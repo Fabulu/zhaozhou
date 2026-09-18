@@ -2632,6 +2632,70 @@ immediately below — `material_m`, `material_refused_m`,
 those are in this cone, because they are registered reads.** The fence is the
 odd one out, and that is where the fix belongs.
 
+### DO NOT FIT CONE 1 ALONE — IT IS WORTH 0.056 ns
+
+The endpoint census of `@packet-h-satstage`'s 200 printed paths, by destination
+signal:
+
+```
+  -2.853  n=53   valid_r[][]              zhao_texture_cache_pipe_v2   <- cone 1, FIXED
+  -2.797  n=42   h_d_q[]          ┐
+  -2.716  n=37   s_d_q[]          │
+  -2.674  n=22   lcnt_q[]         │  zhao_texture_v3rq  -- 110 paths
+  -2.017  n=7    rp_q[]           │
+  -1.843  n=3    h_v_q / s_v_q    ┘
+  -2.056  n=30   walk_q_r[]
+  -2.048  n=1    read_row_present_q
+  -1.6..  n=5    offer_words / rptr / emit_n
+```
+
+Cone 1 owns 53 paths and the worst slack. **The next endpoint down is `h_d_q` at
+-2.797 — 0.056 ns behind it.** So repairing the cache pipe and fitting moves
+`gpu_clk` from 77.80 MHz to about **78.2 MHz**, a 0.4% gain, and the receipt
+would read as though a 6.575 ns saving did almost nothing.
+
+That is a measurement trap this project has walked into before in the other
+direction: `@packet-h-mulstage` removed 105 of 200 worst paths and reported a
+5 MHz REGRESSION. Here the inverse is set up — a real fix that reports nothing —
+and it would be read as "the restructuring was not worth it."
+
+**The rq family is the bigger half anyway: ~110 of 200 paths**, and every one of
+them is gated by the same fence in cone 2. Cone 1 at 53 is second.
+
+So the sequence is: **fix cone 2, then fit both together.** A fit between them
+is a fit whose question has a known, uninteresting answer, and by this
+repository's own batching rule it should not run.
+
+#### The safe half of cone 2, which needs no protocol change
+
+Stated here because the deferral note above could be read as "nothing can be
+done without touching the contract", and that is not true. The current order is
+
+```
+cq_own_q ---(4:1 read mux, 1.43 ns)---> slot ---(64:1 fence mux, 4.27 ns)---> ready
+```
+
+and the two can be swapped, because `join_validation_pending_q` does not depend
+on which queue entry is being read:
+
+```
+cq_own_q[e] ---(64:1 fence mux, 4.27 ns, FOUR IN PARALLEL)---> pending[e]
+                                  ---(4:1 select by cq_rp_q, ~0.5 ns)---> ready
+```
+
+Same value, no registers moved, no cycle changed — the cache-pipe transformation
+applied a second time: **compute for all, select afterwards.** Worth about
+**0.9 ns**, which with cone 1 would put the band near `walk_q_r` at -2.056 and
+`gpu_clk` near **83 MHz**.
+
+It is not free of consequence: `cq_own_q`'s entries live inside
+`zhao_texture_v3own` and the fence lives in the island, so one of them has to
+cross the boundary — either the 64-bit fence vector goes in, or the four owners
+come out. That is a PORT change, which means regenerating `zhao_prod_top`
+(CLAUDE.md's standing rule) and re-running the island's registration gates. It
+is ordinary work with a known checklist, not a contract question — unlike the
+remaining 3.4 ns, which is.
+
 ### What this means for the campaign
 
 The remaining band is dense: 200 paths between -2.853 and -1.623, across the
