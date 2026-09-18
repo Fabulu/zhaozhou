@@ -64,10 +64,22 @@ the next piece of work on this instrument and it is a launcher/project job, not
 a generator one.
 
 This is deliberately written down rather than left implied, because a wrapper
-that elaborates and that nothing fits is precisely the BUILT-INSTALLED-NOWHERE
-shape `tools/budget/uncashed_cheques.py` exists to catch -- and a note saying
-"not yet adopted" is a deferral written down, which leaves the question OPEN
-rather than closing it.
+that elaborates and that nothing fits is the BUILT-INSTALLED-NOWHERE shape.
+
+AND `tools/budget/uncashed_cheques.py` CANNOT SEE IT. Checked rather than
+assumed: the tool runs (self-test 4 fire / 4 no-fire), scans 271 modules and
+reports 7 open rows, and `shell_v2_top` is in none of them. Its check-1 entry
+condition is "measured OR fit-targeted, instantiated by no .sv in fpga/rtl",
+and this wrapper has never been either -- so it is invisible to the detector
+precisely BECAUSE the cheque was never even partially cashed.
+
+That is a real gap and it reads in the flattering direction: a clean
+uncashed-cheques run does not mean nothing is uninstalled, it means nothing
+that was already measured or targeted is uninstalled. A generated wrapper that
+nothing has ever fitted falls through. Written here rather than fixed here
+because widening the tool's entry condition to "every module under
+fpga/rtl/generated" is its own change with its own false-positive question --
+but the next person should know the silence is not evidence.
 
 THE BLOCKER BELOW IS CLOSED, and the answer is worth keeping because it is
 smaller and sharper than the question was.
