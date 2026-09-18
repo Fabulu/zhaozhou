@@ -3533,3 +3533,62 @@ with the comment *"production never defines it"*, selecting between two module
 names with a plain `ifdef`. That is the shape this repository's own macro lesson
 recommends, as opposed to the function-like `` `define `` form that `-D` cannot
 override and that silently compiled production for two combiner mutants.
+
+---
+
+## THE INTENDED CONSOLE, SPECIFIED: two disjoint swaps, 43% of the census
+
+### Swap B — the V2 shell
+
+Determined by intersecting the modules `zhao_shell_top_v2` actually elaborates
+with `zhao_prod_top`'s direct children. **Exactly one overlaps.**
+
+| | module | census ALUT | why |
+|---|---|---:|---|
+| **OUT** | `zhao_shell_top` | 17,917 | V2 replaces it |
+| **OUT** | `zhao_texture_island_v3_top` | 15,446 | V2 contains it |
+| | **removed** | **33,363 ALUT ≈ 21,152 ALM** | |
+| **IN** | `zhao_shell_top_v2` | — | fitted standalone at 27,636 ALM, which is NOT subtractable |
+
+Only one overlap because the census's binner, tile pipe and video path live
+*inside* `zhao_shell_top`, not beside it — so removing V1 removes them with it
+and nothing is counted twice.
+
+### The two swaps are DISJOINT, and that was checked rather than assumed
+
+| | | |
+|---|---|---|
+| does the V2 shell contain `zhao_geom_project`, `zhao_terrain_project`, `zhao_geom_wcache` or `zhao_terrain_tess`? | **no, none of the four** | so swap A's removals are safe |
+| do `zhao_terrain_pipe` or `zhao_geom_proj_lane` instantiate `zhao_shell_top` or `zhao_texture_island_v3_top`? | **no** | so swap B's removals are safe |
+
+They can therefore be applied together in one manifest change and measured in
+one census, or separately if the projector's price is wanted on its own.
+
+### What the intended console is, in one table
+
+| | out | in |
+|---|---|---|
+| A, projector | `zhao_geom_project`, `zhao_terrain_project`, `zhao_geom_wcache`, `zhao_terrain_tess` — 32,384 ALUT | `zhao_terrain_pipe`, `zhao_geom_proj_lane` |
+| B, shell | `zhao_shell_top`, `zhao_texture_island_v3_top` — 33,363 ALUT | `zhao_shell_top_v2` |
+| **total removed** | **65,747 ALUT of 151,705 — 43% of the census** | three modules, all unmeasured *in this arrangement* |
+
+**43% of the machine is being restructured, and not one of the three replacement
+modules has a census number.** That is precisely why the answer has to come from
+a second census rather than from arithmetic, and why the baseline now running
+matters: without it there is nothing to difference against.
+
+### The order, unchanged and now fully specified
+
+1. `@whole-console-sizing` returns → the true ALM of the console as it stands.
+2. Apply swaps A and B to `design/prod_manifest.yml`.
+3. `gen_prod_top.py` → re-census on the same sizing device.
+4. **The difference between those two rows is the only trustworthy price**, and
+   both sit on the same scale as the 41,910-ALM truth device.
+
+### What neither swap fixes
+
+Both are *selection* changes. Neither builds the producer that would drive
+client A in a real machine, neither connects fog, neither builds particles, and
+neither adds the board wrapper — all of which the completed item (1) allocation
+lists as owed. **A smaller census after the swaps is a smaller count of the same
+incomplete machine**, and the remaining debits are still ahead.
