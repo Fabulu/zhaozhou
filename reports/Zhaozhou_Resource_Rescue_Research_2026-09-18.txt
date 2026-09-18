@@ -1,0 +1,633 @@
+ZHAOZHOU: FURTHER RESOURCE-RESCUE EXPERIMENTS
+18 September 2026
+
+READ-ONLY RESEARCH HANDOFF -- NOT AN IMPLEMENTATION OR FIT RECEIPT
+
+Repository: Fabulu/zhaozhou
+Inspected hardware branch: claude/ceiling-architecture-20260912
+Pinned source: ced8752da9c1bac79bc3ef436f64a33bd6cac22c
+Target in the committed reports: Cyclone V 5CSEBA6U23I7
+Tool in the committed reports: Quartus Prime Lite 17.0.2
+
+Purpose: preserve FIELD, appearance, gameplay and the intended workload by
+removing unnecessary computation and expensive representations. Start with
+exact transformations. A 30-fps rendering tier is a separate owner decision,
+not an assumption underneath any result below.
+
+This investigation fetched source and reports, read vendor documentation and
+primary research, and ran independent Python integer-model checks. It did NOT
+edit the repository, run Verilator/formal tools/Quartus, load a board, or inspect
+uncommitted local files. All new physical savings below are UNMEASURED.
+
+Do not interrupt or overwrite the input/output directory of an existing
+Quartus job to try these candidates. Use isolated worktrees and output roots.
+
+CONTENTS
+A. Evidence boundaries and priorities
+B. DIV32: stop walking known-leading-zero quotient bits
+C. EDGE-BOUNDARY: replace parallel column tests with monotone search
+D. VALID-RAM: the remaining memory-shaped control state
+E. TOON-RCP and local divider fusion
+F. Job/configuration-time partial evaluation
+G. Vendor-specific experiments and multipumping limits
+H. Acceptance, abort and integration gates
+I. Sources
+
+
+A. EVIDENCE BOUNDARIES AND PRIORITIES
+==================================
+
+The last completed partial-shell receipt inspected is @packet-h-uvw:
+27,601 fitted ALMs, 63 DSP blocks, 136 M10Ks, 465,488 logical memory bits.
+The roadmap reports 66.03 MHz for that receipt. It uses 5,358 virtual pins;
+2,680 ALMs contain virtual pins. These 2,680 are not an automatic subtractable
+saving: some packing and actual boundary logic can interact. [R1,R2]
+
+The broader zhao_prod_top census is disconnected, and the roadmap reports
+100,709 synthesis-estimated ALMs and 123 DSP. That is not a fitted connected
+console with all required functionality. Do not turn its approximate 92,700
+map-to-fit extrapolation into a measurement, nor assume that the shell's
+packing ratio applies universally. Its legacy adopted roots must be separated
+from the newer candidates and from functions still absent. [R1]
+
+No new additive '50k saving portfolio' is asserted here. The most interesting
+new experiments are:
+
+1. DIV32, followed by a two-engine shared attribute-divider experiment.
+2. EDGE-BOUNDARY, retaining one row accepted per clock after pipeline fill.
+3. VALID-RAM, replacing sparse arena validity flip-flops with a deterministic
+   RAM-backed validity scheme.
+4. TOON-RCP, only after exact quotient-error bounds and a DSP/throughput budget.
+5. Small vendor-mapping experiments on the actual expensive arithmetic leaves.
+
+Keep pursuing already-planned adoption of shared projection, bake_v2,
+cliff_ram, exact post tables and bounded provider scheduling. Those are not
+new discoveries from this investigation, and their projected savings must not
+be counted twice with these experiments. The Golden Path already advocates
+sharing to meet visible deadlines rather than universal one-job-per-clock
+interfaces. [R3]
+
+Important parameter correction: in zhao_project_core, ROWS_PER_PASS=3 is the
+parallel three-row, one-vertex-per-clock arrangement. ROWS_PER_PASS=1 folds
+rows across three clocks. RPP3 does not itself mean one vertex every three
+clocks. [R6]
+
+
+B. DIV32: STOP WALKING KNOWN-LEADING-ZERO QUOTIENT BITS
+====================================================
+
+Source: fpga/rtl/raster/zhao_raster_attrdiv_v2.sv. [R4]
+
+The current output law, for area D > 0, is:
+
+  X = num + floor(D/2)
+  result = saturate_signed32(floor(X/D))
+
+num is signed96, area is unsigned47. The existing circuit already decides
+positive and negative output saturation before running long division. Yet it
+sets QPOS=98 and processes 98 radix-2 digits or 49 radix-4 digits. Its quotient
+bank is also 98 bits, although only a signed32 result is returned.
+
+Do NOT narrow num, the initial rounded X, or the saturation comparisons merely
+because the result is narrow. Preserve those computations exactly.
+
+The range argument
+------------------
+
+For a request not handled by the existing saturation branches:
+
+  -(2^31)*D <= X < (2^31)*D.
+
+The existing negative-floor implementation uses a nonnegative dividend M:
+
+  M = X                 when X >= 0
+  M = -X + D - 1        when X < 0.
+
+This converts the negative floor to a negative ceiling, exactly as the current
+D_PREP logic does. In either case:
+
+  0 <= M < (2^32)*D.
+
+Consequently:
+
+  initial_remainder = M >> 32   satisfies 0 <= remainder < D
+  remaining_bits = M & 0xffffffff.
+
+Start the restoring recurrence with that remainder and shift in ONLY those
+32 low bits. It produces the same unsigned quotient as processing all of M.
+Apply the original sign and status behavior afterwards. A magnitude of 2^31
+is allowed for the exact INT32_MIN result; do not accidentally reject it.
+
+Pseudocode:
+
+  preserve original zero-area and signed saturation decisions
+  M = X if X >= 0 else -X + D - 1
+  r = M >> 32
+  q = 0
+  for each low radix digit of M, most significant first:
+      r = radix*r + digit
+      t = largest t in [0, radix-1] for which t*D <= r
+      r -= t*D
+      q = radix*q + t
+  result = -q if X < 0 else q
+
+The resulting iterative work is:
+
+  radix 2: 98 -> 32 iterations
+  radix 4: 49 -> 16 iterations.
+
+This is not a claim that latency or ALMs fall in exactly those ratios. Setup,
+saturation, response holding, queues and output stages still exist. A wide
+preparation bank may remain even if the iterative quotient/low-bit state is
+narrowed. The resource result must count any replacement preparation bank.
+
+This is also not an exotic new arithmetic premise for the project: the
+projector and the toon divider already initialize a remainder from a high
+word and compute only their required quotient bits. [R6,R7]
+
+Why this can save much more than a few registers
+----------------------------------------------
+
+Earn service-time headroom, then spend it on fewer physical engines. Retain
+three independent attribute-plane clients, but try two shared short dividers
+before attempting one. Keep plane/job/row identities in bounded queues and
+return correctly tagged values and status.
+
+Three radix-4 requests need 3*16 = 48 recurrence cycles on one engine, compared
+with 49 recurrence cycles on each old parallel engine. That arithmetic makes a
+one-engine design worth investigating, NOT automatically valid: three rounds
+of setup and handoff can erase the apparent margin. Two engines are the safer
+first schedule. Exceptional/bypassed divisions have much shorter old latency
+and must be included, not hidden behind the normal-case average.
+
+Prove the complete parent schedule, including row-mask backpressure and
+per-plane gradient requests. Do not mechanically divide the number of lanes
+by three. Sharing is only earned if all consumers still meet deadlines.
+
+Staged implementation and abort rules
+------------------------------------
+
+B1. Freeze the present v2 divider and its real oracle. Re-run the supplied
+    integer model, then implement a sibling short divider.
+B2. Initially pad its externally visible response to the old latency. This
+    permits a strong cycle-aligned comparison before changing timing contracts.
+    Include zero-area, exact positive/negative halves, INT32 boundaries,
+    signed96 rails, area47 rails, stalls, resets and counters.
+B3. Verify the recurrence invariant at each step: 0 <= r < D. Show a deliberately
+    broken seed or negative-rounding variant fails the comparison.
+B4. Expose earlier completion as a separate change. Update latency expectations
+    explicitly, keep output-value/status/order comparisons against the frozen
+    implementation, and measure accepted-request intervals under stalls.
+B5. Build two shared engines; measure aggregate demand and parent throughput.
+    Only then attempt one. A request FIFO must not turn into another large
+    flip-flop/mux forest.
+B6. Compare like-for-like parent maps and fits, including scheduling/queue cost.
+    Abort the sharing variant on a workload miss, deadlock, ordering error,
+    counter drift or net resource loss. The short arithmetic primitive may
+    remain useful even if the one-engine schedule fails.
+
+Do not move the global 100-MHz deadline by changing the clock constraint. Fewer
+iterations is a throughput lever, not evidence of higher Fmax.
+
+Independent checks actually run
+------------------------------
+
+check_candidates.py ran 101,021 num/area cases, with zero value, saturation or
+error mismatches. All directed cases exercised both radices; all 100,000 random
+cases exercised radix 4 and a 5,000-case random subset also exercised radix 2.
+This is Python integer-model evidence, not a simulation of the repository RTL
+or proof of the full frame schedule.
+
+
+C. EDGE-BOUNDARY: REPLACE PARALLEL COLUMN TESTS WITH MONOTONE SEARCH
+================================================================
+
+Source: fpga/rtl/raster/zhao_raster_edgewalk.sv. [R5]
+
+The current row evaluation forms three edge values for each of 16 columns and
+uses three fill predicates per column: 48 predicates plus offset and add logic.
+The implementation already exploits constant low subpixel bits and has a
+bounded sign-preserving saturation argument for its 29-bit local accumulator.
+Do not claim to discover either of those existing optimizations again.
+
+For a single edge within one row:
+
+  E(x) = e0 + x*s,       x = 0..15
+  inside(E) = E >= 0 and (top_left or residue_nonzero or E != 0).
+
+That predicate is monotone with x. For s >= 0, it is false then true; for s < 0,
+its complement is false then true. Thus each edge's mask is a suffix, prefix,
+all, or none. The three-edge mask is their intersection. Linear edge-function
+coverage and its boundary conventions are standard rasterization machinery;
+this proposal is a specific alternate row circuit for the current RTL. [W8]
+
+A fixed-offset binary-lifting search
+-----------------------------------
+
+Let P(E)=inside(E) when s>=0 and P(E)=not inside(E) when s<0.
+
+  if P(e0):
+      boundary = 0
+  else:
+      last_false = 0
+      value = e0
+      for jump in [8,4,2,1]:
+          probe = value + s*jump
+          if not P(probe):
+              last_false += jump
+              value = probe
+      boundary = last_false + 1
+
+boundary is in [0,16]; 16 is the no-transition-in-row sentinel. Each jump is
+fixed, so multiplication is a shift/wire alignment, not a variable multiplier.
+
+  s >= 0: mask = (0xffff << boundary) & 0xffff
+  s <  0: mask = (1 << boundary) - 1.
+
+Zero slope works as the all/none case. Preserve top-left and nonzero-residue
+terms exactly: omitting one changes coverage along shared edges.
+
+This architecture uses at most five predicates per edge, or 15 rather than
+48, and four fixed-offset probe additions per edge. These are conceptual
+operator counts, NOT fitted ALMs. Quartus can already share some arithmetic,
+and the new stages require registers, masks and control.
+
+Pipeline the initial predicate and search rounds so a new row can enter each
+clock. Pass slope, boundary state, tie bits and row identity through each
+stage. Use narrow metadata and avoid duplicating the original job packet into
+every pipeline stage. The existing one-job-at-a-time shell needs correct
+flush/drain handling for the longer tail.
+
+C1. Keep original setup, winding flip, clamping and row-start recurrence.
+C2. Replace only the row-mask computation with a sibling implementation.
+C3. Compare every output mask, covered-pixel count, row identity, last marker
+    and degenerate behavior against the old block; test backpressure and reset.
+C4. Prove every probe lies in the original no-overflow domain. Signed wrapping
+    would break monotonicity; do not use a mathematical proof outside the RTL
+    range. Pipeline widths must preserve the documented signed29 bound.
+C5. Map the complete edge walker, not only a naked comparator. Fit its parent.
+    Abort if tail latency or resource/register overhead defeats the area gain.
+
+Independent checks actually run
+------------------------------
+
+133,380 exhaustive reduced-domain single-edge rows, 100,000 randomized
+full-width boundary/rail rows, and 20,000 three-edge mask intersections all
+matched brute-force 16-column coverage. A deliberate top-left boundary mutant
+was detected. These checks do not exercise the RTL state machine, winding
+setup, stalls, or post-fit timing. See check_results.json.
+
+
+D. VALID-RAM: THE REMAINING MEMORY-SHAPED CONTROL STATE
+====================================================
+
+Sources: zhao_geom_wcache.sv and zhao_vertex_arena.sv. [R8,R9]
+
+The geometry arena's payload already infers RAM. Its validity mechanism does
+not: WCACHE explicitly selects VALID_MODE=0, with 2 arenas * 1,089 entries =
+2,178 valid flip-flops, plus indexed-read muxes, clear and update routing.
+
+A clean 'no uninferred array' warning report does not establish that these
+intentionally synthesized control bits are cheap. The question is whether the
+protocol can be implemented with a cheaper physical representation.
+
+Do NOT just select the existing dense-seal mode. Geometry fills sparsely in
+lookup/triangle order, unlike the dense terrain producer. That mode changes
+which producer traffic is legal.
+
+Two candidate representations:
+
+D1. RAM-backed per-slot epoch tags, with a deterministic boot/reset scrub, a
+    current epoch per arena, and guaranteed clearing before an epoch value is
+    reused. Uninitialized tags must never be trusted. Reset, wrap, reopen and
+    stale-handle behavior are part of the design, not probabilistic exceptions.
+D2. Word-packed valid RAM with a bounded clear walk and explicit forwarding
+    for read-modify-write collisions. This can use fewer tag bits but has a
+    more demanding update/port schedule.
+
+The current header already identifies a deterministic clear walk as a future
+alternative. The new contribution here is making the actual WCACHE instance,
+its 2,178-bit bitmap, and the missing boot/wrap protocol the concrete target.
+
+Align valid/tag reads with the payload response, preserving the specified
+READ-OLD semantics, generation comparison and refusal ordering. This may
+require an explicit latency amendment; the present interface advertises
+always-ready channels and cannot silently lose that behavior. Boot-time
+initialization is not permission to reset every RAM word in one clock.
+
+A simple serial scrub of 2,178 entries at 100 MHz is 21.78 microseconds of raw
+write slots, before any extra sequencing. Its acceptability depends on when
+arenas open, not just on its being a small number. Generation wraps during
+normal operation need their own safe schedule.
+
+Run directed wrap/reset/reopen/collision tests and a small-memory formal
+instance. Map tags, scrubber, forwarding, counters and RAM copies together.
+Saving the whole arena's historical ALUT count is not a plausible entitlement:
+most of its payload storage is already RAM.
+
+
+E. TOON-RCP AND LOCAL DIVIDER FUSION
+==================================
+
+Sources: zhao_raster_toon.sv and zhao_raster_toon_div.sv. [R7,R10]
+
+The toon stage preserves coloured lighting through:
+
+  mean = trunc_toward_zero((r+g+b)/3)
+  q = selected band level
+  channel_out = trunc_toward_zero(channel*q/mean).
+
+mean<=0 follows a separate flat-band rule. The implementation already shares
+ONE pipelined 32-stage divide lane across the three colour channels and uses
+16 fragment slots. It is NOT three separate dividers. Its history explicitly
+records that a long sequential divider missed throughput. Do not regress to
+that implementation and call the missing throughput a small latency cost.
+
+The additional sharing opportunity is the denominator: all three divisions
+use the same mean. A reciprocal/normalization result can be computed once per
+fragment and reused by its three channels.
+
+Plain approximate reciprocals are not a bit-exact replacement. A reciprocal
+estimate followed by exact residual correction can be. For nonnegative N,D
+with D>0 and a proven estimate q0 within one of floor(N/D):
+
+  r = N - q0*D
+  if r < 0:  q0 -= 1
+  if r >= D: q0 += 1
+
+Use a sufficiently wide signed residual and appropriate mutually consistent
+correction logic. Preserve the original sign, truncation, overflow and
+mean<=0 rules. An error bound on the reciprocal must imply the bound on q0
+for the entire allowed numerator range, not only typical light values.
+
+FloPoCo has multipartite-table and piecewise-polynomial generators; Gappa has
+worked fixed-point reciprocal error-verification examples. They are research
+instruments, not drop-in Quartus-17-certified replacements. [W5,W6]
+
+Experiment in the toon leaf before spreading this into projection. Additional
+wide multiply/refinement/correction machinery can consume DSPs or ALMs and
+lose the trade. A bounded fallback must meet worst-case workload demand; an
+average-case statement that difficult inputs are rare is insufficient.
+
+An easier first experiment extends the already-planned divider-fusion idea to
+toon_div. Each of its 32 stages explicitly compares shifted>=D then subtracts
+D. Try one widened subtract whose borrow decides selection and whose low bits
+supply the difference. Quartus may already share this; a zero saving is a
+valid result. This is an extension of existing DSF-style work, not a new
+independent saving to count on top of it.
+
+
+F. JOB/CONFIGURATION-TIME PARTIAL EVALUATION
+==========================================
+
+'Variable' does not always mean 'must be recomputed per pixel'. Candidate
+facts include material coefficients, row bases, bound checks, stride decoding
+and world-space lighting quantities whose inputs are fixed over their actual
+reuse lifetime. Store the computed result under the correct identity/epoch.
+
+Current attrgrad evaluates base + row*dndy, with row in [0,15], using wide
+shift/add logic. A candidate alternative generates the 16 exact row values
+once and stores 16*96 = 1,536 logical bits per plane. The initial divider wait
+may cover generation. BUT early saturation/zero-area paths have little wait,
+and DIV32 shortens the normal wait. These proposals spend overlapping slack;
+prove their combined schedule and never count the same wait twice. [R11]
+
+For configuration-time LUTs, preserve full intermediate products and the
+original final rounding/saturation point. The Golden Path's post-transform
+fusion is an already-written example: three small per-input-channel product
+vector tables followed by exact addition, rather than nine fresh products per
+pixel. Do not claim it as newly invented. [R3]
+
+Full numeric-range specialization is another candidate: keep a narrow common
+path plus a checked exact fallback, or use a loader-validated profile. Prove
+ranges from the admitted content/command contract. 'The sample scene never
+exceeded this value' is not a valid range proof. Widths of fallback arithmetic,
+its queues and its worst-case demand must be charged.
+
+A source-law trap worth preserving: zhao_raster_attrwalk is an existing
+Euclidean quotient/remainder walker with different seed/emission assumptions.
+Current attrgrad_v2 rounds its x-gradient and then steps that quotient, with a
+global-min-x row anchor. A mathematically more accurate per-pixel plane divide
+can therefore disagree with current pixels. Adopt nothing merely because its
+math looks nicer; compare against the actual selected rendering law. [R11,R12]
+
+For ARM assistance, favor complete cold jobs over fine-grained hardware/CPU
+round trips: table generation, pose-cache fill or a whole cliff-rim planning
+job are hypotheses to profile. Include copies, DMA, scheduling, memory traffic
+and deadline tails. Keep dense FIELD execution and interactive deformation
+protected unless an end-to-end workload proof supports a change. FORGE.CLIFF
+already has a carefully sequenced, exact priority/merge algorithm; do not
+replace it with a slower naive sort merely to move code to the CPU. [R13]
+
+
+G. VENDOR-SPECIFIC EXPERIMENTS AND MULTIPUMPING LIMITS
+===================================================
+
+G1. Targeted automatic resource sharing
+-------------------------------------
+
+Quartus 17 supports AUTO_RESOURCE_SHARING for compatible mutually exclusive
+add/subtract/multiply operations. It must be assigned to the relevant entity;
+extra operand mux/control logic can hurt timing. Test it on a narrow named
+leaf with disjoint state-machine operations, not as a global magic switch. [W1]
+
+G2. Ternary arithmetic rather than assuming binary trees are optimal
+------------------------------------------------------------------
+
+Cyclone V ALMs have a shared-arithmetic mode for three-input addition. Compare
+native three-term expressions, the current balanced binary form and, where
+appropriate, compressor/carry-save structures on the actual target. The
+mathematical depth ceil(log2(n)) is not a proof of optimal mapping to a
+three-input-capable fabric. Preserve modulo widths and saturation boundaries.
+This is a paired-map experiment, not permission to undo measured timing cuts
+on the active branch. [W2]
+
+G3. RAM read-during-write semantics and small memories
+----------------------------------------------------
+
+Inspect expensive bypass muxes and write forwarding before widening RAM ports.
+Quartus supplies memory-style controls and read-during-write behavior choices.
+An unconstrained collision result is legal ONLY when the design proves that
+collision cannot occur or its result is never consumed. Do not apply
+no_rw_check to a READ-OLD contract without that proof. Match the exact
+attribute/option syntax to installed Quartus 17, not blindly to current Pro
+manual examples. M10K must mean hard memory here; MLAB consumes logic fabric.
+[W3,W4]
+
+G4. Multipumping is an experiment, not a universal 4x lever
+----------------------------------------------------------
+
+For the fitted -I7 part, the vendor lists independent 18x18/18x19 DSP modes at
+250 MHz and 27x27 at 200 MHz. These are hard-block performance specifications,
+not guarantees for the complete surrounding muxes and pipeline. A small,
+registered 200-MHz island deserves investigation. A 400-MHz arithmetic plan
+for these modes is not supported by those ratings. [W7]
+
+Use related PLL clocks with explicitly timed crossings and reset/lock/phase
+handling. A 200/100 related-clock boundary is not automatically an
+asynchronous FIFO problem, but it still needs a correct timing and protocol
+model. Count every input selector, context tag, accumulator and RAM copy.
+
+The cited Xilinx DSP48E1 study reported average savings of 48% DSP blocks at a
+cost of 74% more LUTs. It does not forecast Cyclone V results; it demonstrates
+why a DSP-saving technique can be the wrong purchase when ALMs bind. Accept a
+multipumped design here only after the NET ALM/DSP/RAM/throughput result wins.
+[W9]
+
+G5. Count physical memories, not just bits
+----------------------------------------
+
+The current partial shell uses roughly 8% of available logical memory bits but
+25% of M10K blocks: 136 of 553. Therefore '18.2% bits in the broad census'
+does not imply 81.8% of physical blocks are unallocated. Narrow and shallow
+memories, replication and port requirements fragment capacity. [R2,W4]
+
+For each proposed memory, record depth, width, read/write operations per clock,
+port mode, banking, physical block count, active/staging epochs and required
+copies. For example, 9,216 logical post-table bits do not imply one M10K when
+three separate 72-bit reads are required concurrently. [R3,W4]
+
+Use the owner's 200 net ALMs per extra M10K as a prioritization heuristic:
+
+  exchange_rate = (old parent fitted ALM - new parent fitted ALM)
+                  / (new parent M10Ks - old parent M10Ks).
+
+Include the controller, queues and ports in the parent. A smaller exchange
+rate may still be worthwhile if it removes a critical timing/DSP bottleneck.
+No design earns credit by exceeding another physical limit.
+
+
+H. ACCEPTANCE, ABORT AND INTEGRATION GATES
+========================================
+
+1. Freeze the source and boundary. Record exact top, parameters, constraints,
+   tool version, stimulus policy, source digest and seed. Read the current
+   branch before applying this handoff; ced8752 is a snapshot, not a promise
+   that subsequent edits are absent.
+
+2. Verify behavior first. Keep an independent old RTL or actual zref oracle.
+   Tests must cover boundary values, stalls, reset, ordering, rounding,
+   saturation, errors and counter semantics. Use a deliberate faulty variant
+   to prove the comparison detects the class of error being claimed absent.
+
+3. Derive service budgets. Separate latency from initiation interval. Account
+   for all clients sharing the provider, setup, drain, arbitration, memory and
+   phase ordering. Do not spend an entire frame independently on rendering,
+   post and terrain work that the architecture requires to be serial.
+
+4. Map before fitting. Preserve the ugly baseline. Compare ALUTs, registers,
+   estimated ALMs, hard DSPs, physical RAM geometry and inferred/uninferred
+   memories under the SAME boundary. Global ALUT-to-ALM ratios are not valid
+   per-leaf saving receipts.
+
+5. Fit the parent to bank the saving. Include support logic and an honest
+   non-constant workload boundary. A wrapper whose static data prunes required
+   capacity is not a price for the general machine. Inspect actual endpoints,
+   not just the worst-path count or Fmax headline.
+
+6. Abort or hold when outputs differ, reset/epoch safety fails, legal workloads
+   miss their phase window, memory ports cannot supply demand, total ALMs do
+   not improve enough, or a physical DSP/RAM limit is exceeded. A rejected
+   experiment stays documented; it does not get silently relabelled success.
+
+7. Adopt into the selected composition exactly once. Remove the replaced
+   physical owner and rerun the hierarchy inventory. Do not credit one shared
+   source file as one shared hardware instance unless the hierarchy proves it.
+
+8. Keep proof, timing and physical area separate. The Python results below
+   establish only the tested integer identities. None establishes a complete
+   console fit or quantifies a new ALM saving.
+
+Suggested order: DIV32 arithmetic proof -> EDGE-BOUNDARY prototype -> VALID-RAM
+protocol design, with small vendor-mapping sweeps alongside those. Adopt known
+large architectural replacements on the main integration path. Attempt toon
+reciprocal sharing and fast DSP islands only with complete resource calendars.
+The intent is not another lengthy preflight project before doing useful work:
+each experiment should answer one narrow, falsifiable resource question.
+
+Run the included checks with Python 3.10+ and the standard library:
+
+  python check_candidates.py
+
+This rewrites check_results.json in the same directory. Do not run Python with
+-O, because these research checks use assertions deliberately.
+
+
+I. SOURCES
+==========
+
+Repository paths below were read at the pinned ced8752 snapshot. The web sources
+are vendor documents, original research or the authors' own technical material.
+Current documentation is not a guarantee that every optional setting exists in
+Quartus 17; test supported syntax in the installed tool.
+
+[R1] Current resource roadmap, especially the opening evidence and vocabulary:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md
+
+[R2] Raw partial-shell fitter summary:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reports/synthesis/blockpaths/zhao_shell_top_v2%40packet-h-uvw.fit.summary
+
+[R3] Existing conditional Golden Path (planning, not a fitted bill):
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reports/Zhaozhou_conditional_golden_path.md
+
+[R4] Exact current attribute divider:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+
+[R5] Edge walker and its signed-range/top-left argument:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/raster/zhao_raster_edgewalk.sv
+
+[R6] Projector core, high-word remainder seed and RPP semantics:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/common/zhao_project_core.sv
+
+[R7] Toon divider, already a 32-stage shared lane:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/raster/zhao_raster_toon_div.sv
+
+[R8] Geometry WCACHE, actual bitmap-mode selection:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/geometry/zhao_geom_wcache.sv
+
+[R9] Vertex arena, bitmap/dense modes, uninitialized-tag caveat:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/geometry/zhao_vertex_arena.sv
+
+[R10] Toon law, channel scheduling and streamed throughput history:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/raster/zhao_raster_toon.sv
+
+[R11] Current attribute gradient/row seed implementation:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+
+[R12] Existing quotient/remainder walker; not assumed a v2 drop-in:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/raster/zhao_raster_attrwalk.sv
+
+[R13] Existing Forge cliff algorithm and its actual boundary:
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/forge/zhao_forge_cliff.sv
+
+[W1] Intel Quartus 17.0: Auto Resource Sharing logic option.
+https://www.intel.com/content/www/us/en/programmable/quartushelp/17.0/logicops/logicops/def_auto_resource_sharing.htm
+
+[W2] Altera Cyclone V handbook: shared arithmetic mode (3-input addition).
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/shared-arithmetic-mode
+
+[W3] Intel/Altera: Controlling RAM Inference and Implementation.
+https://www.intel.com/content/www/us/en/docs/programmable/683082/25-1/controlling-ram-inference-and-implementation.html
+
+[W4] Cyclone V M10K physical width/depth and port configurations.
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations
+
+[W5] FloPoCo operator manual: multipartite tables and piecewise polynomials.
+https://www.flopoco.org/operators_5.0.git.html
+
+[W6] Gappa documentation: fixed-point Newton division example.
+https://gappa.gitlabpages.inria.fr/gappa/examples.html
+
+[W7] Cyclone V device datasheet: DSP block performance by speed grade.
+https://docs.altera.com/r/docs/683801/current/cyclone-v-device-datasheet/dsp-block-performance-specifications
+
+[W8] Fabian Giesen: Triangle rasterization in practice (2013).
+https://fgiesen.wordpress.com/2013/02/08/triangle-rasterization-in-practice/
+
+[W9] Ronak and Fahmy, Multipumping Flexible DSP Blocks for Resource Reduction
+on Xilinx FPGAs, IEEE TCAD 36(9), 2017, 1471-1482; DOI 10.1109/TCAD.2016.2629421.
+Primary-author institutional abstract reports 48% DSP reduction, 74% more LUTs.
+These are Xilinx study results, not a Cyclone V resource forecast.
+https://wrap.warwick.ac.uk/id/eprint/85668/
+
+END

@@ -107,6 +107,45 @@ deliberately not touched.
 
 ---
 
+## OWNER RESEARCH 2026-09-18 -- the optimisation programme AFTER the console is built
+
+`reports/Zhaozhou_Resource_Rescue_Research_2026-09-18.txt`, 31,501 bytes,
+sha256 `11c86f066960f9dc251bae6cd7f8e2f7e54dc716d2a279133c6214fc1f6032f1`.
+
+Saved into the repository 2026-09-18 on the owner's instruction: *"once we're
+done building our whole console (we have lots of unfinished parts you need to
+finish) and figure out our true ALM total, we should start off our optimization
+journey with that, so save it somewhere."*
+
+**It arrived in `~/Downloads`.** This project has already paid for that once --
+`reports/OWNER-DOCUMENT-INDEX.md` exists because a bump-mapping request sat
+unread at the repo root, and DSF-01 sat in the tree indexed nowhere for a day.
+A document outside the repository is not deliverable at all, so it is here, in
+`reports/`, with its hash, before anything is done with it.
+
+**WHAT IT IS.** A read-only research handoff pinned at `ced8752d`, listing
+candidate resource savings: DIV32 leading-zero quotient skipping, edge-boundary
+monotone search replacing parallel column tests, the remaining memory-shaped
+control state, TOON-RCP and divider fusion, job-time partial evaluation, and
+vendor-specific multipumping limits. It reads vendor documentation and runs its
+own integer models.
+
+**WHAT IT IS NOT, in its own words:** *"NOT AN IMPLEMENTATION OR FIT RECEIPT ...
+All new physical savings below are UNMEASURED."* Nothing in it may be entered
+in the ALM budget. It also carries an operational warning worth repeating:
+*"Do not interrupt or overwrite the input/output directory of an existing
+Quartus job to try these candidates. Use isolated worktrees and output roots."*
+
+**SEQUENCING, which is the owner's and is explicit.** It is the START of the
+optimisation journey, and the journey starts AFTER two things: the console is
+actually built -- the unfinished parts finished -- and the true total ALM is
+measured. Neither is done. The whole-console sizing fit is running as
+`@whole-console-sizing`; the unfinished parts are the open items below.
+
+**Status: SAVED AND INDEXED 2026-09-18. NOT STARTED, deliberately.**
+
+---
+
 ## OWNER DIRECTION 2026-09-16 — spend M10K to buy ALMs
 
 Fabian, in session, mid-pass: *"remember we have lot's of m10k memory, ALM's

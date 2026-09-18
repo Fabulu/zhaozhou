@@ -431,3 +431,69 @@ arrival details to size. That loop now has a tool for the first half
 (`setup_path_census.py`) and none for the second — sizing a cone by how many
 paths pass through an intermediate node is what I got wrong twice today, and it
 is the obvious next addition to that tool.
+
+---
+
+## WHAT EACH CONE IS ACTUALLY WORTH, AND TWO CORRECTIONS TO WHAT I WROTE ABOVE
+
+Computed by removing each subset from the 200 printed paths and taking the new
+worst:
+
+| cones landed | worst | `gpu_clk` | paths removed |
+|---|---:|---:|---:|
+| none | −2.540 | **79.74** | 0 |
+| 3 alone | −2.540 | 79.74 | 124 |
+| 5 alone | −2.540 | 79.74 | 28 |
+| **4 alone** | −2.025 | **83.16** | **5** |
+| 3 + 4 | −2.025 | 83.16 | 129 |
+| 4 + 5 | −1.954 | 83.65 | 32 |
+| 3 + 4 + 5 | −1.879 | 84.18 | 156 |
+
+**Cone 4 — five paths, and the smallest change of the three — is worth +3.42
+MHz on its own. The other two add 1.02 MHz between them.** I wrote earlier that
+"all three must ship together"; that was right about cone 3 and cone 5 being
+worthless alone, and wrong about the shape. Cone 4 is both the cheapest and
+almost all of the value. Cone 3 is worth TNS (−2,077 over 124 of 200 paths) and
+no clock; cone 5 is worth 0.5 MHz on top of 4+3 and costs a latency change in
+two modules.
+
+### Correction: the extra pointer bit does NOT make `no_rw_check` safe
+
+I recommended widening `fragment_m`'s queue pointers by one bit so that
+read-during-write becomes structurally impossible. **It does not.** The RAM's
+address is the LOW bits of the pointer, and at FULL those are equal whether or
+not there is a wrap bit — `rp = 0, wp = 4` still addresses entry 0 twice. The
+extra bit distinguishes full from empty in the LOGIC; it does not change what
+address the memory sees.
+
+So `no_rw_check` remains dependent on the full-guard blocking the write, with or
+without it. The two flip-flops buy nothing here and the recommendation is
+withdrawn.
+
+### And the dependency is not a new one, which changes the verdict
+
+I also wrote that `no_rw_check` "converts a guarded condition into a silent
+correctness dependency". Working it through: if the full-guard ever failed and a
+write landed while full, it would overwrite the entry at `read_pointer_q` —
+**destroying the live head**. That is already a correctness failure, today,
+without any attribute. `no_rw_check` does not make correctness depend on
+anything that it did not already depend on; it changes what the *symptom* looks
+like for a fault that is fatal either way.
+
+And the guard is not un-evidenced: `wq_overflow_o` has a committed mutant
+control, `tests/mutants/zhao_texture_frag_expand_mutant.sv`, written precisely
+because the state is unreachable while the guard holds — and this session's run
+of `test_forge_cliff_ram_mutant_control` is a reminder that those controls do
+fire when asked.
+
+**So cone 4 is a one-attribute change, plus an assertion for the empty case that
+should be written and watched to pass.** The pointer work is off the list.
+
+### The revised order
+
+1. **Cone 4** — `ramstyle = "no_rw_check"` on `fragment_m`, plus the assertion.
+   +3.42 MHz, one line of RTL.
+2. **Cone 3** — already committed. Fits alongside for the TNS.
+3. **Cone 5** — deferred. 0.5 MHz for a pipeline stage in both `attrgrad_v2`
+   and `attrgrad_dsp3`, because the differential compares them cycle by cycle
+   and a stage that moves an output edge is visible to it. Not worth it yet.

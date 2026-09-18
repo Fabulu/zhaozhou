@@ -138,3 +138,18 @@ cheap and it is how the three texture briefs were found.
 3. **Index a new owner document in the same pass that reads it** (`DOCKET.md`).
 4. **A run folder is the wrong home for durable direction** -- every pass creates
    a new one, so anything left there is orphaned by the next.
+
+## Zhaozhou_Resource_Rescue_Research_2026-09-18.txt — SAVED, INDEXED, NOT STARTED
+
+`reports/Zhaozhou_Resource_Rescue_Research_2026-09-18.txt`, sha256
+`11c86f066960f9dc251bae6cd7f8e2f7e54dc716d2a279133c6214fc1f6032f1`.
+
+Arrived in `~/Downloads`, copied into the repository 2026-09-18 on the owner's
+instruction. A read-only research handoff of candidate resource savings, pinned
+at `ced8752d`, whose own header says it is NOT an implementation or fit receipt
+and that every saving in it is UNMEASURED.
+
+**Disposition: deliberately NOT STARTED.** The owner sequenced it: it opens the
+optimisation journey AFTER the console is built and the true total ALM is known.
+Recorded here because this index exists precisely so that "unread" and
+"deliberately deferred" stop looking identical. Full entry in `reports/DOCKET.md`.
