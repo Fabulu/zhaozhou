@@ -1000,6 +1000,59 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > prediction is still a measured number, while three separate fits would have
 > bought one extra hour and the same three numbers.
 >
+> ### THE RESULT: 54.12 → 61.52 MHz, and the prediction was optimistic
+>
+> `zhao_shell_top_v2@packet-h-timing`, `status: ok`, clean tree, commit
+> `cebed2fe`, digest `c3ae9b76`, 1,717.7 s.
+>
+> | | `@packet-h-m10k` | `@packet-h-timing` | |
+> |---|---:|---:|---|
+> | Fmax | 54.12 MHz | **61.52 MHz** | +7.40 |
+> | worst setup slack | −8.477 ns | **−6.254 ns** | +2.223 |
+> | setup TNS | −29,688.8 ns | **−19,984.6 ns** | **−33%** |
+> | ALM | 29,044 | 28,959 | −85 |
+> | DSP / M10K / registers | 63 / 134 / 40,773 | 63 / 134 / 40,790 | — |
+>
+> **The prediction was 62–66 MHz and −5.2 to −6.0. It came in at 61.52 and
+> −6.254 — just outside on both, optimistic in both directions.** Writing it
+> down first is what makes that statement possible; without it this would read
+> as an unqualified success instead of a slightly-short one.
+>
+> **What each change did, measured:**
+>
+> * **The resolver is GONE from the table entirely.** Not one `altsyncram →
+>   binding_resolver` row survives. Both the 512-path CRC family and the two
+>   legality paths are eliminated, and that is where the 9,704 ns of TNS went.
+> * **The `attrgrad` tree worked and is STILL the binder.** −8.477 → −6.254, so
+>   the depth 5 → 3 change bought 2.2 ns, and the path count in that family fell
+>   from 121 to 26. But nothing overtook it, so `attrgrad → attrdiv` sets Fmax
+>   again: `1/(10.000 + 6.254) ns = 61.52 MHz`, exactly the reported figure.
+> * **`v3own → v3own` has dropped off the list**, which the prediction expected
+>   to become the binder. It did not.
+>
+> #### The one number that looks like a regression and is not
+>
+> `zhao_geom_binner_v2 → zhao_texture_island_v3_top` went from **206 paths to
+> 1,689** and from −773.6 to −5,493.5 total. Read carelessly that is a large
+> regression in the family this section already identified as `uvw_m`.
+>
+> It is the opposite. Both reports summarise the **2,000 worst paths**, a
+> fixed-size list — so when the top of it is repaired, the long tail becomes
+> visible. Per path: **−3.76 ns before, −3.25 ns now.** The family did not get
+> worse; it stopped being crowded out by the CRC scan.
+>
+> This is the same instrument error as grouping by module, in a new place: a
+> count from a truncated list is a statement about the list, not about the
+> design.
+>
+> #### And it is now 84% of everything
+>
+> 1,689 of 2,000 negative paths end in `uvw_m`, whose read register is still
+> reported uninferred by this fit's own map report (`Info (276007)`) — **exactly
+> as recorded in advance**, because the fix landed after the snapshot. The next
+> composed fit is therefore a clean test of a single change against a family
+> that dominates the remaining list.
+>
 > **`uvw_m` IS NOT IN THIS FIT.** `@packet-h-timing` snapshotted at source digest
 > `c3ae9b76`, and the `uvw_m` read was moved afterwards. So the row that lands
 > measures the attrgrad tree, the stored legality verdict and the CRC verdict
