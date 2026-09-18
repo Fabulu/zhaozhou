@@ -5930,6 +5930,40 @@ add_test(NAME vertex_arena_dense_seal_control
 set_tests_properties(vertex_arena_dense_seal_control PROPERTIES
   LABELS "fast;nightly" TIMEOUT 300)
 
+# VALID_BITMAP's UPDATE LAW, at a shape where getting it wrong is visible.
+# Added 2026-09-18 with the bitmap-process rewrite (DEPTH runtime-variable bit
+# selects -> ARENAS*DEPTH compile-time-constant per-bit flops, after the census
+# attributed 92.2% of the design's combinational ALUTs to this module).
+#
+# The suites above could not see the property that rewrite is most likely to
+# invert. Neither geom_wcache_directed nor geom_wcache_random ever drives
+# `open_i` and `fill_valid_i` on the SAME EDGE, so "an accepted fill wins its
+# own bit against an open of its own arena" -- last-assignment-wins in the old
+# process, set-before-clear in the new -- was never asked. A rewrite that tests
+# the clear first loses that fill silently and passes every existing test.
+#
+# ARENAS=3 and DEPTH=11 are both deliberately NOT powers of two. At a power of
+# two a padded partition and the linear one coincide bit-for-bit, which is
+# exactly how the addressing defect repaired on 2026-09-09 survived a directed
+# suite at DEPTH=16 and a formal shape at DEPTH=4; and ARENAS=3 makes arena 3
+# expressible, so the bad-arena guards can be FIRED rather than assumed.
+#
+# It asserts the CORRECT behaviour, never the defect, so it passes on both the
+# old and the new process -- which is what makes it equivalence evidence rather
+# than a change log.
+add_executable(test_vertex_arena_bitmap_open_fill_race
+               geometry/vertex_arena_bitmap_open_fill_race.cpp)
+target_link_libraries(test_vertex_arena_bitmap_open_fill_race PRIVATE zhao_harness)
+verilate(test_vertex_arena_bitmap_open_fill_race
+  PREFIX Vzhao_vertex_arena
+  TOP_MODULE zhao_vertex_arena
+  VERILATOR_ARGS -GARENAS=3 -GDEPTH=11 -GPAYLOAD_W=64 -GGEN_W=8 -GVALID_MODE=0
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_vertex_arena.sv)
+add_test(NAME vertex_arena_bitmap_open_fill_race
+         COMMAND test_vertex_arena_bitmap_open_fill_race)
+set_tests_properties(vertex_arena_bitmap_open_fill_race PROPERTIES
+  LABELS "fast;geometry" TIMEOUT 300)
+
 # formal: the arena bounds law -- a lookup must never wrap into another vertex.
 # REGISTERED 2026-08-27, and it was deliberately unregistered before that: the
 # proof failed for three days and the notes in design/formal_runs.yml said so

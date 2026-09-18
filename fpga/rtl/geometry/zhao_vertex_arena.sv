@@ -865,18 +865,59 @@ module zhao_vertex_arena #(
       assign seal_short_now_c = 1'b0;
       assign slot_written_c   = valid_q[rd_addr];
 
-      integer vb;
-      always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-          valid_q <= '0;   // one register, one reset -- see the declaration
-        end else begin
-          // OPEN drops this arena's valid bits; a fill accepted on the same
-          // edge wins for its own bit (last assignment), which is the
-          // behaviour this block has always had.
-          if (open_i && !open_bad_arena)
-            for (vb = 0; vb < DEPTH; vb = vb + 1)
-              valid_q[open_arena_i * DEPTH + vb] <= 1'b0;
-          if (fill_ok) valid_q[wr_addr] <= 1'b1;
+      // EVERY WRITE DESTINATION IS A COMPILE-TIME CONSTANT, AND THAT IS THE
+      // WHOLE POINT OF THIS SHAPE. Rewritten 2026-09-18.
+      //
+      // The process here used to be:
+      //
+      //     if (open_i && !open_bad_arena)
+      //       for (vb = 0; vb < DEPTH; vb = vb + 1)
+      //         valid_q[open_arena_i * DEPTH + vb] <= 1'b0;
+      //     if (fill_ok) valid_q[wr_addr] <= 1'b1;
+      //
+      // `open_arena_i` is a SIGNAL, so `open_arena_i * DEPTH + vb` is a
+      // RUNTIME-VARIABLE bit select into a packed register, elaborated DEPTH
+      // times over. At the shell's 2x1089 shape that is 1,089 variable-indexed
+      // partial writes into one 2,178-bit vector -- 2,371,842 potential
+      // bit-update positions -- and Quartus expanded it into a selection
+      // network instead of recognising a per-bank clear. The whole-console
+      // census of 2026-09-18
+      // (reports/WHERE-THE-CENSUS-ACTUALLY-LIVES-20260918.md) attributed
+      // 1,480,718 combinational ALUTs to this module alone: 92.2% of a
+      // 1,605,869-ALUT design, against 125,151 for everything else combined.
+      //
+      // THE UPDATE LAW IS UNCHANGED: v' = set OR (v AND NOT clear). What moves
+      // is only HOW it is expressed -- each bit is its own flop whose two
+      // terms are equalities against CONSTANTS, so there is no variable bit
+      // address for the synthesiser to build a mux tree around. No pipeline
+      // stage, no clear walk, no extra memory, no capacity change, and no new
+      // restriction on sparse fills: a fill may still land in any slot in any
+      // order, exactly as before.
+      //
+      // THE ORDER IS THE PART AN INCAUTIOUS REWRITE GETS BACKWARDS. A fill
+      // accepted on the same edge as an open of its own arena wins its own bit
+      // -- that was "last assignment wins" in the old process, and it is
+      // `set_this` being tested BEFORE `clear_this` here. Reset wins over
+      // both, exactly as the single `valid_q <= '0` did. `fill_ok` still
+      // decides acceptance, including its range and sealed-state checks, so
+      // nothing about which fills are honoured moves either.
+      //
+      // `genvar` is declared on its own line rather than inside the for-header:
+      // Quartus 17.0 is not relied on to accept the inline form, and CLAUDE.md
+      // records two SystemVerilog shapes that lint clean under Verilator and
+      // fail quartus_map outright. Lint-clean is not synthesizable.
+      genvar vb;
+      for (vb = 0; vb < ARENAS * DEPTH; vb = vb + 1) begin : g_valid_bit
+        // The arena this bit belongs to, fixed at elaboration. The old loop
+        // recomputed the same partition at runtime from a signal.
+        localparam int unsigned BANK = vb / DEPTH;
+        wire clear_this = open_i && !open_bad_arena &&
+                          (open_arena_i == ARENA_W'(BANK));
+        wire set_this   = fill_ok && (wr_addr == (AW+IW)'(vb));
+        always_ff @(posedge clk or negedge rst_n) begin
+          if (!rst_n)          valid_q[vb] <= 1'b0;
+          else if (set_this)   valid_q[vb] <= 1'b1;
+          else if (clear_this) valid_q[vb] <= 1'b0;
         end
       end
 
