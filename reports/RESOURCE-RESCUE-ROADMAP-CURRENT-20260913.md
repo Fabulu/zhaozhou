@@ -46,6 +46,29 @@ called below either closure target.
 > envelope, which is the uncashed cheque CLAUDE.md documents, measured at about
 > 2.6× the "~6,000 ALM" it has been quoted as for weeks.
 >
+> **And its DSP figure corrects the scoreboard in the OTHER direction**, which is
+> worth saying because I quoted the old one earlier today. Read out of the same
+> hierarchy:
+>
+> ```
+> zhao_geom_project      10,263 ALUT    22 DSP
+> zhao_terrain_project   14,289 ALUT    11 DSP
+> zhao_geom_wcache        5,132 ALUT     0 DSP   230,868 memory bits
+> ```
+>
+> | | scoreboard, summed per-block rows | whole-machine synthesis |
+> |---|---:|---:|
+> | projection ALM | 12,267 | ≈15,600 — **worse** |
+> | projection DSP | 66 | **33** — half |
+>
+> The 66 came from two stale rows each asserting 33; the machine actually uses
+> 22 and 11. So **deduplicating the projector is worth roughly −7,800 ALM and
+> −11 to −22 DSP, not −33** — which would take the machine from 123 DSP to about
+> 101–112, i.e. onto or just over the physical part rather than comfortably
+> inside the 85 objective. The ALM case for doing it is stronger than recorded
+> and the DSP case is weaker, and both were wrong in the same document an hour
+> apart because both were sums of expired receipts.
+>
 > **And the closure authority was unindexed.**
 > `reports/Zhaozhou_conditional_golden_path.md` (owner, 2026-09-14, pinned to
 > this branch by name) defines closure as a 10% fabric reserve, a 37,719 working
