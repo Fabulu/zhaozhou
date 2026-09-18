@@ -351,11 +351,17 @@ looks like ten small problems.
 
 ### What this does and does not change
 
-**It does not change the clock forecast.** Those 124 paths span -1.954 to
--1.369, and the two worst paths in the design are **outside** them: `read_row_present_q`
-at -2.540 (cone 4) and `mul_x_r` at -2.025 (the multiply). Removing all 124
-still leaves -2.025, so cone 3 alone moves `gpu_clk` from 79.74 to about
-82.6 MHz and no further.
+**It does not change the clock forecast, and my first attempt at saying so was
+itself wrong.** I wrote that cone 3 alone would move `gpu_clk` to about
+82.6 MHz. It moves it to **79.74 MHz — that is, not at all.** Those 124 paths
+span -1.954 to -1.369, and the design's worst path is `read_row_present_q` at
+**-2.540**, which is cone 4's and is outside the set entirely. Removing every
+one of the 124 leaves -2.540 exactly where it was.
+
+Twice in one page: first sizing a cone by its top-ranked endpoint, then
+forecasting a clock from a tier that does not contain the worst path. Both are
+the same slip — reading a ranked list as though the thing at the top of one
+grouping were the thing at the top of the design.
 
 **It changes what cone 3 is worth on TNS**, which is -2,077 and is the number
 that actually measures how much of the design is late. 124 of 200 printed paths,
