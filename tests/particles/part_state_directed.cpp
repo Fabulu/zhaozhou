@@ -243,12 +243,12 @@ void compare_stream(const char* tag, const std::vector<Rec>& got,
 }
 
 struct Counters {
-  uint32_t survivors, children_written, dropped_capacity, refused_staging, species_refused;
+  uint32_t survivors, children_written, dropped_capacity, staging_stalls, species_refused;
 };
 
 Counters snap(const Vzhao_part_state& r) {
   return Counters{r.survivors_o, r.children_written_o, r.children_dropped_capacity_o,
-                  r.children_refused_staging_o, r.species_refused_o};
+                  r.staging_stall_cycles_o, r.species_refused_o};
 }
 
 }  // namespace
@@ -421,9 +421,13 @@ int main(int argc, char** argv) {
 
   // =========================================================================
   // CASE D -- the THIRD counter that was asserted zero and never seen to move:
-  // `children_refused_staging_o`. CHILD_D is 8, so offering twelve children
-  // during one survivor pass fills the staging FIFO and the rest are refused AT
-  // THE HANDSHAKE -- "so the producer sees it; nothing is silently swallowed".
+  // `staging_stall_cycles_o`. CHILD_D is 8, so offering twelve children
+  // during one survivor pass fills the staging FIFO and the producer is STALLED AT
+  // THE HANDSHAKE. The contract's own words are "If staging fills, the tick
+  // stalls rather than dropping a particle" and "staging FIFO full | stall,
+  // never drop". The quoted line that used to sit here -- "so the producer sees
+  // it; nothing is silently swallowed" -- was invented in a module header and
+  // then cited as if the contract had said it.
   //
   // The assertion here is that it MOVED and nothing more precise, and that is
   // deliberate. The RTL bumps it on every CYCLE where `chl_valid_i` meets a
@@ -448,17 +452,17 @@ int main(int argc, char** argv) {
     (void)run_tick(d, s);
     const Counters after = snap(r);
 
-    check(after.refused_staging > before.refused_staging,
-          "D children_refused_staging_o MOVED -- staging refused at the handshake",
-          1, after.refused_staging > before.refused_staging ? 1 : 0);
+    check(after.staging_stalls > before.staging_stalls,
+          "D staging_stall_cycles_o MOVED -- the tick stalls, it never drops",
+          1, after.staging_stalls > before.staging_stalls ? 1 : 0);
     check(after.survivors - before.survivors == 4,
           "D and the survivor pass was unaffected by the refusals", 4,
           after.survivors - before.survivors);
   }
 
-  std::printf("[part_state_directed] survivors=%u children=%u dropped=%u refused_staging=%u "
+  std::printf("[part_state_directed] survivors=%u children=%u dropped=%u staging_stall_cycles=%u "
               "species_refused=%u\n",
               r.survivors_o, r.children_written_o, r.children_dropped_capacity_o,
-              r.children_refused_staging_o, r.species_refused_o);
+              r.staging_stall_cycles_o, r.species_refused_o);
   zhao::exit_hard(zhao::report_and_exit("part_state_directed"));
 }

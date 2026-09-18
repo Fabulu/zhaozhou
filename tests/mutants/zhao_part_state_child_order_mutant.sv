@@ -199,7 +199,7 @@ module zhao_part_state_child_order_mutant #(
     output var logic [31:0]      survivors_o,
     output var logic [31:0]      children_written_o,
     output var logic [31:0]      children_dropped_capacity_o,
-    output var logic [31:0]      children_refused_staging_o,
+    output var logic [31:0]      staging_stall_cycles_o,
     output var logic [31:0]      species_refused_o
 );
 
@@ -312,14 +312,14 @@ module zhao_part_state_child_order_mutant #(
       survivors_o                 <= 32'd0;
       children_written_o          <= 32'd0;
       children_dropped_capacity_o <= 32'd0;
-      children_refused_staging_o  <= 32'd0;
+      staging_stall_cycles_o  <= 32'd0;
       species_refused_o           <= 32'd0;
     end else begin
       tick_done_q <= 1'b0;
 
       // A child refused for staging space is counted where it is refused.
       if (chl_valid_i && chl_full_c && (st_q != S_IDLE))
-        children_refused_staging_o <= children_refused_staging_o + 32'd1;
+        staging_stall_cycles_o <= staging_stall_cycles_o + 32'd1;
 
       if (chl_valid_i && chl_ready_o) begin
         chl_m[chl_wp_q[CHILD_PW-1:0]] <= chl_record_i;

@@ -42,9 +42,22 @@
 //
 // Both drop paths are by ARRIVAL ORDER and never by timing:
 //
-//   * staging full  -> the child is refused and counted. It is refused at the
-//                      handshake, so the producer sees it; nothing is silently
-//                      swallowed.
+//   * staging full  -> the tick STALLS. It does not drop. The contract is
+//                      explicit twice over -- "If staging fills, the tick stalls
+//                      rather than dropping a particle", and the overflow table
+//                      row reads "staging FIFO full | stall, never drop".
+//
+//                      This header previously said the child was "refused at the
+//                      handshake", which is a law the contract forbids, and the
+//                      counter beside it was named children_refused_staging_o to
+//                      match. No child is ever lost here: chl_ready_o simply goes
+//                      low and the producer holds. The counter is therefore
+//                      renamed staging_stall_cycles_o and measures what it
+//                      always measured -- CYCLES of staging backpressure, not
+//                      children. It was incrementing once per clock while a held
+//                      valid met a full FIFO, so as a child count it read high,
+//                      and "refused children" that the contract says cannot
+//                      exist is the worst possible thing for a number to claim.
 //   * tick capacity -> later children dropped, survivors retained.
 //
 // The contract's reason is worth keeping in front of the reader: dropping under
@@ -123,7 +136,7 @@ module zhao_part_state #(
     output var logic [31:0]      survivors_o,
     output var logic [31:0]      children_written_o,
     output var logic [31:0]      children_dropped_capacity_o,
-    output var logic [31:0]      children_refused_staging_o,
+    output var logic [31:0]      staging_stall_cycles_o,
     output var logic [31:0]      species_refused_o
 );
 
@@ -236,14 +249,14 @@ module zhao_part_state #(
       survivors_o                 <= 32'd0;
       children_written_o          <= 32'd0;
       children_dropped_capacity_o <= 32'd0;
-      children_refused_staging_o  <= 32'd0;
+      staging_stall_cycles_o  <= 32'd0;
       species_refused_o           <= 32'd0;
     end else begin
       tick_done_q <= 1'b0;
 
-      // A child refused for staging space is counted where it is refused.
+      // Staging backpressure, in CYCLES. Not a loss: see the header.
       if (chl_valid_i && chl_full_c && (st_q != S_IDLE))
-        children_refused_staging_o <= children_refused_staging_o + 32'd1;
+        staging_stall_cycles_o <= staging_stall_cycles_o + 32'd1;
 
       if (chl_valid_i && chl_ready_o) begin
         chl_m[chl_wp_q[CHILD_PW-1:0]] <= chl_record_i;
