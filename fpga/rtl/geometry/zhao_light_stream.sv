@@ -921,6 +921,17 @@ module zhao_light_stream #(
       // ---------------------------------------------------- divider accept ---
       if (!dq_empty_c && dv_ready_w) dq_rd_q <= dq_rd_q + 4'd1;
 
+      // A finished quotient offered on a GAIN clock that the colour engine
+      // does not take. It lives OUTSIDE the stall guard on purpose: written
+      // inside it, the only way to reach it was `cap_v_q` still set at a gain
+      // clock, and that state cannot occur -- the promote at the intervening
+      // emission clock always clears it. It was a counter that could never
+      // fire, asserted zero, reading like evidence. The sweep in
+      // `light_stream_directed` is what found it, by naming the counters that
+      // never moved instead of only checking the ones that did.
+      if (dv_rvalid_w && !dv_rready_c && (cl_ph_q == 1'b0))
+        colour_backpressure_o <= colour_backpressure_o + CNTW'(1);
+
       // ------------------------------------------------- colour / retire -----
       if (!col_stall_c) begin
         cl_ph_q <= !cl_ph_q;
@@ -940,8 +951,6 @@ module zhao_light_stream #(
             logical_raw_saturations_o <= logical_raw_saturations_o + CNTW'(1);
           if (dv_degen_w && !dv_tago_w[TG_NULL])
             degenerate_terms_o <= degenerate_terms_o + CNTW'(1);
-        end else if (dv_rvalid_w && (cl_ph_q == 1'b0)) begin
-          colour_backpressure_o <= colour_backpressure_o + CNTW'(1);
         end
 
         cp_v_q <= 1'b0;

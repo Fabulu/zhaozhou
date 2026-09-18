@@ -863,6 +863,134 @@ int main(int argc, char** argv) {
     g_t.terms += 2 * burst.size();
   }
 
+  // ---- 12b: THE TWO REMAINING COUNTERS, AND THE SWEEP ---------------------
+  // A counter asserted zero that nobody has ever seen move is a broken
+  // instrument until proven otherwise, so every one of them is accounted for
+  // HERE -- before section 13's reset wipes the totals -- and the sweep below
+  // NAMES any that are still zero rather than leaving it to be noticed.
+  {
+    // nlights above the descriptor set: clamped and counted, never aliased
+    // onto a slot that does not exist.
+    const uint32_t nc0 = dut.nlights_clamped_o;
+    for (uint32_t i = 0; i < kLightsMax; ++i) {
+      L[i] = Light{}; L[i].ly = kOne; L[i].cr = 0x1000;
+    }
+    publish(dut, L, kLightsMax, env);
+    Vtx v; v.ny = kOne; v.nlights = 15; v.src = 0x0E01;
+    check_one(dut, v, L, env, "nlights=15 clamps to LIGHTS_MAX");
+    check(dut.nlights_clamped_o == nc0 + 1, "nlights_clamped_o moved by exactly 1", nc0 + 1,
+          dut.nlights_clamped_o);
+
+    // The law's own INT32 rail. It engages only where the normal is TINY and
+    // the light is huge, which uniform sampling never reaches -- and the
+    // composed vertex is unremarkable either way, which is exactly why the
+    // counter has to be read rather than inferred from the colour.
+    const uint32_t rs0 = dut.logical_raw_saturations_o;
+    Env zero;
+    L[0] = Light{}; L[0].lx = INT32_MAX; L[0].ly = INT32_MAX; L[0].lz = 0; L[0].cr = 0x10000;
+    publish(dut, L, 1, zero);
+    Vtx s; s.nx = 1; s.ny = 1; s.nz = 0; s.nlights = 1; s.src = 0x0E02;
+    const Out so = check_one(dut, s, L, zero, "rail sun: the law's INT32 clamp engages");
+    check(so.rgb.r == 0x10000u, "a saturated raw still clamps to exactly 1.0", 0x10000u, so.rgb.r);
+    check(dut.logical_raw_saturations_o == rs0 + 1,
+          "logical_raw_saturations_o counts the TERM and moved by exactly 1", rs0 + 1,
+          dut.logical_raw_saturations_o);
+
+    // The two backpressure counters INSIDE the pipeline need a case the
+    // fixtures never produce: a term stream running at full rate against a
+    // consumer that has almost stopped. Every other section is either
+    // preparation-limited (so the divider is never pressed) or drains freely
+    // (so the colour engine never falls behind). Supplied magnitudes remove
+    // the preparation limit; eight lights and a consumer taking one packet in
+    // sixty do the rest.
+    const uint32_t db0 = dut.divider_backpressure_o;
+    const uint32_t cb0 = dut.colour_backpressure_o;
+    {
+      for (uint32_t i = 0; i < kLightsMax; ++i) {
+        L[i] = Light{}; L[i].ly = kOne; L[i].cr = 0x1000; L[i].cg = 0x800; L[i].cb = 0x400;
+      }
+      publish(dut, L, kLightsMax, zero);
+      std::vector<Vtx> jam(48);
+      for (uint32_t i = 0; i < jam.size(); ++i) {
+        Vtx j;
+        j.nx = 3000; j.ny = 40000; j.nz = -9000;
+        j.mag_valid = true;
+        j.mag = static_cast<uint32_t>(mag_of(j.nx, j.ny, j.nz));
+        j.creature = true;
+        j.nlights = kLightsMax;
+        j.src = static_cast<uint16_t>(0x0F00 + i);
+        jam[i] = j;
+      }
+      const std::vector<Out> quick = run_batch(dut, jam, 0, nullptr);
+      const std::vector<Out> jammed = run_batch(dut, jam, -60, nullptr);
+      uint32_t moved = 0;
+      for (size_t i = 0; i < jam.size(); ++i)
+        if (quick[i].rgb.r != jammed[i].rgb.r || quick[i].rgb.g != jammed[i].rgb.g ||
+            quick[i].rgb.b != jammed[i].rgb.b || quick[i].src != jammed[i].src)
+          ++moved;
+      check(moved == 0,
+            "a pipeline jammed all the way back to term issue changed no packet and "
+            "reordered none", 0, moved);
+      check(dut.divider_backpressure_o > db0,
+            "divider_backpressure_o was SEEN TO MOVE: term issue really does stop when the "
+            "quotient queue fills", 1, (dut.divider_backpressure_o > db0) ? 1 : 0);
+      check(dut.colour_backpressure_o > cb0,
+            "colour_backpressure_o was SEEN TO MOVE: a result waiting on the colour engine "
+            "really is counted", 1, (dut.colour_backpressure_o > cb0) ? 1 : 0);
+      g_t.normals += 2 * jam.size();
+      g_t.vertices += 2 * jam.size();
+    }
+
+    struct Ctr { const char* name; uint32_t v; };
+    const Ctr all[] = {
+        {"normal_inputs", dut.normal_inputs_o},
+        {"normal_prepared", dut.normal_prepared_o},
+        {"roots_issued", dut.roots_issued_o},
+        {"roots_retired", dut.roots_retired_o},
+        {"supplied_mags", dut.supplied_mags_o},
+        {"terms_accepted", dut.terms_accepted_o},
+        {"terms_retired", dut.terms_retired_o},
+        {"terms_null", dut.terms_null_o},
+        {"normal_queue_wait", dut.normal_queue_wait_o},
+        {"descriptor_wait", dut.descriptor_wait_o},
+        {"dot_product_slots", dut.dot_product_slots_o},
+        {"square_product_slots", dut.square_product_slots_o},
+        {"unused_product_slots", dut.unused_product_slots_o},
+        {"divider_backpressure", dut.divider_backpressure_o},
+        {"colour_backpressure", dut.colour_backpressure_o},
+        {"output_backpressure", dut.output_backpressure_o},
+        {"epoch_refusals", dut.epoch_refusals_o},
+        {"logical_raw_saturations", dut.logical_raw_saturations_o},
+        {"degenerate_terms", dut.degenerate_terms_o},
+        {"vertices_lit", dut.vertices_lit_o},
+        {"degenerate", dut.degenerate_o},
+        {"ndl_clamp_lo", dut.ndl_clamp_lo_o},
+        {"ndl_clamp_hi", dut.ndl_clamp_hi_o},
+        {"rgb_sat", dut.rgb_sat_o},
+        {"cfg_refused", dut.cfg_refused_o},
+        {"nlights_clamped", dut.nlights_clamped_o},
+        {"seam_mismatch", dut.seam_mismatch_o},
+    };
+    std::printf("[stream] COUNTER SWEEP (every counter except the two unreachable guards):\n");
+    int still_zero = 0;
+    for (const Ctr& c : all) {
+      std::printf("[stream]   %-24s %10u%s\n", c.name, c.v, (c.v == 0) ? "   <-- NEVER MOVED" : "");
+      if (c.v == 0) ++still_zero;
+    }
+    check(still_zero == 0,
+          "every counter here was SEEN TO MOVE; the two that cannot be reached with legal "
+          "stimulus (root_queue_overflow_o, tag_mismatch_o) are fired in tests/mutants",
+          0, static_cast<uint32_t>(still_zero));
+    check(dut.root_queue_overflow_o == 0,
+          "root_queue_overflow_o quiet -- and it is fired deliberately by "
+          "light_stream_rqfull_mutant, so this zero is a measurement and not a hope",
+          0, dut.root_queue_overflow_o);
+    check(dut.tag_mismatch_o == 0,
+          "tag_mismatch_o quiet -- fired deliberately by light_stream_skew_mutant",
+          0, dut.tag_mismatch_o);
+    load_env(dut, env);
+  }
+
   // =========================================================================
   // 13: THE RULED FIXTURE -- 120,000 NORMALS, 480,000 LIGHT TERMS
   // =========================================================================
