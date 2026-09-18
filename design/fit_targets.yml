@@ -2204,14 +2204,38 @@ targets:
       - fpga/rtl/memory/zhao_hps_arbiter.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
       - fpga/rtl/raster/zhao_raster_fbwrite.sv
-      - fpga/rtl/geometry/zhao_geom_setup.sv
-      - fpga/rtl/geometry/zhao_geom_meshfetch.sv
-      - fpga/rtl/geometry/zhao_geom_assemble.sv
-      - fpga/rtl/geometry/zhao_geom_vdecode.sv
-      - fpga/rtl/geometry/zhao_geom_assetfetch.sv
-      - fpga/rtl/geometry/zhao_geom_project.sv
-      - fpga/rtl/geometry/zhao_geom_clip.sv
-      - fpga/rtl/geometry/zhao_geom_depthquant.sv
+      # THE GEOMETRY FRONT END WAS DECLARED HERE AND ELABORATED NOWHERE.
+      # Removed 2026-09-18 after tools/budget/closure_liveness.py measured it:
+      # zhao_geom_setup, meshfetch, assemble, vdecode, assetfetch, project,
+      # clip and depthquant had ZERO `Info (12128): Elaborating entity` lines
+      # in every one of this top's eight receipts. zhao_shell_top_v2 starts at
+      # the binner and has no vertex front end at all.
+      #
+      # The structural proof, not just the count: zhao_project_core.sv is not
+      # in this list, and zhao_geom_project instantiates it. Had the block
+      # elaborated, the fit would have failed MODMISSING. It fit clean eight
+      # times.
+      #
+      # Two reasons to remove rather than annotate. The list is read as "this
+      # is what the number covers", and 27,583 ALM covers none of it. And a
+      # dead entry still FREEZES its file under the live-tree rule -- on the
+      # day this was found, the projector-sharing work (the machine's largest
+      # single overrun) was picked up during a fit, found to need
+      # zhao_geom_project.sv, and put down again for a file that fit was not
+      # measuring.
+      #
+      # sourcesHashed drops 97 -> 89 and the source digest changes. That is a
+      # DECLARATION change, not a design change: the synthesised hierarchy is
+      # byte-identical, which the next receipt's ALM/DSP/M10K will show.
+      #
+      # Eleven other declared sources also never elaborate and are KEPT, being
+      # deliberate: the V1 siblings zhao_geom_bin_pipe, zhao_geom_binner and
+      # zhao_raster_tile_pipe, which the differential tests want in one source
+      # list; the unselected arithmetic variants zhao_attr_mul72x13_dsp3,
+      # zhao_dual18_mul, zhao_mul27_exact, zhao_raster_attrgrad_dsp3 and
+      # zhao_texture_bilerp_lane_dsp2; and zhao_raster_blend,
+      # zhao_raster_quant, zhao_raster_rcp24_svc. Run closure_liveness.py
+      # against the next receipt and this comment is the expected remainder.
       - fpga/rtl/raster/zhao_raster_rcp24_svc.sv
       - fpga/rtl/video/zhao_fb_tuple_pkg.sv
       - fpga/rtl/video/zhao_video_slotmgr_v2.sv
