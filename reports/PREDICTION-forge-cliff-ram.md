@@ -1,3 +1,11 @@
+> **PREMISE RETRACTED 2026-09-18, BEFORE ANY FIT RAN.** This file argues from
+> "a list of two thousand records, in flip-flops". It is not: `zhao_forge_cliff`
+> holds **119,808 block memory bits** in the census. I read the DSP column as
+> memory. The fit is still worth running -- that block's only row is a
+> `timeout` on a dirty tree and the RAM variant has no row at all -- but the
+> reasoning below and its 1,500-3,500 ALM range are unfounded and must be
+> rewritten before any receipt is read against them.
+
 # The next leaf fit after `@packet-h-texorder`: `zhao_forge_cliff_ram`
 
 Named in advance, with its question stated, per the batching law.

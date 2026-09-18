@@ -3088,6 +3088,12 @@ problem is solved by adoption.
 
 ## THE OWNER'S MEMORY DIRECTION, QUANTIFIED FOR THE FIRST TIME
 
+> **READ THE COLUMN-MISREAD CORRECTION AT THE END OF THIS DOCUMENT FIRST.**
+> The 22% memory figure and the ranked list below are WRONG -- I read the
+> DSP column as memory. The ~39,000 ALM headline survives; the list does
+> not, and `zhao_forge_cliff` and `zhao_geom_wcache` do not belong on it.
+
+
 Standing direction: *"we have lots of M10K, ALMs are over budget 15 times over,
 so what you can you need to solve with memory."* It has been acted on
 case by case. It has never been measured across the machine. From
@@ -3196,3 +3202,74 @@ The projector is the largest single overrun and correcting it moves the machine
 examined. It is also the one direction the owner has given standing instruction
 about, and the first thing any of this work should do is size two or three
 tables and see whether the trade is real.
+
+---
+
+## COLUMN MISREAD: four claims in this document were wrong, and here they are
+
+I read the Compilation Hierarchy Node table with the wrong column offsets for
+about an hour. The header says:
+
+```
+Compilation Hierarchy Node ; Combinational ALUTs ; Dedicated Logic Registers ;
+                             Block Memory Bits ; DSP Blocks ; Pins ; Virtual Pins
+```
+
+**There is no M9K column.** Memory is reported as BITS. I took the DSP column
+for memory and the Pins column for DSP, and published four things that follow
+from that and are false:
+
+| claimed | actually |
+|---|---|
+| "123 M9K of 553 used (22%)" | 123 is the **DSP** count. Memory is **1,029,005 of 5,662,720 bits — 18%** |
+| "`zhao_forge_cliff` … ZERO M9K", top of the memoryless list | it holds **119,808 memory bits** — it is one of the larger memory users |
+| "two blocks called a CACHE hold no memory" (`geom_wcache`, `field_progcache`) | `zhao_geom_wcache` **does** hold memory; only `field_progcache` does not |
+| "in the census both projectors report 0 DSP" | `zhao_geom_project` has **22 DSP**, `zhao_terrain_project` **11** |
+
+### What survives, recomputed
+
+**46 children hold zero block memory bits and 62,738 ALUT — 41% of the machine,
+≈39,776 ALM**, against a device whose memory is **18% used**. The headline
+barely moved (39,133 → 39,776) because it never depended on the column I got
+wrong — it is a count of ALUT in children with no memory, and both the old and
+new readings happened to select nearly the same number of children. **The
+ranked LIST changed a great deal**, which is the part that would have sent the
+next person to the wrong block:
+
+| ALUT | ≈ALM | REG | DSP | block |
+|---:|---:|---:|---:|---|
+| 5,272 | 3,342 | 1,712 | 3 | `zhao_terrain_bake` |
+| 4,052 | 2,569 | 895 | 0 | `zhao_raster_attrstep` |
+| 3,909 | 2,478 | 3,643 | 0 | `zhao_field_v3_ring_svc` |
+| 3,909 | 2,478 | 1,227 | 0 | `zhao_field_v3_normalize` |
+| 3,408 | 2,161 | 426 | 16 | `zhao_geom_skin_norm` |
+| 3,302 | 2,093 | 3,247 | 0 | `zhao_field_v3_len` |
+| 2,828 | 1,793 | 730 | 0 | `zhao_field_v3_spline` |
+| 2,700 | 1,712 | 2,707 | 0 | `zhao_terrain_tess` |
+| 2,547 | 1,615 | 1,490 | 0 | `zhao_field_progcache` |
+
+`zhao_forge_cliff` and `zhao_geom_wcache` **leave the list entirely**. The
+`field_v3` family stays, and the correction two sections up still applies to it:
+those are exact-by-contract and a plain table is ruled out.
+
+### And the `zhao_forge_cliff_ram` prediction's premise is gone
+
+`reports/PREDICTION-forge-cliff-ram.md` argues from *"a list of two thousand
+records, in flip-flops, beside 430 idle M10K."* **The list is already in RAM** —
+119,808 bits of it. The fit is still worth running, because that block's only
+row is a `timeout` on a dirty tree and the RAM variant has no row at all, but
+**the prediction's reasoning must be rewritten before the receipt is read
+against it**, and its ALM range is now unfounded.
+
+### The instrument lesson, since this is the second column error today
+
+The first was reading a `.setup.rpt` with a regex that matched three tables and
+reported 1,600 paths where there are 200. Both errors were **positional
+assumptions about a text table**, both survived several derived conclusions, and
+both were caught by an arithmetic inconsistency rather than by review — this one
+by noticing that the whole machine could not use 123 M10K while the shell alone
+fits in 136.
+
+`tools/budget/setup_path_census.py` exists because of the first. The lesson the
+second adds: **read the header row, once, and say in the code which column is
+which.** The fix took one command; the hour did not.

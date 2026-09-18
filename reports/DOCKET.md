@@ -89,6 +89,15 @@ from the worst setup path, and `min_fmax_mhz` reads the gating one with a
 fallback so historical rows are judged unchanged. Eleven tops carry
 `min_fmax_mhz: 100`.
 
+**CORRECTION, same evening.** An hour of analysis read the whole-machine
+hierarchy table with the wrong column offsets -- the DSP column taken for
+memory and Pins for DSP. Four claims followed and are struck; the full list
+is at the end of `reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md`. The
+one that reached this docket: the machine's memory is **18% of the device's
+bits**, not "22% of 553 M10K", and `zhao_forge_cliff` is NOT memoryless --
+it holds 119,808 bits. The ~39,000 ALM in children with no memory survives,
+because it never depended on that column.
+
 **Open, with the work specified:** three timing cones in texture and raster,
 all traced node by node from receipts. Cones 1 and 2 are committed and fitting
 as `@packet-h-texorder`; cone 3 (the binner deciding profile verdicts at write
