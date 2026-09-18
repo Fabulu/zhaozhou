@@ -460,13 +460,13 @@ module zhao_part_collide #(
     case (r_tan_src_c)
       SRC_FRIC: tan_c = COEF_W'(d_friction_i);
       SRC_DAMP: tan_c = COEF_W'(d_damping_i);
-      SRC_NEGE: tan_c = -COEF_W'(d_restitution_i);
+      SRC_NEGE: tan_c = -(COEF_W'(d_restitution_i));
       default:  tan_c = COEF_W'(0);
     endcase
     case (r_nrm_src_c)
       SRC_FRIC: nrm_k_c = COEF_W'(d_friction_i);
       SRC_DAMP: nrm_k_c = COEF_W'(d_damping_i);
-      SRC_NEGE: nrm_k_c = -COEF_W'(d_restitution_i);
+      SRC_NEGE: nrm_k_c = -(COEF_W'(d_restitution_i));
       default:  nrm_k_c = COEF_W'(0);
     endcase
   end
@@ -542,8 +542,8 @@ module zhao_part_collide #(
   logic                     inside_at_entry_c;
   always_comb begin
     vp_c              = use_plane_c ? vn_c : (VN_W'(vel_c[1]) <<< NRM_Q);
-    pen_c             = -PUSH_W'(dist_c);
-    inward_c          = -PUSH_W'(vp_c);
+    pen_c             = -(PUSH_W'(dist_c));
+    inward_c          = -(PUSH_W'(vp_c));
     inside_at_entry_c = hit_c && ((pen_c + PUSH_W'(EPS_Q)) > inward_c);
   end
 
@@ -558,9 +558,9 @@ module zhao_part_collide #(
   logic signed [POS_W-1:0]  pout_c [3];
 
   localparam logic signed [ACC_W-1:0]  V_MAX = ACC_W'((1 << (VEL_W-1)) - 1);
-  localparam logic signed [ACC_W-1:0]  V_MIN = -ACC_W'(1 << (VEL_W-1));
+  localparam logic signed [ACC_W-1:0]  V_MIN = -(ACC_W'(1 << (VEL_W-1)));
   localparam logic signed [DISP_W-1:0] P_MAX = DISP_W'((1 << (POS_W-1)) - 1);
-  localparam logic signed [DISP_W-1:0] P_MIN = -DISP_W'(1 << (POS_W-1));
+  localparam logic signed [DISP_W-1:0] P_MIN = -(DISP_W'(1 << (POS_W-1)));
 
   always_comb begin
     clamp_c = 1'b0;
