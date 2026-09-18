@@ -694,6 +694,24 @@ arrives first and explains almost all of the evidence**, which is this file's
 own law about diagnoses landing soft, wearing the clothes of an honest mea
 culpa.
 
+**A suite reads the LIVE TREE, so editing RTL while one runs makes its answer
+worthless — and the failures look real.** Added 2026-09-18. A full `ctest -L
+fast` was launched, then three RTL files were edited while it ran; it reported
+`lint_shell_top_v2`, `lint_shell_v2_lease_path` and `lint_shell_paired_diff`
+red. Linting the same top by hand, a minute later, gave **0 errors**. The reds
+were the lint targets reading half-written files.
+
+This is the exact converse of the rule above about not building into a tree a
+suite is reading, and it is easy to miss because the two feel like one rule
+about concurrency when they are two rules about *who is writing*. A fit is
+safe to run alongside edits — `run_block_fit.ps1` snapshots its sources. A
+SUITE is not, because nothing snapshots for it.
+
+The tell is a red in a target you did not touch, on a file you did. Do not
+debug it: stop the suite, clean `Testing/Temporary` (see above), finish the
+edit, and re-run. A suite whose inputs moved underneath it is not evidence in
+either direction — the greens are worth no more than the reds.
+
 **When `build.ninja` is stale it can be unable to regenerate itself.** One
 verilate rule declared `Vtb_perspuv_pair.cmake` among its outputs while running
 `--make json`, which writes the `.json` that is actually there — so a

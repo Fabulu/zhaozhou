@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
 // generator-sha256: 2d2ae17769fb6931c3812d1c20bd02f610b7bad968f54f197c9a5968d2ba0291
-// template-sha256: 42b2d178e244764ce8cf4ec1beba3f98a331db6471b944a5a2c1886b35bdda99
+// template-sha256: d12b6c7ca558b51b8c0a657d2420c62e228d3d6df78e73f1420639b893a1f7fb
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // ATTR_DSP3/BILERP_DSP2 are explicit top parameters; the G8A flow must set both to 1.
@@ -41,6 +41,13 @@ module zhao_raster_texture_v3_fit_top #(
   logic job_pending_q;
   logic job_valid_w, job_ready_w;
   logic [1156:0] job_meta_w;
+// In production the binner decides these when it writes the job and carries
+// them in the metadata bank's pad. This wrapper builds job_meta_w itself, so
+// it derives them from the same word by the same rule rather than asserting a
+// constant -- and zhao_raster_tile_pipe_v2's simulation-only equivalence
+// assert checks that it derived them correctly.
+wire [1:0] job_profile_bad_w = {(job_meta_w[424:378] == 47'd0),
+                                job_meta_w[268] || (job_meta_w[267:44] != 224'd0)};
   logic frame_fault_clear_pending_q;
   logic frame_fault_clear_valid_w, frame_fault_clear_ready_w, frame_fault_w;
   logic lifetime_structural_fault_w;
@@ -457,6 +464,7 @@ module zhao_raster_texture_v3_fit_top #(
       .job_tile_x_i(12'sd0), .job_tile_y_i(12'sd0),
       .job_tile_index_i(jobs_accepted_q[15:0]),
       .job_src_id_i(stimulus_lfsr_q[15:0]),
+    .job_profile_bad_i(job_profile_bad_w),
       .job_meta_i(job_meta_w), .frame_clear_word_i(64'd0),
       .frame_fault_clear_valid_i(frame_fault_clear_valid_w),
       .frame_fault_clear_ready_o(frame_fault_clear_ready_w),

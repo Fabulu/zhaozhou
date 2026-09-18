@@ -134,6 +134,15 @@ module tb_geom_binner_v2_pair #(
     .arena_full_o(old_arena_full_o), .arena_used_o(old_arena_used_o)
   );
 
+  // Local, not a bench port: the V1 half has no counterpart, so adding a
+
+  // port here would change the C++ harness interface for a signal the
+
+  // differential does not compare.
+
+  logic [1:0] v2_job_profile_bad_w;
+
+
   zhao_geom_binner_v2 #(
     .GRID_W(GRID_W), .GRID_H(GRID_H), .TILES(TILES), .TIDX_W(TIDX_W),
     .TRI_CAP(TRI_CAP), .TRI_W(TRI_W), .CHUNKS(CHUNKS),
@@ -161,6 +170,10 @@ module tb_geom_binner_v2_pair #(
     .job_first_o(v2_job_first_o), .job_last_o(v2_job_last_o),
     .job_tile_x_o(v2_job_tile_x_o), .job_tile_y_o(v2_job_tile_y_o),
     .job_src_id_o(v2_job_src_id_o), .job_meta_o(v2_job_meta_o),
+      // The V1 binner has no profile verdict to compare against, so this
+      // pair bench does not difference it. Connected explicitly rather than
+      // left off: an omitted port is a PINMISSING the next fit discovers.
+      .job_profile_bad_o(v2_job_profile_bad_w),
     .drain_busy_o(v2_drain_busy_o), .drain_done_o(v2_drain_done_o),
     .tile_references_o(v2_tile_references_o),
     .max_tile_list_depth_o(v2_max_tile_list_depth_o),

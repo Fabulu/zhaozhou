@@ -304,6 +304,25 @@ module zhao_geom_binner_v2 #(
   output logic signed [11:0] job_tile_y_o,
   output logic        [15:0] job_src_id_o,
   output logic       [METAW-1:0] job_meta_o,
+
+  // THE PROFILE VERDICTS, DECIDED AT WRITE AND CARRIED IN THE PAD.
+  //
+  // bit 0 = aux profile bad, bit 1 = area profile bad. `zhao_raster_tile_pipe_v2`
+  // used to derive both from `job_meta_i` on the edge this bank delivers it --
+  // a 225-bit OR reduction and a 47-bit zero-compare hanging straight off the
+  // RAM output. `@packet-h-satstage` measured that at 4.85 ns of an 11.37 ns
+  // path, four LUT levels, and it gated 30 paths into the attribute walker's
+  // queue because the fault term also drives admission.
+  //
+  // Deciding them HERE costs nothing that was not already paid for: the bank is
+  // META_SLICES x 40 bits and carries METAW, so the top `META_PAD_W` bits are
+  // storage this design already owns and already reads out every cycle. Two of
+  // the three are now used.
+  //
+  // Detection stays SAME-EDGE, which is the property the consumer's abort
+  // comment depends on -- the verdict arrives on the edge the metadata does,
+  // because it comes out of the same word.
+  output logic               [1:0] job_profile_bad_o,
   output logic               drain_busy_o,
   output logic               drain_done_o,   // one-cycle pulse: frame drained
 
@@ -414,11 +433,34 @@ module zhao_geom_binner_v2 #(
 
   // Explicit generate keeps Quartus 17 away from a zero-repeat concatenation
   // when a legal METAW is already aligned to the 40-bit physical slice width.
+  // THE TWO PROFILE VERDICTS, COMPUTED ON THE WRITE SIDE.
+  //
+  // These bit positions are the Packet-D layout and they are stated in exactly
+  // one other place, `zhao_raster_tile_pipe_v2`'s `profile_aux_bad_w` and
+  // `profile_area_bad_w`. Two copies of one fact is the shape this repository
+  // keeps finding gone stale, so the consumer keeps its original expressions
+  // as a SIMULATION-ONLY equivalence assertion against the bits this port
+  // delivers. The indices cannot drift apart without a test failing on the
+  // first job that exercises them.
+  logic meta_aux_bad_c, meta_area_bad_c;
+  assign meta_aux_bad_c  = tri_meta_i[268] || (tri_meta_i[267:44] != 224'd0);
+  assign meta_area_bad_c = (tri_meta_i[424:378] == 47'd0);
+
+  // Two pad bits are needed. The elaboration guard is not decorative: at a
+  // METAW that happens to align to the 40-bit slice there is no pad at all,
+  // and this feature would silently write into the ABI.
+  initial begin
+    if (META_PAD_W < 2)
+      $fatal(1, "zhao_geom_binner_v2: METAW=%0d leaves META_PAD_W=%0d; the profile verdicts need 2 pad bits",
+             METAW, META_PAD_W);
+  end
+
   generate
-    if (META_PAD_W == 0) begin : g_meta_no_pad
-      assign meta_wd = tri_meta_i;
+    if (META_PAD_W == 2) begin : g_meta_pad_exact
+      assign meta_wd = {meta_area_bad_c, meta_aux_bad_c, tri_meta_i};
     end else begin : g_meta_pad
-      assign meta_wd = {{META_PAD_W{1'b0}}, tri_meta_i};
+      assign meta_wd = {{(META_PAD_W-2){1'b0}},
+                        meta_area_bad_c, meta_aux_bad_c, tri_meta_i};
     end
   endgenerate
   assign meta_ra = `ZHAO_GEOM_BINNER_V2_META_RA(tri_ra);
@@ -481,6 +523,9 @@ module zhao_geom_binner_v2 #(
   logic [SLOT_W-1:0]    d_slot_r;
   logic [TRI_ENT_W-1:0] d_tri_r;
   logic [METAW-1:0]     d_meta_r;
+  // Registered on the SAME edge as d_meta_r, out of the SAME word, so the
+  // verdict and the metadata it describes can never be one job apart.
+  logic [1:0]           d_profile_bad_r;
   logic [5:0]           d_jx_r, d_jy_r;
   logic                 d_job_v, drain_done_r;
 
@@ -671,6 +716,7 @@ module zhao_geom_binner_v2 #(
   assign job_cy_o     = $signed(d_tri_r[125:105]);
   assign job_src_id_o = d_tri_r[141:126];
   assign job_meta_o   = d_meta_r;
+  assign job_profile_bad_o = d_profile_bad_r;
   // RASTER.EDGEWALK's `job_tile_x_i` is "the tile origin — the top-left PIXEL
   // of the 16×16 tile" (its contract, Input packet layouts), NOT a tile index.
   // The drain port is that port field for field, so the index is scaled here,
@@ -734,6 +780,7 @@ module zhao_geom_binner_v2 #(
       d_slot_r     <= {SLOT_W{1'b0}};
       d_tri_r      <= {TRI_ENT_W{1'b0}};
       d_meta_r     <= {METAW{1'b0}};
+      d_profile_bad_r <= 2'b00;
       d_jx_r       <= 6'd0;
       d_jy_r       <= 6'd0;
       d_job_v      <= 1'b0;
@@ -883,6 +930,7 @@ module zhao_geom_binner_v2 #(
             if (!d_job_v) begin
               d_tri_r  <= tri_q;
               d_meta_r <= meta_q[METAW-1:0];
+              d_profile_bad_r <= meta_q[METAW+1 -: 2];
               d_job_v  <= 1'b1;
             end else if (job_ready_i) begin
               d_job_v   <= 1'b0;

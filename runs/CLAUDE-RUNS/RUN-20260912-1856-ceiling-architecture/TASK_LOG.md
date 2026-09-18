@@ -3218,3 +3218,34 @@ Gates that went red and why, all of them working correctly:
   assignment instead.
 * packet_c / packet_d / raster_texture_v3_fit_top -- island + interface-manifest
   hash pins, refreshed with a pointer to the field diff recorded in packet_e.
+
+### 2026-09-18 — cone 3 implemented (the M10K trade)
+
+The binner now decides profile_aux_bad and profile_area_bad when it WRITES a
+job and stores them in two of the three pad bits its metadata bank already
+carries (29 slices x 40 = 1,160 physical against a 1,157-bit ABI). New 2-bit
+output job_profile_bad_o; bin_pipe carries the wire; the tile pipe consumes it
+instead of reducing 272 bits off the RAM output (a 225-bit OR plus a 47-bit
+zero-compare, measured at 4.85 ns of an 11.37 ns path).
+
+Same edge, same word, so the abort logic's documented same-edge invariant is
+untouched -- that is what makes this different from registering the fault term.
+
+The Packet-D bit positions are now stated in two files, so the tile pipe keeps
+its original expressions under `synthesis translate_off` and asserts them
+against the delivered bits on every offered job. Live in Verilator, absent from
+the fabric. An elaboration $fatal fires if a METAW leaves fewer than two pad
+bits rather than letting the feature write into the ABI.
+
+Also touched: the G8A template (derives the verdicts from the job word it
+builds itself) and tb_geom_binner_v2_pair (local wire, not a new bench port --
+that would change the C++ harness interface).
+
+Lint 0 errors on bin_pipe, island, pair bench, G8A wrapper and the composed
+shell. prod_top regenerated and confirmed unchanged. tile_pipe_v2 and
+bin_pipe_v2 moved PROTECTED -> CURRENT (fourth and fifth this campaign);
+binner pin refreshed and is no longer comment-only.
+
+ALSO: killed the full fast suite. It was started before these edits and was
+reporting lint reds on a tree I was rewriting -- 0 errors by hand a minute
+later. Debris cleaned, lesson added to CLAUDE.md's build note.

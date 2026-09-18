@@ -121,10 +121,24 @@ PROTECTED_HASHES = {
     # closing it needed one ENFORCED-BY line and no design change. This file's
     # bytes could not move while it sat in the protected set, which is how a
     # freeze and a lint rule can deadlock over a comment.
-    "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
-        "6c4d8d04bc64b7cf1b7ba36e7b4820c1f4e489785021dc12b48286525f61e861",
-    "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
-        "675fec61863184aee91692934d3434a9b2cc06c607a71d7250265d5197ccd204",
+    # `fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv` and
+    # `fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv` BOTH moved to CURRENT_HASHES
+    # on 2026-09-18, the fourth and fifth files to do so this campaign, and for
+    # the same kind of reason as the first three: a measured timing change,
+    # several packets after Packet E.
+    #
+    # `walk_q_r` was 30 of the 200 worst paths in the machine, and the receipt
+    # traced the cost to four LUT levels of `local_fault_pulse_o` -- 4.85 ns of
+    # an 11.37 ns path -- which is a 225-bit OR reduction and a 47-bit
+    # zero-compare hanging straight off the binner's metadata RAM output. The
+    # binner now decides both verdicts when it WRITES the job and carries them
+    # in pad bits the bank already had, so the tile pipe reads a verdict
+    # instead of computing one. The bin pipe is in the set only because it
+    # carries the wire between them.
+    #
+    # What this set asserts is that PACKET E did not touch these files, and
+    # that remains true. What it cannot assert any more is that they have never
+    # moved.
 }
 CURRENT_HASHES = {
     # Moved out of PROTECTED_HASHES on 2026-09-18 by owner decision.
@@ -163,12 +177,29 @@ CURRENT_HASHES = {
     # is still ZHAO_ATTR_V2_ROUND_NUM with the same two operands, and only their
     # source moved from inputs to the registers captured one edge earlier. The
     # negative-half mutant still selects it and still passes.
+    # Moved out of PROTECTED_HASHES on 2026-09-18 -- see the note in that set.
+    #
+    # The arithmetic is unchanged and is CHECKED to be unchanged: the tile
+    # pipe keeps its original expressions under `synthesis translate_off` and
+    # asserts them against the delivered bits on every offered job, so the
+    # Packet-D bit positions cannot drift between the two files that now state
+    # them. The assertion is live in Verilator and absent from the fabric.
+    "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
+        "dfc64deef75ef9404ecbfbbfc95f234eaaddcc832ccec49e7e7cb0bb5c09ecce",
+    "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
+        "e3080d6619ac3edb9a08abfad40406a61bec7f04b4c4cdcb88fa4cebca519eca",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
         "756643d985e8f0227000008f5f6e072416970c91b874c6d80e2b60e28f156b08",
     # Comment only: the ENFORCED-BY that closed the last ledger_check error.
     # No logic, no ports, no widths -- see the note in PROTECTED_HASHES above.
+    # Refreshed 2026-09-18: no longer comment-only. The binner now decides the
+    # two Packet-D profile verdicts when it WRITES a job and stores them in the
+    # metadata bank's pad -- storage it already had, already read out. See the
+    # note beside zhao_raster_tile_pipe_v2 above; this is the write half of the
+    # same change, and an elaboration guard fires if a METAW leaves fewer than
+    # two pad bits rather than letting it write into the ABI.
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
-        "5d61f2ab90355d38d2ef1b92bbc7c9273993a73ab27337efb9588fda33f28fd5",
+        "3e74db31e7e1bb344cc0c2bc2dbca4d1ab0099ae0e43775e1d0120da5374268b",
     # Refreshed 2026-09-18 with the COMBINE fence restructuring. The island
     # gained two wires and a per-entry fence loop; `u_own` is now
     # parameterised `.CMBQD(OWNER_CMBQD)` instead of a literal 4, so the fence

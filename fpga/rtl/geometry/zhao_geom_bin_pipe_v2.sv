@@ -243,6 +243,10 @@ module zhao_geom_bin_pipe_v2 #(
   logic signed [11:0] job_tile_x_w, job_tile_y_w;
   logic [15:0] job_source_w;
   logic [METAW-1:0] job_meta_w;
+  // bit 0 aux-profile bad, bit 1 area-profile bad -- decided by the binner at
+  // WRITE and carried in the metadata bank's pad, so the tile pipe reads a
+  // verdict instead of reducing 272 bits of it off the RAM output.
+  logic [1:0] job_profile_bad_w;
   logic [15:0] job_tile_index_w;
 
   zhao_geom_binner_v2 #(
@@ -280,6 +284,7 @@ module zhao_geom_bin_pipe_v2 #(
       .job_tile_x_o(job_tile_x_w), .job_tile_y_o(job_tile_y_w),
       .job_src_id_o(job_source_w),
       .job_meta_o(job_meta_w),
+      .job_profile_bad_o(job_profile_bad_w),
       .drain_busy_o(drain_busy_o),
       .drain_done_o(drain_done_o),
       .tile_references_o(binner_tile_references_o),
@@ -325,6 +330,7 @@ module zhao_geom_bin_pipe_v2 #(
       .job_tile_index_i(job_tile_index_w),
       .job_src_id_i(job_source_w),
       .job_meta_i(job_meta_w),
+      .job_profile_bad_i(job_profile_bad_w),
       .frame_clear_word_i(frame_clear_word_q),
       .frame_fault_clear_valid_i(tile_clear_valid_w),
       .frame_fault_clear_ready_o(tile_clear_ready_w),

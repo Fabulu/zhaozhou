@@ -53,6 +53,21 @@ module zhao_raster_tile_pipe_v2 #(
     input  logic         [15:0] job_tile_index_i,
     input  logic         [15:0] job_src_id_i,
     input  logic       [1156:0] job_meta_i,
+
+    // THE PROFILE VERDICTS, ALREADY DECIDED. bit 0 aux bad, bit 1 area bad.
+    //
+    // These used to be reduced here, off `job_meta_i`, on the edge the binner's
+    // metadata bank delivers it: a 225-bit OR and a 47-bit zero-compare, which
+    // `@packet-h-satstage` measured as 4.85 ns of an 11.37 ns path through
+    // `local_fault_pulse_o` into the attribute walker's queue enable. The
+    // binner now decides both when it WRITES the job and carries them in the
+    // bank's pad bits, which were already allocated and already read out.
+    //
+    // Same edge, same word, so the abort comment further down still holds --
+    // the verdict is not a cycle late, it simply stopped being computed twice.
+    // The original expressions survive below as a simulation-only equivalence
+    // check, so the two statements of the Packet-D layout cannot drift apart.
+    input  logic           [1:0] job_profile_bad_i,
     input  logic         [63:0] frame_clear_word_i,
 
     // Recoverable frame-fault clear.  Ready is exposed only at complete local,
@@ -269,9 +284,39 @@ module zhao_raster_tile_pipe_v2 #(
   logic terminal_prior_w;
   logic abort_now_w;
   logic profile_aux_bad_w, profile_area_bad_w;
-  assign profile_aux_bad_w = incoming_flat_request_w[268] ||
-                             (incoming_flat_request_w[267:44] != 224'd0);
-  assign profile_area_bad_w = (incoming_area2_w == 47'd0);
+  assign profile_aux_bad_w  = job_profile_bad_i[0];
+  assign profile_area_bad_w = job_profile_bad_i[1];
+
+  // THE EQUIVALENCE CHECK THAT KEEPS ONE FACT FROM BECOMING TWO.
+  //
+  // The Packet-D bit positions below are also stated in `zhao_geom_binner_v2`,
+  // which is where the verdicts are now decided. A layout stated twice and
+  // checked nowhere is the failure this repository has written down more than
+  // once, so the original expressions stay here as the reference and are
+  // asserted against the delivered bits on every offered job.
+  //
+  // `synthesis translate_off` keeps this out of the fabric. It does NOT keep it
+  // out of Verilator -- that was proven by planting a syntax error inside one
+  // and watching lint reject it -- which is exactly what is wanted: the check
+  // is live in every simulation and absent from the silicon.
+  //
+  // synthesis translate_off
+  logic profile_aux_bad_ref_c, profile_area_bad_ref_c;
+  assign profile_aux_bad_ref_c = incoming_flat_request_w[268] ||
+                                 (incoming_flat_request_w[267:44] != 224'd0);
+  assign profile_area_bad_ref_c = (incoming_area2_w == 47'd0);
+  always_ff @(posedge clk) begin
+    if (rst_n && job_valid_i) begin
+      a_profile_bad_matches_meta : assert
+          ((profile_aux_bad_w  == profile_aux_bad_ref_c) &&
+           (profile_area_bad_w == profile_area_bad_ref_c))
+        else $fatal(1,
+            "profile verdict disagrees with job_meta_i: aux %0b vs %0b, area %0b vs %0b -- the Packet-D layout has drifted between zhao_geom_binner_v2 and this file",
+            profile_aux_bad_w, profile_aux_bad_ref_c,
+            profile_area_bad_w, profile_area_bad_ref_c);
+    end
+  end
+  // synthesis translate_on
 
   // -------------------------------------------------------------------------
   // EDGEWALK and the one-entry, three-destination row broadcaster.
