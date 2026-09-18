@@ -228,7 +228,7 @@ CURRENT_HASHES = {
     # named for did not move: `cmb_owner_all_o` and `cmb_rp_o` are new ports of
     # zhao_texture_v3own, which is a CHILD, and the island consumes them
     # internally.
-        "8a43aa3967fee1dfebcd26f327df93fce302ddf6daf3684d68d108479eb07453",
+        "e9c9f4bcb526de4deae5ed94770e8b0ee43480969749a897b7b77dc4c0dfc7df",
 }
 
 

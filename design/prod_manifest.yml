@@ -463,6 +463,7 @@ excluded:
   # renamed mutant fires. Those are functional receipts, not adoption or fit
   # evidence. Production remains unchanged until zhao_terrain_pipe has a clean
   # composed fit and the NORMALS and DEPTHQUANT seams are designed and verified.
+  - zhao_geom_proj_lane: not-yet-adopted  GEOMETRY's half of the shared projector, built 2026-09-18 to close the gap zhao_proj_subsystem's header names -- client A's result port packed into zhao_geom_wcache, {arena,index} rider as the fill address, no adapter because zhao_vertex_arena's fill_ready_o is a stated constant 1'b1. It is wiring: nothing in it computes. Selecting one shared service instead of two wrappers (6,598 ALM / 33 DSP against ~12,400 / 66) needs this composed AND a producer driving it; the producer is still absent, so this is not yet adoptable on its own
   - zhao_proj_subsystem: not-yet-adopted  shared projection service + three-copy terrain arena shell behind generic reference ports; no embedded walker; used only inside the not-yet-adopted zhao_terrain_pipe
   - zhao_terrain_group_seq: not-yet-adopted  per-view arena allocation, ModeVtx fill/seal, ModeRef replay and release controller; used only inside the not-yet-adopted zhao_terrain_pipe
   - zhao_terrain_pipe: not-yet-adopted  composed ModeVtx/ModeRef terrain projection boundary; both-view dense/bitmap differential and release-mutant control pass, but composed fit, NORMALS, DEPTHQUANT and production adoption remain open

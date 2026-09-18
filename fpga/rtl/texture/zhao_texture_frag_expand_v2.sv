@@ -153,6 +153,18 @@ module zhao_texture_frag_expand_v2 #(
   //
   // The empty-case don't-care is ASSERTED below rather than argued, so it is a
   // property the suite checks on every offered job instead of a paragraph.
+  //
+  // AND THE ASSERTION WAS FIRED DELIBERATELY BEFORE ITS SILENCE WAS QUOTED.
+  // Replacing its `sample_valid_o` term with `1'b1` -- i.e. asserting that a
+  // write never lands on the address being read AT ALL -- fails immediately:
+  //
+  //   %Fatal: a_no_observed_read_during_write: fragment_m read-during-write is
+  //   OBSERVED: write ptr 0 == read ptr 0, occupancy 0
+  //
+  // So the collision happens constantly -- every push into an empty queue --
+  // the `sample_valid_o` term is the thing doing the work, and the assertion
+  // is not passing because the state is unreachable. Reproduce by making that
+  // one substitution and rebuilding the island tests.
   (* ramstyle = "no_rw_check" *)
   fragment_t fragment_m [FQD];
   logic [2:0] sample_pending_m [FQD];
@@ -389,9 +401,16 @@ module zhao_texture_frag_expand_v2 #(
       // `read_pointer_q == write_pointer_q` at empty and at full -- so what must
       // hold is that nothing consumes the read when they do.
       //
-      // At FULL the write cannot happen (`frag_ready_o` is `!queue_full_c`), so
-      // `frag_accept_c` is low. At EMPTY the write can happen but
-      // `sample_valid_o` is low. This asserts the conjunction directly rather
+      // At FULL the write cannot happen, so `frag_accept_c` is low.
+      // ENFORCED-BY: fpga/rtl/texture/zhao_texture_frag_expand_v2.sv:frag_ready_o
+      // (`assign frag_ready_o = !queue_full_c;`, and `frag_accept_c` is
+      // `frag_valid_i && frag_ready_o`).
+      //
+      // At EMPTY the write can happen but `sample_valid_o` is low.
+      // ENFORCED-BY: fpga/rtl/texture/zhao_texture_frag_expand_v2.sv:sample_valid_o
+      // (`assign sample_valid_o = !queue_empty_c && (|head_sample_pending_c);`).
+      //
+      // This asserts the conjunction directly rather
       // than either half, so it covers both cases and any third nobody thought
       // of -- if a write ever lands on the address being read while a consumer
       // is looking, the suite says so instead of one fragment going quietly
