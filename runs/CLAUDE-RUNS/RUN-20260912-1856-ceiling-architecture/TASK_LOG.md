@@ -2620,3 +2620,59 @@ over a COMMENT.** Nothing about that file's logic changed.
 otherwise and just continue with work. You're allowed to make decisions like the
 one before on your own."* The attrgrad unfreeze was the last one asked; the
 binner unfreeze was decided under this instruction and recorded here instead.
+
+---
+
+## The sibling's ten-pin instrument now exists, and two things about it are honest
+
+**It generates and it lints.** `fpga/rtl/generated/zhao_shell_v2_fit_top.sv`,
+2,557 lines, 217 ports, lint-clean against the sibling's real 97-source closure
+in synthesis mode. The `KeyError: 'tri_area2_i'` blocker is closed and the
+answer was smaller than the question: `zhao_raster_tile_pipe_v2` has exactly TWO
+refusal conditions, so the whole legality surface is a non-zero area2 (already
+computed and already guarded) and a flat request with bit 268 clear and
+[267:44] zero, leaving 73 of 298 bits free.
+
+**The policy had the flattering declaration sitting in it the whole time.**
+`tri_flat_request_i`'s `dynamic_mask` was 0x3fff...fff -- all 298 bits declared
+free to toggle, INCLUDING the 225 that must stay zero. That is exactly the
+failure the file's own warning describes: entropy parks the pipe in refusal,
+the measured area shrinks in the flattering direction, and the smoke harness
+blesses the run because the declared mask still matches what toggled. Narrowed
+to the 73-bit legal mask with a `constant_reason`.
+
+**Verified by reading the emitted RTL back**, not by trusting the generator's
+guard: both flat-request literals checked directly against bit 268 and
+[267:44], and confirmed distinct. A guard and the bytes it guards are two
+different things.
+
+**Both new gates were seen to FIRE.** `shell_v2_fit_generated_freshness` was
+fired by appending one line to the wrapper -- red -- then regenerated and
+confirmed byte-identical to before the perturbation.
+
+**And a correction to my own commit message.** I wrote that a wrapper nothing
+fits is "exactly the shape `uncashed_cheques.py` exists to catch". It is not:
+the tool runs, self-tests 4 fire / 4 no-fire, scans 271 modules, reports 7 open
+rows, and `shell_v2_top` is in none of them. Its entry condition is "measured OR
+fit-targeted", and this wrapper has never been either -- so it is invisible to
+the detector precisely BECAUSE the cheque was never partially cashed. A clean
+run means nothing ALREADY measured is uninstalled, not that nothing is.
+
+**What it still owes:** nothing fits it. V1's instrument is not a
+`run_block_fit` target either; the ten-pin flow is `run_shell_fit.ps1`, 36 KB
+hardcoded to V1 (wrapper path, `fpga/quartus/shell_fit` project with its
+.qsf/.sdc/.qpf/report.tcl, gate name). That launcher needs parameterising --
+a launcher/project job, not a generator one.
+
+## The whole-machine budget rests partly on expired receipts
+
+`uncashed_cheques.py` check 2 lists rows whose files moved AFTER the fit that
+measured them, several from dirty trees. `zhao_project_core` asserts 33 DSP from
+a fit whose file moved 23.9 days later -- and the largest breach in the
+scoreboard, *projection and result arenas* at 12,267 ALM and 66 DSP, is two
+instances of that block. So half of it comes from an expired row.
+
+Not an argument that the machine is secretly smaller. It means 173 DSP and
+40,591 ALM are an ESTIMATE built partly on stale rows, and the re-measurement is
+a piece of work with a cost that belongs in the plan rather than being
+discovered when a closure claim is challenged.

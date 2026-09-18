@@ -1026,6 +1026,33 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > owner's answer on the protected file before anything is edited, and then the
 > forwarding compare in `v3own` — a different problem needing a different fix.
 >
+> #### And the whole-machine numbers rest on rows that have gone stale
+>
+> Run 2026-09-18, `tools/budget/uncashed_cheques.py` check 2 — *the repair
+> landed, the receipt did not*. A sample of what it lists:
+>
+> ```
+> zhao_project_core     row asserts 33 DSP   file moved 23.9d AFTER the fit
+> zhao_geom_pose_decode row asserts 18 DSP   file moved 17.3d after
+> zhao_terrain_normals  row asserts 18 DSP   DIRTY TREE, moved 18.1d after
+> zhao_geom_cull        row asserts 15 DSP   file moved 18.3d after
+> zhao_geom_mat3x4_mul  row asserts  9 DSP   file moved 17.3d after
+> ```
+>
+> `zhao_project_core` matters most: the *projection and result arenas* domain is
+> the largest breach in the scoreboard at 12,267 ALM and 66 DSP, and it is two
+> instances of this block — so **half that number comes from a row describing a
+> file that changed three weeks later**, and several of these were taken from a
+> dirty tree besides, where the digest describes nothing.
+>
+> This does not make the scoreboard useless and it is not an argument that the
+> machine is secretly smaller. It means the 173-DSP and 40,591-ALM totals are
+> **an estimate built partly on expired receipts**, and that the re-measurement
+> is itself a piece of work with a cost — which belongs in the plan rather than
+> being discovered when a closure claim is challenged. `tools/budget/
+> dsp_census.py` says so in its own header (*"STALENESS NOT CHECKED"*); this
+> section is here so the roadmap says it too.
+>
 > *(The first two attempts at this table were wrong, and both in the flattering
 > direction. One reported every family ending at `gpu_clk`, which reads as "the
 > virtual-pin boundary dominates" and excuses the design; the other concluded
