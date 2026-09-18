@@ -1061,6 +1061,27 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > tree underneath it risks the receipt being stamped `rtlCleanAtHead: false` —
 > which would make a 23-minute measurement worthless for the usual reason.
 >
+> ##### `v3own` is NOT the next cheap win, and that is worth saying in advance
+>
+> Its family is 276 paths at −5.221, `c3t_v_q → clm_q[0..47][2:0]`, and the shape
+> looks inviting: one valid bit into an array. It is not a deep arithmetic chain
+> — `fwd_t_hit_c` is a shallow compare on slot, generation and a ticket mask —
+> so the cost is the compare plus the acceptance logic plus a 64-way write
+> decode, and the obvious fix is to pipeline the forward decision.
+>
+> **That decision is the T2 lifetime contract.** The comment above it cites the
+> owner's ruling directly — *"an owner's authority ends at its ordered external
+> output transfer, and matching a slot's residual generation bits does not
+> extend the owner's authority after retirement"* — and S8.2 requires C2 to
+> check snapshot identity AND current full-ticket membership, with S8.1 giving
+> a counterexample for each half. Adding a cycle to a forwarding path whose
+> whole purpose is to be exact *within one cycle* is a change to ratified
+> behaviour, not a restructuring.
+>
+> So the ordering is: `uvw_m` (mechanical, no behaviour change), then measure
+> again, and only then decide whether `v3own` is worth opening — with the
+> contract in hand and the owner's ruling read first.
+>
 > #### And the whole-machine numbers rest on rows that have gone stale
 >
 > Run 2026-09-18, `tools/budget/uncashed_cheques.py` check 2 — *the repair
