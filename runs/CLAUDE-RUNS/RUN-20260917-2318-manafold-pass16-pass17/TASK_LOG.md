@@ -74,8 +74,10 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Independently re-ran the exact saved nodule gate. The first attempt crashed uniformly with missing runtime DLLs because `zhao-env.ps1` was not sourced; after sourcing the required environment, normal and all five inverted F/A/B/C/E mute controls returned RC 0 and each named mute visibly fired the gate. This also exposed a provenance discrepancy to resolve before acceptance: the saved gate reports authored/actual rear-socket rho `1.043` / `1.035..1.162`, while Pass-16 findings/card prose still cite `0.960` / `0.950..1.081`.
 - Clean direct Pass-17 baseline renderer build completed in `build-p17-baseline` (MD5 `146F47512B9F69800E194E8DEACAB0B7`). The first launch without `zhao-env.ps1` exited 53 from missing runtime DLLs; with the required environment sourced, `manafold-hit` rendered 140 frames at sequence CRC `0x24122E5A`, exactly matching accepted final4. Binary MD5 is not a reproducibility oracle here; output CRC is.
 - Built and ran fresh `mexpress` and `meyecam` baselines from current main. Both return 0. `mexpress`'s viewer-side proxy puts Manafold only 1.03× ahead of Zixxtrixx (28.5% vs 27.6%) and explicitly defers to the rendered comparison; `meyecam` reports `taunt3` 91% at-least-one / 82% both-eye readability and `trick` only 50% / 47%, corroborating the direct expression/identity review questions without choosing art values.
+- Fresh current-source `mprobe`, `mspan` and `mnodule` baselines also return 0. They establish the protected starting contracts: all declared contacts/clearance and closure remain green; public differential ball motion gates slot 0/2/21; and the five-joint diagnostic reports F/A/B/C/End plus the opposed A+79/B−70/C+118 pose. These remain structure evidence, not the missing public per-carrier visual proof.
 - Expression/clip recon completed in `PASS17-EXPRESSION-RECON.md`: no eye-size channel exists; the base 270×84 long lens must be re-authored wider/splinter-free by eye before asymmetric large/small acting. Fall's f339 is the interpolated half-frame wrapping quats/translations/deformation toward key 0 while `wrap_root_delta` protects root only, so the correct contract is hold-last/non-loop. Trick's held 180° root-Z turn directly faces the creature backward. Native side-by-side confirms taunt3's timing exists but its low back-facing hold and static small eyes still fail the comic-expression bar.
-- Started a dedicated architecture synthesis with an explicit hardware/format-cost decision for the eye-size channel; no production source changes begin before that report names the identity-default path and all green/red gates.
+- Architecture ratified in `PASS17-ARCHITECTURE.md`: optional Q1.15 uniform per-bone scale is allocated only on expression clips, carries pupil children structurally and leaves the hot vertex path unchanged; public `mjointpub` proves five visible carriers; Fall is hold-last/non-loop; Trick gets a rendered axis ladder; taunt3 combines front-readable body, five carriers and asymmetric eyes. Main-lane correction to the proposal: scale presentation midpoints use rounded saturated linear averaging, not Catmull-Rom, so identity/monotonicity cannot overshoot.
+- Wrote durable `PASS-17-INVENTORY.md` / `PASS-17-PLAN.md` beside Manafold and committed/pushed Upheaval architecture checkpoint `8049106`.
 - Continued with one isolated GPT visual-review fork at a time so no batch shares image payload with this main thread.
 
 ---
@@ -106,7 +108,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `PASS16-LIVE-MEDIA-SHA256.txt`
 - `pass16-media-gates.log`
 - `PASS16-MEDIA-CLOSURE.md` and `PASS16-PRODUCTION-VERIFY.md`
-- `PASS17-HISTORY-RECON.md`, `PASS17-ANTENNA-RECON.md`, `PASS17-EXPRESSION-RECON.md`
+- `PASS17-HISTORY-RECON.md`, `PASS17-ANTENNA-RECON.md`, `PASS17-EXPRESSION-RECON.md`, `PASS17-ARCHITECTURE.md`
 - Pass-17 taunt comparison plates (`PASS17-TAUNT3-PUNCHLINE.png`, `PASS17-ZIXX-*-TAUNT-KEYS.png`)
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
@@ -118,12 +120,15 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Accept final4 as the shipping Pass-16 generation after 28/28 full-sheet passes; do not spend another correction cycle on non-reproducing Taunt-III bars.
 - Carry Fall's f338→f339 restart and Trick's long back-facing rotation into Pass 17 as explicit historical remainder.
 - Encode through the existing `tovideo.py` / freshness / decode / deploy path from a junction to the exact accepted frame root; do not copy or regenerate frames.
+- Pass 17 uses an optional uniform Q1.15 bone-scale sidecar rather than spare deform lane 4 or eye-specific vertex metadata; allocate only on expression clips and prove empty/identity byte equivalence before authoring.
+- Fall is deliberately one-shot (`hold_last` plus non-loop site contract); Trick keeps its headstand/contact but changes root flip path, not camera concealment; taunt3 keeps timing and changes the held picture.
+- Public antenna proof is same-binary, same-frame visible-skin A/B for F/A/B/C/E. Existing private controls are preserved but cannot close Direction 14 alone.
 
 ---
 
 ## Next Steps
 
-1. Finish all 28 WebM/poster encodes and require encoder RC 0.
-2. Finalize Pass-16 findings/card provenance, assemble, run freshness and full decode gates.
-3. Commit and push both repos, integrate to `main`, deploy production with `-Project upheaval -Branch main`, and verify production bytes.
-4. Inventory all Pass-17 historical remainder and owner direction, then author/implement the eye-size expression pass including visibly larger and smaller eye morphs.
+1. Implement and independently verify the optional Q1.15 uniform-scale primitive/core tests; commit and push before Manafold consumes it.
+2. Add public `mjointpub` five-carrier controls, correct stale architecture prose and close/authorize antenna finish from a quiet native plate; commit and push.
+3. Render-select the splinter-free base eye, author large/small expression, Fall hold-last/non-loop, Trick axis path and integrated taunt3 punchline; require targeted controls and by-eye gates.
+4. Commit/push the authored packet, render one exact 28-subject generation, review/encode/gate, integrate mains, publish and verify every production byte.
