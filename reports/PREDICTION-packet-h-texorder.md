@@ -384,3 +384,50 @@ contents have been decidable in advance from the receipt rather than guessed.
 Ordered by risk, lowest first: cone 5 is bit-exact arithmetic with a
 differential already watching it; cone 4 needs one pointer bit and an assertion;
 cone 3 is already done and needs nothing.
+
+### The three-change round, SIZED — 156 of 200 paths, and the wall after it
+
+Measured with the committed parser rather than another ad-hoc regex, pairing
+each of the 200 `Summary of Paths` rows with its own `Data Arrival Path`
+section, and asking of each path whether it passes through the cone in question:
+
+| | cone | paths | worst | best |
+|---|---|---:|---:|---:|
+| 3 | the fault-OR (`local_fault_pulse_o`) — **committed, unfitted** | **124** | −1.954 | −1.369 |
+| 5 | the attrgrad multiply (`mul_x_r` / `mul_y_r`) | **28** | **−2.025** | −1.384 |
+| 4 | the fragment RAM's read-during-write bypass | **5** | **−2.540** | −1.442 |
+| | **union** | **156 of 200** | | |
+
+**44 paths survive all three, and their worst is −1.879** — eight paths ending
+at `cfg_rsp_generation_q`, then `cfg_rsp_op_q` at −1.657, `o_a0` at −1.646,
+`div_in_ru_q` at −1.383.
+
+So the forecast for the three-change round, stated as arithmetic rather than
+hope:
+
+```
+now                     gpu_clk 79.74 MHz   worst -2.540
+after cones 3 + 4 + 5   gpu_clk ~84.2 MHz   worst -1.879   (1000 / (10 + 1.879))
+```
+
+**And that is why all three must ship together, now demonstrably.** Cone 4 owns
+the worst path but only five paths; cone 5 owns the second-worst and 28; cone 3
+owns 124 but none worse than −1.954. Ship cone 3 alone and the clock does not
+move at all. Ship cone 4 alone and it moves to 1000/(10+2.025) = 83.2 but leaves
+124 late paths and most of the TNS. Only the union both moves the clock and
+drains the band.
+
+### What it does not reach
+
+**~84 MHz is not 100**, and the 44 survivors have no dominant endpoint — the
+largest group is eight paths. The gap from 84 to 100 is a band starting at
+−1.879 with nothing in it worth a dedicated cone, which is the same shape the
+texture band had at −2.5 and needed three cones to clear.
+
+The honest projection for the remaining 16 MHz is **several more rounds of three
+or four small cones each**, each round worth two to four MHz, found the way
+these were: trace the receipt, group by destination to rank, then walk the
+arrival details to size. That loop now has a tool for the first half
+(`setup_path_census.py`) and none for the second — sizing a cone by how many
+paths pass through an intermediate node is what I got wrong twice today, and it
+is the obvious next addition to that tool.

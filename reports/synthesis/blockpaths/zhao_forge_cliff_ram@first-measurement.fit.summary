@@ -1,0 +1,20 @@
+Fitter Status : Successful - Fri Sep 18 10:02:30 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_forge_cliff_ram
+Family : Cyclone V
+Device : 5CSEBA6U23I7
+Timing Models : Final
+Logic utilization (in ALMs) : 976 / 41,910 ( 2 % )
+Total registers : 939
+Total pins : 0 / 314 ( 0 % )
+Total virtual pins : 273
+Total block memory bits : 120,964 / 5,662,720 ( 2 % )
+Total RAM Blocks : 15 / 553 ( 3 % )
+Total DSP Blocks : 2 / 112 ( 2 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 6 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )
