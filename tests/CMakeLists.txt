@@ -12359,3 +12359,43 @@ verilate(test_geom_group_seq_seal_early_mutant
   SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_group_seq_mutant.sv)
 add_test(NAME geom_group_seq_seal_early_mutant COMMAND test_geom_group_seq_seal_early_mutant)
 set_tests_properties(geom_group_seq_seal_early_mutant PROPERTIES LABELS "fast;mutant")
+
+# ---------------------------------------------------------------------------
+# GEOM.LIGHT (phase 5, ZH-085) -- the vertex-RGB COMPOSITION.
+#
+# THE SOURCE LIST IS THREE FILES AND THAT IS THE POINT. This block contains no
+# light-term arithmetic: it instantiates zhao_terrain_shade, which since
+# TERRAIN.SHADE.md A7 is the SHARED lighting core, and that engine in turn
+# instantiates the zhao_qsq_bytemul primitive. A list naming only the shell
+# gets MODMISSING; a list naming only the shell and the engine gets it one
+# level deeper. That is the founding defect of source_list_parity, hit twice
+# already in this tree.
+set(ZHAO_GEOM_LIGHT_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_qsq_bytemul.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shade.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_light.sv)
+
+add_executable(test_geom_light_directed geometry/geom_light_directed.cpp)
+target_link_libraries(test_geom_light_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_light_directed
+  PREFIX Vzhao_geom_light
+  TOP_MODULE zhao_geom_light
+  SOURCES ${ZHAO_GEOM_LIGHT_SV}
+  VERILATOR_ARGS --assert)
+add_test(NAME geom_light_directed COMMAND test_geom_light_directed)
+set_tests_properties(geom_light_directed PROPERTIES LABELS "fast;nightly")
+
+# The positive control. --break-oracle corrupts ONE expected value in the
+# DIFFERENTIAL tier by +1; a checker never seen to fail is not a checker.
+add_test(NAME geom_light_break_oracle
+         COMMAND test_geom_light_directed --break-oracle)
+set_tests_properties(geom_light_break_oracle PROPERTIES
+  LABELS "fast;nightly" WILL_FAIL TRUE)
+
+add_test(NAME lint_geom_light
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_light
+                 ${ZHAO_GEOM_LIGHT_SV})
+set_tests_properties(lint_geom_light PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
