@@ -547,11 +547,13 @@ def _render_triangle_values(
         raise ShellPortError(f"renderer triangle area is not positive: {area2}")
     edges = ((b, c), (c, a), (a, b))
     values: dict[str, str] = {}
+    edge_coefficients: list[tuple[int, int, int]] = []
     top_left = 0
     for index, ((px, py), (qx, qy)) in enumerate(edges):
         kx = py - qy
         ky = qx - px
         kc = px * qy - qx * py
+        edge_coefficients.append((kx, ky, kc))
         values[f"render_kx{index}_i"] = _signed_decimal(23, kx, f"edge {index} kx")
         values[f"render_ky{index}_i"] = _signed_decimal(23, ky, f"edge {index} ky")
         values[f"render_kc{index}_i"] = _signed_decimal(48, kc, f"edge {index} kc")
@@ -575,6 +577,66 @@ def _render_triangle_values(
     if not 0 <= source_id <= 0xFFFF:
         raise ShellPortError(f"renderer source id does not fit 16 bits: {source_id}")
     values["render_src_id_i"] = f"16'h{source_id:04x}"
+
+    # PACKET H: the sibling shell's per-triangle attribute carriage.
+    #
+    # DO NOT DRIVE `tri_flat_request_i` WITH ENTROPY. `zhao_geom_bin_pipe_v2`
+    # concatenates this whole carriage into one 1,157-bit opaque metadata word
+    # and the binner never decodes it, so for the BINNER only toggling matters
+    # -- which is exactly why entropy here looks safe and is not. The legality
+    # question belongs to the UNPACKER, `zhao_raster_tile_pipe_v2`, and it has
+    # exactly two refusal conditions (traced 2026-09-18, lines 272-274):
+    #
+    #     profile_aux_bad_w  = flat_request[268] || (flat_request[267:44] != 0)
+    #     profile_area_bad_w = (area2 == 0)
+    #
+    # A random flat request trips the first, parks the pipe in refusal, and
+    # SHRINKS the area being measured -- in the flattering direction -- while a
+    # smoke harness still blesses the run because the declared mask matches what
+    # toggled. That is this instrument's whole failure mode.
+    #
+    # Everything else the unpacker reads -- all three planes, the continuation
+    # tail, the fragment state, min_x -- is stored with no test whatever. So the
+    # two fields that CAN refuse get legal values, and the rest are derived from
+    # the same vertices, which makes the two triangles differ field by field
+    # without any of it being invented.
+    if area2 >> 47:
+        raise ShellPortError(f"renderer area2 does not fit 47 bits: {area2}")
+    values["tri_area2_i"] = f"47'h{area2:012x}"
+
+    # Each plane is {n0[95:0], dndx[71:0], dndy[71:0]} = 240 bits, read straight
+    # off the unpacker's own field map. Edge i feeds plane i, so the three
+    # planes differ from each other as well as between triangles.
+    plane_ports = (
+        "tri_invw_plane_i",
+        "tri_u_over_w_plane_i",
+        "tri_v_over_w_plane_i",
+    )
+    for index, port_name in enumerate(plane_ports):
+        # Taken from the coefficients themselves, not parsed back out of the
+        # literals rendered above -- a formatter and its own reader is two
+        # implementations of one encoding.
+        kx, ky, kc = edge_coefficients[index]
+        dndy = ky & ((1 << 72) - 1)
+        dndx = kx & ((1 << 72) - 1)
+        n0 = kc & ((1 << 96) - 1)
+        plane = (n0 << 144) | (dndx << 72) | dndy
+        values[port_name] = f"240'h{plane:060x}"
+
+    # The legal flat request: bit 268 clear and [267:44] zero, which leaves
+    # [43:0] and [297:269] -- 73 of 298 bits -- free to carry real traffic.
+    low = (area2 ^ (source_id * 0x0001_0001)) & ((1 << 44) - 1)
+    high = ((source_id << 13) ^ (area2 >> 5)) & ((1 << 29) - 1)
+    flat_request = (high << 269) | low
+    if flat_request & (1 << 268) or (flat_request >> 44) & ((1 << 224) - 1):
+        raise ShellPortError(
+            "renderer flat request would park the tile pipe in refusal")
+    values["tri_flat_request_i"] = f"298'h{flat_request:075x}"
+
+    tail = (area2 * 0x9E37_79B9) & ((1 << 48) - 1)
+    values["tri_continuation_tail_i"] = f"48'h{tail:012x}"
+    state = ((area2 >> 3) ^ (source_id * 0x85EB_CA6B)) & ((1 << 32) - 1)
+    values["tri_fragment_state_i"] = f"32'h{state:08x}"
     return values
 
 

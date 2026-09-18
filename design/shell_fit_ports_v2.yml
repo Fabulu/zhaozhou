@@ -237,7 +237,8 @@
       "direction": "input",
       "domain": "gpu",
       "driver": "render_producer",
-      "dynamic_mask": "0x3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      "constant_reason": "bit 268 and bits [267:44] must be zero or zhao_raster_tile_pipe_v2 raises profile_aux_bad_w and parks the pipe in refusal, which shrinks the measured area in the flattering direction while the declared mask still matches what toggled; 73 of 298 bits stay free",
+      "dynamic_mask": "0x3ffffffe00000000000000000000000000000000000000000000000000000000fffffffffff"
     },
     {
       "ordinal": 30,

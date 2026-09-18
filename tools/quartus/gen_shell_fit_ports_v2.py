@@ -36,31 +36,55 @@ AUTHORED, and wrong answers here are not caught by any tool:
   from the stimulus -- but both being too narrow passes, so the mask is not a
   substitute for driving the port properly.
 
-STATE, 2026-09-18: EVERY STRUCTURAL CHECK PASSES. ONE THING IS LEFT
--------------------------------------------------------------------
-The generator's complaint count went 157 -> 0 for everything it can decide
-from the policy: drivers registered, handler table made per-shell, ownership
-order fixed, domains accepted, masks declared, traffic profile named, and the
-sibling's attribute carriage classified as a triangle group.
+STATE, 2026-09-18 (evening): IT GENERATES, AND IT LINTS.
+--------------------------------------------------------
+    fpga/rtl/generated/zhao_shell_v2_fit_top.sv        2,557 lines, 217 ports
+    fpga/rtl/generated/zhao_shell_v2_fit_top.manifest.json
 
-What stops it generating is the LAST item below, and it is the one that cannot
-be done mechanically:
+Lint-clean against the sibling's real 97-source closure with `-DSYNTHESIS=1
+-DQUARTUS_SYNTHESIS=1`, top module `shell_v2_top`.
+
+THE BLOCKER BELOW IS CLOSED, and the answer is worth keeping because it is
+smaller and sharper than the question was.
 
     KeyError: 'tri_area2_i'  in _render_triangle_values
 
-`_render_triangle_values` derives a LEGAL setup packet from actual S12.8
-vertices -- edge coefficients, the top-left mask, bounds -- and checks the
-triangle has positive area. The sibling's `tri_*` carriage needs the same
-treatment against the V2 attribute ABI: a 47-bit area2 and three 240-bit
-planes that must agree with those vertices, a 298-bit flat request, a 48-bit
-continuation tail and a 32-bit fragment state.
+The warning that followed it -- do not drive `tri_flat_request_i` with entropy,
+because random values are illegal opcodes that park the pipe in refusal, which
+SHRINKS the measured area in the flattering direction while the smoke harness
+blesses the run because the declared mask still matches what toggled -- was
+right, and it asked the next pass to find what unpacks the 1,157-bit metadata
+word before authoring anything. Done:
 
-DO NOT DRIVE THOSE WITH ENTROPY WITHOUT READING THE NEXT PARAGRAPH.
-`tri_flat_request_i` is a packed request, and random values are illegal opcodes
-that park the pipe in refusal states -- which SHRINKS the area being measured,
-in the flattering direction, while the smoke harness blesses it because the
-declared mask still matches what toggled. That is this instrument's whole
-failure mode, arrived at from a different direction.
+**`zhao_raster_tile_pipe_v2` is the unpacker** (field map at its lines 244-257),
+and it contains EXACTLY TWO refusal conditions:
+
+    assign profile_aux_bad_w  = incoming_flat_request_w[268] ||
+                                (incoming_flat_request_w[267:44] != 224'd0);
+    assign profile_area_bad_w = (incoming_area2_w == 47'd0);
+
+So the whole legality surface is: `tri_area2_i` non-zero -- which
+`_render_triangle_values` ALREADY computes from the vertices and already raises
+on -- and `tri_flat_request_i` with bit 268 clear and [267:44] zero. That leaves
+**73 of 298 bits free** ([43:0] and [297:269]). Everything else the unpacker
+reads -- all three 240-bit planes, the 48-bit continuation tail, the 32-bit
+fragment state, min_x -- is stored with no test whatever, so it only has to
+toggle and to differ between the two triangles.
+
+Two things follow, and both are now in the tree:
+
+* the planes are built as {n0[95:0], dndx[71:0], dndy[71:0]} straight off that
+  field map, one edge per plane, so they differ from each other and between
+  triangles without being invented;
+* `tri_flat_request_i`'s `dynamic_mask` in `design/shell_fit_ports_v2.yml` was
+  0x3fff...fff -- all 298 bits declared free, INCLUDING the 225 that must stay
+  zero. That is the flattering declaration the warning describes, sitting in the
+  policy the whole time. It is now the 73-bit legal mask with a
+  `constant_reason` saying why.
+
+And `zhao_raster_texture_v3_fit_top.sv:347-355` already builds a legal
+`job_meta_w` for the G8A instrument, including `[297:296] = 2'd1` and
+`[424:378] = 47'd16777216`. The encoding was authored one instrument over.
 
 WHAT THE ABI ACTUALLY IS, traced 2026-09-18 so the next pass starts here
 -------------------------------------------------------------------------
