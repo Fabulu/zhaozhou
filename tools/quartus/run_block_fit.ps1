@@ -5,6 +5,19 @@ param(
     # NOT in the shell cone (raster, texture, geometry, terrain) can be
     # characterized with the same flow rather than a second one.
     [string[]]$ExtraSources,
+    # A SIZING DEVICE. Empty means the QSF's own part, which is the TRUTH:
+    # 5CSEBA6U23I7, 41,910 ALM, and the only device any closure claim may cite.
+    #
+    # Set this ONLY to answer "how big is this really?" for a design that cannot
+    # place on the truth device. A design that overflows 41,910 ALM does not
+    # produce an ALM number there -- the fitter stops -- so there is no way to
+    # learn how far over it is without giving it somewhere to land.
+    #
+    # Every row produced this way is stamped `sizingDevice` and
+    # `notTargetDevice = $true`, and its `almsAvailable` is the SIZING part's
+    # capacity. Utilisation against that number is meaningless for this project;
+    # the ALM count is the only field such a row is good for.
+    [string]$Device = '',
     # ATTRIBUTION WITHOUT A FOUR-HOUR FIT.
     #
     # Analysis & Synthesis alone answers the register and memory questions: it
@@ -550,6 +563,12 @@ try {
         $qsf = Get-Content -LiteralPath $SrcQsf
         $qsf = $qsf -replace '^set_global_assignment -name TOP_LEVEL_ENTITY.*', "set_global_assignment -name TOP_LEVEL_ENTITY $mod"
         $qsf = $qsf -replace '^set_global_assignment -name SDC_FILE.*', 'set_global_assignment -name SDC_FILE blockfit.sdc'
+if ($Device) {
+    # The family is left alone on purpose: every part offered here is Cyclone V,
+    # so the fabric primitives, the ALM definition and the timing model stay the
+    # same and the ALM count remains comparable to a truth-device row.
+    $qsf = $qsf -replace '^set_global_assignment -name DEVICE .*', ("set_global_assignment -name DEVICE " + $Device)
+}
         $qsf = $qsf -replace '\.\./\.\./rtl/', "$rtlAbs/"
         if ($PhysicalPins) {
             # A connected wrapper is provenance-bound to its declared closure.
@@ -834,6 +853,24 @@ try {
                            treeCleanAtHead = $treeClean; rtlCleanAtHead = $rtlClean;
                            ioMode = $(if ($PhysicalPins) { 'physical-top-ports' } else { 'virtual-top-ports' });
                            fitterSeed = $effSeed; seedSource = $seedSrc }
+
+        # A SIZING ROW MUST NOT BE READABLE AS A CAPACITY ROW.
+        #
+        # The file-level device field says 5CSEBA6U23I7, because that is the
+        # truth device and almost every row is fitted on it. A row fitted
+        # elsewhere would inherit that sentence and be wrong in the most
+        # expensive possible way: its almsAvailable would be a bigger part's
+        # capacity while the file said the real one, and 27% utilisation on a
+        # design that is 2.2x over would read as closure.
+        #
+        # So the row carries its own device and a flag whose name cannot be
+        # skimmed past. Any gate or report that sums ALM across rows should
+        # refuse a row with notTargetDevice set, or say out loud that it did not.
+        if ($Device) {
+            $row.sizingDevice    = $Device
+            $row.notTargetDevice = $true
+            $row.sizingNote      = "fitted on $Device ONLY to measure size; the target is 5CSEBA6U23I7 at 41,910 ALM and almsAvailable below is NOT that device"
+        }
 
         # THE COMMIT IS NOT THE BYTES, AND THIS ROW ALREADY KNEW IT.
         #
