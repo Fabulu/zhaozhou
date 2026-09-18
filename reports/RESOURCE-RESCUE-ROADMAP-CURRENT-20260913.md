@@ -148,6 +148,35 @@ whole-machine ALM number.
 > > `status: ok` mistake one level up: a true number answering a smaller
 > > question than the one asked. Whichever is built, the row's label should say
 > > which it is.
+> >
+> > #### And the co-fitted ALM answer is already computable, which is the point
+> >
+> > Both halves now have clean `ok` rows on the same device:
+> >
+> > ```
+> > zhao_shell_top_v2   @packet-h-m10k   29,044 ALM   (render path + shell)
+> > zhao_terrain_pipe   @g8b-t11-pins-s2  8,295 ALM   (RPP3/MATW18, 102.19 MHz)
+> >                                      ----------
+> >                                      37,339 ALM
+> > ```
+> >
+> > Against a **41,910-ALM device** that fits, with about 4,600 spare. Against
+> > the owner's **30,000-ALM target** it is roughly **7,300 over** — and the
+> > shell's 97 sources already contain command, geometry, video, audio and
+> > debug, so shell + terrain is most of the machine rather than two fragments
+> > of it.
+> >
+> > That number is **lower than the 40,591 the scoreboard carries**, and the
+> > difference is not good news arriving — it is the scoreboard being a sum of
+> > per-block rows, several of them stale, against two composed measurements.
+> > Treat 37,339 as the better estimate and still an estimate: it is a sum of
+> > two fits, which the island's own history says overstates by about 2.4% once
+> > things are actually composed.
+> >
+> > **So the co-fitted G8C fit would mostly confirm arithmetic already available,
+> > which is an argument for building the CONNECTED one** and spending the fit
+> > on the question that cannot be computed: whether a path crosses between the
+> > two subsystems.
 >
 > **And it is not one chain.** Worst path per endpoint block says what each fix
 > would actually buy: `zhao_terrain_tess` caps at 43.9 MHz, `zhao_project_core`
