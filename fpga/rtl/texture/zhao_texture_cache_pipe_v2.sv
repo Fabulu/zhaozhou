@@ -349,20 +349,62 @@ module zhao_texture_cache_pipe_v2 #(
   logic [IDX_W-1:0] m_idx_c;
   logic [LANES-1:0] m_mask_c;
   logic             m_any_c;
+
+  // COMPARE FIRST, SELECT SECOND -- 2026-09-18, and the arithmetic is unchanged.
+  //
+  // This block used to select the lowest needing lane, publish its tag as
+  // `m_tag_c`, and only THEN compare all four lanes against it. That put four
+  // 28-bit (TAG_W + IDX_W) equalities in series behind a LANES-deep priority
+  // chain, and `@packet-h-satstage` measured the result as the machine's worst
+  // path: `c2_tag[3][16]` -> `valid_r[2][11]`, 12.684 ns against 10.000. The
+  // endpoint is what gives it away -- lane 3's TAG reaching lane 2's VALID can
+  // only happen through the selected tag.
+  //
+  // Every operand of those comparisons is a register (`c2_tag`, `c2_idx`,
+  // `c2_en`, `c2_rval`, `c2_rtag`), so the pairwise answers do not depend on
+  // the selection at all and can be computed beside it. `same_c[j][k]` is the
+  // full LANES x LANES table; the priority chain narrows to ONE BIT wide; and
+  // the mask becomes a one-hot pick from a table that was already settled.
+  //
+  // This is a combinational restructuring inside a single cycle: the same
+  // lane wins (lowest index), the same lanes join its mask, and `m_tag_c` /
+  // `m_idx_c` carry the same values to the same consumers. A cycle-by-cycle
+  // differential cannot see it, which is the point -- nothing downstream moves
+  // by an edge and no latency constant changes.
+  logic [LANES-1:0] same_c [LANES];
+  always_comb
+    for (int unsigned j = 0; j < LANES; j++)
+      for (int unsigned k = 0; k < LANES; k++)
+        same_c[j][k] = (c2_tag[j] == c2_tag[k]) && (c2_idx[j] == c2_idx[k]);
+
+  logic [LANES-1:0] first_oh_c;   // the lowest needing lane, one-hot
   always_comb begin
-    m_any_c  = 1'b0;
-    m_tag_c  = '0;
-    m_idx_c  = '0;
-    m_mask_c = '0;
+    m_any_c    = 1'b0;
+    first_oh_c = '0;
     for (int unsigned k = 0; k < LANES; k++)
       if (!m_any_c && c3_need_c[k]) begin
-        m_any_c = 1'b1;
+        m_any_c       = 1'b1;
+        first_oh_c[k] = 1'b1;
+      end
+  end
+
+  always_comb begin
+    m_tag_c = '0;
+    m_idx_c = '0;
+    for (int unsigned k = 0; k < LANES; k++)
+      if (first_oh_c[k]) begin
         m_tag_c = c2_tag[k];
         m_idx_c = c2_idx[k];
       end
-    if (m_any_c)
-      for (int unsigned k = 0; k < LANES; k++)
-        if (c3_need_c[k] && c2_tag[k] == m_tag_c && c2_idx[k] == m_idx_c)
+  end
+
+  // `same_c[j][j]` is trivially true, so the winning lane is always in its own
+  // mask -- which is what the old form did too, by comparing a tag with itself.
+  always_comb begin
+    m_mask_c = '0;
+    for (int unsigned k = 0; k < LANES; k++)
+      for (int unsigned j = 0; j < LANES; j++)
+        if (first_oh_c[j] && c3_need_c[k] && same_c[j][k])
           m_mask_c[k] = 1'b1;
   end
 

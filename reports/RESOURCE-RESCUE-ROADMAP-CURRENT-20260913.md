@@ -2518,3 +2518,80 @@ The eight geometry blocks have **zero** such lines; `mod255` has one. The
 finding survives its own instrument being corrected, which is the only reason it
 is still in this document.
 
+
+---
+
+## THE REMAINING RENDER BAND IS TEXTURE, AND ITS WORST PATH IS MEASURED NODE BY NODE
+
+At `@packet-h-satstage` the render path is `gpu_clk` at 77.80 MHz, worst
+-2.853, and every one of the 200 printed paths is in the texture island. Two
+cones own it.
+
+### Cone 1: `zhao_texture_cache_pipe_v2`, `c2_tag[3][16]` → `valid_r[2][11]`
+
+12.684 ns of data path against a 10.000 ns period. The receipt's own
+Data Arrival Path, level by level:
+
+```
+  6.465   c2_tag[3][16]|q                  the launching register
+  7.771   c3_hit_c[3]~30                   compare captured tag vs read tag
+  9.286   m_any_c~0                        the LANES-deep priority chain
+ 10.571   m_tag_c[15]~3     ┐
+ 12.047   m_tag_c[6]~8      │  select the winning lane's tag
+ 13.055   m_tag_c[6]~9      ┘
+ 13.857   m_mask_c[2]~25    ┐
+ 14.286   m_mask_c[2]~26    │  ... then compare every lane against it
+ 15.861   m_mask_c[2]~27    ┘
+ 17.312   valid_r~19
+ 19.149   -> valid_r[2][11]
+```
+
+**From `m_any_c` to `m_mask_c` is 9.286 → 15.861 = 6.575 ns, 52% of the data
+path**, and all of it is one ordering decision: the block selected a tag and
+*then* compared four lanes against it, 28 bits wide (TAG_W 24 + IDX_W 4), in
+series behind the priority chain.
+
+The endpoint is what named the fault. Lane 3's TAG reaching lane 2's VALID can
+only happen through the selected tag — grouping these paths by module would
+have said "texture cache" and stopped.
+
+**Fixed 2026-09-18 by inverting the order: compare first, select second.** Every
+operand (`c2_tag`, `c2_idx`, `c2_en`, `c2_rval`, `c2_rtag`) is a register, so
+the pairwise `(tag, idx)` equality table `same_c[j][k]` does not depend on the
+selection and computes beside it. The priority chain narrows to one bit wide,
+and the mask becomes a one-hot pick from a table that was already settled. The
+`m_tag_c` levels leave the mask's cone entirely.
+
+Bit-exact and unpipelined: the same lane wins (lowest index), the same lanes
+join its mask, `m_tag_c` / `m_idx_c` carry the same values to the same
+consumers, and `same_c[j][j]` is trivially true so the winner is in its own mask
+exactly as before. **A combinational restructuring inside one cycle is invisible
+to a cycle-by-cycle differential**, which is why no latency constant moves —
+and is also why the differential cannot confirm it, so the directed and mutant
+suites are the evidence that matters here.
+
+This block's header already carried the warning: *"81.06 MHz worst internal path
+`rq_rp[1] -> valid_r[1][2]` 12.159 ns"*, recorded at some earlier standalone
+fit. The endpoint was the same register array then. Nobody read it back.
+
+### Cone 2: `zhao_texture_v3own` `cq_own_q` → `zhao_texture_v3rq` `h_d_q`
+
+12.277 ns, 1 ns behind cone 1, and **not yet diagnosed.** The obvious reading is
+wrong and worth recording so the next person does not spend the hour: the
+suspicious-looking `win_gen_of_slot()` is not a table lookup at all, it is
+`(sl < tail_q) ? sh_alloc_gen_q : sh_alloc_gen_q - 1`, two GENW values and a
+compare. The cost is somewhere in the accept path between `cq_own_q` and the
+request queue's `pop_c`, and it crosses a module boundary.
+
+**Trace it from the receipt's Data Arrival Path before touching RTL**, the way
+cone 1 was traced. That report names the levels; reading the source names only
+the candidates.
+
+### What this means for the campaign
+
+The remaining band is dense: 200 paths between -2.853 and -1.623, across the
+cache pipe, the owner block and the request queues, with no single dominant
+endpoint. Getting from 77.80 to 100 MHz is not one more fix — it is a Timing4-
+shaped campaign whose first two cones are now named and one of which is done
+pending measurement.
+
