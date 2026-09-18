@@ -119,6 +119,23 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 - Final reviewed candidate renderer MD5: `1255A8F8DEE778F7E76DCC7759D678B0`; focused CRCs are Lasso `0x88B892BD`, Channel `0x915E343F`, Hover `0x571C3D79`.
 - Next: commit/push, render the entire 28-subject bank from the accepted binary, then complete every-frame visual acceptance before encoding and publication.
 
+### 2026-09-17 07:34 UTC+02:00 - Direction 13 packet pushed; final bank starting
+
+- Pushed zhaozhou implementation/evidence commit `db9f4d5f` to `origin/manafold-pass16`.
+- Pushed durable Upheaval owner direction commit `a4097d3` to `origin/manafold-pass16`; prior Pass 16 findings/site-card edits remain intentionally uncommitted pending exact-generation review.
+- Starting one 28-subject `final4-reel` invocation from accepted binary MD5 `1255A8F8DEE778F7E76DCC7759D678B0` under `ZIXX_EXP=celmain` and `ZIXX_LIGHT=diagonal-cool-cross`.
+- On completion: verify all 28 receipt rows, generate every-frame sheets, inspect the full bank by eye, then either perform one bounded correction or encode/publish.
+- **Before reading final4 result:** in progress updating `PASS-16-FINDINGS.md` and `website/creatures.json` for Direction 13; next finish the new blurb/provenance wording, then verify final4 receipts and generate sheets.
+
+### 2026-09-18 - final4 accepted
+
+- Recovered after the prior review session crossed the serialized JSON/request-size limit by accumulating 27 image tool results.
+- Verified the accepted Direction-13 binary at MD5 `1255A8F8DEE778F7E76DCC7759D678B0` and the exact final4 bank at 28 subjects / 11,592 contiguous frames / 28 current every-frame sheets / zero receipt errors.
+- Seven fresh GPT review contexts each inspected four full sheets and wrote evidence before ending, preventing image payload accumulation. Final verdict: **PASS 28/28**; no further Pass-16 correction required.
+- Confirmed historical remainders for Pass 17: Fall hard restart f338→f339 and Trick's long featureless back-facing rotation. Taunt III's suspected density bars do not reproduce in final4.
+- Pass 15 archive is already committed/pushed and 28/28 archive files are SHA-256-identical to the live Pass-15 sources they preserve.
+- Exact-generation WebM encoding started after visual acceptance; freshness, full decode, integration and production-byte verification remain before this run closes.
+
 ---
 
 ## Subagent Spawns

@@ -1,0 +1,10 @@
+﻿assemble: wrote C:\programmieren\zencrifice\manafold-p16\Upheaval\website\public\index.html - 2 creature(s), 666 render(s)
+gate: robots meta is 'noindex, nofollow' - private, ok
+gate: is the encoded bank all one generation?
+checkfresh: 28 subject(s) with sources -- 28 fresh, 0 STALE, 0 absent
+checkfresh: OK every encoded clip is newer than the frames it was made from -- the bank is all one generation.
+gate: decoding every declared media file (~22 min; -SkipDecodeSweep to bypass)
+checkmedia: 1320 declared files, 1320 decoded
+checkmedia: every declared file decodes
+assembled only (-AssembleOnly); nothing deployed.
+MEDIA_GATES_RC=0
