@@ -66,3 +66,70 @@ several candidates.
 **If it is dramatically smaller — say under 1,000 ALM — check the differential
 before celebrating.** A bitmap that drops the budget or the degrade order would
 be small and wrong, and this fit measures area, not law.
+
+---
+
+# PREDICTION REWRITTEN, 2026-09-18, with the columns read correctly
+
+The retraction at the top of this file stands: the premise below — *"a list of
+two thousand records, in flip-flops"* — was wrong. `zhao_forge_cliff` already
+holds **119,808 block memory bits** in the whole-machine census. This is the
+replacement, and it is a weaker case honestly stated rather than the same case
+re-argued.
+
+## What is actually known about this block
+
+| | value | source |
+|---|---:|---|
+| ALUT in the census | 8,715 | `@whole-machine-map-probe` hierarchy |
+| ≈ALM | 5,525 | at the map's own 0.634 ratio |
+| registers | 3,855 | same |
+| block memory bits | **119,808** | same — it is NOT memoryless |
+| DSP | 0 | same |
+| its own leaf fit | **`status: timeout`, `rtlCleanAtHead: false`, no ALM at all** | `zhao_block_fit.json` |
+| `zhao_forge_cliff_ram`'s leaf fit | **no row of any kind** | `zhao_block_fit.json` |
+
+**The reason to run this is no longer "the list is in flops."** It is that the
+fifth-largest block in the machine has never been measured on its own — its one
+attempt timed out on a dirty tree — and a declared alternative has never been
+measured at all. Both facts have been sitting in the database.
+
+## The question, restated
+
+**Does `zhao_forge_cliff_ram` fit, and at what ALM, M10K and Fmax?** Nothing
+more. There is no baseline to compare against except the census figure, which
+is a different arrangement (composed, LFSR-driven, sharing a device with 65
+other blocks).
+
+Correctness is not this fit's question:
+`tests/forge/forge_cliff_ram_differential.cpp` drives both variants from one
+stimulus, and the target's own comment says the handshakes and the compaction's
+same-address suppression *"are Verilator's and do not need this gate."*
+
+## Prediction, with much wider bars than before
+
+1. **It fits** — i.e. `status: ok` or `failed:structure`, not `timeout`. A leaf
+   with one source file and no `min_fmax_mhz` rule.
+2. **ALM 3,000–7,000.** That is deliberately wide. The census figure for the
+   golden is 5,525 ALM in a composed context, and a standalone leaf carries
+   virtual-pin boundary logic that inflates it. I have no measured baseline for
+   this block in this mode, so a narrow range would be invented precision.
+3. **M10K 6–20**, against the golden's 119,808 census bits ≈ 6 M10K-equivalents
+   of payload. If the RAM variant is a *bitmap* as the manifest calls it, it may
+   store far less and use fewer.
+4. **No claim about the saving.** Comparing a leaf row to a census row is the
+   exact error I made three times today. **The number this fit produces cannot
+   be subtracted from 8,715 ALUT**, and it must not be entered in any budget as
+   a saving. What it can do is tell us the RAM variant is viable and roughly
+   how big, which is the precondition for a real comparison.
+
+## What would make the fit worth more than its number
+
+**If the golden also times out again**, then the largest unmeasured block in the
+machine is unmeasurable in isolation, and every figure we have for it comes from
+one census run. That is worth knowing and is not currently written down
+anywhere.
+
+**If the RAM variant fits in minutes where the golden timed out in hours**, the
+adoption case is about measurability as much as area — a block you cannot fit is
+a block whose budget line is permanently an estimate.
