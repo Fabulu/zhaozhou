@@ -1512,6 +1512,36 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > a stage that moves an output edge, and this one does not. It is the cheapest
 > remaining move on the binder and should be the next RTL change.
 >
+> ##### LANDED, and the prediction for `@packet-h-mulstage`
+>
+> The split is in: the two multiplies land in `S_IDLE`, their sum in
+> `S_GRAD_REQ`. Three 96-bit registers per lane — `mul_x_r`, `mul_y_r`, `n0_r` —
+> so 864 flops across the shell's three `g_attr` instances.
+>
+> **The differential proves the central claim rather than arguing it.**
+> `raster_attrgrad_dsp3_diff` compares this module against the untouched
+> `zhao_raster_attrgrad_dsp3` cycle by cycle and passes, which is exactly the
+> evidence that no observable edge moved. 11/11 including all seven DSP3
+> controls.
+>
+> **Prediction, written before the fit:**
+>
+> * **Fmax ≈ 70–72 MHz.** The binder was `tile_pipe → attrgrad` at −5.144 and
+>   this removes its 14.24 ns cone; the next candidates already on the table are
+>   `v3own → v3own` at −3.901 and `frag_expand → video_slotmgr_v2` at −3.571, so
+>   the worst should land near −3.9 and `1/(10 + 3.9) = 71.9 MHz`.
+> * **TNS down again**, though by less than last time: the attrgrad family is
+>   only 44 paths of 2,000, so the gain is depth rather than population.
+> * **ALM roughly flat, ±400.** 864 added flops is about 0.9 ALM-equivalents per
+>   flop at this design's packing, but `@packet-h-uvw` just demonstrated that
+>   flop count and placement quality interact, so the sign is genuinely
+>   uncertain. **If ALM falls, that is congestion again and not this change
+>   being free.**
+>
+> The honest risk: if Fmax lands near 66 again, the multiply was not the whole
+> cone and the DSP macro's own latency dominates — in which case the next move
+> is Quartus's DSP output register rather than another RTL stage.
+>
 > ##### A clarification, and an unfixed twin
 >
 > The tree change could never have broken the differential, and it is worth
