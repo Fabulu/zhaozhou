@@ -2751,6 +2751,82 @@ expected to be a no-op and was confirmed as one rather than assumed), refresh
 the G8A wrapper manifest that records a sha256 per source, and re-run the
 island's registration and freshness gates.
 
+
+### Cone 3, named in advance: the FAULT-OR tree sits in a READY path
+
+`walk_q_r` is 30 paths at -2.056 and the prediction for `@packet-h-texorder`
+says it becomes the wall. It is traced already, from the same receipt:
+
+```
+  6.692   u_binner|d_meta_r[60]                  M10K output register
+  6.717   ...|ram_block1a43|portbdataout[8]
+  8.114   u_tile|local_fault_pulse_o~22   ┐
+  9.502   u_tile|local_fault_pulse_o~26   │  4 LUT levels, 4.85 ns
+ 10.891   u_tile|local_fault_pulse_o~47   │  of an 11.37 ns data path (43%)
+ 11.566   u_tile|local_fault_pulse_o~50   ┘
+ 11.806   u_tile|u_candidate_skid|push~0
+ 12.221   u_tile|u_earlyz|out_free
+ 13.837   u_tile|attr_q_ready_w[0]~1
+ 15.289   u_attrgrad|walk_q_r[12]~0
+ 17.340   u_attrgrad|walk_q_r[9]|ena             2.051 ns of routing to the enable
+ 18.062   -> u_attrgrad|walk_q_r[9]
+```
+
+**A fault-detection OR is gating flow control.** `local_fault_event_w` feeds
+`abort_now_w`, which cancels the candidate skid, which frees early-Z, which
+drives `attr_q_ready_w`, which enables the attribute walker's queue. Detection
+and admission share one combinational cone.
+
+```systemverilog
+// zhao_raster_tile_pipe_v2.sv:1018-1031
+assign coordinate_fault_event_w  = attr_bundle_fault_w && attr_coordinate_bad_w && !terminal_prior_w;
+assign range_fault_event_w       = (attr_bundle_fault_w && attr_range_bad_w && !terminal_prior_w)
+                                || (new_job_accept_w && profile_area_bad_w);
+assign aux_profile_fault_event_w =  new_job_accept_w && profile_aux_bad_w;
+assign local_fault_event_w = coordinate_fault_event_w || range_fault_event_w
+                          || aux_profile_fault_event_w;
+assign abort_now_w = local_abort_q || local_fault_event_w || sequence_abort_o || sequence_mismatch_o;
+```
+
+**The same-edge inclusion is DELIBERATE and documented**, which rules out the
+obvious fix before anyone tries it:
+
+> *"Include the detecting cycle so same-edge skid work is cancelled and no
+> later useful candidate can be admitted before the sticky level lands."*
+
+So registering `local_fault_event_w` is not a retiming, it is a change to a
+stated invariant — the same class as cone 2's remaining 3.4 ns, and it must not
+be done as a timing tweak.
+
+#### The shape that does not fight the invariant, and it is the owner's ruling
+
+The path enters at `d_meta_r`, straight off the binner's metadata M10K, and
+spends 4.85 ns turning that metadata into a verdict. **The verdict could be
+computed when the metadata is WRITTEN and stored beside it**, so the read
+returns `profile_area_bad` and `profile_aux_bad` as bits rather than as work.
+Detection would still be same-edge — the invariant is untouched — because the
+bit arrives on the same edge the metadata does.
+
+That is exactly the standing owner direction: *"we have lots of M10K, ALMs are
+over budget, so what you can you need to solve with memory"* — and the lever
+here is the one the memory note names, lookup instead of computation, not
+relocating state.
+
+**Its gate is the Packet D metadata contract.** `p_packet_d_contract` in this
+same file `$fatal`s unless the metadata ABI is exactly 1157 bits, so widening
+the word is a contract change and not a local edit. Whether spare pad bits
+exist inside 1157 is the first question, and it is a read, not a fit.
+
+**And the file is in `PROTECTED_HASHES`** (`zhao_raster_tile_pipe_v2.sv`,
+`6c4d8d04...`), so this work also needs the protected-set decision that attrgrad,
+the binner and attrdiv each needed this campaign. Three of those were taken;
+the precedent and its reasoning are recorded in
+`tests/tools/test_render_texture_packet_e.py`.
+
+**Not started.** Both changes in `@packet-h-texorder` are unmeasured, and by
+this project's own batching rule the next move is to read that receipt before
+opening a third front.
+
 ### What this means for the campaign
 
 The remaining band is dense: 200 paths between -2.853 and -1.623, across the
