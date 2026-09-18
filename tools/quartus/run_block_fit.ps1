@@ -1069,10 +1069,44 @@ try {
             $sta = Join-Path $dir ('output_files' + [char]92 + 'blockfit.sta.rpt')
             if (Test-Path -LiteralPath $sta) {
                 $s = [IO.File]::ReadAllText($sta)
+                # `fmaxMhz` IS THE SLOWEST CLOCK, NOT THE GATING ONE, and the
+                # two stop agreeing the moment a composed top has more than one
+                # clock. Quartus sorts the Fmax Summary ascending and this takes
+                # the first row, so for a single-clock leaf it is exactly right.
+                #
+                # @packet-h-satstage is what made the difference concrete: the
+                # row reads 72.44 MHz / audio_clk while ALL 200 paths in the
+                # printed window are gpu_clk -> gpu_clk at 10.000 ns, and
+                # audio_clk owns no negative slack whatever. The render clock
+                # was 77.80. audio_clk had simply become the slowest thing in a
+                # design where it has always had slack to spare -- it reads
+                # 90.41 -> 103.21 -> 96.47 -> 72.44 across four fits in which no
+                # commit touches the audio domain.
+                #
+                # The field is KEPT, because every historical row carries it and
+                # rewriting its meaning would silently restate them. Two honest
+                # ones are added beside it.
                 $m = [regex]::Match($s, '(?m)^;\s*([0-9.]+)\s*MHz\s*;\s*([0-9.]+)\s*MHz\s*;\s*(\S+)')
                 if ($m.Success) {
                     $row.fmaxMhz = [double]$m.Groups[2].Value   # restricted Fmax
                     $row.fmaxClock = $m.Groups[3].Value
+                }
+
+                # EVERY clock, so a multi-clock row can be read without the
+                # .sta.rpt beside it. Scoped to the first slow-corner Fmax
+                # Summary, matching the single row taken above.
+                $fsec = [regex]::Match($s, '(?ms)^;\s*Slow 1100mV [^;\r\n]+ Model Fmax Summary\s*;.*?(?=^\+[-+]+\+\s*$\r?\n^;\s*\w[^;\r\n]*;\s*$)')
+                if ($fsec.Success) {
+                    $byClock = @()
+                    foreach ($fm in [regex]::Matches($fsec.Value,
+                             '(?m)^;\s*([0-9.]+)\s*MHz\s*;\s*([0-9.]+)\s*MHz\s*;\s*(\S+)')) {
+                        $byClock += [ordered]@{
+                            clock         = $fm.Groups[3].Value
+                            fmaxMhz       = [double]$fm.Groups[1].Value
+                            restrictedMhz = [double]$fm.Groups[2].Value
+                        }
+                    }
+                    if ($byClock.Count -gt 0) { $row.fmaxByClock = $byClock }
                 }
                 $setup = Get-StaSummary $s 'Setup Summary'
                 if ($null -ne $setup) {
@@ -1108,6 +1142,44 @@ try {
                 $sumSrc = Join-Path $dir 'output_files/blockfit_setup_summary.rpt'
                 if (Test-Path -LiteralPath $sumSrc) {
                     Copy-Item -LiteralPath $sumSrc -Destination (Join-Path $pathDir ($rowModule + '.setup.summary.rpt')) -Force
+
+                    # THE GATING CLOCK AND ITS ACHIEVED Fmax -- the pair that
+                    # actually answers "does this design close".
+                    #
+                    # Taken from the WORST SETUP PATH, whose row carries its own
+                    # launch clock and clock relationship, so this cannot drift
+                    # onto a domain that merely happens to be slow. Achieved
+                    # period is (relationship - slack): at @packet-h-satstage
+                    # 10.000 - (-2.853) = 12.853 ns = 77.80 MHz, which is
+                    # Quartus's own gpu_clk line to the digit.
+                    #
+                    # Positive slack is fine and meaningful here: a design that
+                    # closes with +1.2 ns on a 10 ns clock reports 113.6 MHz,
+                    # which is what it could run at, measured on the path that
+                    # decides.
+                    # The summary report IS the path table and carries no
+                    # `Summary of Paths` banner of its own -- the banner belongs
+                    # to the deeper `*_setup_paths.rpt`. Honour it when present
+                    # and otherwise parse from the top, because requiring a
+                    # marker this file never contains would have made the whole
+                    # block dead code that silently recorded nothing.
+                    $sumTxt = [IO.File]::ReadAllText($sumSrc)
+                    $si = $sumTxt.IndexOf('Summary of Paths')
+                    if ($si -lt 0) { $si = 0 }
+                    if ($sumTxt.Length -gt 0) {
+                        $wp = [regex]::Match($sumTxt.Substring($si),
+                              '(?m)^;\s*(-?[0-9.]+)\s*;[^;]+;[^;]+;\s*(\S+)\s*;\s*(\S+)\s*;\s*([0-9.]+)\s*;')
+                        if ($wp.Success) {
+                            $wSlack = [double]$wp.Groups[1].Value
+                            $wRel   = [double]$wp.Groups[4].Value
+                            $period = $wRel - $wSlack
+                            if ($period -gt 0) {
+                                $row.gatingClock    = $wp.Groups[2].Value
+                                $row.gatingFmaxMhz  = [math]::Round(1000.0 / $period, 2)
+                                $row.gatingPeriodNs = [math]::Round($period, 3)
+                            }
+                        }
+                    }
                 }
                 # THE SLACK-BOUNDED MARGIN REPORT. The fixed 2000-row summary
                 # above cannot answer "how many paths are inside the 110 MHz

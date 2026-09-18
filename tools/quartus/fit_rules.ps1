@@ -64,7 +64,20 @@ function Test-FitRules($Row, $Rules) {
     $reg  = Get-FitMetric $Row 'registers'
     $m10k = Get-FitMetric $Row 'ramBlocks'
     $dsp  = Get-FitMetric $Row 'dspBlocks'
-    $fmax = Get-FitMetric $Row 'fmaxMhz'
+    # PREFER THE GATING CLOCK. `fmaxMhz` is the SLOWEST clock in the design,
+    # whatever its constraint, because it is the first row of Quartus's
+    # ascending Fmax Summary. For a single-clock leaf the two are the same
+    # number. For a composed multi-clock top they part company the moment the
+    # ranking flips -- @packet-h-satstage reported 72.44 MHz / audio_clk while
+    # every negative path in the design was gpu_clk at 77.80 MHz, and audio_clk
+    # had no negative slack at all.
+    #
+    # `gatingFmaxMhz` is derived from the WORST SETUP PATH's own launch clock
+    # and relationship, so it cannot wander onto a domain that is merely slow.
+    # Rows fitted before 2026-09-18 do not carry it and fall back, which keeps
+    # every historical row judged exactly as it was.
+    $fmax = Get-FitMetric $Row 'gatingFmaxMhz'
+    if ($null -eq $fmax) { $fmax = Get-FitMetric $Row 'fmaxMhz' }
 
     # The MINIMUM is the important half. A maximum catches a block that grew; a
     # minimum catches a block whose storage quietly stopped being storage,
