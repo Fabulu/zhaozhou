@@ -42,7 +42,32 @@ STATE, 2026-09-18 (evening): IT GENERATES, AND IT LINTS.
     fpga/rtl/generated/zhao_shell_v2_fit_top.manifest.json
 
 Lint-clean against the sibling's real 97-source closure with `-DSYNTHESIS=1
--DQUARTUS_SYNTHESIS=1`, top module `shell_v2_top`.
+-DQUARTUS_SYNTHESIS=1`, top module `shell_v2_top`. Gated by
+`shell_v2_fit_generated_freshness` and `lint_shell_v2_fit_top`, both of which
+were seen to FIRE before being trusted.
+
+WHAT IS STILL OWED: NOTHING RUNS IT YET.
+----------------------------------------
+The wrapper exists and elaborates; no flow fits it. `zhao_shell_fit_top` -- V1's
+-- has no `- top:` entry in `design/fit_targets.yml` either, because the ten-pin
+instrument is not a `run_block_fit` target: it goes through
+`tools/quartus/run_shell_fit.ps1`, which is 36 KB hardcoded to V1 at every
+level --
+
+    $WrapperRel  = 'fpga/rtl/generated/zhao_shell_fit_top.sv'
+    $ProjectRel  = 'fpga/quartus/shell_fit'     # .qsf .sdc .qpf report.tcl
+    $GateName    = 'shell_fit_top_clean_characterization'
+
+-- so the sibling needs that launcher parameterised over wrapper, project
+directory and gate name, plus its own QSF/SDC/QPF and pin assignment. That is
+the next piece of work on this instrument and it is a launcher/project job, not
+a generator one.
+
+This is deliberately written down rather than left implied, because a wrapper
+that elaborates and that nothing fits is precisely the BUILT-INSTALLED-NOWHERE
+shape `tools/budget/uncashed_cheques.py` exists to catch -- and a note saying
+"not yet adopted" is a deferral written down, which leaves the question OPEN
+rather than closing it.
 
 THE BLOCKER BELOW IS CLOSED, and the answer is worth keeping because it is
 smaller and sharper than the question was.
