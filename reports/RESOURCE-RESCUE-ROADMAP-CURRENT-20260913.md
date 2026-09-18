@@ -3468,3 +3468,68 @@ group by hand; the grouping came from the hierarchy in one pass.
 **And the whole table is superseded the moment `@whole-console-sizing`
 returns**, because that will be the first FITTED whole-machine number rather
 than a synthesis estimate scaled by 0.634.
+
+---
+
+## THE PROJECTOR SELECTION SWAP, SPECIFIED EXACTLY — ready to apply, not applied
+
+Determined by reading what each candidate already contains, because a census
+that instantiates a parent AND its children counts the children twice and the
+resulting "saving" is a bookkeeping error.
+
+**What `zhao_terrain_pipe` contains:** `zhao_terrain_tess`,
+`zhao_terrain_group_seq`, and `zhao_proj_subsystem` — which is one
+`zhao_project_service`, one `zhao_project_core`, and the three-copy terrain
+arena shell.
+
+**What `zhao_geom_proj_lane` contains:** `zhao_geom_wcache`, which is one
+`zhao_vertex_arena`.
+
+**What `zhao_prod_top` selects today**, checked instantiation by
+instantiation: `zhao_geom_project`, `zhao_terrain_project`, `zhao_geom_wcache`
+and `zhao_terrain_tess` are direct children; `zhao_proj_subsystem`,
+`zhao_project_service`, `zhao_terrain_wcache` and `zhao_vertex_arena` are not.
+
+### The swap
+
+| | module | census ALUT | why |
+|---|---|---:|---|
+| **OUT** | `zhao_geom_project` | 10,263 | its private core is one of the two duplicates |
+| **OUT** | `zhao_terrain_project` | 14,289 | its private core is the other |
+| **OUT** | `zhao_terrain_tess` | 2,700 | becomes a child of `zhao_terrain_pipe` |
+| **OUT** | `zhao_geom_wcache` | 5,132 | becomes a child of `zhao_geom_proj_lane` |
+| | **removed** | **32,384 ALUT ≈ 20,531 ALM** | |
+| **IN** | `zhao_terrain_pipe` | — | tess + group_seq + ONE service + ONE core + terrain arenas |
+| **IN** | `zhao_geom_proj_lane` | — | geometry's arena on client A |
+
+**The two IN rows have no census number and that is the entire point.** What
+they cost *inside one synthesis with everything else* is what the second census
+measures, and it is the only number that can be honestly compared with the
+32,384 they replace. `zhao_terrain_pipe`'s standalone 8,295 ALM and
+`zhao_geom_proj_lane`'s unmeasured cost must NOT be subtracted from it — that is
+the leaf-versus-census error this campaign has now made three times.
+
+### Why it is specified and not applied
+
+The baseline has not returned. `@whole-console-sizing` is still in synthesis,
+and applying the swap before it lands would destroy the reference the whole
+comparison depends on. The order is: baseline, then swap, then re-census, then
+the difference.
+
+### One thing the swap does NOT resolve
+
+**The V2 shell is a separate and larger decision.** `zhao_shell_top` (17,917
+ALUT) and `zhao_texture_island_v3_top` (15,446) are both direct children today;
+`zhao_shell_top_v2` contains the island and re-composes the binner, tile pipe
+and video path. Selecting it changes what several other census children mean,
+so it belongs in its own swap with its own baseline — not bundled into this one,
+where it would make the projector's price unreadable.
+
+### And a check on the way
+
+`zhao_terrain_pipe` instantiates `zhao_terrain_group_seq_mutant` at line 287 —
+which looks alarming and is not. It sits under `` `ifdef ZHAO_MUTANT_GROUP_SEQ ``
+with the comment *"production never defines it"*, selecting between two module
+names with a plain `ifdef`. That is the shape this repository's own macro lesson
+recommends, as opposed to the function-like `` `define `` form that `-D` cannot
+override and that silently compiled production for two combiner mutants.
