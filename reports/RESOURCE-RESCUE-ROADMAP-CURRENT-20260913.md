@@ -115,6 +115,22 @@ whole-machine ALM number.
 > > TOP. `zhao_shell_top_v2`'s 97 sources contain no `terrain/` file, so nothing
 > > in the tree instantiates both halves, and that module is the actual next
 > > piece of work for Packet J.
+> >
+> > **Both operands exist and are named**, so the module is a composition rather
+> > than a build — the same shape Packet H turned out to be:
+> >
+> > | half | module | how it is already fitted |
+> > |---|---|---|
+> > | render | `zhao_shell_top_v2` | `- top:` in `fit_targets.yml`, 97 sources |
+> > | terrain | `zhao_terrain_pipe` | via `zhao_terrain_pipe_rpp3_matw18_fit_top`, 17 ports, which fixes `ROWS_PER_PASS(3)` and `MATW(18)` |
+> >
+> > So G8C is: one top instantiating `zhao_shell_top_v2` and `zhao_terrain_pipe`
+> > **at G8B's ratified parameters** under one clock, a `- top:` entry whose
+> > source list is the union of the two closures, and the gates Packet I got —
+> > directed activity witness, synthesis-mode lint, generated freshness, and a
+> > registration-static test. The parameters matter: fitting terrain at anything
+> > other than RPP3/MATW18 would measure a configuration G8B never closed, and
+> > the 102.19 MHz receipt would not describe it.
 >
 > **And it is not one chain.** Worst path per endpoint block says what each fix
 > would actually buy: `zhao_terrain_tess` caps at 43.9 MHz, `zhao_project_core`
