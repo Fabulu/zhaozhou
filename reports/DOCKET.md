@@ -222,6 +222,47 @@ to find.
 from an unnoticed failure. I edited the protected file once by accident in the
 same session, reverted to `7d7cdb7e`, and confirmed the hash matches the pin.
 
+## THE GOLDEN PATH 2026-09-14 — `reports/Zhaozhou_conditional_golden_path.md`
+
+Landed `7ce7e056` / `db7dd905`, subject *"Agent please read - Golden path for
+architecture and new blocks going forward"*. **Indexed nowhere until
+2026-09-18**, despite being pinned to this branch by name in its own header
+(`claude/ceiling-architecture-20260912`) and despite "golden path" appearing in
+the standing session goal.
+
+**This document defines what closure MEANS**, so it outranks any local reading
+of the 30,000 target:
+
+* device 41,910 ALM / 112 DSP / 553 M10K, with a charter-required **10% fabric
+  reserve**, giving a **90% working limit of 37,719**;
+* an illustrative complete portfolio of **37,500** split across seven
+  non-overlapping physical groups — Backend/platform 14,000, Shared projection
+  and replay 5,000, Geometry and lighting 5,500, Terrain/Forge/surfaces 4,500,
+  Complete FIELD 4,500, Complete particles 2,000, Post and 2D 2,000;
+* *"Do not call a 40.5k result closure merely because it is below 41,910."*
+* *"The 112 physical DSP capacity is not an automatic authorization to spend
+  it"*, and the 85-DSP objective is unchanged.
+
+**A TRAP THIS SESSION CAME ONE STEP FROM WALKING INTO.** The measured shell +
+terrain is **37,254 ALM**, and the portfolio total is **37,500**. Those numbers
+are nearly equal and they are NOT comparable. The 37,500 is the COMPLETE
+selected scope including the geometry front end, complete FIELD, particles, and
+post/2D — none of which are in the 37,254, which is one composed shell plus one
+terrain pipe. Reading the near-match as "we are on budget" would be the
+`status: ok` error at whole-machine scale. The envelopes are per-group for
+exactly this reason, and a comparison owes a group-by-group mapping that does
+not yet exist.
+
+Its own framing is a constraint rather than a forecast: *"This table is a
+falsifiable constraint, not proof of feasibility"*, and *"an omitted function is
+an error, not a free saving."*
+
+**Status: READ AND INDEXED 2026-09-18. Not actioned as a unit** — it is a
+standing measurement framework rather than a task, and the useful next step is
+the group-by-group ownership mapping it says the implementation agent still owes.
+
+---
+
 ## OWNER EXPERIMENT 2026-09-17 — DSF-01, projector divider compare/subtract fusion
 
 `reports/Zhaozhou_Divider_Fusion_Implementation_Guide.txt` — 1,457 lines,
