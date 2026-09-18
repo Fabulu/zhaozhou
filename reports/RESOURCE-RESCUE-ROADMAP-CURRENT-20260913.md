@@ -2423,3 +2423,98 @@ remains is the ordering already recorded: compose geometry onto client A, fit
 selection in `design/prod_manifest.yml` and re-census. None of that needed the
 fit that is running, and none of it was visible from the leaf fit rows.
 
+
+---
+
+## `@packet-h-satstage`: THE RENDER CLOCK IS 77.80 MHz, AND THE ROW SAYS 72.44
+
+```
+ALM 27,583   DSP 63   M10K 136   registers 37,510   clean tree, 97 sources
+gpu_clk 77.80 MHz   worst -2.853   TNS -2,276.4   hold +0.086
+```
+
+The saturation split delivered what was predicted for it and more. `final_sat_r`
+(3 paths at -6.372), `dividend_r` (22, plus 7 duplicated) and `neg_r` are all
+better than the new printed floor of -1.623. **gpu_clk went 61.08 → 77.80 MHz
+and TNS fell 76%**, against a prediction of 71–72 MHz recorded before the fit.
+
+The over-delivery is itself informative, and it is the case the prediction's
+falsification clause named: the ~-3.9 band was **both** independent walls and
+one shared placement region. Removing the attrdiv cone let the texture cone
+below it improve from -3.949 to -2.853 without anyone touching it.
+
+### The receipt's `fmaxMhz` field no longer means what a reader will assume
+
+The row records `fmaxMhz: 72.44, fmaxClock: audio_clk`. **All 200 paths in the
+printed window are `gpu_clk → gpu_clk` at a 10.000 ns relationship.** `audio_clk`
+and `vid_clk` own zero negative paths between them.
+
+`run_block_fit.ps1:1074` takes the FIRST row of Quartus's Fmax Summary, which is
+sorted ascending — the slowest clock in the design *regardless of its
+constraint*. Correct for a single-clock leaf. For a composed multi-clock top it
+changes meaning silently the moment the ranking flips, and that is what just
+happened: the render path overtook a domain nobody has been working on.
+
+`audio_clk` is not a new wall. It reads 90.41 → 103.21 → 96.47 → 72.44 across
+four fits in which no commit touches the audio domain — a 30 MHz swing that is
+the fitter spending placement where the constraints are, which it can do freely
+because that clock has no negative slack in any of the four.
+
+**The gate hazard, stated because nothing is currently mis-gated and that will
+not last:** `min_fmax_mhz` is checked against this field (`fit_rules.ps1:67`).
+No rule binds `zhao_shell_top_v2` and labelled rows are never rule-checked, so
+today it is inert. Eleven tops in `design/fit_targets.yml` carry
+`min_fmax_mhz: 100`, and any of them that is multi-clock would be judged on
+whichever clock is slowest in absolute terms. The sound metric is the
+worst-slack clock's achieved Fmax, `1 / (relationship + setupSlackNs)` — for
+this row `1 / (10.000 - 2.853) ns = 77.80 MHz`, agreeing with Quartus's own
+`gpu_clk` line exactly.
+
+### The campaign so far
+
+```
+@packet-h-m10k      29,044 ALM   54.12 MHz   TNS -29,689
+@packet-h-timing    28,959       61.52       TNS -19,985
+@packet-h-uvw       27,601       66.03       TNS  -8,851
+@packet-h-mulstage  27,231       61.08       TNS  -9,514
+@packet-h-satstage  27,583       77.80       TNS  -2,276
+```
+
+**ALM -1,461, gpu_clk +43.8%, TNS -92.3%.** 2,417 ALM inside the 30,000 budget,
+63 of 112 DSP, 136 of 553 M10K. What remains to 100 MHz is 22.2 MHz and
+-2,276 ns, and it is now entirely texture: `zhao_texture_cache_pipe_v2`
+(`c2_tag` → `valid_r`) and `zhao_texture_v3own` (`cq_own_q` → `zhao_texture_v3rq`'s
+`h_d_q` / `s_d_q` / `lcnt_q`), at 11.9–12.7 ns of data delay against 10.000.
+
+Every number above is the render BACK end — see the closure finding above.
+
+### And the closure audit is now a tool, run over all 60 receipts
+
+`tools/budget/closure_liveness.py`. **48 of 60 receipts declare only what they
+elaborate.** `zhao_shell_top_v2` declares 97 and elaborates 78; the 19 split
+three ways and only the first group is a problem:
+
+* **the geometry front end, genuinely absent (8)** — `setup`, `meshfetch`,
+  `assemble`, `vdecode`, `assetfetch`, `project`, `clip`, `depthquant`;
+* **V1 siblings kept beside their V2 (3)** — `geom_bin_pipe`, `geom_binner`,
+  `raster_tile_pipe`, which the differential tests want in one source list;
+* **unselected arithmetic variants (5)** — `attr_mul72x13_dsp3`, `dual18_mul`,
+  `mul27_exact`, `raster_attrgrad_dsp3`, `texture_bilerp_lane_dsp2`;
+* plus `raster_blend`, `raster_quant`, `raster_rcp24_svc`.
+
+`zhao_prod_top`'s census declares 147 and has exactly one dead entry,
+`zhao_raster_quant` — which `prod_manifest.yml` already declares a `probe` with
+a paragraph explaining that RASTER.RESOLVE instantiates its two halves directly.
+That is a closed question, correctly recorded, and the tool finding nothing else
+in the production census is the reassuring half of this audit.
+
+**The tool's first version was wrong, in the accusing direction.** It read the
+Compilation Hierarchy Node table alone and called `zhao_texture_mod255` dead;
+that module is elaborated inside `zhao_texture_mosaic_v2` and simply has no row
+of its own, because Quartus folds small entities into the parent. It now reads
+the `Info (12128): Elaborating entity` lines as authoritative and unions the
+table in as corroboration, so the union can only ever call a module MORE alive.
+The eight geometry blocks have **zero** such lines; `mod255` has one. The
+finding survives its own instrument being corrected, which is the only reason it
+is still in this document.
+

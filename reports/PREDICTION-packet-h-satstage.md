@@ -91,3 +91,81 @@ the next fit: endpoints marked NEW at `@packet-h-mulstage` — `dividend_r` with
 probably present at `@packet-h-uvw` too, sitting just under its -3.293 floor.
 **Do not read them as a regression the mul split caused.** `tools/budget/setup_path_census.py`
 now prints both floors on every comparison so this cannot be misread again.
+
+---
+
+# RESULT: `@packet-h-satstage`, commit e24b9e4f, clean tree, 97 sources
+
+```
+ALM 27,583   DSP 63   M10K 136   registers 37,510   1,580.7 s   status ok
+gpu_clk   77.80 MHz   worst -2.853   TNS -2,276.4   hold +0.086
+audio_clk 72.44 MHz   vid_clk 110.35 MHz
+```
+
+## Scorecard against what was written before the fit
+
+| # | predicted | measured | |
+|---|---|---|---|
+| 1 | `final_sat_r` leaves the critical set | 3 paths at -6.372 → none above -1.623 | **yes** |
+| 2 | `dividend_r` collapses too | 22 + 7 duplicated paths → none; `neg_r` too | **yes** |
+| 3 | worst -3.9 to -4.1, **71–72 MHz** | worst **-2.853**, gpu_clk **77.80 MHz** | better |
+| 4 | ALM 27,100–27,600 | **27,583** | yes |
+| 5 | DSP 63, M10K 136 unchanged | 63, 136 | yes |
+| 6 | TNS -4,500 to -7,500 | **-2,276** | better |
+
+Both "better" rows are the same effect, and it is the one the falsification
+clause named: *"if it leaves but Fmax does not improve, then the ~-3.9 tier is
+not three independent walls but one shared placement region."* It leaves AND
+Fmax improves — so the tier was **both**. The predicted next wall (the texture
+cone at -3.949) did become the wall, but at **-2.853**, because it had been
+carrying placement pressure from the attrdiv cone above it. The reasoning was
+right and the arithmetic was conservative.
+
+## THE HEADLINE `fmaxMhz` FIELD NOW NAMES THE WRONG CLOCK
+
+The row reports `fmaxMhz: 72.44, fmaxClock: audio_clk`. **The render clock is
+77.80 MHz.** All 200 paths in the printed window are `gpu_clk → gpu_clk` at a
+10.000 ns relationship; `audio_clk` and `vid_clk` own **zero** negative paths.
+
+`run_block_fit.ps1:1074` takes the FIRST row of Quartus's Fmax Summary, which is
+sorted ascending — the slowest clock in the design, *regardless of its
+constraint*. For a single-clock leaf that is exactly right. For a composed
+multi-clock top it silently changes meaning the moment the ranking flips, which
+is what happened here: the render path finally overtook a domain nobody was
+working on.
+
+`audio_clk` is not a new wall. Across four fits it reads 90.41 → 103.21 → 96.47
+→ 72.44 while no commit in that range touches the audio domain — a 30 MHz swing
+that is the fitter spending placement where the constraints are, and it is
+free to do that because `audio_clk` has no negative slack at any of the four.
+
+**The hazard is that `min_fmax_mhz` is checked against this field**
+(`fit_rules.ps1:67`). No rule binds `zhao_shell_top_v2`, and labelled rows are
+never rule-checked, so nothing is currently mis-gated — but eleven tops in
+`design/fit_targets.yml` carry `min_fmax_mhz: 100`, and any of them that is
+multi-clock would be judged on whichever clock is slowest in absolute terms
+rather than on whether the design meets its constraint. The sound metric is the
+worst-slack clock's achieved Fmax, `1 / (relationship + setupSlackNs)`, which
+for this row is `1 / (10.000 - 2.853) ns = 77.80 MHz` and agrees with Quartus's
+own `gpu_clk` line exactly.
+
+## Where the render path now stands
+
+```
+@packet-h-m10k      29,044 ALM   54.12 MHz   TNS -29,689
+@packet-h-timing    28,959       61.52       TNS -19,985
+@packet-h-uvw       27,601       66.03       TNS  -8,851
+@packet-h-mulstage  27,231       61.08       TNS  -9,514
+@packet-h-satstage  27,583       77.80       TNS  -2,276
+```
+
+Across the campaign: **ALM -1,461, gpu_clk +43.8%, TNS -92.3%**, 2,417 ALM
+inside the 30,000 budget, 63 of 112 DSP, 136 of 553 M10K. Against the ruled
+100 MHz the gap is **22.2 MHz and -2,276 ns of TNS**, and the remaining band is
+texture: `zhao_texture_cache_pipe_v2` (`c2_tag` → `valid_r`) and
+`zhao_texture_v3own` (`cq_own_q` → `zhao_texture_v3rq`'s `h_d_q` / `s_d_q` /
+`lcnt_q`) own the worst paths, with data delays of 11.9–12.7 ns against 10.000.
+
+And the standing caveat from the closure finding applies to every number above:
+**this is the render BACK end.** The geometry front end is declared in the
+closure and elaborates nowhere.

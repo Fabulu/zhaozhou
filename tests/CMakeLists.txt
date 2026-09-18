@@ -9804,6 +9804,17 @@ set_tests_properties(material_combine_v3_done_bypass_double_issue_control
 # three tables turned 200 negative paths into "1,600 paths, 1,400 of them
 # meeting timing" on 2026-09-18. The report is run by hand; this test exists
 # so the parser cannot rot between runs.
+# closure_liveness audits every fit receipt for sources it DECLARES and never
+# ELABORATES. Registered for its import-time controls, which pin the one
+# distinction the audit rests on: Info 12128 "Elaborating entity" means the
+# module is in the design; Info 12023 "Found entity" only means the file was
+# analysed. Conflating them is how eight geometry blocks sat in
+# zhao_shell_top_v2's 97-source closure reading as measured.
+add_test(NAME closure_liveness_selftest
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/budget/closure_liveness.py)
+set_tests_properties(closure_liveness_selftest PROPERTIES
+  LABELS "fast;lint;budget" TIMEOUT 300)
 add_test(NAME setup_path_census_selftest
   COMMAND "${Python3_EXECUTABLE}"
     ${CMAKE_SOURCE_DIR}/tools/budget/setup_path_census.py
