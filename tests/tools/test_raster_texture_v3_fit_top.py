@@ -70,7 +70,7 @@ PROTECTED = {
         # The field diff that justifies it is recorded once, beside the pin in
         # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
         # 119 -> 119, parameters 16 -> 16.
-        "8a43aa3967fee1dfebcd26f327df93fce302ddf6daf3684d68d108479eb07453",
+        "91b17f5d8b9c05bd155da9062cf97741b66d894f57a8834703471167b87a7b94",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38",
 }
