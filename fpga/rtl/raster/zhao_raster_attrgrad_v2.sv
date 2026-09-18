@@ -94,14 +94,44 @@ module zhao_raster_attrgrad_v2 #(
                  - $signed({job_min_x_i[11], job_min_x_i});
   end
 
+  // `row_r * dndy_r` as a shift-and-add, kept out of the DSPs on purpose.
+  //
+  // WHY THE TERMS ARE SUMMED PAIRWISE RATHER THAN ACCUMULATED. Written as four
+  // sequential `row_offset_c = row_offset_c + ...` statements this is a
+  // dependency CHAIN: each add waits for the one above it, and the fifth add
+  // for `row_num_c` waits for all four. Quartus builds it as written, so the
+  // 2026-09-18 composed-shell fit measured five 96-bit carry chains back to
+  // back and this became THE path that sets the whole machine's Fmax --
+  // -8.477 ns of slack, 17.809 ns of data delay against a 10.000 ns period,
+  // `row_r[0]` through `Add5`, `Add6`, ... into `attrdiv`'s `final_sat_r`.
+  // 1/(10.000 + 8.477) ns = 54.12 MHz, exactly the figure the receipt reports.
+  //
+  // The four terms do not depend on each other, so the sum can be a TREE:
+  // depth 3 for five terms instead of depth 5, which is the optimum
+  // (ceil(log2(5))). Nothing else changes -- these are 96-bit two's-complement
+  // adds, addition is associative modulo 2**96, and `row_r[N] ? term : 0`
+  // reproduces the conditional accumulate exactly, including the all-zero case
+  // when no bit of `row_r` is set. The result is bit-identical by construction.
+  //
+  // "By construction" is an argument, not evidence, so here is the evidence:
+  // the differential below drives this module and `zhao_raster_attrgrad_dsp3`
+  // from the same stimulus and compares them cycle by cycle. That module was
+  // not touched by this change, so it is an independent second implementation
+  // and not a restatement of the same reasoning.
+  // ENFORCED-BY: tests/raster/raster_attrgrad_dsp3_diff.cpp
   logic signed [95:0] row_offset_c, row_num_c;
+  logic signed [95:0] row_t0_c, row_t1_c, row_t2_c, row_t3_c;
+  logic signed [95:0] row_pair0_c, row_pair1_c;
   always_comb begin
-    row_offset_c = 96'sd0;
-    if (row_r[0]) row_offset_c = row_offset_c + dndy_r;
-    if (row_r[1]) row_offset_c = row_offset_c + (dndy_r <<< 1);
-    if (row_r[2]) row_offset_c = row_offset_c + (dndy_r <<< 2);
-    if (row_r[3]) row_offset_c = row_offset_c + (dndy_r <<< 3);
-    row_num_c = base_min_y0_r + row_offset_c;
+    row_t0_c = row_r[0] ? dndy_r         : 96'sd0;
+    row_t1_c = row_r[1] ? (dndy_r <<< 1) : 96'sd0;
+    row_t2_c = row_r[2] ? (dndy_r <<< 2) : 96'sd0;
+    row_t3_c = row_r[3] ? (dndy_r <<< 3) : 96'sd0;
+
+    row_pair0_c  = row_t0_c + row_t1_c;      // level 1
+    row_pair1_c  = row_t2_c + row_t3_c;      // level 1
+    row_offset_c = row_pair0_c + row_pair1_c; // level 2
+    row_num_c    = base_min_y0_r + row_offset_c; // level 3
   end
 
   logic               dv_valid, dv_ready;

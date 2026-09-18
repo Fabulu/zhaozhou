@@ -63,19 +63,26 @@ PACKET_C_SOURCES = (
 # Packet E legitimately changes the V3 implementation while preserving its public
 # schema; these hashes pin that refreshed authority. Shell/accounting bytes remain
 # the protected Packet-C values.
-    # Refreshed 2026-09-18 for the M10K change to the binding resolver. The
-    # manifest holds 1,949 leaves before and after; exactly THREE moved, none
-    # added, none removed:
-    #   source_closure[21]  zhao_texture_binding_resolver_v2.sv -- the page
-    #                       banks moved from flip-flops into inferred M10K
-    #   tools/parser        its duplicate-marker fingerprint was re-pinned
-    #                       because that source moved (marker count still 105)
-    #   canonical_interface_sha256 -- derived from the two above
-    # No port, parameter or elaboration value changed, so the PUBLIC SCHEMA this
-    # constant exists to protect is untouched; only the provenance of the bytes
-    # behind it moved. That distinction is the whole reason to re-pin rather
-    # than to widen the assertion.
-INTERFACE_SHA256 = "8859f06686717edc5c29ca095250a6311024b8fd6f1eeb935c2d03d506fd595f"
+# Refreshed twice on 2026-09-18, for two timing changes inside
+# zhao_texture_binding_resolver_v2: the page banks moving into inferred M10K,
+# then the row gaining a stored legality bit and the CRC verdict gaining its own
+# state. Each time the manifest was field-diffed against the committed one
+# before this line was touched, and each time the result was the same shape:
+#
+#     1,949 leaves before and after; 3 changed, 0 added, 0 removed
+#       source_closure[21]          the resolver's own source hash
+#       tools/parser                its duplicate-marker fingerprint
+#       canonical_interface_sha256  derived from the two above
+#
+# So no port, parameter, dtype or elaboration value moved, and the PUBLIC SCHEMA
+# this constant protects is untouched; only the provenance of the bytes behind
+# it did. That distinction is the whole reason to re-pin rather than widen.
+#
+# The duplicate-marker count is 105 both times. It briefly went to 107 while the
+# stored legality bit was written as a packed struct, whose two members are
+# names that already occur in the closure; it is a packed vector instead, for
+# the reason recorded in tools/rtl/texture_v3_interface_parser.py's pin.
+INTERFACE_SHA256 = "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd"
 PACKET_B_TOP_SHA256 = "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61"

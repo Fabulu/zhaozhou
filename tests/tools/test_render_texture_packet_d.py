@@ -114,7 +114,7 @@ PROTECTED_HASHES = {
     # to a leaf; the island's interface is untouched. That check is what makes
     # this a refresh of a CURRENT hash rather than a quiet edit of a protected
     # one, and it is the reason the distinction is worth keeping.
-        "8859f06686717edc5c29ca095250a6311024b8fd6f1eeb935c2d03d506fd595f",
+        "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":

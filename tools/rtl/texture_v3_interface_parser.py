@@ -66,9 +66,31 @@ SUPPORTED_DUPLICATE_PROFILES = {
     # same evidence the CURRENT-hash refresh of 2026-09-16 recorded, and the
     # difference between refreshing a derived fingerprint and quietly moving a
     # frozen one.
+    # STILL 105 after the 2026-09-18 legality-bit and CRC-verdict changes, and
+    # that is a designed outcome rather than luck.
+    #
+    # The stored word gained a legality bit. Written as
+    # `struct packed { logic legal; binding_row_t row; }` it took the count to
+    # 107: a packed struct emits one MEMBERDTYPE per member, and both `legal`
+    # and `row` already occur elsewhere in the closure, so both became duplicate
+    # markers. Verified by replaying the manifest's own `elaboration.argv` and
+    # listing them --
+    #
+    #     legal | z,293:19,293:24 | /miscsp/0/typesp/276/membersp/0
+    #     row   | z,294:19,294:22 | /miscsp/0/typesp/276/membersp/1
+    #
+    # -- and 107 - 105 was fully accounted for by those two lines.
+    #
+    # It is a packed VECTOR instead. This fingerprint exists to show the
+    # ISLAND's schema did not move; spending two markers on leaf-internal member
+    # names makes it permanently noisier and would have forced a re-derivation
+    # of the independent oracle in tests/tools, whose own comment warns that
+    # fitting its remap to a target digest is the one thing it must never do.
+    # The resolver already speaks in packed vectors with a cast, so nothing was
+    # given up.
     (PRODUCTION_TOP, PRODUCTION_INTERFACE_PURPOSE): {
         "count": 105,
-        "sha256": "3d2cad0cafd8b39b6ac27c441dd203833eb5bcbf4be4c4a18645880f1152938e",
+        "sha256": "0cb6f8812895c285ade5911768134b90d8691f2a7171007d8aa130a05e53640a",
     },
 }
 SUPPORTED_DTYPE_KINDS = frozenset({"BASICDTYPE"})

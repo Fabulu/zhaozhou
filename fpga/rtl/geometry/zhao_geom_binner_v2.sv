@@ -368,9 +368,19 @@ module zhao_geom_binner_v2 #(
   // The Packet-D bank is physically META_SLICES independent 40-bit RAMs. At
   // the default METAW=1157 this is exactly 29 ascending slices and the image is
   // {3'b0, metadata1157}; no pointer or caller cookie is stored beside it.
-  // The top physical pad has no ABI-visible consumer by construction. Keep the
-  // full vector so each generated slice is exactly 40 bits, and waive only the
-  // deliberate unexported pad bits (three bits at the Packet-D default).
+  // The top physical pad has no ABI-visible consumer. Keep the full vector so
+  // each generated slice is exactly 40 bits, and waive only the deliberate
+  // unexported pad bits (three bits at the Packet-D default).
+  //
+  // This said "by construction" until 2026-09-18 and named nothing, which is
+  // the phrasing the ledger's V20 rule exists to refuse -- it is the same
+  // sentence shape as the two claims in this repository that turned out false.
+  // The enforcement is real and was simply never pointed at: the consumer
+  // elaborates `p_packet_d_contract`, which `$fatal`s unless
+  // `$bits(job_meta_i) == 1157`. The pad is `META_PHYS_W - METAW`, so it sits
+  // above the width that check pins, and widening the ABI to reach it fails
+  // elaboration rather than silently exporting the pad.
+  // ENFORCED-BY: fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv:p_packet_d_contract
   logic [META_PHYS_W-1:0] meta_wd;
   /* verilator lint_off UNUSEDSIGNAL */
   logic [META_PHYS_W-1:0] meta_q;

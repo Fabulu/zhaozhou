@@ -2434,3 +2434,189 @@ path of 13.313 ns -- a campaign, and `attrgrad -> attrdiv` is its first target.
 Write the 75 -> 76 bit row change in `zhao_texture_binding_resolver_v2.sv`, with
 a committed mutant that flips the stored bit so the read-side detector is SEEN
 to fire. Then re-fit. Do not claim an Fmax movement from it.
+
+---
+
+## Both timing changes written, and the two facts that de-risked them
+
+**1. `attrgrad`'s row offset is now a TREE, depth 5 -> 3.** `row_offset_c` was
+four sequential `row_offset_c = row_offset_c + ...` statements plus a fifth add
+for `row_num_c`; Quartus builds what is written, so the composed fit measured
+five 96-bit carry chains back to back. That is THE path that sets the machine's
+Fmax: `1/(10.000 + 8.477) ns = 54.12 MHz`, exactly the receipt's figure.
+
+Bit-exact by associativity of mod-2**96 addition. Held to it by the directed
+test, the R4 variant, two mutants, and -- the one that matters -- the DSP3
+differential, which compares this module against `zhao_raster_attrgrad_dsp3`, a
+second implementation I did not touch. 11/11 green.
+
+**And the first run of those tests was a LIE.** They passed in 0.02 s before I
+rebuilt anything: `ctest` does not build. The rebuild then relinked all four
+binaries. The documented stale-binary trap, caught only because the repo says
+to assert the tree before believing a number -- `row_pair0_c` appears 3 times
+in the source, and the rebuild moved 49 steps.
+
+**2. The resolver's legality verdict is now STORED, not recomputed.** The page
+word is 76 bits: the 75-bit row plus `legal`. Written once by the law at
+CFG_WRITE, read back as a bit.
+
+Two things could have made this wrong and both were MEASURED rather than
+assumed, with one cheap `-MapOnly` run (53 s, no fitter):
+
+* **Quartus 17.0 accepts `'{legal: ..., row: ...}`.** The repo's standing
+  lesson is that a clean Verilator lint settles one tool's opinion; this needed
+  the other tool and now has it.
+* **The extra bit did not cost the M10K inference.** The RAM summary names both
+  banks: `Simple Dual Port, 256 x 76, 19,456 bits` each, `altsyncram`, zero
+  uninferred. 38,912 memory bits, 1,213 registers.
+
+Stated plainly: `legal` is 1 for every row that exists today, because the only
+two writers sit past the CFG_WRITE test, so synthesis may fold it. It is not a
+live detector and must not be quoted as one. It is kept as a field because it
+puts the obligation in the TYPE -- a future writer has to say what the law makes
+of its row.
+
+## `ledger_check` is not one known red. It is THREE, and two are in files I changed
+
+I had been carrying "the known `ledger_check` red" all session without opening
+it. It reports V20 violations -- an invariant claim with no machine-resolvable
+`ENFORCED-BY:` within 10 lines:
+
+* `zhao_geom_binner_v2.sv:371` -- the docketed owner decision, pre-existing
+* `zhao_raster_attrgrad_v2.sv:114` -- my bit-identical claim, written today
+* `zhao_texture_binding_resolver_v2.sv:336` -- the quiet-swap claim
+
+The enforcers exist; they were simply never named. For attrgrad it is
+`tests/raster/raster_attrgrad_dsp3_diff.cpp`, the independent second
+implementation. For the resolver it is
+`tests/texture/texture_binding_resolver_v2_directed.cpp`, whose line 323 checks
+"no quiet source activated the page while both witnesses were low" -- precisely
+the claim. Annotating both, which should take the count 3 -> 1.
+
+"Known red" is how a gate stops being read. It took two minutes to open.
+
+## The ten-pin instrument is unblocked, and the answer was one module over
+
+`gen_shell_fit_ports_v2.py` stops at `KeyError: 'tri_area2_i'`, and its own note
+warns that random `tri_flat_request_i` values are illegal opcodes that park the
+pipe in refusal states -- shrinking the measured area in the flattering
+direction. It asks the next pass to find what unpacks the 1,157-bit metadata
+word before authoring anything. Done:
+
+**`zhao_raster_tile_pipe_v2` is the unpacker**, with an exact bit map
+(lines 244-257), and it contains exactly TWO refusal conditions:
+
+    assign profile_aux_bad_w  = incoming_flat_request_w[268] ||
+                                (incoming_flat_request_w[267:44] != 224'd0);
+    assign profile_area_bad_w = (incoming_area2_w == 47'd0);
+
+So the constraint is: `tri_area2_i` non-zero -- which the generator ALREADY
+computes from the vertices and already raises on -- and `tri_flat_request_i`
+with bit 268 clear and [267:44] zero. That leaves **73 of 298 bits free to
+toggle** ([43:0] and [297:269]). Everything else -- continuation tail, fragment
+state, min_x, all three 240-bit planes -- is stored with no legality test at all.
+
+And `zhao_raster_texture_v3_fit_top.sv:347-355` already builds a legal
+`job_meta_w` for the G8A instrument, including `[297:296] = 2'd1` and
+`[424:378] = 47'd16777216`. The encoding the sibling needs was authored one
+instrument over. "Grep the tree for the thing it replaces", again.
+
+## Packet I is NOT being promoted yet, deliberately
+
+Its gate is Packet H's composed fit, and that fit is `ok`. But I have just
+changed two files inside the composed shell's closure, so `@packet-h-m10k` no
+longer describes the tree. Promoting against a receipt a pending re-fit will
+supersede is the stale-evidence error this repository documents at length.
+
+Order: annotate -> commit -> re-fit the composed shell -> promote I against the
+fresh receipt. The G8B row itself already satisfies the receipt law
+(`ok`, 102.19 MHz, 0 virtual pins, clean tree), so nothing else blocks it.
+
+---
+
+## The CRC scan was the real family, and ledger_check went green
+
+**The 515 were never one family.** I wrote that storing the legality verdict
+removes "the 16.0 ns cone from 515 paths". Splitting all 516 RAM-sourced paths
+by DESTINATION instead of by module:
+
+    page0_valid_q / page1_valid_q        512   worst -6.230   CRC scan
+    binding_fault_o, disposition_refuse_q  2   worst -8.273   legality
+    read_row_present_q, cfg_rsp_op_q       2   worst -4.764
+
+The legality change removes TWO of them -- the worst two, but two. 512 are the
+seal: `portbdataout` -> `Mux10` byte select (+4.86 ns) -> `crc32_byte` (+0.56)
+-> `Equal35` (+3.49) -> the 256-bit valid-vector clear (+4.32), 13.69 ns on one
+edge. So the CRC verdict now folds the last byte into `crc_q` and judges it in a
+new LOAD_CRC_CHECK state. The seal value is untouched; the walk already spends
+256 x 10 cycles off the render path and now spends one more.
+
+`binding_crc_busy_o` covers the new state so nothing outside sees a new pulse.
+
+**Two directed checks caught it by exactly one cycle, which is the counters
+discipline working.** `expected 0xA01, got 0xA02` and `0x9FD -> 0x9FE`. Both
+updated with their NAMES and not just their constants: "BAD_CRC response lands
+on final serialized byte" had become FALSE, and the scan count is now spelled
+`1 + 256*10 + 1` so a re-collapsed fold still drops it by thousands.
+
+## The stored word is a VECTOR because a struct cost the island's fingerprint
+
+`struct packed { logic legal; binding_row_t row; }` took the duplicate-name
+marker count 105 -> 107 -- both member names already occur in the closure -- and
+would have forced re-deriving the independent oracle in
+`test_texture_v3_interface_manifest.py`, whose own comment warns that fitting
+its remap to a target digest is the one thing it must never do.
+
+That fingerprint exists to show the ISLAND's schema did not move. Spending two
+markers of it on leaf-internal member names makes it permanently noisier for
+nothing. A packed vector with `binding_row_t'(...)` is the idiom this file
+already uses everywhere.
+
+**The remaps still had to be re-derived**, because Verilator reassigns its
+internal typesp indices and address labels whenever declarations change --
+all sixteen parent addresses moved even with the count back at 105. Learned by
+replaying the manifest's own `elaboration.argv` and matching on
+`(member_name, loc)`, which are properties of the SOURCE and did not move: 105
+rows matched, no ambiguity, none left over. The oracle's digest was then
+computed from the rebuilt rows and only afterwards compared with the parser's
+pin. They agreed at `0cb6f881`.
+
+The four shifted typesp entries went BACK to their pre-M10K values, which looks
+like a revert and is not: the struct contributed exactly three typesp entries
+(itself plus two members), and dropping it removes them.
+
+## ledger_check is GREEN, and it was never one error
+
+It was three. The docketed binner claim, plus two in files this work touched.
+All three had enforcers that existed and were never named:
+
+* attrgrad  -> `tests/raster/raster_attrgrad_dsp3_diff.cpp`, the independent
+  second implementation
+* resolver  -> `texture_binding_resolver_v2_directed.cpp:323`, "no quiet source
+  activated the page while both witnesses were low"
+* binner_v2 -> `zhao_raster_tile_pipe_v2.sv:p_packet_d_contract`, which `$fatal`s
+  unless the metadata ABI is exactly 1157 bits -- the pad sits above that width,
+  so widening the ABI to reach it fails elaboration
+
+The binner's claim read "the top physical pad has no ABI-visible consumer BY
+CONSTRUCTION" and named nothing, which is the exact sentence shape V20 exists to
+refuse. I had been carrying this gate as "the known red" for most of the
+session without opening it. That is how a red gate stops being read.
+
+## Two files left PROTECTED_HASHES
+
+`zhao_raster_attrgrad_v2.sv` by owner decision, and `zhao_geom_binner_v2.sv` by
+the same reasoning once the precedent existed. The set asserts that PACKET E did
+not touch those files, which is still true -- this is Packet-H work two packets
+later -- but it cannot also assert the bytes never moved, so bumping a hash in
+place would have left "protected" meaning something weaker than it reads.
+
+The binner is the sharper case: **a byte freeze and a lint rule had deadlocked
+over a COMMENT.** Nothing about that file's logic changed.
+
+## Owner asked for no more questions
+
+2026-09-18: *"Please don't ask me quiz questions anymore until I ask you
+otherwise and just continue with work. You're allowed to make decisions like the
+one before on your own."* The attrgrad unfreeze was the last one asked; the
+binner unfreeze was decided under this instruction and recorded here instead.

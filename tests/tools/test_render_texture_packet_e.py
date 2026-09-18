@@ -95,16 +95,53 @@ PROTECTED_HASHES = {
         "f2c0ee4d054e2f70a37c4179c4fb985b0ba3f95c5533f598858b3b315e57497b",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
         "2955128d655469f1a79f694797af0e70f521bbee08100c7c2190cda7cd2e4b9a",
-    "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
-        "aa0b2022cce4b9e6a92d7b43130a4a0dcb8b720689a89230065738b5f63c787b",
-    "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
-        "7b89e1705420a2fd5ebfd84ceed9f27fb0855d13bc6f8c2d2c19dbc38ad3e867",
+    # `fpga/rtl/raster/zhao_raster_attrgrad_v2.sv` WAS HERE and is now in
+    # CURRENT_HASHES below. Owner decision, 2026-09-18, asked rather than
+    # assumed because the roadmap's rule is that a file in this set is not
+    # editable work.
+    #
+    # What this set asserts is that PACKET E did not touch these files, and that
+    # remains true -- the edit is Packet-H timing work, two packets later. What
+    # it cannot assert any more is that the file has never moved, so keeping it
+    # here with a bumped hash would have left the word "protected" meaning
+    # something weaker than it reads.
+    # `fpga/rtl/geometry/zhao_geom_binner_v2.sv` also moved to CURRENT_HASHES,
+    # 2026-09-18, and for a COMMENT rather than for logic.
+    #
+    # It carried the last open `ledger_check` error: a V20 invariant claim --
+    # "the top physical pad has no ABI-visible consumer by construction" --
+    # naming no enforcer. That red had been sitting long enough to be described
+    # as "the known one" and stop being read. The enforcement existed all along
+    # (`p_packet_d_contract` in zhao_raster_tile_pipe_v2 `$fatal`s unless the
+    # metadata ABI is exactly 1157 bits, and the pad is above that width), so
+    # closing it needed one ENFORCED-BY line and no design change. This file's
+    # bytes could not move while it sat in the protected set, which is how a
+    # freeze and a lint rule can deadlock over a comment.
     "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
         "6c4d8d04bc64b7cf1b7ba36e7b4820c1f4e489785021dc12b48286525f61e861",
     "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
         "675fec61863184aee91692934d3434a9b2cc06c607a71d7250265d5197ccd204",
 }
 CURRENT_HASHES = {
+    # Moved out of PROTECTED_HASHES on 2026-09-18 by owner decision.
+    #
+    # `row_offset_c` was four sequential 96-bit conditional adds plus a fifth
+    # for `row_num_c` -- five carry chains in series, and the composed shell fit
+    # measured that as THE path setting the whole machine's Fmax: -8.477 ns of
+    # slack, 17.809 ns of data delay against a 10.000 ns period, and
+    # 1/(10.000 + 8.477) ns = 54.12 MHz, exactly the figure the receipt reports.
+    # It is now a balanced tree, depth 3, which is the optimum for five terms.
+    #
+    # The change is bit-exact by associativity of addition modulo 2**96, and it
+    # is held to that by `raster_attrgrad_dsp3_diff`, which drives this module
+    # and `zhao_raster_attrgrad_dsp3` from one stimulus and compares them --
+    # an independent second implementation, untouched by this work.
+    "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
+        "083b98868df3ecd538942fd9e680cf48adad4f46a9e5af680d655616e74e495c",
+    # Comment only: the ENFORCED-BY that closed the last ledger_check error.
+    # No logic, no ports, no widths -- see the note in PROTECTED_HASHES above.
+    "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
+        "5d61f2ab90355d38d2ef1b92bbc7c9273993a73ab27337efb9588fda33f28fd5",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
         "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
     # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
@@ -116,7 +153,7 @@ CURRENT_HASHES = {
     # which is the difference between refreshing a CURRENT hash and quietly
     # editing a PROTECTED one.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "8859f06686717edc5c29ca095250a6311024b8fd6f1eeb935c2d03d506fd595f",
+        "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd",
 }
 
 

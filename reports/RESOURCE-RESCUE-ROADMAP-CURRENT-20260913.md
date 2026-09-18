@@ -756,8 +756,12 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > why G8B sat at `failed:structure` for its whole campaign. The area question
 > is answered and the CLOCK question is not: 54.12 MHz against a ruled 100.
 >
-> **AND THE M10K READ IS ON THE CRITICAL PATH.** The 2,000 summarised negative
-> paths, grouped by the leaf at each END:
+> **AND THE PATHS START AT THE MEMORY — WHICH IS NOT THE SAME AS THE MEMORY
+> BEING THE COST.** This heading read "AND THE M10K READ IS ON THE CRITICAL
+> PATH" until the path detail was opened; it is left visible because the
+> difference between "launches at X" and "is slow because of X" is the entire
+> lesson of the three corrections below. The 2,000 summarised negative paths,
+> grouped by the leaf at each END:
 >
 > | from → to | paths | total | worst |
 > |---|---:|---:|---:|
@@ -819,6 +823,208 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > There is no before-picture — the pre-change fit FAILED and produced no timing,
 > and map-only rows produce none by construction. What is established is where
 > the time goes NOW, and that the memory itself is not where it goes.
+>
+> #### The prediction, written down BEFORE the fit that tests it
+>
+> This file has a chapter on diagnoses that arrive already believed. The defence
+> is to state the expected number first, so the fit can refute it.
+>
+> Decomposing the −8.477 path (data path opens at 6.084 ns):
+>
+> | stretch | ns |
+> |---|---:|
+> | `Add5` → `Add8`, four 96-bit adds in `attrgrad` | 9.50 |
+> | `u_div\|Add0` | 2.24 |
+> | `u_div\|LessThan0~15..26`, a 96-bit compare chain | 4.45 |
+> | `final_sat_r~3..4` | 1.62 |
+>
+> Two changes went in against this:
+>
+> 1. **`attrgrad`'s row offset summed as a tree, depth 5 → 3.** Removes one to
+>    two adder levels from the stretch above, so ≈ **2.3–4.7 ns**. Bit-exact —
+>    associativity of mod-2⁹⁶ addition — and held to that by the directed test,
+>    the R4 variant, two mutants and the DSP3 differential against an untouched
+>    second implementation.
+> 2. **The resolver's legality verdict stored beside the row.** Removes the
+>    16.0 ns cone — from **two paths**, not from 515. See below.
+>
+> ##### The 515 are not one family, and assuming they were was this section's
+> ##### third flattering error in a row
+>
+> I wrote above that storing the verdict "removes the 16.0 ns cone from 515
+> paths", because the two worst RAM-sourced paths run through
+> `binding_row_legal`. Splitting all 516 by DESTINATION instead of by module:
+>
+> | destination | paths | worst | cone |
+> |---|---:|---:|---|
+> | `page0_valid_q` / `page1_valid_q` | **512** | −6.230 | **CRC scan** |
+> | `binding_fault_o`, `disposition_refuse_q` | 2 | −8.273 | legality |
+> | `read_row_present_q`, `cfg_rsp_op_q` | 2 | −4.764 | mixed |
+>
+> **512 of 516 are the CRC SCAN**, and the legality change does not touch them.
+> Their cone is `portbdataout` → `Mux10~4/5/6` (the byte selector) → `crc~3`
+> (`crc32_byte`) → `Equal35~5/~14` (the seal compare) → the valid vectors —
+> read from the path detail, where 140 of the 200 detailed paths land there.
+>
+> So the legality change removes the two WORST RAM paths and about 16 ns of TNS,
+> not 2,617. It is still right — it deletes a re-derivation and one of two
+> silicon copies of a 64-bit arithmetic cone — but it is a small TNS win, not a
+> large one.
+>
+> **The revised prediction: worst slack −8.477 → about −6.2, and Fmax 54.12 →
+> roughly 61–62 MHz**, with the binder becoming the **CRC scan at −6.230**. The
+> `attrgrad` tree does the work; the resolver change clears the two paths above
+> it and leaves the CRC family exposed as the next target.
+>
+> **REVISED AGAIN, because the CRC change landed in the same batch** rather than
+> waiting for a fit between them — CLAUDE.md's rule is to batch changes and
+> spend one fit, and three changes in one fit is what that means here. With the
+> 512-path family split at a register too, the remaining candidates for binder
+> are `v3own → v3own` at −5.221 and `binner_v2 → uvw_m` at −4.475, neither
+> touched. So: **worst ≈ −5.2 to −6.0, Fmax ≈ 62–66 MHz, binder becoming
+> `c3t_v_q → clm_q[*]` in `v3own`.**
+>
+> Three predictions now sit above this line and the fit will judge all of them
+> at once. That is the cost of batching, and it is the right trade when a fit is
+> 23 minutes and there are three changes: what it buys is that a wrong
+> prediction is still a measured number, while three separate fits would have
+> bought one extra hour and the same three numbers.
+>
+> *(The pattern is worth naming, because it has now happened three times in this
+> one section: group by module, find one expensive thing, attribute the whole
+> group to it. Grouping by module said "the boundary dominates"; grouping by
+> source leaf said "the resolver dominates"; grouping by source module again
+> said "the legality cone is 515 paths". Only the DESTINATION SIGNAL told the
+> truth each time, and it was in the same report throughout.)*
+>
+> ##### The CRC scan, decomposed — the next change, specified before it is made
+>
+> ```
+> 8.208   portbdataout[24]                 the RAM, again ~0.2 ns
+> 13.072  Mux10~4/5/6                      +4.86  byte select, 80:8 variable
+> 13.631  crc~3                            +0.56  one crc32_byte round
+> 17.121  Equal35~5 / ~14 / ~14_RESYN      +3.49  the 32-bit seal compare
+> 21.438  page1_valid_q[64]~1 -> page0_valid_q[86]~78   +4.32  clear fanout
+> 21.700  page0_valid_q[86]                       13.69 ns of data path
+> ```
+>
+> Four stages, all in ONE cycle:
+>
+> ```systemverilog
+> wire [7:0]  crc_byte_c  = crc_canonical_row_c[crc_byte_q*8 +: 8];
+> wire [31:0] crc_step_c  = crc32_byte(crc_q, crc_byte_c);
+> wire [31:0] crc_final_c = crc_step_c ^ 32'hFFFF_FFFF;
+> ...
+> if (crc_final_c == crc_expected_q) loader_state_q <= LOAD_SEAL_PENDING;
+> else begin page0_valid_q <= '0; ... end
+> ```
+>
+> **This walk is already byte-serial** — the comment above it records that a
+> previous pass removed "the measured ten-byte combinational chain" — so it
+> already spends 256 × 10 cycles at page-load time, entirely off the render
+> path. **Another one or two cycles there cost nothing measurable.** The obvious
+> split is a register between the byte select and the CRC step, which separates
+> the 4.86 ns mux from the 8.4 ns of CRC + compare + clear; neither half is over
+> the 10 ns period.
+>
+> It is a state-machine change rather than an expression change, so it is the
+> riskiest of the three and wants the seal tests and the `stale_invalid_crc`
+> mutant watching it. It is also the largest single lever left: **512 of the
+> 2,000 worst paths.**
+>
+> **LANDED the same day.** `LOAD_CRC_CHECK` now holds the verdict: the last byte
+> folds into `crc_q`, and `(crc_q ^ 32'hFFFF_FFFF) == crc_expected_q` is taken
+> on the next edge, so the RAM-to-CRC half ends at a flip-flop and the
+> compare-and-clear half starts at one. `binding_crc_busy_o` covers the new
+> state, so a consumer waiting for busy to fall still sees it fall exactly once.
+> The seal VALUE is unchanged — `crc_q` takes exactly the `crc_step_c` the old
+> code compared — so the bytes folded, their order and the accept/refuse outcome
+> are identical; only the edge the outcome is acted on moves.
+>
+> **The seal tests caught it by exactly one cycle, which is the point of
+> them.** `expected 0xA01, got 0xA02` and `0x9FD → 0x9FE`. Both were updated
+> with their NAMES rather than only their constants: *"BAD_CRC response lands on
+> final serialized byte"* had become false, and the scan count is now spelled
+> `1 + 256*10 + 1` so a re-collapsed fold still drops it by thousands and the
+> check still fires. 8/8 including all seven mutant controls.
+>
+> **That is 61–62, not 100.** The remaining gap is the CRC scan (512 paths), the
+> divider's own 96-bit compare chain (4.45 ns on the attrgrad path alone), and
+> the two island families. Anyone reading a single improved number as "closure
+> is near" is reading it wrong.
+>
+> #### And 29,044 ALM is NOT a whole-machine number
+>
+> The receipt reads *"29,044 of 41,910 — budget 30,000 — INSIDE"*, which invites
+> the reading that area is solved with 956 ALM to spare. Counting the target's
+> own 97 sources by directory:
+>
+> ```
+> raster 25 · texture 20 · video 14 · geometry 13 · common 9 · memory 6
+> debug 3 · command 2 · input 2 · generated 1 · field 1 · audio 1
+> ```
+>
+> **There is no `terrain/` in the list.** The composed shell is the shell and the
+> render path; terrain is not in it. Combining the two is precisely what G8C is
+> for, so the 956 ALM of headroom is headroom against a machine that is not yet
+> whole — and the largest single breach in the scoreboard, *projection and
+> result arenas* at 12,267 ALM and 66 DSP, is two projector instances that the
+> source already deduplicated into `zhao_project_core` and the silicon still
+> carries twice.
+>
+> The closure target is the WHOLE console under 30,000 ALM and 85 DSP at
+> 100 MHz. On this evidence the honest status is: **area is inside budget for
+> the part that has been composed, the clock is not, and the part that has been
+> composed is not the whole.** Quoting 29,044 without that third clause is the
+> same error as quoting `status: ok` without reading what the target's rules
+> actually check.
+>
+> #### THE AREA PROBLEM AND THE CLOCK PROBLEM ARE THE SAME PROBLEM
+>
+> This is the most useful thing the receipt says, and it only appears once the
+> remaining families are resolved to their endpoint SIGNALS rather than their
+> modules. Three of the four have one shape:
+>
+> | family | paths | from → to | worst |
+> |---|---:|---|---:|
+> | `binner_v2` → island | 206 | `d_meta_r[97]` → **`uvw_m~*`** | −4.475 |
+> | `v3own` → itself | 276 | `c3t_v_q` → **`clm_q[0..47][2:0]`** | −5.221 |
+> | resolver | many | RAM enable → **`page0_valid_q[*]`** | −6.230 |
+>
+> Every one is **one register driving an array of flip-flops**. All 206 of
+> the binner family land on `uvw_m` — and `uvw_m` is the ONE array in the entire
+> composition that Quartus still reports as uninferred, 4,096 bits in fabric at
+> `zhao_texture_island_v3_top.sv:916`.
+>
+> **`clm_q` is NOT the same case, and the sentence that follows was written
+> before that was checked.** It is `logic [3:0] clm_q [OWNERS]` — 64 × 4 bits =
+> **256 bits**, a twentieth of `uvw_m` — and its source `c3t_v_q` reaches it
+> through `fwd_t_hit_c`, an associative forwarding compare against every entry's
+> slot and generation. A memory has no read port that answers "which entry
+> matches", so relocating it is not the lever; the lever there is the compare
+> depth. Grouping it with `uvw_m` on endpoint SHAPE was the same mistake as
+> grouping timing families by module instead of by signal, one level down.
+>
+> **That changes what the `uvw_m` owner decision is about.** It has been docketed
+> as an area question — 4,096 bits that could be M10K, blocked because the file
+> sits in Packet D's `PROTECTED_HASHES`. It is also the destination of **all 206
+> paths** in the third largest timing family. Moving it is worth ALM *and* ns.
+> It is written once per accepted admission (`uvw_m[own_adm_owner_w[13:8]]`) and
+> read from a registered owner slot, which is the single-registered-read shape
+> that infers — so the question for the owner is narrow.
+>
+> This is the standing owner direction landing from an unexpected direction:
+> *"we have lots of M10K, ALMs are over budget, what you can you need to solve
+> with memory."* The instruction was given as a way to buy AREA. On this
+> evidence it buys CLOCK as well, because a wide array in fabric is both a pile
+> of ALMs and a high-fanout net into thousands of enables. The binding
+> resolver's own history is the proof: its banks left fabric and its area fell
+> from 28,957 ALUT to something that fits — and what was left on its critical
+> path was never the memory, it was the arithmetic.
+>
+> **So the campaign after the current re-fit is: `uvw_m` first**, which needs the
+> owner's answer on the protected file before anything is edited, and then the
+> forwarding compare in `v3own` — a different problem needing a different fix.
 >
 > *(The first two attempts at this table were wrong, and both in the flattering
 > direction. One reported every family ending at `gpu_clk`, which reads as "the

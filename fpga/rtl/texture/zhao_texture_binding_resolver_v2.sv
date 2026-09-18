@@ -255,9 +255,63 @@ module zhao_texture_binding_resolver_v2 #(
   endfunction
 
   // --------------------------------------------------------------------------
+  // THE STORED WORD CARRIES ITS OWN LEGALITY.
+  //
+  // `binding_row_legal()` above is a pure function of the 75-bit row: a 64-bit
+  // variable shift, a 64-bit add, a second variable shift, another add, an OR
+  // and a compare. It used to be evaluated combinationally on the READ side,
+  // on the row that had just come out of the memory, and the 2026-09-18
+  // composed-shell fit measured what that costs:
+  //
+  //   515 of the 2,000 worst paths launched inside altsyncram:page*_m_rtl_0,
+  //   and on the worst of them the MEMORY contributed 0.192 ns while the
+  //   arithmetic hanging off it contributed 16.0 -- read_row_c.mode, Add8,
+  //   Add10, three ShiftLeft2 stages, a ~30-cell Add13 carry chain,
+  //   max_byte_offset, Add14, into binding_fault_o.
+  //
+  // It is also computed a second time, at CFG_WRITE (see `cfg_status_c`), and
+  // that is the copy that decides whether a row is stored at all. So the read
+  // side was re-deriving a property the write side had already established.
+  //
+  // The word is therefore 76 bits: the row, plus the law's verdict on it,
+  // written once when the row is written. The read path tests a stored bit.
+  //
+  // WHAT THE BIT IS WORTH TODAY, stated plainly rather than flatteringly:
+  // lines below are the ONLY writers of these two arrays, and both sit past
+  // the CFG_WRITE legality test, so `legal` is 1'b1 for every row that exists
+  // and synthesis is free to fold it. It is not, today, a live detector, and
+  // quoting it as one would be the "detector that cannot fire" mistake this
+  // repository has a chapter about.
+  //
+  // It is kept as a stored field rather than deleted because it puts the
+  // obligation in the TYPE: a future writer of `page*_m` has to say what the
+  // law makes of its row, and cannot quietly install an unvalidated one the
+  // way it could if the read side simply trusted `_present`. The expression is
+  // shared with the CFG_WRITE test by common-subexpression elimination, so the
+  // write path pays nothing extra for it.
+  // A PACKED VECTOR RATHER THAN A STRUCT, deliberately.
+  //
+  // The obvious spelling is `struct packed { logic legal; binding_row_t row; }`
+  // and it was written that way first. A packed struct emits one MEMBERDTYPE
+  // node per member into Verilator's tree, and both `legal` and `row` are names
+  // that already occur elsewhere in the island's closure -- so the struct moved
+  // the island's duplicate-name fingerprint from 105 markers to 107 and would
+  // have forced a re-derivation of the independent oracle in
+  // tests/tools/test_texture_v3_interface_manifest.py, whose own comment warns
+  // that fitting its remap to a target digest destroys its independence.
+  //
+  // That fingerprint exists to show the ISLAND's schema did not move. Spending
+  // it on two leaf-internal member names makes it noisier at no benefit, and
+  // this file already speaks in packed vectors with a cast for interpretation
+  // (`binding_row_t'(cfg_row_i)` throughout), so a vector is the idiom here
+  // rather than a concession.
+  localparam int unsigned PAGE_ROW_W   = 75;             // binding_row_t
+  localparam int unsigned PAGE_LEGAL_B = PAGE_ROW_W;     // [75]
+  localparam int unsigned PAGE_WORD_W  = PAGE_ROW_W + 1; // 76
+
   // Two physical page banks.  Payload is not reset; validity masks are.
-  binding_row_t page0_m [0:255];
-  binding_row_t page1_m [0:255];
+  logic [PAGE_WORD_W-1:0] page0_m [0:255];
+  logic [PAGE_WORD_W-1:0] page1_m [0:255];
 
   // ---- ONE READ PORT PER BANK, so each infers as M10K ----------------------
   //
@@ -289,26 +343,40 @@ module zhao_texture_binding_resolver_v2 #(
   logic [7:0]   crc_ra_c;
   logic         page0_re_c, page1_re_c;
   logic [7:0]   page0_ra_c, page1_ra_c;
-  binding_row_t page0_rd_q, page1_rd_q;
+  logic [PAGE_WORD_W-1:0] page0_rd_q, page1_rd_q;
 
   // The bank each consumer read FROM, latched with the read. Muxing on the
   // live `active_bank_q` would select the wrong register if the atomic
   // activation edge landed between a read and its use. The design only swaps
   // on data quiet, so that cannot happen today -- a one-bit latch makes the
   // argument unnecessary rather than load-bearing.
+  //
+  // The quiet-swap half of that is a claim about behaviour, so it names its
+  // check: the directed contract drives an activation with both quiet
+  // witnesses low and asserts the page does NOT activate ("no quiet source
+  // activated the page while both witnesses were low"), and the
+  // early-activation-while-held mutant is its positive control.
+  // ENFORCED-BY: tests/texture/texture_binding_resolver_v2_directed.cpp
   logic crc_bank_q, read_bank_q;
   logic [255:0] page0_valid_q, page1_valid_q;
   logic active_bank_q, staging_bank_q;
   logic [7:0] active_generation_q, staging_generation_q;
 
   typedef enum logic [2:0] {
-    LOAD_IDLE, LOAD_LOADING, LOAD_CRC_SCAN, LOAD_SEAL_PENDING
+    LOAD_IDLE, LOAD_LOADING, LOAD_CRC_SCAN, LOAD_CRC_CHECK, LOAD_SEAL_PENDING
   } loader_state_t;
   loader_state_t loader_state_q;
 
   assign active_page_generation_o = active_generation_q;
   assign cfg_loader_idle_o = loader_state_q == LOAD_IDLE;
-  assign binding_crc_busy_o = loader_state_q == LOAD_CRC_SCAN;
+  // LOAD_CRC_CHECK counts as busy. The seal verdict moved out of the scan's
+  // last byte into its own state on 2026-09-18, and this line is what keeps
+  // that invisible from outside: a consumer that waits for busy to fall still
+  // sees it fall exactly once, when the page has been judged. Leaving it as
+  // `== LOAD_CRC_SCAN` would drop busy for one cycle before the verdict, which
+  // is a new externally-observable pulse for an internal pipelining decision.
+  assign binding_crc_busy_o =
+      (loader_state_q == LOAD_CRC_SCAN) || (loader_state_q == LOAD_CRC_CHECK);
   assign binding_seal_pending_o = loader_state_q == LOAD_SEAL_PENDING;
   assign admission_enable_o = loader_state_q != LOAD_SEAL_PENDING;
 
@@ -401,7 +469,10 @@ module zhao_texture_binding_resolver_v2 #(
   wire [7:0] crc_byte_c =
       crc_canonical_row_c[crc_byte_q*8 +: 8];
   wire [31:0] crc_step_c = crc32_byte(crc_q, crc_byte_c);
-  wire [31:0] crc_final_c = crc_step_c ^ 32'hFFFF_FFFF;
+  // `crc_final_c = crc_step_c ^ 32'hFFFF_FFFF` used to live here and was the
+  // head of the 512-path family. The final xor now happens in LOAD_CRC_CHECK,
+  // against the REGISTERED `crc_q`, so this wire has no reader and is gone
+  // rather than left behind to read as live.
   wire [7:0] crc_next_selector_c = crc_selector_q + 8'd1;
 
   // --------------------------------------------------------------------------
@@ -463,8 +534,15 @@ module zhao_texture_binding_resolver_v2 #(
   // lint settles one tool's opinion and says nothing about synthesizability.
   binding_row_t crc_row_c;
   binding_row_t read_row_c;
-  assign crc_row_c  = crc_bank_q  ? page1_rd_q : page0_rd_q;
-  assign read_row_c = read_bank_q ? page1_rd_q : page0_rd_q;
+  logic         read_row_legal_c;
+  assign crc_row_c  = binding_row_t'(crc_bank_q  ? page1_rd_q[PAGE_ROW_W-1:0]
+                                                  : page0_rd_q[PAGE_ROW_W-1:0]);
+  assign read_row_c = binding_row_t'(read_bank_q ? page1_rd_q[PAGE_ROW_W-1:0]
+                                                  : page0_rd_q[PAGE_ROW_W-1:0]);
+  // The law's verdict, read from the same word as the row and by the same
+  // selection, so the two cannot come from different entries.
+  assign read_row_legal_c =
+      read_bank_q ? page1_rd_q[PAGE_LEGAL_B] : page0_rd_q[PAGE_LEGAL_B];
 
   assign iss_tmu_valid_o = req_accept_c;
   assign iss_tmu_handle_o = req_sample_handle_i;
@@ -477,8 +555,13 @@ module zhao_texture_binding_resolver_v2 #(
     read_generation_bad_c =
         (read_job_q.page_generation == 8'd0) ||
         (read_job_q.page_generation != active_generation_q);
-    read_row_bad_c = !read_row_present_q ||
-                     !binding_row_legal(read_row_c);
+    // Was `!binding_row_legal(read_row_c)` -- the same law, re-derived here
+    // from the row that had just left the memory, and the single largest
+    // timing cost in the composed shell. It now reads the verdict stored
+    // beside the row. Logically identical: `legal` is written by the law from
+    // the same bits, in the same cycle as the row, and both are read back
+    // together by the selection above.
+    read_row_bad_c = !read_row_present_q || !read_row_legal_c;
     read_witness_bad_c =
         (read_job_q.handle[GENW +: 2] == 2'd0) &&
         ({read_job_q.witness_class,
@@ -581,11 +664,20 @@ module zhao_texture_binding_resolver_v2 #(
         end
 
         if (cfg_write_c) begin
+          // `legal` is the law applied to the bytes being stored. It is the
+          // same expression the CFG_WRITE guard above already evaluated on the
+          // same operand, so CSE shares one cone; and because that guard has
+          // already refused every row for which it is 0, the value written
+          // here is always 1 in practice. Written as the call rather than as
+          // `1'b1` so the field states what it means and survives a change to
+          // the guard.
           if (staging_bank_q) begin
-            page1_m[cfg_selector_i] <= binding_row_t'(cfg_row_i);
+            page1_m[cfg_selector_i] <=
+                {binding_row_legal(cfg_row_i), cfg_row_i};
             page1_valid_q[cfg_selector_i] <= 1'b1;
           end else begin
-            page0_m[cfg_selector_i] <= binding_row_t'(cfg_row_i);
+            page0_m[cfg_selector_i] <=
+                {binding_row_legal(cfg_row_i), cfg_row_i};
             page0_valid_q[cfg_selector_i] <= 1'b1;
           end
         end
@@ -623,21 +715,36 @@ module zhao_texture_binding_resolver_v2 #(
           crc_q <= crc_step_c;
           crc_byte_q <= crc_byte_q + 4'd1;
         end else if (crc_selector_q == 8'hFF) begin
+          // THE LAST BYTE IS FOLDED HERE AND JUDGED NEXT CYCLE.
+          //
+          // This branch used to compare `crc_final_c` -- which is
+          // `crc32_byte(crc_q, <byte from the RAM>) ^ 32'hFFFF_FFFF` -- and
+          // clear a 256-bit valid vector on the same edge. That put the whole
+          // chain in one clock, and the 2026-09-18 composed fit measured it:
+          //
+          //   portbdataout    -> Mux10~4/5/6   +4.86 ns   the byte select
+          //                   -> crc~3         +0.56      one crc32_byte round
+          //                   -> Equal35~*     +3.49      the 32-bit compare
+          //                   -> page*_valid_q +4.32      the clear fanout
+          //                                    ------
+          //                                    13.69 ns against a 10 ns period
+          //
+          // 512 of the 2,000 worst paths in the whole machine were this, one
+          // per valid bit per bank -- the largest single family, and four times
+          // the size of the legality cone that looked like the headline.
+          //
+          // Folding into `crc_q` and deciding in LOAD_CRC_CHECK splits it at
+          // the register: the RAM-to-CRC half ends at a flip-flop, and the
+          // compare-and-clear half starts at one. The seal VALUE is untouched
+          // -- `crc_q` takes exactly the `crc_step_c` the old code compared,
+          // and the next state xors the same constant -- so the bytes folded,
+          // their order, and the accept/refuse outcome are all identical. Only
+          // the edge on which the outcome is acted upon moves, by one cycle,
+          // in a walk that already spends 256 x 10 of them off the render path.
           crc_have_row_q <= 1'b0;
           crc_byte_q <= 4'd0;
-          if (crc_final_c == crc_expected_q) begin
-            loader_state_q <= LOAD_SEAL_PENDING;
-          end else begin
-            if (staging_bank_q) page1_valid_q <= '0;
-            else                page0_valid_q <= '0;
-            loader_state_q <= LOAD_IDLE;
-            cfg_rsp_v_q <= 1'b1;
-            cfg_rsp_op_q <= CFG_END;
-            cfg_rsp_status_q <= CFG_BAD_CRC;
-            cfg_rsp_generation_q <= staging_generation_q;
-            cfg_errors_o <= cfg_errors_o + 32'd1;
-            binding_fault_o <= 1'b1;
-          end
+          crc_q <= crc_step_c;
+          loader_state_q <= LOAD_CRC_CHECK;
         end else begin
           crc_q <= crc_step_c;
           crc_selector_q <= crc_next_selector_c;
@@ -647,6 +754,25 @@ module zhao_texture_binding_resolver_v2 #(
             crc_row_present_q <= page1_valid_q[crc_next_selector_c];
           else
             crc_row_present_q <= page0_valid_q[crc_next_selector_c];
+        end
+      end
+
+      // The seal verdict, one cycle after the last byte was folded. `crc_q` is
+      // a register here, so this cone starts at a flip-flop rather than at the
+      // page RAM: no byte select and no crc32_byte round in front of it.
+      if (loader_state_q == LOAD_CRC_CHECK) begin
+        if ((crc_q ^ 32'hFFFF_FFFF) == crc_expected_q) begin
+          loader_state_q <= LOAD_SEAL_PENDING;
+        end else begin
+          if (staging_bank_q) page1_valid_q <= '0;
+          else                page0_valid_q <= '0;
+          loader_state_q <= LOAD_IDLE;
+          cfg_rsp_v_q <= 1'b1;
+          cfg_rsp_op_q <= CFG_END;
+          cfg_rsp_status_q <= CFG_BAD_CRC;
+          cfg_rsp_generation_q <= staging_generation_q;
+          cfg_errors_o <= cfg_errors_o + 32'd1;
+          binding_fault_o <= 1'b1;
         end
       end
 

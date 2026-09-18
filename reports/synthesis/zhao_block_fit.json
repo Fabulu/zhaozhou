@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "e05d409b90e8d17a328090f36a001cdd62ac1d50",
-    "newestRunClean":  true,
+    "newestRunCommit":  "0453180af2fe9a3551c3896dbf8e917599e77c1e",
+    "newestRunClean":  false,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -2645,6 +2645,26 @@
                        "blockMemoryBits":  0,
                        "dspBlocks":  2,
                        "virtualPins":  137
+                   },
+                   {
+                       "module":  "zhao_texture_binding_resolver_v2@m10k-legal-bit-map",
+                       "status":  "map_only",
+                       "sourceCommit":  "0453180af2fe9a3551c3896dbf8e917599e77c1e",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  false,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "6028ca312d67c14e919441815ea397f73a85c47757e2b519506e71adb526a530",
+                       "variantOf":  "zhao_texture_binding_resolver_v2",
+                       "seconds":  53.2,
+                       "sourcesHashed":  2,
+                       "partial":  true,
+                       "partialStage":  "analysis_and_synthesis",
+                       "registers":  1213,
+                       "blockMemoryBits":  38912,
+                       "dspBlocks":  0,
+                       "virtualPins":  818
                    },
                    {
                        "module":  "zhao_texture_cache",

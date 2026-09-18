@@ -311,8 +311,27 @@ int main(int argc, char** argv) {
   zhao::check(d->binding_crc_busy_o == 0 && d->binding_seal_pending_o != 0,
               "canonical sparse CRC reaches SEAL_PENDING", 1,
               (!d->binding_crc_busy_o && d->binding_seal_pending_o) ? 1 : 0);
-  zhao::check(crc_cycles == 2561, "serialized CRC scans one preload plus 2560 bytes", 2561,
-              crc_cycles);
+  // 1 preload + 256 rows x 10 bytes + 1 verdict = 2562.
+  //
+  // This read `crc_cycles == 2561` until 2026-09-18, when the seal verdict
+  // moved off the last byte's edge into LOAD_CRC_CHECK -- the composed fit
+  // measured that edge at 13.69 ns against a 10 ns period, and 512 of the
+  // machine's 2,000 worst paths were it. The change costs exactly the one
+  // cycle added below.
+  //
+  // I changed a check my own work tripped, so: the thing it exists to catch is
+  // the fold being COLLAPSED back into a combinational chain, and that is why
+  // the byte term is spelled 256 * 10 instead of 2560. Re-collapsing the fold
+  // drops this count by thousands and the check still fires; nothing about it
+  // got looser, and the exact-count discipline is intact.
+  const unsigned kCrcPreloadCycles = 1;
+  const unsigned kCrcByteCycles = 256u * 10u;
+  const unsigned kCrcVerdictCycles = 1;
+  const unsigned kCrcScanCycles =
+      kCrcPreloadCycles + kCrcByteCycles + kCrcVerdictCycles;
+  zhao::check(crc_cycles == kCrcScanCycles,
+              "serialized CRC scans one preload, 2560 bytes and one verdict",
+              kCrcScanCycles, crc_cycles);
   zhao::check(d->active_page_generation_o == 0 && d->cfg_rsp_valid_o == 0,
               "CRC success neither activates nor acknowledges END", 0,
               static_cast<uint64_t>(d->active_page_generation_o || d->cfg_rsp_valid_o));
@@ -606,9 +625,22 @@ int main(int argc, char** argv) {
               1, (d->cfg_rsp_valid_o && d->cfg_rsp_status_o == 5) ? 1 : 0);
   // Four scan clocks elapsed before this counter started: row-0 preload, two
   // accepted data-path stages, and planner retirement. The response must still
-  // land on selector 255 byte 9, not merely somewhere inside a loose timeout.
-  zhao::check(bad_crc_cycles == 2557, "BAD_CRC response lands on final serialized byte", 2557,
-              bad_crc_cycles);
+  // land on a NAMED edge, not merely somewhere inside a loose timeout.
+  //
+  // That edge changed on 2026-09-18 and so did this check's name. It used to be
+  // "lands on final serialized byte" at 2557, and that sentence was true: the
+  // verdict was taken combinationally on the same edge that folded selector 255
+  // byte 9. It is now taken one cycle later, in LOAD_CRC_CHECK, because that
+  // edge measured 13.69 ns against a 10 ns period in the composed fit. Leaving
+  // the old name beside a bumped constant would have left the file asserting
+  // something the design deliberately stopped doing.
+  //
+  // The exactness is what matters and it is unchanged: one cycle after the
+  // final byte, not "within 4000".
+  const unsigned kBadCrcCycles = 2557 + 1;
+  zhao::check(bad_crc_cycles == kBadCrcCycles,
+              "BAD_CRC response lands one cycle after the final serialized byte",
+              kBadCrcCycles, bad_crc_cycles);
   zhao::check(d->binding_fault_o && d->cfg_errors_o == bad_crc_errors_before + 1,
               "BAD_CRC sets binding fault over same-edge clear and counts once", 1,
               (d->binding_fault_o && d->cfg_errors_o == bad_crc_errors_before + 1) ? 1 : 0);
