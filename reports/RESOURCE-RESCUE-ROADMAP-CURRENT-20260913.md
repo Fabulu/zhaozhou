@@ -2965,6 +2965,27 @@ before this change existed, so the receipt now running measures cones 1 and 2
 only. Cone 3 goes into the next one — which is the right batching anyway, since
 `walk_q_r` sits behind both of them.
 
+#### And the rest of that cone is registers, which is why the fix should deliver
+
+Checked rather than hoped, because a fix that removes half a cost and is
+reported as removing all of it is this project's most familiar mistake. After
+the two profile reductions leave, `local_fault_event_w`'s remaining inputs are:
+
+```systemverilog
+assign attr_coordinate_bad_w = attr_coordinate_bad_q;   // a register
+assign attr_range_bad_w      = attr_range_bad_q;        // a register
+assign attr_bundle_fault_w   = attr_bundle_valid_w && (attr_coordinate_bad_w || attr_range_bad_w);
+```
+
+**Both of the other "bad" terms are already registered**, and `terminal_prior_w`
+and `new_job_accept_w` are built from state and inputs. So nothing wide is left
+behind the two that moved, and the 4.85 ns the receipt attributed to this span
+was the 272-bit reduction and essentially nothing else.
+
+That is a prediction the next receipt can refute: if `walk_q_r` improves by much
+less than ~4.5 ns, something in that cone is expensive that reading the source
+says is not, and the Data Arrival Path will name it.
+
 ### Three cones, one method
 
 Every one of the three was found the same way and none of them by reading
