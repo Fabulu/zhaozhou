@@ -12526,3 +12526,170 @@ add_test(NAME lint_measure_histogram
 set_tests_properties(lint_measure_histogram PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+# ===========================================================================
+# GEOM.LIGHT STREAMED -- the 2026-09-18 lighting throughput rescue.
+#
+# The scalar owner (`zhao_geom_light`, above) is MEASURED at II = 167.0
+# clocks per light term, which is 48.1x over the frame for the ruled
+# 120,000-normal / 480,000-term stress profile. These blocks are the
+# replacement owner, not a second law: the same rounded quotient, reached
+# through two adapters, with the descriptor walk, the square root and the
+# colour fold all given enough bandwidth to keep an II2 divider fed.
+#
+# MEASURED on the ruled fixture: 960,086 clocks, II = 2.0002 clk/term.
+# The eight-light workload is a DIFFERENT workload and is OVER BUDGET at
+# 1,920,086 clocks; `light_stream_directed` asserts that overrun rather than
+# letting "supports eight lights" stand in for "meets rate at eight lights".
+#
+# NONE OF THESE HAVE BEEN THROUGH quartus_map. Lint-clean is one tool's
+# opinion about syntax and is not synthesizability; area, Fmax, DSP mapping
+# and RAM inference are all unmeasured. The multiplier count IS countable
+# from the source and is five operators: two signed 32x32 and three
+# unsigned 20x17. See reports/DSP-SAVINGS-REGISTER-20260918.md row D1.
+# ===========================================================================
+set(ZHAO_LIGHT_DIV_SV  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_light_div32_ii2.sv)
+set(ZHAO_LIGHT_ROOT_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_light_isqrt64_ii8.sv)
+set(ZHAO_LIGHT_SKIN_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_light_skin_adapter.sv)
+set(ZHAO_LIGHT_STREAM_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_light_stream.sv
+    ${ZHAO_LIGHT_DIV_SV}
+    ${ZHAO_LIGHT_ROOT_SV})
+
+# ---- the folded II2 quotient ---------------------------------------------
+add_executable(test_light_div32_ii2_directed geometry/light_div32_ii2_directed.cpp)
+target_link_libraries(test_light_div32_ii2_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_light_div32_ii2_directed
+  PREFIX Vzhao_light_div32_ii2
+  TOP_MODULE zhao_light_div32_ii2
+  SOURCES ${ZHAO_LIGHT_DIV_SV})
+add_test(NAME light_div32_ii2_directed COMMAND test_light_div32_ii2_directed)
+set_tests_properties(light_div32_ii2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+# POSITIVE CONTROL: one expected quotient corrupted by +1; the suite must FAIL.
+add_test(NAME light_div32_ii2_break_oracle
+         COMMAND test_light_div32_ii2_directed --break-oracle)
+set_tests_properties(light_div32_ii2_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME lint_light_div32_ii2
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_light_div32_ii2 ${ZHAO_LIGHT_DIV_SV})
+set_tests_properties(lint_light_div32_ii2 PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- the folded II8 square root ------------------------------------------
+add_executable(test_light_isqrt64_ii8_directed geometry/light_isqrt64_ii8_directed.cpp)
+target_link_libraries(test_light_isqrt64_ii8_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_light_isqrt64_ii8_directed
+  PREFIX Vzhao_light_isqrt64_ii8
+  TOP_MODULE zhao_light_isqrt64_ii8
+  SOURCES ${ZHAO_LIGHT_ROOT_SV})
+add_test(NAME light_isqrt64_ii8_directed COMMAND test_light_isqrt64_ii8_directed)
+set_tests_properties(light_isqrt64_ii8_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME light_isqrt64_ii8_break_oracle
+         COMMAND test_light_isqrt64_ii8_directed --break-oracle)
+set_tests_properties(light_isqrt64_ii8_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME lint_light_isqrt64_ii8
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_light_isqrt64_ii8 ${ZHAO_LIGHT_ROOT_SV})
+set_tests_properties(lint_light_isqrt64_ii8 PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- the creature seam ----------------------------------------------------
+# Differential against the COMPILED producer `zref::creature::skin_world_normal`,
+# not against a model of it: if the range-reduction claim were wrong, the real
+# producer is what would generate the counterexample.
+add_executable(test_light_skin_adapter_directed geometry/light_skin_adapter_directed.cpp)
+target_link_libraries(test_light_skin_adapter_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_light_skin_adapter_directed
+  PREFIX Vzhao_light_skin_adapter
+  TOP_MODULE zhao_light_skin_adapter
+  SOURCES ${ZHAO_LIGHT_SKIN_SV}
+  VERILATOR_ARGS --assert)
+add_test(NAME light_skin_adapter_directed COMMAND test_light_skin_adapter_directed)
+set_tests_properties(light_skin_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME light_skin_adapter_break_oracle
+         COMMAND test_light_skin_adapter_directed --break-oracle)
+set_tests_properties(light_skin_adapter_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME lint_light_skin_adapter
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_light_skin_adapter ${ZHAO_LIGHT_SKIN_SV})
+set_tests_properties(lint_light_skin_adapter PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- the streamed service, and the fixture that decides it ---------------
+add_executable(test_light_stream_directed geometry/light_stream_directed.cpp)
+target_link_libraries(test_light_stream_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_light_stream_directed
+  PREFIX Vzhao_light_stream
+  TOP_MODULE zhao_light_stream
+  SOURCES ${ZHAO_LIGHT_STREAM_SV}
+  VERILATOR_ARGS --assert)
+add_test(NAME light_stream_directed COMMAND test_light_stream_directed)
+# nightly only for the full fixture: it runs the complete 480,000-term and
+# 960,000-term workloads, which is ~2.9M simulated clocks.
+set_tests_properties(light_stream_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME light_stream_break_oracle COMMAND test_light_stream_directed --break-oracle)
+set_tests_properties(light_stream_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME lint_light_stream
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_light_stream ${ZHAO_LIGHT_STREAM_SV})
+set_tests_properties(lint_light_stream PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---- the elaboration guard, FIRED --------------------------------------
+# `--lint-only` does not run `initial` blocks, so a clean lint says nothing
+# whatever about these. GAINW is pinned at 20 because six coefficients at 24
+# bits is 144 and the two-half record does not exist; refusing to elaborate is
+# the honest form of "a nondefault wider GAINW requires a newly priced record
+# and port schedule, not truncation". This target builds the SAME bench with
+# GAINW = 24 and passes when the simulation dies:
+#   %Fatal: zhao_light_stream.sv:282: Assertion failed in TOP.zhao_light_stream:
+#   zhao_light_stream: GAINW != 20 needs a repriced two-half record, not a truncation
+add_executable(test_light_stream_gainw_guard geometry/light_stream_directed.cpp)
+target_link_libraries(test_light_stream_gainw_guard PRIVATE zhao_harness zhao_zref)
+verilate(test_light_stream_gainw_guard
+  PREFIX Vzhao_light_stream
+  TOP_MODULE zhao_light_stream
+  SOURCES ${ZHAO_LIGHT_STREAM_SV}
+  VERILATOR_ARGS --assert -GGAINW=24)
+add_test(NAME light_stream_gainw_guard COMMAND test_light_stream_gainw_guard)
+set_tests_properties(light_stream_gainw_guard PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+
+# ---- the two guards no legal stimulus can reach -------------------------
+# Both are asserted ZERO by light_stream_directed. A detector reading zero is
+# a claim, and it is the claim to check hardest, so each is fired here on a
+# committed mutant before its silence is quoted.
+#
+# THESE ARE WRAPPERS, NOT COPIES. They instantiate PRODUCTION with `.*`, so a
+# port change fails to elaborate rather than quietly testing a module that no
+# longer exists -- the exact failure that left thirteen combiner copies and
+# eight AUX-pipe copies passing green against machines two weeks stale.
+#
+# BOTH TESTS PASS WHEN THEIR COUNTER FIRES. Inverse polarity, deliberately:
+# this is evidence about the INSTRUMENT, not about the design.
+set(ZHAO_LIGHT_MUTANT_SV
+    ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_light_stream_guard_mutants.sv
+    ${ZHAO_LIGHT_STREAM_SV})
+
+add_executable(test_light_stream_rqfull_mutant mutants/light_stream_guard_mutant.cpp)
+target_link_libraries(test_light_stream_rqfull_mutant PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_light_stream_rqfull_mutant PRIVATE ZHAO_MUT_COUNTER=0)
+verilate(test_light_stream_rqfull_mutant
+  PREFIX Vzhao_light_stream_rqfull_mutant
+  TOP_MODULE zhao_light_stream_rqfull_mutant
+  SOURCES ${ZHAO_LIGHT_MUTANT_SV})
+add_test(NAME light_stream_rqfull_mutant COMMAND test_light_stream_rqfull_mutant)
+set_tests_properties(light_stream_rqfull_mutant PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+add_executable(test_light_stream_skew_mutant mutants/light_stream_guard_mutant.cpp)
+target_link_libraries(test_light_stream_skew_mutant PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_light_stream_skew_mutant PRIVATE ZHAO_MUT_COUNTER=1)
+verilate(test_light_stream_skew_mutant
+  PREFIX Vzhao_light_stream_skew_mutant
+  TOP_MODULE zhao_light_stream_skew_mutant
+  SOURCES ${ZHAO_LIGHT_MUTANT_SV})
+add_test(NAME light_stream_skew_mutant COMMAND test_light_stream_skew_mutant)
+set_tests_properties(light_stream_skew_mutant PROPERTIES LABELS "fast;nightly" TIMEOUT 600)

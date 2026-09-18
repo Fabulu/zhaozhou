@@ -119,7 +119,61 @@ A register that only lists savings is the flattering half of a ledger.
 
 | # | change | DSP | why it is still right |
 |---|---|---:|---|
-| D1 | Lighting service refactor to II2 (`Zhaozhou_Lighting_Emergency_Rescue_2026-09-18`) | **+~9** | planning estimate, not fitted. Buys 48.1x -> inside the frame envelope. The old zero-DSP arithmetic "was bought with time that this workload does not have"; the alternative — cloning the 147-clock scalar engine to reach the rate — costs far more ALMs AND more DSPs. |
+| D1 | Lighting service refactor to II2 (`Zhaozhou_Lighting_Emergency_Rescue_2026-09-18`) | **+~9** | planning estimate, not fitted. Buys 48.1x -> inside the frame envelope. The old zero-DSP arithmetic "was bought with time that this workload does not have"; the alternative — cloning the 147-clock scalar engine to reach the rate — costs far more ALMs AND more DSPs. **SUPERSEDED by D1a: the block is built and its multipliers are now COUNTED rather than estimated.** |
+| D1a | `zhao_light_stream` + `zhao_light_div32_ii2` + `zhao_light_isqrt64_ii8` + `zhao_light_skin_adapter`, built and qualified 2026-09-18 | **5 multiplier operators; ~5–7 DSP blocks expected, UNFITTED** | see below |
+
+### D1a — what is COUNTED and what is still a guess
+
+The debit is recorded at the level the source can actually support, which is
+**multiplier operators**, not DSP blocks. Grepping the four new files for `*`
+outside comments and outside elaboration-time constant expressions gives
+**exactly five**, all in `zhao_light_stream.sv`:
+
+| lanes | operator | width | what it serves |
+|---|---|---|---|
+| 2 | `l0p_q <= l0a_c * l0b_c`, `l1p_q <= l1a_c * l1b_c` | **signed 32 x 32 -> 64** | the three dot products per light term AND the three normal squares per normal, on one eight-clock calendar |
+| 3 | `c0p_q/c1p_q/c2p_q <= c*a_c * cur_ndl_q` | **unsigned 20 x 17 -> 37** | RGB gain on one clock, RGB emission on the next |
+
+`zhao_light_div32_ii2.sv` and `zhao_light_isqrt64_ii8.sv` contain **zero**
+multipliers — they are restoring recurrences, adders and subtractors only. The
+folding (16 divide cells reused twice, 4 root cells reused eight times) is what
+keeps them that way.
+
+**The DSP-block number is NOT counted and is not claimed.** Cyclone V offers
+27x27 and paired 18x19 modes; a signed 32x32 does not fit either, and a 20x17
+exceeds the 19-bit operand of the paired mode. A plausible mapping is 2 blocks
+per wide lane and 1 per narrow lane, i.e. **7**; Quartus may partition
+differently, and `multstyle` or retiming could move it either way. The
+emergency report's planning figure was ~9 (6 wide + 3 narrow). **Both are
+arithmetic on a datasheet, not a fit.** The first `quartus_map` of this
+subsystem replaces this row, and nothing here should be added into a census
+until it does.
+
+Three things this row deliberately does NOT do:
+
+* **It does not net out the old owner.** `zhao_geom_light` is still in the tree
+  and still instantiates `zhao_terrain_shade`. Until the scalar datapath is
+  removed from the selected machine, the honest position is that the console
+  now contains BOTH, and the debit is gross rather than net.
+* **It does not claim the three colour multipliers "already exist somewhere".**
+  No shared provider schedule has been shown for them.
+* **It does not price the ALM side at all.** Muxes, the 16 divide cells, the 4
+  root cells, the 16-slot arena, three queues and ~28 counters all consume
+  ALMs, and the folded structure limits replicated *arithmetic* without saying
+  anything about the rest. At the ~135 ALM/DSP exchange rate above, spending 7
+  DSP is worth roughly 945 ALM of logic-built multiplier avoided — which is a
+  RANKING statement and closes nothing.
+
+**What it buys, measured, not estimated:** the ruled 120,000-normal /
+480,000-term fixture completes in **960,086 clocks at II = 2.0002 clk/term**,
+against 80,160,000 clocks for the scalar owner — an **83.5x** reduction, inside
+both the 1,333,333-clock reserved envelope and the proposed 1,000,000-clock
+lighting gate. Root jobs are **120,000, one per normal**, not 480,000.
+
+**What it does not buy:** the eight-lights-on-every-vertex workload is a
+different workload and is **1,920,086 clocks — 1.15x over the raw
+1,666,666-clock frame.** That is asserted as an overrun by
+`light_stream_directed`, not relabelled.
 
 Net position after D1 and the adopted savings is **not computed here on purpose**:
 every figure in this file is a leaf estimate or shape arithmetic, and adding
