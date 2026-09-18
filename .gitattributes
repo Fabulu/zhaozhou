@@ -340,3 +340,32 @@ compiler/tests/generated/** text eol=lf
 # by the corpus test; CRLF checkout would shift byte-offset spans)
 compiler/tests/frontend/corpus/positive/*.form text eol=lf
 compiler/tests/frontend/corpus/golden/*.json text eol=lf
+
+# THE CONNECTED TOP AND ITS NEWLY ADOPTED CLOSURE, added 2026-09-18 with
+# `zhao_console_core`.
+#
+# Pinned for the reason the block above this file's shell-fit section gives in
+# its own words: a fit receipt records a sha256 of each RAW SOURCE BYTE, and
+# `core.autocrlf` is `true` at --system on this machine, so the first checkout
+# of an unpinned closure member changes its digest without changing the design.
+# `fpga/rtl/prod/zhao_prod_top.sv` is already pinned; its sibling connected top
+# and the seven blocks it is the first composition to adopt were not, and the
+# `zhao_console_core` fit row hashes every one of them.
+#
+# Pinned BEFORE a receipt binds the hashes, rather than after one breaks --
+# which is the lesson written three blocks above.
+fpga/rtl/prod/zhao_console_core.sv text eol=lf
+fpga/rtl/particles/zhao_part_state.sv text eol=lf
+fpga/rtl/particles/zhao_part_update.sv text eol=lf
+fpga/rtl/particles/zhao_part_collide.sv text eol=lf
+fpga/rtl/particles/zhao_part_spawn.sv text eol=lf
+fpga/rtl/particles/zhao_part_record.sv text eol=lf
+fpga/rtl/geometry/zhao_geom_group_seq.sv text eol=lf
+fpga/rtl/geometry/zhao_geom_proj_lane.sv text eol=lf
+fpga/rtl/geometry/zhao_geom_wcache.sv text eol=lf
+fpga/rtl/geometry/zhao_geom_skin.sv text eol=lf
+fpga/rtl/compositor/zhao_post_composite.sv text eol=lf
+fpga/rtl/measure/zhao_measure_histogram.sv text eol=lf
+tests/prod/tb_zhao_console_core_smoke.sv text eol=lf
+tests/prod/run_console_core_smoke.ps1 text eol=lf
+tests/shell/v3_closure_inherited.vlt text eol=lf

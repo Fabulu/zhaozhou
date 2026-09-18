@@ -51,6 +51,17 @@ lint_off -rule DECLFILENAME    -file "*zhao_render_texture_pkg.sv"
 // synchronously was removed earlier for exactly this rule.
 lint_off -rule SYNCASYNCNET    -file "*zhao_shell_v2_lease_path.sv"
 lint_off -rule SYNCASYNCNET    -file "*zhao_shell_top_v2.sv"
+// THE CONNECTED TOP, and the attribution was MEASURED rather than assumed.
+// `zhao_console_core` instantiates `zhao_shell_top_v2`, so it inherits the
+// same warning at its own `rst_n` port declaration. The test that says it is
+// inherited: every one of that file's three `always_ff` blocks was rewritten
+// to a SYNCHRONOUS reset in a scratchpad copy and linted, and the warning came
+// back unchanged. A warning that survives the removal of this file's only
+// asynchronous flops is not this file's warning. The async form is kept
+// because it is the house style and because a synchronous-reset glue flop
+// beside asynchronously-reset blocks is a real reset-domain hazard, not a
+// lint preference.
+lint_off -rule SYNCASYNCNET    -file "*zhao_console_core.sv"
 // THE PAIRED DIFFERENTIAL, same reason as the two above and no more than that.
 // Its verdict flops -- the sticky mismatch bit, the toggle witness -- reset on
 // `negedge rst_n` while the shells beneath it also read `rst_n` synchronously,
