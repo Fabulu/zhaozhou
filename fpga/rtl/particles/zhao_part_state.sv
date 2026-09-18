@@ -299,6 +299,11 @@ module zhao_part_state #(
             // generation is at most CAPACITY records, so survivors alone can
             // never exhaust it. The guard is kept because "cannot happen"
             // should still not corrupt the stream if a future tier changes.
+            // ENFORCED-BY: tests/particles/part_state_directed.cpp -- CASE C
+            //   fills CAPACITY=8 with eight survivors and requires all eight to
+            //   keep their places while three children are dropped. The guard
+            //   below is belt-and-braces for a future tier, not the thing the
+            //   claim rests on.
 
             if (rd_done_q && !(prt_v_q && !prt_ready_i)) st_q <= S_APPEND;
           end

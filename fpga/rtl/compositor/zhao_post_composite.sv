@@ -252,6 +252,11 @@
 //   cannot reach across the split" stops being a comparator that has to be
 //   right and becomes a thing that cannot happen. That is a bug class removed
 //   for certain and an ALM saving that is unmeasured, in that order.
+//   ENFORCED-BY: tests/compositor/post_composite_directed.cpp -- case 7, "DUO:
+//   no bleed between views, STRUCTURALLY". It censuses the ADDRESS SPACE, not a
+//   pixel value: no cell index may reach the other view's half, and its
+//   `parked_bad` check is what makes that true for EVERY cycle rather than for
+//   the cycles anyone happened to look at.
 //
 //   This block labels each pixel with `o_x_o`/`o_y_o` in VIEW coordinates; the
 //   canvas assembly, the Duo border and the y offset belong downstream. A
@@ -630,6 +635,8 @@ module zhao_post_composite #(
     // another view, and the cell index below cannot name another view's cell.
     // With one wide plane and a split comparator this would be a thing to test;
     // here it is a thing that cannot happen.
+    // ENFORCED-BY: tests/compositor/post_composite_directed.cpp -- case 7 walks
+    //   every cycle of a pass and fails if any formed index leaves this view.
     xhi_c = $signed({2'b00, frame_w_i}) - EW'(1);
     yhi_c = $signed({2'b00, frame_h_i}) - FW'(1);
 

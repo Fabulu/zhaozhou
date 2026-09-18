@@ -55,8 +55,14 @@
 //   fpga/rtl/geometry/zhao_geom_wcache.sv -- instantiates `zhao_vertex_arena`
 //       with `VALID_MODE(0)`, the BITMAP mode. So a geometry group may be
 //       SHORTER than DEPTH and still seal; that is the difference from the
-//       terrain side, whose 9x9 window is dense by construction. `job_count_i`
-//       is therefore a real per-meshlet value and not a constant.
+//       terrain side, whose 9x9 window `zhao_terrain_group_seq` always fills
+//       completely -- an ASSUMPTION on that block, upheld there, not here.
+//       `job_count_i` is therefore a real per-meshlet value and not a constant.
+//       ENFORCED-BY: tests/geometry/geom_group_seq_directed.cpp -- CASE 2
+//       offers job_count_i = 5 against the bench's DEPTH = 8 and requires the
+//       group to SEAL with its handle carrying count == 5; a constant-DEPTH
+//       reading would still be waiting for eight landings. CASE 1 refuses
+//       count == 0 and count > DEPTH, so the bound is read as well.
 //   fpga/rtl/terrain/zhao_terrain_group_seq.sv -- the proven sibling. Its
 //       lowest-free-arena search, its slot fan-out and its "seal on LANDINGS,
 //       never on ACCEPTS" rule are reproduced here because they are the same
@@ -92,8 +98,13 @@
 // sentence asserting it:
 //
 //   * This block contains NO MULTIPLIER and NO TABLE. It is a state machine,
-//     a running index and per-arena bookkeeping. 0 DSP by construction, so the
-//     "do not spend memory to remove DSPs" half of the direction is moot.
+//     a running index and per-arena bookkeeping. 0 DSP is therefore an
+//     ASSUMPTION, not a measurement, and it is upheld by the author of this
+//     file: there is no `*` on a non-constant operand and no ROM anywhere in
+//     it. Only a quartus_map report can close it and none has been run on this
+//     block, so no enforcer is named here -- the assumption is stated with its
+//     upholder instead. Under it, the "do not spend memory to remove DSPs"
+//     half of the direction is moot.
 //   * Its whole state at the defaults (ARENAS=4 -> ARENA_W=3, DEPTH=1089 ->
 //     INDEX_W=12, CNT_W=11) is: held 8 bits + landed 8x11 = 88 bits + two slot
 //     records (arena 3 + gen 8 + view 1) = 24 bits + job registers (count 12 +
