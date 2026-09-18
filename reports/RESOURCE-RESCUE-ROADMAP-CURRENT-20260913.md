@@ -1473,6 +1473,32 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > stays cycle-aligned. It is a two-module change plus the exact-count test
 > updates, and it is the next piece of RTL work rather than an obstacle.
 >
+> ##### A clarification, and an unfixed twin
+>
+> The tree change could never have broken the differential, and it is worth
+> being exact about why: replacing a serial accumulate with a balanced tree is
+> **combinational restructuring inside one cycle**. It moves no edge, so the
+> cycle-by-cycle comparison is blind to it by construction. A PIPELINE STAGE is
+> a different kind of change and is what the differential would catch. The
+> earlier note treated the two as one risk; only the second is real.
+>
+> **And `zhao_raster_attrgrad_dsp3.sv:100–102` still carries the serial chain:**
+>
+> ```systemverilog
+> row_offset_c = 96'sd0;
+> if (row_r[0]) row_offset_c = row_offset_c + dndy_r;
+> ...
+> ```
+>
+> Byte for byte the arrangement that cost 2.2 ns in the V2. It is not in the
+> composed shell — the shell elaborates the `g_v2` branch — so it costs nothing
+> measured today, and it is **exactly the shape this repository calls an
+> uncashed cheque**: a known defect left in an unadopted sibling, which arrives
+> as a surprise on the day the sibling is adopted. Recorded rather than fixed,
+> because fixing an unmeasured path is how a bounded change becomes a campaign;
+> but it should go in with the pipeline stage, since that pass has to touch this
+> file anyway.
+>
 > #### The prediction for `@packet-h-uvw`, written before it starts
 >
 > Single variable: the `uvw_m` read register moved out of the asynchronously
