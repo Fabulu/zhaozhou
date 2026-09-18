@@ -1,4 +1,4 @@
-// MANAFOLD (creature 02) — the rig: bone ids + skeleton. 12 bones of the 32
+// MANAFOLD (creature 02) — the rig: bone ids + skeleton. 16 bones of the 32
 // allowed.
 //
 // Parent-before-child, rest rotations identity, bind a pure translation
@@ -17,11 +17,10 @@
 //     (hinge D)          2030   the CLOSURE SOLVER, not a knead joint
 //     (arm tip)          3300   buried in the body; not a station
 //
-// Every station the knead layer drives now sits on a ball or the front
-// junction; none is left in a straight run. Pass 8 had fixed the MOTION of
-// these stations, their PLACEMENT was still wrong, and those are different
-// faults. ⚠ The RE-ENTRY ball (2660) still has no joint -- see kLoopArcMm for
-// the closure measurement that blocked it. That half of §9.1 is owed.
+// Every articulated station in the continuous chain sits on a visible swell or
+// body junction. Pass 16 adds the fifth visible carrier as kBRearSocket, a Root-
+// parented body-surface socket; kBReturnTip is a separate Root child kept buried
+// on the straight return. Hinge D remains the closure solver, not a visible ball.
 //
 // PASS 4 (Direction 4 §1: "wherever there is one of these balls, there needs
 // to be bones to bend stuff" — the third direction raising the junction
@@ -115,10 +114,10 @@ enum BoneId : uint8_t {
   kBEyeR = 11,      // right lens
   kBPupilL = 12,    // left star
   kBPupilR = 13,    // right star
-  // PASS 16 / Direction 12: the body-side swell and buried tip finally get
-  // real carriers. Both are children of the C-shared return solver so the
-  // return remains one straight line; the socket is allowed its own local
-  // articulation while the tip stays a sibling and cannot inherit that bend.
+  // PASS 16 / Direction 12: the visible body-side swell and buried tip are
+  // separate Root children at the straight chain's authored positions. The
+  // socket owns its local articulation; the tip is a sibling and cannot inherit
+  // that bend. finalize_rear_follow supplies their body-following translations.
   kBRearSocket = 14,
   kBReturnTip = 15,
 };

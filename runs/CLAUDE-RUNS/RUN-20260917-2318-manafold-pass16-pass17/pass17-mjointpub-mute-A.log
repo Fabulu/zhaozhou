@@ -1,0 +1,11 @@
+PUBLIC FIVE-CARRIER VISIBLE-SKIN GATE (candidate A)
+  fixed mechanism floor 20.0 mm (~3 native px); pictures decide likeness
+  carrier cores  Taunt centroid/max     Taunt-II centroid/max    verdict
+  F        18/18     3.45/  11.45         3.92/  12.69       FAIL
+  A        27/27     0.00/   0.00         0.00/   0.00       FAIL
+  B        18/18   104.69/ 138.83       113.82/ 157.20       OK
+  C        27/27   134.54/ 149.27       154.31/ 188.23       OK
+  E        45/45     0.87/  14.87         0.97/  16.55       FAIL
+rear socket: 99 influenced vertices, authored rho 1.043
+FAIL: 3 failure(s) [FAILABLE PUBLIC MUTE ENGAGED]
+RED LEG OK: mute A makes its own public visible-skin gate fail

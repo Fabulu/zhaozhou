@@ -23,7 +23,9 @@ Targets:
   mband      manafold-bandprobe.exe (pass 8: the committed antenna band
              cross-section profile, read off the COMPILED MESH, for §2b)
   mnodule    manafold-nodule.exe (pass 12: the committed PER-NODULE
-             INDEPENDENCE gate, Direction 9 §2, with two failable legs)
+             INDEPENDENCE gate, Direction 9 §2, with five failable legs)
+  mjointpub  manafold-public-jointgate.exe (pass 17: Direction 14 PUBLIC
+             visible-skin proof, shipping plus F/A/B/C/E mute controls)
   mqa        manafold-qa-p12.exe (pass 12 QA: the corpse across ALL deform
              lanes, the eye-travel drive census, and root continuity)
   mshell     manafold-shellgate.exe (the committed SHELL/FOG gate, D9 s7+s14
@@ -63,7 +65,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mshell|mspan|mexpress|meyecam|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|mexpress|meyecam|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -226,6 +228,12 @@ build_mnodule() {
   "$CXX" "${FLAGS[@]}" "$T/manafold_nodule.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-nodule.exe"
 }
 
+build_mjointpub() {
+  printf '%s\n' "LD manafold-public-jointgate"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_public_jointgate.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-public-jointgate.exe"
+}
+
 build_mshell() {
   printf '%s
 ' "LD manafold-shellgate"
@@ -265,6 +273,7 @@ case "$TARGET" in
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
   mnodule) build_mnodule ;;
+  mjointpub) build_mjointpub ;;
   mqa) build_mqa ;;
   mshell) build_mshell ;;
   mspan) build_mspan ;;

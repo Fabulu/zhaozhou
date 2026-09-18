@@ -1,8 +1,8 @@
 // u02_meshcheck — the COMMITTED mesh-integrity probe for creature 02.
 //
 // Bounded to this creature's acceptance questions (the bounded-validation
-// law): the four balls and (later) the loop chain and the eye lenses must
-// be watertight closed surfaces that cannot open under any pose.
+// law): the body, continuous five-swell antenna chain and eye assemblies must
+// remain watertight surfaces that cannot open under any pose.
 //
 //   1. MANIFOLD EDGES, position-keyed. Group vertices by exact bind
 //      position (the same key the generated normals use), then count every
@@ -12,8 +12,8 @@
 //      ring, which position-keying reconciles by construction.
 //   2. THE SEAM LAW (from zixx_meshcheck fault 1): coincident bind
 //      positions must carry identical {b0,b1,w0}, or the skin is only
-//      closed by luck and opens the moment the bones disagree. Trivial for
-//      today's rigid balls; load-bearing the day the loop chain lands.
+//      closed by luck and opens the moment the bones disagree. Load-bearing on
+//      today's continuously skinned five-carrier antenna and every meshlet seam.
 //   3. DEGENERATE TRIANGLES: zero-area faces in bind space (the sliver
 //      class the segment-taper zipper produced, S4).
 //

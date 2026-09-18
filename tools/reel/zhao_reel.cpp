@@ -7819,6 +7819,31 @@ int main(int argc, char** argv) {
   }
   if (const char* fd = std::getenv("U02_FOLD_DEBUG"))
     u02::g_u02_fold_debug = std::string(fd) == "1" ? 1 : 0;
+  // PASS 17 / Direction 14: same-binary public five-carrier proof. The mute
+  // is consumed only inside swallow_nodules; body/light/effects and the other
+  // four authored inputs remain unchanged. Unset is the shipping default.
+  if (const char* jm = std::getenv("ZHAO_U02_JOINT_MUTE")) {
+    const std::string s = jm;
+    if (s == "none" || s == "NONE")
+      u02::g_u02_public_joint_mute = u02::PublicJointMute::kNone;
+    else if (s == "F")
+      u02::g_u02_public_joint_mute = u02::PublicJointMute::kFront;
+    else if (s == "A")
+      u02::g_u02_public_joint_mute = u02::PublicJointMute::kA;
+    else if (s == "B")
+      u02::g_u02_public_joint_mute = u02::PublicJointMute::kB;
+    else if (s == "C")
+      u02::g_u02_public_joint_mute = u02::PublicJointMute::kC;
+    else if (s == "E")
+      u02::g_u02_public_joint_mute = u02::PublicJointMute::kEnd;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_JOINT_MUTE=%s invalid (expected none|F|A|B|C|E)\n",
+                   jm);
+      return 2;
+    }
+    std::fprintf(stderr, "ZHAO_U02_JOINT_MUTE=%s (public carrier control)\n", jm);
+  }
   // ---- OWNER DIRECTION 10 rung sweep (2026-09-09) ------------------------
   // "connected by white lightning lines surrounded by a deep dark blue."
   // It is an EXPERIMENT, so the deliverable is a LADDER, and 10-GATE item 26

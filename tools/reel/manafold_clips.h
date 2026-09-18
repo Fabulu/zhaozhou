@@ -1337,6 +1337,30 @@ inline int32_t punch_ease(int32_t t) {
  *  put one of the two on the wrong side of a call in the next clip that used
  *  it -- which is exactly the ordering fault `nod` and `eye_lean` both exist
  *  to prevent (see struct Rig). */
+enum class PublicJointMute : uint8_t { kNone = 0, kFront, kA, kB, kC, kEnd };
+inline PublicJointMute g_u02_public_joint_mute = PublicJointMute::kNone;
+
+inline int public_joint_mute_index(PublicJointMute mute) {
+  switch (mute) {
+    case PublicJointMute::kFront: return 0;
+    case PublicJointMute::kA: return 1;
+    case PublicJointMute::kB: return 2;
+    case PublicJointMute::kC: return 3;
+    case PublicJointMute::kEnd: return 4;
+    case PublicJointMute::kNone: return -1;
+  }
+  return -1;
+}
+
+/** Direction 14 public-picture control. Zero exactly one carrier's authored
+ *  swallow input at the production consumption point. The caller's array stays
+ *  unchanged, so swallow_body and every non-antenna channel remain shipping-
+ *  identical while the named visible carrier loses only its public beat. */
+inline void apply_public_joint_mute(int32_t swal[5]) {
+  const int i = public_joint_mute_index(g_u02_public_joint_mute);
+  if (i >= 0) swal[i] = 0;
+}
+
 inline void swallow_press(int f, int start, int stagger, int width, int32_t amp_mm,
                           int32_t out[5]) {
   for (int i = 0; i < 5; ++i) {
@@ -1362,7 +1386,10 @@ inline void swallow_press(int f, int start, int stagger, int width, int32_t amp_
  *  Additive on purpose: the ambient layer is texture and §3's never-off floor
  *  wants it kept; what was missing was a beat ON TOP of it.
  *  ⚠ Call BEFORE the clip's loop_pose (or whole_wobble), which consumes g.nod. */
-inline void swallow_nodules(Rig& g, const int32_t swal[5], int32_t lean_pm) {
+inline void swallow_nodules(Rig& g, const int32_t authored_swal[5], int32_t lean_pm) {
+  int32_t swal[5] = {authored_swal[0], authored_swal[1], authored_swal[2],
+                     authored_swal[3], authored_swal[4]};
+  apply_public_joint_mute(swal);
   if ((swal[0] | swal[1] | swal[2] | swal[3] | swal[4]) == 0) return;
   const auto side = [&](int32_t v) {
     return static_cast<int32_t>((static_cast<int64_t>(v) * lean_pm) / 1000);

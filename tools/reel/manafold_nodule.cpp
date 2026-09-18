@@ -43,17 +43,17 @@
 // off-by-one is the reason the solver writes to neck/A/B rather than A/B/C,
 // and reading it wrong here would make an honest solver look broken.
 //
-// *** THE TWO FAILABLE LEGS (checklist item 10) ***
-// Run with `--fail-mute <A|B|C>` to mute one nodule's offsets at the point the
-// production path consumes them, and with `--fail-ignore` to reproduce the
-// pass-11 behaviour where offsets are ignored entirely. Both must make this
-// gate report FAIL. They are not simulations of a failure: they remove the
-// mechanism from the same code path the pass verdict is taken on.
+// *** THE FAILABLE LEGS (checklist item 10) ***
+// Run with `--fail-mute <F|A|B|C|E>` to mute one visible carrier at the
+// production path's consumption point, and with `--fail-ignore` to reproduce
+// the pass-11 behaviour where all offsets are ignored. Each independently makes
+// the gate report FAIL. They remove the mechanism from the same code path the
+// verdict uses; none fakes a result.
 //
 // Usage:
 //   manafold-nodule.exe                 the gate; rc 0 pass, rc 1 fail
-//   manafold-nodule.exe --fail-mute B   failable leg 1 (expects FAIL)
-//   manafold-nodule.exe --fail-ignore   failable leg 2 (expects FAIL)
+//   manafold-nodule.exe --fail-mute B   one of five carrier red legs (expects FAIL)
+//   manafold-nodule.exe --fail-ignore   all-offset red leg (expects FAIL)
 //   manafold-nodule.exe --csv           per-frame posed ball track, for plots
 
 #include <cstdio>
