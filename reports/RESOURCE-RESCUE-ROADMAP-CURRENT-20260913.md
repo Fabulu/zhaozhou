@@ -890,6 +890,17 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > prediction is still a measured number, while three separate fits would have
 > bought one extra hour and the same three numbers.
 >
+> **`uvw_m` IS NOT IN THIS FIT.** `@packet-h-timing` snapshotted at source digest
+> `c3ae9b76`, and the `uvw_m` read was moved afterwards. So the row that lands
+> measures the attrgrad tree, the stored legality verdict and the CRC verdict
+> state — and **not** the island change. Reading its RAM summary and finding
+> `uvw_m` still uninferred would therefore mean nothing about whether that fix
+> works; it is simply not in the design that was compiled.
+>
+> That needs saying in advance because a number arriving after four changes will
+> be attributed to all four by anyone who did not check the digest, and the
+> digest is right there in the row.
+>
 > *(The pattern is worth naming, because it has now happened three times in this
 > one section: group by module, find one expensive thing, attribute the whole
 > group to it. Grouping by module said "the boundary dominates"; grouping by
