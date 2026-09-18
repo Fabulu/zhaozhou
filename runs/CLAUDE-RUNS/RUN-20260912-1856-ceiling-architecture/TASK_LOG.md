@@ -2778,3 +2778,73 @@ one row in its whole history: `failed:quartus_map.exe` at 59.9 s, 128 sources.
 A `-MapOnly` probe is running now against its current 147-source closure and is
 already past four minutes, so whatever killed it at 59.9 s on commit `0e8b1c9d`
 is no longer killing it there. Result pending.
+
+---
+
+## THE WHOLE MACHINE SYNTHESISES, and two owner documents were unindexed
+
+### `zhao_prod_top` maps for the first time
+
+`@whole-machine-map-probe`, `map_only`, 1,180 s: **105,818 registers,
+1,029,005 memory bits** (18.2% of the device's memory). Its only previous row
+was `failed:quartus_map.exe` at **59.9 s**.
+
+I went looking because the composed shell's success made me ask what a
+whole-machine target would look like -- and found that one already exists:
+`zhao_prod_top` instantiates `zhao_shell_top` and seven terrain blocks and has a
+`- top:` entry with a 147-file closure. Nobody had to invent G8C; the co-fitted
+composition was already there and had never been made to work.
+
+**The register count implies it does not fit.** The composed shell measures 1.41
+registers per ALM; at that ratio 105,818 registers is about **75,100 ALM against
+a 41,910 device** -- 1.8x the chip, 2x the golden path's objective.
+
+Labelled an ESTIMATE everywhere it appears, because the ratio is a property of
+one design's logic mix and the fitter packs after mapping. What makes it worth
+stating is that `DOCKET.md` records a historical whole-machine figure of
+**76,672**, reached by a completely different route, and the estimate lands
+within 2% of it. Two unrelated methods agreeing is stronger than either, and
+they agree in the unwelcome direction.
+
+### The GOLDEN PATH was indexed nowhere
+
+`reports/Zhaozhou_conditional_golden_path.md`, owner document of 2026-09-14,
+**pinned to this branch by name in its own header**, absent from `DOCKET.md` AND
+from `OWNER-DOCUMENT-INDEX.md` -- the latter having been regenerated past its
+date, with a recipe whose own grep matches its commit subject. "Golden path" is
+in the standing session goal. Found by reading `git log` subjects by hand while
+chasing a CI failure.
+
+It is the authority on what closure MEANS: a charter 10% reserve giving a 37,719
+working limit, a 37,500 portfolio in seven groups, and *"do not call a 40.5k
+result closure merely because it is below 41,910"*.
+
+**It named a trap I was one step from.** Shell + terrain measures 37,254 and the
+portfolio totals 37,500. Nearly equal, and NOT comparable -- the portfolio
+covers geometry front end, complete FIELD, particles and post/2D, none of which
+are in the 37,254.
+
+And its section 7 lists *"ALM decreases while DSP, RAM ports, timing or
+bandwidth violate their limits"* as a REJECT condition, which describes the M10K
+work in isolation. The timing work is not a nicety running beside the area work;
+it is the condition under which the area result counts.
+
+`Zhaozhou_Divider_Fusion_Implementation_Guide.txt` (DSF-01) was also unindexed.
+It is a bounded owner experiment on `zhao_project_core`'s restoring divider, and
+its own rule 1 forbids doing it in the active Packet-H checkout -- which is this
+lane. Indexed, not started, and the reason recorded.
+
+### Item (1) attempted three times
+
+The golden path asks for a complete owner/function allocation. Attempt 1 summed
+by directory: 140,559 ALM, a pure double count. Attempt 2 tried to fold
+contained modules and folded ZERO -- `module_graph.build()` returns
+(module -> file) and (FILE PATH -> instantiated modules), not (module ->
+children) -- **and produced the identical total, which is the only reason I
+caught it.** Attempt 3 inverted the map properly: 42 folded, 93,310 charged.
+
+93,310 is still not the answer, and the reason IS item (1): nothing in the tree
+says which VARIANT is selected, so `zhao_texture_island_top` is charged beside
+the shell that contains the V3 island. **Item (1) is not a computation nobody
+ran; it is a decision nobody recorded.** The deliverable is a selected-variant
+list, after which the table computes itself.
