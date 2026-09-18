@@ -52,9 +52,34 @@ nobody has recorded a disposition where the sweep can see it.
 | 2026-09-05 | `81ee3692` | `reports/zhaozhou-texture-island-rearchitecture-2026-09-05.txt` | 2365 | yes | Agent please read - important texture rearchitecture advice |
 | 2026-09-05 | `bd124f78` | `reports/zhaozhou-texture-island-rearchitecture-v2-2026-09-05.txt` | 2867 | yes | Agent please read - update to previous rearchitect |
 | 2026-09-05 | `dd4af89d` | `reports/zhaozhou-terrain-mipmapping-architecture-2026-09-05.txt` | 421 | yes | Agent please read - Mipmapping addendum |
+| 2026-09-14 | `7ce7e056` | `reports/Zhaozhou_conditional_golden_path.md` | 200 | yes | Agent please read - Golden path for architecture and new blocks going forward |
 | 2026-09-14 | `494a82f7` | `reports/Zhaozhou_G8A_DSP_Rescue_Architecture_Brief.txt` | 1834 | yes | G8A DSP rescue brief, imported from the golden-path branch |
 | 2026-09-16 | *this commit* | `reports/Zhaozhou_G8A_Timing4_110MHz_Architecture_Brief.txt` | 1681 | yes | G8A Timing4 / comfortable-110 MHz brief, handed over by the owner |
-| 2026-09-16 | *this commit* | `reports/Zhaozhou_DSP_Uncashed_Savings_Audit_2026-09-16.txt` | 265 | yes | DSP savings not reflected in the 173-DSP scoreboard. **DISPOSITION: READ AND ACTED ON.** It withdrew "floor" as a description of the 173-DSP and 40,591-ALM subtotals, and RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md was corrected the same day to say PARTIAL MIXED EVIDENCE instead. Its seven reconciliation recommendations (separate historical / candidate / adopted prices, represent a shared owner once, expose unpriced functions as unknown) are OPEN. |
+| 2026-09-16 | *this commit* | `reports/Zhaozhou_DSP_Uncashed_Savings_Audit_2026-09-16.txt` | 265 | yes | DSP savings no
+| 2026-09-17 | `c0a9bf1c` | `reports/Zhaozhou_Divider_Fusion_Implementation_Guide.txt` | 1457 | yes | Agent please read - Guide to maybe some free ALMs you can just slot somewhere between your current important work |
+
+## THE MANIFEST MISSED ONE INSIDE ITS OWN WINDOW — 2026-09-18
+
+`Zhaozhou_conditional_golden_path.md` is dated **2026-09-14**, three rows above
+entries dated 09-16, so it was absent from a list that had already been
+regenerated past it. Its commit subject is *"Agent please read - Golden path for
+architecture and new blocks going forward"*, which the recipe's
+`--grep='please read' -i` matches. It should have been caught and was not.
+
+**So the recipe is necessary and not sufficient**, and this file's own opening
+sentence — *"This file exists so that a sweep never again has to re-derive which
+owner documents exist"* — was not true of the one document that defines what
+closure means. Both missing rows were found by reading `git log` subjects by
+hand while chasing something else.
+
+The cheap check that would have caught it: after regenerating, diff the file
+list against `git log --all --grep='please read' -i --name-only`. `--all`
+matters — a document announced on a branch that was never merged into the one
+the recipe runs on is invisible to it, and two of the entries above were
+announced twice from different branches.
+
+Not automated here, because a generator nobody runs is the failure this file was
+written about. Recorded as the check a sweep should perform.t reflected in the 173-DSP scoreboard. **DISPOSITION: READ AND ACTED ON.** It withdrew "floor" as a description of the 173-DSP and 40,591-ALM subtotals, and RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md was corrected the same day to say PARTIAL MIXED EVIDENCE instead. Its seven reconciliation recommendations (separate historical / candidate / adopted prices, represent a shared owner once, expose unpriced functions as unknown) are OPEN. |
 
 ## Hardware-brief dispositions
 
