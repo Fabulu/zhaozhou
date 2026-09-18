@@ -46,6 +46,58 @@ adoption gate, although substantial candidate work is built.
 
 ---
 
+### UPDATED 2026-09-18 EVENING — five things this docket did not know
+
+1. **The composed shell is at `gpu_clk` 77.80 MHz**, 27,583 ALM / 63 DSP /
+   136 M10K, clean tree (`@packet-h-satstage`). Across the day: ALM −1,461,
+   gpu_clk +43.8%, TNS −92.3%. Against the ruled 100 MHz the gap is 22.2 MHz.
+
+2. **That number is the render BACK END.** Eight geometry blocks were declared
+   in the shell's 97-source closure and elaborate nowhere — measured by
+   `tools/budget/closure_liveness.py`, which now audits all 60 receipts and
+   finds 48 clean. The closure is 89 sources. **Every comparison of 27,583
+   against the 30,000 budget is a comparison against a part.**
+
+3. **The projector cheque is priced.** `zhao_project_service` had a `- top:`
+   entry and no row; `@cheque-price` measured one shared service at **6,598 ALM
+   / 33 DSP** with both clients on pins, against ~12,400 / 66 for the two
+   unshared wrappers. The whole chain — service, subsystem, terrain pipe — was
+   already built, composed and fitted at 102.19 MHz on physical pins, and
+   production selects neither. `uncashed_cheques.py` gained **check 4**, which
+   asks reachability from the PRODUCTION TOP rather than from anything, because
+   every link in that chain has a root and none of the roots is `zhao_prod_top`.
+
+4. **Adoption is a SELECTION change, not a rewiring.** `zhao_prod_top` is a
+   resource top — LFSR-driven, blocks not wired to each other, its own header
+   says so. So the projector half of Packet J is the same act as golden-path
+   item (1), and its one design question is answered: no adapter is needed,
+   because `zhao_vertex_arena`'s `fill_ready_o` is a stated constant `1'b1` on
+   both sides.
+
+5. **And cashing it does not close the console.** With the projector shared the
+   whole-machine estimate moves from ~96,200 to ~90,000 ALM against a 37,500
+   portfolio — **2.6× over becomes 2.4× over.** The largest single overrun in
+   the design, corrected, moves the total by 6%. Closure needs work in every
+   group.
+
+**Receipt-field hazard, recorded because it is inert today and will not stay
+inert:** `fmaxMhz` in `zhao_block_fit.json` is the SLOWEST clock in the design
+regardless of constraint. At `@packet-h-satstage` it reads 72.44 / `audio_clk`
+while every negative path is `gpu_clk` at 77.80 and `audio_clk` has no negative
+slack at all. Receipts now also carry `fmaxByClock` and `gatingFmaxMhz`, derived
+from the worst setup path, and `min_fmax_mhz` reads the gating one with a
+fallback so historical rows are judged unchanged. Eleven tops carry
+`min_fmax_mhz: 100`.
+
+**Open, with the work specified:** three timing cones in texture and raster,
+all traced node by node from receipts. Cones 1 and 2 are committed and fitting
+as `@packet-h-texorder`; cone 3 (the binner deciding profile verdicts at write
+and carrying them in pad bits the metadata bank already had) is committed and
+lands in the fit after. Cone 2's remaining 3.4 ns is a protocol question and is
+deliberately not touched.
+
+---
+
 ## OWNER DIRECTION 2026-09-16 — spend M10K to buy ALMs
 
 Fabian, in session, mid-pass: *"remember we have lot's of m10k memory, ALM's
