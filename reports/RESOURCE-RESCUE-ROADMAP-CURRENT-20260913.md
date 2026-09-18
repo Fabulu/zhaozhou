@@ -79,6 +79,28 @@ called below either closure target.
 >
 > Meanwhile the composed sibling shell went **29,044 ALM / 54.12 MHz → 27,601 /
 > 66.03** across three fits in one day, with no uninferred array left in it.
+>
+> #### Reading order for 2026-09-18, because this file grew by 1,258 lines
+>
+> The day's sections were INSERTED next to what they correct rather than
+> appended, so the file reads by topic and not by clock. That is right for a
+> reference and wrong for a narrative, so here is the narrative:
+>
+> | # | fit / event | result |
+> |---|---|---|
+> | 1 | `@packet-h-m10k` (before today) | 29,044 ALM · 54.12 MHz · TNS −29,689 |
+> | 2 | path DETAIL read properly | the M10K is 0.192 ns; `attrgrad` binds, not the resolver |
+> | 3 | `@packet-h-timing` — tree + legality + CRC verdict | 28,959 · **61.52** · −19,985 |
+> | 4 | destinations split | 512 of 516 RAM paths were the CRC scan, not the legality cone |
+> | 5 | `@packet-h-uvw` — one read register moved | 27,601 · **66.03** · −8,851 · **area bought clock** |
+> | 6 | `zhao_prod_top` maps, first time ever | ≈92,700 ALM · 123 DSP — **2.2× the device** |
+> | 7 | golden path found unindexed | defines closure; every envelope breached, total 2.6× |
+> | 8 | `@packet-h-mulstage` — multiply split | *running at time of writing* |
+>
+> **Predictions are written before each fit and left standing afterwards**, which
+> is why several read as wrong: the `uvw` Fmax prediction said "unchanged" and it
+> moved 4.5 MHz. Those are kept deliberately — a prediction edited after the
+> measurement is not a prediction.
 
 ## Authority and vocabulary
 
