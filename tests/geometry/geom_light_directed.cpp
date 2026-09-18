@@ -209,6 +209,19 @@ FoldResult fold(int32_t nx, int32_t ny, int32_t nz, bool producer_degen,
 // ---------------------------------------------------------------------------
 // DUT driving
 // ---------------------------------------------------------------------------
+// Every tick goes through here so INITIATION INTERVAL can be measured rather
+// than inferred. The owner plan of 2026-09-18 §7.2 is specific about which
+// number decides the schedule: "The current service's ACTUAL INITIATION
+// INTERVAL, not just its latency, decides this." A block whose latency and II
+// happen to be equal — this one holds a single packet and overlaps nothing —
+// still owes the measurement, because the moment anything overlaps they part
+// company and a quoted latency silently becomes an optimistic II.
+uint64_t g_cycles = 0;
+void tk(Vzhao_geom_light& d) {
+  zhao::tick(d);
+  ++g_cycles;
+}
+
 void reset_dut(Vzhao_geom_light& dut) {
   dut.rst_n = 0;
   dut.cfg_we_i = 0;
@@ -223,17 +236,17 @@ void reset_dut(Vzhao_geom_light& dut) {
   dut.nlights_i = 0;
   dut.src_id_i = 0;
   dut.eval();
-  for (int i = 0; i < 2; ++i) zhao::tick(dut);
+  for (int i = 0; i < 2; ++i) tk(dut);
   dut.rst_n = 1;
   dut.eval();
-  zhao::tick(dut);
+  tk(dut);
 }
 
 void cfg_write(Vzhao_geom_light& dut, uint32_t idx, uint32_t word, uint32_t data) {
   dut.cfg_we_i = 1;
   dut.cfg_addr_i = static_cast<uint8_t>(((idx & 0xF) << 4) | (word & 0xF));
   dut.cfg_data_i = data;
-  zhao::tick(dut);
+  tk(dut);
   dut.cfg_we_i = 0;
   dut.cfg_addr_i = 0;
   dut.cfg_data_i = 0;
@@ -272,7 +285,7 @@ DriveResult drive(Vzhao_geom_light& dut, int32_t nx, int32_t ny, int32_t nz, boo
                   uint32_t nlights, uint16_t src, int stall = 0) {
   int guard = 0;
   while (!dut.v_ready_o) {
-    zhao::tick(dut);
+    tk(dut);
     if (++guard > 4000) {
       check(false, "v_ready_o never rose", 1, 0);
       zhao::exit_hard(zhao::report_and_exit("geom_light_directed"));
@@ -286,12 +299,12 @@ DriveResult drive(Vzhao_geom_light& dut, int32_t nx, int32_t ny, int32_t nz, boo
   dut.nlights_i = static_cast<uint8_t>(nlights & 0xF);
   dut.src_id_i = src;
   dut.r_ready_i = 0;
-  zhao::tick(dut);  // accept edge
+  tk(dut);  // accept edge
   dut.v_valid_i = 0;
 
   int lat = 0;
   while (!dut.r_valid_o) {
-    zhao::tick(dut);
+    tk(dut);
     if (++lat > 400000) {
       check(false, "r_valid_o never rose", 1, 0);
       zhao::exit_hard(zhao::report_and_exit("geom_light_directed"));
@@ -306,7 +319,7 @@ DriveResult drive(Vzhao_geom_light& dut, int32_t nx, int32_t ny, int32_t nz, boo
 
   // Backpressure: the packet HOLDS, byte for byte, while the consumer stalls.
   for (int i = 0; i < stall; ++i) {
-    zhao::tick(dut);
+    tk(dut);
     check(dut.r_valid_o == 1, "r_valid_o held under stall", 1, dut.r_valid_o);
     check(dut.rgb_r_o == r.rgb.r, "rgb_r_o stable under stall", r.rgb.r, dut.rgb_r_o);
     check(dut.rgb_g_o == r.rgb.g, "rgb_g_o stable under stall", r.rgb.g, dut.rgb_g_o);
@@ -315,7 +328,7 @@ DriveResult drive(Vzhao_geom_light& dut, int32_t nx, int32_t ny, int32_t nz, boo
           dut.src_id_o);
   }
   dut.r_ready_i = 1;
-  zhao::tick(dut);
+  tk(dut);
   dut.r_ready_i = 0;
   return r;
 }
@@ -397,7 +410,7 @@ int main(int argc, char** argv) {
     check(dut.v_ready_o == 0, "v_ready_o low during the engine's cold fill", 0, dut.v_ready_o);
     int fill = 0;
     while (!dut.table_ready_o && fill < 700) {
-      zhao::tick(dut);
+      tk(dut);
       ++fill;
     }
     check(dut.table_ready_o == 1, "engine table fill completes", 1, dut.table_ready_o);
@@ -769,6 +782,49 @@ int main(int argc, char** argv) {
     check(a.latency == b.latency, "latency is stall-independent up to the handshake",
           static_cast<uint32_t>(a.latency), static_cast<uint32_t>(b.latency));
     std::printf("[light] one-light accept->valid: %d cycles\n", a.latency);
+  }
+
+  // ---- 13b: THE INITIATION INTERVAL, MEASURED ---------------------------
+  // The owner plan of 2026-09-18 §7.2: "The current service's ACTUAL
+  // INITIATION INTERVAL, not just its latency, decides this." So this
+  // section measures the sustained rate with a consumer that never stalls,
+  // and prints the frame arithmetic rather than leaving it to be re-derived
+  // from a latency number that only coincidentally equals it today.
+  //
+  // It asserts a CEILING, not an equality. A future overlap of the
+  // descriptor fetch or the MAC under the engine's walk should make this
+  // number FALL, and a test that pinned it exactly would go red on an
+  // improvement — which is how a throughput gate ends up deleted.
+  {
+    const uint64_t c0 = g_cycles;
+    const uint64_t t0 = dut.light_terms_o;
+    constexpr int kBurst = 16;
+    for (int i = 0; i < kBurst; ++i)
+      check_vertex(dut, 3000, 40000, -9000, false, L, 1, env, "II burst vertex",
+                   static_cast<uint16_t>(0x0D00 + i), 0);
+    const uint64_t spent = g_cycles - c0;
+    const uint64_t terms = dut.light_terms_o - t0;
+    const double ii_light = static_cast<double>(spent) / static_cast<double>(terms);
+
+    check(terms == kBurst, "the burst ran exactly one engine turn per vertex",
+          static_cast<uint64_t>(kBurst), terms);
+    // 200 is a ceiling with headroom over the ~165 designed, not a target.
+    check(ii_light < 200.0, "sustained II per light term stays under the declared ceiling", 200,
+          static_cast<uint64_t>(ii_light));
+
+    // The plan's stress profile, carried through THIS measurement. Nothing
+    // here narrows the workload to make the number look better; §7.2 forbids
+    // exactly that ("rather than quietly lowering the admitted workload").
+    const double evals = 120000.0 * 4.0;         // §7.2's stated stress profile
+    const double frame = 1666666.0;              // 100 MHz / 60 Hz
+    const double need = evals * ii_light;
+    std::printf(
+        "[light] MEASURED II = %.1f clk/light-term (%llu clk / %llu terms). "
+        "Plan §7.2 profile 120k vtx x 4 lights = 480k evaluations -> %.0f clk "
+        "against %.0f/frame = %.1fx OVER. NOT creature rate; see the RTL "
+        "header's reported cost and lever order.\n",
+        ii_light, static_cast<unsigned long long>(spent),
+        static_cast<unsigned long long>(terms), need, frame, need / frame);
   }
 
   // ---- 14: THE DIFFERENTIAL TIER ----------------------------------------

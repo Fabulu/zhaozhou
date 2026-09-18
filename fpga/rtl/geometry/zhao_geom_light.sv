@@ -49,8 +49,15 @@
 // have it", and on the budget "Our budget is fucked"). Its cut seam is
 // designed in: `emission_i = 0` is a bit-exact no-op — with every emission
 // word zero this block's output is identical to the multiplicative-only
-// path, and reverting means deleting words 7..9 of the descriptor and three
-// MAC steps. Nothing else depends on it.
+// path.
+//
+// AND THE REVERT IS SETTING IT TO ZERO, NOT DELETING IT. The owner plan of
+// 2026-09-18 §7.1 is explicit: "Emission shares the light response but
+// remains the separately required additive term; ZERO EMISSION IS THE EXACT
+// REVERT CONTROL, NOT AUTHORIZATION TO OMIT IT." An earlier draft of this
+// header said reverting meant deleting words 7..9 and three MAC steps,
+// which is how a required term gets quietly omitted by someone reading the
+// budget. The term is always evaluated; only its value is a knob.
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS BLOCK REFUSES, each refusal pointing at its real owner
@@ -69,42 +76,88 @@
 //     the HPS's (D-6); this block is handed the bounded set.
 //
 // ---------------------------------------------------------------------------
-// THE THROUGHPUT POINT, STATED BECAUSE THE CONTRACT DELIBERATELY DOES NOT
+// THE THROUGHPUT POINT: THIS ARRANGEMENT DOES NOT MEET CREATURE RATE, AND
+// THE OWNER PLAN SAYS SO IN ADVANCE. READ THIS BEFORE COMPOSING THE BLOCK.
 // ---------------------------------------------------------------------------
-// GEOM.LIGHT.md's Latency section says `fixed`, "once the throughput point
-// is chosen. NOT CHOSEN HERE", and the ledger's target_throughput is "see
-// contract". So this is the first choice made, and it is made at the
-// engine's own rate, which is the CHEAPEST point and not the fastest:
+// `reports/Zhaozhou_True_Console_Completion_Plan_2026-09-18.txt` §7.2 states
+// the arithmetic, and it lands exactly on this shape:
+//
+//   "120,000 vertices x four lights = 480,000 evaluations in a particular
+//    stress profile. A scalar 147-cycle service would require 70,560,000
+//    cycles before overhead if serialized, not fit in a 100-MHz/60-Hz frame.
+//    The current service's ACTUAL INITIATION INTERVAL, not just its latency,
+//    decides this."
+//
+// This block is that scalar serialized service. Its II is MEASURED, not
+// reasoned — `geom_light_directed` prints accept-to-accept for a sustained
+// burst, and the number it prints is the one to quote:
 //
 //     per light  = LOAD(11) + OFFER(>=1) + u_shade(~147) + MAC(6) ~= 165 clk
 //     per vertex = nlights * 165 + FOLD(1) + OUT(>=1)
-//                = ~661 clocks at the ruled four local lights.
+//                = ~661 clocks at four local lights
+//     480,000 evaluations x 165 = ~79,200,000 clocks against 1,666,666
+//                                 available. ~47x SHORT.
 //
-// AGAINST the frame budget that is SLOW, and the number is written here so
-// nobody inherits the gap silently: 1,666,666 clocks/frame against 120,000
-// skinned vertices/frame is ~13.9 clocks per vertex, and the skinner itself
-// runs one weighted vertex per 12 clocks. This block at 661 is ~47x short of
-// creature rate. It is exactly at terrain rate (2,000 triangles/frame needs
-// 833 clocks each).
+// The plan's instruction when that happens is explicit and is obeyed here:
+// *"if those still miss, retain enough parallelism and REPORT THE COST rather
+// than quietly lowering the admitted workload."* So nothing below narrows the
+// workload, and the block does NOT claim to meet creature rate. It meets
+// terrain rate exactly (2,000 triangles/frame allows 833 clocks each).
 //
-// THAT IS DELIBERATE AND IT IS THE CONTRACT'S OWN ORDERING. "The accumulator
-// does not need ten permanent light engines merely because ten light terms
-// are legal — sequenced accumulation at the skinner's own rate is the
-// default and parallel engines are a MEASURED ESCALATION, not a starting
-// point", on a design at 171% of its DSP budget and ~15x over ALM. The
-// escalation levers, in the order they should be spent, are:
+// THE COST IS REPORTED HERE. The three levers, in the order the plan's own
+// "preparation, invariant reuse and pipeline/context overlap" implies:
 //
-//   1. a faster `u_shade` throughput point (its own contract says the unused
-//      parallelism lives THERE: II=147 was priced for 2,000 triangles, not
-//      120,000 vertices);
-//   2. N engine instances behind this same sequencer (one localparam and a
-//      generate, no law change);
-//   3. only then anything structural here.
+//   1. INVARIANT REUSE — the largest and the one this arrangement does not
+//      have. See the section below; it is a contract question, not a tuning
+//      knob.
+//   2. PIPELINE/CONTEXT OVERLAP — cheap and not taken yet: the 11-cycle
+//      descriptor LOAD and the 6-cycle MAC could both run underneath the
+//      engine's 147-cycle walk, taking II from ~165 to ~148. That is a 10%
+//      win on a 47x gap, which is why it is recorded rather than spent.
+//   3. LANE COUNT — N engine instances behind this same sequencer, "chosen
+//      from the full deadline, not a guess" (§7.2). One localparam and a
+//      generate; no law changes.
 //
-// Spending (2) before (1) buys N copies of a circuit deliberately built
-// slow. The subsystem fit gate named in SHADE-LIGHT-CONSOLIDATION §6 is
-// where the real ALM/DSP price of this shell gets measured; nothing here
-// claims an area number.
+// Spending (3) before (1) buys N copies of a circuit that recomputes the same
+// square root N times. The subsystem fit gate named in
+// SHADE-LIGHT-CONSOLIDATION §6 is where the real ALM/DSP price gets measured;
+// nothing here claims an area number.
+//
+// AND THE ADMISSION MODEL IS NOT VERIFIED. §7.2: "Do not count four lights as
+// guaranteed on every vertex without checking the ruled profile; conversely,
+// do not assume culling or sparse lights without traces." Neither was done.
+// The 480,000 figure above is the plan's stress profile taken at face value.
+//
+// ---------------------------------------------------------------------------
+// THE INVARIANT THIS ARRANGEMENT RECOMPUTES, WHICH IS A KNOWN CONFLICT
+// ---------------------------------------------------------------------------
+// *** OPEN. DO NOT COMPOSE THIS BLOCK AT K LIGHTS WITHOUT READING THIS. ***
+//
+// The owner plan §7.2 says: "Never normalize independently for every light if
+// the law allows a common magnitude." GEOM.LIGHT.md's own Notes say the same
+// harder — the owner "is explicit that the hardware must not reproduce that
+// structure — copying it would put three square roots per vertex behind this
+// block for no change in the answer."
+//
+// THIS ARRANGEMENT REPRODUCES IT. `u_shade` derives `nmag2` and its `isqrt`
+// from the normal on EVERY turn, and this sequencer hands it the same normal
+// once per light. So K lights cost K product-walks and K roots to obtain one
+// magnitude — and that recomputation is most of the 147 cycles, which makes
+// the invariant-reuse lever and the throughput gap THE SAME PROBLEM.
+//
+// It is not fixed here because the fix is not local and not this block's to
+// make. The engine would need a magnitude-supplied mode, which is precisely
+// the OPEN CONTRACT QUESTION recorded in
+// `reports/SHADE-LIGHT-CONSOLIDATION-20260909.md` §5.4: the render core and
+// the creature pair `skin_world_normal` / `lambert_from_world_normal` are NOT
+// bit-identical laws, and "which law lights creatures in hardware — or
+// whether the engine grows a magnitude-supplied mode with its own coverage —
+// is an open contract question that must be settled BEFORE the vertex-RGB
+// reference is written."
+//
+// Settling it by editing the shared core on the way past is the exact move
+// both contracts were rewritten to forbid. So it is recorded, loudly, and
+// left for the ruling.
 //
 // ---------------------------------------------------------------------------
 // WHERE THE DESCRIPTORS LIVE, AND WHY IT IS NOT FLIP-FLOPS
