@@ -3116,3 +3116,36 @@ NEXT STEP, in order, before attending anything the fit says:
 4. fit the attrdiv change
 5. Packet J / G8C, then K, then R1-R9
 
+
+### 2026-09-18, while @packet-h-satstage runs
+
+Done since the last entry, all outside the running fit's closure:
+
+* attrdiv D_SAT split committed (73125832); prediction for @packet-h-satstage
+  recorded before launch, including what would falsify the REASONING.
+* @packet-h-mulstage read: 27,231 ALM, 61.08 MHz, worst -6.372. Reads as a
+  5 MHz regression and is not one -- base_min_y0_r held 105 of the 200 worst
+  paths at uvw and is better than the printed floor at mulstage, i.e. improved
+  by at least 2.021 ns. What now gates is final_sat_r, which is exactly what
+  the committed split moves off the input edge.
+* THE COMPOSED SHELL HAS NO GEOMETRY FRONT END. Eight geometry blocks are in
+  the 97-source closure and elaborate nowhere; zhao_project_core.sv is not in
+  the closure at all, which is the structural proof. 27,231 ALM is the render
+  BACK end.
+* THE PROJECTOR CHEQUE IS BUILT, COMPOSED AND FITTED. terrain_pipe ->
+  proj_subsystem -> project_service -> ONE project_core, measured at 102.19 MHz
+  on physical pins, while zhao_prod_top still carries two cores (24,399 ALUT).
+* uncashed_cheques.py gains check 4 (composed but never ADOPTED -- reachability
+  from the production top), a --gate ratchet, and the ctest registration it
+  never had. zhao_prod_top reaches 144 of 274 modules.
+* setup_path_census.py committed: the three-table trap, destination-signal
+  grouping, and the printed-window floor, with a ctest so it cannot rot.
+* Three suite reds fixed, all mine, all gates working correctly.
+
+OWED WHEN THE FIT ENDS, in order:
+1. read the receipt against the recorded prediction
+2. mark or remove the eight dead entries in zhao_shell_top_v2's closure
+   (fit_targets.yml -- deliberately deferred so as not to touch a running
+   fit's declaration)
+3. fit zhao_project_service, question already stated: what does the shared
+   service cost with BOTH clients driven, against 24,399 ALUT for two?

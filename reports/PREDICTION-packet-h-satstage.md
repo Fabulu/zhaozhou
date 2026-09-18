@@ -73,3 +73,21 @@ carry that; at the best slack shown (-3.0) it takes at least ~3,200 negative
 paths. The report shows the worst 200 of some thousands, so no count in this
 document is a count of the machine's negative paths — only of the window
 Quartus prints.
+## SECOND CORRECTION: "appears zero times" has a floor under it
+
+`*.setup.rpt` prints the worst 200 paths, so an endpoint's absence means *"all
+its paths are now better than the printed floor"*, not *"it has no paths"*. The
+floors are **-3.293 at `@packet-h-uvw`** and **-3.123 at `@packet-h-mulstage`**,
+and they move precisely because the worst tier shrank.
+
+So the honest form of the mul-split result is a BOUND, and it is still a strong
+one: `base_min_y0_r`'s worst path went from **-5.144 to better than -3.123**, an
+improvement of **at least 2.021 ns**, with all 105 of its paths carried along.
+What cannot be said from this receipt is by how much more.
+
+The same correction applies in the other direction and matters more for reading
+the next fit: endpoints marked NEW at `@packet-h-mulstage` — `dividend_r` with
+22 paths, `walk_q_r` with 32, `metadata_genmis_base_q` with 29 — were very
+probably present at `@packet-h-uvw` too, sitting just under its -3.293 floor.
+**Do not read them as a regression the mul split caused.** `tools/budget/setup_path_census.py`
+now prints both floors on every comparison so this cannot be misread again.
