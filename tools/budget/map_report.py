@@ -48,6 +48,7 @@ COLUMNS = {
     "full":      "Full Hierarchy Name",
 }
 
+_OWN = re.compile(r"\(\s*([0-9][0-9,]*)\s*\)")
 _NUM = re.compile(r"^-?[\d,]+")
 
 
@@ -62,11 +63,33 @@ def _cells(line):
 
 
 def _lead(cell):
-    """The leading count of `123 (45)`, or None. Commas tolerated."""
+    """The leading count of `123 (45)`, or None. Commas tolerated.
+
+    THIS IS THE SUBTREE TOTAL, not the entity''s own cost. Quartus writes
+    `TOTAL (OWN)` in the hierarchy table, where TOTAL includes every descendant.
+    Ranking by it is the leaf-versus-census error in a new costume: on
+    2026-09-18 it reported `zhao_geom_wcache` at 1,480,718 ALUTs, which is larger
+    than any Cyclone V and is in fact its whole subtree. Use `_own` to attribute
+    cost to a module, and `_lead` only when you want the subtree.
+    """
     m = _NUM.match(cell.strip())
     if not m:
         return None
     return int(m.group(0).replace(",", ""))
+
+
+def _own(cell):
+    """The parenthesised OWN count of `123 (45)`, or None.
+
+    This is the number that attributes cost TO THIS ENTITY and to nothing below
+    it, so a column of them sums to the design without counting a child twice.
+    A cell with no parenthesis (the memory-bits and DSP columns) has no separate
+    own figure; the caller falls back to the leading value.
+    """
+    m = _OWN.search(cell)
+    if not m:
+        return None
+    return int(m.group(1).replace(",", ""))
 
 
 def parse_hierarchy(text):
@@ -137,6 +160,15 @@ def parse_hierarchy(text):
         }
         for short in ("alut", "registers", "bits", "dsp", "pins", "vpins"):
             row[short] = _lead(cells[idx[short]]) if short in idx else None
+            # ...and the OWN figure beside it. The unsuffixed key stays the
+            # subtree TOTAL so no existing caller changes meaning silently;
+            # `<key>_own` is the per-entity attribution, and a column of those
+            # sums to the design without counting a child under every parent.
+            if short in idx:
+                own = _own(cells[idx[short]])
+                row[short + "_own"] = own if own is not None else row[short]
+            else:
+                row[short + "_own"] = None
         rows.append(row)
     return rows
 
@@ -207,7 +239,17 @@ if __name__ == "__main__":
         raise SystemExit(0)
     kids = children(rows)
     print("%d rows, %d direct children" % (len(rows), len(kids)))
-    print("%8s %10s %10s %5s  module" % ("ALUT", "REG", "BITS", "DSP"))
-    for r in sorted(kids, key=lambda r: -(r["alut"] or 0))[:20]:
-        print("%8s %10s %10s %5s  %s"
-              % (r["alut"], r["registers"], r["bits"], r["dsp"], r["name"]))
+    print("ranked by OWN cost. Quartus writes TOTAL (OWN); TOTAL includes every")
+    print("descendant, so ranking by it counts a child under each of its parents.")
+    print("%9s %9s %9s %10s %5s  module"
+          % ("ALUT_own", "ALUT_tot", "REG_own", "BITS", "DSP"))
+    for r in sorted(kids, key=lambda r: -(r["alut_own"] or 0))[:20]:
+        print("%9s %9s %9s %10s %5s  %s"
+              % (r["alut_own"], r["alut"], r["registers_own"], r["bits"],
+                 r["dsp"], r["name"]))
+    own_sum = sum(r["alut_own"] or 0 for r in rows)
+    top_tot = rows[0]["alut"] or 0
+    print("\nsum of every row's OWN ALUTs : %d" % own_sum)
+    print("top row's TOTAL ALUTs        : %d" % top_tot)
+    print("a large gap between these means the table was misread, not that the")
+    print("design changed -- they are two ways of counting the same silicon.")
