@@ -2954,3 +2954,37 @@ ONE commit; this session already learned that once and the lesson held.
 **Without the full suite I would have pushed seven red gates.** The standing
 memory is "local gates must match CI", and the fast label is what makes local
 match.
+
+---
+
+## The multiply split: the binder cut for free, and the differential proved it
+
+`base_min_y0_c` was one expression evaluated combinationally and registered on
+job acceptance. `@packet-h-uvw` made it the machine's binder:
+`Mult0~mult_h_mult_hlmac`, a DSP macro feeding a long soft carry chain for the
+partial-product sum -- **14.24 ns of a 15.67 ns path**.
+
+The value has enormous schedule slack: `base_min_y0_r` is written in `S_IDLE`
+and not read until `S_ROW_REQ`, through `S_GRAD_REQ`, `S_GRAD_WAIT` and the
+gradient divide, which alone spends about fifty clocks in `attrdiv`'s `D_RUN`.
+So the multiplies now land in `S_IDLE` and their sum in `S_GRAD_REQ`: **no state
+added, no cycle spent, no output edge moved.**
+
+Bit-exact by width: every operand is 96-bit and the result truncates to 96, so
+holding each product in a 96-bit register preserves the arithmetic exactly
+modulo 2**96. Nothing rounded, widened or reassociated.
+
+**And the differential PROVED the edge claim rather than me arguing it.**
+`raster_attrgrad_dsp3_diff` drives this module and the untouched
+`zhao_raster_attrgrad_dsp3` from one stimulus and compares them cycle by cycle.
+It passes. That is not something I could have talked my way into: if any
+observable edge had moved, it would be red. 11/11 across the directed test, the
+R4 variant, two attrgrad mutants and all seven DSP3 controls.
+
+Fit `@packet-h-mulstage` running, prediction recorded first: Fmax ~70-72 MHz,
+worst near -3.9 (the next candidates are `v3own` at -3.901 and `frag_expand` at
+-3.571), TNS down by less than last time because this family is 44 paths of
+2,000, and ALM flat +/-400 with the sign genuinely uncertain.
+
+**If ALM falls, that is congestion again and not this change being free** --
+recorded in advance so the result cannot be read as whichever is nicer.
