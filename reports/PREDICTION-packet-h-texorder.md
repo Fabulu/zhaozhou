@@ -150,3 +150,85 @@ on it.
 **And cone 3 is still uncashed**: it is committed, it removes `walk_q_r`, and
 `walk_q_r` is now at -1.780 — *below* all four of the above. So cone 3 alone
 will not move the clock either. It goes in with whatever comes next.
+
+---
+
+## CONE 4, traced and diagnosed: a read-during-write bypass on the machine's worst path
+
+`@packet-h-texorder`'s worst path is one path at **−2.540**, and its launching
+register is not anything anyone wrote:
+
+```
+  7.965   fragment_m_rtl_0|...|ram_block1a140~PORT_B_WRITE_ENABLE_REG
+  8.162   ...|ram_block1a140|portbdataout[22]
+  9.399   u_expand|fragment_m~374
+ 11.319   u_expand|Add0~9      ┐
+ 12.400   u_expand|Add0~21     ┘  a carry chain
+ 14.130   u_binding|Mux20~99   ┐
+ 15.503   u_binding|Mux20~101  │  three mux levels, 2.19 ns
+ 16.240   u_binding|Mux20~112  ┘
+ 17.981   -> u_binding|read_row_present_q
+```
+
+**A RAM's PORT-B WRITE ENABLE register is launching a data path.** That only
+happens when the synthesiser has had to build read-during-write bypass logic:
+the read output must reflect a write landing at the same address in the same
+cycle, so the write enable becomes part of the read data.
+
+And the source says exactly why:
+
+```systemverilog
+// zhao_texture_frag_expand_v2.sv:121, 134, 283
+fragment_t fragment_m [FQD];
+assign head_c = fragment_m[read_pointer_q];     // COMBINATIONAL read
+...
+fragment_m[write_pointer_q] <= '{ ... };        // clocked write
+```
+
+An `assign` read of an array that an `always_ff` writes forces the bypass. **This
+is the same shape as the `uvw_m` fix earlier in this campaign** — moving that
+read out of an `always_ff` took the composed shell from 61.52 to 66.03 MHz — and
+it is the third time a memory's read structure has turned out to be the binder.
+
+Note also the **clock path is 7.965 ns**, of which 2.454 ns is
+`gpu_clk~CLKENA0|outclk` to that RAM's `clk0` and 2.463 ns is the RAM's own
+clock-to-out. Before any data moves, eight nanoseconds are spent. Some of that
+is unavoidable insertion delay; the 2.463 is the bypass-laden RAM.
+
+### The candidate fix, and the condition it must satisfy
+
+**Tell Quartus there is no read-during-write.** If the design never needs the
+new data when reading the address being written, the bypass mux and the
+write-enable arc both disappear. On this toolchain that is `ramstyle =
+"no_rw_check"` on the array.
+
+**The condition is checkable and is probably already true.** Read-during-write
+can only occur when `read_pointer_q == write_pointer_q`, which for this queue
+means EMPTY. And the neighbouring lookups in the same file are already gated on
+exactly that:
+
+```systemverilog
+wire head_aux_pending_c = !queue_empty_c && aux_pending_m[read_pointer_q];
+```
+
+`head_c` itself is ungated at line 134, but its consumers build `sample_job_c`,
+which is only offered when the queue is non-empty. **So the value returned
+during a read-during-write is very likely already a don't-care** — and that is
+an assertion to write and run, not an argument to accept. Verilator answers it
+in seconds: assert that `head_c` is never consumed in a cycle where
+`read_pointer_q == write_pointer_q` and a write is landing.
+
+**If that assertion holds, this is a one-attribute change worth ~2.5 ns on the
+machine's gating path.** If it does not, the fix is to gate the read or register
+it, which costs a cycle and is a protocol change — and then it belongs with
+cone 2's remaining 3.4 ns in the "needs a design pass" pile rather than in a
+timing round.
+
+### Why it is not being done in this session
+
+`zhao_texture_frag_expand_v2.sv` is in the shell closure, which is not a
+constraint — block fits snapshot. The actual reason is the honest one: **the
+assertion has not been written or run**, and `no_rw_check` on an array whose
+don't-care has not been proven is precisely the kind of change that passes every
+gate and corrupts one fragment in a million. The next session should write the
+assertion first.
