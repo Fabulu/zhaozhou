@@ -58,6 +58,9 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Media closure passed RC 0: exact `noindex, nofollow`; 28/28 fresh, 0 stale/absent; 1,320/1,320 declared media files decoded. After Direction-14 card wording landed, reassembled and re-ran freshness (still 28/28); final local index is 406,835 bytes, SHA-256 `dd8b2ea82b4a930a51e7136147a86478fe08de58ce6d766ed9f7167401a18baa`.
 - An ad-hoc follow-up noindex assertion initially tested whether the substring `index,` existed and therefore tripped on `noindex,`; corrected it immediately to parse exact comma-separated directives. The canonical deploy gate had already used the correct parser and passed.
 - Committed and pushed the complete Pass-16 Upheaval site/media/findings packet as `0a3a5e5`; committed and pushed Owner Direction 14 separately as `29795c0`, preserving a clean logical boundary between the finished pass and the next pass's binding scope.
+- Committed and pushed Zhaozhou's full final4 review, integrity, media and history evidence as `80c6d266`. Both clean feature branches fast-forwarded `origin/main` without divergence: Zhaozhou `80c6d266`, Upheaval `29795c0`.
+- Published the finished Pass 16 through `deploy.ps1 -Project upheaval -Branch main -SkipDecodeSweep`; freshness remained 28/28 and Wrangler succeeded at `https://6d83b033.upheaval.pages.dev`. The decode skip is bounded by the immediately preceding unchanged-byte 1,320/1,320 full sweep.
+- Cache-bypassed production verification passed on both the unique deployment and `https://upheaval.pages.dev`: local index plus all 56 live Pass-16 media files matched SHA-256 and byte length, 57/57 on each host, zero mismatches. Details: `PASS16-PRODUCTION-VERIFY.md`.
 - Continued with one isolated GPT visual-review fork at a time so no batch shares image payload with this main thread.
 
 ---

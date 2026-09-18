@@ -1,7 +1,7 @@
 # Task Log: RUN-20260916-1838 - Manafold Pass 16
 
 **Created:** 2026-09-16 18:38 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260916-1838-manafold-pass16/
 
 ---
@@ -134,7 +134,10 @@ Complete every item in Owner Direction 12 in one integrated Manafold generation:
 - Seven fresh GPT review contexts each inspected four full sheets and wrote evidence before ending, preventing image payload accumulation. Final verdict: **PASS 28/28**; no further Pass-16 correction required.
 - Confirmed historical remainders for Pass 17: Fall hard restart f338→f339 and Trick's long featureless back-facing rotation. Taunt III's suspected density bars do not reproduce in final4.
 - Pass 15 archive is already committed/pushed and 28/28 archive files are SHA-256-identical to the live Pass-15 sources they preserve.
-- Exact-generation WebM encoding started after visual acceptance; freshness, full decode, integration and production-byte verification remain before this run closes.
+- Exact-generation WebM encoding completed 28/28 at RC 0; freshness passed 28/28 and full decode passed 1,320/1,320.
+- Upheaval site/media/findings committed as `0a3a5e5`, Direction 14 as `29795c0`; Zhaozhou closure evidence committed as `80c6d266`. Both repositories fast-forwarded and pushed to `main`.
+- Published production deployment `https://6d83b033.upheaval.pages.dev` with mandatory `-Project upheaval -Branch main`; production alias is `https://upheaval.pages.dev`.
+- Cache-bypassed verification matched local index plus all 56 live Pass-16 media files byte-for-byte on both hosts: 57/57 each, zero mismatches. **Pass 16 complete.**
 
 ---
 
