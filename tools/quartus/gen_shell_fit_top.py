@@ -65,6 +65,17 @@ DEFAULT_MANIFEST = Path("fpga/rtl/generated/zhao_shell_fit_top.manifest.json")
 SHELL_MODULE = "zhao_shell_top"
 FIT_TOP_MODULE = "zhao_shell_fit_top"
 FIT_STIM_MODULE = "zhao_shell_fit_stimulus"
+# The sinks take the prefix too, which they did NOT until 2026-09-18.
+#
+# `--name-prefix` exists, in its own words, "so two generated instruments can
+# coexist in one tree" -- and it renamed only the top and the stimulus. The
+# sinks stayed hardcoded, so the sibling's wrapper declared
+# `zhao_shell_fit_gpu_sink`, `_video_sink` and `_audio_sink` a SECOND time under
+# the identical names. Nothing elaborated both wrappers, so it never fired; any
+# source list holding both would have failed on duplicate module definitions.
+#
+# V1's names do not move, because its prefix already IS `zhao_shell_fit`.
+FIT_SINK_PREFIX = "zhao_shell_fit"
 
 GENERATOR_SCHEMA = 1
 TRAFFIC_PROFILE = "shell-fit-legal-ish-v1"
@@ -378,7 +389,7 @@ def _render_sink(domain: str, capture_bits: int, seed: int, *, expose_capture: b
     chunks = (capture_bits + 31) // 32
     index_width = max(1, (chunks - 1).bit_length())
     lines = [
-        f"module zhao_shell_fit_{domain}_sink (",
+        f"module {FIT_SINK_PREFIX}_{domain}_sink (",
         "  input  logic clk,",
         "  input  logic rst_n,",
         f"  input  logic [{capture_bits - 1}:0] payload_i,",
@@ -1899,7 +1910,7 @@ def _render_top(
                 f".epoch_o(fit_epoch_o[{index}])",
             ]
         )
-        lines.append(f"  zhao_shell_fit_{domain}_sink u_{domain}_sink (")
+        lines.append(f"  {FIT_SINK_PREFIX}_{domain}_sink u_{domain}_sink (")
         for connection_index, connection in enumerate(sink_connections):
             comma = "," if connection_index + 1 < len(sink_connections) else ""
             lines.append(f"    {connection}{comma}")
@@ -1975,17 +1986,17 @@ def _render_top(
                     "role": "stimulus",
                 },
                 {
-                    "module": "zhao_shell_fit_gpu_sink",
+                    "module": f"{FIT_SINK_PREFIX}_gpu_sink",
                     "instance": "u_gpu_sink",
                     "role": "gpu_sink",
                 },
                 {
-                    "module": "zhao_shell_fit_video_sink",
+                    "module": f"{FIT_SINK_PREFIX}_video_sink",
                     "instance": "u_video_sink",
                     "role": "video_sink",
                 },
                 {
-                    "module": "zhao_shell_fit_audio_sink",
+                    "module": f"{FIT_SINK_PREFIX}_audio_sink",
                     "instance": "u_audio_sink",
                     "role": "audio_sink",
                 },
@@ -2190,10 +2201,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     # instrumented; the wrapper and its stimulus take their names from
     # `--name-prefix` so two generated instruments can coexist in one tree
     # without declaring duplicate modules.
-    global SHELL_MODULE, FIT_TOP_MODULE, FIT_STIM_MODULE
+    global SHELL_MODULE, FIT_TOP_MODULE, FIT_STIM_MODULE, FIT_SINK_PREFIX
     SHELL_MODULE = args.module
     FIT_TOP_MODULE = f"{args.name_prefix}_top"
     FIT_STIM_MODULE = f"{args.name_prefix}_stimulus"
+    FIT_SINK_PREFIX = args.name_prefix
 
     repo = args.repo_root.resolve()
     shell = _resolve(repo, args.shell)

@@ -46,6 +46,28 @@ Lint-clean against the sibling's real 97-source closure with `-DSYNTHESIS=1
 `shell_v2_fit_generated_freshness` and `lint_shell_v2_fit_top`, both of which
 were seen to FIRE before being trusted.
 
+AND THE MASKS ARE AN UNVERIFIED CLAIM FOR THE SIBLING
+-----------------------------------------------------
+`shell_fit_smoke.py` is what turns a `dynamic_mask` from a declaration into a
+measurement: it drives the wrapper and checks, for EXACT equality, that the bits
+which toggle are the bits declared. That is the whole reason the generator emits
+full-span masks by default and lets the harness refuse them.
+
+It takes `--check/--write`, `--repo-root` and `--output`, and nothing else. Like
+`run_shell_fit.ps1` it is hardcoded to V1, so **there is no smoke monitor for the
+sibling**, and `shell_v2_fit_generated_freshness` + `lint_shell_v2_fit_top` check
+that the wrapper is current and elaborates -- not that its stimulus moves what it
+says it moves.
+
+This matters most for the one mask that was deliberately narrowed.
+`tri_flat_request_i` declares 73 of 298 bits free because
+`zhao_raster_tile_pipe_v2` refuses the rest; that narrowing is reasoned from the
+consumer's RTL and CHECKED against the emitted literals, but it is not yet
+checked against a run. Until the smoke monitor is parameterised, treat the
+sibling's masks as argued rather than measured -- which is exactly the
+distinction this instrument exists to enforce, so it should not be the one place
+the distinction is skipped.
+
 WHAT IS STILL OWED: NOTHING RUNS IT YET.
 ----------------------------------------
 The wrapper exists and elaborates; no flow fits it. `zhao_shell_fit_top` -- V1's

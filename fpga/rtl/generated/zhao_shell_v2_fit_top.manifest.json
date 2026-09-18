@@ -92,9 +92,9 @@
       "unpacked_dimensions": []
     }
   ],
-  "generated_rtl_sha256": "236533dff187054b299e6ee5938fb1a08c8681c18d0df75dfb795da59898d8dd",
+  "generated_rtl_sha256": "bda46f8e3888a9f2e4c1e7f6e37ff1fa7444737a8adf48ba7795ba5d6a7b8e87",
   "hashes": {
-    "generator": "620828a95e4dca4098590d5127cc0e1195ae70a932e6ca7b1ec1de931585c4a2",
+    "generator": "ccc7f90d7591e00b63b8dd043d91465ea2c898993691b77bd5e0236e349f076b",
     "package_file": "d0c62815f5e45bbb34dc87b56f251434915b557d36975e16aed26c9db7b627bd",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "97c3dd17e8f6996924eb6fc7fef0cbafa58e20360b60133f2d3bc4eb1e47e7a7",
@@ -117,17 +117,17 @@
       },
       {
         "instance": "u_gpu_sink",
-        "module": "zhao_shell_fit_gpu_sink",
+        "module": "shell_v2_gpu_sink",
         "role": "gpu_sink"
       },
       {
         "instance": "u_video_sink",
-        "module": "zhao_shell_fit_video_sink",
+        "module": "shell_v2_video_sink",
         "role": "video_sink"
       },
       {
         "instance": "u_audio_sink",
-        "module": "zhao_shell_fit_audio_sink",
+        "module": "shell_v2_audio_sink",
         "role": "audio_sink"
       }
     ],

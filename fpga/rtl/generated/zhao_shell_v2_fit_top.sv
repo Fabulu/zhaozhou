@@ -2,7 +2,7 @@
 // Generator: tools/quartus/gen_shell_fit_top.py
 // shell-declaration-sha256: 428951a3322ea145228f5051caf787b0d0b74aa3c54d8e4bf19e32352e61d137
 // policy-sha256: 01b77e4e65b96c00c6ec654516a16594296ef8e3e32af95bdd12e9afe47b81a2
-// generator-sha256: 620828a95e4dca4098590d5127cc0e1195ae70a932e6ca7b1ec1de931585c4a2
+// generator-sha256: ccc7f90d7591e00b63b8dd043d91465ea2c898993691b77bd5e0236e349f076b
 // parser-sha256: 97c3dd17e8f6996924eb6fc7fef0cbafa58e20360b60133f2d3bc4eb1e47e7a7
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
@@ -730,7 +730,7 @@ module shell_v2_top
     .phy_dq_i(shell_phy_dq_i)
   );
 
-  zhao_shell_fit_gpu_sink u_gpu_sink (
+  shell_v2_gpu_sink u_gpu_sink (
     .clk(gpu_clk),
     .rst_n(rst_n),
     .payload_i(gpu_payload_c),
@@ -739,7 +739,7 @@ module shell_v2_top
     .epoch_o(fit_epoch_o[0])
   );
 
-  zhao_shell_fit_video_sink u_video_sink (
+  shell_v2_video_sink u_video_sink (
     .clk(vid_clk),
     .rst_n(rst_n),
     .payload_i(video_payload_c),
@@ -747,7 +747,7 @@ module shell_v2_top
     .epoch_o(fit_epoch_o[1])
   );
 
-  zhao_shell_fit_audio_sink u_audio_sink (
+  shell_v2_audio_sink u_audio_sink (
     .clk(audio_clk),
     .rst_n(rst_n),
     .payload_i(audio_payload_c),
@@ -2130,7 +2130,7 @@ module shell_v2_stimulus
   end
 endmodule
 
-module zhao_shell_fit_gpu_sink (
+module shell_v2_gpu_sink (
   input  logic clk,
   input  logic rst_n,
   input  logic [2264:0] payload_i,
@@ -2317,7 +2317,7 @@ module zhao_shell_fit_gpu_sink (
   end
 endmodule
 
-module zhao_shell_fit_video_sink (
+module shell_v2_video_sink (
   input  logic clk,
   input  logic rst_n,
   input  logic [171:0] payload_i,
@@ -2437,7 +2437,7 @@ module zhao_shell_fit_video_sink (
   end
 endmodule
 
-module zhao_shell_fit_audio_sink (
+module shell_v2_audio_sink (
   input  logic clk,
   input  logic rst_n,
   input  logic [65:0] payload_i,

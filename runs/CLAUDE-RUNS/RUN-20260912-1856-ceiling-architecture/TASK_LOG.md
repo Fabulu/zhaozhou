@@ -3020,3 +3020,43 @@ runs 167-182 s and the group around it carries `TIMEOUT 120`. It does not: line
 long comment about a killed gate reading as "this accounting is broken" when all
 it meant was "we did not wait" -- and reaching for that explanation without
 reading the property would have been the comfortable answer.
+
+---
+
+## The sink-name collision, found while correcting my own comment
+
+Registering `shell_v2_top` and `shell_v2_stimulus` in the manifest, I wrote that
+the sibling instrument "reuses the V1 sink helpers". Then I checked, and it does
+not: it DECLARED ITS OWN under V1's exact names --
+
+    V1: zhao_shell_fit_top  zhao_shell_fit_stimulus  zhao_shell_fit_{gpu,video,audio}_sink
+    V2: shell_v2_top        shell_v2_stimulus        zhao_shell_fit_{gpu,video,audio}_sink
+
+-- because `--name-prefix` renamed the top and the stimulus and left the sinks
+hardcoded at three sites. **`--name-prefix`'s own comment says it exists "so two
+generated instruments can coexist in one tree"**, which the sinks defeated.
+
+Latent, not active: nothing elaborated both wrappers, so it never fired. Any
+source list holding both would have failed on duplicate module definitions.
+
+**Fixed rather than left documented.** `FIT_SINK_PREFIX` threaded through the
+declaration, the instantiation and the three manifest hierarchy rows. V1's RTL
+came back with **one line changed -- its own generator-sha256 comment** -- because
+its prefix already IS `zhao_shell_fit`, exactly as predicted. V2 now declares
+`shell_v2_{gpu,video,audio}_sink`.
+
+**And the fix was PROVEN, not asserted:** linting both wrappers in one source
+list now returns 0. Before the change that is the elaboration that would have
+failed, and it is the only check that actually demonstrates the collision is
+gone rather than renamed.
+
+Cost, paid knowingly: the generator's sha256 moved again, so the V1
+wrapper/manifest chain and the bound receipt fixture needed re-pinning for the
+second time today -- four values across three files. I had deferred this fix an
+hour earlier *because* of that cost, and the hook was right that it was work
+worth doing rather than work to write down.
+
+Three more manifest entries for the new sinks; 133 excluded, all five sibling
+modules `probe`. 7/7 on the fast gates in the chain.
+
+And an audit the collision prompted: scanning every `module` declaration under`fpga/rtl` for names defined in more than one file returns **zero**. The sink`pair was the only instance in the tree, and it is gone rather than merely`renamed -- the both-wrappers elaboration proves that and the audit bounds it.
