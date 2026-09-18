@@ -2988,3 +2988,35 @@ worst near -3.9 (the next candidates are `v3own` at -3.901 and `frag_expand` at
 
 **If ALM falls, that is congestion again and not this change being free** --
 recorded in advance so the result cannot be read as whichever is nicer.
+
+---
+
+## The seventh red: my new instrument's modules had no disposition
+
+`texjoin_accounting_retirement` was the one failure I could not attribute, and
+finding its message took three attempts because the output is 1,400 lines of
+`ResourceWarning` and my first two greps matched `errors="replace"` rather than
+a real error. The message:
+
+    FAIL: test_static_manifest_and_generated_top_are_closed_and_fresh
+        self.assertEqual(set(tops) | inside | set(excluded), set(decl))
+    AssertionError: Items in the second set but not the first:
+    'shell_v2_stimulus'
+    'shell_v2_top'
+
+**The manifest requires EVERY declared module to be a top, inside a top, or
+explicitly excluded**, and my generated sibling instrument declared two modules
+that were dispositioned nowhere. The gate caught exactly what it exists for --
+and it is the same discipline as `uncashed_cheques.py`: a module nobody has
+placed is a question nobody has answered.
+
+Registered both as `probe`, mirroring the five V1 `zhao_shell_fit_*` entries
+that sit immediately above them, with a note saying they reuse V1's sink helpers
+rather than declaring their own.
+
+**I also checked whether it was a TIMEOUT rather than a failure**, because it
+runs 167-182 s and the group around it carries `TIMEOUT 120`. It does not: line
+7393 raises texjoin specifically to 600. Worth checking, because this file has a
+long comment about a killed gate reading as "this accounting is broken" when all
+it meant was "we did not wait" -- and reaching for that explanation without
+reading the property would have been the comfortable answer.

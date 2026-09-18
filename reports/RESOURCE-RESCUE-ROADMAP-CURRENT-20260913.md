@@ -20,6 +20,43 @@ subtree.
 No clean connected whole-machine receipt exists. No current design may be
 called below either closure target.
 
+> ### UPDATE 2026-09-18 — the whole machine has numbers for the first time
+>
+> **The sentence above is still true and is no longer the whole story.** There
+> is still no fitted whole-machine receipt. There is now a whole-machine
+> SYNTHESIS: `zhao_prod_top@whole-machine-map-probe`, `map_only`, 1,180 s, whose
+> only previous row in its entire history was `failed:quartus_map.exe` at 59.9 s.
+>
+> ```
+> estimate of ALMs needed   100,709      device  41,910
+> total DSP blocks              123      device     112
+> registers                 105,818
+> block memory bits       1,029,005      device 5,662,720 (18.2%)
+> ```
+>
+> Calibrated against the composed shell's measured map-to-fit error of **+8.6%**
+> (31,456 estimated → 28,959 fitted, DSP exact): **≈92,700 ALM, about 2.2× the
+> device, and 123 DSP is over the physical part rather than merely over the 85
+> objective.** `zhao_prod_top` is exactly the adopted set — 63 adopted tops all
+> present, zero `superseded` modules among its 64 children — so this is the
+> SELECTED machine, not a composition inflated by duplicates.
+>
+> **The single largest line item is the duplicated projector:**
+> `zhao_terrain_project` + `zhao_geom_project` ≈ 15,600 ALM against a 5,000
+> envelope, which is the uncashed cheque CLAUDE.md documents, measured at about
+> 2.6× the "~6,000 ALM" it has been quoted as for weeks.
+>
+> **And the closure authority was unindexed.**
+> `reports/Zhaozhou_conditional_golden_path.md` (owner, 2026-09-14, pinned to
+> this branch by name) defines closure as a 10% fabric reserve, a 37,719 working
+> limit and a 37,500 portfolio across seven groups — *"do not call a 40.5k
+> result closure merely because it is below 41,910."* It is now indexed in both
+> `DOCKET.md` and `OWNER-DOCUMENT-INDEX.md`. Every one of its seven envelopes is
+> currently breached; the total is **2.6×**.
+>
+> Meanwhile the composed sibling shell went **29,044 ALM / 54.12 MHz → 27,601 /
+> 66.03** across three fits in one day, with no uninferred array left in it.
+
 ## Authority and vocabulary
 
 For every item, keep these states separate:
