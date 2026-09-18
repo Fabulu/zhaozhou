@@ -2974,3 +2974,84 @@ the problem.** Grouping by module would have said "texture", "owner" and "tile
 pipe" and stopped. The Data Arrival Path names levels; everything else names
 candidates.
 
+
+---
+
+## THE PER-GROUP ALLOCATION WITH THE PROJECTOR SHARED, AND WHAT IT DOES NOT CLOSE
+
+Now that `@cheque-price` has priced the shared service, the golden path's item
+(1) can be argued with numbers instead of with an estimate. This is arithmetic
+on two measured tables, not a new measurement, and it is labelled as such
+throughout.
+
+### The one substitution
+
+In `zhao_prod_top`'s census the two projectors are separate children:
+
+```
+zhao_geom_project      10,263 ALUT   (its core 10,220, own logic 6,908)
+zhao_terrain_project   14,289 ALUT   (its core 14,179, own logic 6,883)
+```
+
+One shared `zhao_project_service` serves both clients. Its cost is **not the
+sum and not the smaller** — it is roughly the larger plus arbitration, because
+one core must still carry the wider of the two workloads. Taking the terrain
+figure as the survivor and the leaf fit's measured arbitration increment
+(~400 ALM over one wrapper, i.e. ~630 ALUT at the map's 0.634 ratio):
+
+```
+shared, estimated   14,179 + ~630  =  ~14,800 ALUT
+two, measured                        24,552 ALUT
+                                   -------------
+saving, estimated                    ~9,750 ALUT  ~6,180 ALM
+```
+
+**Every figure above except the two census rows is an estimate**, and the error
+runs in both directions: a leaf fit carries virtual-pin boundary logic a
+composed instance does not, so the increment reads high; and the two census
+rows include each wrapper's own arenas and caches, which sharing the core does
+not automatically dedupe.
+
+### The group table, recomputed
+
+| group | ALUT | ≈ALM | envelope | |
+|---|---:|---:|---:|---:|
+| Backend/platform | 49,241 | 31,200 | 14,000 | 2.2× |
+| Terrain/Forge/surfaces | 25,874 | 16,400 | 4,500 | 3.6× |
+| Complete FIELD | 21,565 | 13,700 | 4,500 | 3.0× |
+| **Shared projection and replay** | **~19,900** | **~12,600** | **5,000** | **2.5×** |
+| Geometry and lighting | 18,412 | 11,700 | 5,500 | 2.1× |
+| Post and 2D | 6,102 | 3,900 | 2,000 | 1.9× |
+| Complete particles | 827 | 500 | 2,000 | 0.26× |
+| **TOTAL** | **~141,900** | **~90,000** | **37,500** | **2.4×** |
+
+**The machine goes from 2.6× over to 2.4× over.** That is the largest single
+overrun in the design, corrected, and it moves the total by 6%.
+
+### What that means, said plainly
+
+**Cashing the biggest cheque in the machine does not close the console.** The
+target is 37,500 ALM across the seven groups, with the device at 41,910 and the
+owner's ruling at 30,000. After the projector, the estimate is still **~90,000
+ALM — about 2.4× the working limit and more than twice the device.**
+
+`zhao_geom_wcache` at 5,132 ALUT survives the sharing untouched and is the third
+row of the same story; the shared-projection group stays 2.5× over even with one
+core. Backend/platform at 2.2× is now the largest absolute overrun at ~31,200
+ALM against 14,000.
+
+**So the projector is necessary and nowhere near sufficient**, and the honest
+reading of this table is that closure needs work in every group rather than one
+more big saving. Nothing in this document should be read as saying the ALM
+problem is solved by adoption.
+
+### What is measured and what is not, stated once
+
+* **Measured:** the two census rows (24,552 ALUT), the shared service standalone
+  (6,598 ALM / 33 DSP, clean tree), the composed shell (27,583 ALM at 77.80 MHz),
+  terrain via G8B (8,295 ALM at 102.19 MHz, physical pins).
+* **Estimated:** the shared service's cost *inside the census* and therefore
+  every "≈" in the table above.
+* **Not measured at all:** the machine with the projector actually shared. That
+  needs a selection change and a re-census, and it is the receipt that would
+  turn this section from arithmetic into evidence.
