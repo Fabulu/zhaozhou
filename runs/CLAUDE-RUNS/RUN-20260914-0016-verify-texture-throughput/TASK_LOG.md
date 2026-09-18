@@ -312,3 +312,46 @@ packet past P0 has been started.
   cost K roots for one magnitude. Invariant reuse and the 48x gap are one problem.
 - 549 particle checks, 3,555 lighting checks, 41 group-seq checks, all green.
 - Five blocks + GEOM.LIGHT + POST.COMPOSITE contribute **0 ALM** to any number.
+
+### Duo quarter-plane geometry SETTLED, and the M10K ceiling ruled
+
+**Owner ruling:** *"Using some more M10K is fine, we have enough, particularly if
+it saves ALMs."* Recorded `reports/OWNER-RULING-M10K-CEILINGS-20260918.md`.
+POST.COMPOSITE's <=8 M10K cap yields; 13 (19 double-banked) against 553 is 3.4%.
+The ruling does NOT license spending M10K to remove DSPs, full-frame LUTs, or
+treating logical bits as physical M10Ks — all three still stand.
+
+**The Duo geometry, settled arithmetically** —
+`reports/DUO-QUARTER-PLANE-GEOMETRY-20260918.md`:
+
+| mode | displayed | rendered | quarter(displayed) | quarter(RENDERED) |
+|---|---|---:|---:|---:|
+| Z60 | 384x240 | 384x240 | 5,760 | 5,760 |
+| Storm | 320x240 | 320x240 | 4,800 | 4,800 |
+| Duo | 512x240 | 2x(256x192) | 7,680 | **6,144** |
+
+**Z60 and Storm cannot distinguish the two readings** — displayed IS rendered
+there. Duo is the only mode where they differ and the only one that is wrong,
+which is exactly why it survived.
+
+**The proof is inside the contract's own throughput table:** Duo main = 98,304 =
+2x256x192 = RENDERED pixels; Duo glow = 15,360 = 2x7,680 = DISPLAYED cells. One
+row, two surfaces. Corrected: plane **128x48 = 6,144** (two 64x48 views), glow
+**12,288**, frame cost **110,592** not 113,664 — overstated 2.7%.
+
+`design/blocks.yml` was already right: *"96x60 Z60 / 2x64x48 Duo"*. The ledger
+beat both contracts. Correction banners added to `POST.GATHER.md` and
+`POST.COMPOSITE.md`.
+
+**The benefit is NOT the 1,536 cells** — memory is now explicitly cheap. It is
+that per-view addressing makes "no bleed between Duo views" **structural**: with
+two 64x48 planes there is no address that names the other view, so the clamp
+stops being a comparator that has to be right. Bug class removed for certain;
+ALM saving real but unmeasured.
+
+Corrected one detail from the worker's report: those 48 rows are **black border**
+(`zhao_pkg.sv`, views at y offset 24), not HUD scanlines. Conclusion unchanged —
+border is black and HUD bypasses post — but `spec/video_rules.md` and the owner
+plan §11.3 describe the same 48 rows differently and someone owns reconciling it.
+
+POST.COMPOSITE worker resumed with both rulings.

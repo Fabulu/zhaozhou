@@ -1,5 +1,31 @@
 # Contract — POST.COMPOSITE (Compositor)
 
+> ## CORRECTED 2026-09-18 — the Duo quarter-res plane is 128 x 48, not 128 x 60
+>
+> The plane table below sizes every mode as the quarter of the DISPLAYED canvas.
+> That is correct for Z60 and Storm, whose displayed area IS their rendered area.
+> **Duo is the only mode where the two differ, and it is wrong there.**
+>
+> `zhao_pkg.sv`: Duo displays 512 x 240 but RENDERS two 256 x 192 views at y
+> offset 24; the 48 remaining rows carry no rendered content, and both contracts
+> already forbid a displaced sample from leaving its view — so those cells are
+> provably dead, not spare.
+>
+> | | stated below | correct |
+> |---|---|---|
+> | Duo plane | 128 x 60 = 7,680 | **128 x 48 = 6,144** (two 64 x 48 views) |
+> | Duo glow prep | 15,360 | **12,288** |
+> | Duo frame cost | 113,664 | **110,592** |
+>
+> The proof is inside the throughput table itself: its Duo main pass counts
+> RENDERED pixels (98,304 = 2 x 256 x 192) while its glow pass counts DISPLAYED
+> cells. One row, two surfaces. Z60 and Storm are unaffected.
+>
+> `design/blocks.yml` was already right — its POST.COMPOSITE purpose line says
+> "96x60 Z60 / **2x64x48** Duo".
+>
+> Full working: `reports/DUO-QUARTER-PLANE-GEOMETRY-20260918.md`.
+
 > Ledger: `design/blocks.yml` · owner ZH-070 · phase 11 · maturity SPECIFIED
 
 ## Purpose and exclusions
