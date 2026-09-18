@@ -3149,3 +3149,32 @@ OWED WHEN THE FIT ENDS, in order:
    fit's declaration)
 3. fit zhao_project_service, question already stated: what does the shared
    service cost with BOTH clients driven, against 24,399 ALUT for two?
+
+### 2026-09-18, after @packet-h-satstage, while the service fit runs
+
+@packet-h-satstage: ALM 27,583, DSP 63, M10K 136, gpu_clk 77.80 MHz,
+worst -2.853, TNS -2,276. Prediction 1/2/4/5 correct, 3 and 6 better than
+predicted. Campaign to date: ALM -1,461, gpu_clk +43.8%, TNS -92.3%.
+
+Since then:
+* The row's fmaxMhz now names audio_clk (72.44) because the render path
+  overtook it. Receipts gained fmaxByClock + gatingClock/gatingFmaxMhz derived
+  from the worst setup path; min_fmax_mhz reads the gating one and falls back,
+  so historical rows are judged unchanged. Both parses verified against the
+  real satstage reports first.
+* Eight dead geometry sources removed from zhao_shell_top_v2's closure:
+  97 -> 89. Declaration change only; the next receipt's 27,583 / 63 / 136 is
+  the check.
+* closure_liveness.py committed and registered: 48 of 60 receipts declare only
+  what they elaborate. Its first version was wrong in the accusing direction
+  and was corrected before the finding was relied on.
+* zhao_project_service fit RUNNING as @cheque-price, prediction recorded in
+  reports/PREDICTION-project-service.md.
+
+NEXT, in order:
+1. read @cheque-price against its prediction
+2. compose geometry onto the service's client A (no adapter needed --
+   zhao_vertex_arena's fill_ready_o is constant 1)
+3. then the selection change in prod_manifest.yml, then re-census
+4. texture is the whole remaining render band: cache_pipe_v2 c2_tag -> valid_r
+   and v3own cq_own_q -> v3rq h_d_q/s_d_q/lcnt_q, 11.9-12.7 ns against 10.000
