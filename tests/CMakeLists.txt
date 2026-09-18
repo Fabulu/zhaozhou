@@ -12399,3 +12399,58 @@ add_test(NAME lint_geom_light
 set_tests_properties(lint_geom_light PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+# ===========================================================================
+# POST.COMPOSITE -- the compositor, one bounded line stream (ruling R6).
+#
+# THIS BENCH IS NOT A DIFFERENTIAL, AND THE REGISTRATION SAYS SO BECAUSE THE
+# LEDGER DOES NOT. design/blocks.yml declares reference_model
+# zref::PostComposite; tools/budget/refmodel_liveness.py lists that symbol
+# among eleven PHANTOM citations -- it has never been written. So
+# post_composite_directed checks SELF-CONSISTENCY against contract prose plus
+# hand-computed expectations, and its header says so in the first paragraph.
+# A future reader must not quote it as "RTL matches the oracle".
+#
+# The weight-bearing half is structural and owes nothing to the model: every
+# mandatory stage is shown to do positive work AND to change the picture when
+# muted (completion plan 11.5); the bench is shown able to tell grade-after-
+# bloom from grade-before-bloom BEFORE it asserts which one ships; world, glow
+# and ink are shown to move by the SAME displacement, which is the case that
+# would read as a printing error if it broke.
+add_executable(test_post_composite_directed compositor/post_composite_directed.cpp)
+target_link_libraries(test_post_composite_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_post_composite_directed
+  PREFIX Vzhao_post_composite
+  TOP_MODULE zhao_post_composite
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_composite.sv)
+add_test(NAME post_composite_directed COMMAND test_post_composite_directed)
+set_tests_properties(post_composite_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ...and the positive control for the one counter no legal stimulus can move.
+#
+# ring_hazard_o watches for a displaced sample reaching a ring column the write
+# pointer has already passed. That state is unreachable while the output delay
+# queue is correct, so "it can fire" would stay an argument forever.
+#
+# tests/mutants/zhao_post_composite_ring_hazard_mutant.sv is a WRAPPER, not a
+# copy -- it instantiates the production module with LAG_PX = 0 and nothing
+# else, so it cannot go stale the way the thirteen combiner copies did. If
+# production gains or loses a port the wrapper's `.*` fails to elaborate, which
+# is a LOUD failure rather than a control that quietly keeps passing.
+#
+# THIS TEST PASSES WHEN THE COUNTER FIRES. Inverse polarity, deliberately: it
+# is evidence about the instrument, not about the design. It doubles as the
+# only proof that the nine-pixel delay queue is load-bearing.
+add_executable(test_post_composite_ring_hazard_mutant
+  mutants/post_composite_ring_hazard_mutant.cpp)
+target_link_libraries(test_post_composite_ring_hazard_mutant PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_post_composite_ring_hazard_mutant PRIVATE
+  ${CMAKE_SOURCE_DIR}/tests/compositor)
+verilate(test_post_composite_ring_hazard_mutant
+  PREFIX Vzhao_post_composite_ring_hazard_mutant
+  TOP_MODULE zhao_post_composite_ring_hazard_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_post_composite_ring_hazard_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_composite.sv)
+add_test(NAME post_composite_ring_hazard_mutant
+         COMMAND test_post_composite_ring_hazard_mutant)
+set_tests_properties(post_composite_ring_hazard_mutant PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 600)
