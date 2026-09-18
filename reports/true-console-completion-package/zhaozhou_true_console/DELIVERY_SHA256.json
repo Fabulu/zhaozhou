@@ -1,0 +1,16 @@
+{
+  "README.txt": "b882d6b10f132d4ab639cb6f6d18b4b2eecbc34110566f5c7e912afac8128348",
+  "Zhaozhou_True_Console_Completion_Plan_2026-09-18.txt": "664142ba9db4b0b5eda27f782182be3ff2d88e87a9b5adc5a670c2d674c447cb",
+  "evidence/completion-seed-check.txt": "8bfefaeb25d9964cb67a907bdbe42b219426e6b08555e9241cd5e017c4ccef00",
+  "evidence/python-tests.txt": "37219518d9daf0b441b13a1078850a08bbe196f452aad6d144fa67f1193e1010",
+  "evidence/rtl-test-status.txt": "9c6babcaa9d85fb3e1378f47f6dcac52a253e2685b831150536716ca9c91e5d2",
+  "evidence/rtl-work/upload_vectors.txt": "866a98ceca0db34ac58aa7ddb77e2e71e09e6cbc0e5c5335212c02832721f938",
+  "examples/completion_seed.json": "77c5b0663acfc7d4ab6ab1f554696849ee2541dce89a404d0b683b9ba8f77c00",
+  "implementation/closure_support.py": "60a722e8fd3017e263b15b722556024998bee27cec0ddce4fa04e95836e184d0",
+  "implementation/zhao_cpl_ram_fifo.sv": "293eb3eb13b8583ea58eb56513fc2a25df7a6129effed52cb79d49817616d6b5",
+  "implementation/zhao_cpl_upload_guard.sv": "6c06bf66f9dcbe6384246ee360ce7a7a8313e7f3a6d693e174b2b03cac8c308b",
+  "sources.json": "5ed29c57ad2f6e630fc58a3f5493e62ce4088a49f099989fc223d24d2ee7f349",
+  "tests/rtl_candidate_tb.sv": "b03517c12f09b7a584d2105eb531b0fc8dfb9cf0b045f324688ea5f66890f584",
+  "tests/run_rtl_tests.py": "62eb5eafa459ae4fe4360e1e6e49ed26c192dc2a134884009757b2ba7b647c02",
+  "tests/test_closure_support.py": "4951803782aae54974a97c23e619ab5894591cbe76ebf97bde4051af53a112fe"
+}

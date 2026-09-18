@@ -153,3 +153,32 @@ and that every saving in it is UNMEASURED.
 optimisation journey AFTER the console is built and the true total ALM is known.
 Recorded here because this index exists precisely so that "unread" and
 "deliberately deferred" stop looking identical. Full entry in `reports/DOCKET.md`.
+
+## Zhaozhou_True_Console_Completion_Plan_2026-09-18.txt — READ, P0 EXECUTED
+
+`reports/Zhaozhou_True_Console_Completion_Plan_2026-09-18.txt`, 3,499 lines,
+sha256 `664142ba9db4b0b5eda27f782182be3ff2d88e87a9b5adc5a670c2d674c447cb`.
+Companion package `reports/true-console-completion-package/` (zip sha256
+`23e7efceffbf9f6d48c2221feb7011c786c19c7c6b05a1f8ed9a7649307c6a0c`, extracted).
+
+The rearchitecture for the missing components: 38 capability checkpoints
+(C01–C38), subsystem architectures, and P0–P9 implementation packets with
+dependencies, acceptance tests and rollback conditions.
+
+**DISPOSITION: READ AND ACTED ON.**
+
+* **P0 delivered** — `reports/P0-STARTING-STATE-CHECKPOINT-20260918.md`.
+* **Verified rather than believed:** `DELIVERY_SHA256.json` 14/14 files match;
+  its 25 Python tests re-run here, `Ran 25 tests — OK`. Its two RTL candidates
+  are declared unverified by the author and remain unverified here.
+* **It corrects this repository, and it is right.** `zhao_prod_top` must stay
+  labelled `RESOURCE_CENSUS_DISCONNECTED` — so the measurement this session
+  called "the whole console fit" is a **resource census**, not a console fit.
+  Two new tops are required: `zhao_console_core`, `zhao_console_board`.
+* It also corrects two classifications in `MISSING-ORGAN-REGISTER-20260918.md`:
+  frozen FIELD v2 is not FIELD.SEQ.CORE completion, and deferred GEOM.WARP is
+  not a prerequisite for feeding ordinary geometry into the shared projector.
+  The second was independently reached here the same afternoon.
+* **Sections relayed to workers in flight:** §7 (lighting) and §11 (post).
+* **OPEN:** P1–P9. P5 explicitly requires reconciling the concurrent particle
+  work rather than rebuilding it.

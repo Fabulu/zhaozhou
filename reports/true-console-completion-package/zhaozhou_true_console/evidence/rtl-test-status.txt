@@ -1,0 +1,3 @@
+NOT RUN: iverilog and vvp are required. RTL remains unverified.
+Generated 4098 deterministic vectors; vector generation is not RTL verification.
+RTL_TEST_EXIT_CODE=2

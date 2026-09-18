@@ -1,0 +1,209 @@
+[
+  {
+    "id": "R01",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md"
+  },
+  {
+    "id": "R02",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/V1-RELEASE-DEFINITION.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/V1-RELEASE-DEFINITION.md"
+  },
+  {
+    "id": "R03",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/prod_manifest.yml",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/prod_manifest.yml"
+  },
+  {
+    "id": "R03",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "fpga/rtl/prod/zhao_prod_top.sv",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/prod/zhao_prod_top.sv"
+  },
+  {
+    "id": "R04",
+    "revision": "155c141f5b922a62b9331c048352e46c3f67ad04",
+    "path": "reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md"
+  },
+  {
+    "id": "R05",
+    "revision": "155c141f5b922a62b9331c048352e46c3f67ad04",
+    "path": "reports/MISSING-ORGAN-REGISTER-20260918.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/reports/MISSING-ORGAN-REGISTER-20260918.md"
+  },
+  {
+    "id": "R05",
+    "revision": "155c141f5b922a62b9331c048352e46c3f67ad04",
+    "path": "fpga/rtl/particles/zhao_part_collide.sv",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/fpga/rtl/particles/zhao_part_collide.sv"
+  },
+  {
+    "id": "R06",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "reports/Zhaozhou_conditional_golden_path.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reports/Zhaozhou_conditional_golden_path.md"
+  },
+  {
+    "id": "R07",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "spec/qformats.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/spec/qformats.md"
+  },
+  {
+    "id": "R07",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "spec/commands.zidl",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/spec/commands.zidl"
+  },
+  {
+    "id": "R08",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/FIELD.SEQ.CORE.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/FIELD.SEQ.CORE.md"
+  },
+  {
+    "id": "R09",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/FIELD.SEQ.EARTH.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/FIELD.SEQ.EARTH.md"
+  },
+  {
+    "id": "R10",
+    "revision": "155c141f5b922a62b9331c048352e46c3f67ad04",
+    "path": "fpga/rtl/geometry/zhao_geom_proj_lane.sv",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/fpga/rtl/geometry/zhao_geom_proj_lane.sv"
+  },
+  {
+    "id": "R11",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/GEOM.LIGHT.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/GEOM.LIGHT.md"
+  },
+  {
+    "id": "R12",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/MEM.UPLOAD.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/MEM.UPLOAD.md"
+  },
+  {
+    "id": "R13",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/MATERIAL.RESOLVE.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/MATERIAL.RESOLVE.md"
+  },
+  {
+    "id": "R14",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "reference/include/zref/zref_mem_upload.hpp",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reference/include/zref/zref_mem_upload.hpp"
+  },
+  {
+    "id": "R15",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "reference/include/zref/zref_material_resolve.hpp",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reference/include/zref/zref_material_resolve.hpp"
+  },
+  {
+    "id": "R16",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/GEOM.LOOM.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/GEOM.LOOM.md"
+  },
+  {
+    "id": "R16",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "spec/creature_rules.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/spec/creature_rules.md"
+  },
+  {
+    "id": "R17",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "fpga/rtl/synth/zhao_probe_v3_full.sv",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/synth/zhao_probe_v3_full.sv"
+  },
+  {
+    "id": "R18",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "fpga/rtl/terrain/zhao_terrain_pipe.sv",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/terrain/zhao_terrain_pipe.sv"
+  },
+  {
+    "id": "R19",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/PART.STATE.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.STATE.md"
+  },
+  {
+    "id": "R19",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/PART.UPDATE.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.UPDATE.md"
+  },
+  {
+    "id": "R19",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/PART.COLLIDE.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.COLLIDE.md"
+  },
+  {
+    "id": "R19",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/PART.SPAWN.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.SPAWN.md"
+  },
+  {
+    "id": "R20",
+    "revision": "155c141f5b922a62b9331c048352e46c3f67ad04",
+    "path": "reports/SELECTION-SWAP-APPLIED-DRYRUN-20260918.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/reports/SELECTION-SWAP-APPLIED-DRYRUN-20260918.md"
+  },
+  {
+    "id": "R21",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/FORGE.SHADOW.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/FORGE.SHADOW.md"
+  },
+  {
+    "id": "R22",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/contracts/POST.COMPOSITE.md",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/POST.COMPOSITE.md"
+  },
+  {
+    "id": "R23",
+    "revision": "3e0287465887d64bc07e8f3ab8d878d8987ec412",
+    "path": "fpga/Zhaozhou.sv",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/3e0287465887d64bc07e8f3ab8d878d8987ec412/fpga/Zhaozhou.sv"
+  },
+  {
+    "id": "R24",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/budgets/workloads.yml",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/budgets/workloads.yml"
+  },
+  {
+    "id": "R24",
+    "revision": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+    "path": "design/external_inputs.yml",
+    "url": "https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/external_inputs.yml"
+  },
+  {
+    "id": "V01",
+    "url": "https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations",
+    "title": "M10K mixed-width configurations"
+  },
+  {
+    "id": "V02",
+    "url": "https://docs.altera.com/r/docs/683323/current",
+    "title": "Quartus Prime Standard Design Recommendations"
+  },
+  {
+    "id": "V03",
+    "url": "https://docs.altera.com/r/docs/683145/21.3/an-584-timing-closure-methodology-for-advanced-fpga-designs/follow-recommended-coding-styles",
+    "title": "AN584 recommended coding styles"
+  }
+]

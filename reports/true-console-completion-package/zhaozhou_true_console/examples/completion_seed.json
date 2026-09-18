@@ -1,0 +1,455 @@
+{
+  "schema": 1,
+  "inspected_head": "155c141f5b922a62b9331c048352e46c3f67ad04",
+  "starting_audit": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+  "owners": {
+    "backend": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 14000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "projection": {
+      "kind": "rtl",
+      "design_to_cost_alm_objective": 5000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "geometry": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 5500,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "terrain_forge": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 4500,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "field": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 4500,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "particles": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 2000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "post_2d": {
+      "kind": "rtl",
+      "design_to_cost_alm_objective": 2000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "runtime": {
+      "kind": "software",
+      "design_to_cost_alm_objective": null,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    }
+  },
+  "capabilities": [
+    {
+      "id": "C01",
+      "title": "Frame command execution",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "backend",
+      "implementation": [
+        "fpga/rtl/common/zhao_shell_top_v2.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C02",
+      "title": "Memory guard/transport/retirement",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C03",
+      "title": "Immutable upload transaction",
+      "policy": "required",
+      "state": "absent",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C04",
+      "title": "Residency pins and cache generation",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C05",
+      "title": "Material resolver",
+      "policy": "required",
+      "state": "absent",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C06",
+      "title": "Geometry request producer",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C07",
+      "title": "Shared projector and arenas",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "projection",
+      "implementation": [
+        "fpga/rtl/geometry/zhao_geom_proj_lane.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C08",
+      "title": "Pose/palette orchestration",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C09",
+      "title": "Normals and selected transform composition",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C10",
+      "title": "RGB/multilight/emission",
+      "policy": "required",
+      "state": "absent",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C11",
+      "title": "Full selected attribute profiles",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C12",
+      "title": "Canonical depth and perspective",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "projection",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C13",
+      "title": "Complete raster material/toon/fog path",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C14",
+      "title": "Frame terminal and scanout ownership",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C15",
+      "title": "FIELD v3 production executor",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "field",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C16",
+      "title": "FIELD admitted profile adapters",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "field",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C17",
+      "title": "Terrain live world composition",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C18",
+      "title": "Terrain normal detail/projection/replay",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "terrain_forge",
+      "implementation": [
+        "fpga/rtl/terrain/zhao_terrain_pipe.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C19",
+      "title": "Terrain bake/mips/persistence",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C20",
+      "title": "Particle state/commit",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C21",
+      "title": "Particle update",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C22",
+      "title": "Particle collision",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "particles",
+      "implementation": [
+        "fpga/rtl/particles/zhao_part_collide.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C23",
+      "title": "Particle spawn/identity",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C24",
+      "title": "Particle draw numeric migration",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C25",
+      "title": "Forge evaluator and lightning seam",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C26",
+      "title": "Contact shadows",
+      "policy": "required",
+      "state": "absent",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C27",
+      "title": "Liquid material path",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C28",
+      "title": "Selected sky/effect producers",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C29",
+      "title": "Full post compositor",
+      "policy": "required",
+      "state": "absent",
+      "owner": "post_2d",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C30",
+      "title": "2D/HUD/Duo composition",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "post_2d",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C31",
+      "title": "Measure/histogram/admission",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C32",
+      "title": "Required diagnostics/capture",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C33",
+      "title": "Controller input and rumble",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C34",
+      "title": "Audio runtime/output",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C35",
+      "title": "CPU runtime/streaming/submit",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "runtime",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C36",
+      "title": "Selected board/platform",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C37",
+      "title": "Generated ABI/assets/Form/replay",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "runtime",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C38",
+      "title": "Optional/deferred reconciliation",
+      "policy": "needs_reconciliation",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    }
+  ],
+  "release_evidence": {},
+  "note": "All costs unknown except design-to-cost objectives. Does not assert that every unknown capability is unbuilt."
+}

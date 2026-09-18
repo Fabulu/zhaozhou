@@ -1,0 +1,30 @@
+test_extremes (test_closure_support.CodecTests.test_extremes) ... ok
+test_layout_covers_exactly_128_bits (test_closure_support.CodecTests.test_layout_covers_exactly_128_bits) ... ok
+test_random_roundtrips (test_closure_support.CodecTests.test_random_roundtrips) ... ok
+test_reserved_and_overflow_refused (test_closure_support.CodecTests.test_reserved_and_overflow_refused) ... ok
+test_zero_and_unit_radius (test_closure_support.CodecTests.test_zero_and_unit_radius) ... ok
+test_16_valid_17_refused (test_closure_support.ParticleAdmissionTests.test_16_valid_17_refused) ... ok
+test_order_violation_refused (test_closure_support.ParticleAdmissionTests.test_order_violation_refused) ... ok
+test_replay_and_population_tier (test_closure_support.ParticleAdmissionTests.test_replay_and_population_tier) ... ok
+test_survivors_cannot_be_evicted (test_closure_support.ParticleAdmissionTests.test_survivors_cannot_be_evicted) ... ok
+test_survivors_precede_children (test_closure_support.ParticleAdmissionTests.test_survivors_precede_children) ... ok
+test_whole_group_capacity_and_strict_prefix (test_closure_support.ParticleAdmissionTests.test_whole_group_capacity_and_strict_prefix) ... ok
+test_duplicate_capability_refused (test_closure_support.PlanningTests.test_duplicate_capability_refused) ... ok
+test_file_existence_and_digest_changes (test_closure_support.PlanningTests.test_file_existence_and_digest_changes) ... ok
+test_no_speculative_area_as_fit (test_closure_support.PlanningTests.test_no_speculative_area_as_fit) ... ok
+test_nonempty_ram_validation (test_closure_support.PlanningTests.test_nonempty_ram_validation) ... ok
+test_provider_bounds_not_certificate (test_closure_support.PlanningTests.test_provider_bounds_not_certificate) ... ok
+test_ram_width_and_ports (test_closure_support.PlanningTests.test_ram_width_and_ports) ... ok
+test_unknown_scope_not_zero (test_closure_support.PlanningTests.test_unknown_scope_not_zero) ... ok
+test_abort_quarantines_until_drain (test_closure_support.UploadTests.test_abort_quarantines_until_drain) ... ok
+test_duplicate_foreign_and_unissued_credit (test_closure_support.UploadTests.test_duplicate_foreign_and_unissued_credit) ... ok
+test_fresh_slot_required (test_closure_support.UploadTests.test_fresh_slot_required) ... ok
+test_random_retirement_permutations (test_closure_support.UploadTests.test_random_retirement_permutations) ... ok
+test_stale_epoch_blocks_publish (test_closure_support.UploadTests.test_stale_epoch_blocks_publish) ... ok
+test_verdict_order_and_boundaries (test_closure_support.UploadTests.test_verdict_order_and_boundaries) ... ok
+test_waits_for_retirement (test_closure_support.UploadTests.test_waits_for_retirement) ... ok
+
+----------------------------------------------------------------------
+Ran 25 tests in 0.390s
+
+OK

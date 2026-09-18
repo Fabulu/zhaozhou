@@ -1,0 +1,3499 @@
+ZHAOZHOU: COMPLETE THE ACTUAL CONSOLE
+Missing-function architecture, resource-conscious implementation, integration,
+and honest measurement plan
+18 September 2026
+
+PRIMARY DELIVERABLE: THIS HANDOFF IS SELF-CONTAINED.
+Supporting source files and tests are included at the end and in the companion
+ZIP. Nothing in this delivery was committed to the repository. The running
+agent's working tree, untracked files and local Quartus processes were not
+accessible. Do not overwrite concurrent work to apply this plan.
+
+READ THIS FIRST
+==============
+The objective is a complete, connected implementation of the selected console,
+with all mandatory functions and the real platform boundary represented. Then
+measure that exact implementation, including a documented failure to fit if it
+is too large. A complete collection of isolated leaf blocks is not that machine.
+A passing image produced by software standing in for missing FPGA functions is
+not evidence that those FPGA functions exist.
+
+Finish functionality economically. Do not manufacture an intentionally bloated
+baseline by cloning arithmetic that the architecture already plans to share.
+Do not postpone composition until every local area or timing target is perfect.
+Do not turn speculative optimization research into prerequisites for completion.
+
+The completion sequence is:
+  recover existing work -> freeze the required capability set -> reuse/adapt the
+  real implementations -> connect the functional core -> exercise all mandatory
+  paths -> synthesize that core and its platform wrapper -> retain the complete
+  resource/failure report -> optimize the measured selected machine.
+
+A successful target-device placement is NOT a prerequisite for completing RTL
+or obtaining useful synthesis evidence. Conversely, a synthesis estimate is NOT
+a fitted number. Approximately 92,700, 96,200 or 120,000 must not be restated as
+a measured final console size without an applicable report and exact scope.
+
+SCOPE AND VERIFIED BASELINE
+===========================
+The broad contract/source audit began at:
+  ced8752da9c1bac79bc3ef436f64a33bd6cac22c
+The live hardware head was refreshed for this handoff to:
+  155c141f5b922a62b9331c048352e46c3f67ad04
+Branch:
+  claude/ceiling-architecture-20260912
+The latter is 62 commits ahead of the former. Its commit timestamp is
+18 September 2026, 18:52:25 CEST. This is a source revision timestamp, not proof
+of a running process or a push timestamp. Implementation must rebase the FACTS
+in this handoff against the agent's newer local/remote tree, not overwrite it.
+
+Newly committed work includes:
+  * zhao_geom_proj_lane.sv: a geometry-side projected-result/arena adapter.
+    It does not by itself implement the geometry request producer.
+  * zhao_part_collide.sv: a candidate collision implementation. The commit
+    reports 180 directed checks and clean Verilator lint; no Quartus measurement
+    and no independent ParticleCollide oracle. Preserve and qualify it, rather
+    than create a competing collision unit.
+  * PART.STATE directed tests and a mutant, but the comparison inspected here
+    did not contain a committed production zhao_part_state.sv. Inspect the local
+    tree before starting any particle-state implementation.
+  * later Packet-H timing receipts, including a recorded 77.80-MHz gpu_clk result
+    at satstage. Earlier messages calling the lane dead or permanently at
+    66.03 MHz are obsolete. Do not use a generic minimum fmaxMhz field across
+    unrelated clock domains as the GPU frequency.
+  * a selection-swap dry run and a new missing-organ register.
+
+Important: the current roadmap explicitly records that eight geometry files
+were in an older source closure but elaborated nowhere in the shell. A file in
+a .qsf or source digest is not an instantiated engine. The shell's geometry
+cost must NOT be inferred from the length of its source list. [R03,R04,R05]
+
+The missing-organ register is useful INPUT, not sufficient authority. It calls
+FIELD v2 a resolution of FIELD.SEQ.CORE and lists GEOM.WARP as a missing required
+producer. The selected FIELD contract freezes v2 as a reference/fallback and
+requires v3 production work; the release definition explicitly defers GEOM.WARP.
+An ordinary static/skinned geometry producer can feed projector client A without
+implementing a deferred warp feature. This plan corrects those classifications.
+[R02,R05,R08,R09,R10]
+
+Nothing here claims a complete local checkout build, Verilator run, Quartus run,
+FPGA timing result or board measurement. The supplied Python support code WAS
+executed: its exact test output is in the package. The two new small RTL
+candidates were not HDL-simulated or synthesized here; their executable testbench
+is supplied for the implementation environment. They are optional starting
+points, not production-certified replacements.
+
+CONTENTS
+========
+1. Non-negotiable behavior and what completion means
+2. A capability ledger that cannot hide missing organs
+3. Selected architecture and physical ownership
+4. Common contracts: handles, memory, backpressure and publication
+5. Upload, material resolution and coherent residency
+6. Geometry, shared projection, animation and attributes
+7. Lighting, terrain normal detail, emission and fog
+8. Complete FIELD v3 and terrain maintenance
+9. Particle state/update/collision/spawn as one economical subsystem
+10. Forge, shadows, liquids, sky and remaining producers
+11. Post-processing, 2D, measurement and diagnostics
+12. Runtime, board, clocks, reset, input and audio
+13. Implementation packets, integration order and acceptance
+14. Measurement and optimization without another false total
+15. Supplied implementations, tests, limitations and invocation
+16. Source register and unresolved decisions
+Appendix: full supporting source code and test records
+
+
+1. NON-NEGOTIABLE BEHAVIOR AND THE MEANING OF COMPLETE
+=====================================================
+1.1 Preserve the selected visible machine
+----------------------------------------
+Keep deterministic 60-Hz simulation/presentation, the existing three presentation
+modes, two-view Duo, shared simulation between the views, deformable persistent
+terrain, FIELD, ordinary correctly clipped/depth-tested/textured geometry,
+creature animation and lighting, bounded particles/spells, fog, post and 2D,
+audio and controller input. Preserve the accepted fixed-point, rounding,
+saturation, ordering, fault and replay laws. [R01,R07]
+
+Do not quietly select 30 fps, halve FIELD population, remove emission, replace
+terrain normal detail with ordinary lighting, or use a fixed flat color to make
+a compile green. Those would be explicit product decisions, not completion.
+A smaller implementation preserving all required behavior is welcome; silently
+lowered admitted workload is not.
+
+Do not add deferred features back in merely because a contract filename exists.
+GEOM.WARP is deferred in the inspected release definition; generic tangent-space
+normal maps are refused for v1. Terrain's separately accepted normal-detail law
+must not be deleted on that basis. Optional POST.ECHO needs an explicit current
+selection, not automatic inclusion or omission. [R02]
+
+The existing reserve objectives remain visible: provisional physical capacity
+41,910 ALMs / 112 DSPs / 553 M10Ks; the Golden Path's 37,500-ALM design-to-cost
+portfolio and 37,719 working limit protect roughly 10% fabric reserve. These are
+constraints to work toward, NOT measured predictions. Verify actual board part,
+speed grade and memory arrangement independently. [R06]
+
+1.2 Separate four verdicts
+--------------------------
+FUNCTION-COMPLETE:
+  Each selected required operation has a real executing path from its input
+  source to an observable endpoint; no mandatory response comes from an oracle,
+  a constant, an LFSR, a rival/probe or a testbench replacement.
+
+SCOPE-COMPLETE MEASUREMENT:
+  The exact selected implementation and platform files elaborate and synthesize;
+  the source/configuration identity, hierarchy and all resource categories are
+  retained. A failed over-capacity fit is an honest outcome, not a missing row.
+
+REAL-TIME-COMPLETE:
+  Required workload cases finish in the actual allowed phases, with resource,
+  memory bandwidth and practical timing reserve, using the same configuration.
+  A 60-Hz scanout repeatedly displaying old frames is not this verdict.
+
+BOARD-PROVEN:
+  The selected top loads on the actual device and passes physical memory,
+  clock/reset, input/audio/video, replay and stress tests.
+
+A design may be function-complete and scope-complete while failing capacity or
+real-time. That is a valuable, precisely labelled checkpoint, not a release.
+The goal of this request is to reach the first honest complete specimen and
+expose all deficits, not manufacture a premature release pass.
+
+1.3 Define the two useful tops and keep the old census separate
+-------------------------------------------------------------
+Use proposed names only if equivalent tops do not already exist:
+  zhao_console_core: the connected machine, with platform transaction interfaces.
+  zhao_console_board: the selected real FPGA/board framework around that core.
+
+The simulation harness supplies external clocks, input events, memory behavior
+and host packets. It does NOT supply missing lighting, FIELD results, particle
+updates, prepared triangles or fake material records in an end-to-end test.
+
+Keep zhao_prod_top as a historical/component resource instrument, labelled
+RESOURCE_CENSUS_DISCONNECTED. Do not rename its status to console merely because
+more modules are listed. Its independent stimulus inhibits some merging and does
+not prove arbitrary internal capacity survives synthesis or all states are live.
+The real hierarchy is the authority for functional completion. [R03,R04]
+
+
+2. A CAPABILITY LEDGER THAT CANNOT HIDE MISSING ORGANS
+====================================================
+2.1 One logical obligation is not necessarily one physical module
+---------------------------------------------------------------
+Several capability contracts can map to one physical owner. FIELD profiles are
+adapters around one semantic engine, not five private executors. Terrain and
+geometry can share the light-term arithmetic and the projection service.
+Liquids and shadows should feed existing geometry/material endpoints.
+
+Conversely, a single module name does not establish the entire capability. A
+shared light-term leaf is not the multi-light RGB producer. A topology generator
+is not a vertex evaluator. An arena return adapter is not the geometry request
+producer. A program cache is not an executable FIELD pipeline.
+
+Maintain two linked views, extending existing tooling rather than replacing it:
+  CAPABILITIES: required behaviors, producer -> owner -> consumer, tests, scope.
+  PHYSICAL OWNERS: actual instantiated engines/memories, parameters, costs,
+                   schedule and whether any other row charges the same instance.
+
+Each capability row must contain:
+  immutable ID; current required/selected-optional/deferred status and authority;
+  source implementation paths and exact selected parameters;
+  one physical/software owner; real producer and consumer;
+  reference symbol plus existence/compiled-call evidence;
+  functional evidence; negative control; boundary/lifetime tests;
+  current integration, synthesis, timing, workload and board evidence SEPARATELY;
+  unbuilt/unverified work; target checkpoint; explicit cost UNKNOWN when unpriced.
+
+A row cannot be declared absent only by a filename heuristic. A row cannot be
+called implemented only because a similarly named historical block exists.
+An external input must name its real provider: "asset memory" is not a complete
+provider until an actual fetch path and arbitration route exist.
+
+2.2 Starting capability inventory
+---------------------------------
+This is the completion checklist, not a new claim that every row is absent.
+State descriptions reflect the inspected evidence; local/newer work wins after
+its source and test are read. Attach every additional mandatory ledger/ABI
+capability to one of these owners or add an explicit row before declaring scope
+closed. Unknown entries block completion; none are silently zero-priced.
+
+ID       Capability / current boundary / completion action
+C01      Frame packets, decoder and scheduler. Existing shell work; prove real
+         semantic commands dispatch through connected clients and finish.
+C02      Memory guard, local SDRAM arbitration/control, HPS bridge. Reuse existing
+         units; add the legitimate upload/particle clients, retirement and epochs.
+C03      Immutable upload. No production mover established by this audit. Build
+         one transactional mover; do not copy FRAMEBLIT for each resource family.
+C04      Residency, frame pins and generation coherence. Existing parts; make
+         their ownership chain complete for every resource and cache.
+C05      Material resolution. Oracle and 32-byte ABI record exist; implement the
+         real lookup/cache/miss path and bind it to the current texture ABI.
+C06      Static/skinned geometry request producer. Existing fetch/decode/skin
+         pieces plus new proj_lane; connect requests and sidecars to client A.
+C07      One shared projector, replay and arenas. Existing subsystem; compose
+         both real clients, selected parameters and completion-safe result sinks.
+C08      Pose orchestration, clip residency and palettes. Existing candidates;
+         complete production cache key, decoder, palette supply and ownership.
+C09      Rigid/skinned normals and selected Transform Loom. Reuse normal units;
+         implement missing transform composition without duplicating projector.
+C10      RGB/multi-light/emission producer. Shared scalar light term exists;
+         finish the independent-light composition and real throughput schedule.
+C11      Clipping, binner and complete attribute transport. Preserve ALL selected
+         RGB/fog/emission/AUX profiles, not only the three-plane texture probe.
+C12      Canonical depth and perspective UV. Adopt the selected profile producer
+         consistently; no mixing old Q16.16 depth and canonical invw24 by accident.
+C13      Raster, texture/material, toon, fog, depth/blend and resolve. Reuse current
+         connected pieces; connect fog after final material source color.
+C14      Renderer framebuffer lease/terminal return and scanout. Complete J seams,
+         abort-release behavior and CDC; no tied-off production terminal producer.
+C15      FIELD v3 production executor and all admitted services. v2 is NOT closure;
+         promote/compose the real v3 machinery and eliminate test rivals.
+C16      FIELD profile adapters: Earth, Flow, Formation, Stamp, any currently
+         selected Warp profile. One engine; explicit admitted plans and outputs.
+C17      Terrain world stream/load/residency/deformation/velocity/material/nav.
+         Connect full page/cache/walker/reducer chain and command-order laws.
+C18      Terrain normals, normal detail, canonical depth, shared projection and
+         replay. Resolve the world-normal producer omitted from the G8B slice.
+C19      Terrain bake/mips/writeback/persistent eviction and reload. Reuse existing
+         storage-conscious candidates; preserve durable surface identity.
+C20      Particle state, compaction and ping-pong publication. Concurrent work
+         exists; reconcile first and implement the full transaction, not just ports.
+C21      Particle update and frozen recipe/reference. No second generic FIELD CPU;
+         common bounded datapath and species/configuration storage.
+C22      Particle collision. New 155c141 candidate exists; qualify semantics,
+         independent reference, integration and resource cost.
+C23      Particle spawn, survivor priority and stable identity. Complete whole-
+         group admission, no same-tick recursion and deterministic overflow.
+C24      Particle draw endpoints/numeric migration. Existing expand/soft/record/
+         ladder do not excuse legacy screen-size interpretation of particle128.
+C25      Forge evaluator/topology and bounded lightning dispatch. Reuse built
+         evaluator and prim; connect to real shared geometry endpoints.
+C26      Contact shadows. Required bounded terrain-conforming geometry, not a
+         shadow-map renderer; build reference and generator where absent.
+C27      Liquid material. Implement through ordinary selected geometry/material/
+         post operations; do not infer a dedicated engine from the contract name.
+C28      Sky, atmosphere, clouds/beams/stars and other selected semantic producers.
+         Audit real dispatch/asset/render paths; not free because software draws it.
+C29      Post gather, one displaced line-stream compositor, grading/bloom/ink/HUD.
+         Gather is not composite. Implement complete ordering and memory leases.
+C30      2D planes/sprites and Duo view/HUD partition. Reuse endpoints, charge
+         fetch and blend work, preserve per-view clamping and display size.
+C31      Measure/tokens/histograms/admission. Existing governor/tokens; missing
+         statistics inputs and charged reductions must have real producers.
+C32      Trace/counters/capture/fault observability. Keep required diagnostics;
+         RAM-back cold statistics, do not erase evidence to claim savings.
+C33      Input snapshot, supported physical controller path and rumble. Verify
+         framework path and explicit SNAC selection; do not promise PS5/SNAC
+         support from unrelated UI or placeholder blocks.
+C34      HPS audio mixer/ring, FIFO and physical output. Reuse frozen sample law,
+         deterministic tick timestamps and underrun behavior.
+C35      CPU runtime, loader, submission, completion, streaming and save state.
+         A source file with a main() stub is not a usable console runtime.
+C36      Real board/framework, PLL/reset/CDC/pins and SDRAM calibration boundary.
+         Placeholder fpga/Zhaozhou.sv is not this owner.
+C37      ABI/assets/compiler/Form-to-command adapters, exact desktop backend and
+         capture/replay. Same game inputs/assets, no parallel invented wire ABI.
+C38      Optional/deferred register. Explicitly settle POST.ECHO and any newly
+         selected extension; preserve deferred GEOM.WARP/general-normal-map rulings.
+
+This inventory intentionally includes software and physical seams. Software
+already required by the charter must exist to call the product complete, but
+its CPU time and bandwidth are NOT charged as zero-cost FPGA capabilities.
+
+2.3 Correct the known classification errors before allocating work
+-----------------------------------------------------------------
+- FIELD v2 -> frozen reference, not the selected production implementation.
+- GEOM.WARP -> do not make it a prerequisite for ordinary client-A geometry.
+- TERRAIN.SHADE -> a shared arithmetic core exists; missing color orchestration
+  must be stated separately, not claim the entire shade RTL is absent.
+- MATERIAL.RESOLVE -> an exact 32-byte record and oracle were frozen later than
+  the early draft that says otherwise. Do not invent a new record.
+- PART numeric formats -> qformats section 10 and the newer ruling supersede
+  obsolete contract paragraphs calling the scales undecided.
+- PART.COLLIDE -> newly built candidate, not automatically adopted/independently
+  verified. Do not leave it labelled "absent" after reading current code.
+- GEOM.LOOM matrix arithmetic -> for a general affine 3x4 compose there are
+  36 variable products (27 for 3x3, nine for translation), plus translation adds.
+  A loose "12 products per transform" sentence is not a valid workload budget.
+- Board wrapper -> PLL and reset alone are not the full platform debit.
+- INPUT.SNAC / POST.ECHO -> selection needs owner/platform authority, not counting
+  every available contract as mandatory silicon.
+- A proof under mutated synthetic stimulus is not proof of actual command-path
+  liveness or complete game workload throughput.
+
+
+3. SELECTED ARCHITECTURE AND PHYSICAL OWNERSHIP
+===============================================
+3.1 Connected dataflow
+----------------------
+HPS/ARM:
+  game truth, canonical terrain collision/save state, Form runtime, immutable
+  assets/streaming policy, exact uniform FIELD preparation, audio mixing,
+  packet construction and input consumption.
+
+HPS DDR:
+  sealed frame rings, asset staging, clip banks, particle ping-pong populations,
+  world persistence, PCM ring, captures, optional bounded event journals.
+
+FPGA core:
+  command intake -> epoch/frame scheduler -> typed client requests
+     |
+     +-> one upload mover -> guard/arbitration -> fresh local-SDRAM slots
+     |                              -> coherent residency publication
+     |
+     +-> terrain world/load -> composed terrain caches -> FIELD Earth/reduction
+     |       -> selected tessellation + normals/material/light attributes
+     |       -> projector client B -> terrain arenas/replay
+     |
+     +-> geometry fetch/decode -> pose/skin or rigid transform -> world records
+     |       -> world normals/lighting -> projector client A -> geometry arenas
+     |
+     +-> particles: state -> update/collide -> compact/spawn -> commit
+     |       -> representation + soft/poly endpoints -> same renderer
+     |
+     +-> Forge/shadows/liquids/sky -> common typed geometry/material endpoints
+     |
+     `-> Measure/admission/counters, not an independent source of game truth
+
+ONE shared projection provider serves A and B; one selected clip/setup/binner
+and raster/texture/depth/blend/resolve path consumes their output. Immutable
+attributes travel via bounded sidecar RAM handles where possible, not wide
+copies through every queue. [R01,R06,R10,R18]
+
+Resolved framebuffer -> exclusive post lease -> world planes/displacement/
+glow/haze/grade/flash/ink -> HUD -> framebuffer terminal -> slot publication ->
+CDC -> video scanout. Audio and input use their real platform paths separately.
+
+3.2 Reuse arithmetic only at an economically sensible scope
+-----------------------------------------------------------
+Choose local shared services for identical or compatible work inside a domain:
+  * one geometry/terrain projector, with real request arbitration;
+  * one lighting producer/core family shared across normal producers;
+  * bounded particle update/collision arithmetic shared across recipe/response
+    cases that cannot execute simultaneously in a single worker;
+  * one upload mover for all immutable resource families;
+  * selected FIELD banks/services reused by its profile adapters;
+  * one post world sample for combined displacement effects.
+
+Do NOT build a console-wide universal arithmetic crossbar. Long operand routes,
+all-to-all muxes, wide tags and incompatible deadlines can cost more than a
+small local lane. The required unit of optimization is the complete service:
+engine + input/output routing + context storage + queues + scheduling + stalls.
+
+For new domains, pick the smallest lane count with a proved workload schedule.
+Do not pick one lane just because area is frightening. FIELD and shared
+projection already have high combined demand; blindly serializing them is not
+an area rescue if it makes the machine miss every frame.
+
+3.3 Cost is charged by instance, never by prose
+----------------------------------------------
+One physical instance has one owner ID. Capabilities using it cite that owner.
+A parent including the texture island must not also bill that island as a
+separate root. The selection-swap dry run already found this exact double count.
+The dry run's successful elaboration of a new RESOURCE top does not establish
+functional installation. [R20]
+
+Retain old implementations as reference/test-only files, not live ancestors of
+the production root. Record their exclusion with a reason and prove the new
+hierarchy does not instantiate both. Never subtract an old estimate from a new
+fitted total to create a purported measured saving.
+
+
+4. COMMON CONTRACTS: HANDLES, MEMORY, BACKPRESSURE, PUBLICATION
+==============================================================
+4.1 Compact identities, late payload access
+-----------------------------------------
+A queue should carry the smallest sufficient token:
+  domain-local context index + generation/epoch + source/order identity.
+Keep immutable material, vertex, plane, species and light-set records in their
+own synchronous stores. Read them when the consumer needs them. Share a record
+only while lifetime/last-reader ownership prevents reuse.
+
+Do not carry an arbitrary proposed 64-bit tag through every stage without a
+bit budget. Define widths from maximum live contexts and the existing ABI.
+Do not widen public handles or narrow generations silently. Existing material
+handles have an 8-bit public generation component while residency records use
+16 bits: this needs an explicit incarnation/epoch check, not truncation and hope.
+Before reuse/wrap, drain readers and invalidate or move to a new epoch. [R12,R13]
+
+4.2 RAM design sheet for every new state structure
+-------------------------------------------------
+Record depth, width, access phases, readers/writers per cycle, physical banking,
+replication, read latency, collision policy, initialization method and expected
+M10K geometry. Count active/inactive banks and output registers.
+
+For ordinary single/simple-dual-port M10K planning use documented legal shapes,
+including 256x40, 512x20, 1024x10, 2048x5, 4096x2 and 8192x1. True dual-port has
+no 256x40 mode. Two independent reads plus one write are not "one dual port".
+Use explicit port copies, banking or scheduling; never divide logical bits by
+10,240 and call that the physical count. [V01]
+
+No reset loop over payload RAM. Reset validity/control; perform a bounded scrub
+where prior contents could otherwise be observed. Generation tagging alone does
+not make random power-up tags valid or prevent generation wrap. Read output must
+be genuinely synchronous; an attribute saying M10K is not proof of inference.
+Same-address mixed-port read/write semantics must be explicitly implemented or
+proved unreachable. [V02,V03]
+
+Examples, shape estimates only:
+  16 x 256-bit material records: seven 256x40 slices if read as one wide word;
+  64 x 64-bit narrow payload organization: two 256x40 slices, at extra cycles;
+  256 x 76-bit binding row: two simple-dual-port slices, four true-dual-port
+    slices before copies, depending on selected organization;
+  nine 512-pixel source lines at RGB565: 73,728 logical bits, not a proof that
+    nine M10Ks satisfy every simultaneous access or additional plane need.
+
+Use narrow/burst storage for low-rate material/descriptor fetches where its
+latency is harmless. Avoid a seven-block 256-bit read just because the public
+record is 32 bytes. Public packing does not mandate a 256-bit internal datapath.
+
+4.3 Ready/valid and service completion
+--------------------------------------
+Hold valid payloads stable until accepted. A fixed-latency producer cannot be
+backpressured by simply freezing downstream tags while products continue to
+arrive. Reserve downstream storage at issue or use enough elastic buffering.
+Define exact acceptance, landing, retirement and terminal events separately.
+
+Arena sealing waits for landed writes, not requests accepted at a deep pipeline
+input. Frame publication waits for all physical memory writes to retire, not
+just the framebuffer writer's issue count. A legal abort stops new work, drains
+or cancels old work by identity and releases ownership exactly once.
+
+An empty queue is not automatically the end of a frame. End markers, issued /
+retired accounting and producer closure distinguish "idle now" from "finished".
+
+4.4 Reset and outstanding memory writes
+---------------------------------------
+A local abort cannot erase knowledge of writes already accepted by an external
+memory interface. Quarantine the destination until those writes drain. Otherwise
+a late write can corrupt a newly allocated owner even if its response is dropped.
+A generation tag protects interpretation, not physical bytes already being
+written to a reused address.
+
+For a global transport reset, define the hardware barrier proving no old write
+can arrive before allocator reuse. For soft domain reset, preserve/drain the
+outstanding transaction or use an externally owned quarantine record. Include
+reset-mid-upload, reset-mid-particle-commit and reset-mid-frame in tests.
+
+4.5 Counter storage is useful but not magic
+------------------------------------------
+Keep immediate fault/credit/ownership bits in fabric. Move cold histograms and
+large indexed statistics to RAM with a defined update schedule. For back-to-back
+updates to the same histogram bin, add forwarding or a conflict stall; otherwise
+read-modify-write loses counts. Never delete required diagnostics as a covert
+product cut. A production-debug build may exclude optional probes only with a
+separate selected configuration and clear evidence.
+
+
+5. UPLOAD, MATERIAL RESOLUTION AND COHERENT RESIDENCY
+===================================================
+5.1 One generic upload controller
+---------------------------------
+Start from the existing zref_mem_upload.hpp verdict and the existing HPS/VRAM
+transaction conventions. Reuse the CRC32C implementation. FRAMEBLIT supplies a
+useful transport precedent, not permission to retain its framebuffer lease or
+canvas-length restrictions in the resource uploader. [R12,R14]
+
+Suggested controller states:
+  IDLE -> CAPTURE -> VALIDATE -> RESERVE_FRESH_SLOT -> READ_BURST
+  -> STAGE_BEATS -> ISSUE_GUARDED_WRITES -> NEXT_BURST
+  -> CLOSE_ISSUER -> WAIT_RETIRE -> VERIFY -> PUBLISH_MAPPING -> COMPLETE
+  Any error -> STOP_NEW_ISSUES -> DRAIN_OLD_WRITES -> QUARANTINE/RELEASE -> ERROR.
+
+Use existing 64-byte bursts and a narrow beat datapath. One or two small RAM
+burst buffers suffice as a STARTING design; actual bridge stalls determine the
+required depth. Do not create one DMA per animation, terrain, texture, palette,
+mesh, sky and Sunder family. The owner/allocator chooses region and destination;
+the mover transports validated bytes unchanged.
+
+Descriptor legality order must match the existing oracle:
+  zero length; alignment; unreachable high HPS address; source arena bounds;
+  destination guard bounds; stale epoch. Check endpoints wider than addresses.
+The new support library and optional RTL validator implement that ordered
+predicate, not the full upload engine. [R14]
+
+The owning configuration must itself be valid: source regions fit the supported
+HPS address aperture; destination regions fit the real local memory and allowed
+resource map. Revalidate epoch and slot ownership at publication, not just at
+request acceptance. Freeze source staging bytes or pin them until all reads end.
+
+5.2 Atomic publication is a mapping transaction
+-----------------------------------------------
+Old slot A remains immutable/pinned. Upload into fresh, unpublished B. All B
+writes retire; CRC and guard checks pass. Then atomically publish B with its
+new generation. Retain A until the final frame/cache reader's pin is released.
+CRC failure discards B and leaves A's bytes and mapping unchanged.
+
+The state variable "generation changed" does not make in-place overwrite atomic.
+Do not claim end-to-end copy verification from a source-stream CRC alone: state
+whether the contract verifies staged bytes, actual readback, or both. Hardware
+memory integrity/readback qualification is a separate property.
+
+There is one residency mapping/publication owner. Cache tags include enough
+resource incarnation to make an old entry structurally unable to match new
+bytes. Explicit invalidation can reclaim capacity and support wrap barriers; it
+must not be an easily forgotten per-cache correctness checklist. [R12]
+
+5.3 HPS and local-SDRAM arbitration changes are part of the implementation
+-------------------------------------------------------------------------
+The inspected HPS arbiter was a two-client interface. Upload and particle state
+cannot be attached by inventing an unregistered identity or bypassing the guard.
+Extend or hierarchically compose arbitration with named clients, bounded burst
+lengths and a liveness/fairness rule. Preserve scanout and required render
+service; reserve enough progress for background uploads so a resource cannot be
+starved forever. Schedule publication deadlines, not a fictional promise that a
+shared-memory upload can never influence latency.
+
+Count request tags, retirement routing, buffers and arbitration in Backend.
+A software memcpy from HPS to a testbench memory is not FPGA uploader completion.
+
+5.4 Material resolver
+----------------------
+Consume the existing 32-byte ZhMaterialRecord emitted by the ABI generator and
+zref::material::Resolver/record_legal. Resolve at meshlet/draw granularity, not
+per fragment. A direct-mapped cache is adequate as the default structure; start
+with the current reference's 16-line organization, then justify any size change
+against hit behavior/counter semantics. [R13,R15]
+
+A low-area implementation uses narrow synchronous words plus a single output
+record assembly register. Sequence the lookup over several clocks. Store tag,
+residency generation, material identity and any semantic quality-tier component
+in the same coherent cache entry. If quality currently does not affect record
+selection, document that rather than silently adding a new interpretation.
+
+On a miss, issue a real guarded fetch, check the frozen record, and only then
+fill and reply. Missing residency faults the frame; a cache miss backpressures
+within its allowed work window. Never fabricate material zero.
+
+Translate the public material sample fields into the CURRENT Packet-B binding
+selector/generation representation in one named adapter. Do not let the old
+FRAGROB terminology generate a second texture residency owner. The resolver
+owns lookup; the texture island owns its established sample lifecycle.
+
+Acceptance:
+  all eight ratified recipes; zero to three samples; legal mode fields;
+  reserved-word rejection; generation republish WITHOUT an explicit flush;
+  byte-for-byte cold/hit response equivalence; held misses under stalls;
+  stale handle/refused table cannot create a fragment; all three-sample material
+  outputs actually reach the combiner and influence the final pixels.
+
+
+6. GEOMETRY, SHARED PROJECTION, ANIMATION AND ATTRIBUTES
+======================================================
+6.1 Build the request path, not another projector
+------------------------------------------------
+Reuse MESHFETCH, ASSETFETCH, VDECODE, the memory adapter, ASSEMBLE, SKIN and
+available normal/pose stages. Static vertices use the ruled rigid transform;
+skinned vertices use the selected palette and exact skin arithmetic. Their
+world-coordinate records feed client A of the shared service.
+
+The newly added zhao_geom_proj_lane consumes returned projected vertices and
+fills the geometry arena. It is a useful piece. It does not remove the need to
+fetch/decode/transform/issue real vertices. Its non-stallable result assumption
+currently relies on the arena accepting every fill: changing arena banking must
+preserve that or add issue-time credits/reserved landing space. [R10]
+
+Geometry request sequence:
+  validate/pin mesh/material/clip resources -> open arena with incarnation
+  -> fetch required vertex/index records -> decode + transform/skin
+  -> prepare world normal/light sidecar -> issue tagged projection request
+  -> count result landings -> seal -> replay indices as triangles
+  -> join attributes -> clip -> setup -> binner -> shared renderer.
+
+Preserve source IDs, index order, view identity, topology and rejection behavior.
+Each viewpoint projects world data separately; simulation/skin work is shared
+where its identity is genuinely view-independent. Billboard orientation and
+camera-dependent effects are not view-independent merely because positions are.
+
+6.2 One provider at the composition root
+---------------------------------------
+The terrain pipe can already own a projection subsystem. If using it, route
+geometry into its exposed A interface; do not instantiate a second subsystem
+next to it. Alternatively extract one common parent provider and use thin client
+adapters, in one deliberate migration. Prove exactly one physical core is
+reachable from the selected root. [R18]
+
+Freeze MATW, ROWS_PER_PASS, arena capacities, validity mode and queue sizes for
+one workload-qualified profile. ROWS_PER_PASS=3 is the fully parallel three-row
+setting in the inspected core; do not describe it as the serialized setting.
+The RPP=1 alternative changes throughput and cannot be selected from its resource
+count alone. A 6,598-ALM service at one parameter point is not proof of savings
+against differently configured geom/terrain wrappers. Reprice matched parents.
+
+A request scheduler must obey both clients' deadlines and the result interface.
+If result A cannot stall, acceptance reserves its landing slot. Configuration
+writes cannot reinterpret vertices already in flight: use frozen per-frame/view
+state, explicit epoch barriers or banked configuration with lifetime tracking.
+
+6.3 Pose, palette and Transform Loom
+------------------------------------
+Resident clip bytes come through upload and generation-tagged residency. The
+pose cache identity includes clip-bank generation, type, clip, frame and subframe
+where applicable, plus any deformation/scale identity that changes the pose.
+Animation state shared among identical instances should decode once, not once
+per creature, while instance-specific patches remain explicit. [R12,R16]
+
+For optional uniform per-bone scale tracks introduced on the art branch, treat
+identity scale as a no-op and preserve source/midpoint validation. Do not assume
+an art/reference feature automatically exists in hardware. Reconcile that asset
+format and its matrix/normal consequences before declaring animated-asset parity.
+
+Loom is a parent-before-child transform composer, not a graph processor. The
+compiler/HPS supplies order, local transforms and keep-world reparent results.
+No recursion, cycle-finding engine, general matrix inversion or gameplay events
+in the FPGA. Use the exact affine compose law and a small sequenced MAC unit;
+store parent records in the ruled local-SDRAM region with a working cache, not
+1,024 wide flip-flop matrices. [R16]
+
+General affine product cost is 36 products per node. A single lane's arithmetic
+issue floor for 1,024 nodes is 36,864 clocks before setup/fetch/rounding. This is
+an illustrative bound, not the actual frame workload or proof of sufficiency.
+Do not replace the real transform-node count with creature count or assume a
+1,024-node stream bound limits the number of streams per frame.
+
+6.4 Complete attribute carriage is a first-class missing cost
+-------------------------------------------------------------
+Packet D's 1,157-bit three-plane record does not prove full Gouraud RGB, fog,
+emission and required world/AUX attributes are priced. List every selected
+profile explicitly: what produces each attribute, where clipping interpolates
+it, how triangle setup stores it, and what fragment stage consumes it. [R06]
+
+Use one authoritative profile descriptor, a compact per-triangle handle and
+RAM-backed plane/material records. Thin consumers fetch needed planes/fields;
+keep counters and metadata to establish ordering. Avoid one giant universal
+pipeline record copied at every stage if most consumers need a few fields.
+
+Do not change interpolation laws while changing storage. Attrgrad's rounded
+horizontal step may differ from recomputing an exact rational per pixel. Match
+accepted behavior, including ties and signed rounding. Any numeric-law change
+needs an explicit version/golden decision, not a smaller implementation label.
+
+Sharing attribute setup dividers is attractive AFTER their true job count and
+setup schedule are known. The supplied DIV32 research is a candidate, not a
+completion dependency. In particular, a three-plane budget cannot be silently
+reused for RGB+emission+fog+AUX profiles without charging their requests.
+
+6.5 Depth, clip and terminal completion
+---------------------------------------
+Carry guarded w to the canonical depth producer and ensure the same selected
+profile reaches reference and RTL. Do not leave one producer emitting old
+Q16.16 1/w while a consumer interprets it as invw24. Preserve strict depth ties,
+clear value and explicit decal/shadow bias. [R07]
+
+Complete renderer return/terminal paths and scanout wiring now, not in an
+unpriced final-glue phase. Both normal completion and faults release exactly
+one lease; dropped/aborted work must not strand it. Test all-zero/fully-clipped
+frames, malformed materials, memory refusal and reset under backpressure.
+
+
+7. LIGHTING, NORMAL DETAIL, EMISSION AND FOG
+===========================================
+7.1 Use the one existing light-term law
+--------------------------------------
+The existing zhao_terrain_shade takes a world normal and implements the shared
+light-term arithmetic. Do not build a second engine because GEOM.LIGHT has a
+different name. The missing work includes selecting/configuring independent
+lights, per-light response, RGB accumulation, ambient/spill/emission carriage,
+and the real throughput-qualified composition. [R11]
+
+Use the compiled shade_from_world_normal_unclamped entry point, not a new
+standalone oracle that merely restates the RTL. For each independent light:
+  signed base response + that light's allowed normal-detail response;
+  clamp that light's response independently;
+  accumulate its gain and emission terms in exact declared wide lanes;
+  add ambient/spill; apply the ruled final saturation/application order.
+A negative second light may not subtract the first light's illumination.
+Emission shares the light response but remains the separately required additive
+term; zero emission is the exact revert control, not authorization to omit it.
+
+7.2 Low-area architecture without an impossible schedule
+--------------------------------------------------------
+Store the bounded light set and material/tint configuration in small immutable
+per-frame banks. Prepare uniform light data on the ARM only using the exact
+existing fixed-point functions and existing authorization. Produce/reuse a world
+normal and magnitude at their correct identity. Never normalize independently
+for every light if the law allows a common magnitude. Never pre-round a shared
+quantity in a way that changes a boundary result.
+
+One candidate architecture has a normal/magnitude frontend, a pipelined light-
+term service, a small RGB accumulation context store, and a deterministic light
+walker. The service's lane count is chosen from the full deadline, not a guess.
+
+A critical warning: 120,000 vertices x four lights = 480,000 evaluations in a
+particular stress profile. A scalar 147-cycle service would require 70,560,000
+cycles before overhead if serialized, not fit in a 100-MHz/60-Hz frame. The
+current service's ACTUAL initiation interval, not just its latency, decides this.
+Use preparation, invariant reuse and pipeline/context overlap; if those still
+miss, retain enough parallelism and report the cost. [R06,R11]
+
+Do not count four lights as guaranteed on every vertex without checking the
+ruled profile; conversely, do not assume culling or sparse lights without traces.
+The admission model must include the worst accepted content, not an attractive
+average demo.
+
+7.3 Terrain normal producer is not resolved by G8B
+-------------------------------------------------
+The current terrain projection pipe explicitly omits TERRAIN.NORMALS and
+canonical depth. Its tessellator emits a vertex fill pass and an index/reference
+pass; there is no world-triangle stream for the old normal unit. [R18]
+
+Default architecture to investigate: retain world positions in a compact banked
+arena during fill; reconstruct the exact world triangle alongside replay and
+feed the existing normal law. Read ports are real costs. A three-vertex read
+may require bank/copy organization or a short sequencer; price it with the
+required triangle rate. Do not turn this into another third full tessellation
+pass if that breaks two-view throughput. Per-cell precomputed normals are an
+alternative ONLY if the same accepted shading law/results can be demonstrated.
+
+Selected terrain normal detail remains separate from ordinary world normals
+and base lighting. Give it an owner, actual sampler/input records and its
+per-light combination point. Do not use flat unlit terrain as the completion
+fixture that happens not to activate this entire debt.
+
+7.4 Fog placement
+------------------
+Compute the accepted fog factor from the selected guarded w and the frozen
+frame-constant reciprocal/preparation. Transport and interpolate the factor
+separately from unfogged RGB. The path is:
+  lighting -> attribute interpolation -> toon if selected -> material combine
+  -> fog final source color -> depth/alpha/additive blend as specified.
+Explicit bypass classes remain explicit: HUD/sky and ruled emissive classes.
+Do not modulate the fog color by the texture or quantize fog into toon bands.
+[R07,R11]
+
+Acceptance must show lit textured geometry and terrain with independent lights,
+colored overlap, zero/high emission, toon boundaries, distant fog and explicit
+bypasses at final resolution. Also compare exact arithmetic/counters under
+pipeline stalls and resource-generation changes.
+
+8. COMPLETE FIELD V3 AND TERRAIN MAINTENANCE
+===========================================
+8.1 What completion actually entails
+------------------------------------
+FIELD is the heart of this machine and is not a feature-cut candidate in this
+plan. The frozen v1/v2 engines remain valuable exact references. They do not
+satisfy the selected v3 Earth60 production contract. Existing v3 services, RF,
+dispatch and experimental compositions are material to reuse, not a reason to
+report the executor as already paid for. [R08,R09,R17]
+
+Make a production extraction matrix before copying a probe:
+  existing source -> production responsibility -> retained arithmetic/state
+  -> removed laboratory stimulus -> required external real provider -> evidence.
+
+The relevant experimental shapes include zhao_probe_v3_exec, _engine, _full,
+_walk_earth and _patch_acc. Their source contains real machinery and also probe
+policies/rivals/test surfaces. Extract or parameterize a production-only
+composition without instantiating a rival agent or a probe table as a consumer.
+Do not rewrite their validated arithmetic merely to remove the word "probe".
+
+Inspect actual elaboration for multiplier ownership. The inspected full probe
+describes an executor bank AND a service-path bank; treating them as one bank,
+or crediting a saving from merging them without a complete schedule, is wrong.
+Do not assume every occurrence of the same source module means one physical
+instance. Conversely, one shared four-wide bank is not four full FIELD CPUs.
+
+8.2 Prepared plans, contexts and exact execution
+-----------------------------------------------
+Preserve canonical Field IR, validator, program identity and zfield::interpret.
+FPLAN is a generated derived representation, not a second manually encoded ISA.
+Exact uniform preparation runs once per association using the same fixed-point
+functions. Store uniforms in the scalar bank; generate varying lattice inputs
+at the profile adapter instead of streaming twelve inputs per point from HPS.
+
+Use the existing ready-context scheduling idea: eligible contexts issue bounded
+micro-operations; long operations park a context until a tagged completion;
+writeback retires through the real RF arbitration. Each context has one explicit
+lifecycle and enough identity to distinguish old results from reused storage.
+Keep cold context payloads and instruction data in synchronous memories; keep
+small live ready/busy/credit state in fabric when concurrent update ports make
+RAM inappropriate.
+
+Required dispatch closure:
+  every admitted FPLAN opcode -> exactly one operation owner -> declared operand
+  width -> request format -> service credit -> result width -> RF destination
+  -> sticky status -> context release -> exported result at END.
+
+No opcode may be classified long by the executor and permanently refused by the
+dispatcher. The old full-probe header documented this failure for SPLINE/RING
+forms. Recheck the current actual table; do not assume that old diagnostic text
+is either current fact or already fixed. Prepared RING and varying-radius RING
+are different admitted forms, not interchangeable opcode labels.
+
+Cold/unsupported programs must be refused at admission or routed through the
+explicit exact software/fallback path already allowed by the contract. They
+cannot silently zero outputs, deadlock a context, or claim Earth60 certification.
+Every mandatory real-time program must retain its certified production route.
+
+8.3 Writeback, credits and resource liveness
+------------------------------------------
+The existing probes found that treating a writeback announcement as an accepted
+write loses results under arbitration. Preserve the actual skid/credit solution.
+A fixed-latency multiply reserves a writeback slot at issue; a returning long-op
+cannot be starved by endless simple ALU work. Use the measured policy or improve
+it with a separately proven bounded schedule. [R17]
+
+Maintain these invariants and fire failing controls:
+  accepted uops = retired + in_flight + explicitly faulted/cancelled;
+  one result updates its original context/destination exactly once;
+  context reuse waits until old tagged work is drained or safely invalidated;
+  no RF source is read before its producer completes;
+  no stale service result writes a fresh context;
+  required completion paths have bounded progress under allowed stalls;
+  all mask lanes and partial final vector groups preserve order/status.
+
+A single universal priority mux over all nested services is not automatically
+smaller or deadlock-free. Identify requests that themselves need another bank,
+reserve before launch, and do not hold a shared lane while waiting for a service
+that also needs that lane.
+
+8.4 Earth adapter and ordered reduction
+---------------------------------------
+Earth generates x/z from patch origin, pitch, row and lane mask. Full 33x33
+row-major update uses 297 four-wide groups, not 273: each 33-wide row needs nine
+groups. Flat INIT/DRAIN can use 273. Uniform SatLedger status must combine with
+varying execution exactly as the canonical interpretation requires. [R09]
+
+Use the existing command-order reductions:
+  height and nav: declared saturating chain, never reassociated casually;
+  material: last covering writer in command order;
+  velocity: its declared exact accumulation;
+  outputs: collected from the plan's actual exported registers.
+
+Results may execute in parallel but must commit to each patch/vertex in the
+required order. Use field-major epochs plus a bounded reorder/context scheme;
+never reduce saturation in completion order. The patch accumulator can use
+banked RAM, with a deterministic access schedule and hazard bypass for successive
+updates to the same vertex.
+
+The inspected Earth budget requires <=6,000 cycles per full association and
+<=850,000 for the 128-association slice including init/finalize and setup.
+Those are admission limits to test, not achieved measurements of this handoff.
+They also do not license spending an independent full frame on all downstream
+terrain and rendering stages. [R09]
+
+8.5 Other profile adapters
+--------------------------
+Flow: consume the frozen particle/population input identity and return bounded
+acceleration to the selected update law. Formation: supply instance/index
+inputs and export transforms/offsets without creating gameplay events. Stamp:
+generate its bounded stencil inputs and commit to the ordinary surface owner.
+Any selected Warp profile must follow its current authority; do not resurrect
+deferred GEOM.WARP as a compulsory separate engine.
+
+Each adapter owns input mapping, scheduling and output transport, not arithmetic
+semantics. One program evaluation must not be reduced by two slightly different
+rules in the CPU and FPGA. Track combined bank/table demand across all admitted
+profiles, including simultaneous Earth plus particles/formation scenes.
+
+8.6 Terrain world, bake and persistence
+---------------------------------------
+Compose the existing island directory, residency, page loader/streamer, load
+queues, composed-cache frontend, patch representation, tessellation and replay.
+A sky/void region is not a failed memory fetch. Dirty persistent layers survive
+eviction and reload. Mutable surface/cache identity changes invalidate exactly
+the dependent records; a view change must not unnecessarily recompute canonical
+terrain truth.
+
+Use the existing bake_v2 and cliff-RAM candidates where their latest functional
+and physical evidence permits adoption. Do not count their predicted savings
+before a matched current parent shows them. Bake's slower sweep may be lawful
+under the existing deferral contract; that does not mean user-visible live
+terrain deformation may be postponed by an arbitrary number of frames.
+
+Separate immediate live FIELD deformation from persistent scar baking, mip
+maintenance and eventual writeback. Tag committed terrain snapshots so rendering,
+particle collision and shadows refer to the same tick's allowed terrain state.
+A cache miss that is late because of arbitration must not nondeterministically
+turn solid ground into no-contact if the law expects resident data.
+
+Acceptance scene: two views, overlapping Earth fields, terrain material/nav/
+velocity outputs, new craters and moving debris, bake/writeback, evict, return,
+replay. Every required output is observed; an attractive height image alone does
+not prove material/nav or persistence paths execute.
+
+
+9. PARTICLES: ONE ECONOMICAL STATE/UPDATE/COLLIDE/SPAWN SUBSYSTEM
+================================================================
+9.1 Reconcile the numeric law before adding hardware
+----------------------------------------------------
+Use qformats.md section 10, not obsolete contract paragraphs:
+  position: three signed18 components in 1/256 m relative to population origin;
+  velocity: three signed11 components in 1/256 m per 60-Hz tick;
+  age10, species7, size6 (relative world radius /16), spin6,
+  flags4 with the reserved bit zero, variation8; exactly 128 bits.
+Population rebasing occurs only between complete ticks and is captured. Do not
+silently clamp a population origin change or reinterpret size as screen pixels.
+[R07]
+
+There is a genuine documentation conflict: the older UPDATE eight-step prose
+places age/collision/events differently from the newer qformats tick list. Freeze
+one canonical composed-tick transition and make old docs point to it. Use the
+newer ratified numeric law as authority where it clearly supersedes older prose;
+where event timing is still ambiguous, propose an explicit compatibility decision
+and independent vectors. Do not let two subagents implement different orders.
+This is a concrete pre-implementation resolution, not a request to design a new
+particle language.
+
+9.2 Default physical organization
+----------------------------------
+One state streamer owns read-A/write-B ping-pong generations in HPS DDR, not a
+population of register records on the FPGA. Small RAM staging queues decouple
+bursts from the worker. Keep species/constants/curves in compact epoch-frozen
+on-chip tables; only the active particle/context lives in fabric.
+
+One bounded worker family shares arithmetic across the fixed recipe and response
+cases. Do not build twelve spatial recipe pipelines and five separate collider
+engines. Do not turn the recipes into a second programmable FIELD processor.
+Flow remains a service input from the actual selected FIELD path.
+
+Start with a single complete update/collision worker and a small number of
+contexts where memory/sample latency requires overlap. Select additional lanes
+only from the worst accepted mix and a measured service schedule. A target II8
+for 32,768 particles costs 262,144 issue clocks; II16 costs 524,288. These are
+issue floors, not complete tick times: add memory, Flow, collision sampling,
+spawn admission, fill/drain and publication. [R06]
+
+9.3 Deterministic survivor-first commit
+---------------------------------------
+Read the old committed generation without overwriting it. Update/collide each
+particle through the exact law. Write survivors in original relative stream
+order into the new generation. Only after the survivor count is final can
+children be appended under the survivor-over-child priority. The whole new
+population publishes after all stores retire; abort leaves the previous
+population and count intact. [R19]
+
+Do not stream children immediately behind each parent: later survivors have
+priority. Do not hold 32,768 full records in fabric to solve this ordering.
+
+Two implementable storage-conscious choices:
+  A. Bounded event journal in HPS DDR. Record only information needed to derive
+     children later, including stable parent identity and the correct post-update
+     parent state or a justified reconstructible locator. After survivors finish,
+     walk the journal deterministically and append admitted whole groups.
+  B. A deliberate second read/compute pass over immutable old input, reconstructing
+     the same events after survivor count is known. Lower journal storage, but
+     charges extra reads and arithmetic; choose from measured bandwidth/time.
+
+Default to A if bandwidth permits; it makes ordering and reset recovery clear.
+Store a small number of journal records in RAM staging, not a full FPGA journal.
+
+For strict-prefix whole-group admission, there is a useful bound: after retained
+valid requested groups cover the maximum possible child capacity, later groups
+cannot be selected for ANY final survivor count. Later requests still contribute
+the exact counters but need not carry a full child payload. This bounds retained
+nonempty group descriptors by population capacity. Confirm the strict-prefix
+policy before relying on that bound; the supplied model labels it a proposal.
+Do not silently skip an earlier oversized legal group and accept a later small
+group if that changes the ruled priority.
+
+A 32-byte journal entry x 32,768 entries is 1 MiB; writing and reading all of it
+adds up to 2 MiB/tick (~125.8 MB/s at 60 Hz) before other traffic. That is an
+explicit worst-case candidate debit, not "free host RAM." Narrower journals or
+second-pass recomputation may be necessary. Admission counts must reflect real
+accepted event patterns, with an overflow behavior that cannot drop survivors.
+
+9.4 Stable particle identity is a specification seam, not free bits
+-------------------------------------------------------------------
+The 128-bit record has no dedicated particle_id, while contracts name stable
+identifiers for stateless hashing. Reuse the already ratified identity scheme
+if implemented. If it is not defined, resolve it explicitly before completion.
+A compacted stream index changes from tick to tick and cannot automatically be
+called a stable lifetime identifier.
+
+One possible proposal is a parallel 32-bit identity sidecar in HPS DDR, combined
+with population incarnation. That preserves 128-bit public particle packing but
+adds 128 KiB per population buffer at 32,768 particles, 256 KiB for the pair,
+and up to 0.25 MiB/tick of roundtrip traffic (~15.7 MB/s at 60 Hz). Wrap/reuse
+needs an incarnation barrier. These numbers are storage arithmetic, not a new
+ratified ABI. The support model receives stable_id externally and deliberately
+does not invent the hash or modify the frozen record.
+
+9.5 Spawn rules and atomic groups
+----------------------------------
+Use the closed event vocabulary and bounded children: parent order -> event
+order -> child index, maximum16 per event, no same-tick recursion. A malformed
+17-child descriptor is refused, not truncated into a different effect. Reserve
+space for an admitted whole group before its writes; reset must not publish
+half of it. Capacity refusals are deterministic, not based on response arrival.
+[R19]
+
+Keep children_requested, emitted and refused separately, including requests
+beyond capacity. If four events can occur for one parent, 16 is a per-EVENT
+bound, not automatically a per-parent bound. Define combined event ordering.
+
+9.6 New collision candidate: reuse, then qualify
+-----------------------------------------------
+The current zhao_part_collide candidate shares a velocity datapath across its
+responses and reports directed property tests. Preserve that work. Its commit
+explicitly says it has no independent oracle and no Quartus measurement. [R05]
+
+Complete the following before calling it production:
+  reconcile canonical particle formats and tick order;
+  establish the exact independent response reference and non-circular vectors;
+  prove the heightfield sample, contact measure and placement use the same
+    geometry, including sloped and moving terrain;
+  bind unavailable-sample behavior to declared residency/sample availability,
+    not arbitrary memory latency;
+  test IGNORE/DIE/STICK/SLIDE/BOUNCE, grazing contact, zero restitution/friction,
+    origin rebasing, saturated velocities and one-response-per-tick;
+  test response stability/order under stalls and reset;
+  map and then measure it inside the complete worker, including muxes/contexts.
+
+Plane/heightfield selection, normal format and clearance epsilon must remain
+named, ruled/validated inputs. Do not make a local 20-mm or one-LSB constant a
+new gameplay/visual law by hiding it in the implementation.
+
+9.7 Draw path and bandwidth
+---------------------------
+Convert the world-radius multiplier through the existing selected projection
+law. Reuse the common geometry/raster endpoints for polygon particles and the
+existing soft endpoint for soft particles. Changing representation must not
+change simulation identity, spawn order or the next tick's hash.
+
+At32,768 particles, 16-byte read plus 16-byte write is 1 MiB/tick, about62.9 MB/s
+at 60 Hz. This alone excludes species loads, event journals, sidecars, child
+append traffic, Flow and all other clients. Keep those additions visible in a
+shared HPS bandwidth ledger and a complete arbitration stress run.
+
+
+10. FORGE, SHADOWS, LIQUIDS, SKY AND OTHER PRODUCERS
+===================================================
+10.1 Forge and lightning
+-------------------------
+Connect existing FORGE.PRIM.EVAL and jitter/table machinery to the topology
+producer, resource loader and common geometry/material route. The old topology
+block emitted indices without positions; a valid index stream is not a rendered
+spell. Keep the bounded segment/branch rules, deterministic order and all
+source/epoch identities. No private projector or second rasterizer per effect.
+
+Use fixed small tables for immutable geometric templates where appropriate.
+Sequence transforms when deadlines permit. Count emission of actual vertices
+and triangles under stalls, not just a configured "segments" value. A lightning
+test must change visible output when its actual evaluator is muted.
+
+10.2 Contact shadows
+---------------------
+Build the missing reference and terrain-conforming primitive generator around
+ordinary transparent geometry. Near hero uses the ruled small hull/ellipse;
+near army a smaller blob; mid a splat; far follows the selected omission rung.
+The governor supplies a rung; the generator uses fixed bounded terrain taps and
+a deterministic vertex order. [R21]
+
+No shadow map, extra render view, shadow framebuffer or self-shadow engine.
+Reuse the common projection/material/alpha path. No ground under a caster means
+no shadow, not a blob at zero elevation. Rung bias is an explicit authored value
+validated by final-resolution movement on flat ground, slopes, cliff edges and
+breaches. Hardware arithmetic count and perceptual approval are separate gates.
+
+10.3 Liquids
+-------------
+Honor the owner ruling that liquids are ordinary geometry through the main
+renderer. Supply the selected material flags, texture/alpha behavior and bounded
+post displacement contribution through existing owners. A MATERIAL.LIQUID
+contract does not imply a new permanent liquid datapath. Audit the real input /
+blend ordering and palette/material generation; do not omit the capability just
+because no separately named liquid module is necessary. [R02]
+
+10.4 Sky and selected atmosphere/effects
+----------------------------------------
+Inventory all implemented/reserved semantic opcodes and selected asset resource
+kinds. For sky, clouds, stars, beams and other required producers, name whether
+the work is ARM-prepared geometry, 2D, a bounded FPGA generator or post input.
+Show its path into the final renderer and its actual texture/overdraw demand.
+Do not claim a software reel's sky proves FPGA sky dispatch. Do not invent
+additional hardware engines for effects already expressible by selected paths.
+
+Culling/LOD must follow the existing observable policy and deterministic
+admission law. A default test that never emits sky/cloud/stars does not price
+those selected workloads, even if their code is compiled.
+
+
+11. POST, 2D, MEASUREMENT AND DIAGNOSTICS
+========================================
+11.1 One bounded world stream
+-----------------------------
+POST.GATHER already existing is not POST.COMPOSITE completion. Implement the
+frozen order: world + restricted world planes; combine displacement contributions
+once; coherently sample world color/glow/ink; haze; bloom; curves/matrix; flash;
+exterior ink; HUD. The three displaced outputs must share coordinates so outlines
+do not detach. [R22]
+
+Keep compact quarter-resolution effect planes. The selected +/-8 horizontal,
++/-4 vertical reach motivates nine source lines and explicit lifetime tracking.
+Use synchronous line banks and narrow output staging, not a second full FPGA
+framebuffer or one framebuffer pass per effect. At edges and in Duo, clamp within
+the correct view BEFORE forming addresses. [R22]
+
+A single source fetch into the line system is distinct from arbitrary repeated
+accesses within resident line RAM. Count line fill, output writes, compact-plane
+reads and any glow-prep passes. Do not equate work-item count with cycles if a
+pixel requires several serialized operations.
+
+If post modifies the back/resolve buffer in place, defer writes until no future
+displaced sample can reach the old line. Never post-process the currently
+scanned-out front buffer. The post lease is exclusive after resolve and before
+publication; its tail shares the frame deadline with prior serial work.
+
+11.2 Exact color tables and small shared arithmetic
+---------------------------------------------------
+Use existing per-channel curves and matrix law. A promising exact preparation
+stores unrounded matrix-product vectors for each curve entry, sums them and
+performs the original final bias/round/saturate. This was already explored in the
+Golden Path; it needs actual generated-table equivalence and parent pricing,
+not another new color math convention. [R06]
+
+For 32/64/32 entries with three signed 24 products per entry, capacity is9,216
+logical bits. Three simultaneous72-bit reads suggest six simple-dual-port
+M10K slices before active/inactive banks. Six, not one. Count normal line/glow/
+displacement memory separately. A three-product sequenced worker is another
+candidate, but do not add its saving to the table version's saving: they replace
+the same work.
+
+Do not introduce a generic65,536-entry RGB565 remap that contradicts the selected
+resource/semantic design. Full-frame lookup tables and ignored port replication
+are not free memory tricks.
+
+11.3 HUD, 2D and completion
+----------------------------
+HUD is last and must not force a second world-frame read. Duo's rendered3D area
+and its displayed canvas differ; count/CRC the correct one. Include the48 HUD
+scanlines and per-view clamping in captures. Post completion issues the same
+owned terminal protocol, not an independent slot swap.
+
+11.4 Measure and statistics
+----------------------------
+Reuse governor/tokens. Complete their inputs from real counters/histograms and
+reported demand. Do not let a guessed workload become an automatically enforced
+feature cut. Keep distinct resource-demand axes: texture nearest/bilinear,
+projection, lighting, FIELD banks, memory service and completion tails.
+
+For a RAM-backed histogram, aggregate per-cycle same-bin events and implement
+read-after-write forwarding or scheduled stalls. A one-read/one-write port cannot
+accept arbitrary simultaneous updates to many bins without extra hardware.
+Snapshots/clears need epoch or double-bank semantics so a host read sees one
+complete interval, not a mixture. Choose widths from the documented interval and
+saturation/wrap policy, not arbitrary32-bit counters everywhere.
+
+11.5 Required visibility without measurement self-deception
+------------------------------------------------------------
+Maintain source-level faults/counters and small trace records. Large captures
+belong in host memory. Make counters useful for liveness: each mandatory
+functional stage sees positive work in a fixture and a deliberate bypass/mute
+changes the expected result. Optional laboratory probes are a separately costed
+build configuration, not silently part of production or silently excluded from
+mandatory evidence.
+
+
+12. RUNTIME, BOARD, CLOCKS, RESET, INPUT AND AUDIO
+================================================
+12.1 Scope the physical platform explicitly
+-------------------------------------------
+The inspected fpga/Zhaozhou.sv was a placeholder, including on the inspected
+board-bringup branch. Recheck newer local files before declaring any new work
+absent. SYS.PLL plus SYS.RESET alone do not complete the board boundary. [R23]
+
+Choose and pin the actual SuperStation One/MiSTer-compatible framework revision,
+license/provenance, exact FPGA part/speed grade, oscillator, RAM arrangement,
+physical pins, voltage/I/O standards, HPS transport and supported input/video/
+audio paths. The provisional5CSEBA6U23I7 fitting target does not establish the
+board's actual populated resources or timing. No pin map is invented here.
+
+Keep the wrapper thin: exactly one clock/reset network, one physical memory
+endpoint per actual device, one video and audio output path, and the required
+host/input bridges. Do not retain an entire test framework plus an independent
+Zhaozhou video subsystem when the production configuration needs only one.
+But do not subtract indispensable scaler/framework logic on paper before an
+actual selectable thin build exists.
+
+12.2 Clock and reset implementation
+-----------------------------------
+Use vendor PLL primitives behind wrappers, with model equivalents in simulation.
+Generate documented GPU/video/audio clocks from the real oscillator. Assert
+reset on external reset/unlocked PLL as appropriate; synchronize deassertion in
+each domain. Preserve frame/transaction reset barriers; a synchronized reset
+release is not a memory-drain certificate.
+
+Constrain all clocks/generated clocks and real I/O interfaces; inspect setup,
+hold, recovery/removal and unconstrained paths per domain. Cross-domain false
+paths are permitted only at actual CDC structures, not to erase a real slow
+synchronous path. Test reset while FIFO data/commands/frame terminals are active.
+Do not claim a physical-pin fit of a344-port internal leaf is a realistic board
+configuration; internal signals belong inside a constrained wrapper.
+
+Do not require a new200/400-MHz arithmetic island for initial completion. The
+existing100-MHz target and independent video/audio domains are the default.
+Double-pumping is an explicitly priced later experiment, not a way to hide
+unclosed timing in the baseline.
+
+12.3 SDRAM/HPS integration
+--------------------------
+Connect the existing controller to actual pins and correct board timing. Test
+addresses across all selected banks, byte lanes, bursts, refresh, arbitration,
+read/write turnaround, reset and saturation. Keep physical controller evidence
+separate from abstract-memory simulation. Model the HPS bridge's real word/byte
+address conversion and supported aperture; a64-bit descriptor field does not
+make a32-bit bus physically reach every address.
+
+Maintain a host-visible submission/completion ring with stable descriptors,
+release/acquire publication and the chosen cache-coherence/DMA ownership rules.
+The exact mechanism depends on the platform runtime; implement it once in a
+transport adapter and test stale-cache behavior rather than assuming volatile
+makes DMA coherent.
+
+12.4 Runtime required to use the machine
+-----------------------------------------
+Deliver a boot/load/submit/poll/present loop, resource upload/residency API,
+frame/input sequencing, audio feed, terrain streaming/writeback, timeout/fault
+recovery and capture/replay. Use the existing generated command and asset ABI.
+Do not write a second packed packet format in a new host helper.
+
+Frame submission preserves immutable data until completion. A failed frame
+retains the previous complete image and records its fault; a failed upload
+retains the old resource generation. Timeouts report which owner/credit stalled,
+not simply "GPU hung." Debug transport must not be the only path able to draw.
+
+CPU work already assigned by the charter (game truth, exact preparation, audio
+mixing, streaming policy) is legitimate. Moving an additional mandatory FPGA
+service to CPU requires a named backend choice, equivalent behavior, CPU budget
+and bandwidth validation; it is not a zero-ALM placeholder for missing hardware.
+
+12.5 Input/audio and deterministic timing
+------------------------------------------
+Connect input snapshot and rumble to the actual selected controller transport.
+If SNAC is selected, include its real interface, supported number/type of ports,
+synchronization and electrical assumptions. If the framework already supplies
+the supported pads, do not duplicate an input engine solely to satisfy a
+filename heuristic. Capture the exact input snapshot used for each simulation
+tick; late host polling must not relabel old input as a different tick.
+
+Audio uses the charter's HPS fixed-point48-kHz mixer, PCM ring, FPGA FIFO and
+actual output bridge. Include timing/rate conversion, underflow/overflow policy
+and stereo channel/order checks. Do not add an FPGA synthesis engine to replace
+the CPU mixer already allocated by the architecture. Audio clock requirements
+are checked independently of the GPU clock.
+
+12.6 Acceptance image and physical demonstration
+-------------------------------------------------
+The final bring-up program must exercise the actual selected machine: upload a
+mesh/material/clip; draw animated lit geometry and terrain; run a FIELD program;
+spawn and collide particles; produce a bounded spell/shadow; run post/HUD; use
+two inputs/two views; play audio; persist a terrain modification and reload it.
+A colored test pattern or software-blitted reel is valuable early bring-up, but
+must carry that label and cannot close console functionality.
+
+
+13. IMPLEMENTATION PACKETS, INTEGRATION ORDER AND ACCEPTANCE
+============================================================
+13.1 P0: Recover, reconcile, freeze the actual starting state
+------------------------------------------------------------
+FIRST ACTIONS, before writing another module:
+  inspect git status, worktrees and untracked files; read current run logs;
+  identify running Quartus processes and their immutable source snapshot;
+  preserve successful/failed reports and raw logs before cleanup;
+  identify concurrent ownership of particle-state/update/collision/spawn work;
+  record exact current branch/head plus dirty-source digest where applicable;
+  compare the supplied capability seed against actual implementations/contracts.
+
+Do not kill a running fit merely to adopt this document. Do not wait for it to
+finish before doing unrelated work in a separate worktree. The runner's snapshot
+makes historical comparisons possible while development continues; preserve that
+snapshot rather than insisting the live tree remain unchanged for hours.
+
+Deliver P0 as a small source/evidence checkpoint, not a new multi-day audit.
+Its exact outputs: frozen scope/owner map; explicit unresolved semantic conflicts;
+current test status with causes; reproduction commands for running/pending jobs.
+No speculative ALM savings subtracted and no change to selected visible tier.
+
+13.2 P1: Complete the byte-to-resident-resource path
+----------------------------------------------------
+Implement/adopt C02-C05: upload, legal client arbitration, retirement, mapping
+publication, cache/pose generation and material lookup. Reuse existing guard/
+bridge/fetch components. Independent working packet; no new renderer redesign.
+
+Done when a sealed host asset reaches a fresh actual memory slot, becomes
+resident only after retirement/verification, is fetched by a real consumer and
+survives update/abort/reset tests without stale bytes. The testbench supplies
+memory behavior, not fake residency success.
+
+13.3 P2: Complete geometry and common projection ownership
+----------------------------------------------------------
+Connect C06-C09/C12 with the real A producer, new return adapter, terrain B,
+selected shared core, view/configuration epochs, landed-write sealing, arena
+replay, exact static/skinned transforms and clip/depth entry. Keep the existing
+G8B selection as the substrate; do not re-create a private terrain projector.
+
+Done when both real clients draw through one projector and common renderer,
+with old private cores absent from the elaborated production root. Measure this
+parent once functional. A resource-top selection change alone does not close P2.
+
+13.4 P3: Complete visual attribute/lighting/fog paths
+----------------------------------------------------
+Implement C10-C14 and C18's normal/detail junction. Build the multi-light producer
+around the existing law; complete RGB/emission/fog/AUX planes, clipped sidecars,
+material adapter and final ordering. Complete lease/terminal/CDC return handling.
+
+Done when the final-resolution capture suite exercises all selected profiles,
+independent colored lights, toon, fog and emission with exact reference behavior
+and a workload/resource report from the same parameter selection.
+
+13.5 P4: Complete FIELD v3 and terrain/persistence
+-------------------------------------------------
+Implement C15-C19 by promoting validated probe machinery into a real production
+composition, binding all admitted opcodes/profiles, sharing exact preparation,
+connecting Earth reduction/world/cache/writeback and proving the actual deadline.
+
+Done when canonical programs run through the production executor with matching
+outputs/status, all required live terrain outputs feed real consumers, eviction/
+reload is exact and the admitted Earth stress completes under its selected
+service schedule. Physical area may still be over budget; label it separately.
+
+13.6 P5: Complete particles, not four isolated leaves
+----------------------------------------------------
+Reconcile concurrent work first. Finish C20-C24 with one authoritative numeric
+law/reference and the full state/update/collision/spawn/publication chain.
+The new COLLIDE leaf is a starting point; the supporting Python model is not a
+replacement for its independent compiled arithmetic oracle.
+
+Done when32,768 particles run across required recipe/response/event cases,
+survivors precede children, reset retains the last generation, hashes/identity
+remain deterministic under compaction/stalls, the actual draw endpoint sees the
+new generation, and all extra HPS traffic is counted.
+
+13.7 P6: Finish common producer capabilities
+--------------------------------------------
+Complete C25-C28: Forge evaluator/topology, lightning seam, contact shadow
+reference/generator, liquid material route and all selected sky/effect commands.
+Feed common endpoints. No extra renderer or duplicate arithmetic service merely
+for a feature name. Tie every implemented command to a live executed fixture.
+
+13.8 P7: Complete post/2D/admission/diagnostics
+----------------------------------------------
+Complete C29-C32. Use one world stream and real exclusive post lease. Finish
+histogram/Measure inputs and real counters. Validate Duo/HUD view boundaries,
+order-sensitive post scenes, generation/reset behavior and final terminal.
+
+13.9 P8: Platform and runtime as a concurrent lane
+-------------------------------------------------
+C33-C37 should progress alongside the core once its transport interfaces freeze,
+not be postponed until "only glue" remains. Pin board/framework assumptions,
+build clocks/reset/physical memory wiring, runtime loader/submission/audio/input
+and the actual board top. Use a bring-up mode for early hardware tests, with
+its limited scope explicit.
+
+13.10 P9: The complete specimen and honest measurement
+------------------------------------------------------
+Join all selected capabilities in zhao_console_core and the selected board top.
+Run full source registration, elaboration, liveness/negative-control checks,
+functional differential scenarios and aggregate schedules. Then snapshot the
+exact sources, parameters, constraints, memories/assets and platform revision.
+
+Run Analysis & Synthesis and retain hierarchy, RAM, DSP, register and ALM
+estimate reports. Attempt the defined fitter flow; preserve explicit failure if
+over capacity. Do not mislabel an unfinished run, coarse fit estimate or larger-
+device diagnostic placement as a successful target-device fit.
+
+Done for this request means a clearly labelled function-complete selected
+specimen plus its full measurement/failure record, with no missing mandatory
+function silently omitted. Release still requires resource/timing/workload and
+actual board closure.
+
+13.11 Practical concurrency and gate ownership
+----------------------------------------------
+Use one integration owner for the top, source lists, manifests, generated ABI,
+CTest registration and acceptance pins. Assign disjoint domain worktrees to
+bounded workers. Each worker commits source + focused test + interface note;
+integration replays it on the selected tree and adds the registration together.
+Do not commit a CMake entry that names someone else's untracked file.
+
+Keep the existing accepted snapshots/receipts immutable. New acceptance pins
+name the intentional changed selection and its evidence. Do not blindly replace
+all expected hashes until eight red tests stop complaining. A hash mismatch may
+be an expected configuration migration, but functional/path tests still need to
+pass under that migration. The dry-run report documents why several old packet
+registrations become stale; use it to migrate once, deliberately. [R20]
+
+A bounded local closure should be pushed when coherent so remote observers can
+see it. A small status record can distinguish running measurement, local
+implementation and a blocked gate; commit silence is not process telemetry.
+This is workflow advice, not a service this handoff schedules or operates.
+
+13.12 Stop, preserve, roll back
+-------------------------------
+For each candidate:
+  record baseline source/configuration and behavior;
+  implement one structural change or a tightly coupled parent migration;
+  compare exact behavior/order/status and fire a negative control;
+  map the same observable capacity;
+  measure the relevant parent when meaningful;
+  publish net resource/time trade, including new memory ports/queues;
+  adopt once or revert the candidate without destroying the evidence.
+
+Abort adoption if it changes a frozen result or declared game tier, exceeds
+memory/port/DSP limits, loses progress/credits, reads uninitialized memory,
+changes out-of-order identity, cannot complete its admitted window, or obtains
+its saving by making real inputs constant/unreachable.
+
+A promising exact local candidate that does not yet satisfy physical timing is
+"not adopted / timing unproven", not "zero benefit" and not a release pass.
+Do not indefinitely polish a disconnected wrapper. Test it inside the correct
+parent with valid timing constraints.
+
+
+14. MEASUREMENT AND OPTIMIZATION WITHOUT ANOTHER FALSE TOTAL
+============================================================
+14.1 Three different resource numbers must stay different
+---------------------------------------------------------
+OLD GROSS CENSUS:
+  existing selected leaves under independent stimulus; useful attribution,
+  incomplete required functions and possibly unrealized sharing.
+
+COMPLETE CONNECTED SYNTHESIS:
+  same selected full functionality, all real ownership/transport/platform
+  represented, measured by Analysis & Synthesis. Report ALM ESTIMATE, DSP,
+  registers, logical memory bits, inferred memories and preserved capacity.
+
+COMPLETE TARGET-DEVICE FIT:
+  actual placement/routing with the selected constraints and top; report fitted
+  ALMs, physical M10Ks/DSPs, per-clock setup/hold/recovery/removal, unconstrained
+  paths, critical families and reserve. A failing fit is reported as such.
+
+An8.6% map-to-fit calibration from a partial shell is a scenario input, not a
+universal conversion. Never turn100,709 estimated into92,700 measured by dividing
+by1.086. Never describe the resource census as a lower bound on the eventual
+optimized machine: added functionality can increase it and sharing/restructuring
+can decrease it. [R03,R04]
+
+14.2 Full receipt contents
+--------------------------
+Identity: commit, dirty-tree flag and file hashes, selected parameters, exact
+source closure, IP/framework versions, generator/ROM hashes, tool build, target
+part, seed, constraints, top entity and intended workload profile.
+Scope: all required capabilities; real instance graph; remaining tieoffs and
+why legitimate; simulation/physical IO boundary; absent functions = none for a
+complete claim; explicit optional/deferred register.
+Resources: top and per-entity figures; ALM estimates versus actual fitted ALMs;
+DSPs by selected mode; physical M10Ks and RAM organization; registers; interfaces;
+harness overhead if any, reported separately without arbitrary subtraction.
+Timing: relevant GPU clock, all other domains and their own targets, setup/hold,
+TNS, clock uncertainty, CDC review and unconstrained endpoint count.
+Workload: accepted/issued/landed/retired counts, per-resource issue slots,
+backpressure, memory bytes, queue maxima, phase durations, miss/abort reasons.
+Outcome: exact stage succeeded/failed; raw logs and reports; reason; no invented
+number for a stage that never reached a report.
+
+14.3 Activation matrix: prevent the next source-list illusion
+-------------------------------------------------------------
+For each capability mark:
+  present in sources? elaborated? preserved after synthesis? activated by real
+  command path? changes required output/counter? meets tier? physically fitted?
+
+The distinctions matter: eight declared geometry sources in an earlier shell
+were not elaborated. A default-zero material profile can similarly prune
+expensive attributes. Public reset-only or LFSR patterns can fail to exercise
+required dataflow even when they keep some registers nonconstant. [R04]
+
+Use at least these complete scenarios:
+  boot + upload + first frame;
+  ordinary textured static scene;
+  skinned creatures with palette/gen change and multiple lights;
+  dense terrain/Duo replay plus both projector clients;
+  overlapping Earth effects with material/nav/velocity outputs;
+  particle-full tick with collisions/spawn exhaustion/live deformation;
+  procedural spell + shadow + liquid;
+  post displacement+bloom+grade+flash+ink+HUD interaction;
+  persistence eviction/reload;
+  faults/reset/stalls/late writes at every ownership boundary.
+
+An optional diagnostic case may use injected inputs to isolate a leaf, but the
+complete claim needs a non-vacuous route through the real upstream producers.
+
+14.4 Area preservation priorities for NEW work
+----------------------------------------------
+1. Eliminate duplicated ownership/engines by construction.
+2. Store payload, tables, contexts and cold statistics in correctly shaped RAM.
+3. Move invariant computation to upload/configuration/exact preparation.
+4. Sequence mutually exclusive arithmetic using a proved service calendar.
+5. Keep internal widths exact but no wider than proven necessary.
+6. Use compact handles/late reads rather than repeated wide records.
+7. Pipeline clear long cones where needed; do not over-pipeline blind slack.
+8. Keep existing hardware that already meets its contract rather than rewrite
+   everything to a new generic framework.
+
+These rules preserve ALMs without demanding an impossible tiny quota for every
+missing organ. Size each complete domain from measurements; if a quota is missed,
+report its actual debit. Do not distribute the negative residual of an overfull
+37.5k portfolio as if missing organs have positive remaining budget.
+
+14.5 Old research goes into the optimization queue, not the completion gate
+--------------------------------------------------------------------------
+Keep DIV32, shared attribute dividers, edge-boundary raster search, RAM validity,
+exact reciprocal refinement, native ternary arithmetic and measured divider
+fusion as ranked candidates. Their integer-model proofs are useful; they are
+not complete hardware savings. Freeze behavioral boundaries so those candidates
+can be substituted after the full structure exists.
+
+Do not count a candidate's savings twice if it relies on slack consumed by
+another change, or if it removes logic already removed by a shared parent.
+Your200-ALM-per-added-M10K rule is a useful ranking heuristic only on NET parent
+measurements; a timing/DSP fix below that rate can still be necessary. Physical
+M10K reserve must be measured, not inferred from18.2% logical bit occupancy.
+
+14.6 When timing work belongs before completion
+-----------------------------------------------
+Fix hard combinational monsters and unsafe clock/reset structures while their
+interfaces are being integrated. Do not spend an unbounded sequence of fits
+on small Fmax increments in a parent that will be replaced next.
+A functionally verified but timing-failing integration checkpoint is allowed;
+record its intended clock and failure. You cannot claim it runs correctly on
+hardware at 100 MHz until the relevant paths close. Faster divider throughput is
+not automatically faster Fmax; distinguish those two benefits.
+
+14.7 No escape hatch is silently selected
+----------------------------------------
+The 30-fps render alternative, greater CPU offload and visible feature cuts
+remain separate owner decisions. They are not needed to call a failing full
+measurement honest. Keep their architectural seams reversible, but do not use
+them to hide an absent function in the first complete selected design.
+
+
+15. SUPPLIED IMPLEMENTATIONS, TESTS, LIMITATIONS AND INVOCATION
+==============================================================
+15.1 What is actually implemented in this delivery
+---------------------------------------------------
+implementation/closure_support.py:
+  exact particle128 pack/unpack against the ruled offsets and signed ranges;
+  survivor-first whole-group admission transaction model;
+  existing upload-verdict ordering and widened containment arithmetic;
+  upload retirement/quarantine/publication transaction model;
+  M10K physical-shape planning, explicitly not fitted counts;
+  necessary provider-capacity check, explicitly not a complete schedule proof;
+  fail-closed capability-ledger checking and explicit-file-list hashing.
+
+implementation/zhao_cpl_ram_fifo.sv:
+  a small candidate RAM-backed FIFO with one whole-word write and one synchronous
+  read, payload not reset, output staging, explicit RAM_WORDS+1 capacity and
+  no reliance on same-address read/write behavior.
+
+implementation/zhao_cpl_upload_guard.sv:
+  candidate bounded sequential upload request validator with ordered refusal
+  codes and33-bit endpoints. NOT a DMA engine or a publication controller.
+
+Do not instantiate a new FIFO if the repository already has a tested equivalent.
+Do not duplicate an uploader's full descriptor registers merely to keep the
+candidate guard as a separate component. Inline/share the state where the parent
+contract permits; remeasure after doing so.
+
+15.2 Exact limitations
+-----------------------
+The Python tests were executed locally. They validate this package's algorithms,
+not the connected repository, its complete reference, Verilator behavior or the
+FPGA. The material/lighting/particle-force/FIELD arithmetic has NOT been invented
+in Python as a substitute for missing authoritative references.
+
+The particle admission model uses an explicit strict-prefix, whole-group policy
+and external stable IDs. Confirm that policy against reconciled current rulings;
+do not silently impose it as a new frozen particle law.
+
+The upload model tracks individual retired words in a Python set so duplicate
+credits are testable. This is a software checking model, NOT an instruction to
+build a bitmap/set of every uploaded word in FPGA fabric. The hardware uses the
+actual ordered/tagged memory-transaction contract and bounded counters/credits.
+
+The upload guard checks request-acceptance epoch. The parent must separately
+revalidate ownership/epoch on publication and drain old accepted writes on abort.
+The guard is not a substitute for source/destination configuration validation.
+
+No HDL simulator or Quartus was available for successful execution in this
+session. The RTL candidates and supplied testbench are therefore labelled
+UNVERIFIED RTL. An attempted environment setup did not yield a simulator; no
+HDL pass, physical resource count or timing number is asserted. Run the bench
+and repository-equivalent gates before even considering adoption.
+
+The completion seed is manually reconciled from cited sources, not generated
+from an elaborator. The Python ledger checker cannot prove functional
+reachability; the real integrated tests and post-synthesis hierarchy must supply
+that evidence. It correctly refuses release with unresolved scope/candidates.
+
+15.3 Commands for this standalone package
+------------------------------------------
+From the extracted package root:
+  python -m unittest discover -s tests -v
+  python implementation/closure_support.py memory 256 76
+  python implementation/closure_support.py memory 256 76 --mode tdp
+  python implementation/closure_support.py ledger examples/completion_seed.json
+  python implementation/closure_support.py ledger examples/completion_seed.json --release
+
+The final command is EXPECTED TO FAIL: this seed honestly records incomplete
+integration and unknown measurements. Removing the failure is not the task;
+complete and prove the referenced obligations.
+
+Optional file-existence checking against the actual repository:
+  python implementation/closure_support.py ledger examples/completion_seed.json --root PATH_TO_REPO
+
+A missing source is reported, not created automatically. Some new local files may
+already exist and need their state/evidence reconciled before using the seed.
+
+The RTL test script creates deterministic input vectors from the independent
+Python predicate model and invokes Icarus Verilog when available. It exits
+nonzero rather than report a pass if iverilog/vvp are absent. The implementation
+agent should add equivalent Verilator/repository tests and a Quartus map before
+production adoption. See tests/run_rtl_tests.py.
+
+15.4 Repository integration instructions
+-----------------------------------------
+Do not paste this whole package into fpga/rtl. Stage only a useful candidate in an
+isolated worktree. Bind its numeric/status constants to the generated repository
+ABI where applicable. Add its test and temporary probe disposition, run lint /
+simulation, inspect inference, then compare the actual parent. Remove unused
+candidate files from production selection. Keep the historical baseline and
+standalone evidence intact.
+
+This document supplies a complete completion STRATEGY and concrete starting
+implementations; it does not pretend to supply thousands of lines of newly
+verified multi-light, FIELD, DMA, post and board RTL. Those are explicitly named
+implementation packets, with reuse paths and tests, not hidden unfinished tasks.
+
+
+16. SOURCE REGISTER AND UNRESOLVED DECISIONS
+===========================================
+16.1 Evidence hierarchy
+------------------------
+Latest explicit owner ruling / frozen numeric or ABI law takes precedence over
+older generated prose. The selected implementation and applicable test/report
+must then agree with that law. A source comment cannot authorize deleting a
+required function; a passed test cannot overrule a frozen ABI. Conflicts are
+recorded and fixed, not settled by whichever file was opened first.
+
+Repository source facts below are from the original audit at ced8752 plus the
+explicit refresh to 155c141 described at the top. URLs in the machine-readable
+source register pin each item to the inspected revision. These are sources,
+not proof that every cited function has already passed integration.
+
+R01 ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md
+    Machine goals, domains, resource reserve, memory/CPU roles, reference-first.
+R02 design/V1-RELEASE-DEFINITION.md
+    Release scope, selected/deferred policies; historical status rows can be stale.
+R03 design/prod_manifest.yml; fpga/rtl/prod/zhao_prod_top.sv
+    Existing production accounting and disconnected census boundary.
+R04 reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md
+    Updated physical/source-closure history, completion work and definitions.
+R05 Commit155c141 + reports/MISSING-ORGAN-REGISTER-20260918.md
+    New collision candidate; missing-register classification errors need repair.
+R06 reports/Zhaozhou_conditional_golden_path.md
+    Seven complete-domain objectives; provider calendars; actual scope rules.
+R07 spec/qformats.md, especially sections8 and10; spec/commands.zidl
+    Canonical depth/fog/particle packing, exact numeric and wire laws.
+R08 design/contracts/FIELD.SEQ.CORE.md
+    v1/v2 frozen; v3 selected; one semantic engine and generated prepared plans.
+R09 design/contracts/FIELD.SEQ.EARTH.md
+    Earth lane bindings,297 versus273 groups, output reductions and deadlines.
+R10 fpga/rtl/geometry/zhao_geom_proj_lane.sv at 155c141
+    New geometry return adapter, non-stallable landing and its actual limits.
+R11 design/contracts/GEOM.LIGHT.md
+    Shared existing light term, missing RGB composition, emission/fog placement.
+R12 design/contracts/MEM.UPLOAD.md
+    Fresh-slot publication, retired writes, generation-tagged coherence.
+R13 design/contracts/MATERIAL.RESOLVE.md
+    Lookup/cache purpose, later frozen32-byte record and refusal behavior.
+R14 reference/include/zref/zref_mem_upload.hpp
+    Executable ordered descriptor predicates and burst law.
+R15 reference/include/zref/zref_material_resolve.hpp
+    Actual material reference/record checks, generation identity and cache.
+R16 design/contracts/GEOM.LOOM.md; spec/creature_rules.md
+    Transform ownership, software-prepared graph and pose/normal seams.
+R17 fpga/rtl/synth/zhao_probe_v3_full.sv; other referenced v3 probe modules
+    Existing experimental implementation and explicit gaps/ownership machinery.
+R18 fpga/rtl/terrain/zhao_terrain_pipe.sv
+    Current terrain/projection composition, exposed client A, missing normals.
+R19 design/contracts/PART.STATE.md, PART.UPDATE.md, PART.COLLIDE.md, PART.SPAWN.md
+    Behavior/ordering/ownership; reconcile obsolete numeric/tick prose with R07.
+R20 reports/SELECTION-SWAP-APPLIED-DRYRUN-20260918.md
+    Actual selection migration, duplicate-accounting trap and acceptance debt.
+R21 design/contracts/FORGE.SHADOW.md
+    Ordinary geometry shadow ladder and bounded terrain taps; reference debt.
+R22 design/contracts/POST.COMPOSITE.md
+    One displaced stream, compact planes, nine source lines and exact ordering.
+R23 fpga/Zhaozhou.sv on inspected board branch3e028746...
+    Placeholder status; no invented claim about unseen newer platform work.
+R24 design/budgets/workloads.yml; design/external_inputs.yml
+    Compute budget versus video period; demand qualifications and provider gaps.
+
+Vendor verification (read as HTML, not a PDF extraction):
+V01 Cyclone V handbook, M10K mixed-width configurations, document683375.
+    Physical SDP/TDP geometry; logical bits do not establish block/port usage.
+V02 Quartus Prime Standard Design Recommendations, document683323.
+    Synchronous memories, unsupported resets, read-during-write and coding style.
+V03 AN584 Timing Closure Methodology, document683145, recommended coding styles.
+    Unsupported payload reset and extra logic around inferred memories.
+
+Detailed source URLs are in sources.json and the source-URL appendix.
+
+16.2 Decisions to settle with existing authority before freezing code
+--------------------------------------------------------------------
+A. Which exact latest board/framework/part/I/O profile is selected?
+B. Canonical complete particle tick ordering where old contracts disagree.
+C. Stable particle identity source and wrap policy without changing128-bit packing.
+D. Whole-child-group capacity policy, especially whether an unfit earlier group
+   prevents all later groups, and exact simultaneous event ordering.
+E. Existing complete independent particle recipe/collision/spawn reference; where
+   absent, author it from current numeric law with independent vectors.
+F. Final selected complete attribute profiles and capacities, including emitted
+   RGB/fog/AUX; a three-plane measurement is not the entire answer.
+G. Terrain world-normal/detail producer with G8B's vertex/reference decomposition.
+H. Complete admitted FIELD opcode/service matrix and currently selected profiles.
+I. Public handle8-bit versus residency16-bit incarnation/wrap protocol.
+J. Actual optional POST.ECHO/SNAC and any other scope amendments.
+
+These are bounded engineering decisions attached to specific packets. They do
+not authorize abandoning the request or treating the affected function as zero.
+Reuse a newer authoritative implementation when found; otherwise resolve the
+specific law and test it, then continue construction.
+
+FINAL INSTRUCTION TO THE IMPLEMENTATION AGENT
+=============================================
+Do not return another impressive partial subtotal labelled "the console."
+Build the selected mandatory paths with one owner per real resource, real
+inputs, real output consumers and conservative storage/arithmetic. Preserve
+published behavior. Keep the old census as evidence. Make the actual connected
+core and board scope explicit. Run the complete measurement even if the result
+is a resource failure. Then we have a machine to shrink instead of a list of
+unpriced promises.
+
+
+SOURCE URL APPENDIX
+===================
+R01 ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md
+
+R02 design/V1-RELEASE-DEFINITION.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/V1-RELEASE-DEFINITION.md
+
+R03 design/prod_manifest.yml
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/prod_manifest.yml
+
+R03 fpga/rtl/prod/zhao_prod_top.sv
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/prod/zhao_prod_top.sv
+
+R04 reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md
+https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md
+
+R05 reports/MISSING-ORGAN-REGISTER-20260918.md
+https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/reports/MISSING-ORGAN-REGISTER-20260918.md
+
+R05 fpga/rtl/particles/zhao_part_collide.sv
+https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/fpga/rtl/particles/zhao_part_collide.sv
+
+R06 reports/Zhaozhou_conditional_golden_path.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reports/Zhaozhou_conditional_golden_path.md
+
+R07 spec/qformats.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/spec/qformats.md
+
+R07 spec/commands.zidl
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/spec/commands.zidl
+
+R08 design/contracts/FIELD.SEQ.CORE.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/FIELD.SEQ.CORE.md
+
+R09 design/contracts/FIELD.SEQ.EARTH.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/FIELD.SEQ.EARTH.md
+
+R10 fpga/rtl/geometry/zhao_geom_proj_lane.sv
+https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/fpga/rtl/geometry/zhao_geom_proj_lane.sv
+
+R11 design/contracts/GEOM.LIGHT.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/GEOM.LIGHT.md
+
+R12 design/contracts/MEM.UPLOAD.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/MEM.UPLOAD.md
+
+R13 design/contracts/MATERIAL.RESOLVE.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/MATERIAL.RESOLVE.md
+
+R14 reference/include/zref/zref_mem_upload.hpp
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reference/include/zref/zref_mem_upload.hpp
+
+R15 reference/include/zref/zref_material_resolve.hpp
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/reference/include/zref/zref_material_resolve.hpp
+
+R16 design/contracts/GEOM.LOOM.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/GEOM.LOOM.md
+
+R16 spec/creature_rules.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/spec/creature_rules.md
+
+R17 fpga/rtl/synth/zhao_probe_v3_full.sv
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/synth/zhao_probe_v3_full.sv
+
+R18 fpga/rtl/terrain/zhao_terrain_pipe.sv
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/fpga/rtl/terrain/zhao_terrain_pipe.sv
+
+R19 design/contracts/PART.STATE.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.STATE.md
+
+R19 design/contracts/PART.UPDATE.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.UPDATE.md
+
+R19 design/contracts/PART.COLLIDE.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.COLLIDE.md
+
+R19 design/contracts/PART.SPAWN.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/PART.SPAWN.md
+
+R20 reports/SELECTION-SWAP-APPLIED-DRYRUN-20260918.md
+https://github.com/Fabulu/zhaozhou/blob/155c141f5b922a62b9331c048352e46c3f67ad04/reports/SELECTION-SWAP-APPLIED-DRYRUN-20260918.md
+
+R21 design/contracts/FORGE.SHADOW.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/FORGE.SHADOW.md
+
+R22 design/contracts/POST.COMPOSITE.md
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/contracts/POST.COMPOSITE.md
+
+R23 fpga/Zhaozhou.sv
+https://github.com/Fabulu/zhaozhou/blob/3e0287465887d64bc07e8f3ab8d878d8987ec412/fpga/Zhaozhou.sv
+
+R24 design/budgets/workloads.yml
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/budgets/workloads.yml
+
+R24 design/external_inputs.yml
+https://github.com/Fabulu/zhaozhou/blob/ced8752da9c1bac79bc3ef436f64a33bd6cac22c/design/external_inputs.yml
+
+V01 M10K mixed-width configurations
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations
+
+V02 Quartus Prime Standard Design Recommendations
+https://docs.altera.com/r/docs/683323/current
+
+V03 AN584 recommended coding styles
+https://docs.altera.com/r/docs/683145/21.3/an-584-timing-closure-methodology-for-advanced-fpga-designs/follow-recommended-coding-styles
+
+
+
+IMPLEMENTATION AND TEST APPENDIX
+================================
+
+
+----- BEGIN FILE: README.txt -----
+ZHAOZHOU TRUE-CONSOLE COMPLETION HANDOFF
+======================================
+
+Start with Zhaozhou_True_Console_Completion_Plan_2026-09-18.txt.
+It includes the architecture, 38-capability checklist, implementation packets,
+acceptance/abort rules, sources and full supporting source appendix.
+
+No repository was modified. Pinned refresh: 155c141f5b922a62b9331c048352e46c3f67ad04.
+Review newer/local work before implementation; do not duplicate concurrent work.
+
+Implemented and executed here:
+  python -m unittest discover -s tests -v
+  25 passing tests (test output in evidence/python-tests.txt).
+
+Implemented but NOT HDL-simulated or synthesized here:
+  implementation/zhao_cpl_ram_fifo.sv
+  implementation/zhao_cpl_upload_guard.sv
+  tests/rtl_candidate_tb.sv
+  python tests/run_rtl_tests.py
+The runner exits 2 when Icarus tools are absent; that is not a pass.
+
+The support models are NOT complete particle-force/FIELD/lighting oracles.
+The strict-prefix spawn admission policy and external stable-ID adapter are
+explicit proposals requiring reconciliation before production adoption.
+
+examples/completion_seed.json deliberately FAILS --release until all obligations
+and target fit/timing/workload/board evidence exist. It is not an auto-generated
+proof of the repository's current scope. The checker cannot prove that a claimed
+source/test/receipt is semantically correct: integration tests and review must.
+
+No FPGA ALM/DSP/M10K saving or timing number is claimed for the supplied code.
+
+----- END FILE: README.txt -----
+
+
+----- BEGIN FILE: implementation/closure_support.py -----
+"""Offline completion support, not a replacement for the repository's oracles.
+
+Python 3.10+, standard library only. Implements:
+* the ruled particle128 packing (qformats.md section 10);
+* survivor-first, whole-child-group admission as a proposed transaction model;
+* upload descriptor validation and a drain-before-publication transaction model;
+* physical-shape M10K planning and necessary provider-calendar checks;
+* a fail-closed completion ledger checker.
+No function claims FPGA area, timing, complete ISA semantics or board validation.
+"""
+from __future__ import annotations
+from dataclasses import dataclass, field
+from enum import IntEnum
+from pathlib import Path
+from typing import Iterable, Mapping, Sequence
+import argparse
+import hashlib
+import json
+import math
+import sys
+
+LAYOUT = (
+    ('x', 0, 18, True), ('y', 18, 18, True), ('z', 36, 18, True),
+    ('vx', 54, 11, True), ('vy', 65, 11, True), ('vz', 76, 11, True),
+    ('age', 87, 10, False), ('species', 97, 7, False),
+    ('size', 104, 6, False), ('spin', 110, 6, False),
+    ('flags', 116, 4, False), ('variation', 120, 8, False),
+)
+
+
+def checked_uint(value: int, bits: int, name: str) -> int:
+    if type(value) is not int or not 0 <= value < (1 << bits):
+        raise ValueError(f'{name} must be an unsigned {bits}-bit integer')
+    return value
+
+
+def pack_particle(values: Mapping[str, int]) -> bytes:
+    """Pack exactly 16 little-endian bytes. Does not invent update arithmetic."""
+    if set(values) != {x[0] for x in LAYOUT}:
+        raise ValueError('particle fields must exactly match the ruled layout')
+    word = 0
+    for name, shift, width, signed in LAYOUT:
+        value = values[name]
+        low, high = (-(1 << (width-1)), (1 << (width-1))-1) if signed else (0, (1 << width)-1)
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError(f'{name} outside [{low}, {high}]')
+        if name == 'flags' and value & 8:
+            raise ValueError('reserved particle flag bit 3 must be zero')
+        word |= (value & ((1 << width)-1)) << shift
+    return word.to_bytes(16, 'little')
+
+
+def unpack_particle(data: bytes) -> dict[str, int]:
+    if len(data) != 16:
+        raise ValueError('particle record must contain exactly 16 bytes')
+    word = int.from_bytes(data, 'little')
+    result = {}
+    for name, shift, width, signed in LAYOUT:
+        raw = (word >> shift) & ((1 << width)-1)
+        result[name] = raw - (1 << width) if signed and raw & (1 << (width-1)) else raw
+    if result['flags'] & 8:
+        raise ValueError('reserved particle flag bit 3 is nonzero')
+    return result
+
+
+@dataclass(frozen=True)
+class ParticleRecord:
+    stable_id: int  # Adapter input, NOT a new field silently inserted into particle128.
+    payload: bytes
+    def __post_init__(self):
+        checked_uint(self.stable_id, 64, 'stable_id')
+        unpack_particle(self.payload)
+
+
+@dataclass(frozen=True)
+class SpawnGroup:
+    parent_order: int
+    event_order: int
+    children: tuple[ParticleRecord, ...]
+    def __post_init__(self):
+        if self.parent_order < 0 or not 0 <= self.event_order < 4:
+            raise ValueError('invalid parent/event order')
+
+
+@dataclass(frozen=True)
+class TickResult:
+    records: tuple[ParticleRecord, ...]
+    children_requested: int
+    children_emitted: int
+    children_refused: int
+    malformed_groups: int
+
+
+def finish_particle_tick(survivors: Sequence[ParticleRecord], groups: Sequence[SpawnGroup],
+                         capacity: int) -> TickResult:
+    """Proposed whole-group, prefix-priority admission policy.
+
+    Update/collision are external exact oracles. Groups must already be in
+    parent/event order. After a legal group cannot fit, later legal groups are
+    refused even if smaller: this preserves the strict-prefix policy documented
+    in the handoff. Confirm that policy against current owner rulings before
+    production adoption. A >16-child group is malformed, refused atomically.
+    """
+    if type(capacity) is not int or capacity < 0 or len(survivors) > capacity:
+        raise ValueError('cannot evict survivors to meet capacity')
+    keys = [(g.parent_order, g.event_order) for g in groups]
+    if keys != sorted(keys) or len(set(keys)) != len(keys):
+        raise ValueError('groups must have unique, ordered parent/event keys')
+    output = list(survivors)
+    requested = emitted = refused = malformed = 0
+    exhausted = False
+    for g in groups:
+        count = len(g.children)
+        requested += count
+        if count > 16:
+            malformed += 1
+            refused += count
+            continue
+        if count == 0:
+            continue
+        if exhausted or len(output) + count > capacity:
+            exhausted = True
+            refused += count
+        else:
+            output.extend(g.children)
+            emitted += count
+    ids = [p.stable_id for p in output]
+    if len(set(ids)) != len(ids):
+        raise ValueError('duplicate stable particle identity')
+    return TickResult(tuple(output), requested, emitted, refused, malformed)
+
+
+class UploadVerdict(IntEnum):
+    OK = 0
+    UNALIGNED = 1
+    ZERO_LENGTH = 2
+    OUTSIDE_GUARD = 3
+    EPOCH_STALE = 4
+    CRC_FAIL = 5
+    SOURCE_OUTSIDE_ARENA = 6
+    SOURCE_UNREACHABLE = 7
+
+
+def upload_verdict(hps_addr: int, vram_addr: int, length: int,
+                   source_base: int, source_bytes: int, dest_base: int, dest_bytes: int,
+                   request_epoch: int, current_epoch: int) -> UploadVerdict:
+    """Mirror zref_mem_upload.hpp predicate order, with unbounded host addition."""
+    checked_uint(hps_addr, 64, 'hps_addr')
+    for name, value in [('vram_addr', vram_addr), ('length', length),
+                        ('source_base', source_base), ('source_bytes', source_bytes),
+                        ('dest_base', dest_base), ('dest_bytes', dest_bytes)]:
+        checked_uint(value, 32, name)
+    checked_uint(request_epoch, 16, 'request_epoch')
+    checked_uint(current_epoch, 16, 'current_epoch')
+    if length == 0:
+        return UploadVerdict.ZERO_LENGTH
+    if (hps_addr | vram_addr | length) & 63:
+        return UploadVerdict.UNALIGNED
+    if hps_addr >> 32:
+        return UploadVerdict.SOURCE_UNREACHABLE
+    if not source_base <= hps_addr or hps_addr + length > source_base + source_bytes:
+        return UploadVerdict.SOURCE_OUTSIDE_ARENA
+    if not dest_base <= vram_addr or vram_addr + length > dest_base + dest_bytes:
+        return UploadVerdict.OUTSIDE_GUARD
+    if request_epoch != current_epoch:
+        return UploadVerdict.EPOCH_STALE
+    return UploadVerdict.OK
+
+
+@dataclass
+class UploadTransaction:
+    """Transaction-level model; retirement is external memory acknowledgement.
+
+    Abort quarantines the destination until all previously issued writes drain.
+    reset() is deliberately absent: global reset requires a transport-drain
+    contract, not forgetting outstanding writes. Late foreign responses do not
+    credit this transaction. Models one transaction, not a full DMA engine.
+    """
+    token: int
+    expected_words: int
+    epoch: int
+    generation: int
+    destination_slot: int
+    issued: int = 0
+    retired: int = 0
+    issue_closed: bool = False
+    crc_ok: bool | None = None
+    failed: bool = False
+    published: bool = False
+    _seen: set[int] = field(default_factory=set, repr=False)
+
+    def __post_init__(self):
+        if type(self.expected_words) is not int or self.expected_words <= 0:
+            raise ValueError('positive integral word count required')
+        for name, value in [('epoch', self.epoch), ('generation', self.generation)]:
+            checked_uint(value, 16, name)
+
+    def issue(self, count: int = 1) -> None:
+        if type(count) is not int or count < 0 or self.issue_closed or self.failed or self.published:
+            raise ValueError('issue after transaction closure or invalid count')
+        if self.issued + count > self.expected_words:
+            raise ValueError('issued too many words')
+        self.issued += count
+
+    def retire(self, token: int, first_word: int, count: int = 1) -> bool:
+        if token != self.token:
+            return False
+        if (type(count) is not int or type(first_word) is not int or count < 1
+                or first_word < 0 or first_word + count > self.issued):
+            raise ValueError('retirement not backed by issued writes')
+        indices = set(range(first_word, first_word+count))
+        if self._seen & indices:
+            raise ValueError('duplicate write credit')
+        self._seen |= indices
+        self.retired += count
+        return True
+
+    def close_issue(self) -> None:
+        if self.issued != self.expected_words and not self.failed:
+            raise ValueError('successful issuer cannot stop early')
+        self.issue_closed = True
+
+    def complete_crc(self, ok: bool) -> None:
+        if type(ok) is not bool:
+            raise ValueError('CRC verdict must be boolean')
+        if self.crc_ok is not None:
+            raise ValueError('CRC already supplied')
+        self.crc_ok = bool(ok)
+        if not ok:
+            self.failed = True
+
+    def abort(self) -> None:
+        if self.published:
+            raise ValueError('cannot abort already published generation')
+        self.failed = True
+        self.issue_closed = True  # Caller has cancelled unsent issues first.
+
+    @property
+    def drained(self) -> bool:
+        return self.issue_closed and self.retired == self.issued
+
+    @property
+    def reclaimable(self) -> bool:
+        return self.failed and self.drained and not self.published
+
+    def publish(self, current_epoch: int, new_slot_unpublished: bool,
+                old_mapping: tuple[int, int]) -> tuple[int, int]:
+        checked_uint(current_epoch, 16, 'current_epoch')
+        if type(new_slot_unpublished) is not bool:
+            raise ValueError('slot visibility must be boolean')
+        if self.published:
+            raise ValueError('duplicate publication')
+        if current_epoch != self.epoch:
+            self.failed = True
+        if not (self.drained and self.issued == self.expected_words and self.crc_ok is True
+                and not self.failed and new_slot_unpublished
+                and self.destination_slot != old_mapping[0]):
+            raise ValueError('publication preconditions not met')
+        self.published = True
+        return (self.destination_slot, self.generation)
+
+
+# Single/simple-dual-port shapes; true-dual-port has no 256x40 mode.
+SDP_SHAPES = ((256,40),(512,20),(1024,10),(2048,5),(4096,2),(8192,1))
+TDP_SHAPES = ((512,20),(1024,10),(2048,5),(4096,2),(8192,1))
+
+
+def memory_plan(depth: int, width: int, mode: str = 'sdp', copies: int = 1) -> dict:
+    """Shape estimate, never a fitted count. Port-copy factor must be supplied."""
+    if any(type(v) is not int or v <= 0 for v in (depth, width, copies)):
+        raise ValueError('depth, width and copies must be positive integers')
+    if mode not in ('sdp', 'tdp'):
+        raise ValueError('mode must be sdp or tdp')
+    shapes = SDP_SHAPES if mode == 'sdp' else TDP_SHAPES
+    choices = []
+    for d,w in shapes:
+        banks = (depth+d-1)//d
+        slices = (width+w-1)//w
+        blocks = banks*slices*copies
+        choices.append((blocks, banks, slices, d,w))
+    blocks,banks,slices,d,w = min(choices)
+    return dict(evidence='shape_estimate_not_fit', blocks=blocks, mode=mode,
+                primitive_depth=d, primitive_width=w, depth_banks=banks,
+                width_slices=slices, physical_copies=copies,
+                logical_bits=depth*width*copies,
+                physical_capacity_bits=blocks*10240)
+
+
+def provider_bound(jobs: int, issue_slots: int, lanes: int, window_cycles: int,
+                   overhead_cycles: int = 0) -> dict:
+    """Necessary capacity test ONLY. Passing does not prove a legal schedule."""
+    vals = (jobs,issue_slots,lanes,window_cycles,overhead_cycles)
+    if any(type(v) is not int for v in vals) or min(jobs,issue_slots,overhead_cycles) < 0:
+        raise ValueError('nonnegative integral demand required')
+    if lanes <= 0 or window_cycles <= 0:
+        raise ValueError('positive lanes and window required')
+    cycles = (jobs*issue_slots+lanes-1)//lanes+overhead_cycles
+    return dict(necessary_cycles=cycles, window_cycles=window_cycles,
+                impossible_even_without_stalls=cycles > window_cycles,
+                schedule_proven=False)
+
+
+class LedgerError(ValueError):
+    pass
+
+
+def check_ledger(doc: dict, root: Path | None = None, release: bool = False) -> list[str]:
+    """Check honest classification; optional declared evidence/file existence.
+
+    This DOES NOT elaborate RTL or discover functional reachability. Reachability
+    and liveness require external reports/tests. Facts cannot be self-certified
+    by inventing a JSON row. Unknown mandatory scope and manual-review items
+    fail release even when names happen to match existing files.
+    """
+    if doc.get('schema') != 1 or not isinstance(doc.get('capabilities'), list):
+        raise LedgerError('schema=1 and capabilities[] required')
+    if not isinstance(doc.get('owners'), dict):
+        raise LedgerError('owners{} required')
+    ids: set[str] = set()
+    problems: list[str] = []
+    required = {'id','policy','state','owner','implementation','evidence','notes'}
+    policies = {'required','optional_selected','deferred','excluded','needs_reconciliation'}
+    states = {'absent','candidate','unit_verified','integrated','mapped','fitted','hardware_proven','not_applicable','unknown'}
+    for row in doc['capabilities']:
+        if not isinstance(row,dict) or not required <= row.keys():
+            raise LedgerError('incomplete capability row')
+        name = row['id']
+        if not isinstance(name,str) or not name or name in ids:
+            raise LedgerError('duplicate/invalid capability id')
+        ids.add(name)
+        if row['policy'] not in policies or row['state'] not in states:
+            raise LedgerError(f'{name}: unsupported policy/state')
+        active = row['policy'] in ('required','optional_selected')
+        if row['policy'] == 'needs_reconciliation':
+            problems.append(f'{name}: requirement status unresolved')
+        if active and row['owner'] not in doc['owners']:
+            problems.append(f'{name}: no physical/software owner')
+        if active and row['state'] in ('absent','unknown','candidate','unit_verified','not_applicable'):
+            problems.append(f"{name}: not connected-and-proven ({row['state']})")
+        if active and not row['implementation']:
+            problems.append(f'{name}: no implementation path')
+        if active and not row['evidence']:
+            problems.append(f'{name}: no supporting evidence')
+        if row['state'] in ('integrated','mapped','fitted','hardware_proven'):
+            need = {'functional_path','negative_control','scope_digest'}
+            if not need <= row['evidence'].keys():
+                problems.append(f'{name}: missing integration/liveness evidence fields')
+        if root is not None:
+            base = root.resolve()
+            for path in row['implementation']:
+                target = (base/path).resolve()
+                if not target.is_relative_to(base) or not target.is_file():
+                    problems.append(f'{name}: missing/outside implementation file {path}')
+    for name, owner in doc['owners'].items():
+        if owner.get('kind') not in ('rtl','software','mixed','platform'):
+            raise LedgerError(f'{name}: invalid owner kind')
+        area = owner.get('fitted_alms')
+        if area is not None:
+            if not isinstance(area,(float,int)) or area < 0:
+                raise LedgerError('invalid fitted ALM count')
+            if owner.get('area_evidence') != 'matched_fit':
+                raise LedgerError(f'{name}: fitted ALMs require matched_fit evidence')
+        if owner.get('candidate_savings_alms') is not None:
+            raise LedgerError('do not subtract speculative savings in the completion ledger')
+    # A complete capability list alone is not a release certificate.
+    # These references need external review; this checker cannot verify their truth.
+    release_evidence = doc.get('release_evidence', {})
+    for requirement in ('function_complete', 'selected_scope_complete', 'target_fit',
+                        'timing', 'workload', 'board'):
+        claim = release_evidence.get(requirement, {})
+        if not (isinstance(claim, dict) and claim.get('status') == 'pass'
+                and claim.get('path') and claim.get('scope_digest')):
+            problems.append(f'release: {requirement} not evidenced')
+        elif root is not None:
+            target = (root.resolve() / claim['path']).resolve()
+            if not target.is_relative_to(root.resolve()) or not target.is_file():
+                problems.append(f'release: {requirement} evidence file missing/outside root')
+    if release and problems:
+        raise LedgerError('\n'.join(problems))
+    return problems
+
+
+def snapshot_files(root: Path, paths: Iterable[str]) -> dict:
+    """Hash explicitly supplied files; no claim that this is the RTL closure."""
+    base = root.resolve()
+    rows = []
+    for name in sorted(set(paths)):
+        p = (base/name).resolve()
+        if not p.is_relative_to(base) or not p.is_file():
+            raise ValueError(f'missing/outside path {name}')
+        data = p.read_bytes()
+        rows.append(dict(path=name, bytes=len(data), sha256=hashlib.sha256(data).hexdigest()))
+    wire = json.dumps(rows,sort_keys=True,separators=(',',':')).encode()
+    return dict(files=rows, manifest_sha256=hashlib.sha256(wire).hexdigest(),
+                scope='explicit_file_list_not_elaboration_proof')
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command',required=True)
+    ledger = sub.add_parser('ledger')
+    ledger.add_argument('json_file',type=Path)
+    ledger.add_argument('--root',type=Path)
+    ledger.add_argument('--release',action='store_true')
+    mem = sub.add_parser('memory')
+    mem.add_argument('depth',type=int); mem.add_argument('width',type=int)
+    mem.add_argument('--mode',choices=['sdp','tdp'],default='sdp')
+    mem.add_argument('--copies',type=int,default=1)
+    args = parser.parse_args()
+    try:
+        if args.command == 'memory':
+            print(json.dumps(memory_plan(args.depth,args.width,args.mode,args.copies),indent=2))
+        else:
+            issues=check_ledger(json.loads(args.json_file.read_text(encoding='utf-8')),args.root,args.release)
+            print(json.dumps(dict(release_ready=not issues, blockers=issues),indent=2))
+        return 0
+    except (ValueError,OSError,KeyError,TypeError) as e:
+        print(str(e),file=sys.stderr)
+        return 2
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
+
+----- END FILE: implementation/closure_support.py -----
+
+
+----- BEGIN FILE: implementation/zhao_cpl_ram_fifo.sv -----
+// Candidate completion primitive, NOT installed in Fabulu/zhaozhou.
+// One synchronous memory read port, one whole-word write port, no RAM reset.
+// Capacity is RAM_WORDS + ONE output register, explicitly; not a drop-in
+// replacement for a FIFO whose externally promised capacity is RAM_WORDS.
+// A full memory refuses push even when a same-edge fetch frees a word. This
+// avoids same-address read/write and a combinational output-ready -> input-ready
+// path. Payload is uninterpreted; the caller includes tags/generations in WIDTH.
+// Reset discards queued work. Use only where the owning transaction allows that.
+// HDL simulation / Quartus inference / area / timing: NOT performed here.
+`default_nettype none
+module zhao_cpl_ram_fifo #(
+    parameter integer WIDTH = 128,
+    parameter integer RAM_WORDS = 16,
+    parameter integer ADDR_W = 4
+) (
+    input wire clk,
+    input wire rst_n,
+    input wire in_valid_i,
+    output wire in_ready_o,
+    input wire [WIDTH-1:0] in_data_i,
+    output wire out_valid_o,
+    input wire out_ready_i,
+    output wire [WIDTH-1:0] out_data_o,
+    output wire [ADDR_W:0] memory_words_o
+);
+    (* ramstyle = "M10K" *) reg [WIDTH-1:0] memory [0:RAM_WORDS-1];
+    reg [ADDR_W-1:0] wr_ptr, rd_ptr;
+    reg [ADDR_W:0] memory_words;
+    reg out_valid;
+    reg [WIDTH-1:0] out_data;
+    wire push, fetch, output_free;
+    localparam [ADDR_W:0] LIMIT = RAM_WORDS;
+    localparam [ADDR_W-1:0] LAST = RAM_WORDS-1;
+
+    initial begin
+        if (WIDTH < 1 || RAM_WORDS < 1 || ADDR_W < 1 ||
+            RAM_WORDS > (2 ** ADDR_W))
+            $fatal(1, "invalid FIFO geometry");
+    end
+    assign in_ready_o = rst_n && memory_words < LIMIT;
+    assign push = in_valid_i && in_ready_o;
+    assign output_free = !out_valid || out_ready_i;
+    assign fetch = rst_n && output_free && memory_words != 0;
+    assign out_valid_o = rst_n && out_valid;
+    assign out_data_o = out_data;
+    assign memory_words_o = memory_words;
+
+    // Deliberately separate from reset logic. fetch/push are suppressed in reset.
+    always @(posedge clk) begin
+        if (push) memory[wr_ptr] <= in_data_i;
+        if (fetch) out_data <= memory[rd_ptr];
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            wr_ptr <= 0;
+            rd_ptr <= 0;
+            memory_words <= 0;
+            out_valid <= 1'b0;
+        end else begin
+            if (push) wr_ptr <= (wr_ptr == LAST) ? 0 : wr_ptr + 1'b1;
+            if (fetch) rd_ptr <= (rd_ptr == LAST) ? 0 : rd_ptr + 1'b1;
+            case ({push,fetch})
+                2'b10: memory_words <= memory_words + 1'b1;
+                2'b01: memory_words <= memory_words - 1'b1;
+                default: memory_words <= memory_words;
+            endcase
+            if (output_free) out_valid <= fetch;
+        end
+    end
+`ifndef SYNTHESIS
+    always @(posedge clk) begin
+        if (rst_n && push && fetch && wr_ptr == rd_ptr)
+            $fatal(1, "FIFO must not rely on same-address RAM collision semantics");
+        if (rst_n && memory_words > LIMIT)
+            $fatal(1, "FIFO occupancy overflow");
+    end
+`endif
+endmodule
+`default_nettype wire
+
+----- END FILE: implementation/zhao_cpl_ram_fifo.sv -----
+
+
+----- BEGIN FILE: implementation/zhao_cpl_upload_guard.sv -----
+// Candidate request validator for the missing MEM.UPLOAD path.
+// NOT the uploader. No transfer, CRC, residency publication, pinning, quarantine,
+// cache invalidation or late-write cancellation is implemented by this leaf.
+// Mirrors zref_mem_upload.hpp verdict precedence. Input regions must themselves
+// be validated by the owning epoch configuration; wider endpoints never wrap.
+// One request at a time, variable latency, held result under backpressure.
+// Inline/share these request latches with the real uploader where appropriate;
+// do not blindly keep two permanent copies of the complete upload descriptor.
+// HDL simulation / Quartus synthesis / area / timing: NOT performed here.
+`default_nettype none
+module zhao_cpl_upload_guard (
+    input wire clk,
+    input wire rst_n,
+    input wire req_valid_i,
+    output wire req_ready_o,
+    input wire [63:0] hps_addr_i,
+    input wire [31:0] vram_addr_i,
+    input wire [31:0] length_i,
+    input wire [31:0] source_base_i,
+    input wire [31:0] source_bytes_i,
+    input wire [31:0] dest_base_i,
+    input wire [31:0] dest_bytes_i,
+    input wire [15:0] request_epoch_i,
+    input wire [15:0] current_epoch_i,
+    output wire rsp_valid_o,
+    input wire rsp_ready_i,
+    output wire [3:0] verdict_o
+);
+    localparam [3:0] IDLE=0, BASIC=1, SRC_LO=2, SRC_HI=3,
+                     DST_LO=4, DST_HI=5, EPOCH=6, ANSWER=7;
+    localparam [3:0] OK=0, UNALIGNED=1, ZERO_LENGTH=2,
+                     OUTSIDE_GUARD=3, EPOCH_STALE=4,
+                     SOURCE_OUTSIDE_ARENA=6, SOURCE_UNREACHABLE=7;
+    reg [3:0] state, verdict;
+    reg [63:0] hps_addr;
+    reg [31:0] vram_addr, length_q, source_base, dest_base;
+    reg [32:0] source_end, dest_end, requested_source_end, requested_dest_end;
+    reg [15:0] request_epoch, epoch_at_accept;
+
+    assign req_ready_o = rst_n && state == IDLE;
+    assign rsp_valid_o = rst_n && state == ANSWER;
+    assign verdict_o = verdict;
+
+    // Payload has no reset value: it is read only after an accepted request.
+    // Resetting only ownership/control is intentional, not a source of validity.
+    always @(posedge clk) begin
+        if (req_valid_i && req_ready_o) begin
+            hps_addr <= hps_addr_i;
+            vram_addr <= vram_addr_i;
+            length_q <= length_i;
+            source_base <= source_base_i;
+            dest_base <= dest_base_i;
+            source_end <= {1'b0,source_base_i} + {1'b0,source_bytes_i};
+            dest_end <= {1'b0,dest_base_i} + {1'b0,dest_bytes_i};
+            requested_source_end <= {1'b0,hps_addr_i[31:0]} + {1'b0,length_i};
+            requested_dest_end <= {1'b0,vram_addr_i} + {1'b0,length_i};
+            request_epoch <= request_epoch_i;
+            epoch_at_accept <= current_epoch_i;
+        end
+    end
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= IDLE;
+            verdict <= OK;
+        end else begin
+            case (state)
+                IDLE: if (req_valid_i && req_ready_o) state <= BASIC;
+                BASIC: begin
+                    if (length_q == 0) begin verdict <= ZERO_LENGTH; state <= ANSWER; end
+                    else if (|{hps_addr[5:0],vram_addr[5:0],length_q[5:0]})
+                        begin verdict <= UNALIGNED; state <= ANSWER; end
+                    else if (|hps_addr[63:32])
+                        begin verdict <= SOURCE_UNREACHABLE; state <= ANSWER; end
+                    else state <= SRC_LO;
+                end
+                SRC_LO: begin
+                    if (hps_addr[31:0] < source_base)
+                        begin verdict <= SOURCE_OUTSIDE_ARENA; state <= ANSWER; end
+                    else state <= SRC_HI;
+                end
+                SRC_HI: begin
+                    if (requested_source_end > source_end)
+                        begin verdict <= SOURCE_OUTSIDE_ARENA; state <= ANSWER; end
+                    else state <= DST_LO;
+                end
+                DST_LO: begin
+                    if (vram_addr < dest_base)
+                        begin verdict <= OUTSIDE_GUARD; state <= ANSWER; end
+                    else state <= DST_HI;
+                end
+                DST_HI: begin
+                    if (requested_dest_end > dest_end)
+                        begin verdict <= OUTSIDE_GUARD; state <= ANSWER; end
+                    else state <= EPOCH;
+                end
+                EPOCH: begin
+                    verdict <= (request_epoch == epoch_at_accept) ? OK : EPOCH_STALE;
+                    state <= ANSWER;
+                end
+                ANSWER: if (rsp_ready_i) state <= IDLE;
+                default: begin state <= IDLE; verdict <= OK; end
+            endcase
+        end
+    end
+endmodule
+`default_nettype wire
+
+----- END FILE: implementation/zhao_cpl_upload_guard.sv -----
+
+
+----- BEGIN FILE: tests/test_closure_support.py -----
+import copy
+import json
+import random
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'implementation'))
+from closure_support import *
+
+
+def payload(age=0):
+    d={name:0 for name,_,_,_ in LAYOUT}
+    d.update(age=age,size=16)
+    return pack_particle(d)
+
+
+def record(i): return ParticleRecord(i, payload())
+
+
+class CodecTests(unittest.TestCase):
+    def test_layout_covers_exactly_128_bits(self):
+        used=[]
+        for _,start,bits,_ in LAYOUT: used.extend(range(start,start+bits))
+        self.assertEqual(sorted(used),list(range(128)))
+    def test_zero_and_unit_radius(self):
+        self.assertEqual(unpack_particle(payload())['size'],16)
+        self.assertEqual(len(payload()),16)
+    def test_random_roundtrips(self):
+        rng=random.Random(18092026)
+        for _ in range(10000):
+            d={}
+            for name,_,w,signed in LAYOUT:
+                d[name]=rng.randrange(-(1<<(w-1)),1<<(w-1)) if signed else rng.randrange(1<<w)
+            d['flags'] &= 7
+            self.assertEqual(unpack_particle(pack_particle(d)),d)
+    def test_extremes(self):
+        for high in (False, True):
+            d={n: ((1<<(w-1))-1 if high else -(1<<(w-1))) if s else ((1<<w)-1 if high else 0) for n,_,w,s in LAYOUT}
+            d['flags'] &= 7
+            self.assertEqual(unpack_particle(pack_particle(d)),d)
+    def test_reserved_and_overflow_refused(self):
+        d=unpack_particle(payload());d['flags']=8
+        with self.assertRaises(ValueError): pack_particle(d)
+        d['flags']=0;d['vx']=1024
+        with self.assertRaises(ValueError): pack_particle(d)
+        with self.assertRaises(ValueError): unpack_particle(b'\0'*15)
+
+
+class ParticleAdmissionTests(unittest.TestCase):
+    def test_survivors_precede_children(self):
+        r=finish_particle_tick([record(1),record(2)],[SpawnGroup(0,0,(record(3),record(4)))],4)
+        self.assertEqual([p.stable_id for p in r.records],[1,2,3,4])
+        self.assertEqual((r.children_requested,r.children_emitted,r.children_refused),(2,2,0))
+    def test_whole_group_capacity_and_strict_prefix(self):
+        r=finish_particle_tick([record(1)],[SpawnGroup(0,0,(record(2),record(3))),SpawnGroup(1,0,(record(4),))],2)
+        self.assertEqual([p.stable_id for p in r.records],[1])
+        self.assertEqual(r.children_refused,3)
+    def test_16_valid_17_refused(self):
+        groups=[SpawnGroup(0,0,tuple(record(i) for i in range(1,17))), SpawnGroup(1,0,tuple(record(i) for i in range(17,34)))]
+        r=finish_particle_tick([],groups,100)
+        self.assertEqual(len(r.records),16)
+        self.assertEqual(r.malformed_groups,1)
+    def test_order_violation_refused(self):
+        with self.assertRaises(ValueError): finish_particle_tick([],[SpawnGroup(2,0,()),SpawnGroup(1,0,())],9)
+    def test_survivors_cannot_be_evicted(self):
+        with self.assertRaises(ValueError): finish_particle_tick([record(1),record(2)],[],1)
+    def test_replay_and_population_tier(self):
+        ss=[record(i) for i in range(32768)]
+        groups=[SpawnGroup(i,0,(record(32768+i),)) for i in range(64)]
+        a=finish_particle_tick(ss,groups,32768);b=finish_particle_tick(ss,groups,32768)
+        self.assertEqual(a,b);self.assertEqual(a.children_refused,64)
+        self.assertEqual([p.stable_id for p in a.records],list(range(32768)))
+
+
+class UploadTests(unittest.TestCase):
+    def test_verdict_order_and_boundaries(self):
+        def v(**kw):
+            d=dict(hps_addr=4096,vram_addr=8192,length=64,source_base=4096,source_bytes=1024,dest_base=8192,dest_bytes=1024,request_epoch=3,current_epoch=3)
+            d.update(kw);return upload_verdict(**d)
+        self.assertEqual(v(),UploadVerdict.OK)
+        self.assertEqual(v(length=0,hps_addr=1),UploadVerdict.ZERO_LENGTH)
+        self.assertEqual(v(hps_addr=(1<<32)+1),UploadVerdict.UNALIGNED)
+        self.assertEqual(v(hps_addr=(1<<32)),UploadVerdict.SOURCE_UNREACHABLE)
+        self.assertEqual(v(hps_addr=0),UploadVerdict.SOURCE_OUTSIDE_ARENA)
+        self.assertEqual(v(vram_addr=0),UploadVerdict.OUTSIDE_GUARD)
+        self.assertEqual(v(current_epoch=4),UploadVerdict.EPOCH_STALE)
+        self.assertEqual(v(length=1024),UploadVerdict.OK)
+        self.assertEqual(v(length=1088),UploadVerdict.SOURCE_OUTSIDE_ARENA)
+        self.assertEqual(v(hps_addr=0xffffffc0,source_base=0xffffff80,source_bytes=128),UploadVerdict.OK)
+        self.assertEqual(v(hps_addr=0xffffffc0,source_base=0xffffff80,source_bytes=128,length=128),UploadVerdict.SOURCE_OUTSIDE_ARENA)
+    def txn(self): return UploadTransaction(77,8,3,4,9)
+    def test_waits_for_retirement(self):
+        t=self.txn();t.issue(8);t.close_issue();t.complete_crc(True)
+        with self.assertRaises(ValueError):t.publish(3,True,(8,3))
+        t.retire(77,0,7)
+        with self.assertRaises(ValueError):t.publish(3,True,(8,3))
+        t.retire(77,7)
+        self.assertEqual(t.publish(3,True,(8,3)),(9,4))
+        with self.assertRaises(ValueError):t.publish(3,True,(8,3))
+    def test_fresh_slot_required(self):
+        t=self.txn();t.issue(8);t.retire(77,0,8);t.close_issue();t.complete_crc(True)
+        with self.assertRaises(ValueError):t.publish(3,True,(9,3))
+    def test_abort_quarantines_until_drain(self):
+        t=self.txn();t.issue(3);t.abort()
+        self.assertFalse(t.reclaimable)
+        t.retire(77,0,3);self.assertTrue(t.reclaimable)
+        with self.assertRaises(ValueError):t.issue()
+        with self.assertRaises(ValueError):t.publish(3,True,(8,3))
+    def test_stale_epoch_blocks_publish(self):
+        t=self.txn();t.issue(8);t.retire(77,0,8);t.close_issue();t.complete_crc(True)
+        with self.assertRaises(ValueError):t.publish(4,True,(8,3))
+        self.assertTrue(t.reclaimable)
+    def test_duplicate_foreign_and_unissued_credit(self):
+        t=self.txn();t.issue(2)
+        self.assertFalse(t.retire(78,0))
+        self.assertEqual(t.retired,0)
+        t.retire(77,0)
+        with self.assertRaises(ValueError):t.retire(77,0)
+        with self.assertRaises(ValueError):t.retire(77,2)
+    def test_random_retirement_permutations(self):
+        rng=random.Random(91)
+        for _ in range(200):
+            t=UploadTransaction(7,32,1,2,3);t.issue(32);t.close_issue();t.complete_crc(True)
+            order=list(range(32));rng.shuffle(order)
+            for n in order[:-1]: t.retire(7,n)
+            with self.assertRaises(ValueError):t.publish(1,True,(2,1))
+            t.retire(7,order[-1]);self.assertEqual(t.publish(1,True,(2,1)),(3,2))
+
+
+class PlanningTests(unittest.TestCase):
+    def test_ram_width_and_ports(self):
+        self.assertEqual(memory_plan(256,75)['blocks'],2)
+        self.assertEqual(memory_plan(256,76)['blocks'],2)
+        self.assertEqual(memory_plan(256,76,'tdp')['blocks'],4)
+        self.assertEqual(memory_plan(16,256)['blocks'],7)
+        self.assertEqual(memory_plan(256,32,copies=3)['blocks'],3)
+    def test_nonempty_ram_validation(self):
+        for d,w in [(0,3),(3,0),(-1,4)]:
+            with self.assertRaises(ValueError):memory_plan(d,w)
+    def test_provider_bounds_not_certificate(self):
+        a=provider_bound(480000,147,1,1333333)
+        self.assertTrue(a['impossible_even_without_stalls'])
+        b=provider_bound(32768,8,1,1333333)
+        self.assertFalse(b['impossible_even_without_stalls'])
+        self.assertFalse(b['schedule_proven'])
+    def ledger(self):
+        return {'schema':1,'owners':{'a':{'kind':'rtl','fitted_alms':None}},'capabilities':[{'id':'X','policy':'required','state':'candidate','owner':'a','implementation':['x.sv'],'evidence':{},'notes':'candidate'}]}
+    def test_unknown_scope_not_zero(self):
+        d=self.ledger();self.assertTrue(check_ledger(d))
+        with self.assertRaises(LedgerError):check_ledger(d,release=True)
+    def test_no_speculative_area_as_fit(self):
+        d=self.ledger();d['owners']['a'].update(fitted_alms=400,area_evidence='estimate')
+        with self.assertRaises(LedgerError):check_ledger(d)
+    def test_duplicate_capability_refused(self):
+        d=self.ledger();d['capabilities'].append(copy.deepcopy(d['capabilities'][0]))
+        with self.assertRaises(LedgerError):check_ledger(d)
+    def test_file_existence_and_digest_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'x.sv').write_text('module x; endmodule\n')
+            a=snapshot_files(root,['x.sv']);(root/'x.sv').write_text('module x; wire a; endmodule\n')
+            b=snapshot_files(root,['x.sv']);self.assertNotEqual(a['manifest_sha256'],b['manifest_sha256'])
+            with self.assertRaises(ValueError):snapshot_files(root,['../missing'])
+
+
+if __name__ == '__main__': unittest.main(verbosity=2)
+
+----- END FILE: tests/test_closure_support.py -----
+
+
+----- BEGIN FILE: tests/run_rtl_tests.py -----
+"""Generate reproducible vectors and run optional RTL candidates with Icarus.
+Returns 2 when tools are unavailable. No skipped test is labelled a pass.
+"""
+from pathlib import Path
+import argparse
+import random
+import shutil
+import subprocess
+import sys
+root=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(root/'implementation'))
+from closure_support import upload_verdict
+
+
+def vectors():
+    rng=random.Random(20260918)
+    cases=[]
+    for i in range(4096):
+        source_base=(rng.randrange(1024)+1)*4096
+        dest_base=(rng.randrange(1024)+1)*4096
+        source_bytes=dest_bytes=4096
+        length=64*rng.randrange(1,65)
+        hps=source_base;dst=dest_base
+        re=ce=rng.randrange(65536)
+        mode=i%12
+        if mode==1:length=0;hps+=1
+        elif mode==2:hps+=1
+        elif mode==3:dst+=1
+        elif mode==4:length+=1
+        elif mode==5:hps+=(1<<32)
+        elif mode==6:hps=source_base-64
+        elif mode==7:hps=source_base+4096
+        elif mode==8:dst=dest_base-64
+        elif mode==9:dst=dest_base+4096
+        elif mode==10:ce=(ce+1)&65535
+        vals=(hps,dst,length,source_base,source_bytes,dest_base,dest_bytes,re,ce)
+        cases.append((vals,int(upload_verdict(*vals))))
+    for length in (64,128):
+        vals=(0xffffffc0,8192,length,0xffffff80,128,8192,1024,3,3)
+        cases.append((vals,int(upload_verdict(*vals))))
+    return cases
+
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument('--generate-only',action='store_true')
+    args=p.parse_args()
+    out=root/'evidence'/'rtl-work';out.mkdir(parents=True,exist_ok=True)
+    rows=vectors()
+    text=''.join(' '.join(f'{x:x}' for x in vals)+f' {code}\n' for vals,code in rows)
+    (out/'upload_vectors.txt').write_text(text,encoding='ascii')
+    print(f'Generated {len(rows)} deterministic vectors; vector generation is not RTL verification.')
+    if args.generate_only:return 0
+    iv=shutil.which('iverilog');vvp=shutil.which('vvp')
+    if not iv or not vvp:
+        print('NOT RUN: iverilog and vvp are required. RTL remains unverified.',file=sys.stderr)
+        return 2
+    target=out/'candidates.vvp'
+    sources=[root/'implementation'/'zhao_cpl_ram_fifo.sv',root/'implementation'/'zhao_cpl_upload_guard.sv',root/'tests'/'rtl_candidate_tb.sv']
+    subprocess.run([iv,'-g2012','-s','rtl_candidate_tb','-o',str(target),*(str(f) for f in sources)],check=True)
+    subprocess.run([vvp,str(target)],cwd=out,check=True)
+    return 0
+if __name__=='__main__':
+    try:sys.exit(main())
+    except subprocess.CalledProcessError as exc:sys.exit(exc.returncode or 1)
+
+----- END FILE: tests/run_rtl_tests.py -----
+
+
+----- BEGIN FILE: tests/rtl_candidate_tb.sv -----
+`timescale 1ns/1ps
+module rtl_candidate_tb;
+    reg clk=0; always #5 clk=~clk;
+    reg rst_n=0;
+    reg fv=0, fr=0;
+    reg [31:0] fd=0;
+    wire fir, fov;
+    wire [31:0] fod;
+    wire [2:0] level;
+    zhao_cpl_ram_fifo #(.WIDTH(32),.RAM_WORDS(3),.ADDR_W(2)) fifo (
+        .clk(clk),.rst_n(rst_n),.in_valid_i(fv),.in_ready_o(fir),.in_data_i(fd),
+        .out_valid_o(fov),.out_ready_i(fr),.out_data_o(fod),.memory_words_o(level)
+    );
+    reg gv=0, gr=0;
+    wire gir, gov;
+    wire [3:0] verdict;
+    reg [63:0] hps=0;
+    reg [31:0] dst=0,len=0,sb=0,sz=0,db=0,dz=0;
+    reg [15:0] re=0,ce=0;
+    zhao_cpl_upload_guard guard (
+        .clk(clk),.rst_n(rst_n),.req_valid_i(gv),.req_ready_o(gir),
+        .hps_addr_i(hps),.vram_addr_i(dst),.length_i(len),
+        .source_base_i(sb),.source_bytes_i(sz),.dest_base_i(db),.dest_bytes_i(dz),
+        .request_epoch_i(re),.current_epoch_i(ce),
+        .rsp_valid_o(gov),.rsp_ready_i(gr),.verdict_o(verdict)
+    );
+    reg [31:0] expected_fifo [0:19999];
+    reg [31:0] rng=32'h19a382df;
+    integer wr=0,rd=0,n,fdfile,got,expect_code,timeout_count,vector_count=0;
+    initial begin
+        repeat(3) @(negedge clk);
+        rst_n=1;
+        // Standard FIFO scoreboard; accepted transfers, not offered requests.
+        for(n=0;n<10000;n=n+1) begin
+            @(negedge clk);
+            rng={rng[30:0],rng[31]^rng[21]^rng[1]^rng[0]};
+            fv=rng[0]; fr=rng[3]; fd=n;
+            @(posedge clk);
+            if(fov && fr) begin
+                if(rd>=wr || fod!==expected_fifo[rd])
+                    $fatal(1,"FIFO order/data mismatch at cycle %0d",n);
+                rd=rd+1;
+            end
+            if(fv && fir) begin expected_fifo[wr]=fd; wr=wr+1; end
+        end
+        @(negedge clk);fv=0;fr=1;
+        timeout_count=0;
+        while(rd<wr) begin
+            @(posedge clk);
+            if(fov && fr) begin
+                if(fod!==expected_fifo[rd]) $fatal(1,"FIFO drain mismatch");
+                rd=rd+1;
+            end
+            timeout_count=timeout_count+1;
+            if(timeout_count>100) $fatal(1,"FIFO failed to drain");
+        end
+        @(negedge clk);fr=0;
+        // Reset intentionally discards queued work; fresh data must not leak old RAM.
+        rst_n=0;repeat(2)@(negedge clk);rst_n=1;
+        @(negedge clk);fv=1;fd=32'hbada55aa;
+        @(posedge clk);if(!fir)$fatal(1,"FIFO not ready after reset");
+        @(negedge clk);fv=0;fr=1;
+        timeout_count=0;
+        while(!fov) begin @(negedge clk);timeout_count=timeout_count+1;
+            if(timeout_count>10)$fatal(1,"fresh FIFO output missing");end
+        if(fod!==32'hbada55aa)$fatal(1,"stale RAM data after reset");
+        @(posedge clk);@(negedge clk);fr=0;
+
+        fdfile=$fopen("upload_vectors.txt","r");
+        if(fdfile==0)$fatal(1,"upload_vectors.txt unavailable");
+        while(!$feof(fdfile)) begin
+            got=$fscanf(fdfile,"%h %h %h %h %h %h %h %h %h %d\n",hps,dst,len,sb,sz,db,dz,re,ce,expect_code);
+            if(got==10) begin
+                while(!gir)@(negedge clk);
+                gv=1;
+                @(posedge clk);@(negedge clk);gv=0;
+                timeout_count=0;
+                while(!gov)begin
+                    @(negedge clk);timeout_count=timeout_count+1;
+                    if(timeout_count>20)$fatal(1,"upload guard timeout");
+                end
+                if(verdict!==expect_code[3:0])
+                    $fatal(1,"guard vector %0d expected %0d got %0d",vector_count,expect_code,verdict);
+                repeat(3) begin
+                    @(negedge clk);
+                    if(!gov || verdict!==expect_code[3:0])$fatal(1,"guard response unstable while stalled");
+                end
+                gr=1;@(posedge clk);@(negedge clk);gr=0;
+                vector_count=vector_count+1;
+            end else if(got!=-1) $fatal(1,"malformed vector line");
+        end
+        $fclose(fdfile);
+        $display("PASS: FIFO %0d transferred records, reset, and %0d guard vectors",wr,vector_count);
+        $finish;
+    end
+    initial begin #3000000;$fatal(1,"global watchdog");end
+endmodule
+
+----- END FILE: tests/rtl_candidate_tb.sv -----
+
+
+----- BEGIN FILE: examples/completion_seed.json -----
+{
+  "schema": 1,
+  "inspected_head": "155c141f5b922a62b9331c048352e46c3f67ad04",
+  "starting_audit": "ced8752da9c1bac79bc3ef436f64a33bd6cac22c",
+  "owners": {
+    "backend": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 14000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "projection": {
+      "kind": "rtl",
+      "design_to_cost_alm_objective": 5000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "geometry": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 5500,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "terrain_forge": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 4500,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "field": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 4500,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "particles": {
+      "kind": "mixed",
+      "design_to_cost_alm_objective": 2000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "post_2d": {
+      "kind": "rtl",
+      "design_to_cost_alm_objective": 2000,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    },
+    "runtime": {
+      "kind": "software",
+      "design_to_cost_alm_objective": null,
+      "fitted_alms": null,
+      "area_evidence": "unknown",
+      "note": "preliminary group owner; refine to actual instances before accounting"
+    }
+  },
+  "capabilities": [
+    {
+      "id": "C01",
+      "title": "Frame command execution",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "backend",
+      "implementation": [
+        "fpga/rtl/common/zhao_shell_top_v2.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C02",
+      "title": "Memory guard/transport/retirement",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C03",
+      "title": "Immutable upload transaction",
+      "policy": "required",
+      "state": "absent",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C04",
+      "title": "Residency pins and cache generation",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C05",
+      "title": "Material resolver",
+      "policy": "required",
+      "state": "absent",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C06",
+      "title": "Geometry request producer",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C07",
+      "title": "Shared projector and arenas",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "projection",
+      "implementation": [
+        "fpga/rtl/geometry/zhao_geom_proj_lane.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C08",
+      "title": "Pose/palette orchestration",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C09",
+      "title": "Normals and selected transform composition",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C10",
+      "title": "RGB/multilight/emission",
+      "policy": "required",
+      "state": "absent",
+      "owner": "geometry",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C11",
+      "title": "Full selected attribute profiles",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C12",
+      "title": "Canonical depth and perspective",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "projection",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C13",
+      "title": "Complete raster material/toon/fog path",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C14",
+      "title": "Frame terminal and scanout ownership",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C15",
+      "title": "FIELD v3 production executor",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "field",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C16",
+      "title": "FIELD admitted profile adapters",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "field",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C17",
+      "title": "Terrain live world composition",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C18",
+      "title": "Terrain normal detail/projection/replay",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "terrain_forge",
+      "implementation": [
+        "fpga/rtl/terrain/zhao_terrain_pipe.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C19",
+      "title": "Terrain bake/mips/persistence",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C20",
+      "title": "Particle state/commit",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C21",
+      "title": "Particle update",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C22",
+      "title": "Particle collision",
+      "policy": "required",
+      "state": "candidate",
+      "owner": "particles",
+      "implementation": [
+        "fpga/rtl/particles/zhao_part_collide.sv"
+      ],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C23",
+      "title": "Particle spawn/identity",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C24",
+      "title": "Particle draw numeric migration",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "particles",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C25",
+      "title": "Forge evaluator and lightning seam",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C26",
+      "title": "Contact shadows",
+      "policy": "required",
+      "state": "absent",
+      "owner": "terrain_forge",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C27",
+      "title": "Liquid material path",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C28",
+      "title": "Selected sky/effect producers",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C29",
+      "title": "Full post compositor",
+      "policy": "required",
+      "state": "absent",
+      "owner": "post_2d",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C30",
+      "title": "2D/HUD/Duo composition",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "post_2d",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C31",
+      "title": "Measure/histogram/admission",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C32",
+      "title": "Required diagnostics/capture",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C33",
+      "title": "Controller input and rumble",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C34",
+      "title": "Audio runtime/output",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C35",
+      "title": "CPU runtime/streaming/submit",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "runtime",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C36",
+      "title": "Selected board/platform",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C37",
+      "title": "Generated ABI/assets/Form/replay",
+      "policy": "required",
+      "state": "unknown",
+      "owner": "runtime",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    },
+    {
+      "id": "C38",
+      "title": "Optional/deferred reconciliation",
+      "policy": "needs_reconciliation",
+      "state": "unknown",
+      "owner": "backend",
+      "implementation": [],
+      "evidence": {},
+      "notes": "Starting checklist, not a live completeness certificate. Reconcile against current working tree and cited sources."
+    }
+  ],
+  "release_evidence": {},
+  "note": "All costs unknown except design-to-cost objectives. Does not assert that every unknown capability is unbuilt."
+}
+
+----- END FILE: examples/completion_seed.json -----
+
+
+----- BEGIN FILE: evidence/python-tests.txt -----
+test_extremes (test_closure_support.CodecTests.test_extremes) ... ok
+test_layout_covers_exactly_128_bits (test_closure_support.CodecTests.test_layout_covers_exactly_128_bits) ... ok
+test_random_roundtrips (test_closure_support.CodecTests.test_random_roundtrips) ... ok
+test_reserved_and_overflow_refused (test_closure_support.CodecTests.test_reserved_and_overflow_refused) ... ok
+test_zero_and_unit_radius (test_closure_support.CodecTests.test_zero_and_unit_radius) ... ok
+test_16_valid_17_refused (test_closure_support.ParticleAdmissionTests.test_16_valid_17_refused) ... ok
+test_order_violation_refused (test_closure_support.ParticleAdmissionTests.test_order_violation_refused) ... ok
+test_replay_and_population_tier (test_closure_support.ParticleAdmissionTests.test_replay_and_population_tier) ... ok
+test_survivors_cannot_be_evicted (test_closure_support.ParticleAdmissionTests.test_survivors_cannot_be_evicted) ... ok
+test_survivors_precede_children (test_closure_support.ParticleAdmissionTests.test_survivors_precede_children) ... ok
+test_whole_group_capacity_and_strict_prefix (test_closure_support.ParticleAdmissionTests.test_whole_group_capacity_and_strict_prefix) ... ok
+test_duplicate_capability_refused (test_closure_support.PlanningTests.test_duplicate_capability_refused) ... ok
+test_file_existence_and_digest_changes (test_closure_support.PlanningTests.test_file_existence_and_digest_changes) ... ok
+test_no_speculative_area_as_fit (test_closure_support.PlanningTests.test_no_speculative_area_as_fit) ... ok
+test_nonempty_ram_validation (test_closure_support.PlanningTests.test_nonempty_ram_validation) ... ok
+test_provider_bounds_not_certificate (test_closure_support.PlanningTests.test_provider_bounds_not_certificate) ... ok
+test_ram_width_and_ports (test_closure_support.PlanningTests.test_ram_width_and_ports) ... ok
+test_unknown_scope_not_zero (test_closure_support.PlanningTests.test_unknown_scope_not_zero) ... ok
+test_abort_quarantines_until_drain (test_closure_support.UploadTests.test_abort_quarantines_until_drain) ... ok
+test_duplicate_foreign_and_unissued_credit (test_closure_support.UploadTests.test_duplicate_foreign_and_unissued_credit) ... ok
+test_fresh_slot_required (test_closure_support.UploadTests.test_fresh_slot_required) ... ok
+test_random_retirement_permutations (test_closure_support.UploadTests.test_random_retirement_permutations) ... ok
+test_stale_epoch_blocks_publish (test_closure_support.UploadTests.test_stale_epoch_blocks_publish) ... ok
+test_verdict_order_and_boundaries (test_closure_support.UploadTests.test_verdict_order_and_boundaries) ... ok
+test_waits_for_retirement (test_closure_support.UploadTests.test_waits_for_retirement) ... ok
+
+----------------------------------------------------------------------
+Ran 25 tests in 0.390s
+
+OK
+
+----- END FILE: evidence/python-tests.txt -----
+
+
+----- BEGIN FILE: evidence/rtl-test-status.txt -----
+NOT RUN: iverilog and vvp are required. RTL remains unverified.
+Generated 4098 deterministic vectors; vector generation is not RTL verification.
+RTL_TEST_EXIT_CODE=2
+
+----- END FILE: evidence/rtl-test-status.txt -----
+
+
+----- BEGIN FILE: evidence/completion-seed-check.txt -----
+C01: not connected-and-proven (candidate)
+C01: no supporting evidence
+C02: not connected-and-proven (unknown)
+C02: no implementation path
+C02: no supporting evidence
+C03: not connected-and-proven (absent)
+C03: no implementation path
+C03: no supporting evidence
+C04: not connected-and-proven (unknown)
+C04: no implementation path
+C04: no supporting evidence
+C05: not connected-and-proven (absent)
+C05: no implementation path
+C05: no supporting evidence
+C06: not connected-and-proven (unknown)
+C06: no implementation path
+C06: no supporting evidence
+C07: not connected-and-proven (candidate)
+C07: no supporting evidence
+C08: not connected-and-proven (unknown)
+C08: no implementation path
+C08: no supporting evidence
+C09: not connected-and-proven (unknown)
+C09: no implementation path
+C09: no supporting evidence
+C10: not connected-and-proven (absent)
+C10: no implementation path
+C10: no supporting evidence
+C11: not connected-and-proven (unknown)
+C11: no implementation path
+C11: no supporting evidence
+C12: not connected-and-proven (unknown)
+C12: no implementation path
+C12: no supporting evidence
+C13: not connected-and-proven (unknown)
+C13: no implementation path
+C13: no supporting evidence
+C14: not connected-and-proven (unknown)
+C14: no implementation path
+C14: no supporting evidence
+C15: not connected-and-proven (unknown)
+C15: no implementation path
+C15: no supporting evidence
+C16: not connected-and-proven (unknown)
+C16: no implementation path
+C16: no supporting evidence
+C17: not connected-and-proven (unknown)
+C17: no implementation path
+C17: no supporting evidence
+C18: not connected-and-proven (candidate)
+C18: no supporting evidence
+C19: not connected-and-proven (unknown)
+C19: no implementation path
+C19: no supporting evidence
+C20: not connected-and-proven (unknown)
+C20: no implementation path
+C20: no supporting evidence
+C21: not connected-and-proven (unknown)
+C21: no implementation path
+C21: no supporting evidence
+C22: not connected-and-proven (candidate)
+C22: no supporting evidence
+C23: not connected-and-proven (unknown)
+C23: no implementation path
+C23: no supporting evidence
+C24: not connected-and-proven (unknown)
+C24: no implementation path
+C24: no supporting evidence
+C25: not connected-and-proven (unknown)
+C25: no implementation path
+C25: no supporting evidence
+C26: not connected-and-proven (absent)
+C26: no implementation path
+C26: no supporting evidence
+C27: not connected-and-proven (unknown)
+C27: no implementation path
+C27: no supporting evidence
+C28: not connected-and-proven (unknown)
+C28: no implementation path
+C28: no supporting evidence
+C29: not connected-and-proven (absent)
+C29: no implementation path
+C29: no supporting evidence
+C30: not connected-and-proven (unknown)
+C30: no implementation path
+C30: no supporting evidence
+C31: not connected-and-proven (unknown)
+C31: no implementation path
+C31: no supporting evidence
+C32: not connected-and-proven (unknown)
+C32: no implementation path
+C32: no supporting evidence
+C33: not connected-and-proven (unknown)
+C33: no implementation path
+C33: no supporting evidence
+C34: not connected-and-proven (unknown)
+C34: no implementation path
+C34: no supporting evidence
+C35: not connected-and-proven (unknown)
+C35: no implementation path
+C35: no supporting evidence
+C36: not connected-and-proven (unknown)
+C36: no implementation path
+C36: no supporting evidence
+C37: not connected-and-proven (unknown)
+C37: no implementation path
+C37: no supporting evidence
+C38: requirement status unresolved
+release: function_complete not evidenced
+release: selected_scope_complete not evidenced
+release: target_fit not evidenced
+release: timing not evidenced
+release: workload not evidenced
+release: board not evidenced
+EXPECTED_INCOMPLETE_SEED_EXIT_CODE=2
+
+----- END FILE: evidence/completion-seed-check.txt -----
