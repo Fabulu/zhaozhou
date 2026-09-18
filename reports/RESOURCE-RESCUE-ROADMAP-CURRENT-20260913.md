@@ -1022,9 +1022,44 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > from 28,957 ALUT to something that fits — and what was left on its critical
 > path was never the memory, it was the arithmetic.
 >
-> **So the campaign after the current re-fit is: `uvw_m` first**, which needs the
-> owner's answer on the protected file before anything is edited, and then the
+> **So the campaign after the current re-fit is: `uvw_m` first**, and then the
 > forwarding compare in `v3own` — a different problem needing a different fix.
+>
+> ##### `uvw_m`: the change, read out of the source and ready to make
+>
+> Traced 2026-09-18 while the re-fit ran. The array is written once and read
+> once, which is already the shape that infers:
+>
+> ```systemverilog
+> logic [63:0] uvw_m [0:OWNERS-1];               // 916  64 x 64 = 4,096 bits
+> always_ff @(posedge clk)                       // 917  write: no reset
+>   if (own_adm_accept_w)
+>     uvw_m[own_adm_owner_w[13:8]] <= {frag_u_over_w_i, frag_v_over_w_i};
+>
+> always_ff @(posedge clk or negedge rst_n) begin // 980  READ lives in here
+>   if (!rst_n) begin
+>     rcp_head_valid_q <= 1'b0;
+>     persp_prep_valid_q <= 1'b0;                 // and NOT the read target
+>   end else if (persp_prep_room_c) begin
+>     if (rcp_head_valid_q)
+>       {persp_prep_uow_q, persp_prep_vow_q} <= uvw_m[uvw_read_owner_c[13:8]];
+> ```
+>
+> **The read register sits in an asynchronously-reset block**, and an M10K output
+> register cannot have an asynchronous reset — which is what costs the
+> inference, exactly as this section predicted before the source was opened.
+>
+> The preconditions for moving it were checked rather than assumed:
+> `persp_prep_uow_q` and `persp_prep_vow_q` are declared at 961, assigned at
+> **line 990 and nowhere else**, consumed at 1020, and **have no assignment in
+> the reset branch** — so relocating them into their own `always_ff @(posedge
+> clk)` with the same `persp_prep_room_c && rcp_head_valid_q` enable changes no
+> behaviour, adds no latency, and loses no reset that exists today.
+>
+> It is deferred only until the running fit writes its row: the file is in that
+> fit's 97-source closure, and although the fit snapshots its sources, moving the
+> tree underneath it risks the receipt being stamped `rtlCleanAtHead: false` —
+> which would make a 23-minute measurement worthless for the usual reason.
 >
 > #### And the whole-machine numbers rest on rows that have gone stale
 >
