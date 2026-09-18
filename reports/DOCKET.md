@@ -222,6 +222,54 @@ to find.
 from an unnoticed failure. I edited the protected file once by accident in the
 same session, reverted to `7d7cdb7e`, and confirmed the hash matches the pin.
 
+## OWNER EXPERIMENT 2026-09-17 — DSF-01, projector divider compare/subtract fusion
+
+`reports/Zhaozhou_Divider_Fusion_Implementation_Guide.txt` — 1,457 lines,
+landed `c0a9bf1c`, subject *"Agent please read - Guide to maybe some free ALMs
+you can just slot somewhere between your current important work."*
+
+**It was in the tree and indexed NOWHERE** — not here, not in
+`reports/OWNER-DOCUMENT-INDEX.md` — from 2026-09-17 until this entry. Found
+2026-09-18 by reading commit SUBJECTS, which is the signal
+`de69ad61` already established is the owner's actual one. This index exists
+precisely so that does not happen, and it happened anyway.
+
+**What it asks for.** One bounded experiment in
+`fpga/rtl/common/zhao_project_core.sv`: replace the separately expressed
+unsigned comparison and subtraction inside the repeated restoring-divider step
+with a 33-bit unsigned subtraction whose high bit supplies the borrow decision.
+Every register, pipeline stage, handshake, enable, reset, quotient convention
+and output packet stays. It comes with a proof exporter, a fail-closed Yosys
+runner, an SMT-LIB check and an evidence template.
+
+**What it explicitly is NOT.** Its own words: *"This is an EXPERIMENT, not an
+instruction to obtain a predetermined saving. The acceptable outcomes include
+'Quartus already does this; stop' and 'the rewrite costs timing; revert'."*
+The ~1,000 ALM planning hypothesis is marked *"not a measured range, confidence
+interval, or guaranteed saving. Do not enter it in the resource budget."*
+It has not been, and this entry is not a licence to.
+
+**Status: READ 2026-09-18, NOT STARTED, and deliberately not started HERE.**
+The guide's own rule 1 is *"Work in isolated checkouts. Do not edit the active
+Packet-H/G8C checkout"*, and it lists Packet H and G8C among the things not to
+broaden into. This lane IS the active Packet-H checkout. Starting it here would
+violate the instruction in the act of obeying it.
+
+**Why it is nonetheless well aimed**, recorded so it is not deprioritised by
+accident: `zhao_project_core` is the block behind the largest breach in the
+scoreboard — *projection and result arenas*, 12,267 ALM and 66 DSP, which is
+two instances of it — and its fit row asserts 33 DSP from a fit its own file
+post-dates by 23.9 days. The domain the owner aimed at is the domain that most
+needs the ALMs.
+
+**Not to be confused with the 2026-09-18 divider work in this lane.** That is
+`zhao_raster_attrdiv_v2`, the attribute divider on the composed shell's binding
+path, a different module with a different problem (pipeline depth, not
+arithmetic expression). The two share the words "divider" and "restoring" and
+nothing else.
+
+---
+
 ## P0 — the console cannot ship without these
 
 ### D1. The 100 MHz timing surgery — **CLOSED 2026-09-04**
