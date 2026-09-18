@@ -97,6 +97,25 @@ whole-machine ALM number.
 > subsystem with a 108.37 MHz one and fitting the pair would measure the terrain
 > pipe's chain a second time and learn nothing new.
 >
+> > **SUPERSEDED 2026-09-18. That cut landed and this blocker is gone.** G8B
+> > closed at **102.19 MHz** on physical pins with zero virtual pins, zero total
+> > negative slack and a clean tree (`@g8b-t11-pins-s2`, `status: ok`, commit
+> > `861816b0`); seeds 2 and 4 close and seed 1 reads 98.90, which the closing
+> > commit says rather than quoting the best row.
+> >
+> > So the argument above — *composing a 43.94 MHz subsystem with a 108.37 MHz
+> > one learns nothing* — no longer describes either operand. The terrain pipe
+> > is no longer the slow half, and after the 2026-09-18 timing work the
+> > composed shell is the one with the open clock question.
+> >
+> > **This paragraph is left standing rather than deleted** because it is the
+> > reason G8C was parked, and a blocker that quietly disappears leaves the next
+> > reader unable to tell whether it was solved or forgotten. It was solved.
+> > What remains for G8C is not a timing precondition at all: there is no G8C
+> > TOP. `zhao_shell_top_v2`'s 97 sources contain no `terrain/` file, so nothing
+> > in the tree instantiates both halves, and that module is the actual next
+> > piece of work for Packet J.
+>
 > **And it is not one chain.** Worst path per endpoint block says what each fix
 > would actually buy: `zhao_terrain_tess` caps at 43.9 MHz, `zhao_project_core`
 > at **50.5 MHz** behind it with 1,631 of the 2,000 negative endpoints, and the
