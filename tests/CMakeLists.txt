@@ -12311,3 +12311,51 @@ verilate(test_part_collide_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
 add_test(NAME part_collide_directed COMMAND test_part_collide_directed)
 set_tests_properties(part_collide_directed PROPERTIES LABELS "fast;particles")
+# ==============================================================================
+# GEOM client-A producer -- zhao_geom_group_seq
+# ==============================================================================
+# The absent organ the shared projector's adoption actually waits on.
+# design/prod_manifest.yml says of zhao_geom_proj_lane: "Selecting one shared
+# service instead of two wrappers (6,598 ALM / 33 DSP against ~12,400 / 66)
+# needs this composed AND a producer driving it; the producer is still absent".
+# This is that producer. It is NOT GEOM.WARP, which is deferred by owner ruling
+# 2026-08-31 6.3, excluded from v1, and which GEOM.PROJECT.md line 67 places in
+# the ALTERNATIVE position to GEOM.WCACHE rather than on the fill path.
+#
+# ARENAS=4 so a dual-view job can be starved deliberately (case 5); DEPTH=8 for
+# the same reason geom_proj_lane_directed uses 8 -- the arena's walk-clear cost
+# is not what this suite tests.
+add_executable(test_geom_group_seq_directed geometry/geom_group_seq_directed.cpp)
+target_link_libraries(test_geom_group_seq_directed PRIVATE zhao_harness)
+verilate(test_geom_group_seq_directed
+  PREFIX Vzhao_geom_group_seq
+  TOP_MODULE zhao_geom_group_seq
+  VERILATOR_ARGS -GARENAS=4 -GDEPTH=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_group_seq.sv)
+add_test(NAME geom_group_seq_directed COMMAND test_geom_group_seq_directed)
+set_tests_properties(geom_group_seq_directed PROPERTIES LABELS "fast;geometry")
+
+add_test(NAME lint_geom_group_seq
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_group_seq
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_group_seq.sv)
+set_tests_properties(lint_geom_group_seq PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE DETECTOR'S POSITIVE CONTROL, at inverted polarity.
+# seal_early_o watches for a seal issued before the landings arrive. That state
+# is unreachable while the drain rule is correct, so no legal stimulus moves it
+# and its silence on production proves nothing on its own. This build swaps in
+# tests/mutants/zhao_geom_group_seq_mutant.sv -- one substantive line, StSealWait
+# advancing without the drain condition -- and PASSES when the counter FIRES.
+add_executable(test_geom_group_seq_seal_early_mutant geometry/geom_group_seq_directed.cpp)
+target_link_libraries(test_geom_group_seq_seal_early_mutant PRIVATE zhao_harness)
+target_compile_definitions(test_geom_group_seq_seal_early_mutant PRIVATE ZHAO_EXPECT_SEAL_EARLY_MUTANT=1)
+verilate(test_geom_group_seq_seal_early_mutant
+  PREFIX Vzhao_geom_group_seq
+  TOP_MODULE zhao_geom_group_seq
+  VERILATOR_ARGS -GARENAS=4 -GDEPTH=8
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_group_seq_mutant.sv)
+add_test(NAME geom_group_seq_seal_early_mutant COMMAND test_geom_group_seq_seal_early_mutant)
+set_tests_properties(geom_group_seq_seal_early_mutant PROPERTIES LABELS "fast;mutant")
