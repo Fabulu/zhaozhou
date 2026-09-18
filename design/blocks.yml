@@ -1675,10 +1675,72 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
-    deferred: true
+    deferred: false
     cut_order: null
     superseded_by: null
-    notes: "Charter §12 calls this Version 2: registered now, built late."
+    notes: >-
+      Charter section 12 calls this Version 2: registered now, built late -- and
+      BUILT on 2026-09-18, after the owner revoked every deferral
+      (reports/MISSING-ORGAN-REGISTER-20260918.md, "I don't want to defer any
+      unfinished blocks now"). RTL: fpga/rtl/measure/zhao_measure_histogram.sv,
+      implementing owner plan section 11.4 -- per-cycle same-bin aggregation,
+      scheduled stalls for distinct bins, read-after-write forwarding, and
+      double-bank plus epoch snapshot semantics with a drained swap. The bins
+      live in a zhao_dc_sdp_ram instance, not in flip-flops, per
+      reports/OWNER-RULING-M10K-CEILINGS-20260918.md; the 3,200-logical-bit
+      figure in the module header is SHAPE ARITHMETIC and no fit has measured it.
+      MATURITY STAYS AT `SPECIFIED` AND THAT IS DELIBERATE. The RTL is written,
+      linted 0/0, and covered by 536 passing directed checks across three
+      executables -- but the ledger ladder is not a description of test coverage,
+      it is a claim about evidence against a ratified oracle, and V2/V17 say so:
+      every advance past SPECIFIED needs a resolvable `reference_model`, and a
+      SPECIFIED block "may cite a not-yet-written oracle" while an advanced one
+      may not. `zref::MeasureHistogram` is the tenth phantom. Advancing this row
+      would have meant writing an oracle in the same increment, by the same
+      author, from the same freshly-invented laws -- a second statement of one
+      intent dressed as independent evidence, which is the failure this ledger
+      rule exists to catch. The block ships SPECIFIED with its evidence named,
+      and what would unblock the advance is exactly one thing: a `zref::measure`
+      oracle written by someone who did not write the RTL, against the laws in
+      the module header.
+      FOUR DEVIATIONS, each argued in the module header rather than resolved by
+      fiat.
+      (1) reference_model zref::MeasureHistogram IS LEFT UNCHANGED AND STILL
+      RESOLVES TO NOTHING (tools/budget/refmodel_liveness.py). It is not amended
+      because there is nothing to amend it to: writing an oracle would mean
+      ratifying the invented laws by implementing them twice. The directed lane
+      is therefore self-consistency plus hand-computed expectations, and both the
+      test header and the module header say so rather than implying a
+      differential.
+      (2) counters [lod_representation_counts] IS NOT DRIVEN. The contract's own
+      note gives two options -- "a reading of its own that is honestly a
+      representation count, or ... record a ledger deviation instead of driving
+      it" -- and the second is taken: this block counts error magnitudes, which
+      is not a representation count under either existing owner's reading
+      (TERRAIN.LOD's subpatch levels, MEASURE.TOKENS' charter ladder rungs). It
+      exposes seven saturating counters of its own instead, six of which are
+      seen to move as deltas in the directed lane, one only in the -GCW=8 build
+      (bin_sat_o) and one only under a committed mutant (frozen_write_o, which is
+      structurally unreachable while the snapshot drain is correct).
+      (3) downstream [MEASURE.GOVERNOR] IS LEFT UNCHANGED AND IS UNBUILT. The
+      contract's decisive argument against inventing a Version-2 cutoff beside a
+      Version-1 governor survives the revocation, so no cutoff rule and no
+      governor port were invented. The edge is named as unbuilt, exactly as
+      MEASURE.GOVERNOR named this same edge from its side, and nothing in
+      design/contracts/MEASURE.GOVERNOR.md needs amending.
+      (4) tests.random tests/measure/measure_histogram_random.cpp STILL DOES NOT
+      EXIST, and cannot be a differential lane without an oracle. The randomised
+      coverage that would have lived there is lane 11 of the directed file: 400
+      beats of mixed masks and magnitudes through real ready/valid backpressure,
+      with all 64 bins compared. Declared here as an open gap rather than
+      satisfied by pointing the entry at the directed file.
+      inputs [fragment_error] is honoured as an EW-bit unsigned magnitude with no
+      declared metric: RASTER.FRAGMENT's fragment_error_o is still the one-bit
+      protocol flag the contract identified, and it is still NOT wired here. The
+      block is metric-agnostic by construction -- the bucketing is log2, so a
+      change of Q format is a constant shift of the bin index and nothing else --
+      which is why spec/qformats.md needs no amendment for this block to exist.
+      Never through quartus_map: lint-clean is not synthesizability.
 
   # ===========================================================================
   # TERRAIN — Mantle (fpga/rtl/terrain)

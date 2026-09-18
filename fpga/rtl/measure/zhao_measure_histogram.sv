@@ -518,8 +518,11 @@ module zhao_measure_histogram #(
 
   // ---------------------------------------------------------------------------
   // Memory stage A -> B. `issue_c` and `rd_accept_c` are mutually exclusive by
-  // construction (issue_c has !rd_accept_c in its term), so the single read
-  // port never has two claimants.
+  // construction -- `issue_c`'s own term contains `!rd_accept_c` -- so the
+  // single read port never has two claimants. The host wins and the
+  // accumulator stalls, which is what makes a read of a bin being updated a
+  // scheduling question rather than a race.
+  // ENFORCED-BY: tests/measure/measure_histogram_directed.cpp:test_read_during_update
   // ---------------------------------------------------------------------------
   logic            b_v_q;
   logic [BINW-1:0] b_bin_q;
