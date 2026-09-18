@@ -1631,10 +1631,17 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > composed shell — the shell elaborates the `g_v2` branch — so it costs nothing
 > measured today, and it is **exactly the shape this repository calls an
 > uncashed cheque**: a known defect left in an unadopted sibling, which arrives
-> as a surprise on the day the sibling is adopted. Recorded rather than fixed,
-> because fixing an unmeasured path is how a bounded change becomes a campaign;
-> but it should go in with the pipeline stage, since that pass has to touch this
-> file anyway.
+> as a surprise on the day the sibling is adopted.
+>
+> **FIXED the same day rather than left recorded.** The first version of this
+> paragraph argued for deferring it, on the grounds that fixing an unmeasured
+> path is how a bounded change becomes a campaign. That was the wrong reading of
+> a good rule: the change is the same twelve lines as the V2's, it is
+> combinational and therefore differential-blind, the file is already inside the
+> shell's 97-source closure, and `dsp3` is `not-yet-adopted` rather than
+> protected. Writing down "there is a known defect here" and leaving it is the
+> failure mode, not the discipline. 11/11 with both implementations
+> restructured, including all seven DSP3 mutant controls.
 >
 > #### The prediction for `@packet-h-uvw`, written before it starts
 >

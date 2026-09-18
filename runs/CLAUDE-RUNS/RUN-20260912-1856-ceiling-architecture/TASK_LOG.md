@@ -3060,3 +3060,38 @@ Three more manifest entries for the new sinks; 133 excluded, all five sibling
 modules `probe`. 7/7 on the fast gates in the chain.
 
 And an audit the collision prompted: scanning every `module` declaration under`fpga/rtl` for names defined in more than one file returns **zero**. The sink`pair was the only instance in the tree, and it is gone rather than merely`renamed -- the both-wrappers elaboration proves that and the audit bounds it.
+
+---
+
+## Fixed the DSP3 twin, having argued an hour earlier for deferring it
+
+`zhao_raster_attrgrad_dsp3.sv` carried the identical serial chain that made the
+V2 the composed shell's binder. I had recorded it as an uncashed cheque and
+argued for leaving it, on the grounds that "fixing an unmeasured path is how a
+bounded change becomes a campaign."
+
+**That was a good rule applied to the wrong case.** The change is the same
+twelve lines, it is combinational and therefore invisible to the differential,
+the file is ALREADY in the shell's 97-source closure, and `dsp3` is
+`not-yet-adopted` rather than protected. Writing down "there is a known defect
+here" and moving on IS the failure mode this repository documents -- not the
+discipline that avoids it.
+
+11/11 with both implementations restructured, including all seven DSP3 mutant
+controls, which pass by DETECTING their mutations rather than by silence.
+
+## And I decided NOT to parameterise the smoke monitor, with a reason
+
+The sibling's masks are an argued claim because `shell_fit_smoke.py` is
+hardcoded to V1. I looked at fixing it: `render_repo()` is a clean funnel over
+four module-level constants and one hardcoded module name, so the TOOL is easy.
+
+What is not easy is making the result mean anything. V1's smoke path is a
+generated testbench, a C++ driver (`tests/shell/shell_fit_smoke.cpp`), a
+verilate target and a family of `shell_fit_smoke_control_*` and
+`shell_fit_smoke_protocol_*` tests. Generating a V2 monitor that nothing
+compiles or runs would be the built-installed-nowhere shape -- the exact thing I
+criticised two entries ago about the wrapper itself.
+
+So: scoped, not started, and the scope written down. It is a sub-project, not a
+gap to close between fits.
