@@ -354,6 +354,83 @@ class _E(object):
         self.commit, self.clean, self.label = commit, clean, label
 
 
+# ---------------------------------------------------------------------------
+# CHECK 4 -- a thing composed is not a thing ADOPTED
+# ---------------------------------------------------------------------------
+PROD_TOP = "zhao_prod_top"
+
+
+def adopted_nowhere(decl, inst, ev, manifest, targets, prod_top=PROD_TOP):
+    """Measured or targeted modules the PRODUCTION top cannot reach.
+
+    Check 1 asks whether anything instantiates a module. That question has a
+    blind spot which hid the largest saving in the machine for weeks, and the
+    shape is worth stating exactly, because it reads as health:
+
+        zhao_terrain_pipe -> zhao_proj_subsystem -> zhao_project_service
+                                                 -> ONE zhao_project_core
+
+    Every link there has a root, so check 1 is silent on all four. The chain is
+    fitted at 102.19 MHz on physical pins. And `zhao_prod_top` instantiates
+    none of it -- production still carries `zhao_geom_project` and
+    `zhao_terrain_project` with a `zhao_project_core` each, 24,399 ALUT of one
+    circuit built twice. Rooted at every step, adopted at none.
+
+    So this check walks the instantiation graph FROM THE PRODUCTION TOP and
+    reports what it cannot reach. Modules check 1 already holds (rootless
+    entirely) are left to it, so the two checks partition rather than overlap.
+
+    A CLOSED manifest disposition silences a row here exactly as it does in
+    check 1: `probe`, `superseded` and friends are answers. `not-yet-adopted`
+    and `unused` are deferrals, which is the whole point -- the manifest has
+    said "not-yet-adopted" about this chain the entire time and nothing read it
+    back.
+    """
+    kids = {m: set(inst.get(p, ())) for m, p in decl.items()}
+    reachable, stack = set(), [prod_top]
+    while stack:
+        m = stack.pop()
+        if m in reachable or m not in decl:
+            continue
+        reachable.add(m)
+        stack.extend(kids.get(m, ()))
+
+    installed = set()
+    for mods in inst.values():
+        installed |= mods
+
+    rows = []
+    for mod, path in sorted(decl.items()):
+        if mod == prod_top or mod in reachable:
+            continue
+        if mod not in installed:
+            continue          # rootless entirely -- check 1 owns this row
+        measured = ev.get(mod) or []
+        has_target = mod in targets
+        if not measured and not has_target:
+            continue
+        section, note = manifest.get(mod, (None, ""))
+        v = verdict(section, note)
+        if v == "CLOSED":
+            continue
+        rows.append({
+            "module": mod, "path": path, "section": section, "note": note,
+            "targeted": has_target, "verdict": v,
+            "dsp": next((e.dsp for e in measured if e.dsp is not None), None),
+            "alm": next((e.alm for e in measured if e.alm is not None), None),
+        })
+    return rows, len(reachable)
+
+def gate_failures(check1_rows, check4_rows):
+    """The rows --gate refuses: measured or targeted, open, and undocumented.
+
+    Extracted from main() so both polarities can be asserted below. A gate
+    whose decision lives inline in a print-and-exit block is a gate nobody
+    has watched fire.
+    """
+    return [r for r in list(check1_rows) + list(check4_rows)
+            if r["verdict"] == "UNDECLARED"]
+
 def self_test():
     decl = {"m_root_measured": "a.sv", "m_root_bare": "b.sv",
             "m_child": "c.sv", "m_root_declared": "d.sv"}
@@ -393,6 +470,42 @@ def self_test():
     assert [b for b, _, _ in wr] == ["zref::render::shade_flat_tri_dir"],         "WRAPPER tier: must fire on shade/light, got %r" % (wr,)
     assert len(declared_laws()) > 50 or not os.path.exists(
         os.path.join(ROOT, BLOCKS)), "declared_laws went vacuous"
+
+    # CHECK 4 in both polarities, on the shape that actually hid the projector:
+    # a chain that is rooted at every link and adopted at none. `m_adopted` is
+    # reachable from the production top; `m_orphan_chain` is instantiated (so
+    # check 1 is silent) but the production top cannot reach it.
+    a_decl = {"zhao_prod_top": "p.sv", "m_adopted": "a.sv",
+              "m_side_top": "s.sv", "m_orphan_chain": "o.sv",
+              "m_orphan_closed": "c.sv"}
+    a_inst = {"p.sv": {"m_adopted"},
+              "s.sv": {"m_orphan_chain", "m_orphan_closed"}}
+    a_ev = {"m_adopted": [_E(dsp=1, alm=10)],
+            "m_orphan_chain": [_E(dsp=2, alm=8694)],
+            "m_orphan_closed": [_E(dsp=0, alm=5)]}
+    a_rows, a_reach = adopted_nowhere(
+        a_decl, a_inst, a_ev,
+        {"m_orphan_closed": ("excluded", "probe  a leaf-fit pair")},
+        {"m_side_top"})
+    a_got = {r["module"] for r in a_rows}
+    assert "m_orphan_chain" in a_got, "FIRE case missed: composed but never adopted"
+    assert "m_adopted" not in a_got, "FALSE POSITIVE: reachable from the production top"
+    assert "m_side_top" not in a_got, "FALSE POSITIVE: rootless -- check 1 owns it"
+    assert "m_orphan_closed" not in a_got, "FALSE POSITIVE: a CLOSED disposition is an answer"
+    assert a_reach == 2, "reachability walk went wrong: %d" % a_reach
+
+    # ANTI-VACUITY for check 4. On the real tree the production top must reach
+    # a substantial hierarchy; a walk that reaches almost nothing would report
+    # the entire design as unadopted and be quietly, spectacularly wrong.
+    # The failure direction here is the opposite of the usual one -- too LOUD
+    # rather than too quiet -- so it would be caught, but only after being
+    # believed once.
+    # The --gate decision in both polarities. A PENDING backlog must NOT fail
+    # the gate (it is 16 rows today and the tool exists to read them back);
+    # a single UNDECLARED row must.
+    assert gate_failures([{"verdict": "PENDING"}], [{"verdict": "PENDING"}]) == [],         "GATE FALSE POSITIVE: a written deferral must not fail the ratchet"
+    assert len(gate_failures([{"verdict": "UNDECLARED", "module": "m", "path": "m.sv"}], [])) == 1,         "GATE FIRE case missed: an undocumented rootless module must fail"
+    assert len(gate_failures([], [{"verdict": "UNDECLARED", "module": "n", "path": "n.sv"}])) == 1,         "GATE FIRE case missed: an undocumented unadopted module must fail"
 
     # Check 2 in isolation from git, by driving its two grounds directly.
     def grounds(clean, touched, when):
@@ -461,7 +574,8 @@ def main():
     manifest = load_manifest_sections()
     targets = load_fit_targets()
 
-    print("uncashed_cheques: self-test 4 fire / 4 no-fire PASSED")
+    print("uncashed_cheques: self-test PASSED -- fire and no-fire controls "
+          "for checks 1-4, the verdict split, and the --gate ratchet")
     print("scanned %d modules, %d fit targets, %d manifest entries\n"
           % (len(decl), len(targets), len(manifest)))
 
@@ -532,6 +646,56 @@ def main():
     print("  the second gets built.")
     print("  A DIRTY row never described any committed state exactly. A BEHIND"
           "\n  row describes an earlier one. Neither is a current measurement.")
+
+    print("\n== CHECK 4: COMPOSED BUT NEVER ADOPTED "
+          "(instantiated somewhere, unreachable from %s)" % PROD_TOP)
+    arows, reach = adopted_nowhere(decl, inst, ev, manifest, targets)
+    for r in sorted(arows, key=lambda r: -(r["alm"] or 0)):
+        cost = []
+        if r["alm"] is not None:
+            cost.append("%d ALM" % r["alm"])
+        if r["dsp"] is not None:
+            cost.append("%d DSP" % r["dsp"])
+        print("  ** %-32s %-10s %s"
+              % (r["module"], r["verdict"],
+                 ", ".join(cost) or ("fit target, never measured"
+                                     if r["targeted"] else "")))
+        if r["note"]:
+            print("       manifest says: %s" % r["note"][:96])
+    print("\n  %s reaches %d of %d modules; %d measured/targeted module(s) "
+          "outside\n  that hierarchy carry an OPEN disposition."
+          % (PROD_TOP, reach, len(decl), len(arows)))
+    print("  Check 1 cannot see these -- every one of them IS instantiated.")
+    print("  A module can be built, composed into a subsystem, composed into a")
+    print("  pipe and fitted on physical pins, and still not be what production")
+    print("  instantiates. Rooted at every step, adopted at none.")
+
+    # --gate is a RATCHET, not a verdict on the backlog. PENDING rows are
+    # allowed: the manifest wrote the cheque down, and this tool exists to
+    # read those back, not to forbid them. UNDECLARED rows are the failure --
+    # a module that is measured or fit-targeted, is reachable from no
+    # production hierarchy, and about which nobody wrote anything at all.
+    #
+    # That distinction is what keeps the gate non-vacuous in both directions.
+    # A gate that failed on PENDING would be red today, stay red for months,
+    # and be suppressed; a gate that failed on nothing would be the green
+    # that this file spent 600 lines warning about. The fire case is one line
+    # in prod_manifest.yml being deleted, which is exactly the regression
+    # worth catching on the day it happens.
+    if "--gate" in sys.argv:
+        undeclared = gate_failures(rows, arows)
+        if undeclared:
+            print("\nGATE FAILED: %d module(s) carry NO disposition at all:"
+                  % len(undeclared))
+            for r in undeclared:
+                print("  %-34s %s" % (r["module"], r["path"]))
+            print("Record why it is rootless or unadopted in "
+                  "design/prod_manifest.yml. A deferral in words is accepted;",
+                  "silence is not.")
+            return 1
+        print("\nGATE PASSED: every open row carries a written disposition "
+              "(%d PENDING, 0 UNDECLARED)."
+              % len([r for r in rows + arows if r["verdict"] == "PENDING"]))
     return 0
 
 

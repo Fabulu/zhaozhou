@@ -9783,6 +9783,25 @@ set_tests_properties(material_combine_v3_done_bypass_double_issue_control
 # and the second time the stale copy reported "exactly 16 live: expected 0x10,
 # got 0x11" -- which reads like a credit overflow in shipped RTL and is nothing
 # of the kind. Nothing in the tree was watching. Now something is.
+# `uncashed_cheques.py` has existed since 2026-09-09, has caught real money
+# every time it was run, and was NEVER REGISTERED -- so nothing ran it back.
+# That is the exact shape the tool itself detects, one level up: a thing built
+# is not a thing installed, and a detector nobody invokes is a detector that
+# reports nothing forever. Registered 2026-09-18, the day its new check 4
+# found the shared projector composed, fitted at 102.19 MHz, and adopted by
+# no production top.
+#
+# `--gate` is a RATCHET and is deliberately green today: it refuses only
+# UNDECLARED rows, never the 16 PENDING ones, because a written deferral is
+# what the manifest is for. Its fire case is asserted at import (see
+# gate_failures' controls), so this is not a test that has never been seen to
+# fail.
+add_test(NAME uncashed_cheques
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/budget/uncashed_cheques.py
+    --gate)
+set_tests_properties(uncashed_cheques PROPERTIES
+  LABELS "fast;lint;budget" TIMEOUT 300)
 add_test(NAME mutant_copy_drift
   COMMAND "${Python3_EXECUTABLE}"
     ${CMAKE_SOURCE_DIR}/tools/budget/mutant_copy_drift.py
