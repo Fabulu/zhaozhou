@@ -1017,36 +1017,61 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > maps end to end. **No fit has ever been attempted on it**, so ALM and Fmax for
 > the machine as a machine still do not exist.
 >
-> #### What the register count implies, and it is not good
+> #### AND THE MAP REPORT ANSWERS THE AREA QUESTION WITHOUT A FIT
 >
-> The composed shell measures 40,790 registers against 28,959 ALM — **1.41
-> registers per ALM** for this design's logic mix. Applying that ratio:
+> I first estimated this from a register ratio — 1.41 registers per ALM on the
+> shell, giving ~75,100 — and then read the report, which states it outright:
 >
 > ```
-> 105,818 registers / 1.41  ≈  75,100 ALM     device: 41,910
+> Estimate of Logic utilization (ALMs needed)   100,709
+> Combinational ALUT usage for logic           158,887
+> Total registers                              105,818
+> Total DSP Blocks                                 123
+> Total block memory bits                    1,029,005
 > ```
 >
-> **That is roughly 1.8× the device and 2× the golden path's 37,500 objective.**
+> **The register-ratio estimate was 25% LOW** — the flattering direction, for
+> the fourth time in this section. It is left above rather than deleted because
+> the pattern is the point.
 >
-> **It is an ESTIMATE and must not be entered anywhere as a measurement.** The
-> ratio is a property of the shell's particular mix of logic and registers, not
-> a constant; the fitter packs and optimises after mapping; and `zhao_prod_top`
-> composes blocks whose membership in the *selected* scope has not been audited
-> against the golden path's groups.
+> **The synthesis estimate is trustworthy here, and that is measured, not
+> assumed.** The composed shell gives a live calibration on the same device,
+> same flow, same day:
 >
-> **What makes it worth stating anyway is that it is independently corroborated.**
-> `DOCKET.md` records a historical whole-machine accounting transition of
-> **76,672 → 58,359 ALM**. The 76,672 was arrived at by a completely different
-> route, and this estimate lands within 2% of it. Two unrelated methods agreeing
-> is much stronger than either alone, and the agreement points the wrong way:
-> the machine has not quietly come down to something near the device.
+> | | map estimate | fitted | error |
+> |---|---:|---:|---:|
+> | shell ALM | 31,456 | 28,959 | +8.6% |
+> | shell DSP | 63 | 63 | exact |
 >
-> #### This is now a fit that can be run, and the question is stated in advance
+> Applying that 1.086: **~92,700 ALM fitted, against a 41,910 device — about
+> 2.2× over.** DSP needs no scaling because the estimate was exact: **123 DSP
+> against a 112-block DEVICE**, which is over the physical part and not merely
+> over the 85 objective. Memory is the one comfortable number at 18%.
 >
-> **What is the whole machine's ALM, DSP, M10K and Fmax?** That has never been
-> answered in any form, every total in this document is a sum of parts because
-> of it, and as of today the target maps. A failure to fit is itself the answer
-> and would be the first honest one.
+> *(The roadmap elsewhere records a map estimate of 62,534 against a fitted
+> 29,044 — a 2.15× error — which is why the calibration was checked rather than
+> reused. That case was the pre-M10K arrangement, where 38,400 bits sat in
+> flip-flops and the fitter recovered enormously. The current design has no such
+> slack left, which is exactly why its estimate is close.)*
+>
+> #### What this does and does not say
+>
+> **It says the machine as composed in `zhao_prod_top` is about 2.2× too big and
+> is over the DSP device count.** That is the first whole-machine statement this
+> project has ever had, and it did not need the multi-hour fit — a 1,180 s map
+> and one calibration row produced it.
+>
+> **It does not say the SELECTED machine is 2.2× too big.** `zhao_prod_top`
+> carries superseded variants alongside their replacements — the V1 texture
+> island beside the V3 one, `material_combine_v1` beside its successor — and
+> nothing in the tree marks which is selected. The leaves analysis below charges
+> 93,310 ALM including exactly that duplication, which lands within 1% of the
+> calibrated 92,700 and corroborates both numbers while sharing their one flaw.
+>
+> **So the next measurement is not a bigger fit. It is the selected-variant
+> list**, after which the same 1,180 s map answers the real question. Spending
+> four hours fitting a composition known to contain duplicates would measure a
+> circuit we already know is wrong — which this repository has a rule about.
 >
 > ### THE GOLDEN PATH SAYS WHAT CLOSURE IS, AND IT WAS UNINDEXED
 >
