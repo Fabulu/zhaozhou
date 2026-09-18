@@ -57,7 +57,18 @@ Clips ship compressed, SXSK-style:
 
 - per frame: root displacement (3 × fx16, 12 B) + `bone_count` × quantized
   quaternion (`quat16`, s16[4], **8 B/bone/frame** — qformats §7.6).
-  32 bones ⇒ ≤ 268 B/frame.
+  32 bones ⇒ ≤ 268 B/frame. This is the **base rigid-pose payload** reported by
+  `clip_frame_bytes()`, not a claim that optional hero sidecars cost zero.
+- optional uniform per-bone scale sidecar: frame-major Q1.15 u16, present only
+  on clips that author size acting. Empty is exact identity; explicit identity
+  is 32768 and must decode byte-identically to empty; zero is invalid. The scale
+  multiplies the decoded local 3×3 basis before hierarchy composition, so it
+  carries children structurally while leaving the bone's own translation and
+  the regular vertex payload unchanged. Presentation half-frames use a rounded
+  linear average; `hold_last` clamps and looping clips wrap. Scale midpoint
+  vectors are generated-only and are discarded/regenerated at asset compile,
+  never trusted as authored input. Declared phase seams compare scale with an
+  empty track normalised to identity, alongside every other pose sidecar.
 - keys at **30 Hz**, each key shown 2 sim ticks, **no interpolation** —
   donor-shipped and it reads perfectly at 240p; a later geomorph between
   keys is a presentation nicety, not v1.

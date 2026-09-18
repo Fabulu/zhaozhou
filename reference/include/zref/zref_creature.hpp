@@ -249,6 +249,11 @@ struct Clip {
   // exact identity for every existing creature. When present, decode adds the
   // sample to the bone's authored bind translation before parent composition.
   std::vector<int32_t> local_translation;  // frame_count * bone_count * 3
+  // Optional per-bone UNIFORM scale, frame-major Q1.15. Empty is exact
+  // identity and takes the old decode path. Explicit identity is 32768; zero
+  // is invalid. Uniform scale changes no normal direction and structurally
+  // carries descendants through the existing matrix hierarchy.
+  std::vector<uint16_t> uniform_scale_q15;  // frame_count * bone_count
   std::vector<ClipEvent> events;  // frame-sorted
   // Optional narrow deformation sidecar. Empty means exact identity; otherwise
   // one fixed-point sample per authored key. It never enters the PoseBank, so
@@ -331,6 +336,7 @@ struct Clip {
   std::vector<quat16> mid_quats;         // frame_count * bone_count, or empty
   std::vector<int32_t> mid_root;         // frame_count * 3, or empty
   std::vector<int32_t> mid_local_translation;  // frame_count * bone_count * 3, or empty
+  std::vector<uint16_t> mid_uniform_scale_q15;  // frame_count * bone_count, or empty
   std::vector<DeformSample> mid_deform;  // frame_count, or empty
   /**
    * LANES 1..kDeformLaneCount-1 (pass 12). Either EMPTY -- exact identity on
@@ -369,9 +375,11 @@ struct PresentationMidpointAuthorship {
  * clips (compress -> coil -> unroll -> spear -> ...) stays pop-free only if
  * the poses on both sides of every intended cut are BIT-IDENTICAL. That is
  * an asset invariant, so the asset compiler enforces it: each declared pair
- * (slot_a, key_a) == (slot_b, key_b) is byte-compared (quats + root) at
- * compile_creature time and the compile FAILS on any mismatch -- the seam
- * law is checked where the bytes are made, not trusted to the eye.
+ * (slot_a, key_a) == (slot_b, key_b) is compared across every authored key
+ * pose channel (quats, root, optional local translation/uniform scale, and all
+ * deformation lanes) at compile_creature time and the compile FAILS on any
+ * mismatch -- the seam law is checked where the bytes are made, not trusted
+ * to the eye.
  */
 struct SeamPair {
   uint16_t slot_a, key_a;
@@ -386,7 +394,7 @@ struct ClipBank {
   bool bake60 = false;          // A1: bake presentation midpoints at compile
 };
 
-/** Byte size of one frame as shipped: 12 + 8 * bone_count (creature_rules 2.1). */
+/** Byte size of one BASE rigid-pose frame; optional hero sidecars are additional. */
 inline constexpr uint32_t clip_frame_bytes(uint8_t bone_count) { return 12u + 8u * bone_count; }
 
 // ----------------------------------------------------- pose bank (GEOM.POSE) —

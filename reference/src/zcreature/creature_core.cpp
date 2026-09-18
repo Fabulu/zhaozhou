@@ -189,7 +189,9 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
                                  const std::vector<uint8_t>& authored_channels) {
   const int n = c.frame_count;
   const size_t local_count = static_cast<size_t>(n) * bc * 3u;
+  const size_t scale_count = static_cast<size_t>(n) * bc;
   const bool has_local_translation = c.local_translation.size() == local_count;
+  const bool has_uniform_scale = c.uniform_scale_q15.size() == scale_count;
   const bool has_deform = c.deform.size() == static_cast<size_t>(n);
   const size_t ex_lanes = static_cast<size_t>(kDeformLaneCount) - 1u;
   const bool has_deform_ex =
@@ -197,6 +199,7 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
   // A midpoint sidecar is meaningless without one valid source sample per key.
   // Clear malformed/stale generated data even on a non-interpolated clip.
   if (!has_local_translation) c.mid_local_translation.clear();
+  if (!has_uniform_scale) c.mid_uniform_scale_q15.clear();
   if (!has_deform) c.mid_deform.clear();
   if (!has_deform_ex) c.mid_deform_ex.clear();
   if (!c.interpolate || n < 2) return;
@@ -214,6 +217,10 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
     c.mid_local_translation.assign(local_count, 0);
   else
     c.mid_local_translation.clear();
+  if (has_uniform_scale)
+    c.mid_uniform_scale_q15.assign(scale_count, uint16_t{32768});
+  else
+    c.mid_uniform_scale_q15.clear();
   if (has_deform)
     c.mid_deform.assign(static_cast<size_t>(n), DeformSample{});
   else
@@ -294,6 +301,19 @@ void bake_presentation_midpoints(Clip& c, uint8_t bc,
           c.mid_local_translation[static_cast<size_t>(k) * bc * 3u + lane] =
               static_cast<int32_t>(m);
         }
+      }
+    }
+    if (!c.mid_uniform_scale_q15.empty()) {
+      for (int b = 0; b < bc; ++b) {
+        const size_t i1 = static_cast<size_t>(k1) * bc + static_cast<size_t>(b);
+        const size_t i2 = static_cast<size_t>(k2) * bc + static_cast<size_t>(b);
+        const uint32_t sum = static_cast<uint32_t>(c.uniform_scale_q15[i1]) +
+                             static_cast<uint32_t>(c.uniform_scale_q15[i2]);
+        // One presentation half-sample exists between authored 30 Hz keys.
+        // Rounded linear averaging is monotone, cannot overshoot, and keeps
+        // explicit Q1.15 identity exact.
+        c.mid_uniform_scale_q15[static_cast<size_t>(k) * bc + b] =
+            static_cast<uint16_t>((sum + 1u) / 2u);
       }
     }
     if (!c.mid_deform.empty()) {
@@ -451,8 +471,31 @@ void decode_pose(const CreatureType& type, const Clip& clip, uint16_t frame,
         }
       }
     }
+    uint16_t uniform_scale_q15 = 32768;
+    const size_t scale_count = static_cast<size_t>(clip.frame_count) * bc;
+    if (clip.uniform_scale_q15.size() == scale_count) {
+      const size_t base = static_cast<size_t>(frame) * bc + b;
+      uniform_scale_q15 = clip.uniform_scale_q15[base];
+      if (clip.interpolate && sub != 0) {
+        if (clip.mid_uniform_scale_q15.size() == scale_count) {
+          uniform_scale_q15 = clip.mid_uniform_scale_q15[base];
+        } else {
+          const uint16_t nf = static_cast<uint16_t>(
+              frame + 1 >= clip.frame_count ? (clip.hold_last ? frame : 0) : frame + 1);
+          const uint32_t sum = static_cast<uint32_t>(uniform_scale_q15) +
+                               clip.uniform_scale_q15[static_cast<size_t>(nf) * bc + b];
+          uniform_scale_q15 = static_cast<uint16_t>((sum + 1u) / 2u);
+        }
+      }
+    }
     quat16_to_mat3(q, r, L);
-    mat3x4fx lr = r;  // LR = R with the rest translation (+ authored local/root displacement)
+    if (uniform_scale_q15 != 32768) {
+      constexpr int kBasis[9] = {0, 1, 2, 4, 5, 6, 8, 9, 10};
+      for (int i : kBasis)
+        r.m[i] = rescale_s32(static_cast<int64_t>(r.m[i]) * uniform_scale_q15,
+                             15, L, &SatLedger::mul);
+    }
+    mat3x4fx lr = r;  // LR = scaled R with rest/local/root translation unscaled
     lr.m[3] += sk.bones[b].tx + local_t[0] + (b == 0 ? disp[0] : 0);
     lr.m[7] += sk.bones[b].ty + local_t[1] + (b == 0 ? disp[1] : 0);
     lr.m[11] += sk.bones[b].tz + local_t[2] + (b == 0 ? disp[2] : 0);
@@ -1148,6 +1191,12 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   }
 
   out.bank = bank;
+  // Uniform-scale midpoints are generated-only. Never trust a caller-provided
+  // companion: without bake60, decode derives the bounded half-sample directly
+  // from authored keys; with bake60, the loop below regenerates every sample.
+  // This prevents a stale exact-length midpoint vector from bypassing source
+  // validation and collapsing a bone only on presentation half-frames.
+  for (Clip& c : out.bank.clips) c.mid_uniform_scale_q15.clear();
   // Regenerate every unowned presentation sample from current integer keys.
   if (bank.bake60) {
     for (Clip& c : out.bank.clips) {
@@ -1162,6 +1211,9 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
   }
 
   // ---- C2: enforce the declared phase seams (bit-identical poses) --------
+  // Optional authored sidecars are pose channels too. Empty local translation
+  // is zero and empty uniform scale is Q1.15 identity; compare those normalized
+  // values so absent and explicit identity mean the same pose.
   for (const SeamPair& sp : bank.seams) {
     const Clip* a = nullptr;
     const Clip* b = nullptr;
@@ -1182,6 +1234,35 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       const quat16& qb = b->quats[static_cast<size_t>(sp.key_b) * bc + k];
       same = qa.q[0] == qb.q[0] && qa.q[1] == qb.q[1] && qa.q[2] == qb.q[2] && qa.q[3] == qb.q[3];
     }
+    const bool a_local_valid =
+        a->local_translation.size() == static_cast<size_t>(a->frame_count) * bc * 3u;
+    const bool b_local_valid =
+        b->local_translation.size() == static_cast<size_t>(b->frame_count) * bc * 3u;
+    const bool a_scale_valid =
+        a->uniform_scale_q15.size() == static_cast<size_t>(a->frame_count) * bc;
+    const bool b_scale_valid =
+        b->uniform_scale_q15.size() == static_cast<size_t>(b->frame_count) * bc;
+    for (size_t bone = 0; bone < bc && same; ++bone) {
+      bad_bone = bone;
+      for (size_t axis = 0; axis < 3 && same; ++axis) {
+        const int32_t ta = a_local_valid
+                               ? a->local_translation[(static_cast<size_t>(sp.key_a) * bc + bone) * 3u + axis]
+                               : 0;
+        const int32_t tb = b_local_valid
+                               ? b->local_translation[(static_cast<size_t>(sp.key_b) * bc + bone) * 3u + axis]
+                               : 0;
+        same = ta == tb;
+      }
+      if (same) {
+        const uint16_t sa = a_scale_valid
+                                ? a->uniform_scale_q15[static_cast<size_t>(sp.key_a) * bc + bone]
+                                : uint16_t{32768};
+        const uint16_t sb = b_scale_valid
+                                ? b->uniform_scale_q15[static_cast<size_t>(sp.key_b) * bc + bone]
+                                : uint16_t{32768};
+        same = sa == sb;
+      }
+    }
     for (int k = 0; k < 3 && same; ++k)
       same = a->root[static_cast<size_t>(sp.key_a) * 3 + k] ==
              b->root[static_cast<size_t>(sp.key_b) * 3 + k];
@@ -1189,6 +1270,22 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
       const DeformSample da = a->deform.empty() ? DeformSample{} : a->deform[sp.key_a];
       const DeformSample db = b->deform.empty() ? DeformSample{} : b->deform[sp.key_b];
       same = da.flatten == db.flatten && da.spread == db.spread;
+    }
+    if (same) {
+      const size_t ex_lanes = static_cast<size_t>(kDeformLaneCount) - 1u;
+      const bool a_ex_valid =
+          a->deform_ex.size() == static_cast<size_t>(a->frame_count) * ex_lanes;
+      const bool b_ex_valid =
+          b->deform_ex.size() == static_cast<size_t>(b->frame_count) * ex_lanes;
+      for (size_t lane = 0; lane < ex_lanes && same; ++lane) {
+        const DeformSample da = a_ex_valid
+                                    ? a->deform_ex[static_cast<size_t>(sp.key_a) * ex_lanes + lane]
+                                    : DeformSample{};
+        const DeformSample db = b_ex_valid
+                                    ? b->deform_ex[static_cast<size_t>(sp.key_b) * ex_lanes + lane]
+                                    : DeformSample{};
+        same = da.flatten == db.flatten && da.spread == db.spread;
+      }
     }
     if (!same) {
       static char msg[96];
@@ -1261,11 +1358,20 @@ bool compile_creature(const Skeleton& sk, const ClipBank& bank, const std::vecto
         (!c.local_translation.empty() &&
          c.local_translation.size() !=
              static_cast<size_t>(c.frame_count) * bank.bone_count * 3u) ||
+        (!c.uniform_scale_q15.empty() &&
+         c.uniform_scale_q15.size() !=
+             static_cast<size_t>(c.frame_count) * bank.bone_count) ||
         (!c.deform.empty() && c.deform.size() != c.frame_count) ||
         (!c.deform_ex.empty() &&
          c.deform_ex.size() !=
              static_cast<size_t>(c.frame_count) * (kDeformLaneCount - 1u))) {
       if (reason) *reason = "clip frame arrays";
+      return false;
+    }
+    if (!c.uniform_scale_q15.empty() &&
+        std::find(c.uniform_scale_q15.begin(), c.uniform_scale_q15.end(), uint16_t{0}) !=
+            c.uniform_scale_q15.end()) {
+      if (reason) *reason = "clip uniform scale zero";
       return false;
     }
     uint16_t per_frame_count = 0;

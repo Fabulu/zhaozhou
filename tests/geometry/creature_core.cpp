@@ -898,6 +898,187 @@ void test_local_translation_track() {
            "local translation: child track does not move root");
 }
 
+void test_uniform_scale_track() {
+  constexpr uint16_t kIdentity = 32768;
+  constexpr uint16_t kOneAndHalf = 49152;
+
+  // root -> eye -> pupil, plus a root sibling. Scaling Eye must keep its own
+  // pivot fixed, carry the Pupil offset, and leave Root/Sibling untouched.
+  zc::Skeleton sk;
+  sk.bone_count = 4;
+  sk.bones[0] = zc::Bone{0, 0, 0, 0};
+  sk.bones[1] = zc::Bone{0, 2 * M1, 0, 0};
+  sk.bones[2] = zc::Bone{1, M1, 0, 0};
+  sk.bones[3] = zc::Bone{0, 0, 2 * M1, 0};
+  zc::SkeletonBake baked;
+  check(zc::bake_skeleton(sk, baked), "uniform scale: bake skeleton");
+
+  zc::Clip empty;
+  empty.slot_id = 1;
+  empty.frame_count = 2;
+  empty.root.assign(6, 0);
+  empty.quats.assign(8, zc::quat16_identity());
+  empty.interpolate = true;
+  zc::bake_presentation_midpoints(empty, 4);
+
+  zc::CreatureType type;
+  type.type_id = 17;
+  type.skeleton = sk;
+  type.baked = baked;
+  type.bank.bone_count = 4;
+
+  // Explicit identity is matrix-byte-identical to the absent optional track at
+  // authored keys and generated presentation half-frames.
+  zc::Clip identity = empty;
+  identity.uniform_scale_q15.assign(8, kIdentity);
+  zc::bake_presentation_midpoints(identity, 4);
+  for (uint16_t frame = 0; frame < 2; ++frame) {
+    for (uint8_t sub = 0; sub < 2; ++sub) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> a{}, b{};
+      zc::decode_pose(type, empty, frame, a, nullptr, sub);
+      zc::decode_pose(type, identity, frame, b, nullptr, sub);
+      check(std::memcmp(a.data(), b.data(), sizeof(a)) == 0,
+            "uniform scale: empty and explicit identity are byte-identical");
+    }
+  }
+
+  zc::Clip scaled = identity;
+  scaled.uniform_scale_q15[(1u * 4u) + 1u] = kOneAndHalf;
+  zc::bake_presentation_midpoints(scaled, 4);
+  std::array<zc::mat3x4fx, zc::kMaxBones> key_pose, mid_pose;
+  zc::decode_pose(type, scaled, 1, key_pose, nullptr, 0);
+  zc::decode_pose(type, scaled, 0, mid_pose, nullptr, 1);
+  check_eq(key_pose[1].m[0], 98304, "uniform scale: eye key basis is exactly 1.5");
+  check_eq(mid_pose[1].m[0], 81920, "uniform scale: eye midpoint basis is exactly 1.25");
+  check_eq(key_pose[0].m[0], M1, "uniform scale: root basis unchanged");
+  check_eq(key_pose[3].m[5], M1, "uniform scale: sibling basis unchanged");
+
+  const auto posed_x = [](const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
+                           int32_t bind_x, uint8_t bone) {
+    int32_t x, y, z;
+    zc::skin_vertex(pose.data(), zc::SkinVertex{bind_x, 0, 0, bone, 0, 64},
+                    x, y, z, nullptr);
+    return x;
+  };
+  check_eq(posed_x(key_pose, 2 * M1, 1), 2 * M1,
+           "uniform scale: eye pivot translation is not scaled");
+  check_eq(posed_x(key_pose, 3 * M1, 2), 3 * M1 + M1 / 2,
+           "uniform scale: parent eye scale carries pupil child offset");
+  check_eq(posed_x(key_pose, 3 * M1, 1), 3 * M1 + M1 / 2,
+           "uniform scale: eye geometry expands around its own pivot");
+
+  // The registration gate has a positive control: putting the same scale on
+  // Pupil instead of Eye leaves the pupil centre behind and must be detected.
+  zc::Clip broken = identity;
+  broken.uniform_scale_q15[(1u * 4u) + 2u] = kOneAndHalf;
+  zc::bake_presentation_midpoints(broken, 4);
+  std::array<zc::mat3x4fx, zc::kMaxBones> broken_pose;
+  zc::decode_pose(type, broken, 1, broken_pose, nullptr, 0);
+  const bool registered = posed_x(broken_pose, 3 * M1, 2) == 3 * M1 + M1 / 2;
+  check(!registered, "uniform scale: broken-parent control fires registration gate");
+
+  // Rounded linear midpoint: odd sums round half up and cannot overshoot.
+  zc::Clip rounded = identity;
+  rounded.uniform_scale_q15[1] = kIdentity;
+  rounded.uniform_scale_q15[4 + 1] = static_cast<uint16_t>(kIdentity + 1);
+  zc::bake_presentation_midpoints(rounded, 4);
+  check_eq(rounded.mid_uniform_scale_q15[1], kIdentity + 1,
+           "uniform scale: odd midpoint rounds half up");
+  check(rounded.mid_uniform_scale_q15[1] >= rounded.uniform_scale_q15[1] &&
+            rounded.mid_uniform_scale_q15[1] <= rounded.uniform_scale_q15[5],
+        "uniform scale: midpoint stays inside authored segment");
+
+  scaled.hold_last = true;
+  zc::bake_presentation_midpoints(scaled, 4);
+  check_eq(scaled.mid_uniform_scale_q15[4 + 1], kOneAndHalf,
+           "uniform scale: hold-last clamps final midpoint");
+  scaled.hold_last = false;
+  zc::bake_presentation_midpoints(scaled, 4);
+  check_eq(scaled.mid_uniform_scale_q15[4 + 1], 40960,
+           "uniform scale: looping final midpoint wraps to key zero");
+
+  zc::Clip malformed = identity;
+  malformed.uniform_scale_q15.pop_back();
+  malformed.mid_uniform_scale_q15.assign(8, kOneAndHalf);
+  zc::bake_presentation_midpoints(malformed, 4);
+  check(malformed.mid_uniform_scale_q15.empty(),
+        "uniform scale: malformed source clears stale generated midpoints");
+
+  zc::ClipBank bad_bank;
+  bad_bank.bone_count = 4;
+  bad_bank.clips.push_back(malformed);
+  zc::RingPart part;
+  part.bone = 1;
+  part.rings = {{0, M1 / 4, 8}, {M1 / 2, M1 / 4, 8}};
+  zc::CreatureType compiled;
+  const char* reason = "";
+  check(!zc::compile_creature(sk, bad_bank, {part}, compiled, &reason),
+        "uniform scale: malformed source length rejected");
+  check(std::strcmp(reason, "clip frame arrays") == 0,
+        "uniform scale: malformed source reason");
+
+  zc::Clip zero = identity;
+  zero.uniform_scale_q15[1] = 0;
+  bad_bank.clips[0] = zero;
+  check(!zc::compile_creature(sk, bad_bank, {part}, compiled, &reason),
+        "uniform scale: zero authored scale rejected");
+  check(std::strcmp(reason, "clip uniform scale zero") == 0,
+        "uniform scale: zero source reason");
+
+  // Generated scale midpoints are not authored input. A stale exact-length
+  // vector must be discarded even when bake60 is off; decode then derives the
+  // safe linear half-sample from the validated authored keys.
+  zc::Clip stale_mid = identity;
+  stale_mid.mid_uniform_scale_q15.assign(8, uint16_t{0});
+  zc::ClipBank stale_bank;
+  stale_bank.bone_count = 4;
+  stale_bank.bake60 = false;
+  stale_bank.clips.push_back(stale_mid);
+  check(zc::compile_creature(sk, stale_bank, {part}, compiled, &reason),
+        "uniform scale: stale generated midpoint compiles from valid source");
+  check(compiled.bank.clips[0].mid_uniform_scale_q15.empty(),
+        "uniform scale: compile discards stale generated midpoint");
+  std::array<zc::mat3x4fx, zc::kMaxBones> stale_pose{};
+  zc::decode_pose(compiled, compiled.bank.clips[0], 0, stale_pose, nullptr, 1);
+  check_eq(stale_pose[1].m[0], M1,
+           "uniform scale: stale zero midpoint cannot collapse half-frame");
+
+  // C2 seams compare every pose-affecting authored channel. Empty and explicit
+  // identity scale/local tracks normalise to the same pose; nonidentity scale,
+  // local translation, or an extra deformation lane must reject the seam.
+  zc::Clip seam_a = empty;
+  seam_a.slot_id = 1;
+  zc::Clip seam_b = identity;
+  seam_b.slot_id = 2;
+  zc::ClipBank seam_bank;
+  seam_bank.bone_count = 4;
+  seam_bank.clips = {seam_a, seam_b};
+  seam_bank.seams.push_back(zc::SeamPair{1, 0, 2, 0});
+  check(zc::compile_creature(sk, seam_bank, {part}, compiled, &reason),
+        "uniform scale: seam accepts absent versus explicit identity");
+
+  seam_bank.clips[1].uniform_scale_q15[1] = kOneAndHalf;
+  check(!zc::compile_creature(sk, seam_bank, {part}, compiled, &reason),
+        "uniform scale: seam rejects scale mismatch");
+  check(std::strncmp(reason, "phase seam mismatch (C2)", 24) == 0,
+        "uniform scale: seam mismatch reason");
+
+  seam_bank.clips[1].uniform_scale_q15.assign(8, kIdentity);
+  seam_bank.clips[1].local_translation.assign(24, 0);
+  seam_bank.clips[1].local_translation[3] = M1 / 8;
+  check(!zc::compile_creature(sk, seam_bank, {part}, compiled, &reason),
+        "uniform scale: seam rejects local translation mismatch");
+
+  seam_bank.clips[1].local_translation.clear();
+  seam_bank.clips[1].deform_ex.assign(
+      static_cast<size_t>(seam_bank.clips[1].frame_count) *
+          (zc::kDeformLaneCount - 1u),
+      zc::DeformSample{});
+  seam_bank.clips[1].deform_ex[0].spread = 1;
+  check(!zc::compile_creature(sk, seam_bank, {part}, compiled, &reason),
+        "uniform scale: seam rejects extra deformation mismatch");
+}
+
 }  // namespace
 
 // THE CREATURE EXTENT LAW (owner ruling 2026-08-24 item 3).
@@ -987,6 +1168,7 @@ int main() {
   test_extent_law();
   test_pose_bank();
   test_local_translation_track();
+  test_uniform_scale_track();
   test_anim();
   test_ground_tilt();
   test_tilt_matrix();
