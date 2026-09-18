@@ -327,11 +327,10 @@ int main(int argc, char** argv) {
   const unsigned kCrcPreloadCycles = 1;
   const unsigned kCrcByteCycles = 256u * 10u;
   const unsigned kCrcVerdictCycles = 1;
-  const unsigned kCrcScanCycles =
-      kCrcPreloadCycles + kCrcByteCycles + kCrcVerdictCycles;
+  const unsigned kCrcScanCycles = kCrcPreloadCycles + kCrcByteCycles + kCrcVerdictCycles;
   zhao::check(crc_cycles == kCrcScanCycles,
-              "serialized CRC scans one preload, 2560 bytes and one verdict",
-              kCrcScanCycles, crc_cycles);
+              "serialized CRC scans one preload, 2560 bytes and one verdict", kCrcScanCycles,
+              crc_cycles);
   zhao::check(d->active_page_generation_o == 0 && d->cfg_rsp_valid_o == 0,
               "CRC success neither activates nor acknowledges END", 0,
               static_cast<uint64_t>(d->active_page_generation_o || d->cfg_rsp_valid_o));
@@ -639,8 +638,8 @@ int main(int argc, char** argv) {
   // final byte, not "within 4000".
   const unsigned kBadCrcCycles = 2557 + 1;
   zhao::check(bad_crc_cycles == kBadCrcCycles,
-              "BAD_CRC response lands one cycle after the final serialized byte",
-              kBadCrcCycles, bad_crc_cycles);
+              "BAD_CRC response lands one cycle after the final serialized byte", kBadCrcCycles,
+              bad_crc_cycles);
   zhao::check(d->binding_fault_o && d->cfg_errors_o == bad_crc_errors_before + 1,
               "BAD_CRC sets binding fault over same-edge clear and counts once", 1,
               (d->binding_fault_o && d->cfg_errors_o == bad_crc_errors_before + 1) ? 1 : 0);
