@@ -224,6 +224,74 @@ it, which costs a cycle and is a protocol change — and then it belongs with
 cone 2's remaining 3.4 ns in the "needs a design pass" pile rather than in a
 timing round.
 
+### Cone 4's precondition, worked out: it holds at EMPTY and is only GUARDED at FULL
+
+Done by reading, since the assertion cannot be written while a suite has the
+tree. The result changes the recommendation, so it was worth doing first.
+
+**Read-during-write needs `read_pointer_q == write_pointer_q`.** The pointers
+are `FQPW = $clog2(FQD)` bits — exactly two for `FQD = 4`, **no extra
+wrap bit** — and emptiness is tracked separately in `occupancy_q`. So the
+pointers coincide in **two** states, not one:
+
+**At EMPTY, the don't-care is real and structural.**
+
+```systemverilog
+wire queue_empty_c   = occupancy_q == '0;
+assign sample_valid_o = !queue_empty_c && (|head_sample_pending_c);
+```
+
+Every `sample_*_o` output is driven unconditionally from `head_c`, but the
+handshake's `valid` is gated on `!queue_empty_c`. A write landing while empty
+does not change `occupancy_q` until the next edge, so `sample_valid_o` is low in
+exactly the cycle the bypass would matter. **Whatever the RAM returns is
+ignored.**
+
+**At FULL, it is not structural — it is a guard.** With two-bit pointers,
+`write_pointer_q == read_pointer_q` again when the queue holds four, and there
+`queue_empty_c` is false, so `sample_valid_o` *can* be high. The only thing
+preventing a meaningful read-during-write is that `queue_full_c` blocks the
+write.
+
+That guard is almost certainly correct — and this project already knows it is
+load-bearing. CLAUDE.md's own case study is **this block**: `wq_overflow_o` is
+the counter that *"cannot be reached with legal stimulus while the full-guard is
+correct"*, which is why `tests/mutants/zhao_texture_frag_expand_mutant.sv` was
+committed to fire it.
+
+### So the recommendation is two changes, not one
+
+**`ramstyle = "no_rw_check"` alone converts a guarded condition into a silent
+correctness dependency.** Today, if the full-guard broke, a counter would
+increment and a mutant-verified detector would say so. With `no_rw_check` and a
+broken guard, the queue would instead return stale data to a live `sample_valid_o`
+— one wrong fragment, no counter, no alarm. That is a strictly worse failure
+mode bought for timing.
+
+**Add the wrap bit first.** Widen the pointers to `$clog2(FQD) + 1`, index the
+array with the low bits, and compare all bits for equality. Then
+`read_pointer_q == write_pointer_q` happens **only** when empty, the don't-care
+is structural rather than guarded, and `no_rw_check` is unconditionally safe.
+Cost: two flip-flops.
+
+That is the standard circular-queue idiom and it is cheap. It also leaves
+`occupancy_q` alone, so `queue_empty_c`, `queue_full_c` and every counter keep
+their current meaning and their current tests.
+
+### What the next session should do, in order
+
+1. Widen the pointers by one bit; keep `occupancy_q` as the authority for
+   empty/full so no existing gate changes meaning.
+2. Write the assertion anyway — `head_c` is never consumed while the pointers
+   are equal and a write is landing — and watch it pass. A structural argument
+   that has not been run is still an argument.
+3. Then `ramstyle = "no_rw_check"` on `fragment_m`, and fit it with cone 3,
+   which is still uncashed.
+
+**Worth ~2.5 ns on the gating path**, and unlike cone 2's remainder it needs no
+protocol change — just a pointer bit that should arguably have been there
+anyway.
+
 ### Why it is not being done in this session
 
 `zhao_texture_frag_expand_v2.sv` is in the shell closure, which is not a
