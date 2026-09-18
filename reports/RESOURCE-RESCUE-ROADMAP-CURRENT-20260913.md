@@ -1045,6 +1045,36 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > count from a truncated list is a statement about the list, not about the
 > design.
 >
+> #### The binder after the tree: the DIVIDER is now more than half of it
+>
+> `@packet-h-timing`'s worst path, −6.254, decomposed (data path opens at 5.988):
+>
+> | stretch | ns |
+> |---|---:|
+> | `attrgrad` — `Add8` → `Add5` → `Add6` | 6.73 |
+> | `attrdiv` — `Add0` | 3.21 |
+> | `attrdiv` — `LessThan0~15..26` | 3.87 |
+> | `attrdiv` — `final_sat_r~3..4` | 1.60 |
+> | | **15.67** |
+>
+> Two things to read off it. **The tree is exactly what was designed** — three
+> adds where there were four-plus-one, and `attrgrad`'s own share fell from
+> ~9.50 ns to 6.73. And **`zhao_raster_attrdiv_v2` now holds 8.68 of the
+> 15.67 ns**, more than half, entirely untouched by this work.
+>
+> So the next lever in this family is the divider's saturation tail: a 96-bit
+> `Add0` feeding a `LessThan0` comparator chain feeding `final_sat_r`. The
+> obvious split is a register between the add and the compare, and the walk that
+> feeds it is a per-row divide rather than a per-pixel one — but
+> `zhao_raster_attrdiv_v2.sv` is in Packet E's `PROTECTED_HASHES`, so it is the
+> third file in that set this campaign has needed. The precedent from the other
+> two applies: the set asserts Packet E did not touch these, which stays true.
+>
+> **It is not worth doing before `@packet-h-uvw` reports.** That fit removes 84%
+> of the negative paths, and the sensible order is to see what the table looks
+> like once the dominant family is gone rather than to optimise against a list
+> that is about to be rewritten.
+>
 > #### The prediction for `@packet-h-uvw`, written before it starts
 >
 > Single variable: the `uvw_m` read register moved out of the asynchronously
