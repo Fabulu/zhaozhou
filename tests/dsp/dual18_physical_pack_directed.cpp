@@ -16,6 +16,19 @@
 
 #include "verilated.h"
 
+// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
+// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
+//
+// THIS INCLUDE MUST BE AT FILE SCOPE, NOT INSIDE A BACKEND ARM. It was added
+// by 24bc6b47 inside the `DUAL18_TOP_PROJECTOR` arm below, so the three
+// zhao::exit_hard calls in main() compiled for exactly ONE of the eight cases
+// tests/dsp/run_dual18_verilator.py drives; the other seven died with
+// "'zhao' has not been declared". Nobody saw it for eight days because no
+// CMake target built this file and the script that does was not a ctest --
+// and tests/lint/verilated_exit_path.py is a TEXT scan, so it read the
+// exit_hard calls, called the file safe, and never compiled anything.
+#include "../harness/zhao_sim.hpp"
+
 #if defined(DUAL18_TOP_INFERRED)
 #include "Vdual18_inferred_pair.h"
 using TestTop = Vdual18_inferred_pair;
@@ -34,10 +47,6 @@ using TestTop = Vdual18_s32x18_exact;
 #define DUAL18_S32X18_TEST 1
 #elif defined(DUAL18_TOP_PROJECTOR)
 #include "Vdual18_s32xu12_projector.h"
-
-// zhao::exit_hard -- tests/harness/zhao_sim.hpp: a plain return from a
-// Verilated main can deadlock in VlThreadPool's destructor at ~0 CPU.
-#include "../harness/zhao_sim.hpp"
 using TestTop = Vdual18_s32xu12_projector;
 #define DUAL18_PROJECTOR_TEST 1
 #else

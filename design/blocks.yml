@@ -2801,6 +2801,16 @@ blocks:
       controls fired. Still `unused` in prod_manifest.yml until the fragment
       seam is wired -- an OPEN deferral, deliberately visible to
       tools/budget/uncashed_cheques.py.
+      PROVENANCE OF THAT 4,738 (2026-09-19). From 2026-09-09 until this date
+      the number above was UNREPRODUCIBLE from the tree: no CMake target
+      compiled the named suite, so the line quoted a measurement that only a
+      scratchpad build had ever made and that no gate could repeat. It has now
+      been registered as the `terrain_normalmap_directed` ctest and RE-RUN:
+      4,738 checks, 0 failures -- the count reproduces exactly, and the
+      --break-oracle positive control is registered separately as
+      `terrain_normalmap_break_oracle` (WILL_FAIL) and was seen to fire. The
+      record stands as written; what was missing was never the measurement,
+      only anything able to take it again.
   - id: TERRAIN.NORMALS
     name: Deformed normals
     kind: rtl

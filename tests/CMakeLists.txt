@@ -12738,3 +12738,153 @@ verilate(test_light_stream_skew_mutant
   SOURCES ${ZHAO_LIGHT_MUTANT_SV})
 add_test(NAME light_stream_skew_mutant COMMAND test_light_stream_skew_mutant)
 set_tests_properties(light_stream_skew_mutant PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ===========================================================================
+# SEVEN COMMITTED TESTS THAT NO TARGET COMPILED (registered 2026-09-19)
+# ---------------------------------------------------------------------------
+# reports/MODULE-DISPOSITION-REGISTER-20260918.md section 5.1 found EIGHT
+# committed test .cpp files that this file never names. There are 452
+# add_executable calls here and zero file(GLOB), so a test is compiled only if
+# it is named -- and four ENFORCED-BY citations plus one quoted measurement
+# (design/blocks.yml: "4,738 checks, positive controls fired") stood on gates
+# that could not fire. A citation that resolves as a PATH while naming a
+# binary nobody builds is worse than no citation: it reads as coverage.
+#
+# island_v3_fault_directed.cpp is the eighth and is already accounted for at
+# line 2674 as retained source history. The other seven are registered below.
+# ===========================================================================
+
+# ---- the two proofs that take no DUT --------------------------------------
+# Pure C++: each states a law twice, independently, and differences the two.
+# No Verilated model, so neither is in verilated_exit_path.py's scope and a
+# plain `return bad != 0` from main is correct here.
+#
+# curve_kstart_equivalence's own header calls itself "a standalone proof, not
+# a CTest gate ... run it when the search changes". It is self-checking and
+# already returns non-zero on disagreement, and nothing in the tree was
+# keeping that promise. A proof nobody re-runs is a proof about an old file.
+add_executable(test_attribute_plane_equivalence proofs/attribute_plane_equivalence.cpp)
+add_test(NAME attribute_plane_equivalence COMMAND test_attribute_plane_equivalence)
+set_tests_properties(attribute_plane_equivalence PROPERTIES LABELS "fast;nightly")
+
+add_executable(test_curve_kstart_equivalence proofs/curve_kstart_equivalence.cpp)
+add_test(NAME curve_kstart_equivalence COMMAND test_curve_kstart_equivalence)
+set_tests_properties(curve_kstart_equivalence PROPERTIES LABELS "fast;nightly")
+
+# ---- zhao_proj_arena3's directed differential ------------------------------
+# fpga/rtl/common/zhao_proj_arena3.sv:96 declares
+#   ENFORCED-BY: tests/geometry/proj_arena3_directed.cpp
+# and the test's own header says "promoting it into tests/CMakeLists.txt is a
+# ten-line block copied from geom_wcache_directed's". This is that block.
+# The module defaults (GROUPS=4, DEPTH=81, STRIDE=128) are exactly what the
+# suite's literal expectations are written against -- kGroups/kDepth in the
+# .cpp -- so no -G overrides: an override here would silently retune the
+# expectations the test asserts.
+add_executable(test_proj_arena3_directed geometry/proj_arena3_directed.cpp)
+target_link_libraries(test_proj_arena3_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_proj_arena3_directed
+  PREFIX Vzhao_proj_arena3
+  TOP_MODULE zhao_proj_arena3
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_proj_arena3.sv)
+add_test(NAME proj_arena3_directed COMMAND test_proj_arena3_directed)
+set_tests_properties(proj_arena3_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 600)
+
+# ---- TERRAIN.NORMALMAP's acceptance suite ----------------------------------
+# fpga/rtl/terrain/zhao_terrain_normalmap.sv lines 9 and 363 both declare
+#   ENFORCED-BY: tests/texture/terrain_normalmap_directed.cpp
+# and design/blocks.yml quotes its check count as evidence for the block.
+# Until this block existed, none of that ran.
+add_executable(test_terrain_normalmap_directed texture/terrain_normalmap_directed.cpp)
+target_link_libraries(test_terrain_normalmap_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_normalmap_directed
+  PREFIX Vzhao_terrain_normalmap
+  TOP_MODULE zhao_terrain_normalmap
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normalmap.sv)
+add_test(NAME terrain_normalmap_directed COMMAND test_terrain_normalmap_directed)
+set_tests_properties(terrain_normalmap_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# The suite's own positive control, registered rather than described: the
+# --break-oracle run corrupts ONE expected delta and the suite MUST then fail.
+# Inverted polarity on purpose -- this is evidence about the INSTRUMENT. The
+# report quoting "positive controls fired" was quoting a control nothing ran.
+add_test(NAME terrain_normalmap_break_oracle
+         COMMAND test_terrain_normalmap_directed --break-oracle)
+set_tests_properties(terrain_normalmap_break_oracle PROPERTIES
+  WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
+# ---- the ATTRSTEP/ATTRWALK proof pair --------------------------------------
+# fpga/rtl/raster/zhao_raster_attrwalk.sv:4 declares
+#   ENFORCED-BY: tests/proofs/attrwalk_rtl_differential.cpp:main
+# These two are the only files in tests/ that link the ACTUAL reference
+# divide, zref::render::div_rhu_s128, rather than restating it -- which is the
+# entire point of the pair (see attrstep_qr_differential.cpp's header: four
+# prior documents each re-derived the law and one of them re-derived it
+# WRONG). internal.hpp is a private header of reference/src/zrender, so that
+# directory goes on the include path; the symbol itself comes from rast.cpp,
+# which is already a member of zhao_zref.
+add_executable(test_attrstep_qr_differential proofs/attrstep_qr_differential.cpp)
+target_link_libraries(test_attrstep_qr_differential PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_attrstep_qr_differential PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src/zrender)
+verilate(test_attrstep_qr_differential
+  PREFIX Vzhao_raster_attrdiv
+  TOP_MODULE zhao_raster_attrdiv
+  VERILATOR_ARGS -GRADIX=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+add_test(NAME attrstep_qr_differential COMMAND test_attrstep_qr_differential)
+set_tests_properties(attrstep_qr_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# THREE Verilated models in one executable, which no other target here needs:
+# the walker at each of the two tie laws, plus the shipped divider. That is
+# the whole architecture of the proof -- one parameter must reach the RTL
+# boundary's law (ties away from zero) and the other must reach the reference's
+# (ties toward +infinity), and both are compared against the ACTUAL machine
+# rather than against a restatement. Vattrwalk_away / Vattrwalk_pos are NOT
+# separate sources: they are zhao_raster_attrwalk verilated twice under
+# different prefixes, so there is no copy here to go stale.
+add_executable(test_attrwalk_rtl_differential proofs/attrwalk_rtl_differential.cpp)
+target_link_libraries(test_attrwalk_rtl_differential PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_attrwalk_rtl_differential PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/src/zrender)
+verilate(test_attrwalk_rtl_differential
+  PREFIX Vattrwalk_away
+  TOP_MODULE zhao_raster_attrwalk
+  VERILATOR_ARGS -GTIE_TOWARD_POSITIVE=0
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrwalk.sv)
+verilate(test_attrwalk_rtl_differential
+  PREFIX Vattrwalk_pos
+  TOP_MODULE zhao_raster_attrwalk
+  VERILATOR_ARGS -GTIE_TOWARD_POSITIVE=1
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrwalk.sv)
+verilate(test_attrwalk_rtl_differential
+  PREFIX Vzhao_raster_attrdiv
+  TOP_MODULE zhao_raster_attrdiv
+  VERILATOR_ARGS -GRADIX=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+add_test(NAME attrwalk_rtl_differential COMMAND test_attrwalk_rtl_differential)
+set_tests_properties(attrwalk_rtl_differential PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---- DSP.DUAL18: a script-driven suite made visible to ctest ---------------
+# tests/dsp/dual18_physical_pack_directed.cpp is compiled by
+# tests/dsp/run_dual18_verilator.py, which builds EIGHT models in a temp dir
+# (deliberately: it must not touch this build tree, and it sweeps parameter
+# signedness combinations a single add_executable cannot express). It was
+# therefore half-live -- real, self-checking, and invisible to a suite run.
+#
+# It stayed broken for eight days because of that invisibility: 24bc6b47 put
+# the harness include inside ONE backend arm, so seven of the eight cases did
+# not compile at all. Registering the runner is what makes that a red line
+# instead of a silence.
+#
+# Its four positive controls (backend_missing, backend_conflict, ce_hold,
+# lane_swap) are internal to the script and each prints FIRED.
+#
+# The full corpus, NOT --quick, and it carries `fast`: measured 2026-09-19 at
+# 59 s full against 57 s quick. Almost all of the wall time is the eight
+# Verilator builds, so bounding the arithmetic saves two seconds and gives up
+# the exhaustive 8-bit classes. A second cheaper entry would have doubled the
+# cost of the every-commit gate to buy nothing.
+add_test(NAME dual18_physical_pack_directed
+         COMMAND "${Python3_EXECUTABLE}"
+                 ${CMAKE_CURRENT_SOURCE_DIR}/dsp/run_dual18_verilator.py)
+set_tests_properties(dual18_physical_pack_directed PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 1800)

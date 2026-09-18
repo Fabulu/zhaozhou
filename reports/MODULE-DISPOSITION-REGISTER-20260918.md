@@ -242,6 +242,55 @@ them retained-as-history the way line 2674 already does for
 `island_v3_fault_directed.cpp` -- and repair the two `ENFORCED-BY` citations
 that currently point at nothing.
 
+#### RESOLVED 2026-09-19: all seven were LOST GATES, none was dead code
+
+Every one of the seven compiles against current RTL, runs, and passes. Nothing
+here had gone stale -- no renamed module, no changed port, no removed signal.
+They were simply never named, and the two RTL directories this register quoted
+are worth correcting for the next reader: `zhao_terrain_normalmap.sv` lives
+under `fpga/rtl/terrain/`, not `fpga/rtl/texture/`, and `zhao_proj_arena3.sv`
+under `fpga/rtl/common/`, not `fpga/rtl/geometry/`.
+
+| test | registered as | result |
+| --- | --- | --- |
+| `attribute_plane_equivalence.cpp` | `attribute_plane_equivalence` | 32,805 pixel-attributes, 0 mismatches |
+| `curve_kstart_equivalence.cpp` | `curve_kstart_equivalence` | 28,032 comparisons, 0 disagreements |
+| `proj_arena3_directed.cpp` | `proj_arena3_directed` | ALL CHECKS PASSED, all nine counters moved |
+| `terrain_normalmap_directed.cpp` | `terrain_normalmap_directed` + `terrain_normalmap_break_oracle` | **4,738 checks, 0 failures** -- the ledger's number to the digit |
+| `attrstep_qr_differential.cpp` | `attrstep_qr_differential` | 4,204 law checks, 11,636 RTL divides, wrong-tie control 8/8 |
+| `attrwalk_rtl_differential.cpp` | `attrwalk_rtl_differential` | 3,015 covered pixels both tie builds, range detector 0 -> 4 |
+| `dual18_physical_pack_directed.cpp` | `dual18_physical_pack_directed` (runs the script) | 8 models PASS, 4 positive controls FIRED |
+
+No `ENFORCED-BY` needed repointing and none needed downgrading to an assumption.
+All four name tests that now genuinely run, and each sits beside a claim the
+test actually covers -- checked, not assumed: `zhao_terrain_normalmap.sv:363`
+claims II=1 by construction and section 8 of the suite measures 64 fragments in
+64 cycles; `zhao_proj_arena3.sv:96` claims one key per GROUP rather than per
+row, and every accepted read is compared against the key its group was opened
+with. **The repair was to make the enforcers run**, which is the strongest of
+V20's three options and was available the whole time.
+
+**And the invisibility was already costing something.** `dual18_physical_pack_
+directed.cpp` did not compile. Commit `24bc6b47` ("26 Verilated test mains
+could each have hung a suite; a gate now watches") put its
+`#include "../harness/zhao_sim.hpp"` inside the *last* `#elif` arm of the
+backend selector, so `zhao::exit_hard` was declared for exactly one of the
+eight cases `run_dual18_verilator.py` drives; the other seven died with
+`'zhao' has not been declared`. That stood for eight days.
+
+The instructive part is why nothing caught it. `tests/lint/verilated_exit_path.py`
+passed this file the whole time -- it is a **text scan**, so it read the three
+`zhao::exit_hard` calls, called the file safe, and never compiled anything. A
+gate that fixed 26 files could not tell that its own fix did not build in seven
+of eight configurations, because no target built the file and the script that
+did was not a ctest. The fix-up gate and the thing it fixed were both invisible
+to the compiler at once. This is the broken-instrument law: the failure was
+silent and in the flattering direction.
+
+Registering the runner as a ctest is what converts that from a silence into a
+red line. `island_v3_fault_directed.cpp` remains the one correct
+retained-as-history case, unchanged.
+
 ### 5.2 Twenty-two modules the connected machine instantiates are marked `excluded`
 
 `zhao_console_core` is the machine. Its closure contains 22 modules that
