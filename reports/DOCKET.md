@@ -69,6 +69,34 @@ otherwise. What landed on the day it arrived:
   fit row holds 8 Kbit or more of declared array in flip-flops.** The ALM breach
   is combinational logic, so the lever is converting COMPUTATION TO LOOKUP, not
   relocating state.
+
+  > **THAT ANSWER WAS WRONG, AND THE TOOL THAT GAVE IT WAS STILL BLIND.**
+  > Corrected 2026-09-18 with measurements, not argument.
+  >
+  > The widening above taught `check_array_storage.py` to count skipped
+  > declarations, which is why it went from "0 blocks / 206 skipped" to a
+  > credible answer. But its `ARRAY_RE` still matched only `logic|reg|bit`, so a
+  > **typed** array declaration was invisible to it — not reported, and not even
+  > counted as skipped. `zhao_texture_binding_resolver_v2` declares
+  > `binding_row_t page0_m [0:255]` twice: **38,400 bits in flip-flops**, in a
+  > block with a current fit row, which the sentence above says does not exist.
+  >
+  > Giving each bank one registered read port moved those bits into M10K and
+  > took the composed shell from **62,534 ALM estimated — unfittable on a 41,910
+  > device — to 29,044 measured.** `uvw_m` in the island is a second instance,
+  > 4,096 bits, and was the destination of every path in one of the four worst
+  > timing families.
+  >
+  > So **relocating state IS a lever here**, and it was ruled out by an
+  > instrument that could not see the state. Converting computation to lookup is
+  > also a lever — the resolver's stored legality verdict is exactly that — and
+  > the two are not alternatives. The tool now has a typed-array pass and a
+  > self-check that fails at import if its own pattern stops matching a
+  > known-good declaration.
+  >
+  > The broken-instrument law's own asymmetry, one turn deeper: the first fix
+  > made the tool report a *credible* number, and a credible wrong number stops
+  > being audited faster than an obviously broken one.
 * `fpga/rtl/common/zhao_qsq_bytemul.sv` — R1's "reusable quarter-square
   primitive", extracted from `zhao_terrain_shade`, which had built one correctly
   on 2026-09-09 and kept it to itself while R1 and R4 both recorded it absent.
