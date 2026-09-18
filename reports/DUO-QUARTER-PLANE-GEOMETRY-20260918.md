@@ -180,3 +180,64 @@ misattributed it. This does not change the plane geometry — HUD bypasses post
 either way — but "the 48 rows are HUD" is now written in an authoritative-looking
 document and is not supported by the video spec. Flagged, not resolved: the
 owner of `spec/video_rules.md` should say which.
+
+---
+
+## RESOLVED — the 48 rows are not HUD, and DUO LOSES NOTHING
+
+Two loose ends closed, on the owner's instruction to handle it.
+
+### 1. The HUD question is settled, and the derivation closes
+
+Flagged above as "someone owns reconciling it". Resolved here, because the
+existing ratified text already entails the answer:
+
+* `POST.COMPOSITE.md` composites HUD as its **last stage, before publication** —
+  so HUD lands in the framebuffer.
+* `spec/video_rules.md` §1: Duo's framebuffer stores **only** the two 256x192
+  view canvases and **no** border rows.
+* Therefore **HUD cannot be in the border rows — there is no storage there to
+  put it in.**
+* `TWOD.SPRITE.md` agrees from the other side: HUD is "two player HUD regions"
+  of ordinary sprite descriptors composited after glow and distortion for
+  legibility. That is a post-stage concern inside the rendered image.
+
+So the owner plan's §11.3 phrase *"the 48 HUD scanlines"* merges two different
+things that live in different places and have different storage status. Recorded
+as a **clarification in `spec/video_rules.md` §3.1** — it rules nothing new and
+changes no ratified number; it states what §1 and §3.1 already entail, because a
+document outside the spec had begun asserting otherwise.
+
+The plan's underlying instruction survives intact and is arguably clearer: a
+capture must include **both** the HUD regions (inside the views) **and** the 48
+black border rows (generated at scanout, inside the displayed CRC). Two things,
+both required, neither of which is a quarter-res effect-plane cell.
+
+### 2. Duo is not being cut, shrunk or degraded — the opposite
+
+Recorded explicitly because "the Duo plane is smaller than the contract says"
+is a sentence that can be misread as a feature cut, and this repository's own
+history contains a configuration whose entire purpose was to fail being quoted
+as a saving.
+
+**Nothing in this finding removes anything from Duo.** After the correction, Duo
+is still:
+
+* 512 x 240 displayed, two independent 256 x 192 views at y offset 24;
+* 0x30000 stored, 0x3C000 allocated;
+* both player HUD regions, full descriptor counts;
+* 48 black border rows, generated at scanout, **inside** the displayed CRC;
+* every post effect — displacement, bloom, haze, grading, flash, ink — at the
+  same quarter linear resolution as every other mode.
+
+What changed is that the effect plane stops allocating 1,536 cells for rows no
+pre-scanout stage can address, and its per-view clamp becomes structural instead
+of a comparator. **Duo gets cheaper and harder to get wrong at the same time:**
+110,592 work items instead of 113,664, and "no bleed between Duo views" becomes
+a thing that cannot happen rather than a thing to test.
+
+And the general rule, from the owner plan §14.7 and §1.1: **visible feature cuts
+are separate owner decisions and may not be used to make a measurement smaller.**
+Duo is part of the selected visible machine. A correction that makes it cost less
+is the good kind; a correction that made it *do* less would need a ruling, and
+this is not one.

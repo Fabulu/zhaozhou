@@ -129,6 +129,37 @@ no mirroring — a 1:1 copy (VIDEO.SCALER is a pass-through formatter, §6).
 The 48 border rows are part of the displayed stream and therefore part of
 the displayed-frame CRC.
 
+> **CLARIFICATION 2026-09-18 — the 48 border rows are NOT HUD. This rules
+> nothing new; it states what §1 and §3.1 already entail, because a document
+> outside this spec has begun calling them "the 48 HUD scanlines".**
+>
+> The two are different things and they live in different places:
+>
+> | | the 48 border rows | the HUD regions |
+> |---|---|---|
+> | where | display rows 0..23 and 216..239 | **inside** the two 256x192 views |
+> | stored? | **no** — generated at scanout (§1) | yes — part of the 0x30000 a Duo frame stores |
+> | who writes them | VIDEO.SCALER / scanout formatter | `POST.COMPOSITE` stage 10, `TWOD.SPRITE` descriptors |
+> | colour | always `16'h0000` | whatever the sprites draw |
+> | in the displayed CRC? | **yes** (§3.1) | yes, via the stored frame |
+>
+> The derivation is short and it closes: `POST.COMPOSITE.md` composites HUD as
+> its last stage, **before publication** — so HUD lands in the framebuffer. Duo's
+> framebuffer stores only the two view canvases and **no** border rows (§1).
+> Therefore HUD cannot be in the border rows: there is no storage there to put it
+> in. `TWOD.SPRITE.md` agrees from the other side — HUD is "two player HUD
+> regions" of ordinary sprite descriptors, composited after glow and distortion
+> for legibility, which is a post-stage concern inside the rendered image.
+>
+> Consequence for anything sizing a buffer: a stage that runs **before** scanout
+> — render, resolve, post, and every quarter-resolution effect plane — can never
+> address the border rows. They are not "usually zero" cells; they are
+> unaddressable. See `reports/DUO-QUARTER-PLANE-GEOMETRY-20260918.md`.
+>
+> **This changes no ratified number and removes nothing from Duo.** Duo remains
+> 512x240 displayed, two 256x192 views at y offset 24, 0x30000 stored, both HUD
+> regions, border rows inside the displayed CRC.
+
 Each view is one CONTIGUOUS block: view 1 begins at slot byte `0x18000`, not
 at column 256 of a 512-wide image. There is no interleaving — a displayed row
 `y ∈ [24,215]` is assembled at scanout by concatenating view-0 row `y − 24`
