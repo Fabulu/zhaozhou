@@ -2576,16 +2576,61 @@ fit. The endpoint was the same register array then. Nobody read it back.
 
 ### Cone 2: `zhao_texture_v3own` `cq_own_q` → `zhao_texture_v3rq` `h_d_q`
 
-12.277 ns, 1 ns behind cone 1, and **not yet diagnosed.** The obvious reading is
-wrong and worth recording so the next person does not spend the hour: the
-suspicious-looking `win_gen_of_slot()` is not a table lookup at all, it is
-`(sl < tail_q) ? sh_alloc_gen_q : sh_alloc_gen_q - 1`, two GENW values and a
-compare. The cost is somewhere in the accept path between `cq_own_q` and the
-request queue's `pop_c`, and it crosses a module boundary.
+12.277 ns, 1 ns behind cone 1, and now traced the same way — from the receipt,
+not from the source:
 
-**Trace it from the receipt's Data Arrival Path before touching RTL**, the way
-cone 1 was traced. That report names the levels; reading the source names only
-the candidates.
+```
+  6.443   cq_own_q~22|q                    the launching register
+  7.869   cq_own_q~56                      the 4-deep queue read mux
+  9.630   u_texture_v3|Mux4~1     |
+ 11.209   u_texture_v3|Mux4~4     |   a 64:1 mux, AT ISLAND SCOPE
+ 12.136   u_texture_v3|Mux4~20    |
+ 12.799   u_own|cmb_fire_c~0
+ 14.672   u_own|cmb_pop_c~1
+ 15.874   u_own|u_rq_init|pop_taken_c
+ 16.350   u_own|u_rq_init|n_h_d_c[13]~0
+ 16.791   u_own|u_rq_init|h_d_q[13]~0
+ 18.720   -> u_own|u_rq_init|h_d_q[1]
+```
+
+**The three `Mux4~*` levels are 7.869 → 12.136 = 4.267 ns, 35% of the data
+path, and they are one line of the island:**
+
+```systemverilog
+// zhao_texture_island_v3_top.sv:2356
+wire owner_combine_validation_ready_c =
+    !join_validation_pending_q[owner_combine_owner_w[13:8]];
+```
+
+`[13:8]` is six bits — a 64:1 mux — and its INDEX is `owner_combine_owner_w`,
+which is `cq_own_q[cq_rp_q]`, the output of another array read. **Two chained
+reads, the second 64 wide, and the answer travels back into `u_own` to decide
+`cmb_fire_c`.** The owner leaves the block and its readiness returns.
+
+Note what this is NOT, recorded because it is where an hour goes: the
+suspicious-looking `win_gen_of_slot()` in `zhao_texture_v3own` is not a table
+lookup at all, it is `(sl < tail_q) ? sh_alloc_gen_q : sh_alloc_gen_q - 1` —
+two values and a compare, nowhere near this path. Reading the source names
+candidates; the report names levels.
+
+**Why this one is NOT fixed in the same pass as cone 1, stated rather than left
+as silence.** The cache-pipe fix was safe because every operand was a register
+and the reordering was bit-exact inside one cycle. Here the obvious analogue is
+not: reordering the two reads — do the 64:1 mux from each of the four queue
+entries, then select by `cq_rp_q` — removes only the 1.4 ns read mux and leaves
+the 4.267 ns of 64-wide select in the cone. Removing *that* means carrying a
+per-entry "my slot is pending" bit, which is a REGISTERED copy of a fence that
+other logic clears, and a fence reacting one cycle late asserts ready one cycle
+early. That is a protocol change, not a restructuring, and it needs its own
+design pass with the admission/validation contract open beside it.
+
+So cone 2 is **diagnosed and left**, deliberately, with the measurement and both
+candidate shapes written down. The hint for whoever takes it:
+`owner_combine_owner_w[13:8]` indexes six other island arrays on the lines
+immediately below — `material_m`, `material_refused_m`,
+`owner_required_mask_m`, `join_validation_generation_m` and more — and **none of
+those are in this cone, because they are registered reads.** The fence is the
+odd one out, and that is where the fix belongs.
 
 ### What this means for the campaign
 
