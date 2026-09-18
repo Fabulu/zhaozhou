@@ -1450,7 +1450,33 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > negative-half mutant, an explicit *"do not simplify this back"* warning, and
 > externally visible `q_saturated_o` / `saturations_o` behaviour. It deserves its
 > own pass with the full mutant gauntlet rather than a hurried one at the end of
-> a long session. The design above is complete enough to start from.
+> a long session.
+>
+> ##### Its test impact, traced so the design is complete
+>
+> Unlike the `base_min_y0` split, this one DOES move an observable edge — it adds
+> a state to every divide — and the tests already assert that exactly.
+> `tests/raster/raster_attrgrad_v2_directed.cpp:134`:
+>
+> ```cpp
+> const uint64_t expected_latency = exceptional ? 2u : kNormalVisibleLatency;
+> if (cycles - accepted_cycle != expected_latency) fail("divider response-visible latency changed");
+> if (dut->d_busy_clocks_o - busy_before != expected_latency) fail(...);
+> ```
+>
+> So the change owes **both** constants: the exceptional path goes 2 → 3, and
+> `kNormalVisibleLatency` goes +1. Two independent assertions check it — the
+> observed cycle delta and the DUT's own `busy_clocks_o` counter — which is the
+> counters-see-what-pictures-cannot discipline, and it means a mistake here
+> cannot pass quietly.
+>
+> **And the DSP3 differential is the hard constraint, not the soft one.** That
+> comparison is cycle-by-cycle and both implementations instantiate the SAME
+> `zhao_raster_attrdiv_v2`, so the change moves both traces identically and the
+> differential survives — the same argument that made today's tree change safe,
+> verified today rather than assumed.
+>
+> The design above plus these two constants is a complete specification.
 >
 > ### `@packet-h-uvw` LANDED: 61.52 → 66.03 MHz, and area bought clock
 >
