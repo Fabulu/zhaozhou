@@ -169,8 +169,14 @@ CURRENT_HASHES = {
     # No logic, no ports, no widths -- see the note in PROTECTED_HASHES above.
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
         "5d61f2ab90355d38d2ef1b92bbc7c9273993a73ab27337efb9588fda33f28fd5",
+    # Refreshed 2026-09-18 with the COMBINE fence restructuring. The island
+    # gained two wires and a per-entry fence loop; `u_own` is now
+    # parameterised `.CMBQD(OWNER_CMBQD)` instead of a literal 4, so the fence
+    # indexing and the queue depth cannot drift apart. No port of this module
+    # changed -- `zhao_prod_top` was regenerated and confirmed byte-identical,
+    # not assumed to be.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98",
+        "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38",
     # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
     # interface manifest moved, because two files in its source closure gained
     # ENFORCED-BY comments (zhao_texture_v3own.sv, zhao_texture_uv_join.sv) and
@@ -180,7 +186,18 @@ CURRENT_HASHES = {
     # which is the difference between refreshing a CURRENT hash and quietly
     # editing a PROTECTED one.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5",
+    # Refreshed 2026-09-18 for the two texture timing changes. FIELD-DIFFED
+    # BEFORE REFRESHING, the way the 2026-09-16 note above did it: exactly five
+    # fields differ and every one is a hash -- the island's own source (twice,
+    # as top_source_sha256 and source_closure[25]), source_closure[13]
+    # (zhao_texture_cache_pipe_v2) and [16] (zhao_texture_v3own), and the
+    # canonical_interface hash derived from them.
+    #
+    # ports 119 -> 119, parameters 16 -> 16. The public schema this test is
+    # named for did not move: `cmb_owner_all_o` and `cmb_rp_o` are new ports of
+    # zhao_texture_v3own, which is a CHILD, and the island consumes them
+    # internally.
+        "8a43aa3967fee1dfebcd26f327df93fce302ddf6daf3684d68d108479eb07453",
 }
 
 

@@ -2696,6 +2696,61 @@ come out. That is a PORT change, which means regenerating `zhao_prod_top`
 is ordinary work with a known checklist, not a contract question — unlike the
 remaining 3.4 ns, which is.
 
+
+#### Cone 2's safe half is DONE — the two reads commute
+
+Implemented 2026-09-18, the same transformation as cone 1 applied across a
+module boundary.
+
+`zhao_texture_v3own` gains two outputs that carry no logic at all:
+
+```systemverilog
+output var logic [CMBQD*OWNERW-1:0]  cmb_owner_all_o,   // the whole queue
+output var logic [$clog2(CMBQD)-1:0] cmb_rp_o,          // and the pointer
+```
+
+and the island's fence stops indexing with `cmb_owner_o`:
+
+```systemverilog
+// was: a 64:1 mux whose index is the output of a 4:1 mux
+wire owner_combine_validation_ready_c =
+    !join_validation_pending_q[owner_combine_owner_w[13:8]];
+
+// now: four 64:1 lookups beside each other, then a 4:1 select
+logic [OWNER_CMBQD-1:0] owner_combine_fence_ok_c;
+always_comb
+  for (int unsigned e = 0; e < OWNER_CMBQD; e++)
+    owner_combine_fence_ok_c[e] =
+        !join_validation_pending_q[owner_combine_owner_all_w[e*OWNERW + 8 +: 6]];
+wire owner_combine_validation_ready_c =
+    owner_combine_fence_ok_c[owner_combine_rp_w];
+```
+
+`owner_combine_rp_w` is the same pointer `cmb_owner_o` is read with, so entry
+`owner_combine_rp_w` **is** `owner_combine_owner_w` — the value is identical,
+nothing is registered, and no cycle moves. `join_validation_pending_q` does not
+depend on which entry is being read, which is the whole reason the two reads
+commute.
+
+**`.CMBQD(4)` on the instantiation became `.CMBQD(OWNER_CMBQD)`.** The fence
+logic now indexes a flattened bus whose layout depends on that depth, so a
+literal 4 in one place and a constant in the other is two copies of one fact —
+the shape this repository keeps finding go stale. One name, one value, and no
+guard needed to keep them honest.
+
+Expected: about **0.9 ns** — the 1.43 ns queue-read mux leaves the cone and a
+~0.5 ns 4:1 select replaces it. The 4.27 ns of 64-wide fence remains, and
+removing *that* is still the protocol question described above.
+
+**Not yet measured.** It ships with cone 1 in the next composed shell fit, per
+the sequencing note above: neither is worth a fit alone.
+
+Ports changed, so the checklist applies: regenerate `zhao_prod_top` (it
+instantiates `zhao_texture_island_v3_top`, whose ports are untouched, so this is
+expected to be a no-op and was confirmed as one rather than assumed), refresh
+the G8A wrapper manifest that records a sha256 per source, and re-run the
+island's registration and freshness gates.
+
 ### What this means for the campaign
 
 The remaining band is dense: 200 paths between -2.853 and -1.623, across the

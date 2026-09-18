@@ -179,7 +179,7 @@
     {
       "ordinal": 21,
       "path": "fpga/rtl/texture/zhao_texture_v3own.sv",
-      "sha256": "dfbf2cc9949297d25eb68810c07548fc81e4ac3c16f8bcf57e656c5acb87b0dc"
+      "sha256": "ff97c4c1aaf836229133b82d376793ed37fdadad407c49b9e6dca0830d57a69d"
     },
     {
       "ordinal": 22,
@@ -224,7 +224,7 @@
     {
       "ordinal": 30,
       "path": "fpga/rtl/texture/zhao_texture_island_v3_top.sv",
-      "sha256": "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98"
+      "sha256": "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38"
     },
     {
       "ordinal": 31,

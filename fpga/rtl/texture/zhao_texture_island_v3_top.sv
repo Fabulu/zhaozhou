@@ -2215,6 +2215,13 @@ module zhao_texture_island_v3_top #(
   logic owner_combine_valid_raw_w;
   logic owner_combine_ready_w;
   logic [OWNERW-1:0] owner_combine_owner_w;
+  // THE combine-queue depth: `u_own` below is now parameterised from this
+  // constant rather than from a literal 4, so the fence logic that indexes
+  // `owner_combine_owner_all_w` cannot drift out of step with the queue it
+  // reads. One name, one value, no guard needed to keep two copies honest.
+  localparam int unsigned OWNER_CMBQD = 4;
+  logic [OWNER_CMBQD*OWNERW-1:0]   owner_combine_owner_all_w;
+  logic [$clog2(OWNER_CMBQD)-1:0]  owner_combine_rp_w;
   logic [TEXTURE_RESULT_W-1:0] owner_combine_s0_w;
   logic [TEXTURE_RESULT_W-1:0] owner_combine_s1_w;
   logic [TEXTURE_RESULT_W-1:0] owner_combine_s2_w;
@@ -2243,7 +2250,7 @@ module zhao_texture_island_v3_top #(
 
   zhao_texture_v3own #(
       .OWNERS(OWNERS), .SLOTW(6), .GENW(GENW), .RESW(TEXTURE_RESULT_W),
-      .CTXW(RCTXW+CTXW), .OUTQD(4), .CMBQD(4), .READ_LATE(1)
+      .CTXW(RCTXW+CTXW), .OUTQD(4), .CMBQD(OWNER_CMBQD), .READ_LATE(1)
   ) u_own (
       .clk(clk), .rst_n(rst_n), .adm_valid_i(own_adm_valid_w),
       .adm_ready_o(own_adm_ready_w),
@@ -2262,6 +2269,8 @@ module zhao_texture_island_v3_top #(
       .aux_rowner_i(aux_return_owner_w), .aux_rresult_i(aux_return_result_w),
       .cmb_valid_o(owner_combine_valid_raw_w),
       .cmb_ready_i(owner_combine_ready_w), .cmb_owner_o(owner_combine_owner_w),
+      .cmb_owner_all_o(owner_combine_owner_all_w),
+      .cmb_rp_o(owner_combine_rp_w),
       .cmb_s0_o(owner_combine_s0_w), .cmb_s1_o(owner_combine_s1_w),
       .cmb_s2_o(owner_combine_s2_w), .cmb_aux_o(owner_combine_aux_w),
       .src_rd_valid_i(combine_source_read_valid_w),
@@ -2353,8 +2362,32 @@ module zhao_texture_island_v3_top #(
   // generation-sealed joined validation above clears it.  The wide generation
   // table remains a downstream registered validation witness, but is
   // deliberately absent from this COMBINE ready feedback path.
+  //
+  // EVALUATE THE FENCE FOR EVERY QUEUE ENTRY, THEN SELECT -- 2026-09-18.
+  //
+  // This read used to be `join_validation_pending_q[owner_combine_owner_w[13:8]]`,
+  // a 64:1 mux whose INDEX was itself the output of `u_own`'s CMBQD-deep queue
+  // read. `@packet-h-satstage` measured the pair, node by node, as 5.70 ns of a
+  // 12.277 ns path -- 1.43 ns for the queue read (`cq_own_q~56`) and 4.27 ns
+  // for the fence (`Mux4~1` -> `Mux4~4` -> `Mux4~20`, all at this scope) --
+  // and that path gated 110 of the 200 worst paths in the machine through
+  // `h_d_q`, `s_d_q`, `lcnt_q` and `rp_q`.
+  //
+  // `join_validation_pending_q` does not depend on WHICH entry is being read,
+  // so the two reads commute. Now the four 64:1 lookups start directly at
+  // `u_own`'s queue registers and run beside the read pointer instead of behind
+  // it, and what remains in series is a 4:1 select.
+  //
+  // Identical value, nothing registered, no cycle moved: `owner_combine_rp_w`
+  // is the same pointer `cmb_owner_o` is read with, so entry
+  // `owner_combine_rp_w` IS `owner_combine_owner_w`.
+  logic [OWNER_CMBQD-1:0] owner_combine_fence_ok_c;
+  always_comb
+    for (int unsigned e = 0; e < OWNER_CMBQD; e++)
+      owner_combine_fence_ok_c[e] =
+          !join_validation_pending_q[owner_combine_owner_all_w[e*OWNERW + 8 +: 6]];
   wire owner_combine_validation_ready_c =
-      !join_validation_pending_q[owner_combine_owner_w[13:8]];
+      owner_combine_fence_ok_c[owner_combine_rp_w];
   assign owner_combine_ready_w = !owner_mask_lifetime_fault_q &&
       owner_combine_validation_ready_c &&
       ((material_reservation_count_c < MATERIAL_FIFO_COUNTW'(MATERIAL_FIFO_DEPTH)) ||

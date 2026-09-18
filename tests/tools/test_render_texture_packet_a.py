@@ -1199,7 +1199,14 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             required = (
                 "joined_owner_mask_valid_c && expand_frag_ready_w;",
                 "wire owner_combine_validation_ready_c =",
-                "!join_validation_pending_q[owner_combine_owner_w[13:8]];",
+                # 2026-09-18: the fence moved from "index with the selected
+                # owner" to "evaluate for every queue entry, then select".
+                # Same value; see the comment at the fence. What this test
+                # protects is unchanged and is checked below, not here --
+                # the WIDE generation table must stay out of the COMBINE ready
+                # feedback path. These two markers only pin the shape.
+                "owner_combine_fence_ok_c[e] =",
+                "!join_validation_pending_q[owner_combine_owner_all_w[e*OWNERW + 8 +: 6]];",
                 "(material_read_join_generation_q == material_read_owner_q[7:0])",
                 "join_validation_generation_m[owner_combine_owner_w[13:8]]",
                 "a_combine_after_join_validation",
@@ -1211,6 +1218,26 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
             )
             if ready is None or "join_validation_generation_m" in ready.group(0):
                 raise AssertionError("generation lookup remains in COMBINE ready feedback")
+            # THE FENCE ITSELF IS NOW A SEPARATE BLOCK, so checking only the
+            # `wire ... =` above would leave the thing this test exists to
+            # forbid free to appear one line higher. Widened 2026-09-18 with
+            # the change that moved it -- a gate whose subject moves and whose
+            # check does not is the shape this repository keeps writing down.
+            # Anchored on the ASSIGNMENT, not on the `for` header. The first
+            # attempt matched `always_comb ... for (int unsigned e = 0;` and
+            # stopped at the semicolon INSIDE the loop header, so it never
+            # covered the fence body and could not have fired -- caught only
+            # because the control below was written and watched to fail.
+            fence = re.search(
+                r"owner_combine_fence_ok_c\[e\]\s*=.*?;",
+                source,
+                re.DOTALL,
+            )
+            if fence is None:
+                raise AssertionError("per-entry COMBINE fence block not found")
+            if "join_validation_generation_m" in fence.group(0):
+                raise AssertionError(
+                    "generation lookup moved into the per-entry COMBINE fence")
             for marker in required:
                 if marker not in source:
                     raise AssertionError("owner generation witness missing: " + marker)
@@ -1251,16 +1278,37 @@ class PacketAOwnershipAndClosureTests(unittest.TestCase):
                     1,
                 )
             )
+        # THE FIRE CASE FOR THE READY WIRE. Retargeted 2026-09-18 onto the
+        # restructured fence: the control used to reinsert the generation
+        # lookup into a line that no longer exists, so it would have stopped
+        # firing silently -- a control that cannot reach its own fault is the
+        # exact thing this file spends its length warning about.
         with self.assertRaisesRegex(AssertionError, "ready feedback"):
             validate_top(
                 top.replace(
-                    "!join_validation_pending_q[owner_combine_owner_w[13:8]];",
-                    "!join_validation_pending_q[owner_combine_owner_w[13:8]] &&\n"
+                    "owner_combine_fence_ok_c[owner_combine_rp_w];",
+                    "owner_combine_fence_ok_c[owner_combine_rp_w] &&\n"
                     "      (join_validation_generation_m[owner_combine_owner_w[13:8]] == "
                     "owner_combine_owner_w[7:0]);",
                     1,
                 )
             )
+
+        # AND THE FIRE CASE FOR THE PER-ENTRY BLOCK, which is new and would
+        # otherwise be a check nobody has watched fail. The generation lookup
+        # is forbidden wherever the fence lives; one control per location,
+        # because a single control proves only one of them.
+        with self.assertRaisesRegex(AssertionError, "per-entry COMBINE fence"):
+            validate_top(
+                top.replace(
+                    "!join_validation_pending_q[owner_combine_owner_all_w[e*OWNERW + 8 +: 6]];",
+                    "!join_validation_pending_q[owner_combine_owner_all_w[e*OWNERW + 8 +: 6]] &&\n"
+                    "          (join_validation_generation_m[owner_combine_owner_w[13:8]] == "
+                    "owner_combine_owner_w[7:0]);",
+                    1,
+                )
+            )
+
         with self.assertRaisesRegex(AssertionError, "Boolean cut missing"):
             validate_owner(
                 owner.replace(

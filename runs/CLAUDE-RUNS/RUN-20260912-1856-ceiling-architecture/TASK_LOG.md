@@ -3190,3 +3190,31 @@ current meaning and both its consumers are untouched. ~0.9 ns.
 Widths confirmed: CMBQD=4, CQPW=2, OWNERW=SLOTW+GENW=14,
 join_validation_pending_q is `logic [0:OWNERS-1]` unpacked in the island.
 Needs zhao_prod_top regeneration after the port change.
+
+### 2026-09-18 — cone 2 safe half implemented
+
+zhao_texture_v3own exposes cmb_owner_all_o (the whole CMBQD queue, flattened)
+and cmb_rp_o. The island evaluates the COMBINE validation fence for all four
+entries in parallel and selects by rp, instead of reading the queue then
+indexing a 64-wide fence with the result. Identical value, nothing registered.
+.CMBQD(4) became .CMBQD(OWNER_CMBQD) so the fence indexing and the queue depth
+cannot drift.
+
+Lint 0 errors, warning count 109 = baseline. Build clean (901 targets, no stale
+Verilator partition). 28/28 island + owner + packet_b tests green.
+
+Port-change checklist done: prod_top regenerated and CONFIRMED byte-identical
+(island ports untouched); G8A wrapper manifest refreshed; texture-v3 interface
+manifest regenerated and FIELD-DIFFED before its pin moved -- exactly five hash
+fields, ports 119 -> 119, parameters 16 -> 16.
+
+Gates that went red and why, all of them working correctly:
+* texture_v3_registration_static -- pins the old fence line, and its two
+  committed v3own mutant COPIES are compared byte-for-byte against production.
+  Marker retargeted, both mutants refreshed mechanically, and the negative
+  control retargeted onto the new line. Writing the new control exposed that my
+  added check was VACUOUS -- its non-greedy regex stopped at the semicolon
+  inside the for-header, so it never covered the fence body. Anchored on the
+  assignment instead.
+* packet_c / packet_d / raster_texture_v3_fit_top -- island + interface-manifest
+  hash pins, refreshed with a pointer to the field diff recorded in packet_e.

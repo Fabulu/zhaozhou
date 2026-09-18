@@ -65,9 +65,14 @@ PROTECTED = {
     # from both. No port, parameter, dtype or elaboration value moved.
     # Kept byte-for-byte in step with the same constant in
     # tests/tools/test_render_texture_packet_c.py, which carries the longer note.
-        "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5",
+        # Island + interface-manifest hashes refreshed 2026-09-18 for the two
+        # texture timing changes (cache-pipe mask ordering, COMBINE fence).
+        # The field diff that justifies it is recorded once, beside the pin in
+        # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
+        # 119 -> 119, parameters 16 -> 16.
+        "8a43aa3967fee1dfebcd26f327df93fce302ddf6daf3684d68d108479eb07453",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98",
+        "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",

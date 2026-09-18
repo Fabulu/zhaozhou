@@ -259,6 +259,32 @@ module zhao_texture_v3own_bypass_pointer_mutant #(
     output var logic              cmb_valid_o,
     input  var logic              cmb_ready_i,
     output var logic [OWNERW-1:0] cmb_owner_o,
+
+    // EVERY QUEUE ENTRY, AND THE POINTER -- so a consumer can compute its own
+    // per-entry answer in parallel and SELECT afterwards, instead of waiting
+    // for `cmb_owner_o` and then indexing something with it.
+    //
+    // Added 2026-09-18 for one measured path. The island's combine fence is
+    //
+    //   !join_validation_pending_q[owner_combine_owner_w[13:8]]
+    //
+    // which is a 64:1 mux whose INDEX is `cmb_owner_o`, itself the output of
+    // this block's CMBQD-deep queue read. Two array reads in series, and
+    // `@packet-h-satstage` measured the pair at 5.70 ns of a 12.277 ns path --
+    // 1.43 ns for the read mux and 4.27 ns for the fence.
+    //
+    // `join_validation_pending_q` does not depend on WHICH entry is being read,
+    // so the island can now evaluate the fence from all CMBQD owners at once
+    // and pick with `cmb_rp_o`. Same value, nothing registered, no cycle moved.
+    //
+    // Flattened rather than an unpacked-array port: Quartus 17 is the target
+    // and this repository's charter keeps the SystemVerilog subset
+    // conservative at module boundaries.
+    // `$clog2(CMBQD)` rather than the body's `CQPW` localparam: a port range
+    // is elaborated before the module body, so `CQPW` is not visible here.
+    output var logic [CMBQD*OWNERW-1:0]     cmb_owner_all_o,
+    output var logic [$clog2(CMBQD)-1:0]    cmb_rp_o,
+
     output var logic [RESW-1:0]   cmb_s0_o,
     output var logic [RESW-1:0]   cmb_s1_o,
     output var logic [RESW-1:0]   cmb_s2_o,
@@ -1164,6 +1190,15 @@ module zhao_texture_v3own_bypass_pointer_mutant #(
   assign cmb_valid_o = (cq_occ_c != '0);
   assign cmb_owner_o = cq_own_q[cq_rp_q[CQPW-1:0]];
   assign cmb_fire_c  = cmb_valid_o && cmb_ready_i;
+
+  // The same queue, unselected, for a consumer that would otherwise index
+  // something with `cmb_owner_o`. See the port comment: this exists so the
+  // island's combine fence can be evaluated from all CMBQD entries in parallel
+  // rather than behind this read mux. Pure rewiring -- no logic, no registers.
+  assign cmb_rp_o = cq_rp_q[CQPW-1:0];
+  always_comb
+    for (int unsigned e = 0; e < CMBQD; e++)
+      cmb_owner_all_o[e*OWNERW +: OWNERW] = cq_own_q[e];
 
   generate
     if (READ_LATE == 0) begin : g_legacy

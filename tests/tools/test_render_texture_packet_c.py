@@ -82,8 +82,13 @@ PACKET_C_SOURCES = (
 # stored legality bit was written as a packed struct, whose two members are
 # names that already occur in the closure; it is a packed vector instead, for
 # the reason recorded in tools/rtl/texture_v3_interface_parser.py's pin.
-INTERFACE_SHA256 = "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5"
-PACKET_B_TOP_SHA256 = "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98"
+# Island + interface-manifest hashes refreshed 2026-09-18 for the two
+# texture timing changes (cache-pipe mask ordering, COMBINE fence).
+# The field diff that justifies it is recorded once, beside the pin in
+# tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
+# 119 -> 119, parameters 16 -> 16.
+INTERFACE_SHA256 = "8a43aa3967fee1dfebcd26f327df93fce302ddf6daf3684d68d108479eb07453"
+PACKET_B_TOP_SHA256 = "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61"
 
