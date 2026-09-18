@@ -173,6 +173,36 @@ less every time it is used. But an implementer unfreezing a file because a lint
 rule asked is the shape CLAUDE.md warns about — *the first explanation that
 absolves the design is the one to check hardest* — so this stays the owner's.
 
+### CLOSED 2026-09-18 as (a), and `ledger_check` IS NOW GREEN
+
+Fabian, in session: *"You're allowed to make decisions like the one before on
+your own."* The decision before was the same collision on
+`zhao_raster_attrgrad_v2.sv`, which the owner answered as (a).
+
+What landed, commit `cebed2fe`:
+
+* `zhao_geom_binner_v2.sv:371` gained
+  `ENFORCED-BY: fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv:p_packet_d_contract`
+  and the claim lost the words "by construction";
+* the entry moved `PROTECTED_HASHES` → `CURRENT_HASHES` in
+  `tests/tools/test_render_texture_packet_e.py`, with the reason recorded in
+  BOTH sets so a reader of either finds it.
+
+**The enforcer was real and had simply never been named.** `p_packet_d_contract`
+`$fatal`s unless `$bits(job_meta_i) == 1157`; the pad is `META_PHYS_W - METAW`,
+so it sits above the width that check pins, and widening the ABI to reach the
+pad fails elaboration rather than silently exporting it. No new enforcement was
+written — the annotation points at what was already there.
+
+**And the error count was never one.** `ledger_check` was carrying THREE V20
+errors, two of them in files this campaign had touched, and had been quoted all
+session as "the known red". Carrying a red gate as known is how it stops being
+read; opening it took two minutes. All three are closed and the gate passes.
+
+`zhao_raster_attrgrad_v2.sv` and `zhao_texture_island_v3_top.sv` also left their
+protected sets in the same campaign, for TIMING changes rather than comments —
+those are recorded at their entries with the measurements that justified them.
+
 **The "no sidecar" claim was re-checked independently on 2026-09-17**, because
 it is the load-bearing one: if V20 had a waiver channel, this would not be an
 owner decision at all. `tools/ledger/src/rules.ts` resolves the annotation from
