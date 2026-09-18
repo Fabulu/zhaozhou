@@ -1102,10 +1102,47 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > here owes the full mutant gauntlet, and the saturation decision is externally
 > visible through `q_saturated_o` and `saturations_o`.
 >
-> **It is not worth doing before `@packet-h-uvw` reports.** That fit removes 84%
-> of the negative paths, and the sensible order is to see what the table looks
-> like once the dominant family is gone rather than to optimise against a list
-> that is about to be rewritten.
+> ##### THE CHANGE BELONGS IN THE DIVIDER, AND THAT IS NOT THE OBVIOUS PLACE
+>
+> The obvious fix is a pipeline stage in `attrgrad`, since that is where the
+> tree is. **It would break the control that proved the tree correct.**
+> `raster_attrgrad_dsp3_diff` drives `zhao_raster_attrgrad_v2` and
+> `zhao_raster_attrgrad_dsp3` from one stimulus and compares them cycle by
+> cycle; changing one side's depth invalidates the differential itself.
+>
+> `zhao_raster_attrgrad_dsp3.sv:134` instantiates **the same
+> `zhao_raster_attrdiv_v2`**. So a change in the divider moves both sides
+> identically and the differential survives. That is the argument that makes
+> this safe, and it is not visible from the timing report.
+>
+> ##### And the split must go BEFORE the round-add, not after it
+>
+> Registering only the comparison leaves `attrgrad`'s tree (6.73) plus `Add0`
+> (3.21) = **9.94 ns** in one cycle, which is the 10 ns period before skew or
+> routing. The break has to be on `num_i` as it arrives.
+>
+> The divider already has the register to do it with — no new bank:
+>
+> ```
+> D_IDLE   dividend_r <= sign-extended num_i          attrgrad tree -> reg   6.7
+>          den_r <= area_i; final_err_r <= (area_i == 0)
+> D_PREP   rounded = ROUND_NUM(dividend_r, den_ext)   reg -> add -> compare  7.1
+>          dividend_r <= {rounded[96], rounded}
+>          neg_r <= rounded[96]; final_sat_r <= sat_pos || sat_neg
+> D_SAT    today's D_PREP body: err / sat -> D_DONE, else magnitude -> D_RUN
+> ```
+>
+> One extra state, one extra cycle on a divide that already spends ~49 in
+> `D_RUN`, and `dividend_r` is reused exactly as the existing comment describes
+> it being reused ("this avoids a second 97-bit bank in all three lanes").
+>
+> **NOT IMPLEMENTED IN THIS PASS, and the reason is not caution about the running
+> fits** — those snapshot their sources, as established twice today. It is that
+> this restructures ratified arithmetic in a file carrying an exact-law
+> negative-half mutant, an explicit *"do not simplify this back"* warning, and
+> externally visible `q_saturated_o` / `saturations_o` behaviour. It deserves its
+> own pass with the full mutant gauntlet rather than a hurried one at the end of
+> a long session. The design above is complete enough to start from.
 >
 > #### The prediction for `@packet-h-uvw`, written before it starts
 >
