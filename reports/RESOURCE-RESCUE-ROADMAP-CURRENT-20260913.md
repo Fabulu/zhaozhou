@@ -1094,6 +1094,48 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > schedules in simulation; (4) freezes selected memory geometries and provider
 > calendars; (5) attaches each unpriced objective to an existing subsystem gate.
 >
+> #### Item (1) attempted, three times, and what actually blocks it
+>
+> Tried 2026-09-18 against the measured rows. Recorded because each failure
+> names a real obstacle rather than a mistake in arithmetic:
+>
+> 1. **Sum every measured row by directory → 140,559 ALM.** A pure double count:
+>    `zhao_shell_top_v2` (28,959) sits in the same directory as the leaves it
+>    contains, so whole subtrees were added to themselves.
+> 2. **Fold contained modules using `module_graph` → still 140,559.** It folded
+>    ZERO, because `build()` returns `(module → file)` and `(FILE PATH →
+>    instantiated modules)`, not `(module → children)`. *The number not moving
+>    is the tell* — the same stale-measurement signature this repository has a
+>    chapter on, caught only because the total was identical to the digit.
+> 3. **Invert the map properly → 42 modules folded, 93,310 ALM charged.**
+>
+> | group | charged | envelope | Δ |
+> |---|---:|---:|---:|
+> | Backend/platform | 52,135 | 14,000 | +38,135 |
+> | Shared projection and replay | 12,267 | 5,000 | +7,267 |
+> | Complete FIELD | 12,364 | 4,500 | +7,864 |
+> | Terrain/Forge/surfaces | 10,365 | 4,500 | +5,865 |
+> | Geometry and lighting | 6,179 | 5,500 | +679 |
+> | Complete particles | 0 | 2,000 | −2,000 |
+> | Post and 2D | 0 | 2,000 | −2,000 |
+>
+> **93,310 is still not the answer, and the reason IS item (1).** The table
+> charges `zhao_texture_island_top` (13,615, the V1 island) beside
+> `zhao_shell_top_v2`, which contains the V3 one; it charges
+> `zhao_texture_material_combine_v1` beside its successor. **Nothing in the tree
+> says which variant is SELECTED**, so a mechanical pass cannot tell a
+> replacement from a duplicate, and every such pair inflates the total.
+>
+> The two zeros are the other half of the same gap: particles and post/2D have
+> **no measured rows at all**, and the golden path is explicit that *"an omitted
+> function is an error, not a free saving"* — so those are not credits.
+>
+> **So item (1) is not a computation somebody failed to run. It is a decision
+> nobody has recorded**, and the useful deliverable is a selected-variant list,
+> after which this table computes itself. That is worth saying precisely,
+> because "produce a complete owner/function allocation" reads like an analysis
+> task and the blocking part of it is not.
+>
 > Item (1) is the missing mapping above. **And §4 is a concrete, already-proven
 > DSP rescue sitting unclaimed:** POST.COMPOSITE's three generated curves and
 > 3×3 Q2.14 matrix fuse into three precomputed unrounded product tables, so nine
