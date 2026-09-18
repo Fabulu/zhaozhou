@@ -3151,6 +3151,44 @@ not small, and the existing 123 blocks are already committed. Every candidate
 needs its table sized before it is called a saving — which is a read and a
 calculation, not a fit.
 
+### CORRECTION, ten minutes later: the `field_v3` names do NOT qualify
+
+I wrote above that `len`, `normalize` and `spline` are "the textbook case for a
+table". One read of `zhao_field_isqrt.sv` refutes it, and its header says so in
+as many words:
+
+> *"The result is the true floor of the square root: `res^2 <= n < (res+1)^2`.
+> This is binary longhand — the same algorithm as long division by hand — not a
+> Newton iteration and not a table. A field program's lengths must be
+> bit-identical to the software's, and no approximation reproduces a floor
+> exactly at every one of 2^64 inputs."*
+
+`zhao_field_v3_len` computes `n2` as an **exact u64** and takes an exact
+`isqrt_u64`, bit-identical to `zref::isqrt_u64` by contract and enforced by
+`tests/differential/field_v3_len_directed.cpp`. **A 2^64-entry table does not
+exist**, and an approximate one breaks the differential on the first input where
+the floor lands differently. The same argument covers `normalize`, which the
+header names as a later consumer of the same submodule.
+
+**So the ranked list above is a list of SIZE, and I attached a mechanism to
+three entries without checking any of them.** That is this document's own law —
+the comfortable explanation arrives first and explains almost all of the
+evidence — committed by me into the same document that states it, inside an
+hour.
+
+**What survives, narrowed.** A table can still help these blocks, but not by
+replacing the function: it can SEED an exact refinement — look up an approximate
+root, then correct it to the true floor with a bounded compare-and-adjust, which
+preserves bit-identity because the correction is exact. That is a design task
+with a correctness obligation, not a substitution, and it must not be entered in
+any budget before someone builds one and the differential still passes.
+
+**And the 39,133 ALM figure is untouched by this**, because it never depended on
+the mechanism — it is the measured ALUT of 47 children that use no memory. What
+changed is that three entries move from "named candidate" to "unclassified",
+which is where `forge_cliff`, the largest, already was. **Nothing on that list is
+a saving until its table is sized and its contract is checked.**
+
 ### Why this is the next place to look
 
 The projector is the largest single overrun and correcting it moves the machine
