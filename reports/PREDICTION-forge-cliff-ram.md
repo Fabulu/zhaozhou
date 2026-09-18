@@ -133,3 +133,81 @@ anywhere.
 **If the RAM variant fits in minutes where the golden timed out in hours**, the
 adoption case is about measurability as much as area — a block you cannot fit is
 a block whose budget line is permanently an estimate.
+
+---
+
+# RESULT: `@first-measurement`, `zhao_forge_cliff_ram`, clean tree, 1 source
+
+```
+ALM 976   M10K 15   DSP 2   registers 939   blockMemoryBits 120,964   466.2 s
+Fmax 39.72 MHz   worst -15.174   TNS -2,070   hold -4.140
+```
+
+**The first fit this block has ever had**, and the first clean one for either
+FORGE.CLIFF variant — the golden's only row remains `status: timeout` after
+5,308 s on a dirty tree.
+
+## The law is intact, which my own falsification clause demanded be checked
+
+I wrote: *"If it is dramatically smaller — say under 1,000 ALM — check the
+differential before celebrating."* It came in at **976**. Checked:
+
+```
+test_forge_cliff_ram_differential        rc=0  all green
+test_forge_cliff_ram_directed            rc=0  all green
+test_forge_cliff_ram_mutant_control      rc=0  walk_fault_o FIRED (as it must)
+test_forge_cliff_ram_over_mutant_control rc=0  walk_fault_o FIRED (as it must)
+```
+
+Both mutant controls fire, so the detectors are live rather than merely silent.
+And the payload is not being dropped: **120,964 memory bits against the golden's
+119,808 in the census** — the same data, held in 15 M10K instead of in logic.
+
+## What this receipt does NOT say
+
+**976 ALM cannot be subtracted from the golden's 8,715 ALUT.** That is the
+leaf-versus-census error, and this file's own prediction forbade it in advance.
+A leaf carries 273 virtual pins the composed instance does not; the census row
+carries sharing and placement pressure the leaf does not. The comparison that
+would settle it is a re-census with the variant selected.
+
+**And the 39.72 MHz says almost nothing about the block in situ.** Splitting the
+200 printed paths by origin: **168 start at a PORT**, 32 inside the design. The
+worst path, -15.174, runs from a RAM bypass to `vd_addr_o[26]` — an output
+virtual pin with no output delay constraint. This is CLAUDE.md's own
+virtual-pin lesson, and where that case found the artefact "real and almost
+irrelevant", here it is 84% of the printed window.
+
+The honest summary of this fit: **the area is 976 ALM, the law is verified, and
+the clock is unmeasured.**
+
+## THE FINDING: a read-during-write bypass, for the THIRD time
+
+The worst internal path launches from
+
+```
+_key_r_rtl_0|altsyncram_esi1:auto_generated|ram_block1a0~PORT_B_WRITE_ENABLE_REG
+```
+
+— the same signature as cone 4's `fragment_m`, and the same root cause as the
+`uvw_m` fix earlier in this campaign. Three instances now, in three different
+subsystems:
+
+| | array | where | what it cost |
+|---|---|---|---|
+| 1 | `uvw_m` | `zhao_texture_island_v3_top` | fixed; 61.52 → 66.03 MHz |
+| 2 | `fragment_m` | `zhao_texture_frag_expand_v2` | cone 4, the current worst path at -2.540 |
+| 3 | `_key_r` | `zhao_forge_cliff_ram` | this fit's worst internal path |
+
+**The pattern is mechanical and greppable: an array written in an `always_ff`
+and read with a bare `assign` or in a different clocked block forces the
+synthesiser to build read-during-write bypass logic, and the write enable then
+launches a data path.** It shows up in a receipt as a
+`~PORT_B_WRITE_ENABLE_REG` or `~porta_datain_reg` at the *start* of a path,
+which is not a name anyone wrote and is therefore easy to skim past.
+
+Three for three, none of them found by reading source. **This should be a
+committed check** — sweep `fpga/rtl` for arrays with a clocked write and an
+unclocked read, and report them ranked by whether any receipt shows a
+write-enable launching from them. That is the next tool, and it is cheaper than
+the next fit.
