@@ -1073,6 +1073,57 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > four hours fitting a composition known to contain duplicates would measure a
 > circuit we already know is wrong — which this repository has a rule about.
 >
+> #### AND THE MAP CARRIES THE PER-GROUP ALLOCATION ITEM (1) ASKED FOR
+>
+> The report's **Compilation Hierarchy Node** table attributes ALUTs to every
+> instance in one consistent synthesis — no fit-row sums, no double counting, no
+> graph reconstruction. `zhao_prod_top` has **66 direct children totalling
+> 151,705 combinational ALUTs** of the design's 158,887.
+>
+> Converting with the map's own two totals (100,709 ALM ÷ 158,887 ALUT = 0.634)
+> so the unit is consistent, against the golden path's envelopes:
+>
+> | group | ALUTs | ≈ALM | envelope | |
+> |---|---:|---:|---:|---:|
+> | Backend/platform | 49,241 | 31,200 | 14,000 | 2.2× |
+> | **Shared projection and replay** | **29,684** | **18,800** | **5,000** | **3.8×** |
+> | Terrain/Forge/surfaces | 25,874 | 16,400 | 4,500 | 3.6× |
+> | Complete FIELD | 21,565 | 13,700 | 4,500 | 3.0× |
+> | Geometry and lighting | 18,412 | 11,700 | 5,500 | 2.1× |
+> | Post and 2D | 6,102 | 3,900 | 2,000 | 1.9× |
+> | Complete particles | 827 | 500 | 2,000 | 0.26× |
+> | **TOTAL** | **151,705** | **96,200** | **37,500** | **2.6×** |
+>
+> The eight largest single nodes:
+>
+> ```
+> zhao_shell_top              17,917      zhao_raster_toon        5,289
+> zhao_texture_island_v3_top  15,446      zhao_terrain_bake       5,272
+> zhao_terrain_project        14,289      zhao_geom_wcache        5,132
+> zhao_geom_project           10,263      zhao_forge_cliff        8,715
+> ```
+>
+> **`zhao_terrain_project` + `zhao_geom_project` = 24,552 ALUTs ≈ 15,600 ALM**,
+> against a 5,000 envelope for *exactly one* projection service. **That is the
+> single largest overrun in the machine and it is the uncashed cheque CLAUDE.md
+> documents**: the source was deduplicated into `zhao_project_core` and the
+> silicon still carries it twice. It has been described for weeks as
+> "~6,000 ALM"; measured in the whole machine it is about 15,600, because each
+> instance drags its own arenas and caches — `zhao_geom_wcache` at 5,132 is a
+> third row of the same story.
+>
+> **Particles at 0.26× is NOT a credit.** The golden path is explicit: *"an
+> omitted function is an error, not a free saving."* 827 ALUTs is a domain that
+> is essentially not built, and its 2,000 is owed, not banked.
+>
+> **What this table is:** the first whole-machine per-group allocation this
+> project has had, from one synthesis rather than a sum of parts.
+> **What it is not:** a selected-scope statement — `zhao_shell_top` (V1, 17,917)
+> and `zhao_texture_island_v3_top` (15,446) are both direct children here, which
+> is the V1-shell-plus-V3-island arrangement, not the composed V2 shell measured
+> separately at 28,959 ALM. Resolving that is the same selected-variant decision
+> named above, and it is now the highest-value unblocked item in this document.
+>
 > ### THE GOLDEN PATH SAYS WHAT CLOSURE IS, AND IT WAS UNINDEXED
 >
 > Found 2026-09-18. `reports/Zhaozhou_conditional_golden_path.md`, owner
