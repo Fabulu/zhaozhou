@@ -21,7 +21,8 @@ Close Manafold Pass 16 from the accepted exact final4 generation through full-sh
 - Full every-frame visual review, exact receipts, Pass-15 byte-exact archive, WebM/poster encode, freshness/decode checks, mainline integration, deployment and production verification.
 - Pass 17 full history sweep across all owner directions, plans/findings, review/QA reports, run logs and git history.
 - At minimum for Pass 17: visibly larger/smaller expressive eye morphs and prior thin-lens/white-splinter debt; Fall f338→f339 hard restart; Trick's prolonged featureless back-facing rotation.
-- Direction 14 zero-trust antenna/bone audit: independently re-trace Front/A/B/C/End production ownership, pose channels, skin/closure/body attachment and public-clip motion; require each visible ball to move individually and each per-carrier ablation to fail while preserving the continuous non-beaded skin.
+- Direction 14 zero-trust antenna/bone audit: independently re-trace Front/A/B/C/End production ownership, pose channels, skin/closure/body attachment and public-clip motion; require each visible ball to move individually and each per-carrier ablation to fail while preserving the continuous non-beaded skin. Resolve the stale rear-socket provenance (`1.043` / `1.035..1.162` in the saved accepted gate versus `0.960` / `0.950..1.081` in Pass-16 prose) rather than inheriting either number.
+- Direct native-scale checks within that coherent expression pass: whether `taunt3` now has an unmistakable comic extreme/punchline, and whether the old corrugated-hose/base-seam antenna finish still survives final4. Re-author only if the current picture confirms either fault.
 - Any additional true remainder found by the history sweep, separated from already-closed work and assembled into one coherent authored pass.
 
 **Out of Scope:**

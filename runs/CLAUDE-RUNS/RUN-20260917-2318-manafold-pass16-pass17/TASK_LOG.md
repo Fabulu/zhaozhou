@@ -61,6 +61,21 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Committed and pushed Zhaozhou's full final4 review, integrity, media and history evidence as `80c6d266`. Both clean feature branches fast-forwarded `origin/main` without divergence: Zhaozhou `80c6d266`, Upheaval `29795c0`.
 - Published the finished Pass 16 through `deploy.ps1 -Project upheaval -Branch main -SkipDecodeSweep`; freshness remained 28/28 and Wrangler succeeded at `https://6d83b033.upheaval.pages.dev`. The decode skip is bounded by the immediately preceding unchanged-byte 1,320/1,320 full sweep.
 - Cache-bypassed production verification passed on both the unique deployment and `https://upheaval.pages.dev`: local index plus all 56 live Pass-16 media files matched SHA-256 and byte length, 57/57 on each host, zero mismatches. Details: `PASS16-PRODUCTION-VERIFY.md`.
+
+### 2026-09-18 - Pass 17 started
+
+- Verified Pass-16 branches clean and equal to `origin/main`: Zhaozhou `77ccfc99`, Upheaval `a2ec391`; no encoder/check/deploy/render process remains.
+- Created fresh `manafold-pass17` branches in both repos from those verified main commits.
+- First Pass-17 action is the binding Direction-14 zero-trust antenna audit before any art constant changes: trace Front/A/B/C/End from bind through public pixels, identify missing B/C red legs and current surface-finish evidence, then reconcile a separate eye/Fall/Trick/taunt3 recon before architecture.
+- Archived all 28 live Pass-16 WebMs byte-for-byte as `archive-pass16-manafold-*`, added the Pass-16 archive group ahead of Pass 15, assembled the 694-entry branch site, and committed/pushed the archive packet as Upheaval `4b8f4cb` on `manafold-pass17` before any Pass-17 render can overwrite live media.
+- The archive introduction still said “NINE generations” after adding Passes 16, 15 and 11; corrected it to twelve with the two newest generations identified, reassembled, and pushed follow-up `b592a99` rather than leaving a stale count beside a correct archive.
+- Zero-trust antenna recon completed in `PASS17-ANTENNA-RECON.md`. The source graph plausibly gives Front/A/B/C/End their named visible cores, and contrary to the abbreviated Pass-16 prose all five existing diagnostic mute legs F/A/B/C/E were fired and failed correctly. Direction 14 remains open because those controls reconstruct private slot 16, Front/End use synthetic markers rather than visible swell skin, and no public Taunt/Taunt-II A/B makes each carrier independently attributable. Several rig/model/gate headers materially contradict the actual 16-bone/five-carrier code.
+- Antenna finish does not preliminarily reproduce the old dense corrugated-hose read, but it remains a direct native/4x quiet multi-angle check; no texture/topology edit is authorized until that plate answers it.
+- Independently re-ran the exact saved nodule gate. The first attempt crashed uniformly with missing runtime DLLs because `zhao-env.ps1` was not sourced; after sourcing the required environment, normal and all five inverted F/A/B/C/E mute controls returned RC 0 and each named mute visibly fired the gate. This also exposed a provenance discrepancy to resolve before acceptance: the saved gate reports authored/actual rear-socket rho `1.043` / `1.035..1.162`, while Pass-16 findings/card prose still cite `0.960` / `0.950..1.081`.
+- Clean direct Pass-17 baseline renderer build completed in `build-p17-baseline` (MD5 `146F47512B9F69800E194E8DEACAB0B7`). The first launch without `zhao-env.ps1` exited 53 from missing runtime DLLs; with the required environment sourced, `manafold-hit` rendered 140 frames at sequence CRC `0x24122E5A`, exactly matching accepted final4. Binary MD5 is not a reproducibility oracle here; output CRC is.
+- Built and ran fresh `mexpress` and `meyecam` baselines from current main. Both return 0. `mexpress`'s viewer-side proxy puts Manafold only 1.03× ahead of Zixxtrixx (28.5% vs 27.6%) and explicitly defers to the rendered comparison; `meyecam` reports `taunt3` 91% at-least-one / 82% both-eye readability and `trick` only 50% / 47%, corroborating the direct expression/identity review questions without choosing art values.
+- Expression/clip recon completed in `PASS17-EXPRESSION-RECON.md`: no eye-size channel exists; the base 270×84 long lens must be re-authored wider/splinter-free by eye before asymmetric large/small acting. Fall's f339 is the interpolated half-frame wrapping quats/translations/deformation toward key 0 while `wrap_root_delta` protects root only, so the correct contract is hold-last/non-loop. Trick's held 180° root-Z turn directly faces the creature backward. Native side-by-side confirms taunt3's timing exists but its low back-facing hold and static small eyes still fail the comic-expression bar.
+- Started a dedicated architecture synthesis with an explicit hardware/format-cost decision for the eye-size channel; no production source changes begin before that report names the identity-default path and all green/red gates.
 - Continued with one isolated GPT visual-review fork at a time so no batch shares image payload with this main thread.
 
 ---
@@ -89,7 +104,10 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `FINAL4-BATCH-01.md` through `FINAL4-BATCH-07.md` plus targeted crop evidence
 - `final4-encode.log`
 - `PASS16-LIVE-MEDIA-SHA256.txt`
-- `pass16-media-gates.log` (in progress)
+- `pass16-media-gates.log`
+- `PASS16-MEDIA-CLOSURE.md` and `PASS16-PRODUCTION-VERIFY.md`
+- `PASS17-HISTORY-RECON.md`, `PASS17-ANTENNA-RECON.md`, `PASS17-EXPRESSION-RECON.md`
+- Pass-17 taunt comparison plates (`PASS17-TAUNT3-PUNCHLINE.png`, `PASS17-ZIXX-*-TAUNT-KEYS.png`)
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---
