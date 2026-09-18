@@ -1,10 +1,10 @@
 # Tests. CTest labels (charter 20.3, P1 findings 4):
-#   fast    — every commit (the default gate: ctest --test-dir build -L fast)
-#   nightly — full fuzz + capture replay (scheduled CI job)
-#   formal  — SymbiYosys lane; wrapper test SKIPs when sby is absent.
+#   fast    â€” every commit (the default gate: ctest --test-dir build -L fast)
+#   nightly â€” full fuzz + capture replay (scheduled CI job)
+#   formal  â€” SymbiYosys lane; wrapper test SKIPs when sby is absent.
 #             Since review M1 the smoke (sby --version) also carries `fast`:
 #             sby IS in CI's oss-cad-suite, and the smoke costs < 1 s.
-#   lint    — per-module verilator --lint-only -Wall (charter 21 step 8) +
+#   lint    â€” per-module verilator --lint-only -Wall (charter 21 step 8) +
 #             the charter-27 format / static-analysis tiers (review M1)
 
 # ---- shared harness library (clock/eval loop, ready/valid stimulus,  -------
@@ -37,7 +37,7 @@ set_tests_properties(stub_top PROPERTIES LABELS "fast;nightly")
 # reconfigure (ninja regenerate) cannot poison it.
 find_program(ZHAO_VERILATOR_BIN NAMES verilator_bin.exe)
 if(NOT ZHAO_VERILATOR_BIN)
-  message(FATAL_ERROR "verilator_bin.exe not found on PATH — source tools/env/zhao-env.ps1|.bat")
+  message(FATAL_ERROR "verilator_bin.exe not found on PATH â€” source tools/env/zhao-env.ps1|.bat")
 endif()
 get_filename_component(_zhao_verilator_filename "${ZHAO_VERILATOR_BIN}" NAME)
 if(NOT _zhao_verilator_filename STREQUAL "verilator_bin.exe")
@@ -87,7 +87,7 @@ set_tests_properties(formal_lane PROPERTIES
 # with the W3/W4 shims.
 find_program(ZHAO_NPM_BIN NAMES npm.cmd npm)
 if(NOT ZHAO_NPM_BIN)
-  message(STATUS "npm not found on PATH — ledger_check test not registered (source tools/env/zhao-env.ps1|.bat)")
+  message(STATUS "npm not found on PATH â€” ledger_check test not registered (source tools/env/zhao-env.ps1|.bat)")
 else()
   configure_file(npm/ledger_check.cmake.in npm/ledger_check.cmake @ONLY)
   add_test(NAME ledger_check
@@ -243,7 +243,7 @@ set_tests_properties(desktop_smoke PROPERTIES LABELS "fast;nightly")
 # The differential test compiles the TS-generated wrapper
 # (compiler/tests/generated/crater_ring.hpp), owns the golden .zvec from the
 # C++ oracle (captures/golden/field/), runs the 8 scripted checks of
-# field-ir.md §12 incl. the minimize demo artifact (captures/failures/field/).
+# field-ir.md Â§12 incl. the minimize demo artifact (captures/failures/field/).
 add_executable(test_field_crater_ring differential/test_field_crater_ring.cpp)
 target_link_libraries(test_field_crater_ring PRIVATE zhao_zref)
 target_include_directories(test_field_crater_ring PRIVATE
@@ -256,7 +256,7 @@ set_tests_properties(field_crater_ring PROPERTIES LABELS "fast;nightly")
 # FIELD v3 Phase 2 gate (reports/Fieldv3.md): full canonical interpret ==
 # uniform preparation + FPLAN vector reference executor, on every output,
 # every saturation lane, rcp0, boundaries, random legal programs and the
-# three committed Earth programs. THREE ctest lanes over ONE binary — a
+# three committed Earth programs. THREE ctest lanes over ONE binary â€” a
 # mutation sweep must run all of the fast ones (tools/sweep_field_plan.sh).
 add_executable(test_field_fplan_diff differential/field_fplan_diff.cpp)
 target_link_libraries(test_field_fplan_diff PRIVATE zhao_zref)
@@ -270,7 +270,7 @@ add_test(NAME field_fplan_random_nightly COMMAND test_field_fplan_diff --random 
 set_tests_properties(field_fplan_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 # The generated canonical-operation table (reference/include/zfield/generated/
 # zfield_optable.hpp) is pinned against OP_INFO by compiler/tests/
-# optable.test.ts — the same place the other TS-generated committed artifacts
+# optable.test.ts â€” the same place the other TS-generated committed artifacts
 # (crater_ring.hpp etc.) are pinned. A ctest lane was deliberately NOT
 # registered: compiler/dist is gitignored and CI does not build the compiler,
 # and a SKIP-if-absent gate is the drift-hiding failure the repo has already
@@ -288,10 +288,10 @@ set_tests_properties(field_fuzz_parity PROPERTIES LABELS "nightly")
 
 # ---- W2.1: frozen interface package lint (charter 21 step 8) ---------------
 # fpga/rtl/common/zhao_pkg.sv is the FROZEN wave-2 interface package (plan
-# §3: changes require architect sign-off). Lint it standalone with its only
+# Â§3: changes require architect sign-off). Lint it standalone with its only
 # dependency (the generated ABI package) so interface drift is caught the
 # moment it is written, before any consumer module exists. Banner-append
-# block (merge rule, plan §3).
+# block (merge rule, plan Â§3).
 add_test(NAME lint_zhao_pkg
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
@@ -433,7 +433,7 @@ set_tests_properties(lint_input_rumble PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # formal: INPUT.SNAPSHOT atomicity + sequence-exactly-once (SKIP when sby
-# absent — same lane pattern as formal_lane)
+# absent â€” same lane pattern as formal_lane)
 configure_file(formal/input_snapshot_atomic.cmake.in
                formal/input_snapshot_atomic.cmake @ONLY)
 add_test(NAME input_snapshot_atomic
@@ -443,12 +443,12 @@ set_tests_properties(input_snapshot_atomic PROPERTIES
   LABELS "formal;nightly"
   RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                    # provers blew the 1800 s wrapper budget on runs that pass
-                   # solo � wall time must approximate solo time (2026-08-16)
+                   # solo ï¿½ wall time must approximate solo time (2026-08-16)
   SKIP_REGULAR_EXPRESSION "formal SKIPPED")
 # ---- W2.4: audio (plan W2.4; spec/audio_rules.md, contracts AUDIO.FIFO ----
 # ---- + SW.MIXER) ------------------------------------------------------------
 # Tone subset (SW.MIXER): golden-vector directed + PCG tone-switching random,
-# both pure ZRef (RTL never generates the tone — mixer-side only).
+# both pure ZRef (RTL never generates the tone â€” mixer-side only).
 add_executable(test_mixer_tone_directed audio/mixer_tone_directed.cpp)
 target_link_libraries(test_mixer_tone_directed PRIVATE zhao_zref)
 target_compile_definitions(test_mixer_tone_directed PRIVATE
@@ -506,7 +506,7 @@ set_tests_properties(lint_zhao_audio_fifo PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# formal: audio_fifo_bounds (plan §4) — SKIP when sby absent. The wrapper
+# formal: audio_fifo_bounds (plan Â§4) â€” SKIP when sby absent. The wrapper
 # stages the mechanical formal copy of zhao_pkg.sv (see audio_formal_lane)
 # and runs the committed property file.
 configure_file(formal/audio_formal_lane.cmake.in formal/audio_formal_lane.cmake @ONLY)
@@ -517,13 +517,13 @@ set_tests_properties(formal_audio_fifo PROPERTIES
   LABELS "formal;nightly"
   RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                    # provers blew the 1800 s wrapper budget on runs that pass
-                   # solo � wall time must approximate solo time (2026-08-16)
+                   # solo ï¿½ wall time must approximate solo time (2026-08-16)
   SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 # ---- W2.5: memory -----------------------------------------------------------
 # Plan W2.5: synthesizable modules lint individually (charter 21 step 8);
 # the BEHAVIOURAL SDRAM MODEL (sim/models/zhao_sdram_model.sv) is a
 # TESTBENCH-ONLY component (spec/memory_rules.md 1, plan D2) and is
-# DELIBERATELY EXCLUDED from every lint target and from fpga/files.qip —
+# DELIBERATELY EXCLUDED from every lint target and from fpga/files.qip â€”
 # it is compiled only into the Verilated testbench wrappers below.
 # Test tops live in tests/memory/ (also never linted/synthesized).
 set(ZHAO_MEM_RTL ${CMAKE_SOURCE_DIR}/fpga/rtl/memory)
@@ -639,9 +639,9 @@ verilate(test_hps_bridge_directed
 add_test(NAME mem_hps_bridge_directed COMMAND test_hps_bridge_directed)
 set_tests_properties(mem_hps_bridge_directed PROPERTIES LABELS "fast;nightly")
 
-# MEM.HPS.BRIDGE randomized differential vs zref::HpsBridge (charter §21
+# MEM.HPS.BRIDGE randomized differential vs zref::HpsBridge (charter Â§21
 # step 5). Previously the block's `tests.random` was an ALIAS of the directed
-# file and the cited mem_random.cpp never instantiated the bridge — the
+# file and the cited mem_random.cpp never instantiated the bridge â€” the
 # randomized evidence for its RTL_VERIFIED claim did not exist.
 add_executable(test_hps_bridge_random memory/hps_bridge_random.cpp)
 target_link_libraries(test_hps_bridge_random PRIVATE zhao_harness zhao_zref)
@@ -668,13 +668,13 @@ if(ZHAO_SBY_BIN)
   set(ZHAO_MEM_FORMAL_WORK "${CMAKE_CURRENT_BINARY_DIR}/formal-work")
   # mem_sdram_refresh_bound is NOT in this list. It is a depth-900 BMC (the
   # refresh bound itself is ~862 cycles, so the depth cannot be meaningfully
-  # reduced), and it had never actually been elaborated before — under the old
+  # reduced), and it had never actually been elaborated before â€” under the old
   # SKIP it "ran" instantly. With a genuinely free environment it does not
   # finish in any CI-shaped budget (>50 min and still going when measured), so
   # putting it in the routine lane would only manufacture timeouts that look
   # like failures. Measured: its `cover` task PASSES in ~11 min (all three
   # covers reached, so the bound is not vacuous), while the `bmc` task was
-  # still running after 50 min — NOT ESTABLISHED, which is an unfinished
+  # still running after 50 min â€” NOT ESTABLISHED, which is an unfinished
   # proof, not a failing one. Kept runnable by hand:
   #     cd tests/formal && sby -f --prefix <dir> mem_sdram_refresh_bound.sby
   # See the wave-3 TASK_LOG.
@@ -691,8 +691,8 @@ if(ZHAO_SBY_BIN)
     add_test(NAME formal_${sby_prop}
              COMMAND "${CMAKE_COMMAND}" -P "${zhao_formal_script}")
     # TIMEOUT 2100 (was 900). mem_vram_arbiter_liveness now carries FOUR tasks
-    # — bmc plus the two `expect fail` tightness tasks that prove the bound is
-    # exact, plus cover — and measures 9m31s wall with all four in parallel on
+    # â€” bmc plus the two `expect fail` tightness tasks that prove the bound is
+    # exact, plus cover â€” and measures 9m31s wall with all four in parallel on
     # the reference machine. 900s left ~35% headroom, which is how a proof lane
     # starts producing timeouts that get read as failures (or, worse, get
     # "fixed" by deleting tasks). The wrapper's own TIMEOUT is 1800 so it fails
@@ -701,7 +701,7 @@ if(ZHAO_SBY_BIN)
       LABELS "formal;nightly"
       RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                        # provers blew the 1800 s wrapper budget on runs that pass
-                       # solo � wall time must approximate solo time (2026-08-16)
+                       # solo ï¿½ wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
@@ -734,10 +734,10 @@ target_include_directories(test_render_sky PRIVATE
 add_test(NAME render_sky COMMAND test_render_sky)
 set_tests_properties(render_sky PROPERTIES LABELS "fast;nightly")
 
-# stars_and_flares.md §13 anchors: hand-computed ramp/boil/corona/ghost/
+# stars_and_flares.md Â§13 anchors: hand-computed ramp/boil/corona/ghost/
 # fade/LOD/glint values, the starfield harness-equivalence gate (byte-exact
 # vs tests/golden/starfield/oracle.bin BEFORE any rendering test), the
-# celestial_state round-trip, the compositor determinism + §5 texel budget,
+# celestial_state round-trip, the compositor determinism + Â§5 texel budget,
 # and the CRC-locked 12-class gamut sheet.
 add_executable(test_render_star render/render_star.cpp)
 target_link_libraries(test_render_star PRIVATE zhao_zref)
@@ -755,8 +755,8 @@ add_test(NAME render_golden COMMAND test_render_golden)
 set_tests_properties(render_golden PROPERTIES LABELS "fast;nightly")
 
 # ---- world-identity wave: dual-heightfield terrain (spec/terrain_rules.md) --
-# column_query directed + the physics-equals-pixels differential (§10.1),
-# breach/heal/no_bake law (§10.2 at reference scope), the §9.2 bake deferral
+# column_query directed + the physics-equals-pixels differential (Â§10.1),
+# breach/heal/no_bake law (Â§10.2 at reference scope), the Â§9.2 bake deferral
 # identity, and the renderer's breach/rim semantics with a legacy control.
 add_executable(test_terrain_dual terrain/terrain_dual.cpp)
 target_link_libraries(test_terrain_dual PRIVATE zhao_zref)
@@ -1026,7 +1026,7 @@ set_tests_properties(texture_combine_diff PROPERTIES LABELS "fast;nightly" TIMEO
 # block above. The II=1 form fit at 8 DSP against the architecture's rule of 2
 # (docket D19q), so this one is variant A `LOGIC2`: two multipliers attributed
 # to ALM logic, tokenized microjobs, queued continuations. The differential
-# matches results BY TAG rather than by arrival, because §15.6 has the combiner
+# matches results BY TAG rather than by arrival, because Â§15.6 has the combiner
 # retire out of allocation order -- a position-keyed test would pass only while
 # the scheduler failed to do its job.
 add_executable(test_material_combine_v1_diff texture/material_combine_v1_diff.cpp)
@@ -1163,8 +1163,8 @@ set_tests_properties(texture_mosaic_random_nightly PROPERTIES LABELS "nightly" T
 # The restricted auxiliary source: `zref::render::sample_sheet`'s world ->
 # sheet-texel mapping in hardware, mastering SURFACE.SHEET's read port. The
 # oracle `zref::AuxSource` (reference/include/zref/zref_aux.hpp) did not exist
-# before 2026-08-19 — the ledger named it and nothing under reference/ defined
-# it — so texture_aux_directed's FIRST lane proves the new header is a faithful
+# before 2026-08-19 â€” the ledger named it and nothing under reference/ defined
+# it â€” so texture_aux_directed's FIRST lane proves the new header is a faithful
 # view onto the executed law before anything else runs.
 #
 # texture_aux_directed also composes the two REAL blocks (TEXTURE.AUX mastering
@@ -1248,7 +1248,7 @@ endif()
 
 # ---- world-identity wave: creature/character reference lane -------------------
 # (spec/creature_rules.md 1-4; the ZREF oracle for the future Phase 8-9 GEOM
-# blocks — confers no block promotion: GEOM.POSE stays SPECIFIED until the
+# blocks â€” confers no block promotion: GEOM.POSE stays SPECIFIED until the
 # qformats quat-lane amendment freezes the decode numerics).
 # Hand-computed anchors: ring stitch counts, quat lane exactness, the 3->2
 # clamp gate's analytic bound, pose-cache eviction law, LOD hysteresis.
@@ -1279,7 +1279,7 @@ set(ZHAO_CMD_DMA_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
                     ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_dma.sv)
 set(ZHAO_DEBUG_COUNTERS_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_counters.sv)
 # DEBUG.CRC folds two bytes per vid clock through zhao_crc32c_fold (one pixel
-# per clock is two bytes), so the leaf travels with it — same rule as CMD.DMA.
+# per clock is two bytes), so the leaf travels with it â€” same rule as CMD.DMA.
 set(ZHAO_DEBUG_CRC_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
                       ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_debug_crc.sv)
 
@@ -2430,7 +2430,7 @@ verilate(test_metajoin_seam_directed
   PREFIX Vzhao_texture_metajoin
   TOP_MODULE zhao_texture_metajoin
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_metajoin.sv)
-# The typed early descriptor bank (Decrufter §5.2/§5.4), built with D0's hold
+# The typed early descriptor bank (Decrufter Â§5.2/Â§5.4), built with D0's hold
 # law from the start rather than after a defect, and with the owner generation
 # on an OUTPUT PORT -- the gap that leaves metajoin's island packing 8'd0 where
 # the identity would travel.
@@ -2440,7 +2440,7 @@ verilate(test_early_desc_directed
   PREFIX Vzhao_texture_early_desc
   TOP_MODULE zhao_texture_early_desc
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_texture_early_desc.sv)
-# The post-PERSPUV join (Decrufter §5.3), composed with the REAL descriptor
+# The post-PERSPUV join (Decrufter Â§5.3), composed with the REAL descriptor
 # bank. A stubbed descriptor source would let the test author decide when the
 # descriptor changes, which is the property under test.
 add_executable(test_uv_join_directed texture/uv_join_directed.cpp)
@@ -3070,7 +3070,7 @@ set_tests_properties(
 
 # M6's CORRECTNESS TEST, RUN AS A KNOWN FAILURE UNTIL M6 LANDS.
 #
-# The owner's V3.1 rearchitecture §0: "M6's correctness test must be written at
+# The owner's V3.1 rearchitecture Â§0: "M6's correctness test must be written at
 # M0, even if the interface change lands later. Any existing behavior that
 # accepts a final result before COMBINE has accepted the corresponding input is
 # not something to preserve for parity."
@@ -3118,9 +3118,9 @@ set_tests_properties(lint_texture_v3bank PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # THE READY QUEUE ON ITS OWN. It had a lint lane and no directed test, and the
-# owner's control-fabric recovery architecture (2026-09-07 §5) names a defect
+# owner's control-fabric recovery architecture (2026-09-07 Â§5) names a defect
 # in it by hand: occ_o omits ld_q, the outstanding synchronous body read, so it
-# can report zero while it still owns a ticket. §5.2 asks for "the three-edge
+# can report zero while it still owns a ticket. Â§5.2 asks for "the three-edge
 # counterexample" in the queue's directed test; this is that test, and it was
 # written to FAIL on the unrepaired block before the repair landed.
 add_executable(test_texture_v3rq_directed texture/texture_v3rq_directed.cpp)
@@ -4912,13 +4912,13 @@ set_tests_properties(lint_debug_crc PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# formal: slot FSM + DMA CRC gate (plan 4) — SKIP only when sby (or the
+# formal: slot FSM + DMA CRC gate (plan 4) â€” SKIP only when sby (or the
 # slang plugin) is absent; anything else is FATAL. Both properties use the
 # read_slang frontend against the REAL packages (the W2.3 lane choice; no
-# ABI stub, no mechanical copies — see the .sby headers). Both carry TWO
+# ABI stub, no mechanical copies â€” see the .sby headers). Both carry TWO
 # tasks (bmc AND cover): every assertion in zhao_cmd_dma is an implication
 # on pkt_valid_o / guard_req_o.valid, and the scheduler's fence property is
-# guarded by a RUN->DONE transition — without the cover task each bmc could
+# guarded by a RUN->DONE transition â€” without the cover task each bmc could
 # pass with those preconditions unreachable (the MEM.GUARD vacuity shape).
 # Reuses the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for
 # multi-task) rather than a parallel cmd-specific template.
@@ -4967,7 +4967,7 @@ if(ZHAO_SBY_BIN)
       LABELS "formal;nightly"
       RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                        # provers blew the 1800 s wrapper budget on runs that pass
-                       # solo � wall time must approximate solo time (2026-08-16)
+                       # solo ï¿½ wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
@@ -4992,11 +4992,11 @@ endif()
 
 # ---- W2.2: video -------------------------------------------------------------
 # Plan W2.2 (VIDEO subsystem: mode/scanout/scaler/framectl). Banner-append
-# block (merge rule, plan §3): everything W2.2 adds lands here, at the end.
+# block (merge rule, plan Â§3): everything W2.2 adds lands here, at the end.
 # Shared driver: tests/video/video_harness.hpp drives the Verilated
 # zhao_video_tb (whole subsystem, tests/video/zhao_video_tb.sv) and the
 # zref::Scanout mirror on one gpu-cycle timeline (vid posedges on odd
-# steps — the frozen 2:1 phase, plan R1).
+# steps â€” the frozen 2:1 phase, plan R1).
 
 set(ZHAO_VIDEO_RTL ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_mode.sv
                    ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_framectl.sv
@@ -5112,7 +5112,7 @@ set_tests_properties(lint_zhao_video_scanout PROPERTIES
 # no PATH hardening (the 0xC0000139 DLL-shadowing trap) and a broad
 # fail-on-rc contract; it was DROPPED in favour of the shared hardened
 # mem_formal_lane.cmake.in (narrow SKIP only when the slang frontend is
-# absent, --prefix for the multi-task bmc+cover pairs V16 requires) — the
+# absent, --prefix for the multi-task bmc+cover pairs V16 requires) â€” the
 # same resolution the W2.6 merge made for the CMD wrappers.
 if(ZHAO_SBY_BIN)
   foreach(sby_prop IN ITEMS video_mode_timing video_scanout_linebuf
@@ -5130,17 +5130,17 @@ if(ZHAO_SBY_BIN)
       LABELS "formal;nightly"
       RUN_SERIAL TRUE  # heavy provers must not co-schedule: two 4-way-contended
                        # provers blew the 1800 s wrapper budget on runs that pass
-                       # solo � wall time must approximate solo time (2026-08-16)
+                       # solo ï¿½ wall time must approximate solo time (2026-08-16)
       TIMEOUT 2100
       SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
   endforeach()
 endif()
 
 # ---- Phase 4: RASTER.EDGEWALK (charter phase 4, ZH-022/ZH-023; law -------
-# ---- spec/qformats.md §8; contract design/contracts/RASTER.EDGEWALK.md) ----
+# ---- spec/qformats.md Â§8; contract design/contracts/RASTER.EDGEWALK.md) ----
 # The oracle is zref::EdgeWalk, which is itself a view onto the FROZEN
 # software raster (reference/src/zrender/rast.cpp), so "RTL == oracle" is
-# literally "RTL == the §8 fill law" — no re-derived fill rule anywhere in
+# literally "RTL == the Â§8 fill law" â€” no re-derived fill rule anywhere in
 # the test.
 set(ZHAO_RASTER_EDGEWALK_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fill.sv
@@ -5214,7 +5214,7 @@ add_test(NAME raster_edgewalk_random_nightly COMMAND test_raster_edgewalk_random
 set_tests_properties(raster_edgewalk_random_nightly PROPERTIES
   LABELS "nightly" TIMEOUT 3600)
 
-# per-module lint (charter §21 step 8)
+# per-module lint (charter Â§21 step 8)
 add_test(NAME lint_raster_edgewalk
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_raster_edgewalk
@@ -5223,9 +5223,9 @@ set_tests_properties(lint_raster_edgewalk PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# formal: the §8 top-left fill rule (charter §20.4 — "adjacent-triangle
+# formal: the Â§8 top-left fill rule (charter Â§20.4 â€” "adjacent-triangle
 # exactly-once coverage is a SymbiYosys formal property"). Proved on
-# zhao_raster_fill, the module the tile walker instantiates 48× per row, so
+# zhao_raster_fill, the module the tile walker instantiates 48Ã— per row, so
 # the proof and the silicon are the same bytes. TWO tasks (bmc AND cover):
 # the covers pin the on-the-edge and sub-unit corners as reachable. Reuses
 # the hardened mem_formal_lane wrapper (narrow SKIP, --prefix for multi-task).
@@ -5251,7 +5251,7 @@ endif()
 # ---- "Active tile storage"; contract design/contracts/RASTER.TILESTORE.md) --
 # The oracle is zref::TileStore. A memory has no pre-existing law to call, so
 # the oracle is a deliberately plain second implementation of the CONTRACT
-# (two arrays and a present bit) — what the differential tests exercise is the
+# (two arrays and a present bit) â€” what the differential tests exercise is the
 # RTL's ping-pong, O(1) clear and write-through-read bypass mechanics.
 set(ZHAO_RASTER_TILESTORE_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_tilestore.sv)
@@ -5297,7 +5297,7 @@ set_tests_properties(lint_raster_tilestore PROPERTIES
 # ---- spec/capture_format.md 2; contract design/contracts/RASTER.RESOLVE.md) -
 # The oracle is zref::TileResolve, which is itself a view onto the FROZEN
 # software resolve (reference/src/zrender/resolve.cpp), so "RTL == oracle" is
-# literally "RTL == the charter 8 ordered dither" — no re-derived dither
+# literally "RTL == the charter 8 ordered dither" â€” no re-derived dither
 # anywhere in the test. The CRC likewise delegates to the one generated
 # CRC-32C machine, on both sides.
 set(ZHAO_RASTER_RESOLVE_SV
@@ -5342,8 +5342,8 @@ set_tests_properties(lint_raster_resolve PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# formal: the RGB565 quantizer, proved on zhao_raster_quant — the module
-# zhao_raster_resolve instantiates 3x per pixel — at BOTH shipping parameter
+# formal: the RGB565 quantizer, proved on zhao_raster_quant â€” the module
+# zhao_raster_resolve instantiates 3x per pixel â€” at BOTH shipping parameter
 # sets. TWO tasks (bmc AND cover): the covers pin green's clamp actually
 # firing, without which the no-wrap theorem would also hold for a quantizer
 # that never reaches the rail. Reuses the hardened mem_formal_lane wrapper.
@@ -5586,7 +5586,7 @@ add_test(NAME texture_tmu_random_nightly COMMAND test_texture_tmu_random --night
 set_tests_properties(texture_tmu_random_nightly PROPERTIES
   LABELS "nightly" TIMEOUT 3600)
 
-# THE FILT_LANES FRONTIER — 4 and 1 beside the default 2.
+# THE FILT_LANES FRONTIER â€” 4 and 1 beside the default 2.
 #
 # zhao_texture_tmu time-multiplexes its four colour channels through
 # FILT_LANES instances of zhao_texture_bilerp, in 4/FILT_LANES passes. The
@@ -5687,7 +5687,7 @@ if(ZHAO_SBY_BIN)
     SKIP_REGULAR_EXPRESSION "formal lane SKIPPED")
 endif()
 
-# ---- Phase 5: the GEOMETRY FRONT — GEOM.CLIP / GEOM.SETUP / GEOM.BINNER ----
+# ---- Phase 5: the GEOMETRY FRONT â€” GEOM.CLIP / GEOM.SETUP / GEOM.BINNER ----
 # ---- (charter phase 5 build order 14/15 "screen-space triangle setup in
 # ---- FPGA" + "tile binner in FPGA", and item 3 "chunked tile lists and safe
 # ---- overflow"; ZH-056 / ZH-057 / ZH-058 / ZH-026). Law spec/qformats.md 8;
@@ -5695,7 +5695,7 @@ endif()
 # The oracles are zref::Clip, zref::Setup and zref::Binner. None of them
 # restates a law rast.cpp already owns: the 2A cross product is
 # zref::EdgeWalk::area2 (which IS rast.cpp's orient()), and the scissored
-# pixel-centre scan box is zref::render::scan_bbox — the very function
+# pixel-centre scan box is zref::render::scan_bbox â€” the very function
 # raster_tri calls, EXTRACTED from it for this increment so the bbox law has
 # one site. The binning law itself (grid anchor, enumeration order, the affine
 # corner trivial-reject, the overflow wall) is CHOSEN, not found; it is argued
@@ -6054,10 +6054,10 @@ set_tests_properties(lint_terrain_normals PROPERTIES
 
 # TERRAIN.SHADE (phase 6, ZH-081)
 #
-# The oracle is the COMPILED ratified law itself — zhao_zref's
+# The oracle is the COMPILED ratified law itself â€” zhao_zref's
 # `shade_flat_tri_dir_unclamped` on the vertices (tier 1) and the law's own
 # pieces (shade_nmag2/shade_ndot/isqrt_u64 + the compiled div_rhu_s128) on
-# raw normals (tier 2). Sun and output are Q16.16, NOT s1.15 — the format
+# raw normals (tier 2). Sun and output are Q16.16, NOT s1.15 â€” the format
 # error the oracle's own history records catching. The suite's positive
 # control is `--break-oracle` (must FAIL); every DUT counter is asserted
 # with an exact count, so no counter can be a hopeful zero.
@@ -6304,7 +6304,7 @@ set_tests_properties(lint_terrain_shade PROPERTIES
 # 9.1's frozen live-field intake (MAX_PATCH_FIELDS = 16, reject the tail, never
 # evict). The oracle is a THIN VIEW onto compose_lattice, and
 # terrain_patch_directed proves that by composing a real 33x33 dual patch with
-# two real earth programs both ways and requiring all 1,089 vertices to agree —
+# two real earth programs both ways and requiring all 1,089 vertices to agree â€”
 # without that cross-check the oracle would be a second implementation of 3.4
 # and charter 29-6 would be broken before the RTL was written.
 # ---- GEOM.MESHFETCH: the creature representation ladder --------------------
@@ -6433,7 +6433,7 @@ set(ZHAO_TERRAIN_PATCH_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch.sv)
 
 # FIELD.OUT.HEIGHT: the op ops.yml declares with "no dedicated opcode" -- the op
-# IS the routing of the height out-lane into the §3.4 compose chain. Narrow on
+# IS the routing of the height out-lane into the Â§3.4 compose chain. Narrow on
 # purpose: terrain_patch_directed.cpp already covers composition as a whole, so
 # this covers only what the op owns (clamp-once, command order, the exact <<8,
 # and the covers gate).
@@ -6488,7 +6488,7 @@ set_tests_properties(lint_terrain_patch PROPERTIES
 # verbatim, so "RTL == oracle" is "RTL == the geometry the golden captures pin".
 # The stitched path is an annulus whose outer boundary uses ONLY the per-side
 # coarse vertices, which makes the shared-edge vertex sets identical by
-# construction — the contract's crack invariant, checked on real emitted
+# construction â€” the contract's crack invariant, checked on real emitted
 # geometry in terrain_tess_directed rather than argued in prose.
 set(ZHAO_TERRAIN_TESS_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_tess.sv)
@@ -7051,7 +7051,7 @@ set_tests_properties(lint_geom_wcache PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # formal: the arena bound the ledger names (tests/formal/
-# geom_binner_arena_bounds.sby), proved on zhao_geom_arena — the module
+# geom_binner_arena_bounds.sby), proved on zhao_geom_arena â€” the module
 # zhao_geom_binner instantiates, so the proof and the silicon are the same
 # bytes. TWO tasks (bmc AND cover): the covers pin the arena actually FILLING
 # and the wall actually REFUSING, without which the bound would also hold for
@@ -7822,7 +7822,7 @@ set_tests_properties(shell_draw_directed PROPERTIES LABELS "fast;nightly" TIMEOU
 
 # THE PHASE-2 GATE: two controllers move independent 2D markers in Duo,
 # 600 capture-exact marker frames (1,202 displayed frames at the machine's
-# sustainable cadence) on the full machine — an executable ctest. ~30 min
+# sustainable cadence) on the full machine â€” an executable ctest. ~30 min
 # wall, so the full gate carries the gate+nightly labels and a 40-marker
 # cut of the SAME binary and assertions guards every commit in fast.
 add_test(NAME shell_duo_markers COMMAND demo_duo_markers)
@@ -7833,7 +7833,7 @@ set_tests_properties(shell_duo_markers_fast PROPERTIES
   LABELS "fast" TIMEOUT 1800)
 
 # nightly soak: 10,000 DISPLAYED frames (5,000 marker packets) with PCG
-# jitter on publish timing, pads and rumble at the stress corners — the
+# jitter on publish timing, pads and rumble at the stress corners â€” the
 # scaled Verilator surrogate of the 8-hour hardware stress (hardware lane)
 add_test(NAME shell_duo_markers_soak COMMAND demo_duo_markers --soak 5000)
 set_tests_properties(shell_duo_markers_soak PROPERTIES
@@ -7876,8 +7876,8 @@ set_tests_properties(shell_golden_replay PROPERTIES
 # ---------------------------------------------------------------------------
 # SURFACE.SHEET (phase 6, ZH-031) and SURFACE.STAMP (phase 6, ZH-052)
 #
-# Layer F — the 64x64 {tag u8, strength u8} per-patch surface sheet of charter
-# 12 — and the Scar Scribe stamp engine that is its only writer
+# Layer F â€” the 64x64 {tag u8, strength u8} per-patch surface sheet of charter
+# 12 â€” and the Scar Scribe stamp engine that is its only writer
 # (spec/terrain_rules.md 7). The ratified law is
 # `zref::render::stamp_surface`, executed today by the software console and
 # pinned by tests/render/render_golden.cpp's crack ring; the oracle
@@ -8001,8 +8001,8 @@ set_tests_properties(surface_stamp_directed PROPERTIES LABELS "fast;nightly" TIM
 # cannot clean and re-score.
 # The shared sequential squarer, checked WHERE ITS VALUE IS VISIBLE.
 #
-# zhao_surface_stamp reduces this module's output to one boolean —
-# `covered = !(d2 > r_outer2 || d2 < r_inner2)` — and all three of those terms
+# zhao_surface_stamp reduces this module's output to one boolean â€”
+# `covered = !(d2 > r_outer2 || d2 < r_inner2)` â€” and all three of those terms
 # come out of the SAME instance, so a comparison cannot see a uniform scaling of
 # it. The 2026-08-23 sweep proved that concretely: three mutants that double or
 # halve the squarer survived the entire stamp suite. They are defects in the
@@ -8116,7 +8116,7 @@ set_tests_properties(lint_surface_blend PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# formal: the surface blend, proved TOTAL rather than bounded — the harness is
+# formal: the surface blend, proved TOTAL rather than bounded â€” the harness is
 # combinational and its 22 free input bits are the whole input space of the
 # module (mode 3, dst 8, src 8, age_shift 3 = 4,194,304 inputs). The cover task
 # is load-bearing: without it the saturation theorems would also hold for a
@@ -8143,8 +8143,8 @@ endif()
 # TERRAIN.BAKE (phase 7, ZH-036)
 #
 # The only writer of layers B and D (terrain_rules 7). The oracle is the
-# EXECUTED reference — `zref::terrain::bake_dig` then
-# `zref::terrain::apply_breach_law` — rather than a second implementation of
+# EXECUTED reference â€” `zref::terrain::bake_dig` then
+# `zref::terrain::apply_breach_law` â€” rather than a second implementation of
 # 3.4, so "RTL == oracle" is "RTL == the deformation the software console
 # already ships". The block owns its own 33x33 sweep, so the tests drive it as
 # a MEMORY answering its read addresses, which is also what makes the scan
@@ -8267,13 +8267,13 @@ endif()
 # ---------------------------------------------------------------------------
 # TERRAIN.VELOCITY (phase 7, ZH-039)
 #
-# The §4.2 velocity lattice: earth out-lane 1 accumulated at lattice vertices
+# The Â§4.2 velocity lattice: earth out-lane 1 accumulated at lattice vertices
 # and baked back to height16. The oracle is cross-checked against the EXECUTED
 # reference (`compose_lattice`'s recorded velocity samples, grouped by vertex
 # in command order) before the RTL is compared to it, so "RTL == oracle" means
 # "RTL == the velocity lane the software console already records". The block
 # owns its own 33x33 sweep, so the tests drive it as a MEMORY answering the
-# address it asks for — which is what makes the z-then-x scan order a checkable
+# address it asks for â€” which is what makes the z-then-x scan order a checkable
 # fact instead of an assumption.
 set(ZHAO_TERRAIN_VELOCITY_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_velocity.sv)
@@ -8325,7 +8325,7 @@ add_test(NAME terrain_velocity_random_nightly COMMAND test_terrain_velocity_rand
 set_tests_properties(terrain_velocity_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
 # PATCH -> VELOCITY: the `fld_covers_o` seam, both blocks REAL. TERRAIN.PATCH
-# owns the §9.1 field list and decides the closed-interval footprint test once;
+# owns the Â§9.1 field list and decides the closed-interval footprint test once;
 # TERRAIN.VELOCITY consumes that answer for out-lane 1. Driving both from ONE
 # field list is the only way the seam is proved rather than asserted, and it is
 # also where the wake workload (one moving field lane, every frame) is measured
@@ -8358,13 +8358,13 @@ set_tests_properties(lint_terrain_velocity PROPERTIES
 # ---------------------------------------------------------------------------
 # MEASURE.TOKENS (phase 8, ZH-048)
 #
-# The global token guard and the charter §9 Duo fairness split. The grant is
+# The global token guard and the charter Â§9 Duo fairness split. The grant is
 # COMBINATIONAL because GEOM.BINNER's law E already committed to that seam in
 # phase 6 ("`tok_grant_i` is sampled on that same edge"); the ledger's
 # `latency: fixed:1` is honoured by the registered `token_denial`, and the
 # directed lane MEASURES both rather than asserting them. The oracle is a first
-# implementation, not a view onto an executed reference — nothing in
-# reference/src allocates tokens — so the contract carries every law it makes.
+# implementation, not a view onto an executed reference â€” nothing in
+# reference/src allocates tokens â€” so the contract carries every law it makes.
 set(ZHAO_MEASURE_TOKENS_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_tokens.sv)
 
@@ -8403,7 +8403,7 @@ set_tests_properties(lint_measure_tokens PROPERTIES
 # The Duo fairness guarantee, proved on the SHIPPING module (ZH-048;
 # design/blocks.yml names measure_tokens_fairness.sby as this block's formal
 # lane, and this is it populated rather than promised). TWO tasks: `prove`
-# (temporal induction — the guarantee holds for ALL time, not for a bounded
+# (temporal induction â€” the guarantee holds for ALL time, not for a bounded
 # prefix) AND `cover`, on a deliberately tiny TOK_W=4 second instance, because
 # without the covers every property would also hold for a guard that never
 # granted anything. Arithmetic-flat by design: five 32-bit compare/add/subtract
@@ -8429,7 +8429,7 @@ endif()
 # ---------------------------------------------------------------------------
 # MEASURE.GOVERNOR (phase 8, ZH-047)
 #
-# The per-camera screen-error policy and per-view degradation. Charter §9
+# The per-camera screen-error policy and per-view degradation. Charter Â§9
 # Version 1 puts the THRESHOLD PREDICTION on the ARM, so this block converts
 # (two camera numbers -> the ONE ratio TERRAIN.LOD's Notes law 8 already
 # committed to consuming) and degrades. The division lives here because
@@ -8513,7 +8513,7 @@ set_tests_properties(lint_measure_governor PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# GEOM.DEPTHQUANT — w to canonical invw24 under the selected depth profile.
+# GEOM.DEPTHQUANT â€” w to canonical invw24 under the selected depth profile.
 # Checked against `zref::depth_of_raw`, the ratified law the golden captures
 # already pin, rather than against a second implementation of it.
 add_executable(test_geom_depthquant_directed geometry/geom_depthquant_directed.cpp)
@@ -9020,7 +9020,7 @@ set_tests_properties(lint_terrain_world PROPERTIES
 # Packet B: repaired Texture-V3 boundary registrations
 # ---------------------------------------------------------------------------
 # This is the single source of truth for every full Packet-B elaboration in
-# CMake.  Its order is frozen by architecture §12.1: package first, selected
+# CMake.  Its order is frozen by architecture Â§12.1: package first, selected
 # root last.  Leaf tests below use only their own minimal closures; historical
 # island/V1/V2 tests above retain their unversioned source lists.
 set(ZHAO_TEXTURE_V3_PACKET_B_SOURCES
@@ -12687,7 +12687,18 @@ verilate(test_light_stream_gainw_guard
   PREFIX Vzhao_light_stream
   TOP_MODULE zhao_light_stream
   SOURCES ${ZHAO_LIGHT_STREAM_SV}
-  VERILATOR_ARGS --assert -GGAINW=24)
+  # -Wno-SELRANGE is REQUIRED, not cosmetic. GAINW=24 makes
+  # `lB_cur_q[100 +: GAINW]` select 123:100 out of 120 bits, and verilate runs
+  # at CMAKE CONFIGURE time -- so without this the SELRANGE warning is fatal
+  # during configure and NO TARGET IN THE TREE can be generated. It broke every
+  # build in the repo on 2026-09-18 until this line was added.
+  #
+  # Suppressing it is correct rather than convenient: the out-of-range select is
+  # a CONSEQUENCE of the bad parameter this target deliberately injects, and the
+  # thing under test is the elaboration $fatal at zhao_light_stream.sv:282 --
+  # which --lint-only can never reach, because it does not run initial blocks.
+  # Let the guard be what fires, not a warning about the bait.
+  VERILATOR_ARGS --assert -GGAINW=24 -Wno-SELRANGE)
 add_test(NAME light_stream_gainw_guard COMMAND test_light_stream_gainw_guard)
 set_tests_properties(light_stream_gainw_guard PROPERTIES
   WILL_FAIL TRUE LABELS "fast;nightly" TIMEOUT 600)
