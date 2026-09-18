@@ -3178,3 +3178,15 @@ NEXT, in order:
 3. then the selection change in prod_manifest.yml, then re-census
 4. texture is the whole remaining render band: cache_pipe_v2 c2_tag -> valid_r
    and v3own cq_own_q -> v3rq h_d_q/s_d_q/lcnt_q, 11.9-12.7 ns against 10.000
+
+### IN PROGRESS when @cheque-price returned
+
+Designing cone 2's SAFE half. Shape settled, not yet written:
+v3own exposes cq_own_q's four entries flattened ([CMBQD*OWNERW-1:0]) plus
+cq_rp_q; the island computes !join_validation_pending_q[owner[13:8]] for all
+four in parallel and selects by rp, instead of reading the queue then the
+fence in series. Additive ports only, so owner_combine_ready_w keeps its exact
+current meaning and both its consumers are untouched. ~0.9 ns.
+Widths confirmed: CMBQD=4, CQPW=2, OWNERW=SLOTW+GENW=14,
+join_validation_pending_q is `logic [0:OWNERS-1]` unpacked in the island.
+Needs zhao_prod_top regeneration after the port change.

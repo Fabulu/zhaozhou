@@ -1,7 +1,7 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "e24b9e4f6c9f036603a09b22a5b33956fc77dc4b",
+    "newestRunCommit":  "3e467e4794aefe2d9aecd9371aa8178fbc859991",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
@@ -784,6 +784,38 @@
                        "blockMemoryBits":  1029005,
                        "dspBlocks":  123,
                        "virtualPins":  4
+                   },
+                   {
+                       "module":  "zhao_project_service@cheque-price",
+                       "status":  "failed:structure",
+                       "sourceCommit":  "3e467e4794aefe2d9aecd9371aa8178fbc859991",
+                       "treeCleanAtHead":  true,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sourceDigest":  "f327c123c0263a5d022def895d1a09208846aa66410ced92cdbea63b20bbf1a6",
+                       "variantOf":  "zhao_project_service",
+                       "seconds":  854.3,
+                       "sourcesHashed":  2,
+                       "alms":  6598,
+                       "registers":  7009,
+                       "blockMemoryBits":  4579,
+                       "ramBlocks":  31,
+                       "dspBlocks":  33,
+                       "virtualPins":  701,
+                       "almsAvailable":  41910,
+                       "ramBlocksAvailable":  553,
+                       "dspBlocksAvailable":  112,
+                       "fmaxMhz":  91.52,
+                       "fmaxClock":  "clk",
+                       "setupSlackNs":  -0.926,
+                       "setupTnsNs":  -402.967,
+                       "holdSlackNs":  0.238,
+                       "holdTnsNs":  0,
+                       "ruleViolations":  [
+                                              "ALM 6598 \u003e allowed 6300"
+                                          ]
                    },
                    {
                        "module":  "zhao_raster_blend",
