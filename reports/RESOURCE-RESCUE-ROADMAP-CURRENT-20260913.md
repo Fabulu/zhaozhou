@@ -131,6 +131,23 @@ whole-machine ALM number.
 > > registration-static test. The parameters matter: fitting terrain at anything
 > > other than RPP3/MATW18 would measure a configuration G8B never closed, and
 > > the 102.19 MHz receipt would not describe it.
+> >
+> > **The open question is what "combined" means, and it decides what the number
+> > is worth.** Two tops are possible and they are not the same measurement:
+> >
+> > * **CO-FITTED** — both instances in one module, ports promoted, nothing
+> >   crossing between them. Cheap to write, and it measures the SUM plus
+> >   whatever placement pressure they put on each other. It answers "do both
+> >   fit on this device at once", which is a real budget question.
+> > * **CONNECTED** — terrain's output actually feeding the render path. This is
+> >   what R9 means by *"connected V3/terrain/geometry selection"*, and only this
+> >   one can expose a cross-subsystem critical path, which is exactly the class
+> >   of problem G8A and the composed shell both turned out to have.
+> >
+> > A co-fitted top that gets reported as "G8C closed" would be the
+> > `status: ok` mistake one level up: a true number answering a smaller
+> > question than the one asked. Whichever is built, the row's label should say
+> > which it is.
 >
 > **And it is not one chain.** Worst path per endpoint block says what each fix
 > would actually buy: `zhao_terrain_tess` caps at 43.9 MHz, `zhao_project_core`
