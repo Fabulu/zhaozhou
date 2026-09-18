@@ -1602,6 +1602,14 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > cone and the DSP macro's own latency dominates — in which case the next move
 > is Quartus's DSP output register rather than another RTL stage.
 >
+> **And the fit is genuinely single-variable, checked rather than assumed.**
+> Diffing the two snapshots' commits over `fpga/rtl/` shows four files moved, but
+> three are the two instrument wrappers and a provenance comment — and the only
+> generated file inside the 97-source closure is `zhao_abi_pkg.sv`, which is
+> neither. So of the sources this fit actually compiles, **exactly one changed**:
+> `zhao_raster_attrgrad_v2.sv`. Whatever the number does is attributable to the
+> multiply split and to nothing else.
+>
 > ##### A clarification, and an unfixed twin
 >
 > The tree change could never have broken the differential, and it is worth
