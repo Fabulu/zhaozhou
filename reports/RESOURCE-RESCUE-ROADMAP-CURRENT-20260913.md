@@ -2238,3 +2238,80 @@ source list should not assert a block that never elaborates.
    apiece, nearly identical, which is the duplication measured rather than
    argued.
 
+
+---
+
+## THE PROJECTOR CHEQUE IS NOT UNBUILT. IT IS BUILT, COMPOSED AND MEASURED — AND PRODUCTION STILL CARRIES TWO
+
+Found 2026-09-18, immediately after the closure finding above, by applying
+CLAUDE.md's own rule before starting work: *grep the tree for the thing it
+replaces.* The thing it replaces exists, and so does the thing after that.
+
+```
+zhao_terrain_pipe  ->  zhao_proj_subsystem  ->  zhao_project_service  ->  ONE zhao_project_core
+      (G8B's fitted top, 102.19 MHz, physical pins, zero TNS)
+```
+
+Verified in G8B's own map report (`@g8b-t11-pins-s2`), instance counts:
+`zhao_proj_subsystem` 4,177, `zhao_project_service` 3,971, `zhao_project_core`
+3,964, **`zhao_terrain_project` 0**. The receipt this project already holds for
+terrain is a receipt for the SHARED arrangement.
+
+### The two arrangements, side by side, both measured
+
+| | production today (`zhao_prod_top` map) | G8B (`@g8b-t11-pins-s2`) |
+|---|---:|---:|
+| `zhao_geom_project` → its own core | 10,220 ALUT (own 6,908) | — |
+| `zhao_terrain_project` → its own core | 14,179 ALUT (own 6,883) | — |
+| one shared `zhao_project_core` | — | 8,694 ALUT (own 7,932), 24 M9K, 0 DSP |
+| **total projection silicon** | **24,399 ALUT ≈ 15,470 ALM** | **8,694 ALUT ≈ 5,512 ALM** |
+
+The two production cores' OWN logic is 6,908 and 6,883 — within 0.4% of each
+other. That is the duplication measured rather than argued: not two blocks that
+happen to both project, but one circuit instantiated twice.
+
+### What would make this number smaller than it looks, stated before anyone quotes it
+
+**In G8B's fit top, client A is not driven.** `zhao_proj_subsystem`'s header is
+explicit — *"client A raw — the geometry producer is not composed anywhere in
+this tree"* — so Quartus may have folded away arbitration and buffering that a
+two-client service has to carry. 8,694 ALUT is therefore a **floor**, not the
+delivered cost, and the honest claim today is *"one core plus an unmeasured
+arbitration increment"*, not a 9,957-ALM saving.
+
+**`zhao_project_service` has a `- top:` entry in `fit_targets.yml` (line 527)
+and has never been fitted** — `zhao_block_fit.json` holds no row for it. So the
+one measurement that would settle the increment has been available to run, as a
+cheap leaf fit, for as long as the entry has existed. **That is the next fit
+after `@packet-h-satstage`,** and its question is stated in advance as this
+document requires: *what does the shared service cost with BOTH clients driven,
+against 24,399 ALUT for two unshared cores?*
+
+### Why the cheque detector did not see this
+
+`tools/budget/uncashed_cheques.py` reports 7 open rows and none of them is the
+projector. It is not wrong; it is asking a different question. Check 1 scans
+modules that are **measured or fit-targeted** and finds those instantiated by
+nothing — and every link here has a root: `zhao_project_service` is
+instantiated by `zhao_proj_subsystem`, which is instantiated by
+`zhao_terrain_pipe`, which is fitted. The chain is rooted at every step and
+**adopted at none**, because the root of the chain is not `zhao_prod_top`.
+
+**So there is a third shape of uncashed cheque, and it is the one that hid the
+largest saving in the machine: ADOPTED NOWHERE, rather than instantiated
+nowhere.** A module can be built, composed into a subsystem, composed into a
+pipe, fitted at 102.19 MHz on physical pins — and still not be what production
+instantiates. The detector should ask reachability **from the production top**,
+not reachability from anything. The manifest already carries the words:
+`zhao_proj_subsystem: not-yet-adopted`, `zhao_terrain_pipe` likewise. Nothing
+reads them back, which is this project's oldest lesson.
+
+### What Packet J actually is, restated
+
+Not "write a G8C top". **Move `zhao_prod_top` off `zhao_geom_project` +
+`zhao_terrain_project` and onto the shared service**, with geometry on client A
+— via `tools/quartus/gen_prod_top.py`, which is the supported way to change what
+the production top composes. The terrain half of that wiring is already written
+and fitted; the geometry half is the port `zhao_proj_subsystem` deliberately
+left exposed.
+
