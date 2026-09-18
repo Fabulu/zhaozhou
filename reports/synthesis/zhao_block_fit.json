@@ -1,8 +1,8 @@
 {
     "schemaVersion":  1,
     "characterization":  "provisional-per-block-fit",
-    "newestRunCommit":  "ba29113f57af2c4fb4ea7a49b2074cbcf83573ad",
-    "newestRunClean":  false,
+    "newestRunCommit":  "5e6649dc10cd6c45ddab7f000560a3d39bf21fd2",
+    "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
@@ -70,6 +70,58 @@
                        "ramBlocks":  0,
                        "dspBlocks":  0,
                        "virtualPins":  810
+                   },
+                   {
+                       "module":  "zhao_console_core@console-core-first-light",
+                       "status":  "ok",
+                       "sourceCommit":  "5e6649dc10cd6c45ddab7f000560a3d39bf21fd2",
+                       "treeCleanAtHead":  false,
+                       "rtlCleanAtHead":  true,
+                       "ioMode":  "virtual-top-ports",
+                       "fitterSeed":  1,
+                       "seedSource":  "shell_fit QSF pinned SEED",
+                       "sizingDevice":  "5CEBA9F31C7",
+                       "notTargetDevice":  true,
+                       "sizingNote":  "fitted on 5CEBA9F31C7 ONLY to measure size; the target is 5CSEBA6U23I7 at 41,910 ALM and almsAvailable below is NOT that device",
+                       "sourceDigest":  "0d686d14ff7bbf3e55ed7a2e9e86e576c918c0e73dda12a60715f1ad45578c8c",
+                       "variantOf":  "zhao_console_core",
+                       "seconds":  2382.3,
+                       "sourcesHashed":  106,
+                       "alms":  47582,
+                       "registers":  56031,
+                       "blockMemoryBits":  1103456,
+                       "ramBlocks":  306,
+                       "dspBlocks":  151,
+                       "virtualPins":  10833,
+                       "almsAvailable":  113560,
+                       "ramBlocksAvailable":  1220,
+                       "dspBlocksAvailable":  342,
+                       "fmaxMhz":  18.5,
+                       "fmaxClock":  "gpu_clk",
+                       "fmaxByClock":  [
+                                           {
+                                               "clock":  "gpu_clk",
+                                               "fmaxMhz":  18.5,
+                                               "restrictedMhz":  18.5
+                                           },
+                                           {
+                                               "clock":  "vid_clk",
+                                               "fmaxMhz":  85.88,
+                                               "restrictedMhz":  85.88
+                                           },
+                                           {
+                                               "clock":  "audio_clk",
+                                               "fmaxMhz":  107.56,
+                                               "restrictedMhz":  107.56
+                                           }
+                                       ],
+                       "setupSlackNs":  -44.06,
+                       "setupTnsNs":  -39646.883,
+                       "gatingClock":  "gpu_clk",
+                       "gatingFmaxMhz":  18.5,
+                       "gatingPeriodNs":  54.06,
+                       "holdSlackNs":  0.251,
+                       "holdTnsNs":  0
                    },
                    {
                        "module":  "zhao_debug_counters",

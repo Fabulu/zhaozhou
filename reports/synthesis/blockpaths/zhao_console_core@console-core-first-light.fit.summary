@@ -1,0 +1,22 @@
+Fitter Status : Successful - Sat Sep 19 01:55:23 2026
+Quartus Prime Version : 17.0.2 Build 602 07/19/2017 SJ Lite Edition
+Revision Name : blockfit
+Top-level Entity Name : zhao_console_core
+Family : Cyclone V
+Device : 5CEBA9F31C7
+Timing Models : Final
+Logic utilization (in ALMs) : 47,582 / 113,560 ( 42 % )
+  * Logic utilization warning : A large number of ALMs contain virtual pins and count towards logic utilization
+  * ALMs containing virtual pins : 5,417 / 113,560 ( 5 % )
+Total registers : 56031
+Total pins : 0 / 480 ( 0 % )
+Total virtual pins : 10,833
+Total block memory bits : 1,103,456 / 12,492,800 ( 9 % )
+Total RAM Blocks : 306 / 1,220 ( 25 % )
+Total DSP Blocks : 151 / 342 ( 44 % )
+Total HSSI RX PCSs : 0
+Total HSSI PMA RX Deserializers : 0
+Total HSSI TX PCSs : 0
+Total HSSI PMA TX Serializers : 0
+Total PLLs : 0 / 8 ( 0 % )
+Total DLLs : 0 / 4 ( 0 % )
