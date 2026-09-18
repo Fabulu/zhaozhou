@@ -356,11 +356,31 @@ def validate_d1_shape(divider: str, gradient: str, mutant: str) -> None:
     for marker in (
         "module zhao_raster_attrdiv_v2 #(",
         "parameter int unsigned RADIX = 2",
-        "`ZHAO_ATTR_V2_ROUND_NUM(num_i, area_ext_c)",
-        "rounded_num_c >= pos_sat_limit_c",
-        "rounded_num_c <  neg_sat_limit_c",
-        "localparam logic [1:0] D_PREP = 2'd3;",
-        "dividend_r   <= {rounded_num_c[96], rounded_num_c};",
+        # UPDATED 2026-09-18 with the D_SAT split. Packet D ratified the exact
+        # law and the number of 98-bit carry chains in the D_PREP cone; it did
+        # not ratify the operands being PORTS. The composed shell fit measured
+        # this cone and attrgrad's adder tree as one path, 15.67 ns against a
+        # 10.000 ns period with 8.68 ns of it here, so the saturation test now
+        # judges a value captured one edge earlier.
+        #
+        # Every marker below still pins what Packet D actually ratified: the
+        # same macro, the same two operands, the same two compares, the same
+        # single 98-bit magnitude add. Only the SOURCE of the operand moved,
+        # and the markers now say so rather than saying `num_i`.
+        "`ZHAO_ATTR_V2_ROUND_NUM($signed(dividend_r[96:0]),",
+        "rounded_num_r_c >= pos_sat_limit_c",
+        "rounded_num_r_c <  neg_sat_limit_c",
+        "localparam logic [2:0] D_PREP = 3'd3;",
+        "localparam logic [2:0] D_SAT  = 3'd4;",
+        "dividend_r  <= {rounded_num_r_c[96], rounded_num_r_c};",
+        # D_IDLE must capture the RAW numerator, sign-extended to the bank's
+        # full 98 bits. The first draft wrote {num_i[95], num_i} -- 97 bits
+        # into a 98-bit register -- and Verilator's WIDTHEXPAND caught it.
+        # Pinned here because a silent re-narrowing would corrupt only large
+        # negative numerators, which no directed case happens to carry.
+        "dividend_r   <= {{2{num_i[95]}}, num_i};",
+        "st_r        <= D_SAT;",
+        "D_SAT: begin",
         # Timing4 D1: the negative magnitude is one 98-bit addition of the
         # complement and the denominator, because -x is (~x)+1 and the explicit
         # -1 cancels that carry-in. The superseded three-add form is asserted
@@ -656,7 +676,12 @@ class PacketDClosureTests(unittest.TestCase):
         bmut = (REPO / "tests/mutants/zhao_geom_binner_v2_mutants.sv").read_text(encoding="utf-8")
         validate_d1_shape(div, grad, amut)
         for marker in (
-            "ZHAO_ATTR_RADIX == 4 ? 51u : 100u",
+            # 51/100 -> 52/101 on 2026-09-18: D_SAT adds one cycle in both
+            # arms. The constant is pinned here rather than computed so that a
+            # latency change has to be WRITTEN DOWN somewhere a reviewer reads,
+            # and this is that place -- the number moving silently is the
+            # failure this marker exists to prevent, not the number being wrong.
+            "ZHAO_ATTR_RADIX == 4 ? 52u : 101u",
             "divider response-visible latency changed",
             "divider busy-clock delta changed",
             "divider advertised successor ready before response",
