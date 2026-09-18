@@ -114,9 +114,37 @@ PROTECTED_HASHES = {
     # to a leaf; the island's interface is untouched. That check is what makes
     # this a refresh of a CURRENT hash rather than a quiet edit of a protected
     # one, and it is the reason the distinction is worth keeping.
-        "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd",
+        "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5",
+    # REFRESHED 2026-09-18 FOR A CHANGE TO THE FILE ITSELF, which is a different
+    # act from the interface-manifest refreshes above and says so plainly.
+    #
+    # `uvw_m` -- 64 x 64 = 4,096 bits -- was the ONE array Quartus still reported
+    # uninferred in the whole composed shell, and the composed fit showed it is
+    # also where ALL 206 paths of the `zhao_geom_binner_v2 -> island` family end,
+    # worst -4.475 ns. It had been docketed as an area question; it was both.
+    #
+    # The array is written once and read once, already the shape that infers.
+    # Its READ REGISTER simply lived inside an `always_ff @(posedge clk or
+    # negedge rst_n)`, and an M10K output register cannot carry an asynchronous
+    # reset. The read moved into its own reset-free clocked block under the
+    # identical enable.
+    #
+    # WHAT DID NOT CHANGE, checked rather than asserted: `persp_prep_uow_q` and
+    # `persp_prep_vow_q` are assigned at that one site and nowhere else, are
+    # consumed by the perspective stage, and had NO assignment in the reset
+    # branch -- so they lose no reset that existed, gain no latency, and see the
+    # same enable on the same edge. The block they left keeps its asynchronous
+    # reset for the two valid bits that use it. 21 of 22 island and stage tests
+    # green on rebuilt binaries, including all 17 mutants; the 22nd was this pin.
+    #
+    # This set is Packet D's freeze, and Packet D did not make this edit -- it is
+    # Packet-H timing work several packets later. Unlike Packet E's file there is
+    # no CURRENT_HASHES here to move it to, and this file's own precedent is to
+    # refresh in place with the evidence recorded, which is what the interface
+    # manifest entry above has done twice. Same treatment, louder note, because
+    # this one is a change to LOGIC PLACEMENT rather than to a derived artifact.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
+        "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":

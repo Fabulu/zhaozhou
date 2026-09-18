@@ -2676,3 +2676,46 @@ Not an argument that the machine is secretly smaller. It means 173 DSP and
 40,591 ALM are an ESTIMATE built partly on stale rows, and the re-measurement is
 a piece of work with a cost that belongs in the plan rather than being
 discovered when a closure claim is challenged.
+
+---
+
+## uvw_m: the reset was on the read register, and my reason for deferring was invented
+
+`uvw_m` is 64 x 64 = 4,096 bits, the ONE array Quartus still reported uninferred
+in the whole composed shell, and the destination of ALL 206 paths in the
+`zhao_geom_binner_v2 -> zhao_texture_island_v3_top` family (worst -4.475). It
+had been docketed as an area question. It was both.
+
+It is written once and read once -- already the shape that infers. The read
+register simply lived inside an `always_ff @(posedge clk or negedge rst_n)`, and
+an M10K output register cannot carry an asynchronous reset. Moved into its own
+reset-free clocked block with the identical enable.
+
+Preconditions checked rather than assumed: `persp_prep_uow_q` and
+`persp_prep_vow_q` are assigned at that one site and nowhere else, consumed by
+the perspective stage, and had NO assignment in the reset branch -- so they lose
+no reset that existed, gain no latency, and see the same enable on the same
+edge. The original block keeps its async reset for the two valid bits that
+actually use it. Lint-clean against the full 97-source closure.
+
+### The part worth keeping is the mistake
+
+I deferred this change and wrote a specific, plausible reason into the roadmap:
+the file is in the running fit's closure, so moving the tree risks the receipt
+being stamped `rtlCleanAtHead: false`, which would waste a 23-minute
+measurement.
+
+**That was wrong.** `run_block_fit.ps1` captures `$head` at line 214,
+`$treeClean` at 229 and `$rtlClean` at 231 -- all at script start, hundreds of
+lines before the loop that writes the row. The tree was clean when the fit
+began, so the provenance was fixed before I made any edit. The sources are
+snapshotted besides, and the runner PRINTS that it has done so.
+
+The fit-guard hook names this failure mode in its own text: *an agent that
+believes the whole RTL tree is frozen for four hours will invent reasons to
+avoid the work it should be doing.* Mine was not laziness dressed up -- it was a
+real hazard that exists in this repository, applied to a case where the tooling
+already handles it, and it cost most of a fit's worth of working time before
+anyone checked the thirty lines that settle it.
+
+The check was one grep. That is the ratio worth remembering.

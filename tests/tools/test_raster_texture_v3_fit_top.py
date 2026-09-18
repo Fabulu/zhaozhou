@@ -65,9 +65,9 @@ PROTECTED = {
     # from both. No port, parameter, dtype or elaboration value moved.
     # Kept byte-for-byte in step with the same constant in
     # tests/tools/test_render_texture_packet_c.py, which carries the longer note.
-        "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd",
+        "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
+        "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",

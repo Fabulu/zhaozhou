@@ -1056,10 +1056,39 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > clk)` with the same `persp_prep_room_c && rcp_head_valid_q` enable changes no
 > behaviour, adds no latency, and loses no reset that exists today.
 >
-> It is deferred only until the running fit writes its row: the file is in that
-> fit's 97-source closure, and although the fit snapshots its sources, moving the
-> tree underneath it risks the receipt being stamped `rtlCleanAtHead: false` —
-> which would make a 23-minute measurement worthless for the usual reason.
+> **LANDED, and the reason I first gave for deferring it was wrong.** I wrote
+> here that the change had to wait for the running fit, because the file is in
+> that fit's 97-source closure and moving the tree underneath it "risks the
+> receipt being stamped `rtlCleanAtHead: false`". Checked instead of asserted:
+> `run_block_fit.ps1` captures `$head` at line 214, `$treeClean` at 229 and
+> `$rtlClean` at 231 — all at script start, hundreds of lines before the fit
+> loop that writes the row. The tree was clean when the fit began, so the row's
+> provenance was fixed before the first edit and nothing done afterwards can
+> spoil it. The sources are snapshotted besides.
+>
+> That is the caution the fit-guard hook exists to refuse, and its warning names
+> the mechanism exactly: *an agent that believes the whole RTL tree is frozen
+> for four hours will invent reasons to avoid the work it should be doing.* The
+> invented reason was plausible, specific, and cost most of a fit's worth of
+> working time before it was checked.
+>
+> ##### And do NOT build a source sweep for this: Quartus already answers it
+>
+> The obvious follow-up is to sweep the closure for other arrays read inside an
+> asynchronously-reset `always_ff`, since that is the defect CLASS rather than
+> one site. It was written, and it is the wrong instrument. It reports dozens of
+> hits — `fifo_tag_q`, `v_q`, `c1_tag`, `rq_en` — and almost all are small
+> pipeline-stage or lane arrays that belong in flops and should stay there, so
+> the output needs a size filter it cannot compute and a judgement it cannot
+> make.
+>
+> **The composed map report already names every uninferred array by name**, and
+> on `@packet-h-m10k` it named exactly one: `uvw_m`. That is an authoritative
+> census from the tool that decides the question, against a heuristic that
+> guesses at it from syntax. The right habit after each composed fit is to
+> re-read the RAM summary and the `Info (276007)` lines — which also means the
+> next fit will say whether this change worked and whether anything new
+> appeared, without anyone writing another scanner.
 >
 > ##### `v3own` is NOT the next cheap win, and that is worth saying in advance
 >

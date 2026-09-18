@@ -105,6 +105,7 @@ PROTECTED_HASHES = {
     # it cannot assert any more is that the file has never moved, so keeping it
     # here with a bumped hash would have left the word "protected" meaning
     # something weaker than it reads.
+    #
     # `fpga/rtl/geometry/zhao_geom_binner_v2.sv` also moved to CURRENT_HASHES,
     # 2026-09-18, and for a COMMENT rather than for logic.
     #
@@ -143,7 +144,7 @@ CURRENT_HASHES = {
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":
         "5d61f2ab90355d38d2ef1b92bbc7c9273993a73ab27337efb9588fda33f28fd5",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c",
+        "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98",
     # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
     # interface manifest moved, because two files in its source closure gained
     # ENFORCED-BY comments (zhao_texture_v3own.sv, zhao_texture_uv_join.sv) and
@@ -153,7 +154,7 @@ CURRENT_HASHES = {
     # which is the difference between refreshing a CURRENT hash and quietly
     # editing a PROTECTED one.
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
-        "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd",
+        "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5",
 }
 
 

@@ -977,6 +977,30 @@ module zhao_texture_island_v3_top #(
   assign rcp_rsp_ready_w = rcp_head_room_c;
   assign persp_req_valid_w = persp_prep_valid_q;
 
+  // THE uvw_m READ, MOVED OUT OF THE RESET BLOCK SO THE ARRAY CAN INFER.
+  //
+  // This assignment used to sit in the `always_ff @(posedge clk or negedge
+  // rst_n)` below, under exactly the enable it still has. `uvw_m` is
+  // 64 x 64 = 4,096 bits, it is written once and read once -- already the shape
+  // that infers -- and Quartus still reported it as the ONE uninferred array in
+  // the whole composed shell, because an M10K output register cannot carry an
+  // asynchronous reset and this one was declared inside a block that has one.
+  //
+  // The 2026-09-18 composed fit measured what that costs in time as well as
+  // area: ALL 206 paths in the `zhao_geom_binner_v2 -> zhao_texture_island_v3
+  // _top` family end at `uvw_m~*`, worst -4.475 ns. It was docketed as an area
+  // question; it was both.
+  //
+  // Nothing else moves. `persp_prep_uow_q` and `persp_prep_vow_q` are assigned
+  // here and nowhere else, are consumed by the perspective stage below, and had
+  // NO assignment in that reset branch -- so they lose no reset that existed,
+  // gain no latency, and see the same enable on the same edge. The block below
+  // keeps its asynchronous reset for the two valid bits that actually use it.
+  always_ff @(posedge clk) begin
+    if (persp_prep_room_c && rcp_head_valid_q)
+      {persp_prep_uow_q, persp_prep_vow_q} <= uvw_m[uvw_read_owner_c[13:8]];
+  end
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       rcp_head_valid_q <= 1'b0;
@@ -987,7 +1011,6 @@ module zhao_texture_island_v3_top #(
       if (persp_prep_room_c) begin
         persp_prep_valid_q <= rcp_head_valid_q;
         if (rcp_head_valid_q) begin
-          {persp_prep_uow_q, persp_prep_vow_q} <= uvw_m[uvw_read_owner_c[13:8]];
           persp_prep_recip_q <= rcp_head_recip_q;
           persp_prep_shift_q <= rcp_head_shift_q;
           persp_prep_zero_q  <= rcp_head_zero_q;

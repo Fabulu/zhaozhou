@@ -82,8 +82,8 @@ PACKET_C_SOURCES = (
 # stored legality bit was written as a packed struct, whose two members are
 # names that already occur in the closure; it is a packed vector instead, for
 # the reason recorded in tools/rtl/texture_v3_interface_parser.py's pin.
-INTERFACE_SHA256 = "eed152cda14c8a0d31774d255455b91537f5243bd935aae9ddc2f547e60d36cd"
-PACKET_B_TOP_SHA256 = "e66061be9f4e5fbfd7d78c83eafe64abf71addf811814d8692907d179426331c"
+INTERFACE_SHA256 = "0bcf88f96401f15ed71ce267dc080a75b541a30f59c875c7497ba2f4faa556c5"
+PACKET_B_TOP_SHA256 = "b70b8b73aed5586ee061ee076614fce198721917dbd725b4f01dbd0d2dcb1b98"
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61"
 
