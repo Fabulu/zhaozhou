@@ -1,0 +1,66 @@
+{
+  "status": "PASS",
+  "tests_run": 9,
+  "counts": {
+    "divider_exact_cases": 40460,
+    "render_and_skin_cases": 20000,
+    "root_exact_cases": 20107,
+    "divider_stream": {
+      "cycles": 30034,
+      "accepted": 12797,
+      "retired": 12750,
+      "reset_aborted": 47
+    },
+    "root_stream": {
+      "accepted": 1960,
+      "retired": 1960
+    },
+    "divider_model_ii": {
+      "accept_interval": 2,
+      "first_accept": 0,
+      "first_consume": 33,
+      "last_consume": 231
+    },
+    "root_model_ii": {
+      "accept_interval": 8,
+      "first_accept": 0,
+      "first_consume": 33,
+      "last_consume": 825
+    },
+    "colour_cases": 10000,
+    "calendar_four": {
+      "vertices": 120000,
+      "terms": 480000,
+      "issue_cycles": 960000,
+      "wide_product_demand": 1800000,
+      "wide_product_capacity": 1920000,
+      "normal_square_slots": 480000,
+      "normal_square_demand": 360000,
+      "root_capacity": 120000,
+      "root_demand": 120000,
+      "colour_product_demand": 2880000,
+      "colour_product_capacity": 2880000,
+      "passes_issue_resources": true,
+      "passes_raw_60hz_window": true,
+      "passes_20pct_reserved_window": true
+    },
+    "calendar_eight": {
+      "vertices": 120000,
+      "terms": 960000,
+      "issue_cycles": 1920000,
+      "wide_product_demand": 3240000,
+      "wide_product_capacity": 3840000,
+      "normal_square_slots": 960000,
+      "normal_square_demand": 360000,
+      "root_capacity": 240000,
+      "root_demand": 120000,
+      "colour_product_demand": 5760000,
+      "colour_product_capacity": 5760000,
+      "passes_issue_resources": true,
+      "passes_raw_60hz_window": false,
+      "passes_20pct_reserved_window": false
+    },
+    "deliberately_wrong_algorithms_caught": 4
+  },
+  "scope": "Independent arithmetic and cycle models only; no RTL execution or Quartus"
+}

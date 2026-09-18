@@ -1,0 +1,13 @@
+{
+  "LIGHTING_RESCUE_HANDOFF.txt": "bd40d056b610332fbd97818c5c9006331b34d6d5bcd649bd8f4e8e7425ef21cb",
+  "README.txt": "72722ded386332968ae493f1de2c840b366673383e7e06339e41e71d89dc3ff5",
+  "light_model.py": "3550cd7bacc9335c3bc0289dfbedb20ba38eff8fce2e6ff6b13c9973efe968da",
+  "rtl/zhao_light_div32_ii2.sv": "7ec77efce217bb81bb6c7c70fc34d371b2af66717891406d72d734520eb0b8f1",
+  "rtl/zhao_light_isqrt64_ii8.sv": "5e511c845398f4ef4f05144bbc42eb060eb217a37b9ac3d130296c532c1a2991",
+  "test_light_model.py": "9224d01d9186dd0d92a8885ec30024d5a5c2fe20809668e108b542b37ab8ee56",
+  "tests/div_vectors.hex": "2ed4dd61d785e72e6666b3da436c80d31a89c1f50c1b1cb26d29221dc2b813c9",
+  "tests/root_vectors.hex": "963a870cb20dc808a6c0516c5fb0c65955d7cda07cdbe320cbc976c39c5f5d7d",
+  "tests/tb_lightarith.sv": "eea0cb26ba7dd8ec29efc35c617bd8fa193a80923e2a5e0fff7af818e2a244a7",
+  "verification_results.json": "495f1118b356960b5c5d5d27cc59316891646973c886f487c7c065925935f83a",
+  "verification_run.log": "0deeaba36ff1bbd72462fd49fd92df6309ca6f4ce01c2f7a0c9290025c76c498"
+}

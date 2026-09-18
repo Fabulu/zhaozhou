@@ -182,3 +182,31 @@ dependencies, acceptance tests and rollback conditions.
 * **Sections relayed to workers in flight:** §7 (lighting) and §11 (post).
 * **OPEN:** P1–P9. P5 explicitly requires reconciling the concurrent particle
   work rather than rebuilding it.
+
+## Zhaozhou_Lighting_Emergency_Rescue_2026-09-18 — READ, VERIFIED, BLOCKER RETIRED
+
+`reports/Zhaozhou_Lighting_Emergency_Rescue_2026-09-18.txt` (820 lines, sha256
+`0984a13625daeec70d6660a3746378b4da013f01324a86f1225e68f62d34cdd2`) and
+`reports/lighting-emergency-package/` (zip sha256
+`16c745ac14959d185c0f1179783c912daf5637f5b519861d343828b9877696bb`, extracted).
+
+**DISPOSITION: READ, INDEPENDENTLY VERIFIED, ACTED ON.**
+
+* **Its load-bearing claim is TRUE and I checked it in the source before acting.**
+  `lambert_from_world_normal` already computes `(dot + mag/2)/mag` —
+  round-half-up — at `reference/src/zcreature/creature_core.cpp:595`. The
+  "different lighting laws" blocker the GEOM.LIGHT worker refused to cross is
+  **stale**; what differs is the interface (signed unclamped vs clamped
+  `[0,65536]`), which adapters handle without changing any picture.
+* **It also corrects our diagnosis.** Magnitude reuse was not the fix. The shared
+  core's square root already costs **zero additional elapsed clocks** (it is
+  overlapped); the cost is 78 byte-product clocks plus a 64-clock serial divide.
+  Our measured II of 167 was right and our attribution was wrong.
+* **Verified rather than believed:** 11/11 package hashes, its 9 tests re-run here
+  (`Ran 9 tests — OK`), and — new information — **both RTL candidates lint 0/0**,
+  which the author could not state because they were never HDL-simulated.
+* **Recorded as a DSP debit:** ~+9 DSP, planning estimate, against a device
+  already at 185 demand vs 112 physical. Justified and not hidden.
+* **Full working:** `reports/LIGHTING-BLOCKER-RETIRED-20260918.md`.
+* **OPEN:** the refactor itself — pipelined quotient service, descriptor
+  bandwidth, colour lanes. No measured 100 MHz result is claimed by anyone.

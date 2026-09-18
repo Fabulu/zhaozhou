@@ -1,0 +1,14 @@
+test_01_divider_boundary_and_random (__main__.Tests.test_01_divider_boundary_and_random) ... ok
+test_02_render_and_creature_adapter (__main__.Tests.test_02_render_and_creature_adapter) ... ok
+test_03_root (__main__.Tests.test_03_root) ... ok
+test_04_divider_stream_stall_bubble_and_reset (__main__.Tests.test_04_divider_stream_stall_bubble_and_reset) ... ok
+test_05_root_stream (__main__.Tests.test_05_root_stream) ... ok
+test_06_measured_model_ii (__main__.Tests.test_06_measured_model_ii) ... ok
+test_07_colour_schedule_preserves_individual_rounding (__main__.Tests.test_07_colour_schedule_preserves_individual_rounding) ... ok
+test_08_calendar (__main__.Tests.test_08_calendar) ... ok
+test_09_negative_controls (__main__.Tests.test_09_negative_controls) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 8.573s
+
+OK

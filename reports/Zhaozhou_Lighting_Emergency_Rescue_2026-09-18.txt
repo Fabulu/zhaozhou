@@ -1,0 +1,820 @@
+ZHAOZHOU — LIGHTING THROUGHPUT EMERGENCY: EXACT STREAMING RESCUE
+18 September 2026
+Reviewed hardware head: 18ef80e801b75aa5e375b841e236bc40baacc81d
+
+DECISION IN ONE PARAGRAPH
+========================
+Preserve the existing rendered laws and the 480,000-light-term stress test.
+Replace the serial implementation of the shared lighting service with a staged,
+partly folded pipeline. Prepare or import the exact normal magnitude ONCE per
+normal identity; issue one exact light term every TWO clocks; issue one exact
+square root every EIGHT clocks when a magnitude is not already supplied. Reuse
+TWO registered s32-by-s32 multiplier lanes for dot products and normal squares,
+and THREE narrow colour-product lanes for six separately rounded products over
+two clocks. Keep one physical production service, not 48 copies of the old one.
+
+This is an implementation change within a shared arithmetic ownership boundary,
+not authorization to change the light law, discard emission, lower population,
+lower the admitted light count, or move the console to 30 fps.
+
+The delivered Python arithmetic/cycle models pass. Two candidate SystemVerilog
+arithmetic modules and an HDL smoke bench are included, but were NOT run through
+an HDL simulator or Quartus here. This is an executable architectural remedy to
+qualify, NOT a claim that a new GEOM.LIGHT is already integrated or fitted.
+No active repository or worktree was edited.
+
+0. WHAT WENT WRONG — TWO SPECIFIC CORRECTIONS
+============================================
+0.1 The scalar arithmetic was intentionally sized for a different workload.
+The source prices the old service against roughly 2,000 terrain triangles per
+frame. Its 147-clock service interval is intentional: a single quarter-square
+byte-product lane spends 30 clocks on normal squares and 48 on the dot, followed
+by a 64-step divide. A 32-step square root OVERLAPS the dot-product walk. It adds
+no extra critical-path cycles in the old full service.
+
+Therefore the statement that repeated square-root calculation is most of the
+147-cycle walk is wrong. Reusing the normal is useful but does not solve this
+emergency by itself. At four lights, deleting redundant square-product walks
+saves approximately 22.5 clocks per term on average (30 - 30/4), assuming an
+otherwise unchanged arrangement. That still leaves most of the measured 167.
+This is schedule arithmetic, not a measurement of an intermediate candidate.
+
+Even a fictional fourfold improvement of EVERYTHING would leave 48.1/4 = 12.0
+of the original overrun. Do not replicate the scalar engine to fill that gap.
+
+0.2 The creature law's 'floor-only' description is stale.
+The ACTUAL lambert_from_world_normal in creature_core.cpp says:
+  dot = n dot L
+  if dot <= 0: return 0
+  lam = (dot + mag/2) / mag
+  return min(lam,65536)
+For positive dot/mag this IS round-half-up, not floor(dot/mag).
+
+The renderer's raw law is:
+  mag = floor_sqrt(nx*nx + ny*ny + nz*nz)
+  if mag == 0: raw = 0
+  else raw = sat_s32(floor((dot + floor(mag/2))/mag))
+
+These functions have different interfaces and clamp placement. They are not
+interchangeable as whole functions. But on a valid prepared normal/magnitude
+pair the creature result is EXACTLY clamp01(the renderer-style raw quotient).
+For a negative dot, the raw rounded result is nonpositive and clamps to zero.
+For a positive dot, the same half-divisor is added before positive division.
+Saturating raw to s32 before clamp01 cannot affect a [0,65536] result.
+
+Counterexample to the stale floor-only description:
+  n=(2,1,0), mag=floor_sqrt(5)=2, L=(0,1,0)
+  creature result is (1+1)/2 = 1, not floor(1/2) = 0.
+
+This removes the supposed need to choose a new visual law before sharing a
+magnitude-supplied QUOTIENT primitive. It does not remove the need for adapters.
+
+1. THE SEMANTIC RULING / CHANGE AUTHORIZATION
+============================================
+1.1 Keep both existing public C++ behaviors as oracles. Do not replace a test
+oracle with the candidate being tested. Freeze current scalar RTL as a test
+oracle/fallback, excluded from the final hot hierarchy after adoption.
+
+1.2 Introduce one prepared-normal service boundary:
+  NormalReady = {context, epoch, normal_x:s32, normal_y:s32, normal_z:s32,
+                 magnitude:u32, degenerate, source_id, producer_profile}
+This is an INTERNAL representation, not a change to public asset/command bytes.
+
+Renderer/rigid adapter:
+  Accept the exact current unnormalised s32 normal; calculate its u64 sum of
+  squares and floor square root once. Do NOT range-reduce it differently.
+  Normal components at INT32_MIN are legal: sum <= 3*2^62 < 2^64.
+  Magnitude can exceed INT32_MAX; preserve UNSIGNED 32 bits.
+
+Creature adapter:
+  Consume SKIN.NORM's existing {direction:s64x3,magnitude:u64} pair.
+  The actual producer range-reduces its directions before squaring. Consequently
+  they fit s32 exactly and its magnitude fits u32. Negative arithmetic shifts
+  can produce -2^30 at a boundary; do not assert an unjustified strict absolute
+  bound. Assert the actual sign-extension/u32-fit properties at this seam.
+  Narrow ONLY after proving those properties. No normalization to a rounded
+  unit vector; no new square root; no reinterpretation of the tuple as Q1.15.
+  Keep arbitrary out-of-producer-domain s64 calls outside this qualified hot
+  port. Do not silently truncate an out-of-range tuple to make it fit.
+
+1.3 The shared arithmetic kernel returns SIGNED s32 raw, saturation status,
+degeneracy and the intact context/light/epoch tag.
+  Renderer detail: clamp01(raw + detail), in signed 33 bits, per light.
+  Creature legacy Lambert: clamp01(raw), preserving its current result.
+Do not force the creature's early clamp onto the terrain detail path. For
+example raw=-1, detail=2 must give 1, not clamp01(raw)+detail = 2.
+A creature normal-detail extension requires its existing explicit profile law;
+it is not invented as part of this fix.
+
+1.4 Degenerate direct-light response remains zero. Ambient versus fully black
+is an ADAPTER/output-composition policy. Preserve the current selected
+DEGEN_BLACK behavior and the relevant existing capture behavior; do not make
+that separate disagreement a reason to block arithmetic pipelining. Freeze the
+profile setting in the candidate manifest and test both settings. No divide by
+zero is permitted to masquerade as a valid lit result.
+
+1.5 'One law / one owner' does NOT mean 'one request in flight'. Amend the
+comments saying another turn of the 147-clock engine is the only permissible
+implementation. The shared owner is allowed to contain a pipeline, contexts,
+and sufficient physical arithmetic to meet its real workload. A new production
+implementation replaces the old owner; it is not an additional independent law.
+
+2. REQUIRED RATE AND THE OPERATING POINT
+=======================================
+At 100 MHz / 60 Hz:
+  raw frame:                         1,666,666 clocks (conservative floor)
+  20%-reserved frame envelope:        1,333,333 clocks
+  stress workload:                   120,000 normals, 480,000 light terms
+  measured old work:                  80,160,000 clocks
+  raw allowed clocks/light term:     3.4729
+  reserved allowed clocks/light:     2.7778
+
+A universal term II=3 is already too slow for the reserved envelope:
+  480,000*3 = 1,440,000 clocks before overhead.
+Select II=2:
+  480,000*2 = 960,000 issue clocks, 9.6 ms at the target clock.
+This leaves 373,333 clocks to the reserved envelope BEFORE subtracting actual
+startup, drain, stalls, other light clients and end-to-end dependency costs.
+
+Qualification gate for the LIGHTING SUBSYSTEM alone:
+  <=1,000,000 clocks for 120k normals / 480k terms including local preparation,
+  pipeline fill/drain, descriptor handling and colour accumulation, under the
+  defined no-external-stall stress fixture. This is a proposed acceptance target,
+  NOT a measured completion time. Then add separately measured external stalls
+  and demonstrate the complete frame schedule; do not spend a whole independent
+  frame on each subsystem.
+
+All-eight-lights-on-all-120k-vertices is a DIFFERENT workload:
+  960,000 terms * 2 = 1,920,000 issue clocks -> fails even the raw frame.
+Keep eight descriptors supported. Do not claim arbitrary simultaneous maxima
+are guaranteed. Keep the existing four-light stress and audit the actual ruled
+four/six/eight tier mix with traces. If the real admitted workload is 960k,
+select II1 (32 divider stages and corresponding product/colour bandwidth) or a
+second qualified lane, and report its cost. Do not relabel the workload away.
+
+3. THE PHYSICAL DATAFLOW
+=======================
+  renderer normal -> exact square-sum prep -> exact root II8 ----+
+                                                              |
+  SKIN.NORM exact prepared pair (skip prep, DO NOT renormalize)-+
+                                                              v
+                 small ordered NORMAL_READY arena, tagged and epoch-owned
+                                                              |
+  light descriptors / exact per-vertex light-direction provider|
+                       |                                      |
+                       +------ term scheduler, vertex-major ----+
+                                       |
+                   TWO registered s32 x s32 product lanes
+                   three dot products per term, scheduled in two clocks
+                                       |
+                     full-width pipelined exact sum (s65/66)
+                                       |
+                        h = dot + (magnitude >> 1)
+                         sign and absolute u64 numerator
+                                       |
+                   ONE folded 32-bit-quotient pipeline, II2
+                                       |
+                 signed raw -> profile clamp/detail -> response17
+                                       |
+                THREE registered response17 x gain20 product lanes
+                   clock A: RGB gain; clock B: RGB emission
+                                       |
+                   per-product rounding, ordered colour accumulation
+                                       |
+                  ambient/spill and selected output fold -> consumer
+
+Normal prep operates ahead of the current term stream; root latency does not
+hold a vertex's term scheduler waiting while all other vertices idle. Start with
+16 bounded prepared-normal/context slots and measure whether fewer suffice.
+Keep inactive tuples in RAM. Keep only the active normal and three active colour
+accumulators in registers when vertex-major ordering permits this.
+
+4. EXACT DIVISION WITHOUT 64 FULL SERIAL STEPS
+=============================================
+4.1 Algebra
+Let D>0, h=dot+floor(D/2), A=abs(h). In this s32 normal/light domain,
+A<2^64. Let hi=A>>32 and lo=A & 0xffffffff.
+
+If hi>=D, floor(A/D)>=2^32. The final signed-32 result is necessarily on
+its sign's saturation rail, including the negative floor adjustment. Carry a
+saturation-bypass flag through the same ordered pipeline.
+
+Otherwise initialize remainder=hi, working_word=lo, and perform exactly 32
+ordinary restoring steps:
+  shifted = (remainder<<1) | (working_word>>31)
+  difference = zero_extend(shifted) - zero_extend(D)
+  take = not borrow
+  remainder = take ? low_difference : shifted
+  working_word = (working_word<<1) | take
+
+At the end working_word=q=floor(A/D), remainder=r=A-qD.
+  h >= 0: result=sat_s32(q)
+  h < 0:  result=sat_s32(-q-(r!=0))
+The initial invariant remainder<D proves the skipped high quotient bits zero.
+This is NOT throwing away numerator bits. Starting remainder at zero WOULD be
+wrong and a negative control in the supplied test detects that error.
+
+Finalization can avoid a two-adder negative chain:
+  when r!=0: -q-1 = bitwise_not(q)
+  otherwise: -q = bitwise_not(q)+1
+Retain a separate signed-range/saturation verdict, including exact INT32_MIN.
+
+4.2 Folded pipeline
+Use 16 physical subtract-step cells, not 32 parallel divider engines.
+  phase 0: each cell takes the previous cell's completed word and does step A;
+           cell zero takes a new request.
+  phase 1: each cell feeds itself back and does step B.
+At the next phase 0, the last cell is finalized into an output register.
+Each request receives 32 recurrence steps; requests enter every two enabled
+clocks. Latency is long but throughput is sufficient.
+
+The supplied zhao_light_div32_ii2.sv implements this architecture with a global
+local-pipeline stall when its output is blocked. The Python cycle model measures
+accept-to-accept and output-to-output II=2, first output CONSUMED 33 clocks after
+first acceptance. No confusion between latency and service interval.
+
+4.3 Preserve observability
+The old raw-saturation counter is per LIGHT TERM, not per new normal. Magnitude
+reuse must not divide that counter or the per-term degeneracy count by K.
+Add a separate normal_preparations/root_jobs counter to demonstrate the saving.
+Do not synthesize a second 64-step divider merely to reproduce diagnostic data.
+
+5. NORMAL PREPARATION: ONE MAGNITUDE, ENOUGH ROOT THROUGHPUT
+=========================================================
+Use the exact integer sum of three squares (u64) and exact floor sqrt. A single
+32-cycle NONPIPELINED sqrt would consume 3.84m clocks for 120k normals and is
+still too slow. Caching a magnitude is not sufficient without a preparation
+service that can feed the term engine.
+
+Use four physical restoring square-root cells, each reused for eight phases.
+One cell performs one base-four digit step each clock:
+  t = (remainder<<2) | next_two_radicand_bits
+  trial = (partial_root<<2) | 1
+  take = t>=trial
+  remainder = take ? t-trial : t
+  partial_root = (partial_root<<1) | take
+After 32 steps the result is floor_sqrt(u64), exactly.
+
+Four cells * eight steps per cell gives latency 32 enabled clocks and II8.
+The supplied zhao_light_isqrt64_ii8.sv is the candidate implementation.
+Reuse the root provider across prepared normal producers where its calendar
+allows. The currently external root call in SKIN.NORM must bind to a real
+provider with this capacity, not a testbench answer or a scalar II32 service
+whose cost disappears from the lighting subtotal.
+
+Do not change SKIN.NORM's 18-product transform/blend law in this emergency.
+Its own transform and palette bandwidth still require separate capacity checks.
+The light-term fix is not evidence that every upstream normal can arrive fast
+enough, nor that all final console deadlines are met.
+
+6. TWO WIDE PRODUCT LANES — EXPLICIT EIGHT-CLOCK CALENDAR
+=======================================================
+For four light terms T0..T3 of current vertex V, use the otherwise-free lane
+slots to prepare the squares of a FUTURE vertex U:
+
+  clock   lane 0              lane 1
+    0     nx(V)*lx(T0)        ny(V)*ly(T0)
+    1     nz(V)*lz(T0)        nx(U)*nx(U)
+    2     nx(V)*lx(T1)        ny(V)*ly(T1)
+    3     nz(V)*lz(T1)        ny(U)*ny(U)
+    4     nx(V)*lx(T2)        ny(V)*ly(T2)
+    5     nz(V)*lz(T2)        nz(U)*nz(U)
+    6     nx(V)*lx(T3)        ny(V)*ly(T3)
+    7     nz(V)*lz(T3)        spare
+
+Tags distinguish DOT versus SQUARE, context and axis through all product
+registers. Full signed products go into a pipelined wide sum with no intermediate
+rounding. Squares must accumulate unsigned; three squares can exceed signed64.
+
+For 120k vertices / 480k terms:
+  dots:                 1,440,000 products
+  normal squares:         360,000 products
+  total:                1,800,000 products
+  available in 960k c:   1,920,000 product slots
+  root jobs:              120,000 at one per 8 clocks
+
+This is a concrete capacity/calendar result, not proof of register placement or
+of perfect scheduling under stalls. Warm the normal queue before steady state;
+U must be ahead of V by enough contexts to cover root latency. A 16-entry queue
+is a first bounded candidate, not an immutable resource requirement.
+
+For variable light counts or already-prepared creature normals, schedule using
+actual product and root demand. The simple eight-clock pattern proves the named
+four-light fixture only. It must not be presented as proof of all distributions.
+
+7. COLOUR AND DESCRIPTORS — THE NEXT BOTTLENECKS MUST NOT BE IGNORED
+=================================================================
+7.1 The six colour products cannot stay on one multiplier at II2.
+Six products * 480k = 2,880,000 product issues. One lane already misses the
+raw frame even if the light response were instantaneous. Use three lanes:
+  clock A: colour_r*ndl, colour_g*ndl, colour_b*ndl
+  clock B: emission_r*ndl, emission_g*ndl, emission_b*ndl
+Apply the current separate (product+32768)>>16 rounding to EACH product.
+Accumulate in the existing proved wide colour domain, then perform the same
+selected ambient/spill/final fold. Emission is not optional missing work.
+
+Do not fuse (colour+emission)*ndl without an exact proof for the current law.
+Example gain=emission=1, ndl=32768: separately rounded terms sum to 2; fusing
+before rounding produces 1. The supplied control detects this difference.
+
+A small active accumulator is enough when the divider retires vertex-major and
+lights in order. Preserve separate gain and emission storage/transport wherever
+the actual selected renderer requires them separately. Do not turn emission into
+ordinary texture-multiplied gain while wiring the faster calculation.
+
+7.2 The ten-word descriptor walk cannot remain per term.
+Even an ideal 10-clock descriptor walk needs 4.8m clocks for 480k terms.
+Select a prepared descriptor record, not repeated serial re-decoding:
+  half A: light direction s32x3 + detail s32 = 128 bits
+  half B: six gain20/emission20 coefficients = 120 bits, plus flags
+For the current default GAINW=20, two 128-bit halves suffice. A nondefault wider
+GAINW requires a newly priced record/port schedule, not truncation.
+
+A possible physical layout is four 32-bit RAM banks read together. Two halves
+per eight-light set, with active/inactive epochs, give depth 32 in each bank.
+Each bank fits the 256x40 M10K shape: four initial M10Ks, not the fraction implied
+by its bit count. Write full 32-bit words into those banks; do not reset arrays.
+Do not double-count an additional RAM copy for two epochs that already fit the
+selected depth. Conversely, many concurrently resident light sets require a
+new depth calculation and may cost more blocks.
+
+Read the direction/detail half before dot issue. Read coefficients late, by the
+same immutable light-set handle/epoch carried with the result, instead of moving
+120 coefficient bits through every divider stage. One half-A fetch plus one
+half-B fetch per term consumes one 128-bit read per clock on average at II2.
+Their arbitration, RAM latency and buffering need an executable schedule.
+Config writes publish a complete new set atomically; old sets remain pinned
+until all outstanding term references drain. 'Latest descriptor' is not a valid
+identity for an in-flight old light term.
+
+The current module is handed light DIRECTIONS. Do not claim this alone completes
+point-light direction, attenuation, strongest-K selection or shadow preparation.
+Keep those actual producers and their costs in the complete ownership/calendar
+ledger. Directions that vary per vertex must be generated and transferred at
+rate; caching constant directional-light descriptors does not make point lights
+constant. The fast dot core accepts either form without changing the arithmetic.
+
+8. BUFFERING, RESET, STALLS AND COUNTERS
+=======================================
+The candidate divider/root use local global-enable stalls. This is safe for the
+register-only local pipeline. It is NOT permission to freeze tags while a DSP or
+RAM output advances independently. Every tag and payload must have the SAME
+advance history, or be connected by an elastic interface with credited space.
+
+At fixed-latency DSP boundaries either:
+  a) gate every DSP pipeline register and its tags with the same local enable;
+  b) use reservation credits and an output FIFO sized to cover all accepted
+     in-flight returns, so the DSP pipeline can remain free-running.
+Use the existing repository's qualified wrappers where possible. Do not add a
+combinational ready chain through the entire console.
+
+For every queue:
+  accepted = retired + refused + reset_abandoned + in_flight
+and no context/light tag may be duplicated, reordered or reused while live.
+Reset clears validity and ownership; it need not reset arithmetic payload arrays.
+On epoch reset, pending old normal/light descriptors are invalid; no late result
+may write a reallocated context. Preserve the current source IDs and event
+counter behavior where observable, while adding counters that distinguish
+normal work, light work and stalls.
+
+Required counters:
+  normal_inputs, normal_prepared, roots_issued, roots_retired, supplied_mags
+  terms_accepted, terms_retired, normal_queue_wait, descriptor_wait
+  dot_product_slots, square_product_slots, unused_product_slots
+  divider_backpressure, colour_backpressure, output_backpressure
+  magnitude_domain_refusals, epoch_refusals, logical_raw_saturations
+
+For the stress case, root_jobs must be <=120k when all normals need preparation,
+NOT 480k. A prepared creature-only fixture should issue zero NEW lighting roots.
+The upstream normal producer's one real root per normal still counts elsewhere.
+
+9. RESOURCE POSITION — WHAT IS AND IS NOT PROMISED
+================================================
+This deliberately abandons a universal 0-DSP hot-lighting rule that was chosen
+for a 2k-triangle scalar workload. That rule cannot be treated as sacred while
+also demanding 480k terms from its serial implementation.
+
+Candidate physical arithmetic:
+  2 x s32-by-s32 registered multiply pipelines
+  3 x gain20-by-response17 registered multiply pipelines
+  16 x 33-bit restoring divide-step cells, time-folded twice
+  4 x restoring sqrt cells, time-folded eight times
+  small descriptor/context/response storage and exact sum/fold logic
+
+Using the repository's historical multiplier calibration, approximately 9 DSP
+blocks is a planning point (roughly 6 for wide lanes plus 3 for narrow lanes),
+NOT a measurement. Quartus may map widths/registers differently. Count the net
+replacement cost, remove the old selected scalar datapath, and do not claim the
+three colour multipliers or normal prep 'already exist somewhere' unless a real
+shared provider schedule and hierarchy prove it.
+
+No defensible fitted ALM/M10K total for this new service exists yet. The folded
+structure limits replicated arithmetic, but muxes, registers, retiming and
+buffers still consume ALMs. The deliverable deliberately does not manufacture
+a 'fits in 1,000 ALMs' assurance. Fit the whole LIGHTING subsystem once its
+function and cycle schedule pass, and report all three resource currencies.
+
+Cyclone V does provide hard 27x27 and paired 18x19 multiplier modes. This is why
+a few well-used DSP lanes are a legitimate trade for very expensive high-rate
+fabric arithmetic. It is not proof that a chosen SystemVerilog expression
+infers the cheapest mapping.
+
+If DSP headroom cannot be recovered, use one of these QUALIFIED follow-ups,
+not 48 scalar engines:
+  - For batch-constant directional lights, benchmark exact distributed-arithmetic
+    or nibble-product coefficient tables, precomputed per light-set generation.
+    This exchanges dot multipliers for ROM ports and adders, but DOES NOT apply
+    unchanged to vertex-varying point-light directions. Price table rebuild and
+    all copies. It is a separate optional experiment, not the emergency path.
+  - Share the wide product lanes with an existing real provider only if their
+    complete calendars fit; this lighting calendar is already 93.75% occupied
+    for the all-unprepared four-light fixture. There is not 'plenty of spare'
+    wide multiplication during that window.
+  - Keep ALM and DSP as a joint portfolio decision. Turning a nearly free hard
+    multiplier into a huge M10K/add-tree structure may make the console worse.
+
+No 200/400-MHz private clock is needed for this rescue. Target the existing
+100-MHz domain and qualify it physically. A pipeline's II2 at 40 MHz still fails.
+
+10. IMPLEMENTATION PACKETS — DO THESE IN ORDER, NO NEW MONASTERY
+==============================================================
+L0: Freeze and publish the current evidence.
+  Save the exact scalar source, 3,555-check result and measured 167-II fixture.
+  Put the 480k admission fixture and definition in one machine-readable place.
+  Pin selected lights/gain widths, tool version and current branch. Keep the
+  active console-completion work moving on independent files.
+
+L1: Close the semantic seam, not by changing the picture.
+  Add the prepared-normal/magnitude internal contract and both adapters.
+  Correct the stale floor-only paragraph by citing the actual C++ source.
+  Differential: current renderer core versus prepared magnitude + raw quotient;
+  current creature Lambert versus clamp01(raw quotient) on actual producer
+  tuples, including the range-reduction boundary, dot<=0 and half cases.
+  Keep terrain detail before its independent per-light clamp.
+  Do NOT globally swap the renderer oracle for the creature one or vice versa.
+  Record the chosen existing degenerate-output policy per profile.
+
+L2: Qualify the divider on its own, then within the light response service.
+  Start with the supplied candidate; run HDL lint, simulation, positive controls.
+  Required edges: D=0/1, UINT32_MAX; high-word seed; equality in subtraction;
+  INT32 positive and negative saturation boundaries; negative nonzero remainder;
+  negative half ties; arbitrary input bubbles and consumer stalls; reset while
+  all stages are occupied; epoch/tag conservation. Fire the elaboration guard.
+  Compare full-domain sampled requests to compiled div_rhu_s128 / actual shade
+  oracle, not merely to a duplicate reference written from the new RTL.
+  Run a >=4096-term no-stall stream and measure accept/retire II separately.
+  Abort/revert candidate on one arithmetic mismatch; don't lower the test.
+
+L3: Qualify prepared-normal throughput.
+  Implement/import exact root II8. Verify against actual zref::isqrt_u64.
+  Integrate squares on the wide product lanes and preserve u64 accumulation.
+  Test 120k distinct normals, all needing work (no cache-hit assumption).
+  Test supplied SKIN.NORM tuples with no extra root. Test zero and cancellation.
+  Add the normal arena and prove no term can use an unsealed/unready tuple.
+
+L4: Build the real product/descriptor/colour streaming shell.
+  Replace ST_LOAD/OFFER/WAIT/MAC per-light serialization with separate staged
+  producers/consumers. Use the explicit two-product and three-colour calendars.
+  Prepare descriptors at the allowed state lifetime. Pin light epochs.
+  Keep emission and exact independent product rounding. Preserve colour/source
+  order and the existing output interface via a temporary adapter if needed.
+  Do not allocate a complete context register bank for every possible light.
+
+L5: Run the assembled LIGHTING gate.
+  Re-run all existing directed tests plus compiled-oracle differential.
+  Run >=4096 mixed terms to measure sustained II; then the full 120k/480k fixture.
+  Gate <=1m lighting cycles under the declared local fixture. Separately record
+  memory/input/output stalls and longest response latency. No local gate proves
+  a full console deadline; that belongs to the connected integration capture.
+  All-eight workload must honestly report over-budget on this II2 variant.
+
+L6: One composed map/fit and adopt once.
+  Measure the actual light owner + normal preparation + RAM/buffers + descriptors
+  + colour folding, with nonconstant useful traffic and capacity-preserving ports.
+  Check 100MHz setup, hold and actual RAM/DSP mapping. Record the clock per domain.
+  Use the measured ALM/DSP/M10K result, not a registers-to-ALMs conversion.
+  Remove duplicate standalone roots/old scalar owners from the selected machine.
+  If the mapped DSP count or array inference is pathological, stop and fix that
+  named mapping problem before spending a large fit. If area exceeds the desired
+  envelope, report it and keep the economically designed functioning candidate
+  for the complete machine census; do not delete required lighting to hide it.
+
+L7: Return to console composition.
+  Wire both real normal producers, real light set/point-direction providers,
+  attribute/emission transport, and final fragment/material consumers.
+  Demonstrate the same existing creature/terrain images and animation lighting.
+  Then measure the complete renderer's dependency path, not just this service.
+
+11. WHAT WAS EXECUTED IN THIS DELIVERY
+=====================================
+Nine Python test methods passed, with these separate scopes:
+  40,460 exact divider magnitude/sign/denominator cases
+  20,000 render + skin adapter cases (multiple assertions per case)
+  20,107 exact square-root cases
+  10,000 colour-rounding cases
+  divider cycle stream: 12,797 accepted; 12,750 retired; 47 reset-abandoned
+  root cycle stream: 1,960 accepted and retired
+  no-stall cycle models: divider II2, root II8; both first-consume at cycle 33
+  eight-clock arithmetic-slot schedule expanded over 120,000 vertices
+  four deliberate wrong-algorithm/domain controls detected
+
+The tests use Python's independent integer division and math.isqrt as references.
+They do not link the repository's complete C++ oracle library. The source-based
+semantic reconciliation is backed by direct reads of the actual C++ functions,
+but the real repo differential remains an adoption gate.
+
+NOT EXECUTED: any HDL simulation/lint, Quartus map/fit, board run, source-tree
+mutation, complete light-shell implementation or complete console simulation.
+The two SV files implement only the folded arithmetic primitives. The supplied
+HDL smoke includes 1,024 divider vectors and 1,024 root vectors, with output
+stalls; it still needs the reset/bubble/assertion extensions listed above.
+
+12. SOURCES AND EXACT SCOPE
+==========================
+All repository references below are pinned to:
+  18ef80e801b75aa5e375b841e236bc40baacc81d
+
+S1 — New scalar light shell and its warning:
+https://github.com/Fabulu/zhaozhou/blob/18ef80e801b75aa5e375b841e236bc40baacc81d/fpga/rtl/geometry/zhao_geom_light.sv
+
+S2 — Actual quarter-square product/root/divide implementation and its cycle law:
+https://github.com/Fabulu/zhaozhou/blob/18ef80e801b75aa5e375b841e236bc40baacc81d/fpga/rtl/terrain/zhao_terrain_shade.sv
+
+S3 — Actual renderer normal/shade law:
+https://github.com/Fabulu/zhaozhou/blob/18ef80e801b75aa5e375b841e236bc40baacc81d/reference/src/zrender/terrain.cpp
+
+S4 — Actual skin_world_normal / lambert_from_world_normal, around lines 550-620:
+https://github.com/Fabulu/zhaozhou/blob/18ef80e801b75aa5e375b841e236bc40baacc81d/reference/src/zcreature/creature_core.cpp
+
+S5 — Shared-core ownership and stale floor-only description, section 5.4:
+https://github.com/Fabulu/zhaozhou/blob/18ef80e801b75aa5e375b841e236bc40baacc81d/reports/SHADE-LIGHT-CONSOLIDATION-20260909.md
+
+S6 — SKIN.NORM producer domain and supplied magnitude:
+https://github.com/Fabulu/zhaozhou/blob/18ef80e801b75aa5e375b841e236bc40baacc81d/design/contracts/GEOM.SKIN.NORM.md
+
+S7 — Cyclone V DSP multiplier modes, Altera official documentation:
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/multipliers
+
+S8 — Cyclone V M10K width/depth modes, Altera official documentation:
+https://docs.altera.com/r/docs/683375/current/cyclone-v-device-handbook-volume-1-device-interfaces-and-integration/m10k-blocks-mixed-width-configurations
+
+BOTTOM LINE
+===========
+The 48x overrun is a real failure of the selected SERIAL throughput point, not a
+proof that these lighting effects need 48 engines or cannot run on the console.
+Magnitude reuse is necessary but nowhere near sufficient. The concrete remedy
+is one shared streamed owner with a qualified II2 response pipeline, exact
+once-per-normal preparation, enough product slots, and sufficient descriptor
+and colour bandwidth. The math and proposed schedules are testable now; the
+actual ALM/DSP/M10K and 100-MHz result must come from the real implementation.
+
+
+APPENDIX — UNVERIFIED RTL CANDIDATE: zhao_light_div32_ii2.sv
+========================================================================
+// Candidate only: NOT HDL-simulated, NOT Quartus mapped/fitted.
+// Exact sat_s32(floor((neg ? -num : num)/den)); den==0 produces zero/degenerate.
+// Caller supplies |dot + floor(den/2)| and its sign, NOT |dot| plus a bias.
+// 16 physical restoring steps reused in two phases: II=2 enabled clocks.
+// 32 arithmetic clocks + registered finalization. Pipeline stalls as ONE unit
+// on output backpressure; input is ordinary ready/valid and has no fixed-rate
+// requirement. This global stall must not be used to stall an unrelated DSP
+// pipeline without elastic buffers and correctly delayed tags.
+`default_nettype none
+module zhao_light_div32_ii2 #(
+    parameter integer TAGW = 16
+) (
+    input wire clk,
+    input wire rst_n,
+    input wire v_valid_i,
+    output wire v_ready_o,
+    input wire [63:0] num_i,
+    input wire [31:0] den_i,
+    input wire neg_i,
+    input wire [TAGW-1:0] tag_i,
+    output logic r_valid_o,
+    input wire r_ready_i,
+    output logic signed [31:0] result_o,
+    output logic saturated_o,
+    output logic degenerate_o,
+    output logic [TAGW-1:0] tag_o
+);
+    localparam integer STAGES = 16;
+    typedef struct packed {
+        logic [32:0] rem;
+        logic [31:0] word_q;
+        logic [31:0] den;
+        logic neg;
+        logic big;
+        logic zero;
+        logic [TAGW-1:0] tag;
+    } state_t;
+    state_t data_q [0:STAGES-1];
+    state_t data_d [0:STAGES-1];
+    state_t seed_c;
+    logic [STAGES-1:0] valid_q;
+    wire [STAGES-1:0] valid_d;
+    logic phase_q;
+    wire advance = !r_valid_o || r_ready_i;
+    assign v_ready_o = advance && !phase_q;
+
+    initial begin
+        if (TAGW < 1) $fatal(1,"TAGW must be positive");
+    end
+
+    always_comb begin
+        seed_c.zero = (den_i == 32'd0);
+        seed_c.big = !seed_c.zero && (num_i[63:32] >= den_i);
+        seed_c.den = seed_c.zero ? 32'd1 : den_i;
+        seed_c.rem = (seed_c.zero || seed_c.big) ? 33'd0 : {1'b0,num_i[63:32]};
+        seed_c.word_q = (seed_c.zero || seed_c.big) ? 32'd0 : num_i[31:0];
+        seed_c.neg = neg_i;
+        seed_c.tag = tag_i;
+    end
+
+    // Explicit widened unsigned subtraction: the BORROW is bit 33.
+    function automatic state_t step(input state_t a);
+        state_t b;
+        logic [32:0] shifted;
+        logic [33:0] difference;
+        logic take;
+        begin
+            b = a;
+            shifted = {a.rem[31:0],a.word_q[31]};
+            difference = {1'b0,shifted} - {2'b0,a.den};
+            take = !difference[33];
+            b.rem = take ? difference[32:0] : shifted;
+            b.word_q = {a.word_q[30:0],take};
+            step = b;
+        end
+    endfunction
+
+    genvar g;
+    generate
+        for (g=0;g<STAGES;g=g+1) begin : gen_step
+            state_t src_c;
+            if (g==0) begin : gen_first
+                always_comb src_c = phase_q ? data_q[g] : seed_c;
+                assign valid_d[g] = phase_q ? valid_q[g] : v_valid_i;
+            end else begin : gen_later
+                always_comb src_c = phase_q ? data_q[g] : data_q[g-1];
+                assign valid_d[g] = phase_q ? valid_q[g] : valid_q[g-1];
+            end
+            always_comb data_d[g] = step(src_c);
+            // Payload does not require reset; validity owns its lifetime.
+            always_ff @(posedge clk) begin
+                if (advance) data_q[g] <= data_d[g];
+            end
+        end
+    endgenerate
+
+    logic signed [31:0] finish_c;
+    logic sat_c;
+    logic rem_nz_c;
+    always_comb begin
+        rem_nz_c = |data_q[STAGES-1].rem;
+        finish_c = 32'sd0;
+        sat_c = 1'b0;
+        if (!data_q[STAGES-1].zero) begin
+            if (data_q[STAGES-1].big) begin
+                sat_c = 1'b1;
+                finish_c = data_q[STAGES-1].neg ? 32'sh80000000 : 32'sh7fffffff;
+            end else if (!data_q[STAGES-1].neg) begin
+                sat_c = data_q[STAGES-1].word_q[31];
+                finish_c = sat_c ? 32'sh7fffffff : $signed(data_q[STAGES-1].word_q);
+            end else begin
+                sat_c = (data_q[STAGES-1].word_q > 32'h80000000) ||
+                        ((data_q[STAGES-1].word_q == 32'h80000000) && rem_nz_c);
+                // floor(-N/D) = -q-(r!=0). For nonzero r this is simply ~q.
+                finish_c = sat_c ? 32'sh80000000 :
+                           (rem_nz_c ? $signed(~data_q[STAGES-1].word_q) :
+                            $signed(~data_q[STAGES-1].word_q + 32'd1));
+            end
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            phase_q <= 1'b0;
+            valid_q <= '0;
+            r_valid_o <= 1'b0;
+            result_o <= 32'sd0;
+            saturated_o <= 1'b0;
+            degenerate_o <= 1'b0;
+            tag_o <= '0;
+        end else if (advance) begin
+            phase_q <= !phase_q;
+            valid_q <= valid_d;
+            r_valid_o <= !phase_q && valid_q[STAGES-1];
+            if (!phase_q && valid_q[STAGES-1]) begin
+                result_o <= finish_c;
+                saturated_o <= sat_c;
+                degenerate_o <= data_q[STAGES-1].zero;
+                tag_o <= data_q[STAGES-1].tag;
+            end
+        end
+    end
+endmodule
+`default_nettype wire
+
+
+APPENDIX — UNVERIFIED RTL CANDIDATE: zhao_light_isqrt64_ii8.sv
+========================================================================
+// Candidate only: NOT HDL-simulated, NOT Quartus mapped/fitted.
+// Four physical base-four restoring root steps; each reused for eight clocks.
+// Exact floor(sqrt(u64)); II=8 enabled clocks, 32 recurrence clocks.
+// Ready/valid global pipeline stall. No reset on payload, only validity.
+`default_nettype none
+module zhao_light_isqrt64_ii8 #(
+    parameter integer TAGW = 16
+) (
+    input wire clk,
+    input wire rst_n,
+    input wire v_valid_i,
+    output wire v_ready_o,
+    input wire [63:0] radicand_i,
+    input wire [TAGW-1:0] tag_i,
+    output logic r_valid_o,
+    input wire r_ready_i,
+    output logic [31:0] root_o,
+    output logic [TAGW-1:0] tag_o
+);
+    localparam integer STAGES=4;
+    typedef struct packed {
+        logic [63:0] rad;
+        logic [33:0] rem;
+        logic [31:0] root;
+        logic [TAGW-1:0] tag;
+    } state_t;
+    state_t data_q[0:STAGES-1];
+    state_t data_d[0:STAGES-1];
+    state_t seed_c;
+    logic [STAGES-1:0] valid_q;
+    wire [STAGES-1:0] valid_d;
+    logic [2:0] phase_q;
+    wire advance = !r_valid_o || r_ready_i;
+    assign v_ready_o = advance && (phase_q == 3'd0);
+    initial begin
+        if (TAGW<1) $fatal(1,"TAGW must be positive");
+    end
+    always_comb begin
+        seed_c.rad = radicand_i;
+        seed_c.rem = 34'd0;
+        seed_c.root = 32'd0;
+        seed_c.tag = tag_i;
+    end
+    function automatic state_t step(input state_t a);
+        state_t b;
+        logic [33:0] shifted;
+        logic [33:0] trial;
+        logic [34:0] difference;
+        logic take;
+        begin
+            b = a;
+            // Before any of the 32 steps rem fits in 32 bits; the final
+            // remainder may need 33 bits but is never stepped again.
+            shifted = {a.rem[31:0],a.rad[63:62]};
+            trial = {a.root,2'b01};
+            difference = {1'b0,shifted} - {1'b0,trial};
+            take = !difference[34];
+            b.rem = take ? difference[33:0] : shifted;
+            b.rad = {a.rad[61:0],2'b00};
+            b.root = {a.root[30:0],take};
+            step = b;
+        end
+    endfunction
+    genvar g;
+    generate
+        for(g=0;g<STAGES;g=g+1) begin: gen_step
+            state_t src_c;
+            if(g==0) begin: gen_first
+                always_comb src_c = (phase_q==3'd0) ? seed_c : data_q[g];
+                assign valid_d[g] = (phase_q==3'd0) ? v_valid_i : valid_q[g];
+            end else begin: gen_later
+                always_comb src_c = (phase_q==3'd0) ? data_q[g-1] : data_q[g];
+                assign valid_d[g] = (phase_q==3'd0) ? valid_q[g-1] : valid_q[g];
+            end
+            always_comb data_d[g] = step(src_c);
+            always_ff @(posedge clk) begin
+                if(advance) data_q[g] <= data_d[g];
+            end
+        end
+    endgenerate
+    always_ff @(posedge clk or negedge rst_n) begin
+        if(!rst_n) begin
+            phase_q <= 3'd0;
+            valid_q <= '0;
+            r_valid_o <= 1'b0;
+            root_o <= 32'd0;
+            tag_o <= '0;
+        end else if(advance) begin
+            phase_q <= phase_q + 3'd1;
+            valid_q <= valid_d;
+            r_valid_o <= (phase_q==3'd0) && valid_q[STAGES-1];
+            if(phase_q==3'd0 && valid_q[STAGES-1]) begin
+                root_o <= data_q[STAGES-1].root;
+                tag_o <= data_q[STAGES-1].tag;
+            end
+        end
+    end
+endmodule
+`default_nettype wire

@@ -110,3 +110,18 @@ with the projector actually shared."*
   rate should be re-derived per candidate rather than applied flat.
 * Savings may not be added together where they remove the same work, and a
   candidate relying on slack another candidate consumes counts once (plan §14.5).
+
+---
+
+## DEBITS — changes that SPEND DSP, recorded beside the savings
+
+A register that only lists savings is the flattering half of a ledger.
+
+| # | change | DSP | why it is still right |
+|---|---|---:|---|
+| D1 | Lighting service refactor to II2 (`Zhaozhou_Lighting_Emergency_Rescue_2026-09-18`) | **+~9** | planning estimate, not fitted. Buys 48.1x -> inside the frame envelope. The old zero-DSP arithmetic "was bought with time that this workload does not have"; the alternative — cloning the 147-clock scalar engine to reach the rate — costs far more ALMs AND more DSPs. |
+
+Net position after D1 and the adopted savings is **not computed here on purpose**:
+every figure in this file is a leaf estimate or shape arithmetic, and adding
+estimates across modules is the leaf-versus-census error this campaign has made
+three times. The first connected synthesis reports the real number.
