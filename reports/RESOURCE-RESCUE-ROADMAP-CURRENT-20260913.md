@@ -3083,3 +3083,78 @@ problem is solved by adoption.
 * **Not measured at all:** the machine with the projector actually shared. That
   needs a selection change and a re-census, and it is the receipt that would
   turn this section from arithmetic into evidence.
+
+---
+
+## THE OWNER'S MEMORY DIRECTION, QUANTIFIED FOR THE FIRST TIME
+
+Standing direction: *"we have lots of M10K, ALMs are over budget 15 times over,
+so what you can you need to solve with memory."* It has been acted on
+case by case. It has never been measured across the machine. From
+`zhao_prod_top@whole-machine-map-probe`'s hierarchy table:
+
+```
+66 direct children      151,705 ALUT      123 M9K of 553 available  (22%)
+
+47 of those children use ZERO memory
+    and hold             61,724 ALUT      40% of the machine, ~39,133 ALM
+```
+
+**The device's memory is 78% idle while the design is 2.4x over on logic**, and
+40% of that logic sits in blocks that touch no memory at all. ~39,133 ALM is
+very nearly the entire 37,500-ALM portfolio.
+
+### The ranked list
+
+| ALUT | ≈ALM | block | what its name says it computes |
+|---:|---:|---|---|
+| 8,715 | 5,525 | `zhao_forge_cliff` | — |
+| 5,132 | 3,254 | `zhao_geom_wcache` | a CACHE, holding no memory |
+| 4,052 | 2,569 | `zhao_raster_attrstep` | — |
+| 3,909 | 2,478 | `zhao_field_v3_ring_svc` | — |
+| 3,909 | 2,478 | `zhao_field_v3_normalize` | **a reciprocal square root** |
+| 3,804 | 2,412 | `zhao_twod_plane` | — |
+| 3,302 | 2,093 | `zhao_field_v3_len` | **a square root** |
+| 2,828 | 1,793 | `zhao_field_v3_spline` | **a basis evaluation** |
+| 2,700 | 1,712 | `zhao_terrain_tess` | — |
+| 2,547 | 1,615 | `zhao_field_progcache` | a CACHE, holding no memory |
+| 2,253 | 1,428 | `zhao_terrain_residency_v2` | — |
+| 1,828 | 1,159 | `zhao_post_gather` | — |
+
+**The four `zhao_field_v3_*` blocks alone are 13,948 ALUT ≈ 8,843 ALM with zero
+M10K between them**, and three of the four are named after functions that are
+the textbook case for a table: `len` is a square root, `normalize` is a
+reciprocal square root, `spline` is a basis evaluation. That is more than the
+projector cheque, in one subsystem, and nobody has looked at it.
+
+**Two blocks called a CACHE hold no memory.** `zhao_geom_wcache` (5,132) and
+`zhao_field_progcache` (2,547). A cache in flip-flops is the exact shape the
+memory note was written about, and `zhao_geom_wcache` is already known to
+survive the projector sharing untouched.
+
+### What this does NOT say, stated before anyone quotes the 39,133
+
+**"Uses zero M10K" is not "should use M10K."** Plenty of logic is genuinely
+control, arithmetic on live operands, or datapath that no table can replace.
+This is a list of CANDIDATES ranked by size, not a saving.
+
+And the lever is the one the memory note names: **lookup instead of
+computation**, not relocating state. Moving a register file into an M10K
+changes where state lives and usually costs latency; replacing an evaluated
+function with a table removes the evaluation. The three `field_v3` names above
+are the second kind. `forge_cliff`, the largest single entry, is unclassified
+until someone reads it.
+
+**And the M10K budget is not free either.** 553 blocks at 20 Kbit is about
+11 Mbit; a table wide enough to replace a 32-bit function at useful precision is
+not small, and the existing 123 blocks are already committed. Every candidate
+needs its table sized before it is called a saving — which is a read and a
+calculation, not a fit.
+
+### Why this is the next place to look
+
+The projector is the largest single overrun and correcting it moves the machine
+2.6x → 2.4x. This list is **six times larger in aggregate** and has never been
+examined. It is also the one direction the owner has given standing instruction
+about, and the first thing any of this work should do is size two or three
+tables and see whether the trade is real.
