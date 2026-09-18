@@ -5768,6 +5768,54 @@ set_tests_properties(geom_setup_random_nightly PROPERTIES
 # The third case is the one that earns the file -- a lane that ignored the
 # rider entirely would pass the round-trip checks and still put every vertex in
 # one place.
+# PART.STATE is the first of the four absent particle-core contracts to be
+# built. Small parameters on purpose: CAPACITY=8 and SPECIES_N=4 make capacity
+# exhaustion and an out-of-range species REACHABLE, which at the required tier
+# of 32,768 they are not -- and a guard that cannot be reached is not evidence
+# about the guard.
+add_executable(test_part_state_directed particles/part_state_directed.cpp)
+# zhao_zref for zref/zref_particle.hpp: the stimulus is built by the RATIFIED
+# particle128 codec (amendment C2 / ruling R3), not by hand-written shifts. The
+# hand-written version masked `age` to seven bits where the oracle says ten.
+target_link_libraries(test_part_state_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_state_directed
+  PREFIX Vzhao_part_state
+  TOP_MODULE zhao_part_state
+  VERILATOR_ARGS -GCAPACITY=8 -GSPECIES_N=4 -GCHILD_D=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv)
+add_test(NAME part_state_directed COMMAND test_part_state_directed)
+set_tests_properties(part_state_directed PROPERTIES LABELS "fast;particles")
+
+# ...and the POSITIVE CONTROL for its ordering check.
+#
+# zhao_part_state.sv carries NO assertion for "survivors compacted first,
+# children strictly after": it says so in its own ZHAO_ASSERT block, because
+# the property is structural and the first draft's assertion ended in `&& 1'b0`.
+# The whole defence of the law is part_state_directed.cpp comparing the emitted
+# stream position by position -- and that suite passed on its first run, which
+# is a claim, not evidence.
+#
+# tests/mutants/zhao_part_state_child_order_mutant.sv is a committed copy whose
+# only substantive difference is that children may enter the write stream DURING
+# the survivor pass. Every count still balances on it -- 7 records, 4 survivors,
+# 3 children -- so a counter-based test passes on a block with the ordering
+# destroyed. Only the per-position comparison sees it.
+#
+# THIS TEST PASSES WHEN THE ORDERING IS SEEN TO BE WRONG. Inverse polarity,
+# deliberately: it is evidence about the instrument, not about the design.
+add_executable(test_part_state_child_order_control
+  mutants/part_state_child_order_control.cpp)
+target_link_libraries(test_part_state_child_order_control PRIVATE zhao_harness zhao_zref)
+verilate(test_part_state_child_order_control
+  PREFIX Vzhao_part_state_child_order_mutant
+  TOP_MODULE zhao_part_state_child_order_mutant
+  VERILATOR_ARGS -GCAPACITY=8 -GSPECIES_N=4 -GCHILD_D=8
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_part_state_child_order_mutant.sv)
+add_test(NAME part_state_child_order_control
+         COMMAND test_part_state_child_order_control)
+set_tests_properties(part_state_child_order_control PROPERTIES
+  LABELS "fast;particles" TIMEOUT 300)
+
 add_executable(test_geom_proj_lane_directed geometry/geom_proj_lane_directed.cpp)
 target_link_libraries(test_geom_proj_lane_directed PRIVATE zhao_harness)
 verilate(test_geom_proj_lane_directed
