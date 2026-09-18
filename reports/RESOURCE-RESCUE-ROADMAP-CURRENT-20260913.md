@@ -1000,6 +1000,62 @@ the past, and the scoreboard should say so per row rather than only in prose.
 > prediction is still a measured number, while three separate fits would have
 > bought one extra hour and the same three numbers.
 >
+> ### THE GOLDEN PATH SAYS WHAT CLOSURE IS, AND IT WAS UNINDEXED
+>
+> Found 2026-09-18. `reports/Zhaozhou_conditional_golden_path.md`, owner
+> document of 2026-09-14, **pinned to this branch by name in its own header**,
+> and indexed in neither `DOCKET.md` nor `OWNER-DOCUMENT-INDEX.md` — the latter
+> having been regenerated past its date. Both are fixed now. It is the authority
+> on what "closure" means and it outranks any local reading of the 30,000
+> target:
+>
+> * charter-required **10% fabric reserve** → a **90% working limit of 37,719**;
+> * an illustrative complete portfolio of **37,500** in seven non-overlapping
+>   groups: Backend/platform 14,000 · Shared projection and replay 5,000 ·
+>   Geometry and lighting 5,500 · Terrain/Forge/surfaces 4,500 · Complete FIELD
+>   4,500 · Complete particles 2,000 · Post and 2D 2,000;
+> * *"Do not call a 40.5k result closure merely because it is below 41,910."*
+>
+> #### It names a trap this document came one step from
+>
+> Shell + terrain measures **37,254** and the portfolio totals **37,500**. Those
+> are nearly equal and **not comparable**. The 37,500 covers the complete
+> selected scope — geometry front end, complete FIELD, particles, post and 2D —
+> none of which is in the 37,254. The envelopes are per-group precisely so this
+> cannot be fudged, and the group-by-group ownership mapping does not exist yet.
+>
+> #### And §7 lists a reject condition this campaign has to answer
+>
+> > *Reject or redesign the portfolio when … **ALM decreases while DSP, RAM
+> > ports, timing or bandwidth violate their limits**.*
+>
+> That is a fair description of the M10K work in isolation: area fell while the
+> composed shell sits at 61.52 MHz against a ruled 100. The honest position is
+> that the timing work is not a separate nicety running beside the area work —
+> it is the condition under which the area result counts at all, which is why
+> three of today's four changes were timing changes rather than further area
+> ones. It is not resolved, and quoting 28,959 ALM without it would be exactly
+> what §7 forbids.
+>
+> #### What the golden path says to do next, in its own words
+>
+> §8 asks for **one bounded architecture packet**, alongside Packet D/E work,
+> that: (1) produces a complete owner/function allocation including unbuilt
+> requirements and the board wrapper; (2) derives mandatory per-frame and
+> per-phase workloads; (3) qualifies the exact compositor fusion and particle
+> schedules in simulation; (4) freezes selected memory geometries and provider
+> calendars; (5) attaches each unpriced objective to an existing subsystem gate.
+>
+> Item (1) is the missing mapping above. **And §4 is a concrete, already-proven
+> DSP rescue sitting unclaimed:** POST.COMPOSITE's three generated curves and
+> 3×3 Q2.14 matrix fuse into three precomputed unrounded product tables, so nine
+> per-pixel multiplies become three table reads and an add — an exact
+> distributive identity the owner verified over **1,048,576 input/configuration
+> pairs with zero mismatches**, with a one-entry perturbation producing 2,048
+> wrong colours as its positive control. Its own caution is that the ALM benefit
+> is uncertain because addressing and adders cost logic, and that it is *"three
+> simultaneous 72-bit read ports … six physical M10Ks initially"*, not one.
+>
 > ### THE RESULT: 54.12 → 61.52 MHz, and the prediction was optimistic
 >
 > `zhao_shell_top_v2@packet-h-timing`, `status: ok`, clean tree, commit
