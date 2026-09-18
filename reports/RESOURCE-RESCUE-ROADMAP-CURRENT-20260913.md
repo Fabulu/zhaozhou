@@ -3409,3 +3409,62 @@ needs an answer, and three of them are structural:
 
 **The first two are the honest blockers**, and neither is a measurement
 question. The third is a decision the G8B receipt already supports.
+
+---
+
+## GOLDEN PATH ITEM (1), COMPLETED: the allocation INCLUDING what is not built
+
+Item (1) of the execution order asks for *"a complete owner/function allocation
+including unbuilt requirements and board"*. The allocation half has existed
+since 2026-09-18 morning, from the whole-machine map's hierarchy. **The
+"including unbuilt requirements and board" half has not, and that is the half
+the envelope table's own warning is about:** *"an omitted function is an error,
+not a free saving."*
+
+Both halves, together, with the source of every number named:
+
+| group | envelope | MEASURED today | ratio | what the scope lists and the measurement does NOT contain |
+|---|---:|---:|---:|---|
+| Backend/platform | 14,000 | ~31,200 | 2.2× | **the board wrapper.** R9 lists "board/framework, PLLs/pins/SDRAM integration" as open, and no PLL, pin assignment or SDRAM controller integration appears in the census. The envelope explicitly charges "one thin board wrapper" here. |
+| Shared projection | 5,000 | ~18,800 | 3.8× | nothing missing — but it contains **two** projectors where the envelope charges exactly one, and says so: "no duplicate private geom/terrain projectors". |
+| Terrain/Forge | 4,500 | ~16,400 | 3.6× | Forge shadows; `zhao_forge_prim_eval` is a fit target never measured. |
+| Complete FIELD | 4,500 | ~13,700 | 3.0× | `zhao_field_progdir` is a fit target never measured. |
+| Geometry + lighting | 5,500 | ~11,700 | 2.1× | complete RGB/multi-light/emission producer — R8 lists lighting as open. |
+| Post and 2D | 2,000 | ~3,900 | 1.9× | **fog end to end.** R4: "Fog is not connected end to end." |
+| Complete particles | 2,000 | **~500** | **0.26×** | **almost all of it.** The scope lists state streaming/compaction, species store, update/collision/spawn, representation/expansion/record/soft endpoint and a bounded flow interface. 827 ALUT is not that machine. |
+| **TOTAL** | **37,500** | **~96,200** | **2.6×** | |
+
+### What this changes, and it is not comfortable
+
+**The 2.6× is measured against a machine that is missing things.** Particles
+alone is ~1,500 ALM of envelope with nothing behind it, the board wrapper is
+unpriced, and fog is not connected. The golden path anticipated exactly this
+and forbade the comfortable reading: *"Particles at 0.26× is NOT a credit ...
+827 ALUTs is a domain that is essentially not built, and its 2,000 is owed, not
+banked."*
+
+So **the true gap is worse than 96,200 − 37,500.** Every unbuilt requirement in
+the right-hand column is a debit not yet taken, and the only one with a number
+on it is particles.
+
+### The one place it moves the other way
+
+Shared projection is the single group where a **measured** alternative already
+exists and is cheaper: `@cheque-price` puts one service at 6,598 ALM / 33 DSP
+against ~12,400 / 66 for the two the census counts. Adopting it does not close
+the group — 5,000 is the envelope and one service plus its arenas and caches is
+more than that — but it is the only row on this table where the correction is
+measured rather than hoped, and `zhao_geom_proj_lane` (built today) removes its
+last structural blocker.
+
+### Status of item (1)
+
+**The allocation is complete as an ACCOUNTING statement** and each group now
+names what it is missing. What it still is not is a per-module ownership
+assignment — the envelope table says that "still has to be checked by the
+implementation agent", and 66 census children have not each been assigned to a
+group by hand; the grouping came from the hierarchy in one pass.
+
+**And the whole table is superseded the moment `@whole-console-sizing`
+returns**, because that will be the first FITTED whole-machine number rather
+than a synthesis estimate scaled by 0.634.
