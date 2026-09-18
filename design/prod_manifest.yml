@@ -260,7 +260,22 @@ selected_profiles:
 #
 # Each is a real DSP/ALM cost the 192-DSP figure does not contain.
 unpriced_requirements:
-  - GEOM.LIGHT: zhao_geom_light  vertex lighting; one law, three normal producers; RTL not built
+  # 2026-09-19: GEOM.LIGHT's row LEFT this list, on the FORGE.PRIM.EVAL
+  # precedent above -- this list means "ratified requirement, NO RTL file",
+  # and the RTL now exists. zhao_geom_light.sv is built (one zhao_terrain_shade
+  # turn per light term, II = 167.0 measured) and so is the streamed
+  # zhao_light_stream beside it with its two arithmetic leaves and the creature
+  # adapter. All five are accounted in `excluded` below as not-yet-adopted, and
+  # GEOM.LIGHT REMAINS A REQUIRED SPECIFIED FUNCTION that no selected top
+  # instantiates -- it has moved from "unbuilt" to "built and deferred", which
+  # is a different fact and not a smaller one. Leaving the row would have made
+  # tools/budget/dsp_census.py go on printing "no RTL, nothing to measure"
+  # about a file that is in the tree.
+  #
+  # TERRAIN.SHADE's row below carries the IDENTICAL staleness -- zhao_terrain_
+  # shade.sv was built 2026-09-09 and is accounted `excluded: unused` -- and is
+  # deliberately left for that lane rather than corrected in passing. Flagged
+  # here so the next reader inherits a known defect instead of a silent one.
   - TERRAIN.SHADE: zhao_terrain_shade  terrain shading; contract maturity REFERENCE_COMPLETE, RTL not built
   - MATERIAL.RESOLVE: zhao_material_resolve  material resolve; RTL not built
   - FORGE.SHADOW: zhao_forge_shadow  forge shadow; RTL not built
@@ -463,8 +478,8 @@ excluded:
   # renamed mutant fires. Those are functional receipts, not adoption or fit
   # evidence. Production remains unchanged until zhao_terrain_pipe has a clean
   # composed fit and the NORMALS and DEPTHQUANT seams are designed and verified.
-  - zhao_geom_proj_lane: not-yet-adopted  GEOMETRY's half of the shared projector, built 2026-09-18 to close the gap zhao_proj_subsystem's header names -- client A's result port packed into zhao_geom_wcache, {arena,index} rider as the fill address, no adapter because zhao_vertex_arena's fill_ready_o is a stated constant 1'b1. It is wiring: nothing in it computes. Selecting one shared service instead of two wrappers (6,598 ALM / 33 DSP against ~12,400 / 66) needs this composed AND a producer driving it; the producer is still absent, so this is not yet adoptable on its own
-  - zhao_proj_subsystem: not-yet-adopted  shared projection service + three-copy terrain arena shell behind generic reference ports; no embedded walker; used only inside the not-yet-adopted zhao_terrain_pipe
+  - zhao_geom_proj_lane: not-yet-adopted  GEOMETRY's half of the shared projector, built 2026-09-18 to close the gap zhao_proj_subsystem's header names -- client A's result port packed into zhao_geom_wcache, {arena,index} rider as the fill address, no adapter because zhao_vertex_arena's fill_ready_o is a stated constant 1'b1. It is wiring: nothing in it computes. Selecting one shared service instead of two wrappers (6,598 ALM / 33 DSP against ~12,400 / 66) needs this composed AND a producer driving it. CORRECTED 2026-09-19: the producer is NO LONGER ABSENT -- zhao_geom_group_seq exists and drives this lane inside zhao_console_core. What is still open is the ADOPTION, which is the selected census deciding to count one shared service instead of zhao_geom_project plus zhao_terrain_project, after the composed fit closes
+  - zhao_proj_subsystem: not-yet-adopted  shared projection service + three-copy terrain arena shell behind generic reference ports; no embedded walker; CORRECTED 2026-09-19: no longer used only inside zhao_terrain_pipe -- zhao_console_core also instantiates it, driven by zhao_geom_group_seq, and measured it at 9,135 total ALUTs and 39 DSP with ONE zhao_project_core where the census carries two. Still not-yet-adopted: neither composition is a selected census root
   - zhao_terrain_group_seq: not-yet-adopted  per-view arena allocation, ModeVtx fill/seal, ModeRef replay and release controller; used only inside the not-yet-adopted zhao_terrain_pipe
   - zhao_terrain_pipe: not-yet-adopted  composed ModeVtx/ModeRef terrain projection boundary; both-view dense/bitmap differential and release-mutant control pass, but composed fit, NORMALS, DEPTHQUANT and production adoption remain open
   - zhao_terrain_wcache: not-yet-adopted  three zhao_vertex_arena read replicas (4x81x106, DENSE_SEAL) with triangle-rate replay; used inside the not-yet-adopted projection subsystem/pipe
@@ -732,3 +747,70 @@ excluded:
   # "unused" meaning "built and instantiated nowhere", which is the defect that
   # check exists to find.
   - zhao_qsq_bytemul: unused  extracted from zhao_terrain_shade 2026-09-16 and INSTANTIATED BY IT; unadopted only because that client is -- no separate deferral -- reports/TERRAIN-SHADE-IMPLEMENTATION-20260909.md
+
+  # ===========================================================================
+  # 2026-09-19 -- THE CONNECTED MACHINE AND THE LIGHTING REFACTOR
+  # ===========================================================================
+  # Thirteen modules were UNACCOUNTED here: built, tested, green, registered in
+  # design/blocks.yml and in design/fit_targets.yml, and dispositioned nowhere.
+  # That is the "three separate acts" failure CLAUDE.md names -- the ledger, the
+  # manifest and the fit source list are three acts, and these had two of three.
+  #
+  # WHY NONE OF THEM IS A `top:`, STATED ONCE FOR ALL THIRTEEN.
+  # `top:` does not mean "not an orphan". It is the SELECTED CENSUS ROOT list
+  # that tools/quartus/gen_prod_top.py generates fpga/rtl/prod/zhao_prod_top.sv
+  # from, and the completion plan S1.3 requires that generated top keep its
+  # RESOURCE_CENSUS_DISCONNECTED standing: "Do not rename its status to console
+  # merely because more modules are listed." Promoting zhao_console_core would
+  # also be arithmetically wrong twice over -- zhao_geom_skin is already a
+  # selected top AND is inside it, which is the DOUBLE COUNT this file exists to
+  # remove, and 22 further modules in its closure carry `excluded` rows that
+  # would all turn into "excluded but nevertheless instantiated" errors. So the
+  # connected machine is accounted as what it is: BUILT, MEASURED, NOT SELECTED.
+
+  # --- the connected machine itself ------------------------------------------
+  - zhao_console_core: not-yet-adopted  THE CONNECTED MACHINE (completion plan S1.3), and a deliberate non-selection rather than an omission. Analysis and Synthesis succeeded 2026-09-19 over 106 snapshotted sources, digest 0d686d14ff7b, giving the first connected figures this project has had -- 63,436 combinational ALUTs, 58,138 registers, 151 DSP against the census's 297, recorded in reports/CONSOLE-CORE-FIRST-LIGHT-20260919.md. It is NOT a selected census root: zhao_prod_top must keep its RESOURCE_CENSUS_DISCONNECTED standing per plan S1.3, and selecting this root would double-count zhao_geom_skin and contradict 22 existing excluded rows in its closure. Adoption is an owner ruling about what the census counts, not an edit -- see the finding in reports/MODULE-DISPOSITION-REGISTER-20260918.md section 5.2
+
+  # --- the seven organs the connected machine composes ------------------------
+  # Each of these WAS "built and adopted nowhere" and contributed 0 ALM to every
+  # measurement ever taken. They are now instantiated -- by zhao_console_core,
+  # and by nothing selected -- so they are counted WITH it, the same standing
+  # zhao_field_progdir_scan has inside zhao_field_progdir. Their per-owner ALUT
+  # and DSP rows are in the 2026-09-19 report above; those are real numbers from
+  # a real hierarchy, and they are not census numbers.
+  - zhao_part_state: not-yet-adopted  PART.STATE, the particle generation store; instantiated by zhao_console_core as one corner of the closed four-block particle ring and by nothing selected; counted with that root, never composed alone
+  - zhao_part_update: not-yet-adopted  PART.UPDATE, the per-particle integrator; instantiated by zhao_console_core only. Its step-6 collision input is TIED TO ZERO there because PART.COLLIDE emits no velocity triple (core header I4), so synthesis folds that datapath away and the 2,250-ALUT / 6-DSP row is a FLOOR for this block, not its cost
+  - zhao_part_spawn: not-yet-adopted  PART.SPAWN, the child emitter; instantiated by zhao_console_core only. Its capacity backstop part_cap_full_i is a boundary port because PART.STATE exposes no such output (core header I8)
+  - zhao_part_collide: not-yet-adopted  PART.COLLIDE, the terrain/plane collision verdict; instantiated by zhao_console_core only. Its terrain sample is a boundary port because zhao_terrain_patch emits heights and no surface normal (core header I6)
+  - zhao_geom_group_seq: not-yet-adopted  the per-group arena allocation, fill/seal and replay sequencer; instantiated by zhao_console_core only, where it is the PRODUCER zhao_geom_proj_lane's and zhao_proj_subsystem's rows were waiting on. That it now exists and drives them does not by itself adopt any of the three: the selected census still counts zhao_geom_project and zhao_terrain_project separately, and changing that is one deliberate edit after the composed fit closes
+  - zhao_post_composite: not-yet-adopted  POST.COMPOSITE, the frame compositor; instantiated by zhao_console_core on the shell's real video mode and by nothing selected. Its SOURCE PIXELS are a boundary port -- RASTER.RESOLVE's output is internal to the shell -- which is the largest declared gap in that composition (core header I15)
+  - zhao_measure_histogram: not-yet-adopted  MEASURE.HISTOGRAM, the error-magnitude histogram on the real frame boundary; instantiated by zhao_console_core only. Its event ingress and host read window are boundary ports because nothing in the console produces that stream and no HPS register path reaches it (core header I18, I19)
+
+  # --- the lighting service: BUILT, AND DELIBERATELY NOT IN THE MACHINE -------
+  # These five are the 2026-09-18 lighting refactor. NONE of them is reachable
+  # from any top, selected or otherwise, and that is ON PURPOSE rather than an
+  # oversight: zhao_console_core's header carries a "LIGHTING SEAM -- DELIBERATELY
+  # NOT CONNECTED" section and ties `light_seam_connected_o` LOW so a hierarchy
+  # census can READ the absence instead of inferring it. The connected machine
+  # therefore contains zero lighting logic and its resource number contains none
+  # either -- nothing in reports/CONSOLE-CORE-FIRST-LIGHT-20260919.md may be read
+  # as "lighting fits in what is left".
+  #
+  # THIS IS A DEFERRAL AND MUST READ AS ONE. tools/budget/uncashed_cheques.py
+  # takes `not-yet-adopted` as PENDING, which is exactly right here: GEOM.LIGHT
+  # is a REQUIRED specified function (owner brief 1.3) and the bill may not lose
+  # it. What is missing is three named seams, all of them listed in the core's
+  # header: the service's vertex/normal input from zhao_geom_skin_norm, its
+  # per-light parameter load from the host/CMD path, and its RGB term out into
+  # the raster material stage inside zhao_geom_bin_pipe_v2 -- which is a
+  # shell-side change, so the seam is not purely additive.
+  #
+  # `superseded` is deliberately NOT used for zhao_geom_light even though
+  # zhao_light_stream's header says it "REPLACES THE OWNER". No adoption ruling
+  # has been taken, neither arrangement is composed anywhere, and a `superseded`
+  # row would CLOSE a question that is open. Both stay pending until the ruling.
+  - zhao_geom_light: not-yet-adopted  GEOM.LIGHT, the vertex-RGB composition: one zhao_terrain_shade instance plus the colour fold, holding no second copy of the ratified dot/isqrt/divide law. MEASURED at II = 167.0 clocks per light term, 48.1x over the frame for the ruled 120,000-vertex / 480,000-term profile, which is why zhao_light_stream exists beside it. Unadopted pending the owner ruling on which arrangement ships and the three seams named above
+  - zhao_light_stream: not-yet-adopted  GEOM.LIGHT as a STREAMED service, one light term every two clocks and one exact magnitude per normal; the declared streamed replacement for zhao_geom_light, same law, different interface. Composed nowhere; adoption needs the ruling plus the vertex/normal, parameter-load and RGB-out seams
+  - zhao_light_div32_ii2: not-yet-adopted  the shared light-term quotient folded to II=2; qualified against the compiled renderer law by tests/geometry/light_div32_ii2_directed.cpp after arriving UNSIMULATED in the 2026-09-18 rescue appendix. Instantiated by zhao_light_stream only; adopted the moment its parent is
+  - zhao_light_isqrt64_ii8: not-yet-adopted  exact floor sqrt of u64 folded to II=8, one root per normal rather than per light term; qualified against the compiled zref::isqrt_u64 by tests/geometry/light_isqrt64_ii8_directed.cpp after arriving UNSIMULATED in the same appendix. Instantiated by zhao_light_stream only; adopted the moment its parent is
+  - zhao_light_skin_adapter: not-yet-adopted  the CREATURE seam: the s64x3 direction / u64 magnitude pair from zhao_geom_skin_norm narrowed to the service's s32x3 / u32 prepared form, with the producer's range reduction ASSERTED rather than cast. Instantiated by nothing yet -- zhao_geom_skin_norm is a selected top and this adapter is the unbuilt half of the join, so it is pending on the same ruling as the service it feeds
