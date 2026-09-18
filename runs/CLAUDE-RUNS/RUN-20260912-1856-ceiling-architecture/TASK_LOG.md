@@ -2719,3 +2719,62 @@ already handles it, and it cost most of a fit's worth of working time before
 anyone checked the thirty lines that settle it.
 
 The check was one grep. That is the ratio worth remembering.
+
+---
+
+## THE FIT LANDED: 54.12 -> 61.52 MHz, TNS down a third
+
+`zhao_shell_top_v2@packet-h-timing`, `status: ok`, clean tree, commit
+`cebed2fe`, digest `c3ae9b76`, 1,717.7 s.
+
+    Fmax         54.12 -> 61.52 MHz     +7.40
+    worst slack  -8.477 -> -6.254 ns    +2.223
+    setup TNS    -29,688.8 -> -19,984.6 ns   -33%
+    ALM          29,044 -> 28,959
+    DSP / M10K   63 / 134, unchanged
+
+**The prediction was 62-66 MHz and -5.2 to -6.0. Actual 61.52 and -6.254 --
+just outside on both, optimistic in both directions.** That sentence is only
+available because the prediction went into the roadmap before the fit started.
+
+Per change, measured rather than apportioned:
+
+* **the resolver is GONE from the path table entirely** -- not one
+  `altsyncram -> binding_resolver` row survives, so both the 512-path CRC family
+  and the two legality paths are eliminated. That is where the 9,704 ns went;
+* **the attrgrad tree worked and is still the binder** -- -8.477 -> -6.254, and
+  its family fell from 121 paths to 26, but nothing overtook it:
+  `1/(10.000 + 6.254) = 61.52 MHz`, exactly the reported figure;
+* **v3own dropped off the list** rather than becoming the binder, which the
+  prediction had as one of two candidates.
+
+### The number that looks like a regression and is not
+
+`binner -> island` went from 206 paths to 1,689, and from -773.6 to -5,493.5.
+
+Both reports summarise the **2,000 worst paths** -- a fixed-size list. Repairing
+the top of it makes the tail visible. Per path the family IMPROVED: -3.76 ->
+-3.25 ns. Nothing about it got worse; it stopped being crowded out by the CRC
+scan.
+
+That is the same instrument error as grouping paths by module, wearing new
+clothes: a count taken from a truncated list describes the list, not the design.
+It would have been very easy to report "the island family got seven times
+worse".
+
+### uvw_m is now 84% of everything, and its fix is queued
+
+1,689 of 2,000 negative paths end in `uvw_m`, and this fit's own map report still
+carries `Info (276007)` for it -- exactly as recorded in advance, because the
+read-register fix landed after the snapshot. So the next composed fit is a clean
+single-variable test against the family that now dominates the list.
+
+## The whole-machine top is getting further than it used to
+
+`zhao_prod_top` -- which instantiates `zhao_shell_top` AND seven terrain blocks,
+so the co-fitted whole machine already exists as a `- top:` entry -- had exactly
+one row in its whole history: `failed:quartus_map.exe` at 59.9 s, 128 sources.
+
+A `-MapOnly` probe is running now against its current 147-source closure and is
+already past four minutes, so whatever killed it at 59.9 s on commit `0e8b1c9d`
+is no longer killing it there. Result pending.
