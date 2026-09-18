@@ -169,3 +169,68 @@ unruled; that reasoning needs re-reading against C2.
 
 **GEOM.WARP** agent launched (build order #2 — the missing client-A producer
 that blocks the shared-projector saving).
+
+### THE PARTICLE CORE IS COMPLETE — all four absent contracts built
+
+| bench | checks |
+|---|---:|
+| part_state_directed | 78 |
+| part_state_child_order_control (inverted-polarity mutant) | 5 |
+| part_update_directed | 264 |
+| part_collide_directed | 180 |
+| part_spawn_directed | 22 |
+| **total** | **549** |
+
+Commits `85436a27`, `155c141f`, `1a9084e2`, `371c8d2a`, `71c03fa9`, `43259a02`,
+`54238e0a` on `claude/ceiling-architecture-20260912`. Tree clean, nothing
+untracked, HEAD builds (it briefly did not — CMakeLists named two files git had
+never seen).
+
+Three defects fixed that no green verdict would have shown:
+
+1. **`spc_child_spc_i >= 7'(SPECIES_N)`** truncates to `7'd0` at production
+   SPECIES_N=128 — every spawn group refused, silently. Verilator UNSIGNED.
+2. **`max_children_in_tick_o` was a second copy of the emitted counter**, because
+   the bench never started a tick. 20 checks were green at the time.
+3. **`children_refused_staging_o` claimed a loss the contract forbids.**
+   PART.STATE.md says "stall, never drop", twice. It also counted CYCLES, not
+   children. Renamed `staging_stall_cycles_o`; the module header that justified
+   the old name (and an invented quotation cited as contract text) is corrected.
+4. **PART.SPAWN was built reasoning from a superseded contract sentence.**
+   Amendment C2 ruled the particle scales on 2026-09-02; PART.SPAWN.md and
+   PART.UPDATE.md never got the SUPERSEDED banner that PART.EXPAND.md and
+   PART.SOFT.md carry. Both now have it.
+
+**Still owed on this group:** a committed mutant for PART.UPDATE's step-3/step-4
+swap; `part_update_random.cpp` cannot be built at all (no `zref::ParticleUpdate`
+oracle); PART.COLLIDE estimates 13–14 DSP against a 12 ceiling — an estimate, not
+a measurement; none of the four has been through `quartus_map`.
+
+`design/blocks.yml` maturity for all four is still SPECIFIED and the
+`reference_model` entries are still phantoms — deliberately untouched while
+agents were writing.
+
+### CORRECTION: "the particle core is complete" is not "the missing organs are done"
+
+Owner asked directly. Checked rather than asserted:
+
+- `design/prod_manifest.yml`   — 0 references to any of the four
+- `design/fit_targets.yml`     — 0
+- `fpga/rtl/prod/zhao_prod_top.sv` — 0
+
+**So the four new blocks contribute exactly 0 ALM to any number.** The fit
+running right now does not contain them and cannot. They are BUILT, INSTALLED
+NOWHERE — the first pattern `tools/budget/uncashed_cheques.py` was written to
+catch, and I created four of them in one session.
+
+**And the tool cannot see them.** Check 1 only considers modules that are
+measured or fit-targeted; these are neither, so they are invisible to it. A
+brand-new unadopted block is exactly the case the detector misses, and it misses
+it in the flattering direction. That is a gap in the instrument, not a pass.
+
+Score against the register's 15 rows: **4 built, 1 in flight (GEOM.WARP), 2 not
+ours (SYS.PLL/SYS.RESET, owner ruled they wait for the board), 8 untouched** —
+GEOM.LIGHT, GEOM.LOOM, FORGE.SHADOW, POST.COMPOSITE, POST.ECHO,
+MEASURE.HISTOGRAM, INPUT.SNAC, MATERIAL.LIQUID. Plus the register's own
+"Unresolved" list — MEM.UPLOAD, MATERIAL.RESOLVE, the five FIELD.SEQ.* — still
+undispositioned since it was written this morning.
