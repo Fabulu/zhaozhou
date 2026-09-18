@@ -2924,15 +2924,53 @@ reduction stops occupying ALMs. **This is the cheapest large lever left in the
 render path, and it was found by reading a receipt rather than by guessing at
 source.**
 
-**Not started.** Both changes in `@packet-h-texorder` are unmeasured, and by
-this project's own batching rule the next move is to read that receipt before
-opening a third front.
+#### Cone 3 is IMPLEMENTED, and it lands in the fit after `@packet-h-texorder`
 
-### What this means for the campaign
+Done 2026-09-18. The binner computes `profile_aux_bad` and `profile_area_bad`
+when it **writes** a job and stores them in two of the three pad bits its
+metadata bank already carries; `zhao_geom_bin_pipe_v2` carries the wire; the
+tile pipe reads a verdict instead of reducing 272 bits off the RAM output.
 
-The remaining band is dense: 200 paths between -2.853 and -1.623, across the
-cache pipe, the owner block and the request queues, with no single dominant
-endpoint. Getting from 77.80 to 100 MHz is not one more fix — it is a Timing4-
-shaped campaign whose first two cones are now named and one of which is done
-pending measurement.
+Same edge, same word — so the abort logic's documented same-edge invariant is
+untouched, which is the whole reason this shape was chosen over registering the
+fault term.
+
+**The layout is now stated in two files, so it is checked in both.** The tile
+pipe keeps its original expressions under `synthesis translate_off` and asserts
+them against the delivered bits on every offered job:
+
+```systemverilog
+a_profile_bad_matches_meta : assert
+    ((profile_aux_bad_w  == profile_aux_bad_ref_c) &&
+     (profile_area_bad_w == profile_area_bad_ref_c))
+```
+
+Live in Verilator — this repository proved that by planting a syntax error
+inside such a block and watching lint reject it — and absent from the fabric.
+And an elaboration `$fatal` fires if a `METAW` leaves fewer than two pad bits,
+rather than letting the feature quietly write into the ABI.
+
+31/31 green across the binner, bin pipe, tile pipe, Packet-D and G8A suites;
+lint 0 errors on five tops; `zhao_prod_top` regenerated and confirmed unchanged.
+
+**It is NOT in `@packet-h-texorder`.** That fit snapshotted its 89 sources
+before this change existed, so the receipt now running measures cones 1 and 2
+only. Cone 3 goes into the next one — which is the right batching anyway, since
+`walk_q_r` sits behind both of them.
+
+### Three cones, one method
+
+Every one of the three was found the same way and none of them by reading
+source first:
+
+| | endpoint | what the RECEIPT said | what the SOURCE suggested |
+|---|---|---|---|
+| 1 | `valid_r` | `m_tag_c` → `m_mask_c`, 6.575 ns: select then compare | "the texture cache is slow" |
+| 2 | `h_d_q` | three `Mux4` at island scope, 4.267 ns: a 64:1 fence behind a queue read | `win_gen_of_slot()`, which is not on the path at all |
+| 3 | `walk_q_r` | four `local_fault_pulse_o` levels, 4.85 ns: 272 bits of reduction off a RAM | a fault counter, which is not the cost |
+
+**In two of the three the source's most suspicious-looking construct was not
+the problem.** Grouping by module would have said "texture", "owner" and "tile
+pipe" and stopped. The Data Arrival Path names levels; everything else names
+candidates.
 
