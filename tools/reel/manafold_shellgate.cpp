@@ -9,12 +9,14 @@
 // protection underneath his judgement rather than a substitute for it:
 //
 //   1. the shell reaches OUTSIDE the silhouette                    (§14.1)
-//   2. the CORE KEEPS ITS OWN PIGMENT                             (D11 §2.3)
-//   3. density RISES INWARD from the gas's outer edge              (D11 §2.3)
+//   2. the CORE KEEPS ITS OWN PIGMENT                       (D15 §1)
+//   3. density RISES INWARD from the gas's outer edge       (D15 §3)
 //   4. the ink is painted LESS than it would be without its mask   (§14.1)
 //   5. alpha 0 changes not one pixel                        (the revert path)
 //   6. the annulus SCALES WITH THE BODY, not with a pixel count    (D11 §2.3)
-//   7. the fog is an OUTER LAYER -- its peak is in the outer half   (D11 §2.3)
+//   7. the fog peak is near/just inside the contour          (D15 §2)
+//   8. transmission exposes the saved scene, not merely tint       (D12)
+//   9. inward reach is LIMITED so most of the ball stays solid     (D15 §1-3)
 //
 // ⚠ PASS 15 LANE-FX-2 INVERTED CHECK 2 AND ADDED 7, BECAUSE THE GATE WAS
 // GREEN ON THE BUILD THE BY-EYE REVIEW REFUSED.
@@ -91,8 +93,9 @@
 //       -I<repo>/tests/render -I<repo>/reference/src \
 //       tools/reel/manafold_shellgate.cpp -o shellgate.exe
 //
-// Run:  shellgate.exe            (all checks; rc 0 = pass)
-//       shellgate.exe --selftest (every failing leg must fail; rc 0 = pass)
+// Run:  shellgate.exe              (all checks; rc 0 = pass)
+//       shellgate.exe --selftest   (every failing leg must fail; rc 0 = pass)
+//       shellgate.exe --legacy-p16 (180/800/750 must fail Direction 15 check 9)
 
 #include <cstdio>
 #include <cstdlib>
@@ -338,7 +341,8 @@ std::vector<Result> run(int break_check) {
       if (v < 0) v = -v;
       paint.push_back(v);
       inset.push_back(-k);
-      d += std::to_string(v) + " ";
+      if (!d.empty()) d += " ";
+      d += std::to_string(v);
     }
     size_t peak = 0;
     for (size_t q = 1; q < paint.size(); ++q)
@@ -498,7 +502,11 @@ std::vector<Result> run(int break_check) {
     u02::shell_paint(no.rgb.data(), behind.data(), kW, kH, no.cover.data(),
                      no.ink.data(), alpha);
     u02::g_u02_shell_transmission_pm = saved;
-    const int x = cx + rad8 - 7;
+    const int sample_inset = std::max(
+        2, static_cast<int>((static_cast<int64_t>(rad8) *
+                             u02::g_u02_shell_depth_pm) /
+                            1000));
+    const int x = cx + rad8 - sample_inset;
     const size_t at = (static_cast<size_t>(cy) * kW + x) * 3;
     int delta = 0;
     for (int k = 0; k < 3; ++k)
@@ -509,6 +517,41 @@ std::vector<Result> run(int break_check) {
                   "same fog with transmission=0 (shipping transmission=%d pm)",
                   x, cy, delta, saved);
     r.push_back({"8 the shell is ACTUALLY SEE-THROUGH (D12)", delta > 0, b});
+  }
+  // ---- 9. inward reach is LIMITED; most of the ball remains solid --------
+  // Direction 15 supersedes Pass 16's broad 180/800/750 transmission. On a
+  // radius-40 body, any painted/transmitted pixel deeper than the outer third
+  // means the mist has become a body-wide veil again. The red leg restores the
+  // exact Pass-16 geometry/transmission rather than nulling an input.
+  {
+    const int rad9 = 40;
+    Scene t = make_scene(rad9, 70);
+    Scene z = make_scene(rad9, 70);
+    const int saved_peak = u02::g_u02_shell_depth_pm;
+    const int saved_decay = u02::g_u02_shell_decay_pm;
+    const int saved_transmission = u02::g_u02_shell_transmission_pm;
+    if (break_check == 9) {
+      u02::g_u02_shell_depth_pm = 180;
+      u02::g_u02_shell_decay_pm = 800;
+      u02::g_u02_shell_transmission_pm = 750;
+    }
+    u02::shell_paint(t.rgb.data(), kW, kH, t.cover.data(), t.ink.data(), alpha);
+    u02::g_u02_shell_depth_pm = saved_peak;
+    u02::g_u02_shell_decay_pm = saved_decay;
+    u02::g_u02_shell_transmission_pm = saved_transmission;
+    int deepest = 0;
+    for (int k = 0; k <= rad9; ++k) {
+      const int x = cx + rad9 - k;
+      if (lum_at(t.rgb, x, cy) != lum_at(z.rgb, x, cy)) deepest = k;
+    }
+    const int limit = rad9 / 3;
+    const bool ok = deepest > 0 && deepest <= limit;
+    char b[220];
+    std::snprintf(b, sizeof(b),
+                  "mist reaches %d px inside a radius-%d body; must stay within "
+                  "the outer third (%d px) so the broad core remains solid",
+                  deepest, rad9, limit);
+    r.push_back({"9 inward reach is LIMITED; body core stays SOLID (D15)", ok, b});
   }
   return r;
 }
@@ -569,8 +612,25 @@ static int regression_control() {
   return bad > 0 ? 0 : 1;
 }
 
+static int legacy_pass16_control() {
+  std::printf("-- LEGACY PASS-16 CONTROL: broad 180/800/750 shell\n"
+              "   Direction 15 rejects this body-wide transmission. Check 9 must go RED.\n");
+  u02::g_u02_shell_depth_pm = 180;
+  u02::g_u02_shell_decay_pm = 800;
+  u02::g_u02_shell_transmission_pm = 750;
+  const std::vector<Result> rs = run(0);
+  const int bad = report(rs, "SHELL GATE against the PASS-16 broad-transparency control");
+  const bool caught_by_inward_reach = rs.size() >= 9 && !rs[8].ok;
+  std::printf("%s\n", caught_by_inward_reach
+                           ? "shellgate --legacy-p16: CAUGHT IT -- limited inward reach goes red"
+                           : "shellgate --legacy-p16: MISSED IT -- check 9 blessed broad transmission");
+  return bad > 0 && caught_by_inward_reach ? 0 : 1;
+}
+
 int main(int argc, char** argv) {
   const bool selftest = argc > 1 && std::strcmp(argv[1], "--selftest") == 0;
+  if (argc > 1 && std::strcmp(argv[1], "--legacy-p16") == 0)
+    return legacy_pass16_control();
   if (argc > 1 && std::strcmp(argv[1], "--regression") == 0)
     return regression_control();
   if (!selftest) {
@@ -580,7 +640,7 @@ int main(int argc, char** argv) {
   }
   // Every check must be demonstrably breakable through the real code path.
   int unbreakable = 0;
-  for (int k = 1; k <= 8; ++k) {
+  for (int k = 1; k <= 9; ++k) {
     char t[96];
     std::snprintf(t, sizeof(t), "SELFTEST: check %d must FAIL when broken", k);
     const std::vector<Result> rs = run(k);

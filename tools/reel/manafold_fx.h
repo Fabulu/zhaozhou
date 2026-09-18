@@ -768,34 +768,16 @@ constexpr int kCoreOfHaloPm = 640;
 // R being the deepest interior point of the cover mask this frame, so the fog
 // breathes with the bounce instead of being a fixed pixel count over a body
 // that changes size.
-// PASS 15 LANE-FX-2: 520 -> 180, AND THIS IS THE KNOB THAT DESTROYED THE FORM.
-// At 520 the annulus ran 52% of the radius, so the fog's PEAK sat 0.52 R in --
-// the middle of the ball -- and the creature became a chalky marble
-// (PASS-15-REVIEW.md s1, plate J01: "the fog is on the wrong side of the ink
-// line"). 180 makes it what the sentence says, an OUTER layer.
-//
-// Picked off pass15-fx2-plates/A02 (inspect f0300, six rungs, ONE binary
-// a5f028ff, with an ABLATED rung and a deliberately-too-far rung). At 200 the
-// core was already indistinguishable from the ablated tile; 180 with the
-// re-authored gamma is where the gas still reads plainly at native 384x240.
-//
-// ⚠ IT IS ALSO THE DECAY LENGTH, and that is one knob doing two jobs
-// (09-ENGINE-GOTCHAS s14). The profile rises to its peak at `out+ann` and then
-// falls to the floor over ONE MORE `ann`, so widening the annulus also softens
-// the inner edge. That coupling is why the shipped 520 produced a TIDEMARK --
-// a hard wandering boundary across the lower body (J02) -- rather than a
-// gradient: the decay was landing across the middle of the animal, where the
-// terminator's own cel bands are, and the two fought. Left coupled because at
-// 180 the decay lands in the rim where nothing competes with it; split it
-// before ever widening this again.
-constexpr int kShellPeakDepthPm = 180;
-// Direction 12 splits the old coupled control. The peak stays on the accepted
-// outer rim while a longer independent decay lets translucency affect more of
-// the body without dragging the brightest fog back across the terminator.
-// Independent review rejected the earlier 500/420 rung as too narrow/opaque.
-// The 800 rung carries the gradient through most of the outer body while the
-// peak itself stays at 180, so the terminator is not replaced by a bright band.
-constexpr int kShellDecayDepthPm = 800;
+// PASS 17 / Direction 15 supersedes Pass 16's broad transmission: most of the
+// body ball is solid; mist lives outside and only a little inside the ink line,
+// thickest at the contour-centred ridge and thinning outward. A same-binary
+// six-rung ladder at native/multi-view/4x selected 100 by looking. Pass 16's
+// 180 peak remains an explicit diagnostic control, not the shipping value.
+constexpr int kShellPeakDepthPm = 100;
+// Direction 12 split the old coupled control. Direction 15 now selects 140:
+// enough inward decay for a soft ridge, but narrow enough that the broad core
+// remains solid. Pass 16's 800 decay is the rejected legacy control.
+constexpr int kShellDecayDepthPm = 140;
 constexpr int kShellFogDepthPm = kShellPeakDepthPm;  // legacy name for gates/reports
 // A floor, so a small or distant subject still gets a band rather than a
 // rounding error. NOT a substitute for the fraction: the fraction is the thing.
@@ -920,13 +902,10 @@ constexpr int32_t kShellInReachPx_legacy_p12 = 6;
 // If a fifth pass is ever tempted to move this number, that is the signal to go
 // and find the mechanism instead.
 constexpr int kShellAlphaMaxPm = 450;     // fog scatter at the annulus peak
-// Direction 12: actual see-through, distinct from tint/alpha. At the shell
-// peak this much of the already-rendered pigment yields to the saved scene
-// behind the creature before fog colour is applied. Authored by eye.
-// Review likewise found 420 still read as opaque at sheet scale. 750 is the
-// first authored rung where the scene plainly reads through broad outer-body
-// regions; lowering fog scatter to 450 preserves pigment over that transmission.
-constexpr int kShellTransmissionPm = 750;
+// Actual see-through, distinct from tint/scatter. Direction 15 selects 180 so
+// the contour mist yields slightly to the scene while the ball's broad interior
+// remains solid. Pass 16's 750 transmission is the same-binary rejected control.
+constexpr int kShellTransmissionPm = 180;
 // THE GAS COLOUR: fog versus bleach. Pass 15 declared this "the axis that
 // decides fog vs bleach" and that it "has never been swept in any pass". Both
 // were true, and LANE-FX-2 found the reason it had never been swept: the

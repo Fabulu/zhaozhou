@@ -25,6 +25,6 @@ Every render returned RC 0. Unlisted controls retain shipping defaults: scatter/
 
 Select **D: peak 100 / decay 140 / transmission 180** as the current authored Pass-17 body-optics values. This is a visual choice from final-resolution scenes, not a value generated from the old shell measurements. Keep the other independent defaults named and unchanged unless the integrated target bank shows a concrete problem.
 
-The same-binary legacy control is explicit `180/800/750`; it must restore the rejected broad transparency. `manafold_shellgate` must be re-aimed before closure to assert a solid untouched core, limited inward reach, a peak near/just inside the contour and outward thinning. The gate preserves the selected picture; it does not choose these values.
+The same-binary legacy control is explicit `180/800/750`; it restores the rejected broad transparency. `manafold_shellgate` is re-aimed to nine structural checks: solid untouched core, contour-adjacent peak, monotone outward thinning, body-scaled band, limited inward reach and real scene transmission among them. Normal, nine-leg selftest, Pass-16 legacy control and historical Pass-15 regression control all return RC 0. The new limited-inward-reach check goes red on 180/800/750 specifically. The gate preserves the selected picture; it does not choose these values.
 
 Final targeted review still covers Inspect plus Hover/Rest views before the full bank. If D loses visible contour mist in those scenes, adjust the named ladder by eye rather than broadening the interior mechanically.
