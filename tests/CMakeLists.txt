@@ -9796,6 +9796,20 @@ set_tests_properties(material_combine_v3_done_bypass_double_issue_control
 # what the manifest is for. Its fire case is asserted at import (see
 # gate_failures' controls), so this is not a test that has never been seen to
 # fail.
+# setup_path_census.py parses a Quartus *.setup.rpt. Running it with no
+# arguments prints usage and returns 2, which is NOT what this test is for --
+# the value is that its import-time self_test() runs, and that self-test
+# asserts the parser still finds `Summary of Paths` AND still rejects the two
+# delay-detail tables whose rows share the same column shape. Confusing those
+# three tables turned 200 negative paths into "1,600 paths, 1,400 of them
+# meeting timing" on 2026-09-18. The report is run by hand; this test exists
+# so the parser cannot rot between runs.
+add_test(NAME setup_path_census_selftest
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/budget/setup_path_census.py
+    ${CMAKE_SOURCE_DIR}/reports/synthesis/blockpaths/zhao_shell_top_v2@packet-h-mulstage.setup.rpt)
+set_tests_properties(setup_path_census_selftest PROPERTIES
+  LABELS "fast;lint;budget" TIMEOUT 120)
 add_test(NAME uncashed_cheques
   COMMAND "${Python3_EXECUTABLE}"
     ${CMAKE_SOURCE_DIR}/tools/budget/uncashed_cheques.py
