@@ -93,8 +93,7 @@ PROTECTED_HASHES = {
         "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61",
     "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv":
         "f2c0ee4d054e2f70a37c4179c4fb985b0ba3f95c5533f598858b3b315e57497b",
-    "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
-        "2955128d655469f1a79f694797af0e70f521bbee08100c7c2190cda7cd2e4b9a",
+
     # `fpga/rtl/raster/zhao_raster_attrgrad_v2.sv` WAS HERE and is now in
     # CURRENT_HASHES below. Owner decision, 2026-09-18, asked rather than
     # assumed because the roadmap's rule is that a file in this set is not
@@ -105,6 +104,10 @@ PROTECTED_HASHES = {
     # it cannot assert any more is that the file has never moved, so keeping it
     # here with a bumped hash would have left the word "protected" meaning
     # something weaker than it reads.
+    #
+    # `fpga/rtl/raster/zhao_raster_attrdiv_v2.sv` also moved to CURRENT_HASHES,
+    # 2026-09-18, for the same Packet-H timing reason as attrgrad: its
+    # saturation test now judges a registered value instead of `num_i`.
     #
     # `fpga/rtl/geometry/zhao_geom_binner_v2.sv` also moved to CURRENT_HASHES,
     # 2026-09-18, and for a COMMENT rather than for logic.
@@ -137,8 +140,31 @@ CURRENT_HASHES = {
     # is held to that by `raster_attrgrad_dsp3_diff`, which drives this module
     # and `zhao_raster_attrgrad_dsp3` from one stimulus and compares them --
     # an independent second implementation, untouched by this work.
+    #
+    # Refreshed at d85e2965, which split the two 48x48 multiplies onto their
+    # own edge (`mul_x_r` / `mul_y_r` / `n0_r`). The pin was left at the
+    # tree-only value for one commit -- caught by this very test, which is
+    # what it is for: a CURRENT_HASHES entry is a record of the bytes as of
+    # its last review, so it goes red on the next edit by design, and the
+    # red is the prompt to write down what moved rather than a failure.
     "fpga/rtl/raster/zhao_raster_attrgrad_v2.sv":
-        "083b98868df3ecd538942fd9e680cf48adad4f46a9e5af680d655616e74e495c",
+        "d148bc92b5672efe9a8b2bdea93d48f51f65c93b335dec26396e48f86c5bb9f0",
+    # Moved out of PROTECTED_HASHES on 2026-09-18, same day and same reason as
+    # attrgrad above: a measured timing change, several packets after Packet E.
+    #
+    # The saturation test used to be evaluated combinationally from `num_i` on
+    # the capture edge -- a 97-bit round-and-add plus two 97-bit signed compares
+    # -- sharing that edge with attrgrad's adder tree upstream. The composed fit
+    # measured the pair as ONE path, 15.67 ns against a 10.000 ns period, of
+    # which this module held 8.68. A new D_SAT state judges the REGISTERED value
+    # instead, so the cone starts at flip-flops.
+    #
+    # The arithmetic is untouched, expression for expression: the exact-law leaf
+    # is still ZHAO_ATTR_V2_ROUND_NUM with the same two operands, and only their
+    # source moved from inputs to the registers captured one edge earlier. The
+    # negative-half mutant still selects it and still passes.
+    "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
+        "756643d985e8f0227000008f5f6e072416970c91b874c6d80e2b60e28f156b08",
     # Comment only: the ENFORCED-BY that closed the last ledger_check error.
     # No logic, no ports, no widths -- see the note in PROTECTED_HASHES above.
     "fpga/rtl/geometry/zhao_geom_binner_v2.sv":

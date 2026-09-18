@@ -3095,3 +3095,24 @@ criticised two entries ago about the wrapper itself.
 
 So: scoped, not started, and the scope written down. It is a sub-project, not a
 gap to close between fits.
+
+## 2026-09-18 — where I was when @packet-h-mulstage came back
+
+IN PROGRESS, not yet committed: the attrdiv saturation split.
+`fpga/rtl/raster/zhao_raster_attrdiv_v2.sv` state widened to [2:0], new
+`D_SAT = 3'd4`; the saturation test moved off `num_i` onto the registers
+captured one edge earlier, so its cone starts at flip-flops. 11/11 directed
++ mutant + both DSP3 differential arms pass. Hash pins in
+`tests/tools/test_render_texture_packet_e.py` moved attrdiv out of
+PROTECTED_HASHES into CURRENT_HASHES, and refreshed attrgrad's stale pin
+(it had been left at the tree-only value across commit d85e2965, the
+multiply split -- the test caught it, which is what it is for).
+
+NEXT STEP, in order, before attending anything the fit says:
+1. commit the attrdiv split + the two pin moves
+2. read the @packet-h-mulstage receipt (prediction on record: Fmax
+   ~70-72 MHz, worst ~-3.9, TNS down, ALM within +/-400)
+3. read the fast-suite result (job bf7ubn18m) -- BUILD_RC=0 already seen
+4. fit the attrdiv change
+5. Packet J / G8C, then K, then R1-R9
+

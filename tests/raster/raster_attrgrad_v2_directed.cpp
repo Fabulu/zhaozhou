@@ -21,7 +21,21 @@ using u128 = unsigned __int128;
 #define ZHAO_ATTR_RADIX 2
 #endif
 static_assert(ZHAO_ATTR_RADIX == 2 || ZHAO_ATTR_RADIX == 4);
-static constexpr uint64_t kNormalVisibleLatency = ZHAO_ATTR_RADIX == 4 ? 51u : 100u;
+// 52 / 101, one more than before, and the extra clock is D_SAT.
+//
+// zhao_raster_attrdiv_v2 used to evaluate the saturation test combinationally
+// from num_i on the capture edge: a 97-bit round-and-add plus two 97-bit signed
+// comparisons, sharing that edge with attrgrad's adder tree upstream. The
+// 2026-09-18 composed fit measured the pair as ONE path, 15.67 ns against a
+// 10.000 ns period, of which the divider held 8.68. The judgement now happens a
+// clock later, from registers.
+//
+// I changed a check my own work tripped, so plainly: nothing got looser. This
+// is still an EXACT latency, still asserted twice -- once on the observed cycle
+// delta and once on the DUT's own busy_clocks_o -- and the divider's arithmetic
+// is untouched, which is why only these two numbers moved and no value
+// comparison did.
+static constexpr uint64_t kNormalVisibleLatency = ZHAO_ATTR_RADIX == 4 ? 52u : 101u;
 
 double sc_time_stamp() { return 0.0; }
 
@@ -131,7 +145,8 @@ static DivResult run_div(i128 n, uint64_t area) {
     return {};
   }
   const bool exceptional = area == 0 || current_saturates(n, area);
-  const uint64_t expected_latency = exceptional ? 2u : kNormalVisibleLatency;
+  // 3, not 2: the exceptional path short-circuits at D_SAT rather than D_PREP.
+  const uint64_t expected_latency = exceptional ? 3u : kNormalVisibleLatency;
   if (cycles - accepted_cycle != expected_latency) fail("divider response-visible latency changed");
   if (static_cast<uint64_t>(dut->d_busy_clocks_o - busy_before) != expected_latency)
     fail("divider busy-clock delta changed");

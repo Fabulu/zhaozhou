@@ -3,9 +3,11 @@
 // q = sat_s32(floor((num + floor(area/2)) / area)), area > 0.
 // Unlike the retained unversioned candidate, a negative exact half therefore
 // rounds toward positive infinity.  Saturation is a valid oracle result and is
-// reported separately from the terminal zero-area error. A dedicated preparation
-// clock reuses the dividend bank to separate rounding from magnitude formation;
-// it adds one clock without adding a second wide register bank.
+// reported separately from the terminal zero-area error. TWO preparation clocks
+// reuse the dividend bank in sequence -- raw, rounded, magnitude -- so rounding,
+// the saturation judgement and magnitude formation each get their own edge
+// without adding a second wide register bank. The second of them was added
+// 2026-09-18 to take the saturation compare off the input edge; see D_SAT.
 //
 // ENFORCED-BY: tests/raster/raster_attrgrad_v2_directed.cpp
 `default_nettype none
@@ -45,12 +47,30 @@ module zhao_raster_attrdiv_v2 #(
   localparam int unsigned QPOS  = 98;
   localparam int unsigned STEPS = QPOS / RBITS;
 
-  localparam logic [1:0] D_IDLE = 2'd0;
-  localparam logic [1:0] D_RUN  = 2'd1;
-  localparam logic [1:0] D_DONE = 2'd2;
-  localparam logic [1:0] D_PREP = 2'd3;
+  // D_SAT SPLITS THE SATURATION TEST OFF THE INPUT EDGE, which widened the
+  // state register from two bits to three.
+  //
+  // `sat_pos_c`/`sat_neg_c` used to be evaluated combinationally from `num_i`
+  // in D_IDLE: one 97-bit round-and-add followed by TWO 97-bit signed
+  // comparisons, all on the same edge that captured the value. And `num_i` is
+  // `zhao_raster_attrgrad_v2`'s freshly-summed `row_num_c`, so the adder tree
+  // upstream shares that edge too.
+  //
+  // The 2026-09-18 composed fit measured the pair as one path: 15.67 ns against
+  // a 10.000 ns period, of which THIS module held 8.68 -- `Add0` at 3.21, the
+  // `LessThan0` chain at 3.87 and `final_sat_r` at 1.60. That is why the
+  // divider's share grew when the tree shrank: they were never two paths.
+  //
+  // Now D_IDLE captures the raw numerator, D_PREP rounds it and judges the
+  // REGISTERED value, and D_SAT acts on the verdict. Every operand of the
+  // comparison starts at a flip-flop.
+  localparam logic [2:0] D_IDLE = 3'd0;
+  localparam logic [2:0] D_RUN  = 3'd1;
+  localparam logic [2:0] D_DONE = 3'd2;
+  localparam logic [2:0] D_PREP = 3'd3;
+  localparam logic [2:0] D_SAT  = 3'd4;
 
-  logic [1:0] st_r;
+  logic [2:0] st_r;
   logic [6:0] iter_r;
   logic       neg_r;
 
@@ -64,27 +84,41 @@ module zhao_raster_attrdiv_v2 #(
   logic               final_err_r;
 
   logic signed [96:0] area_ext_c;
-  logic signed [96:0] rounded_num_c;
+  logic signed [96:0] rounded_num_r_c;
   logic signed [96:0] pos_sat_limit_c;
   logic signed [96:0] neg_sat_limit_c;
-  logic               sat_pos_c, sat_neg_c;
+  logic               sat_pos_r_c, sat_neg_r_c;
   logic        [97:0] magnitude_c;
 
+  // EVALUATED IN D_PREP FROM REGISTERS, not in D_IDLE from the inputs.
+  //
+  // The arithmetic is unchanged, expression for expression -- `area_ext_c` is
+  // the same sign-extension of the same 47-bit area, and the exact-law leaf is
+  // still `ZHAO_ATTR_V2_ROUND_NUM` with the same two operands. Only the SOURCE
+  // of those operands moved: `den_r` instead of `area_i`, and the raw numerator
+  // held in `dividend_r` instead of `num_i`. Both were captured on the previous
+  // edge, so the cone now starts at flip-flops.
+  //
+  // The committed negative-half mutant still selects exactly this expression
+  // and nothing else, which is why the split is a relocation rather than a
+  // rewrite of the law.
   always_comb begin
-    area_ext_c     = $signed({50'd0, area_i});
-    // Exact law leaf.  The committed negative-half mutant selects only this
-    // expression; it does not copy the divider or its transport.
-    rounded_num_c  = `ZHAO_ATTR_V2_ROUND_NUM(num_i, area_ext_c);
-    pos_sat_limit_c = area_ext_c <<< 31; // (INT32_MAX + 1) * area
+    area_ext_c      = $signed({50'd0, den_r});
+    rounded_num_r_c = `ZHAO_ATTR_V2_ROUND_NUM($signed(dividend_r[96:0]),
+                                              area_ext_c);
+    pos_sat_limit_c = area_ext_c <<< 31;    // (INT32_MAX + 1) * area
     neg_sat_limit_c = -(area_ext_c <<< 31); // INT32_MIN * area
-    sat_pos_c = (area_i != 47'd0) && (rounded_num_c >= pos_sat_limit_c);
-    sat_neg_c = (area_i != 47'd0) && (rounded_num_c <  neg_sat_limit_c);
+    sat_pos_r_c = (den_r != 47'd0) && (rounded_num_r_c >= pos_sat_limit_c);
+    sat_neg_r_c = (den_r != 47'd0) && (rounded_num_r_c <  neg_sat_limit_c);
   end
 
   // The fitted G8A path formerly combined input rounding with this 98-bit
-  // magnitude/bias formation on the dividend register's input. D_IDLE now
-  // captures the signed rounded value in dividend_r; D_PREP reuses that same
-  // bank to form the unsigned long-division dividend one clock later.
+  // magnitude/bias formation on the dividend register's input. D_PREP now
+  // captures the signed rounded value in dividend_r; D_SAT reuses that same
+  // bank to form the unsigned long-division dividend one clock later. (Those
+  // were D_IDLE and D_PREP until 2026-09-18; the states shifted by one when the
+  // saturation compare moved off the input edge, and the bank reuse below is
+  // unchanged.)
   // ONE 98-BIT CARRY CHAIN, NOT THREE. The negative branch used to materialize
   // a negate, then add the denominator, then subtract one -- three dependent
   // 98-bit additions in the D_PREP cone, which the Timing3 census reports as
@@ -183,12 +217,15 @@ module zhao_raster_attrdiv_v2 #(
       case (st_r)
         D_IDLE: begin
           if (v_valid_i && v_ready_o) begin
-            // Reuse dividend_r as the preparation register: sign-extend the
-            // exact rounded numerator now, then overwrite it with magnitude in
-            // D_PREP. This avoids a second 97-bit bank in all three lanes.
-            dividend_r   <= {rounded_num_c[96], rounded_num_c};
-            neg_r         <= rounded_num_c[96];
-            final_sat_r   <= sat_pos_c || sat_neg_c;
+            // Capture the RAW numerator. dividend_r is still the one
+            // preparation bank -- it now holds three things in sequence rather
+            // than two: the raw value here, the rounded value in D_PREP, the
+            // unsigned magnitude in D_SAT. Still no second 97-bit bank.
+            // 96-bit input into a 98-bit bank: TWO sign bits, not one. The
+            // old form extended an already-97-bit rounded value by one, and
+            // reusing its shape here silently lost a bit -- caught by
+            // WIDTHEXPAND rather than by a test, which is the cheaper place.
+            dividend_r   <= {{2{num_i[95]}}, num_i};
             final_err_r   <= (area_i == 47'd0);
             den_r         <= area_i;
             rem_r         <= 49'd0;
@@ -198,6 +235,16 @@ module zhao_raster_attrdiv_v2 #(
         end
 
         D_PREP: begin
+          // Round and judge, both from registers. `rounded_den_c` and the two
+          // saturation limits derive from `den_r`, not `area_i`, so nothing in
+          // this cone reaches back to a module input.
+          dividend_r  <= {rounded_num_r_c[96], rounded_num_r_c};
+          neg_r       <= rounded_num_r_c[96];
+          final_sat_r <= sat_pos_r_c || sat_neg_r_c;
+          st_r        <= D_SAT;
+        end
+
+        D_SAT: begin
           if (final_err_r) begin
             final_q_r <= 32'sd0;
             st_r      <= D_DONE;
