@@ -30,6 +30,10 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Flight currently runs four 300 mm bobs across 176 keys. Native review shows real motion but a repeated bounce read; version 18 needs independent amplitude/cadence ladders, complete-frame looking and protected seam/framing/carrier/effect checks.
 - Trick architecture is a planted yaw show-off, not another pitch turn: keep the accepted 180-degree pure-X plant and face correction, pause, perform one full C2 yaw revolution about the vertical support axis, overshoot/correct to identity, then use the existing righting. Strengthen contact proof to identify antenna support rather than merely any deepest vertex.
 - Site recon confirms Mana menu/lab can become one archived `Version 17 experiments` generation by data only. Archived collections use controls+loop, no autoplay and preload none. Coordinate the six menu files with the full version-17 byte archive so no media is overwritten or declared twice.
+- Architecture ratified in `V18-ARCHITECTURE.md`; durable owner-facing scope/sequence lives in `VERSION-18-INVENTORY.md` and `VERSION-18-PLAN.md`.
+- Root authority uses no new bone: authored core centres/support windows make the full Front/End visible profile JunctionF/RearSocket-owned, with an exact legacy-split control. Front gains append-only X/Y `HingePlay` fields while Neck and signed spans retain separate authority.
+- Root material uses generator-authored body-style front/rear transitions. Generic normals/topology remain untouched unless settled native pictures still prove a defect; root-inner ink exclusion is conditional and pose-derived, never a hand mask.
+- Version-18 delivery is six bounded waves: immutable site archive; structural root/Front instruments; root material/conditional ink; swell/Front art; live-history/mana/particle cleanup; Flight/Trick art. Each closure commits and pushes independently before one 22-subject exact bank.
 
 ---
 
@@ -39,6 +43,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 |---|---|---|---|---|
 | 2026-09-19 | GPT fork antenna/root recon | Trace both body connections, carrier sizing/flexibility, material/ink/normals and bounded particle overlap | Complete — root material/skin authorities identified; pre-layer particle A/B recommended | `V18-ANTENNA-ROOT-RECON.md` |
 | 2026-09-19 | GPT fork clip/site recon | Trace Drift/Crackle/Blown mana, Hasty history, Flight/Trick motion and menu/lab archive behavior | Complete — live mist is the shared relic trail; Crackle alone uses old candidate; planted yaw-spin architecture and archive move defined | `V18-CLIP-SITE-RECON.md` |
+| 2026-09-19 | GPT fork architecture | Ratify one structural/art/site architecture and exact wave/gate boundaries | Complete — no helper/generic format; root support ownership, Front axes, staged material, archive and clip paths fixed | `V18-ARCHITECTURE.md` |
 
 ---
 
@@ -51,6 +56,8 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - `V18-PARTICLE-ANTENNA-BASELINE-4X.png`.
 - `V18-CLIP-SITE-RECON.md`.
 - `V18-RELIC-MANA-BASELINE-NATIVE.png`, `V18-HASTY-TRAIL-4X.png`, `V18-FLIGHT-BASELINE-NATIVE.png` and `V18-TRICK-BASELINE-NATIVE.png`.
+- `V18-ARCHITECTURE.md`.
+- `Upheaval/creature/Manafold/VERSION-18-INVENTORY.md` and `VERSION-18-PLAN.md`.
 
 ---
 
@@ -65,12 +72,16 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Treat Crackle as the only actual old-mana subject: compare its candidate-4/night control against ordinary candidate 9/day before promoting the normal presentation.
 - Build Trick's added show-off as a full planted yaw revolution with overshoot/correction, not a second pitch rotation that would break physical antenna support.
 - Move Mana menu/lab as one archived version-17 experiment generation; archived collections remain controls-only and their media bytes are preserved once.
+- Add no helper bone or generic normal/topology format: make complete root profile supports rigidly carrier-owned, then judge generator-authored body-style root texture before any conditional ink exclusion.
+- Front flexibility adds only append-only JunctionF X/Y fields; existing fold Z, Neck articulation and signed length remain separate authorities.
+- Version-18 live/site bank has 22 subjects after the six-menu collection moves to archive; final encode therefore produces 44 live media files.
+- Trick's spin is authored/traced as unwrapped per-mille progress and converted to angle16 only at quaternion construction; support contact is proven on antenna-region vertices.
 
 ---
 
 ## Next Steps
 
-1. Ratify the combined version-18 architecture from both recons: root profile/core alignment, Front channels, root atlas/ink ownership, swell ladder, bounded particle control, live-history retirement, Crackle normalisation, Flight ladder, planted Trick yaw-spin and archive sequencing.
-2. Implement in bounded structural/site and art waves; name every one-binary control and final-resolution stop before changing values.
-3. Independently review source/gates and complete native motion after each wave.
-4. Render one exact version-18 bank, review every frame in isolated contexts, encode, commit/push, fast-forward mains, publish and verify production bytes.
+1. Implement and commit/push Wave A: immutable version-17 archive plus archived Mana menu/lab, with hash/playback/noindex/decode gates.
+2. Implement Wave B root ownership/Front channels/diagnostic controls without choosing art values; independently review gates/source.
+3. Continue Waves C–F in order, choosing material, swell, particle, Flight and Trick values only from complete native motion.
+4. Run one integrated targeted gate, then one exact 22-subject version-18 bank, isolated review, encode, publication and production-byte verification.
