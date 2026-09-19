@@ -880,7 +880,7 @@ module tb_zhao_shell (
       .t_valid_o(asm_t_valid), .t_ready_i(1'b1),
       .t_v0_o(asm_v0), .t_v1_o(asm_v1), .t_v2_o(asm_v2),
       .t_material_o(asm_material), .t_raster_o(asm_raster),
-      .t_src_id_o(asm_src), .t_last_o(asm_t_last),
+      .t_src_id_o(asm_src), .t_last_o(asm_t_last), .m_done_o(),
       .meshlets_o(asm_meshlets), .triangles_o(dbg_asm_triangles_o),
       .refused_limits_o(asm_ref_lim), .refused_index_o(asm_ref_idx));
 
@@ -1082,12 +1082,15 @@ module tb_zhao_shell (
       // not read the field at all -- exactly the kind of thing this staircase
       // exists to stop being true.
       .m_src_id_i(16'd0),
+      .m_visible_mask_i(2'b01),
+      .m_material_id_i(16'd0),
       .m_client_i(realmem_mode_i ? ZHAO_CLIENT_ENGINE1 : zhao_client_e'(0)),
       .guard_req_o(af_guard_req), .guard_rsp_i(af_guard_rsp),
       .beat_valid_i(af_beat_valid), .beat_data_i(af_beat_data),
       .beat_last_i(af_beat_last),
       .s_valid_o(af_s_valid), .s_ready_i(1'b1),
       .s_vertex_count_o(), .s_triangle_count_o(), .s_src_id_o(),
+      .s_visible_mask_o(), .s_material_id_o(),
       .release_i(1'b0),
       // TREAD 9: the index port is wired. `ix_req_i` is gated on the mode so
       // tread 8's behaviour is unchanged when it is off.

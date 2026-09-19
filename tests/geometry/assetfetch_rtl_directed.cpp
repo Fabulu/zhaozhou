@@ -242,18 +242,32 @@ struct Sim {
     d.m_triangle_count = r.triangle_count;
     d.m_src_id = kSrcId;
     d.m_client = kClientEngine1;
+    // The two CARRIED fields (visible mask, material id) change every offer,
+    // so a stale capture from the previous meshlet cannot pass.
+    ++offers_;
+    const uint8_t vis = static_cast<uint8_t>(1u + (offers_ % 3u));        // 1..3
+    const uint16_t mat = static_cast<uint16_t>(0x1000u + 0x0101u * offers_);
+    d.m_visible_mask = vis;
+    d.m_material_id = mat;
     d.m_valid = 1;
 
     int waited = 0;
     while (!d.m_ready && waited++ < 200) step();
     step();  // the accepting edge
     d.m_valid = 0;
+    // CAPTURED, not live: scramble the inputs the moment they were taken.
+    d.m_visible_mask = static_cast<uint8_t>(vis ^ 3u);
+    d.m_material_id = static_cast<uint16_t>(~mat);
 
     // Admitted meshlets leave S_IDLE, so m_ready falls; a refusal never
     // leaves, so it is still high right here. That is the whole distinction.
     d.s_ready = 1;
     for (int i = 0; i < budget; ++i) {
       if (d.s_valid) {
+        ck(d.s_visible_mask == vis,
+           "the servable meshlet carries the visible mask captured WITH it");
+        ck(d.s_material_id == mat,
+           "the servable meshlet carries the material id captured WITH it");
         step();  // s_ready is high, so this accepts it
         d.s_ready = 0;
         return true;
@@ -303,6 +317,8 @@ struct Sim {
     d.v_ready = 0;
     return false;
   }
+
+  uint32_t offers_ = 0;
 
   void release() {
     d.release_pulse = 1;

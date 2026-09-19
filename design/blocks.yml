@@ -3782,6 +3782,48 @@ blocks:
       local index resolves to a DIFFERENT projected vertex per view, so the walk
       runs once per visible view. May alternatively be folded into GEOM.MESHFETCH;
       what is not optional is that one named block owns it.
+
+      2026-09-19 (geom packet): `m_done_o` added -- one pulse on every way a
+      walk ends (last triangle taken, last triplet refused, empty, refused
+      whole), because `t_last_o` rides an emitted triangle and GEOM.REPLAY
+      needs the ending to release the meshlet. Composed with vertex_offset = 0:
+      ids are arena-local (GEOM.REPLAY's contract).
+  - id: GEOM.REPLAY
+    name: Geometry replay customer
+    kind: rtl
+    subsystem: geometry
+    clock_domain: gpu
+    purpose: "Replay a meshlet's TriangleDescriptors out of its sealed per-view projected-vertex arenas: three lookups per triangle per view, corners + behind bits, invw24 per corner from GEOM.DEPTHQUANT, attribute slots from the vertex-attribute store, into GEOM.CLIP; releases the arenas and the meshlet's asset buffer by proof. The customer zhao_console_core entry I11 specified."
+    contract: design/contracts/GEOM.REPLAY.md
+    phase: 5
+    owner_issue: ZH-129
+    inputs: [sealed_groups, triangle_descriptors, cached_vertices]
+    outputs: [view_triangles]
+    upstream: [GEOM.ASSEMBLE, GEOM.WCACHE, GEOM.DEPTHQUANT]
+    downstream: [GEOM.CLIP]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: see contract
+    reference_model: zref::depth_of_raw
+    tests:
+      directed: tests/geometry/geom_replay_directed.cpp
+      random: tests/geometry/geom_replay_directed.cpp
+    counters: [triangles_out, refused, missed, att_skew, profile_mixed]
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-19"
+        commit: "668ad7dc"
+        evidence: tests/geometry/geom_replay_directed.cpp
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      Built 2026-09-19 (geom packet). Contains GEOM.DEPTHQUANT (three lanes) and
+      a private zhao_raster_rcp24_v4. Measured 56 clocks per view-triangle,
+      over the ruled tier's budget; the lever is in the contract.
   - id: GEOM.LIGHT
     name: Vertex lighting
     kind: rtl
@@ -3884,6 +3926,13 @@ blocks:
       REQUIRES A CHANGE TO GEOM.PROJECT: zhao_project_core has w -- "the three
       quotients share the divisor clip.w" -- and does not expose it. Until that
       port exists this block has no producer in the shell.
+
+      COMPOSED 2026-09-19 (geom packet): the w port landed (out_w_o) and the
+      block is instantiated three times inside GEOM.REPLAY, one lane per
+      triangle corner, sharing one zhao_raster_rcp24_v4 by its token. Each lane's
+      reply is LATCHED at its own handshake by the replay, because this block
+      reads rcp_r_i/rcp_k_i in S_COMB, one clock after accepting it -- correct
+      against a service that holds its answer, wrong against a shared one.
 
       The directed test is 7/7 against zref::depth_of_raw across all three
       profiles -- 32 vertices, 1 near-clamped, 1 far-clamped, 0 refused. It

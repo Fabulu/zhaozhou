@@ -19,6 +19,8 @@ module tb_assetfetch
     input  logic [7:0]  m_vertex_count,
     input  logic [7:0]  m_triangle_count,
     input  logic [15:0] m_src_id,
+    input  logic [1:0]  m_visible_mask,
+    input  logic [15:0] m_material_id,
     input  logic [2:0]  m_client,
 
     // ---- the guard port, flat ----------------------------------------------
@@ -42,6 +44,8 @@ module tb_assetfetch
     output logic [7:0]  s_vertex_count,
     output logic [7:0]  s_triangle_count,
     output logic [15:0] s_src_id,
+    output logic [1:0]  s_visible_mask,
+    output logic [15:0] s_material_id,
     input  logic        release_pulse,
 
     // ---- index service ------------------------------------------------------
@@ -97,6 +101,8 @@ module tb_assetfetch
       .m_vertex_count_i   (m_vertex_count),
       .m_triangle_count_i (m_triangle_count),
       .m_src_id_i         (m_src_id),
+      .m_visible_mask_i   (m_visible_mask),
+      .m_material_id_i    (m_material_id),
       .m_client_i         (zhao_client_e'(m_client)),
 
       .guard_req_o  (req),
@@ -110,6 +116,8 @@ module tb_assetfetch
       .s_vertex_count_o   (s_vertex_count),
       .s_triangle_count_o (s_triangle_count),
       .s_src_id_o         (s_src_id),
+      .s_visible_mask_o   (s_visible_mask),
+      .s_material_id_o    (s_material_id),
       .release_i          (release_pulse),
 
       .ix_req_i   (ix_req),

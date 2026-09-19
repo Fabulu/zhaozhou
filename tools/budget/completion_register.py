@@ -172,6 +172,23 @@ def tieoffs() -> list[dict]:
     return out
 
 
+def declared_modules(path: pathlib.Path) -> set[str]:
+    """Every module a source file DECLARES, comments stripped."""
+    try:
+        src = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return set()
+    src = re.sub(r"//[^\n]*", "", src)
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    return set(re.findall(r"^\s*module\s+(zhao_\w+)", src, re.M))
+
+
+def declared_on_disk() -> set[str]:
+    out: set[str] = set()
+    for p in (ROOT / "fpga" / "rtl").rglob("*.sv"):
+        out |= declared_modules(p)
+    return out
+
 def console_closure() -> set[str]:
     """The modules named in zhao_console_core's fit target."""
     if not TARGETS.exists():
@@ -204,7 +221,14 @@ def console_closure() -> set[str]:
     for line in text[i:].splitlines()[1:]:
         s = line.strip()
         if s.startswith("- fpga/rtl/") or s.startswith("- fpga\\rtl\\"):
-            out.add(pathlib.Path(s[2:].replace("\\", "/")).stem)
+            rel = s[2:].replace("\\", "/")
+            out.add(pathlib.Path(rel).stem)
+            # A FILE IS NOT A MODULE. `zhao_hps_arbiter.sv` declares both the
+            # two-client wrapper and `zhao_hps_arbiter_n`; adding only the stem
+            # made the N-client arbiter -- the one R4 composed -- read as NOT
+            # BUILT AT ALL on 2026-09-19. Every module the file declares is in
+            # the closure. (The handover's instrument defect 6, a third instance.)
+            out |= declared_modules(ROOT / rel)
             started = True
             continue
         # The next target begins at a non-indented key. Only stop once this
@@ -385,7 +409,7 @@ def ledger_blocks() -> list[dict]:
 # the flattering direction and was the first run's actual output.
 _ALIAS: dict[str, str | None] = {
     "MEM.VRAM.ARBITER":  "zhao_vram_arbiter",
-    "MEM.HPS.ARBITER":   "zhao_hps_arbiter",
+    "MEM.HPS.ARBITER":   "zhao_hps_arbiter_n",  # R4: the N-client arbiter; the 2-client module is its superseded wrapper
     "MEM.HPS.BRIDGE":    "zhao_hps_bridge",
     # THE ALIAS NAMED A FROZEN GENERATION. Corrected 2026-09-19, and this one
     # MAKES THE NUMBER SMALLER, so it carries four independent witnesses rather
@@ -970,7 +994,7 @@ def disconnected() -> dict:
             # as present is how a filename becomes "progress".
             listed_not_live.append(b["id"])
             absent.append((b["id"], mod))
-        elif list(RTL.rglob(mod + ".sv")):
+        elif list(RTL.rglob(mod + ".sv")) or mod in declared_on_disk():
             absent.append((b["id"], mod))          # built, NOT connected
         else:
             unbuilt.append(b["id"])                # no RTL at all
@@ -1010,6 +1034,8 @@ def audit() -> dict:
                "\n".join("  %-18s -> %s" % (c, m) for c, m in stale)))
 
     paths = {p.stem for p in closure_paths()}
+    for p in closure_paths():
+        paths |= declared_modules(p)      # both walks resolve MODULES, not filenames
     if paths != closure:
         only_c = sorted(closure - paths)
         only_p = sorted(paths - closure)

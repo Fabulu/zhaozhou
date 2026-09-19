@@ -253,6 +253,18 @@ inline int morph_case(const SubpatchJob& job, int vi, int vj) {
 // page before anyone has to choose. See
 // reports/TERRAIN-LOD-DEVIATION-20260907.md.
 //
+// THE ONE SELECTOR, owner ruling R8 (2026-09-19). Until the owner picks a
+// reading by eye from the side-by-side render (reports/terrain-lod-readings/),
+// the provisional reading is the one that keeps shared vertices bit-identical:
+// the MORPH deviation, border ring excluded -- border vertices are shared with
+// a neighbour, `morph_case` never moves them, and they stay exactly the fine
+// lattice's, which is the guarantee T8's nested decimation gives shared
+// vertices. `zhao_terrain_loddev`'s DEV_INCLUDE_BOUNDARY parameter is this
+// constant's hardware twin, and tests/terrain/terrain_loddev_directed.cpp FAILS
+// if their defaults disagree. The owner's pick is a one-line change here and
+// one there, and the test says so if only one moves.
+inline constexpr bool kLodDevIncludeBoundary = false;
+
 // NO NEW ARITHMETIC. The coarse height at a midpoint is `coarse_height` of the
 // relevant pair and which pair it is comes from `morph_case` -- both ratified,
 // both already used by the tessellator, so this is a walk rather than a law.

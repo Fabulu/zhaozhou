@@ -479,7 +479,26 @@
 //    REFUSED and counted apart from a CRC mismatch. The port left this list
 //    rather than being driven; `geom_mf_crc_descriptors_o`/`_fail_o`/
 //    `_framing_o` leave instead, and the smoke fixture now writes the real CRC.
-////  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
+//
+//  * I11 was GEOM.GROUP_SEQ's job port and sealed-group output, and I38
+//    GEOM.ASSETFETCH's meshlet release. BOTH CLOSED AND DELETED 2026-09-19 (geom
+//    packet). I11 wrote down the block it was waiting for -- "take a sealed
+//    handle here and a TriangleDescriptor {v0,v1,v2} from GEOM.ASSEMBLE; issue
+//    THREE lookups on GEOM.PROJ_LANE ... present {ax,ay,bx,by,cx,cy,behind} to
+//    GEOM.CLIP; pulse `rel_valid_o` back" -- and `zhao_geom_replay` is that
+//    block, composed as `u_geom_replay` with a directed test (78 checks, every
+//    counter fired) and GEOM.DEPTHQUANT inside it. The job is issued by the
+//    meshlet dispatcher fork on GEOM.ASSETFETCH's `s_*`, which offers each
+//    meshlet to GROUP_SEQ, ASSEMBLE and REPLAY on one clock. I38's release is
+//    PROVEN rather than guessed: handles arrive only after every vertex landed,
+//    and GEOM.ASSEMBLE's new `m_done_o` ends the walk on every path -- the
+//    replay releases the buffer only when both hold. Sixteen I11 ports, the
+//    twelve I12 lookup/reply ports, the fourteen-port I24 triangle door, the
+//    I38 release and eleven I39 ports left the list rather than being driven.
+//    The smoke bench now draws the fixture meshlet through all of it, in both
+//    views, and pins the pixel count the REFERENCE derives.
+//
+//  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
 //    closed contradiction between three ratified contracts rather than a
 //    wiring gap, and owner ruling 2026-09-19 settled it:
 //    `reports/RULING-I4-COLLISION-SPAWN-20260919.md`. The four `col_*_i` ports
@@ -865,44 +884,25 @@
 //      stale closed entry under-reports progress exactly as deleting an open
 //      one would over-report it. The successor gap is I29, one level up.)
 //
-// I11. GEOM.GROUP_SEQ's job port and its sealed-group output (`geom_job_*`,
-//      `geom_grp_*`, `geom_rel_*`) -- BOUNDARY.
-//      CORRECTED 2026-09-19. This entry used to say "the replay customer is
-//      GEOM.SETUP". THAT IS WRONG, and it was worth the five minutes to check,
-//      because acting on it would have produced exactly the hidden adapter I13
-//      refuses. `zhao_geom_setup`'s input port is a triangle of THREE SCREEN
-//      VERTICES with a signed 2A and a scissored scan box -- it is GEOM.CLIP's
-//      output, and GEOM.CLIP is composed below to drive it. A sealed-group
-//      handle {arena, generation, count, view, src_id} is not that and cannot
-//      be turned into it by naming.
-//
-//      THE REPLAY CUSTOMER IS A BLOCK THAT DOES NOT EXIST. What it must do is
-//      now fully determined by the two ports either side of it, so this is a
-//      specification rather than a guess:
-//        * take a sealed handle here and a TriangleDescriptor {v0,v1,v2} from
-//          GEOM.ASSEMBLE;
-//        * issue THREE lookups on GEOM.PROJ_LANE (`look_arena/look_gen/
-//          look_index`, entry I12) and collect three replies;
-//        * slice each 106-bit reply -- the layout is exactly
-//          {x[20:0], y[20:0], d[31:0], w[30:0], behind}, which is 106 -- into
-//          the corner and its behind bit;
-//        * present {ax,ay,bx,by,cx,cy,behind[2:0]} to GEOM.CLIP (entry I24);
-//        * pulse `rel_valid_o` back here when the group is done with.
-//      The slicing is field routing. The THREE-LOOKUP SEQUENCING IS NOT: it is
-//      a state machine with a reply join, and a state machine belongs in a
-//      file with a contract and a test, not in this composer. It is also NOT
-//      GEOM.LOOM, and the parenthesis that used to stand here said so for two
-//      WRONG reasons -- "that is SKIN -> WARP deformation, and it is in the
-//      register's NOT-BUILT list". GEOM.LOOM is a streaming affine matrix
-//      composer whose contract excludes skinning by name, and it is BUILT and
-//      UNIT_VERIFIED. It is still not this customer, and the refusal is now
-//      argued properly in the refused-blocks list below.
-//
-// I12. GEOM.PROJ_LANE's lookup/reply and arena origin (`geom_look_*`,
-//      `geom_rep_*`, `geom_org_*`) -- BOUNDARY, same absent customer as I11,
-//      and see the specification written there.
+// I12. GEOM.PROJ_LANE's ARENA ORIGIN (`geom_org_*`, `geom_rep_org_*`) --
+//      BOUNDARY, NARROWED 2026-09-19. The lookup/reply half is CLOSED:
+//      GEOM.REPLAY (`zhao_geom_replay`) is the customer I11 specified and it
+//      drives the lane's lookup port. What stays at the edge is the per-arena
+//      ORIGIN datum: nothing in this console writes it and nothing reads it --
+//      the replay's screen triangles never need a world origin, because the
+//      projector is handed world positions. Whether a rebased-coordinate
+//      producer is ever owed (group_seq's header says its vertices are
+//      "LOCAL (rebased) coords") is the question this entry now carries, and it
+//      is a ruling about coordinates, not a wire.
 //
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
+//      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
+//      is closed -- GEOM.REPLAY feeds GEOM.CLIP, which feeds GEOM.SETUP -- so
+//      what remains is TERRAIN's replayed triangles only. Their customer is
+//      the same GEOM.CLIP, which now has a producer, and joining terrain there
+//      needs a two-producer triangle merge AND terrain's own attribute packet
+//      (invw24 from GEOM.DEPTHQUANT for terrain w, and TERRAIN.SHADE's light):
+//      terrain-lane work, named here so it is not mistaken for wiring.
 //      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
 //      and `zhao_terrain_tess` are composed below and drive both, so the
 //      shared projector is measured here with BOTH of its clients live and
@@ -1548,11 +1548,16 @@
 //      `terr_ps_lattices_o` at 2, is the EXPECTED reading of an unretired
 //      cache and not a defect in the chain.
 //
-// I24. GEOM.CLIP's projected-triangle input (`geom_clip_tri_*`), its three
-//      attribute packets (`geom_clip_attr_*`) and its cull mode
-//      (`geom_clip_cull_mode_i`) -- BOUNDARY. Same absent block as I11 and
-//      I12: the three screen corners and their behind bits are the replay
-//      customer's output, and the attribute packets are GEOM.ATTRSETUP's.
+// I24. GEOM.CLIP's CULL MODE (`geom_clip_cull_mode_i`) -- BOUNDARY, NARROWED
+//      2026-09-19 (geom packet). The TRIANGLE and its three ATTRIBUTE PACKETS
+//      are CLOSED: GEOM.REPLAY presents the corners and behind bits straight
+//      out of the arena, and the packet is built at section 11 from
+//      GEOM.DEPTHQUANT's invw24 (slot 0) and the vertex-attribute store's
+//      slots 1..6 (whose writer is entry I46). The bench's triangle door and
+//      its sixteen hand-placed triangles are GONE. The cull mode is per-draw
+//      RASTER STATE; the descriptor's raster word is I39's and has no producer,
+//      so this port stays, and its reset value NONE is `zhao_geom_clip`'s
+//      double-sided law, not a guess.
 //      NOT a boundary, and listed here so nobody re-opens it: the SCISSOR
 //      (`vp_x0/vp_y0/vp_w/vp_h`) is REAL. It is driven from the same
 //      mode-derived pass geometry the compositor uses (GLUE 1 below), because
@@ -2140,78 +2145,24 @@
 //
 //      NOT part of this gap: `j_client_i`. See I40.
 //
-// I38. GEOM.ASSETFETCH's MESHLET RELEASE (`geom_af_release_i`) -- BOUNDARY.
-//      NEW 2026-09-19, the third of I23's successors, and it is the same
-//      SHAPE as I21's compose-cache retirement one subsystem over.
-//
-//      The port's owner is whoever knows that BOTH readers have finished
-//      with the buffered meshlet, and the block says why it refuses to guess:
-//      it is "EXPLICIT rather than inferred from 'all vertices streamed and
-//      the last triplet asked for', because two consumers finish
-//      independently and a buffer released on a guess is a buffer
-//      overwritten under a reader". The two consumers are composed here --
-//      GEOM.VDECODE on the vertex stream and GEOM.ASSEMBLE on the index
-//      service -- and neither emits a done. GEOM.ASSEMBLE's `t_last_o` marks
-//      the last TRIANGLE and says nothing about the vertex run; joining it
-//      to a guess about GEOM.VDECODE would be a retirement policy invented
-//      in the composer, which is the thing the terrain spine is proud of not
-//      having done.
-//
-//      A CONSEQUENCE WORTH STATING, because it looks like a stall and is
-//      not. With nothing driving the release, GEOM.ASSETFETCH fetches ONE
-//      meshlet's footprint, hands it over, serves it, and holds in S_SERVE.
-//      So `geom_af_meshlets_fetched_o` reaching 1 and stopping, while
-//      `geom_af_beats_read_o` shows a whole footprint and
-//      `geom_asm_triangles_o` shows the meshlet's triangles, is the EXPECTED
-//      reading of an unreleased buffer and not a defect in the chain.
-//
-// I39. GEOM.ASSEMBLE's THREE DESCRIPTOR FIELDS
-//      (`geom_asm_vertex_offset_i`, `geom_asm_material_id_i`,
-//      `geom_asm_raster_state_i`) and its TRIANGLE OUTPUT (`geom_asm_t_*`)
-//      -- BOUNDARY. NEW 2026-09-19. One entry because they are two ends of
-//      one block, and the SAME STANDING I35 had before it closed: the block
-//      is composed on its real producer for everything that has one, and the
-//      fields that have no owner inside this module are real ports rather
-//      than constants.
-//
-//      WHAT IS REAL. `m_valid_i`/`m_ready_o`, `m_vertex_count_i`,
-//      `m_triangle_count_i` and `m_src_id_i` come from GEOM.ASSETFETCH's
-//      `s_*` port, and the whole `ix_*` index service is that block's, port
-//      for port: nine bits of triplet number out, three u8 local indices
-//      back, request/valid with no ready, exactly as both files declare it.
-//
-//      WHY THE VERTEX OFFSET IS NOT. `m_vertex_offset_i` is a PER-VIEW
-//      VERTEX-ID BASE: the block adds it to a u8 local index to name a
-//      projected vertex, and its own header says the field is per view
-//      because "a single walk emitting into both views gives view 1 the
-//      vertices of view 0". The nearby value that looks like it --
-//      GEOM.MESHFETCH's `r_vertex_offset_o` -- is a POOL-RELATIVE BYTE
-//      OFFSET into the render asset pool, which is what GEOM.ASSETFETCH's
-//      own port comment calls it and what that block adds
-//      `ZHAO_GEOM_ASSET_BASE` to. Those are different quantities in
-//      different spaces, and the one that would produce the first is the
-//      arena allocator inside GEOM.PARAMBUF, which has no composed owner
-//      (see the refusal list below). Truncating a byte offset to sixteen
-//      bits and calling it a vertex id is precisely the rename I13 refuses.
-//
-//      WHY THE MATERIAL IS NOT, AND IT IS NOT THE OBVIOUS REASON.
-//      GEOM.MESHFETCH DOES emit `r_material_id_o` -- but it emits it beside
-//      the descriptor it has just read, and by the time GEOM.ASSETFETCH has
-//      finished the footprint and offered the meshlet to GEOM.ASSEMBLE, the
-//      fetcher's result register has moved on. Wiring them would be a join
-//      between two things that move independently and would assemble meshlet
-//      N's triangles with meshlet M's material -- the identical fault entry I35
-//      recorded for the pageloader's header registers, and the identical answer
-//      is available: I35 closed by BUILDING the reader rather than by wiring
-//      the stale registers, which is what this entry is waiting for too. Carrying it properly
-//      means a field on GEOM.ASSETFETCH's `s_*` port, which is an RTL change
-//      to a block with its own differential and is not smuggled into a
-//      composition packet. `raster_state` has no producer anywhere.
-//
-//      THE TRIANGLE OUTPUT's customer is the absent replay block of I11 --
-//      the specification written there takes "a TriangleDescriptor
-//      {v0,v1,v2} from GEOM.ASSEMBLE", and this is that port, leaving the
-//      module so the descriptors are observable rather than dropped.
+// I39. GEOM.ASSEMBLE's RASTER WORD (`geom_asm_raster_state_i`) -- BOUNDARY,
+//      NARROWED 2026-09-19 (geom packet). Three of its four parts CLOSED:
+//        * THE VERTEX OFFSET is the named constant `GEOM_ASM_VOFF_C` = 0, and
+//          that is the architecture, not an invented value: GEOM.GROUP_SEQ fills
+//          vertex i of a meshlet at arena index i in EVERY view, so ids are
+//          ARENA-LOCAL and the per-view base is the arena HANDLE, which
+//          GEOM.REPLAY holds. The objection that stood here -- "the one that
+//          would produce the first is the arena allocator inside GEOM.PARAMBUF"
+//          -- described the external-SDRAM arena; the on-chip arena this core
+//          actually composes allocates per meshlet.
+//        * THE MATERIAL is carried by GEOM.ASSETFETCH beside its meshlet
+//          (`m_material_id_i` -> `s_material_id_o`, captured with the counts in
+//          one handshake) -- exactly the fix this entry asked for: "a field on
+//          GEOM.ASSETFETCH's `s_*` port". It rides to GEOM.REPLAY's output and
+//          its consumer there is MATERIAL.RESOLVE's request, entry I20.
+//        * THE TRIANGLE OUTPUT goes to GEOM.REPLAY.
+//      What stays is the descriptor's RASTER WORD: no producer anywhere, no
+//      ratified layout, and the cull mode (I24) is waiting on the same word.
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
 //      the core assigns both, in the same standing as I9 and I25.
@@ -2490,6 +2441,31 @@
 //      `actual_fx` is a differential against a reference, and the console has
 //      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
 //      too. One absent owner, two blocks waiting on it.
+//
+// I46. THE VERTEX-ATTRIBUTE STORE's WRITER (`geom_att_look_*`,
+//      `geom_att_rep_*`) -- BOUNDARY. NEW 2026-09-19 (geom packet), and it is
+//      the one seam composing GEOM.REPLAY OPENED rather than closed.
+//
+//      WHAT IS REAL. Slots 1..6 of the ruling-5 packet -- u_over_w, v_over_w,
+//      r, g, b, alpha -- are per-vertex, per-view quantities, and owner ruling
+//      R11 (provisional, 2026-09-19) puts them in a store KEYED EXACTLY LIKE
+//      THE ARENA and read by the SAME three lookups. So the READ side is real
+//      and composed: the store listens to GEOM.REPLAY's lookup nets
+//      (`geom_att_look_*` are those nets, not a copy), and the replay counts
+//      every clock the store and the arena disagree about timing on
+//      `geom_rp_att_skew_o` -- two memories, independent operands, fired in the
+//      directed test and by the smoke bench's `-BadAttribute` control.
+//
+//      WHAT IS NOT. The store's WRITER. R11 rules it is written "at the same
+//      moment and from the same producer that writes the arena position":
+//      VDECODE/SKIN for u/v (times the view's 1/w for the over-w form) and
+//      `zhao_light_stream` (R2) for r/g/b/alpha -- WITHOUT widening the
+//      palette, skin or group payloads. Keying a value that exists at decode
+//      time by an arena index that exists only at GEOM.GROUP_SEQ's issue is a
+//      join between two things that move independently unless one block owns
+//      both, and designing that owner is its own packet (the coordinator's
+//      split). Until it exists the store is a port pair, and the smoke bench
+//      models it with the arena's contract exactly as it models SDRAM.
 //
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -2869,7 +2845,18 @@
 //   WRITER and its allocator, which is the same one entry I39 names for
 //   GEOM.ASSEMBLE's per-view vertex-id base, one level up.
 //
-//   GEOM.DEPTHQUANT is refused for a HANDSHAKE and not for a missing
+//   GEOM.DEPTHQUANT -- THE REFUSAL BELOW IS SPENT (2026-09-19, geom packet).
+//   It is COMPOSED inside GEOM.REPLAY, and each of the three objections was
+//   answered by a structure rather than argued away: the per-vertex port is not
+//   tapped (depth is taken per CORNER, after the arena, where there IS
+//   backpressure); the arity is the replay's own -- three lanes, one per corner;
+//   and the reciprocal is a PRIVATE `zhao_raster_rcp24_v4` (the latest version,
+//   a second instance of the one law) shared by the lanes through the service's
+//   own token, with each lane's reply latched at its own handshake because the
+//   block reads it one clock later. The text is kept as the record of why the
+//   composition had to be a block and not wiring.
+//
+//   WHAT IT SAID: GEOM.DEPTHQUANT is refused for a HANDSHAKE and not for a missing
 //   producer, which is the opposite of what its entry would have said a day
 //   ago and is worth writing out because the producer half is genuinely
 //   closed. `zhao_proj_subsystem` is composed above and emits `w` twice
@@ -3175,6 +3162,9 @@ module zhao_console_core
   // and exists because a port list cannot call $clog2 on another port.
   parameter int unsigned GEOM_CLIP_ATTRS = 7,
   parameter int unsigned GEOM_CLIP_ATTRW = GEOM_CLIP_ATTRS * 32,
+  // The vertex-attribute store's word (owner ruling R11): slots 1..6 of the
+  // packet above -- everything but invw24, which is GEOM.DEPTHQUANT's alone.
+  parameter int unsigned GEOM_ATTR_STORE_W = (GEOM_CLIP_ATTRS - 1) * 32,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -3431,24 +3421,13 @@ module zhao_console_core
   output logic [31:0]             geom_mf_crc_fail_o,
   output logic [31:0]             geom_mf_crc_framing_o,
 
-  // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
-  input  logic                    geom_af_release_i,
+  // ---- I38 IS CLOSED: GEOM.REPLAY releases the meshlet, by proof ---------
 
-  // ---- I39: GEOM.ASSEMBLE's three descriptor fields -----------------------
-  input  logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i,
-  input  logic [15:0]              geom_asm_material_id_i,
+  // ---- I39, NARROWED: GEOM.ASSEMBLE's RASTER STATE only -------------------
+  // The vertex offset is the named constant 0 (arena-local ids), the material
+  // is carried by GEOM.ASSETFETCH beside its meshlet, and the TriangleDescriptor
+  // goes to GEOM.REPLAY. The descriptor's raster word has no producer anywhere.
   input  logic [31:0]              geom_asm_raster_state_i,
-
-  // ---- I39: GEOM.ASSEMBLE's TriangleDescriptor, out to the absent replay --
-  output logic                     geom_asm_t_valid_o,
-  input  logic                     geom_asm_t_ready_i,
-  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v0_o,
-  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v1_o,
-  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v2_o,
-  output logic [15:0]              geom_asm_t_material_o,
-  output logic [31:0]              geom_asm_t_raster_o,
-  output logic [15:0]              geom_asm_t_src_id_o,
-  output logic                     geom_asm_t_last_o,
 
   // ---- I41: CMD.EXEC's DRAW DISPATCH, the ratified DrawForm ---------------
   // NEW 2026-09-19. DrawForm 0x0300 now reaches the console; what has no
@@ -3601,37 +3580,19 @@ module zhao_console_core
   output logic [31:0]             geom_pal_bone_oob_o,
   output logic [31:0]             geom_pal_bone_unset_o,
 
-  // ---- I11: GEOM.GROUP_SEQ's job in, sealed group out ---------------------
-  input  logic                    geom_job_valid_i,
-  output logic                    geom_job_ready_o,
-  input  logic [GEOM_INDEX_W-1:0] geom_job_count_i,
-  input  logic [GEOM_NVIEWS-1:0]  geom_job_view_mask_i,
-  input  logic [15:0]             geom_job_src_id_i,
-  output logic                    geom_grp_valid_o,
-  input  logic                    geom_grp_ready_i,
-  output logic [GEOM_ARENA_W-1:0] geom_grp_arena_o,
-  output logic [GEOM_GEN_W-1:0]   geom_grp_gen_o,
-  output logic [GEOM_INDEX_W-1:0] geom_grp_count_o,
-  output logic                    geom_grp_view_o,
-  output logic [15:0]             geom_grp_src_id_o,
-  input  logic                    geom_rel_valid_i,
-  input  logic [GEOM_ARENA_W-1:0] geom_rel_arena_i,
+  // ---- I11 IS CLOSED: GEOM.GROUP_SEQ's job, handle and release are INTERNAL.
+  // The job comes from the meshlet dispatcher fork, the handle goes to
+  // GEOM.REPLAY and the release comes back from it. Sixteen ports left this
+  // list rather than being driven; see the closed ledger in the header.
 
-  // ---- I12: GEOM.PROJ_LANE's arena origin and lookup port -----------------
+  // ---- I12, NARROWED: the arena ORIGIN datum only ---------------------------
+  // The lookup port is GEOM.REPLAY's now. What is still at the edge is the
+  // per-arena origin, which nothing in this console writes and nothing reads.
   input  logic                    geom_org_we_i,
   input  logic [GEOM_ARENA_W-1:0] geom_org_arena_i,
   input  logic signed [31:0]      geom_org_x_i,
   input  logic signed [31:0]      geom_org_y_i,
   input  logic signed [31:0]      geom_org_z_i,
-  input  logic                    geom_look_valid_i,
-  output logic                    geom_look_ready_o,
-  input  logic [GEOM_ARENA_W-1:0] geom_look_arena_i,
-  input  logic [GEOM_GEN_W-1:0]   geom_look_gen_i,
-  input  logic [GEOM_INDEX_W-1:0] geom_look_index_i,
-  output logic                    geom_rep_valid_o,
-  output logic                    geom_rep_hit_o,
-  output logic                    geom_rep_refuse_o,
-  output logic [GEOM_PAYLOAD_W-1:0] geom_rep_payload_o,
   output logic signed [31:0]      geom_rep_org_x_o,
   output logic signed [31:0]      geom_rep_org_y_o,
   output logic signed [31:0]      geom_rep_org_z_o,
@@ -3650,24 +3611,35 @@ module zhao_console_core
   output logic [31:0]             geom_arena_refusals_o,
   output logic                    geom_arena_overflow_o,
 
-  // ---- I24: GEOM.CLIP's projected triangle, attributes and cull mode -------
-  // The three SCREEN corners with GEOM.PROJECT's behind verdicts. The absent
-  // replay customer specified at I11 is what drives these. The SCISSOR is NOT
-  // here because it is real -- see GLUE 1.
-  input  logic                    geom_clip_tri_valid_i,
-  output logic                    geom_clip_tri_ready_o,
-  input  logic signed [20:0]      geom_clip_tri_ax_i,
-  input  logic signed [20:0]      geom_clip_tri_ay_i,
-  input  logic signed [20:0]      geom_clip_tri_bx_i,
-  input  logic signed [20:0]      geom_clip_tri_by_i,
-  input  logic signed [20:0]      geom_clip_tri_cx_i,
-  input  logic signed [20:0]      geom_clip_tri_cy_i,
-  input  logic [2:0]              geom_clip_tri_behind_i,
-  input  logic [15:0]             geom_clip_tri_src_id_i,
-  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_i,
-  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_b_i,
-  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_c_i,
+  // ---- I24, NARROWED: GEOM.CLIP's cull mode only ----------------------------
+  // The triangle and its attribute packets come from GEOM.REPLAY (the bench's
+  // triangle door is GONE). The cull mode is per-draw raster state and has no
+  // producer: the descriptor's raster word is I39's.
   input  logic [1:0]              geom_clip_cull_mode_i,
+
+  // ---- I46: THE VERTEX-ATTRIBUTE STORE (owner ruling R11, provisional) -----
+  // Slots 1..6 of the ruling-5 packet (u_over_w, v_over_w, r, g, b, alpha),
+  // per vertex per view, keyed EXACTLY like the arena. The store listens to
+  // GEOM.REPLAY's lookups -- these are the same nets that address the arena --
+  // and answers with the arena's timing. Its WRITER is not built; see I46.
+  output logic                    geom_att_look_valid_o,
+  output logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o,
+  output logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o,
+  output logic [GEOM_INDEX_W-1:0] geom_att_look_index_o,
+  input  logic                    geom_att_rep_valid_i,
+  input  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i,
+
+  // ---- GEOM.REPLAY's evidence ----------------------------------------------
+  output logic [31:0]             geom_rp_meshlets_o,
+  output logic [31:0]             geom_rp_groups_o,
+  output logic [31:0]             geom_rp_triangles_in_o,
+  output logic [31:0]             geom_rp_triangles_out_o,
+  output logic [31:0]             geom_rp_refused_o,
+  output logic [31:0]             geom_rp_missed_o,
+  output logic [31:0]             geom_rp_att_skew_o,
+  output logic [31:0]             geom_rp_profile_mixed_o,
+  output logic [31:0]             geom_rp_view_bad_o,
+  output logic [31:0]             geom_rp_dq_refused_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -6254,6 +6226,46 @@ module zhao_console_core
     end
   end
 
+  // ==========================================================================
+  // GEOM.REPLAY's NETS, declared ahead of their earliest reader. The block
+  // itself is instantiated with the asset path at section 11, beside the
+  // dispatcher fork that feeds it; GEOM.GROUP_SEQ, GEOM.CLIP and
+  // GEOM.PROJ_LANE, which come first in this file, read these.
+  // ==========================================================================
+  // the dispatcher fork -> GEOM.GROUP_SEQ's job
+  wire                    dsp_job_valid, gs_job_ready;
+  wire [GEOM_INDEX_W-1:0] dsp_job_count;
+  wire [1:0]              dsp_job_mask;
+  wire [15:0]             dsp_job_src;
+  // GEOM.GROUP_SEQ -> GEOM.REPLAY: the sealed handle, and the release back
+  wire                    gs_grp_valid, rp_grp_ready, gs_grp_view;
+  wire [GEOM_ARENA_W-1:0] gs_grp_arena, rp_rel_arena;
+  wire [GEOM_GEN_W-1:0]   gs_grp_gen;
+  wire                    rp_rel_valid;
+  // The handle's count and source id are not read: GEOM.REPLAY takes the
+  // meshlet's vertex count from the dispatcher token, which is the SAME number
+  // from the same handshake, so comparing the two would be a detector whose
+  // operands one enable moves together.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [GEOM_INDEX_W-1:0] gs_grp_count;
+  wire [15:0]             gs_grp_src_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+  // GEOM.REPLAY <-> GEOM.PROJ_LANE: the lookups and the replies
+  wire                    rp_look_valid, ln_look_ready;
+  wire [GEOM_ARENA_W-1:0] rp_look_arena;
+  wire [GEOM_GEN_W-1:0]   rp_look_gen;
+  wire [GEOM_INDEX_W-1:0] rp_look_index;
+  wire                    ln_rep_valid, ln_rep_hit, ln_rep_refuse;
+  wire [GEOM_PAYLOAD_W-1:0] ln_rep_payload;
+  // GEOM.REPLAY -> GEOM.CLIP: the triangle and its three attribute packets
+  wire                    rp_o_valid, rp_o_ready;
+  wire signed [20:0]      rp_o_ax, rp_o_ay, rp_o_bx, rp_o_by, rp_o_cx, rp_o_cy;
+  wire [2:0]              rp_o_behind;
+  wire [15:0]             rp_o_src_id;
+  wire [GEOM_CLIP_ATTRW-1:0] rp_attr_a, rp_attr_b, rp_attr_c;
+  // GEOM.REPLAY -> GEOM.ASSETFETCH: the proven release (entry I38)
+  wire                    rp_af_release;
+
   zhao_geom_group_seq #(
     .ARENAS      (GEOM_ARENAS),
     .DEPTH       (GEOM_DEPTH),
@@ -6264,12 +6276,14 @@ module zhao_console_core
     .clk             (gpu_clk),
     .rst_n           (rst_n),
 
-    // I11: the job port; GEOM.SETUP, the replay customer, is not composed.
-    .job_valid_i     (geom_job_valid_i),
-    .job_ready_o     (geom_job_ready_o),
-    .job_count_i     (geom_job_count_i),
-    .job_view_mask_i (geom_job_view_mask_i),
-    .job_src_id_i    (geom_job_src_id_i),
+    // REAL: the job, from the meshlet dispatcher fork at section 11 -- the
+    // meshlet's own vertex count and visible mask, in the SAME handshake that
+    // offers it to GEOM.ASSEMBLE and GEOM.REPLAY. Entry I11, CLOSED.
+    .job_valid_i     (dsp_job_valid),
+    .job_ready_o     (gs_job_ready),
+    .job_count_i     (dsp_job_count),
+    .job_view_mask_i (dsp_job_mask),
+    .job_src_id_i    (dsp_job_src),
 
     // REAL: from GEOM.SKIN.
     .v_valid_i (gs_v_valid),
@@ -6301,16 +6315,16 @@ module zhao_console_core
     .fill_landed_i (ln_fill_landed),
     .fill_arena_i  (ln_fill_arena),
 
-    // I11: the sealed handle and its release.
-    .grp_valid_o (geom_grp_valid_o),
-    .grp_ready_i (geom_grp_ready_i),
-    .grp_arena_o (geom_grp_arena_o),
-    .grp_gen_o   (geom_grp_gen_o),
-    .grp_count_o (geom_grp_count_o),
-    .grp_view_o  (geom_grp_view_o),
-    .grp_src_id_o(geom_grp_src_id_o),
-    .rel_valid_i (geom_rel_valid_i),
-    .rel_arena_i (geom_rel_arena_i),
+    // REAL: the sealed handle into GEOM.REPLAY, and its release back.
+    .grp_valid_o (gs_grp_valid),
+    .grp_ready_i (rp_grp_ready),
+    .grp_arena_o (gs_grp_arena),
+    .grp_gen_o   (gs_grp_gen),
+    .grp_count_o (gs_grp_count),
+    .grp_view_o  (gs_grp_view),
+    .grp_src_id_o(gs_grp_src_id),
+    .rel_valid_i (rp_rel_valid),
+    .rel_arena_i (rp_rel_arena),
 
     .groups_opened_o     (geom_groups_opened_o),
     .groups_sealed_o     (geom_groups_sealed_o),
@@ -6394,20 +6408,23 @@ module zhao_console_core
     .clk          (gpu_clk),
     .rst_n        (rst_n),
 
-    // I24: the absent replay customer specified at I11 drives these.
-    .tri_valid_i  (geom_clip_tri_valid_i),
-    .tri_ready_o  (geom_clip_tri_ready_o),
-    .tri_ax_i     (geom_clip_tri_ax_i),
-    .tri_ay_i     (geom_clip_tri_ay_i),
-    .tri_bx_i     (geom_clip_tri_bx_i),
-    .tri_by_i     (geom_clip_tri_by_i),
-    .tri_cx_i     (geom_clip_tri_cx_i),
-    .tri_cy_i     (geom_clip_tri_cy_i),
-    .tri_behind_i (geom_clip_tri_behind_i),
-    .tri_src_id_i (geom_clip_tri_src_id_i),
-    .tri_attr_a_i (geom_clip_attr_a_i),
-    .tri_attr_b_i (geom_clip_attr_b_i),
-    .tri_attr_c_i (geom_clip_attr_c_i),
+    // REAL: GEOM.REPLAY's triangle, corners and behind verdicts straight out
+    // of the arena, the packets built at section 11 from GEOM.DEPTHQUANT's
+    // invw24 and the attribute store's slots. Entry I24's triangle half and
+    // the bench's triangle door are both GONE.
+    .tri_valid_i  (rp_o_valid),
+    .tri_ready_o  (rp_o_ready),
+    .tri_ax_i     (rp_o_ax),
+    .tri_ay_i     (rp_o_ay),
+    .tri_bx_i     (rp_o_bx),
+    .tri_by_i     (rp_o_by),
+    .tri_cx_i     (rp_o_cx),
+    .tri_cy_i     (rp_o_cy),
+    .tri_behind_i (rp_o_behind),
+    .tri_src_id_i (rp_o_src_id),
+    .tri_attr_a_i (rp_attr_a),
+    .tri_attr_b_i (rp_attr_b),
+    .tri_attr_c_i (rp_attr_c),
 
     // REAL: the scissor is the console's own pass geometry (GLUE 1).
     .vp_x0_i      (12'd0),
@@ -7486,15 +7503,17 @@ module zhao_console_core
     .fill_landed_o(ln_fill_landed),
     .fill_arena_o (ln_fill_arena),
 
-    .look_valid_i(geom_look_valid_i),
-    .look_ready_o(geom_look_ready_o),
-    .look_arena_i(geom_look_arena_i),
-    .look_gen_i  (geom_look_gen_i),
-    .look_index_i(geom_look_index_i),
-    .rep_valid_o (geom_rep_valid_o),
-    .rep_hit_o   (geom_rep_hit_o),
-    .rep_refuse_o(geom_rep_refuse_o),
-    .rep_payload_o(geom_rep_payload_o),
+    // REAL: GEOM.REPLAY's three lookups per triangle per view. Entry I12's
+    // lookup half, CLOSED.
+    .look_valid_i(rp_look_valid),
+    .look_ready_o(ln_look_ready),
+    .look_arena_i(rp_look_arena),
+    .look_gen_i  (rp_look_gen),
+    .look_index_i(rp_look_index),
+    .rep_valid_o (ln_rep_valid),
+    .rep_hit_o   (ln_rep_hit),
+    .rep_refuse_o(ln_rep_refuse),
+    .rep_payload_o(ln_rep_payload),
     .rep_org_x_o (geom_rep_org_x_o),
     .rep_org_y_o (geom_rep_org_y_o),
     .rep_org_z_o (geom_rep_org_z_o),
@@ -7972,7 +7991,7 @@ module zhao_console_core
   // 0x0030 (owner ruling R17): every field off the generated offsets, through a
   // pending queue in CMD.EXEC that outlives the packet's commit, so a frame's
   // draws are never held behind a background copy. Its PUBLICATION is
-  // `spec/memory_rules.md` 5f.1's row. (Entry I46 carried this request as a
+  // `spec/memory_rules.md` 5f.1's row. (Entry I47 carried this request as a
   // boundary for one commit, and is closed and deleted.)
   logic        cmd_upl_valid, cmd_upl_ready;
   logic [23:0] cmd_upl_index;
@@ -10813,13 +10832,14 @@ module zhao_console_core
   wire [15:0] mf_r_instance_id;
   wire [31:0] mf_r_vertex_offset, mf_r_index_offset;
   wire [ 7:0] mf_r_vertex_count, mf_r_triangle_count;
-  // The descriptor's visible mask, material and flags are read by nothing in
-  // this module.  They are DECLARED here and left unread rather than hidden
-  // behind an empty port connection: entry I39 says why the material in
-  // particular may not be handed to GEOM.ASSEMBLE from this register.
-  /* verilator lint_off UNUSEDSIGNAL */
+  // The descriptor's visible mask and material are CARRIED by GEOM.ASSETFETCH
+  // beside the meshlet (captured with its counts), because this register has
+  // moved on by the time the meshlet is servable -- entry I39's argument, and
+  // the fix it asked for. The flags byte is read by nothing: no ratified
+  // meaning, so no consumer.
   wire [ 1:0] mf_r_visible_mask;
   wire [15:0] mf_r_material_id;
+  /* verilator lint_off UNUSEDSIGNAL */
   wire [ 7:0] mf_r_flags;
   /* verilator lint_on UNUSEDSIGNAL */
   wire [31:0] mf_refused [7];
@@ -10840,6 +10860,8 @@ module zhao_console_core
   wire        af_s_valid, af_s_ready;
   wire [ 7:0] af_s_vertex_count, af_s_triangle_count;
   wire [15:0] af_s_src_id;
+  wire [ 1:0] af_s_visible_mask;
+  wire [15:0] af_s_material_id;
   wire        asm_ix_req, af_ix_valid;
   wire [ 8:0] asm_ix_index;
   wire [ 7:0] af_ix_a, af_ix_b, af_ix_c;
@@ -11034,6 +11056,10 @@ module zhao_console_core
     // I40: the job's instance id, echoed beside the meshlet it describes, so
     // the label cannot drift from the thing it labels.
     .m_src_id_i        (mf_r_instance_id),
+    // REAL, and CARRIED: the descriptor's visible mask and material, captured
+    // with the counts in this handshake and offered again on `s_*`.
+    .m_visible_mask_i  (mf_r_visible_mask),
+    .m_material_id_i   (mf_r_material_id),
     .m_client_i        (GEOM_ASSET_CLIENT_C),
 
     // REAL: requester B of the shared ENGINE1 client.
@@ -11049,11 +11075,12 @@ module zhao_console_core
     .s_vertex_count_o  (af_s_vertex_count),
     .s_triangle_count_o(af_s_triangle_count),
     .s_src_id_o        (af_s_src_id),
+    .s_visible_mask_o  (af_s_visible_mask),
+    .s_material_id_o   (af_s_material_id),
 
-    // I38: the release.  Its owner is whoever knows BOTH readers are done, and
-    // neither GEOM.VDECODE nor GEOM.ASSEMBLE emits that.  See the header for
-    // what an unreleased buffer reads like, because it looks like a stall.
-    .release_i(geom_af_release_i),
+    // REAL: the release, from GEOM.REPLAY, which PROVES both readers are done
+    // (its header). Entry I38, CLOSED.
+    .release_i(rp_af_release),
 
     // REAL: the index service, GEOM.ASSEMBLE's other half.
     .ix_req_i  (asm_ix_req),
@@ -11079,6 +11106,25 @@ module zhao_console_core
     .err_beat_unowned_o  (geom_af_err_beat_unowned_o)
   );
 
+  // ---- GEOM.ASSEMBLE <-> GEOM.REPLAY, and the dispatcher fork ---------------
+  // Arena-local vertex ids: GEOM.GROUP_SEQ fills vertex i of a meshlet at arena
+  // index i in EVERY view, so the per-view base is the arena handle and the
+  // offset is zero BY CONSTRUCTION. Named, for the reason I25 gives: the day a
+  // shared vertex pool replaces per-meshlet arenas, this is the line to change.
+  localparam logic [GEOM_ASM_VIDW-1:0] GEOM_ASM_VOFF_C = '0;
+
+  wire                     asm_m_valid, asm_m_ready, rp_mt_ready;
+  wire                     asm_t_valid, asm_t_ready, asm_m_done;
+  // `t_last_o` is not read: it rides an EMITTED triangle, so a refused last
+  // triplet or an empty meshlet ends the walk without one. GEOM.REPLAY ends a
+  // meshlet on `m_done_o`, which fires on every ending.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                     asm_t_last;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire [GEOM_ASM_VIDW-1:0] asm_t_v0, asm_t_v1, asm_t_v2;
+  wire [15:0]              asm_t_material, asm_t_src_id;
+  wire [31:0]              asm_t_raster;
+
   zhao_geom_assemble #(
     .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
     .MAX_TRIANGLES (GEOM_ASSET_MAX_TRIANGLES),
@@ -11088,18 +11134,20 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // REAL: the meshlet, from GEOM.ASSETFETCH's servable port.  The counts come
-    // from the block that has BUFFERED the footprint, so they hold still for
-    // the whole walk by construction rather than by a latch this file added.
-    .m_valid_i         (af_s_valid),
-    .m_ready_o         (af_s_ready),
+    // REAL: the meshlet, from GEOM.ASSETFETCH's servable port THROUGH THE
+    // DISPATCHER FORK below. The counts come from the block that has BUFFERED
+    // the footprint, so they hold still for the whole walk by construction.
+    .m_valid_i         (asm_m_valid),
+    .m_ready_o         (asm_m_ready),
     .m_vertex_count_i  (af_s_vertex_count),
     .m_triangle_count_i(af_s_triangle_count),
     .m_src_id_i        (af_s_src_id),
 
-    // I39: the three fields with no owner inside this module.
-    .m_vertex_offset_i(geom_asm_vertex_offset_i),
-    .m_material_id_i  (geom_asm_material_id_i),
+    // ASSIGNED, not tied off: arena-local vertex ids (GEOM.REPLAY's header).
+    .m_vertex_offset_i(GEOM_ASM_VOFF_C),
+    // REAL: the material, carried beside the meshlet by GEOM.ASSETFETCH.
+    .m_material_id_i  (af_s_material_id),
+    // I39, narrowed: the raster word has no producer anywhere.
     .m_raster_state_i (geom_asm_raster_state_i),
 
     // REAL: the index service.  `ix_valid_i` follows the FETCHER's valid and is
@@ -11112,22 +11160,180 @@ module zhao_console_core
     .ix_b_i    (af_ix_b),
     .ix_c_i    (af_ix_c),
 
-    // I39: the TriangleDescriptor, out to the absent replay customer of I11.
-    .t_valid_o  (geom_asm_t_valid_o),
-    .t_ready_i  (geom_asm_t_ready_i),
-    .t_v0_o     (geom_asm_t_v0_o),
-    .t_v1_o     (geom_asm_t_v1_o),
-    .t_v2_o     (geom_asm_t_v2_o),
-    .t_material_o(geom_asm_t_material_o),
-    .t_raster_o (geom_asm_t_raster_o),
-    .t_src_id_o (geom_asm_t_src_id_o),
-    .t_last_o   (geom_asm_t_last_o),
+    // REAL: the TriangleDescriptor, into GEOM.REPLAY, and the walk's END.
+    .t_valid_o  (asm_t_valid),
+    .t_ready_i  (asm_t_ready),
+    .t_v0_o     (asm_t_v0),
+    .t_v1_o     (asm_t_v1),
+    .t_v2_o     (asm_t_v2),
+    .t_material_o(asm_t_material),
+    .t_raster_o (asm_t_raster),
+    .t_src_id_o (asm_t_src_id),
+    .t_last_o   (asm_t_last),
+    .m_done_o   (asm_m_done),
 
     .meshlets_o      (geom_asm_meshlets_o),
     .triangles_o     (geom_asm_triangles_o),
     .refused_limits_o(geom_asm_refused_limits_o),
     .refused_index_o (geom_asm_refused_index_o)
   );
+
+  // --------------------------------------------------------------------------
+  // THE MESHLET DISPATCHER FORK. GEOM.ASSETFETCH offers ONE servable meshlet;
+  // THREE blocks must take it on the same clock: GEOM.GROUP_SEQ (its vertices
+  // become an arena group per visible view), GEOM.ASSEMBLE (its index walk)
+  // and GEOM.REPLAY (the token that says how many handles to wait for). An
+  // AND-fork, the shape this file already uses twice: one ready is the AND of
+  // all three, and each consumer's valid is gated by the OTHER two readies.
+  // None of the three readies is a function of its own valid -- each is a
+  // state decode (StIdle, S_IDLE, S_IDLE) -- so it cannot deadlock, and the
+  // three accept the SAME meshlet or none does.
+  //
+  // THE VERTEX STREAM CANNOT RACE THE JOB: GEOM.ASSETFETCH starts streaming
+  // vertex records only AFTER `s_*` is accepted (its S_HAND -> S_SERVE), which
+  // is this very clock, so GEOM.GROUP_SEQ already holds the job when the first
+  // record reaches it.
+  // --------------------------------------------------------------------------
+  assign af_s_ready    = gs_job_ready && asm_m_ready && rp_mt_ready;
+  assign dsp_job_valid = af_s_valid && asm_m_ready && rp_mt_ready;
+  assign asm_m_valid   = af_s_valid && gs_job_ready && rp_mt_ready;
+  assign dsp_job_count = GEOM_INDEX_W'(af_s_vertex_count);
+  assign dsp_job_mask  = af_s_visible_mask;
+  assign dsp_job_src   = af_s_src_id;
+
+  // --------------------------------------------------------------------------
+  // GEOM.REPLAY -- the replay customer entries I11 and I12 specified, and the
+  // owner of GEOM.DEPTHQUANT (three lanes on one rcp24_v4, inside it). Entries
+  // I11, I38 and GEOM.DEPTHQUANT CLOSE here; I12, I24 and I39 narrow; the
+  // vertex-attribute store's absent writer opens as I46.
+  // --------------------------------------------------------------------------
+  wire [23:0]                  rp_invw_a, rp_invw_b, rp_invw_c;
+  wire [GEOM_ATTR_STORE_W-1:0] rp_st_a, rp_st_b, rp_st_c;
+  // The triangle's view, material and raster word ride out of GEOM.REPLAY and
+  // are read by nothing here: GEOM.CLIP takes neither, and the material's
+  // consumer is MATERIAL.RESOLVE's request (core entry I20, the texture lane's).
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                         rp_o_view;
+  wire [15:0]                  rp_o_material;
+  wire [31:0]                  rp_o_raster;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_geom_replay #(
+    .ARENA_W   (GEOM_ARENA_W),
+    .GEN_W     (GEOM_GEN_W),
+    .INDEX_W   (GEOM_INDEX_W),
+    .VIDW      (GEOM_ASM_VIDW),
+    .SRCW      (16),
+    .PAYLOAD_W (GEOM_PAYLOAD_W),
+    .ATTRW     (GEOM_ATTR_STORE_W)
+  ) u_geom_replay (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the dispatcher's token -- the meshlet's visible mask and count.
+    .mt_valid_i       (af_s_valid && gs_job_ready && asm_m_ready),
+    .mt_ready_o       (rp_mt_ready),
+    .mt_view_mask_i   (af_s_visible_mask),
+    .mt_vertex_count_i(af_s_vertex_count),
+
+    // REAL: GEOM.GROUP_SEQ's sealed handles, and their release.
+    .grp_valid_i (gs_grp_valid),
+    .grp_ready_o (rp_grp_ready),
+    .grp_arena_i (gs_grp_arena),
+    .grp_gen_i   (gs_grp_gen),
+    .grp_view_i  (gs_grp_view),
+    .rel_valid_o (rp_rel_valid),
+    .rel_arena_o (rp_rel_arena),
+
+    // REAL: the arena opens and the geometry landings, with the profile each
+    // vertex was PROJECTED under -- `proj_a_profile_o` is the service's, on the
+    // same clock as `ln_fill_landed` (PART.PROJECT's demux is combinational).
+    .op_valid_i  (gs_open),
+    .op_arena_i  (gs_open_arena),
+    .fl_valid_i  (ln_fill_landed),
+    .fl_arena_i  (ln_fill_arena),
+    .fl_profile_i(proj_a_profile_o),
+
+    // REAL: GEOM.ASSEMBLE's triangles and the end of its walk.
+    .t_valid_i    (asm_t_valid),
+    .t_ready_o    (asm_t_ready),
+    .t_v0_i       (asm_t_v0),
+    .t_v1_i       (asm_t_v1),
+    .t_v2_i       (asm_t_v2),
+    .t_material_i (asm_t_material),
+    .t_raster_i   (asm_t_raster),
+    .t_src_id_i   (asm_t_src_id),
+    .m_done_i     (asm_m_done),
+
+    // REAL: the arena, and -- on the SAME nets -- the attribute store (I46).
+    .look_valid_o   (rp_look_valid),
+    .look_ready_i   (ln_look_ready),
+    .look_arena_o   (rp_look_arena),
+    .look_gen_o     (rp_look_gen),
+    .look_index_o   (rp_look_index),
+    .rep_valid_i    (ln_rep_valid),
+    .rep_hit_i      (ln_rep_hit),
+    .rep_refuse_i   (ln_rep_refuse),
+    .rep_payload_i  (ln_rep_payload),
+    .att_rep_valid_i(geom_att_rep_valid_i),
+    .att_rep_data_i (geom_att_rep_data_i),
+
+    // REAL: GEOM.ASSETFETCH's release (entry I38, closed).
+    .af_release_o (rp_af_release),
+
+    // REAL: the triangle, into GEOM.CLIP.
+    .o_valid_o    (rp_o_valid),
+    .o_ready_i    (rp_o_ready),
+    .o_ax_o       (rp_o_ax),
+    .o_ay_o       (rp_o_ay),
+    .o_bx_o       (rp_o_bx),
+    .o_by_o       (rp_o_by),
+    .o_cx_o       (rp_o_cx),
+    .o_cy_o       (rp_o_cy),
+    .o_behind_o   (rp_o_behind),
+    .o_invw_a_o   (rp_invw_a),
+    .o_invw_b_o   (rp_invw_b),
+    .o_invw_c_o   (rp_invw_c),
+    .o_attr_a_o   (rp_st_a),
+    .o_attr_b_o   (rp_st_b),
+    .o_attr_c_o   (rp_st_c),
+    .o_view_o     (rp_o_view),
+    .o_src_id_o   (rp_o_src_id),
+    .o_material_o (rp_o_material),
+    .o_raster_o   (rp_o_raster),
+
+    .meshlets_o      (geom_rp_meshlets_o),
+    .groups_o        (geom_rp_groups_o),
+    .triangles_in_o  (geom_rp_triangles_in_o),
+    .triangles_out_o (geom_rp_triangles_out_o),
+    .refused_o       (geom_rp_refused_o),
+    .missed_o        (geom_rp_missed_o),
+    .att_skew_o      (geom_rp_att_skew_o),
+    .profile_mixed_o (geom_rp_profile_mixed_o),
+    .view_bad_o      (geom_rp_view_bad_o),
+    .dq_refused_o    (geom_rp_dq_refused_o)
+  );
+
+  // The attribute store listens to the arena's own lookup nets (I46).
+  assign geom_att_look_valid_o = rp_look_valid && ln_look_ready;
+  assign geom_att_look_arena_o = rp_look_arena;
+  assign geom_att_look_gen_o   = rp_look_gen;
+  assign geom_att_look_index_o = rp_look_index;
+
+  // THE RULING-5 PACKET, per corner: slot 0 is GEOM.DEPTHQUANT's invw24,
+  // zero-extended (the tile pipe refuses anything above bit 23), and slots 1..6
+  // are the store's, in its order. Field placement only -- no arithmetic, and
+  // the slot index is the named `GEOM_ATTR_SLOT_INVW` the packer reads.
+  assign rp_attr_a = {rp_st_a, 8'd0, rp_invw_a};
+  assign rp_attr_b = {rp_st_b, 8'd0, rp_invw_b};
+  assign rp_attr_c = {rp_st_c, 8'd0, rp_invw_c};
+
+  // synthesis translate_off
+  initial begin
+    if (GEOM_ATTR_SLOT_INVW != 0)
+      $fatal(1, "zhao_console_core: the packet build above puts invw24 in slot 0 and GEOM_ATTR_SLOT_INVW says otherwise");
+  end
+  // synthesis translate_on
 
   // ==========================================================================
   // 12. THE SECOND COMPLETION -- the mip pass that makes a page GROUND.
