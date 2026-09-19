@@ -110,17 +110,15 @@ void test_canonical_pitch_places_two_metre_cells() {
         static_cast<int32_t>(d.vtx_wx_o));
 
   probe(d, 1, 0);
-  check(static_cast<int32_t>(d.vtx_wx_o) == 2 * kOneMetre,
-        "column 1 at 2.0 m pitch is 2.0 m", 2 * kOneMetre,
-        static_cast<int32_t>(d.vtx_wx_o));
+  check(static_cast<int32_t>(d.vtx_wx_o) == 2 * kOneMetre, "column 1 at 2.0 m pitch is 2.0 m",
+        2 * kOneMetre, static_cast<int32_t>(d.vtx_wx_o));
 
   probe(d, 32, 32);
   check(static_cast<int32_t>(d.vtx_wx_o) == 64 * kOneMetre,
         "column 32 is 64 m -- spec 1.3: a patch is 64 m per side", 64 * kOneMetre,
         static_cast<int32_t>(d.vtx_wx_o));
-  check(static_cast<int32_t>(d.vtx_wz_o) == 64 * kOneMetre,
-        "and rows obey the identical law in z", 64 * kOneMetre,
-        static_cast<int32_t>(d.vtx_wz_o));
+  check(static_cast<int32_t>(d.vtx_wz_o) == 64 * kOneMetre, "and rows obey the identical law in z",
+        64 * kOneMetre, static_cast<int32_t>(d.vtx_wz_o));
 }
 
 // ---------------------------------------------------------------------------
@@ -191,8 +189,8 @@ void test_compcache_fill_is_66_writes_in_declared_order() {
     if (axes[k] != 1 || idxs[k] != j) order_ok = false;
     if (vals[k] != static_cast<int32_t>(law_place(iz, j, p))) order_ok = false;
   }
-  check(order_ok, "columns on axis 0 then rows on axis 1, ascending, values per the law",
-        1, order_ok ? 1 : 0);
+  check(order_ok, "columns on axis 0 then rows on axis 1, ascending, values per the law", 1,
+        order_ok ? 1 : 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,18 +199,14 @@ void test_compcache_fill_is_66_writes_in_declared_order() {
 void test_envelope_mismatch_fires() {
   Vzhao_terrain_place d;
   reset(d);
-  check(d.place_env_mismatch_o == 0, "the census starts clean", 0,
-        d.place_env_mismatch_o);
+  check(d.place_env_mismatch_o == 0, "the census starts clean", 0, d.place_env_mismatch_o);
 
   present(d, 4, 4, 1, /*env_ok=*/false);
 
-  check(d.place_env_mismatch_o == 1,
-        "a header whose envelope is ONE fx16 tick out is caught", 1,
+  check(d.place_env_mismatch_o == 1, "a header whose envelope is ONE fx16 tick out is caught", 1,
         d.place_env_mismatch_o);
-  check(d.place_valid_o == 0, "and the patch is refused rather than placed", 0,
-        d.place_valid_o);
-  check(d.vtx_placed_o == 0, "so the per-vertex lane reports NOT placed", 0,
-        d.vtx_placed_o);
+  check(d.place_valid_o == 0, "and the patch is refused rather than placed", 0, d.place_valid_o);
+  check(d.vtx_placed_o == 0, "so the per-vertex lane reports NOT placed", 0, d.vtx_placed_o);
 }
 
 void test_illegal_pitch_fires_and_does_not_default() {
@@ -243,8 +237,7 @@ void test_out_of_range_patch_fires() {
   Vzhao_terrain_place e;
   reset(e);
   present(e, 300, 0, -1);
-  check(e.place_range_o == 0, "the same patch at 0.5 m pitch is in range", 0,
-        e.place_range_o);
+  check(e.place_range_o == 0, "the same patch at 0.5 m pitch is in range", 0, e.place_range_o);
   check(e.place_valid_o == 1, "and places normally", 1, e.place_valid_o);
 }
 
@@ -256,10 +249,9 @@ void test_accepted_patches_are_counted() {
     // let each fill drain so the sequencer is idle before the next header
     for (int c = 0; c < 70; ++c) zhao::tick(d);
   }
-  check(d.place_patches_o == 5, "every accepted patch is counted", 5,
-        d.place_patches_o);
-  check(d.place_src_id_o == 0x5A5A, "and the placed patch names its source page",
-        0x5A5A, d.place_src_id_o);
+  check(d.place_patches_o == 5, "every accepted patch is counted", 5, d.place_patches_o);
+  check(d.place_src_id_o == 0x5A5A, "and the placed patch names its source page", 0x5A5A,
+        d.place_src_id_o);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,8 +268,7 @@ void test_refusal_unplaces_the_previous_patch() {
 
   present(d, 2, 2, 1, /*env_ok=*/false);
   check(d.place_valid_o == 0,
-        "a corrupt header unplaces rather than leaving the old placement live", 0,
-        d.place_valid_o);
+        "a corrupt header unplaces rather than leaving the old placement live", 0, d.place_valid_o);
 }
 
 }  // namespace

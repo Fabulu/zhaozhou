@@ -6504,6 +6504,28 @@ set_tests_properties(field_out_height_random PROPERTIES LABELS "fast;nightly" TI
 add_test(NAME field_out_height_random_nightly COMMAND test_field_out_height --random 4000)
 set_tests_properties(field_out_height_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# MEM.UPLOAD -- the HPS->VRAM resource upload engine. Its oracle
+# (zref::mem::upload_verdict) was written BEFORE the RTL, so the bench is a
+# DIFFERENTIAL against that oracle rather than a second transcription of the
+# rules. Several cases carry TWO faults at once, because the oracle's ORDER is
+# part of the law and single-fault cases pass against a backwards priority.
+set(ZHAO_MEM_UPLOAD_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/mem/zhao_mem_upload.sv
+    ${CMAKE_CURRENT_SOURCE_DIR}/mem/tb_mem_upload.sv)
+add_executable(test_mem_upload_directed mem/mem_upload_directed.cpp)
+target_link_libraries(test_mem_upload_directed PRIVATE zhao_harness)
+target_include_directories(test_mem_upload_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/reference/include)
+verilate(test_mem_upload_directed
+  PREFIX Vtb_mem_upload
+  TOP_MODULE tb_mem_upload
+  SOURCES ${ZHAO_MEM_UPLOAD_SV})
+add_test(NAME mem_upload_directed COMMAND test_mem_upload_directed)
+set_tests_properties(mem_upload_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # TERRAIN.PLACE -- the placement owner entry I27 said did not exist. The block is
 # pure shifts of the lattice index, so the test checks the ARITHMETIC against
 # spec/terrain_rules.md 1.3/2.1 written out by hand, and fires all four censuses:
