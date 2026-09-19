@@ -135,10 +135,12 @@ export interface ViewItem extends Node {
   id: bigint;
   /** null when `from` absent (checker raises FORM-E-607) */
   camera: Expr | null;
-  budgetPct: bigint;
+  /** Owner ruling R33: token COUNTS, end to end -- never a percentage. */
+  geometryTokens: bigint;
+  fragmentTokens: bigint;
 }
 
-export interface SharedBudgetItem extends Node { kind: 'shared_budget'; pct: bigint }
+export interface SharedBudgetItem extends Node { kind: 'shared_budget'; tokens: bigint }
 
 export interface EmitStmt extends Node {
   kind: 'emit';

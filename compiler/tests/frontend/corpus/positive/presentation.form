@@ -23,9 +23,9 @@ module wound_present {
   }
 
   presentation duo {
-    view 0 from cam_a budget 45%;
-    view 1 from cam_b budget 45%;
-    shared budget 10%;
+    view 0 from cam_a budget geometry 45000 fragment 90000;
+    view 1 from cam_b budget geometry 45000 fragment 90000;
+    shared budget 1000;
     emit draw_form(form: FORM_PAGE, transform: hit_point, view_mask: 3, weight: 100%);
     emit draw_population(pool: creatures, view_mask: 3, weight: 80%);
     emit draw_procedural(patch: PATCH_PAGE, transform: hit_point, screen_error: screen_err);

@@ -480,10 +480,14 @@ constructs (L3+, FORM-E-717). Missing/unknown argument names: FORM-E-601/602.
 Unknown emit kind: FORM-E-603.
 
 `view` items compile to the frame's SetPresentationContract + SetView pair:
-`view 0 from cameras[0] budget 45%` fixes viewport 0's camera binding and its
-geometry/fragment token share; `shared budget 10%` the shared reserve (FORM
-§12). At most two views in L1 (the Duo law; a third is FORM-E-604). The
-budget split must sum to ≤ 100% (FORM-E-605).
+`view 0 from cameras[0] budget geometry 40000 fragment 90000;` fixes viewport
+0's camera binding and its geometry/fragment token CEILING; `shared budget
+8000;` the shared emergency pool. Budgets are token COUNTS, end to end
+(owner rulings R18/R33): the compiler writes them as authored, a percentage is
+refused (FORM-E-611), and a count must fit the ABI's `u32` (FORM-E-612). No
+per-frame token capacity is ratified, so nothing sums or converts them;
+FORM-E-605 (the old <= 100% rule) is retired. At most two views in L1 (the
+Duo law; a third is FORM-E-604).
 
 Draw-arguments referencing cartridge resources use **page-id constants**
 (`const ISLAND_PATCH: u32 = 3;`) resolved against the .zpak resource-page
@@ -740,12 +744,14 @@ goldens); codes are frozen once W3.2 ships — new rules get new codes.
 | FORM-E-602 | unknown emit argument name |
 | FORM-E-603 | unknown emit kind |
 | FORM-E-604 | more than two views declared |
-| FORM-E-605 | view budgets + shared sum exceeds 100% |
+| FORM-E-605 | RETIRED (owner ruling R33): view budgets + shared sum exceeds 100% |
 | FORM-E-606 | view id repeated or not 0/1 |
 | FORM-E-607 | view has no camera binding |
 | FORM-E-608 | `draw_population` names a non-pool |
 | FORM-E-609 | `audio` names a non-sound |
 | FORM-E-610 | resource page-id argument is not a `u32` const |
+| FORM-E-611 | budget written as a percentage (budgets are token counts, R33) |
+| FORM-E-612 | budget token count exceeds `u32` |
 
 ### FORM-E-650..679 — field dialect (§6)
 

@@ -141,15 +141,18 @@ function lowerPresent(hir: HirProgram): PresentZir {
   const layouts: PresentZir['layouts'] = [];
   const templates: PresentZir['templates'] = [];
   for (const presentation of declarationsOf(hir, 'presentation')) {
-    if (presentation.views.length > 0 || presentation.sharedBudgetPct > 0) {
+    if (presentation.views.length > 0 || presentation.sharedTokens > 0) {
       layouts.push({
         module: presentation.module,
         presentation: presentation.name,
         views: presentation.views.map((view) => {
           if (!view.camera) throw new Error(`internal ZIR presentation '${presentation.name}' has an unbound view`);
-          return { id: view.id, camera: view.camera, budgetPct: view.budgetPct, recordBytes: 96 as const };
+          return {
+            id: view.id, camera: view.camera, geometryTokens: view.geometryTokens,
+            fragmentTokens: view.fragmentTokens, recordBytes: 96 as const,
+          };
         }),
-        sharedBudgetPct: presentation.sharedBudgetPct,
+        sharedTokens: presentation.sharedTokens,
         contractRecordBytes: 48,
       });
     }

@@ -143,7 +143,7 @@ export const NEGATIVE_CORPUS: NegCase[] = [
   { code: 'FORM-E-461', name: 'apply-outside-sim', src: P('  fn f() -> u32 { apply terrain_field lift_ground(origin: world2 { x = 0w, y = 0w }) duration 45t; return 0; }\n' + EARTH_OK) },
   { code: 'FORM-E-462', name: 'apply-non-earth', src: S('  system s every 1 ticks reads writes terrain { apply terrain_field drift_on(origin: world2 { x = 0w, y = 0w }) duration 45t; }\n' + FLOW_OK) },
   { code: 'FORM-E-463', name: 'duration-zero', src: S('  system s every 1 ticks reads writes terrain { apply terrain_field lift_ground(origin: world2 { x = 0w, y = 0w }) duration 0t; }\n' + EARTH_OK) },
-  { code: 'FORM-E-464', name: 'camera-not-world3', src: S('  presentation p { view 0 from 5 budget 10%; }') },
+  { code: 'FORM-E-464', name: 'camera-not-world3', src: S('  presentation p { view 0 from 5 budget geometry 10000 fragment 20000; }') },
 
   // -- FORM-E-500..507 scheduling ----------------------------------------------------
   { code: 'FORM-E-500', name: 'two-writers-one-phase', src: S('  system a every 1 ticks reads writes energy { energy = 1m; }\n  system b every 1 ticks reads writes energy { energy = 2m; }') },
@@ -160,10 +160,12 @@ export const NEGATIVE_CORPUS: NegCase[] = [
   { code: 'FORM-E-601', name: 'emit-arg-missing', src: S('  presentation p { emit draw_form(form: 1, transform: origin, view_mask: 0); }') },
   { code: 'FORM-E-602', name: 'emit-arg-unknown', src: S('  presentation p { emit draw_form(form: 1, transform: origin, view_mask: 0, weight: 50%, mode: 1); }') },
   { code: 'FORM-E-603', name: 'emit-kind-unknown', src: S('  presentation p { emit draw_quad(form: 1); }') },
-  { code: 'FORM-E-604', name: 'three-views', src: S('  presentation p { view 0 from origin budget 30%; view 1 from origin budget 30%; view 1 from origin budget 30%; }') },
-  { code: 'FORM-E-605', name: 'budget-sum-exceeds', src: S('  presentation p { view 0 from origin budget 60%; view 1 from origin budget 60%; }') },
-  { code: 'FORM-E-606', name: 'view-id-not-01', src: S('  presentation p { view 2 from origin budget 30%; }') },
-  { code: 'FORM-E-607', name: 'view-no-camera', src: S('  presentation p { view 0 budget 30%; }') },
+  { code: 'FORM-E-604', name: 'three-views', src: S('  presentation p { view 0 from origin budget geometry 30000 fragment 60000; view 1 from origin budget geometry 30000 fragment 60000; view 1 from origin budget geometry 30000 fragment 60000; }') },
+  { code: 'FORM-E-611', name: 'budget-percentage', src: S('  presentation p { view 0 from origin budget geometry 60% fragment 100; }') },
+  { code: 'FORM-E-611', name: 'shared-budget-percentage', src: S('  presentation p { shared budget 10%; }') },
+  { code: 'FORM-E-612', name: 'budget-exceeds-u32', src: S('  presentation p { view 0 from origin budget geometry 4294967296 fragment 1; }') },
+  { code: 'FORM-E-606', name: 'view-id-not-01', src: S('  presentation p { view 2 from origin budget geometry 30000 fragment 60000; }') },
+  { code: 'FORM-E-607', name: 'view-no-camera', src: S('  presentation p { view 0 budget geometry 30000 fragment 60000; }') },
   { code: 'FORM-E-608', name: 'draw-population-non-pool', src: S('  presentation p { emit draw_population(pool: energy, view_mask: 3, weight: 80%); }') },
   { code: 'FORM-E-609', name: 'audio-non-sound', src: S('  presentation p { emit audio(sound: energy, at: origin); }') },
   { code: 'FORM-E-610', name: 'page-id-not-const', src: S('  presentation p { emit draw_form(form: energy, transform: origin, view_mask: 0, weight: 50%); }') },
@@ -246,4 +248,4 @@ export const NEGATIVE_CORPUS: NegCase[] = [
 ];
 
 /** Codes the frontend cannot raise (documented spec-issue exemptions). */
-export const EXEMPT_CODES = ['FORM-E-668', 'FORM-E-821', 'FORM-E-822', 'FORM-E-830', 'FORM-E-831'];
+export const EXEMPT_CODES = ['FORM-E-605', 'FORM-E-668', 'FORM-E-821', 'FORM-E-822', 'FORM-E-830', 'FORM-E-831'];
