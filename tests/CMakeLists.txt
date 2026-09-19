@@ -9013,6 +9013,34 @@ verilate(test_geom_mem_adapter_directed
 add_test(NAME geom_mem_adapter_directed COMMAND test_geom_mem_adapter_directed)
 set_tests_properties(geom_mem_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# MEM.SHARE at N=3 -- the third ENGINE1 reader (MATERIAL.RESOLVE's record
+# fetch, core material seam 2). The share's body is `zhao_mem_share_n`; the
+# test above is its N=2 proof through `zhao_mem_share2`/the adapter. This one
+# proves the N=3 round-robin bound (N-1), ownership by value, the guard's
+# two-cycle law with a LATE verdict, denial routing, trusted identity and
+# read-only from every index, and fires SHORT/LONG/UNOWNED by stimulus.
+add_executable(test_mem_share_n_directed memory/mem_share_n_directed.cpp)
+target_link_libraries(test_mem_share_n_directed PRIVATE zhao_harness)
+verilate(test_mem_share_n_directed
+  PREFIX Vtb_mem_share_n
+  TOP_MODULE tb_mem_share_n
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory/tb_mem_share_n.sv)
+add_test(NAME mem_share_n_directed COMMAND test_mem_share_n_directed)
+set_tests_properties(mem_share_n_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+foreach(_zhao_share_n 3 5)
+  add_test(NAME lint_zhao_mem_share_n${_zhao_share_n}
+           COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                   --top-module zhao_mem_share_n -GN=${_zhao_share_n}
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv)
+  set_tests_properties(lint_zhao_mem_share_n${_zhao_share_n} PROPERTIES
+    LABELS "lint;fast"
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
 # GEOM.ASSETFETCH -- randomized DIFFERENTIAL. Unlike the meshfetch random file
 # there IS something to differ against here, so this compares the RTL to the
 # oracle over 240 meshlets rather than checking properties.

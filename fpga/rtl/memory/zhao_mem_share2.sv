@@ -1,4 +1,4 @@
-// zhao_mem_share2.sv -- two logical requesters, ONE permitted MEM.GUARD client.
+// zhao_mem_share2.sv -- N logical requesters (two, historically), ONE permitted MEM.GUARD client.
 //
 // Law: reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt 12
 //      spec/memory_rules.md 5d / 5f (a client identity is a PRIVILEGE, not a slot)
@@ -92,27 +92,268 @@
 // counters below exist so the decision to relax it is made against a number.
 //
 // Conservative SystemVerilog subset only (charter 2).
+// ===========================================================================
+// N REQUESTERS -- the third ENGINE1 reader (MATERIAL.RESOLVE's record fetch)
+// ===========================================================================
+// `zhao_console_core`'s material seam 2: the record fetch wants a THIRD ENGINE1
+// requester and the geometry adapter had two. The answer is the same one the
+// top of this file gives for the second: share the ONE permitted client, never
+// park a reader on a spare slot. So the machine above now lives ONCE, in
+// `zhao_mem_share_n #(N)`, and `zhao_mem_share2` is its N=2 instance with the
+// historical port names -- every existing site, source list and directed test
+// is unchanged and now exercises the N core.
+//
+// EVERY GUARANTEE IS KEPT, and each one is stated for N:
+//   * ONE LOGICAL REQUEST IN FLIGHT, owner recorded before issue -- one index
+//     register instead of one bit;
+//   * THE GUARD'S TWO-CYCLE LAW upstream -- ready a level for the picked
+//     requester only, the verdict a pulse to the recorded owner only;
+//   * `last` FROM THE ACCEPTED REQUEST'S OWN LENGTH -- four or eight words;
+//   * TRUSTED FIXED IDENTITY and FORCE_READ, exactly as before;
+//   * NO STARVATION: round-robin at logical-request boundaries. Priority
+//     rotates to the index AFTER the last owner, so a requester that is always
+//     ready waits at most N-1 other requests. At N=2 this is precisely the old
+//     `pick_b = (a && b) ? ~last_b : b` -- the rotation starting after the last
+//     owner, reduced to two -- which is why the old test is the N=2 proof.
+// `tests/memory/mem_share_n_directed.cpp` proves the N=3 bound.
+//
+// It shares this file with its N=2 wrapper so that every source list, and
+// `tools/rtl/check_guard_verdict.py`'s path-listed audit, keep naming one file.
 `default_nettype none
 
+/* verilator lint_off DECLFILENAME */
+module zhao_mem_share_n
+  import zhao_pkg::*;
+#(
+    parameter int unsigned N = 3,
+    // THE ONE PERMITTED CLIENT, as an INT (see zhao_mem_share2's note: Quartus
+    // 17.0 and the arbiter's own `zhao_client_e'(<3 bits>)` idiom).
+    parameter int unsigned CLIENT_ID = 3,          // ZHAO_CLIENT_ENGINE1
+    parameter bit FORCE_READ = 1'b1
+) (
+    input  var logic clk,
+    input  var logic rst_n,
+
+    // ---- the logical requesters --------------------------------------------
+    input  var zhao_guard_req_t [N-1:0] req_i,
+    output var zhao_guard_rsp_t [N-1:0] rsp_o,
+    output var logic            [N-1:0] beat_valid_o,
+    output var logic            [63:0]  beat_data_o,   // one bus; valid routes it
+    output var logic            [N-1:0] beat_last_o,
+
+    // ---- the one permitted client, downstream to MEM.GUARD ----------------
+    output var zhao_guard_req_t m_req_o,
+    input  var zhao_guard_rsp_t m_rsp_i,
+    input  var logic            m_beat_valid_i,
+    input  var logic [63:0]     m_beat_data_i,
+    input  var logic            m_beat_last_i,
+
+    // ---- evidence ---------------------------------------------------------
+    output var logic [N-1:0][31:0] jobs_o,        // logical requests served, per requester
+    output var logic [31:0]     denied_o,          // guard violations, any requester
+    // Arbitration cycles in which MORE THAN ONE requester asked, so at least
+    // one waited. At N=2 this is the old count exactly.
+    output var logic [31:0]     contention_o,
+    output var logic [31:0]     err_short_o,
+    output var logic [31:0]     err_long_o,
+    output var logic [31:0]     err_unowned_o
+);
+
+  localparam int unsigned IW = (N > 1) ? $clog2(N) : 1;
+
+  initial begin
+    if (CLIENT_ID > 7) begin
+      $fatal(1, "zhao_mem_share_n: CLIENT_ID %0d is not a zhao_client_e", CLIENT_ID);
+    end
+    if (N < 2) begin
+      $fatal(1, "zhao_mem_share_n: N must be at least 2 (got %0d)", N);
+    end
+  end
+
+  localparam logic [2:0] CLIENT_BITS = 3'(CLIENT_ID);
+
+  // ------------------------------------------------------------------ FSM --
+  typedef enum logic [2:0] {
+    A_IDLE  = 3'd0,  // nothing in flight; arbitrate
+    A_REQ   = 3'd1,  // offering the selected request to the guard
+    A_VERD  = 3'd2,  // the guard's verdict, one cycle after it accepted
+    A_FILL  = 3'd3,  // the logical request's useful words are returning
+    A_DRAIN = 3'd4   // discard an overlong return through physical LAST
+  } astate_e;
+
+  astate_e st_q;
+
+  // THE LOGICAL OWNER, recorded BEFORE issue (12.4).
+  logic [IW-1:0] own_q;
+  logic [3:0]    expect_q;
+  logic [3:0]    recv_q;
+  zhao_guard_req_t sel_q;
+
+  // ROUND-ROBIN AT LOGICAL-REQUEST BOUNDARIES (12.5): the search starts at the
+  // index AFTER the last owner and wraps. `last_q` resets to 0, so a first tie
+  // goes to requester 1 -- exactly share2's reset `last_b_q = 0`, under which a
+  // first A/B tie goes to B.
+  logic [IW-1:0] last_q;
+
+  logic [N-1:0] wants;
+  logic         any_c;
+  logic         many_c;
+  logic [IW-1:0] pick_c;
+  always_comb begin
+    int idx;
+    int n_asking;
+    for (int i = 0; i < N; i++) wants[i] = req_i[i].valid;
+    any_c = 1'b0;
+    pick_c = '0;
+    n_asking = 0;
+    for (int i = 0; i < N; i++) if (wants[i]) n_asking = n_asking + 1;
+    many_c = (n_asking > 1);
+    for (int k = 1; k <= N; k++) begin
+      idx = int'(last_q) + k;
+      if (idx >= int'(N)) idx = idx - int'(N);
+      if (!any_c && wants[idx]) begin
+        any_c = 1'b1;
+        pick_c = IW'(idx);
+      end
+    end
+  end
+
+  function automatic logic [3:0] words_of(input logic [6:0] len_bytes);
+    words_of = 4'(len_bytes >> 3);
+  endfunction
+
+  // ---------------------------------------------------------- upstream rsp --
+  // The guard's two-cycle law, per requester: ready is a level, and only for
+  // the picked requester, so a losing requester is HELD rather than dropped;
+  // the verdict is a pulse, and only for the recorded owner.
+  logic rsp_ok_q, rsp_viol_q;
+
+  always_comb begin
+    for (int i = 0; i < N; i++) begin
+      rsp_o[i] = '0;
+      if (st_q == A_IDLE) rsp_o[i].ready = wants[i] && (pick_c == IW'(i));
+      if (own_q == IW'(i)) begin
+        rsp_o[i].ok        = rsp_ok_q;
+        rsp_o[i].violation = rsp_viol_q;
+      end
+    end
+  end
+
+  // ------------------------------------------------------- downstream req --
+  always_comb begin
+    m_req_o        = sel_q;
+    m_req_o.valid  = (st_q == A_REQ);
+    m_req_o.client = zhao_client_e'(CLIENT_BITS);
+    // ENFORCED-BY: tests/geometry/geom_mem_adapter_directed.cpp:read_only_substitution
+    m_req_o.write  = FORCE_READ ? 1'b0 : sel_q.write;
+  end
+
+  // ------------------------------------------------------- beat returning --
+  // Routed by the RECORDED owner, never by whoever is currently asking.
+  logic beat_ok_c, last_c;
+  assign beat_ok_c = (st_q == A_FILL) && m_beat_valid_i;
+  assign last_c    = beat_ok_c && (recv_q + 4'd1 == expect_q);
+  assign beat_data_o = m_beat_data_i;
+  always_comb begin
+    for (int i = 0; i < N; i++) begin
+      beat_valid_o[i] = beat_ok_c && (own_q == IW'(i));
+      beat_last_o[i]  = last_c    && (own_q == IW'(i));
+    end
+  end
+
+  // ------------------------------------------------------------- seq core --
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      st_q         <= A_IDLE;
+      own_q        <= '0;
+      last_q       <= '0;
+      expect_q     <= 4'd0;
+      recv_q       <= 4'd0;
+      sel_q        <= '0;
+      rsp_ok_q     <= 1'b0;
+      rsp_viol_q   <= 1'b0;
+      jobs_o       <= '0;
+      denied_o     <= 32'd0;
+      contention_o <= 32'd0;
+      err_short_o  <= 32'd0;
+      err_long_o   <= 32'd0;
+      err_unowned_o <= 32'd0;
+    end else begin
+      rsp_ok_q   <= 1'b0;      // one-cycle verdict pulses
+      rsp_viol_q <= 1'b0;
+
+      if (m_beat_valid_i && (st_q != A_FILL) && (st_q != A_DRAIN)) begin
+        err_unowned_o <= err_unowned_o + 32'd1;
+      end
+
+      unique case (st_q)
+        A_IDLE: begin
+          // MORE THAN ONE ASKED AND AT LEAST ONE WAITED.
+          if (many_c) contention_o <= contention_o + 32'd1;
+
+          if (any_c) begin
+            own_q    <= pick_c;
+            last_q   <= pick_c;
+            sel_q    <= req_i[pick_c];
+            expect_q <= words_of(req_i[pick_c].len);
+            recv_q   <= 4'd0;
+            st_q     <= A_REQ;
+          end
+        end
+
+        A_REQ: begin
+          // The guard's ready is a LEVEL; its verdict is the next cycle.
+          if (m_rsp_i.ready) st_q <= A_VERD;
+        end
+
+        A_VERD: begin
+          if (m_rsp_i.ok) begin
+            rsp_ok_q <= 1'b1;
+            st_q     <= A_FILL;
+            jobs_o[own_q] <= jobs_o[own_q] + 32'd1;
+          end else if (m_rsp_i.violation) begin
+            rsp_viol_q <= 1'b1;
+            denied_o   <= denied_o + 32'd1;
+            st_q       <= A_IDLE;
+          end
+          // Neither yet: WAIT. Reading silence as an answer is the mistake
+          // A_VERD exists to end.
+        end
+
+        A_FILL: begin
+          if (m_beat_valid_i) begin
+            recv_q <= recv_q + 4'd1;
+            if (recv_q + 4'd1 == expect_q) begin
+              if (m_beat_last_i) begin
+                st_q <= A_IDLE;
+              end else begin
+                err_long_o <= err_long_o + 32'd1;
+                st_q       <= A_DRAIN;
+              end
+            end else if (m_beat_last_i) begin
+              err_short_o <= err_short_o + 32'd1;
+              st_q        <= A_IDLE;
+            end
+          end
+        end
+
+        A_DRAIN: begin
+          if (m_beat_valid_i && m_beat_last_i) st_q <= A_IDLE;
+        end
+        default: st_q <= A_IDLE;
+      endcase
+    end
+  end
+
+endmodule
+/* verilator lint_on DECLFILENAME */
+
+// The two-requester share every existing site instantiates: the N core at N=2,
+// with the historical port names. Nothing here decides anything.
 module zhao_mem_share2
   import zhao_pkg::*;
 #(
-    // THE ONE PERMITTED CLIENT, as an INT rather than as the enum type.
-    // Quartus 17.0 is the constraint: an enum-typed parameter is not a form
-    // this tree relies on anywhere, while `zhao_client_e'(<3 bits>)` is the
-    // exact idiom `zhao_vram_arbiter` already uses to build its client tag. So
-    // the value travels as an integer and is cast once, at its single use.
-    //
-    // IT IS A TRUSTED FIXED IDENTITY (11.2) WHATEVER ITS VALUE. The client
-    // field is forced from this parameter and never forwarded from a
-    // requester, so a leaf test's generic client input cannot reach the
-    // production guard through this path.
     parameter int unsigned CLIENT_ID = 3,          // ZHAO_CLIENT_ENGINE1
-
-    // Force every issued request to a READ. Both of today's users share a
-    // READ-ONLY window, and a share that could carry a write would let one
-    // requester's write reach memory under the other's privilege. Set it to 0
-    // only for a share whose window genuinely has a write arm, and say which.
     parameter bit FORCE_READ = 1'b1
 ) (
     input  var logic clk,
@@ -140,230 +381,58 @@ module zhao_mem_share2
     input  var logic            m_beat_last_i,
 
     // ---- evidence ---------------------------------------------------------
-    output var logic [31:0]     jobs_a_o,          // logical requests served, A
-    output var logic [31:0]     jobs_b_o,          // ...and B
-    output var logic [31:0]     denied_o,          // guard violations, either
-    // A logical request that WAITED because the other requester held the
-    // share. This is the number that says whether sharing one client costs
-    // anything, and it is the number the decision to widen to two outstanding
-    // requests has to be made against.
+    output var logic [31:0]     jobs_a_o,
+    output var logic [31:0]     jobs_b_o,
+    output var logic [31:0]     denied_o,
     output var logic [31:0]     contention_o,
-    // Return-count faults, distinct because their causes differ: SHORT is the
-    // line ending before its expected packed-word count, LONG is a word
-    // arriving after it, UNOWNED is a word with no logical request recorded.
     output var logic [31:0]     err_short_o,
     output var logic [31:0]     err_long_o,
     output var logic [31:0]     err_unowned_o
 );
 
-  // Quartus 17.0 rejects a bare module-scope `if`; an elaboration check has to
-  // sit inside `initial begin ... end` (CLAUDE.md, the two SystemVerilog forms
-  // that lint clean and do not synthesise).
-  initial begin
-    if (CLIENT_ID > 7) begin
-      $fatal(1, "zhao_mem_share2: CLIENT_ID %0d is not a zhao_client_e", CLIENT_ID);
-    end
-  end
+  zhao_guard_req_t [1:0] req;
+  zhao_guard_rsp_t [1:0] rsp;
+  logic [1:0]       bv, bl;
+  logic [63:0]      bd;
+  logic [1:0][31:0] jobs;
 
-  // The arbiter's own idiom: three bits, cast once.
-  localparam logic [2:0] CLIENT_BITS = 3'(CLIENT_ID);
+  assign req[0] = a_req_i;
+  assign req[1] = b_req_i;
+  assign a_rsp_o = rsp[0];
+  assign b_rsp_o = rsp[1];
+  assign a_beat_valid_o = bv[0];
+  assign b_beat_valid_o = bv[1];
+  assign a_beat_last_o  = bl[0];
+  assign b_beat_last_o  = bl[1];
+  assign a_beat_data_o  = bd;
+  assign b_beat_data_o  = bd;
+  assign jobs_a_o = jobs[0];
+  assign jobs_b_o = jobs[1];
 
-  // ------------------------------------------------------------------ FSM --
-  typedef enum logic [2:0] {
-    A_IDLE  = 3'd0,  // nothing in flight; arbitrate
-    A_REQ   = 3'd1,  // offering the selected request to the guard
-    A_VERD  = 3'd2,  // the guard's verdict, one cycle after it accepted
-    A_FILL  = 3'd3,  // the logical request's useful words are returning
-    A_DRAIN = 3'd4   // discard an overlong return through physical LAST
-  } astate_e;
-
-  astate_e st_q;
-
-  // THE LOGICAL OWNER, recorded BEFORE issue (12.4). One request in flight, so
-  // this is one register and not a table -- but it is a NAMED record rather
-  // than an implicit "whoever asked last", because that distinction is the
-  // whole point of the block.
-  logic       own_b_q;          // 0 = requester A, 1 = requester B
-  logic [3:0] expect_q;         // expected packed 64-bit words: 4 or 8
-  logic [3:0] recv_q;           // received so far
-  zhao_guard_req_t sel_q;       // the captured request, held stable while
-                                // the guard is blocked (12.2)
-
-  // ROUND-ROBIN AT LOGICAL-REQUEST BOUNDARIES (12.5). `last_b_q` remembers who
-  // went last, so a requester that is always ready cannot starve the other.
-  // Deliberately NOT a preference: the brief permits a bounded one to maintain
-  // lookahead but forbids it starving the other side, and a plain alternation
-  // cannot starve anything. A preference can be added later against
-  // `contention_o` rather than ahead of it.
-  logic last_b_q;
-
-  wire a_wants = a_req_i.valid;
-  wire b_wants = b_req_i.valid;
-  // Alternate when both ask; otherwise take whoever asked.
-  wire pick_b_c = (a_wants && b_wants) ? ~last_b_q : b_wants;
-
-  // EXPECTED WORDS FROM THE REQUEST'S OWN LENGTH, not from who asked. A 64-byte
-  // line is eight packed words and a 32-byte descriptor is four; `len` is in
-  // BYTES and a packed word is eight of them.
-  function automatic logic [3:0] words_of(input logic [6:0] len_bytes);
-    words_of = 4'(len_bytes >> 3);
-  endfunction
-
-  // ---------------------------------------------------------- upstream rsp --
-  // Each requester sees a guard-shaped response, and it must observe the SAME
-  // two-cycle law the real guard has: ready is a level, the verdict is a pulse
-  // the next cycle. Presenting a one-cycle `ready && ok` here would hand both
-  // requesters back the protocol they were just repaired away from.
-  logic rsp_ok_q, rsp_viol_q;
-
-  always_comb begin
-    a_rsp_o = '0;
-    b_rsp_o = '0;
-    // Ready only when the share is free AND this requester is the one the
-    // arbitration picked, so a losing requester is held rather than dropped.
-    if (st_q == A_IDLE) begin
-      a_rsp_o.ready = a_wants && !pick_b_c;
-      b_rsp_o.ready = b_wants &&  pick_b_c;
-    end
-    if (own_b_q) begin
-      b_rsp_o.ok        = rsp_ok_q;
-      b_rsp_o.violation = rsp_viol_q;
-    end else begin
-      a_rsp_o.ok        = rsp_ok_q;
-      a_rsp_o.violation = rsp_viol_q;
-    end
-  end
-
-  // ------------------------------------------------------- downstream req --
-  always_comb begin
-    m_req_o        = sel_q;
-    m_req_o.valid  = (st_q == A_REQ);
-    m_req_o.client = zhao_client_e'(CLIENT_BITS);
-    // FORCED, not forwarded: a requester may present `write` set and this
-    // still issues a read, which is what the leaf test drives.
-    // ENFORCED-BY: tests/geometry/geom_mem_adapter_directed.cpp:read_only_substitution
-    m_req_o.write  = FORCE_READ ? 1'b0 : sel_q.write;
-  end
-
-  // ------------------------------------------------------- beat returning --
-  // Routed by the RECORDED owner, never by whoever is currently asking. A
-  // scanout burst between two bursts of ours does not touch this record, and a
-  // queued request cannot capture it, because there is only one.
-  wire beat_ok_c = (st_q == A_FILL) && m_beat_valid_i;
-
-  assign a_beat_valid_o = beat_ok_c && !own_b_q;
-  assign b_beat_valid_o = beat_ok_c &&  own_b_q;
-  assign a_beat_data_o  = m_beat_data_i;
-  assign b_beat_data_o  = m_beat_data_i;
-
-  // `last` IS THE EXPECTED COUNT, not the downstream flag. The shell's return
-  // generator counts a fixed eight; a 32-byte descriptor must see its last on
-  // word four. Generalised here so both lengths work from one downstream
-  // generator, which is what 12.3 requires.
-  wire last_c = beat_ok_c && (recv_q + 4'd1 == expect_q);
-  assign a_beat_last_o = last_c && !own_b_q;
-  assign b_beat_last_o = last_c &&  own_b_q;
-
-  // ------------------------------------------------------------- seq core --
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      st_q         <= A_IDLE;
-      own_b_q      <= 1'b0;
-      last_b_q     <= 1'b0;
-      expect_q     <= 4'd0;
-      recv_q       <= 4'd0;
-      sel_q        <= '0;
-      rsp_ok_q     <= 1'b0;
-      rsp_viol_q   <= 1'b0;
-      jobs_a_o     <= 32'd0;
-      jobs_b_o     <= 32'd0;
-      denied_o     <= 32'd0;
-      contention_o <= 32'd0;
-      err_short_o  <= 32'd0;
-      err_long_o   <= 32'd0;
-      err_unowned_o <= 32'd0;
-    end else begin
-      rsp_ok_q   <= 1'b0;      // one-cycle verdict pulses
-      rsp_viol_q <= 1'b0;
-
-      // A word arriving with no logical owner. An overlong return in A_DRAIN
-      // still belongs to the recorded request even though its useful count is
-      // complete, so it is discarded there rather than mislabelled UNOWNED.
-      if (m_beat_valid_i && (st_q != A_FILL) && (st_q != A_DRAIN)) begin
-        err_unowned_o <= err_unowned_o + 32'd1;
-      end
-
-      unique case (st_q)
-        A_IDLE: begin
-          // BOTH ASKED AND ONE WAITED. Counted at the moment the loser is held,
-          // which is the only cycle the fact exists.
-          if (a_wants && b_wants) contention_o <= contention_o + 32'd1;
-
-          if (a_wants || b_wants) begin
-            own_b_q  <= pick_b_c;
-            last_b_q <= pick_b_c;
-            sel_q    <= pick_b_c ? b_req_i : a_req_i;
-            expect_q <= words_of(pick_b_c ? b_req_i.len : a_req_i.len);
-            recv_q   <= 4'd0;
-            st_q     <= A_REQ;
-          end
-        end
-
-        A_REQ: begin
-          // The guard's ready is a LEVEL; its verdict is the next cycle. The
-          // selected request stays stable meanwhile (12.2) because `sel_q` is
-          // a register, not a mux of the live requester ports.
-          if (m_rsp_i.ready) st_q <= A_VERD;
-        end
-
-        A_VERD: begin
-          if (m_rsp_i.ok) begin
-            rsp_ok_q <= 1'b1;
-            st_q     <= A_FILL;
-            if (own_b_q) jobs_b_o <= jobs_b_o + 32'd1;
-            else         jobs_a_o <= jobs_a_o + 32'd1;
-          end else if (m_rsp_i.violation) begin
-            rsp_viol_q <= 1'b1;
-            denied_o   <= denied_o + 32'd1;
-            st_q       <= A_IDLE;
-          end
-          // Neither yet: WAIT. Reading silence as an answer is the mistake
-          // A_VERD exists to end, in this block as in the two fetchers.
-        end
-
-        A_FILL: begin
-          if (m_beat_valid_i) begin
-            recv_q <= recv_q + 4'd1;
-            if (recv_q + 4'd1 == expect_q) begin
-              // The requester's useful record is complete. Release the owner
-              // only if the physical return agrees. Otherwise retain ownership
-              // in A_DRAIN through physical LAST so surplus words cannot be
-              // mistaken for an idle gap or captured by a later request.
-              if (m_beat_last_i) begin
-                st_q <= A_IDLE;
-              end else begin
-                err_long_o <= err_long_o + 32'd1;
-                st_q       <= A_DRAIN;
-              end
-            end else if (m_beat_last_i) begin
-              // Downstream said last before the expected count: the line ended
-              // early and the rest of the record would be stale RAM.
-              err_short_o <= err_short_o + 32'd1;
-              st_q        <= A_IDLE;
-            end
-          end
-        end
-
-        A_DRAIN: begin
-          // Surplus words belong to the overlong physical response and are not
-          // exposed to either requester. Keeping the share occupied until its
-          // LAST preserves the one-request-in-flight ownership law.
-          if (m_beat_valid_i && m_beat_last_i) st_q <= A_IDLE;
-        end
-        default: st_q <= A_IDLE;
-      endcase
-    end
-  end
+  zhao_mem_share_n #(
+    .N         (2),
+    .CLIENT_ID (CLIENT_ID),
+    .FORCE_READ(FORCE_READ)
+  ) u_core (
+    .clk           (clk),
+    .rst_n         (rst_n),
+    .req_i         (req),
+    .rsp_o         (rsp),
+    .beat_valid_o  (bv),
+    .beat_data_o   (bd),
+    .beat_last_o   (bl),
+    .m_req_o       (m_req_o),
+    .m_rsp_i       (m_rsp_i),
+    .m_beat_valid_i(m_beat_valid_i),
+    .m_beat_data_i (m_beat_data_i),
+    .m_beat_last_i (m_beat_last_i),
+    .jobs_o        (jobs),
+    .denied_o      (denied_o),
+    .contention_o  (contention_o),
+    .err_short_o   (err_short_o),
+    .err_long_o    (err_long_o),
+    .err_unowned_o (err_unowned_o)
+  );
 
 endmodule
 
