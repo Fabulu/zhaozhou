@@ -506,6 +506,11 @@ module zhao_shell_top_v2
   input  logic [8:0]  post_frame_w_i,       // the VIEW's size, from the video mode
   input  logic [7:0]  post_frame_h_i,
   input  logic        post_duo_i,           // two views per frame
+  // R35/R36: CMD.EXEC's committed look. POST.ECHO captures only when ARMED,
+  // and a pass may not start while the look or the grading table is being
+  // written (CMD.EXEC's EX_POST).
+  input  logic        post_echo_arm_i,
+  input  logic        post_look_hold_i,
   output logic        post_pass_start_o,    // POST.COMPOSITE frame_start
   output logic        post_view_o,          // POST.COMPOSITE view_sel
   output logic        post_src_valid_o,
@@ -1304,6 +1309,8 @@ module zhao_shell_top_v2
     .frame_w_i     (post_frame_w_i),
     .frame_h_i     (post_frame_h_i),
     .duo_i         (post_duo_i),
+    .echo_arm_i    (post_echo_arm_i),
+    .look_hold_i   (post_look_hold_i),
     .pass_start_o  (post_pass_start_o),
     .view_o        (post_view_o),
     .src_valid_o   (post_src_valid_o),

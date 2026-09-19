@@ -100,6 +100,20 @@
 # switch: considered=1 fetched=1 culled=0, all seven refusals 0, beats=24,
 # decoded=4. Both halves are required before the zeros may be quoted.
 # ---------------------------------------------------------------------------
+# -NoEchoArm: THE NEGATIVE CONTROL FOR POST.ECHO'S ARM (owner ruling R35)
+# ---------------------------------------------------------------------------
+# Added 2026-09-19 with SetPost (R36). The bench's command packet carries a
+# SetPost whose flags ARM the echo, and the armed run compares the capture
+# against the frame word for word. That check is evidence about the ARM only if
+# the capture does not happen without it.
+#
+# With -NoEchoArm the SAME packet carries flags = 0 and nothing else changes
+# (+define+ZHAO_SMOKE_NO_ECHO_ARM, a plain ifdef). Its polarity is NORMAL:
+# the bench asserts that POST.ECHO opened no pass and wrote no pixel, and the
+# run PASSES. It also prints the post lease's busy clocks with the echo off,
+# which is the unarmed half of ruling R38's memory budget.
+#
+# ---------------------------------------------------------------------------
 # -BadAttribute: THE POSITIVE CONTROL FOR THE VERTEX-ATTRIBUTE STORE SEAM
 # ---------------------------------------------------------------------------
 # RETARGETED 2026-09-19 (geom packet), and the old target is written down so
@@ -126,7 +140,8 @@ param(
   [switch]$Mutant,
   [switch]$NoTableLoad,
   [switch]$BadDescriptor,
-  [switch]$BadAttribute
+  [switch]$BadAttribute,
+  [switch]$NoEchoArm
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,6 +165,7 @@ if (-not $BuildIn) {
          elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
          elseif ($BadAttribute) { 'zhao_console_core_smoke_badattr' }
+         elseif ($NoEchoArm) { 'zhao_console_core_smoke_noecho' }
          else { 'zhao_console_core_smoke' }
   # PER CHECKOUT. The default used to be one %TEMP% directory for every
   # checkout on the machine, so concurrent packets in separate worktrees
@@ -207,6 +223,10 @@ if ($NoTableLoad) {
 if ($BadAttribute) {
   $defs += '+define+ZHAO_SMOKE_BAD_ATTR'
   Write-Host 'POSITIVE CONTROL: the attribute store answers one lookup ONE CLOCK LATE, INVERTED POLARITY (passes when the run FAILS)'
+}
+if ($NoEchoArm) {
+  $defs += '+define+ZHAO_SMOKE_NO_ECHO_ARM'
+  Write-Host 'NEGATIVE CONTROL: the SetPost leaves POST.ECHO DISARMED (R35); the bench asserts no capture happens'
 }
 if ($BadDescriptor) {
   $defs += '+define+ZHAO_SMOKE_BAD_DESC'

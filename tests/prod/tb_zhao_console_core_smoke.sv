@@ -681,6 +681,8 @@ module tb_zhao_console_core_smoke
   logic [31:0]  mat_not_resident_o, mat_selector_overflow_o, mat_recipe_count_mismatch_o, mat_fetch_denied_o;
   logic [31:0]  geom_ma_jobs_c_o;  logic [31:0]             cmd_exec_uploads_o;
   logic [31:0]             cmd_exec_upload_overflow_o;
+  logic [31:0]             cmd_exec_post_looks_o, cmd_exec_grade_entries_o;
+  logic [31:0]             cmd_exec_post_refused_o, cmd_exec_grade_overflow_o;
   logic [31:0]             upl_cfg_region_base_i;
   logic [31:0]             upl_cfg_region_bytes_i;
   logic [63:0]             upl_cfg_arena_base_i;
@@ -778,18 +780,7 @@ module tb_zhao_console_core_smoke
   logic [15:0]             post_atm_rgb_i;
   logic [7:0]              post_atm_opacity_i;
   logic                    post_atm_add_i;
-  logic [7:0]              post_bloom_gain_i;
-  logic                    post_grade_valid_i;
-  logic                    post_pv_we_i;
-  logic [1:0]              post_pv_sel_i;
-  logic [5:0]              post_pv_addr_i;
-  logic [71:0]             post_pv_data_i;
-  logic signed [8:0]       post_bias_r_i;
-  logic signed [8:0]       post_bias_g_i;
-  logic signed [8:0]       post_bias_b_i;
-  logic [15:0]             post_flash_rgb_i;
-  logic [7:0]              post_flash_amt_i;
-  logic [15:0]             post_ink_rgb_i;
+  // post_bloom_gain_i .. post_ink_rgb_i are GONE (R36): CMD.EXEC drives them.
   logic                    post_hud_req_v_o;
   logic [POST_XW-1:0]      post_hud_req_x_o;
   logic [POST_YW-1:0]      post_hud_req_y_o;
@@ -1808,7 +1799,25 @@ module tb_zhao_console_core_smoke
   // A write, or a read anywhere else, is something this bench has no bytes
   // for, and serving zeros would be inventing them.
   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
-  localparam int unsigned PKT_MAX_C     = 256;
+  localparam int unsigned PKT_MAX_C     = 512;   // 280 B since SetPost/SetGradeTable (R36)
+  // THE LOOK THE PACKET CARRIES (R36): every value distinctive, the picture
+  // still the identity (see build_packet).
+  localparam logic [7:0]        SP_GAIN_C   = 8'h5A;
+  localparam logic signed [8:0] SP_BIAS_R_C = -9'sd256;
+  localparam logic signed [8:0] SP_BIAS_G_C = 9'sd37;
+  localparam logic signed [8:0] SP_BIAS_B_C = 9'sd255;
+  localparam logic [15:0]       SP_FLASH_C  = 16'hF81F;
+  localparam logic [15:0]       SP_INK_C    = 16'h07E0;
+  // Byte k of the SetGradeTable's 72 vector bytes: distinctive, never 0.
+  function automatic logic [7:0] sm_grade_byte(input int unsigned k);
+    sm_grade_byte = 8'(8'h11 + 8'(k * 37));
+  endfunction
+  // The shell's and the core's paths: the mutant build's DUT is a wrapper.
+`ifdef ZHAO_MUT_SLOT_OVERFLOW
+  `define PC_CORE dut.u_dut
+`else
+  `define PC_CORE dut
+`endif
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
   // The top 4 KiB of RENDER.ASSET_POOL (0x06A0_0000 + 0x0160_0000), which
@@ -3147,18 +3156,6 @@ module tb_zhao_console_core_smoke
     post_atm_rgb_i = '0;
     post_atm_opacity_i = '0;
     post_atm_add_i = '0;
-    post_bloom_gain_i = '0;
-    post_grade_valid_i = '0;
-    post_pv_we_i = '0;
-    post_pv_sel_i = '0;
-    post_pv_addr_i = '0;
-    post_pv_data_i = '0;
-    post_bias_r_i = '0;
-    post_bias_g_i = '0;
-    post_bias_b_i = '0;
-    post_flash_rgb_i = '0;
-    post_flash_amt_i = '0;
-    post_ink_rgb_i = '0;
     post_hud_valid_i = '0;
     post_hud_rgb_i = '0;
     hist_ev_valid_i = '0;
@@ -3451,11 +3448,14 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
-      logic [255:0] bfv, efv;
+      zhao_abi_pkg::zhao_rec_set_post_t         sp;
+      zhao_abi_pkg::zhao_rec_set_grade_table_t  gt;
+      logic [255:0] bfv, efv, spv;
       logic [383:0] prv;
+      logic [767:0] gtv;
       logic [31:0]  c;
       int unsigned  o;
-      bf = '0; pr = '0; ef = '0;
+      bf = '0; pr = '0; ef = '0; sp = '0; gt = '0;
       bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
       bf.frame_id = 32'd1;
       pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
@@ -3471,29 +3471,58 @@ module tb_zhao_console_core_smoke
       pr.dst_slot       = UPL_SLOT_C;
       pr.kind           = UPL_KIND_C;
       ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
+      // SetPost (R36): POST.ECHO ARMED (R35) -- the capture this bench checks
+      // word for word exists only because this record arms it -- and a look
+      // whose every value is DISTINCTIVE and whose picture is still the
+      // identity: no grade, no flash amount, no glow for the gain to scale,
+      // no ink bit for the ink colour to paint. Each value is read back at
+      // POST.COMPOSITE's own port below, so the carrier is proven end to end.
+      sp.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_POST;          sp.h_record_bytes = 16'd32;
+      sp.bloom_gain   = SP_GAIN_C;
+`ifdef ZHAO_SMOKE_NO_ECHO_ARM
+      sp.flags        = 8'h00;                               // NEGATIVE CONTROL: disarmed
+`else
+      sp.flags        = 8'h02;                               // echo ARM, grade off
+`endif
+      sp.flash_amount = 8'd0;
+      sp.bias_r       = 16'(SP_BIAS_R_C);
+      sp.bias_g       = 16'(SP_BIAS_G_C);
+      sp.bias_b       = 16'(SP_BIAS_B_C);
+      sp.flash        = SP_FLASH_C;
+      sp.ink          = SP_INK_C;
+      // SetGradeTable (R36): eight B-curve entries at 8..15, distinctive s24s,
+      // read back out of POST.COMPOSITE's own table below.
+      gt.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_GRADE_TABLE;   gt.h_record_bytes = 16'd96;
+      gt.curve = 8'd2; gt.first = 8'd8; gt.count = 8'd8;
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
       prv = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
+      spv = zhao_abi_pkg::zhao_pack_set_post(sp);
+      gtv = zhao_abi_pkg::zhao_pack_set_grade_table(gt);
+      for (int unsigned k = 0; k < 72; k++)
+        gtv[8*(zhao_abi_pkg::ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0 + k) +: 8] = sm_grade_byte(k);
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]      = bfv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k] = prv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 80 + k] = efv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 80 + k]  = spv[8*k +: 8];
+      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 112 + k] = gtv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 208 + k] = efv[8*k +: 8];
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), three records, 112 bytes of them
+      // deadline 0 (the mode's period), five records, 240 bytes of them
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd3;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd112;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd5;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd240;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 112; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+115], pkt_mem[o+114], pkt_mem[o+113], pkt_mem[o+112]} = ~c;
-      pkt_len_q   = o + 112 + 4;
+      for (int unsigned k = 0; k < 240; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+243], pkt_mem[o+242], pkt_mem[o+241], pkt_mem[o+240]} = ~c;
+      pkt_len_q   = o + 240 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
@@ -3815,6 +3844,17 @@ module tb_zhao_console_core_smoke
       if (fb_bad != 0)
         $fatal(1, "SMOKE: the framebuffer after the IDENTITY post pass differs from the raster's frame in %0d word(s), first at word %0d -- the read-back or the write-back moved or changed pixels",
                fb_bad, first_fb);
+`ifdef ZHAO_SMOKE_NO_ECHO_ARM
+      // THE NEGATIVE CONTROL (R35): the same stimulus with the SetPost's arm
+      // OFF must capture NOTHING -- no pass opened, no pixel written. If it did,
+      // the capture checked in the armed run would not be evidence of the arm.
+      if (echo_passes_complete_o != 0 || echo_passes_torn_o != 0 || echo_pixels_written_o != 0
+          || echo_pixels_dropped_o != 0)
+        $fatal(1, "SMOKE: DISARMED POST.ECHO still ran: complete=%0d torn=%0d written=%0d dropped=%0d (disarmed is not starved)",
+               echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
+               echo_pixels_dropped_o);
+      $display("SMOKE: NEGATIVE CONTROL echo disarmed: complete=0 written=0; post busy %0d gpu cycles", post_busy_cycles_q);
+`else
       if (echo_passes_complete_o != 1 || echo_passes_torn_o != 0 || echo_pixels_dropped_o != 0
           || echo_fault_o || echo_pixels_written_o != POST_TB_WORDS)
         $fatal(1, "SMOKE: POST.ECHO did not capture the pass whole: complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
@@ -3823,11 +3863,54 @@ module tb_zhao_console_core_smoke
       if (cap_bad != 0)
         $fatal(1, "SMOKE: POST.ECHO's capture differs from the frame in %0d word(s), first at word %0d",
                cap_bad, first_cap);
+`endif
       if (render_retired_words_o != render_issued_words_o)
         $fatal(1, "SMOKE: after the post pass RASTER.FBWRITE issued %0d words and retired %0d",
                render_issued_words_o, render_retired_words_o);
       if (!render_drained_o)
         $fatal(1, "SMOKE: the render frame (raster + post) never drained -- nothing could publish it");
+    end
+
+    // ---- R35/R36: THE LOOK AND THE GRADING TABLE, at POST.COMPOSITE's ports ----
+    // The command packet's SetPost and SetGradeTable, through CMD.DMA, CMD.DECODER,
+    // CMD.EXEC's EX_POST door and the core, read back at the CONSUMER: every look
+    // value on POST.COMPOSITE's own input, the eight product vectors in its own
+    // B-curve table, and the echo ARM on the shell's lease -- whose capture above
+    // exists only because this arm reached it (the identity look arms nothing).
+    begin
+      automatic int unsigned pv_bad = 0;
+      $display("SMOKE: look      looks=%0d grade_entries=%0d refused=%0d overflow=%0d | gain=%02h bias=%0d/%0d/%0d flash=%04h amt=%0d ink=%04h grade=%b echo_arm=%b",
+               cmd_exec_post_looks_o, cmd_exec_grade_entries_o, cmd_exec_post_refused_o,
+               cmd_exec_grade_overflow_o, `PC_CORE.u_post_composite.bloom_gain_i,
+               $signed(`PC_CORE.u_post_composite.bias_r_i), $signed(`PC_CORE.u_post_composite.bias_g_i),
+               $signed(`PC_CORE.u_post_composite.bias_b_i), `PC_CORE.u_post_composite.flash_rgb_i,
+               `PC_CORE.u_post_composite.flash_amt_i, `PC_CORE.u_post_composite.ink_rgb_i,
+               `PC_CORE.u_post_composite.grade_valid_i, `PC_CORE.post_look_echo_arm_w);
+      for (int unsigned k = 0; k < 8; k++) begin
+        automatic logic [71:0] want = '0;
+        for (int unsigned b = 0; b < 9; b++) want[8*b +: 8] = sm_grade_byte(9*k + b);
+        if (`PC_CORE.u_post_composite.pv_b_q[8 + k] !== want) pv_bad++;
+      end
+      if (cmd_exec_post_looks_o != 32'd1 || cmd_exec_grade_entries_o != 32'd8 ||
+          cmd_exec_post_refused_o != 32'd0 || cmd_exec_grade_overflow_o != 32'd0)
+        $fatal(1, "SMOKE: CMD.EXEC applied %0d look(s) and %0d table entr(y/ies), refused %0d, overflowed %0d -- expected 1 / 8 / 0 / 0",
+               cmd_exec_post_looks_o, cmd_exec_grade_entries_o, cmd_exec_post_refused_o,
+               cmd_exec_grade_overflow_o);
+      if (`PC_CORE.u_post_composite.bloom_gain_i != SP_GAIN_C ||
+          `PC_CORE.u_post_composite.bias_r_i != SP_BIAS_R_C ||
+          `PC_CORE.u_post_composite.bias_g_i != SP_BIAS_G_C ||
+          `PC_CORE.u_post_composite.bias_b_i != SP_BIAS_B_C ||
+          `PC_CORE.u_post_composite.flash_rgb_i != SP_FLASH_C ||
+          `PC_CORE.u_post_composite.flash_amt_i != 8'd0 ||
+          `PC_CORE.u_post_composite.ink_rgb_i != SP_INK_C ||
+          `PC_CORE.u_post_composite.grade_valid_i != 1'b0)
+        $fatal(1, "SMOKE: POST.COMPOSITE's look inputs are not the SetPost the packet carried");
+      if (pv_bad != 0)
+        $fatal(1, "SMOKE: %0d of the 8 SetGradeTable product vectors are not in POST.COMPOSITE's B table at 8..15", pv_bad);
+`ifndef ZHAO_SMOKE_NO_ECHO_ARM
+      if (`PC_CORE.post_look_echo_arm_w !== 1'b1)
+        $fatal(1, "SMOKE: POST.ECHO's arm did not arrive from the SetPost");
+`endif
     end
 
 
@@ -4835,7 +4918,7 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd3 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
+    if (cmd_commands_o != 32'd5 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
       $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 3, 1, 1)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
     if (upl_refused_o != '0)

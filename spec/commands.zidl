@@ -630,3 +630,69 @@ command PublishResource 0x0030 implemented {
   u8  kind;
   pad[2];
 }
+
+// ---- post look and grading (owner rulings R35/R36, 2026-09-19) ---------------
+//
+// SetPost: POST.COMPOSITE's per-frame LOOK. Ruling R36: "Ratify a `SetPost`
+// command carrying bloom gain/bias, flash, ink, grade-valid and the echo arm
+// (R35), plus a grading-table load, lowered by CMD.EXEC." Every field is one of
+// POST.COMPOSITE's look inputs (fpga/rtl/compositor/zhao_post_composite.sv),
+// carried at the width the block consumes or wider, and nothing is interpreted
+// on the way:
+//
+//   bloom_gain     unit8 (qformats 2): the bloom add's gain, stage 4.
+//   flags          bit0 GRADE_VALID -- the palette curves + matrix (stage 5-7)
+//                  apply; 0 passes colour through ungraded.
+//                  bit1 ECHO_ARM -- POST.ECHO captures THIS frame (ruling R35:
+//                  "Capture is ARMED, not always-on"). 0 = no capture, and no
+//                  capture traffic.
+//                  bits 7:2 UNASSIGNED and REFUSED if set: CMD.EXEC drops the
+//                  record and counts it, it never masks a bit it does not know.
+//   flash_amount   unit8: the flash/tint lerp amount, stage 8. 0 = no flash.
+//   bias_r/g/b     the grade's post-matrix bias, added after the round and
+//                  before the saturate (zref::post::grade_finalize). The block
+//                  takes signed NINE bits, so the legal range is [-256, 255];
+//                  a record outside it is REFUSED whole, never clamped.
+//   flash          rgb565, the flash/tint colour.
+//   ink            rgb565, the exterior-ink colour, stage 9.
+//
+// THE LOOK CHANGES ONLY BETWEEN POST PASSES. CMD.EXEC applies a committed
+// SetPost (and streams a committed grading table) only while the post lease is
+// idle, and it does so before the packet's draws leave -- so frame N's look is
+// in place before frame N's raster starts, and never under a pass in flight.
+//
+// SetGradeTable: up to EIGHT entries of one palette curve's PRODUCT-VECTOR
+// table -- the owner plan 11.2 exact preparation zref::post::grade_product_vector
+// generates: an entry is that curve value times its own column of the signed
+// Q2.14 matrix, three signed 24-bit products {outR, outG, outB}, little-endian,
+// nine bytes each, entry k at vectors[9k .. 9k+8]. Curves are R (32 entries),
+// G (64) and B (32); `first + count` must fit the curve, `count` is 1..8, and
+// curve 3 does not exist -- any of those is REFUSED whole. A full table is 16
+// records. Bytes of `vectors` past `count` entries are carried and ignored.
+//
+// VERSION DECISION: `abi version` STAYS 3, the PublishResource 0x0030 precedent
+// (and TerrainEpoch/SubmitTerrainSet before it): an additive opcode moves no
+// existing opcode, field set or size, so every committed capture stays valid and
+// a decoder built before this line reports ZH_ABI_UNKNOWN_OPCODE -- a clean
+// refusal. Declared LAST so no existing golden's sample values shift.
+command SetPost 0x0040 implemented {
+  u8 bloom_gain;      // unit8
+  u8 flags;           // bit0 grade_valid, bit1 echo_arm; bits 7:2 refused
+  u8 flash_amount;    // unit8
+  pad[1];
+  i16 bias_r;         // [-256, 255]
+  i16 bias_g;
+  i16 bias_b;
+  rgb565 flash;
+  rgb565 ink;
+  pad[2];
+}
+
+command SetGradeTable 0x0041 implemented {
+  u8 curve;           // 0 = R[32], 1 = G[64], 2 = B[32]
+  u8 first;           // first entry this record loads
+  u8 count;           // 1..8
+  pad[1];
+  u8 vectors[72];     // count x {outR s24, outG s24, outB s24}, little-endian
+  pad[4];
+}

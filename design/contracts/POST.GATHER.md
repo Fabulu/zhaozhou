@@ -184,6 +184,59 @@ been written** — a phantom citation the ledger caught the moment the block
 gained evidence to check against. The law owns the accumulation
 arithmetic, the saturation and clamp rules, and the pack.
 
+## The tag-to-gather law — PROPOSED, owner ruling R37 (2026-09-19), NOT RATIFIED
+
+This block's per-fragment input is glow RGB, a signed 8.8 displacement pair and
+an ink bit. What RASTER.RESOLVE actually latches is ONE BYTE:
+`spec/stars_and_flares.md` §1, frozen — `tag = (channel << 6) | strength`, with
+`GLOW = 0b01` and strength the source texel's CLUT intensity (0..63). The step
+between those two is an ART law, and ruling R37 asks this packet to PROPOSE it
+with every coefficient in a named constant, a zref model, and a before/after for
+the owner to judge by eye. Here it is; nothing in `fpga/rtl` implements it yet
+and this section is a proposal until the owner rules.
+
+**The proposal** (`zref::post::gather`, `reference/include/zref/zref_post.hpp`):
+
+| constant | proposed | what it decides |
+|---|---|---|
+| `kGlowKnee` | 24 | below this strength a texel is LIT, not a LIGHT: no glow at all. The picture is most sensitive to this one. |
+| `kGlowSlope` | 0x1C (Q4.4) | how fast a texel becomes a light above the knee; saturates near strength 55. |
+| `kGlowTint[3]` | 255, 236, 224 | a per-channel weight on the borrowed colour — the warm bias a halo has. |
+| `kGlowMaster` | 255 | the law's master gain. `SetPost.bloom_gain` scales the RESULT again, per frame. |
+
+and three decisions that are not numbers:
+
+1. **The glow's colour is the fragment's own colour.** A star's halo is the
+   colour of the star. §1's thesis is that intensity is drawn and a palette
+   colourises it; the colourising has already happened by resolve, so the bloom
+   BORROWS it rather than inventing a second palette.
+2. **Strength is a knee, not a scale.** Every CLUT texel carries some intensity.
+   Without a knee the whole image hazes — which is exactly what the contact
+   sheet's `knee 16` row shows (907 of 5,760 cells contributing against 74).
+3. **Displacement and ink are NOT invented.** Channels `0b10` and `0b11` are
+   unallocated in the spec, so a fragment carrying one contributes nothing and is
+   COUNTED (`reserved_channel`). Under this law `c_disp_x_o`, `c_disp_y_o` and
+   `c_ink_o` are ZERO — a statement about what v1 does, not an omission. Ink
+   arrives as a look value on `SetPost` instead (R36), not from a tag.
+
+**The evidence to judge it by**: `reports/post-gather-law/gather_law_contact.png`,
+rendered by `tools/post/gather_law_render.cpp` (the scene, authored by eye) and
+`tools/post/gather_law_sheet.py`. Rows: the resolved frame with no gather, then
+the law at knee 16 / 24 / 32 at two bloom gains, then the blur comparison.
+
+**The second question in that sheet is a COST, not a look.** The halo is
+cell-quantised because the plane is quarter-resolution and POST.COMPOSITE samples
+it per cell; Part A's separable blur is what rounds it. One pass is two sweeps of
+the 96 x 60 plane = 11,520 cell-steps, exactly the glow prep this contract
+budgets for Z60. Two passes still read blocky; FIVE read round, at 57,600
+cell-steps (3.5% of a 1,666,666-clock frame). The renderer's default is TWO —
+the budgeted number — and the sheet shows what the fifth pass buys so the owner
+can spend it deliberately or not at all.
+
+**What is still owed after a ruling**: the RTL adapter (resolve tag + colour ->
+this block's `f_glow_*`), the HUD plane store R37 names next, and composing
+`zhao_post_gather` itself. Core entry I17 (c) stays open until then.
+
 ## Directed tests
 `tests/compositor/post_gather_directed.cpp`.
 

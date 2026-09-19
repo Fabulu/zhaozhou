@@ -148,6 +148,11 @@ module zhao_post_lease
     input  var logic [XW-1:0] frame_w_i,        // the VIEW's size, from the mode
     input  var logic [YW-1:0] frame_h_i,
     input  var logic          duo_i,            // two views per frame
+    // R35/R36, from CMD.EXEC's committed SetPost: POST.ECHO captures a pass only
+    // when ARMED, and a pass may not START while the look or the grading table
+    // is being written (CMD.EXEC's EX_POST, `post_look_busy_o`).
+    input  var logic          echo_arm_i,
+    input  var logic          look_hold_i,
 
     // ---- to / from POST.COMPOSITE --------------------------------------------
     output var logic          pass_start_o,     // the compositor's frame_start
@@ -248,7 +253,8 @@ module zhao_post_lease
 
   logic echo_busy, rd_busy, rd_done_unused, rd_fault;
 
-  assign start_c = ((st_q == S_ARMED) && raster_done_c && lease_live_i && !frame_admit_i)
+  assign start_c = ((st_q == S_ARMED) && raster_done_c && lease_live_i && !frame_admit_i
+                     && !look_hold_i)
                 || ((st_q == S_SETTLE) && fbw_drained_i && !echo_busy
                     && duo_i && !view_q);
 
@@ -324,10 +330,17 @@ module zhao_post_lease
 
   zhao_post_echo #(.XW(XW), .YW(YW), .SKID(256)) u_echo (
     .clk(clk), .rst_n(rst_n),
-    .pass_start_i(start_c), .view_i(view_o),
+    // ARMED ONLY (R35): an unarmed pass is never opened, so it writes nothing,
+    // counts nothing and costs ENGINE0 nothing -- 11,680 write bursts per Z60
+    // frame (THE MEMORY BUDGET above). The arm is the look's, and the look only
+    // changes between passes, so it cannot flip under an open capture.
+    .pass_start_i(start_c && echo_arm_i), .view_i(view_o),
     .w_i(frame_w_i), .h_i(frame_h_i),
     // The raw tap repeats a stalled beat; the ACCEPTED beat happens once.
-    .tap_valid_i(echo_valid_i && out_fire_c), .tap_rgb_i(echo_rgb_i),
+    // ... and the TAP is armed with it: an unarmed echo is not a starved echo,
+    // so its pixels are not DROPS. Measured: without this the disarmed control
+    // reports 92,160 dropped pixels, which reads as a fault and is not one.
+    .tap_valid_i(echo_valid_i && out_fire_c && echo_arm_i), .tap_rgb_i(echo_rgb_i),
     .tap_x_i(out_x_i), .tap_y_i(out_y_i),
     .guard_req_o(ec_req), .guard_rsp_i(ec_rsp),
     .guard_wdata_o(ec_wdata), .guard_wvalid_o(ec_wvalid),

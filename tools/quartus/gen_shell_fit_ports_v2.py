@@ -325,7 +325,12 @@ DRIVERS = {
     # its geometry, its ready to the source stream, its composited output and
     # its echo tap are all the same producer -- POST.COMPOSITE.
     'post_compositor': (
-        'post_frame_w_i', 'post_frame_h_i', 'post_duo_i', 'post_src_ready_i',
+        'post_frame_w_i', 'post_frame_h_i', 'post_duo_i',
+        # R35/R36 (post pass 2): the echo ARM and the look HOLD come from CMD.EXEC
+        # on the console side of the same seam, and the instrument owns them in
+        # the same handler -- one stimulus source for the post side of the edge.
+        'post_echo_arm_i', 'post_look_hold_i',
+        'post_src_ready_i',
         'post_out_valid_i', 'post_out_rgb_i', 'post_out_x_i', 'post_out_y_i',
         'post_out_last_i', 'post_echo_valid_i', 'post_echo_rgb_i',
     ),

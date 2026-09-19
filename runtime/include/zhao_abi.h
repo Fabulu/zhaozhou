@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = b57c282dc2c2ebc1ff4a6629caeb5d40643bfd07a15271844c93ec168f11dfbb
-//   zidl_sha256         = bc58321984e44530ae51c7b9960cb99431c38cf6ca0424e06d49008c5b9c1776
+//   abi_identity_sha256 = 08a5731adfe2b3e6a309f52d418cab36992a06f1314f5f361a36cafaca6ae62e
+//   zidl_sha256         = e722ad3263893683b175e87c209e1e61f082714118b9d434a679523ec025bf99
 #pragma once
 
 #include <cstdint>
@@ -72,6 +72,8 @@ constexpr uint16_t ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 constexpr uint16_t ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
+constexpr uint16_t ZHAO_OP_SET_POST = 0x0040; // 32 B, implemented
+constexpr uint16_t ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -786,6 +788,60 @@ struct ZhRecordPublishResource {
 };
 static_assert(sizeof(ZhRecordPublishResource) == 48, "layout drift: PublishResource record");
 
+// SetPost 0x0040: 32-byte record (implemented)
+struct ZhCmdSetPost {
+  uint8_t bloom_gain;
+  uint8_t flags;
+  uint8_t flash_amount;
+  uint8_t pad;
+  int16_t bias_r;
+  int16_t bias_g;
+  int16_t bias_b;
+  ZhRgb565 flash;
+  ZhRgb565 ink;
+  uint8_t pad_1[2];
+};
+static_assert(offsetof(ZhCmdSetPost, bloom_gain) == 0, "layout drift: SetPost.bloom_gain");
+static_assert(offsetof(ZhCmdSetPost, flags) == 1, "layout drift: SetPost.flags");
+static_assert(offsetof(ZhCmdSetPost, flash_amount) == 2, "layout drift: SetPost.flash_amount");
+static_assert(offsetof(ZhCmdSetPost, pad) == 3, "layout drift: SetPost.pad");
+static_assert(offsetof(ZhCmdSetPost, bias_r) == 4, "layout drift: SetPost.bias_r");
+static_assert(offsetof(ZhCmdSetPost, bias_g) == 6, "layout drift: SetPost.bias_g");
+static_assert(offsetof(ZhCmdSetPost, bias_b) == 8, "layout drift: SetPost.bias_b");
+static_assert(offsetof(ZhCmdSetPost, flash) == 10, "layout drift: SetPost.flash");
+static_assert(offsetof(ZhCmdSetPost, ink) == 12, "layout drift: SetPost.ink");
+static_assert(offsetof(ZhCmdSetPost, pad_1[0]) == 14, "layout drift: SetPost.pad_1");
+static_assert(sizeof(ZhCmdSetPost) == 16, "layout drift: SetPost payload");
+
+struct ZhRecordSetPost {
+  ZhCmdHeader hdr;
+  ZhCmdSetPost payload;
+};
+static_assert(sizeof(ZhRecordSetPost) == 32, "layout drift: SetPost record");
+
+// SetGradeTable 0x0041: 96-byte record (implemented)
+struct ZhCmdSetGradeTable {
+  uint8_t curve;
+  uint8_t first;
+  uint8_t count;
+  uint8_t pad;
+  uint8_t vectors[72];
+  uint8_t pad_1[4];
+};
+static_assert(offsetof(ZhCmdSetGradeTable, curve) == 0, "layout drift: SetGradeTable.curve");
+static_assert(offsetof(ZhCmdSetGradeTable, first) == 1, "layout drift: SetGradeTable.first");
+static_assert(offsetof(ZhCmdSetGradeTable, count) == 2, "layout drift: SetGradeTable.count");
+static_assert(offsetof(ZhCmdSetGradeTable, pad) == 3, "layout drift: SetGradeTable.pad");
+static_assert(offsetof(ZhCmdSetGradeTable, vectors[0]) == 4, "layout drift: SetGradeTable.vectors");
+static_assert(offsetof(ZhCmdSetGradeTable, pad_1[0]) == 76, "layout drift: SetGradeTable.pad_1");
+static_assert(sizeof(ZhCmdSetGradeTable) == 80, "layout drift: SetGradeTable payload");
+
+struct ZhRecordSetGradeTable {
+  ZhCmdHeader hdr;
+  ZhCmdSetGradeTable payload;
+};
+static_assert(sizeof(ZhRecordSetGradeTable) == 96, "layout drift: SetGradeTable record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1242,6 +1298,109 @@ inline ZhRecordPublishResource zhao_sample_publish_resource() {
   return r;
 }
 
+inline ZhRecordSetPost zhao_sample_set_post() {
+  ZhRecordSetPost r{};
+  r.hdr.opcode       = ZHAO_OP_SET_POST;
+  r.hdr.record_bytes = 32;
+  r.hdr.source_id    = 1342242835u; // kind 5, module 1, index 19
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.bloom_gain = 134u;
+  r.payload.flags = 137u;
+  r.payload.flash_amount = 145u;
+  r.payload.bias_r = 30028;
+  r.payload.bias_g = 10970;
+  r.payload.bias_b = 22138;
+  r.payload.flash = zhao_sample_rgb565();
+  r.payload.ink = zhao_sample_rgb565();
+  return r;
+}
+
+inline ZhRecordSetGradeTable zhao_sample_set_grade_table() {
+  ZhRecordSetGradeTable r{};
+  r.hdr.opcode       = ZHAO_OP_SET_GRADE_TABLE;
+  r.hdr.record_bytes = 96;
+  r.hdr.source_id    = 1342242836u; // kind 5, module 1, index 20
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.curve = 205u;
+  r.payload.first = 53u;
+  r.payload.count = 109u;
+  r.payload.vectors[0] = 65u;
+  r.payload.vectors[1] = 153u;
+  r.payload.vectors[2] = 137u;
+  r.payload.vectors[3] = 145u;
+  r.payload.vectors[4] = 129u;
+  r.payload.vectors[5] = 85u;
+  r.payload.vectors[6] = 5u;
+  r.payload.vectors[7] = 173u;
+  r.payload.vectors[8] = 201u;
+  r.payload.vectors[9] = 193u;
+  r.payload.vectors[10] = 185u;
+  r.payload.vectors[11] = 65u;
+  r.payload.vectors[12] = 173u;
+  r.payload.vectors[13] = 41u;
+  r.payload.vectors[14] = 117u;
+  r.payload.vectors[15] = 13u;
+  r.payload.vectors[16] = 9u;
+  r.payload.vectors[17] = 85u;
+  r.payload.vectors[18] = 129u;
+  r.payload.vectors[19] = 73u;
+  r.payload.vectors[20] = 122u;
+  r.payload.vectors[21] = 122u;
+  r.payload.vectors[22] = 232u;
+  r.payload.vectors[23] = 226u;
+  r.payload.vectors[24] = 118u;
+  r.payload.vectors[25] = 6u;
+  r.payload.vectors[26] = 164u;
+  r.payload.vectors[27] = 158u;
+  r.payload.vectors[28] = 18u;
+  r.payload.vectors[29] = 178u;
+  r.payload.vectors[30] = 85u;
+  r.payload.vectors[31] = 13u;
+  r.payload.vectors[32] = 201u;
+  r.payload.vectors[33] = 181u;
+  r.payload.vectors[34] = 89u;
+  r.payload.vectors[35] = 65u;
+  r.payload.vectors[36] = 253u;
+  r.payload.vectors[37] = 89u;
+  r.payload.vectors[38] = 93u;
+  r.payload.vectors[39] = 181u;
+  r.payload.vectors[40] = 73u;
+  r.payload.vectors[41] = 193u;
+  r.payload.vectors[42] = 69u;
+  r.payload.vectors[43] = 145u;
+  r.payload.vectors[44] = 141u;
+  r.payload.vectors[45] = 21u;
+  r.payload.vectors[46] = 137u;
+  r.payload.vectors[47] = 149u;
+  r.payload.vectors[48] = 225u;
+  r.payload.vectors[49] = 153u;
+  r.payload.vectors[50] = 114u;
+  r.payload.vectors[51] = 90u;
+  r.payload.vectors[52] = 72u;
+  r.payload.vectors[53] = 162u;
+  r.payload.vectors[54] = 246u;
+  r.payload.vectors[55] = 30u;
+  r.payload.vectors[56] = 76u;
+  r.payload.vectors[57] = 166u;
+  r.payload.vectors[58] = 165u;
+  r.payload.vectors[59] = 181u;
+  r.payload.vectors[60] = 57u;
+  r.payload.vectors[61] = 153u;
+  r.payload.vectors[62] = 61u;
+  r.payload.vectors[63] = 129u;
+  r.payload.vectors[64] = 77u;
+  r.payload.vectors[65] = 221u;
+  r.payload.vectors[66] = 129u;
+  r.payload.vectors[67] = 117u;
+  r.payload.vectors[68] = 193u;
+  r.payload.vectors[69] = 193u;
+  r.payload.vectors[70] = 201u;
+  r.payload.vectors[71] = 233u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1512,6 +1671,34 @@ inline void zhao_pack_publish_resource(const ZhRecordPublishResource& r, std::ve
   w.u8(r.payload.dst_slot);
   w.u8(r.payload.kind);
   for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
+}
+
+inline void zhao_pack_set_post(const ZhRecordSetPost& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.bloom_gain);
+  w.u8(r.payload.flags);
+  w.u8(r.payload.flash_amount);
+  for (int i = 0; i < 1; ++i) w.u8(r.payload.pad);
+  w.u16(r.payload.bias_r);
+  w.u16(r.payload.bias_g);
+  w.u16(r.payload.bias_b);
+  zhao_pack_rgb565(r.payload.flash, w);
+  zhao_pack_rgb565(r.payload.ink, w);
+  for (int i = 0; i < 2; ++i) w.u8(r.payload.pad_1[i]);
+}
+
+inline void zhao_pack_set_grade_table(const ZhRecordSetGradeTable& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.curve);
+  w.u8(r.payload.first);
+  w.u8(r.payload.count);
+  for (int i = 0; i < 1; ++i) w.u8(r.payload.pad);
+  for (int i = 0; i < 72; ++i) { w.u8(r.payload.vectors[i]); }
+  for (int i = 0; i < 4; ++i) w.u8(r.payload.pad_1[i]);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -1944,6 +2131,109 @@ inline bool zhao_unpack_publish_resource(ZhReader& r, ZhRecordPublishResource& o
   return true;
 }
 
+inline bool zhao_unpack_set_post(ZhReader& r, ZhRecordSetPost& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.bloom_gain = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flash_amount = t; }
+  if (!r.skip(1)) return false;
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.bias_r = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.bias_g = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.bias_b = t; }
+  if (!zhao_unpack_rgb565(r, out.payload.flash)) return false;
+  if (!zhao_unpack_rgb565(r, out.payload.ink)) return false;
+  if (!r.skip(2)) return false;
+  return true;
+}
+
+inline bool zhao_unpack_set_grade_table(ZhReader& r, ZhRecordSetGradeTable& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.curve = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.first = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.count = t; }
+  if (!r.skip(1)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[0] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[1] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[2] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[3] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[4] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[5] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[6] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[7] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[8] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[9] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[10] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[11] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[12] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[13] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[14] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[15] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[16] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[17] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[18] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[19] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[20] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[21] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[22] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[23] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[24] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[25] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[26] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[27] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[28] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[29] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[30] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[31] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[32] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[33] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[34] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[35] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[36] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[37] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[38] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[39] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[40] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[41] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[42] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[43] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[44] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[45] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[46] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[47] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[48] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[49] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[50] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[51] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[52] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[53] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[54] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[55] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[56] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[57] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[58] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[59] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[60] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[61] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[62] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[63] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[64] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[65] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[66] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[67] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[68] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[69] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[70] = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.vectors[71] = t; }
+  if (!r.skip(4)) return false;
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -1963,6 +2253,8 @@ constexpr uint16_t ZHAO_PADS_SET_ENVIRONMENT[] = {20, 21, 22, 23, 24, 25, 26, 27
 constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr uint16_t ZHAO_PADS_PUBLISH_RESOURCE[] = {30, 31};
+constexpr uint16_t ZHAO_PADS_SET_POST[] = {3, 14, 15};
+constexpr uint16_t ZHAO_PADS_SET_GRADE_TABLE[] = {3, 76, 77, 78, 79};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -1983,8 +2275,10 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
   {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
   {"PublishResource", 0x0030, 48, true, ZHAO_PADS_PUBLISH_RESOURCE, 2},
+  {"SetPost", 0x0040, 32, true, ZHAO_PADS_SET_POST, 3},
+  {"SetGradeTable", 0x0041, 96, true, ZHAO_PADS_SET_GRADE_TABLE, 5},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 19;
+constexpr size_t ZHAO_COMMAND_COUNT = 21;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2019,8 +2313,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xB5, 0x7C, 0x28, 0x2D, 0xC2, 0xC2, 0xEB, 0xC1, 0xFF, 0x4A, 0x66, 0x29, 0xCA, 0xEB, 0x5D, 0x40, 0x64, 0x3B, 0xFD, 0x07, 0xA1, 0x52, 0x71, 0x84, 0x4C, 0x93, 0xEC, 0x16, 0x8F, 0x11, 0xDF, 0xBB};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBC, 0x58, 0x32, 0x19, 0x84, 0xE4, 0x45, 0x30, 0xAE, 0x51, 0xC7, 0xB9, 0x96, 0x0C, 0xB9, 0x94, 0x31, 0xC3, 0x8C, 0xF6, 0xCA, 0x04, 0x24, 0xE0, 0x6D, 0x49, 0x00, 0x8C, 0x5B, 0x9C, 0x17, 0x76};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x08, 0xA5, 0x73, 0x1A, 0xDF, 0xE2, 0xB3, 0xE6, 0xA3, 0x09, 0xF5, 0x2D, 0x41, 0x8C, 0xAB, 0x36, 0x99, 0x2A, 0x06, 0xF1, 0x31, 0x4F, 0x5F, 0x36, 0x1A, 0x36, 0xCA, 0xFA, 0xCA, 0x6A, 0xE6, 0x2E};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xE7, 0x22, 0xAD, 0x32, 0x63, 0x89, 0x36, 0x83, 0xB1, 0x75, 0xE8, 0x7C, 0x20, 0x9E, 0x1E, 0x61, 0xF0, 0x82, 0x71, 0x41, 0x18, 0xB9, 0xD4, 0x34, 0xA6, 0x79, 0x52, 0x3E, 0xC0, 0x25, 0xBF, 0x99};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

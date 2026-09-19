@@ -27,6 +27,8 @@ module tb_post_lease_top
     input  var logic [8:0]    frame_w_i,
     input  var logic [7:0]    frame_h_i,
     input  var logic          duo_i,
+    input  var logic          echo_arm_i,
+    input  var logic          look_hold_i,
 
     output var logic          pass_start_o,
     output var logic          view_o,
@@ -109,6 +111,7 @@ module tb_post_lease_top
     .raster_quiet_i(raster_quiet_i), .raster_px_i(1'b0), .fbw_drained_i(fbw_drained_o),
     .fb_base_i(fb_base_i), .fb_stride_i(fb_stride_i),
     .frame_w_i(frame_w_i), .frame_h_i(frame_h_i), .duo_i(duo_i),
+    .echo_arm_i(echo_arm_i), .look_hold_i(look_hold_i),
     .pass_start_o(pass_start_o), .view_o(view_o),
     .src_valid_o(src_valid_o), .src_ready_i(src_ready_i), .src_rgb_o(src_rgb_o),
     .out_valid_i(out_valid_i), .out_ready_o(out_ready_o), .out_rgb_i(out_rgb_i),

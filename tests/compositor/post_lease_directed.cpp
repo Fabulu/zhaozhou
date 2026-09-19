@@ -333,6 +333,8 @@ void reset(Vtb_post_lease_top& top) {
   top.frame_admit_i = 0;
   top.frame_end_i = 0;
   top.raster_quiet_i = 0;
+  top.echo_arm_i = 1;     // armed unless a case says otherwise (R35)
+  top.look_hold_i = 0;
   top.src_ready_i = 0;
   top.out_valid_i = 0;
   top.echo_valid_i = 0;
@@ -550,6 +552,60 @@ int main(int argc, char** argv) {
     const auto a = audit(m, 0, 768, 384, 8, 1);
     zhao::check(o.done && !o.fault && a.fb_bad == 0, "the next frame is clean and clears the flag", 0,
                 (o.done ? 0 : 1) + (o.fault ? 1 : 0) + a.fb_bad);
+  }
+
+  // ---- 6. an UNARMED echo (R35): no capture, no capture traffic --------------
+  // The same frame with echo_arm_i low: the framebuffer is still written back
+  // whole, and POST.ECHO opens nothing -- not one write lands in the capture
+  // window and no echo pass is counted, complete or torn.
+  {
+    reset(top);
+    top.echo_arm_i = 0;
+    OrderedMem m;
+    Comp c;
+    Bench b{top, m, c};
+    m.allow = window(0, 0x3C000);
+    fill_frame(m, 0, 768, 384, 16);
+    const auto o = frame(b, 0, 768, 384, 16, false);
+    unsigned cap = 0;
+    for (const auto& kv : m.mem)
+      if (kv.first >= echo::kCaptureBase && kv.first < echo::kCaptureBase + echo::kCaptureSpan) ++cap;
+    FrameAudit a = audit(m, 0, 768, 384, 16, 1);
+    zhao::check(o.done && a.fb_bad == 0, "unarmed: the pass still writes the frame back exact", 0,
+                (o.done ? 0 : 1) + a.fb_bad);
+    zhao::check(cap == 0 && top.echo_pixels_written_o == 0,
+                "unarmed: NOT ONE word lands in the capture window", 0, cap);
+    zhao::check(o.echo_complete == 0 && o.echo_torn == 0, "unarmed: no echo pass is counted", 0,
+                o.echo_complete + o.echo_torn);
+    zhao::check(top.echo_pixels_dropped_o == 0,
+                "unarmed: and NOT ONE pixel counted DROPPED -- disarmed is not starved", 0,
+                top.echo_pixels_dropped_o);
+    zhao::check(m.writes == 24u * 16u, "unarmed: ENGINE0 carried the write-back and nothing else",
+                24 * 16, m.writes);
+    top.echo_arm_i = 1;
+  }
+
+  // ---- 7. the LOOK HOLD: a pass may not start while the look is written ------
+  {
+    reset(top);
+    OrderedMem m;
+    Comp c;
+    Bench b{top, m, c};
+    m.allow = window(0, 0x3C000);
+    fill_frame(m, 0, 768, 384, 8);
+    top.look_hold_i = 1;
+    bool started_under_hold = false;
+    const auto o = frame(b, 0, 768, 384, 8, false, [&](Bench& bb) {
+      for (int i = 0; i < 300; ++i) {
+        bb.step();
+        if (!c.views_at_start.empty()) started_under_hold = true;
+      }
+      bb.top.look_hold_i = 0;
+    });
+    zhao::check(!started_under_hold, "no pass starts while CMD.EXEC holds the look", 0,
+                started_under_hold ? 1 : 0);
+    zhao::check(o.done && c.views_at_start.size() == 1, "and the pass runs once the hold drops", 1,
+                c.views_at_start.size());
   }
 
   return zhao::report_and_exit("post_lease_directed");

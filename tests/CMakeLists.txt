@@ -9400,6 +9400,12 @@ set_tests_properties(terrain_loddev_mesh_directed PROPERTIES LABELS "fast;nightl
 add_executable(terrain_lod_readings_render ${CMAKE_SOURCE_DIR}/tools/terrain/lod_readings_render.cpp)
 target_link_libraries(terrain_lod_readings_render PRIVATE zhao_zref)
 
+# Owner ruling R37's before/after for the PROPOSED tag-to-gather law. Same
+# shape as the LOD readings above: the tool writes PPMs, tools/post/
+# gather_law_sheet.py lays them out, and the PNG is the only artefact kept.
+add_executable(gather_law_render ${CMAKE_SOURCE_DIR}/tools/post/gather_law_render.cpp)
+target_link_libraries(gather_law_render PRIVATE zhao_zref)
+
 
 # ---------------------------------------------------------------------------
 # TERRAIN.SEQ -- the terrain command path, against zref::terrain::seq::Sequencer.
