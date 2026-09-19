@@ -1046,28 +1046,26 @@ module zhao_console_board
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
   // ==========================================================================
 
-  // ---- I26 (extended): TERRAIN.PAGESTREAM's MEM.GUARD READ client ---------
+  // ---- I26 (extended): THE COMPOSE PATH's ONE MEM.GUARD READ client -------
   // A SECOND guard client, not a second opinion about the first.
   // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
   // READS the same page back out, so it needs the return path
   // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
   // one guard socket and it is named for GEOM, so both stop here -- see entry
   // I26 for why that is a REACHABLE boundary and not I23's refusal.
+  //
+  // STILL ONE PORT AFTER TERRAIN.HDRREAD LANDED, 2026-09-19, and that is the
+  // point of the block behind it.  TWO readers now sit on this socket --
+  // TERRAIN.PAGESTREAM's three plane bursts and TERRAIN.HDRREAD's one header
+  // burst -- joined by `zhao_mem_share2`, the SAME block GEOM.MEM.ADAPTER is a
+  // wrapper over.  The arbiter gains no client, the guard gains no arm, and
+  // this boundary does not widen.  Composing the header reader with its own
+  // socket would have made I26 a three-port entry instead of closing anything.
   output zhao_guard_req_t         terr_ps_guard_req_o,
   input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
   input  logic                    terr_ps_beat_valid_i,
   input  logic [63:0]             terr_ps_beat_data_i,
   input  logic                    terr_ps_beat_last_i,
-
-  // ---- I35: TERRAIN.PLACE's patch header, the two fields nothing reads -----
-  // The patch COORDINATE and the source id come from TERRAIN.SEQ inside this
-  // module.  The PITCH and the ENVELOPE do not; see entry I35.  They are NOT
-  // tied off, and a harness that leaves them zero sees the placement REFUSE
-  // every patch on `terr_place_env_mismatch_o` -- loudly, which is the correct
-  // standing for an unfed corruption check.
-  input  logic signed [7:0]       terr_place_pitch_log2_i,
-  input  logic signed [31:0]      terr_place_env_x0_i,
-  input  logic signed [31:0]      terr_place_env_z0_i,
 
   // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
   input  logic                    terr_pt_fld_valid_i,
@@ -1118,6 +1116,39 @@ module zhao_console_board
   output logic                    terr_ps_done_valid_o,
   output logic                    terr_ps_done_ok_o,
   output logic [3:0]              terr_ps_done_verdict_o,
+
+  // ---- TERRAIN.HDRREAD's evidence (composed item 13) ----------------------
+  // The patch header reader entry I35 named as the absent owner.  These are
+  // the numbers that separate "the placement was fed" from "the placement was
+  // fed SOMETHING": `terr_hr_headers_o` counts headers that returned and
+  // passed their identity test, and every other counter here is a distinct
+  // reason a patch was refused instead.  Their SUM against
+  // `terr_place_patches_o` is the assertion worth making -- a header this
+  // block refused arrives at TERRAIN.PLACE as an impossible pitch, so
+  // `terr_hr_*` and `terr_place_pitch_bad_o` must move together or one of the
+  // two is lying.
+  output logic [31:0]             terr_hr_headers_o,
+  output logic [31:0]             terr_hr_refused_o,
+  output logic [31:0]             terr_hr_guard_denied_o,
+  output logic [31:0]             terr_hr_incomplete_o,
+  output logic [31:0]             terr_hr_ident_fails_o,
+  output logic                    terr_hr_idle_o,
+
+  // ---- THE READ SHARE's evidence (composed item 13) ----------------------
+  // `zhao_mem_share2` joining TERRAIN.HDRREAD (A) and TERRAIN.PAGESTREAM (B)
+  // onto the one guard read client.  `terr_rdshare_contention_o` is the number
+  // that says what the sharing COST: it moves once per cycle in which both
+  // readers asked and one was held.  It is exported rather than counted
+  // privately because the decision to widen this to two outstanding requests
+  // has to be made against a number, which is the block's own stated reason
+  // for having it.
+  output logic [31:0]             terr_rdshare_jobs_a_o,
+  output logic [31:0]             terr_rdshare_jobs_b_o,
+  output logic [31:0]             terr_rdshare_denied_o,
+  output logic [31:0]             terr_rdshare_contention_o,
+  output logic [31:0]             terr_rdshare_err_short_o,
+  output logic [31:0]             terr_rdshare_err_long_o,
+  output logic [31:0]             terr_rdshare_err_unowned_o,
 
   output logic                    terr_place_valid_o,
   output logic [15:0]             terr_place_src_id_o,
@@ -2684,9 +2715,6 @@ module zhao_console_board
       .terr_ps_beat_valid_i              (terr_ps_beat_valid_i),
       .terr_ps_beat_data_i               (terr_ps_beat_data_i),
       .terr_ps_beat_last_i               (terr_ps_beat_last_i),
-      .terr_place_pitch_log2_i           (terr_place_pitch_log2_i),
-      .terr_place_env_x0_i               (terr_place_env_x0_i),
-      .terr_place_env_z0_i               (terr_place_env_z0_i),
       .terr_pt_fld_valid_i               (terr_pt_fld_valid_i),
       .terr_pt_fld_ready_o               (terr_pt_fld_ready_o),
       .terr_pt_fld_height_i              (terr_pt_fld_height_i),
@@ -2721,6 +2749,19 @@ module zhao_console_board
       .terr_ps_done_valid_o              (terr_ps_done_valid_o),
       .terr_ps_done_ok_o                 (terr_ps_done_ok_o),
       .terr_ps_done_verdict_o            (terr_ps_done_verdict_o),
+      .terr_hr_headers_o                 (terr_hr_headers_o),
+      .terr_hr_refused_o                 (terr_hr_refused_o),
+      .terr_hr_guard_denied_o            (terr_hr_guard_denied_o),
+      .terr_hr_incomplete_o              (terr_hr_incomplete_o),
+      .terr_hr_ident_fails_o             (terr_hr_ident_fails_o),
+      .terr_hr_idle_o                    (terr_hr_idle_o),
+      .terr_rdshare_jobs_a_o             (terr_rdshare_jobs_a_o),
+      .terr_rdshare_jobs_b_o             (terr_rdshare_jobs_b_o),
+      .terr_rdshare_denied_o             (terr_rdshare_denied_o),
+      .terr_rdshare_contention_o         (terr_rdshare_contention_o),
+      .terr_rdshare_err_short_o          (terr_rdshare_err_short_o),
+      .terr_rdshare_err_long_o           (terr_rdshare_err_long_o),
+      .terr_rdshare_err_unowned_o        (terr_rdshare_err_unowned_o),
       .terr_place_valid_o                (terr_place_valid_o),
       .terr_place_src_id_o               (terr_place_src_id_o),
       .terr_place_env_mismatch_o         (terr_place_env_mismatch_o),

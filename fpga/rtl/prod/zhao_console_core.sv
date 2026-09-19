@@ -272,10 +272,16 @@
 //
 //      WHAT THIS CHAIN STILL CANNOT DO, said here so nobody reads more into it
 //      than it claims: the FIELD half of section 3.4 is absent (entry I34), so
-//      `live_top` collapses to `compose_top`; layer D is never written (entry
-//      I32), so every cell reads SOLID; and the placement's pitch and envelope
-//      arrive at this module's edge (entry I35). Each is a port and an entry,
-//      and not one of them is a constant standing in for a producer.
+//      `live_top` collapses to `compose_top`; and layer D is never written
+//      (entry I32), so every cell reads SOLID. Each is a port and an entry, and
+//      neither is a constant standing in for a producer.
+//
+//      THE THIRD ITEM ON THIS LIST IS GONE. It read "the placement's pitch and
+//      envelope arrive at this module's edge (entry I35)", and on 2026-09-19
+//      `zhao_terrain_hdrread` was built as the header reader that entry asked
+//      for. The pitch, the envelope and the patch coordinate now come off the
+//      page's own 64 bytes on the compose path. I35 is CLOSED and DELETED, and
+//      composed item 13 below is the connection.
 //
 //  11. THE GEOMETRY ASSET PATH -- five blocks, ONE memory client, and the
 //      first time this console reads a mesh out of memory.
@@ -323,6 +329,55 @@
 //      holds, exactly as the terrain compose cache holds at I21 and for the
 //      same kind of missing owner. That is the EXPECTED reading of this
 //      composition, not a defect in it.
+//
+//  13. THE PATCH HEADER IS READ ON THE COMPOSE PATH -- entry I35's absent
+//      owner, built and wired, and a THIRD memory reader that costs no
+//      memory client.
+//        TERRAIN.SEQ.is_*          -> TERRAIN.HDRREAD.j_*
+//        TERRAIN.HDRREAD.h_*       -> TERRAIN.PLACE.hdr_*   (entry I35, CLOSED)
+//        TERRAIN.HDRREAD.f_*       -> TERRAIN.PSMUX client A -> PAGESTREAM
+//        TERRAIN.HDRREAD.guard_*   -> MEM.SHARE2 requester A
+//        TERRAIN.PAGESTREAM.guard_* -> MEM.SHARE2 requester B
+//        MEM.SHARE2.m_*            -> the one terrain MEM.GUARD read client
+//
+//      WHAT WAS ACTUALLY MISSING. Entry I35 named it exactly and the naming is
+//      why this was an afternoon rather than an argument: TERRAIN.PLACE wants
+//      `pitch_log2` at header +2 and the envelope at +16, TERRAIN.PAGELOADER
+//      captures neither and holds what it does capture FOR THE LAST PAGE IT
+//      LOADED, and TERRAIN.PAGESTREAM reads from +64 and never sees the header.
+//      `zhao_terrain_hdrread` is the reader that entry asked for: one 64-byte
+//      guard burst per patch, decoded to spec/terrain_rules.md 2.1, emitted
+//      with the job's own identity beside it.
+//
+//      THE COORDINATE MOVED AS WELL, AND THAT IS A REPAIR RATHER THAN A RIDER.
+//      `hdr_patch_ix_i`/`hdr_patch_iz_i` used to come from `tis_ix`/`tis_iz`,
+//      read live off TERRAIN.SEQ's port. That was sound only because the header
+//      and the streamer's job were accepted on the SAME CYCLE. They no longer
+//      are -- a burst happens in between -- so the coordinate the envelope is
+//      checked against now comes from the same latched record as the pitch. The
+//      same change applies at TERRAIN.PSMUX client A, whose five job fields are
+//      now TERRAIN.HDRREAD's forwarded copies. Leaving either as it was would
+//      have introduced the exact join fault the new block exists to remove.
+//
+//      A HEADER THAT COULD NOT BE READ REFUSES THE PATCH, AND IT DOES IT
+//      THROUGH THE BLOCK THAT OWNS REFUSAL. On a guard denial, a short burst or
+//      an identity mismatch, TERRAIN.HDRREAD emits `pitch_log2 = 127` -- not a
+//      value spec 1.3 can carry -- so `zhao_terrain_place` refuses on its own
+//      `pitch_ok_c` law, `terr_place_pitch_bad_o` moves, and the composer
+//      discards the page's vertices exactly as decision (c) already says. The
+//      page still streams and still unpins, because the streamer's completion
+//      is the unpin. That is a declared poison value, not a tie-off: a tie-off
+//      invents a number the machine treats as real.
+//
+//      AND IT ADDS NO MEMORY CLIENT, which is the part that had to be got right
+//      rather than merely done. See entry I26: `zhao_vram_arbiter` casts the
+//      slot index to build its client tag and `zhao_mem_guard` grants
+//      TERRAIN.PAGE_POOL to TERRAIN.BUILD alone, so a third reader with its own
+//      socket is a memory-rules ruling. `zhao_mem_share2` is the answer and it
+//      is not new: it is `zhao_geom_mem_adapter`'s body, lifted out with its
+//      client identity made a parameter, so the guard's level-then-pulse
+//      verdict law is implemented ONCE for the whole console instead of a third
+//      time. `terr_rdshare_contention_o` is what the sharing cost.
 //
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
@@ -406,7 +461,9 @@
 //    did NOT move one hop: it moved to three named entries with three different
 //    absent owners (I32 for layer D, I34 for the field lane, I35 for the patch
 //    header's pitch and envelope), which is a smaller and more honest statement
-//    than the one it replaces.
+//    than the one it replaces. ONE OF THE THREE IS NOW CLOSED: I35's absent
+//    owner was built the same day as `zhao_terrain_hdrread` and the entry is
+//    deleted -- which is what naming an absent owner precisely is for.
 //
 //  * I23 was GEOM.VDECODE's 32-BYTE VERTEX RECORD STREAM. CLOSED and
 //    DELETED, 2026-09-19. Its own text said the wiring "is fully determined
@@ -1543,6 +1600,30 @@
 //      entry because it is the same absent thing: the shell exposes ONE guard
 //      socket and it is named for GEOM.
 //
+//      AND NOT WIDENED AGAIN BY THE HEADER READER, 2026-09-19, which is the
+//      part worth writing down because the obvious version of that packet WOULD
+//      have widened it. TERRAIN.HDRREAD (composed item 13) is a third reader of
+//      the same pool, and a third guard port on this module's edge would have
+//      turned a two-port boundary into a three-port one while closing I35 --
+//      a gap count that goes down by one and a boundary that goes up by one.
+//
+//      IT SHARES INSTEAD, through `zhao_mem_share2` as `u_terrain_rdshare`, and
+//      the share is not invented here: it is the SAME MODULE
+//      `zhao_geom_mem_adapter` is now a wrapper over, with ENGINE1's two values
+//      swapped for TERRAIN.BUILD's. That is the pattern the geometry asset path
+//      established and this entry's own note about `zhao_vram_arbiter` casting
+//      the slot index is why: a genuinely new client id is a memory-rules
+//      ruling, and a share avoids needing one.
+//
+//      THIS IS NOT THE MUX THE PARAGRAPH BELOW REFUSES, and the difference is
+//      exact. That paragraph refuses joining the WRITE client and the READ
+//      client, because `zhao_mem_guard`'s arbitration between two different
+//      privileges is the shell's business. `u_terrain_rdshare` joins two
+//      readers of ONE arm of ONE window under ONE client id, upstream of the
+//      guard, in a committed block with its own directed test and its own
+//      contention counter. Two ports out, still, and one owner to join them
+//      when the shell grows the socket.
+//
 //      THE TWO GUARD CLIENTS ARE NOT MERGED HERE, and that is deliberate.
 //      `zhao_mem_guard`'s arbitration is the shell's, and putting a mux between
 //      two clients in this file would be an arbiter the composer invented --
@@ -1909,59 +1990,6 @@
 //      block's contract asks for ("once per patch per frame, before the first
 //      record").
 //
-// I35. TERRAIN.PLACE's PATCH HEADER PITCH AND ENVELOPE
-//      (`terr_place_pitch_log2_i`, `terr_place_env_x0_i`,
-//      `terr_place_env_z0_i`) -- BOUNDARY. NEW 2026-09-19, and it is the
-//      residue of I27's placement blocker rather than a restatement of it: the
-//      placement OWNER exists and is composed, and what has no producer inside
-//      this module is two fields of the patch header it reads.
-//
-//      WHERE THE FIELDS LIVE AND WHY NOTHING HANDS THEM OVER. Both are in the
-//      64-byte patch header, spec/terrain_rules.md 2.1: `pitch_log2` at +2 and
-//      the `rectfx envelope` at +16. Two blocks touch that header and neither
-//      can supply them:
-//
-//        * TERRAIN.PAGELOADER reads it -- and captures only `ver`, `island`,
-//          `ix`, `iz` and the CRC. It also holds them for the LAST PAGE IT
-//          LOADED, which is not the page being composed; wiring its registers
-//          here would be a join between two things that move independently,
-//          and the compose engine would place patch N with patch M's header.
-//        * TERRAIN.PAGESTREAM reads the page from +64 onward -- planes A, B and
-//          C -- and never looks at the header at all.
-//
-//      So closing this needs a HEADER READER ON THE COMPOSE PATH: the streamer
-//      growing a header pass that emits the two fields with the job's own
-//      identity beside them. That is an RTL change to a block with its own
-//      differential and it is not smuggled into a composition packet.
-//
-//      THE PITCH ALSO HAS A SECOND, LARGER OWNER, named so the next packet
-//      picks the right one: `zhao_terrain_island_dir` takes `desc_pitch_log2_i`
-//      as a FRAME-SCOPED island descriptor, and that block is built and not
-//      composed. Which of the two owns the value is a real question -- the
-//      header's copy is per patch and the descriptor's is per island, and
-//      terrain_rules 2.1 says the header's is redundant by construction -- and
-//      this entry does not answer it.
-//
-//      THEY ARE REAL PORTS AND THE FAILURE MODE IS LOUD. These are inputs, so
-//      the shifter and both comparators behind them survive synthesis and no
-//      constant deletes the logic.
-//
-//      A NOTE ABOUT HOW THIS PARAGRAPH IS WORDED, because it cost two register
-//      runs. `completion_register.py` classifies an entry by KEYWORD over its
-//      whole body, and the phrase one would naturally reach for here -- the one
-//      the register uses to mark an entry as settled inside the composer, which
-//      I9 and I25 carry -- removes the entry from the mandatory count. Writing
-//      it, and then writing it again inside quotation marks while explaining
-//      the first, both marked this open gap CLOSED. The header's placement note
-//      above records the same class of misreading happening to I3. So the
-//      phrase does not appear anywhere in this entry, and the positive
-//      statement above is used instead. A harness
-//      that leaves them at zero does not get a plausible flat world: the
-//      envelope check fails on every patch, `terr_place_env_mismatch_o` climbs,
-//      every patch is refused, and `terr_cc_patches_filled_o` stays at zero.
-//      A corruption check with an unfed operand that SILENTLY passed would be
-//      the version of this worth being afraid of.
-//
 // I36. GEOM.MESHFETCH's DRAW JOB (`geom_mf_job_*`) -- BOUNDARY. NEW
 //      2026-09-19, opened by composing the geometry asset path (connected
 //      item 11), and it is one of I23's three successors.
@@ -2032,8 +2060,9 @@
 //      not be a half closure. It would fetch a descriptor at whatever
 //      address the boundary happened to be holding, with `j_valid_i` timed
 //      by a command and `j_desc_addr_i` timed by nothing, which is the
-//      join-between-two-things-that-move-independently fault I35 and I39
-//      each record once already.
+//      join-between-two-things-that-move-independently fault entry I35
+//      recorded (CLOSED and DELETED 2026-09-19 -- zhao_terrain_hdrread is
+//      the header reader it asked for) and I39 records still.
 //
 //      `j_xform_i` IS RESOLVED BY THE CALLER BY CONTRACT, which is why it is
 //      a port and not a lookup here: the block's own comment says "the
@@ -2106,9 +2135,10 @@
 //      (`geom_asm_vertex_offset_i`, `geom_asm_material_id_i`,
 //      `geom_asm_raster_state_i`) and its TRIANGLE OUTPUT (`geom_asm_t_*`)
 //      -- BOUNDARY. NEW 2026-09-19. One entry because they are two ends of
-//      one block, and the SAME STANDING as I35: the block is composed on its
-//      real producer for everything that has one, and the fields that have
-//      no owner inside this module are real ports rather than constants.
+//      one block, and the SAME STANDING I35 had before it closed: the block
+//      is composed on its real producer for everything that has one, and the
+//      fields that have no owner inside this module are real ports rather
+//      than constants.
 //
 //      WHAT IS REAL. `m_valid_i`/`m_ready_o`, `m_vertex_count_i`,
 //      `m_triangle_count_i` and `m_src_id_i` come from GEOM.ASSETFETCH's
@@ -2136,8 +2166,10 @@
 //      finished the footprint and offered the meshlet to GEOM.ASSEMBLE, the
 //      fetcher's result register has moved on. Wiring them would be a join
 //      between two things that move independently and would assemble meshlet
-//      N's triangles with meshlet M's material -- the identical fault I35
-//      records for the pageloader's header registers. Carrying it properly
+//      N's triangles with meshlet M's material -- the identical fault entry I35
+//      recorded for the pageloader's header registers, and the identical answer
+//      is available: I35 closed by BUILDING the reader rather than by wiring
+//      the stale registers, which is what this entry is waiting for too. Carrying it properly
 //      means a field on GEOM.ASSETFETCH's `s_*` port, which is an RTL change
 //      to a block with its own differential and is not smuggled into a
 //      composition packet. `raster_state` has no producer anywhere.
@@ -2214,8 +2246,9 @@
 //      time this file has paid for it. `completion_register.py` HARD-FAILS on
 //      the phrase one would naturally reach for there, because an entry that
 //      denies being settled is how an open gap gets read as a closed one --
-//      I35 records the same trap from the other direction, where writing the
-//      phrase marked a live gap CLOSED. So the denial does not appear here
+//      I35 recorded the same trap from the other direction, where writing the
+//      phrase marked a live gap CLOSED (that entry is now genuinely closed and
+//      deleted, which is why this citation is in the past tense). So the denial does not appear here
 //      and the positive statement is used instead.
 //
 //      THE COUNTERS BESIDE IT HAVE ALL BEEN FIRED, with legal stimulus and no
@@ -6317,6 +6350,42 @@ module zhao_console_core
   wire [TERR_GENW-1:0]    tps_done_gen;
   wire [31:0]             tps_done_epoch;
 
+  // TERRAIN.HDRREAD.  `thr_j_*` is the compose door's side, `thr_h_*` the
+  // header record it emits to TERRAIN.PLACE, and `thr_f_*` the SAME JOB
+  // forwarded on to the streamer afterwards -- carried in the block's own
+  // registers rather than re-read from TERRAIN.SEQ's port, which is the whole
+  // reason the block exists.  See composed item 13.
+  wire                    thr_j_ready;
+  wire                    thr_h_valid;
+  wire signed [7:0]       thr_h_pitch_log2;
+  wire signed [15:0]      thr_h_patch_ix, thr_h_patch_iz;
+  wire signed [31:0]      thr_h_env_x0, thr_h_env_z0;
+  wire [15:0]             thr_h_src_id;
+  // THE VERDICT IS CARRIED AND NOT READ HERE, and that is deliberate rather
+  // than an oversight: TERRAIN.PLACE has no verdict input, and the refusal it
+  // must perform arrives as an impossible pitch on the port above.  A composer
+  // that read the verdict and acted on it would be making the placement
+  // decision outside the block that owns placement.  Waived at the declaration
+  // so the closure's lint stays SILENT, the same way the two narrowings above
+  // are.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                    thr_h_ok;
+  wire [3:0]              thr_h_verdict;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire                    thr_f_valid;
+  wire [TERR_MEMSLOT-1:0] thr_f_slot;
+  wire [TERR_GENW-1:0]    thr_f_gen;
+  wire [31:0]             thr_f_epoch, thr_f_src_id;
+  wire [15:0]             thr_f_flags;
+
+  // THE ONE GUARD READ CLIENT, and the two readers behind it.  `trs_*` is the
+  // share's downstream side; the two upstream sides are the blocks' own ports.
+  zhao_guard_req_t        trs_a_req, trs_b_req;
+  zhao_guard_rsp_t        trs_a_rsp, trs_b_rsp;
+  wire                    trs_a_beat_valid, trs_b_beat_valid;
+  wire [63:0]             trs_a_beat_data,  trs_b_beat_data;
+  wire                    trs_a_beat_last,  trs_b_beat_last;
+
   // THE MIP REQUEST QUEUE'S DEPTH, a named knob rather than a literal in a
   // parameter map.  Eight is the composed frame; `terr_mipreq_drops_o` is what
   // says whether it is enough, and it is counted rather than inferred.
@@ -9290,19 +9359,48 @@ module zhao_console_core
   //       `compose_top`, which is that law with an empty program list and is
   //       exactly the half this composition can honestly carry.  Tying a HEIGHT
   //       here would be the fake stimulus the completion plan names by name.
+  //
+  //   (e) THE PATCH HEADER IS NOW READ, AND IT IS READ BY A BLOCK.  Added
+  //       2026-09-19 with TERRAIN.HDRREAD (composed item 13).  The chain above
+  //       gains one link at its head:
+  //
+  //           TERRAIN.SEQ.is_*  ->  TERRAIN.HDRREAD.j_*
+  //           TERRAIN.HDRREAD.h_*  ->  TERRAIN.PLACE.hdr_*
+  //           TERRAIN.HDRREAD.f_*  ->  TERRAIN.PSMUX client A -> PAGESTREAM
+  //
+  //       The three fields entry I35 recorded as having no producer --
+  //       `pitch_log2` and the envelope's origin corner -- now come off the
+  //       page's own 64 bytes on the compose path, with the job's identity
+  //       beside them.  THE PATCH COORDINATE MOVED TOO, and that is not
+  //       incidental: it used to be `tis_ix`/`tis_iz`, read live off
+  //       TERRAIN.SEQ's port, which was correct only because the header and the
+  //       job were taken on the same cycle.  They no longer are -- the header
+  //       read takes a burst -- so the coordinate comes from the same record as
+  //       the pitch it is checked against.  Reading one from the page and the
+  //       other from a port that has already advanced is the exact
+  //       join-between-two-things-that-move-independently fault I35 named.
   // ==========================================================================
 
   // `zref::swstream::kFlagDual`, T5's patch-record flags bit 3.  See (a).
   localparam int unsigned TERR_FLAG_DUAL_BIT = 3;
 
   assign tce_can_start = !tcc_fill_busy;
-  assign tps_j_valid   = tis_valid && tce_can_start;
-  assign tis_ready     = tps_j_ready && tce_can_start;
+  // THE DOOR NOW OPENS ONTO THE HEADER READER, NOT THE STREAMER.  The cache's
+  // `fill_busy_o` gate (b) is unchanged and still sits here, which gives it MORE
+  // slack than before rather than less: the header burst now runs between the
+  // gate and the first position write.
+  assign tis_ready     = thr_j_ready && tce_can_start;
+
+  // The compose door's side of the streamer is the FORWARDED job, held in
+  // TERRAIN.HDRREAD's own registers.  See (e).
+  assign tps_j_valid   = thr_f_valid;
 
   // ONE PULSE PER PATCH, AND IT IS THE ACCEPTANCE RATHER THAN THE OFFER.
-  // TERRAIN.SEQ HOLDS `is_valid_o` until its ready comes, so a header driven
-  // from the offer would re-latch and re-count `place_patches_o` on every cycle
-  // of the wait -- a census that measures how long the streamer was busy.
+  // TERRAIN.HDRREAD HOLDS `f_valid_o` until its ready comes, so a pulse driven
+  // from the offer would re-count on every cycle of the wait -- a census that
+  // measures how long the streamer was busy.  (This used to read `tis_valid`'s
+  // acceptance and the sentence was the same one about TERRAIN.SEQ; the holder
+  // changed, the hazard did not.)
   assign tce_job_take  = tps_j_valid && tps_j_ready;
 
   assign tpt_vtx_valid  = tps_v_valid && tpc_placed;
@@ -9321,16 +9419,20 @@ module zhao_console_core
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // The patch header.  The coordinate and the source id are TERRAIN.SEQ's and
-    // are internal; the pitch and the envelope are entry I35's boundary.
-    .hdr_valid_i     (tce_job_take),
+    // REAL, AND WHOLE FROM 2026-09-19: the patch header, every field of it off
+    // the page's own 64 bytes, from TERRAIN.HDRREAD.  Entry I35 is closed and
+    // deleted.  This port used to take the coordinate from TERRAIN.SEQ live and
+    // the pitch and envelope from this module's edge; all five now arrive from
+    // ONE record, which is what made the entry's join argument go away rather
+    // than move.
+    .hdr_valid_i     (thr_h_valid),
     .hdr_ready_o     (tpc_hdr_ready),
-    .hdr_pitch_log2_i(terr_place_pitch_log2_i),
-    .hdr_patch_ix_i  (tis_ix),
-    .hdr_patch_iz_i  (tis_iz),
-    .hdr_env_x0_i    (terr_place_env_x0_i),
-    .hdr_env_z0_i    (terr_place_env_z0_i),
-    .hdr_src_id_i    (tis_src_id[15:0]),
+    .hdr_pitch_log2_i(thr_h_pitch_log2),
+    .hdr_patch_ix_i  (thr_h_patch_ix),
+    .hdr_patch_iz_i  (thr_h_patch_iz),
+    .hdr_env_x0_i    (thr_h_env_x0),
+    .hdr_env_z0_i    (thr_h_env_z0),
+    .hdr_src_id_i    (thr_h_src_id),
 
     // REAL: TERRAIN.COMPCACHE's position fill, 33 column x's then 33 row z's.
     .pos_we_o  (tpc_pos_we),
@@ -9353,6 +9455,141 @@ module zhao_console_core
     .place_range_o       (terr_place_range_o),
     .place_patches_o     (terr_place_patches_o),
     .place_src_id_o      (terr_place_src_id_o)
+  );
+
+  // ---- TERRAIN.HDRREAD (composed item 13) ----------------------------------
+  // THE SAME THREE POOL PARAMETERS THE STREAMER AND THE LOADER GET, passed
+  // rather than defaulted, for the identical reason: this block reads byte 0 of
+  // the slot `u_terrain_pageloader` wrote and `u_terrain_pagestream` reads from
+  // +64, and a base or a page size that agreed only by coincidence would read
+  // the previous page's header and place this page where that one belongs.
+  zhao_terrain_hdrread #(
+    .PAGE_BYTES  (TERR_PAGE_BYTES),
+    .REGION_BASE (TERR_POOL_BASE),
+    .REGION_SLOTS(TERR_POOL_SLOTS),
+    .SLOTW       (TERR_MEMSLOT),
+    .GENW        (TERR_GENW)
+  ) u_terrain_hdrread (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cfg_vram_client_i(ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_epoch_i      (terr_cfg_epoch_i),
+
+    // REAL: the compose door, gated by the cache exactly as it was before this
+    // block sat in front of the streamer.
+    .j_valid_i (tis_valid && tce_can_start),
+    .j_ready_o (thr_j_ready),
+    // The same zero extension across the pool's extra refusal bit that both
+    // other pool clients get, written here rather than assumed.
+    .j_slot_i  ({1'b0, tis_slot}),
+    .j_gen_i   (tis_gen),
+    .j_epoch_i (tis_epoch),
+    .j_src_id_i(tis_src_id),
+    .j_flags_i (tis_flags),
+    // REAL: the record's own identity, which the header restates.  This is the
+    // only consumer of `tis_island` in this module and it is what turns the
+    // format's redundancy into a check instead of a comment.
+    .j_island_i(tis_island),
+    .j_ix_i    (tis_ix),
+    .j_iz_i    (tis_iz),
+
+    // REAL: requester A of the one guard read client.  See `u_terrain_rdshare`.
+    .guard_req_o (trs_a_req),
+    .guard_rsp_i (trs_a_rsp),
+    .beat_valid_i(trs_a_beat_valid),
+    .beat_data_i (trs_a_beat_data),
+    .beat_last_i (trs_a_beat_last),
+
+    // REAL: the header record, to TERRAIN.PLACE.
+    .h_valid_o     (thr_h_valid),
+    .h_ready_i     (tpc_hdr_ready),
+    .h_pitch_log2_o(thr_h_pitch_log2),
+    .h_patch_ix_o  (thr_h_patch_ix),
+    .h_patch_iz_o  (thr_h_patch_iz),
+    .h_env_x0_o    (thr_h_env_x0),
+    .h_env_z0_o    (thr_h_env_z0),
+    .h_src_id_o    (thr_h_src_id),
+    .h_ok_o        (thr_h_ok),
+    .h_verdict_o   (thr_h_verdict),
+
+    // REAL: the same job, forwarded to the streamer's share after the header
+    // has been handed over.  UNCONDITIONAL -- a page whose header could not be
+    // read still streams, because the streamer's completion is the page's
+    // unpin and a swallowed job would park the directory entry forever.
+    .f_valid_o (thr_f_valid),
+    .f_ready_i (tps_j_ready),
+    .f_slot_o  (thr_f_slot),
+    .f_gen_o   (thr_f_gen),
+    .f_epoch_o (thr_f_epoch),
+    .f_src_id_o(thr_f_src_id),
+    .f_flags_o (thr_f_flags),
+
+    .headers_read_o   (terr_hr_headers_o),
+    .headers_refused_o(terr_hr_refused_o),
+    .guard_denied_o   (terr_hr_guard_denied_o),
+    .incomplete_o     (terr_hr_incomplete_o),
+    .ident_fails_o    (terr_hr_ident_fails_o),
+    .idle_o           (terr_hr_idle_o)
+  );
+
+  // ---- THE COMPOSE PATH's ONE GUARD READ CLIENT (composed item 13) ---------
+  // TWO READERS, ONE CLIENT, AND NO NEW PRIVILEGE.  `zhao_vram_arbiter` builds
+  // its client tag by casting the slot index, so a genuinely new client id is a
+  // memory-rules ruling and not a wire; `zhao_mem_guard` grants TERRAIN.PAGE_POOL
+  // to ZHAO_CLIENT_TERRAIN_BUILD alone.  This is the same answer the geometry
+  // asset path reached for the same reason, in the same block:
+  // `zhao_geom_mem_adapter` is a wrapper over `zhao_mem_share2` with ENGINE1's
+  // two values, and this instance is the terrain binding of it.
+  //
+  // WHAT IT SAVED, said in numbers rather than as a virtue: entry I26 stays a
+  // TWO-port boundary instead of becoming a three-port one, the shell needs no
+  // second socket, the arbiter needs no client, MEM.GUARD needs no arm, and the
+  // ~200-line arbitration FSM -- with the guard's two-cycle verdict law in it,
+  // the law two separate clients have already got wrong once each -- exists
+  // once for the whole console rather than three times.
+  //
+  // CONTENTION IS REAL HERE AND IT IS COUNTED.  The two readers are NOT
+  // mutually exclusive: TERRAIN.PSMUX can have the MIP PASS streaming a page
+  // through requester B while the compose door's next header is read on A.
+  // `terr_rdshare_contention_o` is what says how often, and it is the number
+  // any decision to widen this to two outstanding requests has to be made
+  // against.
+  zhao_mem_share2 #(
+    .CLIENT_ID (6),        // ZHAO_CLIENT_TERRAIN_BUILD -- see zhao_pkg
+    .FORCE_READ(1'b1)      // both users READ; the pool's write arm is the loader's
+  ) u_terrain_rdshare (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // A: TERRAIN.HDRREAD, one 64-byte header burst per patch.
+    .a_req_i       (trs_a_req),
+    .a_rsp_o       (trs_a_rsp),
+    .a_beat_valid_o(trs_a_beat_valid),
+    .a_beat_data_o (trs_a_beat_data),
+    .a_beat_last_o (trs_a_beat_last),
+
+    // B: TERRAIN.PAGESTREAM, three plane bursts per refill.
+    .b_req_i       (trs_b_req),
+    .b_rsp_o       (trs_b_rsp),
+    .b_beat_valid_o(trs_b_beat_valid),
+    .b_beat_data_o (trs_b_beat_data),
+    .b_beat_last_o (trs_b_beat_last),
+
+    // I26: the one client leaves this module.
+    .m_req_o       (terr_ps_guard_req_o),
+    .m_rsp_i       (terr_ps_guard_rsp_i),
+    .m_beat_valid_i(terr_ps_beat_valid_i),
+    .m_beat_data_i (terr_ps_beat_data_i),
+    .m_beat_last_i (terr_ps_beat_last_i),
+
+    .jobs_a_o     (terr_rdshare_jobs_a_o),
+    .jobs_b_o     (terr_rdshare_jobs_b_o),
+    .denied_o     (terr_rdshare_denied_o),
+    .contention_o (terr_rdshare_contention_o),
+    .err_short_o  (terr_rdshare_err_short_o),
+    .err_long_o   (terr_rdshare_err_long_o),
+    .err_unowned_o(terr_rdshare_err_unowned_o)
   );
 
   // ---- TERRAIN.PAGESTREAM --------------------------------------------------
@@ -9388,12 +9625,16 @@ module zhao_console_core
     .j_src_id_i(tpsx_j_src_id),
     .j_flags_i (tpsx_j_flags),
 
-    // I26, extended: the READ client and its beats leave this module.
-    .guard_req_o (terr_ps_guard_req_o),
-    .guard_rsp_i (terr_ps_guard_rsp_i),
-    .beat_valid_i(terr_ps_beat_valid_i),
-    .beat_data_i (terr_ps_beat_data_i),
-    .beat_last_i (terr_ps_beat_last_i),
+    // I26, extended: requester B of the one guard read client.  This used to
+    // reach the module edge directly; from 2026-09-19 it reaches it through
+    // `u_terrain_rdshare`, which the streamer cannot tell apart -- the share
+    // reproduces the guard's level-then-pulse verdict law deliberately, and the
+    // `last` it returns is the accepted request's own expected word count.
+    .guard_req_o (trs_b_req),
+    .guard_rsp_i (trs_b_rsp),
+    .beat_valid_i(trs_b_beat_valid),
+    .beat_data_i (trs_b_beat_data),
+    .beat_last_i (trs_b_beat_last),
 
     // The vertex DATA is broadcast to both clients and the HANDSHAKE is
     // demuxed by the share's captured owner, which is what makes this a share
@@ -9955,16 +10196,25 @@ module zhao_console_core
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // CLIENT A -- the compose door.  Every field is what went straight to the
-    // streamer before this block existed, including the zero extension across
-    // the pool's extra refusal bit, which is still written rather than assumed.
+    // CLIENT A -- the compose door.
+    //
+    // EVERY FIELD IS TERRAIN.HDRREAD's LATCHED COPY FROM 2026-09-19, and the
+    // change matters more than it looks.  These used to read `tis_*` live, which
+    // was correct while the streamer's job and TERRAIN.SEQ's acceptance were the
+    // SAME CYCLE.  They no longer are: the header reader accepts the job first,
+    // retires `is_valid_o`, spends a burst reading the page header, and only
+    // then offers the job here -- by which time the sequencer may be presenting
+    // the next patch.  Wiring `tis_*` to this port after that would stream page
+    // N's slot under page M's identity, with every handshake and every counter
+    // agreeing.  The zero extension across the pool's extra refusal bit still
+    // happens, one block earlier, at `u_terrain_hdrread.j_slot_i`.
     .a_j_valid_i (tps_j_valid),
     .a_j_ready_o (tps_j_ready),
-    .a_j_slot_i  ({1'b0, tis_slot}),
-    .a_j_gen_i   (tis_gen),
-    .a_j_epoch_i (tis_epoch),
-    .a_j_src_id_i(tis_src_id),
-    .a_j_flags_i (tis_flags),
+    .a_j_slot_i  (thr_f_slot),
+    .a_j_gen_i   (thr_f_gen),
+    .a_j_epoch_i (thr_f_epoch),
+    .a_j_src_id_i(thr_f_src_id),
+    .a_j_flags_i (thr_f_flags),
     .a_v_valid_o (tps_v_valid),
     .a_v_ready_i (tps_v_ready),
     // The compose pass's completion IS the unpin -- entry I27's closed half.

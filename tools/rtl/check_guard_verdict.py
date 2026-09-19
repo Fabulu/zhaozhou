@@ -82,6 +82,39 @@ CLIENTS = [
     # twice; that is about AREA, not about protocol, and the protocol still has
     # to be right or the probe measures a path that never completes.
     "fpga/rtl/synth/zhao_probe_render_fb.sv",
+    # ---------------------------------------------------------------------
+    # SEVEN ADDED 2026-09-19, AND THE REASON THEY WERE MISSING IS THE POINT.
+    #
+    # This tool CRASHED -- `UnicodeDecodeError` inside discover(), on one
+    # cp1252 em dash in `fpga/rtl/terrain/zhao_terrain_bake_v2.sv`. It never
+    # reached the coverage audit, so every client added after that byte landed
+    # went unlisted and unscanned, and the tool's exit code said "1" for a
+    # reason nobody connected to guard protocol at all. The audit that exists
+    # to stop the hand list rotting was itself dead, which is the
+    # broken-instrument law with the crash standing in for the silent zero.
+    #
+    # Three are REAL CLIENTS that test a verdict themselves:
+    "fpga/rtl/terrain/zhao_terrain_pagestream.sv",
+    "fpga/rtl/mem/zhao_mem_upload.sv",
+    "fpga/rtl/memory/zhao_render_asset_mux.sv",
+    # Four ROUTE a verdict down to a client and test nothing themselves --
+    # the same standing `zhao_video_scanout` is listed under above. Listed
+    # rather than excepted, so the audit stays exact.
+    "fpga/rtl/prod/zhao_console_core.sv",
+    "fpga/rtl/prod/zhao_console_board.sv",
+    "fpga/rtl/generated/zhao_shell_fit_top.sv",
+    "fpga/rtl/generated/zhao_shell_v2_fit_top.sv",
+    # ---------------------------------------------------------------------
+    # THE TERRAIN COMPOSE PATH's TWO NEW CLIENTS, 2026-09-19. Added in the
+    # change that created them, which is what the note on TERRAIN.PAGELOADER
+    # above asks for.
+    #
+    # MEM.SHARE2 is the generic two-requester / one-permitted-client share
+    # (GEOM.MEM.ADAPTER is now a wrapper over it), so the protocol it has to
+    # get right is the guard's, once, for both its users.
+    "fpga/rtl/memory/zhao_mem_share2.sv",
+    # TERRAIN.HDRREAD reads the 64-byte patch header on the COMPOSE path.
+    "fpga/rtl/terrain/zhao_terrain_hdrread.sv",
 ]
 
 # `if (foo_rsp.ready)` / `else if (guard_rsp_i.ready)` -- the accepting arm.
@@ -132,6 +165,39 @@ def arm_body(lines, i, col=0):
     return out
 
 
+def in_if_condition(lines, i, col, back=8):
+    """Is `lines[i][col]` inside the parenthesised condition of an `if`?
+
+    Walks LEFT from the match, across lines, unwinding one parenthesis level at
+    a time. Each unmatched `(` is an enclosing group; if the text before it ends
+    in `if` we are in a branch condition, and otherwise we step outside that
+    group and keep going. `back` bounds the walk so a runaway file cannot make
+    this quadratic; eight lines covers every conditional in this tree and the
+    quiescence predicates that motivated the filter are far longer than that.
+    """
+    depth = 0
+    k = i
+    seg = lines[i][:col]
+    while k >= 0 and (i - k) < back:
+        j = len(seg) - 1
+        while j >= 0:
+            ch = seg[j]
+            if ch == ")":
+                depth += 1
+            elif ch == "(":
+                if depth == 0:
+                    if re.search(r"\bif\s*$", seg[:j]):
+                        return True
+                    # not an `if` -- step outside this group and keep looking
+                else:
+                    depth -= 1
+            j -= 1
+        k -= 1
+        if k >= 0:
+            seg = lines[k]
+    return False
+
+
 def scan(path):
     """Return a list of (line, text) offences for one file."""
     try:
@@ -153,6 +219,31 @@ def scan(path):
             continue
         # The declaration itself, and the guard's own driver, are not clients.
         if "output" in line or "assign" in line and "rsp.ready" in line:
+            continue
+        # THE OFFENCE IS ALWAYS A BRANCH CONDITION, so the `.ready` has to sit
+        # inside an `if`. Added 2026-09-19 with the seven clients below, because
+        # the first exact coverage run flagged `zhao_render_asset_mux.sv`'s
+        # `quiet_o` -- a flat `always_comb` conjunction of a dozen `!x.ready` /
+        # `!x.ok` terms describing IDLENESS, which arm_body() then walked as
+        # though it were a state arm. That is not a protocol test at all, and a
+        # gate that flags a quiescence predicate trains the reader to skip the
+        # one line that matters.
+        #
+        # THE FIRST VERSION OF THIS FILTER WAS `"if" in line[:m.start()]` AND IT
+        # SILENCED A TRUE POSITIVE, which is the whole reason it is written out
+        # here. `zhao_mem_upload.sv` opens its condition on one line and puts
+        # the `.ready && .ok` on the NEXT:
+        #
+        #     if (guard_wready_i &&
+        #         ((beat_q != '0) || (guard_rsp_i.ready && guard_rsp_i.ok))) begin
+        #
+        # so the offending line has no `if` on it at all, and a same-line test
+        # reported the file CLEAN -- a detector going quiet in the flattering
+        # direction, in the same edit that revived it. Caught only by asking why
+        # a known hit had disappeared. The test below walks LEFT through the
+        # open parentheses instead, across lines, which is what "inside an if
+        # condition" actually means.
+        if not in_if_condition(lines, i, m.start()):
             continue
         sig = m.group(1)
         for (ln, text) in arm_body(lines, i, m.start()):

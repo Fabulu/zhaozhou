@@ -447,6 +447,7 @@ targets:
 
   - top: zhao_geom_mem_adapter
     sources:
+      - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
 
   - top: zhao_texture_mosaic
@@ -2140,6 +2141,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_loom.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
+      - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
@@ -2630,6 +2632,7 @@ targets:
       # arbiter no client: two requesters, ONE ENGINE1 identity.
       # zhao_geom_cull shares the projector's matrix bank rather than a second.
       - fpga/rtl/geometry/zhao_geom_cull.sv
+      - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
@@ -2725,6 +2728,14 @@ targets:
       #   3. zhao_terrain_patch carries section 3.4's clamps and a 16-entry
       #      rectangle list; it is the ALM in this packet.
       - fpga/rtl/terrain/zhao_terrain_place.sv
+      # TERRAIN.HDRREAD, added 2026-09-19: the compose-path patch header reader
+      # core entry I35 named as the absent owner. It is an FSM, one 64-byte
+      # staging record and no arithmetic wider than an add, so it is expected
+      # to price near TERRAIN.PLACE rather than near the streamer. Its guard
+      # client shares the streamer's through zhao_mem_share2 (already in this
+      # list, above, as the geometry adapter's body), so this adds a block and
+      # NOT a memory client.
+      - fpga/rtl/terrain/zhao_terrain_hdrread.sv
       - fpga/rtl/terrain/zhao_terrain_pagestream.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
       - fpga/rtl/terrain/zhao_terrain_compcache_front.sv

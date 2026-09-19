@@ -8927,6 +8927,7 @@ verilate(test_geom_mem_adapter_directed
   TOP_MODULE tb_geom_mem_adapter
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mem_adapter.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_mem_adapter.sv)
 add_test(NAME geom_mem_adapter_directed COMMAND test_geom_mem_adapter_directed)

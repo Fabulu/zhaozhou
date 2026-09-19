@@ -467,9 +467,24 @@ module tb_zhao_console_core_smoke
   logic [63:0]             terr_ps_beat_data_i;
   logic                    terr_ps_beat_last_i;
 
-  logic signed [7:0]       terr_place_pitch_log2_i;
-  logic signed [31:0]      terr_place_env_x0_i;
-  logic signed [31:0]      terr_place_env_z0_i;
+  // TERRAIN.HDRREAD and the compose path's guard read share, composed item 13.
+  // These replace `terr_place_pitch_log2_i` / `terr_place_env_x0_i` /
+  // `terr_place_env_z0_i`, which were entry I35's boundary and are gone: the
+  // pitch and the envelope come off the page's own header inside the core now,
+  // so there is nothing for a bench to drive and five more things to read.
+  logic [31:0]             terr_hr_headers_o;
+  logic [31:0]             terr_hr_refused_o;
+  logic [31:0]             terr_hr_guard_denied_o;
+  logic [31:0]             terr_hr_incomplete_o;
+  logic [31:0]             terr_hr_ident_fails_o;
+  logic                    terr_hr_idle_o;
+  logic [31:0]             terr_rdshare_jobs_a_o;
+  logic [31:0]             terr_rdshare_jobs_b_o;
+  logic [31:0]             terr_rdshare_denied_o;
+  logic [31:0]             terr_rdshare_contention_o;
+  logic [31:0]             terr_rdshare_err_short_o;
+  logic [31:0]             terr_rdshare_err_long_o;
+  logic [31:0]             terr_rdshare_err_unowned_o;
 
   logic                    terr_pt_fld_valid_i;
   logic                    terr_pt_fld_ready_o;
@@ -2434,17 +2449,21 @@ module tb_zhao_console_core_smoke
     // The door is gone: TERRAIN.SEQ's issue is consumed inside the core now.
     // What this bench drives is what the engine itself cannot produce.
     //
-    // THE PITCH IS THE CANONICAL 2.0 m (spec/terrain_rules.md 1.3,
-    // `pitch_log2 = +1`) and the ENVELOPE IS ZERO, and that pair is a REFUSAL
-    // rather than a placement -- deliberately, and it is entry I35 seen from
-    // the far end. A patch at ix = 3 has origin 3 * 32 * 2.0 m, so an envelope
-    // of zero disagrees with it and `terr_place_env_mismatch_o` would count the
-    // patch and refuse it. This bench never gets that far (no page passes its
-    // CRC, so none is ever issued), so no counter here is quoted either way;
-    // what these three lines do is define the inputs rather than leave them X.
-    terr_place_pitch_log2_i = 8'sd1;
-    terr_place_env_x0_i = '0;
-    terr_place_env_z0_i = '0;
+    // THE PITCH AND THE ENVELOPE ARE NO LONGER DRIVEN HERE, and the three lines
+    // that did it are deleted rather than left at zero. They used to read:
+    //
+    //     terr_place_pitch_log2_i = 8'sd1;   // the canonical 2.0 m
+    //     terr_place_env_x0_i = '0;          // ... against a nonzero origin,
+    //     terr_place_env_z0_i = '0;          //     so a deliberate refusal
+    //
+    // and the comment above them called that pair "entry I35 seen from the far
+    // end". That entry is CLOSED: `zhao_terrain_hdrread` reads the page's own
+    // 64-byte header on the compose path, so the pitch and the envelope are
+    // internal and there is nothing here to define. This bench still never
+    // issues a page (no page passes its CRC), so `terr_hr_headers_o` and the
+    // rest of composed item 13's counters stay at zero for the same reason
+    // every other compose-engine counter does, and none of them is quoted as
+    // evidence of anything.
     // I34: the field lane. LOW, never a constant height -- a constant on
     // `fld_height_i` is a field program that moves every vertex of every patch
     // by the same amount, and section 3.4 would still produce a real composed

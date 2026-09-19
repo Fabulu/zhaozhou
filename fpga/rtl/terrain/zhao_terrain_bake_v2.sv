@@ -215,7 +215,7 @@ module zhao_terrain_bake_v2 (
   localparam logic [4:0] StBrB  = 5'd15;  // mrow_lo <= row 0; address row 1
   localparam logic [4:0] StBrC  = 5'd16;  // mrow_hi <= row 1; prefetch row 2
   localparam logic [4:0] StCell = 5'd17;  // waiting for a cell
-  localparam logic [4:0] StR2C  = 5'd18;  // c_r2 <= radius^2 (ONCE per record —
+  localparam logic [4:0] StR2C  = 5'd18;  // c_r2 <= radius^2 (ONCE per record --
                                           // StVzM recurs per row and must never
                                           // touch r2: the first build captured
                                           // r2 there and clobbered it with the
