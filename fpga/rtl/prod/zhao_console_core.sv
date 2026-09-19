@@ -437,7 +437,19 @@
 //    The successor gap is I33, one level down: the table exists and answers,
 //    and nothing fills it.
 //
-//  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
+//  * I37 was GEOM.MESHFETCH's DESCRIPTOR CRC VERDICT (`geom_mf_crc_ok_i`), a
+//    MISSING BLOCK rather than missing wiring. CLOSED AND DELETED 2026-09-19.
+//    `zhao_crc32c_fold` was the one fold law and is combinational; nothing
+//    owned the WALKER that runs it across the eight returning beats, stops at
+//    byte 60 and compares with 60..63. `zhao_geom_desc_crc` is that block,
+//    composed as `u_geom_desc_crc` on requester A's own beat nets, and its
+//    directed test differences it against `zhao_abi::zhao_crc32c` itself
+//    (the call `zref_meshfetch.hpp:139` refuses on): 728 checks, all three
+//    counters fired by legal stimulus. A burst that is not eight beats is
+//    REFUSED and counted apart from a CRC mismatch. The port left this list
+//    rather than being driven; `geom_mf_crc_descriptors_o`/`_fail_o`/
+//    `_framing_o` leave instead, and the smoke fixture now writes the real CRC.
+////  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
 //    closed contradiction between three ratified contracts rather than a
 //    wiring gap, and owner ruling 2026-09-19 settled it:
 //    `reports/RULING-I4-COLLISION-SPAWN-20260919.md`. The four `col_*_i` ports
@@ -2122,37 +2134,6 @@
 //
 //      NOT part of this gap: `j_client_i`. See I40.
 //
-// I37. GEOM.MESHFETCH's DESCRIPTOR CRC VERDICT (`geom_mf_crc_ok_i`) --
-//      BOUNDARY. NEW 2026-09-19, and it is a MISSING BLOCK rather than
-//      missing wiring, which is why it is its own entry and not a clause of
-//      I36.
-//
-//      The block takes the verdict and does not compute it -- "the CRC over
-//      bytes 0..59, folded by the caller's `zhao_crc32c_fold`. Wired in
-//      rather than folded here: that block is the one implementation and a
-//      second would be a second law." SEARCHED:
-//      `fpga/rtl/common/zhao_crc32c_fold.sv` exists and is exactly that one
-//      implementation, but it is COMBINATIONAL -- {state, up to eight bytes,
-//      a count} in, next state out. What nothing in `fpga/rtl` owns is the
-//      WALKER: the thing that runs that fold across the descriptor's beats
-//      as they return, stops at byte 60, and compares the result with bytes
-//      60..63. That is a state machine with a beat-counting law, and a state
-//      machine belongs in a file with a contract and a test, not in this
-//      composer.
-//
-//      IT IS A PORT AND THE FAILURE MODE IS LOUD IN ONE DIRECTION ONLY,
-//      which is worth stating because the two directions are not
-//      symmetrical. Held LOW, every descriptor is refused, nothing reaches
-//      GEOM.ASSETFETCH, and `geom_mf_refused_crc_o` counts every one of
-//      them. Held HIGH, a corrupt descriptor is believed. The block's own
-//      formal lane already found and fixed the subtle half of this (it
-//      recomputed its refusal from the LIVE input instead of latching the
-//      verdict, `design/formal_runs.yml`), so what remains is only the
-//      absent producer. Taking the verdict from the caller is this tree's
-//      standing pattern for exactly this shape -- see
-//      `zhao_texture_palette_res`'s `ld_crc_ok_i`, whose END(slot,
-//      generation, crc_ok) protocol is the same split.
-//
 // I38. GEOM.ASSETFETCH's MESHLET RELEASE (`geom_af_release_i`) -- BOUNDARY.
 //      NEW 2026-09-19, the third of I23's successors, and it is the same
 //      SHAPE as I21's compose-cache retirement one subsystem over.
@@ -3414,8 +3395,13 @@ module zhao_console_core
   input  logic [1:0]              geom_mf_job_active_mask_i,
   input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
 
-  // ---- I37: the descriptor's CRC VERDICT ----------------------------------
-  input  logic                    geom_mf_crc_ok_i,
+  // ---- I37 IS CLOSED: the descriptor's CRC verdict is computed inside ------
+  // `u_geom_desc_crc` walks the fold over the returning beats. What leaves is
+  // its evidence, so a refused descriptor says WHY at the edge: a CRC that
+  // mismatched and a burst that was not eight beats are different faults.
+  output logic [31:0]             geom_mf_crc_descriptors_o,
+  output logic [31:0]             geom_mf_crc_fail_o,
+  output logic [31:0]             geom_mf_crc_framing_o,
 
   // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
   input  logic                    geom_af_release_i,
@@ -10130,9 +10116,9 @@ module zhao_console_core
     .beat_data_i (mf_beat_data),
     .beat_last_i (mf_beat_last),
 
-    // I37: the descriptor's CRC verdict.  `zhao_crc32c_fold` is the fold step
-    // and exists; the walker that runs it over the returning beats does not.
-    .crc_ok_i(geom_mf_crc_ok_i),
+    // REAL: the descriptor's CRC verdict, from the walker below over the SAME
+    // beats this block receives.  Entry I37, CLOSED.
+    .crc_ok_i(mf_crc_ok),
 
     // REAL: the cull service, which is a block and not a played answer.
     .cull_tick_o  (mf_cull_tick),
@@ -10177,6 +10163,31 @@ module zhao_console_core
   assign geom_mf_refused_triangle_count_o = mf_refused[4];
   assign geom_mf_refused_reserved_o       = mf_refused[5];
   assign geom_mf_refused_zero_bound_o     = mf_refused[6];
+
+  // --------------------------------------------------------------------------
+  // GEOM.MESHFETCH's DESCRIPTOR CRC WALKER.  Entry I37, CLOSED 2026-09-19.
+  //
+  // It taps requester A's beat stream, the one `u_geom_mem_adapter` hands
+  // `u_geom_meshfetch`: the same three nets, not a copy, so the bytes the
+  // CRC is computed over are the bytes the fetcher stores. It does NOT sit in
+  // the stream and cannot stall it (beats have no ready). The fetcher latches
+  // the verdict on the last beat, which is exactly when this block presents
+  // it. `zhao_crc32c_fold` is the one fold law; this is a walker around two
+  // instances of it, not a second CRC.
+  // --------------------------------------------------------------------------
+  wire mf_crc_ok;
+
+  zhao_geom_desc_crc u_geom_desc_crc (
+    .clk          (gpu_clk),
+    .rst_n        (rst_n),
+    .beat_valid_i (mf_beat_valid),
+    .beat_data_i  (mf_beat_data),
+    .beat_last_i  (mf_beat_last),
+    .crc_ok_o     (mf_crc_ok),
+    .descriptors_o(geom_mf_crc_descriptors_o),
+    .crc_fail_o   (geom_mf_crc_fail_o),
+    .framing_err_o(geom_mf_crc_framing_o)
+  );
 
   // --------------------------------------------------------------------------
   // GEOM.MEM_ADAPTER.  The whole reason the geometry front end can be in this

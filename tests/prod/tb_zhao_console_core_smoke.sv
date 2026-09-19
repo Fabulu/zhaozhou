@@ -231,7 +231,10 @@ module tb_zhao_console_core_smoke
   logic [15:0]             geom_mf_job_generation_i;
   logic [1:0]              geom_mf_job_active_mask_i;
   logic signed [31:0]      geom_mf_job_xform_i [0:11];
-  logic                    geom_mf_crc_ok_i;
+  // I37 CLOSED: the CRC walker is inside the core; its evidence comes out.
+  logic [31:0]             geom_mf_crc_descriptors_o;
+  logic [31:0]             geom_mf_crc_fail_o;
+  logic [31:0]             geom_mf_crc_framing_o;
   logic                    geom_af_release_i;
   logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i;
   logic [15:0]              geom_asm_material_id_i;
@@ -2139,6 +2142,23 @@ module tb_zhao_console_core_smoke
     end
   endtask
 
+  // CRC32C (reflected Castagnoli, all-ones seed, final complement) over the
+  // first 60 bytes of an eight-word descriptor, low byte of word 0 first. A
+  // BENCH-SIDE bitwise loop, deliberately NOT the RTL fold, so the fixture and
+  // `zhao_geom_desc_crc` are two implementations that must agree.
+  function automatic logic [31:0] fixture_desc_crc(input logic [63:0] w [8]);
+    logic [31:0] c;
+    logic [7:0]  b;
+    c = 32'hFFFF_FFFF;
+    for (int unsigned i = 0; i < 60; i = i + 1) begin
+      b = w[i / 8][8 * (i % 8) +: 8];
+      c = c ^ {24'd0, b};
+      for (int unsigned k = 0; k < 8; k = k + 1)
+        c = c[0] ? ((c >> 1) ^ 32'h82F6_3B78) : (c >> 1);
+    end
+    return ~c;
+  endfunction
+
   task automatic geom_poke_q(input int unsigned byte_addr, input logic [63:0] d);
     begin
       geom_poke_w(byte_addr + 0, d[15:0]);
@@ -2190,33 +2210,40 @@ module tb_zhao_console_core_smoke
     //   +28 index_offset  u32     pool-relative bytes
     //   +32 generation u16        (must equal the job's j_generation_i)
     //   +36..59 reserved, ALL ZERO or refusal row 6
-    //   +60 CRC word -- NOT READ BY THE RTL. The verdict arrives on
-    //       `crc_ok_i`, which is core entry I37's boundary; the fold that
-    //       would produce it has no owner. Written as zero so the line holds
-    //       no X rather than to be believed.
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF +  0,
-                {16'h0000, 16'h0001, 8'd1, 8'(N_GEOM_VERTS), 8'd0, 8'd1});
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF +  8, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 16, {GEOM_BOUND_R, 32'd0});
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 24, {GEOM_IX_OFF, GEOM_VX_OFF});
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 32, {32'd0, 16'd0, 16'd1});
+    //   +60 CRC32C over bytes 0..59, little-endian. READ BY THE RTL since
+    //       2026-09-19: `zhao_geom_desc_crc` (entry I37, closed) folds the
+    //       returning beats and GEOM.MESHFETCH refuses on a mismatch. The word
+    //       is computed HERE, over exactly the bytes written, so the
+    //       `-BadDescriptor` control still trips the RESERVED row it names and
+    //       not the CRC row.
+    begin : g_desc
+      logic [63:0] dw [8];
+      dw[0] = {16'h0000, 16'h0001, 8'd1, 8'(N_GEOM_VERTS), 8'd0, 8'd1};
+      dw[1] = 64'd0;
+      dw[2] = {GEOM_BOUND_R, 32'd0};
+      dw[3] = {GEOM_IX_OFF, GEOM_VX_OFF};
+      dw[4] = {32'd0, 16'd0, 16'd1};
 `ifdef ZHAO_SMOKE_BAD_DESC
-    // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`). Byte 40 is
-    // inside the descriptor's reserved span 36..59, which GEOM.MESHFETCH's
-    // sixth refusal row requires to be all zero. ONE BYTE, in memory, and
-    // nothing else in the bench changes -- so the run failing here is
-    // evidence about two things at once: the refusal group can fire, and the
-    // descriptor the machine validates is the one this bench wrote into
-    // SDRAM rather than anything it happened to have lying around.
-    // A plain `ifdef`, selected by `+define+`, because CLAUDE.md records
-    // that a command-line -D cannot override a FUNCTION-LIKE `define and
-    // says nothing when it fails to.
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 40, 64'h0000_0000_0000_0001);
+      // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`). Byte 40 is
+      // inside the descriptor's reserved span 36..59, which GEOM.MESHFETCH's
+      // sixth refusal row requires to be all zero. ONE BYTE, in memory, and
+      // nothing else in the bench changes -- so the run failing here is
+      // evidence about two things at once: the refusal group can fire, and the
+      // descriptor the machine validates is the one this bench wrote into
+      // SDRAM rather than anything it happened to have lying around.
+      // A plain `ifdef`, selected by `+define+`, because CLAUDE.md records
+      // that a command-line -D cannot override a FUNCTION-LIKE `define and
+      // says nothing when it fails to.
+      dw[5] = 64'h0000_0000_0000_0001;
 `else
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 40, 64'd0);
+      dw[5] = 64'd0;
 `endif
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 48, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 56, 64'd0);
+      dw[6] = 64'd0;
+      dw[7] = 64'd0;
+      dw[7][63:32] = fixture_desc_crc(dw);
+      for (int unsigned k = 0; k < 8; k = k + 1)
+        geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 8 * k, dw[k]);
+    end
 
     // ---- the index run: ONE triplet, {0, 1, 2}, three packed u8 -----------
     // The whole 64-byte line is written even though only the first word is
@@ -2792,11 +2819,6 @@ module tb_zhao_console_core_smoke
     for (int unsigned i = 0; i < 12; i = i + 1)
       geom_mf_job_xform_i[i] = ((i == 0) || (i == 5) || (i == 10))
                                ? FX16_ONE : 32'sd0;
-    // I37: the CRC verdict has no producer in the tree -- the fold exists,
-    // the walker over the returning beats does not. Held HIGH, which is the
-    // direction that lets the path run; the direction that would be silent
-    // is the other one, and `geom_mf_refused_crc_o` is asserted zero below.
-    geom_mf_crc_ok_i          = 1'b1;
     // I38: nothing in the console knows when BOTH readers have finished with
     // the buffered meshlet, so it is never released and the path serves
     // exactly one. That is the assertion below, not a workaround.
@@ -3258,6 +3280,8 @@ module tb_zhao_console_core_smoke
     // walking N's footprint -- which needs entry I38's release owner, so it
     // is not reachable in this composition at all. Quoting the zero as
     // "sharing costs nothing" would be quoting a workload, not a result.
+    $display("SMOKE: desc crc   descriptors=%0d fail=%0d framing=%0d",
+             geom_mf_crc_descriptors_o, geom_mf_crc_fail_o, geom_mf_crc_framing_o);
     $display("SMOKE: memadapter jobs[a/b]=[%0d %0d] denied=%0d contention=%0d err[short/long/unowned]=[%0d %0d %0d]",
              geom_ma_jobs_a_o, geom_ma_jobs_b_o, geom_ma_denied_o,
              geom_ma_contention_o, geom_ma_err_short_o, geom_ma_err_long_o,
@@ -3338,6 +3362,13 @@ module tb_zhao_console_core_smoke
              geom_mf_refused_generation_o, geom_mf_refused_vertex_count_o,
              geom_mf_refused_triangle_count_o, geom_mf_refused_reserved_o,
              geom_mf_refused_zero_bound_o);
+    // I37: the CRC WALKER, composed. Exactly one descriptor burst ended, its CRC
+    // matched and it was eight beats -- so the verdict the fetcher latched was
+    // COMPUTED, and the refusal check above passing is no longer a tie-off
+    // agreeing with itself.
+    if (geom_mf_crc_descriptors_o != 1 || geom_mf_crc_fail_o != 0 || geom_mf_crc_framing_o != 0)
+      $fatal(1, "SMOKE: the descriptor CRC walker saw descriptors=%0d fail=%0d framing=%0d (want 1/0/0) -- the fold over the returning beats does not agree with the fixture's CRC word",
+             geom_mf_crc_descriptors_o, geom_mf_crc_fail_o, geom_mf_crc_framing_o);
     // GEOM.CULL is a real block on the real matrix bank now. Under the
     // identity camera the fixture's bound is at the clip origin, so a cull
     // that rejects it is a wiring or configuration fault and not a verdict.

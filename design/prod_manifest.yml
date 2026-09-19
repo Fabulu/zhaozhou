@@ -135,6 +135,10 @@ top:
   # that a second geometry fetcher has no client identity the guard admits and
   # the arbiter carries, so this is the only route MESHFETCH has to real memory.
   - zhao_geom_mem_adapter
+  # GEOM.MESHFETCH's descriptor CRC walker (core entry I37, closed 2026-09-19):
+  # two constant-count zhao_crc32c_fold trees and a beat counter, composed
+  # beside the fetcher on its own beat nets, so it is a census top of its own.
+  - zhao_geom_desc_crc
   - zhao_geom_skin_norm
   # GEOM.LOOM: the Transform Loom, the streaming matrix composer the owner's
   # 2026-08-31 SS6.4 ruling left behind when it deleted recursion, cycle

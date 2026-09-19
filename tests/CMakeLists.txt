@@ -9085,6 +9085,30 @@ verilate(test_geom_meshfetch_rtl_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_meshfetch.sv)
 add_test(NAME geom_meshfetch_rtl_directed COMMAND test_geom_meshfetch_rtl_directed)
+# GEOM.MESHFETCH's DESCRIPTOR CRC WALKER -- closes zhao_console_core entry I37.
+# `zhao_geom_desc_crc` runs the one `zhao_crc32c_fold` implementation across
+# the eight returning beats and presents the verdict on the last one. The test
+# differences it against the generated `zhao_abi::zhao_crc32c` ITSELF (the
+# call zref_meshfetch.hpp:139 refuses on) and fires all three counters with
+# legal stimulus: 200 sealed descriptors, all 512 single-bit flips, seven
+# short bursts and a long one.
+add_executable(test_geom_desc_crc_directed geometry/geom_desc_crc_directed.cpp)
+target_link_libraries(test_geom_desc_crc_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_desc_crc_directed
+  PREFIX Vzhao_geom_desc_crc
+  TOP_MODULE zhao_geom_desc_crc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_desc_crc.sv)
+add_test(NAME geom_desc_crc_directed COMMAND test_geom_desc_crc_directed)
+set_tests_properties(geom_desc_crc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+# -Wall, and warnings FATAL: `verilate()` does not pass -Wall.
+add_test(NAME lint_geom_desc_crc
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_desc_crc
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_desc_crc.sv)
+set_tests_properties(lint_geom_desc_crc PROPERTIES
+  LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 set_tests_properties(geom_meshfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # SKIN.NORM's licence: one transformed-and-renormalised normal reused across

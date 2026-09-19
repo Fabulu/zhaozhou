@@ -2140,6 +2140,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_lod.sv
       - fpga/rtl/geometry/zhao_geom_loom.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
+      - fpga/rtl/geometry/zhao_geom_desc_crc.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
@@ -2635,6 +2636,8 @@ targets:
       - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
+      # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
+      - fpga/rtl/geometry/zhao_geom_desc_crc.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/geometry/zhao_geom_assemble.sv
       # Added 2026-09-19, packet I10-PALETTE. GEOM.POSE, WHOLE.

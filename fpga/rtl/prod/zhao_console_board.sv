@@ -643,8 +643,13 @@ module zhao_console_board
   input  logic [1:0]              geom_mf_job_active_mask_i,
   input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
 
-  // ---- I37: the descriptor's CRC VERDICT ----------------------------------
-  input  logic                    geom_mf_crc_ok_i,
+  // ---- I37 IS CLOSED: the descriptor's CRC verdict is computed inside ------
+  // `u_geom_desc_crc` walks the fold over the returning beats. What leaves is
+  // its evidence, so a refused descriptor says WHY at the edge: a CRC that
+  // mismatched and a burst that was not eight beats are different faults.
+  output logic [31:0]             geom_mf_crc_descriptors_o,
+  output logic [31:0]             geom_mf_crc_fail_o,
+  output logic [31:0]             geom_mf_crc_framing_o,
 
   // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
   input  logic                    geom_af_release_i,
@@ -2466,7 +2471,9 @@ module zhao_console_board
       .geom_mf_job_generation_i          (geom_mf_job_generation_i),
       .geom_mf_job_active_mask_i         (geom_mf_job_active_mask_i),
       .geom_mf_job_xform_i               (geom_mf_job_xform_i),
-      .geom_mf_crc_ok_i                  (geom_mf_crc_ok_i),
+      .geom_mf_crc_descriptors_o         (geom_mf_crc_descriptors_o),
+      .geom_mf_crc_fail_o                (geom_mf_crc_fail_o),
+      .geom_mf_crc_framing_o             (geom_mf_crc_framing_o),
       .geom_af_release_i                 (geom_af_release_i),
       .geom_asm_vertex_offset_i          (geom_asm_vertex_offset_i),
       .geom_asm_material_id_i            (geom_asm_material_id_i),
