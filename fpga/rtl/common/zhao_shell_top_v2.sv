@@ -447,7 +447,34 @@ module zhao_shell_top_v2
   output logic [15:0] phy_dq_o,
   output logic        phy_dq_oe_o,
   output logic [1:0]  phy_dqm_o,
-  input  logic [15:0] phy_dq_i
+  input  logic [15:0] phy_dq_i,
+
+  // --------------------------------------------------------------------------
+  // CMD.DMA's PACKET STREAM, RE-EXPORTED.  Added 2026-09-19.
+  // --------------------------------------------------------------------------
+  // These were body wires (`pkt_valid`/`pkt_byte`/`pkt_len`/`pkt_ready`), and
+  // being body wires is the whole reason CMD.DECODER could not be composed:
+  // the stream it wants is REAL and is already flowing -- CMD.DMA emits it and
+  // the smoke bench's played HPS bridge puts genuine packet bytes on it -- but
+  // it had no way out of this module, so five completion-register entries
+  // (I7, I14, I30, I33 and the FORGE.PRIM jobs) all recorded the same absent
+  // command path.  The path was not absent.  It was enclosed.
+  //
+  // `cmd_pkt_ready_i` IS AN INPUT AND NOT AN ASSUMPTION.  The obvious cheaper
+  // shape is to export only the three outputs and let the second consumer snoop
+  // the stream, arguing that it never backpressures.  That argument would be
+  // load-bearing and unproven, and when it failed it would fail SILENTLY, by
+  // dropping command bytes -- the console's command front end is the wrong
+  // place to find out.  So the external consumer gets a real veto and the
+  // acceptance below is the AND of both consumers.
+  //
+  // Every pre-existing instantiator ties it high, which preserves this module's
+  // behaviour exactly; see the paired-diff bench, which is the check that says
+  // so rather than my saying so.
+  output logic        cmd_pkt_valid_o,
+  output logic [ 7:0] cmd_pkt_byte_o,
+  output logic [31:0] cmd_pkt_len_o,
+  input  logic        cmd_pkt_ready_i
 );
 
   // ==========================================================================
@@ -2264,8 +2291,16 @@ module zhao_shell_top_v2
   assign rec_completes_now = in_rec_region && (f_rpos >= 16'd4)
                            && (f_rpos + 16'd1 == f_len);
 
-  // stall the LAST byte of a record while the queue is full (glue 3 law)
-  assign pkt_ready = !(rec_completes_now && rq_full);
+  // stall the LAST byte of a record while the queue is full (glue 3 law), AND
+  // honour the re-exported stream's second consumer.  A byte is accepted only
+  // when BOTH this inline framer and whatever sits on `cmd_pkt_*` can take it,
+  // which is what makes the export a fork rather than a tap: a tap would let
+  // this framer advance past a byte the other consumer never saw.
+  assign pkt_ready = !(rec_completes_now && rq_full) && cmd_pkt_ready_i;
+
+  assign cmd_pkt_valid_o = pkt_valid;
+  assign cmd_pkt_byte_o  = pkt_byte;
+  assign cmd_pkt_len_o   = pkt_len;
 
   // the record's payload dwords INCLUDING the byte on the wires this cycle
   logic [127:0] w_final;

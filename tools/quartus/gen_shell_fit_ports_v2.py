@@ -300,6 +300,15 @@ DRIVERS = {
         'tri_continuation_tail_i', 'tri_fragment_state_i',
         'frame_clear_word_i',
     ),
+    # The second consumer of the re-exported CMD.DMA packet stream. It is its
+    # OWN handler rather than a member of an existing one because it answers a
+    # different producer: every other driven input here is stimulus the
+    # instrument invents, and this one is a BACKPRESSURE ANSWER to a stream the
+    # shell itself emits. Folding it into, say, `v3_config` would put one
+    # handler on both sides of a handshake.
+    'cmd_packet_sink': (
+        'cmd_pkt_ready_i',
+    ),
 }
 
 SINK_FOR_DOMAIN = {'gpu': 'gpu_capture', 'video': 'video_capture',

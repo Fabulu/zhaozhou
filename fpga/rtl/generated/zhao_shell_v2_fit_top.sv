@@ -1,9 +1,9 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
-// shell-declaration-sha256: 428951a3322ea145228f5051caf787b0d0b74aa3c54d8e4bf19e32352e61d137
-// policy-sha256: 01b77e4e65b96c00c6ec654516a16594296ef8e3e32af95bdd12e9afe47b81a2
-// generator-sha256: ccc7f90d7591e00b63b8dd043d91465ea2c898993691b77bd5e0236e349f076b
-// parser-sha256: 97c3dd17e8f6996924eb6fc7fef0cbafa58e20360b60133f2d3bc4eb1e47e7a7
+// shell-declaration-sha256: 55040a693dfca2af1c3fb89444dea1642c0e8cd309c168102fa67bb1fe745fd4
+// policy-sha256: 96ed66516a163ae9c2a2adf44c07d507aa2e90e0ac0e2358e20c7f19eceaa44e
+// generator-sha256: 9198887ae17b79d78ba46cd964d54a9035fd9d58e697e5e42ef0727ef4833db3
+// parser-sha256: a9477386c85900bd866a6809010c6841d14e2eec7283ac3d985036e4408c0e10
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
 
@@ -234,10 +234,14 @@ module shell_v2_top
   (* keep = "true" *) logic shell_phy_dq_oe_o;
   (* keep = "true" *) logic [1:0] shell_phy_dqm_o;
   (* keep = "true" *) logic [15:0] shell_phy_dq_i;
+  (* keep = "true" *) logic shell_cmd_pkt_valid_o;
+  (* keep = "true" *) logic [7:0] shell_cmd_pkt_byte_o;
+  (* keep = "true" *) logic [31:0] shell_cmd_pkt_len_o;
+  (* keep = "true" *) logic shell_cmd_pkt_ready_i;
 
-  logic [2264:0] gpu_payload_c;
+  logic [2305:0] gpu_payload_c;
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [2264:0] gpu_capture_bus;
+  logic [2305:0] gpu_capture_bus;
   /* verilator lint_on UNUSEDSIGNAL */
   always_comb begin
     gpu_payload_c = '0;
@@ -357,6 +361,9 @@ module shell_v2_top
     gpu_payload_c[2246 +: 16] = shell_phy_dq_o;
     gpu_payload_c[2262 +: 1] = shell_phy_dq_oe_o;
     gpu_payload_c[2263 +: 2] = shell_phy_dqm_o;
+    gpu_payload_c[2265 +: 1] = shell_cmd_pkt_valid_o;
+    gpu_payload_c[2266 +: 8] = shell_cmd_pkt_byte_o;
+    gpu_payload_c[2274 +: 32] = shell_cmd_pkt_len_o;
   end
 
   logic [171:0] video_payload_c;
@@ -507,7 +514,8 @@ module shell_v2_top
     .render_fb_base_i(shell_render_fb_base_i),
     .render_fb_stride_i(shell_render_fb_stride_i),
     .fb_writer_i(shell_fb_writer_i),
-    .phy_dq_i(shell_phy_dq_i)
+    .phy_dq_i(shell_phy_dq_i),
+    .cmd_pkt_ready_i(shell_cmd_pkt_ready_i)
   );
 
   zhao_shell_top_v2 u_shell (
@@ -727,7 +735,11 @@ module shell_v2_top
     .phy_dq_o(shell_phy_dq_o),
     .phy_dq_oe_o(shell_phy_dq_oe_o),
     .phy_dqm_o(shell_phy_dqm_o),
-    .phy_dq_i(shell_phy_dq_i)
+    .phy_dq_i(shell_phy_dq_i),
+    .cmd_pkt_valid_o(shell_cmd_pkt_valid_o),
+    .cmd_pkt_byte_o(shell_cmd_pkt_byte_o),
+    .cmd_pkt_len_o(shell_cmd_pkt_len_o),
+    .cmd_pkt_ready_i(shell_cmd_pkt_ready_i)
   );
 
   shell_v2_gpu_sink u_gpu_sink (
@@ -879,7 +891,8 @@ module shell_v2_stimulus
   (* preserve *) output var logic [26:0] render_fb_base_i,
   (* preserve *) output var logic [15:0] render_fb_stride_i,
   (* preserve *) output var logic fb_writer_i,
-  (* preserve *) output var logic [15:0] phy_dq_i
+  (* preserve *) output var logic [15:0] phy_dq_i,
+  (* preserve *) output var logic cmd_pkt_ready_i
 );
   localparam logic [2:0] HPS_IDLE = 3'd0;
   localparam logic [2:0] HPS_GRANT_WAIT = 3'd1;
@@ -1483,6 +1496,7 @@ module shell_v2_stimulus
       render_fb_stride_i <= '0;
       fb_writer_i <= '0;
       phy_dq_i <= '0;
+      cmd_pkt_ready_i <= '0;
       for (slot = 0; slot < 3; slot = slot + 1) ring_delay_q[slot] <= 8'(slot * 17);
     end else if (run_c) begin
       lfsr_q <= {lfsr_q[62:0], ^(lfsr_q & 64'hd800_0000_0000_0000)};
@@ -2133,14 +2147,14 @@ endmodule
 module shell_v2_gpu_sink (
   input  logic clk,
   input  logic rst_n,
-  input  logic [2264:0] payload_i,
-  output logic [2264:0] capture_o,
+  input  logic [2305:0] payload_i,
+  output logic [2305:0] capture_o,
   output logic signature_o,
   output logic epoch_o
 );
 
   // Immediate native-domain endpoint for every shell output bit.
-  (* preserve *) logic [2264:0] capture_q;
+  (* preserve *) logic [2305:0] capture_q;
   always_ff @(posedge clk) capture_q <= payload_i;
   assign capture_o = capture_q;
 
@@ -2237,8 +2251,10 @@ module shell_v2_gpu_sink (
       7'd67: selected_c = capture_q[2144 +: 32];
       7'd68: selected_c = capture_q[2176 +: 32];
       7'd69: selected_c = capture_q[2208 +: 32];
-      7'd70: begin
-        selected_c[24:0] = capture_q[2240 +: 25];
+      7'd70: selected_c = capture_q[2240 +: 32];
+      7'd71: selected_c = capture_q[2272 +: 32];
+      7'd72: begin
+        selected_c[1:0] = capture_q[2304 +: 2];
       end
       default: selected_c = 32'h0;
     endcase
@@ -2283,7 +2299,7 @@ module shell_v2_gpu_sink (
       selected_q <= selected_c;
       selected_index_q <= chunk_index_q;
       selected_valid_q <= 1'b1;
-      if (chunk_index_q == 7'd70) begin
+      if (chunk_index_q == 7'd72) begin
         chunk_index_q <= '0;
       end else begin
         chunk_index_q <= chunk_index_q + 7'd1;
@@ -2291,7 +2307,7 @@ module shell_v2_gpu_sink (
 
       if (selected_valid_q) begin
         misr_q <= misr_next_c;
-        if (selected_index_q == 7'd70) begin
+        if (selected_index_q == 7'd72) begin
           chunk_wraps_q <= chunk_wraps_q + 32'd1;
           if (!serializer_busy_q) begin
             snapshot_q <= misr_next_c;

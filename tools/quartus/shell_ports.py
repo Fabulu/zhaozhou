@@ -139,6 +139,11 @@ _ALLOWED_DRIVERS = {
     "fill_responder",
     "sheet_responder",
     "video_host",
+    # 2026-09-19: the backpressure answer for the re-exported CMD.DMA packet
+    # stream. Unlike the five above it is not a channel the instrument invents;
+    # it is the second consumer's veto on a stream the shell emits, which is
+    # why it is its own handler rather than a member of one of them.
+    "cmd_packet_sink",
 }
 _ALLOWED_SINKS = {"gpu_capture", "video_capture", "audio_capture"}
 

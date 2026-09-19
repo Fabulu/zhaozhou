@@ -234,6 +234,10 @@ SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
         "tri_fragment_state_i",
         "frame_clear_word_i",
     ),
+    # 2026-09-19: the re-exported CMD.DMA packet stream's second consumer.
+    # gpu-domain, so the gpu-clocked stimulus bank can own it directly and it
+    # needs none of the video-domain apparatus `video_host` above is waiting on.
+    "cmd_packet_sink": ("cmd_pkt_ready_i",),
 }
 
 

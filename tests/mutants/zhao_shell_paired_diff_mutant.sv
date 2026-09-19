@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 31 inputs exist only on the sibling. They get harness ports of
+// 32 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -115,6 +115,7 @@ module zhao_shell_paired_diff_mut
   input  logic scanout_ack_i,
   input  logic frame_swap_valid_i,
   input  logic frame_swap_slot_i,
+  input  logic cmd_pkt_ready_i,
   output logic v1_ring_wr_valid_o,
   output logic v2_ring_wr_valid_o,
   output logic [1:0] v1_ring_wr_slot_o,
@@ -470,7 +471,7 @@ module zhao_shell_paired_diff_mut
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 32 outputs the historical shell never had
+  // The sibling has 35 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -693,7 +694,11 @@ module zhao_shell_paired_diff_mut
     .phy_dq_o(v2_phy_dq_o),
     .phy_dq_oe_o(v2_phy_dq_oe_o),
     .phy_dqm_o(v2_phy_dqm_o),
-    .phy_dq_i(phy_dq_i)
+    .phy_dq_i(phy_dq_i),
+    .cmd_pkt_valid_o(),
+    .cmd_pkt_byte_o(),
+    .cmd_pkt_len_o(),
+    .cmd_pkt_ready_i(cmd_pkt_ready_i)
   );
   /* verilator lint_on PINCONNECTEMPTY */
 

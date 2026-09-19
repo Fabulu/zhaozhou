@@ -1822,6 +1822,38 @@
       "domain": "gpu",
       "driver": "sdr_phy_responder",
       "dynamic_mask": "0xffff"
+    },
+    {
+      "ordinal": 217,
+      "name": "cmd_pkt_valid_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 218,
+      "name": "cmd_pkt_byte_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xff"
+    },
+    {
+      "ordinal": 219,
+      "name": "cmd_pkt_len_o",
+      "direction": "output",
+      "domain": "gpu",
+      "sink": "gpu_capture",
+      "dynamic_mask": "0xffffffff"
+    },
+    {
+      "ordinal": 220,
+      "name": "cmd_pkt_ready_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "cmd_packet_sink",
+      "dynamic_mask": "0x1"
     }
   ]
 }

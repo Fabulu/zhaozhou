@@ -1,6 +1,13 @@
 // zhao_vertex_arena_dense_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
 //
-// REFRESHED AGAINST PRODUCTION 2026-09-18.
+// REFRESHED AGAINST PRODUCTION 2026-09-19.
+// This refresh changed NO BODY LINES, and that is the point worth recording.
+// mutant_copy_drift keys on PROVENANCE -- production committing later than
+// the copy -- not on similarity, so it reddened even though a full diff against
+// current production shows exactly two substantive differences: the module
+// rename and the one mutation below. The re-verification is the work; the date
+// is just how the instrument is told the work happened.
+// PREVIOUSLY REFRESHED 2026-09-18.
 // zhao_vertex_arena.sv's VALID_BITMAP update process was rewritten from DEPTH
 // runtime-variable bit-selects into ARENAS*DEPTH per-bit flops with
 // compile-time-constant destinations (the census attributed 92.2% of the whole

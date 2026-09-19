@@ -2407,6 +2407,7 @@ targets:
       - fpga/rtl/video/zhao_video_scanout.sv
       - fpga/rtl/command/zhao_cmd_scheduler.sv
       - fpga/rtl/command/zhao_cmd_dma.sv
+      - fpga/rtl/command/zhao_cmd_decoder.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
       - fpga/rtl/input/zhao_input_snapshot.sv

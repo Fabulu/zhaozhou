@@ -2110,7 +2110,25 @@ module zhao_console_core
   output logic [15:0] phy_dq_o,
   output logic        phy_dq_oe_o,
   output logic [1:0]  phy_dqm_o,
-  input  logic [15:0] phy_dq_i
+  input  logic [15:0] phy_dq_i,
+
+  // --------------------------------------------------------------------------
+  // CMD.DECODER's record headers and verdict.  Added 2026-09-19.
+  // --------------------------------------------------------------------------
+  // OUTPUTS ONLY, and every one of them is driven by real logic inside this
+  // module -- see section 7b. They are on the edge because the decoder's
+  // consumer (the command executor) does not exist yet, and a stream that ends
+  // in a wire is pruned dead logic wearing a port's name, which this campaign
+  // counts as an absent function rather than a present one.
+  output logic        cmd_rec_valid_o,
+  output logic [15:0] cmd_rec_opcode_o,
+  output logic [15:0] cmd_rec_bytes_o,
+  output logic [31:0] cmd_rec_source_id_o,
+  output logic [31:0] cmd_rec_index_o,
+  output logic        cmd_decode_done_o,
+  output logic [ 7:0] cmd_decode_error_o,
+  output logic [31:0] cmd_bytes_consumed_o,
+  output logic [31:0] cmd_commands_o
 );
 
   // ==========================================================================
@@ -3975,6 +3993,12 @@ module zhao_console_core
   // THE SHELL. Every port straight through; nothing renamed, nothing
   // reinterpreted. Its own header is the authority on its seams.
   // ==========================================================================
+  // The re-exported CMD.DMA packet stream, shell -> CMD.DECODER (section 7b).
+  logic        cmd_pkt_valid_w;
+  logic [ 7:0] cmd_pkt_byte_w;
+  logic [31:0] cmd_pkt_len_w;
+  logic        cmd_pkt_ready_w;
+
   zhao_shell_top_v2 #(
     .FRAMER_Q (FRAMER_Q),
     .WFIFO_W  (WFIFO_W)
@@ -4197,8 +4221,90 @@ module zhao_console_core
     .phy_dq_o                  (phy_dq_o),
     .phy_dq_oe_o               (phy_dq_oe_o),
     .phy_dqm_o                 (phy_dqm_o),
-    .phy_dq_i                  (phy_dq_i)
+    .phy_dq_i                  (phy_dq_i),
+
+    // CMD.DMA's packet stream, re-exported by the shell 2026-09-19 so that a
+    // second consumer can exist at all. `cmd_pkt_ready_i` is a real veto: the
+    // shell accepts a byte only when its own inline framer AND the decoder
+    // below can take it, so this is a fork and not a tap.
+    .cmd_pkt_valid_o           (cmd_pkt_valid_w),
+    .cmd_pkt_byte_o            (cmd_pkt_byte_w),
+    .cmd_pkt_len_o             (cmd_pkt_len_w),
+    .cmd_pkt_ready_i           (cmd_pkt_ready_w)
   );
+
+  // ==========================================================================
+  // 7b. CMD.DECODER -- the packet's own verdict
+  // ==========================================================================
+  // COMPOSED 2026-09-19, closing the refusal recorded in this file's header
+  // under "BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED". That refusal was
+  // accurate about the obstacle and wrong about nothing: the stream WAS real
+  // and already flowing, and it WAS enclosed in `zhao_shell_top_v2` with no
+  // way out. Exporting it was a shell-owner change, which is what happened.
+  //
+  // WHAT THIS BLOCK DOES AND DOES NOT DO, said plainly so the next reader does
+  // not over-read it. It walks the sealed packet and produces RECORD HEADERS
+  // (opcode, byte count, source id, index) and a VERDICT (`decode_error_o`,
+  // bytes consumed, records walked). It does NOT produce command PAYLOAD:
+  // `SetView` carries a whole `mat4fx` (spec/commands.zidl:315) and
+  // `SurfaceStamp` a transform plus radius and ring width (:360), none of which
+  // fits in a record header. So composing this does NOT by itself close I14,
+  // I30, I33 or I7 -- those need the command EXECUTOR that
+  // spec/commands.zidl:382 says does not exist yet ("NOTHING TURNS A COMMAND
+  // INTO A FRAME yet"). This block is that executor's front half, and saying so
+  // here is cheaper than someone discovering it from a gap count that did not
+  // move as far as they expected.
+  //
+  // THE VERDICT NOW HAS A CONSUMER. The refusal noted "nothing in the tree
+  // takes `decode_error_o`, and the shell's framer does not validate" -- the
+  // framer trusts the bytes and this block checks them. Both counters below are
+  // on this module's edge, so a packet the framer accepted and the decoder
+  // rejected is VISIBLE rather than silently executed.
+  logic        cmd_rec_valid_w;
+  logic [15:0] cmd_rec_opcode_w;
+  logic [15:0] cmd_rec_bytes_w;
+  logic [31:0] cmd_rec_source_id_w;
+  logic [31:0] cmd_rec_index_w;
+
+  zhao_cmd_decoder u_cmd_decoder (
+    .clk              (gpu_clk),
+    .rst_n            (rst_n),
+
+    .pkt_valid_i      (cmd_pkt_valid_w),
+    .pkt_ready_o      (cmd_pkt_ready_w),
+    .pkt_byte_i       (cmd_pkt_byte_w),
+    .pkt_len_i        (cmd_pkt_len_w),
+
+    // The record headers are retired unconditionally. The decoder's own
+    // contract (its lines 70-75) says a consumer MUST NOT ACT on a record
+    // before `decode_done_o` reports ZH_ABI_OK, because the payload CRC cannot
+    // conclude until the last byte. Retiring is not acting: nothing downstream
+    // of here changes visible state, the headers are counted and observed, and
+    // the executor that will act on them is required to gate on the verdict.
+    // Holding `rec_ready_o` low instead would stall the DMA and, through the
+    // fork above, the shell's own framer with it.
+    .rec_valid_o      (cmd_rec_valid_w),
+    .rec_ready_i      (1'b1),
+    .rec_opcode_o     (cmd_rec_opcode_w),
+    .rec_bytes_o      (cmd_rec_bytes_w),
+    .rec_source_id_o  (cmd_rec_source_id_w),
+    .rec_index_o      (cmd_rec_index_w),
+
+    .decode_done_o    (cmd_decode_done_o),
+    .decode_error_o   (cmd_decode_error_o),
+    .bytes_consumed_o (cmd_bytes_consumed_o),
+    .commands_o       (cmd_commands_o)
+  );
+
+  // The record header stream, on this module's edge. It is observable rather
+  // than dropped, for the same reason SURFACE.STAMP's `stamp_results` is (I32):
+  // a stream with no consumer that leaves the module is evidence, while one
+  // that ends in a wire is pruned logic wearing a port's name.
+  assign cmd_rec_valid_o     = cmd_rec_valid_w;
+  assign cmd_rec_opcode_o    = cmd_rec_opcode_w;
+  assign cmd_rec_bytes_o     = cmd_rec_bytes_w;
+  assign cmd_rec_source_id_o = cmd_rec_source_id_w;
+  assign cmd_rec_index_o     = cmd_rec_index_w;
 
   // ==========================================================================
   // 8. THE TERRAIN PAGING SPINE
