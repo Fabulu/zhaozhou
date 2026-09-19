@@ -14,40 +14,35 @@ Version 18 has two different kinds of work and they may not be mixed when values
 
 A gate can reject a split palette, snapped turn or lost contact. It cannot decide how small a ball should look or how broad a flight should feel.
 
-## 1. Root authority — align the visual support, add no bone
+## 1. Root authority — staged same-rotation helpers
 
-No helper bone is added. The existing JunctionF and RearSocket bones already own the correct semantic pivots and attachments. The defect is that the authored *visual support* of each long root swell is larger and differently centred than its rigid carrier window.
+No generic helper format is added. The first architecture draft proposed widening the rigid JunctionF/RearSocket cores over each complete root swell. Implementation fire-tested that claim before shipping it and disproved it: nominal half-widths `270/280` would reduce the signed F–A/C–End translation runs to `270/680 mm`; legal compaction would leave `53/-27 mm`, violating the fixed 80 mm floor and inverting C–End. End support also reaches the final sampled tail, leaving no outside-support ReturnTip blend. The 80 mm/closure gates do not move.
 
-Add named per-carrier core-centre authorship beside the existing half-width table:
+The corrected architecture separates **rotation authority** from the already-accepted staged translation:
 
-```cpp
-kLoopCarrierCoreAtMm[5]
-kLoopCarrierCoreHalfMm[5]
-```
+- `kLoopCarrierCoreAtMm[5]` names the visible carrier stations while the existing rigid-core witness widths remain unchanged;
+- four append-only, translation-only skin helpers use nearby pivots: one Front helper inherits JunctionF rotation, while three rear stages progressively re-express HingeD rotation as RearSocket rotation before the first visibly swollen rear ring;
+- signed translation starts at the exact version-17 run positions and keeps its exact fractions, bounds and minimum-run law;
+- sampled support is derived from the exact production profile predicate `abs(station-at) < half`, never from hand-authored ring indices or rounded radius additions;
+- every non-terminal ring in that support receives only JunctionF/RearSocket rotation authority (helper palettes differ only in translation or quantized re-expression of the same rotation);
+- terminal rear ring 63 remains the explicit buried ReturnTip-only exception because the mathematical profile is active there and no post-support blend exists beyond the mesh;
 
-For A/B/C, preserve the accepted station-centred windows. For Front and End, derive the integrated structural windows from the authored swell support itself:
-
-```text
-core start = swell station - swell half-width
-core end   = swell station + swell half-width
-```
-
-The incoming blend ends at the core start and the outgoing blend begins at the core end. The complete visible thickening is therefore rigidly JunctionF-owned at the front and RearSocket-owned at the return. The transitions stay outside the zero-slope profile rim. The deeply buried Root and ReturnTip remain unchanged.
+This needs four content bones, raising Manafold from 23 to 27 under the unchanged 32-bone ceiling. Existing helper IDs and every generic format remain stable. The committed legacy-split diagnostic restores version-17 palettes exactly; five protected legacy clips reproduce 2,048/2,048 version-17 frames byte-for-byte.
 
 Why this is the selected architecture:
 
 - it aligns one visible form with one existing semantic carrier;
 - it preserves Root→JunctionF burial, C→End signed closure, RearSocket body follow and ReturnTip burial;
-- it does not create a second length/rotation authority;
-- it keeps the seven signed helpers and bone IDs stable;
+- it adds no second length authority: the four helpers carry exact fractions of the existing signed tracks;
+- it appends IDs 23..26 while preserving all seven signed-helper IDs and the generic 32-bone format;
 - zero rotation/translation still yields the authored bind surface, although the intended palette assignment changes in the root zones.
 
 A strict diagnostic `ZHAO_U02_ROOT_AUTHORITY=integrated|legacy-split` is parsed before type construction. `legacy-split` restores the version-17 station-centred Front/End core windows exactly.
 
 Extend `mspan` rather than adding another near-duplicate gate. It must walk compiled root rings and require:
 
-- every ring under each visible root profile support is rigidly owned by the named carrier;
-- incoming/outgoing blends lie wholly outside that support;
+- every non-terminal ring selected by the exact root profile predicate uses only palettes with the named carrier's rotation authority; staged translation may still differ;
+- the terminal ReturnTip-only ring remains below the body burial ceiling on every shipping key/midpoint;
 - buried base/tip, RearSocket target, signed runs, posed ordering and closure remain green;
 - the legacy-split control fires only the new root-authority category.
 
@@ -72,14 +67,9 @@ rest yaw -> authored fold Z -> Front tilt X -> Front yaw Y
 
 The existing `neck_pm` remains JunctionF's in-plane Z authority. The new fields add only the missing X/Y axes. Neck retains its separate `tilt_neck/yaw_neck` and continues to articulate the post-Front stick. Signed length still begins at Front→A; no body→Front length channel is added.
 
-Public clips author named C2 Front X/Y curves through their existing `HingePlay` object. Start with the clips that expose the root in normal play (Hover/Rest, Flight/Hasty, Drift/Blown, Taunt/Taunt III, Trick); do not add an ambient oscillator under authored gestures. Each clip's Front amplitudes/timing remain independent owner knobs.
+Wave B proves the append-only X/Y capability with deterministic mechanism stimuli and confirms Neck/A/B/C/End local channels remain untouched. It does **not** add a `normal|mute` presentation selector while every shipping Front X/Y curve is still zero—that would be a control wired to no operand. Wave D authors named C2 Front curves in the root-heavy public clips, then adds a truthful same-binary mute and public visible-core evidence. No ambient oscillator is placed under authored gestures.
 
-Add `ZHAO_U02_FRONT_FLEX=normal|mute` as the exact same-binary control. `mjointpub` and `mspan` require:
-
-- current public clips produce a visible Front-core response under the shared metric;
-- muting Front X/Y removes only that extra Front articulation while Neck/A/B/C/End remain live;
-- root ring order, socket follow and all signed spans remain green;
-- position/angular derivatives remain within the existing full-bank continuity categories.
+Root ring order, socket follow, signed spans and full-bank continuity remain mandatory in both waves.
 
 ## 3. Root material, normals and ink — staged, not guessed
 
@@ -255,6 +245,7 @@ Paths:
 
 - `tools/reel/manafold_art.h`
 - `tools/reel/manafold_model.h`
+- `tools/reel/manafold_rig.h`
 - `tools/reel/manafold_clips.h`
 - `tools/reel/manafold_spangate.cpp`
 - `tools/reel/manafold_public_jointgate.cpp`
