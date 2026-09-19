@@ -371,7 +371,12 @@ _ALIAS: dict[str, str | None] = {
     # re-checked it -- see _stale_none_aliases(), which now does, and which
     # fired on this very line.
     "MEM.UPLOAD":        "zhao_mem_upload",
-    "GEOM.LOOM":         None,
+    # BUILT 2026-09-19 (fpga/rtl/geometry/zhao_geom_loom.sv). The THIRD entry
+    # _stale_none_aliases() has caught in one day -- MEM.UPLOAD, FORGE.SHADOW,
+    # and now this one, which it caught while the block was still being written
+    # and was blocking every concurrent worker's register run until fixed.
+    # Pointing it at the module is correct whoever does it.
+    "GEOM.LOOM":         "zhao_geom_loom",
     # BUILT 2026-09-19 (fpga/rtl/forge/zhao_forge_shadow.sv, 39 directed checks).
     # The SECOND entry _stale_none_aliases() has caught the same day it was
     # added, which is the argument for the guard rather than for my memory.
