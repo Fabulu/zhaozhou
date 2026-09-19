@@ -108,6 +108,29 @@
 // job by construction. The fill ends when VERTICES + HOLES == count, and the
 // drain waits for LANDINGS == VERTICES SENT (not count: a hole never lands).
 //
+// A HOLE WITH NO JOB HELD IS CARRIED, NOT ORPHANED (review of 3dae8f10). Once a
+// job's fill has ended, EVERY record of that job is accounted for -- arrived or
+// refused -- so any later hole can only stand for a record of the NEXT job. It
+// is held in `early_q` and charged to the next job the clock that job is
+// accepted; a hole on the accept clock itself is charged to the job accepted.
+// The first version counted such a hole as an orphan and charged nothing, and
+// the next job's VERTICES + HOLES == count could then never be reached: the
+// same hang, moved one state earlier.
+//
+// In the composed console an early hole is ALSO structurally excluded, and the
+// handshake that excludes it is named rather than assumed: GEOM.ASSETFETCH
+// streams a meshlet's vertex records only in S_SERVE, which it enters on the
+// SAME `s_valid && s_ready` edge that hands this block the job (the core's
+// dispatcher fork ANDs `gs_job_ready` = StIdle into `af_s_ready`), and VDECODE
+// can refuse only a record it has been given. So the earliest refusal of job
+// N+1 reaches `hole_i` at least one clock after this block has left StIdle for
+// it. `holes_early_o` counts the carried case anyway: it reads 0 in
+// composition, it is fired by stimulus in the directed test, and if it ever
+// moves in composition the handshake above has stopped being true. What it
+// can NOT make right is a hole belonging to a job this block REFUSED
+// (`jobs_refused_o`): that job's records have no batch to fall into, and its
+// vertices stall the stream as they always did -- unchanged by R31.
+//
 // A group with a hole is SEALED AND HANDED OVER WITH `grp_poison_o` HIGH, never
 // withheld. The contract's law is "a refusal drops the BATCH, not the frame":
 // the indices after a hole are shifted, so no triangle of the meshlet may be
@@ -115,12 +138,10 @@
 // REPLAY is the block that proves both readers are done and releases the
 // buffer. Withholding the handle would be the old deadlock with extra steps.
 //
-// `holes_o` counts holes absorbed into a job; `groups_poisoned_o` counts the
-// handles marked; `holes_orphan_o` counts a hole with NO job held, which the
-// dispatcher's one-meshlet law makes unreachable (a job this block refuses has
-// no count to charge a hole against, and is the one legal way to get there --
-// see `jobs_refused_o`). All three are fired by stimulus in
-// tests/geometry/geom_group_seq_directed.cpp.
+// `holes_o` counts every hole (every refusal VDECODE reports);
+// `groups_poisoned_o` counts the handles marked; `holes_early_o` counts the
+// holes that arrived with no job held and were carried to the next. All three
+// are fired by stimulus in tests/geometry/geom_group_seq_directed.cpp.
 //
 // ---------------------------------------------------------------------------
 // THE MEMORY TRADE, WITH NUMBERS (standing owner direction: ALMs are the
@@ -235,14 +256,16 @@ module zhao_geom_group_seq #(
     // ---- counters ----------------------------------------------------------
     output logic [31:0]             groups_opened_o,
     output logic [31:0]             groups_sealed_o,
-    output logic [31:0]             vertices_sent_o,
+    // Client-A ACCEPTS, one per vertex PER VIEW: a dual-view job moves this by
+    // twice its vertex count (the fan-out sends each vertex once per slot).
+    output logic [31:0]             view_vertices_sent_o,
     output logic [31:0]             landings_o,
     output logic [31:0]             jobs_refused_o,
     output logic [31:0]             alloc_stall_cycles_o,
     output logic [31:0]             rel_unheld_o,
     output logic [31:0]             holes_o,
     output logic [31:0]             groups_poisoned_o,
-    output logic [31:0]             holes_orphan_o,
+    output logic [31:0]             holes_early_o,
     // FAULT, and structurally unreachable while the drain rule is correct --
     // see the header and the committed mutant.
     output logic                    seal_early_o
@@ -298,6 +321,8 @@ module zhao_geom_group_seq #(
   logic               vs_q;          // the fan-out slot of the current vertex
   logic [INDEX_W-1:0] vi_q;          // the vertex index within the group
   logic [INDEX_W-1:0] holes_q;       // records of this job VDECODE refused
+  logic [INDEX_W-1:0] early_q;       // holes that arrived with no job held,
+                                     // carried to the next job (see header)
 
   // ---- the free arena, lowest index first ----------------------------------
   logic               any_free_c;
@@ -359,11 +384,14 @@ module zhao_geom_group_seq #(
   wire a_take_c = a_valid_o && a_ready_i;
 
   // ---- holes, and the end of the fill ----------------------------------------
-  // A hole is charged to the job while its records can still be arriving
-  // (StAlloc: the stream starts on the accept clock, so a record can be refused
-  // before both arenas are open; StFill). Anywhere else there is no record
-  // outstanding for it to stand for, and it is an ORPHAN.
+  // A hole is charged to the held job while its records can still be arriving
+  // (StAlloc: a record can be refused before both arenas are open; StFill).
+  // Anywhere else the held job's records are all accounted for, so the hole
+  // stands for a record of the NEXT job: it is CARRIED in `early_q` and charged
+  // when that job is accepted -- including a hole on the accept clock itself.
+  wire job_accept_c  = job_take_c && job_legal_c;
   wire hole_in_job_c = hole_i && ((st == StAlloc) || (st == StFill));
+  wire hole_early_c  = hole_i && !hole_in_job_c && !job_accept_c;
   wire vtx_done_c    = a_take_c && last_slot_c;
   wire [INDEX_W-1:0] vi_next_c    = vi_q + (vtx_done_c ? INDEX_W'(1) : INDEX_W'(0));
   wire [INDEX_W-1:0] holes_next_c = holes_q + (hole_in_job_c ? INDEX_W'(1) : INDEX_W'(0));
@@ -413,12 +441,13 @@ module zhao_geom_group_seq #(
       vs_q                 <= 1'b0;
       vi_q                 <= '0;
       holes_q              <= '0;
+      early_q              <= '0;
       holes_o              <= '0;
       groups_poisoned_o    <= '0;
-      holes_orphan_o       <= '0;
+      holes_early_o        <= '0;
       groups_opened_o      <= '0;
       groups_sealed_o      <= '0;
-      vertices_sent_o      <= '0;
+      view_vertices_sent_o <= '0;
       landings_o           <= '0;
       jobs_refused_o       <= '0;
       alloc_stall_cycles_o <= '0;
@@ -443,12 +472,13 @@ module zhao_geom_group_seq #(
         end
       end
 
-      // --- holes: charged to the held job, or counted as orphans ------------
-      if (hole_in_job_c) begin
-        holes_q <= holes_next_c;
-        if (holes_o != 32'hFFFF_FFFF) holes_o <= holes_o + 32'd1;
-      end else if (hole_i && (holes_orphan_o != 32'hFFFF_FFFF)) begin
-        holes_orphan_o <= holes_orphan_o + 32'd1;
+      // --- holes: charged to the held job, or carried to the next -----------
+      // (a hole on the accept clock itself is charged in StIdle below)
+      if (hole_i && (holes_o != 32'hFFFF_FFFF)) holes_o <= holes_o + 32'd1;
+      if (hole_in_job_c) holes_q <= holes_next_c;
+      if (hole_early_c) begin
+        if (early_q != '1) early_q <= early_q + INDEX_W'(1);
+        if (holes_early_o != 32'hFFFF_FFFF) holes_early_o <= holes_early_o + 32'd1;
       end
 
       case (st)
@@ -460,7 +490,9 @@ module zhao_geom_group_seq #(
             end else begin
               j_count        <= job_count_i;
               j_src          <= job_src_id_i;
-              holes_q        <= '0;
+              // the carried holes, and this clock's, belong to THIS job
+              holes_q        <= early_q + (hole_i ? INDEX_W'(1) : INDEX_W'(0));
+              early_q        <= '0;
               two_slots_q    <= (&job_view_mask_i);
               slot_view_q[0] <= !job_view_mask_i[0];  // lowest set view
               slot_view_q[1] <= 1'b1;                 // only used when two
@@ -497,8 +529,8 @@ module zhao_geom_group_seq #(
 
         StFill: begin
           if (a_take_c) begin
-            if (vertices_sent_o != 32'hFFFF_FFFF)
-              vertices_sent_o <= vertices_sent_o + 32'd1;
+            if (view_vertices_sent_o != 32'hFFFF_FFFF)
+              view_vertices_sent_o <= view_vertices_sent_o + 32'd1;
             if (last_slot_c) begin
               vs_q <= 1'b0;
               vi_q <= vi_next_c;

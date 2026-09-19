@@ -603,7 +603,8 @@ module zhao_console_core_slot_overflow_mutant
   // ---- GEOMETRY evidence ---------------------------------------------------
   output logic [31:0]             geom_groups_opened_o,
   output logic [31:0]             geom_groups_sealed_o,
-  output logic [31:0]             geom_vertices_sent_o,
+  // client-A accepts, one per vertex PER VIEW (2x the vertices in dual view)
+  output logic [31:0]             geom_view_vertices_sent_o,
   output logic [31:0]             geom_landings_o,
   output logic [31:0]             geom_jobs_refused_o,
   output logic [31:0]             geom_alloc_stall_cycles_o,
@@ -611,10 +612,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic                    geom_seal_early_o,
   // R31: GEOM.VDECODE's refusals as GEOM.GROUP_SEQ absorbs them. A hole is a
   // record that will never arrive; its batch is poisoned and dropped whole,
-  // and an orphan is a hole with no batch held (unreachable, fired directly).
+  // and an EARLY hole is one that arrived with no batch held and was carried
+  // to the next (structurally excluded by ASSETFETCH's S_HAND -> S_SERVE
+  // handshake, so 0 here; fired by stimulus in the directed test).
   output logic [31:0]             geom_holes_o,
   output logic [31:0]             geom_groups_poisoned_o,
-  output logic [31:0]             geom_holes_orphan_o,
+  output logic [31:0]             geom_holes_early_o,
   output logic [31:0]             geom_arena_hits_o,
   output logic [31:0]             geom_arena_misses_o,
   output logic [31:0]             geom_arena_refusals_o,

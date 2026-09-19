@@ -20,7 +20,7 @@
 //                                              STATE -> UPDATE -> COLLIDE ->
 //                                              STATE -> out. Four blocks, one
 //                                              beat, no stimulus in between.
-//   4. `geom_vertices_sent_o` moves         -- GEOM.SKIN -> GROUP_SEQ ->
+//   4. `geom_view_vertices_sent_o` moves         -- GEOM.SKIN -> GROUP_SEQ ->
 //                                              client A of the projector.
 //   5. `proj_a_grants_o` moves              -- the shared projector GRANTED
 //                                              that client: the wire the
@@ -362,13 +362,13 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_pal_bone_unset_o;
   logic [31:0]             geom_groups_opened_o;
   logic [31:0]             geom_groups_sealed_o;
-  logic [31:0]             geom_vertices_sent_o;
+  logic [31:0]             geom_view_vertices_sent_o;
   logic [31:0]             geom_landings_o;
   logic [31:0]             geom_jobs_refused_o;
   logic [31:0]             geom_alloc_stall_cycles_o;
   logic [31:0]             geom_rel_unheld_o;
   logic                    geom_seal_early_o;
-  logic [31:0]             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o;
+  logic [31:0]             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o;
   logic [31:0]             geom_arena_hits_o;
   logic [31:0]             geom_arena_misses_o;
   logic [31:0]             geom_arena_refusals_o;
@@ -3518,7 +3518,7 @@ module tb_zhao_console_core_smoke
              geom_vd_reserved_nz_count_o, geom_vd_w0_illegal_count_o,
              geom_vd_format_bad_count_o);
     $display("SMOKE: geometry   skinned=%0d vertices_sent=%0d a_grants=%0d landings=%0d groups_opened=%0d groups_sealed=%0d",
-             geom_skin_vertices_transformed_o, geom_vertices_sent_o,
+             geom_skin_vertices_transformed_o, geom_view_vertices_sent_o,
              proj_a_grants_o, geom_landings_o,
              geom_groups_opened_o, geom_groups_sealed_o);    $display("SMOKE: pose pal   served=%0d bones_written=%0d bone_unset=%0d bone_oob=%0d palettes_decoded=%0d",
              geom_pal_vertices_served_o, geom_pal_bones_written_o,
@@ -3551,8 +3551,8 @@ module tb_zhao_console_core_smoke
              geom_va_uv_staged_o, geom_va_lq_overflow_o, geom_va_index_oob_o,
              geom_va_look_oob_o, geom_va_profile_mixed_o, geom_va_dq_refused_o,
              geom_va_dq_stray_o);
-    $display("SMOKE: r31        holes=%0d groups_poisoned=%0d holes_orphan=%0d replay_poisoned=%0d",
-             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o, geom_rp_poisoned_o);
+    $display("SMOKE: r31        holes=%0d groups_poisoned=%0d holes_early=%0d replay_poisoned=%0d",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o, geom_rp_poisoned_o);
     $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference: %0d / %0d / %0d / %0d)",
              geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
              geom_setup_triangles_submitted_o, SGF_EXP_REPLAYED, SGF_EXP_CLIPPED,
@@ -3669,7 +3669,7 @@ module tb_zhao_console_core_smoke
 
     if (geom_skin_vertices_transformed_o == 0)
       $fatal(1, "SMOKE: GEOM.SKIN transformed nothing");
-    if (geom_vertices_sent_o == 0)
+    if (geom_view_vertices_sent_o == 0)
       $fatal(1, "SMOKE: GEOM.GROUP_SEQ sent no vertex to client A -- SKIN -> GROUP_SEQ is dead");
     if (proj_a_grants_o == 0)
       $fatal(1, "SMOKE: the shared projector granted client A zero times -- GROUP_SEQ -> PROJ_SUBSYSTEM is dead");
@@ -4139,9 +4139,9 @@ module tb_zhao_console_core_smoke
     if ((geom_vd_reserved_nz_count_o != 1) || (geom_vd_vertices_o != N_GEOM_VERTS - 1))
       $fatal(1, "SMOKE BAD_VERTEX: GEOM.VDECODE refused %0d / decoded %0d -- want exactly 1 / %0d",
              geom_vd_reserved_nz_count_o, geom_vd_vertices_o, N_GEOM_VERTS - 1);
-    if ((geom_holes_o != 1) || (geom_groups_poisoned_o != 2) || (geom_holes_orphan_o != 0))
+    if ((geom_holes_o != 1) || (geom_groups_poisoned_o != 2) || (geom_holes_early_o != 0))
       $fatal(1, "SMOKE BAD_VERTEX: GEOM.GROUP_SEQ holes=%0d poisoned=%0d orphan=%0d -- want 1 / 2 / 0",
-             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o);
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o);
     if ((geom_rp_meshlets_o != 1) || (geom_rp_poisoned_o != SGF_N_TRIS) ||
         (geom_rp_triangles_out_o != 0) || (geom_rp_refused_o != 0) || (geom_rp_missed_o != 0))
       $fatal(1, "SMOKE BAD_VERTEX: GEOM.REPLAY meshlets=%0d poisoned=%0d out=%0d refused=%0d missed=%0d -- want 1 / %0d / 0 / 0 / 0",
@@ -4300,9 +4300,9 @@ module tb_zhao_console_core_smoke
     // The attribute store and the arena answered on the SAME clock every time.
     // R31: a clean fixture has no hole, poisons nothing and orphans nothing.
     // `-BadVertex` is the positive control that moves all four.
-    if ((geom_holes_o | geom_groups_poisoned_o | geom_holes_orphan_o | geom_rp_poisoned_o) != 0)
+    if ((geom_holes_o | geom_groups_poisoned_o | geom_holes_early_o | geom_rp_poisoned_o) != 0)
       $fatal(1, "SMOKE: R31 counters moved on a clean fixture: holes=%0d poisoned=%0d orphan=%0d replay_poisoned=%0d",
-             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o, geom_rp_poisoned_o);
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o, geom_rp_poisoned_o);
     if (geom_rp_att_skew_o != 0)
       $fatal(1, "SMOKE: GEOM.REPLAY saw the attribute store answer out of step with the arena %0d time(s) -- slot 1..6 would belong to a different lookup",
              geom_rp_att_skew_o);
