@@ -86,3 +86,47 @@ and a partial repair would make the loss rarer rather than impossible.
 - `CHILD_AT_POST_CONTACT = 0` elaborates an untested generate branch.
 - Ruling S3's real acceptance is sparks in motion. Nothing was rendered.
 - `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md` is open.
+---
+
+## 2026-09-19 -- Phase 1 gap campaign: root causes, not modules
+
+**Where I am.** Mandatory gaps 78 -> 72. Three agents ran concurrently; TWOD.SAMPLER
+is back, PART.PROJECT and CMD.EXEC still out.
+
+**The leverage find.** Five register entries (I7, I14, I30, I33, FORGE.PRIM jobs)
+all blamed "the absent CMD path". It was never absent -- CMD.DMA's packet stream
+was ENCLOSED as body wires in `zhao_shell_top_v2`. The shell re-exports it now and
+CMD.DECODER is composed. `cmd_pkt_ready_i` is a real INPUT, not an assumption that
+the second consumer never backpressures: that assumption fails silently by dropping
+command bytes. This does NOT close those five -- the decoder emits record headers
+and a verdict, and SetView's mat4fx is payload -- the EXECUTOR does, and that is the
+agent still out.
+
+**Built TERRAIN.PLACE** (`fpga/rtl/terrain/zhao_terrain_place.sv`), the placement
+owner I27 said did not exist. The arithmetic is ratified, not invented:
+spec/terrain_rules.md 1.3 freezes pitch to powers of two so placement is exact
+shifts. 68 checks, 0 failed, all four censuses FIRED. Gates the 15-capability
+terrain cluster, the largest remaining. NOT yet composed into the core.
+
+**Three instruments were lying, all fixed and all found by accident:**
+1. the lint waiver matched `*fpga/rtl/texture*` with forward slashes while the
+   register hands back backslash paths -- 112 phantom warnings that read as a
+   regression in a subtree nobody touched;
+2. both register closure walks anchored on a bare substring search for
+   "zhao_console_core", so an agent's COMMENT mentioning it hijacked them and the
+   headline went 77 -> 124 with nothing in the design changed. Both now match the
+   target header, and audit() hard-fails if the two walks disagree;
+3. `module_graph.strip_comments` stripped `/* */` before `//`, so a glob in a
+   header comment swallowed a `module` keyword and dropped a block from
+   `zhao_prod_top.sv` -- area the fit would never have seen.
+
+**NEXT STEP, written down before I read any agent result:** compose TERRAIN.PLACE +
+TERRAIN.PATCH + TERRAIN.COMPCACHE (+ TESS, entry I22) into `zhao_console_core`.
+That is the whole of I27 and I22 and it is the biggest single cluster left. The
+core is contended by two live agents, so hunk-level staging and `git commit --only`.
+
+**Open for the owner:** all six UNBUILT blocks must be built (the ledger records the
+2026-08-31 cut as withdrawn, quoting "I don't want to defer any unfinished blocks
+now"), but INPUT.SNAC, GEOM.WARP and POST.ECHO have DELIBERATELY BLANK contracts --
+every section reads "Deliberately unwritten" -- so each needs a contract authored
+before any RTL exists to write.
