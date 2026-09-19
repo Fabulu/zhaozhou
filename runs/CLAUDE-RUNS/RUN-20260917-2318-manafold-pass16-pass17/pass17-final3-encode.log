@@ -1,0 +1,30 @@
+﻿tovideo: 28 subject(s)
+  manafold-blown: 292 frames, 4.9 s at 60 fps, 858,317 B webm (VP9 crf16 4:4:4), poster frame 190
+  manafold-channel: 420 frames, 7.0 s at 60 fps, 2,836,575 B webm (VP9 crf16 4:4:4), poster frame 231
+  manafold-crackle: 600 frames, 10.0 s at 60 fps, 3,568,435 B webm (VP9 crf16 4:4:4), poster frame 100
+  manafold-curious: 180 frames, 3.0 s at 60 fps, 1,269,146 B webm (VP9 crf16 4:4:4), poster frame 60
+  manafold-damage: 464 frames, 7.7 s at 60 fps, 3,336,021 B webm (VP9 crf16 4:4:4), poster frame 150
+  manafold-death-drop: 450 frames, 7.5 s at 60 fps, 783,040 B webm (VP9 crf16 4:4:4), poster frame 300
+  manafold-death-gutter: 590 frames, 9.8 s at 60 fps, 907,318 B webm (VP9 crf16 4:4:4), poster frame 300
+  manafold-drift: 300 frames, 5.0 s at 60 fps, 657,824 B webm (VP9 crf16 4:4:4), poster frame 90
+  manafold-fall: 340 frames, 5.7 s at 60 fps, 754,109 B webm (VP9 crf16 4:4:4), poster frame 60
+  manafold-flight: 352 frames, 5.9 s at 60 fps, 1,587,022 B webm (VP9 crf16 4:4:4), poster frame 88
+  manafold-hasty: 240 frames, 4.0 s at 60 fps, 547,961 B webm (VP9 crf16 4:4:4), poster frame 60
+  manafold-hit: 140 frames, 2.3 s at 60 fps, 1,016,825 B webm (VP9 crf16 4:4:4), poster frame 28
+  manafold-hover: 600 frames, 10.0 s at 60 fps, 4,095,252 B webm (VP9 crf16 4:4:4), poster frame 160
+  manafold-inspect: 600 frames, 10.0 s at 60 fps, 5,106,768 B webm (VP9 crf16 4:4:4), poster frame 420
+  manafold-lasso: 336 frames, 5.6 s at 60 fps, 2,661,563 B webm (VP9 crf16 4:4:4), poster frame 150
+  manafold-mana-aqua: 600 frames, 10.0 s at 60 fps, 4,362,334 B webm (VP9 crf16 4:4:4), poster frame 300
+  manafold-mana-blue: 600 frames, 10.0 s at 60 fps, 3,461,736 B webm (VP9 crf16 4:4:4), poster frame 90
+  manafold-mana-boil: 600 frames, 10.0 s at 60 fps, 3,706,678 B webm (VP9 crf16 4:4:4), poster frame 60
+  manafold-mana-cyan: 600 frames, 10.0 s at 60 fps, 4,368,505 B webm (VP9 crf16 4:4:4), poster frame 300
+  manafold-mana-green: 600 frames, 10.0 s at 60 fps, 3,349,396 B webm (VP9 crf16 4:4:4), poster frame 90
+  manafold-mana-stack: 600 frames, 10.0 s at 60 fps, 4,696,345 B webm (VP9 crf16 4:4:4), poster frame 300
+  manafold-pirouette: 240 frames, 4.0 s at 60 fps, 1,686,366 B webm (VP9 crf16 4:4:4), poster frame 60
+  manafold-rest: 400 frames, 6.7 s at 60 fps, 2,654,773 B webm (VP9 crf16 4:4:4), poster frame 120
+  manafold-startle: 160 frames, 2.7 s at 60 fps, 1,233,176 B webm (VP9 crf16 4:4:4), poster frame 26
+  manafold-taunt: 280 frames, 4.7 s at 60 fps, 2,261,487 B webm (VP9 crf16 4:4:4), poster frame 150
+  manafold-taunt2: 240 frames, 4.0 s at 60 fps, 2,119,234 B webm (VP9 crf16 4:4:4), poster frame 120
+  manafold-taunt3: 368 frames, 6.1 s at 60 fps, 2,462,250 B webm (VP9 crf16 4:4:4), poster frame 324
+  manafold-trick: 400 frames, 6.7 s at 60 fps, 2,807,107 B webm (VP9 crf16 4:4:4), poster frame 230
+ENCODE_RC=0

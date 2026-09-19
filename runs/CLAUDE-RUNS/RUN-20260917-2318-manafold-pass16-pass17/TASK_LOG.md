@@ -141,6 +141,10 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Focused Trick repair keeps the pure-X contact half-turn and authors a separate local planted face yaw through the same flip envelope. Complete `-12288..+16384` 400-frame ladders selected `+16384` by eye: both lenses/stars and the antenna support read through the hold. Clean renderer MD5 `60F8AAF3C87AF9BB2B7A6D6338DCA5C6`; selected/yaw-zero/legacy CRCs `0x0BB73CDE / 0x58219E79 / 0x7F5BBEDD`; contact remains `-40 mm`, protected gates return 0, all 16 effect controls are attributed, selector invalids are 5/5 RC 2, and all 27 non-Trick subjects / 11,192 frames are byte-identical. A new exact bank remains mandatory.
 - Built the superseding exact v3 renderer clean at MD5 `67DCAFF8ABC0AA2BA830C439A4CD98C7`, SHA-256 `D60EBA80C2547032A603365837690FB14B551D90D96FB5973F1C976C185C3FE9`. One 28-subject invocation produced `pass17-final3-reel-28`: 28 subjects, 11,592 contiguous validated frames, 3,205,048,896 bytes, bank-manifest SHA-256 `bc2d4d0bdce632815f42cca208763fb04bca62034e285ed1ef707c7f28d55d09`. Exact comparison proves 27 subjects / 11,192 frames byte-identical to v2 and only Trick changed; current Trick is 400/400 byte-identical to the reviewed +16384 candidate (`0x0BB73CDE`). Twenty-eight complete nearest-downsample sheets validate at `pass17-final3-sheets`. `PASS17-FINAL-BANK-INTEGRITY-V3.md` is the sole current receipt.
 - Fresh isolated current-bank Trick review inspected all 400 tiles plus native/2×/4× plant, hold and recovery witnesses. The +90-degree local face yaw keeps both complete almond lenses/stars readable from plant arrival through the hold while the antenna remains visibly load-bearing; transitions, contact, outline, effects and recovery remain continuous. Trick is PASS 400/400. Combined with the committed 11,192-frame equality transfer for the other 27 subjects, the exact v3 bank is **PASS 28/28** and is authorized for encoding. `PASS17-FINAL3-TRICK-REVIEW.md` is the binding final visual verdict.
+- Repointed only the `website/scratch-reel` junction from Pass-16 `final4-reel` to exact accepted `pass17-final3-reel-28`; neither raw target was copied or deleted. Updated Taunt III's poster from the old shrug at f0100 to the accepted A80/1450/750 held punchline at f0324.
+- The first encode launch failed before completing a subject because this noninteractive shell did not have the installed FFmpeg directory on `PATH`. Prepended the exact FFmpeg 9.0.1 full-build bin and restarted all 28 subjects from the beginning. Final encode RC 0 consumed every declared frame and wrote 28 VP9 4:4:4 WebMs plus 28 posters. The 56 live files total 70,576,645 bytes; fast stream/poster validation reports zero errors and exact hashes are in `PASS17-LIVE-MEDIA-SHA256.txt`.
+- Rewrote the live Manafold card and durable Pass-17 findings/plans to the accepted source, current rear rho, solid contour mist, complete O, continuous carriers/effects/palette/death opacity, final face-readable Trick and 28/28 provenance. The Pass-16 archive group remains immutable.
+- Canonical local publication gate passed with no skips: 2 creatures / 694 render entries assembled; Fall controls-only/non-loop and Hover autoplay+loop; exact `noindex, nofollow`; freshness 28/28 with zero stale/absent; full decode 1,376/1,376; RC 0. After correcting the remaining site-wide Pass-16 summary sentence, regenerated the page and repeated the full no-skip gate with the installed FFmpeg directory explicitly on `PATH`; all 1,376 files decoded again. Final local index is 415,608 bytes, SHA-256 `431c2643682bf52012862b050e9a05d3e73aab5040254d3d0eeeb910f148db96`. `PASS17-MEDIA-CLOSURE.md` records the packet; no deployment occurred.
 
 ---
 
@@ -217,6 +221,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `PASS17-FINAL-BANK-INTEGRITY.md` (rejected P3 generation), `PASS17-FINAL-BANK-INTEGRITY-V2.md` (rejected yaw-zero Trick generation), and current `PASS17-FINAL-BANK-INTEGRITY-V3.md`; exact v3 hashes, 27-subject byte-equality proof and 28 complete external every-frame review sheets
 - `PASS17-TRICK-FACE-REPAIR.md`, full 400-frame yaw ladder, selected/contact controls and five curated native/2×/4× plates; `PASS17-FINAL2-BATCH-07.md` is the binding yaw-zero blocker evidence
 - `PASS17-FINAL3-TRICK-REVIEW.md` and three current-bank native/2×/4× phase/transition plates; final cumulative verdict 28/28
+- `pass17-final3-encode.log`, `PASS17-LIVE-MEDIA-SHA256.txt`, `pass17-media-gates.log` and `PASS17-MEDIA-CLOSURE.md`; exact local encode/freshness/playback/noindex/1,376-file decode closure
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---
@@ -237,8 +242,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 ## Next Steps
 
-1. Commit/push the final current-bank Trick verdict and witnesses.
-2. Encode WebMs/posters from `pass17-final3-reel-28` only; record exact media hashes and frame/decode receipts.
-3. Update Pass-17 findings/card and durable Upheaval plans, then run freshness, playback, noindex and full declared-media decode gates.
-4. Commit/push both feature branches; fast-forward both mains; publish with explicit project/branch.
-5. Verify the unique deployment and production alias index plus every live Pass-17 media byte, then commit/push deployment records.
+1. Commit/push the exact Pass-17 media/findings/card packet in Upheaval and the media-closure receipts in Zhaozhou.
+2. Fast-forward both mains.
+3. Publish with `Upheaval/website/deploy.ps1 -Project upheaval -Branch main`.
+4. Verify the unique deployment and production alias index plus every live Pass-17 media byte, then commit/push deployment records.
