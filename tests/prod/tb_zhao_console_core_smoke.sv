@@ -66,6 +66,17 @@ module tb_zhao_console_core_smoke
   // The DUT's parameter defaults, mirrored so the declarations below can use
   // them. Overriding one here without overriding it on the instance is a width
   // mismatch the compiler catches, which is why they are not magic numbers.
+  // TWOD widths, mirrored from zhao_console_core's own parameter defaults so
+  // the `.*` binding can size its ports. DERIVED, not typed: each is the same
+  // $clog2 expression the core uses, so a change to a page or slot count there
+  // cannot leave a hand-written width here quietly disagreeing.
+  localparam int unsigned TWOD_PAGE_WORDS = 8192;
+  localparam int unsigned TWOD_PAL_SLOTS  = 4;
+  localparam int unsigned TWOD_BIND_SLOTS = 8;
+  localparam int unsigned TWOD_PAW        = $clog2(TWOD_PAGE_WORDS);
+  localparam int unsigned TWOD_PALAW      = $clog2(TWOD_PAL_SLOTS * 256);
+  localparam int unsigned TWOD_BSW        = $clog2(TWOD_BIND_SLOTS);
+
   localparam int unsigned PART_REC_W     = 128;
   localparam int unsigned PART_AGE_W     = 10;
   localparam int unsigned PART_POS_W     = 18;
@@ -1034,6 +1045,113 @@ module tb_zhao_console_core_smoke
   logic [31:0] part_exp_polygons_o;
   logic [31:0] part_sft_sprites_o;
 
+
+  // ---------------------------------------------------------------------
+  // TWOD.PLANE / TWOD.SPRITE / TWOD.SAMPLER -- added 2026-09-19.
+  // ---------------------------------------------------------------------
+  // `zhao_console_core u_core (.*)` binds by NAME, so every port the core
+  // grows needs an identically-named net here or the bench will not
+  // elaborate at all. The compositor packet added 86 of them and the bench
+  // could not be built for the rest of the session -- two other packets
+  // each reported it as "not mine", correctly, and it stayed broken
+  // because it belonged to whoever looked last.
+  //
+  // These are DECLARED AND NOT DRIVEN, deliberately. The smoke bench does
+  // not exercise the 2D path: the inputs sit at their reset values and the
+  // outputs are observed rather than checked. That is the honest claim for
+  // a smoke bench -- it proves the composition ELABORATES and the frame
+  // path still runs, NOT that a plane or a sprite draws anything. Reading
+  // a green smoke run as evidence about the 2D path would be exactly the
+  // mistake CLAUDE.md records about gates that cannot reach the state.
+  //
+  // Generated from the core`s own port list rather than typed, so a width
+  // here cannot disagree with the port it binds.
+  logic                                twod_pd_valid_i;
+  logic                                twod_pd_ready_o;
+  logic                                twod_pd_slot_i;
+  logic         [1:0]                  twod_pd_role_i;
+  logic         [1:0]                  twod_pd_blend_i;
+  logic         [7:0]                  twod_pd_opacity_i;
+  logic                                twod_pd_format_i;
+  logic         [15:0]                 twod_pd_width_i;
+  logic         [15:0]                 twod_pd_height_i;
+  logic                                twod_pd_wrap_u_i;
+  logic                                twod_pd_wrap_v_i;
+  logic signed  [31:0]                 twod_pd_a_i;
+  logic signed  [31:0]                 twod_pd_b_i;
+  logic signed  [31:0]                 twod_pd_c_i;
+  logic signed  [31:0]                 twod_pd_d_i;
+  logic signed  [31:0]                 twod_pd_u0_i;
+  logic signed  [31:0]                 twod_pd_v0_i;
+  logic         [1:0]                  twod_pd_view_mask_i;
+  logic         [7:0]                  twod_pd_palette_i;
+  logic                                twod_sd_valid_i;
+  logic                                twod_sd_ready_o;
+  logic signed  [15:0]                 twod_sd_x_i;
+  logic signed  [15:0]                 twod_sd_y_i;
+  logic         [15:0]                 twod_sd_w_i;
+  logic         [15:0]                 twod_sd_h_i;
+  logic signed  [31:0]                 twod_sd_u_i;
+  logic signed  [31:0]                 twod_sd_v_i;
+  logic signed  [31:0]                 twod_sd_a00_i;
+  logic signed  [31:0]                 twod_sd_a01_i;
+  logic signed  [31:0]                 twod_sd_a10_i;
+  logic signed  [31:0]                 twod_sd_a11_i;
+  logic         [2:0]                  twod_sd_format_i;
+  logic         [7:0]                  twod_sd_palette_i;
+  logic         [15:0]                 twod_sd_tint_i;
+  logic         [1:0]                  twod_sd_blend_i;
+  logic         [1:0]                  twod_sd_view_mask_i;
+  logic         [7:0]                  twod_sd_order_i;
+  logic         [15:0]                 twod_sd_src_id_i;
+  logic                                twod_ld_page_we_i;
+  logic         [TWOD_PAW-1:0]         twod_ld_page_addr_i;
+  logic         [15:0]                 twod_ld_page_data_i;
+  logic                                twod_ld_pal_we_i;
+  logic         [TWOD_PALAW-1:0]       twod_ld_pal_addr_i;
+  logic         [15:0]                 twod_ld_pal_data_i;
+  logic                                twod_ld_bind_we_i;
+  logic         [TWOD_BSW-1:0]         twod_ld_bind_sel_i;
+  logic         [TWOD_PAW-1:0]         twod_ld_bind_base_i;
+  logic         [3:0]                  twod_ld_bind_lstride_i;
+  logic         [3:0]                  twod_ld_bind_lheight_i;
+  logic                                twod_atm_slot_i;
+  logic signed  [31:0]                 twod_line_scroll_i;
+  logic                                twod_sc_valid_o;
+  logic                                twod_sc_ready_i;
+  logic         [15:0]                 twod_sc_rgb_o;
+  logic signed  [15:0]                 twod_sc_x_o;
+  logic signed  [15:0]                 twod_sc_y_o;
+  logic         [15:0]                 twod_sc_tint_o;
+  logic         [1:0]                  twod_sc_blend_o;
+  logic         [7:0]                  twod_sc_order_o;
+  logic         [15:0]                 twod_sc_src_id_o;
+  logic                                twod_sc_last_o;
+  logic         [31:0]                 twod_plane_pixels_o;
+  logic         [31:0]                 twod_plane_refused_role_o;
+  logic         [31:0]                 twod_plane_refused_blend_o;
+  logic         [31:0]                 twod_plane_skipped_view_o;
+  logic         [31:0]                 twod_plane_wrap_fail_o;
+  logic         [31:0]                 twod_sprite_descriptors_o;
+  logic         [31:0]                 twod_sprite_skipped_view_o;
+  logic         [31:0]                 twod_sprite_refused_o;
+  logic         [31:0]                 twod_sprite_pixels_o;
+  logic         [31:0]                 twod_samples_o;
+  logic         [31:0]                 twod_plane_samples_o;
+  logic         [31:0]                 twod_sprite_samples_o;
+  logic         [31:0]                 twod_clut8_samples_o;
+  logic         [31:0]                 twod_rgb565_samples_o;
+  logic         [31:0]                 twod_texel_wrapped_o;
+  logic         [31:0]                 twod_page_oob_o;
+  logic         [31:0]                 twod_bind_missing_o;
+  logic         [31:0]                 twod_fmt_refused_o;
+  logic         [31:0]                 twod_pal_refused_o;
+  logic         [31:0]                 twod_skipped_fill_o;
+  logic         [31:0]                 twod_atm_underrun_o;
+  logic         [31:0]                 twod_walk_stalls_o;
+  logic         [31:0]                 twod_sprite_stalls_o;
+  logic         [31:0]                 twod_tint_unapplied_o;
+  logic         [31:0]                 twod_pair_lost_o;
   // ---- THE DUT, OR ITS POSITIVE CONTROL --------------------------------
   // A PLAIN `ifdef`, SELECTED BY A PLAIN `-D`, AND THAT SHAPE IS DELIBERATE.
   // CLAUDE.md: Verilator's `-D` cannot override a FUNCTION-LIKE `define` and
