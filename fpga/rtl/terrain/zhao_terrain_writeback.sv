@@ -66,6 +66,13 @@
 // ---------------------------------------------------------------------------
 // MEM.GUARD MUST GAIN A READ ARM, AND IT IS NOT MADE HERE
 // ---------------------------------------------------------------------------
+// LANDED -- this section is history, kept because it explains the header check
+// below. `zhao_mem_guard.sv` now carries `terrain_rd_ok` over the same
+// TERRAIN.PAGE_POOL constants ("READ for the writeback (rulings T2 / T3 /
+// T4)"), and spec/memory_rules.md 5b records it as enacted 2026-09-06. The
+// "until it lands" sentence below expired that day; core entry I28 found it
+// still standing on 2026-09-19. What follows is the original reasoning.
+//
 // `zhao_mem_guard` gives TERRAIN.BUILD exactly one window, TERRAIN.PAGE_POOL,
 // WRITE-ONLY UNTIL 2026-09-06, and its own comment named this block as the
 // reason the read was
@@ -238,6 +245,17 @@ module zhao_terrain_writeback
     output var logic [3:0]       done_verdict_o,
     output var logic [31:0]      done_seq_o,
     output var logic [31:0]      done_src_id_o,
+
+    // ---- the sheet has LANDED, to SW.STREAM's doorbell ---------------------
+    // A one-cycle pulse on the cycle after the last journal beat of a sheet
+    // retires -- the same edge this block allocates the sheet's ticket -- with
+    // that job's own ticket. It is the hardware returning the ticket (owner
+    // ruling R14; design/contracts/TERRAIN.WRITEBACK.DOORBELL.md): software
+    // cannot see the bridge, so without it nothing tells SW.STREAM there is a
+    // sheet to make durable and ACK. It cannot be stalled; the doorbell reserves
+    // the space for it when it hands out the grant.
+    output var logic             landed_valid_o,
+    output var logic [31:0]      landed_seq_o,
 
     // ---- fault trace -------------------------------------------------------
     output var logic [31:0]        fault_island_o,
@@ -634,6 +652,8 @@ module zhao_terrain_writeback
       fault_src_id_o        <= '0;
       fault_verdict_o       <= V_OK;
       sheets_written_o      <= '0;
+      landed_valid_o        <= 1'b0;
+      landed_seq_o          <= '0;
       sheets_refused_o      <= '0;
       sheets_faulted_o      <= '0;
       hdr_ident_fails_o     <= '0;
@@ -666,6 +686,9 @@ module zhao_terrain_writeback
         t_wait[i]   <= '0;
       end
     end else begin
+      // A pulse: high for exactly the cycle after a sheet lands.
+      landed_valid_o <= 1'b0;
+
       // ------------------------------------------------- pressure, in CYCLES
       if (j_valid_i && !j_ready_o) jobs_stall_cycles_o <= jobs_stall_cycles_o + 32'd1;
       if (outstanding_now > outstanding_hwm_o) outstanding_hwm_o <= outstanding_now;
@@ -1021,6 +1044,8 @@ module zhao_terrain_writeback
                 t_seq[free_idx]    <= job_seq;
                 t_src[free_idx]    <= job_src;
                 sheets_written_o   <= sheets_written_o + 32'd1;
+                landed_valid_o     <= 1'b1;
+                landed_seq_o       <= job_seq;
                 state              <= S_IDLE;
               end else begin
                 for (int unsigned k = 0; k < BEATS_PER_B; k++) cur[k] <= nxt[k];

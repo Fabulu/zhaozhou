@@ -300,6 +300,16 @@ The FPGA half of that barrier is `zref::terrain::Streamer`
 (`reference/include/zref/zref_fjournal.hpp`) and is **not duplicated here**.
 SW.STREAM owns the `Journal`; the slot state machine is the hardware's.
 
+**SW.STREAM owns the journal's entries and tickets, and hands them to the
+hardware through a doorbell** (owner ruling R14,
+`design/contracts/TERRAIN.WRITEBACK.DOORBELL.md`). It keeps the journal
+descriptor `{journal_base, journal_bytes}` current for the epoch, keeps grants
+`{slot, ticket}` posted ahead of need, ACKs `{ticket, ok}` every sheet the
+hardware returns as LANDED once that sheet is durable, and recycles a journal
+entry when its ticket comes back FINAL. The hardware never invents an address or
+a ticket: a dirty eviction with no grant posted waits, and the wait is counted
+(`terr_jdb_starved_cycles_o`) as software backpressure in T12's sense.
+
 ## Q formats and rounding
 
 **None of its own.** SW.STREAM moves bytes and builds lists; it performs no

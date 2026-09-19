@@ -9220,6 +9220,35 @@ set_tests_properties(lint_terrain_writeback PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# TERRAIN.WRITEBACK's journal DOORBELL (owner ruling R14;
+# design/contracts/TERRAIN.WRITEBACK.DOORBELL.md). SW.STREAM's grants give each
+# writeback job its journal address and ticket; every ticket comes back FINAL
+# exactly once. The mutant control FIRES `ret_overflow_o`, which the credit makes
+# unreachable with legal stimulus. INVERTED POLARITY on the control.
+add_test(NAME lint_terrain_jdoorbell
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_jdoorbell
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_jdoorbell.sv)
+set_tests_properties(lint_terrain_jdoorbell PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_jdoorbell_directed terrain/jdoorbell_directed.cpp)
+target_link_libraries(test_jdoorbell_directed PRIVATE zhao_harness)
+verilate(test_jdoorbell_directed
+  PREFIX Vzhao_terrain_jdoorbell
+  TOP_MODULE zhao_terrain_jdoorbell
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_jdoorbell.sv)
+add_test(NAME jdoorbell_directed COMMAND test_jdoorbell_directed)
+set_tests_properties(jdoorbell_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+add_executable(test_jdoorbell_mutant_control terrain/jdoorbell_mutant_control.cpp)
+target_link_libraries(test_jdoorbell_mutant_control PRIVATE zhao_harness)
+verilate(test_jdoorbell_mutant_control
+  PREFIX Vzhao_terrain_jdoorbell_mutant
+  TOP_MODULE zhao_terrain_jdoorbell_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_jdoorbell_mutant.sv)
+add_test(NAME jdoorbell_mutant_control COMMAND test_jdoorbell_mutant_control)
+set_tests_properties(jdoorbell_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # ---------------------------------------------------------------------------
 # TERRAIN.SEQ -- the terrain command path, against zref::terrain::seq::Sequencer.
 #
@@ -9455,6 +9484,7 @@ verilate(test_world_composed_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_jdoorbell.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipgen.sv
@@ -9481,6 +9511,7 @@ add_test(NAME lint_terrain_world
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_residency_v2.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageloader.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_writeback.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_jdoorbell.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loadq.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pagestream.sv
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipgen.sv

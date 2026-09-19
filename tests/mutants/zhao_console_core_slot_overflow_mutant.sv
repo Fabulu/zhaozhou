@@ -145,6 +145,15 @@ module zhao_console_core_slot_overflow_mutant
   // and exists because a port list cannot call $clog2 on another port.
   parameter int unsigned GEOM_CLIP_ATTRS = 7,
   parameter int unsigned GEOM_CLIP_ATTRW = GEOM_CLIP_ATTRS * 32,
+  // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
+  // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
+  // that a ratified layout is still a knob: "this is generated from the
+  // reference, so it is not a knob" is how a wrong number becomes an
+  // unadjustable wrong number. The order is `zhao_geom_clip`'s ruling 5 and
+  // `tests/geometry/geom_clip_attrswap_directed.cpp`'s own line 41.
+  parameter int unsigned GEOM_ATTR_SLOT_INVW     = 0,
+  parameter int unsigned GEOM_ATTR_SLOT_U_OVER_W = 1,
+  parameter int unsigned GEOM_ATTR_SLOT_V_OVER_W = 2,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -264,14 +273,36 @@ module zhao_console_core_slot_overflow_mutant
   //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
   //  PART.COLLIDE's own new `d_index_o`.)
 
-  // ---- I6: the live deformed terrain sample -------------------------------
-  input  logic                    part_ter_valid_i,
-  input  logic signed [PART_POS_W-1:0] part_ter_height_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_nz_i,
+  // (I6's five `part_ter_*` inputs were here. CLOSED 2026-09-19 under owner
+  //  ruling R1: PART.TERRAIN_TAP produces the sample from the live compose
+  //  cache through TERRAIN.HEIGHTTAP, inside this module. See item 14.)
 
-  // ---- I7: the one plane --------------------------------------------------
+  // ---- I6's evidence: the terrain sample's census --------------------------
+  // Every particle lands in exactly one of the first four, so a bench can say
+  // WHY a particle did or did not see ground -- a cold cell, a void or an
+  // unstaged patch, or a fault -- instead of reading PART.COLLIDE's single
+  // "unavailable" total. The tap's three are the service's own view of the
+  // same traffic.
+  output logic [31:0]             part_ter_particles_o,
+  output logic [31:0]             part_ter_ground_o,
+  output logic [31:0]             part_ter_no_ground_o,
+  output logic [31:0]             part_ter_missed_o,
+  output logic [31:0]             part_ter_faults_o,     // cell mismatch + out of range
+  output logic [31:0]             part_ter_fills_landed_o,
+  output logic [31:0]             terr_tap_answered_o,
+  output logic [31:0]             terr_tap_off_patch_o,
+  output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
+
+  // ---- I7: the one plane, and the population origin ------------------------
+  // The origin is widened INTO I7 rather than opened as a new entry because it
+  // is the same kind of thing with the same absent owner: a per-frame
+  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
+  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
+  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
+  // terrain height -- and it became visible the moment a real height arrived.
+  input  logic signed [31:0]      part_pop_origin_x_i,
+  input  logic signed [31:0]      part_pop_origin_y_i,
+  input  logic signed [31:0]      part_pop_origin_z_i,
   input  logic                    part_plane_en_i,
   input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
   input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
@@ -362,8 +393,13 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [1:0]              geom_mf_job_active_mask_i,
   input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
 
-  // ---- I37: the descriptor's CRC VERDICT ----------------------------------
-  input  logic                    geom_mf_crc_ok_i,
+  // ---- I37 IS CLOSED: the descriptor's CRC verdict is computed inside ------
+  // `u_geom_desc_crc` walks the fold over the returning beats. What leaves is
+  // its evidence, so a refused descriptor says WHY at the edge: a CRC that
+  // mismatched and a burst that was not eight beats are different faults.
+  output logic [31:0]             geom_mf_crc_descriptors_o,
+  output logic [31:0]             geom_mf_crc_fail_o,
+  output logic [31:0]             geom_mf_crc_framing_o,
 
   // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
   input  logic                    geom_af_release_i,
@@ -383,6 +419,23 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]              geom_asm_t_raster_o,
   output logic [15:0]              geom_asm_t_src_id_o,
   output logic                     geom_asm_t_last_o,
+
+  // ---- I41: CMD.EXEC's DRAW DISPATCH, the ratified DrawForm ---------------
+  // NEW 2026-09-19. DrawForm 0x0300 now reaches the console; what has no
+  // consumer INSIDE this module is the resolver that would turn its three
+  // handles into GEOM.MESHFETCH's job. See the header entry.
+  output logic                     cmd_draw_valid_o,
+  input  logic                     cmd_draw_ready_i,
+  output logic [31:0]              cmd_draw_form_o,
+  output logic [31:0]              cmd_draw_material_set_o,
+  output logic [31:0]              cmd_draw_transform_o,
+  output logic [ 7:0]              cmd_draw_viewport_mask_o,
+  output logic [ 7:0]              cmd_draw_semantic_weight_o,
+  output logic [15:0]              cmd_draw_flags_o,
+  output logic [15:0]              cmd_draw_src_id_o,
+  output logic [31:0]              cmd_exec_draws_o,
+  output logic [31:0]              cmd_exec_draw_overflow_o,
+  output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
@@ -458,6 +511,34 @@ module zhao_console_core_slot_overflow_mutant
   // internal and this module's edge is two arrays smaller.
   output logic [15:0]             geom_skin_src_id_o,
   output logic [31:0]             geom_skin_vertices_transformed_o,
+
+  // ---- GEOM.SKIN.NORM's world normal and evidence --------------------------
+  // NEW 2026-09-19. GEOM.SKIN.NORM is COMPOSED below, and this is its OUTPUT
+  // leaving the module because its consumer does not exist -- see entry I43.
+  // The block's INPUTS are all real: the packed normal is GEOM.VDECODE's and
+  // the two matrices are GEOM.POSE's palette store's, arriving in one
+  // handshake because the palette now carries the normal through beside them.
+  //
+  // It is a PORT and not a dropped output for the reason I42 gives about the
+  // mip planes: a world normal computed and written nowhere and a world normal
+  // computed WRONGLY are indistinguishable from inside this module, and a port
+  // is the one place the difference can be seen.
+  output logic                    geom_sn_n_valid_o,
+  input  logic                    geom_sn_n_ready_i,
+  output logic signed [63:0]      geom_sn_n_x_o,
+  output logic signed [63:0]      geom_sn_n_y_o,
+  output logic signed [63:0]      geom_sn_n_z_o,
+  output logic [63:0]             geom_sn_n_mag_o,
+  output logic                    geom_sn_n_degenerate_o,
+  output logic [15:0]             geom_sn_n_src_id_o,
+  output logic [31:0]             geom_sn_vertices_o,
+  output logic [31:0]             geom_sn_degenerate_o,
+  output logic [31:0]             geom_sn_reduced_o,
+  // The fork's own cost, made visible rather than argued. It counts cycles in
+  // which GEOM.POSE's palette held a vertex that GEOM.SKIN was ready for and
+  // GEOM.SKIN.NORM was not. See I43 for why that number is expected to be
+  // large and what it means.
+  output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
@@ -573,6 +654,14 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_clip_culled_o,
   output logic signed [47:0]      geom_setup_area2_o,
   output logic [31:0]             geom_setup_triangles_submitted_o,
+  // GEOM.ATTRPACK's two counters, out of the module for the same reason every
+  // other block's are: a counter nobody can read is not evidence. Their RATIO
+  // is the thing worth asserting -- `planes` must be exactly three times
+  // `triangles`, because one shared attrsetup core runs three lanes per
+  // triangle, and a lane that quietly stopped asking would leave every
+  // handshake and every other counter looking perfectly healthy.
+  output logic [31:0]             geom_attrpack_triangles_o,
+  output logic [31:0]             geom_attrpack_planes_o,
 
   // ---- I14: the shared projector's matrix bank ----------------------------
   input  logic                    proj_cfg_we_i,
@@ -657,6 +746,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic [63:0]             terr_hps_wr_data_o,
   output logic                    terr_hps_wr_last_o,
   input  zhao_hps_burst_rsp_t     terr_hps_rsp_i,
+  // The bridge's write-acceptance LEVEL (`zhao_hps_bridge.wr_ready`). WIDENED
+  // 2026-09-19 when TERRAIN.WRITEBACK became the first terrain client that
+  // WRITES: the bridge consumes a beat only once the HPS has accepted the
+  // burst, so a writer that streams on the grant loses its first beats
+  // silently. Same socket as the rest of this family; it closes with I26.
+  input  logic                    terr_hps_wr_ready_i,
 
   output zhao_guard_req_t         terr_guard_req_o,
   input  zhao_guard_rsp_t         terr_guard_rsp_i,
@@ -688,52 +783,64 @@ module zhao_console_core_slot_overflow_mutant
   output logic                    terr_chk_valid_o,
   output logic                    terr_chk_stale_o,
 
-  // ---- I28: TERRAIN.SEQ's F-sheet writeback job and its barrier release ---
-  output logic                    terr_wb_valid_o,
-  input  logic                    terr_wb_ready_i,
-  output logic [TERR_SLOTW-1:0]   terr_wb_slot_o,
-  output logic [TERR_GENW-1:0]    terr_wb_gen_o,
-  output logic [31:0]             terr_wb_epoch_o,
-  output logic [31:0]             terr_wb_island_o,
-  output logic signed [15:0]      terr_wb_ix_o,
-  output logic signed [15:0]      terr_wb_iz_o,
-  output logic [31:0]             terr_wb_src_id_o,
-  input  logic                    terr_wb_done_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_wb_done_slot_i,
-
-  // ---- I28 (other end): TERRAIN.RESIDENCY's writeback-ACK barrier --------
-  input  logic                    terr_wback_valid_i,
-  output logic                    terr_wback_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_wback_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
-  input  logic [31:0]             terr_wback_epoch_i,
+  // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
+  // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
+  // -> the doorbell -> TERRAIN.WRITEBACK -> TERRAIN.RESIDENCY is composed below,
+  // and what crosses this edge is the HPS itself -- the journal descriptor, the
+  // grants it posts, the tickets the hardware returns and the ACKs it sends.
+  // In Verilator the harness IS the HPS (plan D10), exactly as it is for the
+  // FRAME_RING view and `terr_cfg_*` above. Owner ruling R14 names SW.STREAM the
+  // owner; design/contracts/TERRAIN.WRITEBACK.DOORBELL.md is the exchange.
+  input  logic [31:0]             terr_cfg_journal_base_i,   // D0
+  input  logic [31:0]             terr_cfg_journal_bytes_i,  // D0
+  input  logic                    terr_jdb_post_valid_i,     // D1: a grant
+  output logic                    terr_jdb_post_ready_o,
+  input  logic [15:0]             terr_jdb_post_slot_i,
+  input  logic [31:0]             terr_jdb_post_ticket_i,
+  output logic                    terr_jdb_ret_valid_o,      // D2: a return
+  input  logic                    terr_jdb_ret_ready_i,
+  output logic [31:0]             terr_jdb_ret_ticket_o,
+  output logic                    terr_jdb_ret_final_o,
+  output logic                    terr_jdb_ret_ok_o,
+  output logic [3:0]              terr_jdb_ret_verdict_o,
+  input  logic                    terr_jdb_ack_valid_i,      // D3: the ACK
+  output logic                    terr_jdb_ack_ready_o,
+  input  logic [31:0]             terr_jdb_ack_ticket_i,
+  input  logic                    terr_jdb_ack_ok_i,
+  // ...and the evidence both blocks keep. Events and cycles named apart.
+  output logic [31:0]             terr_wb_sheets_written_o,
+  output logic [31:0]             terr_wb_sheets_refused_o,
+  output logic [31:0]             terr_wb_sheets_faulted_o,
+  output logic [31:0]             terr_wb_guard_denied_o,
+  output logic [31:0]             terr_wb_acks_unmatched_o,
+  output logic [31:0]             terr_wb_acks_overdue_o,
+  output logic [31:0]             terr_jdb_starved_cycles_o,
+  output logic [31:0]             terr_jdb_ret_overflow_o,
 
   // ==========================================================================
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
   // ==========================================================================
 
-  // ---- I26 (extended): TERRAIN.PAGESTREAM's MEM.GUARD READ client ---------
+  // ---- I26 (extended): THE COMPOSE PATH's ONE MEM.GUARD READ client -------
   // A SECOND guard client, not a second opinion about the first.
   // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
   // READS the same page back out, so it needs the return path
   // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
   // one guard socket and it is named for GEOM, so both stop here -- see entry
   // I26 for why that is a REACHABLE boundary and not I23's refusal.
+  //
+  // STILL ONE PORT AFTER TERRAIN.HDRREAD LANDED, 2026-09-19, and that is the
+  // point of the block behind it.  TWO readers now sit on this socket --
+  // TERRAIN.PAGESTREAM's three plane bursts and TERRAIN.HDRREAD's one header
+  // burst -- joined by `zhao_mem_share2`, the SAME block GEOM.MEM.ADAPTER is a
+  // wrapper over.  The arbiter gains no client, the guard gains no arm, and
+  // this boundary does not widen.  Composing the header reader with its own
+  // socket would have made I26 a three-port entry instead of closing anything.
   output zhao_guard_req_t         terr_ps_guard_req_o,
   input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
   input  logic                    terr_ps_beat_valid_i,
   input  logic [63:0]             terr_ps_beat_data_i,
   input  logic                    terr_ps_beat_last_i,
-
-  // ---- I35: TERRAIN.PLACE's patch header, the two fields nothing reads -----
-  // The patch COORDINATE and the source id come from TERRAIN.SEQ inside this
-  // module.  The PITCH and the ENVELOPE do not; see entry I35.  They are NOT
-  // tied off, and a harness that leaves them zero sees the placement REFUSE
-  // every patch on `terr_place_env_mismatch_o` -- loudly, which is the correct
-  // standing for an unfed corruption check.
-  input  logic signed [7:0]       terr_place_pitch_log2_i,
-  input  logic signed [31:0]      terr_place_env_x0_i,
-  input  logic signed [31:0]      terr_place_env_z0_i,
 
   // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
   input  logic                    terr_pt_fld_valid_i,
@@ -784,6 +891,40 @@ module zhao_console_core_slot_overflow_mutant
   output logic                    terr_ps_done_valid_o,
   output logic                    terr_ps_done_ok_o,
   output logic [3:0]              terr_ps_done_verdict_o,
+
+  // ---- TERRAIN.HDRREAD's evidence (composed item 13) ----------------------
+  // The patch header reader entry I35 named as the absent owner.  These are
+  // the numbers that separate "the placement was fed" from "the placement was
+  // fed SOMETHING": `terr_hr_headers_o` counts headers that returned and
+  // passed their identity test, and every other counter here is a distinct
+  // reason a patch was refused instead.  Their SUM against
+  // `terr_place_patches_o` is the assertion worth making -- a header this
+  // block refused arrives at TERRAIN.PLACE as an impossible pitch, so
+  // `terr_hr_*` and `terr_place_pitch_bad_o` must move together or one of the
+  // two is lying.
+  output logic [31:0]             terr_hr_headers_o,
+  output logic [31:0]             terr_hr_refused_o,
+  output logic [31:0]             terr_hr_guard_denied_o,
+  output logic [31:0]             terr_hr_incomplete_o,
+  output logic [31:0]             terr_hr_ident_fails_o,
+  output logic                    terr_hr_idle_o,
+
+  // ---- THE READ SHARE's evidence (composed item 13) ----------------------
+  // `zhao_mem_share2` joining TERRAIN.HDRREAD (A) and TERRAIN.PAGESTREAM (B)
+  // onto the one guard read client.  `terr_rdshare_contention_o` is the number
+  // that says what the sharing COST: it moves once per cycle in which both
+  // readers asked and one was held.  It is exported rather than counted
+  // privately because the decision to widen this to two outstanding requests
+  // has to be made against a number, which is the block's own stated reason
+  // for having it.
+  output logic [31:0]             terr_rdshare_jobs_a_o,
+  output logic [31:0]             terr_rdshare_jobs_b_o,
+  output logic [31:0]             terr_rdshare_jobs_wb_o,  // 2: TERRAIN.WRITEBACK
+  output logic [31:0]             terr_rdshare_denied_o,
+  output logic [31:0]             terr_rdshare_contention_o,
+  output logic [31:0]             terr_rdshare_err_short_o,
+  output logic [31:0]             terr_rdshare_err_long_o,
+  output logic [31:0]             terr_rdshare_err_unowned_o,
 
   output logic                    terr_place_valid_o,
   output logic [15:0]             terr_place_src_id_o,
@@ -877,6 +1018,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_hps_c0_bursts_o,
   output logic [31:0]             terr_hps_c1_bursts_o,
   output logic [31:0]             terr_hps_c1_wait_cycles_o,
+  // Client 2, TERRAIN.WRITEBACK's journal writes (owner ruling R4's N-client
+  // arbiter). Its wait is the number that says what the loader costs it.
+  output logic [31:0]             terr_hps_c2_bursts_o,
+  output logic [31:0]             terr_hps_c2_wait_cycles_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -927,8 +1072,19 @@ module zhao_console_core_slot_overflow_mutant
   // view (a group holds one view's results), so it has no consumer inside this
   // core and leaves the module named rather than left dangling.
   output logic                    proj_a_view_o,
-  // The depth profile ports, forwarded verbatim. This file is a WRAPPER and
-  // not a copy, so it carries the production port list and nothing else.
+  // THE DEPTH PROFILE THE RESULT WAS PROJECTED UNDER -- NEW 2026-09-19, and it
+  // closes entry I14's depth-profile item. `SetView`'s `flags[1:0]` is
+  // the depth profile of the frozen 2026-08-31 ruling; `zhao_project_core` now
+  // carries it on cfg address 18 and emits it beside the view, and CMD.EXEC's
+  // SetView arm writes it as the seventeenth step of the view walk.
+  //
+  // IT LEAVES THIS MODULE RATHER THAN BEING CONSUMED HERE, exactly as
+  // `proj_a_view_o` does and for the same reason: GEOM.DEPTHQUANT is the
+  // consumer -- its `v_profile_i` is this port's width and meaning -- and that
+  // block is not composed. `proj_fill_profile_o` is the terrain client's
+  // per-VERTEX half; terrain's per-TRIANGLE profile is still owed, because the
+  // replay arena carries no profile field and widening it is a change to
+  // `zhao_vertex_arena`, not to a composer.
   output logic [1:0]              proj_a_profile_o,
   output logic [1:0]              proj_fill_profile_o,
   output logic [31:0]             proj_replay_triangles_o,
@@ -1084,9 +1240,20 @@ module zhao_console_core_slot_overflow_mutant
   // header entry 7. It was the twenty-first field of a twenty-one-field
   // packet whose other twenty were already internal, and leaving it at the
   // edge held every pixel out of the framebuffer.
-  input  logic [239:0] tri_invw_plane_i,
-  input  logic [239:0] tri_u_over_w_plane_i,
-  input  logic [239:0] tri_v_over_w_plane_i,
+  // AND THE THREE ATTRIBUTE PLANES LEFT THIS EDGE 2026-09-19, by the same act
+  // and for the same reason: `zhao_geom_attrpack` is composed below and is
+  // their producer. They were never a boundary in the sense the other entries
+  // mean -- the arithmetic was in the tree the whole time, in
+  // `zhao_geom_attrsetup`, with no block in front of it to ask three times.
+  //
+  // `tri_flat_request_i` STAYS AT THE EDGE and is not an oversight. It is the
+  // MATERIAL RECORD, and its owner is MATERIAL.RESOLVE, which is BUILT
+  // (`fpga/rtl/texture/zhao_material_resolve.sv`, UNIT_VERIFIED, 91 directed
+  // checks) and NOT COMPOSED. This line read "`maturity: SPECIFIED` with both
+  // tests PLANNED -- NOT WRITTEN and a note blocking it on a cartridge
+  // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
+  // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
+  // sentence naming the residency directory's KEY. See entry I20.
   input  logic [297:0] tri_flat_request_i,
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
@@ -1373,11 +1540,11 @@ module zhao_console_core_slot_overflow_mutant
   input  logic               surf_cmd_field_en_i,
   input  logic        [15:0] surf_cmd_src_id_i,
 
-  // I31: the field-driven brush. FIELD.SEQ.STAMP is not built.
-  input  logic        surf_fld_valid_i,
-  output logic        surf_fld_ready_o,
-  input  logic [31:0] surf_fld_tag_op_i,
-  input  logic [15:0] surf_fld_strength_i,
+  // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
+  // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
+  // `u_field_host` runs the program. The four ports are GONE from this edge
+  // rather than driven from it, which is the difference between a seam that
+  // closed and a seam that acquired a producer.
 
   // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
   output logic        surf_res_valid_o,
@@ -1642,6 +1809,31 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] cmd_commands_o,
 
   // --------------------------------------------------------------------------
+  // DEBUG.TRACE's arming and its host readout.  Added 2026-09-19 with the ring.
+  // --------------------------------------------------------------------------
+  // BOUNDARY, and entry I45 argues it. The trace ring's DATA path is closed
+  // inside this module -- CMD.DECODER's record port feeds it and nothing is
+  // invented on the way -- so what leaves here is the debug CONTROL surface
+  // (arming is a debug command, charter 20.6 "selectable") and the host drain
+  // (the ring streams into the HPS trace arena through MEM.HPS.BRIDGE, which
+  // has no register path to this block). Both are the same shape as
+  // MEASURE.HISTOGRAM's `hist_rd_*` at entry I19, and for the same reason.
+  //
+  // UNARMED IS THE CORRECT DEFAULT and it is not a tie-off: an unarmed stage
+  // produces no event AT ALL -- not a suppressed one -- so an undriven
+  // `dbg_trace_arm_we_i` leaves a ring that costs its memory and stores
+  // nothing, which is exactly what a trace ring does when nobody asked for a
+  // trace.
+  input  logic        dbg_trace_arm_we_i,
+  input  logic [ 6:0] dbg_trace_arm_mask_i,
+  input  logic        dbg_trace_clear_i,
+  input  logic [ 8:0] dbg_trace_rd_addr_i,     // {event[5:0], word[2:0]}
+  output logic [31:0] dbg_trace_rd_data_o,
+  output logic [ 6:0] dbg_trace_armed_o,
+  output logic [31:0] dbg_trace_count_o,
+  output logic [31:0] dbg_trace_dropped_o,
+
+  // --------------------------------------------------------------------------
   // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
   // --------------------------------------------------------------------------
   // OUTPUTS ONLY, driven by real logic below. The executor writes the
@@ -1664,7 +1856,155 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] cmd_exec_stamp_overflow_o,
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
-  output logic [31:0] cmd_exec_unsupported_o
+  output logic [31:0] cmd_exec_unsupported_o,
+
+  // ==========================================================================
+  // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
+  // 2026-09-19 with composition item 12.
+  // ==========================================================================
+  // The counters are here because this chain's whole purpose is a STATE
+  // TRANSITION inside the directory, and a state transition has no other
+  // symptom.  `terr_res_resident_o` rising from zero is the result; these say
+  // which block produced it.
+  output logic [31:0]  terr_mip_pages_mipped_o,
+  output logic [31:0]  terr_mip_pages_faulted_o,
+  output logic [31:0]  terr_mip_samples_sent_o,
+  output logic [31:0]  terr_mipreq_requests_o,
+  output logic [31:0]  terr_mipreq_issued_o,
+  output logic [31:0]  terr_mipreq_drops_o,
+  output logic [31:0]  terr_psmux_a_jobs_o,
+  output logic [31:0]  terr_psmux_b_jobs_o,
+  output logic [31:0]  terr_psmux_stray_v_o,
+  output logic [31:0]  terr_psmux_stray_done_o,
+
+  // I42: THE COARSE-HEIGHT MIP PLANES.  `spec/terrain_rules.md` 2's "17x17 +
+  // 9x9 ... for TERRAIN.LOD" is a STORED quantity, and the store does not
+  // exist.  These are real ports rather than dropped outputs for the reason
+  // I32 gives about layer D: a decimated height written nowhere and a
+  // decimated height written wrongly are indistinguishable from inside, and a
+  // port is the one place the difference is visible.
+  output logic         terr_mg_m17_valid_o,
+  output logic [ 8:0]  terr_mg_m17_addr_o,
+  output logic         terr_mg_m17_surf_o,
+  output logic [15:0]  terr_mg_m17_h_o,
+  output logic         terr_mg_m9_valid_o,
+  output logic [ 6:0]  terr_mg_m9_addr_o,
+  output logic         terr_mg_m9_surf_o,
+  output logic [15:0]  terr_mg_m9_h_o,
+  output logic [31:0]  terr_mg_m17_writes_o,
+  output logic [31:0]  terr_mg_m9_writes_o,
+  output logic [31:0]  terr_mg_aborts_o,
+
+  // ==========================================================================
+  // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
+  // ==========================================================================
+  // THE PROGRAM LOADER. Nothing inside this console loads a field program, and
+  // the named owner is CMD.EXEC's TerrainField 0x0200 arm (spec/commands.zidl:
+  // `handle32[program] program` -> the cartridge PROGRAM page, spec/cartridge.md
+  // 3 kind 0) together with the software decoder. `ld_kind_i` is 0 instruction,
+  // 1 table entry, 2 header; the header is written LAST and is what marks a slot
+  // runnable, so a partially written program can never execute.
+  input  logic         fld_ld_valid_i,
+  output logic         fld_ld_ready_o,
+  input  logic [ 1:0]  fld_ld_kind_i,
+  input  logic [ 2:0]  fld_ld_slot_i,
+  input  logic [ 6:0]  fld_ld_addr_i,
+  input  logic [95:0]  fld_ld_data_i,
+
+  // FIELD.PROGCACHE's TWO PHASES. Both face outward because the decode a miss
+  // requires is `zfield::decode`'s and lives in software -- that block's own
+  // contract says the caller decodes and reports one bit. What is INTERNAL, and
+  // is why the directory is composed rather than left at this edge, is the
+  // insert: it invalidates the program store's slot, so no profile can run
+  // microcode the directory has already promised to another hash.
+  input  logic         fld_pc_lu_valid_i,
+  output logic         fld_pc_lu_ready_o,
+  input  logic [31:0]  fld_pc_lu_hash_i,
+  output logic         fld_pc_lu_resp_valid_o,
+  input  logic         fld_pc_lu_resp_ready_i,
+  output logic         fld_pc_lu_hit_o,
+  output logic [ 2:0]  fld_pc_lu_slot_o,
+  input  logic         fld_pc_cm_valid_i,
+  output logic         fld_pc_cm_ready_o,
+  input  logic [31:0]  fld_pc_cm_hash_i,
+  input  logic         fld_pc_cm_ok_i,
+  output logic         fld_pc_cm_resp_valid_o,
+  input  logic         fld_pc_cm_resp_ready_i,
+  output logic         fld_pc_cm_inserted_o,
+  output logic         fld_pc_cm_evicted_o,
+  output logic [ 2:0]  fld_pc_cm_slot_o,
+
+  // CONSOLE POLICY: which resident program is the stamp brush, and whether one
+  // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
+  // for the same reason -- no opcode carries either, and I30 already records
+  // that an executor filling them in would be choosing values the ABI does not
+  // contain.
+  input  logic [ 2:0]  fld_stamp_slot_i,
+  input  logic         fld_stamp_slot_valid_i,
+
+  // THE ENGINE'S SECOND CLIENT. It is the seam the FLOW and EARTH adapters take
+  // over when I5 and I34 close, and until then it is what makes the arbiter's
+  // contention reachable with legal stimulus: a counter that cannot be fired is
+  // not evidence about the thing it watches.
+  //
+  // The two widths are literals because a port list cannot see a body
+  // localparam. `u_field_host` is instantiated with IN_LANES = 12 (the
+  // ratified E record of spec/form/field-ir.md 7.1) and OUT_LANES = 4, and the
+  // elaboration guard beside the instance refuses any disagreement rather than
+  // leaving the two places to drift.
+  input  logic          fld_req_valid_i,
+  output logic          fld_req_ready_o,
+  input  logic [  2:0]  fld_req_slot_i,
+  input  logic          fld_req_noprog_i,
+  input  logic [383:0]  fld_req_in_i,
+  output logic          fld_resp_valid_o,
+  input  logic          fld_resp_ready_i,
+  output logic [127:0]  fld_resp_out_o,
+  output logic [  7:0]  fld_resp_status_o,
+
+  output logic [31:0]  fld_runs_o,
+  output logic [31:0]  fld_run_faults_o,
+  output logic [31:0]  fld_noprog_o,
+  output logic [31:0]  fld_instr_retired_o,
+  output logic [31:0]  fld_loads_o,
+  output logic [31:0]  fld_load_defers_o,
+  output logic [31:0]  fld_grants_o,
+  output logic [31:0]  fld_contended_grants_o,
+  // A load word addressed past the uop store. CLAMPED, not wrapped: a wrapped
+  // uop write lands on another instruction of the same program, which is silent
+  // and produces a plausible field.
+  output logic [31:0]  fld_ld_oob_o,
+  // A point whose run wrote NOTHING into its declared output window. The lanes
+  // then hold the zeroes the front cleared them to, and a caller reading only
+  // the lanes could not tell that from a field whose value is zero.
+  output logic [31:0]  fld_no_result_o,
+  // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
+  // `zhao_field_v3_engine`'s own header is right that five faults reduced to
+  // one bit is a bit that says "something, somewhere", and a guard that cannot
+  // name its own failure gets read as noise.
+  output logic [31:0]  fld_exec_desync_o,
+  output logic [31:0]  fld_bank_desync_o,
+  output logic [31:0]  fld_svc_bank_desync_o,
+  output logic [31:0]  fld_tag_mismatch_o,
+  output logic [31:0]  fld_wrong_op_o,
+  output logic [31:0]  fld_unsupported_o,
+  output logic [31:0]  fld_skid_overflow_o,
+  output logic [31:0]  fld_uniform_bad_o,
+  // {sat_rescale, sat_mul, sat_add} -- the op ledger, latched over the run.
+  output logic [ 2:0]  fld_sat_o,
+  output logic [31:0]  fld_pc_hits_o,
+  output logic [31:0]  fld_pc_misses_o,
+  output logic [31:0]  fld_pc_rejected_o,
+  output logic [31:0]  fld_pc_evictions_o,
+  output logic [ 3:0]  fld_pc_occupancy_o,
+  output logic [31:0]  surf_fld_stamps_o,
+  output logic [31:0]  surf_fld_texels_o,
+  output logic [31:0]  surf_fld_faults_o,
+  output logic [31:0]  surf_fld_restarts_o,
+  // High while the stencil walk is running. Exported rather than dropped: it
+  // is the one signal that separates "the brush produced nothing" from "the
+  // brush never started", and those have different causes and different fixes.
+  output logic         surf_fld_busy_o
 );
 
   // Every parameter forwarded BY NAME, including TERR_MEMSLOT, which this

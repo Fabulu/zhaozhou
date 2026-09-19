@@ -1018,6 +1018,12 @@ module zhao_console_board
   output logic [63:0]             terr_hps_wr_data_o,
   output logic                    terr_hps_wr_last_o,
   input  zhao_hps_burst_rsp_t     terr_hps_rsp_i,
+  // The bridge's write-acceptance LEVEL (`zhao_hps_bridge.wr_ready`). WIDENED
+  // 2026-09-19 when TERRAIN.WRITEBACK became the first terrain client that
+  // WRITES: the bridge consumes a beat only once the HPS has accepted the
+  // burst, so a writer that streams on the grant loses its first beats
+  // silently. Same socket as the rest of this family; it closes with I26.
+  input  logic                    terr_hps_wr_ready_i,
 
   output zhao_guard_req_t         terr_guard_req_o,
   input  zhao_guard_rsp_t         terr_guard_rsp_i,
@@ -1049,25 +1055,39 @@ module zhao_console_board
   output logic                    terr_chk_valid_o,
   output logic                    terr_chk_stale_o,
 
-  // ---- I28: TERRAIN.SEQ's F-sheet writeback job and its barrier release ---
-  output logic                    terr_wb_valid_o,
-  input  logic                    terr_wb_ready_i,
-  output logic [TERR_SLOTW-1:0]   terr_wb_slot_o,
-  output logic [TERR_GENW-1:0]    terr_wb_gen_o,
-  output logic [31:0]             terr_wb_epoch_o,
-  output logic [31:0]             terr_wb_island_o,
-  output logic signed [15:0]      terr_wb_ix_o,
-  output logic signed [15:0]      terr_wb_iz_o,
-  output logic [31:0]             terr_wb_src_id_o,
-  input  logic                    terr_wb_done_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_wb_done_slot_i,
-
-  // ---- I28 (other end): TERRAIN.RESIDENCY's writeback-ACK barrier --------
-  input  logic                    terr_wback_valid_i,
-  output logic                    terr_wback_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_wback_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
-  input  logic [31:0]             terr_wback_epoch_i,
+  // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
+  // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
+  // -> the doorbell -> TERRAIN.WRITEBACK -> TERRAIN.RESIDENCY is composed below,
+  // and what crosses this edge is the HPS itself -- the journal descriptor, the
+  // grants it posts, the tickets the hardware returns and the ACKs it sends.
+  // In Verilator the harness IS the HPS (plan D10), exactly as it is for the
+  // FRAME_RING view and `terr_cfg_*` above. Owner ruling R14 names SW.STREAM the
+  // owner; design/contracts/TERRAIN.WRITEBACK.DOORBELL.md is the exchange.
+  input  logic [31:0]             terr_cfg_journal_base_i,   // D0
+  input  logic [31:0]             terr_cfg_journal_bytes_i,  // D0
+  input  logic                    terr_jdb_post_valid_i,     // D1: a grant
+  output logic                    terr_jdb_post_ready_o,
+  input  logic [15:0]             terr_jdb_post_slot_i,
+  input  logic [31:0]             terr_jdb_post_ticket_i,
+  output logic                    terr_jdb_ret_valid_o,      // D2: a return
+  input  logic                    terr_jdb_ret_ready_i,
+  output logic [31:0]             terr_jdb_ret_ticket_o,
+  output logic                    terr_jdb_ret_final_o,
+  output logic                    terr_jdb_ret_ok_o,
+  output logic [3:0]              terr_jdb_ret_verdict_o,
+  input  logic                    terr_jdb_ack_valid_i,      // D3: the ACK
+  output logic                    terr_jdb_ack_ready_o,
+  input  logic [31:0]             terr_jdb_ack_ticket_i,
+  input  logic                    terr_jdb_ack_ok_i,
+  // ...and the evidence both blocks keep. Events and cycles named apart.
+  output logic [31:0]             terr_wb_sheets_written_o,
+  output logic [31:0]             terr_wb_sheets_refused_o,
+  output logic [31:0]             terr_wb_sheets_faulted_o,
+  output logic [31:0]             terr_wb_guard_denied_o,
+  output logic [31:0]             terr_wb_acks_unmatched_o,
+  output logic [31:0]             terr_wb_acks_overdue_o,
+  output logic [31:0]             terr_jdb_starved_cycles_o,
+  output logic [31:0]             terr_jdb_ret_overflow_o,
 
   // ==========================================================================
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
@@ -1171,6 +1191,7 @@ module zhao_console_board
   // for having it.
   output logic [31:0]             terr_rdshare_jobs_a_o,
   output logic [31:0]             terr_rdshare_jobs_b_o,
+  output logic [31:0]             terr_rdshare_jobs_wb_o,  // 2: TERRAIN.WRITEBACK
   output logic [31:0]             terr_rdshare_denied_o,
   output logic [31:0]             terr_rdshare_contention_o,
   output logic [31:0]             terr_rdshare_err_short_o,
@@ -1269,6 +1290,10 @@ module zhao_console_board
   output logic [31:0]             terr_hps_c0_bursts_o,
   output logic [31:0]             terr_hps_c1_bursts_o,
   output logic [31:0]             terr_hps_c1_wait_cycles_o,
+  // Client 2, TERRAIN.WRITEBACK's journal writes (owner ruling R4's N-client
+  // arbiter). Its wait is the number that says what the loader costs it.
+  output logic [31:0]             terr_hps_c2_bursts_o,
+  output logic [31:0]             terr_hps_c2_wait_cycles_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -2725,6 +2750,7 @@ module zhao_console_board
       .terr_hps_wr_data_o                (terr_hps_wr_data_o),
       .terr_hps_wr_last_o                (terr_hps_wr_last_o),
       .terr_hps_rsp_i                    (terr_hps_rsp_i),
+      .terr_hps_wr_ready_i               (terr_hps_wr_ready_i),
       .terr_guard_req_o                  (terr_guard_req_o),
       .terr_guard_rsp_i                  (terr_guard_rsp_i),
       .terr_guard_wdata_o                (terr_guard_wdata_o),
@@ -2745,22 +2771,30 @@ module zhao_console_board
       .terr_chk_epoch_i                  (terr_chk_epoch_i),
       .terr_chk_valid_o                  (terr_chk_valid_o),
       .terr_chk_stale_o                  (terr_chk_stale_o),
-      .terr_wb_valid_o                   (terr_wb_valid_o),
-      .terr_wb_ready_i                   (terr_wb_ready_i),
-      .terr_wb_slot_o                    (terr_wb_slot_o),
-      .terr_wb_gen_o                     (terr_wb_gen_o),
-      .terr_wb_epoch_o                   (terr_wb_epoch_o),
-      .terr_wb_island_o                  (terr_wb_island_o),
-      .terr_wb_ix_o                      (terr_wb_ix_o),
-      .terr_wb_iz_o                      (terr_wb_iz_o),
-      .terr_wb_src_id_o                  (terr_wb_src_id_o),
-      .terr_wb_done_valid_i              (terr_wb_done_valid_i),
-      .terr_wb_done_slot_i               (terr_wb_done_slot_i),
-      .terr_wback_valid_i                (terr_wback_valid_i),
-      .terr_wback_ready_o                (terr_wback_ready_o),
-      .terr_wback_slot_i                 (terr_wback_slot_i),
-      .terr_wback_gen_i                  (terr_wback_gen_i),
-      .terr_wback_epoch_i                (terr_wback_epoch_i),
+      .terr_cfg_journal_base_i           (terr_cfg_journal_base_i),
+      .terr_cfg_journal_bytes_i          (terr_cfg_journal_bytes_i),
+      .terr_jdb_post_valid_i             (terr_jdb_post_valid_i),
+      .terr_jdb_post_ready_o             (terr_jdb_post_ready_o),
+      .terr_jdb_post_slot_i              (terr_jdb_post_slot_i),
+      .terr_jdb_post_ticket_i            (terr_jdb_post_ticket_i),
+      .terr_jdb_ret_valid_o              (terr_jdb_ret_valid_o),
+      .terr_jdb_ret_ready_i              (terr_jdb_ret_ready_i),
+      .terr_jdb_ret_ticket_o             (terr_jdb_ret_ticket_o),
+      .terr_jdb_ret_final_o              (terr_jdb_ret_final_o),
+      .terr_jdb_ret_ok_o                 (terr_jdb_ret_ok_o),
+      .terr_jdb_ret_verdict_o            (terr_jdb_ret_verdict_o),
+      .terr_jdb_ack_valid_i              (terr_jdb_ack_valid_i),
+      .terr_jdb_ack_ready_o              (terr_jdb_ack_ready_o),
+      .terr_jdb_ack_ticket_i             (terr_jdb_ack_ticket_i),
+      .terr_jdb_ack_ok_i                 (terr_jdb_ack_ok_i),
+      .terr_wb_sheets_written_o          (terr_wb_sheets_written_o),
+      .terr_wb_sheets_refused_o          (terr_wb_sheets_refused_o),
+      .terr_wb_sheets_faulted_o          (terr_wb_sheets_faulted_o),
+      .terr_wb_guard_denied_o            (terr_wb_guard_denied_o),
+      .terr_wb_acks_unmatched_o          (terr_wb_acks_unmatched_o),
+      .terr_wb_acks_overdue_o            (terr_wb_acks_overdue_o),
+      .terr_jdb_starved_cycles_o         (terr_jdb_starved_cycles_o),
+      .terr_jdb_ret_overflow_o           (terr_jdb_ret_overflow_o),
       .terr_ps_guard_req_o               (terr_ps_guard_req_o),
       .terr_ps_guard_rsp_i               (terr_ps_guard_rsp_i),
       .terr_ps_beat_valid_i              (terr_ps_beat_valid_i),
@@ -2808,6 +2842,7 @@ module zhao_console_board
       .terr_hr_idle_o                    (terr_hr_idle_o),
       .terr_rdshare_jobs_a_o             (terr_rdshare_jobs_a_o),
       .terr_rdshare_jobs_b_o             (terr_rdshare_jobs_b_o),
+      .terr_rdshare_jobs_wb_o            (terr_rdshare_jobs_wb_o),
       .terr_rdshare_denied_o             (terr_rdshare_denied_o),
       .terr_rdshare_contention_o         (terr_rdshare_contention_o),
       .terr_rdshare_err_short_o          (terr_rdshare_err_short_o),
@@ -2875,6 +2910,8 @@ module zhao_console_board
       .terr_hps_c0_bursts_o              (terr_hps_c0_bursts_o),
       .terr_hps_c1_bursts_o              (terr_hps_c1_bursts_o),
       .terr_hps_c1_wait_cycles_o         (terr_hps_c1_wait_cycles_o),
+      .terr_hps_c2_bursts_o              (terr_hps_c2_bursts_o),
+      .terr_hps_c2_wait_cycles_o         (terr_hps_c2_wait_cycles_o),
       .terr_held_o                       (terr_held_o),
       .terr_busy_o                       (terr_busy_o),
       .terr_jobs_accepted_o              (terr_jobs_accepted_o),

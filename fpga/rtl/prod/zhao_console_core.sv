@@ -770,12 +770,12 @@
 //   the second reading narrowed its claim about the four extra job fields from
 //   four to three. See I21.
 //
-//   TERRAIN.BAKE and TERRAIN.WRITEBACK -- REFUSED; entries I32 and I28 carry
-//   those arguments, and BOTH were rewritten by the second sweep. I32's stated
-//   cause had expired (it cited I27's placement blocker, which I27 itself
-//   records as closed) and the real refusal is a packet-shape conflict plus two
-//   missing LAWS; I28's third reason survived but the block's own header names
-//   a blocker that has expired. Both entries carry the detail.
+//   TERRAIN.BAKE -- REFUSED; entry I32 carries the argument, rewritten by the
+//   second sweep: its stated cause had expired (it cited I27's placement
+//   blocker, which I27 itself records as closed) and the real refusal is a
+//   packet-shape conflict plus two missing LAWS.
+//   TERRAIN.WRITEBACK -- COMPOSED 2026-09-19 (the I28 note in the table below),
+//   once owner rulings R14 and R4 answered both of its refusals.
 //
 //   TERRAIN.NORMALMAP -- REFUSED, and it is the one whose seam is furthest
 //   away. It is a FRAGMENT-stage block: its input is a perspective-correct
@@ -1671,12 +1671,14 @@
 //      bridge's HARNESS side, not a client side. So terrain cannot reach
 //      either from in here without a shell port change.
 //
-//      The two terrain readers are merged by the REAL `zhao_hps_arbiter`
-//      before they leave, so what crosses this boundary is ONE bridge client,
-//      not two. That arbiter has exactly TWO client ports and its rule-5
-//      starvation law is written for two guaranteed clients; a third is an
-//      owner ruling, and it is the second reason TERRAIN.WRITEBACK is not
-//      composed (I28).
+//      The terrain bridge clients are merged by the REAL HPS arbiter before
+//      they leave, so what crosses this boundary is ONE bridge client, not
+//      three. Since 2026-09-19 that is `zhao_hps_arbiter_n` at N=3 (owner
+//      ruling R4): TERRAIN.CMD, TERRAIN.PAGELOADER and TERRAIN.WRITEBACK. The
+//      writeback is the first terrain client that WRITES, so the family gained
+//      `terr_hps_wr_ready_i`, the bridge's own write-acceptance level -- one
+//      wire of the same socket, not a new one. Its sheet READS are the third
+//      requester of `u_terrain_rdshare`, so the guard side gained nothing.
 //
 //      WHY THIS IS NOT I23's REFUSAL AGAIN. GEOM.MESHFETCH's beats come back
 //      from INSIDE the shell through MEM.VRAM.ARBITER and `zhao_sdram_ctrl`,
@@ -1760,57 +1762,23 @@
 //      declared at their wire rather than hidden behind an empty port
 //      connection. The store behind that index is a later packet's block.
 //
-// I28. TERRAIN.SEQ's F-sheet writeback job (`terr_wb_*`), its barrier
-//      completion (`terr_wb_done_*`) and TERRAIN.RESIDENCY's writeback
-//      acknowledgement (`terr_wback_*`) -- BOUNDARY. All three are one gap
-//      because they are three ends of ONE absent block, and that block EXISTS:
-//      `fpga/rtl/terrain/zhao_terrain_writeback.sv`, tested, whose `j_*` port
-//      takes TERRAIN.SEQ's `wb_*` almost field for field. It is left out for
-//      two independent reasons, either of which is sufficient:
-//
-//        * ALMOST. Its job port also needs `j_journal_addr_i` and `j_seq_i` --
-//          where in the HPS journal the sheet goes and the ticket the journal
-//          echoes back. TERRAIN.SEQ emits neither and nothing in `fpga/rtl`
-//          owns them; `tests/terrain/tb_terrain_world.sv` mints the ticket in
-//          the bench and its own comment calls that "glue [that] is a finding
-//          rather than a convenience: no contract says who owns the journal
-//          ticket". Minting it here would be that finding, hidden.
-//        * It would be a THIRD MEM.HPS.BRIDGE client behind a two-port
-//          arbiter -- see I26.
-//
-//      AND IT COULD NOT SEE A BEAT ANYWAY, which is the check worth doing
-//      before calling a refusal expensive. A writeback job is caused by a
-//      claim evicting a page whose F-sheet is dirty, and a page becomes dirty
-//      only through the directory's `dm_f` port, whose owner is TERRAIN.BAKE
-//      (entry I27's subsystem, not composed). With no deformation in the core
-//      there are no dirty evictions, so the block would add its area for a
-//      path nothing can enter.
-//
-//      RE-READ 2026-09-19 AND THE REFUSAL SURVIVED -- but ONE BLOCKER THE
-//      BLOCK'S OWN HEADER STILL ADVERTISES HAS EXPIRED, and it is named here
-//      because it is the first thing the next reader will hit and it will stop
-//      them. `zhao_terrain_writeback.sv` 67-84 says "MEM.GUARD MUST GAIN A READ
-//      ARM, AND IT IS NOT MADE HERE ... TERRAIN.PAGE_POOL, WRITE-ONLY UNTIL
-//      2026-09-06", and concludes "until it lands, every sheet faults as
-//      V_INCOMPLETE with `guard_denied_o` counting, and NO slot is released".
-//      SEARCHED `fpga/rtl/memory/zhao_mem_guard.sv`: IT LANDED. Its region
-//      table now reads "TERRAIN.PAGE_POOL ... TERRAIN.BUILD, WRITE (pages in)
-//      and READ (F sheets" (lines 15-16), line 163 says the arm is "READ for
-//      the writeback (rulings T2 / T3 / T4)", and lines 198-200 are the guard
-//      answering the writeback's own sentence: "THE READ WAS WITHHELD UNTIL ITS
-//      BLOCK EXISTED ... brings its own arm and its own proof." So the deadline
-//      in that header is thirteen days past and the file has not been told.
-//      This is the uncashed-cheque shape one step on: the prerequisite was
-//      built, and the note asking for it was never read back.
-//
-//      THE THREE REASONS ABOVE ARE UNAFFECTED, and it is worth being explicit
-//      that removing an expired blocker did not weaken them. The journal ticket
-//      still has no owner (`tests/terrain/tb_terrain_world.sv` 1651-1655 mints
-//      it in glue and calls that "a finding rather than a convenience"); the
-//      HPS arbiter in this module is `u_terr_hps_arb` with its two ports taken
-//      by TERRAIN.CMD and TERRAIN.PAGELOADER, so a third client is still an
-//      owner ruling; and the dirty-eviction path is still unreachable, which
-//      traces to I32 rather than to I27 now that I32 has been rewritten.
+// (I28 CLOSED 2026-09-19, owner rulings R14 and R4. TERRAIN.SEQ's F-sheet
+//      writeback job, its barrier completion and TERRAIN.RESIDENCY's writeback
+//      acknowledgement -- the three ends this entry named -- are now internal:
+//      TERRAIN.SEQ -> `u_terrain_jdoorbell` -> `u_terrain_writeback` ->
+//      TERRAIN.RESIDENCY, with the writeback's sheet reads the third requester
+//      of `u_terrain_rdshare` and its journal writes client 2 of
+//      `u_terr_hps_arb`. Its two refusals were answered by rulings, not by this
+//      file: SW.STREAM owns the journal address and ticket through the doorbell
+//      contract (design/contracts/TERRAIN.WRITEBACK.DOORBELL.md), and the
+//      arbiter is N-wide. What crosses the edge now is the HPS's own half of
+//      that contract (`terr_jdb_*`, `terr_cfg_journal_*`): plan D10's
+//      harness-is-the-HPS edge, the same kind as the FRAME_RING view. The block's header carried an
+//      expired blocker (the guard read arm, landed 2026-09-06); it is corrected
+//      in place. STILL TRUE and recorded at the instance: nothing in this core
+//      can DIRTY a page until TERRAIN.BAKE composes (I27/I32), so the path is
+//      exercised by `tests/terrain/world_composed_directed.cpp`, which composes
+//      the same chain around a played HPS, rather than by the smoke bench.)
 //
 // I29. GEOM.POSE's CLIP PAGE AND SKELETON BAKE (`geom_pose_start_i`,
 //      `geom_pose_bone_*`, `geom_pose_quat_*`, `geom_pose_inv_rest_i`,
@@ -3806,6 +3774,12 @@ module zhao_console_core
   output logic [63:0]             terr_hps_wr_data_o,
   output logic                    terr_hps_wr_last_o,
   input  zhao_hps_burst_rsp_t     terr_hps_rsp_i,
+  // The bridge's write-acceptance LEVEL (`zhao_hps_bridge.wr_ready`). WIDENED
+  // 2026-09-19 when TERRAIN.WRITEBACK became the first terrain client that
+  // WRITES: the bridge consumes a beat only once the HPS has accepted the
+  // burst, so a writer that streams on the grant loses its first beats
+  // silently. Same socket as the rest of this family; it closes with I26.
+  input  logic                    terr_hps_wr_ready_i,
 
   output zhao_guard_req_t         terr_guard_req_o,
   input  zhao_guard_rsp_t         terr_guard_rsp_i,
@@ -3837,25 +3811,39 @@ module zhao_console_core
   output logic                    terr_chk_valid_o,
   output logic                    terr_chk_stale_o,
 
-  // ---- I28: TERRAIN.SEQ's F-sheet writeback job and its barrier release ---
-  output logic                    terr_wb_valid_o,
-  input  logic                    terr_wb_ready_i,
-  output logic [TERR_SLOTW-1:0]   terr_wb_slot_o,
-  output logic [TERR_GENW-1:0]    terr_wb_gen_o,
-  output logic [31:0]             terr_wb_epoch_o,
-  output logic [31:0]             terr_wb_island_o,
-  output logic signed [15:0]      terr_wb_ix_o,
-  output logic signed [15:0]      terr_wb_iz_o,
-  output logic [31:0]             terr_wb_src_id_o,
-  input  logic                    terr_wb_done_valid_i,
-  input  logic [TERR_SLOTW-1:0]   terr_wb_done_slot_i,
-
-  // ---- I28 (other end): TERRAIN.RESIDENCY's writeback-ACK barrier --------
-  input  logic                    terr_wback_valid_i,
-  output logic                    terr_wback_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_wback_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
-  input  logic [31:0]             terr_wback_epoch_i,
+  // ---- THE F-SHEET JOURNAL DOORBELL: SW.STREAM's own words (R14, D10) ------
+  // NOT A TIE-OFF, and not entry I28 moved sideways: I28 is CLOSED. TERRAIN.SEQ
+  // -> the doorbell -> TERRAIN.WRITEBACK -> TERRAIN.RESIDENCY is composed below,
+  // and what crosses this edge is the HPS itself -- the journal descriptor, the
+  // grants it posts, the tickets the hardware returns and the ACKs it sends.
+  // In Verilator the harness IS the HPS (plan D10), exactly as it is for the
+  // FRAME_RING view and `terr_cfg_*` above. Owner ruling R14 names SW.STREAM the
+  // owner; design/contracts/TERRAIN.WRITEBACK.DOORBELL.md is the exchange.
+  input  logic [31:0]             terr_cfg_journal_base_i,   // D0
+  input  logic [31:0]             terr_cfg_journal_bytes_i,  // D0
+  input  logic                    terr_jdb_post_valid_i,     // D1: a grant
+  output logic                    terr_jdb_post_ready_o,
+  input  logic [15:0]             terr_jdb_post_slot_i,
+  input  logic [31:0]             terr_jdb_post_ticket_i,
+  output logic                    terr_jdb_ret_valid_o,      // D2: a return
+  input  logic                    terr_jdb_ret_ready_i,
+  output logic [31:0]             terr_jdb_ret_ticket_o,
+  output logic                    terr_jdb_ret_final_o,
+  output logic                    terr_jdb_ret_ok_o,
+  output logic [3:0]              terr_jdb_ret_verdict_o,
+  input  logic                    terr_jdb_ack_valid_i,      // D3: the ACK
+  output logic                    terr_jdb_ack_ready_o,
+  input  logic [31:0]             terr_jdb_ack_ticket_i,
+  input  logic                    terr_jdb_ack_ok_i,
+  // ...and the evidence both blocks keep. Events and cycles named apart.
+  output logic [31:0]             terr_wb_sheets_written_o,
+  output logic [31:0]             terr_wb_sheets_refused_o,
+  output logic [31:0]             terr_wb_sheets_faulted_o,
+  output logic [31:0]             terr_wb_guard_denied_o,
+  output logic [31:0]             terr_wb_acks_unmatched_o,
+  output logic [31:0]             terr_wb_acks_overdue_o,
+  output logic [31:0]             terr_jdb_starved_cycles_o,
+  output logic [31:0]             terr_jdb_ret_overflow_o,
 
   // ==========================================================================
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
@@ -3959,6 +3947,7 @@ module zhao_console_core
   // for having it.
   output logic [31:0]             terr_rdshare_jobs_a_o,
   output logic [31:0]             terr_rdshare_jobs_b_o,
+  output logic [31:0]             terr_rdshare_jobs_wb_o,  // 2: TERRAIN.WRITEBACK
   output logic [31:0]             terr_rdshare_denied_o,
   output logic [31:0]             terr_rdshare_contention_o,
   output logic [31:0]             terr_rdshare_err_short_o,
@@ -4057,6 +4046,10 @@ module zhao_console_core
   output logic [31:0]             terr_hps_c0_bursts_o,
   output logic [31:0]             terr_hps_c1_bursts_o,
   output logic [31:0]             terr_hps_c1_wait_cycles_o,
+  // Client 2, TERRAIN.WRITEBACK's journal writes (owner ruling R4's N-client
+  // arbiter). Its wait is the number that says what the loader costs it.
+  output logic [31:0]             terr_hps_c2_bursts_o,
+  output logic [31:0]             terr_hps_c2_wait_cycles_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -8386,14 +8379,11 @@ module zhao_console_core
   // names v2 by file when it explains where its SEQW comes from.
   //
   // WHAT IS NOT HERE, AND WHY -- the refusals are the valuable half:
-  //   * TERRAIN.WRITEBACK is a real consumer of TERRAIN.SEQ's `wb_*` and is
-  //     LEFT OUT (entry I28). Two reasons, either sufficient. Its job port
-  //     needs `j_journal_addr_i` and `j_seq_i`, which TERRAIN.SEQ does not
-  //     emit and nothing in `fpga/rtl` owns -- the composed bench mints the
-  //     journal ticket and its own comment calls that glue "a finding". And it
-  //     would be a THIRD MEM.HPS.BRIDGE client: `zhao_hps_arbiter` has exactly
-  //     two ports and its rule-5 starvation law is written for two guaranteed
-  //     clients, so a third is an owner ruling and not a wiring act.
+  //   * TERRAIN.WRITEBACK WAS LEFT OUT HERE UNTIL 2026-09-19 (entry I28), for
+  //     two reasons that were both true: its journal address and ticket had no
+  //     owner, and it would have been a third client of a two-port arbiter.
+  //     Owner ruling R14 gave the first to SW.STREAM and R4 widened the arbiter,
+  //     so it is composed below, behind `u_terrain_jdoorbell`.
   //   * TERRAIN.PAGESTREAM / MIPFEED / MIPGEN connect to EACH OTHER exactly --
   //     that chain is real and its seams are clean. What it has no owner for is
   //     its HEAD: something must notice a page has landed and ask for its mips,
@@ -8438,30 +8428,66 @@ module zhao_console_core
   // `c1_wait_cycles_o` is the arbiter's own instrument for saying what that
   // choice costs the loader.
 
-  zhao_hps_arbiter u_terr_hps_arb (
-    .clk           (gpu_clk),
-    .rst_n         (rst_n),
-    .c0_req_i      (tcm_hps_req),
-    .c0_req_grant_o(tcm_hps_grant),
-    .c0_wr_valid_i (1'b0),
-    .c0_wr_data_i  (64'd0),
-    .c0_wr_last_i  (1'b0),
-    .c0_rsp_o      (tcm_hps_rsp),
-    .c1_req_i      (tpl_hps_req),
-    .c1_req_grant_o(tpl_hps_grant),
-    .c1_wr_valid_i (1'b0),
-    .c1_wr_data_i  (64'd0),
-    .c1_wr_last_i  (1'b0),
-    .c1_rsp_o      (tpl_hps_rsp),
-    .b_req_o       (terr_hps_req_o),
-    .b_req_grant_i (terr_hps_grant_i),
-    .b_wr_valid_o  (terr_hps_wr_valid_o),
-    .b_wr_data_o   (terr_hps_wr_data_o),
-    .b_wr_last_o   (terr_hps_wr_last_o),
-    .b_rsp_i       (terr_hps_rsp_i),
-    .c0_bursts_o     (terr_hps_c0_bursts_o),
-    .c1_bursts_o     (terr_hps_c1_bursts_o),
-    .c1_wait_cycles_o(terr_hps_c1_wait_cycles_o)
+  // THREE CLIENTS SINCE 2026-09-19 (owner ruling R4, `zhao_hps_arbiter_n`).
+  // TERRAIN.WRITEBACK's journal writes take index 2, BELOW the loader, and that
+  // placement is a statement rather than a default: the arbiter's law is that
+  // a continuously-asking lower index starves every higher one, so a burst of
+  // page loads makes the writeback wait -- visibly, in `c2_wait_cycles`. It
+  // cannot deadlock: a dirty victim's slot is barred from LOADING until its
+  // sheet is ACKed (the directory's EVICT_PENDING), so the load that needs the
+  // writeback is never among the loads that starve it, and the loader goes
+  // idle when TERRAIN.SEQ is held behind its own barrier. Indices 0 and 1 keep
+  // their meaning, so `c0/c1` counters read exactly what they read before.
+  // The writeback's `wready` is the bridge's level, and only the burst's owner
+  // is streaming, so it needs no routing through the arbiter.
+  zhao_hps_burst_req_t twb_hps_req;
+  logic                twb_hps_grant;
+  zhao_hps_burst_rsp_t twb_hps_rsp;
+  logic [63:0]         twb_hps_wdata;
+  logic                twb_hps_wvalid, twb_hps_wlast;
+  zhao_hps_burst_req_t [2:0]       thps_req;
+  logic                [2:0]       thps_grant;
+  logic                [2:0]       thps_wr_valid, thps_wr_last;
+  logic                [2:0][63:0] thps_wr_data;
+  zhao_hps_burst_rsp_t [2:0]       thps_rsp;
+  logic                [2:0][31:0] thps_bursts;
+  logic                [2:1][31:0] thps_wait;
+
+  assign thps_req      = {twb_hps_req, tpl_hps_req, tcm_hps_req};
+  assign thps_wr_valid = {twb_hps_wvalid, 1'b0, 1'b0};
+  assign thps_wr_last  = {twb_hps_wlast, 1'b0, 1'b0};
+  assign thps_wr_data  = {twb_hps_wdata, 64'd0, 64'd0};
+  assign tcm_hps_grant = thps_grant[0];
+  assign tpl_hps_grant = thps_grant[1];
+  assign twb_hps_grant = thps_grant[2];
+  assign tcm_hps_rsp   = thps_rsp[0];
+  assign tpl_hps_rsp   = thps_rsp[1];
+  assign twb_hps_rsp   = thps_rsp[2];
+  assign terr_hps_c0_bursts_o      = thps_bursts[0];
+  assign terr_hps_c1_bursts_o      = thps_bursts[1];
+  assign terr_hps_c2_bursts_o      = thps_bursts[2];
+  assign terr_hps_c1_wait_cycles_o = thps_wait[1];
+  assign terr_hps_c2_wait_cycles_o = thps_wait[2];
+
+  zhao_hps_arbiter_n #(
+    .N(3)
+  ) u_terr_hps_arb (
+    .clk          (gpu_clk),
+    .rst_n        (rst_n),
+    .req_i        (thps_req),
+    .req_grant_o  (thps_grant),
+    .wr_valid_i   (thps_wr_valid),
+    .wr_data_i    (thps_wr_data),
+    .wr_last_i    (thps_wr_last),
+    .rsp_o        (thps_rsp),
+    .b_req_o      (terr_hps_req_o),
+    .b_req_grant_i(terr_hps_grant_i),
+    .b_wr_valid_o (terr_hps_wr_valid_o),
+    .b_wr_data_o  (terr_hps_wr_data_o),
+    .b_wr_last_o  (terr_hps_wr_last_o),
+    .b_rsp_i      (terr_hps_rsp_i),
+    .bursts_o     (thps_bursts),
+    .wait_cycles_o(thps_wait)
   );
 
   // ---- TERRAIN.CMD -> TERRAIN.SEQ -----------------------------------------
@@ -8586,6 +8612,26 @@ module zhao_console_core
   wire signed [15:0]       tsq_fault_ix, tsq_fault_iz;
   /* verilator lint_on UNUSEDSIGNAL */
 
+  // ---- TERRAIN.SEQ's writeback job, and its answer ------------------------
+  wire                     tsq_wb_valid, tsq_wb_ready;
+  wire [TERR_SLOTW-1:0]    tsq_wb_slot;
+  wire [TERR_GENW-1:0]     tsq_wb_gen;
+  wire [31:0]              tsq_wb_epoch, tsq_wb_island, tsq_wb_src_id;
+  wire signed [15:0]       tsq_wb_ix, tsq_wb_iz;
+  wire                     tsq_wb_done_valid;
+  wire [TERR_SLOTW-1:0]    tsq_wb_done_slot;
+  // TERRAIN.WRITEBACK's barrier release, to the directory.
+  wire                     twb_rel_valid, twb_rel_ready;
+  wire [TERR_SLOTW-1:0]    twb_rel_slot;
+  wire [TERR_GENW-1:0]     twb_rel_gen;
+  wire [31:0]              twb_rel_epoch;
+  // TERRAIN.WRITEBACK's read client, the third requester of the one terrain
+  // guard read client (`u_terrain_rdshare`).
+  zhao_guard_req_t         twb_g_req;
+  zhao_guard_rsp_t         twb_g_rsp;
+  wire                     twb_g_beat_valid, twb_g_beat_last;
+  wire [63:0]              twb_g_beat_data;
+
   zhao_terrain_seq #(
     .COMPOSE_SLOTS(TERR_CSLOTS),
     .SLOTW        (TERR_SLOTW),
@@ -8665,21 +8711,21 @@ module zhao_console_core
     .pin_gen_o  (tsq_pin_gen),
     .pin_epoch_o(tsq_pin_epoch),
 
-    // TERRAIN.WRITEBACK is not composed -- entry I28. Both halves of the
-    // barrier leave the module together, so the job and its completion stay
-    // one seam rather than becoming a job that goes out and an answer that is
-    // invented here.
-    .wb_valid_o      (terr_wb_valid_o),
-    .wb_ready_i      (terr_wb_ready_i),
-    .wb_done_valid_i (terr_wb_done_valid_i),
-    .wb_done_slot_i  (terr_wb_done_slot_i),
-    .wb_slot_o       (terr_wb_slot_o),
-    .wb_gen_o        (terr_wb_gen_o),
-    .wb_epoch_o      (terr_wb_epoch_o),
-    .wb_island_o     (terr_wb_island_o),
-    .wb_ix_o         (terr_wb_ix_o),
-    .wb_iz_o         (terr_wb_iz_o),
-    .wb_src_id_o     (terr_wb_src_id_o),
+    // TERRAIN.WRITEBACK IS COMPOSED (entry I28 closed 2026-09-19), through
+    // SW.STREAM's journal doorbell, which attaches the two fields this port
+    // does not carry. The completion comes back through the doorbell too, so
+    // the job and its answer are still one seam.
+    .wb_valid_o      (tsq_wb_valid),
+    .wb_ready_i      (tsq_wb_ready),
+    .wb_done_valid_i (tsq_wb_done_valid),
+    .wb_done_slot_i  (tsq_wb_done_slot),
+    .wb_slot_o       (tsq_wb_slot),
+    .wb_gen_o        (tsq_wb_gen),
+    .wb_epoch_o      (tsq_wb_epoch),
+    .wb_island_o     (tsq_wb_island),
+    .wb_ix_o         (tsq_wb_ix),
+    .wb_iz_o         (tsq_wb_iz),
+    .wb_src_id_o     (tsq_wb_src_id),
     .wb_wait_cycles_o(tsq_wb_wait_cycles),
 
     .ld_valid_o     (tsq_ld_valid),
@@ -8919,13 +8965,13 @@ module zhao_console_core
     .unpin_gen_i  (tps_done_gen),
     .unpin_epoch_i(tps_done_epoch),
 
-    // I28, other end: the F-sheet journal barrier. TERRAIN.WRITEBACK owns it
-    // and is not composed.
-    .wb_valid_i(terr_wback_valid_i),
-    .wb_ready_o(terr_wback_ready_o),
-    .wb_slot_i (terr_wback_slot_i),
-    .wb_gen_i  (terr_wback_gen_i),
-    .wb_epoch_i(terr_wback_epoch_i),
+    // THE BARRIER RELEASE, from TERRAIN.WRITEBACK: raised only on a matched,
+    // good journal ACK for a ticket that block allocated (entry I28, closed).
+    .wb_valid_i(twb_rel_valid),
+    .wb_ready_o(twb_rel_ready),
+    .wb_slot_i (twb_rel_slot),
+    .wb_gen_i  (twb_rel_gen),
+    .wb_epoch_i(twb_rel_epoch),
 
     .chk_valid_i(terr_chk_valid_i),
     .chk_slot_i (terr_chk_slot_i),
@@ -8943,6 +8989,231 @@ module zhao_console_core
     .stale_events_o      (tres_stale_events),
     .crc_failures_o      (terr_res_crc_failures_o),
     .resident_o          (terr_res_resident_o)
+  );
+
+  // ---- SW.STREAM's JOURNAL DOORBELL and TERRAIN.WRITEBACK (entry I28) -------
+  // CLOSED 2026-09-19 under owner ruling R14. The two reasons I28 gave for
+  // leaving the writeback out are both answered, and neither by this file:
+  //   * the journal ADDRESS and TICKET now have an owner -- SW.STREAM, whose
+  //     grants `zhao_terrain_jdoorbell` attaches to TERRAIN.SEQ's job verbatim
+  //     (design/contracts/TERRAIN.WRITEBACK.DOORBELL.md). Nothing here mints a
+  //     ticket; a job with no grant posted WAITS and the wait is counted;
+  //   * the THIRD HPS client exists: owner ruling R4 widened the arbiter to N,
+  //     and the writeback is index 2 of `u_terr_hps_arb` above.
+  // Its sheet READS go through the SAME one guard read client as the compose
+  // path's two readers -- a third requester of `u_terrain_rdshare`, under the
+  // same TERRAIN.BUILD identity MEM.GUARD's read arm already admits -- so entry
+  // I26's boundary gains no port for it.
+  //
+  // WHAT CANNOT YET ENTER IT, said so a quiet counter is not misread: a
+  // writeback job is caused by claiming a slot whose F sheet is DIRTY, and a
+  // page becomes dirty only through the directory's `dm_f`, whose writer is
+  // TERRAIN.BAKE (entries I27/I32, still boundaries). Until then the path is
+  // reachable only by a harness driving `terr_dm_*`. The traversal evidence is
+  // `tests/terrain/world_composed_directed.cpp`, which composes this same
+  // sequencer -> doorbell -> writeback -> directory chain with the doorbell's
+  // HPS side played, and journals, ACKs and releases a real dirty victim.
+  //
+  // THE WIDTH STEP, the same one the pageloader's completion crosses: the
+  // writeback and the doorbell carry TERR_MEMSLOT (one bit wider than the
+  // directory's handle) so a computed slot of 1,024 cannot alias to slot 0.
+  // Here the producer is TERR_SLOTW wide, the job's slot is carried to the
+  // release and the completion VERBATIM, and so the top bit is structurally
+  // zero on both ends -- a detector on it would report zero about a wire tied
+  // to zero, which is the unpin path's argument and reached the same way.
+  wire                    tjd_wj_valid, tjd_wj_ready;
+  wire [TERR_MEMSLOT-1:0] tjd_wj_slot;
+  wire [TERR_GENW-1:0]    tjd_wj_gen;
+  wire [31:0]             tjd_wj_epoch, tjd_wj_island, tjd_wj_seq, tjd_wj_src;
+  wire signed [15:0]      tjd_wj_ix, tjd_wj_iz;
+  wire [63:0]             tjd_wj_addr;
+  wire                    twb_landed_valid;
+  wire [31:0]             twb_landed_seq;
+  wire                    twb_done_valid, twb_done_ready, twb_done_ok;
+  wire [TERR_MEMSLOT-1:0] twb_done_slot_w, tjd_seq_done_slot_w, twb_rel_slot_w;
+  wire [3:0]              twb_done_verdict;
+  wire [31:0]             twb_done_seq;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The top slot bit (see the width step above), the completion's restated
+  // identity (TERRAIN.SEQ's barrier port takes {valid, slot} only), the
+  // fault trace, and the counters no port of this module carries.
+  wire                    twb_slot_msbs = twb_rel_slot_w[TERR_MEMSLOT-1]
+                                        ^ tjd_seq_done_slot_w[TERR_MEMSLOT-1];
+  wire [TERR_GENW-1:0]    twb_done_gen;
+  wire [31:0]             twb_done_epoch, twb_done_src_id;
+  wire [31:0]             twb_fault_island, twb_fault_seq, twb_fault_src_id;
+  wire signed [15:0]      twb_fault_ix, twb_fault_iz;
+  wire [3:0]              twb_fault_verdict;
+  wire [31:0]             twb_hdr_ident_fails, twb_bridge_errs, twb_acks_ok;
+  wire [31:0]             twb_acks_nak, twb_acks_after_epoch, twb_seq_conflicts;
+  wire [31:0]             twb_bytes, twb_outstanding_hwm, twb_ack_wait_max;
+  wire [31:0]             twb_jobs_stall;
+  wire [31:0]             tjd_grants_posted, tjd_grants_taken, tjd_returns_landed;
+  wire [31:0]             tjd_returns_final, tjd_credit_stall, tjd_owed;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  assign tsq_wb_done_slot = tjd_seq_done_slot_w[TERR_SLOTW-1:0];
+  assign twb_rel_slot     = twb_rel_slot_w[TERR_SLOTW-1:0];
+
+  zhao_terrain_jdoorbell #(
+    .SLOTW  (TERR_MEMSLOT),
+    .GENW   (TERR_GENW),
+    .GRANTS (4),
+    .TICKETS(4)
+  ) u_terrain_jdoorbell (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .cfg_journal_base_i(terr_cfg_journal_base_i),
+
+    .post_valid_i (terr_jdb_post_valid_i),
+    .post_ready_o (terr_jdb_post_ready_o),
+    .post_slot_i  (terr_jdb_post_slot_i),
+    .post_ticket_i(terr_jdb_post_ticket_i),
+
+    .sj_valid_i (tsq_wb_valid),
+    .sj_ready_o (tsq_wb_ready),
+    .sj_slot_i  ({1'b0, tsq_wb_slot}),
+    .sj_gen_i   (tsq_wb_gen),
+    .sj_epoch_i (tsq_wb_epoch),
+    .sj_island_i(tsq_wb_island),
+    .sj_ix_i    (tsq_wb_ix),
+    .sj_iz_i    (tsq_wb_iz),
+    .sj_src_id_i(tsq_wb_src_id),
+
+    .wj_valid_o       (tjd_wj_valid),
+    .wj_ready_i       (tjd_wj_ready),
+    .wj_slot_o        (tjd_wj_slot),
+    .wj_gen_o         (tjd_wj_gen),
+    .wj_epoch_o       (tjd_wj_epoch),
+    .wj_island_o      (tjd_wj_island),
+    .wj_ix_o          (tjd_wj_ix),
+    .wj_iz_o          (tjd_wj_iz),
+    .wj_journal_addr_o(tjd_wj_addr),
+    .wj_seq_o         (tjd_wj_seq),
+    .wj_src_id_o      (tjd_wj_src),
+
+    .landed_valid_i(twb_landed_valid),
+    .landed_seq_i  (twb_landed_seq),
+    .done_valid_i  (twb_done_valid),
+    .done_ready_o  (twb_done_ready),
+    .done_slot_i   (twb_done_slot_w),
+    .done_ok_i     (twb_done_ok),
+    .done_verdict_i(twb_done_verdict),
+    .done_seq_i    (twb_done_seq),
+
+    .seq_done_valid_o(tsq_wb_done_valid),
+    .seq_done_slot_o (tjd_seq_done_slot_w),
+
+    .ret_valid_o  (terr_jdb_ret_valid_o),
+    .ret_ready_i  (terr_jdb_ret_ready_i),
+    .ret_ticket_o (terr_jdb_ret_ticket_o),
+    .ret_final_o  (terr_jdb_ret_final_o),
+    .ret_ok_o     (terr_jdb_ret_ok_o),
+    .ret_verdict_o(terr_jdb_ret_verdict_o),
+
+    .grants_posted_o      (tjd_grants_posted),
+    .grants_taken_o       (tjd_grants_taken),
+    .returns_landed_o     (tjd_returns_landed),
+    .returns_final_o      (tjd_returns_final),
+    .starved_cycles_o     (terr_jdb_starved_cycles_o),
+    .credit_stall_cycles_o(tjd_credit_stall),
+    .tickets_owed_o       (tjd_owed),
+    .ret_overflow_o       (terr_jdb_ret_overflow_o)
+  );
+
+  zhao_terrain_writeback #(
+    .PAGE_BYTES  (TERR_PAGE_BYTES),
+    .REGION_BASE (TERR_POOL_BASE),
+    .REGION_SLOTS(TERR_POOL_SLOTS),
+    .SLOTW       (TERR_MEMSLOT),
+    .GENW        (TERR_GENW)
+  ) u_terrain_writeback (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .cfg_vram_client_i  (ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_hps_client_i   (ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_journal_base_i (terr_cfg_journal_base_i),
+    .cfg_journal_bytes_i(terr_cfg_journal_bytes_i),
+    .cfg_epoch_i        (terr_cfg_epoch_i),
+
+    .j_valid_i       (tjd_wj_valid),
+    .j_ready_o       (tjd_wj_ready),
+    .j_slot_i        (tjd_wj_slot),
+    .j_gen_i         (tjd_wj_gen),
+    .j_epoch_i       (tjd_wj_epoch),
+    .j_island_i      (tjd_wj_island),
+    .j_ix_i          (tjd_wj_ix),
+    .j_iz_i          (tjd_wj_iz),
+    .j_journal_addr_i(tjd_wj_addr),
+    .j_seq_i         (tjd_wj_seq),
+    .j_src_id_i      (tjd_wj_src),
+
+    .guard_req_o (twb_g_req),
+    .guard_rsp_i (twb_g_rsp),
+    .beat_valid_i(twb_g_beat_valid),
+    .beat_data_i (twb_g_beat_data),
+    .beat_last_i (twb_g_beat_last),
+
+    .hps_req_o      (twb_hps_req),
+    .hps_req_grant_i(twb_hps_grant),
+    .hps_rsp_i      (twb_hps_rsp),
+    .hps_wdata_o    (twb_hps_wdata),
+    .hps_wvalid_o   (twb_hps_wvalid),
+    .hps_wready_i   (terr_hps_wr_ready_i),
+    .hps_wlast_o    (twb_hps_wlast),
+
+    // D3: SW.STREAM's ACK goes straight to the ticket table, which is the one
+    // matcher -- an ACK for a ticket it does not hold is counted unmatched and
+    // releases nothing. The doorbell adds no second matcher.
+    .ack_valid_i(terr_jdb_ack_valid_i),
+    .ack_ready_o(terr_jdb_ack_ready_o),
+    .ack_seq_i  (terr_jdb_ack_ticket_i),
+    .ack_ok_i   (terr_jdb_ack_ok_i),
+
+    .wb_valid_o(twb_rel_valid),
+    .wb_ready_i(twb_rel_ready),
+    .wb_slot_o (twb_rel_slot_w),
+    .wb_gen_o  (twb_rel_gen),
+    .wb_epoch_o(twb_rel_epoch),
+
+    .done_valid_o  (twb_done_valid),
+    .done_ready_i  (twb_done_ready),
+    .done_slot_o   (twb_done_slot_w),
+    .done_gen_o    (twb_done_gen),
+    .done_epoch_o  (twb_done_epoch),
+    .done_ok_o     (twb_done_ok),
+    .done_verdict_o(twb_done_verdict),
+    .done_seq_o    (twb_done_seq),
+    .done_src_id_o (twb_done_src_id),
+
+    .landed_valid_o(twb_landed_valid),
+    .landed_seq_o  (twb_landed_seq),
+
+    .fault_island_o (twb_fault_island),
+    .fault_ix_o     (twb_fault_ix),
+    .fault_iz_o     (twb_fault_iz),
+    .fault_seq_o    (twb_fault_seq),
+    .fault_src_id_o (twb_fault_src_id),
+    .fault_verdict_o(twb_fault_verdict),
+
+    .sheets_written_o     (terr_wb_sheets_written_o),
+    .sheets_refused_o     (terr_wb_sheets_refused_o),
+    .sheets_faulted_o     (terr_wb_sheets_faulted_o),
+    .hdr_ident_fails_o    (twb_hdr_ident_fails),
+    .guard_denied_o       (terr_wb_guard_denied_o),
+    .bridge_errs_o        (twb_bridge_errs),
+    .acks_ok_o            (twb_acks_ok),
+    .acks_nak_o           (twb_acks_nak),
+    .acks_unmatched_o     (terr_wb_acks_unmatched_o),
+    .acks_after_epoch_o   (twb_acks_after_epoch),
+    .acks_overdue_o       (terr_wb_acks_overdue_o),
+    .seq_conflicts_o      (twb_seq_conflicts),
+    .wb_bytes_o           (twb_bytes),
+    .outstanding_hwm_o    (twb_outstanding_hwm),
+    .ack_wait_max_cycles_o(twb_ack_wait_max),
+    .jobs_stall_cycles_o  (twb_jobs_stall)
   );
 
   // ---- TERRAIN.LOADQ, between the sequencer and the loader ----------------
@@ -10082,26 +10353,54 @@ module zhao_console_core
   // `terr_rdshare_contention_o` is what says how often, and it is the number
   // any decision to widen this to two outstanding requests has to be made
   // against.
-  zhao_mem_share2 #(
+  // THREE READERS SINCE 2026-09-19. TERRAIN.WRITEBACK reads the evicted page's
+  // header and its F sheet (130 bursts a sheet) out of the SAME pool, under the
+  // SAME identity, and MEM.GUARD's `terrain_rd_ok` arm is the writeback's own
+  // (spec/memory_rules.md 5b: "landed with TERRAIN.WRITEBACK"). So it is a third
+  // requester of this share -- `zhao_mem_share_n`, the body `zhao_mem_share2`
+  // has wrapped since MEM.SHARE was widened to N and re-proved at N=3 -- and
+  // not a third port on this module's edge. Indices 0 and 1 are A and B as
+  // before; the rotation is round robin with bound N-1, so a sheet read can
+  // delay a refill by at most two requests, and `contention_o` counts it.
+  zhao_guard_req_t [2:0] trs_req;
+  zhao_guard_rsp_t [2:0] trs_rsp;
+  logic            [2:0] trs_beat_valid, trs_beat_last;
+  logic           [63:0] trs_beat_data;
+  logic       [2:0][31:0] trs_jobs;
+
+  assign trs_req          = {twb_g_req, trs_b_req, trs_a_req};
+  assign trs_a_rsp        = trs_rsp[0];
+  assign trs_b_rsp        = trs_rsp[1];
+  assign twb_g_rsp        = trs_rsp[2];
+  assign trs_a_beat_valid = trs_beat_valid[0];
+  assign trs_b_beat_valid = trs_beat_valid[1];
+  assign twb_g_beat_valid = trs_beat_valid[2];
+  assign trs_a_beat_last  = trs_beat_last[0];
+  assign trs_b_beat_last  = trs_beat_last[1];
+  assign twb_g_beat_last  = trs_beat_last[2];
+  assign trs_a_beat_data  = trs_beat_data;
+  assign trs_b_beat_data  = trs_beat_data;
+  assign twb_g_beat_data  = trs_beat_data;
+  assign terr_rdshare_jobs_a_o  = trs_jobs[0];
+  assign terr_rdshare_jobs_b_o  = trs_jobs[1];
+  assign terr_rdshare_jobs_wb_o = trs_jobs[2];
+
+  zhao_mem_share_n #(
+    .N         (3),
     .CLIENT_ID (6),        // ZHAO_CLIENT_TERRAIN_BUILD -- see zhao_pkg
-    .FORCE_READ(1'b1)      // both users READ; the pool's write arm is the loader's
+    .FORCE_READ(1'b1)      // all three READ; the pool's write arm is the loader's
   ) u_terrain_rdshare (
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // A: TERRAIN.HDRREAD, one 64-byte header burst per patch.
-    .a_req_i       (trs_a_req),
-    .a_rsp_o       (trs_a_rsp),
-    .a_beat_valid_o(trs_a_beat_valid),
-    .a_beat_data_o (trs_a_beat_data),
-    .a_beat_last_o (trs_a_beat_last),
-
-    // B: TERRAIN.PAGESTREAM, three plane bursts per refill.
-    .b_req_i       (trs_b_req),
-    .b_rsp_o       (trs_b_rsp),
-    .b_beat_valid_o(trs_b_beat_valid),
-    .b_beat_data_o (trs_b_beat_data),
-    .b_beat_last_o (trs_b_beat_last),
+    // 0: TERRAIN.HDRREAD, one 64-byte header burst per patch.
+    // 1: TERRAIN.PAGESTREAM, three plane bursts per refill.
+    // 2: TERRAIN.WRITEBACK, one header and 129 sheet chunks per dirty victim.
+    .req_i       (trs_req),
+    .rsp_o       (trs_rsp),
+    .beat_valid_o(trs_beat_valid),
+    .beat_data_o (trs_beat_data),
+    .beat_last_o (trs_beat_last),
 
     // I26: the one client leaves this module.
     .m_req_o       (terr_ps_guard_req_o),
@@ -10110,8 +10409,7 @@ module zhao_console_core
     .m_beat_data_i (terr_ps_beat_data_i),
     .m_beat_last_i (terr_ps_beat_last_i),
 
-    .jobs_a_o     (terr_rdshare_jobs_a_o),
-    .jobs_b_o     (terr_rdshare_jobs_b_o),
+    .jobs_o       (trs_jobs),
     .denied_o     (terr_rdshare_denied_o),
     .contention_o (terr_rdshare_contention_o),
     .err_short_o  (terr_rdshare_err_short_o),

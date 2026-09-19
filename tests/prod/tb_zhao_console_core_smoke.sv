@@ -575,23 +575,35 @@ module tb_zhao_console_core_smoke
   logic                    terr_chk_valid_o;
   logic                    terr_chk_stale_o;
 
-  logic                    terr_wb_valid_o;
-  logic                    terr_wb_ready_i;
-  logic [TERR_SLOTW_C-1:0] terr_wb_slot_o;
-  logic [TERR_GENW_C-1:0]  terr_wb_gen_o;
-  logic [31:0]             terr_wb_epoch_o;
-  logic [31:0]             terr_wb_island_o;
-  logic signed [15:0]      terr_wb_ix_o;
-  logic signed [15:0]      terr_wb_iz_o;
-  logic [31:0]             terr_wb_src_id_o;
-  logic                    terr_wb_done_valid_i;
-  logic [TERR_SLOTW_C-1:0] terr_wb_done_slot_i;
-
-  logic                    terr_wback_valid_i;
-  logic                    terr_wback_ready_o;
-  logic [TERR_SLOTW_C-1:0] terr_wback_slot_i;
-  logic [TERR_GENW_C-1:0]  terr_wback_gen_i;
-  logic [31:0]             terr_wback_epoch_i;
+  // SW.STREAM's journal doorbell (owner ruling R14): the HPS's own words.
+  logic [31:0]             terr_cfg_journal_base_i;
+  logic [31:0]             terr_cfg_journal_bytes_i;
+  logic                    terr_jdb_post_valid_i;
+  logic                    terr_jdb_post_ready_o;
+  logic [15:0]             terr_jdb_post_slot_i;
+  logic [31:0]             terr_jdb_post_ticket_i;
+  logic                    terr_jdb_ret_valid_o;
+  logic                    terr_jdb_ret_ready_i;
+  logic [31:0]             terr_jdb_ret_ticket_o;
+  logic                    terr_jdb_ret_final_o;
+  logic                    terr_jdb_ret_ok_o;
+  logic [3:0]              terr_jdb_ret_verdict_o;
+  logic                    terr_jdb_ack_valid_i;
+  logic                    terr_jdb_ack_ready_o;
+  logic [31:0]             terr_jdb_ack_ticket_i;
+  logic                    terr_jdb_ack_ok_i;
+  logic [31:0]             terr_wb_sheets_written_o;
+  logic [31:0]             terr_wb_sheets_refused_o;
+  logic [31:0]             terr_wb_sheets_faulted_o;
+  logic [31:0]             terr_wb_guard_denied_o;
+  logic [31:0]             terr_wb_acks_unmatched_o;
+  logic [31:0]             terr_wb_acks_overdue_o;
+  logic [31:0]             terr_jdb_starved_cycles_o;
+  logic [31:0]             terr_jdb_ret_overflow_o;
+  logic                    terr_hps_wr_ready_i;
+  logic [31:0]             terr_hps_c2_bursts_o;
+  logic [31:0]             terr_hps_c2_wait_cycles_o;
+  logic [31:0]             terr_rdshare_jobs_wb_o;
 
   logic [31:0]             terr_cmd_sets_accepted_o;
   logic [31:0]             terr_cmd_sets_refused_o;
@@ -1679,6 +1691,9 @@ module tb_zhao_console_core_smoke
   int unsigned  hps_bursts_served_q;
   logic         hps_grant_pulse_q;
   assign terr_hps_grant_i = hps_grant_pulse_q;
+  // This played bridge accepts no write burst (see the write arm below), so
+  // its write-acceptance level is never high.
+  assign terr_hps_wr_ready_i = 1'b0;
 
   function automatic logic [63:0] hps_read(input logic [31:0] byte_addr);
     int unsigned w;
@@ -1717,10 +1732,12 @@ module tb_zhao_console_core_smoke
                hps_state_qq <= 1;
              end
            end else if (terr_hps_req_o.valid && terr_hps_req_o.write) begin
-             // Nothing in this composition writes over the bridge --
-             // TERRAIN.WRITEBACK is the only terrain writer and it is entry
-             // I28, not composed. Granting and dropping would be a lie; this
-             // reports a bridge error so a write that appears here is LOUD.
+             // Nothing in this BENCH can write over the bridge -- the only
+             // terrain writer is TERRAIN.WRITEBACK, composed since entry I28
+             // closed, and it cannot be reached here (see the doorbell's
+             // initialisation). Granting and dropping would be a lie; this
+             // reports a bridge error so a write that appears here is LOUD,
+             // and `terr_hps_wr_ready_i` below is never raised.
              hps_grant_pulse_q <= 1'b1;
              terr_hps_rsp_i <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b1};
            end
@@ -2540,18 +2557,23 @@ module tb_zhao_console_core_smoke
     terr_chk_slot_i = '0;
     terr_chk_gen_i = '0;
     terr_chk_epoch_i = '0;
-    // Entry I28: TERRAIN.WRITEBACK is not composed. Its job port is held
-    // READY and its completion is NEVER asserted, which is the honest pair: a
-    // job that leaves and an answer that is not invented. Nothing in this
-    // bench can cause a writeback anyway -- that needs a dirty-F eviction and
-    // `terr_dm_f_i` is never raised.
-    terr_wb_ready_i = 1'b1;
-    terr_wb_done_valid_i = '0;
-    terr_wb_done_slot_i = '0;
-    terr_wback_valid_i = '0;
-    terr_wback_slot_i = '0;
-    terr_wback_gen_i = '0;
-    terr_wback_epoch_i = '0;
+    // TERRAIN.WRITEBACK IS COMPOSED (entry I28 closed) and this bench CANNOT
+    // REACH IT: a writeback job needs a dirty-F eviction, and `terr_dm_f_i` is
+    // never raised here -- nor could a page become resident to be dirtied,
+    // since every page this bench loads fails the header identity check. So
+    // the played SW.STREAM posts NO grants and sends NO ACKs, and the end of
+    // the run asserts that no job ever reached the doorbell. The traversal is
+    // tests/terrain/world_composed_directed.cpp's, which composes the same
+    // sequencer -> doorbell -> writeback -> directory chain.
+    terr_cfg_journal_base_i  = 32'h3000_0000;
+    terr_cfg_journal_bytes_i = 32'd16 * 32'd8192;
+    terr_jdb_post_valid_i  = 1'b0;
+    terr_jdb_post_slot_i   = '0;
+    terr_jdb_post_ticket_i = '0;
+    terr_jdb_ret_ready_i   = 1'b1;
+    terr_jdb_ack_valid_i   = 1'b0;
+    terr_jdb_ack_ticket_i  = '0;
+    terr_jdb_ack_ok_i      = 1'b0;
 
     // The population sits at the island datum: a legal origin, and the one
     // under which a local position IS a world position.
@@ -3655,8 +3677,25 @@ module tb_zhao_console_core_smoke
              terr_pl_pages_refused_o, terr_pl_fault_verdict_o, terr_pl_incomplete_o, terr_pl_hdr_ident_fails_o);
     $display("SMOKE:   fault island=%0d ix=%0d iz=%0d src_id=%0d (verdict 1=UNALIGNED 3=SLOT 4=STALE 5=CRC 6=SRC_ARENA 7=UNREACH 8=HDR_IDENT 9=INCOMPLETE)",
              terr_pl_fault_island_o, terr_pl_fault_ix_o, terr_pl_fault_iz_o, terr_pl_fault_src_id_o);
-    $display("SMOKE:   arb   c0_bursts=%0d c1_bursts=%0d c1_wait_cycles=%0d",
-             terr_hps_c0_bursts_o, terr_hps_c1_bursts_o, terr_hps_c1_wait_cycles_o);
+    $display("SMOKE:   arb   c0_bursts=%0d c1_bursts=%0d c1_wait_cycles=%0d c2_bursts=%0d c2_wait_cycles=%0d",
+             terr_hps_c0_bursts_o, terr_hps_c1_bursts_o, terr_hps_c1_wait_cycles_o,
+             terr_hps_c2_bursts_o, terr_hps_c2_wait_cycles_o);
+    $display("SMOKE:   wb    sheets written=%0d refused=%0d faulted=%0d guard_denied=%0d acks_unmatched=%0d overdue=%0d | doorbell starved=%0d ret_overflow=%0d | rdshare jobs A=%0d B=%0d WB=%0d",
+             terr_wb_sheets_written_o, terr_wb_sheets_refused_o, terr_wb_sheets_faulted_o,
+             terr_wb_guard_denied_o, terr_wb_acks_unmatched_o, terr_wb_acks_overdue_o,
+             terr_jdb_starved_cycles_o, terr_jdb_ret_overflow_o,
+             terr_rdshare_jobs_a_o, terr_rdshare_jobs_b_o, terr_rdshare_jobs_wb_o);
+    // Nothing here can dirty a page, so no writeback job may exist. A job
+    // that appeared anyway would be the sequencer evicting a page it was
+    // never told was dirty -- and with no grants posted it would sit in the
+    // doorbell, visible as starvation, rather than go out with a made-up ticket.
+    if ((terr_jdb_starved_cycles_o != 0) || (terr_wb_sheets_written_o != 0) ||
+        (terr_wb_sheets_refused_o != 0) || (terr_wb_sheets_faulted_o != 0) ||
+        (terr_rdshare_jobs_wb_o != 0) || (terr_hps_c2_bursts_o != 0) ||
+        (terr_jdb_ret_overflow_o != 0))
+      $fatal(1, "SMOKE: a writeback job appeared with no dirty page in the core (starved=%0d written=%0d refused=%0d faulted=%0d)",
+             terr_jdb_starved_cycles_o, terr_wb_sheets_written_o, terr_wb_sheets_refused_o,
+             terr_wb_sheets_faulted_o);
     $display("SMOKE:   probe hps_req_cycles=%0d hps_beats_in=%0d guard_req_cycles=%0d guard_wbeats=%0d",
              pr_hps_req_cy, pr_hps_beats, pr_guard_req_cy, pr_guard_wbeats);
     $display("SMOKE:   bridge bursts served by the played engine=%0d", hps_bursts_served_q);

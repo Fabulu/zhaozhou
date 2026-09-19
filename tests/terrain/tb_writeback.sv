@@ -156,6 +156,11 @@ module tb_writeback
     output var logic [31:0] ack_wait_max_cycles,
     output var logic [31:0] jobs_stall_cycles,
 
+    // ---- the LANDED statement (owner ruling R14's returned ticket) ---------
+    output var logic        landed_valid,
+    output var logic [31:0] landed_seq,
+    output var logic [31:0] landed_count,    // bench-counted pulses, never cleared
+
     // ---- what the BENCH saw (the how-many-times half) ----------------------
     output var logic [31:0] greqs_seen,      // guard requests accepted
     output var logic [31:0] rbeats_seen,     // read beats delivered
@@ -193,6 +198,13 @@ module tb_writeback
     output var logic [31:0] p_fwd_count,
     output var logic [31:0] p_viol_count
 );
+
+  // Counted by the BENCH, independently of sheets_written_o: the directed test
+  // requires the two to agree, so a landing announced twice or never is seen.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) landed_count <= '0;
+    else if (landed_valid) landed_count <= landed_count + 32'd1;
+  end
 
   // two whole pages, so "the neighbouring slot is untouched" is a real check
   localparam int unsigned VWORDS = 2 * 2672;   // 5,344
@@ -285,6 +297,8 @@ module tb_writeback
       .done_verdict_o(done_verdict),
       .done_seq_o(done_seq),
       .done_src_id_o(done_src_id),
+      .landed_valid_o(landed_valid),
+      .landed_seq_o(landed_seq),
       .fault_island_o(fault_island),
       .fault_ix_o(dut_fault_ix),
       .fault_iz_o(dut_fault_iz),
