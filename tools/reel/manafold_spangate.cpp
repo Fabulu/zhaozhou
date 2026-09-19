@@ -21,10 +21,13 @@
 //   --fail-e-mid
 //   --fail-e-presocket
 //   --fail-posed-order
-//   --csv  print shipping signed-delta traces
+//   --fail-order
+//   --fail-mute F|A|B|C|E
+//   --csv  print shipping signed-delta and public ordering traces
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -46,10 +49,27 @@
 
 namespace zc = zref::creature;
 #include "manafold.h"
+#include "manafold_public_joint_metric.h"
 
 namespace {
+namespace pjm = u02::public_joint_metric;
 
 int g_failures = 0;
+enum GateCategory : uint32_t {
+  kCatConfig = 1u << 0,
+  kCatZones = 1u << 1,
+  kCatLanes = 1u << 2,
+  kCatIdentity = 1u << 3,
+  kCatSynthetic = 1u << 4,
+  kCatShipping = 1u << 5,
+  kCatPosedOrder = 1u << 6,
+  kCatCrown = 1u << 7,
+  kCatContinuity = 1u << 8,
+  kCatClosure = 1u << 9,
+  kCatAttribution = 1u << 10,
+};
+uint32_t g_failure_bits = 0;
+uint32_t g_current_category = kCatConfig;
 
 // Closure uses quantized angle16 aim and integer-millimetre distance before the
 // 90 mm delta-to-socket bend zone. This is a structural coincidence tolerance,
@@ -59,6 +79,7 @@ constexpr double kRearEndpointToleranceMm = 10.0;
 void fail(const char* what) {
   std::printf("  FAIL: %s\n", what);
   ++g_failures;
+  g_failure_bits |= g_current_category;
 }
 
 struct Vec3 {
@@ -97,6 +118,39 @@ bool matrix_equal(const zc::mat3x4fx& a, const zc::mat3x4fx& b) {
   return std::memcmp(a.m, b.m, sizeof(a.m)) == 0;
 }
 
+bool parse_strict_int(const char* name, const char* text,
+                      int min_value, int max_value, int& out) {
+  if (text == nullptr || *text == '\0') {
+    std::fprintf(stderr, "%s is empty; expected integer %d..%d\n",
+                 name, min_value, max_value);
+    return false;
+  }
+  const char* first = text;
+  const char* last = text + std::strlen(text);
+  if (*first == '+') {
+    ++first;
+    if (first == last) {
+      std::fprintf(stderr, "%s=%s is not an integer; expected %d..%d\n",
+                   name, text, min_value, max_value);
+      return false;
+    }
+  }
+  int value = 0;
+  const std::from_chars_result parsed = std::from_chars(first, last, value);
+  if (parsed.ec != std::errc{} || parsed.ptr != last) {
+    std::fprintf(stderr, "%s=%s is not an integer; expected %d..%d\n",
+                 name, text, min_value, max_value);
+    return false;
+  }
+  if (value < min_value || value > max_value) {
+    std::fprintf(stderr, "%s=%s outside %d..%d\n",
+                 name, text, min_value, max_value);
+    return false;
+  }
+  out = value;
+  return true;
+}
+
 enum class Span : int { kFA = 0, kAB, kBC, kCE, kNone };
 
 Span parse_span(const char* s) {
@@ -119,6 +173,31 @@ Span parse_drift(const char* s) {
   if (std::strcmp(s, "C") == 0) return Span::kBC;
   if (std::strcmp(s, "E") == 0) return Span::kCE;
   return Span::kNone;
+}
+
+u02::PublicJointMute parse_public_mute(const char* s) {
+  if (s == nullptr || s[0] == 0 || s[1] != 0)
+    return u02::PublicJointMute::kNone;
+  switch (s[0]) {
+    case 'F': return u02::PublicJointMute::kFront;
+    case 'A': return u02::PublicJointMute::kA;
+    case 'B': return u02::PublicJointMute::kB;
+    case 'C': return u02::PublicJointMute::kC;
+    case 'E': return u02::PublicJointMute::kEnd;
+    default: return u02::PublicJointMute::kNone;
+  }
+}
+
+const char* public_mute_name(u02::PublicJointMute mute) {
+  switch (mute) {
+    case u02::PublicJointMute::kFront: return "F";
+    case u02::PublicJointMute::kA: return "A";
+    case u02::PublicJointMute::kB: return "B";
+    case u02::PublicJointMute::kC: return "C";
+    case u02::PublicJointMute::kEnd: return "E";
+    case u02::PublicJointMute::kNone: return "none";
+  }
+  return "none";
 }
 
 const char* span_name(Span s) {
@@ -763,6 +842,446 @@ void check_shipping_posed_ring_order(const zc::CreatureType& type,
     fail("a shipping key/midpoint collapses neighbouring signed-gradient rings");
 }
 
+const zc::Clip* clip_by_slot(const zc::CreatureType& type, uint16_t slot) {
+  for (const zc::Clip& c : type.bank.clips)
+    if (c.slot_id == slot) return &c;
+  return nullptr;
+}
+
+Vec3 root_local(const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
+                int32_t wx, int32_t wy, int32_t wz) {
+  const zc::mat3x4fx& root = pose[u02::kBRoot];
+  const int64_t dx = wx - root.m[3], dy = wy - root.m[7], dz = wz - root.m[11];
+  constexpr double kToMm = 1000.0 / 65536.0;
+  return Vec3{
+      static_cast<double>((root.m[0] * dx + root.m[4] * dy + root.m[8] * dz) >> 16) * kToMm,
+      static_cast<double>((root.m[1] * dx + root.m[5] * dy + root.m[9] * dz) >> 16) * kToMm,
+      static_cast<double>((root.m[2] * dx + root.m[6] * dy + root.m[10] * dz) >> 16) * kToMm,
+  };
+}
+
+Vec3 visible_core_centroid(
+    const zc::CreatureType& type,
+    const std::array<zc::mat3x4fx, zc::kMaxBones>& pose, uint8_t bone) {
+  Vec3 sum{};
+  size_t count = 0;
+  for (const zc::Meshlet& m : type.mesh) {
+    if (!is_loop_meshlet(m)) continue;
+    for (const zc::SkinVertex& v : m.verts) {
+      const bool rigid = (v.b0 == bone && v.w0 == 64) ||
+                         (v.b1 == bone && v.w0 == 0);
+      if (!rigid) continue;
+      int32_t x = 0, y = 0, z = 0;
+      zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
+      const Vec3 p = root_local(pose, x, y, z);
+      sum.x += p.x;
+      sum.y += p.y;
+      sum.z += p.z;
+      ++count;
+    }
+  }
+  if (count == 0) return sum;
+  const double n = static_cast<double>(count);
+  return Vec3{sum.x / n, sum.y / n, sum.z / n};
+}
+
+struct OrderSample {
+  double y[3] = {0.0, 0.0, 0.0};
+  int32_t span_mm[4] = {0, 0, 0, 0};
+};
+
+OrderSample public_order_sample(const zc::CreatureType& type,
+                                const zc::Clip& clip, int presentation_frame) {
+  const int key = presentation_frame / 2;
+  const uint8_t sub = static_cast<uint8_t>(presentation_frame & 1);
+  std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+  zc::decode_pose(type, clip, static_cast<uint16_t>(key), pose, nullptr, sub);
+  const uint8_t bone[3] = {u02::kBHingeA, u02::kBHingeB, u02::kBHingeC};
+  OrderSample out;
+  for (int i = 0; i < 3; ++i)
+    out.y[i] = visible_core_centroid(type, pose, bone[i]).y;
+  const uint8_t receipt[4] = {u02::kBHingeA, u02::kBHingeB,
+                              u02::kBHingeC, u02::kBSpanDeltaE};
+  for (int i = 0; i < 4; ++i) {
+    const int32_t fx = sample_local_y(clip, key, receipt[i], sub);
+    out.span_mm[i] = static_cast<int32_t>((static_cast<int64_t>(fx) * 1000) >> 16);
+  }
+  return out;
+}
+
+int order_crossings(const std::vector<OrderSample>& samples, int a, int b,
+                    double deadband_mm) {
+  int previous = 0;
+  int crossings = 0;
+  for (const OrderSample& s : samples) {
+    const double d = s.y[a] - s.y[b];
+    const int sign = d > deadband_mm ? 1 : (d < -deadband_mm ? -1 : 0);
+    if (sign == 0) continue;
+    if (previous != 0 && sign != previous) ++crossings;
+    previous = sign;
+  }
+  return crossings;
+}
+
+bool quat_equal(const zc::quat16& a, const zc::quat16& b) {
+  return std::memcmp(&a, &b, sizeof(a)) == 0;
+}
+
+void check_public_ordering(const zc::CreatureType& type, bool csv) {
+  const zc::Clip* clip = clip_by_slot(type, u02::kTaunt3Slot);
+  if (clip == nullptr || clip->frame_count != u02::kTaunt3Keys) {
+    fail("shipping Taunt III is absent from the compiled bank");
+    return;
+  }
+  constexpr int kBegin = 112;
+  constexpr int kEnd = 288;
+  constexpr int kWitness[4] = {142, 178, 212, 268};
+  constexpr int kTop[4] = {0, 1, 2, 0};
+  constexpr int kBottom[4] = {2, 0, 1, 2};
+  const double margin = static_cast<double>(u02::kTaunt3OrderReadMarginMm);
+
+  std::vector<OrderSample> samples;
+  samples.reserve(kEnd - kBegin + 1);
+  int witness_fail = 0;
+  int sign_fail = 0;
+  int32_t span_lo[4] = {INT32_MAX, INT32_MAX, INT32_MAX, INT32_MAX};
+  int32_t span_hi[4] = {INT32_MIN, INT32_MIN, INT32_MIN, INT32_MIN};
+  if (csv)
+    std::printf("\nframe,key,sub,A_y,B_y,C_y,AB_y,AC_y,BC_y,FA_mm,AB_mm,BC_mm,CE_mm\n");
+  for (int pf = kBegin; pf <= kEnd; ++pf) {
+    const OrderSample s = public_order_sample(type, *clip, pf);
+    samples.push_back(s);
+    for (int i = 0; i < 4; ++i) {
+      span_lo[i] = std::min(span_lo[i], s.span_mm[i]);
+      span_hi[i] = std::max(span_hi[i], s.span_mm[i]);
+    }
+    if (csv)
+      std::printf("%d,%d,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,%d\n",
+                  pf, pf / 2, pf & 1, s.y[0], s.y[1], s.y[2],
+                  s.y[0] - s.y[1], s.y[0] - s.y[2], s.y[1] - s.y[2],
+                  s.span_mm[0], s.span_mm[1], s.span_mm[2], s.span_mm[3]);
+  }
+  for (int w = 0; w < 4; ++w) {
+    const OrderSample s = public_order_sample(type, *clip, kWitness[w]);
+    const int top = kTop[w], bottom = kBottom[w];
+    for (int i = 0; i < 3; ++i) {
+      if (i != top && !(s.y[top] - s.y[i] >= margin)) ++witness_fail;
+      if (i != bottom && !(s.y[i] - s.y[bottom] >= margin)) ++witness_fail;
+    }
+    std::printf("G8 tableau f%04d: A/B/C %.1f/%.1f/%.1f mm, top %c bottom %c\n",
+                kWitness[w], s.y[0], s.y[1], s.y[2], "ABC"[top],
+                "ABC"[bottom]);
+  }
+  const int crossings[3] = {
+      order_crossings(samples, 0, 1, margin),
+      order_crossings(samples, 0, 2, margin),
+      order_crossings(samples, 1, 2, margin),
+  };
+  for (int i = 0; i < 3; ++i)
+    if (crossings[i] < 2) ++sign_fail;
+  for (int i = 0; i < 4; ++i)
+    if (!(span_lo[i] <= -u02::kTaunt3OrderSpanReadMm &&
+          span_hi[i] >= u02::kTaunt3OrderSpanReadMm))
+      ++sign_fail;
+
+  // Attribute Front/End order punctuation against a direct no-order build. The
+  // body/root channels may differ; only the local endpoint quaternions are read.
+  const int32_t saved_gain = u02::g_u02_order_gain_pm;
+  const u02::PublicJointMute saved_mute = u02::g_u02_public_joint_mute;
+  u02::g_u02_order_gain_pm = 0;
+  u02::g_u02_public_joint_mute = u02::PublicJointMute::kNone;
+  const zc::Clip no_order = u02::build_taunt3();
+  u02::g_u02_order_gain_pm = saved_gain;
+  u02::g_u02_public_joint_mute = saved_mute;
+  int endpoint_live[2] = {0, 0};
+  const uint8_t endpoint_bone[2] = {u02::kBJunctionF, u02::kBRearSocket};
+  for (int key = u02::kTaunt3ShimmyKey; key < u02::kTaunt3FlickKey; ++key)
+    for (int i = 0; i < 2; ++i) {
+      const zc::quat16& a = clip->quats[static_cast<size_t>(key) * u02::kBoneCount + endpoint_bone[i]];
+      const zc::quat16& b = no_order.quats[static_cast<size_t>(key) * u02::kBoneCount + endpoint_bone[i]];
+      if (!quat_equal(a, b)) ++endpoint_live[i];
+    }
+
+  std::printf("G8 public crown shuffle: witness failures %d, crossings AB/AC/BC %d/%d/%d, "
+              "endpoint live F/E %d/%d\n",
+              witness_fail, crossings[0], crossings[1], crossings[2],
+              endpoint_live[0], endpoint_live[1]);
+  std::printf("   phrase span deltas F-A %+d..%+d, A-B %+d..%+d, "
+              "B-C %+d..%+d, C-E %+d..%+d mm\n",
+              span_lo[0], span_hi[0], span_lo[1], span_hi[1],
+              span_lo[2], span_hi[2], span_lo[3], span_hi[3]);
+  if (witness_fail != 0)
+    fail("a named crown-shuffle tableau lacks its visible top/bottom margin");
+  if (sign_fail != 0)
+    fail("the crown shuffle lacks pair crossings or signed span witnesses");
+  if (endpoint_live[0] == 0 || endpoint_live[1] == 0)
+    fail("Front or End lacks independent crown-shuffle punctuation");
+}
+
+zc::Clip build_taunt3_for_mute(u02::PublicJointMute mute) {
+  const u02::PublicJointMute saved = u02::g_u02_public_joint_mute;
+  u02::g_u02_public_joint_mute = mute;
+  zc::Clip clip = u02::build_taunt3();
+  u02::finalize_rear_follow(clip);
+  zc::bake_presentation_midpoints(clip, u02::kBoneCount);
+  u02::finalize_rear_follow_midpoints(clip);
+  u02::g_u02_public_joint_mute = saved;
+  return clip;
+}
+
+void check_held_punchline(const zc::CreatureType& type,
+                          u02::PublicJointMute selected_mute) {
+  constexpr int kWitness = 324;
+  constexpr uint16_t kKey = static_cast<uint16_t>(kWitness / 2);
+  static constexpr u02::PublicJointMute kMute[5] = {
+      u02::PublicJointMute::kFront, u02::PublicJointMute::kA,
+      u02::PublicJointMute::kB, u02::PublicJointMute::kC,
+      u02::PublicJointMute::kEnd};
+  const auto carriers = pjm::carriers();
+
+  const zc::Clip normal = build_taunt3_for_mute(u02::PublicJointMute::kNone);
+  std::array<pjm::CoreDelta, 5> mute_delta{};
+  int read_failures = 0;
+  for (int i = 0; i < 5; ++i) {
+    int32_t input[5] = {11, 22, 33, 44, 55};
+    const int32_t expected[5] = {11, 22, 33, 44, 55};
+    const u02::PublicJointMute saved = u02::g_u02_public_joint_mute;
+    u02::g_u02_public_joint_mute = kMute[i];
+    u02::apply_public_joint_mute(input);
+    u02::g_u02_public_joint_mute = saved;
+    for (int j = 0; j < 5; ++j) {
+      const int32_t want = j == i ? 0 : expected[j];
+      if (input[j] != want)
+        fail("a held-punchline mute changed an unrelated carrier input");
+    }
+
+    const zc::Clip muted = build_taunt3_for_mute(kMute[i]);
+    const pjm::CoreDelta d =
+        pjm::core_delta(type, normal, muted, kKey, carriers[i]);
+    mute_delta[static_cast<size_t>(i)] = d;
+    const bool readable = pjm::clears_public_floor(d, carriers[i]);
+    std::printf("G8 held punchline f%04d mute %s core %zu centroid/max "
+                "%.2f/%.2f mm (%s metric) %s\n",
+                kWitness, carriers[i].name, d.count, d.centroid_mm,
+                d.max_vertex_mm, carriers[i].anchored ? "anchored-max" :
+                                                      "centroid+max",
+                readable ? "OK" : "FAIL");
+    if (!readable) ++read_failures;
+  }
+  if (read_failures != 0)
+    fail("a held-punchline carrier mute does not remove a publicly readable contribution");
+
+  const zc::Clip* shipping = clip_by_slot(type, u02::kTaunt3Slot);
+  if (shipping == nullptr) {
+    fail("shipping Taunt III is absent from the held-punchline gate");
+    return;
+  }
+  const int muted_index = u02::public_joint_mute_index(selected_mute);
+  if (muted_index < 0) {
+    double worst = 0.0;
+    for (int i = 0; i < 5; ++i) {
+      const pjm::CoreDelta d =
+          pjm::core_delta(type, normal, *shipping, kKey, carriers[i]);
+      worst = std::max(worst, std::max(d.centroid_mm, d.max_vertex_mm));
+    }
+    std::printf("   shipping-vs-normal held-punchline worst %.3f mm\n", worst);
+    if (worst > 0.6)
+      fail("shipping held-punchline carrier pose differs from the normal production build");
+  } else {
+    const pjm::CoreDelta& d = mute_delta[static_cast<size_t>(muted_index)];
+    const bool removed = pjm::clears_public_floor(d, carriers[muted_index]);
+    std::printf("   selected held mute %s removes centroid/max %.2f/%.2f mm\n",
+                carriers[muted_index].name, d.centroid_mm, d.max_vertex_mm);
+    if (!removed)
+      fail("the selected held mute did not remove its named held-punchline carrier");
+    else
+      fail("the selected held mute removed its named held-punchline contribution");
+  }
+}
+
+zc::mat3x4fx root_relative_basis(const zc::mat3x4fx& root,
+                                  const zc::mat3x4fx& bone) {
+  zc::mat3x4fx out{};
+  constexpr int at[3][3] = {{0, 1, 2}, {4, 5, 6}, {8, 9, 10}};
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) {
+      int64_t v = 0;
+      for (int k = 0; k < 3; ++k)
+        v += static_cast<int64_t>(root.m[at[k][i]]) * bone.m[at[k][j]];
+      out.m[at[i][j]] = static_cast<int32_t>(v >> 16);
+    }
+  return out;
+}
+
+Vec3 rotation_step_deg(const zc::mat3x4fx& from,
+                       const zc::mat3x4fx& to) {
+  constexpr int at[3][3] = {{0, 1, 2}, {4, 5, 6}, {8, 9, 10}};
+  double a[3][3]{}, b[3][3]{}, r[3][3]{};
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) {
+      a[i][j] = static_cast<double>(from.m[at[i][j]]) / 65536.0;
+      b[i][j] = static_cast<double>(to.m[at[i][j]]) / 65536.0;
+    }
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      for (int k = 0; k < 3; ++k) r[i][j] += a[k][i] * b[k][j];
+  double cs = (r[0][0] + r[1][1] + r[2][2] - 1.0) * 0.5;
+  if (cs < -1.0) cs = -1.0;
+  if (cs > 1.0) cs = 1.0;
+  const double angle = std::acos(cs);
+  if (angle < 1e-9) return Vec3{};
+  const double sn = std::sin(angle);
+  if (std::fabs(sn) < 1e-8)
+    return Vec3{angle * 180.0 / 3.14159265358979, 0.0, 0.0};
+  const double scale = angle * 180.0 / 3.14159265358979 / (2.0 * sn);
+  return Vec3{(r[2][1] - r[1][2]) * scale,
+              (r[0][2] - r[2][0]) * scale,
+              (r[1][0] - r[0][1]) * scale};
+}
+
+void check_carrier_continuity(const zc::CreatureType& type, bool motion_csv,
+                              bool fail_final_dwell) {
+  static constexpr uint8_t kBone[5] = {
+      u02::kBJunctionF, u02::kBHingeA, u02::kBHingeB,
+      u02::kBHingeC, u02::kBRearSocket};
+  static constexpr char kName[5] = {'F', 'A', 'B', 'C', 'E'};
+  double max_step = 0.0, max_accel = 0.0, max_jerk = 0.0;
+  double max_ang_step = 0.0, max_ang_accel = 0.0, max_ang_jerk = 0.0;
+  uint16_t step_slot = 0, accel_slot = 0, jerk_slot = 0;
+  uint16_t astep_slot = 0, aaccel_slot = 0, ajerk_slot = 0;
+  int step_frame = 0, accel_frame = 0, jerk_frame = 0;
+  int astep_frame = 0, aaccel_frame = 0, ajerk_frame = 0;
+  int step_carrier = 0, accel_carrier = 0, jerk_carrier = 0;
+  int astep_carrier = 0, aaccel_carrier = 0, ajerk_carrier = 0;
+  size_t samples = 0;
+  size_t held_tail_samples = 0;
+  bool dwell_mutant_applied = false;
+  if (motion_csv)
+    std::printf("\nslot,frame,carrier,x_mm,y_mm,z_mm,velocity_mm,accel_mm,jerk_mm,angular_velocity_deg,angular_accel_deg,angular_jerk_deg\n");
+
+  for (const zc::Clip& clip : type.bank.clips) {
+    const int count = static_cast<int>(clip.frame_count) * 2;
+    if (count < 4) continue;
+    const int sample_count = count + (clip.hold_last ? 3 : 0);
+    std::vector<std::array<Vec3, 5>> p(static_cast<size_t>(sample_count));
+    std::vector<std::array<zc::mat3x4fx, 5>> m(static_cast<size_t>(sample_count));
+    for (int f = 0; f < sample_count; ++f) {
+      const int pf = f < count ? f : count - 1;
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+      zc::decode_pose(type, clip, static_cast<uint16_t>(pf / 2), pose, nullptr,
+                      static_cast<uint8_t>(pf & 1));
+      for (int i = 0; i < 5; ++i) {
+        p[static_cast<size_t>(f)][i] = visible_core_centroid(type, pose, kBone[i]);
+        m[static_cast<size_t>(f)][i] =
+            root_relative_basis(pose[u02::kBRoot], pose[kBone[i]]);
+      }
+      if (clip.hold_last && f >= count) ++held_tail_samples;
+      if (fail_final_dwell && clip.hold_last && !dwell_mutant_applied &&
+          f == count) {
+        // Consumer-side positive control: authored final key/midpoint are
+        // untouched, but the first held tick fails to clamp the visible core.
+        p[static_cast<size_t>(f)][1].x += 400.0;
+        dwell_mutant_applied = true;
+      }
+    }
+    const auto index = [&](int f) {
+      if (clip.hold_last)
+        return f < 0 ? 0 : (f >= sample_count ? sample_count - 1 : f);
+      f %= count;
+      return f < 0 ? f + count : f;
+    };
+    const int begin = clip.hold_last ? 3 : 0;
+    for (int f = begin; f < sample_count; ++f) {
+      const int f0 = index(f), f1 = index(f - 1), f2 = index(f - 2), f3 = index(f - 3);
+      for (int i = 0; i < 5; ++i) {
+        const Vec3 v0 = p[static_cast<size_t>(f0)][i] - p[static_cast<size_t>(f1)][i];
+        const Vec3 v1 = p[static_cast<size_t>(f1)][i] - p[static_cast<size_t>(f2)][i];
+        const Vec3 v2 = p[static_cast<size_t>(f2)][i] - p[static_cast<size_t>(f3)][i];
+        const Vec3 ac0 = v0 - v1;
+        const Vec3 ac1 = v1 - v2;
+        const double step = length(v0), accel = length(ac0), jerk = length(ac0 - ac1);
+        if (step > max_step) { max_step = step; step_slot = clip.slot_id; step_frame = f; step_carrier = i; }
+        if (accel > max_accel) { max_accel = accel; accel_slot = clip.slot_id; accel_frame = f; accel_carrier = i; }
+        if (jerk > max_jerk) { max_jerk = jerk; jerk_slot = clip.slot_id; jerk_frame = f; jerk_carrier = i; }
+
+        const Vec3 w0 = rotation_step_deg(m[static_cast<size_t>(f1)][i],
+                                          m[static_cast<size_t>(f0)][i]);
+        const Vec3 w1 = rotation_step_deg(m[static_cast<size_t>(f2)][i],
+                                          m[static_cast<size_t>(f1)][i]);
+        const Vec3 w2 = rotation_step_deg(m[static_cast<size_t>(f3)][i],
+                                          m[static_cast<size_t>(f2)][i]);
+        const Vec3 aa0 = w0 - w1;
+        const Vec3 aa1 = w1 - w2;
+        const double astep = length(w0), aaccel = length(aa0), ajerk = length(aa0 - aa1);
+        if (astep > max_ang_step) { max_ang_step = astep; astep_slot = clip.slot_id; astep_frame = f; astep_carrier = i; }
+        if (aaccel > max_ang_accel) { max_ang_accel = aaccel; aaccel_slot = clip.slot_id; aaccel_frame = f; aaccel_carrier = i; }
+        if (ajerk > max_ang_jerk) { max_ang_jerk = ajerk; ajerk_slot = clip.slot_id; ajerk_frame = f; ajerk_carrier = i; }
+        if (motion_csv) {
+          const Vec3& q = p[static_cast<size_t>(f0)][i];
+          std::printf("%u,%d,%c,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+                      clip.slot_id, f, kName[i], q.x, q.y, q.z,
+                      step, accel, jerk, astep, aaccel, ajerk);
+        }
+        ++samples;
+      }
+    }
+  }
+
+  std::printf("G9 full-bank 60Hz carrier continuity: %zu samples, %zu held-tail samples\n",
+              samples, held_tail_samples);
+  std::printf("   position step %.3f mm slot %u f%04d %c; accel %.3f slot %u f%04d %c; jerk %.3f slot %u f%04d %c\n",
+              max_step, step_slot, step_frame, kName[step_carrier],
+              max_accel, accel_slot, accel_frame, kName[accel_carrier],
+              max_jerk, jerk_slot, jerk_frame, kName[jerk_carrier]);
+  std::printf("   angular step %.3f deg slot %u f%04d %c; accel %.3f slot %u f%04d %c; jerk %.3f slot %u f%04d %c\n",
+              max_ang_step, astep_slot, astep_frame, kName[astep_carrier],
+              max_ang_accel, aaccel_slot, aaccel_frame, kName[aaccel_carrier],
+              max_ang_jerk, ajerk_slot, ajerk_frame, kName[ajerk_carrier]);
+  if (const zc::Clip* worst = clip_by_slot(type, step_slot)) {
+    const u02::FoldPhase before = u02::fold_phase(
+        step_slot, worst->frame_count, (step_frame - 1) * 8);
+    const u02::FoldPhase at = u02::fold_phase(
+        step_slot, worst->frame_count, step_frame * 8);
+    std::printf("   worst-position fold phase: prev seg/amp/agit/morph %d/%d/%d/%d %u->%u; "
+                "at %d/%d/%d/%d %u->%u\n",
+                static_cast<int>(before.seg), before.amp_pm, before.agit_pm,
+                before.morph_pm, before.shape_from, before.shape_to,
+                static_cast<int>(at.seg), at.amp_pm, at.agit_pm, at.morph_pm,
+                at.shape_from, at.shape_to);
+    const int key = step_frame / 2;
+    const int lag[5] = {u02::kKneadLagJfKeys, u02::kKneadLagNeckKeys,
+                        u02::kKneadLagAKeys, u02::kKneadLagBKeys,
+                        u02::kKneadLagCKeys};
+    std::printf("   lagged key %d phases J/N/A/B/C:", key);
+    for (int i = 0; i < 5; ++i) {
+      const int fl = ((key - lag[i]) % worst->frame_count + worst->frame_count) %
+                     worst->frame_count;
+      const u02::FoldPhase p = u02::fold_phase(step_slot, worst->frame_count, fl * 16);
+      std::printf(" %d/%d/%d", static_cast<int>(p.seg), p.amp_pm, p.agit_pm);
+    }
+    std::printf("\n   lagged key %d+1 phases:", key);
+    for (int i = 0; i < 5; ++i) {
+      const int fl = ((key + 1 - lag[i]) % worst->frame_count + worst->frame_count) %
+                     worst->frame_count;
+      const u02::FoldPhase p = u02::fold_phase(step_slot, worst->frame_count, fl * 16);
+      std::printf(" %d/%d/%d", static_cast<int>(p.seg), p.amp_pm, p.agit_pm);
+    }
+    std::printf("\n");
+  }
+  if (held_tail_samples == 0)
+    fail("no hold-last carrier pose was checked after the final presentation sample");
+  if (fail_final_dwell && !dwell_mutant_applied)
+    fail("final-dwell carrier mutant did not reach a hold-last clip");
+  if (max_step > u02::kTaunt3OrderMaxCoreStepMm ||
+      max_accel > u02::kTaunt3OrderMaxCoreAccelMm ||
+      max_jerk > u02::kTaunt3OrderMaxCoreJerkMm)
+    fail("a shipping visible carrier has a position step/acceleration/jerk discontinuity");
+  if (max_ang_step > u02::kAntennaMaxAngularStepDeg ||
+      max_ang_accel > u02::kAntennaMaxAngularAccelDeg ||
+      max_ang_jerk > u02::kAntennaMaxAngularJerkDeg)
+    fail("a shipping visible carrier has an angular step/acceleration/jerk discontinuity");
+}
+
 void check_rear_closure(const zc::CreatureType& type,
                         const Stations& stations) {
   const int32_t x = u02::fxu(u02::kLoopTubeXMm);
@@ -824,7 +1343,11 @@ void usage(const char* argv0) {
                "[--fail-delta-drift A|B|C|E] "
                "[--fail-overcompact F-A|A-B|B-C|C-E] "
                "[--fail-e-start] [--fail-e-mid] [--fail-e-presocket] "
-               "[--fail-posed-order]\n",
+               "[--fail-posed-order] [--fail-order] "
+               "[--fail-mute F|A|B|C|E] [--fail-antenna-snap] "
+               "[--fail-accent-switch] [--fail-hold-tremor] "
+               "[--fail-compress-wrap] [--fail-final-dwell] [--motion-csv] "
+               "[--held-only]\n",
                argv0);
 }
 
@@ -840,6 +1363,15 @@ int main(int argc, char** argv) {
   bool fail_e_mid = false;
   bool fail_e_presocket = false;
   bool fail_posed_order = false;
+  bool fail_order = false;
+  bool fail_antenna_snap = false;
+  bool fail_accent_switch = false;
+  bool fail_hold_tremor = false;
+  bool fail_compress_wrap = false;
+  bool fail_final_dwell = false;
+  bool motion_csv = false;
+  bool held_only = false;
+  u02::PublicJointMute fail_mute = u02::PublicJointMute::kNone;
 
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--csv") == 0) {
@@ -864,17 +1396,100 @@ int main(int argc, char** argv) {
       fail_e_presocket = true;
     } else if (std::strcmp(argv[i], "--fail-posed-order") == 0) {
       fail_posed_order = true;
+    } else if (std::strcmp(argv[i], "--fail-order") == 0) {
+      fail_order = true;
+    } else if (std::strcmp(argv[i], "--fail-antenna-snap") == 0) {
+      fail_antenna_snap = true;
+    } else if (std::strcmp(argv[i], "--fail-accent-switch") == 0) {
+      fail_accent_switch = true;
+    } else if (std::strcmp(argv[i], "--fail-hold-tremor") == 0) {
+      fail_hold_tremor = true;
+    } else if (std::strcmp(argv[i], "--fail-compress-wrap") == 0) {
+      fail_compress_wrap = true;
+    } else if (std::strcmp(argv[i], "--fail-final-dwell") == 0) {
+      fail_final_dwell = true;
+    } else if (std::strcmp(argv[i], "--motion-csv") == 0) {
+      motion_csv = true;
+    } else if (std::strcmp(argv[i], "--held-only") == 0) {
+      held_only = true;
+    } else if (std::strcmp(argv[i], "--fail-mute") == 0 && i + 1 < argc) {
+      fail_mute = parse_public_mute(argv[++i]);
+      if (fail_mute == u02::PublicJointMute::kNone) {
+        usage(argv[0]);
+        return 2;
+      }
     } else {
       usage(argv[0]);
       return 2;
     }
   }
 
+  int mutant_count = 0;
+  uint32_t expected_category = 0, allowed_categories = 0;
+  const char* mutant_name = "none";
+  const auto select_mutant = [&](bool active, const char* name,
+                                 uint32_t expected, uint32_t allowed) {
+    if (!active) return;
+    ++mutant_count;
+    mutant_name = name;
+    expected_category = expected;
+    allowed_categories = allowed;
+  };
+  select_mutant(rigid_span != Span::kNone, "rigid-span", kCatZones,
+                kCatZones | kCatPosedOrder | kCatCrown);
+  select_mutant(clamp_span != Span::kNone, "clamp-negative", kCatSynthetic,
+                kCatSynthetic);
+  select_mutant(drift_span != Span::kNone, "delta-drift", kCatSynthetic,
+                kCatSynthetic);
+  select_mutant(overcompact_span != Span::kNone, "overcompact", kCatSynthetic,
+                kCatSynthetic);
+  select_mutant(fail_e_start, "e-start", kCatSynthetic, kCatSynthetic);
+  select_mutant(fail_e_mid, "e-mid", kCatSynthetic, kCatSynthetic);
+  select_mutant(fail_e_presocket, "e-presocket", kCatSynthetic, kCatSynthetic);
+  select_mutant(fail_posed_order, "posed-order", kCatPosedOrder, kCatPosedOrder);
+  select_mutant(fail_order, "crown-order", kCatCrown, kCatCrown);
+  select_mutant(fail_mute != u02::PublicJointMute::kNone, "carrier-mute",
+                kCatCrown,
+                held_only ? kCatCrown
+                          : (kCatShipping | kCatCrown |
+                             kCatContinuity | kCatClosure));
+  select_mutant(fail_antenna_snap, "antenna-snap", kCatContinuity,
+                kCatShipping | kCatContinuity);
+  select_mutant(fail_accent_switch, "accent-switch", kCatContinuity,
+                kCatContinuity);
+  select_mutant(fail_hold_tremor, "hold-tremor", kCatContinuity,
+                kCatShipping | kCatContinuity | kCatClosure);
+  select_mutant(fail_compress_wrap, "compress-wrap", kCatContinuity,
+                kCatContinuity);
+  select_mutant(fail_final_dwell, "final-dwell", kCatContinuity,
+                kCatContinuity);
+  if (mutant_count > 1 ||
+      (held_only && mutant_count == 1 &&
+       fail_mute == u02::PublicJointMute::kNone)) {
+    usage(argv[0]);
+    return 2;
+  }
+
+  if (const char* e = std::getenv("ZHAO_U02_TAUNT3_PUNCH_A_MM")) {
+    int v = 0;
+    if (!parse_strict_int("ZHAO_U02_TAUNT3_PUNCH_A_MM", e, 0, 320, v))
+      return 2;
+    u02::g_u02_taunt3_punch_a_mm = v;
+  }
+
+  if (fail_order) u02::g_u02_order_gain_pm = 0;
+  if (fail_antenna_snap) u02::g_u02_order_snap_control = true;
+  if (fail_accent_switch) u02::g_u02_accent_switch_control = true;
+  if (fail_hold_tremor) u02::g_u02_hold_tremor_control = true;
+  if (fail_compress_wrap) u02::g_u02_compress_wrap_control = true;
+  if (fail_mute != u02::PublicJointMute::kNone && !held_only)
+    u02::g_u02_public_joint_mute = fail_mute;
   const Stations stations;
   zc::CreatureType type = u02::type();
   mutate_rigid_span(type, rigid_span, stations);
 
-  std::printf("MANAFOLD PASS-17 SIGNED-SPAN GATE\n");
+  std::printf("MANAFOLD PASS-17 SIGNED-SPAN GATE%s\n",
+              held_only ? " [HELD-PUNCHLINE FOCUS]" : "");
   std::printf("  bones %u/%d; helpers A/B/C/E/EStart/EMid/EPre = "
               "%u/%u/%u/%u/%u/%u/%u\n",
               type.skeleton.bone_count, zc::kMaxBones,
@@ -889,6 +1504,8 @@ int main(int argc, char** argv) {
               u02::kSpanCompactionMinPm[2], u02::kSpanStretchMaxPm[2],
               u02::kSpanCompactionMinPm[3], u02::kSpanStretchMaxPm[3],
               u02::kSpanMinRunMm);
+  std::printf("  Taunt III held A punctuation %d mm\n",
+              u02::g_u02_taunt3_punch_a_mm);
   if (rigid_span != Span::kNone)
     std::printf("  [MUTANT] rigid free span %s\n", span_name(rigid_span));
   if (clamp_span != Span::kNone)
@@ -905,22 +1522,77 @@ int main(int argc, char** argv) {
     std::printf("  [MUTANT] omit C-End pre-socket-helper fraction\n");
   if (fail_posed_order)
     std::printf("  [MUTANT] rotate one shipping partial helper 180 degrees\n");
+  if (fail_order)
+    std::printf("  [MUTANT] zero the production crown-shuffle gain\n");
+  if (fail_mute != u02::PublicJointMute::kNone)
+    std::printf("  [MUTANT] mute crown-shuffle carrier %s\n",
+                public_mute_name(fail_mute));
+  if (fail_antenna_snap)
+    std::printf("  [MUTANT] restore instantaneous crown tableau replacement\n");
+  if (fail_accent_switch)
+    std::printf("  [MUTANT] restore per-cycle hashed accent/lead switch\n");
+  if (fail_hold_tremor)
+    std::printf("  [MUTANT] restore hard-gated hold tremor\n");
+  if (fail_compress_wrap)
+    std::printf("  [MUTANT] restore raw u16 impact-deform wrap\n");
+  if (fail_final_dwell)
+    std::printf("  [MUTANT] fail to clamp the first held carrier tick\n");
   std::printf("\n");
 
+  g_current_category = kCatConfig;
   if (type.skeleton.bone_count != u02::kBoneCount)
     fail("compiled skeleton does not carry all Manafold bones");
   if (u02::kBoneCount > zc::kMaxBones)
     fail("Manafold exceeds the 32-bone donor ceiling");
 
-  check_compiled_zones(type, stations);
-  check_lane_samples(type);
-  check_identity_palettes(type);
-  check_synthetic_signs(type, stations, clamp_span, drift_span,
-                        overcompact_span, fail_e_start, fail_e_mid,
-                        fail_e_presocket);
-  check_shipping_tracks(type, stations, csv);
-  check_shipping_posed_ring_order(type, stations, fail_posed_order);
-  check_rear_closure(type, stations);
+  if (held_only) {
+    g_current_category = kCatCrown;
+    check_public_ordering(type, csv);
+    check_held_punchline(type, fail_mute);
+    g_current_category = kCatPosedOrder;
+    check_shipping_posed_ring_order(type, stations, false);
+    g_current_category = kCatContinuity;
+    check_carrier_continuity(type, motion_csv, false);
+    g_current_category = kCatClosure;
+    check_rear_closure(type, stations);
+  } else {
+    g_current_category = kCatZones;
+    check_compiled_zones(type, stations);
+    g_current_category = kCatLanes;
+    check_lane_samples(type);
+    g_current_category = kCatIdentity;
+    check_identity_palettes(type);
+    g_current_category = kCatSynthetic;
+    check_synthetic_signs(type, stations, clamp_span, drift_span,
+                          overcompact_span, fail_e_start, fail_e_mid,
+                          fail_e_presocket);
+    g_current_category = kCatShipping;
+    check_shipping_tracks(type, stations, csv);
+    g_current_category = kCatPosedOrder;
+    check_shipping_posed_ring_order(type, stations, fail_posed_order);
+    g_current_category = kCatCrown;
+    check_public_ordering(type, csv);
+    check_held_punchline(type, fail_mute);
+    g_current_category = kCatContinuity;
+    check_carrier_continuity(type, motion_csv, fail_final_dwell);
+    g_current_category = kCatClosure;
+    check_rear_closure(type, stations);
+  }
+
+  if (mutant_count == 1) {
+    const uint32_t observed = g_failure_bits;
+    const bool named = (observed & expected_category) != 0;
+    const uint32_t unrelated = observed & ~allowed_categories;
+    if (!named || unrelated != 0) {
+      g_current_category = kCatAttribution;
+      fail("the selected mutant did not fail only its named/causal detector");
+      std::printf("MUTANT %s: UNATTRIBUTED expected=0x%X observed=0x%X allowed=0x%X\n",
+                  mutant_name, expected_category, observed, allowed_categories);
+    } else {
+      std::printf("MUTANT %s: attributed detector fired (0x%X)\n",
+                  mutant_name, observed);
+    }
+  }
 
   std::printf("\n%s: %d failure(s)\n",
               g_failures == 0 ? "PASS" : "FAIL", g_failures);

@@ -39,3 +39,11 @@ target_include_directories(manafold-outlinegate PRIVATE
   ${CMAKE_SOURCE_DIR}/tests/render
   ${CMAKE_SOURCE_DIR}/compiler/tests/generated
   ${CMAKE_SOURCE_DIR}/reference/src)
+
+# Direction 18: full-bank persistent lightning/particle continuity gate.
+add_executable(manafold-motiongate reel/manafold_motiongate.cpp)
+target_link_libraries(manafold-motiongate PRIVATE zhao_zref)
+target_include_directories(manafold-motiongate PRIVATE
+  ${CMAKE_SOURCE_DIR}/tests/render
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated
+  ${CMAKE_SOURCE_DIR}/reference/src)

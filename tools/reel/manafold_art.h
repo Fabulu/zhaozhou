@@ -2299,7 +2299,10 @@ constexpr int kNoduleClipSlots =
 // tasteful fraction of it. The shipped clips use kNoduleAmpMm.
 // Slot 16, six segments: front socket, A, B, C, rear socket, then the owner's
 // opposed configuration. Every visible ball therefore has its own plate beat.
-constexpr int kNoduleSoloSegKeys = 48;
+// Direction 18: each diagnostic arc gets 72 keys / 144 presentation frames.
+// The 48-key version carried a downstream core through a 69.8 mm jerk impulse;
+// this keeps the full 200 mm envelope and spends TIME rather than amplitude.
+constexpr int kNoduleSoloSegKeys = 72;
 constexpr int kNoduleSoloKeys = kNoduleSoloSegKeys * 6;
 constexpr int32_t kNoduleSoloAmpMm = 200;
 constexpr int32_t kNoduleSoloJointA16 = 3000;
@@ -2726,14 +2729,22 @@ constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
 constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
 constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot
 // Pass 17 axis ladder. The legacy root-Z half-turn points the +X face backward
-// for the entire plant. Runtime values keep the comparison one-binary; the
-// shipping pair is selected by looking and remains named.
+// for the entire plant. Native every-frame comparison selected the pure-X
+// cartwheel: it preserves the inverted antenna plant while keeping the face axis
+// toward the fixed judging camera. The old Z path remains the exact red control.
 constexpr int32_t kTrickLegacyFlipXA16 = 0;
 constexpr int32_t kTrickLegacyFlipZA16 = -32768;
-constexpr int32_t kTrickFlipXA16 = kTrickLegacyFlipXA16;
-constexpr int32_t kTrickFlipZA16 = kTrickLegacyFlipZA16;
+constexpr int32_t kTrickFlipXA16 = -32768;
+constexpr int32_t kTrickFlipZA16 = 0;
 inline int32_t g_u02_trick_flip_x_a16 = kTrickFlipXA16;
 inline int32_t g_u02_trick_flip_z_a16 = kTrickFlipZA16;
+// The old 3000-a16 show-off yaw pushed the otherwise face-preserving X plant
+// back toward a one-eye side read. The balance wobble already keeps the hold
+// alive; shipping keeps the face parked while the legacy yaw remains a named
+// same-binary comparison.
+constexpr int32_t kTrickLegacyShowoffYawA16 = 3000;
+constexpr int32_t kTrickShowoffYawA16 = 0;
+inline int32_t g_u02_trick_showoff_yaw_a16 = kTrickShowoffYawA16;
 
 // PASS 4 (Stage H, Direction 4 §3b): DIRECTIONAL HITS. Four named
 // authored contact stations in one clip, the zixxtrixx-damage precedent;
@@ -2827,6 +2838,8 @@ constexpr int kDeathTailKeys = 108;        // THE ETERNAL REST, held
 // "a corpse that keeps breathing is not dead": the deform ramps to EXACTLY
 // zero over these keys after the last impact and is bit-zero thereafter.
 constexpr int kDeathDeformFadeKeys = 22;
+constexpr int kDeathAntennaSettleLeadKeys = 8;  // C2 arrival before corpse hold
+constexpr int kDeathWhipEaseKeys = 4;           // 8-key/16-frame impact pulse
 // THE OPENING HOLD, and it exists because the gate found a real fault. The
 // probe reads the PRODUCTION deform stream (deformation_sample, both
 // presentation subs), and at the clip's LAST key that stream interpolates
@@ -2991,6 +3004,7 @@ constexpr int32_t kLassoReleaseScalePm = 1600;  // readable loop from first deta
 constexpr int32_t kLassoOutScalePm = 1800;  // the ring OPENS as it flies
 constexpr int32_t kLassoHomeScalePm = 450;  // stays a readable loop while cinched
 constexpr int32_t kLassoSpinA16 = 2200;     // it spins about the throw axis
+constexpr int kLassoShapeMixKeys = 8;        // 16-frame C2 figure handoff
 // the wind-up and the whip, in nodule millimetres -- this IS the throw
 constexpr int32_t kLassoWindMm[3][3] = {  // [A,B,C][x,y,z] at full wind-up
     {-52, -30,  22},
@@ -3081,6 +3095,7 @@ constexpr int32_t kBlownTumbleA16 = 65536;  // one full turn; 390 -> ~140 deg
 // above says it is not. The mana-ratio unification stays untouched.
 constexpr int32_t kBlownYawA16 = 6000;    // was 15000 (~82 deg)
 constexpr int32_t kBlownStreamMm = 96;    // nodule trail at peak velocity
+constexpr int kBlownStreamEaseKeys = 12;  // 24-frame C2 attachment envelope
 constexpr int32_t kBlownCatchSquashPm = 2700;
 
 // ---- THE NODULE TAUNT (D9 SS11, "more fun", third ask) --------------------
@@ -3089,30 +3104,20 @@ constexpr int32_t kBlownCatchSquashPm = 2700;
 // Four beats, each >= 8 keys, one thing at a time (07-MOTION-STYLE SS4), and
 // every beat is a PRESS with a HOLD -- reversal density stays low on purpose.
 //
-// PASS 13 / R3 -- THE BEATS WERE ALL THERE AND NONE OF THEM READ.
-//
-// Pass 12 authored four beats and then eased every one of them over its whole
-// span with `fold_ease`, which is a smoothstep: it leaves slowly, arrives
-// slowly, and never SNAPS. A shrug that takes 32 keys to arrive is not a
-// shrug, it is a drift. Twelve sampled frames of the shipped clip are one
-// standing pose with a wiggle, and the reviewer's verdict ("taunt3 is not
-// funny") is a timing verdict, not a content one.
-//
-// So the STRUCTURE below is pass 12's, unchanged. What changed is the SHAPE of
-// time through it, and it is the shape comedy needs:
+// Direction 18 supersedes the pass-13 snap experiment for every channel carrying
+// antennae or attached effects. The independent amplitudes stay; their time law
+// is now C2 smootherstep with >=16 presentation frames per large transition.
+// Comedy lives in the held tableau and body attitude, not in a physical teleport.
 //
 //    0..  4  rest
-//    4.. 14  ANTICIPATION -- it dips and squashes BEFORE the shrug. New.
-//   14.. 24  the shrug ATTACKS (10 keys, `punch_ease`, not 32 of smoothstep)
-//   24.. 52  ...and is HELD for 28 keys. The hold is the joke.
-//   60.. 80  the lean tips in slowly (this beat is SUPPOSED to be slow)
-//   80..100  ...and is held
-//  100..146  the three-ball shimmy, one press each, unchanged in structure
-//  146..149  THE DISMISSAL SNAPS -- 3 keys, was 10
-//  149..173  ...and is HELD, insolently, for 24 keys
-//  173..183  released, arriving at exactly the rest pose so the loop CLOSES
-//            (the old flick ended at 820 of 1000 and left a 110.7 mm seam,
-//             QA 6.3b -- the last key must return to the first pose)
+//    4.. 14  ANTICIPATION -- it dips and squashes before the shrug
+//   14.. 24  the shrug arrives; 24..52 held
+//   60.. 80  the slow mocking lean
+//   80..132  four C2 crown tableaux, each A/B/C carrier top and bottom
+//  132..144  C2 crown release
+//  144..152  C2 attached-crown dismissal
+//  152..174  held punchline (body overlap lands at 156)
+//  174..183  C2 release to the exact looping rest pose
 //
 // 07-MOTION-STYLE's law is obeyed the way it is written: AMPLITUDE UP,
 // REVERSAL DENSITY FLAT. Every amplitude below is larger than pass 12's; the
@@ -3125,12 +3130,12 @@ constexpr int kTaunt3ShrugAttackKeys = 10;  // ...and it ARRIVES in ten keys
 constexpr int kTaunt3ShrugHoldKey = 52;   // ...and HELD, which is the joke
 constexpr int kTaunt3LeanKey = 60;        // beat 2: the slow mocking lean-in
 constexpr int kTaunt3LeanAttackKeys = 20; // (was hard-coded 26 in the builder)
-constexpr int kTaunt3ShimmyKey = 100;     // beat 3: the three balls, in turn
-constexpr int kTaunt3FlickKey = 146;      // beat 4: the dismissal
-constexpr int kTaunt3FlickAttackKeys = 3; // ...which SNAPS. Was 10.
-constexpr int kTaunt3FlickHoldKeys = 24;  // ...and then does not move.
-// The body follows the antenna rather than moving with it: overlapping action.
-constexpr int kTaunt3FlickBodyLagKeys = 3;
+constexpr int kTaunt3ShimmyKey = 56;      // beat 3: smooth four-tableau crown shuffle
+constexpr int kTaunt3FlickKey = 144;       // beat 4: smooth attached-crown dismissal
+constexpr int kTaunt3FlickAttackKeys = 8;  // 16 presentation frames, C2 arrival
+constexpr int kTaunt3FlickHoldKeys = 22;   // held through key 174
+// The body follows the crown rather than moving with it: overlapping action.
+constexpr int kTaunt3FlickBodyLagKeys = 4;
 constexpr int32_t kTaunt3ShrugMm = 118;   // outer rise / middle drop, in mm (was 88)
 constexpr int32_t kTaunt3AnticMm = 38;    // the pre-dip, against the shrug
 constexpr int32_t kTaunt3AnticDipMm = 76; // ...and the body sinks with it
@@ -3152,27 +3157,94 @@ constexpr int32_t kTaunt3FlickDropMm = 120;  // ...and drops on the dismissal (w
 // Per-mille of the shrug amplitude that stays sideways. Set it to 0 for a pure
 // vertical shrug; that is a one-edit experiment, which is the point of naming it.
 constexpr int32_t kTaunt3ShrugLeanPm = 330;
-// The shimmy press on A was sideways for the same dead reason; it is vertical
-// now, like B's and C's, with this much of the press kept as lateral spice.
-constexpr int32_t kTaunt3ShimmyLeanPm = 250;
-constexpr int32_t kTaunt3ShimmyMm = 78;   // was 64
+// The former positive-only shimmy's 250 pm lean and 78 mm bump are retired;
+// `ZHAO_U02_ORDER_GAIN_PM=0` is the exact one-binary no-order control.
+
+// PASS 17 / Direction 16: THE CROWN SHUFFLE. Four authored tableaux replace
+// three positive bumps. Separate carrier targets are mandatory: A carries B/C
+// and B carries C, so one amplitude copied three times cannot produce three
+// independently readable rankings. Values remain art knobs; the visible-core
+// gate only verifies the picture chosen at native resolution.
+struct Taunt3OrderTiming {
+  int attack_begin;
+  int attack_end;
+  int hold_end;
+};
+constexpr Taunt3OrderTiming kTaunt3OrderTiming[4] = {
+    {56, 68, 74}, {74, 86, 92},
+    {92, 106, 108}, {108, 128, 132},
+};
+// +1 high, 0 middle, -1 low. The fourth tableau repeats the first, arrives by
+// key 128, holds through 132, then spends 12 keys on its C2 release into the
+// existing attached-crown dismissal.
+constexpr int8_t kTaunt3OrderRank[4][3] = {
+    {+1, 0, -1}, {-1, +1, 0}, {0, -1, +1}, {+1, 0, -1},
+};
+// A/B/C each own their complete vocabulary. These values were authored from
+// the same-binary native ladder, never derived from the trace.
+constexpr int32_t kTaunt3OrderHighMm[3] = {200, 210, 230};
+constexpr int32_t kTaunt3OrderMidMm[3] = {-40, -265, 70};
+constexpr int32_t kTaunt3OrderLowMm[3] = {-175, -325, -150};
+// Front/End body-attached carriers answer each crown arrival by rotation. Their
+// centres stay on the body because swallow_nodules consumes these as angles.
+constexpr int32_t kTaunt3OrderEndpointMm[4][2] = {
+    {75, -60}, {-60, 60}, {-70, 80}, {75, -60},
+};
+// Per-tableau changes to the A/B/C fold scales. Position offsets alone cannot
+// put C above A without over-compacting B-C: tableau 2 straightens the B fold
+// so the rigid carrier rises while the signed span stays inside its limits.
+constexpr int32_t kTaunt3OrderFoldDeltaPm[4][3] = {
+    {80, 0, 0}, {0, 300, 0}, {-170, -1000, 0}, {80, 0, 0},
+};
+// Whole-body punctuation parks with each tableau. It supports the read without
+// deciding any carrier's root-local ordering.
+constexpr int32_t kTaunt3OrderBodyRollA16[4] = {1500, -500, -1750, 1500};
+constexpr int32_t kTaunt3OrderBodyLiftMm[4] = {38, 68, 42, 38};
+constexpr int32_t kTaunt3OrderLeanPm = 150;
+constexpr int32_t kTaunt3OrderReleaseKey = 144;
+// Final-resolution acceptance margins, selected below the visible native read
+// with headroom after the authored ladder. They are comparison thresholds, not
+// generators.
+constexpr int32_t kTaunt3OrderReadMarginMm = 50;
+constexpr int32_t kTaunt3OrderSpanReadMm = 12;
+// Direction 18 per-frame continuity guards. These are comparison ceilings,
+// chosen only after the native every-frame review; none generates motion.
+constexpr int32_t kTaunt3OrderMaxCoreStepMm = 80;
+constexpr int32_t kTaunt3OrderMaxCoreAccelMm = 60;
+constexpr int32_t kTaunt3OrderMaxCoreJerkMm = 60;
+constexpr int32_t kAntennaMaxAngularStepDeg = 8;
+constexpr int32_t kAntennaMaxAngularAccelDeg = 6;
+constexpr int32_t kAntennaMaxAngularJerkDeg = 6;
+constexpr int32_t kLightningMaxPathStepMm = 110;
+constexpr int32_t kFoldShapeMaxStationStepPm = 180;
+
+// One-binary art ladder. Unset/1000 is shipping; 0 is an exact no-order
+// control. Per-channel corrections preserve independent owner knobs.
+inline int32_t g_u02_order_gain_pm = 1000;
+inline int32_t g_u02_order_a_pm = 1000;
+inline int32_t g_u02_order_b_pm = 1000;
+inline int32_t g_u02_order_c_pm = 1000;
+inline int32_t g_u02_order_body_pm = 1000;
+inline int32_t g_u02_order_endpoint_pm = 1000;
+// Committed positive control: restores instantaneous tableau replacement at
+// every attack boundary so the production continuity gate must fire.
+inline bool g_u02_order_snap_control = false;
+// Positive control for the Damage/End-socket wrap defect. Shipping saturates
+// high deformation at the authored ceiling; the mutant restores raw u16 wrap
+// so the full-bank carrier continuity checker must catch the teleport.
+inline bool g_u02_compress_wrap_control = false;
+
 constexpr int32_t kTaunt3LeanA16 = 4100;  // was 2400 (13 deg): a MOCKING lean
-// The shoulder turned on the dismissal. It was `-kTaunt3LeanA16 * 2` inside the
-// builder, so raising the lean silently doubled the turn -- one knob governing
-// two features is 09-ENGINE-GOTCHAS 14, and it is split here before it bites.
-// PASS 14 / R4: 7600 (41.7 deg) landed the punchline exactly front-on and then
-// HELD IT THERE for fifty frames -- the balloon zone the review named. The turn
-// the dismissal needs is not lost, it is split with kTaunt3FlickRollA16 onto a
-// second axis.
-//
-// ⚠ SECOND LOOK: CUTTING IT WAS THE WRONG DIRECTION AND THE SHEET SAID SO.
-// The clip arrives at the flick already on a three-quarter, so ANY yaw toward
-// front-on lands nearer the balloon, and 23 degrees still got there. The sign
-// is reversed instead: the dismissal turns the shoulder AWAY, deeper into the
-// three-quarter, which is both further from the worst angle and the better
-// gesture -- you turn away from someone you are dismissing. Bigger than the cut
-// value because it now has somewhere to go.
-constexpr int32_t kTaunt3FlickYawA16 = 6000;
+// Historical dismissal yaw was raised to 6000 when the punchline was still
+// side/back-facing. Pass 17 keeps that exact value only as the rejected control;
+// the selected held picture below uses drop+squash and carrier disagreement for
+// its whole-body read without yawing either eye away.
+// Pass 17 held-punchline ladder. The inherited 6000 yaw parked the face on the
+// side/back. Native full-window comparison selected a front-held body: the
+// authored drop and squash still deliver the whole-body arrival without hiding
+// either eye. Legacy remains the exact rejected same-binary control.
+constexpr int32_t kTaunt3LegacyFlickYawA16 = 6000;
+constexpr int32_t kTaunt3FlickYawA16 = 0;
 inline int32_t g_u02_taunt3_flick_yaw_a16 = kTaunt3FlickYawA16;
 // PASS 13 / R3, SECOND LOOK -- A SHRUG IS A WHOLE-BODY GESTURE.
 //
@@ -3227,8 +3299,8 @@ constexpr int32_t kTaunt3FlickMm = 132;   // was 104
 // creature works and stopping dead while it holds is the read we want.
 constexpr int kTaunt3Hold1Key = 26;      // the stillness starts two keys after
 constexpr int kTaunt3Hold1EndKey = 52;   // the shrug lands, and ends with it
-constexpr int kTaunt3Hold2Key = 152;     // the punchline: after the 3-key flick
-constexpr int kTaunt3Hold2EndKey = 174;  // and its 3-key body lag have landed
+constexpr int kTaunt3Hold2Key = 156;     // crown and four-key body lag have landed
+constexpr int kTaunt3Hold2EndKey = 174;  // held punchline before nine-key release
 // Clock reading when the punchline parks. The remaining 12 units are spent on
 // the 9-key release, so nothing has to sprint at the seam. Lower this and the
 // lean/shimmy run faster; raise it and the release does.
@@ -3240,8 +3312,8 @@ constexpr int kTaunt3ClockAtHold2 = 171;
 // by eye and it is worse than the review's "front-on balloon": across
 // f304-f354 -- the whole punchline -- **the loop is edge-on**. The creature's
 // one big shape, the thing that makes it Manafold rather than a ball, is a
-// vertical stub two nodules wide, and it collapses over f294-302, which is the
-// three-key flick itself, BEFORE the yaw has done much of anything.
+// vertical stub two nodules wide, and it collapsed over f294-302, which was the
+// former three-key flick itself, BEFORE the yaw had done much of anything.
 //
 // The cause is geometric, not a tuning error. The dismissal pushed all three
 // nodules the same way along ONE horizontal axis while the antenna's base
@@ -3255,18 +3327,37 @@ constexpr int kTaunt3ClockAtHold2 = 171;
 //    flung up and back over the shoulder" is a better dismissal than a sideways
 //    swipe anyway. The lateral component is kept as the remainder so the
 //    gesture still has a direction.
-//  * THE TURN IS SPLIT ACROSS TWO AXES. 8b is right that the dismissal has to
-//    carry a whole-body component, and pass 13 was right to add the yaw -- but
-//    41.7 degrees lands exactly on front-on and then holds there. The yaw is cut
-//    to a three-quarter and the difference is spent as a ROLL, so the body still
-//    turns, on more axes than before, and does not stop where it reads worst.
+//  * PASS 14 HISTORICAL TURN: yaw/roll were split to escape a front-on balloon,
+//    but the resulting held side/back pose hid the eyes. Pass 17's selected
+//    front-held orientation below supersedes both while retaining drop+squash.
 constexpr int32_t kTaunt3FlickLiftPm = 900;  // share of the throw that is UP
 constexpr int32_t kTaunt3FlickBackPm = 450;  // ...and back, away from the face
 constexpr int32_t kTaunt3FlickSidePm = 350;  // ...the lateral remainder (was
                                              // 1000: the whole throw, and the
                                              // reason the loop went edge-on)
-constexpr int32_t kTaunt3FlickRollA16 = 7000;  // the tip-away, new in pass 14
+constexpr int32_t kTaunt3LegacyFlickRollA16 = 7000;
+constexpr int32_t kTaunt3FlickRollA16 = 0;
 inline int32_t g_u02_taunt3_flick_roll_a16 = kTaunt3FlickRollA16;
+// Held five-carrier accusation, consumed through the same public path and mute
+// controls as Taunt/Taunt II. Front/End cock oppositely; A/C lift while B drops.
+// The broad dismissal still supplies direction, while this pose supplies the
+// readable disagreement that turns the held picture into a side-eye joke.
+constexpr int32_t kTaunt3PunchFrontMm = 90;
+constexpr int32_t kTaunt3PunchAMm = 80;  // selected legal rung: clearer than 60,
+                                          // 18 mm F-A headroom unlike near-limit 100
+constexpr int32_t kTaunt3PunchBMm = -180;
+constexpr int32_t kTaunt3PunchCMm = 160;
+constexpr int32_t kTaunt3PunchEndMm = -90;
+// Same-binary art ladder for the only held channel that spends F-A length.
+// Shipping remains named here; the renderer override never silently clamps.
+inline int32_t g_u02_taunt3_punch_a_mm = kTaunt3PunchAMm;
+inline int32_t taunt3_punch_carrier_mm(int carrier) {
+  const int32_t values[5] = {kTaunt3PunchFrontMm, g_u02_taunt3_punch_a_mm,
+                             kTaunt3PunchBMm, kTaunt3PunchCMm,
+                             kTaunt3PunchEndMm};
+  return carrier >= 0 && carrier < 5 ? values[carrier] : 0;
+}
+constexpr int32_t kTaunt3PunchLeanPm = 150;
 // PASS 14 / R4, SECOND LOOK -- THE PUNCHLINE HAS TO BE A DIFFERENT SHAPE, AND
 // THE SQUASH IS THE ONLY LEVER THAT MAKES ONE.
 //
@@ -3514,7 +3605,11 @@ constexpr int32_t kMoteOrbitRMinMm = 40, kMoteOrbitRMaxMm = 130;  // E.2: wider
 constexpr int kGatherKeysBase = 22, kGatherKeysHash = 13;   // 44..68 frames
 constexpr int kHoldKeysBase = 24, kHoldKeysHash = 21;       // 48..88 frames
 constexpr int kKneadKeysBase = 24, kKneadKeysHash = 21;     // 48..88 frames
-constexpr int kReleaseKeys = 14;           // every clip's tail: amp eases to 0
+// Direction 18: short clips get fewer complete phrases, never a crushed morph.
+constexpr int kFoldMinDriftKeys = 4;
+constexpr int kFoldMinMorphKeys = 8;       // 16 presentation frames
+constexpr int kFoldReleaseSettleKeys = 4;  // stable identity before seam morph
+constexpr int kReleaseKeys = 14;           // final figure morphs to the opener
 // A complete in-plane turn is occasional punctuation during a stable HOLD.
 // It never applies to Lasso, whose throw spin is separately authored.
 constexpr int kFoldFullTurnChancePm = 330;
@@ -3574,9 +3669,11 @@ constexpr int kFoldEdgeCoreGainPm = 430;
 constexpr int kFoldEdgeHaloGainPm = 220;   // pass 8: pulled back after looking -- the pocket was filling
 constexpr int32_t kFoldEdgeJitterMm = 24;
 constexpr int kFoldEdgeSegs = 4;           // stamps per station-to-station link
-// The edge only exists while the shape does. Below this coherence there is no
-// shape to outline and the outline would be a scribble over the cloud.
+// Direction 18: a lightning figure may recede but may never turn off and
+// reappear as a replacement shape. Below the old coherence threshold the edge
+// stays at this named floor while its stations continue morphing.
 constexpr int32_t kFoldEdgeCohMinPm = 620;
+constexpr int32_t kFoldEdgePresenceFloorPm = 220;
 // §2's "rotate the mana on all axis" and "shapes should look a bit malleable
 // like they're being knead". Slow and incommensurate on purpose -- two turns
 // whose periods do not divide into each other never line up into a tumble, and
@@ -3705,28 +3802,14 @@ constexpr int32_t kKneadPressHoldPm = 300;  // the plateau -- the HOLD that read
                                             // (a beat needs >= 16 frames to
                                             // register; at channel's clock this
                                             // plateau is ~32)
-// PER-CYCLE ACCENTS. Some presses are harder than others. Hashed off the same
-// fx_hash stream fold_phase already uses, so the clip still loops seamlessly and
-// the pattern never visibly repeats (the anti-cycle law).
-constexpr int32_t kKneadAccentLoPm = 700;
-constexpr int32_t kKneadAccentHiPm = 1300;
-// A LEADING BALL. Per cycle, one hashed station presses harder than its
-// siblings, so different balls visibly lead different presses. This is
-// Direction 7 §1's "all the balls move individually" made legible -- while the
-// shared envelope and the per-station lags keep it reading as guided hinges
-// rather than as string.
-// 1450 was authored first and the CLOSURE PROBE caught it before any render:
-// the clip bank's worst arm rim moved 1043 -> 1102 pm against the 1120 gate,
-// leaving 18 pm. It passed, and 18 pm is not headroom -- it is the next small
-// change away from failing, and art.h:188 records what that looks like. Backed
-// off to 1250: the bank comes back to 1072, so 48 pm of headroom instead of 18.
-// (Not all the way back to the stock 1043 -- F.3's phrasing genuinely does reach
-// further on its hardest presses, which is the point of it. 48 pm is a margin;
-// 18 was a coincidence.) The accent still plainly reads; the leading ball was
-// never carried by the last 200 permille. MEASURED AFTER THE CHANGE, not
-// predicted before it -- this comment is in the commit that fixes ten false
-// ones, and a wrong number here would be a joke at the reader's expense.
-constexpr int32_t kKneadLeadBoostPm = 1250;
+// Direction 18: the folded-figure knead's agitation fades across 45% at each
+// side through C2 time. The old 25% smoothstep ramp collapsed to four frames on
+// short clips and kicked the attached End carrier above its acceleration gate.
+constexpr int32_t kKneadAgitRampPm = 450;
+// Direction 18 retires the per-cycle hashed gain and lead-station replacement.
+// `press_wave` is nonzero at its cycle boundary, so switching authority there
+// stepped a live quaternion. Independent travel remains in the station lags,
+// axes and public choreography; the press now keeps one stable gain.
 constexpr int32_t kKneadWagJfA16 = 1600;  // knead: the two hands work...
 constexpr int32_t kKneadWagNeckA16 = 480;  // (neck stirs out-of-plane)
 constexpr int32_t kKneadWagBA16 = 1100;
@@ -3768,7 +3851,17 @@ constexpr int32_t kKneadWagCA16 = 1900;    // ...in counter-rotation
 // and the closure probe bounds it either way.
 constexpr int32_t kKneadWagB2A16 = 4600;
 constexpr int kKneadWagPeriodKeys = 22;
-constexpr int32_t kKneadTremorA16 = 130;   // the hold's small tremor
+// Direction 18 committed controls restore the two rejected live switches so
+// the full-bank angular continuity gate proves it can see them.
+inline bool g_u02_accent_switch_control = false;
+inline bool g_u02_hold_tremor_control = false;
+// Positive-control magnitude only: deliberately large enough that restoring the
+// hard segment-enable MUST trip the production angular continuity checker. The
+// shipping path never reads it while the control is false.
+constexpr int32_t kHoldTremorMutationA16 = 1600;
+// Direction 18 retires the HOLD-only tremor: a sine selected by a segment enum
+// can enter/leave at nonzero phase and step the carrier. Smooth large channels
+// remain alive; the shape's continuous shimmer supplies small-scale life.
 // per-clip gain (pm) for the always-on knead layer, indexed by slot:
 // 0 hover, 1 drift, 2 channel, 3 curious, 4 startle, 5 rest, 6 pirouette,
 // 7 still(diagnostic: OFF), 8 hasty, 9 fall, 10 hit, 11 taunt, 12 taunt2,

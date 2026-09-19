@@ -1193,7 +1193,12 @@ inline void enable_eye_scale_track(zc::Clip& c) {
 inline zc::DeformSample compress_at(int f, int keys, int cycles, int32_t amp,
                                     int32_t phase16 = 0) {
   const int32_t w = (65536 + sinp(f, keys, cycles, phase16)) / 2;  // 0..65536
-  const int32_t flat = static_cast<int32_t>((static_cast<int64_t>(amp) * w) >> 16);
+  int32_t flat = static_cast<int32_t>((static_cast<int64_t>(amp) * w) >> 16);
+  // Direction 18: high impact amplitudes can exceed the u16 sidecar. Casting
+  // wrapped Damage from a deep squash to nearly zero in one key, and the
+  // body-following End socket teleported with it. Saturate at the same authored
+  // deform ceiling used by squash_impact; a representation limit never wraps.
+  if (!g_u02_compress_wrap_control && flat > 60000) flat = 60000;
   const int32_t spread = static_cast<int32_t>(
       (static_cast<int64_t>(flat) * kSpreadRatioPm) / 1000);
   return zc::DeformSample{static_cast<uint16_t>(flat), static_cast<uint16_t>(spread)};
@@ -1380,6 +1385,35 @@ inline int32_t fold_ease(int32_t t) {
   return t * t / 1000 * (3000 - 2 * t) / 1000;
 }
 
+/** Quintic smootherstep in per-mille. Zero velocity AND acceleration at both
+ *  ends: the time law for any channel that carries antennae or attached FX. */
+inline int32_t motion_c2_ease(int32_t t) {
+  if (t < 0) t = 0;
+  if (t > 1000) t = 1000;
+  constexpr int64_t Q = 1LL << 20;
+  const int64_t x = static_cast<int64_t>(t) * Q / 1000;
+  const int64_t x2 = (x * x) >> 20;
+  const int64_t x3 = (x2 * x) >> 20;
+  const int64_t x4 = (x3 * x) >> 20;
+  const int64_t x5 = (x4 * x) >> 20;
+  const int64_t y = 6 * x5 - 15 * x4 + 10 * x3;
+  return static_cast<int32_t>((y * 1000 + Q / 2) / Q);
+}
+
+inline int curve_c2(const Key* k, int n, int f) {
+  if (f <= k[0].f) return k[0].v;
+  for (int i = 0; i + 1 < n; ++i) {
+    if (f >= k[i].f && f <= k[i + 1].f) {
+      const int span = k[i + 1].f - k[i].f;
+      if (span <= 0) return k[i + 1].v;
+      const int32_t t = motion_c2_ease((f - k[i].f) * 1000 / span);
+      return k[i].v + static_cast<int32_t>(
+          (static_cast<int64_t>(k[i + 1].v - k[i].v) * t) / 1000);
+    }
+  }
+  return k[n - 1].v;
+}
+
 /** PASS 13 (R3) -- THE ATTACK EASE. Fast out, decelerating in: 1 - (1-t)^3.
  *
  *  `fold_ease` is a smoothstep. It leaves slowly AND arrives slowly, which is
@@ -1524,6 +1558,89 @@ inline void swallow_body(Rig& g, const int32_t swal[5], int32_t amp_mm,
           (static_cast<int64_t>(roll_a16) * (swal[0] - swal[4])) / amp_mm)));
 }
 
+struct Taunt3OrderPose {
+  int32_t swal[5] = {0, 0, 0, 0, 0};
+  int32_t fold_delta_pm[3] = {0, 0, 0};
+  int32_t body_roll_a16 = 0;
+  int32_t body_lift_mm = 0;
+};
+
+inline int32_t taunt3_order_scaled(int32_t v, int32_t channel_pm) {
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(v) * g_u02_order_gain_pm * channel_pm) / 1000000);
+}
+
+inline Taunt3OrderPose taunt3_order_target(int tableau) {
+  Taunt3OrderPose out;
+  if (tableau < 0 || tableau >= 4 || g_u02_order_gain_pm == 0) return out;
+  const int32_t carrier_pm[3] = {g_u02_order_a_pm, g_u02_order_b_pm,
+                                 g_u02_order_c_pm};
+  for (int i = 0; i < 3; ++i) {
+    const int rank = kTaunt3OrderRank[tableau][i];
+    const int32_t v = rank > 0 ? kTaunt3OrderHighMm[i]
+                      : rank < 0 ? kTaunt3OrderLowMm[i]
+                                 : kTaunt3OrderMidMm[i];
+    out.swal[i + 1] = taunt3_order_scaled(v, carrier_pm[i]);
+  }
+  out.swal[0] = taunt3_order_scaled(
+      kTaunt3OrderEndpointMm[tableau][0], g_u02_order_endpoint_pm);
+  out.swal[4] = taunt3_order_scaled(
+      kTaunt3OrderEndpointMm[tableau][1], g_u02_order_endpoint_pm);
+  for (int i = 0; i < 3; ++i)
+    out.fold_delta_pm[i] = taunt3_order_scaled(
+        kTaunt3OrderFoldDeltaPm[tableau][i], carrier_pm[i]);
+  out.body_roll_a16 = taunt3_order_scaled(
+      kTaunt3OrderBodyRollA16[tableau], g_u02_order_body_pm);
+  out.body_lift_mm = taunt3_order_scaled(
+      kTaunt3OrderBodyLiftMm[tableau], g_u02_order_body_pm);
+  return out;
+}
+
+inline Taunt3OrderPose taunt3_order_blend(const Taunt3OrderPose& a,
+                                          const Taunt3OrderPose& b,
+                                          int32_t u_pm) {
+  if (u_pm < 0) u_pm = 0;
+  if (u_pm > 1000) u_pm = 1000;
+  Taunt3OrderPose out;
+  const auto blend = [&](int32_t x, int32_t y) {
+    return x + static_cast<int32_t>(
+                   (static_cast<int64_t>(y - x) * u_pm) / 1000);
+  };
+  for (int i = 0; i < 5; ++i) out.swal[i] = blend(a.swal[i], b.swal[i]);
+  for (int i = 0; i < 3; ++i)
+    out.fold_delta_pm[i] = blend(a.fold_delta_pm[i], b.fold_delta_pm[i]);
+  out.body_roll_a16 = blend(a.body_roll_a16, b.body_roll_a16);
+  out.body_lift_mm = blend(a.body_lift_mm, b.body_lift_mm);
+  return out;
+}
+
+/** Direction 16's four-tableau crown shuffle. There is no oscillator: each
+ *  attack is monotone, each hold is exact, and the twelve-key release returns to
+ *  zero before the existing dismissal owns key 146. */
+inline Taunt3OrderPose taunt3_order_pose(int f) {
+  const Taunt3OrderPose zero;
+  if (f < kTaunt3ShimmyKey || f >= kTaunt3OrderReleaseKey) return zero;
+  for (int i = 0; i < 4; ++i) {
+    const Taunt3OrderTiming& t = kTaunt3OrderTiming[i];
+    const Taunt3OrderPose to = taunt3_order_target(i);
+    if (f < t.attack_begin) break;
+    if (f < t.attack_end) {
+      if (g_u02_order_snap_control) return to;
+      const Taunt3OrderPose from = i == 0 ? zero : taunt3_order_target(i - 1);
+      const int den = t.attack_end - t.attack_begin;
+      const int32_t u = den > 0 ? motion_c2_ease(
+                                      (f - t.attack_begin) * 1000 / den)
+                                : 1000;
+      return taunt3_order_blend(from, to, u);
+    }
+    if (f < t.hold_end) return to;
+  }
+  const int begin = kTaunt3OrderTiming[3].hold_end;
+  const int den = kTaunt3OrderReleaseKey - begin;
+  const int32_t u = den > 0 ? motion_c2_ease((f - begin) * 1000 / den) : 1000;
+  return taunt3_order_blend(taunt3_order_target(3), zero, u);
+}
+
 /** PASS 11 F.3 -- THE PRESS-RECOVER WAVE, which replaces sinp on the knead wag.
  *
  *  Same contract as sinp: returns -65536..65536, integer cycles per clip so the
@@ -1562,30 +1679,9 @@ inline int32_t press_wave(int f, int keys, int cycles, int32_t phase_pm = 0) {
   return static_cast<int32_t>((static_cast<int64_t>(u) * 2 - 1000) * 65536 / 1000);
 }
 
-/** PASS 11 F.3 -- the per-cycle accent, and the leading ball.
- *
- *  `station` is 0..4 (Jf, Neck, A, B, C). Returns a per-mille gain for THIS
- *  cycle at THIS station. Hashed off fold_phase's own stream, keyed on the
- *  cycle index, so it loops with the clip and never visibly repeats.
- *
- *  It scales a monotone envelope and therefore cannot introduce a reversal --
- *  see press_wave. That is deliberate: the accents had to be safe by
- *  construction, not by a band someone checks afterwards.
- */
-inline int32_t knead_accent_pm(uint32_t slot, int f, int keys, int cycles,
-                               int station) {
-  if (cycles <= 0 || keys <= 0) return 1000;
-  const uint32_t n = static_cast<uint32_t>(
-      (static_cast<int64_t>(f) * cycles) / keys);
-  const uint32_t h = fx_hash(0xACCE7Fu + slot, n, 0x2Bu);
-  const int32_t span = kKneadAccentHiPm - kKneadAccentLoPm;
-  int32_t g = kKneadAccentLoPm + static_cast<int32_t>(h % static_cast<uint32_t>(span + 1));
-  // ...and one station leads this press.
-  const uint32_t lead = (h >> 19) % 5u;
-  if (static_cast<uint32_t>(station) == lead)
-    g = static_cast<int32_t>((static_cast<int64_t>(g) * kKneadLeadBoostPm) / 1000);
-  return g;
-}
+// Direction 18 retires the per-cycle hashed accent/lead switch. Its waveform is
+// nonzero at the cycle boundary, so replacing gain/leader there stepped a live
+// quaternion. The continuous press remains at one stable authored authority.
 
 /** The shared schedule. `salt` = the clip slot; `keys` = the clip length;
  *  `kq4` = key position in Q4 (key * 16 + sub-key sixteenths -- the fx lane
@@ -1596,7 +1692,29 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
   // the opening shape varies PER CLIP (most clips are shorter than one
   // full cycle, so a fixed opener would make the whole bank read RING);
   // the hover keeps the RING -- the easiest read on the showcase loop
-  uint8_t shape = salt == 0 ? 0 : static_cast<uint8_t>(fx_hash(salt, 0xBEEFu, 7u) % kFoldShapeCount);
+  const uint8_t opening_shape = salt == 0
+                                    ? 0
+                                    : static_cast<uint8_t>(
+                                          fx_hash(salt, 0xBEEFu, 7u) % kFoldShapeCount);
+  if (kq4 >= release_at) {
+    // Resolve the ACTUAL stable figure immediately before release first. The
+    // old branch ran in cycle zero and could morph opener -> opener while a
+    // different last figure vanished underneath it.
+    const FoldPhase last = fold_phase(salt, keys, release_at - 1);
+    ph.seg = kSegRelease;
+    const int32_t release_span = kReleaseKeys * 16 - 8;
+    const int32_t raw = release_span > 0
+                            ? (kq4 - release_at) * 1000 / release_span
+                            : 1000;
+    const int32_t t = motion_c2_ease(raw);
+    ph.amp_pm = 1000 + (kDriftAmpFloorPm - 1000) * t / 1000;
+    ph.agit_pm = 0;
+    ph.shape_from = last.shape_from;
+    ph.shape_to = opening_shape;
+    ph.morph_pm = t;
+    return ph;
+  }
+  uint8_t shape = opening_shape;
   uint8_t next_shape = 1;
   int32_t seg_start = 0;
   uint32_t n = 0;
@@ -1610,28 +1728,27 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
     int32_t gather = (kGatherKeysBase + static_cast<int32_t>(h % kGatherKeysHash)) * 16;
     int32_t hold = (kHoldKeysBase + static_cast<int32_t>((h >> 8) % kHoldKeysHash)) * 16;
     int32_t knead = (kKneadKeysBase + static_cast<int32_t>((h >> 16) % kKneadKeysHash)) * 16;
-    // PASS 5 (QA item 3): SHORT CLIPS MUST STILL KNEAD. `hit` (70 keys) and
-    // `startle` (80) never reached the knead segment, and `curious` kneaded
-    // 9 keys of 90 -- the hashed first cycle simply did not fit before the
-    // release tail, so the owner's "then knead it into new shapes ... going
-    // on all the time" was untrue of part of the bank. If the whole first
-    // cycle cannot fit, compress its three segments proportionally so
-    // gather -> hold -> KNEAD -> release all land inside the clip. A clip
-    // whose first cycle already fits takes the same durations as before.
-    // DIRECTION 7 §3: the drift joins the compression, and it is compressed
-    // HARDER than the rest -- a short clip that spent most of itself drifting
-    // would never show a shape at all, which trades one fault (the fold ran
-    // permanently) for its mirror image.
-    if (n == 0 && release_at > 4 * 16 && drift + gather + hold + knead > release_at) {
-      const int32_t cyc = drift + gather + hold + knead;
-      drift = drift * release_at / cyc / 2;
-      gather = gather * release_at / cyc;
-      hold = hold * release_at / cyc;
-      if (drift < 16) drift = 16;
-      if (gather < 16) gather = 16;
-      if (hold < 16) hold = 16;
-      knead = release_at - drift - gather - hold;  // no rounding gap: the knead
-      if (knead < 16) knead = 16;                  // hands straight to release
+    // Direction 18: short clips show fewer complete phrases. The first phrase
+    // keeps a named >=16-presentation-frame gather/hold/morph instead of crushing
+    // the same vocabulary into a one-key replacement.
+    if (n == 0 && release_at > 0 &&
+        drift + gather + hold + knead + kFoldReleaseSettleKeys * 16 > release_at) {
+      drift = kFoldMinDriftKeys * 16;
+      gather = kFoldMinMorphKeys * 16;
+      hold = kFoldMinMorphKeys * 16;
+      knead = kFoldMinMorphKeys * 16;
+    }
+    const int32_t cycle_len = drift + gather + hold + knead;
+    // Reserve a stable identity before the release morph. If another complete
+    // phrase cannot fit, hold the current figure; never begin a partial phrase.
+    if (seg_start + cycle_len + kFoldReleaseSettleKeys * 16 > release_at) {
+      ph.seg = kSegHold;
+      ph.amp_pm = 1000;
+      ph.agit_pm = 0;
+      ph.morph_pm = 0;
+      ph.shape_from = shape;
+      ph.shape_to = shape;
+      return ph;
     }
     next_shape = static_cast<uint8_t>((h >> 24) % kFoldShapeCount);
     if (next_shape == shape)
@@ -1641,14 +1758,6 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
     const int32_t g_end = d_end + gather, h_end = g_end + hold, k_end = h_end + knead;
     ph.shape_from = shape;
     ph.shape_to = next_shape;
-    if (kq4 >= release_at) {  // the tail: ease everything home
-      ph.seg = kSegRelease;
-      const int32_t t = (kq4 - release_at) * 1000 / (kReleaseKeys * 16);
-      ph.amp_pm = 1000 - fold_ease(t);
-      ph.agit_pm = 0;
-      ph.morph_pm = 0;
-      return ph;
-    }
     if (kq4 < d_end) {
       // DIRECTION 7 §3: the DRIFT. The hands ease open to a floor and hold
       // there; they do NOT go slack, or the next gather reads as a snap.
@@ -1657,10 +1766,10 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
       const int32_t ease_keys = 250;  // per-mille of the drift spent easing
       int32_t e;
       if (t < ease_keys) e = 1000 - fold_ease(t * 1000 / ease_keys);
-      else if (t > 1000 - ease_keys) e = fold_ease((1000 - t) * 1000 / ease_keys);
+      else if (t > 1000 - ease_keys)
+        e = fold_ease((t - (1000 - ease_keys)) * 1000 / ease_keys);
       else e = 0;
-      // the clip's FIRST drift starts from zero, matching the release the loop
-      // seam left behind, exactly as the first gather used to
+      // The first drift begins at the same alive floor the release seam reaches.
       if (n == 0) e = 0;
       ph.amp_pm = kDriftAmpFloorPm + (1000 - kDriftAmpFloorPm) * e / 1000;
       ph.agit_pm = 0;
@@ -1692,12 +1801,16 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
       ph.amp_pm = 1000;
       ph.agit_pm = 0;
       ph.morph_pm = 0;
-      const int32_t t = (kq4 - g_end) * 1000 / hold;
+      const int32_t turn_span = hold > 8 ? hold - 8 : hold;
+      const int32_t t = (kq4 - g_end) * 1000 /
+                        (turn_span > 0 ? turn_span : 1);
       const bool full_turn = hold >= kFoldFullTurnMinHoldKeys * 16 &&
           static_cast<int32_t>(turn_h % 1000u) < kFoldFullTurnChancePm;
       if (full_turn) {
+        // Reach the equivalent 360-degree endpoint on the last presentation
+        // sample before KNEAD, with C2 arrival; reset-to-zero is then identical.
         const int32_t turn = static_cast<int32_t>(
-            (static_cast<int64_t>(fold_ease(t)) * 65536) / 1000);
+            (static_cast<int64_t>(motion_c2_ease(t)) * 65536) / 1000);
         ph.turn_a16 = (turn_h & 0x10000u) ? -turn : turn;
       }
       return ph;
@@ -1706,10 +1819,15 @@ inline FoldPhase fold_phase(uint32_t salt, int keys, int32_t kq4) {
       ph.seg = kSegKnead;
       ph.amp_pm = 1000;
       const int32_t t = (kq4 - h_end) * 1000 / knead;
-      // the waggle ramps in and out inside the knead (one thing at a time)
-      ph.agit_pm = t < 250 ? fold_ease(t * 4)
-                 : t > 750 ? fold_ease((1000 - t) * 4)
-                           : 1000;
+      // Direction 18: a short phrase used to switch full agitation across a
+      // quarter of KNEAD (four presentation frames in Curious). Spend 40% on
+      // each C2 fade so attached carriers and the field share a calm handoff.
+      const int32_t ramp = kKneadAgitRampPm;
+      ph.agit_pm = t < ramp
+                       ? motion_c2_ease(t * 1000 / ramp)
+                   : t > 1000 - ramp
+                       ? motion_c2_ease((1000 - t) * 1000 / ramp)
+                       : 1000;
       ph.morph_pm = fold_ease(t);
       return ph;
     }
@@ -1941,7 +2059,7 @@ inline void apply_eye_schedule(Rig& g, uint32_t slot, EyeCam cam, int keys, int 
  *  is a separate parameter so a new clip has to SAY which camera it is baked
  *  for, and u02::clip_cam_orbits is the one place that answers. */
 inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
-                          int32_t eye_pm = 1000) {
+                          int32_t eye_pm = 1000, int32_t motion_pm = 1000) {
   // The eye travel rides here because this is the one layer every PERFORMING
   // clip calls (build_still and build_nodule_solo deliberately do not). It
   // writes the carrier bones, which nothing else in this function touches.
@@ -1965,7 +2083,10 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,
   // which orphaned index 14 -- the damage clip silently ran at 700, 2.8x
   // its authored 250, and the owner's knob did nothing)
-  const int gain = slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadClipPm[slot] : 700;
+  const int base_gain =
+      slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadClipPm[slot] : 700;
+  const int gain = static_cast<int>(
+      (static_cast<int64_t>(base_gain) * motion_pm) / 1000);
   if (gain <= 0) return;
   // PASS 6 C.2: THE SHARED DRIVER IS SPLIT. Every hinge used to read the same
   // `grip` scalar on the same frame, so they were perfectly correlated by
@@ -1985,19 +2106,26 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   const auto a = [&](int32_t base, int32_t env_pm) {
     return static_cast<int32_t>(static_cast<int64_t>(base) * env_pm / 1000 * gain / 1000);
   };
-  // GATHER/HOLD: the grip -- every fold closes a few degrees
+  // GATHER/HOLD: the grip. Direction 18 removes the segment-gated tremor;
+  // every contribution below is driven by a continuous phase envelope.
   const int32_t grip = ph.amp_pm;
-  // HOLD: the small tremor that keeps the grip alive
-  const int32_t trem = ph.seg == kSegHold
-      ? static_cast<int32_t>((static_cast<int64_t>(kKneadTremorA16) *
-                              sinp(f, keys, keys / 9 > 0 ? keys / 9 : 1)) >> 16)
-      : 0;
-  g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_z(a(kKneadGripJfA16, grip) + trem));
-  g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_z(a(kKneadGripNeckA16, ph_neck.amp_pm) - trem));
-  g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kKneadGripAA16, ph_a.amp_pm)));
-  g.q[kBHingeB] =
-      quat_mul(g.q[kBHingeB], quat_z(a(kKneadGripBA16, ph_b.amp_pm) + trem / 2));
-  g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kKneadGripCA16, ph_c.amp_pm)));
+  const int32_t legacy_trem =
+      g_u02_hold_tremor_control && ph.seg == kSegHold
+          ? static_cast<int32_t>((static_cast<int64_t>(kHoldTremorMutationA16) *
+                                  sinp(f, keys, keys / 9 > 0 ? keys / 9 : 1)) >> 16)
+          : 0;
+  g.q[kBJunctionF] = quat_mul(
+      g.q[kBJunctionF], quat_z(a(kKneadGripJfA16, grip) + legacy_trem));
+  g.q[kBNeck] = quat_mul(
+      g.q[kBNeck],
+      quat_z(a(kKneadGripNeckA16, ph_neck.amp_pm) - legacy_trem));
+  g.q[kBHingeA] = quat_mul(g.q[kBHingeA],
+                           quat_z(a(kKneadGripAA16, ph_a.amp_pm)));
+  g.q[kBHingeB] = quat_mul(
+      g.q[kBHingeB],
+      quat_z(a(kKneadGripBA16, ph_b.amp_pm) + legacy_trem / 2));
+  g.q[kBHingeC] = quat_mul(g.q[kBHingeC],
+                           quat_z(a(kKneadGripCA16, ph_c.amp_pm)));
   // PASS 6 C.1/C.3: THE OUT-OF-PLANE CHANNEL -- the axis that did not exist
   // until this pass. A, B and C swing ACROSS the loop plane on their own
   // period, so "up and down separately" is now something the rig can express.
@@ -2025,26 +2153,35 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
     // PASS 11 F.3: press-recover, not a sine. Same amplitude, different phrasing.
     const int32_t w1 = press_wave(f, keys, cyc);
     const int32_t w2 = press_wave(f, keys, cyc, 250);  // a quarter cycle, as 0x4000 was
-    // ...and this cycle is not like the last one. Station indices: Jf 0, Neck 1,
-    // A 2, B 3, C 4 -- one of them leads each press.
-    const auto acc = [&](int station) {
-      return knead_accent_pm(slot, f, keys, cyc, station);
+    const auto legacy_accent = [&](int32_t value, int station) {
+      if (!g_u02_accent_switch_control) return value;
+      const uint32_t n = static_cast<uint32_t>(
+          (static_cast<int64_t>(f) * cyc) / keys);
+      const uint32_t h = fx_hash(0xACCE7Fu + slot, n, 0x2Bu);
+      int32_t gain_pm = 700 + static_cast<int32_t>(h % 601u);
+      if (static_cast<uint32_t>(station) == (h >> 19) % 5u)
+        gain_pm = gain_pm * 1250 / 1000;
+      return static_cast<int32_t>(
+          (static_cast<int64_t>(value) * gain_pm) / 1000);
     };
-    const auto ax = [&](int32_t v, int station) {
-      return static_cast<int32_t>((static_cast<int64_t>(v) * acc(station)) / 1000);
-    };
+    // Direction 18: one stable authority across every cycle boundary. Station
+    // independence comes from lagged phase/axis, never a live hashed switch.
     g.q[kBJunctionF] = quat_mul(
         g.q[kBJunctionF],
-        quat_z(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16), 0)));
+        quat_z(legacy_accent(static_cast<int32_t>(
+            (static_cast<int64_t>(a(kKneadWagJfA16, ph.agit_pm)) * w1) >> 16), 0)));
     g.q[kBHingeC] = quat_mul(
         g.q[kBHingeC],
-        quat_z(-ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16), 4)));
+        quat_z(-legacy_accent(static_cast<int32_t>(
+            (static_cast<int64_t>(a(kKneadWagCA16, ph_c.agit_pm)) * w1) >> 16), 4)));
     g.q[kBNeck] = quat_mul(
         g.q[kBNeck],
-        quat_x(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagNeckA16, ph_neck.agit_pm)) * w2) >> 16), 1)));
+        quat_x(legacy_accent(static_cast<int32_t>(
+            (static_cast<int64_t>(a(kKneadWagNeckA16, ph_neck.agit_pm)) * w2) >> 16), 1)));
     g.q[kBHingeB] = quat_mul(
         g.q[kBHingeB],
-        quat_z(ax(static_cast<int32_t>((static_cast<int64_t>(a(kKneadWagBA16, ph_b.agit_pm)) * w2) >> 16), 3)));
+        quat_z(legacy_accent(static_cast<int32_t>(
+            (static_cast<int64_t>(a(kKneadWagBA16, ph_b.agit_pm)) * w2) >> 16), 3)));
     // Direction 12: the old B2 wag moved only the closure target and made the
     // body attachment slide. Spend that authored beat on the real rear socket
     // carrier instead; its centre stays attached while its local joint turns.
@@ -2354,9 +2491,12 @@ inline zc::Clip build_startle() {
                      {timing.arrive, 1300}, {timing.hold_end, 1300},
                      {30, 750}, {42, 990}, {52, 640}, {74, 40},
                      {79, 0}};
-  static const Key kWhip[] = {{0, 1000},  {8, 1060},  {14, 760},  {22, 1160},
-                              {32, 880},  {44, 1080}, {56, 950},  {68, 1020},
-                              {79, 1000}};
+  // Direction 18: one delayed whip and two broad settling rebounds. The old
+  // 8/14/22/32/44/56/68 reversals asked the attached field to change direction
+  // every 6-12 keys and exceeded the full-bank angular step gate. Endpoints stay
+  // 760/1160/880/1080; time and C2 arrivals remove the spazzy reversal density.
+  static const Key kWhip[] = {{0, 1000},  {8, 1060},  {16, 760}, {28, 1160},
+                              {44, 880}, {60, 1080}, {72, 970}, {79, 1000}};
   const Key kWide[] = {{0, 0}, {timing.anticipate, 80},
                        {timing.eye_arrive, -430}, {36, -430},
                        {52, 0}, {79, 0}};
@@ -2379,7 +2519,11 @@ inline zc::Clip build_startle() {
       g.nod.bz -= sp;
       g.nod.cz += sp;
     }
-    const int whip = curve(kWhip, 9, f);
+    // Direction 18: the whip reverses at the current authored C2 knots
+    // 16/28/44/60/72. The rejected linear 14/22-era schedule changed angular
+    // velocity in one presentation frame; broad C2 arrivals preserve the payoff
+    // while attached FX no longer snap.
+    const int whip = curve_c2(kWhip, 8, f);
     loop_pose(g, 1000, whip, whip, whip, 0);
     face_rest(g);
     apply_squint(g, curve(kWide, 6, f) + blink_at(f, 70));
@@ -2544,10 +2688,16 @@ inline zc::Clip build_fall() {
       const int64_t ease = (t * t) >> 16;  // accelerating spin, like the drop
       g.q[kBRoot] = quat_mul(g.q[kBRoot],
                              quat_z(static_cast<int32_t>((65536 * ease) >> 16)));
-      // pass 3: the EXTRA tumble axis — a slow yaw under the pitch spin
+      // Direction 18: the secondary yaw returns to zero with a C2 envelope
+      // before contact. The old `yaw * drop_ease` vanished wholesale at catch.
+      const int32_t yaw_t = static_cast<int32_t>(
+          (static_cast<int64_t>(f) * 2000) / kFallCatchKey);
+      const int32_t yaw_pm = yaw_t <= 1000
+                                 ? motion_c2_ease(yaw_t)
+                                 : motion_c2_ease(2000 - yaw_t);
       g.q[kBRoot] = quat_mul(
           g.q[kBRoot], quat_y(static_cast<int32_t>(
-                           (static_cast<int64_t>(kFallYawTumbleA16) * ease) >> 16)));
+                           (static_cast<int64_t>(kFallYawTumbleA16) * yaw_pm) / 1000)));
     }
     const int stream = curve(kStream, 7, f);
     loop_pose(g, stream, stream, stream, stream, 0);
@@ -2783,9 +2933,10 @@ inline zc::Clip build_taunt2() {
  *  plant key; 78..148 PLANTED — declared, authored ground contact
  *  (kTrickPlantDepthMm at the loop peak; the committed probe asserts the
  *  window and depth), body wobbling above as an inverted pendulum, the
- *  antenna flexing at the junction hinges, a slow show-off yaw so the
- *  upside-down face passes the camera; 148..186 it rights itself WITH
- *  OVERSHOOT and floats back up; then a pleased settle. */
+ *  antenna flexing at the junction hinges; the rejected show-off yaw remains a
+ *  same-binary control but shipping keeps the selected face axis parked;
+ *  148..186 it rights itself WITH OVERSHOOT and floats back up; then a pleased
+ *  settle. */
 inline zc::Clip build_trick() {
   const int K = kTrickKeys;
   zc::Clip c = clip_shell(13, K, kHoverHeightMm);
@@ -2836,11 +2987,13 @@ inline zc::Clip build_trick() {
           quat_x(static_cast<int32_t>(
               (static_cast<int64_t>(kTrickBalanceWobbleA16 / 2) * bal / 1000 *
                sinp(f, K, 4, 0x4000)) >> 16)));
-      // the slow show-off yaw: the upside-down face sweeps the camera
+      // Legacy show-off yaw remains a same-binary control. Shipping keeps this
+      // at zero so the selected pure-X cartwheel does not turn the face away;
+      // balance wobble and antenna flex keep the planted hold alive.
       g.q[kBRoot] = quat_mul(
           g.q[kBRoot],
           quat_y(static_cast<int32_t>(
-              (static_cast<int64_t>(3000) * bal / 1000 *
+              (static_cast<int64_t>(g_u02_trick_showoff_yaw_a16) * bal / 1000 *
                sinp(f, K, 2, 0x6000)) >> 16)));
       // the antenna flexes at the junction hinges while it balances
       const int32_t flex = static_cast<int32_t>(
@@ -2897,9 +3050,13 @@ inline zc::Clip build_damage() {
       const int32_t knock = peak ? kDamagePeakKnockMm : kDamageKnockMm;
       // displacement: sharp out (3 keys), overshoot, two damped bounces,
       // home by ~key 48 -- all in the air
-      static const Key kD[] = {{0, 0},   {3, -1000}, {10, -780}, {16, -880},
-                               {26, -420}, {34, -180}, {44, -40}, {55, 0}};
-      const int32_t d = curve(kD, 8, t);
+      // Direction 18: the root carries every attached anchor. Spend the house
+      // minimum eight keys / sixteen presentation frames reaching the same
+      // knockback extreme, then keep the accepted rebound values on broad C2
+      // intervals. The former three-key arrival exceeded its declared root gate.
+      static const Key kD[] = {{0, 0},    {8, -1000}, {16, -780}, {24, -880},
+                               {36, -420}, {46, -180}, {52, -40}, {55, 0}};
+      const int32_t d = curve_c2(kD, 8, t);
       dx += static_cast<int32_t>(static_cast<int64_t>(fxu(knock)) * d / 1000 *
                                  kBlowDir[h][0] / 1000);
       dz += static_cast<int32_t>(static_cast<int64_t>(fxu(knock)) * d / 1000 *
@@ -2907,11 +3064,13 @@ inline zc::Clip build_damage() {
       // the whip: opposite, lagged, ringing down
       const int tw = t - kDamageWhipLagKeys;
       if (tw >= 0) {
-        static const Key kW[] = {{0, 0},  {3, 1000}, {9, -560}, {16, 340},
-                                 {24, -180}, {34, 80}, {46, 0}, {55, 0}};
+        // Direction 18: retain every authored whip extreme, but give each
+        // reversal enough time to carry the attached field continuously.
+        static const Key kW[] = {{0, 0},   {5, 1000}, {14, -560}, {24, 340},
+                                 {36, -180}, {48, 80}, {55, 0}};
         whip += static_cast<int32_t>(
             static_cast<int64_t>(peak ? kDamagePeakWhipPm : kDamageWhipPm) *
-            curve(kW, 8, tw) / 1000);
+            curve_c2(kW, 7, tw) / 1000);
       }
       // the wince: squint spike + gaze snapped toward the blow
       static const Key kWc[] = {{0, 0}, {2, 1000}, {18, 1000}, {30, 250}, {42, 0}, {55, 0}};
@@ -2920,10 +3079,13 @@ inline zc::Clip build_damage() {
       if (t < 26) gaze_side = kBlowDir[h][1] != 0 ? kGazeMaxA16 * 3 / 4
                                                   : (kBlowDir[h][0] > 0 ? 0 : 0);
       // the squash spikes on impact
-      static const Key kSq[] = {{0, 1000}, {2, 1000}, {5, 2600}, {14, 1700},
-                                {28, 1250}, {44, 1050}, {55, 1000}};
+      static const Key kSq[] = {{0, 1000}, {2, 1000}, {5, 2600}, {20, 1700},
+                                {34, 1250}, {46, 1050}, {55, 1000}};
+      // Direction 18: RearSocket follows the deformed body, so a linear slope
+      // change here becomes a visible End-carrier impulse. Preserve the squash
+      // stations and amplitudes while arriving/departing each one with C2 time.
       squash = std::max(squash, static_cast<int32_t>(
-          static_cast<int64_t>(kDamageSquashPm) * curve(kSq, 7, t) / 1000));
+          static_cast<int64_t>(kDamageSquashPm) * curve_c2(kSq, 7, t) / 1000));
     }
     // the whip rides the junction + hinges (the same instrument as the
     // folding, used for impact)
@@ -3121,6 +3283,19 @@ inline zc::DeformSample corpse_sample() {
       static_cast<uint16_t>(static_cast<int64_t>(kCorpseFlatMax) * kSpreadRatioPm / 1000)};
 }
 
+/** Direction 18: impact deformation belongs to the body-following End socket.
+ *  The old sample appeared at full strength on the contact key, teleporting the
+ *  attached carrier by 55 mm per presentation frame. Anticipate over the same
+ *  authored whip-ease interval and C2-release over the declared impact window;
+ *  contact/root timing and peak squash remain unchanged. */
+inline int32_t death_impact_env_pm(int lf, int release_keys) {
+  const int attack = kDeathWhipEaseKeys > 0 ? kDeathWhipEaseKeys : 1;
+  if (lf <= -attack || lf >= release_keys || release_keys <= 0) return 0;
+  if (lf < 0)
+    return motion_c2_ease((lf + attack) * 1000 / attack);
+  return 1000 - motion_c2_ease(lf * 1000 / release_keys);
+}
+
 constexpr uint16_t kDeathSlot = 17;
 constexpr uint16_t kDeathBSlot = 18;
 constexpr uint16_t kLassoSlot = 19;
@@ -3305,6 +3480,7 @@ inline int32_t fold_life_pm(uint32_t slot, int keys, int32_t kq4) {
  *  the hand-back to the ordinary fold has no step in it. */
 struct LassoState {
   bool active = false;
+  int32_t shape_mix_pm = 0;  // ordinary fold -> persistent ring -> ordinary fold
   int32_t off_mm[3] = {0, 0, 0};
   int32_t scale_pm = 1000;
   int32_t spin_a16 = 0;
@@ -3329,37 +3505,53 @@ inline LassoState lasso_at(uint32_t slot, int keys, int32_t kq4) {
   LassoState L;
   if (!is_lasso_slot(slot)) return L;
   const LassoTiming T = lasso_timing(slot);
-  const int f = kq4 / 16;
-  if (f < T.release || f >= T.home) return L;
+  const int32_t release_q = T.release * 16;
+  const int32_t catch_q = T.catch_key * 16;
+  const int32_t reel_q = T.reel * 16;
+  const int32_t home_q = T.home * 16;
+  if (kq4 < release_q || kq4 >= home_q) return L;
   L.active = true;
-  int32_t t;  // 0..1000 along the throw
-  if (f < T.catch_key) {
-    t = (f - T.release) * 1000 / (T.catch_key - T.release);
-  } else if (f < T.reel) {
-    t = 1000;  // SNAGGED: it hangs on the target while the antennae take the jerk
+
+  // Direction 18: all lasso state is evaluated directly in Q4. The old integer
+  // key truncation held through key+midpoint and jumped every authored key.
+  const int32_t mix_q = kLassoShapeMixKeys * 16;
+  if (kq4 < release_q + mix_q)
+    L.shape_mix_pm = motion_c2_ease(
+        (kq4 - release_q) * 1000 / (mix_q > 0 ? mix_q : 1));
+  else if (kq4 > home_q - mix_q)
+    L.shape_mix_pm = 1000 - motion_c2_ease(
+        (kq4 - (home_q - mix_q)) * 1000 / (mix_q > 0 ? mix_q : 1));
+  else
+    L.shape_mix_pm = 1000;
+
+  int32_t t;
+  if (kq4 < catch_q) {
+    t = (kq4 - release_q) * 1000 / (catch_q - release_q);
+  } else if (kq4 < reel_q) {
+    t = 1000;
   } else {
-    t = 1000 - (f - T.reel) * 1000 / (T.home - T.reel);
+    t = 1000 - (kq4 - reel_q) * 1000 / (home_q - reel_q);
   }
-  const int32_t e = fold_ease(t);
+  const int32_t e = motion_c2_ease(t);
   for (int k = 0; k < 3; ++k)
-    L.off_mm[k] = static_cast<int32_t>((static_cast<int64_t>(kLassoThrowMm[k]) * e) / 1000);
-  // the LOFT: a thrown loop arcs, it does not slide along a rail
-  L.off_mm[1] += static_cast<int32_t>((4LL * kLassoArcMm * e * (1000 - e)) / 1000000);
-  if (f < T.reel) {
+    L.off_mm[k] = static_cast<int32_t>(
+        (static_cast<int64_t>(kLassoThrowMm[k]) * e) / 1000);
+  L.off_mm[1] += static_cast<int32_t>(
+      (4LL * kLassoArcMm * e * (1000 - e)) / 1000000);
+  if (kq4 < reel_q) {
     L.scale_pm = kLassoReleaseScalePm + static_cast<int32_t>(
         (static_cast<int64_t>(kLassoOutScalePm - kLassoReleaseScalePm) * e) / 1000);
   } else {
-    // reeled home: it CINCHES to kLassoHomeScalePm over the first 70% of the
-    // return, then relaxes back to normal so the hand-back is seamless
-    const int32_t r = (f - T.reel) * 1000 / (T.home - T.reel);
+    const int32_t r = (kq4 - reel_q) * 1000 / (home_q - reel_q);
     L.scale_pm = r < 700
         ? kLassoOutScalePm +
-              (kLassoHomeScalePm - kLassoOutScalePm) * fold_ease(r * 1000 / 700) / 1000
+              (kLassoHomeScalePm - kLassoOutScalePm) *
+                  motion_c2_ease(r * 1000 / 700) / 1000
         : kLassoHomeScalePm + (1000 - kLassoHomeScalePm) *
-                                  fold_ease((r - 700) * 1000 / 300) / 1000;
+              motion_c2_ease((r - 700) * 1000 / 300) / 1000;
   }
   L.spin_a16 = static_cast<int32_t>(
-      (static_cast<int64_t>(kLassoSpinA16) * (f - T.release)) & 0xFFFF);
+      (static_cast<int64_t>(kLassoSpinA16) * (kq4 - release_q) / 16) & 0xFFFF);
   (void)keys;
   return L;
 }
@@ -3408,12 +3600,18 @@ inline zc::Clip build_death_drop() {
                        : dead     ? 1000
                                   : 1000 * (f - kDeathFailKey) /
                                         (B.settle - kDeathFailKey);
+    const int antenna_end = B.settle - kDeathAntennaSettleLeadKeys;
+    const int32_t antenna_gone = !falling ? 0
+        : f >= antenna_end ? 1000
+        : motion_c2_ease((f - kDeathFailKey) * 1000 /
+                         (antenna_end - kDeathFailKey));
     // The living glance/lean fades to zero as it dies. At and after settle the
     // fixed-camera eye base remains, but no nodule or hinge life is restarted.
     // Failable leg 5 restores the old unfaded-then-identity reset.
     if (!dead) {
       antenna_knead(g, kDeathSlot, EyeCam::kFixed, K, f,
-                    g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
+                    g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone),
+                    1000 - antenna_gone);
     } else if (g_u02_death_fail != 5) {
       // Keep only the fixed-camera base. Calling full knead here would reanimate
       // hinges and nodules under a corpse; skipping this was the 31.8 deg snap.
@@ -3425,7 +3623,7 @@ inline zc::Clip build_death_drop() {
     // oscillator under a corpse is precisely the fault D9 §11.2 names.
     {
       NoduleOffsets n;
-      const int32_t d = fold_ease(gone);
+      const int32_t d = antenna_gone;
       const auto s = [&](int32_t mm) {
         return static_cast<int32_t>((static_cast<int64_t>(mm) * d) / 1000);
       };
@@ -3434,8 +3632,14 @@ inline zc::Clip build_death_drop() {
       int32_t whip = 0;
       for (int i = 0; i < kDeathBounces; ++i) {
         const int lf = f - B.impact[i];
-        if (lf >= 0 && lf < 2 * B.dipk[i])
-          whip = kDeathImpactDipMm[i] * (2 * B.dipk[i] - lf) / (2 * B.dipk[i]);
+        if (lf < -kDeathWhipEaseKeys || lf > kDeathWhipEaseKeys) continue;
+        const int32_t pulse_pm = lf < 0
+            ? motion_c2_ease((lf + kDeathWhipEaseKeys) * 1000 /
+                             kDeathWhipEaseKeys)
+            : 1000 - motion_c2_ease(lf * 1000 / kDeathWhipEaseKeys);
+        const int32_t candidate = static_cast<int32_t>(
+            (static_cast<int64_t>(kDeathImpactDipMm[i]) * pulse_pm) / 1000);
+        if (candidate > whip) whip = candidate;
       }
       n.ax = s(kDeathDroopMm[0][0]); n.ay = s(kDeathDroopMm[0][1]) - whip / 3;
       n.az = s(kDeathDroopMm[0][2]);
@@ -3446,7 +3650,8 @@ inline zc::Clip build_death_drop() {
       g.nod = n;
     }
     // the antenna goes SLACK: the fold scale opens past rest and stops there
-    const int32_t slack = 1000 + (kDeathSlackPm - 1000) * fold_ease(gone) / 1000;
+    const int32_t slack =
+        1000 + (kDeathSlackPm - 1000) * antenna_gone / 1000;
     loop_pose(g, slack, slack, slack, slack, 0);
     // the corpse's final attitude -- it does not park itself level
     g.q[kBRoot] = quat_mul(
@@ -3489,9 +3694,11 @@ inline zc::Clip build_death_drop() {
       for (int i = 0; i < kDeathBounces; ++i) {
         const int lf = f - B.impact[i];
         const int win = 2 * B.dipk[i];
-        if (lf >= 0 && lf < win) {
+        const int32_t env = death_impact_env_pm(lf, win);
+        if (env > 0) {
           const int32_t sq = kDeathImpactSquashPm * kDeathApexMm[i] / kDeathApexMm[0];
-          const int32_t v = kCompressAmpPm * sq / 1000 * (win - lf) / win;
+          const int32_t v = static_cast<int32_t>(
+              (static_cast<int64_t>(kCompressAmpPm) * sq * env) / 1000000);
           if (v > flat) flat = v;
         }
       }
@@ -3582,12 +3789,18 @@ inline zc::Clip build_death_gutter() {
                        : dead     ? 1000
                                   : 1000 * (f - kDeathBLetGoKey) /
                                         (B.settle - kDeathBLetGoKey);
+    const int antenna_end = B.settle - kDeathAntennaSettleLeadKeys;
+    const int32_t antenna_gone = !falling ? 0
+        : f >= antenna_end ? 1000
+        : motion_c2_ease((f - kDeathBLetGoKey) * 1000 /
+                         (antenna_end - kDeathBLetGoKey));
     // The living glance/lean fades to zero as it dies. At and after settle the
     // fixed-camera eye base remains, but no nodule or hinge life is restarted.
     // Failable leg 5 restores the old unfaded-then-identity reset.
     if (!dead) {
       antenna_knead(g, kDeathBSlot, EyeCam::kFixed, K, f,
-                    g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone));
+                    g_u02_death_fail == 5 ? 1000 : 1000 - fold_ease(gone),
+                    1000 - antenna_gone);
     } else if (g_u02_death_fail != 5) {
       apply_eye_schedule(g, kDeathBSlot, EyeCam::kFixed, K, f, 0);
     }
@@ -3635,7 +3848,7 @@ inline zc::Clip build_death_gutter() {
     // discontinuities dressed as one beat.
     const int32_t slack_t =
         falling ? kDeathSagSlackSharePm + (1000 - kDeathSagSlackSharePm) *
-                                              fold_ease(gone) / 1000
+                                              antenna_gone / 1000
                 : fold_ease(sag) * kDeathSagSlackSharePm / 1000;
     const int32_t slack = 1000 + (kDeathSlackPm - 1000) * slack_t / 1000;
     loop_pose(g, slack, slack, slack, slack, 0);
@@ -3692,9 +3905,11 @@ inline zc::Clip build_death_gutter() {
       for (int i = 0; i < kDeathBBounces; ++i) {
         const int lf = f - B.impact[i];
         const int win = 2 * B.dipk[i];
-        if (lf >= 0 && lf < win) {
+        const int32_t env = death_impact_env_pm(lf, win);
+        if (env > 0) {
           const int32_t sq = kDeathImpactSquashPm * kDeathBApexMm[i] / kDeathBApexMm[0];
-          const int32_t v = kCompressAmpPm * sq / 1000 * (win - lf) / win;
+          const int32_t v = static_cast<int32_t>(
+              (static_cast<int64_t>(kCompressAmpPm) * sq * env) / 1000000);
           if (v > flat) flat = v;
         }
       }
@@ -3786,7 +4001,7 @@ inline zc::Clip build_lasso() {
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, kLassoSlot, EyeCam::kFixed, K, f);
-    const int32_t th = curve(kThrow, 9, f);
+    const int32_t th = curve_c2(kThrow, 9, f);
     {
       NoduleOffsets n;
       // ONE table for the wind-up and one for the whip; the envelope picks
@@ -3800,15 +4015,20 @@ inline zc::Clip build_lasso() {
         return lf < kLassoReelKey ? kLassoReelKey : lf;
       };
       const auto mixl = [&](int i, int ax) {
-        const int32_t t = curve(kThrow, 9, lag(i));
+        const int32_t t = curve_c2(kThrow, 9, lag(i));
         return t < 0 ? -kLassoWindMm[i][ax] * t / 1000 : kLassoWhipMm[i][ax] * t / 1000;
       };
       n.ax = mixl(0, 0); n.ay = mixl(0, 1); n.az = mixl(0, 2);
       n.bx = mixl(1, 0); n.by = mixl(1, 1); n.bz = mixl(1, 2);
       n.cx = mixl(2, 0); n.cy = mixl(2, 1); n.cz = mixl(2, 2);
-      // the CATCH's jerk: the rope goes taut and pulls every nodule at once
-      if (f >= kLassoCatchKey && f < kLassoCatchKey + 10) {
-        const int32_t j = kLassoJerkMm * (10 - (f - kLassoCatchKey)) / 10;
+      // The taut-rope reaction arrives and releases over eight keys each. The
+      // old full-on-at-catch integer ramp was a one-frame carrier acceleration.
+      if (f >= kLassoCatchKey - 8 && f < kLassoCatchKey + 8) {
+        const int32_t j_pm = f < kLassoCatchKey
+            ? motion_c2_ease((f - (kLassoCatchKey - 8)) * 1000 / 8)
+            : 1000 - motion_c2_ease((f - kLassoCatchKey) * 1000 / 8);
+        const int32_t j = static_cast<int32_t>(
+            (static_cast<int64_t>(kLassoJerkMm) * j_pm) / 1000);
         n.ax += j; n.bx += j * 3 / 2; n.cx += j * 5 / 4;
       }
       g.nod = n;
@@ -3827,7 +4047,7 @@ inline zc::Clip build_lasso() {
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot],
         quat_z(static_cast<int32_t>(
-            (static_cast<int64_t>(kLassoLeanA16) * curve(kLean, 7, f)) / 1000)));
+            (static_cast<int64_t>(kLassoLeanA16) * curve_c2(kLean, 7, f)) / 1000)));
     face_rest(g);
     // the gaze is ON THE TARGET the whole way -- it aims, it throws, it
     // watches the ring fly, it tracks it home. One continuous look, no darting.
@@ -3931,12 +4151,31 @@ inline zc::Clip build_blown() {
     };
     const int32_t h_now = height_mm(f);
     const int32_t vel = h_now - height_mm(f > 0 ? f - 1 : 0);  // mm per key
+    // Direction 18: the blast's derivative changes immediately at launch/catch,
+    // but the attached crown cannot. A C2 envelope brings the stream in over the
+    // authored eight-key blast and hands it back before contact.
+    int32_t stream_env_pm = 0;
+    if (f > kBlownAnticipKey &&
+        f < kBlownAnticipKey + kBlownStreamEaseKeys) {
+      stream_env_pm = motion_c2_ease(
+          (f - kBlownAnticipKey) * 1000 / kBlownStreamEaseKeys);
+    } else if (f >= kBlownAnticipKey + kBlownStreamEaseKeys &&
+               f < kBlownCatchKey - kBlownStreamEaseKeys) {
+      stream_env_pm = 1000;
+    } else if (f >= kBlownCatchKey - kBlownStreamEaseKeys &&
+               f < kBlownCatchKey) {
+      stream_env_pm = 1000 - motion_c2_ease(
+          (f - (kBlownCatchKey - kBlownStreamEaseKeys)) * 1000 /
+          kBlownStreamEaseKeys);
+    }
+    const int32_t stream_vel = static_cast<int32_t>(
+        (static_cast<int64_t>(vel) * stream_env_pm) / 1000);
     // THE ANTENNA STREAMS. Each nodule trails by its own fraction — B (the
     // peak, the loosest) most, A (held by the neck) least — so the streaming
     // reads as three balls on three leashes rather than one rigid fin.
     {
       NoduleOffsets n;
-      const int32_t s = -vel * kBlownStreamMm / 200;  // 200 mm/key ~ full stream
+      const int32_t s = -stream_vel * kBlownStreamMm / 200;
       const auto cl = [](int32_t v, int32_t lim) {
         return v > lim ? lim : v < -lim ? -lim : v;
       };
@@ -3950,7 +4189,8 @@ inline zc::Clip build_blown() {
       g.nod = n;
     }
     const int32_t gather = curve(kGather, 5, f);
-    const int32_t stream = 1000 + (vel > 0 ? vel / 3 : -vel / 5) - gather / 5;
+    const int32_t stream = 1000 +
+        (stream_vel > 0 ? stream_vel / 3 : -stream_vel / 5) - gather / 5;
     loop_pose(g, stream, stream, stream, stream, 0);
     if (f > kBlownAnticipKey && f < kBlownCatchKey) {
       // ===== PASS 14 / R7 -- THE TUMBLE IS DECOUPLED FROM THE HEIGHT ========
@@ -4048,11 +4288,13 @@ inline zc::Clip build_blown() {
  *            at pass 3; a hold nobody can tell you arrived is not one.
  *   60..100  THE LEAN. Slow on purpose — this beat is the one that should
  *            drift — tipping toward the viewer while the shrug decays.
- *  100..146  THE SHIMMY. Three balls, in turn, one press each: A, then B,
- *            then C. A wave with three reversals in 46 keys, not a vibration.
- *  146..149  THE DISMISSAL, in THREE keys. The whole antenna is thrown away.
- *  149..173  HELD. The punchline frame is in here, and you can point at it.
- *  173..183  Released to the rest pose, because the last key must equal the
+ *   56..132  THE CROWN SHUFFLE. Four held A/B/C rankings give every free
+ *            carrier top and bottom ownership. Its first C2 attack overlaps the
+ *            slow lean intentionally; release runs 132..144.
+ *  144..152  THE DISMISSAL, in eight keys / sixteen presentation frames. The
+ *            whole antenna and five-carrier accusation arrive through C2.
+ *  152..174  HELD. The punchline frame is in here, and you can point at it.
+ *  174..183  Released to the rest pose, because the last key must equal the
  *            first or the loop shows a seam (QA 6.3b: it was 110.7 mm). */
 inline zc::Clip build_taunt3() {
   const int K = kTaunt3Keys;
@@ -4077,17 +4319,19 @@ inline zc::Clip build_taunt3() {
   // shrug was still decaying THROUGH the punchline hold. A tail is motion. It
   // reaches zero at kTaunt3Hold2Key - 12 now and is flat from there, so the
   // held pose is actually held.
+  // Direction 16: the older shrug tail overlaps only the crown's first C2
+  // attack. It reaches zero by key 68; from that first arrival onward the four
+  // tableau table owns the carrier rankings. The separate slow lean remains
+  // whole-body attitude, not a carrier-height operand.
   static const Key kShrug[] = {{0, 0}, {kTaunt3ShrugKey, 0},
                                {kTaunt3ShrugKey + kTaunt3ShrugAttackKeys, 1000},
                                {kTaunt3ShrugHoldKey, 1000},
-                               {kTaunt3LeanKey + 14, 420},
-                               {kTaunt3ShimmyKey - 6, 220},
-                               {kTaunt3Hold2Key - 12, 0}, {K - 1, 0}};
+                               {kTaunt3ShimmyKey + 12, 0}, {K - 1, 0}};
   // PASS 14 / R4: same fault, same fix -- {118, 150} -> {183, 0} was a lean
   // still unwinding under the punchline.
   static const Key kLean[] = {{0, 0}, {kTaunt3LeanKey, 0},
                               {kTaunt3LeanKey + kTaunt3LeanAttackKeys, 1000},
-                              {kTaunt3ShimmyKey, 1000}, {kTaunt3ShimmyKey + 18, 150},
+                              {98, 1000}, {120, 150},
                               {kTaunt3Hold2Key - 10, 0}, {K - 1, 0}};
   static const Key kFlick[] = {{0, 0}, {kTaunt3FlickKey, 0},
                                {kTaunt3FlickKey + kTaunt3FlickAttackKeys, 1000},
@@ -4113,16 +4357,17 @@ inline zc::Clip build_taunt3() {
     antenna_knead(g, kTaunt3Slot, EyeCam::kFixed, K, f);  // gain 0: nothing runs under the gesture
     const int fc = curve(kClock, 6, f);   // ambient time, which holds still
     const int32_t antic = fold_ease(curve(kAntic, 5, f));
-    const int32_t shrug = punch_ease(curve(kShrug, 8, f));
+    const int32_t shrug = motion_c2_ease(curve(kShrug, 6, f));
     const int32_t lean = fold_ease(curve(kLean, 7, f));
-    const int32_t flick = punch_ease(curve(kFlick, 5, f));
+    const int32_t flick = motion_c2_ease(curve(kFlick, 5, f));
     // THE BODY FOLLOWS THE ANTENNA, it does not move with it. Same table, read
     // kTaunt3FlickBodyLagKeys later and through the SOFT ease -- so the crown
     // is thrown, and then the shoulder and the body come round after it.
     // Overlapping action; it costs one line and it is most of why a snap reads
     // as a gesture rather than as a jump cut.
     const int32_t flick_body =
-        fold_ease(curve(kFlick, 5, f - kTaunt3FlickBodyLagKeys));
+        motion_c2_ease(curve(kFlick, 5, f - kTaunt3FlickBodyLagKeys));
+    const Taunt3OrderPose order = taunt3_order_pose(f);
     {
       NoduleOffsets n;
       // THE SHRUG: outers up, middle DOWN. Not 1:1 — a middle that drops
@@ -4152,29 +4397,9 @@ inline zc::Clip build_taunt3() {
       n.ay -= kTaunt3AnticMm * antic / 1000;
       n.by += kTaunt3AnticMm * 6 / 10 * antic / 1000;
       n.cy -= kTaunt3AnticMm * antic / 1000;
-      // THE SHIMMY: one press per ball, in sequence. Each press is 14 keys
-      // wide and rises and falls exactly once, so three balls moving in turn
-      // costs three reversals, not thirty.
-      if (f >= kTaunt3ShimmyKey && f < kTaunt3FlickKey) {
-        for (int i = 0; i < 3; ++i) {
-          const int a = kTaunt3ShimmyKey + i * 14;
-          const int lf = f - a;
-          if (lf < 0 || lf >= 28) continue;
-          // 4t(1-t): up and down once, arriving and leaving at exactly zero
-          const int32_t t = lf * 1000 / 28;
-          const int32_t v = static_cast<int32_t>(
-              (4LL * kTaunt3ShimmyMm * t * (1000 - t)) / 1000000);
-          // WAVE 3: A's press is VERTICAL now, like B's and C's. It was
-          // lateral only because the vertical did not move (see the shrug).
-          if (i == 0) {
-            n.ay += v;
-            n.az += static_cast<int32_t>(
-                (static_cast<int64_t>(v) * kTaunt3ShimmyLeanPm) / 1000);
-          }
-          else if (i == 1) { n.by += v; n.bz += v / 3; }
-          else { n.cy += v; n.cz -= v / 3; }
-        }
-      }
+      // Direction 16's CROWN SHUFFLE is evaluated separately below through
+      // swallow_nodules, the same five-carrier production consumption point used
+      // by Taunt/Taunt II. This block owns only the older beats around it.
       // THE DISMISSAL: the whole antenna is flung UP AND BACK OVER THE
       // SHOULDER, and all three go together — a gesture, not a ripple.
       //
@@ -4200,9 +4425,19 @@ inline zc::Clip build_taunt3() {
       n.bz -= fl_side;
       n.cz -= fl_side * 8 / 10;
       g.nod = n;
+      int32_t held_swal[5]{};
+      for (int i = 0; i < 5; ++i) {
+        held_swal[i] = order.swal[i] + static_cast<int32_t>(
+            (static_cast<int64_t>(taunt3_punch_carrier_mm(i)) * flick) / 1000);
+      }
+      // One production consumption point keeps the crown tableaux and held
+      // accusation under the same F/A/B/C/E public mute and attachment law.
+      swallow_nodules(g, held_swal, kTaunt3PunchLeanPm);
     }
-    loop_pose(g, 1000 + shrug / 14, 1000 + shrug / 10, 1000 - shrug / 12,
-              1000 + flick / 10, 0);
+    loop_pose(g, 1000 + shrug / 14,
+              1000 + shrug / 10 + order.fold_delta_pm[0],
+              1000 - shrug / 12 + order.fold_delta_pm[1],
+              1000 + flick / 10 + order.fold_delta_pm[2], 0);
     // the lean-in, and then the shoulder turned on the dismissal -- the turn
     // rides flick_body, so the crown snaps away first and the body follows.
     // PASS 14 / R4: the dismissal's whole-body component is a yaw AND a roll
@@ -4214,7 +4449,8 @@ inline zc::Clip build_taunt3() {
         quat_mul(quat_z(static_cast<int32_t>(
                      (static_cast<int64_t>(kTaunt3LeanA16) * lean) / 1000 -
                      (static_cast<int64_t>(kTaunt3ShrugRollA16) * shrug) / 1000 -
-                     (static_cast<int64_t>(g_u02_taunt3_flick_roll_a16) * flick_body) / 1000)),
+                     (static_cast<int64_t>(g_u02_taunt3_flick_roll_a16) * flick_body) / 1000 +
+                     order.body_roll_a16)),
                  quat_y(static_cast<int32_t>(
                      (static_cast<int64_t>(g_u02_taunt3_flick_yaw_a16) * flick_body) / 1000))));
     face_rest(g);
@@ -4242,7 +4478,8 @@ inline zc::Clip build_taunt3() {
         static_cast<int32_t>((static_cast<int64_t>(fxu(kTaunt3ShrugLiftMm)) * shrug) / 1000) -
         static_cast<int32_t>((static_cast<int64_t>(fxu(kTaunt3AnticDipMm)) * antic) / 1000) -
         static_cast<int32_t>(
-            (static_cast<int64_t>(fxu(kTaunt3FlickDropMm)) * flick_body) / 1000);
+            (static_cast<int64_t>(fxu(kTaunt3FlickDropMm)) * flick_body) / 1000) +
+        fxu(order.body_lift_mm);
     // ...and it SQUASHES on the anticipation, which is the half of a wind-up a
     // root height cannot express: the body compresses before it rises.
     // PASS 14 / R4 -- AND THE PUNCHLINE IS A DIFFERENT SHAPE. The breath is

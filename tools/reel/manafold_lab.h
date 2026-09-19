@@ -45,16 +45,19 @@ namespace lab {
 //                   being kneaded into the next. The hold is where a shape
 //                   becomes a name; it is not cut short here.
 //
-// Keys; frames on screen = 2x. 400 keys = 800 frames = 13.3 s at 60 fps.
-constexpr int kLabKeys = 400;
+// Keys; frames on screen = 2x. Direction 18 lengthens the comparison reel so
+// each large topology morph gets roughly a 4.2 s C2 handoff and each result
+// holds long enough to read at native resolution.
+constexpr int kLabKeys = 720;
 constexpr int kLabStandEndKeys = 60;      // beat 1 ends (frame 120, 2.0 s)
 constexpr int kLabTraverseEndKeys = 180;  // beat 2 ends (frame 360, 6.0 s)
 constexpr int kLabGatherKeys = 25;        // the opening gather, inside beat 1
-constexpr int kLabReleaseKeys = 10;       // the loop-seam release tail
-// The knead's share of one fold cycle in the third beat; the REST of the
-// cycle is HOLD. 260 pm of a 70-key cycle = 18 keys knead, 52 keys hold
-// (1.7 s of stillness per shape). Direction 6: "Do not cut the hold short."
-constexpr int kLabKneadFracPm = 260;
+constexpr int kLabReleaseKeys = 120;      // 4 s C2 shape/root return to opener
+// Direction 18 gives 900 pm of each fold cycle to the transition. In the
+// 720-key reel that is roughly 126 keys / 252 presentation frames for
+// four-shape rows, retaining a 14-key / 28-frame held read between shapes.
+constexpr int kLabKneadFracPm = 900;
+constexpr int kLabHoldLeashFollowFrames = 16;  // smooth leash correction, never a snap
 
 // THE TRAVERSE AXIS -- fixed after looking at the first render.
 //
@@ -137,9 +140,9 @@ struct LabVariant {
   int32_t hold_leash_mm;   // how far the held shape may fall behind before it
                            // is dragged along (it must stay on screen)
 
-  // --- transition: snap between held states instead of morphing ---
-  bool snap;
-  int32_t snap_scatter_mm; // the violent short knead between the two states
+  // --- transition emphasis: smooth scatter during one persistent morph ---
+  bool snap;                // historical field name/subject slug; never a hard cut
+  int32_t snap_scatter_mm;  // extra agitation amplitude during the C2 handoff
 
   // --- the shape as a HOLE: dark silhouette on a bright plate ---
   bool negative;
@@ -263,13 +266,11 @@ constexpr LabVariant kLabVariants[] = {
      1, LAB_SHAPES_4, 3, kRampAqua},
 
     // ---------------------------------------------------------------- 7 --
-    // MECHANISM: SNAP BETWEEN HELD STATES. Continuous morphing is exactly
-    // what currently reads as "a sparkle cloud redistributing" -- every
-    // intermediate frame is a shape that is not a shape. So: hold at 100%,
-    // a fast violent scatter, then SNAP to the next state. The mana is never
-    // between two shapes; it is in one, or it is briefly a mess.
+    // HISTORICAL SNAP STUDY, RETIRED BY DIRECTION 18. The subject slug remains
+    // stable for archive links, but the rendered mechanism is now one persistent
+    // C2 identity with a stronger smooth scatter through the handoff.
     {"snap-states",
-     "MECHANISM: SNAP between held shapes with a violent scatter between",
+     "MECHANISM: persistent C2 shape handoff with a strong smooth scatter",
      28, 3, kMoteHaloRPxMin, kMoteHaloRPxMax,
      kMoteHaloGainPm, 380, 340, false,
      false, 0, 0, 0,
@@ -311,13 +312,10 @@ constexpr LabVariant kLabVariants[] = {
      1, LAB_SHAPES_2, 1, kRampAqua},
 
     // --------------------------------------------------------------- 10 --
-    // THE SYNTHESIS: the three mechanisms that should compound. The outline
-    // carries the shape (edge), it stops changing while you look at it
-    // (snap + long holds), and it stands still in the world so the eye can
-    // settle on it (held). If the fold reads anywhere, it reads here; if it
-    // reads NOWHERE, that is the finding and it is worth the night.
+    // THE SYNTHESIS: outline strands + smooth scatter handoffs + world-held
+    // shapes. The slug remains stable; Direction 18 forbids hard replacement.
     {"edge-snap-held",
-     "SYNTHESIS: outline strands + snap transitions + world-held shapes",
+     "SYNTHESIS: outline strands + smooth scatter morphs + world-held shapes",
      10, 2, kMoteHaloRPxMin, kMoteHaloRPxMax,
      kMoteHaloGainPm, 380, 380, false,
      /*edge_strands=*/true, 430, 300, 24,
@@ -328,6 +326,23 @@ constexpr LabVariant kLabVariants[] = {
 };
 constexpr int kLabVariantCount =
     static_cast<int>(sizeof(kLabVariants) / sizeof(kLabVariants[0]));
+constexpr int kLabTraceMaxMotes = 72;
+constexpr int kLabPersistentFewCount = 5;
+
+struct LabContinuityTrace {
+  FoldPhase fold{};
+  int station_count = 0;
+  int32_t station[kStencilPts][3]{};
+  int edge_link_count = 0;
+  int32_t edge_energy_pm = 0;
+  int32_t edge_presence_pm[kStencilPts]{};
+  int32_t edge_layer_stamp_count[kStencilPts][2]{};  // halo, core
+  int32_t edge_layer_energy_pm[kStencilPts][2]{};
+  int mote_count = 0;
+  uint8_t mote_role[kLabTraceMaxMotes]{};
+  int32_t mote_visibility_pm[kLabTraceMaxMotes]{};
+  int32_t mote_position[kLabTraceMaxMotes][3]{};
+};
 
 // The mana-candidate ids the lab occupies. `mana_fill` owns 0..9; the lab
 // takes 100+ so a lab id can never collide with a shipping candidate and the
@@ -354,9 +369,14 @@ inline FoldPhase lab_phase(const LabVariant& V, int32_t kq4) {
   // beat 3 has ended: ease the whole layer home so the loop seam is clean
   if (kq4 >= release_at) {
     ph.seg = kSegRelease;
-    ph.shape_from = ph.shape_to = V.shapes[V.shape_count - 1];
-    const int32_t t = (kq4 - release_at) * 1000 / (kLabReleaseKeys * 16);
-    ph.amp_pm = 1000 - fold_ease(t);
+    ph.shape_from = V.shapes[V.shape_count - 1];
+    ph.shape_to = V.shapes[0];
+    const int32_t release_span_q4 = kLabReleaseKeys * 16 - 8;
+    int32_t t = (kq4 - release_at) * 1000 /
+                (release_span_q4 > 0 ? release_span_q4 : 1);
+    if (t > 1000) t = 1000;
+    ph.morph_pm = motion_c2_ease(t);
+    ph.amp_pm = 1000 - motion_c2_ease(t);
     return ph;
   }
   // beat 1a: the opening gather, rising from zero (matches the release tail,
@@ -364,7 +384,7 @@ inline FoldPhase lab_phase(const LabVariant& V, int32_t kq4) {
   if (kq4 < gather_end) {
     ph.seg = kSegGather;
     ph.shape_from = ph.shape_to = V.shapes[0];
-    ph.amp_pm = fold_ease(kq4 * 1000 / gather_end);
+    ph.amp_pm = motion_c2_ease(kq4 * 1000 / gather_end);
     return ph;
   }
   // beats 1b + 2: ONE long hold of the opening shape, across the whole stand
@@ -387,11 +407,12 @@ inline FoldPhase lab_phase(const LabVariant& V, int32_t kq4) {
   if (within < knead_len) {
     ph.seg = kSegKnead;
     const int32_t t = within * 1000 / (knead_len > 0 ? knead_len : 1);
-    ph.agit_pm = t < 250 ? fold_ease(t * 4) : t > 750 ? fold_ease((1000 - t) * 4) : 1000;
-    // SNAP: the mana is never BETWEEN two shapes. It is in the old one, then
-    // -- at the scatter's peak, where the eye cannot follow it anyway -- it
-    // is in the new one. Continuous morphing is the named failure.
-    ph.morph_pm = V.snap ? (t >= 500 ? 1000 : 0) : fold_ease(t);
+    ph.agit_pm = t < 250 ? motion_c2_ease(t * 4)
+                         : t > 750 ? motion_c2_ease((1000 - t) * 4) : 1000;
+    // Direction 18: all variants, including the labelled historical SNAP rung,
+    // traverse one persistent C2 identity. Scatter may change amplitude, never
+    // replace the topology on a frame boundary.
+    ph.morph_pm = motion_c2_ease(t);
     return ph;
   }
   ph.seg = kSegHold;
@@ -504,16 +525,23 @@ inline LabState& lab_state(int conduit) {
  *  The halo stays depth-tested so the line still sits in the world. */
 inline void lab_edge_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3],
                            int segs, uint8_t ramp, int core_pm, int halo_pm,
-                           int32_t core_r, int32_t halo_r) {
+                           int32_t core_r, int32_t halo_r, uint32_t frame,
+                           int edge_id, int32_t* stamp_count = nullptr,
+                           int32_t* halo_energy_pm = nullptr,
+                           int32_t* core_energy_pm = nullptr) {
+  const int max_count = segs * 24;
   for (int i = 0; i < segs; ++i) {
-    int64_t dx = (pts[i + 1][0] - pts[i][0]) >> 16;
-    int64_t dy = (pts[i + 1][1] - pts[i][1]) >> 16;
-    int64_t dz = (pts[i + 1][2] - pts[i][2]) >> 16;
-    const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
-                  adz = dz < 0 ? -dz : dz;
-    int n = static_cast<int>((adx + ady + adz) / kBoltStampMm);
-    if (n < 1) n = 1;
-    if (n > 24) n = 24;
+    int n = path_segment_stamp_count(pts[i], pts[i + 1], kBoltStampMm, 24);
+    if (g_u02_fx_continuity_fault == FxContinuityFault::kStampCountPop &&
+        edge_id == 0 && i == 0 && (frame & 1u) == 0u)
+      n = 24;
+    if (stamp_count != nullptr) *stamp_count += n;
+    if (halo_energy_pm != nullptr)
+      *halo_energy_pm += stamp_energy_pm(n, halo_pm, halo_r, max_count,
+                                         1200, halo_r);
+    if (core_energy_pm != nullptr)
+      *core_energy_pm += stamp_energy_pm(n, core_pm, core_r, max_count,
+                                         1200, core_r);
     for (int t = 0; t < n; ++t) {
       const int32_t x = lerp32(pts[i][0], pts[i + 1][0], t, n);
       const int32_t y = lerp32(pts[i][1], pts[i + 1][1], t, n);
@@ -529,26 +557,36 @@ inline void lab_edge_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3],
  *  this only adds breadth. Each strand is ~1,330 px of near-white into a
  *  10-15 px pocket -- the whitening element, and the reason `past-the-wall`
  *  takes four of them. */
-inline void lab_extra_strands(uint32_t frame, const FxAnchors& A, int extra,
-                              std::vector<ManaSplat>& out) {
+inline void lab_extra_strands(uint32_t frame, uint32_t slot, int keys,
+                              const FxAnchors& A, int extra,
+                              std::vector<ManaSplat>& out,
+                              FxContinuityTrace* trace = nullptr) {
   if (extra <= 0) return;
-  const uint32_t phase = frame / kBoltRehashFrames;
-  int32_t pts[kBoltSegs + 1][3];
-  for (int i = 1; i <= extra; ++i) {
-    const uint32_t h = fx_hash(kBoltSeed, phase, 0x51A0u + static_cast<uint32_t>(i));
-    const uint32_t ang = h & 0xFFFFu;
-    const int32_t half = fxu(kStrandSpanMm / 2);
-    const int32_t dx = static_cast<int32_t>((static_cast<int64_t>(half) * fx_cos16(ang)) >> 16);
-    const int32_t dy = static_cast<int32_t>((static_cast<int64_t>(half) * fx_sin16(ang)) >> 16);
-    int32_t s0[3] = {A.ring[0] + dx, A.ring[1] + dy, A.ring[2]};
-    int32_t e0[3] = {A.ring[0] - dx, A.ring[1] - dy, A.ring[2]};
-    s0[0] += fxu(fx_jit(h >> 8, kStrandEndJitMm));
-    s0[1] += fxu(fx_jit(h >> 13, kStrandEndJitMm));
-    e0[0] += fxu(fx_jit(h >> 18, kStrandEndJitMm));
-    e0[1] += fxu(fx_jit(h >> 23, kStrandEndJitMm));
-    bolt_path(s0, e0, kBoltSegs, phase * 3u + static_cast<uint32_t>(i),
-              kBoltSeed + static_cast<uint32_t>(i) * 0x9E37u, pts, kStrandJitterMm);
-    bolt_stamp(out, pts, kBoltSegs, kBoltCoreGainPm, kBoltHaloGainPm);
+  for (int i = 1; i <= extra && i < kFxTraceMaxStrands; ++i) {
+    const FreeLightningPath path = free_lightning_path(frame, slot, keys, i, A);
+    if (trace != nullptr) {
+      for (int p = 0; p <= kBoltSegs; ++p) {
+        const int id = i * (kBoltSegs + 1) + p;
+        for (int k = 0; k < 3; ++k)
+          trace->free_point[id][k] = path.pts[p][k];
+      }
+      trace->free_point_count = (i + 1) * (kBoltSegs + 1);
+    }
+    const int32_t core_gain = kBoltCoreGainPm * path.flick_pm / 1000;
+    const int32_t halo_gain = kBoltHaloGainPm * path.flick_pm / 1000;
+    if (trace != nullptr && i < kFxTraceMaxStrands) {
+      const int count = path_stamp_count(path.pts, kBoltSegs, kBoltStampMm, 24);
+      trace->free_strand_stamp_count[i][0] = count;
+      trace->free_strand_stamp_count[i][1] = count;
+      constexpr int kMaxCount = kBoltSegs * 24;
+      trace->free_strand_energy_pm[i][0] =
+          stamp_energy_pm(count, halo_gain, kBoltHaloRPx,
+                          kMaxCount, 1200, kBoltHaloRPx);
+      trace->free_strand_energy_pm[i][1] =
+          stamp_energy_pm(count, core_gain, kBoltCoreRPx,
+                          kMaxCount, 1200, kBoltCoreRPx);
+    }
+    bolt_stamp(out, path.pts, kBoltSegs, core_gain, halo_gain);
   }
 }
 
@@ -557,7 +595,8 @@ inline void lab_extra_strands(uint32_t frame, const FxAnchors& A, int extra,
  *  distance term exists anywhere (manafold_clips.h:501) -- with the drawing
  *  MECHANISM swapped per variant. Returns agitation 0..1000. */
 inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
-                        FoldState& stfx, std::vector<ManaSplat>& out) {
+                        FoldState& stfx, std::vector<ManaSplat>& out,
+                        LabContinuityTrace* trace = nullptr) {
   const LabVariant& V = kLabVariants[vi];
   LabState& L = lab_state(conduit);
   const int32_t* anchors[6] = {A.junction_f, A.neck, A.hinge_a,
@@ -567,7 +606,11 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
   int32_t rel[6][3];
   for (int i = 0; i < 6; ++i)
     for (int k = 0; k < 3; ++k) rel[i][k] = anchors[i][k] - A.body[k];
-  if (frame == 0 || !stfx.init) {
+  if (frame == 0) {
+    stfx = FoldState{};
+    L = LabState{};
+  }
+  if (!stfx.init) {
     for (int i = 0; i < 6; ++i)
       for (int k = 0; k < 3; ++k) stfx.prev_rel[i][k] = rel[i][k];
     for (auto& v : stfx.dragbuf) v[0] = v[1] = v[2] = 0;
@@ -647,6 +690,11 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
   if (coh > 1000) coh = 1000;
 
   const FoldPhase ph = lab_phase(V, static_cast<int32_t>(frame) * 8);
+  // `lab_phase` already authors gather/release with one C2 envelope. Consume it
+  // directly here: a second ease compresses the transition and moves its
+  // acceleration/jerk peaks away from the authored timeline.
+  coh = lerp32(kCohBasePm, coh, ph.amp_pm, 1000);
+  if (trace != nullptr) trace->fold = ph;
   g_u02_fold_release_pm = ph.seg == kSegRelease ? ph.amp_pm : 1000;
 
   // ---- MECHANISM: hold the shape still in world space --------------------
@@ -658,8 +706,10 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
   const int32_t* pos_anchors[6];
   for (int i = 0; i < 6; ++i) pos_anchors[i] = anchors[i];
   int32_t leashed[6][3];
+  int32_t live_follow_pm = 1000;
   if (V.hold_in_world) {
     if (ph.seg == kSegHold) {
+      live_follow_pm = 0;
       if (!L.holding) {
         for (int i = 0; i < 6; ++i)
           for (int k = 0; k < 3; ++k) L.held[i][k] = anchors[i][k];
@@ -679,17 +729,33 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
         const int64_t pull = mag - leash;
         for (int i = 0; i < 6; ++i)
           for (int k = 0; k < 3; ++k)
-            L.held[i][k] += static_cast<int32_t>(static_cast<int64_t>(d[k]) * pull / mag);
+            L.held[i][k] += static_cast<int32_t>(
+                static_cast<int64_t>(d[k]) * pull /
+                (mag * kLabHoldLeashFollowFrames));
       }
       for (int i = 0; i < 6; ++i) {
         for (int k = 0; k < 3; ++k) leashed[i][k] = L.held[i][k];
         pos_anchors[i] = leashed[i];
       }
-    } else {
-      L.holding = false;
+    } else if (L.holding) {
+      // Direction 18: a world-held figure cannot be dropped back onto the live
+      // rig in one frame. The following knead/release already owns a C2 morph;
+      // use that same envelope to return every anchor to the carrier.
+      const int32_t handoff_pm =
+          (ph.seg == kSegKnead || ph.seg == kSegRelease) ? ph.morph_pm : 1000;
+      live_follow_pm = handoff_pm;
+      if (handoff_pm < 1000) {
+        for (int i = 0; i < 6; ++i) {
+          for (int k = 0; k < 3; ++k)
+            leashed[i][k] = lerp32(L.held[i][k], anchors[i][k], handoff_pm, 1000);
+          pos_anchors[i] = leashed[i];
+        }
+      } else {
+        L.holding = false;
+      }
     }
   }
-  const bool frozen_now = V.hold_in_world && ph.seg == kSegHold;
+  const bool held_ring_now = V.hold_in_world && L.holding;
 
   const FoldWeights& fw = lab_weights(vi);
 
@@ -697,7 +763,7 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
   // The one law: a fixed-weight sum over the POSED anchors. Everything below
   // only chooses WHICH stations are drawn and WITH WHAT.
   const auto bary = [&](uint8_t shape_id, int stn, int32_t q[3]) {
-    const uint16_t* wt = fw.w[shape_id][stn];
+    const int32_t* wt = fw.w[shape_id][stn];
     for (int k = 0; k < 3; ++k) {
       int64_t acc = 0;
       for (int i = 0; i < 6; ++i) acc += static_cast<int64_t>(wt[i]) * pos_anchors[i][k];
@@ -706,7 +772,7 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
   };
   // the pocket centre the stencil offsets rotate about; frozen with the rest
   int32_t ring[3];
-  if (frozen_now) {
+  if (held_ring_now) {
     for (int k = 0; k < 3; ++k) {
       ring[k] = 0;
       for (int i = 0; i < 6; ++i) ring[k] += pos_anchors[i][k] / 6;
@@ -719,10 +785,13 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
    *  to the OFFSET (never the anchors: the folding law stays a rig sum). */
   const auto station_pos = [&](int stn, int32_t P[3]) {
     int32_t Pf[3], Pt[3];
-    bary(ph.shape_from, stn, Pf);
-    bary(ph.shape_to, stn, Pt);
-    int32_t mp = ph.morph_pm;
-    if (!V.snap) mp = fold_ease(mp);
+    const int source_stn = fold_canonical_station(ph.shape_from, stn);
+    const int dest_stn = fold_canonical_station(ph.shape_to, stn);
+    bary(ph.shape_from, source_stn, Pf);
+    bary(ph.shape_to, dest_stn, Pt);
+    // `lab_phase` already authors the shared C2 envelope. Applying the easing a
+    // second time here made the lab use a different transition law.
+    const int32_t mp = ph.morph_pm;
     for (int k = 0; k < 3; ++k) P[k] = lerp32(Pf[k], Pt[k], mp, 1000);
     const int32_t sn = fx_sin16(static_cast<uint32_t>(kStencilFaceYawA16));
     const int32_t cs = fx_cos16(static_cast<uint32_t>(kStencilFaceYawA16));
@@ -748,40 +817,78 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
               1000, true, /*pre=*/true, /*opaque=*/true);
   }
 
+  // Evaluate the persistent station domain for every variant, even when its
+  // drawing mechanism omits edge strands. The production gate consumes this
+  // exact position field rather than reconstructing a private proxy.
+  int32_t S[kStencilPts][3];
+  for (int i = 0; i < kStencilPts; ++i) {
+    station_pos(i, S[i]);
+    if (trace != nullptr)
+      for (int k = 0; k < 3; ++k) trace->station[i][k] = S[i][k];
+  }
+  if (trace != nullptr) trace->station_count = kStencilPts;
+
   // ---- MECHANISM: draw the EDGE, not the area ----------------------------
   if (V.edge_strands) {
-    int32_t S[kStencilPts][3];
-    for (int i = 0; i < kStencilPts; ++i) station_pos(i, S[i]);
-    const uint32_t phase = frame / 3u;  // the outline BUZZES, it does not crawl
     int32_t pts[5][3];
     for (int i = 0; i < kStencilPts; ++i) {
-      if (!lab_edge_link(ph.shape_to, i)) continue;
+      const bool source_link = lab_edge_link(
+          ph.shape_from, fold_canonical_station(ph.shape_from, i));
+      const bool dest_link = lab_edge_link(
+          ph.shape_to, fold_canonical_station(ph.shape_to, i));
+      if (!source_link && !dest_link) continue;
+      const int32_t edge_pm = source_link == dest_link
+                                  ? (source_link ? 1000 : 0)
+                                  : (source_link ? 1000 - ph.morph_pm
+                                                 : ph.morph_pm);
+      if (trace != nullptr) trace->edge_presence_pm[i] = edge_pm;
+      if (edge_pm <= 0) continue;
+      if (trace != nullptr) {
+        ++trace->edge_link_count;
+        trace->edge_energy_pm += edge_pm;
+      }
       const int j = (i + 1) % kStencilPts;
-      bolt_path(S[i], S[j], 4, phase, kBoltSeed ^ (0x5EDu * (i + 1)), pts,
-                V.edge_jitter_mm);
-      lab_edge_stamp(out, pts, 4, V.ramp, V.edge_core_pm, V.edge_halo_pm,
-                     kLabEdgeCoreRPx, kLabEdgeHaloRPx);
+      bolt_path_morph(S[i], S[j], 4, frame,
+                      static_cast<uint32_t>(vi * 101 + i + 1), kLabKeys,
+                      kFoldEdgeMorphFrames,
+                      kBoltSeed ^ (0x5EDu * (i + 1)), pts,
+                      V.edge_jitter_mm);
+      int32_t stamp_count = 0, halo_energy = 0, core_energy = 0;
+      lab_edge_stamp(out, pts, 4, V.ramp,
+                     V.edge_core_pm * edge_pm / 1000,
+                     V.edge_halo_pm * edge_pm / 1000,
+                     kLabEdgeCoreRPx, kLabEdgeHaloRPx, frame, i,
+                     &stamp_count, &halo_energy, &core_energy);
+      if (trace != nullptr) {
+        trace->edge_layer_stamp_count[i][0] = stamp_count;
+        trace->edge_layer_stamp_count[i][1] = stamp_count;
+        trace->edge_layer_energy_pm[i][0] = halo_energy;
+        trace->edge_layer_energy_pm[i][1] = core_energy;
+      }
     }
   }
 
   // ---- the elements ------------------------------------------------------
-  int n_motes = V.mote_count;
-  int n_wander = V.wander_count;
+  int n_motes = V.few_elements ? kLabPersistentFewCount : V.mote_count;
+  int n_wander = V.few_elements ? 0 : V.wander_count;
   int n_shape = n_motes - n_wander;
-  const int8_t* few = nullptr;
-  int few_n = 0;
-  if (V.few_elements) {
-    few = lab_few_stations(ph.shape_to, few_n);
-    n_shape = few_n;
-    n_wander = 0;
-    n_motes = few_n;
-  }
   if (n_shape < 0) n_shape = 0;
+  n_motes = continuity_mote_count(frame, n_motes);
+  if (n_motes > kLabTraceMaxMotes) n_motes = kLabTraceMaxMotes;
+  if (n_shape > n_motes) n_shape = n_motes;
+  if (trace != nullptr) trace->mote_count = n_motes;
+
+  // Stable canonical IDs for the few-element mechanism. Every shape uses the
+  // same five entities; canonical station mapping moves them continuously and
+  // may co-locate IDs at a triangle corner rather than popping count.
+  static constexpr int kFewStation[kLabPersistentFewCount] = {0, 4, 8, 12, 16};
 
   for (int m = 0; m < n_motes; ++m) {
     const uint32_t hm = fx_hash(0xF01Du, static_cast<uint32_t>(m), 0xA7u);
+    const uint8_t normal_role = m >= n_shape ? 1u : 0u;
+    const uint8_t mote_role = continuity_mote_role(frame, m, normal_role);
     int32_t P[3];
-    if (m >= n_shape) {
+    if (mote_role == 1u) {
       // the wanderers: slow hashed walks that leave the pocket, quantised to
       // whole cycles over the clip so the loop seam does not pop
       const int per = 240 + static_cast<int>(hm % 200u);
@@ -803,7 +910,7 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
                                                fx_sin16(th + ph1 + 0x4000u)) >> 16);
     } else {
       const int stn = V.few_elements
-                          ? static_cast<int>(few[m])
+                          ? kFewStation[m % kLabPersistentFewCount]
                           : m * kStencilPts / (n_shape > 0 ? n_shape : 1);
       int32_t Pst[3];
       station_pos(stn, Pst);
@@ -839,29 +946,28 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
         P[k] = lerp32(cloud, tight, coh, 1000);
       }
     }
-    // KNEAD agitation. A SNAP variant scatters hard here instead of morphing
-    // -- the scatter is the transition, and it peaks exactly where the snap
-    // happens, so the eye never sees a half-shape.
+    // Direction 18: even the historical SNAP rung retains persistent particle
+    // IDs and smooth paths; its larger scatter is amplitude, never a reseed.
     const int32_t jit_mm = V.snap ? V.snap_scatter_mm * ph.agit_pm / 1000
                                   : kKneadJitterMm * agit / 1000;
     if (jit_mm > 0) {
-      const uint32_t hj = fx_hash(frame / 2u, static_cast<uint32_t>(m), 0x177u);
-      P[0] += fxu(fx_jit(hj, jit_mm));
-      P[1] += fxu(fx_jit(hj >> 9, jit_mm));
-      P[2] += fxu(fx_jit(hj >> 17, jit_mm));
+      int32_t jo[3];
+      mote_knead_offset(frame, kLabKeys, m, jit_mm, jo);
+      for (int k = 0; k < 3; ++k) P[k] += jo[k];
     }
     // DRAG: the lagged pull along the antenna's sweep (the iron-filings
     // read), clamped by magnitude. A world-frozen shape takes NO drag -- it
     // is standing still, and a drag term would be it standing still while
     // being pulled, which is nothing.
-    if (!frozen_now) {
+    if (live_follow_pm > 0) {
       const int lag = kDragLagFrames + static_cast<int>((hm >> 21) % 4u);
       const uint32_t bi = stfx.drag_idx + 8u - static_cast<uint32_t>(lag);
       int32_t dsp[3];
       for (int k = 0; k < 3; ++k) {
         const int64_t v = static_cast<int64_t>(stfx.dragbuf[bi & 7][k]) +
                           stfx.dragbuf[(bi - 1u) & 7][k] + stfx.dragbuf[(bi - 2u) & 7][k];
-        dsp[k] = static_cast<int32_t>(v * kDragGainPm / 1000);
+        dsp[k] = static_cast<int32_t>(
+            v * kDragGainPm / 1000 * live_follow_pm / 1000 * ph.amp_pm / 1000);
       }
       const int64_t mag = isqrt64(static_cast<int64_t>(dsp[0]) * dsp[0] +
                                   static_cast<int64_t>(dsp[1]) * dsp[1] +
@@ -871,6 +977,16 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
         for (int k = 0; k < 3; ++k) dsp[k] = static_cast<int32_t>(dsp[k] * cap / mag);
       for (int k = 0; k < 3; ++k) P[k] += dsp[k];
     }
+    int32_t visibility_pm = 1000;
+    if (g_u02_fx_continuity_fault == FxContinuityFault::kMoteVisibilityPop &&
+        m == 0 && (frame & 1u) == 0u)
+      visibility_pm = 0;
+    if (trace != nullptr) {
+      trace->mote_role[m] = mote_role;
+      trace->mote_visibility_pm[m] = visibility_pm;
+      for (int k = 0; k < 3; ++k) trace->mote_position[m][k] = P[k];
+    }
+    if (visibility_pm <= 0) continue;
     const int32_t halo = V.halo_min_px +
         static_cast<int32_t>((hm >> 5) %
                              static_cast<uint32_t>(V.halo_max_px - V.halo_min_px + 1));
@@ -880,7 +996,8 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
       // put light back exactly where the hole is. Drawn PRE, with the plate,
       // so the creature occludes both and the dark shape sits INSIDE the loop
       // window instead of being painted over the antenna.
-      mana_push(out, P[0], P[1], P[2], halo, V.ramp, V.void_gain_pm, true,
+      mana_push(out, P[0], P[1], P[2], halo, V.ramp,
+                V.void_gain_pm * visibility_pm / 1000, true,
                 /*pre=*/true, /*opaque=*/true);
     } else if (V.few_elements) {
       // FEWER, LARGER: the first render drew 429 mana px from four 19-26 px
@@ -899,30 +1016,37 @@ inline int32_t lab_fold(int vi, uint32_t frame, int conduit, const FxAnchors& A,
       // what the caged pulsar's core already does, and a three-element shape
       // that loses an element is not a shape.
       mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000, V.ramp,
-                1000, false, false, /*opaque=*/true);
-      mana_push(out, P[0], P[1], P[2], halo, V.ramp, V.halo_gain_pm, false, false);
+                visibility_pm, false, false, /*opaque=*/true);
+      mana_push(out, P[0], P[1], P[2], halo, V.ramp,
+                V.halo_gain_pm * visibility_pm / 1000, false, false);
     } else {
-      mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000, V.ramp, 1000,
-                true, false, /*opaque=*/true);
-      mana_push(out, P[0], P[1], P[2], halo, V.ramp, V.halo_gain_pm, true, false);
+      mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000, V.ramp,
+                visibility_pm, true, false, /*opaque=*/true);
+      mana_push(out, P[0], P[1], P[2], halo, V.ramp,
+                V.halo_gain_pm * visibility_pm / 1000, true, false);
     }
   }
   return agit;
 }
 
 /** The lab's `mana_fill`. `cand` is kLabCandBase + variant index. */
-inline void lab_fill(int cand, uint32_t frame, int conduit, const FxAnchors& A,
-                     FoldState& stfx, std::vector<ManaSplat>& out,
-                     int32_t* agit_out) {
+inline void lab_fill(int cand, uint32_t frame, int conduit, int keys,
+                     const FxAnchors& A, FoldState& stfx,
+                     std::vector<ManaSplat>& out, int32_t* agit_out,
+                     LabContinuityTrace* lab_trace = nullptr,
+                     FxContinuityTrace* fx_trace = nullptr) {
   const int vi = cand - kLabCandBase;
   if (vi < 0 || vi >= kLabVariantCount) return;
   const LabVariant& V = kLabVariants[vi];
-  const int32_t ag = lab_fold(vi, frame, conduit, A, stfx, out);
+  const int32_t ag = lab_fold(vi, frame, conduit, A, stfx, out, lab_trace);
   if (agit_out) *agit_out = ag;
   // the shipping strand VERBATIM (so the control really is the control),
-  // then breadth on top
-  if (V.strand_count >= 1) mana_lightning(frame, A, out);
-  lab_extra_strands(frame, A, V.strand_count - 1, out);
+  // then breadth on top; both share the production continuity trace.
+  const uint32_t lightning_slot = 15u + static_cast<uint32_t>(conduit) * 37u;
+  if (V.strand_count >= 1)
+    mana_lightning(frame, lightning_slot, keys, A, out, 1000, fx_trace);
+  lab_extra_strands(frame, lightning_slot, keys, A, V.strand_count - 1, out,
+                    fx_trace);
 }
 
 // ==================== THE LAB CLIP (slot 15) ===============================
@@ -940,14 +1064,13 @@ inline void lab_antenna_knead(Rig& g, const LabVariant& V, int f) {
                                 kLabKneadGainPm / 1000);
   };
   const int32_t grip = ph.amp_pm;
-  const int32_t trem = ph.seg == kSegHold
-      ? static_cast<int32_t>((static_cast<int64_t>(kKneadTremorA16) *
-                              sinp(f, kLabKeys, kLabKeys / 9)) >> 16)
-      : 0;
-  g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_z(a(kKneadGripJfA16, grip) + trem));
-  g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_z(a(kKneadGripNeckA16, grip) - trem));
+  // Direction 18: the old hold-only tremor entered/exited at an arbitrary sine
+  // value. The lab uses the same continuous grip/wag vocabulary as production;
+  // do not restore a private hard-gated shake here.
+  g.q[kBJunctionF] = quat_mul(g.q[kBJunctionF], quat_z(a(kKneadGripJfA16, grip)));
+  g.q[kBNeck] = quat_mul(g.q[kBNeck], quat_z(a(kKneadGripNeckA16, grip)));
   g.q[kBHingeA] = quat_mul(g.q[kBHingeA], quat_z(a(kKneadGripAA16, grip)));
-  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kKneadGripBA16, grip) + trem / 2));
+  g.q[kBHingeB] = quat_mul(g.q[kBHingeB], quat_z(a(kKneadGripBA16, grip)));
   g.q[kBHingeC] = quat_mul(g.q[kBHingeC], quat_z(a(kKneadGripCA16, grip)));
   if (ph.agit_pm > 0) {
     const int cyc = kLabKeys / kKneadWagPeriodKeys;
@@ -1002,10 +1125,18 @@ inline zc::Clip build_manalab() {
     } else if (f < kLabTraverseEndKeys) {
       // eased, so the start and stop are not a step (a step reads as a
       // teleport, and the smear plane records it as one)
-      t = fold_ease((f - kLabStandEndKeys) * 1000 /
+      t = motion_c2_ease((f - kLabStandEndKeys) * 1000 /
                     (kLabTraverseEndKeys - kLabStandEndKeys));
-    } else {
+    } else if (f < K - kLabReleaseKeys) {
       t = 1000;
+    } else {
+      // Direction 18: return the comparison traverse on a long C2 tail rather
+      // than teleporting from centre back to the left at the loop seam.
+      const int start = K - kLabReleaseKeys;
+      const int den = K - 1 - start;
+      const int32_t home = motion_c2_ease(
+          (f - start) * 1000 / (den > 0 ? den : 1));
+      t = 1000 - home;
     }
     const int32_t back = fxu(kLabTraverseMm) * (1000 - t) / 1000 -
                          fxu(kLabTraverseEndMm);

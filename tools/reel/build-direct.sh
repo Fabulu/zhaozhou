@@ -35,6 +35,8 @@ Targets:
              skinning, zone/identity/extension/compaction/closure controls)
   moutline   manafold-outlinegate.exe (pass 17: complete enclosed-O ink and
              foreground-effect ownership controls)
+  msmooth    manafold-motiongate.exe (Direction 18: full-bank persistent
+             lightning/particle identities and 60 Hz continuity controls)
   meyecam    manafold-eyecam.exe (pass 15: THE EYE-VS-CAMERA PROBE -- where
              each eye plate points RELATIVE TO THE CAMERA, per clip and per
              presentation frame. It shipped in pass 15 with NO TARGET AT ALL,
@@ -68,7 +70,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|mexpress|meyecam|meyesize|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -267,6 +269,12 @@ build_moutline() {
     -o "$BIN/manafold-outlinegate.exe"
 }
 
+build_msmooth() {
+  printf '%s\n' "LD manafold-motiongate"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_motiongate.cpp" "${LIBOBJS[@]}" \
+    -o "$BIN/manafold-motiongate.exe"
+}
+
 build_mexpress() {
   printf '%s\n' "LD manafold-express"
   "$CXX" "${FLAGS[@]}" "$T/manafold_express.cpp" "${LIBOBJS[@]}" \
@@ -293,6 +301,7 @@ case "$TARGET" in
   mshell) build_mshell ;;
   mspan) build_mspan ;;
   moutline) build_moutline ;;
+  msmooth) build_msmooth ;;
   meyecam) build_meyecam ;;
   meyesize) build_meyesize ;;
   mexpress) build_mexpress ;;

@@ -2377,6 +2377,7 @@ struct CreatureReelCtx {
   // post splats after, each depth-tested at its own projected 1/w)
   int u02_mana = 0;
   uint32_t u02_frame = 0;
+  uint32_t u02_period_frames = 1;  // production clip loop at 60 Hz
   std::vector<u02::ManaSplat> u02_mana_splats;
   // pass 3 (R6): the persistence plane — quarter-res RGB accumulation fed
   // by everything the mana draws, decayed with the quantised glitchy step,
@@ -3258,7 +3259,8 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
   static u02::GlowFrame s_mana_ramps[u02::kRampCount];
   if (c.u02_mana != 0 && !c.u02_mana_splats.empty()) {
     u02::glow_bake(s_glow_assets);
-    u02::mana_build_ramps(s_mana_ramps, c.u02_frame);
+    u02::mana_build_ramps(s_mana_ramps, c.u02_frame,
+                          c.u02_period_frames);
     const zref::render::Viewport vpp_m{0, 0, w, h};
     for (const u02::ManaSplat& ms : c.u02_mana_splats) {
       if (c.u02_smear_only) break;  // pass 8: the plane only, bodies suppressed
@@ -4448,6 +4450,8 @@ int render_scene(const SceneSubject& sub) {
         for (const zc::Clip& cc : dog->bank.clips)
           if (cc.slot_id == dog_inst.anim.slot) cl = &cc;
         if (cl != nullptr) {
+          cr_ctx.u02_period_frames =
+              static_cast<uint32_t>(cl->frame_count) * 2u;
           cr_ctx.u02_add_pop.parts.clear();
           cr_ctx.u02_tri_pop.parts.clear();
           cr_ctx.u02_opq_pop.parts.clear();
@@ -4460,37 +4464,8 @@ int render_scene(const SceneSubject& sub) {
             if (ip == nullptr) continue;
             std::array<zc::mat3x4fx, zc::kMaxBones> pose;
             zc::decode_pose(*dog, *cl, ip->anim.frame, pose, nullptr, ip->anim.sub);
-            const auto anchor = [&](uint8_t b, int32_t out[3]) {
-              zc::SkinVertex sv{dog->baked.world_x[b], dog->baked.world_y[b],
-                                dog->baked.world_z[b], b, b, 64, 0, 0};
-              int32_t x, y, z;
-              zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
-              out[0] = ip->x + x;
-              out[1] = ip->y + y;
-              out[2] = ip->z + z;
-            };
-            u02::FxAnchors fa;
-            anchor(u02::kBRoot, fa.body);
-            // PASS 4 (the centrepiece): the six fold anchors. The ring
-            // centre keeps the FRONT JUNCTION (the old neck bind) in its
-            // centroid so the pass-3 centring (R8) is preserved.
-            anchor(u02::kBJunctionF, fa.junction_f);
-            anchor(u02::kBNeck, fa.neck);
-            anchor(u02::kBLoopBase2, fa.junction_b);
-            anchor(u02::kBHingeA, fa.hinge_a);
-            anchor(u02::kBHingeB, fa.hinge_b);
-            anchor(u02::kBHingeC, fa.hinge_c);
-            fa.crown[0] = fa.body[0];
-            fa.crown[1] = fa.body[1] + u02::fxu(u02::vmm(u02::kBodyRadiusMm));
-            fa.crown[2] = fa.body[2];
-            // the ring-pocket centre. PASS 3 (R8): the A/B/C centroid sat
-            // ~120 mm from ball B — the hole's top EDGE, the owner's exact
-            // complaint — so the NECK EXIT joins the centroid and the
-            // anchor lands in the hole's middle. Still posed bones: hinge
-            // play still moves the mana (one performance).
-            for (int k = 0; k < 3; ++k)
-              fa.ring[k] = (fa.junction_f[k] + fa.hinge_a[k] + fa.hinge_b[k] +
-                            fa.hinge_c[k]) / 4;
+            u02::FxAnchors fa = u02::fx_anchors_from_pose(
+                *dog, pose, ip->x, ip->y, ip->z);
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][0] = fa.body[0];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][1] = fa.body[1];
             cr_ctx.u02_glow_centres[cr_ctx.u02_glow_count][2] = fa.body[2];
@@ -4548,7 +4523,8 @@ int render_scene(const SceneSubject& sub) {
               // experimental mana reel's variant table, forked into
               // manafold_lab.h so no shipped constant is touched.
               if (sub.u02_mana >= u02::lab::kLabCandBase) {
-                u02::lab::lab_fill(sub.u02_mana, conduit_frame, ii, fa,
+                u02::lab::lab_fill(sub.u02_mana, conduit_frame, ii,
+                                   cl->frame_count, fa,
                                    cr_ctx.u02_fold[ii],
                                    cr_ctx.u02_mana_splats, &agit);
               } else
@@ -7895,6 +7871,26 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
+  if (const char* e = std::getenv("ZHAO_U02_BOIL_PALETTE_CONTROL")) {
+    if (std::strcmp(e, "none") == 0)
+      u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kNone;
+    else if (std::strcmp(e, "raw-clock") == 0)
+      u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kPaletteRawClock;
+    else if (std::strcmp(e, "hard-switch") == 0)
+      u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kPaletteHardSwitch;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_BOIL_PALETTE_CONTROL=%s invalid "
+                   "(expected none|raw-clock|hard-switch)\n", e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_BOIL_CYCLES")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_BOIL_CYCLES", e, 1, 3, v))
+      return 2;
+    u02::g_u02_boil_cycles = v;
+  }
   if (const char* e = std::getenv("ZHAO_U02_TRICK_FLIP_X_A16")) {
     int v = 0;
     if (!parse_strict_env_int("ZHAO_U02_TRICK_FLIP_X_A16", e,
@@ -7909,6 +7905,13 @@ int main(int argc, char** argv) {
       return 2;
     u02::g_u02_trick_flip_z_a16 = v;
   }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_SHOWOFF_YAW_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_SHOWOFF_YAW_A16", e,
+                              -16384, 16384, v))
+      return 2;
+    u02::g_u02_trick_showoff_yaw_a16 = v;
+  }
   if (const char* e = std::getenv("ZHAO_U02_TAUNT3_FLICK_YAW_A16")) {
     int v = 0;
     if (!parse_strict_env_int("ZHAO_U02_TAUNT3_FLICK_YAW_A16", e,
@@ -7922,6 +7925,43 @@ int main(int argc, char** argv) {
                               -16384, 16384, v))
       return 2;
     u02::g_u02_taunt3_flick_roll_a16 = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TAUNT3_PUNCH_A_MM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TAUNT3_PUNCH_A_MM", e, 0, 320, v))
+      return 2;
+    u02::g_u02_taunt3_punch_a_mm = v;
+  }
+  // Direction 16 one-binary crown-shuffle ladder. Unset/1000 is shipping; only
+  // the global gain admits zero, the exact no-order control. Channel gains stay
+  // bounded corrections so a typo cannot silently delete one carrier.
+  {
+    struct OrderEnv {
+      const char* name;
+      int min_value;
+      int32_t* value;
+    };
+    const OrderEnv vars[] = {
+        {"ZHAO_U02_ORDER_GAIN_PM", 0, &u02::g_u02_order_gain_pm},
+        {"ZHAO_U02_ORDER_A_PM", 500, &u02::g_u02_order_a_pm},
+        {"ZHAO_U02_ORDER_B_PM", 500, &u02::g_u02_order_b_pm},
+        {"ZHAO_U02_ORDER_C_PM", 500, &u02::g_u02_order_c_pm},
+        {"ZHAO_U02_ORDER_BODY_PM", 0, &u02::g_u02_order_body_pm},
+        {"ZHAO_U02_ORDER_ENDPOINT_PM", 0, &u02::g_u02_order_endpoint_pm},
+    };
+    for (const OrderEnv& var : vars) {
+      const char* e = std::getenv(var.name);
+      if (e == nullptr) continue;
+      int v = 0;
+      if (!parse_strict_env_int(var.name, e, var.min_value, 1500, v)) return 2;
+      *var.value = v;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_STAR_HEART_SHIFT")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_STAR_HEART_SHIFT", e, 0, 17, v))
+      return 2;
+    u02::g_u02_star_heart_station_shift = v;
   }
   // PASS 17: same-binary eye-form ladder and independent size-channel mutes.
   // Parse before u02::type() so mesh construction and clip compilation see one
@@ -8639,13 +8679,35 @@ int main(int argc, char** argv) {
                                       u02::kTaunt3Keys, false, &kU02SunTaunt);
     s.note =
         "Direction 9 SS11 (\"more fun\", the third ask): the first SHIPPED clip "
-        "whose performance IS the per-nodule vocabulary. The owner's own "
-        "configuration -- middle down, outers up -- used as an insolent SHRUG "
-        "and then HELD; a slow mocking lean; a three-ball shimmy of one press "
-        "each; the dismissal. Press, arrive, hold: no ambient oscillator runs "
-        "underneath (kNoduleClipPm[21] = 0).";
+        "whose performance IS the per-nodule vocabulary. Direction 16 replaces "
+        "the old positive shimmy with a four-tableau crown shuffle: A/B/C each "
+        "own top and bottom before the held dismissal. Press, arrive, hold: no "
+        "ambient nodule oscillator runs underneath (kNoduleClipPm[21] = 0).";
     rc |= render_scene(s);
   }
+  // Direction 16 authoring views: the exact shipping slot and body performance,
+  // with effects removed so the three visible carrier cores and all four signed
+  // sticks can be judged from fixed front/quarter/side/rear cameras. These never
+  // replace shipping Taunt III as acceptance evidence.
+  const auto render_ordering_view = [&](const char* name, int32_t yaw) {
+    if (!wanted(name)) return;
+    SceneSubject s = subject_u02_clip(u02::kTaunt3Slot, name,
+                                      u02::kTaunt3Keys, false, &kU02SunTaunt);
+    s.u02_mana = 0;
+    s.u02_smear = 0;
+    s.u02_mist = false;
+    s.u02_shell = false;
+    s.planet = 0;
+    s.cam_k = 360000;  // full crown remains in frame at every ordering extreme
+    s.cam_bias = -9000;
+    s.cam_yaw = yaw;
+    s.note = "Direction 16 fixed-camera crown-shuffle authoring view";
+    rc |= render_scene(s);
+  };
+  render_ordering_view("manafold-ordering-fixed", 0);
+  render_ordering_view("manafold-ordering-quarter", 6371);
+  render_ordering_view("manafold-ordering-side", 16384);
+  render_ordering_view("manafold-ordering-rear", 32768);
   // ---- PASS 11 F.2: THE QUARTER VIEW, the AUTHORING instrument -------------
   // manafold-antenna-fixed is the JUDGING view and stays exactly as it is: the
   // owner's §11 antenna verdict is taken on it, and a view that moves between

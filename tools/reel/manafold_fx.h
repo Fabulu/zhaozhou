@@ -42,6 +42,8 @@
 #ifndef ZHAO_REEL_MANAFOLD_FX_H
 #define ZHAO_REEL_MANAFOLD_FX_H
 
+#include <algorithm>
+#include <array>
 #include <cstring>  // std::memset -- the mist plane's shift clears vacated cells
 #include <vector>
 
@@ -74,6 +76,39 @@ struct FxAnchors {
                       // the anchor lands in the hole's middle; it still
                       // moves with hinge play (one performance).
 };
+
+/** One authority for renderer and continuity gates: extract the exact posed
+ *  Manafold FX anchors from a decoded production pose. Instance offsets are
+ *  world fx16. */
+inline FxAnchors fx_anchors_from_pose(
+    const zc::CreatureType& type,
+    const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
+    int32_t instance_x = 0, int32_t instance_y = 0, int32_t instance_z = 0) {
+  FxAnchors out{};
+  const auto anchor = [&](uint8_t bone, int32_t p[3]) {
+    zc::SkinVertex sv{type.baked.world_x[bone], type.baked.world_y[bone],
+                      type.baked.world_z[bone], bone, bone, 64, 0, 0};
+    int32_t x = 0, y = 0, z = 0;
+    zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+    p[0] = instance_x + x;
+    p[1] = instance_y + y;
+    p[2] = instance_z + z;
+  };
+  anchor(kBRoot, out.body);
+  anchor(kBJunctionF, out.junction_f);
+  anchor(kBNeck, out.neck);
+  anchor(kBLoopBase2, out.junction_b);
+  anchor(kBHingeA, out.hinge_a);
+  anchor(kBHingeB, out.hinge_b);
+  anchor(kBHingeC, out.hinge_c);
+  out.crown[0] = out.body[0];
+  out.crown[1] = out.body[1] + fxu(vmm(kBodyRadiusMm));
+  out.crown[2] = out.body[2];
+  for (int k = 0; k < 3; ++k)
+    out.ring[k] = (out.junction_f[k] + out.hinge_a[k] +
+                   out.hinge_b[k] + out.hinge_c[k]) / 4;
+  return out;
+}
 
 // ---- the bolt (FX.LIGHTNING recurrence — kept verbatim) -------------------
 constexpr int kBoltSegs = 16;          // the main bolt (hinge B -> crown)
@@ -605,6 +640,9 @@ constexpr bool kFoldFreeStrandOn = true;
 // the crackle across the pocket, and one of it is a filament while two is a
 // slab that buries the shape the owner is asking to see.
 constexpr int kStrandCount = 1;
+// Trace capacity covers the widest experimental lab variant as well as the
+// one-strand shipping path. Stable IDs are [strand * (segments+1) + point].
+constexpr int kFxTraceMaxStrands = 4;
 constexpr int kSurgeMotes = 5;             // flowing along the strand
 constexpr int kSurgeFlowFrames = 26;       // one end-to-end trip
 constexpr int32_t kSurgeRPx = 7;
@@ -614,14 +652,38 @@ constexpr int kSurgeBurstGainPm = 520;
 constexpr int32_t kStrandJitterMm = 60;    // jag SMALL against the ~50 mm
                                            // segment — a filament, not a
                                            // scribble (the dot-cloud fix)
-constexpr int kBoltRehashFrames = 7;       // the buzz cadence
+// Direction 18: persistent path identities need enough time to travel rather
+// than looking like a cross-faded replacement. Both clocks are clip-periodic;
+// 20 presentation frames clears the house 16-frame motion floor with headroom.
+constexpr int kBoltMorphFrames = 20;
+constexpr int kFoldEdgeMorphFrames = 20;
+constexpr int kMoteKneadPeriodFrames = 48;
+constexpr int kDragVelocitySmoothFrames = 8;
+constexpr int kKneadVisualSmoothFrames = 12;
+constexpr int kCoherenceVisualSmoothFrames = 12;
+constexpr int kFxMorphMinFrames = 16;
+constexpr int kFxTraceStencilPts = 18;
 constexpr int32_t kStrandSpanMm = 820;     // endpoint spread across the pocket
 constexpr int32_t kStrandEndJitMm = 240;   // endpoint scatter per re-hash
 constexpr int32_t kBoilCorePx = 30;
 constexpr int32_t kBoilOuterPx = 48;
 constexpr int kBoilCoreGainPm = 520;
 constexpr int kBoilOuterGainPm = 380;
-constexpr int kBoilRotDiv = 3;             // CLUT rotation: churn, zero pixels
+// The rejected raw clock advanced one CLUT entry every three presentation
+// frames, completing 63 entries in 189 frames. Shipping keeps that pace as an
+// authored target, but rounds to an integer cycle count over each clip so the
+// phase closes exactly at its loop seam. Colour between adjacent entries is
+// interpolated; closing the phase alone would still leave ten hard palette
+// switches per fixed-idle loop.
+// Direction 18's same-binary 1/2/3-cycle ladder selected one revolution over
+// the ten-second fixed-idle loop. One cycle still traverses the complete authored
+// Blue/Violet range and reads as a visible broad churn; two and three repeated
+// the high-contrast colour reversal over already-moving body/antenna action and
+// read as palette flicker. Every adjacent entry remains an exact endpoint, with
+// quintic C2 interpolation between them.
+constexpr int kBoilRotDiv = 3;  // legacy cadence, retained by the fired mutant
+constexpr int kBoilTargetCycleFrames = 600;
+inline int32_t g_u02_boil_cycles = 0;  // 0 = authored period-derived default
 // PASS 3 (R13 #5, Direction 3 §6e): the boil-CENTRE variant — the middle
 // grown ~1.6x, the outer ring removed.
 constexpr int32_t kBoilCentrePx = 48;
@@ -637,6 +699,65 @@ constexpr int32_t kPlasmaSpreadMm = 240;   // the filled blobs' wobble bound
 // under the additive halo — additive alone can never read solid over the
 // bright peach sky. Core radius as per-mille of its halo radius.
 constexpr int kCoreOfHaloPm = 640;
+
+// Direction 18's production-path controls. These are invocable only from the
+// committed motion gate; default kNone is exact shipping behavior.
+enum class FxContinuityFault : uint8_t {
+  kNone = 0,
+  kLightningSwitch,
+  kShapeBlackout,
+  kParticleReseed,
+  kSurgeReseed,
+  kLoopSeamSnap,
+  kMoteCountPop,
+  kMoteRolePop,
+  kWeightWrap,
+  kMorphReverse,
+  kBrightnessSeam,
+  kStampCountPop,
+  kFinalDwell,
+  kMoteVisibilityPop,
+  kPaletteRawClock,
+  kPaletteHardSwitch,
+};
+inline FxContinuityFault g_u02_fx_continuity_fault = FxContinuityFault::kNone;
+
+constexpr int kFxTraceManaBodies = 3;
+
+struct FxContinuityTrace {
+  bool fold_active = false;
+  int32_t life_pm = 0;
+  FoldPhase fold{};
+  int32_t lasso_mix_pm = 0;
+  int32_t agitation_pm = 0;
+  int32_t knead_pm = 0;
+  int32_t fold_station[kFxTraceStencilPts][3]{};
+  int32_t coherence_pm = 0;
+  int32_t edge_lit_pm = 0;
+  int32_t edge_energy_pm = 0;
+  int32_t edge_presence_pm[kFxTraceStencilPts]{};
+  int32_t edge_layer_gain_pm[kFxTraceStencilPts][3]{};  // backing, shimmer, core
+  int32_t edge_layer_stamp_count[kFxTraceStencilPts][3]{};
+  int32_t edge_layer_energy_pm[kFxTraceStencilPts][3]{};
+  int free_strand_stamp_count[kFxTraceMaxStrands][2]{};  // halo, core
+  int32_t free_strand_energy_pm[kFxTraceMaxStrands][2]{};
+  int free_point_count = 0;
+  int32_t free_point[kFxTraceMaxStrands * (kBoltSegs + 1)][3]{};
+  int surge_mote_count = 0;
+  uint8_t surge_mote_role[kSurgeMotes]{};  // 2 = attached free-strand surge
+  int32_t surge_mote_visibility_pm[kSurgeMotes]{};
+  int32_t surge_mote_position[kSurgeMotes][3]{};
+  int mana_body_count = 0;
+  uint8_t mana_body_role[kFxTraceManaBodies]{};
+  int32_t mana_body_visibility_pm[kFxTraceManaBodies]{};
+  int32_t mana_body_position[kFxTraceManaBodies][3]{};
+  int32_t mana_body_radius_px[kFxTraceManaBodies]{};
+  int32_t mana_body_gain_pm[kFxTraceManaBodies]{};
+  int mote_count = 0;
+  uint8_t mote_role[kMoteCount]{};  // 0 shape, 1 wander
+  int32_t mote_visibility_pm[kMoteCount]{};
+  int32_t mote_position[kMoteCount][3]{};
+};
 
 // ===================== THE SHELL (DIRECTION 9 §7 + §14) ===================
 //
@@ -1763,6 +1884,171 @@ inline void bolt_path(const int32_t s[3], const int32_t e[3], int segs, uint32_t
   }
 }
 
+struct LightningMorphPhase {
+  uint32_t from = 0;
+  uint32_t to = 0;
+  int32_t morph_pm = 0;
+  uint32_t cycle_q16 = 0;
+};
+
+/** One clip-periodic phase with an integer cycle count. The fault restores the
+ * rejected fixed-period clock so seam and energy detectors have a positive
+ * control. */
+inline uint32_t fx_clip_phase(uint32_t frame, int keys, int nominal_period,
+                              uint32_t offset = 0u) {
+  const uint32_t total = static_cast<uint32_t>(keys > 1 ? keys * 2 : 2);
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kLoopSeamSnap)
+    return frame * 65536u /
+               static_cast<uint32_t>(nominal_period > 1 ? nominal_period : 2) +
+           offset;
+  const uint32_t cycles = std::max<uint32_t>(
+      1u, total / static_cast<uint32_t>(nominal_period > 1 ? nominal_period : 2));
+  return static_cast<uint32_t>(
+             static_cast<uint64_t>(frame % total) * cycles * 65536u / total) +
+         offset;
+}
+
+/** A loop-periodic path phase. Every hashed path has a successor and each
+ *  station follows a smooth deterministic route to it; the last phase's
+ *  successor is phase zero, so the clip seam is an ordinary morph step rather
+ *  than lightning turning off and reappearing elsewhere. */
+inline LightningMorphPhase lightning_morph_phase(uint32_t frame, int keys,
+                                                  int cadence_frames) {
+  const uint32_t total = static_cast<uint32_t>(keys > 1 ? keys * 2 : 2);
+  const uint32_t cycles = std::max<uint32_t>(
+      1u, total / static_cast<uint32_t>(cadence_frames > 1 ? cadence_frames : 2));
+  const uint32_t f = frame % total;
+  const uint64_t q = static_cast<uint64_t>(f) * cycles * 65536u / total;
+  LightningMorphPhase out;
+  out.from = static_cast<uint32_t>(q >> 16) % cycles;
+  out.to = (out.from + 1u) % cycles;
+  out.cycle_q16 = static_cast<uint32_t>(q & 0xFFFFu);
+  const int32_t raw_pm = static_cast<int32_t>(
+      (static_cast<uint64_t>(out.cycle_q16) * 1000u) / 65536u);
+  out.morph_pm = g_u02_fx_continuity_fault ==
+                         FxContinuityFault::kLightningSwitch
+                     ? 0
+                     : motion_c2_ease(raw_pm);
+  return out;
+}
+
+inline void bolt_path_morph(const int32_t s[3], const int32_t e[3], int segs,
+                            uint32_t frame, uint32_t salt, int keys,
+                            int cadence_frames, uint32_t seed,
+                            int32_t pts[][3],
+                            int32_t jitter_mm = kBoltJitterMm) {
+  const LightningMorphPhase ph =
+      lightning_morph_phase(frame, keys, cadence_frames);
+  int32_t a[kFoldEdgeSegs + 1][3]{};
+  int32_t b[kFoldEdgeSegs + 1][3]{};
+  // All current callers have segs <= kFoldEdgeSegs; keep the bound explicit so
+  // a future larger path cannot silently overrun this committed instrument.
+  if (segs > kFoldEdgeSegs) segs = kFoldEdgeSegs;
+  const uint32_t salted = seed ^ (salt * 0x9E3779B9u);
+  bolt_path(s, e, segs, ph.from, salted, a, jitter_mm);
+  bolt_path(s, e, segs, ph.to, salted, b, jitter_mm);
+  for (int i = 0; i <= segs; ++i)
+    for (int k = 0; k < 3; ++k)
+      pts[i][k] = lerp32(a[i][k], b[i][k], ph.morph_pm, 1000);
+}
+
+struct FreeLightningPath {
+  int32_t pts[kBoltSegs + 1][3]{};
+  int32_t start[3]{};
+  int32_t end[3]{};
+  int flick_pm = 1000;
+};
+
+inline void free_lightning_raw_path(uint32_t phase, uint32_t slot, int strand,
+                                    const FxAnchors& A,
+                                    int32_t pts[kBoltSegs + 1][3],
+                                    int32_t start[3], int32_t end[3]) {
+  const uint32_t salted_phase = phase + slot * 131u;
+  const uint32_t h = fx_hash(kBoltSeed ^ (slot * 0x9E37u), salted_phase,
+                             0x51A0u + static_cast<uint32_t>(strand));
+  const uint32_t ang = h & 0xFFFFu;
+  const int32_t half = fxu(kStrandSpanMm / 2);
+  const int32_t dx = static_cast<int32_t>(
+      (static_cast<int64_t>(half) * fx_cos16(ang)) >> 16);
+  const int32_t dy = static_cast<int32_t>(
+      (static_cast<int64_t>(half) * fx_sin16(ang)) >> 16);
+  start[0] = A.ring[0] + dx + fxu(fx_jit(h >> 8, kStrandEndJitMm));
+  start[1] = A.ring[1] + dy + fxu(fx_jit(h >> 13, kStrandEndJitMm));
+  start[2] = A.ring[2];
+  end[0] = A.ring[0] - dx + fxu(fx_jit(h >> 18, kStrandEndJitMm));
+  end[1] = A.ring[1] - dy + fxu(fx_jit(h >> 23, kStrandEndJitMm));
+  end[2] = A.ring[2];
+  bolt_path(start, end, kBoltSegs,
+            salted_phase * 3u + static_cast<uint32_t>(strand),
+            (kBoltSeed + static_cast<uint32_t>(strand) * 0x9E37u) ^
+                (slot * 0x45D9u),
+            pts, kStrandJitterMm);
+}
+
+inline FreeLightningPath free_lightning_path(uint32_t frame, uint32_t slot,
+                                              int keys, int strand,
+                                              const FxAnchors& A) {
+  const LightningMorphPhase ph =
+      lightning_morph_phase(frame, keys, kBoltMorphFrames);
+  int32_t from[kBoltSegs + 1][3]{}, to[kBoltSegs + 1][3]{};
+  int32_t sf[3]{}, ef[3]{}, st[3]{}, et[3]{};
+  free_lightning_raw_path(ph.from, slot, strand, A, from, sf, ef);
+  free_lightning_raw_path(ph.to, slot, strand, A, to, st, et);
+  FreeLightningPath out;
+  for (int p = 0; p <= kBoltSegs; ++p)
+    for (int k = 0; k < 3; ++k)
+      out.pts[p][k] = lerp32(from[p][k], to[p][k], ph.morph_pm, 1000);
+  for (int k = 0; k < 3; ++k) {
+    out.start[k] = lerp32(sf[k], st[k], ph.morph_pm, 1000);
+    out.end[k] = lerp32(ef[k], et[k], ph.morph_pm, 1000);
+  }
+  const int flick_from = 950 + static_cast<int>(
+      fx_hash(kBoltSeed ^ 0xF11Cu ^ slot, ph.from,
+              static_cast<uint32_t>(strand)) % 130u);
+  const int flick_to = 950 + static_cast<int>(
+      fx_hash(kBoltSeed ^ 0xF11Cu ^ slot, ph.to,
+              static_cast<uint32_t>(strand)) % 130u);
+  out.flick_pm = lerp32(flick_from, flick_to, ph.morph_pm, 1000);
+  return out;
+}
+
+/** One production subdivision law, shared by rendering and continuity traces. */
+inline int path_segment_stamp_count(const int32_t a[3], const int32_t b[3],
+                                    int32_t spacing_mm, int cap) {
+  const int64_t dx = (static_cast<int64_t>(b[0]) - a[0]) >> 16;
+  const int64_t dy = (static_cast<int64_t>(b[1]) - a[1]) >> 16;
+  const int64_t dz = (static_cast<int64_t>(b[2]) - a[2]) >> 16;
+  const int64_t adx = dx < 0 ? -dx : dx;
+  const int64_t ady = dy < 0 ? -dy : dy;
+  const int64_t adz = dz < 0 ? -dz : dz;
+  int n = spacing_mm > 0 ? static_cast<int>((adx + ady + adz) / spacing_mm) : 1;
+  if (n < 1) n = 1;
+  if (n > cap) n = cap;
+  return n;
+}
+
+inline int path_stamp_count(const int32_t pts[][3], int segs,
+                            int32_t spacing_mm, int cap) {
+  int count = 0;
+  for (int i = 0; i < segs; ++i)
+    count += path_segment_stamp_count(pts[i], pts[i + 1], spacing_mm, cap);
+  return count;
+}
+
+/** Radius-weighted accumulated layer energy, normalized to a declared domain. */
+inline int32_t stamp_energy_pm(int count, int gain_pm, int32_t radius_px,
+                               int max_count, int max_gain_pm,
+                               int32_t max_radius_px) {
+  if (count <= 0 || gain_pm <= 0 || radius_px <= 0 || max_count <= 0 ||
+      max_gain_pm <= 0 || max_radius_px <= 0)
+    return 0;
+  const int64_t num = static_cast<int64_t>(count) * gain_pm * radius_px * radius_px * 1000;
+  const int64_t den = static_cast<int64_t>(max_count) * max_gain_pm *
+                      max_radius_px * max_radius_px;
+  const int64_t q = den > 0 ? (num + den / 2) / den : 0;
+  return static_cast<int32_t>(q > 2147483647LL ? 2147483647LL : q);
+}
+
 /** Stamp one bolt path as a CONTINUOUS two-layer chain of splats: a hot
  *  narrow core over a calm wide halo, every ~kBoltStampMm along each
  *  segment (beads at the vertices alone leave visible gaps — the shipped
@@ -1770,18 +2056,7 @@ inline void bolt_path(const int32_t s[3], const int32_t e[3], int segs, uint32_t
 inline void bolt_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3], int segs,
                        int gain_core_pm, int gain_halo_pm) {
   for (int i = 0; i < segs; ++i) {
-    // segment length in mm (fx16 -> mm)
-    int64_t dx = (pts[i + 1][0] - pts[i][0]) >> 16;
-    int64_t dy = (pts[i + 1][1] - pts[i][1]) >> 16;
-    int64_t dz = (pts[i + 1][2] - pts[i][2]) >> 16;
-    int64_t len = dx * dx + dy * dy + dz * dz;
-    // integer sqrt via float-free approx: step count from the dominant axis
-    int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy, adz = dz < 0 ? -dz : dz;
-    int64_t approx = adx + ady + adz;  // upper bound on length
-    (void)len;
-    int n = static_cast<int>(approx / kBoltStampMm);
-    if (n < 1) n = 1;
-    if (n > 24) n = 24;
+    const int n = path_segment_stamp_count(pts[i], pts[i + 1], kBoltStampMm, 24);
     for (int t = 0; t < n; ++t) {
       const int32_t x = lerp32(pts[i][0], pts[i + 1][0], t, n);
       const int32_t y = lerp32(pts[i][1], pts[i + 1][1], t, n);
@@ -1796,16 +2071,20 @@ inline void bolt_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3], int 
  *  the ring pocket — three incommensurate integer periods so nothing
  *  metronomes, salted per element so a crowd never moves in lockstep. */
 inline void centre_wobble(uint32_t frame, uint32_t salt, int32_t bound_mm,
-                          int32_t o[3]) {
+                          int32_t o[3], int keys = 0) {
   const uint32_t h = fx_hash(0xC3A7u, salt, 17u);
   const uint32_t p1 = h & 0xFFFFu, p2 = (h >> 16) & 0xFFFFu;
   const int32_t b = fxu(bound_mm);
+  const auto phase = [&](int period, uint32_t off) {
+    return keys > 1 ? fx_clip_phase(frame, keys, period, off)
+                    : frame * 65536u / static_cast<uint32_t>(period) + off;
+  };
   o[0] = static_cast<int32_t>((static_cast<int64_t>(b) *
-                               fx_cos16(frame * 65536u / 97u + p1)) >> 16);
+                               fx_cos16(phase(97, p1))) >> 16);
   o[1] = static_cast<int32_t>((static_cast<int64_t>(b / 2) *
-                               fx_sin16(frame * 65536u / 61u + p2)) >> 16);
+                               fx_sin16(phase(61, p2))) >> 16);
   o[2] = static_cast<int32_t>((static_cast<int64_t>(b) *
-                               fx_sin16(frame * 65536u / 113u + p1)) >> 16);
+                               fx_sin16(phase(113, p1))) >> 16);
 }
 
 /** One FILLED mana body (R7): a saturated OPAQUE non-additive core (the
@@ -1818,82 +2097,111 @@ inline void mana_filled(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32
   mana_push(out, x, y, z, halo_r_px, ramp, halo_gain_pm, true, false);
 }
 
-/** LIGHTNING (candidate 4 / the channel's blaze). PASS 3 (R9): 2-3
- *  CONTINUOUS strands buzzing across the ring pocket's middle — each a
- *  two-layer stamped path (hot ~2 px near-white core over a calm wider
- *  halo), endpoints re-hashed on the kBoltRehashFrames cadence so they
- *  visibly BUZZ, never vanishing: old paths decay through the smear
- *  plane. Gap-free at native is the gate (kBoltStampMm under one core
- *  radius). */
-inline void mana_lightning(uint32_t frame, const FxAnchors& A,
-                           std::vector<ManaSplat>& out) {
-  const uint32_t phase = frame / kBoltRehashFrames;
-  int32_t pts[kBoltSegs + 1][3];
+/** LIGHTNING (candidate 4 / the channel's blaze). Each station morphs from
+ *  one deterministic jagged path to the next on a loop-periodic clock. Paths,
+ *  brightness, endpoint pulses and attached surge motes remain present and
+ *  continuous; nothing is re-hashed into a new location on one frame. */
+inline void mana_lightning(uint32_t frame, uint32_t slot, int keys,
+                           const FxAnchors& A, std::vector<ManaSplat>& out,
+                           int32_t gain_pm = 1000,
+                           FxContinuityTrace* trace = nullptr) {
+  if (gain_pm <= 0) return;
+  if (gain_pm > 1000) gain_pm = 1000;
+  int32_t flow_s[3] = {A.ring[0], A.ring[1], A.ring[2]};
+  int32_t flow_e[3] = {A.ring[0], A.ring[1], A.ring[2]};
   for (int i = 0; i < kStrandCount; ++i) {
-    const uint32_t h = fx_hash(kBoltSeed, phase, 0x51A0u + static_cast<uint32_t>(i));
-    // endpoints across the pocket, through the middle: a hashed diameter
-    const uint32_t ang = h & 0xFFFFu;
-    const int32_t half = fxu(kStrandSpanMm / 2);
-    const int32_t dx = static_cast<int32_t>(
-        (static_cast<int64_t>(half) * fx_cos16(ang)) >> 16);
-    const int32_t dy = static_cast<int32_t>(
-        (static_cast<int64_t>(half) * fx_sin16(ang)) >> 16);
-    int32_t s0[3] = {A.ring[0] + dx, A.ring[1] + dy, A.ring[2]};
-    int32_t e0[3] = {A.ring[0] - dx, A.ring[1] - dy, A.ring[2]};
-    s0[0] += fxu(fx_jit(h >> 8, kStrandEndJitMm));
-    s0[1] += fxu(fx_jit(h >> 13, kStrandEndJitMm));
-    e0[0] += fxu(fx_jit(h >> 18, kStrandEndJitMm));
-    e0[1] += fxu(fx_jit(h >> 23, kStrandEndJitMm));
-    bolt_path(s0, e0, kBoltSegs, phase * 3u + static_cast<uint32_t>(i),
-              kBoltSeed + static_cast<uint32_t>(i) * 0x9E37u, pts, kStrandJitterMm);
-    // constant presence with a per-frame flicker — a buzz, not a strobe
-    const uint32_t hf = fx_hash(kBoltSeed ^ 0xF11Cu, frame, static_cast<uint32_t>(i));
-    // pass 4 (R4): the brightness FLOOR is raised -- the median frame must
-    // read as lightning, not glitter (the review's own sampling law)
-    const int flick = 950 + static_cast<int>(hf % 130u);
-    bolt_stamp(out, pts, kBoltSegs, kBoltCoreGainPm * flick / 1000,
-               kBoltHaloGainPm * flick / 1000);
+    const FreeLightningPath path = free_lightning_path(frame, slot, keys, i, A);
+    if (i == 0)
+      for (int k = 0; k < 3; ++k) {
+        flow_s[k] = path.start[k];
+        flow_e[k] = path.end[k];
+      }
+    if (trace != nullptr) {
+      for (int p = 0; p <= kBoltSegs; ++p) {
+        const int id = i * (kBoltSegs + 1) + p;
+        for (int k = 0; k < 3; ++k)
+          trace->free_point[id][k] = path.pts[p][k];
+      }
+      trace->free_point_count = (i + 1) * (kBoltSegs + 1);
+    }
+    const int32_t core_gain =
+        kBoltCoreGainPm * path.flick_pm / 1000 * gain_pm / 1000;
+    const int32_t halo_gain =
+        kBoltHaloGainPm * path.flick_pm / 1000 * gain_pm / 1000;
+    if (trace != nullptr && i < kFxTraceMaxStrands) {
+      const int count = path_stamp_count(path.pts, kBoltSegs, kBoltStampMm, 24);
+      trace->free_strand_stamp_count[i][0] = count;
+      trace->free_strand_stamp_count[i][1] = count;
+      constexpr int kMaxCount = kBoltSegs * 24;
+      trace->free_strand_energy_pm[i][0] =
+          stamp_energy_pm(count, halo_gain, kBoltHaloRPx,
+                          kMaxCount, 1200, kBoltHaloRPx);
+      trace->free_strand_energy_pm[i][1] =
+          stamp_energy_pm(count, core_gain, kBoltCoreRPx,
+                          kMaxCount, 1200, kBoltCoreRPx);
+    }
+    bolt_stamp(out, path.pts, kBoltSegs, core_gain, halo_gain);
   }
-  // pass 4 (R4): the SURGE MOTES -- the retired strands' energy, flowing
-  // along the live strand's path and bursting at its ends. Positions are
-  // re-derived from the same bolt path (deterministic; the path is the
-  // rig-anchored diameter), so the surge follows every re-hash.
-  {
-    const uint32_t h0 = fx_hash(kBoltSeed, phase, 0x51A0u);
-    const uint32_t ang = h0 & 0xFFFFu;
-    const int32_t half = fxu(kStrandSpanMm / 2);
-    const int32_t dx = static_cast<int32_t>((static_cast<int64_t>(half) * fx_cos16(ang)) >> 16);
-    const int32_t dy = static_cast<int32_t>((static_cast<int64_t>(half) * fx_sin16(ang)) >> 16);
-    int32_t s0[3] = {A.ring[0] + dx, A.ring[1] + dy, A.ring[2]};
-    int32_t e0[3] = {A.ring[0] - dx, A.ring[1] - dy, A.ring[2]};
-    for (int m = 0; m < kSurgeMotes; ++m) {
-      const uint32_t hm = fx_hash(0x5069u, static_cast<uint32_t>(m), 0x11u);
-      const int32_t t = static_cast<int32_t>(
-          ((frame + hm % 97u) % static_cast<uint32_t>(kSurgeFlowFrames)) * 1000 /
-          static_cast<uint32_t>(kSurgeFlowFrames));
-      int32_t q[3];
-      for (int k = 0; k < 3; ++k) q[k] = lerp32(s0[k], e0[k], t, 1000);
-      q[0] += fxu(fx_jit(hm >> 3, 90));
-      q[1] += fxu(fx_jit(hm >> 9, 90));
-      mana_push(out, q[0], q[1], q[2], kSurgeRPx, kRampCyan, kSurgeGainPm, true, false);
-      mana_push(out, q[0], q[1], q[2], kSurgeRPx * 55 / 100, kRampCyan, 1000, true,
-                false, /*opaque=*/true);
+
+  // Attached surge motes ping-pong along the continuously morphing primary
+  // strand. The eased reversal is position-continuous and the clock is periodic
+  // over the clip, so no mote teleports from one endpoint to the other at wrap.
+  const uint32_t total = static_cast<uint32_t>(keys > 1 ? keys * 2 : 2);
+  const uint32_t flow_cycles = std::max<uint32_t>(1u, total / kSurgeFlowFrames);
+  for (int m = 0; m < kSurgeMotes; ++m) {
+    const uint32_t hm = fx_hash(0x5069u ^ slot, static_cast<uint32_t>(m), 0x11u);
+    const uint32_t q = static_cast<uint32_t>(
+        (static_cast<uint64_t>(frame % total) * flow_cycles * 65536u) / total) +
+        (hm & 0xFFFFu);
+    const uint32_t cyc = q & 0xFFFFu;
+    const uint32_t tri = cyc < 32768u ? cyc * 2u : (65535u - cyc) * 2u;
+    const int32_t t = fold_ease(static_cast<int32_t>(
+        static_cast<uint64_t>(tri) * 1000u / 65535u));
+    int32_t p[3];
+    for (int k = 0; k < 3; ++k) p[k] = lerp32(flow_s[k], flow_e[k], t, 1000);
+    p[0] += fxu(fx_jit(hm >> 3, 90));
+    p[1] += fxu(fx_jit(hm >> 9, 90));
+    if (g_u02_fx_continuity_fault == FxContinuityFault::kSurgeReseed) {
+      const uint32_t rh = fx_hash(frame / 2u, static_cast<uint32_t>(m), 0x5069u);
+      p[0] += fxu(fx_jit(rh, 420));
+      p[1] += fxu(fx_jit(rh >> 9, 420));
+      p[2] += fxu(fx_jit(rh >> 17, 420));
     }
-    // the endpoint bursts breathe on the re-hash cadence
-    const int32_t bt = static_cast<int32_t>(frame % static_cast<uint32_t>(kBoltRehashFrames));
-    const int32_t br = kSurgeBurstRPx - bt;
-    if (br > 3) {
-      mana_push(out, s0[0], s0[1], s0[2], br, kRampCyan, kSurgeBurstGainPm, true, false);
-      mana_push(out, e0[0], e0[1], e0[2], br, kRampCyan, kSurgeBurstGainPm, true, false);
+    int32_t visibility_pm = gain_pm;
+    if (g_u02_fx_continuity_fault == FxContinuityFault::kMoteVisibilityPop &&
+        m == 0 && (frame & 1u) == 0u)
+      visibility_pm = 0;
+    if (trace != nullptr) {
+      trace->surge_mote_count = kSurgeMotes;
+      trace->surge_mote_role[m] = 2u;
+      trace->surge_mote_visibility_pm[m] = visibility_pm;
+      for (int k = 0; k < 3; ++k) trace->surge_mote_position[m][k] = p[k];
     }
+    if (visibility_pm <= 0) continue;
+    mana_push(out, p[0], p[1], p[2], kSurgeRPx, kRampCyan,
+              kSurgeGainPm * visibility_pm / 1000, true, false);
+    mana_push(out, p[0], p[1], p[2], kSurgeRPx * 55 / 100,
+              kRampCyan, visibility_pm, true, false, /*opaque=*/true);
   }
-  // a small anamorphic glint at the pocket centre on each re-hash frame
-  if (frame % kBoltRehashFrames == 0) {
-    for (int i = -2; i <= 2; ++i) {
-      const int32_t r = 6 - (i < 0 ? -i : i) * 2;
-      lightning_push(out, A.ring[0] + fxu(i * kStreakSpanPx * 25 / 24), A.ring[1],
-                     A.ring[2], r, kRampWhite, kStreakGainPm / 2, false);
-    }
+
+  // Endpoint energy and centre glint breathe continuously instead of appearing
+  // for one re-hash frame and vanishing on the next.
+  const uint32_t total_cycles = std::max<uint32_t>(1u, total / kBoltMorphFrames);
+  const uint32_t pulse_q = static_cast<uint32_t>(
+      static_cast<uint64_t>(frame % total) * total_cycles * 65536u / total);
+  const int32_t pulse = (65536 + fx_cos16(pulse_q)) / 2;
+  const int32_t burst_r = 3 + static_cast<int32_t>(
+      (static_cast<int64_t>(kSurgeBurstRPx - 3) * pulse) >> 16);
+  mana_push(out, flow_s[0], flow_s[1], flow_s[2], burst_r, kRampCyan,
+            kSurgeBurstGainPm * gain_pm / 1000, true, false);
+  mana_push(out, flow_e[0], flow_e[1], flow_e[2], burst_r, kRampCyan,
+            kSurgeBurstGainPm * gain_pm / 1000, true, false);
+  const int glint_gain =
+      kStreakGainPm * (650 + 350 * pulse / 65536) / 1000 * gain_pm / 1000;
+  for (int i = -2; i <= 2; ++i) {
+    const int32_t r = 6 - (i < 0 ? -i : i) * 2;
+    lightning_push(out, A.ring[0] + fxu(i * kStreakSpanPx * 25 / 24),
+                   A.ring[1], A.ring[2], r, kRampWhite, glint_gain / 2, false);
   }
 }
 
@@ -1951,11 +2259,13 @@ inline void mana_bullets(uint32_t frame, const FxAnchors& A, uint8_t ramp,
 // above the fold's ordinary draw threshold: the area-derived coherence is
 // measuring the ANTENNA's pocket, which is not where the thrown ring is.
 constexpr int32_t kLassoCohPm = 1000;
-// A dying conduit drops the lightning STRAND at this life level rather than
-// fading it -- a bolt at low strength reads as a glitch, not as an ebb.
+// Historical cutoff retained for receipt compatibility; Direction 18 replaces
+// its binary owner with the continuous fold-life gain in mana_fill.
 constexpr int32_t kFoldLightningCutPm = 620;
 
 constexpr int kStencilPts = 18;
+static_assert(kStencilPts == kFxTraceStencilPts,
+              "FX continuity trace must cover every authored stencil station");
 // Stencil ids, for readability: 0 RING, 1 STAR, 2 BAR, 3 CRESCENT,
 // 4 TRIANGLE, 5 S-CURL. Moved here from the lane-only lab header by pass 8,
 // because the shipping edge (Direction 7 §2) needs them and the shipping path
@@ -1988,6 +2298,22 @@ constexpr uint8_t kShBolt = 6, kShCoil = 7, kShCross = 8;
 // lightning to change more and have more shapes while preserving the approved
 // swirl. These add vocabulary; they do not replace either curl.
 constexpr uint8_t kShDiamond = 9, kShInfinity = 10, kShHeart = 11;
+// Direction 18: HEART enumerates its semantic outline opposite the global
+// persistent-station order. A canonical per-shape map (not a pair-local map)
+// keeps each ID on the same HEART station after a morph completes; otherwise the
+// last 99.8% morph sample hands to a differently indexed stable HEART and pops.
+// Shift 15 is the first native-review candidate (14 remains the named rung).
+constexpr int kStarHeartStationShift = 15;
+inline int g_u02_star_heart_station_shift = -1;
+inline int fold_canonical_station(uint8_t shape, int station) {
+  if (shape != kShHeart) return station;
+  const int shift = g_u02_star_heart_station_shift >= 0
+                        ? g_u02_star_heart_station_shift
+                        : kStarHeartStationShift;
+  int mapped = (shift - station) % kStencilPts;
+  if (mapped < 0) mapped += kStencilPts;
+  return mapped;
+}
 // THE ONE AUTHORITY ON HOW MANY FIGURES EXIST.
 //
 // kFoldShapeCount -- the picker modulus in manafold_clips.h -- must match this
@@ -2180,15 +2506,16 @@ inline bool fold_edge_link(uint8_t shape, int i) {
   }
 }
 
-inline void fold_mvc(int32_t pu, int32_t pv, uint16_t w[6]) {
+inline void fold_mvc(int32_t pu, int32_t pv, int32_t w[6]) {
   const int32_t cu = kStencilCentreUMm, cv = kStencilCentreVMm;
   for (int shrink = 0; shrink < 12; ++shrink) {
-    int64_t d[6], dx[6], dy[6];
+    int64_t d[6], dx[6], dy[6];  // distance is Q12 mm
     for (int i = 0; i < 6; ++i) {
       dx[i] = kFoldAnchorRestMm[i][0] - pu;
       dy[i] = kFoldAnchorRestMm[i][1] - pv;
-      d[i] = isqrt64(dx[i] * dx[i] + dy[i] * dy[i]);
-      if (d[i] < 2) {  // on an anchor: all weight there
+      const int64_t d2 = dx[i] * dx[i] + dy[i] * dy[i];
+      d[i] = isqrt64(d2 << 24);
+      if (d[i] < (2LL << 12)) {  // on an anchor: all weight there
         for (int k = 0; k < 6; ++k) w[k] = 0;
         w[i] = 4096;
         return;
@@ -2204,7 +2531,11 @@ inline void fold_mvc(int32_t pu, int32_t pv, uint16_t w[6]) {
         outside = true;
         break;
       }
-      t[i] = ((d[i] * d[j] - dot) << 12) / cross;  // tan(half angle), Q12
+      // tan(half angle), Q12. Distances retain 12 fractional bits so the
+      // Cauchy numerator cannot lose a small interior weight to millimetre
+      // truncation (the old -4 became uint16_t 65532 at HEART station 1).
+      const int64_t numerator_q24 = d[i] * d[j] - (dot << 24);
+      t[i] = numerator_q24 / (cross << 12);
     }
     if (outside) {
       pu = cu + (pu - cu) * 9 / 10;
@@ -2214,14 +2545,24 @@ inline void fold_mvc(int32_t pu, int32_t pv, uint16_t w[6]) {
     int64_t wsum = 0, wq[6];
     for (int i = 0; i < 6; ++i) {
       const int h = (i + 5) % 6;
-      wq[i] = ((t[h] + t[i]) << 12) / d[i];
+      wq[i] = ((t[h] + t[i]) << 24) / d[i];
       wsum += wq[i];
     }
-    for (int i = 0; i < 6; ++i)
-      w[i] = static_cast<uint16_t>(wsum > 0 ? (wq[i] * 4096) / wsum : 682);
+    if (wsum <= 0) break;
+    int sum_q12 = 0, strongest = 0;
+    for (int i = 0; i < 6; ++i) {
+      w[i] = static_cast<int32_t>((wq[i] * 4096) / wsum);
+      sum_q12 += w[i];
+      if (wq[i] > wq[strongest]) strongest = i;
+    }
+    // Integer division may leave a few Q12 units. Preserve affine unity exactly
+    // on the strongest coordinate; signed storage keeps any sub-unit numerical
+    // sliver signed instead of wrapping it into a dominant positive weight.
+    w[strongest] += 4096 - sum_q12;
     return;
   }
-  for (int k = 0; k < 6; ++k) w[k] = 682;  // degenerate: centroid-ish
+  for (int k = 0; k < 6; ++k) w[k] = 682;
+  w[0] += 4;  // exact Q12 unity in the degenerate centroid fallback
 }
 
 /** The per-mote weight tables: [shape][station] -> Q12 weights over the six
@@ -2230,7 +2571,7 @@ struct FoldWeights {
   // [shape][station] -> Q12 weights over the SIX ANCHORS. The two sixes used
   // to look like the same number and were not: the first is the figure count
   // and the second is the hexagon's corner count. Only the first one moved.
-  uint16_t w[kFoldStencilCount][kStencilPts][6];
+  int32_t w[kFoldStencilCount][kStencilPts][6];
 };
 // The picker's modulus must never outrun the table it indexes: kFoldShapeCount
 // lives in manafold_clips.h and kFoldStencilCount here, and a mismatch in this
@@ -2251,6 +2592,13 @@ inline const FoldWeights& fold_weights() {
         const int32_t pv = kStencilCentreVMm +
             static_cast<int32_t>(st[sh][i].v_pm) * kStencilScaleMm / 1000;
         fold_mvc(pu, pv, fw.w[sh][i]);
+        if (g_u02_fx_continuity_fault == FxContinuityFault::kWeightWrap &&
+            sh == kShHeart && i == 1) {
+          // Committed mutant of the shipped defect: a small negative Q12 weight
+          // stored in uint16_t became 65532 and threw the figure tens of metres.
+          static constexpr int32_t kWrapped[6] = {65532, 2008, 2069, 5, 10, 6};
+          for (int k = 0; k < 6; ++k) fw.w[sh][i][k] = kWrapped[k];
+        }
       }
     built = true;
   }
@@ -2264,13 +2612,19 @@ struct FoldState {
   bool init = false;
   int32_t prev_rel[6][3];   // anchors relative to the body, fx16
   int32_t knead_smooth = 0; // smoothed anchor speed, mm/frame (~4-frame EMA)
+  int32_t knead_visible = 0; // slower visible authority; antenna spikes cannot amplify
   int32_t knead_slow = 0;   // the slow baseline (~64-frame EMA): the clip's
                             // own resting wobble, which must NOT read as
                             // kneading (iter 3 -- raw speed saturated at rest)
-  int32_t dragbuf[8][3];    // rel hinge-B velocity ring (fx16/frame)
+  int32_t dragbuf[8][3];    // smoothed rel hinge-B velocity ring (fx16/frame)
+  int32_t drag_smooth[3]{}; // C1 velocity state; removes carrier jerk amplification
   uint32_t drag_idx = 0;
   int32_t area_ema_pm = 1000;  // ~16-frame smoothed area: the wobble's own
                                // 46/102-frame waves must not flap coherence
+  int32_t coherence_visible = kCohBasePm;  // slower visible authority; returns
+                                           // to this value at the loop seam
+  uint32_t last_frame = 0xFFFFFFFFu;
+  uint32_t repeated_final_ticks = 0;
 };
 
 // Diagnostic gates (env, default off): U02_FOLD_LOCK=1 forces full
@@ -2376,13 +2730,91 @@ inline int g_u02_fold_freeze = 0;
 // not pop from "trails" to "no trails". 1000 everywhere else.
 inline int32_t g_u02_fold_release_pm = 1000;
 
+inline int32_t fold_edge_lit_pm(int32_t coherence_pm, int32_t life_pm) {
+  if (life_pm <= 0) return 0;
+  if (life_pm > 1000) life_pm = 1000;
+  int32_t lit = 0;
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kShapeBlackout) {
+    if (coherence_pm < kFoldEdgeCohMinPm) return 0;
+    lit = (coherence_pm - kFoldEdgeCohMinPm) * 1000 /
+          (1000 - kFoldEdgeCohMinPm > 0 ? 1000 - kFoldEdgeCohMinPm : 1);
+  } else {
+    const int32_t above = coherence_pm > kFoldEdgeCohMinPm
+                              ? (coherence_pm - kFoldEdgeCohMinPm) * 1000 /
+                                    (1000 - kFoldEdgeCohMinPm)
+                              : 0;
+    lit = kFoldEdgePresenceFloorPm +
+          (1000 - kFoldEdgePresenceFloorPm) * above / 1000;
+  }
+  const int32_t scaled = lit * life_pm / 1000;
+  return scaled == 0 && lit > 0 && life_pm > 0 ? 1 : scaled;
+}
+
+inline uint8_t persistent_mote_role(int mote_id) {
+  return mote_id < kMoteCount - kWanderCount ? 0u : 1u;
+}
+
+inline int continuity_mote_count(uint32_t frame, int normal_count) {
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kMoteCountPop &&
+      ((frame / 4u) & 1u) != 0u)
+    return normal_count > 0 ? normal_count - 1 : 0;
+  return normal_count;
+}
+
+inline uint8_t continuity_mote_role(uint32_t frame, int mote_id,
+                                    uint8_t normal_role) {
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kMoteRolePop &&
+      mote_id == 0 && ((frame / 4u) & 1u) != 0u)
+    return normal_role == 0u ? 1u : 0u;
+  return normal_role;
+}
+
+inline int32_t persistent_mote_visibility_pm(int32_t crowd_pm,
+                                             int32_t garnish_pm) {
+  if (crowd_pm < 0) crowd_pm = 0;
+  if (crowd_pm > 1000) crowd_pm = 1000;
+  if (garnish_pm < 0) garnish_pm = 0;
+  if (garnish_pm > 1000) garnish_pm = 1000;
+  const int32_t vis = crowd_pm * garnish_pm / 1000;
+  return vis == 0 && crowd_pm > 0 && garnish_pm > 0 ? 1 : vis;
+}
+
+inline void mote_knead_offset(uint32_t frame, int keys, int mote_id,
+                              int32_t amplitude_mm, int32_t out[3]) {
+  if (amplitude_mm <= 0) {
+    out[0] = out[1] = out[2] = 0;
+    return;
+  }
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kParticleReseed) {
+    const uint32_t h = fx_hash(frame / 2u, static_cast<uint32_t>(mote_id), 0x177u);
+    out[0] = fxu(fx_jit(h, amplitude_mm));
+    out[1] = fxu(fx_jit(h >> 9, amplitude_mm));
+    out[2] = fxu(fx_jit(h >> 17, amplitude_mm));
+    return;
+  }
+  const uint32_t total = static_cast<uint32_t>(keys > 1 ? keys * 2 : 2);
+  const uint32_t cycles = std::max<uint32_t>(1u, total / kMoteKneadPeriodFrames);
+  const uint32_t h = fx_hash(0x177u, static_cast<uint32_t>(mote_id), 0xA71u);
+  const uint32_t q = static_cast<uint32_t>(
+      static_cast<uint64_t>(frame % total) * cycles * 65536u / total);
+  out[0] = static_cast<int32_t>(
+      (static_cast<int64_t>(fxu(amplitude_mm)) * fx_sin16(q + (h & 0xFFFFu))) >> 16);
+  out[1] = static_cast<int32_t>(
+      (static_cast<int64_t>(fxu(amplitude_mm)) *
+       fx_sin16(q + ((h >> 8) & 0xFFFFu) + 0x5555u)) >> 16);
+  out[2] = static_cast<int32_t>(
+      (static_cast<int64_t>(fxu(amplitude_mm)) *
+       fx_sin16(q + ((h >> 16) & 0xFFFFu) + 0xAAAAu)) >> 16);
+}
+
 /** THE CENTREPIECE: place the folded motes for one conduit. `keys` = the
  *  clip's key count (the shared timeline domain); `crowd_pm` scales the
  *  mote count when several conduits share the frame. Returns the agitation
  *  (0..1000) so the caller can raise the smear feed with it. */
 inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchors& A,
                          FoldState& stfx, uint8_t ramp, int crowd_pm,
-                         std::vector<ManaSplat>& out) {
+                         std::vector<ManaSplat>& out,
+                         FxContinuityTrace* trace = nullptr) {
   const int32_t* anchors[6] = {A.junction_f, A.neck, A.hinge_a,
                                A.hinge_b,    A.hinge_c, A.junction_b};
   // U02_FOLD_FREEZE: substitute the rest layout (body-relative) for the
@@ -2401,14 +2833,23 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   int32_t rel[6][3];
   for (int i = 0; i < 6; ++i)
     for (int k = 0; k < 3; ++k) rel[i][k] = anchors[i][k] - A.body[k];
-  if (frame == 0 || !stfx.init) {
+  if (frame == 0) stfx = FoldState{};
+  const bool repeated_frame = stfx.init && stfx.last_frame == frame;
+  if (!stfx.init) {
     for (int i = 0; i < 6; ++i)
       for (int k = 0; k < 3; ++k) stfx.prev_rel[i][k] = rel[i][k];
     for (auto& v : stfx.dragbuf) v[0] = v[1] = v[2] = 0;
+    stfx.drag_smooth[0] = stfx.drag_smooth[1] = stfx.drag_smooth[2] = 0;
     stfx.knead_smooth = 0;
+    stfx.knead_visible = 0;
     stfx.drag_idx = 0;
     stfx.init = true;
   }
+  if (repeated_frame)
+    ++stfx.repeated_final_ticks;
+  else
+    stfx.repeated_final_ticks = 0;
+  stfx.last_frame = frame;
   // KNEAD: summed anchor speed (mm/frame), smoothed over ~4 frames
   int64_t raw = 0;
   for (int i = 0; i < 6; ++i) {
@@ -2424,15 +2865,28 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   // agitation is the EXCESS over the slow baseline: the resting wobble
   // cancels itself out; only a genuinely faster gesture churns the mana
   const int32_t excess = stfx.knead_smooth - stfx.knead_slow * 12 / 10;
-  const int32_t agit = excess <= 0 ? 0
-                       : excess >= kKneadVelRefMm
-                           ? 1000
-                           : excess * 1000 / kKneadVelRefMm;
-  // DRAG: hinge B's relative velocity, ring-buffered for the per-mote lag
+  const int32_t raw_agit = excess <= 0 ? 0
+                           : excess >= kKneadVelRefMm
+                                 ? 1000
+                                 : excess * 1000 / kKneadVelRefMm;
+  // Direction 18: carrier acceleration may be expressive, but attached effects
+  // must not amplify it. A slower persistent authority changes continuously and
+  // retains the knead rather than clipping the amplitude.
+  const int32_t agit_delta = raw_agit - stfx.knead_visible;
+  int32_t agit_step = agit_delta / kKneadVisualSmoothFrames;
+  if (agit_step == 0 && agit_delta != 0) agit_step = agit_delta > 0 ? 1 : -1;
+  stfx.knead_visible += agit_step;
+  const int32_t agit = stfx.knead_visible;
+  // DRAG: hinge B's relative velocity, C1-smoothed before entering the lag
+  // buffer. Raw acceleration spikes otherwise get multiplied by 2.6x and make
+  // the particle field look more violent than the antenna that carries it.
   {
-    stfx.dragbuf[stfx.drag_idx & 7][0] = rel[3][0] - stfx.prev_rel[3][0];
-    stfx.dragbuf[stfx.drag_idx & 7][1] = rel[3][1] - stfx.prev_rel[3][1];
-    stfx.dragbuf[stfx.drag_idx & 7][2] = rel[3][2] - stfx.prev_rel[3][2];
+    for (int k = 0; k < 3; ++k) {
+      const int32_t raw_v = rel[3][k] - stfx.prev_rel[3][k];
+      stfx.drag_smooth[k] +=
+          (raw_v - stfx.drag_smooth[k]) / kDragVelocitySmoothFrames;
+      stfx.dragbuf[stfx.drag_idx & 7][k] = stfx.drag_smooth[k];
+    }
     ++stfx.drag_idx;
   }
   for (int i = 0; i < 6; ++i)
@@ -2487,18 +2941,68 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   if (g_u02_fold_lock) coh = 1000;
   // ---- the shared timeline (shape choice + morph; key = frame / 2) -------
   FoldPhase ph = fold_phase(slot, keys, static_cast<int32_t>(frame) * 8);
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kMorphReverse &&
+      ph.shape_from != ph.shape_to)
+    ph.morph_pm = 1000 - ph.morph_pm;
   // PASS 12 / WAVE 2b (Direction 9 SS11.2): "the mana must respond -- a dead
   // conduit should not keep folding shapes." fold_life_pm() is 1000 for every
   // slot in the bank except the two deaths, so this scales nothing anywhere
   // else; on a death it takes the coherence, the agitation and the mote count
   // down together and then stops the fold outright at the settle key.
   const int32_t life_pm = fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8);
-  if (life_pm <= 0) return 0;  // eternal rest: no shape, no motes, no edge
+  const int mote_domain_count = continuity_mote_count(frame, kMoteCount);
+  if (trace != nullptr) {
+    trace->life_pm = life_pm;
+    trace->fold = ph;
+    trace->fold_active = life_pm > 0;
+    trace->mote_count = mote_domain_count;
+    for (int m = 0; m < mote_domain_count; ++m) {
+      trace->mote_role[m] = continuity_mote_role(
+          frame, m, persistent_mote_role(m));
+      trace->mote_visibility_pm[m] = 0;
+    }
+  }
+  if (life_pm <= 0) return 0;  // eternal rest: prior fade reaches exact zero
   if (life_pm < 1000) {
     coh = coh * life_pm / 1000;
     crowd_pm = crowd_pm * life_pm / 1000;
     ph.agit_pm = ph.agit_pm * life_pm / 1000;
     ph.amp_pm = ph.amp_pm * life_pm / 1000;
+  }
+  // The fold's stateful area filter is not intrinsically loop-periodic. Fade its
+  // visible authority to the named rest coherence on the opening drift/release
+  // envelope, so the encoded last frame and freshly initialized frame zero own
+  // the same layer gains. The fault restores the rejected raw-EMA handoff.
+  int32_t coherence_target = coh;
+  if (g_u02_fx_continuity_fault != FxContinuityFault::kBrightnessSeam) {
+    const int32_t den = 1000 - kDriftAmpFloorPm;
+    int32_t authority = den > 0
+                            ? (ph.amp_pm - kDriftAmpFloorPm) * 1000 / den
+                            : 1000;
+    if (authority < 0) authority = 0;
+    if (authority > 1000) authority = 1000;
+    coherence_target =
+        lerp32(kCohBasePm, coh, motion_c2_ease(authority), 1000);
+    const int32_t delta = coherence_target - stfx.coherence_visible;
+    int32_t step = delta / kCoherenceVisualSmoothFrames;
+    if (step == 0 && delta != 0) step = delta > 0 ? 1 : -1;
+    stfx.coherence_visible += step;
+    if (ph.seg == kSegRelease && ph.morph_pm >= 1000)
+      stfx.coherence_visible = kCohBasePm;
+    coh = stfx.coherence_visible;
+  } else {
+    // Positive control: raw filtered area authority is allowed to cross the
+    // loop boundary without the C2 seam handoff.
+    stfx.coherence_visible = coh;
+  }
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kFinalDwell &&
+      repeated_frame) {
+    // Positive control for held playback: final key/midpoint remain exact, but
+    // stateful brightness alternates after the animation frame clamps.
+    stfx.coherence_visible = (stfx.repeated_final_ticks & 1u) != 0u
+                                 ? kFoldEdgePresenceFloorPm
+                                 : 1000;
+    coh = stfx.coherence_visible;
   }
   // PASS 12 / WAVE 2b (Direction 9 SS15): THE MANA LASSO. Not a new primitive
   // -- the throw PINS the fold's figure to stencil 0, THE RING, and then
@@ -2508,14 +3012,12 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   // prop. lasso_at() is inert for every other slot.
   const LassoState lasso = lasso_at(slot, keys, static_cast<int32_t>(frame) * 8);
   if (lasso.active) {
-    ph.shape_from = 0;  // RING
-    ph.shape_to = 0;
-    ph.morph_pm = 0;
-    // a thrown loop must READ as a loop for the whole flight, so the edge is
-    // held above its draw threshold rather than left to the area-derived
-    // coherence, which is measuring the ANTENNA and not the flying ring
-    if (coh < kLassoCohPm) coh = kLassoCohPm;
+    // Shape ownership and its coherence floor share the same Q4 C2 handoff;
+    // enabling the lasso must not brighten the whole figure in one frame.
+    const int32_t lasso_coh = coh < kLassoCohPm ? kLassoCohPm : coh;
+    coh = lerp32(coh, lasso_coh, lasso.shape_mix_pm, 1000);
   }
+  if (trace != nullptr) trace->coherence_pm = coh;
   // PASS 12 / DIRECTION 13 DIAGNOSTIC (default off): U02_FOLD_SHAPE=<id>
   // pins any figure so every authored stencil can be judged through the
   // shipping morph, edge, depth and knead path.
@@ -2524,6 +3026,10 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     ph.shape_to = static_cast<uint8_t>(g_u02_fold_shape_pin);
   }
   g_u02_fold_release_pm = ph.seg == kSegRelease ? ph.amp_pm : 1000;
+  if (trace != nullptr) {
+    trace->fold = ph;
+    trace->lasso_mix_pm = lasso.shape_mix_pm;
+  }
   const FoldWeights& fw = fold_weights();
   if (g_u02_fold_debug)
     std::fprintf(stderr,
@@ -2553,21 +3059,31 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   // read as the shape moving toward the camera, not as being squeezed. Driven
   // by `agit`, the same signal the mote jitter uses, so a shape only goes soft
   // while the creature is actually kneading it.
-  const uint32_t rot_ph = frame;
+  const auto periodic_phase = [&](int period, uint32_t offset = 0u) {
+    if (g_u02_fx_continuity_fault == FxContinuityFault::kLoopSeamSnap)
+      return frame * 65536u / static_cast<uint32_t>(period) + offset;
+    return fx_clip_phase(frame, keys, period, offset);
+  };
+  const int32_t release_motion_pm =
+      ph.seg == kSegRelease ? 1000 - ph.morph_pm : 1000;
   const int32_t rx_a16 = static_cast<int32_t>(
       (static_cast<int64_t>(kStencilRotXAmpA16) *
-       fx_sin16(rot_ph * 65536u / static_cast<uint32_t>(kStencilRotXFrames))) >> 16);
+       fx_sin16(periodic_phase(kStencilRotXFrames))) >> 16);
   const int32_t rz_a16 = static_cast<int32_t>(
       (static_cast<int64_t>(kStencilRotZAmpA16) *
-       fx_sin16(rot_ph * 65536u / static_cast<uint32_t>(kStencilRotZFrames) + 0x3000u)) >> 16);
-  const int32_t knead_pm = kStencilKneadAmpPm * agit / 1000;
+       fx_sin16(periodic_phase(kStencilRotZFrames, 0x3000u))) >> 16);
+  const int32_t knead_pm =
+      kStencilKneadAmpPm * agit / 1000 * release_motion_pm / 1000;
+  if (trace != nullptr) {
+    trace->agitation_pm = agit;
+    trace->knead_pm = knead_pm;
+  }
   const auto place = [&](int32_t P[3]) {
     int32_t o[3] = {P[0] - A.ring[0], P[1] - A.ring[1], P[2] - A.ring[2]};
     if (knead_pm != 0) {
       const int32_t kq = static_cast<int32_t>(
           (static_cast<int64_t>(knead_pm) *
-           fx_sin16(rot_ph * 65536u /
-                    static_cast<uint32_t>(kStencilKneadFrames))) >> 16);
+           fx_sin16(periodic_phase(kStencilKneadFrames))) >> 16);
       o[0] = static_cast<int32_t>((static_cast<int64_t>(o[0]) * (1000 + kq)) / 1000);
       o[1] = static_cast<int32_t>((static_cast<int64_t>(o[1]) * (1000 - kq)) / 1000);
     }
@@ -2589,7 +3105,12 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     if (!lasso.active) {
       turn(o[1], o[2], rx_a16);            // X
       turn(o[0], o[1], rz_a16);            // Z: slow malleable sway
-      turn(o[0], o[1], ph.turn_a16);        // D13: occasional complete turn
+      const int32_t turn_x = o[0], turn_y = o[1];
+      turn(o[0], o[1], ph.turn_a16);          // D13: occasional complete turn
+      const int32_t turn_visibility_pm =
+          static_cast<int32_t>((static_cast<int64_t>(life_pm) * life_pm) / 1000);
+      o[0] = lerp32(turn_x, o[0], turn_visibility_pm, 1000);
+      o[1] = lerp32(turn_y, o[1], turn_visibility_pm, 1000);
     }
     // THE LASSO (D9 SS15): the ring OPENS as it flies and CINCHES as it is
     // reeled home, and it spins about the throw axis on the way. Applied here,
@@ -2597,9 +3118,14 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // authored throw. Direction 13 intentionally leaves the particle field out
     // of this transform.
     if (lasso.active) {
+      const int32_t scale_pm =
+          lerp32(1000, lasso.scale_pm, lasso.shape_mix_pm, 1000);
       for (int li = 0; li < 3; ++li)
-        o[li] = static_cast<int32_t>((static_cast<int64_t>(o[li]) * lasso.scale_pm) / 1000);
-      turn(o[0], o[1], lasso.spin_a16);
+        o[li] = static_cast<int32_t>(
+            (static_cast<int64_t>(o[li]) * scale_pm) / 1000);
+      const int32_t spin = static_cast<int32_t>(
+          (static_cast<int64_t>(lasso.spin_a16) * lasso.shape_mix_pm) / 1000);
+      turn(o[0], o[1], spin);
     }
     // "Shapes are clipping into the antennae a bit though so you have to switch
     // them about": MOVE THE SHAPES, NOT THE ANTENNAE. One declared offset of
@@ -2614,28 +3140,41 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     P[2] = A.ring[2] + o[2] + fxu(kStencilClearZMm) + fxu(lasso.off_mm[2]);
   };
 
-  // THE EDGE. Drawn only while there IS a shape: below kFoldEdgeCohMinPm the
-  // cloud has dispersed into the standard channel look (S3's drift) and an
-  // outline over it would be a scribble rather than a shape.
-  if (coh >= kFoldEdgeCohMinPm) {
-    const int32_t lit = (coh - kFoldEdgeCohMinPm) * 1000 /
-                        (1000 - kFoldEdgeCohMinPm > 0 ? 1000 - kFoldEdgeCohMinPm : 1);
+  // Direction 18: THE EDGE NEVER DISAPPEARS TO BE REPLACED BY A NEW SHAPE.
+  // Coherence still controls emphasis, but every station and topology edge
+  // keeps morphing at a named low floor through drift and the loop handoff.
+  {
+    const int32_t lit = fold_edge_lit_pm(coh, life_pm);
+    if (trace != nullptr) trace->edge_lit_pm = lit;
+    int64_t trace_shimmer_sum[kStencilPts]{};
+    int32_t trace_shimmer_count[kStencilPts]{};
     int32_t S[kStencilPts][3];
     for (int i = 0; i < kStencilPts; ++i) {
-      const uint16_t* wf = fw.w[ph.shape_from][i];
-      const uint16_t* wt = fw.w[ph.shape_to][i];
+      const int source_station = fold_canonical_station(ph.shape_from, i);
+      const int dest_station = fold_canonical_station(ph.shape_to, i);
+      const int32_t* wf = fw.w[ph.shape_from][source_station];
+      const int32_t* wt = fw.w[ph.shape_to][dest_station];
       for (int k = 0; k < 3; ++k) {
-        int64_t af = 0, at = 0;
+        int64_t af = 0, at = 0, ar = 0;
+        const int32_t* wr = fw.w[kShRing][i];
         for (int j = 0; j < 6; ++j) {
           af += static_cast<int64_t>(wf[j]) * anchors[j][k];
           at += static_cast<int64_t>(wt[j]) * anchors[j][k];
+          ar += static_cast<int64_t>(wr[j]) * anchors[j][k];
         }
-        S[i][k] = lerp32(static_cast<int32_t>(af >> 12),
-                         static_cast<int32_t>(at >> 12), ph.morph_pm, 1000);
+        const int32_t ordinary =
+            lerp32(static_cast<int32_t>(af >> 12),
+                   static_cast<int32_t>(at >> 12), ph.morph_pm, 1000);
+        S[i][k] = lerp32(ordinary, static_cast<int32_t>(ar >> 12),
+                         lasso.shape_mix_pm, 1000);
       }
       place(S[i]);
+      if (trace != nullptr)
+        for (int k = 0; k < 3; ++k) trace->fold_station[i][k] = S[i][k];
     }
-    const uint32_t ph_e = frame / 3u;  // the outline BUZZES, it does not crawl
+    // The outline's jagged stations morph continuously on the clip-periodic
+    // lightning clock. The stencil itself already morphs below; both layers now
+    // change state rather than replacing a whole path every third frame.
     // OWNER DIRECTION 10: the edge is drawn as LIGHTNING -- a white hot line
     // wrapped in a deep dark blue -- or, with kFoldStrandOn false, as pass
     // 13's dim aqua outline. Read once per call so a rung sweep cannot
@@ -2679,29 +3218,70 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     // without popping BAR/CROSS seams or closed loops on at the midpoint.
     for (int pass = 0; pass < passes; ++pass)
     for (int i = 0; i < kStencilPts; ++i) {
-      const bool source_link = fold_edge_link(ph.shape_from, i);
-      const bool dest_link = fold_edge_link(ph.shape_to, i);
-      if (!source_link && !dest_link) continue;
-      const int edge_pm = source_link == dest_link
-                              ? 1000
-                              : (source_link ? 1000 - ph.morph_pm : ph.morph_pm);
+      const bool source_link = fold_edge_link(
+          ph.shape_from, fold_canonical_station(ph.shape_from, i));
+      const bool dest_link = fold_edge_link(
+          ph.shape_to, fold_canonical_station(ph.shape_to, i));
+      const int ordinary_edge_pm = source_link == dest_link
+                                       ? (source_link ? 1000 : 0)
+                                       : (source_link ? 1000 - ph.morph_pm
+                                                      : ph.morph_pm);
+      const int ring_edge_pm = fold_edge_link(kShRing, i) ? 1000 : 0;
+      const int edge_pm =
+          lerp32(ordinary_edge_pm, ring_edge_pm, lasso.shape_mix_pm, 1000);
       if (edge_pm <= 0) continue;
+      const int32_t presence_pm = lit * edge_pm / 1000;
+      if (trace != nullptr) {
+        trace->edge_presence_pm[i] = presence_pm;
+        trace->edge_layer_gain_pm[i][0] =
+            (strand ? dark_gain : kFoldEdgeHaloGainPm) * presence_pm / 1000;
+        trace->edge_layer_gain_pm[i][2] =
+            (strand ? core_gain : kFoldEdgeCoreGainPm) * presence_pm / 1000;
+        trace->edge_energy_pm += presence_pm;
+      }
       const int j = (i + 1) % kStencilPts;
-      bolt_path(S[i], S[j], kFoldEdgeSegs, ph_e, kBoltSeed ^ (0x5EDu * (i + 1)),
-                pts, kFoldEdgeJitterMm);
+      bolt_path_morph(S[i], S[j], kFoldEdgeSegs, frame,
+                        slot * 37u + static_cast<uint32_t>(i + 1), keys,
+                        kFoldEdgeMorphFrames,
+                        kBoltSeed ^ (0x5EDu * (i + 1)), pts,
+                        kFoldEdgeJitterMm);
       for (int sgi = 0; sgi < kFoldEdgeSegs; ++sgi) {
-        int64_t dx = (pts[sgi + 1][0] - pts[sgi][0]) >> 16;
-        int64_t dy = (pts[sgi + 1][1] - pts[sgi][1]) >> 16;
-        int64_t dz = (pts[sgi + 1][2] - pts[sgi][2]) >> 16;
-        const int64_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy,
-                      adz = dz < 0 ? -dz : dz;
         // The strand subdivides by COUNT (see kFoldStrandPerSeg); the
         // pass-13 outline keeps its millimetre spacing byte for byte, so
         // ZHAO_U02_STRAND=0 still reproduces the shipped picture exactly.
         int nst = strand ? per_seg
-                         : static_cast<int>((adx + ady + adz) / stamp_mm);
+                         : path_segment_stamp_count(pts[sgi], pts[sgi + 1],
+                                                    stamp_mm, cap_n);
         if (nst < 1) nst = 1;
         if (nst > cap_n) nst = cap_n;
+        if (g_u02_fx_continuity_fault == FxContinuityFault::kStampCountPop &&
+            i == 0 && sgi == 0 && (frame & 1u) == 0u)
+          nst = cap_n;
+        if (trace != nullptr) {
+          const int max_count = kFoldEdgeSegs * cap_n;
+          if (strand) {
+            trace->edge_layer_stamp_count[i][pass] += nst;
+            if (pass == 0)
+              trace->edge_layer_energy_pm[i][0] +=
+                  stamp_energy_pm(nst, dark_gain * presence_pm / 1000, dark_r,
+                                  max_count, 1200, dark_r);
+            else if (pass == 2)
+              trace->edge_layer_energy_pm[i][2] +=
+                  stamp_energy_pm(nst, core_gain * presence_pm / 1000, core_r,
+                                  max_count, 1200, core_r);
+          } else {
+            trace->edge_layer_stamp_count[i][0] += nst;
+            trace->edge_layer_stamp_count[i][2] += nst;
+            trace->edge_layer_energy_pm[i][0] +=
+                stamp_energy_pm(nst, kFoldEdgeHaloGainPm * presence_pm / 1000,
+                                kFoldEdgeHaloRPx, max_count, 1200,
+                                kFoldEdgeHaloRPx);
+            trace->edge_layer_energy_pm[i][2] +=
+                stamp_energy_pm(nst, kFoldEdgeCoreGainPm * presence_pm / 1000,
+                                kFoldEdgeCoreRPx, max_count, 1200,
+                                kFoldEdgeCoreRPx);
+          }
+        }
         for (int t = 0; t < nst; ++t) {
           const int32_t x = lerp32(pts[sgi][0], pts[sgi + 1][0], t, nst);
           const int32_t y = lerp32(pts[sgi][1], pts[sgi + 1][1], t, nst);
@@ -2734,13 +3314,23 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // these pixels -- the crayon-grain lesson is that a variation
               // narrower than what is already moving is not there.
               const uint32_t sh = fx_hash(
-                  kBoltSeed ^ 0x5B1Eu, frame,
+                  kBoltSeed ^ 0x5B1Eu, slot,
                   static_cast<uint32_t>((i * 97 + sgi * 13 + t) | 1));
-              const int span = shim_flick * 2 + 1;
-              const int mod = 1000 - shim_flick +
-                              static_cast<int>(sh % static_cast<uint32_t>(span));
+              const uint32_t shimmer_q =
+                  fx_clip_phase(frame, keys, 19, sh & 0xFFFFu);
+              const int mod = 1000 + static_cast<int>(
+                  (static_cast<int64_t>(shim_flick) * fx_sin16(shimmer_q)) >> 16);
+              const int32_t shimmer_gain_pm =
+                  shim_gain * presence_pm / 1000 * mod / 1000;
+              if (trace != nullptr) {
+                trace_shimmer_sum[i] += shimmer_gain_pm;
+                ++trace_shimmer_count[i];
+                trace->edge_layer_energy_pm[i][1] +=
+                    stamp_energy_pm(1, shimmer_gain_pm, shim_r,
+                                    kFoldEdgeSegs * cap_n, 1200, shim_r);
+              }
               lightning_push(out, x, y, z, shim_r, kRampShimmer,
-                             shim_gain * lit / 1000 * edge_pm / 1000 * mod / 1000, false);
+                             shimmer_gain_pm, false);
             } else {
               // LAYER 3: THE WHITE LINE, over the finished navy AND its
               // shimmer -- the hot centre of the bolt. Additive and depth-
@@ -2761,11 +3351,18 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
             // superseded by Direction 10 above, which gives the white a dark
             // surround the lab's version never had.
             lightning_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
-                           kFoldEdgeCoreGainPm * edge_pm / 1000, false, /*opaque=*/true,
+                           kFoldEdgeCoreGainPm * lit / 1000 * edge_pm / 1000,
+                           false, /*opaque=*/true,
                            /*soft=*/true);
           }
         }
       }
+    }
+    if (trace != nullptr && strand) {
+      for (int i = 0; i < kStencilPts; ++i)
+        if (trace_shimmer_count[i] > 0)
+          trace->edge_layer_gain_pm[i][1] = static_cast<int32_t>(
+              trace_shimmer_sum[i] / trace_shimmer_count[i]);
     }
   }
 
@@ -2779,9 +3376,11 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   // actually looks neat" is an instruction to leave it alone, not to unify it.
   const bool bolt_motes = u02_strand_on();
   const int garnish_pm = u02_mote_garnish_pm();
-  int n_motes = kMoteCount * crowd_pm / 1000;
-  n_motes = n_motes * garnish_pm / 1000;
-  if (n_motes < 6) n_motes = 6;
+  // Direction 18: fixed IDs and permanent roles. Crowd/life/garnish modulate
+  // visibility continuously; they never truncate a population or reclassify an
+  // ID at an integer boundary.
+  const int32_t mote_visibility_pm =
+      persistent_mote_visibility_pm(crowd_pm, garnish_pm);
   // ⚠ THE WANDERERS SCALE WITH THE GARNISH, AND NOT SCALING THEM IS WHY
   //  CUTTING THE MOTE COUNT DID NOT REMOVE THE FLOATING ORBS.
   //
@@ -2804,10 +3403,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   //  they were authored as whatever the cloud size becomes. At least one
   //  survives: D2's "drift off in weird ways" is still in the look, it is
   //  simply not the look any more.
-  int n_wander = kWanderCount * crowd_pm / 1000 * garnish_pm / 1000;
-  if (n_wander < 1) n_wander = 1;
-  if (n_wander > n_motes - 2) n_wander = n_motes - 2 > 1 ? n_motes - 2 : 1;
-  const int n_shape = n_motes - n_wander;
+  const int n_shape = kMoteCount - kWanderCount;
   const int mote_shape_follow_pm = u02_mote_shape_follow_pm();
   // Independent particles keep the effect's world translation (including the
   // Lasso throw) but not its stencil rotation, skew, scale or shape. This is the
@@ -2817,10 +3413,12 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       A.ring[0] + fxu(kStencilClearXMm) + fxu(lasso.off_mm[0]),
       A.ring[1] + fxu(kStencilClearYMm) + fxu(lasso.off_mm[1]),
       A.ring[2] + fxu(kStencilClearZMm) + fxu(lasso.off_mm[2])};
-  for (int m = 0; m < n_motes; ++m) {
+  for (int m = 0; m < mote_domain_count; ++m) {
+    const uint8_t mote_role = continuity_mote_role(
+        frame, m, persistent_mote_role(m));
     const uint32_t hm = fx_hash(0xF01Du, static_cast<uint32_t>(m), 0xA7u);
     int32_t P[3];
-    if (m >= n_shape) {
+    if (mote_role == 1u) {
       // WANDER: slow hashed walks that leave the pocket and curve off oddly
       // (the owner's "drift off in weird ways"); the smear traces them.
       // PASS 5 (loop seam): the walk's two frequencies are quantised to
@@ -2850,7 +3448,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     } else {
       const int stn = m * kStencilPts / (n_shape > 0 ? n_shape : 1);
       const auto bary = [&](uint8_t shape_id, int32_t q[3]) {
-        const uint16_t* wt = fw.w[shape_id][stn];
+        const int32_t* wt = fw.w[shape_id][stn];
         for (int k = 0; k < 3; ++k) {
           int64_t acc = 0;
           for (int i = 0; i < 6; ++i) acc += static_cast<int64_t>(wt[i]) * anchors[i][k];
@@ -2858,14 +3456,31 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         }
       };
       int32_t Pf[3], Pt[3];
-      bary(ph.shape_from, Pf);
-      bary(ph.shape_to, Pt);
+      const int source_stn = fold_canonical_station(ph.shape_from, stn);
+      const int dest_stn = fold_canonical_station(ph.shape_to, stn);
+      const int32_t* wsf = fw.w[ph.shape_from][source_stn];
+      const int32_t* wst = fw.w[ph.shape_to][dest_stn];
+      for (int k = 0; k < 3; ++k) {
+        int64_t af = 0, at = 0;
+        for (int i = 0; i < 6; ++i) {
+          af += static_cast<int64_t>(wsf[i]) * anchors[i][k];
+          at += static_cast<int64_t>(wst[i]) * anchors[i][k];
+        }
+        Pf[k] = static_cast<int32_t>(af >> 12);
+        Pt[k] = static_cast<int32_t>(at >> 12);
+      }
       // per-mote staggered, eased morph (a deterministic path each)
       const int32_t stag = static_cast<int32_t>(hm % 300u);
       int32_t mp = ph.morph_pm <= stag ? 0 : (ph.morph_pm - stag) * 1000 / (1000 - stag);
       mp = fold_ease(mp);
       int32_t Pst[3];
       for (int k = 0; k < 3; ++k) Pst[k] = lerp32(Pf[k], Pt[k], mp, 1000);
+      if (lasso.shape_mix_pm > 0) {
+        int32_t Pring[3];
+        bary(kShRing, Pring);
+        for (int k = 0; k < 3; ++k)
+          Pst[k] = lerp32(Pst[k], Pring[k], lasso.shape_mix_pm, 1000);
+      }
       // final3 control endpoint: the particle is first folded exactly like the
       // lightning. Direction 13 ships the other endpoint below; keeping both in
       // one binary makes the visual comparison attributable.
@@ -2906,13 +3521,14 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
         P[k] = lerp32(independent, folded, mote_shape_follow_pm, 1000);
       }
     }
-    // KNEAD agitation: per-mote jitter that churns with fast gestures
+    // KNEAD agitation: persistent loop-periodic motion per mote. The old
+    // frame/2 rehash teleported every particle on alternate presentation frames.
     if (agit > 0 && !g_u02_fold_lock) {
-      const uint32_t hj = fx_hash(frame / 2u, static_cast<uint32_t>(m), 0x177u);
-      const int32_t jmm = kKneadJitterMm * agit / 1000;
-      P[0] += fxu(fx_jit(hj, jmm));
-      P[1] += fxu(fx_jit(hj >> 9, jmm));
-      P[2] += fxu(fx_jit(hj >> 17, jmm));
+      const int32_t jmm =
+          kKneadJitterMm * agit / 1000 * release_motion_pm / 1000;
+      int32_t jo[3];
+      mote_knead_offset(frame, keys, m, jmm, jo);
+      for (int k = 0; k < 3; ++k) P[k] += jo[k];
     }
     // DRAG: the lagged pull along the antenna's sweep (iron filings).
     // PASS 5: clamped by MAGNITUDE (kDragMaxMm) so a violent stationary
@@ -2924,7 +3540,8 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       for (int k = 0; k < 3; ++k) {
         const int64_t v = static_cast<int64_t>(stfx.dragbuf[bi & 7][k]) +
                           stfx.dragbuf[(bi - 1u) & 7][k] + stfx.dragbuf[(bi - 2u) & 7][k];
-        dsp[k] = static_cast<int32_t>(v * kDragGainPm / 1000);
+        dsp[k] = static_cast<int32_t>(
+            v * kDragGainPm / 1000 * release_motion_pm / 1000);
       }
       const int64_t mag = isqrt64(static_cast<int64_t>(dsp[0]) * dsp[0] +
                                   static_cast<int64_t>(dsp[1]) * dsp[1] +
@@ -2936,6 +3553,17 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
       }
       for (int k = 0; k < 3; ++k) P[k] += dsp[k];
     }
+    int32_t visible_pm = mote_visibility_pm;
+    if (g_u02_fx_continuity_fault == FxContinuityFault::kMoteVisibilityPop &&
+        m == 0 && (frame & 1u) == 0u)
+      visible_pm = 0;
+    if (trace != nullptr) {
+      trace->mote_count = mote_domain_count;
+      trace->mote_role[m] = mote_role;
+      trace->mote_visibility_pm[m] = visible_pm;
+      for (int k = 0; k < 3; ++k) trace->mote_position[m][k] = P[k];
+    }
+    if (visible_pm <= 0) continue;
     // draw: an opaque heart under an additive halo (R7 -- filled and BIG)
     const int32_t halo = kMoteHaloRPxMin +
         static_cast<int32_t>((hm >> 5) % static_cast<uint32_t>(kMoteHaloRPxMax - kMoteHaloRPxMin + 1));
@@ -2967,12 +3595,25 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     const uint8_t mramp = (bolt_motes && m < n_shape)
                               ? static_cast<uint8_t>(kRampShimmer)
                               : ramp;
-    mana_push(out, P[0], P[1], P[2], halo, mramp, kMoteHaloGainPm, true, false);
+    mana_push(out, P[0], P[1], P[2], halo, mramp,
+              kMoteHaloGainPm * visible_pm / 1000, true, false);
     mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
-              mana_core_ramp(mramp), 1000,
+              mana_core_ramp(mramp), visible_pm,
               true, false, /*opaque=*/true, /*soft=*/true);
   }
   return agit;
+}
+
+inline void trace_mana_body(FxContinuityTrace* trace, int id, uint8_t role,
+                            const int32_t p[3], int32_t radius_px,
+                            int32_t gain_pm, int32_t visibility_pm = 1000) {
+  if (trace == nullptr || id < 0 || id >= kFxTraceManaBodies) return;
+  trace->mana_body_count = std::max(trace->mana_body_count, id + 1);
+  trace->mana_body_role[id] = role;
+  trace->mana_body_visibility_pm[id] = visibility_pm;
+  for (int k = 0; k < 3; ++k) trace->mana_body_position[id][k] = p[k];
+  trace->mana_body_radius_px[id] = radius_px;
+  trace->mana_body_gain_pm[id] = gain_pm;
 }
 
 /** Fill the frame's mana splats for one conduit. `cand` selects the menu
@@ -2985,16 +3626,22 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
  *  judged assembled). Every body is filled (R7) and centre-anchored (R8). */
 inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
                       const FxAnchors& A, FoldState& stfx, int crowd_pm,
-                      std::vector<ManaSplat>& out, int32_t* agit_out = nullptr) {
+                      std::vector<ManaSplat>& out, int32_t* agit_out = nullptr,
+                      FxContinuityTrace* trace = nullptr) {
   switch (cand) {
     case 1: {  // the caged pulsar — now with a FILLED heart
+      const uint32_t breath_phase =
+          fx_clip_phase(frame, keys, kPulsarBreathFrames);
       const int32_t breathe = static_cast<int32_t>(
           (static_cast<int64_t>(kPulsarHaloMaxPx - kPulsarHaloMinPx) *
-           ((65536 + fx_sin16(frame * 65536 / kPulsarBreathFrames)) / 2)) >> 16);
+           ((65536 + fx_sin16(breath_phase)) / 2)) >> 16);
       int32_t wob[3];
-      centre_wobble(frame, 1u, kCentreWobbleMm, wob);
+      centre_wobble(frame, 1u, kCentreWobbleMm, wob, keys);
       const int32_t x = A.ring[0] + wob[0], y = A.ring[1] + wob[1],
                     z = A.ring[2] + wob[2];
+      const int32_t body[3] = {x, y, z};
+      trace_mana_body(trace, 0, 1u, body, kPulsarHaloMinPx + breathe,
+                      kPulsarHaloGainPm);
       mana_push(out, x, y, z, kPulsarHaloMinPx + breathe, kRampCyan,
                 kPulsarHaloGainPm, true, true);  // pre: arms occlude it
       mana_push(out, x, y, z, kPulsarCorePx * 2 / 3, kRampCyan, 1000, true,
@@ -3010,50 +3657,52 @@ inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
       for (int i = 0; i < 3; ++i) {
         int32_t wob[3];
         centre_wobble(frame, 40u + static_cast<uint32_t>(cand) * 8u +
-                          static_cast<uint32_t>(i), kPlasmaSpreadMm, wob);
-        mana_filled(out, A.ring[0] + wob[0], A.ring[1] + wob[1],
-                    A.ring[2] + wob[2], r_px[i], ramp, kPlasmaGainPm);
+                          static_cast<uint32_t>(i), kPlasmaSpreadMm, wob, keys);
+        const int32_t p[3] = {A.ring[0] + wob[0], A.ring[1] + wob[1],
+                              A.ring[2] + wob[2]};
+        trace_mana_body(trace, i, static_cast<uint8_t>(cand), p, r_px[i],
+                        kPlasmaGainPm);
+        mana_filled(out, p[0], p[1], p[2], r_px[i], ramp, kPlasmaGainPm);
       }
       break;
     }
     case 3: {  // THE FOLD, aquamarine — pass 4: the shipping mana. The
                // antenna folds the motes into shapes and kneads them
                // (bullets retired; the fold IS the plasma now).
-      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
+      const int32_t ag =
+          mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out, trace);
       if (agit_out) *agit_out = ag;
       break;
     }
     case 6: {  // THE FOLD, cyan — the long/glitchier smear rung
-      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampCyan, crowd_pm, out);
+      const int32_t ag =
+          mana_fold(frame, slot, keys, A, stfx, kRampCyan, crowd_pm, out, trace);
       if (agit_out) *agit_out = ag;
       break;
     }
     case 4:
-      mana_lightning(frame, A, out);
+      mana_lightning(frame, slot, keys, A, out, 1000, trace);
       break;
     case 9: {  // the CHANNEL stack: the fold + the lightning strand
-      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
-      // PASS 12 / WAVE 2b: the strand is the loudest thing the mana does, so a
-      // dying conduit loses it FIRST and outright rather than fading it -- a
-      // lightning bolt at 12% strength reads as a rendering fault, not as a
-      // creature running out. 1000 for every slot but the two deaths.
-      // OWNER DIRECTION 10: the free cross-pocket strand is OFF by default now.
-      // It is a full-brightness white filament composited over the same pocket
-      // with no knowledge of the stencil -- so under D10, where the EDGE is a
-      // white strand, it is the same primitive drawing a diameter on top of a
-      // figure. `kFoldFreeStrandOn` (and ZHAO_U02_FREE_STRAND) restores it.
-      if (u02_free_strand_on() &&
-          fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8) >=
-          kFoldLightningCutPm)
-        mana_lightning(frame, A, out);
+      const int32_t ag =
+          mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out, trace);
+      // Direction 18: the free strand shares the death/life envelope. It fades
+      // continuously with its persistent points instead of crossing one cutoff
+      // and disappearing wholesale.
+      const int32_t strand_life =
+          fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8);
+      if (u02_free_strand_on() && strand_life > 0)
+        mana_lightning(frame, slot, keys, A, out, strand_life, trace);
       if (agit_out) *agit_out = ag;
       break;
     }
     case 5: {  // the boil CENTRE, grown 1.6x, outer removed (R13 #5)
       int32_t wob[3];
-      centre_wobble(frame, 5u, kCentreWobbleMm, wob);
+      centre_wobble(frame, 5u, kCentreWobbleMm, wob, keys);
       const int32_t x = A.ring[0] + wob[0], y = A.ring[1] + wob[1],
                     z = A.ring[2] + wob[2];
+      const int32_t body[3] = {x, y, z};
+      trace_mana_body(trace, 0, 5u, body, kBoilCentrePx, kBoilCoreGainPm);
       mana_push(out, x, y, z, kBoilCentrePx * kCoreOfHaloPm / 1000, kRampBlue,
                 1000, true, false, /*opaque=*/true);
       mana_push(out, x, y, z, kBoilCentrePx, kRampBlue, kBoilCoreGainPm,
@@ -3061,9 +3710,10 @@ inline void mana_fill(int cand, uint32_t frame, uint32_t slot, int keys,
       break;
     }
     case 8: {  // THE STACK: caged pulsar + strand + the aqua fold
-      mana_fill(1, frame, slot, keys, A, stfx, crowd_pm, out);
-      mana_lightning(frame, A, out);
-      const int32_t ag = mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out);
+      mana_fill(1, frame, slot, keys, A, stfx, crowd_pm, out, nullptr, trace);
+      mana_lightning(frame, slot, keys, A, out, 1000, trace);
+      const int32_t ag =
+          mana_fold(frame, slot, keys, A, stfx, kRampAqua, crowd_pm, out, trace);
       if (agit_out) *agit_out = ag;
       break;
     }
@@ -3119,15 +3769,87 @@ inline void glow_build_ramp(GlowFrame& f, const uint8_t lo[3], const uint8_t mid
   f.pal[0][0] = f.pal[0][1] = f.pal[0][2] = 0;  // additive identity
 }
 
-/** Build the frame's mana ramps. `frame` drives the boil's counter-rotating
- *  CLUT churn. Index by ManaRamp. */
-inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame) {
+inline int boil_ramp_entry(const uint8_t lo[3], const uint8_t mid[3],
+                           const uint8_t hi[3], int gain_pm, int j, int c) {
+  const uint8_t* a = j < 32 ? lo : mid;
+  const uint8_t* b = j < 32 ? mid : hi;
+  const int t = (j & 31) * 2 + 1;
+  int v = (a[c] * (64 - t) + b[c] * t) / 64;
+  v = v * gain_pm / 1000;
+  return v > 255 ? 255 : v;
+}
+
+/** Fractional rotation through the 63 live CLUT entries. `rot_q16` is Q16.16
+ *  entries modulo 63. Blending the two adjacent production ramps makes the
+ *  churn continuous within the loop; a periodic clock alone merely moves the
+ *  hard switch. */
+inline void glow_build_ramp_phase(GlowFrame& f, const uint8_t lo[3],
+                                  const uint8_t mid[3], const uint8_t hi[3],
+                                  int gain_pm, int32_t rot_q16) {
+  constexpr int32_t kCycleQ16 = 63 << 16;
+  rot_q16 %= kCycleQ16;
+  if (rot_q16 < 0) rot_q16 += kCycleQ16;
+  const int rot = rot_q16 >> 16;
+  const int32_t frac = rot_q16 & 0xFFFF;
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kPaletteHardSwitch) {
+    glow_build_ramp(f, lo, mid, hi, gain_pm, rot);
+    return;
+  }
+  const int32_t raw_pm = static_cast<int32_t>(
+      (static_cast<int64_t>(frac) * 1000 + 32768) >> 16);
+  const int32_t eased_q16 = static_cast<int32_t>(
+      (static_cast<int64_t>(motion_c2_ease(raw_pm)) * 65536 + 500) / 1000);
+  for (int i = 0; i < 64; ++i) {
+    if (i == 0) {
+      f.pal[i][0] = f.pal[i][1] = f.pal[i][2] = 0;
+      continue;
+    }
+    const int j0 = 1 + (i - 1 + rot) % 63;
+    const int j1 = j0 == 63 ? 1 : j0 + 1;
+    for (int c = 0; c < 3; ++c) {
+      const int v0 = boil_ramp_entry(lo, mid, hi, gain_pm, j0, c);
+      const int v1 = boil_ramp_entry(lo, mid, hi, gain_pm, j1, c);
+      const int64_t mixed =
+          static_cast<int64_t>(v0) * (65536 - eased_q16) +
+          static_cast<int64_t>(v1) * eased_q16;
+      f.pal[i][c] = static_cast<uint8_t>((mixed + 32768) >> 16);
+    }
+  }
+}
+
+/** The boil's phase in Q16.16 CLUT entries. The cycle count is the nearest
+ *  integer to the authored target cadence, so every clip closes exactly without
+ *  replacing the churn with a short common-divisor buzz. */
+inline int32_t boil_palette_phase_q16(uint32_t frame,
+                                      uint32_t period_frames) {
+  if (period_frames == 0) period_frames = 1;
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kPaletteRawClock)
+    return static_cast<int32_t>(((frame / kBoilRotDiv) % 63u) << 16);
+  const uint32_t cycles = g_u02_boil_cycles > 0
+      ? static_cast<uint32_t>(g_u02_boil_cycles)
+      : std::max<uint32_t>(
+            1u, (period_frames + kBoilTargetCycleFrames / 2u) /
+                    kBoilTargetCycleFrames);
+  const uint32_t pf = frame % period_frames;
+  const int64_t phase =
+      (static_cast<int64_t>(pf) * cycles * 63 * 65536) / period_frames;
+  int32_t q = static_cast<int32_t>(phase % (63LL << 16));
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kPaletteHardSwitch)
+    q &= ~0xFFFF;
+  return q;
+}
+
+/** Build the frame's mana ramps. The boil churn is clip-periodic and
+ *  fractional; all other ramps remain exact static production ramps. */
+inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame,
+                             uint32_t period_frames) {
   constexpr uint8_t kBlack[3] = {0, 0, 0};
   glow_build_ramp(ramps[kRampGlow], kGlowLo, kGlowMid, kGlowHi, 1000);
-  const int rot = static_cast<int>((frame / kBoilRotDiv) % 63);
-  glow_build_ramp(ramps[kRampBlue], kBlack, kManaBlueMid, kManaBlueHi, 1000, rot);
-  glow_build_ramp(ramps[kRampViolet], kBlack, kManaVioletMid, kManaVioletHi, 1000,
-                  63 - rot);
+  const int32_t phase = boil_palette_phase_q16(frame, period_frames);
+  glow_build_ramp_phase(ramps[kRampBlue], kBlack, kManaBlueMid, kManaBlueHi,
+                        1000, phase);
+  glow_build_ramp_phase(ramps[kRampViolet], kBlack, kManaVioletMid,
+                        kManaVioletHi, 1000, -phase);
   glow_build_ramp(ramps[kRampGold], kBlack, kManaGoldMid, kManaGoldHi, 1000);
   glow_build_ramp(ramps[kRampCyan], kBlack, kManaCyanMid, kManaCyanHi, 1000);
   glow_build_ramp(ramps[kRampWhite], kBlack, kManaWhiteMid, kManaWhiteHi, 1000);
