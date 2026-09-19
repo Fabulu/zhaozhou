@@ -215,11 +215,6 @@
 //  I7. PART.COLLIDE's plane (`part_plane_*`) -- BOUNDARY. A per-frame owner
 //      value by the block's own design; CMD.SCHEDULER has no path to it.
 //
-//  I8. PART.SPAWN's capacity backstop (`part_cap_full_i`) -- BOUNDARY.
-//      PART.STATE knows when the generation is full and exposes no such
-//      output; it only counts `children_dropped_capacity_o` after the fact.
-//      A one-bit addition to PART.STATE would close this properly.
-//
 //  I9. PART.SPAWN's parent id (`par_id_i`) -- NOT a tie-off: the core assigns
 //      it. The particle128 record (amendment C2) carries no id field, so the
 //      only identity available is the particle's ORDINAL within the
@@ -476,8 +471,6 @@ module zhao_console_core
   input  logic [4:0]              part_spw_spc_count_i,
 
   // ---- I8: the capacity backstop ------------------------------------------
-  input  logic                    part_cap_full_i,
-
   // ---- PARTICLE evidence (every counter leaves the module) ----------------
   output logic                    part_tick_busy_o,
   output logic                    part_tick_done_o,
@@ -1285,6 +1278,8 @@ module zhao_console_core
     else if (pu_out_valid && pu_out_ready_c) part_ordinal_q <= part_ordinal_q + 1'b1;
   end
 
+  wire part_capacity_full_c;   // I8: PART.STATE -> PART.SPAWN, internal
+
   zhao_part_state #(
     .CAPACITY  (PART_CAPACITY),
     .CHILD_D   (PART_CHILD_D),
@@ -1296,6 +1291,11 @@ module zhao_console_core
     .tick_start_i (core_tick_c),
     .tick_busy_o  (part_tick_busy_o),
     .tick_done_o  (part_tick_done_o),
+
+    // I8 CLOSED 2026-09-19. PART.STATE now tells PART.SPAWN when the generation
+    // is full, so the capacity backstop is a real internal producer->consumer
+    // edge instead of a pin the board had to drive.
+    .capacity_full_o (part_capacity_full_c),
 
     // I1: the generation store. Harness = memory; MEM.HPS.BRIDGE has no
     // particle client port, so there is no route to it inside this core.
@@ -1489,7 +1489,7 @@ module zhao_console_core
     .chl_record_o(sp_chl_record),
 
     // I8: PART.STATE exposes no capacity-full level.
-    .cap_full_i(part_cap_full_i),
+    .cap_full_i(part_capacity_full_c),
 
     .children_requested_o     (part_children_requested_o),
     .children_emitted_o       (part_children_emitted_o),
