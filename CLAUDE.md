@@ -599,6 +599,62 @@ from its own context and committed immediately, so nothing was lost permanently
 
 **A bad commit is recoverable. A discarded working tree is not.**
 
+### And three more ways the shared index bites, all on the same day
+
+Added 2026-09-19, after four concurrent packets. The two rules above are
+necessary and were not sufficient; each of these cost someone real work.
+
+**`git commit` with no pathspec commits the WHOLE INDEX, not what you just
+added.** I ran `git add tools/budget/completion_register.py` and then a plain
+`git commit`, and the commit carried another agent's already-staged CMD.EXEC
+packet — five files, under my message, describing something else entirely.
+Nothing was lost, but the authorship record is wrong forever and the agent's
+next commit reported "nothing to commit", which reads exactly like a failure.
+**Check `git diff --cached --name-only` before every commit**, not just
+`git status`.
+
+**`git commit --only <path>` is NOT the fix, and is wrong in the other
+direction.** `-o` commits the **working-tree** contents of the named paths, so
+on a shared file it sweeps in exactly the uncommitted edits you were trying to
+avoid. It is correct only for files you exclusively own. A worker caught this
+before using it; I had already recommended it to two others and had to correct
+myself.
+
+**What actually works** is a private index:
+
+```powershell
+$env:GIT_INDEX_FILE = "$env:TEMP\mine.idx"
+git read-tree HEAD
+git apply --cached my-hunks.patch
+git commit -F msg.txt
+Remove-Item env:GIT_INDEX_FILE
+```
+
+This writes **zero** entries to the shared index, so no other agent's staging is
+disturbed in either direction. Its own gotcha, found the same day: `commit-tree`
+and a private-index commit advance HEAD **without touching the shared index**,
+so paths your commit changed then read as staged **reverts** in everyone else's
+`git status`. Neutralise them (`git reset -q HEAD -- <paths>`, which touches the
+index only) or the next agent will commit a revert of your work believing it is
+cleanup.
+
+### Lint the BLOB you are about to commit, not the working tree
+
+Same day, same cause. Two packets built a staged blob that was broken in ways
+the working tree never showed: a `-U0` patch placed new ports **after** the
+module's `);`, and an `endmodule` end-marker swallowed another packet's whole
+instantiation. Both were caught only because the author checked out the staged
+blob and linted *that*. `git show :<path>` or `git archive HEAD` gives you the
+thing that will actually be compiled by whoever pulls next.
+
+**The tree you test is not always the tree you ship.**
+
+### The scratchpad is shared between concurrent agents
+
+Two agents independently wrote `stage_mine.py` to the same scratchpad path and
+one silently overwrote the other. The directory is per-session, not per-agent.
+**Prefix every temp file with something unique to your packet.**
+
 So before `git checkout -- <shared file>`:
 
 * run `git diff <file>` and read it. If it contains lines you did not write,

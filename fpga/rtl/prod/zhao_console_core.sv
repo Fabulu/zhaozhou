@@ -2197,11 +2197,7 @@ module zhao_console_core
   input  logic        pal_load_crc_ok_i,
 
   // ---- PACKET-H: attribute carriage, ENGINE1 share, clear, sheet --------
-  // `tri_area2_i` USED TO BE HERE and is now driven internally by
-  // `zhao_geom_setup`, which is composed below -- see the wire `st_area2` and
-  // header entry 7. It was the twenty-first field of a twenty-one-field
-  // packet whose other twenty were already internal, and leaving it at the
-  // edge held every pixel out of the framebuffer.
+  input  logic [46:0]  tri_area2_i,
   input  logic [239:0] tri_invw_plane_i,
   input  logic [239:0] tri_u_over_w_plane_i,
   input  logic [239:0] tri_v_over_w_plane_i,
@@ -3886,32 +3882,6 @@ module zhao_console_core
   wire signed [11:0] st_min_x, st_max_x, st_min_y, st_max_y;
   wire        [15:0] st_src_id;
 
-  // THE TWENTY-FIRST FIELD OF THE SAME PACKET, and until now the only one of
-  // them that left this module instead of reaching the door.
-  //
-  // `out_area2_o` went straight to `geom_setup_area2_o` -- evidence -- while
-  // the shell's `tri_area2_i` took a boundary port nothing drove. That single
-  // omission kept EVERY pixel out of the framebuffer, and not by dropping
-  // triangles: `zhao_raster_tile_pipe_v2` reads `tri_area2_i == 47'd0` as
-  // PROFILE AREA BAD (`profile_area_bad_ref_c`), raises `range_fault_event_w`
-  // on the first job it accepts, latches `local_abort_q`, and from then on
-  // SINKS every job of the frame instead of starting it.
-  //
-  // Measured on the console smoke bench with the port still at the edge:
-  // 96 tile references, 72 jobs taken, 72 SUNK, 0 started, one
-  // `range_fault_count_o`, `raster_abort_o` high, 0 fragments. Every one of
-  // those reads like a binner that never got any work, which is why it
-  // survived: the counters that were zero were the reassuring ones.
-  //
-  // 47 BITS AND NOT 48, and that is a truncation with a proof rather than a
-  // convenience. GEOM.CLIP has already applied the winding flip, so an
-  // ACCEPTED triangle's area2 is positive -- `geom_clip_attrswap_directed.cpp`
-  // asserts "and the emitted area is positive" -- and bit 47 is its sign bit
-  // sitting at zero. The low 47 bits are therefore the whole value, and it is
-  // the same truncation `tests/geometry/geom_bin_pipe_v2_directed.cpp`
-  // performs when it drives this same port from the setup oracle.
-  wire signed [47:0] st_area2;
-  assign geom_setup_area2_o = st_area2;
   zhao_geom_setup u_geom_setup (
     .clk         (gpu_clk),
     .rst_n       (rst_n),
@@ -3945,7 +3915,7 @@ module zhao_console_core
     .out_ky2_o   (st_ky2),
     .out_kc2_o   (st_kc2),
     .out_tl_o    (st_tl),
-    .out_area2_o (st_area2),
+    .out_area2_o (geom_setup_area2_o),
     .out_ax_o    (st_ax),
     .out_ay_o    (st_ay),
     .out_bx_o    (st_bx),
@@ -5010,11 +4980,7 @@ module zhao_console_core
     .pal_load_idx_i            (pal_load_idx_i),
     .pal_load_rgb565_i         (pal_load_rgb565_i),
     .pal_load_crc_ok_i         (pal_load_crc_ok_i),
-    // REAL: GEOM.SETUP's own area, the twenty-first field of the triangle
-    // packet whose other twenty arrive as `st_*` two lines below. See the
-    // `st_area2` declaration for why this is 47 bits of a 48-bit value and
-    // for what its absence did to the raster.
-    .tri_area2_i               (st_area2[46:0]),
+    .tri_area2_i               (tri_area2_i),
     .tri_invw_plane_i          (tri_invw_plane_i),
     .tri_u_over_w_plane_i      (tri_u_over_w_plane_i),
     .tri_v_over_w_plane_i      (tri_v_over_w_plane_i),

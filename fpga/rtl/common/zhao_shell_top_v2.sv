@@ -1122,52 +1122,14 @@ module zhao_shell_top_v2
     .busy_o(render_busy_o)
   );
 
-  // THE RENDER GUARD'S WINDOW IS THE RENDERER'S LEASE, AND IT USED TO BE THE
-  // BLITTER'S.
-  //
-  // "Wired exactly as DEBUG.FRAMEBLIT is" was true of the request path and was
-  // also true of the WINDOW, which is where it stopped being right:
-  // `map_valid_q`/`map_slot_q`/`map_span_q` are `fb_lease_valid`,
-  // `fb_lease_slot` and `r_blit_len` -- the BLIT lease and the BLIT packet's
-  // byte count. While the RENDERER holds the lease the blit lease is not live,
-  // so `map_valid` is low, and `zhao_mem_guard`'s own law is "map_valid=0 (no
-  // grant this frame) => deny-all". Every render burst was refused.
-  //
-  // It presented as a render path that produces nothing, with the counter that
-  // would have explained it -- `render_gv_cnt` -- never read by anything.
-  // Measured on the console smoke bench before this window existed: the bin
-  // pipe resolved 6 tiles and handed 1,536 fragments to `zhao_raster_fbwrite`,
-  // which latched `fatal_error_o` on the first burst and wrote zero.
-  //
-  // The window comes from VIDEO.SLOTMGR's LIVE LEASE rather than from the
-  // renderer lease's `frame_*` identity, because the manager's record is the
-  // authority the contract names -- "the accepted response, live lease, READY
-  // event, stored slot record, displayed record and swap echo all carry the
-  // same immutable {writer,slot,generation,mode,base,span}" -- and because it
-  // is a LEVEL that lasts exactly as long as the permission does, where
-  // `frame_valid_o` is one cycle at admission.
-  //
-  // `lease_span_o` is the manager's mode-derived canvas size, which is exactly
-  // the `blit_span = canvas_bytes(mode)` the guard's header asks for; the guard
-  // clamps it to the slot span regardless, so a wrong mode cannot open an
-  // escape here.
-  //
-  // THE BLIT GUARD IS DELIBERATELY LEFT ALONE. Its window is `r_blit_len`, the
-  // length of the packet in flight, which is NARROWER than the canvas. Moving
-  // it to `lease_span_o` for symmetry would WIDEN a permission, and this packet
-  // has no reason to do that.
-  logic        rmap_valid_q;
-  logic [0:0]  rmap_slot_q;
-  logic [31:0] rmap_span_q;
-
   zhao_mem_guard u_guard_render (
     .clk        (gpu_clk),
     .rst_n      (rst_n),
     .req        (render_guard_req),
     .rsp        (render_guard_rsp),
-    .map_valid  (rmap_valid_q),
-    .blit_slot  (rmap_slot_q),
-    .blit_span  (rmap_span_q),
+    .map_valid  (map_valid_q),
+    .blit_slot  (map_slot_q),
+    .blit_span  (map_span_q),
     // The SAME lease owner the blit guard sees. This guard passes only when the
     // lease names the render engine, so exactly one of the two writers can ever
     // pass in a frame -- the lease ruling in hardware rather than in a comment.
@@ -2052,16 +2014,6 @@ module zhao_shell_top_v2
   assign map_valid_q = fb_lease_valid;
   assign map_slot_q  = fb_lease_slot;
   assign map_span_q  = r_blit_len;
-
-  // AND THE SAME LAW FOR THE OTHER WRITER. `lease_writer_o` is 1 for the
-  // renderer, so this window exists only while the renderer's lease is live and
-  // shuts with it -- the same sentence as the three lines above, read off the
-  // slot manager's live record instead of the blitter's dispatch. See
-  // `u_guard_render` for why it is the manager's record and not the renderer
-  // lease's `frame_*` identity.
-  assign rmap_valid_q = v2_lease_valid && v2_lease_writer;
-  assign rmap_slot_q  = v2_lease_slot;
-  assign rmap_span_q  = v2_lease_span;
 
   // Per-FB-slot completion toggles, now driven by a PUBLICATION the slot
   // manager accepted rather than by "the blitter said status zero". A blit that

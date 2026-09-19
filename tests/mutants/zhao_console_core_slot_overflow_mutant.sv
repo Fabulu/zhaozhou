@@ -917,11 +917,7 @@ module zhao_console_core_slot_overflow_mutant
   input  logic        pal_load_crc_ok_i,
 
   // ---- PACKET-H: attribute carriage, ENGINE1 share, clear, sheet --------
-  // `tri_area2_i` USED TO BE HERE and is now driven internally by
-  // `zhao_geom_setup`, which is composed below -- see the wire `st_area2` and
-  // header entry 7. It was the twenty-first field of a twenty-one-field
-  // packet whose other twenty were already internal, and leaving it at the
-  // edge held every pixel out of the framebuffer.
+  input  logic [46:0]  tri_area2_i,
   input  logic [239:0] tri_invw_plane_i,
   input  logic [239:0] tri_u_over_w_plane_i,
   input  logic [239:0] tri_v_over_w_plane_i,
