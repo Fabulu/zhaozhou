@@ -65,6 +65,7 @@ Rules:
 - Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
 - Do not inflate severity. Say "none found" when that is the truth.
 - Keep private reasoning brief; spend tokens on the written answer.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
 Finish with this exact section, max 400 words, for whoever continues after you:
 ## CONTINUATION
 - Done: <what this chunk established, as facts with file:line>
@@ -265,6 +266,18 @@ def cmd_new(dirpath: Path, slug: str, cont: str | None, review: str | None) -> N
     print(p)
 
 
+def cmd_brief(answer: Path) -> None:
+    """Print only the FINDINGS table and CONTINUATION -- what the coordinator reads."""
+    t = answer.read_text(encoding="utf-8")
+    head = t.split("## Answer", 1)[0]
+    f = re.search(r"^## FINDINGS\s*$(.*?)(?=^## |\Z)", t, re.M | re.S)
+    c = re.search(r"^## CONTINUATION\s*$(.*?)(?=^## Coordinator|\Z)", t, re.M | re.S)
+    print(head.strip().splitlines()[0])
+    print("## FINDINGS\n" + (f.group(1).strip() if f else "(no FINDINGS section -- read the full answer)"))
+    if c:
+        print("## CONTINUATION\n" + c.group(1).strip())
+
+
 def cmd_verdict(dirpath: Path, qid: str, verdict: str, note: str) -> None:
     led = dirpath / "QWEN-LEDGER.md"
     rows = led.read_text(encoding="utf-8").splitlines()
@@ -290,6 +303,8 @@ def main(argv: list[str]) -> None:
         cont = argv[argv.index("--continue") + 1] if "--continue" in argv else None
         rev = argv[argv.index("--review") + 1] if "--review" in argv else None
         cmd_new(winpath(argv[2]), argv[3], cont, rev)
+    elif cmd == "brief":
+        cmd_brief(winpath(argv[2]))
     elif cmd == "verdict":
         cmd_verdict(winpath(argv[2]), argv[3], argv[4], argv[5] if len(argv) > 5 else "")
     else:
