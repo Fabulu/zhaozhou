@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# pass-19 gate matrix (v18 integrated matrix + the pass-19 rear/line legs). Usage: gatematrix_int.sh <bindir> <logdir> <out.txt>
+# pass-19 gate matrix (v18 integrated matrix + the pass-19 rear/line legs;
+# review: + --fail-line-flag and the End swell/ball selectors). Usage: gatematrix_int.sh <bindir> <logdir> <out.txt>
 B="$1"; L="$2"; OUT="$3"; mkdir -p "$L"; : > "$OUT"
 REPO=/c/programmieren/zencrifice/manafold-p16/zhaozhou
 run() { # id expected_rc cmd...
@@ -34,6 +35,7 @@ run n-mrear 0 "$B/manafold-rear-audit.exe" --gate
 runmask r-rear-frame 0x3 "$B/manafold-rear-audit.exe" --fail-rear-frame
 runmask r-rear-joint 0x2 "$B/manafold-rear-audit.exe" --fail-rear-joint
 runmask r-line-scale 0x4 "$B/manafold-rear-audit.exe" --fail-line-scale
+runmask r-line-flag 0x4 "$B/manafold-rear-audit.exe" --fail-line-flag
 # mspan controls
 for s in F-A A-B B-C C-E; do run s-rigid-$s 1 "$B/manafold-spangate.exe" --fail-rigid-span $s; done
 for s in F-A A-B B-C C-E; do run s-clamp-$s 1 "$B/manafold-spangate.exe" --fail-clamp-negative $s; done
@@ -89,6 +91,11 @@ sel rear-follow ZHAO_U02_REAR_SOCKET_FOLLOW_PM=1001
 sel rear-ambient ZHAO_U02_REAR_AMBIENT_GAIN_PM=abc
 sel line-scale ZHAO_U02_MANA_LINE_SCALE=wide
 sel line-full ZHAO_U02_MANA_LINE_FULL_PX=10
+sel end-swell-rx ZHAO_U02_END_SWELL_RX_MM=81
+sel end-ball-rz ZHAO_U02_END_BALL_RZ_MM=abc
+sel end-ball-half ZHAO_U02_END_BALL_HALF_MM=10
+sel end-ball-at ZHAO_U02_END_BALL_AT_MM=2300
+sel end-ball-support ZHAO_U02_END_BALL_AT_MM=2600 ZHAO_U02_END_BALL_HALF_MM=280
 # live-history gate (Wave E)
 LH="python $REPO/tools/reel/manafold_live_history_gate.py --renderer $R"
 run e-live-history-normal 0 $LH --out "$L/lh-normal"

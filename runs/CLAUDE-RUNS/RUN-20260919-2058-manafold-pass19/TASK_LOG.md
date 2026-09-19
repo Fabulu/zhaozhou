@@ -69,3 +69,14 @@ Manafold pass 19 from Owner Direction 20: smooth, whole rear antenna connection 
 - 17 images read (notes in manafold-p16/p19-look/NOTES.md). Sheets + plates committed; P19-IMPLEMENTATION.md written.
 - Stopped a gate-matrix shell whose bash children survived TaskStop (killed by PID; verified none left).
 - Not done (later packets): 22-subject bank, encode, merge, deploy.
+
+### Coordinator — implementation closed, review launched
+- Implementation packet pushed (`d172a5aa`, `2de50e08`, `c5a7b82c`, `b1fddb5d`). Root cause: the End carrier had no rest orientation, so the tube folded 150–170° at the back ball, leaving a stub up to 207 mm and End oscillators wagging it. Fixed by giving the End an arm-following frame, End oscillators at 400 pm, and distance-scaled mana lines; 122/122 gates.
+- Coordinator concern: the End ball now reads only as a slight thickening, which may violate Direction 19 item 3 (balls stay visibly thicker than sticks). Launched an independent review + QA agent to judge by eye and fix (End swell ladder) if needed, and to decide the 360 vs 285 px line point and the 35° swallow bend. Deleted the implementation scratch reels.
+
+### 2026-09-19 - Independent review + QA (sole agent)
+- Verdict **FIXED** (`P19-REVIEW-QA.md`). Rear connection whole (PASS), rear calm (PASS), Drift lines proportional (PASS), 360 kept over 285 by eye, 35 deg swallow bend accepted as the authored beat.
+- Art fix: the End no longer read as a ball once the stub was gone (Direction 19 item 3). Added the End BALL, a shorter MAX-combined swell inside the long swell's support (mesh profile only), 2560/150, 30/36 mm, chosen from a 5-rung ladder by eye. It stands down under legacy-root and legacy swell.
+- Instrument fixes in `manafold-rear-audit`: R2 now measures the true joint step (2.39 -> 2.76 worst; the old magnitude metric was blind to constant-bend sweeps). The R2 ceiling moved 4.0 -> 6.0 because 4.0 held an eye-judged rung. R3 gained a production line-flag census and a `--fail-line-flag` control. R1's `rel` operand is recorded as tautological, and its centreline half is the real detector.
+- Source `1eb115e4`. Renderer `.tmp/p19-rev/bin/zhao-reel-cel.exe`, MD5 `510fab169ec12c48022160114227512f`. Legacy toggles 9/9 = v18 bank.
+- 16 images read. Scratch: `manafold-p16/p19-qa/` (NOTES.md, renders).
