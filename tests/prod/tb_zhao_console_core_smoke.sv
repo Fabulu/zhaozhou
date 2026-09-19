@@ -559,33 +559,6 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_res_evictions_o;
   logic [31:0]             terr_res_crc_failures_o;
   logic [31:0]             terr_res_resident_o;
-
-  // THE SECOND COMPLETION, 2026-09-19 (core composition item 12).  Declared
-  // here rather than by hand at the bottom because this bench binds with `.*`:
-  // every core port needs an identically-named net, and a port with none is a
-  // bind error rather than a silent zero.
-  logic [31:0]             terr_mip_pages_mipped_o;
-  logic [31:0]             terr_mip_pages_faulted_o;
-  logic [31:0]             terr_mip_samples_sent_o;
-  logic [31:0]             terr_mipreq_requests_o;
-  logic [31:0]             terr_mipreq_issued_o;
-  logic [31:0]             terr_mipreq_drops_o;
-  logic [31:0]             terr_psmux_a_jobs_o;
-  logic [31:0]             terr_psmux_b_jobs_o;
-  logic [31:0]             terr_psmux_stray_v_o;
-  logic [31:0]             terr_psmux_stray_done_o;
-  logic                    terr_mg_m17_valid_o;
-  logic [ 8:0]             terr_mg_m17_addr_o;
-  logic                    terr_mg_m17_surf_o;
-  logic [15:0]             terr_mg_m17_h_o;
-  logic                    terr_mg_m9_valid_o;
-  logic [ 6:0]             terr_mg_m9_addr_o;
-  logic                    terr_mg_m9_surf_o;
-  logic [15:0]             terr_mg_m9_h_o;
-  logic [31:0]             terr_mg_m17_writes_o;
-  logic [31:0]             terr_mg_m9_writes_o;
-  logic [31:0]             terr_mg_aborts_o;
-
   logic [31:0]             terr_lq_accepted_o;
   logic [31:0]             terr_lq_issued_o;
   logic [31:0]             terr_lq_high_water_o;

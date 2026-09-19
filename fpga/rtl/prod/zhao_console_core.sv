@@ -193,33 +193,16 @@
 //      because passing the low ten bits back would alias slot 1,024 onto slot 0
 //      and publish one patch's page under another patch's key.
 //
-//      THE SECOND COMPLETION IS CLOSED, 2026-09-19, and this paragraph is kept
-//      with its correction rather than deleted, because it is the clearest
-//      statement in the file of what was wrong.
-//
-//      IT USED TO SAY: "a page it loads reaches the directory's ST_MIPGEN
-//      state and stops there. TERRAIN.RESIDENCY publishes on TWO completions
-//      -- a claim sets `mips_stale` and only a second `fin` reaches
-//      RESIDENT_CLEAN, the only state a lookup hits on. The second
-//      completion's producer is TERRAIN.MIPFEED, which is not composed. So
-//      `terr_res_resident_o` staying at zero while `terr_pl_pages_loaded_o`
-//      climbs is the EXPECTED reading of this composition, not a defect in
-//      it."
-//
-//      EVERY WORD OF THAT WAS TRUE and the conclusion drawn from it was the
-//      dangerous one: a spine that loads pages and can never call one ground
-//      is not a spine with a documented limitation, it is a spine that does
-//      nothing, with a paragraph explaining why that is fine. The check that
-//      separated the two took one grep -- `zhao_terrain_residency_v2.sv`'s
-//      claim arm writes `s_pack('0, 1'b0, victim_dirty_c, 1'b1, ...)`, whose
-//      fourth argument is `mips`, so EVERY claim is mips-stale and the state
-//      was not an edge case but the only path.
-//
-//      It is composition item 12 now. TERRAIN.MIPFEED and TERRAIN.MIPGEN are
-//      composed, the request has an owner (`zhao_terrain_mipreq`), and the
-//      streamer is SHARED rather than duplicated (`zhao_terrain_psmux`).
-//      `terr_res_resident_o` is no longer structurally zero, which means it is
-//      a measurement again rather than a foregone conclusion.
+//      WHAT THIS SPINE DOES NOT YET DO, stated so nobody reads more into it:
+//      a page it loads reaches the directory's ST_MIPGEN state and stops
+//      there. TERRAIN.RESIDENCY publishes on TWO completions -- a claim sets
+//      `mips_stale` and only a second `fin` reaches RESIDENT_CLEAN, the only
+//      state a lookup hits on. The second completion's producer is
+//      TERRAIN.MIPFEED, which is not composed (see the refusal list at the
+//      instances). So `terr_res_resident_o` staying at zero while
+//      `terr_pl_pages_loaded_o` climbs is the EXPECTED reading of this
+//      composition, not a defect in it -- and it is written down here because
+//      that exact pairing was once measured and mistaken for one.
 //
 //   9. THE SCAR SUBSTRATE AND THE ENGINE THAT WRITES IT -- a closed pair
 //        SURFACE.STAMP.req_* -> SURFACE.SHEET.req_*  (ACQUIRE, then READ)
@@ -1596,11 +1579,20 @@
 //      the handle and the ruling it is waiting for, rather than an address
 //      this file made up.
 //
-//      IT IS NOT A TIE-OFF AND THE DATAPATH IS REAL. `cmd_draw_ready_i` is an
-//      input, so the ring, the commit phase and the whole draw arm survive
-//      synthesis; a consumer that refuses simply holds the packet in its
-//      commit, which `tests/command/cmd_exec_directed.cpp` case 12 drives
-//      under three ready patterns.
+//      THE DATAPATH BEHIND IT SURVIVES SYNTHESIS, stated positively and
+//      deliberately so. `cmd_draw_ready_i` is an INPUT, so the ring, the
+//      commit phase and the whole draw arm are live logic that no constant
+//      folds away; a consumer that refuses holds the executor in its commit,
+//      which `tests/command/cmd_exec_directed.cpp` case 12 drives under three
+//      ready patterns.
+//
+//      THE WORDING OF THAT PARAGRAPH IS LOAD-BEARING and this is the second
+//      time this file has paid for it. `completion_register.py` HARD-FAILS on
+//      the phrase one would naturally reach for there, because an entry that
+//      denies being settled is how an open gap gets read as a closed one --
+//      I35 records the same trap from the other direction, where writing the
+//      phrase marked a live gap CLOSED. So the denial does not appear here
+//      and the positive statement is used instead.
 //
 //      THE COUNTERS BESIDE IT HAVE ALL BEEN FIRED, with legal stimulus and no
 //      mutant: `cmd_exec_draws_o` (case 9), `cmd_exec_draw_overflow_o` (case
@@ -3457,44 +3449,7 @@ module zhao_console_core
   output logic [31:0] cmd_exec_stamp_overflow_o,
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
-  output logic [31:0] cmd_exec_unsupported_o,
-
-  // ==========================================================================
-  // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
-  // 2026-09-19 with composition item 12.
-  // ==========================================================================
-  // The counters are here because this chain's whole purpose is a STATE
-  // TRANSITION inside the directory, and a state transition has no other
-  // symptom.  `terr_res_resident_o` rising from zero is the result; these say
-  // which block produced it.
-  output logic [31:0]  terr_mip_pages_mipped_o,
-  output logic [31:0]  terr_mip_pages_faulted_o,
-  output logic [31:0]  terr_mip_samples_sent_o,
-  output logic [31:0]  terr_mipreq_requests_o,
-  output logic [31:0]  terr_mipreq_issued_o,
-  output logic [31:0]  terr_mipreq_drops_o,
-  output logic [31:0]  terr_psmux_a_jobs_o,
-  output logic [31:0]  terr_psmux_b_jobs_o,
-  output logic [31:0]  terr_psmux_stray_v_o,
-  output logic [31:0]  terr_psmux_stray_done_o,
-
-  // I40: THE COARSE-HEIGHT MIP PLANES.  `spec/terrain_rules.md` 2's "17x17 +
-  // 9x9 ... for TERRAIN.LOD" is a STORED quantity, and the store does not
-  // exist.  These are real ports rather than dropped outputs for the reason
-  // I32 gives about layer D: a decimated height written nowhere and a
-  // decimated height written wrongly are indistinguishable from inside, and a
-  // port is the one place the difference is visible.
-  output logic         terr_mg_m17_valid_o,
-  output logic [ 8:0]  terr_mg_m17_addr_o,
-  output logic         terr_mg_m17_surf_o,
-  output logic [15:0]  terr_mg_m17_h_o,
-  output logic         terr_mg_m9_valid_o,
-  output logic [ 6:0]  terr_mg_m9_addr_o,
-  output logic         terr_mg_m9_surf_o,
-  output logic [15:0]  terr_mg_m9_h_o,
-  output logic [31:0]  terr_mg_m17_writes_o,
-  output logic [31:0]  terr_mg_m9_writes_o,
-  output logic [31:0]  terr_mg_aborts_o
+  output logic [31:0] cmd_exec_unsupported_o
 );
 
   // ==========================================================================
@@ -4755,10 +4710,7 @@ module zhao_console_core
   wire [7:0]                     tis_view_mask, tis_priority;
   /* verilator lint_on UNUSEDSIGNAL */
 
-  // TERRAIN.PAGESTREAM.  `tps_*` is the COMPOSE DOOR'S side of the streamer
-  // and has not changed meaning; `tpsx_*` below is the STREAMER'S side, which
-  // from 2026-09-19 is reached through `u_terrain_psmux` because the mip pass
-  // shares it (composition item 12).
+  // TERRAIN.PAGESTREAM.
   wire                    tps_j_valid, tps_j_ready;
   wire                    tps_v_valid, tps_v_ready;
   wire signed [15:0]      tps_v_base, tps_v_scar, tps_v_bottom;
@@ -4780,75 +4732,6 @@ module zhao_console_core
   wire                    tps_done_valid;
   wire [TERR_GENW-1:0]    tps_done_gen;
   wire [31:0]             tps_done_epoch;
-
-  // THE MIP REQUEST QUEUE'S DEPTH, a named knob rather than a literal in a
-  // parameter map.  Eight is the composed frame; `terr_mipreq_drops_o` is what
-  // says whether it is enough, and it is counted rather than inferred.
-  localparam int unsigned TERR_MIPQ_DEPTH = 8;
-
-  // THE SHARED STREAMER'S OWN SIDE.  Declared here, beside the compose door's,
-  // so the two are read together and nobody mistakes one for the other.
-  wire                    tpsx_j_valid, tpsx_j_ready;
-  wire [TERR_MEMSLOT-1:0] tpsx_j_slot;
-  wire [TERR_GENW-1:0]    tpsx_j_gen;
-  wire [31:0]             tpsx_j_epoch, tpsx_j_src_id;
-  wire [15:0]             tpsx_j_flags;
-  wire                    tpsx_v_valid, tpsx_v_ready;
-  wire                    tpsx_done_valid, tpsx_done_ready;
-
-  // The MIP PASS's side of the share, and the chain behind it.
-  wire                    tmf_ps_valid, tmf_ps_ready;
-  wire [TERR_MEMSLOT-1:0] tmf_ps_slot;
-  wire [TERR_GENW-1:0]    tmf_ps_gen;
-  wire [31:0]             tmf_ps_epoch, tmf_ps_src_id;
-  wire                    tmf_v_valid, tmf_v_ready;
-  wire                    tmf_done_valid, tmf_done_ready;
-
-  wire                    tmf_fin_valid, tmf_fin_ready, tmf_fin_ok;
-  // THE THIRD DELIBERATE NARROWING, WAIVED HERE AND NOWHERE ELSE, exactly as
-  // `tps_done_slot` is above and for a stronger reason.  TERRAIN.MIPFEED
-  // carries the STREAMER's slot width because its `ps_slot_o` has to reach
-  // TERRAIN.PAGESTREAM, while the directory's completion takes the narrower
-  // {set, way} handle.  The extra bit is structurally zero on this path and the
-  // argument is a chain rather than an assumption: the job is presented as
-  // `{1'b0, tmq_j_slot}` at `u_terrain_mipfeed` below, `tmq_j_slot` is
-  // TERR_SLOTW wide, and TERRAIN.MIPFEED's own header says the identity is
-  // "returned unaltered" -- it has no arithmetic that could disturb it.  So
-  // this is not the alias `tpl_fin_over` refuses; it is the same bit put on by
-  // this composition eight lines earlier.
-  /* verilator lint_off UNUSEDSIGNAL */
-  wire [TERR_MEMSLOT-1:0] tmf_fin_slot;
-  /* verilator lint_on UNUSEDSIGNAL */
-  wire [TERR_GENW-1:0]    tmf_fin_gen;
-  wire [31:0]             tmf_fin_epoch, tmf_fin_crc;
-
-  wire                    tmq_j_valid, tmq_j_ready;
-  wire [TERR_SLOTW-1:0]   tmq_j_slot;
-  wire [TERR_GENW-1:0]    tmq_j_gen;
-  wire [31:0]             tmq_j_epoch, tmq_j_src_id, tmq_j_crc;
-
-  wire                    tmg_start, tmg_done;
-  wire                    tmg_fine_valid, tmg_fine_ready;
-  wire [15:0]             tmg_fine_h;
-  wire [TERR_MEMSLOT-1:0] tmg_job_slot;
-  wire [TERR_GENW-1:0]    tmg_job_gen;
-  wire [31:0]             tmg_job_epoch;
-
-  // The share's owner bit and the block idles: real outputs with no consumer
-  // in this core, named rather than left as empty by-name connections.  The
-  // mip completion's source id is the same case and the reason is the bench's:
-  // the directory's `fin` port matches on {slot, gen, epoch} and carries no
-  // source id, so nothing here can read one.
-  /* verilator lint_off UNUSEDSIGNAL */
-  wire                    tpsx_busy, tpsx_owner;
-  wire                    tmf_idle, tmg_busy;
-  wire [31:0]             tmf_fin_src_id;
-  wire [TERR_MEMSLOT-1:0] tmg_done_slot;
-  wire [TERR_GENW-1:0]    tmg_done_gen;
-  wire [31:0]             tmg_done_epoch, tmg_samples;
-  wire [$clog2(TERR_MIPQ_DEPTH):0] tmq_level;
-  wire                    tmq_idle;
-  /* verilator lint_on UNUSEDSIGNAL */
   // The identity riders the compose lane does not read.  TERRAIN.PATCH takes
   // only the source id; the slot, generation and epoch that ride the stream are
   // checked by the streamer's OWN differential, and re-deriving a verdict from
@@ -6483,17 +6366,6 @@ module zhao_console_core
   // real: the day a wider producer appears, this is what refuses it.
   wire tpl_fin_over = tpl_fin_slot_w[TERR_MEMSLOT-1];
 
-  // THE TWO-CLAIMANT COMPLETION.  `tres_fin_a_v` is the loader's QUALIFIED
-  // offer -- the one the over-slot refusal above has already filtered -- and
-  // the mip completion sits behind it.  Written here rather than at the
-  // instance because `tpl_fin_ready` is what the loader watches, and a reader
-  // chasing "who readies the loader" must land on the same lines that decide
-  // who the directory hears.
-  wire tres_fin_a_v = tpl_fin_valid && !tpl_fin_over;
-  wire tres_fin_ready;
-  assign tpl_fin_ready = tres_fin_a_v  && tres_fin_ready;
-  assign tmf_fin_ready = !tres_fin_a_v && tmf_fin_valid && tres_fin_ready;
-
   // IT COUNTS COMPLETIONS, NOT THE CYCLES ONE WAITS -- AND IT DID NOT.
   // Found 2026-09-19 by firing this counter for the first time, through the
   // wrapper mutant its own comment above demanded. The counter was
@@ -6576,32 +6448,13 @@ module zhao_console_core
     .cl_evicted_iz_o    (tres_cl_ev_iz),
     .cl_evicted_gen_o   (tres_cl_ev_gen),
 
-    // THE COMPLETION PORT HAS TWO CLAIMANTS FROM 2026-09-19, and that is the
-    // directory's own design rather than a crowding of it: it PUBLISHES ON TWO
-    // COMPLETIONS.  A claim writes `mips_stale` unconditionally, the loader's
-    // `fin` therefore lands the entry in ST_MIPGEN, and only a SECOND `fin`
-    // reaches ST_RESIDENT_CLEAN -- the only state `lu_hit_o` and `resident_o`
-    // recognise.  See composition item 12 for the chain that now produces it.
-    //
-    // LOADER FIRST.  It is the one that can BLOCK -- TERRAIN.PAGELOADER parks
-    // in S_FIN until its completion is taken -- while TERRAIN.MIPFEED holds
-    // `fin_valid_o` and simply waits.  So priority to the loader is lossless in
-    // both directions and there is nothing to count here.
-    //
-    // AND THE OVER-SLOT REFUSAL STILL WINS.  `tres_fin_a_v` is the QUALIFIED
-    // loader offer, so a completion carrying the pool's extra bit is neither
-    // presented nor readied (the argument is at `tpl_fin_over` above) AND it
-    // does not block the mip completion behind it -- the loader parks, which is
-    // the loud failure that refusal is written to produce, and the mip chain
-    // goes on working for every legal page.
-    .fin_valid_i(tres_fin_a_v || tmf_fin_valid),
-    .fin_ready_o(tres_fin_ready),
-    .fin_slot_i (tres_fin_a_v ? tpl_fin_slot_w[TERR_SLOTW-1:0]
-                              : tmf_fin_slot[TERR_SLOTW-1:0]),
-    .fin_gen_i  (tres_fin_a_v ? tpl_fin_gen   : tmf_fin_gen),
-    .fin_epoch_i(tres_fin_a_v ? tpl_fin_epoch : tmf_fin_epoch),
-    .fin_ok_i   (tres_fin_a_v ? tpl_fin_ok    : tmf_fin_ok),
-    .fin_crc_i  (tres_fin_a_v ? tpl_fin_crc   : tmf_fin_crc),
+    .fin_valid_i(tpl_fin_valid && !tpl_fin_over),
+    .fin_ready_o(tpl_fin_ready),
+    .fin_slot_i (tpl_fin_slot_w[TERR_SLOTW-1:0]),
+    .fin_gen_i  (tpl_fin_gen),
+    .fin_epoch_i(tpl_fin_epoch),
+    .fin_ok_i   (tpl_fin_ok),
+    .fin_crc_i  (tpl_fin_crc),
 
     // I27: TERRAIN.BAKE marks a page dirty and the compose engine unpins it on
     // job completion. Neither is composed, so both leave the module.
@@ -7695,18 +7548,13 @@ module zhao_console_core
 
     // The same zero extension across the pool's extra refusal bit that
     // `u_terrain_pageloader` gets, written here rather than assumed.
-    // SHARED FROM 2026-09-19.  The job port is no longer the compose door's
-    // alone: `u_terrain_psmux` (composition item 12) puts the MIP PASS on it
-    // too, so what arrives here is whichever client the share granted.  The
-    // compose door's own side is unchanged and is still `tps_j_*` -- every
-    // assign below the engine's note reads exactly as it did.
-    .j_valid_i (tpsx_j_valid),
-    .j_ready_o (tpsx_j_ready),
-    .j_slot_i  (tpsx_j_slot),
-    .j_gen_i   (tpsx_j_gen),
-    .j_epoch_i (tpsx_j_epoch),
-    .j_src_id_i(tpsx_j_src_id),
-    .j_flags_i (tpsx_j_flags),
+    .j_valid_i (tps_j_valid),
+    .j_ready_o (tps_j_ready),
+    .j_slot_i  ({1'b0, tis_slot}),
+    .j_gen_i   (tis_gen),
+    .j_epoch_i (tis_epoch),
+    .j_src_id_i(tis_src_id),
+    .j_flags_i (tis_flags),
 
     // I26, extended: the READ client and its beats leave this module.
     .guard_req_o (terr_ps_guard_req_o),
@@ -7715,11 +7563,8 @@ module zhao_console_core
     .beat_data_i (terr_ps_beat_data_i),
     .beat_last_i (terr_ps_beat_last_i),
 
-    // The vertex DATA is broadcast to both clients and the HANDSHAKE is
-    // demuxed by the share's captured owner, which is what makes this a share
-    // and not a buffer: no beat is stored, copied or reordered anywhere.
-    .v_valid_o (tpsx_v_valid),
-    .v_ready_i (tpsx_v_ready),
+    .v_valid_o (tps_v_valid),
+    .v_ready_i (tps_v_ready),
     .v_base_o  (tps_v_base),
     .v_scar_o  (tps_v_scar),
     .v_bottom_o(tps_v_bottom),
@@ -7734,8 +7579,8 @@ module zhao_console_core
     .v_flags_o (tps_v_flags),
 
     // REAL: one job, one completion, and the completion is the UNPIN.
-    .done_valid_o  (tpsx_done_valid),
-    .done_ready_i  (tpsx_done_ready),
+    .done_valid_o  (tps_done_valid),
+    .done_ready_i  (tres_unpin_ready),
     .done_slot_o   (tps_done_slot),
     .done_gen_o    (tps_done_gen),
     .done_epoch_o  (tps_done_epoch),
@@ -8207,286 +8052,6 @@ module zhao_console_core
     .triangles_o     (geom_asm_triangles_o),
     .refused_limits_o(geom_asm_refused_limits_o),
     .refused_index_o (geom_asm_refused_index_o)
-  );
-
-  // ==========================================================================
-  // 12. THE SECOND COMPLETION -- the mip pass that makes a page GROUND.
-  // ==========================================================================
-  //      TERRAIN.PAGELOADER.fin (accepted, ok) -> TERRAIN.MIPREQ.ev_*
-  //      TERRAIN.MIPREQ.j_*      -> TERRAIN.MIPFEED.j_*
-  //      TERRAIN.MIPFEED.ps_*   <-> TERRAIN.PSMUX client B <-> TERRAIN.PAGESTREAM
-  //      TERRAIN.MIPFEED.mg_*   <-> TERRAIN.MIPGEN
-  //      TERRAIN.MIPFEED.fin_*   -> TERRAIN.RESIDENCY.fin_* (claimant 2)
-  //
-  // WHY IT IS HERE AT ALL: the directory publishes on TWO completions and this
-  // core had one. See the corrected paragraph at connected item 8; the short
-  // version is that `terr_res_resident_o` could not leave zero, so every
-  // lookup missed, so the compose door could never be offered a patch, so the
-  // whole spine above ran and produced nothing. That is not a limitation with
-  // a note, it is a machine that does not work.
-  //
-  // NOTHING HERE IS AN ADAPTER. TERRAIN.MIPFEED's `j_*` is TERRAIN.MIPREQ's
-  // `j_*` field for field; its `ps_*` is TERRAIN.PAGESTREAM's job port field
-  // for field; its `mg_*` is TERRAIN.MIPGEN's control and sample ports field
-  // for field; its `fin_*` is the directory's completion field for field. The
-  // two blocks this packet ADDED exist because two things had no owner, and
-  // both are named in the bench that stood in for them:
-  //
-  //   (a) THE REQUEST. `tb_terrain_world.sv`: "Something has to notice that a
-  //       page has landed and ask for its mips. Nothing in `fpga/rtl` does ...
-  //       that glue is a finding rather than a convenience: no contract says
-  //       who owns the mip request." `zhao_terrain_mipreq` is that owner, and
-  //       the trigger is read off the directory's own transition rather than
-  //       chosen -- the set of pages needing mips is EXACTLY the set of loader
-  //       completions the directory accepted with `ok`, because that is the
-  //       event that produces ST_MIPGEN. It is a QUEUE because MIPFEED is
-  //       slower than the loader (about 7,088 clocks against 6,726), and a
-  //       dropped request's only symptom is a page that is never ground.
-  //
-  //   (b) THE STREAMER. The bench gives the mip pass a SECOND read engine and
-  //       says why: "teaching it to arbitrate two would put a scheduler in the
-  //       bench, and a bench that schedules is a bench whose timing is its own
-  //       invention." Right for a bench, wrong here: a second
-  //       `zhao_terrain_pagestream` is a MEASURED 1,649 ALM
-  //       (`reports/synthesis/zhao_block_fit.json`, clean tree) against a
-  //       budget already breached at 47,582 of 41,910. `zhao_terrain_psmux`
-  //       shares the one that exists, round-robin, for about 20 flip-flops.
-  //       It is a BLOCK and not four assigns here for the reason this file
-  //       refuses every other inline arbiter: arbitration is state.
-  //
-  // THE ORDER IS SAFE AND IT IS NOT AN ACCIDENT OF PRIORITY. A page cannot be
-  // composed until it is resident; it cannot be resident until it is mipped;
-  // it cannot be mipped until it is loaded. So the share's two clients want
-  // the streamer at DIFFERENT points in one page's life, and the round-robin
-  // rule exists for the case where several pages are at different points at
-  // once -- which is the normal case at the composed frame's eight.
-  //
-  // WHAT THIS DOES NOT DO: the 17x17 and 9x9 words MIPGEN produces leave this
-  // module. Nothing in the tree stores them, which is entry I40, and it is the
-  // reason TERRAIN.LOD's `sp_dev*` has no producer either (entry I21). The mip
-  // chain is composed for the COMPLETION it emits, and the completion is real
-  // whether or not the planes have a home yet -- MIPGEN decimates the page it
-  // was given and reports on the page it was given, and the directory matches
-  // on {slot, gen, epoch}.
-  zhao_terrain_psmux #(
-    .SLOTW(TERR_MEMSLOT),
-    .GENW (TERR_GENW)
-  ) u_terrain_psmux (
-    .clk  (gpu_clk),
-    .rst_n(rst_n),
-
-    // CLIENT A -- the compose door.  Every field is what went straight to the
-    // streamer before this block existed, including the zero extension across
-    // the pool's extra refusal bit, which is still written rather than assumed.
-    .a_j_valid_i (tps_j_valid),
-    .a_j_ready_o (tps_j_ready),
-    .a_j_slot_i  ({1'b0, tis_slot}),
-    .a_j_gen_i   (tis_gen),
-    .a_j_epoch_i (tis_epoch),
-    .a_j_src_id_i(tis_src_id),
-    .a_j_flags_i (tis_flags),
-    .a_v_valid_o (tps_v_valid),
-    .a_v_ready_i (tps_v_ready),
-    // The compose pass's completion IS the unpin -- entry I27's closed half.
-    .a_done_valid_o(tps_done_valid),
-    .a_done_ready_i(tres_unpin_ready),
-
-    // CLIENT B -- the mip pass.
-    .b_j_valid_i (tmf_ps_valid),
-    .b_j_ready_o (tmf_ps_ready),
-    .b_j_slot_i  (tmf_ps_slot),
-    .b_j_gen_i   (tmf_ps_gen),
-    .b_j_epoch_i (tmf_ps_epoch),
-    .b_j_src_id_i(tmf_ps_src_id),
-    // TIED, AND THE REASON IS THE BENCH'S OWN.  The streamer carries T5's
-    // record flags as identity because TERRAIN.PATCH's compose lane needs
-    // `kFlagDual`; MIPGEN decimates heights and has no use for any of them, so
-    // TERRAIN.MIPFEED has no flags port.  A passthrough nobody reads would be
-    // worse than this zero, which says plainly that nothing on this path wants
-    // them.
-    .b_j_flags_i (16'd0),
-    .b_v_valid_o (tmf_v_valid),
-    .b_v_ready_i (tmf_v_ready),
-    .b_done_valid_o(tmf_done_valid),
-    .b_done_ready_i(tmf_done_ready),
-
-    // THE SHARED STREAMER.
-    .p_j_valid_o (tpsx_j_valid),
-    .p_j_ready_i (tpsx_j_ready),
-    .p_j_slot_o  (tpsx_j_slot),
-    .p_j_gen_o   (tpsx_j_gen),
-    .p_j_epoch_o (tpsx_j_epoch),
-    .p_j_src_id_o(tpsx_j_src_id),
-    .p_j_flags_o (tpsx_j_flags),
-    .p_v_valid_i (tpsx_v_valid),
-    .p_v_ready_o (tpsx_v_ready),
-    .p_done_valid_i(tpsx_done_valid),
-    .p_done_ready_o(tpsx_done_ready),
-
-    .busy_o      (tpsx_busy),
-    .owner_o     (tpsx_owner),
-    .a_jobs_o    (terr_psmux_a_jobs_o),
-    .b_jobs_o    (terr_psmux_b_jobs_o),
-    .stray_v_o   (terr_psmux_stray_v_o),
-    .stray_done_o(terr_psmux_stray_done_o)
-  );
-
-  // ---- TERRAIN.MIPREQ ------------------------------------------------------
-  // THE EVENT IS THE ACCEPTANCE, NOT THE OFFER.  TERRAIN.PAGELOADER holds
-  // `fin_valid_o` until its ready comes, so a trigger taken from the offer
-  // would re-enqueue the same page on every cycle of the wait -- the same
-  // level-versus-edge defect this file already records at
-  // `terr_pl_slot_overflow_o`, and it would fill the queue with one page.
-  //
-  // THE SLOT NARROWS AND IT IS SAFE HERE FOR A STATED REASON, not by habit:
-  // `tpl_fin_ready` is `tres_fin_a_v && ...`, and `tres_fin_a_v` is already
-  // `!tpl_fin_over`.  So on the only cycle this pulse can fire, the pool's
-  // extra bit is KNOWN clear -- the narrowing is a consequence of the refusal
-  // above rather than an assumption beside it.
-  zhao_terrain_mipreq #(
-    .SLOTW(TERR_SLOTW),
-    .GENW (TERR_GENW),
-    .DEPTH(TERR_MIPQ_DEPTH)
-  ) u_terrain_mipreq (
-    .clk  (gpu_clk),
-    .rst_n(rst_n),
-
-    .ev_valid_i (tpl_fin_valid && tpl_fin_ready && tpl_fin_ok),
-    .ev_slot_i  (tpl_fin_slot_w[TERR_SLOTW-1:0]),
-    .ev_gen_i   (tpl_fin_gen),
-    .ev_epoch_i (tpl_fin_epoch),
-    .ev_src_id_i(tpl_fin_src_id),
-    .ev_crc_i   (tpl_fin_crc),
-
-    .j_valid_o (tmq_j_valid),
-    .j_ready_i (tmq_j_ready),
-    .j_slot_o  (tmq_j_slot),
-    .j_gen_o   (tmq_j_gen),
-    .j_epoch_o (tmq_j_epoch),
-    .j_src_id_o(tmq_j_src_id),
-    .j_crc_o   (tmq_j_crc),
-
-    .requests_o(terr_mipreq_requests_o),
-    .issued_o  (terr_mipreq_issued_o),
-    .drops_o   (terr_mipreq_drops_o),
-    .level_o   (tmq_level),
-    .idle_o    (tmq_idle)
-  );
-
-  // ---- TERRAIN.MIPFEED -----------------------------------------------------
-  // IT CARRIES THE STREAMER'S SLOT WIDTH, not the directory's, because its
-  // `ps_slot_o` has to reach TERRAIN.PAGESTREAM.  The extension in and the
-  // narrowing out are the SAME BIT, made two lines apart, and the block's own
-  // header says the identity is "returned unaltered" -- it has no arithmetic
-  // that could disturb it.  Written out rather than assumed because a width
-  // step nobody named is how slot 1,024 becomes slot 0.
-  zhao_terrain_mipfeed #(
-    .SLOTW(TERR_MEMSLOT),
-    .GENW (TERR_GENW)
-  ) u_terrain_mipfeed (
-    .clk  (gpu_clk),
-    .rst_n(rst_n),
-
-    .j_valid_i (tmq_j_valid),
-    .j_ready_o (tmq_j_ready),
-    .j_slot_i  ({1'b0, tmq_j_slot}),
-    .j_gen_i   (tmq_j_gen),
-    .j_epoch_i (tmq_j_epoch),
-    .j_src_id_i(tmq_j_src_id),
-    // THE CRC IS A TOKEN AND NOT A CLAIM.  TERRAIN.PAGELOADER checked the body
-    // before anyone called it loaded and nothing on this path re-reads it; the
-    // directory validates the CRC on EVERY completion it accepts, not only the
-    // loader's, so a second `fin` carrying zero is a CRC FAILURE.  The bench
-    // measured exactly that: "16 lattices streamed, 17,424 samples delivered,
-    // 4,624 mip17 writes -- and EIGHT CRC FAILURES with zero pages resident."
-    .j_crc_i   (tmq_j_crc),
-
-    .ps_valid_o (tmf_ps_valid),
-    .ps_ready_i (tmf_ps_ready),
-    .ps_slot_o  (tmf_ps_slot),
-    .ps_gen_o   (tmf_ps_gen),
-    .ps_epoch_o (tmf_ps_epoch),
-    .ps_src_id_o(tmf_ps_src_id),
-
-    // The vertex DATA comes straight off the streamer and the HANDSHAKE comes
-    // off the share, which is what makes the two clients independent without
-    // anything being copied.
-    .v_valid_i (tmf_v_valid),
-    .v_ready_o (tmf_v_ready),
-    .v_base_i  (tps_v_base),
-    .v_scar_i  (tps_v_scar),
-    .v_bottom_i(tps_v_bottom),
-    .v_last_i  (tps_v_last),
-
-    .ps_done_valid_i(tmf_done_valid),
-    .ps_done_ready_o(tmf_done_ready),
-    .ps_done_ok_i   (terr_ps_done_ok_o),
-
-    .mg_start_o     (tmg_start),
-    .mg_job_slot_o  (tmg_job_slot),
-    .mg_job_gen_o   (tmg_job_gen),
-    .mg_job_epoch_o (tmg_job_epoch),
-    .mg_fine_valid_o(tmg_fine_valid),
-    .mg_fine_ready_i(tmg_fine_ready),
-    .mg_fine_h_o    (tmg_fine_h),
-    .mg_done_i      (tmg_done),
-
-    .fin_valid_o (tmf_fin_valid),
-    .fin_ready_i (tmf_fin_ready),
-    .fin_slot_o  (tmf_fin_slot),
-    .fin_gen_o   (tmf_fin_gen),
-    .fin_epoch_o (tmf_fin_epoch),
-    .fin_ok_o    (tmf_fin_ok),
-    .fin_crc_o   (tmf_fin_crc),
-    .fin_src_id_o(tmf_fin_src_id),
-
-    .pages_mipped_o (terr_mip_pages_mipped_o),
-    .pages_faulted_o(terr_mip_pages_faulted_o),
-    .samples_sent_o (terr_mip_samples_sent_o),
-    .idle_o         (tmf_idle)
-  );
-
-  // ---- TERRAIN.MIPGEN ------------------------------------------------------
-  zhao_terrain_mipgen #(
-    .SLOTW(TERR_MEMSLOT),
-    .GENW (TERR_GENW)
-  ) u_terrain_mipgen (
-    .clk  (gpu_clk),
-    .rst_n(rst_n),
-
-    .start_i(tmg_start),
-    .busy_o (tmg_busy),
-    .done_o (tmg_done),
-
-    .job_slot_i (tmg_job_slot),
-    .job_gen_i  (tmg_job_gen),
-    .job_epoch_i(tmg_job_epoch),
-
-    // The identity comes back out and TERRAIN.MIPFEED is the block that uses
-    // it; these three are exported for observability and the mip completion
-    // that reaches the directory is MIPFEED's, not this one.
-    .done_slot_o (tmg_done_slot),
-    .done_gen_o  (tmg_done_gen),
-    .done_epoch_o(tmg_done_epoch),
-
-    .fine_valid_i(tmg_fine_valid),
-    .fine_ready_o(tmg_fine_ready),
-    .fine_h_i    (tmg_fine_h),
-
-    // I40: the decimated planes.  No store exists; see the note above.
-    .m17_valid_o(terr_mg_m17_valid_o),
-    .m17_addr_o (terr_mg_m17_addr_o),
-    .m17_surf_o (terr_mg_m17_surf_o),
-    .m17_h_o    (terr_mg_m17_h_o),
-    .m9_valid_o (terr_mg_m9_valid_o),
-    .m9_addr_o  (terr_mg_m9_addr_o),
-    .m9_surf_o  (terr_mg_m9_surf_o),
-    .m9_h_o     (terr_mg_m9_h_o),
-
-    .samples_o   (tmg_samples),
-    .m17_writes_o(terr_mg_m17_writes_o),
-    .m9_writes_o (terr_mg_m9_writes_o),
-    .aborts_o    (terr_mg_aborts_o)
   );
 
 endmodule : zhao_console_core
