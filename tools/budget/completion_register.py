@@ -468,6 +468,17 @@ _ALIAS: dict[str, str | None] = {
     # different question with its own named precondition -- the composed fit --
     # and is deliberately not touched here.
     "GEOM.PROJECT":      "zhao_proj_subsystem",
+    # GEOM.LIGHT IS zhao_light_stream, BY OWNER RULING R2 (2026-09-19, owner
+    # explicit): "zhao_light_stream owns vertex light. zhao_geom_light is
+    # superseded." The naming convention resolves GEOM.LIGHT to the SUPERSEDED
+    # scalar block -- supersession by RENAME, the third shape the core header's
+    # lighting section says no tool looks for -- so "connected" would have been
+    # satisfiable by wiring the wrong one. Witnesses: the ruling;
+    # zhao_light_stream.sv's own first section, "THIS REPLACES THE OWNER, IT DOES
+    # NOT ADD A SECOND LAW"; console_inventory.yml, zhao_geom_light superseded_by
+    # zhao_light_stream; and the composition, `u_light_stream` fed by GEOM.SKIN.NORM
+    # through `u_light_skin_adapter`.
+    "GEOM.LIGHT":        "zhao_light_stream",
     # TERRAIN.PROJECT IS THE SAME SHARED SERVICE'S CLIENT B. Resolved 2026-09-19
     # (terrain packet), the twin of the GEOM.PROJECT line above and for the same
     # reason. THIS MAKES THE NUMBER SMALLER, so four witnesses, and the fourth is

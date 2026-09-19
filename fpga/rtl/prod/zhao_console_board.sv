@@ -777,18 +777,13 @@ module zhao_console_board
   output logic [31:0]             geom_skin_vertices_transformed_o,
 
   // ---- GEOM.SKIN.NORM's world normal and evidence --------------------------
-  // NEW 2026-09-19. GEOM.SKIN.NORM is COMPOSED below, and this is its OUTPUT
-  // leaving the module because its consumer does not exist -- see entry I43.
-  // The block's INPUTS are all real: the packed normal is GEOM.VDECODE's and
-  // the two matrices are GEOM.POSE's palette store's, arriving in one
-  // handshake because the palette now carries the normal through beside them.
-  //
-  // It is a PORT and not a dropped output for the reason I42 gives about the
-  // mip planes: a world normal computed and written nowhere and a world normal
-  // computed WRONGLY are indistinguishable from inside this module, and a port
-  // is the one place the difference can be seen.
+  // GEOM.SKIN.NORM's world normal, OBSERVED. Entry I43 is CLOSED
+  // (2026-09-19, owner ruling R2): its consumer is GEOM.LIGHT --
+  // `zhao_light_stream`, through `zhao_light_skin_adapter` -- composed below.
+  // The ready is the adapter's, so the port that stood here as `_ready_i`
+  // is gone; the normal itself still leaves as a TAP, because the smoke
+  // bench differences it against a hand computation and a tap costs nothing.
   output logic                    geom_sn_n_valid_o,
-  input  logic                    geom_sn_n_ready_i,
   output logic signed [63:0]      geom_sn_n_x_o,
   output logic signed [63:0]      geom_sn_n_y_o,
   output logic signed [63:0]      geom_sn_n_z_o,
@@ -803,6 +798,39 @@ module zhao_console_board
   // GEOM.SKIN.NORM was not. See I43 for why that number is expected to be
   // large and what it means.
   output logic [31:0]             geom_sn_fork_stall_o,
+
+  // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
+  // I47: the prepared descriptor bank, written by the HOST. SetEnvironment
+  // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
+  // this bank's Q16.16 directions and u20 gains -- see I47.
+  input  logic                    geom_light_cfg_we_i,
+  input  logic                    geom_light_cfg_commit_i,
+  input  logic [7:0]              geom_light_cfg_addr_i,
+  input  logic [31:0]             geom_light_cfg_data_i,
+  output logic                    geom_light_cfg_gen_o,
+  input  logic [3:0]              geom_light_nlights_i,
+  // I46: the lit vertex RGB -- the vertex-attribute store's r/g/b input, whose
+  // WRITER is not built. Out of the module, with a real ready.
+  output logic                    geom_light_valid_o,
+  input  logic                    geom_light_ready_i,
+  output logic [16:0]             geom_light_r_o,
+  output logic [16:0]             geom_light_g_o,
+  output logic [16:0]             geom_light_b_o,
+  output logic                    geom_light_degenerate_vtx_o,
+  output logic [15:0]             geom_light_src_id_o,
+  // Evidence: the lit count, the adapter's narrowing refusals, and every
+  // FAULT counter the service has. Its throughput observers (slot and
+  // backpressure clocks) stay inside; its directed test is where they are read.
+  output logic [31:0]             geom_light_vertices_lit_o,
+  output logic [31:0]             geom_light_degenerate_o,
+  output logic [31:0]             geom_light_cfg_refused_o,
+  output logic [31:0]             geom_light_epoch_refusals_o,
+  output logic [31:0]             geom_light_seam_mismatch_o,
+  output logic [31:0]             geom_light_tag_mismatch_o,
+  output logic [31:0]             geom_light_root_queue_overflow_o,
+  output logic [31:0]             geom_light_rgb_sat_o,
+  output logic [31:0]             geom_light_nlights_clamped_o,
+  output logic [31:0]             geom_light_adapter_refused_o,
 
   // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
@@ -2573,7 +2601,6 @@ module zhao_console_board
       .geom_skin_src_id_o                (geom_skin_src_id_o),
       .geom_skin_vertices_transformed_o  (geom_skin_vertices_transformed_o),
       .geom_sn_n_valid_o                 (geom_sn_n_valid_o),
-      .geom_sn_n_ready_i                 (geom_sn_n_ready_i),
       .geom_sn_n_x_o                     (geom_sn_n_x_o),
       .geom_sn_n_y_o                     (geom_sn_n_y_o),
       .geom_sn_n_z_o                     (geom_sn_n_z_o),
@@ -2584,6 +2611,29 @@ module zhao_console_board
       .geom_sn_degenerate_o              (geom_sn_degenerate_o),
       .geom_sn_reduced_o                 (geom_sn_reduced_o),
       .geom_sn_fork_stall_o              (geom_sn_fork_stall_o),
+      .geom_light_cfg_we_i               (geom_light_cfg_we_i),
+      .geom_light_cfg_commit_i           (geom_light_cfg_commit_i),
+      .geom_light_cfg_addr_i             (geom_light_cfg_addr_i),
+      .geom_light_cfg_data_i             (geom_light_cfg_data_i),
+      .geom_light_cfg_gen_o              (geom_light_cfg_gen_o),
+      .geom_light_nlights_i              (geom_light_nlights_i),
+      .geom_light_valid_o                (geom_light_valid_o),
+      .geom_light_ready_i                (geom_light_ready_i),
+      .geom_light_r_o                    (geom_light_r_o),
+      .geom_light_g_o                    (geom_light_g_o),
+      .geom_light_b_o                    (geom_light_b_o),
+      .geom_light_degenerate_vtx_o       (geom_light_degenerate_vtx_o),
+      .geom_light_src_id_o               (geom_light_src_id_o),
+      .geom_light_vertices_lit_o         (geom_light_vertices_lit_o),
+      .geom_light_degenerate_o           (geom_light_degenerate_o),
+      .geom_light_cfg_refused_o          (geom_light_cfg_refused_o),
+      .geom_light_epoch_refusals_o       (geom_light_epoch_refusals_o),
+      .geom_light_seam_mismatch_o        (geom_light_seam_mismatch_o),
+      .geom_light_tag_mismatch_o         (geom_light_tag_mismatch_o),
+      .geom_light_root_queue_overflow_o  (geom_light_root_queue_overflow_o),
+      .geom_light_rgb_sat_o              (geom_light_rgb_sat_o),
+      .geom_light_nlights_clamped_o      (geom_light_nlights_clamped_o),
+      .geom_light_adapter_refused_o      (geom_light_adapter_refused_o),
       .geom_pose_start_i                 (geom_pose_start_i),
       .geom_pose_bone_count_i            (geom_pose_bone_count_i),
       .geom_pose_root_dx_i               (geom_pose_root_dx_i),

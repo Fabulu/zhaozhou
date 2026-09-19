@@ -38,6 +38,7 @@
 #include <utility>
 #include <vector>
 
+#include "zref/zref_creature.hpp"
 #include "zref/zref_geom.hpp"
 #include "zrender/internal.hpp"
 
@@ -87,6 +88,20 @@ const int32_t kMat[16] = {
 // pixel count rather than hidden under each other.
 struct VP { uint32_t x0, y0, w, h; };
 const VP kVp[2] = {{0, 0, 32, 64}, {32, 0, 32, 64}};
+
+// ---- THE LIGHT (GEOM.LIGHT = zhao_light_stream, owner ruling R2) -----------
+// One light, gain 1.0 on all three channels, no emission, zero environment --
+// light_stream_directed.cpp's own convention, under which each output channel
+// IS the light response and is compared against the SHIPPED law. The direction
+// is (0.6, 0.8, 0), so the response to the fixture's normal is a real fraction.
+constexpr int32_t kLightX = 39322, kLightY = 52429, kLightZ = 0;
+constexpr uint32_t kGain = 0x10000;
+// GEOM.SKIN.NORM's world normal for every fixture record: the packed normal is
+// (127, 0, 0) and w0 = 64 through the IDENTITY bind pose (no pose decoded, I29),
+// so n = (64 * 65536 * 127, 0, 0) and |n| = n.x (a perfect square). The smoke
+// bench asserts this same value on its SKIN.NORM tap; it is the one input here
+// that is hand-derived rather than called, and the bench checks it.
+constexpr int64_t kSnNx = int64_t(64) * 65536 * 127;
 
 // The GEOM.CLIP scissor: the Z60 canvas the core derives from `mode_act_o`
 // (POST_W_Z60_C x POST_H_FULL_C in zhao_console_core.sv).
@@ -210,6 +225,20 @@ std::string emit(const Result& r) {
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_ACCEPTED = %d;  // into GEOM.SETUP\n", r.accepted); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TILES    = %zu;  // union over both views\n", r.tiles.size()); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_PIXELS   = %zu;  // tiles x 16 x 16\n", r.tiles.size() * 256); s += b;
+  {
+    const int64_t n[3] = {kSnNx, 0, 0};
+    const int32_t ndl = zref::creature::lambert_from_world_normal(n, kSnNx, kLightX, kLightY, kLightZ);
+    // rhu16(gain * ndl), then + ambient + spill (both zero), saturated at 1.0.
+    uint64_t lit = (uint64_t(kGain) * uint64_t(uint32_t(ndl)) + 32768u) >> 16;
+    if (lit > 65536u) lit = 65536u;
+    std::snprintf(b, sizeof b, "localparam logic signed [31:0] SGF_LIGHT_X = %s, SGF_LIGHT_Y = %s, SGF_LIGHT_Z = %s;\n",
+                  hex32(kLightX).c_str(), hex32(kLightY).c_str(), hex32(kLightZ).c_str());
+    s += b;
+    std::snprintf(b, sizeof b, "localparam logic [19:0] SGF_LIGHT_GAIN = 20'h%05X;\n", kGain); s += b;
+    std::snprintf(b, sizeof b, "localparam logic [16:0] SGF_EXP_LIT = 17'd%llu;  // zref::creature::lambert_from_world_normal = %d\n",
+                  static_cast<unsigned long long>(lit), ndl);
+    s += b;
+  }
   s += "// Tiles, (tx,ty):";
   for (const auto& t : r.tiles) {
     std::snprintf(b, sizeof b, " (%d,%d)", t.first, t.second);

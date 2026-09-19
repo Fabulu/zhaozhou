@@ -209,6 +209,26 @@ ambient / tint as `rgb565`, `tint_strength` unit8, fog mode + near/far
   stand-in froze. RGB565 → 8-bit expansion by bit replication
   (`c8 = (c5 << 3) | (c5 >> 2)`, `(c6 << 2) | (c6 >> 4)` — the frozen
   stars §2 expansion).
+  **AMENDED 2026-09-19 -- owner ruling R2** (`reports/OWNER-RULINGS-20260919-EVENING.md`):
+  *vertex light is owned by GEOM.LIGHT, implemented by `zhao_light_stream`*,
+  not by GEOM.PROJECT, and `zhao_geom_light` is superseded. The projector does
+  projection only (the ledger already called "projection + lighting"
+  aspirational). What this amendment keeps and what it leaves open:
+  - **Kept, unchanged:** the sun DIRECTION law above, and the RGB565 -> 8-bit
+    expansion by bit replication. They become light 0's direction and the
+    source of its colour.
+  - **The owner's law is `zhao_light_stream`'s**: per light,
+    `ndl = lambert(N, |N|, L)` (the shared round-half-up quotient; creature
+    normals take the early clamp), then per channel
+    `rhu16(gain_c * ndl) + rhu16(emission_c * ndl)`, summed over lights, plus
+    ambient and spill, saturated at 1.0 (Q16.16).
+  - **OPEN -- the bridge.** The one-sun u8 formula above
+    (`sat_u8(ambient_c + rescale_u(sun_c * ndl, 8))`) and the service's Q16
+    form round differently. Mapping `SetEnvironment` onto the service's bank --
+    which u20 gain an 8-bit sun channel becomes, where `tint` applies, and the
+    u8 saturation point -- is NOT ratified by this amendment. Until it is, and
+    until 0x0311 moves from `reserved` to `implemented`, the bank is host-loaded
+    (`zhao_console_core` entry I47).
 - **Global tint** (time-of-day / weather mood; the §1.3 crossfade's
   world-light leg). Per channel, applied to the LIT vertex colour before
   texture modulation (the donor's `lmap` position — tint the light, not

@@ -146,18 +146,6 @@ modules:
     disposition: superseded
     superseded_by: zhao_proj_subsystem
     why: "a thin shell over zhao_project_core, whose one shared instance serves geometry as client A of zhao_proj_subsystem. Owner ruling R3 (reports/OWNER-RULINGS-20260919-EVENING.md): keep the time-multiplex, no third port -- composing this shell would be a second projector (~6,199 ALM / 33 DSP). The register resolves GEOM.PROJECT to zhao_proj_subsystem with the witnesses beside that alias."
-  zhao_light_div32_ii2:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_light_isqrt64_ii8:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_light_skin_adapter:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_light_stream:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_material_resolve:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
