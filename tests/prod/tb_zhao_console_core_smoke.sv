@@ -985,10 +985,69 @@ module tb_zhao_console_core_smoke
   logic        [ 2:0] surf_cmd_age_shift_i;
   logic               surf_cmd_field_en_i;
   logic        [15:0] surf_cmd_src_id_i;
-  logic               surf_fld_valid_i;
-  logic               surf_fld_ready_o;
-  logic        [31:0] surf_fld_tag_op_i;
-  logic        [15:0] surf_fld_strength_i;
+  // I31 CLOSED 2026-09-19: `surf_fld_*` is no longer at the DUT's edge. The
+  // brush is driven inside the core by `u_field_stamp_adapter`, so these four
+  // nets are GONE rather than held at zero. What the adapter reports is below.
+  logic        [31:0] surf_fld_stamps_o;
+  logic        [31:0] surf_fld_texels_o;
+  logic        [31:0] surf_fld_faults_o;
+  logic        [31:0] surf_fld_restarts_o;
+  logic               surf_fld_busy_o;
+
+  // ---- THE FIELD ENGINE'S EDGE (core entry I42) ---------------------------
+  // Widths generated from the core's own port list, including the two wide
+  // ones: `fld_req_in_i` is IN_LANES x 32 = 384 and `fld_resp_out_o` is
+  // OUT_LANES x 32 = 128, at the parameters the core instantiates.
+  logic               fld_ld_valid_i;
+  logic               fld_ld_ready_o;
+  logic        [ 1:0] fld_ld_kind_i;
+  logic        [ 2:0] fld_ld_slot_i;
+  logic        [ 6:0] fld_ld_addr_i;
+  logic        [95:0] fld_ld_data_i;
+  logic               fld_pc_lu_valid_i;
+  logic               fld_pc_lu_ready_o;
+  logic        [31:0] fld_pc_lu_hash_i;
+  logic               fld_pc_lu_resp_valid_o;
+  logic               fld_pc_lu_resp_ready_i;
+  logic               fld_pc_lu_hit_o;
+  logic        [ 2:0] fld_pc_lu_slot_o;
+  logic               fld_pc_cm_valid_i;
+  logic               fld_pc_cm_ready_o;
+  logic        [31:0] fld_pc_cm_hash_i;
+  logic               fld_pc_cm_ok_i;
+  logic               fld_pc_cm_resp_valid_o;
+  logic               fld_pc_cm_resp_ready_i;
+  logic               fld_pc_cm_inserted_o;
+  logic               fld_pc_cm_evicted_o;
+  logic        [ 2:0] fld_pc_cm_slot_o;
+  logic        [ 2:0] fld_stamp_slot_i;
+  logic               fld_stamp_slot_valid_i;
+  logic               fld_req_valid_i;
+  logic               fld_req_ready_o;
+  logic        [ 2:0] fld_req_slot_i;
+  logic               fld_req_noprog_i;
+  logic [383:0]       fld_req_in_i;
+  logic               fld_resp_valid_o;
+  logic               fld_resp_ready_i;
+  logic [127:0]       fld_resp_out_o;
+  logic        [ 7:0] fld_resp_status_o;
+  logic        [31:0] fld_runs_o;
+  logic        [31:0] fld_run_faults_o;
+  logic        [31:0] fld_noprog_o;
+  logic        [31:0] fld_instr_retired_o;
+  logic        [31:0] fld_loads_o;
+  logic        [31:0] fld_load_defers_o;
+  logic        [31:0] fld_grants_o;
+  logic        [31:0] fld_contended_grants_o;
+  logic        [31:0] fld_hdr_clamped_o;
+  logic        [31:0] fld_tbl_oob_o;
+  logic        [31:0] fld_pc_oob_o;
+  logic        [ 4:0] fld_sat_o;
+  logic        [31:0] fld_pc_hits_o;
+  logic        [31:0] fld_pc_misses_o;
+  logic        [31:0] fld_pc_rejected_o;
+  logic        [31:0] fld_pc_evictions_o;
+  logic        [ 3:0] fld_pc_occupancy_o;
   logic               surf_res_valid_o;
   logic               surf_res_ready_i;
   logic        [11:0] surf_res_texel_o;
@@ -1340,13 +1399,57 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  // I31: no FIELD.SEQ.STAMP, so the field brush is never offered and
-  // `cmd_field_en_i` selects it off. These are INPUTS held at zero, not
-  // constants tied inside the RTL -- the datapath behind `cmd_field_en_i` is
-  // still synthesised and this row still measures it.
-  assign surf_fld_valid_i    = 1'b0;
-  assign surf_fld_tag_op_i   = 32'd0;
-  assign surf_fld_strength_i = 16'd0;
+  // ---- THE FIELD ENGINE (core entry I42) ----------------------------------
+  // NO PROGRAM IS LOADED HERE, and the stamp brush is therefore DISARMED:
+  // `fld_stamp_slot_valid_i` is low, the core ANDs it into the stamp's
+  // `cmd_field_en_i`, and the stamp runs its ABI path exactly as it did before
+  // this composition. That is deliberate -- this bench's surface acceptance
+  // below must measure the same stamp it measured yesterday, or the composition
+  // would be hiding a regression behind a new feature.
+  assign fld_ld_valid_i         = 1'b0;
+  assign fld_ld_kind_i          = 2'd0;
+  assign fld_ld_slot_i          = 3'd0;
+  assign fld_ld_addr_i          = 7'd0;
+  assign fld_ld_data_i          = 96'd0;
+  assign fld_pc_lu_valid_i      = 1'b0;
+  assign fld_pc_lu_hash_i       = 32'd0;
+  assign fld_pc_lu_resp_ready_i = 1'b1;
+  assign fld_pc_cm_valid_i      = 1'b0;
+  assign fld_pc_cm_hash_i       = 32'd0;
+  assign fld_pc_cm_ok_i         = 1'b0;
+  assign fld_pc_cm_resp_ready_i = 1'b1;
+  assign fld_stamp_slot_i       = 3'd0;
+  assign fld_stamp_slot_valid_i = 1'b0;
+  assign fld_req_slot_i         = 3'd0;
+  assign fld_req_noprog_i       = 1'b0;
+  assign fld_req_in_i           = 384'd0;
+  assign fld_resp_ready_i       = 1'b1;
+
+  // ---- THE ONE THING THIS BENCH ASKS THE ENGINE -----------------------------
+  // A single request on the edge client, at a slot nothing was ever loaded
+  // into. The right answer is a REFUSAL, and the point of asking is that a
+  // refusal can only come back if the whole path exists: the core's port, the
+  // arbiter, the slot's `hdr_loaded` bit, the response bus and the status.
+  //
+  // IT IS DELIBERATELY NOT A SUCCESSFUL RUN. Loading a program here would mean
+  // choosing one, and a composed engine that returns a plausible number is
+  // exactly the thing a smoke bench cannot tell apart from a composed engine
+  // that returns a plausible number for the wrong reason. A refusal has a
+  // named status and a counter, and neither can be produced by accident.
+  logic fld_probe_done_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      fld_req_valid_i  <= 1'b0;
+      fld_probe_done_q <= 1'b0;
+    end else if (!fld_probe_done_q) begin
+      if (fld_req_valid_i && fld_req_ready_o) begin
+        fld_req_valid_i  <= 1'b0;
+        fld_probe_done_q <= 1'b1;
+      end else begin
+        fld_req_valid_i <= 1'b1;
+      end
+    end
+  end
 
   // I32: TERRAIN.BAKE does not exist, so this bench plays its consumer and is
   // ALWAYS READY. That is not a convenience: `s2_accept` inside SURFACE.STAMP
@@ -3817,6 +3920,35 @@ module tb_zhao_console_core_smoke
     if (surf_res_records_q != surf_stamp_texels_touched_o)
       $fatal(1, "SMOKE: stamp_results delivered %0d beats against %0d texels retired -- the result port and the write port disagree about how many texels this stamp touched",
              surf_res_records_q, surf_stamp_texels_touched_o);
+
+    // 5. THE FIELD ENGINE IS COMPOSED AND REACHABLE (entry I42). One request
+    //    was offered at the edge, at a slot nothing was loaded into. All three
+    //    of these must hold together: a grant proves the arbiter accepted it, a
+    //    noprog proves the `hdr_loaded` interlock answered, and the status
+    //    proves the answer came back down the shared response bus. Any one of
+    //    them alone could be produced by a stuck signal.
+    if (fld_grants_o != 32'd1)
+      $fatal(1, "SMOKE: FIELD's arbiter granted %0d requests against exactly one offered -- 0 means the edge client does not reach the engine, >1 means the bench re-offered",
+             fld_grants_o);
+    if (fld_noprog_o != 32'd1)
+      $fatal(1, "SMOKE: FIELD refused %0d runs against one request at an unloaded slot -- 0 means the program store's loaded interlock is not consulted, so a slot with no microcode would have been WALKED",
+             fld_noprog_o);
+    if (fld_resp_status_o != 8'hF0)
+      $fatal(1, "SMOKE: FIELD answered status %02x, not ST_NO_PROGRAM -- the refusal did not reach the shared response bus, and a caller reading only the lanes would have taken four zeroes for a field",
+             fld_resp_status_o);
+    if (fld_runs_o != 32'd0)
+      $fatal(1, "SMOKE: FIELD completed %0d walks against zero loaded programs -- the sequencer ran something, and there is nothing in the store for it to have run",
+             fld_runs_o);
+
+    // 6. THE STAMP BRUSH STAYED DISARMED, which is what makes check 3 above
+    //    still a measurement of the same stamp. `fld_stamp_slot_valid_i` is low
+    //    here, so the adapter must never have started a walk.
+    if (surf_fld_stamps_o != 32'd0)
+      $fatal(1, "SMOKE: the field stamp adapter started %0d walks with no program resident -- the console's arm gate is not holding, and the stamp consumed field records nobody authored",
+             surf_fld_stamps_o);
+    if (surf_fld_texels_o != 32'd0)
+      $fatal(1, "SMOKE: the field stamp adapter delivered %0d records with no program resident",
+             surf_fld_texels_o);
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;

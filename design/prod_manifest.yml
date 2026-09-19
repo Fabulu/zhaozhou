@@ -201,11 +201,48 @@ top:
   - zhao_measure_governor
   - zhao_measure_tokens
 
-  # --- FIELD v3, which is the production generation -------------------------
-  # v1 is FROZEN by owner ruling 2026-08-25 and v2 is FROZEN as the exact
-  # differential fallback (reports/Fieldv3.md Phase 1). Neither is in the
-  # machine. The v3 EXECUTOR is not built yet -- see the report's hole list.
-  - zhao_field_progcache
+  # --- FIELD: the composed engine, and the v3 family beside it ---------------
+  # AMENDED 2026-09-19, and the amendment is the point. This block used to say
+  # of v1 and v2 "Neither is in the machine". That is no longer true of v1, and
+  # the line below in the `excluded` section that said "no production path
+  # instantiates it" has been corrected in the same pass -- a manifest sentence
+  # that is stale in the direction of "less is composed" is exactly the kind
+  # this file exists to catch.
+  #
+  # FIELD v3 IS STILL THE PRODUCTION GENERATION and nothing here retires that
+  # ruling. What changed is that the console needed a field engine and v3's
+  # EXECUTOR is not built: it exists as `fpga/rtl/synth/zhao_probe_v3_exec.sv`,
+  # a probe; its only composition (`zhao_probe_v3_full.sv`) carries a live
+  # deadlock in its own header -- "a program containing SPLINE or RING PARKS
+  # THAT CONTEXT FOREVER" -- whose repair that file says is not an agent's to
+  # make; and no production `zhao_field_v3_*` module has a fit row at all.
+  #
+  # So `zhao_field_engine` composes v1. FROZEN is a ruling about CHANGES, not
+  # about composition: `design/contracts/FIELD.SEQ.CORE.md` names v1 "the exact
+  # serial reference and differential oracle" AND the FALLBACK, and a fallback
+  # that is not composed is not a fallback. When the v3 executor is promoted out
+  # of `synth/` and its dispatcher disagreement settled, it replaces `u_seq`
+  # inside `zhao_field_engine` and this list changes by one line.
+  #
+  # v2 remains out of the machine, unchanged (reports/Fieldv3.md Phase 1).
+  #
+  # FIELD.PROGCACHE IS NO LONGER LISTED HERE and that is not a demotion: it is
+  # INSIDE zhao_field_engine now, so the checker derives it from the real
+  # instantiation graph. Leaving it as a top as well would double-count the
+  # directory against the budget.
+  # FIELD.SEQ.CORE as a console organ: the sequencer, its program store (two
+  # M10K-inferred RAMs), the residency directory above, and the arbiter that
+  # lets the profiles take turns on ONE engine.
+  # `design/contracts/FIELD.SEQ.{EARTH,WARP,FLOW,FORMATION,STAMP}.md` are
+  # identical on the point -- "one engine, five profiles ... There is no
+  # separate FIELD.SEQ.EARTH sequencer in hardware and there is not going to be
+  # one" -- so the five profiles are program sets plus stream adapters, and
+  # counting them as blocks would count one engine five times.
+  - zhao_field_engine
+  # The S profile's STREAM ADAPTER, which FIELD.SEQ.CORE.md permits by name.
+  # Counted because zhao_console_core instantiates it and it closes entry I31:
+  # SURFACE.STAMP's field-driven brush has a producer.
+  - zhao_field_stamp_adapter
   # The long-op services are listed INDIVIDUALLY rather than through
   # zhao_field_v3_svcpath. That composition exists to test wiring: it carries a
   # deliberate RIVAL agent on the multiplier bank so refusal is reachable, and
@@ -732,22 +769,27 @@ excluded:
   - zhao_raster_blend: superseded  split into blend_fin + blend_prod, which zhao_raster_fragment instantiates
 
   # --- FIELD v1: FROZEN by owner ruling 2026-08-25 --------------------------
-  # v1 is kept as the exact reference the differential tests run against. It is
-  # not the production engine and no production path instantiates it.
-  - zhao_field_seq: frozen  FIELD v1 sequencer
-  - zhao_field_alu: frozen  FIELD v1
-  - zhao_field_alu_vec: frozen  FIELD v1
-  - zhao_field_curve: frozen  FIELD v1
-  - zhao_field_exec_shared: frozen  FIELD v1
-  - zhao_field_len: frozen  FIELD v1
-  - zhao_field_noise: frozen  FIELD v1
-  - zhao_field_normalize: frozen  FIELD v1
-  - zhao_field_rcp: frozen  FIELD v1
-  - zhao_field_rcp_rom: frozen  FIELD v1
-  - zhao_field_rf_ram: frozen  FIELD v1
-  - zhao_field_ring: frozen  FIELD v1
-  - zhao_field_rot: frozen  FIELD v1
-  - zhao_field_sinks: frozen  FIELD v1
+  # CORRECTED 2026-09-19. This block used to end "It is not the production
+  # engine and no production path instantiates it." The first half stands; the
+  # second half is now false, and it was false in the flattering direction --
+  # a reader auditing what the console costs would have skipped eleven modules
+  # that are in it.
+  #
+  # FROZEN IS A RULING ABOUT CHANGES, NOT ABOUT COMPOSITION. v1 stays the exact
+  # reference the differential tests run against and takes correctness repairs
+  # only. It is ALSO the fallback engine, and `zhao_field_engine` composes it
+  # into `zhao_console_core` because v3's executor is a probe with a live
+  # deadlock (see the FIELD block in `top:` above). Eleven of the fourteen
+  # modules below are therefore reachable from a counted top and have moved out
+  # of this list; the checker verifies that against the real instantiation
+  # graph rather than taking this comment's word for it.
+  #
+  # THE THREE THAT REMAIN are the ones nothing in the machine instantiates:
+  # `alu_vec` is the v3 probe executor's vector wrapper, `rf_ram` belongs to v2,
+  # and `sinks` has no caller at all.
+  - zhao_field_alu_vec: frozen  FIELD v1, used only by the v3 probe executor
+  - zhao_field_rf_ram: frozen  FIELD v1 register memory, used only by v2
+  - zhao_field_sinks: frozen  FIELD v1, no caller
 
   # --- FIELD v2: FROZEN 2026-08-27 as the differential fallback -------------
   # reports/Fieldv3.md Phase 1: v2 is "exact fallback and differential

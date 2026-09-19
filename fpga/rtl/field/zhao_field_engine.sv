@@ -150,20 +150,33 @@ module zhao_field_engine #(
     parameter int unsigned IN_LANES = 12,
     parameter int unsigned OUT_LANES = 4,
 
-    // ---- DERIVED. Present in the parameter list only because the port list
-    // ---- needs them and a localparam is not visible there. DO NOT OVERRIDE;
-    // ---- the elaboration guards below refuse an override that disagrees.
-    parameter int unsigned SLOTW  = (PROGS   > 1) ? $clog2(PROGS)   : 1,
-    parameter int unsigned PCW    = (INSTR_N > 1) ? $clog2(INSTR_N) : 1,
-    parameter int unsigned TSELW  = (TABLES  > 1) ? $clog2(TABLES)  : 1,
-    parameter int unsigned TIDXW  = (TBL_N   > 1) ? $clog2(TBL_N)   : 1,
-    parameter int unsigned IADDRW = SLOTW + PCW,
-    parameter int unsigned TADDRW = SLOTW + TSELW + TIDXW,
+    // ---- DERIVED, AND WRITTEN OUT AS LITERALS ON PURPOSE. --------------------
+    // These belong in the parameter list because the PORT list needs them and a
+    // body localparam is not visible there. They are plain integers rather than
+    // `$clog2` expressions because `tools/quartus/gen_prod_top.py` cannot
+    // evaluate a parameter expression when it sizes a port, and a module it
+    // cannot size is SKIPPED from the generated production top -- silently, and
+    // in the flattering direction, since the manifest then reports the block as
+    // accounted while no fit ever elaborates it. That was measured here, not
+    // guessed: the generator printed "SKIPPED zhao_field_engine ... unresolved
+    // parameter expression: SLOTW-1" and went on to write a top without it.
+    //
+    // The cost of a literal is that it can disagree with the parameter it is
+    // derived from, so the elaboration guards below check EVERY ONE of them
+    // against its own expression and `$fatal` on a mismatch. A literal that is
+    // checked is a literal; a literal that is not is a second opinion.
+    // DO NOT OVERRIDE these; override the parameter each is derived from.
+    parameter int unsigned SLOTW   = 3,   // $clog2(PROGS)   at PROGS   = 8
+    parameter int unsigned PCW     = 6,   // $clog2(INSTR_N) at INSTR_N = 64
+    parameter int unsigned TSELW   = 1,   // $clog2(TABLES)  at TABLES  = 2
+    parameter int unsigned TIDXW   = 6,   // $clog2(TBL_N)   at TBL_N   = 64
+    parameter int unsigned IADDRW  = 9,   // SLOTW + PCW
+    parameter int unsigned TADDRW  = 10,  // SLOTW + TSELW + TIDXW
     // The load address is WITHIN a slot -- `ld_slot_i` names the slot for every
     // kind, including the two that write a RAM. Carrying the slot twice, once
     // in `ld_slot_i` and once in the high bits of an address, is two places
     // that must agree with nothing forcing them to.
-    parameter int unsigned LDADDRW = (PCW > (TSELW + TIDXW)) ? PCW : (TSELW + TIDXW)
+    parameter int unsigned LDADDRW = 7    // max(PCW, TSELW + TIDXW)
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -309,14 +322,30 @@ module zhao_field_engine #(
     if (CLIENTS < 1) begin
       $fatal(1, "zhao_field_engine: CLIENTS must be at least 1");
     end
+    // Every derived width, checked against the expression it stands for. These
+    // are the price of writing them as literals so the production-top generator
+    // can size the ports; see the note in the parameter list.
     if (SLOTW != ((PROGS > 1) ? $clog2(PROGS) : 1)) begin
-      $fatal(1, "zhao_field_engine: SLOTW is derived and was overridden");
+      $fatal(1, "zhao_field_engine: SLOTW=%0d disagrees with clog2(PROGS=%0d)", SLOTW, PROGS);
+    end
+    if (PCW != ((INSTR_N > 1) ? $clog2(INSTR_N) : 1)) begin
+      $fatal(1, "zhao_field_engine: PCW=%0d disagrees with clog2(INSTR_N=%0d)", PCW, INSTR_N);
+    end
+    if (TSELW != ((TABLES > 1) ? $clog2(TABLES) : 1)) begin
+      $fatal(1, "zhao_field_engine: TSELW=%0d disagrees with clog2(TABLES=%0d)", TSELW, TABLES);
+    end
+    if (TIDXW != ((TBL_N > 1) ? $clog2(TBL_N) : 1)) begin
+      $fatal(1, "zhao_field_engine: TIDXW=%0d disagrees with clog2(TBL_N=%0d)", TIDXW, TBL_N);
     end
     if (IADDRW != (SLOTW + PCW)) begin
-      $fatal(1, "zhao_field_engine: IADDRW is derived and was overridden");
+      $fatal(1, "zhao_field_engine: IADDRW=%0d disagrees with SLOTW+PCW=%0d", IADDRW, SLOTW + PCW);
     end
     if (TADDRW != (SLOTW + TSELW + TIDXW)) begin
-      $fatal(1, "zhao_field_engine: TADDRW is derived and was overridden");
+      $fatal(1, "zhao_field_engine: TADDRW=%0d disagrees with SLOTW+TSELW+TIDXW=%0d",
+             TADDRW, SLOTW + TSELW + TIDXW);
+    end
+    if (LDADDRW != ((PCW > (TSELW + TIDXW)) ? PCW : (TSELW + TIDXW))) begin
+      $fatal(1, "zhao_field_engine: LDADDRW=%0d disagrees with max(PCW, TSELW+TIDXW)", LDADDRW);
     end
   end
 

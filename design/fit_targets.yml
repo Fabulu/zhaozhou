@@ -2064,6 +2064,23 @@ targets:
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
+      # FIELD.SEQ.CORE composed 2026-09-19 (console entry I42). The v1 engine
+      # and its op units enter the production top's closure because
+      # `zhao_field_engine` instantiates them; `zhao_field_progcache` is
+      # already above and is now INSIDE that engine rather than beside it.
+      - fpga/rtl/field/zhao_field_alu.sv
+      - fpga/rtl/field/zhao_field_curve.sv
+      - fpga/rtl/field/zhao_field_len.sv
+      - fpga/rtl/field/zhao_field_noise.sv
+      - fpga/rtl/field/zhao_field_normalize.sv
+      - fpga/rtl/field/zhao_field_rcp_rom.sv
+      - fpga/rtl/field/zhao_field_rcp.sv
+      - fpga/rtl/field/zhao_field_ring.sv
+      - fpga/rtl/field/zhao_field_rot.sv
+      - fpga/rtl/field/zhao_field_exec_shared.sv
+      - fpga/rtl/field/zhao_field_seq.sv
+      - fpga/rtl/field/zhao_field_engine.sv
+      - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_isqrt.sv
       - fpga/rtl/field/zhao_field_mul.sv
       - fpga/rtl/field/zhao_field_progcache.sv
@@ -2721,4 +2738,31 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_mipreq.sv
       - fpga/rtl/terrain/zhao_terrain_mipfeed.sv
       - fpga/rtl/terrain/zhao_terrain_mipgen.sv
+      # ---- FIELD.SEQ.CORE, composed 2026-09-19 (core entry I42) -------------
+      # One engine for all five profiles. `design/contracts/FIELD.SEQ.*.md`:
+      # "one engine, five profiles ... There is no separate FIELD.SEQ.EARTH
+      # sequencer in hardware and there is not going to be one." The leaf fit
+      # row for zhao_field_seq is 4,494 ALM / 3,725 reg / 5 M10K / 3 DSP at
+      # 58.99 MHz on a clean tree, so the fit question this closure asks is
+      # whether the composed store (two M10K-inferred RAMs) and the arbiter
+      # land near that, or whether the 96-bit table memory costs more than the
+      # sequencer it feeds.
+      - fpga/rtl/field/zhao_field_alu.sv
+      - fpga/rtl/field/zhao_field_curve.sv
+      - fpga/rtl/field/zhao_field_isqrt.sv
+      - fpga/rtl/field/zhao_field_len.sv
+      - fpga/rtl/field/zhao_field_mul.sv
+      - fpga/rtl/field/zhao_field_noise.sv
+      - fpga/rtl/field/zhao_field_normalize.sv
+      - fpga/rtl/field/zhao_field_rcp_rom.sv
+      - fpga/rtl/field/zhao_field_rcp.sv
+      - fpga/rtl/field/zhao_field_ring.sv
+      - fpga/rtl/field/zhao_field_rot.sv
+      - fpga/rtl/field/zhao_field_sin_rom.sv
+      - fpga/rtl/field/zhao_field_sin.sv
+      - fpga/rtl/field/zhao_field_exec_shared.sv
+      - fpga/rtl/field/zhao_field_seq.sv
+      - fpga/rtl/field/zhao_field_progcache.sv
+      - fpga/rtl/field/zhao_field_engine.sv
+      - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/prod/zhao_console_core.sv

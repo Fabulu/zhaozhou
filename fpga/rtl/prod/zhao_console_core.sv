@@ -461,9 +461,37 @@
 //      store to that bridge exists yet. Connecting them is a shell change.
 //
 //
-//  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY. FIELD.SEQ.FLOW
-//      is not composed; `zhao_field_seq.sv` exists but exposes no bounded
-//      acceleration sample of this shape.
+//  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY, and the REASON
+//      CHANGED 2026-09-19. The old text said "FIELD.SEQ.FLOW is not composed",
+//      and that named a block `design/contracts/FIELD.SEQ.FLOW.md` rules will
+//      never exist: "one engine, five profiles ... There is no separate
+//      FIELD.SEQ.FLOW sequencer in hardware and there is not going to be one."
+//      The engine IS composed now -- `u_field_engine`, at the end of this
+//      module -- so what this seam lacks is its own stream adapter, and the
+//      adapter lacks one specific thing.
+//
+//      WHAT IS ACTUALLY MISSING IS THE F PROFILE'S LANE BINDING, and unlike the
+//      S profile's it cannot be assembled out of parts that are already
+//      ratified. I31 closed because both of its halves existed:
+//      FIELD.SEQ.CORE.md names the S varying lanes ("Stamp: stencil u,v") and
+//      `zhao_surface_stamp` already unpacks field-ir 7.1's stamp record byte
+//      for byte. For F, FIELD.SEQ.CORE.md names only the input KIND ("Flow:
+//      particle state"), and nothing in this tree says which fields of the
+//      128-bit particle128 record become which registers, nor which registers
+//      the three s11 accelerations are read back from. FIELD.SEQ.FLOW.md says
+//      that binding is still open and belongs "with the blocks that consume the
+//      output"; choosing it inside a composition packet would be inventing an
+//      ABI, and an invented lane map produces a perfectly plausible wind.
+//
+//      THE JOIN IS ALREADY SOLVED, recorded here so the next packet does not
+//      re-derive it. `zhao_part_update` takes this sample COMBINATIONALLY in
+//      the same cycle as `in_record_i`, exactly as it takes the species
+//      descriptor, and its header says why: "both sides of every comparison are
+//      the same cycle's wires, so there is no stall for them to come apart
+//      across." So a FLOW adapter needs NO new port on that block -- this file
+//      gates `in_valid_i` and PART.STATE's `prt_ready_i` on "the answer for
+//      THIS record is ready", and the record is held stable for the whole
+//      offer. That is a join a composer may write. The binding is not.
 //
 //  I6. PART.COLLIDE's terrain sample (`part_ter_*`) -- BOUNDARY.
 //      `zhao_terrain_patch.sv` exists and is the named owner, but it emits
@@ -1221,14 +1249,25 @@
 //      `zhao_surface_stamp.sv` S5 owns it: nothing in this tree defines a brush
 //      page's format, so there is no port to drive.
 //
-// I31. SURFACE.STAMP's FIELD-DRIVEN BRUSH (`surf_fld_*`) -- BOUNDARY.
-//      FIELD.SEQ.STAMP is the named owner and it is not built. This is the
-//      same shape as I5 (PART.UPDATE's field sample) one sequencer over, and
-//      it is a SEPARATE entry from I30 because the absent owner is a different
-//      block: closing the CMD path would not close this, and vice versa.
-//      NOT tied off: `cmd_field_en_i` selects whether the brush is consulted,
-//      and it is an input rather than a constant, so the datapath behind it
-//      survives synthesis and this row measures it.
+//      (I31 was SURFACE.STAMP's FIELD-DRIVEN BRUSH. It is CLOSED and the
+//      entry is DELETED, 2026-09-19. Its old text said "FIELD.SEQ.STAMP is the
+//      named owner and it is not built", and that owner is ruled never to
+//      exist -- `design/contracts/FIELD.SEQ.STAMP.md`: "one engine, five
+//      profiles ... There is no separate FIELD.SEQ.STAMP sequencer in hardware
+//      and there is not going to be one." What was missing was the engine,
+//      which is `u_field_engine` now, and the S profile's STREAM ADAPTER, which
+//      FIELD.SEQ.CORE.md permits by name and which is
+//      `u_field_stamp_adapter`. `surf_fld_valid_i`, `surf_fld_ready_o`,
+//      `surf_fld_tag_op_i` and `surf_fld_strength_i` are GONE from the port
+//      list rather than driven from it.
+//
+//      The binding was assembled rather than chosen: FIELD.SEQ.CORE.md names
+//      the S varying lanes "stencil u,v", and `zhao_surface_stamp` already
+//      unpacks spec/form/field-ir.md 7.1's {tag_op, strength} byte for byte.
+//      The ONE decision this file takes is policy and is stated beside the
+//      stamp: `cmd_field_en_i` is ANDed with "a stamp program is resident", so
+//      a stamp that asks for the brush with nothing loaded runs as a plain ABI
+//      stamp instead of stalling forever on records that cannot come.)
 //
 // I32. SURFACE.STAMP's `stamp_results` (`surf_res_*`) -- BOUNDARY. TERRAIN.BAKE
 //      is the named consumer, it is built (`fpga/rtl/terrain/zhao_terrain_bake
@@ -1298,15 +1337,42 @@
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
 //      composing the terrain compose engine (connected item 10).
 //
-//      THE ABSENT OWNER IS FIELD.SEQ.EARTH and it is not built.
-//      `tests/terrain/tb_terrain_compose.sv` names it in as many words -- "the
-//      field half needs FIELD.SEQ.EARTH, which is a different lane" -- and
-//      `zhao_field_v2_core` and `zhao_field_progcache` are both in the
-//      completion register's built-but-not-connected list with no sequencer
-//      above them. This is a SEPARATE entry from I5 (PART.UPDATE's field
-//      sample, FIELD.SEQ.FLOW) and from I31 (SURFACE.STAMP's brush,
-//      FIELD.SEQ.STAMP) for the reason I31 already gives: the absent owner is a
-//      different block, so closing one would not close the others.
+//      THE REASON CHANGED 2026-09-19 AND IT IS NOW A SHARPER ONE. The old text
+//      said "THE ABSENT OWNER IS FIELD.SEQ.EARTH and it is not built", citing
+//      `tests/terrain/tb_terrain_compose.sv` and the fact that
+//      `zhao_field_progcache` had "no sequencer above" it. Both halves of that
+//      have moved. `design/contracts/FIELD.SEQ.EARTH.md` rules that owner out
+//      of existence -- "one engine, five profiles ... There is no separate
+//      FIELD.SEQ.EARTH sequencer in hardware and there is not going to be one"
+//      -- and the sequencer is composed here as `u_field_engine`, with
+//      FIELD.PROGCACHE inside it.
+//
+//      WHAT ACTUALLY BLOCKS THE HEIGHT LANE IS THE UNIFORMS, and it is a
+//      MISSING PRODUCER rather than a missing block. FIELD.SEQ.EARTH.md
+//      ratifies the E record exactly: x and z are VARYING and come from the
+//      lattice walk, but `age` (R2), `phase` (R3) and `p0..p7` (R4..R11) are
+//      UNIFORM and come from the field descriptor. `spec/commands.zidl`
+//      TerrainField 0x0200 carries all ten -- `start_tick`, `duration_ticks`
+//      and `parameters[64]` -- and the 9.1 list intake beside this entry
+//      carries NONE of them: `terr_pt_fld_add_*` is a footprint, a program hash
+//      and a command index, and `zhao_terrain_patch.sv` marks the last two
+//      "trace only". Running an Earth program with ten zeroed uniform lanes is
+//      precisely the thing this entry already forbids for the height itself --
+//      a field program applied to every vertex, invisible in the result.
+//
+//      SO CLOSING IT NEEDS A DESCRIPTOR TABLE keyed by `fld_add_cmd_i`, filled
+//      by CMD.EXEC's TerrainField arm, which is the same absent producer entry
+//      I42 names for the program store. That is one seam, not two.
+//
+//      THE REST OF THE ADAPTER IS ALREADY DESIGNABLE and is recorded so the
+//      next packet does not re-derive it: the per-lane PROGRAM is knowable
+//      without touching TERRAIN.PATCH, because `fld_add_accept_o` is a pulse
+//      this module can count and `fld_add_hash_i` is on the same port, so an
+//      EARTH adapter can shadow {hash -> slot} per lane through the directory's
+//      lookup while the patch keeps the ratified footprint test (its chosen law
+//      2). This is still a SEPARATE entry from I5 for the reason I31 gave: the
+//      missing piece differs per seam, and the F profile's is a lane binding
+//      while this one's is a descriptor producer.
 //
 //      IT IS NOT TIED OFF AND IT MAY NOT BE. Section 3.4 is
 //      `live_top = max(compose_top + SUM field lanes, fx(bottom))`, so a
@@ -1632,6 +1698,52 @@
 //      10, DRAW_Q+1 forms in one packet) and `cmd_exec_draw_src_truncated_o`
 //      (case 11). None is asserted zero here.
 //
+// I42. THE FIELD ENGINE'S PROGRAM LOADER (`fld_ld_*`), ITS DIRECTORY PHASES
+//      (`fld_pc_*`) AND ITS SECOND CLIENT (`fld_req_*` / `fld_resp_*`) --
+//      BOUNDARY. NEW 2026-09-19, and it is ONE entry replacing part of THREE:
+//      I5, I31 and I34 each named a different absent FIELD.SEQ.* block, and all
+//      three of those blocks are ruled never to exist. What they were all
+//      actually waiting on is here.
+//
+//      THE LOADER. `zhao_field_seq`'s own header says the shell owns the
+//      instruction and table memories, and `zhao_field_engine` is that shell.
+//      Nothing inside this console fills them. The named owner is CMD.EXEC's
+//      `TerrainField 0x0200` arm -- `handle32[program] program` naming a
+//      cartridge PROGRAM page, spec/cartridge.md 3 kind 0 -- with
+//      `zfield::decode` in software producing the one verdict bit the directory
+//      takes. That arm is not built; CMD.EXEC's draw arm landed the same day
+//      and this is the next one.
+//
+//      THE DIRECTORY'S TWO PHASES face outward for the reason FIELD.PROGCACHE's
+//      contract gives: the decode a miss requires costs orders of magnitude
+//      more than the lookup and belongs to the caller. The phase that is
+//      INTERNAL is the insert, and it is why the directory is composed inside
+//      the engine rather than left at this edge -- it invalidates the program
+//      store's slot, so a profile can never run microcode the directory has
+//      promised to a new hash.
+//
+//      THE SECOND CLIENT IS A REAL PORT AND IT IS ALSO AN INSTRUMENT. Client 0
+//      is `u_field_stamp_adapter`, internal. Client 1 is at this edge, and it
+//      is what makes the arbiter's contention reachable with legal stimulus:
+//      `fld_contended_grants_o` cannot be fired by one client, and a counter
+//      that cannot be fired is not evidence about the thing it watches. It is
+//      also the seam the FLOW and EARTH adapters take over when I5 and I34
+//      close.
+//
+//      WHY NOT A CONSTANT, for each of the three. A tied-off loader leaves the
+//      store empty forever, so every profile run returns ST_NO_PROGRAM and the
+//      whole engine folds away in synthesis -- this row would then measure
+//      nothing. A tied-off directory makes `hdr_loaded` a constant and removes
+//      the invalidation edge that is the block's whole reason for being here. A
+//      tied-off second client removes the arbiter's reachable contention and
+//      with it the only positive control for two of its counters.
+//
+//      EVERY COUNTER BEHIND THIS PORT HAS BEEN FIRED except one, and that one
+//      is structural rather than untested: `fld_pc_oob_o` watches for a fetch
+//      outside a slot's window, and the header clamp that fires
+//      `fld_hdr_clamped_o` is exactly what makes that state unreachable. The
+//      other eight are driven by `tests/field/field_engine_directed.cpp`.
+//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -1655,10 +1767,19 @@
 //   "its own verdict has no consumer either"; that is now the one input
 //   CMD.EXEC gates every console write on.)
 //
-//   FIELD.PROGCACHE. Its `lu_*`/`cm_*` are a hash lookup and a commit with a
-//   decode verdict. Both ends are FIELD.SEQ blocks and none of them is
-//   composed; `zhao_field_v2_core` is itself in the register's
-//   built-but-not-connected list.
+//   (FIELD.PROGCACHE was refused here and the refusal is SPENT, 2026-09-19. It
+//   said "Both ends are FIELD.SEQ blocks and none of them is composed". The
+//   first half was wrong even then: the lookup end is the program LOADER, which
+//   is software plus CMD.EXEC, not a FIELD.SEQ block -- that block's own
+//   contract says the caller decodes and reports one bit. The second half is
+//   what changed: FIELD.SEQ.CORE is composed as `u_field_engine`, and the
+//   directory is INSIDE it, because the edge that matters is internal. An
+//   insert invalidates the store's slot, so no profile can run microcode the
+//   directory has already promised to another hash -- the stale-prepared-values
+//   failure class the PROGCACHE contract names. Both PHASES still face outward
+//   and I42 says who owns them. It was also true that `zhao_field_v2_core` is
+//   unconnected; it still is, and it is FROZEN as the fallback, so that is a
+//   ruling rather than a gap.)
 //
 //   THE FORGE CLUSTER -- all four blocks, refused together, RE-ARGUED
 //   2026-09-19 because the reason on file had gone stale in the flattering
@@ -3215,11 +3336,11 @@ module zhao_console_core
   input  logic               surf_cmd_field_en_i,
   input  logic        [15:0] surf_cmd_src_id_i,
 
-  // I31: the field-driven brush. FIELD.SEQ.STAMP is not built.
-  input  logic        surf_fld_valid_i,
-  output logic        surf_fld_ready_o,
-  input  logic [31:0] surf_fld_tag_op_i,
-  input  logic [15:0] surf_fld_strength_i,
+  // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
+  // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
+  // `u_field_engine` runs the program. The four ports are GONE from this edge
+  // rather than driven from it, which is the difference between a seam that
+  // closed and a seam that acquired a producer.
 
   // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
   output logic        surf_res_valid_o,
@@ -3543,7 +3664,102 @@ module zhao_console_core
   output logic [15:0]  terr_mg_m9_h_o,
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
-  output logic [31:0]  terr_mg_aborts_o
+  output logic [31:0]  terr_mg_aborts_o,
+
+  // ==========================================================================
+  // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
+  // ==========================================================================
+  // THE PROGRAM LOADER. Nothing inside this console loads a field program, and
+  // the named owner is CMD.EXEC's TerrainField 0x0200 arm (spec/commands.zidl:
+  // `handle32[program] program` -> the cartridge PROGRAM page, spec/cartridge.md
+  // 3 kind 0) together with the software decoder. `ld_kind_i` is 0 instruction,
+  // 1 table entry, 2 header; the header is written LAST and is what marks a slot
+  // runnable, so a partially written program can never execute.
+  input  logic         fld_ld_valid_i,
+  output logic         fld_ld_ready_o,
+  input  logic [ 1:0]  fld_ld_kind_i,
+  input  logic [ 2:0]  fld_ld_slot_i,
+  input  logic [ 6:0]  fld_ld_addr_i,
+  input  logic [95:0]  fld_ld_data_i,
+
+  // FIELD.PROGCACHE's TWO PHASES. Both face outward because the decode a miss
+  // requires is `zfield::decode`'s and lives in software -- that block's own
+  // contract says the caller decodes and reports one bit. What is INTERNAL, and
+  // is why the directory is composed rather than left at this edge, is the
+  // insert: it invalidates the program store's slot, so no profile can run
+  // microcode the directory has already promised to another hash.
+  input  logic         fld_pc_lu_valid_i,
+  output logic         fld_pc_lu_ready_o,
+  input  logic [31:0]  fld_pc_lu_hash_i,
+  output logic         fld_pc_lu_resp_valid_o,
+  input  logic         fld_pc_lu_resp_ready_i,
+  output logic         fld_pc_lu_hit_o,
+  output logic [ 2:0]  fld_pc_lu_slot_o,
+  input  logic         fld_pc_cm_valid_i,
+  output logic         fld_pc_cm_ready_o,
+  input  logic [31:0]  fld_pc_cm_hash_i,
+  input  logic         fld_pc_cm_ok_i,
+  output logic         fld_pc_cm_resp_valid_o,
+  input  logic         fld_pc_cm_resp_ready_i,
+  output logic         fld_pc_cm_inserted_o,
+  output logic         fld_pc_cm_evicted_o,
+  output logic [ 2:0]  fld_pc_cm_slot_o,
+
+  // CONSOLE POLICY: which resident program is the stamp brush, and whether one
+  // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
+  // for the same reason -- no opcode carries either, and I30 already records
+  // that an executor filling them in would be choosing values the ABI does not
+  // contain.
+  input  logic [ 2:0]  fld_stamp_slot_i,
+  input  logic         fld_stamp_slot_valid_i,
+
+  // THE ENGINE'S SECOND CLIENT. It is the seam the FLOW and EARTH adapters take
+  // over when I5 and I34 close, and until then it is what makes the arbiter's
+  // contention reachable with legal stimulus: a counter that cannot be fired is
+  // not evidence about the thing it watches.
+  //
+  // The two widths are literals because a port list cannot see a body
+  // localparam. `u_field_engine` is instantiated with IN_LANES = 12 (the
+  // ratified E record of spec/form/field-ir.md 7.1) and OUT_LANES = 4, and the
+  // elaboration guard beside the instance refuses any disagreement rather than
+  // leaving the two places to drift.
+  input  logic          fld_req_valid_i,
+  output logic          fld_req_ready_o,
+  input  logic [  2:0]  fld_req_slot_i,
+  input  logic          fld_req_noprog_i,
+  input  logic [383:0]  fld_req_in_i,
+  output logic          fld_resp_valid_o,
+  input  logic          fld_resp_ready_i,
+  output logic [127:0]  fld_resp_out_o,
+  output logic [  7:0]  fld_resp_status_o,
+
+  output logic [31:0]  fld_runs_o,
+  output logic [31:0]  fld_run_faults_o,
+  output logic [31:0]  fld_noprog_o,
+  output logic [31:0]  fld_instr_retired_o,
+  output logic [31:0]  fld_loads_o,
+  output logic [31:0]  fld_load_defers_o,
+  output logic [31:0]  fld_grants_o,
+  output logic [31:0]  fld_contended_grants_o,
+  output logic [31:0]  fld_hdr_clamped_o,
+  output logic [31:0]  fld_tbl_oob_o,
+  output logic [31:0]  fld_pc_oob_o,
+  // {rcp0, sat_rcp, sat_rescale, sat_mul, sat_add} -- the SatLedger of the LAST
+  // completed run, straight off the sequencer.
+  output logic [ 4:0]  fld_sat_o,
+  output logic [31:0]  fld_pc_hits_o,
+  output logic [31:0]  fld_pc_misses_o,
+  output logic [31:0]  fld_pc_rejected_o,
+  output logic [31:0]  fld_pc_evictions_o,
+  output logic [ 3:0]  fld_pc_occupancy_o,
+  output logic [31:0]  surf_fld_stamps_o,
+  output logic [31:0]  surf_fld_texels_o,
+  output logic [31:0]  surf_fld_faults_o,
+  output logic [31:0]  surf_fld_restarts_o,
+  // High while the stencil walk is running. Exported rather than dropped: it
+  // is the one signal that separates "the brush produced nothing" from "the
+  // brush never started", and those have different causes and different fixes.
+  output logic         surf_fld_busy_o
 );
 
   // ==========================================================================
@@ -5554,6 +5770,18 @@ module zhao_console_core
   // knows -- and because the walk is a LOOP (sampler -> plane -> sampler) and
   // splitting a loop across two places in a file is how one half gets edited.
   // ==========================================================================
+  // ---- the FIELD engine's internal client and its shared response bus -----
+  // Client 0 of `u_field_engine`, driven by `u_field_stamp_adapter`. Both are
+  // declared at the end of this module; these wires are here so the engine's
+  // port map can be read without scrolling for a declaration.
+  logic         sfa_req_valid, sfa_req_ready;
+  logic [  2:0] sfa_req_slot;
+  logic         sfa_req_noprog;
+  logic [383:0] sfa_req_in;
+  logic         sfa_resp_valid, sfa_resp_ready;
+  logic [127:0] fld_resp_out_c;
+  logic [  7:0] fld_resp_status_c;
+
   logic                   atm_req_v_c;
   logic [POST_XW-1:0]     atm_req_x_c;
   logic [POST_YW-1:0]     atm_req_y_c;
@@ -5794,6 +6022,26 @@ module zhao_console_core
   logic signed [31:0] surf_cmd_radius_m, surf_cmd_ring_width_m;
   logic        surf_cmd_ready_int;
 
+  // ---- the field brush's wires, and the one policy decision this makes -----
+  // `surf_field_en_c` is the host's request for the brush ANDed with "a stamp
+  // program is actually resident". Without that gate a stamp issued with
+  // `cmd_field_en_i` high and nothing loaded would stall forever waiting for
+  // 4,096 records that cannot come, and `zhao_field_seq`'s own header is right
+  // that a hang is the worse failure and the one nobody can debug from a frame
+  // capture. It runs as a plain ABI stamp instead, and `fld_noprog_o` is not
+  // the counter that says so -- `fld_stamp_slot_valid_i` is an input the board
+  // can read back, so the condition is visible from outside without inventing
+  // a counter for a state the console chose.
+  //
+  // THIS IS A POLICY DECISION TAKEN IN THE COMPOSER, which is where I30 already
+  // says the stamp's other four policy bits are decided.
+  logic        surf_field_en_c;
+  logic        sfa_fld_valid, sfa_fld_ready;
+  logic [31:0] sfa_fld_tag_op;
+  logic [15:0] sfa_fld_strength;
+  logic        sfa_arm_ready;
+  assign surf_field_en_c = surf_cmd_field_en_i && sfa_arm_ready;
+
   assign surf_cmd_valid_m       = cmd_exec_stamp_valid_w || surf_cmd_valid_i;
   assign cmd_exec_stamp_ready_w = surf_cmd_ready_int;
   assign surf_cmd_ready_o       = surf_cmd_ready_int && !cmd_exec_stamp_valid_w;
@@ -5842,14 +6090,14 @@ module zhao_console_core
     .cmd_blend_en_i  (surf_cmd_blend_en_i),
     .cmd_blend_i     (surf_cmd_blend_i),
     .cmd_age_shift_i (surf_cmd_age_shift_i),
-    .cmd_field_en_i  (surf_cmd_field_en_i),
+    .cmd_field_en_i  (surf_field_en_c),
     .cmd_src_id_i    (surf_cmd_src_id_m),
 
-    // I31: FIELD.SEQ.STAMP is not built.
-    .fld_valid_i   (surf_fld_valid_i),
-    .fld_ready_o   (surf_fld_ready_o),
-    .fld_tag_op_i  (surf_fld_tag_op_i),
-    .fld_strength_i(surf_fld_strength_i),
+    // I31 CLOSED: the S-profile stream adapter, at the end of this module.
+    .fld_valid_i   (sfa_fld_valid),
+    .fld_ready_o   (sfa_fld_ready),
+    .fld_tag_op_i  (sfa_fld_tag_op),
+    .fld_strength_i(sfa_fld_strength),
 
     // REAL: SURFACE.SHEET's request port, name for name.
     .req_valid_o (surf_req_valid),
@@ -8684,6 +8932,165 @@ module zhao_console_core
     .m17_writes_o(terr_mg_m17_writes_o),
     .m9_writes_o (terr_mg_m9_writes_o),
     .aborts_o    (terr_mg_aborts_o)
+  );
+
+  // ==========================================================================
+  // FIELD.SEQ.CORE, COMPOSED ONCE -- and the S profile riding on it.
+  // ==========================================================================
+  // THE CORRECTION THIS INSTANCE IS. Entries I5, I31 and I34 each said their
+  // owner -- FIELD.SEQ.FLOW, FIELD.SEQ.STAMP, FIELD.SEQ.EARTH -- "is not
+  // built". `design/contracts/FIELD.SEQ.{FLOW,STAMP,EARTH}.md` are identical on
+  // the point and say the opposite in as many words:
+  //
+  //   > Owner ruling, 2026-08-22: one engine, five profiles. This contract
+  //   > describes a CONFIGURATION of FIELD.SEQ.CORE ... There is no separate
+  //   > FIELD.SEQ.EARTH sequencer in hardware and there is not going to be one.
+  //
+  // `design/blocks.yml` records all five as `kind: profile` with
+  // `implemented_by: FIELD.SEQ.CORE`, rule V21. So three entries were each
+  // waiting on a block that is RULED never to exist, while the block that
+  // implements all three -- `zhao_field_seq`, RTL_VERIFIED, fit-measured at
+  // 4,494 ALM / 5 M10K / 3 DSP on a clean tree -- was outside this file
+  // entirely. What each seam was actually missing is its own STREAM ADAPTER,
+  // which FIELD.SEQ.CORE.md permits by name, and a program to run.
+  //
+  // WHAT THE SHARING SAVES. Three profiles on three engines is 13,482 ALM and
+  // 9 DSP. One engine and an arbiter is 4,494 ALM and 3 DSP, so ~8,988 ALM and
+  // 6 DSP are not spent -- and the program store is M10K rather than logic,
+  // which is the owner's ruling that memory is the slack and ALMs are the debt.
+  //
+  // WHY v1 AND NOT v3, stated so it is a decision rather than an omission. The
+  // v3 executor is a PROBE under `fpga/rtl/synth/`, its only composition
+  // (`zhao_probe_v3_full.sv`) carries a live deadlock in its own header -- "a
+  // program containing SPLINE or RING PARKS THAT CONTEXT FOREVER" -- whose
+  // repair that file says is not an agent's to make, and no production
+  // `zhao_field_v3_*` module has a fit row at all. Composing a machine already
+  // known to park a context forever would be composing a circuit already known
+  // to be wrong. When v3 is promoted and its dispatcher disagreement settled it
+  // replaces `u_seq` INSIDE `zhao_field_engine`, and nothing here changes.
+  logic [4:0] fld_sat_c;
+
+  zhao_field_engine #(
+    .CLIENTS  (2),
+    .PROGS    (8),
+    .INSTR_N  (64),
+    .TABLES   (2),
+    .TBL_N    (64),
+    .IN_LANES (12),
+    .OUT_LANES(4)
+  ) u_field_engine (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // I42: the program loader. CMD.EXEC's TerrainField arm is the named owner.
+    .ld_valid_i(fld_ld_valid_i),
+    .ld_ready_o(fld_ld_ready_o),
+    .ld_kind_i (fld_ld_kind_i),
+    .ld_slot_i (fld_ld_slot_i),
+    .ld_addr_i (fld_ld_addr_i),
+    .ld_data_i (fld_ld_data_i),
+
+    // I42: FIELD.PROGCACHE's two phases. The insert edge is internal.
+    .pc_lu_valid_i     (fld_pc_lu_valid_i),
+    .pc_lu_ready_o     (fld_pc_lu_ready_o),
+    .pc_lu_hash_i      (fld_pc_lu_hash_i),
+    .pc_lu_resp_valid_o(fld_pc_lu_resp_valid_o),
+    .pc_lu_resp_ready_i(fld_pc_lu_resp_ready_i),
+    .pc_lu_hit_o       (fld_pc_lu_hit_o),
+    .pc_lu_slot_o      (fld_pc_lu_slot_o),
+    .pc_cm_valid_i     (fld_pc_cm_valid_i),
+    .pc_cm_ready_o     (fld_pc_cm_ready_o),
+    .pc_cm_hash_i      (fld_pc_cm_hash_i),
+    .pc_cm_ok_i        (fld_pc_cm_ok_i),
+    .pc_cm_resp_valid_o(fld_pc_cm_resp_valid_o),
+    .pc_cm_resp_ready_i(fld_pc_cm_resp_ready_i),
+    .pc_cm_inserted_o  (fld_pc_cm_inserted_o),
+    .pc_cm_evicted_o   (fld_pc_cm_evicted_o),
+    .pc_cm_slot_o      (fld_pc_cm_slot_o),
+    .pc_hits_o         (fld_pc_hits_o),
+    .pc_misses_o       (fld_pc_misses_o),
+    .pc_rejected_o     (fld_pc_rejected_o),
+    .pc_evictions_o    (fld_pc_evictions_o),
+    .pc_occupancy_o    (fld_pc_occupancy_o),
+
+    // Client 0 is REAL: the S-profile adapter below. Client 1 is at this
+    // module's edge and is the seam I5 and I34 will take.
+    .req_valid_i ({fld_req_valid_i, sfa_req_valid}),
+    .req_ready_o ({fld_req_ready_o, sfa_req_ready}),
+    .req_slot_i  ({fld_req_slot_i, sfa_req_slot}),
+    .req_noprog_i({fld_req_noprog_i, sfa_req_noprog}),
+    .req_in_i    ({fld_req_in_i, sfa_req_in}),
+    .resp_valid_o({fld_resp_valid_o, sfa_resp_valid}),
+    .resp_ready_i({fld_resp_ready_i, sfa_resp_ready}),
+    .resp_out_o  (fld_resp_out_c),
+    .resp_status_o(fld_resp_status_c),
+
+    .runs_o            (fld_runs_o),
+    .run_faults_o      (fld_run_faults_o),
+    .noprog_o          (fld_noprog_o),
+    .instr_retired_o   (fld_instr_retired_o),
+    .loads_o           (fld_loads_o),
+    .load_defers_o     (fld_load_defers_o),
+    .grants_o          (fld_grants_o),
+    .contended_grants_o(fld_contended_grants_o),
+    .hdr_clamped_o     (fld_hdr_clamped_o),
+    .tbl_oob_o         (fld_tbl_oob_o),
+    .pc_oob_o          (fld_pc_oob_o),
+    .sat_add_o         (fld_sat_c[0]),
+    .sat_mul_o         (fld_sat_c[1]),
+    .sat_rescale_o     (fld_sat_c[2]),
+    .sat_rcp_o         (fld_sat_c[3]),
+    .rcp0_o            (fld_sat_c[4])
+  );
+
+  assign fld_sat_o         = fld_sat_c;
+  assign fld_resp_out_o    = fld_resp_out_c;
+  assign fld_resp_status_o = fld_resp_status_c;
+
+  // The S profile's stream adapter. It computes nothing -- no coverage, no
+  // blend, no arithmetic -- because `zhao_surface_stamp`'s S2 chose to deliver
+  // one record per VISITED texel rather than per COVERED texel precisely so
+  // that a producer would not have to reproduce its circle geometry. The two
+  // cursors are held together by the shared start (`surf_cmd_valid_m &&
+  // surf_cmd_ready_int`, the same accept the stamp itself begins on) and by the
+  // handshake, not by a duplicated rule.
+  zhao_field_stamp_adapter #(
+    .SHEET_W  (64),
+    .SHEET_H  (64),
+    .SLOTW    (3),
+    .IN_LANES (12),
+    .OUT_LANES(4)
+  ) u_field_stamp_adapter (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cmd_fire_i    (surf_cmd_valid_m && surf_cmd_ready_int),
+    .cmd_field_en_i(surf_field_en_c),
+
+    .slot_i      (fld_stamp_slot_i),
+    .slot_valid_i(fld_stamp_slot_valid_i),
+    .arm_ready_o (sfa_arm_ready),
+
+    .fld_valid_o   (sfa_fld_valid),
+    .fld_ready_i   (sfa_fld_ready),
+    .fld_tag_op_o  (sfa_fld_tag_op),
+    .fld_strength_o(sfa_fld_strength),
+
+    .req_valid_o  (sfa_req_valid),
+    .req_ready_i  (sfa_req_ready),
+    .req_slot_o   (sfa_req_slot),
+    .req_noprog_o (sfa_req_noprog),
+    .req_in_o     (sfa_req_in),
+    .resp_valid_i (sfa_resp_valid),
+    .resp_ready_o (sfa_resp_ready),
+    .resp_out_i   (fld_resp_out_c),
+    .resp_status_i(fld_resp_status_c),
+
+    .stamps_o  (surf_fld_stamps_o),
+    .texels_o  (surf_fld_texels_o),
+    .faults_o  (surf_fld_faults_o),
+    .restarts_o(surf_fld_restarts_o),
+    .busy_o    (surf_fld_busy_o)
   );
 
 endmodule : zhao_console_core
