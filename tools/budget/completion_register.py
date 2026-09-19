@@ -133,18 +133,131 @@ def has_test_target(module: str) -> bool:
     return module in CMAKE.read_text(encoding="utf-8", errors="replace")
 
 
+BLOCKS = ROOT / "design" / "blocks.yml"
+RTL = ROOT / "fpga" / "rtl"
+
+
+def ledger_blocks() -> list[dict]:
+    """Every `kind: rtl` block, with the fields that decide whether it is ours.
+
+    `implementation:` would be the obvious source and it is NOT usable: only 6
+    of 98 rtl blocks carry one. So the module is resolved by the repository's
+    naming convention and then CHECKED against the filesystem -- a convention
+    that resolves to nothing is reported as unresolvable rather than counted as
+    missing, because a name heuristic over-reports and an over-reported gap list
+    sends people to build things that already exist.
+    """
+    if not BLOCKS.exists():
+        return []
+    text = BLOCKS.read_text(encoding="utf-8", errors="replace")
+    out: list[dict] = []
+    cur: dict | None = None
+    for line in text.splitlines():
+        m = re.match(r"\s*-\s*id:\s*(\S+)", line)
+        if m:
+            if cur:
+                out.append(cur)
+            cur = {"id": m.group(1), "kind": None, "deferred": None,
+                   "blocked_on": None, "implementation": None}
+            continue
+        if cur is None:
+            continue
+        for key in ("kind", "deferred", "blocked_on", "implementation"):
+            m = re.match(r"\s*%s:\s*(\S+)" % key, line)
+            if m:
+                cur[key] = m.group(1)
+    if cur:
+        out.append(cur)
+    return [b for b in out if b["kind"] == "rtl"]
+
+
+# Capabilities whose module name the convention cannot construct. Every entry
+# was resolved BY HAND against the tree on 2026-09-19 and carries what was
+# found, so a reader can re-check rather than trust. `None` means the search
+# genuinely found nothing -- those are real "not built" gaps, and leaving them
+# in the unresolvable bucket would have reported "0 NOT BUILT AT ALL", which is
+# the flattering direction and was the first run's actual output.
+_ALIAS: dict[str, str | None] = {
+    "MEM.VRAM.ARBITER":  "zhao_vram_arbiter",
+    "MEM.HPS.ARBITER":   "zhao_hps_arbiter",
+    "MEM.HPS.BRIDGE":    "zhao_hps_bridge",
+    "FIELD.SEQ.CORE":    "zhao_field_v2_core",
+    "TERRAIN.COMPCACHE": "zhao_terrain_compcache_front",
+    "TERRAIN.ISLAND":    "zhao_terrain_island_dir",
+    "GEOM.POSE":         "zhao_geom_pose_decode",
+    "MATERIAL.RESOLVE":  "zhao_texture_material_combine_v2",
+    # searched and genuinely absent -- no file matches these at all
+    "MEM.UPLOAD":        None,
+    "GEOM.LOOM":         None,
+    "FORGE.SHADOW":      None,
+}
+
+
+def resolve_module(block_id: str, implementation: str | None) -> str | None:
+    if block_id in _ALIAS:
+        return _ALIAS[block_id]          # may be None: searched, genuinely absent
+    if implementation:
+        p = ROOT / implementation
+        if p.exists():
+            return p.stem
+    # PART.STATE -> zhao_part_state ; GEOM.SKIN.NORM -> zhao_geom_skin_norm
+    cand = "zhao_" + block_id.lower().replace(".", "_")
+    if (list(RTL.rglob(cand + ".sv"))):
+        return cand
+    return None
+
+
+def disconnected() -> dict:
+    """Mandatory capabilities whose implementation is NOT in the console.
+
+    The owner's standard: a mandatory function does not count as present if it
+    is "a disconnected implementation". Closure membership is exactly that test,
+    and it is the one that cannot be satisfied by a file existing on disk.
+    """
+    closure = console_closure()
+    absent, unbuilt, unresolvable, deferred_ok, connected = [], [], [], [], []
+    for b in ledger_blocks():
+        if b["deferred"] == "true":
+            deferred_ok.append(b["id"])            # cites its own ruling in the ledger
+            continue
+        if b["blocked_on"] == "hardware":
+            deferred_ok.append(b["id"])            # waits for the board, by ruling
+            continue
+        mod = resolve_module(b["id"], b["implementation"])
+        if mod is None and b["id"] in _ALIAS:
+            unbuilt.append(b["id"])      # hand-searched and absent: a REAL gap
+        elif mod is None:
+            unresolvable.append(b["id"])
+        elif mod in closure:
+            connected.append(b["id"])
+        elif list(RTL.rglob(mod + ".sv")):
+            absent.append((b["id"], mod))          # built, NOT connected
+        else:
+            unbuilt.append(b["id"])                # no RTL at all
+    return {"connected": connected, "built_not_connected": absent,
+            "unbuilt": unbuilt, "unresolvable": unresolvable,
+            "deferred_or_blocked": deferred_ok}
+
+
 def audit() -> dict:
     ties = tieoffs()
     closure = console_closure()
     gaps = [t for t in ties if t["mandatory_gap"]]
+    dis = disconnected()
+    total = len(gaps) + len(dis["built_not_connected"]) + len(dis["unbuilt"])
     return {
         "tieoffs_total": len(ties),
-        "mandatory_gaps": len(gaps),
+        "tieoff_gaps": len(gaps),
+        "mandatory_gaps": total,
         "closure_modules": len(closure),
         "by_kind": {k: sum(1 for t in ties if t["kind"] == k)
                     for k in sorted({t["kind"] for t in ties})},
         "gaps": [{"id": t["id"], "kind": t["kind"],
                   "head": t["head"][:100]} for t in gaps],
+        "capability": {k: len(v) for k, v in dis.items()},
+        "built_not_connected": [m for _, m in dis["built_not_connected"]],
+        "unbuilt": dis["unbuilt"],
+        "unresolvable": dis["unresolvable"],
     }
 
 
@@ -204,7 +317,28 @@ def main(argv: list[str]) -> int:
     print("tie-off entries in its header     : %d" % rep["tieoffs_total"])
     for k, n in sorted(rep["by_kind"].items()):
         print("    %-22s %d" % (k, n))
+    c = rep["capability"]
+    print("\nmandatory rtl capabilities (design/blocks.yml)")
+    print("    connected in the console  : %d" % c["connected"])
+    print("    BUILT BUT NOT CONNECTED   : %d" % c["built_not_connected"])
+    print("    NOT BUILT AT ALL          : %d" % c["unbuilt"])
+    print("    deferred / waits for board: %d   (cite the ruling, not a gap)"
+          % c["deferred_or_blocked"])
+    print("    name unresolvable         : %d   (reported, never counted as a gap --"
+          % c["unresolvable"])
+    print("                                     a name heuristic over-reports)")
+    if rep["built_not_connected"]:
+        print("\n  BUILT BUT NOT CONNECTED (a disconnected implementation does not count):")
+        for m in rep["built_not_connected"][:20]:
+            print("    %s" % m)
+    if rep["unbuilt"]:
+        print("\n  NOT BUILT AT ALL:")
+        for m in rep["unbuilt"][:20]:
+            print("    %s" % m)
+
     print("\nMANDATORY GAPS REMAINING          : %d" % rep["mandatory_gaps"])
+    print("  (%d tie-offs + %d built-not-connected + %d unbuilt)"
+          % (rep["tieoff_gaps"], c["built_not_connected"], c["unbuilt"]))
     if rep["gaps"]:
         print()
         for g in rep["gaps"]:
