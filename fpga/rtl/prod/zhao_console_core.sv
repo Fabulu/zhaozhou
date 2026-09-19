@@ -3565,6 +3565,10 @@ module zhao_console_core
   output logic [31:0]             geom_va_profile_mixed_o,
   output logic [31:0]             geom_va_dq_refused_o,
   output logic [31:0]             geom_va_dq_stray_o,
+  // Review of d52ae6c0: depth results that WAITED for their u/v (a handshake,
+  // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
+  output logic [31:0]             geom_va_uv_waits_o,
+  output logic                    geom_va_poison_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -5803,6 +5807,8 @@ module zhao_console_core
   // first readers; the block is instantiated at section 11 beside GEOM.REPLAY.
   wire                     va_lit_ready;
   wire                     va_done;
+  wire                     va_poison;   // the batch lost a row (VATTR)
+  assign geom_va_poison_o = va_poison;
 
   // ==========================================================================
   // GEOM.VDECODE -> GEOM.POSE's PALETTE STORE -> GEOM.SKIN.  ENTRY I10, WHOLE.
@@ -11393,7 +11399,10 @@ module zhao_console_core
     .grp_gen_i   (gs_grp_gen),
     .grp_view_i  (gs_grp_view),
     // REAL: R31 -- a batch GEOM.VDECODE refused part of is dropped here, whole.
-    .grp_poison_i(gs_grp_poison),
+    // R31 poison, from BOTH owners of a batch's rows: GROUP_SEQ (a refused
+    // record) and GEOM.VATTR (a row dropped or outside the store) -- a batch
+    // whose store rows are not all its own is dropped, never drawn.
+    .grp_poison_i(gs_grp_poison || va_poison),
     .rel_valid_o (rp_rel_valid),
     .rel_arena_o (rp_rel_arena),
 
@@ -11510,6 +11519,7 @@ module zhao_console_core
     .fl_profile_i  (proj_a_profile_o),
 
     .done_o        (va_done),
+    .poison_o      (va_poison),
 
     .look_valid_i  (rp_look_valid && ln_look_ready),
     .look_arena_i  (rp_look_arena),
@@ -11527,7 +11537,8 @@ module zhao_console_core
     .look_oob_o        (geom_va_look_oob_o),
     .profile_mixed_o   (geom_va_profile_mixed_o),
     .dq_refused_o      (geom_va_dq_refused_o),
-    .dq_stray_o        (geom_va_dq_stray_o)
+    .dq_stray_o        (geom_va_dq_stray_o),
+    .uv_waits_o        (geom_va_uv_waits_o)
   );
 
   // THE RULING-5 PACKET, per corner: slot 0 is GEOM.DEPTHQUANT's invw24,

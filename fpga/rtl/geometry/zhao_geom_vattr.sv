@@ -115,7 +115,11 @@
 //   look_oob_o     a lookup outside ARENAS x VSLOTS; answered with zeros.
 //   profile_mixed_o one arena landed under two depth profiles (moved here from
 //                  GEOM.REPLAY with the depth law itself).
-//   dq_refused_o / dq_stray_o  the depth stream's own, forwarded.
+//   dq_refused_o / dq_stray_o  the depth stream's own, forwarded (stray is
+//                  fired in geom_depthquant_stream_directed case 2).
+//   poison_o       not a counter: the batch lost a row (a drop or an
+//                  out-of-store landing), ORed into REPLAY's handle poison.
+//   uv_waits_o     not a fault: depth results that waited for their u/v.
 //
 // Conservative SystemVerilog subset only (charter section 2).
 `default_nettype none
@@ -168,6 +172,11 @@ module zhao_geom_vattr #(
 
     // ---- every write the current batch owes is in the store -----------------
     output wire                     done_o,
+    // The batch lost a row -- a landing dropped by the full queue, or outside
+    // the store -- so some corner REPLAY reads for it is not this batch's.
+    // The composer ORs it into the handle's poison beside GROUP_SEQ's (R31:
+    // the batch drops, not the frame). Cleared at the next `batch_i`.
+    output logic                    poison_o,
 
     // ---- lookups: GEOM.REPLAY's own, as the arena accepted them -------------
     input  wire                     look_valid_i,
@@ -189,7 +198,12 @@ module zhao_geom_vattr #(
     output logic [31:0]             look_oob_o,
     output logic [31:0]             profile_mixed_o,
     output logic [31:0]             dq_refused_o,
-    output logic [31:0]             dq_stray_o
+    output logic [31:0]             dq_stray_o,
+    // A depth result whose vertex's u/v was NOT yet staged: the row writer
+    // WAITS for it (see "u/v BEFORE ITS ROW") and this counts each such result
+    // once. Not a fault -- the wait makes the row right -- but the evidence
+    // that the join is a HANDSHAKE rather than a timing assumption.
+    output logic [31:0]             uv_waits_o
 );
 
   localparam int unsigned VIW  = $clog2(VSLOTS);
@@ -236,6 +250,20 @@ module zhao_geom_vattr #(
   logic [31:0]        rows_b_q;       // rows finished this batch (incl. dropped)
 
   wire [1:0] views_c = 2'(batch_views_i[0]) + 2'(batch_views_i[1]);
+
+  // THE BATCH'S ORDINALS AS SEEN THIS CLOCK. On the `batch_i` clock they are
+  // already the NEW batch's zeros, so an event coinciding with the boundary is
+  // counted, addressed and stored as the new batch's first -- the arrays and
+  // the ordinals cannot disagree (review of d52ae6c0: they used to, the arrays
+  // taking the old ordinal while the counters held). In composition no event
+  // coincides: the job accept that raises `batch_i` precedes the meshlet's
+  // first vertex record (GEOM.ASSETFETCH's S_HAND -> S_SERVE), and `done_o`
+  // gates the previous batch's handle, so its last event is already in.
+  wire [1:0]   op_n_c    = batch_i ? 2'd0 : op_n_q;
+  wire [VIW:0] uv_ord_c  = batch_i ? '0   : uv_ord_q;
+  wire [VIW:0] lit_ord_c = batch_i ? '0   : lit_ord_q;
+  wire [31:0]  lands_b_c = batch_i ? '0   : lands_b_q;
+  wire [31:0]  rows_b_c  = batch_i ? '0   : rows_b_q;
 
   // ==========================================================================
   // THE u/v STAGE: decode order, keyed by ordinal == the arena index
@@ -354,7 +382,20 @@ module zhao_geom_vattr #(
   logic [INDEX_W-1:0] w_index_q;
   logic signed [31:0] w_uow_q;
 
-  assign dq_d_ready = (w_st_q == W_IDLE);
+  // u/v BEFORE ITS ROW -- A HANDSHAKE, NOT A TIMING (review of d52ae6c0). A
+  // row needs its vertex's u/v, staged at decode under the ordinal the landing
+  // names. Decode precedes projection for the same vertex in composition, but
+  // that is an ORDER between two independent paths, and the first version read
+  // `uv_mem` at the landing's index with no check that the ordinal had been
+  // staged: a landing that outran its decode would have multiplied the
+  // PREVIOUS batch's u/v into this one's row, silently. Now the depth result
+  // is not taken until its ordinal is staged (`uv_ord_q` has passed it); an
+  // index outside the store has no u/v to wait for (it is index_oob's).
+  wire [INDEX_W-1:0] dq_index_c = dq_tag[INDEX_W-1:0];
+  wire dq_in_store_c = in_store(dq_tag[TAGW-1 -: ARENA_W], dq_index_c);
+  wire uv_have_c     = !dq_in_store_c || (32'(dq_index_c) < 32'(uv_ord_q));
+  assign dq_d_ready  = (w_st_q == W_IDLE) && uv_have_c;
+  logic uv_wait_seen_q;   // this result's wait is already counted
 
   // THE ONE MULTIPLIER, and the one rounding (qformats 4, round-half-up).
   logic signed [15:0] mul_a_c;
@@ -413,7 +454,7 @@ module zhao_geom_vattr #(
 
   always_ff @(posedge clk) begin
     // The three arrays: one synchronous write and one synchronous read each.
-    if (uv_valid_i && (32'(uv_ord_q) < VSLOTS)) uv_mem[uv_ord_q[VIW-1:0]] <= {uv_v_i, uv_u_i};
+    if (uv_valid_i && (32'(uv_ord_c) < VSLOTS)) uv_mem[uv_ord_c[VIW-1:0]] <= {uv_v_i, uv_u_i};
     uv_rd_q <= uv_mem[uv_ra];
     if (pv_we_c) pv_mem[pv_wa_c] <= pv_wd_c;
     pv_rd_q <= pv_mem[rd_row_c];
@@ -445,6 +486,7 @@ module zhao_geom_vattr #(
   // ==========================================================================
   // DONE: every landing has its row, every decoded vertex its colour
   // ==========================================================================
+  wire row_lost_c = lq_drop_c || ((w_st_q == W_V) && !w_in_store_c);
   assign done_o = (rows_b_q == lands_b_q) && (lit_ord_q == uv_ord_q) &&
                   lq_empty_c && dq_idle && (w_st_q == W_IDLE) && (c_st_q == C_IDLE);
 
@@ -474,6 +516,9 @@ module zhao_geom_vattr #(
       c_st_q           <= C_IDLE;
       c_rgb_q          <= '0;
       c_ord_q          <= '0;
+      poison_o         <= 1'b0;
+      uv_wait_seen_q   <= 1'b0;
+      uv_waits_o       <= '0;
       rep_valid_o      <= 1'b0;
       rd_in_q          <= 1'b0;
       landings_o       <= '0;
@@ -500,8 +545,8 @@ module zhao_geom_vattr #(
 
       // --- opens: the batch's arenas, and a fresh profile per arena --------
       if (op_valid_i) begin
-        if (op_n_q < 2'd2) sl_arena_q[op_n_q[0]] <= op_arena_i;
-        if (!batch_i) op_n_q <= op_n_q + 2'd1;
+        if (op_n_c < 2'd2) sl_arena_q[op_n_c[0]] <= op_arena_i;
+        op_n_q <= op_n_c + 2'd1;
         prof_seen_q[op_arena_i] <= 1'b0;
       end
 
@@ -509,15 +554,15 @@ module zhao_geom_vattr #(
       if (uv_valid_i) begin
         // An ordinal past VSLOTS is not staged; the landing it would serve is
         // outside the store too and is counted there, once, on index_oob_o.
-        if ((32'(uv_ord_q) < VSLOTS) && (uv_staged_o != 32'hFFFF_FFFF))
+        if ((32'(uv_ord_c) < VSLOTS) && (uv_staged_o != 32'hFFFF_FFFF))
           uv_staged_o <= uv_staged_o + 32'd1;
-        if (!batch_i) uv_ord_q <= uv_ord_q + (VIW+1)'(1);
+        uv_ord_q <= uv_ord_c + (VIW+1)'(1);
       end
 
       // --- landings: queued, or dropped and counted ------------------------
       if (fl_valid_i) begin
         if (landings_o != 32'hFFFF_FFFF) landings_o <= landings_o + 32'd1;
-        if (!batch_i) lands_b_q <= lands_b_q + 32'd1;
+        lands_b_q <= lands_b_c + 32'd1;
         if (!prof_seen_q[fl_arena_i]) begin
           prof_q[fl_arena_i]      <= fl_profile_i;
           prof_seen_q[fl_arena_i] <= 1'b1;
@@ -543,11 +588,22 @@ module zhao_geom_vattr #(
           index_oob_o <= index_oob_o + 32'd1;
         end
       end
-      if (!batch_i) rows_b_q <= rows_b_q + 32'(rows_inc_c);
+      if (batch_i || (rows_inc_c != 2'd0)) rows_b_q <= rows_b_c + 32'(rows_inc_c);
+
+      // --- the batch's poison: a row it owes will never be right -------------
+      if (batch_i)         poison_o <= row_lost_c;
+      else if (row_lost_c) poison_o <= 1'b1;
+
+      // --- a depth result that had to wait for its u/v, counted once ---------
+      if (dq_d_valid && (w_st_q == W_IDLE) && !uv_have_c && !uv_wait_seen_q) begin
+        uv_wait_seen_q <= 1'b1;
+        if (uv_waits_o != 32'hFFFF_FFFF) uv_waits_o <= uv_waits_o + 32'd1;
+      end
+      if (dq_d_valid && dq_d_ready) uv_wait_seen_q <= 1'b0;
 
       // --- the row writer ----------------------------------------------------
       case (w_st_q)
-        W_IDLE: if (dq_d_valid) begin
+        W_IDLE: if (dq_d_valid && dq_d_ready) begin   // the SAME handshake the stream sees
           w_invw_q  <= dq_invw;
           w_arena_q <= dq_tag[TAGW-1 -: ARENA_W];
           w_index_q <= dq_tag[INDEX_W-1:0];
@@ -565,8 +621,8 @@ module zhao_geom_vattr #(
       case (c_st_q)
         C_IDLE: if (lit_take_c) begin
           c_rgb_q <= {lit_b_i, lit_g_i, lit_r_i};
-          c_ord_q <= lit_ord_q;
-          if (!batch_i) lit_ord_q <= lit_ord_q + (VIW+1)'(1);
+          c_ord_q <= lit_ord_c;
+          lit_ord_q <= lit_ord_c + (VIW+1)'(1);
           c_st_q  <= (views_need_q == 2'd0) ? C_IDLE : C_W0;
         end
         C_W0: begin

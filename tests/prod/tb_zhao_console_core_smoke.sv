@@ -989,6 +989,8 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_va_uv_staged_o, geom_va_lq_overflow_o, geom_va_index_oob_o;
   logic [31:0] geom_va_look_oob_o, geom_va_profile_mixed_o, geom_va_dq_refused_o;
   logic [31:0] geom_va_dq_stray_o;
+  logic [31:0] geom_va_uv_waits_o;
+  logic        geom_va_poison_o;
   // ---- GEOM.REPLAY's evidence
   logic [31:0] geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o;
   logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
@@ -4367,6 +4369,12 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: GEOM.VATTR faulted: lq_overflow=%0d index_oob=%0d look_oob=%0d profile_mixed=%0d dq_refused=%0d dq_stray=%0d",
              geom_va_lq_overflow_o, geom_va_index_oob_o, geom_va_look_oob_o,
              geom_va_profile_mixed_o, geom_va_dq_refused_o, geom_va_dq_stray_o);
+    // Review of d52ae6c0: in composition decode precedes projection, so no
+    // depth result should have had to wait for its u/v, and a clean batch
+    // loses no row. (Both are fired in geom_vattr_directed cases I, C, G.)
+    $display("SMOKE: vattr join uv_waits=%0d poison=%0d", geom_va_uv_waits_o, geom_va_poison_o);
+    if (geom_va_poison_o)
+      $fatal(1, "SMOKE: GEOM.VATTR poisoned a clean batch");
     // The attribute store and the arena answered on the SAME clock every time.
     // R31: a clean fixture has no hole, poisons nothing and orphans nothing.
     // `-BadVertex` is the positive control that moves all four.

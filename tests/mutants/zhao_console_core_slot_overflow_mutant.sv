@@ -647,6 +647,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_va_profile_mixed_o,
   output logic [31:0]             geom_va_dq_refused_o,
   output logic [31:0]             geom_va_dq_stray_o,
+  // Review of d52ae6c0: depth results that WAITED for their u/v (a handshake,
+  // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
+  output logic [31:0]             geom_va_uv_waits_o,
+  output logic                    geom_va_poison_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,

@@ -18,6 +18,17 @@
 // Every counter the block exports is seen to MOVE by legal stimulus at its
 // ports (cases C..G), and to stay at zero on the clean cases, so no mutant is
 // owed. Case H MEASURES the rate R31 asks about.
+//
+// Review of d52ae6c0 (cases I..K, and the poison checks in A, C and G):
+//   I  landings AHEAD of their u/v -- the row writer WAITS (uv_waits_o fires)
+//      and every row is still the reference's; before the fix it multiplied
+//      the stage's stale words into the row.
+//   J  events ON the batch_i clock (an open and the first u/v) are the NEW
+//      batch's -- stored and counted under the same ordinal.
+//   K  done_o, read the way the composer reads it: at the first clock it is
+//      high after the last landing, every landing is a row or a counted loss.
+//   poison_o rises on a lost row (C drop, G out of store) and is low on a
+//   clean batch (A) -- the composer ORs it into REPLAY's handle poison.
 #include <cstdint>
 #include <cstdio>
 #include <deque>
@@ -97,7 +108,8 @@ struct Bench {
   // PAIRS (both views back to back), `lit_lag` delays each colour after its
   // u/v. Returns the clocks from the first landing to `done_o`.
   long run_batch(const std::vector<Vtx>& vs, unsigned mask, const unsigned arena[2],
-                 const unsigned prof[2], int land_every, int lit_lag, bool lit_before_opens = false) {
+                 const unsigned prof[2], int land_every, int lit_lag, bool lit_before_opens = false,
+                 int uv_delay = 0) {
     const unsigned nviews = (mask & 1u) + ((mask >> 1) & 1u);
     // batch boundary
     zero();
@@ -129,13 +141,16 @@ struct Bench {
     std::deque<std::pair<long, int>> uv_ev, lit_ev;      // (cycle, vertex)
     std::deque<std::pair<long, std::pair<int, int>>> land_ev;  // (cycle, (vertex, view))
     const long base = clocks + 2;
-    for (unsigned i = first_uv; i < vs.size(); ++i) uv_ev.push_back({base + 2 * i, static_cast<int>(i)});
+    for (unsigned i = first_uv; i < vs.size(); ++i)
+      uv_ev.push_back({base + uv_delay + 2 * i, static_cast<int>(i)});
     for (unsigned i = lit_before_opens ? 0u : 0u; i < vs.size(); ++i)
-      lit_ev.push_back({base + 2 * i + lit_lag, static_cast<int>(i)});
+      lit_ev.push_back({base + uv_delay + 2 * i + lit_lag, static_cast<int>(i)});
     for (unsigned i = 0; i < vs.size(); ++i)
       for (unsigned k = 0; k < nviews; ++k)
         land_ev.push_back({base + 20 + static_cast<long>(land_every) * i + k, {static_cast<int>(i), static_cast<int>(k)}});
     const long first_land = land_ev.empty() ? clocks : land_ev.front().first;
+    const uint32_t land0 = t.landings_o, rows0 = t.rows_written_o, drop0 = t.lq_overflow_o,
+                   oob0 = t.index_oob_o;
     int lit_pending = -1;
     for (long guard = 0; guard < 200000; ++guard) {
       zero();
@@ -164,8 +179,15 @@ struct Bench {
       if (lit_took) lit_pending = -1;
       zero();
       t.eval();
-      if (uv_ev.empty() && lit_ev.empty() && land_ev.empty() && lit_pending < 0 && t.done_o)
+      if (uv_ev.empty() && lit_ev.empty() && land_ev.empty() && lit_pending < 0 && t.done_o) {
+        // K: what `done_o` promises the composer, checked at the clock it is
+        // first read: every landing of the batch is a written row or a
+        // counted loss -- no row is still owed.
+        const uint32_t owed = (t.landings_o - land0) - ((t.rows_written_o - rows0) +
+                                                        (t.lq_overflow_o - drop0) + (t.index_oob_o - oob0));
+        ck(owed == 0, "K: when done_o is first high, no landing's row is still owed");
         return clocks - first_land;
+      }
     }
     return -1;
   }
@@ -237,6 +259,7 @@ int main(int argc, char** argv) {
     ck(b.t.lq_overflow_o == 0 && b.t.index_oob_o == 0 && b.t.look_oob_o == 0 &&
            b.t.profile_mixed_o == 0 && b.t.dq_refused_o == 0 && b.t.dq_stray_o == 0,
        "A: no fault counter moved on a clean batch");
+    ck(b.t.poison_o == 0, "A: a clean batch is not poisoned");
     std::printf("  A: 64 vertices x 2 views, landing pairs every 10 clocks: done %ld clocks after the first landing\n", t);
   }
 
@@ -264,6 +287,9 @@ int main(int argc, char** argv) {
     ck(drops > 0, "C: lq_overflow_o FIRES on a landing burst above the reciprocal's rate");
     ck((b.t.rows_written_o - r0) + drops == b.t.landings_o - l0,
        "C: every landing is either a written row or a counted drop -- none vanishes");
+    ck(b.t.poison_o == 1,
+       "C: a batch that dropped a row is POISONED -- REPLAY must not draw the stale row "
+       "the drop left behind");
     std::printf("  C: 40 landings in 40 clocks -> %u dropped and counted, %u written\n", drops,
                 b.t.rows_written_o - r0);
   }
@@ -343,6 +369,7 @@ int main(int argc, char** argv) {
     for (int g = 0; g < 400 && !b.t.done_o; ++g) { b.step(); b.t.eval(); }
     ck(b.t.index_oob_o == i0 + 1, "G: index_oob_o counts a landing outside ARENAS x VSLOTS");
     ck(b.t.done_o, "G: ... and the batch still completes");
+    ck(b.t.poison_o == 1, "G: ... POISONED, because the row it owes is nowhere");
   }
 
   // ---- H: THE RATE (owner ruling R31) ---------------------------------------
@@ -371,6 +398,61 @@ int main(int argc, char** argv) {
       }
     }
   }
+  // ---- I: landings AHEAD of their u/v (review of d52ae6c0) ------------------
+  // Every u/v arrives 600 clocks late -- after every landing of the batch. The
+  // depth results must WAIT for their ordinal to be staged; the rows must be
+  // the reference's (the previous batch's u/v sits in the stage the whole
+  // time, so a writer that did not wait would multiply it in).
+  {
+    const unsigned arena[2] = {1, 3}, prof[2] = {2, 0};
+    const auto vs = b.make(8, prof[0], prof[1]);  // 16 landings: fits the 16 contexts
+    const uint32_t w0 = b.t.uv_waits_o, d0 = b.t.lq_overflow_o;
+    const long t = b.run_batch(vs, 0b11, arena, prof, 10, 4, false, 600);
+    ck(t > 0, "I: a batch whose landings outran its u/v completes");
+    ck(b.t.lq_overflow_o == d0, "I: ... without dropping a landing while the writer waited");
+    ck(b.t.uv_waits_o - w0 > 0, "I: uv_waits_o FIRES -- depth results waited for their u/v");
+    ck(b.verify(vs, 2, arena, prof) == 0, "I: every row is the reference's: the wait made the join right");
+    ck(b.t.poison_o == 0, "I: waiting is not a loss -- the batch is not poisoned");
+    std::printf("  I: u/v 600 clocks behind the landings: %u result(s) waited\n", b.t.uv_waits_o - w0);
+  }
+
+  // ---- J: events ON the batch_i clock belong to the NEW batch -----------------
+  // The batch boundary, the first open and the first u/v on ONE clock. Before
+  // the review fix the array took the old ordinal and the counters held, so
+  // vertex 0's u/v landed at the previous batch's end and vertex 1 overwrote
+  // slot 0.
+  {
+    const unsigned arena[2] = {2, 0}, prof[2] = {1, 1};
+    const auto vs = b.make(6, prof[0], prof[1]);
+    b.zero();
+    b.t.batch_i = 1; b.t.batch_views_i = 0b01;
+    b.t.op_valid_i = 1; b.t.op_arena_i = arena[0];
+    b.t.uv_valid_i = 1; b.t.uv_u_i = static_cast<uint16_t>(vs[0].u); b.t.uv_v_i = static_cast<uint16_t>(vs[0].v);
+    b.step();
+    for (unsigned i = 1; i < vs.size(); ++i) {
+      b.zero();
+      b.t.uv_valid_i = 1; b.t.uv_u_i = static_cast<uint16_t>(vs[i].u); b.t.uv_v_i = static_cast<uint16_t>(vs[i].v);
+      b.step();
+    }
+    for (unsigned i = 0; i < vs.size(); ++i) {
+      b.zero();
+      b.t.lit_valid_i = 1; b.t.lit_r_i = vs[i].r; b.t.lit_g_i = vs[i].g; b.t.lit_b_i = vs[i].b;
+      b.t.eval();
+      for (int g = 0; g < 100 && !b.t.lit_ready_o; ++g) { b.step(); b.t.eval(); }
+      b.step();
+      b.zero();
+      b.t.fl_valid_i = 1; b.t.fl_arena_i = arena[0]; b.t.fl_index_i = i;
+      b.t.fl_w_i = vs[i].w[0]; b.t.fl_profile_i = prof[0];
+      b.step();
+      for (int g = 0; g < 8; ++g) { b.zero(); b.step(); }
+    }
+    b.zero();
+    for (int g = 0; g < 400 && !b.t.done_o; ++g) { b.step(); b.t.eval(); }
+    ck(b.t.done_o, "J: the batch whose open and first u/v rode the batch_i clock completes");
+    ck(b.verify(vs, 1, arena, prof) == 0,
+       "J: vertex 0's u/v, staged ON the boundary clock, keys row 0 of the NEW batch");
+  }
+
   std::printf("geom_vattr_directed: %d checks, %d failed (landings=%u rows=%u colours=%u uv=%u "
               "lq_overflow=%u index_oob=%u look_oob=%u mixed=%u dq_refused=%u dq_stray=%u)\n",
               g_checks, g_fail, b.t.landings_o, b.t.rows_written_o, b.t.colours_written_o,

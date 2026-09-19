@@ -1811,6 +1811,7 @@ module zhao_prod_top (
     else u26_lfsr_q <= {u26_lfsr_q[62:0], (^(u26_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u26_lit_ready_o;
   logic [1-1:0] u26_done_o;
+  logic [1-1:0] u26_poison_o;
   logic [1-1:0] u26_rep_valid_o;
   logic [24-1:0] u26_rep_invw24_o;
   logic [192-1:0] u26_rep_data_o;
@@ -1824,6 +1825,7 @@ module zhao_prod_top (
   logic [32-1:0] u26_profile_mixed_o;
   logic [32-1:0] u26_dq_refused_o;
   logic [32-1:0] u26_dq_stray_o;
+  logic [32-1:0] u26_uv_waits_o;
   zhao_geom_vattr u26_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -1845,6 +1847,7 @@ module zhao_prod_top (
       .fl_w_i(u26_src[98 +: 31]),
       .fl_profile_i(u26_src[105 +: 2]),
       .done_o(u26_done_o),
+      .poison_o(u26_poison_o),
       .look_valid_i(u26_src[112 +: 1]),
       .look_arena_i(u26_src[119 +: 3]),
       .look_index_i(u26_src[126 +: 12]),
@@ -1860,12 +1863,13 @@ module zhao_prod_top (
       .look_oob_o(u26_look_oob_o),
       .profile_mixed_o(u26_profile_mixed_o),
       .dq_refused_o(u26_dq_refused_o),
-      .dq_stray_o(u26_dq_stray_o)
+      .dq_stray_o(u26_dq_stray_o),
+      .uv_waits_o(u26_uv_waits_o)
   );
   logic u26_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u26_fold_q <= 1'b0;
-    else u26_fold_q <= u26_fold_q ^ (((^u26_lit_ready_o)) & u26_src[0]) ^ (((^u26_done_o)) & u26_src[1]) ^ (((^u26_rep_valid_o)) & u26_src[2]) ^ (((^u26_rep_invw24_o)) & u26_src[3]) ^ (((^u26_rep_data_o)) & u26_src[4]) ^ (((^u26_landings_o)) & u26_src[5]) ^ (((^u26_rows_written_o)) & u26_src[6]) ^ (((^u26_colours_written_o)) & u26_src[7]) ^ (((^u26_uv_staged_o)) & u26_src[8]) ^ (((^u26_lq_overflow_o)) & u26_src[9]) ^ (((^u26_index_oob_o)) & u26_src[10]) ^ (((^u26_look_oob_o)) & u26_src[11]) ^ (((^u26_profile_mixed_o)) & u26_src[12]) ^ (((^u26_dq_refused_o)) & u26_src[13]) ^ (((^u26_dq_stray_o)) & u26_src[14]);
+    else u26_fold_q <= u26_fold_q ^ (((^u26_lit_ready_o)) & u26_src[0]) ^ (((^u26_done_o)) & u26_src[1]) ^ (((^u26_poison_o)) & u26_src[2]) ^ (((^u26_rep_valid_o)) & u26_src[3]) ^ (((^u26_rep_invw24_o)) & u26_src[4]) ^ (((^u26_rep_data_o)) & u26_src[5]) ^ (((^u26_landings_o)) & u26_src[6]) ^ (((^u26_rows_written_o)) & u26_src[7]) ^ (((^u26_colours_written_o)) & u26_src[8]) ^ (((^u26_uv_staged_o)) & u26_src[9]) ^ (((^u26_lq_overflow_o)) & u26_src[10]) ^ (((^u26_index_oob_o)) & u26_src[11]) ^ (((^u26_look_oob_o)) & u26_src[12]) ^ (((^u26_profile_mixed_o)) & u26_src[13]) ^ (((^u26_dq_refused_o)) & u26_src[14]) ^ (((^u26_dq_stray_o)) & u26_src[15]) ^ (((^u26_uv_waits_o)) & u26_src[16]);
 
   // ---- zhao_geom_vdecode ----
   logic [63:0] u27_lfsr_q;

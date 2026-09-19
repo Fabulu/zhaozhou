@@ -919,6 +919,10 @@ module zhao_console_board
   output logic [31:0]             geom_va_profile_mixed_o,
   output logic [31:0]             geom_va_dq_refused_o,
   output logic [31:0]             geom_va_dq_stray_o,
+  // Review of d52ae6c0: depth results that WAITED for their u/v (a handshake,
+  // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
+  output logic [31:0]             geom_va_uv_waits_o,
+  output logic                    geom_va_poison_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -2718,6 +2722,8 @@ module zhao_console_board
       .geom_va_profile_mixed_o           (geom_va_profile_mixed_o),
       .geom_va_dq_refused_o              (geom_va_dq_refused_o),
       .geom_va_dq_stray_o                (geom_va_dq_stray_o),
+      .geom_va_uv_waits_o                (geom_va_uv_waits_o),
+      .geom_va_poison_o                  (geom_va_poison_o),
       .geom_rp_meshlets_o                (geom_rp_meshlets_o),
       .geom_rp_groups_o                  (geom_rp_groups_o),
       .geom_rp_triangles_in_o            (geom_rp_triangles_in_o),
