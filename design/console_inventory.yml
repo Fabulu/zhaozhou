@@ -337,6 +337,17 @@ modules:
   zhao_terrain_bake_v2:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_heighttap:
+    disposition: pending_compose
+    why: "NEW 2026-09-19. TERRAIN.HEIGHTTAP -- the world (x,z) -> {height, no_ground}
+      service the console header calls the missing half of a tap: NOTHING IN THE TREE
+      PERFORMS THE INVERSE, and it is a block rather than a wrapper. Two blocks want it --
+      FORGE.SHADOW tap_* port, which this one mirrors signal for signal, and PART.COLLIDE
+      (entry I6, which also needs a surface normal this block does not emit, so I6 does not
+      close on it). Differentially tested against zref::terrain::column_query itself across
+      all four frozen pitches, 783 checks; five censuses fired with legal stimulus and the
+      sixth carries a committed mutant, because a convex combination cannot leave the
+      interval its corners span and no legal input can reach that guard."
   zhao_terrain_island_dir:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

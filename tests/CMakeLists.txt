@@ -13768,3 +13768,55 @@ add_test(NAME lint_zhao_field_stamp_adapter
 set_tests_properties(lint_zhao_field_stamp_adapter PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# TERRAIN.HEIGHTTAP -- the INVERSE map. The console header says of it: "NOTHING
+# IN THE TREE PERFORMS THE INVERSE. That is the missing half of a tap service,
+# and it is a block rather than a wrapper."  This is that block, and the test is
+# DIFFERENTIAL against `zref::terrain::column_query` itself rather than against a
+# transcription of spec/terrain_rules.md 4.3 into the test -- which is why it
+# links zhao_zref. A second implementation of a ratified law living in a test is
+# the failure CLAUDE.md records for the terrain shade header.
+#
+# All six censuses are FIRED here with legal stimulus (void cell, off-patch, a
+# lattice placed at the wrong pitch, an illegal pitch, an interpolation that
+# does not fit s32, and the owner starving the tap of read cycles), so no
+# committed mutant is owed. The overflow guard exists BECAUSE the explicit -Wall
+# lint reported quot_c[63:32] unused -- verilate() does not pass -Wall.
+set(ZHAO_TERRAIN_HEIGHTTAP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_heighttap.sv)
+add_executable(test_terrain_heighttap_directed terrain/terrain_heighttap_directed.cpp)
+target_link_libraries(test_terrain_heighttap_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_heighttap_directed
+  PREFIX Vzhao_terrain_heighttap
+  TOP_MODULE zhao_terrain_heighttap
+  SOURCES ${ZHAO_TERRAIN_HEIGHTTAP_SV})
+add_test(NAME terrain_heighttap_directed COMMAND test_terrain_heighttap_directed)
+set_tests_properties(terrain_heighttap_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_terrain_heighttap
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_heighttap
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_heighttap.sv)
+set_tests_properties(lint_zhao_terrain_heighttap PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE HEIGHTTAP OVERFLOW GUARD, POSITIVE CONTROL. `interp_overflow_o` is
+# UNREACHABLE with legal stimulus -- the interpolation is a convex combination of
+# three corner heights, so it cannot leave the interval they span, and the
+# directed test tried with corners at both s32 rails and could not move it. This
+# is the committed mutant CLAUDE.md requires for exactly that case: one shift
+# removed (the divide by the cell width D), so the expression extrapolates and
+# an ordinary relief lattice overshoots the rail. INVERTED POLARITY: the control
+# PASSES when the counter FIRES. Evidence about the instrument, not the design.
+add_executable(test_terrain_heighttap_mutant_control
+               terrain/terrain_heighttap_mutant_control.cpp)
+target_link_libraries(test_terrain_heighttap_mutant_control PRIVATE zhao_harness)
+verilate(test_terrain_heighttap_mutant_control
+  PREFIX Vzhao_terrain_heighttap_mutant
+  TOP_MODULE zhao_terrain_heighttap_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_heighttap_mutant.sv)
+add_test(NAME terrain_heighttap_mutant_control
+         COMMAND test_terrain_heighttap_mutant_control)
+set_tests_properties(terrain_heighttap_mutant_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
