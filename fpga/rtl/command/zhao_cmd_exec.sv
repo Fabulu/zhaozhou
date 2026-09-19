@@ -142,9 +142,23 @@
 //                                  16/17 and SetView carries no rect, only an
 //                                  id; the id -> rect table is video_rules.md's
 //                                  and is not in the ABI.
-//   NOT       flags[1:0]        -- depth_profile. The frozen ruling of
-//                                  2026-08-31 assigns it and `zhao_project_core`
-//                                  has no depth-profile port to put it on.
+//   CARRIED   flags[1:0]        -- depth_profile, as of 2026-09-19. The frozen
+//                                  ruling of 2026-08-31 assigns it, and
+//                                  `zhao_project_core` now has cfg address 18 to
+//                                  put it on. Committed as the SEVENTEENTH step
+//                                  of the view walk, so a view's camera and its
+//                                  profile land from ONE record under ONE dirty
+//                                  bit and cannot be split across frames. The
+//                                  reserved value 2'd3 is refused by the BANK,
+//                                  not here: CMD.DECODER owns the verdict and
+//                                  this block owns the payload, and a second
+//                                  legality test here would be the duplicate
+//                                  implementation this header opens by
+//                                  forbidding.
+//                                  `flags[15:2]` stay UNASSIGNED and are not
+//                                  read -- zhao_sample_set_view() already ships
+//                                  0x8261, so demanding zero would refuse a
+//                                  legal command.
 //   NOT       pixel_error       -- MEASURE.GOVERNOR is not composed.
 //   NOT       geometry_tokens   -- MEASURE.TOKENS is not composed.
 //   NOT       fragment_tokens   -- likewise.
@@ -367,6 +381,10 @@ module zhao_cmd_exec
   localparam int unsigned SV_VIEW_ID = ZHAO_SET_VIEW_OFF_VIEW_ID;
   localparam int unsigned SV_MAT_LO  = ZHAO_SET_VIEW_OFF_VIEW_PROJECTION;
   localparam int unsigned SV_MAT_HI  = ZHAO_SET_VIEW_OFF_PIXEL_ERROR;  // exclusive
+  // `flags` is a u16 and the depth profile is its LOW TWO BITS, so only the
+  // low byte is read. From the GENERATED offset like every other field here --
+  // the whole point of the block above is that no layout is written by hand.
+  localparam int unsigned SV_FLAGS   = ZHAO_SET_VIEW_OFF_FLAGS;
 
   localparam int unsigned OFF_PATCH = ZHAO_SURFACE_STAMP_OFF_PATCH;
   localparam int unsigned OFF_OPER  = ZHAO_SURFACE_STAMP_OFF_OPERATION;
@@ -447,6 +465,12 @@ module zhao_cmd_exec
 
   // ---- SetView staging: a shadow of the bank, not of the packet ------------
   logic [31:0] sv_mat [0:1][0:15];
+  // The staged depth profile, one per bank view, shadowing the bank's addr-18
+  // register exactly as `sv_mat` shadows addresses 0..15. It is NOT a separate
+  // dirty bit: a SetView writes the camera and its profile as ONE record, and
+  // committing them under two flags would let a view run with this frame's
+  // matrix and last frame's profile.
+  logic [ 1:0] sv_prof [0:1];
   logic [ 1:0] sv_dirty;
   logic        sv_view;   // the bank view this record targets
   logic        sv_ok;     // ... and whether view_id could address it at all
@@ -558,7 +582,10 @@ module zhao_cmd_exec
   ex_e st;
 
   logic       cv;   // view being committed
-  logic [3:0] cw;   // matrix word being committed
+  // FIVE BITS, NOT FOUR, since 2026-09-19: the commit walk is now SEVENTEEN
+  // steps per view -- matrix words 0..15 at cfg addresses 0..15, then step 16
+  // carrying SetView's depth profile to cfg address 18.
+  logic [4:0] cw;   // commit step: 0..15 matrix word, 16 depth profile
 
   // The byte stream is accepted only while staging. During a commit the fork's
   // AND holds CMD.DMA off, which is what makes "nothing escapes early" a
@@ -571,6 +598,9 @@ module zhao_cmd_exec
       pos <= 32'd0; rpos <= 16'd0; rlen <= 16'd0; r_op <= 16'd0;
       for (vi = 0; vi < 2; vi = vi + 1)
         for (wi = 0; wi < 16; wi = wi + 1) sv_mat[vi][wi] <= 32'd0;
+        // 2'd0 is WORLD_LONG, the ruling's own zero meaning: a console that
+        // never issues a profile behaves as it did before this field existed.
+        sv_prof[vi] <= 2'd0;
       sv_dirty <= 2'd0; sv_view <= 1'b0; sv_ok <= 1'b0; wacc <= 24'd0;
       ss_patch <= 32'd0; ss_tx <= 32'd0; ss_ty <= 32'd0;
       ss_rad <= 32'd0; ss_ring <= 32'd0;
@@ -585,7 +615,7 @@ module zhao_cmd_exec
       draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
       draw_src_truncated_o <= 32'd0;
       poisoned <= 1'b0;
-      st <= EX_STAGE; cv <= 1'b0; cw <= 4'd0;
+      st <= EX_STAGE; cv <= 1'b0; cw <= 5'd0;
       proj_cfg_we_o <= 1'b0; proj_cfg_view_o <= 1'b0;
       proj_cfg_addr_o <= 5'd0; proj_cfg_data_o <= 32'd0;
       stamp_valid_o <= 1'b0;
@@ -632,6 +662,14 @@ module zhao_cmd_exec
                     `ZHAO_EXEC_INC(view_range_refused_o);
                   end
                 end
+                // THE DEPTH PROFILE, `flags[1:0]`, owner ruling 2026-08-31 §1.
+                // Byte SV_FLAGS is the u16's LOW byte (little-endian) and it
+                // arrives AFTER SV_VIEW_ID (18 > 16), so `sv_view`/`sv_ok` are
+                // already settled when this fires -- the same ordering the
+                // matrix words rely on, and it is checked by the elaboration
+                // guard on the record size rather than assumed.
+                if ((rpos == 16'(SV_FLAGS)) && sv_ok)
+                  sv_prof[sv_view] <= pkt_byte_i[1:0];
                 if (sv_in_mat) begin
                   wacc <= {pkt_byte_i, wacc[23:8]};
                   if ((mo[1:0] == 2'd3) && sv_ok)
@@ -743,7 +781,7 @@ module zhao_cmd_exec
             if ((verdict_error_i == ZH_ABI_OK) && !poisoned) begin
               st <= EX_CFG;
               cv <= 1'b0;
-              cw <= 4'd0;
+              cw <= 5'd0;
             end else begin
               `ZHAO_EXEC_INC(packets_abandoned_o);
               sv_dirty <= 2'd0;
@@ -768,20 +806,21 @@ module zhao_cmd_exec
         // silently wrong camera. With it the merge is LOSSLESS in both
         // directions: the host wins the cycle, this block re-presents.
         //
-        // The bubble costs 64 clocks per frame at two full views. That is not
+        // The bubble costs 68 clocks per frame at two full views -- 64 for the
+        // matrix words and 4 for the two profile writes. That is not
         // a throughput question by any measure that matters here.
         EX_CFG: begin
           if (proj_cfg_we_o) begin
             if (proj_cfg_ready_i) begin
               // Accepted. Retire this word and drop `we` for one cycle.
-              if (cw == 4'd15) begin
-                cw           <= 4'd0;
+              if (cw == 5'd16) begin
+                cw           <= 5'd0;
                 sv_dirty[cv] <= 1'b0;
                 `ZHAO_EXEC_INC(views_written_o);
                 if (cv) st <= EX_STAMP;
                 else    cv <= 1'b1;
               end else begin
-                cw <= cw + 4'd1;
+                cw <= cw + 5'd1;
               end
             end else begin
               proj_cfg_we_o <= 1'b1;  // refused: hold the identical word
@@ -789,8 +828,14 @@ module zhao_cmd_exec
           end else if (sv_dirty[cv]) begin
             proj_cfg_we_o   <= 1'b1;
             proj_cfg_view_o <= cv;
-            proj_cfg_addr_o <= {1'b0, cw};
-            proj_cfg_data_o <= sv_mat[cv][cw];
+            // STEP 16 IS cfg ADDRESS 18, NOT 16. Addresses 16 and 17 are the
+            // viewport rect, which SetView does not carry -- it carries a
+            // viewport_id, and the id-to-rect table is video_rules.md's, not in
+            // the ABI at all. The console's host port owns those two words.
+            // Writing them from here would be this block inventing a rectangle.
+            proj_cfg_addr_o <= (cw == 5'd16) ? 5'd18 : {1'b0, cw[3:0]};
+            proj_cfg_data_o <= (cw == 5'd16) ? {30'd0, sv_prof[cv]}
+                                             : sv_mat[cv][cw[3:0]];
           end else begin
             if (cv) st <= EX_STAMP;
             else    cv <= 1'b1;

@@ -157,6 +157,11 @@ module zhao_terrain_project #(
     output logic signed [31:0] out_bd_o,
     output logic signed [31:0] out_cd_o,
     output logic               out_view_o,
+  // The view's depth profile, registered with the TRIANGLE rather than passed
+  // through, for the same reason `out_view_o` is: this block's output stage is
+  // one cycle behind the core's, and a value read a cycle later would be the
+  // NEXT triangle's. `SetView.flags[1:0]`, owner ruling 2026-08-31 section 1.
+  output logic [ 1:0]        out_profile_o,
     output logic        [ 7:0] out_mat_a_o,   // mosaic_candidates: layer E,
     output logic        [ 7:0] out_mat_b_o,   //   forwarded, never selected
     output logic        [ 7:0] out_weight_o,
@@ -262,6 +267,7 @@ module zhao_terrain_project #(
   logic [30:0]          s6_clipw_unused;  // see the u_core comment
   logic             s6_behind;
   logic             s6_view;
+  logic [1:0]       s6_profile;
   logic [PAY_W-1:0] s6_pay;
   logic             core_busy;
   // Constant 1: this block uses the core's default ROWS_PER_PASS=3, whose
@@ -308,6 +314,7 @@ module zhao_terrain_project #(
       .out_w_o      (s6_clipw_unused),
       .out_behind_o (s6_behind),
       .out_view_o   (s6_view),
+    .out_profile_o(s6_profile),
       .out_payload_o(s6_pay),
 
       .busy_o(core_busy),
@@ -353,6 +360,7 @@ module zhao_terrain_project #(
       out_bd_o     <= '0;
       out_cd_o     <= '0;
       out_view_o   <= 1'b0;
+      out_profile_o <= 2'd0;
       out_mat_a_o  <= '0;
       out_mat_b_o  <= '0;
       out_weight_o <= '0;
@@ -379,6 +387,7 @@ module zhao_terrain_project #(
           out_behind_o <= {s6_behind, acc_behind[1], acc_behind[0]};
           out_src_id_o <= s6_src;
           out_view_o   <= s6_view;
+          out_profile_o <= s6_profile;
           out_mat_a_o  <= s6_mat_a;
           out_mat_b_o  <= s6_mat_b;
           out_weight_o <= s6_weight;

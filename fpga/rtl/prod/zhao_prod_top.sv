@@ -1409,6 +1409,7 @@ module zhao_prod_top (
   logic [16-1:0] u21_out_src_id_o;
   logic [32-1:0] u21_vertices_transformed_o;
   logic [32-1:0] u21_mat_refused_o;
+  logic [2-1:0] u21_out_profile_o;
   zhao_geom_project u21_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -1432,12 +1433,13 @@ module zhao_prod_top (
       .out_behind_o(u21_out_behind_o),
       .out_src_id_o(u21_out_src_id_o),
       .vertices_transformed_o(u21_vertices_transformed_o),
-      .mat_refused_o(u21_mat_refused_o)
+      .mat_refused_o(u21_mat_refused_o),
+      .out_profile_o(u21_out_profile_o)
   );
   logic u21_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u21_fold_q <= 1'b0;
-    else u21_fold_q <= u21_fold_q ^ (((^u21_v_ready_o)) & u21_src[0]) ^ (((^u21_out_valid_o)) & u21_src[1]) ^ (((^u21_out_x_o)) & u21_src[2]) ^ (((^u21_out_y_o)) & u21_src[3]) ^ (((^u21_out_d_o)) & u21_src[4]) ^ (((^u21_out_w_o)) & u21_src[5]) ^ (((^u21_out_behind_o)) & u21_src[6]) ^ (((^u21_out_src_id_o)) & u21_src[7]) ^ (((^u21_vertices_transformed_o)) & u21_src[8]) ^ (((^u21_mat_refused_o)) & u21_src[9]);
+    else u21_fold_q <= u21_fold_q ^ (((^u21_v_ready_o)) & u21_src[0]) ^ (((^u21_out_valid_o)) & u21_src[1]) ^ (((^u21_out_x_o)) & u21_src[2]) ^ (((^u21_out_y_o)) & u21_src[3]) ^ (((^u21_out_d_o)) & u21_src[4]) ^ (((^u21_out_w_o)) & u21_src[5]) ^ (((^u21_out_behind_o)) & u21_src[6]) ^ (((^u21_out_src_id_o)) & u21_src[7]) ^ (((^u21_vertices_transformed_o)) & u21_src[8]) ^ (((^u21_mat_refused_o)) & u21_src[9]) ^ (((^u21_out_profile_o)) & u21_src[10]);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u22_lfsr_q;
@@ -3506,6 +3508,7 @@ module zhao_prod_top (
   logic signed [32-1:0] u51_out_bd_o;
   logic signed [32-1:0] u51_out_cd_o;
   logic [1-1:0] u51_out_view_o;
+  logic [2-1:0] u51_out_profile_o;
   logic [8-1:0] u51_out_mat_a_o;
   logic [8-1:0] u51_out_mat_b_o;
   logic [8-1:0] u51_out_weight_o;
@@ -3549,6 +3552,7 @@ module zhao_prod_top (
       .out_bd_o(u51_out_bd_o),
       .out_cd_o(u51_out_cd_o),
       .out_view_o(u51_out_view_o),
+      .out_profile_o(u51_out_profile_o),
       .out_mat_a_o(u51_out_mat_a_o),
       .out_mat_b_o(u51_out_mat_b_o),
       .out_weight_o(u51_out_weight_o),
@@ -3559,7 +3563,7 @@ module zhao_prod_top (
   logic u51_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u51_fold_q <= 1'b0;
-    else u51_fold_q <= u51_fold_q ^ (((^u51_tri_ready_o)) & u51_src[0]) ^ (((^u51_out_valid_o)) & u51_src[1]) ^ (((^u51_out_ax_o)) & u51_src[2]) ^ (((^u51_out_ay_o)) & u51_src[3]) ^ (((^u51_out_bx_o)) & u51_src[4]) ^ (((^u51_out_by_o)) & u51_src[5]) ^ (((^u51_out_cx_o)) & u51_src[6]) ^ (((^u51_out_cy_o)) & u51_src[7]) ^ (((^u51_out_behind_o)) & u51_src[8]) ^ (((^u51_out_src_id_o)) & u51_src[9]) ^ (((^u51_out_ad_o)) & u51_src[10]) ^ (((^u51_out_bd_o)) & u51_src[11]) ^ (((^u51_out_cd_o)) & u51_src[12]) ^ (((^u51_out_view_o)) & u51_src[13]) ^ (((^u51_out_mat_a_o)) & u51_src[14]) ^ (((^u51_out_mat_b_o)) & u51_src[15]) ^ (((^u51_out_weight_o)) & u51_src[16]) ^ (((^u51_terrain_triangles_emitted_o)) & u51_src[17]) ^ (((^u51_idle_o)) & u51_src[18]) ^ (((^u51_mat_refused_o)) & u51_src[19]);
+    else u51_fold_q <= u51_fold_q ^ (((^u51_tri_ready_o)) & u51_src[0]) ^ (((^u51_out_valid_o)) & u51_src[1]) ^ (((^u51_out_ax_o)) & u51_src[2]) ^ (((^u51_out_ay_o)) & u51_src[3]) ^ (((^u51_out_bx_o)) & u51_src[4]) ^ (((^u51_out_by_o)) & u51_src[5]) ^ (((^u51_out_cx_o)) & u51_src[6]) ^ (((^u51_out_cy_o)) & u51_src[7]) ^ (((^u51_out_behind_o)) & u51_src[8]) ^ (((^u51_out_src_id_o)) & u51_src[9]) ^ (((^u51_out_ad_o)) & u51_src[10]) ^ (((^u51_out_bd_o)) & u51_src[11]) ^ (((^u51_out_cd_o)) & u51_src[12]) ^ (((^u51_out_view_o)) & u51_src[13]) ^ (((^u51_out_profile_o)) & u51_src[14]) ^ (((^u51_out_mat_a_o)) & u51_src[15]) ^ (((^u51_out_mat_b_o)) & u51_src[16]) ^ (((^u51_out_weight_o)) & u51_src[17]) ^ (((^u51_terrain_triangles_emitted_o)) & u51_src[18]) ^ (((^u51_idle_o)) & u51_src[19]) ^ (((^u51_mat_refused_o)) & u51_src[20]);
 
   // ---- zhao_terrain_residency_v2 ----
   logic [63:0] u52_lfsr_q;

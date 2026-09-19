@@ -888,11 +888,41 @@
 //          whole ledger exists to refuse. The host port keeps them and the
 //          merge above is lossless in both directions, so this is a missing
 //          COMMAND rather than missing wiring.
-//        * `proj_en_i`, and `SetView`'s OTHER FIVE FIELDS. `flags[1:0]` is the
-//          depth profile of the frozen 2026-08-31 ruling and `zhao_project_core`
-//          has no port to put it on; `pixel_error` wants MEASURE.GOVERNOR and
-//          `geometry_tokens`/`fragment_tokens` want MEASURE.TOKENS, none of
-//          which is composed. A ratified field with no port is still a gap.
+//        * `proj_en_i`, and `SetView`'s OTHER FOUR FIELDS. `pixel_error` wants
+//          MEASURE.GOVERNOR and `geometry_tokens`/`fragment_tokens` want
+//          MEASURE.TOKENS, none of which is composed. A ratified field with no
+//          port is still a gap.
+//
+//      CLOSED 2026-09-19: THE DEPTH PROFILE. This entry used to read
+//      "`flags[1:0]` is the depth profile of the frozen 2026-08-31 ruling and
+//      `zhao_project_core` has no port to put it on". It has one now, and NO
+//      PORT ON THIS MODULE'S CFG BUS HAD TO MOVE FOR IT: `cfg_addr_i` has been
+//      five bits since the viewport words landed, so address 18 was already
+//      reachable, and `zhao_geom_cull` -- which shares the bus -- ignores
+//      addr >= 16 on purpose, so the word reaches the projector and nobody
+//      else. CMD.EXEC's view walk is SEVENTEEN steps instead of sixteen, and
+//      step 16 carries `flags[1:0]` to cfg address 18 under the SAME dirty bit
+//      as the matrix, so a view's camera and its profile cannot land in
+//      different frames.
+//
+//      ZERO KEEPS ITS MEANING (`spec/commands.zidl:301`). 2'd0 is WORLD_LONG,
+//      it is the bank's reset value, and no existing capture decodes
+//      differently -- which is the whole reason the ruling chose `flags` over a
+//      new opcode. The reserved value 2'd3 is REFUSED by the bank (the register
+//      keeps its previous profile) because `zhao_geom_depthquant` indexes
+//      THREE-entry tables with this two-bit field, and one past the end is X
+//      rather than a diagnosis.
+//
+//      WHAT IS NOT CLOSED BY IT, said plainly, because a carried field with no
+//      reader is the uncashed cheque this file has a chapter about.
+//      `proj_a_profile_o` and `proj_fill_profile_o` LEAVE this module. Their
+//      consumer is GEOM.DEPTHQUANT, whose `v_profile_i` is exactly this width
+//      and meaning and whose own header opens with the audit finding this port
+//      answers -- "no `depth_profile` port exists anywhere in fpga/rtl" -- and
+//      that block is not composed. Terrain's per-TRIANGLE profile is owed
+//      besides: the replay arena carries no profile field, so
+//      `zhao_vertex_arena`'s payload would have to widen, and that is a change
+//      to that block rather than to a composer.
 //
 // I15. POST.COMPOSITE's SOURCE PIXELS (`post_s_*`) -- BOUNDARY, and this is
 //      the largest honest gap in the file.
@@ -2764,9 +2794,10 @@
 //       claim that expires the moment somebody composes the file, and this one
 //       did. "No client port is free" is a claim about the arrangement, and it
 //       is the one that was doing the work all along.
-//   `v_profile_i` is additionally SetView's `flags[1:0]`, which is entry
-//   I14's still-open half: a ratified field with no port on
-//   `zhao_project_core` to put it on.
+//   `v_profile_i` is additionally SetView's `flags[1:0]`. CLOSED 2026-09-19:
+//   `zhao_project_core` has cfg address 18 and emits `out_profile_o`, and this
+//   module re-exports it as `proj_a_profile_o`. What is still missing is THIS
+//   BLOCK, not the field -- see entry I14.
 //
 //   GEOM.PROJECT IS NOT REFUSED AND IT IS NOT COMPOSED, which is a third
 //   thing and the only one of its kind in this file. `zhao_geom_project.sv`
@@ -3877,6 +3908,21 @@ module zhao_console_core
   // view (a group holds one view's results), so it has no consumer inside this
   // core and leaves the module named rather than left dangling.
   output logic                    proj_a_view_o,
+  // THE DEPTH PROFILE THE RESULT WAS PROJECTED UNDER -- NEW 2026-09-19, and it
+  // closes entry I14's depth-profile item. `SetView`'s `flags[1:0]` is
+  // the depth profile of the frozen 2026-08-31 ruling; `zhao_project_core` now
+  // carries it on cfg address 18 and emits it beside the view, and CMD.EXEC's
+  // SetView arm writes it as the seventeenth step of the view walk.
+  //
+  // IT LEAVES THIS MODULE RATHER THAN BEING CONSUMED HERE, exactly as
+  // `proj_a_view_o` does and for the same reason: GEOM.DEPTHQUANT is the
+  // consumer -- its `v_profile_i` is this port's width and meaning -- and that
+  // block is not composed. `proj_fill_profile_o` is the terrain client's
+  // per-VERTEX half; terrain's per-TRIANGLE profile is still owed, because the
+  // replay arena carries no profile field and widening it is a change to
+  // `zhao_vertex_arena`, not to a composer.
+  output logic [1:0]              proj_a_profile_o,
+  output logic [1:0]              proj_fill_profile_o,
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
@@ -6813,6 +6859,7 @@ module zhao_console_core
     // -- so this remains "the view this result was projected in"; it is simply
     // no longer geometry's alone.
     .a_view_o   (proj_a_view_o),
+    .a_profile_o(proj_a_profile_o),
     .a_payload_o(sv_a_payload),
 
     // REAL: client B in, from TERRAIN.GROUP_SEQ. This is the composition the
@@ -6830,6 +6877,7 @@ module zhao_console_core
     // REAL: the terrain arena's lifetime and its landings, both directions.
     .fill_landed_o(ts_fill_landed),
     .fill_arena_o (ts_fill_arena),
+    .fill_profile_o(proj_fill_profile_o),
     .open_i       (ts_open),
     .open_arena_i (ts_open_arena),
     .open_gen_o   (ts_open_gen),

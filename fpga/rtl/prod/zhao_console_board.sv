@@ -1292,6 +1292,21 @@ module zhao_console_board
   // view (a group holds one view's results), so it has no consumer inside this
   // core and leaves the module named rather than left dangling.
   output logic                    proj_a_view_o,
+  // THE DEPTH PROFILE THE RESULT WAS PROJECTED UNDER -- NEW 2026-09-19, and it
+  // closes entry I14's depth-profile item. `SetView`'s `flags[1:0]` is
+  // the depth profile of the frozen 2026-08-31 ruling; `zhao_project_core` now
+  // carries it on cfg address 18 and emits it beside the view, and CMD.EXEC's
+  // SetView arm writes it as the seventeenth step of the view walk.
+  //
+  // IT LEAVES THIS MODULE RATHER THAN BEING CONSUMED HERE, exactly as
+  // `proj_a_view_o` does and for the same reason: GEOM.DEPTHQUANT is the
+  // consumer -- its `v_profile_i` is this port's width and meaning -- and that
+  // block is not composed. `proj_fill_profile_o` is the terrain client's
+  // per-VERTEX half; terrain's per-TRIANGLE profile is still owed, because the
+  // replay arena carries no profile field and widening it is a change to
+  // `zhao_vertex_arena`, not to a composer.
+  output logic [1:0]              proj_a_profile_o,
+  output logic [1:0]              proj_fill_profile_o,
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
@@ -2865,6 +2880,8 @@ module zhao_console_board
       .proj_out_refused_o                (proj_out_refused_o),
       .proj_out_missed_o                 (proj_out_missed_o),
       .proj_a_view_o                     (proj_a_view_o),
+      .proj_a_profile_o                  (proj_a_profile_o),
+      .proj_fill_profile_o               (proj_fill_profile_o),
       .proj_replay_triangles_o           (proj_replay_triangles_o),
       .proj_replay_refused_o             (proj_replay_refused_o),
       .proj_replay_missed_o              (proj_replay_missed_o),

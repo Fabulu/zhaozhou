@@ -56,7 +56,9 @@ module tb_proj_matw_mutant (
     output wire        m_out_view_o,
     output wire [15:0] m_out_payload_o,
     output wire        m_busy_o,
-    output wire [31:0] m_mat_refused_o
+    output wire [31:0] m_mat_refused_o,
+    output wire [1:0] r_out_profile_o,
+    output wire [1:0] m_out_profile_o
 );
 
   zhao_project_core #(
@@ -85,6 +87,7 @@ module tb_proj_matw_mutant (
       .out_w_o      (r_out_w_o),
       .out_behind_o (r_out_behind_o),
       .out_view_o   (r_out_view_o),
+    .out_profile_o(r_out_profile_o),  // not observed by this bench
       .out_payload_o(r_out_payload_o),
       .busy_o       (r_busy_o),
       .mat_refused_o(r_mat_refused_o)
@@ -116,6 +119,7 @@ module tb_proj_matw_mutant (
       .out_w_o      (m_out_w_o),
       .out_behind_o (m_out_behind_o),
       .out_view_o   (m_out_view_o),
+    .out_profile_o(m_out_profile_o),  // not observed by this bench
       .out_payload_o(m_out_payload_o),
       .busy_o       (m_busy_o),
       .mat_refused_o(m_mat_refused_o)

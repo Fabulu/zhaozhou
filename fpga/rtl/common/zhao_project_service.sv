@@ -169,6 +169,10 @@ module zhao_project_service #(
     output wire [30:0]                a_w_o,
     output wire                       a_behind_o,
     output wire                       a_view_o,
+    // The depth profile of the view this vertex was projected under, fanned to
+    // both clients exactly as `o_view` is: ONE bank, one profile per view, and
+    // the client that receives the vertex is the one whose request it was.
+    output wire [1:0]                 a_profile_o,
     output wire [PAYLOAD_A_W-1:0]     a_payload_o,
 
     // ---- client B ---------------------------------------------------------
@@ -187,6 +191,7 @@ module zhao_project_service #(
     output wire [30:0]                b_w_o,
     output wire                       b_behind_o,
     output wire                       b_view_o,
+    output wire [1:0]                 b_profile_o,
     output wire [PAYLOAD_B_W-1:0]     b_payload_o,
 
     output wire                       busy_o,
@@ -270,6 +275,7 @@ module zhao_project_service #(
   wire signed [31:0] o_d;
   wire        [30:0] o_w;
   wire               o_behind, o_view;
+  wire [1:0]         o_profile;
 
   zhao_project_core #(
       .PAYLOAD_W(PAY_W),
@@ -297,6 +303,7 @@ module zhao_project_service #(
       .out_w_o    (o_w),
       .out_behind_o(o_behind),
       .out_view_o (o_view),
+    .out_profile_o(o_profile),
       .out_payload_o(o_payload),
       .busy_o     (busy_o),
       .mat_refused_o(mat_refused_o)
@@ -316,6 +323,7 @@ module zhao_project_service #(
   assign a_w_o       = o_w;
   assign a_behind_o  = o_behind;
   assign a_view_o    = o_view;
+  assign a_profile_o = o_profile;
   assign a_payload_o = o_payload[PAYLOAD_A_W-1:0];
 
   assign b_x_o       = o_x;
@@ -324,6 +332,7 @@ module zhao_project_service #(
   assign b_w_o       = o_w;
   assign b_behind_o  = o_behind;
   assign b_view_o    = o_view;
+  assign b_profile_o = o_profile;
   assign b_payload_o = o_payload[PAYLOAD_B_W-1:0];
 
 endmodule

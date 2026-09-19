@@ -217,8 +217,8 @@ module zhao_material_resolve #(
     input  logic rst_n,
 
     // ---- the residency directory -------------------------------------------
-    // BOUNDARY. The LAW now exists -- spec/memory_rules.md 5f.1 names this
-    // row and zhao_mem_upload publishes it -- but MEM.UPLOAD is composed
+    // BOUNDARY. The LAW now exists -- `spec/memory_rules.md` 5f.1 names this
+    // row and `zhao_mem_upload` publishes it -- but MEM.UPLOAD is composed
     // nowhere in this console, so nothing here yet SAYS where a published
     // MATERIAL_SET lives. See the header for the four seams in the way.
     // `dir_entry_i` is a flat 8 bits rather than `$clog2(SETS)`: a width that

@@ -90,6 +90,11 @@ module zhao_proj_subsystem #(
     output wire        [30:0]       a_w_o,
     output wire                     a_behind_o,
     output wire                     a_view_o,
+    // Client A's depth profile, straight out of the shared service.
+    // `SetView.flags[1:0]`, owner ruling 2026-08-31 section 1. GEOM.DEPTHQUANT is
+    // where it goes when that block is composed; it sits beside `a_w_o`, the quantity it
+    // converts.
+    output wire [1:0]               a_profile_o,
     output wire [PAYLOAD_A_W-1:0]   a_payload_o,
 
     // ---- client B: terrain lattice vertices with their arena address ---------
@@ -103,6 +108,13 @@ module zhao_proj_subsystem #(
     input  wire [INDEX_W-1:0]       b_index_i,
     output wire                     fill_landed_o,   // one terrain fill wrote the arena
     output wire [ARENA_W-1:0]       fill_arena_o,    // ... this one
+    // The profile of the terrain vertex that just landed, beside the fill it
+    // landed with. It is exposed HERE rather than on the triangle port because
+    // the triangle port is the REPLAY shell's, and the arena does not carry a
+    // profile field -- making it do so is a change to `zhao_vertex_arena`'s
+    // payload and is not smuggled in beside a two-bit port. So terrain's
+    // per-triangle profile is still owed; this is its per-vertex half.
+    output wire [1:0]               fill_profile_o,
 
     // ---- the arena lifetime: open / seal ----------------------------------------
     input  wire                     open_i,
@@ -203,6 +215,7 @@ module zhao_proj_subsystem #(
       .a_w_o        (a_w_o),
       .a_behind_o   (a_behind_o),
       .a_view_o     (a_view_o),
+      .a_profile_o  (a_profile_o),
       .a_payload_o  (a_payload_o),
       .b_valid_i    (b_valid_i),
       .b_ready_o    (b_ready_o),
@@ -218,6 +231,7 @@ module zhao_proj_subsystem #(
       .b_w_o        (b_w_o),
       .b_behind_o   (b_behind_o),
       .b_view_o     (b_view_o),
+      .b_profile_o  (fill_profile_o),
       .b_payload_o  (b_payload_o),
       .busy_o       (svc_busy_o),
       .a_grants_o   (a_grants_o),

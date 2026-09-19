@@ -83,6 +83,13 @@ module zhao_terrain_pipe #(
     output wire        [30:0]       a_w_o,
     output wire                     a_behind_o,
     output wire                     a_view_o,
+    // Client A's depth profile, forwarded from the shared subsystem. The
+    // terrain triangle port below does NOT carry one: the profile would have
+    // to ride `zhao_vertex_arena`'s payload through the replay, which is a
+    // change to that block rather than to this one. `fill_profile_o` is the
+    // per-vertex half that does exist.
+    output wire [1:0]               a_profile_o,
+    output wire [1:0]               fill_profile_o,
     output wire [PAYLOAD_A_W-1:0]   a_payload_o,
 
     // ---- one subpatch job -----------------------------------------------------
@@ -416,6 +423,8 @@ module zhao_terrain_pipe #(
       .a_w_o             (a_w_o),
       .a_behind_o        (a_behind_o),
       .a_view_o          (a_view_o),
+      .a_profile_o       (a_profile_o),
+      .fill_profile_o    (fill_profile_o),
       .a_payload_o       (a_payload_o),
       .b_valid_i         (b_valid),
       .b_ready_o         (b_ready),

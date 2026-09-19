@@ -530,7 +530,8 @@ module tb_zhao_shell (
   // row of every tile resolves to the same address, so 208 bursts hammered 128
   // bytes. Not a defect -- an unconfigured frame (docket D19h).
   input  logic [26:0] render_fb_base_i,
-  input  logic [15:0] render_fb_stride_i
+  input  logic [15:0] render_fb_stride_i,
+    output wire [1:0] pj_out_profile
 );
 
   logic        phy_cs_n, phy_ras_n, phy_cas_n, phy_we_n, phy_dq_oe;
@@ -1267,7 +1268,8 @@ module tb_zhao_shell (
       // The core's refusal counter (MATW). This bench runs the default
       // MATW=32, where it is structurally zero; connected so the pin list is
       // complete, unread because the shell packet has no field for it.
-      .mat_refused_o(pj_mat_refused));
+      .mat_refused_o(pj_mat_refused),
+      .out_profile_o(pj_out_profile),);
 
   // ---- D22 step 3: GEOM.CLIP ------------------------------------------------
   localparam int unsigned CLIP_ATTRS = 7;

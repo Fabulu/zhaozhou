@@ -110,7 +110,15 @@ module zhao_geom_project #(
     // not fit signed MATW. Structurally zero at MATW=32; the core's counter,
     // exposed rather than dropped -- an error output left open is the
     // unfired-detector law.
-    output logic [31:0] mat_refused_o
+    output logic [31:0] mat_refused_o,
+
+  // THE VIEW'S DEPTH PROFILE, forwarded whole from the shared core.
+  // `SetView.flags[1:0]`, owner ruling 2026-08-31 section 1; 2'd0 = WORLD_LONG
+  // is the reset and the ruling's own zero meaning, so nothing that never
+  // GEOM.DEPTHQUANT's `v_profile_i` is where this goes when that block is
+  // writes it changes. It sits directly behind `out_w_o`, the quantity it
+  // converts, so the two leave here together.
+  output logic [ 1:0] out_profile_o
 );
 
   // ---------------------------------------------------------------------------
@@ -168,6 +176,7 @@ module zhao_geom_project #(
       .out_w_o      (out_w_o),
       .out_behind_o (out_behind_o),
       .out_view_o   (core_view),
+    .out_profile_o(out_profile_o),
       .out_payload_o(out_src_id_o),
 
       .busy_o(core_busy),

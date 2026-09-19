@@ -57,7 +57,9 @@ module tb_proj_service_rowmux (
     output wire [31:0] a_grants_o,
     output wire [31:0] b_grants_o,
     output wire [31:0] contended_o,
-    output wire [31:0] mat_refused_o
+    output wire [31:0] mat_refused_o,
+    output wire [1:0] a_profile_o,
+    output wire [1:0] b_profile_o
 );
 
   zhao_project_service #(
@@ -86,6 +88,7 @@ module tb_proj_service_rowmux (
       .a_w_o      (a_w_o),
       .a_behind_o (a_behind_o),
       .a_view_o   (a_view_o),
+      .a_profile_o(a_profile_o),  // not observed by this bench
       .a_payload_o(a_payload_o),
       .b_valid_i  (b_valid_i),
       .b_ready_o  (b_ready_o),
@@ -101,6 +104,7 @@ module tb_proj_service_rowmux (
       .b_w_o      (b_w_o),
       .b_behind_o (b_behind_o),
       .b_view_o   (b_view_o),
+      .b_profile_o(b_profile_o),  // not observed by this bench
       .b_payload_o(b_payload_o),
       .busy_o     (busy_o),
       .a_grants_o (a_grants_o),

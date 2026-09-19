@@ -688,6 +688,8 @@ module tb_zhao_console_core_smoke
   logic                    proj_out_refused_o;
   logic                    proj_out_missed_o;
   logic                    proj_a_view_o;
+  logic [1:0]              proj_a_profile_o;
+  logic [1:0]              proj_fill_profile_o;
   logic [31:0]             proj_replay_triangles_o;
   logic [31:0]             proj_replay_refused_o;
   logic [31:0]             proj_replay_missed_o;

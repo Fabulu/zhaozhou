@@ -67,7 +67,9 @@ module tb_proj_rowmux (
     output wire        d_out_view_o,
     output wire [15:0] d_out_payload_o,
     output wire        d_busy_o,
-    output wire [31:0] d_mat_refused_o
+    output wire [31:0] d_mat_refused_o,
+    output wire [1:0] r_out_profile_o,
+    output wire [1:0] d_out_profile_o
 );
 
   zhao_project_core #(
@@ -95,6 +97,7 @@ module tb_proj_rowmux (
       .out_w_o      (r_out_w_o),
       .out_behind_o (r_out_behind_o),
       .out_view_o   (r_out_view_o),
+    .out_profile_o(r_out_profile_o),  // not observed by this bench
       .out_payload_o(r_out_payload_o),
       .busy_o       (r_busy_o),
       .mat_refused_o(r_mat_refused_o)
@@ -125,6 +128,7 @@ module tb_proj_rowmux (
       .out_w_o      (d_out_w_o),
       .out_behind_o (d_out_behind_o),
       .out_view_o   (d_out_view_o),
+    .out_profile_o(d_out_profile_o),  // not observed by this bench
       .out_payload_o(d_out_payload_o),
       .busy_o       (d_busy_o),
       .mat_refused_o(d_mat_refused_o)

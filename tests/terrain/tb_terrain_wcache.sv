@@ -179,7 +179,10 @@ module tb_terrain_wcache #(
     output wire        [ 7:0] o_weight_o,
     output wire        [31:0] o_triangles_o,
     output wire               o_idle_o,
-    output wire        [31:0] o_mat_refused_o
+    output wire        [31:0] o_mat_refused_o,
+    output wire [1:0] a_profile_o,
+    output wire [1:0] fill_profile_o,
+    output wire [1:0] o_profile_o
 );
 
   // ---- the composed subsystem: service + terrain shell, in RTL ------------------------
@@ -263,6 +266,7 @@ module tb_terrain_wcache #(
       .a_w_o             (a_w_o),
       .a_behind_o        (a_behind_o),
       .a_view_o          (a_view_o),
+      .a_profile_o       (a_profile_o),
       .a_payload_o       (a_payload_o),
       .b_valid_i         (b_valid_i),
       .b_ready_o         (b_ready_o),
@@ -274,6 +278,7 @@ module tb_terrain_wcache #(
       .b_index_i         (b_index_i),
       .fill_landed_o     (fill_seen_o),
       .fill_arena_o      (fill_arena_unused),
+      .fill_profile_o    (fill_profile_o),
       .open_i            (open_i),
       .open_arena_i      (open_arena_i),
       .open_gen_o        (open_gen_o),
@@ -367,6 +372,7 @@ module tb_terrain_wcache #(
       .out_bd_o    (o_bd_o),
       .out_cd_o    (o_cd_o),
       .out_view_o  (o_view_o),
+      .out_profile_o(o_profile_o),
       .out_mat_a_o (o_mat_a_o),
       .out_mat_b_o (o_mat_b_o),
       .out_weight_o(o_weight_o),

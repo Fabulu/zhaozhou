@@ -319,6 +319,14 @@ module zhao_project_core_mutant #(
     // addr 0..15  : matrix row-major m[0..15] (row 2, words 8..11, inert)
     // addr 16     : { y0[27:16], x0[11:0] }
     // addr 17     : { h [27:16], w [11:0] }
+    // addr 18     : { 30'b0, depth_profile[1:0] }   -- SetView flags[1:0]
+    //
+    // ADDR 18 IS NEW, 2026-09-19, and it needs NO port change on this bus:
+    // `cfg_addr_i` has been five bits since the viewport words landed, so every
+    // existing caller passes it through already. `zhao_geom_cull` shares this
+    // bus and ignores addr >= 16 on purpose, so the word reaches this block and
+    // nobody else -- which is the same reason the viewport rect could be added
+    // where it was.
     input logic        cfg_we_i,
     input logic        cfg_view_i,
     input logic [ 4:0] cfg_addr_i,
@@ -363,6 +371,26 @@ module zhao_project_core_mutant #(
     output logic        [30:0]       out_w_o,
     output logic                    out_behind_o, // clip.w <= 0: vertex is zero
     output logic                    out_view_o,
+    // THE DEPTH PROFILE OF THE VIEW THIS VERTEX WAS PROJECTED UNDER.
+    //
+    // `SetView.flags[1:0]`, owner ruling 2026-08-31 §1, FROZEN CONSOLE LAW:
+    // 00 WORLD_LONG, 01 WORLD_STANDARD, 10 CLOSE, 11 RESERVED AND REFUSED.
+    // `spec/commands.zidl:305` is why it belongs on THIS port and not on a
+    // latched register somewhere downstream -- "the profile travels WITH the
+    // view, is recorded in captures and is reproduced in replay".
+    //
+    // ITS CONSUMER ALREADY EXISTS AND ALREADY HAS THE PORT.
+    // `zhao_geom_depthquant.v_profile_i` is two bits and that block's own
+    // header opens with the audit finding this port closes: "no `depth_profile`
+    // port exists anywhere in fpga/rtl, though the ABI carries a two-bit
+    // profile in SetView". It sits directly behind `out_w_o`, which is the
+    // quantity it converts, so the two leave together.
+    //
+    // ZERO KEEPS ITS MEANING (`spec/commands.zidl:301`). Reset is 2'd0 =
+    // WORLD_LONG, so nothing that never writes addr 18 changes behaviour and no
+    // existing capture decodes differently. That is the whole reason the ruling
+    // chose `flags` over a new opcode.
+    output logic [1:0]              out_profile_o,
     output logic [PAYLOAD_W-1:0]    out_payload_o,
 
     // Any vertex anywhere in the pipe, output register included. A caller with
@@ -536,6 +564,9 @@ module zhao_project_core_mutant #(
   logic        [11:0] vp_y0[0:1];
   logic        [11:0] vp_w [0:1];
   logic        [11:0] vp_h [0:1];
+  // The per-view depth profile. Two bits, reset 2'd0 = WORLD_LONG, which is the
+  // ruling's own zero meaning -- see `out_profile_o`.
+  logic        [ 1:0] prof [0:1];
 
   // ---- the refusal law (header, "THE REFUSAL LAW") ------------------------
   // A product word is any matrix address in columns 0..2 of rows 0, 1 or 3.
@@ -552,9 +583,6 @@ module zhao_project_core_mutant #(
       // structurally zero at this setting, and says so in the header.
       assign cfg_fits = 1'b1;
     end else begin : g_fits_chk
-      // Fits signed MATW iff bits [31:MATW-1] are all the sign bit. This is
-      // the exact test, not a magnitude compare: -2^(MATW-1) fits, +2^(MATW-1)
-      // does not, and both land on the boundary this reads.
       // MUTANT: the refusal law removed. Every product word is written,
       // including those that do not fit a signed MATW-bit value, so an
       // out-of-range coefficient wraps silently instead of being refused and
@@ -562,6 +590,38 @@ module zhao_project_core_mutant #(
       assign cfg_fits = 1'b1;
     end
   endgenerate
+
+  // ---- the depth-profile GUARD (`spec/commands.zidl:292`) ------------------
+  // A write to addr 18 whose low two bits are 2'd3 is REFUSED: the register
+  // keeps its previous value. 2'd3 is RESERVED by the 2026-08-31 ruling --
+  // "11 RESERVED -- REFUSED, ZH_ABI_BAD_VALUE" -- and the hole it would open is
+  // real rather than theoretical: `zhao_geom_depthquant` reads
+  // `WMIN[v_profile_i]`, `WMAX[v_profile_i]` and `SCALE_LOG2[v_profile_i]` from
+  // THREE-ENTRY arrays with a TWO-BIT index, so a profile of 3 indexes one past
+  // the end of all three and an unpacked out-of-range read is X rather than a
+  // diagnosis. Holding the previous profile gives a picture that is stale
+  // rather than undefined.
+  //
+  // THIS IS A GUARD AND NOT A DETECTOR, AND THE DIFFERENCE IS DELIBERATE.
+  // There is no `profile_refused_o` counter here, because the COUNTED refusal
+  // belongs at the boundary the value ARRIVES at, beside the one this tree
+  // already has for the identical shape: `zhao_cmd_exec`'s
+  // `view_range_refused_o`, which refuses a `view_id` the two-view bank cannot
+  // address ("Refuse, never mask"). A counter here would have to be forwarded
+  // through `zhao_geom_project`, `zhao_terrain_project`,
+  // `zhao_project_service`, `zhao_proj_subsystem`, `zhao_terrain_pipe`, both
+  // console tops and six testbenches to be readable, and a counter nobody can
+  // read is not evidence. Stated rather than left implicit so the next person
+  // adds it in CMD.EXEC when this port gains its consumer, instead of
+  // rediscovering the cascade.
+  //
+  // The upper 30 bits are NOT checked, deliberately: `flags[15:2]` is
+  // UNASSIGNED by the ruling and `zhao_sample_set_view()` already carries
+  // 0x8261, so demanding zero there would refuse a legal command that ships.
+  logic cfg_is_prof;
+  logic prof_legal;
+  assign cfg_is_prof = (cfg_addr_i == 5'd18);
+  assign prof_legal  = (cfg_data_i[1:0] != 2'd3);
 
   // Refused writes, counted. Not gated by `en_i`: configuration writes are
   // not, either. Saturating, like every other counter in this subsystem.
@@ -574,6 +634,7 @@ module zhao_project_core_mutant #(
     end
   end
 
+
   integer ci;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -585,6 +646,10 @@ module zhao_project_core_mutant #(
       vp_y0[0] <= '0; vp_y0[1] <= '0;
       vp_w[0]  <= '0; vp_w[1]  <= '0;
       vp_h[0]  <= '0; vp_h[1]  <= '0;
+      // 2'd0 IS WORLD_LONG and that is the point of resetting to it, not an
+      // arbitrary safe value: a console that never issues a SetView profile
+      // behaves exactly as it did before this port existed.
+      prof[0]  <= 2'd0; prof[1]  <= 2'd0;
     end else if (cfg_we_i) begin
       if (cfg_addr_i < 5'd16) begin
         // A refused product word KEEPS its previous value -- the register is
@@ -598,6 +663,10 @@ module zhao_project_core_mutant #(
       end else if (cfg_addr_i == 5'd17) begin
         vp_w[cfg_view_i] <= cfg_data_i[11:0];
         vp_h[cfg_view_i] <= cfg_data_i[27:16];
+      end else if (cfg_is_prof) begin
+        // A refused (reserved) profile KEEPS its previous value -- the register
+        // is simply not written, exactly as a refused product word is not.
+        if (prof_legal) prof[cfg_view_i] <= cfg_data_i[1:0];
       end
     end
   end
@@ -1280,7 +1349,7 @@ module zhao_project_core_mutant #(
       s6_invw <= '0; s6_w <= '0; s6_pay <= '0;
       out_valid_o <= 1'b0;
       out_x_o <= '0; out_y_o <= '0; out_d_o <= '0; out_behind_o <= 1'b0;
-      out_view_o <= 1'b0; out_payload_o <= '0;
+      out_view_o <= 1'b0; out_profile_o <= 2'd0; out_payload_o <= '0;
     end else if (en_i) begin
       // stage 1 lives in the ROWS_PER_PASS generate above.
 
@@ -1365,6 +1434,24 @@ module zhao_project_core_mutant #(
       out_w_o <= s6b_behind ? 31'd0 : s6b_w;
       out_behind_o <= s6b_behind;
       out_view_o <= s6b_view;
+      // THE PROFILE IS READ LATE, BY THE CARRIED VIEW, AND THAT IS THIS
+      // FILE'S OWN EXISTING RULE RATHER THAN A NEW ONE. `s5_vpw`/`s5_vph` are
+      // selected out of `vp_w`/`vp_h` at stage 5 by `dstep_view[DIV_STEPS]`,
+      // with the comment "Selected with the SAME index, on the same edge, from
+      // the same registers". A view's VIEWPORT is therefore already read after
+      // its vertices entered, and the profile is read the same way, one index
+      // and one edge -- `s6b_view` here.
+      //
+      // WHY NOT CAPTURE IT WITH THE VERTEX, like the MATRIX is. Because it is
+      // not part of the transform. The matrix is captured at accept precisely
+      // so a configuration write cannot TEAR one vertex's transform across two
+      // cameras; the profile takes part in no arithmetic in this block, is
+      // consumed a block later by GEOM.DEPTHQUANT, and is a property of the
+      // VIEW rather than of the vertex. Carrying it would have cost a two-bit
+      // lane through all 38 stages -- about 76 flops on a design already over
+      // its ALM criterion -- to buy a distinction this block does not make for
+      // the viewport either.
+      out_profile_o <= prof[s6b_view];
       out_payload_o <= s6b_pay;
     end
   end

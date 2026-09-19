@@ -927,6 +927,10 @@ module zhao_console_core_slot_overflow_mutant
   // view (a group holds one view's results), so it has no consumer inside this
   // core and leaves the module named rather than left dangling.
   output logic                    proj_a_view_o,
+  // The depth profile ports, forwarded verbatim. This file is a WRAPPER and
+  // not a copy, so it carries the production port list and nothing else.
+  output logic [1:0]              proj_a_profile_o,
+  output logic [1:0]              proj_fill_profile_o,
   output logic [31:0]             proj_replay_triangles_o,
   output logic [31:0]             proj_replay_refused_o,
   output logic [31:0]             proj_replay_missed_o,
