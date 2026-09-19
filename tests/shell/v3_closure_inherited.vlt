@@ -25,21 +25,36 @@
 // waiver that matches nothing is perfectly silent about being useless. The
 // first version of this file had exactly that and the warnings all came
 // back. Separator-agnostic prefixes only.
+//
+// AND THAT FIX WAS ONLY HALF A FIX, found 2026-09-19. The separator before
+// the BASENAME was made agnostic and the ones inside the DIRECTORY were left
+// as forward slashes, so these globs match only when the CALLER happens to
+// pass posix paths. design/fit_targets.yml does, which is why this looked
+// settled; tools/budget/completion_register.py's closure_paths() hands back
+// Windows backslash paths, and linting from it brings all 112 texture-subtree
+// warnings back -- in a subtree the caller never touched, looking exactly like
+// a regression they just caused. That is the same failure the paragraph above
+// describes, one directory level up.
+//
+// `?` matches a single character in Verilator's globs, so `*fpga?rtl?texture*`
+// matches both spellings and cannot rot this way again. Proven by running the
+// baseline twice, once with posix paths and once with backslash paths: both
+// silent, RC 0.
 `verilator_config
 
-lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/texture*"
-lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/raster*"
-lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/geometry*"
-lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/common*"
-lint_off -rule UNUSEDSIGNAL    -file "*fpga/rtl/video*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga?rtl?texture*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga?rtl?raster*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga?rtl?geometry*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga?rtl?common*"
+lint_off -rule UNUSEDSIGNAL    -file "*fpga?rtl?video*"
 
-lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/texture*"
-lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/raster*"
-lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/geometry*"
-lint_off -rule UNUSEDPARAM     -file "*fpga/rtl/common*"
+lint_off -rule UNUSEDPARAM     -file "*fpga?rtl?texture*"
+lint_off -rule UNUSEDPARAM     -file "*fpga?rtl?raster*"
+lint_off -rule UNUSEDPARAM     -file "*fpga?rtl?geometry*"
+lint_off -rule UNUSEDPARAM     -file "*fpga?rtl?common*"
 
-lint_off -rule PINCONNECTEMPTY -file "*fpga/rtl/texture*"
-lint_off -rule UNDRIVEN        -file "*fpga/rtl/texture*"
+lint_off -rule PINCONNECTEMPTY -file "*fpga?rtl?texture*"
+lint_off -rule UNDRIVEN        -file "*fpga?rtl?texture*"
 lint_off -rule DECLFILENAME    -file "*zhao_render_texture_pkg.sv"
 
 // The one warning Verilator attributes to the harness rather than the closure.
