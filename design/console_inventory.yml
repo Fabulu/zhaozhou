@@ -33,6 +33,10 @@ modules:
   zhao_field_exec_shared:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_hps_arbiter:
+    disposition: superseded
+    superseded_by: zhao_hps_arbiter_n
+    why: "the historical two-client wrapper over the N-client core (owner ruling R4); since 2026-09-19 both console sites instantiate zhao_hps_arbiter_n directly -- the shell's TERRAIN.BUILD socket and the terrain spine -- and the wrapper remains for its 66-check directed test"
   zhao_field_len:
     disposition: superseded
     superseded_by: zhao_field_v3_len
