@@ -168,3 +168,49 @@ cut on 2026-08-31 before their specs were written. The ledger records the revoca
 verbatim ("I don't want to defer any unfinished blocks now ... the 2026-08-31 SS6.3
 cut is withdrawn"), so I am treating them as mandatory and authoring the contracts.
 Flagged rather than assumed.
+## 2026-09-19 evening -- A PIXEL TRAVERSES THE RENDER PATH
+
+**The milestone.** `raster pixels=1536 bursts=96 issued=1536 retired=1536 fatal=0`
+from 16 triangles in 1 admitted frame, every issued word retired by the arbiter.
+This morning it was zero and the smoke bench blamed VIDEO.SLOTMGR.
+
+**And the bench's own sentence was wrong three times over.** All six lease blocks
+were ALREADY composed in the shell. The real blockers were two wires: GEOM.SETUP's
+`out_area2_o` never reached `tri_area2_i` (header entry 7 claimed "port for port";
+it was 20 of 21), so the tile pipe read area2==0 as PROFILE AREA BAD and sank 72 of
+72 jobs; and `u_guard_render` was handed the BLITTER's window, so MEM.GUARD denied
+everything and FBWRITE went fatal after 1,536 fragments. Both fired as positive
+controls when reverted.
+
+**I23 is DELETED, not closed.** The geometry asset path composes: MESHFETCH +
+ASSETFETCH through one MEM_ADAPTER on the shell's single guard socket, into
+VDECODE and ASSEMBLE, with CULL on the projector's EXISTING matrix bank. The smoke
+bench now writes the same `vdec_record()` bytes into SDRAM instead of playing them,
+so the only difference between the old reading and the new one is the memory path.
+`zhao_geom_project` deliberately NOT composed -- a second projector is ~6,199 ALM
+and 33 DSP, and the one in `u_proj_subsystem` is already there.
+
+**I23's stated reason was false and had been for a long time.** "No behavioural
+SDRAM model in this tree" -- `sim/models/zhao_sdram_model.sv` is 219 lines and
+cycle-true. The thing that actually blocked geometry was four files lower:
+`ZHAO_RENDER_ASSET_BASE`'s `default: pass_ok = 1'b0` in `zhao_pkg`, whose own
+comment says so. THE REFUSAL SURVIVED ITS OWN CAUSE BY FOUR FILES.
+
+**GEOM.LOOM built** as a streaming matrix composer over the EXISTING
+`zhao_geom_mat3x4_mul` -- I nearly briefed a duplicate before finding it.
+
+**MY OWN ERROR, recorded because I got the correction wrong too.** Commit
+b788812f reverted the video packet's 064acc93 through a stale shared index. I
+checked, diffed my commit against 759b449a -- which was NOT its parent -- and
+reported "false alarm, nothing reverted". Diffing ACROSS the agent's commit
+cancelled the revert out. The packet re-landed it as 9887da8d. The CLAUDE.md
+section warning about exactly this was written by me one minute before I did it.
+
+**Where it stands.** 70 mandatory gaps (30 tie-offs + 37 disconnected + 3 unbuilt),
+58 capabilities connected, closure 143 modules. Unwaived lint 120 with attribution
+(6 inherited from the newly-composed asset path); waived still SILENT.
+
+**NEXT:** the tie-off count is rising as composition makes real seams visible (26
+-> 30). That is honest, not regression -- but it means the remaining work is now
+mostly BOUNDARY entries with named absent owners, and the two biggest named owners
+are CMD.SCHEDULER (I14/I30/I33/I36) and the Packet-D attribute carriage (I20).
