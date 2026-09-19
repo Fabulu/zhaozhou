@@ -1,0 +1,115 @@
+PASS n-mspan rc=0 exp=0 | MANAFOLD PASS-17 SIGNED-SPAN GATE
+PASS n-msmooth rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mprobe rc=0 exp=0 | u02-probe: slot 13 PLANTED 360 keys 100..140: carrier-B owned 82/82, depth-fail 0, range -27..-18 mm — OK
+PASS n-mjointpub rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mqa rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mmeshcheck rc=0 exp=0 | u02-meshcheck: 34 meshlets, 2800 tris, 1416 position groups, 4200 edges — CLEAN
+PASS n-moutline rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mshell rc=0 exp=0 | shellgate: PASS
+PASS n-mshell-selftest rc=0 exp=0 | shellgate --selftest: every check is failable
+PASS n-mnodule rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-meyesize rc=0 exp=0 | PASS: 0 failure(s)
+PASS s-rigid-F-A rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x802)
+PASS s-clamp-F-A rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-over-F-A rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-rigid-A-B rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x82)
+PASS s-clamp-A-B rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-over-A-B rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-rigid-B-C rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x82)
+PASS s-clamp-B-C rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-over-B-C rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-rigid-C-E rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x882)
+PASS s-clamp-C-E rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-over-C-E rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-drift-A rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-drift-B rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-drift-C rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-drift-E rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-e-start rc=1 exp=1 | MUTANT e-start: attributed detector fired (0x10)
+PASS s-e-mid rc=1 exp=1 | MUTANT e-mid: attributed detector fired (0x10)
+PASS s-e-presocket rc=1 exp=1 | MUTANT e-presocket: attributed detector fired (0x10)
+PASS s-posed-order rc=1 exp=1 | MUTANT posed-order: attributed detector fired (0x40)
+PASS s-order rc=1 exp=1 | MUTANT crown-order: attributed detector fired (0x80)
+PASS s-antenna-snap rc=1 exp=1 | MUTANT antenna-snap: attributed detector fired (0x120)
+PASS s-accent-switch rc=1 exp=1 | MUTANT accent-switch: attributed detector fired (0x100)
+PASS s-hold-tremor rc=1 exp=1 | MUTANT hold-tremor: attributed detector fired (0x120)
+PASS s-compress-wrap rc=1 exp=1 | MUTANT compress-wrap: attributed detector fired (0x100)
+PASS s-final-dwell rc=1 exp=1 | MUTANT final-dwell: attributed detector fired (0x100)
+PASS s-root-authority rc=1 exp=1 | MUTANT root-authority: attributed detector fired (0x1880)
+PASS s-front-flex rc=1 exp=1 | MUTANT front-flex: attributed detector fired (0x1000)
+PASS s-swell-size rc=1 exp=1 | MUTANT swell-size: attributed detector fired (0x2000)
+PASS s-terminal-cap rc=1 exp=1 | MUTANT terminal-cap: attributed detector fired (0x4800)
+PASS s-mute-F rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x80)
+PASS s-mute-A rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x1A0)
+PASS s-mute-B rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x2A0)
+PASS s-mute-C rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x80)
+PASS s-mute-E rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x80)
+PASS m-lightning-switch rc=1 exp=1 | MUTANT lightning-switch: attributed detector fired categories=0x4c20 expected=0x800 allowed=0x4c20
+PASS m-shape-blackout rc=1 exp=1 | MUTANT shape-blackout: attributed detector fired categories=0x10 expected=0x10 allowed=0x58010
+PASS m-particle-reseed rc=1 exp=1 | MUTANT fold-particle-reseed: attributed detector fired categories=0x2024 expected=0x4 allowed=0x2024
+PASS m-surge-reseed rc=1 exp=1 | MUTANT surge-reseed: attributed detector fired categories=0x4420 expected=0x4000 allowed=0x4420
+PASS m-loop-seam rc=1 exp=1 | MUTANT loop-seam: attributed detector fired categories=0x1480 expected=0x400 allowed=0x1480
+PASS m-mote-count rc=1 exp=1 | MUTANT mote-count: attributed detector fired categories=0x82028 expected=0x8 allowed=0x82028
+PASS m-mote-role rc=1 exp=1 | MUTANT mote-role: attributed detector fired categories=0x2428 expected=0x8 allowed=0x2428
+PASS m-weight-wrap rc=1 exp=1 | MUTANT mvc-weight-wrap: attributed detector fired categories=0x1001 expected=0x1 allowed=0x1001
+PASS m-morph-reverse rc=1 exp=1 | MUTANT morph-reverse: attributed detector fired categories=0x1b500 expected=0x1100 allowed=0x1b500
+PASS m-brightness-seam rc=1 exp=1 | MUTANT brightness-seam: attributed detector fired categories=0x18000 expected=0x18000 allowed=0x58000
+PASS m-stamp-count rc=1 exp=1 | MUTANT stamp-count-pop: attributed detector fired categories=0x60040 expected=0x60040 allowed=0x60040
+PASS m-final-dwell rc=1 exp=1 | MUTANT final-dwell: attributed detector fired categories=0x18000 expected=0x10000 allowed=0x58000
+PASS m-mote-visibility rc=1 exp=1 | MUTANT mote-visibility-pop: attributed detector fired categories=0x80000 expected=0x80000 allowed=0x80000
+PASS m-palette-raw-clock rc=1 exp=1 | MUTANT palette-raw-clock: attributed detector fired categories=0x200000 expected=0x200000 allowed=0x200000
+PASS m-palette-hard-switch rc=1 exp=1 | MUTANT palette-hard-switch: attributed detector fired categories=0x200000 expected=0x200000 allowed=0x200000
+PASS m-death-effect-cutoff rc=1 exp=1 | MUTANT death-effect-cutoff: attributed detector fired categories=0x400000 expected=0x400000 allowed=0x400000
+PASS p-mjoint-F rc=0 exp=0 | RED LEG OK: mute F makes its own public visible-skin gate fail
+PASS p-mnodule-F rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mjoint-A rc=0 exp=0 | RED LEG OK: mute A makes its own public visible-skin gate fail
+PASS p-mnodule-A rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mjoint-B rc=0 exp=0 | RED LEG OK: mute B makes its own public visible-skin gate fail
+PASS p-mnodule-B rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mjoint-C rc=0 exp=0 | RED LEG OK: mute C makes its own public visible-skin gate fail
+PASS p-mnodule-C rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mjoint-E rc=0 exp=0 | RED LEG OK: mute E makes its own public visible-skin gate fail
+PASS p-mnodule-E rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-ignore rc=0 exp=0 | FAIL: 6 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mprobe-mirror rc=1 exp=1 | u02-probe: 5d gate A -- eyes never touch: closest approach 0 mm (corner 2080, floor 12) - FAIL
+PASS p-mprobe-outline rc=1 exp=1 | u02-probe: 5c LEASH rule 1 (overhang <= 32 mm = 370 pm of a 89 mm star half-width): worst 206 mm at slot 14 key 85 - FAIL
+PASS p-mprobe-scale rc=1 exp=1 | u02-probe: 5c LEASH rule 1 (overhang <= 32 mm = 370 pm of a 89 mm star half-width): worst 344 mm at slot 21 key 156 - FAIL
+PASS p-mprobe-support rc=1 exp=1 | u02-probe: slot 13 PLANTED 360 keys 100..140: carrier-B owned 0/82, depth-fail 0, range 2147483647..-2147483648 mm — FAIL
+PASS p-mprobe-support-depth rc=1 exp=1 | u02-probe: slot 13 PLANTED 360 keys 100..140: carrier-B owned 82/82, depth-fail 82, range 13..22 mm — FAIL
+PASS p-moutline-owner rc=1 exp=1 | [MUTANT] enclosed-opening owner disabled
+PASS p-moutline-repaint rc=1 exp=1 | [MUTANT] stale post-energy ink restore enabled
+PASS p-mqa-lane rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with lane 0 answering for every lane Q1 reports the corpse as dead, which is exactly what the shipped gate does
+PASS p-mqa-seam rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports 2 death(s) standing back up, which is the fault pass 12 shipped
+PASS p-mqa-eyesnap rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- Q2 rejects both death eye resets at their own settle keys
+PASS p-mqa-startle-step rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- legacy Startle timing exceeds its unchanged 260 mm ceiling
+PASS p-mqa-rootstep rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- with the sag carry at one key Q3 reports 1 clip(s) over ceiling, which is the 240 mm teleport pass 12 shipped
+PASS p-mqa-fall-wrap rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- legacy Fall wrap makes Q5 reject 4 contract/channel item(s), including the non-root pose reset
+PASS p-meyesize-L rc=0 exp=0 | RED LEG OK: mute L restores only its eye to identity
+PASS p-meyesize-R rc=0 exp=0 | RED LEG OK: mute R restores only its eye to identity
+PASS p-meyesize-wrong rc=0 exp=0 | RED LEG OK: wrong-bone scale fails only left Eye->Pupil registration
+PASS f-mqa-trick-spin-gain rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-gain [Q6a] fired only its own category (3 item(s))
+PASS f-mqa-trick-spin-ease rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-ease [Q6b] fired only its own category (3 item(s))
+PASS f-mqa-trick-spin-pivot rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-trick-spin-pivot [Q6c] fired only its own category (1 item(s))
+PASS f-mqa-flight-seam rc=0 exp=0 | qa-p12: FAILABLE LEG OK -- --fail-flight-seam [Q7] fired only its own category (1 item(s))
+PASS f-sel-spin-bogus rc=2 exp=2 | ZHAO_U02_TRICK_SPIN=bogus invalid (expected normal|none) 
+PASS f-sel-start-range rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_START_KEY=78 outside 79..147 
+PASS f-sel-short-seg rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_*_KEY: start 100 turn 104 settle 140 leaves a segment under 8 keys 
+PASS f-sel-overshoot rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM=300 outside 0..250 
+PASS f-sel-gain rc=2 exp=2 | ZHAO_U02_TRICK_SPIN_GAIN_PM=-1 outside 0..2000 
+PASS f-sel-trick-bias rc=2 exp=2 | ZHAO_U02_TRICK_CAM_BIAS=abc is not an integer; expected -40000..40000 
+PASS f-sel-trick-k rc=2 exp=2 | ZHAO_U02_TRICK_CAM_K=1 outside 60000..600000 
+PASS f-sel-cycles rc=2 exp=2 | ZHAO_U02_FLIGHT_BOB_CYCLES=0 outside 1..12 
+PASS f-sel-amp rc=2 exp=2 | ZHAO_U02_FLIGHT_BOB_MM=-5 outside 0..2000 
+PASS f-sel-rise rc=2 exp=2 | ZHAO_U02_FLIGHT_RISE_FRAC16=100 outside 16384..49152 
+PASS f-sel-warp rc=2 exp=2 | ZHAO_U02_FLIGHT_RISE_FRAC16/TOP_HANG16: warp |(8192,10000)| exceeds 10000 (the clock would run backwards) 
+PASS f-sel-flight-k rc=2 exp=2 | ZHAO_U02_FLIGHT_CAM_K=5 outside 60000..400000 
+PASS f-sel-drift-bx rc=2 exp=2 | ZHAO_U02_DRIFT_CAM_BX=x is not an integer; expected -40000..40000 
+PASS f-sel-lift rc=2 exp=2 | ZHAO_U02_FLIGHT_LIFT_MM=3000 outside 0..2000 
+PASS e-live-history-normal rc=0 exp=0 | PASS: no persistent history on any live Manafold subject
+PASS e-live-history-legacy rc=0 exp=0 | CONTROL legacy: HISTORY detector fired on every live subject -- OK
+PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK
+PASS f-ident-flight-v17env | 0x5B272AB3 == Wave-E 0x5B272AB3 (v17-neutral knobs, final binary)
+PASS f-ident-trick-none-v17cam | 0x22563A37 == Wave-E 0x22563A37 (v17-neutral knobs, final binary)
+PASS f-ident-drift-bx0 | 0x3A11AB0C == Wave-E 0x3A11AB0C (v17-neutral knobs, final binary)
+PASS f-ident-zixx-idle | final crc32c=0x1408F885 == HEAD crc32c=0x1408F885
+PASS f-bank-identity | 33/36 subjects byte-identical to Wave E (22 live + crackle-legacy + 13 non-live); the 3 that differ are the intended flight/trick/drift

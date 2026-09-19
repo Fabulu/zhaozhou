@@ -1,0 +1,11 @@
+Q016: prompt 85002 chars ~26563 tokens; max_tokens 81437; window 112000
+  input Upheaval/creature/Manafold/OWNER-DIRECTION-19-2026-09-19.md:1-21  4612 chars  sha c4e32faf91efcc0e
+  input Upheaval/creature/Manafold/PASS-17-FINDINGS.md:1-111  12361 chars  sha 752d0c9fc3325a04
+  input Upheaval/website/creatures.json:37-37  2698 chars  sha 32f92ba41e1ed209
+  input zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ARCHIVE-CLOSURE.md:1-94  5153 chars  sha 35cdd71e5931db54
+  input zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ROOT-AUTHORITY-IMPLEMENTATION.md:1-106  8150 chars  sha e8b0e9292c96ac8e
+  input zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ROOT-MATERIAL-IMPLEMENTATION.md:1-113  7756 chars  sha 3fda0473255e7e04
+  input zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-ART.md:1-128  10619 chars  sha 896c5514a21f93cb
+  input zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:1-131  17442 chars  sha bc06392311d43ba3
+  input zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:1-111  12597 chars  sha 45415db985cf7465
+Q016: ok; 29508 completion tokens (20032 reasoning) in 424s -> /mnt/c/programmieren/zencrifice/manafold-p16/zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/qwen/Q016-v18-findings-draft-xhigh.answer.md

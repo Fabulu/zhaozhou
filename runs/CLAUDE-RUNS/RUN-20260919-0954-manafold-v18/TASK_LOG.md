@@ -101,6 +101,16 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
   - Receipts: 97/97 matrix. The legacy control fires 22/22 and reproduces 21/22 Wave-D bytes. Non-live 13/13 identical.
   - Looked at 14 images: history before/after, fade ladder and strips, Crackle legacy vs new, every-frame Hasty/Drift/Blown/Crackle/Channel/Lasso/Death Drop, 4x and native particle witnesses.
   - Open: Drift left-edge framing at f260-298 (pre-existing).
+- 20:30: Wave E closed by the Opus worker. Zhaozhou `0381bdec` (source) + `39f7f002` (evidence), Upheaval `d97cb76`; 97/97 controls; live history mist off on 22/22; Crackle on candidate 9/day with an exact legacy control; the pre-layer mote route was declined and a 120 mm mote surface fade shipped. Coordinator verified the pushes and deleted the Wave-E scratch. Launched the Opus worker on Wave F (Flight + Trick 360, support-point pivot, framing ladders) with the verified prep note. Qwen Q009 is doing an independent read-only bug review of the committed Wave-E fx diff; the relay gained `show:<sha>:<path>` inputs.
+- 20:55: Independent Qwen review of the committed Wave-E source in two chunks (Q009 fx.h, Q010 zhao_reel.cpp, continuation-linked); both verified by coordinator spot checks. The mote fade works in mm depth space with symmetric band, edge taps safe and exact off path. The live-history self-check reads executed-plane receipts and reaches the process RC. crackle-legacy is isolated. No P1/P2.
+
+- 19:30: Wave F CLOSED by the Opus worker (`V18-WAVE-F-PERFORMANCES.md`). Source `d7d51171`.
+  - Flight: one warped clock; chosen by eye c2 / 800 mm / cruise lift 500 / rise 0.366 / hang 4000 / pitch lead 4096, camera k220000 bias +5000. About 70 px of travel against v17's 10. v17-neutral knobs reproduce `0x5B272AB3`.
+  - Trick: pause, one world-vertical 360 pivoting about the planted support, 40 pm overshoot, C2 correction, then the existing righting, all inside the unchanged plant (keys 100/128/140; kTrickKeys stays 200). Camera k330000 bias -10000 lifts the crown off the bottom edge with 0 top-edge frames. `SPIN=none` + v17 camera reproduces `0x22563A37`.
+  - Drift: a constant horizontal aim of 14000 keeps the whole traverse inside the frame; BX=0 reproduces `0x3A11AB0C`.
+  - Gates 115/115: mqa Q6a/b/c + Q7 with four attributed controls, an mprobe PLANTED 360 line, 14 selectors, live-history gate, identities, Zixx Idle, and a bank 33/36 identical to Wave E (the other 3 are the intended changes).
+  - Prep corrections: the u02 house cam_bias is 0, not 14000; the support pivot must be the chain point at carrier B, and the gate measures the contact patch.
+  - Open: the pre-existing Trick pause contact wander of 178 mm (owner call); no Drift margin at either end.
 
 ## Subagent Spawns
 
@@ -118,6 +128,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 | 2026-09-19 | GPT fork Wave D review | Audit swell isolation, public Front ownership, Trick contact, ReturnTip, effect visibility, controls and pictures | BLOCKED — terminal taper repair changes visible return run; Trick contact is not support-owned; duplicate Front API | `V18-SWELL-FRONT-REVIEW.md` |
 | 2026-09-19 | Claude worker Wave D closure | Verify/repair the three blockers and two coordinator audits, clean direct build, full control matrix, production-presentation rerender and visual review, commit/push | Complete — CLOSED; mesh-cap regression and wrong-presentation sheets found and repaired; 88/88 gates | `V18-SWELL-FRONT-REPAIR.md` |
 | 2026-09-19 | Claude worker Wave E cleanup | Retire live history mist with assertion/gate/controls, normalise Crackle with exact legacy control, re-look Drift/Blown, bounded particle attempt, full matrix, every-frame review, commit/push | Complete — CLOSED; 97/97; fade shipped at 120 mm; legacy fade leak found and fixed | `V18-WAVE-E-CLEANUP.md` |
+| 2026-09-19 | Claude worker Wave F performances | Flight/Trick ladders chosen by eye, spin pivot, gates/controls, every-frame review, commit/push | Complete — CLOSED; 115/115 | `V18-WAVE-F-PERFORMANCES.md` |
 
 ---
 
@@ -174,5 +185,5 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 1. ~~Repair Wave D blockers~~ and ~~commit/push Wave D~~ — done (`V18-SWELL-FRONT-REPAIR.md`). Every later render must use the production invocation (`zhao-reel-cel.exe`, `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`).
 2. Wave F must keep the new committed Trick support probe green (strict B ownership plus two fired controls) and should revisit the planted-crown framing at the frame bottom.
 3. ~~Run Wave E~~ — done (`V18-WAVE-E-CLEANUP.md`). Drift left-edge framing at f260-298 is an open camera question.
-4. Run Wave F: select Flight amplitude/cadence by complete motion, author Trick's planted 360-degree yaw turn with overshoot/correction and keep antenna-region support proof green.
+4. ~~Run Wave F~~ — done (`V18-WAVE-F-PERFORMANCES.md`). Owner calls: Trick pause contact wander (pre-existing), Drift margin.
 5. Run one integrated targeted gate, then one exact 22-subject version-18 bank, isolated every-frame review, encode, publication and production-byte verification.

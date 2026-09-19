@@ -1,0 +1,5 @@
+flight-v17env crc32c=0x5B272AB3 expect 0x5B272AB3
+trick-none-v17cam crc32c=0x22563A37 expect 0x22563A37
+drift-bx0 crc32c=0x3A11AB0C expect 0x3A11AB0C
+zixx-idle-final crc32c=0x1408F885
+zixx-idle-HEAD crc32c=0x1408F885

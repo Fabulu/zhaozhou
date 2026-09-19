@@ -1,0 +1,25 @@
+LIST OK: renderer table == site live bank (22 subjects)
+HISTORY renderer RC 5: 22/22 lines, OK 0, FAIL 22 (executed-mist FAIL 22), missing []
+  manafold-blown: declared mist=1 smear=0 executed mist=292 smear=0 FAIL
+  manafold-channel: declared mist=1 smear=0 executed mist=420 smear=0 FAIL
+  manafold-crackle: declared mist=1 smear=0 executed mist=600 smear=0 FAIL
+  manafold-curious: declared mist=1 smear=0 executed mist=180 smear=0 FAIL
+  manafold-damage: declared mist=1 smear=0 executed mist=464 smear=0 FAIL
+  manafold-death-drop: declared mist=1 smear=0 executed mist=227 smear=0 FAIL
+  manafold-death-gutter: declared mist=1 smear=0 executed mist=216 smear=0 FAIL
+  manafold-drift: declared mist=1 smear=0 executed mist=300 smear=0 FAIL
+  manafold-fall: declared mist=1 smear=0 executed mist=340 smear=0 FAIL
+  manafold-flight: declared mist=1 smear=0 executed mist=352 smear=0 FAIL
+  manafold-hasty: declared mist=1 smear=0 executed mist=240 smear=0 FAIL
+  manafold-hit: declared mist=1 smear=0 executed mist=140 smear=0 FAIL
+  manafold-hover: declared mist=1 smear=0 executed mist=600 smear=0 FAIL
+  manafold-inspect: declared mist=1 smear=0 executed mist=600 smear=0 FAIL
+  manafold-lasso: declared mist=1 smear=0 executed mist=336 smear=0 FAIL
+  manafold-pirouette: declared mist=1 smear=0 executed mist=240 smear=0 FAIL
+  manafold-rest: declared mist=1 smear=0 executed mist=400 smear=0 FAIL
+  manafold-startle: declared mist=1 smear=0 executed mist=160 smear=0 FAIL
+  manafold-taunt: declared mist=1 smear=0 executed mist=280 smear=0 FAIL
+  manafold-taunt2: declared mist=1 smear=0 executed mist=240 smear=0 FAIL
+  manafold-taunt3: declared mist=1 smear=0 executed mist=368 smear=0 FAIL
+  manafold-trick: declared mist=1 smear=0 executed mist=400 smear=0 FAIL
+CONTROL legacy: HISTORY detector fired on every live subject -- OK

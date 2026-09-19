@@ -1,0 +1,15 @@
+dbe8f8b6c0da990f0f4e40328c5309df *manafold-eyesize.exe
+5effd6e3644d671c52d260792d228d51 *manafold-meshcheck.exe
+dd9f86a497dda2f2f87016eee482388d *manafold-motiongate.exe
+0ed68ce84a64a9360e04112192fdb593 *manafold-nodule.exe
+afd9516eafc513c8f05cc96047132263 *manafold-outlinegate.exe
+3cb8802e6d4aaecfbc410b45df2da416 *manafold-probe.exe
+d3bddaf0aeee8d71389d26ce4b9471ae *manafold-public-jointgate.exe
+808bfe9bbc6b28b3b5985597653316ab *manafold-qa-p12.exe
+f9ce689846f65079450a7bf7493d655a *manafold-shellgate.exe
+e2047d04fab3138ca69d4f2ddebf56ad *manafold-spangate.exe
+e17c5306313e3bdca9763646d06986b5 *zhao-reel-cel.exe
+91c117a4863e82fe9afba87979f558de *zhao-reel.exe
+6aa39a2acac6006baa1c3233a91565a988c56f351001402a3340e29ff086ed27 *zhao-reel-cel.exe
+compiler: g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0
+build: tools/reel/build-direct.sh --output .tmp/v18-waveF-final --clean cel, then reel mspan msmooth mprobe mjointpub mqa mmeshcheck moutline mshell mnodule meyesize (19:04:40-19:05:27; last source edit 19:04:21)
