@@ -177,8 +177,18 @@ section above; `design/blocks.yml` said "BLOCKED ON A CARTRIDGE DECISION
 suite had been green for a fortnight. A contract and its ledger row disagreed
 for sixteen days and nothing compared them.
 
-**What the block actually waits on is SLOT -> EXTENT**, and it is a different
-ruling from R4:
+**SLOT -> EXTENT WAS RULED ON 2026-09-19** -- `spec/memory_rules.md` §5f.1:
+*a published slot is named by the handle index of the resource it holds*, so
+the residency directory is `{index:24}` keyed with row
+`{slot, base, extent, kind}`, and `zhao_mem_upload` publishes all five
+(`publish_index_o`, `publish_slot_o`, `publish_base_o`, `publish_extent_o`,
+`publish_tag_o`). Base and extent were never missing VALUES -- MEM.UPLOAD
+already bounds-checked `req_vram_addr_i` and `req_len_i` against
+`cfg_region_*` before writing a byte, then dropped them. The only genuinely
+absent field was the KEY.
+
+**What the block waited on, kept because it is the evidence for that ruling**,
+and it was a different ruling from R4:
 
 * the Memory ownership section above says records are read "from **local
   SDRAM**, in a region owned by the render resource arena and uploaded through
@@ -194,9 +204,31 @@ ruling from R4:
 * `spec/commands.zidl` has no command that publishes a material set; by D-2's
   design the route is the generic `.zpak` resource path.
 
-**The ruling needed, stated so it can be made:** *for a resource kind published
-by `MEM.UPLOAD`, what maps `{kind, handle index}` to `{base, extent}` in
-local SDRAM?* One sentence in 5f plus two fields on that publication closes it.
+**The ruling needed, stated so it could be made:** *for a resource kind
+published by `MEM.UPLOAD`, what maps `{kind, handle index}` to `{base,
+extent}` in local SDRAM?* One sentence in §5f plus two fields on that
+publication closed it, and §5f.1 is that sentence.
+
+**WHAT IS LEFT IS COMPOSITION, AND IT IS FOUR SEAMS RATHER THAN ONE RULING.**
+`reports/OWNER-DOCKET-20260919.md` item 4 called the ruling "the last thing
+between the texture island and sampling anything". That is too strong, and each
+of the four remaining is an entry somebody had already written down:
+
+1. **MEM.UPLOAD is composed nowhere.** `zhao_hps_arbiter` carries exactly two
+   clients and both are taken in BOTH instances -- CMD.DMA and DEBUG.FRAMEBLIT
+   in `zhao_shell_top_v2`, TERRAIN.CMD and TERRAIN.PAGELOADER in
+   `zhao_console_core`'s `u_terr_hps_arb`. A third is an owner ruling, and core
+   entry I27 already records it as one.
+2. **The record fetch wants a third ENGINE1 requester.**
+   `zhao_geom_mem_adapter` has exactly two, GEOM.MESHFETCH and GEOM.ASSETFETCH.
+3. **The resolve REQUEST has no honest producer.** `cmd_draw_material_set_o`
+   (core entry I41) and `geom_mf_job_*` (I36) are both boundaries while
+   CMD.SCHEDULER's draw path is absent, and joining the two live wires that ARE
+   present would pair meshlet N's triangles with meshlet M's material -- the
+   join core entry I39 refuses by name, because GEOM.MESHFETCH's result
+   register has moved on by the time the meshlet is offered.
+4. **`tri_flat_request_i` wants the binding page's three fields besides**,
+   which the section below says are not ours.
 
 Until then the block's `dir_*` (residency directory write) and `mem_*`
 (record fetch) ports are **real ports driven by nobody** -- the standing

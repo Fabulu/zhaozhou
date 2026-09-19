@@ -1201,19 +1201,48 @@
 //          `spec/commands.zidl:220-262` froze the 32-byte record on
 //          2026-09-05. Sixteen days.
 //
-//      WHAT IT IS ACTUALLY BLOCKED ON IS A RULING AND IT IS NARROWER THAN THE
-//      ONE IT WAS BLAMED ON. The block needs the base and record count of the
-//      resident MATERIAL_SET on its `dir_*` port. `spec/memory_rules.md` 5f
-//      leaves the render asset pool's internal layout undecided, in as many
-//      words: "how it is carved up is the asset fetcher's business and is
-//      still open". And the BASE and EXTENT are not missing from the design --
-//      they are missing from the PUBLICATION: `zhao_mem_upload` already takes
-//      `req_vram_addr_i` and `req_len_i` and bounds-checks both against
-//      `cfg_region_*`, and then publishes only {slot, generation, tag}. What
-//      is genuinely absent is the KEY: nothing anywhere carries the 24-bit
-//      handle index that `dir_set_index_i` wants. That is one sentence of 5f,
-//      it is an owner ruling about the pool's naming, and the ledger row's
-//      `blocked_on` now states it rather than this file.
+//      THE RULING IT WAS BLOCKED ON WAS MADE, AND IT WAS NOT THE LAST THING.
+//      `spec/memory_rules.md` 5f.1, 2026-09-19: a published slot is named by
+//      the handle index of the resource it holds, so the residency directory
+//      is {index:24} keyed with row {slot, base, extent, kind}, and
+//      `zhao_mem_upload` now publishes all five. The BASE and EXTENT were never
+//      missing from the design -- they were missing from the PUBLICATION: that
+//      block already took `req_vram_addr_i` and `req_len_i` and bounds-checked
+//      both against `cfg_region_*` before writing a byte, then dropped them.
+//      What was genuinely absent was the KEY, and 5f.1 names it.
+//
+//      SO THE ENTRY STAYS OPEN, AND ITS REASON IS NOW FOUR SEAMS RATHER THAN
+//      ONE UNDECIDED SENTENCE. `reports/OWNER-DOCKET-20260919.md` item 4 called
+//      the ruling "the last thing between the texture island and sampling
+//      anything". It is not, and every one of the four is an entry this file
+//      ALREADY CARRIES -- which is the part worth keeping: the distance was
+//      written down in four places and nothing had added them up.
+//
+//        1. MEM.UPLOAD IS COMPOSED NOWHERE, so nothing can WRITE the
+//           directory. `zhao_hps_arbiter` has exactly two client ports and
+//           both are taken in both instances -- CMD.DMA and DEBUG.FRAMEBLIT
+//           inside `zhao_shell_top_v2`, TERRAIN.CMD and TERRAIN.PAGELOADER in
+//           `u_terr_hps_arb` below. Entry I27 already says a third client is
+//           an owner ruling; this is a SECOND customer for that same ruling,
+//           which is worth knowing before it is priced as a terrain-only one.
+//        2. THE RECORD FETCH wants a third ENGINE1 requester.
+//           `u_geom_mem_adapter` has exactly two and they are spent on
+//           GEOM.MESHFETCH and GEOM.ASSETFETCH.
+//        3. THE RESOLVE REQUEST HAS NO HONEST PRODUCER, and this is the one
+//           that looks closed and is not. Both nouns are live in this module
+//           -- `cmd_draw_material_set_o` and `mf_r_material_id` -- and they
+//           MAY NOT BE JOINED. The first is the DRAW's, and CMD.EXEC's draw
+//           dispatch is entry I41, a boundary; the second is GEOM.MESHFETCH's
+//           result register, which entry I39 records has already moved on by
+//           the time the meshlet is offered. Joining them would assemble
+//           meshlet N's triangles with meshlet M's material -- the fault I39
+//           refuses by name. TWO LIVE WIRES ARE NOT A PRODUCER.
+//        4. `tri_flat_request_i` WANTS MORE THAN THE RECORD: the binding
+//           page's `palette_slot`, `palette_generation` and `response_class`
+//           are `zhao_texture_binding_resolver_v2`'s, which takes the
+//           request's copies as WITNESSES and CHECKS them, so a resolver that
+//           invented them would manufacture that mismatch. MATERIAL.RESOLVE's
+//           own projection section says this in as many words.
 //
 //      DRIVING THE REMAINING THREE FROM HERE IS STILL REFUSED for the usual
 //      reason: the only legal-value constructor in the tree is
@@ -3569,28 +3598,26 @@ module zhao_console_core
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
   // ==========================================================================
 
-  // ---- I26 (extended): TERRAIN.PAGESTREAM's MEM.GUARD READ client ---------
+  // ---- I26 (extended): THE COMPOSE PATH's ONE MEM.GUARD READ client -------
   // A SECOND guard client, not a second opinion about the first.
   // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
   // READS the same page back out, so it needs the return path
   // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
   // one guard socket and it is named for GEOM, so both stop here -- see entry
   // I26 for why that is a REACHABLE boundary and not I23's refusal.
+  //
+  // STILL ONE PORT AFTER TERRAIN.HDRREAD LANDED, 2026-09-19, and that is the
+  // point of the block behind it.  TWO readers now sit on this socket --
+  // TERRAIN.PAGESTREAM's three plane bursts and TERRAIN.HDRREAD's one header
+  // burst -- joined by `zhao_mem_share2`, the SAME block GEOM.MEM.ADAPTER is a
+  // wrapper over.  The arbiter gains no client, the guard gains no arm, and
+  // this boundary does not widen.  Composing the header reader with its own
+  // socket would have made I26 a three-port entry instead of closing anything.
   output zhao_guard_req_t         terr_ps_guard_req_o,
   input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
   input  logic                    terr_ps_beat_valid_i,
   input  logic [63:0]             terr_ps_beat_data_i,
   input  logic                    terr_ps_beat_last_i,
-
-  // ---- I35: TERRAIN.PLACE's patch header, the two fields nothing reads -----
-  // The patch COORDINATE and the source id come from TERRAIN.SEQ inside this
-  // module.  The PITCH and the ENVELOPE do not; see entry I35.  They are NOT
-  // tied off, and a harness that leaves them zero sees the placement REFUSE
-  // every patch on `terr_place_env_mismatch_o` -- loudly, which is the correct
-  // standing for an unfed corruption check.
-  input  logic signed [7:0]       terr_place_pitch_log2_i,
-  input  logic signed [31:0]      terr_place_env_x0_i,
-  input  logic signed [31:0]      terr_place_env_z0_i,
 
   // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
   input  logic                    terr_pt_fld_valid_i,
@@ -3641,6 +3668,39 @@ module zhao_console_core
   output logic                    terr_ps_done_valid_o,
   output logic                    terr_ps_done_ok_o,
   output logic [3:0]              terr_ps_done_verdict_o,
+
+  // ---- TERRAIN.HDRREAD's evidence (composed item 13) ----------------------
+  // The patch header reader entry I35 named as the absent owner.  These are
+  // the numbers that separate "the placement was fed" from "the placement was
+  // fed SOMETHING": `terr_hr_headers_o` counts headers that returned and
+  // passed their identity test, and every other counter here is a distinct
+  // reason a patch was refused instead.  Their SUM against
+  // `terr_place_patches_o` is the assertion worth making -- a header this
+  // block refused arrives at TERRAIN.PLACE as an impossible pitch, so
+  // `terr_hr_*` and `terr_place_pitch_bad_o` must move together or one of the
+  // two is lying.
+  output logic [31:0]             terr_hr_headers_o,
+  output logic [31:0]             terr_hr_refused_o,
+  output logic [31:0]             terr_hr_guard_denied_o,
+  output logic [31:0]             terr_hr_incomplete_o,
+  output logic [31:0]             terr_hr_ident_fails_o,
+  output logic                    terr_hr_idle_o,
+
+  // ---- THE READ SHARE's evidence (composed item 13) ----------------------
+  // `zhao_mem_share2` joining TERRAIN.HDRREAD (A) and TERRAIN.PAGESTREAM (B)
+  // onto the one guard read client.  `terr_rdshare_contention_o` is the number
+  // that says what the sharing COST: it moves once per cycle in which both
+  // readers asked and one was held.  It is exported rather than counted
+  // privately because the decision to widen this to two outstanding requests
+  // has to be made against a number, which is the block's own stated reason
+  // for having it.
+  output logic [31:0]             terr_rdshare_jobs_a_o,
+  output logic [31:0]             terr_rdshare_jobs_b_o,
+  output logic [31:0]             terr_rdshare_denied_o,
+  output logic [31:0]             terr_rdshare_contention_o,
+  output logic [31:0]             terr_rdshare_err_short_o,
+  output logic [31:0]             terr_rdshare_err_long_o,
+  output logic [31:0]             terr_rdshare_err_unowned_o,
 
   output logic                    terr_place_valid_o,
   output logic [15:0]             terr_place_src_id_o,

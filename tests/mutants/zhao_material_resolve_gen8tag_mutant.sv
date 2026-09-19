@@ -93,22 +93,49 @@
 // ledger's `tests: PLANNED -- NOT WRITTEN` was stale on both lines.
 //
 // ---------------------------------------------------------------------------
-// WHAT *IS* STILL MISSING, PRECISELY: SLOT -> EXTENT
+// WHAT WAS MISSING (SLOT -> EXTENT) IS RULED; WHAT IS LEFT IS FOUR SEAMS
 // ---------------------------------------------------------------------------
 // A resolve must read record `material_id` of the table named by handle32
 // `{index:24, generation:8}`. That needs the table's BASE ADDRESS and its
-// RECORD COUNT. Nothing in the tree produces either:
+// RECORD COUNT.
 //
-//   * `spec/memory_rules.md` §5f, "It is a knob, and what is NOT decided
-//     here", leaves open "the pool's internal layout (descriptors vs index
-//     streams vs vertex records)" -- so no law turns a 24-bit handle index
-//     into an address inside `RENDER.ASSET_POOL`;
-//   * `MEM.UPLOAD`'s publication is `{publish_slot_o[7:0],
-//     publish_generation_o[15:0], publish_tag_o[7:0]}` -- a slot and a
-//     generation, carrying NEITHER a base address, NOR an extent, NOR a
-//     resource kind. A directory cannot be built from it;
-//   * `spec/commands.zidl` has no command that publishes a material set. The
-//     route is the generic `.zpak` resource path, by D-2's design.
+// THE RULING THIS SECTION ASKED FOR WAS MADE, 2026-09-19. `spec/memory_rules.md`
+// §5f.1: **a published slot is named by the handle index of the resource it
+// holds**, so the residency directory is `{index:24}` keyed with row
+// `{slot, base, extent, kind}`. `zhao_mem_upload` now publishes all five --
+// `publish_index_o`, `publish_slot_o`, `publish_base_o`, `publish_extent_o` and
+// the kind that always travelled as `publish_tag_o`. Base and extent were never
+// missing VALUES: that block already took `req_vram_addr_i` and `req_len_i` and
+// bounds-checked both against `cfg_region_*` before a byte moved, then dropped
+// them on publication. The only genuinely absent field was the KEY, and §5f.1
+// is what names it.
+//
+// SO `dir_*` NOW HAS A LAW AND STILL HAS NO PRODUCER IN THIS COMPOSITION, and
+// the reason has changed from a missing decision to four missing SEAMS. Stated
+// here so the next reader does not re-derive them or, worse, re-blame the
+// ruling:
+//
+//   1. `MEM.UPLOAD` is composed nowhere. `zhao_hps_arbiter` carries exactly TWO
+//      clients and both are taken in both instances -- CMD.DMA and
+//      DEBUG.FRAMEBLIT in `zhao_shell_top_v2`, TERRAIN.CMD and
+//      TERRAIN.PAGELOADER in `zhao_console_core`'s `u_terr_hps_arb`. A third is
+//      an owner ruling, and core entry I27 already records it as one.
+//   2. The fetch port `mem_*` wants a third ENGINE1 requester;
+//      `zhao_geom_mem_adapter` has exactly two, GEOM.MESHFETCH and
+//      GEOM.ASSETFETCH.
+//   3. The REQUEST has no honest producer. Both nouns are live in
+//      `zhao_console_core` and they may NOT be joined: `cmd_draw_material_set_o`
+//      is the DRAW's (entry I41, a boundary) and `mf_r_material_id` is the
+//      fetcher's result register, which has moved on by the time the meshlet is
+//      offered -- entry I39 refuses exactly that join, by name, because it
+//      pairs meshlet N's triangles with meshlet M's material.
+//   4. `tri_flat_request_i` wants the binding page's `palette_slot`,
+//      `palette_generation` and `response_class` besides, which THE PROJECTION
+//      below says plainly this block does not own.
+//
+// `spec/commands.zidl` still has no command that publishes a material set, and
+// that is correct rather than missing: the route is the generic `.zpak`
+// resource path, by owner ruling D-2's design.
 //
 // THEREFORE THE DIRECTORY WRITE PORT (`dir_*`) AND THE FETCH PORT (`mem_*`)
 // ARE BOUNDARIES, declared as real ports and driven by nobody in this
@@ -118,11 +145,6 @@
 // constant. Inventing a base here would be worse than leaving it open --
 // a wrong address returns a well-formed record for the wrong surface, and
 // there is no counter anywhere that can see that.
-//
-// The ruling this block waits on, stated so it can be made: **for a resource
-// kind published by MEM.UPLOAD, what maps `{kind, handle index}` to
-// `{base, extent}` in local SDRAM?** One sentence in `spec/memory_rules.md`
-// §5f plus two fields on MEM.UPLOAD's publication closes it.
 //
 // ---------------------------------------------------------------------------
 // D-3: THE CACHE TAG INCLUDES THE RESIDENCY GENERATION
@@ -235,8 +257,10 @@ module zhao_material_resolve_gen8tag_mutant #(
     input  logic rst_n,
 
     // ---- the residency directory -------------------------------------------
-    // BOUNDARY. See the header: nothing in this console can currently say where
-    // a published MATERIAL_SET lives or how many records it holds.
+    // BOUNDARY. The LAW now exists -- spec/memory_rules.md 5f.1 names this
+    // row and zhao_mem_upload publishes it -- but MEM.UPLOAD is composed
+    // nowhere in this console, so nothing here yet SAYS where a published
+    // MATERIAL_SET lives. See the header for the four seams in the way.
     // `dir_entry_i` is a flat 8 bits rather than `$clog2(SETS)`: a width that
     // moves with a parameter is a port whose meaning changes silently when the
     // parameter does, and the smoke bench binds by name with `.*`. Entries at
