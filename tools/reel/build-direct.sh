@@ -45,6 +45,9 @@ Targets:
              mshell in the same pass. Checklist item 42.)
   meyesize   manafold-eyesize.exe (pass 17: identity-default L/R eye-size
              sidecar, child-registration and form-control gate)
+  mrear      manafold-rear-audit.exe (pass 19: the committed REAR-CHAIN audit,
+             Direction 20 items 1+2 -- arm/End relative rotation, rear
+             centreline bend and End/last-segment motion energy per sample)
   mexpress   manafold-express.exe (pass 12 wave 3: THE EXPRESSIVENESS PLATE,
              Direction 5 SS6 -- Manafold's deform channel measured against
              Zixxtrixx's, every clip in both banks. A verification, not a gate.)
@@ -70,7 +73,7 @@ while [ "$#" -gt 0 ]; do
       usage
       exit 0
       ;;
-    reel|cel|meshcheck|probe|mprobe|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
+    reel|cel|meshcheck|probe|mprobe|mrear|mmeshcheck|mhinge|mband|mc2proto|mnodule|mjointpub|mshell|mspan|moutline|msmooth|mexpress|meyecam|meyesize|mqa|all)
       TARGET="$1"
       shift
       ;;
@@ -281,6 +284,12 @@ build_mexpress() {
     -o "$BIN/manafold-express.exe"
 }
 
+build_mrear() {
+  printf '%s
+' "LD manafold-rear-audit"
+  "$CXX" "${FLAGS[@]}" "$T/manafold_rear_audit.cpp" "${LIBOBJS[@]}"     -o "$BIN/manafold-rear-audit.exe"
+}
+
 build_mhinge() {
   printf '%s\n' "LD manafold-hinge-traj"
   "$CXX" "${FLAGS[@]}" "$T/manafold_hinge_traj.cpp" "${LIBOBJS[@]}" \
@@ -295,6 +304,7 @@ case "$TARGET" in
   mprobe) build_mprobe ;;
   mmeshcheck) build_mmeshcheck ;;
   mhinge) build_mhinge ;;
+  mrear) build_mrear ;;
   mnodule) build_mnodule ;;
   mjointpub) build_mjointpub ;;
   mqa) build_mqa ;;
