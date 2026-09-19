@@ -6181,6 +6181,19 @@ module zhao_console_core
   // And the two that ARE closed are closed by HALVES, deliberately: I14 keeps
   // the viewport rect and I30 keeps the patch envelope, because no ratified
   // command carries either. The merges above say which half is which.
+  //
+  // ONE PACKET PER RESET, AND IT IS THE DECODER'S BOUND, NOT THIS ONE'S.
+  // `zhao_cmd_decoder`'s `S_DONE` holds the verdict until reset and drives
+  // `pkt_ready_o` low there, so the shared stream stops after one packet and
+  // this composition executes exactly one frame's commands per reset. Written
+  // down because it is invisible from here: every counter below reads a
+  // perfectly sensible number for packet one and then never moves again, which
+  // looks like an executor that stalled rather than a decoder that finished.
+  // CMD.EXEC itself is already re-armable -- `pos` wraps at `pkt_len`, the view
+  // shadow's dirty bits and the stamp ring are cleared on every commit and on
+  // every abandon -- so it needs no change when the decoder learns to re-arm.
+  // That change belongs to CMD.DECODER, whose verdict 19 committed goldens
+  // pin, and it is not smuggled in here.
   zhao_cmd_exec #(
     .STAMP_Q (CMD_EXEC_STAMP_Q)
   ) u_cmd_exec (
