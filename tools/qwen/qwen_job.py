@@ -112,6 +112,12 @@ def read_input(spec: str, root: Path) -> tuple[str, str]:
         out = subprocess.run(["git", "-C", str(root), "diff", "-U6", "--", rel],
                              capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         return f"git diff -U6 -- {rel}", out or "(no diff)"
+    if spec.startswith("show:"):
+        # show:<commit>:<path> -- one file's diff inside a committed change
+        _, sha, rel = spec.split(":", 2)
+        out = subprocess.run(["git", "-C", str(root), "show", "-U6", "--format=%h %s", sha, "--", rel.strip()],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+        return f"git show {sha} -- {rel.strip()}", out or "(no diff)"
     m = re.match(r"^(.*?):(\d+)-(\d+)$", spec)
     rel, lo, hi = (m.group(1), int(m.group(2)), int(m.group(3))) if m else (spec, 1, 10**9)
     f = root / rel if not re.match(r"^[A-Za-z]:|^/", rel) else winpath(rel)
