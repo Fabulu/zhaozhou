@@ -943,7 +943,8 @@
 //      `fb_writer_i` is NOT one of them and stays exactly as that file
 //      declares it: the manager's `lease_writer_o` is the value it will
 //      become, and making that substitution is CMD.SCHEDULER's act, not this
-//      composer's.//
+//      composer's.
+//
 // I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
 //      that is NOT wired, which is worth stating precisely so nobody wires it
@@ -952,12 +953,49 @@
 //      It is not the sequencer's job port: the sequencer additionally needs
 //      `job_view_mask`, `job_mat_a`, `job_mat_b` and `job_weight`, and
 //      TERRAIN.LOD emits none of the four. Taking its 12 matching fields and
-//      inventing the other 4 here is the hidden-adapter failure. TERRAIN.LOD
-//      is itself unfed besides: its `sp_*` patch_state descriptors come from
-//      TERRAIN.PATCH, which is not composed. Closing this properly is
-//      LOD + PATCH composed together, with the view mask and materials coming
-//      from whoever owns the draw -- CMD.SCHEDULER, by the same absent path
-//      I14 describes for the projection matrices.
+//      inventing the other 4 here is the hidden-adapter failure.
+//
+//      CORRECTED 2026-09-19, and the correction makes this entry HARDER rather
+//      than easier, which is why it is worth the space. The entry used to add:
+//      "TERRAIN.LOD is itself unfed besides: its `sp_*` patch_state
+//      descriptors come from TERRAIN.PATCH, which is not composed. Closing
+//      this properly is LOD + PATCH composed together, with the view mask and
+//      materials coming from whoever owns the draw -- CMD.SCHEDULER."
+//
+//      TERRAIN.PATCH IS COMPOSED NOW (connected item 10) AND IT STILL CANNOT
+//      FEED TERRAIN.LOD. The two ports share a name in `design/blocks.yml` --
+//      both are called `patch_state` -- and they are different things, which
+//      is this file's standing lesson about the declared edge not being the
+//      RTL's seam:
+//        * `zhao_terrain_patch.st_*` is PER VERTEX. One record per lattice
+//          vertex: `top_o`, `bottom_o`, `compose_top_o`, a dirty bit and a
+//          source id. It is a composed height.
+//        * `zhao_terrain_lod.sp_*` is PER SUBPATCH, sixteen per patch, and it
+//          carries a CENTRE (`sp_cx/cy/cz`), three STORED COARSE DEVIATIONS
+//          (`sp_dev1/2/3`) and the previous frame's HISTORY (`sp_prev_level`,
+//          `sp_prev_morph`, `sp_hold`).
+//      Not one field of the first is a field of the second. Wiring them by
+//      name-matching would have produced a LOD decision made from a height.
+//
+//      SO THE REAL BLOCKER IS THE DEVIATIONS, and this entry now names it
+//      instead of naming the wrong block. `sp_dev1/2/3` are the differences
+//      between the fine lattice and its coarse mips -- the "17x17 + 9x9 ...
+//      for TERRAIN.LOD" of `spec/terrain_rules.md` 2. TERRAIN.MIPGEN computes
+//      those mips and is composed as of 2026-09-19, and THE STORE THAT WOULD
+//      HOLD THEM DOES NOT EXIST: that is entry I42. The history is the other
+//      half and is the caller's by TERRAIN.LOD's own chosen law 5 -- it
+//      "rides the packet" and the block deliberately keeps no RAM -- so
+//      whoever owns the deviation store owns the history beside it.
+//
+//      AND THE OWNER OF THE FOUR EXTRA FIELDS IS NOT CMD.SCHEDULER. That
+//      block exists and has been instantiated as `u_sched` inside
+//      `zhao_shell_top_v2` since 2026-08-16, so the old sentence was false
+//      twice over -- it named an absent owner that is not absent and would
+//      have been the wrong owner anyway, its own first line calling it "the
+//      3-slot frame ownership FSM". `job_view_mask`, `job_mat_a`, `job_mat_b`
+//      and `job_weight` belong to whoever owns the terrain DRAW, and no block
+//      in this tree claims that. The owner is UNIDENTIFIED, which is a
+//      smaller and truer statement than a name.
 //
 //      WIDENED 2026-09-19, and it is one more end of the SAME absent owner
 //      rather than a second gap: `terr_cc_serve_release_i`, TERRAIN.COMPCACHE's
@@ -3773,7 +3811,7 @@ module zhao_console_core
   output logic [31:0]  terr_psmux_stray_v_o,
   output logic [31:0]  terr_psmux_stray_done_o,
 
-  // I40: THE COARSE-HEIGHT MIP PLANES.  `spec/terrain_rules.md` 2's "17x17 +
+  // I42: THE COARSE-HEIGHT MIP PLANES.  `spec/terrain_rules.md` 2's "17x17 +
   // 9x9 ... for TERRAIN.LOD" is a STORED quantity, and the store does not
   // exist.  These are real ports rather than dropped outputs for the reason
   // I32 gives about layer D: a decimated height written nowhere and a
@@ -8832,7 +8870,7 @@ module zhao_console_core
   // once -- which is the normal case at the composed frame's eight.
   //
   // WHAT THIS DOES NOT DO: the 17x17 and 9x9 words MIPGEN produces leave this
-  // module. Nothing in the tree stores them, which is entry I40, and it is the
+  // module. Nothing in the tree stores them, which is entry I42, and it is the
   // reason TERRAIN.LOD's `sp_dev*` has no producer either (entry I21). The mip
   // chain is composed for the COMPLETION it emits, and the completion is real
   // whether or not the planes have a home yet -- MIPGEN decimates the page it
@@ -9043,7 +9081,7 @@ module zhao_console_core
     .fine_ready_o(tmg_fine_ready),
     .fine_h_i    (tmg_fine_h),
 
-    // I40: the decimated planes.  No store exists; see the note above.
+    // I42: the decimated planes.  No store exists; see the note above.
     .m17_valid_o(terr_mg_m17_valid_o),
     .m17_addr_o (terr_mg_m17_addr_o),
     .m17_surf_o (terr_mg_m17_surf_o),
