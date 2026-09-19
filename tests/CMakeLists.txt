@@ -13440,3 +13440,66 @@ add_test(NAME lint_geom_attrpack
 set_tests_properties(lint_geom_attrpack PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# --------------------------------------------------------------------------
+# FIELD.SEQ.CORE COMPOSED -- zhao_field_engine: the sequencer, its program
+# store, its residency directory and the arbiter that shares it.
+#
+# The ARITHMETIC is not re-tested here; `zhao_field_seq` is the exact
+# differential oracle and field_seq_directed.cpp owns that question. Every case
+# in this driver is about the WRAPPER, and every one of them is a counter that
+# must move -- the block has nine and this is the firing control for eight of
+# them. The ninth, `pc_oob_o`, is unreachable precisely because the header
+# clamp is correct, and that is recorded rather than asserted away.
+add_executable(test_field_engine_directed field/field_engine_directed.cpp)
+target_link_libraries(test_field_engine_directed PRIVATE zhao_harness)
+verilate(test_field_engine_directed
+  PREFIX Vzhao_field_engine
+  TOP_MODULE zhao_field_engine
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_exec_shared.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+add_test(NAME field_engine_directed COMMAND test_field_engine_directed)
+set_tests_properties(field_engine_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_field_engine
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_engine
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_engine.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_seq.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_progcache.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_exec_shared.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_curve.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_len.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_noise.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_normalize.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ring.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rot.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+set_tests_properties(lint_zhao_field_engine PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
