@@ -6543,6 +6543,55 @@ verilate(test_terrain_place_directed
 add_test(NAME terrain_place_directed COMMAND test_terrain_place_directed)
 set_tests_properties(terrain_place_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# THE PLACEMENT SEAM: TERRAIN.PLACE's 66-write burst, read back out of
+# TERRAIN.COMPCACHE's serve port. Registered 2026-09-19 with the composition
+# that closed core header entry I22 and the door half of I27.
+#
+# WHY IT IS A SEPARATE TARGET FROM THE TWO ABOVE. `terrain_place_directed`
+# checks the shifter against spec/terrain_rules.md 1.3/2.1 and fires all four of
+# its counters; `compcache_front_rtl_directed` checks the store with a harness
+# writing `pos_*` by hand. Both pass with the two blocks WIRED WRONG -- a wx/wz
+# transposition, or a burst landing in the wrong buffer parity, is invisible
+# from either end alone and is exactly what `zhao_console_core` now depends on.
+# Component checks passing is not composition evidence.
+add_executable(test_terrain_place_cache_directed terrain/terrain_place_cache_directed.cpp)
+target_link_libraries(test_terrain_place_cache_directed PRIVATE zhao_harness)
+verilate(test_terrain_place_cache_directed
+  PREFIX Vtb_terrain_place_cache
+  TOP_MODULE tb_terrain_place_cache
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_place_cache.sv)
+add_test(NAME terrain_place_cache_directed COMMAND test_terrain_place_cache_directed)
+set_tests_properties(terrain_place_cache_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# THE POSITIVE CONTROL for the two placement checks above. It swaps the axis bit
+# on the ONE wire between the two blocks -- neither block is edited, the
+# mutation is the WIRING, which is the fault this bench is about -- and inverts
+# the driver's polarity, so it passes when the checks FAIL. Without it, "0
+# failed" is a claim that these checks can tell the column plane from the row
+# plane and nothing has tested that claim.
+#
+# The macro selector is a plain `ifdef` and its NEGATIVE control is the target
+# above: the same C++ with the macro undefined passes. CLAUDE.md records why
+# that pairing is required -- a command-line -D cannot override a function-like
+# `define and says nothing when it fails to, so two mutants once passed while
+# measuring unmutated production.
+add_executable(test_terrain_place_cache_axis_swap terrain/terrain_place_cache_directed.cpp)
+target_link_libraries(test_terrain_place_cache_axis_swap PRIVATE zhao_harness)
+target_compile_definitions(test_terrain_place_cache_axis_swap PRIVATE ZHAO_EXPECT_FAIL)
+verilate(test_terrain_place_cache_axis_swap
+  PREFIX Vtb_terrain_place_cache
+  TOP_MODULE tb_terrain_place_cache
+  VERILATOR_ARGS +define+ZHAO_PLACE_CACHE_AXIS_SWAP
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_compcache_front.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_place_cache.sv)
+add_test(NAME terrain_place_cache_axis_swap_control
+         COMMAND test_terrain_place_cache_axis_swap)
+set_tests_properties(terrain_place_cache_axis_swap_control
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_executable(test_terrain_patch_directed terrain/terrain_patch_directed.cpp)
 target_link_libraries(test_terrain_patch_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_terrain_patch_directed PRIVATE
