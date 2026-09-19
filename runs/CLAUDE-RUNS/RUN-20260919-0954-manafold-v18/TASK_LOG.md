@@ -92,6 +92,15 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Coordinator audit 2: lift key 148 is a declared contract change. The committed `U02_TRICK_MIN_TRACE` shows keys 150-155 at +128..+936 mm (airborne righting), and the float gate covers them from 150. Burial 270->200 A/B over every clip key/midpoint moved only the 10 `kBReturnTip` 64/64 vertices and no ring; the assert is now the exact named invariant `kRearSocketStraightTailMm - kReturnTipPullInMm`. Root 1534 + support pivot is declared as a contact-repair animation change; looked at against Wave C, the crown is now on the dirt where it used to hover.
 - Direct clean build (g++ 16.1.0): production renderer `zhao-reel-cel.exe` MD5 `0FA8BAE0BF6A738C485FAD2DCB77A64B`, `mspan` `19E0B61CF3996A1302318F38354B4E9B`, `msmooth` `8EEA5E4AE24E1DF6A69DCAD3458EE6C6`, `mprobe` `974E35957A133E2B00C655CBA021FE53`. Gate matrix 88/88: 10 normals RC 0, 35 span and 16 smooth controls attributed RC 1, 27 protected legs. Selectors 9/9 RC 2; Zixxtrixx Idle 576/576 exact.
 - Looked at (production ink): the ladder, selected-vs-legacy, Front A/B, Trick 3-way plus the every-key Trick sheet, Wave C vs Wave D Trick, rear-return worst-changed crops, and the Hover, Taunt III and six more all-frame sheets. Verdict PASS. Open, not blocking: Trick crown framing at the frame bottom and the End-swell stub are both pre-existing (Wave C identical).
+- 19:45: Wave D closed by the Opus worker. Zhaozhou `50803207` (source) + `cd5f004f` (evidence), Upheaval `a4b5c5f`; 88/88 controls; production-ink visual pass. Coordinator verified the pushes and deleted ~8 GB of worker-cleared scratch renders. Committed the Qwen relay as `b3b29398`. Launched the Opus worker on Wave E with `V18-WAVE-EF-PREP.md` as input. Qwen Q008 is mapping the camera framing knobs for Wave F (Trick crown at the bottom edge; Flight headroom).
+- 18:20: Wave E CLOSED by the Opus worker (`V18-WAVE-E-CLEANUP.md`). Source `0381bdec`.
+  - Live 48x30 history mist retired from all 22 live subjects: builder default off; `ZHAO_U02_LIVE_MIST=legacy` control; executed-block receipts plus an RC-5 renderer assertion; committed `manafold_live_history_gate.py`.
+  - Crackle on candidate 9/day; `manafold-crackle-legacy` == Wave-D `0xEDDC80D7`.
+  - Drift and Blown keep candidate 9.
+  - Particle attempt: the pre-layer route was declined by construction (it flattens depth). Shipped a small mote/antenna-surface fade (5x5 footprint mean, 120 mm by eye); `off` is byte-exact.
+  - Receipts: 97/97 matrix. The legacy control fires 22/22 and reproduces 21/22 Wave-D bytes. Non-live 13/13 identical.
+  - Looked at 14 images: history before/after, fade ladder and strips, Crackle legacy vs new, every-frame Hasty/Drift/Blown/Crackle/Channel/Lasso/Death Drop, 4x and native particle witnesses.
+  - Open: Drift left-edge framing at f260-298 (pre-existing).
 
 ## Subagent Spawns
 
@@ -108,6 +117,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 | 2026-09-19 | GPT fork Wave D swell/Front art | Author and select the smaller five-swell family and public Front X/Y performances; repair exposed structural/contact blockers; run full controls and every-frame review | Complete locally — 400 pm swells, 1500 pm Front gain, hidden-cap/contact repairs, full matrices green | `V18-SWELL-FRONT-ART.md` |
 | 2026-09-19 | GPT fork Wave D review | Audit swell isolation, public Front ownership, Trick contact, ReturnTip, effect visibility, controls and pictures | BLOCKED — terminal taper repair changes visible return run; Trick contact is not support-owned; duplicate Front API | `V18-SWELL-FRONT-REVIEW.md` |
 | 2026-09-19 | Claude worker Wave D closure | Verify/repair the three blockers and two coordinator audits, clean direct build, full control matrix, production-presentation rerender and visual review, commit/push | Complete — CLOSED; mesh-cap regression and wrong-presentation sheets found and repaired; 88/88 gates | `V18-SWELL-FRONT-REPAIR.md` |
+| 2026-09-19 | Claude worker Wave E cleanup | Retire live history mist with assertion/gate/controls, normalise Crackle with exact legacy control, re-look Drift/Blown, bounded particle attempt, full matrix, every-frame review, commit/push | Complete — CLOSED; 97/97; fade shipped at 120 mm; legacy fade leak found and fixed | `V18-WAVE-E-CLEANUP.md` |
 
 ---
 
@@ -127,6 +137,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - `V18-ROOT-MATERIAL-IMPLEMENTATION.md`, `V18-ROOT-MATERIAL-REVIEW.md`, selected five complete root-heavy sheets, the native four-rung ladder and enlarged root comparison.
 - `V18-SWELL-FRONT-ART.md`, `V18-SWELL-LADDER-HOVER-2X.png`, `V18-SWELL-SELECTED-VS-LEGACY-2X.png`, three complete Front-flex A/B sheets and nine selected all-frame subject sheets.
 
+- `V18-WAVE-E-CLEANUP.md`, `V18-WAVE-E-RECEIPTS/` and eleven `V18-WAVE-E-MANAFOLD_*-ALLFRAMES.png` sheets.
 ---
 
 ## Decisions Made
@@ -153,12 +164,15 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Treat the terminal ring as a declared zero-radius ReturnTip-only cap and prove it buried in 3D on every shipping key/midpoint; do not alter the preceding visible taper or infer burial from rendered pixels.
 - Do not claim the repository-wide `--clean-first` CMake failure as a source result. Touched native targets use direct clean builds because the generated build graph failed on absent Verilator `*.cmake` copy inputs while rebuilding itself.
 
+- Retire the 48x30 persistent mist from every live subject by changing the builder default. Keep non-live inheritors explicit. Enforce with executed-block receipts rather than the flag alone, because the two operands must come from different paths.
+- Crackle ships candidate 9 under the day sky. The Crackle/Channel backdrop pairing is deliberately ended, and Channel keeps night.
+- Particle overlap: the pre-creature layer is rejected by construction (depth only holds terrain there, so it would flatten foreground motes). The shipped fix is a footprint-averaged depth-proximity fade on antenna pixels, 120 mm, exact-off switchable.
 ---
 
 ## Next Steps
 
 1. ~~Repair Wave D blockers~~ and ~~commit/push Wave D~~ — done (`V18-SWELL-FRONT-REPAIR.md`). Every later render must use the production invocation (`zhao-reel-cel.exe`, `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`).
 2. Wave F must keep the new committed Trick support probe green (strict B ownership plus two fired controls) and should revisit the planted-crown framing at the frame bottom.
-3. Run Wave E: remove the live 48×30 persistent history mist, normalize Crackle against candidate 9/day, reassess Drift/Blown after history removal and perform the bounded existing pre-creature mote-layer A/B.
+3. ~~Run Wave E~~ — done (`V18-WAVE-E-CLEANUP.md`). Drift left-edge framing at f260-298 is an open camera question.
 4. Run Wave F: select Flight amplitude/cadence by complete motion, author Trick's planted 360-degree yaw turn with overshoot/correction and keep antenna-region support proof green.
 5. Run one integrated targeted gate, then one exact 22-subject version-18 bank, isolated every-frame review, encode, publication and production-byte verification.

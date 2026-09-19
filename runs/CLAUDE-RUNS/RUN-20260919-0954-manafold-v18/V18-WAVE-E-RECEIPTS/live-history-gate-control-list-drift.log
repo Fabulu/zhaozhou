@@ -1,0 +1,3 @@
+LIST FAIL: site-not-in-renderer ['manafold-hover'] renderer-not-on-site []
+CONTROL list-drift: LIST detector fired -- OK
+RC=0

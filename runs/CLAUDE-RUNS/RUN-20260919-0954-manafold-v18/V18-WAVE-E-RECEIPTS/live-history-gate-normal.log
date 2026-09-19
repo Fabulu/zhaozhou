@@ -1,0 +1,26 @@
+LIST OK: renderer table == site live bank (22 subjects)
+HISTORY renderer RC 0: 22/22 lines, OK 22, FAIL 0 (executed-mist FAIL 0), missing []
+  manafold-blown: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-channel: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-crackle: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-curious: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-damage: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-death-drop: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-death-gutter: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-drift: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-fall: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-flight: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-hasty: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-hit: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-hover: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-inspect: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-lasso: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-pirouette: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-rest: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-startle: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-taunt: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-taunt2: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-taunt3: declared mist=0 smear=0 executed mist=0 smear=0 OK
+  manafold-trick: declared mist=0 smear=0 executed mist=0 smear=0 OK
+PASS: no persistent history on any live Manafold subject
+RC=0

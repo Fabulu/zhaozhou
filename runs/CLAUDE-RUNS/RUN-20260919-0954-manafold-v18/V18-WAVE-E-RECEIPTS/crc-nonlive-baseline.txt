@@ -1,0 +1,13 @@
+manafold-antenna-fixed frames=420 0xEFFECC9D
+manafold-antenna-quarter frames=420 0xF5742D9C
+manafold-fogprobe-mana frames=400 0xC60E06FC
+manafold-fogprobe-mist frames=400 0x52898050
+manafold-fogprobe-off frames=400 0xB37A4107
+manafold-mana-aqua frames=600 0xF68FD3C5
+manafold-mana-stack frames=600 0x48666AAB
+manafold-mist-parked frames=400 0x2DB93746
+manafold-nodule-solo frames=864 0x32C59937
+manafold-ordering-fixed frames=368 0xFC2B66A4
+manafold-still frames=4 0x0E4E89DC
+manafold-trio frames=420 0x0DD30ABA
+manalab-control-channel frames=1440 0xDDB4A9B0

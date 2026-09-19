@@ -1,0 +1,14 @@
+96419def5b6de28b7a7cbd4ddc4464d9 *manafold-eyesize.exe
+8c2e7e1cc2fd92624ecb5c10f190c8a3 *manafold-meshcheck.exe
+f944f4e83ec6af1e0a446ab33224f85e *manafold-motiongate.exe
+fbd71b03c84efafc75eda65922131b57 *manafold-nodule.exe
+45c18b5de24d93b88427e70d4f7e17f4 *manafold-outlinegate.exe
+13ea1e7d2a3ff53518b51c222a5b969f *manafold-probe.exe
+cdd5d364b7ceabd99640ae8dd562a95d *manafold-public-jointgate.exe
+302048fc8781f39a39541c3d01128a55 *manafold-qa-p12.exe
+8b9d3fc60b843434f81bb0c63f8861da *manafold-shellgate.exe
+795539ac772020964618754cc1456360 *manafold-spangate.exe
+ae7f03a5c32357d891e7915d758d316f *zhao-reel-cel.exe
+35f781fa43aab88d504991993fe448f7 *zhao-reel.exe
+compiler: g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0
+build: tools/reel/build-direct.sh --output .tmp/v18-waveE-final --clean cel, then reel mspan msmooth mprobe mjointpub mqa mmeshcheck moutline mshell mnodule meyesize (18:05; last source edit 18:05:04)
