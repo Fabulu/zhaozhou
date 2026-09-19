@@ -72,6 +72,33 @@ RTL = ROOT / "fpga" / "rtl"
 INVENTORY = ROOT / "design" / "console_inventory.yml"
 CONSOLE_ROOT = "zhao_console_core"
 
+# THE SECOND ROOT. Added 2026-09-19, the hour `zhao_console_board` stopped
+# refusing to instantiate `zhao_console_core`.
+#
+# The owner's goal names TWO tops -- the connected machine and the board
+# framework around it -- and this gate walked only the first. That was correct
+# while the board instantiated nothing; it stopped being correct the moment the
+# seam was soldered, and the tell was already sitting in the inventory. Two
+# entries read "reaches the machine when the board joins the core", which is a
+# disposition with an EXPIRY DATE written into it, and nothing was watching for
+# the date to pass. This tree has a chapter about exactly that: a deferral
+# written down is still a deferral, and knowledge nobody reads back is knowledge
+# that goes stale in the flattering direction.
+#
+# So board membership is DERIVED, like console membership, and for the same
+# reason the file's own docstring gives: a hand-kept membership table is a table
+# that lies the moment somebody forgets. `zhao_sys_pll`, `zhao_sys_reset` and
+# the two helpers declared beside them are no longer entries here -- they are
+# reachable, which is a fact about the tree rather than a claim about it.
+#
+# WHAT THE SECOND ROOT DOES AND DOES NOT GET. It gets G3 (only the latest
+# version may be wired -- the owner's ruling is about the machine, not about one
+# root of it) and it gets G4 (reachable needs no entry). It does NOT get G1 or
+# G2, because those compare against a FIT SOURCE LIST and the board has no fit
+# target: it has never been through quartus_map and has no fit row. When it
+# gets one, G1 and G2 should follow it here rather than a second gate appearing.
+BOARD_ROOT = "zhao_console_board"
+
 # The dispositions a non-console module may carry. Each says something
 # different about WHY it is out, and they are not interchangeable: "superseded"
 # means there is a newer one and it is a bug to compose this; "oracle" means it
@@ -234,9 +261,38 @@ def run_check() -> int:
 
     all_modules = set(decl)
     live = reachable_from(CONSOLE_ROOT, decl, inst)
+    # The board's own closure MINUS the console's: what the board framework adds
+    # on top of the machine it contains. Today that is the board, SYS.PLL,
+    # SYS.RESET and the two helpers declared beside them.
+    board_live = reachable_from(BOARD_ROOT, decl, inst) - live
     closure_files = {_rel(p) for p in reg.closure_paths()}
 
     errors: list[str] = []
+
+    # THE SECOND ROOT MUST STILL BE A ROOT. If `zhao_console_board` ever gets
+    # composed into something, or is renamed, `board_live` silently collapses to
+    # the empty set and every module it was covering becomes G4 UNCLASSIFIED --
+    # loud. But the reverse is the dangerous one: if the board stops
+    # instantiating the core, `board_live` keeps covering SYS.PLL and SYS.RESET
+    # while the console is once again topless, and NOTHING here would say so.
+    # So check the seam itself, not just its consequences.
+    if BOARD_ROOT not in all_modules:
+        errors.append(
+            "SECOND ROOT MISSING: %s does not exist in fpga/rtl. The owner's "
+            "goal names two tops and this gate can only find one." % BOARD_ROOT)
+    elif CONSOLE_ROOT not in inst.get(decl[BOARD_ROOT], ()):
+        errors.append(
+            "SEAM UNSOLDERED: %s exists but does not instantiate %s, so the "
+            "console has no top that could be programmed onto hardware. This "
+            "was the state on 2026-09-19 and it is not allowed to return "
+            "silently -- if it is deliberate, this gate is what has to be "
+            "edited to say so." % (BOARD_ROOT, CONSOLE_ROOT))
+    elif mods.get(BOARD_ROOT, {}).get("disposition") != "top":
+        errors.append(
+            "SECOND ROOT NOT DECLARED: %s is walked as a root but "
+            "design/console_inventory.yml does not disposition it `top`. The "
+            "entry is what ties this gate's second walk to a decision somebody "
+            "wrote down." % BOARD_ROOT)
 
     # ---- G1: nothing dead in the closure -----------------------------------
     # A FILE is dead when NONE of the modules it declares is reachable.
@@ -279,7 +335,12 @@ def run_check() -> int:
                 % (mod, path))
 
     # ---- G3: the latest version, and only the latest ------------------------
-    for mod in sorted(live):
+    # Over BOTH roots. The owner's ruling -- "you only get to fit the latest
+    # version" -- is about what the machine contains, and the machine is now the
+    # board and everything under it. A superseded PLL wrapper composed one level
+    # above the console would be exactly as wrong and, until this line, exactly
+    # as invisible.
+    for mod in sorted(live | board_live):
         newer = newer_siblings(mod, all_modules)
         if not newer:
             continue
@@ -293,7 +354,10 @@ def run_check() -> int:
             % (mod, ", ".join(newer), mod))
 
     # ---- G4: everything has a disposition ----------------------------------
-    for stem in sorted(all_modules - live):
+    # Reachable from EITHER root needs no entry, for the same reason reachable
+    # from the console never did: membership is derived, and the inventory holds
+    # only what cannot be.
+    for stem in sorted(all_modules - live - board_live):
         if _is_package(stem, decl):
             continue
         entry = mods.get(stem)
@@ -325,8 +389,11 @@ def run_check() -> int:
 
     # ---- report -------------------------------------------------------------
     print("console inventory: %d modules declared, %d elaborated by %s, "
-          "%d fit source files" % (len(all_modules), len(live), CONSOLE_ROOT,
-                                    len(closure_files)))
+          "%d more added by %s, %d fit source files"
+          % (len(all_modules), len(live), CONSOLE_ROOT,
+             len(board_live), BOARD_ROOT, len(closure_files)))
+    if board_live:
+        print("  the board framework: %s" % ", ".join(sorted(board_live)))
     if not errors:
         print("console inventory OK -- every source is reachable, every "
               "reachable module is a source, the latest version is the one "
@@ -349,6 +416,25 @@ def _self_test() -> None:
     i = {pathlib.Path("r.sv"): {"k"}, pathlib.Path("x.sv"): {"x"}}
     assert reachable_from("r", d, i) == {"r", "k"}, "reachability follows instantiation"
     assert "x" not in reachable_from("r", d, i), "a self-instantiating island is NOT reachable"
+
+    # THE SECOND ROOT, on a hand-checkable graph. `b` is the board, it
+    # instantiates the core `r` and a platform block `p`; `q` is off both.
+    d2 = {"b": pathlib.Path("b.sv"), "r": pathlib.Path("r.sv"),
+          "k": pathlib.Path("k.sv"), "p": pathlib.Path("p.sv"),
+          "q": pathlib.Path("q.sv")}
+    i2 = {pathlib.Path("b.sv"): {"r", "p"}, pathlib.Path("r.sv"): {"k"}}
+    core_live = reachable_from("r", d2, i2)
+    board_only = reachable_from("b", d2, i2) - core_live
+    assert core_live == {"r", "k"}, core_live
+    assert board_only == {"b", "p"}, board_only
+    # The one that matters: a module the board adds must NOT need an inventory
+    # entry, and a module neither root reaches must still need one.
+    assert "p" in board_only, "the board's own blocks are covered by the second root"
+    assert "q" not in (core_live | board_only), "an unreached module stays classified"
+    # And the UNSOLDERED case must be distinguishable, because that is the state
+    # this whole second root was added to stop returning silently.
+    i3 = {pathlib.Path("b.sv"): {"p"}}
+    assert "r" not in reachable_from("b", d2, i3), "a board that drops the core is visible"
 
 
 if __name__ == "__main__":

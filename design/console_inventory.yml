@@ -20,7 +20,7 @@
 modules:
   zhao_console_board:
     disposition: top
-    why: "a top in its own right; not composed into the console"
+    why: "THE SECOND ROOT. Not composed into the console because it CONTAINS the console: since 2026-09-19 it instantiates zhao_console_core and drives it from zhao_sys_pll and zhao_sys_reset, so it is the top that could be programmed onto hardware. check_console_inventory.py walks it as a root in its own right, and this entry is what ties that walk to a decision somebody wrote down -- the gate fails if this line stops saying `top`, and fails differently if the module stops instantiating the core."
   zhao_debug_trace:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
@@ -298,12 +298,23 @@ modules:
   zhao_synth_probe:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_sys_pll:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_sys_reset:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  # zhao_sys_pll and zhao_sys_reset WERE `pending_compose` here, and are not any
+  # more -- they are REACHABLE FROM zhao_console_board, which this gate now
+  # walks as a second root, so their membership is derived and an entry would be
+  # a hand-kept claim about a fact the tree already states. The same applies to
+  # zhao_sys_pll_simclk and zhao_sys_reset_sync, whose entries said in as many
+  # words that they would "reach the machine when the board joins the core". It
+  # joined on 2026-09-19.
+  #
+  # `tools/budget/completion_register.py` STILL COUNTS SYS.PLL AND SYS.RESET AS
+  # DISCONNECTED, and that is left alone deliberately rather than papered over.
+  # The register reads the source list under `- top: zhao_console_core` in
+  # design/fit_targets.yml -- the CORE's closure. These two are composed one
+  # level above that root, so the instrument cannot see them, and re-pointing it
+  # at the board would change what "connected" means for all 77 mandatory
+  # capabilities at once in the direction that makes the number smaller. Two
+  # gates disagreeing here is not a contradiction: one asks "is it in the
+  # machine" and the other asks "is it in the core's fit".
   zhao_terrain_bake:
     disposition: superseded
     superseded_by: zhao_terrain_bake_v2
@@ -470,12 +481,11 @@ modules:
   zhao_shell_fit_audio_sink:
     disposition: instrument
     why: "v1 shell-fit instrument's audio capture bank"
-  zhao_sys_pll_simclk:
-    disposition: pending_compose
-    why: "SYS.PLL's simulation clock divider, declared beside zhao_sys_pll in the same file; reaches the machine when the board joins the core"
-  zhao_sys_reset_sync:
-    disposition: pending_compose
-    why: "SYS.RESET's per-domain release synchroniser, declared beside zhao_sys_reset; reaches the machine when the board joins the core"
+  # zhao_sys_pll_simclk and zhao_sys_reset_sync were here, saying they would
+  # "reach the machine when the board joins the core". They do; see the note at
+  # zhao_sys_pll above. A disposition with an expiry date written into it is a
+  # deferral, and nothing was watching for the date to pass -- so membership is
+  # derived now instead of asserted.
 
 # Modules the console elaborates DESPITE a newer sibling existing. Each needs a
 # reason good enough to survive the owner reading it.

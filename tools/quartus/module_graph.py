@@ -138,8 +138,43 @@ def build(rtl_dir="fpga/rtl"):
     for p, s in files.items():
         body = strip_comments(s)
         for mod in names:
-            if decl[mod] == p:
-                continue
+            # A FILE IS NOT A MODULE -- and this line used to say it was.
+            #
+            # It read `if decl[mod] == p: continue`, which skips a module
+            # whenever the file being scanned is the file that DECLARES it. The
+            # intent was to stop a module appearing to instantiate itself. The
+            # effect was to make EVERY EDGE INSIDE A MULTI-MODULE FILE
+            # invisible, and five files in this tree declare more than one
+            # module. Eleven real edges were suppressed:
+            #
+            #   zhao_sys_pll.sv       -> zhao_sys_pll_simclk    (x4 instances)
+            #   zhao_sys_reset.sv     -> zhao_sys_reset_sync    (x4 instances)
+            #   zhao_raster_quant.sv  -> zhao_raster_quant_fin
+            #   the two generated shell fit tops -> their stimulus and 3 sinks
+            #
+            # It reads in the FLATTERING DIRECTION, exactly as this function's
+            # own docstring warns: a missed edge makes a module look
+            # uninstantiated, so it becomes a graph ROOT, so it looks like dead
+            # weight or like something nobody built a consumer for. On
+            # 2026-09-19 that cost a real breakage -- `check_console_inventory`
+            # called `zhao_raster_quant.sv` dead, it was removed from the
+            # console closure on the gate's say-so, and the console lint broke.
+            # That gate has since been taught the same lesson at its own level;
+            # THIS is where the lesson belongs, because three other tools read
+            # this graph (`gen_prod_top.py`, `check_prod_manifest.py`,
+            # `check_ownership_roles.py`) and each inherited the blind spot.
+            #
+            # REMOVING THE SKIP ADDS NO FALSE EDGES, measured rather than
+            # assumed: with it gone, no module matches its own instantiation
+            # pattern inside its own file, because a DECLARATION is
+            # `module foo #(...) (` -- no instance name between the parameter
+            # list and the port list -- while an INSTANTIATION requires one.
+            # All eleven new edges were checked by hand and all eleven are real.
+            # `gen_prod_top.py --check` stays fresh at 70 instances and
+            # `check_prod_manifest.py` prints byte-identical output either way,
+            # so nothing downstream moves; what moves is that the sys blocks are
+            # now visibly reachable from `zhao_console_board`.
+            #
             # The trailing boundary is not optional: without it
             # `zhao_terrain_bake` matches inside `zhao_terrain_bake_delta` and
             # invents a cycle between a module and its own child.
@@ -150,7 +185,50 @@ def build(rtl_dir="fpga/rtl"):
     return decl, inst
 
 
+def _intra_file_self_test():
+    """The multi-module case, on a file this test writes itself.
+
+    CLAUDE.md: a detector that has not been shown to FIRE has not been tested.
+    The defect this guards against was silent for sixteen days and cost a
+    broken console lint, and its whole signature is an edge that is simply
+    absent -- there is no error message to notice. So the control is an
+    ACTUAL build() over an actual two-module file, not an assertion about a
+    regex.
+    """
+    import shutil
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="zhao_mg_selftest_")
+    try:
+        with io.open(os.path.join(tmp, "pair.sv"), "w", encoding="utf-8") as fh:
+            fh.write(
+                "module zhao_helper #(parameter int D = 1) (input logic a);\n"
+                "endmodule\n"
+                "module zhao_parent #(parameter int D = 1) (input logic a);\n"
+                "  zhao_helper #(.D(D)) u_one (.a(a));\n"
+                "endmodule\n")
+        with io.open(os.path.join(tmp, "solo.sv"), "w", encoding="utf-8") as fh:
+            fh.write("module zhao_solo (input logic a);\nendmodule\n")
+        decl, inst = build(tmp)
+        edges = inst.get(tmp.replace(SEP, "/") + "/pair.sv", set())
+        assert "zhao_helper" in edges, (
+            "THE DEFECT IS BACK: an instantiation inside the declaring file is "
+            "invisible again, and nothing downstream will say so. edges=%r"
+            % (edges,))
+        # The negative half, which is what the removed skip was reaching for:
+        # a module must NOT be reported as instantiating itself.
+        assert "zhao_parent" not in edges, "a declaration is not an instantiation"
+        assert "zhao_solo" not in edges, "no edge to an unrelated module"
+        assert set(decl) == {"zhao_helper", "zhao_parent", "zhao_solo"}, decl
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return True
+
+
 def main():
+    _strip_comments_self_test()
+    _intra_file_self_test()
+    print("module_graph: self-test PASSED (comment stripping; an edge INSIDE a "
+          "multi-module file is visible and a declaration is not an edge)")
     decl, inst = build()
     instantiated = set()
     for ms in inst.values():
