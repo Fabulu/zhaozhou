@@ -3394,7 +3394,7 @@ blocks:
     kind: rtl
     subsystem: geometry
     clock_domain: gpu
-    purpose: Bounded transform graph evaluation (orbit/aim/billboard/oscillator/spline/gait/formations) producing instance transforms; consumes formation-field samples.
+    purpose: Evaluate a parent-before-child transform stream (orbit/aim/billboard/oscillator/spline composition, plus handed-in gait and formation offsets) producing instance transforms; consumes formation-field samples.
     contract: design/contracts/GEOM.LOOM.md
     phase: 9
     owner_issue: ZH-041
@@ -3408,18 +3408,70 @@ blocks:
     reference_model: zref::TransformLoom
     tests:
       directed: tests/geometry/geom_loom_directed.cpp
-      random: tests/geometry/geom_loom_random.cpp
-      formal: tests/formal/geom_loom_graph_bounds.sby
-    counters: [vertices_transformed]
+      random: tests/geometry/geom_loom_directed.cpp
+      formal: "PLANNED -- NOT WRITTEN"
+    counters: [nodes_transformed]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-19"
+        commit: 80e8d55d
+        evidence: tests/geometry/geom_loom_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
-    notes: "Bounded graph: cycle/depth limits are spec constants; overflow degrades, never hangs."
+    notes: >-
+      Bounded graph: cycle/depth limits are spec constants; overflow degrades,
+      never hangs.
 
+      BUILT 2026-09-19 as fpga/rtl/geometry/zhao_geom_loom.sv. Composed into
+      zhao_console_core NOWHERE, deliberately: the producer of the node stream
+      is CMD.SCHEDULER, the absent owner core entries I14/I30/I33/I36 already
+      name, and the consumer GEOM.WARP has no RTL and no contract. Every port
+      would be a boundary, so the composition would connect nothing and open
+      four new tie-off entries. It is a production fit top instead, so that it
+      gets PRICED.
+
+      COUNTER RENAMED. `vertices_transformed` became `nodes_transformed`,
+      which is what the contract asked for in its own counters section --
+      "the ledger counter name should be corrected when this block is built;
+      changing it now would break the ledger's own staleness check before
+      there is RTL to justify it". The RTL's port is nodes_transformed_o and
+      tools/design/check_counters.py now resolves it.
+
+      RANDOM SHARES THE DIRECTED FILE, as GEOM.SKIN's matrix product already
+      does -- `geom_loom_random` is `test_geom_loom_directed --random N`, and
+      pointing this row at a file that does not exist would be the phantom
+      citation this ledger has a staleness check for. Two further builds of
+      the same source are registered: `geom_loom_small` (MAX_NODES=16, the
+      positive control for the OVERFLOW refusal, which no legal stimulus can
+      reach at the shipping 1024/10) and `geom_loom_lanes3` (MUL_LANES=3, the
+      DSP/throughput knob's other position held to the same oracle).
+
+      FORMAL IS NOT WRITTEN, and this row says so rather than citing the
+      `geom_loom_graph_bounds.sby` it used to name, which has never existed.
+      Three of the contract's five formal properties are STRUCTURAL in the
+      implementation and are stated as such in the block header: emission can
+      only be entered from the commit state with `last`, so no partial stream
+      can leave; the parent store's valid bit is cleared by a scrub state that
+      reset lands in and that holds in_ready_o low throughout, so no row is
+      read before written and no stream can resume mid-way; and both
+      handshakes are a state decode and a register respectively. The other
+      two -- the topological precondition and reset dropping work in flight --
+      are directed-tested. An SMT proof over a 412-bit x 1,024 store and a
+      32x32 multiplier is a separate packet with its own tractability
+      question, and a half-closed .sby cited here would be worse than this
+      sentence.
+
+      THROUGHPUT IS MISSED AND THE ARITHMETIC IS IN THE HEADER. 48 clocks per
+      node measured at MUL_LANES=1 (3 DSP) and 23 at MUL_LANES=3 (9 DSP),
+      against the `1 transform per clock` above -- 32.4% or 15.5% of a
+      1,333,333-clock frame at the contract's ~9,000-node tier. The target
+      line is left unchanged because it is the ledger's DECLARED intent and
+      the deviation belongs beside the measurement, not hidden by editing the
+      goal to match the result.
   - id: GEOM.WARP
     name: Warp8 application stage
     kind: rtl
