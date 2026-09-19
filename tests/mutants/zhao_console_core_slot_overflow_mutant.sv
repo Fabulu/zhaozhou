@@ -76,6 +76,16 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned FRAMER_Q = 8,
   parameter int unsigned WFIFO_W  = 64,
 
+  // ---- CMD.EXEC (section 7c) -----------------------------------------------
+  // How many SurfaceStamps one packet may carry. It is the ONE number in the
+  // executor that can refuse an otherwise legal packet, so it is a knob and not
+  // a constant: a packet with more stamps than this is refused WHOLE and
+  // counted on `cmd_exec_stamp_overflow_o`, never applied in part. Eight is
+  // chosen against the sheet, not against the ABI -- each stamp walks 4,096
+  // texels, so a frame that wants more than eight is asking the surface stage
+  // for more work than a frame has.
+  parameter int unsigned CMD_EXEC_STAMP_Q = 8,
+
   // ---- PARTICLES -----------------------------------------------------------
   parameter int unsigned PART_REC_W    = 128,     // particle128, amendment C2
   parameter int unsigned PART_CAPACITY = 32768,   // the required tier
@@ -111,6 +121,23 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
   parameter int unsigned GEOM_MUL_LANES= 3,
 
+  // ---- GEOMETRY: the asset fetch path -------------------------------------
+  // ONE pair of limits for TWO blocks, written once for the same reason
+  // TWOD_LINE_W is: GEOM.ASSETFETCH sizes the private buffer it fills from
+  // these, and GEOM.ASSEMBLE decides which local index is legal against the
+  // same numbers. Two blocks disagreeing about how big a meshlet may be is a
+  // walk off the end of a buffer that every handshake calls legal, so they
+  // are one expression rather than two literals. Both are the owning blocks'
+  // own defaults (GEOM.MESHFETCH.md's ruling limits: a u8 local index cannot
+  // address past 255, and 126 triangles x 3 indices is 378 bytes).
+  parameter int unsigned GEOM_ASSET_MAX_VERTICES  = 64,
+  parameter int unsigned GEOM_ASSET_MAX_TRIANGLES = 126,
+  // GEOM.ASSEMBLE's vertex-id width. 16 is NOT a free choice and is named
+  // here so it reads as the constraint it is: it is GEOM.PARAMBUF's
+  // TriangleDescriptor field (`vertex_id[3] u16`, ruling R7), so widening it
+  // would emit a descriptor the record layer cannot store.
+  parameter int unsigned GEOM_ASM_VIDW = 16,
+
   // ---- GEOMETRY: the clip/setup triangle front door ------------------------
   // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
   // lit r/g/b and alpha. The block never interprets them; it only keeps them
@@ -137,6 +164,21 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned POST_XW       = $clog2(POST_LINE_W + 1),
   parameter int unsigned POST_YW       = $clog2(POST_MAX_H + 1),
 
+  // ---- TWOD: the plane, the sprite walker and the sampler between them -----
+  // TWOD_LINE_W and TWOD_MAX_H are NOT separate numbers -- they are
+  // POST_LINE_W and POST_MAX_H, because the ring the sampler prepares is
+  // addressed by the compositor's own raster pointer and two blocks that
+  // disagree about what a line is would produce a picture sheared by the
+  // difference. They are written as expressions rather than repeated literals
+  // so the agreement cannot be broken by editing one of them.
+  parameter int unsigned TWOD_PAGE_WORDS = 8192,   // 16 KiB of texel page
+  parameter int unsigned TWOD_PAL_SLOTS  = 4,
+  parameter int unsigned TWOD_BIND_SLOTS = 8,
+  parameter int unsigned TWOD_ATM_LINES  = 4,
+  parameter int unsigned TWOD_PAW        = $clog2(TWOD_PAGE_WORDS),
+  parameter int unsigned TWOD_PALAW      = $clog2(TWOD_PAL_SLOTS * 256),
+  parameter int unsigned TWOD_BSW        = $clog2(TWOD_BIND_SLOTS),
+
   // ---- MEASURE -------------------------------------------------------------
   parameter int unsigned HIST_EW       = 32,
   parameter int unsigned HIST_SUB_BITS = 1,
@@ -145,6 +187,17 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned HIST_BINW     = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS),
 
   // ---- SURFACE: the scar substrate and the engine that writes it -----------
+  // Both are the owning block's own default, named here so the day one moves
+  // the thing that has to move with it is greppable, and so the owner keeps
+  // control of a value that is a measured frontier rather than a law.
+  //   SURF_SLOTS   -- resident 64x64 sheets. Each slot is 65,536 bits (about
+  //                   seven M10K), so this is SURFACE.SHEET's whole memory
+  //                   bill and the block's own header asks the first fit to
+  //                   retune it.
+  //   SURF_SQ_RADIX-- SURFACE.STAMP's squarer radix. All three settings meet
+  //                   the 20,000 texel/frame demand; the wall is Fmax on a
+  //                   SHARED gpu_clk, which is exactly why 1 is the default
+  //                   and this is a knob rather than a constant.
   parameter int unsigned SURF_SLOTS    = 2,
   parameter int unsigned SURF_SQ_RADIX = 1,
 
@@ -292,13 +345,87 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             part_refused_capacity_o,
   output logic [31:0]             part_max_children_in_tick_o,
 
-  // ---- I23: GEOM.VDECODE's 32-byte vertex record stream --------------------
-  // GEOM.ASSETFETCH is its named producer and is not composed; see I23 for the
-  // reason, which is a missing memory model rather than a missing wire.
-  input  logic                    geom_vd_v_valid_i,
-  output logic                    geom_vd_v_ready_o,
-  input  logic [255:0]            geom_vd_v_bytes_i,
-  input  logic [15:0]             geom_vd_v_src_id_i,
+  // ---- THE GEOMETRY ASSET PATH (connected item 11) -------------------------
+  // I23's four ports -- `geom_vd_v_valid_i`, `geom_vd_v_ready_o`,
+  // `geom_vd_v_bytes_i`, `geom_vd_v_src_id_i` -- LEFT THIS LIST on 2026-09-19
+  // rather than being driven: GEOM.ASSETFETCH is composed below and is that
+  // port's real producer. What follows is what the path still asks of the
+  // outside, and each group is one numbered entry in the header.
+
+  // ---- I36: GEOM.MESHFETCH's DRAW JOB -------------------------------------
+  input  logic                    geom_mf_job_valid_i,
+  output logic                    geom_mf_job_ready_o,
+  input  logic [15:0]             geom_mf_job_instance_id_i,
+  input  logic [26:0]             geom_mf_job_desc_addr_i,
+  input  logic [7:0]              geom_mf_job_format_i,
+  input  logic [15:0]             geom_mf_job_generation_i,
+  input  logic [1:0]              geom_mf_job_active_mask_i,
+  input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
+
+  // ---- I37: the descriptor's CRC VERDICT ----------------------------------
+  input  logic                    geom_mf_crc_ok_i,
+
+  // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
+  input  logic                    geom_af_release_i,
+
+  // ---- I39: GEOM.ASSEMBLE's three descriptor fields -----------------------
+  input  logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i,
+  input  logic [15:0]              geom_asm_material_id_i,
+  input  logic [31:0]              geom_asm_raster_state_i,
+
+  // ---- I39: GEOM.ASSEMBLE's TriangleDescriptor, out to the absent replay --
+  output logic                     geom_asm_t_valid_o,
+  input  logic                     geom_asm_t_ready_i,
+  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v0_o,
+  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v1_o,
+  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v2_o,
+  output logic [15:0]              geom_asm_t_material_o,
+  output logic [31:0]              geom_asm_t_raster_o,
+  output logic [15:0]              geom_asm_t_src_id_o,
+  output logic                     geom_asm_t_last_o,
+
+  // ---- the asset path's evidence ------------------------------------------
+  // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
+  // as the block's `refused_o [7]`, in the block's own documented order
+  // (format, crc, generation, vertex_count, triangle_count, reserved,
+  // zero_bound). One counter for all seven would name none of them, which is
+  // that block's own argument for keeping them apart.
+  output logic [31:0] geom_mf_meshlets_considered_o,
+  output logic [31:0] geom_mf_culled_all_cameras_o,
+  output logic [31:0] geom_mf_descriptors_fetched_o,
+  output logic [31:0] geom_mf_guard_denied_o,
+  output logic [31:0] geom_mf_refused_format_o,
+  output logic [31:0] geom_mf_refused_crc_o,
+  output logic [31:0] geom_mf_refused_generation_o,
+  output logic [31:0] geom_mf_refused_vertex_count_o,
+  output logic [31:0] geom_mf_refused_triangle_count_o,
+  output logic [31:0] geom_mf_refused_reserved_o,
+  output logic [31:0] geom_mf_refused_zero_bound_o,
+
+  // GEOM.MEM_ADAPTER: `geom_ma_contention_o` is the number that says what
+  // sharing ONE ENGINE1 client between two fetchers actually costs, and it
+  // could not move until both of them were behind it.
+  output logic [31:0] geom_ma_jobs_a_o,
+  output logic [31:0] geom_ma_jobs_b_o,
+  output logic [31:0] geom_ma_denied_o,
+  output logic [31:0] geom_ma_contention_o,
+  output logic [31:0] geom_ma_err_short_o,
+  output logic [31:0] geom_ma_err_long_o,
+  output logic [31:0] geom_ma_err_unowned_o,
+
+  output logic [31:0] geom_af_meshlets_fetched_o,
+  output logic [31:0] geom_af_beats_read_o,
+  output logic [31:0] geom_af_guard_denied_o,
+  output logic [31:0] geom_af_refused_footprint_o,
+  output logic [31:0] geom_af_prefetch_stall_o,
+  output logic [31:0] geom_af_err_beat_truncated_o,
+  output logic [31:0] geom_af_err_beat_overrun_o,
+  output logic [31:0] geom_af_err_beat_unowned_o,
+
+  output logic [31:0] geom_asm_meshlets_o,
+  output logic [31:0] geom_asm_triangles_o,
+  output logic [31:0] geom_asm_refused_limits_o,
+  output logic [31:0] geom_asm_refused_index_o,
 
   // ---- GEOM.VDECODE's side-channels and evidence ---------------------------
   // These leave the module because nothing composed here consumes them, and an
@@ -478,10 +605,13 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [7:0]              terr_job_weight_i,
   input  logic                    terr_sparse_fill_i,
 
-  // ---- TERRAIN.TESS's lattice and cell-state read ports (I22) -------------
-  // `zhao_terrain_compcache_front` is the named owner and is not composed.
-  // TERRAIN.TESS's lattice and cell-state ports left the core on 2026-09-19
-  // when `zhao_terrain_compcache_front` was composed (core header I22, closed).
+  // TERRAIN.TESS's lattice and cell-state read ports USED TO BE HERE, as entry
+  // I22.  `zhao_terrain_compcache_front` is composed below and its serve side
+  // drives them, so the eleven ports are gone from this list rather than being
+  // driven by a harness.  The retirement pulse the cache's serve side needs --
+  // `terr_cc_serve_release_i` -- is further down with the rest of the compose
+  // engine's boundary, because its owner is the block that issues the subpatch
+  // jobs (entry I21) and not the cache.
 
   // ==========================================================================
   // THE TERRAIN PAGING SPINE'S OWN BOUNDARY (composed item 8 in the header)
@@ -536,8 +666,12 @@ module zhao_console_core_slot_overflow_mutant
   output logic                    terr_guard_wlast_o,
 
   // ---- I27 (narrowed): the directory's deformation and handle-check ports --
-  //      The compose door and the unpin are internal to the core from
-  //      2026-09-19; see that file's header.
+  //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
+  //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
+  //      and TERRAIN.PLACE inside this module, and the streamer's own completion
+  //      is what unpins the page.  What is left here is the deformation mark,
+  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
+  //      caller is the same absent subpatch issuer as entry I21.
   input  logic                    terr_dm_valid_i,
   output logic                    terr_dm_ready_o,
   input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
@@ -574,17 +708,34 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
   input  logic [31:0]             terr_wback_epoch_i,
 
-  // ---- THE TERRAIN COMPOSE ENGINE's boundary (core header item 10) --------
+  // ==========================================================================
+  // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
+  // ==========================================================================
+
+  // ---- I26 (extended): TERRAIN.PAGESTREAM's MEM.GUARD READ client ---------
+  // A SECOND guard client, not a second opinion about the first.
+  // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
+  // READS the same page back out, so it needs the return path
+  // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
+  // one guard socket and it is named for GEOM, so both stop here -- see entry
+  // I26 for why that is a REACHABLE boundary and not I23's refusal.
   output zhao_guard_req_t         terr_ps_guard_req_o,
   input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
   input  logic                    terr_ps_beat_valid_i,
   input  logic [63:0]             terr_ps_beat_data_i,
   input  logic                    terr_ps_beat_last_i,
 
+  // ---- I35: TERRAIN.PLACE's patch header, the two fields nothing reads -----
+  // The patch COORDINATE and the source id come from TERRAIN.SEQ inside this
+  // module.  The PITCH and the ENVELOPE do not; see entry I35.  They are NOT
+  // tied off, and a harness that leaves them zero sees the placement REFUSE
+  // every patch on `terr_place_env_mismatch_o` -- loudly, which is the correct
+  // standing for an unfed corruption check.
   input  logic signed [7:0]       terr_place_pitch_log2_i,
   input  logic signed [31:0]      terr_place_env_x0_i,
   input  logic signed [31:0]      terr_place_env_z0_i,
 
+  // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
   input  logic                    terr_pt_fld_valid_i,
   output logic                    terr_pt_fld_ready_o,
   input  logic signed [31:0]      terr_pt_fld_height_i,
@@ -605,13 +756,21 @@ module zhao_console_core_slot_overflow_mutant
   output logic [15:0]             terr_pt_trace_cmd_o,
   output logic [31:0]             terr_pt_programs_rejected_o,
 
+  // ---- I32 (extended): TERRAIN.COMPCACHE's layer-D cell-state write -------
   input  logic                    terr_cc_cs_we_i,
   input  logic [4:0]              terr_cc_cs_ci_i,
   input  logic [4:0]              terr_cc_cs_cj_i,
   input  logic [1:0]              terr_cc_cs_substance_i,
 
+  // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
+  // "TESS is finished with the served patch", one patch per RISING EDGE.  The
+  // block that knows is the one that issued the subpatch jobs, and that is the
+  // absent owner entry I21 already names.
   input  logic                    terr_cc_serve_release_i,
 
+  // ---- THE COMPOSE ENGINE'S EVIDENCE --------------------------------------
+  // Events, never cycles.  These are what say a PAGE became a LATTICE rather
+  // than four blocks having elaborated next to each other.
   output logic [31:0]             terr_ps_lattices_o,
   output logic [31:0]             terr_ps_lattices_refused_o,
   output logic [31:0]             terr_ps_vertices_o,
@@ -619,6 +778,9 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_ps_guard_denied_o,
   output logic [31:0]             terr_ps_incomplete_o,
   output logic                    terr_ps_idle_o,
+  // A TAP on the streamer's completion, not a handshake: the READY belongs to
+  // TERRAIN.RESIDENCY's unpin port inside this module.  Exported so a refusal
+  // can be READ rather than only counted.
   output logic                    terr_ps_done_valid_o,
   output logic                    terr_ps_done_ok_o,
   output logic [3:0]              terr_ps_done_verdict_o,
@@ -799,14 +961,10 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    post_gg_present_i,
   input  logic [15:0]             post_gg_glow_i,
   input  logic                    post_gg_ink_i,
-  output logic                    post_atm_req_v_o,
-  output logic [POST_XW-1:0]      post_atm_req_x_o,
-  output logic [POST_YW-1:0]      post_atm_req_y_o,
-  input  logic                    post_atm_en_i,
-  input  logic                    post_atm_valid_i,
-  input  logic [15:0]             post_atm_rgb_i,
-  input  logic [7:0]              post_atm_opacity_i,
-  input  logic                    post_atm_add_i,
+  // The `atm_*` GROUP IS GONE FROM THIS EDGE, 2026-09-19. It is now internal:
+  // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
+  // this module and the atmosphere sheet never leaves. Entry I17 records what
+  // changed and what did not.
   input  logic [7:0]              post_bloom_gain_i,
   input  logic                    post_grade_valid_i,
   input  logic                    post_pv_we_i,
@@ -1128,15 +1286,16 @@ module zhao_console_core_slot_overflow_mutant
   // a memory that never says no, and `prefetch_stall_o` was connected before
   // this tread precisely so its uncontended reading (27) exists to compare
   // against.
-  input  var zhao_guard_req_t geom_guard_req_i,
-  output var zhao_guard_rsp_t geom_guard_rsp_o,
-  // ...and the beats coming back. Until this tread the shell had ONE reader,
-  // so read data was wired straight to the scanout packer. Now it has two, and
-  // which one a returning word belongs to is a fact that has to be tracked
-  // rather than assumed.
-  output var logic            geom_beat_valid_o,
-  output var logic [63:0]     geom_beat_data_o,
-  output var logic            geom_beat_last_o,
+  // THESE FIVE PORTS ARE GONE, 2026-09-19, and the sentence above is why the
+  // removal is the point rather than a tidy-up. `geom_guard_req_i`,
+  // `geom_guard_rsp_o` and the three `geom_beat_*_o` were this module's edge:
+  // the bench answered the grants and fabricated the beats, so "the whole
+  // staircase rested on a memory that granted immediately and answered in one
+  // cycle" was still true of the CONSOLE even after it stopped being true of
+  // the shell. `u_geom_mem_adapter` drives that socket now (connected item
+  // 11), so the fetchers are behind the real guard and the real controller
+  // and the only memory left for a harness to supply is the SDRAM itself, at
+  // `phy_*`, where the completion plan puts it.
 
   input  logic [63:0] render_fill_word_i,
   input  logic [63:0] render_clear_word_i,
@@ -1181,8 +1340,15 @@ module zhao_console_core_slot_overflow_mutant
   output logic        render_overflow_o,
   output logic        render_fragment_error_o,
 
-  // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
-  // ---- I30/I31/I32: the composed SURFACE pair's three unowned ends -------
+  // ==========================================================================
+  // SURFACE. The pair below is composed and CLOSED ON ITSELF -- SURFACE.STAMP
+  // is SURFACE.SHEET's only client and SURFACE.SHEET is SURFACE.STAMP's only
+  // store, so the request, page and write channels are all internal wires and
+  // none of them appears here. What DOES appear is the three ends that have no
+  // owner in this tree (entries I30, I31, I32) plus the pair's evidence.
+  // ==========================================================================
+
+  // I30: the SurfaceStamp dispatch. CMD.SCHEDULER has no path to it.
   input  logic               surf_cmd_valid_i,
   output logic               surf_cmd_ready_o,
   input  logic        [31:0] surf_cmd_handle_i,
@@ -1202,10 +1368,14 @@ module zhao_console_core_slot_overflow_mutant
   input  logic        [ 2:0] surf_cmd_age_shift_i,
   input  logic               surf_cmd_field_en_i,
   input  logic        [15:0] surf_cmd_src_id_i,
+
+  // I31: the field-driven brush. FIELD.SEQ.STAMP is not built.
   input  logic        surf_fld_valid_i,
   output logic        surf_fld_ready_o,
   input  logic [31:0] surf_fld_tag_op_i,
   input  logic [15:0] surf_fld_strength_i,
+
+  // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
   output logic        surf_res_valid_o,
   input  logic        surf_res_ready_i,
   output logic [11:0] surf_res_texel_o,
@@ -1213,9 +1383,15 @@ module zhao_console_core_slot_overflow_mutant
   output logic [ 7:0] surf_res_strength_o,
   output logic [ 7:0] surf_res_before_o,
   output logic [15:0] surf_res_src_id_o,
+
+  // SURFACE.SHEET's spare response fields. NOT a gap: SURFACE.STAMP consumes
+  // the two it needs (`status`, `strength`) and these three are the block's
+  // own evidence, which leaves the module rather than being dropped.
   output logic [ 1:0] surf_pg_op_o,
   output logic [ 7:0] surf_pg_tag_o,
   output logic [15:0] surf_pg_src_id_o,
+
+  // residency_status and the pair's counters
   output logic [SURF_SLOTS-1:0] surf_res_occupancy_o,
   output logic        surf_res_busy_o,
   output logic        surf_res_overflow_o,
@@ -1229,6 +1405,99 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] surf_stamps_o,
   output logic [31:0] surf_stamp_texels_touched_o,
 
+  // ==========================================================================
+  // I24: THE PARTICLE DRAW PATH'S TWO ENDS.
+  //
+  // The MIDDLE is now internal -- PART.COLLIDE's records fork into
+  // PART.PROJECT, which shares the one projector, and on into PART.LADDER and
+  // the two endpoints. What leaves the module is:
+  //
+  //   * the owner values PART.PROJECT and the ladder need and nothing here
+  //     produces: the per-(particle, camera) hold state (I23's absent DDR), the
+  //     ladder's species/governor inputs, and the particle's RGB. PART.TABLE's
+  //     `v_colour_o` is an INDEX and no palette block exists to turn it into a
+  //     colour, which is why the colour is a value here rather than a lookup;
+  //   * the two endpoints' packets, whose customer is the same absent GEOM
+  //     replay/setup path I11, I12 and I13 name;
+  //   * the rung write-back, which is where the hold state has to GO for the
+  //     next frame to have any.
+  //
+  // The SCISSOR is NOT here: PART.SOFT takes the same mode-derived rectangle
+  // GEOM.CLIP does (GLUE 1), because it is the console's own pass geometry and
+  // not a second opinion about it.
+  // ==========================================================================
+  input  logic signed [31:0] part_prj_base_radius_i,
+  input  logic               part_prj_view_i,
+  input  logic        [15:0] part_prj_trail_i,
+  input  logic               part_prj_narrow_i,
+  input  logic               part_prj_protected_i,
+  input  logic        [ 2:0] part_prj_gov_floor_i,
+  input  logic        [ 2:0] part_prj_prev_rung_i,
+  input  logic        [ 3:0] part_prj_hold_i,
+  input  logic               part_prj_first_i,
+  input  logic        [ 7:0] part_prj_r_i,
+  input  logic        [ 7:0] part_prj_g_i,
+  input  logic        [ 7:0] part_prj_b_i,
+  input  logic        [15:0] part_prj_src_id_i,
+
+  // the rung and the hold state it produced, for the next frame's store
+  output logic               part_rung_valid_o,
+  input  logic               part_rung_ready_i,
+  output logic        [ 2:0] part_rung_o,
+  output logic        [ 3:0] part_rung_hold_o,
+  output logic               part_rung_changed_o,
+  output logic        [15:0] part_rung_src_id_o,
+
+  // PART.EXPAND's three-vertex screen fan
+  output logic               part_exp_valid_o,
+  input  logic               part_exp_ready_i,
+  output logic signed [21:0] part_exp_ax_o,
+  output logic signed [21:0] part_exp_ay_o,
+  output logic signed [21:0] part_exp_bx_o,
+  output logic signed [21:0] part_exp_by_o,
+  output logic signed [21:0] part_exp_cx_o,
+  output logic signed [21:0] part_exp_cy_o,
+  output logic signed [31:0] part_exp_d_o,
+  output logic        [ 7:0] part_exp_r_o,
+  output logic        [ 7:0] part_exp_g_o,
+  output logic        [ 7:0] part_exp_b_o,
+  output logic               part_exp_depth_test_o,
+  output logic               part_exp_depth_write_o,
+  output logic        [15:0] part_exp_src_id_o,
+
+  // PART.SOFT's scissored whole-pixel span
+  output logic               part_sft_valid_o,
+  input  logic               part_sft_ready_i,
+  output logic signed [12:0] part_sft_min_x_o,
+  output logic signed [12:0] part_sft_max_x_o,
+  output logic signed [12:0] part_sft_min_y_o,
+  output logic signed [12:0] part_sft_max_y_o,
+  output logic signed [31:0] part_sft_d_o,
+  output logic        [ 7:0] part_sft_r_o,
+  output logic        [ 7:0] part_sft_g_o,
+  output logic        [ 7:0] part_sft_b_o,
+  output logic               part_sft_depth_test_o,
+  output logic               part_sft_depth_write_o,
+  output logic        [15:0] part_sft_src_id_o,
+
+  // the draw path's evidence
+  output logic [31:0] part_prj_projected_o,
+  output logic [31:0] part_prj_behind_o,
+  output logic [31:0] part_prj_geom_grants_o,
+  output logic [31:0] part_prj_part_grants_o,
+  output logic [31:0] part_prj_contended_o,
+  output logic [31:0] part_prj_size_sat_o,
+  output logic [31:0] part_prj_slot_pressure_o,
+  output logic [31:0] part_prj_tag_collision_o,
+  output logic [31:0] part_prj_ladder_unexpected_o,
+  output logic [31:0] part_lad_decisions_o,
+  output logic [31:0] part_lad_changes_o,
+  output logic [31:0] part_lad_held_o,
+  output logic [31:0] part_lad_gov_forced_o,
+  output logic [31:0] part_exp_polygons_o,
+  output logic [31:0] part_sft_sprites_o,
+
+  // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
   output logic        phy_cs_n_o,
   output logic        phy_ras_n_o,
   output logic        phy_cas_n_o,
@@ -1238,7 +1507,160 @@ module zhao_console_core_slot_overflow_mutant
   output logic [15:0] phy_dq_o,
   output logic        phy_dq_oe_o,
   output logic [1:0]  phy_dqm_o,
-  input  logic [15:0] phy_dq_i
+  input  logic [15:0] phy_dq_i,
+
+  // --------------------------------------------------------------------------
+  // TWOD: the plane descriptors, the sprite descriptors, the sampler's assets
+  // and the sprite colour stream.  Added 2026-09-19 with TWOD.SAMPLER.
+  // --------------------------------------------------------------------------
+  // WHAT IS AND IS NOT A GAP HERE, because the group is large and it would be
+  // easy to read all of it as one:
+  //   * the two DESCRIPTOR groups are the CMD seam. SetPlane and the sprite
+  //     display list are commands, `zhao_cmd_decoder` emits record headers and
+  //     not decoded descriptors, and the executor that would turn one into the
+  //     other is the same absent path entries I14 and I30 describe. GAP, and
+  //     it is the SAME gap those two already name rather than a new one.
+  //   * the three LOAD groups are ASSETS. Entry I17's own sentence about the
+  //     grading curves -- "generated ASSETS by design, so their load port is
+  //     legitimately external" -- covers a texture page, a palette and a
+  //     binding exactly. NOT a gap.
+  //   * `twod_sc_*` is the sprite colour, and it has no consumer HERE because
+  //     POST.COMPOSITE's `hud_*` port is a raster-order random access and
+  //     TWOD.SPRITE walks in descriptor order. GAP, and a NEW one -- see I17.
+  input  logic                    twod_pd_valid_i,
+  output logic                    twod_pd_ready_o,
+  input  logic                    twod_pd_slot_i,
+  input  logic [1:0]              twod_pd_role_i,
+  input  logic [1:0]              twod_pd_blend_i,
+  input  logic [7:0]              twod_pd_opacity_i,
+  input  logic                    twod_pd_format_i,
+  input  logic [15:0]             twod_pd_width_i,
+  input  logic [15:0]             twod_pd_height_i,
+  input  logic                    twod_pd_wrap_u_i,
+  input  logic                    twod_pd_wrap_v_i,
+  input  logic signed [31:0]      twod_pd_a_i,
+  input  logic signed [31:0]      twod_pd_b_i,
+  input  logic signed [31:0]      twod_pd_c_i,
+  input  logic signed [31:0]      twod_pd_d_i,
+  input  logic signed [31:0]      twod_pd_u0_i,
+  input  logic signed [31:0]      twod_pd_v0_i,
+  input  logic [1:0]              twod_pd_view_mask_i,
+  input  logic [7:0]              twod_pd_palette_i,
+
+  input  logic                    twod_sd_valid_i,
+  output logic                    twod_sd_ready_o,
+  input  logic signed [15:0]      twod_sd_x_i,
+  input  logic signed [15:0]      twod_sd_y_i,
+  input  logic [15:0]             twod_sd_w_i,
+  input  logic [15:0]             twod_sd_h_i,
+  input  logic signed [31:0]      twod_sd_u_i,
+  input  logic signed [31:0]      twod_sd_v_i,
+  input  logic signed [31:0]      twod_sd_a00_i,
+  input  logic signed [31:0]      twod_sd_a01_i,
+  input  logic signed [31:0]      twod_sd_a10_i,
+  input  logic signed [31:0]      twod_sd_a11_i,
+  input  logic [2:0]              twod_sd_format_i,
+  input  logic [7:0]              twod_sd_palette_i,
+  input  logic [15:0]             twod_sd_tint_i,
+  input  logic [1:0]              twod_sd_blend_i,
+  input  logic [1:0]              twod_sd_view_mask_i,
+  input  logic [7:0]              twod_sd_order_i,
+  input  logic [15:0]             twod_sd_src_id_i,
+
+  input  logic                    twod_ld_page_we_i,
+  input  logic [TWOD_PAW-1:0]     twod_ld_page_addr_i,
+  input  logic [15:0]             twod_ld_page_data_i,
+  input  logic                    twod_ld_pal_we_i,
+  input  logic [TWOD_PALAW-1:0]   twod_ld_pal_addr_i,
+  input  logic [15:0]             twod_ld_pal_data_i,
+  input  logic                    twod_ld_bind_we_i,
+  input  logic [TWOD_BSW-1:0]     twod_ld_bind_sel_i,
+  input  logic [TWOD_PAW-1:0]     twod_ld_bind_base_i,
+  input  logic [3:0]              twod_ld_bind_lstride_i,
+  input  logic [3:0]              twod_ld_bind_lheight_i,
+  input  logic                    twod_atm_slot_i,
+  input  logic signed [31:0]      twod_line_scroll_i,
+
+  output logic                    twod_sc_valid_o,
+  input  logic                    twod_sc_ready_i,
+  output logic [15:0]             twod_sc_rgb_o,
+  output logic signed [15:0]      twod_sc_x_o,
+  output logic signed [15:0]      twod_sc_y_o,
+  output logic [15:0]             twod_sc_tint_o,
+  output logic [1:0]              twod_sc_blend_o,
+  output logic [7:0]              twod_sc_order_o,
+  output logic [15:0]             twod_sc_src_id_o,
+  output logic                    twod_sc_last_o,
+
+  // ---- TWOD evidence -------------------------------------------------------
+  output logic [31:0]             twod_plane_pixels_o,
+  output logic [31:0]             twod_plane_refused_role_o,
+  output logic [31:0]             twod_plane_refused_blend_o,
+  output logic [31:0]             twod_plane_skipped_view_o,
+  output logic [31:0]             twod_plane_wrap_fail_o,
+  output logic [31:0]             twod_sprite_descriptors_o,
+  output logic [31:0]             twod_sprite_skipped_view_o,
+  output logic [31:0]             twod_sprite_refused_o,
+  output logic [31:0]             twod_sprite_pixels_o,
+  output logic [31:0]             twod_samples_o,
+  output logic [31:0]             twod_plane_samples_o,
+  output logic [31:0]             twod_sprite_samples_o,
+  output logic [31:0]             twod_clut8_samples_o,
+  output logic [31:0]             twod_rgb565_samples_o,
+  output logic [31:0]             twod_texel_wrapped_o,
+  output logic [31:0]             twod_page_oob_o,
+  output logic [31:0]             twod_bind_missing_o,
+  output logic [31:0]             twod_fmt_refused_o,
+  output logic [31:0]             twod_pal_refused_o,
+  output logic [31:0]             twod_skipped_fill_o,
+  output logic [31:0]             twod_atm_underrun_o,
+  output logic [31:0]             twod_walk_stalls_o,
+  output logic [31:0]             twod_sprite_stalls_o,
+  output logic [31:0]             twod_tint_unapplied_o,
+  output logic [31:0]             twod_pair_lost_o,
+
+  // --------------------------------------------------------------------------
+  // CMD.DECODER's record headers and verdict.  Added 2026-09-19.
+  // --------------------------------------------------------------------------
+  // OUTPUTS ONLY, and every one of them is driven by real logic inside this
+  // module -- see section 7b. They are on the edge because the decoder's
+  // consumer (the command executor) does not exist yet, and a stream that ends
+  // in a wire is pruned dead logic wearing a port's name, which this campaign
+  // counts as an absent function rather than a present one.
+  output logic        cmd_rec_valid_o,
+  output logic [15:0] cmd_rec_opcode_o,
+  output logic [15:0] cmd_rec_bytes_o,
+  output logic [31:0] cmd_rec_source_id_o,
+  output logic [31:0] cmd_rec_index_o,
+  output logic        cmd_decode_done_o,
+  output logic [ 7:0] cmd_decode_error_o,
+  output logic [31:0] cmd_bytes_consumed_o,
+  output logic [31:0] cmd_commands_o,
+
+  // --------------------------------------------------------------------------
+  // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
+  // --------------------------------------------------------------------------
+  // OUTPUTS ONLY, driven by real logic below. The executor writes the
+  // projector's matrix bank and dispatches SURFACE.STAMP, and BOTH of those go
+  // to internal consumers -- so without these ports the only thing observable
+  // about whether a command was executed would be a downstream side effect two
+  // subsystems away. These are the numbers a bench reads to say "the packet
+  // became console state", and every one of them is fired by a named case in
+  // tests/command/cmd_exec_directed.cpp.
+  //
+  // `cmd_exec_unsupported_o` IS THE HONEST ONE. It counts records the ABI
+  // defines and this executor has no arm for -- BeginFrame, EndFrame,
+  // DrawForm, every reserved opcode. It is the distance between the command
+  // surface and the executor expressed as a NUMBER rather than as prose in a
+  // header, and it is expected to be large today.
+  output logic [31:0] cmd_exec_committed_o,
+  output logic [31:0] cmd_exec_abandoned_o,
+  output logic [31:0] cmd_exec_views_o,
+  output logic [31:0] cmd_exec_stamps_o,
+  output logic [31:0] cmd_exec_stamp_overflow_o,
+  output logic [31:0] cmd_exec_view_refused_o,
+  output logic [31:0] cmd_exec_src_truncated_o,
+  output logic [31:0] cmd_exec_unsupported_o
 );
 
   // Every parameter forwarded BY NAME, including TERR_MEMSLOT, which this
@@ -1270,6 +1692,9 @@ module zhao_console_core_slot_overflow_mutant
       .GEOM_INDEX_W(GEOM_INDEX_W),
       .GEOM_ARENA_W(GEOM_ARENA_W),
       .GEOM_MUL_LANES(GEOM_MUL_LANES),
+      .GEOM_ASSET_MAX_VERTICES(GEOM_ASSET_MAX_VERTICES),
+      .GEOM_ASSET_MAX_TRIANGLES(GEOM_ASSET_MAX_TRIANGLES),
+      .GEOM_ASM_VIDW(GEOM_ASM_VIDW),
       .GEOM_CLIP_ATTRS(GEOM_CLIP_ATTRS),
       .GEOM_CLIP_ATTRW(GEOM_CLIP_ATTRW),
       .PROJ_T_ARENAS(PROJ_T_ARENAS),
