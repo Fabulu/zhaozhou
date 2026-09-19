@@ -1021,6 +1021,31 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_src_truncated_o;
   logic [31:0] cmd_exec_unsupported_o;
 
+  // ---- THE DRAW DISPATCH (core entry I41), added 2026-09-19 --------------
+  // `DrawForm 0x0300` lowered by CMD.EXEC's draw arm. Declared here for the
+  // `.*` reason above.
+  //
+  // `cmd_draw_ready_i` IS HELD HIGH AND THAT IS A MODELLED CONSUMER, NOT A
+  // TIE-OFF DRESSED UP. The dispatch is the LAST phase of CMD.EXEC's commit,
+  // so a ready held low would park the executor in EX_DRAW forever: the next
+  // packet's bytes would never be accepted, `cmd_exec_committed_o` would stay
+  // at zero, and this bench's command-path checks would fail with no hint of
+  // where. High is what an always-available consumer looks like, and the
+  // REFUSING consumer is exercised where it belongs -- three ready patterns in
+  // `tests/command/cmd_exec_directed.cpp` case 12.
+  logic        cmd_draw_valid_o;
+  logic        cmd_draw_ready_i;
+  logic [31:0] cmd_draw_form_o;
+  logic [31:0] cmd_draw_material_set_o;
+  logic [31:0] cmd_draw_transform_o;
+  logic [ 7:0] cmd_draw_viewport_mask_o;
+  logic [ 7:0] cmd_draw_semantic_weight_o;
+  logic [15:0] cmd_draw_flags_o;
+  logic [15:0] cmd_draw_src_id_o;
+  logic [31:0] cmd_exec_draws_o;
+  logic [31:0] cmd_exec_draw_overflow_o;
+  logic [31:0] cmd_exec_draw_src_truncated_o;
+
   // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
   // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed
   // 2026-09-19. Declared here for the same reason the command front above is:
@@ -2299,6 +2324,11 @@ module tb_zhao_console_core_smoke
     part_rung_ready_i = 1'b1;
     part_exp_ready_i  = 1'b1;
     part_sft_ready_i  = 1'b1;
+
+    // THE DRAW DISPATCH (core entry I41). HIGH, and the declaration comment
+    // says why: the draw drain is the LAST phase of CMD.EXEC's commit, so a
+    // low ready parks the executor and stops the command path outright.
+    cmd_draw_ready_i = 1'b1;
     // One world unit of base radius, fx16. A VALUE, not a law: no species
     // radius table exists anywhere in the tree and the reference says that is
     // properly the owner's, so this bench picks one so that the projected size

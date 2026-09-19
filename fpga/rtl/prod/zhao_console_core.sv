@@ -525,8 +525,12 @@
 //      closed is named here so nobody re-solves it.
 //
 //      CLOSED: THE CAMERA. This entry used to read "the camera matrices are
-//      host/CMD state and CMD.SCHEDULER has no projection-config path". They
-//      have one now, and it is not CMD.SCHEDULER: `zhao_cmd_exec` (section 7c)
+//      host/CMD state and CMD.SCHEDULER has no projection-config path". That
+//      sentence was wrong about the block as well as about the path --
+//      CMD.SCHEDULER is composed, as `u_sched` inside `u_shell`, and entry I36
+//      carries the evidence and the correction for all four entries that said
+//      "absent". They
+//      have a path now, and it is not CMD.SCHEDULER: `zhao_cmd_exec` (section 7c)
 //      lowers `SetView 0x0010`'s `mat4fx view_projection` straight onto cfg
 //      addresses 0..15, one word per clock, out of a packet CMD.DECODER has
 //      already ratified. `cmd_exec_views_o` counts it.
@@ -1225,9 +1229,18 @@
 //      is the HOST THAT FILLS IT. Six ports, one word per clock, never refused
 //      for backpressure.
 //
-//      THE ABSENT OWNER IS CMD.SCHEDULER, the same one I14 and I30 name.
-//      `zhao_cmd_decoder` is not composed (see the refusal list below) and no
-//      block in this core produces a descriptor write. Inventing one here would
+//      CORRECTED 2026-09-19. This entry used to say "THE ABSENT OWNER IS
+//      CMD.SCHEDULER, the same one I14 and I30 name. `zhao_cmd_decoder` is not
+//      composed (see the refusal list below)". BOTH CLAUSES ARE STALE.
+//      CMD.DECODER is composed, as section 7b, and CMD.SCHEDULER is not absent
+//      at all -- it is `u_sched` inside `u_shell`, running in this composition
+//      (the evidence is at entry I36). The conclusion is unchanged and is now
+//      the only thing holding the entry open, so it is stated on its own:
+//
+//      NO RATIFIED COMMAND CARRIES A SPECIES DESCRIPTOR. `spec/commands.zidl`
+//      has no opcode with one, which is why CMD.EXEC has no arm for it and
+//      says so in its own header. No block in this core produces a descriptor
+//      write either. Inventing one here would
 //      mean this file choosing what a species IS, which is owner DATA --
 //      `reference/include/zref/zref_particle.hpp` says so in as many words:
 //      "there is no species table ... That is a DATA/ABI question and it is
@@ -1337,15 +1350,69 @@
 //      2026-09-19, opened by composing the geometry asset path (connected
 //      item 11), and it is one of I23's three successors.
 //
-//      THE ABSENT OWNER IS CMD.SCHEDULER, the same one I14, I30 and I33
-//      name, and the job is a DRAW: which instance, where its 64-byte
-//      descriptor lives, which asset format the reader speaks, the
-//      generation the handle claims, which cameras are active this frame,
-//      and the resolved 3x4 instance transform. `zhao_cmd_decoder` emits
-//      record headers and `zhao_cmd_exec` lowers SetView and SurfaceStamp;
-//      neither produces a mesh draw, and there is no opcode in
+//      CORRECTED 2026-09-19, TWICE OVER, AND BOTH CORRECTIONS MATTER. This
+//      entry used to read "THE ABSENT OWNER IS CMD.SCHEDULER, the same one
+//      I14, I30 and I33 name ... and there is no opcode in
 //      `spec/commands.zidl` this file could lower into one without choosing
-//      the layout itself.
+//      the layout itself." Neither half survived being checked.
+//
+//      CMD.SCHEDULER IS NOT ABSENT. SEARCHED:
+//      `fpga/rtl/command/zhao_cmd_scheduler.sv` has been committed since
+//      2026-08-16 (e60ba85a), carries a contract
+//      (`design/contracts/CMD.SCHEDULER.md`), a directed suite and a formal
+//      proof (`tests/formal/cmd_scheduler_slot_fsm.sby`), and is
+//      INSTANTIATED as `u_sched` at `zhao_shell_top_v2.sv:725` -- inside the
+//      very shell this module instantiates as `u_shell`. It is running in
+//      this composition right now. It is ALSO the wrong owner: by its own
+//      first line it is "the 3-slot frame ownership FSM", and its dispatch
+//      sinks are DEBUG.FRAMEBLIT, INPUT.RUMBLE and VIDEO.MODE. I30 already
+//      took this correction for SurfaceStamp; the other three entries had
+//      not, and "absent" was doing load-bearing work in all of them.
+//
+//      THE OPCODE EXISTS AND IS RATIFIED. `DrawForm 0x0300` is
+//      `implemented` in `spec/commands.zidl`, 32 bytes, and it carries
+//      `handle32[form]`, `handle32[material_set]`, `handle32[transform]`,
+//      `viewport_mask`, `semantic_weight` and `flags`, with every offset in
+//      `zhao_abi_pkg.sv`. `DrawPopulation 0x0301` and `DrawProcedural
+//      0x0302` are `implemented` beside it. So the DISPATCH half is closed:
+//      `zhao_cmd_exec`'s draw arm (section 7c) lowers DrawForm whole, and
+//      entry I41 is where that dispatch leaves this module.
+//
+//      WHAT IS STILL OPEN IS A RULING, NOT A WIRE, and it is three of the
+//      six job fields. The job is {instance_id, desc_addr, format,
+//      generation, active_mask, xform[12]}. DrawForm ratifies
+//      `active_mask` (viewport_mask) and `generation` (the handle's own
+//      byte). It does not ratify the other three, and nothing else does
+//      either:
+//
+//        * `j_desc_addr_i` needs handle32{index:24} -> a 64-byte aligned
+//          pool address. SEARCHED: `spec/memory_rules.md` 5f ratifies the
+//          REGION (`ZHAO_RENDER_ASSET_BASE` = 0x06A0_0000, 22 MiB, ENGINE1,
+//          read-only) and then says in as many words "Not decided: the
+//          pool's internal layout (descriptors vs index streams vs vertex
+//          records) ... how it is carved up is the asset fetcher's business
+//          and is still open." `design/contracts/GEOM.ASSETFETCH.md`
+//          repeats it. There is no `BASE + index*64` law to apply, and
+//          writing one here would be this file choosing a memory layout the
+//          ABI deliberately declines to define -- the same refusal I33 and
+//          I7 carry.
+//        * `j_format_i` is the format this reader expects, compared against
+//          the descriptor's own byte 0. No command carries it and no
+//          registry defines it; it waits on the same ruling.
+//        * `j_xform_i[12]` needs the instance-transform palette. SEARCHED:
+//          the resolver of this shape is
+//          `reference/include/zref/zref_material_resolve.hpp`'s
+//          `zref::material::Resolver`, whose RTL is MATERIAL.RESOLVE and
+//          whose contract's line 4 reads "RTL: not built".
+//
+//      SO THE JOB PORT STAYS, AND IT IS NOT HALF-DRIVEN. A job is ATOMIC --
+//      six fields in one handshake -- so driving the two ratified fields
+//      from CMD.EXEC while the other four came from this module's edge would
+//      not be a half closure. It would fetch a descriptor at whatever
+//      address the boundary happened to be holding, with `j_valid_i` timed
+//      by a command and `j_desc_addr_i` timed by nothing, which is the
+//      join-between-two-things-that-move-independently fault I35 and I39
+//      each record once already.
 //
 //      `j_xform_i` IS RESOLVED BY THE CALLER BY CONTRACT, which is why it is
 //      a port and not a lookup here: the block's own comment says "the
@@ -1487,6 +1554,42 @@
 //      something other than the instance that caused the fetch, the owner is
 //      whoever owns the draw and this assignment is wrong.
 //
+// I41. CMD.EXEC's DRAW DISPATCH (`cmd_draw_*`) -- BOUNDARY. NEW 2026-09-19,
+//      and it is a gap this packet OPENED DELIBERATELY, by building a
+//      producer for a ratified command whose consumer needs a ruling. That is
+//      worth saying plainly, because the register's count goes UP by one here
+//      and the trade is on purpose.
+//
+//      WHAT IT IS. `DrawForm 0x0300`, whole: the three handle32s (`form`,
+//      `material_set`, `transform`), `viewport_mask`, `semantic_weight`,
+//      `flags`, and the record header's `source_id`. Every offset comes from
+//      `zhao_abi_pkg.sv` and nothing is dropped. Before this packet the
+//      opcode arrived at the console and died: `zhao_cmd_scheduler.sv:384`
+//      says "all other opcodes: counted, no dispatch (Phase-2 no-op sinks)",
+//      and CMD.EXEC counted it on `unsupported_o`. It now leaves the module
+//      as a real, observable stream.
+//
+//      WHY IT IS A PORT AND NOT A WIRE INTO GEOM.MESHFETCH. Entry I36 is the
+//      long answer and it is a MISSING RULING: `spec/memory_rules.md` 5f
+//      leaves the render asset pool's internal layout undecided, so there is
+//      no law that turns `form`'s 24-bit index into a descriptor address, and
+//      MATERIAL.RESOLVE -- the resolver that would turn `transform` into a
+//      3x4 -- has no RTL. The handles therefore leave as HANDLES, unresolved,
+//      which is the honest shape: a consumer that needs the pool layout gets
+//      the handle and the ruling it is waiting for, rather than an address
+//      this file made up.
+//
+//      IT IS NOT A TIE-OFF AND THE DATAPATH IS REAL. `cmd_draw_ready_i` is an
+//      input, so the ring, the commit phase and the whole draw arm survive
+//      synthesis; a consumer that refuses simply holds the packet in its
+//      commit, which `tests/command/cmd_exec_directed.cpp` case 12 drives
+//      under three ready patterns.
+//
+//      THE COUNTERS BESIDE IT HAVE ALL BEEN FIRED, with legal stimulus and no
+//      mutant: `cmd_exec_draws_o` (case 9), `cmd_exec_draw_overflow_o` (case
+//      10, DRAW_Q+1 forms in one packet) and `cmd_exec_draw_src_truncated_o`
+//      (case 11). None is asserted zero here.
+//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -1515,19 +1618,58 @@
 //   composed; `zhao_field_v2_core` is itself in the register's
 //   built-but-not-connected list.
 //
+//   THE FORGE CLUSTER -- all four blocks, refused together, RE-ARGUED
+//   2026-09-19 because the reason on file had gone stale in the flattering
+//   direction. It said their job comes "from CMD.SCHEDULER (absent)". That
+//   block is not absent (entry I36), so the refusal needed a real cause and
+//   it turns out to have four different ones. Every input of every one of the
+//   four is an unsourced boundary in this tree, and `design/blocks.yml` never
+//   names a producer for the resource types they consume.
+//
 //   FORGE.PRIM and FORGE.PRIM_EVAL are the TOPOLOGY and the POSITIONS of one
 //   primitive -- indices from one, fx16 vertices from the other -- and they do
-//   NOT meet each other: neither has a port the other drives. Both take a job
-//   from CMD.SCHEDULER (absent, as at I14/I30) and both aim at GEOM.SETUP,
-//   which takes SCREEN triangles with edge functions. So composing them would
-//   put stimulus in at this module's edge and take results out at the same
-//   edge, with no producer and no consumer inside -- a disconnected
-//   implementation with extra steps, which is what the standard excludes.
+//   NOT meet each other: neither has a port the other drives. Both aim at
+//   GEOM.SETUP, which takes SCREEN triangles with edge functions.
+//
+//   AND THE DRAW ARM DOES NOT REACH THEM, which is the useful new fact.
+//   `DrawProcedural 0x0302` is the Primitive Forge dispatch and it is
+//   ratified -- but `spec/commands.zidl` says of it, in as many words:
+//   "forge parameters do NOT travel inline; `program` names the cartridge
+//   terrain-patch page (spec/cartridge.md 4 kind 4)". SEARCHED, and kind 4 is
+//   `{u16 width; u16 height; fx16 x0,z0,x1,z1; u16 rsv[6]}` plus a
+//   heightfield body -- a HEIGHTFIELD, with no field for `j_family`,
+//   `j_segments`, `j_sides`, and nothing at all resembling PRIM_EVAL's thirty
+//   fx16 anchors, jitter axes, seed and branch descriptors. There is no forge
+//   PROGRAM page kind defined anywhere in `spec/cartridge.md`. SEARCHED
+//   FURTHER: no RTL in `fpga/rtl` reads a cartridge page of any kind. So the
+//   missing owner is a PAGE READER for a page format that does not exist yet,
+//   and the same file marks DrawProcedural "[w3] EXECUTED by the software
+//   renderer" -- it does not dispatch to these blocks today even on paper.
+//   Lowering it in CMD.EXEC would stage a record for nobody.
 //
 //   FORGE.CLIFF needs a page ISSUER that walks the lattice, a 34x34 solid-bit
 //   window and a vdist read master. None exists; TERRAIN.TESS is composed but
-//   emits none of the three. Its own output is a RIM EDGE, not a triangle, so
-//   even the far end needs a block that is not built.
+//   its output is `terrain_mesh`, a vertex/triangle stream, and it emits none
+//   of the three. The only per-cell substance producer in the tree is
+//   `zhao_terrain_compcache_front`'s `cs_req_i`/`cs_ci_i`/`cs_cj_i` ->
+//   `cs_substance_o`, a SINGLE-CELL indexed query already consumed by
+//   TERRAIN.TESS above -- and the block's own comment C1 records rejecting
+//   exactly that port, because it "puts this block in contention with
+//   TERRAIN.PATCH's own consumers". Nothing anywhere produces a vdist field.
+//   Its own output is a RIM EDGE, not a triangle, so even the far end needs a
+//   block that is not built.
+//
+//   FORGE.SHADOW landed 2026-09-19 and is refused for the same shape, listed
+//   here because it is new and would otherwise be absent from this record. It
+//   needs a shadow CASTER -- {world x, world z, radius, strength, rung,
+//   src_id} -- and `design/blocks.yml`'s `shadow_caster` is nobody's output.
+//   `zhao_geom_lod`'s `rung_o` is the right width and only the rung: that
+//   block emits no world position or radius. It also needs TERRAIN HEIGHT
+//   TAPS, a world-(x,z) -> {height, no_ground} service, and no block in
+//   `fpga/rtl/terrain` has one -- the nearest, the compose cache's
+//   `lat_req_i`, is keyed by LATTICE INDEX and carries no void bit. That is
+//   the same absence entry I6 already records from the particle side, which
+//   is why `part_ter_*` is a boundary too.
 //
 //   GEOM.PARAMBUF is the ENGINE1 arena's RECORD LAYER -- 24-byte
 //   ProjectedVertex, 16-byte TriangleDescriptor and 64-byte tile-reference
@@ -2004,6 +2146,23 @@ module zhao_console_core
   output logic [31:0]              geom_asm_t_raster_o,
   output logic [15:0]              geom_asm_t_src_id_o,
   output logic                     geom_asm_t_last_o,
+
+  // ---- I41: CMD.EXEC's DRAW DISPATCH, the ratified DrawForm ---------------
+  // NEW 2026-09-19. DrawForm 0x0300 now reaches the console; what has no
+  // consumer INSIDE this module is the resolver that would turn its three
+  // handles into GEOM.MESHFETCH's job. See the header entry.
+  output logic                     cmd_draw_valid_o,
+  input  logic                     cmd_draw_ready_i,
+  output logic [31:0]              cmd_draw_form_o,
+  output logic [31:0]              cmd_draw_material_set_o,
+  output logic [31:0]              cmd_draw_transform_o,
+  output logic [ 7:0]              cmd_draw_viewport_mask_o,
+  output logic [ 7:0]              cmd_draw_semantic_weight_o,
+  output logic [15:0]              cmd_draw_flags_o,
+  output logic [15:0]              cmd_draw_src_id_o,
+  output logic [31:0]              cmd_exec_draws_o,
+  output logic [31:0]              cmd_exec_draw_overflow_o,
+  output logic [31:0]              cmd_exec_draw_src_truncated_o,
 
   // ---- the asset path's evidence ------------------------------------------
   // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
@@ -7125,6 +7284,24 @@ module zhao_console_core
   // the viewport rect and I30 keeps the patch envelope, because no ratified
   // command carries either. The merges above say which half is which.
   //
+  // A THIRD ARM, ADDED 2026-09-19: THE DRAW. `DrawForm 0x0300` is
+  // `implemented` in `spec/commands.zidl` and was reaching this console and
+  // dying -- CMD.SCHEDULER's record dispatch ends with "all other opcodes:
+  // counted, no dispatch" and CMD.EXEC counted it on `unsupported_o`. It now
+  // lowers whole, onto `cmd_draw_*`, which leaves this module as entry I41.
+  // The three handles leave UNRESOLVED: the pool layout that would turn
+  // `form` into a descriptor address is `spec/memory_rules.md` 5f's, and that
+  // section says it is not decided.
+  //
+  // THE COMMIT ORDER IS NOW VIEWS -> STAMPS -> DRAWS AND THAT IS LOAD
+  // BEARING. A form dispatched before its own packet's SetView would be drawn
+  // through the previous frame's camera -- one wrong frame per camera move,
+  // with every counter in this file balancing. The executor's FSM gives the
+  // order structurally rather than by timing luck, and
+  // `tests/command/cmd_exec_directed.cpp` case 12 measures it: the first form
+  // leaves strictly after the thirty-second matrix word, under three
+  // different ready patterns.
+  //
   // ONE PACKET PER RESET, AND IT IS THE DECODER'S BOUND, NOT THIS ONE'S.
   // `zhao_cmd_decoder`'s `S_DONE` holds the verdict until reset and drives
   // `pkt_ready_o` low there, so the shared stream stops after one packet and
@@ -7173,6 +7350,21 @@ module zhao_console_core
     .stamp_ring_width_o(cmd_exec_stamp_ring_w),
     .stamp_src_id_o    (cmd_exec_stamp_src_id_w),
 
+    // I41: the DRAW DISPATCH, straight out of this module. It does NOT go to
+    // `u_geom_meshfetch` and the header entry says why in full: three of that
+    // block's six job fields have no ratified producer, a job is atomic, and
+    // half-driving one is a fetch at whatever address the other half was
+    // holding rather than a half closure.
+    .draw_valid_o          (cmd_draw_valid_o),
+    .draw_ready_i          (cmd_draw_ready_i),
+    .draw_form_o           (cmd_draw_form_o),
+    .draw_material_set_o   (cmd_draw_material_set_o),
+    .draw_transform_o      (cmd_draw_transform_o),
+    .draw_viewport_mask_o  (cmd_draw_viewport_mask_o),
+    .draw_semantic_weight_o(cmd_draw_semantic_weight_o),
+    .draw_flags_o          (cmd_draw_flags_o),
+    .draw_src_id_o         (cmd_draw_src_id_o),
+
     .packets_committed_o  (cmd_exec_committed_o),
     .packets_abandoned_o  (cmd_exec_abandoned_o),
     .views_written_o      (cmd_exec_views_o),
@@ -7180,6 +7372,9 @@ module zhao_console_core
     .stamp_overflow_o     (cmd_exec_stamp_overflow_o),
     .view_range_refused_o (cmd_exec_view_refused_o),
     .stamp_src_truncated_o(cmd_exec_src_truncated_o),
+    .draws_issued_o       (cmd_exec_draws_o),
+    .draw_overflow_o      (cmd_exec_draw_overflow_o),
+    .draw_src_truncated_o (cmd_exec_draw_src_truncated_o),
     .unsupported_o        (cmd_exec_unsupported_o)
   );
 
