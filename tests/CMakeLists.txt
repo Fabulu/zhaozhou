@@ -13049,3 +13049,69 @@ add_test(NAME console_core_slot_overflow_control
           -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -Mutant)
 set_tests_properties(console_core_slot_overflow_control PROPERTIES
   LABELS "prod;mutant")
+# ===========================================================================
+# PLATFORM: SYS.PLL and SYS.RESET. Registered 2026-09-19, the pass that wrote
+# them.
+#
+# Both blocks were `blocked_on: hardware` until board_truth.json (2026-09-13)
+# answered the reference clock, the part and the reset contract. Each bench
+# verilates a WRAPPER that instantiates its production block TWICE from one
+# stimulus -- shipping defaults beside a moved parameterisation -- because a
+# parameter is only a knob if moving it moves the machine, and two instances in
+# one process cannot differ by a stimulus accident the way two runs can. The
+# wrappers copy nothing, so `mutant_copy_drift.py` correctly ignores them.
+#
+# WHAT sys_pll_directed IS NOT EVIDENCE ABOUT: `altera_pll`. The vendor body
+# sits behind `ifdef ZHAO_SYS_PLL_VENDOR`, which is never defined in any
+# Verilator lane, so these targets measure the behavioural model only.
+# ===========================================================================
+add_executable(test_sys_pll_directed platform/sys_pll_directed.cpp)
+target_link_libraries(test_sys_pll_directed PRIVATE zhao_harness)
+verilate(test_sys_pll_directed
+  PREFIX Vtb_zhao_sys_pll
+  TOP_MODULE tb_zhao_sys_pll
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/platform/tb_zhao_sys_pll.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_pll.sv)
+add_test(NAME sys_pll_directed COMMAND test_sys_pll_directed)
+set_tests_properties(sys_pll_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_sys_reset_directed platform/sys_reset_directed.cpp)
+target_link_libraries(test_sys_reset_directed PRIVATE zhao_harness)
+verilate(test_sys_reset_directed
+  PREFIX Vtb_zhao_sys_reset
+  TOP_MODULE tb_zhao_sys_reset
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/platform/tb_zhao_sys_reset.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_reset.sv)
+add_test(NAME sys_reset_directed COMMAND test_sys_reset_directed)
+set_tests_properties(sys_reset_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_sys_pll
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_sys_pll
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_pll.sv)
+set_tests_properties(lint_zhao_sys_pll PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_zhao_sys_reset
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_sys_reset
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_reset.sv)
+set_tests_properties(lint_zhao_sys_reset PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The board framework. It does NOT instantiate zhao_console_core -- read its
+# header for the port count that made a hand transcription the stale-copy
+# failure this repository has a chapter about -- so its closure is exactly the
+# two platform blocks and the lint is a real gate on the composition it does
+# make: pins -> PLL -> reset network.
+add_test(NAME lint_zhao_console_board
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_console_board
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/prod/zhao_console_board.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_pll.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_reset.sv)
+set_tests_properties(lint_zhao_console_board PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

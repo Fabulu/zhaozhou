@@ -283,8 +283,23 @@ _ALIAS: dict[str, str | None] = {
     # they reach the resolver and must resolve.
     "SYS.CDC":           "zhao_cdc_snapshot",
     "MEM.SDRAM":         "zhao_sdram_ctrl",
-    "SYS.PLL":           None,   # no RTL; board facts now exist, so this is a BUILD task
-    "SYS.RESET":         None,   # same
+    # BUILT 2026-09-19, and this edit MAKES THE NUMBER SMALLER, so it is the
+    # kind to check hardest. What changed is not the rule but the tree:
+    # `fpga/rtl/sys/zhao_sys_pll.sv` and `fpga/rtl/sys/zhao_sys_reset.sv` now
+    # exist, lint 0/0 under -Wall with a fired positive control, pass
+    # `check_quartus17_syntax`, and each has a registered directed ctest whose
+    # counters are SEEN TO MOVE as deltas. The naming convention resolves both
+    # on its own -- SYS.PLL -> zhao_sys_pll -- so these two lines could simply
+    # be deleted; they are spelled out instead so that the transition from
+    # "hand-searched and genuinely absent" to "built" stays legible in the one
+    # place a reader will look.
+    #
+    # THEY REMAIN GAPS, in the DISCONNECTED bucket, and that is the honest
+    # result: they are composed in `zhao_console_board`, not in
+    # `zhao_console_core`, so they are not in the closure this register reads.
+    # The mandatory total does not move -- only which bucket they sit in.
+    "SYS.PLL":           "zhao_sys_pll",
+    "SYS.RESET":         "zhao_sys_reset",
 }
 
 
