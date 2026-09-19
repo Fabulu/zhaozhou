@@ -4077,6 +4077,24 @@ verilate(test_post_fbread_directed
 add_test(NAME post_fbread_directed COMMAND test_post_fbread_directed)
 set_tests_properties(post_fbread_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# The same bench at FIFO_BEATS=8, the block's legal minimum. Q004 F3 (a phantom
+# owed beat when the first beat lands on the verdict cycle) is invisible at 16 --
+# the head register's one beat of slack absorbs it -- and fatal at 8, so the
+# depth the defect lives at is a build of its own (post pass 2, 2026-09-19).
+add_executable(test_post_fbread_directed_q8 compositor/post_fbread_directed.cpp)
+target_link_libraries(test_post_fbread_directed_q8 PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_post_fbread_directed_q8 PRIVATE ${CMAKE_SOURCE_DIR}/tests/compositor)
+target_compile_definitions(test_post_fbread_directed_q8 PRIVATE POST_FBREAD_FIFO=8)
+verilate(test_post_fbread_directed_q8
+  PREFIX Vzhao_post_fbread
+  TOP_MODULE zhao_post_fbread
+  VERILATOR_ARGS -GYW=9 -GFIFO_BEATS=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_fbread.sv)
+add_test(NAME post_fbread_directed_q8 COMMAND test_post_fbread_directed_q8)
+set_tests_properties(post_fbread_directed_q8 PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 add_executable(test_post_echo_directed compositor/post_echo_directed.cpp)
 target_link_libraries(test_post_echo_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_post_echo_directed PRIVATE ${CMAKE_SOURCE_DIR}/tests/compositor)
@@ -4089,6 +4107,26 @@ verilate(test_post_echo_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_echo.sv)
 add_test(NAME post_echo_directed COMMAND test_post_echo_directed)
 set_tests_properties(post_echo_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# The post LEASE standalone (post pass 2, 2026-09-19): the sequencer, the ENGINE0
+# share and the retire ledger with the REAL RASTER.FBWRITE on its socket, against
+# an in-order memory that returns credits for reads and writes. Q004 F1/F2/F4.
+add_executable(test_post_lease_directed compositor/post_lease_directed.cpp)
+target_link_libraries(test_post_lease_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_post_lease_directed PRIVATE ${CMAKE_SOURCE_DIR}/tests/compositor)
+verilate(test_post_lease_directed
+  PREFIX Vtb_post_lease_top
+  TOP_MODULE tb_post_lease_top
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fbwrite.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_fbread.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_echo.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_lease.sv
+          ${CMAKE_SOURCE_DIR}/tests/compositor/tb_post_lease_top.sv)
+add_test(NAME post_lease_directed COMMAND test_post_lease_directed)
+set_tests_properties(post_lease_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # GEOM.VDECODE format 0 -- RAW/CANONICAL, authorised by ruling R11. Format 0
 # is the DIFFERENTIAL REFERENCE: packed formats 1 and 2 are bake-off gated and
@@ -9498,6 +9536,12 @@ set_tests_properties(terrain_loddev_mesh_directed PROPERTIES LABELS "fast;nightl
 # tools/terrain/lod_readings_sheet.py builds it, runs it and assembles the PNG.
 add_executable(terrain_lod_readings_render ${CMAKE_SOURCE_DIR}/tools/terrain/lod_readings_render.cpp)
 target_link_libraries(terrain_lod_readings_render PRIVATE zhao_zref)
+
+# Owner ruling R37's before/after for the PROPOSED tag-to-gather law. Same
+# shape as the LOD readings above: the tool writes PPMs, tools/post/
+# gather_law_sheet.py lays them out, and the PNG is the only artefact kept.
+add_executable(gather_law_render ${CMAKE_SOURCE_DIR}/tools/post/gather_law_render.cpp)
+target_link_libraries(gather_law_render PRIVATE zhao_zref)
 
 
 # ---------------------------------------------------------------------------

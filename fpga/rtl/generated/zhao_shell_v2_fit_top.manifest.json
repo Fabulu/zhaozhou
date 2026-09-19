@@ -10,13 +10,13 @@
       "gpu": 2827,
       "video": 172
     },
-    "input_bits": 3205,
-    "input_ports": 110,
-    "non_clock_reset_input_bits": 3201,
+    "input_bits": 3207,
+    "input_ports": 112,
+    "non_clock_reset_input_bits": 3203,
     "output_bits": 3065,
     "output_ports": 157,
-    "port_count": 267,
-    "total_bits": 6270
+    "port_count": 269,
+    "total_bits": 6272
   },
   "external_ports": [
     {
@@ -92,15 +92,15 @@
       "unpacked_dimensions": []
     }
   ],
-  "generated_rtl_sha256": "a6d3547c4c61b302a5ba18108bc84ecf630a4109c65b6873a9fb20a4b57d65aa",
+  "generated_rtl_sha256": "3484ab30d3eeff424855837b22ec5d244ef1892379376f9780663ad44df0dac2",
   "hashes": {
-    "generator": "55900894edddbf9a0e82373e7d4e80cee0b0c3551b1d144c093ea6f94134509a",
+    "generator": "4a0bb1c11945f7703f706a732d0a015d6b18abf23dae4408b8dfdd3e127b3e66",
     "package_file": "e25eae05277f917c1bd2247257ec77ee9f783c4ca3065117f04bd36edc9798ff",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "cf10b580276970bf2be1e4abea5cb6d97248e46671ba525027f45c8079815fc5",
-    "policy": "5913ca4f289e625d8d2f6fd3a3cd2899b4a7485c1094b3860084e16c916ee19c",
-    "shell_declaration": "c1b68329afa7582935e8cbed616aad92123fc0873d2b8372453c9164a273c92f",
-    "shell_file": "1d2f30220937a7c2779243a9670eca0d00abdf851243ea3c440d1cc94c940908"
+    "policy": "6ddc01eca0b78e727cbc5f712c705e4c1b73ac690e9bfe6d2161886a9b13f129",
+    "shell_declaration": "1453909cb5cc2c526ecb78d9327847e400afae3446a0edcce82855168f181086",
+    "shell_file": "f37b4ee6602067c9047c634f4b2fb69f1ed8e1f3a1d70fe51f255178f9af9e3b"
   },
   "hierarchy": {
     "remainder_attribution": "reported top row only; never inferred by subtraction",
@@ -6373,6 +6373,50 @@
     },
     {
       "bit_width": 1,
+      "capture_register": null,
+      "connection": ".post_echo_arm_i(shell_post_echo_arm_i)",
+      "constant_reason": null,
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1",
+      "element_width": 1,
+      "generated_signal": "shell_post_echo_arm_i",
+      "name": "post_echo_arm_i",
+      "ordinal": 227,
+      "packed_dimensions": [],
+      "registered_driver": "u_stimulus.post_echo_arm_i",
+      "signal_type_text": "logic",
+      "signature_offset": null,
+      "signed": false,
+      "sink": null,
+      "type_text": "logic",
+      "unpacked_dimensions": []
+    },
+    {
+      "bit_width": 1,
+      "capture_register": null,
+      "connection": ".post_look_hold_i(shell_post_look_hold_i)",
+      "constant_reason": null,
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1",
+      "element_width": 1,
+      "generated_signal": "shell_post_look_hold_i",
+      "name": "post_look_hold_i",
+      "ordinal": 228,
+      "packed_dimensions": [],
+      "registered_driver": "u_stimulus.post_look_hold_i",
+      "signal_type_text": "logic",
+      "signature_offset": null,
+      "signed": false,
+      "sink": null,
+      "type_text": "logic",
+      "unpacked_dimensions": []
+    },
+    {
+      "bit_width": 1,
       "capture_register": "u_gpu_sink.capture_q[2405 +: 1]",
       "connection": ".post_pass_start_o(shell_post_pass_start_o)",
       "constant_reason": null,
@@ -6383,7 +6427,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_pass_start_o",
       "name": "post_pass_start_o",
-      "ordinal": 227,
+      "ordinal": 229,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6405,7 +6449,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_view_o",
       "name": "post_view_o",
-      "ordinal": 228,
+      "ordinal": 230,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6427,7 +6471,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_src_valid_o",
       "name": "post_src_valid_o",
-      "ordinal": 229,
+      "ordinal": 231,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6449,7 +6493,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_src_ready_i",
       "name": "post_src_ready_i",
-      "ordinal": 230,
+      "ordinal": 232,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.post_src_ready_i",
       "signal_type_text": "logic",
@@ -6471,7 +6515,7 @@
       "element_width": 16,
       "generated_signal": "shell_post_src_rgb_o",
       "name": "post_src_rgb_o",
-      "ordinal": 231,
+      "ordinal": 233,
       "packed_dimensions": [
         {
           "left": 15,
@@ -6501,7 +6545,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_out_valid_i",
       "name": "post_out_valid_i",
-      "ordinal": 232,
+      "ordinal": 234,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.post_out_valid_i",
       "signal_type_text": "logic",
@@ -6523,7 +6567,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_out_ready_o",
       "name": "post_out_ready_o",
-      "ordinal": 233,
+      "ordinal": 235,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6545,7 +6589,7 @@
       "element_width": 16,
       "generated_signal": "shell_post_out_rgb_i",
       "name": "post_out_rgb_i",
-      "ordinal": 234,
+      "ordinal": 236,
       "packed_dimensions": [
         {
           "left": 15,
@@ -6575,7 +6619,7 @@
       "element_width": 9,
       "generated_signal": "shell_post_out_x_i",
       "name": "post_out_x_i",
-      "ordinal": 235,
+      "ordinal": 237,
       "packed_dimensions": [
         {
           "left": 8,
@@ -6605,7 +6649,7 @@
       "element_width": 8,
       "generated_signal": "shell_post_out_y_i",
       "name": "post_out_y_i",
-      "ordinal": 236,
+      "ordinal": 238,
       "packed_dimensions": [
         {
           "left": 7,
@@ -6635,7 +6679,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_out_last_i",
       "name": "post_out_last_i",
-      "ordinal": 237,
+      "ordinal": 239,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.post_out_last_i",
       "signal_type_text": "logic",
@@ -6657,7 +6701,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_echo_valid_i",
       "name": "post_echo_valid_i",
-      "ordinal": 238,
+      "ordinal": 240,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.post_echo_valid_i",
       "signal_type_text": "logic",
@@ -6679,7 +6723,7 @@
       "element_width": 16,
       "generated_signal": "shell_post_echo_rgb_i",
       "name": "post_echo_rgb_i",
-      "ordinal": 239,
+      "ordinal": 241,
       "packed_dimensions": [
         {
           "left": 15,
@@ -6709,7 +6753,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_busy_o",
       "name": "post_busy_o",
-      "ordinal": 240,
+      "ordinal": 242,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6731,7 +6775,7 @@
       "element_width": 32,
       "generated_signal": "shell_post_passes_o",
       "name": "post_passes_o",
-      "ordinal": 241,
+      "ordinal": 243,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6761,7 +6805,7 @@
       "element_width": 32,
       "generated_signal": "shell_post_frames_o",
       "name": "post_frames_o",
-      "ordinal": 242,
+      "ordinal": 244,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6791,7 +6835,7 @@
       "element_width": 1,
       "generated_signal": "shell_post_fault_o",
       "name": "post_fault_o",
-      "ordinal": 243,
+      "ordinal": 245,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6813,7 +6857,7 @@
       "element_width": 32,
       "generated_signal": "shell_post_src_reads_o",
       "name": "post_src_reads_o",
-      "ordinal": 244,
+      "ordinal": 246,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6843,7 +6887,7 @@
       "element_width": 32,
       "generated_signal": "shell_post_src_pixels_o",
       "name": "post_src_pixels_o",
-      "ordinal": 245,
+      "ordinal": 247,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6873,7 +6917,7 @@
       "element_width": 32,
       "generated_signal": "shell_post_retire_unowned_o",
       "name": "post_retire_unowned_o",
-      "ordinal": 246,
+      "ordinal": 248,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6903,7 +6947,7 @@
       "element_width": 32,
       "generated_signal": "shell_post_share_contention_o",
       "name": "post_share_contention_o",
-      "ordinal": 247,
+      "ordinal": 249,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6933,7 +6977,7 @@
       "element_width": 32,
       "generated_signal": "shell_echo_passes_complete_o",
       "name": "echo_passes_complete_o",
-      "ordinal": 248,
+      "ordinal": 250,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6963,7 +7007,7 @@
       "element_width": 32,
       "generated_signal": "shell_echo_passes_torn_o",
       "name": "echo_passes_torn_o",
-      "ordinal": 249,
+      "ordinal": 251,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6993,7 +7037,7 @@
       "element_width": 32,
       "generated_signal": "shell_echo_pixels_written_o",
       "name": "echo_pixels_written_o",
-      "ordinal": 250,
+      "ordinal": 252,
       "packed_dimensions": [
         {
           "left": 31,
@@ -7023,7 +7067,7 @@
       "element_width": 32,
       "generated_signal": "shell_echo_pixels_dropped_o",
       "name": "echo_pixels_dropped_o",
-      "ordinal": 251,
+      "ordinal": 253,
       "packed_dimensions": [
         {
           "left": 31,
@@ -7053,7 +7097,7 @@
       "element_width": 1,
       "generated_signal": "shell_echo_fault_o",
       "name": "echo_fault_o",
-      "ordinal": 252,
+      "ordinal": 254,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7075,7 +7119,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_cs_n_o",
       "name": "phy_cs_n_o",
-      "ordinal": 253,
+      "ordinal": 255,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7097,7 +7141,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_ras_n_o",
       "name": "phy_ras_n_o",
-      "ordinal": 254,
+      "ordinal": 256,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7119,7 +7163,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_cas_n_o",
       "name": "phy_cas_n_o",
-      "ordinal": 255,
+      "ordinal": 257,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7141,7 +7185,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_we_n_o",
       "name": "phy_we_n_o",
-      "ordinal": 256,
+      "ordinal": 258,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7163,7 +7207,7 @@
       "element_width": 13,
       "generated_signal": "shell_phy_a_o",
       "name": "phy_a_o",
-      "ordinal": 257,
+      "ordinal": 259,
       "packed_dimensions": [
         {
           "left": 12,
@@ -7193,7 +7237,7 @@
       "element_width": 2,
       "generated_signal": "shell_phy_ba_o",
       "name": "phy_ba_o",
-      "ordinal": 258,
+      "ordinal": 260,
       "packed_dimensions": [
         {
           "left": 1,
@@ -7223,7 +7267,7 @@
       "element_width": 16,
       "generated_signal": "shell_phy_dq_o",
       "name": "phy_dq_o",
-      "ordinal": 259,
+      "ordinal": 261,
       "packed_dimensions": [
         {
           "left": 15,
@@ -7253,7 +7297,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_dq_oe_o",
       "name": "phy_dq_oe_o",
-      "ordinal": 260,
+      "ordinal": 262,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7275,7 +7319,7 @@
       "element_width": 2,
       "generated_signal": "shell_phy_dqm_o",
       "name": "phy_dqm_o",
-      "ordinal": 261,
+      "ordinal": 263,
       "packed_dimensions": [
         {
           "left": 1,
@@ -7305,7 +7349,7 @@
       "element_width": 16,
       "generated_signal": "shell_phy_dq_i",
       "name": "phy_dq_i",
-      "ordinal": 262,
+      "ordinal": 264,
       "packed_dimensions": [
         {
           "left": 15,
@@ -7335,7 +7379,7 @@
       "element_width": 1,
       "generated_signal": "shell_cmd_pkt_valid_o",
       "name": "cmd_pkt_valid_o",
-      "ordinal": 263,
+      "ordinal": 265,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -7357,7 +7401,7 @@
       "element_width": 8,
       "generated_signal": "shell_cmd_pkt_byte_o",
       "name": "cmd_pkt_byte_o",
-      "ordinal": 264,
+      "ordinal": 266,
       "packed_dimensions": [
         {
           "left": 7,
@@ -7387,7 +7431,7 @@
       "element_width": 32,
       "generated_signal": "shell_cmd_pkt_len_o",
       "name": "cmd_pkt_len_o",
-      "ordinal": 265,
+      "ordinal": 267,
       "packed_dimensions": [
         {
           "left": 31,
@@ -7417,7 +7461,7 @@
       "element_width": 1,
       "generated_signal": "shell_cmd_pkt_ready_i",
       "name": "cmd_pkt_ready_i",
-      "ordinal": 266,
+      "ordinal": 268,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.cmd_pkt_ready_i",
       "signal_type_text": "logic",

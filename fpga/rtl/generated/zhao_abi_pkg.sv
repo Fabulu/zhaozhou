@@ -96,6 +96,8 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_DEBUG_FRAME_BLIT = 16'hF002;
   localparam logic [15:0] ZHAO_OP_DEBUG_RUMBLE = 16'hF004;
   localparam logic [15:0] ZHAO_OP_PUBLISH_RESOURCE = 16'h0030;
+  localparam logic [15:0] ZHAO_OP_SET_POST = 16'h0040;
+  localparam logic [15:0] ZHAO_OP_SET_GRADE_TABLE = 16'h0041;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
@@ -1117,6 +1119,218 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT = 44;
   localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_KIND = 45;
   localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_PAD = 46;
+
+  // SetPost 0x0040: 32-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [15:0] pad_1;  // 2 zero byte(s) @30
+    zhao_rgb565_t ink;  // 2 B @28
+    zhao_rgb565_t flash;  // 2 B @26
+    logic [15:0] bias_b;  // i16 @24
+    logic [15:0] bias_g;  // i16 @22
+    logic [15:0] bias_r;  // i16 @20
+    logic [7:0] pad;  // 1 zero byte(s) @19
+    logic [7:0] flash_amount;  // u8 @18
+    logic [7:0] flags;  // u8 @17
+    logic [7:0] bloom_gain;  // u8 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_set_post_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_POST_BYTES = 32;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_POST_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_SET_POST_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_SET_POST_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_SET_POST_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_SET_POST_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_SET_POST_OFF_BLOOM_GAIN = 16;
+  localparam int unsigned ZHAO_SET_POST_OFF_FLAGS = 17;
+  localparam int unsigned ZHAO_SET_POST_OFF_FLASH_AMOUNT = 18;
+  localparam int unsigned ZHAO_SET_POST_OFF_PAD = 19;
+  localparam int unsigned ZHAO_SET_POST_OFF_BIAS_R = 20;
+  localparam int unsigned ZHAO_SET_POST_OFF_BIAS_G = 22;
+  localparam int unsigned ZHAO_SET_POST_OFF_BIAS_B = 24;
+  localparam int unsigned ZHAO_SET_POST_OFF_FLASH = 26;
+  localparam int unsigned ZHAO_SET_POST_OFF_INK = 28;
+  localparam int unsigned ZHAO_SET_POST_OFF_PAD_1 = 30;
+
+  // SetGradeTable 0x0041: 96-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [31:0] pad_1;  // 4 zero byte(s) @92
+    logic [7:0] vectors_71;  // u8 @91
+    logic [7:0] vectors_70;  // u8 @90
+    logic [7:0] vectors_69;  // u8 @89
+    logic [7:0] vectors_68;  // u8 @88
+    logic [7:0] vectors_67;  // u8 @87
+    logic [7:0] vectors_66;  // u8 @86
+    logic [7:0] vectors_65;  // u8 @85
+    logic [7:0] vectors_64;  // u8 @84
+    logic [7:0] vectors_63;  // u8 @83
+    logic [7:0] vectors_62;  // u8 @82
+    logic [7:0] vectors_61;  // u8 @81
+    logic [7:0] vectors_60;  // u8 @80
+    logic [7:0] vectors_59;  // u8 @79
+    logic [7:0] vectors_58;  // u8 @78
+    logic [7:0] vectors_57;  // u8 @77
+    logic [7:0] vectors_56;  // u8 @76
+    logic [7:0] vectors_55;  // u8 @75
+    logic [7:0] vectors_54;  // u8 @74
+    logic [7:0] vectors_53;  // u8 @73
+    logic [7:0] vectors_52;  // u8 @72
+    logic [7:0] vectors_51;  // u8 @71
+    logic [7:0] vectors_50;  // u8 @70
+    logic [7:0] vectors_49;  // u8 @69
+    logic [7:0] vectors_48;  // u8 @68
+    logic [7:0] vectors_47;  // u8 @67
+    logic [7:0] vectors_46;  // u8 @66
+    logic [7:0] vectors_45;  // u8 @65
+    logic [7:0] vectors_44;  // u8 @64
+    logic [7:0] vectors_43;  // u8 @63
+    logic [7:0] vectors_42;  // u8 @62
+    logic [7:0] vectors_41;  // u8 @61
+    logic [7:0] vectors_40;  // u8 @60
+    logic [7:0] vectors_39;  // u8 @59
+    logic [7:0] vectors_38;  // u8 @58
+    logic [7:0] vectors_37;  // u8 @57
+    logic [7:0] vectors_36;  // u8 @56
+    logic [7:0] vectors_35;  // u8 @55
+    logic [7:0] vectors_34;  // u8 @54
+    logic [7:0] vectors_33;  // u8 @53
+    logic [7:0] vectors_32;  // u8 @52
+    logic [7:0] vectors_31;  // u8 @51
+    logic [7:0] vectors_30;  // u8 @50
+    logic [7:0] vectors_29;  // u8 @49
+    logic [7:0] vectors_28;  // u8 @48
+    logic [7:0] vectors_27;  // u8 @47
+    logic [7:0] vectors_26;  // u8 @46
+    logic [7:0] vectors_25;  // u8 @45
+    logic [7:0] vectors_24;  // u8 @44
+    logic [7:0] vectors_23;  // u8 @43
+    logic [7:0] vectors_22;  // u8 @42
+    logic [7:0] vectors_21;  // u8 @41
+    logic [7:0] vectors_20;  // u8 @40
+    logic [7:0] vectors_19;  // u8 @39
+    logic [7:0] vectors_18;  // u8 @38
+    logic [7:0] vectors_17;  // u8 @37
+    logic [7:0] vectors_16;  // u8 @36
+    logic [7:0] vectors_15;  // u8 @35
+    logic [7:0] vectors_14;  // u8 @34
+    logic [7:0] vectors_13;  // u8 @33
+    logic [7:0] vectors_12;  // u8 @32
+    logic [7:0] vectors_11;  // u8 @31
+    logic [7:0] vectors_10;  // u8 @30
+    logic [7:0] vectors_9;  // u8 @29
+    logic [7:0] vectors_8;  // u8 @28
+    logic [7:0] vectors_7;  // u8 @27
+    logic [7:0] vectors_6;  // u8 @26
+    logic [7:0] vectors_5;  // u8 @25
+    logic [7:0] vectors_4;  // u8 @24
+    logic [7:0] vectors_3;  // u8 @23
+    logic [7:0] vectors_2;  // u8 @22
+    logic [7:0] vectors_1;  // u8 @21
+    logic [7:0] vectors_0;  // u8 @20
+    logic [7:0] pad;  // 1 zero byte(s) @19
+    logic [7:0] count;  // u8 @18
+    logic [7:0] first;  // u8 @17
+    logic [7:0] curve;  // u8 @16
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_set_grade_table_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_BYTES = 96;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_CURVE = 16;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_FIRST = 17;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_COUNT = 18;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_PAD = 19;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0 = 20;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_1 = 21;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_2 = 22;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_3 = 23;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_4 = 24;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_5 = 25;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_6 = 26;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_7 = 27;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_8 = 28;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_9 = 29;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_10 = 30;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_11 = 31;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_12 = 32;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_13 = 33;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_14 = 34;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_15 = 35;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_16 = 36;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_17 = 37;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_18 = 38;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_19 = 39;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_20 = 40;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_21 = 41;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_22 = 42;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_23 = 43;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_24 = 44;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_25 = 45;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_26 = 46;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_27 = 47;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_28 = 48;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_29 = 49;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_30 = 50;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_31 = 51;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_32 = 52;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_33 = 53;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_34 = 54;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_35 = 55;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_36 = 56;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_37 = 57;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_38 = 58;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_39 = 59;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_40 = 60;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_41 = 61;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_42 = 62;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_43 = 63;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_44 = 64;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_45 = 65;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_46 = 66;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_47 = 67;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_48 = 68;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_49 = 69;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_50 = 70;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_51 = 71;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_52 = 72;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_53 = 73;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_54 = 74;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_55 = 75;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_56 = 76;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_57 = 77;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_58 = 78;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_59 = 79;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_60 = 80;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_61 = 81;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_62 = 82;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_63 = 83;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_64 = 84;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_65 = 85;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_66 = 86;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_67 = 87;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_68 = 88;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_69 = 89;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_70 = 90;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_71 = 91;
+  localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_PAD_1 = 92;
 
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
@@ -2232,6 +2446,228 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [255:0] zhao_pack_set_post(input zhao_rec_set_post_t c);
+    logic [255:0] v;
+    begin
+      v[ZHAO_SET_POST_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_SET_POST_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_SET_POST_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_SET_POST_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_SET_POST_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_SET_POST_OFF_BLOOM_GAIN*8 +: 8] = c.bloom_gain;
+      v[ZHAO_SET_POST_OFF_FLAGS*8 +: 8] = c.flags;
+      v[ZHAO_SET_POST_OFF_FLASH_AMOUNT*8 +: 8] = c.flash_amount;
+      v[ZHAO_SET_POST_OFF_PAD*8 +: 8] = c.pad;
+      v[ZHAO_SET_POST_OFF_BIAS_R*8 +: 16] = c.bias_r;
+      v[ZHAO_SET_POST_OFF_BIAS_G*8 +: 16] = c.bias_g;
+      v[ZHAO_SET_POST_OFF_BIAS_B*8 +: 16] = c.bias_b;
+      v[ZHAO_SET_POST_OFF_FLASH*8 +: 16] = c.flash;
+      v[ZHAO_SET_POST_OFF_INK*8 +: 16] = c.ink;
+      v[ZHAO_SET_POST_OFF_PAD_1*8 +: 16] = c.pad_1;
+      zhao_pack_set_post = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_set_post_t zhao_unpack_set_post(input logic [255:0] v);
+    zhao_rec_set_post_t c;
+    begin
+      c.h_opcode = v[ZHAO_SET_POST_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_SET_POST_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_SET_POST_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_SET_POST_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_SET_POST_OFF_H_RESERVED0*8 +: 32];
+      c.bloom_gain = v[ZHAO_SET_POST_OFF_BLOOM_GAIN*8 +: 8];
+      c.flags = v[ZHAO_SET_POST_OFF_FLAGS*8 +: 8];
+      c.flash_amount = v[ZHAO_SET_POST_OFF_FLASH_AMOUNT*8 +: 8];
+      c.pad = v[ZHAO_SET_POST_OFF_PAD*8 +: 8];
+      c.bias_r = v[ZHAO_SET_POST_OFF_BIAS_R*8 +: 16];
+      c.bias_g = v[ZHAO_SET_POST_OFF_BIAS_G*8 +: 16];
+      c.bias_b = v[ZHAO_SET_POST_OFF_BIAS_B*8 +: 16];
+      c.flash = v[ZHAO_SET_POST_OFF_FLASH*8 +: 16];
+      c.ink = v[ZHAO_SET_POST_OFF_INK*8 +: 16];
+      c.pad_1 = v[ZHAO_SET_POST_OFF_PAD_1*8 +: 16];
+      zhao_unpack_set_post = c;
+    end
+  endfunction
+
+  function automatic logic [767:0] zhao_pack_set_grade_table(input zhao_rec_set_grade_table_t c);
+    logic [767:0] v;
+    begin
+      v[ZHAO_SET_GRADE_TABLE_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_SET_GRADE_TABLE_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_SET_GRADE_TABLE_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_SET_GRADE_TABLE_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_SET_GRADE_TABLE_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_SET_GRADE_TABLE_OFF_CURVE*8 +: 8] = c.curve;
+      v[ZHAO_SET_GRADE_TABLE_OFF_FIRST*8 +: 8] = c.first;
+      v[ZHAO_SET_GRADE_TABLE_OFF_COUNT*8 +: 8] = c.count;
+      v[ZHAO_SET_GRADE_TABLE_OFF_PAD*8 +: 8] = c.pad;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0*8 +: 8] = c.vectors_0;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_1*8 +: 8] = c.vectors_1;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_2*8 +: 8] = c.vectors_2;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_3*8 +: 8] = c.vectors_3;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_4*8 +: 8] = c.vectors_4;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_5*8 +: 8] = c.vectors_5;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_6*8 +: 8] = c.vectors_6;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_7*8 +: 8] = c.vectors_7;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_8*8 +: 8] = c.vectors_8;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_9*8 +: 8] = c.vectors_9;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_10*8 +: 8] = c.vectors_10;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_11*8 +: 8] = c.vectors_11;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_12*8 +: 8] = c.vectors_12;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_13*8 +: 8] = c.vectors_13;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_14*8 +: 8] = c.vectors_14;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_15*8 +: 8] = c.vectors_15;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_16*8 +: 8] = c.vectors_16;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_17*8 +: 8] = c.vectors_17;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_18*8 +: 8] = c.vectors_18;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_19*8 +: 8] = c.vectors_19;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_20*8 +: 8] = c.vectors_20;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_21*8 +: 8] = c.vectors_21;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_22*8 +: 8] = c.vectors_22;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_23*8 +: 8] = c.vectors_23;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_24*8 +: 8] = c.vectors_24;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_25*8 +: 8] = c.vectors_25;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_26*8 +: 8] = c.vectors_26;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_27*8 +: 8] = c.vectors_27;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_28*8 +: 8] = c.vectors_28;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_29*8 +: 8] = c.vectors_29;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_30*8 +: 8] = c.vectors_30;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_31*8 +: 8] = c.vectors_31;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_32*8 +: 8] = c.vectors_32;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_33*8 +: 8] = c.vectors_33;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_34*8 +: 8] = c.vectors_34;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_35*8 +: 8] = c.vectors_35;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_36*8 +: 8] = c.vectors_36;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_37*8 +: 8] = c.vectors_37;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_38*8 +: 8] = c.vectors_38;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_39*8 +: 8] = c.vectors_39;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_40*8 +: 8] = c.vectors_40;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_41*8 +: 8] = c.vectors_41;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_42*8 +: 8] = c.vectors_42;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_43*8 +: 8] = c.vectors_43;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_44*8 +: 8] = c.vectors_44;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_45*8 +: 8] = c.vectors_45;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_46*8 +: 8] = c.vectors_46;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_47*8 +: 8] = c.vectors_47;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_48*8 +: 8] = c.vectors_48;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_49*8 +: 8] = c.vectors_49;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_50*8 +: 8] = c.vectors_50;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_51*8 +: 8] = c.vectors_51;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_52*8 +: 8] = c.vectors_52;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_53*8 +: 8] = c.vectors_53;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_54*8 +: 8] = c.vectors_54;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_55*8 +: 8] = c.vectors_55;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_56*8 +: 8] = c.vectors_56;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_57*8 +: 8] = c.vectors_57;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_58*8 +: 8] = c.vectors_58;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_59*8 +: 8] = c.vectors_59;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_60*8 +: 8] = c.vectors_60;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_61*8 +: 8] = c.vectors_61;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_62*8 +: 8] = c.vectors_62;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_63*8 +: 8] = c.vectors_63;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_64*8 +: 8] = c.vectors_64;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_65*8 +: 8] = c.vectors_65;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_66*8 +: 8] = c.vectors_66;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_67*8 +: 8] = c.vectors_67;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_68*8 +: 8] = c.vectors_68;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_69*8 +: 8] = c.vectors_69;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_70*8 +: 8] = c.vectors_70;
+      v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_71*8 +: 8] = c.vectors_71;
+      v[ZHAO_SET_GRADE_TABLE_OFF_PAD_1*8 +: 32] = c.pad_1;
+      zhao_pack_set_grade_table = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_set_grade_table_t zhao_unpack_set_grade_table(input logic [767:0] v);
+    zhao_rec_set_grade_table_t c;
+    begin
+      c.h_opcode = v[ZHAO_SET_GRADE_TABLE_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_SET_GRADE_TABLE_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_SET_GRADE_TABLE_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_SET_GRADE_TABLE_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_SET_GRADE_TABLE_OFF_H_RESERVED0*8 +: 32];
+      c.curve = v[ZHAO_SET_GRADE_TABLE_OFF_CURVE*8 +: 8];
+      c.first = v[ZHAO_SET_GRADE_TABLE_OFF_FIRST*8 +: 8];
+      c.count = v[ZHAO_SET_GRADE_TABLE_OFF_COUNT*8 +: 8];
+      c.pad = v[ZHAO_SET_GRADE_TABLE_OFF_PAD*8 +: 8];
+      c.vectors_0 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0*8 +: 8];
+      c.vectors_1 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_1*8 +: 8];
+      c.vectors_2 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_2*8 +: 8];
+      c.vectors_3 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_3*8 +: 8];
+      c.vectors_4 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_4*8 +: 8];
+      c.vectors_5 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_5*8 +: 8];
+      c.vectors_6 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_6*8 +: 8];
+      c.vectors_7 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_7*8 +: 8];
+      c.vectors_8 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_8*8 +: 8];
+      c.vectors_9 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_9*8 +: 8];
+      c.vectors_10 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_10*8 +: 8];
+      c.vectors_11 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_11*8 +: 8];
+      c.vectors_12 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_12*8 +: 8];
+      c.vectors_13 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_13*8 +: 8];
+      c.vectors_14 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_14*8 +: 8];
+      c.vectors_15 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_15*8 +: 8];
+      c.vectors_16 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_16*8 +: 8];
+      c.vectors_17 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_17*8 +: 8];
+      c.vectors_18 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_18*8 +: 8];
+      c.vectors_19 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_19*8 +: 8];
+      c.vectors_20 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_20*8 +: 8];
+      c.vectors_21 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_21*8 +: 8];
+      c.vectors_22 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_22*8 +: 8];
+      c.vectors_23 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_23*8 +: 8];
+      c.vectors_24 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_24*8 +: 8];
+      c.vectors_25 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_25*8 +: 8];
+      c.vectors_26 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_26*8 +: 8];
+      c.vectors_27 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_27*8 +: 8];
+      c.vectors_28 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_28*8 +: 8];
+      c.vectors_29 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_29*8 +: 8];
+      c.vectors_30 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_30*8 +: 8];
+      c.vectors_31 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_31*8 +: 8];
+      c.vectors_32 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_32*8 +: 8];
+      c.vectors_33 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_33*8 +: 8];
+      c.vectors_34 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_34*8 +: 8];
+      c.vectors_35 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_35*8 +: 8];
+      c.vectors_36 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_36*8 +: 8];
+      c.vectors_37 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_37*8 +: 8];
+      c.vectors_38 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_38*8 +: 8];
+      c.vectors_39 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_39*8 +: 8];
+      c.vectors_40 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_40*8 +: 8];
+      c.vectors_41 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_41*8 +: 8];
+      c.vectors_42 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_42*8 +: 8];
+      c.vectors_43 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_43*8 +: 8];
+      c.vectors_44 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_44*8 +: 8];
+      c.vectors_45 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_45*8 +: 8];
+      c.vectors_46 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_46*8 +: 8];
+      c.vectors_47 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_47*8 +: 8];
+      c.vectors_48 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_48*8 +: 8];
+      c.vectors_49 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_49*8 +: 8];
+      c.vectors_50 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_50*8 +: 8];
+      c.vectors_51 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_51*8 +: 8];
+      c.vectors_52 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_52*8 +: 8];
+      c.vectors_53 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_53*8 +: 8];
+      c.vectors_54 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_54*8 +: 8];
+      c.vectors_55 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_55*8 +: 8];
+      c.vectors_56 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_56*8 +: 8];
+      c.vectors_57 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_57*8 +: 8];
+      c.vectors_58 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_58*8 +: 8];
+      c.vectors_59 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_59*8 +: 8];
+      c.vectors_60 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_60*8 +: 8];
+      c.vectors_61 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_61*8 +: 8];
+      c.vectors_62 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_62*8 +: 8];
+      c.vectors_63 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_63*8 +: 8];
+      c.vectors_64 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_64*8 +: 8];
+      c.vectors_65 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_65*8 +: 8];
+      c.vectors_66 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_66*8 +: 8];
+      c.vectors_67 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_67*8 +: 8];
+      c.vectors_68 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_68*8 +: 8];
+      c.vectors_69 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_69*8 +: 8];
+      c.vectors_70 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_70*8 +: 8];
+      c.vectors_71 = v[ZHAO_SET_GRADE_TABLE_OFF_VECTORS_71*8 +: 8];
+      c.pad_1 = v[ZHAO_SET_GRADE_TABLE_OFF_PAD_1*8 +: 32];
+      zhao_unpack_set_grade_table = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -2255,6 +2691,8 @@ package zhao_abi_pkg;
         ZHAO_OP_DEBUG_FRAME_BLIT: zhao_opcode_record_bytes = 48;
         ZHAO_OP_DEBUG_RUMBLE: zhao_opcode_record_bytes = 32;
         ZHAO_OP_PUBLISH_RESOURCE: zhao_opcode_record_bytes = 48;
+        ZHAO_OP_SET_POST: zhao_opcode_record_bytes = 32;
+        ZHAO_OP_SET_GRADE_TABLE: zhao_opcode_record_bytes = 96;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -2319,6 +2757,14 @@ package zhao_abi_pkg;
         end
         ZHAO_OP_PUBLISH_RESOURCE: begin
           if (zhao_bytes_nonzero(p, base, 46, 2)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_SET_POST: begin
+          if (zhao_bytes_nonzero(p, base, 19, 1)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 30, 2)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_SET_GRADE_TABLE: begin
+          if (zhao_bytes_nonzero(p, base, 19, 1)) zhao_record_pad_nonzero = 1'b1;
+          if (zhao_bytes_nonzero(p, base, 92, 4)) zhao_record_pad_nonzero = 1'b1;
         end
         default: zhao_record_pad_nonzero = 1'b0;
       endcase
@@ -2435,6 +2881,8 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_debug_frame_blit_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_debug_rumble_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_publish_resource_t) != 8*48) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_set_post_t) != 8*32) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_set_grade_table_t) != 8*96) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;

@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = ce34affb9e20fc8a4c15ea519c015054617f0b0b3ad4ff40c28acabc991202f5
-//   zidl_sha256         = 08da9339570ce7bf01f4ff96a1bfbe3c9586bee028a73bc45b11962e427b0a03
+//   abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
+//   zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
 
 // ---------------------------------------------------------------- abi ---
 
@@ -80,6 +80,8 @@ export const ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 export const ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
 export const ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 export const ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
+export const ZHAO_OP_SET_POST = 0x0040; // 32 B, implemented
+export const ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
 
 // frame packet (capture_format.md 3)
 export const ZHAO_FRAME_MAGIC = 0x314b505a; // 'Z','P','K','1' LE
@@ -395,6 +397,28 @@ export interface ZhRecordPublishResource {
   kind: number; // u8, @29
 }
 
+/** SetPost 0x0040: 32-byte record (implemented) */
+export interface ZhRecordSetPost {
+  hdr: ZhCmdHeader;
+  bloom_gain: number; // u8, @0
+  flags: number; // u8, @1
+  flash_amount: number; // u8, @2
+  bias_r: number; // i16, @4
+  bias_g: number; // i16, @6
+  bias_b: number; // i16, @8
+  flash: ZhRgb565; // @10
+  ink: ZhRgb565; // @12
+}
+
+/** SetGradeTable 0x0041: 96-byte record (implemented) */
+export interface ZhRecordSetGradeTable {
+  hdr: ZhCmdHeader;
+  curve: number; // u8, @0
+  first: number; // u8, @1
+  count: number; // u8, @2
+  vectors: number[]; // u8, @4
+}
+
 export interface ZhCommandInfo {
   name: string;
   opcode: number;
@@ -425,8 +449,10 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'DebugFrameBlit', opcode: 0xF002, recordBytes: 48, implemented: true, padOffsets: [2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 1, size: 1, values: [0, 1, 2] }] },
   { name: 'DebugRumble', opcode: 0xF004, recordBytes: 32, implemented: true, padOffsets: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
   { name: 'PublishResource', opcode: 0x0030, recordBytes: 48, implemented: true, padOffsets: [30, 31], enumChecks: [] },
+  { name: 'SetPost', opcode: 0x0040, recordBytes: 32, implemented: true, padOffsets: [3, 14, 15], enumChecks: [] },
+  { name: 'SetGradeTable', opcode: 0x0041, recordBytes: 96, implemented: true, padOffsets: [3, 76, 77, 78, 79], enumChecks: [] },
 ];
-export const ZHAO_COMMAND_COUNT = 19 as const;
+export const ZHAO_COMMAND_COUNT = 21 as const;
 export const ZHAO_MAX_RECORD_BYTES = 176 as const;
 export function zhaoCommandInfo(opcode: number): ZhCommandInfo | undefined {
   return ZHAO_COMMAND_TABLE.find((c) => c.opcode === opcode);
@@ -904,6 +930,40 @@ export function zhaoSamplePublishResource(): ZhRecordPublishResource {
   };
 }
 
+export function zhaoSampleSetPost(): ZhRecordSetPost {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_SET_POST,
+      recordBytes: 32,
+      sourceId: 1342242835, // kind 5, module 1, index 19
+      flags: 0,
+    },
+    bloom_gain: 134,
+    flags: 137,
+    flash_amount: 145,
+    bias_r: 30028,
+    bias_g: 10970,
+    bias_b: 22138,
+    flash: zhaoSampleRgb565(),
+    ink: zhaoSampleRgb565(),
+  };
+}
+
+export function zhaoSampleSetGradeTable(): ZhRecordSetGradeTable {
+  return {
+    hdr: {
+      opcode: ZHAO_OP_SET_GRADE_TABLE,
+      recordBytes: 96,
+      sourceId: 1342242836, // kind 5, module 1, index 20
+      flags: 0,
+    },
+    curve: 205,
+    first: 53,
+    count: 109,
+    vectors: [65, 153, 137, 145, 129, 85, 5, 173, 201, 193, 185, 65, 173, 41, 117, 13, 9, 85, 129, 73, 122, 122, 232, 226, 118, 6, 164, 158, 18, 178, 85, 13, 201, 181, 89, 65, 253, 89, 93, 181, 73, 193, 69, 145, 141, 21, 137, 149, 225, 153, 114, 90, 72, 162, 246, 30, 76, 166, 165, 181, 57, 153, 61, 129, 77, 221, 129, 117, 193, 193, 201, 233],
+  };
+}
+
 export function zhaoPackMat4fx(v: ZhMat4fx, w: ZhByteWriter): void {
   w.fx16(v.m00);
   w.fx16(v.m01);
@@ -1157,8 +1217,34 @@ export function zhaoPackPublishResource(r: ZhRecordPublishResource, w: ZhByteWri
   w.zeros(2); // pad
 }
 
+export function zhaoPackSetPost(r: ZhRecordSetPost, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u8(r.bloom_gain);
+  w.u8(r.flags);
+  w.u8(r.flash_amount);
+  w.zeros(1); // pad
+  w.i16(r.bias_r);
+  w.i16(r.bias_g);
+  w.i16(r.bias_b);
+  zhaoPackRgb565(r.flash, w);
+  zhaoPackRgb565(r.ink, w);
+  w.zeros(2); // pad_1
+}
+
+export function zhaoPackSetGradeTable(r: ZhRecordSetGradeTable, w: ZhByteWriter): void {
+  w.u16(r.hdr.opcode); w.u16(r.hdr.recordBytes); w.u32(r.hdr.sourceId);
+  w.u32(r.hdr.flags); w.zeros(4); // reserved0
+  w.u8(r.curve);
+  w.u8(r.first);
+  w.u8(r.count);
+  w.zeros(1); // pad
+  for (let i = 0; i < 72; i++) w.u8(r.vectors[i]!);
+  w.zeros(4); // pad_1
+}
+
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xCE, 0x34, 0xAF, 0xFB, 0x9E, 0x20, 0xFC, 0x8A, 0x4C, 0x15, 0xEA, 0x51, 0x9C, 0x01, 0x50, 0x54, 0x61, 0x7F, 0x0B, 0x0B, 0x3A, 0xD4, 0xFF, 0x40, 0xC2, 0x8A, 0xCA, 0xBC, 0x99, 0x12, 0x02, 0xF5];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0x08, 0xDA, 0x93, 0x39, 0x57, 0x0C, 0xE7, 0xBF, 0x01, 0xF4, 0xFF, 0x96, 0xA1, 0xBF, 0xBE, 0x3C, 0x95, 0x86, 0xBE, 0xE0, 0x28, 0xA7, 0x3B, 0xC4, 0x5B, 0x11, 0x96, 0x2E, 0x42, 0x7B, 0x0A, 0x03];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x85, 0x93, 0x45, 0x80, 0x75, 0xD6, 0x65, 0xE6, 0x9F, 0x30, 0x57, 0x50, 0x45, 0x6E, 0x34, 0x20, 0x5D, 0x05, 0xD7, 0x91, 0xA0, 0x2A, 0x14, 0xDD, 0x5B, 0x48, 0xB7, 0x5A, 0xC6, 0x26, 0x92, 0x97];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0xBF, 0xE9, 0x4A, 0xE7, 0x22, 0x67, 0xC7, 0x84, 0x00, 0x83, 0xAA, 0x04, 0x9C, 0x9A, 0x3A, 0xA2, 0x64, 0xB4, 0x08, 0x9F, 0x1B, 0x4D, 0x5B, 0xC6, 0x87, 0x7E, 0x06, 0xA3, 0x5A, 0x99, 0x5A, 0x3E];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

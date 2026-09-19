@@ -1902,6 +1902,22 @@
     },
     {
       "ordinal": 227,
+      "name": "post_echo_arm_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 228,
+      "name": "post_look_hold_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "post_compositor",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 229,
       "name": "post_pass_start_o",
       "direction": "output",
       "domain": "gpu",
@@ -1909,7 +1925,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 228,
+      "ordinal": 230,
       "name": "post_view_o",
       "direction": "output",
       "domain": "gpu",
@@ -1917,7 +1933,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 229,
+      "ordinal": 231,
       "name": "post_src_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -1925,7 +1941,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 230,
+      "ordinal": 232,
       "name": "post_src_ready_i",
       "direction": "input",
       "domain": "gpu",
@@ -1933,7 +1949,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 231,
+      "ordinal": 233,
       "name": "post_src_rgb_o",
       "direction": "output",
       "domain": "gpu",
@@ -1941,7 +1957,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 232,
+      "ordinal": 234,
       "name": "post_out_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -1949,7 +1965,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 233,
+      "ordinal": 235,
       "name": "post_out_ready_o",
       "direction": "output",
       "domain": "gpu",
@@ -1957,7 +1973,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 234,
+      "ordinal": 236,
       "name": "post_out_rgb_i",
       "direction": "input",
       "domain": "gpu",
@@ -1965,7 +1981,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 235,
+      "ordinal": 237,
       "name": "post_out_x_i",
       "direction": "input",
       "domain": "gpu",
@@ -1973,7 +1989,7 @@
       "dynamic_mask": "0x1ff"
     },
     {
-      "ordinal": 236,
+      "ordinal": 238,
       "name": "post_out_y_i",
       "direction": "input",
       "domain": "gpu",
@@ -1981,7 +1997,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 237,
+      "ordinal": 239,
       "name": "post_out_last_i",
       "direction": "input",
       "domain": "gpu",
@@ -1989,7 +2005,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 238,
+      "ordinal": 240,
       "name": "post_echo_valid_i",
       "direction": "input",
       "domain": "gpu",
@@ -1997,7 +2013,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 239,
+      "ordinal": 241,
       "name": "post_echo_rgb_i",
       "direction": "input",
       "domain": "gpu",
@@ -2005,7 +2021,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 240,
+      "ordinal": 242,
       "name": "post_busy_o",
       "direction": "output",
       "domain": "gpu",
@@ -2013,7 +2029,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 241,
+      "ordinal": 243,
       "name": "post_passes_o",
       "direction": "output",
       "domain": "gpu",
@@ -2021,7 +2037,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 242,
+      "ordinal": 244,
       "name": "post_frames_o",
       "direction": "output",
       "domain": "gpu",
@@ -2029,7 +2045,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 243,
+      "ordinal": 245,
       "name": "post_fault_o",
       "direction": "output",
       "domain": "gpu",
@@ -2037,7 +2053,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 244,
+      "ordinal": 246,
       "name": "post_src_reads_o",
       "direction": "output",
       "domain": "gpu",
@@ -2045,7 +2061,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 245,
+      "ordinal": 247,
       "name": "post_src_pixels_o",
       "direction": "output",
       "domain": "gpu",
@@ -2053,7 +2069,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 246,
+      "ordinal": 248,
       "name": "post_retire_unowned_o",
       "direction": "output",
       "domain": "gpu",
@@ -2061,7 +2077,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 247,
+      "ordinal": 249,
       "name": "post_share_contention_o",
       "direction": "output",
       "domain": "gpu",
@@ -2069,7 +2085,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 248,
+      "ordinal": 250,
       "name": "echo_passes_complete_o",
       "direction": "output",
       "domain": "gpu",
@@ -2077,7 +2093,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 249,
+      "ordinal": 251,
       "name": "echo_passes_torn_o",
       "direction": "output",
       "domain": "gpu",
@@ -2085,7 +2101,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 250,
+      "ordinal": 252,
       "name": "echo_pixels_written_o",
       "direction": "output",
       "domain": "gpu",
@@ -2093,7 +2109,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 251,
+      "ordinal": 253,
       "name": "echo_pixels_dropped_o",
       "direction": "output",
       "domain": "gpu",
@@ -2101,7 +2117,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 252,
+      "ordinal": 254,
       "name": "echo_fault_o",
       "direction": "output",
       "domain": "gpu",
@@ -2109,7 +2125,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 253,
+      "ordinal": 255,
       "name": "phy_cs_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2118,7 +2134,7 @@
       "constant_reason": "The sampled capture sequence keeps chip-select at one invariant logic level."
     },
     {
-      "ordinal": 254,
+      "ordinal": 256,
       "name": "phy_ras_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2126,7 +2142,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 255,
+      "ordinal": 257,
       "name": "phy_cas_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2134,7 +2150,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 256,
+      "ordinal": 258,
       "name": "phy_we_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -2142,7 +2158,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 257,
+      "ordinal": 259,
       "name": "phy_a_o",
       "direction": "output",
       "domain": "gpu",
@@ -2151,7 +2167,7 @@
       "constant_reason": "The deterministic bounded traffic profile produces only the listed changed bits; remaining payload bits stay invariant."
     },
     {
-      "ordinal": 258,
+      "ordinal": 260,
       "name": "phy_ba_o",
       "direction": "output",
       "domain": "gpu",
@@ -2159,7 +2175,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 259,
+      "ordinal": 261,
       "name": "phy_dq_o",
       "direction": "output",
       "domain": "gpu",
@@ -2167,7 +2183,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 260,
+      "ordinal": 262,
       "name": "phy_dq_oe_o",
       "direction": "output",
       "domain": "gpu",
@@ -2175,7 +2191,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 261,
+      "ordinal": 263,
       "name": "phy_dqm_o",
       "direction": "output",
       "domain": "gpu",
@@ -2184,7 +2200,7 @@
       "constant_reason": "All characterized SDR transfers use full-word masks, so both DQM bits remain constant."
     },
     {
-      "ordinal": 262,
+      "ordinal": 264,
       "name": "phy_dq_i",
       "direction": "input",
       "domain": "gpu",
@@ -2192,7 +2208,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 263,
+      "ordinal": 265,
       "name": "cmd_pkt_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -2200,7 +2216,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 264,
+      "ordinal": 266,
       "name": "cmd_pkt_byte_o",
       "direction": "output",
       "domain": "gpu",
@@ -2208,7 +2224,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 265,
+      "ordinal": 267,
       "name": "cmd_pkt_len_o",
       "direction": "output",
       "domain": "gpu",
@@ -2216,7 +2232,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 266,
+      "ordinal": 268,
       "name": "cmd_pkt_ready_i",
       "direction": "input",
       "domain": "gpu",

@@ -1044,11 +1044,10 @@
 //      `zhao_vertex_arena`'s payload would have to widen, and that is a change
 //      to that block rather than to a composer.
 //
-// I17. POST.COMPOSITE's gather planes, HUD, grading table, flash and ink
-//      (`post_gd_*`, `post_gg_*`, `post_hud_*`, `post_pv_*`, `post_bias_*`,
-//      `post_flash_*`, `post_ink_*`, `post_bloom_gain_i`) -- BOUNDARY. The
-//      grading curves are generated ASSETS by design, so their load port is
-//      legitimately external; the plane ports are not, and are a gap.
+// I17. POST.COMPOSITE's gather planes and HUD (`post_gd_*`, `post_gg_*`,
+//      `post_hud_*`) -- BOUNDARY. HALVES (a) AND (b) CLOSED 2026-09-19 (post
+//      pass 2, owner rulings R35/R36): the look values and the grading table
+//      are no longer on this edge -- see (a)/(b) at the end of this entry.
 //
 //      THE ATMOSPHERE SHEET IS NO LONGER IN THIS LIST. `post_atm_*` is GONE
 //      FROM THIS MODULE'S EDGE as of 2026-09-19: TWOD.PLANE, TWOD.SPRITE and
@@ -1172,17 +1171,32 @@
 //      with ONE channel defined, GLOW = 0b01 -- no refraction, shockwave or ink
 //      channel and no glow-RGB law), `design/contracts/POST.GATHER.md` ("Resolved
 //      tile pixels with their material tags" -- the tag byte, not a glow RGB).
-//        a. `post_bloom_gain_i`, `post_bias_*`, `post_flash_*`, `post_ink_rgb_i`,
-//           `post_grade_valid_i`: per-frame LOOK values with no ABI carrier. An
-//           ABI addition (a `SetPost` record, zidl + emitter + zref + captures
-//           together, the R17/R21 pattern) is an owner decision.
-//        b. `post_pv_*`: the grading product-vector table. A generated asset by
-//           design (this entry's own classification), and its load path is the
-//           same undecided carrier as (a) -- or MEM.UPLOAD, which cannot yet
-//           land in a block-local table.
-//        c. `post_gd_*` / `post_gg_*` (POST.GATHER): the tag->glow/displacement
-//           law is unwritten, as the bullets above say; `post_hud_*`: the HUD
-//           store is unbuilt, as bullet 1 says. Both unchanged by this pass.
+//        a. CLOSED 2026-09-19 (post pass 2, R36). `SetPost` 0x0040 carries bloom
+//           gain, grade-valid, the three biases, flash colour and amount, ink
+//           and POST.ECHO's ARM (R35); CMD.EXEC's EX_POST phase drives them into
+//           POST.COMPOSITE (`post_look_*_w`) only while the post lease is idle,
+//           and holds a pass start while it writes. zidl + generated packers +
+//           `zref::post::look` + captures moved together; cmd_exec_directed
+//           cases 17-21 difference the RTL against zref field for field.
+//        b. CLOSED 2026-09-19 (post pass 2, R36). `SetGradeTable` 0x0041 carries
+//           up to eight product vectors per record; `zref::post::look::
+//           emit_grade_table` is the emitter (through `grade_product_vector`,
+//           the one generator of the table), and CMD.EXEC stages entries in an
+//           M10K and writes them through `pv_*` behind the same door.
+//        c. `post_gd_*` / `post_gg_*` (POST.GATHER): STILL OPEN, and now with a
+//           PROPOSAL in front of the owner rather than a blank. Ruling R37 asks
+//           for the tag->gather law to be proposed from stars_and_flares.md 1
+//           with every coefficient in a named constant, a zref model and a
+//           render to judge by eye: `zref::post::gather` (knee 24, slope 0x1C,
+//           tint 255/236/224, master 255), the law written into
+//           design/contracts/POST.GATHER.md, and
+//           reports/post-gather-law/gather_law_contact.png from
+//           tools/post/gather_law_render.cpp + gather_law_sheet.py. The glow
+//           borrows the fragment's own colour; DISPLACEMENT AND INK ARE NOT
+//           INVENTED (channels 0b10/0b11 are unallocated, so they contribute
+//           nothing and are counted). What is owed AFTER the ruling: the RTL
+//           adapter, the HUD plane store, and composing zhao_post_gather.
+//           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says.
 // I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Nothing in
 //      the console produces an error-magnitude stream; the block measures a
 //      difference against a reference and the console has no reference. Its
@@ -3961,6 +3975,11 @@ module zhao_console_core
   // onto it (owner ruling R17). These two are CMD.EXEC's upload evidence.
   output logic [31:0]             cmd_exec_uploads_o,
   output logic [31:0]             cmd_exec_upload_overflow_o,
+  // R35/R36: SetPost / SetGradeTable, each fired by tests/command/cmd_exec_directed.cpp.
+  output logic [31:0]             cmd_exec_post_looks_o,       // looks handed to POST.COMPOSITE
+  output logic [31:0]             cmd_exec_grade_entries_o,    // product vectors written
+  output logic [31:0]             cmd_exec_post_refused_o,     // records REFUSED (flags/bias/header)
+  output logic [31:0]             cmd_exec_grade_overflow_o,   // entries refused for staging room
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
   // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit (in
   // TERRAIN.PAGE_POOL always; in RENDER.ASSET_POOL through R32's arm, which is
@@ -4124,18 +4143,10 @@ module zhao_console_core
   // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
   // this module and the atmosphere sheet never leaves. Entry I17 records what
   // changed and what did not.
-  input  logic [7:0]              post_bloom_gain_i,
-  input  logic                    post_grade_valid_i,
-  input  logic                    post_pv_we_i,
-  input  logic [1:0]              post_pv_sel_i,
-  input  logic [5:0]              post_pv_addr_i,
-  input  logic [71:0]             post_pv_data_i,
-  input  logic signed [8:0]       post_bias_r_i,
-  input  logic signed [8:0]       post_bias_g_i,
-  input  logic signed [8:0]       post_bias_b_i,
-  input  logic [15:0]             post_flash_rgb_i,
-  input  logic [7:0]              post_flash_amt_i,
-  input  logic [15:0]             post_ink_rgb_i,
+  // THE LOOK AND THE GRADING TABLE ARE GONE FROM THIS EDGE, 2026-09-19 (post
+  // pass 2, owner rulings R35/R36): post_bloom_gain_i, post_grade_valid_i,
+  // post_pv_*, post_bias_*, post_flash_* and post_ink_rgb_i are driven by
+  // CMD.EXEC's SetPost / SetGradeTable arm (section 7c). Entry I17 (a)(b).
   output logic                    post_hud_req_v_o,
   output logic [POST_XW-1:0]      post_hud_req_x_o,
   output logic [POST_YW-1:0]      post_hud_req_y_o,
@@ -7919,6 +7930,19 @@ module zhao_console_core
   logic                   post_echo_valid_c;
   logic [15:0]            post_echo_rgb_c;
 
+  // ---- R35/R36: THE LOOK, from CMD.EXEC (section 7c) --------------------------
+  // SetPost's look, SetGradeTable's product vectors, POST.ECHO's arm and the
+  // pass-start hold, declared here because the compositor and the shell's post
+  // lease consume them before CMD.EXEC's instance appears in this file.
+  logic [7:0]        post_look_bloom_gain_w, post_look_flash_amt_w;
+  logic              post_look_grade_valid_w, post_look_echo_arm_w, post_look_hold_w;
+  logic              post_look_pv_we_w;
+  logic [1:0]        post_look_pv_sel_w;
+  logic [5:0]        post_look_pv_addr_w;
+  logic [71:0]       post_look_pv_data_w;
+  logic signed [8:0] post_look_bias_r_w, post_look_bias_g_w, post_look_bias_b_w;
+  logic [15:0]       post_look_flash_rgb_w, post_look_ink_rgb_w;
+
   zhao_post_composite #(
     .LINE_W    (POST_LINE_W),
     .MAX_H     (POST_MAX_H),
@@ -7969,18 +7993,20 @@ module zhao_console_core
     .atm_rgb_i   (atm_rgb_c),
     .atm_opacity_i(atm_opacity_c),
     .atm_add_i   (atm_add_c),
-    .bloom_gain_i(post_bloom_gain_i),
-    .grade_valid_i(post_grade_valid_i),
-    .pv_we_i     (post_pv_we_i),
-    .pv_sel_i    (post_pv_sel_i),
-    .pv_addr_i   (post_pv_addr_i),
-    .pv_data_i   (post_pv_data_i),
-    .bias_r_i    (post_bias_r_i),
-    .bias_g_i    (post_bias_g_i),
-    .bias_b_i    (post_bias_b_i),
-    .flash_rgb_i (post_flash_rgb_i),
-    .flash_amt_i (post_flash_amt_i),
-    .ink_rgb_i   (post_ink_rgb_i),
+    // REAL (R36): the look and the grading table, from CMD.EXEC's committed
+    // SetPost / SetGradeTable. Applied only while the post lease is idle.
+    .bloom_gain_i(post_look_bloom_gain_w),
+    .grade_valid_i(post_look_grade_valid_w),
+    .pv_we_i     (post_look_pv_we_w),
+    .pv_sel_i    (post_look_pv_sel_w),
+    .pv_addr_i   (post_look_pv_addr_w),
+    .pv_data_i   (post_look_pv_data_w),
+    .bias_r_i    (post_look_bias_r_w),
+    .bias_g_i    (post_look_bias_g_w),
+    .bias_b_i    (post_look_bias_b_w),
+    .flash_rgb_i (post_look_flash_rgb_w),
+    .flash_amt_i (post_look_flash_amt_w),
+    .ink_rgb_i   (post_look_ink_rgb_w),
     .hud_req_v_o (post_hud_req_v_o),
     .hud_req_x_o (post_hud_req_x_o),
     .hud_req_y_o (post_hud_req_y_o),
@@ -8679,6 +8705,10 @@ module zhao_console_core
     .post_frame_h_i            (post_frame_h_c),
     // Duo exactly where `post_frame_w_c/h_c` chose the Duo view (the case's default).
     .post_duo_i                ((mode_act_o != MODE_Z60_C) && (mode_act_o != MODE_STORM_C)),
+    // R35/R36: CMD.EXEC's committed echo ARM, and its hold on a pass start
+    // while the look or the grading table is being written.
+    .post_echo_arm_i           (post_look_echo_arm_w),
+    .post_look_hold_i          (post_look_hold_w),
     .post_pass_start_o         (post_pass_start_c),
     .post_view_o               (post_view_c),
     .post_src_valid_o          (post_s_valid_c),
@@ -10673,6 +10703,23 @@ module zhao_console_core
     .tok_vreq_geom_o    (cmd_tok_vreq_geom),
     .tok_vreq_frag_o    (cmd_tok_vreq_frag),
     .contracts_applied_o(cmd_exec_contracts_o),
+    // R35/R36: SetPost / SetGradeTable -> POST.COMPOSITE's look and table, and
+    // POST.ECHO's arm, through the door of an IDLE post lease.
+    .post_idle_i       (!post_busy_o),
+    .post_look_busy_o  (post_look_hold_w),
+    .post_bloom_gain_o (post_look_bloom_gain_w),
+    .post_grade_valid_o(post_look_grade_valid_w),
+    .post_echo_arm_o   (post_look_echo_arm_w),
+    .post_bias_r_o     (post_look_bias_r_w),
+    .post_bias_g_o     (post_look_bias_g_w),
+    .post_bias_b_o     (post_look_bias_b_w),
+    .post_flash_rgb_o  (post_look_flash_rgb_w),
+    .post_flash_amt_o  (post_look_flash_amt_w),
+    .post_ink_rgb_o    (post_look_ink_rgb_w),
+    .post_pv_we_o      (post_look_pv_we_w),
+    .post_pv_sel_o     (post_look_pv_sel_w),
+    .post_pv_addr_o    (post_look_pv_addr_w),
+    .post_pv_data_o    (post_look_pv_data_w),
 
     .packets_committed_o  (cmd_exec_committed_o),
     .packets_abandoned_o  (cmd_exec_abandoned_o),
@@ -10686,6 +10733,10 @@ module zhao_console_core
     .draw_src_truncated_o (cmd_exec_draw_src_truncated_o),
     .uploads_issued_o     (cmd_exec_uploads_o),
     .upload_overflow_o    (cmd_exec_upload_overflow_o),
+    .post_looks_applied_o (cmd_exec_post_looks_o),
+    .grade_entries_written_o(cmd_exec_grade_entries_o),
+    .post_refused_o       (cmd_exec_post_refused_o),
+    .grade_overflow_o     (cmd_exec_grade_overflow_o),
     .unsupported_o        (cmd_exec_unsupported_o)
   );
 

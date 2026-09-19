@@ -1,8 +1,8 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
-// shell-declaration-sha256: c1b68329afa7582935e8cbed616aad92123fc0873d2b8372453c9164a273c92f
-// policy-sha256: 5913ca4f289e625d8d2f6fd3a3cd2899b4a7485c1094b3860084e16c916ee19c
-// generator-sha256: 55900894edddbf9a0e82373e7d4e80cee0b0c3551b1d144c093ea6f94134509a
+// shell-declaration-sha256: 1453909cb5cc2c526ecb78d9327847e400afae3446a0edcce82855168f181086
+// policy-sha256: 6ddc01eca0b78e727cbc5f712c705e4c1b73ac690e9bfe6d2161886a9b13f129
+// generator-sha256: 4a0bb1c11945f7703f706a732d0a015d6b18abf23dae4408b8dfdd3e127b3e66
 // parser-sha256: cf10b580276970bf2be1e4abea5cb6d97248e46671ba525027f45c8079815fc5
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
@@ -244,6 +244,8 @@ module shell_v2_top
   (* keep = "true" *) logic [8:0] shell_post_frame_w_i;
   (* keep = "true" *) logic [7:0] shell_post_frame_h_i;
   (* keep = "true" *) logic shell_post_duo_i;
+  (* keep = "true" *) logic shell_post_echo_arm_i;
+  (* keep = "true" *) logic shell_post_look_hold_i;
   (* keep = "true" *) logic shell_post_pass_start_o;
   (* keep = "true" *) logic shell_post_view_o;
   (* keep = "true" *) logic shell_post_src_valid_o;
@@ -598,6 +600,8 @@ module shell_v2_top
     .post_frame_w_i(shell_post_frame_w_i),
     .post_frame_h_i(shell_post_frame_h_i),
     .post_duo_i(shell_post_duo_i),
+    .post_echo_arm_i(shell_post_echo_arm_i),
+    .post_look_hold_i(shell_post_look_hold_i),
     .post_src_ready_i(shell_post_src_ready_i),
     .post_out_valid_i(shell_post_out_valid_i),
     .post_out_rgb_i(shell_post_out_rgb_i),
@@ -838,6 +842,8 @@ module shell_v2_top
     .post_frame_w_i(shell_post_frame_w_i),
     .post_frame_h_i(shell_post_frame_h_i),
     .post_duo_i(shell_post_duo_i),
+    .post_echo_arm_i(shell_post_echo_arm_i),
+    .post_look_hold_i(shell_post_look_hold_i),
     .post_pass_start_o(shell_post_pass_start_o),
     .post_view_o(shell_post_view_o),
     .post_src_valid_o(shell_post_src_valid_o),
@@ -1040,6 +1046,8 @@ module shell_v2_stimulus
   (* preserve *) output var logic [8:0] post_frame_w_i,
   (* preserve *) output var logic [7:0] post_frame_h_i,
   (* preserve *) output var logic post_duo_i,
+  (* preserve *) output var logic post_echo_arm_i,
+  (* preserve *) output var logic post_look_hold_i,
   (* preserve *) output var logic post_src_ready_i,
   (* preserve *) output var logic post_out_valid_i,
   (* preserve *) output var logic [15:0] post_out_rgb_i,
@@ -1663,6 +1671,8 @@ module shell_v2_stimulus
       post_frame_w_i <= '0;
       post_frame_h_i <= '0;
       post_duo_i <= '0;
+      post_echo_arm_i <= '0;
+      post_look_hold_i <= '0;
       post_src_ready_i <= '0;
       post_out_valid_i <= '0;
       post_out_rgb_i <= '0;

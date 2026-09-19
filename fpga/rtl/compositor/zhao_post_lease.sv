@@ -73,15 +73,65 @@
 // source pixels at its view's last pixel, so the reader's next pixel simply
 // waits for the next pass. Post's write-back labels view 1's rows `y + h`.
 //
-// COST (estimated, UNMEASURED): the share (~90 ALM), the sequencer and the
-// retire FIFO (~60 ALM), plus the reader and the echo (their own headers).
+// ---------------------------------------------------------------------------
+// THE MEMORY BUDGET -- owner ruling R38, measured 2026-09-19 (post pass 2)
+// ---------------------------------------------------------------------------
+// R38: "Add a measured second outstanding read (and more if measurement says
+// so) and PROVE post fits inside the frame alongside raster and replay, in
+// clocks, with the margin stated." The instrument is the console smoke's
+// `post census` (tests/prod/tb_zhao_console_core_smoke.sv), Z60 384 x 240,
+// echo armed, every number below read off it:
+//
+//   MAX_RD  lease busy  sdram busy     e0 bursts rd/wr  other   conflicts
+//     1      729,594   632,628 (86%)   11,520/23,360   17,635   14,319
+//     2      697,494   622,683 (89%)   11,520/23,360   16,810   14,307
+//     4      698,215   623,373 (89%)   11,520/23,360   16,840   14,367
+//
+// So the second read is worth 4.4% and a fourth is worth nothing: the SDRAM
+// controller is already 86% busy with MAX_RD = 1. POST IS MEMORY-BOUND, not
+// latency-bound -- 51,690 bursts at 12.05 clocks each is the pass. More reads
+// in flight cannot help past 2 because `zhao_vram_arbiter` gives each client a
+// 32-word credit pool: a 64-byte read owns all of it until it retires.
+// MAX_RD = 2 ships (the share's in-flight table and the shell's `last` queue
+// cost ~30 ALM between them).
+//
+// THE FRAME (1,666,666 gpu clocks, Z60 at the 100 MHz placeholder):
+//   post, echo ARMED, measured          697,494   41.8%
+//   left for the render phase           969,172   58.2%
+// The measurement is PESSIMISTIC in one known direction: the smoke's scanout
+// runs about 3.5x the real Z60 rate (16,810 "other" bursts in 697k clocks,
+// against 11,520 per 1,666,666 in a real frame), and every scanout burst in the
+// window is time post waited. Post's OWN demand is 34,880 bursts x 12.05 =
+// 420,300 SDRAM clocks; with real-rate scanout interleaved at the measured 89%
+// utilisation that is about 521,000, 31% of the frame. An UNARMED echo (R35)
+// removes 11,680 of the write bursts.
+//
+// WHAT THIS PROVES AND WHAT IT DOES NOT. Post fits: it leaves at least 969,172
+// clocks of every frame to the render phase, measured. It does NOT prove the
+// render phase fits in them, and that is not post's to prove: GEOM.REPLAY
+// measures 56 clocks per view-triangle (reports/R3-CLIENT-A-SCHEDULE-PROOF-
+// 20260919.md), ~4.5M clocks at the guaranteed tier. R31's rate packet must
+// therefore bring raster + replay under 969,172 clocks (armed) -- NOT under the
+// whole 1,666,666 frame -- because post runs AFTER the raster on the same slot.
+// The three levers left on the post side are named in FINDINGS-post2: echo
+// armed only when used (R35, built with SetPost), a bank-interleaved address
+// map (14,307 conflicts x ~6 clocks = ~86k), and a third framebuffer slot so
+// post N overlaps raster N+1 (an architectural decision, not taken here).
+//
+// COST (estimated, UNMEASURED): the share (~90 ALM, +~20 for MAX_RD = 2), the
+// sequencer and the retire FIFO (~80 ALM with RQ = 8), plus the reader (now a
+// 16-beat queue, unchanged) and the echo (their own headers).
 `default_nettype none
 
 module zhao_post_lease
   import zhao_pkg::*;
 #(
     parameter int unsigned XW = 9,
-    parameter int unsigned YW = 8
+    parameter int unsigned YW = 8,
+    // READS IN FLIGHT on ENGINE0 (owner ruling R38): the share's MAX_RD, and the
+    // reader's queue is sized to hold that many 64-byte reads (8 beats each).
+    // Chosen on the console smoke's post census -- see THE MEMORY BUDGET below.
+    parameter int unsigned MAX_RD = 2
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -98,6 +148,11 @@ module zhao_post_lease
     input  var logic [XW-1:0] frame_w_i,        // the VIEW's size, from the mode
     input  var logic [YW-1:0] frame_h_i,
     input  var logic          duo_i,            // two views per frame
+    // R35/R36, from CMD.EXEC's committed SetPost: POST.ECHO captures a pass only
+    // when ARMED, and a pass may not START while the look or the grading table
+    // is being written (CMD.EXEC's EX_POST, `post_look_busy_o`).
+    input  var logic          echo_arm_i,
+    input  var logic          look_hold_i,
 
     // ---- to / from POST.COMPOSITE --------------------------------------------
     output var logic          pass_start_o,     // the compositor's frame_start
@@ -177,6 +232,8 @@ module zhao_post_lease
   logic          view_q;
   logic          start_c;
   logic          last_out_seen_q;
+  logic          admit_pend_q;     // an admit arrived mid-pass; taken at S_DONE
+  logic          admit_early_q;    // sticky until the next pass: see frame_admit_i
 
   // The view the NEXT pass opens: the first pass of a frame is view 0, the
   // second (Duo only) is view 1.
@@ -196,12 +253,25 @@ module zhao_post_lease
 
   logic echo_busy, rd_busy, rd_done_unused, rd_fault;
 
-  assign start_c = ((st_q == S_ARMED) && raster_done_c && lease_live_i)
+  assign start_c = ((st_q == S_ARMED) && raster_done_c && lease_live_i && !frame_admit_i
+                     && !look_hold_i)
                 || ((st_q == S_SETTLE) && fbw_drained_i && !echo_busy
                     && duo_i && !view_q);
 
   assign pass_start_o = start_c;
-  assign view_o       = view_q;
+  // THE VIEW A PASS OPENS IS KNOWN ON ITS START CYCLE, not one cycle later.
+  // `view_q` is loaded AT the start edge (S_ARMED -> 0, S_SETTLE -> 1), so on
+  // the start cycle itself it still names the PREVIOUS pass: Duo's second pass
+  // opened reading view 0, and the first pass after a Duo frame opened reading
+  // view 1. The echo already took `start_c ? next_view_c : view_q`; this is the
+  // same expression, so the compositor and the echo can never disagree about
+  // which view a pass is. (Found by review, Q004 F1; nothing downstream
+  // LATCHES the view at frame_start today -- POST.COMPOSITE drives gd/gg_view
+  // combinationally and its front pointer is idle on the start cycle -- so the
+  // stale cycle was harmless in the composition and wrong as a contract.)
+  // ENFORCED-BY: tests/compositor/post_lease_directed.cpp (case 1: the view is
+  // sampled ON the pass_start_o cycle, Duo and the frame after it)
+  assign view_o       = start_c ? next_view_c : view_q;
   assign phase_post_o = (st_q == S_PASS) || (st_q == S_SETTLE) || (st_q == S_DONE);
   assign busy_o       = (st_q == S_ARMED) || (st_q == S_PASS) || (st_q == S_SETTLE);
 
@@ -216,7 +286,7 @@ module zhao_post_lease
   assign rd_h_c = duo_i ? (RYW'(frame_h_i) << 1) : RYW'(frame_h_i);
 
   logic [31:0] rd_overflow_unused;
-  zhao_post_fbread #(.XW(XW), .YW(RYW), .FIFO_BEATS(16)) u_source (
+  zhao_post_fbread #(.XW(XW), .YW(RYW), .FIFO_BEATS((MAX_RD < 2) ? 16 : 8 * MAX_RD)) u_source (
     .clk(clk), .rst_n(rst_n),
     // ONE read per FRAME: only the first view's start opens it.
     .start_i (start_c && (st_q == S_ARMED)),
@@ -228,7 +298,8 @@ module zhao_post_lease
     .busy_o(rd_busy), .done_o(rd_done_unused), .fault_o(rd_fault),
     .reads_o(src_reads_o), .pixels_o(src_pixels_o), .overflow_o(rd_overflow_unused)
   );
-  assign fault_o = rd_fault;
+  // A refused source read, or a frame admitted under a live post phase.
+  assign fault_o = rd_fault || admit_early_q;
 
   // ==========================================================================
   // THE WRITE-BACK -- the compositor's output onto RASTER.FBWRITE's port
@@ -259,10 +330,17 @@ module zhao_post_lease
 
   zhao_post_echo #(.XW(XW), .YW(YW), .SKID(256)) u_echo (
     .clk(clk), .rst_n(rst_n),
-    .pass_start_i(start_c), .view_i(start_c ? next_view_c : view_q),
+    // ARMED ONLY (R35): an unarmed pass is never opened, so it writes nothing,
+    // counts nothing and costs ENGINE0 nothing -- 11,680 write bursts per Z60
+    // frame (THE MEMORY BUDGET above). The arm is the look's, and the look only
+    // changes between passes, so it cannot flip under an open capture.
+    .pass_start_i(start_c && echo_arm_i), .view_i(view_o),
     .w_i(frame_w_i), .h_i(frame_h_i),
     // The raw tap repeats a stalled beat; the ACCEPTED beat happens once.
-    .tap_valid_i(echo_valid_i && out_fire_c), .tap_rgb_i(echo_rgb_i),
+    // ... and the TAP is armed with it: an unarmed echo is not a starved echo,
+    // so its pixels are not DROPS. Measured: without this the disarmed control
+    // reports 92,160 dropped pixels, which reads as a fault and is not one.
+    .tap_valid_i(echo_valid_i && out_fire_c && echo_arm_i), .tap_rgb_i(echo_rgb_i),
     .tap_x_i(out_x_i), .tap_y_i(out_y_i),
     .guard_req_o(ec_req), .guard_rsp_i(ec_rsp),
     .guard_wdata_o(ec_wdata), .guard_wvalid_o(ec_wvalid),
@@ -289,12 +367,23 @@ module zhao_post_lease
   logic            wpend_c;
   assign wpend_c = wpend_q;
 
+  // THE RETIRE LEDGER'S ROOM (see RETIREMENT ATTRIBUTION below). The share
+  // holds at most ONE taken-but-unverdicted request, so withholding every
+  // requester while the ledger has fewer than two free entries means the
+  // verdict that request earns always has an entry to land in.
+  logic rq_room_c;
+
   always_comb begin
     sh_req[0] = fbw_req_i;
     sh_req[1] = rd_req;
     sh_req[2] = ec_req;
     if (wpend_c) begin
       sh_req[0].valid = 1'b0;
+      sh_req[2].valid = 1'b0;
+    end
+    if (!rq_room_c) begin
+      sh_req[0].valid = 1'b0;
+      sh_req[1].valid = 1'b0;
       sh_req[2].valid = 1'b0;
     end
   end
@@ -304,7 +393,7 @@ module zhao_post_lease
   logic [2:0][31:0] sh_jobs_unused;
   logic [31:0]      sh_denied_unused, sh_short_unused, sh_long_unused, sh_unowned_unused;
 
-  zhao_mem_share_n #(.N(3), .CLIENT_ID(2), .FORCE_READ(1'b0)) u_engine0_share (
+  zhao_mem_share_n #(.N(3), .CLIENT_ID(2), .FORCE_READ(1'b0), .MAX_RD(MAX_RD)) u_engine0_share (
     .clk(clk), .rst_n(rst_n),
     .req_i(sh_req), .rsp_o(sh_rsp),
     .beat_valid_o(sh_bv), .beat_data_o(sh_bd), .beat_last_o(sh_bl_unused),
@@ -336,13 +425,30 @@ module zhao_post_lease
   // RETIREMENT ATTRIBUTION -- in order, as the controller retires
   // ==========================================================================
   // {requester, words} pushed at each passed verdict; the credit stream drains
-  // the head. Depth 4 covers a request in the guard, one at the arbiter and one
-  // retiring, with one to spare.
-  localparam int unsigned RQ = 4;
-  logic [1:0] rq_own [0:RQ-1];
-  logic [5:0] rq_left[0:RQ-1];
-  logic [1:0] rq_wp_q, rq_rp_q;
-  logic [2:0] rq_n_q;
+  // the head.
+  //
+  // IT HAD NO FULL GUARD (found by review, Q004 F4). Depth 4 was argued from
+  // today's arbiter -- "a request in the guard, one at the arbiter and one
+  // retiring, with one to spare" -- and nothing enforced the argument: a fifth
+  // passed verdict before the first credit wrapped `rq_wp_q` over a live entry
+  // and misattributed every word after it, which surfaces as a FBWRITE that
+  // never drains or an echo reported torn. The argument is also exactly the one
+  // R38 retires: every extra outstanding read is one more entry.
+  //
+  // So the ledger now GUARDS itself (`rq_room_c` masks the share, above) and is
+  // deep enough that the guard never binds at the arbiter's own depth: 8
+  // entries of 8 bits is 64 flops (~20 ALM). The ledger no longer depends on
+  // how deep the memory system downstream happens to be.
+  // ENFORCED-BY: tests/compositor/post_lease_directed.cpp (case 3: credits
+  // held back for hundreds of clocks while all three requesters run)
+  localparam int unsigned RQ  = 8;
+  localparam int unsigned RQW = $clog2(RQ);
+  logic [1:0]     rq_own [0:RQ-1];
+  logic [5:0]     rq_left[0:RQ-1];
+  logic [RQW-1:0] rq_wp_q, rq_rp_q;
+  logic [RQW:0]   rq_n_q;
+
+  assign rq_room_c = (rq_n_q <= (RQW+1)'(RQ - 2));
 
   logic       push_c;
   logic [1:0] push_own_c;
@@ -375,8 +481,8 @@ module zhao_post_lease
   assign credit_c   = (e0_credits_i != 8'd0);
   assign head_own_c = rq_own[rq_rp_q];
 
-  assign fbw_retire_o = (credit_c && (rq_n_q != 3'd0) && (head_own_c == 2'd0)) ? e0_credits_i : 8'd0;
-  assign ec_retire    = (credit_c && (rq_n_q != 3'd0) && (head_own_c == 2'd2)) ? e0_credits_i : 8'd0;
+  assign fbw_retire_o = (credit_c && (rq_n_q != '0) && (head_own_c == 2'd0)) ? e0_credits_i : 8'd0;
+  assign ec_retire    = (credit_c && (rq_n_q != '0) && (head_own_c == 2'd2)) ? e0_credits_i : 8'd0;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -386,11 +492,11 @@ module zhao_post_lease
     end else begin
       automatic logic pop = 1'b0;
       if (credit_c) begin
-        if (rq_n_q == 3'd0) begin
+        if (rq_n_q == '0) begin
           retire_unowned_o <= retire_unowned_o + 32'd1;
         end else if (6'(e0_credits_i) >= rq_left[rq_rp_q]) begin
           pop = 1'b1;
-          rq_rp_q <= rq_rp_q + 2'd1;
+          rq_rp_q <= rq_rp_q + RQW'(1);
           // A burst's credits belong to ONE request. More than the head is
           // owed means a word was attributed to the wrong requester.
           if (6'(e0_credits_i) != rq_left[rq_rp_q])
@@ -402,9 +508,9 @@ module zhao_post_lease
       if (push_c) begin
         rq_own[rq_wp_q]  <= push_own_c;
         rq_left[rq_wp_q] <= push_words_c;
-        rq_wp_q          <= rq_wp_q + 2'd1;
+        rq_wp_q          <= rq_wp_q + RQW'(1);
       end
-      rq_n_q <= rq_n_q + (push_c ? 3'd1 : 3'd0) - (pop ? 3'd1 : 3'd0);
+      rq_n_q <= rq_n_q + (push_c ? (RQW+1)'(1) : '0) - (pop ? (RQW+1)'(1) : '0);
     end
   end
 
@@ -416,6 +522,8 @@ module zhao_post_lease
       st_q            <= S_IDLE;
       view_q          <= 1'b0;
       last_out_seen_q <= 1'b0;
+      admit_pend_q    <= 1'b0;
+      admit_early_q   <= 1'b0;
       wpend_q         <= 1'b0;
       wown_q          <= 1'b0;
       passes_o        <= '0;
@@ -470,7 +578,51 @@ module zhao_post_lease
 
       // A newly admitted render frame ends the previous post phase: the shell
       // gives RASTER.FBWRITE back to the raster from here.
-      if (frame_admit_i) st_q <= S_IDLE;
+      //
+      // ONLY A FINISHED PHASE IS ENDED BY IT (found by review, Q004 F2). This
+      // used to force S_IDLE unconditionally, so an admit during S_PASS or
+      // S_SETTLE would hand FBWRITE's port back to the raster with post
+      // pixels still in it, and leave the reader and the echo running with
+      // nobody sequencing them.
+      //
+      // IT CANNOT HAPPEN IN THIS SHELL, and the chain is short enough to state:
+      //   1. an admit is `zhao_renderer_lease_v2`'s ST_FRAME, reached only from
+      //      ST_IDLE/ST_RETRY with `!lease_valid_i` -- no live manager lease;
+      //   2. post arms only with `lease_live_i` (the manager's lease, writer =
+      //      renderer), and stays busy until its last word retires;
+      //   3. `zhao_video_slotmgr_v2` drops a live lease ONLY on a matching
+      //      TERMINAL; faults latch and never release it;
+      //   4. the renderer's terminal is tied off in `zhao_shell_top_v2`, and the
+      //      blit terminal cannot match a renderer lease (writer differs).
+      // So between arming and `busy_o` falling there is no admit. When the
+      // renderer terminal gets its producer, it must be issued on
+      // `render_drained_o` -- which is already `fbw_drained && !post_busy_o`.
+      //
+      // Because (4) is a tie-off rather than a law, the lease DEFINES what an
+      // early admit does instead of relying on it:
+      //   * in S_ARMED nothing has been read or written, so the arming is
+      //     simply abandoned (no pass, no frame counted);
+      //   * in S_PASS / S_SETTLE the pass is FINISHED, not torn: the admit is
+      //     held and taken at S_DONE, so FBWRITE's port changes hands only
+      //     between whole writers and ENGINE0's three requesters are never
+      //     orphaned. The new frame's raster waits on FBWRITE's ready meanwhile.
+      // Either way `fault_o` latches (`admit_early_q`) until the next pass
+      // starts, so the frame cannot be mistaken for a clean one.
+      // ENFORCED-BY: tests/compositor/post_lease_directed.cpp (cases 4 and 5)
+      if (frame_admit_i) begin
+        if ((st_q == S_PASS) || (st_q == S_SETTLE)) begin
+          admit_pend_q  <= 1'b1;
+          admit_early_q <= 1'b1;
+        end else begin
+          st_q <= S_IDLE;
+          if (st_q == S_ARMED) admit_early_q <= 1'b1;
+        end
+      end
+      if (admit_pend_q && (st_q == S_DONE)) begin
+        st_q         <= S_IDLE;
+        admit_pend_q <= 1'b0;
+      end
+      if (start_c && (st_q == S_ARMED)) admit_early_q <= 1'b0;
     end
   end
 

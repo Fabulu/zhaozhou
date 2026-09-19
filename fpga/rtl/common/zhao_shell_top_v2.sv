@@ -506,6 +506,11 @@ module zhao_shell_top_v2
   input  logic [8:0]  post_frame_w_i,       // the VIEW's size, from the video mode
   input  logic [7:0]  post_frame_h_i,
   input  logic        post_duo_i,           // two views per frame
+  // R35/R36: CMD.EXEC's committed look. POST.ECHO captures only when ARMED,
+  // and a pass may not start while the look or the grading table is being
+  // written (CMD.EXEC's EX_POST).
+  input  logic        post_echo_arm_i,
+  input  logic        post_look_hold_i,
   output logic        post_pass_start_o,    // POST.COMPOSITE frame_start
   output logic        post_view_o,          // POST.COMPOSITE view_sel
   output logic        post_src_valid_o,
@@ -1287,7 +1292,10 @@ module zhao_shell_top_v2
 
   // ---- POST.COMPOSITE's lease ------------------------------------------------
   logic        e0_beat_valid, e0_beat_last;
-  zhao_post_lease #(.XW(9), .YW(8)) u_post_lease (
+  // Reads in flight on ENGINE0 (owner ruling R38): the lease's share and the
+  // read-beat `last` queue below are sized by this ONE number.
+  localparam int unsigned POST_E0_MAX_RD = 2;
+  zhao_post_lease #(.XW(9), .YW(8), .MAX_RD(POST_E0_MAX_RD)) u_post_lease (
     .clk(gpu_clk), .rst_n(rst_n),
     // The renderer's live lease: the one the render guard's window comes from.
     .lease_live_i  (rmap_valid_q),
@@ -1301,6 +1309,8 @@ module zhao_shell_top_v2
     .frame_w_i     (post_frame_w_i),
     .frame_h_i     (post_frame_h_i),
     .duo_i         (post_duo_i),
+    .echo_arm_i    (post_echo_arm_i),
+    .look_hold_i   (post_look_hold_i),
     .pass_start_o  (post_pass_start_o),
     .view_o        (post_view_o),
     .src_valid_o   (post_src_valid_o),
@@ -1801,18 +1811,56 @@ module zhao_shell_top_v2
   // ---- ENGINE0's read beats (the post source), last from ITS request ------
   // The geometry path's lesson, applied a third time: last marks the end of
   // the guard request, counted from the accepted request's own len.
-  logic [3:0] e0_expect_r;
-  logic [3:0] e0_beat_cnt_r;
+  //
+  // MORE THAN ONE READ IN FLIGHT (owner ruling R38, 2026-09-19). This counter
+  // was reset at every read's guard ACCEPT, which is right only while one read
+  // is outstanding: with the post lease's second read, read 2's accept landed
+  // in the middle of read 1's return, `last` fired at the wrong beat, the share
+  // discarded the tail as an overlong return and the post pass stopped dead
+  // after 48 pixels (measured on the console smoke). A counter that resets on
+  // the NEXT request is a frozen copy of "there is only ever one".
+  //
+  // So the expectations queue, in the order the guard PASSED the reads -- the
+  // order their beats return in, since guard, arbiter and controller are all
+  // strictly in order. An entry is pushed at the read's VERDICT, not its accept:
+  // a refused read returns nothing and must owe nothing. The length is captured
+  // at the accept (the request is off the pins by the verdict) and the queue is
+  // as deep as the lease's MAX_RD, which is what bounds it: the share holds at
+  // most that many passed reads unreturned.
+  localparam int unsigned E0_RDQ = POST_E0_MAX_RD;
+  localparam int unsigned E0_RQW = (E0_RDQ > 1) ? $clog2(E0_RDQ) : 1;
+  logic [3:0]        e0_exp_q [0:E0_RDQ-1];
+  logic [E0_RQW-1:0] e0_ewp_q, e0_erp_q;
+  logic [3:0]        e0_acc_len_q;      // the accepted read's beats, until its verdict
+  logic              e0_acc_rd_q;       // ... and whether the accepted request IS a read
+  logic [3:0]        e0_expect_r;
+  logic [3:0]        e0_beat_cnt_r;
+  assign e0_expect_r = e0_exp_q[e0_erp_q];
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       e0_beat_cnt_r <= 4'd0;
-      e0_expect_r   <= 4'd8;
-    end else if (render_guard_req.valid && render_guard_rsp.ready
-                 && !render_guard_req.write) begin
-      e0_beat_cnt_r <= 4'd0;
-      e0_expect_r   <= 4'(render_guard_req.len >> 3);
-    end else if (e0_beat_valid) begin
-      e0_beat_cnt_r <= e0_beat_cnt_r + 4'd1;
+      e0_ewp_q      <= '0;
+      e0_erp_q      <= '0;
+      e0_acc_len_q  <= 4'd8;
+      e0_acc_rd_q   <= 1'b0;
+      for (int k = 0; k < int'(E0_RDQ); k++) e0_exp_q[k] <= 4'd8;
+    end else begin
+      if (render_guard_req.valid && render_guard_rsp.ready) begin
+        e0_acc_len_q <= 4'(render_guard_req.len >> 3);
+        e0_acc_rd_q  <= !render_guard_req.write;
+      end
+      if (render_guard_rsp.ok && e0_acc_rd_q) begin
+        e0_exp_q[e0_ewp_q] <= e0_acc_len_q;
+        e0_ewp_q           <= (E0_RDQ > 1) ? (e0_ewp_q + E0_RQW'(1)) : '0;
+      end
+      if (e0_beat_valid) begin
+        if (e0_beat_last) begin
+          e0_beat_cnt_r <= 4'd0;
+          e0_erp_q      <= (E0_RDQ > 1) ? (e0_erp_q + E0_RQW'(1)) : '0;
+        end else begin
+          e0_beat_cnt_r <= e0_beat_cnt_r + 4'd1;
+        end
+      end
     end
   end
   assign e0_beat_valid = packed_valid && rd_owner_e0_r;

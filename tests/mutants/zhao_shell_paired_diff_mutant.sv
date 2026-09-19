@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 51 inputs exist only on the sibling. They get harness ports of
+// 53 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -126,6 +126,8 @@ module zhao_shell_paired_diff_mut
   input  logic [8:0] post_frame_w_i,
   input  logic [7:0] post_frame_h_i,
   input  logic post_duo_i,
+  input  logic post_echo_arm_i,
+  input  logic post_look_hold_i,
   input  logic post_src_ready_i,
   input  logic post_out_valid_i,
   input  logic [15:0] post_out_rgb_i,
@@ -724,6 +726,8 @@ module zhao_shell_paired_diff_mut
     .post_frame_w_i(post_frame_w_i),
     .post_frame_h_i(post_frame_h_i),
     .post_duo_i(post_duo_i),
+    .post_echo_arm_i(post_echo_arm_i),
+    .post_look_hold_i(post_look_hold_i),
     .post_pass_start_o(),
     .post_view_o(),
     .post_src_valid_o(),
