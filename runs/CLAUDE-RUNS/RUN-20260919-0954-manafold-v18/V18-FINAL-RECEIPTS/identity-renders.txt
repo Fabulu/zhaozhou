@@ -1,0 +1,6 @@
+flight-v17env rc=0 0x5B272AB3 expect 0x5B272AB3
+trick-none-legacypin-v17cam rc=0 0x22563A37 expect 0x22563A37
+trick-legacypin rc=0 0xBF695C69 expect WaveF 0xBF695C69
+drift-bx0 rc=0 0x3A11AB0C expect 0x3A11AB0C
+crackle-legacy rc=0 0xEDDC80D7 expect 0xEDDC80D7
+zixx-idle (production env) 0x1408F885 expect 0x1408F885

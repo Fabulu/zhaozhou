@@ -111,6 +111,14 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
   - Gates 115/115: mqa Q6a/b/c + Q7 with four attributed controls, an mprobe PLANTED 360 line, 14 selectors, live-history gate, identities, Zixx Idle, and a bank 33/36 identical to Wave E (the other 3 are the intended changes).
   - Prep corrections: the u02 house cam_bias is 0, not 14000; the support pivot must be the chain point at carrier B, and the gate measures the contact patch.
   - Open: the pre-existing Trick pause contact wander of 178 mm (owner call); no Drift margin at either end.
+- 23:40: Wave F closed by the Opus worker. Zhaozhou `d7d51171` (source) + `bf51325f` (evidence), Upheaval `3b10b10`; 115/115 controls. Flight: 2 cycles, 800 mm bob raised 500 mm, quick climb, long glide. Trick: pause, 360, 14 degree overshoot, correction inside the existing plant, framing k330000/bias -10000. Drift: horizontal bias 14000. Coordinator decision on the reported ~178 mm planted-antenna slide during the pause (legacy balance wobble): fix it with the support XZ pivot across the whole contact window, behind a named toggle with an exact-off control, judged by eye. Launched the Opus integration packet: slide fix, integrated gate, exact 22-subject final bank and every-frame review; it stops before encode.
+- Qwen relay corrected to xhigh plus auto token budget (owner direction). Q015 (Wave-D clips, xhigh): partial; one real note forwarded to the Wave-F worker (the legacy JunctionF balance flex). Q016 (v18 findings plus site-blurb draft from ~26.5k tokens of reports, xhigh): verified; it will be finalized by continuation after the final bank. Q017/Q018 (Wave-F motion + gates review, xhigh) are running.
+- 19:43: Integration packet CLOSED by the Opus worker (`V18-FINAL-BANK-INTEGRITY.md`). Verdict **READY-TO-ENCODE**. Source `db2bcf0e`.
+  - Trick plant pin: the support-XZ pivot now spans the whole contact window 78..147, with a 12-key C2 release at the lift. The toggle is `ZHAO_U02_TRICK_PLANT_PIN`, and `legacy` reproduces Wave F `0xBF695C69` exactly. mqa Q6d: 12.99 mm (bound 24); the control fires at 178.46 mm. Chosen by eye from a native A/B, a contact slit-scan, the release frames and a 3x plant crop.
+  - Integrated gate: one clean direct build, 113/113, plus exact-off identities (Flight, Trick none+legacy+v17 cam, Trick legacy, Drift, crackle-legacy, Zixx Idle).
+  - Final bank: renderer MD5 `0f082622d4ca0c58d012d1f0de555723`, 22 subjects, 7,992 frames, manifest `bdaac548...28bd`. 21/22 byte-identical to Wave F; only Trick changed.
+  - Frame root: `C:\programmieren\zencrifice\manafold-p16\v18-final-reel-22` (keep for the encode).
+  - Every-frame sheets for all 22 were looked at (18 images). Fine detail of the byte-identical subjects transfers from Waves D/E/F.
 
 ## Subagent Spawns
 
@@ -129,6 +137,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 | 2026-09-19 | Claude worker Wave D closure | Verify/repair the three blockers and two coordinator audits, clean direct build, full control matrix, production-presentation rerender and visual review, commit/push | Complete — CLOSED; mesh-cap regression and wrong-presentation sheets found and repaired; 88/88 gates | `V18-SWELL-FRONT-REPAIR.md` |
 | 2026-09-19 | Claude worker Wave E cleanup | Retire live history mist with assertion/gate/controls, normalise Crackle with exact legacy control, re-look Drift/Blown, bounded particle attempt, full matrix, every-frame review, commit/push | Complete — CLOSED; 97/97; fade shipped at 120 mm; legacy fade leak found and fixed | `V18-WAVE-E-CLEANUP.md` |
 | 2026-09-19 | Claude worker Wave F performances | Flight/Trick ladders chosen by eye, spin pivot, gates/controls, every-frame review, commit/push | Complete — CLOSED; 115/115 | `V18-WAVE-F-PERFORMANCES.md` |
+| 2026-09-19 | Claude worker integration + final bank | Trick plant pin, integrated gate, exact 22-subject bank, every-frame review | Complete; READY-TO-ENCODE; 113/113 | `V18-FINAL-BANK-INTEGRITY.md` |
 
 ---
 
@@ -186,4 +195,4 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 2. Wave F must keep the new committed Trick support probe green (strict B ownership plus two fired controls) and should revisit the planted-crown framing at the frame bottom.
 3. ~~Run Wave E~~ — done (`V18-WAVE-E-CLEANUP.md`). Drift left-edge framing at f260-298 is an open camera question.
 4. ~~Run Wave F~~ — done (`V18-WAVE-F-PERFORMANCES.md`). Owner calls: Trick pause contact wander (pre-existing), Drift margin.
-5. Run one integrated targeted gate, then one exact 22-subject version-18 bank, isolated every-frame review, encode, publication and production-byte verification.
+5. ~~Run one integrated targeted gate, then one exact 22-subject version-18 bank and every-frame review~~ -- done (`V18-FINAL-BANK-INTEGRITY.md`). Next: encode exactly that bank (frame root `manafold-p16/v18-final-reel-22`, manifest `bdaac548...`), publication and production-byte verification.

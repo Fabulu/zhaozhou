@@ -1,0 +1,23 @@
+manafold-blown	292	final 0x840DA184	waveF 0x840DA184	SAME
+manafold-channel	420	final 0xD49861D0	waveF 0xD49861D0	SAME
+manafold-crackle	600	final 0xCC1BDA8B	waveF 0xCC1BDA8B	SAME
+manafold-curious	180	final 0xFD63139B	waveF 0xFD63139B	SAME
+manafold-damage	464	final 0xBADF776E	waveF 0xBADF776E	SAME
+manafold-death-drop	450	final 0x99FCC8A1	waveF 0x99FCC8A1	SAME
+manafold-death-gutter	590	final 0x3BA123EC	waveF 0x3BA123EC	SAME
+manafold-drift	300	final 0x69158A83	waveF 0x69158A83	SAME
+manafold-fall	340	final 0x1F062A86	waveF 0x1F062A86	SAME
+manafold-flight	352	final 0x9FBC05CB	waveF 0x9FBC05CB	SAME
+manafold-hasty	240	final 0xC6FB59FB	waveF 0xC6FB59FB	SAME
+manafold-hit	140	final 0x3BABB107	waveF 0x3BABB107	SAME
+manafold-hover	600	final 0x24B3FE60	waveF 0x24B3FE60	SAME
+manafold-inspect	600	final 0x95A27283	waveF 0x95A27283	SAME
+manafold-lasso	336	final 0x26666BC0	waveF 0x26666BC0	SAME
+manafold-pirouette	240	final 0x18DB7B27	waveF 0x18DB7B27	SAME
+manafold-rest	400	final 0xD25EF330	waveF 0xD25EF330	SAME
+manafold-startle	160	final 0x11C587EF	waveF 0x11C587EF	SAME
+manafold-taunt	280	final 0x3874DBF4	waveF 0x3874DBF4	SAME
+manafold-taunt2	240	final 0x499AC40C	waveF 0x499AC40C	SAME
+manafold-taunt3	368	final 0x07EACF1D	waveF 0x07EACF1D	SAME
+manafold-trick	400	final 0xAB4D78E9	waveF 0xBF695C69	CHANGED
+21/22 identical to the Wave-F bank; changed: manafold-trick only (the plant pin). Trick frames differing from the ZHAO_U02_TRICK_PLANT_PIN=legacy render (== Wave F 0xBF695C69): f156..f318 only (163 frames = keys 78..159: the contact window 78..147 and the 12-key release to key 159. Key 78 differs although its pin offset is exactly zero; the probable cause is a neighbour-reading post-pass such as finalize_rear_follow, not proven).

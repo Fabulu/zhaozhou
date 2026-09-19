@@ -1,0 +1,186 @@
+{
+  "root": "C:\\programmieren\\zencrifice\\manafold-p16\\v18-final-reel-22",
+  "subjects": 22,
+  "frames": 7992,
+  "bytes": 2209692096,
+  "manifest_sha256": "bdaac548e5dc956b7aa4afac57dae73e265861b25e3160788a26cbd8aa0628bd",
+  "manifest_text": "manafold-blown\t292\t0x840DA184\t57d09760d550ce40b0fc050ea7fe20ecf557b7c8f8ccda7ddb16a4085bc98547\t80734496\nmanafold-channel\t420\t0xD49861D0\tea29946e11d28bdae7edfd452f19caea6d35b49a98f09b8d3a7fc000d70ed350\t116124960\nmanafold-crackle\t600\t0xCC1BDA8B\t1b04280607638734b45cc551d1c0e8813d2f76bbc5cb6d0060e87d488bb3281f\t165892800\nmanafold-curious\t180\t0xFD63139B\td799c8958b56ff2afa1e332aa2da876985ae0c065366ff803d4e2334b403ddb8\t49767840\nmanafold-damage\t464\t0xBADF776E\te26e0824468db7bfbab39ecda2ee587f2585ca57f4828c590ceebd4858c5653e\t128290432\nmanafold-death-drop\t450\t0x99FCC8A1\t865aad22aca5a7482a44908d587fed3328dd999e3c007dbc0aea27e51d5b1375\t124419600\nmanafold-death-gutter\t590\t0x3BA123EC\t09b2821ba88d09903c6cbb0a9de2d9b975c7019fa8e377bdffbcb45171287e09\t163127920\nmanafold-drift\t300\t0x69158A83\t06765873e5066ec11cc9353a2c638e5974b1cad621f5fa19f1c7f1184c5d6411\t82946400\nmanafold-fall\t340\t0x1F062A86\tf75ed433ffd9b3a4851276d65e22dbf3f83662208f5eba4973c9f27902e735bf\t94005920\nmanafold-flight\t352\t0x9FBC05CB\t8667e1455f465a7059fe26ace43edd30eb6d8c84d838e4275b647344a7c4e950\t97323776\nmanafold-hasty\t240\t0xC6FB59FB\t28642acaf21852fe76c051615ac7ab798f4b44c1975fb189d7d52297409532e0\t66357120\nmanafold-hit\t140\t0x3BABB107\t6e1d253fe8123a7899e570ae9569a48e5e5b1a572ec6841c5e1a850b32a554cb\t38708320\nmanafold-hover\t600\t0x24B3FE60\t2631dedc6775c32816cc12876eefb4aee47289bca2236660c5f0520dde6d02f9\t165892800\nmanafold-inspect\t600\t0x95A27283\tea4359bf5f9799b7708f68a857e7b143db347d5a0fbd61a8b419360f38e56b86\t165892800\nmanafold-lasso\t336\t0x26666BC0\t965e85a84e42a055c4823ba38e47c8b3952a6fe0eb200ef424cc79bdeb54baaf\t92899968\nmanafold-pirouette\t240\t0x18DB7B27\t61e2f57bef172799022e32a1670c354a0a2d36b3c97ec41d10fee5b4589e4cf1\t66357120\nmanafold-rest\t400\t0xD25EF330\t35840a88d7c0805ba178f38a9d9a2e7d5efedfb185e212cc1bcc7ed670e6cd81\t110595200\nmanafold-startle\t160\t0x11C587EF\t5b4ac5a92c99768f736ff6a9ecc25d64bf310f11aad7916956131f8deec7f73e\t44238080\nmanafold-taunt\t280\t0x3874DBF4\t403220b92b95d691edd57b955f9dbfbd3acdf4174e18d7f72d191fee93ccb567\t77416640\nmanafold-taunt2\t240\t0x499AC40C\tcb55c18b2e9d1064c91e6bb5bb69d181a83923883f5e3b4da7be451398f63f7a\t66357120\nmanafold-taunt3\t368\t0x07EACF1D\t89e1b4339aca83d8aa0d9f852fd1251bb63c82fec0c319e1fb3b482c9ec74036\t101747584\nmanafold-trick\t400\t0xAB4D78E9\tf328dc5e3ba4d8a7b498703de9b1df93255a3d9a089dd13f22d6240786934f43\t110595200\n",
+  "rows": [
+    {
+      "subject": "manafold-blown",
+      "frames": 292,
+      "sequence_crc32c": "0x840DA184",
+      "sequence_sha256": "57d09760d550ce40b0fc050ea7fe20ecf557b7c8f8ccda7ddb16a4085bc98547",
+      "bytes": 80734496,
+      "newest_frame_mtime_ns": 1789839144510664100
+    },
+    {
+      "subject": "manafold-channel",
+      "frames": 420,
+      "sequence_crc32c": "0xD49861D0",
+      "sequence_sha256": "ea29946e11d28bdae7edfd452f19caea6d35b49a98f09b8d3a7fc000d70ed350",
+      "bytes": 116124960,
+      "newest_frame_mtime_ns": 1789839031915275200
+    },
+    {
+      "subject": "manafold-crackle",
+      "frames": 600,
+      "sequence_crc32c": "0xCC1BDA8B",
+      "sequence_sha256": "1b04280607638734b45cc551d1c0e8813d2f76bbc5cb6d0060e87d488bb3281f",
+      "bytes": 165892800,
+      "newest_frame_mtime_ns": 1789839176735879800
+    },
+    {
+      "subject": "manafold-curious",
+      "frames": 180,
+      "sequence_crc32c": "0xFD63139B",
+      "sequence_sha256": "d799c8958b56ff2afa1e332aa2da876985ae0c065366ff803d4e2334b403ddb8",
+      "bytes": 49767840,
+      "newest_frame_mtime_ns": 1789839036556288200
+    },
+    {
+      "subject": "manafold-damage",
+      "frames": 464,
+      "sequence_crc32c": "0xBADF776E",
+      "sequence_sha256": "e26e0824468db7bfbab39ecda2ee587f2585ca57f4828c590ceebd4858c5653e",
+      "bytes": 128290432,
+      "newest_frame_mtime_ns": 1789839107404542500
+    },
+    {
+      "subject": "manafold-death-drop",
+      "frames": 450,
+      "sequence_crc32c": "0x99FCC8A1",
+      "sequence_sha256": "865aad22aca5a7482a44908d587fed3328dd999e3c007dbc0aea27e51d5b1375",
+      "bytes": 124419600,
+      "newest_frame_mtime_ns": 1789839117214872100
+    },
+    {
+      "subject": "manafold-death-gutter",
+      "frames": 590,
+      "sequence_crc32c": "0x3BA123EC",
+      "sequence_sha256": "09b2821ba88d09903c6cbb0a9de2d9b975c7019fa8e377bdffbcb45171287e09",
+      "bytes": 163127920,
+      "newest_frame_mtime_ns": 1789839130080510900
+    },
+    {
+      "subject": "manafold-drift",
+      "frames": 300,
+      "sequence_crc32c": "0x69158A83",
+      "sequence_sha256": "06765873e5066ec11cc9353a2c638e5974b1cad621f5fa19f1c7f1184c5d6411",
+      "bytes": 82946400,
+      "newest_frame_mtime_ns": 1789839020669294400
+    },
+    {
+      "subject": "manafold-fall",
+      "frames": 340,
+      "sequence_crc32c": "0x1F062A86",
+      "sequence_sha256": "f75ed433ffd9b3a4851276d65e22dbf3f83662208f5eba4973c9f27902e735bf",
+      "bytes": 94005920,
+      "newest_frame_mtime_ns": 1789839068418908300
+    },
+    {
+      "subject": "manafold-flight",
+      "frames": 352,
+      "sequence_crc32c": "0x9FBC05CB",
+      "sequence_sha256": "8667e1455f465a7059fe26ace43edd30eb6d8c84d838e4275b647344a7c4e950",
+      "bytes": 97323776,
+      "newest_frame_mtime_ns": 1789839151980927800
+    },
+    {
+      "subject": "manafold-hasty",
+      "frames": 240,
+      "sequence_crc32c": "0xC6FB59FB",
+      "sequence_sha256": "28642acaf21852fe76c051615ac7ab798f4b44c1975fb189d7d52297409532e0",
+      "bytes": 66357120,
+      "newest_frame_mtime_ns": 1789839061952655500
+    },
+    {
+      "subject": "manafold-hit",
+      "frames": 140,
+      "sequence_crc32c": "0x3BABB107",
+      "sequence_sha256": "6e1d253fe8123a7899e570ae9569a48e5e5b1a572ec6841c5e1a850b32a554cb",
+      "bytes": 38708320,
+      "newest_frame_mtime_ns": 1789839072029935600
+    },
+    {
+      "subject": "manafold-hover",
+      "frames": 600,
+      "sequence_crc32c": "0x24B3FE60",
+      "sequence_sha256": "2631dedc6775c32816cc12876eefb4aee47289bca2236660c5f0520dde6d02f9",
+      "bytes": 165892800,
+      "newest_frame_mtime_ns": 1789838998979465900
+    },
+    {
+      "subject": "manafold-inspect",
+      "frames": 600,
+      "sequence_crc32c": "0x95A27283",
+      "sequence_sha256": "ea4359bf5f9799b7708f68a857e7b143db347d5a0fbd61a8b419360f38e56b86",
+      "bytes": 165892800,
+      "newest_frame_mtime_ns": 1789839015145856900
+    },
+    {
+      "subject": "manafold-lasso",
+      "frames": 336,
+      "sequence_crc32c": "0x26666BC0",
+      "sequence_sha256": "965e85a84e42a055c4823ba38e47c8b3952a6fe0eb200ef424cc79bdeb54baaf",
+      "bytes": 92899968,
+      "newest_frame_mtime_ns": 1789839138545495100
+    },
+    {
+      "subject": "manafold-pirouette",
+      "frames": 240,
+      "sequence_crc32c": "0x18DB7B27",
+      "sequence_sha256": "61e2f57bef172799022e32a1670c354a0a2d36b3c97ec41d10fee5b4589e4cf1",
+      "bytes": 66357120,
+      "newest_frame_mtime_ns": 1789839057503193100
+    },
+    {
+      "subject": "manafold-rest",
+      "frames": 400,
+      "sequence_crc32c": "0xD25EF330",
+      "sequence_sha256": "35840a88d7c0805ba178f38a9d9a2e7d5efedfb185e212cc1bcc7ed670e6cd81",
+      "bytes": 110595200,
+      "newest_frame_mtime_ns": 1789839051078302500
+    },
+    {
+      "subject": "manafold-startle",
+      "frames": 160,
+      "sequence_crc32c": "0x11C587EF",
+      "sequence_sha256": "5b4ac5a92c99768f736ff6a9ecc25d64bf310f11aad7916956131f8deec7f73e",
+      "bytes": 44238080,
+      "newest_frame_mtime_ns": 1789839040637358300
+    },
+    {
+      "subject": "manafold-taunt",
+      "frames": 280,
+      "sequence_crc32c": "0x3874DBF4",
+      "sequence_sha256": "403220b92b95d691edd57b955f9dbfbd3acdf4174e18d7f72d191fee93ccb567",
+      "bytes": 77416640,
+      "newest_frame_mtime_ns": 1789839079337868500
+    },
+    {
+      "subject": "manafold-taunt2",
+      "frames": 240,
+      "sequence_crc32c": "0x499AC40C",
+      "sequence_sha256": "cb55c18b2e9d1064c91e6bb5bb69d181a83923883f5e3b4da7be451398f63f7a",
+      "bytes": 66357120,
+      "newest_frame_mtime_ns": 1789839085398511300
+    },
+    {
+      "subject": "manafold-taunt3",
+      "frames": 368,
+      "sequence_crc32c": "0x07EACF1D",
+      "sequence_sha256": "89e1b4339aca83d8aa0d9f852fd1251bb63c82fec0c319e1fb3b482c9ec74036",
+      "bytes": 101747584,
+      "newest_frame_mtime_ns": 1789839161785131900
+    },
+    {
+      "subject": "manafold-trick",
+      "frames": 400,
+      "sequence_crc32c": "0xAB4D78E9",
+      "sequence_sha256": "f328dc5e3ba4d8a7b498703de9b1df93255a3d9a089dd13f22d6240786934f43",
+      "bytes": 110595200,
+      "newest_frame_mtime_ns": 1789839095162227700
+    }
+  ]
+}
