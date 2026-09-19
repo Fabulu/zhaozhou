@@ -1460,6 +1460,23 @@
 //      owner is UNIDENTIFIED, which is a smaller and truer statement than a
 //      name -- and it is now a statement about three fields instead of four.
 //
+//      THE DATA IS NOT UNOWNED; THE CARRIER IS WRONG-GRAINED. Added 2026-09-19
+//      by the terrain packet. `spec/terrain_rules.md` 2's page table has layer
+//      E, "Base material | 32x32 | {matA u8, matB u8, weight unit8} | Mosaic
+//      candidates", and its section-6 draw law reads "matA/matB/weight from
+//      layer E at cell". So the triple has a ratified SOURCE -- the resident
+//      page -- and it is PER CELL, while `job_mat_a/_b/_weight` are PER
+//      SUBPATCH JOB and ride every reference of that job unchanged. A job
+//      covers many cells, so no producer can fill the job port with layer E
+//      honestly: picking one cell's triple, or any reduction of 64, would be a
+//      look law invented in the composer. What is missing is (a) a reader of
+//      layer E (TERRAIN.PAGESTREAM reads A, B, C and not E; the compose cache
+//      holds no E) and (b) a decision on WHERE the per-cell triple joins the
+//      triangle -- at the job, or per reference by the triangle's cell. (b) is
+//      a contract conflict between TERRAIN.GROUP_SEQ's port and terrain_rules
+//      6, and it is the owner's, not this file's. SEARCHED: `grep -i "layer
+//      E|mat_a|material" fpga/rtl/terrain` -- only riders and comments.
+//
 //      WIDENED 2026-09-19, and it is one more end of the SAME absent owner
 //      rather than a second gap: `terr_cc_serve_release_i`, TERRAIN.COMPCACHE's
 //      patch retirement. The cache's port means "TESS is finished with the
