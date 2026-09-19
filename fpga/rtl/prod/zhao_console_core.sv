@@ -773,9 +773,19 @@
 //   recording GEOM.LIGHT MEASURED at 48.1x the frame for the ruled 120,000-
 //   vertex profile. Refusing SHADE here does not decide that, and this
 //   paragraph exists so the next reader does not think it did.
-//   SHADE's `sun_*` would be a boundary besides -- three lanes with no producer
-//   anywhere in `fpga/rtl`, whose ratified values (`zref::terrain::kShadeLight*`
-//   = 26758 / 53521 / 26758) are constants a DRIVER writes.
+//   COMPOSED 2026-09-19 (owner ruling R21) AND THIS PARAGRAPH IS THE RECORD OF
+//   WHAT CHANGED. The refusal above said SHADE's `sun_*` "would be a boundary
+//   besides -- three lanes with no producer anywhere in `fpga/rtl`". That was
+//   true and it is not any more: `zhao_light_env` computes the direction for
+//   light 0's own bank words out of SetEnvironment (R25), and publishes it on
+//   `sun_x/y/z_o` -- the SAME values, not a second implementation of 4a's law.
+//   The other half of the refusal -- that TERRAIN.SEQ has no ModeTri arm --
+//   stopped mattering when R21 moved the normal to the REPLAY stage:
+//   `zhao_terrain_lightlane` stores the world vertex on the projector's fill
+//   beat and reads three rows per reference, so no third tessellation pass is
+//   needed and the sequencer's arm is not the question any more.
+//   (GEOM.LIGHT's own instantiation of SHADE, described above, is unaffected:
+//   sharing the lighting core is what that block's header asks for.)
 //
 //   (The block ledger's 18-DSP row for `zhao_terrain_normals` is DIRTY --
 //   `rtlCleanAtHead: false`, dated before the 2026-08-24 change that took it
@@ -975,6 +985,18 @@
 //      needs a two-producer triangle merge AND terrain's own attribute packet
 //      (invw24 from GEOM.DEPTHQUANT for terrain w, and TERRAIN.SHADE's light):
 //      terrain-lane work, named here so it is not mistaken for wiring.
+//
+//      HALF OF THAT IS DONE, 2026-09-19 (owner ruling R21), and the entry is
+//      narrowed rather than closed. `TERRAIN.SHADE's light` in the sentence
+//      above is no longer missing: `u_terrain_lightlane` computes it here --
+//      the world vertex stored on the projector's own fill beat, the ratified
+//      face normal, the ratified flat shade, the sun from SetEnvironment -- and
+//      it leaves on `terr_light_*`, tagged with the same `src_id` the
+//      triangle carries. What is STILL absent is (a) the two-producer triangle
+//      merge into GEOM.CLIP and (b) terrain's `invw24` from GEOM.DEPTHQUANT.
+//      The light's ports are part of THIS entry's packet and not a new
+//      boundary: the same absent consumer takes both, and a light exported
+//      beside a triangle it belongs to is the shape that consumer will want.
 //      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
 //      and `zhao_terrain_tess` are composed below and drive both, so the
 //      shared projector is measured here with BOTH of its clients live and
@@ -4097,6 +4119,30 @@ module zhao_console_core
   output logic                    proj_svc_busy_o,
   output logic [31:0]             proj_a_grants_o,
   output logic [31:0]             proj_b_grants_o,
+
+  // ---- TERRAIN's LIT NORMALS: the per-triangle base light (R21) -----------
+  // Part of entry I13's terrain triangle packet, not a new boundary: the
+  // entry's own sentence says joining terrain to GEOM.CLIP needs "terrain's
+  // own attribute packet (invw24 from GEOM.DEPTHQUANT for terrain w, and
+  // TERRAIN.SHADE's light)". This is that light, computed here, leaving on the
+  // same edge as the triangle it belongs to and tagged with the same src_id.
+  // Its producer chain is REAL end to end: the world vertex is stored on the
+  // projector's own fill beat, the face normal is `zhao_terrain_normals` and
+  // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
+  // through `zhao_light_env` (R25). The consumer is I13's absent merge.
+  output logic                    terr_light_valid_o,
+  input  logic                    terr_light_ready_i,
+  output logic signed [31:0]      terr_light_base_o,
+  output logic                    terr_light_degenerate_o,
+  output logic [15:0]             terr_light_src_id_o,
+  output logic [31:0]             terr_light_refs_taken_o,
+  output logic [31:0]             terr_light_emitted_o,
+  output logic [31:0]             terr_light_stale_reads_o,
+  output logic [31:0]             terr_light_normals_o,
+  output logic [31:0]             terr_light_shaded_o,
+  output logic [31:0]             terr_light_degenerate_count_o,
+  output logic [31:0]             terr_light_base_sat_o,
+  output logic [31:0]             terr_light_degen_mismatch_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
@@ -6339,6 +6385,8 @@ module zhao_console_core
   wire        cmd_env_valid, cmd_env_ready;
   wire [15:0] cmd_env_yaw, cmd_env_pitch, cmd_env_sun, cmd_env_amb;
   wire        le_cfg_we, le_cfg_commit, le_hold;
+  // R21/R25: the sun direction the bank publishes, for TERRAIN's lit normals.
+  wire signed [31:0] le_sun_x, le_sun_y, le_sun_z;
   wire [7:0]  le_cfg_addr;
   wire [31:0] le_cfg_data;
   wire [3:0]  le_nlights;
@@ -6362,6 +6410,11 @@ module zhao_console_core
     .hold_o         (le_hold),
     .stream_idle_i  (ls_idle),
     .nlights_o      (le_nlights),
+
+    // R21: the same direction light 0's words carry, published for terrain.
+    .sun_x_o        (le_sun_x),
+    .sun_y_o        (le_sun_y),
+    .sun_z_o        (le_sun_z),
 
     .loads_o      (geom_light_env_loads_o),
     .records_o    (geom_light_env_records_o),
@@ -6990,6 +7043,27 @@ module zhao_console_core
   wire [GEOM_GEN_W-1:0]     ts_open_gen;
 
   wire                      ts_r_valid, ts_r_ready, ts_r_view;
+  // ---- THE REFERENCE FORK (R21): TWO CONSUMERS, EACH SERVED EXACTLY ONCE ---
+  // The reference stream now has two customers -- the projector's replay shell
+  // and the light lane -- and this is GLUE 6's AND-fork, not an AND of their
+  // readies. The difference is not cosmetic and it was MEASURED: with the
+  // producer's ready ANDed but each consumer seeing the raw `valid`, the replay
+  // shell accepted the SAME reference on every cycle the producer held it
+  // waiting for the slower lane. `proj_replay_triangles_o` went from 128 to
+  // 18,244 for 128 triangles -- about 147 replays each, which is exactly the
+  // lane's clocks per triangle. The output was identical every time, so nothing
+  // downstream could see it; only the counter could (CLAUDE.md, "counters see
+  // what pictures cannot").
+  //
+  // So each consumer's VALID is gated on the other's READY, both accept on the
+  // same clock, and the producer's ready is the AND. NO CONSUMER'S READY READS
+  // ITS OWN VALID: `tl_r_ready` is `st_q == S_IDLE` in the lane, a register,
+  // and the shell's is its own arena state -- so nothing here closes a
+  // combinational loop.
+  wire                      ps_r_ready, tl_r_ready;
+  wire                      ps_r_valid_c = ts_r_valid && tl_r_ready;
+  wire                      tl_r_valid_c = ts_r_valid && ps_r_ready;
+  assign ts_r_ready = ps_r_ready && tl_r_ready;
   wire [PROJ_T_ARENA_W-1:0] ts_r_arena;
   wire [GEOM_GEN_W-1:0]     ts_r_gen;
   wire [PROJ_T_INDEX_W-1:0] ts_r_ia, ts_r_ib, ts_r_ic;
@@ -7677,8 +7751,10 @@ module zhao_console_core
     .seal_arena_i (ts_seal_arena),
 
     // REAL: the tagged references, from the same sequencer.
-    .ref_valid_i  (ts_r_valid),
-    .ref_ready_o  (ts_r_ready),
+    // R21: the fork above. This shell sees a reference only when the light
+    // lane can take it too, so it accepts each one exactly once.
+    .ref_valid_i  (ps_r_valid_c),
+    .ref_ready_o  (ps_r_ready),
     .ref_arena_i  (ts_r_arena),
     .ref_gen_i    (ts_r_gen),
     .ref_ia_i     (ts_r_ia),
@@ -7730,6 +7806,90 @@ module zhao_console_core
     .b_grants_o        (proj_b_grants_o),
     .contended_o       (proj_contended_o),
     .mat_refused_o     (proj_mat_refused_o)
+  );
+
+  // ==========================================================================
+  // TERRAIN's LIT NORMALS (owner ruling R21): TERRAIN.NORMALS and TERRAIN.SHADE
+  // ==========================================================================
+  // Both blocks have been BUILT and disconnected since they were written --
+  // `zhao_terrain_normals` because the only ratified normal needed a triangle
+  // and terrain had no triangle stage, `zhao_terrain_shade` because its sun had
+  // no producer and its output had no customer. R5 asked for a third ModeTri
+  // pass and terrain2 measured that it cannot fit (4,096 jobs x 456 clocks
+  // against a 1,666,666-clock frame). R21 kept the GOAL and changed the MEANS:
+  // compute the face normal at the REPLAY stage from a vertex store.
+  //
+  // `zhao_terrain_lightlane` is that store and that lane. It writes the WORLD
+  // vertex on the projector's own fill beat -- the same {arena, index} the
+  // arena is keyed by, R11's pattern, so no two streams are joined -- and reads
+  // three rows per reference. The sun is `zhao_light_env`'s published direction
+  // (R25's SetEnvironment, the value the bank already computes) rather than a
+  // second implementation of 4a's law.
+  //
+  // WHAT IT COSTS, in clocks rather than in adjectives: `zhao_terrain_shade` is
+  // 147 clocks per triangle with one in flight, so the lane's ready throttles
+  // the reference stream and terrain replay runs at that rate. At the ruled
+  // 2,000 terrain triangles per frame that is 294,000 of 1,666,666 clocks --
+  // 17.6% -- and `tests/terrain/terrain_lightlane_directed.cpp` measures the
+  // interval rather than asserting it.
+  zhao_terrain_lightlane #(
+    .ARENAS (PROJ_T_ARENAS),
+    .DEPTH  (PROJ_T_DEPTH),
+    .GEN_W  (GEOM_GEN_W),
+    .SRCW   (16)
+  ) u_terrain_lightlane (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the fill beat is client B's accepted vertex -- the same handshake
+    // that writes the projector's arena, so the store cannot hold a vertex the
+    // arena does not.
+    .fill_valid_i(ts_b_valid),
+    .fill_ready_i(ts_b_ready),
+    .fill_arena_i(ts_b_arena),
+    .fill_index_i(ts_b_index),
+    .fill_vx_i   (ts_b_vx),
+    .fill_vy_i   (ts_b_vy),
+    .fill_vz_i   (ts_b_vz),
+
+    // REAL: the arena's lifetime, from the same sequencer and the same shell.
+    .open_i      (ts_open),
+    .open_arena_i(ts_open_arena),
+    .open_gen_i  (ts_open_gen),
+
+    // REAL: TERRAIN.GROUP_SEQ's reference stream, joined with the replay's.
+    .ref_valid_i (tl_r_valid_c),
+    .ref_ready_o (tl_r_ready),
+    .ref_arena_i (ts_r_arena),
+    .ref_gen_i   (ts_r_gen),
+    .ref_ia_i    (ts_r_ia),
+    .ref_ib_i    (ts_r_ib),
+    .ref_ic_i    (ts_r_ic),
+    .ref_src_id_i(ts_r_src_id),
+
+    // REAL: the sun SetEnvironment loaded, published by GEOM.LIGHT.ENV.
+    .sun_x_i(le_sun_x),
+    .sun_y_i(le_sun_y),
+    .sun_z_i(le_sun_z),
+
+    // I13: the light leaves with the triangle it belongs to.
+    .light_valid_o     (terr_light_valid_o),
+    .light_ready_i     (terr_light_ready_i),
+    .light_base_o      (terr_light_base_o),
+    .light_degenerate_o(terr_light_degenerate_o),
+    .light_src_id_o    (terr_light_src_id_o),
+
+    .refs_taken_o       (terr_light_refs_taken_o),
+    .lights_emitted_o   (terr_light_emitted_o),
+    .stale_reads_o      (terr_light_stale_reads_o),
+    .normals_evaluated_o(terr_light_normals_o),
+    .triangles_shaded_o (terr_light_shaded_o),
+    .degenerate_count_o (terr_light_degenerate_count_o),
+    .base_sat_o         (terr_light_base_sat_o),
+    .degen_mismatch_o   (terr_light_degen_mismatch_o),
+    /* verilator lint_off PINCONNECTEMPTY */
+    .idle_o             ()
+    /* verilator lint_on PINCONNECTEMPTY */
   );
 
   zhao_geom_proj_lane #(

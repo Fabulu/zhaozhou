@@ -763,7 +763,23 @@ module tb_zhao_console_core_smoke
   logic [31:0]             proj_b_grants_o;
   logic [31:0]             proj_contended_o;
   logic [31:0]             proj_mat_refused_o;
-  logic                    post_gd_req_v_o;
+  // R21: TERRAIN's lit normals leave with the triangle they belong to (entry
+  // I13). The bench takes every light -- the far side of that edge is the
+  // absent GEOM.CLIP merge, and a harness that stalled it would measure its
+  // own backpressure instead of the lane.
+  logic                    terr_light_valid_o;
+  logic                    terr_light_ready_i;
+  logic signed [31:0]      terr_light_base_o;
+  logic                    terr_light_degenerate_o;
+  logic [15:0]             terr_light_src_id_o;
+  logic [31:0]             terr_light_refs_taken_o;
+  logic [31:0]             terr_light_emitted_o;
+  logic [31:0]             terr_light_stale_reads_o;
+  logic [31:0]             terr_light_normals_o;
+  logic [31:0]             terr_light_shaded_o;
+  logic [31:0]             terr_light_degenerate_count_o;
+  logic [31:0]             terr_light_base_sat_o;
+  logic [31:0]             terr_light_degen_mismatch_o;  logic                    post_gd_req_v_o;
   logic                    post_gd_view_o;
   logic [POST_XW-3:0]      post_gd_cx_o;
   logic [POST_YW-3:0]      post_gd_cy_o;
@@ -3086,6 +3102,8 @@ module tb_zhao_console_core_smoke
     // GEOM.DEPTHQUANT's, inside GEOM.REPLAY, and slots 1..6 are the modelled
     // attribute store's (I46) -- see the store above.
     geom_clip_cull_mode_i = '0;
+    // R21: always take the terrain light (see its declaration).
+    terr_light_ready_i = 1'b1;
     render_frame_open_q = 1'b0;
     geom_pose_start_i = 1'b0;
     geom_pose_bone_count_i = '0;
@@ -3924,6 +3942,12 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
+    // ---- R21: TERRAIN's LIT NORMALS, measured on the DUT's own edge --------
+    $display("SMOKE: terrlight refs_taken=%0d lights=%0d shaded=%0d normals=%0d stale=%0d degenerate=%0d sat=%0d degen_mismatch=%0d",
+             terr_light_refs_taken_o, terr_light_emitted_o, terr_light_shaded_o,
+             terr_light_normals_o, terr_light_stale_reads_o,
+             terr_light_degenerate_count_o, terr_light_base_sat_o,
+             terr_light_degen_mismatch_o);
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     // Entry I4's two formerly-stuck counters. Both were structurally incapable
     // of moving before owner ruling 2026-09-19; both are asserted below.
@@ -4075,6 +4099,34 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ forwarded no vertex to client B -- TESS -> GROUP_SEQ -> PROJ_SUBSYSTEM is dead");
     if (proj_b_grants_o == 0)
       $fatal(1, "SMOKE: the shared projector granted client B zero times -- the second client is still not live");
+    // R21: and the SAME references that reached the replay shell reached the
+    // light lane, were shaded, and came out as base lights. This is the check
+    // that says TERRAIN.NORMALS and TERRAIN.SHADE are in the machine rather
+    // than merely elaborated: a light can only exist if a world vertex was
+    // stored on the projector's fill beat and read back by a reference.
+    if (terr_light_emitted_o == 0)
+      $fatal(1, "SMOKE: the terrain light lane emitted no base light (refs_taken=%0d shaded=%0d normals=%0d stale=%0d) -- TERRAIN.NORMALS -> TERRAIN.SHADE carried nothing",
+             terr_light_refs_taken_o, terr_light_shaded_o, terr_light_normals_o,
+             terr_light_stale_reads_o);
+    if (terr_light_emitted_o != terr_light_shaded_o)
+      $fatal(1, "SMOKE: %0d lights left the lane against %0d triangles shaded -- the lane dropped or duplicated one",
+             terr_light_emitted_o, terr_light_shaded_o);
+    if (terr_light_degen_mismatch_o != 0)
+      $fatal(1, "SMOKE: the shade law and TERRAIN.NORMALS disagreed about degeneracy %0d time(s)",
+             terr_light_degen_mismatch_o);
+    // WHAT THIS BENCH DOES NOT PROVE ABOUT THE LIGHT, said before somebody
+    // quotes `degenerate=128` as a defect or as a pass. Every page in this run
+    // fails its CRC by construction, so no page is resident and the lattice
+    // TERRAIN.TESS emits is flat zero: all three corners of every triangle are
+    // the same point, the cross product is exactly zero, and the LAW's answer
+    // to that is degenerate with shade 0. The counters above are therefore
+    // evidence that the reference reached the store, the normal and the shade
+    // and came back -- not that the shade VALUE is right. The value is proved
+    // bit-for-bit against zref in tests/terrain/terrain_lightlane_directed.cpp
+    // over a random sub-metre lattice.
+    if (terr_light_stale_reads_o != 0)
+      $fatal(1, "SMOKE: the light lane refused %0d reference(s) as stale -- the world store and the projector's arena disagree about a generation",
+             terr_light_stale_reads_o);
     if (terr_groups_opened_o == 0)
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ opened no arena -- the open/gen handshake with the subsystem is dead");
     if (terr_release_unsafe_o != 0)

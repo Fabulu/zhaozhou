@@ -6683,6 +6683,48 @@ set_tests_properties(lint_terrain_shade PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN's LIT NORMALS (owner ruling R21): the world-vertex store beside the
+# projector's arena, the ratified face normal and the ratified flat shade, in
+# one lane driven by the reference stream at the replay's own rate. This is
+# what makes zhao_terrain_normals and zhao_terrain_shade -- both BUILT and
+# both disconnected since they were written -- part of the machine.
+#
+# It proves the value TRAVERSES (a random lattice in, a bit-identical base
+# light out), that the count and the order hold, that the stale-generation
+# refusal FIRES, and R21's throughput demand IN CLOCKS: the measured interval
+# per triangle times the ruled 2,000 terrain triangles must fit the frame.
+add_executable(test_terrain_lightlane_directed terrain/terrain_lightlane_directed.cpp)
+target_link_libraries(test_terrain_lightlane_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_lightlane_directed
+  PREFIX Vtb_terrain_lightlane
+  TOP_MODULE tb_terrain_lightlane
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_qsq_bytemul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normals.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shade.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lightlane.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_lightlane.sv)
+add_test(NAME terrain_lightlane_directed COMMAND test_terrain_lightlane_directed)
+set_tests_properties(terrain_lightlane_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+add_test(NAME terrain_lightlane_break_oracle
+         COMMAND test_terrain_lightlane_directed --break-oracle)
+set_tests_properties(terrain_lightlane_break_oracle PROPERTIES
+  LABELS "fast;nightly" WILL_FAIL TRUE TIMEOUT 600)
+
+add_test(NAME lint_terrain_lightlane
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_lightlane
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_qsq_bytemul.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_normals.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_shade.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lightlane.sv)
+set_tests_properties(lint_terrain_lightlane PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+# ---------------------------------------------------------------------------
 # TERRAIN.PATCH (phase 6, ZH-033)
 #
 # The Mantle entry point: terrain_rules 3.4's per-vertex composition chain and

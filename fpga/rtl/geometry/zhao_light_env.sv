@@ -89,6 +89,20 @@ module zhao_light_env #(
     // ---- the bank's light count, for the per-vertex descriptor --------------
     output logic [3:0]  nlights_o,
 
+  // ---- the published sun DIRECTION, for consumers outside the bank ----------
+  // Owner ruling R21 (2026-09-19): terrain's lit normals get their sun from
+  // SetEnvironment. The direction is the one this block ALREADY computes for
+  // light 0's words 0..2 -- 4a's law on the shared `zhao_field_sin` -- and it
+  // is published here at the same commit rather than re-derived by a consumer,
+  // which would be the second implementation of a ratified arithmetic this
+  // tree has already paid for twice. Q16.16, the bank's own format, and it
+  // means "the direction TO the light": the power-on default (pitch = zenith)
+  // is (0, 1, 0). Valid from reset, because the power-on load is pending from
+  // reset and publishes before anything can read it.
+  output logic signed [31:0] sun_x_o,
+  output logic signed [31:0] sun_y_o,
+  output logic signed [31:0] sun_z_o,
+
     // ---- evidence ------------------------------------------------------------
     output logic [31:0] loads_o,         // bank loads published (power-on included)
     output logic [31:0] records_o,       // SetEnvironment records taken
@@ -226,6 +240,12 @@ module zhao_light_env #(
       cfg_addr_o   <= '0;
       cfg_data_o   <= '0;
       nlights_o    <= 4'd0;
+      // R21: the zenith sun until the power-on load publishes, a handful of
+      // clocks after reset. A zero direction would shade every triangle black
+      // and read as a defect in whoever consumed it.
+      sun_x_o      <= 32'sd0;
+      sun_y_o      <= 32'sh0001_0000;
+      sun_z_o      <= 32'sd0;
       loads_o      <= '0;
       records_o    <= '0;
       superseded_o <= '0;
@@ -309,6 +329,12 @@ module zhao_light_env #(
           // after every write of the load.
           cfg_commit_o <= 1'b1;
           nlights_o    <= 4'd1;
+          // R21: the same three values the bank just took, published for the
+          // consumers that read a direction rather than a bank word. They move
+          // with the commit, so a reader never sees half a load.
+          sun_x_o      <= lx_q;
+          sun_y_o      <= 32'(sp_q);
+          sun_z_o      <= lz_q;
           if (loads_o != 32'hFFFF_FFFF) loads_o <= loads_o + 32'd1;
           st_q <= L_IDLE;
         end

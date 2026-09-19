@@ -191,7 +191,13 @@ top:
   - zhao_terrain_place
   - zhao_terrain_patch
   - zhao_terrain_tess
-  - zhao_terrain_normals
+  # R21 (2026-09-19): the world-vertex store beside the projector's arena and
+  # the face-normal -> shade lane that reads it. This is what put
+  # zhao_terrain_normals, zhao_terrain_shade and zhao_qsq_bytemul into the
+  # machine, so their deferral rows below are closed rather than restated.
+  # (zhao_terrain_shade and zhao_qsq_bytemul are counted INSIDE it, as the
+  # census requires: a module its parent instantiates is not a top.)
+  - zhao_terrain_lightlane
   - zhao_terrain_lod
   - zhao_terrain_project
   - zhao_terrain_velocity
@@ -900,7 +906,12 @@ excluded:
   # demand. It finally gives TERRAIN.NORMALS a consumer — but the seam
   # DOWNSTREAM does not exist yet: TERRAIN.PROJECT has no colour port, so
   # there is nothing to wire base_o into. That gap is scoped in the report.
-  - zhao_terrain_shade: unused  built to contract 2026-09-09 (exact law, 0 DSP, 1 M10K quarter-square); OPEN DEFERRAL until TERRAIN.PROJECT grows the colour/shade seam -- reports/TERRAIN-SHADE-IMPLEMENTATION-20260909.md
+  # CHEQUE CASHED 2026-09-19 (owner ruling R21): the deferral this row carried
+  # -- "until TERRAIN.PROJECT grows the colour/shade seam" -- was answered by
+  # changing where the light is computed rather than by widening the projector.
+  # `zhao_terrain_lightlane` stores the world vertex on the projector's own
+  # fill beat and shades at the REPLAY stage, so the block is COUNTED above.
+  # The row stays as the record of what was deferred and what closed it.
   # R1 -- the quarter-square table that used to be INSIDE zhao_terrain_shade,
   # extracted 2026-09-16 so R4/R5/R6/FIELD can instantiate it instead of each
   # growing their own. One M10K, no DSP, exact for all 65,536 byte pairs
@@ -914,7 +925,10 @@ excluded:
   # meaning "built and wired into a deferred client" is a different fact from
   # "unused" meaning "built and instantiated nowhere", which is the defect that
   # check exists to find.
-  - zhao_qsq_bytemul: unused  extracted from zhao_terrain_shade 2026-09-16 and INSTANTIATED BY IT; unadopted only because that client is -- no separate deferral -- reports/TERRAIN-SHADE-IMPLEMENTATION-20260909.md
+  # ...and with its one client composed (R21, above), this primitive is in the
+  # machine too, counted with it. The note is kept because the DISTINCTION it
+  # draws -- "unused, instantiated by a deferred client" against "unused,
+  # instantiated nowhere" -- is what tools/budget/uncashed_cheques.py reads.
 
   # ===========================================================================
   # 2026-09-19 -- THE CONNECTED MACHINE AND THE LIGHTING REFACTOR

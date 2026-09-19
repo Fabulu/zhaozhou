@@ -1490,6 +1490,30 @@ module zhao_console_board
   output logic                    proj_svc_busy_o,
   output logic [31:0]             proj_a_grants_o,
   output logic [31:0]             proj_b_grants_o,
+
+  // ---- TERRAIN's LIT NORMALS: the per-triangle base light (R21) -----------
+  // Part of entry I13's terrain triangle packet, not a new boundary: the
+  // entry's own sentence says joining terrain to GEOM.CLIP needs "terrain's
+  // own attribute packet (invw24 from GEOM.DEPTHQUANT for terrain w, and
+  // TERRAIN.SHADE's light)". This is that light, computed here, leaving on the
+  // same edge as the triangle it belongs to and tagged with the same src_id.
+  // Its producer chain is REAL end to end: the world vertex is stored on the
+  // projector's own fill beat, the face normal is `zhao_terrain_normals` and
+  // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
+  // through `zhao_light_env` (R25). The consumer is I13's absent merge.
+  output logic                    terr_light_valid_o,
+  input  logic                    terr_light_ready_i,
+  output logic signed [31:0]      terr_light_base_o,
+  output logic                    terr_light_degenerate_o,
+  output logic [15:0]             terr_light_src_id_o,
+  output logic [31:0]             terr_light_refs_taken_o,
+  output logic [31:0]             terr_light_emitted_o,
+  output logic [31:0]             terr_light_stale_reads_o,
+  output logic [31:0]             terr_light_normals_o,
+  output logic [31:0]             terr_light_shaded_o,
+  output logic [31:0]             terr_light_degenerate_count_o,
+  output logic [31:0]             terr_light_base_sat_o,
+  output logic [31:0]             terr_light_degen_mismatch_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
@@ -3148,6 +3172,19 @@ module zhao_console_board
       .proj_svc_busy_o                   (proj_svc_busy_o),
       .proj_a_grants_o                   (proj_a_grants_o),
       .proj_b_grants_o                   (proj_b_grants_o),
+      .terr_light_valid_o                (terr_light_valid_o),
+      .terr_light_ready_i                (terr_light_ready_i),
+      .terr_light_base_o                 (terr_light_base_o),
+      .terr_light_degenerate_o           (terr_light_degenerate_o),
+      .terr_light_src_id_o               (terr_light_src_id_o),
+      .terr_light_refs_taken_o           (terr_light_refs_taken_o),
+      .terr_light_emitted_o              (terr_light_emitted_o),
+      .terr_light_stale_reads_o          (terr_light_stale_reads_o),
+      .terr_light_normals_o              (terr_light_normals_o),
+      .terr_light_shaded_o               (terr_light_shaded_o),
+      .terr_light_degenerate_count_o     (terr_light_degenerate_count_o),
+      .terr_light_base_sat_o             (terr_light_base_sat_o),
+      .terr_light_degen_mismatch_o       (terr_light_degen_mismatch_o),
       .proj_contended_o                  (proj_contended_o),
       .proj_mat_refused_o                (proj_mat_refused_o),
       .post_gd_req_v_o                   (post_gd_req_v_o),
