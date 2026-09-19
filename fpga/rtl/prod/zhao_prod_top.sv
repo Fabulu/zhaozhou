@@ -1735,14 +1735,10 @@ module zhao_prod_top (
     u25_b_i[10] = u25_src[49 +: 32] ^ (32)'(10);
     u25_b_i[11] = u25_src[49 +: 32] ^ (32)'(11);
   end
-  logic [1-1:0] u25_sq_valid_o;
-  logic [64-1:0] u25_sq_n_o;
-  logic [1-1:0] u25_sq_rready_o;
   logic [1-1:0] u25_n_valid_o;
   logic signed [64-1:0] u25_n_x_o;
   logic signed [64-1:0] u25_n_y_o;
   logic signed [64-1:0] u25_n_z_o;
-  logic [64-1:0] u25_n_mag_o;
   logic [1-1:0] u25_n_degenerate_o;
   logic [16-1:0] u25_n_src_id_o;
   logic [32-1:0] u25_vertices_o;
@@ -1760,18 +1756,11 @@ module zhao_prod_top (
       .v_src_id_i(u25_src[35 +: 16]),
       .a_i(u25_a_i),
       .b_i(u25_b_i),
-      .sq_valid_o(u25_sq_valid_o),
-      .sq_ready_i(u25_src[56 +: 1]),
-      .sq_n_o(u25_sq_n_o),
-      .sq_rvalid_i(u25_src[63 +: 1]),
-      .sq_rready_o(u25_sq_rready_o),
-      .sq_r_i(u25_src[70 +: 64]),
       .n_valid_o(u25_n_valid_o),
-      .n_ready_i(u25_src[77 +: 1]),
+      .n_ready_i(u25_src[56 +: 1]),
       .n_x_o(u25_n_x_o),
       .n_y_o(u25_n_y_o),
       .n_z_o(u25_n_z_o),
-      .n_mag_o(u25_n_mag_o),
       .n_degenerate_o(u25_n_degenerate_o),
       .n_src_id_o(u25_n_src_id_o),
       .vertices_o(u25_vertices_o),
@@ -1781,7 +1770,7 @@ module zhao_prod_top (
   logic u25_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u25_fold_q <= 1'b0;
-    else u25_fold_q <= u25_fold_q ^ (((^u25_v_ready_o)) & u25_src[0]) ^ (((^u25_sq_valid_o)) & u25_src[1]) ^ (((^u25_sq_n_o)) & u25_src[2]) ^ (((^u25_sq_rready_o)) & u25_src[3]) ^ (((^u25_n_valid_o)) & u25_src[4]) ^ (((^u25_n_x_o)) & u25_src[5]) ^ (((^u25_n_y_o)) & u25_src[6]) ^ (((^u25_n_z_o)) & u25_src[7]) ^ (((^u25_n_mag_o)) & u25_src[8]) ^ (((^u25_n_degenerate_o)) & u25_src[9]) ^ (((^u25_n_src_id_o)) & u25_src[10]) ^ (((^u25_vertices_o)) & u25_src[11]) ^ (((^u25_degenerate_o)) & u25_src[12]) ^ (((^u25_reduced_o)) & u25_src[13]);
+    else u25_fold_q <= u25_fold_q ^ (((^u25_v_ready_o)) & u25_src[0]) ^ (((^u25_n_valid_o)) & u25_src[1]) ^ (((^u25_n_x_o)) & u25_src[2]) ^ (((^u25_n_y_o)) & u25_src[3]) ^ (((^u25_n_z_o)) & u25_src[4]) ^ (((^u25_n_degenerate_o)) & u25_src[5]) ^ (((^u25_n_src_id_o)) & u25_src[6]) ^ (((^u25_vertices_o)) & u25_src[7]) ^ (((^u25_degenerate_o)) & u25_src[8]) ^ (((^u25_reduced_o)) & u25_src[9]);
 
   // ---- zhao_geom_vdecode ----
   logic [63:0] u26_lfsr_q;
@@ -1923,7 +1912,6 @@ module zhao_prod_top (
   logic signed [32-1:0] u28_p_nx_o;
   logic signed [32-1:0] u28_p_ny_o;
   logic signed [32-1:0] u28_p_nz_o;
-  logic [32-1:0] u28_p_mag_o;
   logic [1-1:0] u28_p_degenerate_o;
   logic [4-1:0] u28_p_nlights_o;
   logic [16-1:0] u28_p_src_id_o;
@@ -1937,16 +1925,14 @@ module zhao_prod_top (
       .s_nx_i(u28_src[7 +: 64]),
       .s_ny_i(u28_src[14 +: 64]),
       .s_nz_i(u28_src[21 +: 64]),
-      .s_mag_i(u28_src[28 +: 64]),
-      .s_degenerate_i(u28_src[35 +: 1]),
-      .s_nlights_i(u28_src[42 +: 4]),
-      .s_src_id_i(u28_src[49 +: 16]),
+      .s_degenerate_i(u28_src[28 +: 1]),
+      .s_nlights_i(u28_src[35 +: 4]),
+      .s_src_id_i(u28_src[42 +: 16]),
       .p_valid_o(u28_p_valid_o),
-      .p_ready_i(u28_src[56 +: 1]),
+      .p_ready_i(u28_src[49 +: 1]),
       .p_nx_o(u28_p_nx_o),
       .p_ny_o(u28_p_ny_o),
       .p_nz_o(u28_p_nz_o),
-      .p_mag_o(u28_p_mag_o),
       .p_degenerate_o(u28_p_degenerate_o),
       .p_nlights_o(u28_p_nlights_o),
       .p_src_id_o(u28_p_src_id_o),
@@ -1956,7 +1942,7 @@ module zhao_prod_top (
   logic u28_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u28_fold_q <= 1'b0;
-    else u28_fold_q <= u28_fold_q ^ (((^u28_s_ready_o)) & u28_src[0]) ^ (((^u28_p_valid_o)) & u28_src[1]) ^ (((^u28_p_nx_o)) & u28_src[2]) ^ (((^u28_p_ny_o)) & u28_src[3]) ^ (((^u28_p_nz_o)) & u28_src[4]) ^ (((^u28_p_mag_o)) & u28_src[5]) ^ (((^u28_p_degenerate_o)) & u28_src[6]) ^ (((^u28_p_nlights_o)) & u28_src[7]) ^ (((^u28_p_src_id_o)) & u28_src[8]) ^ (((^u28_accepted_o)) & u28_src[9]) ^ (((^u28_refused_o)) & u28_src[10]);
+    else u28_fold_q <= u28_fold_q ^ (((^u28_s_ready_o)) & u28_src[0]) ^ (((^u28_p_valid_o)) & u28_src[1]) ^ (((^u28_p_nx_o)) & u28_src[2]) ^ (((^u28_p_ny_o)) & u28_src[3]) ^ (((^u28_p_nz_o)) & u28_src[4]) ^ (((^u28_p_degenerate_o)) & u28_src[5]) ^ (((^u28_p_nlights_o)) & u28_src[6]) ^ (((^u28_p_src_id_o)) & u28_src[7]) ^ (((^u28_accepted_o)) & u28_src[8]) ^ (((^u28_refused_o)) & u28_src[9]);
 
   // ---- zhao_light_stream ----
   logic [63:0] u29_lfsr_q;

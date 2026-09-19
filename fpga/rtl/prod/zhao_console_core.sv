@@ -3455,7 +3455,6 @@ module zhao_console_core
   output logic signed [63:0]      geom_sn_n_x_o,
   output logic signed [63:0]      geom_sn_n_y_o,
   output logic signed [63:0]      geom_sn_n_z_o,
-  output logic [63:0]             geom_sn_n_mag_o,
   output logic                    geom_sn_n_degenerate_o,
   output logic [15:0]             geom_sn_n_src_id_o,
   output logic [31:0]             geom_sn_vertices_o,
@@ -5926,16 +5925,16 @@ module zhao_console_core
   assign skin_v_valid = pal_o_valid && sn_v_ready;
   assign sn_v_valid   = pal_o_valid && skin_v_ready;
 
-  // The root service GEOM.SKIN.NORM names by file. `zhao_field_isqrt` is
-  // already in this closure (the FIELD engine instantiates it), so this costs a
-  // second instance and NOT a second law -- and a second LAW is what would have
-  // been wrong: that block's header says "a second implementation would be a
-  // second law", and `zref::isqrt_u64` is the one both cite.
-  wire        sn_sq_valid, sn_sq_ready, sn_sq_rvalid, sn_sq_rready;
+  // GEOM.SKIN.NORM's ROOT IS GONE FROM HERE (owner ruling R31, 2026-09-19). A
+  // second `zhao_field_isqrt` instance used to serve it: 32 serial steps a
+  // vertex, which made the AND-fork above stall GEOM.SKIN ~27 clocks a vertex
+  // (smoke: fork_stall_cycles=217 over 8). The magnitude is now taken by
+  // GEOM.LIGHT's own II8 root -- idle on the creature path until now -- so the
+  // root is time-multiplexed, not duplicated. See `zhao_geom_skin_norm`.
+  //
   // GEOM.LIGHT's skin adapter takes the normal (entry I43 closed); its ready
   // is read by GEOM.SKIN.NORM just below, so it is declared here.
   wire        la_s_ready;
-  wire [63:0] sn_sq_n, sn_sq_r;
 
   zhao_geom_vdecode #(
     .SRCW (16)
@@ -6161,13 +6160,6 @@ module zhao_console_core
     .a_i        (pal_a_m),
     .b_i        (pal_b_m),
 
-    // REAL: the exact floor root, as a service.
-    .sq_valid_o  (sn_sq_valid),
-    .sq_ready_i  (sn_sq_ready),
-    .sq_n_o      (sn_sq_n),
-    .sq_rvalid_i (sn_sq_rvalid),
-    .sq_rready_o (sn_sq_rready),
-    .sq_r_i      (sn_sq_r),
 
     // I43: the world normal leaves the module. Its consumer is GEOM.LIGHT and
     // that seam is refused for reasons of its own -- see the lighting section.
@@ -6176,7 +6168,6 @@ module zhao_console_core
     .n_x_o          (geom_sn_n_x_o),
     .n_y_o          (geom_sn_n_y_o),
     .n_z_o          (geom_sn_n_z_o),
-    .n_mag_o        (geom_sn_n_mag_o),
     .n_degenerate_o (geom_sn_n_degenerate_o),
     .n_src_id_o     (geom_sn_n_src_id_o),
 
@@ -6185,28 +6176,21 @@ module zhao_console_core
     .reduced_o    (geom_sn_reduced_o)
   );
 
-  zhao_field_isqrt u_geom_skin_norm_isqrt (
-    .clk       (gpu_clk),
-    .rst_n     (rst_n),
-    .n_valid_i (sn_sq_valid),
-    .n_ready_o (sn_sq_ready),
-    .n_i       (sn_sq_n),
-    .r_valid_o (sn_sq_rvalid),
-    .r_ready_i (sn_sq_rready),
-    .r_o       (sn_sq_r)
-  );
 
   // --------------------------------------------------------------------------
   // GEOM.LIGHT -- `zhao_light_stream`, composed 2026-09-19 by owner ruling R2
   // ("zhao_light_stream owns vertex light; zhao_geom_light is superseded").
   //
-  //   GEOM.SKIN.NORM --{s64x3, u64 mag}--> zhao_light_skin_adapter
-  //                  --{s32x3, u32 mag}--> zhao_light_stream --> RGB (I46)
+  //   GEOM.SKIN.NORM --{s64x3}--> zhao_light_skin_adapter
+  //                  --{s32x3}--> zhao_light_stream (|n| rooted HERE) --> RGB
   //
-  // THE CREATURE PATH, by both blocks' own contracts: SKIN.NORM supplies the
-  // magnitude with the direction, so `n_mag_valid_i` is HIGH (no root job, the
-  // `supplied_mags` case) and the profile is CREATURE (no detail term, the early
-  // clamp) -- the two constants below are that contract, named, not tie-offs.
+  // THE CREATURE PATH, by both blocks' own contracts: the profile is CREATURE
+  // (no detail term, the early clamp), and since owner ruling R31 the stream
+  // ROOTS the normal itself (`n_mag_valid_i` LOW -- the stream's own
+  // "computed here, ONCE" case), because its II8 root is the one root this
+  // path needs and SKIN.NORM's serial one was stalling the skinner. The two
+  // constants below are that contract, named, not tie-offs; `n_mag_i` is not
+  // read while `n_mag_valid_i` is low (the stream seals the slot on its root).
   // The adapter NARROWS by assertion, not by cast, and refuses and counts a
   // tuple outside the producer's range reduction.
   //
@@ -6215,12 +6199,11 @@ module zhao_console_core
   // `zhao_geom_light` -- the scalar arrangement measured at II = 167 -- is NOT
   // composed (console_inventory: superseded, R2).
   // --------------------------------------------------------------------------
-  localparam logic GEOM_LIGHT_MAG_SUPPLIED_C = 1'b1;  // SKIN.NORM hands |n|
+  localparam logic GEOM_LIGHT_MAG_SUPPLIED_C = 1'b0;  // GEOM.LIGHT roots |n| (R31)
   localparam logic GEOM_LIGHT_PROFILE_C      = 1'b1;  // 1 = creature
 
   wire               la_p_valid, la_p_ready;
   wire signed [31:0] la_p_nx, la_p_ny, la_p_nz;
-  wire        [31:0] la_p_mag;
   wire               la_p_degenerate;
   wire        [ 3:0] la_p_nlights;
   wire        [15:0] la_p_src_id;
@@ -6248,7 +6231,6 @@ module zhao_console_core
     .s_nx_i         (geom_sn_n_x_o),
     .s_ny_i         (geom_sn_n_y_o),
     .s_nz_i         (geom_sn_n_z_o),
-    .s_mag_i        (geom_sn_n_mag_o),
     .s_degenerate_i (geom_sn_n_degenerate_o),
     // I48: how many lights the published set holds is the host's, with the set.
     .s_nlights_i    (geom_light_nlights_i),
@@ -6259,7 +6241,6 @@ module zhao_console_core
     .p_nx_o         (la_p_nx),
     .p_ny_o         (la_p_ny),
     .p_nz_o         (la_p_nz),
-    .p_mag_o        (la_p_mag),
     .p_degenerate_o (la_p_degenerate),
     .p_nlights_o    (la_p_nlights),
     .p_src_id_o     (la_p_src_id),
@@ -6288,7 +6269,7 @@ module zhao_console_core
     .n_y_i          (la_p_ny),
     .n_z_i          (la_p_nz),
     .n_mag_valid_i  (GEOM_LIGHT_MAG_SUPPLIED_C),
-    .n_mag_i        (la_p_mag),
+    .n_mag_i        (32'd0),   // not read: n_mag_valid_i is low
     .n_degenerate_i (la_p_degenerate),
     .n_profile_i    (GEOM_LIGHT_PROFILE_C),
     .n_lights_i     (la_p_nlights),
@@ -6337,10 +6318,11 @@ module zhao_console_core
 
   // THE FORK'S COST, COUNTED RATHER THAN ARGUED (I43). A cycle in which the
   // store is offering a vertex, GEOM.SKIN would take it and GEOM.SKIN.NORM
-  // would not. This number is EXPECTED to be large -- the normal path is a
-  // ~38-clock one-at-a-time walk against the skinner's twelve -- and it is a
-  // port so that the rate is measured in the composed machine instead of
-  // being asserted in a comment.
+  // would not. It WAS large -- 217 over the smoke's 8 vertices, the normal path
+  // then being a ~38-clock walk with a serial root against the skinner's
+  // twelve -- and owner ruling R31 moved that root into GEOM.LIGHT, leaving
+  // SKIN.NORM at six clocks a vertex. It stays a port so the rate is measured
+  // in the composed machine instead of being asserted in a comment.
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       geom_sn_fork_stall_o <= '0;

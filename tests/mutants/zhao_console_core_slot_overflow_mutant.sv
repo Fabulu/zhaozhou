@@ -515,7 +515,6 @@ module zhao_console_core_slot_overflow_mutant
   output logic signed [63:0]      geom_sn_n_x_o,
   output logic signed [63:0]      geom_sn_n_y_o,
   output logic signed [63:0]      geom_sn_n_z_o,
-  output logic [63:0]             geom_sn_n_mag_o,
   output logic                    geom_sn_n_degenerate_o,
   output logic [15:0]             geom_sn_n_src_id_o,
   output logic [31:0]             geom_sn_vertices_o,

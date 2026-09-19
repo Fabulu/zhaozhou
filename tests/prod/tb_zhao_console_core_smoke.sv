@@ -319,7 +319,6 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_light_root_queue_overflow_o, geom_light_rgb_sat_o, geom_light_nlights_clamped_o;
   logic [31:0] geom_light_adapter_refused_o;
   logic signed [63:0]      geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o;
-  logic [63:0]             geom_sn_n_mag_o;
   logic                    geom_sn_n_degenerate_o;
   logic [15:0]             geom_sn_n_src_id_o;
   logic [31:0]             geom_sn_vertices_o;
@@ -2386,6 +2385,55 @@ module tb_zhao_console_core_smoke
   // REFERENCE's response (SGF_EXP_LIT, from zref::creature::lambert_from_
   // world_normal in the fixture generator) -- gain 1.0 and a zero environment
   // make each channel exactly the law's answer.
+  // ---- R31: THE GEOMETRY RATE, MEASURED IN THE COMPOSED MACHINE -----------
+  // First and last clock each stage's counter moved, and how many times. The
+  // steady interval is (last - first) / (moves - 1): it excludes the pipeline
+  // fill, which is latency, not rate. Printed on the `SMOKE: rate` line; the
+  // per-block benches (skin_norm_rtl_directed, geom_replay_directed) carry the
+  // long-run figures, this is the same quantity with every real neighbour live.
+  longint unsigned rt_clk_q;
+  longint unsigned rt_skin_first_q, rt_skin_last_q, rt_land_first_q, rt_land_last_q;
+  longint unsigned rt_tri_first_q, rt_tri_last_q, rt_vd_first_q, rt_rel_q;
+  int unsigned     rt_skin_n_q, rt_land_n_q, rt_tri_n_q;
+  logic [31:0]     rt_skin_prev_q, rt_land_prev_q, rt_tri_prev_q, rt_vd_prev_q, rt_rel_prev_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      rt_clk_q <= 0;
+      rt_skin_first_q <= 0; rt_skin_last_q <= 0; rt_skin_n_q <= 0; rt_skin_prev_q <= 0;
+      rt_land_first_q <= 0; rt_land_last_q <= 0; rt_land_n_q <= 0; rt_land_prev_q <= 0;
+      rt_tri_first_q  <= 0; rt_tri_last_q  <= 0; rt_tri_n_q  <= 0; rt_tri_prev_q  <= 0;
+      rt_vd_first_q   <= 0; rt_vd_prev_q   <= 0; rt_rel_q    <= 0; rt_rel_prev_q  <= 0;
+    end else begin
+      rt_clk_q <= rt_clk_q + 1;
+      if (geom_vd_vertices_o != rt_vd_prev_q) begin
+        if (rt_vd_prev_q == 0) rt_vd_first_q <= rt_clk_q;
+        rt_vd_prev_q <= geom_vd_vertices_o;
+      end
+      if (geom_skin_vertices_transformed_o != rt_skin_prev_q) begin
+        if (rt_skin_n_q == 0) rt_skin_first_q <= rt_clk_q;
+        rt_skin_last_q <= rt_clk_q;
+        rt_skin_n_q    <= rt_skin_n_q + 1;
+        rt_skin_prev_q <= geom_skin_vertices_transformed_o;
+      end
+      if (geom_landings_o != rt_land_prev_q) begin
+        if (rt_land_n_q == 0) rt_land_first_q <= rt_clk_q;
+        rt_land_last_q <= rt_clk_q;
+        rt_land_n_q    <= rt_land_n_q + 1;
+        rt_land_prev_q <= geom_landings_o;
+      end
+      if (geom_rp_triangles_out_o != rt_tri_prev_q) begin
+        if (rt_tri_n_q == 0) rt_tri_first_q <= rt_clk_q;
+        rt_tri_last_q <= rt_clk_q;
+        rt_tri_n_q    <= rt_tri_n_q + 1;
+        rt_tri_prev_q <= geom_rp_triangles_out_o;
+      end
+      if (geom_rp_meshlets_o != rt_rel_prev_q) begin
+        rt_rel_q      <= rt_clk_q;
+        rt_rel_prev_q <= geom_rp_meshlets_o;
+      end
+    end
+  end
+
   int unsigned geom_lit_seen_q, geom_lit_bad_q;
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
@@ -3549,6 +3597,17 @@ module tb_zhao_console_core_smoke
              geom_pal_vertices_served_o, geom_pal_bones_written_o,
              geom_pal_bone_unset_o, geom_pal_bone_oob_o,
              geom_pose_palettes_decoded_o);
+    $display("SMOKE: rate       skin %0d moves, steady %0d.%02d clk/vertex | landings %0d, steady %0d.%02d clk/landing | replay %0d view-tris, steady %0d.%02d clk/view-tri | meshlet loop %0d clk (first decode -> release)",
+             rt_skin_n_q,
+             (rt_skin_n_q > 1) ? (rt_skin_last_q - rt_skin_first_q) / (rt_skin_n_q - 1) : 0,
+             (rt_skin_n_q > 1) ? (((rt_skin_last_q - rt_skin_first_q) * 100) / (rt_skin_n_q - 1)) % 100 : 0,
+             rt_land_n_q,
+             (rt_land_n_q > 1) ? (rt_land_last_q - rt_land_first_q) / (rt_land_n_q - 1) : 0,
+             (rt_land_n_q > 1) ? (((rt_land_last_q - rt_land_first_q) * 100) / (rt_land_n_q - 1)) % 100 : 0,
+             rt_tri_n_q,
+             (rt_tri_n_q > 1) ? (rt_tri_last_q - rt_tri_first_q) / (rt_tri_n_q - 1) : 0,
+             (rt_tri_n_q > 1) ? (((rt_tri_last_q - rt_tri_first_q) * 100) / (rt_tri_n_q - 1)) % 100 : 0,
+             rt_rel_q - rt_vd_first_q);
     $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
              geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
              geom_sn_fork_stall_o);
@@ -4230,10 +4289,11 @@ module tb_zhao_console_core_smoke
     //     n[1] = n[2] = 0                       (rows 1 and 2 select ny, nz)
     //     |n|  = isqrt(n[0]^2) = n[0]           (a perfect square, floor-exact)
     //
-    // That last line is the one worth having: the magnitude EQUALLING the x
-    // component is what an exact floor root of a perfect square gives and what
-    // an approximation would not, so this single equality is the evidence that
-    // the `zhao_field_isqrt` instance composed beside this block really ran.
+    // Since owner ruling R31 that root is GEOM.LIGHT's own II8 root, not a
+    // service beside this block, so it is no longer tapped here: the lit value
+    // below is compared against `zref::creature::lambert_from_world_normal`,
+    // whose quotient divides by exactly this |n| -- an approximate or missing
+    // root would move every channel off the reference.
     if (geom_sn_degenerate_o != 0)
       $fatal(1, "SMOKE: GEOM.SKIN.NORM called %0d normals degenerate -- the fixture's packed normal is (127,0,0) and blends to a real direction through either bone",
              geom_sn_degenerate_o);
@@ -4243,9 +4303,7 @@ module tb_zhao_console_core_smoke
     if ((geom_sn_n_y_o != 0) || (geom_sn_n_z_o != 0))
       $fatal(1, "SMOKE: GEOM.SKIN.NORM's world normal is (%0d, %0d, %0d) -- rows 1 and 2 select ny and nz, both zero in the fixture, so a nonzero lane means the row indexing is wrong",
              geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o);
-    if (geom_sn_n_mag_o != 64'(SN_EXPECT_NX))
-      $fatal(1, "SMOKE: GEOM.SKIN.NORM's magnitude is %0d, expected %0d -- isqrt of a perfect square must return it exactly, so this is the root service failing to answer or answering approximately",
-             geom_sn_n_mag_o, SN_EXPECT_NX);
+
 
     // `geom_sn_reduced_o` READS ZERO AND THE REASON IS STRUCTURAL, not untested.
     // The range reduction fires when max|n| >= 2^30, and the value computed
