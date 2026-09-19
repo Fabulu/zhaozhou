@@ -458,6 +458,32 @@ _ALIAS: dict[str, str | None] = {
     # different question with its own named precondition -- the composed fit --
     # and is deliberately not touched here.
     "GEOM.PROJECT":      "zhao_proj_subsystem",
+    # TERRAIN.PROJECT IS THE SAME SHARED SERVICE'S CLIENT B. Resolved 2026-09-19
+    # (terrain packet), the twin of the GEOM.PROJECT line above and for the same
+    # reason. THIS MAKES THE NUMBER SMALLER, so four witnesses, and the fourth is
+    # a MEASUREMENT rather than a reading:
+    #   1. `zhao_terrain_project.sv`'s own header: "THE PROJECTOR IS NO LONGER IN
+    #      THIS FILE" -- it keeps the vertex sequencer, triangle reassembly and
+    #      riders around ONE `zhao_project_core`; `zhao_proj_subsystem`'s header
+    #      names its triangle output as "zhao_terrain_project's packet plus three
+    #      `w`" -- the same packet, the Mosaic riders included.
+    #   2. design/blocks.yml TERRAIN.PROJECT notes: "MERGED 2026-08-24 ... The
+    #      projection law now lives once, in fpga/rtl/common/zhao_project_core.sv".
+    #   3. zhao_console_core.sv's own TERRAIN.PROJECT paragraph: "REFUSED, AND IT
+    #      IS A SAVING RATHER THAN A GAP. It is a SECOND PROJECTOR" (6,068 ALM /
+    #      33 DSP); terrain reaches the shared core on client B through
+    #      TERRAIN.GROUP_SEQ, and composing the shell would undo the dedup that
+    #      `zhao_project_core` exists for. Owner ruling R3's "keep the
+    #      time-multiplex" is the same sharing decision made for client A.
+    #   4. MEASURED in the console smoke bench: `proj_b_grants_o` = 81 and
+    #      `proj_replay_triangles_o` = 128 -- terrain vertices ARE projected
+    #      through client B and replayed as triangles in this composition.
+    # Its downstream consumer is GEOM.SETUP/GEOM.CLIP's door (entry I13), which
+    # is a separately counted tie-off; this line does not touch it. The census
+    # question (prod_manifest prices the shell separately) is the fit's, as for
+    # GEOM.PROJECT, and is not touched. Reversible in one line if the owner
+    # rules client B is not the terrain projector's home.
+    "TERRAIN.PROJECT":   "zhao_proj_subsystem",
     # ---- THE TEXTURE CLUSTER, hand-resolved 2026-09-19 ---------------------
     #
     # SIX capabilities resolved by the naming convention to SIX SUPERSEDED

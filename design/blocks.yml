@@ -3062,6 +3062,14 @@ blocks:
       both survived. It is ALSO not a DSP saving: both shells hold their own
       core, so the pair is still 66 DSPs, measured. See the docket entry.
 
+      RESOLVED 2026-09-19 (terrain packet), the twin of GEOM.PROJECT's resolution
+      under owner ruling R3: the capability is served by the ONE shared core as
+      client B of zhao_proj_subsystem, composed in zhao_console_core and driven by
+      TERRAIN.GROUP_SEQ (smoke: b_grants 81, replay_triangles 128). This shell is
+      superseded (design/console_inventory.yml) and the completion register
+      resolves TERRAIN.PROJECT to zhao_proj_subsystem. The census row is the
+      fit's question and is untouched.
+
   # ===========================================================================
   # SURFACE — Scar Scribe (fpga/rtl/surface)
   # ===========================================================================

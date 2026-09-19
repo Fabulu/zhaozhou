@@ -599,18 +599,19 @@
 //   LONGER IN THIS FILE ... the law lives once, in
 //   `fpga/rtl/common/zhao_project_core.sv`" (`zhao_terrain_project.sv` 19-29).
 //
-//   AND IT STAYS IN THE REGISTER'S DISCONNECTED LIST ON PURPOSE, which is the
-//   second reading's one addition here. The obvious tidy-up is a
-//   `completion_register._ALIAS` entry pointing TERRAIN.PROJECT at the shared
-//   subsystem, exactly as the TEXTURE cluster and TERRAIN.RESIDENCY were
-//   hand-resolved. It was NOT taken, and the reason is two lines of
-//   `design/prod_manifest.yml` (588 and 921): the selected census "still counts
-//   `zhao_geom_project` and `zhao_terrain_project` separately, and changing that
-//   is one deliberate edit AFTER THE COMPOSED FIT CLOSES". Retiring the row now
-//   would make the gap count smaller ahead of the ruling that is supposed to
-//   make it smaller -- a free reduction in the flattering direction, taken by a
-//   packet that is not the one holding the fit. Over-reporting one gap is the
-//   safe side of that, and this paragraph is why it is over-reported.
+//   RESOLVED IN THE REGISTER 2026-09-19, AND THE PARAGRAPH THAT KEPT IT OUT IS
+//   SUPERSEDED BY ITS TWIN. This used to argue that the `_ALIAS` entry should
+//   wait, because `design/prod_manifest.yml` counts the two projector shells
+//   separately "until the composed fit closes". The geometry packet then
+//   resolved GEOM.PROJECT to client A under owner ruling R3 and SEPARATED the
+//   two questions: the REGISTER asks whether the capability is present in the
+//   console (it is -- measured in the smoke, `proj_b_grants_o` 81 and
+//   `proj_replay_triangles_o` 128 for terrain); the CENSUS asks what the fit
+//   prices, and that row stays as it is until the fit. TERRAIN.PROJECT now
+//   resolves to `zhao_proj_subsystem` (client B) the same way, with four
+//   witnesses beside the alias in `tools/budget/completion_register.py`, and
+//   `zhao_terrain_project` is `superseded` in `design/console_inventory.yml`.
+//   The projected triangle's consumer is still entry I13, counted separately.
 //
 //   TERRAIN.NORMALS and TERRAIN.SHADE -- REFUSED TOGETHER, on a path that
 //   cannot be entered. They are a genuine pair: NORMALS takes a world triangle

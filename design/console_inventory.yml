@@ -357,8 +357,9 @@ modules:
     disposition: top
     why: "a top in its own right; not composed into the console"
   zhao_terrain_project:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+    disposition: superseded
+    superseded_by: zhao_proj_subsystem
+    why: "a shell around zhao_project_core, whose ONE shared instance projects terrain as client B of zhao_proj_subsystem (producer TERRAIN.GROUP_SEQ; measured in the console smoke: b_grants 81, replay_triangles 128). Composing this shell would be a second projector (6,068 ALM / 33 DSP) -- the twin of zhao_geom_project, superseded the same way for client A under owner ruling R3. The register resolves TERRAIN.PROJECT to zhao_proj_subsystem with the witnesses beside that alias."
   zhao_terrain_residency:
     disposition: superseded
     superseded_by: zhao_terrain_residency_v2
