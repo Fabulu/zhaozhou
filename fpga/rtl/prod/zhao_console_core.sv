@@ -1675,73 +1675,44 @@
 //      day comes, the owner is whoever owns the draw -- the same absent
 //      CMD.SCHEDULER path I14 describes -- and this becomes a real entry.
 //
-// I26. THE TERRAIN PAGING SPINE's MEM.HPS.BRIDGE and MEM.GUARD clients
-//      (`terr_hps_*`, `terr_guard_*`) -- BOUNDARY, and this one is a REACHABLE
-//      boundary rather than an unreachable one, which is the whole difference
-//      between it and the refusal recorded at I23.
+// (I26 CLOSED 2026-09-19 (terrain3). THE TERRAIN PAGING SPINE's MEM.HPS.BRIDGE
+//      and MEM.GUARD clients are INTERNAL now. The entry's own diagnosis was
+//      right -- "Both providers EXIST and are already in this closure ... What
+//      is missing is a SOCKET" -- and the socket arrived on 2026-09-19 as
+//      `build_*` on `zhao_shell_top_v2`. What this packet added is what a
+//      socket with WRITERS on it needs:
 //
-//      Both providers EXIST and are already in this closure: `zhao_hps_bridge`
-//      and `zhao_mem_guard` are instantiated inside `zhao_shell_top_v2`. What
-//      is missing is a SOCKET. The shell exposes exactly one guard client port
-//      and it is named for GEOM (`geom_guard_req_i`), and it exposes the HPS
-//      bridge's HARNESS side, not a client side. So terrain cannot reach
-//      either from in here without a shell port change.
+//        * `u_build_share` (`zhao_mem_share_wr`): MEM.UPLOAD and
+//          TERRAIN.PAGELOADER write and `u_terrain_rdshare` reads, all as
+//          ZHAO_CLIENT_TERRAIN_BUILD on slot 6. A readers-only share cannot
+//          hold two writers: the write-data words of two bursts would
+//          interleave in slot 6's one queue, and every requester would see
+//          every other requester's retirement credits -- MEM.UPLOAD would
+//          count a page load's retirement as its own and publish a mapping to
+//          bytes still in flight. The share owns write-data ordering and an
+//          in-order retirement ledger; `tests/memory/mem_share_wr_directed.cpp`
+//          proves both and FIRES its two tripwires.
+//        * HPS WRITES on the socket. The shell's port comment said the arbiter
+//          "has no `b_wr_ready_i`, so the bridge's write READY cannot reach a
+//          writer". The ready did not need routing THROUGH the arbiter: it is a
+//          level that is high only while the one granted burst streams, and
+//          both socket writers already gate on it. So the socket carries the
+//          beats and hands the level back as `build_hps_wr_ready_o`.
 //
-//      The terrain bridge clients are merged by the REAL HPS arbiter before
-//      they leave, so what crosses this boundary is ONE bridge client, not
-//      three. Since 2026-09-19 that is `zhao_hps_arbiter_n` at N=3 (owner
-//      ruling R4): TERRAIN.CMD, TERRAIN.PAGELOADER and TERRAIN.WRITEBACK. The
-//      writeback is the first terrain client that WRITES, so the family gained
-//      `terr_hps_wr_ready_i`, the bridge's own write-acceptance level -- one
-//      wire of the same socket, not a new one. Its sheet READS are the third
-//      requester of `u_terrain_rdshare`, so the guard side gained nothing.
+//      WHAT IT COST TO FIND, recorded because the next composition onto real
+//      fabric will meet the same class: with the spine on the real bridge,
+//      TERRAIN.CMD asked for a 64-byte burst at a 32-byte-aligned address on
+//      every resume after an abandoned burst, and `zhao_hps_bridge` refuses
+//      that as malformed. The block's own bench checked only `len`. Fixed in
+//      `zhao_terrain_cmd` (aligned base, skipped lead, counted in
+//      `list_refetch_bytes_o`) and the bench now carries the bridge's law.
 //
-//      WHY THIS IS NOT I23's REFUSAL AGAIN. GEOM.MESHFETCH's beats come back
-//      from INSIDE the shell through MEM.VRAM.ARBITER and `zhao_sdram_ctrl`,
-//      whose `phy_*` no bench connects -- nothing outside can put a beat on
-//      them, so those blocks would elaborate and never see one. These ports
-//      are on THIS MODULE'S EDGE, where the completion plan's own sentence
-//      applies: the harness "supplies external clocks, input events, MEMORY
-//      BEHAVIOR and host packets". A harness can drive these and the composed
-//      terrain bench already drives exactly this shape.
-//
-//      WIDENED 2026-09-19 BY A SECOND GUARD CLIENT (`terr_ps_guard_*`,
-//      `terr_ps_beat_*`). The compose engine's TERRAIN.PAGESTREAM reads the
-//      page back out of the pool that TERRAIN.PAGELOADER wrote, so it is a READ
-//      client and needs the return leg -- `beat_valid/data/last` -- that a
-//      write client has no use for. It is listed here rather than as its own
-//      entry because it is the same absent thing: the shell exposes ONE guard
-//      socket and it is named for GEOM.
-//
-//      AND NOT WIDENED AGAIN BY THE HEADER READER, 2026-09-19, which is the
-//      part worth writing down because the obvious version of that packet WOULD
-//      have widened it. TERRAIN.HDRREAD (composed item 13) is a third reader of
-//      the same pool, and a third guard port on this module's edge would have
-//      turned a two-port boundary into a three-port one while closing I35 --
-//      a gap count that goes down by one and a boundary that goes up by one.
-//
-//      IT SHARES INSTEAD, through `zhao_mem_share2` as `u_terrain_rdshare`, and
-//      the share is not invented here: it is the SAME MODULE
-//      `zhao_geom_mem_adapter` is now a wrapper over, with ENGINE1's two values
-//      swapped for TERRAIN.BUILD's. That is the pattern the geometry asset path
-//      established and this entry's own note about `zhao_vram_arbiter` casting
-//      the slot index is why: a genuinely new client id is a memory-rules
-//      ruling, and a share avoids needing one.
-//
-//      THIS IS NOT THE MUX THE PARAGRAPH BELOW REFUSES, and the difference is
-//      exact. That paragraph refuses joining the WRITE client and the READ
-//      client, because `zhao_mem_guard`'s arbitration between two different
-//      privileges is the shell's business. `u_terrain_rdshare` joins two
-//      readers of ONE arm of ONE window under ONE client id, upstream of the
-//      guard, in a committed block with its own directed test and its own
-//      contention counter. Two ports out, still, and one owner to join them
-//      when the shell grows the socket.
-//
-//      THE TWO GUARD CLIENTS ARE NOT MERGED HERE, and that is deliberate.
-//      `zhao_mem_guard`'s arbitration is the shell's, and putting a mux between
-//      two clients in this file would be an arbiter the composer invented --
-//      the thing the paging spine's own note above is proud of not having done.
-//      Two ports out, one owner to join them, when the shell grows the socket.
+//      AND WHAT UNBLOCKED IT: `zhao_hps_arbiter_n` latched a client's request
+//      only while IDLE, and CMD.DMA pulses its request for ONE cycle, so with
+//      the spine keeping the bridge busy the ring read stopped after one burst
+//      and the whole render path read as dead. That is the cmdmem packet's
+//      pending-slot repair (ruling R55); this composition waited for it rather
+//      than working around it.)
 //
 // I27. THE DIRECTORY's DEFORMATION MARK and HANDLE CHECK (`terr_dm_*`,
 //      `terr_chk_*`) -- BOUNDARY. NARROWED 2026-09-19, and the two halves that

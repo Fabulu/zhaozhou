@@ -2153,6 +2153,7 @@ targets:
       - fpga/rtl/geometry/zhao_light_stream.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/memory/zhao_mem_share2.sv
+      - fpga/rtl/memory/zhao_mem_share_wr.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
       - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
       - fpga/rtl/geometry/zhao_geom_parambuf.sv

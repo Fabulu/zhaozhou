@@ -33,9 +33,6 @@ modules:
   zhao_field_exec_shared:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_mem_share_wr:
-    disposition: pending_compose
-    why: "the TERRAIN.BUILD socket's upstream share with WRITERS (core entry I26): MEM.UPLOAD and TERRAIN.PAGELOADER write slot 6 and the terrain read share reads it, so the one guard client needs write-data ownership and per-requester retirement attribution that zhao_mem_share_n does not have. Built and proved (tests/memory/mem_share_wr_directed.cpp, 26 checks); composed the moment the shell's HPS arbiter stops losing CMD.DMA's one-cycle request pulse, which is what blocks I26 today."
   zhao_mem_share2:
     disposition: superseded
     superseded_by: zhao_mem_share_n
