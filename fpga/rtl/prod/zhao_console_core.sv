@@ -423,24 +423,56 @@
 //
 //      WHAT IS MISSING IS THEREFORE THREE THINGS, NAMED SO THE NEXT PACKET
 //      DOES NOT GO LOOKING FOR A PORT:
-//        1. A RASTER-ORDER FRAMEBUFFER READ MASTER in the gpu-clock domain.
-//           Nothing in `fpga/rtl` is one. `zhao_scanout_fetch` reads a frame in
-//           raster order, but it is the VIDEO domain's FRONT-buffer reader, and
-//           `zhao_post_composite`'s own header forbids the use it would be put
-//           to: "NEVER POST-PROCESS THE CURRENTLY SCANNED-OUT FRONT BUFFER".
-//        2. A MEMORY IDENTITY FOR A THIRD FRAMEBUFFER AGENT. The shell's lease
-//           is ONE BIT -- `fb_writer_i`, 0 = DEBUG.FRAMEBLIT, 1 =
-//           RASTER.FBWRITE -- and `zhao_mem_guard` passes on that bit. Post is
-//           a reader AND a writer inside one frame and has no client enum the
-//           guard admits, which is the same shape as the second geometry
-//           fetcher `zhao_shell_top_v2` already refuses at its `client_req[3]`
-//           note. That is a decision for the memory rules, not for this file.
+//        1. A RASTER-ORDER FRAMEBUFFER READ MASTER in the gpu-clock domain,
+//           AND IT IS NOT A NEW INVENTION -- searched, and this entry is
+//           narrower than it first said. `zhao_scanout_fetch` is already
+//           exactly that shape: its own header says "gpu domain", it reads a
+//           slot READ-ONLY through MEM.GUARD in 64-B bursts, one display line
+//           at a time, in raster order. Three things make it not droppable in
+//           as it stands, and all three are bounded:
+//             - it fetches `display_slot_sync`, the DISPLAYED slot, and post
+//               must read the BACK buffer. Pointing it at the front one is the
+//               use `zhao_post_composite`'s own header forbids by name --
+//               "NEVER POST-PROCESS THE CURRENTLY SCANNED-OUT FRONT BUFFER";
+//             - it re-arms on `dec_sync`/`frame_start_sync`, the VIDEO
+//               raster's swap decision, not on render drain -- which is item 3;
+//             - its output is 64-bit beats into `zhao_scanout_linebuf`, while
+//               `s_rgb_i` wants one RGB565 at a time. That unpack is a
+//               byte-lane split under `spec/video_rules.md` 3 (little-endian
+//               halfwords, row-major, no row padding), NOT a colour law and not
+//               arithmetic this file would be inventing.
+//           So the source side is a re-armed variant of a block that exists,
+//           not a block nobody has written. It is still a MODULE and a memory
+//           client, which is why it is not done here as wiring.
+//        2. A MEMORY IDENTITY FOR A THIRD FRAMEBUFFER AGENT, AND THIS IS THE
+//           REAL BLOCKER once item 1 is read properly. The shell's lease is ONE
+//           BIT -- `fb_writer_i`, 0 = DEBUG.FRAMEBLIT, 1 = RASTER.FBWRITE --
+//           and `zhao_mem_guard` passes on that bit. Post is a reader AND a
+//           writer inside one frame. `zhao_vram_arbiter` builds the
+//           controller's client tag by CASTING THE SLOT INDEX, so the client is
+//           POSITIONAL, not configurable, and the shell's five slots are all
+//           spoken for: 0 SCANOUT, 1 BLIT_DMA, 2 ENGINE0 (render), 3 ENGINE1
+//           (geometry fetch), 4 DEBUG. There is no index post could present
+//           that both the guard admits and the arbiter would carry -- exactly
+//           the refusal `zhao_shell_top_v2` already writes out at its
+//           `client_req[3]` note for a second geometry fetcher. That is a
+//           decision for the memory rules, not for this file.
 //        3. A FRAME-COMPLETION EVENT to start the pass on. `frame_start_i` is
 //           `core_tick_c` here, which is the console tick, not render drain.
 //
 //      REFUSED 2026-09-19, and this is the fourth refusal of this seam. The
 //      earlier three were right to refuse and gave a reason that pointed at the
 //      wrong file; the reason above points at the right ones.
+//      AND `reports/APPROACH-CORRECTION-20260919.md` SHOULD BE READ WITH THIS.
+//      Its root-cause list names "RESOLVE internal to `zhao_geom_bin_pipe_v2`
+//      -- blocks the whole post path". That sentence is the one corrected
+//      above: RESOLVE's output is nine ports, the internality is one level up
+//      and is a port addition, and the thing that actually blocks the post path
+//      is the order/density mismatch plus item 2. Same document's rule, applied
+//      to this entry: a refusal must name what it searched, so item 1 names
+//      `zhao_scanout_fetch` and says what is and is not missing about it rather
+//      than claiming nothing exists.
+//
 //
 // I16. POST.COMPOSITE's output and echo tap (`post_o_*`, `post_echo_*`) --
 //      BOUNDARY, the other end of I15. The output end is the SMALLER half and
