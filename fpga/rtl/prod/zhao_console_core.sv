@@ -130,7 +130,7 @@
 //
 //      The gap that remains is ONE LEVEL UP and is named separately: the
 //      decoder's own clip page and skeleton bake have no producer. That is
-//      entry I27, and it is a narrower and more honest statement than I10 was.
+//      entry I29, and it is a narrower and more honest statement than I10 was.
 //
 //   7. THE TRIANGLE FRONT DOOR, CLOSED WITH ITS REAL PRODUCER
 //        GEOM.CLIP.out_*  -> GEOM.SETUP.tri_*
@@ -248,31 +248,17 @@
 //      decision taken in the composer: if ids must survive compaction, a real
 //      PART.ID owner is needed and this counter is wrong.
 //
-// I10. GEOM.SKIN's BONE MATRICES (`geom_skin_a_m_i`, `geom_skin_b_m_i`) --
-//      BOUNDARY. NARROWED 2026-09-19: the VERTEX half of this entry is CLOSED.
-//      `zhao_geom_vdecode` is composed below and drives `v_x/v_y/v_z/v_w0/
-//      v_rigid/v_src_id` directly, so those six ports are no longer boundary
-//      and no longer appear in the port list. What remains is the palette, and
-//      it is a MISSING BLOCK rather than missing wiring:
-//
-//        `zhao_geom_pose_decode` (GEOM.POSE) exists, is tested, and emits the
-//        palette ONE BONE PER BEAT on `out_valid_o / out_bone_o / out_m_o[12]`.
-//        GEOM.SKIN wants TWO WHOLE MATRICES presented WITH the vertex and
-//        latched on accept, addressed by that vertex's `bone0`/`bone1`. A
-//        streamed producer and a random-access consumer do not meet: something
-//        must STORE the decoded palette and answer two reads per vertex.
-//        Nothing in the tree does. Grepped 2026-09-19 -- `zhao_geom_pose_cache`
-//        is NOT it (it is the {type,clip,frame,sub,gen} tuple cache that
-//        answers "which slot", not a matrix store), and no other file holds a
-//        bone-indexed matrix memory.
-//
-//      So GEOM.POSE is deliberately NOT composed here: instantiating it with no
-//      consumer would be a disconnected implementation with extra steps, and
-//      building the palette store inside this composer is exactly the hidden
-//      adapter this file must not contain. The address it needs is already on
-//      this module's edge -- `geom_vd_bone0_o` / `geom_vd_bone1_o` come out of
-//      the decoder below and go nowhere, which is what the gap looks like.
-//      Closing this is one new block (a GEOM.POSE palette store), not wiring.
+//      (I10 was GEOM.SKIN's BONE MATRICES. It is CLOSED and the entry is
+//      DELETED, 2026-09-19. The vertex half closed when `zhao_geom_vdecode`
+//      was composed; the palette half was a MISSING BLOCK rather than missing
+//      wiring, and `zhao_geom_pose_palette` is that block -- GEOM.POSE's
+//      decoded palette in RAM, two reads per vertex, the vertex passed through
+//      beside its two matrices. `geom_skin_a_m_i` / `geom_skin_b_m_i` are gone
+//      from the port list rather than driven, and `geom_vd_bone0_o` /
+//      `geom_vd_bone1_o` went with them because they now have a consumer.
+//      Deleted rather than marked closed, for the reason I4 gives above: a
+//      stale closed entry under-reports progress exactly as deleting an open
+//      one would over-report it. The successor gap is I29, one level up.)
 //
 // I11. GEOM.GROUP_SEQ's job port and its sealed-group output (`geom_job_*`,
 //      `geom_grp_*`, `geom_rel_*`) -- BOUNDARY.
@@ -379,8 +365,10 @@
 //      memory the plan allows it to play.
 //
 // I23. GEOM.VDECODE's 32-byte vertex record stream (`geom_vd_v_*`) --
-//      BOUNDARY, and its decoded side-channels (`geom_vd_d_n*`, `geom_vd_u/v`,
-//      `geom_vd_bone0/1`) leave this module because nothing here consumes them.
+//      BOUNDARY, and its decoded side-channels (`geom_vd_d_n*`, `geom_vd_u/v`)
+//      leave this module because nothing here consumes them. `geom_vd_bone0/1`
+//      was in that list until 2026-09-19 and is not any more: the palette store
+//      consumes both, so they are internal wires (see the I10 closure note).
 //      THE NAMED OWNER EXISTS AND IS NOT COMPOSED, and the reason is worth
 //      writing down precisely so the next packet does not rediscover it:
 //
@@ -500,6 +488,33 @@
 //      (entry I27's subsystem, not composed). With no deformation in the core
 //      there are no dirty evictions, so the block would add its area for a
 //      path nothing can enter.
+//
+// I29. GEOM.POSE's CLIP PAGE AND SKELETON BAKE (`geom_pose_start_i`,
+//      `geom_pose_bone_*`, `geom_pose_quat_*`, `geom_pose_inv_rest_i`,
+//      `geom_pose_root_d*`) -- BOUNDARY. NEW 2026-09-19, and it is I10's
+//      SUCCESSOR rather than a new discovery: closing I10 composed
+//      `zhao_geom_pose_decode`, and a composed block's inputs become this
+//      module's edge until their own producer arrives.
+//
+//      The decoder's source fetch is COMBINATIONAL BY CONTRACT -- it drives
+//      `bone_idx_o` and the caller must present that bone's parent, rest
+//      translation, quaternion and inverse-rest matrix in the SAME cycle. So
+//      this is not a stream that could be tied off plausibly; it is a memory
+//      the caller owns, and the block's own header says it "owns none of them
+//      and holds no cache".
+//
+//      THE OWNER IS GEOM.MESHFETCH plus the clip-bank pages behind MEM.GUARD,
+//      and it is the same obstacle as I23, one asset kind over: the pages come
+//      back through MEM.VRAM.ARBITER and `zhao_sdram_ctrl`, and there is no
+//      behavioural SDRAM model in this tree. A composition onto that socket
+//      would elaborate, lint and never see a beat.
+//
+//      WHAT IS NOT PART OF THIS GAP, because the distinction is the whole
+//      point of closing I10: the palette STORE is present and internal. A
+//      decoded palette written by the block above is read by GEOM.SKIN through
+//      `zhao_geom_pose_palette` with nothing external in between, and the
+//      store's own `geom_pal_bone_unset_o` reports any vertex that arrived
+//      before its pose did. The missing thing is the BYTES, not the path.
 //
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
@@ -785,9 +800,9 @@ module zhao_console_core
   output logic [15:0]             geom_skin_src_id_o,
   output logic [31:0]             geom_skin_vertices_transformed_o,
 
-  // ---- I27: GEOM.POSE's clip page and skeleton bake ------------------------
+  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
-  // decoder's own SOURCE is what is now missing, and this is it. See I27.
+  // decoder's own SOURCE is what is now missing, and this is it. See I29.
   input  logic                    geom_pose_start_i,
   input  logic [5:0]              geom_pose_bone_count_i,
   input  logic signed [31:0]      geom_pose_root_dx_i,
@@ -1101,6 +1116,23 @@ module zhao_console_core
   // TERR_SLOTW producer, so the extra bit can only ever be zero -- and a
   // counter that proves it is better than a comment that asserts it.
   output logic [31:0]             terr_pl_slot_overflow_o,
+  // A REFUSAL IS NOT A FAULT AND MUST NOT LOOK LIKE SILENCE. `pages_refused_o`
+  // counts jobs the loader judged BEFORE touching memory (bad slot, unaligned
+  // or unreachable source, outside the staging arena, stale epoch) and
+  // `fault_verdict_o` names which. Leaving them unexposed cost a diagnosis
+  // once already: with loaded=0, faulted=0 and bytes=0 there is no way to tell
+  // a refused job from a loader that never started.
+  output logic [31:0]             terr_pl_pages_refused_o,
+  output logic [3:0]              terr_pl_fault_verdict_o,
+  output logic [31:0]             terr_pl_incomplete_o,
+  output logic [31:0]             terr_pl_hdr_ident_fails_o,
+  // THE ARBITER'S OWN STARVATION INSTRUMENT. Rule 5 says starvation must be
+  // visible, and `c1_wait_cycles_o` is how. This composition is the first to
+  // put two terrain clients on it, so the number it reports is evidence about
+  // a fairness contract that had never carried two live clients before.
+  output logic [31:0]             terr_hps_c0_bursts_o,
+  output logic [31:0]             terr_hps_c1_bursts_o,
+  output logic [31:0]             terr_hps_c1_wait_cycles_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -2090,7 +2122,7 @@ module zhao_console_core
   //
   // WHAT IS STILL MISSING IS ONE LEVEL UP: the decoder's own source -- the clip
   // page and the skeleton bake -- has no producer in this tree. That is entry
-  // I27, and it is a smaller and more precisely named gap than I10 was.
+  // I29, and it is a smaller and more precisely named gap than I10 was.
   //
   // THE REFUSAL PATH IS FORWARDED, NOT DROPPED. `d_refused_o` is raised
   // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
@@ -2187,7 +2219,7 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I27: the clip page and the skeleton bake have no producer in this tree.
+    // I29: the clip page and the skeleton bake have no producer in this tree.
     .start_i       (geom_pose_start_i),
     .busy_o        (geom_pose_busy_o),
     .bone_count_i  (geom_pose_bone_count_i),
@@ -3420,9 +3452,6 @@ module zhao_console_core
   // command-class traffic; a 21,376-byte page is the bulk transfer, and
   // `c1_wait_cycles_o` is the arbiter's own instrument for saying what that
   // choice costs the loader.
-  /* verilator lint_off UNUSEDSIGNAL */
-  wire [31:0] tarb_c0_bursts, tarb_c1_bursts, tarb_c1_wait_cycles;
-  /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_hps_arbiter u_terr_hps_arb (
     .clk           (gpu_clk),
@@ -3445,9 +3474,9 @@ module zhao_console_core
     .b_wr_data_o   (terr_hps_wr_data_o),
     .b_wr_last_o   (terr_hps_wr_last_o),
     .b_rsp_i       (terr_hps_rsp_i),
-    .c0_bursts_o     (tarb_c0_bursts),
-    .c1_bursts_o     (tarb_c1_bursts),
-    .c1_wait_cycles_o(tarb_c1_wait_cycles)
+    .c0_bursts_o     (terr_hps_c0_bursts_o),
+    .c1_bursts_o     (terr_hps_c1_bursts_o),
+    .c1_wait_cycles_o(terr_hps_c1_wait_cycles_o)
   );
 
   // ---- TERRAIN.CMD -> TERRAIN.SEQ -----------------------------------------
@@ -3915,9 +3944,7 @@ module zhao_console_core
   wire [31:0]        tpl_fin_src_id;
   wire [31:0]        tpl_fault_island, tpl_fault_src_id;
   wire signed [15:0] tpl_fault_ix, tpl_fault_iz;
-  wire [3:0]         tpl_fault_verdict;
   wire [31:0]        tpl_fault_crc_seen, tpl_fault_crc_expect;
-  wire [31:0]        tpl_pages_refused, tpl_hdr_ident_fails, tpl_incomplete;
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_terrain_pageloader #(
@@ -3974,16 +4001,16 @@ module zhao_console_core
     .fault_ix_o        (tpl_fault_ix),
     .fault_iz_o        (tpl_fault_iz),
     .fault_src_id_o    (tpl_fault_src_id),
-    .fault_verdict_o   (tpl_fault_verdict),
+    .fault_verdict_o   (terr_pl_fault_verdict_o),
     .fault_crc_seen_o  (tpl_fault_crc_seen),
     .fault_crc_expect_o(tpl_fault_crc_expect),
 
     .pages_loaded_o   (terr_pl_pages_loaded_o),
     .pages_faulted_o  (terr_pl_pages_faulted_o),
-    .pages_refused_o  (tpl_pages_refused),
+    .pages_refused_o  (terr_pl_pages_refused_o),
     .crc_fails_o      (terr_pl_crc_fails_o),
-    .hdr_ident_fails_o(tpl_hdr_ident_fails),
-    .incomplete_o     (tpl_incomplete),
+    .hdr_ident_fails_o(terr_pl_hdr_ident_fails_o),
+    .incomplete_o     (terr_pl_incomplete_o),
     .guard_denied_o   (terr_pl_guard_denied_o),
     .bridge_errs_o    (terr_pl_bridge_errs_o),
     .load_bytes_o     (terr_pl_load_bytes_o)

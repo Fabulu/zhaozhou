@@ -1773,6 +1773,17 @@ targets:
     sources:
       - fpga/rtl/geometry/zhao_geom_pose_cache.sv
 
+  # GEOM.POSE's palette store, added 2026-09-19 with the block itself. NO RULES
+  # DELIBERATELY: it has never been fitted and there is no measurement to write
+  # one against. THE QUESTION THIS LEAF ANSWERS is the only one its own tests
+  # cannot -- does Quartus infer the 96 x 128-bit store as M10K, or does it pick
+  # MLAB and turn ~4 M10K of shape arithmetic into roughly 21 MLABs of LUT RAM?
+  # `(* ramstyle = "M10K" *)` is a HINT. Until a fit reports the M10K count,
+  # every memory figure in that file's header is arithmetic and says so.
+  - top: zhao_geom_pose_palette
+    sources:
+      - fpga/rtl/geometry/zhao_geom_pose_palette.sv
+
   - top: zhao_geom_cull
     sources:
       - fpga/rtl/geometry/zhao_geom_cull.sv
@@ -2463,6 +2474,25 @@ targets:
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
+      # Added 2026-09-19, packet I10-PALETTE. GEOM.POSE, WHOLE.
+      #
+      # THE EXCLUSION NOTE ABOVE HAS EXPIRED. It says zhao_geom_pose_decode is
+      # NOT added because "no palette store exists to join it to GEOM.SKIN".
+      # One now does -- `zhao_geom_pose_palette`, the block header entry I10
+      # named as missing -- so the decoder has a real consumer and both are in.
+      # The note is left in place rather than rewritten because this row's
+      # history is the record of what each fit measured; this paragraph is the
+      # correction, and a stale reason beside a landed change is the failure
+      # CLAUDE.md has a chapter about.
+      #
+      # `zhao_geom_mat3x4_mul` and `zhao_geom_quat2mat` come with the decoder:
+      # they are its two engines, not separate compositions. The decoder's own
+      # SOURCE (clip page + skeleton bake) is now header entry I29 and is a
+      # boundary, so this row measures the palette PATH and not the fetch.
+      - fpga/rtl/geometry/zhao_geom_pose_palette.sv
+      - fpga/rtl/geometry/zhao_geom_pose_decode.sv
+      - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+      - fpga/rtl/geometry/zhao_geom_quat2mat.sv
       # Added 2026-09-19, packet P-TERRAIN. THE PAGING SPINE: five blocks in
       # one chain, TERRAIN.CMD -> TERRAIN.SEQ -> TERRAIN.RESIDENCY /
       # TERRAIN.LOADQ -> TERRAIN.PAGELOADER -> TERRAIN.RESIDENCY. Every seam

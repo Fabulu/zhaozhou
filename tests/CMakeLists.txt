@@ -12975,3 +12975,50 @@ verilate(test_part_state_tick_boundary
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv)
 add_test(NAME part_state_tick_boundary COMMAND test_part_state_tick_boundary)
 set_tests_properties(part_state_tick_boundary PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+# ---------------------------------------------------------------------------
+# GEOM.POSE's BONE-MATRIX PALETTE STORE -- the block entry I10 was missing.
+#
+# `zhao_geom_pose_decode` streams the palette one bone per beat and
+# `zhao_geom_skin` wants two whole matrices latched with the vertex. Nothing in
+# the tree joined them, so GEOM.SKIN's matrix ports were a console BOUNDARY.
+# This block stores the palette in RAM and answers two reads per vertex.
+#
+# It does NO arithmetic, so the failures are all routing and holding: the wrong
+# matrix for the right bone, a walk long enough to drop GEOM.SKIN below the
+# owner-ruled 120,000 vertices/frame, or a stalled offer whose matrices drift
+# away from the vertex beside them. Every counter is checked as a DELTA.
+add_executable(test_geom_pose_palette_directed geometry/geom_pose_palette_directed.cpp)
+target_link_libraries(test_geom_pose_palette_directed PRIVATE zhao_harness)
+verilate(test_geom_pose_palette_directed
+  PREFIX Vzhao_geom_pose_palette
+  TOP_MODULE zhao_geom_pose_palette
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_palette.sv)
+add_test(NAME geom_pose_palette_directed COMMAND test_geom_pose_palette_directed)
+set_tests_properties(geom_pose_palette_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_geom_pose_palette
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_pose_palette
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_palette.sv)
+set_tests_properties(lint_zhao_geom_pose_palette PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE INSTRUMENT, DEMONSTRATED. Every counter this block owns balances exactly
+# when bone1's matrix is fetched from bone0's address: the walk is still seven
+# clocks, the handshake still completes, `vertices_served_o` still advances once
+# per vertex, and a two-weight vertex is silently skinned with one bone twice.
+# The section 1 differential is the ONLY detector for that fault class, so the
+# mutant below proves it fires. INVERTED POLARITY: the control PASSES when the
+# differential FAILS. Evidence about the instrument, not about the design.
+add_executable(test_geom_pose_palette_mutant_control
+               geometry/geom_pose_palette_mutant_control.cpp)
+target_link_libraries(test_geom_pose_palette_mutant_control PRIVATE zhao_harness)
+verilate(test_geom_pose_palette_mutant_control
+  PREFIX Vzhao_geom_pose_palette_mutant
+  TOP_MODULE zhao_geom_pose_palette_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_pose_palette_mutant.sv)
+add_test(NAME geom_pose_palette_mutant_control
+         COMMAND test_geom_pose_palette_mutant_control)
+set_tests_properties(geom_pose_palette_mutant_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
