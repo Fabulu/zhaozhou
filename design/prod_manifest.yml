@@ -209,13 +209,33 @@ top:
   # that is stale in the direction of "less is composed" is exactly the kind
   # this file exists to catch.
   #
-  # FIELD v3 IS STILL THE PRODUCTION GENERATION and nothing here retires that
-  # ruling. What changed is that the console needed a field engine and v3's
-  # EXECUTOR is not built: it exists as `fpga/rtl/synth/zhao_probe_v3_exec.sv`,
-  # a probe; its only composition (`zhao_probe_v3_full.sv`) carries a live
-  # deadlock in its own header -- "a program containing SPLINE or RING PARKS
-  # THAT CONTEXT FOREVER" -- whose repair that file says is not an agent's to
-  # make; and no production `zhao_field_v3_*` module has a fit row at all.
+  # FIELD v3 IS THE PRODUCTION GENERATION. CORRECTED 2026-09-19: the three
+  # reasons this block gave for composing v1 instead were each checked at the
+  # source and each was false, all three in the flattering direction of "less
+  # is built than you think".
+  #
+  #   "v3's EXECUTOR is not built: it exists as a probe" -- it was built. The
+  #   file was fpga/rtl/synth/zhao_probe_v3_exec.sv and the word "probe" in its
+  #   name was read as a statement about the design. It is now
+  #   fpga/rtl/field/zhao_field_v3_exec.sv, byte for byte the same circuit.
+  #
+  #   "its only composition carries a live deadlock -- a program containing
+  #   SPLINE or RING PARKS THAT CONTEXT FOREVER" -- FIXED 2026-08-29, three
+  #   weeks before this sentence was written, by zhao_field_ops_pkg.sv. ONE
+  #   field_long_width() table, from which the executor is_long() and the
+  #   dispatcher dst_width_of() are both derived, so the two lists that
+  #   disagreed no longer exist. The stale header the claim quoted now carries
+  #   the record of its own repair instead.
+  #
+  #   "no production zhao_field_v3_* module has a fit row at all" -- every one
+  #   of the fourteen has had its own leaf target in design/fit_targets.yml
+  #   since before this was written. What had no row was the COMPOSITION, and
+  #   that is the gap this pass closed.
+  #
+  # The composed machine is zhao_field_v3_engine (was zhao_probe_v3_full),
+  # gated by field_v3_earth_quad at CTX=32 OUTSTANDING=16 LANES=4 LONGQ=16
+  # DIST_BANKS=8 RING_UNITS=8 REGS=64: three Earth programs exact, worst
+  # 533,227 clocks against a budget of 850,000, 24,636 value checks green.
   #
   # So `zhao_field_host` composes v1. FROZEN is a ruling about CHANGES, not
   # about composition: `design/contracts/FIELD.SEQ.CORE.md` names v1 "the exact
@@ -686,12 +706,13 @@ excluded:
   - zhao_probe_dist_svc: probe  distance service fit probe
   - zhao_probe_patch_acc: probe  patch accumulator fit probe
   - zhao_probe_render_fb: probe  renderer+framebuffer fit probe
-  - zhao_probe_v3_engine: probe  FIELD v3 engine probe
-  - zhao_probe_v3_exec: probe  FIELD v3 executor probe -- the executor itself is NOT BUILT
-  - zhao_probe_v3_full: probe  FIELD v3 whole-engine probe
   - zhao_probe_walk_earth: probe  Earth60 walk probe
-  - zhao_probe_curve_svc: probe  curve service probe, instantiated by the v3_svcpath HARNESS only
-  - zhao_field_v3_svcpath: harness  composes the v3 long-op path WITH a rival on the multiplier bank and a probe, to make refusal reachable; its services are counted individually above
+  # FIVE ENTRIES REMOVED 2026-09-19. zhao_probe_v3_{exec,engine,full} and
+  # zhao_probe_curve_svc no longer exist under those names -- they are
+  # zhao_field_v3_{exec,core,engine,curve} in fpga/rtl/field/ and are counted
+  # through the composition. zhao_field_v3_svcpath left with them: this file
+  # called it a harness while a counted top instantiated it, which the checker
+  # was already reporting as "it is in the machine whatever the manifest says".
   - zhao_synth_probe: harness  the generic synthesis probe wrapper
   - zhao_stub_top: harness  the blank top used to measure the fitter's own floor
   - zhao_prod_top: harness  the GENERATED resource top itself; it holds the instances, it is not one
