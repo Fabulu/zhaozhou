@@ -93,6 +93,37 @@ def tieoffs() -> list[dict]:
         cur["body"] += " " + line.strip().lstrip("/").strip()
     if cur:
         out.append(cur)
+
+    # DUPLICATE ENTRY IDS ARE A HARD FAILURE.
+    #
+    # On 2026-09-19 two packets, within one hour, both numbered a new entry I42
+    # -- one for a deviation store, one for a program store. Entries live in a
+    # LIST here, so both were kept, both were counted, and the register reported
+    # nothing wrong. Worse, other entries CITE ids in prose ("the same absent
+    # owner as I42"), and a reader following that citation lands on whichever of
+    # the two they find first.
+    #
+    # It is not obvious which direction this fails in, which is exactly why it
+    # needs a guard rather than a habit: two entries counted is an over-report,
+    # but a citation resolving to the wrong entry sends work at the wrong seam,
+    # and an editor who "fixes the duplicate" by deleting one silently drops a
+    # real gap. The concurrency that caused it is now the normal way this repo
+    # works -- four to six packets editing one header -- so it will happen again.
+    seen_ids: dict[str, str] = {}
+    for t in out:
+        if t["id"] in seen_ids:
+            raise SystemExit(
+                "completion_register: DUPLICATE ENTRY ID %s in "
+                "zhao_console_core.sv's INCOMPLETE block.\n"
+                "  first : %s\n"
+                "  second: %s\n"
+                "Two packets numbering the same entry is the normal hazard now "
+                "that several edit this header at once. Renumber the LATER one "
+                "to the next free id and move any prose that cites it -- do not "
+                "delete either, they are different gaps."
+                % (t["id"], seen_ids[t["id"]][:90], t["head"][:90]))
+        seen_ids[t["id"]] = t["head"]
+
     for t in out:
         # THE MARKER COUNTS ONLY IN THE HEAD LINE, and that is a correctness fix
         # rather than tidiness.
