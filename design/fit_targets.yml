@@ -2534,4 +2534,43 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_pageloader.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
       - fpga/rtl/measure/zhao_measure_histogram.sv
+      # SURFACE, added 2026-09-19. The pair is composed CLOSED -- SURFACE.STAMP
+      # is SURFACE.SHEET's only client and its only writer (terrain_rules 7:
+      # "F written only by SURFACE.STAMP"), so all three channels between them
+      # are internal wires and this row measures a real read-modify-write loop
+      # rather than two adjacent blocks. `zhao_surface_blend` and
+      # `zhao_surface_sq` are SURFACE.STAMP's own submodules, not separate
+      # adoptions.
+      #
+      # THE MEMORY IS THE THING TO READ FIRST IN THIS ROW'S DELTA.
+      # SURFACE.SHEET is SURF_SLOTS x 65,536 bits (about seven M10K per slot,
+      # fourteen at the default of 2), so this row's M10K figure moves a long
+      # way and its ALM figure should not. Its own header asks the first fit to
+      # retune `Slots`, and this is that fit.
+      #
+      # REFUSED FROM THE SAME PACKET, for the record, since a row that names
+      # what it added should name what it did not: zhao_twod_plane and
+      # zhao_twod_sprite (both emit TEXEL SAMPLE REQUESTS and POST.COMPOSITE's
+      # atm_*/hud_* ports want RGB back -- the sampler between them is not
+      # built), zhao_post_gather (RASTER.RESOLVE emits an 8-bit effect TAG and
+      # this block wants glow RGB + a signed 8.8 displacement; expanding one
+      # into the other is a colour law invented in the composer, and resolve's
+      # stream is internal to zhao_geom_bin_pipe_v2 besides -- entry I15),
+      # zhao_part_expand / zhao_part_soft (both take an ALREADY PROJECTED
+      # particle and nothing projects particles; zhao_part_expand additionally
+      # carries a SUPERSEDED-ASSUMPTION banner of its own saying its `size <<
+      # 4` predates amendment C2), zhao_part_ladder (its projected size has no
+      # producer and its hold state is contract-bound to DDR), zhao_cmd_decoder
+      # (the byte stream it wants is real and is INTERNAL to zhao_shell_top_v2),
+      # zhao_measure_tokens / zhao_measure_governor (the binner's token client
+      # is one bit against a seven-field request, and the budgets and the
+      # per-camera pixel error have no producer), zhao_debug_trace (its events
+      # carry expected-vs-actual and the console has no reference -- entry I18's
+      # refusal, one block over), zhao_field_progcache, zhao_forge_prim,
+      # zhao_forge_prim_eval and zhao_forge_cliff (all four wait on a dispatch
+      # or an issuer that is not built).
+      - fpga/rtl/surface/zhao_surface_blend.sv
+      - fpga/rtl/surface/zhao_surface_sq.sv
+      - fpga/rtl/surface/zhao_surface_sheet.sv
+      - fpga/rtl/surface/zhao_surface_stamp.sv
       - fpga/rtl/prod/zhao_console_core.sv

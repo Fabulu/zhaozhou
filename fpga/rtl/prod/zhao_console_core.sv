@@ -191,6 +191,26 @@
 //      composition, not a defect in it -- and it is written down here because
 //      that exact pairing was once measured and mistaken for one.
 //
+//   9. THE SCAR SUBSTRATE AND THE ENGINE THAT WRITES IT -- a closed pair
+//        SURFACE.STAMP.req_* -> SURFACE.SHEET.req_*  (ACQUIRE, then READ)
+//        SURFACE.SHEET.pg_*  -> SURFACE.STAMP.pg_*   (status + pre-blend F)
+//        SURFACE.STAMP.wr_*  -> SURFACE.SHEET.wr_*   (the blended texel)
+//      Port for port and width for width, three channels, nothing renamed and
+//      nothing computed between them. `spec/terrain_rules.md` 7 says layer F
+//      is "written only by SURFACE.STAMP", so this is not two blocks that
+//      happen to fit: it is the only pairing the law permits, and SURFACE.SHEET
+//      had never had its single client attached.
+//
+//      THE STORE IS REAL AND ON CHIP -- SURF_SLOTS x 65,536 bits of M10K --
+//      so this is NOT the refusal at I23: nothing behind it waits on a
+//      behavioural SDRAM model that this tree does not have.
+//
+//      AND IT IS AN ISLAND, which is stated here rather than left to be
+//      discovered. Nothing in the console causes a stamp; the dispatch arrives
+//      at this module's edge because CMD.SCHEDULER has no SurfaceStamp path
+//      (entry I30). The traffic BETWEEN the two blocks is real and the traffic
+//      INTO the pair is a boundary, and those are different claims.
+//
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
 // ---------------------------------------------------------------------------
@@ -516,6 +536,39 @@
 //      store's own `geom_pal_bone_unset_o` reports any vertex that arrived
 //      before its pose did. The missing thing is the BYTES, not the path.
 //
+// I30. SURFACE.STAMP's DISPATCH (`surf_cmd_*`) -- BOUNDARY. NEW 2026-09-19,
+//      opened by composing the SURFACE pair (connected item 9).
+//      `spec/commands.zidl` carries SurfaceStamp with its `handle32[patch]`,
+//      operation byte, tag, strength, transform, radius and ring width, so the
+//      command is RATIFIED and the fields below are its fields -- what is
+//      missing is the path from CMD.SCHEDULER to here. `zhao_cmd_scheduler`
+//      decodes SetPresentationContract and the display/rumble/snapshot
+//      dispatches and nothing else; it has no SurfaceStamp arm and no port to
+//      put one on. This is the SAME absent path entry I14 describes for the
+//      projection matrices and I7 for the collision plane, and it should be
+//      closed with them rather than one at a time.
+//      The patch ENVELOPE (`surf_cmd_env_*`) rides the same port and has the
+//      same absent owner: it is the placement TERRAIN.PATCH would supply, and
+//      entry I27 already records that nothing in the tree emits placement.
+//
+// I31. SURFACE.STAMP's FIELD-DRIVEN BRUSH (`surf_fld_*`) -- BOUNDARY.
+//      FIELD.SEQ.STAMP is the named owner and it is not built. This is the
+//      same shape as I5 (PART.UPDATE's field sample) one sequencer over, and
+//      it is a SEPARATE entry from I30 because the absent owner is a different
+//      block: closing the CMD path would not close this, and vice versa.
+//      NOT tied off: `cmd_field_en_i` selects whether the brush is consulted,
+//      and it is an input rather than a constant, so the datapath behind it
+//      survives synthesis and this row measures it.
+//
+// I32. SURFACE.STAMP's `stamp_results` (`surf_res_*`) -- BOUNDARY. TERRAIN.BAKE
+//      is the named consumer, it is built (`fpga/rtl/terrain/zhao_terrain_bake
+//      .sv`) and it is NOT composed. It is deliberately not composed here:
+//      TERRAIN.BAKE belongs to the terrain compose engine that entry I27 says
+//      is blocked on a placement owner, and adopting it for this one port
+//      would pull that whole subsystem in behind a seam I27 already records as
+//      unclosable today. The port is on this module's edge so the result
+//      stream is observable rather than dropped.
+//
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
 // ---------------------------------------------------------------------------
@@ -618,6 +671,21 @@ module zhao_console_core
   parameter int unsigned HIST_LANES    = 4,
   parameter int unsigned HIST_CW       = 24,
   parameter int unsigned HIST_BINW     = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS),
+
+  // ---- SURFACE: the scar substrate and the engine that writes it -----------
+  // Both are the owning block's own default, named here so the day one moves
+  // the thing that has to move with it is greppable, and so the owner keeps
+  // control of a value that is a measured frontier rather than a law.
+  //   SURF_SLOTS   -- resident 64x64 sheets. Each slot is 65,536 bits (about
+  //                   seven M10K), so this is SURFACE.SHEET's whole memory
+  //                   bill and the block's own header asks the first fit to
+  //                   retune it.
+  //   SURF_SQ_RADIX-- SURFACE.STAMP's squarer radix. All three settings meet
+  //                   the 20,000 texel/frame demand; the wall is Fmax on a
+  //                   SHARED gpu_clk, which is exactly why 1 is the default
+  //                   and this is a knob rather than a constant.
+  parameter int unsigned SURF_SLOTS    = 2,
+  parameter int unsigned SURF_SQ_RADIX = 1,
 
   // ---- TERRAIN: the paging spine (CMD -> SEQ -> RESIDENCY/LOADQ -> LOADER) --
   // Every one of these is the value the block that owns it already defaults to;
@@ -1602,6 +1670,71 @@ module zhao_console_core
   output logic [31:0] render_retired_words_o,
   output logic        render_overflow_o,
   output logic        render_fragment_error_o,
+
+  // ==========================================================================
+  // SURFACE. The pair below is composed and CLOSED ON ITSELF -- SURFACE.STAMP
+  // is SURFACE.SHEET's only client and SURFACE.SHEET is SURFACE.STAMP's only
+  // store, so the request, page and write channels are all internal wires and
+  // none of them appears here. What DOES appear is the three ends that have no
+  // owner in this tree (entries I30, I31, I32) plus the pair's evidence.
+  // ==========================================================================
+
+  // I30: the SurfaceStamp dispatch. CMD.SCHEDULER has no path to it.
+  input  logic               surf_cmd_valid_i,
+  output logic               surf_cmd_ready_o,
+  input  logic        [31:0] surf_cmd_handle_i,
+  input  logic        [ 7:0] surf_cmd_operation_i,
+  input  logic        [ 7:0] surf_cmd_tag_i,
+  input  logic        [15:0] surf_cmd_strength_i,
+  input  logic signed [31:0] surf_cmd_tx_i,
+  input  logic signed [31:0] surf_cmd_ty_i,
+  input  logic signed [31:0] surf_cmd_radius_i,
+  input  logic signed [31:0] surf_cmd_ring_width_i,
+  input  logic signed [31:0] surf_cmd_env_x0_i,
+  input  logic signed [31:0] surf_cmd_env_z0_i,
+  input  logic signed [31:0] surf_cmd_env_x1_i,
+  input  logic signed [31:0] surf_cmd_env_z1_i,
+  input  logic               surf_cmd_blend_en_i,
+  input  logic        [ 2:0] surf_cmd_blend_i,
+  input  logic        [ 2:0] surf_cmd_age_shift_i,
+  input  logic               surf_cmd_field_en_i,
+  input  logic        [15:0] surf_cmd_src_id_i,
+
+  // I31: the field-driven brush. FIELD.SEQ.STAMP is not built.
+  input  logic        surf_fld_valid_i,
+  output logic        surf_fld_ready_o,
+  input  logic [31:0] surf_fld_tag_op_i,
+  input  logic [15:0] surf_fld_strength_i,
+
+  // I32: `stamp_results` -> TERRAIN.BAKE, which is not composed.
+  output logic        surf_res_valid_o,
+  input  logic        surf_res_ready_i,
+  output logic [11:0] surf_res_texel_o,
+  output logic [ 7:0] surf_res_tag_o,
+  output logic [ 7:0] surf_res_strength_o,
+  output logic [ 7:0] surf_res_before_o,
+  output logic [15:0] surf_res_src_id_o,
+
+  // SURFACE.SHEET's spare response fields. NOT a gap: SURFACE.STAMP consumes
+  // the two it needs (`status`, `strength`) and these three are the block's
+  // own evidence, which leaves the module rather than being dropped.
+  output logic [ 1:0] surf_pg_op_o,
+  output logic [ 7:0] surf_pg_tag_o,
+  output logic [15:0] surf_pg_src_id_o,
+
+  // residency_status and the pair's counters
+  output logic [SURF_SLOTS-1:0] surf_res_occupancy_o,
+  output logic        surf_res_busy_o,
+  output logic        surf_res_overflow_o,
+  output logic        surf_sheet_wr_miss_o,
+  output logic [15:0] surf_sheet_wr_miss_src_id_o,
+  output logic        surf_sheet_idle_o,
+  output logic [31:0] surf_sheet_texels_touched_o,
+  output logic        surf_stamp_done_o,
+  output logic        surf_stamp_rejected_o,
+  output logic        surf_stamp_idle_o,
+  output logic [31:0] surf_stamps_o,
+  output logic [31:0] surf_stamp_texels_touched_o,
 
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
   output logic        phy_cs_n_o,
@@ -3154,6 +3287,185 @@ module zhao_console_core
     .host_conflict_o(hist_host_conflict_o),
     .snapshots_o    (hist_snapshots_o),
     .frozen_write_o (hist_frozen_write_o)
+  );
+
+  // ==========================================================================
+  // SURFACE: STAMP <-> SHEET, a closed read-modify-write pair.
+  //
+  // `spec/terrain_rules.md` 7 -- "F written only by SURFACE.STAMP" -- is not a
+  // note about this composition, it is the reason the composition is a PAIR and
+  // not two blocks that happen to be adjacent. SURFACE.SHEET has exactly one
+  // request port, one page port and one write port; SURFACE.STAMP is the only
+  // block in the tree that drives all three, and it drives them port for port
+  // and width for width. Nothing is renamed and nothing is computed between
+  // them:
+  //
+  //   STAMP.req_*  -> SHEET.req_*   (ACQUIRE, then one READ per covered texel)
+  //   SHEET.pg_*   -> STAMP.pg_*    (status and the pre-blend strength)
+  //   STAMP.wr_*   -> SHEET.wr_*    (the blended texel, with byte enables)
+  //
+  // So the loop is real and it is INTERNAL: a stamp acquires a sheet, reads
+  // layer F texel by texel, blends, and writes it back into the same on-chip
+  // store. `surf_sheet_texels_touched_o` and `surf_stamp_texels_touched_o` are
+  // the two ends of that loop counted independently, which is the point --
+  // they are incremented by different blocks from different events, so they
+  // agreeing is evidence rather than a tautology.
+  //
+  // WHAT THIS IS NOT, said plainly rather than left for somebody to discover.
+  // This pair is an ISLAND inside the core. Nothing in the console CAUSES a
+  // stamp: the dispatch arrives at this module's edge (I30) because
+  // CMD.SCHEDULER has no SurfaceStamp path, so until it does, the pair only
+  // moves when a harness moves it. That is the completion plan's permitted
+  // "host packets" and it is a boundary, not a connection, and it is counted
+  // as one below.
+  //
+  // THE STORE IS ON CHIP AND REAL. SURFACE.SHEET is `SURF_SLOTS` x 65,536 bits
+  // of M10K, not a port standing in for hardware storage, so this is not the
+  // refusal recorded at I23: there is nothing behind it that needs a beat from
+  // an SDRAM model that does not exist.
+  //
+  // TEXTURE.AUX IS THE SECOND READER THE LEDGER NAMES, and it does not fit:
+  // `design/blocks.yml` gives SURFACE.SHEET `downstream: [SURFACE.STAMP,
+  // TEXTURE.AUX, MEM.GUARD]` while the block has ONE request port. Sharing it
+  // is an arbiter, and an arbiter invented here is the thing this file refuses
+  // to contain. TEXTURE.AUX is uncomposed for its own reasons, so nothing is
+  // lost today; it is written down so the next packet does not read the single
+  // port as an oversight.
+  // ==========================================================================
+  wire        surf_req_valid, surf_req_ready;
+  wire [ 1:0] surf_req_op;
+  wire [31:0] surf_req_handle;
+  wire [11:0] surf_req_texel;
+  wire [15:0] surf_req_src_id;
+
+  wire        surf_pg_valid, surf_pg_ready;
+  wire [ 1:0] surf_pg_status;
+  wire [ 7:0] surf_pg_strength;
+
+  wire        surf_wr_valid, surf_wr_ready;
+  wire [31:0] surf_wr_handle;
+  wire [11:0] surf_wr_texel;
+  wire [ 7:0] surf_wr_tag, surf_wr_strength;
+  wire        surf_wr_we_tag, surf_wr_we_strength;
+  wire [15:0] surf_wr_src_id;
+
+  zhao_surface_stamp #(
+    .SQ_RADIX (SURF_SQ_RADIX)
+  ) u_surface_stamp (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // I30: the SurfaceStamp dispatch has no producer in this tree.
+    .cmd_valid_i     (surf_cmd_valid_i),
+    .cmd_ready_o     (surf_cmd_ready_o),
+    .cmd_handle_i    (surf_cmd_handle_i),
+    .cmd_operation_i (surf_cmd_operation_i),
+    .cmd_tag_i       (surf_cmd_tag_i),
+    .cmd_strength_i  (surf_cmd_strength_i),
+    .cmd_tx_i        (surf_cmd_tx_i),
+    .cmd_ty_i        (surf_cmd_ty_i),
+    .cmd_radius_i    (surf_cmd_radius_i),
+    .cmd_ring_width_i(surf_cmd_ring_width_i),
+    .cmd_env_x0_i    (surf_cmd_env_x0_i),
+    .cmd_env_z0_i    (surf_cmd_env_z0_i),
+    .cmd_env_x1_i    (surf_cmd_env_x1_i),
+    .cmd_env_z1_i    (surf_cmd_env_z1_i),
+    .cmd_blend_en_i  (surf_cmd_blend_en_i),
+    .cmd_blend_i     (surf_cmd_blend_i),
+    .cmd_age_shift_i (surf_cmd_age_shift_i),
+    .cmd_field_en_i  (surf_cmd_field_en_i),
+    .cmd_src_id_i    (surf_cmd_src_id_i),
+
+    // I31: FIELD.SEQ.STAMP is not built.
+    .fld_valid_i   (surf_fld_valid_i),
+    .fld_ready_o   (surf_fld_ready_o),
+    .fld_tag_op_i  (surf_fld_tag_op_i),
+    .fld_strength_i(surf_fld_strength_i),
+
+    // REAL: SURFACE.SHEET's request port, name for name.
+    .req_valid_o (surf_req_valid),
+    .req_ready_i (surf_req_ready),
+    .req_op_o    (surf_req_op),
+    .req_handle_o(surf_req_handle),
+    .req_texel_o (surf_req_texel),
+    .req_src_id_o(surf_req_src_id),
+
+    // REAL: SURFACE.SHEET's page responses.
+    .pg_valid_i   (surf_pg_valid),
+    .pg_ready_o   (surf_pg_ready),
+    .pg_status_i  (surf_pg_status),
+    .pg_strength_i(surf_pg_strength),
+
+    // REAL: SURFACE.SHEET's write port -- the only writer layer F has.
+    .wr_valid_o       (surf_wr_valid),
+    .wr_ready_i       (surf_wr_ready),
+    .wr_handle_o      (surf_wr_handle),
+    .wr_texel_o       (surf_wr_texel),
+    .wr_tag_o         (surf_wr_tag),
+    .wr_strength_o    (surf_wr_strength),
+    .wr_we_tag_o      (surf_wr_we_tag),
+    .wr_we_strength_o (surf_wr_we_strength),
+    .wr_src_id_o      (surf_wr_src_id),
+
+    // I32: TERRAIN.BAKE is not composed.
+    .res_valid_o   (surf_res_valid_o),
+    .res_ready_i   (surf_res_ready_i),
+    .res_texel_o   (surf_res_texel_o),
+    .res_tag_o     (surf_res_tag_o),
+    .res_strength_o(surf_res_strength_o),
+    .res_before_o  (surf_res_before_o),
+    .res_src_id_o  (surf_res_src_id_o),
+
+    .stamp_done_o            (surf_stamp_done_o),
+    .stamp_rejected_o        (surf_stamp_rejected_o),
+    .surface_stamps_o        (surf_stamps_o),
+    .surface_texels_touched_o(surf_stamp_texels_touched_o),
+    .idle_o                  (surf_stamp_idle_o)
+  );
+
+  zhao_surface_sheet #(
+    .Slots (SURF_SLOTS)
+  ) u_surface_sheet (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // REAL: SURFACE.STAMP is the only requester.
+    .req_valid_i (surf_req_valid),
+    .req_ready_o (surf_req_ready),
+    .req_op_i    (surf_req_op),
+    .req_handle_i(surf_req_handle),
+    .req_texel_i (surf_req_texel),
+    .req_src_id_i(surf_req_src_id),
+
+    // REAL: the response stream. STAMP takes `status` and `strength`; the
+    // other three leave this module as evidence (see the port declarations).
+    .pg_valid_o   (surf_pg_valid),
+    .pg_ready_i   (surf_pg_ready),
+    .pg_op_o      (surf_pg_op_o),
+    .pg_status_o  (surf_pg_status),
+    .pg_tag_o     (surf_pg_tag_o),
+    .pg_strength_o(surf_pg_strength),
+    .pg_src_id_o  (surf_pg_src_id_o),
+
+    // REAL: SURFACE.STAMP is the only writer.
+    .wr_valid_i      (surf_wr_valid),
+    .wr_ready_o      (surf_wr_ready),
+    .wr_handle_i     (surf_wr_handle),
+    .wr_texel_i      (surf_wr_texel),
+    .wr_tag_i        (surf_wr_tag),
+    .wr_strength_i   (surf_wr_strength),
+    .wr_we_tag_i     (surf_wr_we_tag),
+    .wr_we_strength_i(surf_wr_we_strength),
+    .wr_src_id_i     (surf_wr_src_id),
+    .wr_miss_o       (surf_sheet_wr_miss_o),
+    .wr_miss_src_id_o(surf_sheet_wr_miss_src_id_o),
+
+    .res_occupancy_o(surf_res_occupancy_o),
+    .res_busy_o     (surf_res_busy_o),
+    .res_overflow_o (surf_res_overflow_o),
+
+    .surface_texels_touched_o(surf_sheet_texels_touched_o),
+    .idle_o                  (surf_sheet_idle_o)
   );
 
   // ==========================================================================

@@ -91,6 +91,10 @@ module tb_zhao_console_core_smoke
   localparam int unsigned HIST_LANES     = 4;
   localparam int unsigned HIST_CW        = 24;
   localparam int unsigned HIST_BINW      = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS);
+  // SURFACE.SHEET's resident slot count, mirrored so `surf_res_occupancy_o`
+  // can be declared. Overriding SURF_SLOTS on the DUT without changing this
+  // is a width mismatch the compiler catches, which is the point.
+  localparam int unsigned SURF_SLOTS     = 2;
 
   localparam int unsigned N_PART_RECORDS = 6;
 
@@ -816,6 +820,58 @@ module tb_zhao_console_core_smoke
   logic [31:0] render_retired_words_o;
   logic        render_overflow_o;
   logic        render_fragment_error_o;
+  // ---- PACKET P-SURFACE, 2026-09-19 -------------------------------------
+  // The three ends of the composed SURFACE pair that have no owner in the
+  // tree (DUT entries I30, I31, I32), plus its evidence. The request, page
+  // and write channels between STAMP and SHEET are INTERNAL to the DUT and
+  // deliberately do not appear here -- if they did, this bench would be
+  // playing the seam it is supposed to be measuring.
+  logic               surf_cmd_valid_i;
+  logic               surf_cmd_ready_o;
+  logic        [31:0] surf_cmd_handle_i;
+  logic        [ 7:0] surf_cmd_operation_i;
+  logic        [ 7:0] surf_cmd_tag_i;
+  logic        [15:0] surf_cmd_strength_i;
+  logic signed [31:0] surf_cmd_tx_i;
+  logic signed [31:0] surf_cmd_ty_i;
+  logic signed [31:0] surf_cmd_radius_i;
+  logic signed [31:0] surf_cmd_ring_width_i;
+  logic signed [31:0] surf_cmd_env_x0_i;
+  logic signed [31:0] surf_cmd_env_z0_i;
+  logic signed [31:0] surf_cmd_env_x1_i;
+  logic signed [31:0] surf_cmd_env_z1_i;
+  logic               surf_cmd_blend_en_i;
+  logic        [ 2:0] surf_cmd_blend_i;
+  logic        [ 2:0] surf_cmd_age_shift_i;
+  logic               surf_cmd_field_en_i;
+  logic        [15:0] surf_cmd_src_id_i;
+  logic               surf_fld_valid_i;
+  logic               surf_fld_ready_o;
+  logic        [31:0] surf_fld_tag_op_i;
+  logic        [15:0] surf_fld_strength_i;
+  logic               surf_res_valid_o;
+  logic               surf_res_ready_i;
+  logic        [11:0] surf_res_texel_o;
+  logic        [ 7:0] surf_res_tag_o;
+  logic        [ 7:0] surf_res_strength_o;
+  logic        [ 7:0] surf_res_before_o;
+  logic        [15:0] surf_res_src_id_o;
+  logic        [ 1:0] surf_pg_op_o;
+  logic        [ 7:0] surf_pg_tag_o;
+  logic        [15:0] surf_pg_src_id_o;
+  logic [SURF_SLOTS-1:0] surf_res_occupancy_o;
+  logic               surf_res_busy_o;
+  logic               surf_res_overflow_o;
+  logic               surf_sheet_wr_miss_o;
+  logic        [15:0] surf_sheet_wr_miss_src_id_o;
+  logic               surf_sheet_idle_o;
+  logic        [31:0] surf_sheet_texels_touched_o;
+  logic               surf_stamp_done_o;
+  logic               surf_stamp_rejected_o;
+  logic               surf_stamp_idle_o;
+  logic        [31:0] surf_stamps_o;
+  logic        [31:0] surf_stamp_texels_touched_o;
+
   logic        phy_cs_n_o;
   logic        phy_ras_n_o;
   logic        phy_cas_n_o;
@@ -844,6 +900,116 @@ module tb_zhao_console_core_smoke
 `else
   zhao_console_core dut (.*);
 `endif
+
+  // ==========================================================================
+  // PACKET P-SURFACE: ONE SurfaceStamp COMMAND, AND NOTHING ELSE
+  // ==========================================================================
+  // WHAT THIS HARNESS IS ALLOWED TO BE, and it is a narrower licence than the
+  // terrain engine below claims. The completion plan lets a harness supply
+  // "host packets"; `spec/commands.zidl` carries SurfaceStamp with exactly the
+  // fields driven here, so presenting one is presenting a host packet whose
+  // decoder does not exist yet (DUT entry I30). What this bench does NOT do is
+  // touch the seam under test: SURFACE.STAMP's request, page and write
+  // channels are internal to the DUT, so every texel read and every texel
+  // written below happens between two real blocks with this file nowhere in
+  // the loop.
+  //
+  // THE NUMBERS ARE THE COMMITTED TEST'S OWN. `tests/surface/
+  // surface_stamp_chain.cpp` runs this identical pair against the reference
+  // with a 64x64 m envelope centred on the origin and a crack ring, and its
+  // `settle()` wires the three channels port for port the same way the DUT
+  // does. Reusing its envelope means a disagreement here is about the
+  // COMPOSITION rather than about a stimulus nobody has validated.
+  //
+  // ONE metre per texel: the envelope is 64 m across a 64-texel sheet. A ring
+  // of outer radius 6 and width 2 covers an annulus of a few dozen texels --
+  // small on purpose, because at SQ_RADIX = 1 each texel costs ~39 cycles and
+  // this is a wiring bench, not a throughput measurement.
+  localparam int signed SURF_M      = 32'sh0001_0000;  // fx16 one metre
+  localparam int signed SURF_ENV_LO = -32 * SURF_M;
+  localparam int signed SURF_ENV_HI =  32 * SURF_M;
+  localparam logic [31:0] SURF_PATCH_C = 32'h0000_2C01;  // the chain test's handle
+
+  // `stamp_rejected_o`, `res_overflow_o` and `wr_miss_o` are ONE-CYCLE PULSES,
+  // so the verdict cannot read them directly -- by the time it runs they are
+  // long back at zero, and a zero read at the wrong moment is indistinguishable
+  // from a pulse that never happened. They are made sticky here so a single
+  // event survives to be asserted on.
+  logic surf_rejected_seen_q, surf_overflow_seen_q, surf_wr_miss_seen_q;
+  logic surf_done_seen_q;
+  logic [31:0] surf_res_records_q;   // stamp_results beats this bench accepted
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      surf_rejected_seen_q <= 1'b0;
+      surf_overflow_seen_q <= 1'b0;
+      surf_wr_miss_seen_q  <= 1'b0;
+      surf_done_seen_q     <= 1'b0;
+      surf_res_records_q   <= 32'd0;
+    end else begin
+      if (surf_stamp_rejected_o) surf_rejected_seen_q <= 1'b1;
+      if (surf_res_overflow_o)   surf_overflow_seen_q <= 1'b1;
+      if (surf_sheet_wr_miss_o)  surf_wr_miss_seen_q  <= 1'b1;
+      if (surf_stamp_done_o)     surf_done_seen_q     <= 1'b1;
+      if (surf_res_valid_o && surf_res_ready_i)
+        surf_res_records_q <= surf_res_records_q + 32'd1;
+    end
+  end
+
+  // I31: no FIELD.SEQ.STAMP, so the field brush is never offered and
+  // `cmd_field_en_i` selects it off. These are INPUTS held at zero, not
+  // constants tied inside the RTL -- the datapath behind `cmd_field_en_i` is
+  // still synthesised and this row still measures it.
+  assign surf_fld_valid_i    = 1'b0;
+  assign surf_fld_tag_op_i   = 32'd0;
+  assign surf_fld_strength_i = 16'd0;
+
+  // I32: TERRAIN.BAKE does not exist, so this bench plays its consumer and is
+  // ALWAYS READY. That is not a convenience: `s2_accept` inside SURFACE.STAMP
+  // requires the RESULT beat to be taken as well as the write, so a low
+  // `res_ready` would stall the pair and both texel counters would read zero
+  // for a reason that has nothing to do with the seam under test.
+  assign surf_res_ready_i = 1'b1;
+
+  // The command's payload is constant; only `valid` moves. Holding the fields
+  // steady is what the block's contract expects of a dispatch and it keeps the
+  // handshake below the only moving part.
+  assign surf_cmd_handle_i     = SURF_PATCH_C;
+  assign surf_cmd_operation_i  = 8'd0;        // ABI operation 0
+  assign surf_cmd_tag_i        = 8'd1;
+  assign surf_cmd_strength_i   = 16'hD000;    // the low byte is discarded by law
+  assign surf_cmd_tx_i         = 32'sd0;
+  assign surf_cmd_ty_i         = 32'sd0;
+  assign surf_cmd_radius_i     = 6 * SURF_M;
+  assign surf_cmd_ring_width_i = 2 * SURF_M;  // a crack ring, not a filled disc
+  assign surf_cmd_env_x0_i     = SURF_ENV_LO;
+  assign surf_cmd_env_z0_i     = SURF_ENV_LO;
+  assign surf_cmd_env_x1_i     = SURF_ENV_HI;
+  assign surf_cmd_env_z1_i     = SURF_ENV_HI;
+  assign surf_cmd_blend_en_i   = 1'b0;        // 0 = the ABI operation mapping
+  assign surf_cmd_blend_i      = 3'd0;
+  assign surf_cmd_age_shift_i  = 3'd1;
+  assign surf_cmd_field_en_i   = 1'b0;
+  assign surf_cmd_src_id_i     = 16'd4242;
+
+  // ONE command, offered once and withdrawn on its ACCEPTANCE -- the same
+  // shape every other producer in this bench uses, and for the reason recorded
+  // in CLAUDE.md: a `valid` held across a whole offer window re-submitted one
+  // meshlet fifteen times and every result still matched. `surf_stamps_o` is
+  // asserted to be exactly 1 below, which is what catches the inverse.
+  logic surf_cmd_offered_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      surf_cmd_valid_i   <= 1'b0;
+      surf_cmd_offered_q <= 1'b0;
+    end else begin
+      if (surf_cmd_valid_i && surf_cmd_ready_o) surf_cmd_valid_i <= 1'b0;
+      else if (reset_released_q && !surf_cmd_offered_q) begin
+        surf_cmd_valid_i   <= 1'b1;
+        surf_cmd_offered_q <= 1'b1;
+      end
+    end
+  end
 
   // ==========================================================================
   // PACKET P-TERRAIN: THE PLAYED HPS BRIDGE AND MEM.GUARD
@@ -2407,6 +2573,94 @@ module tb_zhao_console_core_smoke
     else if (render_pixels_o == 0)
       $fatal(1, "SMOKE: %0d frame(s) were ADMITTED and the shell still rasterised 0 pixels from %0d triangles -- that is a real render-path fault, not the missing lease",
              v2_frames_admitted_o, geom_setup_triangles_submitted_o);
+
+    // ======================================================================
+    // PACKET P-SURFACE, 2026-09-19: SURFACE.STAMP <-> SURFACE.SHEET.
+    //
+    // WAIT FOR THE WORK, DO NOT GUESS AT IT -- the same rule the terrain wait
+    // above is written against. A ring of a few dozen texels at SQ_RADIX = 1
+    // costs a few thousand cycles plus SURFACE.SHEET's 4,096-cycle clear
+    // sweep, and a fixed `repeat` that expired early would read the counters
+    // mid-flight and look exactly like a seam that does not carry.
+    //
+    // THE CONSERVATION CHECK HAS BEEN SEEN TO FIRE, on the tree it guards and
+    // then reverted: `zhao_console_core`'s `.wr_handle_i` was driven with a
+    // literal instead of `surf_wr_handle`, and the run stopped with
+    //
+    //     texels[stamp/sheet]=[60 0] ... wr_miss_seen=1
+    //     "SURFACE.SHEET wrote 0 texels against SURFACE.STAMP's 60 retired"
+    //
+    // which is worth three things at once. The check fires. `wr_miss_o` and
+    // its sticky latch are live. And -- the reason this control was chosen
+    // over an easier one -- SURFACE.STAMP still completed its stamp and still
+    // retired all sixty texels while SURFACE.SHEET wrote none, so the two
+    // counters are demonstrably NOT two operands moving together. CLAUDE.md's
+    // rule is that a detector whose operands share one enable cannot fire;
+    // this is the measurement that says these two do not.
+    // ======================================================================
+    guard = 0;
+    while (!surf_done_seen_q && (guard < 200000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    repeat (16) @(posedge gpu_clk);
+
+    // EVIDENCE BEFORE VERDICT.
+    $display("SMOKE: surface   stamps=%0d done_seen=%0d rejected_seen=%0d idle[stamp/sheet]=[%0d %0d] guard=%0d",
+             surf_stamps_o, surf_done_seen_q, surf_rejected_seen_q,
+             surf_stamp_idle_o, surf_sheet_idle_o, guard);
+    $display("SMOKE: surface   texels[stamp/sheet]=[%0d %0d] results_taken=%0d occupancy=%b busy=%0d overflow_seen=%0d wr_miss_seen=%0d",
+             surf_stamp_texels_touched_o, surf_sheet_texels_touched_o,
+             surf_res_records_q, surf_res_occupancy_o, surf_res_busy_o,
+             surf_overflow_seen_q, surf_wr_miss_seen_q);
+
+    // 1. THE COMMAND WAS TAKEN AND COMPLETED EXACTLY ONCE. Not ">= 1": a
+    //    producer whose `valid` outlives its acceptance re-submits, and this
+    //    repository has shipped that defect with byte-identical output. One
+    //    command offered, one stamp counted.
+    if (surf_stamps_o != 32'd1)
+      $fatal(1, "SMOKE: SURFACE.STAMP completed %0d stamps against exactly one command offered -- 0 means the dispatch never crossed, >1 means the bench re-submitted",
+             surf_stamps_o);
+    if (surf_rejected_seen_q)
+      $fatal(1, "SMOKE: SURFACE.STAMP rejected the stamp (residency overflow) -- SURFACE.SHEET refused the ACQUIRE, so the pair's control channel carries but its allocator does not");
+
+    // 2. THE ACQUIRE REACHED THE SHEET AND THE SHEET ANSWERED IT. Occupancy is
+    //    SURFACE.SHEET's own state, set only by an ACQUIRE it allocated. The
+    //    request channel is internal to the DUT, so a live bit here can only
+    //    have come from STAMP's `req_op_o`.
+    if (surf_res_occupancy_o == '0)
+      $fatal(1, "SMOKE: SURFACE.SHEET holds no resident slot after a completed stamp -- STAMP.req_* -> SHEET.req_* does not carry the ACQUIRE");
+    if (surf_overflow_seen_q)
+      $fatal(1, "SMOKE: SURFACE.SHEET raised res_overflow on a single stamp against %0d free slots", SURF_SLOTS);
+
+    // 3. THE LOOP CLOSED -- and this is the check the composition exists for.
+    //    The two counters are incremented by DIFFERENT BLOCKS on DIFFERENT
+    //    events: SURFACE.STAMP counts a texel retiring out of its stage 2,
+    //    SURFACE.SHEET counts a write that HIT a resident handle. They cannot
+    //    both be moved by one wire, so their agreement is evidence rather than
+    //    a tautology -- which is exactly the property CLAUDE.md says a checker
+    //    needs, and exactly what a detector whose two operands share one
+    //    register enable does not have.
+    //
+    //    A handle that failed to cross would leave STAMP's count high and
+    //    SHEET's at zero (the block drops a non-resident write and says so on
+    //    `wr_miss_o`), so this is a conservation statement and not "a counter
+    //    moved".
+    if (surf_stamp_texels_touched_o == 0)
+      $fatal(1, "SMOKE: SURFACE.STAMP visited no texel -- a ring of outer radius 6 m on a 64 m envelope covers a few dozen, so the command's geometry never reached the walker");
+    if (surf_sheet_texels_touched_o != surf_stamp_texels_touched_o)
+      $fatal(1, "SMOKE: SURFACE.SHEET wrote %0d texels against SURFACE.STAMP's %0d retired -- the STAMP.wr_* -> SHEET.wr_* seam loses writes (wr_miss_seen=%0d)",
+             surf_sheet_texels_touched_o, surf_stamp_texels_touched_o,
+             surf_wr_miss_seen_q);
+    if (surf_wr_miss_seen_q)
+      $fatal(1, "SMOKE: SURFACE.SHEET dropped at least one write as non-resident -- the handle on the write port is not the handle the ACQUIRE made resident");
+
+    // 4. THE RESULT STREAM CARRIES (entry I32's port). One beat per retired
+    //    texel by SURFACE.STAMP's own retirement law: stage 2 cannot free
+    //    until BOTH the write and the result have been accepted.
+    if (surf_res_records_q != surf_stamp_texels_touched_o)
+      $fatal(1, "SMOKE: stamp_results delivered %0d beats against %0d texels retired -- the result port and the write port disagree about how many texels this stamp touched",
+             surf_res_records_q, surf_stamp_texels_touched_o);
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
