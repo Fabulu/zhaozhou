@@ -580,3 +580,53 @@ command DebugRumble 0xF004 implemented {
   u8 strength;    // PWM duty numerator (duty = strength/256)
   pad[13];        // rsv byte + 12-B alignment pad — 16-B payload, 32-B record
 }
+
+// ---- resources (owner ruling R17, 2026-09-19) --------------------------------
+//
+// PublishResource: THE ONE COMMAND THAT MOVES A STAGED RESOURCE INTO VRAM.
+// Ruling R17 (reports/OWNER-RULINGS-20260919-EVENING.md): "a new ratified
+// command ... lowered by CMD.EXEC onto MEM.UPLOAD's request port". Every field
+// is one of MEM.UPLOAD's request fields (design/contracts/MEM.UPLOAD.md
+// `UploadRequest`), and nothing here is interpreted by the command path:
+//
+//   resource        the handle32 the game names the resource by. Its 24-bit
+//                   INDEX is spec/memory_rules.md 5f.1's directory key; its
+//                   8-bit generation is the handle's, NOT the residency
+//                   generation (that is `new_generation`, 16 bits -- D-3's
+//                   cache tag keys on all sixteen).
+//   hps_addr_lo/hi  the staged bytes in the HPS arena. SIXTY-FOUR bits on
+//                   purpose: MEM.UPLOAD REFUSES a source above 4 GiB
+//                   (kUploadSourceUnreachable) rather than narrowing it, and a
+//                   32-bit field would do the narrowing on the wire.
+//   vram_dst        destination in local SDRAM (the allocator's FRESH slot).
+//   length          bytes, a multiple of 64 (a refusal, never a pad).
+//   crc32c          over the staged bytes, zhao_crc32c_fold's law.
+//   new_generation  the residency generation published on completion.
+//   epoch           the resource epoch this upload belongs to. NOT in R17's
+//                   field list and added deliberately: the contract's
+//                   UploadRequest carries it and its law 2 is "a request naming
+//                   an epoch that has closed is REFUSED" -- a command without
+//                   it could only borrow somebody else's epoch.
+//   dst_slot        the arena slot (MEM.UPLOAD's `req_dst_slot_i`).
+//   kind            the .zpak resource kind (spec/cartridge.md 4a), which
+//                   travels as MEM.UPLOAD's `req_tag_i` and is published as
+//                   the directory row's kind.
+//
+// VERSION DECISION: `abi version` STAYS 3, the precedent of TerrainEpoch
+// 0x0220 / SubmitTerrainSet 0x0230, which were allocated under v3 by ruling T5
+// without a bump. A v3 decoder built before this line reports
+// ZH_ABI_UNKNOWN_OPCODE on 0x0030 -- a clean refusal -- and every committed
+// capture stays valid, because no opcode, field set or size it uses moved.
+command PublishResource 0x0030 implemented {
+  handle32[resource] resource;
+  u32 hps_addr_lo;
+  u32 hps_addr_hi;
+  u32 vram_dst;
+  u32 length;
+  u32 crc32c;
+  u16 new_generation;
+  u16 epoch;
+  u8  dst_slot;
+  u8  kind;
+  pad[2];
+}

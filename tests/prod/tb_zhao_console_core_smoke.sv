@@ -653,17 +653,8 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_hps_c1_wait_cycles_o;
 
   // ---- MEM.UPLOAD on the TERRAIN.BUILD socket (2026-09-19, cmdmem) --------
-  logic                    upl_req_valid_i;
-  logic                    upl_req_ready_o;
-  logic [ 7:0]             upl_req_tag_i;
-  logic [23:0]             upl_req_index_i;
-  logic [63:0]             upl_req_hps_addr_i;
-  logic [31:0]             upl_req_vram_addr_i;
-  logic [31:0]             upl_req_len_i;
-  logic [15:0]             upl_req_epoch_i;
-  logic [ 7:0]             upl_req_dst_slot_i;
-  logic [15:0]             upl_req_new_gen_i;
-  logic [31:0]             upl_req_crc_i;
+  logic [31:0]             cmd_exec_uploads_o;
+  logic [31:0]             cmd_exec_upload_overflow_o;
   logic [31:0]             upl_cfg_region_base_i;
   logic [31:0]             upl_cfg_region_bytes_i;
   logic [63:0]             upl_cfg_arena_base_i;
@@ -1770,26 +1761,52 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  // ---- the SHELL's HPS port: the upload arena (2026-09-19, cmdmem) ----------
-  // Until this block the shell's own HPS pins were tied low and nothing crossed
-  // them. MEM.UPLOAD now reaches HPS DDR through the shell's REAL
-  // `zhao_hps_bridge` and `zhao_hps_arbiter_n` (the TERRAIN.BUILD socket), so
-  // the bench plays the far side of that bridge exactly as it plays the
-  // terrain spine's: a grant, a fixed latency, then len/8 beats of memory.
+  // ---- the SHELL's HPS port: the FRAME RING and the upload arena ------------
+  // Until 2026-09-19 the shell's own HPS pins were tied low, so no command
+  // packet ever reached this console and CMD.DECODER / CMD.EXEC / DEBUG.TRACE
+  // walked nothing (the note at the DEBUG.TRACE check said so). The bench now
+  // plays the far side of the shell's REAL `zhao_hps_bridge`, exactly as it
+  // plays the terrain spine's: a grant, a fixed latency, then len/8 beats.
   //
-  // IT MODELS ONLY THE UPLOAD ARENA, and says so loudly. Any other request
-  // over these pins -- a CMD.DMA packet fetch, a write -- is something this
-  // bench has no bytes for, and serving zeros would be inventing a packet.
+  // It serves TWO regions and says so loudly for anything else:
+  //   * FRAME_RING slot 0's body at RING_BASE (0) + the 4-KiB descriptor table
+  //     -- one sealed packet, built below from the GENERATED packers;
+  //   * MEM.UPLOAD's staging arena -- the bytes that packet's PublishResource
+  //     names.
+  // A write, or a read anywhere else, is something this bench has no bytes
+  // for, and serving zeros would be inventing them.
+  localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
+  localparam int unsigned PKT_MAX_C     = 256;
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
   // The top 4 KiB of TERRAIN.PAGE_POOL -- the only window MEM.GUARD's
   // TERRAIN_BUILD arm admits -- well clear of the pages the spine loads.
   localparam logic [31:0] UPL_REGION_C  = 32'h054D_F000;
   localparam logic [31:0] UPL_REGION_SZ = 32'h0000_1000;
+  // The request the packet carries, named once so the checks can compare the
+  // published row against it.
+  localparam logic [23:0] UPL_INDEX_C   = 24'h00_ABCD;
+  localparam logic [ 7:0] UPL_KIND_C    = 8'd11;            // spec/cartridge.md 4a: MATERIAL_SET
+  localparam logic [ 7:0] UPL_SLOT_C    = 8'd5;
+  localparam logic [15:0] UPL_GEN_C     = 16'h0102;
+  localparam logic [15:0] UPL_EPOCH_C   = 16'd9;
   logic [63:0] upl_mem [0:UPL_WORDS_C-1];
+  logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
+  int unsigned pkt_len_q;
+  logic        pkt_armed_q;       // set by the initial block once the packet is built
 
-  int unsigned  sh_state_q, sh_wait_q, sh_beats_q, sh_bursts_q;
+  int unsigned  sh_state_q, sh_wait_q, sh_beats_q, sh_bursts_q, sh_pkt_bursts_q;
   logic [31:0]  sh_addr_q;
+  logic         sh_is_pkt_q;
+
+  function automatic logic [63:0] ring_read(input logic [31:0] a);
+    logic [63:0] w;
+    w = '0;
+    for (int unsigned k = 0; k < 8; k++)
+      if ((a - RING_SLOT0_C + 32'(k)) < 32'(PKT_MAX_C))
+        w[8*k +: 8] = pkt_mem[(a - RING_SLOT0_C) + 32'(k)];
+    return w;
+  endfunction
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -1797,7 +1814,9 @@ module tb_zhao_console_core_smoke
       sh_wait_q       <= 0;
       sh_beats_q      <= 0;
       sh_bursts_q     <= 0;
+      sh_pkt_bursts_q <= 0;
       sh_addr_q       <= 32'd0;
+      sh_is_pkt_q     <= 1'b0;
       hps_req_grant_i <= 1'b0;
       hps_rd_valid_i  <= 1'b0;
       hps_rd_data_i   <= 64'd0;
@@ -1808,10 +1827,16 @@ module tb_zhao_console_core_smoke
       hps_rd_last_i   <= 1'b0;
       case (sh_state_q)
         0: if (hps_req_valid_o) begin
-             if (hps_req_write_o || (hps_req_addr_o < UPL_ARENA_C) ||
-                 (hps_req_addr_o >= UPL_ARENA_C + 32'(UPL_WORDS_C * 8)))
-               $fatal(1, "SMOKE: the shell's HPS port was asked for %s at %08x -- this bench plays only MEM.UPLOAD's arena and has no bytes to answer with",
-                      hps_req_write_o ? "a WRITE" : "a read", hps_req_addr_o);
+             if (hps_req_write_o)
+               $fatal(1, "SMOKE: the shell's HPS port was asked for a WRITE at %08x -- nothing in this console writes HPS DDR", hps_req_addr_o);
+             if ((hps_req_addr_o >= RING_SLOT0_C) && (hps_req_addr_o < RING_SLOT0_C + 32'(PKT_MAX_C)))
+               sh_is_pkt_q <= 1'b1;
+             else if ((hps_req_addr_o >= UPL_ARENA_C) &&
+                      (hps_req_addr_o < UPL_ARENA_C + 32'(UPL_WORDS_C * 8)))
+               sh_is_pkt_q <= 1'b0;
+             else
+               $fatal(1, "SMOKE: the shell's HPS port was asked for a read at %08x -- this bench plays only FRAME_RING slot 0 and MEM.UPLOAD's arena",
+                      hps_req_addr_o);
              hps_req_grant_i <= 1'b1;
              sh_addr_q       <= hps_req_addr_o;
              sh_beats_q      <= hps_req_len_o >> 3;
@@ -1822,13 +1847,15 @@ module tb_zhao_console_core_smoke
            else               sh_state_q <= 2;
         2: begin
              hps_rd_valid_i <= 1'b1;
-             hps_rd_data_i  <= upl_mem[(sh_addr_q - UPL_ARENA_C) >> 3];
+             hps_rd_data_i  <= sh_is_pkt_q ? ring_read(sh_addr_q)
+                                           : upl_mem[(sh_addr_q - UPL_ARENA_C) >> 3];
              hps_rd_last_i  <= (sh_beats_q == 1);
              sh_addr_q      <= sh_addr_q + 32'd8;
              sh_beats_q     <= sh_beats_q - 1;
              if (sh_beats_q == 1) begin
-               sh_state_q  <= 0;
-               sh_bursts_q <= sh_bursts_q + 1;
+               sh_state_q <= 0;
+               if (sh_is_pkt_q) sh_pkt_bursts_q <= sh_pkt_bursts_q + 1;
+               else             sh_bursts_q     <= sh_bursts_q + 1;
              end
            end
         default: sh_state_q <= 0;
@@ -1836,11 +1863,38 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  // ---- ONE UPLOAD, offered once the console is out of reset ----------------
-  // Its request fields are set with the other configuration before reset; the
-  // valid is raised here and dropped on the handshake. What comes back is
-  // recorded, and checked at the end against the request that caused it.
-  logic         upl_fired_q;
+  // ---- the FRAME_RING's descriptor word view (harness-as-HPS, plan D10) -----
+  // Slot 0 becomes READY once the packet is built and the console is out of
+  // reset. The FPGA's own ring writes (DONE, then FREE) are applied to the
+  // word view as HPS DDR would hold them, so the slot is claimed ONCE and is
+  // not re-executed at the next tick -- the upload would publish twice.
+  int unsigned ring_writes_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      hps_state_i     <= '{default: '0};
+      hps_byte_len_i  <= '{default: '0};
+      ring_wr_ready_i <= 1'b1;
+      ring_writes_q   <= 0;
+    end else begin
+      // The HPS producer's own walk, charter 7.4: FREE -> ARM_WRITING while the
+      // body is written, then READY once it is sealed. CMD.SCHEDULER follows
+      // the word forward-only and does not take FREE -> READY in one step.
+      if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
+        if (hps_state_i[0] == 2'd0) begin
+          hps_state_i[0] <= 2'd1;               // ARM_WRITING
+        end else if (hps_state_i[0] == 2'd1) begin
+          hps_state_i[0]    <= 2'd2;            // READY
+          hps_byte_len_i[0] <= 32'(pkt_len_q);
+        end
+      end
+      if (ring_wr_valid_o && ring_wr_ready_i) begin
+        hps_state_i[ring_wr_slot_o] <= ring_wr_state_o;
+        ring_writes_q <= ring_writes_q + 1;
+      end
+    end
+  end
+
+  // ---- what the packet's upload produced ------------------------------------
   int unsigned  upl_done_seen_q, upl_pub_seen_q;
   logic [7:0]   upl_status_seen_q;
   logic [7:0]   upl_pub_slot_q, upl_pub_tag_q;
@@ -1850,8 +1904,6 @@ module tb_zhao_console_core_smoke
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      upl_req_valid_i   <= 1'b0;
-      upl_fired_q       <= 1'b0;
       upl_done_seen_q   <= 0;
       upl_pub_seen_q    <= 0;
       upl_status_seen_q <= 8'hFF;
@@ -1862,11 +1914,6 @@ module tb_zhao_console_core_smoke
       upl_pub_base_q    <= '0;
       upl_pub_extent_q  <= '0;
     end else begin
-      if (reset_released_q && !upl_fired_q && !upl_req_valid_i) upl_req_valid_i <= 1'b1;
-      if (upl_req_valid_i && upl_req_ready_o) begin
-        upl_req_valid_i <= 1'b0;
-        upl_fired_q     <= 1'b1;
-      end
       if (upl_done_o) begin
         upl_done_seen_q   <= upl_done_seen_q + 1;
         upl_status_seen_q <= upl_status_o;
@@ -1882,7 +1929,6 @@ module tb_zhao_console_core_smoke
       end
     end
   end
-
   // ---- the played MEM.GUARD write window -----------------------------------
   // TERRAIN.PAGELOADER writes the page into TERRAIN.PAGE_POOL through a guard
   // client. The real `zhao_mem_guard` gives ZHAO_CLIENT_TERRAIN_BUILD a
@@ -2976,9 +3022,9 @@ module tb_zhao_console_core_smoke
     scanout_ack_i = '0;
     frame_swap_valid_i = '0;
     frame_swap_slot_i = '0;
-    hps_state_i = '{default: '0};
-    hps_byte_len_i = '{default: '0};
-    ring_wr_ready_i = '0;
+    // hps_state_i, hps_byte_len_i and ing_wr_ready_i are driven by the
+    // FRAME_RING word-view model (harness-as-HPS), not tied here.
+    pkt_armed_q = 1'b0;
     // `hps_req_grant_i` / `hps_rd_*_i` are no longer tied here: the shell's HPS
     // port is served by the upload-arena model below (MEM.UPLOAD's socket).
     pad_present_i = '0;
@@ -3194,11 +3240,14 @@ module tb_zhao_console_core_smoke
     terr_cfg_arena_bytes_i = 32'(HPS_WORDS * 8);
     terr_cfg_load_budget_i = 16'd32;   // T7's per-frame page budget
 
-    // ---- MEM.UPLOAD's one request (core entry I47) ------------------------
-    // A 256-byte MATERIAL_SET-kind resource staged in the upload arena, sealed
-    // with the SAME production folder as the terrain list above -- so this is
-    // evidence about the socket and the copy, not about the CRC law, which
-    // `tests/mem/mem_upload_directed.cpp` owns.
+    // ---- ONE COMMAND PACKET: BeginFrame, PublishResource, EndFrame ---------
+    // Built from the GENERATED record packers and sealed with the generated
+    // CRC-32C step -- the bench writes no layout by hand. It travels the whole
+    // command path: FRAME_RING slot 0 -> CMD.SCHEDULER claim -> CMD.DMA fetch
+    // over the shell's REAL HPS bridge -> CMD.DECODER's verdict and CMD.EXEC's
+    // PublishResource arm (owner ruling R17) -> MEM.UPLOAD -> the TERRAIN.BUILD
+    // socket. The payload it names is sealed with the SAME production folder
+    // as the terrain list above.
     for (int unsigned w = 0; w < UPL_WORDS_C; w++)
       upl_mem[w] = 64'hC0DE_5EED_0000_0000 + 64'(w * 32'h0101_0101);
     fold_c_i = 32'hFFFF_FFFF;
@@ -3208,16 +3257,55 @@ module tb_zhao_console_core_smoke
       #1ns;
       fold_c_i = fold_c_o;
     end
-    upl_req_crc_i          = ~fold_c_i;
-    upl_req_tag_i          = 8'd11;            // spec/cartridge.md 4a: MATERIAL_SET
-    upl_req_index_i        = 24'h00_ABCD;      // the handle index (5f.1's key)
-    upl_req_hps_addr_i     = 64'(UPL_ARENA_C);
-    upl_req_vram_addr_i    = UPL_REGION_C;
-    upl_req_len_i          = 32'(UPL_WORDS_C * 8);
-    upl_req_epoch_i        = 16'd9;
-    upl_req_dst_slot_i     = 8'd5;
-    upl_req_new_gen_i      = 16'h0102;
-    upl_cfg_region_base_i  = UPL_REGION_C;
+    begin : build_packet
+      zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
+      zhao_abi_pkg::zhao_rec_publish_resource_t pr;
+      zhao_abi_pkg::zhao_rec_end_frame_t        ef;
+      logic [255:0] bfv, efv;
+      logic [383:0] prv;
+      logic [31:0]  c;
+      int unsigned  o;
+      bf = '0; pr = '0; ef = '0;
+      bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
+      bf.frame_id = 32'd1;
+      pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
+      pr.h_source_id    = 32'd77;
+      pr.resource       = {8'h2A, UPL_INDEX_C};              // {generation, index}
+      pr.hps_addr_lo    = UPL_ARENA_C;
+      pr.hps_addr_hi    = 32'd0;
+      pr.vram_dst       = UPL_REGION_C;
+      pr.length         = 32'(UPL_WORDS_C * 8);
+      pr.crc32c         = ~fold_c_i;
+      pr.new_generation = UPL_GEN_C;
+      pr.epoch          = UPL_EPOCH_C;
+      pr.dst_slot       = UPL_SLOT_C;
+      pr.kind           = UPL_KIND_C;
+      ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
+      bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
+      prv = zhao_abi_pkg::zhao_pack_publish_resource(pr);
+      efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
+      for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
+      o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]      = bfv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k] = prv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 80 + k] = efv[8*k +: 8];
+      // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
+      // deadline 0 (the mode's period), three records, 112 bytes of them
+      {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
+      {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
+      {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
+      {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd3;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd112;
+      c = 32'hFFFF_FFFF;
+      for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
+      {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
+      c = 32'hFFFF_FFFF;
+      for (int unsigned k = 0; k < 112; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+115], pkt_mem[o+114], pkt_mem[o+113], pkt_mem[o+112]} = ~c;
+      pkt_len_q   = o + 112 + 4;
+      pkt_armed_q = 1'b1;
+    end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
     upl_cfg_arena_base_i   = 64'(UPL_ARENA_C);
     upl_cfg_arena_bytes_i  = 32'(UPL_WORDS_C * 8);
@@ -4520,6 +4608,8 @@ module tb_zhao_console_core_smoke
     // block publish. Every field of the published row is checked against the
     // request that caused it, because a publication naming the wrong base is
     // a well-formed row for the wrong surface.
+    $display("SMOKE: ring      slot0_state=%0d ring_writes=%0d pkt_bursts=%0d pkt_len=%0d dma_done=%b dma_status=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d fence_ok=%b",
+             hps_state_i[0], ring_writes_q, sh_pkt_bursts_q, pkt_len_q, dma_done_o, dma_status_o, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o, cmd_exec_uploads_o, fence_ok_o);
     $display("SMOKE: upload    done=%0d status=%0d published=%0d rows=%0d bursts=%0d wait=%0d slot=%0d gen=%04x tag=%0d index=%06x base=%08x extent=%0d",
              upl_done_seen_q, upl_status_seen_q, upl_published_o, upl_pub_seen_q,
              sh_bursts_q, upl_hps_wait_o, upl_pub_slot_q, upl_pub_gen_q,
@@ -4533,10 +4623,19 @@ module tb_zhao_console_core_smoke
     if (sh_bursts_q != (UPL_WORDS_C / 8))
       $fatal(1, "SMOKE: the shell's bridge served %0d HPS bursts for a %0d-byte upload, expected %0d",
              sh_bursts_q, UPL_WORDS_C * 8, UPL_WORDS_C / 8);
-    if (upl_pub_index_q != upl_req_index_i || upl_pub_slot_q != upl_req_dst_slot_i ||
-        upl_pub_gen_q != upl_req_new_gen_i || upl_pub_tag_q != upl_req_tag_i ||
-        upl_pub_base_q != upl_req_vram_addr_i || upl_pub_extent_q != upl_req_len_i)
-      $fatal(1, "SMOKE: MEM.UPLOAD published a row that is not the request's -- 5f.1's directory would name the wrong surface");
+    if (upl_pub_index_q != UPL_INDEX_C || upl_pub_slot_q != UPL_SLOT_C ||
+        upl_pub_gen_q != UPL_GEN_C || upl_pub_tag_q != UPL_KIND_C ||
+        upl_pub_base_q != UPL_REGION_C || upl_pub_extent_q != 32'(UPL_WORDS_C * 8))
+      $fatal(1, "SMOKE: MEM.UPLOAD published a row that is not the PublishResource's -- 5f.1's directory would name the wrong surface");
+    // THE COMMAND PATH, end to end (R17): the packet was fetched over the
+    // shell's bridge, walked by both consumers, committed, and CMD.EXEC handed
+    // exactly one request to MEM.UPLOAD.
+    $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
+             sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
+             cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
+    if (cmd_commands_o != 32'd3 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 3, 1, 1)",
+             cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
     if (upl_refused_o != '0)
       $fatal(1, "SMOKE: MEM.UPLOAD's refusal census moved (%032x) on a legal upload", upl_refused_o);
     if (shell_err_wfifo_o || shell_err_route_o)
@@ -4562,25 +4661,16 @@ module tb_zhao_console_core_smoke
     if (dbg_trace_count_o != cmd_commands_o)
       $fatal(1, "SMOKE: DEBUG.TRACE stored %0d event(s) against %0d records walked by CMD.DECODER -- the record port and the ring disagree",
              dbg_trace_count_o, cmd_commands_o);
-    // AND THE EQUALITY ABOVE IS TWO ZEROS AGREEING TODAY. Said out loud rather
-    // than left for somebody to discover, because a green check quoted as
-    // evidence for something it cannot see is this project's most expensive
-    // recurring mistake. This bench submits NO COMMAND PACKET: nothing here
-    // writes the frame ring or feeds CMD.DMA, so CMD.DECODER walks no records
-    // and the ring has nothing to store. It was written as a live equality so
-    // that it starts testing the seam the moment a packet arrives, and the
-    // check WAS seen to fire -- an earlier version of it fatal'd on exactly
-    // this zero, which is how the limitation was found rather than assumed.
-    //
-    // WHAT IS PROVEN HERE is narrower and is the armed-mask readback above:
-    // `dbg_trace_arm_mask_i` written at this bench's edge comes back out of
-    // `dbg_trace_armed_o` through the composition, so the instance is live,
-    // reachable and not pruned. The rec -> ev seam itself is covered by
-    // tests/debug/debug_trace_rtl_directed.cpp at the block, and by nothing at
-    // the composition until something submits a packet here.
+    // THE EQUALITY ABOVE IS NO LONGER TWO ZEROS AGREEING. Until 2026-09-19 this
+    // bench submitted no command packet, CMD.DECODER walked nothing and the
+    // ring stored nothing, and this comment said so rather than let a green
+    // check be quoted for a seam it could not see. The bench now plays
+    // FRAME_RING slot 0 and submits one sealed packet (BeginFrame,
+    // PublishResource, EndFrame), so the ring must store exactly the three
+    // records the decoder walked -- and the zero-guard below makes a packet
+    // that silently stopped arriving FAIL rather than fall back to the note.
     if (cmd_commands_o == 32'd0)
-      $display("SMOKE: NOTE DEBUG.TRACE's record-to-event equality is UNTESTED in this bench -- no command packet is submitted, so CMD.DECODER walked 0 records and the ring stored 0. The check above is live and will engage the moment a packet does. What this bench does prove about the ring is the arming readback.");
-
+      $fatal(1, "SMOKE: CMD.DECODER walked 0 records -- the bench's command packet no longer arrives, so DEBUG.TRACE's equality above is two zeros agreeing");
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
 `endif  // ZHAO_SMOKE_BAD_VERTEX -- the clean verdict above is compiled OUT under the R31 control

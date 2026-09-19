@@ -537,44 +537,16 @@ class CmdDma {
     uint32_t cmds_walked;     // records accepted before the verdict
   };
 
-  /** record_bytes for a known opcode, 0 for unknown (generated layouts). */
+  /** record_bytes for a known opcode, 0 for unknown -- from the GENERATED
+   *  command table (`zhao_abi::zhao_command_info`), not a hand-typed switch.
+   *  The switch that stood here omitted SetEnvironment 0x0311, TerrainEpoch
+   *  0x0220 and SubmitTerrainSet 0x0230 -- in lockstep with the same hole in
+   *  `zhao_cmd_dma.sv`'s `rec_size`, so the RTL and its oracle agreed on the
+   *  wrong answer. Both now read the generator's table (2026-09-19). */
   static uint16_t recordSize(uint16_t opcode) {
-    switch (opcode) {
-      case zhao_abi::ZHAO_OP_NOP:
-        return sizeof(zhao_abi::ZhRecordNop);
-      case zhao_abi::ZHAO_OP_BEGIN_FRAME:
-        return sizeof(zhao_abi::ZhRecordBeginFrame);
-      case zhao_abi::ZHAO_OP_END_FRAME:
-        return sizeof(zhao_abi::ZhRecordEndFrame);
-      case zhao_abi::ZHAO_OP_SET_VIEW:
-        return sizeof(zhao_abi::ZhRecordSetView);
-      case zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT:
-        return sizeof(zhao_abi::ZhRecordSetPresentationContract);
-      case zhao_abi::ZHAO_OP_TERRAIN_FIELD:
-        return sizeof(zhao_abi::ZhRecordTerrainField);
-      case zhao_abi::ZHAO_OP_SURFACE_STAMP:
-        return sizeof(zhao_abi::ZhRecordSurfaceStamp);
-      case zhao_abi::ZHAO_OP_DRAW_FORM:
-        return sizeof(zhao_abi::ZhRecordDrawForm);
-      case zhao_abi::ZHAO_OP_DRAW_POPULATION:
-        return sizeof(zhao_abi::ZhRecordDrawPopulation);
-      case zhao_abi::ZHAO_OP_DRAW_PROCEDURAL:
-        return sizeof(zhao_abi::ZhRecordDrawProcedural);
-      case zhao_abi::ZHAO_OP_DRAW_SKY:
-        return sizeof(zhao_abi::ZhRecordDrawSky);
-      case zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT:
-        return sizeof(zhao_abi::ZhRecordEmitAudioEvent);
-      case zhao_abi::ZHAO_OP_DEBUG_BOOTSTRAP:
-        return sizeof(zhao_abi::ZhRecordDebugBootstrap);
-      case zhao_abi::ZHAO_OP_DEBUG_FRAME_BLIT:
-        return sizeof(zhao_abi::ZhRecordDebugFrameBlit);
-      case zhao_abi::ZHAO_OP_DEBUG_RUMBLE:
-        return sizeof(zhao_abi::ZhRecordDebugRumble);
-      default:
-        return 0;
-    }
+    const zhao_abi::ZhCommandInfo* info = zhao_abi::zhao_command_info(opcode);
+    return info ? static_cast<uint16_t>(info->record_bytes) : 0;
   }
-
   /**
    * The verdict for one slot fetch: packet bytes p (as stored in HPS DDR),
    * the FRAME_RING descriptor byte_len, and the scheduler's current

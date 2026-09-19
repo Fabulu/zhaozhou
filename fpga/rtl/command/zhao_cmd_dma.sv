@@ -123,26 +123,17 @@ module zhao_cmd_dma #(
   localparam logic [7:0] ST_EPOCH           = 8'd15;  // module-local (zref)
   localparam logic [7:0] ST_BRIDGE_ERR      = 8'd17;  // module-local (zref)
 
-  // ---- record size table (generated LayoutIR sizes — never hand-derived) ---
+  // ---- record size table: THE GENERATED ONE ---------------------------------
+  // This used to be a hand-typed fifteen-arm case under the heading "generated
+  // LayoutIR sizes -- never hand-derived". It was hand-derived, and it had
+  // gone stale: SetEnvironment 0x0311 (ABI v3), TerrainEpoch 0x0220 and
+  // SubmitTerrainSet 0x0230 (ruling T5) were in the ABI and not in it, so
+  // CMD.DMA refused as ZH_ABI_UNKNOWN_OPCODE a packet CMD.DECODER -- which
+  // calls the generated `zhao_opcode_record_bytes` -- accepted. Found
+  // 2026-09-19 adding PublishResource 0x0030, which would have been the
+  // fourth. One table now, the generator's.
   function automatic logic [15:0] rec_size(input logic [15:0] op);
-    case (op)
-      zhao_abi_pkg::ZHAO_OP_NOP:                       rec_size = 16'd16;
-      zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME:               rec_size = 16'd32;
-      zhao_abi_pkg::ZHAO_OP_END_FRAME:                 rec_size = 16'd32;
-      zhao_abi_pkg::ZHAO_OP_SET_VIEW:                  rec_size = 16'd96;
-      zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT: rec_size = 16'd48;
-      zhao_abi_pkg::ZHAO_OP_TERRAIN_FIELD:             rec_size = 16'd112;
-      zhao_abi_pkg::ZHAO_OP_SURFACE_STAMP:             rec_size = 16'd64;
-      zhao_abi_pkg::ZHAO_OP_DRAW_FORM:                 rec_size = 16'd32;
-      zhao_abi_pkg::ZHAO_OP_DRAW_POPULATION:           rec_size = 16'd32;
-      zhao_abi_pkg::ZHAO_OP_DRAW_PROCEDURAL:           rec_size = 16'd64;
-      zhao_abi_pkg::ZHAO_OP_DRAW_SKY:                  rec_size = 16'd176;
-      zhao_abi_pkg::ZHAO_OP_EMIT_AUDIO_EVENT:          rec_size = 16'd32;
-      zhao_abi_pkg::ZHAO_OP_DEBUG_BOOTSTRAP:           rec_size = 16'd64;
-      zhao_abi_pkg::ZHAO_OP_DEBUG_FRAME_BLIT:          rec_size = 16'd48;
-      zhao_abi_pkg::ZHAO_OP_DEBUG_RUMBLE:              rec_size = 16'd32;
-      default:                                         rec_size = 16'd0;
-    endcase
+    rec_size = 16'(zhao_abi_pkg::zhao_opcode_record_bytes(op));
   endfunction
 
   function automatic logic [31:0] canvas_bytes(input logic [7:0] m);

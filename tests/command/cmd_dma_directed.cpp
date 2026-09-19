@@ -816,5 +816,26 @@ int main(int argc, char** argv) {
   check(t.pkt_bytes_.empty(), "bridge: nothing downstream", 0, t.pkt_bytes_.size());
 }
 
+// ---- 8. EVERY OPCODE IN THE GENERATED TABLE WALKS ------------------------------
+// CMD.DMA's size table was hand-typed under a "never hand-derived" heading and
+// had lost SetEnvironment 0x0311, TerrainEpoch 0x0220 and SubmitTerrainSet
+// 0x0230 -- a packet CMD.DECODER accepted, CMD.DMA refused as UNKNOWN_OPCODE.
+// It now calls the generated table, and this case walks every entry of
+// `zhao_abi::ZHAO_COMMAND_TABLE` (PublishResource 0x0030 among them) through
+// the RTL: none may come back 7. Header flags bit0 is set so the debug opcodes
+// are lawful too.
+for (const auto& info : zhao_abi::ZHAO_COMMAND_TABLE) {
+  DmaBench t;
+  const std::vector<uint8_t> pkt =
+      makePacket(11, 0, 20, 1, {makeRecord(info.opcode, info.record_bytes, {})});
+  t.load(kSlotBody0, pkt);
+  t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
+  const std::string tag = std::string("table: ") + info.name;
+  check(!t.verdicts_.empty() && t.verdicts_[0].status != 7, (tag + " is a known opcode").c_str(),
+        0, t.verdicts_.empty() ? 99 : t.verdicts_[0].status);
+  check(!t.verdicts_.empty() && t.verdicts_[0].status == 0, (tag + " walks OK").c_str(), 0,
+        t.verdicts_.empty() ? 99 : t.verdicts_[0].status);
+}
+
 return zhao::report_and_exit("cmd_dma_directed");
 }

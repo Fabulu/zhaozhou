@@ -86,14 +86,27 @@ struct DrawOut {
   uint16_t src_id;
 };
 
+struct UploadOut {
+  uint32_t cycle;
+  uint32_t index;
+  uint8_t kind;
+  uint64_t hps;
+  uint32_t vram, len, crc;
+  uint16_t epoch, gen;
+  uint8_t slot;
+};
+
 struct Run {
   bool done = false;
   uint8_t err = 0;
   uint32_t commands = 0;
   uint32_t verdict_cycle = 0;
-  std::vector<CfgWrite> cfg;
+  std::vector<CfgWrite> cfg;       // matrix words, cfg addresses 0..15
+  std::vector<CfgWrite> profiles;  // depth-profile writes, cfg address 18
   std::vector<StampOut> stamps;
   std::vector<DrawOut> draws;
+  std::vector<UploadOut> uploads;
+  uint32_t uploads_issued = 0, upload_overflow = 0;
   uint32_t committed = 0, abandoned = 0, views = 0, issued = 0;
   uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
   uint32_t draws_issued = 0, draw_overflow = 0, draw_truncated = 0;
@@ -109,7 +122,8 @@ struct Run {
  * rather than deltas.
  */
 Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
-              uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu) {
+              uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu,
+              uint32_t upl_mask = 0xFFFFFFFFu) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
@@ -118,6 +132,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   dut.stamp_ready_i = 1;
   dut.proj_cfg_ready_i = 1;
   dut.draw_ready_i = 1;
+  dut.upl_ready_i = 1;
   dut.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(dut);
   dut.rst_n = 1;
@@ -148,6 +163,8 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     // can refuse for as long as it likes and every form must still arrive,
     // once, in submission order.
     dut.draw_ready_i = ((draw_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    // MEM.UPLOAD's ready: in the composition it is high only in its S_IDLE.
+    dut.upl_ready_i = ((upl_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     dut.eval();
 
     const bool moved = have && dut.pkt_ready_o;
@@ -190,10 +207,31 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
       d.src_id = static_cast<uint16_t>(dut.draw_src_id_o);
     }
 
+    const bool upl_fires = (dut.upl_valid_o != 0) && (dut.upl_ready_i != 0);
+    UploadOut u{};
+    if (upl_fires) {
+      u.cycle = cyc;
+      u.index = dut.upl_index_o;
+      u.kind = static_cast<uint8_t>(dut.upl_kind_o);
+      u.hps = dut.upl_hps_addr_o;
+      u.vram = dut.upl_vram_addr_o;
+      u.len = dut.upl_len_o;
+      u.crc = dut.upl_crc_o;
+      u.epoch = static_cast<uint16_t>(dut.upl_epoch_o);
+      u.gen = static_cast<uint16_t>(dut.upl_new_gen_o);
+      u.slot = static_cast<uint8_t>(dut.upl_dst_slot_o);
+    }
+
     zhao::tick(dut);
     if (moved) ++i;
+    if (upl_fires) r.uploads.push_back(u);
     if (stamp_fires) r.stamps.push_back(s);
-    if (cfg_fires) r.cfg.push_back(w);
+    // THE SEVENTEENTH STEP. Since ac4f293d every committed view also writes
+    // SetView's depth profile to cfg address 18. This bench predates it and
+    // counted every cfg write as a matrix word, so eleven checks read 17 and
+    // 34 where they meant 16 and 32 -- red since that commit. The profile
+    // write is recorded on its own and asserted in case 1, not dropped.
+    if (cfg_fires) (w.addr == 18 ? r.profiles : r.cfg).push_back(w);
     if (draw_fires) r.draws.push_back(d);
 
     if (dut.decode_done_o && !r.done) {
@@ -220,6 +258,8 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.draws_issued = dut.draws_issued_o;
   r.draw_overflow = dut.draw_overflow_o;
   r.draw_truncated = dut.draw_src_truncated_o;
+  r.uploads_issued = dut.uploads_issued_o;
+  r.upload_overflow = dut.upload_overflow_o;
   return r;
 }
 
@@ -306,6 +346,40 @@ std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t 
   return out;
 }
 
+// PublishResource (R17), packed by the GENERATED packer like every record here.
+std::vector<uint8_t> publishRecord(uint32_t k) {
+  zhao_abi::ZhRecordPublishResource rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_PUBLISH_RESOURCE;
+  rec.hdr.record_bytes = 48;
+  rec.hdr.source_id = 0x90u + k;
+  rec.payload.resource = (0x2Au << 24) | (0x00ABC0u + k);  // {gen 0x2A, index}
+  rec.payload.hps_addr_lo = 0x3000'0000u + k * 0x1000u;
+  rec.payload.hps_addr_hi = k;                  // nonzero for k>0: carried, not narrowed
+  rec.payload.vram_dst = 0x054D'F000u + k * 0x100u;
+  rec.payload.length = 256u + 64u * k;
+  rec.payload.crc32c = 0xC0FF'EE00u + k;
+  rec.payload.new_generation = static_cast<uint16_t>(0x0102u + k);
+  rec.payload.epoch = static_cast<uint16_t>(9u + k);
+  rec.payload.dst_slot = static_cast<uint8_t>(5u + k);
+  rec.payload.kind = static_cast<uint8_t>(11u + k);
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_publish_resource(rec, out);
+  return out;
+}
+
+void checkUpload(const UploadOut& u, uint32_t k, const std::string& tag) {
+  check(u.index == 0x00ABC0u + k, (tag + " index (handle[23:0])").c_str(), 0x00ABC0u + k, u.index);
+  check(u.kind == 11u + k, (tag + " kind").c_str(), 11u + k, u.kind);
+  check(u.hps == ((static_cast<uint64_t>(k) << 32) | (0x3000'0000u + k * 0x1000u)),
+        (tag + " hps address, all 64 bits").c_str(), 0, 0);
+  check(u.vram == 0x054D'F000u + k * 0x100u, (tag + " vram").c_str(), 0x054DF000u + k * 0x100u, u.vram);
+  check(u.len == 256u + 64u * k, (tag + " length").c_str(), 256u + 64u * k, u.len);
+  check(u.crc == 0xC0FF'EE00u + k, (tag + " crc32c").c_str(), 0xC0FFEE00u + k, u.crc);
+  check(u.gen == 0x0102u + k, (tag + " new generation").c_str(), 0x0102u + k, u.gen);
+  check(u.epoch == 9u + k, (tag + " epoch").c_str(), 9u + k, u.epoch);
+  check(u.slot == 5u + k, (tag + " dst slot").c_str(), 5u + k, u.slot);
+}
+
 // The stamp this test uses wherever the values themselves are not the point.
 constexpr uint32_t kPatch = 0x0A0B0C0Du;
 constexpr uint8_t kOp = 1;
@@ -381,6 +455,10 @@ int main(int argc, char** argv) {
       }
     }
 
+    check(r.profiles.size() == 1, "case1: one depth-profile write (cfg 18)", 1, r.profiles.size());
+    if (r.profiles.size() == 1)
+      check(r.profiles[0].data == 0 && r.profiles[0].view == 0,
+            "case1: profile WORLD_LONG (flags 0) for view 0", 0, r.profiles[0].data);
     check(r.stamps.size() == 1, "case1: one stamp dispatched", 1, r.stamps.size());
     if (r.stamps.size() == 1) {
       const StampOut& s = r.stamps[0];
@@ -747,6 +825,78 @@ int main(int argc, char** argv) {
         }
       }
     }
+  }
+
+  // ---- 13. PublishResource (R17): two uploads and a form, committed --------
+  // Every MEM.UPLOAD request field off the generated offsets, in submission
+  // order, AFTER the verdict, and BEFORE the form (EX_UPL precedes EX_DRAW).
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(publishRecord(0));
+    b.append_record(drawFormRecord(0x70u, 0xF00Du, 0xBEA7u, 0xC0DEu, 1, 0, 0));
+    b.append_record(publishRecord(1));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case13: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    checkNothingEscapedEarly(r, "case13");
+    check(r.committed == 1, "case13: committed", 1, r.committed);
+    check(r.uploads.size() == 2, "case13: two uploads handed to MEM.UPLOAD", 2, r.uploads.size());
+    check(r.uploads_issued == 2, "case13: uploads_issued_o", 2, r.uploads_issued);
+    check(r.unsupported == 2, "case13: only BeginFrame/EndFrame unsupported now", 2, r.unsupported);
+    if (r.uploads.size() == 2) {
+      checkUpload(r.uploads[0], 0, "case13 upload 0");
+      checkUpload(r.uploads[1], 1, "case13 upload 1");
+      check(r.uploads[0].cycle > r.verdict_cycle, "case13: no upload before the verdict", 1,
+            r.uploads[0].cycle > r.verdict_cycle ? 1 : 0);
+      if (r.draws.size() == 1)
+        check(r.uploads[0].cycle < r.draws[0].cycle, "case13: the upload starts before the form", 1,
+              r.uploads[0].cycle < r.draws[0].cycle ? 1 : 0);
+    }
+  }
+
+  // ---- 14. five uploads against UPL_Q = 4: refused WHOLE, counted ----------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    for (uint32_t k = 0; k < 5; ++k) b.append_record(publishRecord(k));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case14: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    check(r.upload_overflow == 1, "case14: upload_overflow_o fires", 1, r.upload_overflow);
+    check(r.abandoned == 1, "case14: the packet is abandoned", 1, r.abandoned);
+    check(r.uploads.empty(), "case14: NO upload leaves -- not four of five", 0, r.uploads.size());
+  }
+
+  // ---- 15. a payload-CRC failure carries no upload out ---------------------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(publishRecord(0));
+    b.end_frame(0);
+    std::vector<uint8_t> p = b.seal(1, 1, 0);
+    p[36 + 32 + 20] = static_cast<uint8_t>(p[36 + 32 + 20] ^ 0x5Au);  // inside hps_addr_lo
+    const Run r = runPacket(p, 0xFFFFFFFFu);
+    check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case15: payload CRC fails",
+          zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, r.err);
+    check(r.abandoned == 1, "case15: abandoned", 1, r.abandoned);
+    check(r.uploads.empty(), "case15: NO upload of a packet that failed its CRC", 0, r.uploads.size());
+  }
+
+  // ---- 16. MEM.UPLOAD busy: the commit does NOT wait for it ----------------
+  // Ready held low for the whole run. The packet must still commit and its
+  // form still dispatch; the upload waits in the pending queue, lost nowhere.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(publishRecord(0));
+    b.append_record(drawFormRecord(0x70u, 0xF00Du, 0xBEA7u, 0xC0DEu, 1, 0, 0));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x0u);
+    check(r.committed == 1, "case16: committed with MEM.UPLOAD busy", 1, r.committed);
+    check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1, r.draws.size());
+    check(r.uploads.empty() && r.uploads_issued == 0, "case16: the upload is still pending", 0,
+          r.uploads_issued);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

@@ -192,6 +192,20 @@
 // Three handles leave this block as handles, UNRESOLVED and on purpose. See
 // the section below.
 //
+// PublishResource 0x0030 -- ADDED 2026-09-19 by owner ruling R17. Every field
+// is one of MEM.UPLOAD's request fields and is carried whole:
+//   CARRIED   resource[23:0] (5f.1's directory key), hps_addr_lo/hi (64 bits,
+//             so MEM.UPLOAD can REFUSE an unreachable source rather than this
+//             block narrowing it), vram_dst, length, crc32c, new_generation,
+//             epoch, dst_slot, kind (-> MEM.UPLOAD's req_tag_i).
+//   NOT       resource[31:24], the handle's generation byte: MEM.UPLOAD's
+//             generation is the 16-bit RESIDENCY one and nothing in the upload
+//             path consumes the handle's. Sunk visibly, see `pq_handle_gen_unused`.
+//   NOT       the header's source_id: MEM.UPLOAD has no attribution port.
+// Uploads are EVENTS (ring, refused whole on `upload_overflow_o`) and commit
+// into a PENDING queue that outlives the commit, so a background copy never
+// holds a frame's draws. `tests/command/cmd_exec_directed.cpp` cases 13-16.
+//
 // ---------------------------------------------------------------------------
 // WHY THE DRAW ARM EMITS HANDLES AND NOT A MESHFETCH JOB
 // ---------------------------------------------------------------------------
@@ -274,7 +288,18 @@ module zhao_cmd_exec
     // `draw_overflow_o`, never half-drawn. Smaller than STAMP_Q because a
     // Phase-2 frame submits a handful of forms and the entry is wider (144
     // bits against 208 x 8); raise it when a frame's form count does.
-    parameter int unsigned DRAW_Q = 4
+    parameter int unsigned DRAW_Q = 4,
+
+    // Staged PublishResource capacity per packet (R17), the same law as the
+    // two above: more than this in one packet is refused WHOLE on
+    // `upload_overflow_o`, never half-published.
+    parameter int unsigned UPL_Q = 4,
+    // The PENDING upload queue between a committed packet and MEM.UPLOAD. It
+    // outlives the commit, so a packet's draws are not held behind a
+    // multi-burst upload -- MEM.UPLOAD takes one request at a time and is a
+    // background client (memory_rules 5d). A commit that finds it full WAITS
+    // (backpressure, counted in no counter because nothing is lost).
+    parameter int unsigned UPL_PQ = 4
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -357,6 +382,25 @@ module zhao_cmd_exec
     output logic [15:0] draw_flags_o,
     output logic [15:0] draw_src_id_o,
 
+    // ---- R17: PublishResource -> MEM.UPLOAD's request port -----------------
+    // Field for field MEM.UPLOAD's `req_*`, from the GENERATED offsets. What is
+    // NOT carried, and why: the handle's 8-bit GENERATION. MEM.UPLOAD's
+    // generation is the 16-bit RESIDENCY generation (`new_generation`), which
+    // is what D-3's cache tag keys on; the handle's byte names which
+    // incarnation of the resource the game means, and no port in the upload
+    // path consumes it. Carrying it to nothing would be a wire, not a check.
+    output logic        upl_valid_o,
+    input  logic        upl_ready_i,
+    output logic [23:0] upl_index_o,      // handle32 index: 5f.1's directory key
+    output logic [ 7:0] upl_kind_o,       // .zpak kind -> MEM.UPLOAD req_tag_i
+    output logic [63:0] upl_hps_addr_o,
+    output logic [31:0] upl_vram_addr_o,
+    output logic [31:0] upl_len_o,
+    output logic [15:0] upl_epoch_o,
+    output logic [ 7:0] upl_dst_slot_o,
+    output logic [15:0] upl_new_gen_o,
+    output logic [31:0] upl_crc_o,
+
     // ---- evidence ----------------------------------------------------------
     // Every one of these is fired by a directed case in
     // tests/command/cmd_exec_directed.cpp. None is asserted zero without one.
@@ -370,6 +414,8 @@ module zhao_cmd_exec
     output logic [31:0] draws_issued_o,
     output logic [31:0] draw_overflow_o,
     output logic [31:0] draw_src_truncated_o,
+    output logic [31:0] uploads_issued_o,    // handed to MEM.UPLOAD
+    output logic [31:0] upload_overflow_o,   // packets refused: > UPL_Q uploads
     output logic [31:0] unsupported_o
 );
 
@@ -408,6 +454,18 @@ module zhao_cmd_exec
   localparam int unsigned OFF_DF_WEIGHT = ZHAO_DRAW_FORM_OFF_SEMANTIC_WEIGHT;
   localparam int unsigned OFF_DF_FLAGS  = ZHAO_DRAW_FORM_OFF_FLAGS;
 
+  // PublishResource 0x0030 (R17), same rule, same package.
+  localparam int unsigned OFF_PR_RES   = ZHAO_PUBLISH_RESOURCE_OFF_RESOURCE;
+  localparam int unsigned OFF_PR_HLO   = ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_LO;
+  localparam int unsigned OFF_PR_HHI   = ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_HI;
+  localparam int unsigned OFF_PR_VRAM  = ZHAO_PUBLISH_RESOURCE_OFF_VRAM_DST;
+  localparam int unsigned OFF_PR_LEN   = ZHAO_PUBLISH_RESOURCE_OFF_LENGTH;
+  localparam int unsigned OFF_PR_CRC   = ZHAO_PUBLISH_RESOURCE_OFF_CRC32C;
+  localparam int unsigned OFF_PR_GEN   = ZHAO_PUBLISH_RESOURCE_OFF_NEW_GENERATION;
+  localparam int unsigned OFF_PR_EPOCH = ZHAO_PUBLISH_RESOURCE_OFF_EPOCH;
+  localparam int unsigned OFF_PR_SLOT  = ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT;
+  localparam int unsigned OFF_PR_KIND  = ZHAO_PUBLISH_RESOURCE_OFF_KIND;
+
   // Quartus 17.0 needs an elaboration check inside `initial begin ... end`; a
   // bare module-scope `if` is a syntax error there however clean the lint
   // (CLAUDE.md, "Verilator lint-clean is not Quartus-synthesizable"). And
@@ -441,6 +499,15 @@ module zhao_cmd_exec
       $fatal(1, "zhao_cmd_exec: DrawForm's flags are no longer its last field; df_flags_c is stale");
     if (ZHAO_DRAW_FORM_OFF_H_SOURCE_ID != RH_SRC)
       $fatal(1, "zhao_cmd_exec: DrawForm's header source_id moved off the shared offset");
+    if (ZHAO_PUBLISH_RESOURCE_BYTES != 48)
+      $fatal(1, "zhao_cmd_exec: PublishResource record size moved; re-read the offsets");
+    // Its last field byte (`kind`) must land BEFORE the record's last byte, or
+    // the ring write at `rec_done` reads the register one byte early -- the
+    // DrawForm hazard, which that arm needs a bypass for and this one does not.
+    if ((OFF_PR_KIND + 1) >= ZHAO_PUBLISH_RESOURCE_BYTES)
+      $fatal(1, "zhao_cmd_exec: PublishResource's kind is its last byte; add the df_flags_c-style bypass");
+    if (UPL_Q < 2 || UPL_PQ < 2)
+      $fatal(1, "zhao_cmd_exec: UPL_Q and UPL_PQ must be >= 2 (the pointers need a bit)");
   end
 
   // ---- the packet walk (glue 3's framing, port for port) -------------------
@@ -565,6 +632,64 @@ module zhao_cmd_exec
   assign draw_flags_o          = dq_head[DQ_FLAGS_LO  +: 16];
   assign draw_src_id_o         = dq_head[DQ_SRC_LO    +: 16];
 
+  // ---- PublishResource staging (R17): a ring of EVENTS, then a PENDING queue
+  // An upload is an event (two uploads are two copies), so it stages like a
+  // stamp: per packet, bounded by UPL_Q, refused whole on overflow. At commit
+  // the staged entries MOVE into `pq`, which is not cleared by the commit and
+  // drains to MEM.UPLOAD whenever it is ready -- in any state, including while
+  // the next packet stages. That is the one place this block lets a console-
+  // visible effect outlive its commit, and it is still AFTER the verdict: an
+  // entry reaches `pq` only from EX_UPL, which only a clean verdict enters.
+  localparam int unsigned UQ_RES_LO   = 0;
+  localparam int unsigned UQ_HLO_LO   = 32;
+  localparam int unsigned UQ_HHI_LO   = 64;
+  localparam int unsigned UQ_VRAM_LO  = 96;
+  localparam int unsigned UQ_LEN_LO   = 128;
+  localparam int unsigned UQ_CRC_LO   = 160;
+  localparam int unsigned UQ_GEN_LO   = 192;
+  localparam int unsigned UQ_EPOCH_LO = 208;
+  localparam int unsigned UQ_SLOT_LO  = 224;
+  localparam int unsigned UQ_KIND_LO  = 232;
+  localparam int unsigned UPL_W       = 240;
+  localparam int unsigned UQW         = $clog2(UPL_Q);
+  localparam int unsigned PQW         = $clog2(UPL_PQ);
+
+  logic [31:0] pr_res, pr_hlo, pr_hhi, pr_vram, pr_len, pr_crc;
+  logic [15:0] pr_gen, pr_epoch;
+  logic [ 7:0] pr_slot, pr_kind;
+
+  logic [UPL_W-1:0] uq [0:UPL_Q-1];
+  logic [UQW:0]     uq_wp, uq_rp;
+  logic [UQW:0]     uq_occ;
+  logic             uq_full;
+  assign uq_occ  = uq_wp - uq_rp;
+  assign uq_full = (uq_occ >= (UQW+1)'(UPL_Q));
+
+  logic [UPL_W-1:0] pq [0:UPL_PQ-1];
+  logic [PQW:0]     pq_wp, pq_rp;
+  logic [PQW:0]     pq_occ;
+  logic             pq_full;
+  assign pq_occ  = pq_wp - pq_rp;
+  assign pq_full = (pq_occ >= (PQW+1)'(UPL_PQ));
+
+  logic [UPL_W-1:0] pq_head;
+  assign pq_head         = pq[pq_rp[PQW-1:0]];
+  assign upl_valid_o     = (pq_occ != '0);
+  assign upl_index_o     = pq_head[UQ_RES_LO   +: 24];
+  assign upl_kind_o      = pq_head[UQ_KIND_LO  +: 8];
+  assign upl_hps_addr_o  = {pq_head[UQ_HHI_LO +: 32], pq_head[UQ_HLO_LO +: 32]};
+  assign upl_vram_addr_o = pq_head[UQ_VRAM_LO  +: 32];
+  assign upl_len_o       = pq_head[UQ_LEN_LO   +: 32];
+  assign upl_epoch_o     = pq_head[UQ_EPOCH_LO +: 16];
+  assign upl_dst_slot_o  = pq_head[UQ_SLOT_LO  +: 8];
+  assign upl_new_gen_o   = pq_head[UQ_GEN_LO   +: 16];
+  assign upl_crc_o       = pq_head[UQ_CRC_LO   +: 32];
+  // The handle's generation byte, [31:24] of the staged `resource`: see the
+  // port comment for why no port consumes it.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [7:0] pq_handle_gen_unused = pq_head[UQ_RES_LO + 24 +: 8];
+  /* verilator lint_on UNUSEDSIGNAL */
+
   // A packet that overflowed the stamp ring is POISONED: it is refused WHOLE at
   // its own verdict, even if the verdict is ZH_ABI_OK. Half of a frame's scars
   // is not a degraded frame, it is a wrong one. A packet that overflowed the
@@ -573,10 +698,15 @@ module zhao_cmd_exec
   logic poisoned;
 
   // ---- commit ------------------------------------------------------------
-  typedef enum logic [1:0] {
+  // EX_UPL sits BEFORE EX_DRAW so a packet's uploads start before the draws
+  // that may name them. Starting is all it can promise: MEM.UPLOAD publishes
+  // asynchronously, and a draw that resolves a not-yet-published resource is
+  // MATERIAL.RESOLVE's "a miss STALLS, it never guesses" -- not this block's.
+  typedef enum logic [2:0] {
     EX_STAGE,  // walking a packet; NOTHING leaves this block
     EX_CFG,    // draining the view shadow into the matrix bank
     EX_STAMP,  // draining the stamp ring into SURFACE.STAMP
+    EX_UPL,    // moving staged uploads into the pending queue
     EX_DRAW    // draining the draw ring out of the console
   } ex_e;
   ex_e st;
@@ -611,6 +741,11 @@ module zhao_cmd_exec
       df_vpmask <= 8'd0; df_weight <= 8'd0; df_flags <= 16'd0;
       df_src_hi_nz <= 1'b0;
       dq_wp <= '0; dq_rp <= '0; dq_head <= '0;
+      pr_res <= 32'd0; pr_hlo <= 32'd0; pr_hhi <= 32'd0; pr_vram <= 32'd0;
+      pr_len <= 32'd0; pr_crc <= 32'd0; pr_gen <= 16'd0; pr_epoch <= 16'd0;
+      pr_slot <= 8'd0; pr_kind <= 8'd0;
+      uq_wp <= '0; uq_rp <= '0; pq_wp <= '0; pq_rp <= '0;
+      uploads_issued_o <= 32'd0; upload_overflow_o <= 32'd0;
       draw_valid_o <= 1'b0;
       draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
       draw_src_truncated_o <= 32'd0;
@@ -625,6 +760,13 @@ module zhao_cmd_exec
       stamp_src_truncated_o <= 32'd0; unsupported_o <= 32'd0;
     end else begin
       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
+
+      // THE PENDING UPLOAD QUEUE DRAINS IN EVERY STATE. Its entries are
+      // committed already; MEM.UPLOAD takes one whenever it is idle.
+      if (upl_valid_o && upl_ready_i) begin
+        pq_rp <= pq_rp + (PQW+1)'(1);
+        `ZHAO_EXEC_INC(uploads_issued_o);
+      end
 
       unique case (st)
 
@@ -709,6 +851,28 @@ module zhao_cmd_exec
                   df_flags <= {pkt_byte_i, df_flags[15:8]};
               end
 
+              // ---- PublishResource (R17) ------------------------------------
+              if (r_op == ZHAO_OP_PUBLISH_RESOURCE) begin
+                if ((rpos >= 16'(OFF_PR_RES)) && (rpos < 16'(OFF_PR_RES + 4)))
+                  pr_res <= {pkt_byte_i, pr_res[31:8]};
+                if ((rpos >= 16'(OFF_PR_HLO)) && (rpos < 16'(OFF_PR_HLO + 4)))
+                  pr_hlo <= {pkt_byte_i, pr_hlo[31:8]};
+                if ((rpos >= 16'(OFF_PR_HHI)) && (rpos < 16'(OFF_PR_HHI + 4)))
+                  pr_hhi <= {pkt_byte_i, pr_hhi[31:8]};
+                if ((rpos >= 16'(OFF_PR_VRAM)) && (rpos < 16'(OFF_PR_VRAM + 4)))
+                  pr_vram <= {pkt_byte_i, pr_vram[31:8]};
+                if ((rpos >= 16'(OFF_PR_LEN)) && (rpos < 16'(OFF_PR_LEN + 4)))
+                  pr_len <= {pkt_byte_i, pr_len[31:8]};
+                if ((rpos >= 16'(OFF_PR_CRC)) && (rpos < 16'(OFF_PR_CRC + 4)))
+                  pr_crc <= {pkt_byte_i, pr_crc[31:8]};
+                if ((rpos >= 16'(OFF_PR_GEN)) && (rpos < 16'(OFF_PR_GEN + 2)))
+                  pr_gen <= {pkt_byte_i, pr_gen[15:8]};
+                if ((rpos >= 16'(OFF_PR_EPOCH)) && (rpos < 16'(OFF_PR_EPOCH + 2)))
+                  pr_epoch <= {pkt_byte_i, pr_epoch[15:8]};
+                if (rpos == 16'(OFF_PR_SLOT)) pr_slot <= pkt_byte_i;
+                if (rpos == 16'(OFF_PR_KIND)) pr_kind <= pkt_byte_i;
+              end
+
               // ---- the record ends ----------------------------------------
               // Every SetView and SurfaceStamp field lands at or before the
               // last field byte of a well-formed record (83 of 96, 59 of 64),
@@ -745,6 +909,19 @@ module zhao_cmd_exec
                                            df_vpmask, df_xform, df_mset,
                                            df_form};
                     dq_wp <= dq_wp + (DQW+1)'(1);
+                  end
+                end else if (r_op == ZHAO_OP_PUBLISH_RESOURCE) begin
+                  if (uq_full) begin
+                    // Declared capacity, refused whole, counted: half of a
+                    // frame's uploads is a frame drawing a resource that never
+                    // arrives.
+                    poisoned <= 1'b1;
+                    `ZHAO_EXEC_INC(upload_overflow_o);
+                  end else begin
+                    uq[uq_wp[UQW-1:0]] <= {pr_kind, pr_slot, pr_epoch, pr_gen,
+                                           pr_crc, pr_len, pr_vram, pr_hhi,
+                                           pr_hlo, pr_res};
+                    uq_wp <= uq_wp + (UQW+1)'(1);
                   end
                 end else if (zhao_opcode_record_bytes(r_op) != 32'd0) begin
                   // A record the ABI defines and this block has no arm for.
@@ -789,6 +966,10 @@ module zhao_cmd_exec
               sq_rp    <= '0;
               dq_wp    <= '0;
               dq_rp    <= '0;
+              // The STAGING ring only. `pq` holds uploads of packets that
+              // already committed; abandoning this one must not cancel those.
+              uq_wp    <= '0;
+              uq_rp    <= '0;
               poisoned <= 1'b0;
             end
           end
@@ -862,6 +1043,26 @@ module zhao_cmd_exec
           end else begin
             sq_wp <= '0;
             sq_rp <= '0;
+            st    <= EX_UPL;
+          end
+        end
+
+        // ------------------------------------------------------------------
+        // COMMIT phase 3 -- staged uploads into the PENDING queue (R17)
+        // ------------------------------------------------------------------
+        // One per clock. A full pending queue HOLDS the commit rather than
+        // dropping an upload: nothing is lost, and the stall is bounded by
+        // MEM.UPLOAD draining one request.
+        EX_UPL: begin
+          if (uq_occ != '0) begin
+            if (!pq_full) begin
+              pq[pq_wp[PQW-1:0]] <= uq[uq_rp[UQW-1:0]];
+              pq_wp <= pq_wp + (PQW+1)'(1);
+              uq_rp <= uq_rp + (UQW+1)'(1);
+            end
+          end else begin
+            uq_wp <= '0;
+            uq_rp <= '0;
             st    <= EX_DRAW;
           end
         end
