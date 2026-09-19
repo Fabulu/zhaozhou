@@ -1,0 +1,22 @@
+checkarchive: SELFTEST OK valid contract passes and three red legs fire
+checkfresh: SELFTEST OK live/archive classification and orphan red leg fire
+assemble: wrote C:\programmieren\zencrifice\manafold-p16\Upheaval\website\public\index.html - 2 creature(s), 716 render(s)
+checkplayback: OK Fall is controls-only/non-looping and Hover remains autoplay+loop
+checkarchive: OK 56/56 archive files, 70576645 bytes; 22+6 version-17 clips and 10 labs declared once; archived playback is controls+loop/no-autoplay/preload-none
+gate: robots meta is 'noindex, nofollow' - private, ok
+gate: is the encoded bank all one generation?
+checkfresh: ARCHIVE manafold-mana-aqua          source retained; live encode intentionally absent
+checkfresh: ARCHIVE manafold-mana-blue          source retained; live encode intentionally absent
+checkfresh: ARCHIVE manafold-mana-boil          source retained; live encode intentionally absent
+checkfresh: ARCHIVE manafold-mana-cyan          source retained; live encode intentionally absent
+checkfresh: ARCHIVE manafold-mana-green         source retained; live encode intentionally absent
+checkfresh: ARCHIVE manafold-mana-stack         source retained; live encode intentionally absent
+checkfresh: 28 rendered subject(s) -- 22 live fresh, 6 archived, 0 STALE, 0 absent, 0 unknown
+checkfresh: OK every live encoded clip is newer than its source; archived source exemptions are explicit
+gate: decoding every declared media file (~22 min; -SkipDecodeSweep to bypass)
+checkmedia: 1420 declared files, 1420 decoded
+checkmedia: every declared file decodes
+assembled only (-AssembleOnly); nothing deployed.
+
+[exited with code 0]
+index bytes=425157 sha256=86626fcc13ae29fcc8c5df81111b8ad4becb00316bf27dd22a50f841b75720f7

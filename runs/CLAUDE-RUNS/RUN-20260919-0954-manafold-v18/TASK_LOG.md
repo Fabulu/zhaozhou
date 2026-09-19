@@ -34,6 +34,10 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Root authority uses no new bone: authored core centres/support windows make the full Front/End visible profile JunctionF/RearSocket-owned, with an exact legacy-split control. Front gains append-only X/Y `HingePlay` fields while Neck and signed spans retain separate authority.
 - Root material uses generator-authored body-style front/rear transitions. Generic normals/topology remain untouched unless settled native pictures still prove a defect; root-inner ink exclusion is conditional and pose-derived, never a hand mask.
 - Version-18 delivery is six bounded waves: immutable site archive; structural root/Front instruments; root material/conditional ink; swell/Front art; live-history/mana/particle cleanup; Flight/Trick art. Each closure commits and pushes independently before one 22-subject exact bank.
+- Wave A archive closure is complete locally. All 28 production-verified version-17 WebMs/posters were copied byte-for-byte to `archive-v17-manafold-*`: 56/56 SHA-256 pairs, 70,576,645 bytes. One archive generation declares 22 non-menu clips, six menu clips and ten labs exactly once.
+- Mana menu and Mana lab are archive-only. The twelve superseded live menu files were removed only after exact archive pair and declaration checks passed; source-frame directories remain explicit freshness exemptions until the version-18 scratch bank replaces them.
+- Added `checkarchive.py` with three fired selftest red legs and wired it into every assemble/deploy. `checkfresh.py` now derives live/archive source ownership from the manifest, passes 22 live fresh + six archived + zero stale/absent/unknown, and fires on unmanifested source in selftest.
+- Full no-skip site gate passes: 2 creatures / 716 render entries; exact `noindex, nofollow`; Fall live one-shot and archive controls/loop/no-autoplay/preload-none contracts; 56/56 locked archive files; 1,420/1,420 declared media decoded. No deployment occurred.
 
 ---
 
@@ -44,6 +48,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 | 2026-09-19 | GPT fork antenna/root recon | Trace both body connections, carrier sizing/flexibility, material/ink/normals and bounded particle overlap | Complete — root material/skin authorities identified; pre-layer particle A/B recommended | `V18-ANTENNA-ROOT-RECON.md` |
 | 2026-09-19 | GPT fork clip/site recon | Trace Drift/Crackle/Blown mana, Hasty history, Flight/Trick motion and menu/lab archive behavior | Complete — live mist is the shared relic trail; Crackle alone uses old candidate; planted yaw-spin architecture and archive move defined | `V18-CLIP-SITE-RECON.md` |
 | 2026-09-19 | GPT fork architecture | Ratify one structural/art/site architecture and exact wave/gate boundaries | Complete — no helper/generic format; root support ownership, Front axes, staged material, archive and clip paths fixed | `V18-ARCHITECTURE.md` |
+| 2026-09-19 | GPT fork Wave A archive | Preserve version-17 bytes; archive menu/lab; add immutable hash/declaration/playback/freshness gates | Complete locally — 56/56 pair hashes, 22+6+10 unique declarations, 1,420/1,420 decode | `V18-ARCHIVE-CLOSURE.md` |
 
 ---
 
@@ -58,6 +63,8 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - `V18-RELIC-MANA-BASELINE-NATIVE.png`, `V18-HASTY-TRAIL-4X.png`, `V18-FLIGHT-BASELINE-NATIVE.png` and `V18-TRICK-BASELINE-NATIVE.png`.
 - `V18-ARCHITECTURE.md`.
 - `Upheaval/creature/Manafold/VERSION-18-INVENTORY.md` and `VERSION-18-PLAN.md`.
+- `V18-ARCHIVE-CLOSURE.md`, `V17-ARCHIVE-SHA256.txt` and `v18-archive-gates.log`.
+- `Upheaval/creature/Manafold/V17-ARCHIVE-SHA256.txt` and `website/tools/checkarchive.py`.
 
 ---
 
@@ -76,12 +83,13 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Front flexibility adds only append-only JunctionF X/Y fields; existing fold Z, Neck articulation and signed length remain separate authorities.
 - Version-18 live/site bank has 22 subjects after the six-menu collection moves to archive; final encode therefore produces 44 live media files.
 - Trick's spin is authored/traced as unwrapped per-mille progress and converted to angle16 only at quaternion construction; support contact is proven on antenna-region vertices.
+- Version-17 archive integrity is a permanent deploy gate: immutable hashes, unique 22+6+10 declarations and archive-only playback cannot silently drift. Archived source-frame directories are explicit freshness exemptions, never missing live encodes.
 
 ---
 
 ## Next Steps
 
-1. Implement and commit/push Wave A: immutable version-17 archive plus archived Mana menu/lab, with hash/playback/noindex/decode gates.
+1. Commit/push the closed Wave A archive packet and receipts.
 2. Implement Wave B root ownership/Front channels/diagnostic controls without choosing art values; independently review gates/source.
 3. Continue Waves C–F in order, choosing material, swell, particle, Flight and Trick values only from complete native motion.
 4. Run one integrated targeted gate, then one exact 22-subject version-18 bank, isolated review, encode, publication and production-byte verification.
