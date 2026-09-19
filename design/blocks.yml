@@ -3815,7 +3815,7 @@ blocks:
     maturity_log:
       - state: UNIT_VERIFIED
         date: "2026-09-19"
-        commit: "pending"
+        commit: "668ad7dc"
         evidence: tests/geometry/geom_replay_directed.cpp
     deferred: false
     cut_order: null
