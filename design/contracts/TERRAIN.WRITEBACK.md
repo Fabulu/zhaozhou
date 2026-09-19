@@ -268,6 +268,15 @@ and **emitted only on a matched, good ACK**.
 Verilator the harness is the HPS and answers it; in production it is SW.STREAM's
 doorbell.
 
+**Sheet landed out** (`landed_valid_o`, `landed_seq_o`), added 2026-09-19 for owner
+ruling R14: a one-cycle pulse on the edge the sheet's last journal beat retires —
+the edge the ticket is allocated — carrying that job's own `seq`. Software cannot
+see the bridge, so this is how the hardware returns the ticket and tells SW.STREAM
+there is a sheet to make durable and ACK. It cannot be stalled; the doorbell
+(`design/contracts/TERRAIN.WRITEBACK.DOORBELL.md`) reserves room for it when it
+hands out the grant. The job port's `journal_addr` and `seq` now come from that
+doorbell, never from a composer.
+
 **Memory ports:** one `zhao_guard_req_t/rsp_t` + `beat_valid/beat_data/beat_last`
 guard client (**reads**), one `zhao_hps_burst_req_t/rsp_t` +
 `hps_wdata/wvalid/wlast` bridge client (**writes**). Both client identities are

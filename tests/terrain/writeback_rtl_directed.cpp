@@ -290,6 +290,11 @@ Submitted submit(Bench& b, const Job& j, int max_wait_ready = 64) {
   while (true) {
     if (b.d.sheets_written != w0) {
       s.transferred = true;
+      // R14: the sheet's landing is ANNOUNCED on the same edge it is counted,
+      // with this job's own ticket -- the hardware returning the ticket.
+      ck(b.d.landed_valid == 1, "landed: the pulse rises on the edge the sheet lands", 1,
+         b.d.landed_valid);
+      cke(j.seq, b.d.landed_seq, "landed: the pulse carries the landing job's ticket");
       return s;
     }
     if (b.d.done_valid) {
@@ -1532,6 +1537,9 @@ int main(int argc, char** argv) {
   ck(b.d.sheets_written >= b.d.acks_ok + b.d.acks_nak,
      "ledger: bytes-away can never lag acknowledgements", 1,
      static_cast<long long>(b.d.sheets_written) - b.d.acks_ok - b.d.acks_nak);
+
+  // Every sheet that landed was announced exactly once, counted by the BENCH.
+  cke(b.d.sheets_written, b.d.landed_count, "landed: one announcement per sheet written");
 
   std::printf("writeback_rtl_directed: %d checks, %d failures, %lld gpu clocks\n", g_checks, g_fail,
               b.cycles);

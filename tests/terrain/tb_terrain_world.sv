@@ -509,7 +509,6 @@ module tb_terrain_world
   localparam int unsigned JWORDS      = JNL_ENTRIES * (F_BYTES / 8);  // 16,384
   localparam int unsigned JW          = $clog2(JWORDS);
 
-  localparam int unsigned WR_BURSTS = F_BYTES / 64;  // 128 journal bursts per sheet
 
   localparam int unsigned SLOTW   = 10;  // 256 sets x 4 ways
   localparam int unsigned MEMSLOT = 11;  // the pool clients' one-wider slot index
@@ -1650,17 +1649,115 @@ module tb_terrain_world
   // TWO FIELDS TERRAIN.SEQ DOES NOT PRODUCE. The writeback job wants a journal
   // ADDRESS and a journal TICKET (`j_journal_addr_i`, `j_seq_i`), and
   // TERRAIN.SEQ's writeback port carries neither -- it emits
-  // {slot, gen, epoch, island, ix, iz, src_id}. The two are minted here, in
-  // glue, and that glue is a finding rather than a convenience: nothing in any
-  // contract says who owns the journal arena allocator.
-  logic [31:0] wb_ticket_q;
-  logic [63:0] wb_jnl_addr_c;
-  assign h_wb_ticket = wb_ticket_q;
-  assign wb_jnl_addr_c = {32'd0, cfg_journal_base_i}
-                       + 64'(wb_ticket_q[$clog2(JNL_ENTRIES)-1:0]) * 64'(F_BYTES);
-
+  // {slot, gen, epoch, island, ix, iz, src_id}. They used to be MINTED HERE, in
+  // glue this bench called "a finding rather than a convenience: nothing in any
+  // contract says who owns the journal arena allocator".
+  //
+  // OWNER RULING R14 SAYS WHO: SW.STREAM, through a doorbell
+  // (design/contracts/TERRAIN.WRITEBACK.DOORBELL.md). The REAL doorbell sits
+  // between the sequencer and the writeback now, and the bench plays only the
+  // HPS side of it: it POSTS grants {slot, ticket} and ACKs the sheets the
+  // hardware RETURNS as landed. The numbering is the one the glue used --
+  // tickets 1, 2, 3, ... and journal entry `ticket mod JNL_ENTRIES` -- so every
+  // existing expectation about which entry a sheet lands in still holds, and
+  // now holds because the HARDWARE attached the grant rather than because the
+  // bench computed the same number twice.
   logic [MEMSLOT-1:0] wb_j_slot;
   assign wb_j_slot = {1'b0, q_wb_slot};
+
+  // ---- the played SW.STREAM: grants ---------------------------------------
+  logic [31:0] jdb_post_q;          // the next ticket software will hand out
+  logic        jdb_post_ready;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) jdb_post_q <= 32'd1;
+    else if (jdb_post_ready) jdb_post_q <= jdb_post_q + 32'd1;
+  end
+
+  logic               jdb_wj_valid, jdb_wj_ready;
+  logic [MEMSLOT-1:0] jdb_wj_slot;
+  logic [GENW-1:0]    jdb_wj_gen;
+  logic [31:0]        jdb_wj_epoch, jdb_wj_island, jdb_wj_seq, jdb_wj_src;
+  logic signed [15:0] jdb_wj_ix, jdb_wj_iz;
+  logic [63:0]        jdb_wj_addr;
+  logic               wb_landed_valid;
+  logic [31:0]        wb_landed_seq;
+  logic               jdb_ret_valid, jdb_ret_ready, jdb_ret_final, jdb_ret_ok;
+  logic [31:0]        jdb_ret_ticket;
+  logic [3:0]         jdb_ret_verdict;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic               jdb_done_ready, jdb_seq_done_valid;
+  logic [MEMSLOT-1:0] jdb_seq_done_slot;
+  logic [31:0]        jdb_grants_posted, jdb_grants_taken, jdb_returns_landed;
+  logic [31:0]        jdb_returns_final, jdb_starved, jdb_credit_stall;
+  logic [31:0]        jdb_owed, jdb_ret_overflow;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // The ticket the NEXT sheet will use is the head of the mailbox: software
+  // posts 1, 2, 3, ... and the doorbell consumes them in order.
+  assign h_wb_ticket = jdb_grants_taken + 32'd1;
+
+  zhao_terrain_jdoorbell #(
+      .SLOTW  (MEMSLOT),
+      .GENW   (GENW),
+      .GRANTS (4),
+      .TICKETS(4),
+      .F_BYTES(F_BYTES)
+  ) u_jdb (
+      .clk  (clk),
+      .rst_n(rst_n),
+      .cfg_journal_base_i(cfg_journal_base_i),
+      .post_valid_i (1'b1),
+      .post_ready_o (jdb_post_ready),
+      .post_slot_i  (16'(jdb_post_q % JNL_ENTRIES)),
+      .post_ticket_i(jdb_post_q),
+      .sj_valid_i   (wb_valid),
+      .sj_ready_o   (wb_ready),
+      .sj_slot_i    (wb_j_slot),
+      .sj_gen_i     (wb_gen),
+      .sj_epoch_i   (q_wb_epoch),
+      .sj_island_i  (wb_island),
+      .sj_ix_i      (q_wb_ix),
+      .sj_iz_i      (q_wb_iz),
+      .sj_src_id_i  (wb_src_id),
+      .wj_valid_o       (jdb_wj_valid),
+      .wj_ready_i       (jdb_wj_ready),
+      .wj_slot_o        (jdb_wj_slot),
+      .wj_gen_o         (jdb_wj_gen),
+      .wj_epoch_o       (jdb_wj_epoch),
+      .wj_island_o      (jdb_wj_island),
+      .wj_ix_o          (jdb_wj_ix),
+      .wj_iz_o          (jdb_wj_iz),
+      .wj_journal_addr_o(jdb_wj_addr),
+      .wj_seq_o         (jdb_wj_seq),
+      .wj_src_id_o      (jdb_wj_src),
+      .landed_valid_i(wb_landed_valid),
+      .landed_seq_i  (wb_landed_seq),
+      // The completion is tapped at its HANDSHAKE: this bench's C++ owns
+      // `wbdone_ready` so it can hold completions, and a FINAL is owed when one
+      // is taken, not while one is offered.
+      .done_valid_i  (wbdone_valid && wbdone_ready),
+      .done_ready_o  (jdb_done_ready),
+      .done_slot_i   (wbdone_slot_w),
+      .done_ok_i     (wbdone_ok),
+      .done_verdict_i(wbdone_verdict),
+      .done_seq_i    (wbdone_seq),
+      .seq_done_valid_o(jdb_seq_done_valid),
+      .seq_done_slot_o (jdb_seq_done_slot),
+      .ret_valid_o  (jdb_ret_valid),
+      .ret_ready_i  (jdb_ret_ready),
+      .ret_ticket_o (jdb_ret_ticket),
+      .ret_final_o  (jdb_ret_final),
+      .ret_ok_o     (jdb_ret_ok),
+      .ret_verdict_o(jdb_ret_verdict),
+      .grants_posted_o      (jdb_grants_posted),
+      .grants_taken_o       (jdb_grants_taken),
+      .returns_landed_o     (jdb_returns_landed),
+      .returns_final_o      (jdb_returns_final),
+      .starved_cycles_o     (jdb_starved),
+      .credit_stall_cycles_o(jdb_credit_stall),
+      .tickets_owed_o       (jdb_owed),
+      .ret_overflow_o       (jdb_ret_overflow)
+  );
 
   zhao_guard_req_t wbg_req;
   zhao_guard_rsp_t wbg_rsp;
@@ -1703,17 +1800,17 @@ module tb_terrain_world
       .cfg_journal_bytes_i(cfg_journal_bytes_i),
       .cfg_epoch_i        (cfg_epoch_i),
 
-      .j_valid_i       (wb_valid),
-      .j_ready_o       (wb_ready),
-      .j_slot_i        (wb_j_slot),
-      .j_gen_i         (wb_gen),
-      .j_epoch_i       (q_wb_epoch),
-      .j_island_i      (wb_island),
-      .j_ix_i          (q_wb_ix),
-      .j_iz_i          (q_wb_iz),
-      .j_journal_addr_i(wb_jnl_addr_c),
-      .j_seq_i         (wb_ticket_q),
-      .j_src_id_i      (wb_src_id),
+      .j_valid_i       (jdb_wj_valid),
+      .j_ready_o       (jdb_wj_ready),
+      .j_slot_i        (jdb_wj_slot),
+      .j_gen_i         (jdb_wj_gen),
+      .j_epoch_i       (jdb_wj_epoch),
+      .j_island_i      (jdb_wj_island),
+      .j_ix_i          (jdb_wj_ix),
+      .j_iz_i          (jdb_wj_iz),
+      .j_journal_addr_i(jdb_wj_addr),
+      .j_seq_i         (jdb_wj_seq),
+      .j_src_id_i      (jdb_wj_src),
 
       .guard_req_o (wbg_req),
       .guard_rsp_i (wbg_rsp),
@@ -1750,6 +1847,9 @@ module tb_terrain_world
       .done_seq_o    (wbdone_seq),
       .done_src_id_o (wbdone_src_id),
 
+      .landed_valid_o(wb_landed_valid),
+      .landed_seq_o  (wb_landed_seq),
+
       .fault_island_o (wb_fault_island),
       .fault_ix_o     (wb_fault_ix),
       .fault_iz_o     (wb_fault_iz),
@@ -1784,12 +1884,7 @@ module tb_terrain_world
   assign g_wb_gen    = wbrel_gen;
   assign g_wb_epoch  = wbrel_epoch;
 
-  // The journal ticket advances on every ACCEPTED writeback job, so a job and
-  // its ticket are minted by the same handshake.
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) wb_ticket_q <= 32'd1;
-    else if (wb_valid && wb_ready) wb_ticket_q <= wb_ticket_q + 32'd1;
-  end
+
 
   // =========================================================================
   // MEM.HPS.ARBITER -- the real two-client arbiter, first use by two terrain
@@ -2376,70 +2471,50 @@ module tb_terrain_world
     end
   end
 
-  // The tickets waiting to be acknowledged, in job-acceptance order.
-  localparam int unsigned TKD = 8;
-  logic [31:0] tk_q [TKD];
-  logic [2:0]  tk_wr, tk_rd;
-  logic [31:0] wb_ack_seq_q;
-  assign wb_ack_seq_q = tk_q[tk_rd];
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      tk_wr <= 3'd0;
-      tk_rd <= 3'd0;
-      for (int unsigned i = 0; i < TKD; i++) tk_q[i] <= 32'd0;
-    end else begin
-      if (wb_valid && wb_ready) begin
-        tk_q[tk_wr] <= wb_ticket_q;
-        tk_wr       <= tk_wr + 3'd1;
-      end
-      if (jw_take && (brb_beat == 3'd7) && (jnl_burst_q == 32'(WR_BURSTS - 1)))
-        tk_rd <= tk_rd + 3'd1;
-    end
-  end
-
   // =========================================================================
-  // SW.STREAM'S JOURNAL DOORBELL, PLAYED
+  // SW.STREAM'S JOURNAL DOORBELL, PLAYED -- the HPS side of the REAL one
   // =========================================================================
-  // A sheet is 128 journal bursts. When the last one retires the sheet's bytes
-  // are in the journal, and the ticket that named it is echoed back after a
-  // programmable delay. Tickets are acknowledged in the order the jobs were
-  // accepted, which is the order TERRAIN.WRITEBACK processes them in.
+  // The hardware RETURNS each ticket (owner ruling R14): LANDED when the
+  // sheet's bytes are in the journal -- software makes them durable and ACKs --
+  // and FINAL when the job has completed. The played software ACKs every
+  // LANDED after a programmable delay and swallows every FINAL.
+  //
+  // IT NO LONGER WATCHES THE BRIDGE. The version this replaces counted journal
+  // write beats to decide when a sheet had landed, and kept its own FIFO of
+  // tickets in job-acceptance order to decide which one. Software cannot see
+  // the bridge, so that played an HPS that does not exist; the LANDED return is
+  // the one thing a real HPS can know, and the ticket comes from the hardware.
   localparam int unsigned AKD = 8;
   logic [31:0] ak_seq [AKD];
   logic [AKD-1:0] ak_busy;
   logic [31:0] ak_due [AKD];
   logic [2:0] ak_wr, ak_rd;
-  logic [31:0] jnl_burst_q;
 
   assign ack_valid = ak_busy[ak_rd] && (cyc >= ak_due[ak_rd]);
   assign ack_seq   = ak_seq[ak_rd];
   assign ack_ok    = cfg_ack_ok_i;
+
+  // A LANDED is taken only while there is a place to schedule its ACK; a FINAL
+  // is always taken. Holding a LANDED holds the doorbell's return queue, which
+  // is the real backpressure a slow HPS would apply.
+  assign jdb_ret_ready = !(jdb_ret_valid && !jdb_ret_final && ak_busy[ak_wr]);
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       ak_busy     <= '0;
       ak_wr       <= 3'd0;
       ak_rd       <= 3'd0;
-      jnl_burst_q <= 32'd0;
       h_acks_sent <= 32'd0;
       for (int unsigned i = 0; i < AKD; i++) begin
         ak_seq[i] <= 32'd0; ak_due[i] <= 32'd0;
       end
     end else begin
       if (stat_clear) h_acks_sent <= 32'd0;
-      if (jw_take && (brb_beat == 3'd7)) begin
-        if (jnl_burst_q == 32'(WR_BURSTS - 1)) begin
-          jnl_burst_q <= 32'd0;
-          if (!ak_busy[ak_wr]) begin
-            ak_seq[ak_wr]  <= wb_ack_seq_q;
-            ak_due[ak_wr]  <= cyc + {16'd0, cfg_ack_delay_i};
-            ak_busy[ak_wr] <= 1'b1;
-            ak_wr          <= ak_wr + 3'd1;
-          end
-        end else begin
-          jnl_burst_q <= jnl_burst_q + 32'd1;
-        end
+      if (jdb_ret_valid && jdb_ret_ready && !jdb_ret_final) begin
+        ak_seq[ak_wr]  <= jdb_ret_ticket;
+        ak_due[ak_wr]  <= cyc + {16'd0, cfg_ack_delay_i};
+        ak_busy[ak_wr] <= 1'b1;
+        ak_wr          <= ak_wr + 3'd1;
       end
       if (ack_valid && ack_ready) begin
         ak_busy[ak_rd] <= 1'b0;
@@ -2449,6 +2524,12 @@ module tb_terrain_world
     end
   end
 
+  // The FINAL record's fields are the writeback's completion restated, which
+  // this bench already checks at the source; they are read here only so an
+  // unconsumed field is a decision rather than an accident.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire jdb_ret_unused = jdb_ret_ok ^ (^jdb_ret_verdict);
+  /* verilator lint_on UNUSEDSIGNAL */
   // =========================================================================
   // THE REAL MEM.GUARD, OBSERVING BOTH TERRAIN CLIENTS
   // =========================================================================

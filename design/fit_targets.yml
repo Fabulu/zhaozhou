@@ -2701,6 +2701,15 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_residency_v2.sv
       - fpga/rtl/terrain/zhao_terrain_loadq.sv
       - fpga/rtl/terrain/zhao_terrain_pageloader.sv
+      # TERRAIN.WRITEBACK and SW.STREAM's journal DOORBELL, 2026-09-19 (core entry
+      # I28 closed; owner rulings R14 and R4). The doorbell attaches SW.STREAM's
+      # {journal address, ticket} grant to TERRAIN.SEQ's writeback job; the
+      # writeback reads through the terrain read share and writes as client 2 of
+      # the N-client HPS arbiter. Area question for the fit: the writeback's two
+      # 8 x 64-bit chunk buffers and ticket table, and the doorbell's 16-record
+      # return queue -- flops, no multiplier.
+      - fpga/rtl/terrain/zhao_terrain_writeback.sv
+      - fpga/rtl/terrain/zhao_terrain_jdoorbell.sv
       # Added 2026-09-19, packet P-TERRAIN-COMPOSE. THE COMPOSE ENGINE: the
       # four blocks that turn a resident page into the lattice TERRAIN.TESS
       # reads. They close core header entry I22 whole and the DOOR and UNPIN

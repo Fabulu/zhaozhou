@@ -683,7 +683,8 @@ excluded:
   # entry, this line, and design/fit_targets.yml's zhao_prod_top source list.
   - zhao_terrain_pageloader: unused  the terrain page mover; the guard window and the client id now exist, but zhao_shell_top does not compose it yet
   - zhao_terrain_seq: unused  the terrain command sequencer; it drives RESIDENCY, PAGELOADER and COMPCACHE, none of which zhao_shell_top composes yet -- that composition is step 8 of the world-layer build sequence
-  - zhao_terrain_writeback: unused  dirty-page evacuation; same reason
+  - zhao_terrain_writeback: not-yet-adopted  TERRAIN.WRITEBACK, dirty-page F-sheet evacuation. COMPOSED 2026-09-19 into zhao_console_core (core entry I28 closed, owner rulings R14 and R4): its journal address and ticket come from SW.STREAM through zhao_terrain_jdoorbell, its sheet reads are the third requester of the terrain read share, its journal writes are client 2 of the N-client HPS arbiter. `unused` has expired; this row is about zhao_prod_top, which still does not instantiate it
+  - zhao_terrain_jdoorbell: not-yet-adopted  SW.STREAM's F-sheet journal DOORBELL (owner ruling R14; design/contracts/TERRAIN.WRITEBACK.DOORBELL.md). NEW 2026-09-19 and composed into zhao_console_core the same day: attaches a posted {journal slot, ticket} grant to each TERRAIN.SEQ writeback job and returns every ticket LANDED/FINAL. A 4-deep grant FIFO, a 2*TICKETS return queue reserved by credit, counters; no multiplier. Not fitted standalone: measured inside the console closure
 
   # --- the world layer's 2026-09-07 blocks -----------------------------------
   # Four blocks landed the day the world layer was composed, and they are
