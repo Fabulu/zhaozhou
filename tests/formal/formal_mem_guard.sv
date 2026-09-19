@@ -155,6 +155,13 @@ module formal_mem_guard
   wire fwd_in_terrain = (fwd_addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
                      && (fwd_end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
                                        + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+  // POST.ECHO's capture buffer (ruling R7, spec/memory_rules.md 5g): constant
+  // bounds, ENGINE0's alone, WRITE-only, lease-gated.
+  wire fwd_in_echo = (fwd_addr32 >= ZHAO_POST_ECHO_BASE)
+                  && (fwd_end32  <= ZHAO_POST_ECHO_BASE + ZHAO_POST_ECHO_SPAN);
+  // The leased FB window, as the DUT is entitled to use it for either writer.
+  wire fwd_in_lease = env_map_valid && (fwd_addr32 >= blit_base)
+                   && (fwd_end32 <= blit_base + blit_span_eff);
 
   // --------------------------------------------------------- A1 + A2 + A3 --
   always_ff @(posedge clk) begin
@@ -185,6 +192,18 @@ module formal_mem_guard
             && env_map_valid && env_fb_writer
             && (fwd_addr32 >= blit_base)
             && (fwd_end32  <= blit_base + blit_span_eff))
+        // ENGINE0 READS ITS OWN LEASED WINDOW (POST.COMPOSITE's read/write
+        // lease, 2026-09-19). The same window, the same lease term, the
+        // opposite direction bit. A forwarded read carries no write data, so
+        // this arm cannot alter a frame buffer; what it must not do is read
+        // OUTSIDE the lease, and the window and `env_fb_writer` terms say so.
+        || (arb_req.client == ZHAO_CLIENT_ENGINE0 && !arb_req.write
+            && env_fb_writer && fwd_in_lease)
+        // ENGINE0 WRITES POST.ECHO's CAPTURE (ruling R7). A FIFTH window and
+        // named as one: constant bounds, disjoint from every FB slot, so no
+        // capture write can alter a displayable frame -- and lease-gated.
+        || (arb_req.client == ZHAO_CLIENT_ENGINE0 && arb_req.write
+            && env_fb_writer && fwd_in_echo)
         // ENGINE1 owns the Phase-3 asset pool, READ-ONLY. This arm is a
         // genuinely NEW WINDOW, not a second client admitted to an existing
         // one, and the difference is stated rather than smuggled: what keeps
@@ -222,7 +241,21 @@ module formal_mem_guard
       // and exempting the new client from it, keeps a proof green by removing
       // the new region from its scope.
       a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_render_asset
-                   || fwd_in_terrain);
+                   || fwd_in_terrain || fwd_in_echo);
+
+      // The echo capture is WRITE-ONLY and has exactly one owner, and the
+      // owner holds the render lease. Each is implied by a1_region; each is
+      // stated separately so a regression names the half that broke.
+      a1_echo_wo:    assert (!(fwd_in_echo && !arb_req.write));
+      a1_echo_owner: assert (!(fwd_in_echo && arb_req.client != ZHAO_CLIENT_ENGINE0));
+      a1_echo_lease: assert (!(fwd_in_echo && !env_fb_writer));
+      // No capture forward overlaps a frame buffer: the window is disjoint
+      // from both slots, stated as a theorem rather than trusted to constants.
+      a1_echo_not_fb: assert (!(fwd_in_echo && (fwd_in_slot0 || fwd_in_slot1)));
+      // An ENGINE0 read is always inside the lease, and only while it holds it.
+      a1_engine0_rd_lease: assert (!(arb_req.client == ZHAO_CLIENT_ENGINE0
+                                     && !arb_req.write
+                                     && !(env_fb_writer && fwd_in_lease)));
 
       // The render asset pool is read-only and has exactly one global owner.
       // Geometry and texture are local mux subowners, never new client IDs.
@@ -295,6 +328,15 @@ module formal_mem_guard
       // Without this the ENGINE0 arm of a1_region could be vacuous, which is
       // the exact failure this file's header records having shipped once.
       c_forward_engine: cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE0);
+      // ONE COVER PER ENGINE0 ARM. With three arms, `c_forward_engine` can be
+      // discharged by any one of them and would stay green over a dead arm --
+      // the vacuity this harness's header records shipping once.
+      c_forward_engine_wr: cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE0
+                                  && arb_req.write && fwd_in_lease);
+      c_forward_engine_rd: cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE0
+                                  && !arb_req.write && fwd_in_lease);
+      c_forward_echo:      cover (arb_req.valid && arb_req.client == ZHAO_CLIENT_ENGINE0
+                                  && arb_req.write && fwd_in_echo);
       // Packet E uses 16-byte texture fills while retained geometry uses 32/64.
       // Three covers prevent one legal request shape from hiding a dead arm.
       c_forward_render_asset_16:

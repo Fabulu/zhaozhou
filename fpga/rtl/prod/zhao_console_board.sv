@@ -1416,11 +1416,10 @@ module zhao_console_board
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
-  // ---- I15/I16/I17: the compositor's absent neighbours --------------------
-  input  logic                    post_view_sel_i,
-  input  logic                    post_s_valid_i,
-  output logic                    post_s_ready_o,
-  input  logic [15:0]             post_s_rgb_i,
+  // ---- I17: the compositor's absent neighbours ----------------------------
+  // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
+  // (I15, 2026-09-19): the pass, its view and its pixels come from the shell's
+  // `zhao_post_lease`, which reads the back buffer in raster order.
   output logic                    post_gd_req_v_o,
   output logic                    post_gd_view_o,
   output logic [POST_XW-3:0]      post_gd_cx_o,
@@ -1456,14 +1455,24 @@ module zhao_console_board
   output logic [POST_YW-1:0]      post_hud_req_y_o,
   input  logic                    post_hud_valid_i,
   input  logic [15:0]             post_hud_rgb_i,
-  output logic                    post_o_valid_o,
-  input  logic                    post_o_ready_i,
-  output logic [15:0]             post_o_rgb_o,
-  output logic [POST_XW-1:0]      post_o_x_o,
-  output logic [POST_YW-1:0]      post_o_y_o,
-  output logic                    post_o_last_o,
-  output logic                    post_echo_valid_o,
-  output logic [15:0]             post_echo_rgb_o,
+  // `post_o_*` and `post_echo_*` are GONE FROM THIS EDGE (I16, 2026-09-19):
+  // the composited stream is written back through RASTER.FBWRITE inside the
+  // shell's post lease, and the echo tap feeds POST.ECHO there.
+
+  // ---- POST.COMPOSITE's LEASE and POST.ECHO: evidence ----------------------
+  output logic                    post_busy_o,             // armed/running: frame not publishable
+  output logic [31:0]             post_passes_o,           // compositor passes written back
+  output logic [31:0]             post_frames_o,           // render frames fully post-processed
+  output logic                    post_fault_o,            // a refused source read
+  output logic [31:0]             post_src_reads_o,        // 64-byte back-buffer reads
+  output logic [31:0]             post_src_pixels_o,       // pixels handed to the compositor
+  output logic [31:0]             post_retire_unowned_o,   // tripwire: must read 0
+  output logic [31:0]             post_share_contention_o, // ENGINE0 share waits
+  output logic [31:0]             echo_passes_complete_o,  // WHOLE captures
+  output logic [31:0]             echo_passes_torn_o,
+  output logic [31:0]             echo_pixels_written_o,
+  output logic [31:0]             echo_pixels_dropped_o,
+  output logic                    echo_fault_o,
 
   // ---- COMPOSITOR evidence -------------------------------------------------
   output logic [31:0]             post_displacement_edge_clamps_o,
@@ -3021,10 +3030,6 @@ module zhao_console_board
       .proj_b_grants_o                   (proj_b_grants_o),
       .proj_contended_o                  (proj_contended_o),
       .proj_mat_refused_o                (proj_mat_refused_o),
-      .post_view_sel_i                   (post_view_sel_i),
-      .post_s_valid_i                    (post_s_valid_i),
-      .post_s_ready_o                    (post_s_ready_o),
-      .post_s_rgb_i                      (post_s_rgb_i),
       .post_gd_req_v_o                   (post_gd_req_v_o),
       .post_gd_view_o                    (post_gd_view_o),
       .post_gd_cx_o                      (post_gd_cx_o),
@@ -3056,14 +3061,19 @@ module zhao_console_board
       .post_hud_req_y_o                  (post_hud_req_y_o),
       .post_hud_valid_i                  (post_hud_valid_i),
       .post_hud_rgb_i                    (post_hud_rgb_i),
-      .post_o_valid_o                    (post_o_valid_o),
-      .post_o_ready_i                    (post_o_ready_i),
-      .post_o_rgb_o                      (post_o_rgb_o),
-      .post_o_x_o                        (post_o_x_o),
-      .post_o_y_o                        (post_o_y_o),
-      .post_o_last_o                     (post_o_last_o),
-      .post_echo_valid_o                 (post_echo_valid_o),
-      .post_echo_rgb_o                   (post_echo_rgb_o),
+      .post_busy_o                       (post_busy_o),
+      .post_passes_o                     (post_passes_o),
+      .post_frames_o                     (post_frames_o),
+      .post_fault_o                      (post_fault_o),
+      .post_src_reads_o                  (post_src_reads_o),
+      .post_src_pixels_o                 (post_src_pixels_o),
+      .post_retire_unowned_o             (post_retire_unowned_o),
+      .post_share_contention_o           (post_share_contention_o),
+      .echo_passes_complete_o            (echo_passes_complete_o),
+      .echo_passes_torn_o                (echo_passes_torn_o),
+      .echo_pixels_written_o             (echo_pixels_written_o),
+      .echo_pixels_dropped_o             (echo_pixels_dropped_o),
+      .echo_fault_o                      (echo_fault_o),
       .post_displacement_edge_clamps_o   (post_displacement_edge_clamps_o),
       .post_bloom_cells_contributing_o   (post_bloom_cells_contributing_o),
       .post_passes_completed_o           (post_passes_completed_o),

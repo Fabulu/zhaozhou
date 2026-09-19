@@ -251,6 +251,23 @@ SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
         "build_wlast_i",
         "build_hps_req_i",
     ),
+    # 2026-09-19 (post): POST.COMPOSITE on the far side of the shell's post
+    # lease -- its view geometry, its ready to the source, its composited output
+    # and its echo tap. Legal in the policy, held at reset by the paused
+    # instrument until it is given stimulus, exactly as the socket above.
+    "post_compositor": (
+        "post_frame_w_i",
+        "post_frame_h_i",
+        "post_duo_i",
+        "post_src_ready_i",
+        "post_out_valid_i",
+        "post_out_rgb_i",
+        "post_out_x_i",
+        "post_out_y_i",
+        "post_out_last_i",
+        "post_echo_valid_i",
+        "post_echo_rgb_i",
+    ),
 }
 
 

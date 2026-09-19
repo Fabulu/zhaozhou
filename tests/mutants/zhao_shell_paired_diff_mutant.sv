@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 37 inputs exist only on the sibling. They get harness ports of
+// 48 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -120,6 +120,17 @@ module zhao_shell_paired_diff_mut
   input  logic build_wvalid_i,
   input  logic build_wlast_i,
   input  zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
+  input  logic [8:0] post_frame_w_i,
+  input  logic [7:0] post_frame_h_i,
+  input  logic post_duo_i,
+  input  logic post_src_ready_i,
+  input  logic post_out_valid_i,
+  input  logic [15:0] post_out_rgb_i,
+  input  logic [8:0] post_out_x_i,
+  input  logic [7:0] post_out_y_i,
+  input  logic post_out_last_i,
+  input  logic post_echo_valid_i,
+  input  logic [15:0] post_echo_rgb_i,
   input  logic cmd_pkt_ready_i,
   output logic v1_ring_wr_valid_o,
   output logic v2_ring_wr_valid_o,
@@ -476,7 +487,7 @@ module zhao_shell_paired_diff_mut
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 44 outputs the historical shell never had
+  // The sibling has 62 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -704,6 +715,35 @@ module zhao_shell_paired_diff_mut
     .render_retired_words_o(v2_render_retired_words_o),
     .render_overflow_o(v2_render_overflow_o),
     .render_fragment_error_o(v2_render_fragment_error_o),
+    .post_frame_w_i(post_frame_w_i),
+    .post_frame_h_i(post_frame_h_i),
+    .post_duo_i(post_duo_i),
+    .post_pass_start_o(),
+    .post_view_o(),
+    .post_src_valid_o(),
+    .post_src_ready_i(post_src_ready_i),
+    .post_src_rgb_o(),
+    .post_out_valid_i(post_out_valid_i),
+    .post_out_ready_o(),
+    .post_out_rgb_i(post_out_rgb_i),
+    .post_out_x_i(post_out_x_i),
+    .post_out_y_i(post_out_y_i),
+    .post_out_last_i(post_out_last_i),
+    .post_echo_valid_i(post_echo_valid_i),
+    .post_echo_rgb_i(post_echo_rgb_i),
+    .post_busy_o(),
+    .post_passes_o(),
+    .post_frames_o(),
+    .post_fault_o(),
+    .post_src_reads_o(),
+    .post_src_pixels_o(),
+    .post_retire_unowned_o(),
+    .post_share_contention_o(),
+    .echo_passes_complete_o(),
+    .echo_passes_torn_o(),
+    .echo_pixels_written_o(),
+    .echo_pixels_dropped_o(),
+    .echo_fault_o(),
     .phy_cs_n_o(v2_phy_cs_n_o),
     .phy_ras_n_o(v2_phy_ras_n_o),
     .phy_cas_n_o(v2_phy_cas_n_o),

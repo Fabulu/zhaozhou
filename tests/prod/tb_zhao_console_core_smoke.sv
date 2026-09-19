@@ -738,10 +738,6 @@ module tb_zhao_console_core_smoke
   logic [31:0]             proj_b_grants_o;
   logic [31:0]             proj_contended_o;
   logic [31:0]             proj_mat_refused_o;
-  logic                    post_view_sel_i;
-  logic                    post_s_valid_i;
-  logic                    post_s_ready_o;
-  logic [15:0]             post_s_rgb_i;
   logic                    post_gd_req_v_o;
   logic                    post_gd_view_o;
   logic [POST_XW-3:0]      post_gd_cx_o;
@@ -781,14 +777,22 @@ module tb_zhao_console_core_smoke
   logic [POST_YW-1:0]      post_hud_req_y_o;
   logic                    post_hud_valid_i;
   logic [15:0]             post_hud_rgb_i;
-  logic                    post_o_valid_o;
-  logic                    post_o_ready_i;
-  logic [15:0]             post_o_rgb_o;
-  logic [POST_XW-1:0]      post_o_x_o;
-  logic [POST_YW-1:0]      post_o_y_o;
-  logic                    post_o_last_o;
-  logic                    post_echo_valid_o;
-  logic [15:0]             post_echo_rgb_o;
+  // POST.COMPOSITE's lease and POST.ECHO (I15/I16 closed 2026-09-19): the
+  // source, the output and the echo tap are internal now; this is their
+  // evidence.
+  logic                    post_busy_o;
+  logic [31:0]             post_passes_o;
+  logic [31:0]             post_frames_o;
+  logic                    post_fault_o;
+  logic [31:0]             post_src_reads_o;
+  logic [31:0]             post_src_pixels_o;
+  logic [31:0]             post_retire_unowned_o;
+  logic [31:0]             post_share_contention_o;
+  logic [31:0]             echo_passes_complete_o;
+  logic [31:0]             echo_passes_torn_o;
+  logic [31:0]             echo_pixels_written_o;
+  logic [31:0]             echo_pixels_dropped_o;
+  logic                    echo_fault_o;
   logic [31:0]             post_displacement_edge_clamps_o;
   logic [31:0]             post_bloom_cells_contributing_o;
   logic [31:0]             post_passes_completed_o;
@@ -2548,7 +2552,66 @@ module tb_zhao_console_core_smoke
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 24, rec[255:192]);
     end
 
+    // THE FRAME IS PRE-FILLED WITH A SENTINEL, and without it the post checks
+    // below would compare zeros. MEASURED 2026-09-19: the raster's 2,560 pixels
+    // are ALL 0x0000 -- the material is still unbound, so the surface samples
+    // nothing (the NOTE the verdict prints) -- and the model's memory starts at
+    // zero, so an all-zero frame went out through the post source and came back
+    // "byte-identical" having proved nothing. With a nonzero pattern in every
+    // word of the view: the raster's pixels (black) REPLACE it where it draws,
+    // which is itself evidence the raster wrote; the identity post pass must
+    // bring every word back unchanged; and the echo must carry every one of
+    // them to the capture -- which starts at zero, so an echo that wrote
+    // nothing cannot match.
+    for (int unsigned w = 0; w < 384 * 240; w++)    // POST_TB_WORDS, declared below
+      geom_poke_w(2 * w, 16'((w * 40503) ^ 32'h5A3C) | 16'h0001);
+
     geom_fixture_ready_q = 1'b1;
+  end
+
+  // ==========================================================================
+  // POST.COMPOSITE AND POST.ECHO: THE VALUE TRAVERSES (I15, I16, R7)
+  // ==========================================================================
+  // The back buffer is snapshotted at the instant the post source hands its
+  // FIRST pixel to the compositor. By then the raster has drained and every
+  // raster word has RETIRED (the lease's start condition), and no write-back
+  // can have happened yet (the compositor writes line y only after reading
+  // line y+4). So the snapshot is exactly the raster's frame.
+  //
+  // With every effect input at zero the compositor is the IDENTITY (no
+  // displacement, no glow, no atmosphere, bloom gain 0, ungraded, flash 0,
+  // no ink, no HUD), so after the pass:
+  //   * the framebuffer must equal the snapshot word for word -- the frame
+  //     went out through the source reader and came back through RASTER.
+  //     FBWRITE without a word moving or changing;
+  //   * the capture must equal the snapshot word for word -- the echo tap
+  //     carried the same pixels to POST.ECHO's window.
+  // A reader that read the wrong rows, a writer that wrote them back
+  // displaced, or an echo that dropped or misplaced a chunk each breaks one
+  // of the two equalities.
+  localparam int unsigned POST_TB_W = 384;          // Z60, the smoke's mode
+  localparam int unsigned POST_TB_H = 240;
+  localparam int unsigned POST_TB_WORDS = POST_TB_W * POST_TB_H;
+  localparam int unsigned POST_ECHO_WBASE = 32'h05C0_0000 >> 1;
+  logic [15:0] post_fb_snap [0:POST_TB_WORDS-1];
+  bit          post_snap_taken_q;
+  // The pass's duration: every cycle the post lease is busy (armed at the
+  // raster's frame_end, done when the last written-back word has retired).
+  // POST.COMPOSITE.md prices the stream at ~103,680 work items per Z60 frame and
+  // warns that a number near 461,000 means it has quietly become passes again.
+  int unsigned post_busy_cycles_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      post_snap_taken_q  <= 1'b0;
+      post_busy_cycles_q <= 0;
+    end else begin
+      if (post_busy_o) post_busy_cycles_q <= post_busy_cycles_q + 1;
+      if (!post_snap_taken_q && (post_src_pixels_o != 32'd0)) begin
+        for (int unsigned w = 0; w < POST_TB_WORDS; w++)
+          post_fb_snap[w] = u_geom_sdram.mem[w];
+        post_snap_taken_q <= 1'b1;
+      end
+    end
   end
 
   // THE BEHAVIOURAL SDRAM. Core header entry I23's refusal said this did not
@@ -2973,9 +3036,6 @@ module tb_zhao_console_core_smoke
     terr_job_weight_i = '0;
     terr_sparse_fill_i = '0;
     proj_out_ready_i = '0;
-    post_view_sel_i = '0;
-    post_s_valid_i = '0;
-    post_s_rgb_i = '0;
     post_gd_present_i = '0;
     post_gd_dx_i = '0;
     post_gd_dy_i = '0;
@@ -3001,7 +3061,6 @@ module tb_zhao_console_core_smoke
     post_ink_rgb_i = '0;
     post_hud_valid_i = '0;
     post_hud_rgb_i = '0;
-    post_o_ready_i = '0;
     hist_ev_valid_i = '0;
     hist_ev_lane_valid_i = '0;
     hist_ev_err_i = '0;
@@ -3439,7 +3498,14 @@ module tb_zhao_console_core_smoke
     @(posedge gpu_clk);
     fb_writer_i          <= 1'b1;
     render_fb_base_i     <= 27'd0;
-    render_fb_stride_i   <= 16'd128;      // 64 px * 2 bytes
+    // THE STORED-SURFACE STRIDE, and it is a law, not a choice:
+    // spec/video_rules.md 1 -- "Z60 is 384x240 at 768 bytes/row" -- with no
+    // caller-supplied stride. It was 128 here (a 64-pixel grid's rows) while
+    // nothing read the frame back; POST.COMPOSITE now does, in raster order,
+    // at the mode's geometry, and a 128-byte stride under a 768-byte read
+    // would read six raster rows as one. The raster's pixels are unchanged:
+    // the same 2560 land at their (x, y), one row per 768 bytes.
+    render_fb_stride_i   <= 16'd768;      // Z60: 384 px * 2 bytes
     render_fill_word_i   <= 64'hA5A5_A5A5_A5A5_A5A5;
     render_clear_word_i  <= 64'h5A5A_5A5A_5A5A_5A5A;
     render_src_a_i       <= 8'hFF;
@@ -3574,6 +3640,73 @@ module tb_zhao_console_core_smoke
 
     // let the tick's generation drain
     repeat (2000) @(posedge gpu_clk);
+
+    // ---- the post pass: bounded, then every counter and both equalities ----
+    guard = 0;
+    while ((post_frames_o == 0) && (guard < 3000000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
+    begin
+      automatic int unsigned fb_bad = 0, cap_bad = 0, drawn = 0;
+      automatic int unsigned first_fb = 0, first_cap = 0;
+      for (int unsigned w = 0; w < POST_TB_WORDS; w++) begin
+        if (u_geom_sdram.mem[w] !== post_fb_snap[w]) begin
+          if (fb_bad == 0) first_fb = w;
+          fb_bad++;
+        end
+        if (u_geom_sdram.mem[POST_ECHO_WBASE + w] !== post_fb_snap[w]) begin
+          if (cap_bad == 0) first_cap = w;
+          cap_bad++;
+        end
+        if (post_fb_snap[w] == 16'h0000) drawn++;   // the raster's (black) pixels
+      end
+      $display("SMOKE: post       frames=%0d passes=%0d src_reads=%0d src_px=%0d line_fill=%0d out=%0d fault=%0d unowned=%0d share_waits=%0d waited=%0d",
+               post_frames_o, post_passes_o, post_src_reads_o, post_src_pixels_o,
+               post_line_fill_writes_o, post_output_writes_o, post_fault_o,
+               post_retire_unowned_o, post_share_contention_o, guard);
+      $display("SMOKE: post       lease busy %0d gpu cycles, frame_end to last retired write-back word (contract: ~103,680 work items for Z60; ~461,000 = five passes)",
+               post_busy_cycles_q);
+      $display("SMOKE: echo       complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
+               echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
+               echo_pixels_dropped_o, echo_fault_o);
+      $display("SMOKE: post       raster-overwritten=%0d | framebuffer after post differs in %0d word(s) | capture differs in %0d word(s)",
+               drawn, fb_bad, cap_bad);
+      if (post_frames_o != 1 || post_passes_o != 1)
+        $fatal(1, "SMOKE: POST.COMPOSITE's lease completed %0d frame(s) / %0d pass(es) after %0d cycles, not 1/1 -- busy=%0d fault=%0d src_px=%0d out=%0d",
+               post_frames_o, post_passes_o, guard, post_busy_o, post_fault_o,
+               post_src_pixels_o, post_output_writes_o);
+      if (post_src_pixels_o != POST_TB_WORDS || post_line_fill_writes_o != POST_TB_WORDS
+          || post_output_writes_o != POST_TB_WORDS)
+        $fatal(1, "SMOKE: the post pass moved %0d source / %0d filled / %0d output pixels, not %0d each",
+               post_src_pixels_o, post_line_fill_writes_o, post_output_writes_o, POST_TB_WORDS);
+      if (post_src_reads_o != POST_TB_H * (POST_TB_W / 32))
+        $fatal(1, "SMOKE: the post source issued %0d reads, not %0d (one 64-byte read per 32 pixels)",
+               post_src_reads_o, POST_TB_H * (POST_TB_W / 32));
+      if (post_fault_o || post_retire_unowned_o != 0)
+        $fatal(1, "SMOKE: post lease tripwire: fault=%0d retire_unowned=%0d", post_fault_o, post_retire_unowned_o);
+      // The raster replaced EXACTLY its own pixels' worth of sentinel: every
+      // pixel it wrote is 0x0000 and the sentinel never is.
+      if (drawn != render_pixels_o)
+        $fatal(1, "SMOKE: %0d word(s) of the sentinel were overwritten by the raster, but it wrote %0d pixel(s) -- the snapshot is not the raster's frame",
+               drawn, render_pixels_o);
+      if (fb_bad != 0)
+        $fatal(1, "SMOKE: the framebuffer after the IDENTITY post pass differs from the raster's frame in %0d word(s), first at word %0d -- the read-back or the write-back moved or changed pixels",
+               fb_bad, first_fb);
+      if (echo_passes_complete_o != 1 || echo_passes_torn_o != 0 || echo_pixels_dropped_o != 0
+          || echo_fault_o || echo_pixels_written_o != POST_TB_WORDS)
+        $fatal(1, "SMOKE: POST.ECHO did not capture the pass whole: complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
+               echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
+               echo_pixels_dropped_o, echo_fault_o);
+      if (cap_bad != 0)
+        $fatal(1, "SMOKE: POST.ECHO's capture differs from the frame in %0d word(s), first at word %0d",
+               cap_bad, first_cap);
+      if (render_retired_words_o != render_issued_words_o)
+        $fatal(1, "SMOKE: after the post pass RASTER.FBWRITE issued %0d words and retired %0d",
+               render_issued_words_o, render_retired_words_o);
+      if (!render_drained_o)
+        $fatal(1, "SMOKE: the render frame (raster + post) never drained -- nothing could publish it");
+    end
 
 
     // ======================================================================

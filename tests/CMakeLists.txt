@@ -3998,6 +3998,37 @@ verilate(test_post_gather_random
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_gather.sv)
 add_test(NAME post_gather_random COMMAND test_post_gather_random)
 set_tests_properties(post_gather_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+# POST.COMPOSITE's framebuffer lease (core entries I15/I16, 2026-09-19): the
+# SOURCE read-back and POST.ECHO (owner ruling R7). Both benches play MEM.GUARD's
+# real two-cycle law from tests/compositor/post_mem_model.hpp -- ready a level,
+# the verdict a pulse a cycle late -- because every guard client in this tree
+# that was only ever tested against a same-cycle model shipped reading every
+# pass as a refusal (tools/rtl/check_guard_verdict.py).
+add_executable(test_post_fbread_directed compositor/post_fbread_directed.cpp)
+target_link_libraries(test_post_fbread_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_post_fbread_directed PRIVATE ${CMAKE_SOURCE_DIR}/tests/compositor)
+verilate(test_post_fbread_directed
+  PREFIX Vzhao_post_fbread
+  TOP_MODULE zhao_post_fbread
+  VERILATOR_ARGS -GYW=9
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_fbread.sv)
+add_test(NAME post_fbread_directed COMMAND test_post_fbread_directed)
+set_tests_properties(post_fbread_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+add_executable(test_post_echo_directed compositor/post_echo_directed.cpp)
+target_link_libraries(test_post_echo_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_post_echo_directed PRIVATE ${CMAKE_SOURCE_DIR}/tests/compositor)
+verilate(test_post_echo_directed
+  PREFIX Vzhao_post_echo
+  TOP_MODULE zhao_post_echo
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_fbwrite.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_echo.sv)
+add_test(NAME post_echo_directed COMMAND test_post_echo_directed)
+set_tests_properties(post_echo_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # GEOM.VDECODE format 0 -- RAW/CANONICAL, authorised by ruling R11. Format 0
 # is the DIFFERENTIAL REFERENCE: packed formats 1 and 2 are bake-off gated and
@@ -7682,6 +7713,12 @@ list(APPEND ZHAO_SHELL_V2_TOP_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_blit_lease_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/video/zhao_video_ready_bridge_v2.sv
+  # POST.COMPOSITE's lease inside the shell (core I15/I16, 2026-09-19): the
+  # ENGINE0 share, the source read-back and POST.ECHO.
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_share2.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_fbread.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_echo.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_lease.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_shell_top_v2.sv)
 
 add_test(NAME lint_shell_top_v2

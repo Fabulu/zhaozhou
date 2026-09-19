@@ -485,6 +485,45 @@ module zhao_shell_top_v2
   output logic        render_overflow_o,
   output logic        render_fragment_error_o,
 
+  // ---- POST.COMPOSITE's FRAMEBUFFER LEASE (core entries I15/I16, 2026-09-19)
+  // POST.COMPOSITE.md: "an exclusive framebuffer read/write lease after resolve
+  // and before publication". The lease is held HERE, by `zhao_post_lease`,
+  // because this is where the render lease, RASTER.FBWRITE and the ENGINE0
+  // guard live; the compositor itself stays in the core. Across this edge go
+  // the compositor's addressless source stream (the back buffer read back in
+  // raster order), its composited output (written back through the SAME
+  // RASTER.FBWRITE, in place) and its POST.ECHO tap. `render_drained_o` now
+  // means the RENDER FRAME -- raster AND post -- has retired.
+  input  logic [8:0]  post_frame_w_i,       // the VIEW's size, from the video mode
+  input  logic [7:0]  post_frame_h_i,
+  input  logic        post_duo_i,           // two views per frame
+  output logic        post_pass_start_o,    // POST.COMPOSITE frame_start
+  output logic        post_view_o,          // POST.COMPOSITE view_sel
+  output logic        post_src_valid_o,
+  input  logic        post_src_ready_i,
+  output logic [15:0] post_src_rgb_o,
+  input  logic        post_out_valid_i,
+  output logic        post_out_ready_o,
+  input  logic [15:0] post_out_rgb_i,
+  input  logic [8:0]  post_out_x_i,
+  input  logic [7:0]  post_out_y_i,
+  input  logic        post_out_last_i,
+  input  logic        post_echo_valid_i,
+  input  logic [15:0] post_echo_rgb_i,
+  output logic        post_busy_o,
+  output logic [31:0] post_passes_o,
+  output logic [31:0] post_frames_o,
+  output logic        post_fault_o,
+  output logic [31:0] post_src_reads_o,
+  output logic [31:0] post_src_pixels_o,
+  output logic [31:0] post_retire_unowned_o,
+  output logic [31:0] post_share_contention_o,
+  output logic [31:0] echo_passes_complete_o,
+  output logic [31:0] echo_passes_torn_o,
+  output logic [31:0] echo_pixels_written_o,
+  output logic [31:0] echo_pixels_dropped_o,
+  output logic        echo_fault_o,
+
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
   output logic        phy_cs_n_o,
   output logic        phy_ras_n_o,
@@ -1146,28 +1185,157 @@ module zhao_shell_top_v2
   );
   /* verilator lint_on PINCONNECTEMPTY */
 
+  // ---- RASTER.FBWRITE: ONE ENGINE, TWO PHASES (2026-09-19) -----------------
+  // The raster's pixels, then POST.COMPOSITE's write-back of the same frame.
+  // The two never overlap: post starts only once the raster is quiet, nothing
+  // is on its pixel port and every raster word has retired, and the raster
+  // cannot restart until a new frame is admitted -- which ends the post phase.
+  // So the port is switched, not arbitrated, and the second writer costs a
+  // 45-bit mux instead of a second FBWRITE (~300 ALM saved).
+  logic               post_phase_w;
+  logic               ppx_valid, ppx_ready, ppx_last;
+  logic        [15:0] ppx_rgb565;
+  logic signed [11:0] ppx_x, ppx_y;
+  logic               fbw_px_valid, fbw_px_ready, fbw_px_last;
+  logic        [15:0] fbw_px_rgb565;
+  logic signed [11:0] fbw_px_x, fbw_px_y;
+  assign fbw_px_valid  = post_phase_w ? ppx_valid  : rpx_valid;
+  assign fbw_px_rgb565 = post_phase_w ? ppx_rgb565 : rpx_rgb565;
+  assign fbw_px_x      = post_phase_w ? ppx_x      : rpx_x;
+  assign fbw_px_y      = post_phase_w ? ppx_y      : rpx_y;
+  assign fbw_px_last   = post_phase_w ? ppx_last   : rpx_last;
+  assign rpx_ready     = !post_phase_w && fbw_px_ready;
+  assign ppx_ready     =  post_phase_w && fbw_px_ready;
+
+  // FBWRITE is now requester 0 of ENGINE0's share inside the post lease; its
+  // guard port, write channel and retirement credits go THROUGH the lease.
+  zhao_guard_req_t fbw_guard_req;
+  zhao_guard_rsp_t fbw_guard_rsp;
+  logic [63:0]     fbw_guard_wdata;
+  logic            fbw_guard_wvalid, fbw_guard_wready, fbw_guard_wlast;
+  logic [ 7:0]     fbw_retire_words;
+  logic [31:0]     fbw_pixels_w, fbw_bursts_w;
+  logic            fbw_drained_w;
+
   zhao_raster_fbwrite u_render_fbw (
     .clk(gpu_clk), .rst_n(rst_n),
     .fb_base_i(render_fb_base_i), .fb_stride_i(render_fb_stride_i),
-    .px_valid_i(rpx_valid), .px_ready_o(rpx_ready),
-    .px_rgb565_i(rpx_rgb565), .px_x_i(rpx_x), .px_y_i(rpx_y), .px_last_i(rpx_last),
+    .px_valid_i(fbw_px_valid), .px_ready_o(fbw_px_ready),
+    .px_rgb565_i(fbw_px_rgb565), .px_x_i(fbw_px_x), .px_y_i(fbw_px_y),
+    .px_last_i(fbw_px_last),
     .frame_end_i(render_frame_end_i),
     // Retirement is the arbiter credit stream for the ENGINE0 client, exactly
-    // as DEBUG.FRAMEBLIT takes client_rsp[1].credits. The block's own issue
-    // count says nothing about whether the write landed.
-    .retire_words_i(client_rsp[2].credits),
-    .guard_req_o(render_guard_req), .guard_rsp_i(render_guard_rsp),
-    .guard_wdata_o(render_wdata), .guard_wvalid_o(render_wvalid),
-    .guard_wready_i(render_wready), .guard_wlast_o(render_wlast),
-    .pixels_written_o(render_pixels_o),
-    .bursts_issued_o(render_bursts_o),
+    // as DEBUG.FRAMEBLIT takes client_rsp[1].credits -- now ATTRIBUTED by the
+    // post lease, because three requesters share ENGINE0 and each must see
+    // only the words its own requests retired.
+    .retire_words_i(fbw_retire_words),
+    .guard_req_o(fbw_guard_req), .guard_rsp_i(fbw_guard_rsp),
+    .guard_wdata_o(fbw_guard_wdata), .guard_wvalid_o(fbw_guard_wvalid),
+    .guard_wready_i(fbw_guard_wready), .guard_wlast_o(fbw_guard_wlast),
+    .pixels_written_o(fbw_pixels_w),
+    .bursts_issued_o(fbw_bursts_w),
     .stall_clocks_o(rp_stall_unused),
     .stream_error_o(render_stream_error_o),
     .issued_words_o(render_issued_words_o),
     .retired_words_o(render_retired_words_o),
-    .drained_o(render_drained_o),
+    .drained_o(fbw_drained_w),
     .fatal_error_o(render_fatal_o),
     .busy_o(render_busy_o)
+  );
+
+  // `render_pixels_o` / `render_bursts_o` are the RASTER's, and stay so: the
+  // write-back of the same frame is counted by POST.COMPOSITE's own
+  // `output_writes_o`. FBWRITE's window counters run on through the post phase,
+  // so the raster's totals are frozen at the phase change.
+  logic [31:0] raster_pixels_q, raster_bursts_q;
+  logic        post_phase_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      raster_pixels_q <= 32'd0;
+      raster_bursts_q <= 32'd0;
+      post_phase_q    <= 1'b0;
+    end else begin
+      post_phase_q <= post_phase_w;
+      if (post_phase_w && !post_phase_q) begin
+        raster_pixels_q <= fbw_pixels_w;
+        raster_bursts_q <= fbw_bursts_w;
+      end
+    end
+  end
+  assign render_pixels_o = post_phase_w ? raster_pixels_q : fbw_pixels_w;
+  assign render_bursts_o = post_phase_w ? raster_bursts_q : fbw_bursts_w;
+
+  // THE FRAME TRANSACTION NOW INCLUDES POST. A frame controller publishes on
+  // `render_drained_o`; the frame is not finished until the compositor has
+  // written it back and every word of that has retired too.
+  assign render_drained_o = fbw_drained_w && !post_busy_o;
+
+  // ---- POST.COMPOSITE's lease ------------------------------------------------
+  logic        e0_beat_valid, e0_beat_last;
+  zhao_post_lease #(.XW(9), .YW(8)) u_post_lease (
+    .clk(gpu_clk), .rst_n(rst_n),
+    // The renderer's live lease: the one the render guard's window comes from.
+    .lease_live_i  (rmap_valid_q),
+    .frame_admit_i (v2_frame_admit_w),
+    .frame_end_i   (render_frame_end_i),
+    .raster_quiet_i(v2_bin_quiet_w),
+    .raster_px_i   (rpx_valid),
+    .fbw_drained_i (fbw_drained_w),
+    .fb_base_i     (render_fb_base_i),
+    .fb_stride_i   (render_fb_stride_i),
+    .frame_w_i     (post_frame_w_i),
+    .frame_h_i     (post_frame_h_i),
+    .duo_i         (post_duo_i),
+    .pass_start_o  (post_pass_start_o),
+    .view_o        (post_view_o),
+    .src_valid_o   (post_src_valid_o),
+    .src_ready_i   (post_src_ready_i),
+    .src_rgb_o     (post_src_rgb_o),
+    .out_valid_i   (post_out_valid_i),
+    .out_ready_o   (post_out_ready_o),
+    .out_rgb_i     (post_out_rgb_i),
+    .out_x_i       (post_out_x_i),
+    .out_y_i       (post_out_y_i),
+    .out_last_i    (post_out_last_i),
+    .echo_valid_i  (post_echo_valid_i),
+    .echo_rgb_i    (post_echo_rgb_i),
+    .phase_post_o  (post_phase_w),
+    .fbw_px_valid_o(ppx_valid),
+    .fbw_px_ready_i(ppx_ready),
+    .fbw_px_rgb_o  (ppx_rgb565),
+    .fbw_px_x_o    (ppx_x),
+    .fbw_px_y_o    (ppx_y),
+    .fbw_px_last_o (ppx_last),
+    .fbw_req_i     (fbw_guard_req),
+    .fbw_rsp_o     (fbw_guard_rsp),
+    .fbw_wdata_i   (fbw_guard_wdata),
+    .fbw_wvalid_i  (fbw_guard_wvalid),
+    .fbw_wready_o  (fbw_guard_wready),
+    .fbw_wlast_i   (fbw_guard_wlast),
+    .fbw_retire_o  (fbw_retire_words),
+    .e0_req_o      (render_guard_req),
+    .e0_rsp_i      (render_guard_rsp),
+    .e0_wdata_o    (render_wdata),
+    .e0_wvalid_o   (render_wvalid),
+    .e0_wready_i   (render_wready),
+    .e0_wlast_o    (render_wlast),
+    .e0_beat_valid_i(e0_beat_valid),
+    .e0_beat_data_i(packed_data),
+    .e0_beat_last_i(e0_beat_last),
+    .e0_credits_i  (client_rsp[2].credits),
+    .busy_o        (post_busy_o),
+    .passes_o      (post_passes_o),
+    .frames_o      (post_frames_o),
+    .fault_o       (post_fault_o),
+    .src_reads_o   (post_src_reads_o),
+    .src_pixels_o  (post_src_pixels_o),
+    .retire_unowned_o(post_retire_unowned_o),
+    .share_contention_o(post_share_contention_o),
+    .echo_passes_complete_o(echo_passes_complete_o),
+    .echo_passes_torn_o(echo_passes_torn_o),
+    .echo_pixels_written_o(echo_pixels_written_o),
+    .echo_pixels_dropped_o(echo_pixels_dropped_o),
+    .echo_fault_o  (echo_fault_o)
   );
 
   // THE RENDER GUARD'S WINDOW IS THE RENDERER'S LEASE, AND IT USED TO BE THE
@@ -1227,7 +1395,34 @@ module zhao_shell_top_v2
     .guard_violation_req (render_gv_req)
   );
 
-  assign client_req[2] = render_arb_req;
+  // ENGINE0's WRITES WAIT FOR THEIR DATA (2026-09-19). The render engine used
+  // to reach the guard directly and push its row the cycle after the verdict,
+  // so the data was always queued before the controller could want it -- a
+  // latency race that happened to be won. With ENGINE0 shared (the post lease)
+  // the verdict reaches a writer later, and the race is no longer won by
+  // construction. Slot 6 already solved this exactly: the arbiter sees a write
+  // only when all its words are in the queue and not yet owed to an accepted
+  // request. The same gate, on the framebuffer queue, for the same reason.
+  // ENFORCED-BY: tests/prod/tb_zhao_console_core_smoke.sv (shell_err_wfifo_o
+  //              stays 0 through the raster AND the post write-back)
+  logic [$clog2(WFIFO_W):0] wf_owed;
+  logic                     wf_room_for_req;
+  assign wf_room_for_req =
+      ({1'b0, wf_occ} - {1'b0, wf_owed})
+        >= ($bits(wf_occ)+1)'(build_words_of(render_arb_req.len));
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) wf_owed <= '0;
+    else wf_owed <= wf_owed
+         + ((client_rsp[2].grant && render_arb_req.write)
+              ? ($bits(wf_owed))'(build_words_of(render_arb_req.len)) : '0)
+         - ((wr_beat_ctrl && !wr_sel_build && (wf_owed != '0))
+              ? ($bits(wf_owed))'(1) : '0);
+  end
+  always_comb begin
+    client_req[2]       = render_arb_req;
+    client_req[2].valid = render_arb_req.valid
+                          && (!render_arb_req.write || wf_room_for_req);
+  end
   // D22 TREAD 10. Slot 3 was tied to '0 and is now the geometry fetch path to
   // real memory, through the real guard -- the same block the scanout and blit
   // clients use, not a second copy of its rules.
@@ -1489,13 +1684,18 @@ module zhao_shell_top_v2
   // THE THIRD READ OWNER, slot 6 (the TERRAIN.BUILD socket). Captured at the
   // same grant edge by the same rule; a returning word carries no tag.
   logic rd_owner_build_r;
+  // THE FOURTH READ OWNER, ENGINE0 (2026-09-19): POST.COMPOSITE's source
+  // read-back, through the post lease. Same capture rule, same reason.
+  logic rd_owner_e0_r;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       rd_owner_geom_r  <= 1'b0;
       rd_owner_build_r <= 1'b0;
+      rd_owner_e0_r    <= 1'b0;
     end else if (ctrl_rsp.grant && !ctrl_req.write) begin
       rd_owner_geom_r  <= (ctrl_req.client == ZHAO_CLIENT_ENGINE1);
       rd_owner_build_r <= (ctrl_req.client == ZHAO_CLIENT_TERRAIN_BUILD);
+      rd_owner_e0_r    <= (ctrl_req.client == ZHAO_CLIENT_ENGINE0);
     end
   end
 
@@ -1569,7 +1769,28 @@ module zhao_shell_top_v2
     end
   end
 
-  assign scan_beat_valid = packed_valid && !rd_owner_geom_r && !rd_owner_build_r;
+  assign scan_beat_valid = packed_valid && !rd_owner_geom_r && !rd_owner_build_r
+                           && !rd_owner_e0_r;
+
+  // ---- ENGINE0's read beats (the post source), last from ITS request ------
+  // The geometry path's lesson, applied a third time: last marks the end of
+  // the guard request, counted from the accepted request's own len.
+  logic [3:0] e0_expect_r;
+  logic [3:0] e0_beat_cnt_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      e0_beat_cnt_r <= 4'd0;
+      e0_expect_r   <= 4'd8;
+    end else if (render_guard_req.valid && render_guard_rsp.ready
+                 && !render_guard_req.write) begin
+      e0_beat_cnt_r <= 4'd0;
+      e0_expect_r   <= 4'(render_guard_req.len >> 3);
+    end else if (e0_beat_valid) begin
+      e0_beat_cnt_r <= e0_beat_cnt_r + 4'd1;
+    end
+  end
+  assign e0_beat_valid = packed_valid && rd_owner_e0_r;
+  assign e0_beat_last  = e0_beat_valid && (e0_beat_cnt_r + 4'd1 == e0_expect_r);
   assign scan_beat_data  = packed_data;
 
   // ---- slot 6's read beats, with `last` counted from ITS request -----------
@@ -1632,9 +1853,14 @@ module zhao_shell_top_v2
       // not, so every legal burst raised the shell's own corruption alarm.
       // Widened DELIBERATELY and no further: ENGINE1 is the one identity
       // `zhao_mem_guard` grants the asset-pool window to.
+      // 2026-09-19: ENGINE0 READS are legal while the lease names the render
+      // engine (POST.COMPOSITE's read/write lease, the guard's b_read_ok).
+      // Learned in the SAME edit as the guard arm, for the reason this block's
+      // own comments give twice.
       if (!ctrl_req.write && (ctrl_req.client != ZHAO_CLIENT_SCANOUT)
                           && (ctrl_req.client != ZHAO_CLIENT_ENGINE1)
-                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD))
+                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD)
+                          && !((ctrl_req.client == ZHAO_CLIENT_ENGINE0) && fb_writer_i))
         route_err <= 1'b1;
     end
   end

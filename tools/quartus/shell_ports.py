@@ -146,6 +146,8 @@ _ALLOWED_DRIVERS = {
     "cmd_packet_sink",
     # 2026-09-19: the TERRAIN.BUILD socket's client (slot 6 + HPS socket).
     "build_socket_client",
+    # 2026-09-19: POST.COMPOSITE on the far side of the shell's post lease.
+    "post_compositor",
 }
 _ALLOWED_SINKS = {"gpu_capture", "video_capture", "audio_capture"}
 

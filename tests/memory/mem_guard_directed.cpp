@@ -252,10 +252,62 @@ int main(int argc, char** argv) {
     h.request(MemoryGuard::Req{true, true, MemoryGuard::BLIT_DMA, 0x0000, 64, full_be(64)}, eng);
     h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, map);
 
-    // The engine reads nothing and writes nothing without a lease.
-    h.request(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, eng);
+    // THE POST.COMPOSITE LEASE (2026-09-19): the engine that holds the lease
+    // may READ its own window -- "an exclusive framebuffer read/write lease
+    // after resolve and before publication". It used to read nothing. The
+    // polarity is asserted against the oracle HERE, not only differenced,
+    // because a request the RTL and the oracle both wrongly refuse agrees.
+    auto expect_verdict = [&](const MemoryGuard::Req& r, const GuardMap& m, bool want,
+                              const char* what) {
+      if (MemoryGuard::verdict(m, r) != want) {
+        std::printf("  ORACLE POLARITY: %s expected %s\n", what, want ? "PASS" : "DENY");
+        h.mismatches++;
+      }
+      h.request(r, m);
+    };
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)},
+                   eng, true, "ENGINE0 read inside its lease");
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0003BFC0, 64, full_be(64)},
+                   eng, true, "ENGINE0 read at the window's last line");
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0003C000, 64, full_be(64)},
+                   eng, false, "ENGINE0 read past the window");
+    // ...and only while it HOLDS the lease: the blit's lease refuses it.
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)},
+                   map, false, "ENGINE0 read under the blit's lease");
+    // The OTHER slot is not the lease, whoever asks.
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x02000000, 64, full_be(64)},
+                   eng, false, "ENGINE0 read of the unleased slot");
     GuardMap none{false, 0, 0x0003C000, GuardMap::WRITER_ENGINE0};
     h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)}, none);
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, 0x0000, 64, full_be(64)},
+                   none, false, "ENGINE0 read with no lease");
+
+    // POST.ECHO's CAPTURE (ruling R7, spec/memory_rules.md 5g): ENGINE0,
+    // WRITE-only, constant bounds, lease-gated. Both ends, one past, the read
+    // direction, the blit's lease, and every other client.
+    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
+                   eng, true, "echo write at the capture base");
+    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0,
+                                    kPostEchoBase + kPostEchoSpan - 32, 32, full_be(32)},
+                   eng, true, "echo write at the capture's last line");
+    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0,
+                                    kPostEchoBase + kPostEchoSpan - 31, 32, full_be(32)},
+                   eng, false, "echo write one byte past the capture");
+    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase - 8, 32, full_be(32)},
+                   eng, false, "echo write below the capture");
+    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
+                   eng, false, "a READ of the capture");
+    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
+                   map, false, "echo write under the blit's lease");
+    // Not frame-scoped: the capture is a constant window, so no map is needed.
+    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
+                   none, true, "echo write with the lease named but no slot window");
+    for (unsigned c : {unsigned(MemoryGuard::SCANOUT), unsigned(MemoryGuard::BLIT_DMA),
+                       unsigned(MemoryGuard::ENGINE1), unsigned(MemoryGuard::DEBUG), 5u,
+                       unsigned(MemoryGuard::TERRAIN_BUILD)}) {
+      expect_verdict(MemoryGuard::Req{true, true, c, kPostEchoBase, 32, full_be(32)}, eng, false,
+                     "a capture write from a client that is not ENGINE0");
+    }
 
     // ENGINE1 owns nothing in framebuffer space; DEBUG owns no region.
     for (unsigned c = MemoryGuard::ENGINE1; c <= MemoryGuard::DEBUG; c++) {

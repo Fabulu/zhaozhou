@@ -317,6 +317,15 @@ DRIVERS = {
         'build_guard_req_i', 'build_wdata_i', 'build_wvalid_i',
         'build_wlast_i', 'build_hps_req_i',
     ),
+    # POST.COMPOSITE's LEASE (2026-09-19, post packet): the compositor in the
+    # console on the other side of the shell's zhao_post_lease. ONE handler:
+    # its geometry, its ready to the source stream, its composited output and
+    # its echo tap are all the same producer -- POST.COMPOSITE.
+    'post_compositor': (
+        'post_frame_w_i', 'post_frame_h_i', 'post_duo_i', 'post_src_ready_i',
+        'post_out_valid_i', 'post_out_rgb_i', 'post_out_x_i', 'post_out_y_i',
+        'post_out_last_i', 'post_echo_valid_i', 'post_echo_rgb_i',
+    ),
 }
 
 SINK_FOR_DOMAIN = {'gpu': 'gpu_capture', 'video': 'video_capture',

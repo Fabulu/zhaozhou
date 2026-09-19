@@ -61,6 +61,12 @@ CLIENTS = [
     # caught it the moment the file existed -- which is what the audit is for.
     "fpga/rtl/geometry/zhao_geom_mem_adapter.sv",
     "fpga/rtl/raster/zhao_raster_fbwrite.sv",
+    # POST.COMPOSITE's lease (2026-09-19), added WITH the blocks: the source
+    # read-back and POST.ECHO master the guard through ENGINE0's share, and the
+    # lease itself reads the share's verdict pulses to order write data.
+    "fpga/rtl/compositor/zhao_post_fbread.sv",
+    "fpga/rtl/compositor/zhao_post_echo.sv",
+    "fpga/rtl/compositor/zhao_post_lease.sv",
     # TERRAIN.PAGELOADER. Added with the block, not after it -- the coverage
     # audit is only exact if a new client joins this list in the same change
     # that creates it.
