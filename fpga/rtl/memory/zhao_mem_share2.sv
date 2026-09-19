@@ -91,6 +91,17 @@
 // and no later queued request can capture an earlier request's return. The
 // counters below exist so the decision to relax it is made against a number.
 //
+// RELAXED, BY PARAMETER AND ON A NUMBER, 2026-09-19 (owner ruling R38). The
+// post lease's ENGINE0 share measured its three requesters queued behind every
+// 64-byte read's return (the console smoke's `post census`), and R38 asked for
+// a measured second outstanding read. `MAX_RD` reads may now be in flight; the
+// routing proof generalises rather than weakens, because the guard, the arbiter
+// and the controller are all strictly in order: the returning word belongs to
+// the OLDEST read in flight, and a FIFO of recorded owners is that proof with a
+// depth. MAX_RD = 1 is the old law cycle for cycle, and every site but the post
+// lease keeps it. ENFORCED-BY: tests/memory/mem_share_n_directed.cpp (the old
+// law, unchanged) and tests/compositor/post_lease_directed.cpp (MAX_RD > 1).
+//
 // Conservative SystemVerilog subset only (charter 2).
 // ===========================================================================
 // N REQUESTERS -- the third ENGINE1 reader (MATERIAL.RESOLVE's record fetch)
@@ -129,7 +140,11 @@ module zhao_mem_share_n
     // THE ONE PERMITTED CLIENT, as an INT (see zhao_mem_share2's note: Quartus
     // 17.0 and the arbiter's own `zhao_client_e'(<3 bits>)` idiom).
     parameter int unsigned CLIENT_ID = 3,          // ZHAO_CLIENT_ENGINE1
-    parameter bit FORCE_READ = 1'b1
+    parameter bit FORCE_READ = 1'b1,
+    // READS IN FLIGHT (owner ruling R38, 2026-09-19). 1 is the original
+    // one-logical-request law and every existing site keeps it; the post lease
+    // raises it on the evidence of the console smoke's post census.
+    parameter int unsigned MAX_RD = 1
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -160,6 +175,7 @@ module zhao_mem_share_n
 );
 
   localparam int unsigned IW = (N > 1) ? $clog2(N) : 1;
+  localparam int unsigned FW = (MAX_RD > 1) ? $clog2(MAX_RD) : 1;
 
   initial begin
     if (CLIENT_ID > 7) begin
@@ -168,25 +184,30 @@ module zhao_mem_share_n
     if (N < 2) begin
       $fatal(1, "zhao_mem_share_n: N must be at least 2 (got %0d)", N);
     end
+    if ((MAX_RD < 1) || ((MAX_RD & (MAX_RD - 1)) != 0)) begin
+      $fatal(1, "zhao_mem_share_n: MAX_RD must be a power of two >= 1 (got %0d)", MAX_RD);
+    end
   end
 
   localparam logic [2:0] CLIENT_BITS = 3'(CLIENT_ID);
 
   // ------------------------------------------------------------------ FSM --
-  typedef enum logic [2:0] {
-    A_IDLE  = 3'd0,  // nothing in flight; arbitrate
-    A_REQ   = 3'd1,  // offering the selected request to the guard
-    A_VERD  = 3'd2,  // the guard's verdict, one cycle after it accepted
-    A_FILL  = 3'd3,  // the logical request's useful words are returning
-    A_DRAIN = 3'd4   // discard an overlong return through physical LAST
+  // The REQUEST side. A_FILL and A_DRAIN are gone from it (2026-09-19, owner
+  // ruling R38): the return side is its own machine below, so that with
+  // MAX_RD > 1 the request side can go on to the next request while a read's
+  // beats are still coming back. At MAX_RD = 1 the request side waits for the
+  // return side exactly where A_FILL/A_DRAIN used to hold it, so every existing
+  // site is cycle-for-cycle unchanged (their directed tests are the proof).
+  typedef enum logic [1:0] {
+    A_IDLE  = 2'd0,  // arbitrate among the requesters allowed to go
+    A_REQ   = 2'd1,  // offering the selected request to the guard
+    A_VERD  = 2'd2   // the guard's verdict, one cycle after it accepted
   } astate_e;
 
   astate_e st_q;
 
-  // THE LOGICAL OWNER, recorded BEFORE issue (12.4).
+  // THE LOGICAL OWNER of the request being offered, recorded BEFORE issue.
   logic [IW-1:0] own_q;
-  logic [3:0]    expect_q;
-  logic [3:0]    recv_q;
   zhao_guard_req_t sel_q;
 
   // ROUND-ROBIN AT LOGICAL-REQUEST BOUNDARIES (12.5): the search starts at the
@@ -195,6 +216,32 @@ module zhao_mem_share_n
   // first A/B tie goes to B.
   logic [IW-1:0] last_q;
 
+  // ---------------------------------------------------- the return side --
+  // THE READS IN FLIGHT, IN ORDER. MEM.GUARD, the arbiter and the controller
+  // are all strictly in order, so a read's beats come back in the order the
+  // guard passed the reads, and a FIFO of {owner, words} pushed at each passed
+  // read IS the routing table: a returning word belongs to the head. With
+  // MAX_RD = 1 the FIFO has one entry and this is the old single-owner proof
+  // verbatim -- "a returning word belongs to the recorded owner because there
+  // is exactly one".
+  logic [IW-1:0] fl_own [0:MAX_RD-1];
+  logic [3:0]    fl_exp [0:MAX_RD-1];
+  logic [FW-1:0] fl_wp_q, fl_rp_q;
+  logic [FW:0]   fl_n_q;
+  logic [3:0]    recv_q;
+  logic          drain_q;      // discarding an overlong return through LAST
+
+  // May another READ be issued? Only with room in the table, and never while
+  // an overlong return is being discarded (whose tail no entry owns).
+  logic rd_room_c;
+  assign rd_room_c = (fl_n_q < (FW+1)'(MAX_RD)) && !drain_q;
+  // May a WRITE be issued? A write returns no beats, so with MAX_RD > 1 it may
+  // pass while reads are in flight -- that is most of what R38 buys: the post
+  // lease's two writers no longer wait out every read's return. At MAX_RD = 1
+  // it waits exactly as it always did.
+  logic wr_room_c;
+  assign wr_room_c = (MAX_RD > 1) ? !drain_q : rd_room_c;
+
   logic [N-1:0] wants;
   logic         any_c;
   logic         many_c;
@@ -202,10 +249,14 @@ module zhao_mem_share_n
   always_comb begin
     int idx;
     int n_asking;
-    for (int i = 0; i < N; i++) wants[i] = req_i[i].valid;
+    for (int i = 0; i < N; i++)
+      wants[i] = req_i[i].valid
+              && (((!FORCE_READ) && req_i[i].write) ? wr_room_c : rd_room_c);
     any_c = 1'b0;
     pick_c = '0;
     n_asking = 0;
+    // Counted over the requesters ALLOWED to go this cycle: at MAX_RD = 1 that is
+    // exactly the old A_IDLE-only count (nobody is allowed while a read fills).
     for (int i = 0; i < N; i++) if (wants[i]) n_asking = n_asking + 1;
     many_c = (n_asking > 1);
     for (int k = 1; k <= N; k++) begin
@@ -249,29 +300,45 @@ module zhao_mem_share_n
   end
 
   // ------------------------------------------------------- beat returning --
-  // Routed by the RECORDED owner, never by whoever is currently asking.
-  logic beat_ok_c, last_c;
-  assign beat_ok_c = (st_q == A_FILL) && m_beat_valid_i;
-  assign last_c    = beat_ok_c && (recv_q + 4'd1 == expect_q);
+  // Routed by the HEAD of the in-flight table, never by whoever is currently
+  // asking.
+  logic          beat_ok_c, last_c;
+  logic [IW-1:0] head_own_c;
+  logic [3:0]    head_exp_c;
+  assign head_own_c = fl_own[fl_rp_q];
+  assign head_exp_c = fl_exp[fl_rp_q];
+  assign beat_ok_c  = m_beat_valid_i && (fl_n_q != '0) && !drain_q;
+  assign last_c     = beat_ok_c && (recv_q + 4'd1 == head_exp_c);
   assign beat_data_o = m_beat_data_i;
   always_comb begin
     for (int i = 0; i < N; i++) begin
-      beat_valid_o[i] = beat_ok_c && (own_q == IW'(i));
-      beat_last_o[i]  = last_c    && (own_q == IW'(i));
+      beat_valid_o[i] = beat_ok_c && (head_own_c == IW'(i));
+      beat_last_o[i]  = last_c    && (head_own_c == IW'(i));
     end
   end
 
   // ------------------------------------------------------------- seq core --
+  logic push_c, pop_c;
+  assign push_c = (st_q == A_VERD) && m_rsp_i.ok && !(!FORCE_READ && sel_q.write);
+  assign pop_c  = beat_ok_c && ((recv_q + 4'd1 == head_exp_c) || m_beat_last_i);
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       st_q         <= A_IDLE;
       own_q        <= '0;
       last_q       <= '0;
-      expect_q     <= 4'd0;
-      recv_q       <= 4'd0;
       sel_q        <= '0;
       rsp_ok_q     <= 1'b0;
       rsp_viol_q   <= 1'b0;
+      fl_wp_q      <= '0;
+      fl_rp_q      <= '0;
+      fl_n_q       <= '0;
+      recv_q       <= 4'd0;
+      drain_q      <= 1'b0;
+      for (int k = 0; k < int'(MAX_RD); k++) begin
+        fl_own[k] <= '0;
+        fl_exp[k] <= 4'd0;
+      end
       jobs_o       <= '0;
       denied_o     <= 32'd0;
       contention_o <= 32'd0;
@@ -282,10 +349,34 @@ module zhao_mem_share_n
       rsp_ok_q   <= 1'b0;      // one-cycle verdict pulses
       rsp_viol_q <= 1'b0;
 
-      if (m_beat_valid_i && (st_q != A_FILL) && (st_q != A_DRAIN)) begin
-        err_unowned_o <= err_unowned_o + 32'd1;
+      // ---- the return side ---------------------------------------------
+      if (m_beat_valid_i) begin
+        if (drain_q) begin
+          if (m_beat_last_i) drain_q <= 1'b0;
+        end else if (fl_n_q == '0) begin
+          err_unowned_o <= err_unowned_o + 32'd1;
+        end else if (recv_q + 4'd1 == head_exp_c) begin
+          recv_q <= 4'd0;
+          if (!m_beat_last_i) begin
+            err_long_o <= err_long_o + 32'd1;
+            drain_q    <= 1'b1;
+          end
+        end else if (m_beat_last_i) begin
+          err_short_o <= err_short_o + 32'd1;
+          recv_q      <= 4'd0;
+        end else begin
+          recv_q <= recv_q + 4'd1;
+        end
       end
+      if (push_c) begin
+        fl_own[fl_wp_q] <= own_q;
+        fl_exp[fl_wp_q] <= words_of(sel_q.len);
+        fl_wp_q         <= (MAX_RD > 1) ? (fl_wp_q + FW'(1)) : '0;
+      end
+      if (pop_c) fl_rp_q <= (MAX_RD > 1) ? (fl_rp_q + FW'(1)) : '0;
+      fl_n_q <= fl_n_q + (push_c ? (FW+1)'(1) : '0) - (pop_c ? (FW+1)'(1) : '0);
 
+      // ---- the request side ---------------------------------------------
       unique case (st_q)
         A_IDLE: begin
           // MORE THAN ONE ASKED AND AT LEAST ONE WAITED.
@@ -295,8 +386,6 @@ module zhao_mem_share_n
             own_q    <= pick_c;
             last_q   <= pick_c;
             sel_q    <= req_i[pick_c];
-            expect_q <= words_of(req_i[pick_c].len);
-            recv_q   <= 4'd0;
             st_q     <= A_REQ;
           end
         end
@@ -309,16 +398,15 @@ module zhao_mem_share_n
         A_VERD: begin
           if (m_rsp_i.ok) begin
             rsp_ok_q <= 1'b1;
-            // A WRITE RETURNS NO BEATS (2026-09-19, the ENGINE0 share of
-            // POST.COMPOSITE's lease). A passed write is COMPLETE at this
-            // block's boundary once the guard has said ok: its data travels on
-            // the requester's own write channel, never through here, so A_FILL
-            // would wait for read beats that are never coming. Constant-false
-            // at every FORCE_READ site, so they are unchanged.
-            // The ordering of the write DATA across requesters is the
+            // A passed READ enters the in-flight table (push_c above) and the
+            // request side is free at once; whether it may issue again is
+            // `rd_room_c` / `wr_room_c`'s business. A WRITE RETURNS NO BEATS
+            // (2026-09-19, the ENGINE0 share of POST.COMPOSITE's lease): its
+            // data travels on the requester's own write channel, never through
+            // here. The ordering of the write DATA across requesters is the
             // integrator's (see `zhao_post_lease`): this block only promises
             // the guard sees one request at a time.
-            st_q     <= (!FORCE_READ && sel_q.write) ? A_IDLE : A_FILL;
+            st_q     <= A_IDLE;
             jobs_o[own_q] <= jobs_o[own_q] + 32'd1;
           end else if (m_rsp_i.violation) begin
             rsp_viol_q <= 1'b1;
@@ -327,27 +415,6 @@ module zhao_mem_share_n
           end
           // Neither yet: WAIT. Reading silence as an answer is the mistake
           // A_VERD exists to end.
-        end
-
-        A_FILL: begin
-          if (m_beat_valid_i) begin
-            recv_q <= recv_q + 4'd1;
-            if (recv_q + 4'd1 == expect_q) begin
-              if (m_beat_last_i) begin
-                st_q <= A_IDLE;
-              end else begin
-                err_long_o <= err_long_o + 32'd1;
-                st_q       <= A_DRAIN;
-              end
-            end else if (m_beat_last_i) begin
-              err_short_o <= err_short_o + 32'd1;
-              st_q        <= A_IDLE;
-            end
-          end
-        end
-
-        A_DRAIN: begin
-          if (m_beat_valid_i && m_beat_last_i) st_q <= A_IDLE;
         end
         default: st_q <= A_IDLE;
       endcase

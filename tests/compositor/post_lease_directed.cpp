@@ -81,6 +81,7 @@ struct OrderedMem {
   // evidence
   unsigned accepts = 0, oks = 0, violations = 0, reads = 0, writes = 0;
   unsigned bad_write_order = 0, max_uncredited = 0;
+  unsigned reads_inflight = 0, max_reads_inflight = 0;   // passed reads, last beat not yet back
 
   // state
   unsigned busy = 0;
@@ -140,6 +141,7 @@ struct OrderedMem {
           wexp.push_back(beats_of(pending.len));
         } else {
           ++reads;
+          if (++reads_inflight > max_reads_inflight) max_reads_inflight = reads_inflight;
         }
         jobs.push_back(Job{pending.write, pending.addr, pending.len, pending.be, 0,
                            pending.write ? 0u : read_lat, (pending.len + 1) / 2});
@@ -177,7 +179,7 @@ struct OrderedMem {
           ++j.done_beats;
           const bool fin = (j.done_beats == beats_of(j.len));
           if (j.done_beats % 2 == 0 || fin) retire_burst(j, fin);
-          if (fin) jobs.pop_front();
+          if (fin) { jobs.pop_front(); --reads_inflight; }
         } else if (j.wait) {
           --j.wait;
         }
@@ -455,6 +457,9 @@ int main(int argc, char** argv) {
     zhao::check(o.unowned == 0 && !o.fault && !o.fbw_bad, "no unowned credit, no fault, drained", 0,
                 o.unowned + (o.fault ? 1 : 0) + (o.fbw_bad ? 1 : 0));
     zhao::check(top.src_reads_o == 24u * 12u, "twelve reads per row", 24 * 12, top.src_reads_o);
+    std::printf("    most reads in flight at once: %u\n", m.max_reads_inflight);
+    zhao::check(m.max_reads_inflight >= 2, "the share really had a SECOND read in flight (R38)", 2,
+                m.max_reads_inflight);
   }
 
   // ---- 3. credits held back: the retire ledger must not wrap ----------------

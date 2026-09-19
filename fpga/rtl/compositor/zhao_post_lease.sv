@@ -73,15 +73,65 @@
 // source pixels at its view's last pixel, so the reader's next pixel simply
 // waits for the next pass. Post's write-back labels view 1's rows `y + h`.
 //
-// COST (estimated, UNMEASURED): the share (~90 ALM), the sequencer and the
-// retire FIFO (~60 ALM), plus the reader and the echo (their own headers).
+// ---------------------------------------------------------------------------
+// THE MEMORY BUDGET -- owner ruling R38, measured 2026-09-19 (post pass 2)
+// ---------------------------------------------------------------------------
+// R38: "Add a measured second outstanding read (and more if measurement says
+// so) and PROVE post fits inside the frame alongside raster and replay, in
+// clocks, with the margin stated." The instrument is the console smoke's
+// `post census` (tests/prod/tb_zhao_console_core_smoke.sv), Z60 384 x 240,
+// echo armed, every number below read off it:
+//
+//   MAX_RD  lease busy  sdram busy     e0 bursts rd/wr  other   conflicts
+//     1      729,594   632,628 (86%)   11,520/23,360   17,635   14,319
+//     2      697,494   622,683 (89%)   11,520/23,360   16,810   14,307
+//     4      698,215   623,373 (89%)   11,520/23,360   16,840   14,367
+//
+// So the second read is worth 4.4% and a fourth is worth nothing: the SDRAM
+// controller is already 86% busy with MAX_RD = 1. POST IS MEMORY-BOUND, not
+// latency-bound -- 51,690 bursts at 12.05 clocks each is the pass. More reads
+// in flight cannot help past 2 because `zhao_vram_arbiter` gives each client a
+// 32-word credit pool: a 64-byte read owns all of it until it retires.
+// MAX_RD = 2 ships (the share's in-flight table and the shell's `last` queue
+// cost ~30 ALM between them).
+//
+// THE FRAME (1,666,666 gpu clocks, Z60 at the 100 MHz placeholder):
+//   post, echo ARMED, measured          697,494   41.8%
+//   left for the render phase           969,172   58.2%
+// The measurement is PESSIMISTIC in one known direction: the smoke's scanout
+// runs about 3.5x the real Z60 rate (16,810 "other" bursts in 697k clocks,
+// against 11,520 per 1,666,666 in a real frame), and every scanout burst in the
+// window is time post waited. Post's OWN demand is 34,880 bursts x 12.05 =
+// 420,300 SDRAM clocks; with real-rate scanout interleaved at the measured 89%
+// utilisation that is about 521,000, 31% of the frame. An UNARMED echo (R35)
+// removes 11,680 of the write bursts.
+//
+// WHAT THIS PROVES AND WHAT IT DOES NOT. Post fits: it leaves at least 969,172
+// clocks of every frame to the render phase, measured. It does NOT prove the
+// render phase fits in them, and that is not post's to prove: GEOM.REPLAY
+// measures 56 clocks per view-triangle (reports/R3-CLIENT-A-SCHEDULE-PROOF-
+// 20260919.md), ~4.5M clocks at the guaranteed tier. R31's rate packet must
+// therefore bring raster + replay under 969,172 clocks (armed) -- NOT under the
+// whole 1,666,666 frame -- because post runs AFTER the raster on the same slot.
+// The three levers left on the post side are named in FINDINGS-post2: echo
+// armed only when used (R35, built with SetPost), a bank-interleaved address
+// map (14,307 conflicts x ~6 clocks = ~86k), and a third framebuffer slot so
+// post N overlaps raster N+1 (an architectural decision, not taken here).
+//
+// COST (estimated, UNMEASURED): the share (~90 ALM, +~20 for MAX_RD = 2), the
+// sequencer and the retire FIFO (~80 ALM with RQ = 8), plus the reader (now a
+// 16-beat queue, unchanged) and the echo (their own headers).
 `default_nettype none
 
 module zhao_post_lease
   import zhao_pkg::*;
 #(
     parameter int unsigned XW = 9,
-    parameter int unsigned YW = 8
+    parameter int unsigned YW = 8,
+    // READS IN FLIGHT on ENGINE0 (owner ruling R38): the share's MAX_RD, and the
+    // reader's queue is sized to hold that many 64-byte reads (8 beats each).
+    // Chosen on the console smoke's post census -- see THE MEMORY BUDGET below.
+    parameter int unsigned MAX_RD = 2
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -230,7 +280,7 @@ module zhao_post_lease
   assign rd_h_c = duo_i ? (RYW'(frame_h_i) << 1) : RYW'(frame_h_i);
 
   logic [31:0] rd_overflow_unused;
-  zhao_post_fbread #(.XW(XW), .YW(RYW), .FIFO_BEATS(16)) u_source (
+  zhao_post_fbread #(.XW(XW), .YW(RYW), .FIFO_BEATS((MAX_RD < 2) ? 16 : 8 * MAX_RD)) u_source (
     .clk(clk), .rst_n(rst_n),
     // ONE read per FRAME: only the first view's start opens it.
     .start_i (start_c && (st_q == S_ARMED)),
@@ -330,7 +380,7 @@ module zhao_post_lease
   logic [2:0][31:0] sh_jobs_unused;
   logic [31:0]      sh_denied_unused, sh_short_unused, sh_long_unused, sh_unowned_unused;
 
-  zhao_mem_share_n #(.N(3), .CLIENT_ID(2), .FORCE_READ(1'b0)) u_engine0_share (
+  zhao_mem_share_n #(.N(3), .CLIENT_ID(2), .FORCE_READ(1'b0), .MAX_RD(MAX_RD)) u_engine0_share (
     .clk(clk), .rst_n(rst_n),
     .req_i(sh_req), .rsp_o(sh_rsp),
     .beat_valid_o(sh_bv), .beat_data_o(sh_bd), .beat_last_o(sh_bl_unused),
