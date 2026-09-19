@@ -730,7 +730,6 @@ excluded:
   - zhao_synth_probe: harness  the generic synthesis probe wrapper
   - zhao_stub_top: harness  the blank top used to measure the fitter's own floor
   - zhao_prod_top: harness  the GENERATED resource top itself; it holds the instances, it is not one
-  - zhao_debug_trace: probe  the trace port; a bring-up instrument, not shipped logic
 
   # Characterization infrastructure discovered by the fail-closed production
   # manifest census.  The dual18 primitive remains a pending candidate until an
@@ -940,6 +939,18 @@ excluded:
   - zhao_geom_attrpack: not-yet-adopted  GEOM.ATTRPACK, the three-plane front end the Packet-D attribute carriage never had. Core header entry I20 recorded that tri_invw_plane_i, tri_u_over_w_plane_i and tri_v_over_w_plane_i had no producer anywhere in fpga/rtl and that every [239:0] in the tree was an input; the arithmetic was never the gap, because zhao_geom_attrsetup already emitted 96+72+72 = exactly one plane and its own header says a textured Gouraud triangle asks seven times. This is the block that ASKS, and it holds ONE attrsetup core time-multiplexed across three lanes rather than three instances -- seven gpu clocks per triangle against roughly forty-one of budget, which buys back two copies of a 96-bit multiply-add tree on a device where ALMs bind at 47,582 against 41,910. Instantiated by zhao_console_core only, off GEOM.CLIP's winding-flipped attribute packet, which that module was already emitting to nobody. The three ports left the core's port list exactly as tri_area2_i did. What is still a boundary there is tri_flat_request_i, and that is a DIFFERENT gap: it is the material record. CORRECTED 2026-09-19 -- this line used to say MATERIAL.RESOLVE was maturity SPECIFIED with both tests PLANNED -- NOT WRITTEN, which was already untrue of the tests when it was written and is now untrue of the RTL: zhao_material_resolve.sv exists and is UNIT_VERIFIED. The port stays a boundary for a reason one ruling away, not for want of a block -- see that module's blocked_on
   - zhao_post_composite: not-yet-adopted  POST.COMPOSITE, the frame compositor; instantiated by zhao_console_core on the shell's real video mode and by nothing selected. Its SOURCE PIXELS are a boundary port -- RASTER.RESOLVE's output is internal to the shell -- which is the largest declared gap in that composition (core header I15)
   - zhao_measure_histogram: not-yet-adopted  MEASURE.HISTOGRAM, the error-magnitude histogram on the real frame boundary; instantiated by zhao_console_core only. Its event ingress and host read window are boundary ports because nothing in the console produces that stream and no HPS register path reaches it (core header I18, I19)
+  # MOVED HERE 2026-09-19 FROM THE "probes and leaf-fit pairs: never in the
+  # machine" SECTION, where it read `probe  the trace port; a bring-up
+  # instrument, not shipped logic`. That section's own description is "every one
+  # of them is a wrapper around production logic that is already counted above",
+  # and this block wraps nothing: it has a contract, a reference model
+  # (zref::trace::Ring), a design/blocks.yml row with `deferred: false` and
+  # `cut_order: null`, and a charter 20.6 mandate. It was misfiled, and the
+  # misfiling was doing work -- uncashed_cheques.py treats `probe` as a note
+  # that CLOSES the question, so a mandatory v1 capability sat excused by one
+  # word in a list of wrappers. The owner's own rule for the ledger applies
+  # here too: an excuse that cites nothing is not an excuse.
+  - zhao_debug_trace: not-yet-adopted  DEBUG.TRACE, the bounded event ring, charter 20.6; instantiated by zhao_console_core only, at section 7b-ii, behind zhao_cmd_decoder's record port. Its arming and host readout are boundary ports for the same reason MEASURE.HISTOGRAM's are, and the core header argues it at I45
 
   # --- the lighting service: BUILT, AND DELIBERATELY NOT IN THE MACHINE -------
   # These five are the 2026-09-18 lighting refactor. NONE of them is reachable

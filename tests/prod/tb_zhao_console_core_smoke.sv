@@ -1135,6 +1135,25 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_bytes_consumed_o;
   logic [31:0] cmd_commands_o;
 
+  // ---- DEBUG.TRACE's arming and readout (core entry I45) -----------------
+  // Declared for the `.*` reason above, and ARMED below, because the thing
+  // worth checking here is the one neither block's isolated test can see: the
+  // ring's contract says "composition with CMD.DECODER is the point ... a
+  // field mismatch that neither block's isolated tests can see". So the bench
+  // arms stage 0 and asserts the ring stored EXACTLY as many events as the
+  // decoder reports records walked. A count that is merely non-zero would pass
+  // with the source id and the sequence swapped, or with a stage constant that
+  // happened to be armed; an EQUALITY against the producer's own counter is
+  // the check that can fail.
+  logic        dbg_trace_arm_we_i;
+  logic [ 6:0] dbg_trace_arm_mask_i;
+  logic        dbg_trace_clear_i;
+  logic [ 8:0] dbg_trace_rd_addr_i;
+  logic [31:0] dbg_trace_rd_data_o;
+  logic [ 6:0] dbg_trace_armed_o;
+  logic [31:0] dbg_trace_count_o;
+  logic [31:0] dbg_trace_dropped_o;
+
   logic [31:0] cmd_exec_committed_o;
   logic [31:0] cmd_exec_abandoned_o;
   logic [31:0] cmd_exec_views_o;
@@ -2501,6 +2520,17 @@ module tb_zhao_console_core_smoke
     // its declaration: this consumer sits on the far side of an AND-fork that
     // GEOM.SKIN is on too, so a low ready here is backpressure on the SKINNER.
     geom_sn_n_ready_i = 1'b1;
+
+    // DEBUG.TRACE (core entry I45). ARM STAGE 0 -- `zref::trace::kCommandDecoder`
+    // -- and nothing else, because stage 0 is the only one this console has a
+    // producer for. Arming is one write; the mask is held by the block.
+    // This is stimulus the bench OWNS: arming is a debug command and no block
+    // here decodes one, so the bench stands in for the host exactly as it does
+    // for the HPS everywhere else in this file.
+    dbg_trace_clear_i    = 1'b0;
+    dbg_trace_rd_addr_i  = '0;
+    dbg_trace_arm_mask_i = 7'b000_0001;
+    dbg_trace_arm_we_i   = 1'b1;
     // One world unit of base radius, fx16. A VALUE, not a law: no species
     // radius table exists anywhere in the tree and the reference says that is
     // properly the owner's, so this bench picks one so that the projected size
@@ -4046,6 +4076,44 @@ module tb_zhao_console_core_smoke
     if (surf_fld_texels_o != 32'd0)
       $fatal(1, "SMOKE: the field stamp adapter delivered %0d records with no program resident",
              surf_fld_texels_o);
+
+    // ---- DEBUG.TRACE against its producer (core entry I45) ----------------
+    // The composition check the ring's contract asks for, and it is an
+    // EQUALITY on purpose. `cmd_commands_o` is CMD.DECODER's own count of
+    // records walked; `dbg_trace_count_o` is what the ring stored with stage 0
+    // armed. They must agree exactly: the ring drops only when full (64 events)
+    // and this packet carries far fewer, so any difference is a lost event, a
+    // stage byte that is not 0, or an arming gate that does not gate.
+    $display("SMOKE: trace     armed=%b stored=%0d dropped=%0d against decoder records=%0d",
+             dbg_trace_armed_o, dbg_trace_count_o, dbg_trace_dropped_o,
+             cmd_commands_o);
+    if (dbg_trace_armed_o != 7'b000_0001)
+      $fatal(1, "SMOKE: DEBUG.TRACE armed mask reads %b, expected 000_0001 -- the arm write did not land",
+             dbg_trace_armed_o);
+    if (dbg_trace_dropped_o != 32'd0)
+      $fatal(1, "SMOKE: DEBUG.TRACE dropped %0d event(s) into a 64-deep ring from %0d records",
+             dbg_trace_dropped_o, cmd_commands_o);
+    if (dbg_trace_count_o != cmd_commands_o)
+      $fatal(1, "SMOKE: DEBUG.TRACE stored %0d event(s) against %0d records walked by CMD.DECODER -- the record port and the ring disagree",
+             dbg_trace_count_o, cmd_commands_o);
+    // AND THE EQUALITY ABOVE IS TWO ZEROS AGREEING TODAY. Said out loud rather
+    // than left for somebody to discover, because a green check quoted as
+    // evidence for something it cannot see is this project's most expensive
+    // recurring mistake. This bench submits NO COMMAND PACKET: nothing here
+    // writes the frame ring or feeds CMD.DMA, so CMD.DECODER walks no records
+    // and the ring has nothing to store. It was written as a live equality so
+    // that it starts testing the seam the moment a packet arrives, and the
+    // check WAS seen to fire -- an earlier version of it fatal'd on exactly
+    // this zero, which is how the limitation was found rather than assumed.
+    //
+    // WHAT IS PROVEN HERE is narrower and is the armed-mask readback above:
+    // `dbg_trace_arm_mask_i` written at this bench's edge comes back out of
+    // `dbg_trace_armed_o` through the composition, so the instance is live,
+    // reachable and not pruned. The rec -> ev seam itself is covered by
+    // tests/debug/debug_trace_rtl_directed.cpp at the block, and by nothing at
+    // the composition until something submits a packet here.
+    if (cmd_commands_o == 32'd0)
+      $display("SMOKE: NOTE DEBUG.TRACE's record-to-event equality is UNTESTED in this bench -- no command packet is submitted, so CMD.DECODER walked 0 records and the ring stored 0. The check above is live and will engage the moment a packet does. What this bench does prove about the ring is the arming readback.");
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;

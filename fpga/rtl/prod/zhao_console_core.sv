@@ -1098,12 +1098,41 @@
 //      state, and state belongs in a file with a contract and a test. Its
 //      outputs go to TERRAIN.LOD, which is not composed (entry I21).
 //
-//      DEBUG.TRACE is refused by THIS ENTRY'S OWN ARGUMENT, one block over.
-//      Its event carries `ev_expected_fx_i` beside `ev_actual_fx_i` -- a
-//      differential against a reference -- and the console has no reference,
-//      which is the sentence above. The ledger's `upstream: [CMD.DECODER]` is
-//      not the RTL's seam either: the decoder emits record headers, not
-//      {stage, tile, primitive, pixel, expected, actual}.
+//      DEBUG.TRACE IS NO LONGER REFUSED. It is COMPOSED at section 7b-ii as
+//      of 2026-09-19, and the refusal that stood here was WRONG rather than
+//      stale -- it is preserved below because a refusal that reasoned from the
+//      wrong port is worth more as a record than as a deletion. It read:
+//
+//        "DEBUG.TRACE is refused by THIS ENTRY'S OWN ARGUMENT, one block over.
+//         Its event carries `ev_expected_fx_i` beside `ev_actual_fx_i` -- a
+//         differential against a reference -- and the console has no reference,
+//         which is the sentence above. The ledger's `upstream: [CMD.DECODER]`
+//         is not the RTL's seam either: the decoder emits record headers, not
+//         {stage, tile, primitive, pixel, expected, actual}."
+//
+//      IT COMPARED THE DECODER'S OUTPUT AGAINST THE RING'S OUTPUT. The nine
+//      `ev_*` fields are the RATIFIED TRACE RECORD the ring stores
+//      (`spec/capture_format.md` chunk 0x000A, 32 bytes). What the block
+//      CONSUMES is the table in its own contract's "Input and output packet
+//      layouts": `rec_valid_i`/`rec_ready_o`, `rec_opcode_i` (16),
+//      `rec_bytes_i` (16), `rec_source_id_i` (32), `rec_index_i` (32) -- which
+//      is `zhao_cmd_decoder`'s record port, field for field and width for
+//      width. The same contract's Integration section says "this block's only
+//      producer is that block's record port", and that producer has been
+//      composed in this file since earlier the same day.
+//
+//      THE ADAPTATION IS RATIFIED, NOT INVENTED, which is the claim that had
+//      to be checked because five of the nine fields are driven by constants.
+//      `zref::trace::Ring::on_record()` -- the ledger's declared
+//      `reference_model` -- IS the mapping: stage = `kCommandDecoder` (0),
+//      `source_id` and `command_seq` from the record, and the five raster
+//      fields zero by that file's recorded choice 3, "zero, because zero is
+//      checkable ... leaving them undefined is how a trace format rots".
+//
+//      SO THE PREMISE SURVIVES EXACTLY WHERE IT WAS TRUE. The console still
+//      has no reference, and the two fields that would need one are the two a
+//      decoder-stage event does not carry. The other six charter 20.6 stages
+//      have no producer here; entry I45 records that as the remaining half.
 //
 // I19. MEASURE.HISTOGRAM's host read window (`hist_rd_*`) -- BOUNDARY. The
 //      host is the HPS; no register path from HPS to this block exists.
@@ -2282,13 +2311,59 @@
 //      the block's own header says a second implementation would be the fault.
 //      No source file joined the fit for it.
 //
+// I45. DEBUG.TRACE's ARMING AND HOST READOUT (`dbg_trace_arm_*`,
+//      `dbg_trace_clear_i`, `dbg_trace_rd_*`) -- BOUNDARY. NEW 2026-09-19 with
+//      the ring at section 7b-ii, and it is the SMALL half that the composition
+//      left open rather than a restatement of the refusal it replaced.
+//
+//      THE DATA PATH IS CLOSED. CMD.DECODER's record port drives the ring
+//      through `zref::trace::Ring::on_record()`'s own mapping; nothing about
+//      the event is invented here and I18 carries that argument in full.
+//
+//      WHAT LEAVES IS CONTROL, AND IT IS EXTERNAL BY DESIGN, not by omission.
+//      `arm_mask_i` is a DEBUG COMMAND -- charter 20.6 says the ring is
+//      "selectable", the contract calls trace selection a debug command, and
+//      the block's own header calls arming "a seven-bit MASK, not a selector,
+//      so two stages can be traced in one run". Nothing in this console decodes
+//      such a command: `zhao_cmd_exec` has arms for SetView, SurfaceStamp and
+//      DrawForm and its `unsupported_o` counts the rest. So this is the same
+//      absent owner I14, I30 and I41 name, seen from the debug surface.
+//
+//      AND UNARMED IS THE CORRECT DEFAULT, WHICH IS WHAT SEPARATES THIS FROM A
+//      CONSTANT WEARING A PORT'S NAME. An unarmed stage "is not an event either. It is
+//      not stored and NOT counted" -- the block's own words. A ring nobody
+//      armed stores nothing, which is precisely what a trace ring does when no
+//      trace was asked for. A tie-off is a value invented so a consumer sees
+//      something; this is the absence of a request.
+//
+//      THE READOUT IS I19'S SHAPE EXACTLY. `rd_addr_i`/`rd_data_o` is a host
+//      drain -- "writing events into the trace arena is MEM.HPS.BRIDGE's job
+//      downstream, which is why this block's output is a stream rather than an
+//      address" -- and the same sentence I19 writes about MEASURE.HISTOGRAM
+//      applies unchanged: the host is the HPS and no register path from HPS to
+//      this block exists. Closing one closes both, and they should be closed
+//      together rather than twice.
+//
+//      SIX OF THE SEVEN STAGES HAVE NO PRODUCER, stated so the composition is
+//      not over-read. `kCommandDecoder` (0) is wired. Stages 1..6 -- vertex
+//      output, clipped triangle, tile insertion, texture address, depth test,
+//      final pixel -- have no offer port in this file, so arming them produces
+//      nothing. SEARCHED: no module in `fpga/rtl` has an output group shaped
+//      like {tile, primitive, pixel, expected, actual}, and the reason is the
+//      one I18 gives and that survives intact -- `expected_fx` against
+//      `actual_fx` is a differential against a reference, and the console has
+//      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
+//      too. One absent owner, two blocks waiting on it.
+//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
 // Fourteen of the sixteen blocks in the 2026-09-19 small-blocks packet were
 // refused. Ten of them are argued at the entry their port would have closed
 // (TWOD.PLANE, TWOD.SPRITE and POST.GATHER at I17; PART.EXPAND, PART.SOFT and
-// PART.LADDER at I24; MEASURE.TOKENS, MEASURE.GOVERNOR and DEBUG.TRACE at I18;
+// PART.LADDER at I24; MEASURE.TOKENS and MEASURE.GOVERNOR at I18 -- DEBUG.TRACE
+// was in that sentence and is COMPOSED as of 2026-09-19, section 7b-ii, with
+// its refusal preserved at I18 and its remaining boundary at I45;
 // PART.TABLE was in that sentence too, as "an uncashed cheque rather than a
 // refusal", pointing at I2; it is COMPOSED as of 2026-09-19 and the pointer now
 // goes to the CLOSED AND DELETED ledger above). The remaining four have no such
@@ -4385,6 +4460,31 @@ module zhao_console_core
   output logic [ 7:0] cmd_decode_error_o,
   output logic [31:0] cmd_bytes_consumed_o,
   output logic [31:0] cmd_commands_o,
+
+  // --------------------------------------------------------------------------
+  // DEBUG.TRACE's arming and its host readout.  Added 2026-09-19 with the ring.
+  // --------------------------------------------------------------------------
+  // BOUNDARY, and entry I45 argues it. The trace ring's DATA path is closed
+  // inside this module -- CMD.DECODER's record port feeds it and nothing is
+  // invented on the way -- so what leaves here is the debug CONTROL surface
+  // (arming is a debug command, charter 20.6 "selectable") and the host drain
+  // (the ring streams into the HPS trace arena through MEM.HPS.BRIDGE, which
+  // has no register path to this block). Both are the same shape as
+  // MEASURE.HISTOGRAM's `hist_rd_*` at entry I19, and for the same reason.
+  //
+  // UNARMED IS THE CORRECT DEFAULT and it is not a tie-off: an unarmed stage
+  // produces no event AT ALL -- not a suppressed one -- so an undriven
+  // `dbg_trace_arm_we_i` leaves a ring that costs its memory and stores
+  // nothing, which is exactly what a trace ring does when nobody asked for a
+  // trace.
+  input  logic        dbg_trace_arm_we_i,
+  input  logic [ 6:0] dbg_trace_arm_mask_i,
+  input  logic        dbg_trace_clear_i,
+  input  logic [ 8:0] dbg_trace_rd_addr_i,     // {event[5:0], word[2:0]}
+  output logic [31:0] dbg_trace_rd_data_o,
+  output logic [ 6:0] dbg_trace_armed_o,
+  output logic [31:0] dbg_trace_count_o,
+  output logic [31:0] dbg_trace_dropped_o,
 
   // --------------------------------------------------------------------------
   // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
@@ -7453,6 +7553,114 @@ module zhao_console_core
   assign cmd_rec_bytes_o     = cmd_rec_bytes_w;
   assign cmd_rec_source_id_o = cmd_rec_source_id_w;
   assign cmd_rec_index_o     = cmd_rec_index_w;
+
+  // ==========================================================================
+  // 7b-ii. DEBUG.TRACE -- the record stream's first real consumer
+  // ==========================================================================
+  // COMPOSED 2026-09-19, and the refusal it closes was WRONG rather than
+  // merely stale, which is worth saying because the wrong sentence is the one
+  // that did the refusing. Entry I18 read:
+  //
+  //   "DEBUG.TRACE is refused by THIS ENTRY'S OWN ARGUMENT, one block over.
+  //    Its event carries `ev_expected_fx_i` beside `ev_actual_fx_i` -- a
+  //    differential against a reference -- and the console has no reference
+  //    ... The ledger's `upstream: [CMD.DECODER]` is not the RTL's seam
+  //    either: the decoder emits record headers, not {stage, tile, primitive,
+  //    pixel, expected, actual}."
+  //
+  // THAT COMPARED THE DECODER'S OUTPUT AGAINST THIS BLOCK'S OUTPUT. The
+  // nine-field `ev_*` group is the RATIFIED TRACE RECORD (capture_format.md
+  // chunk 0x000A, 32 bytes) -- what the ring STORES. What the block CONSUMES
+  // is named in its own contract's "Input and output packet layouts" table,
+  // and the table is this, verbatim: `rec_valid_i` `rec_ready_o`,
+  // `rec_opcode_i` (16), `rec_bytes_i` (16), `rec_source_id_i` (32),
+  // `rec_index_i` (32). That is `zhao_cmd_decoder`'s record port, field for
+  // field and width for width. The contract's own Integration section says so
+  // in as many words: "Composition with CMD.DECODER is the point: this
+  // block's only producer is that block's record port."
+  //
+  // NOTHING BETWEEN THE TWO IS INVENTED HERE, and that is the part that had to
+  // be checked rather than asserted, because five of the nine fields below are
+  // CONSTANTS and a constant standing in for a producer is the failure this
+  // file exists to stop. They are not standing in for anything. The mapping is
+  // `zref::trace::Ring::on_record()` in
+  // `reference/include/zref/zref_trace.hpp`, which is the ledger's declared
+  // `reference_model` for this block, and it reads:
+  //
+  //     e.stage       = kCommandDecoder;   // 0
+  //     e.source_id   = r.source_id;
+  //     e.command_seq = r.index;
+  //     // tile/primitive/pixel/expected/actual stay zero: see choice 3
+  //
+  // That file's header enumerates the three questions the spec leaves open and
+  // answers them in one place. Choice 3 is this one, and its reasoning is the
+  // opposite of a convenience: "`tile`, `primitive`, `pixel`, `expected_fx`
+  // and `actual_fx` describe a raster divergence and mean nothing for a
+  // decoded command record. Chosen: zero, because zero is checkable.
+  // Rejected: leaving them undefined, which makes a byte-comparison of
+  // captures impossible and is how a trace format rots." Choice 1 is the stage
+  // BYTE: the charter names seven sources and numbers none, so the reference
+  // takes their listed order and `kCommandDecoder` is 0.
+  //
+  // So the refusal's premise survives exactly where it was true and nowhere
+  // else: the console still has no reference, and the two fields that WOULD
+  // need one are the two the ruling says a decoder-stage event does not carry.
+  // The other six raster stages (1..6) have no producer in this console and
+  // are not wired; they are unarmable in practice because nothing offers an
+  // event on them, and that is entry I44's other half.
+  //
+  // `ev_valid_i` IS THE RETIREMENT, NOT THE OFFER, and on this seam they are
+  // the same wire: `rec_ready_i` above is tied to `1'b1` with its reasoning,
+  // so every valid record moves in the cycle it is presented. Written out
+  // because the CMD.EXEC fork two sections down is the counter-example -- a
+  // consumer that read `pkt_valid && pkt_ready_o` on a FORKED stream ran one
+  // byte ahead for a whole packet -- and if `rec_ready_i` ever stops being a
+  // constant this line must become `cmd_rec_valid_w && <that ready>`.
+  //
+  // THE RING NEVER STALLS THE DECODER. There is no ready on `ev_*` at all;
+  // that absence is the block's stated law ("a ring that back-pressured its
+  // producer would make the act of tracing alter the timing being traced"), so
+  // composing it cannot change the command path's behaviour whether armed or
+  // not. A full ring counts the loss on `dropped_o`.
+  //
+  // COST, stated rather than discovered later: the ring is DEPTH x 256 bits,
+  // 16 Kbit at the default 64 events, one write port and one registered read
+  // port -- the simple-dual-port shape, so it should land in M10K rather than
+  // ALMs, which is the trade this budget wants (ALMs bind; memory is the
+  // slack). DEPTH stays a parameter and is left at the contract's default; it
+  // is the knob to turn if the fit says otherwise.
+  zhao_debug_trace #(
+    .DEPTH(64)
+  ) u_debug_trace (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .arm_we_i   (dbg_trace_arm_we_i),
+    .arm_mask_i (dbg_trace_arm_mask_i),
+    .armed_o    (dbg_trace_armed_o),
+    .clear_i    (dbg_trace_clear_i),
+
+    .ev_valid_i       (cmd_rec_valid_w),
+    // `zref::trace::kCommandDecoder`. An IDENTITY, not data: it names which of
+    // the charter's seven sources this port is, and there is nothing for a
+    // producer to supply.
+    .ev_stage_i       (8'd0),
+    // Ruled zero for a decoder-stage event -- zref_trace.hpp choice 3.
+    .ev_tile_i        (32'd0),
+    .ev_primitive_i   (32'd0),
+    .ev_pixel_i       (32'd0),
+    .ev_expected_fx_i (32'd0),
+    .ev_actual_fx_i   (32'd0),
+    // The two fields the reference DOES fill, from the record that fills them.
+    .ev_source_id_i   (cmd_rec_source_id_w),
+    .ev_command_seq_i (cmd_rec_index_w),
+
+    .rd_addr_i (dbg_trace_rd_addr_i),
+    .rd_data_o (dbg_trace_rd_data_o),
+
+    .count_o   (dbg_trace_count_o),
+    .dropped_o (dbg_trace_dropped_o)
+  );
 
   // ==========================================================================
   // 8. THE TERRAIN PAGING SPINE

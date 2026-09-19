@@ -2493,6 +2493,10 @@ targets:
       - fpga/rtl/command/zhao_cmd_exec.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
+      # DEBUG.TRACE, composed 2026-09-19 at section 7b-ii behind
+      # zhao_cmd_decoder's record port. Quartus takes a set, so the ordering
+      # buys nothing; it is placed beside the decoder so a reader sees the pair.
+      - fpga/rtl/debug/zhao_debug_trace.sv
       - fpga/rtl/input/zhao_input_snapshot.sv
       - fpga/rtl/input/zhao_input_rumble.sv
       - fpga/rtl/audio/zhao_audio_fifo.sv

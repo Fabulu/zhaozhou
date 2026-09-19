@@ -757,6 +757,34 @@ module zhao_console_board
   output logic [15:0]             geom_skin_src_id_o,
   output logic [31:0]             geom_skin_vertices_transformed_o,
 
+  // ---- GEOM.SKIN.NORM's world normal and evidence --------------------------
+  // NEW 2026-09-19. GEOM.SKIN.NORM is COMPOSED below, and this is its OUTPUT
+  // leaving the module because its consumer does not exist -- see entry I43.
+  // The block's INPUTS are all real: the packed normal is GEOM.VDECODE's and
+  // the two matrices are GEOM.POSE's palette store's, arriving in one
+  // handshake because the palette now carries the normal through beside them.
+  //
+  // It is a PORT and not a dropped output for the reason I42 gives about the
+  // mip planes: a world normal computed and written nowhere and a world normal
+  // computed WRONGLY are indistinguishable from inside this module, and a port
+  // is the one place the difference can be seen.
+  output logic                    geom_sn_n_valid_o,
+  input  logic                    geom_sn_n_ready_i,
+  output logic signed [63:0]      geom_sn_n_x_o,
+  output logic signed [63:0]      geom_sn_n_y_o,
+  output logic signed [63:0]      geom_sn_n_z_o,
+  output logic [63:0]             geom_sn_n_mag_o,
+  output logic                    geom_sn_n_degenerate_o,
+  output logic [15:0]             geom_sn_n_src_id_o,
+  output logic [31:0]             geom_sn_vertices_o,
+  output logic [31:0]             geom_sn_degenerate_o,
+  output logic [31:0]             geom_sn_reduced_o,
+  // The fork's own cost, made visible rather than argued. It counts cycles in
+  // which GEOM.POSE's palette held a vertex that GEOM.SKIN was ready for and
+  // GEOM.SKIN.NORM was not. See I43 for why that number is expected to be
+  // large and what it means.
+  output logic [31:0]             geom_sn_fork_stall_o,
+
   // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
   // decoder's own SOURCE is what is now missing, and this is it. See I29.
@@ -1948,6 +1976,31 @@ module zhao_console_board
   output logic [31:0] cmd_commands_o,
 
   // --------------------------------------------------------------------------
+  // DEBUG.TRACE's arming and its host readout.  Added 2026-09-19 with the ring.
+  // --------------------------------------------------------------------------
+  // BOUNDARY, and entry I45 argues it. The trace ring's DATA path is closed
+  // inside this module -- CMD.DECODER's record port feeds it and nothing is
+  // invented on the way -- so what leaves here is the debug CONTROL surface
+  // (arming is a debug command, charter 20.6 "selectable") and the host drain
+  // (the ring streams into the HPS trace arena through MEM.HPS.BRIDGE, which
+  // has no register path to this block). Both are the same shape as
+  // MEASURE.HISTOGRAM's `hist_rd_*` at entry I19, and for the same reason.
+  //
+  // UNARMED IS THE CORRECT DEFAULT and it is not a tie-off: an unarmed stage
+  // produces no event AT ALL -- not a suppressed one -- so an undriven
+  // `dbg_trace_arm_we_i` leaves a ring that costs its memory and stores
+  // nothing, which is exactly what a trace ring does when nobody asked for a
+  // trace.
+  input  logic        dbg_trace_arm_we_i,
+  input  logic [ 6:0] dbg_trace_arm_mask_i,
+  input  logic        dbg_trace_clear_i,
+  input  logic [ 8:0] dbg_trace_rd_addr_i,     // {event[5:0], word[2:0]}
+  output logic [31:0] dbg_trace_rd_data_o,
+  output logic [ 6:0] dbg_trace_armed_o,
+  output logic [31:0] dbg_trace_count_o,
+  output logic [31:0] dbg_trace_dropped_o,
+
+  // --------------------------------------------------------------------------
   // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
   // --------------------------------------------------------------------------
   // OUTPUTS ONLY, driven by real logic below. The executor writes the
@@ -2434,6 +2487,18 @@ module zhao_console_board
       .geom_vd_format_bad_count_o        (geom_vd_format_bad_count_o),
       .geom_skin_src_id_o                (geom_skin_src_id_o),
       .geom_skin_vertices_transformed_o  (geom_skin_vertices_transformed_o),
+      .geom_sn_n_valid_o                 (geom_sn_n_valid_o),
+      .geom_sn_n_ready_i                 (geom_sn_n_ready_i),
+      .geom_sn_n_x_o                     (geom_sn_n_x_o),
+      .geom_sn_n_y_o                     (geom_sn_n_y_o),
+      .geom_sn_n_z_o                     (geom_sn_n_z_o),
+      .geom_sn_n_mag_o                   (geom_sn_n_mag_o),
+      .geom_sn_n_degenerate_o            (geom_sn_n_degenerate_o),
+      .geom_sn_n_src_id_o                (geom_sn_n_src_id_o),
+      .geom_sn_vertices_o                (geom_sn_vertices_o),
+      .geom_sn_degenerate_o              (geom_sn_degenerate_o),
+      .geom_sn_reduced_o                 (geom_sn_reduced_o),
+      .geom_sn_fork_stall_o              (geom_sn_fork_stall_o),
       .geom_pose_start_i                 (geom_pose_start_i),
       .geom_pose_bone_count_i            (geom_pose_bone_count_i),
       .geom_pose_root_dx_i               (geom_pose_root_dx_i),
@@ -3227,6 +3292,14 @@ module zhao_console_board
       .cmd_decode_error_o                (cmd_decode_error_o),
       .cmd_bytes_consumed_o              (cmd_bytes_consumed_o),
       .cmd_commands_o                    (cmd_commands_o),
+      .dbg_trace_arm_we_i                (dbg_trace_arm_we_i),
+      .dbg_trace_arm_mask_i              (dbg_trace_arm_mask_i),
+      .dbg_trace_clear_i                 (dbg_trace_clear_i),
+      .dbg_trace_rd_addr_i               (dbg_trace_rd_addr_i),
+      .dbg_trace_rd_data_o               (dbg_trace_rd_data_o),
+      .dbg_trace_armed_o                 (dbg_trace_armed_o),
+      .dbg_trace_count_o                 (dbg_trace_count_o),
+      .dbg_trace_dropped_o               (dbg_trace_dropped_o),
       .cmd_exec_committed_o              (cmd_exec_committed_o),
       .cmd_exec_abandoned_o              (cmd_exec_abandoned_o),
       .cmd_exec_views_o                  (cmd_exec_views_o),
