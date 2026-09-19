@@ -86,13 +86,25 @@
 //
 //      This block produces four resets and the core takes one. The conclusion
 //      that the core "needs two more ports" was wrong, and measuring the core
-//      says why: it contains exactly FOUR occurrences of `vid_clk`/`audio_clk`
-//      -- the two port declarations and the two connections to `u_shell` --
-//      and EVERY `always_ff` in it is `@(posedge gpu_clk or negedge rst_n)`.
-//      The core has no video or audio domain of its own; its single vid/audio
-//      consumer is `u_shell`, and `zhao_shell_top_v2.sv` declares exactly one
-//      `rst_n`. Two new core ports would terminate nowhere, and a seam that
-//      accepts a per-domain reset and drops it is a lie.
+//      says why. RE-MEASURED 2026-09-19 RATHER THAN COPIED FORWARD, because an
+//      inherited count is exactly the kind of claim this tree keeps finding
+//      stale -- and one half of it HAD gone stale:
+//
+//        * `vid_clk`/`audio_clk` appear in exactly FOUR places, unchanged: the
+//          two port declarations and the two connections to `u_shell`.
+//        * the earlier header said every `always_ff` is `@(posedge gpu_clk or
+//          negedge rst_n)`, "four of four, no exceptions". There are SIX now
+//          and one of them is `@(posedge gpu_clk)` with no reset edge at all.
+//          It is the GEOM.ATTRPACK/GEOM.SETUP lockstep assertion behind
+//          `// synthesis translate_off`, so it is not in the fabric -- but
+//          "no exceptions" was still the wrong sentence to carry forward.
+//
+//      The CONCLUSION survives the correction and is in fact stronger: all six
+//      are on `gpu_clk`. The core has no video or audio domain of its own; its
+//      single vid/audio consumer is `u_shell`, and `zhao_shell_top_v2.sv`
+//      declares exactly one `rst_n`. Two new core ports would terminate
+//      nowhere, and a seam that accepts a per-domain reset and drops it is a
+//      lie.
 //
 //      SO `rst_n_video_o` AND `rst_n_audio_o` STAY ON THIS MODULE'S EDGE,
 //      UNCONNECTED TO THE CORE, AND THAT IS THE HONEST STATE. They are real
