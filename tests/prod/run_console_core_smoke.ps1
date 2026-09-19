@@ -37,11 +37,29 @@
 # processes inherit. A relative `-o foo.o` therefore lands somewhere else
 # entirely while the compile reports success. Every path below is absolute.
 
+#
+# ---------------------------------------------------------------------------
+# -Mutant: THE POSITIVE CONTROL FOR `terr_pl_slot_overflow_o`
+# ---------------------------------------------------------------------------
+# With -Mutant the same bench, the same stimulus and the same closure are built
+# against `tests/mutants/zhao_console_core_slot_overflow_mutant.sv` -- a WRAPPER
+# that instantiates `zhao_console_core` with TERR_POOL_SLOTS halved -- selected
+# by a plain `-D` against a plain `ifdef`. Its polarity is INVERTED: the run
+# passes when the counter FIRES and fails when it reads 0.
+#
+# The negative control is this script WITHOUT the switch: the identical
+# stimulus against unmutated production must read the counter 0. Both halves
+# are required before the zero may be quoted as evidence.
+#
+# It builds into its own directory so the two sets of Verilator objects cannot
+# be mistaken for each other -- a stale object from the other build is the
+# stale-binary trap with a mutant's name on it.
 [CmdletBinding()]
 param(
   [string]$Repo    = $null,
   [string]$BuildIn = $null,
-  [switch]$SkipVerilate
+  [switch]$SkipVerilate,
+  [switch]$Mutant
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,7 +78,9 @@ $gxx = 'C:\programmieren\dsstuff\mingw64\bin'
 $env:VERILATOR_ROOT = $vr
 $env:PATH = "C:\programmieren\zencrifice\.tools\oss-cad-suite\bin;C:\programmieren\zencrifice\.tools\oss-cad-suite\lib;$gxx;$env:PATH"
 
-if (-not $BuildIn) { $BuildIn = Join-Path $env:TEMP 'zhao_console_core_smoke' }
+if (-not $BuildIn) {
+  $BuildIn = Join-Path $env:TEMP ($(if ($Mutant) { 'zhao_console_core_smoke_mut' } else { 'zhao_console_core_smoke' }))
+}
 if (-not (Test-Path $BuildIn)) { New-Item -ItemType Directory -Path $BuildIn | Out-Null }
 $bd = (Resolve-Path $BuildIn).Path
 
@@ -84,6 +104,12 @@ $repoFwd = $Repo.Replace('\', '/')
 $srcs = @("$repoFwd/tests/shell/v3_closure_inherited.vlt")
 $srcs += ($srcRel | ForEach-Object { "$repoFwd/$_" })
 $srcs += "$repoFwd/tests/prod/tb_zhao_console_core_smoke.sv"
+$defs = @()
+if ($Mutant) {
+  $srcs += "$repoFwd/tests/mutants/zhao_console_core_slot_overflow_mutant.sv"
+  $defs += '-DZHAO_MUT_SLOT_OVERFLOW'
+  Write-Host 'MUTANT BUILD: zhao_console_core_slot_overflow_mutant, INVERTED POLARITY (passes when the counter fires)'
+}
 Write-Host "closure: $($srcRel.Count) RTL sources from fit_targets.yml"
 
 if (-not $SkipVerilate) {
@@ -92,7 +118,7 @@ if (-not $SkipVerilate) {
   # flags produce exactly the same sources, main and unit list and stop there.
   Write-Host 'verilating'
   $ErrorActionPreference = 'Continue'
-  & $vl --cc --exe --main --timing --timescale 1ns/1ps -Wno-fatal `
+  & $vl --cc --exe --main --timing --timescale 1ns/1ps -Wno-fatal @defs `
         --Mdir ($bd.Replace('\', '/')) --top-module $top --prefix "V$top" @srcs 2>&1 |
     Select-String '%Error' | ForEach-Object { Write-Host $_ }
   $vlrc = $LASTEXITCODE

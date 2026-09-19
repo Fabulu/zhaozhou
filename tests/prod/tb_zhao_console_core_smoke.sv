@@ -827,7 +827,23 @@ module tb_zhao_console_core_smoke
   logic [1:0]  phy_dqm_o;
   logic [15:0] phy_dq_i;
 
+  // ---- THE DUT, OR ITS POSITIVE CONTROL --------------------------------
+  // A PLAIN `ifdef`, SELECTED BY A PLAIN `-D`, AND THAT SHAPE IS DELIBERATE.
+  // CLAUDE.md: Verilator's `-D` cannot override a FUNCTION-LIKE `define` and
+  // says NOTHING when it fails to, so two mutants once passed while measuring
+  // unmutated production. A bare `ifdef` selecting between two instantiations
+  // is the form `-D` does reach, and the negative control is built in: without
+  // the define this is production, and production must read the counter ZERO
+  // under the identical stimulus.
+  //
+  // `tests/mutants/zhao_console_core_slot_overflow_mutant.sv` is a WRAPPER --
+  // it instantiates `zhao_console_core` with TERR_POOL_SLOTS halved -- so it
+  // has no copied body to go stale. Its own header carries the argument.
+`ifdef ZHAO_MUT_SLOT_OVERFLOW
+  zhao_console_core_slot_overflow_mutant dut (.*);
+`else
   zhao_console_core dut (.*);
+`endif
 
   // ==========================================================================
   // PACKET P-TERRAIN: THE PLAYED HPS BRIDGE AND MEM.GUARD
@@ -845,53 +861,71 @@ module tb_zhao_console_core_smoke
   // TERRAIN.PAGELOADER are merged inside the core by the real
   // `zhao_hps_arbiter`. That the two of them share this port WITHOUT either
   // starving is itself part of what this bench exercises.
-  localparam int unsigned HPS_WORDS   = 8192;          // 64 KiB window
   localparam logic [31:0] HPS_BASE    = 32'h2000_0000; // the staging arena
   localparam int unsigned PAGE_BYTES_C = 21376;        // terrain_rules sec 2/7
   localparam int unsigned LIST_OFF_C   = 0;
   // ==========================================================================
-  // ONE RECORD, AND THE REASON IS A DEFECT THIS BENCH FOUND -- READ THIS BEFORE
-  // RAISING IT.
+  // THREE RECORDS, AND THE REASON IT WAS ONE -- THE DEFECT WAS IN THIS FILE
   // ==========================================================================
-  // At N_TERR_REC = 1 the whole spine runs clean: one record, one lookup, one
-  // claim, one load job, 334 bursts, 21,376 bytes retired, one completion into
-  // the directory.
+  // THE HISTORY, KEPT BECAUSE THE WRONG DIAGNOSIS IS THE INSTRUCTIVE PART.
+  // This bench shipped at N_TERR_REC = 1 on 2026-09-19 with a note saying that
+  // at 2 or more "every record after the first arrives all-zero", and locating
+  // the loss "at or before TERRAIN.SEQ's capture of the record stream, i.e. in
+  // the TERRAIN.CMD -> TERRAIN.SEQ seam". The measurements quoted were real:
   //
-  // AT 2 OR MORE, EVERY RECORD AFTER THE FIRST ARRIVES ALL-ZERO. Measured
-  // 2026-09-19, not inferred:
-  //
-  //   N=2:  cmd records=3 -> seq consumed=2, claims=2/0(same),
-  //         pl loaded=0 faulted=1 refused=1, fault island=0 ix=0 iz=0 src_id=0
-  //   N=3:  cmd records=3 -> seq consumed=3, claims=3/1(same),
+  //   N=3:  cmd records=3, seq consumed=3, claims=3/1(same),
   //         pl loaded=0 faulted=1 refused=2, fault island=0 ix=0 iz=0 src_id=0
   //
-  // Three things locate it, and the third is the one that matters:
-  //   * the first job reads its page in full (21,376 bytes) and fails only on
-  //     header identity, which is expected of a zero page -- so the path works
-  //     once;
-  //   * every later job is REFUSED with verdict 6 (V_SRC_ARENA) and an
-  //     identity of all zeros, which is a job whose payload never arrived;
-  //   * AT N=3 ONE CLAIM COMES BACK `same`. The claim key is
-  //     {epoch, island, ix, iz} and SEQ builds it from the RECORD, BEFORE
-  //     TERRAIN.LOADQ is involved. Two records that both present a zero key
-  //     collide, and that is exactly the one extra `same` at N=3 and the zero
-  //     at N=2. So the payload is already gone when TERRAIN.SEQ claims.
-  //     TERRAIN.LOADQ IS NOT THE SUSPECT; the loss is at or before SEQ's
-  //     capture of the record stream, i.e. in the TERRAIN.CMD -> TERRAIN.SEQ
-  //     seam.
+  // and so was the reasoning from them -- a claim key is {epoch, island, ix,
+  // iz}, SEQ builds it from the record, two zero keys collide, hence the extra
+  // `same`. Every step of that is correct. The CONCLUSION was wrong, because
+  // it took one fact for granted: that the bytes were in memory to begin with.
   //
-  // It is NOT the played bridge: TERRAIN.CMD folds the list's CRC in a first
-  // pass over the same bytes and `crc_fails=0`, so it had every byte of every
-  // record in hand and still emitted the later ones empty.
+  // THEY WERE NOT. The arena writer below declared its word index as
+  // `int unsigned b = ...` inside the loop body of an `initial` block. A
+  // variable declared in a begin/end of a STATIC scope has static lifetime, so
+  // its initialiser runs ONCE before time zero and never again: `b` was 0 for
+  // every r, all three records were written over each other at word 0, and the
+  // arena held the LAST record followed by zeros. Traced at the DUT's own CMD
+  // port, the very first burst of pass one reads
   //
-  // THE REPRODUCER IS THIS CONSTANT. Set it to 2 and the check on
-  // `terr_pl_pages_refused_o` below fires immediately. That check asserts the
-  // CORRECT behaviour -- a well-formed record is never refused -- rather than
-  // the defect, so it keeps working after the repair instead of inverting.
-  localparam int unsigned N_TERR_REC   = 1;
+  //   20000000: 0009000500000042 0000000020006380 00010001deadbeef 00000000000003ea
+  //   20000020: 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+  //
+  // -- one record (ix=5, iz=9, src=1002, which is r=2) and then nothing.
+  // TERRAIN.CMD read exactly what was there and emitted exactly what it read;
+  // TERRAIN.SEQ claimed exactly what it was handed; TERRAIN.PAGELOADER refused
+  // a job whose page address was 0 with verdict 6 (V_SRC_ARENA), which is the
+  // CORRECT refusal for an address outside the staging arena. Every block on
+  // the spine behaved correctly on bad input, and the bad input was ours.
+  //
+  // AND `crc_fails=0` IS WHY IT LOOKED LIKE THE TREE'S FAULT. That zero was
+  // quoted as proof that CMD "had every byte of every record in hand". It is
+  // not: this bench seals the list with the SAME `zhao_crc32c_fold` over the
+  // SAME words it wrote, so the two sides of that comparison were corrupted
+  // together and it could not fire. The declaration below already says this
+  // bench is "NO EVIDENCE WHATEVER about the CRC itself"; the note that shipped
+  // used it as evidence about the RECORDS anyway. A detector wired to two
+  // operands that move together cannot fire (CLAUDE.md) -- and the reassuring
+  // reading is what let the fault be handed to the spine.
+  //
+  // WHAT GUARDS IT NOW: `automatic` on the index, a page address per record
+  // rather than a shared one, and an independent read-back of the arena that
+  // $fatals at time zero naming the record. See the layout loop.
+  //
+  // N_TERR_REC IS THE KNOB AND THREE IS ITS FLOOR, not a decoration: one record
+  // is what hid this, and it takes three to make the directory's `same` answer
+  // and the second re-request of an abandoned burst both happen.
+  localparam int unsigned N_TERR_REC   = 3;
   localparam int unsigned LIST_BYTES_C = N_TERR_REC * 32;
   localparam int unsigned PAGE0_OFF_C  = 4096;
-  localparam int unsigned PAGE1_OFF_C  = PAGE0_OFF_C + PAGE_BYTES_C;
+  // THE WINDOW IS DERIVED, NOT TYPED. It was a hand-written 64 KiB while the
+  // records shared one page; a per-record page makes the arena a function of
+  // N_TERR_REC, and a constant somebody has to remember to raise alongside it
+  // is a constant that will be wrong. The last page ends exactly at the arena
+  // end, which TERRAIN.PAGELOADER allows: its test is `src_hi > arena_hi`.
+  localparam int unsigned ARENA_BYTES_C = PAGE0_OFF_C + N_TERR_REC * PAGE_BYTES_C;
+  localparam int unsigned HPS_WORDS     = (ARENA_BYTES_C + 7) / 8;
 
   logic [63:0] hps_mem [0:HPS_WORDS-1];
 
@@ -1637,24 +1671,65 @@ module tb_zhao_console_core_smoke
     // that table rather than as an opaque blob, so a layout change fails here
     // loudly instead of producing plausible terrain in the wrong place.
     //
-    // TWO records with DIFFERENT patch coordinates, and the difference is
-    // load-bearing: the directory keys on {epoch, island, ix, iz}, so two
-    // records that differ only in source id would land in one entry and the
-    // second would report SAME rather than a fresh claim. Two claims is the
-    // evidence that both records crossed every seam individually.
+    // N_TERR_REC records with DIFFERENT patch coordinates AND DIFFERENT page
+    // addresses, and both differences are load-bearing. The directory keys on
+    // {epoch, island, ix, iz}, so records that differed only in source id would
+    // land in one entry and the later ones would report SAME rather than a
+    // fresh claim; and a page address shared between records would let a swap
+    // between two jobs go unseen on the loader's side. One claim and one page
+    // per record is the evidence that each crossed every seam individually.
+    //
+    // `automatic`, AND IT IS THE WHOLE DEFECT THIS BENCH SPENT A PASS ON.
+    // A variable declared inside a begin/end of a STATIC scope -- which an
+    // `initial` block is -- has static lifetime, so its initialiser runs ONCE,
+    // before time zero, and NOT on each pass of the loop. Written without
+    // `automatic`, `b` stayed 0 for every r and all N_TERR_REC records were
+    // written on top of each other at word 0: the arena held the LAST record
+    // and then zeros. See the note at N_TERR_REC for what that looked like from
+    // the far end of the spine.
     for (int unsigned r = 0; r < N_TERR_REC; r++) begin
-      int unsigned b = (LIST_OFF_C >> 3) + r * 4;
+      automatic int unsigned b = (LIST_OFF_C >> 3) + r * 4;
       hps_mem[b + 0] = {16'(r + 7),          // patch_iz   i16  bytes 6..7
                         16'(r + 3),          // patch_ix   i16  bytes 4..5
                         32'h0000_0042};      // island_id  u32  bytes 0..3
       hps_mem[b + 1] = 64'(HPS_BASE) +
-                       64'(r == 0 ? PAGE0_OFF_C : PAGE1_OFF_C); // hps_page_addr
+                       64'(PAGE0_OFF_C + r * PAGE_BYTES_C); // hps_page_addr
       hps_mem[b + 2] = {8'd0,                // priority   u8   byte 23
                         8'h01,               // view_mask  u8   byte 22
                         16'h0001,            // flags      u16  bytes 20..21 (REQUIRED)
                         32'hDEAD_BEEF};      // expected_page_crc32c bytes 16..19
       hps_mem[b + 3] = {32'd0,               // reserved   u32  bytes 28..31
                         32'(1000 + r)};      // source_id  u32  bytes 24..27
+    end
+
+    // ---- THE ARENA IS READ BACK BEFORE IT IS BELIEVED ---------------------
+    // MAKE THE HARNESS'S OWN LOSS COUNTABLE. The defect above wrote every
+    // record to one address and was SILENT everywhere a check could have seen
+    // it: the list CRC is folded by this bench over the same bytes the bench
+    // wrote, so both sides agreed on the identical mistake and `crc_fails=0`
+    // was then quoted as proof that the bridge had handed over every record.
+    // A checker whose two operands are corrupted together cannot fire
+    // (CLAUDE.md), and a bench that seals its own list is exactly that shape.
+    //
+    // This loop is the independent operand. It re-reads the arena field by
+    // field against the intent stated above, so an aliasing, an off-by-one or
+    // a widened record is LOUD at time zero and names the record -- instead of
+    // arriving 5 ms later as "the console lost a record".
+    for (int unsigned r = 0; r < N_TERR_REC; r++) begin
+      automatic int unsigned b = (LIST_OFF_C >> 3) + r * 4;
+      if (hps_mem[b + 0][31:0] !== 32'h0000_0042)
+        $fatal(1, "SMOKE: arena record %0d holds island %08x, not 00000042 -- the list layout aliased", r, hps_mem[b + 0][31:0]);
+      if (hps_mem[b + 0][47:32] !== 16'(r + 3))
+        $fatal(1, "SMOKE: arena record %0d holds ix %0d, not %0d -- the list layout aliased", r, hps_mem[b + 0][47:32], r + 3);
+      if (hps_mem[b + 0][63:48] !== 16'(r + 7))
+        $fatal(1, "SMOKE: arena record %0d holds iz %0d, not %0d -- the list layout aliased", r, hps_mem[b + 0][63:48], r + 7);
+      if (hps_mem[b + 1] !== 64'(HPS_BASE) + 64'(PAGE0_OFF_C + r * PAGE_BYTES_C))
+        $fatal(1, "SMOKE: arena record %0d holds page address %016x, not %016x -- the list layout aliased",
+               r, hps_mem[b + 1], 64'(HPS_BASE) + 64'(PAGE0_OFF_C + r * PAGE_BYTES_C));
+      if (hps_mem[b + 2] !== {8'd0, 8'h01, 16'h0001, 32'hDEAD_BEEF})
+        $fatal(1, "SMOKE: arena record %0d holds crc/flags/mask/prio %016x -- the list layout aliased", r, hps_mem[b + 2]);
+      if (hps_mem[b + 3][31:0] !== 32'(1000 + r))
+        $fatal(1, "SMOKE: arena record %0d holds source id %0d, not %0d -- the list layout aliased", r, hps_mem[b + 3][31:0], 1000 + r);
     end
 
     // Fold the list with the PRODUCTION folder. See the declaration for why
@@ -1975,7 +2050,7 @@ module tb_zhao_console_core_smoke
     // PACKET P-TERRAIN, 2026-09-19: the paging spine must be SEEN TO CARRY
     // DATA, block to block, not merely to elaborate.
     //
-    // WAIT FOR THE WORK, DO NOT GUESS AT IT. Two pages is 2 x 334 bursts and
+    // WAIT FOR THE WORK, DO NOT GUESS AT IT. Each page is 334 bursts and
     // each burst costs the played bridge's latency plus its beats, so a fixed
     // `repeat` would either waste time or -- far worse -- expire early and
     // read counters mid-flight, which looks exactly like a seam that does not
@@ -1983,7 +2058,16 @@ module tb_zhao_console_core_smoke
     // job produces exactly one completion, loaded or faulted.
     // ======================================================================
     guard = 0;
-    while (((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o) < N_TERR_REC) &&
+    //
+    // THREE TERMS, MATCHING THE COMPLETION LAW THE CHECKS BELOW ASSERT. The
+    // wait used `loaded + faulted` while the "one job, one completion" check
+    // uses `loaded + faulted + refused`; a refusal IS a completion, so the two
+    // disagreed about when the work was over and the wait would sit out its
+    // whole 200,000-cycle budget on any run that refuses a job. That costs
+    // nothing but time in production -- and it is exactly the case the slot-
+    // overflow mutant creates deliberately.
+    while (((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o +
+             terr_pl_pages_refused_o) < N_TERR_REC) &&
            (guard < 200000)) begin
       @(posedge gpu_clk);
       guard++;
@@ -2021,6 +2105,34 @@ module tb_zhao_console_core_smoke
     $display("SMOKE:   probe hps_req_cycles=%0d hps_beats_in=%0d guard_req_cycles=%0d guard_wbeats=%0d",
              pr_hps_req_cy, pr_hps_beats, pr_guard_req_cy, pr_guard_wbeats);
     $display("SMOKE:   bridge bursts served by the played engine=%0d", hps_bursts_served_q);
+
+    // ======================================================================
+    // THE POSITIVE CONTROL, AND ITS POLARITY IS INVERTED ON PURPOSE
+    // ======================================================================
+    // Under -DZHAO_MUT_SLOT_OVERFLOW the DUT is the wrapper mutant and the
+    // whole production terrain verdict below is COMPILED OUT, not merely
+    // jumped over: the mutation legitimately breaks those checks -- a pool of
+    // 512 slots refuses every job the directory places above 511, and an
+    // illegal completion is never accepted, so the spine stops. Running them
+    // against a deliberately broken machine would be asserting the bug. An
+    // `if` plus `\$finish` is not enough here, because Verilator defers the
+    // finish to the end of the time step and the straight-line statements
+    // after it still execute -- which printed six %Fatal lines under a PASSING
+    // exit code the first time this was written. `\ifdef`/`\else` removes
+    // them from the build instead.
+    //
+    // What is asserted instead is the one thing this build exists to show:
+    // THE COUNTER MOVES. It reads 0 in production under the identical
+    // stimulus, which is the other half of the same measurement.
+`ifdef ZHAO_MUT_SLOT_OVERFLOW
+    $display("SMOKE: MUTANT zhao_console_core_slot_overflow_mutant -- terr_pl_slot_overflow_o=%0d (pages_refused=%0d verdict=%0d)",
+             terr_pl_slot_overflow_o, terr_pl_pages_refused_o, terr_pl_fault_verdict_o);
+    if (terr_pl_slot_overflow_o == 0)
+      $fatal(1, "MUTANT FAILED: terr_pl_slot_overflow_o stayed 0 with TERR_POOL_SLOTS halved -- the counter could not be made to fire, so its zero in production is not evidence");
+    $display("SMOKE: MUTANT PASS -- terr_pl_slot_overflow_o fired %0d time(s). The detector works; production's zero is a measurement.",
+             terr_pl_slot_overflow_o);
+    $finish;
+`else
 
     // ---- 1. THE COMMAND WAS READ OVER THE BRIDGE -------------------------
     if (terr_cmd_sets_accepted_o != 1)
@@ -2069,7 +2181,7 @@ module tb_zhao_console_core_smoke
     if (terr_seq_err_stray_ans_o != 1'b0)
       $fatal(1, "SMOKE: TERRAIN.SEQ latched err_stray_ans -- a directory answer arrived with nothing waiting for it");
     if (terr_seq_frame_faults_o != 0)
-      $fatal(1, "SMOKE: TERRAIN.SEQ raised %0d frame faults on a 2-record set against a 1,024-slot directory",
+      $fatal(1, "SMOKE: TERRAIN.SEQ raised %0d frame faults on an N_TERR_REC-record set against a 1,024-slot directory",
              terr_seq_frame_faults_o);
 
     // ---- 4. THE SEQ -> LOADQ -> PAGELOADER CHAIN -------------------------
@@ -2095,8 +2207,10 @@ module tb_zhao_console_core_smoke
     // 64-B aligned, inside the declared staging arena, on the live epoch and
     // names a slot the directory issued, so `pages_refused_o` must be zero.
     // This is the tripwire for the multi-record defect documented at
-    // N_TERR_REC -- it asserts the CORRECT behaviour, so it survives the
-    // repair; raise N_TERR_REC to 2 and it fires.
+    // N_TERR_REC. It asserts the CORRECT behaviour -- a well-formed record is
+    // never refused -- rather than the defect, so it survived the repair
+    // instead of inverting, and it is what went red while the arena writer was
+    // aliasing its records on top of each other.
     if (terr_pl_pages_refused_o != 0)
       $fatal(1, "SMOKE: TERRAIN.PAGELOADER REFUSED %0d well-formed job(s), verdict %0d, identity island=%0d ix=%0d iz=%0d src_id=%0d -- a job reached the loader with no payload. See the note at N_TERR_REC.",
              terr_pl_pages_refused_o, terr_pl_fault_verdict_o,
@@ -2170,6 +2284,7 @@ module tb_zhao_console_core_smoke
              terr_cmd_records_emitted_o, terr_seq_records_consumed_o,
              terr_res_claims_o, terr_lq_issued_o, terr_pl_load_bytes_o,
              hps_bursts_served_q);
+`endif  // ZHAO_MUT_SLOT_OVERFLOW -- end of the production terrain verdict
 
     // ======================================================================
     // PACKET P-GEOM, 2026-09-19: the three blocks composed this pass must be

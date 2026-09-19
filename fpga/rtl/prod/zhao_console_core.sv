@@ -3780,10 +3780,44 @@ module zhao_console_core
   // real: the day a wider producer appears, this is what refuses it.
   wire tpl_fin_over = tpl_fin_slot_w[TERR_MEMSLOT-1];
 
+  // IT COUNTS COMPLETIONS, NOT THE CYCLES ONE WAITS -- AND IT DID NOT.
+  // Found 2026-09-19 by firing this counter for the first time, through the
+  // wrapper mutant its own comment above demanded. The counter was
+  //
+  //     else if (tpl_fin_valid && tpl_fin_over && ...) <= + 1
+  //
+  // which is a LEVEL, and `fin_valid_o` is held until `fin_ready_i`. An
+  // offending completion is deliberately never offered to the directory
+  // (`.fin_valid_i(tpl_fin_valid && !tpl_fin_over)` below), so its ready never
+  // comes and the level stands for the rest of the run: ONE illegal completion
+  // read 700,109 on the mutant. A counter whose port comment says "completions
+  // carried a pool slot outside the directory's range" and whose reading is
+  // six orders of magnitude off cannot be quoted for either number.
+  //
+  // So it is edge-qualified. `tpl_fin_over_q` holds last cycle's offer, and
+  // only the 0->1 transition counts -- exactly one increment per completion,
+  // whether or not the completion is ever accepted.
+  //
+  // AND THE MUTANT RECORDED A SECOND FACT, which is a CONSEQUENCE and not a
+  // defect: because the offer is suppressed rather than consumed,
+  // TERRAIN.PAGELOADER stays in S_FIN for ever on an illegal slot and the
+  // paging spine stops. That is loud rather than silent -- the opposite of the
+  // failure this refusal exists to prevent -- and it is the correct standing
+  // for a state the composition makes unreachable. Choosing anything else
+  // (accept-and-drop, or a drain) is a policy for TERRAIN.RESIDENCY's contract
+  // to state, not for this composer to invent.
+  logic tpl_fin_over_q;
+
   always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) terr_pl_slot_overflow_o <= 32'd0;
-    else if (tpl_fin_valid && tpl_fin_over && (terr_pl_slot_overflow_o != 32'hFFFF_FFFF))
-      terr_pl_slot_overflow_o <= terr_pl_slot_overflow_o + 32'd1;
+    if (!rst_n) begin
+      tpl_fin_over_q          <= 1'b0;
+      terr_pl_slot_overflow_o <= 32'd0;
+    end else begin
+      tpl_fin_over_q <= tpl_fin_valid && tpl_fin_over;
+      if (tpl_fin_valid && tpl_fin_over && !tpl_fin_over_q &&
+          (terr_pl_slot_overflow_o != 32'hFFFF_FFFF))
+        terr_pl_slot_overflow_o <= terr_pl_slot_overflow_o + 32'd1;
+    end
   end
 
   zhao_terrain_residency_v2 #(

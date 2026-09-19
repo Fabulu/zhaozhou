@@ -381,3 +381,14 @@ fpga/rtl/measure/zhao_measure_histogram.sv text eol=lf
 tests/prod/tb_zhao_console_core_smoke.sv text eol=lf
 tests/prod/run_console_core_smoke.ps1 text eol=lf
 tests/shell/v3_closure_inherited.vlt text eol=lf
+# The slot-overflow positive control, added 2026-09-19 with the mutant and for
+# the reason stated three blocks above: a new file in a pinned directory is not
+# pinned by the directory, it is pinned by being NAMED. Git warned "LF will be
+# replaced by CRLF" on the very first `git add` of this file.
+#
+# It matters here for a second reason as well. This mutant is a WRAPPER, so
+# `mutant_copy_drift.py` skips it -- but its parameter and port block is a
+# verbatim transcription of `zhao_console_core.sv`'s, which IS pinned above, and
+# regenerating it means diffing the two. Pinned on one side and not the other,
+# every line differs and the diff stops being evidence.
+tests/mutants/zhao_console_core_slot_overflow_mutant.sv text eol=lf
