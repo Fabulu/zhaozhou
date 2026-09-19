@@ -214,3 +214,42 @@ section warning about exactly this was written by me one minute before I did it.
 -> 30). That is honest, not regression -- but it means the remaining work is now
 mostly BOUNDARY entries with named absent owners, and the two biggest named owners
 are CMD.SCHEDULER (I14/I30/I33/I36) and the Packet-D attribute carriage (I20).
+## 2026-09-19 night -- CMD.SCHEDULER was never absent, and the recipe ate a packet
+
+**THE TENTH FALSE ABSENCE, and the biggest.** `zhao_cmd_scheduler.sv` -- 25 KB,
+a contract, a directed suite and a formal proof -- has been instantiated as
+`u_sched` at `zhao_shell_top_v2.sv:725` since 2026-08-16, INSIDE the shell
+`zhao_console_core` already instantiates. FOUR header entries (I14, I30, I33,
+I36) rested on it being missing. It is also the WRONG owner: its own first line
+calls it "the 3-slot frame ownership FSM" and its dispatch sinks are
+DEBUG.FRAMEBLIT, INPUT.RUMBLE and VIDEO.MODE. The draws were arriving and dying
+at its line 384, "all other opcodes: counted, no dispatch".
+
+**The draw job is two halves with different answers.** The DISPATCH half was a
+missing arm in a live block -- `DrawForm 0x0300` now reaches the console through
+a third CMD.EXEC arm sharing the existing framer, verdict gate and commit FSM.
+The JOB half is a missing RULING: spec/memory_rules.md 5f ratifies the asset
+pool's region and then says "Not decided: the pool's internal layout ... still
+open", so nothing turns a 24-bit handle into a descriptor address. Three of six
+job fields have no ratified producer, and a job is atomic, so it was NOT
+half-driven.
+
+**GEOM.ATTRPACK landed** -- "the front end that asks three times and packs the
+planes", which is the I20 blocker that makes the 1,536 pixels flat.
+
+**THE PRIVATE-INDEX RECIPE REVERTED A PACKET IN FULL**, 529 deletions, after
+being written into CLAUDE.md. `git read-tree HEAD` snapshots HEAD at that
+moment; run it in one tool call and `git commit` in another, and anything that
+commits in between makes your index describe the past. Every local signal said
+fine -- apply returned 0, the staged diff was correct -- and the ONLY tell was
+the commit summary reporting four files when one was staged. CLAUDE.md now
+requires read-tree and commit to be atomic, or a `rev-parse HEAD` re-check
+immediately before committing. A private index protects another agent's INDEX;
+it does nothing for their COMMITS.
+
+**Where it stands.** 69 mandatory gaps. Three packets live: terrain, texture +
+attributes, FIELD.
+
+**NEXT:** when a slot frees, the board<->core join -- `zhao_console_board` is one
+of the two required tops and deliberately does not instantiate the core. It has
+waited all session because the core's port list has not been still long enough.
