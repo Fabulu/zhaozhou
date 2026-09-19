@@ -6743,6 +6743,52 @@ verilate(test_terrain_place_directed
 add_test(NAME terrain_place_directed COMMAND test_terrain_place_directed)
 set_tests_properties(terrain_place_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.HDRREAD -- the compose-path patch header reader that closed
+# zhao_console_core entry I35. The DUT is wrapped by tb_terrain_hdrread.sv only
+# to flatten `zhao_guard_req_t` / `zhao_guard_rsp_t`, so a C++ driver names the
+# fields instead of indexing bit positions it would be silently wrong about.
+#
+# The driver builds each page header BY BYTE OFFSET from spec/terrain_rules.md
+# 2.1 rather than from the RTL's beat cases, fires all five counters with legal
+# stimulus (a denied guard, a short burst, a header naming another patch, an
+# out-of-pool slot, a stale epoch), and asserts one-job-in / one-header-out /
+# one-job-forwarded after every case -- a refusal that swallowed the job would
+# leave the page pinned in the directory forever.
+add_executable(test_terrain_hdrread_directed terrain/terrain_hdrread_directed.cpp)
+target_link_libraries(test_terrain_hdrread_directed PRIVATE zhao_harness)
+verilate(test_terrain_hdrread_directed
+  PREFIX Vtb_terrain_hdrread
+  TOP_MODULE tb_terrain_hdrread
+  VERILATOR_ARGS --assert
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_hdrread.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_hdrread.sv)
+add_test(NAME terrain_hdrread_directed COMMAND test_terrain_hdrread_directed)
+set_tests_properties(terrain_hdrread_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# ITS POSITIVE CONTROL, and it is the one check above that no legal stimulus can
+# fire. A correct block has no input that makes it forward the wrong patch, so
+# "the ordering check can fail" would stay an argument; the mutant drives the
+# five forwarding assignments from the LIVE job port -- which is the wiring
+# zhao_console_core actually had before this block existed -- and this driver's
+# polarity is INVERTED, so it PASSES when the fault is visible.
+#
+# `-DZHAO_HDRREAD_LIVE_FORWARD_MUTANT` selects the DUT through a PLAIN `ifdef in
+# the shared testbench, which is a form Verilator's -D reaches. The negative
+# control is recorded in the driver's header: built WITHOUT the define, against
+# production, this same driver FAILS -- which is the proof the selector engaged
+# rather than silently compiling the unmutated block. UNUSEDSIGNAL is waived
+# because the mutation is precisely what leaves the latched registers unread.
+add_executable(test_terrain_hdrread_mutant_control terrain/terrain_hdrread_mutant_control.cpp)
+target_link_libraries(test_terrain_hdrread_mutant_control PRIVATE zhao_harness)
+verilate(test_terrain_hdrread_mutant_control
+  PREFIX Vtb_terrain_hdrread
+  TOP_MODULE tb_terrain_hdrread
+  VERILATOR_ARGS --assert -DZHAO_HDRREAD_LIVE_FORWARD_MUTANT -Wno-UNUSEDSIGNAL
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_hdrread_live_forward_mutant.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_hdrread.sv)
+add_test(NAME terrain_hdrread_mutant_control COMMAND test_terrain_hdrread_mutant_control)
+set_tests_properties(terrain_hdrread_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # THE PLACEMENT SEAM: TERRAIN.PLACE's 66-write burst, read back out of
 # TERRAIN.COMPCACHE's serve port. Registered 2026-09-19 with the composition
 # that closed core header entry I22 and the door half of I27.

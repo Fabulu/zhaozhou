@@ -5,7 +5,7 @@
 // (mrow_lo/mrow_hi plus a one-row prefetch) replaced 1,089 flops that v1 read
 // combinationally, and its characteristic fault is an off-by-one in WHICH row
 // the prefetch lands: every counter still balances, every handshake still
-// completes, and only the §3.4 breach/heal DECISIONS move. Exactly the class
+// completes, and only the sec 3.4 breach/heal DECISIONS move. Exactly the class
 // of corruption a detector wired to its own enable could never see.
 //
 // The one substantive change, in StCell's prefetch address:
@@ -248,7 +248,7 @@ module zhao_terrain_bake_v2_mutant (
   localparam logic [4:0] StBrB  = 5'd15;  // mrow_lo <= row 0; address row 1
   localparam logic [4:0] StBrC  = 5'd16;  // mrow_hi <= row 1; prefetch row 2
   localparam logic [4:0] StCell = 5'd17;  // waiting for a cell
-  localparam logic [4:0] StR2C  = 5'd18;  // c_r2 <= radius^2 (ONCE per record —
+  localparam logic [4:0] StR2C  = 5'd18;  // c_r2 <= radius^2 (ONCE per record --
                                           // StVzM recurs per row and must never
                                           // touch r2: the first build captured
                                           // r2 there and clobbered it with the
