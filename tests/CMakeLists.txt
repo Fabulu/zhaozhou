@@ -13049,6 +13049,19 @@ add_test(NAME console_core_slot_overflow_control
           -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -Mutant)
 set_tests_properties(console_core_slot_overflow_control PROPERTIES
   LABELS "prod;mutant")
+
+# The second inverted-polarity control on the same bench, added 2026-09-19 with
+# the composition that closed core header entries I2 and I3. The smoke now
+# proves PART.TABLE by what comes OUT of three consumers -- a STICK contact, one
+# child per collision, an exact colour byte -- and none of that is evidence
+# until the checks have been seen to fail. -NoTableLoad skips the four loads and
+# changes nothing else; the script inverts the verdict, so this test PASSES when
+# the bench fails. It is evidence about the instrument, not about the design.
+add_test(NAME console_core_table_load_control
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -NoTableLoad)
+set_tests_properties(console_core_table_load_control PROPERTIES
+  LABELS "prod;mutant")
 # ===========================================================================
 # PLATFORM: SYS.PLL and SYS.RESET. Registered 2026-09-19, the pass that wrote
 # them.

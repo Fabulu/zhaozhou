@@ -54,12 +54,33 @@
 # It builds into its own directory so the two sets of Verilator objects cannot
 # be mistaken for each other -- a stale object from the other build is the
 # stale-binary trap with a mutant's name on it.
+#
+# ---------------------------------------------------------------------------
+# -NoTableLoad: THE NEGATIVE CONTROL FOR EVERY PART.TABLE CHECK
+# ---------------------------------------------------------------------------
+# Added 2026-09-19 with the composition that closed core header entries I2 and
+# I3. The bench now LOADS `zhao_part_table` instead of driving descriptors onto
+# the consumers, so its STICK contacts, its collision spawns and its exact
+# colour byte are claims about what the table served. A claim like that is worth
+# nothing until the check has been seen to FAIL.
+#
+# With -NoTableLoad the four loads are skipped and NOTHING else changes
+# (`+define+ZHAO_SMOKE_SKIP_TBL_LOAD`, a plain `ifdef` -- CLAUDE.md records that
+# a command-line define cannot override a FUNCTION-LIKE `define` and says
+# nothing when it fails to). Its polarity is INVERTED: the control PASSES when
+# the run fails.
+#
+# MEASURED 2026-09-19: loads[upd/col/spw/crv]=[0 0 0 0], contacts_stick=0,
+# spawn_by_event=[0 0 0 0], no children, and the run stops at "a collision
+# produced no child". It builds into its own directory so a stale object from
+# the loaded build cannot be mistaken for it.
 [CmdletBinding()]
 param(
   [string]$Repo    = $null,
   [string]$BuildIn = $null,
   [switch]$SkipVerilate,
-  [switch]$Mutant
+  [switch]$Mutant,
+  [switch]$NoTableLoad
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,7 +100,10 @@ $env:VERILATOR_ROOT = $vr
 $env:PATH = "C:\programmieren\zencrifice\.tools\oss-cad-suite\bin;C:\programmieren\zencrifice\.tools\oss-cad-suite\lib;$gxx;$env:PATH"
 
 if (-not $BuildIn) {
-  $BuildIn = Join-Path $env:TEMP ($(if ($Mutant) { 'zhao_console_core_smoke_mut' } else { 'zhao_console_core_smoke' }))
+  $tag = if ($Mutant) { 'zhao_console_core_smoke_mut' }
+         elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
+         else { 'zhao_console_core_smoke' }
+  $BuildIn = Join-Path $env:TEMP $tag
 }
 if (-not (Test-Path $BuildIn)) { New-Item -ItemType Directory -Path $BuildIn | Out-Null }
 $bd = (Resolve-Path $BuildIn).Path
@@ -109,6 +133,10 @@ if ($Mutant) {
   $srcs += "$repoFwd/tests/mutants/zhao_console_core_slot_overflow_mutant.sv"
   $defs += '-DZHAO_MUT_SLOT_OVERFLOW'
   Write-Host 'MUTANT BUILD: zhao_console_core_slot_overflow_mutant, INVERTED POLARITY (passes when the counter fires)'
+}
+if ($NoTableLoad) {
+  $defs += '+define+ZHAO_SMOKE_SKIP_TBL_LOAD'
+  Write-Host 'NEGATIVE CONTROL: PART.TABLE is NOT loaded, INVERTED POLARITY (passes when the run FAILS)'
 }
 Write-Host "closure: $($srcRel.Count) RTL sources from fit_targets.yml"
 
@@ -181,4 +209,15 @@ $env:PATH = "$gxx;$env:PATH"
 & $exe
 $rc = $LASTEXITCODE
 Write-Host "SMOKE_RC=$rc"
+if ($NoTableLoad) {
+  # INVERTED. A zero here would mean the PART.TABLE checks pass with the table
+  # never loaded -- which would make them evidence about something other than
+  # what the table served.
+  if ($rc -eq 0) {
+    Write-Host 'NEGATIVE CONTROL FAILED: the run PASSED with PART.TABLE unloaded. The table checks are not measuring the table.'
+    exit 1
+  }
+  Write-Host "NEGATIVE CONTROL PASS: the run failed (rc=$rc) with PART.TABLE unloaded, as it must."
+  exit 0
+}
 exit $rc
