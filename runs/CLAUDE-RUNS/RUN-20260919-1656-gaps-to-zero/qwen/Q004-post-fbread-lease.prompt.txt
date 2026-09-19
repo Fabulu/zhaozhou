@@ -1,0 +1,858 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q004: post-fbread-lease
+## Brief
+POST.COMPOSITE runs after the raster has drained and before the frame is published, inside the
+render engine's framebuffer LEASE. It uses the render engine's own memory client, ENGINE0, and
+the memory guard admits ENGINE0 only while `fb_writer == 1` (the render holds the lease). Three
+requesters share ENGINE0 inside `zhao_post_lease`: the raster's writer, the post source reader
+`zhao_post_fbread`, and the post write-back/echo. `zhao_post_fbread` reads the finished back
+buffer in raster order.
+
+## Questions
+1. Can `zhao_post_lease` grant ENGINE0 to post's reader or writer while the raster still has writes
+   in flight (i.e. before the raster has DRAINED), so post reads pixels that are not final?
+2. Can a response beat for one requester be delivered to another (a mis-steer when two requests
+   overlap, or a request issued while a response is still streaming)?
+3. Does `zhao_post_fbread` read EXACTLY the frame: every pixel once, in raster order, correct at
+   the row stride and at the last row and column, for both 1-view and 2-view (Duo) geometry? Check
+   the address arithmetic for widths and overflow.
+4. Backpressure: if post's consumer stalls mid-row, is any beat lost or duplicated?
+5. Any counter or guard that cannot fire (both operands behind one enable, or a condition that cannot arise)?
+
+# INPUT fpga/rtl/compositor/zhao_post_fbread.sv:1-331
+```
+    1| // zhao_post_fbread.sv -- POST.COMPOSITE's SOURCE: the completed back buffer,
+    2| // read back in RASTER order through the render engine's own lease.
+    3| //
+    4| // ENFORCED-BY: tests/compositor/post_fbread_directed.cpp
+    5| //
+    6| // ---------------------------------------------------------------------------
+    7| // WHY THIS BLOCK EXISTS (core header entry I15, closed 2026-09-19)
+    8| // ---------------------------------------------------------------------------
+    9| // `zhao_post_composite`'s source port `s_*` is ADDRESSLESS: the Nth pixel it
+   10| // accepts IS frame pixel (N mod W, N div W), and its nine-line ring is built on
+   11| // that. RASTER.RESOLVE is TILE-ordered (16x16, and only the tiles a triangle
+   12| // touched), so the reorder buffer between the two is a whole frame -- and the
+   13| // frame store that already exists is the framebuffer. POST.COMPOSITE.md names
+   14| // the arrangement: "an exclusive framebuffer read/write lease after resolve and
+   15| // before publication". This block is the READ half of that lease: it walks the
+   16| // leased slot row by row, 64 bytes at a time, and hands the compositor one
+   17| // RGB565 pixel per accepted beat, in exactly the order the compositor counts.
+   18| //
+   19| // It is the shape `zhao_scanout_fetch` already has (the core's I15 note named
+   20| // it), re-armed on RENDER DRAIN rather than on the video swap and pointed at the
+   21| // BACK buffer rather than the displayed one. It is a separate block rather than
+   22| // a mode of that one because every one of the three differences is in the
+   23| // fetcher's control half, and the fetcher's control half is the display pipe.
+   24| //
+   25| // ---------------------------------------------------------------------------
+   26| // THE LAWS THIS FILE OWNS
+   27| // ---------------------------------------------------------------------------
+   28| // * BYTE ORDER: `spec/video_rules.md` 3 -- RGB565 little-endian halfwords,
+   29| //   row-major, no row padding beyond `stride_i`. The shell's read packer
+   30| //   assembles a beat as {w3, w2, w1, w0} with w0 the LOWEST address, so pixel k
+   31| //   of a beat is `beat[16*k +: 16]`. No colour arithmetic: a pixel leaves this
+   32| //   block with the bits it was stored with.
+   33| // * ONE LOGICAL REQUEST AT A TIME. A request is at most 64 bytes (32 px) and
+   34| //   never crosses a row; the last request of a row is shorter when the width is
+   35| //   not a multiple of 32. Widths must be a multiple of 4 px (one beat) -- every
+   36| //   mode is (384, 320, 256) -- and a width that is not is REFUSED at start with
+   37| //   `fault_o`, never silently truncated.
+   38| // * CREDIT BEFORE REQUEST. A request is offered only when the beat queue has
+   39| //   room for every beat it will return, counting beats already owed. A read
+   40| //   that could overflow the queue is not issued, so there is no overflow path
+   41| //   to get wrong -- and `overflow_o` is the tripwire that says so.
+   42| // * THE GUARD'S TWO-CYCLE LAW: `ready` is a level, the verdict is a pulse one
+   43| //   cycle (or, behind a share, more) later. R_VERD WAITS for `ok` or
+   44| //   `violation` and never reads silence as either (check_guard_verdict.py).
+   45| // * A REFUSED READ IS FATAL TO THE PASS. `fault_o` latches, no further request
+   46| //   is issued, and the pixels already queued still drain -- the compositor then
+   47| //   waits for pixels that never come, which is correct: a frame whose source
+   48| //   could not be read must not be published as if it had been.
+   49| //
+   50| // ---------------------------------------------------------------------------
+   51| // COST, STATED BEFORE ANY FIT (none has been run)
+   52| // ---------------------------------------------------------------------------
+   53| // The beat queue is FIFO_BEATS x 64 bits with a REGISTERED read, written so it
+   54| // infers a simple dual-port memory: at 16 beats that is two M10K at the 32x64
+   55| // shape rather than 1,024 flops (~256 ALM of registers plus a 16:1 x 64 mux).
+   56| // The owner ruling of 2026-09-18 prefers M10K to ALMs, and this is that trade.
+   57| // The rest is two row counters, an address accumulator (NO multiplier: the row
+   58| // base advances by `stride_i` per row) and a 4:1 halfword select. Estimate:
+   59| // ~120 ALM, 0 DSP, 2 M10K. UNMEASURED.
+   60| `default_nettype none
+   61| 
+   62| module zhao_post_fbread
+   63|   import zhao_pkg::*;
+   64| #(
+   65|     parameter int unsigned XW         = 9,    // pixel x within the view (<= 511)
+   66|     parameter int unsigned YW         = 8,    // pixel y within the view (<= 255)
+   67|     parameter int unsigned FIFO_BEATS = 16    // power of two, >= 8
+   68| ) (
+   69|     input  var logic clk,
+   70|     input  var logic rst_n,
+   71| 
+   72|     // ---- the pass -----------------------------------------------------------
+   73|     input  var logic                           start_i,   // one pulse per pass
+   74|     input  var logic [ZHAO_VRAM_ADDR_BITS-1:0] origin_i,  // byte addr of view (0,0)
+   75|     input  var logic [15:0]                    stride_i,  // bytes per row
+   76|     input  var logic [XW-1:0]                  w_i,
+   77|     input  var logic [YW-1:0]                  h_i,
+   78| 
+   79|     // ---- MEM.GUARD read master (client ENGINE0, reads only) ----------------
+   80|     output var zhao_guard_req_t guard_req_o,
+   81|     input  var zhao_guard_rsp_t guard_rsp_i,
+   82|     input  var logic            beat_valid_i,
+   83|     input  var logic [63:0]     beat_data_i,
+   84| 
+   85|     // ---- to POST.COMPOSITE's `s_*` ------------------------------------------
+   86|     output var logic        px_valid_o,
+   87|     input  var logic        px_ready_i,
+   88|     output var logic [15:0] px_rgb_o,
+   89| 
+   90|     // ---- evidence -----------------------------------------------------------
+   91|     output var logic        busy_o,        // a pass is in progress
+   92|     output var logic        done_o,        // one pulse: the pass's last pixel left
+   93|     output var logic        fault_o,       // sticky per pass: refused read / bad width
+   94|     output var logic [31:0] reads_o,       // requests the guard passed
+   95|     output var logic [31:0] pixels_o,      // pixels handed to the compositor
+   96|     output var logic [31:0] overflow_o     // tripwire: a beat with no room (unreachable)
+   97| );
+   98| 
+   99|   localparam int unsigned QW = $clog2(FIFO_BEATS);
+  100| 
+  101|   initial begin
+  102|     if ((FIFO_BEATS < 8) || ((FIFO_BEATS & (FIFO_BEATS - 1)) != 0))
+  103|       $fatal(1, "zhao_post_fbread: FIFO_BEATS must be a power of two >= 8 (got %0d)", FIFO_BEATS);
+  104|     if (XW > 11)
+  105|       $fatal(1, "zhao_post_fbread: XW %0d leaves no room for the byte offset", XW);
+  106|   end
+  107| 
+  108|   // ==========================================================================
+  109|   // REQUEST SIDE
+  110|   // ==========================================================================
+  111|   typedef enum logic [1:0] {
+  112|     R_IDLE = 2'd0,   // no pass, or the pass's last request is out
+  113|     R_WAIT = 2'd1,   // waiting for queue room
+  114|     R_REQ  = 2'd2,   // offering one read to the guard
+  115|     R_VERD = 2'd3    // the guard's verdict, one or more cycles later
+  116|   } rstate_e;
+  117| 
+  118|   rstate_e       r_st_q;
+  119|   logic [XW-1:0] rx_q;                             // next pixel x to request
+  120|   logic [YW-1:0] ry_q;                             // row being requested
+  121|   logic [ZHAO_VRAM_ADDR_BITS-1:0] row_base_q;      // origin + ry * stride
+  122|   logic [XW-1:0] w_q;
+  123|   logic [YW-1:0] h_q;
+  124|   logic [15:0]   stride_q;
+  125| 
+  126|   // pixels in the next request: min(32, w - rx)
+  127|   logic [XW-1:0] rem_c;
+  128|   logic [5:0]    npx_c;
+  129|   assign rem_c = w_q - rx_q;
+  130|   assign npx_c = (rem_c >= XW'(32)) ? 6'd32 : 6'(rem_c);
+  131| 
+  132|   logic [3:0]    nbeats_c;                         // 1..8
+  133|   assign nbeats_c = 4'(npx_c >> 2);
+  134| 
+  135|   // Beats already owed to the queue by passed requests, plus the queue's own
+  136|   // occupancy: a request is offered only when all of its beats fit.
+  137|   logic [QW:0]   q_count_q;                        // beats resident in the queue
+  138|   logic [QW:0]   owed_q;                           // beats passed, not yet arrived
+  139|   logic          room_c;
+  140|   assign room_c = ((QW+1)'(FIFO_BEATS) - q_count_q - owed_q) >= (QW+1)'(nbeats_c);
+  141| 
+  142|   logic [3:0]    req_beats_q;                      // beats of the request in flight
+  143| 
+  144|   always_comb begin
+  145|     guard_req_o        = '0;
+  146|     guard_req_o.valid  = (r_st_q == R_REQ);
+  147|     guard_req_o.write  = 1'b0;
+  148|     guard_req_o.client = ZHAO_CLIENT_ENGINE0;
+  149|     guard_req_o.addr   = row_base_q + ZHAO_VRAM_ADDR_BITS'({rx_q, 1'b0});
+  150|     guard_req_o.len    = 7'({npx_c, 1'b0});        // bytes = pixels * 2
+  151|     // The guard wants the FULL contiguous mask over [addr, addr+len).
+  152|     guard_req_o.be     = (npx_c == 6'd32) ? '1
+  153|                          : ((64'd1 << {npx_c, 1'b0}) - 64'd1);
+  154|   end
+  155| 
+  156|   // ==========================================================================
+  157|   // THE BEAT QUEUE -- simple dual port, registered read (infers memory)
+  158|   // ==========================================================================
+  159|   logic [63:0]   q_mem [0:FIFO_BEATS-1];
+  160|   logic [QW-1:0] q_wp_q, q_rp_q;
+  161|   logic [63:0]   head_q;                           // the beat being unpacked
+  162|   logic          head_v_q;
+  163|   logic [1:0]    idx_q;                            // halfword within head_q
+  164|   logic          rd_en_c, px_fire_c, head_done_c;
+  165| 
+  166|   assign px_fire_c   = px_valid_o && px_ready_i;
+  167|   assign head_done_c = px_fire_c && (idx_q == 2'd3);
+  168|   // Load the next beat into the head exactly when the head empties, so a steady
+  169|   // stream presents a pixel every cycle with no bubble at beat boundaries.
+  170|   assign rd_en_c     = (q_count_q != '0) && (!head_v_q || head_done_c);
+  171| 
+  172|   always_ff @(posedge clk) begin
+  173|     if (beat_valid_i) q_mem[q_wp_q] <= beat_data_i;
+  174|     if (rd_en_c)      head_q        <= q_mem[q_rp_q];
+  175|   end
+  176| 
+  177|   assign px_valid_o = head_v_q;
+  178|   assign px_rgb_o   = head_q[{idx_q, 4'b0000} +: 16];
+  179| 
+  180|   // ==========================================================================
+  181|   // THE PASS LEDGER
+  182|   // ==========================================================================
+  183|   // Pixels handed out this pass, counted as (x, y) so `done_o` is the last
+  184|   // pixel of the view and never a product that needs a multiplier.
+  185|   logic [XW-1:0] ox_q;
+  186|   logic [YW-1:0] oy_q;
+  187|   logic          pass_q;                           // a pass is live on the output side
+  188| 
+  189|   assign busy_o = pass_q;
+  190| 
+  191|   // A width that is not a whole number of beats cannot be walked without
+  192|   // inventing pixels, and a zero-sized view has no last pixel.
+  193|   logic bad_geom_c;
+  194|   assign bad_geom_c = (w_i[1:0] != 2'b00) || (w_i == '0) || (h_i == '0);
+  195| 
+  196|   always_ff @(posedge clk or negedge rst_n) begin
+  197|     if (!rst_n) begin
+  198|       r_st_q      <= R_IDLE;
+  199|       rx_q        <= '0;
+  200|       ry_q        <= '0;
+  201|       row_base_q  <= '0;
+  202|       w_q         <= '0;
+  203|       h_q         <= '0;
+  204|       stride_q    <= '0;
+  205|       req_beats_q <= '0;
+  206|       q_count_q   <= '0;
+  207|       owed_q      <= '0;
+  208|       q_wp_q      <= '0;
+  209|       q_rp_q      <= '0;
+  210|       head_v_q    <= 1'b0;
+  211|       idx_q       <= 2'd0;
+  212|       ox_q        <= '0;
+  213|       oy_q        <= '0;
+  214|       pass_q      <= 1'b0;
+  215|       done_o      <= 1'b0;
+  216|       fault_o     <= 1'b0;
+  217|       reads_o     <= '0;
+  218|       pixels_o    <= '0;
+  219|       overflow_o  <= '0;
+  220|     end else begin
+  221|       done_o <= 1'b0;
+  222| 
+  223|       // ---- queue occupancy: one assignment, so a push and a pop together
+  224|       //      are both counted -------------------------------------------------
+  225|       q_count_q <= q_count_q + ((beat_valid_i) ? (QW+1)'(1) : '0)
+  226|                              - ((rd_en_c)      ? (QW+1)'(1) : '0);
+  227|       if (beat_valid_i) begin
+  228|         q_wp_q <= q_wp_q + QW'(1);
+  229|         // Structurally unreachable: a request is issued only with room for
+  230|         // every beat it returns. Counted rather than asserted so it ships.
+  231|         if (q_count_q == (QW+1)'(FIFO_BEATS)) overflow_o <= overflow_o + 32'd1;
+  232|       end
+  233|       if (rd_en_c) q_rp_q <= q_rp_q + QW'(1);
+  234| 
+  235|       // ---- owed beats: + at the verdict, - per arriving beat ---------------
+  236|       begin
+  237|         automatic logic [QW:0] add = '0;
+  238|         if ((r_st_q == R_VERD) && guard_rsp_i.ok) add = (QW+1)'(req_beats_q);
+  239|         owed_q <= owed_q + add - ((beat_valid_i && (owed_q != '0)) ? (QW+1)'(1) : '0);
+  240|       end
+  241| 
+  242|       // ---- the head and the pixel walk --------------------------------------
+  243|       if (rd_en_c) begin
+  244|         head_v_q <= 1'b1;
+  245|         idx_q    <= 2'd0;
+  246|       end else if (head_done_c) begin
+  247|         head_v_q <= 1'b0;
+  248|       end
+  249|       if (px_fire_c) begin
+  250|         if (!rd_en_c) idx_q <= idx_q + 2'd1;
+  251|         pixels_o <= pixels_o + 32'd1;
+  252|         if (ox_q == (w_q - XW'(1))) begin
+  253|           ox_q <= '0;
+  254|           oy_q <= oy_q + YW'(1);
+  255|           if (oy_q == (h_q - YW'(1))) begin
+  256|             pass_q <= 1'b0;
+  257|             done_o <= 1'b1;
+  258|           end
+  259|         end else begin
+  260|           ox_q <= ox_q + XW'(1);
+  261|         end
+  262|       end
+  263| 
+  264|       // ---- the request walk -------------------------------------------------
+  265|       case (r_st_q)
+  266|         R_IDLE: begin
+  267|           if (start_i) begin
+  268|             w_q        <= w_i;
+  269|             h_q        <= h_i;
+  270|             stride_q   <= stride_i;
+  271|             row_base_q <= origin_i;
+  272|             rx_q       <= '0;
+  273|             ry_q       <= '0;
+  274|             ox_q       <= '0;
+  275|             oy_q       <= '0;
+  276|             fault_o    <= bad_geom_c;
+  277|             // A new pass starts from an EMPTY queue. The sequencer starts one
+  278|             // only after the previous pass finished or faulted, so nothing a
+  279|             // flush could drop is still owed to it.
+  280|             q_rp_q     <= q_wp_q;
+  281|             q_count_q  <= '0;
+  282|             owed_q     <= '0;
+  283|             head_v_q   <= 1'b0;
+  284|             pass_q     <= !bad_geom_c;
+  285|             r_st_q     <= bad_geom_c ? R_IDLE : R_WAIT;
+  286|           end
+  287|         end
+  288| 
+  289|         R_WAIT: begin
+  290|           if (room_c) begin
+  291|             req_beats_q <= nbeats_c;
+  292|             r_st_q      <= R_REQ;
+  293|           end
+  294|         end
+  295| 
+  296|         // The guard's ready is a LEVEL; its verdict follows.
+  297|         R_REQ: begin
+  298|           if (guard_rsp_i.ready) r_st_q <= R_VERD;
+  299|         end
+  300| 
+  301|         R_VERD: begin
+  302|           if (guard_rsp_i.ok) begin
+  303|             reads_o <= reads_o + 32'd1;
+  304|             if (({1'b0, rx_q} + (XW+1)'(npx_c)) >= {1'b0, w_q}) begin
+  305|               rx_q <= '0;
+  306|               if (ry_q == (h_q - YW'(1))) begin
+  307|                 r_st_q <= R_IDLE;                  // the last request is out
+  308|               end else begin
+  309|                 ry_q       <= ry_q + YW'(1);
+  310|                 row_base_q <= row_base_q + ZHAO_VRAM_ADDR_BITS'(stride_q);
+  311|                 r_st_q     <= R_WAIT;
+  312|               end
+  313|             end else begin
+  314|               rx_q   <= rx_q + XW'(npx_c);
+  315|               r_st_q <= R_WAIT;
+  316|             end
+  317|           end else if (guard_rsp_i.violation) begin
+  318|             fault_o <= 1'b1;
+  319|             r_st_q  <= R_IDLE;
+  320|           end
+  321|           // Neither yet: WAIT. Silence is not an answer.
+  322|         end
+  323| 
+  324|         default: r_st_q <= R_IDLE;
+  325|       endcase
+  326|     end
+  327|   end
+  328| 
+  329| endmodule : zhao_post_fbread
+  330| 
+  331| `default_nettype wire
+```
+
+# INPUT fpga/rtl/compositor/zhao_post_lease.sv:1-485
+```
+    1| // zhao_post_lease.sv -- POST.COMPOSITE's framebuffer read/write LEASE: the
+    2| // sequencing, the memory identity and the byte ledger that put the compositor
+    3| // between the raster and publication.
+    4| //
+    5| // ENFORCED-BY: tests/prod/tb_zhao_console_core_smoke.sv (the composed pass:
+    6| //              framebuffer and capture compared word for word, every counter
+    7| //              and tripwire read), with its three parts proven standalone by
+    8| //              tests/compositor/post_fbread_directed.cpp, post_echo_directed.cpp
+    9| //              and tests/memory/mem_share_n_directed.cpp
+   10| //
+   11| // ---------------------------------------------------------------------------
+   12| // WHAT THE CONTRACT SAYS, AND WHAT THIS FILE DOES ABOUT EACH CLAUSE
+   13| // ---------------------------------------------------------------------------
+   14| // POST.COMPOSITE.md: "POST.COMPOSITE owns an exclusive framebuffer read/write
+   15| // lease after resolve and before publication. HUD follows post and never forces
+   16| // another read." And zhao_post_composite's own header: "NEVER POST-PROCESS THE
+   17| // CURRENTLY SCANNED-OUT FRONT BUFFER ... The lease ... is the integrator's to
+   18| // hold", and "COMPLETION USES THE OWNED TERMINAL PROTOCOL".
+   19| //
+   20| //   * AFTER RESOLVE. The pass arms on the render frame's `frame_end` and starts
+   21| //     only when the bin pipe is QUIET (every tile resolved), no raster pixel is
+   22| //     pending, and RASTER.FBWRITE is DRAINED -- every word the raster issued has
+   23| //     RETIRED, so the read-back cannot overtake a write still in flight.
+   24| //   * EXCLUSIVE, AND NOT THE FRONT BUFFER. The pass arms only while the RENDER
+   25| //     lease is live (`lease_live_i`: the slot manager's live lease naming the
+   26| //     renderer). That lease is on the BACK slot by construction -- the manager
+   27| //     never grants the displayed one -- and it is exclusive by construction.
+   28| //     The guard enforces it a second time: ENGINE0's read arm is inside the
+   29| //     leased window and lease-gated (tests/formal/mem_guard_no_escape.sby).
+   30| //   * BEFORE PUBLICATION. `busy_o` is high from arming to the last retired
+   31| //     write of the last view; the shell folds it into `render_drained_o`, which
+   32| //     is the only signal a frame controller may publish on.
+   33| //
+   34| // ---------------------------------------------------------------------------
+   35| // THE MEMORY IDENTITY -- ENGINE0, SHARED, NOT A NEW CLIENT
+   36| // ---------------------------------------------------------------------------
+   37| // Core entry I15 said the real blocker was "a memory identity for a third
+   38| // framebuffer agent": the arbiter's client id IS its slot index, T3 forbids
+   39| // spending client 5, and post both reads and writes. The resolution is the
+   40| // one `zhao_mem_share_n` exists for -- "a client identity is a PRIVILEGE, not a
+   41| // slot" -- applied to ENGINE0: the render engine's lease, the render engine's
+   42| // identity, three logical requesters behind one share:
+   43| //
+   44| //   0  RASTER.FBWRITE  (the raster's writes, then post's write-back: ONE engine,
+   45| //                       the shell switches its pixel port at the phase change)
+   46| //   1  zhao_post_fbread (the back buffer, read in raster order)
+   47| //   2  zhao_post_echo   (POST.ECHO's capture writes)
+   48| //
+   49| // TWO things the share does not do, and this file does:
+   50| //
+   51| //   * WRITE-DATA ORDER. A write's data travels on its requester's own channel
+   52| //     into the shell's one write queue, which the controller pops in grant
+   53| //     order. Two writers pushing at once would interleave words. So a write is
+   54| //     offered to the share only while no other write's data is outstanding
+   55| //     (`wpend`), and the data channel is muxed to the one outstanding writer.
+   56| //     The mask is COMBINATIONAL on the verdict pulse as well as registered, so
+   57| //     the cycle a write passes is already closed to the other writer.
+   58| //   * RETIREMENT ATTRIBUTION. The arbiter returns credits per CLIENT, and
+   59| //     RASTER.FBWRITE's `drained_o` balances issued words against retired words.
+   60| //     Three requesters on one client would each see the others' credits. The
+   61| //     controller is strictly in order, so a FIFO of {requester, words} pushed at
+   62| //     each passed verdict and drained by the credit stream attributes every
+   63| //     retired word to the request that issued it. `retire_unowned_o` is the
+   64| //     tripwire: a credit with no owner (structurally unreachable).
+   65| //
+   66| // ---------------------------------------------------------------------------
+   67| // DUO -- two passes, one read
+   68| // ---------------------------------------------------------------------------
+   69| // spec/video_rules.md 1: Duo's stored surface is ONE logical 256 x 384 image at
+   70| // 512 bytes/row, view 1 at logical row 192. So the reader walks ONE tall pass
+   71| // (views * h rows from the slot base, no view offset, no multiplier), and the
+   72| // compositor and the echo run one pass per view: the compositor stops taking
+   73| // source pixels at its view's last pixel, so the reader's next pixel simply
+   74| // waits for the next pass. Post's write-back labels view 1's rows `y + h`.
+   75| //
+   76| // COST (estimated, UNMEASURED): the share (~90 ALM), the sequencer and the
+   77| // retire FIFO (~60 ALM), plus the reader and the echo (their own headers).
+   78| `default_nettype none
+   79| 
+   80| module zhao_post_lease
+   81|   import zhao_pkg::*;
+   82| #(
+   83|     parameter int unsigned XW = 9,
+   84|     parameter int unsigned YW = 8
+   85| ) (
+   86|     input  var logic clk,
+   87|     input  var logic rst_n,
+   88| 
+   89|     // ---- the render frame this pass belongs to ------------------------------
+   90|     input  var logic          lease_live_i,     // the render lease is live
+   91|     input  var logic          frame_admit_i,    // a render frame was admitted
+   92|     input  var logic          frame_end_i,      // the raster's frame_end pulse
+   93|     input  var logic          raster_quiet_i,   // bin pipe quiet (all tiles resolved)
+   94|     input  var logic          raster_px_i,      // a raster pixel is on offer
+   95|     input  var logic          fbw_drained_i,    // RASTER.FBWRITE: every word retired
+   96|     input  var logic [ZHAO_VRAM_ADDR_BITS-1:0] fb_base_i,
+   97|     input  var logic [15:0]   fb_stride_i,
+   98|     input  var logic [XW-1:0] frame_w_i,        // the VIEW's size, from the mode
+   99|     input  var logic [YW-1:0] frame_h_i,
+  100|     input  var logic          duo_i,            // two views per frame
+  101| 
+  102|     // ---- to / from POST.COMPOSITE --------------------------------------------
+  103|     output var logic          pass_start_o,     // the compositor's frame_start
+  104|     output var logic          view_o,           // the compositor's view_sel
+  105|     output var logic          src_valid_o,
+  106|     input  var logic          src_ready_i,
+  107|     output var logic [15:0]   src_rgb_o,
+  108|     input  var logic          out_valid_i,
+  109|     output var logic          out_ready_o,
+  110|     input  var logic [15:0]   out_rgb_i,
+  111|     input  var logic [XW-1:0] out_x_i,
+  112|     input  var logic [YW-1:0] out_y_i,
+  113|     input  var logic          out_last_i,
+  114|     input  var logic          echo_valid_i,     // POST.COMPOSITE's tap
+  115|     input  var logic [15:0]   echo_rgb_i,
+  116| 
+  117|     // ---- the shared RASTER.FBWRITE's pixel port during the post phase -------
+  118|     output var logic               phase_post_o,
+  119|     output var logic               fbw_px_valid_o,
+  120|     input  var logic               fbw_px_ready_i,
+  121|     output var logic [15:0]        fbw_px_rgb_o,
+  122|     output var logic signed [11:0] fbw_px_x_o,
+  123|     output var logic signed [11:0] fbw_px_y_o,
+  124|     output var logic               fbw_px_last_o,
+  125| 
+  126|     // ---- requester 0: RASTER.FBWRITE's guard master and write channel -------
+  127|     input  var zhao_guard_req_t fbw_req_i,
+  128|     output var zhao_guard_rsp_t fbw_rsp_o,
+  129|     input  var logic [63:0]     fbw_wdata_i,
+  130|     input  var logic            fbw_wvalid_i,
+  131|     output var logic            fbw_wready_o,
+  132|     input  var logic            fbw_wlast_i,
+  133|     output var logic [7:0]      fbw_retire_o,
+  134| 
+  135|     // ---- ENGINE0 towards MEM.GUARD, the write queue and the credit stream ---
+  136|     output var zhao_guard_req_t e0_req_o,
+  137|     input  var zhao_guard_rsp_t e0_rsp_i,
+  138|     output var logic [63:0]     e0_wdata_o,
+  139|     output var logic            e0_wvalid_o,
+  140|     input  var logic            e0_wready_i,
+  141|     output var logic            e0_wlast_o,
+  142|     input  var logic            e0_beat_valid_i,  // ENGINE0 read beats, routed
+  143|     input  var logic [63:0]     e0_beat_data_i,
+  144|     input  var logic            e0_beat_last_i,
+  145|     input  var logic [7:0]      e0_credits_i,     // client_rsp[ENGINE0].credits
+  146| 
+  147|     // ---- evidence -------------------------------------------------------------
+  148|     output var logic          busy_o,            // armed or running: do not publish
+  149|     output var logic [31:0]   passes_o,          // compositor passes completed
+  150|     output var logic [31:0]   frames_o,          // frames fully post-processed
+  151|     output var logic          fault_o,           // sticky: a refused source read
+  152|     output var logic [31:0]   src_reads_o,
+  153|     output var logic [31:0]   src_pixels_o,
+  154|     output var logic [31:0]   retire_unowned_o,  // tripwire, must read 0
+  155|     output var logic [31:0]   share_contention_o,
+  156|     output var logic [31:0]   echo_passes_complete_o,
+  157|     output var logic [31:0]   echo_passes_torn_o,
+  158|     output var logic [31:0]   echo_pixels_written_o,
+  159|     output var logic [31:0]   echo_pixels_dropped_o,
+  160|     output var logic          echo_fault_o
+  161| );
+  162| 
+  163|   localparam int unsigned RYW = YW + 1;          // the reader's tall Duo pass
+  164| 
+  165|   // ==========================================================================
+  166|   // THE SEQUENCER
+  167|   // ==========================================================================
+  168|   typedef enum logic [2:0] {
+  169|     S_IDLE  = 3'd0,   // no render frame to post-process
+  170|     S_ARMED = 3'd1,   // frame_end seen; waiting for the raster to drain
+  171|     S_PASS  = 3'd2,   // a compositor pass is running
+  172|     S_SETTLE= 3'd3,   // the pass's last pixel is out; wait for retirement
+  173|     S_DONE  = 3'd4    // every view post-processed; hold until the next frame
+  174|   } sstate_e;
+  175| 
+  176|   sstate_e       st_q;
+  177|   logic          view_q;
+  178|   logic          start_c;
+  179|   logic          last_out_seen_q;
+  180| 
+  181|   // The view the NEXT pass opens: the first pass of a frame is view 0, the
+  182|   // second (Duo only) is view 1.
+  183|   logic          next_view_c;
+  184|   assign next_view_c = (st_q == S_SETTLE);
+  185| 
+  186|   // The share's view of each requester, declared here because the sequencer,
+  187|   // the write-order mask and the retire ledger all read it.
+  188|   zhao_guard_req_t [2:0] sh_req;
+  189|   zhao_guard_rsp_t [2:0] sh_rsp;
+  190|   logic [2:0][6:0]       sh_req_len_q;     // length when the share took it
+  191| 
+  192|   // The raster is finished with the slot: every tile resolved, nothing on the
+  193|   // pixel port, every raster word retired.
+  194|   logic raster_done_c;
+  195|   assign raster_done_c = raster_quiet_i && !raster_px_i && fbw_drained_i;
+  196| 
+  197|   logic echo_busy, rd_busy, rd_done_unused, rd_fault;
+  198| 
+  199|   assign start_c = ((st_q == S_ARMED) && raster_done_c && lease_live_i)
+  200|                 || ((st_q == S_SETTLE) && fbw_drained_i && !echo_busy
+  201|                     && duo_i && !view_q);
+  202| 
+  203|   assign pass_start_o = start_c;
+  204|   assign view_o       = view_q;
+  205|   assign phase_post_o = (st_q == S_PASS) || (st_q == S_SETTLE) || (st_q == S_DONE);
+  206|   assign busy_o       = (st_q == S_ARMED) || (st_q == S_PASS) || (st_q == S_SETTLE);
+  207| 
+  208|   // ==========================================================================
+  209|   // THE SOURCE -- one tall read for every view of the frame
+  210|   // ==========================================================================
+  211|   zhao_guard_req_t rd_req;
+  212|   zhao_guard_rsp_t rd_rsp;
+  213|   logic            rd_beat_v;
+  214|   logic [63:0]     rd_beat_d;
+  215|   logic [RYW-1:0]  rd_h_c;
+  216|   assign rd_h_c = duo_i ? (RYW'(frame_h_i) << 1) : RYW'(frame_h_i);
+  217| 
+  218|   logic [31:0] rd_overflow_unused;
+  219|   zhao_post_fbread #(.XW(XW), .YW(RYW), .FIFO_BEATS(16)) u_source (
+  220|     .clk(clk), .rst_n(rst_n),
+  221|     // ONE read per FRAME: only the first view's start opens it.
+  222|     .start_i (start_c && (st_q == S_ARMED)),
+  223|     .origin_i(fb_base_i), .stride_i(fb_stride_i),
+  224|     .w_i(frame_w_i), .h_i(rd_h_c),
+  225|     .guard_req_o(rd_req), .guard_rsp_i(rd_rsp),
+  226|     .beat_valid_i(rd_beat_v), .beat_data_i(rd_beat_d),
+  227|     .px_valid_o(src_valid_o), .px_ready_i(src_ready_i), .px_rgb_o(src_rgb_o),
+  228|     .busy_o(rd_busy), .done_o(rd_done_unused), .fault_o(rd_fault),
+  229|     .reads_o(src_reads_o), .pixels_o(src_pixels_o), .overflow_o(rd_overflow_unused)
+  230|   );
+  231|   assign fault_o = rd_fault;
+  232| 
+  233|   // ==========================================================================
+  234|   // THE WRITE-BACK -- the compositor's output onto RASTER.FBWRITE's port
+  235|   // ==========================================================================
+  236|   // Canvas row = view-local row, plus h for view 1 (the stored Duo surface).
+  237|   logic [RYW-1:0] out_row_c;
+  238|   assign out_row_c = view_q ? (RYW'(out_y_i) + RYW'(frame_h_i)) : RYW'(out_y_i);
+  239| 
+  240|   assign fbw_px_valid_o = out_valid_i && (st_q == S_PASS);
+  241|   assign out_ready_o    = fbw_px_ready_i && (st_q == S_PASS);
+  242|   assign fbw_px_rgb_o   = out_rgb_i;
+  243|   assign fbw_px_x_o     = 12'($signed({1'b0, out_x_i}));
+  244|   assign fbw_px_y_o     = 12'($signed({1'b0, out_row_c}));
+  245|   assign fbw_px_last_o  = out_last_i;
+  246| 
+  247|   logic out_fire_c;
+  248|   assign out_fire_c = out_valid_i && out_ready_o;
+  249| 
+  250|   // ==========================================================================
+  251|   // POST.ECHO -- on the compositor's tap, qualified by the output handshake
+  252|   // ==========================================================================
+  253|   zhao_guard_req_t ec_req;
+  254|   zhao_guard_rsp_t ec_rsp;
+  255|   logic [63:0]     ec_wdata;
+  256|   logic            ec_wvalid, ec_wready, ec_wlast;
+  257|   logic [7:0]      ec_retire;
+  258|   logic            ec_complete_unused;
+  259| 
+  260|   zhao_post_echo #(.XW(XW), .YW(YW), .SKID(256)) u_echo (
+  261|     .clk(clk), .rst_n(rst_n),
+  262|     .pass_start_i(start_c), .view_i(start_c ? next_view_c : view_q),
+  263|     .w_i(frame_w_i), .h_i(frame_h_i),
+  264|     // The raw tap repeats a stalled beat; the ACCEPTED beat happens once.
+  265|     .tap_valid_i(echo_valid_i && out_fire_c), .tap_rgb_i(echo_rgb_i),
+  266|     .tap_x_i(out_x_i), .tap_y_i(out_y_i),
+  267|     .guard_req_o(ec_req), .guard_rsp_i(ec_rsp),
+  268|     .guard_wdata_o(ec_wdata), .guard_wvalid_o(ec_wvalid),
+  269|     .guard_wready_i(ec_wready), .guard_wlast_o(ec_wlast),
+  270|     .retire_words_i(ec_retire),
+  271|     .busy_o(echo_busy), .pass_complete_o(ec_complete_unused),
+  272|     .passes_complete_o(echo_passes_complete_o), .passes_torn_o(echo_passes_torn_o),
+  273|     .pixels_written_o(echo_pixels_written_o), .pixels_dropped_o(echo_pixels_dropped_o),
+  274|     .fault_o(echo_fault_o)
+  275|   );
+  276| 
+  277| 
+  278|   // ==========================================================================
+  279|   // ENGINE0 -- three logical requesters, one client (zhao_mem_share_n)
+  280|   // ==========================================================================
+  281|   // WRITE-DATA ORDER: from the moment the share TAKES a write until that
+  282|   // write's last data beat (or its refusal), the other writer's request is
+  283|   // withheld. Registered at the take, which is early enough: the share takes
+  284|   // one requester per idle cycle and is busy until the verdict, so no second
+  285|   // write can be taken before this mask is up -- and registered, so it forms
+  286|   // no combinational path back through the share's ready.
+  287|   logic            wpend_q;
+  288|   logic            wown_q;                 // 0 = FBWRITE, 1 = ECHO
+  289|   logic            wpend_c;
+  290|   assign wpend_c = wpend_q;
+  291| 
+  292|   always_comb begin
+  293|     sh_req[0] = fbw_req_i;
+  294|     sh_req[1] = rd_req;
+  295|     sh_req[2] = ec_req;
+  296|     if (wpend_c) begin
+  297|       sh_req[0].valid = 1'b0;
+  298|       sh_req[2].valid = 1'b0;
+  299|     end
+  300|   end
+  301| 
+  302|   logic [2:0]       sh_bv, sh_bl_unused;
+  303|   logic [63:0]      sh_bd;
+  304|   logic [2:0][31:0] sh_jobs_unused;
+  305|   logic [31:0]      sh_denied_unused, sh_short_unused, sh_long_unused, sh_unowned_unused;
+  306| 
+  307|   zhao_mem_share_n #(.N(3), .CLIENT_ID(2), .FORCE_READ(1'b0)) u_engine0_share (
+  308|     .clk(clk), .rst_n(rst_n),
+  309|     .req_i(sh_req), .rsp_o(sh_rsp),
+  310|     .beat_valid_o(sh_bv), .beat_data_o(sh_bd), .beat_last_o(sh_bl_unused),
+  311|     .m_req_o(e0_req_o), .m_rsp_i(e0_rsp_i),
+  312|     .m_beat_valid_i(e0_beat_valid_i), .m_beat_data_i(e0_beat_data_i),
+  313|     .m_beat_last_i(e0_beat_last_i),
+  314|     .jobs_o(sh_jobs_unused), .denied_o(sh_denied_unused),
+  315|     .contention_o(share_contention_o),
+  316|     .err_short_o(sh_short_unused), .err_long_o(sh_long_unused),
+  317|     .err_unowned_o(sh_unowned_unused)
+  318|   );
+  319| 
+  320|   // The share is the guard as each requester sees it. A requester whose
+  321|   // request is masked sees no ready, which is simply the guard being busy.
+  322|   assign fbw_rsp_o = sh_rsp[0];
+  323|   assign rd_rsp    = sh_rsp[1];
+  324|   assign ec_rsp    = sh_rsp[2];
+  325|   assign rd_beat_v = sh_bv[1];
+  326|   assign rd_beat_d = sh_bd;
+  327| 
+  328|   // The one outstanding writer owns the data channel.
+  329|   assign e0_wvalid_o  = wown_q ? ec_wvalid : fbw_wvalid_i;
+  330|   assign e0_wdata_o   = wown_q ? ec_wdata  : fbw_wdata_i;
+  331|   assign e0_wlast_o   = wown_q ? ec_wlast  : fbw_wlast_i;
+  332|   assign fbw_wready_o = !wown_q && e0_wready_i;
+  333|   assign ec_wready    =  wown_q && e0_wready_i;
+  334| 
+  335|   // ==========================================================================
+  336|   // RETIREMENT ATTRIBUTION -- in order, as the controller retires
+  337|   // ==========================================================================
+  338|   // {requester, words} pushed at each passed verdict; the credit stream drains
+  339|   // the head. Depth 4 covers a request in the guard, one at the arbiter and one
+  340|   // retiring, with one to spare.
+  341|   localparam int unsigned RQ = 4;
+  342|   logic [1:0] rq_own [0:RQ-1];
+  343|   logic [5:0] rq_left[0:RQ-1];
+  344|   logic [1:0] rq_wp_q, rq_rp_q;
+  345|   logic [2:0] rq_n_q;
+  346| 
+  347|   logic       push_c;
+  348|   logic [1:0] push_own_c;
+  349|   logic [5:0] push_words_c;
+  350|   always_comb begin
+  351|     push_c       = 1'b0;
+  352|     push_own_c   = 2'd0;
+  353|     push_words_c = 6'd0;
+  354|     for (int k = 0; k < 3; k++) begin
+  355|       if (sh_rsp[k].ok) begin
+  356|         push_c       = 1'b1;
+  357|         push_own_c   = 2'(k);
+  358|         push_words_c = 6'(sh_req_len_q[k] >> 1);   // bytes -> 16-bit words
+  359|       end
+  360|     end
+  361|   end
+  362| 
+  363|   // The length each requester last offered, captured when the share took it
+  364|   // (its ready), because the requester drops the request before the verdict.
+  365|   always_ff @(posedge clk or negedge rst_n) begin
+  366|     if (!rst_n) sh_req_len_q <= '0;
+  367|     else begin
+  368|       for (int k = 0; k < 3; k++)
+  369|         if (sh_req[k].valid && sh_rsp[k].ready) sh_req_len_q[k] <= sh_req[k].len;
+  370|     end
+  371|   end
+  372| 
+  373|   logic       credit_c;
+  374|   logic [1:0] head_own_c;
+  375|   assign credit_c   = (e0_credits_i != 8'd0);
+  376|   assign head_own_c = rq_own[rq_rp_q];
+  377| 
+  378|   assign fbw_retire_o = (credit_c && (rq_n_q != 3'd0) && (head_own_c == 2'd0)) ? e0_credits_i : 8'd0;
+  379|   assign ec_retire    = (credit_c && (rq_n_q != 3'd0) && (head_own_c == 2'd2)) ? e0_credits_i : 8'd0;
+  380| 
+  381|   always_ff @(posedge clk or negedge rst_n) begin
+  382|     if (!rst_n) begin
+  383|       rq_wp_q <= '0; rq_rp_q <= '0; rq_n_q <= '0;
+  384|       retire_unowned_o <= '0;
+  385|       for (int i = 0; i < RQ; i++) begin rq_own[i] <= '0; rq_left[i] <= '0; end
+  386|     end else begin
+  387|       automatic logic pop = 1'b0;
+  388|       if (credit_c) begin
+  389|         if (rq_n_q == 3'd0) begin
+  390|           retire_unowned_o <= retire_unowned_o + 32'd1;
+  391|         end else if (6'(e0_credits_i) >= rq_left[rq_rp_q]) begin
+  392|           pop = 1'b1;
+  393|           rq_rp_q <= rq_rp_q + 2'd1;
+  394|           // A burst's credits belong to ONE request. More than the head is
+  395|           // owed means a word was attributed to the wrong requester.
+  396|           if (6'(e0_credits_i) != rq_left[rq_rp_q])
+  397|             retire_unowned_o <= retire_unowned_o + 32'd1;
+  398|         end else begin
+  399|           rq_left[rq_rp_q] <= rq_left[rq_rp_q] - 6'(e0_credits_i);
+  400|         end
+  401|       end
+  402|       if (push_c) begin
+  403|         rq_own[rq_wp_q]  <= push_own_c;
+  404|         rq_left[rq_wp_q] <= push_words_c;
+  405|         rq_wp_q          <= rq_wp_q + 2'd1;
+  406|       end
+  407|       rq_n_q <= rq_n_q + (push_c ? 3'd1 : 3'd0) - (pop ? 3'd1 : 3'd0);
+  408|     end
+  409|   end
+  410| 
+  411|   // ==========================================================================
+  412|   // THE ONE SEQUENTIAL BLOCK FOR THE PASS
+  413|   // ==========================================================================
+  414|   always_ff @(posedge clk or negedge rst_n) begin
+  415|     if (!rst_n) begin
+  416|       st_q            <= S_IDLE;
+  417|       view_q          <= 1'b0;
+  418|       last_out_seen_q <= 1'b0;
+  419|       wpend_q         <= 1'b0;
+  420|       wown_q          <= 1'b0;
+  421|       passes_o        <= '0;
+  422|       frames_o        <= '0;
+  423|     end else begin
+  424|       // ---- write-data ownership --------------------------------------------
+  425|       if (sh_req[0].valid && sh_rsp[0].ready && sh_req[0].write) begin
+  426|         wpend_q <= 1'b1; wown_q <= 1'b0;
+  427|       end
+  428|       if (sh_req[2].valid && sh_rsp[2].ready) begin
+  429|         wpend_q <= 1'b1; wown_q <= 1'b1;
+  430|       end
+  431|       // Released by the owner's last data beat, or by its REFUSAL: a refused
+  432|       // write sends no data, and holding the mask would lock out the other
+  433|       // writer for good.
+  434|       if ((e0_wvalid_o && e0_wready_i && e0_wlast_o)
+  435|           || (wown_q ? sh_rsp[2].violation : sh_rsp[0].violation))
+  436|         wpend_q <= 1'b0;
+  437| 
+  438|       // ---- the pass ---------------------------------------------------------
+  439|       if (out_fire_c && out_last_i) last_out_seen_q <= 1'b1;
+  440| 
+  441|       case (st_q)
+  442|         S_IDLE: begin
+  443|           if (frame_end_i && lease_live_i) st_q <= S_ARMED;
+  444|         end
+  445|         S_ARMED: begin
+  446|           if (start_c) begin
+  447|             st_q            <= S_PASS;
+  448|             view_q          <= 1'b0;
+  449|             last_out_seen_q <= 1'b0;
+  450|           end
+  451|         end
+  452|         S_PASS: begin
+  453|           if (last_out_seen_q || (out_fire_c && out_last_i)) st_q <= S_SETTLE;
+  454|         end
+  455|         S_SETTLE: begin
+  456|           if (start_c) begin                       // Duo: view 1
+  457|             st_q            <= S_PASS;
+  458|             view_q          <= 1'b1;
+  459|             last_out_seen_q <= 1'b0;
+  460|             passes_o        <= passes_o + 32'd1;
+  461|           end else if (fbw_drained_i && !echo_busy) begin
+  462|             st_q     <= S_DONE;
+  463|             passes_o <= passes_o + 32'd1;
+  464|             frames_o <= frames_o + 32'd1;
+  465|           end
+  466|         end
+  467|         S_DONE: ;
+  468|         default: st_q <= S_IDLE;
+  469|       endcase
+  470| 
+  471|       // A newly admitted render frame ends the previous post phase: the shell
+  472|       // gives RASTER.FBWRITE back to the raster from here.
+  473|       if (frame_admit_i) st_q <= S_IDLE;
+  474|     end
+  475|   end
+  476| 
+  477| 
+  478|   logic unused_c;
+  479|   assign unused_c = ^{rd_busy, rd_done_unused, rd_overflow_unused, ec_complete_unused,
+  480|                       sh_bv[0], sh_bv[2], sh_bl_unused, sh_jobs_unused, sh_denied_unused,
+  481|                       sh_short_unused, sh_long_unused, sh_unowned_unused};
+  482| 
+  483| endmodule : zhao_post_lease
+  484| 
+  485| `default_nettype wire
+```

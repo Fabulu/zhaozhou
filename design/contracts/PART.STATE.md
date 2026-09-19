@@ -135,6 +135,32 @@ figure the stretch tier must be argued against.
 Species descriptors are read-only and small; they belong in an on-chip table
 loaded per frame, not re-fetched per particle.
 
+### The HPS DDR face (2026-09-19, console entry I1)
+
+The streamer between this block and MEM.HPS.BRIDGE is `zhao_part_hps`
+(`fpga/rtl/particles/zhao_part_hps.sv`, composed in `zhao_console_core` as
+client 3 of the core's HPS arbiter). What it adds, stated so the next reader
+does not have to derive it from RTL:
+
+* **Buffers and bases.** The HPS allocates both buffers and writes their byte
+  bases (64-byte aligned) as configuration, the `terr_cfg_*` shape of plan D10.
+* **The seed.** `{buffer, count}` -- "this buffer holds this many records" --
+  accepted only between ticks, with the bases latched at the same moment. It is
+  the population descriptor's `active_count` (spec/qformats.md 10) arriving at
+  the only block that can use it. Until the first seed no tick is passed on.
+  **Provisional:** no contract previously said how a first generation is born;
+  this is the minimum, and the carrier of the population descriptor is still
+  open (console entry I7).
+* **The count is the hardware's.** The next generation's length is the number
+  of records this block wrote, counted by the streamer.
+* **Record order in DDR.** Record `i` at `base + 16*i`, two 64-bit beats, low
+  half first; bursts of four records (64 B), a short burst only at a tail.
+* **An empty generation.** `rd_empty_i` (sampled on `tick_start_i`) says the
+  previous generation holds no records; the survivor pass closes on its own and
+  the append phase runs as normal. Without it a zero-record generation could not
+  end its tick.
+* **Bridge tag.** ENGINE1 (`PART_HPS_CLIENT` in the console core). The client
+  enum is full and id 5 is held unspent by ruling T3; **provisional**.
 ## Q formats and rounding
 Position is 18 bits per axis and velocity 11 — both **deliberately narrow**, and
 the contract must state what they mean before RTL fixes it by accident.

@@ -244,14 +244,38 @@ module zhao_console_core_slot_overflow_mutant
   // "INCOMPLETE -- TIED OFF, AND WHY" table with the owner that is missing.
   // ==========================================================================
 
-  // ---- I1: PART.STATE's generation store (harness = memory) ---------------
-  input  logic                    part_rd_valid_i,
-  output logic                    part_rd_ready_o,
-  input  logic [PART_REC_W-1:0]   part_rd_record_i,
-  input  logic                    part_rd_last_i,
-  output logic                    part_wr_valid_o,
-  input  logic                    part_wr_ready_i,
-  output logic [PART_REC_W-1:0]   part_wr_record_o,
+  // (I1's seven `part_rd_*` / `part_wr_*` ports were here. CLOSED 2026-09-19:
+  //  the generation store is HPS DDR by contract and `u_part_hps` streams it
+  //  through client 3 of `u_terr_hps_arb`. What crosses this edge now is the
+  //  HPS's own configuration, in the `terr_cfg_*` shape, below.)
+
+  // ---- PART.STATE's HPS DDR buffers: the HPS's configuration and seed ------
+  // NOT A TIE-OFF. PART.STATE.md: "Owns the two particle buffers in HPS DDR";
+  // the HPS allocates them (spec/memory_rules.md 5, "particle pools per the
+  // charter allocator") and in Verilator the harness IS the HPS (plan D10),
+  // exactly as for `terr_cfg_arena_*`. The seed says "buffer `buf` holds
+  // `count` records" -- the population descriptor's `active_count`
+  // (spec/qformats.md 10) -- and is taken only between ticks.
+  input  logic [31:0]             part_cfg_base0_i,
+  input  logic [31:0]             part_cfg_base1_i,
+  input  logic                    part_seed_valid_i,
+  output logic                    part_seed_ready_o,
+  input  logic                    part_seed_buf_i,
+  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // The store's evidence. `cur_count` is the generation's length as the
+  // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
+  // stimulus in tests/particles/part_hps_directed.cpp.
+  output logic                    part_hps_cur_buf_o,
+  output logic [$clog2(PART_CAPACITY):0] part_hps_cur_count_o,
+  output logic [31:0]             part_hps_ticks_o,
+  output logic [31:0]             part_hps_ticks_dropped_o,
+  output logic [31:0]             part_hps_ticks_unseeded_o,
+  output logic [31:0]             part_hps_seeds_o,
+  output logic [31:0]             part_hps_seeds_refused_o,
+  output logic [31:0]             part_hps_rd_bursts_o,
+  output logic [31:0]             part_hps_wr_bursts_o,
+  output logic [31:0]             part_hps_records_read_o,
+  output logic [31:0]             part_hps_records_written_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -1035,6 +1059,9 @@ module zhao_console_core_slot_overflow_mutant
   // arbiter). Its wait is the number that says what the loader costs it.
   output logic [31:0]             terr_hps_c2_bursts_o,
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
+  // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
+  output logic [31:0]             terr_hps_c3_bursts_o,
+  output logic [31:0]             terr_hps_c3_wait_cycles_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`

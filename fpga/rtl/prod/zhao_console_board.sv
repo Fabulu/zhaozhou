@@ -74,7 +74,7 @@
 // RE-EXPORTING IS NOT TYING OFF, and the distinction is the whole reason this
 // is allowed. A tie-off drives a constant into a port and tells the fitter the
 // producer does not exist. A re-export moves the seam one level out and leaves
-// it a seam: `part_rd_valid_i` is as unowned at the board's edge as it was at
+// it a seam: `part_fld_valid_i` is as unowned at the board's edge as it was at
 // the core's, it is listed in the core's "INCOMPLETE -- TIED OFF, AND WHY"
 // table under the owner that is missing, and NOTHING NEW became fake. This
 // pass adds ZERO tie-offs and removes none.
@@ -516,14 +516,38 @@ module zhao_console_board
   // "INCOMPLETE -- TIED OFF, AND WHY" table with the owner that is missing.
   // ==========================================================================
 
-  // ---- I1: PART.STATE's generation store (harness = memory) ---------------
-  input  logic                    part_rd_valid_i,
-  output logic                    part_rd_ready_o,
-  input  logic [PART_REC_W-1:0]   part_rd_record_i,
-  input  logic                    part_rd_last_i,
-  output logic                    part_wr_valid_o,
-  input  logic                    part_wr_ready_i,
-  output logic [PART_REC_W-1:0]   part_wr_record_o,
+  // (I1's seven `part_rd_*` / `part_wr_*` ports were here. CLOSED 2026-09-19:
+  //  the generation store is HPS DDR by contract and `u_part_hps` streams it
+  //  through client 3 of `u_terr_hps_arb`. What crosses this edge now is the
+  //  HPS's own configuration, in the `terr_cfg_*` shape, below.)
+
+  // ---- PART.STATE's HPS DDR buffers: the HPS's configuration and seed ------
+  // NOT A TIE-OFF. PART.STATE.md: "Owns the two particle buffers in HPS DDR";
+  // the HPS allocates them (spec/memory_rules.md 5, "particle pools per the
+  // charter allocator") and in Verilator the harness IS the HPS (plan D10),
+  // exactly as for `terr_cfg_arena_*`. The seed says "buffer `buf` holds
+  // `count` records" -- the population descriptor's `active_count`
+  // (spec/qformats.md 10) -- and is taken only between ticks.
+  input  logic [31:0]             part_cfg_base0_i,
+  input  logic [31:0]             part_cfg_base1_i,
+  input  logic                    part_seed_valid_i,
+  output logic                    part_seed_ready_o,
+  input  logic                    part_seed_buf_i,
+  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // The store's evidence. `cur_count` is the generation's length as the
+  // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
+  // stimulus in tests/particles/part_hps_directed.cpp.
+  output logic                    part_hps_cur_buf_o,
+  output logic [$clog2(PART_CAPACITY):0] part_hps_cur_count_o,
+  output logic [31:0]             part_hps_ticks_o,
+  output logic [31:0]             part_hps_ticks_dropped_o,
+  output logic [31:0]             part_hps_ticks_unseeded_o,
+  output logic [31:0]             part_hps_seeds_o,
+  output logic [31:0]             part_hps_seeds_refused_o,
+  output logic [31:0]             part_hps_rd_bursts_o,
+  output logic [31:0]             part_hps_wr_bursts_o,
+  output logic [31:0]             part_hps_records_read_o,
+  output logic [31:0]             part_hps_records_written_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -1307,6 +1331,9 @@ module zhao_console_board
   // arbiter). Its wait is the number that says what the loader costs it.
   output logic [31:0]             terr_hps_c2_bursts_o,
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
+  // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
+  output logic [31:0]             terr_hps_c3_bursts_o,
+  output logic [31:0]             terr_hps_c3_wait_cycles_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -2574,13 +2601,23 @@ module zhao_console_board
       .TERR_MEMSLOT             (TERR_MEMSLOT),
       .TERR_PAGE_BYTES          (TERR_PAGE_BYTES)
   ) u_core (
-      .part_rd_valid_i                   (part_rd_valid_i),
-      .part_rd_ready_o                   (part_rd_ready_o),
-      .part_rd_record_i                  (part_rd_record_i),
-      .part_rd_last_i                    (part_rd_last_i),
-      .part_wr_valid_o                   (part_wr_valid_o),
-      .part_wr_ready_i                   (part_wr_ready_i),
-      .part_wr_record_o                  (part_wr_record_o),
+      .part_cfg_base0_i                  (part_cfg_base0_i),
+      .part_cfg_base1_i                  (part_cfg_base1_i),
+      .part_seed_valid_i                 (part_seed_valid_i),
+      .part_seed_ready_o                 (part_seed_ready_o),
+      .part_seed_buf_i                   (part_seed_buf_i),
+      .part_seed_count_i                 (part_seed_count_i),
+      .part_hps_cur_buf_o                (part_hps_cur_buf_o),
+      .part_hps_cur_count_o              (part_hps_cur_count_o),
+      .part_hps_ticks_o                  (part_hps_ticks_o),
+      .part_hps_ticks_dropped_o          (part_hps_ticks_dropped_o),
+      .part_hps_ticks_unseeded_o         (part_hps_ticks_unseeded_o),
+      .part_hps_seeds_o                  (part_hps_seeds_o),
+      .part_hps_seeds_refused_o          (part_hps_seeds_refused_o),
+      .part_hps_rd_bursts_o              (part_hps_rd_bursts_o),
+      .part_hps_wr_bursts_o              (part_hps_wr_bursts_o),
+      .part_hps_records_read_o           (part_hps_records_read_o),
+      .part_hps_records_written_o        (part_hps_records_written_o),
       .part_tbl_ld_valid_i               (part_tbl_ld_valid_i),
       .part_tbl_ld_ready_o               (part_tbl_ld_ready_o),
       .part_tbl_ld_sel_i                 (part_tbl_ld_sel_i),
@@ -3041,6 +3078,8 @@ module zhao_console_board
       .terr_hps_c1_wait_cycles_o         (terr_hps_c1_wait_cycles_o),
       .terr_hps_c2_bursts_o              (terr_hps_c2_bursts_o),
       .terr_hps_c2_wait_cycles_o         (terr_hps_c2_wait_cycles_o),
+      .terr_hps_c3_bursts_o              (terr_hps_c3_bursts_o),
+      .terr_hps_c3_wait_cycles_o         (terr_hps_c3_wait_cycles_o),
       .cmd_exec_uploads_o                (cmd_exec_uploads_o),
       .cmd_exec_upload_overflow_o        (cmd_exec_upload_overflow_o),
       .upl_cfg_region_base_i             (upl_cfg_region_base_i),

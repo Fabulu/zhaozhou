@@ -2174,6 +2174,61 @@ add_test(NAME field_v3_earth_directed COMMAND test_field_v3_earth_directed --poi
          ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
 set_tests_properties(field_v3_earth_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
 
+# THE GROUP CAP, PROVED EXACT (gz/pfs, 2026-09-19). The same real Earth programs
+# -- DIST2-heavy, which is the distance service a cap narrows -- on the same
+# eight-context engine, with every long-op group capped at ONE point. At that
+# cap zhao_field_v3_svcpath builds the distance service one lane wide (two
+# roots at DIST_BANKS=2 instead of eight), and the dispatcher cannot put a real
+# point in a lane it no longer computes. The gate is the test's own: every value
+# against the oracle. The clocks it prints are SLOWER by design at eight
+# contexts; the console's front holds one point in flight and loses nothing.
+add_executable(test_field_v3_earth_group1 differential/field_v3_earth_directed.cpp)
+target_link_libraries(test_field_v3_earth_group1 PRIVATE zhao_harness zhao_zref)
+verilate(test_field_v3_earth_group1
+  PREFIX Vzhao_field_v3_engine
+  TOP_MODULE zhao_field_v3_engine
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+  VERILATOR_ARGS -GGROUP_PTS=1)
+add_test(NAME field_v3_earth_group1 COMMAND test_field_v3_earth_group1 --points 256
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/crater_ring.zprog
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/impact_wave.zprog
+         ${CMAKE_SOURCE_DIR}/compiler/tests/generated/wave_pool.zprog)
+set_tests_properties(field_v3_earth_group1 PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_field_v3_len_lanes1
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall -GLANES=1
+                 --top-module zhao_field_v3_len
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv)
+set_tests_properties(lint_zhao_field_v3_len_lanes1 PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # THE SAME PROGRAMS ON A WIDER MACHINE. Little's law, not a guess: a point
 # costs ~250 clocks of latency and only eight are ever in flight, so the engine
 # idles waiting rather than running out of arithmetic. This target scales the
@@ -6088,6 +6143,34 @@ verilate(test_part_state_directed
 add_test(NAME part_state_directed COMMAND test_part_state_directed)
 set_tests_properties(part_state_directed PROPERTIES LABELS "fast;particles")
 
+# PART.STATE's HPS DDR face (entry I1, closed 2026-09-19 on gz/pfs): the REAL
+# streamer + PART.STATE + N-client arbiter + bridge, with the C++ playing
+# UPDATE, SPAWN and the HPS. A record crosses DDR twice and is compared bit for
+# bit each time; an empty generation finishes its tick; every counter fires.
+add_executable(test_part_hps_directed particles/part_hps_directed.cpp)
+target_link_libraries(test_part_hps_directed PRIVATE zhao_harness)
+verilate(test_part_hps_directed
+  PREFIX Vtb_part_hps_chain
+  TOP_MODULE tb_part_hps_chain
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_hps.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/particles/tb_part_hps_chain.sv)
+add_test(NAME part_hps_directed COMMAND test_part_hps_directed)
+set_tests_properties(part_hps_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_hps
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_hps
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_hps.sv)
+set_tests_properties(lint_zhao_part_hps PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # ...and the POSITIVE CONTROL for its ordering check.
 #
 # zhao_part_state.sv carries NO assertion for "survivors compacted first,

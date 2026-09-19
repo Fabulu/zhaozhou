@@ -2548,6 +2548,9 @@ targets:
       - fpga/rtl/common/zhao_shell_top_v2.sv
       - fpga/rtl/particles/zhao_part_record.sv
       - fpga/rtl/particles/zhao_part_state.sv
+      # PART.STATE's HPS DDR face, 2026-09-19 (gz/pfs, core entry I1): the
+      # ping-pong streamer between PART.STATE and client 3 of u_terr_hps_arb.
+      - fpga/rtl/particles/zhao_part_hps.sv
       - fpga/rtl/particles/zhao_part_update.sv
       - fpga/rtl/particles/zhao_part_collide.sv
       # PART.TERRAIN_TAP, 2026-09-19 (core entry I6, owner ruling R1): the terrain
