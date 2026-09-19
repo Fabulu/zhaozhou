@@ -1,0 +1,972 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q003: post-echo-vs-zref
+## Brief
+POST.ECHO was just built: a contract first, then a C++ reference model (`zref::post::echo` in
+`zref_post.hpp`), then the RTL `zhao_post_echo.sv`, checked by a directed test that compares the
+RTL against the reference. The contract is the law. You are shown the contract, the RTL, the
+reference header and the directed test.
+
+This is a DIFFERENTIAL review. The question is not "is the RTL self-consistent", but "do the three
+agree, and does the test actually prove it".
+
+## Questions
+1. Does the RTL implement the CONTRACT exactly? List every place where the RTL and the contract
+   disagree (format, rounding, bit widths, ordering, edge behaviour, what happens at frame start and end).
+2. Does the reference model implement the contract exactly? Same list. A place where the RTL and the
+   reference AGREE with each other but DIFFER from the contract is the most important finding: the
+   test cannot catch it.
+3. Does the directed test compare the RTL against the reference over inputs that can reach every
+   branch? Name any branch or edge case (e.g. saturation, the last pixel, a stall mid-frame, an
+   arm/disarm between frames) that no test input reaches.
+4. Is any counter or guard in the RTL wired so that it could never fire (both operands of a
+   comparison loaded by the same enable, or a condition that cannot arise)?
+
+# INPUT design/contracts/POST.ECHO.md:1-177
+```
+    1| # Contract — POST.ECHO (Frame echo)
+    2| 
+    3| > Ledger: `design/blocks.yml` · owner ZH-071 · phase 11 · maturity RTL_VERIFIED
+    4| 
+    5| > **REVIVED 2026-09-19 by owner ruling R7** (`reports/OWNER-RULINGS-20260919-EVENING.md`):
+    6| > *"INPUT.SNAC, GEOM.WARP, POST.ECHO — Build all three (owner, explicit). They
+    7| > stay mandatory; the 2026-09-18 revocation stands."* The 2026-08-31 §4 deferral
+    8| > this file used to carry, and its "deliberately unwritten" sections, are
+    9| > withdrawn by that ruling. Every section below is written for the block that
+   10| > now exists: `fpga/rtl/compositor/zhao_post_echo.sv`.
+   11| 
+   12| ## Purpose and exclusions
+   13| 
+   14| Echo the composited frame — **post-ink, pre-HUD** — into a capture buffer in
+   15| local VRAM, once per post pass, so the world as the player saw it, without the
+   16| interface, is available after the frame is gone (a pause/photo backdrop, a
+   17| capture for the host, a debug readback).
+   18| 
+   19| Exclusions: no colour arithmetic (the pixel is POST.COMPOSITE's stage-9 value,
+   20| bit for bit); no HUD; no scaling; no second read of the framebuffer (the echo
+   21| is fed from the compositor's tap, never from memory); no influence on the
+   22| displayed frame, ever.
+   23| 
+   24| ## Clock and reset semantics
+   25| 
+   26| Single `gpu_clk`, synchronous active-low `rst_n`. Reset abandons a pass in
+   27| flight; the capture buffer is then simply incomplete, which the pass counters
+   28| say. Nothing durable lives in the block.
+   29| 
+   30| ## Input and output packet layouts
+   31| 
+   32| **In — the tap.** One beat per composited pixel ACCEPTED downstream:
+   33| 
+   34| | field | width | meaning |
+   35| |---|---|---|
+   36| | `tap_valid_i` | 1 | `echo_valid_o && o_valid_o && o_ready_i` of POST.COMPOSITE |
+   37| | `tap_rgb_i` | 16 | `echo_rgb_o`: RGB565, post-ink, pre-HUD |
+   38| | `tap_x_i`, `tap_y_i` | 9, 8 | the pixel's VIEW-local coordinate (`o_x_o`, `o_y_o`) |
+   39| 
+   40| The qualification by the output handshake is load-bearing: POST.COMPOSITE holds
+   41| `echo_valid_o` high through a downstream stall, so the raw tap would repeat a
+   42| stalled pixel once per stall cycle. The accepted beat happens exactly once.
+   43| 
+   44| **Pass control:** `pass_start_i` (the compositor's own `frame_start_i` pulse),
+   45| `view_i`, `w_i`, `h_i` — sampled at the pulse, held for the pass.
+   46| 
+   47| **Out — the capture.** 32-byte bursts through MEM.GUARD as client ENGINE0 into
+   48| the capture window (`zhao_pkg` `ZHAO_POST_ECHO_BASE` = `0x05C0_0000`, span
+   49| `0x0003_C000`, `spec/memory_rules.md` 5g). The capture is a row-major RGB565
+   50| image of width `w` and height `views × h`, **views stacked vertically**:
+   51| 
+   52|     addr(view, x, y) = ZHAO_POST_ECHO_BASE + ((view · h + y) · w + x) · 2
+   53| 
+   54| Stacking keeps the stride equal to the view width and needs no multiplier: the
+   55| second view is simply `h` rows further down. Duo (2 × 256 × 192) is 196,608
+   56| bytes; Z60 is 184,320; both inside the span.
+   57| 
+   58| ## Backpressure rules
+   59| 
+   60| **The echo NEVER backpressures the compositor.** It has no ready. The contract
+   61| this block replaces already said the one thing that matters: *"drop the echo
+   62| rather than stall or fault the frame. An echo is observational; it must never
+   63| be able to affect what is displayed."*
+   64| 
+   65| Drops are **whole 16-pixel chunks**, decided at the chunk's first pixel: a chunk
+   66| is admitted only if the skid queue has room for all sixteen of its pixels, and
+   67| is otherwise dropped in full. Chunks are row-aligned (`w` is a multiple of 16),
+   68| so every admitted chunk is exactly one RASTER.FBWRITE row burst and a dropped
+   69| chunk leaves a clean 32-byte hole — never a torn burst, never a pixel written
+   70| to a neighbour's address. A pass with any dropped chunk is **TORN**.
+   71| 
+   72| ## Memory ownership
+   73| 
+   74| Owns the capture window, WRITE-only, as client ENGINE0 under the render lease
+   75| (`fb_writer == 1`); the guard refuses a capture write from any other client or
+   76| without the lease, and refuses any read of the window
+   77| (`tests/formal/mem_guard_no_escape.sby`: `a1_echo_wo`, `a1_echo_owner`,
+   78| `a1_echo_lease`, `a1_echo_not_fb`). ENGINE0 is shared with the post source
+   79| read and the post write-back through one `zhao_mem_share_n` in
+   80| `zhao_post_lease`; the echo is one of its three logical requesters.
+   81| 
+   82| ## Q formats and rounding
+   83| 
+   84| None. RGB565 in, RGB565 out, unchanged.
+   85| 
+   86| ## Latency (fixed or variable)
+   87| 
+   88| Variable: a pixel waits in the skid until its chunk's burst is accepted. A pass
+   89| is COMPLETE when every pixel of the pass has been written and every issued word
+   90| has RETIRED at the arbiter — the same "accepted is not retired" law as
+   91| RASTER.FBWRITE, because it is RASTER.FBWRITE doing the writing.
+   92| 
+   93| ## Target throughput
+   94| 
+   95| One tap pixel per clock accepted into the skid at peak. SUSTAINED, the echo
+   96| keeps up with RASTER.FBWRITE's rate -- 16 pixels per ~22 clocks on a fast
+   97| memory -- which is the rate the compositor's own write-back (the same engine)
+   98| paces the tap to; the 256-entry skid absorbs sixteen chunks of difference in
+   99| when the two writers win ENGINE0. A tap that outruns that for longer is
+  100| starved, and drops whole chunks. The echo adds 2 bytes per composited pixel of ENGINE0 write traffic
+  101| (184,320 B per Z60 frame); it shares ENGINE0 round-robin with the post source
+  102| read and write-back, so its cost is bandwidth and time, never content.
+  103| 
+  104| ## Overflow and malformed-input behaviour
+  105| 
+  106| | condition | behaviour |
+  107| |---|---|
+  108| | skid has no room for a whole chunk at its first pixel | drop the chunk (16 px), count, mark the pass TORN |
+  109| | `w` not a multiple of 16, or `w`/`h` zero | refuse the pass at its start: every pixel dropped, pass TORN |
+  110| | `views·h·w·2` > span | the burst that leaves the window is REFUSED by MEM.GUARD (the region check lives there, once) -> `fault_o`, pass TORN. `zref::post::echo::geometry_ok` states the same bound as the law. |
+  111| | the guard refuses a capture burst | `fault_o` (sticky until reset -- it is RASTER.FBWRITE's own fatal latch), every later pass TORN |
+  112| | a tap pixel arrives with no pass open | dropped and counted |
+  113| 
+  114| ## Counters and traces
+  115| 
+  116| `echo_pixels_written`, `echo_pixels_dropped`, `echo_passes_complete`,
+  117| `echo_passes_torn`, `fault_o`. A complete pass also pulses `pass_complete_o`,
+  118| which is what a consumer of the capture keys on: an incomplete capture is never
+  119| reported as a capture.
+  120| 
+  121| ## Scalar reference function
+  122| 
+  123| `zref::post::echo` in `reference/include/zref/zref_post.hpp`:
+  124| `echo::geometry_ok(w, h, views)`, `echo::capture_addr(view, x, y, w, h)`,
+  125| `echo::chunk_of(x)`. It owns the address law, the chunk law and the geometry
+  126| refusal; the directed test differences the RTL's every written word against it.
+  127| 
+  128| ## Directed tests
+  129| 
+  130| `tests/compositor/post_echo_directed.cpp` (RTL against `zref::post::echo`):
+  131| 
+  132| * a Z60 pass with the tap paced as the composition paces it (16 on, 6 off --
+  133|   one FBWRITE row burst) on a fast memory: every one of 92,160 pixels lands at
+  134|   `capture_addr`, byte-identical; `passes_complete == 1`, `dropped == 0`;
+  135| * Duo: two passes, views stacked — view 1 lands `h` rows below view 0, and no
+  136|   word of either view is written outside its own rows;
+  137| * a memory that stalls hard: chunks drop WHOLE — every written word is at its
+  138|   law address with its tap value, the dropped count is exactly 16 × the chunks
+  139|   absent from memory, the pass is TORN and not reported complete;
+  140| * the tap is qualified: a stalled compositor beat (tap held, not accepted) is
+  141|   written once -- a property of the COMPOSITION (`zhao_post_lease` ANDs the
+  142|   tap with the output handshake), proven in the console smoke, where the
+  143|   capture must equal the framebuffer word for word;
+  144| * a width that is not a multiple of 16 is refused;
+  145| * a guard refusal latches `fault_o` and tears the pass;
+  146| * the echo never has a ready: the test drives the tap at one pixel per clock
+  147|   regardless and asserts nothing upstream could have waited.
+  148| 
+  149| ## Randomized differential tests
+  150| 
+  151| The directed bench's third case is itself randomised (PCG-driven memory stalls
+  152| over two seeds). A separate random bench is not written: the block has no data
+  153| path of its own beyond the address law, which the directed cases exhaust.
+  154| 
+  155| ## Formal properties
+  156| 
+  157| The window is proven by `mem_guard_no_escape` (above). No block-level formal
+  158| lane.
+  159| 
+  160| ## Synthesis / resource ceiling
+  161| 
+  162| `zhao_raster_fbwrite` (one more instance — the same row-burst engine the
+  163| renderer uses, not a second design) + a 256 × 34-bit skid written to infer one
+  164| M10K + chunk/pass counters. Estimate ~400 ALM, 0–1 DSP (fbwrite's 12×16 row
+  165| multiply), 1 M10K. **Unmeasured; no fit has been run.**
+  166| 
+  167| ## Integration capture cases
+  168| 
+  169| `tests/prod/tb_zhao_console_core_smoke.sv`: after the smoke's render frame
+  170| drains, the post pass runs and the echo captures it; the bench compares the
+  171| capture window against the framebuffer word for word (with no HUD and effects
+  172| off the two must be identical) and requires `echo_passes_complete == 1`.
+  173| 
+  174| ## Notes
+  175| 
+  176| cut_order 1 — the first thing to go if synthesis fails (§26). Cutting it costs
+  177| exactly this file and one ENGINE0 requester; POST.COMPOSITE's tap stays.
+```
+
+# INPUT fpga/rtl/compositor/zhao_post_echo.sv:1-314
+```
+    1| // zhao_post_echo.sv -- POST.ECHO: the composited frame, post-ink and pre-HUD,
+    2| // echoed into a capture buffer once per post pass.
+    3| //
+    4| // Contract: design/contracts/POST.ECHO.md (written 2026-09-19 with this file).
+    5| // Law:      zref::post::echo (reference/include/zref/zref_post.hpp).
+    6| // ENFORCED-BY: tests/compositor/post_echo_directed.cpp
+    7| //
+    8| // ---------------------------------------------------------------------------
+    9| // WHY IT EXISTS NOW
+   10| // ---------------------------------------------------------------------------
+   11| // Owner ruling R7, 2026-09-19: POST.ECHO is mandatory and is BUILT. The block
+   12| // that used to be "first on the cut list" with every behavioural section
+   13| // "deliberately unwritten" now has a contract, a reference and this. What the
+   14| // old contract DID say survives unchanged, because it was right: the echo sits
+   15| // "after step 8 and before HUD", it is "observational", and it must "drop the
+   16| // echo rather than stall or fault the frame".
+   17| //
+   18| // ---------------------------------------------------------------------------
+   19| // WHAT IT IS MADE OF -- one existing engine and one queue
+   20| // ---------------------------------------------------------------------------
+   21| //   tap (accepted composited beat) --> chunk admission --> skid (M10K)
+   22| //        --> zhao_raster_fbwrite (capture base, stride w*2) --> MEM.GUARD
+   23| //
+   24| // The writer is RASTER.FBWRITE, instantiated again rather than rewritten: a
+   25| // raster-ordered, contiguous, 16-pixel-row stream into bursts with retirement
+   26| // accounting is EXACTLY what that block is, and its contiguity check is the
+   27| // thing that proves an admitted chunk landed where the address law says.
+   28| //
+   29| // ---------------------------------------------------------------------------
+   30| // THE THREE LAWS THIS FILE OWNS (and zref::post::echo states)
+   31| // ---------------------------------------------------------------------------
+   32| // 1. WHERE: addr(view, x, y) = BASE + ((view*h + y)*w + x)*2. Views are
+   33| //    STACKED, so view 1 is `fbwrite.px_y = y + h` and the stride stays w*2 --
+   34| //    no multiplier here at all.
+   35| // 2. NEVER STALL, DROP WHOLE CHUNKS. There is no ready on the tap. At a chunk's
+   36| //    first pixel (x mod 16 == 0) the chunk is admitted only if the skid has
+   37| //    room for all sixteen; otherwise all sixteen are dropped and the pass is
+   38| //    TORN. Dropping single pixels would break FBWRITE's contiguity check and
+   39| //    latch a fatal error; dropping chunks leaves 32-byte holes and nothing else.
+   40| // 3. A CAPTURE IS WHOLE OR IT IS NOT A CAPTURE. `pass_complete_o` pulses, and
+   41| //    `passes_complete_o` counts, only when every pixel of the pass was admitted
+   42| //    AND every issued word has RETIRED at the arbiter (FBWRITE's `drained_o`).
+   43| //    Anything less is counted in `passes_torn_o` and never reported complete.
+   44| //
+   45| // The tap MUST be qualified by the compositor's output handshake (the core
+   46| // does it): POST.COMPOSITE holds `echo_valid_o` through a downstream stall, so
+   47| // an unqualified tap would repeat a stalled pixel once per stall cycle.
+   48| //
+   49| // ---------------------------------------------------------------------------
+   50| // COST (estimated, UNMEASURED -- no fit has been run)
+   51| // ---------------------------------------------------------------------------
+   52| // One more zhao_raster_fbwrite (~300 ALM, its 12x16 row multiply may take a
+   53| // DSP), a 256 x (16 + XW + YW + 1) = 256 x 34-bit skid with registered read
+   54| // written to infer ONE M10K (the 256x40 shape) rather than ~8,700 flops, and
+   55| // the pass counters. ~400 ALM, 0-1 DSP, 1 M10K.
+   56| //
+   57| // WHY 256 AND NOT 32: the depth is free up to one M10K, and it buys slack. A
+   58| // RASTER.FBWRITE sustains 16 pixels per ~22 clocks (16 collect + request +
+   59| // verdict + four data beats) on a fast memory -- the SAME engine that paces the
+   60| // compositor's own write-back, so in the composition the tap arrives at that
+   61| // rate and the echo keeps up. What the skid absorbs is the difference in when
+   62| // the two writers win ENGINE0's round-robin: sixteen chunks of it. A tap that
+   63| // outruns a FBWRITE for longer than that is starved by definition and drops
+   64| // whole chunks, which is the contract's behaviour, not a fault.
+   65| `default_nettype none
+   66| 
+   67| module zhao_post_echo
+   68|   import zhao_pkg::*;
+   69| #(
+   70|     parameter int unsigned XW   = 9,     // view-local x (<= 511)
+   71|     parameter int unsigned YW   = 8,     // view-local y (<= 255)
+   72|     parameter int unsigned SKID = 256    // power of two, >= 32 (two chunks)
+   73| ) (
+   74|     input  var logic clk,
+   75|     input  var logic rst_n,
+   76| 
+   77|     // ---- the pass: the compositor's own frame_start and geometry ------------
+   78|     input  var logic          pass_start_i,
+   79|     input  var logic          view_i,
+   80|     input  var logic [XW-1:0] w_i,
+   81|     input  var logic [YW-1:0] h_i,
+   82| 
+   83|     // ---- the tap, one beat per ACCEPTED composited pixel --------------------
+   84|     input  var logic          tap_valid_i,
+   85|     input  var logic [15:0]   tap_rgb_i,
+   86|     input  var logic [XW-1:0] tap_x_i,
+   87|     input  var logic [YW-1:0] tap_y_i,
+   88| 
+   89|     // ---- MEM.GUARD write master (client ENGINE0), exactly as FBWRITE drives it
+   90|     output var zhao_guard_req_t guard_req_o,
+   91|     input  var zhao_guard_rsp_t guard_rsp_i,
+   92|     output var logic [63:0]     guard_wdata_o,
+   93|     output var logic            guard_wvalid_o,
+   94|     input  var logic            guard_wready_i,
+   95|     output var logic            guard_wlast_o,
+   96|     input  var logic [7:0]      retire_words_i,   // THIS requester's retired words
+   97| 
+   98|     // ---- evidence -----------------------------------------------------------
+   99|     output var logic          busy_o,              // a pass is open or draining
+  100|     output var logic          pass_complete_o,     // one pulse: a WHOLE capture landed
+  101|     output var logic [31:0]   passes_complete_o,
+  102|     output var logic [31:0]   passes_torn_o,
+  103|     output var logic [31:0]   pixels_written_o,    // pixels handed to the writer
+  104|     output var logic [31:0]   pixels_dropped_o,
+  105|     output var logic          fault_o              // sticky: a refused burst or a
+  106|                                                    // broken stream (FBWRITE's latch)
+  107| );
+  108| 
+  109|   localparam int unsigned QW = $clog2(SKID);
+  110|   localparam int unsigned CW = YW + 1;             // capture row: v*h + y
+  111|   localparam int unsigned EW = 16 + XW + CW;       // one skid entry
+  112| 
+  113|   initial begin
+  114|     if ((SKID < 32) || ((SKID & (SKID - 1)) != 0))
+  115|       $fatal(1, "zhao_post_echo: SKID must be a power of two >= 32 (got %0d)", SKID);
+  116|     if ((XW > 11) || (CW > 11))
+  117|       $fatal(1, "zhao_post_echo: coordinates wider than FBWRITE's signed 12 bits");
+  118|   end
+  119| 
+  120|   // ==========================================================================
+  121|   // PASS STATE
+  122|   // ==========================================================================
+  123|   logic          open_q;        // tap pixels of this pass are still arriving
+  124|   logic          drain_q;       // the last pixel arrived; waiting for retirement
+  125|   logic          torn_q;        // this pass dropped a chunk or was refused
+  126|   logic          view_q;
+  127|   logic [XW-1:0] w_q;
+  128|   logic [YW-1:0] h_q;
+  129|   logic          keep_q;        // the current chunk was admitted
+  130| 
+  131|   // ==========================================================================
+  132|   // THE SKID -- simple dual port, registered read, one M10K
+  133|   // ==========================================================================
+  134|   logic [EW-1:0] sk_mem [0:SKID-1];
+  135|   logic [QW-1:0] sk_wp_q, sk_rp_q;
+  136|   logic [QW:0]   sk_count_q;
+  137|   logic [EW-1:0] head_q;
+  138|   logic          head_v_q;
+  139| 
+  140|   logic          fbw_ready;
+  141|   logic          push_c, rd_en_c, head_take_c;
+  142|   logic [EW-1:0] push_data_c;
+  143| 
+  144|   assign head_take_c = head_v_q && fbw_ready;
+  145|   assign rd_en_c     = (sk_count_q != '0) && (!head_v_q || head_take_c);
+  146| 
+  147|   always_ff @(posedge clk) begin
+  148|     if (push_c)  sk_mem[sk_wp_q] <= push_data_c;
+  149|     if (rd_en_c) head_q          <= sk_mem[sk_rp_q];
+  150|   end
+  151| 
+  152|   // ==========================================================================
+  153|   // CHUNK ADMISSION -- decided at the chunk's first pixel, held for sixteen
+  154|   // ==========================================================================
+  155|   logic          chunk_open_c, room_c, admit_c;
+  156|   logic [CW-1:0] crow_c;
+  157|   assign chunk_open_c = (tap_x_i[3:0] == 4'd0);
+  158|   // Room for all sixteen pixels NOW, assuming the writer takes none of them
+  159|   // while they arrive: the conservative reading, and the one that makes a
+  160|   // partial chunk impossible rather than unlikely.
+  161|   assign room_c  = ((QW+1)'(SKID) - sk_count_q) >= (QW+1)'(16);
+  162|   assign admit_c = chunk_open_c ? room_c : keep_q;
+  163|   assign crow_c  = view_q ? (CW'(tap_y_i) + CW'(h_q)) : CW'(tap_y_i);
+  164| 
+  165|   assign push_c      = tap_valid_i && open_q && admit_c;
+  166|   assign push_data_c = {tap_rgb_i, tap_x_i, crow_c};
+  167| 
+  168|   logic last_px_c;
+  169|   assign last_px_c = (tap_x_i == (w_q - XW'(1))) && (tap_y_i == (h_q - YW'(1)));
+  170| 
+  171|   // ==========================================================================
+  172|   // THE WRITER -- RASTER.FBWRITE, pointed at the capture window
+  173|   // ==========================================================================
+  174|   logic [15:0]        px_rgb;
+  175|   logic [XW-1:0]      px_x;
+  176|   logic [CW-1:0]      px_row;
+  177|   assign {px_rgb, px_x, px_row} = head_q;
+  178| 
+  179|   logic signed [11:0] fbw_x, fbw_y;
+  180|   assign fbw_x = 12'($signed({1'b0, px_x}));
+  181|   assign fbw_y = 12'($signed({1'b0, px_row}));
+  182| 
+  183|   // A row ends every sixteen pixels by construction (w is a multiple of 16), so
+  184|   // FBWRITE flushes on a full row buffer. `px_last_i` is still driven with the
+  185|   // true row end, which is the same event, so a short row could never linger.
+  186|   logic fbw_last;
+  187|   assign fbw_last = (px_x == (w_q - XW'(1)));
+  188| 
+  189|   logic [31:0] fbw_pixels_unused, fbw_bursts_unused, fbw_stall_unused;
+  190|   logic [31:0] fbw_issued_unused, fbw_retired_unused;
+  191|   logic        fbw_stream_err, fbw_fatal, fbw_drained, fbw_busy;
+  192| 
+  193|   zhao_raster_fbwrite u_capture_writer (
+  194|     .clk(clk), .rst_n(rst_n),
+  195|     .fb_base_i  (ZHAO_VRAM_ADDR_BITS'(ZHAO_POST_ECHO_BASE)),
+  196|     .fb_stride_i(16'({w_q, 1'b0})),
+  197|     .px_valid_i (head_v_q), .px_ready_o(fbw_ready),
+  198|     .px_rgb565_i(px_rgb), .px_x_i(fbw_x), .px_y_i(fbw_y), .px_last_i(fbw_last),
+  199|     // The writer's per-frame counter window is this block's pass.
+  200|     .frame_end_i(pass_start_i),
+  201|     .retire_words_i(retire_words_i),
+  202|     .guard_req_o(guard_req_o), .guard_rsp_i(guard_rsp_i),
+  203|     .guard_wdata_o(guard_wdata_o), .guard_wvalid_o(guard_wvalid_o),
+  204|     .guard_wready_i(guard_wready_i), .guard_wlast_o(guard_wlast_o),
+  205|     .pixels_written_o(fbw_pixels_unused),
+  206|     .bursts_issued_o (fbw_bursts_unused),
+  207|     .stall_clocks_o  (fbw_stall_unused),
+  208|     .stream_error_o  (fbw_stream_err),
+  209|     .issued_words_o  (fbw_issued_unused),
+  210|     .retired_words_o (fbw_retired_unused),
+  211|     .drained_o       (fbw_drained),
+  212|     .fatal_error_o   (fbw_fatal),
+  213|     .busy_o          (fbw_busy)
+  214|   );
+  215| 
+  216|   // The window counters are the writer's own business; this block counts its
+  217|   // own events. Sunk by a statement rather than a waiver.
+  218|   logic unused_c;
+  219|   assign unused_c = ^{fbw_pixels_unused, fbw_bursts_unused, fbw_stall_unused,
+  220|                       fbw_issued_unused, fbw_retired_unused, fbw_busy};
+  221| 
+  222|   assign fault_o = fbw_fatal || fbw_stream_err;
+  223|   assign busy_o  = open_q || drain_q;
+  224| 
+  225|   // ==========================================================================
+  226|   // THE ONE SEQUENTIAL BLOCK
+  227|   // ==========================================================================
+  228|   logic bad_geom_c;
+  229|   assign bad_geom_c = (w_i[3:0] != 4'd0) || (w_i == '0) || (h_i == '0);
+  230| 
+  231|   logic settle_c;
+  232|   assign settle_c = drain_q && (sk_count_q == '0) && !head_v_q && fbw_drained;
+  233| 
+  234|   // Torn events: a pass settling torn, a pass abandoned by a new start, and a
+  235|   // new pass refused for its geometry. At most two coincide.
+  236|   logic [1:0] torn_inc_c;
+  237|   assign torn_inc_c = 2'((settle_c && (torn_q || fault_o)) ? 1 : 0)
+  238|                     + 2'((pass_start_i && (open_q || (drain_q && !settle_c))) ? 1 : 0)
+  239|                     + 2'((pass_start_i && bad_geom_c) ? 1 : 0);
+  240| 
+  241|   always_ff @(posedge clk or negedge rst_n) begin
+  242|     if (!rst_n) begin
+  243|       open_q            <= 1'b0;
+  244|       drain_q           <= 1'b0;
+  245|       torn_q            <= 1'b0;
+  246|       view_q            <= 1'b0;
+  247|       w_q               <= '0;
+  248|       h_q               <= '0;
+  249|       keep_q            <= 1'b0;
+  250|       sk_wp_q           <= '0;
+  251|       sk_rp_q           <= '0;
+  252|       sk_count_q        <= '0;
+  253|       head_v_q          <= 1'b0;
+  254|       pass_complete_o   <= 1'b0;
+  255|       passes_complete_o <= '0;
+  256|       passes_torn_o     <= '0;
+  257|       pixels_written_o  <= '0;
+  258|       pixels_dropped_o  <= '0;
+  259|     end else begin
+  260|       pass_complete_o <= 1'b0;
+  261| 
+  262|       // ---- the skid, one occupancy assignment ------------------------------
+  263|       sk_count_q <= sk_count_q + (push_c  ? (QW+1)'(1) : '0)
+  264|                                - (rd_en_c ? (QW+1)'(1) : '0);
+  265|       if (push_c)  sk_wp_q <= sk_wp_q + QW'(1);
+  266|       if (rd_en_c) sk_rp_q <= sk_rp_q + QW'(1);
+  267|       if (rd_en_c)          head_v_q <= 1'b1;
+  268|       else if (head_take_c) head_v_q <= 1'b0;
+  269|       if (head_take_c) pixels_written_o <= pixels_written_o + 32'd1;
+  270| 
+  271|       // ---- tap bookkeeping --------------------------------------------------
+  272|       if (tap_valid_i) begin
+  273|         if (!open_q || !admit_c) pixels_dropped_o <= pixels_dropped_o + 32'd1;
+  274|         if (open_q) begin
+  275|           if (chunk_open_c) keep_q <= room_c;
+  276|           if (!admit_c)     torn_q <= 1'b1;
+  277|           if (last_px_c) begin
+  278|             open_q  <= 1'b0;
+  279|             drain_q <= 1'b1;
+  280|           end
+  281|         end
+  282|       end
+  283| 
+  284|       // ---- a pass settles: whole, or torn -----------------------------------
+  285|       if (settle_c) begin
+  286|         drain_q <= 1'b0;
+  287|         if (!(torn_q || fault_o)) begin
+  288|           passes_complete_o <= passes_complete_o + 32'd1;
+  289|           pass_complete_o   <= 1'b1;
+  290|         end
+  291|       end
+  292|       // Every torn event this cycle, summed ONCE: two nonblocking increments of
+  293|       // one counter keep only the last, which is how a counter under-reports.
+  294|       if (torn_inc_c != 2'd0) passes_torn_o <= passes_torn_o + 32'(torn_inc_c);
+  295| 
+  296|       // ---- a new pass. One that arrives over an unsettled pass tears it: the
+  297|       //      previous capture cannot be called whole if its tail never came. --
+  298|       if (pass_start_i) begin
+  299|         view_q  <= view_i;
+  300|         w_q     <= w_i;
+  301|         h_q     <= h_i;
+  302|         keep_q  <= 1'b0;
+  303|         drain_q <= 1'b0;
+  304|         // A refused geometry opens no pass: every pixel of it is a drop, and
+  305|         // the refusal is a torn pass so it cannot read as "nothing happened".
+  306|         open_q  <= !bad_geom_c;
+  307|         torn_q  <= bad_geom_c;
+  308|       end
+  309|     end
+  310|   end
+  311| 
+  312| endmodule : zhao_post_echo
+  313| 
+  314| `default_nettype wire
+```
+
+# INPUT reference/include/zref/zref_post.hpp:1-165
+```
+    1| // zref_post.hpp — the post-effect gather law (ruling R5).
+    2| //
+    3| // ---------------------------------------------------------------------------
+    4| // WHY THIS FILE EXISTS AT ALL
+    5| // ---------------------------------------------------------------------------
+    6| // POST.GATHER.md cited `zref::PostGather` as its scalar reference and no such
+    7| // symbol had ever been written. The ledger's V17 caught it the moment the
+    8| // block gained real evidence to check against — "a symbol nobody defined is a
+    9| // phantom citation".
+   10| //
+   11| // The right answer to a phantom citation is to write the symbol, not to drop
+   12| // the claim, so this is the law the citation was always pointing at.
+   13| //
+   14| // ---------------------------------------------------------------------------
+   15| // WHAT THE LAW IS
+   16| // ---------------------------------------------------------------------------
+   17| // Accumulate in u16 per channel, saturating, and pack to RGB565 EXACTLY ONCE,
+   18| // at tile flush. Accumulating in the packed format would lose the headroom
+   19| // that makes bloom read as light rather than as clipping.
+   20| //
+   21| // Displacement accumulates as signed 8.8 in a wide saturating lane, rounds
+   22| // ONCE to integer pixels, and clamps to X in [-8, +8] and Y in [-4, +4].
+   23| //
+   24| // THOSE CLAMPS ARE NOT THIS BLOCK'S OWN BOUND. They are what POST.COMPOSITE's
+   25| // nine-line ring is built against, and nothing in the compositor can detect a
+   26| // gather that exceeds them.
+   27| #pragma once
+   28| 
+   29| #include <cstdint>
+   30| 
+   31| namespace zref {
+   32| namespace post {
+   33| 
+   34| inline constexpr int kDispMaxX = 8;
+   35| inline constexpr int kDispMaxY = 4;
+   36| 
+   37| // A saturating u16 accumulate of one u8 contribution.
+   38| inline uint16_t glow_accumulate(uint16_t acc, uint8_t add) {
+   39|   const uint32_t s = static_cast<uint32_t>(acc) + add;
+   40|   return static_cast<uint16_t>(s > 0xFFFFu ? 0xFFFFu : s);
+   41| }
+   42| 
+   43| // The ONE rounding into RGB565, at flush. A channel at or above 255 is full.
+   44| inline uint16_t glow_pack565(uint16_t r, uint16_t g, uint16_t b) {
+   45|   const uint16_t r5 = (r > 255u) ? 31u : static_cast<uint16_t>(r >> 3);
+   46|   const uint16_t g6 = (g > 255u) ? 63u : static_cast<uint16_t>(g >> 2);
+   47|   const uint16_t b5 = (b > 255u) ? 31u : static_cast<uint16_t>(b >> 3);
+   48|   return static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
+   49| }
+   50| 
+   51| // signed 8.8 -> integer pixels, round-half-up, then clamp. One rounding.
+   52| inline int8_t disp_to_pixels(int16_t v, int limit, bool* clamped) {
+   53|   const int32_t r = (static_cast<int32_t>(v) + 128) >> 8;
+   54|   const bool c = (r > limit) || (r < -limit);
+   55|   if (clamped != nullptr) *clamped = c;
+   56|   return static_cast<int8_t>(r > limit ? limit : (r < -limit ? -limit : r));
+   57| }
+   58| 
+   59| // ---------------------------------------------------------------------------
+   60| // THE EXACT GRADING PREPARATION -- POST.COMPOSITE, owner plan 2026-09-18 11.2
+   61| // ---------------------------------------------------------------------------
+   62| // This half of the file belongs to POST.COMPOSITE, not POST.GATHER. It lives
+   63| // here because `zref::post` is where the post subsystem's ratified arithmetic
+   64| // lives, and because a table generator that exists only inside a test header is
+   65| // a law with no owner -- the shape that produced two projector cores.
+   66| //
+   67| // The plan's arrangement: "stores unrounded matrix-product vectors for each
+   68| // curve entry, sums them and performs the ORIGINAL final bias/round/saturate".
+   69| // The last clause is the load-bearing one. This is NOT a new colour convention;
+   70| // it is the SAME curve+matrix law with the multiply hoisted out of the per-pixel
+   71| // path and into table generation, and the finalize step is untouched.
+   72| //
+   73| // WHY 24 SIGNED BITS IS EXACT, not merely roomy. A matrix coefficient is Q2.14
+   74| // in s16, so |m| <= 32768; a curve entry is a u8, so k <= 255. The largest
+   75| // product is 32,768 * 255 = 8,355,840, and a signed 24-bit field holds
+   76| // [-8,388,608, +8,388,607]. It fits with 32,767 to spare, and it would NOT fit
+   77| // in 23. Three of them per entry is 72 bits; 128 entries is 9,216 logical bits.
+   78| //
+   79| // NOTHING HERE ROUNDS. That is the whole point -- rounding a product before the
+   80| // sum is exactly what would make the table an approximation instead of an
+   81| // identity, and it is the error this arrangement is most likely to acquire.
+   82| 
+   83| // A curve entry's unrounded product vector: that entry's value times its own
+   84| // COLUMN of the matrix. Column 0 is the R curve, 1 the G curve, 2 the B curve;
+   85| // `p[o]` is the contribution to OUTPUT channel o. Getting the row/column
+   86| // transpose backwards produces a plausible-looking picture with the channels
+   87| // cross-mixed, so the indexing is spelled out rather than implied.
+   88| inline void grade_product_vector(const int16_t m[9], int col, uint8_t k, int32_t p[3]) {
+   89|   p[0] = static_cast<int32_t>(m[(0 * 3) + col]) * static_cast<int32_t>(k);
+   90|   p[1] = static_cast<int32_t>(m[(1 * 3) + col]) * static_cast<int32_t>(k);
+   91|   p[2] = static_cast<int32_t>(m[(2 * 3) + col]) * static_cast<int32_t>(k);
+   92| }
+   93| 
+   94| // The ORIGINAL final step, shared by both paths and changed by neither: one
+   95| // round-half-up, then the bias, then one saturate.
+   96| inline uint8_t grade_finalize(int32_t acc, int bias) {
+   97|   int32_t q = (acc + 8192) >> 14;
+   98|   q += bias;
+   99|   return static_cast<uint8_t>(q < 0 ? 0 : (q > 255 ? 255 : q));
+  100| }
+  101| 
+  102| // The nine-multiplier path, kept as the REFERENCE the table is proved against.
+  103| // It is not a second implementation of the law -- it is the law, and the table
+  104| // is a precomputation of it that has to be shown to agree.
+  105| inline uint8_t grade_channel_mul(const int16_t m[9], int row, uint8_t kr, uint8_t kg, uint8_t kb,
+  106|                                  int bias) {
+  107|   const int32_t acc = (static_cast<int32_t>(m[(row * 3) + 0]) * kr) +
+  108|                       (static_cast<int32_t>(m[(row * 3) + 1]) * kg) +
+  109|                       (static_cast<int32_t>(m[(row * 3) + 2]) * kb);
+  110|   return grade_finalize(acc, bias);
+  111| }
+  112| 
+  113| // The table path: sum the three vectors' component for this output channel,
+  114| // then the same finalize. Equal to `grade_channel_mul` by construction, which
+  115| // is precisely why it must be CHECKED -- the failure available is a packing,
+  116| // sign-extension or transpose error, not an algebraic one.
+  117| //
+  118| // Note what CANNOT go wrong here, so nobody writes a test for it: the order of
+  119| // `pr`, `pg` and `pb` is immaterial, because they are summed. A mutation that
+  120| // swaps two of them is not a fault, and a check that claims to catch one is
+  121| // claiming something it cannot do. The transpose that DOES matter lives in
+  122| // `grade_product_vector` above, and that is where the positive control aims.
+  123| inline uint8_t grade_channel_table(const int32_t pr[3], const int32_t pg[3], const int32_t pb[3],
+  124|                                    int row, int bias) {
+  125|   return grade_finalize(pr[row] + pg[row] + pb[row], bias);
+  126| }
+  127| 
+  128| // ===========================================================================
+  129| // POST.ECHO -- the capture law (owner ruling R7, design/contracts/POST.ECHO.md)
+  130| // ===========================================================================
+  131| // The echo writes POST.COMPOSITE's post-ink/pre-HUD pixel, unchanged, into a
+  132| // capture window. There is no colour law here -- only WHERE a pixel goes, which
+  133| // passes are refused, and the granularity at which a starved echo drops. Those
+  134| // three are what the RTL can get wrong, so they are what this owns.
+  135| namespace echo {
+  136| 
+  137| // zhao_pkg ZHAO_POST_ECHO_BASE / _SPAN (spec/memory_rules.md 5g).
+  138| inline constexpr uint32_t kCaptureBase = 0x05C00000u;
+  139| inline constexpr uint32_t kCaptureSpan = 0x0003C000u;
+  140| // A chunk is one RASTER.FBWRITE row burst: 16 pixels, 32 bytes. Drops are whole
+  141| // chunks, so a starved echo leaves clean holes and never a torn burst.
+  142| inline constexpr unsigned kChunkPx = 16;
+  143| 
+  144| // A pass is capturable only if its rows split into whole chunks and the stacked
+  145| // image fits the window. Anything else is refused at pass start.
+  146| inline bool geometry_ok(unsigned w, unsigned h, unsigned views) {
+  147|   if (w == 0 || h == 0 || views == 0) return false;
+  148|   if (w % kChunkPx != 0) return false;
+  149|   return uint64_t(views) * h * w * 2u <= kCaptureSpan;
+  150| }
+  151| 
+  152| // Views are STACKED vertically: view v's row y is capture row v*h + y. The
+  153| // stride is the view width, so no multiplier is needed to reach view 1.
+  154| inline uint32_t capture_addr(unsigned view, unsigned x, unsigned y, unsigned w, unsigned h) {
+  155|   return kCaptureBase + ((uint32_t(view) * h + y) * w + x) * 2u;
+  156| }
+  157| 
+  158| // Which chunk of its row a pixel belongs to, and whether it opens one.
+  159| inline unsigned chunk_of(unsigned x) { return x / kChunkPx; }
+  160| inline bool opens_chunk(unsigned x) { return (x % kChunkPx) == 0; }
+  161| 
+  162| }  // namespace echo
+  163| 
+  164| }  // namespace post
+  165| }  // namespace zref
+```
+
+# INPUT tests/compositor/post_echo_directed.cpp:1-264
+```
+    1| // post_echo_directed.cpp -- POST.ECHO against zref::post::echo.
+    2| //
+    3| // Contract: design/contracts/POST.ECHO.md. Every word the RTL writes is
+    4| // differenced against the reference address law, and the three things an echo
+    5| // can get wrong are each provoked on purpose:
+    6| //
+    7| //   1. WHERE a pixel lands (views stacked, stride = view width);
+    8| //   2. HOW it drops when starved -- whole 16-pixel chunks, never a stall, never
+    9| //      a torn burst, and a pass with a drop is never reported complete;
+   10| //   3. WHAT it refuses -- a width that is not whole chunks, a refused burst.
+   11| //
+   12| // The tap is driven at one pixel per clock whatever the memory does. The echo
+   13| // has no ready, so nothing here CAN wait for it; what is checked is that
+   14| // everything offered is either written at its law address or counted dropped.
+   15| #include <cstdint>
+   16| #include <cstdio>
+   17| #include <set>
+   18| #include <vector>
+   19| 
+   20| #include "verilated.h"
+   21| 
+   22| #include "Vzhao_post_echo.h"
+   23| 
+   24| #include "post_mem_model.hpp"
+   25| #include "zhao_sim.hpp"
+   26| #include "zref/zref_post.hpp"
+   27| 
+   28| namespace echo = zref::post::echo;
+   29| 
+   30| namespace {
+   31| 
+   32| uint16_t tapval(unsigned view, unsigned x, unsigned y) {
+   33|   uint32_t h = (view * 0x9E3779B9u) ^ (x * 2654435761u) ^ (y * 40503u + 0x1234u);
+   34|   h ^= h >> 13;
+   35|   return uint16_t(h * 2246822519u >> 16);
+   36| }
+   37| 
+   38| struct PassOut {
+   39|   unsigned complete = 0, torn = 0, written = 0, dropped = 0;
+   40|   bool fault = false;
+   41| };
+   42| 
+   43| // One pass: pulse pass_start, offer the whole view, then run until the echo
+   44| // settles. PACED means the tap arrives the way the composition delivers it: the
+   45| // compositor's output is accepted by a RASTER.FBWRITE identical to the echo's
+   46| // own, which takes sixteen pixels and then spends six clocks on the burst
+   47| // (request, verdict, four data beats) -- 16 on, 6 off; the bench leaves one
+   48| // clock of margin (16 on, 7 off), because a tap paced EXACTLY at the writer's
+   49| // best case is a tie that any extra guard-busy clock breaks. UNPACED is one pixel per
+   50| // clock forever, faster than any FBWRITE can write, i.e. a starving echo.
+   51| PassOut pass(Vzhao_post_echo& top, postmem::Model& m, unsigned view, unsigned w, unsigned h,
+   52|              unsigned gap_num, unsigned gap_den, uint64_t seed, bool paced = true) {
+   53|   postmem::Pcg pcg(seed);
+   54|   const unsigned c0 = top.passes_complete_o, t0 = top.passes_torn_o;
+   55|   const unsigned w0 = top.pixels_written_o, d0 = top.pixels_dropped_o;
+   56|   unsigned x = 0, y = 0;
+   57|   bool tapping = true;
+   58|   bool first = true;
+   59|   const uint64_t limit = uint64_t(w) * h * 30 + 100000;
+   60|   for (uint64_t cyc = 0; cyc < limit; ++cyc) {
+   61|     const auto d = m.drive();
+   62|     top.guard_rsp_i = d.rsp;
+   63|     top.guard_wready_i = d.wready;
+   64|     top.retire_words_i = d.credits;
+   65|     top.pass_start_i = first;
+   66|     top.view_i = view;
+   67|     top.w_i = w;
+   68|     top.h_i = h;
+   69|     const bool paced_off = paced && ((cyc % 23) >= 16);
+   70|     const bool offer = !first && tapping && !paced_off && !(gap_num && pcg.chance(gap_num, gap_den));
+   71|     top.tap_valid_i = offer;
+   72|     top.tap_rgb_i = tapval(view, x, y);
+   73|     top.tap_x_i = x;
+   74|     top.tap_y_i = y;
+   75|     top.clk = 0;
+   76|     top.eval();
+   77|     const auto req = postmem::decode(top.guard_req_o);
+   78|     const bool wv = top.guard_wvalid_o;
+   79|     const uint64_t wd = top.guard_wdata_o;
+   80|     const bool wl = top.guard_wlast_o;
+   81|     top.clk = 1;
+   82|     top.eval();
+   83|     m.edge(d, req, wv, wd, wl);
+   84|     first = false;
+   85|     if (offer) {
+   86|       if (++x == w) {
+   87|         x = 0;
+   88|         if (++y == h) tapping = false;
+   89|       }
+   90|     }
+   91|     if (!tapping && !top.busy_o) break;
+   92|   }
+   93|   top.tap_valid_i = 0;
+   94|   top.pass_start_i = 0;
+   95|   PassOut o;
+   96|   o.complete = top.passes_complete_o - c0;
+   97|   o.torn = top.passes_torn_o - t0;
+   98|   o.written = top.pixels_written_o - w0;
+   99|   o.dropped = top.pixels_dropped_o - d0;
+  100|   o.fault = top.fault_o;
+  101|   return o;
+  102| }
+  103| 
+  104| // Every pixel of a view is either at its law address with its tap value, or
+  105| // absent as part of a WHOLE absent chunk. Returns {present pixels, absent
+  106| // chunks, wrong words, partial chunks}.
+  107| struct Audit { unsigned present = 0, absent_chunks = 0, wrong = 0, partial = 0; };
+  108| Audit audit(const postmem::Model& m, unsigned view, unsigned w, unsigned h) {
+  109|   Audit a;
+  110|   for (unsigned y = 0; y < h; ++y) {
+  111|     for (unsigned c = 0; c < w / echo::kChunkPx; ++c) {
+  112|       unsigned here = 0;
+  113|       for (unsigned i = 0; i < echo::kChunkPx; ++i) {
+  114|         const unsigned x = c * echo::kChunkPx + i;
+  115|         const uint32_t addr = echo::capture_addr(view, x, y, w, h);
+  116|         auto it = m.mem.find(addr);
+  117|         if (it == m.mem.end()) continue;
+  118|         ++here;
+  119|         if (it->second != tapval(view, x, y)) ++a.wrong;
+  120|       }
+  121|       if (here == echo::kChunkPx) a.present += here;
+  122|       else if (here == 0) ++a.absent_chunks;
+  123|       else ++a.partial;
+  124|     }
+  125|   }
+  126|   return a;
+  127| }
+  128| 
+  129| // Nothing may be written outside the capture window, nor outside the rows the
+  130| // passes named.
+  131| unsigned strays(const postmem::Model& m, unsigned views, unsigned w, unsigned h) {
+  132|   unsigned n = 0;
+  133|   const uint32_t lo = echo::kCaptureBase;
+  134|   const uint32_t hi = echo::kCaptureBase + views * h * w * 2;
+  135|   for (const auto& kv : m.mem)
+  136|     if (kv.first < lo || kv.first >= hi) ++n;
+  137|   return n;
+  138| }
+  139| 
+  140| }  // namespace
+  141| 
+  142| int main(int argc, char** argv) {
+  143|   Verilated::commandArgs(argc, argv);
+  144|   Vzhao_post_echo top;
+  145| 
+  146|   top.rst_n = 0;
+  147|   top.pass_start_i = 0;
+  148|   top.tap_valid_i = 0;
+  149|   top.guard_rsp_i = 0;
+  150|   top.guard_wready_i = 0;
+  151|   top.retire_words_i = 0;
+  152|   for (int i = 0; i < 4; ++i) zhao::tick(top);
+  153|   top.rst_n = 1;
+  154|   zhao::tick(top);
+  155| 
+  156|   // The window the guard would open: echo writes land only in the capture.
+  157|   auto capture_only = [](const postmem::Req& q) {
+  158|     return q.write && q.client == 2 && q.addr >= echo::kCaptureBase &&
+  159|            q.addr + q.len <= echo::kCaptureBase + echo::kCaptureSpan;
+  160|   };
+  161| 
+  162|   // ---- 1. Z60, paced, fast memory: every pixel, byte for byte, one capture --
+  163|   {
+  164|     postmem::Model m;
+  165|     m.allow = capture_only;
+  166|     const auto o = pass(top, m, 0, 384, 240, 0, 1, 1);
+  167|     const auto a = audit(m, 0, 384, 240);
+  168|     zhao::check(echo::geometry_ok(384, 240, 1), "the reference accepts Z60", 1, 1);
+  169|     zhao::check(a.present == 384u * 240u, "all 92,160 pixels land at capture_addr", 92160, a.present);
+  170|     zhao::check(a.wrong == 0 && a.partial == 0, "each one byte-identical to its tap", 0,
+  171|                 a.wrong + a.partial);
+  172|     zhao::check(strays(m, 1, 384, 240) == 0, "nothing lands outside the view's rows", 0,
+  173|                 strays(m, 1, 384, 240));
+  174|     zhao::check(o.complete == 1 && o.torn == 0, "one WHOLE capture reported", 1, o.complete);
+  175|     zhao::check(o.dropped == 0 && o.written == 92160, "no drops; every pixel handed to the writer",
+  176|                 92160, o.written);
+  177|     zhao::check(m.bad_write_order == 0 && m.violations == 0, "every data beat belonged to a passed write",
+  178|                 0, m.bad_write_order + m.violations);
+  179|   }
+  180| 
+  181|   // ---- 2. Duo: views STACKED -- view 1 lands h rows below view 0 ------------
+  182|   {
+  183|     postmem::Model m;
+  184|     m.allow = capture_only;
+  185|     m.pcg = postmem::Pcg(3);
+  186|     m.read_lat = 3;   // stacking is the question here, not starvation
+  187|     const auto o0 = pass(top, m, 0, 256, 192, 0, 1, 2);
+  188|     const auto o1 = pass(top, m, 1, 256, 192, 0, 1, 3);
+  189|     const auto a0 = audit(m, 0, 256, 192);
+  190|     const auto a1 = audit(m, 1, 256, 192);
+  191|     zhao::check(a0.present == 256u * 192u && a1.present == 256u * 192u,
+  192|                 "both Duo views land whole", 2 * 256 * 192, a0.present + a1.present);
+  193|     zhao::check(a0.wrong + a1.wrong + a0.partial + a1.partial == 0,
+  194|                 "each view at its OWN rows, byte-identical", 0,
+  195|                 a0.wrong + a1.wrong + a0.partial + a1.partial);
+  196|     zhao::check(echo::capture_addr(1, 0, 0, 256, 192) == echo::kCaptureBase + 192u * 512u,
+  197|                 "view 1 row 0 is capture row 192 (the stacking law)", 1, 1);
+  198|     zhao::check(strays(m, 2, 256, 192) == 0, "the stacked image and nothing else", 0,
+  199|                 strays(m, 2, 256, 192));
+  200|     zhao::check(o0.complete == 1 && o1.complete == 1, "two whole captures", 2,
+  201|                 o0.complete + o1.complete);
+  202|   }
+  203| 
+  204|   // ---- 3. a starving memory: chunks drop WHOLE, the pass is TORN ------------
+  205|   for (uint64_t seed : {101ull, 202ull}) {
+  206|     postmem::Model m;
+  207|     m.allow = capture_only;
+  208|     m.pcg = postmem::Pcg(seed);
+  209|     m.busy_min = 3;
+  210|     m.busy_rand = 30;
+  211|     m.wready_num = 1;
+  212|     m.wready_den = 6;
+  213|     m.credit_lat = 20;
+  214|     const auto o = pass(top, m, 0, 320, 40, 0, 1, seed, /*paced=*/false);
+  215|     const auto a = audit(m, 0, 320, 40);
+  216|     zhao::check(a.absent_chunks > 0, "the starved memory really did force drops", 1,
+  217|                 a.absent_chunks > 0 ? 1 : 0);
+  218|     zhao::check(a.partial == 0, "never a PARTIAL chunk -- drops are whole chunks", 0, a.partial);
+  219|     zhao::check(a.wrong == 0, "every word that landed is its tap, at its law address", 0, a.wrong);
+  220|     zhao::check(o.dropped == a.absent_chunks * echo::kChunkPx,
+  221|                 "dropped == 16 x the chunks absent from memory", a.absent_chunks * 16u, o.dropped);
+  222|     zhao::check(o.written == a.present, "written == the pixels present in memory", a.present,
+  223|                 o.written);
+  224|     zhao::check(o.torn == 1 && o.complete == 0, "a pass with a drop is TORN, never complete", 1,
+  225|                 o.torn);
+  226|     zhao::check(!o.fault, "starvation is not a fault", 0, o.fault ? 1 : 0);
+  227|   }
+  228| 
+  229|   // ---- 4. gaps in the tap (a compositor that stalls) change nothing ---------
+  230|   {
+  231|     postmem::Model m;
+  232|     m.allow = capture_only;
+  233|     const auto o = pass(top, m, 0, 256, 16, 1, 3, 4);
+  234|     const auto a = audit(m, 0, 256, 16);
+  235|     zhao::check(a.present == 256u * 16u && a.wrong == 0, "a gappy tap still lands whole", 4096,
+  236|                 a.present);
+  237|     zhao::check(o.complete == 1, "and is one whole capture", 1, o.complete);
+  238|   }
+  239| 
+  240|   // ---- 5. a width that is not whole chunks is REFUSED -----------------------
+  241|   {
+  242|     postmem::Model m;
+  243|     m.allow = capture_only;
+  244|     const auto o = pass(top, m, 0, 100, 4, 0, 1, 5);
+  245|     zhao::check(!echo::geometry_ok(100, 4, 1), "the reference refuses 100 px", 0, 0);
+  246|     zhao::check(m.accepts == 0, "a refused pass writes nothing", 0, m.accepts);
+  247|     zhao::check(o.dropped == 400 && o.torn == 1 && o.complete == 0,
+  248|                 "every pixel of it dropped, the pass torn", 400, o.dropped);
+  249|   }
+  250| 
+  251|   // ---- 6. a refused burst: fault_o latches and the pass is torn -------------
+  252|   //      (LAST, because FBWRITE's fatal latch is sticky until reset.)
+  253|   {
+  254|     postmem::Model m;
+  255|     m.allow = [](const postmem::Req& q) { return q.addr != echo::kCaptureBase + 64u; };
+  256|     const auto o = pass(top, m, 0, 64, 4, 0, 1, 6);
+  257|     zhao::check(o.fault, "a refused capture burst latches fault_o", 1, o.fault ? 1 : 0);
+  258|     zhao::check(o.torn == 1 && o.complete == 0, "and the pass is torn, not complete", 1, o.torn);
+  259|   }
+  260| 
+  261|   std::printf("  post_echo: complete=%u torn=%u written=%u dropped=%u\n", top.passes_complete_o,
+  262|               top.passes_torn_o, top.pixels_written_o, top.pixels_dropped_o);
+  263|   return zhao::report_and_exit("post_echo_directed");
+  264| }
+```

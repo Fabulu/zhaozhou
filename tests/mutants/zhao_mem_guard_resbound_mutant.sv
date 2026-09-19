@@ -317,6 +317,35 @@ module zhao_mem_guard_resbound_mutant
   assign resource_wr_ok = req.write && res_in_pool
                         && (addr32 >= res_base) && (end33 <= res_end33);
 
+  // ENGINE0 GAINS TWO ARMS, 2026-09-19, and neither opens a way out of the map.
+  //
+  // 1. `fb_read_ok` -- a READ of the LEASED slot window. POST.COMPOSITE.md: "POST
+  //    .COMPOSITE owns an exclusive framebuffer read/write lease after resolve
+  //    and before publication". Post runs INSIDE the render lease, after the
+  //    raster has drained and before anything publishes, so its identity is the
+  //    render engine's own: ENGINE0, under `fb_writer == 1`, inside the SAME
+  //    clamped window the render writes go to. No new client id (T3 keeps 5
+  //    unspent) and no new window -- a direction bit, for the client that
+  //    already owned this window, while it holds the lease. A read cannot alter
+  //    a frame buffer, so the no-escape theorem gains nothing to prove.
+  //
+  // 2. `echo_ok` -- a WRITE of POST.ECHO's capture buffer (ruling R7). A FIFTH
+  //    window (SIXTH, counting R32's resource arm), named as one: CONSTANT bounds in bank 2's reserved tail
+  //    (zhao_pkg ZHAO_POST_ECHO_BASE, spec/memory_rules.md 5g), disjoint from
+  //    both FB slots, the asset pool and the terrain pool, so a capture write
+  //    can never alter a displayed or displayable frame. Lease-gated like the
+  //    rest of ENGINE0: the echo writes only during a post pass, which only
+  //    happens while the renderer holds the lease.
+  //
+  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby (a1_region, a1_echo_*,
+  //              c_forward_engine_rd, c_forward_echo)
+  logic fb_read_ok, echo_ok;
+  assign fb_read_ok = !req.write && map_valid
+                      && (addr32 >= blit_base) && (end32 <= blit_end);
+  assign echo_ok    = req.write
+                      && (addr32 >= ZHAO_POST_ECHO_BASE)
+                      && (end32  <= ZHAO_POST_ECHO_BASE + ZHAO_POST_ECHO_SPAN);
+
   // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
   // clamped slot span; what separates them is which one the lease names. A
   // writer without the lease is refused exactly as a request outside the window
@@ -325,7 +354,8 @@ module zhao_mem_guard_resbound_mutant
     unique case (req.client)
       ZHAO_CLIENT_SCANOUT:  pass_ok = shape_ok && scan_ok;
       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
-      ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
+      ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && (blit_ok || fb_read_ok || echo_ok)
+                                      && (fb_writer == 1'b1);
       ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && render_asset_ok;
       ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok
                                                         || resource_wr_ok);
