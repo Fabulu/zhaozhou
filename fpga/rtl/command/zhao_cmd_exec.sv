@@ -192,6 +192,20 @@
 // Three handles leave this block as handles, UNRESOLVED and on purpose. See
 // the section below.
 //
+// PublishResource 0x0030 -- ADDED 2026-09-19 by owner ruling R17. Every field
+// is one of MEM.UPLOAD's request fields and is carried whole:
+//   CARRIED   resource[23:0] (5f.1's directory key), hps_addr_lo/hi (64 bits,
+//             so MEM.UPLOAD can REFUSE an unreachable source rather than this
+//             block narrowing it), vram_dst, length, crc32c, new_generation,
+//             epoch, dst_slot, kind (-> MEM.UPLOAD's req_tag_i).
+//   NOT       resource[31:24], the handle's generation byte: MEM.UPLOAD's
+//             generation is the 16-bit RESIDENCY one and nothing in the upload
+//             path consumes the handle's. Sunk visibly, see `pq_handle_gen_unused`.
+//   NOT       the header's source_id: MEM.UPLOAD has no attribution port.
+// Uploads are EVENTS (ring, refused whole on `upload_overflow_o`) and commit
+// into a PENDING queue that outlives the commit, so a background copy never
+// holds a frame's draws. `tests/command/cmd_exec_directed.cpp` cases 13-16.
+//
 // ---------------------------------------------------------------------------
 // WHY THE DRAW ARM EMITS HANDLES AND NOT A MESHFETCH JOB
 // ---------------------------------------------------------------------------

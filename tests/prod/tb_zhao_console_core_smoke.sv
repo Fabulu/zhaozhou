@@ -1873,9 +1873,16 @@ module tb_zhao_console_core_smoke
       ring_wr_ready_i <= 1'b1;
       ring_writes_q   <= 0;
     end else begin
-      if (pkt_armed_q && reset_released_q && (ring_writes_q == 0) && (hps_state_i[0] == 2'd0)) begin
-        hps_state_i[0]    <= 2'd2;              // READY
-        hps_byte_len_i[0] <= 32'(pkt_len_q);
+      // The HPS producer's own walk, charter 7.4: FREE -> ARM_WRITING while the
+      // body is written, then READY once it is sealed. CMD.SCHEDULER follows
+      // the word forward-only and does not take FREE -> READY in one step.
+      if (pkt_armed_q && reset_released_q && (ring_writes_q == 0)) begin
+        if (hps_state_i[0] == 2'd0) begin
+          hps_state_i[0] <= 2'd1;               // ARM_WRITING
+        end else if (hps_state_i[0] == 2'd1) begin
+          hps_state_i[0]    <= 2'd2;            // READY
+          hps_byte_len_i[0] <= 32'(pkt_len_q);
+        end
       end
       if (ring_wr_valid_o && ring_wr_ready_i) begin
         hps_state_i[ring_wr_slot_o] <= ring_wr_state_o;
@@ -4457,6 +4464,8 @@ module tb_zhao_console_core_smoke
     // block publish. Every field of the published row is checked against the
     // request that caused it, because a publication naming the wrong base is
     // a well-formed row for the wrong surface.
+    $display("SMOKE: ring      slot0_state=%0d ring_writes=%0d pkt_bursts=%0d pkt_len=%0d dma_done=%b dma_status=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d fence_ok=%b",
+             hps_state_i[0], ring_writes_q, sh_pkt_bursts_q, pkt_len_q, dma_done_o, dma_status_o, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o, cmd_exec_uploads_o, fence_ok_o);
     $display("SMOKE: upload    done=%0d status=%0d published=%0d rows=%0d bursts=%0d wait=%0d slot=%0d gen=%04x tag=%0d index=%06x base=%08x extent=%0d",
              upl_done_seen_q, upl_status_seen_q, upl_published_o, upl_pub_seen_q,
              sh_bursts_q, upl_hps_wait_o, upl_pub_slot_q, upl_pub_gen_q,
@@ -4508,25 +4517,16 @@ module tb_zhao_console_core_smoke
     if (dbg_trace_count_o != cmd_commands_o)
       $fatal(1, "SMOKE: DEBUG.TRACE stored %0d event(s) against %0d records walked by CMD.DECODER -- the record port and the ring disagree",
              dbg_trace_count_o, cmd_commands_o);
-    // AND THE EQUALITY ABOVE IS TWO ZEROS AGREEING TODAY. Said out loud rather
-    // than left for somebody to discover, because a green check quoted as
-    // evidence for something it cannot see is this project's most expensive
-    // recurring mistake. This bench submits NO COMMAND PACKET: nothing here
-    // writes the frame ring or feeds CMD.DMA, so CMD.DECODER walks no records
-    // and the ring has nothing to store. It was written as a live equality so
-    // that it starts testing the seam the moment a packet arrives, and the
-    // check WAS seen to fire -- an earlier version of it fatal'd on exactly
-    // this zero, which is how the limitation was found rather than assumed.
-    //
-    // WHAT IS PROVEN HERE is narrower and is the armed-mask readback above:
-    // `dbg_trace_arm_mask_i` written at this bench's edge comes back out of
-    // `dbg_trace_armed_o` through the composition, so the instance is live,
-    // reachable and not pruned. The rec -> ev seam itself is covered by
-    // tests/debug/debug_trace_rtl_directed.cpp at the block, and by nothing at
-    // the composition until something submits a packet here.
+    // THE EQUALITY ABOVE IS NO LONGER TWO ZEROS AGREEING. Until 2026-09-19 this
+    // bench submitted no command packet, CMD.DECODER walked nothing and the
+    // ring stored nothing, and this comment said so rather than let a green
+    // check be quoted for a seam it could not see. The bench now plays
+    // FRAME_RING slot 0 and submits one sealed packet (BeginFrame,
+    // PublishResource, EndFrame), so the ring must store exactly the three
+    // records the decoder walked -- and the zero-guard below makes a packet
+    // that silently stopped arriving FAIL rather than fall back to the note.
     if (cmd_commands_o == 32'd0)
-      $display("SMOKE: NOTE DEBUG.TRACE's record-to-event equality is UNTESTED in this bench -- no command packet is submitted, so CMD.DECODER walked 0 records and the ring stored 0. The check above is live and will engage the moment a packet does. What this bench does prove about the ring is the arming readback.");
-
+      $fatal(1, "SMOKE: CMD.DECODER walked 0 records -- the bench's command packet no longer arrives, so DEBUG.TRACE's equality above is two zeros agreeing");
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
   end
