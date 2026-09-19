@@ -25,6 +25,11 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Proven source causes: the loop atlas deliberately uses a cooler pigment and much stronger grain than the body at both roots; body and loop are separate intersecting closed surfaces with separate normals; body-only internal ink can advertise the intersection; Front and End long swells cross independently moving skin palettes. Front is also channel-poor: HingePlay has no JunctionF tilt/yaw and signed length starts only at Front→A.
 - The five “balls” are already editable swells in one skin, not separate topology. Size work can ladder only swell amplitudes while protecting stick taper, stations, half-widths and span/core structure.
 - Particle overlap already depth-tests. The bounded experiment is to route only fold/surge motes through the existing pre-creature layer so sticks occlude them; stop if it flattens the particle field. No collision subsystem is justified.
+- Clip/site recon completed in `V18-CLIP-SITE-RECON.md`. Drift and Blown already use ordinary candidate-9 fold+strand mana; their relic read is dominated by the live speed-driven persistent mist plane. Hasty's 96×60 smear preset is genuinely off, but the separate 48×30 creature-relative mist is itself a lagged history buffer and exactly reproduces the blocky trail the owner rejected.
+- Direction 19 supersedes the old mist rationale: retire the persistent mist plane on every live subject while preserving the non-history contour shell/mist and archived diagnostics. Crackle is the only true old mana clip—candidate 4 lightning-only plus the special night backdrop—and should be laddered against ordinary candidate 9/day presentation.
+- Flight currently runs four 300 mm bobs across 176 keys. Native review shows real motion but a repeated bounce read; version 18 needs independent amplitude/cadence ladders, complete-frame looking and protected seam/framing/carrier/effect checks.
+- Trick architecture is a planted yaw show-off, not another pitch turn: keep the accepted 180-degree pure-X plant and face correction, pause, perform one full C2 yaw revolution about the vertical support axis, overshoot/correct to identity, then use the existing righting. Strengthen contact proof to identify antenna support rather than merely any deepest vertex.
+- Site recon confirms Mana menu/lab can become one archived `Version 17 experiments` generation by data only. Archived collections use controls+loop, no autoplay and preload none. Coordinate the six menu files with the full version-17 byte archive so no media is overwritten or declared twice.
 
 ---
 
@@ -33,6 +38,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 | Timestamp | Agent | Purpose | Status | Findings Link |
 |---|---|---|---|---|
 | 2026-09-19 | GPT fork antenna/root recon | Trace both body connections, carrier sizing/flexibility, material/ink/normals and bounded particle overlap | Complete — root material/skin authorities identified; pre-layer particle A/B recommended | `V18-ANTENNA-ROOT-RECON.md` |
+| 2026-09-19 | GPT fork clip/site recon | Trace Drift/Crackle/Blown mana, Hasty history, Flight/Trick motion and menu/lab archive behavior | Complete — live mist is the shared relic trail; Crackle alone uses old candidate; planted yaw-spin architecture and archive move defined | `V18-CLIP-SITE-RECON.md` |
 
 ---
 
@@ -43,6 +49,8 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - `V18-ANTENNA-ROOT-RECON.md`.
 - `V18-ROOT-BASELINE-HOVER-{NATIVE,4X}.png`.
 - `V18-PARTICLE-ANTENNA-BASELINE-4X.png`.
+- `V18-CLIP-SITE-RECON.md`.
+- `V18-RELIC-MANA-BASELINE-NATIVE.png`, `V18-HASTY-TRAIL-4X.png`, `V18-FLIGHT-BASELINE-NATIVE.png` and `V18-TRICK-BASELINE-NATIVE.png`.
 
 ---
 
@@ -53,12 +61,16 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Mana menu and Mana lab move to archive; their media/provenance remain immutable.
 - Root repair order is structural authority first, then body-like atlas/root-ink integration, then by-eye swell-size/flexibility ladders.
 - Reuse the existing pre-creature splat layer as the only bounded particle-overlap experiment; do not build geometric particle collision.
+- Retire the 48×30 persistent mist history plane from every live Manafold subject; it is the visual Hasty smear and the shared Drift/Blown relic trail. Preserve the contour shell/mist and archived diagnostics.
+- Treat Crackle as the only actual old-mana subject: compare its candidate-4/night control against ordinary candidate 9/day before promoting the normal presentation.
+- Build Trick's added show-off as a full planted yaw revolution with overshoot/correction, not a second pitch rotation that would break physical antenna support.
+- Move Mana menu/lab as one archived version-17 experiment generation; archived collections remain controls-only and their media bytes are preserved once.
 
 ---
 
 ## Next Steps
 
-1. Complete the independent clip/mana/smear/site recon for Drift, Crackle, Blown, Flight, Hasty, Trick and archive structure.
-2. Ratify the version-18 architecture: root profile/core alignment, Front channels, root atlas/ink ownership, swell ladder and bounded particle control separated from clip/site work.
-3. Implement and prove in bounded waves, with complete native motion review after each art wave.
+1. Ratify the combined version-18 architecture from both recons: root profile/core alignment, Front channels, root atlas/ink ownership, swell ladder, bounded particle control, live-history retirement, Crackle normalisation, Flight ladder, planted Trick yaw-spin and archive sequencing.
+2. Implement in bounded structural/site and art waves; name every one-binary control and final-resolution stop before changing values.
+3. Independently review source/gates and complete native motion after each wave.
 4. Render one exact version-18 bank, review every frame in isolated contexts, encode, commit/push, fast-forward mains, publish and verify production bytes.
