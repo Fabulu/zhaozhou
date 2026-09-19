@@ -215,3 +215,45 @@ frozen layout and a staging path, on the terrain pattern. Corrected in the core.
 `zhao_terrain_bake_v2_mutant` DRIFTED, and `check_prod_manifest.py` reports
 `zhao_terrain_hdrread` UNACCOUNTED. Both belong to the terrain packet that is
 live in the tree; my own additions are accounted and drift-clean.
+
+### 2026-09-19 ~18:15 - Run closed
+
+**Commits (all pushed):**
+* `261d53c3` TERRAIN.HEIGHTTAP built + directed suite + committed mutant
+* `d128bd96` the three refusals corrected in zhao_console_core (comment-only)
+* `f121c179` census row, and the record of the manifest race
+* `c47fe1d9` handover section 12
+
+**Capabilities closed: ZERO of nine.** Every one is blocked on something a
+packet is not allowed to decide, and each blocker is now NAMED rather than
+described:
+
+| capability | blocker |
+|---|---|
+| GEOM.LIGHT | owner decision, docket item 5 -- untouched by instruction |
+| GEOM.PROJECT | ruled: a second zhao_project_core is ~6,199 ALM + 33 DSP |
+| GEOM.LOOM | no producer AND no consumer; GEOM.WARP is one of the 3 unbuilt |
+| GEOM.PARAMBUF | needs an arena WRITER; memory_rules 5f proves the region read-only (a1_render_asset_ro) |
+| GEOM.DEPTHQUANT | a 3-corner serialiser is buildable, but composing opens a boundary at the far end and buys a second reciprocal on a device over on ALM and DSP. Net ZERO on the gap count. |
+| FORGE.SHADOW | caster rung -> projector client slot (docket) + creature-form LOD constants (layout frozen until Phase 12 by ruling) |
+| FORGE.PRIM / PRIM_EVAL | a forge page KIND with a frozen layout and a staging path -- NOT a hardware cartridge reader (SW.STREAM owns the parse, ruling T12) |
+| FORGE.CLIFF | page issuer, 34x34 solid window and a vdist read master; nothing produces a vdist field at all |
+
+**What sharing saved.** The tap reads the compose cache's EXISTING lattice and
+cell-state ports as a pass-through, taking only cycles TERRAIN.TESS does not
+want. The two alternatives were a second read port on
+`zhao_terrain_compcache_front` -- a port change to a file a live packet was
+editing, plus a board regeneration -- or the tap holding its own copy of the
+33x33x2x2 lattice, which is the ~14 M10K that block declares. Neither was
+spent. And not composing GEOM.PROJECT / GEOM.DEPTHQUANT preserved ~6,199 ALM +
+33 DSP and one reciprocal respectively.
+
+**Gate state at `f121c179`** (isolated worktree, clean tree): register 61
+(entered at 62, the -1 is another packet's); inventory OK; manifest OK;
+gen_prod_top fresh; gen_console_board fresh; quartus17 RC 0; board lint SILENT
+RC 0 on the exact spliced blob; smoke PASS with raster pixels=1536 / 16 tris /
+1 admitted frame; heighttap directed 783/0; mutant control 6/0.
+`mutant_copy_drift` reports one DRIFTED copy -- `zhao_material_resolve` --
+which is another packet's.
+
+**Status:** Complete.
