@@ -253,3 +253,47 @@ attributes, FIELD.
 **NEXT:** when a slot frees, the board<->core join -- `zhao_console_board` is one
 of the two required tops and deliberately does not instantiate the core. It has
 waited all session because the core's port list has not been still long enough.
+## 2026-09-19 late -- the board is soldered to the core, and FIELD v3 ships
+
+**THE SECOND REQUIRED TOP EXISTS.** `fd665eca`: `zhao_console_board` instantiates
+`zhao_console_core`. The board's own header had a section titled "WHAT THIS FILE
+DELIBERATELY DOES NOT DO: INSTANTIATE zhao_console_core", honest at the time --
+the core declared 687 ports and four packets were editing it. That reason expired
+and nothing had re-read it. The inventory gate now walks BOTH tops: 167 modules
+elaborated by the core, 5 more added by the board.
+
+**FIELD v3 IS THE ENGINE AND v1 IS OUT** (`da57defe`). And the finding behind it is
+the one to remember: `zhao_probe_v3_full.sv` in `fpga/rtl/synth/` WAS the composed
+v3 engine -- executor, service path, both mul banks, five differential gates on it.
+Nothing was missing from the datapath. What was missing was a production NAME, a
+HOME and a FIT TARGET. Four files moved out of synth/, no line of circuit changed.
+"`probe` in a filename kept a finished engine out of the machine for three weeks."
+
+**The cited deadlock was fixed three weeks before the sentence citing it.** The
+manifest and the core both quoted a stale probe header about a SPLINE/RING
+park-forever; `zhao_field_ops_pkg` made it structurally impossible on 2026-08-29.
+Three claims in the FIELD manifest block were false and ALL THREE READ LOW.
+
+**THE SAME LAW, SIX AND SEVEN TIMES.** "A file is not a module" bit twice more:
+  * my own `check_console_inventory` took a module's name to be its filename, so
+    it called `zhao_raster_quant.sv` dead (its second module is
+    `zhao_raster_quant_fin`), I removed it on the gate's say-so, and the console
+    lint broke;
+  * `module_graph.build()` -- shared by gen_prod_top, check_prod_manifest and
+    check_ownership_roles -- had `if decl[mod] == p: continue`, which suppressed
+    EVERY EDGE INSIDE a multi-module file. Eleven real edges invisible, and in the
+    flattering direction: a missed edge makes a module look uninstantiated, so it
+    reads as dead weight.
+
+**Where it stands.** 64 mandatory gaps (32 tie-offs + 29 disconnected + 3 unbuilt).
+Console inventory gate OK on all four gates across both tops.
+
+**THE ONE THING THAT MUST NOT BE FORGOTTEN BEFORE THE FIT:** the console was
+composing FIELD at the SCALAR BENCH POINT -- `PROGS(8)`, `REGS(32)` -- while the
+shipped machine is `CTX=32 LANES=4 REGS=64 OUTSTANDING=16 LONGQ=16 DIST_BANKS=8
+RING_UNITS=8`, and `zhao_field_host` did not expose most of those knobs at all. A
+fit taken before `703c1174`/`d9854632` would have measured a one-lane,
+eight-context machine and called it the console. Check the selected
+parameterisation before believing any FIELD area number.
+
+**NEXT:** geometry/forge remainder in flight; then terrain's remaining 10.
