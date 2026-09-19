@@ -60,3 +60,12 @@ Manafold pass 19 from Owner Direction 20: smooth, whole rear antenna connection 
 - ROOT CAUSE items 1+2: kBRearSocket (Root child since pass 16) has no rest orientation -> End rings point Root +Y (up) while the arm arrives downward; tube hairpins 150-170 deg at ring 55 on every sample of every clip; rings 58-62 stand up to 207 mm out of the body as the "End-swell stub", swung by the End authorities (25 deg B2 wag, hinge-play, swallow) independently of the arm.
 - Item 3: fold/bolt line splats have constant screen-px radii; ink scales by projected radius.
 - Plan in P19-DIAGNOSIS.md: RearSocket = arm arrival frame x authored; line splats scaled by the ink's operand; strict legacy toggles; new rear/line gate.
+
+### 2026-09-19 - Implementation and close (sole Opus worker)
+- Fix `2de50e08`: RearSocket = arm arrival frame x authored (ZHAO_U02_REAR_SOCKET_FRAME=arm|legacy-root); ambient End share kRearSocketAmbientGainPm=400 (hinge-play End + knead B2 wag only); mana line splats scale by the ink's projected-radius operand, full at kManaLineFullRadiusPx=360 (ZHAO_U02_MANA_LINE_SCALE=distance|legacy); new manafold-rear-audit --gate (R1 frame / R2 joint / R3 line).
+- `c5a7b82c`: renormalize the composed End quaternion (mspan G9 went red on the unnormalized product; now equals v18).
+- Knob change recorded: a whole-End gain failed mjointpub's End floor at 300 -> moved to the ambient sources.
+- Final renderer MD5 287a6b53caf4b546deceaca763d8c025; legacy toggles 7/7 byte-identical to the v18 bank; gate matrix 122/122.
+- 17 images read (notes in manafold-p16/p19-look/NOTES.md). Sheets + plates committed; P19-IMPLEMENTATION.md written.
+- Stopped a gate-matrix shell whose bash children survived TaskStop (killed by PID; verified none left).
+- Not done (later packets): 22-subject bank, encode, merge, deploy.

@@ -1,0 +1,29 @@
+rear frame legacy-root, follow 1000 pm, ambient gain 400 pm, line law distance full 360 px
+slot  0 (600 samples): rel max 169.8 mean 150.7 step 4.48 (sample 456) deg | axis max 163.2 | rear bend max 166.5 (ring 55, sample 1) mean 150.0 | front bend max 107.0 | socket-local max 25.7 step 5.38 | arm dev 47.2 step 2.22
+  motion (root-local, mm/sample): End  path 544 vmax 2.5 amax 1.02 jmax 1.04 jrms 0.286
+                                  last path 5882 vmax 19.2 amax 8.64 jmax 9.76 jrms 4.364
+                                  C    path 11598 vmax 40.4 amax 17.88 jmax 19.49 jrms 6.465
+slot  5 (400 samples): rel max 169.7 mean 149.8 step 3.24 (sample 219) deg | axis max 163.1 | rear bend max 166.3 (ring 55, sample 2) mean 151.4 | front bend max 87.4 | socket-local max 21.0 step 3.37 | arm dev 32.0 step 2.68
+  motion (root-local, mm/sample): End  path 300 vmax 1.7 amax 0.50 jmax 0.51 jrms 0.140
+                                  last path 3096 vmax 18.2 amax 7.09 jmax 9.10 jrms 3.963
+                                  C    path 6108 vmax 35.5 amax 14.06 jmax 14.70 jrms 5.119
+slot 21 (368 samples): rel max 175.1 mean 168.3 step 1.57 (sample 153) deg | axis max 167.9 | rear bend max 170.5 (ring 55, sample 140) mean 160.4 | front bend max 93.1 | socket-local max 9.9 step 1.15 | arm dev 30.3 step 2.92
+  motion (root-local, mm/sample): End  path 504 vmax 8.1 amax 4.52 jmax 4.54 jrms 1.171
+                                  last path 2539 vmax 30.4 amax 10.60 jmax 12.68 jrms 4.880
+                                  C    path 5033 vmax 60.1 amax 21.43 jmax 21.91 jrms 8.513
+slot  2 (420 samples): rel max 170.3 mean 151.0 step 3.71 (sample 229) deg | axis max 161.3 | rear bend max 164.8 (ring 55, sample 67) mean 152.1 | front bend max 93.7 | socket-local max 24.0 step 5.08 | arm dev 30.1 step 1.30
+  motion (root-local, mm/sample): End  path 815 vmax 4.1 amax 1.01 jmax 1.01 jrms 0.359
+                                  last path 2732 vmax 16.7 amax 10.78 jmax 10.43 jrms 3.644
+                                  C    path 5507 vmax 33.8 amax 20.45 jmax 20.59 jrms 5.019
+slot  1 (300 samples): rel max 169.5 mean 149.3 step 3.37 (sample 195) deg | axis max 166.5 | rear bend max 169.1 (ring 55, sample 3) mean 152.8 | front bend max 88.8 | socket-local max 22.4 step 3.96 | arm dev 35.4 step 2.48
+  motion (root-local, mm/sample): End  path 557 vmax 3.3 amax 1.27 jmax 1.29 jrms 0.520
+                                  last path 2665 vmax 22.4 amax 8.71 jmax 10.25 jrms 4.011
+                                  C    path 5264 vmax 43.6 amax 16.04 jmax 16.78 jrms 5.949
+slot 13 (400 samples): rel max 173.0 mean 167.0 step 0.65 (sample 200) deg | axis max 169.2 | rear bend max 171.1 (ring 55, sample 275) mean 165.6 | front bend max 82.1 | socket-local max 0.0 step 0.00 | arm dev 19.7 step 2.46
+  motion (root-local, mm/sample): End  path 298 vmax 2.4 amax 2.34 jmax 2.42 jrms 0.770
+                                  last path 2543 vmax 23.9 amax 21.78 jmax 22.08 jrms 4.181
+                                  C    path 5060 vmax 47.0 amax 42.81 jmax 42.67 jrms 6.400
+slot 19 (336 samples): rel max 173.2 mean 151.0 step 4.45 (sample 218) deg | axis max 159.2 | rear bend max 163.4 (ring 55, sample 12) mean 151.6 | front bend max 99.5 | socket-local max 23.6 step 3.44 | arm dev 39.3 step 4.50
+  motion (root-local, mm/sample): End  path 641 vmax 3.5 amax 1.03 jmax 1.04 jrms 0.563
+                                  last path 1771 vmax 27.2 amax 10.46 jmax 12.72 jrms 4.025
+                                  C    path 3445 vmax 51.8 amax 20.83 jmax 20.71 jrms 5.855

@@ -1,0 +1,18 @@
+# identity renders, final binary, production env (ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross)
+## shipping (arm frame, ambient 400, distance lines ref 360)
+manafold-hover: 600 frames, 24453 unique colours, sequence_crc32c=0x40E1DBF1
+manafold-inspect: 600 frames, 24675 unique colours, sequence_crc32c=0x7E4F8487
+manafold-drift: 300 frames, 13610 unique colours, sequence_crc32c=0xD474E003
+manafold-channel: 420 frames, 20633 unique colours, sequence_crc32c=0x9F8C2486
+manafold-rest: 400 frames, 20868 unique colours, sequence_crc32c=0xD04B3BC6
+manafold-trick: 400 frames, 21208 unique colours, sequence_crc32c=0x12438AAD
+manafold-taunt3: 368 frames, 20790 unique colours, sequence_crc32c=0xE87404ED
+## ZHAO_U02_REAR_SOCKET_FRAME=legacy-root + ZHAO_U02_MANA_LINE_SCALE=legacy (must equal v18 bank)
+manafold-hover: 600 frames, 24471 unique colours, sequence_crc32c=0x24B3FE60
+manafold-inspect: 600 frames, 24681 unique colours, sequence_crc32c=0x95A27283
+manafold-drift: 300 frames, 14398 unique colours, sequence_crc32c=0x69158A83
+manafold-channel: 420 frames, 21023 unique colours, sequence_crc32c=0xD49861D0
+manafold-rest: 400 frames, 21226 unique colours, sequence_crc32c=0xD25EF330
+manafold-trick: 400 frames, 21870 unique colours, sequence_crc32c=0xAB4D78E9
+manafold-taunt3: 368 frames, 20989 unique colours, sequence_crc32c=0x07EACF1D
+## v18 bank (V18-FINAL-BANK-INTEGRITY.md): hover 0x24B3FE60 inspect 0x95A27283 drift 0x69158A83 channel 0xD49861D0 rest 0xD25EF330 trick 0xAB4D78E9 taunt3 0x07EACF1D -> 7/7 byte-identical

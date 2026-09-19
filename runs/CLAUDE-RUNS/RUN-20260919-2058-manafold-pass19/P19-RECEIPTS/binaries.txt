@@ -1,0 +1,15 @@
+0f7ce969bc4dc84090398e8b44179e23 *manafold-eyesize.exe
+36d4070d0c9cb1fe78860ce7927ea224 *manafold-meshcheck.exe
+7742b82e66ffff0c31ac34e391b78951 *manafold-motiongate.exe
+15241dbc2e36cf1838f8b6693bc1716f *manafold-nodule.exe
+84ec222caac614e3eda6921e731601f2 *manafold-outlinegate.exe
+0d1506c566874740843ba7f3433ded54 *manafold-probe.exe
+e8eb6b39cd83aa7f785735b8c6eba158 *manafold-public-jointgate.exe
+4d15a0e5a46dd4bdfa13a00d692c0b05 *manafold-qa-p12.exe
+6a4b8bb671878825d3683f4f24705844 *manafold-rear-audit.exe
+d6d305b4244d448c4c8c4e5707a1fc9a *manafold-shellgate.exe
+d1cbcdc370fe0ae2c4f4f76f03ab69ac *manafold-spangate.exe
+287a6b53caf4b546deceaca763d8c025 *zhao-reel-cel.exe
+5907fdfd8a98952756b5fb28a52d5476 *zhao-reel.exe
+a88cd03690dac625dd0998a8fa88c0803c321f0c82331613d5ccedb340bcb482 *zhao-reel-cel.exe
+source: zhaozhou c5a7b82c692017fdcde2c13bb3f1812aedf3aad2 (tools/reel clean: 0 changes); build-direct.sh --output .tmp/p19-final --clean cel, then reel mspan msmooth mprobe mjointpub mqa mmeshcheck moutline mshell mnodule meyesize mrear; g++ 16.1.0
