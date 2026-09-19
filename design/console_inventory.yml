@@ -327,8 +327,8 @@ modules:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_terrain_island_dir:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+    disposition: not_v1
+    why: "a DUPLICATE PROVIDER, removed under owner ruling R23 on the same ground as R16 removed zhao_terrain_visible: ruling T5 puts the visibility walk AND the patch directory on the HPS, and reference/include/zref/zref_sw_stream.hpp asks both questions there through zref::island::Directory and zref::island::visible_set (reference/include/zref/zref_island.hpp), tested by tests/terrain/sw_stream_directed.cpp. Its only RTL instantiator was zhao_terrain_visible, which is itself removed. Kept on disk with its differential test."
   zhao_terrain_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

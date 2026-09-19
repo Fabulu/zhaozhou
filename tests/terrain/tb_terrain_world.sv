@@ -1998,6 +1998,11 @@ module tb_terrain_world
       .sets_refused_o   (tcm_refused),
       .records_emitted_o(tc_records),
       .list_bytes_read_o(tc_bytes),
+      // I26-era alignment fix: the re-fetched lead of a resumed burst. Not
+      // checked here; tests/terrain/terrain_cmd_rtl_directed.cpp owns it.
+      /* verilator lint_off PINCONNECTEMPTY */
+      .list_refetch_bytes_o(),
+      /* verilator lint_on PINCONNECTEMPTY */
       .crc_fails_o      (tc_crc_fails),
       .bridge_errs_o    (tcm_brerrs),
       .idle_o           (tcm_idle)

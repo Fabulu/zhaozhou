@@ -1057,29 +1057,16 @@ module zhao_console_board
   input  logic [31:0]             terr_cfg_arena_bytes_i,
   input  logic [15:0]             terr_cfg_load_budget_i,
 
-  // ---- I26: the spine's MEM.HPS.BRIDGE and MEM.GUARD clients --------------
-  // ONE bridge port, because the two terrain readers go through the REAL
-  // `zhao_hps_arbiter` instantiated below and not through anything invented
-  // here. See entry I26 for why the port stops at this module's edge.
-  output zhao_hps_burst_req_t     terr_hps_req_o,
-  input  logic                    terr_hps_grant_i,
-  output logic                    terr_hps_wr_valid_o,
-  output logic [63:0]             terr_hps_wr_data_o,
-  output logic                    terr_hps_wr_last_o,
-  input  zhao_hps_burst_rsp_t     terr_hps_rsp_i,
-  // The bridge's write-acceptance LEVEL (`zhao_hps_bridge.wr_ready`). WIDENED
-  // 2026-09-19 when TERRAIN.WRITEBACK became the first terrain client that
-  // WRITES: the bridge consumes a beat only once the HPS has accepted the
-  // burst, so a writer that streams on the grant loses its first beats
-  // silently. Same socket as the rest of this family; it closes with I26.
-  input  logic                    terr_hps_wr_ready_i,
-
-  output zhao_guard_req_t         terr_guard_req_o,
-  input  zhao_guard_rsp_t         terr_guard_rsp_i,
-  output logic [63:0]             terr_guard_wdata_o,
-  output logic                    terr_guard_wvalid_o,
-  input  logic                    terr_guard_wready_i,
-  output logic                    terr_guard_wlast_o,
+  // ---- I26 CLOSED 2026-09-19 (terrain3): the spine is ON the TERRAIN.BUILD socket
+  // The terrain HPS arbiter's one bridge port and the pool's two guard clients
+  // (TERRAIN.PAGELOADER's writes, the compose path's read share) used to stop
+  // at this edge. They now reach the shell's REAL `zhao_hps_bridge` and
+  // `zhao_mem_guard` through `u_build_share` and the socket's HPS client 1 --
+  // see `u_build_share` below. What crosses the edge is the socket share's
+  // evidence: contention between its three requesters, and its two tripwires.
+  output logic [31:0]             terr_bsock_contention_o,
+  output logic [31:0]             terr_bsock_retire_unowned_o,
+  output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
   // ---- I27 (narrowed): the directory's deformation and handle-check ports --
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
@@ -1142,26 +1129,9 @@ module zhao_console_board
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
   // ==========================================================================
 
-  // ---- I26 (extended): THE COMPOSE PATH's ONE MEM.GUARD READ client -------
-  // A SECOND guard client, not a second opinion about the first.
-  // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
-  // READS the same page back out, so it needs the return path
-  // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
-  // one guard socket and it is named for GEOM, so both stop here -- see entry
-  // I26 for why that is a REACHABLE boundary and not I23's refusal.
-  //
-  // STILL ONE PORT AFTER TERRAIN.HDRREAD LANDED, 2026-09-19, and that is the
-  // point of the block behind it.  TWO readers now sit on this socket --
-  // TERRAIN.PAGESTREAM's three plane bursts and TERRAIN.HDRREAD's one header
-  // burst -- joined by `zhao_mem_share2`, the SAME block GEOM.MEM.ADAPTER is a
-  // wrapper over.  The arbiter gains no client, the guard gains no arm, and
-  // this boundary does not widen.  Composing the header reader with its own
-  // socket would have made I26 a three-port entry instead of closing anything.
-  output zhao_guard_req_t         terr_ps_guard_req_o,
-  input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
-  input  logic                    terr_ps_beat_valid_i,
-  input  logic [63:0]             terr_ps_beat_data_i,
-  input  logic                    terr_ps_beat_last_i,
+  // ---- I26 (extended) CLOSED 2026-09-19: the compose path's read share is
+  // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
+  // left this list with the rest of I26.
 
   // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
   input  logic                    terr_pt_fld_valid_i,
@@ -1495,6 +1465,30 @@ module zhao_console_board
   output logic                    proj_svc_busy_o,
   output logic [31:0]             proj_a_grants_o,
   output logic [31:0]             proj_b_grants_o,
+
+  // ---- TERRAIN's LIT NORMALS: the per-triangle base light (R21) -----------
+  // Part of entry I13's terrain triangle packet, not a new boundary: the
+  // entry's own sentence says joining terrain to GEOM.CLIP needs "terrain's
+  // own attribute packet (invw24 from GEOM.DEPTHQUANT for terrain w, and
+  // TERRAIN.SHADE's light)". This is that light, computed here, leaving on the
+  // same edge as the triangle it belongs to and tagged with the same src_id.
+  // Its producer chain is REAL end to end: the world vertex is stored on the
+  // projector's own fill beat, the face normal is `zhao_terrain_normals` and
+  // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
+  // through `zhao_light_env` (R25). The consumer is I13's absent merge.
+  output logic                    terr_light_valid_o,
+  input  logic                    terr_light_ready_i,
+  output logic signed [31:0]      terr_light_base_o,
+  output logic                    terr_light_degenerate_o,
+  output logic [15:0]             terr_light_src_id_o,
+  output logic [31:0]             terr_light_refs_taken_o,
+  output logic [31:0]             terr_light_emitted_o,
+  output logic [31:0]             terr_light_stale_reads_o,
+  output logic [31:0]             terr_light_normals_o,
+  output logic [31:0]             terr_light_shaded_o,
+  output logic [31:0]             terr_light_degenerate_count_o,
+  output logic [31:0]             terr_light_base_sat_o,
+  output logic [31:0]             terr_light_degen_mismatch_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
@@ -2918,19 +2912,9 @@ module zhao_console_board
       .terr_cfg_arena_base_i             (terr_cfg_arena_base_i),
       .terr_cfg_arena_bytes_i            (terr_cfg_arena_bytes_i),
       .terr_cfg_load_budget_i            (terr_cfg_load_budget_i),
-      .terr_hps_req_o                    (terr_hps_req_o),
-      .terr_hps_grant_i                  (terr_hps_grant_i),
-      .terr_hps_wr_valid_o               (terr_hps_wr_valid_o),
-      .terr_hps_wr_data_o                (terr_hps_wr_data_o),
-      .terr_hps_wr_last_o                (terr_hps_wr_last_o),
-      .terr_hps_rsp_i                    (terr_hps_rsp_i),
-      .terr_hps_wr_ready_i               (terr_hps_wr_ready_i),
-      .terr_guard_req_o                  (terr_guard_req_o),
-      .terr_guard_rsp_i                  (terr_guard_rsp_i),
-      .terr_guard_wdata_o                (terr_guard_wdata_o),
-      .terr_guard_wvalid_o               (terr_guard_wvalid_o),
-      .terr_guard_wready_i               (terr_guard_wready_i),
-      .terr_guard_wlast_o                (terr_guard_wlast_o),
+      .terr_bsock_contention_o           (terr_bsock_contention_o),
+      .terr_bsock_retire_unowned_o       (terr_bsock_retire_unowned_o),
+      .terr_bsock_wbeat_unowned_o        (terr_bsock_wbeat_unowned_o),
       .terr_dm_valid_i                   (terr_dm_valid_i),
       .terr_dm_ready_o                   (terr_dm_ready_o),
       .terr_dm_slot_i                    (terr_dm_slot_i),
@@ -2969,11 +2953,6 @@ module zhao_console_board
       .terr_wb_acks_overdue_o            (terr_wb_acks_overdue_o),
       .terr_jdb_starved_cycles_o         (terr_jdb_starved_cycles_o),
       .terr_jdb_ret_overflow_o           (terr_jdb_ret_overflow_o),
-      .terr_ps_guard_req_o               (terr_ps_guard_req_o),
-      .terr_ps_guard_rsp_i               (terr_ps_guard_rsp_i),
-      .terr_ps_beat_valid_i              (terr_ps_beat_valid_i),
-      .terr_ps_beat_data_i               (terr_ps_beat_data_i),
-      .terr_ps_beat_last_i               (terr_ps_beat_last_i),
       .terr_pt_fld_valid_i               (terr_pt_fld_valid_i),
       .terr_pt_fld_ready_o               (terr_pt_fld_ready_o),
       .terr_pt_fld_height_i              (terr_pt_fld_height_i),
@@ -3198,6 +3177,19 @@ module zhao_console_board
       .proj_svc_busy_o                   (proj_svc_busy_o),
       .proj_a_grants_o                   (proj_a_grants_o),
       .proj_b_grants_o                   (proj_b_grants_o),
+      .terr_light_valid_o                (terr_light_valid_o),
+      .terr_light_ready_i                (terr_light_ready_i),
+      .terr_light_base_o                 (terr_light_base_o),
+      .terr_light_degenerate_o           (terr_light_degenerate_o),
+      .terr_light_src_id_o               (terr_light_src_id_o),
+      .terr_light_refs_taken_o           (terr_light_refs_taken_o),
+      .terr_light_emitted_o              (terr_light_emitted_o),
+      .terr_light_stale_reads_o          (terr_light_stale_reads_o),
+      .terr_light_normals_o              (terr_light_normals_o),
+      .terr_light_shaded_o               (terr_light_shaded_o),
+      .terr_light_degenerate_count_o     (terr_light_degenerate_count_o),
+      .terr_light_base_sat_o             (terr_light_base_sat_o),
+      .terr_light_degen_mismatch_o       (terr_light_degen_mismatch_o),
       .proj_contended_o                  (proj_contended_o),
       .proj_mat_refused_o                (proj_mat_refused_o),
       .post_gd_req_v_o                   (post_gd_req_v_o),

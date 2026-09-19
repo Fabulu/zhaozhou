@@ -436,9 +436,29 @@ int main(int argc, char** argv) {
       ck(compare("C", o.recs, list) == 0, msg);
       std::snprintf(msg, sizeof msg, "C pattern %d started exactly one frame", pattern);
       ck(o.frames == 1, msg, 1, o.frames);
-      std::printf("   pattern %d: %llu cycles, %u bursts, %u beats\n", pattern,
-                  (unsigned long long)o.cycles, d.bursts_seen, d.beats_seen);
+      // EVERY REQUEST THIS BLOCK MAKES IS ONE THE REAL BRIDGE WILL ANSWER.
+      // `zhao_hps_bridge` admits only 64-byte-aligned bursts and answers
+      // anything else with `err | last`, nothing issued. A record boundary is
+      // 32 bytes, so the resume after an abandoned burst -- which this stall
+      // pattern is here to reach -- used to ask for 64 bytes at a 32-byte
+      // boundary. The played bridge now carries the same law, so this check
+      // can fail; before the fix it fails on every pattern with
+      // `misaligned_seen` at 4..6 and the command refused V_BRIDGE.
+      std::snprintf(msg, sizeof msg,
+                    "C pattern %d issued no burst the real bridge would refuse as malformed",
+                    pattern);
+      ck(d.misaligned_seen == 0, msg, 0, long(d.misaligned_seen));
+      std::snprintf(msg, sizeof msg, "C pattern %d counted no bridge error", pattern);
+      ck(d.c_bridge_errs == 0, msg, 0, long(d.c_bridge_errs));
+      std::printf("   pattern %d: %llu cycles, %u bursts, %u beats, %u refetched bytes\n", pattern,
+                  (unsigned long long)o.cycles, d.bursts_seen, d.beats_seen, d.c_refetch);
     }
+    // THE COST OF THE ALIGNMENT, MEASURED RATHER THAN ARGUED. Thirteen records
+    // stalled at every boundary re-fetch the 32-byte lead of the burst they
+    // resume into, so the number is not zero and it is not the list either.
+    ck(d.c_refetch > 0 && d.c_refetch < 13u * 32u,
+       "C the re-fetched lead is real and is bounded by one record per resume", 1,
+       (d.c_refetch > 0 && d.c_refetch < 13u * 32u) ? 1 : 0);
   }
 
   // =========================================================================

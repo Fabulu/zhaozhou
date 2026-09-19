@@ -773,9 +773,19 @@
 //   recording GEOM.LIGHT MEASURED at 48.1x the frame for the ruled 120,000-
 //   vertex profile. Refusing SHADE here does not decide that, and this
 //   paragraph exists so the next reader does not think it did.
-//   SHADE's `sun_*` would be a boundary besides -- three lanes with no producer
-//   anywhere in `fpga/rtl`, whose ratified values (`zref::terrain::kShadeLight*`
-//   = 26758 / 53521 / 26758) are constants a DRIVER writes.
+//   COMPOSED 2026-09-19 (owner ruling R21) AND THIS PARAGRAPH IS THE RECORD OF
+//   WHAT CHANGED. The refusal above said SHADE's `sun_*` "would be a boundary
+//   besides -- three lanes with no producer anywhere in `fpga/rtl`". That was
+//   true and it is not any more: `zhao_light_env` computes the direction for
+//   light 0's own bank words out of SetEnvironment (R25), and publishes it on
+//   `sun_x/y/z_o` -- the SAME values, not a second implementation of 4a's law.
+//   The other half of the refusal -- that TERRAIN.SEQ has no ModeTri arm --
+//   stopped mattering when R21 moved the normal to the REPLAY stage:
+//   `zhao_terrain_lightlane` stores the world vertex on the projector's fill
+//   beat and reads three rows per reference, so no third tessellation pass is
+//   needed and the sequencer's arm is not the question any more.
+//   (GEOM.LIGHT's own instantiation of SHADE, described above, is unaffected:
+//   sharing the lighting core is what that block's header asks for.)
 //
 //   (The block ledger's 18-DSP row for `zhao_terrain_normals` is DIRTY --
 //   `rtlCleanAtHead: false`, dated before the 2026-08-24 change that took it
@@ -975,6 +985,18 @@
 //      needs a two-producer triangle merge AND terrain's own attribute packet
 //      (invw24 from GEOM.DEPTHQUANT for terrain w, and TERRAIN.SHADE's light):
 //      terrain-lane work, named here so it is not mistaken for wiring.
+//
+//      HALF OF THAT IS DONE, 2026-09-19 (owner ruling R21), and the entry is
+//      narrowed rather than closed. `TERRAIN.SHADE's light` in the sentence
+//      above is no longer missing: `u_terrain_lightlane` computes it here --
+//      the world vertex stored on the projector's own fill beat, the ratified
+//      face normal, the ratified flat shade, the sun from SetEnvironment -- and
+//      it leaves on `terr_light_*`, tagged with the same `src_id` the
+//      triangle carries. What is STILL absent is (a) the two-producer triangle
+//      merge into GEOM.CLIP and (b) terrain's `invw24` from GEOM.DEPTHQUANT.
+//      The light's ports are part of THIS entry's packet and not a new
+//      boundary: the same absent consumer takes both, and a light exported
+//      beside a triangle it belongs to is the shape that consumer will want.
 //      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
 //      and `zhao_terrain_tess` are composed below and drive both, so the
 //      shared projector is measured here with BOTH of its clients live and
@@ -1667,73 +1689,44 @@
 //      day comes, the owner is whoever owns the draw -- the same absent
 //      CMD.SCHEDULER path I14 describes -- and this becomes a real entry.
 //
-// I26. THE TERRAIN PAGING SPINE's MEM.HPS.BRIDGE and MEM.GUARD clients
-//      (`terr_hps_*`, `terr_guard_*`) -- BOUNDARY, and this one is a REACHABLE
-//      boundary rather than an unreachable one, which is the whole difference
-//      between it and the refusal recorded at I23.
+// (I26 CLOSED 2026-09-19 (terrain3). THE TERRAIN PAGING SPINE's MEM.HPS.BRIDGE
+//      and MEM.GUARD clients are INTERNAL now. The entry's own diagnosis was
+//      right -- "Both providers EXIST and are already in this closure ... What
+//      is missing is a SOCKET" -- and the socket arrived on 2026-09-19 as
+//      `build_*` on `zhao_shell_top_v2`. What this packet added is what a
+//      socket with WRITERS on it needs:
 //
-//      Both providers EXIST and are already in this closure: `zhao_hps_bridge`
-//      and `zhao_mem_guard` are instantiated inside `zhao_shell_top_v2`. What
-//      is missing is a SOCKET. The shell exposes exactly one guard client port
-//      and it is named for GEOM (`geom_guard_req_i`), and it exposes the HPS
-//      bridge's HARNESS side, not a client side. So terrain cannot reach
-//      either from in here without a shell port change.
+//        * `u_build_share` (`zhao_mem_share_wr`): MEM.UPLOAD and
+//          TERRAIN.PAGELOADER write and `u_terrain_rdshare` reads, all as
+//          ZHAO_CLIENT_TERRAIN_BUILD on slot 6. A readers-only share cannot
+//          hold two writers: the write-data words of two bursts would
+//          interleave in slot 6's one queue, and every requester would see
+//          every other requester's retirement credits -- MEM.UPLOAD would
+//          count a page load's retirement as its own and publish a mapping to
+//          bytes still in flight. The share owns write-data ordering and an
+//          in-order retirement ledger; `tests/memory/mem_share_wr_directed.cpp`
+//          proves both and FIRES its two tripwires.
+//        * HPS WRITES on the socket. The shell's port comment said the arbiter
+//          "has no `b_wr_ready_i`, so the bridge's write READY cannot reach a
+//          writer". The ready did not need routing THROUGH the arbiter: it is a
+//          level that is high only while the one granted burst streams, and
+//          both socket writers already gate on it. So the socket carries the
+//          beats and hands the level back as `build_hps_wr_ready_o`.
 //
-//      The terrain bridge clients are merged by the REAL HPS arbiter before
-//      they leave, so what crosses this boundary is ONE bridge client, not
-//      three. Since 2026-09-19 that is `zhao_hps_arbiter_n` at N=3 (owner
-//      ruling R4): TERRAIN.CMD, TERRAIN.PAGELOADER and TERRAIN.WRITEBACK. The
-//      writeback is the first terrain client that WRITES, so the family gained
-//      `terr_hps_wr_ready_i`, the bridge's own write-acceptance level -- one
-//      wire of the same socket, not a new one. Its sheet READS are the third
-//      requester of `u_terrain_rdshare`, so the guard side gained nothing.
+//      WHAT IT COST TO FIND, recorded because the next composition onto real
+//      fabric will meet the same class: with the spine on the real bridge,
+//      TERRAIN.CMD asked for a 64-byte burst at a 32-byte-aligned address on
+//      every resume after an abandoned burst, and `zhao_hps_bridge` refuses
+//      that as malformed. The block's own bench checked only `len`. Fixed in
+//      `zhao_terrain_cmd` (aligned base, skipped lead, counted in
+//      `list_refetch_bytes_o`) and the bench now carries the bridge's law.
 //
-//      WHY THIS IS NOT I23's REFUSAL AGAIN. GEOM.MESHFETCH's beats come back
-//      from INSIDE the shell through MEM.VRAM.ARBITER and `zhao_sdram_ctrl`,
-//      whose `phy_*` no bench connects -- nothing outside can put a beat on
-//      them, so those blocks would elaborate and never see one. These ports
-//      are on THIS MODULE'S EDGE, where the completion plan's own sentence
-//      applies: the harness "supplies external clocks, input events, MEMORY
-//      BEHAVIOR and host packets". A harness can drive these and the composed
-//      terrain bench already drives exactly this shape.
-//
-//      WIDENED 2026-09-19 BY A SECOND GUARD CLIENT (`terr_ps_guard_*`,
-//      `terr_ps_beat_*`). The compose engine's TERRAIN.PAGESTREAM reads the
-//      page back out of the pool that TERRAIN.PAGELOADER wrote, so it is a READ
-//      client and needs the return leg -- `beat_valid/data/last` -- that a
-//      write client has no use for. It is listed here rather than as its own
-//      entry because it is the same absent thing: the shell exposes ONE guard
-//      socket and it is named for GEOM.
-//
-//      AND NOT WIDENED AGAIN BY THE HEADER READER, 2026-09-19, which is the
-//      part worth writing down because the obvious version of that packet WOULD
-//      have widened it. TERRAIN.HDRREAD (composed item 13) is a third reader of
-//      the same pool, and a third guard port on this module's edge would have
-//      turned a two-port boundary into a three-port one while closing I35 --
-//      a gap count that goes down by one and a boundary that goes up by one.
-//
-//      IT SHARES INSTEAD, through `zhao_mem_share2` as `u_terrain_rdshare`, and
-//      the share is not invented here: it is the SAME MODULE
-//      `zhao_geom_mem_adapter` is now a wrapper over, with ENGINE1's two values
-//      swapped for TERRAIN.BUILD's. That is the pattern the geometry asset path
-//      established and this entry's own note about `zhao_vram_arbiter` casting
-//      the slot index is why: a genuinely new client id is a memory-rules
-//      ruling, and a share avoids needing one.
-//
-//      THIS IS NOT THE MUX THE PARAGRAPH BELOW REFUSES, and the difference is
-//      exact. That paragraph refuses joining the WRITE client and the READ
-//      client, because `zhao_mem_guard`'s arbitration between two different
-//      privileges is the shell's business. `u_terrain_rdshare` joins two
-//      readers of ONE arm of ONE window under ONE client id, upstream of the
-//      guard, in a committed block with its own directed test and its own
-//      contention counter. Two ports out, still, and one owner to join them
-//      when the shell grows the socket.
-//
-//      THE TWO GUARD CLIENTS ARE NOT MERGED HERE, and that is deliberate.
-//      `zhao_mem_guard`'s arbitration is the shell's, and putting a mux between
-//      two clients in this file would be an arbiter the composer invented --
-//      the thing the paging spine's own note above is proud of not having done.
-//      Two ports out, one owner to join them, when the shell grows the socket.
+//      AND WHAT UNBLOCKED IT: `zhao_hps_arbiter_n` latched a client's request
+//      only while IDLE, and CMD.DMA pulses its request for ONE cycle, so with
+//      the spine keeping the bridge busy the ring read stopped after one burst
+//      and the whole render path read as dead. That is the cmdmem packet's
+//      pending-slot repair (ruling R55); this composition waited for it rather
+//      than working around it.)
 //
 // I27. THE DIRECTORY's DEFORMATION MARK and HANDLE CHECK (`terr_dm_*`,
 //      `terr_chk_*`) -- BOUNDARY. NARROWED 2026-09-19, and the two halves that
@@ -3680,29 +3673,16 @@ module zhao_console_core
   input  logic [31:0]             terr_cfg_arena_bytes_i,
   input  logic [15:0]             terr_cfg_load_budget_i,
 
-  // ---- I26: the spine's MEM.HPS.BRIDGE and MEM.GUARD clients --------------
-  // ONE bridge port, because the two terrain readers go through the REAL
-  // `zhao_hps_arbiter` instantiated below and not through anything invented
-  // here. See entry I26 for why the port stops at this module's edge.
-  output zhao_hps_burst_req_t     terr_hps_req_o,
-  input  logic                    terr_hps_grant_i,
-  output logic                    terr_hps_wr_valid_o,
-  output logic [63:0]             terr_hps_wr_data_o,
-  output logic                    terr_hps_wr_last_o,
-  input  zhao_hps_burst_rsp_t     terr_hps_rsp_i,
-  // The bridge's write-acceptance LEVEL (`zhao_hps_bridge.wr_ready`). WIDENED
-  // 2026-09-19 when TERRAIN.WRITEBACK became the first terrain client that
-  // WRITES: the bridge consumes a beat only once the HPS has accepted the
-  // burst, so a writer that streams on the grant loses its first beats
-  // silently. Same socket as the rest of this family; it closes with I26.
-  input  logic                    terr_hps_wr_ready_i,
-
-  output zhao_guard_req_t         terr_guard_req_o,
-  input  zhao_guard_rsp_t         terr_guard_rsp_i,
-  output logic [63:0]             terr_guard_wdata_o,
-  output logic                    terr_guard_wvalid_o,
-  input  logic                    terr_guard_wready_i,
-  output logic                    terr_guard_wlast_o,
+  // ---- I26 CLOSED 2026-09-19 (terrain3): the spine is ON the TERRAIN.BUILD socket
+  // The terrain HPS arbiter's one bridge port and the pool's two guard clients
+  // (TERRAIN.PAGELOADER's writes, the compose path's read share) used to stop
+  // at this edge. They now reach the shell's REAL `zhao_hps_bridge` and
+  // `zhao_mem_guard` through `u_build_share` and the socket's HPS client 1 --
+  // see `u_build_share` below. What crosses the edge is the socket share's
+  // evidence: contention between its three requesters, and its two tripwires.
+  output logic [31:0]             terr_bsock_contention_o,
+  output logic [31:0]             terr_bsock_retire_unowned_o,
+  output logic [31:0]             terr_bsock_wbeat_unowned_o,
 
   // ---- I27 (narrowed): the directory's deformation and handle-check ports --
   //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
@@ -3765,26 +3745,9 @@ module zhao_console_core
   // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
   // ==========================================================================
 
-  // ---- I26 (extended): THE COMPOSE PATH's ONE MEM.GUARD READ client -------
-  // A SECOND guard client, not a second opinion about the first.
-  // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
-  // READS the same page back out, so it needs the return path
-  // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
-  // one guard socket and it is named for GEOM, so both stop here -- see entry
-  // I26 for why that is a REACHABLE boundary and not I23's refusal.
-  //
-  // STILL ONE PORT AFTER TERRAIN.HDRREAD LANDED, 2026-09-19, and that is the
-  // point of the block behind it.  TWO readers now sit on this socket --
-  // TERRAIN.PAGESTREAM's three plane bursts and TERRAIN.HDRREAD's one header
-  // burst -- joined by `zhao_mem_share2`, the SAME block GEOM.MEM.ADAPTER is a
-  // wrapper over.  The arbiter gains no client, the guard gains no arm, and
-  // this boundary does not widen.  Composing the header reader with its own
-  // socket would have made I26 a three-port entry instead of closing anything.
-  output zhao_guard_req_t         terr_ps_guard_req_o,
-  input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
-  input  logic                    terr_ps_beat_valid_i,
-  input  logic [63:0]             terr_ps_beat_data_i,
-  input  logic                    terr_ps_beat_last_i,
+  // ---- I26 (extended) CLOSED 2026-09-19: the compose path's read share is
+  // requester 2 of `u_build_share`, on the shell's slot-6 socket. Its ports
+  // left this list with the rest of I26.
 
   // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
   input  logic                    terr_pt_fld_valid_i,
@@ -4118,6 +4081,30 @@ module zhao_console_core
   output logic                    proj_svc_busy_o,
   output logic [31:0]             proj_a_grants_o,
   output logic [31:0]             proj_b_grants_o,
+
+  // ---- TERRAIN's LIT NORMALS: the per-triangle base light (R21) -----------
+  // Part of entry I13's terrain triangle packet, not a new boundary: the
+  // entry's own sentence says joining terrain to GEOM.CLIP needs "terrain's
+  // own attribute packet (invw24 from GEOM.DEPTHQUANT for terrain w, and
+  // TERRAIN.SHADE's light)". This is that light, computed here, leaving on the
+  // same edge as the triangle it belongs to and tagged with the same src_id.
+  // Its producer chain is REAL end to end: the world vertex is stored on the
+  // projector's own fill beat, the face normal is `zhao_terrain_normals` and
+  // the shade is `zhao_terrain_shade`, with the sun from SetEnvironment
+  // through `zhao_light_env` (R25). The consumer is I13's absent merge.
+  output logic                    terr_light_valid_o,
+  input  logic                    terr_light_ready_i,
+  output logic signed [31:0]      terr_light_base_o,
+  output logic                    terr_light_degenerate_o,
+  output logic [15:0]             terr_light_src_id_o,
+  output logic [31:0]             terr_light_refs_taken_o,
+  output logic [31:0]             terr_light_emitted_o,
+  output logic [31:0]             terr_light_stale_reads_o,
+  output logic [31:0]             terr_light_normals_o,
+  output logic [31:0]             terr_light_shaded_o,
+  output logic [31:0]             terr_light_degenerate_count_o,
+  output logic [31:0]             terr_light_base_sat_o,
+  output logic [31:0]             terr_light_degen_mismatch_o,
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
@@ -5078,6 +5065,14 @@ module zhao_console_core
   output logic         surf_fld_busy_o
 );
 
+  // THE TERRAIN SPINE's HPS PORT, internal since entry I26 closed: the bridge
+  // side of `u_terr_hps_arb`, carried to the TERRAIN.BUILD socket's client 1.
+  zhao_hps_burst_req_t     terr_hps_req;
+  logic                    terr_hps_grant;
+  logic                    terr_hps_wr_valid, terr_hps_wr_last, terr_hps_wr_ready;
+  logic [63:0]             terr_hps_wr_data;
+  zhao_hps_burst_rsp_t     terr_hps_rsp;
+
   // ==========================================================================
   // ELABORATION GUARDS.
   //
@@ -5529,7 +5524,7 @@ module zhao_console_core
     .hps_wr_valid_o   (ptb_hps_wvalid),
     .hps_wr_data_o    (ptb_hps_wdata),
     .hps_wr_last_o    (ptb_hps_wlast),
-    .hps_wr_ready_i   (terr_hps_wr_ready_i),
+    .hps_wr_ready_i   (terr_hps_wr_ready),
     .busy_o           (ph_busy_unused),
     .cur_buf_o        (part_hps_cur_buf_o),
     .cur_count_o      (part_hps_cur_count_o),
@@ -6401,6 +6396,8 @@ module zhao_console_core
   wire        cmd_env_valid, cmd_env_ready;
   wire [15:0] cmd_env_yaw, cmd_env_pitch, cmd_env_sun, cmd_env_amb;
   wire        le_cfg_we, le_cfg_commit, le_hold;
+  // R21/R25: the sun direction the bank publishes, for TERRAIN's lit normals.
+  wire signed [31:0] le_sun_x, le_sun_y, le_sun_z;
   wire [7:0]  le_cfg_addr;
   wire [31:0] le_cfg_data;
   wire [3:0]  le_nlights;
@@ -6424,6 +6421,11 @@ module zhao_console_core
     .hold_o         (le_hold),
     .stream_idle_i  (ls_idle),
     .nlights_o      (le_nlights),
+
+    // R21: the same direction light 0's words carry, published for terrain.
+    .sun_x_o        (le_sun_x),
+    .sun_y_o        (le_sun_y),
+    .sun_z_o        (le_sun_z),
 
     .loads_o      (geom_light_env_loads_o),
     .records_o    (geom_light_env_records_o),
@@ -7052,6 +7054,27 @@ module zhao_console_core
   wire [GEOM_GEN_W-1:0]     ts_open_gen;
 
   wire                      ts_r_valid, ts_r_ready, ts_r_view;
+  // ---- THE REFERENCE FORK (R21): TWO CONSUMERS, EACH SERVED EXACTLY ONCE ---
+  // The reference stream now has two customers -- the projector's replay shell
+  // and the light lane -- and this is GLUE 6's AND-fork, not an AND of their
+  // readies. The difference is not cosmetic and it was MEASURED: with the
+  // producer's ready ANDed but each consumer seeing the raw `valid`, the replay
+  // shell accepted the SAME reference on every cycle the producer held it
+  // waiting for the slower lane. `proj_replay_triangles_o` went from 128 to
+  // 18,244 for 128 triangles -- about 147 replays each, which is exactly the
+  // lane's clocks per triangle. The output was identical every time, so nothing
+  // downstream could see it; only the counter could (CLAUDE.md, "counters see
+  // what pictures cannot").
+  //
+  // So each consumer's VALID is gated on the other's READY, both accept on the
+  // same clock, and the producer's ready is the AND. NO CONSUMER'S READY READS
+  // ITS OWN VALID: `tl_r_ready` is `st_q == S_IDLE` in the lane, a register,
+  // and the shell's is its own arena state -- so nothing here closes a
+  // combinational loop.
+  wire                      ps_r_ready, tl_r_ready;
+  wire                      ps_r_valid_c = ts_r_valid && tl_r_ready;
+  wire                      tl_r_valid_c = ts_r_valid && ps_r_ready;
+  assign ts_r_ready = ps_r_ready && tl_r_ready;
   wire [PROJ_T_ARENA_W-1:0] ts_r_arena;
   wire [GEOM_GEN_W-1:0]     ts_r_gen;
   wire [PROJ_T_INDEX_W-1:0] ts_r_ia, ts_r_ib, ts_r_ic;
@@ -7739,8 +7762,10 @@ module zhao_console_core
     .seal_arena_i (ts_seal_arena),
 
     // REAL: the tagged references, from the same sequencer.
-    .ref_valid_i  (ts_r_valid),
-    .ref_ready_o  (ts_r_ready),
+    // R21: the fork above. This shell sees a reference only when the light
+    // lane can take it too, so it accepts each one exactly once.
+    .ref_valid_i  (ps_r_valid_c),
+    .ref_ready_o  (ps_r_ready),
     .ref_arena_i  (ts_r_arena),
     .ref_gen_i    (ts_r_gen),
     .ref_ia_i     (ts_r_ia),
@@ -7792,6 +7817,90 @@ module zhao_console_core
     .b_grants_o        (proj_b_grants_o),
     .contended_o       (proj_contended_o),
     .mat_refused_o     (proj_mat_refused_o)
+  );
+
+  // ==========================================================================
+  // TERRAIN's LIT NORMALS (owner ruling R21): TERRAIN.NORMALS and TERRAIN.SHADE
+  // ==========================================================================
+  // Both blocks have been BUILT and disconnected since they were written --
+  // `zhao_terrain_normals` because the only ratified normal needed a triangle
+  // and terrain had no triangle stage, `zhao_terrain_shade` because its sun had
+  // no producer and its output had no customer. R5 asked for a third ModeTri
+  // pass and terrain2 measured that it cannot fit (4,096 jobs x 456 clocks
+  // against a 1,666,666-clock frame). R21 kept the GOAL and changed the MEANS:
+  // compute the face normal at the REPLAY stage from a vertex store.
+  //
+  // `zhao_terrain_lightlane` is that store and that lane. It writes the WORLD
+  // vertex on the projector's own fill beat -- the same {arena, index} the
+  // arena is keyed by, R11's pattern, so no two streams are joined -- and reads
+  // three rows per reference. The sun is `zhao_light_env`'s published direction
+  // (R25's SetEnvironment, the value the bank already computes) rather than a
+  // second implementation of 4a's law.
+  //
+  // WHAT IT COSTS, in clocks rather than in adjectives: `zhao_terrain_shade` is
+  // 147 clocks per triangle with one in flight, so the lane's ready throttles
+  // the reference stream and terrain replay runs at that rate. At the ruled
+  // 2,000 terrain triangles per frame that is 294,000 of 1,666,666 clocks --
+  // 17.6% -- and `tests/terrain/terrain_lightlane_directed.cpp` measures the
+  // interval rather than asserting it.
+  zhao_terrain_lightlane #(
+    .ARENAS (PROJ_T_ARENAS),
+    .DEPTH  (PROJ_T_DEPTH),
+    .GEN_W  (GEOM_GEN_W),
+    .SRCW   (16)
+  ) u_terrain_lightlane (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the fill beat is client B's accepted vertex -- the same handshake
+    // that writes the projector's arena, so the store cannot hold a vertex the
+    // arena does not.
+    .fill_valid_i(ts_b_valid),
+    .fill_ready_i(ts_b_ready),
+    .fill_arena_i(ts_b_arena),
+    .fill_index_i(ts_b_index),
+    .fill_vx_i   (ts_b_vx),
+    .fill_vy_i   (ts_b_vy),
+    .fill_vz_i   (ts_b_vz),
+
+    // REAL: the arena's lifetime, from the same sequencer and the same shell.
+    .open_i      (ts_open),
+    .open_arena_i(ts_open_arena),
+    .open_gen_i  (ts_open_gen),
+
+    // REAL: TERRAIN.GROUP_SEQ's reference stream, joined with the replay's.
+    .ref_valid_i (tl_r_valid_c),
+    .ref_ready_o (tl_r_ready),
+    .ref_arena_i (ts_r_arena),
+    .ref_gen_i   (ts_r_gen),
+    .ref_ia_i    (ts_r_ia),
+    .ref_ib_i    (ts_r_ib),
+    .ref_ic_i    (ts_r_ic),
+    .ref_src_id_i(ts_r_src_id),
+
+    // REAL: the sun SetEnvironment loaded, published by GEOM.LIGHT.ENV.
+    .sun_x_i(le_sun_x),
+    .sun_y_i(le_sun_y),
+    .sun_z_i(le_sun_z),
+
+    // I13: the light leaves with the triangle it belongs to.
+    .light_valid_o     (terr_light_valid_o),
+    .light_ready_i     (terr_light_ready_i),
+    .light_base_o      (terr_light_base_o),
+    .light_degenerate_o(terr_light_degenerate_o),
+    .light_src_id_o    (terr_light_src_id_o),
+
+    .refs_taken_o       (terr_light_refs_taken_o),
+    .lights_emitted_o   (terr_light_emitted_o),
+    .stale_reads_o      (terr_light_stale_reads_o),
+    .normals_evaluated_o(terr_light_normals_o),
+    .triangles_shaded_o (terr_light_shaded_o),
+    .degenerate_count_o (terr_light_degenerate_count_o),
+    .base_sat_o         (terr_light_base_sat_o),
+    .degen_mismatch_o   (terr_light_degen_mismatch_o),
+    /* verilator lint_off PINCONNECTEMPTY */
+    .idle_o             ()
+    /* verilator lint_on PINCONNECTEMPTY */
   );
 
   zhao_geom_proj_lane #(
@@ -8397,13 +8506,139 @@ module zhao_console_core
   zhao_hps_burst_req_t [0:0] upl_hps_req;
   logic                [0:0] upl_hps_grant;
   zhao_hps_burst_rsp_t [0:0] upl_hps_rsp;
+  // ---- THE TERRAIN.BUILD SOCKET's UPSTREAM SHARE (entry I26, CLOSED) -------
+  // The shell exposes ONE slot-6 guard client and says "upstream sharing of
+  // the one guard port is the composer's". It has three customers here:
+  //   0: MEM.UPLOAD            -- writes (a resource into R32's region)
+  //   1: TERRAIN.PAGELOADER    -- writes (a page into TERRAIN.PAGE_POOL)
+  //   2: `u_terrain_rdshare`   -- reads  (HDRREAD, PAGESTREAM, WRITEBACK)
+  // A readers-only share cannot hold two WRITERS: it would let their data
+  // words interleave in slot 6's one queue, and hand every requester every
+  // other requester's retirement credits -- MEM.UPLOAD would count a page
+  // load's retirement as its own and publish a mapping to bytes in flight.
+  // `zhao_mem_share_wr` is `zhao_mem_share_n` with those two channels added
+  // (write-data ownership, an in-order retirement ledger), proved in
+  // tests/memory/mem_share_wr_directed.cpp. All three already carried
+  // ZHAO_CLIENT_TERRAIN_BUILD's privilege; the share makes that identity
+  // TRUSTED rather than claimed. The rotation's bound is N-1: a page load waits
+  // at most for one upload request and one read.
+  zhao_guard_req_t         tpl_g_req;
+  zhao_guard_rsp_t         tpl_g_rsp;
+  logic [63:0]             tpl_g_wdata;
+  logic                    tpl_g_wvalid, tpl_g_wready, tpl_g_wlast;
+  zhao_guard_req_t         trs_m_req;
+  zhao_guard_rsp_t         trs_m_rsp;
+  logic                    trs_m_beat_valid, trs_m_beat_last;
+  logic [63:0]             trs_m_beat_data;
+
+  zhao_guard_req_t         bsk_req;
+  zhao_guard_rsp_t         bsk_rsp;
+  logic [63:0]             bsk_wdata;
+  logic                    bsk_wvalid, bsk_wready, bsk_wlast;
+  logic [7:0]              bsk_credits;
+  logic                    bsk_beat_valid, bsk_beat_last;
+  logic [63:0]             bsk_beat_data;
+
+  zhao_guard_req_t [2:0]       bs_req;
+  zhao_guard_rsp_t [2:0]       bs_rsp;
+  logic            [63:0]      bs_beat_data;
+  logic            [2:0][63:0] bs_wdata;
+  logic            [2:0]       bs_wvalid, bs_wlast;
   /* verilator lint_off UNUSEDSIGNAL */
-  // The socket's READ leg. Its customers are the terrain readers (I26); until
-  // they move onto it nothing here reads a slot-6 beat, and a sink says so
-  // where an empty pin would say nothing.
-  logic                    sock_beat_valid, sock_beat_last;
-  logic [63:0]             sock_beat_data;
+  // Beats for requesters 0 and 1 (the two writers never read, so the share
+  // never routes them one), requester 2's write ready (the read share never
+  // writes), and the two retirement streams nobody consumes -- see below.
+  logic            [2:0]       bs_beat_valid, bs_beat_last;
+  logic            [2:0]       bs_wready;
+  logic            [2:0][7:0]  bs_retire;
+  // Per-requester job counts, the share's own denial/short/long/unowned and
+  // ledger counters, and the retirement streams of the two requesters that do
+  // not consume one: TERRAIN.PAGELOADER publishes on its last beat's
+  // acceptance (the pool is read back through the SAME client, so the
+  // arbiter's per-slot order already puts its reads after its writes), and a
+  // read's retirement means nothing to a reader. All sunk here, named.
+  logic            [2:0][31:0] bs_jobs;
+  logic [31:0]                 bs_denied, bs_short, bs_long, bs_unowned, bs_ledger_full;
   /* verilator lint_on UNUSEDSIGNAL */
+
+  assign bs_req[0]      = upl_guard_req;
+  assign bs_req[1]      = tpl_g_req;
+  assign bs_req[2]      = trs_m_req;
+  assign upl_guard_rsp  = bs_rsp[0];
+  assign tpl_g_rsp      = bs_rsp[1];
+  assign trs_m_rsp      = bs_rsp[2];
+  assign bs_wdata       = {64'd0, tpl_g_wdata, upl_wdata};
+  assign bs_wvalid      = {1'b0, tpl_g_wvalid, upl_wvalid};
+  assign bs_wlast       = {1'b0, tpl_g_wlast, upl_wlast};
+  assign upl_wready     = bs_wready[0];
+  assign tpl_g_wready   = bs_wready[1];
+  assign upl_retire_words = bs_retire[0];
+  assign trs_m_beat_valid = bs_beat_valid[2];
+  assign trs_m_beat_last  = bs_beat_last[2];
+  assign trs_m_beat_data  = bs_beat_data;
+
+  zhao_mem_share_wr #(
+    .N         (3),
+    .CLIENT_ID (6),        // ZHAO_CLIENT_TERRAIN_BUILD -- see zhao_pkg
+    .RQ        (4)
+  ) u_build_share (
+    .clk             (gpu_clk),
+    .rst_n           (rst_n),
+    .req_i           (bs_req),
+    .rsp_o           (bs_rsp),
+    .beat_valid_o    (bs_beat_valid),
+    .beat_data_o     (bs_beat_data),
+    .beat_last_o     (bs_beat_last),
+    .wdata_i         (bs_wdata),
+    .wvalid_i        (bs_wvalid),
+    .wlast_i         (bs_wlast),
+    .wready_o        (bs_wready),
+    .retire_o        (bs_retire),
+    .m_req_o         (bsk_req),
+    .m_rsp_i         (bsk_rsp),
+    .m_beat_valid_i  (bsk_beat_valid),
+    .m_beat_data_i   (bsk_beat_data),
+    .m_beat_last_i   (bsk_beat_last),
+    .m_wdata_o       (bsk_wdata),
+    .m_wvalid_o      (bsk_wvalid),
+    .m_wlast_o       (bsk_wlast),
+    .m_wready_i      (bsk_wready),
+    .m_credits_i     (bsk_credits),
+    .jobs_o          (bs_jobs),
+    .denied_o        (bs_denied),
+    .contention_o    (terr_bsock_contention_o),
+    .err_short_o     (bs_short),
+    .err_long_o      (bs_long),
+    .err_unowned_o   (bs_unowned),
+    .retire_unowned_o(terr_bsock_retire_unowned_o),
+    .wbeat_unowned_o (terr_bsock_wbeat_unowned_o),
+    .ledger_full_o   (bs_ledger_full)
+  );
+
+  // THE TERRAIN HPS ARBITER's ONE BRIDGE PORT, now the socket's HPS client 1.
+  // Client 0 stays MEM.UPLOAD's, so `upl_hps_wait_o` reads what it read before;
+  // index order is the arbiter's priority law, so the terrain spine sits BELOW
+  // the upload -- a background copy is short and bounded, while PART.STATE's
+  // generation stream behind this port asks for most of a tick, and putting it
+  // above would starve every upload for the tick. Starvation of the spine is
+  // visible as `build_hps_wait_o[1]` -> `terr_hps_sock_wait` (sunk: the spine's
+  // own per-client waits are already exported by `u_terr_hps_arb`).
+  // (`terr_hps_*` are declared at the top of the body: PART.STATE reads
+  // `terr_hps_wr_ready` several thousand lines above this point.)
+  zhao_hps_burst_req_t [1:0]       sock_hps_req;
+  logic                [1:0]       sock_hps_grant;
+  zhao_hps_burst_rsp_t [1:0]       sock_hps_rsp;
+  logic                [1:0][31:0] sock_hps_wait;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic                [31:0]      terr_hps_sock_wait;
+  /* verilator lint_on UNUSEDSIGNAL */
+  assign sock_hps_req      = {terr_hps_req, upl_hps_req[0]};
+  assign upl_hps_grant[0]  = sock_hps_grant[0];
+  assign upl_hps_rsp[0]    = sock_hps_rsp[0];
+  assign terr_hps_grant    = sock_hps_grant[1];
+  assign terr_hps_rsp      = sock_hps_rsp[1];
+  assign upl_hps_wait_o    = sock_hps_wait[0];
+  assign terr_hps_sock_wait = sock_hps_wait[1];
 
   zhao_mem_upload u_mem_upload (
     .clk                  (gpu_clk),
@@ -8451,7 +8686,7 @@ module zhao_console_core
   zhao_shell_top_v2 #(
     .FRAMER_Q    (FRAMER_Q),
     .WFIFO_W     (WFIFO_W),
-    .BUILD_HPS_N (1)
+    .BUILD_HPS_N (2)
   ) u_shell (
     .gpu_clk                   (gpu_clk),
     .vid_clk                   (vid_clk),
@@ -8634,24 +8869,29 @@ module zhao_console_core
     .geom_beat_valid_o         (ma_m_beat_valid),
     .geom_beat_data_o          (ma_m_beat_data),
     .geom_beat_last_o          (ma_m_beat_last),
-    // THE TERRAIN.BUILD SOCKET (slot 6 + HPS client 2), 2026-09-19. MEM.UPLOAD
-    // is its first client. The READ-BEAT leg exists for the terrain readers
-    // (TERRAIN.PAGESTREAM / HDRREAD, entry I26), which have not moved onto it
-    // yet, so it is sunk below rather than left as an empty pin.
-    .build_guard_req_i         (upl_guard_req),
-    .build_guard_rsp_o         (upl_guard_rsp),
-    .build_wdata_i             (upl_wdata),
-    .build_wvalid_i            (upl_wvalid),
-    .build_wready_o            (upl_wready),
-    .build_wlast_i             (upl_wlast),
-    .build_retire_words_o      (upl_retire_words),
-    .build_beat_valid_o        (sock_beat_valid),
-    .build_beat_data_o         (sock_beat_data),
-    .build_beat_last_o         (sock_beat_last),
-    .build_hps_req_i           (upl_hps_req),
-    .build_hps_grant_o         (upl_hps_grant),
-    .build_hps_rsp_o           (upl_hps_rsp),
-    .build_hps_wait_o          (upl_hps_wait_o),
+    // THE TERRAIN.BUILD SOCKET (slot 6 + HPS clients 2 and 3). Since entry I26
+    // closed its guard client is `u_build_share` (MEM.UPLOAD, TERRAIN.PAGELOADER
+    // and the terrain read share), and its HPS client 1 is `u_terr_hps_arb`.
+    .build_guard_req_i         (bsk_req),
+    .build_guard_rsp_o         (bsk_rsp),
+    .build_wdata_i             (bsk_wdata),
+    .build_wvalid_i            (bsk_wvalid),
+    .build_wready_o            (bsk_wready),
+    .build_wlast_i             (bsk_wlast),
+    .build_retire_words_o      (bsk_credits),
+    .build_beat_valid_o        (bsk_beat_valid),
+    .build_beat_data_o         (bsk_beat_data),
+    .build_beat_last_o         (bsk_beat_last),
+    .build_hps_req_i           (sock_hps_req),
+    .build_hps_grant_o         (sock_hps_grant),
+    .build_hps_rsp_o           (sock_hps_rsp),
+    .build_hps_wait_o          (sock_hps_wait),
+    // MEM.UPLOAD reads only; the terrain arbiter's port carries TERRAIN.WRITEBACK's
+    // journal and PART.STATE's generation writes.
+    .build_hps_wr_valid_i      ({terr_hps_wr_valid, 1'b0}),
+    .build_hps_wr_data_i       ({terr_hps_wr_data, 64'd0}),
+    .build_hps_wr_last_i       ({terr_hps_wr_last, 1'b0}),
+    .build_hps_wr_ready_o      (terr_hps_wr_ready),
     // R32: the guard's write arm into RENDER.ASSET_POOL is bounded by the SAME
     // region MEM.UPLOAD checks every request against and publishes into, so
     // the two cannot disagree about where a resource may land.
@@ -9077,12 +9317,12 @@ module zhao_console_core
     .wr_data_i    (thps_wr_data),
     .wr_last_i    (thps_wr_last),
     .rsp_o        (thps_rsp),
-    .b_req_o      (terr_hps_req_o),
-    .b_req_grant_i(terr_hps_grant_i),
-    .b_wr_valid_o (terr_hps_wr_valid_o),
-    .b_wr_data_o  (terr_hps_wr_data_o),
-    .b_wr_last_o  (terr_hps_wr_last_o),
-    .b_rsp_i      (terr_hps_rsp_i),
+    .b_req_o      (terr_hps_req),
+    .b_req_grant_i(terr_hps_grant),
+    .b_wr_valid_o (terr_hps_wr_valid),
+    .b_wr_data_o  (terr_hps_wr_data),
+    .b_wr_last_o  (terr_hps_wr_last),
+    .b_rsp_i      (terr_hps_rsp),
     .bursts_o     (thps_bursts),
     .wait_cycles_o(thps_wait)
   );
@@ -9102,6 +9342,12 @@ module zhao_console_core
   wire [31:0]        tcm_rec_src_id;
   /* verilator lint_off UNUSEDSIGNAL */
   wire [31:0]        tcm_list_bytes_read;
+  // The re-fetched lead of a burst resumed after an abandoned one: the cost of
+  // `zhao_hps_bridge`'s 64-byte alignment against T5's 32-byte record. Sunk
+  // here beside `list_bytes_read_o`, which is sunk for the same reason -- the
+  // block's own directed test owns both numbers
+  // (tests/terrain/terrain_cmd_rtl_directed.cpp, case C).
+  wire [31:0]        tcm_list_refetch;
   wire               tcm_idle;
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -9156,6 +9402,7 @@ module zhao_console_core
     .sets_refused_o   (terr_cmd_sets_refused_o),
     .records_emitted_o(terr_cmd_records_emitted_o),
     .list_bytes_read_o(tcm_list_bytes_read),
+    .list_refetch_bytes_o(tcm_list_refetch),
     .crc_fails_o      (terr_cmd_crc_fails_o),
     .bridge_errs_o    (terr_cmd_bridge_errs_o),
     .idle_o           (tcm_idle)
@@ -9758,7 +10005,7 @@ module zhao_console_core
     .hps_rsp_i      (twb_hps_rsp),
     .hps_wdata_o    (twb_hps_wdata),
     .hps_wvalid_o   (twb_hps_wvalid),
-    .hps_wready_i   (terr_hps_wr_ready_i),
+    .hps_wready_i   (terr_hps_wr_ready),
     .hps_wlast_o    (twb_hps_wlast),
 
     // D3: SW.STREAM's ACK goes straight to the ticket table, which is the one
@@ -9914,12 +10161,12 @@ module zhao_console_core
     .hps_req_grant_i(tpl_hps_grant),
     .hps_rsp_i      (tpl_hps_rsp),
 
-    .guard_req_o   (terr_guard_req_o),
-    .guard_rsp_i   (terr_guard_rsp_i),
-    .guard_wdata_o (terr_guard_wdata_o),
-    .guard_wvalid_o(terr_guard_wvalid_o),
-    .guard_wready_i(terr_guard_wready_i),
-    .guard_wlast_o (terr_guard_wlast_o),
+    .guard_req_o   (tpl_g_req),
+    .guard_rsp_i   (tpl_g_rsp),
+    .guard_wdata_o (tpl_g_wdata),
+    .guard_wvalid_o(tpl_g_wvalid),
+    .guard_wready_i(tpl_g_wready),
+    .guard_wlast_o (tpl_g_wlast),
 
     .fin_valid_o  (tpl_fin_valid),
     .fin_ready_i  (tpl_fin_ready),
@@ -11120,12 +11367,12 @@ module zhao_console_core
     .beat_data_o (trs_beat_data),
     .beat_last_o (trs_beat_last),
 
-    // I26: the one client leaves this module.
-    .m_req_o       (terr_ps_guard_req_o),
-    .m_rsp_i       (terr_ps_guard_rsp_i),
-    .m_beat_valid_i(terr_ps_beat_valid_i),
-    .m_beat_data_i (terr_ps_beat_data_i),
-    .m_beat_last_i (terr_ps_beat_last_i),
+    // I26 CLOSED: the one client is requester 2 of `u_build_share`.
+    .m_req_o       (trs_m_req),
+    .m_rsp_i       (trs_m_rsp),
+    .m_beat_valid_i(trs_m_beat_valid),
+    .m_beat_data_i (trs_m_beat_data),
+    .m_beat_last_i (trs_m_beat_last),
 
     .jobs_o       (trs_jobs),
     .denied_o     (terr_rdshare_denied_o),

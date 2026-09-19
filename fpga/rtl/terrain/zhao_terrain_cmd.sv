@@ -172,6 +172,13 @@ module zhao_terrain_cmd
     output var logic [31:0] sets_refused_o,
     output var logic [31:0] records_emitted_o,
     output var logic [31:0] list_bytes_read_o,
+    // Bytes the bridge delivered that this block had already consumed: the
+    // lead of a burst that starts BELOW the byte the walk wants, because
+    // `zhao_hps_bridge` admits only 64-byte-aligned bursts and a record
+    // boundary is 32. It is the measured cost of abandoning a burst for the
+    // consumer, and it is deliberately NOT folded into `list_bytes_read_o`,
+    // which means "the list was read, twice".
+    output var logic [31:0] list_refetch_bytes_o,
     output var logic [31:0] crc_fails_o,
     output var logic [31:0] bridge_errs_o,
     output var logic        idle_o
@@ -228,6 +235,7 @@ module zhao_terrain_cmd
   logic [31:0] crc_q;
   logic [15:0] emitted_q;
   logic [ 1:0] rbeat_q;         // which beat of the current record
+  logic [ 2:0] skip_q;          // beats of this burst below the wanted byte
   logic [63:0] rec_b0_q, rec_b1_q, rec_b2_q;
   logic [ 3:0] verdict_q;
   logic [31:0] crc_seen_q;
@@ -283,15 +291,47 @@ module zhao_terrain_cmd
   // 32-bit "bytes this burst" and then truncating it at the port is how a
   // burst length silently becomes 0 for a 128-byte remainder.
   logic [6:0]  this_bytes_c;
+
+  // ==========================================================================
+  // THE BRIDGE ADMITS ONLY 64-BYTE-ALIGNED BURSTS, AND A RECORD BOUNDARY IS 32
+  // ==========================================================================
+  // Fixed 2026-09-19 (terrain3), found by composing this block onto the REAL
+  // `zhao_hps_bridge` instead of a played one. The bridge's own rule is
+  // `malformed = (len == 0) || (len > 64) || (addr[5:0] != 0)`; it answers a
+  // malformed request with `err | last`, NOTHING ISSUED.
+  //
+  // Pass two abandons the rest of a burst whenever the consumer is not ready at
+  // a record boundary (S_HOLD, below) and re-requests "from the byte after this
+  // record". A record is 32 bytes, so every other resume asked for a 64-byte
+  // burst at a 32-byte-aligned address -- and the bench that played the bridge
+  // for this block checked only `len % 8`, so the request looked legal for as
+  // long as nothing real answered it. On the composed console it produced
+  // exactly one `bridge_errs` and verdict V_BRIDGE, on the SECOND record, with
+  // the list's CRC matching perfectly: the command was rejected by the fabric,
+  // not by its contents.
+  //
+  // THE FIX IS TO ASK FROM THE ALIGNED BASE AND DISCARD THE LEAD, not to move
+  // the resume point (that would skip a record) and not to widen the record to
+  // 64 bytes (that is T5's ABI). The burst starts at the 64-byte boundary at or
+  // below the wanted byte, is long enough to cover the skipped lead plus what
+  // is left (capped at one burst), and `skip_q` beats are dropped on arrival.
+  // The cost is measured in `list_refetch_bytes_o` rather than argued about.
+  logic [31:0] abs_c;          // the absolute address of the next wanted byte
+  logic [ 5:0] skip_bytes_c;   // how far into its 64-byte burst that byte sits
+  logic [31:0] want_bytes_c;   // skipped lead + what is left of the pass
+  assign abs_c        = cfg_arena_base_i + job_off_q + byte_q;
+  assign skip_bytes_c = abs_c[5:0];
   assign left_c       = job_bytes_q - byte_q;
-  assign this_bytes_c = (left_c > 32'(BURST_BYTES)) ? 7'(BURST_BYTES) : 7'(left_c);
+  assign want_bytes_c = left_c + {26'd0, skip_bytes_c};
+  assign this_bytes_c = (want_bytes_c > 32'(BURST_BYTES)) ? 7'(BURST_BYTES)
+                                                         : 7'(want_bytes_c);
 
   always_comb begin
     hps_req_o        = '0;
     hps_req_o.valid  = (state_q == S_REQ);
     hps_req_o.write  = 1'b0;
     hps_req_o.client = cfg_hps_client_i;
-    hps_req_o.addr   = cfg_arena_base_i + job_off_q + byte_q;
+    hps_req_o.addr   = abs_c - {26'd0, skip_bytes_c};
     hps_req_o.len    = this_bytes_c;
   end
 
@@ -353,6 +393,8 @@ module zhao_terrain_cmd
       sets_refused_o    <= 32'd0;
       records_emitted_o <= 32'd0;
       list_bytes_read_o <= 32'd0;
+      list_refetch_bytes_o <= 32'd0;
+      skip_q            <= 3'd0;
       crc_fails_o       <= 32'd0;
       bridge_errs_o     <= 32'd0;
     end else begin
@@ -427,6 +469,9 @@ module zhao_terrain_cmd
             state_q       <= S_DONE;
           end else if (hps_req_grant_i) begin
             beat_q  <= '0;
+            // The lead of this burst that lies BELOW the wanted byte, in beats.
+            // Zero for every burst that starts on a record the walk wants.
+            skip_q  <= skip_bytes_c[5:3];
             state_q <= S_BEAT;
           end
         end
@@ -436,6 +481,21 @@ module zhao_terrain_cmd
             bridge_errs_o <= bridge_errs_o + 32'd1;
             verdict_q     <= V_BRIDGE;
             state_q       <= S_DONE;
+          end else if (hps_rsp_i.beat_valid && (skip_q != 3'd0)) begin
+            // A byte this pass has already consumed, re-delivered because the
+            // burst had to start at a 64-byte boundary. It is not folded, not
+            // assembled, and does not advance the walk -- only counted.
+            skip_q               <= skip_q - 3'd1;
+            beat_q               <= beat_q + ($clog2(BEATS_PER_BST+1))'(1);
+            list_refetch_bytes_o <= list_refetch_bytes_o + 32'd8;
+            if (hps_rsp_i.last) begin
+              // The burst ended inside its own skipped lead: the fabric served
+              // fewer beats than the length it was given. Nothing can be
+              // assembled from it, so it is the bridge's verdict, not a stall.
+              bridge_errs_o <= bridge_errs_o + 32'd1;
+              verdict_q     <= V_BRIDGE;
+              state_q       <= S_DONE;
+            end
           end else if (hps_rsp_i.beat_valid) begin
             list_bytes_read_o <= list_bytes_read_o + 32'd8;
 

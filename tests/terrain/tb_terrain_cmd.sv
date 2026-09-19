@@ -95,6 +95,9 @@ module tb_terrain_cmd
     output var logic [31:0] c_refused,
     output var logic [31:0] c_records,
     output var logic [31:0] c_bytes,
+    output var logic [31:0] c_refetch,
+    // requests this model refused as malformed, the real bridge's law
+    output var logic [31:0] misaligned_seen,
     output var logic [31:0] c_crc_fails,
     output var logic [31:0] c_bridge_errs,
     output var logic        c_idle,
@@ -180,6 +183,7 @@ module tb_terrain_cmd
       .sets_refused_o   (c_refused),
       .records_emitted_o(c_records),
       .list_bytes_read_o(c_bytes),
+      .list_refetch_bytes_o(c_refetch),
       .crc_fails_o      (c_crc_fails),
       .bridge_errs_o    (c_bridge_errs),
       .idle_o           (c_idle)
@@ -201,6 +205,11 @@ module tb_terrain_cmd
 
   assign br_word = VW'((br_base >> 3) + {28'd0, br_beat});
 
+  // `zhao_hps_bridge.sv`'s own malformed law, copied field for field.
+  logic malformed_c;
+  assign malformed_c = (hps_req.len == 7'd0) || (hps_req.len > 7'd64) ||
+                       (hps_req.addr[5:0] != 6'd0);
+
   logic err_grant_c, err_mid_c;
   assign err_grant_c = (cfg_err_mode_i == 2'd1) && (bursts_seen[15:0] == cfg_err_burst_i);
   assign err_mid_c   = (cfg_err_mode_i == 2'd2) && (br_idx == cfg_err_burst_i)
@@ -218,12 +227,14 @@ module tb_terrain_cmd
       hps_rsp     <= '0;
       bursts_seen <= 32'd0;
       beats_seen  <= 32'd0;
+      misaligned_seen <= 32'd0;
       first_addr  <= 32'hFFFF_FFFF;
       last_addr   <= 32'd0;
     end else begin
       if (stat_clear_i) begin
         bursts_seen <= 32'd0;
         beats_seen  <= 32'd0;
+        misaligned_seen <= 32'd0;
         first_addr  <= 32'hFFFF_FFFF;
         last_addr   <= 32'd0;
       end
@@ -237,7 +248,20 @@ module tb_terrain_cmd
           bursts_seen <= (stat_clear_i ? 32'd0 : bursts_seen) + 32'd1;
           if (hps_req.addr < first_addr) first_addr <= hps_req.addr;
           if (hps_req.addr > last_addr)  last_addr  <= hps_req.addr;
-          if (err_grant_c) begin
+          // THE REAL BRIDGE'S MALFORMED LAW, added 2026-09-19 (terrain3) after
+          // this model's absence of it hid a live defect for as long as the
+          // block was only ever tested here. `zhao_hps_bridge.sv`:
+          //     malformed = (len == 0) || (len > 64) || (addr[5:0] != 0)
+          // and a malformed request is answered `err | last`, NOTHING ISSUED.
+          // This model checked only that `len` was honoured, so a 64-byte burst
+          // at a 32-byte-aligned address -- which this block emitted on every
+          // resume after an abandoned burst -- looked perfectly legal here and
+          // was refused by the fabric the moment the console composed it.
+          if (malformed_c) begin
+            misaligned_seen <= (stat_clear_i ? 32'd0 : misaligned_seen) + 32'd1;
+            hps_rsp.err     <= 1'b1;
+            hps_rsp.last    <= 1'b1;
+          end else if (err_grant_c) begin
             // "nothing issued" -- the bridge's own words. No grant, one err.
             hps_rsp.err <= 1'b1;
           end else begin

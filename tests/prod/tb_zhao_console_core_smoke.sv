@@ -448,19 +448,7 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_cfg_arena_bytes_i;
   logic [15:0]             terr_cfg_load_budget_i;
 
-  zhao_hps_burst_req_t     terr_hps_req_o;
-  logic                    terr_hps_grant_i;
-  logic                    terr_hps_wr_valid_o;
-  logic [63:0]             terr_hps_wr_data_o;
-  logic                    terr_hps_wr_last_o;
-  zhao_hps_burst_rsp_t     terr_hps_rsp_i;
 
-  zhao_guard_req_t         terr_guard_req_o;
-  zhao_guard_rsp_t         terr_guard_rsp_i;
-  logic [63:0]             terr_guard_wdata_o;
-  logic                    terr_guard_wvalid_o;
-  logic                    terr_guard_wready_i;
-  logic                    terr_guard_wlast_o;
 
   // ---- THE TERRAIN COMPOSE ENGINE's boundary (core header item 10) --------
   // The compose DOOR and the UNPIN are gone from the DUT: TERRAIN.SEQ's issue
@@ -469,11 +457,6 @@ module tb_zhao_console_core_smoke
   // own edge, and every one of these is a thing the completion plan lets a
   // harness supply -- memory behaviour, or a field result this console has no
   // producer for and must therefore NOT invent.
-  zhao_guard_req_t         terr_ps_guard_req_o;
-  zhao_guard_rsp_t         terr_ps_guard_rsp_i;
-  logic                    terr_ps_beat_valid_i;
-  logic [63:0]             terr_ps_beat_data_i;
-  logic                    terr_ps_beat_last_i;
 
   // TERRAIN.HDRREAD and the compose path's guard read share, composed item 13.
   // These replace `terr_place_pitch_log2_i` / `terr_place_env_x0_i` /
@@ -591,7 +574,11 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_wb_acks_overdue_o;
   logic [31:0]             terr_jdb_starved_cycles_o;
   logic [31:0]             terr_jdb_ret_overflow_o;
-  logic                    terr_hps_wr_ready_i;
+  // I26 closed (terrain3): the terrain spine's bridge and guard ports are
+  // internal now; the TERRAIN.BUILD socket share's evidence crosses instead.
+  logic [31:0]             terr_bsock_contention_o;
+  logic [31:0]             terr_bsock_retire_unowned_o;
+  logic [31:0]             terr_bsock_wbeat_unowned_o;
   logic [31:0]             terr_hps_c2_bursts_o;
   logic [31:0]             terr_hps_c2_wait_cycles_o;
   logic [31:0]             terr_rdshare_jobs_wb_o;
@@ -765,7 +752,23 @@ module tb_zhao_console_core_smoke
   logic [31:0]             proj_b_grants_o;
   logic [31:0]             proj_contended_o;
   logic [31:0]             proj_mat_refused_o;
-  logic                    post_gd_req_v_o;
+  // R21: TERRAIN's lit normals leave with the triangle they belong to (entry
+  // I13). The bench takes every light -- the far side of that edge is the
+  // absent GEOM.CLIP merge, and a harness that stalled it would measure its
+  // own backpressure instead of the lane.
+  logic                    terr_light_valid_o;
+  logic                    terr_light_ready_i;
+  logic signed [31:0]      terr_light_base_o;
+  logic                    terr_light_degenerate_o;
+  logic [15:0]             terr_light_src_id_o;
+  logic [31:0]             terr_light_refs_taken_o;
+  logic [31:0]             terr_light_emitted_o;
+  logic [31:0]             terr_light_stale_reads_o;
+  logic [31:0]             terr_light_normals_o;
+  logic [31:0]             terr_light_shaded_o;
+  logic [31:0]             terr_light_degenerate_count_o;
+  logic [31:0]             terr_light_base_sat_o;
+  logic [31:0]             terr_light_degen_mismatch_o;  logic                    post_gd_req_v_o;
   logic                    post_gd_view_o;
   logic [POST_XW-3:0]      post_gd_cx_o;
   logic [POST_YW-3:0]      post_gd_cy_o;
@@ -1739,12 +1742,7 @@ module tb_zhao_console_core_smoke
   localparam int unsigned HPS_LAT = 16;
 
   int unsigned  hps_state_qq;    // 0 idle, 1 waiting, 2 streaming
-  int unsigned  hps_wait_qq;
-  int unsigned  hps_beats_qq;    // beats still to send
-  logic [31:0]  hps_addr_qq;
   int unsigned  hps_bursts_served_q;
-  logic         hps_grant_pulse_q;
-  assign terr_hps_grant_i = hps_grant_pulse_q;
 
   // ---- THE PARTICLE BUFFERS, in the played DDR (entry I1 closed) ----------
   // PART.STATE.md: "Dense sequential ping-pong in HPS DDR". The bench is the
@@ -1754,8 +1752,10 @@ module tb_zhao_console_core_smoke
   // bridge socket, and every record it writes goes back IN -- which is what
   // the write arm below is for. It is the only region the played bridge
   // accepts a write into; a write anywhere else is still answered with `err`.
-  localparam logic [31:0] PART_HPS_BASE0 = 32'h3000_0000;
-  localparam logic [31:0] PART_HPS_BASE1 = 32'h3000_1000;
+  // 0x3100_0000, not 0x3000_0000: that is MEM.UPLOAD's staging arena, and
+  // since entry I26 closed both are served by the ONE shell bridge below.
+  localparam logic [31:0] PART_HPS_BASE0 = 32'h3100_0000;
+  localparam logic [31:0] PART_HPS_BASE1 = 32'h3100_1000;
   localparam int unsigned PART_HPS_WORDS = 1024;          // 2 x 256 records
   logic [63:0] part_mem [0:PART_HPS_WORDS-1];
 
@@ -1763,9 +1763,6 @@ module tb_zhao_console_core_smoke
     return (a >= PART_HPS_BASE0) && (a < PART_HPS_BASE0 + 32'(PART_HPS_WORDS * 8));
   endfunction
 
-  // The write-acceptance LEVEL: high only while a granted particle write burst
-  // is streaming, which is exactly when the real bridge's `wr_ready` is.
-  assign terr_hps_wr_ready_i = (hps_state_qq == 4);
 
   // What crossed the socket, as whole records -- the evidence that replaces
   // the old `part_wr_*` / `part_rd_*` ports.
@@ -1783,98 +1780,6 @@ module tb_zhao_console_core_smoke
     if (w >= HPS_WORDS) return 64'd0;
     return hps_mem[w];
   endfunction
-
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      hps_state_qq        <= 0;
-      hps_wait_qq         <= 0;
-      hps_beats_qq        <= 0;
-      hps_addr_qq         <= 32'd0;
-      hps_grant_pulse_q   <= 1'b0;
-      hps_bursts_served_q <= 0;
-      terr_hps_rsp_i      <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b0};
-      part_ddr_wr_rec_valid_q <= 1'b0;
-      part_ddr_wr_rec_q       <= '0;
-      part_ddr_wr_lo_q        <= 64'd0;
-      part_ddr_wr_half_q      <= 1'b0;
-      part_ddr_rd_beats_q     <= 0;
-    end else begin
-      hps_grant_pulse_q <= 1'b0;
-      terr_hps_rsp_i    <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b0};
-      part_ddr_wr_rec_valid_q <= 1'b0;
-
-      case (hps_state_qq)
-        0: if (terr_hps_req_o.valid && !terr_hps_req_o.write) begin
-             // A READ burst. `len` is BYTES (1..64); the bridge answers in
-             // 64-bit beats, so the beat count is len/8 and a len that is not
-             // a multiple of 8 would be a malformed burst -- reported as `err`
-             // rather than rounded, because rounding invents bytes.
-             hps_grant_pulse_q <= 1'b1;
-             hps_addr_qq       <= terr_hps_req_o.addr;
-             if ((terr_hps_req_o.len == 7'd0) || (terr_hps_req_o.len[2:0] != 3'd0)) begin
-               terr_hps_rsp_i <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b1};
-             end else begin
-               hps_beats_qq <= terr_hps_req_o.len >> 3;
-               hps_wait_qq  <= HPS_LAT;
-               hps_state_qq <= 1;
-             end
-           end else if (terr_hps_req_o.valid && terr_hps_req_o.write &&
-                        in_part_region(terr_hps_req_o.addr) &&
-                        (terr_hps_req_o.len != 7'd0) && (terr_hps_req_o.len[2:0] == 3'd0)) begin
-             // A PARTICLE write burst -- PART.STATE's next generation. Granted,
-             // then after the same latency the write level rises and the beats
-             // land in `part_mem` one per cycle until `wr_last`.
-             hps_grant_pulse_q <= 1'b1;
-             hps_addr_qq       <= terr_hps_req_o.addr;
-             hps_wait_qq       <= HPS_LAT;
-             hps_state_qq      <= 3;
-           end else if (terr_hps_req_o.valid && terr_hps_req_o.write) begin
-             // Nothing ELSE in this bench can write over the bridge -- the only
-             // terrain writer is TERRAIN.WRITEBACK, composed since entry I28
-             // closed, and it cannot be reached here (see the doorbell's
-             // initialisation). Granting and dropping would be a lie; this
-             // reports a bridge error so a write that appears here is LOUD.
-             hps_grant_pulse_q <= 1'b1;
-             terr_hps_rsp_i <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b1};
-           end
-        1: if (hps_wait_qq > 1) hps_wait_qq <= hps_wait_qq - 1;
-           else                 hps_state_qq <= 2;
-        2: begin
-             terr_hps_rsp_i <= '{beat_valid: 1'b1,
-                                 data:       hps_read(hps_addr_qq),
-                                 last:       (hps_beats_qq == 1),
-                                 err:        1'b0};
-             if (in_part_region(hps_addr_qq)) part_ddr_rd_beats_q <= part_ddr_rd_beats_q + 1;
-             hps_addr_qq  <= hps_addr_qq + 32'd8;
-             hps_beats_qq <= hps_beats_qq - 1;
-             if (hps_beats_qq == 1) begin
-               hps_state_qq        <= 0;
-               hps_bursts_served_q <= hps_bursts_served_q + 1;
-             end
-           end
-        3: if (hps_wait_qq > 1) hps_wait_qq <= hps_wait_qq - 1;
-           else                 hps_state_qq <= 4;
-        4: if (terr_hps_wr_valid_o) begin
-             part_mem[(hps_addr_qq - PART_HPS_BASE0) >> 3] <= terr_hps_wr_data_o;
-             hps_addr_qq <= hps_addr_qq + 32'd8;
-             // two beats, low half first, make one particle128 record
-             if (!part_ddr_wr_half_q) begin
-               part_ddr_wr_lo_q   <= terr_hps_wr_data_o;
-               part_ddr_wr_half_q <= 1'b1;
-             end else begin
-               part_ddr_wr_rec_q       <= {terr_hps_wr_data_o, part_ddr_wr_lo_q};
-               part_ddr_wr_rec_valid_q <= 1'b1;
-               part_ddr_wr_half_q      <= 1'b0;
-             end
-             if (terr_hps_wr_last_o) begin
-               hps_state_qq        <= 0;
-               hps_bursts_served_q <= hps_bursts_served_q + 1;
-             end
-           end
-        default: hps_state_qq <= 0;
-      endcase
-    end
-  end
 
   // ---- the SHELL's HPS port: the FRAME RING and the upload arena ------------
   // Until 2026-09-19 the shell's own HPS pins were tied low, so no command
@@ -1954,6 +1859,30 @@ module tb_zhao_console_core_smoke
     return w;
   endfunction
 
+  // ONE ENGINE SINCE ENTRY I26 CLOSED (terrain3, 2026-09-19). The terrain
+  // spine's bridge port used to leave the core and be played by its own engine
+  // above; it is now the TERRAIN.BUILD socket's HPS client 1, merged with
+  // CMD.DMA, DEBUG.FRAMEBLIT and MEM.UPLOAD by the shell's real
+  // `zhao_hps_arbiter_n` and carried by the shell's real `zhao_hps_bridge`. So
+  // the far side of that bridge now plays FOUR regions -- the ring slot, the
+  // upload arena, the terrain staging arena (TERRAIN.CMD's list and the pages)
+  // and the particle ping-pong -- and accepts WRITES into the particle region
+  // only, which is the only thing in this console that writes HPS DDR here.
+  // A write anywhere else, or a read of bytes this bench does not have, is
+  // still $fatal: serving zeros would be inventing them.
+  //
+  // The engine's state encodings are the old terrain engine's (0 idle, 1 wait,
+  // 2 stream, 3 write wait, 4 write accept), so `hps_state_qq`,
+  // `hps_bursts_served_q` and the particle evidence keep their meanings.
+  function automatic int unsigned hps_region(input logic [31:0] a);
+    if ((a >= RING_SLOT0_C) && (a < RING_SLOT0_C + 32'(PKT_MAX_C))) return 1;
+    if ((a >= UPL_ARENA_C) && (a < UPL_ARENA_C + 32'(UPL_WORDS_C * 8))) return 2;
+    if (in_part_region(a)) return 3;
+    if ((a >= HPS_BASE) && (a < HPS_BASE + 32'(HPS_WORDS * 8))) return 4;
+    return 0;
+  endfunction
+
+  int unsigned sh_region_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       sh_state_q      <= 0;
@@ -1963,48 +1892,93 @@ module tb_zhao_console_core_smoke
       sh_pkt_bursts_q <= 0;
       sh_addr_q       <= 32'd0;
       sh_is_pkt_q     <= 1'b0;
+      sh_region_q     <= 0;
+      hps_state_qq    <= 0;
+      hps_bursts_served_q <= 0;
       hps_req_grant_i <= 1'b0;
       hps_rd_valid_i  <= 1'b0;
       hps_rd_data_i   <= 64'd0;
       hps_rd_last_i   <= 1'b0;
+      part_ddr_wr_rec_valid_q <= 1'b0;
+      part_ddr_wr_rec_q       <= '0;
+      part_ddr_wr_lo_q        <= 64'd0;
+      part_ddr_wr_half_q      <= 1'b0;
+      part_ddr_rd_beats_q     <= 0;
     end else begin
       hps_req_grant_i <= 1'b0;
       hps_rd_valid_i  <= 1'b0;
       hps_rd_last_i   <= 1'b0;
+      part_ddr_wr_rec_valid_q <= 1'b0;
       case (sh_state_q)
         0: if (hps_req_valid_o) begin
-             if (hps_req_write_o)
-               $fatal(1, "SMOKE: the shell's HPS port was asked for a WRITE at %08x -- nothing in this console writes HPS DDR", hps_req_addr_o);
-             if ((hps_req_addr_o >= RING_SLOT0_C) && (hps_req_addr_o < RING_SLOT0_C + 32'(PKT_MAX_C)))
-               sh_is_pkt_q <= 1'b1;
-             else if ((hps_req_addr_o >= UPL_ARENA_C) &&
-                      (hps_req_addr_o < UPL_ARENA_C + 32'(UPL_WORDS_C * 8)))
-               sh_is_pkt_q <= 1'b0;
-             else
-               $fatal(1, "SMOKE: the shell's HPS port was asked for a read at %08x -- this bench plays only FRAME_RING slot 0 and MEM.UPLOAD's arena",
-                      hps_req_addr_o);
-             hps_req_grant_i <= 1'b1;
-             sh_addr_q       <= hps_req_addr_o;
-             sh_beats_q      <= hps_req_len_o >> 3;
-             sh_wait_q       <= HPS_LAT;
-             sh_state_q      <= 1;
+             if ((hps_req_len_o == 7'd0) || (hps_req_len_o[2:0] != 3'd0))
+               $fatal(1, "SMOKE: a malformed HPS burst reached the bridge's far side (addr %08x len %0d)",
+                      hps_req_addr_o, hps_req_len_o);
+             if (hps_req_write_o) begin
+               if (!in_part_region(hps_req_addr_o))
+                 $fatal(1, "SMOKE: the shell's HPS port was asked for a WRITE at %08x -- only PART.STATE's generation buffers are writable here",
+                        hps_req_addr_o);
+               hps_req_grant_i <= 1'b1;
+               sh_addr_q       <= hps_req_addr_o;
+               sh_region_q     <= 3;
+               sh_state_q      <= 4;
+               hps_state_qq    <= 4;
+             end else begin
+               if (hps_region(hps_req_addr_o) == 0)
+                 $fatal(1, "SMOKE: the shell's HPS port was asked for a read at %08x -- this bench plays FRAME_RING slot 0, MEM.UPLOAD's arena, the terrain staging arena and the particle buffers",
+                        hps_req_addr_o);
+               sh_is_pkt_q     <= (hps_region(hps_req_addr_o) == 1);
+               sh_region_q     <= hps_region(hps_req_addr_o);
+               hps_req_grant_i <= 1'b1;
+               sh_addr_q       <= hps_req_addr_o;
+               sh_beats_q      <= hps_req_len_o >> 3;
+               sh_wait_q       <= HPS_LAT;
+               sh_state_q      <= 1;
+               hps_state_qq    <= 1;
+             end
            end
         1: if (sh_wait_q > 1) sh_wait_q <= sh_wait_q - 1;
-           else               sh_state_q <= 2;
+           else begin sh_state_q <= 2; hps_state_qq <= 2; end
         2: begin
              hps_rd_valid_i <= 1'b1;
-             hps_rd_data_i  <= sh_is_pkt_q ? ring_read(sh_addr_q)
-                                           : upl_mem[(sh_addr_q - UPL_ARENA_C) >> 3];
+             hps_rd_data_i  <= (sh_region_q == 1) ? ring_read(sh_addr_q)
+                             : (sh_region_q == 2) ? upl_mem[(sh_addr_q - UPL_ARENA_C) >> 3]
+                             : hps_read(sh_addr_q);
              hps_rd_last_i  <= (sh_beats_q == 1);
+             if (sh_region_q == 3) part_ddr_rd_beats_q <= part_ddr_rd_beats_q + 1;
              sh_addr_q      <= sh_addr_q + 32'd8;
              sh_beats_q     <= sh_beats_q - 1;
              if (sh_beats_q == 1) begin
-               sh_state_q <= 0;
-               if (sh_is_pkt_q) sh_pkt_bursts_q <= sh_pkt_bursts_q + 1;
-               else             sh_bursts_q     <= sh_bursts_q + 1;
+               sh_state_q   <= 0;
+               hps_state_qq <= 0;
+               case (sh_region_q)
+                 1: sh_pkt_bursts_q <= sh_pkt_bursts_q + 1;
+                 2: sh_bursts_q     <= sh_bursts_q + 1;
+                 default: hps_bursts_served_q <= hps_bursts_served_q + 1;
+               endcase
              end
            end
-        default: sh_state_q <= 0;
+        4: if (hps_wr_valid_o) begin
+             // The bridge streams a granted write burst one beat per cycle while
+             // its own `wr_ready` level is high; the far side takes each beat.
+             part_mem[(sh_addr_q - PART_HPS_BASE0) >> 3] <= hps_wr_data_o;
+             sh_addr_q <= sh_addr_q + 32'd8;
+             // two beats, low half first, make one particle128 record
+             if (!part_ddr_wr_half_q) begin
+               part_ddr_wr_lo_q   <= hps_wr_data_o;
+               part_ddr_wr_half_q <= 1'b1;
+             end else begin
+               part_ddr_wr_rec_q       <= {hps_wr_data_o, part_ddr_wr_lo_q};
+               part_ddr_wr_rec_valid_q <= 1'b1;
+               part_ddr_wr_half_q      <= 1'b0;
+             end
+             if (hps_wr_last_o) begin
+               sh_state_q          <= 0;
+               hps_state_qq        <= 0;
+               hps_bursts_served_q <= hps_bursts_served_q + 1;
+             end
+           end
+        default: begin sh_state_q <= 0; hps_state_qq <= 0; end
       endcase
     end
   end
@@ -2125,69 +2099,25 @@ module tb_zhao_console_core_smoke
   localparam logic [ZHAO_VRAM_ADDR_BITS-1:0] POOL_BASE_C  = 27'h400_0000;
   localparam int unsigned                    POOL_SLOTS_C = 1024;
 
-  wire guard_in_pool = (terr_guard_req_o.addr >= POOL_BASE_C) &&
-                       (terr_guard_req_o.addr <
-                          POOL_BASE_C + (POOL_SLOTS_C * PAGE_BYTES_C));
-
-  // THE VERDICT IS A PULSE ONE CYCLE AFTER THE REQUEST, NOT A LEVEL WITH IT,
-  // and getting that wrong cost a diagnosis that looked exactly like an RTL
-  // deadlock. `zhao_terrain_pageloader` splits the handshake across two states
-  // and its own comments are the specification:
-  //
-  //   S_GREQ:  "`ready` is a LEVEL and moves the machine on. `ok` is NOT
-  //             tested here."
-  //   S_GVERD: "...it is tested HERE, one cycle later, where the guard
-  //             PULSES it."
-  //
-  // The first version of this model drove `ready`, `ok` and `violation`
-  // together, combinationally, off `guard_req_o.valid`. By the time the loader
-  // reached S_GVERD the request had dropped, so `ok` was low and it waited in
-  // S_GVERD forever. The symptom was a spine that carried records, claims and
-  // load jobs perfectly and then a loader that retired ZERO bytes with
-  // `pages_refused`, `guard_denied` and `bridge_errs` all clean -- which reads
-  // as a fault in the composition and was a fault in the harness. It was found
-  // by probing the DUT's own edge (`guard_req_cycles=1, guard_wbeats=0`), not
-  // by reading either file again.
-  logic guard_verd_q, guard_ok_q;
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      guard_verd_q <= 1'b0;
-      guard_ok_q   <= 1'b0;
-    end else begin
-      guard_verd_q <= terr_guard_req_o.valid;
-      guard_ok_q   <= guard_in_pool;
-    end
-  end
-
-  always_comb begin
-    terr_guard_rsp_i.ready     = terr_guard_req_o.valid;
-    terr_guard_rsp_i.ok        = guard_verd_q &&  guard_ok_q;
-    terr_guard_rsp_i.violation = guard_verd_q && !guard_ok_q;
-  end
-
-  // ALWAYS READY ON THE WRITE CHANNEL, stated as a limit rather than left
-  // implicit: this model never backpressures the page write, so the loader's
-  // write-stall path is NOT exercised here. `tests/terrain/tb_pageloader.sv`
-  // is where that is tested; this bench is about the seams between blocks.
-  assign terr_guard_wready_i = 1'b1;
-
+  // THE PLAYED GUARD WINDOW THAT STOOD HERE IS GONE (terrain3, entry I26).
+  // TERRAIN.PAGELOADER's writes now reach the shell's REAL `zhao_mem_guard`
+  // through `u_build_share`, land in the REAL SDRAM model through the real
+  // arbiter, and the compose path reads them back the same way. The history
+  // of this model's verdict-timing bug is kept in the git log; the real guard
+  // implements the two-cycle law the note described.
   // ---- WHERE THE SPINE GOT TO, watched at the DUT's own edge ---------------
-  // Every signal here is a real port of zhao_console_core, so this needs no
-  // hierarchical reach into the loader and stays valid however Verilator
-  // partitions the design. It answers the one question a stalled block cannot:
-  // which handshake did it reach, and which did it not.
-  int unsigned pr_hps_req_cy, pr_hps_beats, pr_guard_req_cy, pr_guard_wbeats;
+  // The terrain spine's own bridge and guard ports are internal since entry I26
+  // closed, so these probes watch the one bridge's far side and the socket
+  // share's counters instead: HPS request cycles and read beats across ALL
+  // bridge clients, and the socket's contention.
+  int unsigned pr_hps_req_cy, pr_hps_beats;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      pr_hps_req_cy   <= 0;
-      pr_hps_beats    <= 0;
-      pr_guard_req_cy <= 0;
-      pr_guard_wbeats <= 0;
+      pr_hps_req_cy <= 0;
+      pr_hps_beats  <= 0;
     end else begin
-      if (terr_hps_req_o.valid)                        pr_hps_req_cy   <= pr_hps_req_cy + 1;
-      if (terr_hps_rsp_i.beat_valid)                   pr_hps_beats    <= pr_hps_beats + 1;
-      if (terr_guard_req_o.valid)                      pr_guard_req_cy <= pr_guard_req_cy + 1;
-      if (terr_guard_wvalid_o && terr_guard_wready_i)  pr_guard_wbeats <= pr_guard_wbeats + 1;
+      if (hps_req_valid_o) pr_hps_req_cy <= pr_hps_req_cy + 1;
+      if (hps_rd_valid_i)  pr_hps_beats  <= pr_hps_beats + 1;
     end
   end
 
@@ -2956,53 +2886,9 @@ module tb_zhao_console_core_smoke
   // `tests/terrain/tb_terrain_place_cache.sv` (the placement seam this packet
   // added).
   // --------------------------------------------------------------------------
-  wire ps_guard_in_pool = (terr_ps_guard_req_o.addr >= POOL_BASE_C) &&
-                          (terr_ps_guard_req_o.addr <
-                             POOL_BASE_C + (POOL_SLOTS_C * PAGE_BYTES_C));
-
-  logic ps_verd_q, ps_ok_q;
-  int unsigned ps_beats_qq;
-  int unsigned ps_wait_qq;
-
-  always_comb begin
-    terr_ps_guard_rsp_i.ready     = terr_ps_guard_req_o.valid;
-    terr_ps_guard_rsp_i.ok        = ps_verd_q &&  ps_ok_q;
-    terr_ps_guard_rsp_i.violation = ps_verd_q && !ps_ok_q;
-  end
-
-  always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) begin
-      ps_verd_q            <= 1'b0;
-      ps_ok_q              <= 1'b0;
-      ps_beats_qq          <= 0;
-      ps_wait_qq           <= 0;
-      terr_ps_beat_valid_i <= 1'b0;
-      terr_ps_beat_data_i  <= 64'd0;
-      terr_ps_beat_last_i  <= 1'b0;
-    end else begin
-      ps_verd_q <= terr_ps_guard_req_o.valid;
-      ps_ok_q   <= ps_guard_in_pool;
-
-      terr_ps_beat_valid_i <= 1'b0;
-      terr_ps_beat_last_i  <= 1'b0;
-
-      // A granted read burst is eight 64-bit beats, the established shape three
-      // blocks in this tree already use.
-      if (terr_ps_guard_req_o.valid && ps_guard_in_pool && (ps_beats_qq == 0)) begin
-        ps_beats_qq <= 8;
-        ps_wait_qq  <= HPS_LAT;
-      end else if (ps_beats_qq != 0) begin
-        if (ps_wait_qq > 0) begin
-          ps_wait_qq <= ps_wait_qq - 1;
-        end else begin
-          terr_ps_beat_valid_i <= 1'b1;
-          terr_ps_beat_data_i  <= 64'd0;
-          terr_ps_beat_last_i  <= (ps_beats_qq == 1);
-          ps_beats_qq          <= ps_beats_qq - 1;
-        end
-      end
-    end
-  end
+  // (The played read window that stood here went with entry I26: the compose
+  // path's read share is requester 2 of the core's TERRAIN.BUILD socket share
+  // and reads the REAL SDRAM the loader wrote.)
 
   // ==========================================================================
   // THE RUN.
@@ -3170,6 +3056,8 @@ module tb_zhao_console_core_smoke
     // GEOM.DEPTHQUANT's, inside GEOM.REPLAY, and slots 1..6 are the modelled
     // attribute store's (I46) -- see the store above.
     geom_clip_cull_mode_i = '0;
+    // R21: always take the terrain light (see its declaration).
+    terr_light_ready_i = 1'b1;
     render_frame_open_q = 1'b0;
     geom_pose_start_i = 1'b0;
     geom_pose_bone_count_i = '0;
@@ -4126,6 +4014,12 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
+    // ---- R21: TERRAIN's LIT NORMALS, measured on the DUT's own edge --------
+    $display("SMOKE: terrlight refs_taken=%0d lights=%0d shaded=%0d normals=%0d stale=%0d degenerate=%0d sat=%0d degen_mismatch=%0d",
+             terr_light_refs_taken_o, terr_light_emitted_o, terr_light_shaded_o,
+             terr_light_normals_o, terr_light_stale_reads_o,
+             terr_light_degenerate_count_o, terr_light_base_sat_o,
+             terr_light_degen_mismatch_o);
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     // Entry I4's two formerly-stuck counters. Both were structurally incapable
     // of moving before owner ruling 2026-09-19; both are asserted below.
@@ -4277,6 +4171,34 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ forwarded no vertex to client B -- TESS -> GROUP_SEQ -> PROJ_SUBSYSTEM is dead");
     if (proj_b_grants_o == 0)
       $fatal(1, "SMOKE: the shared projector granted client B zero times -- the second client is still not live");
+    // R21: and the SAME references that reached the replay shell reached the
+    // light lane, were shaded, and came out as base lights. This is the check
+    // that says TERRAIN.NORMALS and TERRAIN.SHADE are in the machine rather
+    // than merely elaborated: a light can only exist if a world vertex was
+    // stored on the projector's fill beat and read back by a reference.
+    if (terr_light_emitted_o == 0)
+      $fatal(1, "SMOKE: the terrain light lane emitted no base light (refs_taken=%0d shaded=%0d normals=%0d stale=%0d) -- TERRAIN.NORMALS -> TERRAIN.SHADE carried nothing",
+             terr_light_refs_taken_o, terr_light_shaded_o, terr_light_normals_o,
+             terr_light_stale_reads_o);
+    if (terr_light_emitted_o != terr_light_shaded_o)
+      $fatal(1, "SMOKE: %0d lights left the lane against %0d triangles shaded -- the lane dropped or duplicated one",
+             terr_light_emitted_o, terr_light_shaded_o);
+    if (terr_light_degen_mismatch_o != 0)
+      $fatal(1, "SMOKE: the shade law and TERRAIN.NORMALS disagreed about degeneracy %0d time(s)",
+             terr_light_degen_mismatch_o);
+    // WHAT THIS BENCH DOES NOT PROVE ABOUT THE LIGHT, said before somebody
+    // quotes `degenerate=128` as a defect or as a pass. Every page in this run
+    // fails its CRC by construction, so no page is resident and the lattice
+    // TERRAIN.TESS emits is flat zero: all three corners of every triangle are
+    // the same point, the cross product is exactly zero, and the LAW's answer
+    // to that is degenerate with shade 0. The counters above are therefore
+    // evidence that the reference reached the store, the normal and the shade
+    // and came back -- not that the shade VALUE is right. The value is proved
+    // bit-for-bit against zref in tests/terrain/terrain_lightlane_directed.cpp
+    // over a random sub-metre lattice.
+    if (terr_light_stale_reads_o != 0)
+      $fatal(1, "SMOKE: the light lane refused %0d reference(s) as stale -- the world store and the projector's arena disagree about a generation",
+             terr_light_stale_reads_o);
     if (terr_groups_opened_o == 0)
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ opened no arena -- the open/gen handshake with the subsystem is dead");
     if (terr_release_unsafe_o != 0)
@@ -4493,8 +4415,17 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: a writeback job appeared with no dirty page in the core (starved=%0d written=%0d refused=%0d faulted=%0d)",
              terr_jdb_starved_cycles_o, terr_wb_sheets_written_o, terr_wb_sheets_refused_o,
              terr_wb_sheets_faulted_o);
-    $display("SMOKE:   probe hps_req_cycles=%0d hps_beats_in=%0d guard_req_cycles=%0d guard_wbeats=%0d",
-             pr_hps_req_cy, pr_hps_beats, pr_guard_req_cy, pr_guard_wbeats);
+    $display("SMOKE:   probe bridge hps_req_cycles=%0d hps_beats_in=%0d | socket contention=%0d retire_unowned=%0d wbeat_unowned=%0d",
+             pr_hps_req_cy, pr_hps_beats, terr_bsock_contention_o,
+             terr_bsock_retire_unowned_o, terr_bsock_wbeat_unowned_o);
+    // THE SOCKET SHARE's TRIPWIRES must read zero on legal traffic. They were
+    // FIRED by stimulus in tests/memory/mem_share_wr_directed.cpp; here, with
+    // MEM.UPLOAD's publication and TERRAIN.PAGELOADER's pages sharing slot 6
+    // for real, a nonzero value is a misattributed credit or a data word from
+    // a writer that did not own the channel.
+    if ((terr_bsock_retire_unowned_o != 0) || (terr_bsock_wbeat_unowned_o != 0))
+      $fatal(1, "SMOKE: the TERRAIN.BUILD socket share tripped: retire_unowned=%0d wbeat_unowned=%0d",
+             terr_bsock_retire_unowned_o, terr_bsock_wbeat_unowned_o);
     $display("SMOKE:   bridge bursts served by the played engine=%0d", hps_bursts_served_q);
 
     // ======================================================================

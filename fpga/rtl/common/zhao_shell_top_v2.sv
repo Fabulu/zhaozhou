@@ -400,16 +400,24 @@ module zhao_shell_top_v2
   //     read-beat return (TERRAIN.PAGESTREAM, TERRAIN.HDRREAD). The guard is
   //     the one `zhao_mem_guard` law, so TERRAIN.PAGE_POOL is the window,
   //     plus R32's write-only published-resource region (build_res_*).
-  //   * BUILD_HPS_N read clients of the shell's HPS arbiter.
+  //   * BUILD_HPS_N clients of the shell's HPS arbiter, reading and (since
+  //     2026-09-19) writing.
   //
   // Upstream sharing of the one guard port is the composer's, through
   // `zhao_mem_share_n` for readers, exactly as `u_terrain_rdshare` already does.
   //
-  // HPS WRITES ARE NOT OFFERED, and that is a property of the arbiter, not a
-  // choice here: `zhao_hps_arbiter_n` has no `b_wr_ready_i`, so the bridge's
-  // write READY cannot reach a writer (see the `hb_wr_ready` sink below). A
-  // socket port that accepted HPS write beats would lose them. The first HPS
-  // writer (TERRAIN.WRITEBACK) must add that ready to the arbiter first.
+  // HPS WRITES ARE OFFERED SINCE 2026-09-19 (terrain3, entry I26), and the
+  // sentence that stood here explains exactly how. It read: "`zhao_hps_arbiter_n`
+  // has no `b_wr_ready_i`, so the bridge's write READY cannot reach a writer ...
+  // The first HPS writer must add that ready to the arbiter first." The first
+  // HPS writers already existed -- TERRAIN.WRITEBACK's journal and PART.STATE's
+  // generation store, both behind the core's terrain arbiter -- and neither
+  // needs the ready routed THROUGH an arbiter: the bridge's `wr_ready` is a
+  // LEVEL that is high only while the one granted write burst is streaming, so
+  // only that burst's owner can see it high while it has data to give. Both
+  // writers already gate on exactly that level (`terr_hps_wr_ready_i`). So the
+  // socket carries each client's write beats into the arbiter's existing
+  // `wr_*_i` and hands the bridge's level back out as `build_hps_wr_ready_o`.
   input  var zhao_guard_req_t build_guard_req_i,
   output var zhao_guard_rsp_t build_guard_rsp_o,
   input  var logic [63:0]     build_wdata_i,
@@ -429,6 +437,12 @@ module zhao_shell_top_v2
   // the bridge and did not have it. A background client is ALLOWED to starve
   // (5d); it is not allowed to starve invisibly.
   output var logic [BUILD_HPS_N-1:0][31:0] build_hps_wait_o,
+  // Each socket client's HPS WRITE beats, and the bridge's write-acceptance
+  // LEVEL (see the note above: only the granted burst's owner streams).
+  input  var logic [BUILD_HPS_N-1:0]       build_hps_wr_valid_i,
+  input  var logic [BUILD_HPS_N-1:0][63:0] build_hps_wr_data_i,
+  input  var logic [BUILD_HPS_N-1:0]       build_hps_wr_last_i,
+  output var logic                         build_hps_wr_ready_o,
   // Owner ruling R32 (provisional, 2026-09-19): the ONE region of
   // RENDER.ASSET_POOL this socket's guard client may WRITE -- the resource
   // region MEM.UPLOAD publishes into the residency directory. The guard admits
@@ -2435,13 +2449,12 @@ module zhao_shell_top_v2
     .rst_n      (rst_n),
     .req_i      (hn_req),
     .req_grant_o(hn_grant),
-    // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this
-    // packet carries rather than makes. No client here WRITES to HPS DDR --
-    // CMD.DMA and DEBUG.FRAMEBLIT never did, and the socket offers reads only
-    // (see its port comment: the arbiter has no write READY to give a writer).
-    .wr_valid_i ('0),
-    .wr_data_i  ('0),
-    .wr_last_i  ('0),
+    // CMD.DMA (0) and DEBUG.FRAMEBLIT (1) never write HPS DDR, so their write
+    // lanes stay zero, as in V1. The socket clients' lanes are their own (see
+    // the socket's port comment for why no ready needs routing through here).
+    .wr_valid_i ({build_hps_wr_valid_i, 2'b00}),
+    .wr_data_i  ({build_hps_wr_data_i, 128'd0}),
+    .wr_last_i  ({build_hps_wr_last_i, 2'b00}),
     .rsp_o      (hn_rsp),
     .b_req_o       (arb_hps_req),
     .b_req_grant_i (arb_bridge_grant),
@@ -2479,6 +2492,7 @@ module zhao_shell_top_v2
     .hps_err_count (hps_err_count_o),
     .wr_ready (hb_wr_ready), .wr_early_beats (hb_wr_early)
   );
+  assign build_hps_wr_ready_o = hb_wr_ready;
 
   /* verilator lint_off UNUSEDSIGNAL */
   logic unused_mem;
@@ -2571,9 +2585,20 @@ module zhao_shell_top_v2
                     // landed, which is the same shape as an ignore rule that
                     // hides waste instead of removing it.
                     //
-                    // Sunk here rather than deleted, because deleting the port
-                    // would remove the evidence that the repair is waiting.
-                    ^ hb_wr_ready ^ ^hb_wr_early;
+                    // SUPERSEDED 2026-09-19 (terrain3, entry I26). The ready now
+                    // LEAVES the shell as `build_hps_wr_ready_o`, and the stall
+                    // the paragraph above asks the arbiter for is supplied by the
+                    // WRITERS instead: the bridge's level is high only while the
+                    // ONE granted write burst streams, so its owner is the only
+                    // client that can see it high with data to give, and both
+                    // socket writers (TERRAIN.WRITEBACK's journal, PART.STATE's
+                    // generation store) offer a beat only while it is high. The
+                    // arbiter's pass-through write mux therefore never carries a
+                    // beat the bridge refuses. `hb_wr_early` is the check on that
+                    // claim -- beats offered while the level was low, zero for a
+                    // compliant writer -- and it is still sunk, not exported: the
+                    // one open end of this repair, named so it is not lost.
+                    ^ ^hb_wr_early;
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================
