@@ -369,15 +369,87 @@
 //      projection-config path.
 //
 // I15. POST.COMPOSITE's SOURCE PIXELS (`post_s_*`) -- BOUNDARY, and this is
-//      the largest honest gap in the file. RASTER.RESOLVE's output is INTERNAL
-//      to `zhao_geom_bin_pipe_v2`, and inside the shell RASTER.FBWRITE is
-//      already fed from it directly. The compositor therefore sits BESIDE the
-//      render path, not in it. Interposing it is a change to the shell's
-//      render chain and to `zhao_geom_bin_pipe_v2`'s port list; it is not
-//      wiring and it was not attempted here.
+//      the largest honest gap in the file.
+//
+//      CORRECTED 2026-09-19. This entry used to read "RASTER.RESOLVE's output
+//      is INTERNAL to `zhao_geom_bin_pipe_v2` ... interposing it is a change to
+//      ... `zhao_geom_bin_pipe_v2`'s port list". THAT IS FALSE, and it sent the
+//      next reader at the wrong file. The resolved stream is NINE PORTS on that
+//      module -- `fb_valid_o`/`fb_ready_i`/`fb_rgb565_o`/`fb_tag_o`/
+//      `fb_addr_o`/`fb_x_o`/`fb_y_o`/`fb_last_o`/`fb_src_id_o`, under its own
+//      comment "Resolved framebuffer stream". No bin-pipe port change is needed
+//      for anything. What is internal is one level up: `zhao_shell_top_v2`
+//      carries it on the `rpx_*` wires from `u_render_bin` straight into
+//      `u_render_fbw` and re-exports none of it, so the shell has no pixel-
+//      stream port -- but that is an ordinary port addition on a file this
+//      packet may edit, and it is NOT why the compositor is unconnected.
+//
+//      THE REAL OBSTACLE IS ORDER AND DENSITY, AND IT IS NOT WIRING.
+//
+//        * `post_s_*` IS ADDRESSLESS. `zhao_post_composite` has no source
+//          coordinate port; it derives one from `x_in_q`/`y_in_q`, counters
+//          that step on every accepted pixel and wrap at `frame_w_i` and
+//          `frame_h_i`. The Nth pixel it accepts IS, by construction, frame
+//          pixel (N mod W, N div W). Its nine-line ring is built on that: the
+//          write pointer and the read pointer walk the same raster at the same
+//          rate, which is the whole LAG_PX argument in that file's header.
+//        * RASTER.RESOLVE IS TILE-ORDERED. It resolves "one finished 16x16
+//          tile"; `fb_addr_o` is `{row[3:0], col[3:0]}` WITHIN the tile and
+//          `zhao_raster_tile_pipe_v2` forms the surface coordinate as tile
+//          origin plus that. So stream pixel 17 is frame (0,1) of one tile
+//          while the compositor's counter is at (16,0) of the frame. Feeding
+//          one to the other scrambles every pixel after the first sixteen, and
+//          it does so with every handshake legal, `s_ready_o`/`fb_ready_i`
+//          balanced, and `output_writes_o` counting a full frame. This is the
+//          plausible wrong picture with a clean instrument beside it, which is
+//          the failure this file's rules are written about.
+//        * AND IT IS SPARSE. `resolve_start_w` fires only out of `RS_SWAP`,
+//          which a tile reaches only after the binner hands it a job sequence.
+//          A tile no triangle touches is never resolved and emits no pixels at
+//          all, while the compositor waits for exactly `frame_w * frame_h` of
+//          them before `o_last_o`. On any frame that is not fully covered the
+//          block would simply never finish a pass.
+//        * `zhao_raster_fbwrite` EXISTS BECAUSE THE STREAM IS SCATTERED. It
+//          recomputes a VRAM address per tile row from `px_x_i`/`px_y_i` and
+//          raises `stream_error_o` if a pixel is not its predecessor's
+//          successor within a row. A dense raster stream would need neither.
+//
+//      SO THE REORDER BUFFER BETWEEN THE TWO IS A WHOLE FRAME, and the frame
+//      store that already exists is the framebuffer. That is exactly what
+//      POST.COMPOSITE.md means by "an exclusive framebuffer read/write lease
+//      after resolve and before publication": post reads the COMPLETED
+//      framebuffer back in raster order. Interposing before FBWRITE is not a
+//      cheaper version of that arrangement, it is a different and wrong one.
+//
+//      WHAT IS MISSING IS THEREFORE THREE THINGS, NAMED SO THE NEXT PACKET
+//      DOES NOT GO LOOKING FOR A PORT:
+//        1. A RASTER-ORDER FRAMEBUFFER READ MASTER in the gpu-clock domain.
+//           Nothing in `fpga/rtl` is one. `zhao_scanout_fetch` reads a frame in
+//           raster order, but it is the VIDEO domain's FRONT-buffer reader, and
+//           `zhao_post_composite`'s own header forbids the use it would be put
+//           to: "NEVER POST-PROCESS THE CURRENTLY SCANNED-OUT FRONT BUFFER".
+//        2. A MEMORY IDENTITY FOR A THIRD FRAMEBUFFER AGENT. The shell's lease
+//           is ONE BIT -- `fb_writer_i`, 0 = DEBUG.FRAMEBLIT, 1 =
+//           RASTER.FBWRITE -- and `zhao_mem_guard` passes on that bit. Post is
+//           a reader AND a writer inside one frame and has no client enum the
+//           guard admits, which is the same shape as the second geometry
+//           fetcher `zhao_shell_top_v2` already refuses at its `client_req[3]`
+//           note. That is a decision for the memory rules, not for this file.
+//        3. A FRAME-COMPLETION EVENT to start the pass on. `frame_start_i` is
+//           `core_tick_c` here, which is the console tick, not render drain.
+//
+//      REFUSED 2026-09-19, and this is the fourth refusal of this seam. The
+//      earlier three were right to refuse and gave a reason that pointed at the
+//      wrong file; the reason above points at the right ones.
 //
 // I16. POST.COMPOSITE's output and echo tap (`post_o_*`, `post_echo_*`) --
-//      BOUNDARY, the other end of I15.
+//      BOUNDARY, the other end of I15. The output end is the SMALLER half and
+//      it is still blocked by I15's item 2: `o_x_o`/`o_y_o`/`o_last_o` are
+//      shaped exactly like `zhao_raster_fbwrite`'s `px_x_i`/`px_y_i`/
+//      `px_last_i`, so the composited stream has a writer the moment post has a
+//      lease -- and until then, wiring it to the EXISTING `u_render_fbw` would
+//      put two producers on one framebuffer writer, which is worse than the
+//      gap.
 //
 // I17. POST.COMPOSITE's gather planes, atmosphere sheet, HUD, grading table,
 //      flash and ink (`post_gd_*`, `post_gg_*`, `post_atm_*`, `post_hud_*`,
@@ -424,9 +496,16 @@
 //          tag byte into glow RGB plus a displacement vector is a colour and
 //          geometry law invented in the composer, and it is exactly the kind
 //          of plausible wrong number this repository has shipped before.
-//        * AND THAT STREAM IS INTERNAL ANYWAY. RASTER.RESOLVE sits inside
-//          `zhao_geom_bin_pipe_v2` and its fragments never leave it, which is
-//          entry I15's refusal reached from the other end.
+//        * AND THE STREAM IT WOULD READ IS INTERNAL ANYWAY. Corrected
+//          2026-09-19 with I15: the RESOLVED stream is not internal -- it is
+//          nine ports on `zhao_geom_bin_pipe_v2`. What never leaves is the
+//          PRE-RESOLVE FRAGMENT stream that POST.GATHER's per-fragment input
+//          actually describes; `stage_fragment_*` exposes a fragment's texel
+//          sample as a structural probe for the directed gate and the mutants,
+//          not as a handshaked stream and not as a glow value. So this bullet
+//          survives the correction, and the first bullet -- one tag byte
+//          against glow RGB plus a signed 8.8 displacement -- is still the
+//          load-bearing one.
 //      Its OUTPUT is a third gap on top: the block flushes sixteen cells per
 //      tile as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
 //      The store between a flush and a random access is the `lowres_buffers`
@@ -3376,7 +3455,10 @@ module zhao_console_core
     .frame_h_i    (post_frame_h_c),
     .view_sel_i   (post_view_sel_i),
 
-    // I15: RASTER.RESOLVE's stream is internal to zhao_geom_bin_pipe_v2.
+    // I15: not a missing port -- a missing ORDER. This port is addressless and
+    // the block counts its own raster; RASTER.RESOLVE emits 16x16 tiles, and
+    // only the tiles a triangle touched. The reorder buffer between them is a
+    // whole frame, so post reads the COMPLETED framebuffer or it reads nothing.
     .s_valid_i(post_s_valid_i),
     .s_ready_o(post_s_ready_o),
     .s_rgb_i  (post_s_rgb_i),
