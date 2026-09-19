@@ -1,0 +1,491 @@
+// cmd_exec_directed.cpp -- CMD.EXEC, driven through the real pair.
+//
+// The DUT is `tb_cmd_exec_pair`: CMD.DECODER and CMD.EXEC on one forked byte
+// stream, so the verdict this test relies on is the one the shipped decoder
+// actually produces, at the cycle it actually produces it. See that file's
+// header for why the executor is not driven alone.
+//
+// THE LAYOUT IS A DIFFERENTIAL, not a shared constant. The RTL reads its byte
+// offsets from `fpga/rtl/generated/zhao_abi_pkg.sv`; this test writes its
+// records through `zhao_pack_set_view` / `zhao_pack_surface_stamp` in
+// `runtime/include/zhao_abi.h`. Both come from the same .zidl and NEITHER is
+// hand-written here, so a field that lands at the wrong offset on one side
+// fails against the other. A test that used the RTL's own constants to build
+// its stimulus would agree with any offset whatsoever.
+//
+// WHAT EACH CASE IS FOR. Every counter this block exposes is fired by name
+// below, because CLAUDE.md is explicit that a counter asserted zero and never
+// seen to move is a claim rather than evidence:
+//
+//   1  packets_committed_o, views_written_o, stamps_issued_o, unsupported_o
+//      -- and THE ARCHITECTURAL ASSERTION: not one console write happens at or
+//      before the verdict cycle.
+//   2  packets_abandoned_o, on a real payload-CRC failure, with zero writes.
+//   3  view_range_refused_o, on a view_id the two-view bank cannot address.
+//   4  stamp_src_truncated_o, on a source_id whose high half is nonzero.
+//   5  stamp_overflow_o, on a packet with STAMP_Q+1 stamps -- reachable with
+//      LEGAL stimulus, so it needs no committed mutant.
+//   6  the collapse law: two SetViews for one view commit ONCE; two views
+//      commit twice.
+//   7  the same packet as case 1 under stamp backpressure: identical results,
+//      only slower.
+
+#include "Vtb_cmd_exec_pair.h"
+#include "verilated.h"
+
+#include "zhao_sim.hpp"
+#include "zref/zref_frame.hpp"
+
+#include <cstdint>
+#include <cstdio>
+#include <string>
+#include <vector>
+
+namespace {
+
+using zhao::check;
+
+struct CfgWrite {
+  uint32_t cycle;
+  uint8_t view;
+  uint8_t addr;
+  uint32_t data;
+};
+
+struct StampOut {
+  uint32_t cycle;
+  uint32_t patch;
+  uint8_t operation;
+  uint8_t tag;
+  uint16_t strength;
+  int32_t tx;
+  int32_t ty;
+  int32_t radius;
+  int32_t ring_width;
+  uint16_t src_id;
+};
+
+struct Run {
+  bool done = false;
+  uint8_t err = 0;
+  uint32_t commands = 0;
+  uint32_t verdict_cycle = 0;
+  std::vector<CfgWrite> cfg;
+  std::vector<StampOut> stamps;
+  uint32_t committed = 0, abandoned = 0, views = 0, issued = 0;
+  uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
+};
+
+/**
+ * Stream one packet through the pair and collect everything that left the
+ * executor, each tagged with the cycle it left on.
+ *
+ * `stamp_mask` gates SURFACE.STAMP's ready from a bit pattern. The decoder is
+ * one-shot -- its S_DONE holds the verdict until reset -- so every packet gets
+ * a fresh DUT, which is also what makes the counter assertions below absolute
+ * rather than deltas.
+ */
+Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask) {
+  Vtb_cmd_exec_pair dut;
+  dut.rst_n = 0;
+  dut.pkt_valid_i = 0;
+  dut.pkt_byte_i = 0;
+  dut.pkt_len_i = 0;
+  dut.stamp_ready_i = 1;
+  dut.eval();
+  for (int i = 0; i < 3; ++i) zhao::tick(dut);
+  dut.rst_n = 1;
+  dut.eval();
+
+  Run r;
+  size_t i = 0;
+  uint32_t cyc = 0;
+  uint32_t drain = 0;
+  // The commit drain is bounded: 32 matrix words plus two clocks per stamp,
+  // times the worst stall pattern. 4,096 idle cycles after the verdict is
+  // three orders over that, and a run that needs more is a hang, not a slow
+  // test.
+  const uint32_t kDrainCycles = 4096;
+  const uint32_t kGuard = static_cast<uint32_t>(pkt.size()) * 8 + 8192;
+
+  while (cyc < kGuard) {
+    const bool have = (i < pkt.size());
+    dut.pkt_valid_i = have ? 1 : 0;
+    dut.pkt_byte_i = have ? pkt[i] : 0;
+    dut.pkt_len_i = static_cast<uint32_t>(pkt.size());
+    dut.stamp_ready_i = ((stamp_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    dut.eval();
+
+    const bool moved = have && dut.pkt_ready_o;
+    // The stamp handshake is a pre-edge view, like every ready/valid pair in
+    // this tree's benches.
+    const bool stamp_fires = (dut.stamp_valid_o != 0) && (dut.stamp_ready_i != 0);
+    StampOut s;
+    if (stamp_fires) {
+      s.cycle = cyc;
+      s.patch = dut.stamp_patch_o;
+      s.operation = static_cast<uint8_t>(dut.stamp_operation_o);
+      s.tag = static_cast<uint8_t>(dut.stamp_tag_o);
+      s.strength = static_cast<uint16_t>(dut.stamp_strength_o);
+      s.tx = static_cast<int32_t>(dut.stamp_tx_o);
+      s.ty = static_cast<int32_t>(dut.stamp_ty_o);
+      s.radius = static_cast<int32_t>(dut.stamp_radius_o);
+      s.ring_width = static_cast<int32_t>(dut.stamp_ring_width_o);
+      s.src_id = static_cast<uint16_t>(dut.stamp_src_id_o);
+    }
+
+    zhao::tick(dut);
+    if (moved) ++i;
+    if (stamp_fires) r.stamps.push_back(s);
+
+    if (dut.proj_cfg_we_o) {
+      CfgWrite w;
+      w.cycle = cyc;
+      w.view = static_cast<uint8_t>(dut.proj_cfg_view_o);
+      w.addr = static_cast<uint8_t>(dut.proj_cfg_addr_o);
+      w.data = dut.proj_cfg_data_o;
+      r.cfg.push_back(w);
+    }
+
+    if (dut.decode_done_o && !r.done) {
+      r.done = true;
+      r.err = static_cast<uint8_t>(dut.decode_error_o);
+      r.commands = dut.decode_commands_o;
+      r.verdict_cycle = cyc;
+    }
+
+    ++cyc;
+    if (r.done) {
+      if (++drain >= kDrainCycles) break;
+    }
+  }
+
+  r.committed = dut.packets_committed_o;
+  r.abandoned = dut.packets_abandoned_o;
+  r.views = dut.views_written_o;
+  r.issued = dut.stamps_issued_o;
+  r.overflow = dut.stamp_overflow_o;
+  r.refused = dut.view_range_refused_o;
+  r.truncated = dut.stamp_src_truncated_o;
+  r.unsupported = dut.unsupported_o;
+  return r;
+}
+
+// ---- record builders, all layout from the generated packers ---------------
+
+std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t first_word) {
+  zhao_abi::ZhRecordSetView rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
+  rec.hdr.record_bytes = 96;
+  rec.hdr.source_id = source_id;
+  rec.payload.view_id = view_id;
+  rec.payload.viewport_id = 0;
+  rec.payload.flags = 0;
+  // Sixteen distinguishable words, written out BY NAME in declaration order.
+  // Not a loop over a pointer into the struct: the point of this stimulus is
+  // that word k carries the value k, so `m00` must be seen at cfg address 0.
+  // If the RTL wrote them to the wrong address, in the wrong order, or
+  // byte-swapped, the compare in case 1 says which.
+  zhao_abi::ZhMat4fx& vp = rec.payload.view_projection;
+  vp.m00 = first_word + 0;
+  vp.m01 = first_word + 1;
+  vp.m02 = first_word + 2;
+  vp.m03 = first_word + 3;
+  vp.m10 = first_word + 4;
+  vp.m11 = first_word + 5;
+  vp.m12 = first_word + 6;
+  vp.m13 = first_word + 7;
+  vp.m20 = first_word + 8;
+  vp.m21 = first_word + 9;
+  vp.m22 = first_word + 10;
+  vp.m23 = first_word + 11;
+  vp.m30 = first_word + 12;
+  vp.m31 = first_word + 13;
+  vp.m32 = first_word + 14;
+  vp.m33 = first_word + 15;
+  rec.payload.pixel_error = 0;
+  rec.payload.geometry_tokens = 0;
+  rec.payload.fragment_tokens = 0;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_set_view(rec, out);
+  return out;
+}
+
+std::vector<uint8_t> surfaceStampRecord(uint32_t source_id, uint32_t patch, uint8_t op, uint8_t tag,
+                                        uint16_t strength, int32_t tx, int32_t ty, int32_t radius,
+                                        int32_t ring) {
+  zhao_abi::ZhRecordSurfaceStamp rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_SURFACE_STAMP;
+  rec.hdr.record_bytes = 64;
+  rec.hdr.source_id = source_id;
+  rec.payload.brush = 0;
+  rec.payload.patch = patch;
+  rec.payload.operation = op;
+  rec.payload.tag = tag;
+  rec.payload.strength = strength;
+  rec.payload.transform.tx = tx;
+  rec.payload.transform.ty = ty;
+  rec.payload.transform.r00 = 0x00010000;
+  rec.payload.transform.r01 = 0;
+  rec.payload.transform.r10 = 0;
+  rec.payload.transform.r11 = 0x00010000;
+  rec.payload.radius = radius;
+  rec.payload.ring_width = ring;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_surface_stamp(rec, out);
+  return out;
+}
+
+// The stamp this test uses wherever the values themselves are not the point.
+constexpr uint32_t kPatch = 0x0A0B0C0Du;
+constexpr uint8_t kOp = 1;
+constexpr uint8_t kTag = 0x5Au;
+constexpr uint16_t kStrength = 0xBEEFu;
+constexpr int32_t kTx = -0x00012345;
+constexpr int32_t kTy = 0x00067890;
+constexpr int32_t kRadius = 0x00028000;
+constexpr int32_t kRing = 0x00008000;
+
+/** Assert nothing left the executor at or before the verdict. */
+void checkNothingEscapedEarly(const Run& r, const char* what) {
+  uint32_t early_cfg = 0, early_stamp = 0;
+  for (const CfgWrite& w : r.cfg)
+    if (w.cycle <= r.verdict_cycle) ++early_cfg;
+  for (const StampOut& s : r.stamps)
+    if (s.cycle <= r.verdict_cycle) ++early_stamp;
+  check(early_cfg == 0, (std::string(what) + ": no matrix write at or before the verdict").c_str(),
+        0, early_cfg);
+  check(early_stamp == 0, (std::string(what) + ": no stamp at or before the verdict").c_str(), 0,
+        early_stamp);
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  Verilated::commandArgs(argc, argv);
+
+  // ---- 1. one SetView + one SurfaceStamp, committed -----------------------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(0, 0x0000'0007u, 0x0011'0000));
+    b.append_record(
+        surfaceStampRecord(0x0000'0009u, kPatch, kOp, kTag, kStrength, kTx, kTy, kRadius, kRing));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.done, "case1: reached a verdict", 1, r.done ? 1 : 0);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case1: the packet is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    check(r.commands == 4, "case1: four records walked", 4, r.commands);
+
+    checkNothingEscapedEarly(r, "case1");
+
+    check(r.committed == 1, "case1: packets_committed_o", 1, r.committed);
+    check(r.abandoned == 0, "case1: packets_abandoned_o", 0, r.abandoned);
+    check(r.views == 1, "case1: views_written_o", 1, r.views);
+    check(r.issued == 1, "case1: stamps_issued_o", 1, r.issued);
+    // BeginFrame and EndFrame are ABI records this block has no arm for.
+    check(r.unsupported == 2, "case1: unsupported_o counts BeginFrame + EndFrame", 2,
+          r.unsupported);
+    check(r.overflow == 0, "case1: stamp_overflow_o", 0, r.overflow);
+    check(r.refused == 0, "case1: view_range_refused_o", 0, r.refused);
+    check(r.truncated == 0, "case1: stamp_src_truncated_o", 0, r.truncated);
+
+    // THE PAYLOAD. Sixteen words, in address order, with the values the packer
+    // put on the wire.
+    check(r.cfg.size() == 16, "case1: sixteen matrix words written", 16, r.cfg.size());
+    if (r.cfg.size() == 16) {
+      for (uint32_t k = 0; k < 16; ++k) {
+        const CfgWrite& w = r.cfg[k];
+        const std::string tag = "case1: matrix word " + std::to_string(k);
+        check(w.view == 0, (tag + " view").c_str(), 0, w.view);
+        check(w.addr == k, (tag + " address").c_str(), k, w.addr);
+        check(w.data == static_cast<uint32_t>(0x0011'0000 + static_cast<int32_t>(k)),
+              (tag + " data").c_str(), static_cast<uint32_t>(0x0011'0000 + k), w.data);
+      }
+    }
+
+    check(r.stamps.size() == 1, "case1: one stamp dispatched", 1, r.stamps.size());
+    if (r.stamps.size() == 1) {
+      const StampOut& s = r.stamps[0];
+      check(s.patch == kPatch, "case1: stamp patch handle", kPatch, s.patch);
+      check(s.operation == kOp, "case1: stamp operation", kOp, s.operation);
+      check(s.tag == kTag, "case1: stamp tag", kTag, s.tag);
+      check(s.strength == kStrength, "case1: stamp strength", kStrength, s.strength);
+      check(s.tx == kTx, "case1: stamp transform.tx", static_cast<uint32_t>(kTx),
+            static_cast<uint32_t>(s.tx));
+      check(s.ty == kTy, "case1: stamp transform.ty", static_cast<uint32_t>(kTy),
+            static_cast<uint32_t>(s.ty));
+      check(s.radius == kRadius, "case1: stamp radius", static_cast<uint32_t>(kRadius),
+            static_cast<uint32_t>(s.radius));
+      check(s.ring_width == kRing, "case1: stamp ring_width", static_cast<uint32_t>(kRing),
+            static_cast<uint32_t>(s.ring_width));
+      check(s.src_id == 9, "case1: stamp source_id low half", 9, s.src_id);
+    }
+  }
+
+  // ---- 2. the same packet with one payload byte flipped -------------------
+  // The positive control for packets_abandoned_o, and the whole reason this
+  // block stages instead of acting.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(0, 0x0000'0007u, 0x0011'0000));
+    b.append_record(
+        surfaceStampRecord(0x0000'0009u, kPatch, kOp, kTag, kStrength, kTx, kTy, kRadius, kRing));
+    b.end_frame(0);
+    std::vector<uint8_t> p = b.seal(1, 1, 0);
+    // A matrix byte, well inside the record stream: the header CRC still
+    // passes, so the decoder reaches ZH_ABI_BAD_PAYLOAD_CRC on the last byte
+    // -- after the executor has already staged the whole SetView.
+    p[36 + 32 + 24] = static_cast<uint8_t>(p[36 + 32 + 24] ^ 0xFFu);
+    const Run r = runPacket(p, 0xFFFFFFFFu);
+
+    check(r.done, "case2: reached a verdict", 1, r.done ? 1 : 0);
+    check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case2: the payload CRC fails",
+          zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, r.err);
+    check(r.abandoned == 1, "case2: packets_abandoned_o fires", 1, r.abandoned);
+    check(r.committed == 0, "case2: packets_committed_o", 0, r.committed);
+    // The assertion this block exists for: a staged SetView and a staged stamp
+    // BOTH evaporate, and the surface sheet is never scarred by a packet that
+    // failed its CRC.
+    check(r.cfg.empty(), "case2: NO matrix word was written", 0, r.cfg.size());
+    check(r.stamps.empty(), "case2: NO stamp was dispatched", 0, r.stamps.size());
+    check(r.views == 0, "case2: views_written_o", 0, r.views);
+    check(r.issued == 0, "case2: stamps_issued_o", 0, r.issued);
+  }
+
+  // ---- 3. a view_id the bank cannot address -------------------------------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(7, 0x0000'0007u, 0x0022'0000));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case3: the RECORD is legal ABI", zhao_abi::ZH_ABI_OK,
+          r.err);
+    check(r.refused == 1, "case3: view_range_refused_o fires", 1, r.refused);
+    // Refused, not masked. view_id 7 must NOT land in view 1.
+    check(r.cfg.empty(), "case3: nothing was written to either view", 0, r.cfg.size());
+    check(r.views == 0, "case3: views_written_o", 0, r.views);
+    check(r.committed == 1, "case3: the packet still commits", 1, r.committed);
+  }
+
+  // ---- 4. a source_id whose high half does not fit ------------------------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(
+        surfaceStampRecord(0x0001'0005u, kPatch, kOp, kTag, kStrength, kTx, kTy, kRadius, kRing));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case4: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    check(r.truncated == 1, "case4: stamp_src_truncated_o fires", 1, r.truncated);
+    check(r.stamps.size() == 1, "case4: the stamp is still dispatched", 1, r.stamps.size());
+    if (r.stamps.size() == 1)
+      check(r.stamps[0].src_id == 5, "case4: the low half is what is carried", 5,
+            r.stamps[0].src_id);
+  }
+
+  // ---- 5. more stamps than the ring holds ---------------------------------
+  // STAMP_Q is 8 in the harness; nine stamps is a legal packet the console
+  // cannot execute, and it is refused WHOLE rather than eight-ninths applied.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    for (int k = 0; k < 9; ++k) {
+      b.append_record(surfaceStampRecord(static_cast<uint32_t>(k), kPatch,
+                                         static_cast<uint8_t>(k & 1), kTag, kStrength, kTx, kTy,
+                                         kRadius, kRing));
+    }
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case5: the PACKET is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    check(r.overflow == 1, "case5: stamp_overflow_o fires", 1, r.overflow);
+    check(r.abandoned == 1, "case5: the packet is refused whole", 1, r.abandoned);
+    check(r.committed == 0, "case5: packets_committed_o", 0, r.committed);
+    check(r.stamps.empty(), "case5: not one stamp escaped", 0, r.stamps.size());
+    check(r.issued == 0, "case5: stamps_issued_o", 0, r.issued);
+  }
+
+  // ---- 6. the collapse law -------------------------------------------------
+  {
+    // Two SetViews for the SAME view: idempotent state, last one wins, ONE
+    // commit. This is the property that makes the shadow bank bounded.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(0, 1, 0x0033'0000));
+    b.append_record(setViewRecord(0, 2, 0x0044'0000));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.views == 1, "case6a: two SetViews for one view commit once", 1, r.views);
+    check(r.cfg.size() == 16, "case6a: sixteen words, not thirty-two", 16, r.cfg.size());
+    if (r.cfg.size() == 16)
+      check(r.cfg[0].data == 0x0044'0000u, "case6a: the SECOND SetView is the one that lands",
+            0x0044'0000u, r.cfg[0].data);
+  }
+  {
+    // Two DIFFERENT views: two commits, thirty-two words, view 0 first.
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(1, 1, 0x0055'0000));
+    b.append_record(setViewRecord(0, 2, 0x0066'0000));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.views == 2, "case6b: both views commit", 2, r.views);
+    check(r.cfg.size() == 32, "case6b: thirty-two words", 32, r.cfg.size());
+    if (r.cfg.size() == 32) {
+      check(r.cfg[0].view == 0, "case6b: view 0 drains first", 0, r.cfg[0].view);
+      check(r.cfg[0].data == 0x0066'0000u, "case6b: view 0 data", 0x0066'0000u, r.cfg[0].data);
+      check(r.cfg[16].view == 1, "case6b: view 1 drains second", 1, r.cfg[16].view);
+      check(r.cfg[16].data == 0x0055'0000u, "case6b: view 1 data", 0x0055'0000u, r.cfg[16].data);
+    }
+  }
+
+  // ---- 7. the same work under stamp backpressure --------------------------
+  // The result must be identical, only slower. A drain that drops a stamp when
+  // its consumer is slow is the defect this case exists to catch.
+  {
+    const uint32_t masks[2] = {0xAAAAAAAAu, 0x11111111u};
+    for (int m = 0; m < 2; ++m) {
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(setViewRecord(0, 7, 0x0011'0000));
+      for (int k = 0; k < 4; ++k) {
+        b.append_record(surfaceStampRecord(static_cast<uint32_t>(0x20 + k), kPatch,
+                                           static_cast<uint8_t>(k & 1), kTag, kStrength, kTx, kTy,
+                                           kRadius, kRing));
+      }
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), masks[m]);
+      const std::string tag = "case7[mask " + std::to_string(m) + "]";
+
+      check(r.err == zhao_abi::ZH_ABI_OK, (tag + ": well formed").c_str(), zhao_abi::ZH_ABI_OK,
+            r.err);
+      checkNothingEscapedEarly(r, tag.c_str());
+      check(r.committed == 1, (tag + ": committed").c_str(), 1, r.committed);
+      check(r.views == 1, (tag + ": views_written_o").c_str(), 1, r.views);
+      check(r.issued == 4, (tag + ": all four stamps issued").c_str(), 4, r.issued);
+      check(r.stamps.size() == 4, (tag + ": all four stamps observed").c_str(), 4, r.stamps.size());
+      check(r.cfg.size() == 16, (tag + ": sixteen matrix words").c_str(), 16, r.cfg.size());
+      // In order, and each carrying its own source id -- a drain that reissued
+      // the head would show the same id twice, which is the shape of the
+      // re-submission defect CLAUDE.md records under "Counters see what
+      // pictures cannot".
+      for (size_t k = 0; k < r.stamps.size() && k < 4; ++k) {
+        check(r.stamps[k].src_id == 0x20 + k,
+              (tag + ": stamp " + std::to_string(k) + " source id").c_str(), 0x20 + k,
+              r.stamps[k].src_id);
+      }
+    }
+  }
+
+  return zhao::report_and_exit("cmd_exec_directed");
+}

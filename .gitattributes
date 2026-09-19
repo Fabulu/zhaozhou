@@ -402,3 +402,16 @@ fpga/rtl/sys/zhao_sys_reset.sv text eol=lf
 fpga/rtl/prod/zhao_console_board.sv text eol=lf
 tests/platform/tb_zhao_sys_pll.sv text eol=lf
 tests/platform/tb_zhao_sys_reset.sv text eol=lf
+
+# CMD.EXEC, added 2026-09-19 with the block, and pinned BEFORE a receipt binds
+# its hash rather than after one breaks -- the lesson this file records three
+# times already. `fpga/rtl/command/zhao_cmd_exec.sv` joins the
+# `zhao_console_core` fit closure the moment the composer instantiates it, and
+# that row hashes every raw source byte; `core.autocrlf` is true at --system on
+# this machine, so the first checkout of an unpinned member moves its digest
+# without moving the design. Its pair harness goes with it: the harness is a
+# wrapper whose whole job is to stand for the composer's fork, and a diff
+# between them is only evidence if both sides check out the same way.
+fpga/rtl/command/zhao_cmd_exec.sv text eol=lf
+tests/command/tb_cmd_exec_pair.sv text eol=lf
+tests/command/cmd_exec_directed.cpp text eol=lf

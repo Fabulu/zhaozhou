@@ -179,8 +179,24 @@ module zhao_cmd_exec
     // The SAME stream CMD.DECODER sees. The fork is an AND of the two readies
     // in the composer; a consumer that cannot say "not yet" drops bytes the
     // other consumer has already counted.
+    //
+    // `pkt_fork_ready_i` IS THE AND, HANDED BACK, and it is not decoration --
+    // it is the difference between this block working and this block reading
+    // every field one byte out of place. The obvious `take = pkt_valid_i &&
+    // pkt_ready_o` is wrong on a FORK: it says "I could have taken it", and the
+    // byte only actually moves when the OTHER consumer could too. CMD.DECODER
+    // holds its ready low for one cycle in S_CHECK, at packet offset 36 --
+    // which is the first byte of the record region -- so a walk driven by the
+    // local ready runs exactly one byte ahead for the whole packet and captures
+    // nothing at any offset it believes in. Measured, not reasoned: the first
+    // build of this block staged zero records with every counter reading a
+    // confident zero and the decoder beside it reporting four records walked.
+    // `zhao_shell_top_v2`'s glue 3 has the same shape from the other side
+    // (`pkt_ready = ... && cmd_pkt_ready_i`) and its comment says why: a tap
+    // "would let this framer advance past a byte the other consumer never saw".
     input  logic        pkt_valid_i,
     output logic        pkt_ready_o,
+    input  logic        pkt_fork_ready_i,
     input  logic [ 7:0] pkt_byte_i,
     input  logic [31:0] pkt_len_i,
 
@@ -278,7 +294,9 @@ module zhao_cmd_exec
   end
 
   logic take, in_rec_region, rec_done;
-  assign take          = pkt_valid_i && pkt_ready_o;
+  // NOT `pkt_valid_i && pkt_ready_o` -- see the port comment. This is the byte
+  // that MOVED, not the byte this block would have accepted.
+  assign take          = pkt_valid_i && pkt_fork_ready_i;
   assign in_rec_region = (pos >= 32'd36) && (pos < pkt_len_m4_q);
   // `rlen` is complete from record offset 4 onward, which is exactly the guard
   // glue 3 uses and for the same reason.

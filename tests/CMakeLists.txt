@@ -4844,6 +4844,34 @@ set_tests_properties(lint_zhao_cmd_decoder PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# CMD.EXEC: the executor, driven through the REAL pair. The DUT top is
+# tests/command/tb_cmd_exec_pair.sv -- CMD.DECODER and CMD.EXEC on ONE forked
+# byte stream -- so the verdict the executor gates on, and the cycle it arrives
+# on, are the shipped decoder's and not the test's opinion of them. Driving the
+# executor alone with a C++ verdict would pass while proving nothing about the
+# ready fork or the one-cycle staging race.
+add_executable(test_cmd_exec_directed command/cmd_exec_directed.cpp)
+target_link_libraries(test_cmd_exec_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_cmd_exec_directed
+  PREFIX Vtb_cmd_exec_pair
+  TOP_MODULE tb_cmd_exec_pair
+  INCLUDE_DIRS ${ZHAO_CMD_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_decoder.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_exec.sv
+          ${CMAKE_SOURCE_DIR}/tests/command/tb_cmd_exec_pair.sv)
+add_test(NAME cmd_exec_directed COMMAND test_cmd_exec_directed)
+set_tests_properties(cmd_exec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_cmd_exec
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_cmd_exec
+                 ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/command/zhao_cmd_exec.sv)
+set_tests_properties(lint_zhao_cmd_exec PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # CMD.DMA: directed vectors with the harness-as-HPS bridge responder (D10)
 add_executable(test_cmd_dma_directed command/cmd_dma_directed.cpp)
 target_link_libraries(test_cmd_dma_directed PRIVATE zhao_harness zhao_zref)

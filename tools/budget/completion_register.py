@@ -106,9 +106,28 @@ def console_closure() -> set[str]:
     if not TARGETS.exists():
         return set()
     text = TARGETS.read_text(encoding="utf-8", errors="replace")
-    i = text.find("zhao_console_core")
-    if i < 0:
+    # ANCHOR ON THE TARGET HEADER, NOT ON THE NAME.
+    #
+    # This was `text.find("zhao_console_core")` -- the first occurrence of the
+    # string ANYWHERE in the file. On 2026-09-19 an agent added a fit target
+    # whose comment says "It is composed in zhao_console_core as well", at line
+    # 1726, which is 625 lines ABOVE the real target. The scan anchored on that
+    # sentence, read the one source under the comment's own target, and returned
+    # a closure of ONE MODULE. The register then reported 124 mandatory gaps
+    # against 77, and NOTHING ABOUT THE DESIGN HAD CHANGED.
+    #
+    # It failed in the loud direction this time, which is luck and not design:
+    # had the hijacked target been a large one, the closure would have grown and
+    # the count would have FALLEN. This is the third defect of the same family in
+    # this instrument -- closure membership counted as connection, the unbounded
+    # scan that absorbed the next target, and now an anchor that matches prose --
+    # and they share one cause: THE REGISTER WAS READING A CONVENTION RATHER THAN
+    # A STRUCTURE. A comment cannot accidentally be a target header, so match the
+    # header.
+    m = re.search(r"^\s*-\s*top:\s*zhao_console_core\s*$", text, re.M)
+    if m is None:
         return set()
+    i = m.start()
     out: set[str] = set()
     started = False
     for line in text[i:].splitlines()[1:]:
@@ -187,9 +206,15 @@ def closure_paths() -> list[pathlib.Path]:
     if not TARGETS.exists():
         return []
     t = TARGETS.read_text(encoding="utf-8", errors="replace")
-    i = t.find("zhao_console_core")
-    if i < 0:
+    # Same anchor, same reason, same defect -- see console_closure() above. These
+    # two functions have now carried the identical bug TWICE (the unbounded scan
+    # and this one), which is what happens when a pair of functions is kept in
+    # step by the author remembering to. The `assert` in main() comparing their
+    # two answers is the standing guard against a third.
+    m = re.search(r"^\s*-\s*top:\s*zhao_console_core\s*$", t, re.M)
+    if m is None:
         return []
+    i = m.start()
     out, started = [], False
     for line in t[i:].splitlines()[1:]:
         s = line.strip()
@@ -446,6 +471,32 @@ def disconnected() -> dict:
 def audit() -> dict:
     ties = tieoffs()
     closure = console_closure()
+
+    # THE CROSS-CHECK, and it exists because the claim that it existed was made
+    # before the code did. `console_closure()` and `closure_paths()` read the
+    # same region of the same file by two separate copies of the same walk, and
+    # they have now carried the identical defect twice -- the unbounded scan that
+    # absorbed the following target, and the substring anchor that matched a
+    # COMMENT mentioning the core 625 lines above the real target. The second one
+    # collapsed the closure to a single module and moved the headline number from
+    # 77 to 124 with nothing in the design changed.
+    #
+    # Two independent walks that must agree are worth far more than one walk
+    # trusted, so their disagreement is now a HARD FAILURE rather than a sentence
+    # in a commit message. It is checked here rather than in main() so that every
+    # consumer of audit() gets it, including --json.
+    paths = {p.stem for p in closure_paths()}
+    if paths != closure:
+        only_c = sorted(closure - paths)
+        only_p = sorted(paths - closure)
+        raise SystemExit(
+            "completion_register: the two closure walks DISAGREE, so neither "
+            "number can be trusted.\n"
+            "  console_closure() only: %s\n"
+            "  closure_paths()  only: %s\n"
+            "One of them is reading the wrong region of design/fit_targets.yml. "
+            "Fix that before reading any gap count." % (only_c, only_p)
+        )
     gaps = [t for t in ties if t["mandatory_gap"]]
     dis = disconnected()
     # UNRESOLVABLE COUNTS AS A GAP. It was excluded at first on the reasoning
