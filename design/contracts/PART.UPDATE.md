@@ -21,6 +21,35 @@
 > These two did not, which is why a block was built in September 2026 citing
 > "the scale is unruled" as its reason for doing nothing.
 
+> ## CONTESTED — STEP 6 CONFLICTS WITH TWO SIBLING CONTRACTS. NOT RULED.
+>
+> Raised 2026-09-19. **Nothing below is amended and no reading is adopted
+> here**; this banner exists so the conflict is read rather than re-derived,
+> and the next person to touch step 6 needs an owner ruling, not an adapter.
+>
+> The eight-step order below puts *"6. resolve at most ONE collision response
+> for the tick"* inside this block. Three sentences make that unsatisfiable:
+>
+> * this contract's own **In** lists three inputs — record, species descriptor,
+>   Field sample — and **a resolved collision velocity is not among them**;
+> * this contract's **Scalar reference function** section says the collision
+>   response is `zref::ParticleCollide`'s, *"separate stages with separate
+>   oracles"*;
+> * `PART.COLLIDE.md` **In** says it consumes *"The updated particle from
+>   PART.UPDATE"* and its Notes call it a *leaf* — so it is strictly
+>   DOWNSTREAM and has no return edge, while `PART.SPAWN.md` **In** requires
+>   the four ruled events, **collision among them**, to arrive *"from
+>   PART.UPDATE"*.
+>
+> So this block must author a collision event it cannot observe. The RTL
+> (`fpga/rtl/particles/zhao_part_update.sv`) carries `col_valid_i/col_vx_i/
+> col_vy_i/col_vz_i` as the seam cut to escape that, and it has **no legal
+> producer**; in `zhao_console_core` it is tied to zero, which also leaves
+> `collisions_applied_o` and `spawn_by_event2_o` structurally stuck at zero.
+> The full citation chain, the reason "give PART.COLLIDE a velocity output"
+> double-applies the response, and a recommendation are in entry **I4** of
+> `fpga/rtl/prod/zhao_console_core.sv`'s INCOMPLETE header.
+
 > Ledger: `design/blocks.yml` · owner ZH-062 · phase 10 · maturity SPECIFIED
 
 ## Purpose and exclusions

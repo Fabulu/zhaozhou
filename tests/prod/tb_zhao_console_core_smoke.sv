@@ -1094,8 +1094,13 @@ module tb_zhao_console_core_smoke
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
-    $display("SMOKE: tied-off, MUST be zero: collisions_applied=%0d (entry I4)",
-             part_collisions_applied_o);
+    // Entry I4's two stuck counters, PRINTED rather than asserted-about. The
+    // second one was found on 2026-09-19 and is the more alarming: event bit 2
+    // is COLLISION, PART.UPDATE builds it from the tied-off `col_valid_i`, so
+    // SPAWN-ON-COLLISION is dead in this console and its counter reads zero
+    // exactly as it would if no particle had ever hit anything.
+    $display("SMOKE: entry I4, both STRUCTURALLY stuck: collisions_applied=%0d spawn_by_event2(collision)=%0d",
+             part_collisions_applied_o, part_spawn_by_event2_o);
 
     if (!part_tick_seen_q)
       $fatal(1, "SMOKE: PART.STATE never went busy -- SHELL.gpu_tick_o does not reach it");

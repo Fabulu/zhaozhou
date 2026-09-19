@@ -21,6 +21,29 @@
 > These two did not, which is why a block was built in September 2026 citing
 > "the scale is unruled" as its reason for doing nothing.
 
+> ## CONTESTED — THE `collision` EVENT CANNOT COME FROM PART.UPDATE. NOT RULED.
+>
+> Raised 2026-09-19. **Nothing below is amended and no reading is adopted
+> here.**
+>
+> **In** requires *"The parent particle plus its spawn/death events from
+> `PART.UPDATE`"*, and the FROZEN event list (owner ruling 2026-08-31 §2.4) is
+> *"birth, a bounded age marker, **collision**, death"*. But `PART.COLLIDE.md`
+> places PART.COLLIDE strictly DOWNSTREAM of PART.UPDATE and calls it a leaf,
+> and `PART.UPDATE.md` excludes the collision response from its own oracle and
+> from its input list. PART.UPDATE therefore cannot know a collision occurred,
+> so it cannot author event bit 2.
+>
+> The measured consequence in the composed console: `spawn_by_event2_o` is
+> **structurally stuck at zero**. Spawn-on-collision — sparks on impact — does
+> not work, and no test said so, because the counter reads zero exactly as it
+> would if no collision had happened. Do not quote it as evidence.
+>
+> Resolving this decides a physics question no contract answers: whether a
+> collision-spawned child is placed at the parent's PRE- or POST-contact
+> position. Full citations and a recommendation: entry **I4** of
+> `fpga/rtl/prod/zhao_console_core.sv`'s INCOMPLETE header.
+
 > Ledger: `design/blocks.yml` · owner ZH-064 · phase 10 · maturity SPECIFIED
 
 ## Purpose and exclusions

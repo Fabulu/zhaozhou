@@ -1,5 +1,32 @@
 # Contract — PART.COLLIDE (Particle collision)
 
+> ## CONTESTED — THE STEP-6 BOUNDARY CONFLICTS WITH TWO SIBLINGS. NOT RULED.
+>
+> Raised 2026-09-19. **Nothing below is amended and no reading is adopted
+> here.** This contract is self-consistent; the conflict is between it and
+> `PART.UPDATE.md` / `PART.SPAWN.md`, and it is recorded on all three so that
+> reading any one of them surfaces it.
+>
+> This contract places this block strictly DOWNSTREAM of PART.UPDATE (**In**:
+> *"The updated particle from PART.UPDATE"*) and makes it a leaf (**Notes**:
+> *"results return through PART.STATE's writeback path"*). `PART.UPDATE.md`
+> nevertheless lists the collision response as **step 6 of ITS eight-step
+> order**, and `PART.SPAWN.md` requires the ruled **collision** event to reach
+> PART.SPAWN *"from PART.UPDATE"*. PART.UPDATE can therefore neither observe
+> nor announce a collision, and `zhao_part_update.sv`'s `col_*_i` port — the
+> seam cut to escape that — has no legal producer, because driving it from
+> this block would be a cycle.
+>
+> Note for anyone tempted by "just add a velocity output here": this block
+> already resolves step 6 END TO END. `vout_c` is the responded velocity,
+> `pout_c` the contact-point placement this contract's Q-format section
+> requires, and `w_flg` writes `kPartCollidedThisTick`; all three land in
+> `c_record_o`, which PART.STATE writes back. The response already reaches the
+> particle. Feeding it to PART.UPDATE as well would apply it TWICE.
+>
+> Full citations and a recommendation: entry **I4** of
+> `fpga/rtl/prod/zhao_console_core.sv`'s INCOMPLETE header.
+
 > Ledger: `design/blocks.yml` · owner ZH-063 · phase 10 · maturity SPECIFIED
 
 ## Purpose and exclusions

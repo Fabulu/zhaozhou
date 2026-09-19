@@ -126,20 +126,81 @@
 //  I3. THE SIZE/COLOUR CURVE TABLE (`part_crv_*`) -- BOUNDARY, same gap as I2.
 //
 //  I4. PART.UPDATE STEP 6, THE COLLISION RESPONSE (`col_valid_i`, `col_vx_i`,
-//      `col_vy_i`, `col_vz_i`) -- TIED TO ZERO, and this one is a real
-//      INTERFACE MISMATCH rather than a missing block.
-//      PART.UPDATE expects a resolved velocity triple. PART.COLLIDE applies
-//      the response to the RECORD and emits `c_record_o`; it has no velocity
-//      output at all. The two step-6 contracts do not meet, so there is
-//      nothing legitimate to wire and an adapter here would be arithmetic
-//      invented in the composer -- exactly what this file must not contain.
-//      TWO CONSEQUENCES, STATED SO NOBODY QUOTES THEM AS EVIDENCE LATER:
+//      `col_vy_i`, `col_vz_i`) -- TIED TO ZERO. It is NOT an interface
+//      mismatch between two blocks that could be adapted. It is a CLOSED
+//      CONTRADICTION BETWEEN THREE RATIFIED CONTRACTS, and it needs an OWNER
+//      RULING, not a wire. Investigated 2026-09-19; the four citations are
+//      quoted rather than summarised because the summary is what keeps
+//      sending people to build an adapter.
+//
+//      (1) `design/contracts/PART.COLLIDE.md` "Input and output packet
+//          layouts / In": *"The updated particle from PART.UPDATE, its species
+//          descriptor, and the collision sources."* PART.COLLIDE is therefore
+//          strictly DOWNSTREAM of PART.UPDATE. Its "Notes" repeat it: *"leaf
+//          (results return through PART.STATE's writeback path)"* -- there is
+//          no return edge to PART.UPDATE anywhere in its contract.
+//      (2) `design/contracts/PART.UPDATE.md` "In" lists exactly three inputs:
+//          *"The 128-bit record from PART.STATE, the species descriptor, and a
+//          bounded Field/FLOW acceleration sample."* A RESOLVED COLLISION
+//          VELOCITY IS NOT AMONG THEM. Its "Scalar reference function" section
+//          removes it explicitly: `zref::ParticleUpdate` owns the recipes, the
+//          order and the saturation rules, *"Not the collision response
+//          (`zref::ParticleCollide`) ... which are separate stages with
+//          separate oracles."*
+//      (3) `design/contracts/PART.SPAWN.md` "In": *"The parent particle plus
+//          its spawn/death events from `PART.UPDATE`, and the parent's species
+//          descriptor."* And its FROZEN event list (owner ruling 2026-08-31
+//          §2.4) is *"birth, a bounded age marker, collision, death"*.
+//
+//      So PART.UPDATE must author a COLLISION event (3), and cannot know a
+//      collision has happened (1)+(2). `col_valid_i` is the seam somebody cut
+//      to escape that, and it has no legal producer: PART.COLLIDE is
+//      downstream, so driving it would be a cycle.
+//
+//      AND IT WOULD ALSO DOUBLE-APPLY THE RESPONSE, which is the fact that
+//      settles the "just add a velocity output to PART.COLLIDE" repair.
+//      `zhao_part_collide.sv` already resolves step 6 END TO END: `vout_c` is
+//      the responded velocity, `pout_c` the contact-point placement, and
+//      `w_flg` writes `kPartCollidedThisTick` -- all three go into
+//      `c_record_o`, which PART.STATE writes back and hands PART.UPDATE at the
+//      NEXT tick. The response therefore already reaches the particle, through
+//      the record, on PART.COLLIDE's own declared path. PART.UPDATE's step 6
+//      would apply it a second time. Note also that PART.UPDATE's step 6
+//      cannot satisfy PART.COLLIDE.md's *"A contact must not leave the
+//      particle inside the surface"*, because the block's own header says step
+//      6 *"does NOT re-integrate position"* -- a velocity-only step 6 can
+//      never place the contact point.
+//
+//      THE RECOMMENDATION, for the owner to accept or refuse -- NOT taken
+//      here, because a wrong ruling changes particle physics silently:
+//      retire `col_*_i` from PART.UPDATE (step 6 is PART.COLLIDE's, whole),
+//      and give the COLLISION EVENT to the block that owns the step -- carry
+//      PART.UPDATE's three own events across PART.COLLIDE on the same register
+//      enable as the record, and let PART.COLLIDE insert its own
+//      `c_contact_o` at the collision bit. That contradicts PART.SPAWN.md's
+//      "from PART.UPDATE" sentence, which is why it is a RULING and not an
+//      edit. It also decides a physics question no contract answers: whether a
+//      collision-spawned child is placed at the parent's PRE- or POST-contact
+//      position.
+//
+//      THREE CONSEQUENCES, STATED SO NOBODY QUOTES THEM AS EVIDENCE LATER:
 //        (a) `part_collisions_applied_o` is STRUCTURALLY STUCK AT ZERO in this
 //            core. It is not a working counter reading zero; it is a counter
 //            that cannot move. Do not read it as "no collisions occurred".
-//        (b) synthesis will constant-fold PART.UPDATE's step-6 datapath, so
+//        (b) `part_spawn_by_event2_o` is STUCK AT ZERO FOR THE SAME REASON,
+//            and nothing said so until 2026-09-19. Event bit 2 is COLLISION
+//            (`zhao_part_spawn.sv`: "0 birth, 1 age marker, 2 collision,
+//            3 death"), PART.UPDATE builds that bit from `col_apply_c`, and
+//            `col_apply_c` is `motion_c && col_valid_i`. SPAWN-ON-COLLISION --
+//            sparks on impact, one of the ruling's four events -- IS DEAD IN
+//            THIS CONSOLE. A second counter reading zero beside the first is
+//            exactly the pattern CLAUDE.md says to check hardest.
+//        (c) synthesis will constant-fold PART.UPDATE's step-6 datapath, so
 //            this core UNDER-COUNTS PART.UPDATE's area. The resource number is
-//            a floor for that block, not its cost.
+//            a floor for that block, not its cost. Note the repair above
+//            REMOVES that datapath rather than driving it, so the corrected
+//            number is expected to go DOWN, not up -- anyone budgeting for
+//            "step 6 once it is wired" should budget for nothing.
 //
 //  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY. FIELD.SEQ.FLOW
 //      is not composed; `zhao_field_seq.sv` exists but exposes no bounded
