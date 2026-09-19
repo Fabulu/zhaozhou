@@ -29,6 +29,22 @@
 //                                              GEOM.PROJ_LANE into the
 //                                              sequencer. THE LOOP CLOSES.
 //   7. `hist_snapshots_o` moves             -- SHELL.gpu_tick -> MEASURE.
+//   8. `terr_tess_vertices_o` moves         -- TERRAIN.GROUP_SEQ ->
+//                                              TERRAIN.TESS and back.
+//   9. `terr_fills_forwarded_o` moves       -- TERRAIN.GROUP_SEQ -> client B.
+//  10. `proj_b_grants_o` moves              -- the shared projector's ARBITER
+//                                              granted its SECOND client.
+//                                              Before the terrain sequencer
+//                                              was composed this counter could
+//                                              not move at all, so the whole
+//                                              reason the projector is SHARED
+//                                              was an argument and not a
+//                                              measurement.
+//  11. `terr_groups_opened_o` moves         -- the open/gen handshake with the
+//                                              subsystem's terrain arena.
+//  12. `terr_release_unsafe_o` STAYS ZERO   -- the sequencer's own safety
+//                                              detector, which has a committed
+//                                              mutant proving it can fire.
 //
 // WHAT IT CANNOT SHOW, said here rather than left as a silence: nothing flows
 // through POST.COMPOSITE, because its source pixels have no producer in the
@@ -236,33 +252,56 @@ module tb_zhao_console_core_smoke
   logic [4:0]              proj_cfg_addr_i;
   logic [31:0]             proj_cfg_data_i;
   logic                    proj_en_i;
-  logic                    proj_b_valid_i;
-  logic                    proj_b_ready_o;
-  logic signed [31:0]      proj_b_vx_i;
-  logic signed [31:0]      proj_b_vy_i;
-  logic signed [31:0]      proj_b_vz_i;
-  logic                    proj_b_view_i;
-  logic [PROJ_T_ARENA_W-1:0] proj_b_arena_i;
-  logic [PROJ_T_INDEX_W-1:0] proj_b_index_i;
-  logic                    proj_fill_landed_o;
-  logic [PROJ_T_ARENA_W-1:0] proj_fill_arena_o;
-  logic                    proj_open_i;
-  logic [PROJ_T_ARENA_W-1:0] proj_open_arena_i;
-  logic [GEOM_GEN_W-1:0]   proj_open_gen_o;
-  logic                    proj_seal_i;
-  logic [PROJ_T_ARENA_W-1:0] proj_seal_arena_i;
-  logic                    proj_ref_valid_i;
-  logic                    proj_ref_ready_o;
-  logic [PROJ_T_ARENA_W-1:0] proj_ref_arena_i;
-  logic [GEOM_GEN_W-1:0]   proj_ref_gen_i;
-  logic [PROJ_T_INDEX_W-1:0] proj_ref_ia_i;
-  logic [PROJ_T_INDEX_W-1:0] proj_ref_ib_i;
-  logic [PROJ_T_INDEX_W-1:0] proj_ref_ic_i;
-  logic [15:0]             proj_ref_src_id_i;
-  logic                    proj_ref_view_i;
-  logic [7:0]              proj_ref_mat_a_i;
-  logic [7:0]              proj_ref_mat_b_i;
-  logic [7:0]              proj_ref_weight_i;
+  // Client B, its arena lifetime and its reference port are NO LONGER PORTS:
+  // TERRAIN.GROUP_SEQ and TERRAIN.TESS drive them inside the DUT. What the
+  // bench declares instead is the terrain producer's OWN boundary.
+  logic                    terr_job_valid_i;
+  logic                    terr_job_ready_o;
+  logic [5:0]              terr_job_ox_i;
+  logic [5:0]              terr_job_oz_i;
+  logic [1:0]              terr_job_level_i;
+  logic [1:0]              terr_job_lvl_nz_i;
+  logic [1:0]              terr_job_lvl_pz_i;
+  logic [1:0]              terr_job_lvl_nx_i;
+  logic [1:0]              terr_job_lvl_px_i;
+  logic [16:0]             terr_job_morph_i;
+  logic                    terr_job_surface_i;
+  logic                    terr_job_dual_i;
+  logic [15:0]             terr_job_src_id_i;
+  logic [1:0]              terr_job_view_mask_i;
+  logic [7:0]              terr_job_mat_a_i;
+  logic [7:0]              terr_job_mat_b_i;
+  logic [7:0]              terr_job_weight_i;
+  logic                    terr_sparse_fill_i;
+  logic                    terr_lat_req_o;
+  logic [5:0]              terr_lat_vi_o;
+  logic [5:0]              terr_lat_vj_o;
+  logic                    terr_lat_surface_o;
+  logic signed [31:0]      terr_lat_h_i;
+  logic signed [31:0]      terr_lat_wx_i;
+  logic signed [31:0]      terr_lat_wz_i;
+  logic                    terr_cs_req_o;
+  logic [4:0]              terr_cs_ci_o;
+  logic [4:0]              terr_cs_cj_o;
+  logic [1:0]              terr_cs_substance_i;
+  logic [PROJ_T_ARENAS-1:0] terr_held_o;
+  logic                    terr_busy_o;
+  logic [31:0]             terr_jobs_accepted_o;
+  logic [31:0]             terr_jobs_no_view_o;
+  logic [31:0]             terr_jobs_rejected_o;
+  logic [31:0]             terr_jobs_empty_o;
+  logic [31:0]             terr_groups_opened_o;
+  logic [31:0]             terr_groups_released_o;
+  logic [31:0]             terr_fills_forwarded_o;
+  logic [31:0]             terr_fills_dropped_o;
+  logic [31:0]             terr_refs_forwarded_o;
+  logic [31:0]             terr_release_unsafe_o;
+  logic [31:0]             terr_tess_vertices_o;
+  logic [31:0]             terr_tess_refs_o;
+  logic [31:0]             terr_tess_rejected_o;
+  logic [31:0]             terr_tess_lod_clamped_o;
+  logic [31:0]             terr_tess_mode_invalid_o;
+  logic                    terr_tess_idle_o;
   logic                    proj_out_valid_o;
   logic                    proj_out_ready_i;
   logic signed [20:0]      proj_out_ax_o;
@@ -692,6 +731,30 @@ module tb_zhao_console_core_smoke
     end
   end
 
+  // --------------------------------------------------------------------------
+  // THE TERRAIN LATTICE (entry I22: TERRAIN.COMPCACHE's front is not composed,
+  // so the harness plays the MEMORY -- which is exactly what the completion
+  // plan allows it to play, and nothing more).
+  //
+  // A flat lattice: every vertex sits at height 0 with its placed world x/z
+  // taken from the requested (vi, vj). That is a memory MODEL, not a terrain:
+  // the bench asserts only that beats crossed wires, never a shape. The reply
+  // is REGISTERED one cycle after the request, which is the port's own law
+  // ("registered, data valid the cycle AFTER the request") -- answering
+  // combinationally would test a timing the real store does not offer.
+  // --------------------------------------------------------------------------
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      terr_lat_h_i  <= '0;
+      terr_lat_wx_i <= '0;
+      terr_lat_wz_i <= '0;
+    end else if (terr_lat_req_o) begin
+      terr_lat_h_i  <= '0;
+      terr_lat_wx_i <= FX16_ONE * 32'(terr_lat_vi_o);
+      terr_lat_wz_i <= FX16_ONE * 32'(terr_lat_vj_o);
+    end
+  end
+
   // ==========================================================================
   // THE RUN.
   // ==========================================================================
@@ -765,28 +828,24 @@ module tb_zhao_console_core_smoke
     proj_cfg_addr_i = '0;
     proj_cfg_data_i = '0;
     proj_en_i = '0;
-    proj_b_valid_i = '0;
-    proj_b_vx_i = '0;
-    proj_b_vy_i = '0;
-    proj_b_vz_i = '0;
-    proj_b_view_i = '0;
-    proj_b_arena_i = '0;
-    proj_b_index_i = '0;
-    proj_open_i = '0;
-    proj_open_arena_i = '0;
-    proj_seal_i = '0;
-    proj_seal_arena_i = '0;
-    proj_ref_valid_i = '0;
-    proj_ref_arena_i = '0;
-    proj_ref_gen_i = '0;
-    proj_ref_ia_i = '0;
-    proj_ref_ib_i = '0;
-    proj_ref_ic_i = '0;
-    proj_ref_src_id_i = '0;
-    proj_ref_view_i = '0;
-    proj_ref_mat_a_i = '0;
-    proj_ref_mat_b_i = '0;
-    proj_ref_weight_i = '0;
+    terr_job_valid_i = '0;
+    terr_job_ox_i = '0;
+    terr_job_oz_i = '0;
+    terr_job_level_i = '0;
+    terr_job_lvl_nz_i = '0;
+    terr_job_lvl_pz_i = '0;
+    terr_job_lvl_nx_i = '0;
+    terr_job_lvl_px_i = '0;
+    terr_job_morph_i = '0;
+    terr_job_surface_i = '0;
+    terr_job_dual_i = '0;
+    terr_job_src_id_i = '0;
+    terr_job_view_mask_i = '0;
+    terr_job_mat_a_i = '0;
+    terr_job_mat_b_i = '0;
+    terr_job_weight_i = '0;
+    terr_sparse_fill_i = '0;
+    terr_cs_substance_i = '0;
     proj_out_ready_i = '0;
     post_view_sel_i = '0;
     post_s_valid_i = '0;
@@ -930,6 +989,10 @@ module tb_zhao_console_core_smoke
     part_col_d_response_i   = 3'd0;
     part_wr_ready_i         = 1'b1;
     proj_en_i               = 1'b1;
+    // The replayed terrain triangle has no consumer in this core (entry I13),
+    // so the bench SINKS it. Holding it low instead would back the replay up
+    // into the sequencer and the resulting stall would read as a wiring fault.
+    proj_out_ready_i        = 1'b1;
     geom_skin_v_w0_i        = 7'd64;      // 64/64 == rigid
     geom_skin_v_rigid_i     = 1'b1;
     geom_skin_v_src_id_i    = 16'h00A1;
@@ -967,6 +1030,41 @@ module tb_zhao_console_core_smoke
     if (guard >= 1000)
       $fatal(1, "SMOKE: GEOM.GROUP_SEQ never accepted a job (job_ready_o stuck low)");
 
+    // ---- the terrain job --------------------------------------------------
+    // One subpatch, one view, level 0, top surface, no geomorph. The tess
+    // turns this into 81 window vertices (client B's fill) and then its
+    // triangles (the replay), so both halves of client B are exercised by ONE
+    // job. `sparse_fill_i` stays LOW: the subsystem here carries a dense
+    // shell, and a sparse fill against a dense shell is a seal-short fault the
+    // terrain differential fires on purpose -- not something a wiring smoke
+    // bench should provoke.
+    @(posedge gpu_clk);
+    terr_job_ox_i        <= 6'd0;
+    terr_job_oz_i        <= 6'd0;
+    terr_job_level_i     <= 2'd0;
+    terr_job_lvl_nz_i    <= 2'd0;
+    terr_job_lvl_pz_i    <= 2'd0;
+    terr_job_lvl_nx_i    <= 2'd0;
+    terr_job_lvl_px_i    <= 2'd0;
+    terr_job_morph_i     <= 17'd0;
+    terr_job_surface_i   <= 1'b0;
+    terr_job_dual_i      <= 1'b0;
+    terr_job_src_id_i    <= 16'h5678;
+    terr_job_view_mask_i <= 2'b01;
+    terr_job_mat_a_i     <= 8'h11;
+    terr_job_mat_b_i     <= 8'h22;
+    terr_job_weight_i    <= 8'hFF;
+    terr_job_valid_i     <= 1'b1;
+    guard = 0;
+    while (!(terr_job_valid_i && terr_job_ready_o) && (guard < 1000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
+    @(posedge gpu_clk);
+    terr_job_valid_i <= 1'b0;
+    if (guard >= 1000)
+      $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ never accepted a job (job_ready_o stuck low)");
+
     // ---- run until the shell reaches two frame edges ----------------------
     // Two rather than one: the first proves FRAMECTL runs, the second gives
     // the particle generation a whole tick to drain.
@@ -989,6 +1087,12 @@ module tb_zhao_console_core_smoke
              geom_skin_vertices_transformed_o, geom_vertices_sent_o,
              proj_a_grants_o, geom_landings_o,
              geom_groups_opened_o, geom_groups_sealed_o);
+    $display("SMOKE: terrain    tess_vertices=%0d tess_refs=%0d fills_forwarded=%0d refs_forwarded=%0d groups_opened=%0d b_grants=%0d",
+             terr_tess_vertices_o, terr_tess_refs_o, terr_fills_forwarded_o,
+             terr_refs_forwarded_o, terr_groups_opened_o, proj_b_grants_o);
+    $display("SMOKE: projector  a_grants=%0d b_grants=%0d contended=%0d replay_triangles=%0d",
+             proj_a_grants_o, proj_b_grants_o, proj_contended_o,
+             proj_replay_triangles_o);
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
     $display("SMOKE: tied-off, MUST be zero: collisions_applied=%0d (entry I4)",
              part_collisions_applied_o);
@@ -1007,6 +1111,23 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: no landing reached GROUP_SEQ -- PROJ_SUBSYSTEM -> PROJ_LANE -> GROUP_SEQ does not close");
     if (hist_snapshots_o == 0)
       $fatal(1, "SMOKE: MEASURE.HISTOGRAM never snapped -- SHELL.gpu_tick_o does not reach it");
+
+    // ---- CLIENT B, the thing this composition exists to prove -------------
+    // Each of these can only move if a beat crossed a wire between two real
+    // blocks. `proj_b_grants_o` is the one that matters most: it is the
+    // ARBITER inside the shared projector granting its second client, and
+    // before TERRAIN.GROUP_SEQ was composed it could not move at all.
+    if (terr_tess_vertices_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.TESS emitted no window vertex -- GROUP_SEQ -> TESS job port is dead");
+    if (terr_fills_forwarded_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ forwarded no vertex to client B -- TESS -> GROUP_SEQ -> PROJ_SUBSYSTEM is dead");
+    if (proj_b_grants_o == 0)
+      $fatal(1, "SMOKE: the shared projector granted client B zero times -- the second client is still not live");
+    if (terr_groups_opened_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ opened no arena -- the open/gen handshake with the subsystem is dead");
+    if (terr_release_unsafe_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ released an arena with work outstanding (release_unsafe=%0d)",
+             terr_release_unsafe_o);
 
     // A NEGATIVE CONTROL for the header's entry I4, kept as an assertion about
     // the CORRECT state of this core rather than about the defect: the step-6

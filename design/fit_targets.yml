@@ -2420,6 +2420,11 @@ targets:
       - fpga/rtl/common/zhao_project_service.sv
       - fpga/rtl/terrain/zhao_terrain_wcache.sv
       - fpga/rtl/common/zhao_proj_subsystem.sv
+      # Added 2026-09-19 closing header entry I13: the shared projector's
+      # CLIENT B. These two are the real producer for it, so this row is the
+      # first that measures the projector with BOTH clients live.
+      - fpga/rtl/terrain/zhao_terrain_tess.sv
+      - fpga/rtl/terrain/zhao_terrain_group_seq.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
       - fpga/rtl/measure/zhao_measure_histogram.sv
       - fpga/rtl/prod/zhao_console_core.sv

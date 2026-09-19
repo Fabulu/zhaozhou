@@ -76,6 +76,21 @@
 //      its own". `zhao_geom_group_seq` IS that producer and this is the first
 //      composition in which it drives the thing it was written for.
 //
+//   3b. THE TERRAIN CLIENT, ON THE SAME PROJECTOR
+//        TERRAIN.GROUP_SEQ.t_job -> TERRAIN.TESS (mode 1, then mode 2)
+//        TERRAIN.TESS.vtx/ref    -> TERRAIN.GROUP_SEQ
+//        TERRAIN.GROUP_SEQ.b     -> PROJ_SUBSYSTEM client B
+//        TERRAIN.GROUP_SEQ.open/seal/r -> the same subsystem's arena and
+//                                replay shell; landings come back on
+//                                `fill_landed_o`.
+//      This is the point of a SHARED projector and it had never been measured:
+//      until this composition client B was on pins, so the arbiter always
+//      granted client A, `proj_contended_o` could not move, and the block's
+//      whole justification -- one projector serving two clients -- was an
+//      argument rather than a circuit. `zhao_terrain_pipe.sv` composes the
+//      same trio around its OWN projector instance and is deliberately not
+//      used, because that would put two projectors in the core.
+//
 //   4. THE COMPOSITOR ON THE REAL VIDEO MODE
 //        SHELL.gpu_tick_o -> POST.COMPOSITE.frame_start_i
 //        SHELL.mode_act_o -> the pass width/height (Z60 384x240, Storm 320x240,
@@ -165,12 +180,16 @@
 // I12. GEOM.PROJ_LANE's lookup/reply and arena origin (`geom_look_*`,
 //      `geom_rep_*`, `geom_org_*`) -- BOUNDARY, same absent customer as I11.
 //
-// I13. PROJ_SUBSYSTEM's CLIENT B, its reference port and its triangle output
-//      (`proj_b_*`, `proj_ref_*`, `proj_out_*`) -- BOUNDARY.
-//      `fpga/rtl/terrain/zhao_terrain_group_seq.sv` EXISTS and is the real
-//      producer for client B; composing it is the obvious next packet and was
-//      out of this one's scope. Client B being on pins means the shared
-//      projector is measured here with ONE of its two clients live.
+// I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
+//      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
+//      and `zhao_terrain_tess` are composed below and drive both, so the
+//      shared projector is measured here with BOTH of its clients live and
+//      `proj_contended_o` can move. What remains is the far end: the replayed
+//      triangle's customer is GEOM.SETUP, which is not composed, and the
+//      shell's own triangle door (`render_kx0_i` and its siblings) takes EDGE
+//      FUNCTIONS -- setup's arithmetic, not a rename of these corners. Wiring
+//      the corners into a port that wants edge functions would be exactly the
+//      hidden adapter this file must not contain.
 //
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY.
 //      The camera matrices are host/CMD state and CMD.SCHEDULER has no
@@ -206,6 +225,31 @@
 //      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
 //      geometry memory clients -- is UNCHANGED and still provisional. This
 //      file adds no opinion about them; read that file's header.
+//
+// I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
+//      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
+//      that is NOT wired, which is worth stating precisely so nobody wires it
+//      by name-matching. `fpga/rtl/terrain/zhao_terrain_lod.sv` exists and its
+//      own header says its output is "EXACTLY zhao_terrain_tess's job port".
+//      It is not the sequencer's job port: the sequencer additionally needs
+//      `job_view_mask`, `job_mat_a`, `job_mat_b` and `job_weight`, and
+//      TERRAIN.LOD emits none of the four. Taking its 12 matching fields and
+//      inventing the other 4 here is the hidden-adapter failure. TERRAIN.LOD
+//      is itself unfed besides: its `sp_*` patch_state descriptors come from
+//      TERRAIN.PATCH, which is not composed. Closing this properly is
+//      LOD + PATCH composed together, with the view mask and materials coming
+//      from whoever owns the draw -- CMD.SCHEDULER, by the same absent path
+//      I14 describes for the projection matrices.
+//
+// I22. TERRAIN.TESS's lattice and cell-state read ports (`terr_lat_*`,
+//      `terr_cs_*`) -- BOUNDARY. `fpga/rtl/terrain/zhao_terrain_compcache_front.sv`
+//      EXISTS and is the named owner -- it emits `lat_h_o`, `lat_wx_o`,
+//      `lat_wz_o` and `cs_substance_o` on exactly this shape. It is not
+//      composed here because it is a CACHE FRONT: adopting it moves the gap
+//      one hop to its fill path and to TERRAIN.COMPCACHE's store, which is
+//      the next packet rather than this one. The ports are real and registered
+//      (data valid the cycle after the request), so the harness can play the
+//      memory the plan allows it to play.
 //
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
@@ -282,6 +326,9 @@ module zhao_console_core
   parameter int unsigned PROJ_T_DEPTH  = 81,
   parameter int unsigned PROJ_T_INDEX_W= $clog2(PROJ_T_DEPTH) + 1,
   parameter int unsigned PROJ_T_ARENA_W= $clog2(PROJ_T_ARENAS) + 1,
+  // TERRAIN.TESS's own window index: 81 vertices need 7 bits. The sequencer
+  // widens it to PROJ_T_INDEX_W, which carries a refusal bit beside it.
+  parameter int unsigned PROJ_T_IDX_W  = 7,
 
   // ---- COMPOSITOR ----------------------------------------------------------
   parameter int unsigned POST_LINE_W   = 384,     // Z60 is the widest view
@@ -486,34 +533,65 @@ module zhao_console_core
   input  logic [31:0]             proj_cfg_data_i,
   input  logic                    proj_en_i,
 
-  // ---- I13: the projector's CLIENT B (terrain), reference and output ------
-  input  logic                    proj_b_valid_i,
-  output logic                    proj_b_ready_o,
-  input  logic signed [31:0]      proj_b_vx_i,
-  input  logic signed [31:0]      proj_b_vy_i,
-  input  logic signed [31:0]      proj_b_vz_i,
-  input  logic                    proj_b_view_i,
-  input  logic [PROJ_T_ARENA_W-1:0] proj_b_arena_i,
-  input  logic [PROJ_T_INDEX_W-1:0] proj_b_index_i,
-  output logic                    proj_fill_landed_o,
-  output logic [PROJ_T_ARENA_W-1:0] proj_fill_arena_o,
-  input  logic                    proj_open_i,
-  input  logic [PROJ_T_ARENA_W-1:0] proj_open_arena_i,
-  output logic [GEOM_GEN_W-1:0]   proj_open_gen_o,
-  input  logic                    proj_seal_i,
-  input  logic [PROJ_T_ARENA_W-1:0] proj_seal_arena_i,
-  input  logic                    proj_ref_valid_i,
-  output logic                    proj_ref_ready_o,
-  input  logic [PROJ_T_ARENA_W-1:0] proj_ref_arena_i,
-  input  logic [GEOM_GEN_W-1:0]   proj_ref_gen_i,
-  input  logic [PROJ_T_INDEX_W-1:0] proj_ref_ia_i,
-  input  logic [PROJ_T_INDEX_W-1:0] proj_ref_ib_i,
-  input  logic [PROJ_T_INDEX_W-1:0] proj_ref_ic_i,
-  input  logic [15:0]             proj_ref_src_id_i,
-  input  logic                    proj_ref_view_i,
-  input  logic [7:0]              proj_ref_mat_a_i,
-  input  logic [7:0]              proj_ref_mat_b_i,
-  input  logic [7:0]              proj_ref_weight_i,
+  // ---- TERRAIN: the subpatch job that drives client B (I21) ---------------
+  // TERRAIN.GROUP_SEQ's own job port. TERRAIN.LOD exists and its header says
+  // its output is "EXACTLY zhao_terrain_tess's job port" -- but it emits no
+  // view mask and no material riders, and its own `sp_*` producer
+  // (TERRAIN.PATCH's patch_state) is not composed here. See entry I21.
+  input  logic                    terr_job_valid_i,
+  output logic                    terr_job_ready_o,
+  input  logic [5:0]              terr_job_ox_i,
+  input  logic [5:0]              terr_job_oz_i,
+  input  logic [1:0]              terr_job_level_i,
+  input  logic [1:0]              terr_job_lvl_nz_i,
+  input  logic [1:0]              terr_job_lvl_pz_i,
+  input  logic [1:0]              terr_job_lvl_nx_i,
+  input  logic [1:0]              terr_job_lvl_px_i,
+  input  logic [16:0]             terr_job_morph_i,
+  input  logic                    terr_job_surface_i,
+  input  logic                    terr_job_dual_i,
+  input  logic [15:0]             terr_job_src_id_i,
+  input  logic [1:0]              terr_job_view_mask_i,
+  input  logic [7:0]              terr_job_mat_a_i,
+  input  logic [7:0]              terr_job_mat_b_i,
+  input  logic [7:0]              terr_job_weight_i,
+  input  logic                    terr_sparse_fill_i,
+
+  // ---- TERRAIN.TESS's lattice and cell-state read ports (I22) -------------
+  // `zhao_terrain_compcache_front` is the named owner and is not composed.
+  output logic                    terr_lat_req_o,
+  output logic [5:0]              terr_lat_vi_o,
+  output logic [5:0]              terr_lat_vj_o,
+  output logic                    terr_lat_surface_o,
+  input  logic signed [31:0]      terr_lat_h_i,
+  input  logic signed [31:0]      terr_lat_wx_i,
+  input  logic signed [31:0]      terr_lat_wz_i,
+  output logic                    terr_cs_req_o,
+  output logic [4:0]              terr_cs_ci_o,
+  output logic [4:0]              terr_cs_cj_o,
+  input  logic [1:0]              terr_cs_substance_i,
+
+  // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
+  output logic [PROJ_T_ARENAS-1:0] terr_held_o,
+  output logic                    terr_busy_o,
+  output logic [31:0]             terr_jobs_accepted_o,
+  output logic [31:0]             terr_jobs_no_view_o,
+  output logic [31:0]             terr_jobs_rejected_o,
+  output logic [31:0]             terr_jobs_empty_o,
+  output logic [31:0]             terr_groups_opened_o,
+  output logic [31:0]             terr_groups_released_o,
+  output logic [31:0]             terr_fills_forwarded_o,
+  output logic [31:0]             terr_fills_dropped_o,
+  output logic [31:0]             terr_refs_forwarded_o,
+  output logic [31:0]             terr_release_unsafe_o,
+  output logic [31:0]             terr_tess_vertices_o,
+  output logic [31:0]             terr_tess_refs_o,
+  output logic [31:0]             terr_tess_rejected_o,
+  output logic [31:0]             terr_tess_lod_clamped_o,
+  output logic [31:0]             terr_tess_mode_invalid_o,
+  output logic                    terr_tess_idle_o,
+
+  // ---- I13: the projector's TRIANGLE OUTPUT -------------------------------
   output logic                    proj_out_valid_o,
   input  logic                    proj_out_ready_i,
   output logic signed [20:0]      proj_out_ax_o,
@@ -1495,6 +1573,265 @@ module zhao_console_core
     .seal_early_o        (geom_seal_early_o)
   );
 
+  // ==========================================================================
+  // TERRAIN: TESS -> GROUP_SEQ -> the SAME SHARED PROJECTOR, as CLIENT B.
+  //
+  // `design/prod_manifest.yml` records the shared projector as waiting for its
+  // producers. Client A got one when GEOM.GROUP_SEQ was composed above; this is
+  // the other, and it is the whole justification for the block being SHARED at
+  // all. Until now the projector had one live client, so its arbiter, its
+  // contention counter and its material-refusal path were all measured against
+  // a port that never asked for anything.
+  //
+  // `zhao_terrain_pipe.sv` composes exactly this trio ALREADY -- and it is NOT
+  // used here, deliberately: it instantiates its OWN `zhao_proj_subsystem`, so
+  // adopting it would put a SECOND projector in the core and undo the sharing
+  // this composition exists to measure. The tess and the sequencer are
+  // instantiated directly onto the projector that is already here, and the
+  // wiring below is `zhao_terrain_pipe`'s, seam for seam.
+  // ==========================================================================
+  wire                      ts_b_valid, ts_b_ready, ts_b_view;
+  wire signed [31:0]        ts_b_vx, ts_b_vy, ts_b_vz;
+  wire [PROJ_T_ARENA_W-1:0] ts_b_arena, ts_fill_arena, ts_open_arena, ts_seal_arena;
+  wire [PROJ_T_INDEX_W-1:0] ts_b_index;
+  wire                      ts_fill_landed, ts_open, ts_seal;
+  wire [GEOM_GEN_W-1:0]     ts_open_gen;
+
+  wire                      ts_r_valid, ts_r_ready, ts_r_view;
+  wire [PROJ_T_ARENA_W-1:0] ts_r_arena;
+  wire [GEOM_GEN_W-1:0]     ts_r_gen;
+  wire [PROJ_T_INDEX_W-1:0] ts_r_ia, ts_r_ib, ts_r_ic;
+  wire [15:0]               ts_r_src_id;
+  wire [7:0]                ts_r_mat_a, ts_r_mat_b, ts_r_weight;
+
+  // sequencer -> tess job, and the tess's two streams back
+  wire                      tt_job_valid, tt_job_ready, tt_job_reject;
+  wire [1:0]                tt_job_mode;
+  wire [5:0]                tt_job_ox, tt_job_oz;
+  wire [1:0]                tt_job_level, tt_job_nz, tt_job_pz, tt_job_nx, tt_job_px;
+  wire [16:0]               tt_job_morph;
+  wire                      tt_job_surface, tt_job_dual;
+  wire [15:0]               tt_job_src_id;
+  wire                      tt_vtx_valid, tt_vtx_ready, tt_vtx_stride;
+  wire signed [31:0]        tt_vtx_x, tt_vtx_y, tt_vtx_z;
+  wire [PROJ_T_IDX_W-1:0]   tt_vtx_index;
+  wire                      tt_ref_valid, tt_ref_ready;
+  wire [PROJ_T_IDX_W-1:0]   tt_ref_ia, tt_ref_ib, tt_ref_ic;
+
+  // The tess's ModeTri leg. ModeTri (job_mode 0) is NEVER presented by the
+  // sequencer -- it presents mode 1 then mode 2 -- so this port is dead by
+  // construction, not by a tie-off. TERRAIN.NORMALS is its customer and
+  // `zhao_terrain_pipe`'s header prices the three ways to feed it; none is
+  // taken here either. `tri_ready_i` is held high so nothing can ever stall
+  // the block on a port it does not use.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                      tt_tri_valid, tt_tri_surface;
+  wire signed [31:0]        tt_tri_ax, tt_tri_ay, tt_tri_az;
+  wire signed [31:0]        tt_tri_bx, tt_tri_by, tt_tri_bz;
+  wire signed [31:0]        tt_tri_cx, tt_tri_cy, tt_tri_cz;
+  wire [15:0]               tt_tri_src_id;
+  wire [31:0]               tt_tri_emitted;
+  // The per-stream surface and src_id riders: the SEQUENCER carries the job's
+  // own `src_id` and materials to the reference port, so the tess's copies are
+  // redundant rather than missing.
+  wire                      tt_vtx_surface, tt_ref_surface;
+  wire [15:0]               tt_vtx_src_id, tt_ref_src_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_tess #(
+    .IDX_W (PROJ_T_IDX_W)
+  ) u_terrain_tess (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: presented twice per job by the sequencer, mode 1 then mode 2.
+    .job_valid_i  (tt_job_valid),
+    .job_ready_o  (tt_job_ready),
+    .job_mode_i   (tt_job_mode),
+    .job_ox_i     (tt_job_ox),
+    .job_oz_i     (tt_job_oz),
+    .job_level_i  (tt_job_level),
+    .job_lvl_nz_i (tt_job_nz),
+    .job_lvl_pz_i (tt_job_pz),
+    .job_lvl_nx_i (tt_job_nx),
+    .job_lvl_px_i (tt_job_px),
+    .job_morph_i  (tt_job_morph),
+    .job_surface_i(tt_job_surface),
+    .job_dual_i   (tt_job_dual),
+    .job_src_id_i (tt_job_src_id),
+
+    // I22: the lattice and cell-state stores have no owner composed here.
+    .lat_req_o     (terr_lat_req_o),
+    .lat_vi_o      (terr_lat_vi_o),
+    .lat_vj_o      (terr_lat_vj_o),
+    .lat_surface_o (terr_lat_surface_o),
+    .lat_h_i       (terr_lat_h_i),
+    .lat_wx_i      (terr_lat_wx_i),
+    .lat_wz_i      (terr_lat_wz_i),
+    .cs_req_o      (terr_cs_req_o),
+    .cs_ci_o       (terr_cs_ci_o),
+    .cs_cj_o       (terr_cs_cj_o),
+    .cs_substance_i(terr_cs_substance_i),
+
+    // ModeTri: never presented; see the declaration above.
+    .tri_valid_o(tt_tri_valid),
+    .tri_ready_i(1'b1),
+    .ax_o       (tt_tri_ax),
+    .ay_o       (tt_tri_ay),
+    .az_o       (tt_tri_az),
+    .bx_o       (tt_tri_bx),
+    .by_o       (tt_tri_by),
+    .bz_o       (tt_tri_bz),
+    .cx_o       (tt_tri_cx),
+    .cy_o       (tt_tri_cy),
+    .cz_o       (tt_tri_cz),
+    .surface_o  (tt_tri_surface),
+    .src_id_o   (tt_tri_src_id),
+
+    // REAL: the 81 window vertices, into the sequencer's fill phase.
+    .vtx_valid_o  (tt_vtx_valid),
+    .vtx_ready_i  (tt_vtx_ready),
+    .vtx_x_o      (tt_vtx_x),
+    .vtx_y_o      (tt_vtx_y),
+    .vtx_z_o      (tt_vtx_z),
+    .vtx_index_o  (tt_vtx_index),
+    .vtx_stride_o (tt_vtx_stride),
+    .vtx_surface_o(tt_vtx_surface),
+    .vtx_src_id_o (tt_vtx_src_id),
+
+    // REAL: one triangle per clock as three window indices, into the replay.
+    .ref_valid_o  (tt_ref_valid),
+    .ref_ready_i  (tt_ref_ready),
+    .ref_ia_o     (tt_ref_ia),
+    .ref_ib_o     (tt_ref_ib),
+    .ref_ic_o     (tt_ref_ic),
+    .ref_surface_o(tt_ref_surface),
+    .ref_src_id_o (tt_ref_src_id),
+
+    .terrain_triangles_emitted_o(tt_tri_emitted),
+    .terrain_vertices_emitted_o (terr_tess_vertices_o),
+    .terrain_refs_emitted_o     (terr_tess_refs_o),
+    .mode_invalid_o             (terr_tess_mode_invalid_o),
+    .subpatch_rejected_o        (terr_tess_rejected_o),
+    .lod_clamped_o              (terr_tess_lod_clamped_o),
+    .job_reject_o               (tt_job_reject),
+    .idle_o                     (terr_tess_idle_o)
+  );
+
+  zhao_terrain_group_seq #(
+    .ARENAS  (PROJ_T_ARENAS),
+    .DEPTH   (PROJ_T_DEPTH),
+    .GEN_W   (GEOM_GEN_W),
+    .IDX_W   (PROJ_T_IDX_W),
+    .INDEX_W (PROJ_T_INDEX_W),
+    .ARENA_W (PROJ_T_ARENA_W)
+  ) u_terrain_group_seq (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I21: the subpatch job. TERRAIN.LOD is the near-producer and cannot be
+    // wired -- see the header entry.
+    .job_valid_i    (terr_job_valid_i),
+    .job_ready_o    (terr_job_ready_o),
+    .job_ox_i       (terr_job_ox_i),
+    .job_oz_i       (terr_job_oz_i),
+    .job_level_i    (terr_job_level_i),
+    .job_lvl_nz_i   (terr_job_lvl_nz_i),
+    .job_lvl_pz_i   (terr_job_lvl_pz_i),
+    .job_lvl_nx_i   (terr_job_lvl_nx_i),
+    .job_lvl_px_i   (terr_job_lvl_px_i),
+    .job_morph_i    (terr_job_morph_i),
+    .job_surface_i  (terr_job_surface_i),
+    .job_dual_i     (terr_job_dual_i),
+    .job_src_id_i   (terr_job_src_id_i),
+    .job_view_mask_i(terr_job_view_mask_i),
+    .job_mat_a_i    (terr_job_mat_a_i),
+    .job_mat_b_i    (terr_job_mat_b_i),
+    .job_weight_i   (terr_job_weight_i),
+
+    // The sparse-fill knob is an OWNER KNOB, not a tie-off: it is legal only
+    // against a VALID_MODE = 0 shell and this block cannot see the shell's
+    // mode, so the composition that holds both is where they must agree.
+    // `zhao_proj_subsystem` here carries the dense shell, so the safe value is
+    // low and it is exposed rather than frozen.
+    .sparse_fill_i  (terr_sparse_fill_i),
+
+    // REAL: the tessellator, both modes.
+    .t_job_valid_o  (tt_job_valid),
+    .t_job_ready_i  (tt_job_ready),
+    .t_job_mode_o   (tt_job_mode),
+    .t_job_ox_o     (tt_job_ox),
+    .t_job_oz_o     (tt_job_oz),
+    .t_job_level_o  (tt_job_level),
+    .t_job_lvl_nz_o (tt_job_nz),
+    .t_job_lvl_pz_o (tt_job_pz),
+    .t_job_lvl_nx_o (tt_job_nx),
+    .t_job_lvl_px_o (tt_job_px),
+    .t_job_morph_o  (tt_job_morph),
+    .t_job_surface_o(tt_job_surface),
+    .t_job_dual_o   (tt_job_dual),
+    .t_job_src_id_o (tt_job_src_id),
+    .t_job_reject_i (tt_job_reject),
+    .t_vtx_valid_i  (tt_vtx_valid),
+    .t_vtx_ready_o  (tt_vtx_ready),
+    .t_vtx_x_i      (tt_vtx_x),
+    .t_vtx_y_i      (tt_vtx_y),
+    .t_vtx_z_i      (tt_vtx_z),
+    .t_vtx_index_i  (tt_vtx_index),
+    .t_vtx_stride_i (tt_vtx_stride),
+    .t_ref_valid_i  (tt_ref_valid),
+    .t_ref_ready_o  (tt_ref_ready),
+    .t_ref_ia_i     (tt_ref_ia),
+    .t_ref_ib_i     (tt_ref_ib),
+    .t_ref_ic_i     (tt_ref_ic),
+
+    // REAL: CLIENT B of the shared projection service.
+    .b_valid_o    (ts_b_valid),
+    .b_ready_i    (ts_b_ready),
+    .b_vx_o       (ts_b_vx),
+    .b_vy_o       (ts_b_vy),
+    .b_vz_o       (ts_b_vz),
+    .b_view_o     (ts_b_view),
+    .b_arena_o    (ts_b_arena),
+    .b_index_o    (ts_b_index),
+    .fill_landed_i(ts_fill_landed),
+    .fill_arena_i (ts_fill_arena),
+
+    // REAL: the terrain arena's lifetime.
+    .open_o      (ts_open),
+    .open_arena_o(ts_open_arena),
+    .open_gen_i  (ts_open_gen),
+    .seal_o      (ts_seal),
+    .seal_arena_o(ts_seal_arena),
+
+    // REAL: tagged references into the projector's replay shell.
+    .r_valid_o (ts_r_valid),
+    .r_ready_i (ts_r_ready),
+    .r_arena_o (ts_r_arena),
+    .r_gen_o   (ts_r_gen),
+    .r_ia_o    (ts_r_ia),
+    .r_ib_o    (ts_r_ib),
+    .r_ic_o    (ts_r_ic),
+    .r_src_id_o(ts_r_src_id),
+    .r_view_o  (ts_r_view),
+    .r_mat_a_o (ts_r_mat_a),
+    .r_mat_b_o (ts_r_mat_b),
+    .r_weight_o(ts_r_weight),
+
+    .held_o           (terr_held_o),
+    .busy_o           (terr_busy_o),
+    .jobs_accepted_o  (terr_jobs_accepted_o),
+    .jobs_no_view_o   (terr_jobs_no_view_o),
+    .jobs_rejected_o  (terr_jobs_rejected_o),
+    .jobs_empty_o     (terr_jobs_empty_o),
+    .groups_opened_o  (terr_groups_opened_o),
+    .groups_released_o(terr_groups_released_o),
+    .fills_forwarded_o(terr_fills_forwarded_o),
+    .fills_dropped_o  (terr_fills_dropped_o),
+    .refs_forwarded_o (terr_refs_forwarded_o),
+    .release_unsafe_o (terr_release_unsafe_o)
+  );
+
   zhao_proj_subsystem #(
     .PAYLOAD_A_W (GEOM_PAY_A_W),
     .ARENAS      (PROJ_T_ARENAS),
@@ -1530,35 +1867,44 @@ module zhao_console_core
     .a_view_o   (proj_a_view_o),
     .a_payload_o(pj_a_payload),
 
-    // I13: client B is TERRAIN, and zhao_terrain_group_seq is NOT composed
-    // here. The shared projector is therefore measured with one live client.
-    .b_valid_i(proj_b_valid_i),
-    .b_ready_o(proj_b_ready_o),
-    .b_vx_i   (proj_b_vx_i),
-    .b_vy_i   (proj_b_vy_i),
-    .b_vz_i   (proj_b_vz_i),
-    .b_view_i (proj_b_view_i),
-    .b_arena_i(proj_b_arena_i),
-    .b_index_i(proj_b_index_i),
-    .fill_landed_o(proj_fill_landed_o),
-    .fill_arena_o (proj_fill_arena_o),
-    .open_i       (proj_open_i),
-    .open_arena_i (proj_open_arena_i),
-    .open_gen_o   (proj_open_gen_o),
-    .seal_i       (proj_seal_i),
-    .seal_arena_i (proj_seal_arena_i),
-    .ref_valid_i  (proj_ref_valid_i),
-    .ref_ready_o  (proj_ref_ready_o),
-    .ref_arena_i  (proj_ref_arena_i),
-    .ref_gen_i    (proj_ref_gen_i),
-    .ref_ia_i     (proj_ref_ia_i),
-    .ref_ib_i     (proj_ref_ib_i),
-    .ref_ic_i     (proj_ref_ic_i),
-    .ref_src_id_i (proj_ref_src_id_i),
-    .ref_view_i   (proj_ref_view_i),
-    .ref_mat_a_i  (proj_ref_mat_a_i),
-    .ref_mat_b_i  (proj_ref_mat_b_i),
-    .ref_weight_i (proj_ref_weight_i),
+    // REAL: client B in, from TERRAIN.GROUP_SEQ. This is the composition the
+    // shared projector was built for -- BOTH of its clients are live here, and
+    // `proj_contended_o` can therefore move for the first time.
+    .b_valid_i(ts_b_valid),
+    .b_ready_o(ts_b_ready),
+    .b_vx_i   (ts_b_vx),
+    .b_vy_i   (ts_b_vy),
+    .b_vz_i   (ts_b_vz),
+    .b_view_i (ts_b_view),
+    .b_arena_i(ts_b_arena),
+    .b_index_i(ts_b_index),
+
+    // REAL: the terrain arena's lifetime and its landings, both directions.
+    .fill_landed_o(ts_fill_landed),
+    .fill_arena_o (ts_fill_arena),
+    .open_i       (ts_open),
+    .open_arena_i (ts_open_arena),
+    .open_gen_o   (ts_open_gen),
+    .seal_i       (ts_seal),
+    .seal_arena_i (ts_seal_arena),
+
+    // REAL: the tagged references, from the same sequencer.
+    .ref_valid_i  (ts_r_valid),
+    .ref_ready_o  (ts_r_ready),
+    .ref_arena_i  (ts_r_arena),
+    .ref_gen_i    (ts_r_gen),
+    .ref_ia_i     (ts_r_ia),
+    .ref_ib_i     (ts_r_ib),
+    .ref_ic_i     (ts_r_ic),
+    .ref_src_id_i (ts_r_src_id),
+    .ref_view_i   (ts_r_view),
+    .ref_mat_a_i  (ts_r_mat_a),
+    .ref_mat_b_i  (ts_r_mat_b),
+    .ref_weight_i (ts_r_weight),
+
+    // I13: the projected triangle. GEOM.SETUP is the customer and is not
+    // composed; the shell's own triangle door takes EDGE FUNCTIONS, which is
+    // setup's arithmetic and not this file's to invent.
     .out_valid_o  (proj_out_valid_o),
     .out_ready_i  (proj_out_ready_i),
     .out_ax_o     (proj_out_ax_o),
