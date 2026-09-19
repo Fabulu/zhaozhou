@@ -7815,6 +7815,36 @@ int main(int argc, char** argv) {
       return 2;
     u02::g_u02_swell_pm = v;
   }
+  if (const char* e = std::getenv("ZHAO_U02_SWELL_MODE")) {
+    if (std::strcmp(e, "selected") == 0)
+      u02::g_u02_swell_legacy = false;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_swell_legacy = true;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_SWELL_MODE=%s invalid (expected selected|legacy)\n",
+                   e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_FRONT_FLEX")) {
+    if (std::strcmp(e, "normal") == 0)
+      u02::g_u02_front_flex_mute = false;
+    else if (std::strcmp(e, "mute") == 0)
+      u02::g_u02_front_flex_mute = true;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_FRONT_FLEX=%s invalid (expected normal|mute)\n",
+                   e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_FRONT_FLEX_GAIN_PM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_FRONT_FLEX_GAIN_PM", e, 0, 2000, v))
+      return 2;
+    u02::g_u02_front_flex_gain_pm = v;
+  }
   // PASS 17 / Direction 14: same-binary public five-carrier proof. The mute
   // is consumed only inside swallow_nodules; body/light/effects and the other
   // four authored inputs remain unchanged. Unset is the shipping default.

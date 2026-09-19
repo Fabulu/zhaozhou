@@ -68,6 +68,9 @@ enum GateCategory : uint32_t {
   kCatClosure = 1u << 9,
   kCatAttribution = 1u << 10,
   kCatRootAuthority = 1u << 11,
+  kCatFrontFlex = 1u << 12,
+  kCatSwellSize = 1u << 13,
+  kCatTerminalCap = 1u << 14,
 };
 uint32_t g_failure_bits = 0;
 uint32_t g_current_category = kCatConfig;
@@ -1093,6 +1096,229 @@ const zc::Clip* clip_by_slot(const zc::CreatureType& type, uint16_t slot) {
   return nullptr;
 }
 
+zc::Clip build_front_flex_clip(uint16_t slot) {
+  switch (slot) {
+    case u02::kIdleOrbitSlot: return u02::build_hover_idle(slot);
+    case 1: return u02::build_drift();
+    case 5: return u02::build_rest();
+    case 8: return u02::build_hasty();
+    case 11: return u02::build_taunt();
+    case 13: return u02::build_trick();
+    case u02::kBlownSlot: return u02::build_blown();
+    case u02::kTaunt3Slot: return u02::build_taunt3();
+    case u02::kFlightSlot: return u02::build_flight();
+    case u02::kIdleFixedSlot: return u02::build_hover_idle(slot);
+    default: return {};
+  }
+}
+
+void check_front_flex(const zc::CreatureType& type) {
+  constexpr uint16_t kSlots[] = {
+      u02::kIdleOrbitSlot, 1, 5, 8, 11, 13, u02::kBlownSlot,
+      u02::kTaunt3Slot, u02::kFlightSlot, u02::kIdleFixedSlot};
+  const bool saved_mute = u02::g_u02_front_flex_mute;
+  const int32_t saved_gain = u02::g_u02_front_flex_gain_pm;
+  size_t clips = 0, changed_frames = 0, closure_quats = 0,
+         nodule_solve_quats = 0, unexpected_quats = 0,
+         production_mismatch = 0, bad_seams = 0, missing_core = 0;
+  double weakest_max_mm = std::numeric_limits<double>::infinity();
+  uint16_t weakest_slot = 0;
+  const auto front = pjm::carriers()[0];
+
+  for (uint16_t slot : kSlots) {
+    u02::g_u02_front_flex_gain_pm = saved_gain;
+    u02::g_u02_front_flex_mute = false;
+    const zc::Clip normal = build_front_flex_clip(slot);
+    u02::g_u02_front_flex_mute = true;
+    const zc::Clip muted = build_front_flex_clip(slot);
+    u02::g_u02_front_flex_mute = saved_mute;
+    u02::g_u02_front_flex_gain_pm = saved_gain;
+    const zc::Clip* production = clip_by_slot(type, slot);
+    if (normal.frame_count == 0 || muted.frame_count != normal.frame_count ||
+        production == nullptr || production->frame_count != normal.frame_count) {
+      ++missing_core;
+      continue;
+    }
+    ++clips;
+    size_t clip_changed = 0;
+    double clip_max_mm = 0.0;
+    for (uint16_t f = 0; f < normal.frame_count; ++f) {
+      const size_t qbase = static_cast<size_t>(f) * type.skeleton.bone_count;
+      const zc::quat16& qn = normal.quats[qbase + u02::kBJunctionF];
+      const zc::quat16& qm = muted.quats[qbase + u02::kBJunctionF];
+      if (std::memcmp(&qn, &qm, sizeof(qn)) != 0) {
+        ++clip_changed;
+        ++changed_frames;
+      }
+      for (uint8_t b = 0; b < type.skeleton.bone_count; ++b) {
+        if (b == u02::kBJunctionF) continue;
+        const zc::quat16& an = normal.quats[qbase + b];
+        const zc::quat16& am = muted.quats[qbase + b];
+        if (std::memcmp(&an, &am, sizeof(an)) == 0) continue;
+        // The shipping Front axes now enter through HingePlay before nodule and
+        // closure solving. Those solvers may compensate on their own local
+        // operands; no unrelated body/face/helper authority may change.
+        if (b == u02::kBHingeD)
+          ++closure_quats;
+        else if (b == u02::kBNeck || b == u02::kBHingeA ||
+                 b == u02::kBHingeB || b == u02::kBHingeC)
+          ++nodule_solve_quats;
+        else
+          ++unexpected_quats;
+      }
+      const zc::Clip& expect = saved_mute ? muted : normal;
+      const zc::quat16& qe = expect.quats[qbase + u02::kBJunctionF];
+      const zc::quat16& qp = production->quats[qbase + u02::kBJunctionF];
+      if (std::memcmp(&qe, &qp, sizeof(qe)) != 0) ++production_mismatch;
+      const pjm::CoreDelta d = pjm::core_delta(type, normal, muted, f, front);
+      if (d.count == 0) {
+        ++missing_core;
+      } else {
+        clip_max_mm = std::max(clip_max_mm, d.max_vertex_mm);
+      }
+    }
+    if (std::memcmp(&normal.quats[u02::kBJunctionF],
+                    &muted.quats[u02::kBJunctionF], sizeof(zc::quat16)) != 0 ||
+        std::memcmp(&normal.quats[(static_cast<size_t>(normal.frame_count - 1) *
+                                  type.skeleton.bone_count) + u02::kBJunctionF],
+                    &muted.quats[(static_cast<size_t>(muted.frame_count - 1) *
+                                 type.skeleton.bone_count) + u02::kBJunctionF],
+                    sizeof(zc::quat16)) != 0)
+      ++bad_seams;
+    if (clip_changed == 0) ++missing_core;
+    if (clip_max_mm < weakest_max_mm) {
+      weakest_max_mm = clip_max_mm;
+      weakest_slot = slot;
+    }
+  }
+  u02::g_u02_front_flex_mute = saved_mute;
+  u02::g_u02_front_flex_gain_pm = saved_gain;
+
+  std::printf("G6b public Front X/Y: %zu clips, %zu changed frames, "
+              "weakest max %.2f mm slot %u; closure/nodule/unexpected "
+              "%zu/%zu/%zu production mismatch %zu seams %zu missing %zu\n",
+              clips, changed_frames, weakest_max_mm, weakest_slot,
+              closure_quats, nodule_solve_quats, unexpected_quats,
+              production_mismatch, bad_seams, missing_core);
+  if (clips != 10 || changed_frames == 0 || missing_core != 0)
+    fail("the version-18 public Front X/Y performance is absent from a named clip");
+  if (weakest_max_mm < pjm::kVisibleEffectMinMm)
+    fail("one public clip's Front X/Y performance does not clear the visible-core floor");
+  if (unexpected_quats != 0)
+    fail("Front HingePlay axes change an unrelated local quaternion");
+  if (closure_quats == 0)
+    fail("Front HingePlay axes do not reach the closure solver");
+  if (production_mismatch != 0)
+    fail("compiled production clips do not match the selected Front-flex mode");
+  if (bad_seams != 0)
+    fail("Front-flex curves do not return to identity at a clip seam");
+  if (saved_mute)
+    fail("the selected Front-flex positive control muted the shipping X/Y curves");
+}
+
+void check_swell_size() {
+  const bool saved_legacy = u02::g_u02_swell_legacy;
+  const int32_t saved_pm = u02::g_u02_swell_pm;
+  u02::g_u02_swell_pm = 1000;
+  u02::g_u02_swell_legacy = false;
+  const zc::RingPart selected = u02::make_loop();
+  u02::g_u02_swell_legacy = true;
+  const zc::RingPart legacy = u02::make_loop();
+  u02::g_u02_swell_legacy = false;
+  u02::g_u02_swell_pm = 0;
+  const zc::RingPart no_swell = u02::make_loop();
+  u02::g_u02_swell_legacy = saved_legacy;
+  u02::g_u02_swell_pm = saved_pm;
+  const zc::RingPart actual = u02::make_loop();
+
+  size_t actual_mismatch = 0, selected_legacy_diff = 0,
+         selected_live_rings = 0;
+  if (selected.rings.size() != actual.rings.size() ||
+      selected.rings.size() != legacy.rings.size() ||
+      selected.rings.size() != no_swell.rings.size()) {
+    fail("swell controls changed loop ring topology");
+    return;
+  }
+  for (size_t i = 0; i < selected.rings.size(); ++i) {
+    const zc::RingSpec& s = selected.rings[i];
+    const zc::RingSpec& a = actual.rings[i];
+    const zc::RingSpec& l = legacy.rings[i];
+    const zc::RingSpec& z = no_swell.rings[i];
+    if (s.rx != a.rx || s.rz != a.rz) ++actual_mismatch;
+    if (s.rx != l.rx || s.rz != l.rz) ++selected_legacy_diff;
+    if (s.rx != z.rx || s.rz != z.rz) ++selected_live_rings;
+    if (s.y != a.y || s.b0 != a.b0 || s.b1 != a.b1 || s.w0 != a.w0)
+      ++actual_mismatch;
+  }
+  std::printf("G6c swell size: %zu rings, selected/legacy differ %zu, "
+              "selected swell live on %zu, actual mismatches %zu\n",
+              selected.rings.size(), selected_legacy_diff,
+              selected_live_rings, actual_mismatch);
+  if (selected_legacy_diff == 0 || selected_live_rings == 0)
+    fail("selected and legacy/no-swell antenna profiles are not distinct");
+  if (actual_mismatch != 0)
+    fail("compiled source mode does not use the selected swell family");
+  if (saved_legacy)
+    fail("the selected swell-size positive control restored legacy protruding balls");
+}
+
+void check_terminal_cap() {
+  const bool saved_control = u02::g_u02_terminal_cap_control;
+  u02::g_u02_terminal_cap_control = false;
+  const zc::RingPart collapsed = u02::make_loop();
+  u02::g_u02_terminal_cap_control = true;
+  const zc::RingPart authored = u02::make_loop();
+  u02::g_u02_terminal_cap_control = saved_control;
+  const zc::RingPart actual = u02::make_loop();
+
+  if (collapsed.rings.size() != static_cast<size_t>(u02::kLoopRings) ||
+      authored.rings.size() != collapsed.rings.size() ||
+      actual.rings.size() != collapsed.rings.size()) {
+    fail("terminal-cap control changed loop ring topology");
+    return;
+  }
+  size_t profile_diffs = 0, nonterminal_diffs = 0, collateral = 0,
+         actual_mismatch = 0;
+  size_t changed_ring = collapsed.rings.size();
+  for (size_t i = 0; i < collapsed.rings.size(); ++i) {
+    const zc::RingSpec& c = collapsed.rings[i];
+    const zc::RingSpec& a = authored.rings[i];
+    const zc::RingSpec& p = actual.rings[i];
+    if (c.rx != a.rx || c.rz != a.rz) {
+      ++profile_diffs;
+      changed_ring = i;
+      if (i + 1 != collapsed.rings.size()) ++nonterminal_diffs;
+    }
+    if (c.y != a.y || c.radius != a.radius || c.cx != a.cx || c.cz != a.cz ||
+        c.segments != a.segments || c.b0 != a.b0 || c.b1 != a.b1 ||
+        c.w0 != a.w0)
+      ++collateral;
+    if (c.rx != p.rx || c.rz != p.rz || c.y != p.y ||
+        c.radius != p.radius || c.cx != p.cx || c.cz != p.cz ||
+        c.segments != p.segments || c.b0 != p.b0 || c.b1 != p.b1 ||
+        c.w0 != p.w0)
+      ++actual_mismatch;
+  }
+  const zc::RingSpec& cap = collapsed.rings.back();
+  const zc::RingSpec& full = authored.rings.back();
+  const bool exact_profile =
+      cap.rx == u02::fxu(u02::kReturnTipCapRxMm) &&
+      cap.rz == u02::fxu(u02::kReturnTipCapRzMm) &&
+      u02::kLoopBladeRxMm[6] == 42 && u02::kLoopBladeRzMm[6] == 26 &&
+      full.rx > cap.rx && full.rz > cap.rz;
+  std::printf("G6d terminal cap: %zu profile diff at ring %zu/%zu, "
+              "nonterminal %zu collateral %zu actual mismatch %zu; "
+              "collapsed %d/%d authored %d/%d\n",
+              profile_diffs, changed_ring, collapsed.rings.size() - 1,
+              nonterminal_diffs, collateral, actual_mismatch,
+              cap.rx, cap.rz, full.rx, full.rz);
+  if (profile_diffs != 1 || changed_ring + 1 != collapsed.rings.size() ||
+      nonterminal_diffs != 0 || collateral != 0 || !exact_profile)
+    fail("terminal collapse is not confined to the ReturnTip-only final ring");
+  if (actual_mismatch != 0 || saved_control)
+    fail("compiled source mode does not use the collapsed terminal cap");
+}
+
 Vec3 root_local(const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
                 int32_t wx, int32_t wy, int32_t wz) {
   const zc::mat3x4fx& root = pose[u02::kBRoot];
@@ -1592,7 +1818,8 @@ void usage(const char* argv0) {
                "[--fail-mute F|A|B|C|E] [--fail-antenna-snap] "
                "[--fail-accent-switch] [--fail-hold-tremor] "
                "[--fail-compress-wrap] [--fail-final-dwell] "
-               "[--fail-root-authority] [--motion-csv] "
+               "[--fail-root-authority] [--fail-front-flex] "
+               "[--fail-swell-size] [--fail-terminal-cap] [--motion-csv] "
                "[--held-only]\n",
                argv0);
 }
@@ -1616,6 +1843,9 @@ int main(int argc, char** argv) {
   bool fail_compress_wrap = false;
   bool fail_final_dwell = false;
   bool fail_root_authority = false;
+  bool fail_front_flex = false;
+  bool fail_swell_size = false;
+  bool fail_terminal_cap = false;
   bool motion_csv = false;
   bool held_only = false;
   u02::PublicJointMute fail_mute = u02::PublicJointMute::kNone;
@@ -1657,6 +1887,12 @@ int main(int argc, char** argv) {
       fail_final_dwell = true;
     } else if (std::strcmp(argv[i], "--fail-root-authority") == 0) {
       fail_root_authority = true;
+    } else if (std::strcmp(argv[i], "--fail-front-flex") == 0) {
+      fail_front_flex = true;
+    } else if (std::strcmp(argv[i], "--fail-swell-size") == 0) {
+      fail_swell_size = true;
+    } else if (std::strcmp(argv[i], "--fail-terminal-cap") == 0) {
+      fail_terminal_cap = true;
     } else if (std::strcmp(argv[i], "--motion-csv") == 0) {
       motion_csv = true;
     } else if (std::strcmp(argv[i], "--held-only") == 0) {
@@ -1685,7 +1921,7 @@ int main(int argc, char** argv) {
     allowed_categories = allowed;
   };
   select_mutant(rigid_span != Span::kNone, "rigid-span", kCatZones,
-                kCatZones | kCatPosedOrder | kCatCrown);
+                kCatZones | kCatPosedOrder | kCatCrown | kCatRootAuthority);
   select_mutant(clamp_span != Span::kNone, "clamp-negative", kCatSynthetic,
                 kCatSynthetic);
   select_mutant(drift_span != Span::kNone, "delta-drift", kCatSynthetic,
@@ -1701,7 +1937,8 @@ int main(int argc, char** argv) {
                 kCatCrown,
                 held_only ? kCatCrown
                           : (kCatShipping | kCatCrown |
-                             kCatContinuity | kCatClosure));
+                             kCatContinuity | kCatClosure |
+                             kCatRootAuthority));
   select_mutant(fail_antenna_snap, "antenna-snap", kCatContinuity,
                 kCatShipping | kCatContinuity);
   select_mutant(fail_accent_switch, "accent-switch", kCatContinuity,
@@ -1713,7 +1950,13 @@ int main(int argc, char** argv) {
   select_mutant(fail_final_dwell, "final-dwell", kCatContinuity,
                 kCatContinuity);
   select_mutant(fail_root_authority, "root-authority", kCatRootAuthority,
-                kCatRootAuthority);
+                kCatRootAuthority | kCatFrontFlex | kCatCrown);
+  select_mutant(fail_front_flex, "front-flex", kCatFrontFlex,
+                kCatFrontFlex);
+  select_mutant(fail_swell_size, "swell-size", kCatSwellSize,
+                kCatSwellSize);
+  select_mutant(fail_terminal_cap, "terminal-cap", kCatTerminalCap,
+                kCatTerminalCap | kCatRootAuthority);
   if (mutant_count > 1 ||
       (held_only && mutant_count == 1 &&
        fail_mute == u02::PublicJointMute::kNone)) {
@@ -1721,6 +1964,12 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  if (const char* e = std::getenv("ZHAO_U02_FRONT_FLEX_GAIN_PM")) {
+    int v = 0;
+    if (!parse_strict_int("ZHAO_U02_FRONT_FLEX_GAIN_PM", e, 0, 2000, v))
+      return 2;
+    u02::g_u02_front_flex_gain_pm = v;
+  }
   if (const char* e = std::getenv("ZHAO_U02_TAUNT3_PUNCH_A_MM")) {
     int v = 0;
     if (!parse_strict_int("ZHAO_U02_TAUNT3_PUNCH_A_MM", e, 0, 320, v))
@@ -1735,6 +1984,12 @@ int main(int argc, char** argv) {
   if (fail_compress_wrap) u02::g_u02_compress_wrap_control = true;
   if (fail_root_authority)
     u02::g_u02_root_authority_legacy_split = true;
+  if (fail_front_flex)
+    u02::g_u02_front_flex_mute = true;
+  if (fail_swell_size)
+    u02::g_u02_swell_legacy = true;
+  if (fail_terminal_cap)
+    u02::g_u02_terminal_cap_control = true;
   if (fail_mute != u02::PublicJointMute::kNone && !held_only)
     u02::g_u02_public_joint_mute = fail_mute;
   const Stations stations;
@@ -1795,6 +2050,12 @@ int main(int argc, char** argv) {
     std::printf("  [MUTANT] fail to clamp the first held carrier tick\n");
   if (fail_root_authority)
     std::printf("  [MUTANT] restore split Front/End root rotation authority\n");
+  if (fail_front_flex)
+    std::printf("  [MUTANT] mute all version-18 public Front X/Y curves\n");
+  if (fail_swell_size)
+    std::printf("  [MUTANT] restore version-17 protruding swell amplitudes\n");
+  if (fail_terminal_cap)
+    std::printf("  [MUTANT] restore the authored 42/26 profile on the buried terminal ring\n");
   std::printf("\n");
 
   g_current_category = kCatConfig;
@@ -1818,6 +2079,12 @@ int main(int argc, char** argv) {
     check_compiled_zones(type, stations);
     g_current_category = kCatRootAuthority;
     check_root_authority(type, stations);
+    g_current_category = kCatFrontFlex;
+    check_front_flex(type);
+    g_current_category = kCatSwellSize;
+    check_swell_size();
+    g_current_category = kCatTerminalCap;
+    check_terminal_cap();
     g_current_category = kCatLanes;
     check_lane_samples(type);
     g_current_category = kCatIdentity;

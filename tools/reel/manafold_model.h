@@ -182,18 +182,43 @@ inline zc::RingPart make_loop() {
       if (az > best_z) best_z = az;
     };
     int32_t sw_x = 0, sw_z = 0;
+    // VERSION 18: shipping uses the selected 400-pm swell family. The exact
+    // version-17 amplitudes remain one-binary controls; the independent global
+    // diagnostic multiplier applies after selecting either named family.
+    const bool legacy_swell = g_u02_swell_legacy;
     swell(kKnuckleAtJfMm, kKnuckleSwellHalfMm[0],
-          kKnuckleSwellJfRxMm, kKnuckleSwellJfRzMm, sw_x, sw_z);
+          legacy_swell ? kKnuckleSwellJfLegacyRxMm : kKnuckleSwellJfRxMm,
+          legacy_swell ? kKnuckleSwellJfLegacyRzMm : kKnuckleSwellJfRzMm,
+          sw_x, sw_z);
     swell(kKnuckleAtAMm, kKnuckleSwellHalfMm[1],
-          kKnuckleSwellARxMm, kKnuckleSwellARzMm, sw_x, sw_z);
+          legacy_swell ? kKnuckleSwellALegacyRxMm : kKnuckleSwellARxMm,
+          legacy_swell ? kKnuckleSwellALegacyRzMm : kKnuckleSwellARzMm,
+          sw_x, sw_z);
     swell(kKnuckleAtBMm, kKnuckleSwellHalfMm[2],
-          kKnuckleSwellBRxMm, kKnuckleSwellBRzMm, sw_x, sw_z);
+          legacy_swell ? kKnuckleSwellBLegacyRxMm : kKnuckleSwellBRxMm,
+          legacy_swell ? kKnuckleSwellBLegacyRzMm : kKnuckleSwellBRzMm,
+          sw_x, sw_z);
     swell(kKnuckleAtCMm, kKnuckleSwellHalfMm[3],
-          kKnuckleSwellCRxMm, kKnuckleSwellCRzMm, sw_x, sw_z);
+          legacy_swell ? kKnuckleSwellCLegacyRxMm : kKnuckleSwellCRxMm,
+          legacy_swell ? kKnuckleSwellCLegacyRzMm : kKnuckleSwellCRzMm,
+          sw_x, sw_z);
     swell(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4],
-          kKnuckleSwellEndRxMm, kKnuckleSwellEndRzMm, sw_x, sw_z);
-    rs.rx = fxu(taper(kLoopBladeRxMm, s) + sw_x);
-    rs.rz = fxu(taper(kLoopBladeRzMm, s) + sw_z);
+          legacy_swell ? kKnuckleSwellEndLegacyRxMm : kKnuckleSwellEndRxMm,
+          legacy_swell ? kKnuckleSwellEndLegacyRzMm : kKnuckleSwellEndRzMm,
+          sw_x, sw_z);
+    const int32_t profile_rx_mm = taper(kLoopBladeRxMm, s) + sw_x;
+    const int32_t profile_rz_mm = taper(kLoopBladeRzMm, s) + sw_z;
+    // VERSION 18: the authored taper remains complete through its 42/26 final
+    // key. Only the last ReturnTip-owned ring is a collapsed buried cap. The
+    // positive control restores that ring's authored profile so the burial
+    // detector proves why this explicit topology-local exception exists.
+    const bool terminal_cap = i + 1 == kLoopRings;
+    rs.rx = fxu(terminal_cap && !g_u02_terminal_cap_control
+                    ? kReturnTipCapRxMm
+                    : profile_rx_mm);
+    rs.rz = fxu(terminal_cap && !g_u02_terminal_cap_control
+                    ? kReturnTipCapRzMm
+                    : profile_rz_mm);
     rs.segments = static_cast<uint8_t>(kLoopSegments);
     // PASS 16: one continuous skin, but real carrier-owned swell cores.
     // Previous versions blended THROUGH every visible ball and, at C, skipped

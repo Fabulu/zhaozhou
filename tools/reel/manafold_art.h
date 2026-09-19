@@ -504,7 +504,11 @@ constexpr int32_t kLoopReentryYMm = 200;
 constexpr int32_t kRearSocketTargetXMm = -360;
 constexpr int32_t kRearSocketTargetYMm = 500;
 constexpr int32_t kRearSocketTargetZMm = 0;
-constexpr int32_t kRearSocketBurialMm = 270;
+// VERSION 18 Front X/Y motion widens the closure-direction envelope. The
+// terminal ring is a 2 mm buried cap, and its centre is held 200 mm past
+// the visible RearSocket so it stays inside the body without shortening or
+// moving the visible C-End span.
+constexpr int32_t kRearSocketBurialMm = 200;
 // the drawn kink/lean lives in the REST POSE on the neck bone (R8): a small
 // yaw opens the front view's slot-hole read and gives the antenna the
 // sheet's asymmetric attitude; the rest tilt at A is the drawn front KINK.
@@ -587,8 +591,19 @@ constexpr int32_t kLoopRestTiltCA16 = 940;    // ~5.2 deg
 // three"). A tip that flares to 70 rx has 70 mm of rim to poke through a
 // surface its centreline is safely inside -- and it is BURIED, so nothing is
 // lost by slimming it.
+// VERSION 18: public Front X/Y motion legitimately swings the closure farther
+// than version 17. Keep the complete authored taper table intact: the final
+// visible profile key is still 42/26. make_loop() owns the separate terminal
+// ReturnTip-only cap override, so a buried implementation detail cannot rewrite
+// the artist's visible taper authority.
 constexpr int32_t kLoopBladeRxMm[7] = {130, 74, 46, 44, 48, 58, 42};
 constexpr int32_t kLoopBladeRzMm[7] = {140, 72, 30, 24, 20, 29, 26};
+// The cap is a vanishingly small ring, NOT zero: a zero-radius ring welds its
+// eight vertices into one position and hands meshcheck 16 zero-area triangles
+// (8 return quad halves + the 8-triangle end fan). 2 mm keeps every face real
+// while remaining a buried implementation detail proven by the burial sweep.
+constexpr int32_t kReturnTipCapRxMm = 2;
+constexpr int32_t kReturnTipCapRzMm = 2;
 
 // ---- PASS 15: WHERE THOSE SEVEN KEYS SIT, AS A KNOB INSTEAD OF A SIDE EFFECT
 //
@@ -812,8 +827,20 @@ constexpr int32_t kRearSocketFromCMm = kKnuckleAtEndMm - kKnuckleAtCMm;
 constexpr int32_t kReturnTipFromCMm = kLoopArcMm[5];
 static_assert(kRearSocketFromCMm > 0 && kRearSocketFromCMm < kReturnTipFromCMm,
               "rear socket must lie on the straight return before the buried tip");
-static_assert(kRearSocketBurialMm == kReturnTipFromCMm - kRearSocketFromCMm,
-              "rear socket burial must preserve the accepted straight-tail length");
+// The accepted version-17 straight tail from the visible RearSocket to the
+// buried tip. Version 18 keeps it and pulls ONLY the ReturnTip target in along
+// that same straight continuation by a named amount. A 270-vs-200 A/B over every
+// clip key+midpoint moved exactly the 10 ReturnTip-only (bone kBReturnTip,
+// weight 64/64) terminal vertices and no ring profile (Wave-D repair report).
+constexpr int32_t kRearSocketStraightTailMm =
+    kReturnTipFromCMm - kRearSocketFromCMm;
+constexpr int32_t kReturnTipPullInMm = 70;
+static_assert(kReturnTipPullInMm > 0 &&
+                  kReturnTipPullInMm < kRearSocketStraightTailMm,
+              "ReturnTip pull-in must stay inside the accepted straight tail");
+static_assert(kRearSocketBurialMm ==
+                  kRearSocketStraightTailMm - kReturnTipPullInMm,
+              "ReturnTip burial = accepted straight tail minus the named pull-in");
 // How far each knuckle stands PROUD of the band, broadwise (x, in the loop
 // plane) and across the blade (z). Every one is an independent owner knob: set
 // a pair to 0 and that knuckle goes away without touching the others.
@@ -848,18 +875,27 @@ static_assert(kRearSocketBurialMm == kReturnTipFromCMm - kRearSocketFromCMm,
 // fault. 26/31 puts the station at ~100 rx against hinge A's 108: for the first
 // time the front junction is SLIMMER than the balls, which is what the sheet
 // draws and what "too thick" has been asking for three times.
-constexpr int32_t kKnuckleSwellJfRxMm = 26, kKnuckleSwellJfRzMm = 31;
-// DIRECTION 7 §6a: the two ends move in OPPOSITE directions, which is why they
-// are separate constants and why no global taper scale can express it --
-// "the front one is just too thick" while "the others are a bit bulby, might
-// even be a bit more but they're barely okay... so the others can become
-// slightly bigger". And the generalisation to carry: BULBY IS THE TARGET READ.
-// Judged by eye AFTER the swellings were restored, not converted literally from
-// the words, because the owner assessed "barely okay" while looking at pass 7's
-// uniform strap -- which is the shape being rebuilt here.
-constexpr int32_t kKnuckleSwellARxMm = 64, kKnuckleSwellARzMm = 86;
-constexpr int32_t kKnuckleSwellBRxMm = 62, kKnuckleSwellBRzMm = 82;
-constexpr int32_t kKnuckleSwellCRxMm = 60, kKnuckleSwellCRzMm = 78;
+// VERSION 18: the complete 1000/700/550/400/250 same-binary ladder selected
+// 400 pm by eye. The body-to-loop taper remains untouched; only the five proud
+// swell additions shrink, so every carrier stays thicker than its adjacent
+// sticks without reading as a sphere threaded onto them. Legacy values remain
+// exact same-binary controls rather than prose archaeology.
+constexpr int32_t kKnuckleSwellJfLegacyRxMm = 26,
+                  kKnuckleSwellJfLegacyRzMm = 31;
+constexpr int32_t kKnuckleSwellJfRxMm = 10, kKnuckleSwellJfRzMm = 12;
+// DIRECTION 7 §6a historically protected the three proud knuckles while slimming
+// Front. Owner Direction 19 supersedes that visual target for all five: they stay
+// thicker than the sticks, but no longer read as obvious protruding balls. The
+// legacy constants below preserve the exact former family for one-binary proof.
+constexpr int32_t kKnuckleSwellALegacyRxMm = 64,
+                  kKnuckleSwellALegacyRzMm = 86;
+constexpr int32_t kKnuckleSwellBLegacyRxMm = 62,
+                  kKnuckleSwellBLegacyRzMm = 82;
+constexpr int32_t kKnuckleSwellCLegacyRxMm = 60,
+                  kKnuckleSwellCLegacyRzMm = 78;
+constexpr int32_t kKnuckleSwellARxMm = 26, kKnuckleSwellARzMm = 34;
+constexpr int32_t kKnuckleSwellBRxMm = 25, kKnuckleSwellBRzMm = 33;
+constexpr int32_t kKnuckleSwellCRxMm = 24, kKnuckleSwellCRzMm = 31;
 // ---- PASS 11 F.4.2: THE REAR END (Direction 8 3.1) ------------------------
 // "Right now a ball is inside the creature spazzing out, supposed to be the rear
 // end of the antenna. I guess getting rid of it as a ball entirely should solve
@@ -891,7 +927,13 @@ constexpr int32_t kKnuckleSwellCRxMm = 60, kKnuckleSwellCRzMm = 78;
 // a lot and the radii only a little, so the band thickens over a long run into
 // the body instead of stacking a lump on it. Volume roughly preserved, aspect
 // stretched -- exactly the trade F.4 made at the front junction.
-constexpr int32_t kKnuckleSwellEndRxMm = 50, kKnuckleSwellEndRzMm = 62;
+constexpr int32_t kKnuckleSwellEndLegacyRxMm = 50,
+                  kKnuckleSwellEndLegacyRzMm = 62;
+constexpr int32_t kKnuckleSwellEndRxMm = 20, kKnuckleSwellEndRzMm = 25;
+inline bool g_u02_swell_legacy = false;
+inline bool g_u02_terminal_cap_control = false;
+inline bool g_u02_front_flex_mute = false;
+inline int32_t g_u02_front_flex_gain_pm = 1500;  // v18 by-eye selected public gain
 
 // ---- the eyes (the whole face) ----
 // Two big purple almond lenses close together on the lower front, angled
@@ -2800,16 +2842,16 @@ constexpr int kTrickKeys = 200;
 // dipping to 19 mm three keys ahead of the window. Both are one number: the
 // plant sits 62 mm too low. Raised by the measured shortfall. The declaration
 // is unchanged; the knob moved, which is what the knob is for.
-constexpr int32_t kTrickPlantRootMm = 1706;   // root height while planted: the
-                                              // loop peak (~1665 above root,
-                                              // inverted) meets the dirt with
-                                              // the declared penetration
+// VERSION 18 support-owner repair: the old pooled whole-mesh minimum blessed a
+// single -25 mm instant while most of the declared plant floated. The committed
+// probe now follows carrier B's antenna swell at every key/midpoint. 1534 is the
+// authored arrival height; build_trick pivots the body about that planted support
+// centre so the balance performance cannot pull the contact off the dirt.
+constexpr int32_t kTrickPlantRootMm = 1534;   // root height at support arrival
 constexpr int32_t kTrickPlantDepthMm = 25;    // DECLARED penetration at plant
 constexpr int kTrickFlipStartKey = 42;        // the pitch-over begins
 constexpr int kTrickPlantKey = 78;            // contact window opens
-constexpr int kTrickLiftKey = 156;            // contact window closes (the
-                                              // peak DRAGS a few keys into
-                                              // the righting — probed)
+constexpr int kTrickLiftKey = 148;            // held plant ends; righting begins
 constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
 constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
 constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot

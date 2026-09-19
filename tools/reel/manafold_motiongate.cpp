@@ -361,7 +361,6 @@ ClipMetrics trace_clip(const zc::CreatureType& type, const zc::Clip& clip) {
           prior_surge_role[static_cast<size_t>(i)] != tr.surge_mote_role[i])
         ++out.surge_role_changes;
       prior_surge_role[static_cast<size_t>(i)] = tr.surge_mote_role[i];
-      if (tr.surge_mote_visibility_pm[i] <= 0) continue;
       const V3 p = mm_rel(tr.surge_mote_position[i], anchors.body);
       EntityHistory& h = surge_h[static_cast<size_t>(i)];
       if (loops && sample == frames && h.have_p) {
@@ -450,6 +449,10 @@ ClipMetrics trace_clip(const zc::CreatureType& type, const zc::Clip& clip) {
             tr.edge_layer_energy_pm[i][layer], sample);
       }
     }
+    // Position and rendered visibility are independent operands. Stable mote IDs
+    // stay in the position history even at zero visibility; otherwise a
+    // visibility-only control changes which position samples exist and can
+    // manufacture a teleport finding in a detector it did not mutate.
     if (prior_mote_count >= 0 && tr.mote_count != prior_mote_count)
       ++out.mote_count_changes;
     prior_mote_count = tr.mote_count;
@@ -461,7 +464,7 @@ ClipMetrics trace_clip(const zc::CreatureType& type, const zc::Clip& clip) {
           prior_role[static_cast<size_t>(i)] != tr.mote_role[i])
         ++out.role_changes;
       prior_role[static_cast<size_t>(i)] = tr.mote_role[i];
-      if (tr.mote_visibility_pm[i] > 0) {
+      if (tr.life_pm > 0) {
         const V3 p = mm_rel(tr.mote_position[i], anchors.body);
         EntityHistory& h = mote_h[static_cast<size_t>(i)];
         if (loops && sample == frames && h.have_p) {
@@ -872,7 +875,6 @@ LabMetrics trace_lab_variant(const zc::CreatureType& type, const zc::Clip& clip,
           prior_role[static_cast<size_t>(i)] != lt.mote_role[i])
         ++out.role_changes;
       prior_role[static_cast<size_t>(i)] = lt.mote_role[i];
-      if (lt.mote_visibility_pm[i] <= 0) continue;
       const V3 p = mm_rel(lt.mote_position[i], anchors.body);
       EntityHistory& h = mote_h[static_cast<size_t>(i)];
       if (sample == frames && h.have_p)
@@ -891,7 +893,6 @@ LabMetrics trace_lab_variant(const zc::CreatureType& type, const zc::Clip& clip,
           prior_surge_role[static_cast<size_t>(i)] != ft.surge_mote_role[i])
         ++out.surge_role_changes;
       prior_surge_role[static_cast<size_t>(i)] = ft.surge_mote_role[i];
-      if (ft.surge_mote_visibility_pm[i] <= 0) continue;
       const V3 p = mm_rel(ft.surge_mote_position[i], anchors.body);
       EntityHistory& h = surge_h[static_cast<size_t>(i)];
       if (sample == frames && h.have_p)

@@ -94,12 +94,47 @@ static bool g_fail_mirror = false;
 // sticker, the exact fault the rules name -- so the bounds below are WITNESSED
 // rather than rumours with exit codes (10-GATE-CHECKLIST item 10).
 static bool g_fail_outline = false;
+// VERSION 18: a positive control for the Trick support-ownership detector. It
+// declares the adjacent A core as the support without moving geometry; the
+// physical deepest point remains B, so only the ownership operand must fail.
+// Depth is judged only on OWNED samples, so this control fires ownership alone.
+static bool g_fail_trick_support = false;
+// Separate positive control for the support DEPTH operand: ownership is left
+// untouched and the measured support depth is offset upward by a fixed lift,
+// so only the depth band must fail.
+static bool g_fail_trick_support_depth = false;
+constexpr int32_t kTrickSupportDepthControlLiftMm = 40;
+
+// Membership is decided on the UNDEFORMED bind vertex (never the per-frame
+// deformed copy), so a vertex cannot change region from frame to frame, and
+// only a bone that actually carries weight on the vertex counts
+// (w0 is b0's weight in 1/64; b1 carries 64 - w0).
+static bool is_trick_support_vertex(const zc::SkinVertex& v) {
+  const int carrier = g_fail_trick_support ? 1 : 2;  // wrong A vs declared B
+  const uint8_t bone = carrier == 1 ? u02::kBHingeA : u02::kBHingeB;
+  const bool b0_live = v.b0 == bone && v.w0 > 0;
+  const bool b1_live = v.b1 == bone && v.w0 < 64;
+  if (!b0_live && !b1_live) return false;
+  const int32_t bind_y_mm = static_cast<int32_t>(
+      (static_cast<int64_t>(v.y) * 1000) >> 16);
+  const int32_t y0 = u02::kLoopNeckExitYMm - u02::kLoopBuryMm;
+  const int32_t station_mm = bind_y_mm - y0;
+  const int32_t lo = u02::kLoopCarrierCoreAtMm[carrier] -
+                     u02::kKnuckleSwellHalfMm[carrier] - 1;
+  const int32_t hi = u02::kLoopCarrierCoreAtMm[carrier] +
+                     u02::kKnuckleSwellHalfMm[carrier] + 1;
+  return station_mm >= lo && station_mm <= hi;
+}
 
 int main(int argc, char** argv) {
   for (int ai = 1; ai < argc; ++ai)
   {
     if (std::strcmp(argv[ai], "--fail-mirror") == 0) g_fail_mirror = true;
     if (std::strcmp(argv[ai], "--fail-outline") == 0) g_fail_outline = true;
+    if (std::strcmp(argv[ai], "--fail-trick-support") == 0)
+      g_fail_trick_support = true;
+    if (std::strcmp(argv[ai], "--fail-trick-support-depth") == 0)
+      g_fail_trick_support_depth = true;
     if (std::strcmp(argv[ai], "--fail-scale-inverse") == 0)
       g_fail_scale_inverse = true;
   }
@@ -188,6 +223,13 @@ int main(int argc, char** argv) {
     int32_t death_rest_worst = INT32_MAX;     // the eternal rest
     int32_t worst = INT32_MAX;        // outside any declared window
     int32_t window_worst = INT32_MAX; // inside the declared window
+    size_t trick_support_samples = 0;
+    size_t trick_support_owned = 0;
+    size_t trick_support_missing = 0;
+    size_t trick_support_depth_fail = 0;
+    int32_t trick_support_deepest = INT32_MAX;
+    int32_t trick_support_shallowest = INT32_MIN;
+    size_t trick_support_diagnostics = 0;
     uint16_t worst_frame = 0;
     uint8_t worst_sub = 0;
     for (uint16_t f = 0; f < clip.frame_count; ++f) {
@@ -218,12 +260,31 @@ int main(int argc, char** argv) {
         std::array<zc::mat3x4fx, zc::kMaxBones> pose;
         zc::decode_pose(T, clip, f, pose, nullptr, sub);
         const zc::DeformSample d = zc::deformation_sample(T, clip.slot_id, f, sub);
+        int32_t sample_all_min = INT32_MAX;
+        int32_t sample_support_min = INT32_MAX;
+        int32_t sample_nonsupport_min = INT32_MAX;
+        int32_t sample_all_bind_y = 0;
+        uint8_t sample_all_b0 = 0, sample_all_b1 = 0;
         for (const zc::Meshlet& m : T.mesh) {
           for (size_t vi = 0; vi < m.verts.size(); ++vi) {
-            zc::SkinVertex sv = m.verts[vi];
+            const zc::SkinVertex& bind_v = m.verts[vi];
+            zc::SkinVertex sv = bind_v;
             if (!m.deform.empty()) sv = zc::deform_skin_vertex(sv, m.deform[vi], d);
             int32_t x, y, z;
             zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+            if (y < sample_all_min) {
+              sample_all_min = y;
+              sample_all_bind_y = sv.y;
+              sample_all_b0 = sv.b0;
+              sample_all_b1 = sv.b1;
+            }
+            if (has_window) {
+              if (is_trick_support_vertex(bind_v)) {
+                if (y < sample_support_min) sample_support_min = y;
+              } else if (y < sample_nonsupport_min) {
+                sample_nonsupport_min = y;
+              }
+            }
             if (death_phase == 1) {
               if (y < death_air_worst) death_air_worst = y;
               continue;
@@ -245,6 +306,55 @@ int main(int argc, char** argv) {
               worst = y;
               worst_frame = f;
               worst_sub = sub;
+            }
+          }
+        }
+        if (has_window && std::getenv("U02_TRICK_MIN_TRACE") != nullptr) {
+          const int32_t all_mm = static_cast<int32_t>(
+              (static_cast<int64_t>(sample_all_min) * 1000) >> 16);
+          const int32_t sup_mm = sample_support_min == INT32_MAX
+              ? INT32_MAX
+              : static_cast<int32_t>(
+                    (static_cast<int64_t>(sample_support_min) * 1000) >> 16);
+          std::printf("TRICK_MIN,%u,%u,%d,%d,%s,%s\n", f, sub, all_mm, sup_mm,
+                      in_window ? "window" : in_apron ? "apron" : "float",
+                      sample_support_min < sample_nonsupport_min ? "B" : "other");
+        }
+        if (in_window) {
+          ++trick_support_samples;
+          if (sample_support_min == INT32_MAX) {
+            ++trick_support_missing;
+          } else {
+            // Owned only when the support is STRICTLY deeper than every
+            // non-support vertex: a tie is a shared contact, counted as a miss.
+            const bool owned = sample_support_min < sample_nonsupport_min;
+            if (owned) ++trick_support_owned;
+            else if (trick_support_diagnostics < 16) {
+              const int32_t all_mm = static_cast<int32_t>(
+                  (static_cast<int64_t>(sample_all_min) * 1000) >> 16);
+              const int32_t bind_y_mm = static_cast<int32_t>(
+                  (static_cast<int64_t>(sample_all_bind_y) * 1000) >> 16);
+              std::printf(
+                  "u02-probe: Trick support miss key %u sub %u deepest %d mm "
+                  "bind-y %d bones %u/%u\n",
+                  f, sub, all_mm, bind_y_mm, sample_all_b0, sample_all_b1);
+              ++trick_support_diagnostics;
+            }
+            const int32_t support_mm = static_cast<int32_t>(
+                (static_cast<int64_t>(sample_support_min) * 1000) >> 16) +
+                (g_fail_trick_support_depth ? kTrickSupportDepthControlLiftMm : 0);
+            if (std::getenv("U02_TRICK_SUPPORT_TRACE") != nullptr)
+              std::printf("TRICK_SUPPORT,%u,%u,%d\n", f, sub, support_mm);
+            // Depth describes the declared support only where it IS the
+            // contact; an unowned sample has already failed ownership.
+            if (owned) {
+              if (support_mm > -kTrickDepthMinMm ||
+                  support_mm < -kTrickDepthMaxMm)
+                ++trick_support_depth_fail;
+              if (support_mm < trick_support_deepest)
+                trick_support_deepest = support_mm;
+              if (support_mm > trick_support_shallowest)
+                trick_support_shallowest = support_mm;
             }
           }
         }
@@ -271,6 +381,26 @@ int main(int argc, char** argv) {
           wmm, u02::kTrickPlantDepthMm, kTrickDepthMaxMm, kTrickDepthMinMm,
           wok ? "OK" : "FAIL");
       if (!wok) rc = 1;
+
+      const size_t expected_samples = static_cast<size_t>(
+          (u02::kTrickLiftKey - u02::kTrickPlantKey) * 2);
+      const int32_t support_deep_mm = trick_support_deepest;
+      const int32_t support_shallow_mm = trick_support_shallowest;
+      const bool support_ok =
+          trick_support_samples == expected_samples &&
+          trick_support_owned == expected_samples &&
+          trick_support_missing == 0 && trick_support_depth_fail == 0;
+      std::printf(
+          "u02-probe: slot %u ANTENNA SUPPORT carrier %s key+midpoints "
+          "%zu/%zu owned, missing %zu depth-fail %zu, range %d..%d mm — %s\n",
+          clip.slot_id,
+          g_fail_trick_support ? "A [CONTROL]"
+          : g_fail_trick_support_depth ? "B [DEPTH CONTROL +40 mm]" : "B",
+          trick_support_owned, trick_support_samples,
+          trick_support_missing, trick_support_depth_fail,
+          support_deep_mm, support_shallow_mm,
+          support_ok ? "OK" : "FAIL");
+      if (!support_ok) rc = 1;
     }
     // ---- PASS 12 / WAVE 2b: THE DEATH CONTRACT --------------------------
     if (is_death) {
@@ -441,8 +571,11 @@ int main(int argc, char** argv) {
       // Pass 16: the buried tip is a real carrier. Test its centre and rim
       // through production skinning instead of reconstructing terminal rings as
       // if they were still all rigidly bound to D.
-      const int32_t rim_rx = u02::kLoopBladeRxMm[6];
-      const int32_t rim_rz = u02::kLoopBladeRzMm[6];
+      // Version 18 restores the authored 42/26 taper key and gives only the
+      // ReturnTip-owned final ring an explicit production cap profile. Probe
+      // that real cap, never the neighbouring visible taper authority.
+      const int32_t rim_rx = u02::kReturnTipCapRxMm;
+      const int32_t rim_rz = u02::kReturnTipCapRzMm;
       const int32_t offs[5][2] = {
           {0, 0}, {rim_rx, 0}, {-rim_rx, 0}, {0, rim_rz}, {0, -rim_rz}};
       for (int oi = 0; oi < 5; ++oi) {
