@@ -344,6 +344,9 @@ modules:
   zhao_terrain_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_loddev:
+    disposition: pending_compose
+    why: "TERRAIN.LOD's deviation producer (owner ruling R8), built 2026-09-19 with the ONE selector DEV_INCLUDE_BOUNDARY and differentially tested against zref::terrain::lod_deviation in both readings. Not composed: TERRAIN.LOD itself is not composed (entry I21 -- its cameras, per-subpatch history, neighbour levels and the job port's material/view fields have no producer yet), and where this block sits depends on the open WHEN question of reports/TERRAIN-LOD-DEVIATION-20260907.md (at load behind MIPGEN, or per frame behind TERRAIN.PATCH)."
   zhao_terrain_normalmap:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
