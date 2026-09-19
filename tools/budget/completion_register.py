@@ -331,7 +331,11 @@ _ALIAS: dict[str, str | None] = {
     "GEOM.POSE":         "zhao_geom_pose_decode",
     "MATERIAL.RESOLVE":  "zhao_texture_material_combine_v2",
     # searched and genuinely absent -- no file matches these at all
-    "MEM.UPLOAD":        None,
+    # BUILT 2026-09-19 (fpga/rtl/mem/zhao_mem_upload.sv, 89 directed checks).
+    # This entry said None until the block existed, and nothing would have
+    # re-checked it -- see _stale_none_aliases(), which now does, and which
+    # fired on this very line.
+    "MEM.UPLOAD":        "zhao_mem_upload",
     "GEOM.LOOM":         None,
     "FORGE.SHADOW":      None,
     # the owner revoked their deferral 2026-09-18; all three were cut BEFORE
@@ -362,6 +366,31 @@ _ALIAS: dict[str, str | None] = {
     "SYS.PLL":           "zhao_sys_pll",
     "SYS.RESET":         "zhao_sys_reset",
 }
+
+
+def _stale_none_aliases() -> list[tuple[str, str]]:
+    """Hand-resolved `None` entries for which a module now EXISTS.
+
+    A `None` in `_ALIAS` means "searched by hand on 2026-09-19 and genuinely
+    absent". That is a statement about a moment, and this campaign's whole job is
+    to make such statements false by building the thing. Nothing re-checked them,
+    so the first block built to close one of these entries stayed counted as
+    UNBUILT -- the register would have gone on reporting a gap that had been
+    filled, and the only way to notice was to wonder why a number did not move.
+
+    MEM.UPLOAD proved it the same day it was written. So the hand-resolutions are
+    now re-checked against the tree on every run, and a stale one is a HARD
+    FAILURE rather than a silent under-count: an alias that outlives its search
+    is exactly the phantom-citation shape this file exists to prevent.
+    """
+    stale = []
+    for cap, mod in _ALIAS.items():
+        if mod is not None:
+            continue
+        cand = "zhao_" + cap.lower().replace(".", "_")
+        if list(RTL.rglob(cand + ".sv")):
+            stale.append((cap, cand))
+    return stale
 
 
 def resolve_module(block_id: str, implementation: str | None) -> str | None:
@@ -485,6 +514,16 @@ def audit() -> dict:
     # trusted, so their disagreement is now a HARD FAILURE rather than a sentence
     # in a commit message. It is checked here rather than in main() so that every
     # consumer of audit() gets it, including --json.
+    stale = _stale_none_aliases()
+    if stale:
+        raise SystemExit(
+            "completion_register: %d hand-resolved _ALIAS entry(ies) say a module "
+            "is absent, but it now EXISTS in the tree:\n%s\n"
+            "Point each alias at its module. A `None` that outlives its search "
+            "under-counts progress and hides a block somebody already built."
+            % (len(stale),
+               "\n".join("  %-18s -> %s" % (c, m) for c, m in stale)))
+
     paths = {p.stem for p in closure_paths()}
     if paths != closure:
         only_c = sorted(closure - paths)
