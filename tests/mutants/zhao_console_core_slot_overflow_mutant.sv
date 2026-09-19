@@ -597,17 +597,8 @@ module zhao_console_core_slot_overflow_mutant
   // GEOM.REPLAY and the release comes back from it. Sixteen ports left this
   // list rather than being driven; see the closed ledger in the header.
 
-  // ---- I12, NARROWED: the arena ORIGIN datum only ---------------------------
-  // The lookup port is GEOM.REPLAY's now. What is still at the edge is the
-  // per-arena origin, which nothing in this console writes and nothing reads.
-  input  logic                    geom_org_we_i,
-  input  logic [GEOM_ARENA_W-1:0] geom_org_arena_i,
-  input  logic signed [31:0]      geom_org_x_i,
-  input  logic signed [31:0]      geom_org_y_i,
-  input  logic signed [31:0]      geom_org_z_i,
-  output logic signed [31:0]      geom_rep_org_x_o,
-  output logic signed [31:0]      geom_rep_org_y_o,
-  output logic signed [31:0]      geom_rep_org_z_o,
+  // ---- I12 IS CLOSED (owner ruling R27): no arena origin is owed in v1 -----
+  // The eight geom_org_* / geom_rep_org_* ports left the list; see the ledger.
 
   // ---- GEOMETRY evidence ---------------------------------------------------
   output logic [31:0]             geom_groups_opened_o,

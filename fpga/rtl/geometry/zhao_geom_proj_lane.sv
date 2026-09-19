@@ -112,11 +112,9 @@ module zhao_geom_proj_lane #(
     input  wire                     open_i,
     input  wire [ARENA_W-1:0]       open_arena_i,
     output wire [GEN_W-1:0]         open_gen_o,
-    input  wire                     org_we_i,
-    input  wire [ARENA_W-1:0]       org_arena_i,
-    input  wire signed [31:0]       org_x_i,
-    input  wire signed [31:0]       org_y_i,
-    input  wire signed [31:0]       org_z_i,
+    // NO ARENA ORIGIN (owner ruling R27, 2026-09-19): the projector takes WORLD
+    // positions, so nothing in the console writes or reads a per-arena origin.
+    // The port pair that carried it is gone; see the wcache instance below.
     input  wire                     seal_i,
     input  wire [ARENA_W-1:0]       seal_arena_i,
 
@@ -139,9 +137,6 @@ module zhao_geom_proj_lane #(
     output wire                     rep_hit_o,
     output wire                     rep_refuse_o,
     output wire [PAYLOAD_W-1:0]     rep_payload_o,
-    output wire signed [31:0]       rep_org_x_o,
-    output wire signed [31:0]       rep_org_y_o,
-    output wire signed [31:0]       rep_org_z_o,
 
     output wire [31:0]              arena_hits_o,
     output wire [31:0]              arena_misses_o,
@@ -184,6 +179,18 @@ module zhao_geom_proj_lane #(
 
   wire fill_ready_unused;   // the primitive never stalls a fill; see the header
 
+  // THE ORIGIN IS NOT OWED IN v1 (owner ruling R27): "No arena-origin producer
+  // is owed in v1: the projector consumes WORLD positions, so nothing reads the
+  // origin. Remove the dead port pair and record the ruling. It carries no
+  // function, so removing it removes none." The shared arena primitive keeps
+  // its origin feature (its own tests and proofs exercise it); this lane holds
+  // the write disabled and leaves the read unread -- zhao_terrain_wcache's
+  // established arrangement for the same primitive, where the origin was never
+  // owed either.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire signed [31:0] org_x_unused, org_y_unused, org_z_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   zhao_geom_wcache #(
       .ARENAS   (ARENAS),
       .DEPTH    (DEPTH),
@@ -195,11 +202,11 @@ module zhao_geom_proj_lane #(
       .open_i        (open_i),
       .open_arena_i  (open_arena_i),
       .open_gen_o    (open_gen_o),
-      .org_we_i      (org_we_i),
-      .org_arena_i   (org_arena_i),
-      .org_x_i       (org_x_i),
-      .org_y_i       (org_y_i),
-      .org_z_i       (org_z_i),
+      .org_we_i      (1'b0),
+      .org_arena_i   ({ARENA_W{1'b0}}),
+      .org_x_i       (32'sd0),
+      .org_y_i       (32'sd0),
+      .org_z_i       (32'sd0),
 
       .fill_valid_i  (a_valid_i),
       .fill_ready_o  (fill_ready_unused),
@@ -218,9 +225,9 @@ module zhao_geom_proj_lane #(
       .rep_hit_o     (rep_hit_o),
       .rep_refuse_o  (rep_refuse_o),
       .rep_payload_o (rep_payload_o),
-      .rep_org_x_o   (rep_org_x_o),
-      .rep_org_y_o   (rep_org_y_o),
-      .rep_org_z_o   (rep_org_z_o),
+      .rep_org_x_o   (org_x_unused),
+      .rep_org_y_o   (org_y_unused),
+      .rep_org_z_o   (org_z_unused),
       .arena_hits_o    (arena_hits_o),
       .arena_misses_o  (arena_misses_o),
       .arena_refusals_o(arena_refusals_o),

@@ -529,6 +529,19 @@
 //    row both views against zref::depth_of_raw and zref::geom_over_w, every
 //    counter fired), geom_depthquant_stream_directed, the smoke's VATTR census.
 //
+//  * I12 was GEOM.PROJ_LANE's ARENA ORIGIN (`geom_org_*`, `geom_rep_org_*`).
+//    CLOSED AND DELETED 2026-09-19 (geom2 packet) by owner ruling R27: "No
+//    arena-origin producer is owed in v1: the projector consumes WORLD
+//    positions, so nothing reads the origin. Remove the dead port pair and
+//    record the ruling. It carries no function, so removing it removes none."
+//    The entry itself had said so -- "nothing in this console writes it and
+//    nothing reads it" -- and that was checked before removing: the only
+//    reader of the arena's rep_org_* was this module's edge. Eight ports left
+//    the list; `zhao_geom_proj_lane` holds the shared arena primitive's origin
+//    write disabled, as `zhao_terrain_wcache` always has, and the primitive's
+//    own tested origin feature is untouched. If a rebased-coordinate producer
+//    is ever ruled in, it arrives as a NEW entry against that ruling.
+//
 //  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
 //    closed contradiction between three ratified contracts rather than a
 //    wiring gap, and owner ruling 2026-09-19 settled it:
@@ -914,17 +927,6 @@
 //      Deleted rather than marked closed, for the reason I4 gives above: a
 //      stale closed entry under-reports progress exactly as deleting an open
 //      one would over-report it. The successor gap is I29, one level up.)
-//
-// I12. GEOM.PROJ_LANE's ARENA ORIGIN (`geom_org_*`, `geom_rep_org_*`) --
-//      BOUNDARY, NARROWED 2026-09-19. The lookup/reply half is CLOSED:
-//      GEOM.REPLAY (`zhao_geom_replay`) is the customer I11 specified and it
-//      drives the lane's lookup port. What stays at the edge is the per-arena
-//      ORIGIN datum: nothing in this console writes it and nothing reads it --
-//      the replay's screen triangles never need a world origin, because the
-//      projector is handed world positions. Whether a rebased-coordinate
-//      producer is ever owed (group_seq's header says its vertices are
-//      "LOCAL (rebased) coords") is the question this entry now carries, and it
-//      is a ruling about coordinates, not a wire.
 //
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
 //      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
@@ -3530,17 +3532,8 @@ module zhao_console_core
   // GEOM.REPLAY and the release comes back from it. Sixteen ports left this
   // list rather than being driven; see the closed ledger in the header.
 
-  // ---- I12, NARROWED: the arena ORIGIN datum only ---------------------------
-  // The lookup port is GEOM.REPLAY's now. What is still at the edge is the
-  // per-arena origin, which nothing in this console writes and nothing reads.
-  input  logic                    geom_org_we_i,
-  input  logic [GEOM_ARENA_W-1:0] geom_org_arena_i,
-  input  logic signed [31:0]      geom_org_x_i,
-  input  logic signed [31:0]      geom_org_y_i,
-  input  logic signed [31:0]      geom_org_z_i,
-  output logic signed [31:0]      geom_rep_org_x_o,
-  output logic signed [31:0]      geom_rep_org_y_o,
-  output logic signed [31:0]      geom_rep_org_z_o,
+  // ---- I12 IS CLOSED (owner ruling R27): no arena origin is owed in v1 -----
+  // The eight geom_org_* / geom_rep_org_* ports left the list; see the ledger.
 
   // ---- GEOMETRY evidence ---------------------------------------------------
   output logic [31:0]             geom_groups_opened_o,
@@ -7615,12 +7608,8 @@ module zhao_console_core
     .seal_i      (gs_seal),
     .seal_arena_i(gs_seal_arena),
 
-    // I12: the arena origin and the lookup port; same absent customer.
-    .org_we_i   (geom_org_we_i),
-    .org_arena_i(geom_org_arena_i),
-    .org_x_i    (geom_org_x_i),
-    .org_y_i    (geom_org_y_i),
-    .org_z_i    (geom_org_z_i),
+    // (I12's arena origin is not owed in v1 -- owner ruling R27; the lane no
+    // longer has the port pair.)
 
     // REAL: landings back to the sequencer.
     .fill_landed_o(ln_fill_landed),
@@ -7638,9 +7627,6 @@ module zhao_console_core
     .rep_hit_o   (ln_rep_hit),
     .rep_refuse_o(ln_rep_refuse),
     .rep_payload_o(ln_rep_payload),
-    .rep_org_x_o (geom_rep_org_x_o),
-    .rep_org_y_o (geom_rep_org_y_o),
-    .rep_org_z_o (geom_rep_org_z_o),
 
     .arena_hits_o    (geom_arena_hits_o),
     .arena_misses_o  (geom_arena_misses_o),

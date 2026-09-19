@@ -360,14 +360,6 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_pal_bones_written_o;
   logic [31:0]             geom_pal_bone_oob_o;
   logic [31:0]             geom_pal_bone_unset_o;
-  logic                    geom_org_we_i;
-  logic [GEOM_ARENA_W-1:0] geom_org_arena_i;
-  logic signed [31:0]      geom_org_x_i;
-  logic signed [31:0]      geom_org_y_i;
-  logic signed [31:0]      geom_org_z_i;
-  logic signed [31:0]      geom_rep_org_x_o;
-  logic signed [31:0]      geom_rep_org_y_o;
-  logic signed [31:0]      geom_rep_org_z_o;
   logic [31:0]             geom_groups_opened_o;
   logic [31:0]             geom_groups_sealed_o;
   logic [31:0]             geom_vertices_sent_o;
@@ -2898,11 +2890,6 @@ module tb_zhao_console_core_smoke
     geom_pose_quat_y_i = '0;
     geom_pose_quat_z_i = '0;
     geom_pose_inv_rest_i = '{default: '0};
-    geom_org_we_i = '0;
-    geom_org_arena_i = '0;
-    geom_org_x_i = '0;
-    geom_org_y_i = '0;
-    geom_org_z_i = '0;
     proj_cfg_we_i = '0;
     proj_cfg_view_i = '0;
     proj_cfg_addr_i = '0;
