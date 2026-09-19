@@ -1828,17 +1828,50 @@ struct ManaSplat {
   // dark ramp toward black does not fade it: without this operand, Death Drop's
   // navy backing stayed a large opaque black mass until it vanished outright.
   int16_t opacity_pm;
+  // VERSION 18 WAVE E (Owner Direction 19 §5, bounded attempt): this splat is a
+  // fold/surge MOTE body and may take the antenna-surface fade in the renderer
+  // (kMoteSurfaceFade*). Lightning, endpoints and every other splat leave it
+  // false and are never touched by that fade.
+  bool surface_fade;
 };
+
+// ---- VERSION 18 WAVE E: MOTE / ANTENNA-SURFACE FADE (bounded attempt) -------
+// A mote is one flat disc depth-tested per pixel at its CENTRE depth. When that
+// centre crosses the front surface of an antenna stick the whole disc flips in
+// one frame from painting over the stick to being cut by its silhouette: the
+// "particle goes through the antenna" read. The fade uses depth the renderer
+// already has -- no centreline model, no collision, no repulsion: over the
+// mote's footprint (kMoteSurfaceFadeTaps^2 samples), wherever a pixel is
+// covered by the creature but NOT by the body-only pass (i.e. by the antenna),
+// that sample's visibility ramps to zero as the mote centre's view depth
+// approaches the surface's, over kMoteSurfaceFadeMm on either side; the mote
+// takes the footprint mean. Motes clearly in front of or behind a stick, and
+// every mote in the open O, are untouched.
+//   ZHAO_U02_MOTE_SURFACE_FADE=off|on      (strict; default below)
+//   ZHAO_U02_MOTE_SURFACE_FADE_MM=<1..2000> (the authoring ladder)
+// `off` is the exact-off control: byte-identical to a binary without the fade
+// (Channel/Hover/Taunt III sequence CRCs, Wave E).
+// SELECTED BY EYE, Wave E: 120 mm from an off/120/240 ladder on complete
+// Channel, Hover and Taunt III (4x worst-changed crops and consecutive-frame
+// strips; 60 was tried only on the rejected centre-pixel first cut, whose
+// lateral pop the footprint mean removes). 240 began fading motes genuinely
+// in front of a stick.
+constexpr bool kMoteSurfaceFadeDefault = true;
+constexpr int32_t kMoteSurfaceFadeMm = 120;
+constexpr int kMoteSurfaceFadeTaps = 5;  // footprint samples per axis
+static_assert(kMoteSurfaceFadeTaps >= 2, "footprint needs at least two taps");
+inline bool g_u02_mote_surface_fade = kMoteSurfaceFadeDefault;
+inline int32_t g_u02_mote_surface_fade_mm = kMoteSurfaceFadeMm;
 
 inline void mana_push(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32_t z,
                       int32_t r_px, uint8_t ramp, int gain_pm, bool depth_test,
                       bool pre, bool opaque = false, bool soft = false,
-                      int opacity_pm = 1000) {
+                      int opacity_pm = 1000, bool surface_fade = false) {
   if (gain_pm <= 0 || r_px <= 0 || opacity_pm <= 0) return;
   if (opacity_pm > 1000) opacity_pm = 1000;
   out.push_back(ManaSplat{x, y, z, r_px, ramp, static_cast<int16_t>(gain_pm),
                           depth_test, opaque, pre, soft,
-                          static_cast<int16_t>(opacity_pm)});
+                          static_cast<int16_t>(opacity_pm), surface_fade});
 }
 
 inline bool lightning_depth_test() {
@@ -2189,9 +2222,11 @@ inline void mana_lightning(uint32_t frame, uint32_t slot, int keys,
     }
     if (visibility_pm <= 0) continue;
     mana_push(out, p[0], p[1], p[2], kSurgeRPx, kRampCyan,
-              kSurgeGainPm * visibility_pm / 1000, true, false);
+              kSurgeGainPm * visibility_pm / 1000, true, false, false, false,
+              1000, /*surface_fade=*/true);
     mana_push(out, p[0], p[1], p[2], kSurgeRPx * 55 / 100,
-              kRampCyan, visibility_pm, true, false, /*opaque=*/true);
+              kRampCyan, visibility_pm, true, false, /*opaque=*/true, false,
+              1000, /*surface_fade=*/true);
   }
 
   // Endpoint energy and centre glint breathe continuously instead of appearing
@@ -3638,10 +3673,12 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                               : ramp;
     const int32_t mote_opacity_pm = backing_opacity_pm;
     mana_push(out, P[0], P[1], P[2], halo, mramp,
-              kMoteHaloGainPm * visible_pm / 1000, true, false);
+              kMoteHaloGainPm * visible_pm / 1000, true, false, false, false,
+              1000, /*surface_fade=*/true);
     mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
               mana_core_ramp(mramp), visible_pm,
-              true, false, /*opaque=*/true, /*soft=*/true, mote_opacity_pm);
+              true, false, /*opaque=*/true, /*soft=*/true, mote_opacity_pm,
+              /*surface_fade=*/true);
   }
   return agit;
 }

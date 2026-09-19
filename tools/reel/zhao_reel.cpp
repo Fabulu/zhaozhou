@@ -2416,7 +2416,16 @@ struct CreatureReelCtx {
   u02::MistFollowState u02_mist_follow;
   std::vector<uint8_t> u02_smear_buf;
   std::vector<int32_t> u02_smear_depth;  // R5: per-cell nearest splat depth
-  u02::FoldState u02_fold[3];            // pass 4: per-conduit fold state
+  // VERSION 18 WAVE E (Owner Direction 19 §8): EXECUTED-history receipts. They
+  // count frames on which a persistent history plane actually ran (was fed and
+  // composited), incremented INSIDE those blocks -- never where a flag is read.
+  // The live-history assertion in render_scene compares the subject's declared
+  // flags against these, so the two operands come from different paths: a
+  // future edit that re-enables a plane by some other route than `u02_mist` /
+  // `u02_smear` is still caught, because the block itself reports that it ran.
+  uint32_t u02_mist_frames_run = 0;
+  uint32_t u02_smear_frames_run = 0;
+  u02::FoldState u02_fold[3];          // pass 4: per-conduit fold state
   int32_t u02_fold_agit = 0;             // this frame's agitation (smear feed)
 };
 constexpr uint32_t kZixxMovingSourceCount = 4;
@@ -3596,6 +3605,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
     // frame forever, and a "creature-relative" plane that never actually
     // shifts is a screen-space plane with a better comment.
     if (c.u02_mist) {
+      ++c.u02_mist_frames_run;  // Wave E receipt: the 48x30 history plane ran
       if (c.u02_mist_buf.size() !=
           static_cast<size_t>(u02::kMistW) * u02::kMistH * 3)
         c.u02_mist_buf.assign(
@@ -3693,6 +3703,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
                                ? c.u02_smear_preset
                                : 0];
     if (sp.gain_pm > 0) {
+      ++c.u02_smear_frames_run;  // Wave E receipt: the 96x60 history plane ran
       if (c.u02_smear_buf.size() !=
           static_cast<size_t>(u02::kSmearW) * u02::kSmearH * 3)
         c.u02_smear_buf.assign(
@@ -3801,11 +3812,67 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       const zref::render::ProjOut pm = zref::render::project_vertex(
           c.vp, vpp_m, zref::fx16{ms.x}, zref::fx16{ms.y}, zref::fx16{ms.z}, nullptr);
       if (!pm.in) continue;
+      // VERSION 18 WAVE E: the bounded mote/antenna-surface fade (manafold_fx.h
+      // kMoteSurfaceFade*). Antenna = creature-covered AND not body-covered at
+      // the mote's centre pixel. Off leaves both operands untouched.
+      int gain_pm = ms.gain_pm;
+      int opacity_pm = ms.opacity_pm;
+      bool soft = ms.soft;
+      if (ms.surface_fade && u02::g_u02_mote_surface_fade && pm.s.d > 0 &&
+          !u02_body_cover.empty() && pre_depth.size() == static_cast<size_t>(w) * h) {
+        // Averaged over the disc's FOOTPRINT (kMoteSurfaceFadeTaps^2 samples
+        // across its radius), not read at the centre pixel alone: a centre-only
+        // read would drop a mote in ONE frame as its centre slid sideways onto
+        // a stick at matching depth -- trading the old depth pop for a lateral
+        // one. Off-antenna samples count as fully visible.
+        const int32_t cx = pm.s.x >> 8, cy = pm.s.y >> 8;
+        const int64_t zm = 65536000LL / pm.s.d;  // view depth, mm (world-metre w)
+        const int64_t band = u02::g_u02_mote_surface_fade_mm;
+        constexpr int kTaps = u02::kMoteSurfaceFadeTaps;
+        int64_t f_sum = 0;
+        for (int ty = 0; ty < kTaps; ++ty) {
+          for (int tx = 0; tx < kTaps; ++tx) {
+            const int32_t sx = cx + (2 * tx - (kTaps - 1)) * ms.r_px / (kTaps - 1);
+            const int32_t sy = cy + (2 * ty - (kTaps - 1)) * ms.r_px / (kTaps - 1);
+            int f = 1000;
+            if (sx >= 0 && sy >= 0 && sx < static_cast<int32_t>(w) &&
+                sy < static_cast<int32_t>(h)) {
+              const size_t si = static_cast<size_t>(sy) * w + sx;
+              if (depth[si] > 0 && depth[si] != pre_depth[si] && !u02_body_cover[si]) {
+                const int64_t zs = 65536000LL / depth[si];
+                const int64_t gap = zm > zs ? zm - zs : zs - zm;
+                if (gap < band) {
+                  // smoothstep: zero slope at both ends of the band
+                  const int64_t t = gap * 1000 / band;
+                  f = static_cast<int>(t * t * (3000 - 2 * t) / 1000000);
+                }
+              }
+            }
+            f_sum += f;
+          }
+        }
+        const int f = static_cast<int>(f_sum / (kTaps * kTaps));
+        if (f < 1000) {
+          // Fade by the operand that means transparency for each splat kind:
+          // an additive halo by gain; a soft body by opacity (its gain scales
+          // colour toward BLACK, not toward clear -- PASS 17); a hard opaque
+          // body is drawn soft at opacity f, having no transparency operand.
+          if (!ms.opaque) {
+            gain_pm = gain_pm * f / 1000;
+          } else if (soft) {
+            opacity_pm = opacity_pm * f / 1000;
+          } else {
+            soft = true;
+            opacity_pm = f;
+          }
+          if (gain_pm <= 0 || opacity_pm <= 0) continue;
+        }
+      }
       const u02::GlowFrame& gf2 = u02::glow_frame_cached(
-          s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm);
+          s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, gain_pm);
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
-                      ms.soft, ms.opacity_pm);
+                      soft, opacity_pm);
     }
   }
   // Direction 17: internal ink is painted once before the depth-tested effects.
@@ -3917,6 +3984,44 @@ void chained_pre_resolve(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, u
 }
 
 // ------------------------------------------------------------ scene render --
+
+// ---- VERSION 18 WAVE E: NO PERSISTENT HISTORY ON ANY LIVE MANAFOLD SUBJECT --
+//
+// Owner Direction 19 §8: "Hasty has the old smear effect again, we're getting
+// rid of that everywhere." Direction 12 already zeroed the 96x60 `u02_smear`
+// plane, but the SEPARATE 48x30 `u02_mist` plane was still inherited from the
+// builder by every clip, and on a travelling clip its creature-following
+// residue IS the smear read (Hasty) and the relic trail (Drift, Blown).
+//
+// kU02LiveSiteSubjects is the version-18 live bank: exactly the 22
+// `renders/manafold-*.webm` entries in Upheaval/website/creatures.json. The
+// committed gate tools/reel/manafold_live_history_gate.py checks this table
+// against that JSON, so the two lists cannot drift apart silently.
+//
+// ZHAO_U02_LIVE_MIST=off|legacy (strict; default off). `legacy` restores the
+// version-17 builder default (mist on every non-slot-7 clip) from the same
+// binary. It is the POSITIVE CONTROL for the assertion in render_scene: in
+// legacy mode every live subject renders its old trail and the renderer
+// returns RC 5 with a LIVE HISTORY line. It is not a presentation choice.
+static bool g_u02_live_mist_legacy = false;
+static constexpr const char* kU02LiveSiteSubjects[] = {
+    "manafold-hover",       "manafold-inspect",      "manafold-channel",
+    "manafold-trick",       "manafold-damage",       "manafold-hasty",
+    "manafold-flight",      "manafold-fall",         "manafold-hit",
+    "manafold-taunt",       "manafold-taunt2",       "manafold-death-drop",
+    "manafold-death-gutter", "manafold-lasso",       "manafold-blown",
+    "manafold-taunt3",      "manafold-drift",        "manafold-curious",
+    "manafold-startle",     "manafold-rest",         "manafold-pirouette",
+    "manafold-crackle",
+};
+static_assert(sizeof(kU02LiveSiteSubjects) / sizeof(kU02LiveSiteSubjects[0]) == 22,
+              "version-18 live Manafold bank is 22 subjects");
+bool u02_is_live_site_subject(const char* name) {
+  if (name == nullptr) return false;
+  for (const char* n : kU02LiveSiteSubjects)
+    if (std::strcmp(n, name) == 0) return true;
+  return false;
+}
 
 int render_scene(const SceneSubject& sub) {
   const uint32_t W = 384, H = 240;
@@ -4804,6 +4909,30 @@ int render_scene(const SceneSubject& sub) {
     fclose(f);
   }
 
+  // VERSION 18 WAVE E: the no-live-history assertion. Declared flags AND the
+  // executed-block receipts must both be zero on every live site subject. It
+  // runs after the frames so the legacy control still leaves pictures behind,
+  // and it fails the process (RC 5) rather than warning.
+  int live_history_rc = 0;
+  if (u02_is_live_site_subject(sub.name)) {
+    const bool dirty = sub.u02_mist || sub.u02_smear != 0 ||
+                       cr_ctx.u02_mist_frames_run != 0 ||
+                       cr_ctx.u02_smear_frames_run != 0;
+    std::printf("live-history: %s declared mist=%d smear=%d executed mist=%u smear=%u "
+                "frames%s -- %s\n",
+                sub.name, sub.u02_mist ? 1 : 0, sub.u02_smear,
+                cr_ctx.u02_mist_frames_run, cr_ctx.u02_smear_frames_run,
+                g_u02_live_mist_legacy ? " [CONTROL ZHAO_U02_LIVE_MIST=legacy]" : "",
+                dirty ? "FAIL" : "OK");
+    if (dirty) {
+      std::fprintf(stderr,
+                   "%s: LIVE HISTORY FAIL -- a persistent history plane ran on a live "
+                   "Manafold subject (Owner Direction 19 §8)\n",
+                   sub.name);
+      live_history_rc = 5;
+    }
+  }
+
   if (!g_write) {
     std::printf("%s: %u frames, %zu unique colours, sequence_crc32c=0x%08X\n", sub.name, sub.frames,
                 pal.count(), seq_crc);
@@ -4815,7 +4944,7 @@ int render_scene(const SceneSubject& sub) {
                    sub.name, seq_crc, sub.expect_seq_crc);
       return 4;
     }
-    return 0;
+    return live_history_rc;
   }
 
   // ---- provenance ----
@@ -4854,7 +4983,7 @@ int render_scene(const SceneSubject& sub) {
 
   std::printf("%s: %u frames, %zu unique colours, sequence_crc32c=0x%08X\n", sub.name, sub.frames,
               pal.count(), seq_crc);
-  return 0;
+  return live_history_rc;
 }
 
 // ------------------------------------------------------------ subjects ------
@@ -5876,7 +6005,19 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // screen-space halo it cannot walk out of. Slot 7 (the form diagnostic) opts
   // out with the rest of the effects: an unobstructed look at geometry is what
   // that subject is for.
-  s.u02_mist = slot != 7;
+  //
+  // VERSION 18 WAVE E (Owner Direction 19 §8) RETIRES THIS DEFAULT. The 48x30
+  // plane is persistent frame history: on a travelling clip the residue it
+  // leaves behind the creature IS the "old smear" the owner saw on Hasty and
+  // the relic trail on Drift/Blown. The builder now gives NO subject the plane.
+  // The contour shell (`u02_shell`, which paints the creature-edge haze from
+  // the same coverage mask) is a separate flag and is untouched.
+  //
+  // Non-live subjects that inherited the old default keep it EXPLICITLY at
+  // their call sites (archived mana menu/lab, trio, crackle-legacy); the fog
+  // lattice and mist-variant sheet already declared theirs. The legacy
+  // selector restores the old default for the live-history positive control.
+  s.u02_mist = g_u02_live_mist_legacy && slot != 7;
   // ⚠ FALSE-COMMENT CORRECTION (pass 12, the D3 census). This block read:
   // "Every clip ships under its own named sun over kU02SunRig; only
   // manafold-inspect raises the moving rig." NONE OF THAT HAS BEEN TRUE SINCE
@@ -7827,6 +7968,34 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
+  // VERSION 18 WAVE E: bounded mote/antenna-surface fade (manafold_fx.h).
+  if (const char* e = std::getenv("ZHAO_U02_MOTE_SURFACE_FADE")) {
+    if (std::strcmp(e, "off") == 0)
+      u02::g_u02_mote_surface_fade = false;
+    else if (std::strcmp(e, "on") == 0)
+      u02::g_u02_mote_surface_fade = true;
+    else {
+      std::fprintf(stderr, "ZHAO_U02_MOTE_SURFACE_FADE=%s invalid (expected off|on)\n", e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_MOTE_SURFACE_FADE_MM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_MOTE_SURFACE_FADE_MM", e, 1, 2000, v))
+      return 2;
+    u02::g_u02_mote_surface_fade_mm = v;
+  }
+  // VERSION 18 WAVE E: live-history positive control (see kU02LiveSiteSubjects).
+  if (const char* e = std::getenv("ZHAO_U02_LIVE_MIST")) {
+    if (std::strcmp(e, "off") == 0)
+      g_u02_live_mist_legacy = false;
+    else if (std::strcmp(e, "legacy") == 0)
+      g_u02_live_mist_legacy = true;
+    else {
+      std::fprintf(stderr, "ZHAO_U02_LIVE_MIST=%s invalid (expected off|legacy)\n", e);
+      return 2;
+    }
+  }
   if (const char* e = std::getenv("ZHAO_U02_FRONT_FLEX")) {
     if (std::strcmp(e, "normal") == 0)
       u02::g_u02_front_flex_mute = false;
@@ -8907,16 +9076,42 @@ int main(int argc, char** argv) {
     rc |= render_scene(s);
     u02::g_u02_mist = u02::MistCfg{};  // never leak a variant into the next subject
   }
+  // VERSION 18 WAVE E (Owner Direction 19 §6: "Drift I think is a relic with a
+  // weird mana, crackle too. Maybe keep them but change the mana to the normal
+  // one?"). Crackle was the ONE live subject still on an old mana: candidate 4
+  // (lightning only, no fold) under the night backdrop. It now takes the
+  // builder's shipping candidate 9 (fold + lightning) under the ordinary day
+  // sky, like every other fixed-camera live clip except Channel.
+  //
+  // This ENDS the deliberate Crackle/Channel backdrop pairing (R6-bis, the
+  // 2026-09-08 divergence): Channel keeps its night backdrop, set inside
+  // subject_u02_clip for slot 2, and Crackle no longer calls u02_backdrop.
+  // `manafold-crackle-legacy` below is the verbatim old block, kept as the
+  // exact same-binary control (candidate 4 + night + the old mist plane).
   if (wanted("manafold-crackle")) {
     SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, "manafold-crackle",
                                      u02::kIdleKeys, false, &kU02SunChannel);
-    s.u02_mana = 4;  // the crackle IS the lightning candidate
     s.u02_smear = 0;  // Direction 12: no active Manafold subject carries smear
-    // R6-bis: the same one call `channel` makes, so the pair cannot diverge
-    // again. That divergence is what happened here on 2026-09-08.
+    s.note = "the crackle idle under the normal shipping mana (candidate 9, day sky)";
+    rc |= render_scene(s);
+  }
+  if (wanted("manafold-crackle-legacy")) {
+    // CONTROL, not live: must reproduce the version-18 Wave D manafold-crackle
+    // bytes exactly. Every field that differs from the live subject is set
+    // here explicitly, including the retired history mist.
+    SceneSubject s = subject_u02_clip(u02::kIdleFixedSlot, "manafold-crackle-legacy",
+                                     u02::kIdleKeys, false, &kU02SunChannel);
+    s.u02_mana = 4;  // the crackle IS the lightning candidate
+    s.u02_smear = 0;
+    s.u02_mist = true;  // Wave E: the builder no longer gives it; legacy keeps it
     u02_backdrop(s, 58, 96, 132);
     s.note = "the ADDLIGHTNING variant: the conduit crackles continuously";
+    // ...and without the Wave E mote/antenna-surface fade, which otherwise
+    // moves its surge motes (found: 0x8D4A8F80 vs Wave D 0xEDDC80D7).
+    const bool fade_was = u02::g_u02_mote_surface_fade;
+    u02::g_u02_mote_surface_fade = false;
     rc |= render_scene(s);
+    u02::g_u02_mote_surface_fade = fade_was;
   }
   // Pass 2 (Direction 2 §3): THE MANA MENU — six named candidates, each a
   // short clip on the reworked hover, for the OWNER to pick from by eye.
@@ -8937,6 +9132,9 @@ int main(int argc, char** argv) {
                                        u02::kIdleKeys, false, &kU02SunHover);
       s.u02_mana = m.cand;
       s.u02_smear = 0;
+      // Wave E: archived (version-17 generation), bytes immutable -- keep the
+      // mist it was rendered with, explicitly, now the builder no longer gives it.
+      s.u02_mist = true;
       s.note = "mana-menu candidate: the owner picks with his eyes";
       rc |= render_scene(s);
     }
@@ -8954,6 +9152,7 @@ int main(int argc, char** argv) {
     s.name = nm.c_str();
     s.u02_mana = u02::lab::kLabCandBase + vi;
     s.u02_smear = 0;  // Direction 12 supersedes every experimental smear rung
+    s.u02_mist = true;  // Wave E: archived lab keeps its rendered mist explicitly
     // the clip TRAVELS (beat 2), so it stages on flat ground -- the reel
     // snaps the root to one terrain column and at bump_ext 6 the mound rises
     // under lateral travel and the creature walks into the hillside (shipped
@@ -8967,6 +9166,7 @@ int main(int argc, char** argv) {
   if (wanted("manafold-trio")) {
     SceneSubject s = subject_u02_clip(2, "manafold-trio", u02::kChannelKeys, false, &kU02SunChannel);
     s.u02_trio = true;
+    s.u02_mist = true;  // Wave E: not live; keeps its prior inherited mist explicitly
     s.cam_k = 170000;  // pull back: three conduits share the frame
     s.note = "THREE phase-offset conduits, one scene sun + bloom, all effects";
     rc |= render_scene(s);
