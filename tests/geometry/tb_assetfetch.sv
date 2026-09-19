@@ -21,6 +21,8 @@ module tb_assetfetch
     input  logic [15:0] m_src_id,
     input  logic [1:0]  m_visible_mask,
     input  logic [15:0] m_material_id,
+  // R29: the draw's own state, carried beside the meshlet.
+  input  logic [71:0] m_side,
     input  logic [2:0]  m_client,
 
     // ---- the guard port, flat ----------------------------------------------
@@ -46,6 +48,7 @@ module tb_assetfetch
     output logic [15:0] s_src_id,
     output logic [1:0]  s_visible_mask,
     output logic [15:0] s_material_id,
+  output logic [71:0] s_side,
     input  logic        release_pulse,
 
     // ---- index service ------------------------------------------------------
@@ -103,6 +106,7 @@ module tb_assetfetch
       .m_src_id_i         (m_src_id),
       .m_visible_mask_i   (m_visible_mask),
       .m_material_id_i    (m_material_id),
+      .m_side_i           (m_side),
       .m_client_i         (zhao_client_e'(m_client)),
 
       .guard_req_o  (req),
@@ -118,6 +122,7 @@ module tb_assetfetch
       .s_src_id_o         (s_src_id),
       .s_visible_mask_o   (s_visible_mask),
       .s_material_id_o    (s_material_id),
+      .s_side_o           (s_side),
       .release_i          (release_pulse),
 
       .ix_req_i   (ix_req),

@@ -648,6 +648,9 @@ module tb_zhao_shell (
   logic [31:0]       mf_r_voff, mf_r_ioff;
   logic [7:0]        mf_r_vcount, mf_r_tcount, mf_r_flags;
   logic [15:0]       mf_r_material, mf_r_instance;
+  // R29: the draw-state sideband. This bench issues no DrawForm, so it is
+  // zero here and is carried only to keep the two fetchers' ports honest.
+  logic [71:0]       mf_r_side;
   logic [1:0]        mf_r_vis;
   /* verilator lint_off UNUSEDSIGNAL */
   logic signed [31:0] mf_cull_cx, mf_cull_cy, mf_cull_cz, mf_cull_radius;
@@ -756,6 +759,9 @@ module tb_zhao_shell (
       .j_instance_id_i(16'h1234), .j_desc_addr_i(27'h40),
       .j_format_i(8'd1), .j_generation_i(16'd1), .j_active_mask_i(2'b01),
       .j_xform_i(mf_xform), .j_client_i(zhao_client_e'(0)),
+      // R29: this bench's offsets are already POOL-relative, so the page base
+      // it would add is zero, and it carries no draw state.
+      .j_stream_base_i(32'd0), .j_side_i(72'd0),
       .guard_req_o(mf_guard_req), .guard_rsp_i(mf_guard_rsp),
       .beat_valid_i(mf_beat_valid), .beat_data_i(mf_beat_data),
       .beat_last_i(mf_beat_last), .crc_ok_i(mf_crc_ok_i),
@@ -769,6 +775,7 @@ module tb_zhao_shell (
       .r_vertex_offset_o(mf_r_voff), .r_index_offset_o(mf_r_ioff),
       .r_vertex_count_o(mf_r_vcount), .r_triangle_count_o(mf_r_tcount),
       .r_material_id_o(mf_r_material), .r_flags_o(mf_r_flags),
+      .r_side_o(mf_r_side),
       // The evidence ports. Connected rather than left dangling: a block whose
       // counters are unconnected still elaborates, and the missing-pin warning
       // is the only thing that says the trace nobody is reading was never
@@ -1084,13 +1091,14 @@ module tb_zhao_shell (
       .m_src_id_i(16'd0),
       .m_visible_mask_i(2'b01),
       .m_material_id_i(16'd0),
+      .m_side_i(72'd0),
       .m_client_i(realmem_mode_i ? ZHAO_CLIENT_ENGINE1 : zhao_client_e'(0)),
       .guard_req_o(af_guard_req), .guard_rsp_i(af_guard_rsp),
       .beat_valid_i(af_beat_valid), .beat_data_i(af_beat_data),
       .beat_last_i(af_beat_last),
       .s_valid_o(af_s_valid), .s_ready_i(1'b1),
       .s_vertex_count_o(), .s_triangle_count_o(), .s_src_id_o(),
-      .s_visible_mask_o(), .s_material_id_o(),
+      .s_visible_mask_o(), .s_material_id_o(), .s_side_o(),
       .release_i(1'b0),
       // TREAD 9: the index port is wired. `ix_req_i` is gated on the mode so
       // tread 8's behaviour is unchanged when it is off.

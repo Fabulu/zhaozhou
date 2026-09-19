@@ -113,10 +113,15 @@ module tb_geom_mem_adapter
       // evidence that A and B behave exactly as before the widening.
       .c_req_i('0), .c_rsp_o(), .c_beat_valid_o(), .c_beat_data_o(),
       .c_beat_last_o(),
+      // Requester D (GEOM.DRAWJOB, 2026-09-20, R29) held IDLE for the same
+      // reason: this bench is the evidence that A and B did not move.
+      .d_req_i('0), .d_rsp_o(), .d_beat_valid_o(), .d_beat_data_o(),
+      .d_beat_last_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),
-      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .denied_o(denied),
+      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .jobs_d_o(),
+      .denied_o(denied),
       .contention_o(contention),
       .err_short_o(err_short), .err_long_o(err_long), .err_unowned_o(err_unowned)
   );

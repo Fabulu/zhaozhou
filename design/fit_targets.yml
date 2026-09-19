@@ -2138,6 +2138,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_cull.sv
       - fpga/rtl/geometry/zhao_geom_depthquant.sv
       - fpga/rtl/geometry/zhao_geom_lod.sv
+      - fpga/rtl/geometry/zhao_geom_drawjob.sv
       - fpga/rtl/geometry/zhao_geom_loom.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv
@@ -2678,6 +2679,15 @@ targets:
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv
+      # Added 2026-09-20 (geom3 packet): GEOM.DRAWJOB and GEOM.LOOM, owner
+      # ruling R29. The draw becomes jobs here -- entries I36 and I41 close
+      # with them, and GEOM.LOOM writes the instance transform palette the
+      # job's xform[12] is read from. DRAWJOB's CRC is zhao_geom_desc_crc,
+      # the line above; LOOM's multiplier is zhao_geom_mat3x4_mul and its
+      # sine zhao_field_sin, both already in this list (the multiplier comes
+      # with GEOM.POSE's decoder further down, and one entry is enough).
+      - fpga/rtl/geometry/zhao_geom_drawjob.sv
+      - fpga/rtl/geometry/zhao_geom_loom.sv
       # Added 2026-09-19 (geom packet): GEOM.REPLAY and the GEOM.DEPTHQUANT
       # lanes inside it. Entries I11/I38 and GEOM.DEPTHQUANT close with it; its
       # reciprocal is zhao_raster_rcp24_v4, already in this list.

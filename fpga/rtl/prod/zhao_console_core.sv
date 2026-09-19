@@ -1557,113 +1557,6 @@
 //      `terr_ps_lattices_o` at 2, is the EXPECTED reading of an unretired
 //      cache and not a defect in the chain.
 //
-// I24. GEOM.CLIP's CULL MODE (`geom_clip_cull_mode_i`) -- BOUNDARY, NARROWED
-//      2026-09-19 (geom packet). The TRIANGLE and its three ATTRIBUTE PACKETS
-//      are CLOSED: GEOM.REPLAY presents the corners and behind bits straight
-//      out of the arena, and the packet is built at section 11 from GEOM.VATTR's
-//      answer: invw24 (slot 0, GEOM.DEPTHQUANT's, streamed per landed vertex)
-//      and slots 1..6 (entry I46, closed 2026-09-19). The bench's triangle door and
-//      its sixteen hand-placed triangles are GONE. The cull mode is per-draw
-//      RASTER STATE; the descriptor's raster word is I39's and has no producer,
-//      so this port stays, and its reset value NONE is `zhao_geom_clip`'s
-//      double-sided law, not a guess.
-//      NOT a boundary, and listed here so nobody re-opens it: the SCISSOR
-//      (`vp_x0/vp_y0/vp_w/vp_h`) is REAL. It is driven from the same
-//      mode-derived pass geometry the compositor uses (GLUE 1 below), because
-//      `zhao_geom_clip`'s own header defines the rectangle as "a canvas in
-//      Z60/Storm, one 256x192 view block in Duo -- video_rules.md 3.1", which
-//      is that value and not a second opinion about it.
-//
-//      THE PARTICLE DRAW ENDPOINTS ARE NOW COMPOSED, and the paragraph that
-//      refused them is kept below with its errors marked, because three of its
-//      four refusals were right for the wrong reason and the fourth was simply
-//      wrong. `zhao_part_expand`'s triangle and `zhao_part_soft`'s span now
-//      leave this module as `part_exp_*` / `part_sft_*` -- so what is still a
-//      BOUNDARY here is only their CUSTOMER, which is the same absent GEOM
-//      replay/setup path I11, I12 and I13 name. The producer exists.
-//
-//      WHAT IT SAID: "NOTHING IN THIS CORE PROJECTS A PARTICLE.
-//      `zhao_proj_subsystem` has exactly two client ports and both are live
-//      (GEOM on A, TERRAIN on B), so a particle client is a third port and that
-//      is an owner ruling, not wiring. The particle ring composed above carries
-//      particle128 WORLD records and stops there."
-//
-//      WHY THAT WAS TOO STRONG. A third CLIENT does not have to be a third
-//      PORT. `fpga/rtl/particles/zhao_part_project.sv` (2026-09-19) sits IN
-//      FRONT OF client A and time-multiplexes it -- geometry straight through,
-//      particles round-robin on the cycles geometry does not want, results
-//      demultiplexed by the rider's top bit, which `zhao_geom_proj_lane`'s own
-//      zero padding leaves free (ARENA_W 3 + INDEX_W 12 of GEOM_PAY_A_W 16).
-//      Nothing inside `zhao_project_service`, `zhao_project_core` or
-//      `zhao_proj_subsystem` changed by one character, so no verified block's
-//      starvation law was touched and the owner ruling the entry called for is
-//      not needed. The block contains NO projection arithmetic: a second
-//      `zhao_project_core` would be 6,199 ALM and 33 DSP, and undoing the
-//      deduplication campaign to draw a sprite is the trade that was actually
-//      being refused. The composed demand is client A's own plus about 3.9% of
-//      the frame at SLOTS = 40, and about 17.7% at the shipping SLOTS = 8 --
-//      the knob and its arithmetic are in that block's header.
-//
-//      And the ring no longer stops: PART.PROJECT takes a THIRD BRANCH of the
-//      fork on PART.COLLIDE's output (glue 3), so the records it projects are
-//      the ring's own and no new record boundary was invented for them.
-//
-//      WHAT IT SAID: "`zhao_part_expand` IS ADDITIONALLY UNSAFE TO ADOPT
-//      TODAY, by its own testimony... converting a world radius to a screen
-//      half-side is a projection."
-//
-//      WHY THAT WAS WRONG, and this is the instructive one. The conversion was
-//      ALREADY RATIFIED and the refusal was reading a stale warning.
-//      `reference/include/zref/zref_particle.hpp` carries a correction dated
-//      2026-09-06 whose entire purpose is to say so: "THE PROJECTION IS NOT THE
-//      MISSING PIECE. Turning a world radius into a screen half-extent is
-//      already implemented, already tested, and already has its trap written
-//      down -- `zref::render::draw_form_marker`", whose world-space branch is
-//      `half_sub = rescale_s32(fx_mul(size_fx16, c.s.d), 8)` at projection
-//      scale 1. PART.PROJECT implements that expression bit for bit and hands
-//      `zhao_part_expand` a SCREEN size, which is exactly the input its banner
-//      asks for -- so `size << 4` is correct rather than superseded and the
-//      block is composed UNCHANGED. What the reference says IS missing is
-//      `base_radius_fx16`, a per-species content decision; it arrives here as
-//      the declared owner port `part_prj_base_radius_i` at the end of the
-//      port list.
-//
-//      This is the "read the SIBLING contract" lesson with the roles reversed:
-//      the refusal quoted `zhao_part_expand`'s header, which was accurate about
-//      itself, and never read the reference file that had already withdrawn the
-//      warning it was leaning on. An instruction is not delivered until it is
-//      read, and a REFUSAL is an instruction too.
-//
-//      WHAT IT SAID about `zhao_part_ladder`: two refusals. The first --
-//      "`p_size_i` is a PROJECTED size with the same absent producer" -- is
-//      closed by the above. THE SECOND STANDS AND IS NOT REPAIRED HERE: its
-//      `p_prev_rung_i`/`p_hold_i` are per-(particle, camera) state its contract
-//      explicitly keeps OFF chip, and I23's DDR is still absent. What changed
-//      is that the state is now PAIRED: it rides PART.PROJECT's slot store with
-//      its particle and comes back beside the rung that consumed it, on
-//      `part_rung_*`. Where it comes FROM is the declared boundary
-//      `part_prj_prev_rung_i`/`part_prj_hold_i`/`part_prj_first_i`, which is a
-//      narrower gap than "nothing projects a particle" and a different one.
-//
-//      AND THE LEDGER'S EDGE HERE IS STILL NOT THE RTL'S, exactly as written.
-//      `design/blocks.yml` gives PART.EXPAND and PART.SOFT
-//      `upstream: [PART.LADDER]`; the ladder emits a RUNG and neither block has
-//      a port that takes one. That is why the composition below routes BY the
-//      rung with a stateless demux rather than wiring the ladder's output into
-//      a port that does not exist. The declared edge is a ROUTING fact, and it
-//      is implemented as one. (The same is still true of CMD.DECODER ->
-//      DEBUG.TRACE: the decoder emits record headers, the trace ring takes
-//      {stage, tile, primitive, pixel, expected_fx, actual_fx}. Those are
-//      different things.)
-//
-//      TWO OF THE SIX RUNGS HAVE AN ENDPOINT IN THIS TREE. SHARD -> PART.EXPAND
-//      and SPRITE -> PART.SOFT. MESHLET, RIBBON, GLINT and CULLED have no block
-//      built, so a particle on one of those rungs leaves only on
-//      `part_rung_*` -- it is not silently dropped, it is emitted with its rung
-//      and nothing here claims to draw it. Do not "fix" that by routing GLINT
-//      into PART.SOFT: a glint is its own representation on the frozen ladder
-//      and inventing the equivalence in a composer is the hidden adapter this
-//      file must not contain.
 //
 // I25. GEOM.VDECODE's format selector (`v_format_i`) -- NOT a tie-off: the
 //      core assigns it, in the same standing as I9. There is exactly ONE
@@ -2040,118 +1933,7 @@
 //      block's contract asks for ("once per patch per frame, before the first
 //      record").
 //
-// I36. GEOM.MESHFETCH's DRAW JOB (`geom_mf_job_*`) -- BOUNDARY. NEW
-//      2026-09-19, opened by composing the geometry asset path (connected
-//      item 11), and it is one of I23's three successors.
 //
-//      CORRECTED 2026-09-19, TWICE OVER, AND BOTH CORRECTIONS MATTER. This
-//      entry used to read "THE ABSENT OWNER IS CMD.SCHEDULER, the same one
-//      I14, I30 and I33 name ... and there is no opcode in
-//      `spec/commands.zidl` this file could lower into one without choosing
-//      the layout itself." Neither half survived being checked.
-//
-//      CMD.SCHEDULER IS NOT ABSENT. SEARCHED:
-//      `fpga/rtl/command/zhao_cmd_scheduler.sv` has been committed since
-//      2026-08-16 (e60ba85a), carries a contract
-//      (`design/contracts/CMD.SCHEDULER.md`), a directed suite and a formal
-//      proof (`tests/formal/cmd_scheduler_slot_fsm.sby`), and is
-//      INSTANTIATED as `u_sched` at `zhao_shell_top_v2.sv:725` -- inside the
-//      very shell this module instantiates as `u_shell`. It is running in
-//      this composition right now. It is ALSO the wrong owner: by its own
-//      first line it is "the 3-slot frame ownership FSM", and its dispatch
-//      sinks are DEBUG.FRAMEBLIT, INPUT.RUMBLE and VIDEO.MODE. I30 already
-//      took this correction for SurfaceStamp; the other three entries had
-//      not, and "absent" was doing load-bearing work in all of them.
-//
-//      THE OPCODE EXISTS AND IS RATIFIED. `DrawForm 0x0300` is
-//      `implemented` in `spec/commands.zidl`, 32 bytes, and it carries
-//      `handle32[form]`, `handle32[material_set]`, `handle32[transform]`,
-//      `viewport_mask`, `semantic_weight` and `flags`, with every offset in
-//      `zhao_abi_pkg.sv`. `DrawPopulation 0x0301` and `DrawProcedural
-//      0x0302` are `implemented` beside it. So the DISPATCH half is closed:
-//      `zhao_cmd_exec`'s draw arm (section 7c) lowers DrawForm whole, and
-//      entry I41 is where that dispatch leaves this module.
-//
-//      WHAT IS STILL OPEN IS A RULING, NOT A WIRE, and it is three of the
-//      six job fields. The job is {instance_id, desc_addr, format,
-//      generation, active_mask, xform[12]}. DrawForm ratifies
-//      `active_mask` (viewport_mask) and `generation` (the handle's own
-//      byte). It does not ratify the other three, and nothing else does
-//      either:
-//
-//        * `j_desc_addr_i` needs handle32{index:24} -> a 64-byte aligned
-//          pool address. SEARCHED: `spec/memory_rules.md` 5f ratifies the
-//          REGION (`ZHAO_RENDER_ASSET_BASE` = 0x06A0_0000, 22 MiB, ENGINE1,
-//          read-only) and then says in as many words "Not decided: the
-//          pool's internal layout (descriptors vs index streams vs vertex
-//          records) ... how it is carved up is the asset fetcher's business
-//          and is still open." `design/contracts/GEOM.ASSETFETCH.md`
-//          repeats it. There is no `BASE + index*64` law to apply, and
-//          writing one here would be this file choosing a memory layout the
-//          ABI deliberately declines to define -- the same refusal I33 and
-//          I7 carry.
-//        * `j_format_i` is the format this reader expects, compared against
-//          the descriptor's own byte 0. No command carries it and no
-//          registry defines it; it waits on the same ruling.
-//        * `j_xform_i[12]` needs the instance-transform palette. SEARCHED:
-//          the resolver of this shape is
-//          `reference/include/zref/zref_material_resolve.hpp`'s
-//          `zref::material::Resolver`, whose RTL is MATERIAL.RESOLVE. THE
-//          CITATION THAT STOOD HERE IS A PHANTOM: it read "whose contract's
-//          line 4 reads 'RTL: not built'", and that line now reads
-//          "RTL: `fpga/rtl/texture/zhao_material_resolve.sv` -- BUILT
-//          2026-09-19". The refusal survives on its other half -- the block is
-//          BUILT AND NOT COMPOSED, blocked on `spec/memory_rules.md` 5f
-//          (entry I20) -- so the port stays, for a reason that is true.
-//
-//      SO THE JOB PORT STAYS, AND IT IS NOT HALF-DRIVEN. A job is ATOMIC --
-//      six fields in one handshake -- so driving the two ratified fields
-//      from CMD.EXEC while the other four came from this module's edge would
-//      not be a half closure. It would fetch a descriptor at whatever
-//      address the boundary happened to be holding, with `j_valid_i` timed
-//      by a command and `j_desc_addr_i` timed by nothing, which is the
-//      join-between-two-things-that-move-independently fault entry I35
-//      recorded (CLOSED and DELETED 2026-09-19 -- zhao_terrain_hdrread is
-//      the header reader it asked for) and I39 records still.
-//
-//      `j_xform_i` IS RESOLVED BY THE CALLER BY CONTRACT, which is why it is
-//      a port and not a lookup here: the block's own comment says "the
-//      contract's job packet names `instance_transform_id`. Resolving an id
-//      to a matrix is a PALETTE LOOKUP, and this block does not own it".
-//      GEOM.POSE's palette is composed above and holds BONE matrices for a
-//      creature, which is a different table from an instance transform;
-//      reading one as the other would be the hidden adapter this file
-//      refuses.
-//
-//      NOT part of this gap: `j_client_i`. See I40.
-//
-// I39. GEOM.ASSEMBLE's RASTER WORD (`geom_asm_raster_state_i`) -- BOUNDARY,
-//      NARROWED 2026-09-19 (geom packet). Three of its four parts CLOSED:
-//        * THE VERTEX OFFSET is the named constant `GEOM_ASM_VOFF_C` = 0, and
-//          that is the architecture, not an invented value: GEOM.GROUP_SEQ fills
-//          vertex i of a meshlet at arena index i in EVERY view, so ids are
-//          ARENA-LOCAL and the per-view base is the arena HANDLE, which
-//          GEOM.REPLAY holds. The objection that stood here -- "the one that
-//          would produce the first is the arena allocator inside GEOM.PARAMBUF"
-//          -- described the external-SDRAM arena; the on-chip arena this core
-//          actually composes allocates per meshlet.
-//        * THE MATERIAL is carried by GEOM.ASSETFETCH beside its meshlet
-//          (`m_material_id_i` -> `s_material_id_o`, captured with the counts in
-//          one handshake) -- exactly the fix this entry asked for: "a field on
-//          GEOM.ASSETFETCH's `s_*` port". It rides to GEOM.REPLAY's output and
-//          its consumer there is MATERIAL.RESOLVE's request, entry I20.
-//        * THE TRIANGLE OUTPUT goes to GEOM.REPLAY.
-//      What stays is the descriptor's RASTER WORD, and the cull mode (I24) is
-//      waiting on the same word. Its LAYOUT is RATIFIED since 2026-09-19 (owner
-//      ruling R28, geom2): raster_state[1:0] = the draw's cull mode from
-//      DrawForm.flags[3:2], [31:2] = MaterialRecord.raster_state[31:2]
-//      (spec/commands.zidl, design/contracts/GEOM.PARAMBUF.md,
-//      `zref::raster_state`). What it still lacks is a PATH: the draw's flags
-//      leave CMD.EXEC on `cmd_draw_*` (I41) but reach no meshlet until a draw
-//      becomes a GEOM.MESHFETCH job (I36, owner ruling R29). Wiring
-//      `cmd_draw_flags_o` here before that would pair meshlet N's triangles
-//      with draw M's cull mode -- the drift this entry refuses for the
-//      material. So I39 and I24 stay open, now for ONE reason, and it is I36.
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
 //      the core assigns both, in the same standing as I9 and I25.
@@ -2181,54 +1963,6 @@
 //      something other than the instance that caused the fetch, the owner is
 //      whoever owns the draw and this assignment is wrong.
 //
-// I41. CMD.EXEC's DRAW DISPATCH (`cmd_draw_*`) -- BOUNDARY. NEW 2026-09-19,
-//      and it is a gap this packet OPENED DELIBERATELY, by building a
-//      producer for a ratified command whose consumer needs a ruling. That is
-//      worth saying plainly, because the register's count goes UP by one here
-//      and the trade is on purpose.
-//
-//      WHAT IT IS. `DrawForm 0x0300`, whole: the three handle32s (`form`,
-//      `material_set`, `transform`), `viewport_mask`, `semantic_weight`,
-//      `flags`, and the record header's `source_id`. Every offset comes from
-//      `zhao_abi_pkg.sv` and nothing is dropped. Before this packet the
-//      opcode arrived at the console and died: `zhao_cmd_scheduler.sv:384`
-//      says "all other opcodes: counted, no dispatch (Phase-2 no-op sinks)",
-//      and CMD.EXEC counted it on `unsupported_o`. It now leaves the module
-//      as a real, observable stream.
-//
-//      WHY IT IS A PORT AND NOT A WIRE INTO GEOM.MESHFETCH. Entry I36 is the
-//      long answer and it is a MISSING RULING: `spec/memory_rules.md` 5f
-//      leaves the render asset pool's internal layout undecided, so there is
-//      no law that turns `form`'s 24-bit index into a descriptor address, and
-//      MATERIAL.RESOLVE -- the resolver that would turn `transform` into a
-//      3x4 -- is BUILT and NOT COMPOSED, for the ruling reason entry I20 now
-//      states (this line said "has no RTL" until 2026-09-19; it is the same
-//      conclusion reached from a fact that stopped being true).
-//      The handles therefore leave as HANDLES, unresolved,
-//      which is the honest shape: a consumer that needs the pool layout gets
-//      the handle and the ruling it is waiting for, rather than an address
-//      this file made up.
-//
-//      THE DATAPATH BEHIND IT SURVIVES SYNTHESIS, stated positively and
-//      deliberately so. `cmd_draw_ready_i` is an INPUT, so the ring, the
-//      commit phase and the whole draw arm are live logic that no constant
-//      folds away; a consumer that refuses holds the executor in its commit,
-//      which `tests/command/cmd_exec_directed.cpp` case 12 drives under three
-//      ready patterns.
-//
-//      THE WORDING OF THAT PARAGRAPH IS LOAD-BEARING and this is the second
-//      time this file has paid for it. `completion_register.py` HARD-FAILS on
-//      the phrase one would naturally reach for there, because an entry that
-//      denies being settled is how an open gap gets read as a closed one --
-//      I35 recorded the same trap from the other direction, where writing the
-//      phrase marked a live gap CLOSED (that entry is now genuinely closed and
-//      deleted, which is why this citation is in the past tense). So the denial does not appear here
-//      and the positive statement is used instead.
-//
-//      THE COUNTERS BESIDE IT HAVE ALL BEEN FIRED, with legal stimulus and no
-//      mutant: `cmd_exec_draws_o` (case 9), `cmd_exec_draw_overflow_o` (case
-//      10, DRAW_Q+1 forms in one packet) and `cmd_exec_draw_src_truncated_o`
-//      (case 11). None is asserted zero here.
 //
 // I44. TERRAIN.MIPGEN's COARSE-HEIGHT PLANES (`terr_mg_m17_*`,
 //      `terr_mg_m9_*`) -- BOUNDARY. NEW 2026-09-19, opened by composing the
@@ -2379,17 +2113,21 @@
 //      MATERIAL_SET publications (5f.1's row) and its FETCH is requester C of
 //      the ENGINE1 adapter, with the new denied-fetch input. Both real.
 //
-//      THE ONE SEAM, and it is not GEOM.REPLAY. Replay has landed and emits a
-//      per-triangle `o_material_o` -- the material_id, correctly joined to its
-//      triangle. What no block in this core carries is the triangle's
-//      MATERIAL_SET HANDLE: it is DrawForm's `material_set`, which leaves
-//      through CMD.EXEC's draw dispatch (entry I41, a boundary), while the
-//      triangles that belong to that draw enter through GEOM.MESHFETCH's job
-//      port (entry I36, a boundary) whose six fields have no handle among
-//      them. Pairing `cmd_draw_material_set_o` with replay's triangles here
-//      would be the join I20 seam 3 and I39 refuse by name: two live wires,
-//      no owner, and meshlet N drawn with draw M's materials. The handle has
-//      to ride the job that produces the triangles, which is I36's ruling.
+//      THE SEAM THIS ENTRY DESCRIBED IS HALF GONE, 2026-09-20, and the half
+//      that went is the one it called impossible. It read: "What no block in
+//      this core carries is the triangle's MATERIAL_SET HANDLE ... The handle
+//      has to ride the job that produces the triangles, which is I36's
+//      ruling." I36 was ruled (R29) and the handle now DOES ride: GEOM.DRAWJOB
+//      puts the draw's `material_set` in the job's sideband, GEOM.MESHFETCH
+//      and GEOM.ASSETFETCH carry it beside the meshlet, and it is offered on
+//      `af_s_side[63:32]` in the SAME handshake as `af_s_material_id` -- the
+//      two halves of this block's request, joined by construction rather than
+//      by timing. Nothing here pairs two live wires any more.
+//
+//      WHAT IS STILL OPEN is the REQUEST's issue point and the RESPONSE, which
+//      is this entry and is the texture lane's: a request must be issued per
+//      meshlet (or per triangle) and its answer joined back to the triangles
+//      that asked, and this packet did not build that and will not pretend to.
 //
 //      AND BEHIND IT, ONE MORE THING, NAMED SO THE NEXT READER COUNTS IT:
 //      (a) the response feeds `tri_flat_request_i` together with the binding
@@ -2404,6 +2142,47 @@
 //      fetches the 32-byte record through requester C and the guard, and
 //      resolves it (`mat_fetch_denied_o` = 0). The denied path stays live
 //      and is fired by the block's own bench (case R20).
+//
+// I50. GEOM.LOOM's NODE STREAM and CAMERA BASIS (`geom_loom_*`) -- BOUNDARY.
+//      NEW 2026-09-20 (geom3 packet), and like I41 before it this is a gap
+//      OPENED DELIBERATELY: the register goes up by one here and the trade is
+//      on purpose, because it buys four.
+//
+//      WHY GEOM.LOOM IS COMPOSED AT ALL. Owner ruling R29 ratified the draw
+//      job's `xform[12]` as "the instance transform palette row named by the
+//      transform handle", and the palette's writer has to be a real producer of
+//      instance transforms. There is exactly one in this tree and it is this
+//      block: `design/contracts/GEOM.LOOM.md`'s purpose line is "producing
+//      instance transforms" and its output is "{node_index, transform[12]} --
+//      a 3x4 affine, row-major, fx16 S15.16". Composing anything else, or
+//      taking the palette's rows from a port, would have been a second opinion
+//      about where a world transform comes from.
+//
+//      WHY ITS INPUT IS A BOUNDARY AND NOT A MISSING BLOCK, which is the part
+//      worth reading before anyone goes looking for the producer. The owner
+//      ruling of 2026-08-31 6.4 put it outside this console IN TERMS: "The
+//      ARM/compiler supplies a parent-before-child topologically sorted
+//      stream. Loom only composes transforms ... Keep-world reparenting is
+//      computed on the ARM between frames." The contract calls that deletion
+//      "what makes this block buildable". So the stream is host state, like the
+//      frame ring itself, and what is missing is not a block but a CARRIER --
+//      the same shape as I42's field program loader, and its recommendation is
+//      the same: a doorbell on the R14/R43 pattern (SW.STREAM stages the sorted
+//      stream, a CSR mailbox hands over base/count, hardware acknowledges).
+//      That is an ABI addition and an owner call, and it is written up in the
+//      geom3 findings rather than decided here.
+//
+//      `cam_basis_i` RIDES THE SAME ENTRY because it has the same owner and the
+//      same absence. It is the frame's camera 3x3 for BILLBOARD nodes, and it
+//      cannot be derived from anything this console holds: `SetView` carries a
+//      combined view-PROJECTION matrix, and recovering a rotation basis from it
+//      needs the inversion the ruling excludes by name.
+//
+//      WHAT IS NOT PART OF THIS GAP: the palette itself, its writer and its
+//      reader are all real and composed, and `geom_dj_pal_writes_o` counts the
+//      rows GEOM.LOOM lands in it. A draw naming a row nobody wrote is REFUSED
+//      and counted (`geom_dj_refused_xform_o`), never drawn at the identity --
+//      an unset matrix is not a pose, it is an unset matrix.
 //
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -3284,15 +3063,59 @@ module zhao_console_core
   // port's real producer. What follows is what the path still asks of the
   // outside, and each group is one numbered entry in the header.
 
-  // ---- I36: GEOM.MESHFETCH's DRAW JOB -------------------------------------
-  input  logic                    geom_mf_job_valid_i,
-  output logic                    geom_mf_job_ready_o,
-  input  logic [15:0]             geom_mf_job_instance_id_i,
-  input  logic [26:0]             geom_mf_job_desc_addr_i,
-  input  logic [7:0]              geom_mf_job_format_i,
-  input  logic [15:0]             geom_mf_job_generation_i,
-  input  logic [1:0]              geom_mf_job_active_mask_i,
-  input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
+  // ---- I36 IS CLOSED: GEOM.DRAWJOB builds the job (owner ruling R29) -------
+  // The nine job ports that stood here are GONE. `zhao_geom_drawjob` resolves
+  // the ratified DrawForm -- the MESH_STREAM residency row, that page's frozen
+  // header, and the instance transform palette GEOM.LOOM writes -- and drives
+  // GEOM.MESHFETCH directly. What leaves is its evidence, one port per REASON,
+  // because the nine refusals have nine different diagnoses.
+  output logic [31:0]             geom_dj_draws_o,
+  output logic [31:0]             geom_dj_jobs_o,
+  output logic [31:0]             geom_dj_masked_o,
+  output logic [31:0]             geom_dj_empty_o,
+  output logic [31:0]             geom_dj_pal_writes_o,
+  output logic [31:0]             geom_dj_pal_dropped_o,
+  output logic [31:0]             geom_dj_refused_cull_o,
+  output logic [31:0]             geom_dj_refused_resident_o,
+  output logic [31:0]             geom_dj_refused_stale_o,
+  output logic [31:0]             geom_dj_refused_xform_o,
+  output logic [31:0]             geom_dj_refused_denied_o,
+  output logic [31:0]             geom_dj_refused_format_o,
+  output logic [31:0]             geom_dj_refused_crc_o,
+  output logic [31:0]             geom_dj_refused_reserved_o,
+  output logic [31:0]             geom_dj_refused_layout_o,
+  output logic [31:0]             geom_dj_hdr_reads_o,
+  output logic [31:0]             geom_dj_hdr_crc_fail_o,
+  output logic [31:0]             geom_dj_hdr_framing_o,
+
+  // ---- I50: GEOM.LOOM's NODE STREAM and CAMERA BASIS -- BOUNDARY ----------
+  // NEW 2026-09-20, and it is a gap this packet OPENED DELIBERATELY by
+  // composing GEOM.LOOM for R29's transform palette. The owner ruling of
+  // 2026-08-31 6.4 puts the stream's producer OUTSIDE this console on purpose:
+  // "The ARM/compiler supplies a parent-before-child topologically sorted
+  // stream." There is no command that carries one and no block that builds
+  // one, so the stream arrives here, at the edge, whole -- see the header.
+  input  logic                    geom_loom_valid_i,
+  output logic                    geom_loom_ready_o,
+  input  logic [9:0]              geom_loom_node_index_i,
+  input  logic [9:0]              geom_loom_parent_index_i,
+  input  logic [3:0]              geom_loom_kind_i,
+  input  logic signed [31:0]      geom_loom_param_i [0:11],
+  input  logic [15:0]             geom_loom_angle_i,
+  input  logic [1:0]              geom_loom_axis_i,
+  input  logic                    geom_loom_bodypatch_i,
+  input  logic [15:0]             geom_loom_src_id_i,
+  input  logic                    geom_loom_first_i,
+  input  logic                    geom_loom_last_i,
+  input  logic signed [31:0]      geom_loom_cam_basis_i [0:8],
+  output logic [31:0]             geom_loom_nodes_o,
+  output logic [31:0]             geom_loom_streams_o,
+  output logic [31:0]             geom_loom_refused_sorted_o,
+  output logic [31:0]             geom_loom_refused_parent_o,
+  output logic [31:0]             geom_loom_refused_overflow_o,
+  output logic [31:0]             geom_loom_refused_kind_o,
+  output logic [31:0]             geom_loom_refused_shear_o,
+  output logic [31:0]             geom_loom_refused_framing_o,
 
   // ---- I37 IS CLOSED: the descriptor's CRC verdict is computed inside ------
   // `u_geom_desc_crc` walks the fold over the returning beats. What leaves is
@@ -3304,25 +3127,17 @@ module zhao_console_core
 
   // ---- I38 IS CLOSED: GEOM.REPLAY releases the meshlet, by proof ---------
 
-  // ---- I39, NARROWED: GEOM.ASSEMBLE's RASTER STATE only -------------------
-  // The vertex offset is the named constant 0 (arena-local ids), the material
-  // is carried by GEOM.ASSETFETCH beside its meshlet, and the TriangleDescriptor
-  // goes to GEOM.REPLAY. The descriptor's raster word has no producer anywhere.
-  input  logic [31:0]              geom_asm_raster_state_i,
+  // ---- I39 IS CLOSED: the raster word RIDES THE MESHLET -------------------
+  // The word is built by GEOM.DRAWJOB from the draw's own flags (R28's cull
+  // mode) and carried in the JOB'S handshake through GEOM.MESHFETCH and
+  // GEOM.ASSETFETCH to GEOM.ASSEMBLE, so a meshlet's triangles cannot take
+  // another draw's state. The port that stood here is GONE.
 
-  // ---- I41: CMD.EXEC's DRAW DISPATCH, the ratified DrawForm ---------------
-  // NEW 2026-09-19. DrawForm 0x0300 now reaches the console; what has no
-  // consumer INSIDE this module is the resolver that would turn its three
-  // handles into GEOM.MESHFETCH's job. See the header entry.
-  output logic                     cmd_draw_valid_o,
-  input  logic                     cmd_draw_ready_i,
-  output logic [31:0]              cmd_draw_form_o,
-  output logic [31:0]              cmd_draw_material_set_o,
-  output logic [31:0]              cmd_draw_transform_o,
-  output logic [ 7:0]              cmd_draw_viewport_mask_o,
-  output logic [ 7:0]              cmd_draw_semantic_weight_o,
-  output logic [15:0]              cmd_draw_flags_o,
-  output logic [15:0]              cmd_draw_src_id_o,
+  // ---- I41 IS CLOSED: the draw dispatch has a consumer INSIDE -------------
+  // `cmd_draw_*` no longer leaves the module: GEOM.DRAWJOB is the resolver
+  // entry I36 said was missing, and the three handles are resolved against
+  // real residency rather than shipped out unresolved. The COUNTERS stay --
+  // they are evidence, not a boundary.
   output logic [31:0]              cmd_exec_draws_o,
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
@@ -3524,11 +3339,10 @@ module zhao_console_core
   output logic [31:0]             geom_arena_refusals_o,
   output logic                    geom_arena_overflow_o,
 
-  // ---- I24, NARROWED: GEOM.CLIP's cull mode only ----------------------------
-  // The triangle and its attribute packets come from GEOM.REPLAY (the bench's
-  // triangle door is GONE). The cull mode is per-draw raster state and has no
-  // producer: the descriptor's raster word is I39's.
-  input  logic [1:0]              geom_clip_cull_mode_i,
+  // ---- I24 IS CLOSED: the cull mode is the TRIANGLE'S OWN -----------------
+  // GEOM.CLIP takes `rp_o_raster[1:0]`, the word GEOM.REPLAY presents beside
+  // the corners, which travelled from the draw with the meshlet. The port that
+  // stood here is GONE.
 
   // ---- GEOM.VATTR's evidence (entry I46 CLOSED; owner rulings R11, R31) ----
   // The vertex-attribute store and its writer are INTERNAL: the eleven
@@ -3985,6 +3799,7 @@ module zhao_console_core
   output logic [31:0]             mat_recipe_count_mismatch_o,
   output logic [31:0]             mat_fetch_denied_o,
   output logic [31:0]             geom_ma_jobs_c_o,
+  output logic [31:0]             geom_ma_jobs_d_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -6576,6 +6391,18 @@ module zhao_console_core
   wire [2:0]              rp_o_behind;
   wire [15:0]             rp_o_src_id;
   wire [GEOM_CLIP_ATTRW-1:0] rp_attr_a, rp_attr_b, rp_attr_c;
+  // The triangle's RASTER WORD (R28), declared here rather than beside
+  // GEOM.REPLAY five thousand lines below because GEOM.CLIP -- which is
+  // composed FIRST in this file -- is the consumer of its cull field, and a
+  // net used before it is declared is an error under `default_nettype none`.
+  /* verilator lint_off UNUSEDSIGNAL */
+  // [31:2] is the MATERIAL's half, and R28 says in as many words that no bit of
+  // it has a ratified consumer in v1 -- "so a v1 material writes 0 there". It
+  // is carried rather than dropped because the word is the triangle's, whole:
+  // the day a material format gives one of those bits a meaning, the value is
+  // already here and only its reader is new.
+  wire [31:0]             rp_o_raster;
+  /* verilator lint_on UNUSEDSIGNAL */
   // GEOM.REPLAY -> GEOM.ASSETFETCH: the proven release (entry I38)
   wire                    rp_af_release;
 
@@ -6756,8 +6583,13 @@ module zhao_console_core
     .vp_y0_i      (12'd0),
     .vp_w_i       (clip_vp_w_c),
     .vp_h_i       (clip_vp_h_c),
-    // I24: draw state, no owner composed.
-    .cull_mode_i  (geom_clip_cull_mode_i),
+    // I24, CLOSED 2026-09-20 (owner rulings R28/R29). REAL: the cull mode is
+    // bits [1:0] of THIS TRIANGLE'S OWN raster word, the one GEOM.REPLAY
+    // presents beside the corners. It reached the triangle by travelling with
+    // the meshlet from GEOM.DRAWJOB -- job, to meshlet, to triangle -- never on
+    // a second path, which is why meshlet N cannot be culled by draw M's mode.
+    // `zref::raster_state::cull_mode` is the same field selector.
+    .cull_mode_i  (rp_o_raster[1:0]),
 
     // REAL: into GEOM.SETUP.
     .out_valid_o  (cl_o_valid),
@@ -8467,6 +8299,12 @@ module zhao_console_core
   // `spec/memory_rules.md` 5f.1's row. (Entry I47 carried this request as a
   // boundary for one commit, and is closed and deleted.)
   logic        cmd_upl_valid, cmd_upl_ready;
+  // I41, CLOSED: CMD.EXEC's DrawForm arm, now an INTERNAL stream into
+  // GEOM.DRAWJOB rather than nine ports at the console's edge.
+  logic        cmd_draw_valid_w, cmd_draw_ready_w;
+  logic [31:0] cmd_draw_form_w, cmd_draw_material_set_w, cmd_draw_transform_w;
+  logic [ 7:0] cmd_draw_viewport_mask_w, cmd_draw_semantic_weight_w;
+  logic [15:0] cmd_draw_flags_w, cmd_draw_src_id_w;
   logic [23:0] cmd_upl_index;
   logic [ 7:0] cmd_upl_kind, cmd_upl_slot;
   logic [63:0] cmd_upl_hps;
@@ -10872,20 +10710,20 @@ module zhao_console_core
     .stamp_ring_width_o(cmd_exec_stamp_ring_w),
     .stamp_src_id_o    (cmd_exec_stamp_src_id_w),
 
-    // I41: the DRAW DISPATCH, straight out of this module. It does NOT go to
-    // `u_geom_meshfetch` and the header entry says why in full: three of that
-    // block's six job fields have no ratified producer, a job is atomic, and
-    // half-driving one is a fetch at whatever address the other half was
-    // holding rather than a half closure.
-    .draw_valid_o          (cmd_draw_valid_o),
-    .draw_ready_i          (cmd_draw_ready_i),
-    .draw_form_o           (cmd_draw_form_o),
-    .draw_material_set_o   (cmd_draw_material_set_o),
-    .draw_transform_o      (cmd_draw_transform_o),
-    .draw_viewport_mask_o  (cmd_draw_viewport_mask_o),
-    .draw_semantic_weight_o(cmd_draw_semantic_weight_o),
-    .draw_flags_o          (cmd_draw_flags_o),
-    .draw_src_id_o         (cmd_draw_src_id_o),
+    // I41, CLOSED 2026-09-20: the DRAW DISPATCH now has a consumer INSIDE this
+    // module. `u_geom_drawjob` is the resolver entry I36 said did not exist,
+    // and owner ruling R29 gave it the three field laws it was missing. The
+    // handles are resolved against real residency here rather than leaving the
+    // console unresolved.
+    .draw_valid_o          (cmd_draw_valid_w),
+    .draw_ready_i          (cmd_draw_ready_w),
+    .draw_form_o           (cmd_draw_form_w),
+    .draw_material_set_o   (cmd_draw_material_set_w),
+    .draw_transform_o      (cmd_draw_transform_w),
+    .draw_viewport_mask_o  (cmd_draw_viewport_mask_w),
+    .draw_semantic_weight_o(cmd_draw_semantic_weight_w),
+    .draw_flags_o          (cmd_draw_flags_w),
+    .draw_src_id_o         (cmd_draw_src_id_w),
 
     // R17: PublishResource -> MEM.UPLOAD's request port.
     .upl_valid_o    (cmd_upl_valid),
@@ -11570,6 +11408,18 @@ module zhao_console_core
   // The memory-client identity.  Entry I40: assigned here, not tied off.
   localparam zhao_client_e GEOM_ASSET_CLIENT_C = ZHAO_CLIENT_ENGINE1;
 
+  // The DRAW-STATE SIDEBAND's width (owner rulings R28/R29). One packing,
+  // `zref::drawjob`'s: {semantic_weight[71:64], material_set[63:32],
+  // raster_state[31:0]}. Named once here so the three blocks that carry it
+  // cannot disagree about what it is.
+  localparam int unsigned GEOM_SIDE_W = 72;
+  // Draw-addressable instance transforms. 256 is the ruling's content tier
+  // (256 creatures); it is a KNOB and costs ~10 M10K, and 1,024 -- GEOM.LOOM's
+  // whole node space -- would cost ~39. A node index at or above it is
+  // COUNTED (`geom_dj_pal_dropped_o`), never wrapped onto another instance's
+  // row, and a draw naming an unwritten row is refused.
+  localparam int unsigned GEOM_XFORMS = 256;
+
   // ---- GEOM.MESHFETCH <-> GEOM.CULL ----------------------------------------
   wire               mf_cull_tick, mf_cull_ready, mf_cull_valid, mf_cull_reject;
   wire        [ 1:0] mf_cull_active, mf_cull_vis;
@@ -11588,16 +11438,58 @@ module zhao_console_core
   wire [ 1:0] mf_r_visible_mask;
   wire [15:0] mf_r_material_id;
   /* verilator lint_off UNUSEDSIGNAL */
+  // [71:32] is the draw's MATERIAL SET and SEMANTIC WEIGHT, riding beside the
+  // meshlet to consumers this console does not compose yet: the material set is
+  // half of MATERIAL.RESOLVE's request (entry I49 -- and the OTHER half,
+  // `af_s_material_id`, is on this same handshake, which is what that entry
+  // said it was missing), and the weight is the Measure policy's degrade order.
+  // Carried, not dropped: the draw is the only place either value exists, and
+  // re-deriving them at the consumer is the parallel path R29 exists to refuse.
+  wire [GEOM_SIDE_W-1:0] mf_r_side, af_s_side;
+  /* verilator lint_on UNUSEDSIGNAL */
+  /* verilator lint_off UNUSEDSIGNAL */
   wire [ 7:0] mf_r_flags;
   /* verilator lint_on UNUSEDSIGNAL */
   wire [31:0] mf_refused [7];
 
-  // ---- the two guard requesters, and the one client they share -------------
-  zhao_guard_req_t mf_guard_req, af_guard_req, ma_m_req;
-  zhao_guard_rsp_t mf_guard_rsp, af_guard_rsp, ma_m_rsp;
-  wire        mf_beat_valid, af_beat_valid, ma_m_beat_valid;
-  wire [63:0] mf_beat_data,  af_beat_data,  ma_m_beat_data;
-  wire        mf_beat_last,  af_beat_last,  ma_m_beat_last;
+  // ---- the guard requesters, and the one client they share -----------------
+  zhao_guard_req_t mf_guard_req, af_guard_req, ma_m_req, dj_guard_req;
+  zhao_guard_rsp_t mf_guard_rsp, af_guard_rsp, ma_m_rsp, dj_guard_rsp;
+  wire        mf_beat_valid, af_beat_valid, ma_m_beat_valid, dj_beat_valid;
+  wire [63:0] mf_beat_data,  af_beat_data,  ma_m_beat_data,  dj_beat_data;
+  wire        mf_beat_last,  af_beat_last,  ma_m_beat_last,  dj_beat_last;
+
+  // ---- GEOM.DRAWJOB -> GEOM.MESHFETCH: the job, whole (R29) ---------------
+  wire                  dj_j_valid, dj_j_ready, dj_d_ready;
+  wire [15:0]           dj_j_instance_id;
+  wire [26:0]           dj_j_desc_addr;
+  wire [ 7:0]           dj_j_format;
+  wire [15:0]           dj_j_generation;
+  wire [ 1:0]           dj_j_active_mask;
+  wire signed [31:0]    dj_j_xform [12];
+  wire [31:0]           dj_j_stream_base;
+  wire [GEOM_SIDE_W-1:0] dj_j_side;
+  wire [31:0]           dj_refused [9];
+  // ---- GEOM.LOOM -> the instance transform palette -------------------------
+  wire               lm_out_valid;
+  wire [9:0]         lm_out_node;
+  wire signed [31:0] lm_out_m [12];
+  wire [31:0]        lm_refused [6];
+  /* verilator lint_off UNUSEDSIGNAL */
+  // GEOM.LOOM's stream identity and end marker. The palette is keyed by node
+  // index alone, so it reads neither. They are exported by no port BECAUSE
+  // their consumer is GEOM.WARP (owner ruling R7), which is not composed --
+  // and a stream's `last` is not the palette's business in any case.
+  wire [15:0]        lm_out_src_id;
+  wire               lm_out_last;
+  wire               lm_refuse_valid;
+  wire [2:0]         lm_refuse_reason;
+  wire [9:0]         lm_refuse_node;
+  wire [15:0]        lm_refuse_src;
+  wire [15:0]        lm_nodes_max, lm_depth_max;
+  wire [31:0]        lm_kind_hist [10];
+  wire [31:0]        lm_stall_cycles;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   // ---- GEOM.ASSETFETCH -> GEOM.VDECODE: the 32-byte vertex record ----------
   wire         af_v_valid, af_v_ready;
@@ -11613,6 +11505,197 @@ module zhao_console_core
   wire        asm_ix_req, af_ix_valid;
   wire [ 8:0] asm_ix_index;
   wire [ 7:0] af_ix_a, af_ix_b, af_ix_c;
+
+  // ==========================================================================
+  // GEOM.LOOM and GEOM.DRAWJOB -- the draw becomes jobs (I36, I41; R29)
+  // ==========================================================================
+  // THE CHAIN, end to end, with no wire that arrives on a second path:
+  //
+  //   DrawForm 0x0300 -> CMD.EXEC's draw arm -> GEOM.DRAWJOB
+  //        form      -> the MESH_STREAM residency row (MEM.UPLOAD's own
+  //                     publication, `spec/memory_rules.md` 5f.1, kind 12)
+  //                  -> that page's frozen 64-byte header, read through
+  //                     requester D of the geometry adapter
+  //                  -> desc_addr = base + desc_offset + 64*i
+  //        transform -> the instance transform palette, written by GEOM.LOOM
+  //        flags     -> the raster word (R28) -> carried with every meshlet
+  //   -> GEOM.MESHFETCH -> GEOM.ASSETFETCH -> GEOM.ASSEMBLE -> GEOM.REPLAY
+  //   -> GEOM.CLIP's cull mode
+  //
+  // A DRAW WAITS WHILE A PUBLICATION IS IN FLIGHT, and this is the one
+  // composition rule here that is not in a block. MEM.UPLOAD publishes its row
+  // only when the last byte is written and the CRC has verified, so a draw that
+  // resolved mid-publication would be told NOT RESIDENT about bytes that are
+  // arriving. That is a false refusal with a real counter, which is worse than
+  // a wait. It is NOT a stall on missing residency: a resource nobody is
+  // publishing still refuses, immediately, and is counted.
+  // `zhao_mem_upload` always answers (done_o pulses on every retired request,
+  // refused or not), so the wait is bounded by one upload.
+  logic upl_inflight_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) upl_inflight_q <= 1'b0;
+    else if (cmd_upl_valid && cmd_upl_ready) upl_inflight_q <= 1'b1;
+    else if (upl_done_o) upl_inflight_q <= 1'b0;
+  end
+  wire publication_in_flight_c = cmd_upl_valid || upl_inflight_q;
+
+  // The .zpak resource kind whose pages this path reads (spec/cartridge.md 3).
+  localparam logic [7:0] GEOM_KIND_MESH_STREAM = 8'd12;
+
+  zhao_geom_loom u_geom_loom (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I50, BOUNDARY: the ARM's topologically sorted node stream and the frame's
+    // camera basis. The 2026-08-31 6.4 ruling puts both outside the console.
+    .in_valid_i       (geom_loom_valid_i),
+    .in_ready_o       (geom_loom_ready_o),
+    .in_node_index_i  (geom_loom_node_index_i),
+    .in_parent_index_i(geom_loom_parent_index_i),
+    .in_kind_i        (geom_loom_kind_i),
+    .in_param_i       (geom_loom_param_i),
+    .in_angle_i       (geom_loom_angle_i),
+    .in_axis_i        (geom_loom_axis_i),
+    .in_bodypatch_i   (geom_loom_bodypatch_i),
+    .in_src_id_i      (geom_loom_src_id_i),
+    .in_first_i       (geom_loom_first_i),
+    .in_last_i        (geom_loom_last_i),
+    .cam_basis_i      (geom_loom_cam_basis_i),
+
+    // REAL: the composed world transforms, into the palette. The palette is a
+    // WRITE PORT that never stalls (one clock, one row), so `out_ready_i` is
+    // constant -- and that is a statement about this consumer, not a tie-off:
+    // GEOM.WARP (owner ruling R7) will fork this stream when it is built, and
+    // THEN the ready becomes an AND.
+    .out_valid_o     (lm_out_valid),
+    .out_ready_i     (1'b1),
+    .out_node_index_o(lm_out_node),
+    .out_m_o         (lm_out_m),
+    .out_src_id_o    (lm_out_src_id),
+    .out_last_o      (lm_out_last),
+
+    .refuse_valid_o     (lm_refuse_valid),
+    .refuse_reason_o    (lm_refuse_reason),
+    .refuse_node_index_o(lm_refuse_node),
+    .refuse_src_id_o    (lm_refuse_src),
+
+    .nodes_transformed_o   (geom_loom_nodes_o),
+    .streams_composed_o    (geom_loom_streams_o),
+    .streams_refused_o     (lm_refused),
+    .nodes_per_stream_max_o(lm_nodes_max),
+    .chain_depth_max_o     (lm_depth_max),
+    .node_kind_hist_o      (lm_kind_hist),
+    .consumer_stall_cycles_o(lm_stall_cycles)
+  );
+
+  // The six refusal rows, split by REASON in the block's own order, for the
+  // reason GEOM.MESHFETCH's seven are split: one counter for six causes names
+  // none of them.
+  assign geom_loom_refused_sorted_o   = lm_refused[0];
+  assign geom_loom_refused_parent_o   = lm_refused[1];
+  assign geom_loom_refused_overflow_o = lm_refused[2];
+  assign geom_loom_refused_kind_o     = lm_refused[3];
+  assign geom_loom_refused_shear_o    = lm_refused[4];
+  assign geom_loom_refused_framing_o  = lm_refused[5];
+
+  zhao_geom_drawjob #(
+    .DIR_SETS (4),
+    .XFORMS   (GEOM_XFORMS),
+    .LOOM_IDXW(10),
+    .SIDEW    (GEOM_SIDE_W)
+  ) u_geom_drawjob (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: CMD.EXEC's ratified DrawForm, held only while a publication is
+    // still writing the directory this block reads.
+    .d_valid_i          (cmd_draw_valid_w && !publication_in_flight_c),
+    .d_ready_o          (dj_d_ready),
+    .d_form_i           (cmd_draw_form_w),
+    .d_material_set_i   (cmd_draw_material_set_w),
+    .d_transform_i      (cmd_draw_transform_w),
+    .d_viewport_mask_i  (cmd_draw_viewport_mask_w),
+    .d_semantic_weight_i(cmd_draw_semantic_weight_w),
+    .d_flags_i          (cmd_draw_flags_w),
+    .d_src_id_i         (cmd_draw_src_id_w),
+
+    // REAL: MEM.UPLOAD's own publication, the 5f.1 row, for MESH_STREAM pages.
+    // The same publication drives MATERIAL.RESOLVE's directory for kind 11:
+    // one rule, two consumers, each taking the kind it owns.
+    .dir_we_i        (upl_publish_valid_o && (upl_publish_tag_o == GEOM_KIND_MESH_STREAM)),
+    .dir_entry_i     (upl_publish_slot_o),
+    .dir_index_i     (upl_publish_index_o),
+    .dir_generation_i(upl_publish_generation_o),
+    .dir_base_i      (upl_publish_base_o),
+    .dir_extent_i    (upl_publish_extent_o),
+
+    // REAL: GEOM.LOOM's composed world transforms.
+    .px_valid_i(lm_out_valid),
+    .px_index_i(lm_out_node),
+    .px_m_i    (lm_out_m),
+
+    // REAL: requester D of the shared ENGINE1 client, for the page header.
+    .client_i    (GEOM_ASSET_CLIENT_C),
+    .guard_req_o (dj_guard_req),
+    .guard_rsp_i (dj_guard_rsp),
+    .beat_valid_i(dj_beat_valid),
+    .beat_data_i (dj_beat_data),
+    .beat_last_i (dj_beat_last),
+    // REAL: the SAME walker law the descriptor fetch uses, over the SAME beats
+    // this block receives -- a second instance of one implementation, not a
+    // second implementation.
+    .crc_ok_i    (dj_crc_ok),
+
+    // REAL: the job, into GEOM.MESHFETCH.
+    .j_valid_o      (dj_j_valid),
+    .j_ready_i      (dj_j_ready),
+    .j_instance_id_o(dj_j_instance_id),
+    .j_desc_addr_o  (dj_j_desc_addr),
+    .j_format_o     (dj_j_format),
+    .j_generation_o (dj_j_generation),
+    .j_active_mask_o(dj_j_active_mask),
+    .j_xform_o      (dj_j_xform),
+    .j_stream_base_o(dj_j_stream_base),
+    .j_side_o       (dj_j_side),
+
+    .draws_o      (geom_dj_draws_o),
+    .jobs_o       (geom_dj_jobs_o),
+    .masked_o     (geom_dj_masked_o),
+    .empty_o      (geom_dj_empty_o),
+    .pal_writes_o (geom_dj_pal_writes_o),
+    .pal_dropped_o(geom_dj_pal_dropped_o),
+    .refused_o    (dj_refused)
+  );
+
+  // GEOM.DRAWJOB's header CRC walker: the descriptor's own, on requester D's
+  // beats. The header was given the descriptor's framing precisely so this
+  // block could read it unmodified.
+  wire dj_crc_ok;
+  zhao_geom_desc_crc u_dj_hdr_crc (
+    .clk          (gpu_clk),
+    .rst_n        (rst_n),
+    .beat_valid_i (dj_beat_valid),
+    .beat_data_i  (dj_beat_data),
+    .beat_last_i  (dj_beat_last),
+    .crc_ok_o     (dj_crc_ok),
+    .descriptors_o(geom_dj_hdr_reads_o),
+    .crc_fail_o   (geom_dj_hdr_crc_fail_o),
+    .framing_err_o(geom_dj_hdr_framing_o)
+  );
+
+  // The draw stream's ready carries the same hold as its valid, so a held
+  // draw is not accepted by one side of the handshake and refused by the other.
+  assign cmd_draw_ready_w = dj_d_ready && !publication_in_flight_c;
+
+  assign geom_dj_refused_cull_o     = dj_refused[0];
+  assign geom_dj_refused_resident_o = dj_refused[1];
+  assign geom_dj_refused_stale_o    = dj_refused[2];
+  assign geom_dj_refused_xform_o    = dj_refused[3];
+  assign geom_dj_refused_denied_o   = dj_refused[4];
+  assign geom_dj_refused_format_o   = dj_refused[5];
+  assign geom_dj_refused_crc_o      = dj_refused[6];
+  assign geom_dj_refused_reserved_o = dj_refused[7];
+  assign geom_dj_refused_layout_o   = dj_refused[8];
 
   // --------------------------------------------------------------------------
   // GEOM.CULL.  MUL_LANES is LEFT AT THE BLOCK'S OWN DEFAULT (2, two shared
@@ -11653,15 +11736,20 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I36: the DRAW.  CMD.SCHEDULER is the absent owner; see the header.
-    .j_valid_i      (geom_mf_job_valid_i),
-    .j_ready_o      (geom_mf_job_ready_o),
-    .j_instance_id_i(geom_mf_job_instance_id_i),
-    .j_desc_addr_i  (geom_mf_job_desc_addr_i),
-    .j_format_i     (geom_mf_job_format_i),
-    .j_generation_i (geom_mf_job_generation_i),
-    .j_active_mask_i(geom_mf_job_active_mask_i),
-    .j_xform_i      (geom_mf_job_xform_i),
+    // I36, CLOSED 2026-09-20: the DRAW, from GEOM.DRAWJOB. Every field is a
+    // resolved value with a ruling behind it (R29), not a port at the edge.
+    .j_valid_i      (dj_j_valid),
+    .j_ready_o      (dj_j_ready),
+    .j_instance_id_i(dj_j_instance_id),
+    .j_desc_addr_i  (dj_j_desc_addr),
+    .j_format_i     (dj_j_format),
+    .j_generation_i (dj_j_generation),
+    .j_active_mask_i(dj_j_active_mask),
+    .j_xform_i      (dj_j_xform),
+    // R29: the page's pool-relative base, added to the descriptor's
+    // PAGE-relative offsets once, here; and the draw's own state, carried.
+    .j_stream_base_i(dj_j_stream_base),
+    .j_side_i       (dj_j_side),
     .j_client_i     (GEOM_ASSET_CLIENT_C),   // I40: assigned here
 
     // REAL: requester A of the shared ENGINE1 client.
@@ -11701,6 +11789,8 @@ module zhao_console_core
     .r_triangle_count_o(mf_r_triangle_count),
     .r_material_id_o   (mf_r_material_id),
     .r_flags_o         (mf_r_flags),
+    // R29: the draw's state, out in the SAME handshake as the meshlet.
+    .r_side_o          (mf_r_side),
 
     .meshlets_considered_o(geom_mf_meshlets_considered_o),
     .culled_all_cameras_o (geom_mf_culled_all_cameras_o),
@@ -11892,6 +11982,15 @@ module zhao_console_core
     .c_beat_data_o (mr_beat_data),
     .c_beat_last_o (mr_beat_last),
 
+    // REAL: requester D, GEOM.DRAWJOB's 64-byte MESH_STREAM header (R29). One
+    // read per DRAW, against A's one per meshlet, so it is the lightest of the
+    // four and the round robin's bound is unchanged in kind.
+    .d_req_i       (dj_guard_req),
+    .d_rsp_o       (dj_guard_rsp),
+    .d_beat_valid_o(dj_beat_valid),
+    .d_beat_data_o (dj_beat_data),
+    .d_beat_last_o (dj_beat_last),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -11902,6 +12001,7 @@ module zhao_console_core
     .jobs_a_o     (geom_ma_jobs_a_o),
     .jobs_b_o     (geom_ma_jobs_b_o),
     .jobs_c_o     (geom_ma_jobs_c_o),
+    .jobs_d_o     (geom_ma_jobs_d_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),
@@ -11933,6 +12033,9 @@ module zhao_console_core
     // with the counts in this handshake and offered again on `s_*`.
     .m_visible_mask_i  (mf_r_visible_mask),
     .m_material_id_i   (mf_r_material_id),
+    // R29: the draw's raster word, material set and weight, in the same
+    // handshake as the counts -- the meshlet and its draw cannot separate.
+    .m_side_i          (mf_r_side),
     .m_client_i        (GEOM_ASSET_CLIENT_C),
 
     // REAL: requester B of the shared ENGINE1 client.
@@ -11950,6 +12053,7 @@ module zhao_console_core
     .s_src_id_o        (af_s_src_id),
     .s_visible_mask_o  (af_s_visible_mask),
     .s_material_id_o   (af_s_material_id),
+    .s_side_o          (af_s_side),
 
     // REAL: the release, from GEOM.REPLAY, which PROVES both readers are done
     // (its header). Entry I38, CLOSED.
@@ -12020,8 +12124,11 @@ module zhao_console_core
     .m_vertex_offset_i(GEOM_ASM_VOFF_C),
     // REAL: the material, carried beside the meshlet by GEOM.ASSETFETCH.
     .m_material_id_i  (af_s_material_id),
-    // I39, narrowed: the raster word has no producer anywhere.
-    .m_raster_state_i (geom_asm_raster_state_i),
+    // I39, CLOSED 2026-09-20: the RASTER WORD, off the sideband GEOM.ASSETFETCH
+    // carries beside THIS meshlet. R28's layout: [1:0] the draw's cull mode,
+    // [31:2] the material's half, which every v1 material writes as zero and
+    // GEOM.DRAWJOB names as a constant at the seam a resolved record replaces.
+    .m_raster_state_i (af_s_side[31:0]),
 
     // REAL: the index service.  `ix_valid_i` follows the FETCHER's valid and is
     // not tied to the request -- the served answer has a real valid, and tying
@@ -12093,7 +12200,6 @@ module zhao_console_core
   /* verilator lint_off UNUSEDSIGNAL */
   wire                         rp_o_view;
   wire [15:0]                  rp_o_material;
-  wire [31:0]                  rp_o_raster;
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_geom_replay #(

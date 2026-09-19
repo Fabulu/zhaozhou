@@ -66,7 +66,17 @@
 
 module zhao_geom_meshfetch
   import zhao_pkg::*;
-(
+#(
+    // The DRAW'S OWN STATE, carried through this block beside the meshlet it
+    // belongs to: {semantic_weight[7:0], material_set[31:0], raster_state[31:0]}
+    // as `zref::drawjob` packs it (owner rulings R28/R29). This block does not
+    // read a bit of it. It carries it because the alternative -- a second,
+    // parallel path from the draw to the meshlet's consumers -- is the join
+    // core entry I39 refuses by name: two live wires paired by their timing,
+    // which mislabels meshlet N with draw M's state the first time anything
+    // stalls.
+    parameter int unsigned SIDEW = 72
+) (
     input var logic clk,
     input var logic rst_n,
 
@@ -83,6 +93,13 @@ module zhao_geom_meshfetch
     input  var logic [15:0]       j_generation_i,    // expected, for stale handles
     input  var logic [1:0]        j_active_mask_i,   // the CALLER drives this
     input  var logic signed [31:0] j_xform_i [12],   // row-major 3x4, fx16
+    // THE PAGE'S POOL-RELATIVE BASE (owner ruling R29). The descriptor's
+    // vertex/index offsets are PAGE-relative -- "byte offset into the mesh's
+    // vertex stream" -- and GEOM.ASSETFETCH's are POOL-relative, so the base is
+    // added ONCE, here, where the job that names the page is held. Zero
+    // reproduces this block's behaviour before R29 exactly.
+    input  var logic [31:0]       j_stream_base_i,
+    input  var logic [SIDEW-1:0]  j_side_i,
     // Logical memory-client identity, captured with the job. Production routes
     // this leaf through zhao_geom_mem_adapter, which substitutes ENGINE1.
     input  var zhao_client_e      j_client_i,
@@ -126,6 +143,8 @@ module zhao_geom_meshfetch
     output var logic [7:0]        r_triangle_count_o,
     output var logic [15:0]       r_material_id_o,
     output var logic [7:0]        r_flags_o,
+    // The draw's state, in the SAME handshake as the meshlet it describes.
+    output var logic [SIDEW-1:0]  r_side_o,
 
     // ---- evidence -------------------------------------------------------------
     output var logic [31:0]       meshlets_considered_o,
@@ -207,6 +226,8 @@ module zhao_geom_meshfetch
   // Captured at acceptance, beside the fields that already were.
   zhao_client_e   client_q;
   logic [26:0]    desc_addr_q;
+  logic [31:0]      sbase_q;      // R29: the page's pool-relative base
+  logic [SIDEW-1:0] side_q;       // R29: the draw's state, carried
 
   logic [63:0] d_q [8];
   logic [2:0]  beat_q;
@@ -329,10 +350,23 @@ module zhao_geom_meshfetch
   assign cull_cz_o     = wc_q[2];
   assign cull_radius_o = $signed(wr_q);
 
+  // THE REBASE SATURATES (owner ruling R29, and the reason is the same one the
+  // radius scale gives two hundred lines above). A page base plus a
+  // page-relative offset can exceed 32 bits; wrapping would turn an offset far
+  // past the pool into a SMALL one, which is a well-formed address inside
+  // somebody else's asset. Saturated, it reaches GEOM.ASSETFETCH's pool-end
+  // refusal, which is a counted fault with a name.
+  function automatic logic [31:0] rebase(input logic [31:0] page_off);
+    logic [32:0] s;
+    s = {1'b0, sbase_q} + {1'b0, page_off};
+    rebase = s[32] ? 32'hFFFF_FFFF : s[31:0];
+  endfunction
+
   assign r_valid_o          = (st_q == S_EMIT);
   assign r_instance_id_o    = inst_q;
-  assign r_vertex_offset_o  = dw(24);
-  assign r_index_offset_o   = dw(28);
+  assign r_vertex_offset_o  = rebase(dw(24));
+  assign r_index_offset_o   = rebase(dw(28));
+  assign r_side_o           = side_q;
   assign r_vertex_count_o   = db(2);
   assign r_triangle_count_o = db(3);
   assign r_material_id_o    = dh(4);
@@ -357,6 +391,8 @@ module zhao_geom_meshfetch
             inst_q <= j_instance_id_i;
             client_q    <= j_client_i;
             desc_addr_q <= j_desc_addr_i;
+            sbase_q     <= j_stream_base_i;
+            side_q      <= j_side_i;
             fmt_q  <= j_format_i;
             gen_q  <= j_generation_i;
             act_q  <= j_active_mask_i;
