@@ -665,7 +665,13 @@ inline zc::quat16 rear_socket_compose(const zc::quat16& qd,
   const zc::quat16 base =
       follow >= 1000 ? qd
                      : zc::quat16_nlerp(rear_rest_arrival(), qd, follow, 1000);
-  return quat_mul(base, authored);
+  // Renormalize: the arm frame is a product of the whole chain's quat16s, and
+  // quat16_to_mat3 scales by |q|^2, so an unnormalized product both scales the
+  // End rings slightly and blinds a trace-based angular metric (mspan G9 read
+  // 0 deg then 2.9 deg for a steady 0.5 deg/sample turn). nlerp(q, q) is the
+  // production renormalizer: lane = q exactly, then one round to unit length.
+  const zc::quat16 q = quat_mul(base, authored);
+  return zc::quat16_nlerp(q, q, 1, 2);
 }
 
 // The clip builders historically solved closure before assigning c.deform[f].
