@@ -379,6 +379,27 @@
 //      verdict law is implemented ONCE for the whole console instead of a third
 //      time. `terr_rdshare_contention_o` is what the sharing cost.
 //
+//  14. PART.COLLIDE STANDS ON THE LIVE TERRAIN -- entry I6, closed under owner
+//      ruling R1 (2026-09-19). Two blocks and one borrowed port:
+//        TERRAIN.COMPCACHE read ports <- TERRAIN.HEIGHTTAP (pass-through; TESS
+//                                        first, the tap on cycles TESS leaves)
+//        TERRAIN.HEIGHTTAP rsp_* (a whole CELL + both normals)
+//                                     -> PART.TERRAIN_TAP's cell cache
+//        PART.UPDATE -> PART.TERRAIN_TAP -> PART.COLLIDE, with t_* on the beat
+//      The normal is R1's law, normalize3_approx(face_normal) of the 4.3-picked
+//      triangle, computed by the tree's one implementation of normalize3_approx
+//      (`zhao_field_v3_normalize`) inside the tap. The particle path never waits
+//      on a terrain read -- PART.COLLIDE's contract forbids it -- so a particle
+//      over an uncached cell goes on with no sample, counted, while the cell is
+//      fetched behind it. Glue 4's survive/ordinal join moved WITH the new stage
+//      (they ride in its sideband), because leaving it on PART.UPDATE's retire
+//      would have joined each particle's verdict to the one in front of it.
+//      Evidence: `tests/particles/part_terrain_tap_directed.cpp` (the three
+//      blocks, differenced against zref::terrain::column_query and
+//      ::collision_normal; a particle below the reference surface leaves
+//      standing on it). The population ORIGIN the frame change needs has no
+//      producer here and widens entry I7.
+//
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
 // ---------------------------------------------------------------------------
@@ -404,6 +425,15 @@
 // (Found on 2026-09-19 while closing I2/I3; the misclassification of I3 in
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
+//
+//  * I6 was PART.COLLIDE's TERRAIN SAMPLE (`part_ter_*`), a boundary because
+//    "the collision test needs {height, nx, ny, nz}" and nothing in the tree
+//    emitted a normal -- the law for one was contradicted in writing
+//    (terrain_rules 4.4 against TERRAIN.NORMALS.md:194). CLOSED 2026-09-19 by
+//    owner ruling R1 and composed item 14; the five ports are gone from the
+//    list rather than driven. The one new input the frame change needs, the
+//    population origin, joined entry I7 rather than opening a new entry: it is
+//    the same kind of per-frame population value with the same absent owner.
 //
 //  * I2 was THE SPECIES DESCRIPTOR TABLE and I3 the SIZE/COLOUR CURVE TABLE,
 //    both boundaries because four contracts handed the table to each other and
@@ -801,14 +831,19 @@
 //      THIS record is ready", and the record is held stable for the whole
 //      offer. That is a join a composer may write. The binding is not.
 //
-//  I6. PART.COLLIDE's terrain sample (`part_ter_*`) -- BOUNDARY.
-//      `zhao_terrain_patch.sv` exists and is the named owner, but it emits
-//      heights (top/bottom/compose_top) and NO SURFACE NORMAL, and the
-//      collision test needs {height, nx, ny, nz}. Wiring height alone and
-//      inventing a normal would be the hidden-adapter failure.
-//
 //  I7. PART.COLLIDE's plane (`part_plane_*`) -- BOUNDARY. A per-frame owner
 //      value by the block's own design; CMD.SCHEDULER has no path to it.
+//      WIDENED 2026-09-19 BY THE POPULATION ORIGIN (`part_pop_origin_*`), when
+//      I6 closed. spec/qformats.md 10 puts a particle's position RELATIVE TO
+//      ITS POPULATION'S ORIGIN, "fx16 on a 1/256-m grid", and PART.TERRAIN_TAP
+//      needs it to turn a local position into the world point the terrain is
+//      indexed by (and the terrain's world height back into the local frame
+//      PART.COLLIDE compares against). No ratified command carries a
+//      population descriptor to this core -- DrawPopulation names a pool
+//      handle, not an origin -- so it is the same kind of value as the plane,
+//      with the same absent owner, and it rides this entry rather than a new
+//      one. Zero is a legal origin (the island datum), which is what an
+//      undriven bench gets.
 //
 //  I9. PART.SPAWN's parent id (`par_id_i`) -- NOT a tie-off: the core assigns
 //      it. The particle128 record (amendment C2) carries no id field, so the
@@ -3297,14 +3332,36 @@ module zhao_console_core
   //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
   //  PART.COLLIDE's own new `d_index_o`.)
 
-  // ---- I6: the live deformed terrain sample -------------------------------
-  input  logic                    part_ter_valid_i,
-  input  logic signed [PART_POS_W-1:0] part_ter_height_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_nz_i,
+  // (I6's five `part_ter_*` inputs were here. CLOSED 2026-09-19 under owner
+  //  ruling R1: PART.TERRAIN_TAP produces the sample from the live compose
+  //  cache through TERRAIN.HEIGHTTAP, inside this module. See item 14.)
 
-  // ---- I7: the one plane --------------------------------------------------
+  // ---- I6's evidence: the terrain sample's census --------------------------
+  // Every particle lands in exactly one of the first four, so a bench can say
+  // WHY a particle did or did not see ground -- a cold cell, a void or an
+  // unstaged patch, or a fault -- instead of reading PART.COLLIDE's single
+  // "unavailable" total. The tap's three are the service's own view of the
+  // same traffic.
+  output logic [31:0]             part_ter_particles_o,
+  output logic [31:0]             part_ter_ground_o,
+  output logic [31:0]             part_ter_no_ground_o,
+  output logic [31:0]             part_ter_missed_o,
+  output logic [31:0]             part_ter_faults_o,     // cell mismatch + out of range
+  output logic [31:0]             part_ter_fills_landed_o,
+  output logic [31:0]             terr_tap_answered_o,
+  output logic [31:0]             terr_tap_off_patch_o,
+  output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
+
+  // ---- I7: the one plane, and the population origin ------------------------
+  // The origin is widened INTO I7 rather than opened as a new entry because it
+  // is the same kind of thing with the same absent owner: a per-frame
+  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
+  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
+  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
+  // terrain height -- and it became visible the moment a real height arrived.
+  input  logic signed [31:0]      part_pop_origin_x_i,
+  input  logic signed [31:0]      part_pop_origin_y_i,
+  input  logic signed [31:0]      part_pop_origin_z_i,
   input  logic                    part_plane_en_i,
   input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
   input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
@@ -5070,6 +5127,14 @@ module zhao_console_core
   wire [3:0]            pu_out_events;
 
   wire                  pc_p_ready;
+  // PART.TERRAIN_TAP, between PART.UPDATE and PART.COLLIDE (item 14).
+  wire                  ptt_p_ready, ptt_q_valid;
+  wire [PART_REC_W-1:0] ptt_q_record;
+  wire [3:0]            ptt_q_events;
+  wire [PART_PID_W:0]   ptt_q_side;      // {survive, ordinal}: glue 4, amended
+  wire                  ptt_t_valid;
+  wire signed [PART_POS_W-1:0] ptt_t_height;
+  wire signed [PART_NRM_W-1:0] ptt_t_nx, ptt_t_ny, ptt_t_nz;
   wire                  pc_c_valid, pc_c_alive;
   wire [PART_REC_W-1:0] pc_c_record;
   wire [PART_REC_W-1:0] pc_c_spawn_record;
@@ -5179,7 +5244,17 @@ module zhao_console_core
   // PART.COLLIDE itself, on its own copy of that enable, for the same reason
   // and because bit 2 is that block's to write.
   // --------------------------------------------------------------------------
-  wire pu_take_c = pu_out_valid && pc_p_ready;
+  //
+  // AMENDED 2026-09-19, AND THE AMENDMENT IS THE SAME ARGUMENT ONE STAGE LATER.
+  // PART.TERRAIN_TAP (item 14) now sits between PART.UPDATE and PART.COLLIDE,
+  // so a particle can be held in it while the collider holds the one before.
+  // Loading these two on PART.UPDATE's retire would then describe the particle
+  // BEHIND the collider's -- a metadata swap with every count still balancing.
+  // So they ride THROUGH the new stage in its `side` register, loaded by the
+  // same enable as the record there, and are loaded here on the COLLIDER'S
+  // take, which is the same condition PART.COLLIDE loads its record on.
+  wire pu_take_c = pu_out_valid && ptt_p_ready;
+  wire pc_take_c = ptt_q_valid  && pc_p_ready;
 
   logic                  pc_survive_q;
   logic [PART_PID_W-1:0] pc_ordinal_q;
@@ -5188,9 +5263,9 @@ module zhao_console_core
     if (!rst_n) begin
       pc_survive_q <= 1'b0;
       pc_ordinal_q <= '0;
-    end else if (pu_take_c) begin
-      pc_survive_q <= pu_out_survive;
-      pc_ordinal_q <= part_ordinal_q;
+    end else if (pc_take_c) begin
+      pc_survive_q <= ptt_q_side[PART_PID_W];
+      pc_ordinal_q <= ptt_q_side[PART_PID_W-1:0];
     end
   end
 
@@ -5382,6 +5457,13 @@ module zhao_console_core
     .chl_valid_i  (sp_chl_valid),
     .chl_ready_o  (sp_chl_ready),
     .chl_record_i (sp_chl_record),
+    // REAL, 2026-09-19: PART.SPAWN still holds a parent of this generation --
+    // it is not idle, or the fork's S branch still holds the collider's beat
+    // for it. The append phase waits for both, so a collision child is
+    // written in the tick whose collision made it (qformats 10's tick law),
+    // whatever the latency in front of PART.COLLIDE. Item 14 moved that
+    // latency and exposed the race; this is the defect report's option (a).
+    .chl_busy_i   (!sp_par_ready || fork_spw_valid_c),
 
     .wr_valid_o   (part_wr_valid_o),
     .wr_ready_i   (part_wr_ready_i),
@@ -5447,7 +5529,7 @@ module zhao_console_core
     // the fork moved to PART.COLLIDE's output when ruling I4 put PART.SPAWN
     // downstream of it (glue 3).
     .out_valid_o  (pu_out_valid),
-    .out_ready_i  (pc_p_ready),
+    .out_ready_i  (ptt_p_ready),
     .out_record_o (pu_out_record),
     .out_survive_o(pu_out_survive),
     .out_refused_o(part_upd_beat_refused_o),
@@ -5466,6 +5548,140 @@ module zhao_console_core
     .hist_val_o              (part_hist_val_o)
   );
 
+  // ==========================================================================
+  // 14. PART.COLLIDE'S TERRAIN SAMPLE.  ENTRY I6, CLOSED 2026-09-19.
+  //
+  //   TERRAIN.COMPCACHE --read ports-- TERRAIN.HEIGHTTAP --cells-- PART.TERRAIN_TAP
+  //                                                                   |  t_*
+  //         PART.UPDATE ---------------- particle ------------------> PART.COLLIDE
+  //
+  // I6 said "the collision test needs {height, nx, ny, nz}" and nothing emitted
+  // a normal; the law for one was contradicted in writing. OWNER RULING R1
+  // (reports/OWNER-RULINGS-20260919-EVENING.md) made it `normalize3_approx(
+  // face_normal(t))` of the triangle spec/terrain_rules.md 4.3 picks for the
+  // height, and spec 4.4 now says so for collision. `zhao_terrain_heighttap`
+  // computes it (through `zhao_field_v3_normalize`, the one implementation of
+  // that law) and answers with the whole CELL; `zhao_part_terrain_tap` caches
+  // cells so the particle path is NEVER stalled on this multi-cycle read, which
+  // PART.COLLIDE's contract forbids by name -- a particle over an uncached cell
+  // goes on with no sample, counted, and the cell is fetched behind it.
+  //
+  // THE TAP IS A PASS-THROUGH IN FRONT OF THE COMPOSE CACHE'S READ PORTS, and
+  // TERRAIN.TESS -- their owner -- is never gated or delayed by it (its header,
+  // and `terrain_heighttap_directed.cpp` case 8). It takes only cycles TESS did
+  // not want.
+  //
+  // COHERENCE. A cached cell is a copy of what the compose cache SERVES. The
+  // invalidation below is every event that can change that: a fill starting or
+  // completing, a served patch retired, a placement write, a cell-state write.
+  // Over-invalidating costs refetches; under-invalidating would hand a
+  // particle a crater that has been filled in. It is deliberately the former.
+  //
+  // WHAT THIS DOES NOT CLAIM. The compose cache stages ONE patch at a time, so
+  // a particle over any other patch gets no sample -- counted as no-ground,
+  // not faked. That is the cache's shape (T6's 256-entry composed cache is a
+  // later block), not this seam's, and the census says how often it bites.
+  // ==========================================================================
+  // Both are driven in the terrain section (item 14's second half, beside the
+  // compose cache), where the nets they are built from are declared.
+  wire              ptt_inval_c;
+  wire signed [7:0] ptt_pitch_c;
+
+  wire                      htp_req_valid, htp_req_ready, htp_req_surface;
+  wire signed [31:0]        htp_req_x, htp_req_z;
+  wire                      htp_rsp_valid, htp_rsp_no_ground;
+  wire signed [31:0]        htp_h00, htp_h10, htp_h01, htp_h11, htp_wx00, htp_wz00;
+  wire [4:0]                htp_sh;
+  wire signed [31:0]        htp_na_x, htp_na_y, htp_na_z, htp_nb_x, htp_nb_y, htp_nb_z;
+  wire [31:0]               ptt_mismatch, ptt_range;
+  // The point answer's height and normal are the SERVICE's answer to its
+  // requester; this requester evaluates its own points from the cell, so it
+  // reads the cell and not the point. FORGE.SHADOW, the point answer's other
+  // customer, is not composed (its own blocker, the creature rung, is in the
+  // FORGE.SHADOW header). The census members not exported are summed into the
+  // two fault ports or are cadence evidence tested at block level.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire signed [31:0]        htp_height, htp_nx, htp_ny, htp_nz;
+  wire [31:0]               htp_void, htp_place_bad, htp_pitch_bad, htp_ovf, htp_stall, htp_nsat;
+  wire [31:0]               ptt_hsat, ptt_issued, ptt_discarded, ptt_invals;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  assign part_ter_faults_o = ptt_mismatch + ptt_range;
+  assign terr_tap_faults_o = htp_place_bad + htp_pitch_bad + htp_ovf;
+
+  zhao_part_terrain_tap #(
+    .REC_W  (PART_REC_W),
+    .POS_W  (PART_POS_W),
+    .NRM_W  (PART_NRM_W),
+    .NRM_Q  (10),
+    .CELLS  (4),
+    .SIDE_W (PART_PID_W + 1)
+  ) u_part_terrain_tap (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // I7, widened: the population origin has no producer in this core.
+    .origin_x_i(part_pop_origin_x_i),
+    .origin_y_i(part_pop_origin_y_i),
+    .origin_z_i(part_pop_origin_z_i),
+    // REAL: the same net TERRAIN.PLACE and TERRAIN.HEIGHTTAP read.
+    .pitch_log2_i(ptt_pitch_c),
+    .inval_i     (ptt_inval_c),
+
+    // REAL: PART.UPDATE's retire, with glue 4's two facts riding beside it.
+    .p_valid_i (pu_out_valid),
+    .p_ready_o (ptt_p_ready),
+    .p_record_i(pu_out_record),
+    .p_events_i(pu_out_events),
+    .p_side_i  ({pu_out_survive, part_ordinal_q}),
+
+    // REAL: into PART.COLLIDE, sample and all.
+    .q_valid_o (ptt_q_valid),
+    .q_ready_i (pc_p_ready),
+    .q_record_o(ptt_q_record),
+    .q_events_o(ptt_q_events),
+    .q_side_o  (ptt_q_side),
+    .t_valid_o (ptt_t_valid),
+    .t_height_o(ptt_t_height),
+    .t_nx_o    (ptt_t_nx),
+    .t_ny_o    (ptt_t_ny),
+    .t_nz_o    (ptt_t_nz),
+
+    // REAL: TERRAIN.HEIGHTTAP.
+    .tap_req_valid_o  (htp_req_valid),
+    .tap_req_ready_i  (htp_req_ready),
+    .tap_req_x_o      (htp_req_x),
+    .tap_req_z_o      (htp_req_z),
+    .tap_req_surface_o(htp_req_surface),
+    .tap_rsp_valid_i    (htp_rsp_valid),
+    .tap_rsp_no_ground_i(htp_rsp_no_ground),
+    .tap_rsp_h00_i (htp_h00),
+    .tap_rsp_h10_i (htp_h10),
+    .tap_rsp_h01_i (htp_h01),
+    .tap_rsp_h11_i (htp_h11),
+    .tap_rsp_wx00_i(htp_wx00),
+    .tap_rsp_wz00_i(htp_wz00),
+    .tap_rsp_sh_i  (htp_sh),
+    .tap_rsp_na_x_i(htp_na_x),
+    .tap_rsp_na_y_i(htp_na_y),
+    .tap_rsp_na_z_i(htp_na_z),
+    .tap_rsp_nb_x_i(htp_nb_x),
+    .tap_rsp_nb_y_i(htp_nb_y),
+    .tap_rsp_nb_z_i(htp_nb_z),
+
+    .particles_o        (part_ter_particles_o),
+    .samples_ground_o   (part_ter_ground_o),
+    .samples_no_ground_o(part_ter_no_ground_o),
+    .samples_missed_o   (part_ter_missed_o),
+    .cell_mismatch_o    (ptt_mismatch),
+    .out_of_range_o     (ptt_range),
+    .height_sats_o      (ptt_hsat),
+    .fills_issued_o     (ptt_issued),
+    .fills_landed_o     (part_ter_fills_landed_o),
+    .fills_discarded_o  (ptt_discarded),
+    .invalidations_o    (ptt_invals)
+  );
+
   zhao_part_collide #(
     .REC_W (PART_REC_W),
     .POS_W (PART_POS_W),
@@ -5476,12 +5692,13 @@ module zhao_console_core
     .clk      (gpu_clk),
     .rst_n    (rst_n),
 
-    // REAL: straight from PART.UPDATE, with its three own event bits riding
-    // beside the record. Bit 2 arrives zero and this block fills it (ruling I4).
-    .p_valid_i(pu_out_valid),
+    // REAL: from PART.TERRAIN_TAP (item 14), which carries PART.UPDATE's
+    // record and its three own event bits through unchanged. Bit 2 arrives
+    // zero and this block fills it (ruling I4).
+    .p_valid_i(ptt_q_valid),
     .p_ready_o(pc_p_ready),
-    .p_record_i(pu_out_record),
-    .p_events_i(pu_out_events),
+    .p_record_i(ptt_q_record),
+    .p_events_i(ptt_q_events),
 
     // REAL: I2 CLOSED 2026-09-19. `d_index_o` is NEW on this block and is the
     // whole reason the entry could close -- the collider publishes the species
@@ -5494,12 +5711,13 @@ module zhao_console_core
     .d_friction_i   (ptb_c_friction),
     .d_damping_i    (ptb_c_damping),
 
-    // I6: TERRAIN.PATCH emits heights and no surface normal.
-    .t_valid_i (part_ter_valid_i),
-    .t_height_i(part_ter_height_i),
-    .t_nx_i    (part_ter_nx_i),
-    .t_ny_i    (part_ter_ny_i),
-    .t_nz_i    (part_ter_nz_i),
+    // REAL: I6 CLOSED 2026-09-19 -- the live composed terrain, through
+    // TERRAIN.HEIGHTTAP and PART.TERRAIN_TAP (item 14), on the same beat.
+    .t_valid_i (ptt_t_valid),
+    .t_height_i(ptt_t_height),
+    .t_nx_i    (ptt_t_nx),
+    .t_ny_i    (ptt_t_ny),
+    .t_nz_i    (ptt_t_nz),
 
     // I7: the one plane, a per-frame owner value with no CMD path.
     .pl_en_i(part_plane_en_i),
@@ -6689,6 +6907,121 @@ module zhao_console_core
   wire [5:0]          tt_lat_vi, tt_lat_vj;
   wire                tt_cs_req;
   wire [4:0]          tt_cs_ci, tt_cs_cj;
+
+  // ---- item 14, second half: TERRAIN.HEIGHTTAP in front of the cache ------
+  // TESS's read ports now pass THROUGH the tap (`htp_o_*`, its side) to the
+  // compose cache (`htp_c_*`, the cache's side). The tap never gates TESS; it
+  // borrows only cycles TESS does not request. Its client is PART.TERRAIN_TAP,
+  // instantiated with the particles in item 14's first half.
+  wire                htp_c_lat_req, htp_c_lat_surface, htp_c_cs_req;
+  wire [5:0]          htp_c_lat_vi, htp_c_lat_vj;
+  wire [4:0]          htp_c_cs_ci, htp_c_cs_cj;
+  wire signed [31:0]  htp_o_lat_h, htp_o_lat_wx, htp_o_lat_wz;
+  wire [1:0]          htp_o_cs_substance;
+
+  // The invalidation: every event that can change what the compose cache
+  // SERVES. See item 14's COHERENCE paragraph for why it errs wide.
+  assign ptt_inval_c = tcc_fill_start || terr_cc_fill_done_o || terr_cc_serve_release_i ||
+                       terr_cc_cs_we_i || tpc_pos_we;
+  // THE PITCH THE SERVED LATTICE WAS PLACED AT -- HELD, NOT THE HEADER WIRE.
+  //
+  // The tap's own header asks for "the SAME net that drives
+  // zhao_terrain_place.hdr_pitch_log2_i", and that request cannot be honoured
+  // literally, which is worth a paragraph because the literal wiring LINTS
+  // CLEAN AND IS WRONG. `thr_h_pitch_log2` is TERRAIN.HDRREAD's `h_pitch_log2_o`,
+  // and that is `ok ? pitch : HDR_PITCH_REFUSE (127)` -- a value that is only
+  // the pitch on the cycle a header is being presented. TERRAIN.PLACE takes it
+  // on that handshake and holds it privately. A tap reading the wire directly
+  // would see 127 on nearly every cycle and answer PITCH FAULT for a lattice
+  // that is perfectly placed.
+  //
+  // So the pitch is held HERE, loaded by the one handshake TERRAIN.PLACE loads
+  // it on (`hdr_valid` -- PLACE's `hdr_ready_o` is constant 1 by contract), and
+  // only when it is a legal 1.3 pitch: a REFUSED header places nothing, so it
+  // must not change the pitch the served lattice was placed at. It is the same
+  // source of truth as PLACE's, taken on the same enable. An island has one
+  // pitch (spec 1.3); if two islands ever alternate, the tap's `ud == vd == D`
+  // check against the stored placement answers PLACEMENT FAULT, counted on
+  // `terr_tap_faults_o`, rather than a quiet wrong height.
+  //
+  // Reset to 0 (1 m): before anything is placed nothing is served, so every
+  // tap answers off-patch from the cache's poison whatever this holds.
+  logic signed [7:0] ptt_pitch_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n)
+      ptt_pitch_q <= 8'sd0;
+    else if (thr_h_valid && (thr_h_pitch_log2 >= -8'sd1) && (thr_h_pitch_log2 <= 8'sd2))
+      ptt_pitch_q <= thr_h_pitch_log2;
+  end
+  assign ptt_pitch_c = ptt_pitch_q;
+
+  zhao_terrain_heighttap u_terrain_heighttap (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .pitch_log2_i(ptt_pitch_c),
+
+    // REAL: PART.TERRAIN_TAP's cell fills.
+    .req_valid_i  (htp_req_valid),
+    .req_ready_o  (htp_req_ready),
+    .req_x_i      (htp_req_x),
+    .req_z_i      (htp_req_z),
+    .req_surface_i(htp_req_surface),
+    .rsp_valid_o    (htp_rsp_valid),
+    .rsp_height_o   (htp_height),
+    .rsp_no_ground_o(htp_rsp_no_ground),
+    .rsp_nx_o(htp_nx),
+    .rsp_ny_o(htp_ny),
+    .rsp_nz_o(htp_nz),
+    .rsp_h00_o (htp_h00),
+    .rsp_h10_o (htp_h10),
+    .rsp_h01_o (htp_h01),
+    .rsp_h11_o (htp_h11),
+    .rsp_wx00_o(htp_wx00),
+    .rsp_wz00_o(htp_wz00),
+    .rsp_sh_o  (htp_sh),
+    .rsp_na_x_o(htp_na_x),
+    .rsp_na_y_o(htp_na_y),
+    .rsp_na_z_o(htp_na_z),
+    .rsp_nb_x_o(htp_nb_x),
+    .rsp_nb_y_o(htp_nb_y),
+    .rsp_nb_z_o(htp_nb_z),
+
+    // REAL: TERRAIN.TESS, the owner, passed straight through.
+    .o_lat_req_i     (tt_lat_req),
+    .o_lat_vi_i      (tt_lat_vi),
+    .o_lat_vj_i      (tt_lat_vj),
+    .o_lat_surface_i (tt_lat_surface),
+    .o_lat_h_o       (htp_o_lat_h),
+    .o_lat_wx_o      (htp_o_lat_wx),
+    .o_lat_wz_o      (htp_o_lat_wz),
+    .o_cs_req_i      (tt_cs_req),
+    .o_cs_ci_i       (tt_cs_ci),
+    .o_cs_cj_i       (tt_cs_cj),
+    .o_cs_substance_o(htp_o_cs_substance),
+
+    // REAL: the compose cache's read ports.
+    .c_lat_req_o     (htp_c_lat_req),
+    .c_lat_vi_o      (htp_c_lat_vi),
+    .c_lat_vj_o      (htp_c_lat_vj),
+    .c_lat_surface_o (htp_c_lat_surface),
+    .c_lat_h_i       (tcc_lat_h),
+    .c_lat_wx_i      (tcc_lat_wx),
+    .c_lat_wz_i      (tcc_lat_wz),
+    .c_cs_req_o      (htp_c_cs_req),
+    .c_cs_ci_o       (htp_c_cs_ci),
+    .c_cs_cj_o       (htp_c_cs_cj),
+    .c_cs_substance_i(tcc_cs_substance),
+
+    .taps_answered_o   (terr_tap_answered_o),
+    .taps_void_o       (htp_void),
+    .taps_off_patch_o  (terr_tap_off_patch_o),
+    .place_mismatch_o  (htp_place_bad),
+    .pitch_bad_o       (htp_pitch_bad),
+    .interp_overflow_o (htp_ovf),
+    .tap_stall_clocks_o(htp_stall),
+    .normal_sats_o     (htp_nsat)
+  );
+
   // `fill_accept_o` is the one-cycle echo of a start this composition already
   // knows it made; the count that matters is `patches_filled_o`, exported.
   /* verilator lint_off UNUSEDSIGNAL */
@@ -6748,17 +7081,21 @@ module zhao_console_core
     // it is composed at `u_terrain_compcache` below and these eleven wires are
     // internal.  Nothing is adapted -- the cache's one-cycle read latency is its
     // own published contract and this block was built to it.
+    // From 2026-09-19 the answers come back THROUGH TERRAIN.HEIGHTTAP (item
+    // 14), which passes them straight through with no register and no mux:
+    // this block only reads the cycle after one it requested, and on every
+    // such cycle the tap did not inject.
     .lat_req_o     (tt_lat_req),
     .lat_vi_o      (tt_lat_vi),
     .lat_vj_o      (tt_lat_vj),
     .lat_surface_o (tt_lat_surface),
-    .lat_h_i       (tcc_lat_h),
-    .lat_wx_i      (tcc_lat_wx),
-    .lat_wz_i      (tcc_lat_wz),
+    .lat_h_i       (htp_o_lat_h),
+    .lat_wx_i      (htp_o_lat_wx),
+    .lat_wz_i      (htp_o_lat_wz),
     .cs_req_o      (tt_cs_req),
     .cs_ci_o       (tt_cs_ci),
     .cs_cj_o       (tt_cs_cj),
-    .cs_substance_i(tcc_cs_substance),
+    .cs_substance_i(htp_o_cs_substance),
 
     // ModeTri: never presented; see the declaration above.
     .tri_valid_o(tt_tri_valid),
@@ -9977,17 +10314,19 @@ module zhao_console_core
     .serve_src_id_o (terr_cc_serve_src_id_o),
 
     // REAL: TERRAIN.TESS's lattice and cell-state read ports.  Entry I22.
-    .lat_req_i    (tt_lat_req),
-    .lat_vi_i     (tt_lat_vi),
-    .lat_vj_i     (tt_lat_vj),
-    .lat_surface_i(tt_lat_surface),
+    // Through TERRAIN.HEIGHTTAP from 2026-09-19 (item 14): TESS's request
+    // when it makes one, the tap's borrowed read when it does not.
+    .lat_req_i    (htp_c_lat_req),
+    .lat_vi_i     (htp_c_lat_vi),
+    .lat_vj_i     (htp_c_lat_vj),
+    .lat_surface_i(htp_c_lat_surface),
     .lat_h_o      (tcc_lat_h),
     .lat_wx_o     (tcc_lat_wx),
     .lat_wz_o     (tcc_lat_wz),
 
-    .cs_req_i      (tt_cs_req),
-    .cs_ci_i       (tt_cs_ci),
-    .cs_cj_i       (tt_cs_cj),
+    .cs_req_i      (htp_c_cs_req),
+    .cs_ci_i       (htp_c_cs_ci),
+    .cs_cj_i       (htp_c_cs_cj),
     .cs_substance_o(tcc_cs_substance),
 
     .fill_records_o  (terr_cc_fill_records_o),

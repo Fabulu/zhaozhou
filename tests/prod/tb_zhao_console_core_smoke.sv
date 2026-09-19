@@ -110,10 +110,15 @@ module tb_zhao_console_core_smoke
 
   localparam int unsigned N_PART_RECORDS = 6;
 
-  // ---- the terrain the particles are driven into (see the acceptance below) --
-  // Every record this bench offers sits at y = 0, so a heightfield at +100
-  // position LSBs puts all six INSIDE the surface and every one of them makes a
-  // contact. `PART_CLEAR_EPS` is `zhao_part_collide`'s own default; it is
+  // ---- the surface the particles are driven into (see the acceptance below) --
+  // Every record this bench offers sits at y = 0, so a surface at +100
+  // position LSBs puts all six INSIDE it and every one of them makes a
+  // contact. From 2026-09-19 that surface is the PLANE (entry I7, still a
+  // boundary input) and not a hand-driven terrain sample: I6 closed and the
+  // terrain sample is produced INSIDE the core now, from a compose cache this
+  // bench never fills (its pages fault by design -- see the TERRAIN spine
+  // note), so the terrain answers "no ground" and the plane is what the
+  // particles land on. The terrain path is asserted separately, below. `PART_CLEAR_EPS` is `zhao_part_collide`'s own default; it is
   // written here rather than read, so a change to that parameter fails this
   // bench loudly instead of silently agreeing with itself.
   localparam int signed   PART_TER_H     = 100;
@@ -162,11 +167,20 @@ module tb_zhao_console_core_smoke
   logic signed [10:0]      part_fld_ax_i;
   logic signed [10:0]      part_fld_ay_i;
   logic signed [10:0]      part_fld_az_i;
-  logic                    part_ter_valid_i;
-  logic signed [PART_POS_W-1:0] part_ter_height_i;
-  logic signed [PART_NRM_W-1:0] part_ter_nx_i;
-  logic signed [PART_NRM_W-1:0] part_ter_ny_i;
-  logic signed [PART_NRM_W-1:0] part_ter_nz_i;
+  // I6 CLOSED: the terrain sample is the core's own now. Its census and the
+  // population origin (I7, widened) take the five retired inputs' place.
+  logic [31:0]             part_ter_particles_o;
+  logic [31:0]             part_ter_ground_o;
+  logic [31:0]             part_ter_no_ground_o;
+  logic [31:0]             part_ter_missed_o;
+  logic [31:0]             part_ter_faults_o;
+  logic [31:0]             part_ter_fills_landed_o;
+  logic [31:0]             terr_tap_answered_o;
+  logic [31:0]             terr_tap_off_patch_o;
+  logic [31:0]             terr_tap_faults_o;
+  logic signed [31:0]      part_pop_origin_x_i;
+  logic signed [31:0]      part_pop_origin_y_i;
+  logic signed [31:0]      part_pop_origin_z_i;
   logic                    part_plane_en_i;
   logic signed [PART_NRM_W-1:0] part_plane_nx_i;
   logic signed [PART_NRM_W-1:0] part_plane_ny_i;
@@ -2539,11 +2553,11 @@ module tb_zhao_console_core_smoke
     terr_wback_gen_i = '0;
     terr_wback_epoch_i = '0;
 
-    part_ter_valid_i = '0;
-    part_ter_height_i = '0;
-    part_ter_nx_i = '0;
-    part_ter_ny_i = '0;
-    part_ter_nz_i = '0;
+    // The population sits at the island datum: a legal origin, and the one
+    // under which a local position IS a world position.
+    part_pop_origin_x_i = '0;
+    part_pop_origin_y_i = '0;
+    part_pop_origin_z_i = '0;
     part_plane_en_i = '0;
     part_plane_nx_i = '0;
     part_plane_ny_i = '0;
@@ -2864,8 +2878,12 @@ module tb_zhao_console_core_smoke
     // terrain sample) and PRINTED two counters it knew could not move. Both of
     // them CAN move now, and making them move is the point of this stimulus.
     //
-    //   * a heightfield at +100 with an up normal, so every record -- all of
-    //     which sit at y = 0 -- is inside the surface and makes a contact;
+    //   * a PLANE at +100 with an up normal (n.p = c, c in Q NRM_Q), so every
+    //     record -- all of which sit at y = 0 -- is inside the surface and
+    //     makes a contact. It was a hand-driven heightfield until I6 closed;
+    //     a unit up normal makes the plane's placement the same exact
+    //     vertical h + CLEAR_EPS the heightfield's was, so the acceptance
+    //     value below did not move;
     //   * STICK (3'd2), the simplest PLACING response: both coefficients are
     //     zero, so the velocity result needs no coefficient arithmetic and the
     //     placement is the exact vertical h + CLEAR_EPS;
@@ -2874,11 +2892,11 @@ module tb_zhao_console_core_smoke
     //     marker is disabled and the lifetime is unbounded -- so the other
     //     three spawn counters staying at zero is a specificity check, not an
     //     oversight.
-    part_ter_valid_i        = 1'b1;
-    part_ter_height_i       = PART_POS_W'(PART_TER_H);
-    part_ter_nx_i           = '0;
-    part_ter_ny_i           = PART_NRM_W'(1 << 10);   // NRM_Q = 10: a unit +Y normal
-    part_ter_nz_i           = '0;
+    part_plane_en_i         = 1'b1;
+    part_plane_nx_i         = '0;
+    part_plane_ny_i         = PART_NRM_W'(1 << 10);   // NRM_Q = 10: a unit +Y normal
+    part_plane_nz_i         = '0;
+    part_plane_c_i          = 32'(PART_TER_H) <<< 10; // y = +100 LSBs, Q NRM_Q
     // (the STICK response and the spawn rule are now LOADED INTO PART.TABLE
     //  after reset lifts -- see the load sequence below.)
     proj_en_i               = 1'b1;
@@ -3494,7 +3512,45 @@ module tb_zhao_console_core_smoke
     if (part_collisions_applied_o == 0)
       $fatal(1, "SMOKE: part_collisions_applied_o is still zero -- PART.COLLIDE's collision_events_o does not reach the boundary");
     if (part_contacts_stick_o == 0)
-      $fatal(1, "SMOKE: no STICK contact was counted -- the terrain sample does not reach PART.COLLIDE");
+      $fatal(1, "SMOKE: no STICK contact was counted -- the plane does not reach PART.COLLIDE");
+
+    // ======================================================================
+    // THE TERRAIN SAMPLE IS THE CORE'S OWN. ENTRY I6, composed 2026-09-19.
+    //
+    // Every particle now passes through PART.TERRAIN_TAP on its way to the
+    // collider, and the first one over an uncached cell sends a real fill
+    // through TERRAIN.HEIGHTTAP into the REAL compose cache's read ports. This
+    // bench never fills that cache -- its pages fault by design -- so the
+    // honest answers are: the fill LANDS (the round trip exists), the tap
+    // answers OFF-PATCH (nothing is served), no particle is handed ground, and
+    // PART.COLLIDE's "unavailable" is exactly the particles that were not.
+    // The values themselves are differenced against the reference in
+    // tests/particles/part_terrain_tap_directed.cpp; this is the composition.
+    // ======================================================================
+    $display("SMOKE: terrain sample  particles=%0d ground=%0d no_ground=%0d missed=%0d faults=%0d fills_landed=%0d | tap answered=%0d off_patch=%0d faults=%0d | collide unavailable=%0d",
+             part_ter_particles_o, part_ter_ground_o, part_ter_no_ground_o,
+             part_ter_missed_o, part_ter_faults_o, part_ter_fills_landed_o,
+             terr_tap_answered_o, terr_tap_off_patch_o, terr_tap_faults_o,
+             part_terrain_sample_unavailable_o);
+    if (part_ter_particles_o == 0)
+      $fatal(1, "SMOKE: no particle passed through PART.TERRAIN_TAP -- it is not on the PART.UPDATE -> PART.COLLIDE path");
+    if (part_ter_particles_o != part_ter_ground_o + part_ter_no_ground_o +
+                                part_ter_missed_o + part_ter_faults_o)
+      $fatal(1, "SMOKE: terrain-sample census does not balance: %0d particles, %0d accounted for",
+             part_ter_particles_o, part_ter_ground_o + part_ter_no_ground_o +
+                                   part_ter_missed_o + part_ter_faults_o);
+    if (part_ter_fills_landed_o == 0)
+      $fatal(1, "SMOKE: no terrain cell fill came back -- the TERRAIN.HEIGHTTAP round trip through the compose cache is broken");
+    if (terr_tap_off_patch_o == 0)
+      $fatal(1, "SMOKE: the tap never answered OFF-PATCH, but this bench serves no patch -- it is reading something that is not the compose cache");
+    if (part_ter_ground_o != 0)
+      $fatal(1, "SMOKE: %0d particle(s) were handed ground from a compose cache this bench never filled", part_ter_ground_o);
+    if (part_terrain_sample_unavailable_o != part_ter_particles_o - part_ter_ground_o)
+      $fatal(1, "SMOKE: PART.COLLIDE counted %0d unavailable samples; the tap delivered %0d of %0d",
+             part_terrain_sample_unavailable_o, part_ter_ground_o, part_ter_particles_o);
+    if (part_ter_faults_o != 0 || terr_tap_faults_o != 0)
+      $fatal(1, "SMOKE: terrain-sample FAULTS (sampler %0d, tap %0d) on a bench that places nothing wrong",
+             part_ter_faults_o, terr_tap_faults_o);
 
     // ======================================================================
     // PART.TABLE ANSWERED. ENTRIES I2 AND I3, composed 2026-09-19.

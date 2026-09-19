@@ -359,6 +359,31 @@ pre-crater normals forever (S1 §4); we recompute exactly where the ground
 moved. Velocity is the Earth velocity out-lane accumulated at lattice
 vertices (TERRAIN.VELOCITY), interpolated by the same §4.3 rule.
 
+**The collision normal (amended 2026-09-19, owner ruling R1 of
+`reports/OWNER-RULINGS-20260919-EVENING.md`).** The sentence above was read
+two ways and contradicted `design/contracts/TERRAIN.NORMALS.md` (face
+normals; the vertex-normal question "left open for whoever ratifies it"). For
+**collision** it is now ratified, and the rendering sentence above is
+untouched by this paragraph:
+
+```
+collision_normal(island, wx, wz, surface):
+  (cell, tri) = the §4.3 pick column_query makes for (wx, wz)   // same pick, not a second one
+  t = tri A ? (i00, i11, i10) : (i00, i01, i11)                 // the §4.3 emit order
+      with vertex = (placed wx[i], surface height, placed wz[j])
+  n = normalize3_approx(face_normal(t))                         // qformats §7.4; fx16 unit, +y up
+```
+
+`face_normal` is `zref::terrain::face_normal` (Q32.32 cross product,
+`rescale_s32(., 16)`, saturating). The emit order is what makes the normal
+point **up** out of a top surface; it is not inverted for the bottom surface
+(the underside's inverted *render* winding is a drawing fact). Consumers that
+take a unit normal in another format convert it with ONE round-half-up rescale
+(qformats §4) — PART.COLLIDE's S1.10 is `rescale(n, 6)`. Reference:
+`zref::terrain::collision_normal` over `zref::terrain::column_pick`
+(`reference/src/zterrain/terrain_core.cpp`); hardware:
+`zhao_terrain_heighttap` → `zhao_part_terrain_tap` → `zhao_part_collide`.
+
 ## 5. Rim geometry (FORGE.CLIFF law)
 
 - **Rim edge** = a lattice edge between a SOLID cell and a void/OUT

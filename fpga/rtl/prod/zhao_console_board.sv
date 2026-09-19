@@ -545,14 +545,36 @@ module zhao_console_board
   //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
   //  PART.COLLIDE's own new `d_index_o`.)
 
-  // ---- I6: the live deformed terrain sample -------------------------------
-  input  logic                    part_ter_valid_i,
-  input  logic signed [PART_POS_W-1:0] part_ter_height_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_ter_nz_i,
+  // (I6's five `part_ter_*` inputs were here. CLOSED 2026-09-19 under owner
+  //  ruling R1: PART.TERRAIN_TAP produces the sample from the live compose
+  //  cache through TERRAIN.HEIGHTTAP, inside this module. See item 14.)
 
-  // ---- I7: the one plane --------------------------------------------------
+  // ---- I6's evidence: the terrain sample's census --------------------------
+  // Every particle lands in exactly one of the first four, so a bench can say
+  // WHY a particle did or did not see ground -- a cold cell, a void or an
+  // unstaged patch, or a fault -- instead of reading PART.COLLIDE's single
+  // "unavailable" total. The tap's three are the service's own view of the
+  // same traffic.
+  output logic [31:0]             part_ter_particles_o,
+  output logic [31:0]             part_ter_ground_o,
+  output logic [31:0]             part_ter_no_ground_o,
+  output logic [31:0]             part_ter_missed_o,
+  output logic [31:0]             part_ter_faults_o,     // cell mismatch + out of range
+  output logic [31:0]             part_ter_fills_landed_o,
+  output logic [31:0]             terr_tap_answered_o,
+  output logic [31:0]             terr_tap_off_patch_o,
+  output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
+
+  // ---- I7: the one plane, and the population origin ------------------------
+  // The origin is widened INTO I7 rather than opened as a new entry because it
+  // is the same kind of thing with the same absent owner: a per-frame
+  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
+  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
+  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
+  // terrain height -- and it became visible the moment a real height arrived.
+  input  logic signed [31:0]      part_pop_origin_x_i,
+  input  logic signed [31:0]      part_pop_origin_y_i,
+  input  logic signed [31:0]      part_pop_origin_z_i,
   input  logic                    part_plane_en_i,
   input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
   input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
@@ -2405,11 +2427,18 @@ module zhao_console_board
       .part_fld_ax_i                     (part_fld_ax_i),
       .part_fld_ay_i                     (part_fld_ay_i),
       .part_fld_az_i                     (part_fld_az_i),
-      .part_ter_valid_i                  (part_ter_valid_i),
-      .part_ter_height_i                 (part_ter_height_i),
-      .part_ter_nx_i                     (part_ter_nx_i),
-      .part_ter_ny_i                     (part_ter_ny_i),
-      .part_ter_nz_i                     (part_ter_nz_i),
+      .part_ter_particles_o              (part_ter_particles_o),
+      .part_ter_ground_o                 (part_ter_ground_o),
+      .part_ter_no_ground_o              (part_ter_no_ground_o),
+      .part_ter_missed_o                 (part_ter_missed_o),
+      .part_ter_faults_o                 (part_ter_faults_o),
+      .part_ter_fills_landed_o           (part_ter_fills_landed_o),
+      .terr_tap_answered_o               (terr_tap_answered_o),
+      .terr_tap_off_patch_o              (terr_tap_off_patch_o),
+      .terr_tap_faults_o                 (terr_tap_faults_o),
+      .part_pop_origin_x_i               (part_pop_origin_x_i),
+      .part_pop_origin_y_i               (part_pop_origin_y_i),
+      .part_pop_origin_z_i               (part_pop_origin_z_i),
       .part_plane_en_i                   (part_plane_en_i),
       .part_plane_nx_i                   (part_plane_nx_i),
       .part_plane_ny_i                   (part_plane_ny_i),

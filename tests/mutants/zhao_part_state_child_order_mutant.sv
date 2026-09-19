@@ -308,6 +308,20 @@ module zhao_part_state_child_order_mutant #(
     input  wire                  chl_valid_i,
     output wire                  chl_ready_o,
     input  wire [REC_W-1:0]      chl_record_i,
+    // THE PRODUCER MAY STILL EMIT INTO THIS GENERATION. High while the child
+    // producer holds a parent of THIS generation whose children it has not
+    // finished offering -- in the console, PART.SPAWN not idle, or the fork
+    // branch that feeds it still holding a parent. The append phase does not
+    // close while it is high. This is option (a) of
+    // reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md, added 2026-09-19 when a
+    // stage inserted before PART.COLLIDE moved the timing and two collision
+    // children of tick 1 missed their append phase and were deferred to tick 2:
+    // option (b) alone made a late child DEFERRED rather than LOST, which is
+    // correct and not enough, because qformats 10's tick law puts this tick's
+    // collision children in this tick ("survivors compact, THEN children
+    // append"). Tie LOW where no producer can hold a parent across the survivor
+    // pass; the block then behaves exactly as before.
+    input  wire                  chl_busy_i,
 
     // ---- the next generation, to MEM.HPS.BRIDGE ------------------------------
     output wire                  wr_valid_o,
@@ -581,7 +595,7 @@ module zhao_part_state_child_order_mutant #(
           // accept's own condition, so the phase cannot close underneath one:
           // the child that arrives here is drained by this phase, in this
           // generation, on the next cycle.
-          if (chl_empty_c && !wr_v_q && !chl_wr_fire_c) st_q <= S_DONE;
+          if (chl_empty_c && !wr_v_q && !chl_wr_fire_c && !chl_busy_i) st_q <= S_DONE;
         end
 
         S_DONE: begin

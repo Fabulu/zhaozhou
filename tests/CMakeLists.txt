@@ -13914,7 +13914,13 @@ set_tests_properties(lint_zhao_field_stamp_adapter PROPERTIES
 # does not fit s32, and the owner starving the tap of read cycles), so no
 # committed mutant is owed. The overflow guard exists BECAUSE the explicit -Wall
 # lint reported quot_c[63:32] unused -- verilate() does not pass -Wall.
+# R1 (2026-09-19): the tap now emits normalize3_approx(face_normal) of the
+# picked triangle, through THE one implementation of that law,
+# zhao_field_v3_normalize, which brings its isqrt and its rcp24 seed ROM.
 set(ZHAO_TERRAIN_HEIGHTTAP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_heighttap.sv)
 add_executable(test_terrain_heighttap_directed terrain/terrain_heighttap_directed.cpp)
 target_link_libraries(test_terrain_heighttap_directed PRIVATE zhao_harness zhao_zref)
@@ -13928,7 +13934,7 @@ set_tests_properties(terrain_heighttap_directed PROPERTIES LABELS "fast;nightly"
 add_test(NAME lint_zhao_terrain_heighttap
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_terrain_heighttap
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_heighttap.sv)
+                 ${ZHAO_TERRAIN_HEIGHTTAP_SV})
 set_tests_properties(lint_zhao_terrain_heighttap PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
@@ -13947,8 +13953,42 @@ target_link_libraries(test_terrain_heighttap_mutant_control PRIVATE zhao_harness
 verilate(test_terrain_heighttap_mutant_control
   PREFIX Vzhao_terrain_heighttap_mutant
   TOP_MODULE zhao_terrain_heighttap_mutant
-  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_heighttap_mutant.sv)
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_heighttap_mutant.sv)
 add_test(NAME terrain_heighttap_mutant_control
          COMMAND test_terrain_heighttap_mutant_control)
 set_tests_properties(terrain_heighttap_mutant_control PROPERTIES
   LABELS "fast;nightly" TIMEOUT 300)
+
+# PART.TERRAIN_TAP -- console entry I6, owner ruling R1 (2026-09-19). The chain
+# TERRAIN.HEIGHTTAP -> PART.TERRAIN_TAP -> PART.COLLIDE, all three real, with
+# only the compose cache's read ports as a fixture. Every sample differenced
+# against zref::terrain::column_query and ::collision_normal through the
+# particle frame (qformats 10); a particle below the reference surface must
+# leave PART.COLLIDE standing on it. All eleven censuses fired with legal
+# stimulus, so no mutant is owed.
+set(ZHAO_PART_TERRAIN_TAP_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_terrain_tap.sv)
+add_executable(test_part_terrain_tap_directed particles/part_terrain_tap_directed.cpp)
+target_link_libraries(test_part_terrain_tap_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_terrain_tap_directed
+  PREFIX Vtb_part_terrain_chain
+  TOP_MODULE tb_part_terrain_chain
+  SOURCES ${ZHAO_TERRAIN_HEIGHTTAP_SV}
+          ${ZHAO_PART_TERRAIN_TAP_SV}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_collide.sv
+          ${CMAKE_SOURCE_DIR}/tests/particles/tb_part_terrain_chain.sv)
+add_test(NAME part_terrain_tap_directed COMMAND test_part_terrain_tap_directed)
+set_tests_properties(part_terrain_tap_directed PROPERTIES
+  LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_terrain_tap
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_terrain_tap
+                 ${ZHAO_PART_TERRAIN_TAP_SV})
+set_tests_properties(lint_zhao_part_terrain_tap PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

@@ -161,6 +161,7 @@ struct Answer {
   bool valid = false;
   int32_t height = 0;
   bool no_ground = false;
+  int32_t nx = 0, ny = 0, nz = 0;   // owner ruling R1's collision normal
 };
 
 Answer tap(Dut& d, const Cache& c, int32_t x, int32_t z, int surface, int max_wait = 400) {
@@ -179,6 +180,9 @@ Answer tap(Dut& d, const Cache& c, int32_t x, int32_t z, int surface, int max_wa
     a.valid = true;
     a.height = static_cast<int32_t>(d.rsp_height_o);
     a.no_ground = d.rsp_no_ground_o != 0;
+    a.nx = static_cast<int32_t>(d.rsp_nx_o);
+    a.ny = static_cast<int32_t>(d.rsp_ny_o);
+    a.nz = static_cast<int32_t>(d.rsp_nz_o);
   }
   return a;
 }
@@ -202,6 +206,47 @@ void fill_relief(Cache& c, uint32_t seed) {
       c.bottom[k] = c.top[k] - 300000;
     }
   }
+}
+
+// THE NORMAL, owner ruling R1: normalize3_approx(face_normal(t)) of the picked
+// triangle, asked of the REFERENCE (`zref::terrain::collision_normal` over
+// `column_pick`, the same pick `column_query` uses), never transcribed here.
+void check_normal(const zref::terrain::ComposedLattice& ref, int32_t x, int32_t z, bool bottom,
+                  const Answer& a, const char* which) {
+  const zref::terrain::ColumnPick p =
+      zref::terrain::column_pick(ref, zref::fx16{x}, zref::fx16{z});
+  const zref::terrain::CollisionNormal n = zref::terrain::collision_normal(ref, p, bottom);
+  char what[96];
+  std::snprintf(what, sizeof what, "%s normal x equals collision_normal", which);
+  check(a.nx == n.n.x.raw, what, n.n.x.raw, a.nx);
+  std::snprintf(what, sizeof what, "%s normal y equals collision_normal", which);
+  check(a.ny == n.n.y.raw, what, n.n.y.raw, a.ny);
+  std::snprintf(what, sizeof what, "%s normal z equals collision_normal", which);
+  check(a.nz == n.n.z.raw, what, n.n.z.raw, a.nz);
+  // +y UP, which is what the emit order buys: a heightfield face's y lane is
+  // D*D and never zero, so a unit normal of it is strictly positive in y.
+  check(a.ny > 0, "the collision normal points up", 1, a.ny > 0 ? 1 : 0);
+}
+
+// THE CELL the answer came from -- the fields PART.TERRAIN_TAP caches. They
+// are held until the next request is captured, so one step after
+// `rsp_valid_o` they are still the answer's cell.
+void check_cell(const Dut& d, const Cache& c, int32_t x, int32_t z, int surface, int sh) {
+  const int ci = x >> sh, cj = z >> sh;
+  check(static_cast<int32_t>(d.rsp_h00_o) == c.h(ci, cj, surface), "cell h00",
+        c.h(ci, cj, surface), static_cast<int32_t>(d.rsp_h00_o));
+  check(static_cast<int32_t>(d.rsp_h10_o) == c.h(ci + 1, cj, surface), "cell h10",
+        c.h(ci + 1, cj, surface), static_cast<int32_t>(d.rsp_h10_o));
+  check(static_cast<int32_t>(d.rsp_h01_o) == c.h(ci, cj + 1, surface), "cell h01",
+        c.h(ci, cj + 1, surface), static_cast<int32_t>(d.rsp_h01_o));
+  check(static_cast<int32_t>(d.rsp_h11_o) == c.h(ci + 1, cj + 1, surface), "cell h11",
+        c.h(ci + 1, cj + 1, surface), static_cast<int32_t>(d.rsp_h11_o));
+  check(static_cast<int32_t>(d.rsp_wx00_o) == c.cx(ci), "cell wx00", c.cx(ci),
+        static_cast<int32_t>(d.rsp_wx00_o));
+  check(static_cast<int32_t>(d.rsp_wz00_o) == c.cz(cj), "cell wz00", c.cz(cj),
+        static_cast<int32_t>(d.rsp_wz00_o));
+  check(static_cast<int>(d.rsp_sh_o) == sh, "cell shift", sh,
+        static_cast<long long>(d.rsp_sh_o));
 }
 
 // ---------------------------------------------------------------------------
@@ -242,10 +287,13 @@ void test_matches_the_reference_on_random_interior_points() {
       check(!top.no_ground, "solid cell is not no_ground", 0, top.no_ground ? 1 : 0);
       check(top.height == want.top.raw, "top height equals zref::terrain::column_query",
             want.top.raw, top.height);
+      check_normal(ref, x, z, false, top, "top");
+      check_cell(d, c, x, z, 0, sh);
 
       const Answer bot = tap(d, c, x, z, 1);
       check(bot.height == want.bottom.raw, "bottom height equals the reference",
             want.bottom.raw, bot.height);
+      check_normal(ref, x, z, true, bot, "bottom");
     }
     check(d.taps_answered_o == 48, "every tap counted as answered", 48,
           static_cast<long long>(d.taps_answered_o));
@@ -412,7 +460,14 @@ void test_extreme_corners_stay_between_their_rails() {
     check(!a.no_ground, "a rail-to-rail lattice still has ground", 0, a.no_ground ? 1 : 0);
     check(a.height == want.top.raw, "and it is still the reference's answer", want.top.raw,
           a.height);
+    // face_normal's rescale SATURATES on a rail-to-rail lattice, in the
+    // reference exactly as here, so the normal is still the reference's.
+    check_normal(ref, x, z, false, a, "rails");
   }
+  // THE NORMAL-SATURATION CENSUS, fired with legal stimulus: a dh of ~2^32 at
+  // SH = 18 is ~2^34 after the rescale, far past s32.
+  check(d.normal_sats_o == 12, "every rail-to-rail answer counted a normal saturation", 12,
+        static_cast<long long>(d.normal_sats_o));
   check(d.interp_overflow_o == 0, "the overflow guard stays silent on legal stimulus", 0,
         static_cast<long long>(d.interp_overflow_o));
 }

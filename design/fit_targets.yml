@@ -2535,6 +2535,9 @@ targets:
       - fpga/rtl/particles/zhao_part_state.sv
       - fpga/rtl/particles/zhao_part_update.sv
       - fpga/rtl/particles/zhao_part_collide.sv
+      # PART.TERRAIN_TAP, 2026-09-19 (core entry I6, owner ruling R1): the terrain
+      # sample, between PART.UPDATE and PART.COLLIDE.
+      - fpga/rtl/particles/zhao_part_terrain_tap.sv
       - fpga/rtl/particles/zhao_part_spawn.sv
       # PART.TABLE, added 2026-09-19 with the composition that closes core
       # header I2 and I3. It was BUILT on 2026-09-19 and instantiated nowhere
@@ -2742,6 +2745,10 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_pagestream.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
       - fpga/rtl/terrain/zhao_terrain_compcache_front.sv
+      # TERRAIN.HEIGHTTAP, 2026-09-19 (item 14): the pass-through tap in front
+      # of the compose cache's read ports. Its normaliser is FIELD's
+      # zhao_field_v3_normalize, already in this list through the field engine.
+      - fpga/rtl/terrain/zhao_terrain_heighttap.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv

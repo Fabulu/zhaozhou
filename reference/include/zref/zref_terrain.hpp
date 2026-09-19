@@ -120,6 +120,47 @@ struct ColumnResult {
  */
 ColumnResult column_query(const ComposedLattice& lat, fx16 wx, fx16 wz);
 
+/**
+ * The cell and triangle `column_query` picks, and nothing else. Exposed
+ * 2026-09-19 so the collision normal below is taken from THE SAME PICK as the
+ * height -- `column_query` is now implemented on top of this, so there is one
+ * locate and one tie rule, not two that could drift. `cls` is kOut or kVoid
+ * exactly when `column_query`'s is; for kSolid, (ci, cj) is the cell and
+ * `tri_a` is the §4.3 pick (u >= v, ties to A).
+ */
+struct ColumnPick {
+  ColumnClass cls = ColumnClass::kOut;
+  int ci = 0, cj = 0;
+  bool tri_a = true;
+};
+ColumnPick column_pick(const ComposedLattice& lat, fx16 wx, fx16 wz);
+
+/**
+ * THE COLLISION NORMAL -- owner ruling R1, 2026-09-19
+ * (reports/OWNER-RULINGS-20260919-EVENING.md; terrain_rules §4.4 amended):
+ *
+ *     normalize3_approx(face_normal(t))
+ *
+ * where t is the triangle `column_pick` chose, with its vertices taken as the
+ * placed lattice points (wx[i], h, wz[j]) IN THE RENDERER'S EMIT ORDER
+ * (§4.3: A = (i00, i11, i10), B = (i00, i01, i11)). That order is what makes
+ * the normal point UP (+y) out of a top surface, so physics and pixels agree
+ * on which way a face faces. `bottom` selects the bottom lattice; the winding
+ * is NOT inverted for it -- this is the normal of the surface's graph, +y up,
+ * whichever surface is asked (the underside's inverted RENDER winding is a
+ * drawing fact, not a collision one).
+ *
+ * `degenerate` is face_normal's verdict (all three lanes rescale to zero),
+ * in which case `n` is normalize3_approx's pinned zero vector. Only
+ * meaningful for a kSolid pick.
+ */
+struct CollisionNormal {
+  vec3fx n{};
+  bool degenerate = false;
+};
+CollisionNormal collision_normal(const ComposedLattice& lat, const ColumnPick& pick,
+                                 bool bottom);
+
 // ---- TERRAIN.BAKE reference (terrain_rules.md §3.4 + §9) -------------------
 
 /**

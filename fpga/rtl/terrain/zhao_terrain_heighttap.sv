@@ -21,9 +21,15 @@
 //     `tap_height_i`/`tap_no_ground_i` -- `zhao_forge_shadow.sv:131-137`. This
 //     block's service port is that port MIRRORED, signal for signal.
 //   * PART.COLLIDE's terrain sample, console entry I6. That one needs a SURFACE
-//     NORMAL as well as a height and this block emits no normal, so I6 does not
-//     close here. Said plainly rather than nearly-claimed: wiring height alone
-//     and inventing a normal is the hidden-adapter failure I6 already names.
+//     NORMAL as well as a height. Until 2026-09-19 this block emitted none,
+//     because the normal's law was contradicted in writing (terrain_rules 4.4
+//     said finite differences, TERRAIN.NORMALS.md:194 said face normals and
+//     left the question open). OWNER RULING R1 settled it -- "the collision
+//     normal is normalize3_approx(face_normal(...)) of the triangle 4.3
+//     already picks for the height" -- and this block now emits exactly that
+//     (THE NORMAL, below), plus the whole CELL it came from, which
+//     PART.TERRAIN_TAP caches so that PART.COLLIDE's particle path is never
+//     stalled on this multi-cycle read.
 //
 // ---------------------------------------------------------------------------
 // THE ARITHMETIC IS TRANSCRIBED FROM THE RATIFIED LAW, NOT REDERIVED
@@ -148,9 +154,15 @@ module zhao_terrain_heighttap #(
     input var logic rst_n,
 
     // ---- the island's cell pitch, spec/terrain_rules.md 1.3 ------------------
-    // The SAME net that drives `zhao_terrain_place.hdr_pitch_log2_i`. One source
-    // of truth used twice; a second opinion about the pitch is how the inverse
-    // and the forward map come apart.
+    // The pitch TERRAIN.PLACE placed the served lattice at: the value on
+    // `zhao_terrain_place.hdr_pitch_log2_i`, taken on the SAME handshake PLACE
+    // takes it on, and HELD. One source of truth used twice; a second opinion
+    // about the pitch is how the inverse and the forward map come apart.
+    // CORRECTED 2026-09-19: this used to say "the SAME net", and in the console
+    // that net is TERRAIN.HDRREAD's `h_pitch_log2_o`, which reads 127 (REFUSE)
+    // on every cycle a header is not being presented -- wiring it here literally
+    // lints clean and makes nearly every tap a pitch fault. `zhao_console_core`
+    // item 14 holds it.
     input var logic signed [7:0] pitch_log2_i,
 
     // ---- the service, mirroring zhao_forge_shadow.sv:131-137 -----------------
@@ -169,6 +181,38 @@ module zhao_terrain_heighttap #(
     output var logic               rsp_valid_o,
     output var logic signed [31:0] rsp_height_o,
     output var logic               rsp_no_ground_o,
+
+    // ---- THE NORMAL, owner ruling R1 (2026-09-19) ----------------------------
+    // `normalize3_approx(face_normal(t))` of the triangle t this answer's height
+    // came from, fx16 (1.0 = 65536), +y up. Valid with `rsp_valid_o` when
+    // `rsp_no_ground_o` is low; zero otherwise. See THE NORMAL in the header.
+    output var logic signed [31:0] rsp_nx_o,
+    output var logic signed [31:0] rsp_ny_o,
+    output var logic signed [31:0] rsp_nz_o,
+
+    // ---- THE CELL the answer came from --------------------------------------
+    // Everything a client needs to evaluate OTHER points of the same cell
+    // without asking again: the four corner heights of the requested surface,
+    // the placed x/z of corner 00, the shift that is the cell width, and BOTH
+    // triangles' normals (A = (i00,i11,i10), B = (i00,i01,i11), spec 4.3).
+    // PART.TERRAIN_TAP caches it, because PART.COLLIDE's contract forbids
+    // stalling the particle path on a terrain read and this service is a
+    // multi-cycle one. Valid with the answer when it has ground; these are
+    // read straight off the registers the answer was computed from, so they
+    // cannot disagree with it.
+    output var logic signed [31:0] rsp_h00_o,
+    output var logic signed [31:0] rsp_h10_o,
+    output var logic signed [31:0] rsp_h01_o,
+    output var logic signed [31:0] rsp_h11_o,
+    output var logic signed [31:0] rsp_wx00_o,
+    output var logic signed [31:0] rsp_wz00_o,
+    output var logic        [ 4:0] rsp_sh_o,
+    output var logic signed [31:0] rsp_na_x_o,
+    output var logic signed [31:0] rsp_na_y_o,
+    output var logic signed [31:0] rsp_na_z_o,
+    output var logic signed [31:0] rsp_nb_x_o,
+    output var logic signed [31:0] rsp_nb_y_o,
+    output var logic signed [31:0] rsp_nb_z_o,
 
     // ---- the OWNER's read ports, in (TERRAIN.TESS) --------------------------
     input  var logic               o_lat_req_i,
@@ -203,7 +247,11 @@ module zhao_terrain_heighttap #(
     output var logic [CENSUS_W-1:0] place_mismatch_o,   // FAULT: lattice vs pitch
     output var logic [CENSUS_W-1:0] pitch_bad_o,        // FAULT: pitch outside 1.3
     output var logic [CENSUS_W-1:0] interp_overflow_o,  // FAULT: answer exceeds s32
-    output var logic [CENSUS_W-1:0] tap_stall_clocks_o  // cycles the owner took
+    output var logic [CENSUS_W-1:0] tap_stall_clocks_o, // cycles the owner took
+    // face_normal's rescale into Q16.16 saturated on an answered tap. The
+    // reference saturates identically (`rescale_s32`), so the answer still
+    // equals it; this counts that the lattice was steep enough to need it.
+    output var logic [CENSUS_W-1:0] normal_sats_o
 );
 
   // The compose cache's no-answer value, `zhao_terrain_compcache_front.sv:452`.
@@ -280,6 +328,9 @@ module zhao_terrain_heighttap #(
   localparam logic [3:0] S_MUL0 = 4'd7;
   localparam logic [3:0] S_MUL1 = 4'd8;
   localparam logic [3:0] S_OUT  = 4'd9;
+  localparam logic [3:0] S_VERD = 4'd10;  // the verdict is final; ground -> normals
+  localparam logic [3:0] S_NRM  = 4'd11;  // offer both face normals to the normaliser
+  localparam logic [3:0] S_NRMW = 4'd12;  // wait for normalize3_approx
 
   logic [3:0] st_q;
   assign req_ready_o = (st_q == S_IDLE);
@@ -420,6 +471,156 @@ module zhao_terrain_heighttap #(
     ovf_c   = (sum_c > S32_MAX) || (sum_c < S32_MIN);
   end
 
+  // ---- THE NORMAL (owner ruling R1) -------------------------------------------
+  // `zref::terrain::collision_normal`: face_normal of the picked triangle with
+  // its vertices at the placed lattice points (wx, h, wz) in spec 4.3's emit
+  // order, then normalize3_approx. On a cell whose placement has passed the
+  // `ud == vd == D` check above, the cross product COLLAPSES EXACTLY -- the
+  // x and z edge components are 0 or D -- to
+  //
+  //     A = (i00, i11, i10):  n = D * ( -(h10-h00),  D,  -(h11-h10) )
+  //     B = (i00, i01, i11):  n = D * ( -(h11-h01),  D,  -(h01-h00) )
+  //
+  // (write e1 = b-a, e2 = c-a and expand face_normal's three lines; every term
+  // with a zero x or z edge component vanishes). The dh's are the SAME four
+  // differences the height interpolation uses, and D = 1 <<< SH, so each lane
+  // is a SHIFT, not a product: no multiplier is spent on the cross product.
+  // face_normal then rescales Q32.32 -> Q16.16 by `rescale_s32(., 16)` --
+  // round half up, SATURATING into s32 -- and that is reproduced exactly,
+  // saturation included, because the reference's answer is what is owed.
+  //
+  // The y lane is D*D rescaled, 2^(2*SH-16), never zero, so a heightfield face
+  // is never degenerate and `normalize3_approx`'s zero-vector rule cannot be
+  // reached from here.
+  function automatic logic signed [31:0] resc16(input logic signed [63:0] v);
+    logic signed [63:0] r;
+    begin
+      r = (v + 64'sd32768) >>> 16;
+      if (r > 64'sh0000_0000_7FFF_FFFF)       resc16 = 32'sh7FFF_FFFF;
+      else if (r < -64'sh0000_0000_8000_0000) resc16 = 32'sh8000_0000;
+      else                                     resc16 = r[31:0];
+    end
+  endfunction
+
+  function automatic logic resc16_sat(input logic signed [63:0] v);
+    logic signed [63:0] r;
+    begin
+      r = (v + 64'sd32768) >>> 16;
+      resc16_sat = (r > 64'sh0000_0000_7FFF_FFFF) || (r < -64'sh0000_0000_8000_0000);
+    end
+  endfunction
+
+  logic signed [63:0] fa_x_c, fa_z_c, fb_x_c, fb_z_c, f_y_c;
+  logic signed [31:0] na_x_c, na_y_c, na_z_c, nb_x_c, nb_y_c, nb_z_c;
+  logic               nsat_c;
+  always_comb begin
+    fa_x_c = -((64'(h10_q) - 64'(h00_q)) <<< rq_sh_q);
+    fa_z_c = -((64'(h11_q) - 64'(h10_q)) <<< rq_sh_q);
+    fb_x_c = -((64'(h11_q) - 64'(h01_q)) <<< rq_sh_q);
+    fb_z_c = -((64'(h01_q) - 64'(h00_q)) <<< rq_sh_q);
+    f_y_c  = 64'sd1 <<< (6'(rq_sh_q) + 6'(rq_sh_q));
+    na_x_c = resc16(fa_x_c);
+    na_y_c = resc16(f_y_c);
+    na_z_c = resc16(fa_z_c);
+    nb_x_c = resc16(fb_x_c);
+    nb_y_c = na_y_c;
+    nb_z_c = resc16(fb_z_c);
+    nsat_c = resc16_sat(fa_x_c) || resc16_sat(fa_z_c) ||
+             resc16_sat(fb_x_c) || resc16_sat(fb_z_c);
+  end
+
+  // ---- normalize3_approx: THE ONE IMPLEMENTATION, not a second --------------
+  // `zhao_field_v3_normalize` is the tree's implementation of
+  // `zref::normalize3_approx` (the latest version; v1 `zhao_field_normalize` is
+  // frozen and the console inventory's G3 would refuse it). It is four points
+  // wide; this block asks for two -- triangle A on lane 0, triangle B on lane 1
+  // -- and lanes 2 and 3 carry the zero vector, which that block answers with
+  // zeros WITHOUT touching its isqrt (its law 2), so they cost two clocks.
+  //
+  // It expects an ENGINE'S four-wide multiplier bank. This block is not an
+  // engine and does not buy four 33x33 multipliers for a service that answers
+  // one tap at a time: the bank below is ONE multiplier walked over the four
+  // lanes, which is legal because the normaliser waits on `mul_valid_i`
+  // rather than assuming a latency. Ten bank issues x four lanes is forty
+  // clocks per answer; the two isqrt walks dominate either way.
+  logic               nrm_v_ready, nrm_r_valid;
+  logic signed [31:0] nrm_o0 [4], nrm_o1 [4], nrm_o2 [4];
+  // Lanes 2 and 3 are the zero vector by construction (above), so their outputs
+  // are zero and unread. `sat_rescale_o` cannot fire for a unit vector: every
+  // output is v*r >>> (31+e) with |v| <= len, i.e. at most 1.0 plus the law's
+  // 2 LSB. `rcp0_o` is for NORMALIZE2's zero vector and NORMALIZE3 never sets
+  // it. `tag_o` echoes a constant. All named, none consumed.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [3:0]         nrm_sat, nrm_rcp0;
+  logic [7:0]         nrm_tag;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  logic               bk_issue, bk_ready, bk_valid;
+  logic signed [32:0] bk_a [4], bk_b [4];
+  logic signed [65:0] bk_p [4];
+
+  zhao_field_v3_normalize u_normalize (
+      .clk(clk), .rst_n(rst_n),
+      .v_valid_i(st_q == S_NRM), .v_ready_o(nrm_v_ready), .is_n3_i(1'b1),
+      .a0_0_i(na_x_c), .a0_1_i(nb_x_c), .a0_2_i(32'sd0), .a0_3_i(32'sd0),
+      .a1_0_i(na_y_c), .a1_1_i(nb_y_c), .a1_2_i(32'sd0), .a1_3_i(32'sd0),
+      .a2_0_i(na_z_c), .a2_1_i(nb_z_c), .a2_2_i(32'sd0), .a2_3_i(32'sd0),
+      .tag_i(8'd0),
+      .r_valid_o(nrm_r_valid), .r_ready_i(st_q == S_NRMW),
+      .o0_0_o(nrm_o0[0]), .o0_1_o(nrm_o0[1]), .o0_2_o(nrm_o0[2]), .o0_3_o(nrm_o0[3]),
+      .o1_0_o(nrm_o1[0]), .o1_1_o(nrm_o1[1]), .o1_2_o(nrm_o1[2]), .o1_3_o(nrm_o1[3]),
+      .o2_0_o(nrm_o2[0]), .o2_1_o(nrm_o2[1]), .o2_2_o(nrm_o2[2]), .o2_3_o(nrm_o2[3]),
+      .sat_rescale_o(nrm_sat), .rcp0_o(nrm_rcp0), .tag_o(nrm_tag),
+      .mul_issue_o(bk_issue), .mul_ready_i(bk_ready),
+      .mul_a_0_o(bk_a[0]), .mul_a_1_o(bk_a[1]), .mul_a_2_o(bk_a[2]), .mul_a_3_o(bk_a[3]),
+      .mul_b_0_o(bk_b[0]), .mul_b_1_o(bk_b[1]), .mul_b_2_o(bk_b[2]), .mul_b_3_o(bk_b[3]),
+      .mul_valid_i(bk_valid),
+      .mul_p_0_i(bk_p[0]), .mul_p_1_i(bk_p[1]), .mul_p_2_i(bk_p[2]), .mul_p_3_i(bk_p[3])
+  );
+
+  // The one-multiplier bank. The operands are LATCHED at issue, because the
+  // normaliser's operand mux moves on as soon as it leaves the issuing state.
+  logic               wk_busy;
+  logic [1:0]         wk_lane;
+  logic signed [32:0] wk_a [4], wk_b [4];
+  logic signed [65:0] wk_prod_c;
+  assign bk_ready  = !wk_busy && !bk_valid;
+  assign wk_prod_c = wk_a[wk_lane] * wk_b[wk_lane];
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      wk_busy  <= 1'b0;
+      wk_lane  <= 2'd0;
+      bk_valid <= 1'b0;
+      for (int l = 0; l < 4; l++) begin
+        wk_a[l] <= '0;
+        wk_b[l] <= '0;
+        bk_p[l] <= '0;
+      end
+    end else begin
+      bk_valid <= 1'b0;
+      if (bk_issue && bk_ready) begin
+        for (int l = 0; l < 4; l++) begin
+          wk_a[l] <= bk_a[l];
+          wk_b[l] <= bk_b[l];
+        end
+        wk_lane <= 2'd0;
+        wk_busy <= 1'b1;
+      end else if (wk_busy) begin
+        bk_p[wk_lane] <= wk_prod_c;
+        wk_lane       <= wk_lane + 2'd1;
+        if (wk_lane == 2'd3) begin
+          wk_busy  <= 1'b0;
+          bk_valid <= 1'b1;
+        end
+      end
+    end
+  end
+
+  // The normaliser's answer, held for the response.
+  logic signed [31:0] rna_x_q, rna_y_q, rna_z_q, rnb_x_q, rnb_y_q, rnb_z_q;
+  logic               rtri_a_q;   // the pick, frozen with the normals
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       st_q               <= S_IDLE;
@@ -451,6 +652,17 @@ module zhao_terrain_heighttap #(
       pitch_bad_o        <= '0;
       interp_overflow_o  <= '0;
       tap_stall_clocks_o <= '0;
+      normal_sats_o      <= '0;
+      rsp_nx_o           <= '0;
+      rsp_ny_o           <= '0;
+      rsp_nz_o           <= '0;
+      rna_x_q            <= '0;
+      rna_y_q            <= '0;
+      rna_z_q            <= '0;
+      rnb_x_q            <= '0;
+      rnb_y_q            <= '0;
+      rnb_z_q            <= '0;
+      rtri_a_q           <= 1'b1;
     end else begin
       rsp_valid_o <= 1'b0;
       lat_in_q    <= lat_go_c ? st_q : S_IDLE;
@@ -503,12 +715,40 @@ module zhao_terrain_heighttap #(
 
         S_MUL1: begin
           acc_q <= acc_q + mul_p_c;
-          st_q  <= S_OUT;
+          st_q  <= S_VERD;
+        end
+
+        // The accumulator is final from here. Only an answer WITH ground has
+        // a triangle, so only that one pays for the normal; every refusal goes
+        // straight out with the latency it always had. The verdict below is
+        // the same combinational set S_OUT reads, over registers nothing
+        // writes between here and there, so the two cannot disagree.
+        S_VERD: begin
+          rtri_a_q <= tri_a_c;
+          if (rq_pitch_ok_q && !place_bad_c && !off_patch_c && !void_c && !ovf_c)
+            st_q <= S_NRM;
+          else
+            st_q <= S_OUT;
+        end
+
+        S_NRM: if (nrm_v_ready) st_q <= S_NRMW;
+
+        S_NRMW: if (nrm_r_valid) begin
+          rna_x_q <= nrm_o0[0];
+          rna_y_q <= nrm_o1[0];
+          rna_z_q <= nrm_o2[0];
+          rnb_x_q <= nrm_o0[1];
+          rnb_y_q <= nrm_o1[1];
+          rnb_z_q <= nrm_o2[1];
+          st_q    <= S_OUT;
         end
 
         S_OUT: begin
           rsp_valid_o <= 1'b1;
           st_q        <= S_IDLE;
+          rsp_nx_o    <= '0;
+          rsp_ny_o    <= '0;
+          rsp_nz_o    <= '0;
           if (!rq_pitch_ok_q) begin
             rsp_height_o    <= '0;
             rsp_no_ground_o <= 1'b1;
@@ -533,6 +773,10 @@ module zhao_terrain_heighttap #(
             rsp_height_o    <= 32'(sum_c);
             rsp_no_ground_o <= 1'b0;
             taps_answered_o <= taps_answered_o + 1;
+            rsp_nx_o        <= rtri_a_q ? rna_x_q : rnb_x_q;
+            rsp_ny_o        <= rtri_a_q ? rna_y_q : rnb_y_q;
+            rsp_nz_o        <= rtri_a_q ? rna_z_q : rnb_z_q;
+            if (nsat_c) normal_sats_o <= normal_sats_o + 1;
           end
         end
 
@@ -540,6 +784,25 @@ module zhao_terrain_heighttap #(
       endcase
     end
   end
+
+  // ---- the cell, read straight off the registers the answer came from ------
+  // Continuous rather than re-registered: every one of these is written only
+  // in the corner states or at request capture, both of which are strictly
+  // AFTER the cycle `rsp_valid_o` is high (capture happens at the END of the
+  // IDLE cycle that cycle is), so on that cycle they are the answer's cell.
+  assign rsp_h00_o  = h00_q;
+  assign rsp_h10_o  = h10_q;
+  assign rsp_h01_o  = h01_q;
+  assign rsp_h11_o  = h11_q;
+  assign rsp_wx00_o = wx00_q;
+  assign rsp_wz00_o = wz00_q;
+  assign rsp_sh_o   = rq_sh_q;
+  assign rsp_na_x_o = rna_x_q;
+  assign rsp_na_y_o = rna_y_q;
+  assign rsp_na_z_o = rna_z_q;
+  assign rsp_nb_x_o = rnb_x_q;
+  assign rsp_nb_y_o = rnb_y_q;
+  assign rsp_nb_z_o = rnb_z_q;
 
 endmodule : zhao_terrain_heighttap
 

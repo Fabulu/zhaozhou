@@ -157,6 +157,7 @@ struct Dut {
     v->vrd_valid_i = 0;
     v->vrd_survive_i = 0;
     v->chl_valid_i = 0;
+    v->chl_busy_i = 0;
     v->wr_ready_i = 1;
     v->eval();
   }
@@ -188,8 +189,11 @@ struct TickObs {
 // Drive one whole tick. `child_taken` is carried BETWEEN ticks on purpose: a
 // producer that has had its child accepted does not offer it again, and a
 // producer that was refused holds the same record.
+// `producer_busy`: the producer reports `chl_busy_i` HIGH for as long as it
+// holds a child of this generation it has not had accepted -- which is what
+// PART.SPAWN (not idle) or the fork branch feeding it asserts in the console.
 TickObs run_tick(Dut& d, int n_surv, const Rec& child, int child_delay, bool offer_child,
-                 bool& child_taken) {
+                 bool& child_taken, bool producer_busy = false) {
   Vzhao_part_state& r = *d.v;
   TickObs o;
   const uint32_t w0 = r.children_written_o;
@@ -226,6 +230,10 @@ TickObs run_tick(Dut& d, int n_surv, const Rec& child, int child_delay, bool off
       r.chl_valid_i = 1;
       d.set_rec(r.chl_record_i, child);
     }
+    // Busy from the start of the tick until the child is taken: the parent is
+    // held BEFORE its child is ready, which is exactly the window the plain
+    // sweep loses.
+    if (producer_busy && offer_child && !child_taken) r.chl_busy_i = 1;
 
     r.eval();
     const bool rd_fire = r.rd_valid_i && r.rd_ready_o;
@@ -380,6 +388,46 @@ int main(int argc, char** argv) {
         "the sweep actually REACHED the closed boundary (a child offered to a live tick and "
         "refused for all of it)",
         1, static_cast<uint64_t>(boundary_refusals));
+
+  // ---- OPTION (a): THE PRODUCER SAYS IT IS BUSY ------------------------------
+  // Added 2026-09-19 with `chl_busy_i`. The same sweep, with the producer
+  // reporting that it still holds a parent of this generation until its child
+  // is accepted. The append phase must now WAIT, so every child lands in the
+  // tick that made it -- including every delay the plain sweep above had to
+  // defer. The plain sweep's checks are untouched: tied low, the port changes
+  // nothing.
+  int busy_not_in_tick1 = 0, busy_rescued = 0, busy_stream_faults = 0;
+  for (int delay = 0; delay <= kMaxDelay; ++delay) {
+    d.reset();
+    const Rec child = pack_rec(800 + delay, 1);
+    bool taken = false;
+    const TickObs t1 = run_tick(d, kSurvivors, child, delay, true, taken, true);
+    const int w1 = count_child(t1, child);
+    bool taken2 = taken;
+    const TickObs t2 = run_tick(d, kNextSurvivors, child, 0, !taken, taken2, true);
+    const int w2 = count_child(t2, child);
+    if (!(t1.accepted && w1 == 1 && w2 == 0)) ++busy_not_in_tick1;
+    if (!stream_ok(t1, kSurvivors, child, w1)) ++busy_stream_faults;
+    // Accepted after the survivor pass ended: only an open append phase can
+    // take such a child, so this counts the window the busy producer held.
+    if (t1.accepted && t1.accepted_after_pass) ++busy_rescued;
+  }
+  check(busy_not_in_tick1 == 0,
+        "with the producer BUSY, every child is written in the tick whose parent made it", 0,
+        static_cast<uint64_t>(busy_not_in_tick1));
+  check(busy_stream_faults == 0,
+        "and the ordering law still holds: survivors dense and in order, then the child", 0,
+        static_cast<uint64_t>(busy_stream_faults));
+  // POSITIVE CONTROL: the busy sweep really held the append phase open for a
+  // child that arrived after the survivor pass -- the very window the plain
+  // sweep's boundary_refusals shows being closed.
+  check(busy_rescued > boundary_accepts,
+        "the busy producer kept the append phase open past where the plain sweep closed it",
+        static_cast<uint64_t>(boundary_accepts + 1), static_cast<uint64_t>(busy_rescued));
+
+  std::printf(
+      "[part_state_tick_boundary] busy sweep: not_in_tick1=%d accepted_after_pass=%d\n",
+      busy_not_in_tick1, busy_rescued);
 
   std::printf(
       "[part_state_tick_boundary] delays=%d accepted=%d written=%d dropped=%d "

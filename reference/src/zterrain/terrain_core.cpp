@@ -7,7 +7,8 @@
 #include "zref/zref_terrain.hpp"
 
 #include "zref/zref_render.hpp"
-#include "zref/zref_trig.hpp"  // isqrt_u64 (qformats §7.2), for keel R
+#include "zref/zref_terrain_normals.hpp"  // face_normal, for collision_normal (R1)
+#include "zref/zref_trig.hpp"  // isqrt_u64 (qformats §7.2), for keel R; normalize3_approx
 
 #include <algorithm>
 
@@ -44,14 +45,17 @@ inline bool locate(const std::vector<int32_t>& c, int32_t x, int* out_i) {
 
 }  // namespace
 
-ColumnResult column_query(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
-  ColumnResult r;
-  if (lat.w < 2 || lat.h < 2) return r;
+// The locate and the §4.3 triangle pick, ONCE. `column_query` below and
+// `collision_normal` both stand on this, so the height and the normal a
+// particle collides with can never come from two different triangles.
+ColumnPick column_pick(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
+  ColumnPick p;
+  if (lat.w < 2 || lat.h < 2) return p;
   int ci = 0, cj = 0;
-  if (!locate(lat.wx, wxq.raw, &ci) || !locate(lat.wz, wzq.raw, &cj)) return r;  // kOut
+  if (!locate(lat.wx, wxq.raw, &ci) || !locate(lat.wz, wzq.raw, &cj)) return p;  // kOut
   if (lat.substance(ci, cj) != kSolid) {
-    r.cls = ColumnClass::kVoid;
-    return r;
+    p.cls = ColumnClass::kVoid;
+    return p;
   }
   // exact rational fractions from the placed lattice (see header note): the
   // spec's u/v with numerator un/vn over denominator ud/vd, no rounding yet
@@ -61,14 +65,56 @@ ColumnResult column_query(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
   const int64_t vn = static_cast<int64_t>(wzq.raw) - lat.wz[static_cast<size_t>(cj)];
   const int64_t vd =
       static_cast<int64_t>(lat.wz[static_cast<size_t>(cj) + 1]) - lat.wz[static_cast<size_t>(cj)];
-  if (ud <= 0 || vd <= 0) return r;  // degenerate placed cell: OUT (defensive)
+  if (ud <= 0 || vd <= 0) return p;  // degenerate placed cell: OUT (defensive)
+  p.cls = ColumnClass::kSolid;
+  p.ci = ci;
+  p.cj = cj;
+  // triangle pick on the fixed i00–i11 diagonal: A iff u >= v, ties to A
+  // (§4.3) — cross-multiplied so the compare is exact
+  p.tri_a = un * vd >= vn * ud;
+  return p;
+}
+
+CollisionNormal collision_normal(const ComposedLattice& lat, const ColumnPick& pick,
+                                 bool bottom) {
+  CollisionNormal out;
+  if (pick.cls != ColumnClass::kSolid) return out;
+  const std::vector<int32_t>& hgt = (bottom && lat.dual) ? lat.bottom : lat.top;
+  const auto vtx = [&](int i, int j) {
+    NormalVertex v;
+    v.x = lat.wx[static_cast<size_t>(i)];
+    v.y = hgt[static_cast<size_t>(j) * static_cast<size_t>(lat.w) + static_cast<size_t>(i)];
+    v.z = lat.wz[static_cast<size_t>(j)];
+    return v;
+  };
+  const int i = pick.ci, j = pick.cj;
+  // §4.3's emit order: A = (i00, i11, i10), B = (i00, i01, i11).
+  const FaceNormal f = pick.tri_a ? face_normal(vtx(i, j), vtx(i + 1, j + 1), vtx(i + 1, j))
+                                  : face_normal(vtx(i, j), vtx(i, j + 1), vtx(i + 1, j + 1));
+  out.degenerate = f.degenerate;
+  out.n = normalize3_approx(vec3fx{fx16{f.x}, fx16{f.y}, fx16{f.z}}, nullptr);
+  return out;
+}
+
+ColumnResult column_query(const ComposedLattice& lat, fx16 wxq, fx16 wzq) {
+  ColumnResult r;
+  const ColumnPick p = column_pick(lat, wxq, wzq);
+  if (p.cls != ColumnClass::kSolid) {
+    r.cls = p.cls;
+    return r;
+  }
+  const int ci = p.ci, cj = p.cj;
+  const int64_t un = static_cast<int64_t>(wxq.raw) - lat.wx[static_cast<size_t>(ci)];
+  const int64_t ud =
+      static_cast<int64_t>(lat.wx[static_cast<size_t>(ci) + 1]) - lat.wx[static_cast<size_t>(ci)];
+  const int64_t vn = static_cast<int64_t>(wzq.raw) - lat.wz[static_cast<size_t>(cj)];
+  const int64_t vd =
+      static_cast<int64_t>(lat.wz[static_cast<size_t>(cj) + 1]) - lat.wz[static_cast<size_t>(cj)];
   const size_t i00 = static_cast<size_t>(cj) * lat.w + ci;
   const size_t i10 = i00 + 1;
   const size_t i01 = i00 + static_cast<size_t>(lat.w);
   const size_t i11 = i01 + 1;
-  // triangle pick on the fixed i00–i11 diagonal: A iff u >= v, ties to A
-  // (§4.3) — cross-multiplied so the compare is exact
-  const bool tri_a = un * vd >= vn * ud;
+  const bool tri_a = p.tri_a;
   // §4.3 two-MAD forms with ONE rounding: common denominator ud*vd, one
   // round-half-up division (the corner identities and the single-valued
   // diagonal are asserted by tests/terrain/terrain_dual.cpp)
