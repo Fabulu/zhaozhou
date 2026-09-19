@@ -12888,3 +12888,58 @@ add_test(NAME dual18_physical_pack_directed
                  ${CMAKE_CURRENT_SOURCE_DIR}/dsp/run_dual18_verilator.py)
 set_tests_properties(dual18_physical_pack_directed PROPERTIES
   LABELS "fast;nightly" TIMEOUT 1800)
+
+# ---------------------------------------------------------------------------
+# PART.TABLE -- the species descriptor table and the size/colour curve table.
+#
+# zhao_console_core.sv's gaps I2 and I3: three built blocks read a table that
+# nothing implemented. `fpga/rtl/particles/zhao_part_table.sv` is that owner.
+#
+# SPECIES_N=8 and CRV_N=8 on purpose, for the reason PART.STATE's bench uses
+# CAPACITY=8: at the production tier the index fields address the table EXACTLY
+# (7 bits -> 128 species, 4 bits -> 16 buckets), so an out-of-range index is
+# UNREACHABLE and the refusal that handles it is not evidence about anything.
+# Shrinking the table is the only way to reach `load_refused_o` with legal
+# stimulus -- and it also makes the two DISCRIMINATING cases reachable, because
+# index 11 then masks onto species 3, which the bench keeps loaded throughout.
+#
+# Note what this suite is NOT: differential. No species descriptor layout exists
+# anywhere in reference/ or spec/ -- zref_particle.hpp says so in its own words
+# -- so the load word's offsets are AUTHORED in the RTL and have no oracle. The
+# packing walk (one field all-ones, every other field required to read zero) is
+# the structural check that stands in for one.
+add_executable(test_part_table_directed particles/part_table_directed.cpp)
+target_link_libraries(test_part_table_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_table_directed
+  PREFIX Vzhao_part_table
+  TOP_MODULE zhao_part_table
+  VERILATOR_ARGS -GSPECIES_N=8 -GCRV_N=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table.sv)
+add_test(NAME part_table_directed COMMAND test_part_table_directed)
+set_tests_properties(part_table_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_table
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_table
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table.sv)
+set_tests_properties(lint_zhao_part_table PROPERTIES LABELS "lint;fast")
+
+# ---------------------------------------------------------------------------
+# PART.STATE's capacity backstop -- gap I8, `capacity_full_o`.
+#
+# A SEPARATE suite rather than more cases in part_state_directed, because that
+# suite's check count (78) is quoted as evidence in the ledger and in the run
+# log, and a number that moves whenever somebody adds a case is a number nobody
+# can use.
+#
+# Same parameters as part_state_directed for the same reason: at the required
+# tier of 32,768 a full generation is not reachable in a test at all.
+add_executable(test_part_state_capacity_backstop particles/part_state_capacity_backstop.cpp)
+target_link_libraries(test_part_state_capacity_backstop PRIVATE zhao_harness zhao_zref)
+verilate(test_part_state_capacity_backstop
+  PREFIX Vzhao_part_state
+  TOP_MODULE zhao_part_state
+  VERILATOR_ARGS -GCAPACITY=8 -GSPECIES_N=4 -GCHILD_D=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv)
+add_test(NAME part_state_capacity_backstop COMMAND test_part_state_capacity_backstop)
+set_tests_properties(part_state_capacity_backstop PROPERTIES LABELS "fast;particles" TIMEOUT 300)

@@ -360,6 +360,18 @@ fpga/rtl/particles/zhao_part_update.sv text eol=lf
 fpga/rtl/particles/zhao_part_collide.sv text eol=lf
 fpga/rtl/particles/zhao_part_spawn.sv text eol=lf
 fpga/rtl/particles/zhao_part_record.sv text eol=lf
+# PART.TABLE, added 2026-09-19 with the block, for the reason stated above and
+# BEFORE a receipt binds its hash. `git ls-files --eol` showed the five blocks
+# above pinned by name and their siblings `zhao_part_expand.sv`,
+# `zhao_part_ladder.sv` and `zhao_part_soft.sv` already sitting at `w/crlf` in
+# this working tree -- so the translation is not hypothetical here, it has
+# already happened to every particles file nobody listed. A new file added to a
+# pinned directory is not pinned by the directory; it is pinned by being named.
+fpga/rtl/particles/zhao_part_table.sv text eol=lf
+# The ordering mutant is a byte COPY of zhao_part_state.sv, and its evidence is
+# the diff between the two. Pinned on one side and not the other, every line
+# differs and `mutant_copy_drift.py`'s substantive-line count becomes noise.
+tests/mutants/zhao_part_state_child_order_mutant.sv text eol=lf
 fpga/rtl/geometry/zhao_geom_group_seq.sv text eol=lf
 fpga/rtl/geometry/zhao_geom_proj_lane.sv text eol=lf
 fpga/rtl/geometry/zhao_geom_wcache.sv text eol=lf

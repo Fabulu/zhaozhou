@@ -66,6 +66,40 @@
 // Every drop here is a function of the input sequence alone.
 //
 // ---------------------------------------------------------------------------
+// THE CAPACITY BACKSTOP -- GAP I8, CLOSED HERE
+// ---------------------------------------------------------------------------
+// `zhao_console_core.sv` recorded the gap in its own words:
+//
+//   "I8. PART.SPAWN's capacity backstop (`part_cap_full_i`) -- BOUNDARY.
+//    PART.STATE knows when the generation is full and exposes no such output;
+//    it only counts `children_dropped_capacity_o` after the fact. A one-bit
+//    addition to PART.STATE would close this properly."
+//
+// `capacity_full_o` is that bit. It is a LEVEL, not a pulse, and it answers
+// exactly one question: can this generation still take another child?
+//
+// IT COUNTS THE STAGED CHILDREN, AND THAT IS THE WHOLE POINT. `written_q`
+// alone is what has REACHED the write channel; every child already sitting in
+// the staging FIFO will be written before any child PART.SPAWN has yet to
+// produce. A backstop built on `written_q` alone would read "room available"
+// for a generation whose remaining room is already spoken for, let PART.SPAWN
+// emit children into staging, and then drop them in S_APPEND -- which is
+// correct behaviour arriving one buffer too late, and it shows up as
+// `children_dropped_capacity_o` moving on a tick nobody expected it to.
+//
+// So the predicate is `written_q + staged >= CAPACITY`, and it is low in
+// S_IDLE: between ticks `written_q` still holds the PREVIOUS generation's
+// total, and a stale "full" there would refuse the first child of the next
+// tick. That is the one way this bit could lie, so it is gated rather than
+// left to the reader.
+//
+// WHAT IT DOES NOT DO: it does not replace `children_dropped_capacity_o`.
+// PART.SPAWN can hold a group it has already committed to, and the S_APPEND
+// drop remains the authority on what was actually lost. The backstop reduces
+// the drops; it does not make them unreachable, and a test that assumed it did
+// would be asserting the wrong law.
+//
+// ---------------------------------------------------------------------------
 // RESET
 // ---------------------------------------------------------------------------
 // "Reset abandons the stream in flight. The ping-pong buffers are NOT cleared —
@@ -131,6 +165,10 @@ module zhao_part_state #(
     input  wire                  wr_ready_i,
     output wire [REC_W-1:0]      wr_record_o,
 
+    // ---- the capacity backstop, to PART.SPAWN's `cap_full_i` (gap I8) --------
+    // High while this generation cannot take another child. See the header.
+    output wire                  capacity_full_o,
+
     // ---- counters. Faults leave the module; see the ledger's reading of a
     // ---- counter that is asserted zero and never seen to move.
     output var logic [31:0]      survivors_o,
@@ -172,6 +210,14 @@ module zhao_part_state #(
              SPECIES_N, (1 << W_SPC));
     if (CHILD_D < 2)
       $fatal(1, "zhao_part_state: CHILD_D=%0d; staging needs at least 2 entries", CHILD_D);
+    // `capacity_full_o` sums `written_q` and the staging occupancy in CNT_W+1
+    // bits. That is only wide enough while staging cannot itself exceed the
+    // tier; a deeper FIFO than the generation would truncate the sum and the
+    // backstop would read LOW when it should read high -- the flattering
+    // direction, and therefore the one to fail loudly on.
+    if (CHILD_D > CAPACITY)
+      $fatal(1, "zhao_part_state: CHILD_D=%0d exceeds CAPACITY=%0d; the capacity backstop's sum would truncate",
+             CHILD_D, CAPACITY);
   end
 
   // ---- tick phases ----------------------------------------------------------
@@ -228,6 +274,14 @@ module zhao_part_state #(
   assign wr_record_o = wr_rec_q;
 
   assign tick_busy_o = (st_q != S_IDLE);
+
+  // ---- the capacity backstop (gap I8) ---------------------------------------
+  // Everything this generation has already spent: written, plus every child
+  // staged and not yet written. Size casts rather than a zero-padding
+  // concatenation, because CNT_W - CHILD_PW - 1 is legitimately ZERO at the
+  // bench's parameters and a zero-width replication is not legal.
+  wire [CNT_W:0] cap_spent_c = (CNT_W+1)'(written_q) + (CNT_W+1)'(chl_occ_c);
+  assign capacity_full_o = (st_q != S_IDLE) && (cap_spent_c >= (CNT_W+1)'(CAPACITY));
 
   logic tick_done_q;
   assign tick_done_o = tick_done_q;
