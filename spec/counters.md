@@ -29,6 +29,24 @@ RTL whim.
   (taking the next free index); an existing index is never renumbered and
   never reused. A capture that cites counter ids pins their meaning via the
   ABI_INFO-committed blocks.yml of its commit.
+- **The append-only law is ENFORCED, not trusted** (2026-09-19). Twenty-three
+  commits had PREPENDED entries, so `frame_cycles` -- id 0 in `zhao_pkg`, in
+  DEBUG.COUNTERS and in every wave-2 capture -- had become catalog index 150,
+  and nothing noticed: V15 checks duplicates only, and the ledger's rule stage
+  was not running at all behind a failing schema stage. The catalog is restored
+  to the order the ids were assigned (reconstructed from the file's git
+  history; it reproduces every `ZHAO_CNT_*` value), `design/counter_ids.lock`
+  records that order, and `tools/design/check_counter_ids.py` (ctest
+  `counter_ids_append_only`) fails if the catalog does not begin with the lock
+  or if any `ZHAO_CNT_*` localparam disagrees with its name's index. A new
+  counter is appended to the catalog and then to the lock (`--update-lock`).
+- **One emitter per id** (owner ruling R19, provisional, 2026-09-19). No
+  counter name is declared by two blocks. Twenty-five names were; each kept
+  its canonical owner and every other emitter received its own appended id
+  (`<block>_<name>`, or the ruling's names `mosaic_picks` for TEXTURE.MOSAIC
+  and `sprite_texels` for TWOD.SPRITE), with the port it already had bound
+  through `counter_ports`. CMD.DMA's three snapshots, which presented under
+  CMD.SCHEDULER's and MEM.HPS.BRIDGE's ids, now carry `cmd_dma_*`.
 
 ## 3. Snapshot protocol (D9) — distributed counters, no global bus
 
@@ -78,9 +96,9 @@ the catalog with no owner yet — legal, they snapshot 0):
 
 | Counter | Owner | Event |
 |---|---|---|
-| frame_cycles | VIDEO.FRAMECTL | one per displayed frame (tick count) |
-| deadline_faults | CMD.SCHEDULER (+MEM.VRAM.ARBITER budget tests) | a displayed frame came from the repeat path |
-| commands | CMD.DECODER | accepted command records |
+| frame_cycles | CMD.SCHEDULER (the provider DEBUG.COUNTERS reads; VIDEO.FRAMECTL's is `video_framectl_frame_cycles`) | one per displayed frame (tick count) |
+| deadline_faults | CMD.SCHEDULER | a displayed frame came from the repeat path |
+| commands | CMD.SCHEDULER (the provider DEBUG.COUNTERS reads; CMD.DECODER's is `cmd_decoder_commands`) | accepted command records |
 | vram_bytes_by_client | MEM.VRAM.ARBITER | accepted payload bytes per client |
 | hps_ddr_bytes_by_client | MEM.HPS.BRIDGE | burst payload bytes per client |
 | scanout_starvation_cycles | VIDEO.SCANOUT | starved vid cycles at the serializer |

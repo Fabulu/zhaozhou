@@ -939,13 +939,13 @@ module zhao_cmd_dma #(
   // ------------------------------------------------------- snapshots -------
   always_comb begin
     snap_cmds_o.valid      = snap_v;
-    snap_cmds_o.counter_id = zhao_pkg::ZHAO_CNT_COMMANDS;
+    snap_cmds_o.counter_id = zhao_pkg::ZHAO_CNT_CMD_DMA_COMMANDS;   // R19: its own id
     snap_cmds_o.value      = sh_cmds;
     snap_bytes_o.valid      = snap_v;
-    snap_bytes_o.counter_id = zhao_pkg::ZHAO_CNT_HPS_BYTES;
+    snap_bytes_o.counter_id = zhao_pkg::ZHAO_CNT_CMD_DMA_HPS_BYTES;
     snap_bytes_o.value      = sh_bytes;
     snap_drops_o.valid      = snap_v;
-    snap_drops_o.counter_id = zhao_pkg::ZHAO_CNT_DEADLINE_FAULTS;
+    snap_drops_o.counter_id = zhao_pkg::ZHAO_CNT_CMD_DMA_DROPS;
     snap_drops_o.value      = sh_drops;
   end
 
