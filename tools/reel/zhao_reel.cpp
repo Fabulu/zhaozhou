@@ -7918,6 +7918,13 @@ int main(int argc, char** argv) {
       return 2;
     u02::g_u02_trick_flip_z_a16 = v;
   }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_FACE_YAW_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_FACE_YAW_A16", e,
+                              -16384, 16384, v))
+      return 2;
+    u02::g_u02_trick_face_yaw_a16 = v;
+  }
   if (const char* e = std::getenv("ZHAO_U02_TRICK_SHOWOFF_YAW_A16")) {
     int v = 0;
     if (!parse_strict_env_int("ZHAO_U02_TRICK_SHOWOFF_YAW_A16", e,

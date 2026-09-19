@@ -2933,8 +2933,10 @@ inline zc::Clip build_taunt2() {
  *  plant key; 78..148 PLANTED — declared, authored ground contact
  *  (kTrickPlantDepthMm at the loop peak; the committed probe asserts the
  *  window and depth), body wobbling above as an inverted pendulum, the
- *  antenna flexing at the junction hinges; the rejected show-off yaw remains a
- *  same-binary control but shipping keeps the selected face axis parked;
+ *  antenna flexing at the junction hinges; a local planted face yaw rides the
+ *  same flip envelope so both complete eye plates face the fixed camera without
+ *  moving the camera or changing contact; the rejected yaw-zero and show-off
+ *  paths remain same-binary controls;
  *  148..186 it rights itself WITH OVERSHOOT and floats back up; then a pleased
  *  settle. */
 inline zc::Clip build_trick() {
@@ -2969,7 +2971,14 @@ inline zc::Clip build_trick() {
         (static_cast<int64_t>(g_u02_trick_flip_x_a16) * flip_pm) / 1000);
     const int32_t flip_z = static_cast<int32_t>(
         (static_cast<int64_t>(g_u02_trick_flip_z_a16) * flip_pm) / 1000);
-    g.q[kBRoot] = quat_mul(g.q[kBRoot], quat_mul(quat_x(flip_x), quat_z(flip_z)));
+    const int32_t face_yaw = static_cast<int32_t>(
+        (static_cast<int64_t>(g_u02_trick_face_yaw_a16) * flip_pm) / 1000);
+    // The half-turn establishes the contact. The separate local yaw follows the
+    // same continuous flip envelope and changes only the planted viewing azimuth;
+    // it does not switch on at contact or borrow authority from the camera.
+    g.q[kBRoot] = quat_mul(
+        g.q[kBRoot],
+        quat_mul(quat_mul(quat_x(flip_x), quat_z(flip_z)), quat_y(face_yaw)));
     // the balance layer FADES over the first keys of the righting instead
     // of cutting (a step in the quats is a one-frame snap)
     static const Key kBalFade[] = {{0, 1000}, {148, 1000}, {158, 0}, {199, 0}};
@@ -2988,8 +2997,8 @@ inline zc::Clip build_trick() {
               (static_cast<int64_t>(kTrickBalanceWobbleA16 / 2) * bal / 1000 *
                sinp(f, K, 4, 0x4000)) >> 16)));
       // Legacy show-off yaw remains a same-binary control. Shipping keeps this
-      // at zero so the selected pure-X cartwheel does not turn the face away;
-      // balance wobble and antenna flex keep the planted hold alive.
+      // flourish at zero: the stable face correction is the separately authored
+      // planted yaw above, while balance wobble and antenna flex keep the hold alive.
       g.q[kBRoot] = quat_mul(
           g.q[kBRoot],
           quat_y(static_cast<int32_t>(

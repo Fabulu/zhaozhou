@@ -2729,19 +2729,29 @@ constexpr int kTrickHomeKey = 186;            // righted (overshoot inside)
 constexpr int32_t kTrickBalanceWobbleA16 = 900;  // inverted-pendulum sway
 constexpr int32_t kTrickOvershootA16 = 2600;     // the righting overshoot
 // Pass 17 axis ladder. The legacy root-Z half-turn points the +X face backward
-// for the entire plant. Native every-frame comparison selected the pure-X
-// cartwheel: it preserves the inverted antenna plant while keeping the face axis
-// toward the fixed judging camera. The old Z path remains the exact red control.
+// for the entire plant. Pure X preserves that nominal axis and protects the
+// antenna contact, but exact final-bank review showed the composed camera-relative
+// eye plates still edge-on. Shipping therefore keeps the pure-X half-turn and
+// adds the separate planted local face yaw below; the old Z and yaw-zero paths
+// remain exact red controls.
 constexpr int32_t kTrickLegacyFlipXA16 = 0;
 constexpr int32_t kTrickLegacyFlipZA16 = -32768;
 constexpr int32_t kTrickFlipXA16 = -32768;
 constexpr int32_t kTrickFlipZA16 = 0;
 inline int32_t g_u02_trick_flip_x_a16 = kTrickFlipXA16;
 inline int32_t g_u02_trick_flip_z_a16 = kTrickFlipZA16;
-// The old 3000-a16 show-off yaw pushed the otherwise face-preserving X plant
-// back toward a one-eye side read. The balance wobble already keeps the hold
-// alive; shipping keeps the face parked while the legacy yaw remains a named
-// same-binary comparison.
+// Final-bank review showed that preserving the nominal +X face axis was not
+// enough: after the camera-relative eye base and the inverted root compose, both
+// plates still project edge-on. This planted local yaw is a separate authored
+// knob so the face can turn toward the fixed judging camera without changing the
+// half-turn, contact height, plant timing or camera. It follows the flip envelope
+// continuously into and out of the headstand.
+constexpr int32_t kTrickFaceYawA16 = 16384;  // +90 deg: both eyes face camera
+inline int32_t g_u02_trick_face_yaw_a16 = kTrickFaceYawA16;
+// The old 3000-a16 oscillating show-off yaw changed sign through the hold and
+// never supplied the stable viewing correction the inverted face required. The
+// balance wobble already keeps the hold alive; shipping parks this flourish while
+// the separate +90-degree face yaw above stays authored through the plant.
 constexpr int32_t kTrickLegacyShowoffYawA16 = 3000;
 constexpr int32_t kTrickShowoffYawA16 = 0;
 inline int32_t g_u02_trick_showoff_yaw_a16 = kTrickShowoffYawA16;
