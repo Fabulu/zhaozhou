@@ -773,6 +773,17 @@ numbers are unreproducible -- commit the probe.
 
 ---
 
+## START HERE IF YOU ARE PICKING UP THE CONSOLE COMPLETION CAMPAIGN
+
+**`reports/HANDOVER-20260919.md`** — read it before touching anything. It carries
+the current gap count, what the console does and does not do, every gate and what
+its output means, the environment and git traps that cost hours, the fourteen
+"X does not exist" claims that turned out false, the eleven decisions the console
+is waiting on, and the exact `/goal` prompt to write.
+
+It is meant to be UPDATED IN PLACE at the end of each session, never duplicated.
+Two handovers is the same failure as two sources of truth.
+
 ## Process
 
 * **Every session is a RUN**, created with `zhaozhou/runs/CLAUDE-RUNS/init-run.ps1`,
