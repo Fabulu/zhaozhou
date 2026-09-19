@@ -39,6 +39,9 @@
 //  11  draw_src_truncated_o, and the proof that the stamp counter stayed put.
 //  12  VIEWS BEFORE DRAWS, measured: the first form leaves after the last
 //      matrix word, under three draw-ready patterns, in submission order.
+//  17  R25 SetEnvironment: two records, ONE environment out after the verdict,
+//      the last record's four bank fields; envs_issued_o; not unsupported.
+//  18  R25: an abandoned packet's environment never leaves.
 
 #include "Vtb_cmd_exec_pair.h"
 #include "verilated.h"
@@ -96,6 +99,11 @@ struct UploadOut {
   uint8_t slot;
 };
 
+struct EnvOut {
+  uint32_t cycle;
+  uint16_t yaw, pitch, sun, ambient;
+};
+
 struct Run {
   bool done = false;
   uint8_t err = 0;
@@ -110,6 +118,8 @@ struct Run {
   uint32_t committed = 0, abandoned = 0, views = 0, issued = 0;
   uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
   uint32_t draws_issued = 0, draw_overflow = 0, draw_truncated = 0;
+  std::vector<EnvOut> envs;
+  uint32_t envs_issued = 0;
 };
 
 /**
@@ -123,7 +133,8 @@ struct Run {
  */
 Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
               uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu,
-              uint32_t upl_mask = 0xFFFFFFFFu) {
+              uint32_t upl_mask = 0xFFFFFFFFu,
+              uint32_t env_mask = 0xFFFFFFFFu) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
@@ -133,6 +144,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   dut.proj_cfg_ready_i = 1;
   dut.draw_ready_i = 1;
   dut.upl_ready_i = 1;
+  dut.env_ready_i = 1;
   dut.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(dut);
   dut.rst_n = 1;
@@ -165,6 +177,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     dut.draw_ready_i = ((draw_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     // MEM.UPLOAD's ready: in the composition it is high only in its S_IDLE.
     dut.upl_ready_i = ((upl_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    dut.env_ready_i = ((env_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     dut.eval();
 
     const bool moved = have && dut.pkt_ready_o;
@@ -221,8 +234,12 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
       u.gen = static_cast<uint16_t>(dut.upl_new_gen_o);
       u.slot = static_cast<uint8_t>(dut.upl_dst_slot_o);
     }
+    const bool env_fires = (dut.env_valid_o != 0) && (dut.env_ready_i != 0);
+    EnvOut ev{cyc, static_cast<uint16_t>(dut.env_sun_yaw_o), static_cast<uint16_t>(dut.env_sun_pitch_o),
+              static_cast<uint16_t>(dut.env_sun_colour_o), static_cast<uint16_t>(dut.env_ambient_o)};
 
     zhao::tick(dut);
+    if (env_fires) r.envs.push_back(ev);
     if (moved) ++i;
     if (upl_fires) r.uploads.push_back(u);
     if (stamp_fires) r.stamps.push_back(s);
@@ -260,6 +277,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.draw_truncated = dut.draw_src_truncated_o;
   r.uploads_issued = dut.uploads_issued_o;
   r.upload_overflow = dut.upload_overflow_o;
+  r.envs_issued = dut.envs_issued_o;
   return r;
 }
 
@@ -378,6 +396,28 @@ void checkUpload(const UploadOut& u, uint32_t k, const std::string& tag) {
   check(u.gen == 0x0102u + k, (tag + " new generation").c_str(), 0x0102u + k, u.gen);
   check(u.epoch == 9u + k, (tag + " epoch").c_str(), 9u + k, u.epoch);
   check(u.slot == 5u + k, (tag + " dst slot").c_str(), 5u + k, u.slot);
+}
+
+std::vector<uint8_t> setEnvironmentRecord(uint32_t source_id, uint16_t yaw, uint16_t pitch,
+                                          uint16_t sun, uint16_t ambient) {
+  zhao_abi::ZhRecordSetEnvironment rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_ENVIRONMENT;
+  rec.hdr.record_bytes = 48;
+  rec.hdr.source_id = source_id;
+  rec.payload.sun_yaw = yaw;
+  rec.payload.sun_pitch = pitch;
+  rec.payload.sun_colour.bits = sun;
+  rec.payload.ambient.bits = ambient;
+  // tint / fog are carried by the record and are not the bank's: set them to
+  // values that would show up if the arm read the wrong offsets.
+  rec.payload.tint.bits = 0xA5A5u;
+  rec.payload.tint_strength = 0x77u;
+  rec.payload.fog = zhao_abi::FOG_LINEAR;
+  rec.payload.fog_near = 0x00050000;
+  rec.payload.fog_far = 0x00090000;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_set_environment(rec, out);
+  return out;
 }
 
 // The stamp this test uses wherever the values themselves are not the point.
@@ -897,6 +937,54 @@ int main(int argc, char** argv) {
     check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1, r.draws.size());
     check(r.uploads.empty() && r.uploads_issued == 0, "case16: the upload is still pending", 0,
           r.uploads_issued);
+  }
+
+  // ---- 17. R25: SetEnvironment, committed -- the LAST record wins ---------
+  // Two SetEnvironment records around a SetView, the ambient/colour values
+  // chosen so a byte-swap or an offset slip shows. Exactly ONE environment
+  // leaves, after the verdict, carrying the SECOND record's four bank fields;
+  // it is no longer counted as unsupported (BeginFrame + EndFrame still are).
+  // env_ready is held low for a while to show the offer waits, unchanged.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setEnvironmentRecord(0x31u, 0x1122u, 0x3344u, 0x5566u, 0x7788u));
+    b.append_record(setViewRecord(0, 0x0000'0007u, 0x0011'0000));
+    b.append_record(setEnvironmentRecord(0x32u, 0xA1B2u, 0x0C3Du, 0xBDF7u, 0x4208u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu, 0xFFFF0000u);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case17: the packet is well formed (SetEnvironment implemented)",
+          zhao_abi::ZH_ABI_OK, r.err);
+    check(r.committed == 1, "case17: committed", 1, r.committed);
+    check(r.envs.size() == 1, "case17: ONE environment presented for two records", 1, r.envs.size());
+    check(r.envs_issued == 1, "case17: envs_issued_o", 1, r.envs_issued);
+    check(r.unsupported == 2, "case17: SetEnvironment is no longer unsupported", 2, r.unsupported);
+    if (!r.envs.empty()) {
+      const EnvOut& e = r.envs[0];
+      check(e.cycle > r.verdict_cycle, "case17: the environment leaves AFTER the verdict", 1,
+            e.cycle > r.verdict_cycle ? 1 : 0);
+      check(e.yaw == 0xA1B2u, "case17: sun_yaw of the LAST record", 0xA1B2u, e.yaw);
+      check(e.pitch == 0x0C3Du, "case17: sun_pitch", 0x0C3Du, e.pitch);
+      check(e.sun == 0xBDF7u, "case17: sun_colour", 0xBDF7u, e.sun);
+      check(e.ambient == 0x4208u, "case17: ambient", 0x4208u, e.ambient);
+    }
+  }
+
+  // ---- 18. R25: an ABANDONED packet's environment never leaves ------------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setEnvironmentRecord(0x33u, 0x1111u, 0x2222u, 0x3333u, 0x4444u));
+    b.end_frame(0);
+    std::vector<uint8_t> p = b.seal(1, 1, 0);
+    // a pad byte of the SetEnvironment record: header CRC intact, payload CRC not
+    p[36 + 32 + 40] = static_cast<uint8_t>(p[36 + 32 + 40] ^ 0xFFu);
+    const Run r = runPacket(p, 0xFFFFFFFFu);
+    check(r.abandoned == 1, "case18: the packet is abandoned", 1, r.abandoned);
+    check(r.envs.empty() && r.envs_issued == 0,
+          "case18: a staged environment is DISCARDED with its packet", 0,
+          static_cast<uint32_t>(r.envs.size()) + r.envs_issued);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

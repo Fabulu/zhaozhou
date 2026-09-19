@@ -39,8 +39,8 @@
 //   I7   PART.COLLIDE's plane. Same shape, shorter story: no ratified command
 //        carries a plane. `SetEnvironment 0x0311` is the nearest thing in the
 //        opcode space and it carries sun, ambient, tint and fog -- no geometry
-//        -- and it is `reserved`, not `implemented`, so it has no execution
-//        semantics to borrow even if it did.
+//        -- and its execution semantics (owner ruling R25, implemented
+//        2026-09-19) are the LIGHT bank's, so there is nothing to borrow.
 //
 // ---------------------------------------------------------------------------
 // THE VERDICT TENSION, AND WHY THIS BLOCK DOES NOT NEED THE SPECULATIVE ESCAPE
@@ -400,6 +400,18 @@ module zhao_cmd_exec
     output logic [ 7:0] upl_dst_slot_o,
     output logic [15:0] upl_new_gen_o,
     output logic [31:0] upl_crc_o,
+    // ---- R25: SetEnvironment 0x0311, the fields the light bank consumes ------
+    // Staged like SetView (a shadow, last record wins), presented ONCE per
+    // committed packet that carried one, never on an abandoned packet. Its
+    // consumer is zhao_light_env. Tint and fog are not presented: they are not
+    // bank words (reference/include/zref/zref_light_env.hpp says why).
+    output logic        env_valid_o,
+    input  logic        env_ready_i,
+    output logic [15:0] env_sun_yaw_o,
+    output logic [15:0] env_sun_pitch_o,
+    output logic [15:0] env_sun_colour_o,   // rgb565
+    output logic [15:0] env_ambient_o,      // rgb565
+    output logic [31:0] envs_issued_o,
 
     // ---- evidence ----------------------------------------------------------
     // Every one of these is fired by a directed case in
@@ -923,7 +935,8 @@ module zhao_cmd_exec
                                            pr_hlo, pr_res};
                     uq_wp <= uq_wp + (UQW+1)'(1);
                   end
-                end else if (zhao_opcode_record_bytes(r_op) != 32'd0) begin
+                end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
+                             && (zhao_opcode_record_bytes(r_op) != 32'd0)) begin
                   // A record the ABI defines and this block has no arm for.
                   // Counted rather than narrated, so the distance between the
                   // command surface and the executor is a NUMBER.
@@ -1103,6 +1116,74 @@ module zhao_cmd_exec
 
         default: st <= EX_STAGE;
       endcase
+    end
+  end
+
+  // ==========================================================================
+  // R25: SetEnvironment 0x0311 -> zhao_light_env. SELF-CONTAINED ON PURPOSE:
+  // it reads the packet walk and the verdict and touches nothing the state
+  // machine above owns, so CMD.EXEC's other arms are unchanged by it.
+  //
+  // THE SAME ATOMICITY AS SetView: fields land in a shadow during STAGE, the
+  // record's end marks it pending, and it leaves this block only on a CLEAN
+  // verdict (ZH_ABI_OK and not poisoned) -- an abandoned packet's environment
+  // is discarded with the rest of it. Several SetEnvironment records in one
+  // packet: the last one wins (4a: per-frame global state). All four fields
+  // end by byte 23 of a 48-byte record, so no capture collides with
+  // `rec_done`, and the elaboration guard below keeps that true.
+  // ==========================================================================
+  localparam int unsigned OFF_EN_YAW   = ZHAO_SET_ENVIRONMENT_OFF_SUN_YAW;
+  localparam int unsigned OFF_EN_PITCH = ZHAO_SET_ENVIRONMENT_OFF_SUN_PITCH;
+  localparam int unsigned OFF_EN_SUN   = ZHAO_SET_ENVIRONMENT_OFF_SUN_COLOUR;
+  localparam int unsigned OFF_EN_AMB   = ZHAO_SET_ENVIRONMENT_OFF_AMBIENT;
+  initial begin
+    if ((OFF_EN_AMB + 2) >= ZHAO_SET_ENVIRONMENT_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetEnvironment's ambient reaches the record's last byte; the capture races rec_done");
+  end
+
+  logic [15:0] en_yaw, en_pitch, en_sun, en_amb;
+  logic        en_dirty;
+  wire en_byte_c = (st == EX_STAGE) && take && in_rec_region
+                && (r_op == ZHAO_OP_SET_ENVIRONMENT);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      en_yaw <= 16'd0; en_pitch <= 16'd0; en_sun <= 16'd0; en_amb <= 16'd0;
+      en_dirty <= 1'b0;
+      env_valid_o <= 1'b0;
+      env_sun_yaw_o <= 16'd0; env_sun_pitch_o <= 16'd0;
+      env_sun_colour_o <= 16'd0; env_ambient_o <= 16'd0;
+      envs_issued_o <= 32'd0;
+    end else begin
+      if (en_byte_c) begin
+        if ((rpos >= 16'(OFF_EN_YAW))   && (rpos < 16'(OFF_EN_YAW + 2)))
+          en_yaw   <= {pkt_byte_i, en_yaw[15:8]};
+        if ((rpos >= 16'(OFF_EN_PITCH)) && (rpos < 16'(OFF_EN_PITCH + 2)))
+          en_pitch <= {pkt_byte_i, en_pitch[15:8]};
+        if ((rpos >= 16'(OFF_EN_SUN))   && (rpos < 16'(OFF_EN_SUN + 2)))
+          en_sun   <= {pkt_byte_i, en_sun[15:8]};
+        if ((rpos >= 16'(OFF_EN_AMB))   && (rpos < 16'(OFF_EN_AMB + 2)))
+          en_amb   <= {pkt_byte_i, en_amb[15:8]};
+        if (rec_done) en_dirty <= 1'b1;
+      end
+
+      if (env_valid_o && env_ready_i) begin
+        env_valid_o <= 1'b0;
+        `ZHAO_EXEC_INC(envs_issued_o);
+      end
+
+      if ((st == EX_STAGE) && verdict_valid_i) begin
+        if ((verdict_error_i == ZH_ABI_OK) && !poisoned && en_dirty) begin
+          // A newer environment replaces one the consumer has not taken yet:
+          // the latest committed state is the state.
+          env_valid_o      <= 1'b1;
+          env_sun_yaw_o    <= en_yaw;
+          env_sun_pitch_o  <= en_pitch;
+          env_sun_colour_o <= en_sun;
+          env_ambient_o    <= en_amb;
+        end
+        en_dirty <= 1'b0;
+      end
     end
   end
 

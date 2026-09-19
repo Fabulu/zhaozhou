@@ -121,6 +121,9 @@ top:
   # two arithmetic leaves INSIDE it -- behind the creature seam adapter.
   - zhao_light_stream
   - zhao_light_skin_adapter
+  # GEOM.LIGHT.ENV (geom2, 2026-09-19, owner ruling R25): SetEnvironment ->
+  # the bank; its zhao_field_sin is counted inside it.
+  - zhao_light_env
   # Both built 2026-09-04. MESHFETCH is position 1 of the composition order --
   # the geometry front end's entry point, which nothing downstream could be fed
   # by until it existed. It cannot pass MEM.GUARD yet and that is a PHASE

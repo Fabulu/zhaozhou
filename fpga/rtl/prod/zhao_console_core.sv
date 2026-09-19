@@ -506,7 +506,30 @@
 //    narrowed by assertion -- on the creature path the two blocks' contracts
 //    name (magnitude supplied, early clamp). The normal still leaves as a TAP;
 //    its `_ready_i` port is gone. What the light produces is GEOM.VATTR's r/g/b
-//    (I46, closed), and what configures it is I48.
+//    (I46, closed), and what configures it is SetEnvironment (I48, closed).
+//
+//  * I48 was GEOM.LIGHT's DESCRIPTOR BANK (`geom_light_cfg_*`,
+//    `geom_light_nlights_i`), host-written. CLOSED AND DELETED 2026-09-19 (geom2
+//    packet) by owner ruling R25: "Promote SetEnvironment 0x0311 from reserved
+//    to IMPLEMENTED. The bank's Q16.16 / u20-gain values are THE LAW; section
+//    4a's u8 formula becomes a derived view with a zref bridge. CMD.EXEC lowers
+//    SetEnvironment into the bank." 0x0311 is `implemented` in
+//    spec/commands.zidl; the bridge is `zref::light_env::bank_of`
+//    (reference/include/zref/zref_light_env.hpp), every value derived from a
+//    4a sentence it quotes; CMD.EXEC stages the record like SetView and
+//    presents it only on a clean verdict; `zhao_light_env` (GEOM.LIGHT.ENV,
+//    `u_light_env`) computes the sun direction on its own `zhao_field_sin`,
+//    writes light 0 and the environment words and commits once, holding the
+//    stream's vertex input until the stream is idle, so no vertex is lit under
+//    a half-written bank and no bank write can be refused. The power-on default
+//    is that same path applied to 4a's default record, not a reset constant.
+//    Five host ports left the list. TINT and FOG ride the record and are NOT
+//    bank words; the bridge header says why and where they go.
+//    Evidence: light_env_directed (every bank word of 400 random records and
+//    the power-on default against the bridge, hold, supersede fired),
+//    cmd_exec_directed cases 17/18, and the smoke bench, whose packet now
+//    carries a SetEnvironment and whose every lit vertex is checked per channel
+//    against the reference applied to THAT record.
 //
 //  * I46 was THE VERTEX-ATTRIBUTE STORE's WRITER (`geom_att_look_*`,
 //    `geom_att_rep_*`, and GEOM.LIGHT's ready). CLOSED AND DELETED 2026-09-19
@@ -2417,32 +2440,6 @@
 //      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
 //      too. One absent owner, two blocks waiting on it.
 //
-// I48. GEOM.LIGHT's DESCRIPTOR BANK (`geom_light_cfg_*`, `geom_light_nlights_i`)
-//      -- BOUNDARY. NEW 2026-09-19 (geom packet), opened by composing
-//      `zhao_light_stream` under owner ruling R2.
-//
-//      The bank is prepared state -- per light a Q16.16 direction and detail, six
-//      u20 gains; an environment of ambient and spill -- published atomically by
-//      `cfg_commit_i`. Its host is the HPS, as for I14's matrices. Its COMMAND is
-//      `SetEnvironment 0x0311` (`spec/sky_and_beams.md` 4a), and two things stand
-//      between that record and these ports -- stated precisely, because the first
-//      draft of this entry said "no ratified law" and that was FALSE:
-//        * RATIFIED, and so NOT the blocker: the sun DIRECTION law,
-//          L = (fx_mul(cos p, sin y), sin p, fx_mul(cos p, cos y)) with fx_sin /
-//          fx_cos (qformats 7.1), and the rgb565 -> 8-bit expansion by bit
-//          replication. Both are 4a's own text.
-//        * NOT ratified: (1) the opcode is `reserved`, not `implemented` -- its
-//          execution "lands with the weather/lighting wave", an ABI status only
-//          the owner moves; (2) the BRIDGE from 4a's u8 lit law,
-//          sat_u8(ambient_c + rescale_u(sun_c * ndl, 8)), to this bank's Q16.16
-//          gains and separately-rounded products. R2 moved OWNERSHIP to
-//          `zhao_light_stream` (4a is amended to say so, 2026-09-19) but did not
-//          write the numeric bridge, and the two laws round differently.
-//      OWNER DECISION (recommendation in FINDINGS-geom.md): mark 0x0311
-//      implemented and ratify the bridge; then CMD.EXEC lowers it onto these
-//      ports as it lowers SetView onto the projector's, with the 4a direction
-//      computed by the existing `zhao_field_sin`.
-//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -2949,21 +2946,22 @@
 //     `console_inventory.yml` and `prod_manifest.yml` record the supersession,
 //     so the rename-shaped supersession no tool detects is now written down in
 //     all three places a tool reads.
-//   * THE DESCRIPTOR BANK -- still has no COMMAND producer, and the reason is
-//     now exactly one sentence: no ratified law converts SetEnvironment's
-//     one-sun rgb565/angle16 record into the bank's Q16.16 / u20 form. Entry I48.
+//   * THE DESCRIPTOR BANK -- CLOSED 2026-09-19 (geom2, owner ruling R25):
+//     SetEnvironment is implemented and lowered by CMD.EXEC through
+//     GEOM.LIGHT.ENV (`u_light_env`). Entry I48 is in the CLOSED ledger.
 //
 // WHAT IS COMPOSED. GEOM.SKIN.NORM -> `zhao_light_skin_adapter` (the creature
 // seam, narrowed by assertion) -> `zhao_light_stream` on the creature path,
 // with the service's two arithmetic leaves inside it. Entry I43 is closed.
-// The smoke bench loads one light and checks every lit vertex against
-// `zref::creature::lambert_from_world_normal`, through the fixture generator.
+// The smoke bench's command packet carries a SetEnvironment, and every lit
+// vertex is checked per channel against `zref::light_env::bank_of` of THAT
+// record and `zref::creature::lambert_from_world_normal`, through the fixture
+// generator.
 //
 // WHAT IS STILL OPEN, and `light_seam_connected_o` stays LOW until it is:
-//   * the BANK's command producer (I48);
-//   * the lit RGB's route to the raster: it is the vertex-attribute store's
-//     r/g/b input (owner ruling R11), and the store's WRITER is I46. Until it
-//     exists the colour leaves the module on `geom_light_*` with a real ready.
+//   * the lit RGB's route to the RASTER. GEOM.VATTR stores it (I46, closed)
+//     and GEOM.REPLAY reads it with every corner, but GEOM.ATTRPACK's three
+//     planes are invw, u_over_w and v_over_w, and none of them is colour.
 //     Nothing here should be read as "the raster is lit".
 //
 // ---------------------------------------------------------------------------
@@ -3438,15 +3436,18 @@ module zhao_console_core
   output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
-  // I48: the prepared descriptor bank, written by the HOST. SetEnvironment
-  // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
-  // this bank's Q16.16 directions and u20 gains -- see I48.
-  input  logic                    geom_light_cfg_we_i,
-  input  logic                    geom_light_cfg_commit_i,
-  input  logic [7:0]              geom_light_cfg_addr_i,
-  input  logic [31:0]             geom_light_cfg_data_i,
+  // The prepared descriptor bank is loaded by COMMAND since owner ruling R25
+  // (entry I48, CLOSED 2026-09-19): SetEnvironment 0x0311 -> CMD.EXEC ->
+  // GEOM.LIGHT.ENV (`zhao_light_env`) -> the bank, and the power-on default is
+  // the same path applied to 4a's default record. The host ports that stood
+  // here are gone; the published generation stays as evidence.
   output logic                    geom_light_cfg_gen_o,
-  input  logic [3:0]              geom_light_nlights_i,
+  // GEOM.LIGHT.ENV's evidence: bank loads published (the power-on load
+  // included), SetEnvironment records taken, and records replaced before they
+  // were loaded (fired in tests/geometry/light_env_directed.cpp case 4).
+  output logic [31:0]             geom_light_env_loads_o,
+  output logic [31:0]             geom_light_env_records_o,
+  output logic [31:0]             geom_light_env_superseded_o,
   // The lit vertex RGB, OBSERVED. Its consumer is GEOM.VATTR (entry I46,
   // CLOSED 2026-09-19): the ready is the store's, so the port that stood here
   // as `_ready_i` is gone and the store's ready leaves as a tap beside it, so
@@ -4815,6 +4816,8 @@ module zhao_console_core
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
+  // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
+  output logic [31:0] cmd_exec_envs_o,
 
   // ==========================================================================
   // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
@@ -4985,10 +4988,10 @@ module zhao_console_core
   end
 
   // ==========================================================================
-  // THE LIGHTING SEAM. LOW on purpose: GEOM.LIGHT is composed (R2), but its
-  // bank has no command producer (I48) and its RGB does not yet reach the
-  // raster (the attribute store's writer, I46). The header's lighting section
-  // says what is connected and what is not.
+  // THE LIGHTING SEAM. LOW on purpose: GEOM.LIGHT is composed (R2) and its
+  // bank is loaded by SetEnvironment (R25, I48 closed), but its RGB stops at
+  // GEOM.REPLAY -- the raster's attribute planes carry no colour. The header's
+  // lighting section says what is connected and what is not.
   // ==========================================================================
   assign light_seam_connected_o = 1'b0;
 
@@ -6183,8 +6186,51 @@ module zhao_console_core
               ls_normal_queue_wait, ls_descriptor_wait, ls_dot_slots, ls_square_slots,
               ls_unused_slots, ls_divider_bp, ls_colour_bp, ls_output_bp,
               ls_raw_sat, ls_degen_terms, ls_clamp_lo, ls_clamp_hi;
-  wire        ls_idle;
   /* verilator lint_on UNUSEDSIGNAL */
+  wire        ls_idle, ls_v_ready;
+
+  // ---- GEOM.LIGHT.ENV: SetEnvironment -> the bank (owner ruling R25, I48) ---
+  // CMD.EXEC presents the committed record (section 7b's u_cmd_exec, further
+  // down; the nets are declared here, ahead of their first reader). The block
+  // computes 4a's sun direction on its own `zhao_field_sin`, writes light 0 and
+  // the environment words, and publishes them with ONE commit -- while HOLDING
+  // the stream's vertex input, and only once the stream reports idle, so the
+  // environment never changes under a vertex and no bank write can be refused.
+  wire        cmd_env_valid, cmd_env_ready;
+  wire [15:0] cmd_env_yaw, cmd_env_pitch, cmd_env_sun, cmd_env_amb;
+  wire        le_cfg_we, le_cfg_commit, le_hold;
+  wire [7:0]  le_cfg_addr;
+  wire [31:0] le_cfg_data;
+  wire [3:0]  le_nlights;
+
+  zhao_light_env u_light_env (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .e_valid_i      (cmd_env_valid),
+    .e_ready_o      (cmd_env_ready),
+    .e_sun_yaw_i    (cmd_env_yaw),
+    .e_sun_pitch_i  (cmd_env_pitch),
+    .e_sun_colour_i (cmd_env_sun),
+    .e_ambient_i    (cmd_env_amb),
+
+    .cfg_we_o     (le_cfg_we),
+    .cfg_commit_o (le_cfg_commit),
+    .cfg_addr_o   (le_cfg_addr),
+    .cfg_data_o   (le_cfg_data),
+
+    .hold_o         (le_hold),
+    .stream_idle_i  (ls_idle),
+    .nlights_o      (le_nlights),
+
+    .loads_o      (geom_light_env_loads_o),
+    .records_o    (geom_light_env_records_o),
+    .superseded_o (geom_light_env_superseded_o)
+  );
+
+  // The hold is an AND on BOTH halves of the adapter -> stream handshake, so a
+  // held vertex is neither taken nor lost: it waits in the adapter.
+  assign la_p_ready = ls_v_ready && !le_hold;
 
   zhao_light_skin_adapter #(
     .SRCW (16)
@@ -6199,8 +6245,8 @@ module zhao_console_core
     .s_ny_i         (geom_sn_n_y_o),
     .s_nz_i         (geom_sn_n_z_o),
     .s_degenerate_i (geom_sn_n_degenerate_o),
-    // I48: how many lights the published set holds is the host's, with the set.
-    .s_nlights_i    (geom_light_nlights_i),
+    // How many lights the published set holds: GEOM.LIGHT.ENV's, with the set.
+    .s_nlights_i    (le_nlights),
     .s_src_id_i     (geom_sn_n_src_id_o),
 
     .p_valid_o      (la_p_valid),
@@ -6222,16 +6268,16 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I48: the prepared descriptor bank, host-written, published atomically.
-    .cfg_we_i     (geom_light_cfg_we_i),
-    .cfg_commit_i (geom_light_cfg_commit_i),
-    .cfg_addr_i   (geom_light_cfg_addr_i),
-    .cfg_data_i   (geom_light_cfg_data_i),
+    // The prepared descriptor bank, loaded by GEOM.LIGHT.ENV (R25, I48 closed).
+    .cfg_we_i     (le_cfg_we),
+    .cfg_commit_i (le_cfg_commit),
+    .cfg_addr_i   (le_cfg_addr),
+    .cfg_data_i   (le_cfg_data),
     .cfg_gen_o    (geom_light_cfg_gen_o),
 
-    // REAL: the prepared normal, from the adapter.
-    .v_valid_i      (la_p_valid),
-    .v_ready_o      (la_p_ready),
+    // REAL: the prepared normal, from the adapter -- held while the bank loads.
+    .v_valid_i      (la_p_valid && !le_hold),
+    .v_ready_o      (ls_v_ready),
     .n_x_i          (la_p_nx),
     .n_y_i          (la_p_ny),
     .n_z_i          (la_p_nz),
@@ -10311,6 +10357,15 @@ module zhao_console_core
     .upl_dst_slot_o (cmd_upl_slot),
     .upl_new_gen_o  (cmd_upl_gen),
     .upl_crc_o      (cmd_upl_crc),
+
+    // R25: SetEnvironment -> GEOM.LIGHT.ENV (u_light_env, beside u_light_stream).
+    .env_valid_o     (cmd_env_valid),
+    .env_ready_i     (cmd_env_ready),
+    .env_sun_yaw_o   (cmd_env_yaw),
+    .env_sun_pitch_o (cmd_env_pitch),
+    .env_sun_colour_o(cmd_env_sun),
+    .env_ambient_o   (cmd_env_amb),
+    .envs_issued_o   (cmd_exec_envs_o),
 
     .packets_committed_o  (cmd_exec_committed_o),
     .packets_abandoned_o  (cmd_exec_abandoned_o),

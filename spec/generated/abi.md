@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = b57c282dc2c2ebc1ff4a6629caeb5d40643bfd07a15271844c93ec168f11dfbb
-zidl_sha256         = bc58321984e44530ae51c7b9960cb99431c38cf6ca0424e06d49008c5b9c1776
+abi_identity_sha256 = ce34affb9e20fc8a4c15ea519c015054617f0b0b3ad4ff40c28acabc991202f5
+zidl_sha256         = a2ae0b111ce1ad5c1735017f48e048f1c47ad94e226d9431d4a9de874adf2265
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-19 commands (14 implemented).
+19 commands (15 implemented).
 
 ## Commands
 
@@ -30,7 +30,7 @@ ABI version **3**, little-endian, command alignment
 | `DrawPopulation` | `0x0301` | 32 | implemented |
 | `DrawProcedural` | `0x0302` | 64 | implemented |
 | `DrawSky` | `0x0310` | 176 | reserved |
-| `SetEnvironment` | `0x0311` | 48 | reserved |
+| `SetEnvironment` | `0x0311` | 48 | implemented |
 | `EmitAudioEvent` | `0x0400` | 32 | implemented |
 | `DebugBootstrap` | `0xF001` | 64 | reserved |
 | `DebugFrameBlit` | `0xF002` | 48 | implemented |
@@ -373,7 +373,7 @@ Golden sample: `tests/abi/golden/cmd_draw_sky.bin` (C++ packer
 TS `zhaoPackDrawSky(zhaoSampleDrawSky(), ...)`, SV round-trips it via
 `zhao_unpack_draw_sky`/`zhao_pack_draw_sky`).
 
-### SetEnvironment — 0x0311 (48 B, reserved)
+### SetEnvironment — 0x0311 (48 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 

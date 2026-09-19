@@ -541,6 +541,49 @@ void test_audio_events() {
         "sample_index -> frozen tone table (audio_rules §4)");
 }
 
+// ---- 5b. SetEnvironment 0x0311 (owner ruling R25): executed, and PERSISTENT -
+// Before R25 the opcode was `reserved` and a frame carrying it was refused.
+// Now: the frame renders, the record's state is the renderer's, a frame with
+// no record KEEPS it (4a), the last record in a frame wins, and reset()
+// restores the power-on default.
+void test_set_environment() {
+  const auto rec = [](uint16_t yaw, uint16_t pitch, uint16_t sun, uint16_t amb) {
+    zhao_abi::ZhRecordSetEnvironment e = zhao_abi::zhao_sample_set_environment();
+    e.payload.sun_yaw = yaw;
+    e.payload.sun_pitch = pitch;
+    e.payload.sun_colour.bits = sun;
+    e.payload.ambient.bits = amb;
+    std::vector<uint8_t> v;
+    zhao_abi::zhao_pack_set_environment(e, v);
+    return v;
+  };
+  zref::render::SoftwareRenderer rend;
+  zref::render::RenderCanvas canvas;
+  zref::render::RenderResources res;
+  const zref::sky::EnvState def{};
+  check(rend.environment().sun_pitch.raw == def.sun_pitch.raw &&
+            rend.environment().sun_colour.bits == def.sun_colour.bits,
+        "SetEnvironment: a fresh renderer holds 4a's power-on default");
+  const zref::render::RenderResult r1 = rend.render_frame(
+      rtest::seal_frame(11, [&](zhao::ZhaoFrameBuilder& b) {
+        b.append_record(rec(0x1111, 0x2222, 0x3333, 0x4444));
+        b.append_record(rec(0x4000, 0x1000, 0xFD0C, 0x10C4));
+      }),
+      0, canvas, res);
+  check(r1.status == zhao_abi::ZH_ABI_OK, "SetEnvironment: a frame carrying it renders (implemented)");
+  const zref::sky::EnvState& e = rend.environment();
+  check(e.sun_yaw.raw == 0x4000 && e.sun_pitch.raw == 0x1000 && e.sun_colour.bits == 0xFD0C &&
+            e.ambient.bits == 0x10C4,
+        "SetEnvironment: the LAST record in the frame is the state");
+  const zref::render::RenderResult r2 =
+      rend.render_frame(rtest::seal_frame(12, [](zhao::ZhaoFrameBuilder&) {}), 0, canvas, res);
+  check(r2.status == zhao_abi::ZH_ABI_OK && rend.environment().sun_colour.bits == 0xFD0C,
+        "SetEnvironment: a frame without one KEEPS the previous state (4a)");
+  rend.reset();
+  check(rend.environment().sun_colour.bits == def.sun_colour.bits,
+        "SetEnvironment: reset() restores the power-on default");
+}
+
 // ---- 6. resolve: dither vectors + the two CRC laws -------------------------
 void test_resolve_and_crc() {
   // a uniform 128-gray 4x1 strip: channel steps straddle the 565 threshold
@@ -961,6 +1004,7 @@ int main() {
   test_draw_form();
   test_draw_population();
   test_audio_events();
+  test_set_environment();
   test_resolve_and_crc();
   test_resolve_white_rail();
   test_mode_latch();

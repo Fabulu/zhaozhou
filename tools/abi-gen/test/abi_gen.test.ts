@@ -43,10 +43,17 @@ test('parser accepts the real commands.zidl', () => {
   assert.equal(ir.abi.version, 3); // ABI v3 (SetEnvironment 0x0311, 2026-08-17)
   assert.equal(ir.abi.commandAlignment, 16);
   // v3: +SetEnvironment 0x0311, +TerrainEpoch 0x0220, +SubmitTerrainSet 0x0230
-  // (all reserved). The terrain pair is ruling T5's ABI, confirmed by this
-  // generator as that ruling asks -- the pager behind them is built, the
-  // executor is not, and `reserved` is what says so on the wire.
-  assert.equal(ir.commands.length, 18);
+  // (all three reserved when added). The terrain pair is ruling T5's ABI,
+  // confirmed by this generator as that ruling asks -- the pager behind them
+  // is built, the executor is not, and `reserved` is what says so on the wire.
+  // +PublishResource 0x0030 (owner ruling R17, implemented): 19 commands. This
+  // line read 18 after R17 landed and the suite was red for it.
+  assert.equal(ir.commands.length, 19);
+  // SetEnvironment was promoted to IMPLEMENTED by owner ruling R25 (2026-09-19);
+  // the frame wire is unchanged, so the version is too.
+  const env = ir.commands.find((c) => c.name === 'SetEnvironment');
+  assert.ok(env);
+  assert.equal(env.implemented, true);
 });
 
 test('parser rejects missing command status keyword', () => {

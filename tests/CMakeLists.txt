@@ -9169,6 +9169,19 @@ verilate(test_geom_depthquant_stream_directed
 add_test(NAME geom_depthquant_stream_directed COMMAND test_geom_depthquant_stream_directed)
 set_tests_properties(geom_depthquant_stream_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# GEOM.LIGHT's ENVIRONMENT LOADER: SetEnvironment -> the light bank (owner
+# ruling R25, entry I48), every word against zref::light_env::bank_of.
+add_executable(test_light_env_directed geometry/light_env_directed.cpp)
+target_link_libraries(test_light_env_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_light_env_directed
+  PREFIX Vzhao_light_env
+  TOP_MODULE zhao_light_env
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_light_env.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+add_test(NAME light_env_directed COMMAND test_light_env_directed)
+set_tests_properties(light_env_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+
 # THE SMOKE BENCH'S GEOMETRY FIXTURE, and every number the bench asserts about
 # it, derived from the reference (project_vertex -> Clip -> Setup -> Binner).
 # The bench `include`s the generated header; this test fails if it is stale.

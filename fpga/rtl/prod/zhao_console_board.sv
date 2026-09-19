@@ -799,15 +799,18 @@ module zhao_console_board
   output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
-  // I48: the prepared descriptor bank, written by the HOST. SetEnvironment
-  // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
-  // this bank's Q16.16 directions and u20 gains -- see I48.
-  input  logic                    geom_light_cfg_we_i,
-  input  logic                    geom_light_cfg_commit_i,
-  input  logic [7:0]              geom_light_cfg_addr_i,
-  input  logic [31:0]             geom_light_cfg_data_i,
+  // The prepared descriptor bank is loaded by COMMAND since owner ruling R25
+  // (entry I48, CLOSED 2026-09-19): SetEnvironment 0x0311 -> CMD.EXEC ->
+  // GEOM.LIGHT.ENV (`zhao_light_env`) -> the bank, and the power-on default is
+  // the same path applied to 4a's default record. The host ports that stood
+  // here are gone; the published generation stays as evidence.
   output logic                    geom_light_cfg_gen_o,
-  input  logic [3:0]              geom_light_nlights_i,
+  // GEOM.LIGHT.ENV's evidence: bank loads published (the power-on load
+  // included), SetEnvironment records taken, and records replaced before they
+  // were loaded (fired in tests/geometry/light_env_directed.cpp case 4).
+  output logic [31:0]             geom_light_env_loads_o,
+  output logic [31:0]             geom_light_env_records_o,
+  output logic [31:0]             geom_light_env_superseded_o,
   // The lit vertex RGB, OBSERVED. Its consumer is GEOM.VATTR (entry I46,
   // CLOSED 2026-09-19): the ready is the store's, so the port that stood here
   // as `_ready_i` is gone and the store's ready leaves as a tap beside it, so
@@ -2173,6 +2176,8 @@ module zhao_console_board
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
+  // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
+  output logic [31:0] cmd_exec_envs_o,
 
   // ==========================================================================
   // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
@@ -2644,12 +2649,10 @@ module zhao_console_board
       .geom_sn_degenerate_o              (geom_sn_degenerate_o),
       .geom_sn_reduced_o                 (geom_sn_reduced_o),
       .geom_sn_fork_stall_o              (geom_sn_fork_stall_o),
-      .geom_light_cfg_we_i               (geom_light_cfg_we_i),
-      .geom_light_cfg_commit_i           (geom_light_cfg_commit_i),
-      .geom_light_cfg_addr_i             (geom_light_cfg_addr_i),
-      .geom_light_cfg_data_i             (geom_light_cfg_data_i),
       .geom_light_cfg_gen_o              (geom_light_cfg_gen_o),
-      .geom_light_nlights_i              (geom_light_nlights_i),
+      .geom_light_env_loads_o            (geom_light_env_loads_o),
+      .geom_light_env_records_o          (geom_light_env_records_o),
+      .geom_light_env_superseded_o       (geom_light_env_superseded_o),
       .geom_light_valid_o                (geom_light_valid_o),
       .geom_light_ready_o                (geom_light_ready_o),
       .geom_light_r_o                    (geom_light_r_o),
@@ -3497,6 +3500,7 @@ module zhao_console_board
       .cmd_exec_view_refused_o           (cmd_exec_view_refused_o),
       .cmd_exec_src_truncated_o          (cmd_exec_src_truncated_o),
       .cmd_exec_unsupported_o            (cmd_exec_unsupported_o),
+      .cmd_exec_envs_o                   (cmd_exec_envs_o),
       .terr_mip_pages_mipped_o           (terr_mip_pages_mipped_o),
       .terr_mip_pages_faulted_o          (terr_mip_pages_faulted_o),
       .terr_mip_samples_sent_o           (terr_mip_samples_sent_o),

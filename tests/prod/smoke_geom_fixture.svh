@@ -24,7 +24,6 @@ localparam int unsigned SGF_EXP_CULLED   = 0;  // GEOM.CLIP `culled` (zero area 
 localparam int unsigned SGF_EXP_ACCEPTED = 14;  // into GEOM.SETUP
 localparam int unsigned SGF_EXP_TILES    = 10;  // union over both views
 localparam int unsigned SGF_EXP_PIXELS   = 2560;  // tiles x 16 x 16
-localparam logic signed [31:0] SGF_LIGHT_X = 32'sh0000999A, SGF_LIGHT_Y = 32'sh0000CCCD, SGF_LIGHT_Z = 32'sh00000000;
-localparam logic [19:0] SGF_LIGHT_GAIN = 20'h10000;
-localparam logic [16:0] SGF_EXP_LIT = 17'd39322;  // zref::creature::lambert_from_world_normal = 39322
+localparam logic [15:0] SGF_ENV_YAW = 16'h4000, SGF_ENV_PITCH = 16'h1000, SGF_ENV_SUN = 16'hFD0C, SGF_ENV_AMB = 16'h10C4;  // the SetEnvironment record
+localparam logic [16:0] SGF_EXP_LIT_R = 17'd64406, SGF_EXP_LIT_G = 17'd44459, SGF_EXP_LIT_B = 17'd31863;  // bank_of(record) -> L=(60547,25080,0), ndl 60547
 // Tiles, (tx,ty): (0,1) (0,2) (1,1) (1,2) (1,3) (2,1) (2,2) (3,1) (3,2) (3,3)

@@ -510,8 +510,20 @@ command DrawSky 0x0310 reserved {
 
 // [v3, sky_and_beams v1.2 §4a] Sky/environment extension — the FIRST
 // allocation from the sky extension range (0x0311..0x031F), made under that
-// file's version-bump law. Reserved: layout FROZEN, execution lands with the
-// weather/lighting wave. The world's ONE light/environment state record —
+// file's version-bump law. Layout FROZEN since v3.
+// IMPLEMENTED since owner ruling R25 (2026-09-19): "Promote SetEnvironment
+// 0x0311 from reserved to IMPLEMENTED. The bank's Q16.16 / u20-gain values are
+// THE LAW; section 4a's u8 formula becomes a derived view with a zref bridge.
+// CMD.EXEC lowers SetEnvironment into the bank." The bridge is
+// reference/include/zref/zref_light_env.hpp (bank_of); the lowering is
+// zhao_cmd_exec's environment arm -> zhao_light_env -> zhao_light_stream's
+// descriptor bank, loaded between vertices and committed as one generation.
+// sun_yaw/sun_pitch/sun_colour/ambient reach the bank; tint and fog travel
+// with the record and are NOT bank words (see the bridge header).
+// VERSION: unchanged. Promotion moves no opcode, field, size or offset --
+// the frame wire is byte-identical -- so by this file's own rule (the
+// QFMT 1 -> 2 precedent above) it is not a command-surface change.
+// The world's ONE light/environment state record —
 // the donor envi.d per-level lighting struct (sun direction/colour, ambient,
 // fog; S6 §1) ported to lawful widths. Per-frame GLOBAL state: no viewport
 // mask (one world, one sun; Duo views share it; SetView stays the per-view
@@ -519,7 +531,7 @@ command DrawSky 0x0310 reserved {
 // defaults) live in sky_and_beams 4a; the fog formula in qformats 8.
 // unit8 = qformats 2. pad[12] bytes 0-3 are the documented same-bytes site
 // for a future fog_density (exponential fog — deferred, qformats 8).
-command SetEnvironment 0x0311 reserved {
+command SetEnvironment 0x0311 implemented {
   angle16 sun_yaw;    // sun azimuth, turns (yaw 0 faces +Z); direction law: sky_and_beams 4a
   angle16 sun_pitch;  // sun elevation, turns (0x4000 = zenith)
   rgb565 sun_colour;  // sun colour (lanes carry the strength)
