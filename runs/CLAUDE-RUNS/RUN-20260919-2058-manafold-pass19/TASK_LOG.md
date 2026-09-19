@@ -1,7 +1,7 @@
 # Task Log: RUN-20260919-2058 - [Describe objective here]
 
 **Created:** 2026-09-19 20:58 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260919-2058-manafold-pass19/
 
 ---
@@ -95,3 +95,10 @@ Manafold pass 19 from Owner Direction 20: smooth, whole rear antenna connection 
   - Real-tree control: without the receipt, checkarchive failed on all 44 live names.
   - No-skip gate RC 0: fresh 22/0/0, v17 56/56 + v18 44/44 + live 44/44, noindex, decode 1,464/1,464. Index sha `6092a642...`.
   - Card, captions, findings and plan committed as Upheaval `f9e98ba`.
+- **Steps 8-10 done** (`P19-PRODUCTION-VERIFY.md`):
+  - Both mains fast-forwarded and pushed: Zhaozhou `f3f061f7`->`e547a5ec`, Upheaval `2132bb87`->`f9e98bae`.
+  - `deploy.ps1 -Project upheaval -Branch main`, DEPLOY_RC 0, deployed to `https://452e401c.upheaval.pages.dev`.
+  - The verifier's selftest fired on broken copies, including catching its own broken Hover-loop fixture. Cache-bypassed exact verification then passed 51/51 on BOTH hosts: index + 44 live + 3 v17 + 3 v18 archive files, 0 mismatches, 0 retries.
+  - Cleanup: deleted the raw bank `p19-final-reel-22`, the two scope banks, the full-res sheets and the look scratch, about 6.4 GB. All receipts, viewing sheets and looks are committed. The `scratch-reel` junction now dangles, as it did after v18.
+  - No lane process is left running. A Codex plugin broker node process is alive, but it was not started by this packet and was left alone.
+- Manafold pass 19 is published. Status: Complete.
