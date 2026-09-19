@@ -309,6 +309,14 @@ DRIVERS = {
     'cmd_packet_sink': (
         'cmd_pkt_ready_i',
     ),
+    # THE TERRAIN.BUILD SOCKET (2026-09-19, cmdmem packet): one client of VRAM
+    # slot 6 and of the HPS arbiter's socket indices. ONE handler, because the
+    # guard request, its write channel and its HPS read are the same producer
+    # -- MEM.UPLOAD in the console -- and splitting them would invent a second.
+    'build_socket_client': (
+        'build_guard_req_i', 'build_wdata_i', 'build_wvalid_i',
+        'build_wlast_i', 'build_hps_req_i',
+    ),
 }
 
 SINK_FOR_DOMAIN = {'gpu': 'gpu_capture', 'video': 'video_capture',

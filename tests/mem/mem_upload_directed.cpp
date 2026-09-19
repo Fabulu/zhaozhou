@@ -202,20 +202,32 @@ struct Outcome {
   int tag = -1;
   int bursts = 0;
   bool published_before_retire = false;
+  bool data_ok = true;  // every written beat was the staged beat, in order
 };
 
 Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guard = false,
-                   bool hps_error = false) {
+                   bool hps_error = false, int guard_busy = 0) {
   Outcome o;
   present(d, kArenaBase, kRegionBase, len, kEpoch, crc);
 
   const uint32_t beats_total = len / 8;
   uint32_t beats_done = 0;
-  uint32_t outstanding = 0;  // the bench's own model of unretired writes
+  uint32_t outstanding = 0;        // the bench's own model of unretired writes
+  uint32_t outstanding_words = 0;  // ... in 16-bit SDRAM words, the credit unit
+  uint32_t words_written = 0;      // 64-bit beats the DUT wrote, in order
+  bool verdict_pending = false;    // the guard accepted last cycle
+  int reqs_accepted = 0;           // guard requests accepted so far
+  int busy_left = 0;               // cycles the guard stays not-ready
   bool granted = false;      // a burst has been granted and is being served
 
   for (int cycle = 0; cycle < 50000; ++cycle) {
     d.eval();
+    // THIS CHECK USED TO SIT BELOW THE RETURN, and so could never fire:
+    // `publish_valid_o` is high only in S_REPORT, which is exactly the cycle
+    // `done_o` is, and the `return` below took that cycle first. The one
+    // detector this bench has for the atomicity law was structurally blind to
+    // every publication. It now runs first.
+    if (d.publish_valid_o && outstanding != 0) o.published_before_retire = true;
     if (d.done_o) {
       o.status = d.status_o;
       o.published = d.publish_valid_o;
@@ -246,25 +258,66 @@ Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guar
     d.hps_data_i = 0x1122334455667788ull + beats_done;
     d.hps_last_i = serving && ((beats_done % 8) == 7);
 
-    // the guard accepts, unless the case asks it to deny
-    d.guard_violation_i = deny_guard && serving && (beats_done == 8);
-    d.guard_ready_i = !d.guard_violation_i;
-    d.guard_ok_i = !d.guard_violation_i;
-    d.retire_words_i = (outstanding > 0) ? 1 : 0;
+    // THE GUARD, MODELLED AS `zhao_mem_guard` BEHAVES rather than as an
+    // always-ready sink. `ready` is a LEVEL (`!fwd_active`), dropped for
+    // `guard_busy` cycles after every accept -- a background client's forward
+    // waits behind the guaranteed clients in the arbiter -- and the verdict
+    // (`ok` / `violation`) is REGISTERED: it arrives the cycle AFTER the
+    // accept. The old bench raised ready and ok together, forever, so it could
+    // not see a beat held against a busy guard, which is a beat lost.
+    d.guard_ok_i = verdict_pending && !(deny_guard && reqs_accepted == 2);
+    d.guard_violation_i = verdict_pending && deny_guard && reqs_accepted == 2;
+    d.guard_ready_i = (busy_left == 0);
+    d.eval();
+    const bool accept_now = d.guard_req_valid_o && d.guard_ready_i;
+    // RETIREMENT IN THE ARBITER'S OWN UNIT. `retire_words_i` is wired to
+    // `zhao_vram_arbiter`'s `client_rsp[k].credits`, which returns 16-bit SDRAM
+    // WORDS -- a 64-bit beat is FOUR of them -- one burst of up to eight words
+    // at a time (`zhao_sdram_ctrl`: "rsp.credits ... returning the retired word
+    // count"). This bench used to retire ONE per cycle per 64-bit beat, i.e. it
+    // modelled a beat as a word; against that model a DUT that counted beats
+    // looked exactly right, and against the real arbiter it published after a
+    // quarter of its writes had landed. Now the bench models words and retires
+    // them in the arbiter's eight-word bursts.
+    // At the controller's own pace, too: `zhao_sdram_ctrl`'s write
+    // grant-to-grant span is 10 cycles at best, so one 8-word credit per 10.
+    // A bench that retired every cycle would drain before any early publish
+    // could be seen -- the first version of this change did exactly that and
+    // passed against the defect it was written to expose.
+    d.retire_words_i = (outstanding_words >= 8 && (cycle % 10) == 9) ? 8 : 0;
 
     // COUNT WHAT THE DUT TOOK, not what the bench offered. `guard_wvalid_o` is
     // the block's own statement that this beat is being written.
     d.eval();
-    const bool taken = d.guard_wvalid_o && d.guard_wready_i && !d.guard_violation_i;
-    const bool last_of_burst = taken && d.guard_wlast_o;
+    const bool taken = d.guard_wvalid_o && d.guard_wready_i;
     if (taken) {
-      ++beats_done;
-      ++outstanding;
+      // EVERY WRITTEN WORD IS COMPARED WITH WHAT WAS STAGED, in order. The
+      // bench used to count beats and never look at them, so a lost or
+      // repeated beat that still totalled correctly would have passed.
+      const uint64_t want = 0x1122334455667788ull + words_written;
+      if (d.guard_wdata_o != want) o.data_ok = false;
+      ++words_written;
+      outstanding_words += 4;
     }
-    if (outstanding > 0 && d.retire_words_i) --outstanding;
+    if (d.retire_words_i) outstanding_words -= d.retire_words_i;
+    outstanding = outstanding_words;
+
+    // A beat the bridge delivered is gone whether or not anyone took it.
+    const bool hps_beat = d.hps_beat_valid_i;
+    const bool hps_last = d.hps_last_i;
+
+    // guard bookkeeping for the NEXT cycle
+    verdict_pending = accept_now;
+    if (accept_now) {
+      ++reqs_accepted;
+      busy_left = guard_busy;
+    } else if (busy_left > 0) {
+      --busy_left;
+    }
 
     zhao::tick(d);
-    if (last_of_burst) granted = false;  // the next burst must be granted afresh
+    if (hps_beat) ++beats_done;
+    if (hps_beat && hps_last) granted = false;  // the next burst must be granted afresh
   }
   return o;
 }
@@ -292,6 +345,23 @@ void test_a_good_upload_publishes() {
   check(!o.published_before_retire, "and never publishes before every write retired", 0,
         o.published_before_retire ? 1 : 0);
   check(d.uploads_published_o == 1, "the published census moved", 1, d.uploads_published_o);
+  check(o.data_ok, "and every written beat is the staged beat, in order", 1, o.data_ok ? 1 : 0);
+}
+
+// A BUSY GUARD. The HPS bridge's response stream has no ready, so a guard that
+// is not ready when a beat arrives must never cost that beat. Before the burst
+// buffer this case lost beats; 40 cycles is longer than a whole burst.
+void test_a_busy_guard_loses_no_beat() {
+  Vtb_mem_upload d;
+  reset(d);
+  const uint32_t len = 4 * kBurst;
+  const uint32_t crc = crc32c_of(payload_of(len));
+  const Outcome o = run_upload(d, len, crc, false, false, /*guard_busy=*/40);
+  check(o.status == zm::kUploadOk, "a busy guard still ends OK", zm::kUploadOk, o.status);
+  check(o.published, "and publishes", 1, o.published ? 1 : 0);
+  check(o.data_ok, "with every beat written, none lost to the held guard", 1, o.data_ok ? 1 : 0);
+  check(!o.published_before_retire, "and never before its writes retired", 0,
+        o.published_before_retire ? 1 : 0);
 }
 
 void test_a_bad_crc_does_not_publish() {
@@ -386,6 +456,7 @@ int main(int argc, char** argv) {
 
   test_verdict_matches_the_oracle();
   test_a_good_upload_publishes();
+  test_a_busy_guard_loses_no_beat();
   test_a_bad_crc_does_not_publish();
   test_a_denied_guard_write_does_not_publish();
   test_an_hps_error_does_not_publish();

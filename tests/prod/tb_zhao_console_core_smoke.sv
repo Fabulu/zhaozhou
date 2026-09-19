@@ -647,6 +647,36 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_hps_c1_bursts_o;
   logic [31:0]             terr_hps_c1_wait_cycles_o;
 
+  // ---- MEM.UPLOAD on the TERRAIN.BUILD socket (2026-09-19, cmdmem) --------
+  logic                    upl_req_valid_i;
+  logic                    upl_req_ready_o;
+  logic [ 7:0]             upl_req_tag_i;
+  logic [23:0]             upl_req_index_i;
+  logic [63:0]             upl_req_hps_addr_i;
+  logic [31:0]             upl_req_vram_addr_i;
+  logic [31:0]             upl_req_len_i;
+  logic [15:0]             upl_req_epoch_i;
+  logic [ 7:0]             upl_req_dst_slot_i;
+  logic [15:0]             upl_req_new_gen_i;
+  logic [31:0]             upl_req_crc_i;
+  logic [31:0]             upl_cfg_region_base_i;
+  logic [31:0]             upl_cfg_region_bytes_i;
+  logic [63:0]             upl_cfg_arena_base_i;
+  logic [31:0]             upl_cfg_arena_bytes_i;
+  logic [15:0]             upl_cfg_epoch_i;
+  logic                    upl_publish_valid_o;
+  logic [ 7:0]             upl_publish_slot_o;
+  logic [15:0]             upl_publish_generation_o;
+  logic [ 7:0]             upl_publish_tag_o;
+  logic [23:0]             upl_publish_index_o;
+  logic [31:0]             upl_publish_base_o;
+  logic [31:0]             upl_publish_extent_o;
+  logic                    upl_done_o;
+  logic [ 7:0]             upl_status_o;
+  logic [15:0]             upl_published_o;
+  logic [127:0]            upl_refused_o;
+  logic [31:0]             upl_hps_wait_o;
+
   logic [PROJ_T_ARENAS-1:0] terr_held_o;
   logic                    terr_busy_o;
   logic [31:0]             terr_jobs_accepted_o;
@@ -1737,6 +1767,119 @@ module tb_zhao_console_core_smoke
     end
   end
 
+  // ---- the SHELL's HPS port: the upload arena (2026-09-19, cmdmem) ----------
+  // Until this block the shell's own HPS pins were tied low and nothing crossed
+  // them. MEM.UPLOAD now reaches HPS DDR through the shell's REAL
+  // `zhao_hps_bridge` and `zhao_hps_arbiter_n` (the TERRAIN.BUILD socket), so
+  // the bench plays the far side of that bridge exactly as it plays the
+  // terrain spine's: a grant, a fixed latency, then len/8 beats of memory.
+  //
+  // IT MODELS ONLY THE UPLOAD ARENA, and says so loudly. Any other request
+  // over these pins -- a CMD.DMA packet fetch, a write -- is something this
+  // bench has no bytes for, and serving zeros would be inventing a packet.
+  localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
+  localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
+  // The top 4 KiB of TERRAIN.PAGE_POOL -- the only window MEM.GUARD's
+  // TERRAIN_BUILD arm admits -- well clear of the pages the spine loads.
+  localparam logic [31:0] UPL_REGION_C  = 32'h054D_F000;
+  localparam logic [31:0] UPL_REGION_SZ = 32'h0000_1000;
+  logic [63:0] upl_mem [0:UPL_WORDS_C-1];
+
+  int unsigned  sh_state_q, sh_wait_q, sh_beats_q, sh_bursts_q;
+  logic [31:0]  sh_addr_q;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      sh_state_q      <= 0;
+      sh_wait_q       <= 0;
+      sh_beats_q      <= 0;
+      sh_bursts_q     <= 0;
+      sh_addr_q       <= 32'd0;
+      hps_req_grant_i <= 1'b0;
+      hps_rd_valid_i  <= 1'b0;
+      hps_rd_data_i   <= 64'd0;
+      hps_rd_last_i   <= 1'b0;
+    end else begin
+      hps_req_grant_i <= 1'b0;
+      hps_rd_valid_i  <= 1'b0;
+      hps_rd_last_i   <= 1'b0;
+      case (sh_state_q)
+        0: if (hps_req_valid_o) begin
+             if (hps_req_write_o || (hps_req_addr_o < UPL_ARENA_C) ||
+                 (hps_req_addr_o >= UPL_ARENA_C + 32'(UPL_WORDS_C * 8)))
+               $fatal(1, "SMOKE: the shell's HPS port was asked for %s at %08x -- this bench plays only MEM.UPLOAD's arena and has no bytes to answer with",
+                      hps_req_write_o ? "a WRITE" : "a read", hps_req_addr_o);
+             hps_req_grant_i <= 1'b1;
+             sh_addr_q       <= hps_req_addr_o;
+             sh_beats_q      <= hps_req_len_o >> 3;
+             sh_wait_q       <= HPS_LAT;
+             sh_state_q      <= 1;
+           end
+        1: if (sh_wait_q > 1) sh_wait_q <= sh_wait_q - 1;
+           else               sh_state_q <= 2;
+        2: begin
+             hps_rd_valid_i <= 1'b1;
+             hps_rd_data_i  <= upl_mem[(sh_addr_q - UPL_ARENA_C) >> 3];
+             hps_rd_last_i  <= (sh_beats_q == 1);
+             sh_addr_q      <= sh_addr_q + 32'd8;
+             sh_beats_q     <= sh_beats_q - 1;
+             if (sh_beats_q == 1) begin
+               sh_state_q  <= 0;
+               sh_bursts_q <= sh_bursts_q + 1;
+             end
+           end
+        default: sh_state_q <= 0;
+      endcase
+    end
+  end
+
+  // ---- ONE UPLOAD, offered once the console is out of reset ----------------
+  // Its request fields are set with the other configuration before reset; the
+  // valid is raised here and dropped on the handshake. What comes back is
+  // recorded, and checked at the end against the request that caused it.
+  logic         upl_fired_q;
+  int unsigned  upl_done_seen_q, upl_pub_seen_q;
+  logic [7:0]   upl_status_seen_q;
+  logic [7:0]   upl_pub_slot_q, upl_pub_tag_q;
+  logic [15:0]  upl_pub_gen_q;
+  logic [23:0]  upl_pub_index_q;
+  logic [31:0]  upl_pub_base_q, upl_pub_extent_q;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      upl_req_valid_i   <= 1'b0;
+      upl_fired_q       <= 1'b0;
+      upl_done_seen_q   <= 0;
+      upl_pub_seen_q    <= 0;
+      upl_status_seen_q <= 8'hFF;
+      upl_pub_slot_q    <= '0;
+      upl_pub_tag_q     <= '0;
+      upl_pub_gen_q     <= '0;
+      upl_pub_index_q   <= '0;
+      upl_pub_base_q    <= '0;
+      upl_pub_extent_q  <= '0;
+    end else begin
+      if (reset_released_q && !upl_fired_q && !upl_req_valid_i) upl_req_valid_i <= 1'b1;
+      if (upl_req_valid_i && upl_req_ready_o) begin
+        upl_req_valid_i <= 1'b0;
+        upl_fired_q     <= 1'b1;
+      end
+      if (upl_done_o) begin
+        upl_done_seen_q   <= upl_done_seen_q + 1;
+        upl_status_seen_q <= upl_status_o;
+      end
+      if (upl_publish_valid_o) begin
+        upl_pub_seen_q   <= upl_pub_seen_q + 1;
+        upl_pub_slot_q   <= upl_publish_slot_o;
+        upl_pub_tag_q    <= upl_publish_tag_o;
+        upl_pub_gen_q    <= upl_publish_generation_o;
+        upl_pub_index_q  <= upl_publish_index_o;
+        upl_pub_base_q   <= upl_publish_base_o;
+        upl_pub_extent_q <= upl_publish_extent_o;
+      end
+    end
+  end
+
   // ---- the played MEM.GUARD write window -----------------------------------
   // TERRAIN.PAGELOADER writes the page into TERRAIN.PAGE_POOL through a guard
   // client. The real `zhao_mem_guard` gives ZHAO_CLIENT_TERRAIN_BUILD a
@@ -2359,7 +2502,7 @@ module tb_zhao_console_core_smoke
   // triangles GEOM.CLIP sees are the fixture meshlet's own, projected by the
   // shared projector in BOTH views and replayed out of the arena.
   //
-  // THE VERTEX-ATTRIBUTE STORE (core entry I46) IS MODELLED HERE, with the
+  // THE VERTEX-ATTRIBUTE STORE (core entry I47) IS MODELLED HERE, with the
   // arena's own contract: it listens to the replay's lookups and answers ONE
   // clock later. Its WRITER is the unbuilt half of owner ruling R11, so these
   // values stand in for it exactly as the SDRAM model stands in for memory.
@@ -2780,10 +2923,8 @@ module tb_zhao_console_core_smoke
     hps_state_i = '{default: '0};
     hps_byte_len_i = '{default: '0};
     ring_wr_ready_i = '0;
-    hps_req_grant_i = '0;
-    hps_rd_valid_i = '0;
-    hps_rd_data_i = '0;
-    hps_rd_last_i = '0;
+    // `hps_req_grant_i` / `hps_rd_*_i` are no longer tied here: the shell's HPS
+    // port is served by the upload-arena model below (MEM.UPLOAD's socket).
     pad_present_i = '0;
     pad_buttons_i = '{default: '0};
     pad_lx_i = '{default: '0};
@@ -2996,6 +3137,35 @@ module tb_zhao_console_core_smoke
     terr_cfg_arena_base_i  = HPS_BASE;
     terr_cfg_arena_bytes_i = 32'(HPS_WORDS * 8);
     terr_cfg_load_budget_i = 16'd32;   // T7's per-frame page budget
+
+    // ---- MEM.UPLOAD's one request (core entry I47) ------------------------
+    // A 256-byte MATERIAL_SET-kind resource staged in the upload arena, sealed
+    // with the SAME production folder as the terrain list above -- so this is
+    // evidence about the socket and the copy, not about the CRC law, which
+    // `tests/mem/mem_upload_directed.cpp` owns.
+    for (int unsigned w = 0; w < UPL_WORDS_C; w++)
+      upl_mem[w] = 64'hC0DE_5EED_0000_0000 + 64'(w * 32'h0101_0101);
+    fold_c_i = 32'hFFFF_FFFF;
+    fold_n_i = 4'd8;
+    for (int unsigned w = 0; w < UPL_WORDS_C; w++) begin
+      fold_d_i = upl_mem[w];
+      #1ns;
+      fold_c_i = fold_c_o;
+    end
+    upl_req_crc_i          = ~fold_c_i;
+    upl_req_tag_i          = 8'd11;            // spec/cartridge.md 4a: MATERIAL_SET
+    upl_req_index_i        = 24'h00_ABCD;      // the handle index (5f.1's key)
+    upl_req_hps_addr_i     = 64'(UPL_ARENA_C);
+    upl_req_vram_addr_i    = UPL_REGION_C;
+    upl_req_len_i          = 32'(UPL_WORDS_C * 8);
+    upl_req_epoch_i        = 16'd9;
+    upl_req_dst_slot_i     = 8'd5;
+    upl_req_new_gen_i      = 16'h0102;
+    upl_cfg_region_base_i  = UPL_REGION_C;
+    upl_cfg_region_bytes_i = UPL_REGION_SZ;
+    upl_cfg_arena_base_i   = 64'(UPL_ARENA_C);
+    upl_cfg_arena_bytes_i  = 32'(UPL_WORDS_C * 8);
+    upl_cfg_epoch_i        = 16'd9;
 
     repeat (20) @(posedge gpu_clk);
     rst_n = 1'b1;
@@ -4197,6 +4367,37 @@ module tb_zhao_console_core_smoke
     if (surf_fld_texels_o != 32'd0)
       $fatal(1, "SMOKE: the field stamp adapter delivered %0d records with no program resident",
              surf_fld_texels_o);
+
+    // ---- MEM.UPLOAD across the TERRAIN.BUILD socket (entry I47) ----------
+    // End to end through REAL blocks: the shell's `zhao_hps_arbiter_n` and
+    // `zhao_hps_bridge` fetch the staged bytes, the REAL `zhao_mem_guard`
+    // admits slot 6 into TERRAIN.PAGE_POOL, `zhao_vram_arbiter` and
+    // `zhao_sdram_ctrl` write them and return credits, and only then does the
+    // block publish. Every field of the published row is checked against the
+    // request that caused it, because a publication naming the wrong base is
+    // a well-formed row for the wrong surface.
+    $display("SMOKE: upload    done=%0d status=%0d published=%0d rows=%0d bursts=%0d wait=%0d slot=%0d gen=%04x tag=%0d index=%06x base=%08x extent=%0d",
+             upl_done_seen_q, upl_status_seen_q, upl_published_o, upl_pub_seen_q,
+             sh_bursts_q, upl_hps_wait_o, upl_pub_slot_q, upl_pub_gen_q,
+             upl_pub_tag_q, upl_pub_index_q, upl_pub_base_q, upl_pub_extent_q);
+    if (upl_done_seen_q != 1 || upl_status_seen_q != 8'd0)
+      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with status %0d, expected once with 0 (kUploadOk) -- refused=%032x",
+             upl_done_seen_q, upl_status_seen_q, upl_refused_o);
+    if (upl_pub_seen_q != 1 || upl_published_o != 16'd1)
+      $fatal(1, "SMOKE: MEM.UPLOAD published %0d row(s) (census %0d), expected exactly one",
+             upl_pub_seen_q, upl_published_o);
+    if (sh_bursts_q != (UPL_WORDS_C / 8))
+      $fatal(1, "SMOKE: the shell's bridge served %0d HPS bursts for a %0d-byte upload, expected %0d",
+             sh_bursts_q, UPL_WORDS_C * 8, UPL_WORDS_C / 8);
+    if (upl_pub_index_q != upl_req_index_i || upl_pub_slot_q != upl_req_dst_slot_i ||
+        upl_pub_gen_q != upl_req_new_gen_i || upl_pub_tag_q != upl_req_tag_i ||
+        upl_pub_base_q != upl_req_vram_addr_i || upl_pub_extent_q != upl_req_len_i)
+      $fatal(1, "SMOKE: MEM.UPLOAD published a row that is not the request's -- 5f.1's directory would name the wrong surface");
+    if (upl_refused_o != '0)
+      $fatal(1, "SMOKE: MEM.UPLOAD's refusal census moved (%032x) on a legal upload", upl_refused_o);
+    if (shell_err_wfifo_o || shell_err_route_o)
+      $fatal(1, "SMOKE: the shell's write-queue (%b) or routing (%b) tripwire fired with the slot-6 socket live",
+             shell_err_wfifo_o, shell_err_route_o);
 
     // ---- DEBUG.TRACE against its producer (core entry I45) ----------------
     // The composition check the ring's contract asks for, and it is an

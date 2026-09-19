@@ -2509,6 +2509,8 @@ targets:
       - fpga/rtl/memory/zhao_mem_guard.sv
       - fpga/rtl/memory/zhao_hps_bridge.sv
       - fpga/rtl/memory/zhao_hps_arbiter.sv
+      # MEM.UPLOAD, the TERRAIN.BUILD socket's first client (2026-09-19, cmdmem).
+      - fpga/rtl/mem/zhao_mem_upload.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
       - fpga/rtl/raster/zhao_raster_fbwrite.sv
       # NOT zhao_raster_quant_fin.sv -- THERE IS NO SUCH FILE. The module is

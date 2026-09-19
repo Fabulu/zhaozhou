@@ -89,8 +89,30 @@ def read(path):
 
 
 def ports_of(path, module):
+    """The module's ports, with its INTEGER PARAMETERS resolved in the ranges.
+
+    Since the TERRAIN.BUILD socket (2026-09-19) the sibling has a port sized by
+    its own parameter -- `zhao_hps_burst_req_t [BUILD_HPS_N-1:0]
+    build_hps_req_i`. Copied verbatim into this harness, which has no such
+    parameter, that range names nothing and the harness does not elaborate.
+    The harness instantiates the sibling at its DEFAULTS, so the default is the
+    value that range has here; resolving it is not a guess.
+    """
     text = read(path)
-    return parse_ports(port_header(text, module))
+    ports = parse_ports(port_header(text, module))
+    params = dict(re.findall(r'parameter\s+int\s+unsigned\s+(\w+)\s*=\s*(\d+)', text))
+    if not params:
+        return ports
+    pat = re.compile(r'\b(%s)\b' % '|'.join(map(re.escape, params)))
+
+    def sub(dims):
+        return [pat.sub(lambda m: params[m.group(1)], x) for x in dims]
+
+    out = []
+    for p in ports:
+        d, n, packed, unpacked, s, ut = p
+        out.append((d, n, sub(packed), sub(unpacked), s, ut))
+    return out
 
 
 def decl(direction, name, packed, unpacked=(), utype=''):
