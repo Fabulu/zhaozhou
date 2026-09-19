@@ -258,21 +258,48 @@ module tb_zhao_console_core_smoke
   // the core's own port list rather than typed -- a width that disagrees
   // binds silently in one tool and loudly in another, and either way the
   // bench is then measuring a different machine.
-  logic                    geom_mf_job_valid_i;
-  logic                    geom_mf_job_ready_o;
-  logic [15:0]             geom_mf_job_instance_id_i;
-  logic [26:0]             geom_mf_job_desc_addr_i;
-  logic [7:0]              geom_mf_job_format_i;
-  logic [15:0]             geom_mf_job_generation_i;
-  logic [1:0]              geom_mf_job_active_mask_i;
-  logic signed [31:0]      geom_mf_job_xform_i [0:11];
+  // I36/I41 ARE CLOSED (2026-09-20, owner ruling R29): the nine job ports this
+  // bench used to drive are GONE, and the job is built inside the core by
+  // GEOM.DRAWJOB out of a real DrawForm in the command packet. What the bench
+  // declares now is that block's EVIDENCE.
+  logic [31:0] geom_dj_draws_o, geom_dj_jobs_o, geom_dj_masked_o, geom_dj_empty_o;
+  logic [31:0] geom_dj_pal_writes_o, geom_dj_pal_dropped_o;
+  logic [31:0] geom_dj_refused_cull_o, geom_dj_refused_resident_o;
+  logic [31:0] geom_dj_refused_stale_o, geom_dj_refused_xform_o;
+  logic [31:0] geom_dj_refused_denied_o, geom_dj_refused_format_o;
+  logic [31:0] geom_dj_refused_crc_o, geom_dj_refused_reserved_o;
+  logic [31:0] geom_dj_refused_layout_o;
+  logic [31:0] geom_dj_hdr_reads_o, geom_dj_hdr_crc_fail_o, geom_dj_hdr_framing_o;
+  logic [31:0] geom_ma_jobs_d_o;
+
+  // I50, BOUNDARY: GEOM.LOOM's node stream and camera basis, which the
+  // 2026-08-31 6.4 ruling puts on the ARM. This bench plays that ARM: ONE ROOT
+  // node carrying the identity, which is the instance transform the draw then
+  // names -- so the descriptor's object bound is its world bound and the cull
+  // sees the sphere the fixture placed.
+  logic                    geom_loom_valid_i;
+  logic                    geom_loom_ready_o;
+  logic [9:0]              geom_loom_node_index_i;
+  logic [9:0]              geom_loom_parent_index_i;
+  logic [3:0]              geom_loom_kind_i;
+  logic signed [31:0]      geom_loom_param_i [0:11];
+  logic [15:0]             geom_loom_angle_i;
+  logic [1:0]              geom_loom_axis_i;
+  logic                    geom_loom_bodypatch_i;
+  logic [15:0]             geom_loom_src_id_i;
+  logic                    geom_loom_first_i;
+  logic                    geom_loom_last_i;
+  logic signed [31:0]      geom_loom_cam_basis_i [0:8];
+  logic [31:0]             geom_loom_nodes_o, geom_loom_streams_o;
+  logic [31:0]             geom_loom_refused_sorted_o, geom_loom_refused_parent_o;
+  logic [31:0]             geom_loom_refused_overflow_o, geom_loom_refused_kind_o;
+  logic [31:0]             geom_loom_refused_shear_o, geom_loom_refused_framing_o;
   // I37 CLOSED: the CRC walker is inside the core; its evidence comes out.
   logic [31:0]             geom_mf_crc_descriptors_o;
   logic [31:0]             geom_mf_crc_fail_o;
   logic [31:0]             geom_mf_crc_framing_o;
   // I38 and I11 CLOSED, I39 narrowed to the raster word: GEOM.REPLAY owns the
   // release, the handle and the TriangleDescriptor inside the core now.
-  logic [31:0]              geom_asm_raster_state_i;
   logic [31:0] geom_mf_meshlets_considered_o;
   logic [31:0] geom_mf_culled_all_cameras_o;
   logic [31:0] geom_mf_descriptors_fetched_o;
@@ -1039,7 +1066,6 @@ module tb_zhao_console_core_smoke
   // read is not evidence. The RATIO is what gets asserted below.
   logic [31:0]             geom_attrpack_triangles_o;
   logic [31:0]             geom_attrpack_planes_o;
-  logic [1:0]              geom_clip_cull_mode_i;
   logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_o, geom_clip_attr_b_o, geom_clip_attr_c_o;
   logic                    geom_clip_flip_o;
   logic                    geom_clip_ret_valid_o;
@@ -1284,15 +1310,7 @@ module tb_zhao_console_core_smoke
   // where. High is what an always-available consumer looks like, and the
   // REFUSING consumer is exercised where it belongs -- three ready patterns in
   // `tests/command/cmd_exec_directed.cpp` case 12.
-  logic        cmd_draw_valid_o;
-  logic        cmd_draw_ready_i;
-  logic [31:0] cmd_draw_form_o;
-  logic [31:0] cmd_draw_material_set_o;
-  logic [31:0] cmd_draw_transform_o;
-  logic [ 7:0] cmd_draw_viewport_mask_o;
-  logic [ 7:0] cmd_draw_semantic_weight_o;
-  logic [15:0] cmd_draw_flags_o;
-  logic [15:0] cmd_draw_src_id_o;
+
   logic [31:0] cmd_exec_draws_o;
   logic [31:0] cmd_exec_draw_overflow_o;
   logic [31:0] cmd_exec_draw_src_truncated_o;
@@ -1926,8 +1944,30 @@ module tb_zhao_console_core_smoke
   localparam logic [ 7:0] UPL_SLOT_C    = 8'd1;
   localparam logic [15:0] UPL_GEN_C     = 16'h0102;
   localparam logic [15:0] UPL_EPOCH_C   = 16'd9;
-  logic [63:0] upl_mem [0:UPL_WORDS_C-1];
+  // ---- the MESH_STREAM page, owner ruling R29 -----------------------------
+  // A SECOND PublishResource in the same packet, of kind 12, carrying the
+  // geometry fixture: header, descriptor, index run and vertex records, in one
+  // immutable page. It lands 1 KiB into the same writable region as the
+  // MATERIAL_SET, 64-byte aligned because the descriptor table must be, and
+  // GEOM.DRAWJOB resolves the draw's `form` handle to it through the 5f.1
+  // directory MEM.UPLOAD publishes.
+  localparam logic [23:0] MSH_INDEX_C   = 24'h00_1234;
+  localparam logic [ 7:0] MSH_KIND_C    = 8'd12;            // MESH_STREAM
+  localparam logic [ 7:0] MSH_SLOT_C    = 8'd2;
+  localparam logic [15:0] MSH_GEN_C     = 16'h0055;
+  localparam logic [31:0] MSH_DST_C     = UPL_REGION_C + 32'h0000_0400;
+  localparam int unsigned MSH_WORDS_C   = 56;               // 448 B: 64+64+64+8*32
+  localparam int unsigned MSH_ARENA_W   = UPL_WORDS_C;      // words into the arena
+  localparam int unsigned UPL_ALL_WORDS = UPL_WORDS_C + MSH_WORDS_C;
+  // The Loom node the draw's transform handle names, and the draw's own
+  // identity. `SMK_DRAW_SRC_C` becomes the meshlet's src_id, which is what the
+  // vertex records are attributed to downstream -- it was the job port's
+  // `instance_id` before R29 and is the DrawForm record's source id now.
+  localparam int unsigned SMK_XFORM_NODE_C = 5;
+  localparam logic [15:0] SMK_DRAW_SRC_C   = 16'h00A1;
+  logic [63:0] upl_mem [0:UPL_ALL_WORDS-1];
   logic [255:0] upl_rec0;         // record 0 of the uploaded MATERIAL_SET
+  logic [31:0]  upl_crc_material_q, upl_crc_mesh_q;
   logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
   int unsigned pkt_len_q;
   logic        pkt_armed_q;       // set by the initial block once the packet is built
@@ -1969,7 +2009,7 @@ module tb_zhao_console_core_smoke
              if ((hps_req_addr_o >= RING_SLOT0_C) && (hps_req_addr_o < RING_SLOT0_C + 32'(PKT_MAX_C)))
                sh_is_pkt_q <= 1'b1;
              else if ((hps_req_addr_o >= UPL_ARENA_C) &&
-                      (hps_req_addr_o < UPL_ARENA_C + 32'(UPL_WORDS_C * 8)))
+                      (hps_req_addr_o < UPL_ARENA_C + 32'(UPL_ALL_WORDS * 8)))
                sh_is_pkt_q <= 1'b0;
              else
                $fatal(1, "SMOKE: the shell's HPS port was asked for a read at %08x -- this bench plays only FRAME_RING slot 0 and MEM.UPLOAD's arena",
@@ -2038,6 +2078,15 @@ module tb_zhao_console_core_smoke
   logic [15:0]  upl_pub_gen_q;
   logic [23:0]  upl_pub_index_q;
   logic [31:0]  upl_pub_base_q, upl_pub_extent_q;
+  // TWO publications now (R29): the MATERIAL_SET and the MESH_STREAM page the
+  // draw names. They are latched SEPARATELY, by kind, because one pair of
+  // registers holding "the last row" would let either check pass on the other
+  // resource's publication.
+  logic [7:0]   msh_pub_slot_q, msh_pub_tag_q;
+  logic [15:0]  msh_pub_gen_q;
+  logic [23:0]  msh_pub_index_q;
+  logic [31:0]  msh_pub_base_q, msh_pub_extent_q;
+  int unsigned  msh_pub_seen_q;
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -2050,12 +2099,31 @@ module tb_zhao_console_core_smoke
       upl_pub_index_q   <= '0;
       upl_pub_base_q    <= '0;
       upl_pub_extent_q  <= '0;
+      msh_pub_seen_q    <= 0;
+      msh_pub_slot_q    <= '0;
+      msh_pub_tag_q     <= '0;
+      msh_pub_gen_q     <= '0;
+      msh_pub_index_q   <= '0;
+      msh_pub_base_q    <= '0;
+      msh_pub_extent_q  <= '0;
     end else begin
       if (upl_done_o) begin
         upl_done_seen_q   <= upl_done_seen_q + 1;
         upl_status_seen_q <= upl_status_o;
       end
-      if (upl_publish_valid_o) begin
+      // TWO publications now (R29), latched SEPARATELY BY KIND: one pair of
+      // registers holding 'the last row' would let either check pass on the
+      // other resource's publication.
+      if (upl_publish_valid_o && (upl_publish_tag_o == MSH_KIND_C)) begin
+        msh_pub_seen_q   <= msh_pub_seen_q + 1;
+        msh_pub_slot_q   <= upl_publish_slot_o;
+        msh_pub_tag_q    <= upl_publish_tag_o;
+        msh_pub_gen_q    <= upl_publish_generation_o;
+        msh_pub_index_q  <= upl_publish_index_o;
+        msh_pub_base_q   <= upl_publish_base_o;
+        msh_pub_extent_q <= upl_publish_extent_o;
+      end
+      if (upl_publish_valid_o && (upl_publish_tag_o == UPL_KIND_C)) begin
         upl_pub_seen_q   <= upl_pub_seen_q + 1;
         upl_pub_slot_q   <= upl_publish_slot_o;
         upl_pub_tag_q    <= upl_publish_tag_o;
@@ -2481,9 +2549,16 @@ module tb_zhao_console_core_smoke
   // twice: a fixture that agrees with itself by construction cannot drift.
   // ==========================================================================
   localparam int unsigned GEOM_POOL_BASE = 32'h06A0_0000;
-  localparam int unsigned GEOM_DESC_OFF  = 32'h0000_0000;
+  // PAGE-RELATIVE since 2026-09-20 (owner ruling R29): these are offsets into
+  // the MESH_STREAM page, which now begins with its frozen 64-byte header.
+  // The header is at 0, the descriptor table at 64, and the descriptor's own
+  // vertex/index offsets are page-relative too -- GEOM.MESHFETCH adds the
+  // page's pool-relative base once, so what reaches GEOM.ASSETFETCH is still
+  // pool-relative and that block is unchanged.
+  localparam int unsigned GEOM_HDR_OFF   = 32'h0000_0000;
+  localparam int unsigned GEOM_DESC_OFF  = 32'h0000_0040;
   localparam int unsigned GEOM_IX_OFF    = 32'h0000_0080;
-  localparam int unsigned GEOM_VX_OFF    = 32'h0000_0100;
+  localparam int unsigned GEOM_VX_OFF    = 32'h0000_00C0;
   // The bound, in the meshlet's own space, and the identity instance transform
   // that carries it to world. It sits at the clip origin under the identity
   // camera written below, so GEOM.CULL must call it VISIBLE -- and its radius
@@ -2501,7 +2576,7 @@ module tb_zhao_console_core_smoke
   logic        geom_model_error;
   bit          geom_fixture_ready_q;
   bit          geom_camera_ready_q;
-  bit          geom_job_sent_q;
+  bit          geom_loom_sent_q;
 
   // ONE 16-BIT WORD PER CLOCK, at `byte_addr >> 1`, low byte of the word first
   // -- `zhao_sdram_ctrl` computes `waddr = req.addr[26:1]` and the shell's read
@@ -2649,92 +2724,12 @@ module tb_zhao_console_core_smoke
     geom_fixture_ready_q = 1'b0;
     @(posedge gpu_clk);
 
-    // ---- the 64-byte meshlet descriptor, field by field -------------------
-    //   +0  format u8         (must equal the job's j_format_i)
-    //   +1  flags u8
-    //   +2  vertex_count u8   (<= 64)
-    //   +3  triangle_count u8 (<= 126)
-    //   +4  material_id u16
-    //   +8  bound centre x, y, z  i32 fx16
-    //   +20 bound radius u32      (nonzero, or refusal row 7)
-    //   +24 vertex_offset u32     pool-relative bytes
-    //   +28 index_offset  u32     pool-relative bytes
-    //   +32 generation u16        (must equal the job's j_generation_i)
-    //   +36..59 reserved, ALL ZERO or refusal row 6
-    //   +60 CRC32C over bytes 0..59, little-endian. READ BY THE RTL since
-    //       2026-09-19: `zhao_geom_desc_crc` (entry I37, closed) folds the
-    //       returning beats and GEOM.MESHFETCH refuses on a mismatch. The word
-    //       is computed HERE, over exactly the bytes written, so the
-    //       `-BadDescriptor` control still trips the RESERVED row it names and
-    //       not the CRC row.
-    begin : g_desc
-      logic [63:0] dw [8];
-      dw[0] = {16'h0000, 16'h0001, 8'(SGF_N_TRIS), 8'(N_GEOM_VERTS), 8'd0, 8'd1};
-      dw[1] = 64'd0;
-      // Bound centre z = 1.5 (bytes 16..19), inside the w = z camera's view,
-      // so GEOM.CULL keeps the meshlet in both views; radius 0.25 (20..23).
-      dw[2] = {GEOM_BOUND_R, 32'h0001_8000};
-      dw[3] = {GEOM_IX_OFF, GEOM_VX_OFF};
-      dw[4] = {32'd0, 16'd0, 16'd1};
-`ifdef ZHAO_SMOKE_BAD_DESC
-      // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`). Byte 40 is
-      // inside the descriptor's reserved span 36..59, which GEOM.MESHFETCH's
-      // sixth refusal row requires to be all zero. ONE BYTE, in memory, and
-      // nothing else in the bench changes -- so the run failing here is
-      // evidence about two things at once: the refusal group can fire, and the
-      // descriptor the machine validates is the one this bench wrote into
-      // SDRAM rather than anything it happened to have lying around.
-      // A plain `ifdef`, selected by `+define+`, because CLAUDE.md records
-      // that a command-line -D cannot override a FUNCTION-LIKE `define and
-      // says nothing when it fails to.
-      dw[5] = 64'h0000_0000_0000_0001;
-`else
-      dw[5] = 64'd0;
-`endif
-      dw[6] = 64'd0;
-      dw[7] = 64'd0;
-      dw[7][63:32] = fixture_desc_crc(dw);
-      for (int unsigned k = 0; k < 8; k = k + 1)
-        geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 8 * k, dw[k]);
-    end
-
-    // ---- the index run: SGF_N_TRIS triplets of packed u8, from the fixture --
-    // The whole 64-byte line is written, so no beat of a line this bench caused
-    // to be read carries X.
-    begin : g_ix
-      logic [191:0] ixw;
-      ixw = '0;
-      for (int unsigned k = 0; k < 3 * SGF_N_TRIS; k = k + 1)
-        ixw[8 * k +: 8] = SGF_IX[k];
-      geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  0, ixw[63:0]);
-      geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  8, ixw[127:64]);
-      geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 16, ixw[191:128]);
-    end
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 24, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 32, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 40, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 48, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 56, 64'd0);
-
-    // ---- the vertex run: N_GEOM_VERTS x 32 bytes, byte k at bits [8k+:8] --
-    for (int unsigned n = 0; n < N_GEOM_VERTS; n = n + 1) begin
-      automatic logic [255:0] rec;
-      rec = vdec_record(n);
-`ifdef ZHAO_SMOKE_BAD_VERTEX
-      // THE R31 CONTROL (`-BadVertex`). Record 3's first reserved byte (off
-      // 24) is nonzero IN SDRAM, so GEOM.VDECODE refuses exactly that record
-      // and nothing else changes. Before the R31 fix this wedged GEOM.GROUP_SEQ
-      // in StFill for ever and the run died at "GEOM.REPLAY released no
-      // meshlet"; the checks below require the batch to be DROPPED and the
-      // frame to COMPLETE instead.
-      if (n == 3) rec[192 +: 8] = 8'h01;
-`endif
-      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  0, rec[63:0]);
-      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  8, rec[127:64]);
-      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 16, rec[191:128]);
-      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 24, rec[255:192]);
-    end
-
+    // THE FIXTURE'S BYTES ARE NO LONGER POKED INTO VRAM (2026-09-20, R29).
+    // The descriptor, the index run and the vertex records are now the body of
+    // a MESH_STREAM page that MEM.UPLOAD copies from the HPS staging arena and
+    // publishes -- built in the packet block below, beside the command that
+    // names it, so the page and its CRC cannot drift apart. What stays here is
+    // the frame sentinel, which is about the POST pass and not about geometry.
     // THE FRAME IS PRE-FILLED WITH A SENTINEL, and without it the post checks
     // below would compare zeros. MEASURED 2026-09-19: the raster's 2,560 pixels
     // are ALL 0x0000 -- the material is still unbound, so the surface samples
@@ -2829,29 +2824,28 @@ module tb_zhao_console_core_smoke
     .model_error         (geom_model_error)
   );
 
-  // THE DRAW. One meshlet, once, after reset has lifted, the SDRAM controller
-  // has finished its PRECHARGE/REFRESH/MRS sequence and the fixture is in
-  // memory. The transform is the identity, so the descriptor's object-space
-  // bound is also its world bound and GEOM.CULL sees the sphere the fixture
-  // placed rather than one this bench moved.
+  // THE DRAW IS NO LONGER THIS BENCH'S (2026-09-20, owner ruling R29). It used
+  // to poke a six-field job straight at GEOM.MESHFETCH, which is exactly the
+  // fake stimulus entry I36 was open about: every field was a value this file
+  // chose. The job now comes from a REAL DrawForm 0x0300 in the command packet
+  // below, resolved by GEOM.DRAWJOB against a REAL MESH_STREAM page that
+  // MEM.UPLOAD wrote and published into RENDER.ASSET_POOL.
+  //
+  // WHAT THIS BENCH STILL PLAYS is the ARM's side of entry I50: ONE ROOT node
+  // into GEOM.LOOM, carrying the identity, because that stream's producer is
+  // host software BY RULING (2026-08-31 6.4) and not a block anyone deleted.
+  // It is sent once, before the frame; the palette holds the row from then on,
+  // and a draw whose transform row was never written is REFUSED and counted.
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
-      geom_mf_job_valid_i <= 1'b0;
-      geom_job_sent_q     <= 1'b0;
+      geom_loom_valid_i <= 1'b0;
+      geom_loom_sent_q  <= 1'b0;
     end else begin
-      if (geom_mf_job_valid_i && geom_mf_job_ready_o) begin
-        geom_mf_job_valid_i <= 1'b0;
-        geom_job_sent_q     <= 1'b1;
-      end else if (reset_released_q && init_done_o && geom_fixture_ready_q
-                   && geom_camera_ready_q && render_frame_open_q
-                   // R25: the frame's own SetEnvironment is in the bank (load
-                   // 1 is the power-on default, load 2 is this packet's).
-                   && (geom_light_env_loads_o >= 32'd2)
-                   && !geom_job_sent_q) begin
-        // INSIDE THE OPEN RENDER FRAME: the meshlet's triangles reach the
-        // shell's binner through GEOM.REPLAY, and a render frame does not
-        // survive the console's frame boundary (the note at the frame open).
-        geom_mf_job_valid_i <= 1'b1;
+      if (geom_loom_valid_i && geom_loom_ready_o) begin
+        geom_loom_valid_i <= 1'b0;
+        geom_loom_sent_q  <= 1'b1;
+      end else if (reset_released_q && !geom_loom_sent_q) begin
+        geom_loom_valid_i <= 1'b1;
       end
     end
   end
@@ -3080,7 +3074,6 @@ module tb_zhao_console_core_smoke
     // THE DRAW DISPATCH (core entry I41). HIGH, and the declaration comment
     // says why: the draw drain is the LAST phase of CMD.EXEC's commit, so a
     // low ready parks the executor and stops the command path outright.
-    cmd_draw_ready_i = 1'b1;
 
     // DEBUG.TRACE (core entry I45). ARM STAGE 0 -- `zref::trace::kCommandDecoder`
     // -- and nothing else, because stage 0 is the only one this console has a
@@ -3116,7 +3109,6 @@ module tb_zhao_console_core_smoke
     // THE RULING-5 PACKET IS NO LONGER DRIVEN HERE. Slot 0 (invw24) is
     // GEOM.DEPTHQUANT's, inside GEOM.REPLAY, and slots 1..6 are the modelled
     // attribute store's (I46) -- see the store above.
-    geom_clip_cull_mode_i = '0;
     render_frame_open_q = 1'b0;
     geom_pose_start_i = 1'b0;
     geom_pose_bone_count_i = '0;
@@ -3214,7 +3206,7 @@ module tb_zhao_console_core_smoke
     scanout_ack_i = '0;
     frame_swap_valid_i = '0;
     frame_swap_slot_i = '0;
-    // hps_state_i, hps_byte_len_i and ing_wr_ready_i are driven by the
+    // hps_state_i, hps_byte_len_i and ring_wr_ready_i are driven by the
     // FRAME_RING word-view model (harness-as-HPS), not tied here.
     pkt_armed_q = 1'b0;
     // `hps_req_grant_i` / `hps_rd_*_i` are no longer tied here: the shell's HPS
@@ -3248,17 +3240,26 @@ module tb_zhao_console_core_smoke
     // bench that also drove it would be two drivers on the data bus with the
     // harness winning -- which reads as a memory that answers zero.
 
-    // ---- the geometry asset path's boundaries (core entries I36..I39) -----
-    geom_mf_job_instance_id_i = 16'h00A1;   // becomes the meshlet's src_id
-    geom_mf_job_desc_addr_i   = 27'(GEOM_POOL_BASE + GEOM_DESC_OFF);
-    geom_mf_job_format_i      = 8'd1;
-    geom_mf_job_generation_i  = 16'd1;
-    geom_mf_job_active_mask_i = 2'b11;      // BOTH cameras
+    // ---- entry I50: the ARM's Loom stream, ONE ROOT node -------------------
+    // ROOT takes its twelve elements straight from `param` (the block's own
+    // kind table), so this IS the instance transform the draw names: the
+    // identity, which keeps the descriptor's object bound its world bound and
+    // leaves GEOM.CULL seeing the sphere the fixture placed.
+    geom_loom_node_index_i   = 10'(SMK_XFORM_NODE_C);
+    geom_loom_parent_index_i = 10'd0;
+    geom_loom_kind_i         = 4'd0;        // ROOT
     for (int unsigned i = 0; i < 12; i = i + 1)
-      geom_mf_job_xform_i[i] = ((i == 0) || (i == 5) || (i == 10))
-                               ? FX16_ONE : 32'sd0;
-    // I39, narrowed: the descriptor's raster word has no producer anywhere.
-    geom_asm_raster_state_i   = '0;
+      geom_loom_param_i[i] = ((i == 0) || (i == 5) || (i == 10)) ? FX16_ONE : 32'sd0;
+    geom_loom_angle_i     = 16'd0;
+    geom_loom_axis_i      = 2'd0;
+    geom_loom_bodypatch_i = 1'b0;
+    geom_loom_src_id_i    = 16'h00A1;
+    geom_loom_first_i     = 1'b1;
+    geom_loom_last_i      = 1'b1;           // a one-node stream, framed
+    // The camera basis is the identity: no BILLBOARD node is sent, and zeros
+    // would be a matrix this bench invented for a kind it never uses.
+    for (int unsigned i = 0; i < 9; i = i + 1)
+      geom_loom_cam_basis_i[i] = ((i == 0) || (i == 4) || (i == 8)) ? FX16_ONE : 32'sd0;
 
     // ---- reset ------------------------------------------------------------
     rst_n            = 1'b0;
@@ -3461,6 +3462,65 @@ module tb_zhao_console_core_smoke
       upl_rec0 = zhao_abi_pkg::zhao_pack_material_record(mr);
       for (int unsigned w = 0; w < 4; w++) upl_mem[w] = upl_rec0[64*w +: 64];
     end
+    // ---- THE MESH_STREAM PAGE (owner ruling R29) --------------------------
+    // Words MSH_ARENA_W..+MSH_WORDS_C of the same staging arena: the frozen
+    // 64-byte header, the 64-byte meshlet descriptor, the index run and the
+    // vertex records. Every byte is the fixture's own -- the same descriptor
+    // fields, the same `SGF_IX` triplets and the same `vdec_record(n)` this
+    // bench poked into VRAM before R29 -- so what changed is HOW THE BYTES GET
+    // THERE (MEM.UPLOAD writes them and publishes the row) and not what they
+    // are. The two `ifdef` controls still mutate the page here, and the CRC is
+    // taken AFTERWARDS, so a deliberately broken descriptor is uploaded
+    // faithfully and refused by the block that should refuse it.
+    begin : build_mesh_page
+      logic [63:0] hw [8];
+      logic [63:0] dw [8];
+      logic [191:0] ixw;
+      for (int unsigned w = 0; w < MSH_WORDS_C; w++) upl_mem[MSH_ARENA_W + w] = 64'd0;
+      // the header: format 1, one meshlet, generation 1, table at 64
+      hw[0] = {16'h0000, 16'd1, 16'd1, 8'd0, 8'd1};
+      hw[1] = {32'd0, GEOM_DESC_OFF};
+      for (int unsigned k = 2; k < 8; k++) hw[k] = 64'd0;
+      hw[7][63:32] = fixture_desc_crc(hw);   // the SAME fold, over bytes 0..59
+      for (int unsigned k = 0; k < 8; k++) upl_mem[MSH_ARENA_W + k] = hw[k];
+      // the descriptor, field for field as before -- with PAGE-relative offsets
+      dw[0] = {16'h0000, 16'h0001, 8'(SGF_N_TRIS), 8'(N_GEOM_VERTS), 8'd0, 8'd1};
+      dw[1] = 64'd0;
+      dw[2] = {GEOM_BOUND_R, 32'h0001_8000};
+      dw[3] = {GEOM_IX_OFF, GEOM_VX_OFF};
+      dw[4] = {32'd0, 16'd0, 16'd1};
+`ifdef ZHAO_SMOKE_BAD_DESC
+      // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`), unchanged in
+      // meaning: byte 40 is inside the descriptor's reserved span, which
+      // GEOM.MESHFETCH's sixth refusal row requires to be zero.
+      dw[5] = 64'h0000_0000_0000_0001;
+`else
+      dw[5] = 64'd0;
+`endif
+      dw[6] = 64'd0;
+      dw[7] = 64'd0;
+      dw[7][63:32] = fixture_desc_crc(dw);
+      for (int unsigned k = 0; k < 8; k++) upl_mem[MSH_ARENA_W + 8 + k] = dw[k];
+      // the index run
+      ixw = '0;
+      for (int unsigned k = 0; k < 3 * SGF_N_TRIS; k = k + 1) ixw[8 * k +: 8] = SGF_IX[k];
+      upl_mem[MSH_ARENA_W + (GEOM_IX_OFF >> 3) + 0] = ixw[63:0];
+      upl_mem[MSH_ARENA_W + (GEOM_IX_OFF >> 3) + 1] = ixw[127:64];
+      upl_mem[MSH_ARENA_W + (GEOM_IX_OFF >> 3) + 2] = ixw[191:128];
+      // the vertex records
+      for (int unsigned nv = 0; nv < N_GEOM_VERTS; nv = nv + 1) begin
+        automatic logic [255:0] rec;
+        rec = vdec_record(nv);
+`ifdef ZHAO_SMOKE_BAD_VERTEX
+        // THE R31 CONTROL (`-BadVertex`), unchanged: record 3's first reserved
+        // byte is nonzero, so GEOM.VDECODE refuses exactly that record and the
+        // batch must be DROPPED while the frame completes.
+        if (nv == 3) rec[192 +: 8] = 8'h01;
+`endif
+        for (int unsigned k = 0; k < 4; k++)
+          upl_mem[MSH_ARENA_W + (GEOM_VX_OFF >> 3) + 4 * nv + k] = rec[64*k +: 64];
+      end
+    end
     fold_c_i = 32'hFFFF_FFFF;
     fold_n_i = 4'd8;
     for (int unsigned w = 0; w < UPL_WORDS_C; w++) begin
@@ -3468,20 +3528,35 @@ module tb_zhao_console_core_smoke
       #1ns;
       fold_c_i = fold_c_o;
     end
+    upl_crc_material_q = ~fold_c_i;
+    // ...and the MESH_STREAM page's own CRC, over its 448 bytes, folded with
+    // the SAME production block and AFTER the two controls have had their say,
+    // so a deliberately broken descriptor is uploaded faithfully and refused by
+    // the block that should refuse it rather than by the uploader.
+    fold_c_i = 32'hFFFF_FFFF;
+    for (int unsigned w = 0; w < MSH_WORDS_C; w++) begin
+      fold_d_i = upl_mem[MSH_ARENA_W + w];
+      #1ns;
+      fold_c_i = fold_c_o;
+    end
+    upl_crc_mesh_q = ~fold_c_i;
     begin : build_packet
       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
       zhao_abi_pkg::zhao_rec_set_presentation_contract_t pc;
       zhao_abi_pkg::zhao_rec_set_view_t         sv;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
+      zhao_abi_pkg::zhao_rec_publish_resource_t pr2;
+      zhao_abi_pkg::zhao_rec_draw_form_t        df;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
       zhao_abi_pkg::zhao_rec_set_environment_t  se;
       logic [255:0] bfv, efv;
-      logic [383:0] prv, pcv, sev;
+      logic [383:0] prv, pr2v, pcv, sev;
+      logic [255:0] dfv;
       logic [767:0] svv;
       logic [511:0] matv;
       logic [31:0]  c;
       int unsigned  o;
-      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0;
+      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; df = '0;
       // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
       // already runs), two views, and the five token CEILINGS.
       pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
@@ -3507,11 +3582,39 @@ module tb_zhao_console_core_smoke
       pr.hps_addr_hi    = 32'd0;
       pr.vram_dst       = UPL_REGION_C;
       pr.length         = 32'(UPL_WORDS_C * 8);
-      pr.crc32c         = ~fold_c_i;
+      pr.crc32c         = upl_crc_material_q;
       pr.new_generation = UPL_GEN_C;
       pr.epoch          = UPL_EPOCH_C;
       pr.dst_slot       = UPL_SLOT_C;
       pr.kind           = UPL_KIND_C;
+      // THE SECOND PUBLICATION: the MESH_STREAM page the draw below names.
+      // Its handle generation is the low byte of the generation it is
+      // published with, because that is what GEOM.DRAWJOB compares -- the same
+      // law `zhao_material_resolve` applies to the same handle shape.
+      pr2.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE; pr2.h_record_bytes = 16'd48;
+      pr2.h_source_id    = 32'd79;
+      pr2.resource       = {MSH_INDEX_C, MSH_GEN_C[7:0]};
+      pr2.hps_addr_lo    = UPL_ARENA_C + 32'(MSH_ARENA_W * 8);
+      pr2.hps_addr_hi    = 32'd0;
+      pr2.vram_dst       = MSH_DST_C;
+      pr2.length         = 32'(MSH_WORDS_C * 8);
+      pr2.crc32c         = upl_crc_mesh_q;
+      pr2.new_generation = MSH_GEN_C;
+      pr2.epoch          = UPL_EPOCH_C;
+      pr2.dst_slot       = MSH_SLOT_C;
+      pr2.kind           = MSH_KIND_C;
+      // THE DRAW ITSELF (`DrawForm 0x0300`). `form` names the page above,
+      // `transform` names the Loom node this bench streams, and `flags` is
+      // ZERO -- cull mode NONE, the double-sided law every capture was
+      // recorded under, so the fixture's triangles are not culled by winding.
+      df.h_opcode = zhao_abi_pkg::ZHAO_OP_DRAW_FORM;         df.h_record_bytes = 16'd32;
+      df.h_source_id   = 32'(SMK_DRAW_SRC_C);
+      df.form          = {MSH_INDEX_C, MSH_GEN_C[7:0]};
+      df.material_set  = {UPL_INDEX_C, 8'h2A};
+      df.transform     = {24'(SMK_XFORM_NODE_C), 8'h00};
+      df.viewport_mask = 8'h03;                 // BOTH cameras, as before
+      df.semantic_weight = 8'd7;
+      df.flags         = 16'd0;
       se.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_ENVIRONMENT;   se.h_record_bytes = 16'd48;
       se.h_source_id = 32'd78;
       se.sun_yaw     = SGF_ENV_YAW;
@@ -3520,7 +3623,9 @@ module tb_zhao_console_core_smoke
       se.ambient     = SGF_ENV_AMB;
       ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
-      prv = zhao_abi_pkg::zhao_pack_publish_resource(pr);
+      prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
+      pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
+      dfv  = zhao_abi_pkg::zhao_pack_draw_form(df);
       sev = zhao_abi_pkg::zhao_pack_set_environment(se);
       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
       pcv = zhao_abi_pkg::zhao_pack_set_presentation_contract(pc);
@@ -3528,35 +3633,54 @@ module tb_zhao_console_core_smoke
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
       // BeginFrame 32 | SetPresentationContract 48 | SetView 96 |
-      // PublishResource 48 | SetEnvironment 48 | EndFrame 32 = 304 bytes, six records
+      // PublishResource 48 | PublishResource 48 | SetEnvironment 48 |
+      // DrawForm 32 | EndFrame 32 = 384 bytes, EIGHT records. The draw comes
+      // after both publications because the page it names must be resident
+      // before it resolves -- and the core holds the draw while a publication
+      // is in flight, which is what makes the ORDER enough.
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]       = bfv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k]  = pcv[8*k +: 8];
       for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 80 + k]  = svv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 176 + k] = prv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = sev[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 272 + k] = efv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = pr2v[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 272 + k] = sev[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 320 + k] = dfv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 352 + k] = efv[8*k +: 8];
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), six records, 304 bytes of them
+      // deadline 0 (the mode's period), EIGHT records, 384 bytes of them
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd6;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd304;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd8;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd384;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 304; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+307], pkt_mem[o+306], pkt_mem[o+305], pkt_mem[o+304]} = ~c;
-      pkt_len_q   = o + 304 + 4;
+      for (int unsigned k = 0; k < 384; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+387], pkt_mem[o+386], pkt_mem[o+385], pkt_mem[o+384]} = ~c;
+      pkt_len_q   = o + 384 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
     upl_cfg_arena_base_i   = 64'(UPL_ARENA_C);
-    upl_cfg_arena_bytes_i  = 32'(UPL_WORDS_C * 8);
+    // The arena holds BOTH staged resources now: the MATERIAL_SET and, after
+    // it, the MESH_STREAM page. Sized short, MEM.UPLOAD refuses the second
+    // request with kUploadSourceOutsideArena (verdict 6) -- which it did, and
+    // which is the block correctly refusing a source it was not given.
+    upl_cfg_arena_bytes_i  = 32'(UPL_ALL_WORDS * 8);
     upl_cfg_epoch_i        = 16'd9;
 
+    // THE FIXTURE MUST BE IN MEMORY BEFORE THE MACHINE STARTS, and this wait
+    // is new because the thing that used to enforce it is gone. Until
+    // 2026-09-20 the DRAW was this bench's, gated on `geom_fixture_ready_q`,
+    // and that gate happened to hold the frame back until the 92,160-word POST
+    // sentinel had been poked. The draw is the command packet's now, so nothing
+    // waited, and the snapshot caught a half-filled frame: 44,972 words read as
+    // "overwritten by the raster" against the 2,560 pixels it actually wrote.
+    // The raster was right and the sentinel was late.
+    wait (geom_fixture_ready_q);
     repeat (20) @(posedge gpu_clk);
     rst_n = 1'b1;
     repeat (4) @(posedge gpu_clk);
@@ -3740,12 +3864,26 @@ module tb_zhao_console_core_smoke
       guard = guard + 1;
     end
     if (geom_rp_meshlets_o == 0)
-      $fatal(1, "SMOKE: GEOM.REPLAY released no meshlet in %0d cycles -- replayed %0d of %0d view-triangles, handles=%0d, fetched=%0d meshlet(s), skinned=%0d, landings=%0d, descriptor refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]",
+      $fatal(1, "SMOKE: GEOM.REPLAY released no meshlet in %0d cycles -- replayed %0d of %0d view-triangles, handles=%0d, fetched=%0d meshlet(s), skinned=%0d, landings=%0d, descriptor refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]; THE DRAW: draws=%0d jobs=%0d masked=%0d empty=%0d hdr_reads=%0d hdr_crc_fail=%0d refused[cull/resident/stale/xform/denied/fmt/crc/resv/layout]=[%0d %0d %0d %0d %0d %0d %0d %0d %0d]; THE LOOM: nodes=%0d streams=%0d pal_writes=%0d pal_dropped=%0d loom_refused[sorted/parent/ovf/kind/shear/framing]=[%0d %0d %0d %0d %0d %0d]; THE UPLOAD: published=%0d status=%0d",
              guard, geom_rp_triangles_out_o, SGF_EXP_REPLAYED, geom_rp_groups_o,
              geom_af_meshlets_fetched_o, geom_skin_vertices_transformed_o, geom_landings_o,
              geom_mf_refused_format_o, geom_mf_refused_crc_o,
              geom_mf_refused_generation_o, geom_mf_refused_vertex_count_o,
              geom_mf_refused_triangle_count_o, geom_mf_refused_reserved_o,
+             geom_mf_refused_zero_bound_o,
+             geom_dj_draws_o, geom_dj_jobs_o, geom_dj_masked_o, geom_dj_empty_o,
+             geom_dj_hdr_reads_o, geom_dj_hdr_crc_fail_o,
+             geom_dj_refused_cull_o, geom_dj_refused_resident_o,
+             geom_dj_refused_stale_o, geom_dj_refused_xform_o,
+             geom_dj_refused_denied_o, geom_dj_refused_format_o,
+             geom_dj_refused_crc_o, geom_dj_refused_reserved_o,
+             geom_dj_refused_layout_o,
+             geom_loom_nodes_o, geom_loom_streams_o,
+             geom_dj_pal_writes_o, geom_dj_pal_dropped_o,
+             geom_loom_refused_sorted_o, geom_loom_refused_parent_o,
+             geom_loom_refused_overflow_o, geom_loom_refused_kind_o,
+             geom_loom_refused_shear_o, geom_loom_refused_framing_o,
+             upl_published_o, upl_status_o,
              geom_mf_refused_zero_bound_o);
     // Let the last accepted triangles clear GEOM.SETUP and the binner.
     repeat (200) @(posedge gpu_clk);
@@ -4848,7 +4986,7 @@ module tb_zhao_console_core_smoke
     if (geom_attrpack_triangles_o == 0)
       $fatal(1, "SMOKE: GEOM.ATTRPACK never saw a triangle, so every plane the shell read was its reset value");
 
-    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END, and the three Packet-D attribute planes now have a PRODUCER: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) -- three lanes through one shared GEOM.ATTRSETUP -- from GEOM.CLIP's own winding-flipped vertex attributes, so depth and both texture coordinates vary across the surface instead of interpolating to zero. What is STILL not proven is the MATERIAL ON A TRIANGLE. The record half is now proven end to end (2026-09-19, cmdmem, rulings R17/R20/R32): a PublishResource in the command packet lands a MATERIAL_SET in RENDER.ASSET_POOL through MEM.UPLOAD on the TERRAIN.BUILD socket, MATERIAL.RESOLVE finds it in the 5f.1 directory, fetches record 0 as ENGINE1 through the adapter's third requester, and answers the uploaded record bit for bit (the `SMOKE: material` line). Two seams remain, NAMED so they are not rediscovered. (1) The resolve REQUEST has no honest producer: `cmd_draw_material_set_o` (I41) and `geom_mf_job_*` (I36) are both boundaries, and joining the two live wires that ARE here would pair meshlet N's triangles with meshlet M's material -- the fault entry I39 refuses by name; this bench drives the request itself, which is why the proof stops at the record. (2) `tri_flat_request_i` wants the binding page's palette slot, palette generation and response class besides, which MATERIAL.RESOLVE's own header says it does not own. So `tri_flat_request_i` still has no producer, sample_count, material_recipe and base_binding_selector are all still zero, and the texture island still samples nothing. Perspective-correct interpolation is composed; the surface it would sample is not bound.",
+    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END, and the three Packet-D attribute planes now have a PRODUCER: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) -- three lanes through one shared GEOM.ATTRSETUP -- from GEOM.CLIP's own winding-flipped vertex attributes, so depth and both texture coordinates vary across the surface instead of interpolating to zero. What is STILL not proven is the MATERIAL ON A TRIANGLE. The record half is now proven end to end (2026-09-19, cmdmem, rulings R17/R20/R32): a PublishResource in the command packet lands a MATERIAL_SET in RENDER.ASSET_POOL through MEM.UPLOAD on the TERRAIN.BUILD socket, MATERIAL.RESOLVE finds it in the 5f.1 directory, fetches record 0 as ENGINE1 through the adapter's third requester, and answers the uploaded record bit for bit (the `SMOKE: material` line). ONE seam remains, and it is smaller than it was. (1) The resolve REQUEST's two halves are now JOINED BY CONSTRUCTION (2026-09-20, R29): the draw's material_set rides the job's sideband through GEOM.MESHFETCH and GEOM.ASSETFETCH and is offered on the same handshake as the meshlet's own material_id, so the pairing entry I39 refused -- two live wires joined by their timing -- is no longer what anyone would be doing. What is still missing is the issue point and the response join, which is entry I49 and the texture lane's; this bench still drives the request itself, which is why the proof stops at the record. (2) `tri_flat_request_i` wants the binding page's palette slot, palette generation and response class besides, which MATERIAL.RESOLVE's own header says it does not own. So `tri_flat_request_i` still has no producer, sample_count, material_recipe and base_binding_selector are all still zero, and the texture island still samples nothing. Perspective-correct interpolation is composed; the surface it would sample is not bound.",
              render_pixels_o, render_bursts_o,
              geom_setup_triangles_submitted_o, v2_frames_admitted_o,
              geom_attrpack_planes_o, geom_attrpack_triangles_o);
@@ -4984,27 +5122,95 @@ module tb_zhao_console_core_smoke
              upl_done_seen_q, upl_status_seen_q, upl_published_o, upl_pub_seen_q,
              sh_bursts_q, upl_hps_wait_o, upl_pub_slot_q, upl_pub_gen_q,
              upl_pub_tag_q, upl_pub_index_q, upl_pub_base_q, upl_pub_extent_q);
-    if (upl_done_seen_q != 1 || upl_status_seen_q != 8'd0)
-      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with status %0d, expected once with 0 (kUploadOk) -- refused=%032x",
+    // TWO uploads since 2026-09-20 (owner ruling R29): the MATERIAL_SET, and
+    // the MESH_STREAM page the DrawForm names.
+    if (upl_done_seen_q != 2 || upl_status_seen_q != 8'd0)
+      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with last status %0d, expected TWICE with 0 (kUploadOk) -- refused=%032x",
              upl_done_seen_q, upl_status_seen_q, upl_refused_o);
-    if (upl_pub_seen_q != 1 || upl_published_o != 16'd1)
-      $fatal(1, "SMOKE: MEM.UPLOAD published %0d row(s) (census %0d), expected exactly one",
-             upl_pub_seen_q, upl_published_o);
-    if (sh_bursts_q != (UPL_WORDS_C / 8))
-      $fatal(1, "SMOKE: the shell's bridge served %0d HPS bursts for a %0d-byte upload, expected %0d",
-             sh_bursts_q, UPL_WORDS_C * 8, UPL_WORDS_C / 8);
+    if (upl_pub_seen_q != 1 || msh_pub_seen_q != 1 || upl_published_o != 16'd2)
+      $fatal(1, "SMOKE: MEM.UPLOAD published %0d MATERIAL_SET and %0d MESH_STREAM row(s) (census %0d), expected one of each",
+             upl_pub_seen_q, msh_pub_seen_q, upl_published_o);
+    if (sh_bursts_q != (UPL_ALL_WORDS / 8))
+      $fatal(1, "SMOKE: the shell's bridge served %0d HPS bursts for %0d bytes of upload, expected %0d",
+             sh_bursts_q, UPL_ALL_WORDS * 8, UPL_ALL_WORDS / 8);
     if (upl_pub_index_q != UPL_INDEX_C || upl_pub_slot_q != UPL_SLOT_C ||
         upl_pub_gen_q != UPL_GEN_C || upl_pub_tag_q != UPL_KIND_C ||
         upl_pub_base_q != UPL_REGION_C || upl_pub_extent_q != 32'(UPL_WORDS_C * 8))
-      $fatal(1, "SMOKE: MEM.UPLOAD published a row that is not the PublishResource's -- 5f.1's directory would name the wrong surface");
+      $fatal(1, "SMOKE: MEM.UPLOAD published a MATERIAL_SET row that is not the PublishResource's -- 5f.1's directory would name the wrong surface");
+    // The MESH_STREAM row is checked the same way and for the same reason: it
+    // is what GEOM.DRAWJOB resolves the draw's `form` handle against, so a row
+    // naming the wrong base would fetch descriptors out of another resource.
+    if (msh_pub_index_q != MSH_INDEX_C || msh_pub_slot_q != MSH_SLOT_C ||
+        msh_pub_gen_q != MSH_GEN_C || msh_pub_tag_q != MSH_KIND_C ||
+        msh_pub_base_q != MSH_DST_C || msh_pub_extent_q != 32'(MSH_WORDS_C * 8))
+      $fatal(1, "SMOKE: MEM.UPLOAD published a MESH_STREAM row that is not the PublishResource's -- index=%06x slot=%0d gen=%04x tag=%0d base=%08x extent=%0d",
+             msh_pub_index_q, msh_pub_slot_q, msh_pub_gen_q, msh_pub_tag_q,
+             msh_pub_base_q, msh_pub_extent_q);
+    // ---- THE DRAW, end to end (entries I36/I41/I39/I24; owner ruling R29) --
+    // Counters, not a picture. The frame above could look identical while the
+    // machine did the work twice, resolved the wrong page, or drew a meshlet
+    // whose transform nobody wrote -- this repository has a chapter about each.
+    $display("SMOKE: draw      draws=%0d jobs=%0d masked=%0d empty=%0d hdr[reads/crc_fail/framing]=[%0d %0d %0d] refused[cull/resident/stale/xform/denied/fmt/crc/resv/layout]=[%0d %0d %0d %0d %0d %0d %0d %0d %0d] adapterD=%0d",
+             geom_dj_draws_o, geom_dj_jobs_o, geom_dj_masked_o, geom_dj_empty_o,
+             geom_dj_hdr_reads_o, geom_dj_hdr_crc_fail_o, geom_dj_hdr_framing_o,
+             geom_dj_refused_cull_o, geom_dj_refused_resident_o, geom_dj_refused_stale_o,
+             geom_dj_refused_xform_o, geom_dj_refused_denied_o, geom_dj_refused_format_o,
+             geom_dj_refused_crc_o, geom_dj_refused_reserved_o, geom_dj_refused_layout_o,
+             geom_ma_jobs_d_o);
+    $display("SMOKE: loom      nodes=%0d streams=%0d pal_writes=%0d pal_dropped=%0d refused[sorted/parent/ovf/kind/shear/framing]=[%0d %0d %0d %0d %0d %0d]",
+             geom_loom_nodes_o, geom_loom_streams_o, geom_dj_pal_writes_o,
+             geom_dj_pal_dropped_o, geom_loom_refused_sorted_o, geom_loom_refused_parent_o,
+             geom_loom_refused_overflow_o, geom_loom_refused_kind_o,
+             geom_loom_refused_shear_o, geom_loom_refused_framing_o);
+    if (geom_loom_streams_o != 32'd1 || geom_loom_nodes_o != 32'd1)
+      $fatal(1, "SMOKE: GEOM.LOOM composed %0d node(s) in %0d stream(s), expected 1 and 1 -- the ARM stream this bench plays is one ROOT node",
+             geom_loom_nodes_o, geom_loom_streams_o);
+    if ((geom_loom_refused_sorted_o | geom_loom_refused_parent_o |
+         geom_loom_refused_overflow_o | geom_loom_refused_kind_o |
+         geom_loom_refused_shear_o | geom_loom_refused_framing_o) != 32'd0)
+      $fatal(1, "SMOKE: GEOM.LOOM refused this bench's stream -- the palette row the draw names was never written");
+    if (geom_dj_pal_writes_o != 32'd1 || geom_dj_pal_dropped_o != 32'd0)
+      $fatal(1, "SMOKE: the instance transform palette took %0d write(s) and dropped %0d -- the draw's xform[12] comes from a row GEOM.LOOM composed, or it comes from nowhere",
+             geom_dj_pal_writes_o, geom_dj_pal_dropped_o);
+    if (geom_dj_draws_o != 32'd1)
+      $fatal(1, "SMOKE: GEOM.DRAWJOB accepted %0d draw(s), expected the packet's ONE DrawForm",
+             geom_dj_draws_o);
+    // EXACTLY ONE JOB, because the header declares exactly one meshlet. A
+    // machine that re-offered the job would raster the identical triangles and
+    // this is the only line that would notice.
+    if (geom_dj_jobs_o != 32'd1)
+      $fatal(1, "SMOKE: GEOM.DRAWJOB emitted %0d job(s) for a one-meshlet stream",
+             geom_dj_jobs_o);
+    if ((geom_dj_refused_cull_o | geom_dj_refused_resident_o | geom_dj_refused_stale_o |
+         geom_dj_refused_xform_o | geom_dj_refused_denied_o | geom_dj_refused_format_o |
+         geom_dj_refused_crc_o | geom_dj_refused_reserved_o | geom_dj_refused_layout_o |
+         geom_dj_masked_o | geom_dj_empty_o) != 32'd0)
+      $fatal(1, "SMOKE: GEOM.DRAWJOB refused or skipped the packet's draw -- see the line above for which of the nine reasons");
+    // The header was READ, once, through the adapter's fourth requester, and
+    // its CRC verdict came from the same walker the descriptor's does.
+    if (geom_dj_hdr_reads_o != 32'd1 || geom_dj_hdr_crc_fail_o != 32'd0 ||
+        geom_dj_hdr_framing_o != 32'd0)
+      $fatal(1, "SMOKE: the MESH_STREAM header was read %0d time(s), crc_fail=%0d framing=%0d",
+             geom_dj_hdr_reads_o, geom_dj_hdr_crc_fail_o, geom_dj_hdr_framing_o);
+    if (geom_ma_jobs_d_o != 32'd1)
+      $fatal(1, "SMOKE: the geometry adapter served %0d request(s) on requester D, expected the one header read",
+             geom_ma_jobs_d_o);
+    // I24: the cull mode reached GEOM.CLIP on the TRIANGLE'S OWN raster word.
+    // The packet's DrawForm carries flags 0 -- cull NONE, double-sided -- so no
+    // triangle may be culled by winding. It is the one end of that wire this
+    // bench can see; the other end (the word's composition from the draw's
+    // flags) is differenced against `zref::raster_state` in the DRAWJOB test.
+    if (geom_clip_culled_o != 32'd0)
+      $fatal(1, "SMOKE: GEOM.CLIP culled %0d triangle(s) under a draw whose cull mode is NONE -- the raster word that reached it is not this draw's",
+             geom_clip_culled_o);
     // THE COMMAND PATH, end to end (R17): the packet was fetched over the
     // shell's bridge, walked by both consumers, committed, and CMD.EXEC handed
     // exactly one request to MEM.UPLOAD.
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd6 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 6, 1, 1)",
+    if (cmd_commands_o != 32'd8 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd2)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 8, 1, 2)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
     // ---- MEASURE.TOKENS (R18/R33): the CEILING and the REQUEST ----------
     // Counts off the wire, unchanged. View 0 sent no SetView, so it keeps the

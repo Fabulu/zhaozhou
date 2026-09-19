@@ -145,9 +145,6 @@ modules:
   zhao_geom_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_geom_loom:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_geom_parambuf:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

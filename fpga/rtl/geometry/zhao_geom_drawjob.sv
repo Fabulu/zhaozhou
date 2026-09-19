@@ -113,6 +113,12 @@ module zhao_geom_drawjob
     input  var logic            beat_valid_i,
     input  var logic [63:0]     beat_data_i,
     input  var logic            beat_last_i,
+    // The CRC over bytes 0..59, folded by the CALLER'S `zhao_geom_desc_crc`
+    // over these same beats -- wired in rather than folded here, exactly as
+    // GEOM.MESHFETCH takes it and for the same reason: that walker is the one
+    // implementation and a second instance inside this block would also make it
+    // a census top inside a census top.
+    input  var logic            crc_ok_i,
 
     // ---- the job, into GEOM.MESHFETCH --------------------------------------
     output var logic                  j_valid_o,
@@ -133,10 +139,7 @@ module zhao_geom_drawjob
     output var logic [31:0] empty_o,          // a legal stream of zero meshlets
     output var logic [31:0] pal_writes_o,     // palette rows written by GEOM.LOOM
     output var logic [31:0] pal_dropped_o,    // a node index past the palette
-    output var logic [31:0] refused_o [9],    // zref::drawjob::Refusal order
-    output var logic [31:0] hdr_reads_o,
-    output var logic [31:0] hdr_crc_fail_o,
-    output var logic [31:0] hdr_framing_o
+    output var logic [31:0] refused_o [9]     // zref::drawjob::Refusal order
 );
 
   // The descriptor format this reader speaks, and the frozen strides.
@@ -322,19 +325,6 @@ module zhao_geom_drawjob
       j_xform_o[k] = $signed(pal_rd_q[32 * k +: 32]);
   end
 
-  // ---- the CRC walker, the descriptor's own ------------------------------
-  wire hdr_crc_ok;
-  zhao_geom_desc_crc u_hdr_crc (
-    .clk          (clk),
-    .rst_n        (rst_n),
-    .beat_valid_i (beat_valid_i),
-    .beat_data_i  (beat_data_i),
-    .beat_last_i  (beat_last_i),
-    .crc_ok_o     (hdr_crc_ok),
-    .descriptors_o(hdr_reads_o),
-    .crc_fail_o   (hdr_crc_fail_o),
-    .framing_err_o(hdr_framing_o)
-  );
 
   // ---- the palette write port (GEOM.LOOM never waits) ---------------------
   always_ff @(posedge clk or negedge rst_n) begin
@@ -437,7 +427,7 @@ module zhao_geom_drawjob
           h_q[beat_q] <= beat_data_i;
           beat_q      <= beat_q + 3'd1;
           if (beat_last_i) begin
-            crc_ok_q <= hdr_crc_ok;
+            crc_ok_q <= crc_ok_i;
             st_q     <= S_VALID;
           end
         end

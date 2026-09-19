@@ -147,12 +147,22 @@ Run drive(Vzhao_geom_drawjob& t, const dj::DrawForm& d, const uint8_t* header) {
 
     t.beat_valid_i = 0;
     t.beat_last_i = 0;
+    t.crc_ok_i = 0;
     if (granted && beat < 8) {
       uint64_t w = 0;
       for (int k = 0; k < 8; ++k) w |= static_cast<uint64_t>(header[beat * 8 + k]) << (8 * k);
       t.beat_valid_i = 1;
       t.beat_data_i = w;
       t.beat_last_i = (beat == 7) ? 1 : 0;
+      // The walker's verdict, PLAYED exactly as `zhao_geom_desc_crc` presents
+      // it: a combinational pulse on the LAST beat, high only when the fold
+      // over bytes 0..59 matches the word at 60. Driving it high for the whole
+      // burst would make the CRC refusal untestable.
+      const uint32_t stamped =
+          static_cast<uint32_t>(header[60]) | (static_cast<uint32_t>(header[61]) << 8) |
+          (static_cast<uint32_t>(header[62]) << 16) | (static_cast<uint32_t>(header[63]) << 24);
+      const bool crc_good = zhao_abi::zhao_crc32c(0, header, dj::kHdrCrcCovered) == stamped;
+      t.crc_ok_i = (beat == 7 && crc_good) ? 1 : 0;
     }
 
     t.eval();
@@ -238,6 +248,7 @@ int main(int argc, char** argv) {
   top.dir_we_i = 0;
   top.px_valid_i = 0;
   top.beat_valid_i = 0;
+  top.crc_ok_i = 0;
   top.guard_rsp_i = 0;
   top.client_i = 3;  // ZHAO_CLIENT_ENGINE1
   top.rst_n = 0;

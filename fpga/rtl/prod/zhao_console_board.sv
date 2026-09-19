@@ -682,15 +682,59 @@ module zhao_console_board
   // port's real producer. What follows is what the path still asks of the
   // outside, and each group is one numbered entry in the header.
 
-  // ---- I36: GEOM.MESHFETCH's DRAW JOB -------------------------------------
-  input  logic                    geom_mf_job_valid_i,
-  output logic                    geom_mf_job_ready_o,
-  input  logic [15:0]             geom_mf_job_instance_id_i,
-  input  logic [26:0]             geom_mf_job_desc_addr_i,
-  input  logic [7:0]              geom_mf_job_format_i,
-  input  logic [15:0]             geom_mf_job_generation_i,
-  input  logic [1:0]              geom_mf_job_active_mask_i,
-  input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
+  // ---- I36 IS CLOSED: GEOM.DRAWJOB builds the job (owner ruling R29) -------
+  // The nine job ports that stood here are GONE. `zhao_geom_drawjob` resolves
+  // the ratified DrawForm -- the MESH_STREAM residency row, that page's frozen
+  // header, and the instance transform palette GEOM.LOOM writes -- and drives
+  // GEOM.MESHFETCH directly. What leaves is its evidence, one port per REASON,
+  // because the nine refusals have nine different diagnoses.
+  output logic [31:0]             geom_dj_draws_o,
+  output logic [31:0]             geom_dj_jobs_o,
+  output logic [31:0]             geom_dj_masked_o,
+  output logic [31:0]             geom_dj_empty_o,
+  output logic [31:0]             geom_dj_pal_writes_o,
+  output logic [31:0]             geom_dj_pal_dropped_o,
+  output logic [31:0]             geom_dj_refused_cull_o,
+  output logic [31:0]             geom_dj_refused_resident_o,
+  output logic [31:0]             geom_dj_refused_stale_o,
+  output logic [31:0]             geom_dj_refused_xform_o,
+  output logic [31:0]             geom_dj_refused_denied_o,
+  output logic [31:0]             geom_dj_refused_format_o,
+  output logic [31:0]             geom_dj_refused_crc_o,
+  output logic [31:0]             geom_dj_refused_reserved_o,
+  output logic [31:0]             geom_dj_refused_layout_o,
+  output logic [31:0]             geom_dj_hdr_reads_o,
+  output logic [31:0]             geom_dj_hdr_crc_fail_o,
+  output logic [31:0]             geom_dj_hdr_framing_o,
+
+  // ---- I50: GEOM.LOOM's NODE STREAM and CAMERA BASIS -- BOUNDARY ----------
+  // NEW 2026-09-20, and it is a gap this packet OPENED DELIBERATELY by
+  // composing GEOM.LOOM for R29's transform palette. The owner ruling of
+  // 2026-08-31 6.4 puts the stream's producer OUTSIDE this console on purpose:
+  // "The ARM/compiler supplies a parent-before-child topologically sorted
+  // stream." There is no command that carries one and no block that builds
+  // one, so the stream arrives here, at the edge, whole -- see the header.
+  input  logic                    geom_loom_valid_i,
+  output logic                    geom_loom_ready_o,
+  input  logic [9:0]              geom_loom_node_index_i,
+  input  logic [9:0]              geom_loom_parent_index_i,
+  input  logic [3:0]              geom_loom_kind_i,
+  input  logic signed [31:0]      geom_loom_param_i [0:11],
+  input  logic [15:0]             geom_loom_angle_i,
+  input  logic [1:0]              geom_loom_axis_i,
+  input  logic                    geom_loom_bodypatch_i,
+  input  logic [15:0]             geom_loom_src_id_i,
+  input  logic                    geom_loom_first_i,
+  input  logic                    geom_loom_last_i,
+  input  logic signed [31:0]      geom_loom_cam_basis_i [0:8],
+  output logic [31:0]             geom_loom_nodes_o,
+  output logic [31:0]             geom_loom_streams_o,
+  output logic [31:0]             geom_loom_refused_sorted_o,
+  output logic [31:0]             geom_loom_refused_parent_o,
+  output logic [31:0]             geom_loom_refused_overflow_o,
+  output logic [31:0]             geom_loom_refused_kind_o,
+  output logic [31:0]             geom_loom_refused_shear_o,
+  output logic [31:0]             geom_loom_refused_framing_o,
 
   // ---- I37 IS CLOSED: the descriptor's CRC verdict is computed inside ------
   // `u_geom_desc_crc` walks the fold over the returning beats. What leaves is
@@ -702,25 +746,17 @@ module zhao_console_board
 
   // ---- I38 IS CLOSED: GEOM.REPLAY releases the meshlet, by proof ---------
 
-  // ---- I39, NARROWED: GEOM.ASSEMBLE's RASTER STATE only -------------------
-  // The vertex offset is the named constant 0 (arena-local ids), the material
-  // is carried by GEOM.ASSETFETCH beside its meshlet, and the TriangleDescriptor
-  // goes to GEOM.REPLAY. The descriptor's raster word has no producer anywhere.
-  input  logic [31:0]              geom_asm_raster_state_i,
+  // ---- I39 IS CLOSED: the raster word RIDES THE MESHLET -------------------
+  // The word is built by GEOM.DRAWJOB from the draw's own flags (R28's cull
+  // mode) and carried in the JOB'S handshake through GEOM.MESHFETCH and
+  // GEOM.ASSETFETCH to GEOM.ASSEMBLE, so a meshlet's triangles cannot take
+  // another draw's state. The port that stood here is GONE.
 
-  // ---- I41: CMD.EXEC's DRAW DISPATCH, the ratified DrawForm ---------------
-  // NEW 2026-09-19. DrawForm 0x0300 now reaches the console; what has no
-  // consumer INSIDE this module is the resolver that would turn its three
-  // handles into GEOM.MESHFETCH's job. See the header entry.
-  output logic                     cmd_draw_valid_o,
-  input  logic                     cmd_draw_ready_i,
-  output logic [31:0]              cmd_draw_form_o,
-  output logic [31:0]              cmd_draw_material_set_o,
-  output logic [31:0]              cmd_draw_transform_o,
-  output logic [ 7:0]              cmd_draw_viewport_mask_o,
-  output logic [ 7:0]              cmd_draw_semantic_weight_o,
-  output logic [15:0]              cmd_draw_flags_o,
-  output logic [15:0]              cmd_draw_src_id_o,
+  // ---- I41 IS CLOSED: the draw dispatch has a consumer INSIDE -------------
+  // `cmd_draw_*` no longer leaves the module: GEOM.DRAWJOB is the resolver
+  // entry I36 said was missing, and the three handles are resolved against
+  // real residency rather than shipped out unresolved. The COUNTERS stay --
+  // they are evidence, not a boundary.
   output logic [31:0]              cmd_exec_draws_o,
   output logic [31:0]              cmd_exec_draw_overflow_o,
   output logic [31:0]              cmd_exec_draw_src_truncated_o,
@@ -922,11 +958,10 @@ module zhao_console_board
   output logic [31:0]             geom_arena_refusals_o,
   output logic                    geom_arena_overflow_o,
 
-  // ---- I24, NARROWED: GEOM.CLIP's cull mode only ----------------------------
-  // The triangle and its attribute packets come from GEOM.REPLAY (the bench's
-  // triangle door is GONE). The cull mode is per-draw raster state and has no
-  // producer: the descriptor's raster word is I39's.
-  input  logic [1:0]              geom_clip_cull_mode_i,
+  // ---- I24 IS CLOSED: the cull mode is the TRIANGLE'S OWN -----------------
+  // GEOM.CLIP takes `rp_o_raster[1:0]`, the word GEOM.REPLAY presents beside
+  // the corners, which travelled from the draw with the meshlet. The port that
+  // stood here is GONE.
 
   // ---- GEOM.VATTR's evidence (entry I46 CLOSED; owner rulings R11, R31) ----
   // The vertex-attribute store and its writer are INTERNAL: the eleven
@@ -1413,6 +1448,7 @@ module zhao_console_board
   output logic [31:0]             mat_recipe_count_mismatch_o,
   output logic [31:0]             mat_fetch_denied_o,
   output logic [31:0]             geom_ma_jobs_c_o,
+  output logic [31:0]             geom_ma_jobs_d_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -2707,27 +2743,48 @@ module zhao_console_board
       .part_refused_unknown_species_o    (part_refused_unknown_species_o),
       .part_refused_capacity_o           (part_refused_capacity_o),
       .part_max_children_in_tick_o       (part_max_children_in_tick_o),
-      .geom_mf_job_valid_i               (geom_mf_job_valid_i),
-      .geom_mf_job_ready_o               (geom_mf_job_ready_o),
-      .geom_mf_job_instance_id_i         (geom_mf_job_instance_id_i),
-      .geom_mf_job_desc_addr_i           (geom_mf_job_desc_addr_i),
-      .geom_mf_job_format_i              (geom_mf_job_format_i),
-      .geom_mf_job_generation_i          (geom_mf_job_generation_i),
-      .geom_mf_job_active_mask_i         (geom_mf_job_active_mask_i),
-      .geom_mf_job_xform_i               (geom_mf_job_xform_i),
+      .geom_dj_draws_o                   (geom_dj_draws_o),
+      .geom_dj_jobs_o                    (geom_dj_jobs_o),
+      .geom_dj_masked_o                  (geom_dj_masked_o),
+      .geom_dj_empty_o                   (geom_dj_empty_o),
+      .geom_dj_pal_writes_o              (geom_dj_pal_writes_o),
+      .geom_dj_pal_dropped_o             (geom_dj_pal_dropped_o),
+      .geom_dj_refused_cull_o            (geom_dj_refused_cull_o),
+      .geom_dj_refused_resident_o        (geom_dj_refused_resident_o),
+      .geom_dj_refused_stale_o           (geom_dj_refused_stale_o),
+      .geom_dj_refused_xform_o           (geom_dj_refused_xform_o),
+      .geom_dj_refused_denied_o          (geom_dj_refused_denied_o),
+      .geom_dj_refused_format_o          (geom_dj_refused_format_o),
+      .geom_dj_refused_crc_o             (geom_dj_refused_crc_o),
+      .geom_dj_refused_reserved_o        (geom_dj_refused_reserved_o),
+      .geom_dj_refused_layout_o          (geom_dj_refused_layout_o),
+      .geom_dj_hdr_reads_o               (geom_dj_hdr_reads_o),
+      .geom_dj_hdr_crc_fail_o            (geom_dj_hdr_crc_fail_o),
+      .geom_dj_hdr_framing_o             (geom_dj_hdr_framing_o),
+      .geom_loom_valid_i                 (geom_loom_valid_i),
+      .geom_loom_ready_o                 (geom_loom_ready_o),
+      .geom_loom_node_index_i            (geom_loom_node_index_i),
+      .geom_loom_parent_index_i          (geom_loom_parent_index_i),
+      .geom_loom_kind_i                  (geom_loom_kind_i),
+      .geom_loom_param_i                 (geom_loom_param_i),
+      .geom_loom_angle_i                 (geom_loom_angle_i),
+      .geom_loom_axis_i                  (geom_loom_axis_i),
+      .geom_loom_bodypatch_i             (geom_loom_bodypatch_i),
+      .geom_loom_src_id_i                (geom_loom_src_id_i),
+      .geom_loom_first_i                 (geom_loom_first_i),
+      .geom_loom_last_i                  (geom_loom_last_i),
+      .geom_loom_cam_basis_i             (geom_loom_cam_basis_i),
+      .geom_loom_nodes_o                 (geom_loom_nodes_o),
+      .geom_loom_streams_o               (geom_loom_streams_o),
+      .geom_loom_refused_sorted_o        (geom_loom_refused_sorted_o),
+      .geom_loom_refused_parent_o        (geom_loom_refused_parent_o),
+      .geom_loom_refused_overflow_o      (geom_loom_refused_overflow_o),
+      .geom_loom_refused_kind_o          (geom_loom_refused_kind_o),
+      .geom_loom_refused_shear_o         (geom_loom_refused_shear_o),
+      .geom_loom_refused_framing_o       (geom_loom_refused_framing_o),
       .geom_mf_crc_descriptors_o         (geom_mf_crc_descriptors_o),
       .geom_mf_crc_fail_o                (geom_mf_crc_fail_o),
       .geom_mf_crc_framing_o             (geom_mf_crc_framing_o),
-      .geom_asm_raster_state_i           (geom_asm_raster_state_i),
-      .cmd_draw_valid_o                  (cmd_draw_valid_o),
-      .cmd_draw_ready_i                  (cmd_draw_ready_i),
-      .cmd_draw_form_o                   (cmd_draw_form_o),
-      .cmd_draw_material_set_o           (cmd_draw_material_set_o),
-      .cmd_draw_transform_o              (cmd_draw_transform_o),
-      .cmd_draw_viewport_mask_o          (cmd_draw_viewport_mask_o),
-      .cmd_draw_semantic_weight_o        (cmd_draw_semantic_weight_o),
-      .cmd_draw_flags_o                  (cmd_draw_flags_o),
-      .cmd_draw_src_id_o                 (cmd_draw_src_id_o),
       .cmd_exec_draws_o                  (cmd_exec_draws_o),
       .cmd_exec_draw_overflow_o          (cmd_exec_draw_overflow_o),
       .cmd_exec_draw_src_truncated_o     (cmd_exec_draw_src_truncated_o),
@@ -2844,7 +2901,6 @@ module zhao_console_board
       .geom_arena_misses_o               (geom_arena_misses_o),
       .geom_arena_refusals_o             (geom_arena_refusals_o),
       .geom_arena_overflow_o             (geom_arena_overflow_o),
-      .geom_clip_cull_mode_i             (geom_clip_cull_mode_i),
       .geom_va_landings_o                (geom_va_landings_o),
       .geom_va_rows_written_o            (geom_va_rows_written_o),
       .geom_va_colours_written_o         (geom_va_colours_written_o),
@@ -3142,6 +3198,7 @@ module zhao_console_board
       .mat_recipe_count_mismatch_o       (mat_recipe_count_mismatch_o),
       .mat_fetch_denied_o                (mat_fetch_denied_o),
       .geom_ma_jobs_c_o                  (geom_ma_jobs_c_o),
+      .geom_ma_jobs_d_o                  (geom_ma_jobs_d_o),
       .terr_held_o                       (terr_held_o),
       .terr_busy_o                       (terr_busy_o),
       .terr_jobs_accepted_o              (terr_jobs_accepted_o),
