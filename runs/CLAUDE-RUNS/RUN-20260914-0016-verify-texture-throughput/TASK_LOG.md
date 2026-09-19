@@ -468,3 +468,26 @@ a circuit you already know is wrong is wasted, and every intermediate specimen
 between here and zero gaps is knowably wrong.
 
 Current: **85 mandatory gaps** (20 tie-offs + 57 disconnected + 8 unbuilt).
+
+### Phase 1 in flight — 2026-09-19
+
+| | gaps | tie-offs | disconnected | unbuilt |
+|---|---:|---:|---:|---:|
+| register built | 85 | 20 | 57 | 8 |
+| after I8 closed | 85 | 20 | 57 | 8 |
+| after ruling I4 | 84 | 19 | 57 | 8 |
+| now | **83** | 21 | **54** | 8 |
+
+Tie-offs went UP 19 -> 21 while disconnected fell 57 -> 54. That is composition
+working correctly: wiring a module in closes some gaps and honestly declares the
+seams it cannot reach yet. A packet that only ever lowered the count would be
+hiding something.
+
+**Landed:** PART.TABLE (the species/curve tables nothing owned) and its manifest
+row; I8 closed as a real internal edge; ruling I4 implemented, with
+`part_spawn_by_event2_o` moving 0 -> 6 -- spawn-on-collision works for the first
+time in this console; the tick-boundary child loss repaired as *"deferred, never
+destroyed"*, which is the impossible-not-rarer shape that was required.
+
+**Standing:** FIT AT COMPLETION ONLY. Quartus is idle and stays idle until the
+register reads zero. Verified idle at every check.
