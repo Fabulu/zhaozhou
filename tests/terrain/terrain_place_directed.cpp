@@ -286,5 +286,14 @@ int main(int argc, char** argv) {
   test_refusal_unplaces_the_previous_patch();
 
   std::printf("terrain_place_directed: %d checks, %d failed\n", g_checks, g_failed);
-  return g_failed == 0 ? 0 : 1;
+  std::fflush(stdout);
+  // TEARDOWN-DEADLOCK WORKAROUND, documented in tests/harness/zhao_sim.hpp:
+  // Verilator 5.051 + winlibs libwinpthread intermittently deadlocks in
+  // VlThreadPool::~VlThreadPool() during exit-time static destruction -- the
+  // process hangs with ~0 CPU in WaitForSingleObject and the verdict is lost
+  // in the unflushed pipe buffer. A plain C++ return is exactly the shape
+  // that hangs. I hit it on this very test and misdiagnosed it as the shell
+  // blocking on a console handle; the cause was here all along and named in
+  // the harness header.
+  zhao::exit_hard(g_failed == 0 ? 0 : 1);
 }
