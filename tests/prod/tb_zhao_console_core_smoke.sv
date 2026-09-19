@@ -4080,6 +4080,18 @@ module tb_zhao_console_core_smoke
              (rt_tri_n_q > 1) ? (rt_tri_last_q - rt_tri_first_q) / (rt_tri_n_q - 1) : 0,
              (rt_tri_n_q > 1) ? (((rt_tri_last_q - rt_tri_first_q) * 100) / (rt_tri_n_q - 1)) % 100 : 0,
              rt_rel_q - rt_vd_first_q);
+    // ---- R47: WHERE THE MESHLET LOOP'S CLOCKS GO ---------------------------
+    // The same five timestamps the rate line already holds, printed as a
+    // PROFILE rather than as averages. R47 asks for the overlapped loop proved
+    // in clocks; this is the measurement of the serial one it is compared to,
+    // and it is what says which stage the overlap would have to break.
+    // All figures are clocks since the first decoded vertex of the meshlet.
+    $display("SMOKE: loop       decode[%0d..%0d] skin[%0d..%0d] land[%0d..%0d] replay[%0d..%0d] release=%0d | total=%0d clk",
+             0, rt_skin_last_q - rt_vd_first_q,
+             rt_skin_first_q - rt_vd_first_q, rt_skin_last_q - rt_vd_first_q,
+             rt_land_first_q - rt_vd_first_q, rt_land_last_q - rt_vd_first_q,
+             rt_tri_first_q - rt_vd_first_q, rt_tri_last_q - rt_vd_first_q,
+             rt_rel_q - rt_vd_first_q, rt_rel_q - rt_vd_first_q);
     $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
              geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
              geom_sn_fork_stall_o);
