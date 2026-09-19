@@ -506,6 +506,7 @@ module zhao_prod_top (
   logic [32-1:0] u07_t_raster_o;
   logic [16-1:0] u07_t_src_id_o;
   logic [1-1:0] u07_t_last_o;
+  logic [1-1:0] u07_m_done_o;
   logic [32-1:0] u07_meshlets_o;
   logic [32-1:0] u07_triangles_o;
   logic [32-1:0] u07_refused_limits_o;
@@ -536,6 +537,7 @@ module zhao_prod_top (
       .t_raster_o(u07_t_raster_o),
       .t_src_id_o(u07_t_src_id_o),
       .t_last_o(u07_t_last_o),
+      .m_done_o(u07_m_done_o),
       .meshlets_o(u07_meshlets_o),
       .triangles_o(u07_triangles_o),
       .refused_limits_o(u07_refused_limits_o),
@@ -544,7 +546,7 @@ module zhao_prod_top (
   logic u07_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u07_fold_q <= 1'b0;
-    else u07_fold_q <= u07_fold_q ^ (((^u07_m_ready_o)) & u07_src[0]) ^ (((^u07_ix_req_o)) & u07_src[1]) ^ (((^u07_ix_index_o)) & u07_src[2]) ^ (((^u07_t_valid_o)) & u07_src[3]) ^ (((^u07_t_v0_o)) & u07_src[4]) ^ (((^u07_t_v1_o)) & u07_src[5]) ^ (((^u07_t_v2_o)) & u07_src[6]) ^ (((^u07_t_material_o)) & u07_src[7]) ^ (((^u07_t_raster_o)) & u07_src[8]) ^ (((^u07_t_src_id_o)) & u07_src[9]) ^ (((^u07_t_last_o)) & u07_src[10]) ^ (((^u07_meshlets_o)) & u07_src[11]) ^ (((^u07_triangles_o)) & u07_src[12]) ^ (((^u07_refused_limits_o)) & u07_src[13]) ^ (((^u07_refused_index_o)) & u07_src[14]);
+    else u07_fold_q <= u07_fold_q ^ (((^u07_m_ready_o)) & u07_src[0]) ^ (((^u07_ix_req_o)) & u07_src[1]) ^ (((^u07_ix_index_o)) & u07_src[2]) ^ (((^u07_t_valid_o)) & u07_src[3]) ^ (((^u07_t_v0_o)) & u07_src[4]) ^ (((^u07_t_v1_o)) & u07_src[5]) ^ (((^u07_t_v2_o)) & u07_src[6]) ^ (((^u07_t_material_o)) & u07_src[7]) ^ (((^u07_t_raster_o)) & u07_src[8]) ^ (((^u07_t_src_id_o)) & u07_src[9]) ^ (((^u07_t_last_o)) & u07_src[10]) ^ (((^u07_m_done_o)) & u07_src[11]) ^ (((^u07_meshlets_o)) & u07_src[12]) ^ (((^u07_triangles_o)) & u07_src[13]) ^ (((^u07_refused_limits_o)) & u07_src[14]) ^ (((^u07_refused_index_o)) & u07_src[15]);
 
   // ---- zhao_geom_assetfetch ----
   logic [63:0] u08_lfsr_q;
@@ -555,14 +557,16 @@ module zhao_prod_top (
     else u08_lfsr_q <= {u08_lfsr_q[62:0], (^(u08_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u08_m_ready_o;
   zhao_client_e u08_m_client_i;
-  assign u08_m_client_i = zhao_client_e'(u08_src[42 +: $bits(zhao_client_e)]);
+  assign u08_m_client_i = zhao_client_e'(u08_src[56 +: $bits(zhao_client_e)]);
   zhao_guard_req_t u08_guard_req_o;
   zhao_guard_rsp_t u08_guard_rsp_i;
-  assign u08_guard_rsp_i = zhao_guard_rsp_t'(u08_src[49 +: $bits(zhao_guard_rsp_t)]);
+  assign u08_guard_rsp_i = zhao_guard_rsp_t'(u08_src[63 +: $bits(zhao_guard_rsp_t)]);
   logic [1-1:0] u08_s_valid_o;
   logic [8-1:0] u08_s_vertex_count_o;
   logic [8-1:0] u08_s_triangle_count_o;
   logic [16-1:0] u08_s_src_id_o;
+  logic [2-1:0] u08_s_visible_mask_o;
+  logic [16-1:0] u08_s_material_id_o;
   logic [1-1:0] u08_ix_valid_o;
   logic [8-1:0] u08_ix_a_o;
   logic [8-1:0] u08_ix_b_o;
@@ -588,26 +592,30 @@ module zhao_prod_top (
       .m_vertex_count_i(u08_src[21 +: 8]),
       .m_triangle_count_i(u08_src[28 +: 8]),
       .m_src_id_i(u08_src[35 +: 16]),
+      .m_visible_mask_i(u08_src[42 +: 2]),
+      .m_material_id_i(u08_src[49 +: 16]),
       .m_client_i(u08_m_client_i),
       .guard_req_o(u08_guard_req_o),
       .guard_rsp_i(u08_guard_rsp_i),
-      .beat_valid_i(u08_src[56 +: 1]),
-      .beat_data_i(u08_src[63 +: 64]),
-      .beat_last_i(u08_src[70 +: 1]),
+      .beat_valid_i(u08_src[70 +: 1]),
+      .beat_data_i(u08_src[77 +: 64]),
+      .beat_last_i(u08_src[84 +: 1]),
       .s_valid_o(u08_s_valid_o),
-      .s_ready_i(u08_src[77 +: 1]),
+      .s_ready_i(u08_src[91 +: 1]),
       .s_vertex_count_o(u08_s_vertex_count_o),
       .s_triangle_count_o(u08_s_triangle_count_o),
       .s_src_id_o(u08_s_src_id_o),
-      .release_i(u08_src[84 +: 1]),
-      .ix_req_i(u08_src[91 +: 1]),
-      .ix_index_i(u08_src[98 +: 9]),
+      .s_visible_mask_o(u08_s_visible_mask_o),
+      .s_material_id_o(u08_s_material_id_o),
+      .release_i(u08_src[98 +: 1]),
+      .ix_req_i(u08_src[105 +: 1]),
+      .ix_index_i(u08_src[112 +: 9]),
       .ix_valid_o(u08_ix_valid_o),
       .ix_a_o(u08_ix_a_o),
       .ix_b_o(u08_ix_b_o),
       .ix_c_o(u08_ix_c_o),
       .v_valid_o(u08_v_valid_o),
-      .v_ready_i(u08_src[105 +: 1]),
+      .v_ready_i(u08_src[119 +: 1]),
       .v_bytes_o(u08_v_bytes_o),
       .v_src_id_o(u08_v_src_id_o),
       .meshlets_fetched_o(u08_meshlets_fetched_o),
@@ -622,7 +630,7 @@ module zhao_prod_top (
   logic u08_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u08_fold_q <= 1'b0;
-    else u08_fold_q <= u08_fold_q ^ (((^u08_m_ready_o)) & u08_src[0]) ^ (((^u08_guard_req_o)) & u08_src[1]) ^ (((^u08_s_valid_o)) & u08_src[2]) ^ (((^u08_s_vertex_count_o)) & u08_src[3]) ^ (((^u08_s_triangle_count_o)) & u08_src[4]) ^ (((^u08_s_src_id_o)) & u08_src[5]) ^ (((^u08_ix_valid_o)) & u08_src[6]) ^ (((^u08_ix_a_o)) & u08_src[7]) ^ (((^u08_ix_b_o)) & u08_src[8]) ^ (((^u08_ix_c_o)) & u08_src[9]) ^ (((^u08_v_valid_o)) & u08_src[10]) ^ (((^u08_v_bytes_o)) & u08_src[11]) ^ (((^u08_v_src_id_o)) & u08_src[12]) ^ (((^u08_meshlets_fetched_o)) & u08_src[13]) ^ (((^u08_beats_read_o)) & u08_src[14]) ^ (((^u08_guard_denied_o)) & u08_src[15]) ^ (((^u08_refused_footprint_o)) & u08_src[16]) ^ (((^u08_prefetch_stall_o)) & u08_src[17]) ^ (((^u08_err_beat_truncated_o)) & u08_src[18]) ^ (((^u08_err_beat_overrun_o)) & u08_src[19]) ^ (((^u08_err_beat_unowned_o)) & u08_src[20]);
+    else u08_fold_q <= u08_fold_q ^ (((^u08_m_ready_o)) & u08_src[0]) ^ (((^u08_guard_req_o)) & u08_src[1]) ^ (((^u08_s_valid_o)) & u08_src[2]) ^ (((^u08_s_vertex_count_o)) & u08_src[3]) ^ (((^u08_s_triangle_count_o)) & u08_src[4]) ^ (((^u08_s_src_id_o)) & u08_src[5]) ^ (((^u08_s_visible_mask_o)) & u08_src[6]) ^ (((^u08_s_material_id_o)) & u08_src[7]) ^ (((^u08_ix_valid_o)) & u08_src[8]) ^ (((^u08_ix_a_o)) & u08_src[9]) ^ (((^u08_ix_b_o)) & u08_src[10]) ^ (((^u08_ix_c_o)) & u08_src[11]) ^ (((^u08_v_valid_o)) & u08_src[12]) ^ (((^u08_v_bytes_o)) & u08_src[13]) ^ (((^u08_v_src_id_o)) & u08_src[14]) ^ (((^u08_meshlets_fetched_o)) & u08_src[15]) ^ (((^u08_beats_read_o)) & u08_src[16]) ^ (((^u08_guard_denied_o)) & u08_src[17]) ^ (((^u08_refused_footprint_o)) & u08_src[18]) ^ (((^u08_prefetch_stall_o)) & u08_src[19]) ^ (((^u08_err_beat_truncated_o)) & u08_src[20]) ^ (((^u08_err_beat_overrun_o)) & u08_src[21]) ^ (((^u08_err_beat_unowned_o)) & u08_src[22]);
 
   // ---- zhao_geom_attrsetup ----
   logic [63:0] u09_lfsr_q;
@@ -775,698 +783,766 @@ module zhao_prod_top (
     if (!rst_n) u11_fold_q <= 1'b0;
     else u11_fold_q <= u11_fold_q ^ (((^u11_ready_o)) & u11_src[0]) ^ (((^u11_valid_o)) & u11_src[1]) ^ (((^u11_vis_o)) & u11_src[2]) ^ (((^u11_reject_o)) & u11_src[3]);
 
-  // ---- zhao_geom_depthquant ----
+  // ---- zhao_geom_desc_crc ----
   logic [63:0] u12_lfsr_q;
   logic [1023:0] u12_src;
   assign u12_src = {16{u12_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u12_lfsr_q <= 64'h000000076A9AD791;
     else u12_lfsr_q <= {u12_lfsr_q[62:0], (^(u12_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u12_v_ready_o;
-  logic [1-1:0] u12_d_valid_o;
-  logic [24-1:0] u12_d_invw24_o;
-  logic [1-1:0] u12_d_behind_o;
-  logic [16-1:0] u12_d_src_id_o;
-  logic [1-1:0] u12_rcp_valid_o;
-  logic [24-1:0] u12_rcp_d_o;
-  logic [1-1:0] u12_rcp_rready_o;
-  logic [32-1:0] u12_vertices_o;
-  logic [32-1:0] u12_clamped_near_o;
-  logic [32-1:0] u12_clamped_far_o;
-  logic [32-1:0] u12_saturated_o;
-  logic [32-1:0] u12_refused_o;
-  zhao_geom_depthquant u12_i (
+  logic [1-1:0] u12_crc_ok_o;
+  logic [32-1:0] u12_descriptors_o;
+  logic [32-1:0] u12_crc_fail_o;
+  logic [32-1:0] u12_framing_err_o;
+  zhao_geom_desc_crc u12_i (
       .clk(clk),
       .rst_n(rst_n),
-      .v_valid_i(u12_src[0 +: 1]),
-      .v_ready_o(u12_v_ready_o),
-      .v_w_i(u12_src[7 +: 40]),
-      .v_behind_i(u12_src[14 +: 1]),
-      .v_profile_i(u12_src[21 +: 2]),
-      .v_src_id_i(u12_src[28 +: 16]),
-      .d_valid_o(u12_d_valid_o),
-      .d_ready_i(u12_src[35 +: 1]),
-      .d_invw24_o(u12_d_invw24_o),
-      .d_behind_o(u12_d_behind_o),
-      .d_src_id_o(u12_d_src_id_o),
-      .rcp_valid_o(u12_rcp_valid_o),
-      .rcp_ready_i(u12_src[42 +: 1]),
-      .rcp_d_o(u12_rcp_d_o),
-      .rcp_rvalid_i(u12_src[49 +: 1]),
-      .rcp_rready_o(u12_rcp_rready_o),
-      .rcp_r_i(u12_src[56 +: 24]),
-      .rcp_k_i(u12_src[63 +: 6]),
-      .vertices_o(u12_vertices_o),
-      .clamped_near_o(u12_clamped_near_o),
-      .clamped_far_o(u12_clamped_far_o),
-      .saturated_o(u12_saturated_o),
-      .refused_o(u12_refused_o)
+      .beat_valid_i(u12_src[0 +: 1]),
+      .beat_data_i(u12_src[7 +: 64]),
+      .beat_last_i(u12_src[14 +: 1]),
+      .crc_ok_o(u12_crc_ok_o),
+      .descriptors_o(u12_descriptors_o),
+      .crc_fail_o(u12_crc_fail_o),
+      .framing_err_o(u12_framing_err_o)
   );
   logic u12_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u12_fold_q <= 1'b0;
-    else u12_fold_q <= u12_fold_q ^ (((^u12_v_ready_o)) & u12_src[0]) ^ (((^u12_d_valid_o)) & u12_src[1]) ^ (((^u12_d_invw24_o)) & u12_src[2]) ^ (((^u12_d_behind_o)) & u12_src[3]) ^ (((^u12_d_src_id_o)) & u12_src[4]) ^ (((^u12_rcp_valid_o)) & u12_src[5]) ^ (((^u12_rcp_d_o)) & u12_src[6]) ^ (((^u12_rcp_rready_o)) & u12_src[7]) ^ (((^u12_vertices_o)) & u12_src[8]) ^ (((^u12_clamped_near_o)) & u12_src[9]) ^ (((^u12_clamped_far_o)) & u12_src[10]) ^ (((^u12_saturated_o)) & u12_src[11]) ^ (((^u12_refused_o)) & u12_src[12]);
+    else u12_fold_q <= u12_fold_q ^ (((^u12_crc_ok_o)) & u12_src[0]) ^ (((^u12_descriptors_o)) & u12_src[1]) ^ (((^u12_crc_fail_o)) & u12_src[2]) ^ (((^u12_framing_err_o)) & u12_src[3]);
 
-  // ---- zhao_geom_desc_crc ----
+  // ---- zhao_geom_fogfactor ----
   logic [63:0] u13_lfsr_q;
   logic [1023:0] u13_src;
   assign u13_src = {16{u13_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u13_lfsr_q <= 64'h0000000808D25142;
     else u13_lfsr_q <= {u13_lfsr_q[62:0], (^(u13_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u13_crc_ok_o;
-  logic [32-1:0] u13_descriptors_o;
-  logic [32-1:0] u13_crc_fail_o;
-  logic [32-1:0] u13_framing_err_o;
-  zhao_geom_desc_crc u13_i (
+  logic [1-1:0] u13_v_ready_o;
+  logic [1-1:0] u13_r_valid_o;
+  logic signed [32-1:0] u13_fogf_o;
+  logic [16-1:0] u13_tag_o;
+  logic [32-1:0] u13_vertices_o;
+  logic [32-1:0] u13_clear_vertices_o;
+  logic [32-1:0] u13_opaque_vertices_o;
+  zhao_geom_fogfactor u13_i (
       .clk(clk),
       .rst_n(rst_n),
-      .beat_valid_i(u13_src[0 +: 1]),
-      .beat_data_i(u13_src[7 +: 64]),
-      .beat_last_i(u13_src[14 +: 1]),
-      .crc_ok_o(u13_crc_ok_o),
-      .descriptors_o(u13_descriptors_o),
-      .crc_fail_o(u13_crc_fail_o),
-      .framing_err_o(u13_framing_err_o)
+      .cfg_en_i(u13_src[0 +: 1]),
+      .cfg_far_i(u13_src[7 +: 32]),
+      .cfg_near_i(u13_src[14 +: 32]),
+      .cfg_k_i(u13_src[21 +: 32]),
+      .v_valid_i(u13_src[28 +: 1]),
+      .v_ready_o(u13_v_ready_o),
+      .w_i(u13_src[35 +: 31]),
+      .behind_i(u13_src[42 +: 1]),
+      .tag_i(u13_src[49 +: 16]),
+      .r_valid_o(u13_r_valid_o),
+      .r_ready_i(u13_src[56 +: 1]),
+      .fogf_o(u13_fogf_o),
+      .tag_o(u13_tag_o),
+      .vertices_o(u13_vertices_o),
+      .clear_vertices_o(u13_clear_vertices_o),
+      .opaque_vertices_o(u13_opaque_vertices_o)
   );
   logic u13_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u13_fold_q <= 1'b0;
-    else u13_fold_q <= u13_fold_q ^ (((^u13_crc_ok_o)) & u13_src[0]) ^ (((^u13_descriptors_o)) & u13_src[1]) ^ (((^u13_crc_fail_o)) & u13_src[2]) ^ (((^u13_framing_err_o)) & u13_src[3]);
+    else u13_fold_q <= u13_fold_q ^ (((^u13_v_ready_o)) & u13_src[0]) ^ (((^u13_r_valid_o)) & u13_src[1]) ^ (((^u13_fogf_o)) & u13_src[2]) ^ (((^u13_tag_o)) & u13_src[3]) ^ (((^u13_vertices_o)) & u13_src[4]) ^ (((^u13_clear_vertices_o)) & u13_src[5]) ^ (((^u13_opaque_vertices_o)) & u13_src[6]);
 
-  // ---- zhao_geom_fogfactor ----
+  // ---- zhao_geom_lod ----
   logic [63:0] u14_lfsr_q;
   logic [1023:0] u14_src;
   assign u14_src = {16{u14_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u14_lfsr_q <= 64'h00000008A709CAF3;
     else u14_lfsr_q <= {u14_lfsr_q[62:0], (^(u14_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u14_v_ready_o;
-  logic [1-1:0] u14_r_valid_o;
-  logic signed [32-1:0] u14_fogf_o;
-  logic [16-1:0] u14_tag_o;
-  logic [32-1:0] u14_vertices_o;
-  logic [32-1:0] u14_clear_vertices_o;
-  logic [32-1:0] u14_opaque_vertices_o;
-  zhao_geom_fogfactor u14_i (
+  logic [2-1:0] u14_rung_o;
+  logic [16-1:0] u14_hold_o;
+  logic [2-1:0] u14_raw_o;
+  logic [1-1:0] u14_valid_o;
+  logic [1-1:0] u14_ready_o;
+  zhao_geom_lod u14_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cfg_en_i(u14_src[0 +: 1]),
-      .cfg_far_i(u14_src[7 +: 32]),
-      .cfg_near_i(u14_src[14 +: 32]),
-      .cfg_k_i(u14_src[21 +: 32]),
-      .v_valid_i(u14_src[28 +: 1]),
-      .v_ready_o(u14_v_ready_o),
-      .w_i(u14_src[35 +: 31]),
-      .behind_i(u14_src[42 +: 1]),
-      .tag_i(u14_src[49 +: 16]),
-      .r_valid_o(u14_r_valid_o),
-      .r_ready_i(u14_src[56 +: 1]),
-      .fogf_o(u14_fogf_o),
-      .tag_o(u14_tag_o),
-      .vertices_o(u14_vertices_o),
-      .clear_vertices_o(u14_clear_vertices_o),
-      .opaque_vertices_o(u14_opaque_vertices_o)
+      .tick_i(u14_src[0 +: 1]),
+      .proj_radius_q8_i(u14_src[7 +: 32]),
+      .thresh_q8_i(u14_src[14 +: 32]),
+      .bound_radius_i(u14_src[21 +: 32]),
+      .micro_error_i(u14_src[28 +: 32]),
+      .splat_error_i(u14_src[35 +: 32]),
+      .glint_error_i(u14_src[42 +: 32]),
+      .rung_i(u14_src[49 +: 2]),
+      .hold_i(u14_src[56 +: 16]),
+      .rung_o(u14_rung_o),
+      .hold_o(u14_hold_o),
+      .raw_o(u14_raw_o),
+      .valid_o(u14_valid_o),
+      .ready_o(u14_ready_o)
   );
   logic u14_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u14_fold_q <= 1'b0;
-    else u14_fold_q <= u14_fold_q ^ (((^u14_v_ready_o)) & u14_src[0]) ^ (((^u14_r_valid_o)) & u14_src[1]) ^ (((^u14_fogf_o)) & u14_src[2]) ^ (((^u14_tag_o)) & u14_src[3]) ^ (((^u14_vertices_o)) & u14_src[4]) ^ (((^u14_clear_vertices_o)) & u14_src[5]) ^ (((^u14_opaque_vertices_o)) & u14_src[6]);
+    else u14_fold_q <= u14_fold_q ^ (((^u14_rung_o)) & u14_src[0]) ^ (((^u14_hold_o)) & u14_src[1]) ^ (((^u14_raw_o)) & u14_src[2]) ^ (((^u14_valid_o)) & u14_src[3]) ^ (((^u14_ready_o)) & u14_src[4]);
 
-  // ---- zhao_geom_lod ----
+  // ---- zhao_geom_loom ----
   logic [63:0] u15_lfsr_q;
   logic [1023:0] u15_src;
   assign u15_src = {16{u15_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u15_lfsr_q <= 64'h00000009454144A4;
     else u15_lfsr_q <= {u15_lfsr_q[62:0], (^(u15_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [2-1:0] u15_rung_o;
-  logic [16-1:0] u15_hold_o;
-  logic [2-1:0] u15_raw_o;
-  logic [1-1:0] u15_valid_o;
-  logic [1-1:0] u15_ready_o;
-  zhao_geom_lod u15_i (
+  logic [1-1:0] u15_in_ready_o;
+  logic signed [32-1:0] u15_in_param_i [12];
+  always_comb begin
+    u15_in_param_i[0] = u15_src[28 +: 32] ^ (32)'(0);
+    u15_in_param_i[1] = u15_src[28 +: 32] ^ (32)'(1);
+    u15_in_param_i[2] = u15_src[28 +: 32] ^ (32)'(2);
+    u15_in_param_i[3] = u15_src[28 +: 32] ^ (32)'(3);
+    u15_in_param_i[4] = u15_src[28 +: 32] ^ (32)'(4);
+    u15_in_param_i[5] = u15_src[28 +: 32] ^ (32)'(5);
+    u15_in_param_i[6] = u15_src[28 +: 32] ^ (32)'(6);
+    u15_in_param_i[7] = u15_src[28 +: 32] ^ (32)'(7);
+    u15_in_param_i[8] = u15_src[28 +: 32] ^ (32)'(8);
+    u15_in_param_i[9] = u15_src[28 +: 32] ^ (32)'(9);
+    u15_in_param_i[10] = u15_src[28 +: 32] ^ (32)'(10);
+    u15_in_param_i[11] = u15_src[28 +: 32] ^ (32)'(11);
+  end
+  logic signed [32-1:0] u15_cam_basis_i [9];
+  always_comb begin
+    u15_cam_basis_i[0] = u15_src[77 +: 32] ^ (32)'(0);
+    u15_cam_basis_i[1] = u15_src[77 +: 32] ^ (32)'(1);
+    u15_cam_basis_i[2] = u15_src[77 +: 32] ^ (32)'(2);
+    u15_cam_basis_i[3] = u15_src[77 +: 32] ^ (32)'(3);
+    u15_cam_basis_i[4] = u15_src[77 +: 32] ^ (32)'(4);
+    u15_cam_basis_i[5] = u15_src[77 +: 32] ^ (32)'(5);
+    u15_cam_basis_i[6] = u15_src[77 +: 32] ^ (32)'(6);
+    u15_cam_basis_i[7] = u15_src[77 +: 32] ^ (32)'(7);
+    u15_cam_basis_i[8] = u15_src[77 +: 32] ^ (32)'(8);
+  end
+  logic [1-1:0] u15_out_valid_o;
+  logic [10-1:0] u15_out_node_index_o;
+  logic signed [32-1:0] u15_out_m_o [12];
+  logic u15_out_m_o_fold;
+  always_comb begin
+    u15_out_m_o_fold = 1'b0;
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[0]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[1]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[2]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[3]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[4]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[5]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[6]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[7]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[8]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[9]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[10]);
+    u15_out_m_o_fold = u15_out_m_o_fold ^ (^u15_out_m_o[11]);
+  end
+  logic [16-1:0] u15_out_src_id_o;
+  logic [1-1:0] u15_out_last_o;
+  logic [1-1:0] u15_refuse_valid_o;
+  logic [3-1:0] u15_refuse_reason_o;
+  logic [10-1:0] u15_refuse_node_index_o;
+  logic [16-1:0] u15_refuse_src_id_o;
+  logic [32-1:0] u15_nodes_transformed_o;
+  logic [32-1:0] u15_streams_composed_o;
+  logic [32-1:0] u15_streams_refused_o [6];
+  logic u15_streams_refused_o_fold;
+  always_comb begin
+    u15_streams_refused_o_fold = 1'b0;
+    u15_streams_refused_o_fold = u15_streams_refused_o_fold ^ (^u15_streams_refused_o[0]);
+    u15_streams_refused_o_fold = u15_streams_refused_o_fold ^ (^u15_streams_refused_o[1]);
+    u15_streams_refused_o_fold = u15_streams_refused_o_fold ^ (^u15_streams_refused_o[2]);
+    u15_streams_refused_o_fold = u15_streams_refused_o_fold ^ (^u15_streams_refused_o[3]);
+    u15_streams_refused_o_fold = u15_streams_refused_o_fold ^ (^u15_streams_refused_o[4]);
+    u15_streams_refused_o_fold = u15_streams_refused_o_fold ^ (^u15_streams_refused_o[5]);
+  end
+  logic [16-1:0] u15_nodes_per_stream_max_o;
+  logic [16-1:0] u15_chain_depth_max_o;
+  logic [32-1:0] u15_node_kind_hist_o [10];
+  logic u15_node_kind_hist_o_fold;
+  always_comb begin
+    u15_node_kind_hist_o_fold = 1'b0;
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[0]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[1]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[2]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[3]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[4]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[5]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[6]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[7]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[8]);
+    u15_node_kind_hist_o_fold = u15_node_kind_hist_o_fold ^ (^u15_node_kind_hist_o[9]);
+  end
+  logic [32-1:0] u15_consumer_stall_cycles_o;
+  zhao_geom_loom u15_i (
       .clk(clk),
       .rst_n(rst_n),
-      .tick_i(u15_src[0 +: 1]),
-      .proj_radius_q8_i(u15_src[7 +: 32]),
-      .thresh_q8_i(u15_src[14 +: 32]),
-      .bound_radius_i(u15_src[21 +: 32]),
-      .micro_error_i(u15_src[28 +: 32]),
-      .splat_error_i(u15_src[35 +: 32]),
-      .glint_error_i(u15_src[42 +: 32]),
-      .rung_i(u15_src[49 +: 2]),
-      .hold_i(u15_src[56 +: 16]),
-      .rung_o(u15_rung_o),
-      .hold_o(u15_hold_o),
-      .raw_o(u15_raw_o),
-      .valid_o(u15_valid_o),
-      .ready_o(u15_ready_o)
+      .in_valid_i(u15_src[0 +: 1]),
+      .in_ready_o(u15_in_ready_o),
+      .in_node_index_i(u15_src[7 +: 10]),
+      .in_parent_index_i(u15_src[14 +: 10]),
+      .in_kind_i(u15_src[21 +: 4]),
+      .in_param_i(u15_in_param_i),
+      .in_angle_i(u15_src[35 +: 16]),
+      .in_axis_i(u15_src[42 +: 2]),
+      .in_bodypatch_i(u15_src[49 +: 1]),
+      .in_src_id_i(u15_src[56 +: 16]),
+      .in_first_i(u15_src[63 +: 1]),
+      .in_last_i(u15_src[70 +: 1]),
+      .cam_basis_i(u15_cam_basis_i),
+      .out_valid_o(u15_out_valid_o),
+      .out_ready_i(u15_src[84 +: 1]),
+      .out_node_index_o(u15_out_node_index_o),
+      .out_m_o(u15_out_m_o),
+      .out_src_id_o(u15_out_src_id_o),
+      .out_last_o(u15_out_last_o),
+      .refuse_valid_o(u15_refuse_valid_o),
+      .refuse_reason_o(u15_refuse_reason_o),
+      .refuse_node_index_o(u15_refuse_node_index_o),
+      .refuse_src_id_o(u15_refuse_src_id_o),
+      .nodes_transformed_o(u15_nodes_transformed_o),
+      .streams_composed_o(u15_streams_composed_o),
+      .streams_refused_o(u15_streams_refused_o),
+      .nodes_per_stream_max_o(u15_nodes_per_stream_max_o),
+      .chain_depth_max_o(u15_chain_depth_max_o),
+      .node_kind_hist_o(u15_node_kind_hist_o),
+      .consumer_stall_cycles_o(u15_consumer_stall_cycles_o)
   );
   logic u15_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u15_fold_q <= 1'b0;
-    else u15_fold_q <= u15_fold_q ^ (((^u15_rung_o)) & u15_src[0]) ^ (((^u15_hold_o)) & u15_src[1]) ^ (((^u15_raw_o)) & u15_src[2]) ^ (((^u15_valid_o)) & u15_src[3]) ^ (((^u15_ready_o)) & u15_src[4]);
+    else u15_fold_q <= u15_fold_q ^ (((^u15_in_ready_o)) & u15_src[0]) ^ (((^u15_out_valid_o)) & u15_src[1]) ^ (((^u15_out_node_index_o)) & u15_src[2]) ^ ((u15_out_m_o_fold) & u15_src[3]) ^ (((^u15_out_src_id_o)) & u15_src[4]) ^ (((^u15_out_last_o)) & u15_src[5]) ^ (((^u15_refuse_valid_o)) & u15_src[6]) ^ (((^u15_refuse_reason_o)) & u15_src[7]) ^ (((^u15_refuse_node_index_o)) & u15_src[8]) ^ (((^u15_refuse_src_id_o)) & u15_src[9]) ^ (((^u15_nodes_transformed_o)) & u15_src[10]) ^ (((^u15_streams_composed_o)) & u15_src[11]) ^ ((u15_streams_refused_o_fold) & u15_src[12]) ^ (((^u15_nodes_per_stream_max_o)) & u15_src[13]) ^ (((^u15_chain_depth_max_o)) & u15_src[14]) ^ ((u15_node_kind_hist_o_fold) & u15_src[15]) ^ (((^u15_consumer_stall_cycles_o)) & u15_src[16]);
 
-  // ---- zhao_geom_loom ----
+  // ---- zhao_geom_mem_adapter ----
   logic [63:0] u16_lfsr_q;
   logic [1023:0] u16_src;
   assign u16_src = {16{u16_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u16_lfsr_q <= 64'h00000009E378BE55;
     else u16_lfsr_q <= {u16_lfsr_q[62:0], (^(u16_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u16_in_ready_o;
-  logic signed [32-1:0] u16_in_param_i [12];
-  always_comb begin
-    u16_in_param_i[0] = u16_src[28 +: 32] ^ (32)'(0);
-    u16_in_param_i[1] = u16_src[28 +: 32] ^ (32)'(1);
-    u16_in_param_i[2] = u16_src[28 +: 32] ^ (32)'(2);
-    u16_in_param_i[3] = u16_src[28 +: 32] ^ (32)'(3);
-    u16_in_param_i[4] = u16_src[28 +: 32] ^ (32)'(4);
-    u16_in_param_i[5] = u16_src[28 +: 32] ^ (32)'(5);
-    u16_in_param_i[6] = u16_src[28 +: 32] ^ (32)'(6);
-    u16_in_param_i[7] = u16_src[28 +: 32] ^ (32)'(7);
-    u16_in_param_i[8] = u16_src[28 +: 32] ^ (32)'(8);
-    u16_in_param_i[9] = u16_src[28 +: 32] ^ (32)'(9);
-    u16_in_param_i[10] = u16_src[28 +: 32] ^ (32)'(10);
-    u16_in_param_i[11] = u16_src[28 +: 32] ^ (32)'(11);
-  end
-  logic signed [32-1:0] u16_cam_basis_i [9];
-  always_comb begin
-    u16_cam_basis_i[0] = u16_src[77 +: 32] ^ (32)'(0);
-    u16_cam_basis_i[1] = u16_src[77 +: 32] ^ (32)'(1);
-    u16_cam_basis_i[2] = u16_src[77 +: 32] ^ (32)'(2);
-    u16_cam_basis_i[3] = u16_src[77 +: 32] ^ (32)'(3);
-    u16_cam_basis_i[4] = u16_src[77 +: 32] ^ (32)'(4);
-    u16_cam_basis_i[5] = u16_src[77 +: 32] ^ (32)'(5);
-    u16_cam_basis_i[6] = u16_src[77 +: 32] ^ (32)'(6);
-    u16_cam_basis_i[7] = u16_src[77 +: 32] ^ (32)'(7);
-    u16_cam_basis_i[8] = u16_src[77 +: 32] ^ (32)'(8);
-  end
-  logic [1-1:0] u16_out_valid_o;
-  logic [10-1:0] u16_out_node_index_o;
-  logic signed [32-1:0] u16_out_m_o [12];
-  logic u16_out_m_o_fold;
-  always_comb begin
-    u16_out_m_o_fold = 1'b0;
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[0]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[1]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[2]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[3]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[4]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[5]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[6]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[7]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[8]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[9]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[10]);
-    u16_out_m_o_fold = u16_out_m_o_fold ^ (^u16_out_m_o[11]);
-  end
-  logic [16-1:0] u16_out_src_id_o;
-  logic [1-1:0] u16_out_last_o;
-  logic [1-1:0] u16_refuse_valid_o;
-  logic [3-1:0] u16_refuse_reason_o;
-  logic [10-1:0] u16_refuse_node_index_o;
-  logic [16-1:0] u16_refuse_src_id_o;
-  logic [32-1:0] u16_nodes_transformed_o;
-  logic [32-1:0] u16_streams_composed_o;
-  logic [32-1:0] u16_streams_refused_o [6];
-  logic u16_streams_refused_o_fold;
-  always_comb begin
-    u16_streams_refused_o_fold = 1'b0;
-    u16_streams_refused_o_fold = u16_streams_refused_o_fold ^ (^u16_streams_refused_o[0]);
-    u16_streams_refused_o_fold = u16_streams_refused_o_fold ^ (^u16_streams_refused_o[1]);
-    u16_streams_refused_o_fold = u16_streams_refused_o_fold ^ (^u16_streams_refused_o[2]);
-    u16_streams_refused_o_fold = u16_streams_refused_o_fold ^ (^u16_streams_refused_o[3]);
-    u16_streams_refused_o_fold = u16_streams_refused_o_fold ^ (^u16_streams_refused_o[4]);
-    u16_streams_refused_o_fold = u16_streams_refused_o_fold ^ (^u16_streams_refused_o[5]);
-  end
-  logic [16-1:0] u16_nodes_per_stream_max_o;
-  logic [16-1:0] u16_chain_depth_max_o;
-  logic [32-1:0] u16_node_kind_hist_o [10];
-  logic u16_node_kind_hist_o_fold;
-  always_comb begin
-    u16_node_kind_hist_o_fold = 1'b0;
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[0]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[1]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[2]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[3]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[4]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[5]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[6]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[7]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[8]);
-    u16_node_kind_hist_o_fold = u16_node_kind_hist_o_fold ^ (^u16_node_kind_hist_o[9]);
-  end
-  logic [32-1:0] u16_consumer_stall_cycles_o;
-  zhao_geom_loom u16_i (
+  zhao_guard_req_t u16_a_req_i;
+  assign u16_a_req_i = zhao_guard_req_t'(u16_src[0 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u16_a_rsp_o;
+  logic [1-1:0] u16_a_beat_valid_o;
+  logic [64-1:0] u16_a_beat_data_o;
+  logic [1-1:0] u16_a_beat_last_o;
+  zhao_guard_req_t u16_b_req_i;
+  assign u16_b_req_i = zhao_guard_req_t'(u16_src[7 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u16_b_rsp_o;
+  logic [1-1:0] u16_b_beat_valid_o;
+  logic [64-1:0] u16_b_beat_data_o;
+  logic [1-1:0] u16_b_beat_last_o;
+  zhao_guard_req_t u16_m_req_o;
+  zhao_guard_rsp_t u16_m_rsp_i;
+  assign u16_m_rsp_i = zhao_guard_rsp_t'(u16_src[14 +: $bits(zhao_guard_rsp_t)]);
+  logic [32-1:0] u16_jobs_a_o;
+  logic [32-1:0] u16_jobs_b_o;
+  logic [32-1:0] u16_denied_o;
+  logic [32-1:0] u16_contention_o;
+  logic [32-1:0] u16_err_short_o;
+  logic [32-1:0] u16_err_long_o;
+  logic [32-1:0] u16_err_unowned_o;
+  zhao_geom_mem_adapter u16_i (
       .clk(clk),
       .rst_n(rst_n),
-      .in_valid_i(u16_src[0 +: 1]),
-      .in_ready_o(u16_in_ready_o),
-      .in_node_index_i(u16_src[7 +: 10]),
-      .in_parent_index_i(u16_src[14 +: 10]),
-      .in_kind_i(u16_src[21 +: 4]),
-      .in_param_i(u16_in_param_i),
-      .in_angle_i(u16_src[35 +: 16]),
-      .in_axis_i(u16_src[42 +: 2]),
-      .in_bodypatch_i(u16_src[49 +: 1]),
-      .in_src_id_i(u16_src[56 +: 16]),
-      .in_first_i(u16_src[63 +: 1]),
-      .in_last_i(u16_src[70 +: 1]),
-      .cam_basis_i(u16_cam_basis_i),
-      .out_valid_o(u16_out_valid_o),
-      .out_ready_i(u16_src[84 +: 1]),
-      .out_node_index_o(u16_out_node_index_o),
-      .out_m_o(u16_out_m_o),
-      .out_src_id_o(u16_out_src_id_o),
-      .out_last_o(u16_out_last_o),
-      .refuse_valid_o(u16_refuse_valid_o),
-      .refuse_reason_o(u16_refuse_reason_o),
-      .refuse_node_index_o(u16_refuse_node_index_o),
-      .refuse_src_id_o(u16_refuse_src_id_o),
-      .nodes_transformed_o(u16_nodes_transformed_o),
-      .streams_composed_o(u16_streams_composed_o),
-      .streams_refused_o(u16_streams_refused_o),
-      .nodes_per_stream_max_o(u16_nodes_per_stream_max_o),
-      .chain_depth_max_o(u16_chain_depth_max_o),
-      .node_kind_hist_o(u16_node_kind_hist_o),
-      .consumer_stall_cycles_o(u16_consumer_stall_cycles_o)
+      .a_req_i(u16_a_req_i),
+      .a_rsp_o(u16_a_rsp_o),
+      .a_beat_valid_o(u16_a_beat_valid_o),
+      .a_beat_data_o(u16_a_beat_data_o),
+      .a_beat_last_o(u16_a_beat_last_o),
+      .b_req_i(u16_b_req_i),
+      .b_rsp_o(u16_b_rsp_o),
+      .b_beat_valid_o(u16_b_beat_valid_o),
+      .b_beat_data_o(u16_b_beat_data_o),
+      .b_beat_last_o(u16_b_beat_last_o),
+      .m_req_o(u16_m_req_o),
+      .m_rsp_i(u16_m_rsp_i),
+      .m_beat_valid_i(u16_src[21 +: 1]),
+      .m_beat_data_i(u16_src[28 +: 64]),
+      .m_beat_last_i(u16_src[35 +: 1]),
+      .jobs_a_o(u16_jobs_a_o),
+      .jobs_b_o(u16_jobs_b_o),
+      .denied_o(u16_denied_o),
+      .contention_o(u16_contention_o),
+      .err_short_o(u16_err_short_o),
+      .err_long_o(u16_err_long_o),
+      .err_unowned_o(u16_err_unowned_o)
   );
   logic u16_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u16_fold_q <= 1'b0;
-    else u16_fold_q <= u16_fold_q ^ (((^u16_in_ready_o)) & u16_src[0]) ^ (((^u16_out_valid_o)) & u16_src[1]) ^ (((^u16_out_node_index_o)) & u16_src[2]) ^ ((u16_out_m_o_fold) & u16_src[3]) ^ (((^u16_out_src_id_o)) & u16_src[4]) ^ (((^u16_out_last_o)) & u16_src[5]) ^ (((^u16_refuse_valid_o)) & u16_src[6]) ^ (((^u16_refuse_reason_o)) & u16_src[7]) ^ (((^u16_refuse_node_index_o)) & u16_src[8]) ^ (((^u16_refuse_src_id_o)) & u16_src[9]) ^ (((^u16_nodes_transformed_o)) & u16_src[10]) ^ (((^u16_streams_composed_o)) & u16_src[11]) ^ ((u16_streams_refused_o_fold) & u16_src[12]) ^ (((^u16_nodes_per_stream_max_o)) & u16_src[13]) ^ (((^u16_chain_depth_max_o)) & u16_src[14]) ^ ((u16_node_kind_hist_o_fold) & u16_src[15]) ^ (((^u16_consumer_stall_cycles_o)) & u16_src[16]);
+    else u16_fold_q <= u16_fold_q ^ (((^u16_a_rsp_o)) & u16_src[0]) ^ (((^u16_a_beat_valid_o)) & u16_src[1]) ^ (((^u16_a_beat_data_o)) & u16_src[2]) ^ (((^u16_a_beat_last_o)) & u16_src[3]) ^ (((^u16_b_rsp_o)) & u16_src[4]) ^ (((^u16_b_beat_valid_o)) & u16_src[5]) ^ (((^u16_b_beat_data_o)) & u16_src[6]) ^ (((^u16_b_beat_last_o)) & u16_src[7]) ^ (((^u16_m_req_o)) & u16_src[8]) ^ (((^u16_jobs_a_o)) & u16_src[9]) ^ (((^u16_jobs_b_o)) & u16_src[10]) ^ (((^u16_denied_o)) & u16_src[11]) ^ (((^u16_contention_o)) & u16_src[12]) ^ (((^u16_err_short_o)) & u16_src[13]) ^ (((^u16_err_long_o)) & u16_src[14]) ^ (((^u16_err_unowned_o)) & u16_src[15]);
 
-  // ---- zhao_geom_mem_adapter ----
+  // ---- zhao_geom_meshfetch ----
   logic [63:0] u17_lfsr_q;
   logic [1023:0] u17_src;
   assign u17_src = {16{u17_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u17_lfsr_q <= 64'h0000000A81B03806;
     else u17_lfsr_q <= {u17_lfsr_q[62:0], (^(u17_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  zhao_guard_req_t u17_a_req_i;
-  assign u17_a_req_i = zhao_guard_req_t'(u17_src[0 +: $bits(zhao_guard_req_t)]);
-  zhao_guard_rsp_t u17_a_rsp_o;
-  logic [1-1:0] u17_a_beat_valid_o;
-  logic [64-1:0] u17_a_beat_data_o;
-  logic [1-1:0] u17_a_beat_last_o;
-  zhao_guard_req_t u17_b_req_i;
-  assign u17_b_req_i = zhao_guard_req_t'(u17_src[7 +: $bits(zhao_guard_req_t)]);
-  zhao_guard_rsp_t u17_b_rsp_o;
-  logic [1-1:0] u17_b_beat_valid_o;
-  logic [64-1:0] u17_b_beat_data_o;
-  logic [1-1:0] u17_b_beat_last_o;
-  zhao_guard_req_t u17_m_req_o;
-  zhao_guard_rsp_t u17_m_rsp_i;
-  assign u17_m_rsp_i = zhao_guard_rsp_t'(u17_src[14 +: $bits(zhao_guard_rsp_t)]);
-  logic [32-1:0] u17_jobs_a_o;
-  logic [32-1:0] u17_jobs_b_o;
-  logic [32-1:0] u17_denied_o;
-  logic [32-1:0] u17_contention_o;
-  logic [32-1:0] u17_err_short_o;
-  logic [32-1:0] u17_err_long_o;
-  logic [32-1:0] u17_err_unowned_o;
-  zhao_geom_mem_adapter u17_i (
+  logic [1-1:0] u17_j_ready_o;
+  logic signed [32-1:0] u17_j_xform_i [12];
+  always_comb begin
+    u17_j_xform_i[0] = u17_src[42 +: 32] ^ (32)'(0);
+    u17_j_xform_i[1] = u17_src[42 +: 32] ^ (32)'(1);
+    u17_j_xform_i[2] = u17_src[42 +: 32] ^ (32)'(2);
+    u17_j_xform_i[3] = u17_src[42 +: 32] ^ (32)'(3);
+    u17_j_xform_i[4] = u17_src[42 +: 32] ^ (32)'(4);
+    u17_j_xform_i[5] = u17_src[42 +: 32] ^ (32)'(5);
+    u17_j_xform_i[6] = u17_src[42 +: 32] ^ (32)'(6);
+    u17_j_xform_i[7] = u17_src[42 +: 32] ^ (32)'(7);
+    u17_j_xform_i[8] = u17_src[42 +: 32] ^ (32)'(8);
+    u17_j_xform_i[9] = u17_src[42 +: 32] ^ (32)'(9);
+    u17_j_xform_i[10] = u17_src[42 +: 32] ^ (32)'(10);
+    u17_j_xform_i[11] = u17_src[42 +: 32] ^ (32)'(11);
+  end
+  zhao_client_e u17_j_client_i;
+  assign u17_j_client_i = zhao_client_e'(u17_src[49 +: $bits(zhao_client_e)]);
+  zhao_guard_req_t u17_guard_req_o;
+  zhao_guard_rsp_t u17_guard_rsp_i;
+  assign u17_guard_rsp_i = zhao_guard_rsp_t'(u17_src[56 +: $bits(zhao_guard_rsp_t)]);
+  logic [1-1:0] u17_cull_tick_o;
+  logic [2-1:0] u17_cull_active_o;
+  logic signed [32-1:0] u17_cull_cx_o;
+  logic signed [32-1:0] u17_cull_cy_o;
+  logic signed [32-1:0] u17_cull_cz_o;
+  logic signed [32-1:0] u17_cull_radius_o;
+  logic [1-1:0] u17_r_valid_o;
+  logic [16-1:0] u17_r_instance_id_o;
+  logic [2-1:0] u17_r_visible_mask_o;
+  logic [32-1:0] u17_r_vertex_offset_o;
+  logic [32-1:0] u17_r_index_offset_o;
+  logic [8-1:0] u17_r_vertex_count_o;
+  logic [8-1:0] u17_r_triangle_count_o;
+  logic [16-1:0] u17_r_material_id_o;
+  logic [8-1:0] u17_r_flags_o;
+  logic [32-1:0] u17_meshlets_considered_o;
+  logic [32-1:0] u17_culled_all_cameras_o;
+  logic [32-1:0] u17_descriptors_fetched_o;
+  logic [32-1:0] u17_guard_denied_o;
+  logic [32-1:0] u17_refused_o [7];
+  logic u17_refused_o_fold;
+  always_comb begin
+    u17_refused_o_fold = 1'b0;
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[0]);
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[1]);
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[2]);
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[3]);
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[4]);
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[5]);
+    u17_refused_o_fold = u17_refused_o_fold ^ (^u17_refused_o[6]);
+  end
+  zhao_geom_meshfetch u17_i (
       .clk(clk),
       .rst_n(rst_n),
-      .a_req_i(u17_a_req_i),
-      .a_rsp_o(u17_a_rsp_o),
-      .a_beat_valid_o(u17_a_beat_valid_o),
-      .a_beat_data_o(u17_a_beat_data_o),
-      .a_beat_last_o(u17_a_beat_last_o),
-      .b_req_i(u17_b_req_i),
-      .b_rsp_o(u17_b_rsp_o),
-      .b_beat_valid_o(u17_b_beat_valid_o),
-      .b_beat_data_o(u17_b_beat_data_o),
-      .b_beat_last_o(u17_b_beat_last_o),
-      .m_req_o(u17_m_req_o),
-      .m_rsp_i(u17_m_rsp_i),
-      .m_beat_valid_i(u17_src[21 +: 1]),
-      .m_beat_data_i(u17_src[28 +: 64]),
-      .m_beat_last_i(u17_src[35 +: 1]),
-      .jobs_a_o(u17_jobs_a_o),
-      .jobs_b_o(u17_jobs_b_o),
-      .denied_o(u17_denied_o),
-      .contention_o(u17_contention_o),
-      .err_short_o(u17_err_short_o),
-      .err_long_o(u17_err_long_o),
-      .err_unowned_o(u17_err_unowned_o)
+      .j_valid_i(u17_src[0 +: 1]),
+      .j_ready_o(u17_j_ready_o),
+      .j_instance_id_i(u17_src[7 +: 16]),
+      .j_desc_addr_i(u17_src[14 +: 27]),
+      .j_format_i(u17_src[21 +: 8]),
+      .j_generation_i(u17_src[28 +: 16]),
+      .j_active_mask_i(u17_src[35 +: 2]),
+      .j_xform_i(u17_j_xform_i),
+      .j_client_i(u17_j_client_i),
+      .guard_req_o(u17_guard_req_o),
+      .guard_rsp_i(u17_guard_rsp_i),
+      .beat_valid_i(u17_src[63 +: 1]),
+      .beat_data_i(u17_src[70 +: 64]),
+      .beat_last_i(u17_src[77 +: 1]),
+      .crc_ok_i(u17_src[84 +: 1]),
+      .cull_tick_o(u17_cull_tick_o),
+      .cull_active_o(u17_cull_active_o),
+      .cull_cx_o(u17_cull_cx_o),
+      .cull_cy_o(u17_cull_cy_o),
+      .cull_cz_o(u17_cull_cz_o),
+      .cull_radius_o(u17_cull_radius_o),
+      .cull_ready_i(u17_src[91 +: 1]),
+      .cull_valid_i(u17_src[98 +: 1]),
+      .cull_vis_i(u17_src[105 +: 2]),
+      .cull_reject_i(u17_src[112 +: 1]),
+      .r_valid_o(u17_r_valid_o),
+      .r_ready_i(u17_src[119 +: 1]),
+      .r_instance_id_o(u17_r_instance_id_o),
+      .r_visible_mask_o(u17_r_visible_mask_o),
+      .r_vertex_offset_o(u17_r_vertex_offset_o),
+      .r_index_offset_o(u17_r_index_offset_o),
+      .r_vertex_count_o(u17_r_vertex_count_o),
+      .r_triangle_count_o(u17_r_triangle_count_o),
+      .r_material_id_o(u17_r_material_id_o),
+      .r_flags_o(u17_r_flags_o),
+      .meshlets_considered_o(u17_meshlets_considered_o),
+      .culled_all_cameras_o(u17_culled_all_cameras_o),
+      .descriptors_fetched_o(u17_descriptors_fetched_o),
+      .guard_denied_o(u17_guard_denied_o),
+      .refused_o(u17_refused_o)
   );
   logic u17_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u17_fold_q <= 1'b0;
-    else u17_fold_q <= u17_fold_q ^ (((^u17_a_rsp_o)) & u17_src[0]) ^ (((^u17_a_beat_valid_o)) & u17_src[1]) ^ (((^u17_a_beat_data_o)) & u17_src[2]) ^ (((^u17_a_beat_last_o)) & u17_src[3]) ^ (((^u17_b_rsp_o)) & u17_src[4]) ^ (((^u17_b_beat_valid_o)) & u17_src[5]) ^ (((^u17_b_beat_data_o)) & u17_src[6]) ^ (((^u17_b_beat_last_o)) & u17_src[7]) ^ (((^u17_m_req_o)) & u17_src[8]) ^ (((^u17_jobs_a_o)) & u17_src[9]) ^ (((^u17_jobs_b_o)) & u17_src[10]) ^ (((^u17_denied_o)) & u17_src[11]) ^ (((^u17_contention_o)) & u17_src[12]) ^ (((^u17_err_short_o)) & u17_src[13]) ^ (((^u17_err_long_o)) & u17_src[14]) ^ (((^u17_err_unowned_o)) & u17_src[15]);
+    else u17_fold_q <= u17_fold_q ^ (((^u17_j_ready_o)) & u17_src[0]) ^ (((^u17_guard_req_o)) & u17_src[1]) ^ (((^u17_cull_tick_o)) & u17_src[2]) ^ (((^u17_cull_active_o)) & u17_src[3]) ^ (((^u17_cull_cx_o)) & u17_src[4]) ^ (((^u17_cull_cy_o)) & u17_src[5]) ^ (((^u17_cull_cz_o)) & u17_src[6]) ^ (((^u17_cull_radius_o)) & u17_src[7]) ^ (((^u17_r_valid_o)) & u17_src[8]) ^ (((^u17_r_instance_id_o)) & u17_src[9]) ^ (((^u17_r_visible_mask_o)) & u17_src[10]) ^ (((^u17_r_vertex_offset_o)) & u17_src[11]) ^ (((^u17_r_index_offset_o)) & u17_src[12]) ^ (((^u17_r_vertex_count_o)) & u17_src[13]) ^ (((^u17_r_triangle_count_o)) & u17_src[14]) ^ (((^u17_r_material_id_o)) & u17_src[15]) ^ (((^u17_r_flags_o)) & u17_src[16]) ^ (((^u17_meshlets_considered_o)) & u17_src[17]) ^ (((^u17_culled_all_cameras_o)) & u17_src[18]) ^ (((^u17_descriptors_fetched_o)) & u17_src[19]) ^ (((^u17_guard_denied_o)) & u17_src[20]) ^ ((u17_refused_o_fold) & u17_src[21]);
 
-  // ---- zhao_geom_meshfetch ----
+  // ---- zhao_geom_parambuf ----
   logic [63:0] u18_lfsr_q;
   logic [1023:0] u18_src;
   assign u18_src = {16{u18_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u18_lfsr_q <= 64'h0000000B1FE7B1B7;
     else u18_lfsr_q <= {u18_lfsr_q[62:0], (^(u18_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u18_j_ready_o;
-  logic signed [32-1:0] u18_j_xform_i [12];
-  always_comb begin
-    u18_j_xform_i[0] = u18_src[42 +: 32] ^ (32)'(0);
-    u18_j_xform_i[1] = u18_src[42 +: 32] ^ (32)'(1);
-    u18_j_xform_i[2] = u18_src[42 +: 32] ^ (32)'(2);
-    u18_j_xform_i[3] = u18_src[42 +: 32] ^ (32)'(3);
-    u18_j_xform_i[4] = u18_src[42 +: 32] ^ (32)'(4);
-    u18_j_xform_i[5] = u18_src[42 +: 32] ^ (32)'(5);
-    u18_j_xform_i[6] = u18_src[42 +: 32] ^ (32)'(6);
-    u18_j_xform_i[7] = u18_src[42 +: 32] ^ (32)'(7);
-    u18_j_xform_i[8] = u18_src[42 +: 32] ^ (32)'(8);
-    u18_j_xform_i[9] = u18_src[42 +: 32] ^ (32)'(9);
-    u18_j_xform_i[10] = u18_src[42 +: 32] ^ (32)'(10);
-    u18_j_xform_i[11] = u18_src[42 +: 32] ^ (32)'(11);
-  end
-  zhao_client_e u18_j_client_i;
-  assign u18_j_client_i = zhao_client_e'(u18_src[49 +: $bits(zhao_client_e)]);
-  zhao_guard_req_t u18_guard_req_o;
-  zhao_guard_rsp_t u18_guard_rsp_i;
-  assign u18_guard_rsp_i = zhao_guard_rsp_t'(u18_src[56 +: $bits(zhao_guard_rsp_t)]);
-  logic [1-1:0] u18_cull_tick_o;
-  logic [2-1:0] u18_cull_active_o;
-  logic signed [32-1:0] u18_cull_cx_o;
-  logic signed [32-1:0] u18_cull_cy_o;
-  logic signed [32-1:0] u18_cull_cz_o;
-  logic signed [32-1:0] u18_cull_radius_o;
-  logic [1-1:0] u18_r_valid_o;
-  logic [16-1:0] u18_r_instance_id_o;
-  logic [2-1:0] u18_r_visible_mask_o;
-  logic [32-1:0] u18_r_vertex_offset_o;
-  logic [32-1:0] u18_r_index_offset_o;
-  logic [8-1:0] u18_r_vertex_count_o;
-  logic [8-1:0] u18_r_triangle_count_o;
-  logic [16-1:0] u18_r_material_id_o;
-  logic [8-1:0] u18_r_flags_o;
-  logic [32-1:0] u18_meshlets_considered_o;
-  logic [32-1:0] u18_culled_all_cameras_o;
-  logic [32-1:0] u18_descriptors_fetched_o;
-  logic [32-1:0] u18_guard_denied_o;
-  logic [32-1:0] u18_refused_o [7];
-  logic u18_refused_o_fold;
-  always_comb begin
-    u18_refused_o_fold = 1'b0;
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[0]);
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[1]);
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[2]);
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[3]);
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[4]);
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[5]);
-    u18_refused_o_fold = u18_refused_o_fold ^ (^u18_refused_o[6]);
-  end
-  zhao_geom_meshfetch u18_i (
+  logic signed [32-1:0] u18_pv_x_o;
+  logic signed [32-1:0] u18_pv_y_o;
+  logic [24-1:0] u18_pv_invw_o;
+  logic [8-1:0] u18_pv_status_o;
+  logic signed [32-1:0] u18_pv_uow_o;
+  logic signed [32-1:0] u18_pv_vow_o;
+  logic [32-1:0] u18_pv_rgba_o;
+  logic [1-1:0] u18_pv_illegal_o;
+  logic [16-1:0] u18_td_v0_o;
+  logic [16-1:0] u18_td_v1_o;
+  logic [16-1:0] u18_td_v2_o;
+  logic [16-1:0] u18_td_material_o;
+  logic [32-1:0] u18_td_raster_o;
+  logic [32-1:0] u18_td_source_o;
+  logic [1-1:0] u18_td_illegal_o;
+  logic [32-1:0] u18_ck_next_o;
+  logic [16-1:0] u18_ck_count_o;
+  logic [16-1:0] u18_ck_gen_o;
+  logic [1-1:0] u18_ck_stale_o;
+  logic [1-1:0] u18_ck_illegal_o;
+  logic [1-1:0] u18_ck_follow_o;
+  logic [32-1:0] u18_pv_illegal_count_o;
+  logic [32-1:0] u18_td_illegal_count_o;
+  logic [32-1:0] u18_ck_stale_count_o;
+  logic [32-1:0] u18_ck_illegal_count_o;
+  zhao_geom_parambuf u18_i (
       .clk(clk),
       .rst_n(rst_n),
-      .j_valid_i(u18_src[0 +: 1]),
-      .j_ready_o(u18_j_ready_o),
-      .j_instance_id_i(u18_src[7 +: 16]),
-      .j_desc_addr_i(u18_src[14 +: 27]),
-      .j_format_i(u18_src[21 +: 8]),
-      .j_generation_i(u18_src[28 +: 16]),
-      .j_active_mask_i(u18_src[35 +: 2]),
-      .j_xform_i(u18_j_xform_i),
-      .j_client_i(u18_j_client_i),
-      .guard_req_o(u18_guard_req_o),
-      .guard_rsp_i(u18_guard_rsp_i),
-      .beat_valid_i(u18_src[63 +: 1]),
-      .beat_data_i(u18_src[70 +: 64]),
-      .beat_last_i(u18_src[77 +: 1]),
-      .crc_ok_i(u18_src[84 +: 1]),
-      .cull_tick_o(u18_cull_tick_o),
-      .cull_active_o(u18_cull_active_o),
-      .cull_cx_o(u18_cull_cx_o),
-      .cull_cy_o(u18_cull_cy_o),
-      .cull_cz_o(u18_cull_cz_o),
-      .cull_radius_o(u18_cull_radius_o),
-      .cull_ready_i(u18_src[91 +: 1]),
-      .cull_valid_i(u18_src[98 +: 1]),
-      .cull_vis_i(u18_src[105 +: 2]),
-      .cull_reject_i(u18_src[112 +: 1]),
-      .r_valid_o(u18_r_valid_o),
-      .r_ready_i(u18_src[119 +: 1]),
-      .r_instance_id_o(u18_r_instance_id_o),
-      .r_visible_mask_o(u18_r_visible_mask_o),
-      .r_vertex_offset_o(u18_r_vertex_offset_o),
-      .r_index_offset_o(u18_r_index_offset_o),
-      .r_vertex_count_o(u18_r_vertex_count_o),
-      .r_triangle_count_o(u18_r_triangle_count_o),
-      .r_material_id_o(u18_r_material_id_o),
-      .r_flags_o(u18_r_flags_o),
-      .meshlets_considered_o(u18_meshlets_considered_o),
-      .culled_all_cameras_o(u18_culled_all_cameras_o),
-      .descriptors_fetched_o(u18_descriptors_fetched_o),
-      .guard_denied_o(u18_guard_denied_o),
-      .refused_o(u18_refused_o)
+      .pv_valid_i(u18_src[0 +: 1]),
+      .pv_bytes_i(u18_src[7 +: 192]),
+      .pv_x_o(u18_pv_x_o),
+      .pv_y_o(u18_pv_y_o),
+      .pv_invw_o(u18_pv_invw_o),
+      .pv_status_o(u18_pv_status_o),
+      .pv_uow_o(u18_pv_uow_o),
+      .pv_vow_o(u18_pv_vow_o),
+      .pv_rgba_o(u18_pv_rgba_o),
+      .pv_illegal_o(u18_pv_illegal_o),
+      .td_valid_i(u18_src[14 +: 1]),
+      .td_bytes_i(u18_src[21 +: 128]),
+      .td_sealed_vertices_i(u18_src[28 +: 16]),
+      .td_v0_o(u18_td_v0_o),
+      .td_v1_o(u18_td_v1_o),
+      .td_v2_o(u18_td_v2_o),
+      .td_material_o(u18_td_material_o),
+      .td_raster_o(u18_td_raster_o),
+      .td_source_o(u18_td_source_o),
+      .td_illegal_o(u18_td_illegal_o),
+      .ck_valid_i(u18_src[35 +: 1]),
+      .ck_bytes_i(u18_src[42 +: 512]),
+      .ck_frame_gen_i(u18_src[49 +: 16]),
+      .ck_next_o(u18_ck_next_o),
+      .ck_count_o(u18_ck_count_o),
+      .ck_gen_o(u18_ck_gen_o),
+      .ck_stale_o(u18_ck_stale_o),
+      .ck_illegal_o(u18_ck_illegal_o),
+      .ck_follow_o(u18_ck_follow_o),
+      .pv_illegal_count_o(u18_pv_illegal_count_o),
+      .td_illegal_count_o(u18_td_illegal_count_o),
+      .ck_stale_count_o(u18_ck_stale_count_o),
+      .ck_illegal_count_o(u18_ck_illegal_count_o)
   );
   logic u18_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u18_fold_q <= 1'b0;
-    else u18_fold_q <= u18_fold_q ^ (((^u18_j_ready_o)) & u18_src[0]) ^ (((^u18_guard_req_o)) & u18_src[1]) ^ (((^u18_cull_tick_o)) & u18_src[2]) ^ (((^u18_cull_active_o)) & u18_src[3]) ^ (((^u18_cull_cx_o)) & u18_src[4]) ^ (((^u18_cull_cy_o)) & u18_src[5]) ^ (((^u18_cull_cz_o)) & u18_src[6]) ^ (((^u18_cull_radius_o)) & u18_src[7]) ^ (((^u18_r_valid_o)) & u18_src[8]) ^ (((^u18_r_instance_id_o)) & u18_src[9]) ^ (((^u18_r_visible_mask_o)) & u18_src[10]) ^ (((^u18_r_vertex_offset_o)) & u18_src[11]) ^ (((^u18_r_index_offset_o)) & u18_src[12]) ^ (((^u18_r_vertex_count_o)) & u18_src[13]) ^ (((^u18_r_triangle_count_o)) & u18_src[14]) ^ (((^u18_r_material_id_o)) & u18_src[15]) ^ (((^u18_r_flags_o)) & u18_src[16]) ^ (((^u18_meshlets_considered_o)) & u18_src[17]) ^ (((^u18_culled_all_cameras_o)) & u18_src[18]) ^ (((^u18_descriptors_fetched_o)) & u18_src[19]) ^ (((^u18_guard_denied_o)) & u18_src[20]) ^ ((u18_refused_o_fold) & u18_src[21]);
+    else u18_fold_q <= u18_fold_q ^ (((^u18_pv_x_o)) & u18_src[0]) ^ (((^u18_pv_y_o)) & u18_src[1]) ^ (((^u18_pv_invw_o)) & u18_src[2]) ^ (((^u18_pv_status_o)) & u18_src[3]) ^ (((^u18_pv_uow_o)) & u18_src[4]) ^ (((^u18_pv_vow_o)) & u18_src[5]) ^ (((^u18_pv_rgba_o)) & u18_src[6]) ^ (((^u18_pv_illegal_o)) & u18_src[7]) ^ (((^u18_td_v0_o)) & u18_src[8]) ^ (((^u18_td_v1_o)) & u18_src[9]) ^ (((^u18_td_v2_o)) & u18_src[10]) ^ (((^u18_td_material_o)) & u18_src[11]) ^ (((^u18_td_raster_o)) & u18_src[12]) ^ (((^u18_td_source_o)) & u18_src[13]) ^ (((^u18_td_illegal_o)) & u18_src[14]) ^ (((^u18_ck_next_o)) & u18_src[15]) ^ (((^u18_ck_count_o)) & u18_src[16]) ^ (((^u18_ck_gen_o)) & u18_src[17]) ^ (((^u18_ck_stale_o)) & u18_src[18]) ^ (((^u18_ck_illegal_o)) & u18_src[19]) ^ (((^u18_ck_follow_o)) & u18_src[20]) ^ (((^u18_pv_illegal_count_o)) & u18_src[21]) ^ (((^u18_td_illegal_count_o)) & u18_src[22]) ^ (((^u18_ck_stale_count_o)) & u18_src[23]) ^ (((^u18_ck_illegal_count_o)) & u18_src[24]);
 
-  // ---- zhao_geom_parambuf ----
+  // ---- zhao_geom_pose_cache ----
   logic [63:0] u19_lfsr_q;
   logic [1023:0] u19_src;
   assign u19_src = {16{u19_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u19_lfsr_q <= 64'h0000000BBE1F2B68;
     else u19_lfsr_q <= {u19_lfsr_q[62:0], (^(u19_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic signed [32-1:0] u19_pv_x_o;
-  logic signed [32-1:0] u19_pv_y_o;
-  logic [24-1:0] u19_pv_invw_o;
-  logic [8-1:0] u19_pv_status_o;
-  logic signed [32-1:0] u19_pv_uow_o;
-  logic signed [32-1:0] u19_pv_vow_o;
-  logic [32-1:0] u19_pv_rgba_o;
-  logic [1-1:0] u19_pv_illegal_o;
-  logic [16-1:0] u19_td_v0_o;
-  logic [16-1:0] u19_td_v1_o;
-  logic [16-1:0] u19_td_v2_o;
-  logic [16-1:0] u19_td_material_o;
-  logic [32-1:0] u19_td_raster_o;
-  logic [32-1:0] u19_td_source_o;
-  logic [1-1:0] u19_td_illegal_o;
-  logic [32-1:0] u19_ck_next_o;
-  logic [16-1:0] u19_ck_count_o;
-  logic [16-1:0] u19_ck_gen_o;
-  logic [1-1:0] u19_ck_stale_o;
-  logic [1-1:0] u19_ck_illegal_o;
-  logic [1-1:0] u19_ck_follow_o;
-  logic [32-1:0] u19_pv_illegal_count_o;
-  logic [32-1:0] u19_td_illegal_count_o;
-  logic [32-1:0] u19_ck_stale_count_o;
-  logic [32-1:0] u19_ck_illegal_count_o;
-  zhao_geom_parambuf u19_i (
+  logic [1-1:0] u19_acq_ready_o;
+  logic [1-1:0] u19_resp_valid_o;
+  logic [2-1:0] u19_resp_kind_o;
+  logic [7-1:0] u19_resp_slot_o;
+  logic [32-1:0] u19_hits_o;
+  logic [32-1:0] u19_misses_o;
+  logic [32-1:0] u19_bad_ids_o;
+  logic [32-1:0] u19_clamped_inserts_o;
+  logic [32-1:0] u19_resident_o;
+  zhao_geom_pose_cache u19_i (
       .clk(clk),
       .rst_n(rst_n),
-      .pv_valid_i(u19_src[0 +: 1]),
-      .pv_bytes_i(u19_src[7 +: 192]),
-      .pv_x_o(u19_pv_x_o),
-      .pv_y_o(u19_pv_y_o),
-      .pv_invw_o(u19_pv_invw_o),
-      .pv_status_o(u19_pv_status_o),
-      .pv_uow_o(u19_pv_uow_o),
-      .pv_vow_o(u19_pv_vow_o),
-      .pv_rgba_o(u19_pv_rgba_o),
-      .pv_illegal_o(u19_pv_illegal_o),
-      .td_valid_i(u19_src[14 +: 1]),
-      .td_bytes_i(u19_src[21 +: 128]),
-      .td_sealed_vertices_i(u19_src[28 +: 16]),
-      .td_v0_o(u19_td_v0_o),
-      .td_v1_o(u19_td_v1_o),
-      .td_v2_o(u19_td_v2_o),
-      .td_material_o(u19_td_material_o),
-      .td_raster_o(u19_td_raster_o),
-      .td_source_o(u19_td_source_o),
-      .td_illegal_o(u19_td_illegal_o),
-      .ck_valid_i(u19_src[35 +: 1]),
-      .ck_bytes_i(u19_src[42 +: 512]),
-      .ck_frame_gen_i(u19_src[49 +: 16]),
-      .ck_next_o(u19_ck_next_o),
-      .ck_count_o(u19_ck_count_o),
-      .ck_gen_o(u19_ck_gen_o),
-      .ck_stale_o(u19_ck_stale_o),
-      .ck_illegal_o(u19_ck_illegal_o),
-      .ck_follow_o(u19_ck_follow_o),
-      .pv_illegal_count_o(u19_pv_illegal_count_o),
-      .td_illegal_count_o(u19_td_illegal_count_o),
-      .ck_stale_count_o(u19_ck_stale_count_o),
-      .ck_illegal_count_o(u19_ck_illegal_count_o)
+      .begin_frame_i(u19_src[0 +: 1]),
+      .acq_valid_i(u19_src[7 +: 1]),
+      .acq_ready_o(u19_acq_ready_o),
+      .acq_type_i(u19_src[14 +: 16]),
+      .acq_clip_i(u19_src[21 +: 16]),
+      .acq_frame_i(u19_src[28 +: 16]),
+      .acq_sub_i(u19_src[35 +: 8]),
+      .acq_gen_i(u19_src[42 +: 16]),
+      .acq_resolvable_i(u19_src[49 +: 1]),
+      .resp_valid_o(u19_resp_valid_o),
+      .resp_ready_i(u19_src[56 +: 1]),
+      .resp_kind_o(u19_resp_kind_o),
+      .resp_slot_o(u19_resp_slot_o),
+      .hits_o(u19_hits_o),
+      .misses_o(u19_misses_o),
+      .bad_ids_o(u19_bad_ids_o),
+      .clamped_inserts_o(u19_clamped_inserts_o),
+      .resident_o(u19_resident_o)
   );
   logic u19_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u19_fold_q <= 1'b0;
-    else u19_fold_q <= u19_fold_q ^ (((^u19_pv_x_o)) & u19_src[0]) ^ (((^u19_pv_y_o)) & u19_src[1]) ^ (((^u19_pv_invw_o)) & u19_src[2]) ^ (((^u19_pv_status_o)) & u19_src[3]) ^ (((^u19_pv_uow_o)) & u19_src[4]) ^ (((^u19_pv_vow_o)) & u19_src[5]) ^ (((^u19_pv_rgba_o)) & u19_src[6]) ^ (((^u19_pv_illegal_o)) & u19_src[7]) ^ (((^u19_td_v0_o)) & u19_src[8]) ^ (((^u19_td_v1_o)) & u19_src[9]) ^ (((^u19_td_v2_o)) & u19_src[10]) ^ (((^u19_td_material_o)) & u19_src[11]) ^ (((^u19_td_raster_o)) & u19_src[12]) ^ (((^u19_td_source_o)) & u19_src[13]) ^ (((^u19_td_illegal_o)) & u19_src[14]) ^ (((^u19_ck_next_o)) & u19_src[15]) ^ (((^u19_ck_count_o)) & u19_src[16]) ^ (((^u19_ck_gen_o)) & u19_src[17]) ^ (((^u19_ck_stale_o)) & u19_src[18]) ^ (((^u19_ck_illegal_o)) & u19_src[19]) ^ (((^u19_ck_follow_o)) & u19_src[20]) ^ (((^u19_pv_illegal_count_o)) & u19_src[21]) ^ (((^u19_td_illegal_count_o)) & u19_src[22]) ^ (((^u19_ck_stale_count_o)) & u19_src[23]) ^ (((^u19_ck_illegal_count_o)) & u19_src[24]);
+    else u19_fold_q <= u19_fold_q ^ (((^u19_acq_ready_o)) & u19_src[0]) ^ (((^u19_resp_valid_o)) & u19_src[1]) ^ (((^u19_resp_kind_o)) & u19_src[2]) ^ (((^u19_resp_slot_o)) & u19_src[3]) ^ (((^u19_hits_o)) & u19_src[4]) ^ (((^u19_misses_o)) & u19_src[5]) ^ (((^u19_bad_ids_o)) & u19_src[6]) ^ (((^u19_clamped_inserts_o)) & u19_src[7]) ^ (((^u19_resident_o)) & u19_src[8]);
 
-  // ---- zhao_geom_pose_cache ----
+  // ---- zhao_geom_pose_decode ----
   logic [63:0] u20_lfsr_q;
   logic [1023:0] u20_src;
   assign u20_src = {16{u20_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u20_lfsr_q <= 64'h0000000C5C56A519;
     else u20_lfsr_q <= {u20_lfsr_q[62:0], (^(u20_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u20_acq_ready_o;
-  logic [1-1:0] u20_resp_valid_o;
-  logic [2-1:0] u20_resp_kind_o;
-  logic [7-1:0] u20_resp_slot_o;
-  logic [32-1:0] u20_hits_o;
-  logic [32-1:0] u20_misses_o;
-  logic [32-1:0] u20_bad_ids_o;
-  logic [32-1:0] u20_clamped_inserts_o;
-  logic [32-1:0] u20_resident_o;
-  zhao_geom_pose_cache u20_i (
+  logic [1-1:0] u20_busy_o;
+  logic [5-1:0] u20_bone_idx_o;
+  logic signed [32-1:0] u20_inv_rest_i [12];
+  always_comb begin
+    u20_inv_rest_i[0] = u20_src[91 +: 32] ^ (32)'(0);
+    u20_inv_rest_i[1] = u20_src[91 +: 32] ^ (32)'(1);
+    u20_inv_rest_i[2] = u20_src[91 +: 32] ^ (32)'(2);
+    u20_inv_rest_i[3] = u20_src[91 +: 32] ^ (32)'(3);
+    u20_inv_rest_i[4] = u20_src[91 +: 32] ^ (32)'(4);
+    u20_inv_rest_i[5] = u20_src[91 +: 32] ^ (32)'(5);
+    u20_inv_rest_i[6] = u20_src[91 +: 32] ^ (32)'(6);
+    u20_inv_rest_i[7] = u20_src[91 +: 32] ^ (32)'(7);
+    u20_inv_rest_i[8] = u20_src[91 +: 32] ^ (32)'(8);
+    u20_inv_rest_i[9] = u20_src[91 +: 32] ^ (32)'(9);
+    u20_inv_rest_i[10] = u20_src[91 +: 32] ^ (32)'(10);
+    u20_inv_rest_i[11] = u20_src[91 +: 32] ^ (32)'(11);
+  end
+  logic [1-1:0] u20_out_valid_o;
+  logic [5-1:0] u20_out_bone_o;
+  logic signed [32-1:0] u20_out_m_o [12];
+  logic u20_out_m_o_fold;
+  always_comb begin
+    u20_out_m_o_fold = 1'b0;
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[0]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[1]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[2]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[3]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[4]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[5]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[6]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[7]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[8]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[9]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[10]);
+    u20_out_m_o_fold = u20_out_m_o_fold ^ (^u20_out_m_o[11]);
+  end
+  logic [1-1:0] u20_done_o;
+  logic [32-1:0] u20_palettes_decoded_o;
+  zhao_geom_pose_decode u20_i (
       .clk(clk),
       .rst_n(rst_n),
-      .begin_frame_i(u20_src[0 +: 1]),
-      .acq_valid_i(u20_src[7 +: 1]),
-      .acq_ready_o(u20_acq_ready_o),
-      .acq_type_i(u20_src[14 +: 16]),
-      .acq_clip_i(u20_src[21 +: 16]),
-      .acq_frame_i(u20_src[28 +: 16]),
-      .acq_sub_i(u20_src[35 +: 8]),
-      .acq_gen_i(u20_src[42 +: 16]),
-      .acq_resolvable_i(u20_src[49 +: 1]),
-      .resp_valid_o(u20_resp_valid_o),
-      .resp_ready_i(u20_src[56 +: 1]),
-      .resp_kind_o(u20_resp_kind_o),
-      .resp_slot_o(u20_resp_slot_o),
-      .hits_o(u20_hits_o),
-      .misses_o(u20_misses_o),
-      .bad_ids_o(u20_bad_ids_o),
-      .clamped_inserts_o(u20_clamped_inserts_o),
-      .resident_o(u20_resident_o)
+      .start_i(u20_src[0 +: 1]),
+      .busy_o(u20_busy_o),
+      .bone_count_i(u20_src[7 +: 6]),
+      .root_dx_i(u20_src[14 +: 32]),
+      .root_dy_i(u20_src[21 +: 32]),
+      .root_dz_i(u20_src[28 +: 32]),
+      .bone_idx_o(u20_bone_idx_o),
+      .bone_parent_i(u20_src[35 +: 5]),
+      .bone_tx_i(u20_src[42 +: 32]),
+      .bone_ty_i(u20_src[49 +: 32]),
+      .bone_tz_i(u20_src[56 +: 32]),
+      .quat_w_i(u20_src[63 +: 16]),
+      .quat_x_i(u20_src[70 +: 16]),
+      .quat_y_i(u20_src[77 +: 16]),
+      .quat_z_i(u20_src[84 +: 16]),
+      .inv_rest_i(u20_inv_rest_i),
+      .out_valid_o(u20_out_valid_o),
+      .out_ready_i(u20_src[98 +: 1]),
+      .out_bone_o(u20_out_bone_o),
+      .out_m_o(u20_out_m_o),
+      .done_o(u20_done_o),
+      .palettes_decoded_o(u20_palettes_decoded_o)
   );
   logic u20_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u20_fold_q <= 1'b0;
-    else u20_fold_q <= u20_fold_q ^ (((^u20_acq_ready_o)) & u20_src[0]) ^ (((^u20_resp_valid_o)) & u20_src[1]) ^ (((^u20_resp_kind_o)) & u20_src[2]) ^ (((^u20_resp_slot_o)) & u20_src[3]) ^ (((^u20_hits_o)) & u20_src[4]) ^ (((^u20_misses_o)) & u20_src[5]) ^ (((^u20_bad_ids_o)) & u20_src[6]) ^ (((^u20_clamped_inserts_o)) & u20_src[7]) ^ (((^u20_resident_o)) & u20_src[8]);
+    else u20_fold_q <= u20_fold_q ^ (((^u20_busy_o)) & u20_src[0]) ^ (((^u20_bone_idx_o)) & u20_src[1]) ^ (((^u20_out_valid_o)) & u20_src[2]) ^ (((^u20_out_bone_o)) & u20_src[3]) ^ ((u20_out_m_o_fold) & u20_src[4]) ^ (((^u20_done_o)) & u20_src[5]) ^ (((^u20_palettes_decoded_o)) & u20_src[6]);
 
-  // ---- zhao_geom_pose_decode ----
+  // ---- zhao_geom_project ----
   logic [63:0] u21_lfsr_q;
   logic [1023:0] u21_src;
   assign u21_src = {16{u21_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u21_lfsr_q <= 64'h0000000CFA8E1ECA;
     else u21_lfsr_q <= {u21_lfsr_q[62:0], (^(u21_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u21_busy_o;
-  logic [5-1:0] u21_bone_idx_o;
-  logic signed [32-1:0] u21_inv_rest_i [12];
-  always_comb begin
-    u21_inv_rest_i[0] = u21_src[91 +: 32] ^ (32)'(0);
-    u21_inv_rest_i[1] = u21_src[91 +: 32] ^ (32)'(1);
-    u21_inv_rest_i[2] = u21_src[91 +: 32] ^ (32)'(2);
-    u21_inv_rest_i[3] = u21_src[91 +: 32] ^ (32)'(3);
-    u21_inv_rest_i[4] = u21_src[91 +: 32] ^ (32)'(4);
-    u21_inv_rest_i[5] = u21_src[91 +: 32] ^ (32)'(5);
-    u21_inv_rest_i[6] = u21_src[91 +: 32] ^ (32)'(6);
-    u21_inv_rest_i[7] = u21_src[91 +: 32] ^ (32)'(7);
-    u21_inv_rest_i[8] = u21_src[91 +: 32] ^ (32)'(8);
-    u21_inv_rest_i[9] = u21_src[91 +: 32] ^ (32)'(9);
-    u21_inv_rest_i[10] = u21_src[91 +: 32] ^ (32)'(10);
-    u21_inv_rest_i[11] = u21_src[91 +: 32] ^ (32)'(11);
-  end
+  logic [1-1:0] u21_v_ready_o;
   logic [1-1:0] u21_out_valid_o;
-  logic [5-1:0] u21_out_bone_o;
-  logic signed [32-1:0] u21_out_m_o [12];
-  logic u21_out_m_o_fold;
-  always_comb begin
-    u21_out_m_o_fold = 1'b0;
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[0]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[1]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[2]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[3]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[4]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[5]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[6]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[7]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[8]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[9]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[10]);
-    u21_out_m_o_fold = u21_out_m_o_fold ^ (^u21_out_m_o[11]);
-  end
-  logic [1-1:0] u21_done_o;
-  logic [32-1:0] u21_palettes_decoded_o;
-  zhao_geom_pose_decode u21_i (
+  logic signed [21-1:0] u21_out_x_o;
+  logic signed [21-1:0] u21_out_y_o;
+  logic signed [32-1:0] u21_out_d_o;
+  logic [31-1:0] u21_out_w_o;
+  logic [1-1:0] u21_out_behind_o;
+  logic [16-1:0] u21_out_src_id_o;
+  logic [32-1:0] u21_vertices_transformed_o;
+  logic [32-1:0] u21_mat_refused_o;
+  logic [2-1:0] u21_out_profile_o;
+  zhao_geom_project u21_i (
       .clk(clk),
       .rst_n(rst_n),
-      .start_i(u21_src[0 +: 1]),
-      .busy_o(u21_busy_o),
-      .bone_count_i(u21_src[7 +: 6]),
-      .root_dx_i(u21_src[14 +: 32]),
-      .root_dy_i(u21_src[21 +: 32]),
-      .root_dz_i(u21_src[28 +: 32]),
-      .bone_idx_o(u21_bone_idx_o),
-      .bone_parent_i(u21_src[35 +: 5]),
-      .bone_tx_i(u21_src[42 +: 32]),
-      .bone_ty_i(u21_src[49 +: 32]),
-      .bone_tz_i(u21_src[56 +: 32]),
-      .quat_w_i(u21_src[63 +: 16]),
-      .quat_x_i(u21_src[70 +: 16]),
-      .quat_y_i(u21_src[77 +: 16]),
-      .quat_z_i(u21_src[84 +: 16]),
-      .inv_rest_i(u21_inv_rest_i),
+      .cfg_we_i(u21_src[0 +: 1]),
+      .cfg_view_i(u21_src[7 +: 1]),
+      .cfg_addr_i(u21_src[14 +: 5]),
+      .cfg_data_i(u21_src[21 +: 32]),
+      .v_valid_i(u21_src[28 +: 1]),
+      .v_ready_o(u21_v_ready_o),
+      .vx_i(u21_src[35 +: 32]),
+      .vy_i(u21_src[42 +: 32]),
+      .vz_i(u21_src[49 +: 32]),
+      .view_i(u21_src[56 +: 1]),
+      .src_id_i(u21_src[63 +: 16]),
       .out_valid_o(u21_out_valid_o),
-      .out_ready_i(u21_src[98 +: 1]),
-      .out_bone_o(u21_out_bone_o),
-      .out_m_o(u21_out_m_o),
-      .done_o(u21_done_o),
-      .palettes_decoded_o(u21_palettes_decoded_o)
+      .out_ready_i(u21_src[70 +: 1]),
+      .out_x_o(u21_out_x_o),
+      .out_y_o(u21_out_y_o),
+      .out_d_o(u21_out_d_o),
+      .out_w_o(u21_out_w_o),
+      .out_behind_o(u21_out_behind_o),
+      .out_src_id_o(u21_out_src_id_o),
+      .vertices_transformed_o(u21_vertices_transformed_o),
+      .mat_refused_o(u21_mat_refused_o),
+      .out_profile_o(u21_out_profile_o)
   );
   logic u21_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u21_fold_q <= 1'b0;
-    else u21_fold_q <= u21_fold_q ^ (((^u21_busy_o)) & u21_src[0]) ^ (((^u21_bone_idx_o)) & u21_src[1]) ^ (((^u21_out_valid_o)) & u21_src[2]) ^ (((^u21_out_bone_o)) & u21_src[3]) ^ ((u21_out_m_o_fold) & u21_src[4]) ^ (((^u21_done_o)) & u21_src[5]) ^ (((^u21_palettes_decoded_o)) & u21_src[6]);
+    else u21_fold_q <= u21_fold_q ^ (((^u21_v_ready_o)) & u21_src[0]) ^ (((^u21_out_valid_o)) & u21_src[1]) ^ (((^u21_out_x_o)) & u21_src[2]) ^ (((^u21_out_y_o)) & u21_src[3]) ^ (((^u21_out_d_o)) & u21_src[4]) ^ (((^u21_out_w_o)) & u21_src[5]) ^ (((^u21_out_behind_o)) & u21_src[6]) ^ (((^u21_out_src_id_o)) & u21_src[7]) ^ (((^u21_vertices_transformed_o)) & u21_src[8]) ^ (((^u21_mat_refused_o)) & u21_src[9]) ^ (((^u21_out_profile_o)) & u21_src[10]);
 
-  // ---- zhao_geom_project ----
+  // ---- zhao_geom_replay ----
   logic [63:0] u22_lfsr_q;
   logic [1023:0] u22_src;
   assign u22_src = {16{u22_lfsr_q}};
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u22_lfsr_q <= 64'h0000000D98C5987B;
     else u22_lfsr_q <= {u22_lfsr_q[62:0], (^(u22_lfsr_q & 64'hD800000000000000)) ^ seed_i};
-  logic [1-1:0] u22_v_ready_o;
-  logic [1-1:0] u22_out_valid_o;
-  logic signed [21-1:0] u22_out_x_o;
-  logic signed [21-1:0] u22_out_y_o;
-  logic signed [32-1:0] u22_out_d_o;
-  logic [31-1:0] u22_out_w_o;
-  logic [1-1:0] u22_out_behind_o;
-  logic [16-1:0] u22_out_src_id_o;
-  logic [32-1:0] u22_vertices_transformed_o;
-  logic [32-1:0] u22_mat_refused_o;
-  logic [2-1:0] u22_out_profile_o;
-  zhao_geom_project u22_i (
+  logic [1-1:0] u22_mt_ready_o;
+  logic [1-1:0] u22_grp_ready_o;
+  logic [1-1:0] u22_rel_valid_o;
+  logic [3-1:0] u22_rel_arena_o;
+  logic [1-1:0] u22_t_ready_o;
+  logic [1-1:0] u22_look_valid_o;
+  logic [3-1:0] u22_look_arena_o;
+  logic [8-1:0] u22_look_gen_o;
+  logic [12-1:0] u22_look_index_o;
+  logic [1-1:0] u22_af_release_o;
+  logic [1-1:0] u22_o_valid_o;
+  logic signed [21-1:0] u22_o_ax_o;
+  logic signed [21-1:0] u22_o_ay_o;
+  logic signed [21-1:0] u22_o_bx_o;
+  logic signed [21-1:0] u22_o_by_o;
+  logic signed [21-1:0] u22_o_cx_o;
+  logic signed [21-1:0] u22_o_cy_o;
+  logic [3-1:0] u22_o_behind_o;
+  logic [24-1:0] u22_o_invw_a_o;
+  logic [24-1:0] u22_o_invw_b_o;
+  logic [24-1:0] u22_o_invw_c_o;
+  logic [192-1:0] u22_o_attr_a_o;
+  logic [192-1:0] u22_o_attr_b_o;
+  logic [192-1:0] u22_o_attr_c_o;
+  logic [1-1:0] u22_o_view_o;
+  logic [16-1:0] u22_o_src_id_o;
+  logic [16-1:0] u22_o_material_o;
+  logic [32-1:0] u22_o_raster_o;
+  logic [32-1:0] u22_meshlets_o;
+  logic [32-1:0] u22_groups_o;
+  logic [32-1:0] u22_triangles_in_o;
+  logic [32-1:0] u22_triangles_out_o;
+  logic [32-1:0] u22_refused_o;
+  logic [32-1:0] u22_missed_o;
+  logic [32-1:0] u22_att_skew_o;
+  logic [32-1:0] u22_profile_mixed_o;
+  logic [32-1:0] u22_view_bad_o;
+  logic [32-1:0] u22_dq_refused_o;
+  zhao_geom_replay u22_i (
       .clk(clk),
       .rst_n(rst_n),
-      .cfg_we_i(u22_src[0 +: 1]),
-      .cfg_view_i(u22_src[7 +: 1]),
-      .cfg_addr_i(u22_src[14 +: 5]),
-      .cfg_data_i(u22_src[21 +: 32]),
-      .v_valid_i(u22_src[28 +: 1]),
-      .v_ready_o(u22_v_ready_o),
-      .vx_i(u22_src[35 +: 32]),
-      .vy_i(u22_src[42 +: 32]),
-      .vz_i(u22_src[49 +: 32]),
-      .view_i(u22_src[56 +: 1]),
-      .src_id_i(u22_src[63 +: 16]),
-      .out_valid_o(u22_out_valid_o),
-      .out_ready_i(u22_src[70 +: 1]),
-      .out_x_o(u22_out_x_o),
-      .out_y_o(u22_out_y_o),
-      .out_d_o(u22_out_d_o),
-      .out_w_o(u22_out_w_o),
-      .out_behind_o(u22_out_behind_o),
-      .out_src_id_o(u22_out_src_id_o),
-      .vertices_transformed_o(u22_vertices_transformed_o),
-      .mat_refused_o(u22_mat_refused_o),
-      .out_profile_o(u22_out_profile_o)
+      .mt_valid_i(u22_src[0 +: 1]),
+      .mt_ready_o(u22_mt_ready_o),
+      .mt_view_mask_i(u22_src[7 +: 2]),
+      .mt_vertex_count_i(u22_src[14 +: 8]),
+      .grp_valid_i(u22_src[21 +: 1]),
+      .grp_ready_o(u22_grp_ready_o),
+      .grp_arena_i(u22_src[28 +: 3]),
+      .grp_gen_i(u22_src[35 +: 8]),
+      .grp_view_i(u22_src[42 +: 1]),
+      .rel_valid_o(u22_rel_valid_o),
+      .rel_arena_o(u22_rel_arena_o),
+      .op_valid_i(u22_src[49 +: 1]),
+      .op_arena_i(u22_src[56 +: 3]),
+      .fl_valid_i(u22_src[63 +: 1]),
+      .fl_arena_i(u22_src[70 +: 3]),
+      .fl_profile_i(u22_src[77 +: 2]),
+      .t_valid_i(u22_src[84 +: 1]),
+      .t_ready_o(u22_t_ready_o),
+      .t_v0_i(u22_src[91 +: 16]),
+      .t_v1_i(u22_src[98 +: 16]),
+      .t_v2_i(u22_src[105 +: 16]),
+      .t_material_i(u22_src[112 +: 16]),
+      .t_raster_i(u22_src[119 +: 32]),
+      .t_src_id_i(u22_src[126 +: 16]),
+      .m_done_i(u22_src[133 +: 1]),
+      .look_valid_o(u22_look_valid_o),
+      .look_ready_i(u22_src[140 +: 1]),
+      .look_arena_o(u22_look_arena_o),
+      .look_gen_o(u22_look_gen_o),
+      .look_index_o(u22_look_index_o),
+      .rep_valid_i(u22_src[147 +: 1]),
+      .rep_hit_i(u22_src[154 +: 1]),
+      .rep_refuse_i(u22_src[161 +: 1]),
+      .rep_payload_i(u22_src[168 +: 106]),
+      .att_rep_valid_i(u22_src[175 +: 1]),
+      .att_rep_data_i(u22_src[182 +: 192]),
+      .af_release_o(u22_af_release_o),
+      .o_valid_o(u22_o_valid_o),
+      .o_ready_i(u22_src[189 +: 1]),
+      .o_ax_o(u22_o_ax_o),
+      .o_ay_o(u22_o_ay_o),
+      .o_bx_o(u22_o_bx_o),
+      .o_by_o(u22_o_by_o),
+      .o_cx_o(u22_o_cx_o),
+      .o_cy_o(u22_o_cy_o),
+      .o_behind_o(u22_o_behind_o),
+      .o_invw_a_o(u22_o_invw_a_o),
+      .o_invw_b_o(u22_o_invw_b_o),
+      .o_invw_c_o(u22_o_invw_c_o),
+      .o_attr_a_o(u22_o_attr_a_o),
+      .o_attr_b_o(u22_o_attr_b_o),
+      .o_attr_c_o(u22_o_attr_c_o),
+      .o_view_o(u22_o_view_o),
+      .o_src_id_o(u22_o_src_id_o),
+      .o_material_o(u22_o_material_o),
+      .o_raster_o(u22_o_raster_o),
+      .meshlets_o(u22_meshlets_o),
+      .groups_o(u22_groups_o),
+      .triangles_in_o(u22_triangles_in_o),
+      .triangles_out_o(u22_triangles_out_o),
+      .refused_o(u22_refused_o),
+      .missed_o(u22_missed_o),
+      .att_skew_o(u22_att_skew_o),
+      .profile_mixed_o(u22_profile_mixed_o),
+      .view_bad_o(u22_view_bad_o),
+      .dq_refused_o(u22_dq_refused_o)
   );
   logic u22_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u22_fold_q <= 1'b0;
-    else u22_fold_q <= u22_fold_q ^ (((^u22_v_ready_o)) & u22_src[0]) ^ (((^u22_out_valid_o)) & u22_src[1]) ^ (((^u22_out_x_o)) & u22_src[2]) ^ (((^u22_out_y_o)) & u22_src[3]) ^ (((^u22_out_d_o)) & u22_src[4]) ^ (((^u22_out_w_o)) & u22_src[5]) ^ (((^u22_out_behind_o)) & u22_src[6]) ^ (((^u22_out_src_id_o)) & u22_src[7]) ^ (((^u22_vertices_transformed_o)) & u22_src[8]) ^ (((^u22_mat_refused_o)) & u22_src[9]) ^ (((^u22_out_profile_o)) & u22_src[10]);
+    else u22_fold_q <= u22_fold_q ^ (((^u22_mt_ready_o)) & u22_src[0]) ^ (((^u22_grp_ready_o)) & u22_src[1]) ^ (((^u22_rel_valid_o)) & u22_src[2]) ^ (((^u22_rel_arena_o)) & u22_src[3]) ^ (((^u22_t_ready_o)) & u22_src[4]) ^ (((^u22_look_valid_o)) & u22_src[5]) ^ (((^u22_look_arena_o)) & u22_src[6]) ^ (((^u22_look_gen_o)) & u22_src[7]) ^ (((^u22_look_index_o)) & u22_src[8]) ^ (((^u22_af_release_o)) & u22_src[9]) ^ (((^u22_o_valid_o)) & u22_src[10]) ^ (((^u22_o_ax_o)) & u22_src[11]) ^ (((^u22_o_ay_o)) & u22_src[12]) ^ (((^u22_o_bx_o)) & u22_src[13]) ^ (((^u22_o_by_o)) & u22_src[14]) ^ (((^u22_o_cx_o)) & u22_src[15]) ^ (((^u22_o_cy_o)) & u22_src[16]) ^ (((^u22_o_behind_o)) & u22_src[17]) ^ (((^u22_o_invw_a_o)) & u22_src[18]) ^ (((^u22_o_invw_b_o)) & u22_src[19]) ^ (((^u22_o_invw_c_o)) & u22_src[20]) ^ (((^u22_o_attr_a_o)) & u22_src[21]) ^ (((^u22_o_attr_b_o)) & u22_src[22]) ^ (((^u22_o_attr_c_o)) & u22_src[23]) ^ (((^u22_o_view_o)) & u22_src[24]) ^ (((^u22_o_src_id_o)) & u22_src[25]) ^ (((^u22_o_material_o)) & u22_src[26]) ^ (((^u22_o_raster_o)) & u22_src[27]) ^ (((^u22_meshlets_o)) & u22_src[28]) ^ (((^u22_groups_o)) & u22_src[29]) ^ (((^u22_triangles_in_o)) & u22_src[30]) ^ (((^u22_triangles_out_o)) & u22_src[31]) ^ (((^u22_refused_o)) & u22_src[32]) ^ (((^u22_missed_o)) & u22_src[33]) ^ (((^u22_att_skew_o)) & u22_src[34]) ^ (((^u22_profile_mixed_o)) & u22_src[35]) ^ (((^u22_view_bad_o)) & u22_src[36]) ^ (((^u22_dq_refused_o)) & u22_src[37]);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u23_lfsr_q;

@@ -55,6 +55,14 @@ module zhao_geom_assetfetch
     input  var logic [7:0]        m_vertex_count_i,
     input  var logic [7:0]        m_triangle_count_i,
     input  var logic [SRCW-1:0]   m_src_id_i,
+    // CARRIED, NOT USED: the descriptor's per-camera visible mask and material
+    // id, captured WITH the counts and presented on `s_*` in the same
+    // handshake. GEOM.MESHFETCH's result register has moved on by the time this
+    // meshlet is servable (zhao_console_core entry I39), so a consumer that
+    // wants these must get them from HERE, beside the meshlet they describe --
+    // the same argument that puts `m_src_id_i` on this port.
+    input  var logic [1:0]        m_visible_mask_i,
+    input  var logic [15:0]       m_material_id_i,
     // The memory-client identity, an input for the same reason MESHFETCH takes
     // one: no block invents which client it is.
     input  var zhao_client_e      m_client_i,
@@ -72,6 +80,8 @@ module zhao_geom_assetfetch
     output var logic [7:0]        s_vertex_count_o,
     output var logic [7:0]        s_triangle_count_o,
     output var logic [SRCW-1:0]   s_src_id_o,
+    output var logic [1:0]        s_visible_mask_o,
+    output var logic [15:0]       s_material_id_o,
     // The consumer pulses this when it has finished walking the meshlet. It is
     // EXPLICIT rather than inferred from "all vertices streamed and the last
     // triplet asked for", because two consumers finish independently and a
@@ -180,6 +190,8 @@ module zhao_geom_assetfetch
   //
   // Captured at acceptance, beside the fields that already were.
   logic [SRCW-1:0] src_q;
+  logic [1:0]      vis_q;    // carried: see m_visible_mask_i
+  logic [15:0]     mat_q;    // carried: see m_material_id_i
   zhao_client_e    client_q;
 
   // Absolute LINE-ALIGNED bases, and the byte each stream starts at inside its
@@ -433,6 +445,8 @@ module zhao_geom_assetfetch
   assign s_vertex_count_o   = vcnt_q;
   assign s_triangle_count_o = tcnt_q;
   assign s_src_id_o         = src_q;
+  assign s_visible_mask_o   = vis_q;
+  assign s_material_id_o    = mat_q;
 
   // ------------------------------------------------------------- control ---
   always_ff @(posedge clk) begin
@@ -456,6 +470,8 @@ module zhao_geom_assetfetch
       vcnt_q    <= '0;
       tcnt_q    <= '0;
       src_q     <= '0;
+      vis_q     <= '0;
+      mat_q     <= '0;
       client_q  <= zhao_client_e'(0);
       ix_line0_q  <= '0;
       vx_line0_q  <= '0;
@@ -517,6 +533,8 @@ module zhao_geom_assetfetch
           vcnt_q <= m_vertex_count_i;
           tcnt_q <= m_triangle_count_i;
           src_q  <= m_src_id_i;
+          vis_q  <= m_visible_mask_i;
+          mat_q  <= m_material_id_i;
           client_q <= m_client_i;
 
           if (refuse_c) begin

@@ -109,7 +109,10 @@ top:
   # DEPTHQUANT is R6, w to canonical invw24 under the selected depth profile;
   # twelve RTL files consume invw24 and nothing produced it.
   - zhao_geom_assemble
-  - zhao_geom_depthquant
+  # GEOM.REPLAY (geom packet, 2026-09-19): the replay customer. It CONTAINS
+  # GEOM.DEPTHQUANT -- three lanes -- and a private zhao_raster_rcp24_v4, so
+  # depthquant is counted INSIDE it now rather than as a top of its own.
+  - zhao_geom_replay
   # Both built 2026-09-04. MESHFETCH is position 1 of the composition order --
   # the geometry front end's entry point, which nothing downstream could be fed
   # by until it existed. It cannot pass MEM.GUARD yet and that is a PHASE

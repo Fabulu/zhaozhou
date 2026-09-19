@@ -43,6 +43,15 @@ struct Tri {
   int last;
 };
 
+// `m_done_o` bookkeeping for the LAST run(): how many pulses, and whether any
+// triangle was emitted after one. Every accepted meshlet must end in exactly
+// one pulse, and nothing may follow it -- the replay releases the meshlet's
+// buffer on that pulse.
+int g_last_dones = 0;
+bool g_emit_after_done = false;
+int g_runs_with_one_done = 0;
+int g_runs = 0;
+
 // Drive one meshlet through, answering the index port from `idx`.
 std::vector<Tri> run(Vzhao_geom_assemble& t, const std::vector<uint8_t>& idx, unsigned voff,
                      unsigned vcount, unsigned tcount, bool stall) {
@@ -59,6 +68,8 @@ std::vector<Tri> run(Vzhao_geom_assemble& t, const std::vector<uint8_t>& idx, un
   t.eval();
   zhao::tick(t);
   t.m_valid_i = 0;
+  g_last_dones = t.m_done_o ? 1 : 0;
+  g_emit_after_done = false;
 
   uint32_t g = 0x51u;
   for (int c = 0; c < 8000; ++c) {
@@ -79,13 +90,22 @@ std::vector<Tri> run(Vzhao_geom_assemble& t, const std::vector<uint8_t>& idx, un
     t.eval();
 
     if (t.t_valid_o && t.t_ready_i) {
+      if (g_last_dones != 0) g_emit_after_done = true;
       out.push_back({{static_cast<unsigned>(t.t_v0_o), static_cast<unsigned>(t.t_v1_o),
                       static_cast<unsigned>(t.t_v2_o)},
                      static_cast<int>(t.t_last_o)});
     }
     zhao::tick(t);
+    if (t.m_done_o) ++g_last_dones;
     if (!t.ix_req_o && !t.t_valid_o && !out.empty()) break;
   }
+  // Drain long enough for a pulse that follows the last emission to land.
+  for (int c = 0; c < 4; ++c) {
+    zhao::tick(t);
+    if (t.m_done_o) ++g_last_dones;
+  }
+  ++g_runs;
+  if (g_last_dones == 1 && !g_emit_after_done) ++g_runs_with_one_done;
   t.ix_valid_i = 0;
   t.t_ready_i = 1;
   return out;
@@ -247,6 +267,30 @@ int main(int argc, char** argv) {
                 "an empty mesh look like a corrupt one",
                 0, static_cast<int>(top.refused_limits_o - before));
   }
+
+  // ---- 7: the LAST triplet refused still ends the walk -------------------
+  // `t_last_o` rides an emitted triangle, so when the final triplet is refused
+  // no triangle carries it. `m_done_o` is the only thing that says the walk is
+  // over, and the replay waits on it to release the meshlet.
+  {
+    const unsigned vcount = 8, tcount = 3;
+    std::vector<uint8_t> idx = make_indices(tcount, vcount);
+    idx[8] = static_cast<uint8_t>(vcount);  // triplet 2, the last, refused
+    const auto out = run(top, idx, 0, vcount, tcount, false);
+    int lasts = 0;
+    for (const auto& tr : out) lasts += tr.last;
+    zhao::check(out.size() == tcount - 1 && lasts == 0 && g_last_dones == 1,
+                "a refused LAST triplet emits no `t_last_o` and STILL ends the "
+                "walk with exactly one `m_done_o`",
+                1, (out.size() == tcount - 1 && lasts == 0) ? g_last_dones : -1);
+  }
+
+  // ---- 8: every run above ended in exactly ONE pulse, after its last emission
+  zhao::check(g_runs_with_one_done == g_runs,
+              "every accepted meshlet -- walked, stalled, refused whole, "
+              "refused at its last triplet, or empty -- ends in exactly one "
+              "`m_done_o`, and no triangle follows it",
+              g_runs, g_runs_with_one_done);
 
   std::printf("  %u meshlets, %u triangles, %u limit-refused, %u index-refused\n", top.meshlets_o,
               top.triangles_o, top.refused_limits_o, top.refused_index_o);

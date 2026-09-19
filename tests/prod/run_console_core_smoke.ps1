@@ -100,30 +100,25 @@
 # switch: considered=1 fetched=1 culled=0, all seven refusals 0, beats=24,
 # decoded=4. Both halves are required before the zeros may be quoted.
 # ---------------------------------------------------------------------------
-# -BadAttribute: THE POSITIVE CONTROL FOR THE PACKET-D ATTRIBUTE CARRIAGE
+# -BadAttribute: THE POSITIVE CONTROL FOR THE VERTEX-ATTRIBUTE STORE SEAM
 # ---------------------------------------------------------------------------
-# Added 2026-09-19 with GEOM.ATTRPACK, the composition that closed the first
-# three of core header entry I20's six ports. Those three planes used to be
-# boundary inputs this bench drove to zero, and zero planes interpolate to zero
-# WITHOUT setting any error -- which is exactly why the gap survived so long.
-# The same property makes the new wiring dangerous to trust: a producer that
-# emitted rubbish, or one whose planes never reached the rasteriser at all,
-# would produce exactly the 1,536 pixels the old zeros did.
+# RETARGETED 2026-09-19 (geom packet), and the old target is written down so
+# nobody reaches for it again. It used to change vertex A's invw24 at the
+# bench's triangle door to 0x7F000000 so `zhao_raster_tile_pipe_v2`'s range
+# refusal sank every job. THE DOOR IS GONE: invw24 now comes from
+# GEOM.DEPTHQUANT inside GEOM.REPLAY, which cannot leave 24 bits by its own
+# law, so no bench stimulus can put an out-of-range value on lane 0 any more.
 #
-# With -BadAttribute ONE NUMBER changes -- vertex A's invw24 in the ruling-5
-# attribute packet, from 0x00C00000 to 0x7F000000, through
-# `+define+ZHAO_SMOKE_BAD_ATTR` (a plain `ifdef`). Nothing else moves: same
-# triangles, same closure, same stimulus. Its interpolant sets bits above 24,
-# which is `zhao_raster_tile_pipe_v2`'s `incoming_range_bad_c`, so the pipe
-# raises `range_fault_event_w`, latches its abort and SINKS every job.
-#
-# That is worth more than a refusal check, and it is why this switch was chosen
-# over asserting the plane words in the bench: if GEOM.ATTRPACK's planes were
-# not really what the attribute lanes interpolate, changing a vertex attribute
-# could not change the outcome. Its polarity is INVERTED: the control passes
-# when the run FAILS.
-#
-[CmdletBinding()]
+# What the switch proves now is the NEW seam that composition opened: the
+# vertex-attribute store (core entry I46, owner ruling R11) must answer on the
+# same clock as the arena, or slots 1..6 belong to a different lookup than
+# the corner they ride with. With -BadAttribute the bench's store model answers
+# the FIRST lookup of the run ONE CLOCK LATE (`+define+ZHAO_SMOKE_BAD_ATTR`, a
+# plain `ifdef`). GEOM.REPLAY's `att_skew_o` compares two memories' timings --
+# independent operands -- and the bench asserts it zero. MEASURED 2026-09-19:
+# att_skew=1 and the run stops there. Its polarity is INVERTED: the control
+# passes when the run FAILS.
+#[CmdletBinding()]
 param(
   [string]$Repo    = $null,
   [string]$BuildIn = $null,
@@ -211,7 +206,7 @@ if ($NoTableLoad) {
 }
 if ($BadAttribute) {
   $defs += '+define+ZHAO_SMOKE_BAD_ATTR'
-  Write-Host 'POSITIVE CONTROL: vertex A''s invw24 is out of 24 bits, INVERTED POLARITY (passes when the run FAILS)'
+  Write-Host 'POSITIVE CONTROL: the attribute store answers one lookup ONE CLOCK LATE, INVERTED POLARITY (passes when the run FAILS)'
 }
 if ($BadDescriptor) {
   $defs += '+define+ZHAO_SMOKE_BAD_DESC'
@@ -225,7 +220,9 @@ if (-not $SkipVerilate) {
   # flags produce exactly the same sources, main and unit list and stop there.
   Write-Host 'verilating'
   $ErrorActionPreference = 'Continue'
-  & $vl --cc --exe --main --timing --timescale 1ns/1ps -Wno-fatal @defs `
+  # -I tests/prod: the bench `include`s smoke_geom_fixture.svh, the generated
+  # geometry fixture (tests/prod/smoke_geom_fixture_gen.cpp).
+  & $vl --cc --exe --main --timing --timescale 1ns/1ps -Wno-fatal @defs "-I$repoFwd/tests/prod" `
         --Mdir ($bd.Replace('\', '/')) --top-module $top --prefix "V$top" @srcs 2>&1 |
     Select-String '%Error' | ForEach-Object { Write-Host $_ }
   $vlrc = $LASTEXITCODE
@@ -317,10 +314,10 @@ if ($BadAttribute) {
   # changing a vertex attribute changed nothing. Everything the
   # composition claims about the picture rests on this one.
   if ($rc -eq 0) {
-    Write-Host 'POSITIVE CONTROL FAILED: the run PASSED with an out-of-range invw24 at vertex A. Either the tile pipe''s range refusal cannot fire or GEOM.ATTRPACK''s planes are not what it interpolates.'
+    Write-Host 'POSITIVE CONTROL FAILED: the run PASSED with the attribute store out of step with the arena. GEOM.REPLAY''s att_skew_o cannot fire, or the bench no longer asserts it.'
     exit 1
   }
-  Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one out-of-range vertex attribute, as it must."
+  Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one late attribute-store reply, as it must."
   exit 0
 }
 exit $rc
