@@ -186,6 +186,24 @@ module zhao_geom_pose_palette #(
     input  logic        [15:0]       v_bone0_i,
     input  logic        [15:0]       v_bone1_i,
     input  logic [SRCW-1:0]          v_src_id_i,
+    // The PACKED BIND-SPACE NORMAL, carried through beside the vertex and
+    // NOT interpreted here. Added 2026-09-19 for GEOM.SKIN.NORM, which needs
+    // {normal, w0} AND the same two bone matrices the vertex was skinned
+    // with. Before this the normal was valid at `zhao_geom_vdecode`'s output
+    // and the matrices at this block's, several clocks and one lookup apart,
+    // for what may not even be the same vertex -- joining them outside would
+    // have been a composer pairing two things that move independently, and
+    // the result is a normal skinned by another vertex's bones, which is a
+    // lit vertex no output check can distinguish from a correct one.
+    //
+    // It is captured by THE SAME ENABLE, in THE SAME cycle, as `v_bone0_i`
+    // and `v_bone1_i` (R_IDLE below), so the normal and the two matrices
+    // that answer for it cannot come apart -- and it is held through R_HOLD
+    // with the rest of the record, under the same law the R_HOLD comment
+    // states. This block performs NO arithmetic on it.
+    input  logic signed [ 7:0]       v_nx_i,
+    input  logic signed [ 7:0]       v_ny_i,
+    input  logic signed [ 7:0]       v_nz_i,
 
     // ---- vertex + its two matrices out: `zhao_geom_skin`'s vertex input ----
     output logic                     o_valid_o,
@@ -196,6 +214,12 @@ module zhao_geom_pose_palette #(
     output logic        [ 6:0]       o_w0_o,
     output logic                     o_rigid_o,
     output logic [SRCW-1:0]          o_src_id_o,
+    // The same packed normal, beside the matrices that answer for it.
+    // `zhao_geom_skin` does not take it and does not have to: it is a payload
+    // this block carries, exactly as `o_rigid_o` is.
+    output logic signed [ 7:0]       o_nx_o,
+    output logic signed [ 7:0]       o_ny_o,
+    output logic signed [ 7:0]       o_nz_o,
     output logic signed [31:0]       a_m_o [12],
     output logic signed [31:0]       b_m_o [12],
 
@@ -371,6 +395,9 @@ module zhao_geom_pose_palette #(
       o_w0_o            <= '0;
       o_rigid_o         <= 1'b0;
       o_src_id_o        <= '0;
+      o_nx_o            <= '0;
+      o_ny_o            <= '0;
+      o_nz_o            <= '0;
       vertices_served_o <= '0;
       bones_written_o   <= '0;
       bone_oob_o        <= '0;
@@ -408,6 +435,11 @@ module zhao_geom_pose_palette #(
             o_w0_o     <= v_w0_i;
             o_rigid_o  <= v_rigid_i;
             o_src_id_o <= v_src_id_i;
+            // Same enable, same cycle as the bone indices below. That is the
+            // whole guarantee the port comment claims.
+            o_nx_o     <= v_nx_i;
+            o_ny_o     <= v_ny_i;
+            o_nz_o     <= v_nz_i;
 
             b0_q    <= b0_eff_c;
             b1_q    <= b1_eff_c;

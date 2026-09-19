@@ -2572,17 +2572,33 @@ targets:
       # NOT ADDED, and the reasons are in the core's header rather than here:
       # zhao_geom_project (carries a PRIVATE zhao_project_core and would put a
       # second projector beside the shared one this row exists to measure),
-      # zhao_geom_light and zhao_geom_skin_norm (the lighting seam is excluded
-      # on purpose), zhao_geom_pose_decode (no palette store exists to join it
+      # zhao_geom_light (SUPERSEDED by zhao_light_stream -- see core entry I44),
+      # zhao_geom_pose_decode (no palette store exists to join it
       # to GEOM.SKIN), zhao_geom_meshfetch / assetfetch / assemble (their beats
       # return from inside the shell and no behavioural SDRAM exists in the
       # tree, so they would elaborate and never see one), zhao_geom_parambuf
       # (nothing composed produces the byte blobs it decodes) and
       # zhao_geom_depthquant (zhao_raster_rcp24_svc answers out of order with a
       # token and the block's reciprocal port has neither).
+      #
+      # THREE OF THOSE SENTENCES HAVE EXPIRED and the row no longer repeats
+      # them. zhao_geom_pose_decode IS added below with the palette store it
+      # needed; the meshfetch/assetfetch/assemble sentence was refuted by
+      # `sim/models/zhao_sdram_model.sv` and they are composed; and
+      # zhao_geom_skin_norm has left this list entirely -- see the row below.
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
+      # Added 2026-09-19, packet P-GEOMFORGE. GEOM.SKIN.NORM, composed on the
+      # SAME handshake as GEOM.SKIN through an AND-fork on GEOM.POSE's palette
+      # store -- which now carries the packed normal through beside the vertex,
+      # the one RTL change the lighting seam's own note asked for. Its root is
+      # `zhao_field_isqrt`, already in this closure for the FIELD engine, so a
+      # second INSTANCE joins the fit and no second law and no new file does.
+      # Its output leaves the core as a port (entry I43): GEOM.LIGHT is refused
+      # on its own grounds and a normal written nowhere cannot be told from a
+      # normal written wrongly.
+      - fpga/rtl/geometry/zhao_geom_skin_norm.sv
       # Added 2026-09-19, packet TEX2. GEOM.ATTRPACK is the OTHER consumer of
       # the same GEOM.CLIP packet: the vertices go to GEOM.SETUP and become
       # edge functions, the ruling-5 attribute packet comes here and becomes

@@ -286,6 +286,30 @@ module tb_zhao_console_core_smoke
   logic [15:0]             geom_skin_src_id_o;
   logic [31:0]             geom_skin_vertices_transformed_o;
 
+  // ---- GEOM.SKIN.NORM, composed 2026-09-19 (core entry I43) ----------------
+  // `geom_sn_n_ready_i` is driven HIGH below and that is a real decision, not a
+  // convenience: the block emits into a boundary and a bench that held the
+  // consumer's ready low would stall the AND-fork on GEOM.POSE's palette store
+  // and throttle GEOM.SKIN with it, which would make every skinned-vertex count
+  // in this file a measurement of the bench's own backpressure.
+  logic                    geom_sn_n_valid_o;
+  logic                    geom_sn_n_ready_i;
+  logic signed [63:0]      geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o;
+  logic [63:0]             geom_sn_n_mag_o;
+  logic                    geom_sn_n_degenerate_o;
+  logic [15:0]             geom_sn_n_src_id_o;
+  logic [31:0]             geom_sn_vertices_o;
+  logic [31:0]             geom_sn_degenerate_o;
+  logic [31:0]             geom_sn_reduced_o;
+  logic [31:0]             geom_sn_fork_stall_o;
+
+  // The hand-computed world normal the fixture must produce. A NAMED constant
+  // rather than a literal in the check, because it is derived from
+  // `vdec_record`'s normal byte and w0 and must move if either does: it is
+  // w0 * ONE_FX16 * nx = 64 * 65536 * 127. The derivation is written out at
+  // the assertion.
+  localparam logic signed [63:0] SN_EXPECT_NX = 64'sd532676608;
+
   // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // GEOM.SKIN's two matrix arrays USED TO BE HERE and the bench drove them with
   // an identity. They are gone because zhao_geom_pose_palette is composed in
@@ -2472,6 +2496,11 @@ module tb_zhao_console_core_smoke
     // says why: the draw drain is the LAST phase of CMD.EXEC's commit, so a
     // low ready parks the executor and stops the command path outright.
     cmd_draw_ready_i = 1'b1;
+
+    // GEOM.SKIN.NORM's world normal (core entry I43). HIGH, for the reason at
+    // its declaration: this consumer sits on the far side of an AND-fork that
+    // GEOM.SKIN is on too, so a low ready here is backpressure on the SKINNER.
+    geom_sn_n_ready_i = 1'b1;
     // One world unit of base radius, fx16. A VALUE, not a law: no species
     // radius table exists anywhere in the tree and the reference says that is
     // properly the owner's, so this bench picks one so that the projected size
@@ -3198,6 +3227,9 @@ module tb_zhao_console_core_smoke
              geom_pal_vertices_served_o, geom_pal_bones_written_o,
              geom_pal_bone_unset_o, geom_pal_bone_oob_o,
              geom_pose_palettes_decoded_o);
+    $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
+             geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
+             geom_sn_fork_stall_o);
     $display("SMOKE: tri door   offered=%0d clip_submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d",
              geom_tris_sent_q, geom_clip_submitted_o, geom_clip_clipped_o,
              geom_clip_culled_o, geom_setup_triangles_submitted_o);
@@ -3743,6 +3775,63 @@ module tb_zhao_console_core_smoke
     if (geom_pal_bone_oob_o != 0)
       $fatal(1, "SMOKE: the pose palette saw %0d out-of-range bone indices -- every record this bench builds names bone 0",
              geom_pal_bone_oob_o);
+
+    // ---- GEOM.SKIN.NORM, the OTHER branch of the palette store's fork -------
+    // (core entry I43.) The fork is an AND, so the normal path and the position
+    // path accept the SAME beat on the SAME clock. That is the whole claim this
+    // check exists to test, and it is testable precisely because the two blocks
+    // count independently: `geom_sn_vertices_o` is GEOM.SKIN.NORM's own accept
+    // counter and `geom_skin_vertices_transformed_o` is GEOM.SKIN's completion
+    // counter, and NO single register enable drives both. A fork that let one
+    // branch drop a beat separates them.
+    if (geom_sn_vertices_o != geom_vd_vertices_o)
+      $fatal(1, "SMOKE: GEOM.SKIN.NORM accepted %0d of the palette store's %0d vertices -- the normal branch of the fork is not carrying the traffic the position branch is",
+             geom_sn_vertices_o, geom_vd_vertices_o);
+
+    // AND THE WHOLE RESULT IS COMPUTABLE BY HAND, so this is a DIFFERENTIAL and
+    // not an "it moved" check. Every term is a fixture constant:
+    //
+    //   `vdec_record` packs the normal (nx, ny, nz) = (127, 0, 0) and w0 = 64,
+    //   which is the RIGID case (w1 = 64 - w0 = 0, so bone B contributes
+    //   nothing). No pose is decoded (entry I29), so the palette substitutes
+    //   the IDENTITY for both bones, whose row 0 is [ONE_FX16, 0, 0, 0] with
+    //   ONE_FX16 = 65536. So, following `zhao_geom_skin_norm`'s own law:
+    //
+    //     A_row0 . N = 65536 * 127            = 8,323,072
+    //     n[0] = w0 * (A_row0 . N) = 64 * that = 532,676,608 = 2^22 * 127
+    //     n[1] = n[2] = 0                       (rows 1 and 2 select ny, nz)
+    //     |n|  = isqrt(n[0]^2) = n[0]           (a perfect square, floor-exact)
+    //
+    // That last line is the one worth having: the magnitude EQUALLING the x
+    // component is what an exact floor root of a perfect square gives and what
+    // an approximation would not, so this single equality is the evidence that
+    // the `zhao_field_isqrt` instance composed beside this block really ran.
+    if (geom_sn_degenerate_o != 0)
+      $fatal(1, "SMOKE: GEOM.SKIN.NORM called %0d normals degenerate -- the fixture's packed normal is (127,0,0) and blends to a real direction through either bone",
+             geom_sn_degenerate_o);
+    if (geom_sn_n_x_o != SN_EXPECT_NX)
+      $fatal(1, "SMOKE: GEOM.SKIN.NORM's world normal x is %0d, expected %0d (64 * 65536 * 127) -- the two-bone blend or the identity substitution is wrong",
+             geom_sn_n_x_o, SN_EXPECT_NX);
+    if ((geom_sn_n_y_o != 0) || (geom_sn_n_z_o != 0))
+      $fatal(1, "SMOKE: GEOM.SKIN.NORM's world normal is (%0d, %0d, %0d) -- rows 1 and 2 select ny and nz, both zero in the fixture, so a nonzero lane means the row indexing is wrong",
+             geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o);
+    if (geom_sn_n_mag_o != 64'(SN_EXPECT_NX))
+      $fatal(1, "SMOKE: GEOM.SKIN.NORM's magnitude is %0d, expected %0d -- isqrt of a perfect square must return it exactly, so this is the root service failing to answer or answering approximately",
+             geom_sn_n_mag_o, SN_EXPECT_NX);
+
+    // `geom_sn_reduced_o` READS ZERO AND THE REASON IS STRUCTURAL, not untested.
+    // The range reduction fires when max|n| >= 2^30, and the value computed
+    // above is 532,676,608 against 1,073,741,824 -- just under half. It cannot
+    // be reached from this bench at all while entry I29 is open, because a
+    // palette NOTHING FILLS substitutes the identity for every bone, so the
+    // blend is always 2^22 times a signed byte and is bounded by 2^22 * 128 =
+    // 536,870,912 whatever the record carries. The counter's positive control
+    // is `tests/geometry/skin_norm_rtl_directed.cpp`, which drives the block
+    // directly with real matrices large enough to trip it. Asserted zero here
+    // WITH that reason, rather than quietly not looked at.
+    if (geom_sn_reduced_o != 0)
+      $fatal(1, "SMOKE: GEOM.SKIN.NORM range-reduced %0d vertices -- with identity bones the blend is bounded by 2^29 and cannot reach the 2^30 threshold",
+             geom_sn_reduced_o);
 
     // GEOM.CLIP -> GEOM.SETUP -> the shell's triangle door (the far end of I13).
     // Every triangle offered is front-facing and wholly inside the canvas, so

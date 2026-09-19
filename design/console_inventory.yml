@@ -117,8 +117,25 @@ modules:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_geom_light:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+    disposition: superseded
+    superseded_by: zhao_light_stream
+    why: "SUPERSEDED BY RENAME, which is a third shape this tree now has and no tool
+      looks for. zhao_light_stream.sv's own header opens 'THIS REPLACES THE OWNER, IT
+      DOES NOT ADD A SECOND LAW' and prices what it replaces: zhao_geom_light is 'the
+      scalar arrangement: one zhao_terrain_shade turn per light term, MEASURED at
+      II = 167.0 clocks, which is 48.1x over the frame for the ruled 120,000-vertex /
+      480,000-term stress profile.' Owner ruling 2026-09-19 -- only the latest version
+      gets composed or fitted -- so composing this one would fit a machine nobody
+      ships. completion_register.superseded_in_closure() CANNOT catch it: it matches a
+      version SUFFIX (_v2) or INFIX (_v3_), and this supersedes by a different NAME. The
+      capability GEOM.LIGHT still resolves to this module in the register, so
+      'connected' remains satisfiable by wiring the superseded block and the instrument
+      would say fine -- exactly the FIELD.SEQ.CORE -> zhao_field_v2_core defect CLAUDE.md
+      records. This entry is where the ruling is held until a tool can hold it.
+      NOT ruled here, and left open deliberately: neither block is composable yet,
+      because the descriptor bank has no producer for reasons of ownership and format
+      rather than wiring -- zhao_console_core.sv's lighting section carries that
+      argument in full."
   zhao_geom_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
@@ -132,9 +149,6 @@ modules:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_geom_project:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_geom_skin_norm:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_light_div32_ii2:

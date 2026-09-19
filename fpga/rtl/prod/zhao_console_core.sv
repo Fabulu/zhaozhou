@@ -455,6 +455,244 @@
 //    every other, so the stray note changes nothing today. Named so the next
 //    reader knows it was looked at rather than missed.
 //
+// ---------------------------------------------------------------------------
+// THE TERRAIN CLUSTER, SWEPT 2026-09-19 -- what was composed and what was not
+// ---------------------------------------------------------------------------
+// MOVED HERE BY THE SECOND SWEEP, AND THE MOVE IS THIS HEADER'S OWN RULE
+// RATHER THAN TIDINESS. This section is a RECORD of capabilities looked at and
+// refused; it is not itself a gap. `tools/budget/completion_register.py`
+// attaches every comment line to the PRECEDING `// I<n>.` entry until the next
+// one, so while these eighty lines sat between two entries they were read as
+// one entry's BODY -- the exact misreading the placement note above records for
+// I3 and for I4. Prose before the first entry is attached to nothing, which is
+// what a record should be. The KIND never changed (the entry it landed on was
+// BOUNDARY and so is every sentence here), so no total was ever wrong; only the
+// entry's text was somebody else's.
+//
+// Twelve terrain capabilities were in the completion register's
+// built-but-not-connected list. TWO were composed earlier on 2026-09-19
+// (MIPFEED and MIPGEN, connected item 12). The other ten were each read against
+// what this module can actually offer them, and the refusals are here rather
+// than nowhere, because "it was looked at" and "it was missed" are
+// indistinguishable from an empty list.
+//
+// RE-SWEPT LATER THE SAME DAY, and this is the second reading. ALL TEN
+// REFUSALS STILL STAND -- nothing is withdrawn and nothing new is composed --
+// but five of them were resting on a cause that had expired, that was never the
+// strongest one available, or that named an absent owner which is not absent.
+// Those corrections are written INTO the paragraphs below rather than appended,
+// each with the search that found it named, because a refusal that says
+// something does not exist has to say where it looked. The ALM this sweep
+// avoided is the ALM it avoided the first time, and it is quoted again below
+// only where the second reading changed the argument for it.
+//
+//   TERRAIN.PROJECT -- REFUSED, AND IT IS A SAVING RATHER THAN A GAP. It is a
+//   SECOND PROJECTOR. `design/blocks.yml` declares `zref::render::project_vertex`
+//   as the reference model of BOTH GEOM.PROJECT and TERRAIN.PROJECT, which is
+//   the duplication `tools/budget/uncashed_cheques.py` check 3 exists to find,
+//   and the block ledger prices it: 6,068 ALM and 33 DSP. Terrain already
+//   reaches the SHARED `zhao_proj_subsystem` on CLIENT B, through
+//   TERRAIN.GROUP_SEQ, and entry I13 records that seam as closed. So composing
+//   this block would spend 6,068 ALM and 33 DSP to compute a second time what
+//   the machine already computes -- and would undo the deduplication campaign
+//   that `zhao_project_core` exists because of. It is SUPERSEDED, not pending,
+//   and the block's own header says so in as many words: "THE PROJECTOR IS NO
+//   LONGER IN THIS FILE ... the law lives once, in
+//   `fpga/rtl/common/zhao_project_core.sv`" (`zhao_terrain_project.sv` 19-29).
+//
+//   AND IT STAYS IN THE REGISTER'S DISCONNECTED LIST ON PURPOSE, which is the
+//   second reading's one addition here. The obvious tidy-up is a
+//   `completion_register._ALIAS` entry pointing TERRAIN.PROJECT at the shared
+//   subsystem, exactly as the TEXTURE cluster and TERRAIN.RESIDENCY were
+//   hand-resolved. It was NOT taken, and the reason is two lines of
+//   `design/prod_manifest.yml` (588 and 921): the selected census "still counts
+//   `zhao_geom_project` and `zhao_terrain_project` separately, and changing that
+//   is one deliberate edit AFTER THE COMPOSED FIT CLOSES". Retiring the row now
+//   would make the gap count smaller ahead of the ruling that is supposed to
+//   make it smaller -- a free reduction in the flattering direction, taken by a
+//   packet that is not the one holding the fit. Over-reporting one gap is the
+//   safe side of that, and this paragraph is why it is over-reported.
+//
+//   TERRAIN.NORMALS and TERRAIN.SHADE -- REFUSED TOGETHER, on a path that
+//   cannot be entered. They are a genuine pair: NORMALS takes a world triangle
+//   (`ax..cz` plus `src_id`) and emits an unnormalised face normal with a
+//   degenerate bit; SHADE takes exactly those fields, and its own header says
+//   so ("UN-normalised -- exactly what `zhao_terrain_normals` emits"). And
+//   NORMALS' input is exactly `zhao_terrain_tess`'s `tri_*` port, field for
+//   field -- which is why this looks composable and is not.
+//
+//   THE TESSELLATOR'S TRIANGLE PORT IS NEVER PRESENTED IN THIS COMPOSITION.
+//   `zhao_terrain_tess` expands a job into ModeTri (0), ModeVtx (1) or ModeRef
+//   (2), and `zhao_terrain_group_seq` declares only `ModeVtx = 2'd1` and
+//   `ModeRef = 2'd2` -- there is no mode-0 localparam in that file and no arm
+//   that could drive one (`mode_q` is written at three sites, 449, 532 and 563,
+//   and none of them writes 0). So `tri_valid_o` cannot fire while the
+//   sequencer owns the job port, and composing NORMALS onto it would add
+//   ~789 ALM (plus SHADE) for a path nothing can enter.
+//
+//   THE SECOND READING MOVED THE BAR, AND IT MOVED IT UP. This entry used to
+//   say the missing piece is "a SECOND PRESENTATION from TERRAIN.GROUP_SEQ,
+//   which is an RTL change to a block with its own differential". True, and not
+//   the binding constraint. SEARCHED -- `reports/TERRAIN-PIPELINE-COMPOSITION-
+//   20260910.md` 1 and `zhao_terrain_pipe.sv` 27-34, which is the composition
+//   that already holds tess and sequencer together -- and the three options are
+//   PRICED there, with none adopted:
+//     * a third ModeTri pass: "+456 clocks per level-0 job -- DOES NOT FIT THE
+//       TWO-VIEW SCHEDULE". So it is a throughput ruling, not an afternoon;
+//     * a world-vertex arena beside the projected one: "a second 4x81 shell at
+//       96 bits", which is ALM on a budget already over;
+//     * a per-cell normal produced upstream, which is a block nobody has
+//       specified.
+//   `zhao_terrain_pipe.sv` ties the same port off for the same reason and says
+//   so at its line 241, so this module is the SECOND composition to refuse it,
+//   not the first. Worth knowing for whoever takes the ruling:
+//   `zhao_terrain_tess.sv` 314 DOES declare `ModeTri = 2'd0` -- the mode exists
+//   in the tessellator and is exercised by four drivers
+//   (`fpga/rtl/synth/zhao_pair_tess_normals.sv` 113,
+//   `tests/terrain/tb_terrain_compose.sv` 556, `tests/terrain/tess_harness.hpp`
+//   55, and the invalid-mode case of `terrain_tess_modes_directed.cpp`). Only
+//   the SEQUENCER lacks the arm.
+//
+//   AND TERRAIN.SHADE HAS A SECOND CLIENT THE FIRST SWEEP DID NOT NAME, which
+//   matters because it means SHADE does not depend on the terrain ruling above
+//   at all: `fpga/rtl/geometry/zhao_geom_light.sv` 422 INSTANTIATES it as
+//   `u_shade`, deliberately -- "GEOM.LIGHT's vertex-RGB block INSTANTIATES this
+//   module; building a second engine for the other normal producers is the
+//   mistake both contracts now forbid" (`zhao_terrain_shade.sv` 9-11). So SHADE
+//   reaches the machine through whichever of the two arrives first, and
+//   GEOM.LIGHT is itself blocked on a different question again: an owner ruling
+//   between it and `zhao_light_stream`, with `design/prod_manifest.yml` 950
+//   recording GEOM.LIGHT MEASURED at 48.1x the frame for the ruled 120,000-
+//   vertex profile. Refusing SHADE here does not decide that, and this
+//   paragraph exists so the next reader does not think it did.
+//   SHADE's `sun_*` would be a boundary besides -- three lanes with no producer
+//   anywhere in `fpga/rtl`, whose ratified values (`zref::terrain::kShadeLight*`
+//   = 26758 / 53521 / 26758) are constants a DRIVER writes.
+//
+//   (The block ledger's 18-DSP row for `zhao_terrain_normals` is DIRTY --
+//   `rtlCleanAtHead: false`, dated before the 2026-08-24 change that took it
+//   from six multipliers to one -- so that number reads HIGH and should not be
+//   quoted as the cost. Named here so the next reader does not re-derive it.)
+//
+//   TERRAIN.VISIBLE and TERRAIN.ISLAND_DIR -- REFUSED as one, because VISIBLE
+//   INSTANTIATES the directory (`u_dir` at its line 334) and composing one
+//   composes both. It is refused because it would be a CENSUS INSTANCE and not
+//   a connection: all three of its input groups and its only output group would
+//   be boundaries.
+//
+//   THE SECOND READING SHARPENED BOTH HALVES OF THAT, and both corrections make
+//   the refusal harder rather than softer.
+//
+//     * THE HANDLE IS NOT MERELY UNRECONCILED, IT IS THE WRONG WIDTH. The first
+//       sweep said adopting it "would need an adapter that invents a handle
+//       encoding". SEARCHED for an encoding it could use instead --
+//       `design/contracts/TERRAIN.RESIDENCY.md` 47,
+//       `reports/OWNER-RULINGS-BUILDABILITY-20260902.md` 712 (which is ruling
+//       T10 itself), `zhao_terrain_residency_v2.sv` 35 and
+//       `reports/digests/LANE2-TERRAIN-8KM.md` 60 -- and all four give the SAME
+//       handle: `{resource_epoch:u32, slot:u10, generation:u8}`. That is FIFTY
+//       BITS. `zhao_terrain_island_dir`'s `res_ans_handle_i` is THIRTY-TWO, and
+//       the block never offers an epoch or an island id to be keyed on. So the
+//       two do not merely disagree about a packing; the narrower port cannot
+//       carry the ratified value at all, and `zref_island.hpp` 81-84 and 128
+//       confirm why -- its `uint32_t page_handle` is an OPAQUE token the CALLER
+//       supplies and the directory only stores. Closing this is a contract
+//       amendment about what an island handle is, not a wiring job.
+//     * THE VIEW'S OWNER IS NOT ABSENT -- IT IS SOFTWARE, BY RULING. The first
+//       sweep said "the view is a camera in patch coordinates and no block here
+//       produces one", which is true of `fpga/rtl` and misses the reason.
+//       `design/contracts/SW.STREAM.md` 77 gives `zref::island::visible_set` to
+//       the software streamer "for both the streamer and TERRAIN.VISIBLE", and
+//       ruling T5 makes the sealed list CAPTURE DATA -- "replay does not rerun
+//       the HPS visibility walk". `zref_island.hpp` 196-201 says the same from
+//       the other side. So the work VISIBLE would do IS BEING DONE, in
+//       software, and its result already reaches this module: the sealed list
+//       arrives at `terr_cmd_*`, `zhao_terrain_cmd` walks it and
+//       `zhao_terrain_seq` consumes the records, both composed below. VISIBLE
+//       is an unadopted HARDWARE ALTERNATIVE to a ratified software path that
+//       is already live here, which is a different thing from a missing
+//       producer and is why composing it would add area and remove nothing.
+//       Its own contract agrees (`TERRAIN.VISIBLE.md` 341-344: "Nothing
+//       downstream consumes the stream yet"), and both its benches model the
+//       store rather than connect one (`tests/terrain/tb_island_visible.sv`
+//       4-8, `tb_island_dir.sv` 3-7) -- so the composition has never been
+//       attempted anywhere, by anyone, and that is recorded in the contracts
+//       too (`TERRAIN.ISLAND.md` 150-156).
+//     * and its `p_*` visible-patch stream still has no consumer here:
+//       TERRAIN.SEQ takes full command records with an island id, a 64-bit HPS
+//       address, a CRC, flags, a view mask and a priority -- not a coordinate
+//       pair and a handle.
+//
+//   TERRAIN.VELOCITY -- REFUSED, and the FIRST SWEEP'S STATED CAUSE HAS
+//   EXPIRED. It said "Its `lane_velocity_i` is FIELD.SEQ.EARTH's out-lane 1,
+//   the same block I34 names and THE SAME ONE THAT IS NOT BUILT". Entry I34,
+//   thirty lines up in this same header, already says the opposite:
+//   `design/contracts/FIELD.SEQ.EARTH.md` rules that sequencer out of existence
+//   ("one engine, five profiles ... there is not going to be one") and the
+//   FIELD v3 fabric is composed here as `u_field_host`. A refusal that
+//   contradicts a live entry in its own file is worth more than a correction,
+//   so here is what the second reading found instead. THREE reasons, none of
+//   which is "not built":
+//
+//     * THE UNIFORMS, which is I34's blocker and not a separate one. The E
+//       record's `age`, `phase` and `p0..p7` are UNIFORM and come from the
+//       field descriptor; nothing produces that descriptor yet. Velocity is
+//       out-lane 1 of the SAME evaluation whose out-lane 0 the height uses, so
+//       it is blocked by exactly what the height is blocked by.
+//     * TWO WALKERS OVER ONE PAGE. The block drives its own `vtx_vi_o`/
+//       `vtx_vj_o` by its own chosen law ("the block OWNS the sweep"), while
+//       TERRAIN.PAGESTREAM walks the lattice on its own schedule. Joining two
+//       address masters is a scheduler, and a composer may not write one.
+//     * AND ITS OUTPUT HAS NOWHERE TO GO, which the first sweep did not state
+//       and which is the same shape as entry I44. `vv_*` is the
+//       `spec/terrain_rules.md` 4.2 velocity lattice -- "height16-scaled,
+//       2 B/vertex, 545 KiB" per frame -- and the block's own header says "no
+//       VRAM port and no lattice-sized buffer ... the 2 B/vertex store belongs
+//       to whoever owns the VRAM page". Nothing owns it. Composing the block
+//       would produce a lattice with no reader, exactly as I44's decimated
+//       planes do, and its `moving_mask_o` is already documented as "PRODUCED,
+//       NEVER CONSUMED".
+//
+//   ONE THING THAT IS NOT A BLOCKER, named so it is not re-derived:
+//   `lane_covers_i` DOES have a producer here -- TERRAIN.PATCH's `fld_covers_o`,
+//   exported deliberately for it. And whoever takes the height lane should look
+//   at `fpga/rtl/synth/zhao_probe_walk_earth.sv` FIRST: it is the Earth lattice
+//   walker, differentially tested
+//   (`tests/differential/field_walk_earth_directed.cpp`), its own header names
+//   "ready/valid toward TERRAIN.PATCH's field-major reducer" as its downstream,
+//   and it is still in `synth/` under a probe name -- which is precisely the
+//   shape of the thing FIELD v3 was promoted out of earlier today. A file is not
+//   a probe because its name says so.
+//
+//   TERRAIN.LOD -- REFUSED; entry I21 carries the whole argument and was
+//   CORRECTED by both sweeps, because the blocker it named first (TERRAIN.PATCH
+//   not composed) had expired, the real one is the deviation store of I44, and
+//   the second reading narrowed its claim about the four extra job fields from
+//   four to three. See I21.
+//
+//   TERRAIN.BAKE and TERRAIN.WRITEBACK -- REFUSED; entries I32 and I28 carry
+//   those arguments, and BOTH were rewritten by the second sweep. I32's stated
+//   cause had expired (it cited I27's placement blocker, which I27 itself
+//   records as closed) and the real refusal is a packet-shape conflict plus two
+//   missing LAWS; I28's third reason survived but the block's own header names
+//   a blocker that has expired. Both entries carry the detail.
+//
+//   TERRAIN.NORMALMAP -- REFUSED, and it is the one whose seam is furthest
+//   away. It is a FRAGMENT-stage block: its input is a perspective-correct
+//   terrain (u, v) with an integer mip level, "tapped from the stream that
+//   feeds the texture path". That stream is the pre-resolve fragment stream
+//   entry I17 records as never leaving `zhao_geom_bin_pipe_v2`, and its tile
+//   upload port wants a generated asset. Neither end is here, and the second
+//   reading adds two facts that make that concrete rather than argued: NOTHING
+//   IN THE WHOLE REPOSITORY INSTANTIATES THIS MODULE -- not `fpga/rtl`, not
+//   `zhao_prod_top`, not `zhao_terrain_pipe`; the only place it is elaborated
+//   at all is `tests/texture/terrain_normalmap_directed.cpp`. And its detail
+//   pyramid is built OFFLINE ("by averaging SIGNED dx/dz", its line 61), so the
+//   `tw_*` upload port is waiting on an asset pipeline rather than on a block.
+//   `design/prod_manifest.yml` 856 already calls it an "OPEN DEFERRAL until the
+//   fragment-seam wiring lands", which is the same statement from the ledger's
+//   side.
+//
 //  I1. PART.STATE's generation store (`part_rd_*`, `part_wr_*`) -- BOUNDARY.
 //      The plan lets the harness supply "memory behavior", and this is that.
 //      But the real provider is named nowhere: MEM.HPS.BRIDGE is instantiated
@@ -548,8 +786,12 @@
 //      The slicing is field routing. The THREE-LOOKUP SEQUENCING IS NOT: it is
 //      a state machine with a reply join, and a state machine belongs in a
 //      file with a contract and a test, not in this composer. It is also NOT
-//      GEOM.LOOM (that is SKIN -> WARP deformation, and it is in the register's
-//      NOT-BUILT list for its own reasons).
+//      GEOM.LOOM, and the parenthesis that used to stand here said so for two
+//      WRONG reasons -- "that is SKIN -> WARP deformation, and it is in the
+//      register's NOT-BUILT list". GEOM.LOOM is a streaming affine matrix
+//      composer whose contract excludes skinning by name, and it is BUILT and
+//      UNIT_VERIFIED. It is still not this customer, and the refusal is now
+//      argued properly in the refused-blocks list below.
 //
 // I12. GEOM.PROJ_LANE's lookup/reply and arena origin (`geom_look_*`,
 //      `geom_rep_*`, `geom_org_*`) -- BOUNDARY, same absent customer as I11,
@@ -1737,10 +1979,22 @@
 //      10, DRAW_Q+1 forms in one packet) and `cmd_exec_draw_src_truncated_o`
 //      (case 11). None is asserted zero here.
 //
-// I42. TERRAIN.MIPGEN's COARSE-HEIGHT PLANES (`terr_mg_m17_*`,
+// I44. TERRAIN.MIPGEN's COARSE-HEIGHT PLANES (`terr_mg_m17_*`,
 //      `terr_mg_m9_*`) -- BOUNDARY. NEW 2026-09-19, opened by composing the
 //      second completion (connected item 12), and it is the SUCCESSOR to a
 //      larger absence rather than a new discovery.
+//
+//      RENUMBERED FROM I42 LATER THE SAME DAY, AND THE COLLISION IS WORTH ONE
+//      PARAGRAPH because it had already made two cross-references ambiguous.
+//      Two entries were written as `I42` by two packets in the same hour --
+//      this one and THE FIELD ENGINE'S PROGRAM LOADER below -- and both were
+//      then cited by number: I21 pointed at `I42` meaning the deviation store
+//      (this entry) while I34 pointed at `I42` meaning the program store (the
+//      other one). `completion_register.py` keeps its entries in a LIST, so it
+//      counted both and reported no defect; the ambiguity was only ever
+//      readable by a person, which is the kind a gate cannot catch. This entry
+//      moved because I43 was already taken and the FIELD entry is another
+//      packet's to edit. I21's citation is updated with it.
 //
 //      WHAT LEAVES. The 17x17 and 9x9 decimations of the page's height
 //      lattice, address and surface beside each value, one write per clock.
@@ -1777,90 +2031,6 @@
 //      layer D: a decimated height written nowhere and a decimated height
 //      written wrongly are indistinguishable from inside this module, and a
 //      port is the one place the difference can be seen.
-//
-// ---------------------------------------------------------------------------
-// THE TERRAIN CLUSTER, SWEPT 2026-09-19 -- what was composed and what was not
-// ---------------------------------------------------------------------------
-// Twelve terrain capabilities were in the completion register's
-// built-but-not-connected list. TWO are composed by this packet (MIPFEED and
-// MIPGEN, connected item 12). The other ten were each read against what this
-// module can actually offer them, and the refusals are here rather than
-// nowhere, because "it was looked at" and "it was missed" are indistinguishable
-// from an empty list.
-//
-//   TERRAIN.PROJECT -- REFUSED, AND IT IS A SAVING RATHER THAN A GAP. It is a
-//   SECOND PROJECTOR. `design/blocks.yml` declares `zref::render::project_vertex`
-//   as the reference model of BOTH GEOM.PROJECT and TERRAIN.PROJECT, which is
-//   the duplication `tools/budget/uncashed_cheques.py` check 3 exists to find,
-//   and the block ledger prices it: 6,068 ALM and 33 DSP. Terrain already
-//   reaches the SHARED `zhao_proj_subsystem` on CLIENT B, through
-//   TERRAIN.GROUP_SEQ, and entry I13 records that seam as closed. So composing
-//   this block would spend 6,068 ALM and 33 DSP to compute a second time what
-//   the machine already computes -- and would undo the deduplication campaign
-//   that `zhao_project_core` exists because of. It is SUPERSEDED, not pending.
-//
-//   TERRAIN.NORMALS and TERRAIN.SHADE -- REFUSED TOGETHER, on a path that
-//   cannot be entered. They are a genuine pair: NORMALS takes a world triangle
-//   (`ax..cz` plus `src_id`) and emits an unnormalised face normal with a
-//   degenerate bit; SHADE takes exactly those fields. And NORMALS' input is
-//   exactly `zhao_terrain_tess`'s `tri_*` port, field for field -- which is
-//   why this looks composable and is not.
-//
-//   THE TESSELLATOR'S TRIANGLE PORT IS NEVER PRESENTED IN THIS COMPOSITION.
-//   `zhao_terrain_tess` expands a job into ModeTri (0), ModeVtx (1) or ModeRef
-//   (2), and `zhao_terrain_group_seq` declares only `ModeVtx = 2'd1` and
-//   `ModeRef = 2'd2` -- there is no mode-0 localparam in that file and no arm
-//   that could drive one. So `tri_valid_o` cannot fire while the sequencer
-//   owns the job port, and composing NORMALS onto it would add ~789 ALM (plus
-//   SHADE) for a path nothing can enter. That is entry I28's own argument, and
-//   it is the reason these two are refused rather than the reason they are
-//   hard: what they need is a SECOND PRESENTATION from TERRAIN.GROUP_SEQ, which
-//   is an RTL change to a block with its own differential and is not smuggled
-//   into a composition packet. SHADE's `sun_*` would be a boundary besides.
-//
-//   (The block ledger's 18-DSP row for `zhao_terrain_normals` is DIRTY --
-//   `rtlCleanAtHead: false`, dated before the 2026-08-24 change that took it
-//   from six multipliers to one -- so that number reads HIGH and should not be
-//   quoted as the cost. Named here so the next reader does not re-derive it.)
-//
-//   TERRAIN.VISIBLE and TERRAIN.ISLAND_DIR -- REFUSED as one, because VISIBLE
-//   INSTANTIATES the directory (`u_dir` at its line 334) and composing one
-//   composes both. It is refused because it would be a CENSUS INSTANCE and not
-//   a connection: all three of its input groups and its only output group
-//   would be boundaries. The view (`v_centre_ix/iz`, `v_radius`) is a camera in
-//   patch coordinates and no block here produces one; the island descriptor
-//   (`desc_extent_*`, `desc_pitch_log2`) is the frame-scoped value entry I35
-//   records as having no owner; and its `res_*` is a residency query of a
-//   DIFFERENT SHAPE from the one this core composes -- it asks {ix, iz} and
-//   wants a 32-bit HANDLE back, where `zhao_terrain_residency_v2` answers
-//   {slot, gen} against {epoch, island, ix, iz}. Adopting it would need an
-//   adapter that invents a handle encoding, and its `p_*` visible-patch stream
-//   has no consumer here either: TERRAIN.SEQ takes full command records with an
-//   HPS address and a CRC, not a coordinate pair.
-//
-//   TERRAIN.VELOCITY -- REFUSED, and it is entry I34's absent owner seen from a
-//   third side. Its `lane_velocity_i` is FIELD.SEQ.EARTH's out-lane 1, the same
-//   block I34 names and the same one that is not built. Its `lane_covers_i`
-//   DOES have a producer here -- TERRAIN.PATCH's `fld_covers_o`, exported
-//   deliberately for it -- but a covers answer without the velocity beside it
-//   is half a lane, and the block drives its own `vtx_vi/vj` address while
-//   TERRAIN.PAGESTREAM walks the lattice on its own schedule, so the two are
-//   different walkers over the same page and joining them is a scheduler.
-//
-//   TERRAIN.LOD -- REFUSED; entry I21 carries the whole argument and was
-//   CORRECTED by this sweep, because the blocker it named (TERRAIN.PATCH not
-//   composed) had expired and the real one is the deviation store of I42.
-//
-//   TERRAIN.BAKE and TERRAIN.WRITEBACK -- REFUSED; entries I32 and I28 carry
-//   those arguments unchanged. Both were re-read against the composed engine
-//   and neither refusal has expired.
-//
-//   TERRAIN.NORMALMAP -- REFUSED, and it is the one whose seam is furthest
-//   away. It is a FRAGMENT-stage block: its input is a perspective-correct
-//   terrain (u, v) with an integer mip level, "tapped from the stream that
-//   feeds the texture path". That stream is the pre-resolve fragment stream
-//   entry I17 records as never leaving `zhao_geom_bin_pipe_v2`, and its tile
-//   upload port wants a generated asset. Neither end is here.
 //
 // I42. THE FIELD ENGINE'S PROGRAM LOADER (`fld_ld_*`), ITS DIRECTORY PHASES
 //      (`fld_pc_*`) AND ITS SECOND CLIENT (`fld_req_*` / `fld_resp_*`) --
@@ -1907,6 +2077,64 @@
 //      outside a slot's window, and the header clamp that fires
 //      `fld_ld_oob_o` is exactly what makes that state unreachable. The
 //      other eight are driven by `tests/field/field_host_directed.cpp`.
+//
+// I43. GEOM.SKIN.NORM's WORLD NORMAL (`geom_sn_n_*`) -- BOUNDARY. NEW
+//      2026-09-19, and it is the SUCCESSOR to the lighting seam's first
+//      bullet, which is CLOSED. The block is COMPOSED; what leaves is its
+//      output, and only its output.
+//
+//      WHAT CLOSED, AND THE REFUSAL WAS ACCURATE RIGHT UP TO ITS LAST CLAUSE.
+//      The lighting section used to say this block's "THREE OPERANDS ARE NEVER
+//      SIMULTANEOUSLY VALID IN THIS MODULE" -- the normal valid at
+//      GEOM.VDECODE's output, the matrices at the palette store's, "several
+//      clocks and one lookup apart, for what may not even be the same vertex".
+//      That was exactly true, it named the fix ("`zhao_geom_pose_palette`
+//      carrying the normal through beside the vertex"), and it classified the
+//      fix correctly as "an RTL change to a block with its own directed test,
+//      not a composition". So this entry is not a correction of a wrong
+//      refusal: it is a refusal whose stated price was PAID.
+//
+//      THE RTL CHANGE IS A PAYLOAD AND NOTHING ELSE. `v_nx_i/v_ny_i/v_nz_i` in,
+//      `o_nx_o/o_ny_o/o_nz_o` out, captured in R_IDLE by THE SAME ENABLE, on
+//      THE SAME CLOCK, as the two bone indices that select the matrices, and
+//      held through R_HOLD with the rest of the record. No arithmetic was added
+//      to that block and none was added here. The point of putting it inside
+//      the store rather than joining it outside is the record-swap law: two
+//      quantities a composer pairs from independent paths produce a normal
+//      skinned by another vertex's bones, and a lit vertex no output check can
+//      distinguish from a correct one.
+//
+//      THE FORK IS AN AND-FORK AND ITS COST IS MEASURED, NOT ARGUED.
+//      GEOM.SKIN and GEOM.SKIN.NORM accept the same beat on the same clock.
+//      Neither block's `ready` is a function of its own `valid`, so it cannot
+//      deadlock. What it CAN do is throttle, and it does: GEOM.SKIN.NORM is
+//      strictly ONE AT A TIME -- S_IDLE, S_MUL x3, S_REDUCE, S_SQ, S_WAIT,
+//      S_EMIT with a THIRTY-TWO ITERATION serial root in the middle -- against
+//      GEOM.SKIN's one weighted vertex per twelve clocks. That is stated here
+//      because the block's OWN comment says the opposite: "this block runs at
+//      vertex rate behind GEOM.SKIN's one-per-twelve-clocks, so three clocks of
+//      transform is free". The three transform clocks ARE free; the root is not
+//      counted in that sentence, and it dominates. `geom_sn_fork_stall_o`
+//      counts the cycles the skinner waits, and the composed smoke bench reads
+//      63 of them over 4 vertices -- so the number is real, it is on a port,
+//      and nobody has to take a comment's word for it.
+//
+//      WHY THE OUTPUT IS A PORT. Its consumer is GEOM.LIGHT, refused below for
+//      reasons of its own, and I42's argument applies unchanged: a world normal
+//      written nowhere and a world normal written WRONGLY are indistinguishable
+//      from inside this module, and a port is the one place the difference can
+//      be seen. The smoke bench uses it as exactly that -- the fixture's normal
+//      (127, 0, 0) at w0 = 64 through the identity substitution must give
+//      n = (64 * 65536 * 127, 0, 0) and |n| equal to that x component, since the
+//      square is perfect and the root is floor-exact. That last equality is the
+//      evidence that the `zhao_field_isqrt` instance beside the block answered
+//      at all, and an approximation would not satisfy it.
+//
+//      NOT A GAP, and listed so nobody re-opens it: the ROOT is a second
+//      INSTANCE of a block already in this closure, not a second LAW. Both
+//      `zhao_geom_skin_norm` and the FIELD engine cite `zref::isqrt_u64`, and
+//      the block's own header says a second implementation would be the fault.
+//      No source file joined the fit for it.
 //
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -1989,21 +2217,162 @@
 //   FORGE.SHADOW landed 2026-09-19 and is refused for the same shape, listed
 //   here because it is new and would otherwise be absent from this record. It
 //   needs a shadow CASTER -- {world x, world z, radius, strength, rung,
-//   src_id} -- and `design/blocks.yml`'s `shadow_caster` is nobody's output.
-//   `zhao_geom_lod`'s `rung_o` is the right width and only the rung: that
-//   block emits no world position or radius. It also needs TERRAIN HEIGHT
-//   TAPS, a world-(x,z) -> {height, no_ground} service, and no block in
-//   `fpga/rtl/terrain` has one -- the nearest, the compose cache's
-//   `lat_req_i`, is keyed by LATTICE INDEX and carries no void bit. That is
-//   the same absence entry I6 already records from the particle side, which
-//   is why `part_ter_*` is a boundary too.
+//   src_id} -- and `design/blocks.yml`'s `shadow_caster` is nobody's output:
+//   the string occurs exactly once in all of `design/`, in FORGE.SHADOW's own
+//   `inputs:` list.
+//
+//   RE-SEARCHED 2026-09-19 AND THE NEAREST CANDIDATE NAMED HERE WAS THE WRONG
+//   ONE, which matters because the sentence invited the next reader to conclude
+//   no world-position-and-radius producer exists. One does. The entry used to
+//   say only that "`zhao_geom_lod`'s `rung_o` is the right width and only the
+//   rung: that block emits no world position or radius" -- true of that block,
+//   and the weakest candidate in the tree. The two strongest:
+//     * `zhao_geom_meshfetch` emits `cull_cx_o`/`cull_cy_o`/`cull_cz_o`/
+//       `cull_radius_o`, all `signed [31:0]`, which `zhao_geom_cull` calls "the
+//       instance bounding sphere, fx16 world", beside `r_instance_id_o[15:0]`.
+//       That is a world position and a radius at the exact widths. It is still
+//       refused, and now for reasons that survive: it is a point-to-point
+//       REQUEST CHANNEL into GEOM.CULL rather than a stream anyone may tap; it
+//       carries no strength; and a 3D bounding-sphere cull radius is not a
+//       ground-contact footprint radius.
+//     * `zhao_cmd_exec` emits `stamp_tx_o`/`stamp_ty_o`/`stamp_radius_o`
+//       (`signed [31:0]`) and `stamp_src_id_o[15:0]` -- four of the six fields
+//       at exact width. It is disqualified SEMANTICALLY rather than
+//       structurally, which is the more dangerous kind of near-miss: that is
+//       SURFACE.STAMP's terrain-deformation brush, live in this file, so wiring
+//       it would put a contact shadow under every crater and scar and none
+//       under a creature. Shape match, wrong source.
+//   SO THE BLOCKER IS NARROWER THAN "nobody emits a caster" AND IS STATED AS
+//   WHAT IT IS: no block emits a RUNG together with a world position, because
+//   the creature rung is unported state inside `zhao_geom_meshfetch`'s LodState
+//   (`zhao_geom_lod`'s own comment says that block "holds one LodState per live
+//   instance"), and NOTHING IN THE TREE EMITS A SHADOW STRENGTH AT ALL.
+//
+//   IT ALSO NEEDS TERRAIN HEIGHT TAPS, a world-(x,z) -> {height, no_ground}
+//   service, and that half of the refusal SURVIVED the same re-search intact,
+//   with one precision correction. Across all of `fpga/rtl` -- every one of the
+//   23 subdirectories, `synth/` and every `probe`-named file included -- ZERO
+//   output ports match a height keyed by a world coordinate, and only THREE
+//   modules emit world x/z at all: `zhao_terrain_place` (`vtx_wx_o`/`vtx_wz_o`),
+//   `zhao_terrain_compcache_front` (`lat_wx_o`/`lat_wz_o`) and this block
+//   itself. Both of the first two are the FORWARD map, lattice index -> world;
+//   NOTHING IN THE TREE PERFORMS THE INVERSE. That is the missing half of a tap
+//   service, and it is a block rather than a wrapper.
+//
+//     - THE CORRECTION: this entry used to say the compose cache's `lat_req_i`
+//       "is keyed by LATTICE INDEX and carries no void bit". The first clause is
+//       right and the second is right ONLY of that port. The block DOES answer a
+//       void query -- `cs_req_i`/`cs_ci_i`/`cs_cj_i` -> `cs_substance_o`, where
+//       substance 0 is SOLID -- on a SEPARATE channel keyed by a 5-bit CELL
+//       index, unjoined to the height, and already contended: FORGE.CLIFF is
+//       refused over that very port two paragraphs above. Worth stating exactly,
+//       because "no void bit exists" would send somebody to build one.
+//     - AND THE TAP'S PROTOCOL SHAPE ALREADY EXISTS for a different quantity:
+//       `zhao_texture_aux` is a ready/valid service keyed by `req_wx_i`/
+//       `req_wz_i` ("fx16 world metres") with two no-answer bits. It is the
+//       closest architectural precedent, and it does not resolve world -> patch
+//       either: it makes the CALLER supply the patch envelope. Even the block
+//       shaped like the answer does not contain the missing piece.
+//
+//   That is the same absence entry I6 already records from the particle side,
+//   which is why `part_ter_*` is a boundary too -- and two independent blocks
+//   now want the one service nobody has written, which is the argument for
+//   building it rather than a reason to refuse again.
+//
+//   GEOM.LOOM -- REFUSED, and the description this file carried of it was
+//   WRONG on two of three points. It is added to this list 2026-09-19 because
+//   until now its only mention was a parenthesis inside entry I11, and a
+//   capability the register counts deserves a stated cause rather than an
+//   aside. The parenthesis said it "is SKIN -> WARP deformation, and it is in
+//   the register's NOT-BUILT list for its own reasons".
+//
+//   WRONG 1: IT IS NOT DEFORMATION AND IT DOES NOT TOUCH A VERTEX.
+//   `zhao_geom_loom` is a STREAMING AFFINE MATRIX COMPOSER over a
+//   parent-before-child transform node stream -- ROOT, RIGID, SCALE, ORBIT,
+//   AIM, BILLBOARD, OSC, SPLINE, GAIT, FORM -- and its header quotes owner
+//   ruling 2026-08-31 6.4: "WHAT SURVIVES IS A STREAMING MATRIX COMPOSER, and
+//   this file is exactly that and nothing else." `design/contracts/GEOM.LOOM.md`
+//   excludes the rest by name: "no skinning (GEOM.SKIN), no pose decode
+//   (GEOM.POSE)". "SKIN -> WARP" is the LEDGER'S EDGE POSITION
+//   (`upstream: [GEOM.SKIN]`, `downstream: [GEOM.WARP]`), not a description of
+//   the block -- the same declared-edge-is-not-the-RTL's-seam trap entry I21
+//   records for the two ports both called `patch_state`.
+//
+//   WRONG 2: IT IS BUILT. `design/blocks.yml` has it `UNIT_VERIFIED`, dated
+//   2026-09-19, commit 80e8d55d, evidence `tests/geometry/geom_loom_directed.cpp`
+//   -- 1,006 lines of RTL with a directed test and two extra registered builds
+//   for its OVERFLOW control and its DSP knob. It is BUILT AND NOT COMPOSED,
+//   which is this repository's own distinction, and calling it not-built is the
+//   error that gets a block written twice.
+//
+//   RIGHT 3, AND IT IS THE WHOLE REFUSAL: NOTHING PRODUCES ITS INPUT AND
+//   NOTHING CONSUMES ITS OUTPUT. Its node stream takes `in_node_index_i[9:0]`,
+//   `in_parent_index_i[9:0]`, `in_kind_i[3:0]`, `in_param_i[12]` (s32),
+//   `in_angle_i[15:0]`, `in_axis_i[1:0]`, `in_bodypatch_i`, `in_first_i`,
+//   `in_last_i`. `zhao_geom_skin`'s ENTIRE output is `o_valid_o`, `o_x_o`,
+//   `o_y_o`, `o_z_o`, `o_src_id_o` -- not one field of the first is a field of
+//   the second, so the ledger's `inputs: [skinned_vertices]` is itself stale
+//   against the 6.4 ruling that took vertices out of this block. SEARCHED for
+//   the consumer: `warp` appears EIGHT times in all of `fpga/`, every one of
+//   them prose, and one of them is the header of `zhao_geom_group_seq` which is
+//   literally titled "WHY THIS FILE EXISTS -- AND WHY IT IS NOT GEOM.WARP".
+//   There is no GEOM.WARP module, in `fpga/rtl/synth/` or anywhere else.
+//   `design/contracts/GEOM.WARP.md` DOES exist -- the ledger's note that it has
+//   "no RTL and no contract" is false in its letter -- but every section of it
+//   reads "Deliberately unwritten", so it is a stub and the substance holds.
+//   (Its stated justification has expired besides: the 2026-08-31 deferral it
+//   cites was REVOKED by the owner on 2026-09-18, "I don't want to defer any
+//   unfinished blocks now". That is a reason to WRITE the contract, not a
+//   reason to compose this block into a machine with neither end.)
+//
+//   So composing it would connect nothing and open new tie-off entries at both
+//   ends, which is the same test TERRAIN.VISIBLE fails above. It is carried as
+//   a production fit top instead, so that it gets PRICED -- 48 clk/node at
+//   MUL_LANES=1 for 3 DSP, 23 at MUL_LANES=3 for 9 -- and that is the right
+//   place for it until GEOM.WARP has RTL.
 //
 //   GEOM.PARAMBUF is the ENGINE1 arena's RECORD LAYER -- 24-byte
 //   ProjectedVertex, 16-byte TriangleDescriptor and 64-byte tile-reference
 //   chunk, bytes in and fields out, with the s21 legality rule and the
 //   chunk's frame-generation staleness gate. Its three inputs are records
 //   READ BACK OUT of that arena, and SEARCHED: nothing in `fpga/rtl` writes
-//   one into memory. GEOM.ASSEMBLE, composed below, emits a
+//   one into memory. RE-SEARCHED 2026-09-19 and the refusal stands, with one
+//   sentence added because the next reader will otherwise think it is stale.
+//   Every geometry memory client is hard-coded READ-ONLY in source --
+//   `zhao_geom_meshfetch.sv:319`, `zhao_geom_assetfetch.sv:341` and
+//   `zhao_geom_mem_adapter.sv:190` all assign `write = 1'b0`, the last with the
+//   comment "the asset window is READ-ONLY by construction" -- and the only
+//   five blocks in the whole tree that assert `write = 1'b1` are RASTER.FBWRITE,
+//   DEBUG.FRAMEBLIT, MEM.UPLOAD and two terrain paths. None is geometry, and
+//   `spec/memory_rules.md` 5f declares RENDER.ASSET_POOL read-only with a formal
+//   assertion (`a1_render_asset_ro`) to match, so a writer today would be built
+//   against a region the guard is PROVEN to refuse.
+//
+//   AND `zhao_geom_arena.sv` IS NOT THIS ARENA'S ALLOCATOR, said explicitly
+//   because it is a file with "arena" in its name containing a real bump
+//   allocator, and finding it is how somebody concludes this entry is out of
+//   date. It is GEOM.BINNER's, by its own first line, and the widths settle it:
+//   `PTR_W = 8` over `CHUNKS = 256` against this block's 32-bit `next_chunk`
+//   over `ARENA_CHUNKS = 65536`. An 8-bit pointer cannot name a 64 Ki-chunk
+//   arena. `zhao_geom_binner_v2` has no memory port at all.
+//
+//   THE LEDGER CORROBORATES THE ABSENCE FROM A SECOND, INDEPENDENT DIRECTION,
+//   which is worth more than the port search repeated. `design/blocks.yml`
+//   declares four counters for this block -- `parambuf_records_written`,
+//   `parambuf_chunks_allocated`, `parambuf_stale_handles`,
+//   `parambuf_overflow_frames` -- and all four strings appear in that file and
+//   in NO `.sv` FILE IN THE REPOSITORY. The RTL exports `pv_illegal_count_o`,
+//   `td_illegal_count_o`, `ck_stale_count_o` and `ck_illegal_count_o` instead.
+//   A counter named *records_written* that no RTL drives is the ledger
+//   describing a writer nobody built, and it agrees with the port search
+//   without sharing an operand with it.
+//
+//   The block's own header says the same thing from the inside: "It does not
+//   own SDRAM, does not arbitrate, and does not allocate the arena", and hands
+//   the capacity policy, the quota seal and the frame-fault path to "the
+//   composed block's" -- a block that does not exist.
+//
+//   GEOM.ASSEMBLE, composed below, emits a
 //   TriangleDescriptor's FIELDS, which is this block's job run backwards --
 //   pairing the two would be an encode immediately undone by a decode with
 //   no memory between them, which is a disconnected implementation with
@@ -2044,9 +2413,34 @@
 //       `rcp_valid_o`/`rcp_ready_i`/`rcp_d_o` and
 //       `rcp_rvalid_i`/`rcp_rready_o`/`rcp_r_i`/`rcp_k_i` match
 //       `fpga/rtl/raster/zhao_raster_rcp24.sv` port for port -- SEARCHED,
-//       and that is the golden implementation and the oracle -- but it is
-//       not in this closure and the shell's own reciprocal is internal to
-//       the raster path with no client port.
+//       and that is the golden implementation and the oracle.
+//
+//       CORRECTED 2026-09-19, because the clause that followed -- "but it is
+//       not in this closure" -- IS NO LONGER TRUE IN ITS LETTER, and a reader
+//       checking it would find the opposite and distrust the rest.
+//       `zhao_raster_rcp24_v4` IS in this console's closure today, and it is
+//       the right one to look at besides: under the owner's "only the latest
+//       version" ruling, `zhao_raster_rcp24` is not the block a new client
+//       would be given. Its reply port carries `r_o[23:0]` and `k_o[5:0]`,
+//       which is this block's `rcp_r_i`/`rcp_k_i` exactly.
+//
+//       THE REFUSAL SURVIVES ON ITS SUBSTANCE, which was never really about
+//       the file being absent: there is no reciprocal service with a SPARE
+//       CLIENT PORT. `zhao_raster_rcp24_v4` is instantiated exactly once in
+//       the whole tree -- `zhao_texture_island_v3_top:922`, at NCTX = 12 --
+//       and it has ONE request port, which the texture island owns. Serving
+//       GEOM.DEPTHQUANT from it means an arbiter between two clients written
+//       in this composer, which is the thing the terrain spine's own note is
+//       proud of not having done; serving it from a SECOND instance means
+//       paying for a second reciprocal on a device over on both ALM and DSP,
+//       to feed a block the two bullets above already refuse for arity and
+//       backpressure. Either way the handshake argument is what decides it,
+//       and that is unchanged.
+//
+//       Worth keeping the distinction: "the file is not in the closure" is a
+//       claim that expires the moment somebody composes the file, and this one
+//       did. "No client port is free" is a claim about the arrangement, and it
+//       is the one that was doing the work all along.
 //   `v_profile_i` is additionally SetView's `flags[1:0]`, which is entry
 //   I14's still-open half: a ratified field with no port on
 //   `zhao_project_core` to put it on.
@@ -2099,28 +2493,78 @@
 //
 // The seam is still not connected, and the reasons are now specific:
 //
-//   * GEOM.SKIN.NORM's THREE OPERANDS ARE NEVER SIMULTANEOUSLY VALID IN THIS
-//     MODULE, and this is the interesting one because two of the three are
-//     already here and idle. It needs {packed bind-space normal, w0} AND the
-//     same two bone matrices its vertex was skinned with. The normal is
-//     GEOM.VDECODE's `d_nx_o`/`d_ny_o`/`d_nz_o`, which leave this module
-//     unused today; the matrices are `zhao_geom_pose_palette`'s `a_m_o` and
-//     `b_m_o`. But the palette store's pass-through payload is x, y, z, w0,
-//     rigid and src_id -- IT DOES NOT CARRY THE NORMAL -- so the normal is
-//     valid at the decoder's output and the matrices at the store's, several
-//     clocks and one lookup apart, for what may not even be the same vertex.
-//     Joining them here would be a composer pairing two things that move
-//     independently, producing a normal skinned by another vertex's bones,
-//     which is a lit vertex no output check can distinguish from a correct
-//     one. Closing it means `zhao_geom_pose_palette` carrying the normal
-//     through beside the vertex -- an RTL change to a block with its own
-//     directed test, not a composition.
-//   * GEOM.LIGHT's DESCRIPTOR BANK HAS NO PRODUCER. `cfg_we_i`/`cfg_addr_i`/
-//     `cfg_data_i` carry per-light direction, normal detail, colour gain and
-//     emission, plus the environment's ambient and spill, and `nlights_i`
-//     says how many to fold. No opcode in `spec/commands.zidl` carries any
-//     of it, so this is the same absent CMD path entry I14 describes for the
-//     viewport rect -- a missing COMMAND rather than missing wiring.
+//   * GEOM.SKIN.NORM's THREE OPERANDS -- CLOSED 2026-09-19, see entry I43.
+//     The paragraph that stood here was right in every particular: the normal
+//     was GEOM.VDECODE's and the matrices `zhao_geom_pose_palette`'s, and the
+//     store's pass-through payload did not carry the normal, so the two were
+//     several clocks and one lookup apart, for what may not even be the same
+//     vertex. It named the fix and priced it as an RTL change rather than a
+//     composition. The change is made -- the store carries the normal now,
+//     captured by the same enable as the two bone indices -- and the block is
+//     composed on an AND-fork beside GEOM.SKIN. Its OUTPUT is the gap now,
+//     which is a narrower statement than this one was.
+//   * GEOM.LIGHT's DESCRIPTOR BANK HAS NO PRODUCER -- the conclusion is TRUE
+//     and the REASON GIVEN HERE WAS FALSE, corrected 2026-09-19. It read: "No
+//     opcode in `spec/commands.zidl` carries any of it." SEARCHED, and naming
+//     what was searched is the point: `spec/commands.zidl:522` defines
+//     `SetEnvironment 0x0311` with `angle16 sun_yaw`, `angle16 sun_pitch`,
+//     `rgb565 sun_colour`, `rgb565 ambient`, `rgb565 tint`, `u8 tint_strength`
+//     and the fog fields -- a sun direction, a sun colour and an ambient,
+//     roughly HALF this bank. `zhao_abi_pkg.sv:93` already declares
+//     `ZHAO_OP_SET_ENVIRONMENT`, so the opcode is visible to RTL today.
+//
+//     The sentence was the flattering simplification of one this tree already
+//     had RIGHT: `zhao_cmd_exec.sv:40-43` says 0x0311 "is the nearest thing in
+//     the opcode space and it carries sun, ambient, tint and fog -- no
+//     geometry -- and it is `reserved`, not `implemented`, so it has no
+//     execution semantics to borrow even if it did". Two files in this tree
+//     disagreed about a checkable fact, and the looser one was the one doing
+//     the refusing.
+//
+//     AND THE REAL BLOCKER IS AN OWNERSHIP AND FORMAT CONFLICT, which has to be
+//     RULED rather than built, and is a harder thing than a missing command.
+//     `spec/sky_and_beams.md` 4a assigns vertex light to GEOM.PROJECT, not to
+//     GEOM.LIGHT, and ratifies a ONE-SUN rgb565 model -- ndl = clamp(N.L, 0, 1)
+//     then lit = sat_u8(ambient_c + rescale_u(sun_c * ndl, 8)) -- saying in as
+//     many words "no dynamic point lights in the format (the donor never had
+//     them)". `zhao_geom_light` implements an EIGHT-LIGHT, ten-word Q16.16 bank
+//     with emission and spill and an `nlights_i`; normal detail, emission,
+//     spill and `nlights` have no ABI representation at all. The numeric forms
+//     do not match either -- an angle16 pair against an s32 direction vector,
+//     rgb565 against u20 Q16.16. Wiring 0x0311 into `cfg_*` would be choosing
+//     between two ratified laws inside a composition packet.
+//     `design/blocks.yml`'s own GEOM.LIGHT row carries the other half of the
+//     contradiction: "the ledger's description of GEOM.PROJECT as
+//     projection-plus-lighting is aspirational".
+//
+//   * AND `zhao_geom_light` IS THE SUPERSEDED IMPLEMENTATION BESIDES, which is
+//     the finding that matters most here and is new on 2026-09-19. Even if the
+//     bank had a producer, THIS is not the block to wire it to.
+//     `fpga/rtl/geometry/zhao_light_stream.sv` opens "THIS REPLACES THE OWNER,
+//     IT DOES NOT ADD A SECOND LAW", and prices what it replaces:
+//     "`zhao_geom_light.sv` is the scalar arrangement: one `zhao_terrain_shade`
+//     turn per light term, MEASURED at II = 167.0 clocks, which is 48.1x over
+//     the frame for the ruled 120,000-vertex / 480,000-term stress profile."
+//
+//     So composing `zhao_geom_light` would be the owner's 2026-09-19 ruling
+//     broken exactly as it was broken for FIELD -- fitting a machine nobody
+//     ships, spending ALM and DSP on dead weight on a device already over on
+//     both. And it would not be CAUGHT, because
+//     `completion_register.superseded_in_closure()` matches a version SUFFIX or
+//     INFIX and `zhao_light_stream` is neither: it supersedes by RENAME, a
+//     third shape the tree now has and no tool looks for. The capability
+//     GEOM.LIGHT resolves to `zhao_geom_light` in the register, so "connected"
+//     is today satisfiable by wiring the superseded block and the instrument
+//     would say fine -- the identical defect CLAUDE.md records for
+//     FIELD.SEQ.CORE resolving to `zhao_field_v2_core`.
+//
+//     `design/console_inventory.yml` now carries the disposition, so the gate
+//     holds the ruling even though the register cannot see it. What is NOT done
+//     here, and is named so it is not mistaken for done: `design/blocks.yml`'s
+//     GEOM.LIGHT row still reads `maturity: SPECIFIED`, `superseded_by: null`
+//     and both tests "PLANNED -- NOT WRITTEN", which is stale on all three
+//     counts. Correcting a ledger row is not this packet's to do quietly while
+//     two other packets hold that file open.
 //   * ITS OUTPUT IS A SHELL-SIDE CHANGE. The RGB term goes into the raster
 //     material stage inside `zhao_geom_bin_pipe_v2`, so the seam is not
 //     purely additive to this file and should be planned with I15.
@@ -2574,6 +3018,34 @@ module zhao_console_core
   // internal and this module's edge is two arrays smaller.
   output logic [15:0]             geom_skin_src_id_o,
   output logic [31:0]             geom_skin_vertices_transformed_o,
+
+  // ---- GEOM.SKIN.NORM's world normal and evidence --------------------------
+  // NEW 2026-09-19. GEOM.SKIN.NORM is COMPOSED below, and this is its OUTPUT
+  // leaving the module because its consumer does not exist -- see entry I43.
+  // The block's INPUTS are all real: the packed normal is GEOM.VDECODE's and
+  // the two matrices are GEOM.POSE's palette store's, arriving in one
+  // handshake because the palette now carries the normal through beside them.
+  //
+  // It is a PORT and not a dropped output for the reason I42 gives about the
+  // mip planes: a world normal computed and written nowhere and a world normal
+  // computed WRONGLY are indistinguishable from inside this module, and a port
+  // is the one place the difference can be seen.
+  output logic                    geom_sn_n_valid_o,
+  input  logic                    geom_sn_n_ready_i,
+  output logic signed [63:0]      geom_sn_n_x_o,
+  output logic signed [63:0]      geom_sn_n_y_o,
+  output logic signed [63:0]      geom_sn_n_z_o,
+  output logic [63:0]             geom_sn_n_mag_o,
+  output logic                    geom_sn_n_degenerate_o,
+  output logic [15:0]             geom_sn_n_src_id_o,
+  output logic [31:0]             geom_sn_vertices_o,
+  output logic [31:0]             geom_sn_degenerate_o,
+  output logic [31:0]             geom_sn_reduced_o,
+  // The fork's own cost, made visible rather than argued. It counts cycles in
+  // which GEOM.POSE's palette held a vertex that GEOM.SKIN was ready for and
+  // GEOM.SKIN.NORM was not. See I43 for why that number is expected to be
+  // large and what it means.
+  output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
@@ -4666,8 +5138,34 @@ module zhao_console_core
   wire        [ 6:0] pal_o_w0;
   wire               pal_o_rigid;
   wire        [15:0] pal_o_src_id;
+  wire signed [ 7:0] pal_o_nx, pal_o_ny, pal_o_nz;
   wire signed [31:0] pal_a_m [12];
   wire signed [31:0] pal_b_m [12];
+
+  // THE FORK. GEOM.SKIN takes the position and GEOM.SKIN.NORM takes the normal,
+  // and BOTH need the same vertex's two matrices in the same handshake. See
+  // entry I43 for the whole argument, including what this costs in clocks.
+  wire               skin_v_ready;      // GEOM.SKIN's own ready
+  wire               sn_v_ready;        // GEOM.SKIN.NORM's own ready
+  wire               skin_v_valid;
+  wire               sn_v_valid;
+
+  // A plain AND-fork. Neither consumer's `ready` is a function of its `valid`
+  // -- `zhao_geom_skin` is `!busy && (!o_valid_o || o_ready_i)` and
+  // `zhao_geom_skin_norm` is `(st_q == S_IDLE)` -- so this cannot deadlock, and
+  // the two accept in the SAME cycle, which is what makes the normal and the
+  // position provably the same vertex's.
+  assign pal_o_ready = skin_v_ready && sn_v_ready;
+  assign skin_v_valid = pal_o_valid && sn_v_ready;
+  assign sn_v_valid   = pal_o_valid && skin_v_ready;
+
+  // The root service GEOM.SKIN.NORM names by file. `zhao_field_isqrt` is
+  // already in this closure (the FIELD engine instantiates it), so this costs a
+  // second instance and NOT a second law -- and a second LAW is what would have
+  // been wrong: that block's header says "a second implementation would be a
+  // second law", and `zref::isqrt_u64` is the one both cite.
+  wire        sn_sq_valid, sn_sq_ready, sn_sq_rvalid, sn_sq_rready;
+  wire [63:0] sn_sq_n, sn_sq_r;
 
   zhao_geom_vdecode #(
     .SRCW (16)
@@ -4797,7 +5295,14 @@ module zhao_console_core
     .v_bone1_i  (vd_d_bone1),
     .v_src_id_i (vd_d_src_id),
 
-    // REAL: the vertex and its two matrices, into GEOM.SKIN.
+    // REAL: the packed bind-space normal, from the SAME GEOM.VDECODE beat as
+    // the position and the two bone indices above. This is the port added
+    // 2026-09-19 that made GEOM.SKIN.NORM composable -- see I43.
+    .v_nx_i     (geom_vd_d_nx_o),
+    .v_ny_i     (geom_vd_d_ny_o),
+    .v_nz_i     (geom_vd_d_nz_o),
+
+    // REAL: the vertex and its two matrices, into GEOM.SKIN and GEOM.SKIN.NORM.
     .o_valid_o  (pal_o_valid),
     .o_ready_i  (pal_o_ready),
     .o_x_o      (pal_o_x),
@@ -4806,6 +5311,9 @@ module zhao_console_core
     .o_w0_o     (pal_o_w0),
     .o_rigid_o  (pal_o_rigid),
     .o_src_id_o (pal_o_src_id),
+    .o_nx_o     (pal_o_nx),
+    .o_ny_o     (pal_o_ny),
+    .o_nz_o     (pal_o_nz),
     .a_m_o      (pal_a_m),
     .b_m_o      (pal_b_m),
 
@@ -4823,8 +5331,10 @@ module zhao_console_core
 
     // REAL: from the palette store, which took it from GEOM.VDECODE. ENTRY I10
     // IS CLOSED -- vertex and matrices arrive together from a real producer.
-    .v_valid_i (pal_o_valid),
-    .v_ready_o (pal_o_ready),
+    // `v_valid_i` is the fork's, not the store's raw valid: this block and
+    // GEOM.SKIN.NORM accept the same beat on the same clock (I43).
+    .v_valid_i (skin_v_valid),
+    .v_ready_o (skin_v_ready),
     .v_x_i     (pal_o_x),
     .v_y_i     (pal_o_y),
     .v_z_i     (pal_o_z),
@@ -4844,6 +5354,92 @@ module zhao_console_core
 
     .vertices_transformed_o (geom_skin_vertices_transformed_o)
   );
+
+  // --------------------------------------------------------------------------
+  // GEOM.SKIN.NORM -- the blended world normal, composed 2026-09-19.
+  //
+  // WHAT MADE IT COMPOSABLE. The lighting-seam note above used to say its
+  // "THREE OPERANDS ARE NEVER SIMULTANEOUSLY VALID IN THIS MODULE", and that
+  // was exactly right about the tree as it stood: the normal was valid at
+  // GEOM.VDECODE's output and the matrices at the palette store's, several
+  // clocks and one lookup apart, for what may not even be the same vertex. The
+  // note also named the fix -- "`zhao_geom_pose_palette` carrying the normal
+  // through beside the vertex" -- and called it "an RTL change to a block with
+  // its own directed test, not a composition". That change is made, the
+  // directed test covers it, and the mutant copy was regenerated with it, so
+  // the three operands now arrive on ONE handshake. Nothing is paired here by
+  // this file's guesswork.
+  //
+  // THE ROOT IS A SECOND INSTANCE AND NOT A SECOND LAW. `zhao_field_isqrt` is
+  // the block's own named service and is already in this closure, so no source
+  // file joins the fit for it.
+  // --------------------------------------------------------------------------
+  zhao_geom_skin_norm #(
+    .SRCW (16)
+  ) u_geom_skin_norm (
+    .clk        (gpu_clk),
+    .rst_n      (rst_n),
+
+    // REAL: the packed normal and its two matrices, one handshake, one vertex.
+    .v_valid_i  (sn_v_valid),
+    .v_ready_o  (sn_v_ready),
+    .v_nx_i     (pal_o_nx),
+    .v_ny_i     (pal_o_ny),
+    .v_nz_i     (pal_o_nz),
+    .v_w0_i     (pal_o_w0),
+    .v_src_id_i (pal_o_src_id),
+    .a_i        (pal_a_m),
+    .b_i        (pal_b_m),
+
+    // REAL: the exact floor root, as a service.
+    .sq_valid_o  (sn_sq_valid),
+    .sq_ready_i  (sn_sq_ready),
+    .sq_n_o      (sn_sq_n),
+    .sq_rvalid_i (sn_sq_rvalid),
+    .sq_rready_o (sn_sq_rready),
+    .sq_r_i      (sn_sq_r),
+
+    // I43: the world normal leaves the module. Its consumer is GEOM.LIGHT and
+    // that seam is refused for reasons of its own -- see the lighting section.
+    .n_valid_o      (geom_sn_n_valid_o),
+    .n_ready_i      (geom_sn_n_ready_i),
+    .n_x_o          (geom_sn_n_x_o),
+    .n_y_o          (geom_sn_n_y_o),
+    .n_z_o          (geom_sn_n_z_o),
+    .n_mag_o        (geom_sn_n_mag_o),
+    .n_degenerate_o (geom_sn_n_degenerate_o),
+    .n_src_id_o     (geom_sn_n_src_id_o),
+
+    .vertices_o   (geom_sn_vertices_o),
+    .degenerate_o (geom_sn_degenerate_o),
+    .reduced_o    (geom_sn_reduced_o)
+  );
+
+  zhao_field_isqrt u_geom_skin_norm_isqrt (
+    .clk       (gpu_clk),
+    .rst_n     (rst_n),
+    .n_valid_i (sn_sq_valid),
+    .n_ready_o (sn_sq_ready),
+    .n_i       (sn_sq_n),
+    .r_valid_o (sn_sq_rvalid),
+    .r_ready_i (sn_sq_rready),
+    .r_o       (sn_sq_r)
+  );
+
+  // THE FORK'S COST, COUNTED RATHER THAN ARGUED (I43). A cycle in which the
+  // store is offering a vertex, GEOM.SKIN would take it and GEOM.SKIN.NORM
+  // would not. This number is EXPECTED to be large -- the normal path is a
+  // ~38-clock one-at-a-time walk against the skinner's twelve -- and it is a
+  // port so that the rate is measured in the composed machine instead of
+  // being asserted in a comment.
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      geom_sn_fork_stall_o <= '0;
+    end else if (pal_o_valid && skin_v_ready && !sn_v_ready
+                 && geom_sn_fork_stall_o != 32'hFFFF_FFFF) begin
+      geom_sn_fork_stall_o <= geom_sn_fork_stall_o + 32'd1;
+    end
+  end
 
   zhao_geom_group_seq #(
     .ARENAS      (GEOM_ARENAS),
