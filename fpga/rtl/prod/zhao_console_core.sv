@@ -105,16 +105,32 @@
 //   5. THE MEASUREMENT INTERVAL IS THE FRAME
 //        SHELL.gpu_tick_o -> MEASURE.HISTOGRAM.snapshot_i
 //
-//   6. THE VERTEX DECODER FEEDS THE SKINNER
-//        GEOM.VDECODE.d_{x,y,z,w0,rigid,src_id} -> GEOM.SKIN.v_*
+//   6. THE VERTEX DECODER FEEDS THE SKINNER, THROUGH THE PALETTE STORE
+//        GEOM.VDECODE.d_{x,y,z,w0,rigid,src_id,bone0,bone1}
+//                              -> GEOM.POSE's palette store -> GEOM.SKIN.v_*
+//        GEOM.POSE.decode.out_{valid,bone,m[12]}
+//                              -> GEOM.POSE's palette store, write port
+//        palette store.{a_m_o, b_m_o} -> GEOM.SKIN.{a_m_i, b_m_i}
 //      Name for name, width for width, no arithmetic between them. Until this
 //      composition GEOM.SKIN's vertex port was a boundary (entry I10) and the
 //      only thing that had ever driven it was a harness. It now has its real
 //      producer, and the decoder's REFUSAL path (`d_refused_o` and its three
 //      causes) leaves this module rather than being dropped, because a vertex
 //      the decoder rejected must not look like a vertex that never arrived.
-//      GEOM.SKIN's BONE MATRICES are still a boundary -- see I10, which is now
-//      about the palette and nothing else.
+//
+//      ENTRY I10 IS CLOSED AND DELETED, 2026-09-19. Its remaining half was the
+//      BONE MATRICES, and it was a missing BLOCK rather than missing wiring:
+//      `zhao_geom_pose_decode` streams the palette one bone per beat and
+//      GEOM.SKIN wants two whole matrices latched with the vertex, so a stream
+//      and a random access did not meet. `zhao_geom_pose_palette` is that
+//      block -- it stores the decoded palette in RAM, answers two reads per
+//      vertex in seven clocks (under GEOM.SKIN's own issue interval of 12), and
+//      substitutes the identity bind pose for a bone that is out of range or
+//      not yet decoded rather than reading whatever the memory held.
+//
+//      The gap that remains is ONE LEVEL UP and is named separately: the
+//      decoder's own clip page and skeleton bake have no producer. That is
+//      entry I27, and it is a narrower and more honest statement than I10 was.
 //
 //   7. THE TRIANGLE FRONT DOOR, CLOSED WITH ITS REAL PRODUCER
 //        GEOM.CLIP.out_*  -> GEOM.SETUP.tri_*
@@ -130,6 +146,50 @@
 //      I13 was against renaming CORNERS into edge functions, and this is not
 //      that -- it is the block whose job is to derive them, doing it.
 //      GEOM.CLIP's own input is still a boundary (I24).
+//
+//   8. THE TERRAIN PAGING SPINE -- five blocks in one chain
+//        TERRAIN.CMD.fr_*/rec_*  -> TERRAIN.SEQ.fr_*/rec_*
+//        TERRAIN.SEQ.lu_/cl_/pin_ <-> TERRAIN.RESIDENCY (the v2 directory)
+//        TERRAIN.SEQ.ld_*        -> TERRAIN.LOADQ.j_*
+//        TERRAIN.LOADQ.q_*       -> TERRAIN.PAGELOADER.j_*
+//        TERRAIN.PAGELOADER.fin_* -> TERRAIN.RESIDENCY.fin_*
+//      Every seam is name for name and width for width. Nothing is renamed,
+//      nothing is computed, and the ONE place two clients meet is the real
+//      `zhao_hps_arbiter` -- a block with a contract and a documented fairness
+//      rule, instantiated rather than imitated. There is no arbiter, mux or
+//      state machine that this file invented anywhere in the spine.
+//
+//      THE DIRECTORY IS `zhao_terrain_residency_v2`, AND THAT IS THE LEDGER'S
+//      CHOICE RATHER THAN THIS FILE'S. `design/blocks.yml`'s TERRAIN.RESIDENCY
+//      row says so three independent ways: its purpose line ends "the
+//      direct-mapped prototype is superseded because two islands may legally
+//      overlap in local patch coordinates"; its `tests:` are
+//      `terrain_residency_v2_directed.cpp` and `terrain_residency_v2_random.cpp`;
+//      and its UNIT_VERIFIED maturity evidence is the v2 directed test.
+//      `zhao_terrain_residency.sv` -- the v1 file -- opens with "FIRST BLOCK OF
+//      THE WORLD LAYER. Nothing instantiates it yet." `zhao_terrain_seq`'s own
+//      header names v2 by file when it says where its SEQW comes from, and v1's
+//      ports do not match it: v1 keys on {px, py} alone, which is exactly the
+//      overlap defect that row records as superseded.
+//
+//      WIDTHS: TERRAIN.SEQ and the directory share a TERR_SLOTW = 10 handle
+//      ($clog2(256 sets x 4 ways)). TERRAIN.PAGELOADER carries the POOL index,
+//      one bit wider on purpose. The step is crossed in exactly two places,
+//      both annotated at the instances, and the return leg is QUALIFIED rather
+//      than narrowed -- a completion whose extra bit is set is not offered,
+//      because passing the low ten bits back would alias slot 1,024 onto slot 0
+//      and publish one patch's page under another patch's key.
+//
+//      WHAT THIS SPINE DOES NOT YET DO, stated so nobody reads more into it:
+//      a page it loads reaches the directory's ST_MIPGEN state and stops
+//      there. TERRAIN.RESIDENCY publishes on TWO completions -- a claim sets
+//      `mips_stale` and only a second `fin` reaches RESIDENT_CLEAN, the only
+//      state a lookup hits on. The second completion's producer is
+//      TERRAIN.MIPFEED, which is not composed (see the refusal list at the
+//      instances). So `terr_res_resident_o` staying at zero while
+//      `terr_pl_pages_loaded_o` climbs is the EXPECTED reading of this
+//      composition, not a defect in it -- and it is written down here because
+//      that exact pairing was once measured and mistaken for one.
 //
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
@@ -365,6 +425,82 @@
 //      day comes, the owner is whoever owns the draw -- the same absent
 //      CMD.SCHEDULER path I14 describes -- and this becomes a real entry.
 //
+// I26. THE TERRAIN PAGING SPINE's MEM.HPS.BRIDGE and MEM.GUARD clients
+//      (`terr_hps_*`, `terr_guard_*`) -- BOUNDARY, and this one is a REACHABLE
+//      boundary rather than an unreachable one, which is the whole difference
+//      between it and the refusal recorded at I23.
+//
+//      Both providers EXIST and are already in this closure: `zhao_hps_bridge`
+//      and `zhao_mem_guard` are instantiated inside `zhao_shell_top_v2`. What
+//      is missing is a SOCKET. The shell exposes exactly one guard client port
+//      and it is named for GEOM (`geom_guard_req_i`), and it exposes the HPS
+//      bridge's HARNESS side, not a client side. So terrain cannot reach
+//      either from in here without a shell port change.
+//
+//      The two terrain readers are merged by the REAL `zhao_hps_arbiter`
+//      before they leave, so what crosses this boundary is ONE bridge client,
+//      not two. That arbiter has exactly TWO client ports and its rule-5
+//      starvation law is written for two guaranteed clients; a third is an
+//      owner ruling, and it is the second reason TERRAIN.WRITEBACK is not
+//      composed (I28).
+//
+//      WHY THIS IS NOT I23's REFUSAL AGAIN. GEOM.MESHFETCH's beats come back
+//      from INSIDE the shell through MEM.VRAM.ARBITER and `zhao_sdram_ctrl`,
+//      whose `phy_*` no bench connects -- nothing outside can put a beat on
+//      them, so those blocks would elaborate and never see one. These ports
+//      are on THIS MODULE'S EDGE, where the completion plan's own sentence
+//      applies: the harness "supplies external clocks, input events, MEMORY
+//      BEHAVIOR and host packets". A harness can drive these and the composed
+//      terrain bench already drives exactly this shape.
+//
+// I27. THE TERRAIN COMPOSE ENGINE's door (`terr_is_*`) and the directory's
+//      deformation, unpin and handle-check ports (`terr_dm_*`,
+//      `terr_unpin_*`, `terr_chk_*`) -- BOUNDARY. ONE missing subsystem, so
+//      one entry: TERRAIN.SEQ issues a patch, and what receives it is
+//      TERRAIN.PATCH plus the field engine composing into the named compose
+//      slot, with TERRAIN.COMPCACHE storing the result and unpinning the page
+//      when the job is done. None of that is composed, and the reason is NOT
+//      that the seams do not meet -- TERRAIN.PATCH's `st_*` output is declared
+//      port-for-port with TERRAIN.COMPCACHE's `st_*` input by COMPCACHE's own
+//      header, and COMPCACHE's serve side is exactly TERRAIN.TESS's lattice
+//      port, which is entry I22.
+//
+//      THE BLOCKER IS PLACEMENT, and it is a missing owner rather than missing
+//      wiring. TERRAIN.PATCH needs `wx_i`/`wz_i`, the PLACED world x and z of
+//      the lattice vertex, and TERRAIN.COMPCACHE needs the same 33 column x's
+//      and 33 row z's through its `pos_*` write port. TERRAIN.PAGESTREAM emits
+//      the heights and the lattice indices and NOT the placement; nothing else
+//      in the tree emits it either. Deriving it here from the index, the patch
+//      coordinate and a pitch is arithmetic invented in the composer, which
+//      this file does not do. Closing I22 is therefore PATCH + COMPCACHE + a
+//      placement owner, and the third is the one that does not exist.
+//
+// I28. TERRAIN.SEQ's F-sheet writeback job (`terr_wb_*`), its barrier
+//      completion (`terr_wb_done_*`) and TERRAIN.RESIDENCY's writeback
+//      acknowledgement (`terr_wback_*`) -- BOUNDARY. All three are one gap
+//      because they are three ends of ONE absent block, and that block EXISTS:
+//      `fpga/rtl/terrain/zhao_terrain_writeback.sv`, tested, whose `j_*` port
+//      takes TERRAIN.SEQ's `wb_*` almost field for field. It is left out for
+//      two independent reasons, either of which is sufficient:
+//
+//        * ALMOST. Its job port also needs `j_journal_addr_i` and `j_seq_i` --
+//          where in the HPS journal the sheet goes and the ticket the journal
+//          echoes back. TERRAIN.SEQ emits neither and nothing in `fpga/rtl`
+//          owns them; `tests/terrain/tb_terrain_world.sv` mints the ticket in
+//          the bench and its own comment calls that "glue [that] is a finding
+//          rather than a convenience: no contract says who owns the journal
+//          ticket". Minting it here would be that finding, hidden.
+//        * It would be a THIRD MEM.HPS.BRIDGE client behind a two-port
+//          arbiter -- see I26.
+//
+//      AND IT COULD NOT SEE A BEAT ANYWAY, which is the check worth doing
+//      before calling a refusal expensive. A writeback job is caused by a
+//      claim evicting a page whose F-sheet is dirty, and a page becomes dirty
+//      only through the directory's `dm_f` port, whose owner is TERRAIN.BAKE
+//      (entry I27's subsystem, not composed). With no deformation in the core
+//      there are no dirty evictions, so the block would add its area for a
+//      path nothing can enter.
+//
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
 // ---------------------------------------------------------------------------
@@ -466,7 +602,32 @@ module zhao_console_core
   parameter int unsigned HIST_SUB_BITS = 1,
   parameter int unsigned HIST_LANES    = 4,
   parameter int unsigned HIST_CW       = 24,
-  parameter int unsigned HIST_BINW     = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS)
+  parameter int unsigned HIST_BINW     = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS),
+
+  // ---- TERRAIN: the paging spine (CMD -> SEQ -> RESIDENCY/LOADQ -> LOADER) --
+  // Every one of these is the value the block that owns it already defaults to;
+  // they are named here rather than left implicit so the day one moves, the
+  // thing that has to move with it is greppable. TERR_SLOTW is DERIVED from the
+  // directory's own geometry and must not be set independently: it is the width
+  // of a {set, way} handle and $clog2(SETS*WAYS) is what the directory emits.
+  parameter int unsigned TERR_SETS     = 256,   // ruling T9/T10: 256 sets...
+  parameter int unsigned TERR_WAYS     = 4,     //   ...x 4 ways = 1,024 slots
+  parameter int unsigned TERR_SLOTW    = $clog2(TERR_SETS * TERR_WAYS),
+  parameter int unsigned TERR_GENW     = 8,     // T10: "generation u8 minimum"
+  parameter int unsigned TERR_SEQW     = 16,    // the loader claim sequence
+  parameter int unsigned TERR_PINW     = 6,     // 63 concurrent pins on a page
+  parameter int unsigned TERR_CSLOTS   = 256,   // T6's composed height cache
+  parameter int unsigned TERR_LOADQ_D  = 32,    // T7's per-frame page budget
+
+  // TERRAIN.PAGE_POOL (ruling T2). The pool can move to any unmapped range, so
+  // the base and the slot count are knobs and every width below is derived from
+  // them rather than restated. TERR_MEMSLOT is ONE BIT WIDER than the pool needs
+  // and that extra bit is load-bearing -- see the width note at the pageloader
+  // instance, which is the one place in this file the step is crossed.
+  parameter logic [ZHAO_VRAM_ADDR_BITS-1:0] TERR_POOL_BASE = 27'h400_0000,
+  parameter int unsigned TERR_POOL_SLOTS = 1024,
+  parameter int unsigned TERR_MEMSLOT     = $clog2(TERR_POOL_SLOTS) + 1,
+  parameter int unsigned TERR_PAGE_BYTES  = 21376  // terrain_rules sec 2 / sec 7
 ) (
   // ==========================================================================
   // THE ADOPTED ORGANS' OWN BOUNDARY.
@@ -594,16 +755,18 @@ module zhao_console_core
 
   // ---- GEOM.VDECODE's side-channels and evidence ---------------------------
   // These leave the module because nothing composed here consumes them, and an
-  // output left open is an output nobody reads. `geom_vd_bone0_o`/`bone1_o` in
-  // particular ARE the address the absent GEOM.POSE palette store needs: I10's
-  // remaining gap is visible on this edge rather than buried.
+  // output left open is an output nobody reads.
+  //
+  // `geom_vd_bone0_o` / `bone1_o` USED TO BE HERE, described as "the address
+  // the absent GEOM.POSE palette store needs". The store is no longer absent
+  // (`zhao_geom_pose_palette`, composed below), so the two bone indices are now
+  // INTERNAL wires with a real consumer and they have left this port list. The
+  // attribute channel below still has none.
   output logic signed [7:0]       geom_vd_d_nx_o,
   output logic signed [7:0]       geom_vd_d_ny_o,
   output logic signed [7:0]       geom_vd_d_nz_o,
   output logic signed [15:0]      geom_vd_d_u_o,
   output logic signed [15:0]      geom_vd_d_v_o,
-  output logic [15:0]             geom_vd_bone0_o,
-  output logic [15:0]             geom_vd_bone1_o,
   output logic                    geom_vd_refused_o,
   output logic                    geom_vd_reserved_nz_o,
   output logic                    geom_vd_w0_illegal_o,
@@ -613,11 +776,45 @@ module zhao_console_core
   output logic [31:0]             geom_vd_w0_illegal_count_o,
   output logic [31:0]             geom_vd_format_bad_count_o,
 
-  // ---- I10: GEOM.SKIN's bone matrices (the vertex half is CLOSED) ----------
-  input  logic signed [31:0]      geom_skin_a_m_i [0:11],
-  input  logic signed [31:0]      geom_skin_b_m_i [0:11],
+  // ---- GEOM.SKIN's evidence -----------------------------------------------
+  // I10 IS CLOSED. `geom_skin_a_m_i` / `geom_skin_b_m_i` used to be here, two
+  // twelve-element boundary arrays that only a harness had ever driven. They
+  // are gone rather than driven: `zhao_geom_pose_palette` below stores the
+  // decoded palette and answers the two reads, so GEOM.SKIN's matrix ports are
+  // internal and this module's edge is two arrays smaller.
   output logic [15:0]             geom_skin_src_id_o,
   output logic [31:0]             geom_skin_vertices_transformed_o,
+
+  // ---- I27: GEOM.POSE's clip page and skeleton bake ------------------------
+  // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
+  // decoder's own SOURCE is what is now missing, and this is it. See I27.
+  input  logic                    geom_pose_start_i,
+  input  logic [5:0]              geom_pose_bone_count_i,
+  input  logic signed [31:0]      geom_pose_root_dx_i,
+  input  logic signed [31:0]      geom_pose_root_dy_i,
+  input  logic signed [31:0]      geom_pose_root_dz_i,
+  output logic [4:0]              geom_pose_bone_idx_o,
+  input  logic [4:0]              geom_pose_bone_parent_i,
+  input  logic signed [31:0]      geom_pose_bone_tx_i,
+  input  logic signed [31:0]      geom_pose_bone_ty_i,
+  input  logic signed [31:0]      geom_pose_bone_tz_i,
+  input  logic signed [15:0]      geom_pose_quat_w_i,
+  input  logic signed [15:0]      geom_pose_quat_x_i,
+  input  logic signed [15:0]      geom_pose_quat_y_i,
+  input  logic signed [15:0]      geom_pose_quat_z_i,
+  input  logic signed [31:0]      geom_pose_inv_rest_i [0:11],
+  output logic                    geom_pose_busy_o,
+  output logic                    geom_pose_done_o,
+  output logic [31:0]             geom_pose_palettes_decoded_o,
+
+  // ---- GEOM.POSE's palette store: its evidence ----------------------------
+  // `geom_pal_bone_unset_o` is the one to watch. It is the store's own report
+  // that a vertex named a bone the current palette has not been given, which is
+  // what a vertex stream that was not drained before a new decode looks like.
+  output logic [31:0]             geom_pal_vertices_served_o,
+  output logic [31:0]             geom_pal_bones_written_o,
+  output logic [31:0]             geom_pal_bone_oob_o,
+  output logic [31:0]             geom_pal_bone_unset_o,
 
   // ---- I11: GEOM.GROUP_SEQ's job in, sealed group out ---------------------
   input  logic                    geom_job_valid_i,
@@ -747,6 +944,163 @@ module zhao_console_core
   output logic [4:0]              terr_cs_ci_o,
   output logic [4:0]              terr_cs_cj_o,
   input  logic [1:0]              terr_cs_substance_i,
+
+  // ==========================================================================
+  // THE TERRAIN PAGING SPINE'S OWN BOUNDARY (composed item 8 in the header)
+  // ==========================================================================
+
+  // ---- TERRAIN.CMD's command and its configuration ------------------------
+  // NOT a tie-off, and in the same standing as I9 and I25. This is T5's
+  // `SubmitTerrainSet`, already unpacked -- a HOST PACKET from SW.STREAM, which
+  // the completion plan names in its own list of what a harness may supply:
+  // "external clocks, input events, memory behavior and host packets". The
+  // arena base/bytes and the live epoch ride the same path and are host state
+  // for the same reason. If CMD.SCHEDULER later owns the terrain draw, these
+  // become internal and this note goes with them; it is NOT counted as a gap
+  // because nothing is missing, the producer is simply outside the console.
+  input  logic                    terr_cmd_valid_i,
+  output logic                    terr_cmd_ready_o,
+  input  logic [31:0]             terr_cmd_epoch_i,
+  input  logic [31:0]             terr_cmd_list_off_i,
+  input  logic [31:0]             terr_cmd_list_bytes_i,
+  input  logic [31:0]             terr_cmd_list_crc_i,
+  input  logic [15:0]             terr_cmd_patch_count_i,
+  input  logic [31:0]             terr_cmd_sequence_i,
+  input  logic [31:0]             terr_cmd_src_id_i,
+  output logic                    terr_cmd_done_valid_o,
+  input  logic                    terr_cmd_done_ready_i,
+  output logic                    terr_cmd_done_ok_o,
+  output logic [3:0]              terr_cmd_done_verdict_o,
+  output logic [31:0]             terr_cmd_done_src_id_o,
+  output logic [31:0]             terr_cmd_done_crc_seen_o,
+
+  input  logic [31:0]             terr_cfg_epoch_i,
+  input  logic [31:0]             terr_cfg_arena_base_i,
+  input  logic [31:0]             terr_cfg_arena_bytes_i,
+  input  logic [15:0]             terr_cfg_load_budget_i,
+
+  // ---- I26: the spine's MEM.HPS.BRIDGE and MEM.GUARD clients --------------
+  // ONE bridge port, because the two terrain readers go through the REAL
+  // `zhao_hps_arbiter` instantiated below and not through anything invented
+  // here. See entry I26 for why the port stops at this module's edge.
+  output zhao_hps_burst_req_t     terr_hps_req_o,
+  input  logic                    terr_hps_grant_i,
+  output logic                    terr_hps_wr_valid_o,
+  output logic [63:0]             terr_hps_wr_data_o,
+  output logic                    terr_hps_wr_last_o,
+  input  zhao_hps_burst_rsp_t     terr_hps_rsp_i,
+
+  output zhao_guard_req_t         terr_guard_req_o,
+  input  zhao_guard_rsp_t         terr_guard_rsp_i,
+  output logic [63:0]             terr_guard_wdata_o,
+  output logic                    terr_guard_wvalid_o,
+  input  logic                    terr_guard_wready_i,
+  output logic                    terr_guard_wlast_o,
+
+  // ---- I27: the terrain COMPOSE ENGINE's door and the directory's ---------
+  //      deformation, unpin and handle-check ports.
+  output logic                    terr_is_valid_o,
+  input  logic                    terr_is_ready_i,
+  output logic [TERR_SLOTW-1:0]   terr_is_slot_o,
+  output logic [TERR_GENW-1:0]    terr_is_gen_o,
+  output logic [31:0]             terr_is_epoch_o,
+  output logic [31:0]             terr_is_island_o,
+  output logic signed [15:0]      terr_is_ix_o,
+  output logic signed [15:0]      terr_is_iz_o,
+  output logic                    terr_is_cslot_valid_o,
+  output logic [$clog2(TERR_CSLOTS)-1:0] terr_is_cslot_o,
+  output logic [15:0]             terr_is_flags_o,
+  output logic [7:0]              terr_is_view_mask_o,
+  output logic [7:0]              terr_is_priority_o,
+  output logic [31:0]             terr_is_src_id_o,
+
+  input  logic                    terr_dm_valid_i,
+  output logic                    terr_dm_ready_o,
+  input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
+  input  logic [TERR_GENW-1:0]    terr_dm_gen_i,
+  input  logic [31:0]             terr_dm_epoch_i,
+  input  logic                    terr_dm_bd_i,
+  input  logic                    terr_dm_f_i,
+  input  logic                    terr_dm_mips_i,
+
+  input  logic                    terr_unpin_valid_i,
+  output logic                    terr_unpin_ready_o,
+  input  logic [TERR_SLOTW-1:0]   terr_unpin_slot_i,
+  input  logic [TERR_GENW-1:0]    terr_unpin_gen_i,
+  input  logic [31:0]             terr_unpin_epoch_i,
+
+  input  logic                    terr_chk_valid_i,
+  input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
+  input  logic [TERR_GENW-1:0]    terr_chk_gen_i,
+  input  logic [31:0]             terr_chk_epoch_i,
+  output logic                    terr_chk_valid_o,
+  output logic                    terr_chk_stale_o,
+
+  // ---- I28: TERRAIN.SEQ's F-sheet writeback job and its barrier release ---
+  output logic                    terr_wb_valid_o,
+  input  logic                    terr_wb_ready_i,
+  output logic [TERR_SLOTW-1:0]   terr_wb_slot_o,
+  output logic [TERR_GENW-1:0]    terr_wb_gen_o,
+  output logic [31:0]             terr_wb_epoch_o,
+  output logic [31:0]             terr_wb_island_o,
+  output logic signed [15:0]      terr_wb_ix_o,
+  output logic signed [15:0]      terr_wb_iz_o,
+  output logic [31:0]             terr_wb_src_id_o,
+  input  logic                    terr_wb_done_valid_i,
+  input  logic [TERR_SLOTW-1:0]   terr_wb_done_slot_i,
+
+  // ---- I28 (other end): TERRAIN.RESIDENCY's writeback-ACK barrier --------
+  input  logic                    terr_wback_valid_i,
+  output logic                    terr_wback_ready_o,
+  input  logic [TERR_SLOTW-1:0]   terr_wback_slot_i,
+  input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
+  input  logic [31:0]             terr_wback_epoch_i,
+
+  // ---- TERRAIN PAGING evidence -------------------------------------------
+  // Events, never cycles, except where the name says otherwise. These are the
+  // instrument that says the spine carried a beat rather than merely
+  // elaborating, which is the whole question this composition has to answer.
+  output logic [31:0]             terr_cmd_sets_accepted_o,
+  output logic [31:0]             terr_cmd_sets_refused_o,
+  output logic [31:0]             terr_cmd_records_emitted_o,
+  output logic [31:0]             terr_cmd_crc_fails_o,
+  output logic [31:0]             terr_cmd_bridge_errs_o,
+  output logic                    terr_seq_busy_o,
+  output logic                    terr_seq_done_o,
+  output logic [31:0]             terr_seq_records_consumed_o,
+  output logic [31:0]             terr_seq_patches_issued_o,
+  output logic [31:0]             terr_seq_claims_issued_o,
+  output logic [31:0]             terr_seq_claims_refused_o,
+  output logic [31:0]             terr_seq_claims_same_o,
+  output logic [31:0]             terr_seq_loads_issued_o,
+  output logic [31:0]             terr_seq_skipped_not_resident_o,
+  output logic [31:0]             terr_seq_frame_faults_o,
+  // A tripwire, not a decoration: an answer arrived with nothing waiting for
+  // one. `zhao_terrain_seq`'s own header explains why every consequence of it
+  // is silent, and the composed bench for that block has already caught a real
+  // shim bug with it, so it is a detector that has been SEEN to fire.
+  output logic                    terr_seq_err_stray_ans_o,
+  output logic [31:0]             terr_res_hits_o,
+  output logic [31:0]             terr_res_misses_o,
+  output logic [31:0]             terr_res_claims_o,
+  output logic [31:0]             terr_res_evictions_o,
+  output logic [31:0]             terr_res_crc_failures_o,
+  output logic [31:0]             terr_res_resident_o,
+  output logic [31:0]             terr_lq_accepted_o,
+  output logic [31:0]             terr_lq_issued_o,
+  output logic [31:0]             terr_lq_high_water_o,
+  output logic [31:0]             terr_pl_pages_loaded_o,
+  output logic [31:0]             terr_pl_pages_faulted_o,
+  output logic [31:0]             terr_pl_crc_fails_o,
+  output logic [31:0]             terr_pl_load_bytes_o,
+  output logic [31:0]             terr_pl_guard_denied_o,
+  output logic [31:0]             terr_pl_bridge_errs_o,
+  // THE INTEGRATION'S OWN OBLIGATION, MADE MEASURABLE. The loader carries a
+  // slot ONE BIT WIDER than the directory's handle so a computed 1,024 refuses
+  // instead of aliasing onto slot 0. This composition drives that port from a
+  // TERR_SLOTW producer, so the extra bit can only ever be zero -- and a
+  // counter that proves it is better than a comment that asserts it.
+  output logic [31:0]             terr_pl_slot_overflow_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -1704,7 +2058,7 @@ module zhao_console_core
   wire [GEOM_ARENA_W-1:0]  ln_fill_arena;
 
   // ==========================================================================
-  // GEOM.VDECODE -> GEOM.SKIN.  REAL, and it is half of entry I10.
+  // GEOM.VDECODE -> GEOM.POSE's PALETTE STORE -> GEOM.SKIN.  ENTRY I10, WHOLE.
   //
   // The decoder takes one 32-byte vertex record and hands the skinner the six
   // fields it wants, under the same names and the same widths. Nothing sits
@@ -1712,13 +2066,31 @@ module zhao_console_core
   // whole test of whether two blocks written months apart actually meet, and
   // these two do.
   //
-  // WHAT DOES NOT MEET, and is entry I10's remaining half: the decoder also
-  // emits `d_bone0_o` and `d_bone1_o`, which are the two palette ADDRESSES for
-  // this vertex, and GEOM.SKIN wants the two 3x4 MATRICES those addresses
-  // select. No block in the tree turns one into the other. They leave this
-  // module on `geom_vd_bone0_o`/`geom_vd_bone1_o` beside the matrices' own
-  // boundary inputs, so the missing store is visible as a gap between two
-  // adjacent ports rather than as prose.
+  // WHAT USED TO NOT MEET, and is now closed: the decoder also emits
+  // `d_bone0_o` and `d_bone1_o`, the two palette ADDRESSES for this vertex, and
+  // GEOM.SKIN wants the two 3x4 MATRICES those addresses select. That was a
+  // MISSING BLOCK, not missing wiring -- `zhao_geom_pose_decode` streams the
+  // palette one bone per beat while GEOM.SKIN wants two whole matrices latched
+  // with the vertex, and a stream and a random access do not meet.
+  //
+  // `zhao_geom_pose_palette` is that block. It stores the decoded palette in
+  // RAM, answers two reads per vertex, and passes the vertex through unchanged
+  // beside them. So the chain composed here is
+  //
+  //     GEOM.POSE decode --(one bone per beat)--> palette store
+  //     GEOM.VDECODE     --(vertex + bone0/bone1)--> palette store
+  //     palette store    --(vertex + A + B)--> GEOM.SKIN
+  //
+  // and GEOM.SKIN's `a_m_i`/`b_m_i` are internal wires rather than a boundary.
+  //
+  // NOTHING IS COMPUTED IN THIS FILE. The store indexes, it does not skin; the
+  // decoder decodes, it does not store. The hidden adapter this composer must
+  // never contain would have been the palette memory written inline here, and
+  // it is a named, tested, separately-linted block instead.
+  //
+  // WHAT IS STILL MISSING IS ONE LEVEL UP: the decoder's own source -- the clip
+  // page and the skeleton bake -- has no producer in this tree. That is entry
+  // I27, and it is a smaller and more precisely named gap than I10 was.
   //
   // THE REFUSAL PATH IS FORWARDED, NOT DROPPED. `d_refused_o` is raised
   // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
@@ -1728,11 +2100,31 @@ module zhao_console_core
   // I25: one ratified vertex format, named rather than literal. See the header.
   localparam logic [2:0] GEOM_VERTEX_FORMAT_C = 3'd0;
 
+  // The palette size, shared by the decoder and the store so a mismatch is one
+  // edit rather than two. 32 is `zhao_geom_pose_decode`'s MAX_BONES default and
+  // spec/creature_rules.md 2.2's ceiling.
+  localparam int GEOM_POSE_BONES_C = 32;
+
   wire               vd_d_valid, vd_d_ready;
   wire signed [31:0] vd_d_x, vd_d_y, vd_d_z;
   wire        [ 6:0] vd_d_w0;
   wire               vd_d_rigid;
   wire        [15:0] vd_d_src_id;
+  wire        [15:0] vd_d_bone0, vd_d_bone1;
+
+  // Decoder -> store, the palette beat.
+  wire               pd_out_valid, pd_out_ready;
+  wire        [ 4:0] pd_out_bone;
+  wire signed [31:0] pd_out_m [12];
+
+  // Store -> skinner, the vertex with its two matrices.
+  wire               pal_o_valid, pal_o_ready;
+  wire signed [31:0] pal_o_x, pal_o_y, pal_o_z;
+  wire        [ 6:0] pal_o_w0;
+  wire               pal_o_rigid;
+  wire        [15:0] pal_o_src_id;
+  wire signed [31:0] pal_a_m [12];
+  wire signed [31:0] pal_b_m [12];
 
   zhao_geom_vdecode #(
     .SRCW (16)
@@ -1757,14 +2149,16 @@ module zhao_console_core
     .d_rigid_o  (vd_d_rigid),
     .d_src_id_o (vd_d_src_id),
 
-    // I10's remaining half and the attribute path, both out at the edge.
+    // REAL: the two palette addresses, into the store. This was I10's
+    // remaining half. The attribute path below still leaves at the edge.
+    .d_bone0_o  (vd_d_bone0),
+    .d_bone1_o  (vd_d_bone1),
+
     .d_nx_o     (geom_vd_d_nx_o),
     .d_ny_o     (geom_vd_d_ny_o),
     .d_nz_o     (geom_vd_d_nz_o),
     .d_u_o      (geom_vd_d_u_o),
     .d_v_o      (geom_vd_d_v_o),
-    .d_bone0_o  (geom_vd_bone0_o),
-    .d_bone1_o  (geom_vd_bone1_o),
 
     .d_refused_o     (geom_vd_refused_o),
     .d_reserved_nz_o (geom_vd_reserved_nz_o),
@@ -1777,24 +2171,122 @@ module zhao_console_core
     .format_bad_o  (geom_vd_format_bad_count_o)
   );
 
+  // --------------------------------------------------------------------------
+  // GEOM.POSE's decoder. Its palette output now has a consumer, which is the
+  // whole reason it is composed here: an instantiation with nothing reading it
+  // would be a disconnected implementation with extra steps.
+  //
+  // The parameters are LEFT AT THEIR DEFAULTS on purpose. MUL_LANES_QUAT = 1
+  // and MUL_LANES_MAT = 1 are owner ruling R4 (2026-09-09, "relax the 1
+  // bone/clock rule"): one shared multiplier lane per engine, 4 DSP instead of
+  // 18. Restating them here would put a second copy of a ruling in a composer.
+  // --------------------------------------------------------------------------
+  zhao_geom_pose_decode #(
+    .MAX_BONES (GEOM_POSE_BONES_C)
+  ) u_geom_pose_decode (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I27: the clip page and the skeleton bake have no producer in this tree.
+    .start_i       (geom_pose_start_i),
+    .busy_o        (geom_pose_busy_o),
+    .bone_count_i  (geom_pose_bone_count_i),
+    .root_dx_i     (geom_pose_root_dx_i),
+    .root_dy_i     (geom_pose_root_dy_i),
+    .root_dz_i     (geom_pose_root_dz_i),
+    .bone_idx_o    (geom_pose_bone_idx_o),
+    .bone_parent_i (geom_pose_bone_parent_i),
+    .bone_tx_i     (geom_pose_bone_tx_i),
+    .bone_ty_i     (geom_pose_bone_ty_i),
+    .bone_tz_i     (geom_pose_bone_tz_i),
+    .quat_w_i      (geom_pose_quat_w_i),
+    .quat_x_i      (geom_pose_quat_x_i),
+    .quat_y_i      (geom_pose_quat_y_i),
+    .quat_z_i      (geom_pose_quat_z_i),
+    .inv_rest_i    (geom_pose_inv_rest_i),
+
+    // REAL: one bone per beat, into the palette store.
+    .out_valid_o (pd_out_valid),
+    .out_ready_i (pd_out_ready),
+    .out_bone_o  (pd_out_bone),
+    .out_m_o     (pd_out_m),
+
+    .done_o             (geom_pose_done_o),
+    .palettes_decoded_o (geom_pose_palettes_decoded_o)
+  );
+
+  // --------------------------------------------------------------------------
+  // GEOM.POSE's palette store. The block entry I10 named as missing.
+  //
+  // `pal_begin_i` is `geom_pose_start_i` ITSELF, not a copy and not a tie-off:
+  // the pulse that starts a decode is exactly the pulse that makes the previous
+  // pose unreadable. Wiring them together is what makes "a vertex that arrives
+  // during a decode" report itself on `geom_pal_bone_unset_o` rather than
+  // silently reading half of one pose and half of another.
+  // --------------------------------------------------------------------------
+  zhao_geom_pose_palette #(
+    .BONES (GEOM_POSE_BONES_C),
+    .SRCW  (16)
+  ) u_geom_pose_palette (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .pal_begin_i (geom_pose_start_i),
+
+    // REAL: from GEOM.POSE's decoder.
+    .wr_valid_i (pd_out_valid),
+    .wr_ready_o (pd_out_ready),
+    .wr_bone_i  (pd_out_bone),
+    .wr_m_i     (pd_out_m),
+
+    // REAL: from GEOM.VDECODE, vertex and both palette addresses.
+    .v_valid_i  (vd_d_valid),
+    .v_ready_o  (vd_d_ready),
+    .v_x_i      (vd_d_x),
+    .v_y_i      (vd_d_y),
+    .v_z_i      (vd_d_z),
+    .v_w0_i     (vd_d_w0),
+    .v_rigid_i  (vd_d_rigid),
+    .v_bone0_i  (vd_d_bone0),
+    .v_bone1_i  (vd_d_bone1),
+    .v_src_id_i (vd_d_src_id),
+
+    // REAL: the vertex and its two matrices, into GEOM.SKIN.
+    .o_valid_o  (pal_o_valid),
+    .o_ready_i  (pal_o_ready),
+    .o_x_o      (pal_o_x),
+    .o_y_o      (pal_o_y),
+    .o_z_o      (pal_o_z),
+    .o_w0_o     (pal_o_w0),
+    .o_rigid_o  (pal_o_rigid),
+    .o_src_id_o (pal_o_src_id),
+    .a_m_o      (pal_a_m),
+    .b_m_o      (pal_b_m),
+
+    .vertices_served_o (geom_pal_vertices_served_o),
+    .bones_written_o   (geom_pal_bones_written_o),
+    .bone_oob_o        (geom_pal_bone_oob_o),
+    .bone_unset_o      (geom_pal_bone_unset_o)
+  );
+
   zhao_geom_skin #(
     .MUL_LANES (GEOM_MUL_LANES)
   ) u_geom_skin (
     .clk       (gpu_clk),
     .rst_n     (rst_n),
 
-    // REAL: from GEOM.VDECODE. This half of I10 is closed.
-    .v_valid_i (vd_d_valid),
-    .v_ready_o (vd_d_ready),
-    .v_x_i     (vd_d_x),
-    .v_y_i     (vd_d_y),
-    .v_z_i     (vd_d_z),
-    .v_w0_i    (vd_d_w0),
-    .v_rigid_i (vd_d_rigid),
-    .v_src_id_i(vd_d_src_id),
-    // I10: the palette store between GEOM.POSE and here does not exist.
-    .a_m_i     (geom_skin_a_m_i),
-    .b_m_i     (geom_skin_b_m_i),
+    // REAL: from the palette store, which took it from GEOM.VDECODE. ENTRY I10
+    // IS CLOSED -- vertex and matrices arrive together from a real producer.
+    .v_valid_i (pal_o_valid),
+    .v_ready_o (pal_o_ready),
+    .v_x_i     (pal_o_x),
+    .v_y_i     (pal_o_y),
+    .v_z_i     (pal_o_z),
+    .v_w0_i    (pal_o_w0),
+    .v_rigid_i (pal_o_rigid),
+    .v_src_id_i(pal_o_src_id),
+    .a_m_i     (pal_a_m),
+    .b_m_i     (pal_b_m),
 
     // REAL: skinned, view-independent vertices into the group sequencer.
     .o_valid_o (gs_v_valid),
@@ -2851,6 +3343,650 @@ module zhao_console_core
     .phy_dq_oe_o               (phy_dq_oe_o),
     .phy_dqm_o                 (phy_dqm_o),
     .phy_dq_i                  (phy_dq_i)
+  );
+
+  // ==========================================================================
+  // 8. THE TERRAIN PAGING SPINE
+  // ==========================================================================
+  // TERRAIN.CMD -> TERRAIN.SEQ -> TERRAIN.RESIDENCY / TERRAIN.LOADQ ->
+  // TERRAIN.PAGELOADER -> TERRAIN.RESIDENCY. Five blocks, every seam between
+  // them a port-for-port, width-for-width match declared by the blocks' own
+  // headers. There is no arithmetic here, no state machine and no arbiter that
+  // this file invented: the ONE place two clients meet is the REAL
+  // `zhao_hps_arbiter`, which is a block with a contract and a fairness rule,
+  // instantiated rather than imitated.
+  //
+  // WHY THE DIRECTORY IS `zhao_terrain_residency_v2` AND NOT `_residency`.
+  // `design/blocks.yml`'s TERRAIN.RESIDENCY row says it in three independent
+  // places: its purpose line ends "the direct-mapped prototype is SUPERSEDED
+  // because two islands may legally overlap in local patch coordinates", its
+  // `tests:` are `terrain_residency_v2_directed.cpp` and
+  // `terrain_residency_v2_random.cpp`, and its UNIT_VERIFIED maturity evidence
+  // is the v2 directed test. `zhao_terrain_residency.sv`'s own header says
+  // "FIRST BLOCK OF THE WORLD LAYER. Nothing instantiates it yet." The v2
+  // block is the ledger's TERRAIN.RESIDENCY and the v1 file is the prototype
+  // that row retires. Every port below is v2's, and `zhao_terrain_seq`'s header
+  // names v2 by file when it explains where its SEQW comes from.
+  //
+  // WHAT IS NOT HERE, AND WHY -- the refusals are the valuable half:
+  //   * TERRAIN.WRITEBACK is a real consumer of TERRAIN.SEQ's `wb_*` and is
+  //     LEFT OUT (entry I28). Two reasons, either sufficient. Its job port
+  //     needs `j_journal_addr_i` and `j_seq_i`, which TERRAIN.SEQ does not
+  //     emit and nothing in `fpga/rtl` owns -- the composed bench mints the
+  //     journal ticket and its own comment calls that glue "a finding". And it
+  //     would be a THIRD MEM.HPS.BRIDGE client: `zhao_hps_arbiter` has exactly
+  //     two ports and its rule-5 starvation law is written for two guaranteed
+  //     clients, so a third is an owner ruling and not a wiring act.
+  //   * TERRAIN.PAGESTREAM / MIPFEED / MIPGEN connect to EACH OTHER exactly --
+  //     that chain is real and its seams are clean. What it has no owner for is
+  //     its HEAD: something must notice a page has landed and ask for its mips,
+  //     and TERRAIN.RESIDENCY has no port to ask with. The composed bench mints
+  //     that trigger in an eight-deep queue and says so. Composing the three
+  //     here would add their area for a chain nothing in this core can start.
+  //   * TERRAIN.NORMALS -> TERRAIN.SHADE is an exact packet match and TESS is
+  //     already its producer on paper -- but `tri_valid_o` is ModeTri, and the
+  //     declaration above records that the sequencer presents mode 1 then mode
+  //     2 and never mode 0. The port is dead BY CONSTRUCTION, so the chain
+  //     would elaborate and could not see a beat.
+  //   * TERRAIN.PROJECT carries a PRIVATE `zhao_project_core`. The console
+  //     already runs ONE `zhao_proj_subsystem` with client A (GEOM) and client
+  //     B (TERRAIN.GROUP_SEQ) live, which is the deduplication this campaign
+  //     exists to achieve; instantiating TERRAIN.PROJECT would put a second
+  //     projector beside it and undo exactly that. The terrain projection this
+  //     block would do is ALREADY DONE by client B, so it is not a missing
+  //     function -- it is a superseded implementation of a present one.
+  //   * TERRAIN.VISIBLE (and TERRAIN.ISLAND, which it instantiates) speak to a
+  //     DIFFERENT directory: `res_ix_o`/`res_iz_o` are unsigned 16-bit patch
+  //     coordinates answered with a 32-bit `handle`, where v2's canonical key
+  //     is {epoch, island, ix, iz} answered with {slot, gen}. Those are two
+  //     abstractions, not two spellings, and reconciling them here would be the
+  //     hidden adapter this file must not contain.
+  //   * TERRAIN.PATCH and TERRAIN.COMPCACHE would close I22, and the seam
+  //     between them is declared port-for-port by COMPCACHE's own header. They
+  //     are blocked on PLACEMENT: TERRAIN.PATCH needs `wx_i`/`wz_i` (placed
+  //     world x/z) and COMPCACHE needs its `pos_*` write port, and no block in
+  //     the tree produces either. Inventing the placement from the lattice
+  //     index and a pitch is arithmetic in the composer.
+
+  // ---- the HPS clients, merged by the block whose job that is --------------
+  zhao_hps_burst_req_t tcm_hps_req,  tpl_hps_req;
+  logic                tcm_hps_grant, tpl_hps_grant;
+  zhao_hps_burst_rsp_t tcm_hps_rsp,  tpl_hps_rsp;
+
+  // TERRAIN.CMD takes client 0 and TERRAIN.PAGELOADER client 1, which is the
+  // arbiter's OWN documented intent rather than a preference invented here:
+  // its port comments read "client 0 (high priority: CMD.DMA)" and "client 1
+  // (low priority: DEBUG.FRAMEBLIT)". A short command-list read is the
+  // command-class traffic; a 21,376-byte page is the bulk transfer, and
+  // `c1_wait_cycles_o` is the arbiter's own instrument for saying what that
+  // choice costs the loader.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0] tarb_c0_bursts, tarb_c1_bursts, tarb_c1_wait_cycles;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_hps_arbiter u_terr_hps_arb (
+    .clk           (gpu_clk),
+    .rst_n         (rst_n),
+    .c0_req_i      (tcm_hps_req),
+    .c0_req_grant_o(tcm_hps_grant),
+    .c0_wr_valid_i (1'b0),
+    .c0_wr_data_i  (64'd0),
+    .c0_wr_last_i  (1'b0),
+    .c0_rsp_o      (tcm_hps_rsp),
+    .c1_req_i      (tpl_hps_req),
+    .c1_req_grant_o(tpl_hps_grant),
+    .c1_wr_valid_i (1'b0),
+    .c1_wr_data_i  (64'd0),
+    .c1_wr_last_i  (1'b0),
+    .c1_rsp_o      (tpl_hps_rsp),
+    .b_req_o       (terr_hps_req_o),
+    .b_req_grant_i (terr_hps_grant_i),
+    .b_wr_valid_o  (terr_hps_wr_valid_o),
+    .b_wr_data_o   (terr_hps_wr_data_o),
+    .b_wr_last_o   (terr_hps_wr_last_o),
+    .b_rsp_i       (terr_hps_rsp_i),
+    .c0_bursts_o     (tarb_c0_bursts),
+    .c1_bursts_o     (tarb_c1_bursts),
+    .c1_wait_cycles_o(tarb_c1_wait_cycles)
+  );
+
+  // ---- TERRAIN.CMD -> TERRAIN.SEQ -----------------------------------------
+  wire               tcm_fr_start;
+  wire [31:0]        tcm_fr_epoch;
+  wire [15:0]        tcm_fr_patch_count;
+  wire [31:0]        tcm_fr_sequence;
+  wire               tcm_rec_valid, tcm_rec_ready;
+  wire [31:0]        tcm_rec_island;
+  wire signed [15:0] tcm_rec_ix, tcm_rec_iz;
+  wire [63:0]        tcm_rec_hps_addr;
+  wire [31:0]        tcm_rec_crc;
+  wire [15:0]        tcm_rec_flags;
+  wire [7:0]         tcm_rec_view_mask, tcm_rec_priority;
+  wire [31:0]        tcm_rec_src_id;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0]        tcm_list_bytes_read;
+  wire               tcm_idle;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_cmd u_terrain_cmd (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .cfg_hps_client_i (ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_epoch_i      (terr_cfg_epoch_i),
+    .cfg_arena_base_i (terr_cfg_arena_base_i),
+    .cfg_arena_bytes_i(terr_cfg_arena_bytes_i),
+
+    .j_valid_i      (terr_cmd_valid_i),
+    .j_ready_o      (terr_cmd_ready_o),
+    .j_epoch_i      (terr_cmd_epoch_i),
+    .j_list_off_i   (terr_cmd_list_off_i),
+    .j_list_bytes_i (terr_cmd_list_bytes_i),
+    .j_list_crc_i   (terr_cmd_list_crc_i),
+    .j_patch_count_i(terr_cmd_patch_count_i),
+    .j_sequence_i   (terr_cmd_sequence_i),
+    .j_src_id_i     (terr_cmd_src_id_i),
+
+    .hps_req_o      (tcm_hps_req),
+    .hps_req_grant_i(tcm_hps_grant),
+    .hps_rsp_i      (tcm_hps_rsp),
+
+    .fr_start_o      (tcm_fr_start),
+    .fr_epoch_o      (tcm_fr_epoch),
+    .fr_patch_count_o(tcm_fr_patch_count),
+    .fr_sequence_o   (tcm_fr_sequence),
+
+    .rec_valid_o    (tcm_rec_valid),
+    .rec_ready_i    (tcm_rec_ready),
+    .rec_island_o   (tcm_rec_island),
+    .rec_ix_o       (tcm_rec_ix),
+    .rec_iz_o       (tcm_rec_iz),
+    .rec_hps_addr_o (tcm_rec_hps_addr),
+    .rec_crc_o      (tcm_rec_crc),
+    .rec_flags_o    (tcm_rec_flags),
+    .rec_view_mask_o(tcm_rec_view_mask),
+    .rec_priority_o (tcm_rec_priority),
+    .rec_src_id_o   (tcm_rec_src_id),
+
+    .done_valid_o   (terr_cmd_done_valid_o),
+    .done_ready_i   (terr_cmd_done_ready_i),
+    .done_ok_o      (terr_cmd_done_ok_o),
+    .done_verdict_o (terr_cmd_done_verdict_o),
+    .done_src_id_o  (terr_cmd_done_src_id_o),
+    .done_crc_seen_o(terr_cmd_done_crc_seen_o),
+
+    .sets_accepted_o  (terr_cmd_sets_accepted_o),
+    .sets_refused_o   (terr_cmd_sets_refused_o),
+    .records_emitted_o(terr_cmd_records_emitted_o),
+    .list_bytes_read_o(tcm_list_bytes_read),
+    .crc_fails_o      (terr_cmd_crc_fails_o),
+    .bridge_errs_o    (terr_cmd_bridge_errs_o),
+    .idle_o           (tcm_idle)
+  );
+
+  // ---- TERRAIN.SEQ, and the directory it drives ---------------------------
+  wire                     tsq_lu_valid, tsq_lu_ready;
+  wire [31:0]              tsq_lu_epoch, tsq_lu_island;
+  wire signed [15:0]       tsq_lu_ix, tsq_lu_iz;
+  wire                     tres_lu_ans_valid, tres_lu_ans_hit;
+  wire [TERR_SLOTW-1:0]    tres_lu_ans_slot;
+  wire [TERR_GENW-1:0]     tres_lu_ans_gen;
+
+  wire                     tsq_cl_valid, tsq_cl_ready;
+  wire [31:0]              tsq_cl_epoch, tsq_cl_island, tsq_cl_expect_crc;
+  wire signed [15:0]       tsq_cl_ix, tsq_cl_iz;
+  wire [TERR_SEQW-1:0]     tsq_cl_seq;
+  wire                     tres_cl_ans_valid, tres_cl_ans_same, tres_cl_ans_refused;
+  wire [TERR_SLOTW-1:0]    tres_cl_ans_slot;
+  wire [TERR_GENW-1:0]     tres_cl_ans_gen;
+  wire                     tres_cl_ev_dirty;
+  wire [31:0]              tres_cl_ev_island;
+  wire signed [15:0]       tres_cl_ev_ix, tres_cl_ev_iz;
+  wire [TERR_GENW-1:0]     tres_cl_ev_gen;
+
+  wire                     tsq_pin_valid, tsq_pin_ready;
+  wire [TERR_SLOTW-1:0]    tsq_pin_slot;
+  wire [TERR_GENW-1:0]     tsq_pin_gen;
+  wire [31:0]              tsq_pin_epoch;
+
+  wire                     tsq_ld_valid, tsq_ld_ready;
+  wire [TERR_SLOTW-1:0]    tsq_ld_slot;
+  wire [TERR_GENW-1:0]     tsq_ld_gen;
+  wire [31:0]              tsq_ld_epoch, tsq_ld_island, tsq_ld_expect_crc, tsq_ld_src_id;
+  wire signed [15:0]       tsq_ld_ix, tsq_ld_iz;
+  wire [63:0]              tsq_ld_hps_addr;
+
+  // TERRAIN.RESIDENCY's own eviction-valid, its post-reset init level, and the
+  // four counters no consumer in this core reads. Named rather than left as an
+  // empty by-name connection, because `.cl_evicted_o()` reads as "there is no
+  // such signal" when it means "nothing here consumes it".
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                     tres_ready, tres_cl_evicted;
+  wire [31:0]              tres_dirty_evictions, tres_refused_all_pinned;
+  wire [31:0]              tres_stale_events;
+  wire [31:0]              tsq_prefetch_resident, tsq_loads_deferred;
+  wire [31:0]              tsq_writebacks_issued, tsq_compose_slots_used;
+  wire [31:0]              tsq_pins_issued, tsq_drained, tsq_wb_wait_cycles;
+  wire                     tsq_frame_fault;
+  wire [31:0]              tsq_fault_src_id, tsq_fault_island;
+  wire signed [15:0]       tsq_fault_ix, tsq_fault_iz;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_seq #(
+    .COMPOSE_SLOTS(TERR_CSLOTS),
+    .SLOTW        (TERR_SLOTW),
+    .GENW         (TERR_GENW),
+    .SEQW         (TERR_SEQW)
+  ) u_terrain_seq (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // The frame ring and the record stream, both from TERRAIN.CMD. Name for
+    // name and width for width; nothing is renamed and nothing is computed.
+    .fr_start_i      (tcm_fr_start),
+    .fr_epoch_i      (tcm_fr_epoch),
+    .fr_patch_count_i(tcm_fr_patch_count),
+    .fr_sequence_i   (tcm_fr_sequence),
+    .fr_busy_o       (terr_seq_busy_o),
+    .fr_done_o       (terr_seq_done_o),
+
+    .cfg_load_budget_i(terr_cfg_load_budget_i),
+
+    .rec_valid_i    (tcm_rec_valid),
+    .rec_ready_o    (tcm_rec_ready),
+    .rec_island_i   (tcm_rec_island),
+    .rec_ix_i       (tcm_rec_ix),
+    .rec_iz_i       (tcm_rec_iz),
+    .rec_hps_addr_i (tcm_rec_hps_addr),
+    .rec_crc_i      (tcm_rec_crc),
+    .rec_flags_i    (tcm_rec_flags),
+    .rec_view_mask_i(tcm_rec_view_mask),
+    .rec_priority_i (tcm_rec_priority),
+    .rec_src_id_i   (tcm_rec_src_id),
+
+    // NO LOOKUP SHIM, AND THAT IS A DELIBERATE READING OF THE RTL RATHER THAN
+    // a copy of the composed bench. `tb_terrain_world.sv` carries a hold-and-
+    // retry shim here, and its own comment dates it: it was written when the
+    // directory had no `lu_ready_o` and the sequencer had to guess whether its
+    // one-cycle offer had landed. Both ports exist now, and
+    // `zhao_terrain_seq.sv:345` drives `lu_valid_o = (st == S_LOOKUP)` with
+    // `S_LOOKUP: if (lu_ready_i) st_n = S_WAIT_LU` -- a HELD offer released by
+    // a real ready. A lookup can no longer be dropped, so the shim would be
+    // state this composer invented to solve a problem the blocks already
+    // solved between them. The bench keeps it behind `cfg_dir_gate_i` to
+    // reproduce the historical defect, which is a different job.
+    .lu_valid_o    (tsq_lu_valid),
+    .lu_ready_i    (tsq_lu_ready),
+    .lu_epoch_o    (tsq_lu_epoch),
+    .lu_island_o   (tsq_lu_island),
+    .lu_ix_o       (tsq_lu_ix),
+    .lu_iz_o       (tsq_lu_iz),
+    .lu_ans_valid_i(tres_lu_ans_valid),
+    .lu_ans_hit_i  (tres_lu_ans_hit),
+    .lu_ans_slot_i (tres_lu_ans_slot),
+    .lu_ans_gen_i  (tres_lu_ans_gen),
+
+    .cl_valid_o        (tsq_cl_valid),
+    .cl_ready_i        (tsq_cl_ready),
+    .cl_epoch_o        (tsq_cl_epoch),
+    .cl_island_o       (tsq_cl_island),
+    .cl_ix_o           (tsq_cl_ix),
+    .cl_iz_o           (tsq_cl_iz),
+    .cl_expect_crc_o   (tsq_cl_expect_crc),
+    .cl_seq_o          (tsq_cl_seq),
+    .cl_ans_valid_i    (tres_cl_ans_valid),
+    .cl_ans_same_i     (tres_cl_ans_same),
+    .cl_ans_refused_i  (tres_cl_ans_refused),
+    .cl_ans_slot_i     (tres_cl_ans_slot),
+    .cl_ans_gen_i      (tres_cl_ans_gen),
+    .cl_ans_ev_dirty_i (tres_cl_ev_dirty),
+    .cl_ans_ev_island_i(tres_cl_ev_island),
+    .cl_ans_ev_ix_i    (tres_cl_ev_ix),
+    .cl_ans_ev_iz_i    (tres_cl_ev_iz),
+    .cl_ans_ev_gen_i   (tres_cl_ev_gen),
+
+    .pin_valid_o(tsq_pin_valid),
+    .pin_ready_i(tsq_pin_ready),
+    .pin_slot_o (tsq_pin_slot),
+    .pin_gen_o  (tsq_pin_gen),
+    .pin_epoch_o(tsq_pin_epoch),
+
+    // TERRAIN.WRITEBACK is not composed -- entry I28. Both halves of the
+    // barrier leave the module together, so the job and its completion stay
+    // one seam rather than becoming a job that goes out and an answer that is
+    // invented here.
+    .wb_valid_o      (terr_wb_valid_o),
+    .wb_ready_i      (terr_wb_ready_i),
+    .wb_done_valid_i (terr_wb_done_valid_i),
+    .wb_done_slot_i  (terr_wb_done_slot_i),
+    .wb_slot_o       (terr_wb_slot_o),
+    .wb_gen_o        (terr_wb_gen_o),
+    .wb_epoch_o      (terr_wb_epoch_o),
+    .wb_island_o     (terr_wb_island_o),
+    .wb_ix_o         (terr_wb_ix_o),
+    .wb_iz_o         (terr_wb_iz_o),
+    .wb_src_id_o     (terr_wb_src_id_o),
+    .wb_wait_cycles_o(tsq_wb_wait_cycles),
+
+    .ld_valid_o     (tsq_ld_valid),
+    .ld_ready_i     (tsq_ld_ready),
+    .ld_slot_o      (tsq_ld_slot),
+    .ld_gen_o       (tsq_ld_gen),
+    .ld_epoch_o     (tsq_ld_epoch),
+    .ld_island_o    (tsq_ld_island),
+    .ld_ix_o        (tsq_ld_ix),
+    .ld_iz_o        (tsq_ld_iz),
+    .ld_hps_addr_o  (tsq_ld_hps_addr),
+    .ld_expect_crc_o(tsq_ld_expect_crc),
+    .ld_src_id_o    (tsq_ld_src_id),
+
+    // The terrain COMPOSE ENGINE's door -- entry I27.
+    .is_valid_o      (terr_is_valid_o),
+    .is_ready_i      (terr_is_ready_i),
+    .is_slot_o       (terr_is_slot_o),
+    .is_gen_o        (terr_is_gen_o),
+    .is_epoch_o      (terr_is_epoch_o),
+    .is_island_o     (terr_is_island_o),
+    .is_ix_o         (terr_is_ix_o),
+    .is_iz_o         (terr_is_iz_o),
+    .is_cslot_valid_o(terr_is_cslot_valid_o),
+    .is_cslot_o      (terr_is_cslot_o),
+    .is_flags_o      (terr_is_flags_o),
+    .is_view_mask_o  (terr_is_view_mask_o),
+    .is_priority_o   (terr_is_priority_o),
+    .is_src_id_o     (terr_is_src_id_o),
+
+    .frame_fault_o  (tsq_frame_fault),
+    .fault_src_id_o (tsq_fault_src_id),
+    .fault_island_o (tsq_fault_island),
+    .fault_ix_o     (tsq_fault_ix),
+    .fault_iz_o     (tsq_fault_iz),
+    .err_stray_ans_o(terr_seq_err_stray_ans_o),
+
+    .records_consumed_o    (terr_seq_records_consumed_o),
+    .patches_issued_o      (terr_seq_patches_issued_o),
+    .prefetch_resident_o   (tsq_prefetch_resident),
+    .skipped_not_resident_o(terr_seq_skipped_not_resident_o),
+    .claims_issued_o       (terr_seq_claims_issued_o),
+    .claims_refused_o      (terr_seq_claims_refused_o),
+    .claims_same_o         (terr_seq_claims_same_o),
+    .loads_issued_o        (terr_seq_loads_issued_o),
+    .loads_deferred_o      (tsq_loads_deferred),
+    .writebacks_issued_o   (tsq_writebacks_issued),
+    .compose_slots_used_o  (tsq_compose_slots_used),
+    .pins_issued_o         (tsq_pins_issued),
+    .drained_o             (tsq_drained),
+    .frame_faults_o        (terr_seq_frame_faults_o)
+  );
+
+  // ---- TERRAIN.RESIDENCY (the v2 directory, per the ledger row) -----------
+  wire                  tpl_fin_valid, tpl_fin_ready, tpl_fin_ok;
+  wire [TERR_MEMSLOT-1:0] tpl_fin_slot_w;
+  wire [TERR_GENW-1:0]  tpl_fin_gen;
+  wire [31:0]           tpl_fin_epoch, tpl_fin_crc;
+
+  // THE WIDTH STEP, CROSSED IN EXACTLY ONE DIRECTION AND QUALIFIED, NOT
+  // NARROWED. TERRAIN.PAGELOADER carries a pool index ONE BIT WIDER than the
+  // directory's {set, way} handle, deliberately: at exactly $clog2(1024) = 10
+  // bits a computed slot of 1,024 CANNOT be expressed and would arrive
+  // TRUNCATED as slot 0, overwriting a live page. "A refusal is not a clamp."
+  // Passing the low ten bits alone would hand that alias straight back and
+  // publish another patch's page under this patch's key.
+  //
+  // So the completion is OFFERED only when the extra bit is clear, and the
+  // ones it is not are COUNTED. In this composition the producer of `j_slot_i`
+  // is a TERR_SLOTW wire, so the bit is structurally zero and the counter
+  // cannot move under any legal stimulus -- which makes it exactly the
+  // `wq_overflow_o` shape CLAUDE.md describes, and it therefore OWES a
+  // committed mutant under `tests/mutants/` before its silence may be quoted.
+  // It is kept rather than dropped because the qualification it ledgers is
+  // real: the day a wider producer appears, this is what refuses it.
+  wire tpl_fin_over = tpl_fin_slot_w[TERR_MEMSLOT-1];
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) terr_pl_slot_overflow_o <= 32'd0;
+    else if (tpl_fin_valid && tpl_fin_over && (terr_pl_slot_overflow_o != 32'hFFFF_FFFF))
+      terr_pl_slot_overflow_o <= terr_pl_slot_overflow_o + 32'd1;
+  end
+
+  zhao_terrain_residency_v2 #(
+    .SETS(TERR_SETS),
+    .WAYS(TERR_WAYS),
+    .GENW(TERR_GENW),
+    .PINW(TERR_PINW),
+    .SEQW(TERR_SEQW)
+  ) u_terrain_residency (
+    .clk    (gpu_clk),
+    .rst_n  (rst_n),
+    .ready_o(tres_ready),
+
+    .lu_valid_i (tsq_lu_valid),
+    .lu_ready_o (tsq_lu_ready),
+    .lu_epoch_i (tsq_lu_epoch),
+    .lu_island_i(tsq_lu_island),
+    .lu_ix_i    (tsq_lu_ix),
+    .lu_iz_i    (tsq_lu_iz),
+    .lu_valid_o (tres_lu_ans_valid),
+    .lu_hit_o   (tres_lu_ans_hit),
+    .lu_slot_o  (tres_lu_ans_slot),
+    .lu_gen_o   (tres_lu_ans_gen),
+
+    .cl_valid_i     (tsq_cl_valid),
+    .cl_ready_o     (tsq_cl_ready),
+    .cl_epoch_i     (tsq_cl_epoch),
+    .cl_island_i    (tsq_cl_island),
+    .cl_ix_i        (tsq_cl_ix),
+    .cl_iz_i        (tsq_cl_iz),
+    .cl_expect_crc_i(tsq_cl_expect_crc),
+    .cl_seq_i       (tsq_cl_seq),
+    .cl_valid_o         (tres_cl_ans_valid),
+    .cl_same_o          (tres_cl_ans_same),
+    .cl_refused_o       (tres_cl_ans_refused),
+    .cl_slot_o          (tres_cl_ans_slot),
+    .cl_gen_o           (tres_cl_ans_gen),
+    .cl_evicted_o       (tres_cl_evicted),
+    .cl_evicted_dirty_o (tres_cl_ev_dirty),
+    .cl_evicted_island_o(tres_cl_ev_island),
+    .cl_evicted_ix_o    (tres_cl_ev_ix),
+    .cl_evicted_iz_o    (tres_cl_ev_iz),
+    .cl_evicted_gen_o   (tres_cl_ev_gen),
+
+    .fin_valid_i(tpl_fin_valid && !tpl_fin_over),
+    .fin_ready_o(tpl_fin_ready),
+    .fin_slot_i (tpl_fin_slot_w[TERR_SLOTW-1:0]),
+    .fin_gen_i  (tpl_fin_gen),
+    .fin_epoch_i(tpl_fin_epoch),
+    .fin_ok_i   (tpl_fin_ok),
+    .fin_crc_i  (tpl_fin_crc),
+
+    // I27: TERRAIN.BAKE marks a page dirty and the compose engine unpins it on
+    // job completion. Neither is composed, so both leave the module.
+    .dm_valid_i(terr_dm_valid_i),
+    .dm_ready_o(terr_dm_ready_o),
+    .dm_slot_i (terr_dm_slot_i),
+    .dm_gen_i  (terr_dm_gen_i),
+    .dm_epoch_i(terr_dm_epoch_i),
+    .dm_bd_i   (terr_dm_bd_i),
+    .dm_f_i    (terr_dm_f_i),
+    .dm_mips_i (terr_dm_mips_i),
+
+    .pin_valid_i(tsq_pin_valid),
+    .pin_ready_o(tsq_pin_ready),
+    .pin_slot_i (tsq_pin_slot),
+    .pin_gen_i  (tsq_pin_gen),
+    .pin_epoch_i(tsq_pin_epoch),
+
+    .unpin_valid_i(terr_unpin_valid_i),
+    .unpin_ready_o(terr_unpin_ready_o),
+    .unpin_slot_i (terr_unpin_slot_i),
+    .unpin_gen_i  (terr_unpin_gen_i),
+    .unpin_epoch_i(terr_unpin_epoch_i),
+
+    // I28, other end: the F-sheet journal barrier. TERRAIN.WRITEBACK owns it
+    // and is not composed.
+    .wb_valid_i(terr_wback_valid_i),
+    .wb_ready_o(terr_wback_ready_o),
+    .wb_slot_i (terr_wback_slot_i),
+    .wb_gen_i  (terr_wback_gen_i),
+    .wb_epoch_i(terr_wback_epoch_i),
+
+    .chk_valid_i(terr_chk_valid_i),
+    .chk_slot_i (terr_chk_slot_i),
+    .chk_gen_i  (terr_chk_gen_i),
+    .chk_epoch_i(terr_chk_epoch_i),
+    .chk_valid_o(terr_chk_valid_o),
+    .chk_stale_o(terr_chk_stale_o),
+
+    .hits_o              (terr_res_hits_o),
+    .misses_o            (terr_res_misses_o),
+    .claims_o            (terr_res_claims_o),
+    .evictions_o         (terr_res_evictions_o),
+    .dirty_evictions_o   (tres_dirty_evictions),
+    .refused_all_pinned_o(tres_refused_all_pinned),
+    .stale_events_o      (tres_stale_events),
+    .crc_failures_o      (terr_res_crc_failures_o),
+    .resident_o          (terr_res_resident_o)
+  );
+
+  // ---- TERRAIN.LOADQ, between the sequencer and the loader ----------------
+  // The queue exists so the sequencer never waits on the LOADER'S acceptance.
+  // A page load is thousands of clocks; the sequencer's job is to get through
+  // the frame's record list.
+  wire                  tlq_q_valid, tlq_q_ready;
+  wire [TERR_SLOTW-1:0] tlq_q_slot;
+  wire [TERR_GENW-1:0]  tlq_q_gen;
+  wire [31:0]           tlq_q_epoch, tlq_q_island, tlq_q_expect_crc, tlq_q_src_id;
+  wire signed [15:0]    tlq_q_ix, tlq_q_iz;
+  wire [63:0]           tlq_q_hps_addr;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0]           tlq_drained, tlq_refused, tlq_level, tlq_inflight;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_loadq #(
+    .DEPTH(TERR_LOADQ_D),
+    .SLOTW(TERR_SLOTW),
+    .GENW (TERR_GENW)
+  ) u_terrain_loadq (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .j_valid_i     (tsq_ld_valid),
+    .j_ready_o     (tsq_ld_ready),
+    .j_slot_i      (tsq_ld_slot),
+    .j_gen_i       (tsq_ld_gen),
+    .j_epoch_i     (tsq_ld_epoch),
+    .j_island_i    (tsq_ld_island),
+    .j_ix_i        (tsq_ld_ix),
+    .j_iz_i        (tsq_ld_iz),
+    .j_hps_addr_i  (tsq_ld_hps_addr),
+    .j_expect_crc_i(tsq_ld_expect_crc),
+    .j_src_id_i    (tsq_ld_src_id),
+
+    .q_valid_o     (tlq_q_valid),
+    .q_ready_i     (tlq_q_ready),
+    .q_slot_o      (tlq_q_slot),
+    .q_gen_o       (tlq_q_gen),
+    .q_epoch_o     (tlq_q_epoch),
+    .q_island_o    (tlq_q_island),
+    .q_ix_o        (tlq_q_ix),
+    .q_iz_o        (tlq_q_iz),
+    .q_hps_addr_o  (tlq_q_hps_addr),
+    .q_expect_crc_o(tlq_q_expect_crc),
+    .q_src_id_o    (tlq_q_src_id),
+
+    // The drain is the MECHANISM for abandoning a faulted frame's queued jobs
+    // and the POLICY is an owner ruling nobody has made -- the block's own
+    // header says so. Nothing in this core asserts it, which is the same
+    // standing it has in the composed bench.
+    .drain_i(1'b0),
+
+    .accepted_o  (terr_lq_accepted_o),
+    .issued_o    (terr_lq_issued_o),
+    .drained_o   (tlq_drained),
+    .refused_o   (tlq_refused),
+    .level_o     (tlq_level),
+    .inflight_o  (tlq_inflight),
+    .high_water_o(terr_lq_high_water_o)
+  );
+
+  // ---- TERRAIN.PAGELOADER -------------------------------------------------
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [3:0]         tpl_fin_verdict;
+  wire [31:0]        tpl_fin_src_id;
+  wire [31:0]        tpl_fault_island, tpl_fault_src_id;
+  wire signed [15:0] tpl_fault_ix, tpl_fault_iz;
+  wire [3:0]         tpl_fault_verdict;
+  wire [31:0]        tpl_fault_crc_seen, tpl_fault_crc_expect;
+  wire [31:0]        tpl_pages_refused, tpl_hdr_ident_fails, tpl_incomplete;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_pageloader #(
+    .PAGE_BYTES  (TERR_PAGE_BYTES),
+    .REGION_BASE (TERR_POOL_BASE),
+    .REGION_SLOTS(TERR_POOL_SLOTS),
+    .GENW        (TERR_GENW)
+  ) u_terrain_pageloader (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .cfg_vram_client_i    (ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_hps_client_i     (ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_hps_arena_base_i (terr_cfg_arena_base_i),
+    .cfg_hps_arena_bytes_i(terr_cfg_arena_bytes_i),
+    .cfg_epoch_i          (terr_cfg_epoch_i),
+
+    // The zero extension across the pool's extra refusal bit, written here
+    // rather than assumed. See the note at `tpl_fin_over` for the other end.
+    .j_valid_i     (tlq_q_valid),
+    .j_ready_o     (tlq_q_ready),
+    .j_slot_i      ({1'b0, tlq_q_slot}),
+    .j_gen_i       (tlq_q_gen),
+    .j_epoch_i     (tlq_q_epoch),
+    .j_island_i    (tlq_q_island),
+    .j_ix_i        (tlq_q_ix),
+    .j_iz_i        (tlq_q_iz),
+    .j_hps_addr_i  (tlq_q_hps_addr),
+    .j_expect_crc_i(tlq_q_expect_crc),
+    .j_src_id_i    (tlq_q_src_id),
+
+    .hps_req_o      (tpl_hps_req),
+    .hps_req_grant_i(tpl_hps_grant),
+    .hps_rsp_i      (tpl_hps_rsp),
+
+    .guard_req_o   (terr_guard_req_o),
+    .guard_rsp_i   (terr_guard_rsp_i),
+    .guard_wdata_o (terr_guard_wdata_o),
+    .guard_wvalid_o(terr_guard_wvalid_o),
+    .guard_wready_i(terr_guard_wready_i),
+    .guard_wlast_o (terr_guard_wlast_o),
+
+    .fin_valid_o  (tpl_fin_valid),
+    .fin_ready_i  (tpl_fin_ready),
+    .fin_slot_o   (tpl_fin_slot_w),
+    .fin_gen_o    (tpl_fin_gen),
+    .fin_epoch_o  (tpl_fin_epoch),
+    .fin_ok_o     (tpl_fin_ok),
+    .fin_crc_o    (tpl_fin_crc),
+    .fin_verdict_o(tpl_fin_verdict),
+    .fin_src_id_o (tpl_fin_src_id),
+
+    .fault_island_o    (tpl_fault_island),
+    .fault_ix_o        (tpl_fault_ix),
+    .fault_iz_o        (tpl_fault_iz),
+    .fault_src_id_o    (tpl_fault_src_id),
+    .fault_verdict_o   (tpl_fault_verdict),
+    .fault_crc_seen_o  (tpl_fault_crc_seen),
+    .fault_crc_expect_o(tpl_fault_crc_expect),
+
+    .pages_loaded_o   (terr_pl_pages_loaded_o),
+    .pages_faulted_o  (terr_pl_pages_faulted_o),
+    .pages_refused_o  (tpl_pages_refused),
+    .crc_fails_o      (terr_pl_crc_fails_o),
+    .hdr_ident_fails_o(tpl_hdr_ident_fails),
+    .incomplete_o     (tpl_incomplete),
+    .guard_denied_o   (terr_pl_guard_denied_o),
+    .bridge_errs_o    (terr_pl_bridge_errs_o),
+    .load_bytes_o     (terr_pl_load_bytes_o)
   );
 
 endmodule : zhao_console_core

@@ -248,6 +248,25 @@ _ALIAS: dict[str, str | None] = {
     "FIELD.SEQ.CORE":    "zhao_field_v2_core",
     "TERRAIN.COMPCACHE": "zhao_terrain_compcache_front",
     "TERRAIN.ISLAND":    "zhao_terrain_island_dir",
+    # THE NAME CONVENTION RESOLVES THIS ONE TO A SUPERSEDED PROTOTYPE, which is
+    # the block-id-to-module failure CLAUDE.md's broken-instrument section
+    # already records ("three of them existed under a name the rule did not
+    # construct") -- except here the constructed name EXISTS, so nothing looked
+    # wrong. `zhao_terrain_residency.sv` is the direct-mapped first draft and
+    # its own header opens "FIRST BLOCK OF THE WORLD LAYER. Nothing
+    # instantiates it yet."
+    #
+    # THIS CHANGE MAKES THE NUMBER SMALLER, so it is the kind that has to be
+    # checked hardest. It was checked against `design/blocks.yml`'s own
+    # TERRAIN.RESIDENCY row, which says it three independent ways:
+    #   * purpose: "...the direct-mapped prototype is superseded because two
+    #     islands may legally overlap in local patch coordinates";
+    #   * tests:   terrain_residency_v2_directed.cpp / _random.cpp;
+    #   * maturity UNIT_VERIFIED, evidence terrain_residency_v2_directed.cpp.
+    # And structurally: `zhao_terrain_seq`'s master ports match v2 port for
+    # port ({epoch, island, ix, iz} key, SEQW claim sequence, pin/unpin) and do
+    # NOT match v1's {px, py} lookup at all. `zhao_prod_top` instantiates v2.
+    "TERRAIN.RESIDENCY": "zhao_terrain_residency_v2",
     "GEOM.POSE":         "zhao_geom_pose_decode",
     "MATERIAL.RESOLVE":  "zhao_texture_material_combine_v2",
     # searched and genuinely absent -- no file matches these at all

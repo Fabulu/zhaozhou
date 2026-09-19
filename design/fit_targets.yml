@@ -2463,6 +2463,45 @@ targets:
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
+      # Added 2026-09-19, packet P-TERRAIN. THE PAGING SPINE: five blocks in
+      # one chain, TERRAIN.CMD -> TERRAIN.SEQ -> TERRAIN.RESIDENCY /
+      # TERRAIN.LOADQ -> TERRAIN.PAGELOADER -> TERRAIN.RESIDENCY. Every seam
+      # between them is a port-for-port, width-for-width match the blocks' own
+      # headers declare, and the only place two clients meet is the REAL
+      # `zhao_hps_arbiter` (already in this list for the shell's own use).
+      #
+      # `_residency_v2` and NOT `_residency`: design/blocks.yml's
+      # TERRAIN.RESIDENCY row names the v2 tests as its UNIT_VERIFIED evidence
+      # and its purpose line calls the direct-mapped prototype SUPERSEDED.
+      # `zhao_terrain_residency.sv`'s own header says nothing instantiates it.
+      #
+      # WHAT THIS ROW'S AREA NUMBER WILL AND WILL NOT CONTAIN. The spine's
+      # MEM.HPS.BRIDGE and MEM.GUARD clients stop at zhao_console_core's edge
+      # (header entry I26) -- the shell has no spare bridge socket and its one
+      # guard socket is named for GEOM. So the logic behind them is PRESENT and
+      # not constant-folded, but no second bridge is counted here.
+      #
+      # NOT ADDED, and every reason is in the core's header rather than here:
+      # zhao_terrain_project (carries a PRIVATE zhao_project_core; the terrain
+      # projection is ALREADY done by client B of the shared subsystem this row
+      # exists to measure, so it is a superseded implementation and not a
+      # missing function), zhao_terrain_writeback (its journal address and
+      # ticket have no owner in fpga/rtl, and it would be a THIRD client on a
+      # two-port arbiter whose fairness rule is written for two),
+      # zhao_terrain_pagestream / mipfeed / mipgen (they join each other
+      # exactly, but nothing in fpga/rtl can ASK for a page's mips -- the
+      # composed bench mints that trigger and calls it a finding),
+      # zhao_terrain_normals / shade (TESS's ModeTri port is dead by
+      # construction here, so the chain could not see a beat),
+      # zhao_terrain_patch / compcache_front (both need a PLACEMENT owner --
+      # wx/wz and the pos_* write port -- and no block produces one),
+      # zhao_terrain_visible / island_dir / lod / bake / velocity / normalmap
+      # (each waits on one of the above).
+      - fpga/rtl/terrain/zhao_terrain_cmd.sv
+      - fpga/rtl/terrain/zhao_terrain_seq.sv
+      - fpga/rtl/terrain/zhao_terrain_residency_v2.sv
+      - fpga/rtl/terrain/zhao_terrain_loadq.sv
+      - fpga/rtl/terrain/zhao_terrain_pageloader.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
       - fpga/rtl/measure/zhao_measure_histogram.sv
       - fpga/rtl/prod/zhao_console_core.sv
