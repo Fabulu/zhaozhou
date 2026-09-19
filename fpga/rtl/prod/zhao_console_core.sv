@@ -1225,7 +1225,17 @@
 //      between the fine lattice and its coarse mips -- the "17x17 + 9x9 ...
 //      for TERRAIN.LOD" of `spec/terrain_rules.md` 2. TERRAIN.MIPGEN computes
 //      those mips and is composed as of 2026-09-19, and THE STORE THAT WOULD
-//      HOLD THEM DOES NOT EXIST: that is entry I42. The history is the other
+//      HOLD THEM DOES NOT EXIST: that is entry I44 (it was written as I42 and
+//      renumbered later the same day; see that entry for why). The quantity
+//      itself has no executable definition anywhere either, which is a second
+//      statement and a worse one: `reports/TERRAIN-LOD-DEVIATION-20260907.md`
+//      found the only driver of `sp_dev1_i` in the tree to be an LFSR in
+//      `zhao_prod_top`, every test writing the three by hand, and TWO
+//      DEFENSIBLE READINGS of `dev[L]` (the morph deviation, which excludes the
+//      boundary ring, against the mesh deviation, which includes it) that
+//      differ on every subpatch edge. The law is derivable from `coarse_height`
+//      and `morph_case` with no new arithmetic -- and choosing WHICH of the two
+//      it is, is an owner ruling, not a composition. The history is the other
 //      half and is the caller's by TERRAIN.LOD's own chosen law 5 -- it
 //      "rides the packet" and the block deliberately keeps no RAM -- so
 //      whoever owns the deviation store owns the history beside it.
@@ -1236,9 +1246,42 @@
 //      twice over -- it named an absent owner that is not absent and would
 //      have been the wrong owner anyway, its own first line calling it "the
 //      3-slot frame ownership FSM". `job_view_mask`, `job_mat_a`, `job_mat_b`
-//      and `job_weight` belong to whoever owns the terrain DRAW, and no block
-//      in this tree claims that. The owner is UNIDENTIFIED, which is a
-//      smaller and truer statement than a name.
+//      and `job_weight` belong to whoever owns the terrain DRAW.
+//
+//      NARROWED FROM FOUR FIELDS TO THREE, 2026-09-19, and the correction is
+//      against THIS FILE'S OWN WIRE DECLARATION rather than against a document.
+//      The sentence that stood here said all four "belong to whoever owns the
+//      terrain DRAW, and no block in this tree claims that. The owner is
+//      UNIDENTIFIED". That is FALSE FOR `job_view_mask`, and the refutation is
+//      ninety lines below at `tis_view_mask`, where this module already says
+//      the field is produced and names where it goes. The chain is composed
+//      end to end today: ruling T5's `SubmitTerrainSet` record carries a
+//      per-record view mask, `zhao_terrain_cmd` emits it as `rec_view_mask_o`,
+//      `zhao_terrain_seq` carries it to the compose door as `is_view_mask_o`
+//      (its line 394, from `r_view_q`), and it lands here as `tis_view_mask` --
+//      declared, waived as unconsumed AT the declaration, with the comment
+//      "`is_view_mask_o` and `is_priority_o` belong to the subpatch job
+//      TERRAIN.LOD would build, which is entry I21's boundary". So the producer
+//      is not absent; the CONSUMER is, and the consumer is TERRAIN.LOD.
+//
+//      WHAT THE VIEW MASK STILL NEEDS IS A RECONCILIATION, NOT AN OWNER, and
+//      it is a real question this entry does not answer: the door's mask is
+//      EIGHT bits (T5's per-player tag, `zhao_terrain_cmd.sv` 124-131 recording
+//      the SET-level copy as work with no consumer) while
+//      `zhao_terrain_group_seq.job_view_mask_i` is TWO, documented "bit v =
+//      project into view v" and compared against `2'b11`/`2'b10`/`2'b00` to
+//      choose one or two arena slots. Those are a PLAYER mask and a PROJECTOR
+//      VIEW mask. On a two-view machine they very probably coincide, and
+//      "very probably coincide" is exactly the reasoning that produces a hidden
+//      adapter, so the narrowing is named here and not performed.
+//
+//      THE THREE THAT REMAIN UNOWNED are `job_mat_a`, `job_mat_b` and
+//      `job_weight` -- the material pair and its blend weight. SEARCHED: the
+//      T5 record carries {island, ix, iz, hps_addr, crc, flags, view_mask,
+//      priority, src_id} and no material at all, TERRAIN.CMD adds none, and
+//      nothing else in `fpga/rtl` drives a `job_mat_*`. For those three the
+//      owner is UNIDENTIFIED, which is a smaller and truer statement than a
+//      name -- and it is now a statement about three fields instead of four.
 //
 //      WIDENED 2026-09-19, and it is one more end of the SAME absent owner
 //      rather than a second gap: `terr_cc_serve_release_i`, TERRAIN.COMPCACHE's
@@ -1477,6 +1520,32 @@
 //      there are no dirty evictions, so the block would add its area for a
 //      path nothing can enter.
 //
+//      RE-READ 2026-09-19 AND THE REFUSAL SURVIVED -- but ONE BLOCKER THE
+//      BLOCK'S OWN HEADER STILL ADVERTISES HAS EXPIRED, and it is named here
+//      because it is the first thing the next reader will hit and it will stop
+//      them. `zhao_terrain_writeback.sv` 67-84 says "MEM.GUARD MUST GAIN A READ
+//      ARM, AND IT IS NOT MADE HERE ... TERRAIN.PAGE_POOL, WRITE-ONLY UNTIL
+//      2026-09-06", and concludes "until it lands, every sheet faults as
+//      V_INCOMPLETE with `guard_denied_o` counting, and NO slot is released".
+//      SEARCHED `fpga/rtl/memory/zhao_mem_guard.sv`: IT LANDED. Its region
+//      table now reads "TERRAIN.PAGE_POOL ... TERRAIN.BUILD, WRITE (pages in)
+//      and READ (F sheets" (lines 15-16), line 163 says the arm is "READ for
+//      the writeback (rulings T2 / T3 / T4)", and lines 198-200 are the guard
+//      answering the writeback's own sentence: "THE READ WAS WITHHELD UNTIL ITS
+//      BLOCK EXISTED ... brings its own arm and its own proof." So the deadline
+//      in that header is thirteen days past and the file has not been told.
+//      This is the uncashed-cheque shape one step on: the prerequisite was
+//      built, and the note asking for it was never read back.
+//
+//      THE THREE REASONS ABOVE ARE UNAFFECTED, and it is worth being explicit
+//      that removing an expired blocker did not weaken them. The journal ticket
+//      still has no owner (`tests/terrain/tb_terrain_world.sv` 1651-1655 mints
+//      it in glue and calls that "a finding rather than a convenience"); the
+//      HPS arbiter in this module is `u_terr_hps_arb` with its two ports taken
+//      by TERRAIN.CMD and TERRAIN.PAGELOADER, so a third client is still an
+//      owner ruling; and the dirty-eviction path is still unreachable, which
+//      traces to I32 rather than to I27 now that I32 has been rewritten.
+//
 // I29. GEOM.POSE's CLIP PAGE AND SKELETON BAKE (`geom_pose_start_i`,
 //      `geom_pose_bone_*`, `geom_pose_quat_*`, `geom_pose_inv_rest_i`,
 //      `geom_pose_root_d*`) -- BOUNDARY. NEW 2026-09-19, and it is I10's
@@ -1551,13 +1620,69 @@
 //      stamp instead of stalling forever on records that cannot come.)
 //
 // I32. SURFACE.STAMP's `stamp_results` (`surf_res_*`) -- BOUNDARY. TERRAIN.BAKE
-//      is the named consumer, it is built (`fpga/rtl/terrain/zhao_terrain_bake
-//      .sv`) and it is NOT composed. It is deliberately not composed here:
-//      TERRAIN.BAKE belongs to the terrain compose engine that entry I27 says
-//      is blocked on a placement owner, and adopting it for this one port
-//      would pull that whole subsystem in behind a seam I27 already records as
-//      unclosable today. The port is on this module's edge so the result
-//      stream is observable rather than dropped.
+//      is the named consumer, it is built and it is NOT composed. The port is
+//      on this module's edge so the result stream is observable rather than
+//      dropped.
+//
+//      THE REASON CHANGED 2026-09-19 AND THE ONE IT REPLACES HAD EXPIRED.
+//      This entry used to read: "TERRAIN.BAKE belongs to the terrain compose
+//      engine that entry I27 says is blocked on a placement owner, and adopting
+//      it for this one port would pull that whole subsystem in behind a seam
+//      I27 already records as unclosable today." Entry I27 does not say that
+//      any more and says the opposite in its first bullet -- "THE COMPOSE DOOR
+//      (`terr_is_*`) IS CLOSED ... `zhao_terrain_place` is that owner" -- and
+//      the compose engine is composed below. A refusal whose cited authority
+//      has since withdrawn the citation is the shape this header exists to
+//      catch, so it is replaced rather than patched, and the real one is
+//      harder.
+//
+//      THE TWO PORTS ARE NOT THE SAME PACKET, AND THE BLOCK'S OWN HEADER SAYS
+//      SO FIRST. `zhao_surface_stamp`'s result stream is PER TEXEL of a 64x64
+//      layer-F sheet -- `res_texel_o[11:0]`, `res_tag_o`, `res_strength_o`,
+//      `res_before_o`, `res_src_id_o`, which is what `surf_res_*` carries out
+//      of this module. `zhao_terrain_bake`'s `cmd_*` is ONE RECORD PER PATCH
+//      BAKE: {patch_id, cx, cz, radius, depth_from, depth_to, env_x0/z0/x1/z1,
+//      dual, cells, src_id}. Every field differs but `src_id`. The block wrote
+//      the conflict down when it was built (`zhao_terrain_bake.sv` 29-48): "the
+//      ledger says `inputs: [stamp_results]` ... This contract's own packet
+//      table says something DIFFERENT ... Those are two different wires wearing
+//      one name", and it refuses to bridge them for a stated reason -- closing
+//      that seam needs TWO LAWS THAT DO NOT EXIST ANYWHERE IN THIS TREE: a
+//      strength(u8) -> depth(fx16) mapping and a 64x64 -> 33x33 resample.
+//      "Inventing them here would put a fabrication under every permanent
+//      wound in the game." That is a better refusal than the one it replaces
+//      because it names what would have to be RATIFIED, not what is not wired.
+//
+//      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
+//      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
+//      ({base, scar, bottom, nobake}) with a layer-B writeback on `sc_*`, and
+//      its BREACH phase does the same for layer D on `cell_*`. It has no VRAM
+//      port by design ("no VRAM port and no residency directory", its lines
+//      118-124), so a composer must SERVE those. `zhao_terrain_compcache_front`
+//      cannot: it holds COMPOSED HEIGHTS (top/bottom) and a cell-state plane,
+//      not the page's A/B/C layers, and the resident page itself is reachable
+//      from in here only through the guard socket entry I26 records as absent.
+//      So two of bake's four input groups have no server in this module even
+//      if the stamp seam were ratified tomorrow.
+//
+//      WHAT WOULD BE FIELD ROUTING, SAID SO NOBODY RE-DERIVES IT: the layer-D
+//      WRITE half matches. Bake's `cs_event_o`/`cs_sub_o`/`cs_ci_o`/`cs_cj_o`
+//      map onto `zhao_terrain_compcache_front`'s `cs_we_i`/`cs_w_substance_i`/
+//      `cs_w_ci_i`/`cs_w_cj_i` with only a 6-to-5 bit address narrowing, and
+//      that is the port the next paragraph exports. The gap is the block, not
+//      that seam.
+//
+//      AND THE BLOCK TO COMPOSE IS NOT THE ONE THIS ENTRY USED TO NAME.
+//      `design/console_inventory.yml` already records `zhao_terrain_bake:
+//      superseded_by: zhao_terrain_bake_v2`, and v2's own first lines say it is
+//      "PORT-COMPATIBLE with zhao_terrain_bake: same ports, same laws, same
+//      counters, same handshake contracts", trading seven private multipliers
+//      and 1,089 flops for one operand-muxed multiply and one M10K. Under the
+//      ONLY-THE-LATEST-VERSION ruling v2 is what a composition packet may
+//      instantiate, and `design/prod_manifest.yml` 474 keeps v1 selected only
+//      "until fit gate T1 runs" on the structural DSP prediction. Pointing this
+//      entry at `zhao_terrain_bake.sv` would have sent the next packet to
+//      compose the superseded file, which is the trap that ruling is about.
 //
 //      WIDENED 2026-09-19 BY LAYER D (`terr_cc_cs_*`), TERRAIN.COMPCACHE's
 //      cell-state write port, and it is the same absent block from the other
@@ -1643,7 +1768,28 @@
 //
 //      SO CLOSING IT NEEDS A DESCRIPTOR TABLE keyed by `fld_add_cmd_i`, filled
 //      by CMD.EXEC's TerrainField arm, which is the same absent producer entry
-//      I42 names for the program store. That is one seam, not two.
+//      I42 names for the program store. That is one seam, not two. (The `I42`
+//      meant there is THE FIELD ENGINE'S PROGRAM LOADER, below. A second entry
+//      was written as I42 the same hour and has been renumbered I44; this
+//      citation was one of the two the collision made ambiguous.)
+//
+//      AND BEFORE BUILDING THE WALKER THAT FEEDS THIS LANE, READ
+//      `fpga/rtl/synth/zhao_probe_walk_earth.sv`. Added 2026-09-19 by the
+//      terrain sweep, because the file is exactly the shape this repository
+//      lost three weeks to once already -- a finished engine kept out of the
+//      machine because `probe` was in its filename. It is the Earth LATTICE
+//      WALKER, it is differentially tested
+//      (`tests/differential/field_walk_earth_directed.cpp`), its own header
+//      names its downstream as "ready/valid toward TERRAIN.PATCH's field-major
+//      reducer" -- this port -- and it deletes the v2 transport that cost
+//      27,225 clocks per association against a 10,416-clock allowance by
+//      GENERATING the lattice points from two prepared 33-entry tables.
+//      `zhao_probe_patch_acc.sv` beside it is the accumulator of the same
+//      chain. This entry does NOT claim they close the lane: the walker takes a
+//      PREPARED descriptor, so the uniforms above are still its input and still
+//      have no producer, and promoting a file out of `synth/` is the FIELD
+//      lane's act and not a terrain packet's. It is named so the next reader
+//      searches before building a second one.
 //
 //      THE REST OF THE ADAPTER IS ALREADY DESIGNABLE and is recorded so the
 //      next packet does not re-derive it: the per-lane PROGRAM is knowable
