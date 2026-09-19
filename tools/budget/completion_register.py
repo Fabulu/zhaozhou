@@ -446,7 +446,10 @@ _ALIAS: dict[str, str | None] = {
     # matters beyond bookkeeping: MATERIAL.RESOLVE is the owner of
     # `tri_flat_request_i`, the half of the console core's entry I20 that
     # GEOM.ATTRPACK did not close.
-    "MATERIAL.RESOLVE":  None,
+    # BUILT 2026-09-19 (fpga/rtl/.../zhao_material_resolve.sv). FOURTH catch by
+    # _stale_none_aliases(), this one minutes after the texture packet correctly
+    # set it to None -- the block it said was absent then exists now.
+    "MATERIAL.RESOLVE":  "zhao_material_resolve",
     # searched and genuinely absent -- no file matches these at all
     # BUILT 2026-09-19 (fpga/rtl/mem/zhao_mem_upload.sv, 89 directed checks).
     # This entry said None until the block existed, and nothing would have
@@ -491,6 +494,69 @@ _ALIAS: dict[str, str | None] = {
     "SYS.PLL":           "zhao_sys_pll",
     "SYS.RESET":         "zhao_sys_reset",
 }
+
+
+def superseded_in_closure() -> list[tuple[str, list[str]]]:
+    """Composed modules for which a HIGHER-VERSIONED sibling exists on disk.
+
+    OWNER RULING, 2026-09-19, verbatim and unambiguous:
+
+        "YOU ONLY GET TO FIT THE LATEST VERSION. IF IT IS BROKEN YOU FIX IT."
+
+    It was issued because the console had composed the ENTIRE v1 FIELD datapath
+    -- alu, seq, ring, rot, noise, mul, len, normalize -- while all FOURTEEN
+    `zhao_field_v3_*` modules sat outside the closure. Fitting that measures a
+    machine nobody ships: it spends ALM and DSP budget on dead weight and makes
+    the eventual resource number describe the wrong design, on a device already
+    over on both (47,582 ALM against 41,910; 151 DSP against 112).
+
+    THE REGISTER HELPED CAUSE IT. `FIELD.SEQ.CORE` resolves to
+    `zhao_field_v2_core` and `FIELD.PROGCACHE` to `zhao_field_progcache` -- one
+    superseded, one unversioned -- so the instrument could not see v3 at all,
+    and "connected" was satisfiable by wiring the old one. That is a NEW
+    flattering direction and it belongs with the five already fixed here: a gap
+    closed by composing the wrong version is not a gap closed.
+
+    TWO NAMING SHAPES, because this tree uses both:
+
+        suffix  zhao_texture_cache_pipe_v2  supersedes  zhao_texture_cache_pipe
+        infix   zhao_field_v3_len           supersedes  zhao_field_len
+
+    `successor_in()` handles the suffix shape and only to REDUCE the count. This
+    is the opposite question and it is asked of the closure rather than of a
+    capability: what have we actually wired that something newer exists for?
+
+    Reported, not fatal, and that is a deliberate and temporary choice: the FIELD
+    v1 -> v3 swap is in flight as this lands, and a hard failure would block
+    every concurrent worker's register run for the duration. TURN IT FATAL once
+    the swap is committed -- a report nobody is forced to read is how the v1
+    datapath got composed in the first place.
+    """
+    # INSTANTIATED, not merely listed. A module that sits in the source list but
+    # nothing elaborates costs the fitter nothing -- Quartus builds what is
+    # reachable from the top -- so flagging it would be a false alarm, and a
+    # check that cries wolf about dead sources is a check people learn to skip.
+    # The real fault is having WIRED the old one.
+    on_disk = {p.stem for p in RTL.rglob("*.sv")}
+    live = instantiated_in(closure_paths())
+    out: list[tuple[str, list[str]]] = []
+    for mod in sorted(console_closure() & live):
+        newer: list[str] = []
+        for cand in on_disk:
+            if cand == mod:
+                continue
+            # suffix:  <mod>_v2, <mod>_v3, ...
+            m = re.fullmatch(re.escape(mod) + r"_v(\d+)", cand)
+            if m:
+                newer.append(cand)
+                continue
+            # infix:   zhao_<sub>_v3_<rest>  against  zhao_<sub>_<rest>
+            m2 = re.fullmatch(r"(zhao_[a-z0-9]+)_v(\d+)_(.+)", cand)
+            if m2 and "%s_%s" % (m2.group(1), m2.group(3)) == mod:
+                newer.append(cand)
+        if newer:
+            out.append((mod, sorted(newer)))
+    return out
 
 
 def _stale_none_aliases() -> list[tuple[str, str]]:
@@ -742,6 +808,18 @@ def main(argv: list[str]) -> int:
 
     print("completion register -- computed from the tree, not maintained by hand")
     print("self-test PASSED: the parser sees a planted gap and classifies it\n")
+    sup = superseded_in_closure()
+    if sup:
+        print("!" * 74)
+        print("SUPERSEDED MODULES ARE COMPOSED -- %d of them." % len(sup))
+        print("Owner ruling 2026-09-19: \"YOU ONLY GET TO FIT THE LATEST VERSION.")
+        print("IF IT IS BROKEN YOU FIX IT.\"  Fitting an old version measures a")
+        print("machine nobody ships and spends budget on dead weight.")
+        for mod, newer in sup:
+            print("   composed %-30s superseded by %s" % (mod, ", ".join(newer)))
+        print("!" * 74)
+        print()
+
     print("zhao_console_core closure modules : %d" % rep["closure_modules"])
     print("tie-off entries in its header     : %d" % rep["tieoffs_total"])
     for k, n in sorted(rep["by_kind"].items()):
