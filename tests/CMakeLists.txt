@@ -1560,6 +1560,38 @@ set_tests_properties(lint_zhao_hps_arbiter PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# MEM.HPS.ARBITER at N=3 -- owner ruling R4 widened the arbiter to N clients
+# and asked for the starvation law to be preserved AND RE-PROVED. The two-client
+# test above now runs through `zhao_hps_arbiter`, the N core's N=2 wrapper; this
+# one puts a third client on the same core with the REAL bridge, including the
+# middle-client case (outranked and outranking) no two-port test can reach, and
+# fires client 2's wait counter by stimulus.
+add_executable(test_hps_arbiter_n_directed memory/hps_arbiter_n_directed.cpp)
+target_link_libraries(test_hps_arbiter_n_directed PRIVATE zhao_harness)
+verilate(test_hps_arbiter_n_directed
+  PREFIX Vzhao_hps_arb_n_compose
+  TOP_MODULE zhao_hps_arb_n_compose
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/memory/zhao_hps_arb_n_compose.sv)
+add_test(NAME hps_arbiter_n_directed COMMAND test_hps_arbiter_n_directed)
+set_tests_properties(hps_arbiter_n_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# -Wall at N=3 and N=5: the N core with a non-power-of-two count, where an
+# owner index can name a client that does not exist.
+foreach(_zhao_arb_n 3 5)
+  add_test(NAME lint_zhao_hps_arbiter_n${_zhao_arb_n}
+           COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                   --top-module zhao_hps_arbiter_n -GN=${_zhao_arb_n}
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                   ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv)
+  set_tests_properties(lint_zhao_hps_arbiter_n${_zhao_arb_n} PROPERTIES
+    LABELS "lint;fast"
+    ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+endforeach()
 # VIDEO.SLOTMGR -- the framebuffer slot ownership machine. This is the authority
 # DEBUG.FRAMEBLIT's whole safety argument rested on and which did not exist:
 # something has to decide that the slot being written speculatively is not the

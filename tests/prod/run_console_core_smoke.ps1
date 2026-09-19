@@ -156,7 +156,16 @@ if (-not $BuildIn) {
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
          elseif ($BadAttribute) { 'zhao_console_core_smoke_badattr' }
          else { 'zhao_console_core_smoke' }
-  $BuildIn = Join-Path $env:TEMP $tag
+  # PER CHECKOUT. The default used to be one %TEMP% directory for every
+  # checkout on the machine, so concurrent packets in separate worktrees
+  # verilated into the SAME object directory and failed each other's link with
+  # `undefined reference to ...::ctor` -- which reads exactly like a partition
+  # bug in your own change (2026-09-19, texmat lane). The repo path's hash
+  # keeps one checkout's reruns incremental and two checkouts apart.
+  $sha = [System.Security.Cryptography.SHA1]::Create()
+  $key = ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Repo.ToLowerInvariant())) |
+          Select-Object -First 4 | ForEach-Object { $_.ToString('x2') }) -join ''
+  $BuildIn = Join-Path $env:TEMP "${tag}_$key"
 }
 if (-not (Test-Path $BuildIn)) { New-Item -ItemType Directory -Path $BuildIn | Out-Null }
 $bd = (Resolve-Path $BuildIn).Path

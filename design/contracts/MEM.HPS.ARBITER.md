@@ -6,7 +6,7 @@
 
 ## Purpose and exclusions
 
-Give two requesters one HPS bridge port: choose an owner, convert the clients'
+Give N requesters (two, historically; see R4 below) one HPS bridge port: choose an owner, convert the clients'
 held ready/valid request into the single-cycle pulse the bridge requires, and
 route every response beat to the owner and to nobody else.
 
@@ -21,6 +21,34 @@ client 0. The mapping is encoded and tested here rather than assumed: even if
 the scheduler's ordering makes the two mutually exclusive today, that is a
 property of the scheduler and not of this wire.
 
+## N clients -- owner ruling R4 (2026-09-19)
+
+`reports/OWNER-RULINGS-20260919-EVENING.md` R4: *widen to N clients, preserving
+and re-proving the existing starvation law.* Both two-port instances were full
+and MEM.UPLOAD and the terrain directory (I26/I27) each needed a port.
+
+* **One implementation.** `zhao_hps_arbiter_n #(N)` holds the machine;
+  `zhao_hps_arbiter` is its N=2 instance with the historical port names, in the
+  same file. Every existing site is unchanged and the two-client directed test
+  (69 checks) now exercises the N core.
+* **The starvation law, generalised and not weakened.** The LOWER index has
+  strict priority over every higher one. Client 0 keeps its guarantee exactly:
+  it never waits behind anyone for a NEW burst, only for the burst in flight.
+  Every client from index 1 up has the guarantee client 1 always had:
+  **nothing**, if any lower index asks continuously, and its waiting is counted
+  in `wait_cycles_o[i]`. A middle client that asks continuously starves every
+  client above it: the same law, applied twice. The bounded yield below is
+  still not implemented. **Choosing a client's index is how the composer says
+  what may wait for it.**
+* **Re-proved at N=3** by `tests/memory/hps_arbiter_n_directed.cpp` (111
+  checks, composed with the real bridge via
+  `tests/memory/zhao_hps_arb_n_compose.sv`). Every rule is covered with a third
+  client present, including a malformed burst and a write from the new index.
+  Two cases only three clients can reach are also covered: the MIDDLE client
+  (it starves client 2, and client 0 still pre-empts it after at most one
+  in-flight burst), and client 2's wait counter FIRED by stimulus (it passes
+  500 under starvation). `lint_zhao_hps_arbiter_n3` / `_n5` hold `-Wall` at a
+  non-power-of-two N.
 ## Clock and reset semantics
 
 Single `clk`, asynchronous active-low `rst_n`, `gpu` domain. Reset returns to
