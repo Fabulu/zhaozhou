@@ -2433,6 +2433,16 @@ targets:
       - fpga/rtl/particles/zhao_part_update.sv
       - fpga/rtl/particles/zhao_part_collide.sv
       - fpga/rtl/particles/zhao_part_spawn.sv
+      # PART.TABLE, added 2026-09-19 with the composition that closes core
+      # header I2 and I3. It was BUILT on 2026-09-19 and instantiated nowhere
+      # for a day; this row is the half that makes the silicon real. It brings
+      # no new port to the boundary except its own per-frame load (entry I33),
+      # and its 31,456 bits are asked for as MLAB by a `ramstyle` HINT -- so the
+      # FIRST QUESTION FOR THIS FIT is whether Quartus honoured it. If it
+      # declined, the table is a ~18,400-ALM flip-flop bank instead of ~870 and
+      # this row moves by that much. The arithmetic is in the file's header and
+      # is arithmetic, not a measurement.
+      - fpga/rtl/particles/zhao_part_table.sv
       - fpga/rtl/geometry/zhao_geom_skin.sv
       - fpga/rtl/geometry/zhao_geom_group_seq.sv
       - fpga/rtl/geometry/zhao_vertex_arena.sv

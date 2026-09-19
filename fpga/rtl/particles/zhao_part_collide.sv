@@ -56,6 +56,13 @@
 //      descriptor M10K here would be a second copy of somebody else's memory.
 //      The descriptor arrives as ports.
 //
+//      Amended 2026-09-19: it also LEAVES as a port. `d_index_o` publishes the
+//      species this block decoded, so the owner that serves `d_*_i` has an
+//      address without anyone decoding the record a second time. That owner is
+//      now `zhao_part_table` (PART.TABLE), not PART.STATE -- four contracts
+//      handed the table to each other and none implemented it; see that file's
+//      header. Nothing about "no memory here" changes.
+//
 //   2. THE MULTIPLIERS ARE NOT QUARTER-SQUARE TABLES. The obvious next move is
 //      a*b = ((a+b)^2 - (a-b)^2)/4 with the squares in M10K. This block has ~10
 //      products; at these widths each needs a ~2048x22b square ROM and two read
@@ -233,6 +240,32 @@ module zhao_part_collide #(
     // The response is SELECTED EXPLICITLY by the descriptor. Owner ruling
     // 2026-08-31 §2.3: "Hardware must not guess from speed, colour, particle
     // size or material" — so nothing below reads any of those.
+    //
+    // `d_index_o` SAYS WHICH SPECIES THE FOUR INPUTS BELOW MUST DESCRIBE.
+    // Added 2026-09-19, composing PART.TABLE (core header I2/I3). Until then
+    // this block took a descriptor and never said whose, so a table serving it
+    // had no address — and the only alternative was for the COMPOSER to slice
+    // `species` out of `p_record_i` itself. That is a second decode of the
+    // frozen layout invented in `zhao_console_core.sv`, which that file's own
+    // header exists to refuse; and it would be a second reader of a field
+    // THIS block has already read. So the port is the honest fix: it publishes
+    // the index the block is ALREADY using, off its own `zhao_part_record`
+    // instance, and nothing new is computed anywhere.
+    //
+    // IT IS COMBINATIONAL OFF `p_record_i`, deliberately, and that is what
+    // makes it safe rather than a metadata-swap hazard. The four `d_*_i`
+    // inputs are read in the same instant as the record (the contract's
+    // "sampled with the particle"); an index taken from THE SAME WIRE in THE
+    // SAME instant cannot move apart from it, because there is no register
+    // between them for a stall to open. A REGISTERED index would reintroduce
+    // exactly the two-operands-that-move-together defect CLAUDE.md records.
+    //
+    // It costs no logic: `u_spc` already exists and already fans out to the
+    // codec's re-pack input.
+    // `wire`, matching `c_spawn_record_o` below: it is a continuous assignment
+    // from an existing net, not state, and the wire form is the one this file
+    // has already put through both tools for exactly that shape.
+    output wire [6:0]                   d_index_o,
     input  var logic [2:0]              d_response_i,
     input  var logic signed [FX_W-1:0]  d_restitution_i,
     input  var logic signed [FX_W-1:0]  d_friction_i,
@@ -440,6 +473,11 @@ module zhao_part_collide #(
       .radius_o      (unused_radius),
       .angle16_o     (unused_angle16)
   );
+
+  // The published descriptor address. One net, no arithmetic, no register: see
+  // the note at the port declaration for why the absence of a register is the
+  // property that makes it correct rather than a shortcut.
+  assign d_index_o = u_spc;
 
   // ---- the two surface tests ------------------------------------------------
   // TERRAIN. The heightfield's up axis is +Y, and `t_height_i` is in the same

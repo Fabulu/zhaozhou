@@ -221,72 +221,79 @@
 // wide data input deletes the logic behind it and produces a resource number
 // that is confidently too small.
 //
+// CLOSED AND DELETED -- the ledger of numbers this block no longer carries.
+//
+// IT LIVES HERE, ABOVE THE FIRST ENTRY, AND THE PLACEMENT IS LOAD-BEARING.
+// `tools/budget/completion_register.py` parses this block by matching `// I<n>.`
+// and attaching EVERY following comment line to that entry until the next one.
+// So a note about a DELETED entry, left where the entry used to be, is read as
+// part of the PRECEDING LIVE ENTRY'S text -- and the register classifies an
+// entry by keyword. The I4 note below contains the words "tied to zero"; while
+// it sat between I3 and I5 it made I3 read `tied-to-zero` when I3 was a
+// boundary, and moving the note without moving it far enough would simply have
+// transferred that misreading to I1. Prose before the first entry is attached
+// to nothing, which is exactly what a closed entry's record should be.
+// (Found on 2026-09-19 while closing I2/I3; the misclassification of I3 in
+// every register run before that date is this, and it changed the KIND column
+// only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
+//
+//  * I2 was THE SPECIES DESCRIPTOR TABLE and I3 the SIZE/COLOUR CURVE TABLE,
+//    both boundaries because four contracts handed the table to each other and
+//    none implemented it. BOTH ARE CLOSED, 2026-09-19, and both entries are
+//    DELETED rather than marked closed, for the reason I4 gives below.
+//
+//    The owner is `zhao_part_table` (PART.TABLE). It had been BUILT on
+//    2026-09-19, named for these entries, and instantiated NOWHERE -- the
+//    uncashed cheque CLAUDE.md has a chapter about, with this header still
+//    telling the next reader to build it again. It is instantiated at
+//    `u_part_table` below and serves all four reads: PART.UPDATE's species
+//    descriptor and its size/colour curve, PART.COLLIDE's four coefficients,
+//    PART.SPAWN's child rule. Twenty-five ports left this module's port list
+//    rather than being driven.
+//
+//    THE ONE OBSTACLE WAS AN ADDRESS, NOT A TABLE. `zhao_part_collide` read its
+//    descriptor combinationally and EMITTED NO INDEX -- it decoded the species
+//    into an internal `u_spc` and kept it -- so `c_index_i` had no driver, and
+//    the only composer-side answer was a SECOND `zhao_part_record` instance
+//    here to re-slice a field the consumer had already read. That is a block
+//    added by the composer and a second decode of a frozen layout. The fix is
+//    `zhao_part_collide.d_index_o`, one output on the block that already holds
+//    the value, added in the same pass.
+//
+//    The timing was NOT the hazard it looks like, and the deleted entry had
+//    already written down why: the collider's descriptor read is combinational
+//    off `p_record_i`, so an index taken from the same wire in the same instant
+//    cannot swap against it. No register was added, and adding one is what
+//    WOULD have created the hazard.
+//
+//    The successor gap is I33, one level down: the table exists and answers,
+//    and nothing fills it.
+//
+//  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
+//    closed contradiction between three ratified contracts rather than a
+//    wiring gap, and owner ruling 2026-09-19 settled it:
+//    `reports/RULING-I4-COLLISION-SPAWN-20260919.md`. The four `col_*_i` ports
+//    are RETIRED, PART.COLLIDE emits the collision event it already owned, and
+//    a collision-spawned child is placed POST-CONTACT. The entry is deleted
+//    rather than marked closed, because this block is what the completion
+//    register counts and a stale closed entry under-reports progress exactly as
+//    deleting an open one would over-report it. The closure is recorded at the
+//    instances below and in the ruling.
+//    (Moved here from between I3 and I5 on 2026-09-19, unedited, when I2/I3
+//    were deleted -- see the placement note above for why it could not stay.)
+//
+//  * I10 was GEOM.SKIN's BONE MATRICES; its record is still inline between I9
+//    and I11 and is left there. It is the same shape as the two above and
+//    SHOULD move here, but I9 is `NOT a tie-off` and that keyword wins over
+//    every other, so the stray note changes nothing today. Named so the next
+//    reader knows it was looked at rather than missed.
+//
 //  I1. PART.STATE's generation store (`part_rd_*`, `part_wr_*`) -- BOUNDARY.
 //      The plan lets the harness supply "memory behavior", and this is that.
 //      But the real provider is named nowhere: MEM.HPS.BRIDGE is instantiated
 //      inside the shell and has no particle client port, so no route from this
 //      store to that bridge exists yet. Connecting them is a shell change.
 //
-//  I2. THE SPECIES DESCRIPTOR TABLE (`part_upd_spc_*`, `part_spw_spc_*`,
-//      `part_col_d_*`) -- BOUNDARY.
-//      PART.COLLIDE's contract says "this block owns no memory"; PART.UPDATE's
-//      says the table "belongs to PART.STATE"; and `zhao_part_state.sv` has no
-//      descriptor port and no such memory. All three blocks read a table this
-//      composition does not provide.
-//
-//      CORRECTED 2026-09-19. This entry used to say "NO OWNER EXISTS IN THE
-//      TREE ... A PART.TABLE owner must be built". IT WAS BUILT. The file is
-//      `fpga/rtl/particles/zhao_part_table.sv` and the commit that added it is
-//      named for this entry: "particles: PART.TABLE, the descriptor table
-//      nothing owned (gaps I2, I3, I8)". It has never been instantiated
-//      anywhere.
-//
-//      That is an UNCASHED CHEQUE of the exact shape CLAUDE.md records -- the
-//      prerequisite deliberately built, the final step never performed,
-//      nothing in the tree watching for it -- and it is worse than the
-//      projector's because the entry that commissioned the block still says
-//      the block does not exist. Anyone reading this header to decide what to
-//      do next was being told to build it again.
-//
-//      WHAT IS ACTUALLY LEFT, so the next packet starts from the real
-//      obstacle. Two of the three consumers are DROP-IN: PART.UPDATE drives
-//      `spc_index_o` and the table answers on `u_index_i`, field for field
-//      (recipe, lifetime, age_mark, drag, grav, strength, cx/cy/cz, p0/p1/p2),
-//      and PART.SPAWN's `spc_species_o`/`spc_event_o` meet `s_species_i`/
-//      `s_event_i` the same way. THE THIRD IS NOT: `zhao_part_collide` reads
-//      `d_response_i`/`d_restitution_i`/`d_friction_i`/`d_damping_i`
-//      combinationally and EMITS NO INDEX -- it decodes the species into an
-//      internal `u_spc` off `p_record_i` and keeps it. So the table's
-//      `c_index_i` has no driver, and supplying one from this file means
-//      instantiating a second `zhao_part_record` codec here purely to re-read
-//      a field the consumer has already read. That is a block added by the
-//      composer, and the honest fix is one port on PART.COLLIDE
-//      (`d_index_o`), which is a change to that block rather than to this one.
-//      Note the timing is NOT the hazard it looks like: the block's own
-//      descriptor read is combinational off `p_record_i`, so an index derived
-//      from the same wire in the same instant cannot swap against it.
-//
-//      Until that port exists, composing the table would close the UPDATE and
-//      SPAWN halves and leave the COLLIDE half open, so this entry would
-//      narrow rather than close. Its `ld_*` per-frame load would also become a
-//      new boundary with the same absent CMD.SCHEDULER owner as I14 and I30.
-//      That is a real net gain and it is left for the particles owner
-//      deliberately, not overlooked: this file is shared with live agents and
-//      the packet that owns PART.COLLIDE should make the port change and the
-//      composition in one pass.
-//
-//  I3. THE SIZE/COLOUR CURVE TABLE (`part_crv_*`) -- BOUNDARY, same gap as I2.
-//
-//      (I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
-//      closed contradiction between three ratified contracts rather than a
-//      wiring gap, and owner ruling 2026-09-19 settled it:
-//      `reports/RULING-I4-COLLISION-SPAWN-20260919.md`. The four `col_*_i`
-//      ports are RETIRED, PART.COLLIDE emits the collision event it already
-//      owned, and a collision-spawned child is placed POST-CONTACT. The entry
-//      is deleted rather than marked closed, because this block is what the
-//      completion register counts and a stale closed entry under-reports
-//      progress exactly as deleting an open one would over-report it. The
-//      closure is recorded at the instances below and in the ruling.)
 //
 //  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY. FIELD.SEQ.FLOW
 //      is not composed; `zhao_field_seq.sv` exists but exposes no bounded
@@ -838,6 +845,36 @@
 //      unclosable today. The port is on this module's edge so the result
 //      stream is observable rather than dropped.
 //
+// I33. PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`) -- BOUNDARY. NEW
+//      2026-09-19, and it is the SUCCESSOR to the deleted I2/I3 rather than a
+//      restatement of them: the descriptor table is built, instantiated and
+//      answering all four reads inside this module, and what has no owner here
+//      is the HOST THAT FILLS IT. Six ports, one word per clock, never refused
+//      for backpressure.
+//
+//      THE ABSENT OWNER IS CMD.SCHEDULER, the same one I14 and I30 name.
+//      `zhao_cmd_decoder` is not composed (see the refusal list below) and no
+//      block in this core produces a descriptor write. Inventing one here would
+//      mean this file choosing what a species IS, which is owner DATA --
+//      `reference/include/zref/zref_particle.hpp` says so in as many words:
+//      "there is no species table ... That is a DATA/ABI question and it is
+//      properly the owner's". So the load is a port and the CONTENTS are not
+//      guessed.
+//
+//      WHAT AN UNLOADED TABLE DOES, stated rather than left to be discovered:
+//      every read answers with whatever the array holds -- X in simulation,
+//      zero on Cyclone V power-up -- and zero is a recipe of 0 (HOLD), an
+//      unbounded lifetime, an IGNORE response, count 0 and known 0. Every
+//      consumer already refuses on its own terms, with its own counter. The
+//      table adds no fifth opinion, deliberately.
+//
+//      `part_tbl_load_refused_o` CANNOT FIRE IN THIS COMPOSITION and its zero
+//      is therefore not a measurement: at PART_SPECIES_N = 128 and CRV_N = 16 a
+//      seven-bit index cannot address outside the table, so the refusal is
+//      structurally unreachable. It is reachable and fired at SPECIES_N = 8 in
+//      `tests/particles/part_table_directed.cpp`. Said here because a counter
+//      asserted zero and never seen to move is a claim, not evidence.
+//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -845,8 +882,10 @@
 // refused. Ten of them are argued at the entry their port would have closed
 // (TWOD.PLANE, TWOD.SPRITE and POST.GATHER at I17; PART.EXPAND, PART.SOFT and
 // PART.LADDER at I24; MEASURE.TOKENS, MEASURE.GOVERNOR and DEBUG.TRACE at I18;
-// and see I2 for PART.TABLE, which is not in that packet and is an uncashed
-// cheque rather than a refusal). The remaining four have no such entry, so
+// PART.TABLE was in that sentence too, as "an uncashed cheque rather than a
+// refusal", pointing at I2; it is COMPOSED as of 2026-09-19 and the pointer now
+// goes to the CLOSED AND DELETED ledger above). The remaining four have no such
+// entry, so
 // they are here rather than nowhere:
 //
 //   CMD.DECODER. The stream it wants is REAL AND IS ALREADY FLOWING -- CMD.DMA
@@ -938,6 +977,17 @@ module zhao_console_core
   parameter int unsigned PART_FX_W     = 16,
   parameter int unsigned PART_PID_W    = 16,
   parameter int unsigned PART_TICK_W   = 32,
+  // PART.TABLE's load bus. DERIVED, NOT A KNOB, and restated here for the same
+  // reason `zhao_part_table` carries it in its own parameter list: a PORT WIDTH
+  // CANNOT REFER TO A BODY LOCALPARAM. It is the widest descriptor slice --
+  // recipe 4 + lifetime + age_mark + drag 8 + grav + strength + cx,cy,cz +
+  // p0,p1,p2 -- and the table's own elaboration guard $fatals if this does not
+  // equal its UPD_W, so a divergence between these two expressions is loud at
+  // elaboration rather than a silently truncated descriptor. It is NOT
+  // arithmetic invented here: it is the table's own expression, copied with its
+  // owner named, and the guard is what makes the copy safe.
+  parameter int unsigned PART_TBL_LD_W = 12 + (2 * PART_AGE_W) + (5 * PART_VEL_W)
+                                            + (3 * PART_POS_W),
 
   // ---- GEOMETRY: the client-A side of the shared projector -----------------
   parameter int unsigned GEOM_ARENAS   = 4,
@@ -1038,25 +1088,18 @@ module zhao_console_core
   input  logic                    part_wr_ready_i,
   output logic [PART_REC_W-1:0]   part_wr_record_o,
 
-  // ---- I2: PART.UPDATE's species descriptor (NO OWNER EXISTS) -------------
-  output logic [6:0]              part_upd_spc_index_o,
-  input  logic [3:0]              part_upd_spc_recipe_i,
-  input  logic [PART_AGE_W-1:0]   part_upd_spc_lifetime_i,
-  input  logic [PART_AGE_W-1:0]   part_upd_spc_age_mark_i,
-  input  logic [7:0]              part_upd_spc_drag_i,
-  input  logic signed [10:0]      part_upd_spc_grav_i,
-  input  logic signed [10:0]      part_upd_spc_strength_i,
-  input  logic signed [17:0]      part_upd_spc_cx_i,
-  input  logic signed [17:0]      part_upd_spc_cy_i,
-  input  logic signed [17:0]      part_upd_spc_cz_i,
-  input  logic signed [10:0]      part_upd_spc_p0_i,
-  input  logic signed [10:0]      part_upd_spc_p1_i,
-  input  logic signed [10:0]      part_upd_spc_p2_i,
-
-  // ---- I3: the size/colour curve table (NO OWNER EXISTS) ------------------
-  output logic [3:0]              part_crv_index_o,
-  input  logic [5:0]              part_crv_size_i,
-  input  logic [7:0]              part_crv_colour_i,
+  // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
+  // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
+  // rather than driven -- `zhao_part_table` is instantiated below and answers
+  // all four reads inside this module. What is left is the host that fills it,
+  // and this is that seam. One word per clock; the table never refuses for
+  // backpressure (`ld_ready_o` is constant high and says so in its own file).
+  input  logic                    part_tbl_ld_valid_i,
+  output logic                    part_tbl_ld_ready_o,
+  input  logic [1:0]              part_tbl_ld_sel_i,
+  input  logic [6:0]              part_tbl_ld_index_i,
+  input  logic [1:0]              part_tbl_ld_event_i,
+  input  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i,
 
   // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
   input  logic                    part_fld_valid_i,
@@ -1064,11 +1107,9 @@ module zhao_console_core
   input  logic signed [10:0]      part_fld_ay_i,
   input  logic signed [10:0]      part_fld_az_i,
 
-  // ---- I2: PART.COLLIDE's slice of the same missing descriptor ------------
-  input  logic [2:0]              part_col_d_response_i,
-  input  logic signed [PART_FX_W-1:0] part_col_d_restitution_i,
-  input  logic signed [PART_FX_W-1:0] part_col_d_friction_i,
-  input  logic signed [PART_FX_W-1:0] part_col_d_damping_i,
+  // (I2's PART.COLLIDE slice -- `part_col_d_response_i` and the three
+  //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
+  //  PART.COLLIDE's own new `d_index_o`.)
 
   // ---- I6: the live deformed terrain sample -------------------------------
   input  logic                    part_ter_valid_i,
@@ -1084,12 +1125,24 @@ module zhao_console_core
   input  logic signed [PART_NRM_W-1:0] part_plane_nz_i,
   input  logic signed [31:0]      part_plane_c_i,
 
-  // ---- I2: PART.SPAWN's slice of the same missing descriptor --------------
-  output logic [6:0]              part_spw_spc_species_o,
-  output logic [1:0]              part_spw_spc_event_o,
-  input  logic                    part_spw_spc_known_i,
-  input  logic [6:0]              part_spw_spc_child_spc_i,
-  input  logic [4:0]              part_spw_spc_count_i,
+  // (I2's PART.SPAWN slice was here. CLOSED: PART.TABLE serves it below.)
+
+  // ---- PART.TABLE's own evidence (I33's other half) -----------------------
+  // Five counters, out at the boundary like every other particle counter, so a
+  // bench can say WHICH slice a load landed in and a silent load path is
+  // visible rather than inferred from a descriptor read that happens to work.
+  // `part_tbl_load_refused_o` is STRUCTURALLY UNREACHABLE at PART_SPECIES_N =
+  // 128 and PART.TABLE's CRV_N = 16 -- seven index bits cannot address outside
+  // a 128-entry table -- so its zero here is arithmetic, not a measurement.
+  // The reachable case is proven at SPECIES_N = 8 by
+  // `tests/particles/part_table_directed.cpp`, which is where the refusal has a
+  // positive control. Quoting this port's zero as evidence of anything would be
+  // the broken-instrument law.
+  output logic [31:0]             part_tbl_loads_update_o,
+  output logic [31:0]             part_tbl_loads_collide_o,
+  output logic [31:0]             part_tbl_loads_spawn_o,
+  output logic [31:0]             part_tbl_loads_curve_o,
+  output logic [31:0]             part_tbl_load_refused_o,
 
   // ---- I8: the capacity backstop ------------------------------------------
   // ---- PARTICLE evidence (every counter leaves the module) ----------------
@@ -2271,6 +2324,128 @@ module zhao_console_core
 
   wire part_capacity_full_c;   // I8: PART.STATE -> PART.SPAWN, internal
 
+  // --------------------------------------------------------------------------
+  // PART.TABLE -- THE DESCRIPTOR OWNER.  ENTRIES I2 AND I3, CLOSED.
+  //
+  // `fpga/rtl/particles/zhao_part_table.sv` was built on 2026-09-19, named for
+  // these two entries, and instantiated NOWHERE for a day. This is the missing
+  // final step -- the uncashed cheque CLAUDE.md has a chapter about, cashed.
+  //
+  // FOUR READS, ALL COMBINATIONAL, ALL IN THE SAME CYCLE AS THEIR INDEX, and
+  // that is a property of the table rather than a convenience taken here: its
+  // header states why an M10K cannot serve them and prices the variant that
+  // could. Nothing below registers an index or a reply, so there is no second
+  // enable for a request and a response to drift across -- which is this
+  // repository's own metadata-swap defect and the reason the shape matters.
+  //
+  // THE WIRING IS PORT-FOR-PORT, and the table's header carries the map it was
+  // written against. NO ARITHMETIC IS PERFORMED IN THIS FILE: every connection
+  // below is one net to one net, same name, same width. The one place that was
+  // NOT true is now true -- PART.COLLIDE emitted no index, so `c_index_i` had no
+  // driver and the only composer-side answer was to instantiate a SECOND
+  // `zhao_part_record` here and re-slice `species` out of a record the collide
+  // instance has already decoded. That would be a block added by the composer
+  // and a second decode of a frozen layout. `zhao_part_collide.d_index_o` is the
+  // honest fix: one output on the block that already holds the value.
+  //
+  // AND THE TIMING IS NOT THE HAZARD IT LOOKS LIKE. `d_index_o` is
+  // combinational off `p_record_i`, and PART.COLLIDE's four `d_*_i` inputs are
+  // read in the same instant as that record. An index taken from the SAME WIRE
+  // in the SAME instant cannot separate from the descriptor it selects.
+  //
+  // WHAT IS STILL A BOUNDARY: the per-frame LOAD (entry I33). Nothing in this
+  // core fills the table -- CMD.SCHEDULER has no path to it, the same absent
+  // owner as I14 and I30 -- so `part_tbl_ld_*` leaves the module. That is a
+  // narrower gap than I2/I3 and a different one: the table EXISTS and ANSWERS
+  // here; what is missing is the host that writes it.
+  // --------------------------------------------------------------------------
+  wire [6:0]                  ptb_u_index;
+  wire [3:0]                  ptb_u_recipe;
+  wire [PART_AGE_W-1:0]       ptb_u_lifetime;
+  wire [PART_AGE_W-1:0]       ptb_u_age_mark;
+  wire [7:0]                  ptb_u_drag;
+  wire signed [PART_VEL_W-1:0] ptb_u_grav;
+  wire signed [PART_VEL_W-1:0] ptb_u_strength;
+  wire signed [PART_POS_W-1:0] ptb_u_cx, ptb_u_cy, ptb_u_cz;
+  wire signed [PART_VEL_W-1:0] ptb_u_p0, ptb_u_p1, ptb_u_p2;
+
+  wire [3:0]                  ptb_v_index;
+  wire [5:0]                  ptb_v_size;
+  wire [7:0]                  ptb_v_colour;
+
+  wire [6:0]                  ptb_c_index;
+  wire [2:0]                  ptb_c_response;
+  wire signed [PART_FX_W-1:0] ptb_c_restitution, ptb_c_friction, ptb_c_damping;
+
+  wire [6:0]                  ptb_s_species;
+  wire [1:0]                  ptb_s_event;
+  wire                        ptb_s_known;
+  wire [6:0]                  ptb_s_child_spc;
+  wire [4:0]                  ptb_s_count;
+
+  zhao_part_table #(
+    .SPECIES_N (PART_SPECIES_N),
+    .AGE_W     (PART_AGE_W),
+    .POS_W     (PART_POS_W),
+    .VEL_W     (PART_VEL_W),
+    .FX_W      (PART_FX_W),
+    .LD_W      (PART_TBL_LD_W)
+    // CRV_N is left at its default 16, which is the ceiling PART.UPDATE's
+    // 4-bit `crv_index_o` sets. There is no console-level knob for it because
+    // there is nothing here that could legitimately choose a smaller one.
+  ) u_part_table (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I33: the per-frame load, out at the boundary.
+    .ld_valid_i (part_tbl_ld_valid_i),
+    .ld_ready_o (part_tbl_ld_ready_o),
+    .ld_sel_i   (part_tbl_ld_sel_i),
+    .ld_index_i (part_tbl_ld_index_i),
+    .ld_event_i (part_tbl_ld_event_i),
+    .ld_data_i  (part_tbl_ld_data_i),
+
+    // REAL: PART.UPDATE's species descriptor.  I2, update half.
+    .u_index_i   (ptb_u_index),
+    .u_recipe_o  (ptb_u_recipe),
+    .u_lifetime_o(ptb_u_lifetime),
+    .u_age_mark_o(ptb_u_age_mark),
+    .u_drag_o    (ptb_u_drag),
+    .u_grav_o    (ptb_u_grav),
+    .u_strength_o(ptb_u_strength),
+    .u_cx_o      (ptb_u_cx),
+    .u_cy_o      (ptb_u_cy),
+    .u_cz_o      (ptb_u_cz),
+    .u_p0_o      (ptb_u_p0),
+    .u_p1_o      (ptb_u_p1),
+    .u_p2_o      (ptb_u_p2),
+
+    // REAL: PART.UPDATE's size/colour curve.  I3, whole.
+    .v_index_i (ptb_v_index),
+    .v_size_o  (ptb_v_size),
+    .v_colour_o(ptb_v_colour),
+
+    // REAL: PART.COLLIDE's slice, addressed by that block's own decode.
+    .c_index_i      (ptb_c_index),
+    .c_response_o   (ptb_c_response),
+    .c_restitution_o(ptb_c_restitution),
+    .c_friction_o   (ptb_c_friction),
+    .c_damping_o    (ptb_c_damping),
+
+    // REAL: PART.SPAWN's child rule.  I2, spawn half.
+    .s_species_i  (ptb_s_species),
+    .s_event_i    (ptb_s_event),
+    .s_known_o    (ptb_s_known),
+    .s_child_spc_o(ptb_s_child_spc),
+    .s_count_o    (ptb_s_count),
+
+    .loads_update_o (part_tbl_loads_update_o),
+    .loads_collide_o(part_tbl_loads_collide_o),
+    .loads_spawn_o  (part_tbl_loads_spawn_o),
+    .loads_curve_o  (part_tbl_loads_curve_o),
+    .load_refused_o (part_tbl_load_refused_o)
+  );
+
   zhao_part_state #(
     .CAPACITY  (PART_CAPACITY),
     .CHILD_D   (PART_CHILD_D),
@@ -2336,20 +2511,21 @@ module zhao_console_core
     .in_ready_o (ps_prt_ready),
     .in_record_i(ps_prt_record),
 
-    // I2: the species descriptor table has no owner in this tree.
-    .spc_index_o   (part_upd_spc_index_o),
-    .spc_recipe_i  (part_upd_spc_recipe_i),
-    .spc_lifetime_i(part_upd_spc_lifetime_i),
-    .spc_age_mark_i(part_upd_spc_age_mark_i),
-    .spc_drag_i    (part_upd_spc_drag_i),
-    .spc_grav_i    (part_upd_spc_grav_i),
-    .spc_strength_i(part_upd_spc_strength_i),
-    .spc_cx_i      (part_upd_spc_cx_i),
-    .spc_cy_i      (part_upd_spc_cy_i),
-    .spc_cz_i      (part_upd_spc_cz_i),
-    .spc_p0_i      (part_upd_spc_p0_i),
-    .spc_p1_i      (part_upd_spc_p1_i),
-    .spc_p2_i      (part_upd_spc_p2_i),
+    // REAL: I2 CLOSED 2026-09-19. The species descriptor comes from PART.TABLE
+    // above, field for field, same cycle as the index.
+    .spc_index_o   (ptb_u_index),
+    .spc_recipe_i  (ptb_u_recipe),
+    .spc_lifetime_i(ptb_u_lifetime),
+    .spc_age_mark_i(ptb_u_age_mark),
+    .spc_drag_i    (ptb_u_drag),
+    .spc_grav_i    (ptb_u_grav),
+    .spc_strength_i(ptb_u_strength),
+    .spc_cx_i      (ptb_u_cx),
+    .spc_cy_i      (ptb_u_cy),
+    .spc_cz_i      (ptb_u_cz),
+    .spc_p0_i      (ptb_u_p0),
+    .spc_p1_i      (ptb_u_p1),
+    .spc_p2_i      (ptb_u_p2),
 
     // I5: FIELD.SEQ.FLOW is not composed.
     .fld_valid_i(part_fld_valid_i),
@@ -2363,10 +2539,13 @@ module zhao_console_core
     // tie-offs that used to sit here are gone rather than driven, so this row's
     // PART.UPDATE area goes DOWN, not up.
 
-    // I3: the curve table has no owner in this tree.
-    .crv_index_o (part_crv_index_o),
-    .crv_size_i  (part_crv_size_i),
-    .crv_colour_i(part_crv_colour_i),
+    // REAL: I3 CLOSED 2026-09-19. The size/colour curve is PART.TABLE's fourth
+    // slice. Its index is `age_next_c[AGE_W-1 -: 4]` INSIDE PART.UPDATE -- the
+    // advanced age, which exists nowhere a cycle earlier -- which is the reason
+    // the table's curve read is combinational and cannot become an M10K.
+    .crv_index_o (ptb_v_index),
+    .crv_size_i  (ptb_v_size),
+    .crv_colour_i(ptb_v_colour),
 
     // REAL: the verdict, straight into PART.COLLIDE. ONE consumer, no fork --
     // the fork moved to PART.COLLIDE's output when ruling I4 put PART.SPAWN
@@ -2408,11 +2587,16 @@ module zhao_console_core
     .p_record_i(pu_out_record),
     .p_events_i(pu_out_events),
 
-    // I2: the same missing descriptor table.
-    .d_response_i   (part_col_d_response_i),
-    .d_restitution_i(part_col_d_restitution_i),
-    .d_friction_i   (part_col_d_friction_i),
-    .d_damping_i    (part_col_d_damping_i),
+    // REAL: I2 CLOSED 2026-09-19. `d_index_o` is NEW on this block and is the
+    // whole reason the entry could close -- the collider publishes the species
+    // it has already decoded off `p_record_i`, and PART.TABLE answers on the
+    // same wire in the same instant. Neither this file nor any adapter decodes
+    // the record a second time.
+    .d_index_o      (ptb_c_index),
+    .d_response_i   (ptb_c_response),
+    .d_restitution_i(ptb_c_restitution),
+    .d_friction_i   (ptb_c_friction),
+    .d_damping_i    (ptb_c_damping),
 
     // I6: TERRAIN.PATCH emits heights and no surface normal.
     .t_valid_i (part_ter_valid_i),
@@ -2480,12 +2664,15 @@ module zhao_console_core
     .par_events_i(pc_c_events),
     .tick_i      (gpu_tick_frame_id_o),
 
-    // I2: the same missing descriptor table.
-    .spc_species_o  (part_spw_spc_species_o),
-    .spc_event_o    (part_spw_spc_event_o),
-    .spc_known_i    (part_spw_spc_known_i),
-    .spc_child_spc_i(part_spw_spc_child_spc_i),
-    .spc_count_i    (part_spw_spc_count_i),
+    // REAL: I2 CLOSED 2026-09-19. PART.SPAWN presents {species, event} on
+    // entering S_EVAL and consumes the reply in that same cycle, so this read is
+    // combinational too -- reading it a cycle early would mean a second copy of
+    // this block's event priority encoder, which IS its determinism contract.
+    .spc_species_o  (ptb_s_species),
+    .spc_event_o    (ptb_s_event),
+    .spc_known_i    (ptb_s_known),
+    .spc_child_spc_i(ptb_s_child_spc),
+    .spc_count_i    (ptb_s_count),
 
     // REAL: children straight into PART.STATE's staging channel.
     .chl_valid_o(sp_chl_valid),

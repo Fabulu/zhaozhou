@@ -88,6 +88,17 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned PART_FX_W     = 16,
   parameter int unsigned PART_PID_W    = 16,
   parameter int unsigned PART_TICK_W   = 32,
+  // PART.TABLE's load bus. DERIVED, NOT A KNOB, and restated here for the same
+  // reason `zhao_part_table` carries it in its own parameter list: a PORT WIDTH
+  // CANNOT REFER TO A BODY LOCALPARAM. It is the widest descriptor slice --
+  // recipe 4 + lifetime + age_mark + drag 8 + grav + strength + cx,cy,cz +
+  // p0,p1,p2 -- and the table's own elaboration guard $fatals if this does not
+  // equal its UPD_W, so a divergence between these two expressions is loud at
+  // elaboration rather than a silently truncated descriptor. It is NOT
+  // arithmetic invented here: it is the table's own expression, copied with its
+  // owner named, and the guard is what makes the copy safe.
+  parameter int unsigned PART_TBL_LD_W = 12 + (2 * PART_AGE_W) + (5 * PART_VEL_W)
+                                            + (3 * PART_POS_W),
 
   // ---- GEOMETRY: the client-A side of the shared projector -----------------
   parameter int unsigned GEOM_ARENAS   = 4,
@@ -177,25 +188,18 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    part_wr_ready_i,
   output logic [PART_REC_W-1:0]   part_wr_record_o,
 
-  // ---- I2: PART.UPDATE's species descriptor (NO OWNER EXISTS) -------------
-  output logic [6:0]              part_upd_spc_index_o,
-  input  logic [3:0]              part_upd_spc_recipe_i,
-  input  logic [PART_AGE_W-1:0]   part_upd_spc_lifetime_i,
-  input  logic [PART_AGE_W-1:0]   part_upd_spc_age_mark_i,
-  input  logic [7:0]              part_upd_spc_drag_i,
-  input  logic signed [10:0]      part_upd_spc_grav_i,
-  input  logic signed [10:0]      part_upd_spc_strength_i,
-  input  logic signed [17:0]      part_upd_spc_cx_i,
-  input  logic signed [17:0]      part_upd_spc_cy_i,
-  input  logic signed [17:0]      part_upd_spc_cz_i,
-  input  logic signed [10:0]      part_upd_spc_p0_i,
-  input  logic signed [10:0]      part_upd_spc_p1_i,
-  input  logic signed [10:0]      part_upd_spc_p2_i,
-
-  // ---- I3: the size/colour curve table (NO OWNER EXISTS) ------------------
-  output logic [3:0]              part_crv_index_o,
-  input  logic [5:0]              part_crv_size_i,
-  input  logic [7:0]              part_crv_colour_i,
+  // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
+  // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
+  // rather than driven -- `zhao_part_table` is instantiated below and answers
+  // all four reads inside this module. What is left is the host that fills it,
+  // and this is that seam. One word per clock; the table never refuses for
+  // backpressure (`ld_ready_o` is constant high and says so in its own file).
+  input  logic                    part_tbl_ld_valid_i,
+  output logic                    part_tbl_ld_ready_o,
+  input  logic [1:0]              part_tbl_ld_sel_i,
+  input  logic [6:0]              part_tbl_ld_index_i,
+  input  logic [1:0]              part_tbl_ld_event_i,
+  input  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i,
 
   // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
   input  logic                    part_fld_valid_i,
@@ -203,11 +207,9 @@ module zhao_console_core_slot_overflow_mutant
   input  logic signed [10:0]      part_fld_ay_i,
   input  logic signed [10:0]      part_fld_az_i,
 
-  // ---- I2: PART.COLLIDE's slice of the same missing descriptor ------------
-  input  logic [2:0]              part_col_d_response_i,
-  input  logic signed [PART_FX_W-1:0] part_col_d_restitution_i,
-  input  logic signed [PART_FX_W-1:0] part_col_d_friction_i,
-  input  logic signed [PART_FX_W-1:0] part_col_d_damping_i,
+  // (I2's PART.COLLIDE slice -- `part_col_d_response_i` and the three
+  //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
+  //  PART.COLLIDE's own new `d_index_o`.)
 
   // ---- I6: the live deformed terrain sample -------------------------------
   input  logic                    part_ter_valid_i,
@@ -223,12 +225,24 @@ module zhao_console_core_slot_overflow_mutant
   input  logic signed [PART_NRM_W-1:0] part_plane_nz_i,
   input  logic signed [31:0]      part_plane_c_i,
 
-  // ---- I2: PART.SPAWN's slice of the same missing descriptor --------------
-  output logic [6:0]              part_spw_spc_species_o,
-  output logic [1:0]              part_spw_spc_event_o,
-  input  logic                    part_spw_spc_known_i,
-  input  logic [6:0]              part_spw_spc_child_spc_i,
-  input  logic [4:0]              part_spw_spc_count_i,
+  // (I2's PART.SPAWN slice was here. CLOSED: PART.TABLE serves it below.)
+
+  // ---- PART.TABLE's own evidence (I33's other half) -----------------------
+  // Five counters, out at the boundary like every other particle counter, so a
+  // bench can say WHICH slice a load landed in and a silent load path is
+  // visible rather than inferred from a descriptor read that happens to work.
+  // `part_tbl_load_refused_o` is STRUCTURALLY UNREACHABLE at PART_SPECIES_N =
+  // 128 and PART.TABLE's CRV_N = 16 -- seven index bits cannot address outside
+  // a 128-entry table -- so its zero here is arithmetic, not a measurement.
+  // The reachable case is proven at SPECIES_N = 8 by
+  // `tests/particles/part_table_directed.cpp`, which is where the refusal has a
+  // positive control. Quoting this port's zero as evidence of anything would be
+  // the broken-instrument law.
+  output logic [31:0]             part_tbl_loads_update_o,
+  output logic [31:0]             part_tbl_loads_collide_o,
+  output logic [31:0]             part_tbl_loads_spawn_o,
+  output logic [31:0]             part_tbl_loads_curve_o,
+  output logic [31:0]             part_tbl_load_refused_o,
 
   // ---- I8: the capacity backstop ------------------------------------------
   // ---- PARTICLE evidence (every counter leaves the module) ----------------
@@ -1200,6 +1214,7 @@ module zhao_console_core_slot_overflow_mutant
       .PART_FX_W(PART_FX_W),
       .PART_PID_W(PART_PID_W),
       .PART_TICK_W(PART_TICK_W),
+      .PART_TBL_LD_W(PART_TBL_LD_W),
       .GEOM_ARENAS(GEOM_ARENAS),
       .GEOM_DEPTH(GEOM_DEPTH),
       .GEOM_NVIEWS(GEOM_NVIEWS),

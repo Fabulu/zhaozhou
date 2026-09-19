@@ -127,30 +127,29 @@ module tb_zhao_console_core_smoke
   logic                    part_wr_valid_o;
   logic                    part_wr_ready_i;
   logic [PART_REC_W-1:0]   part_wr_record_o;
-  logic [6:0]              part_upd_spc_index_o;
-  logic [3:0]              part_upd_spc_recipe_i;
-  logic [PART_AGE_W-1:0]   part_upd_spc_lifetime_i;
-  logic [PART_AGE_W-1:0]   part_upd_spc_age_mark_i;
-  logic [7:0]              part_upd_spc_drag_i;
-  logic signed [10:0]      part_upd_spc_grav_i;
-  logic signed [10:0]      part_upd_spc_strength_i;
-  logic signed [17:0]      part_upd_spc_cx_i;
-  logic signed [17:0]      part_upd_spc_cy_i;
-  logic signed [17:0]      part_upd_spc_cz_i;
-  logic signed [10:0]      part_upd_spc_p0_i;
-  logic signed [10:0]      part_upd_spc_p1_i;
-  logic signed [10:0]      part_upd_spc_p2_i;
-  logic [3:0]              part_crv_index_o;
-  logic [5:0]              part_crv_size_i;
-  logic [7:0]              part_crv_colour_i;
+  // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
+  // PORTS THAT USED TO BE DECLARED HERE ARE GONE: the core instantiates
+  // `zhao_part_table` and answers its own descriptor reads (entries I2 and I3,
+  // closed 2026-09-19). This bench now has to LOAD the table to get the same
+  // stimulus it used to drive straight onto the consumers' inputs -- which is
+  // the point, because a descriptor that reaches PART.COLLIDE now has to have
+  // travelled through the table to get there.
+  localparam int unsigned PART_TBL_LD_W = 12 + (2 * PART_AGE_W) + (5 * 11) + (3 * 18);
+  logic                    part_tbl_ld_valid_i;
+  logic                    part_tbl_ld_ready_o;
+  logic [1:0]              part_tbl_ld_sel_i;
+  logic [6:0]              part_tbl_ld_index_i;
+  logic [1:0]              part_tbl_ld_event_i;
+  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i;
+  logic [31:0]             part_tbl_loads_update_o;
+  logic [31:0]             part_tbl_loads_collide_o;
+  logic [31:0]             part_tbl_loads_spawn_o;
+  logic [31:0]             part_tbl_loads_curve_o;
+  logic [31:0]             part_tbl_load_refused_o;
   logic                    part_fld_valid_i;
   logic signed [10:0]      part_fld_ax_i;
   logic signed [10:0]      part_fld_ay_i;
   logic signed [10:0]      part_fld_az_i;
-  logic [2:0]              part_col_d_response_i;
-  logic signed [PART_FX_W-1:0] part_col_d_restitution_i;
-  logic signed [PART_FX_W-1:0] part_col_d_friction_i;
-  logic signed [PART_FX_W-1:0] part_col_d_damping_i;
   logic                    part_ter_valid_i;
   logic signed [PART_POS_W-1:0] part_ter_height_i;
   logic signed [PART_NRM_W-1:0] part_ter_nx_i;
@@ -161,11 +160,6 @@ module tb_zhao_console_core_smoke
   logic signed [PART_NRM_W-1:0] part_plane_ny_i;
   logic signed [PART_NRM_W-1:0] part_plane_nz_i;
   logic signed [31:0]      part_plane_c_i;
-  logic [6:0]              part_spw_spc_species_o;
-  logic [1:0]              part_spw_spc_event_o;
-  logic                    part_spw_spc_known_i;
-  logic [6:0]              part_spw_spc_child_spc_i;
-  logic [4:0]              part_spw_spc_count_i;
   logic                    part_cap_full_i;
   logic                    part_tick_busy_o;
   logic                    part_tick_done_o;
@@ -1332,6 +1326,126 @@ module tb_zhao_console_core_smoke
     end
   end
 
+  // ==========================================================================
+  // PART.TABLE'S LOAD -- THE BENCH IS THE HOST, AND SAYS SO.
+  //
+  // Core entries I2 and I3 closed on 2026-09-19: the console instantiates
+  // `zhao_part_table` and answers its own descriptor reads. Nothing in the core
+  // FILLS that table -- CMD.SCHEDULER has no path to it (entry I33) -- so the
+  // load is a boundary and THIS BENCH IS STANDING IN FOR THE HOST. That is a
+  // declared limit, not a hidden one: what is proven below is that a descriptor
+  // written through `part_tbl_ld_*` comes back out of three different consumers,
+  // and NOT that any real agent writes it.
+  //
+  // It handshakes on `ld_ready_o` rather than assuming it. The port is constant
+  // high by design and its own file says so -- but a bench that ignores a ready
+  // it was given is a bench that would not notice the day it stopped being
+  // constant, and this one is the only host the table has.
+  //
+  // THE WORD MAP IS A COPY, and copies go stale in the flattering direction, so
+  // the authority is named: `fpga/rtl/particles/zhao_part_table.sv`, section
+  // "LOAD WORD MAP". What protects this copy is not diligence -- it is that a
+  // mispacked word puts the wrong value in every field, and the three
+  // behavioural checks below (a STICK contact, one child per collision, and an
+  // exact colour byte at the boundary) all fail loudly when it does. A packing
+  // bug here cannot pass quietly.
+  // ==========================================================================
+  localparam logic [1:0] TBL_SEL_UPD = 2'd0;
+  localparam logic [1:0] TBL_SEL_COL = 2'd1;
+  localparam logic [1:0] TBL_SEL_SPW = 2'd2;
+  localparam logic [1:0] TBL_SEL_CRV = 2'd3;
+
+  // update slice: recipe 4 | lifetime 10 | age_mark 10 | drag 8 | grav 11 |
+  //               strength 11 | cx 18 | cy 18 | cz 18 | p0 11 | p1 11 | p2 11
+  localparam int unsigned TBL_U_OFF_RCP = 0;
+  localparam int unsigned TBL_U_OFF_LIF = TBL_U_OFF_RCP + 4;
+  localparam int unsigned TBL_U_OFF_MRK = TBL_U_OFF_LIF + PART_AGE_W;
+  localparam int unsigned TBL_U_OFF_DRG = TBL_U_OFF_MRK + PART_AGE_W;
+  // collide slice: response 3 | restitution 16 | friction 16 | damping 16
+  localparam int unsigned TBL_C_OFF_RSP = 0;
+  // spawn rule: child species 7 | count 5 | known 1
+  localparam int unsigned TBL_S_OFF_CHD = 0;
+  localparam int unsigned TBL_S_OFF_CNT = TBL_S_OFF_CHD + 7;
+  localparam int unsigned TBL_S_OFF_KNW = TBL_S_OFF_CNT + 5;
+  // curve entry: size 6 | colour 8
+  localparam int unsigned TBL_V_OFF_SIZ = 0;
+  localparam int unsigned TBL_V_OFF_CLR = TBL_V_OFF_SIZ + 6;
+
+  // R_COLOUR, the tenth id of owner ruling 2026-08-31's CLOSED vocabulary. It
+  // is chosen because it is the one recipe whose visible effect is a TABLE READ
+  // and not arithmetic: its multiplier operand stays at zero, so the particle's
+  // motion is identical to the all-zero descriptor this bench used to drive,
+  // and the ONLY difference at the boundary is that `part_colour_o` now carries
+  // the curve's colour byte. That makes the I3 check a read-back rather than an
+  // inference.
+  localparam logic [3:0] TBL_RECIPE_COLOUR = 4'd10;
+  localparam logic [7:0] TBL_CURVE_COLOUR  = 8'hA5;
+  localparam logic [5:0] TBL_CURVE_SIZE    = 6'h2A;
+
+  task automatic tbl_load(input logic [1:0] sel,
+                          input logic [6:0] idx,
+                          input logic [1:0] ev,
+                          input logic [PART_TBL_LD_W-1:0] data);
+    int unsigned g;
+    part_tbl_ld_sel_i   = sel;
+    part_tbl_ld_index_i = idx;
+    part_tbl_ld_event_i = ev;
+    part_tbl_ld_data_i  = data;
+    part_tbl_ld_valid_i = 1'b1;
+    g = 0;
+    while (!part_tbl_ld_ready_o && (g < 100)) begin
+      @(posedge gpu_clk);
+      g++;
+    end
+    if (g >= 100)
+      $fatal(1, "SMOKE: PART.TABLE never raised ld_ready_o -- its load port is not reachable from the boundary");
+    @(posedge gpu_clk);
+    part_tbl_ld_valid_i = 1'b0;
+    part_tbl_ld_data_i  = '0;
+  endtask
+
+  // The colour byte, captured where it leaves the module, ONE SAMPLE PER
+  // PARTICLE.
+  //
+  // `part_colour_en_o` and `part_colour_o` are REGISTERED LEVELS, not pulses:
+  // PART.UPDATE loads them on a retire and they stand until the next one. The
+  // first version of this counter sampled the level every cycle and reported
+  // 253,517 "beats" for six particles -- a number that is not wrong so much as
+  // about the wrong thing, and it would have made a single correct particle
+  // look like a quarter of a million confirmations. So the sample is qualified
+  // on `part_updated_o` MOVING, which is exactly one event per updated
+  // particle, and the count that comes out is comparable with the six records
+  // this bench offers.
+  int unsigned part_colour_beats_q;
+  int unsigned part_colour_wrong_q;
+  logic [7:0]  part_colour_last_q;
+  logic [31:0] part_updated_prev_q;
+
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      part_colour_beats_q <= 0;
+      part_colour_wrong_q <= 0;
+      part_colour_last_q  <= '0;
+      part_updated_prev_q <= '0;
+    end else begin
+      part_updated_prev_q <= part_updated_o;
+      if (part_updated_o !== part_updated_prev_q) begin
+        if (part_colour_en_o) begin
+          part_colour_beats_q <= part_colour_beats_q + 1;
+          part_colour_last_q  <= part_colour_o;
+          if (part_colour_o !== TBL_CURVE_COLOUR)
+            part_colour_wrong_q <= part_colour_wrong_q + 1;
+        end else begin
+          // A retire with the enable LOW is a particle whose recipe did not
+          // come back as R_COLOUR. Counted as wrong rather than skipped: a
+          // silent skip is how "it was right every time" becomes "it was right
+          // the one time it happened to be looked at".
+          part_colour_wrong_q <= part_colour_wrong_q + 1;
+        end
+      end
+    end
+  end
+
   // --------------------------------------------------------------------------
   // THE GENERATION STORE (entry I1: harness = memory).
   //
@@ -1504,28 +1618,15 @@ module tb_zhao_console_core_smoke
     // port list, so a new input cannot arrive here undriven and X-propagate
     // into a pass.
     part_wr_ready_i = '0;
-    part_upd_spc_recipe_i = '0;
-    part_upd_spc_lifetime_i = '0;
-    part_upd_spc_age_mark_i = '0;
-    part_upd_spc_drag_i = '0;
-    part_upd_spc_grav_i = '0;
-    part_upd_spc_strength_i = '0;
-    part_upd_spc_cx_i = '0;
-    part_upd_spc_cy_i = '0;
-    part_upd_spc_cz_i = '0;
-    part_upd_spc_p0_i = '0;
-    part_upd_spc_p1_i = '0;
-    part_upd_spc_p2_i = '0;
-    part_crv_size_i = '0;
-    part_crv_colour_i = '0;
+    part_tbl_ld_valid_i = '0;
+    part_tbl_ld_sel_i = '0;
+    part_tbl_ld_index_i = '0;
+    part_tbl_ld_event_i = '0;
+    part_tbl_ld_data_i = '0;
     part_fld_valid_i = '0;
     part_fld_ax_i = '0;
     part_fld_ay_i = '0;
     part_fld_az_i = '0;
-    part_col_d_response_i = '0;
-    part_col_d_restitution_i = '0;
-    part_col_d_friction_i = '0;
-    part_col_d_damping_i = '0;
     // ---- PACKET P-TERRAIN: the spine's inputs, all defined before reset ----
     terr_cmd_valid_i = '0;
     terr_cmd_epoch_i = '0;
@@ -1583,9 +1684,6 @@ module tb_zhao_console_core_smoke
     part_plane_ny_i = '0;
     part_plane_nz_i = '0;
     part_plane_c_i = '0;
-    part_spw_spc_known_i = '0;
-    part_spw_spc_child_spc_i = '0;
-    part_spw_spc_count_i = '0;
     part_cap_full_i = '0;
     part_hist_sel_i = '0;
     geom_vd_v_bytes_i = '0;
@@ -1776,7 +1874,13 @@ module tb_zhao_console_core_smoke
     //     a KNOWN response, so PART.COLLIDE reports alive rather than refusing;
     //   the projector enabled and a rigid, unit-weight skin, so client A is
     //     offered real vertices.
-    part_upd_spc_lifetime_i = '0;
+    //
+    // ALL THREE OF THOSE USED TO BE WIRES. Until 2026-09-19 this bench drove
+    // the lifetime, the collision response and the spawn rule straight onto the
+    // consumers' descriptor inputs, because the table they belong to had no
+    // owner (entries I2/I3). It does now, so they are LOADED below instead --
+    // and every particle behaviour this bench already asserted is now evidence
+    // that the load reached the consumer through `zhao_part_table`.
     part_wr_ready_i         = 1'b1;
 
     // ---- SPAWN ON COLLISION, the acceptance for owner ruling I4 -------------
@@ -1799,10 +1903,8 @@ module tb_zhao_console_core_smoke
     part_ter_nx_i           = '0;
     part_ter_ny_i           = PART_NRM_W'(1 << 10);   // NRM_Q = 10: a unit +Y normal
     part_ter_nz_i           = '0;
-    part_col_d_response_i   = 3'd2;                   // STICK
-    part_spw_spc_known_i    = 1'b1;
-    part_spw_spc_child_spc_i = 7'd0;
-    part_spw_spc_count_i    = 5'd1;
+    // (the STICK response and the spawn rule are now LOADED INTO PART.TABLE
+    //  after reset lifts -- see the load sequence below.)
     proj_en_i               = 1'b1;
     // The replayed terrain triangle has no consumer in this core (entry I13),
     // so the bench SINKS it. Holding it low instead would back the replay up
@@ -1920,6 +2022,65 @@ module tb_zhao_console_core_smoke
     rst_n = 1'b1;
     repeat (4) @(posedge gpu_clk);
     reset_released_q = 1'b1;
+
+    // ---- LOAD PART.TABLE, BEFORE ANY PARTICLE IS OFFERED ------------------
+    // Four words for species 0 -- the only species these records carry (the
+    // generation store writes position X and leaves every other field zero, so
+    // `species` is 0 by construction). The host loads between ticks and the
+    // table is read during them; that is the discipline `no_rw_check` on its
+    // arrays is correct under, and doing it here is what makes the attribute
+    // honest rather than convenient.
+    //
+    // ORDER MATTERS AND IS CHECKED. The generation store below only offers
+    // records once `part_tick_busy_o` rises, so this must complete first; the
+    // assertion after it is what turns "it should have" into "it did".
+`ifndef ZHAO_SMOKE_SKIP_TBL_LOAD
+    tbl_load(TBL_SEL_UPD, 7'd0, 2'd0,
+             PART_TBL_LD_W'(TBL_RECIPE_COLOUR) << TBL_U_OFF_RCP);   // lifetime 0 = unbounded,
+                                                                    // drag/grav/strength/centre/params 0
+    tbl_load(TBL_SEL_COL, 7'd0, 2'd0,
+             PART_TBL_LD_W'(3'd2) << TBL_C_OFF_RSP);                // STICK; both coefficients 0
+    tbl_load(TBL_SEL_SPW, 7'd0, 2'd2,                                // event 2 = COLLISION
+             (PART_TBL_LD_W'(7'd0) << TBL_S_OFF_CHD) |               // child species 0
+             (PART_TBL_LD_W'(5'd1) << TBL_S_OFF_CNT) |               // one child
+             (PART_TBL_LD_W'(1'b1) << TBL_S_OFF_KNW));               // known
+    tbl_load(TBL_SEL_CRV, 7'd0, 2'd0,                                // curve bucket 0: age_next[9:6]
+             (PART_TBL_LD_W'(TBL_CURVE_SIZE)   << TBL_V_OFF_SIZ) |
+             (PART_TBL_LD_W'(TBL_CURVE_COLOUR) << TBL_V_OFF_CLR));
+
+    if (part_updated_o != 0)
+      $fatal(1, "SMOKE: %0d particle(s) were already updated when PART.TABLE was loaded -- the load lost its race with the first tick and every descriptor read below is against an empty table",
+             part_updated_o);
+    if (part_tbl_loads_update_o != 1 || part_tbl_loads_collide_o != 1 ||
+        part_tbl_loads_spawn_o != 1 || part_tbl_loads_curve_o != 1)
+      $fatal(1, "SMOKE: PART.TABLE counted upd=%0d col=%0d spw=%0d crv=%0d against one load each -- the load port does not reach all four slices",
+             part_tbl_loads_update_o, part_tbl_loads_collide_o,
+             part_tbl_loads_spawn_o, part_tbl_loads_curve_o);
+    if (part_tbl_load_refused_o != 0)
+      $fatal(1, "SMOKE: PART.TABLE refused %0d of four in-range loads", part_tbl_load_refused_o);
+`else
+    // THE NEGATIVE CONTROL FOR EVERY PART.TABLE CHECK IN THIS FILE, and it is a
+    // committed switch rather than an edit somebody made once and reverted.
+    //
+    // With `ZHAO_SMOKE_SKIP_TBL_LOAD` defined, the four loads above do not
+    // happen and nothing else changes. The table then answers every read with
+    // what an unwritten array holds, and the checks at the foot of the run MUST
+    // go red -- otherwise they are passing on something other than the table's
+    // contents, which is the whole thing they claim to measure.
+    //
+    // MEASURED 2026-09-19, the pass that composed the table:
+    //   loads[upd/col/spw/crv] = [0 0 0 0]
+    //   `part_colour_beats_q` = 0 and the run fails at
+    //   "PART.UPDATE never raised out_colour_en_o".
+    // Run it by adding `+define+ZHAO_SMOKE_SKIP_TBL_LOAD` to the verilate step
+    // in tests/prod/run_console_core_smoke.ps1. (Written as prose rather than
+    // as a command line, because a comment beginning with the tool's own name
+    // is parsed as a metacomment and rejected -- BADVLTPRAGMA, met here.)
+    // It is a PLAIN `ifdef` on purpose: CLAUDE.md records that a command-line
+    // `-D` cannot override a FUNCTION-LIKE `define` and says nothing when it
+    // fails to, so a macro-selected control has to be a form `-D` reaches.
+    $display("SMOKE: NEGATIVE CONTROL -- PART.TABLE is deliberately NOT loaded; every table check below must fail.");
+`endif
 
     // ---- PACKET P-TERRAIN: one SubmitTerrainSet, then let the spine run ---
     // A HOST PACKET, which is what the plan lets a harness present. Everything
@@ -2203,6 +2364,47 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: part_collisions_applied_o is still zero -- PART.COLLIDE's collision_events_o does not reach the boundary");
     if (part_contacts_stick_o == 0)
       $fatal(1, "SMOKE: no STICK contact was counted -- the terrain sample does not reach PART.COLLIDE");
+
+    // ======================================================================
+    // PART.TABLE ANSWERED. ENTRIES I2 AND I3, composed 2026-09-19.
+    //
+    // The three checks above are ALREADY table evidence and this is the one
+    // place to say so plainly, because it is easy to read them as unchanged:
+    // the STICK response, the "known" spawn rule and the child count are no
+    // longer wires from this bench. Each was written into `zhao_part_table`
+    // through `part_tbl_ld_*` and had to come back out through a DIFFERENT
+    // consumer's descriptor port to move those counters. A table that
+    // elaborated and was never asked reads as all-zero, and all-zero is
+    // response IGNORE (no contact counted, no collision event) and known = 0
+    // (no child). So `part_contacts_stick_o`, `part_spawn_by_event2_o` and
+    // `part_children_seen_q` are each a read that returned a REAL VALUE.
+    //
+    // THE COLOUR BYTE IS THE EXACT ONE, and it is here because the three above
+    // prove a non-zero descriptor arrived without pinning down WHICH. Species 0
+    // was loaded with recipe R_COLOUR and curve bucket 0 with an arbitrary
+    // 0xA5; PART.UPDATE reads the recipe from the table's update slice, looks
+    // the curve up in its curve slice on the SAME cycle, and publishes the
+    // result at this module's edge. Two slices, one byte, no adapter in
+    // between. An off-by-one in the load word map, a swapped slice or a
+    // wrong-cycle read all land somewhere other than 0xA5.
+    if (part_colour_beats_q == 0)
+      $fatal(1, "SMOKE: PART.UPDATE never raised out_colour_en_o -- the update slice's recipe field did not come back from PART.TABLE (entry I2), so nothing below it means anything");
+    if (part_colour_wrong_q != 0)
+      $fatal(1, "SMOKE: %0d of %0d retires carried a colour byte other than %02x, or none at all (last seen %02x) -- PART.TABLE's curve slice is not serving what was loaded into it (entry I3)",
+             part_colour_wrong_q, part_colour_beats_q, TBL_CURVE_COLOUR, part_colour_last_q);
+    if (part_colour_beats_q != part_updated_o)
+      $fatal(1, "SMOKE: %0d colour samples against %0d particles updated -- the descriptor did not reach every beat",
+             part_colour_beats_q, part_updated_o);
+    $display("SMOKE: PART.TABLE -- loads[upd/col/spw/crv]=[%0d %0d %0d %0d] refused=%0d; %0d of %0d retires carried %02x from curve bucket 0; STICK contacts=%0d, collision spawns=%0d.",
+             part_tbl_loads_update_o, part_tbl_loads_collide_o,
+             part_tbl_loads_spawn_o, part_tbl_loads_curve_o,
+             part_tbl_load_refused_o, part_colour_beats_q, part_updated_o,
+             part_colour_last_q, part_contacts_stick_o, part_spawn_by_event2_o);
+    // `part_tbl_load_refused_o` IS NOT CHECKED FOR A FIRING and its zero is not
+    // quoted as evidence: at the console's PART_SPECIES_N = 128 a seven-bit
+    // index cannot address outside the table, so the refusal is structurally
+    // unreachable here. It is reachable and fired at SPECIES_N = 8 in
+    // tests/particles/part_table_directed.cpp.
 
     // SPECIFICITY. Only event 2 fires in this stimulus: the records carry no
     // born flag, the age marker is disabled and the lifetime is unbounded. If
