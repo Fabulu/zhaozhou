@@ -80,3 +80,13 @@ Manafold pass 19 from Owner Direction 20: smooth, whole rear antenna connection 
 - Instrument fixes in `manafold-rear-audit`: R2 now measures the true joint step (2.39 -> 2.76 worst; the old magnitude metric was blind to constant-bend sweeps). The R2 ceiling moved 4.0 -> 6.0 because 4.0 held an eye-judged rung. R3 gained a production line-flag census and a `--fail-line-flag` control. R1's `rel` operand is recorded as tautological, and its centreline half is the real detector.
 - Source `1eb115e4`. Renderer `.tmp/p19-rev/bin/zhao-reel-cel.exe`, MD5 `510fab169ec12c48022160114227512f`. Legacy toggles 9/9 = v18 bank.
 - 16 images read. Scratch: `manafold-p16/p19-qa/` (NOTES.md, renders).
+
+### 2026-09-19 22:15 - Closing packet (sole Opus worker): archive, bank, review, encode, publish
+- Brief correction recorded: the brief says Inspect is not a site subject, but `kU02LiveSiteSubjects` and `creatures.json` both carry `manafold-inspect` as one of the 22 live clips. So Inspect is rendered IN the one-invocation bank, and it still gets the priority close look.
+- **Step 1 done (Upheaval `e3e0a22`, pushed):** 44 live v18 files verified against `V18-LIVE-MEDIA-SHA256.txt` (44/44), then copied to `archive-v18-manafold-*` (44,743,343 bytes). The receipt is `V18-ARCHIVE-SHA256.txt` (creature + this run). The generation "Version 18 — 2026-09-19" declares 22 clips once. The archive note now reads FOURTEEN. checkarchive locks v18, cross-locks every row to the published v18 receipt, and adds the pass-19 live phase (`P19-LIVE-MEDIA-SHA256.txt`). Selftest: 9 red legs. Real tree RC 0.
+- Step 2: clean direct build from `10877707` (tools/reel clean, last touched `1eb115e4`), g++ 16.1.0, `.tmp/p19-bank/bin/zhao-reel-cel.exe`: MD5 `776d55758933d5284147b360ff2eda62`, SHA-256 `eb10880f655f860306f2c46ed826ce391611b46e39343334fafdfc6df872354e`. It differs from the review binary's MD5 (`510fab16...`). That binary has since been deleted, so the difference cannot be diffed. The build does NOT embed its output path (checked), so the probable cause is the PE link timestamp. This is not proven. Identity is carried by the render CRCs instead. The bank is rendering into `manafold-p16/p19-final-reel-22` in one invocation.
+- **Steps 2-3 done** (`P19-FINAL-BANK-INTEGRITY.md`):
+  - Bank: RENDER_RC 0, validated 22/7,992, manifest `f7edc1fb...36ed5`.
+  - The bank reproduces the review's 9 shipping CRCs exactly.
+  - Scope: the same-binary legacy bank equals v18 on 22/22. The rear changes 22/22 and the lines 21/22 (Inspect's lines are unchanged by construction).
+  - Review: all 22 sheets plus 6 close looks, 19 images. No fault. READY-TO-ENCODE.

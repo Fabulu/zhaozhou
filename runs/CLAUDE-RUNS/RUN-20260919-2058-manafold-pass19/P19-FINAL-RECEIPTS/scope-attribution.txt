@@ -1,0 +1,27 @@
+# Pass-19 scope attribution, all from the ONE bank binary (MD5 776d5575...), production env
+# legacy = REAR_SOCKET_FRAME=legacy-root + MANA_LINE_SCALE=legacy (must equal v18: proves every byte of change is the pass-19 toggles)
+# linelegacy = shipping rear + MANA_LINE_SCALE=legacy (differs from shipping only where distance-scaled lines changed pixels)
+subject	v18	legacy	legacy==v18	shipping	linelegacy	lines-change-pixels	rear-changes(linelegacy!=legacy)
+manafold-blown	0x840DA184	0x840DA184	SAME	0xCCAC7CAB	0xA1D5D1E5	yes	yes
+manafold-channel	0xD49861D0	0xD49861D0	SAME	0x8D8022A0	0x7FC465BE	yes	yes
+manafold-crackle	0xCC1BDA8B	0xCC1BDA8B	SAME	0x43CA2CCD	0x95A33D7F	yes	yes
+manafold-curious	0xFD63139B	0xFD63139B	SAME	0x265BD173	0x443936DB	yes	yes
+manafold-damage	0xBADF776E	0xBADF776E	SAME	0x28FAADC2	0xEAA6E861	yes	yes
+manafold-death-drop	0x99FCC8A1	0x99FCC8A1	SAME	0xF4FF71A1	0xF1805E61	yes	yes
+manafold-death-gutter	0x3BA123EC	0x3BA123EC	SAME	0x658B4D3D	0x396F1B3D	yes	yes
+manafold-drift	0x69158A83	0x69158A83	SAME	0x9A76FE69	0x226B3A71	yes	yes
+manafold-fall	0x1F062A86	0x1F062A86	SAME	0x0DE69D1C	0x98E10BD6	yes	yes
+manafold-flight	0x9FBC05CB	0x9FBC05CB	SAME	0x5A0897E1	0xCE38BC4B	yes	yes
+manafold-hasty	0xC6FB59FB	0xC6FB59FB	SAME	0x14EFB828	0x3C16C38C	yes	yes
+manafold-hit	0x3BABB107	0x3BABB107	SAME	0x39F4EE4F	0xD99554FC	yes	yes
+manafold-hover	0x24B3FE60	0x24B3FE60	SAME	0xA2D0E051	0x61710750	yes	yes
+manafold-inspect	0x95A27283	0x95A27283	SAME	0x779615BB	0x779615BB	no	yes
+manafold-lasso	0x26666BC0	0x26666BC0	SAME	0xF6B893FE	0xA3045F31	yes	yes
+manafold-pirouette	0x18DB7B27	0x18DB7B27	SAME	0xE05DB5C3	0x5A34E42F	yes	yes
+manafold-rest	0xD25EF330	0xD25EF330	SAME	0xA8B3AD33	0x12CADF4F	yes	yes
+manafold-startle	0x11C587EF	0x11C587EF	SAME	0xFD813D7E	0x79F245A7	yes	yes
+manafold-taunt	0x3874DBF4	0x3874DBF4	SAME	0x3F19A505	0xACB4559A	yes	yes
+manafold-taunt2	0x499AC40C	0x499AC40C	SAME	0xE2F2232F	0x4C55B8E7	yes	yes
+manafold-taunt3	0x07EACF1D	0x07EACF1D	SAME	0x75BC4777	0xA7D60B8F	yes	yes
+manafold-trick	0xAB4D78E9	0xAB4D78E9	SAME	0x71BB47B9	0xC5D4CC64	yes	yes
+# legacy==v18: 22/22; lines change pixels: 21/22; rear change: 22/22

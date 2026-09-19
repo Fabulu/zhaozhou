@@ -1,0 +1,22 @@
+manafold-blown	292	p19 0xCCAC7CAB	v18 0x840DA184	CHANGED	review -	
+manafold-channel	420	p19 0x8D8022A0	v18 0xD49861D0	CHANGED	review 0x8D8022A0	=review
+manafold-crackle	600	p19 0x43CA2CCD	v18 0xCC1BDA8B	CHANGED	review -	
+manafold-curious	180	p19 0x265BD173	v18 0xFD63139B	CHANGED	review -	
+manafold-damage	464	p19 0x28FAADC2	v18 0xBADF776E	CHANGED	review -	
+manafold-death-drop	450	p19 0xF4FF71A1	v18 0x99FCC8A1	CHANGED	review -	
+manafold-death-gutter	590	p19 0x658B4D3D	v18 0x3BA123EC	CHANGED	review -	
+manafold-drift	300	p19 0x9A76FE69	v18 0x69158A83	CHANGED	review 0x9A76FE69	=review
+manafold-fall	340	p19 0x0DE69D1C	v18 0x1F062A86	CHANGED	review -	
+manafold-flight	352	p19 0x5A0897E1	v18 0x9FBC05CB	CHANGED	review -	
+manafold-hasty	240	p19 0x14EFB828	v18 0xC6FB59FB	CHANGED	review -	
+manafold-hit	140	p19 0x39F4EE4F	v18 0x3BABB107	CHANGED	review -	
+manafold-hover	600	p19 0xA2D0E051	v18 0x24B3FE60	CHANGED	review 0xA2D0E051	=review
+manafold-inspect	600	p19 0x779615BB	v18 0x95A27283	CHANGED	review 0x779615BB	=review
+manafold-lasso	336	p19 0xF6B893FE	v18 0x26666BC0	CHANGED	review 0xF6B893FE	=review
+manafold-pirouette	240	p19 0xE05DB5C3	v18 0x18DB7B27	CHANGED	review 0xE05DB5C3	=review
+manafold-rest	400	p19 0xA8B3AD33	v18 0xD25EF330	CHANGED	review 0xA8B3AD33	=review
+manafold-startle	160	p19 0xFD813D7E	v18 0x11C587EF	CHANGED	review -	
+manafold-taunt	280	p19 0x3F19A505	v18 0x3874DBF4	CHANGED	review -	
+manafold-taunt2	240	p19 0xE2F2232F	v18 0x499AC40C	CHANGED	review -	
+manafold-taunt3	368	p19 0x75BC4777	v18 0x07EACF1D	CHANGED	review 0x75BC4777	=review
+manafold-trick	400	p19 0x71BB47B9	v18 0xAB4D78E9	CHANGED	review 0x71BB47B9	=review

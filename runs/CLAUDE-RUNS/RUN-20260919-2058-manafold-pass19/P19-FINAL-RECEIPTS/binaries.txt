@@ -1,0 +1,5 @@
+776d55758933d5284147b360ff2eda62 *.tmp/p19-bank/bin/zhao-reel-cel.exe
+eb10880f655f860306f2c46ed826ce391611b46e39343334fafdfc6df872354e *.tmp/p19-bank/bin/zhao-reel-cel.exe
+compiler: g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0
+source: zhaozhou 108777077aba6a50806aacf68c4f8c6e8d66e19b (tools/reel clean at build, last touched by 1eb115e4); build: tools/reel/build-direct.sh --output .tmp/p19-bank --clean cel
+invocation: env -u ZHAO_U02_LIVE_MIST ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross zhao-reel-cel.exe manafold-p16/p19-final-reel-22 <the 22 kU02LiveSiteSubjects> -> RENDER_RC=0
