@@ -297,3 +297,43 @@ eight-context machine and called it the console. Check the selected
 parameterisation before believing any FIELD area number.
 
 **NEXT:** geometry/forge remainder in flight; then terrain's remaining 10.
+## 2026-09-19 night -- 62 gaps, and eleven of them are decisions
+
+**Where it stands.** 62 mandatory gaps (34 tie-offs + 25 disconnected + 3 unbuilt),
+70 capabilities connected, from 78 gaps this morning. Both required tops exist and
+the board is soldered to the core. A pixel traverses the render path. The console
+executes ratified commands. FIELD v3 is the composed engine.
+
+**ELEVEN OF THE 34 TIE-OFFS CANNOT BE CLOSED BY BUILDING ANYTHING.** They want a
+ruling. Written up with a recommendation and evidence each in
+`reports/OWNER-DOCKET-20260919.md`. The two I marked SAFE are in flight; the rest
+are the owner's, and the largest by area is the three "unbuilt" optional alternates.
+
+**The census was counting twelve modules TWICE** -- the v3 service modules were
+listed as tops while living inside `zhao_field_host`. 70 -> 58 instances. Note the
+direction: this one INFLATES, and a big number looks like honest bad news, so
+nobody audits it either.
+
+**Instrument defects found today, all one law -- READ THE STRUCTURE, NOT THE
+CONVENTION:** closure membership counted as connection; an unbounded scan; a
+substring anchor matching a comment; an alias outliving its search; a settling
+marker matching prose; a filename standing in for a module (TWICE -- in my own new
+gate, and in `module_graph` where it hid 11 real edges); and duplicate entry ids
+that the register counted twice and never mentioned. Every one now has a guard that
+was FIRED before it was trusted.
+
+**Fourteen "X does not exist" claims have been false today.** The two that should
+change how anyone reads a refusal: CMD.SCHEDULER, called absent by four entries
+while instantiated in the shell since 2026-08-16; and a finished FIELD v3 engine
+that sat in `fpga/rtl/synth/` for three weeks because `probe` was in its filename.
+The terrain lane then found `zhao_probe_walk_earth.sv` the same way.
+
+**THE PHASE 2 FACT THAT MATTERS MORE THAN THE GAP COUNT:** FIELD is not in the
+47,582 ALM figure -- that fit's own sources name one field file, and
+THE-NUMBER-20260919.md says so. FIELD is composed now, so its cost is ADDITIVE to a
+budget already 5,672 ALM and 39 DSP over, and FIELD at the SCALAR configuration is
+charged ~13,700 ALM against a 4,500 envelope. No ruling fixes that.
+
+**NEXT:** three packets in flight -- the material directory key (makes the texture
+island sample), terrain's absent owners, geometry/forge owners. Phase 1 is not done
+and the fit stays closed until it is.
