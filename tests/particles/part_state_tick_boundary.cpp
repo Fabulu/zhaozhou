@@ -79,8 +79,8 @@ namespace {
 
 constexpr int kCapacity = 8;
 constexpr int kSpecies = 4;
-constexpr int kSurvivors = 4;   // leaves room in the tier, so a drop here would
-                                // be a fault and not the capacity law
+constexpr int kSurvivors = 4;  // leaves room in the tier, so a drop here would
+                               // be a fault and not the capacity law
 constexpr int kNextSurvivors = 2;
 // The tick is roughly a dozen cycles at these parameters; the sweep runs well
 // past its end so the S_IDLE refusal is visited too.
@@ -287,13 +287,13 @@ int main(int argc, char** argv) {
   auto* top = new Vzhao_part_state;  // heap + exit_hard: see zhao_sim.hpp
   Dut d(top);
 
-  int orphans = 0;           // accepted, then neither written nor dropped
-  int deferred_lost = 0;     // refused at the boundary and never written after
-  int duplicates = 0;        // written in both generations
-  int silent_refusals = 0;   // offered and refused with no counter moving
-  int stream_faults = 0;     // survivors or ordering disturbed
-  int boundary_accepts = 0;  // accepted after the survivor pass ended
-  int boundary_refusals = 0; // offered while the tick was live and refused all tick
+  int orphans = 0;            // accepted, then neither written nor dropped
+  int deferred_lost = 0;      // refused at the boundary and never written after
+  int duplicates = 0;         // written in both generations
+  int silent_refusals = 0;    // offered and refused with no counter moving
+  int stream_faults = 0;      // survivors or ordering disturbed
+  int boundary_accepts = 0;   // accepted after the survivor pass ended
+  int boundary_refusals = 0;  // offered while the tick was live and refused all tick
   int accepted_total = 0, written_total = 0, dropped_total = 0;
 
   int first_orphan_delay = -1;
