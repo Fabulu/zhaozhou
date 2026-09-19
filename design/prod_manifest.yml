@@ -544,7 +544,7 @@ excluded:
   # directory is ALREADY in that source list, so adding this block adds the
   # scan logic only.
   - zhao_terrain_visible: unused  the visible-patch builder; TERRAIN.LOD does not consume it yet
-  - zhao_terrain_compcache_front: unused  TERRAIN.COMPCACHE's on-chip patch front; nothing composes PATCH -> TESS through it yet, and putting it in the production top before that composition exists would fit a store nothing reads
+  - zhao_terrain_compcache_front: unused  TERRAIN.COMPCACHE's on-chip patch front. CORRECTED 2026-09-19: the clause 'nothing composes PATCH -> TESS through it yet' has EXPIRED -- zhao_console_core composes PAGESTREAM -> PATCH -> COMPCACHE -> TESS with zhao_terrain_place supplying the placement, and core header entry I22 is closed and deleted. It stays `unused` HERE because this row is about zhao_prod_top, the disconnected census top, which still does not instantiate it. The stale reason is left beside the correction rather than edited away
 
   # TERRAIN.PAGELOADER -- the HPS-to-local page mover. It was UNACCOUNTED here
   # (this gate was red on it) until the memory amendment of 2026-09-06, and the
@@ -582,7 +582,7 @@ excluded:
   # Each has its own per-block fit target and a measured row, so none of them is
   # unmeasured; what they are is uncomposed.
   - zhao_terrain_loadq: unused  the load queue between SEQ and PAGELOADER; fitted (1 M10K, 734 ALM, 107.33 MHz) but the shell composes neither end
-  - zhao_terrain_pagestream: unused  turns a resident page slot into the 33x33 lattice; fitted, and its consumers PATCH and MIPGEN are themselves uncomposed in the shell
+  - zhao_terrain_pagestream: unused  turns a resident page slot into the 33x33 lattice; fitted. CORRECTED 2026-09-19: PATCH is no longer uncomposed -- zhao_console_core drives this block from TERRAIN.SEQ's is_* door and takes its lattice into TERRAIN.PATCH. MIPGEN still is, and nothing in fpga/rtl can ask for a page's mips, which is why TERRAIN.MIPFEED below is still refused. `unused` here remains true of zhao_prod_top
   - zhao_terrain_mipfeed: unused  runs the streamer twice into MIPGEN for the second residency completion; fitted (343 ALM, no memory, no DSP)
   - zhao_terrain_cmd: unused  SubmitTerrainSet -> TERRAIN.SEQ's frame ring; fitted (1,069 ALM, no memory), and the command seam it would sit behind is an open ruling -- the shell's record framer carries 16 payload bytes and the command is 32
 
