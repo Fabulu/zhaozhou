@@ -36,6 +36,10 @@ module tb_cmd_exec_pair #(
 
     // SURFACE.STAMP's backpressure, so the drain can be stalled on purpose
     input  logic        stamp_ready_i,
+    // The matrix bank's refusal. In the composer this is `!proj_cfg_we_i` --
+    // the host cfg port wins the cycle and CMD.EXEC re-presents. Driven here so
+    // the re-presentation is exercised rather than assumed.
+    input  logic        proj_cfg_ready_i,
 
     // ---- CMD.DECODER's verdict, observable -------------------------------
     output logic        decode_done_o,
@@ -120,7 +124,8 @@ module tb_cmd_exec_pair #(
       .verdict_valid_i(decode_done_o),
       .verdict_error_i(decode_error_o),
 
-      .proj_cfg_we_o  (proj_cfg_we_o),
+      .proj_cfg_we_o   (proj_cfg_we_o),
+      .proj_cfg_ready_i(proj_cfg_ready_i),
       .proj_cfg_view_o(proj_cfg_view_o),
       .proj_cfg_addr_o(proj_cfg_addr_o),
       .proj_cfg_data_o(proj_cfg_data_o),

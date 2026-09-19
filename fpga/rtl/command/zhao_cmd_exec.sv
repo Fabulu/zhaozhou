@@ -209,7 +209,15 @@ module zhao_cmd_exec
     // ---- I14: the shared projector's matrix bank ---------------------------
     // Address map is `zhao_project_core.sv`'s: 0..15 matrix, 16 viewport
     // origin, 17 viewport extent. This block writes 0..15 and nothing else.
+    // `proj_cfg_ready_i` IS A REFUSAL, not a stall of the bank. The bank has a
+    // second writer -- the console's host cfg port, which owns addresses 16
+    // and 17 (the viewport rect) because SetView carries an id and not a rect.
+    // The composer gives that writer the cycle and drops this one's ready; the
+    // word is then re-presented unchanged. Nothing is dropped on either side,
+    // so the composer needs no conflict counter -- and a counter it could not
+    // fire would have been worse than none.
     output logic        proj_cfg_we_o,
+    input  logic        proj_cfg_ready_i,
     output logic        proj_cfg_view_o,
     output logic [ 4:0] proj_cfg_addr_o,
     output logic [31:0] proj_cfg_data_o,
@@ -522,21 +530,38 @@ module zhao_cmd_exec
         // ------------------------------------------------------------------
         // COMMIT phase 1 -- the view shadow into the matrix bank
         // ------------------------------------------------------------------
+        // ISSUE, THEN RETIRE -- one word per two clocks, and the second clock
+        // is the point. `proj_cfg_ready_i` exists because the matrix bank has
+        // a SECOND writer: the console's own `proj_cfg_*_i` host port, which
+        // owns cfg addresses 16 and 17 (the viewport rect) that no ratified
+        // command carries. Without a handshake the composer would have to drop
+        // one of the two writes and count it, and a dropped matrix word is a
+        // silently wrong camera. With it the merge is LOSSLESS in both
+        // directions: the host wins the cycle, this block re-presents.
+        //
+        // The bubble costs 64 clocks per frame at two full views. That is not
+        // a throughput question by any measure that matters here.
         EX_CFG: begin
-          if (sv_dirty[cv]) begin
+          if (proj_cfg_we_o) begin
+            if (proj_cfg_ready_i) begin
+              // Accepted. Retire this word and drop `we` for one cycle.
+              if (cw == 4'd15) begin
+                cw           <= 4'd0;
+                sv_dirty[cv] <= 1'b0;
+                `ZHAO_EXEC_INC(views_written_o);
+                if (cv) st <= EX_STAMP;
+                else    cv <= 1'b1;
+              end else begin
+                cw <= cw + 4'd1;
+              end
+            end else begin
+              proj_cfg_we_o <= 1'b1;  // refused: hold the identical word
+            end
+          end else if (sv_dirty[cv]) begin
             proj_cfg_we_o   <= 1'b1;
             proj_cfg_view_o <= cv;
             proj_cfg_addr_o <= {1'b0, cw};
             proj_cfg_data_o <= sv_mat[cv][cw];
-            if (cw == 4'd15) begin
-              cw           <= 4'd0;
-              sv_dirty[cv] <= 1'b0;
-              `ZHAO_EXEC_INC(views_written_o);
-              if (cv) st <= EX_STAMP;
-              else    cv <= 1'b1;
-            end else begin
-              cw <= cw + 4'd1;
-            end
           end else begin
             if (cv) st <= EX_STAMP;
             else    cv <= 1'b1;

@@ -85,13 +85,15 @@ struct Run {
  * a fresh DUT, which is also what makes the counter assertions below absolute
  * rather than deltas.
  */
-Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask) {
+Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
+              uint32_t cfg_mask = 0xFFFFFFFFu) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
   dut.pkt_byte_i = 0;
   dut.pkt_len_i = 0;
   dut.stamp_ready_i = 1;
+  dut.proj_cfg_ready_i = 1;
   dut.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(dut);
   dut.rst_n = 1;
@@ -114,6 +116,10 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask) {
     dut.pkt_byte_i = have ? pkt[i] : 0;
     dut.pkt_len_i = static_cast<uint32_t>(pkt.size());
     dut.stamp_ready_i = ((stamp_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    // The matrix bank's refusal: in the composer this is `!proj_cfg_we_i`,
+    // the host cfg port taking the cycle. A word refused here must be
+    // RE-PRESENTED unchanged, never skipped and never duplicated.
+    dut.proj_cfg_ready_i = ((cfg_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     dut.eval();
 
     const bool moved = have && dut.pkt_ready_o;
@@ -134,18 +140,19 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask) {
       s.src_id = static_cast<uint16_t>(dut.stamp_src_id_o);
     }
 
-    zhao::tick(dut);
-    if (moved) ++i;
-    if (stamp_fires) r.stamps.push_back(s);
-
-    if (dut.proj_cfg_we_o) {
-      CfgWrite w;
+    const bool cfg_fires = (dut.proj_cfg_we_o != 0) && (dut.proj_cfg_ready_i != 0);
+    CfgWrite w;
+    if (cfg_fires) {
       w.cycle = cyc;
       w.view = static_cast<uint8_t>(dut.proj_cfg_view_o);
       w.addr = static_cast<uint8_t>(dut.proj_cfg_addr_o);
       w.data = dut.proj_cfg_data_o;
-      r.cfg.push_back(w);
     }
+
+    zhao::tick(dut);
+    if (moved) ++i;
+    if (stamp_fires) r.stamps.push_back(s);
+    if (cfg_fires) r.cfg.push_back(w);
 
     if (dut.decode_done_o && !r.done) {
       r.done = true;
@@ -484,6 +491,51 @@ int main(int argc, char** argv) {
               (tag + ": stamp " + std::to_string(k) + " source id").c_str(), 0x20 + k,
               r.stamps[k].src_id);
       }
+    }
+  }
+
+  // ---- 8. the matrix bank refuses, and refuses hard -----------------------
+  // In the composed core the host cfg port owns addresses 16 and 17 and wins
+  // any cycle it wants, so CMD.EXEC's write can be refused at any point in the
+  // drain. Every word must still land, ONCE, in order. A drain that skipped a
+  // refused word would leave one matrix coefficient stale -- a camera that is
+  // subtly wrong, with every counter still reading right.
+  {
+    const uint32_t cfg_masks[3] = {0xAAAAAAAAu, 0x11111111u, 0x00000001u};
+    for (int m = 0; m < 3; ++m) {
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(setViewRecord(1, 3, 0x0077'0000));
+      b.append_record(setViewRecord(0, 4, 0x0088'0000));
+      b.append_record(
+          surfaceStampRecord(0x31u, kPatch, kOp, kTag, kStrength, kTx, kTy, kRadius, kRing));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, cfg_masks[m]);
+      const std::string tag = "case8[cfg mask " + std::to_string(m) + "]";
+
+      check(r.err == zhao_abi::ZH_ABI_OK, (tag + ": well formed").c_str(), zhao_abi::ZH_ABI_OK,
+            r.err);
+      checkNothingEscapedEarly(r, tag.c_str());
+      check(r.committed == 1, (tag + ": committed").c_str(), 1, r.committed);
+      check(r.views == 2, (tag + ": both views").c_str(), 2, r.views);
+      check(r.cfg.size() == 32, (tag + ": thirty-two words, none lost, none doubled").c_str(), 32,
+            r.cfg.size());
+      if (r.cfg.size() == 32) {
+        for (uint32_t k = 0; k < 32; ++k) {
+          const uint32_t base = (k < 16) ? 0x0088'0000u : 0x0077'0000u;
+          const uint8_t view = (k < 16) ? 0 : 1;
+          check(r.cfg[k].view == view, (tag + ": word " + std::to_string(k) + " view").c_str(),
+                view, r.cfg[k].view);
+          check(r.cfg[k].addr == (k & 15u), (tag + ": word " + std::to_string(k) + " addr").c_str(),
+                k & 15u, r.cfg[k].addr);
+          check(r.cfg[k].data == base + (k & 15u),
+                (tag + ": word " + std::to_string(k) + " data").c_str(), base + (k & 15u),
+                r.cfg[k].data);
+        }
+      }
+      // The stamp drain sits behind the cfg drain, so a bank that refuses for
+      // a long time must not lose the stamp queued behind it.
+      check(r.issued == 1, (tag + ": the stamp behind the drain still lands").c_str(), 1, r.issued);
     }
   }
 
