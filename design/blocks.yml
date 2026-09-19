@@ -5289,10 +5289,16 @@ blocks:
     counters: [vram_bytes_by_client]
     source_ids: true
     budget_group: twod_post
-    maturity: SPECIFIED
-    # Raised to UNIT_VERIFIED in the commit AFTER the one that lands the RTL, so
-    # the maturity_log can pin the commit that actually holds the evidence.
-    maturity_log: []
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-19"
+        commit: "c4606721"
+        evidence: reference/include/zref/zref_post.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-19"
+        commit: "c4606721"
+        evidence: tests/compositor/post_echo_directed.cpp
     deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn. Ruling R7 (2026-09-19): BUILD it.
     cut_order: 1
     superseded_by: null
