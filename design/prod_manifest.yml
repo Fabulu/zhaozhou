@@ -151,6 +151,11 @@ top:
   - zhao_post_gather
   - zhao_twod_plane
   - zhao_twod_sprite
+  # TWOD.SAMPLER, built 2026-09-19. The texel-request-to-colour block between
+  # the two above and POST.COMPOSITE. It is counted because the console does not
+  # merely intend to have it -- it is instantiated in zhao_console_core and the
+  # compositor's atmosphere seam is closed through it.
+  - zhao_twod_sampler
   - zhao_surface_sheet
   - zhao_surface_stamp
   - zhao_measure_governor

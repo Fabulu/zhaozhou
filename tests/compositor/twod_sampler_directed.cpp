@@ -76,15 +76,15 @@ struct Bench {
   Vzhao_twod_sampler& t;
 
   // --- the TWOD.PLANE model ------------------------------------------------
-  bool pend = false;      // a sample is sitting in the plane's one register
+  bool pend = false;  // a sample is sitting in the plane's one register
   int pend_x = 0, pend_y = 0;
   bool plane_draws = true;  // false models a view-masked / disabled slot
   int plane_opacity = 0xC0;
-  int plane_blend = 1;      // 0 REPLACE, 1 ALPHA, 2 ADD
-  int plane_role = 1;       // ATMOSPHERE
-  int plane_fmt = 0;        // 0 CLUT8, 1 RGB565
+  int plane_blend = 1;  // 0 REPLACE, 1 ALPHA, 2 ADD
+  int plane_role = 1;   // ATMOSPHERE
+  int plane_fmt = 0;    // 0 CLUT8, 1 RGB565
   int plane_pal = 0;
-  int plane_u_bias = 0;     // added to u before it leaves the model (wrap probe)
+  int plane_u_bias = 0;         // added to u before it leaves the model (wrap probe)
   bool plane_free_run = false;  // feed samples with no walk behind them
 
   // --- the POST.COMPOSITE model --------------------------------------------
@@ -278,8 +278,8 @@ int main(int argc, char** argv) {
     int bad_colour = 0, held = 0;
     const int got = run_frame(true, &bad_colour, &held, 20000);
     zhao::check(got == W * H, "every pixel of the frame came back exactly once", W * H, got);
-    zhao::check(bad_colour == 0, "CLUT8 atmosphere colour, opacity and add bit are the page's",
-                0, bad_colour);
+    zhao::check(bad_colour == 0, "CLUT8 atmosphere colour, opacity and add bit are the page's", 0,
+                bad_colour);
     zhao::check(top.plane_samples_o == static_cast<uint32_t>(W * H),
                 "one plane sample per walked pixel", W * H, top.plane_samples_o);
     zhao::check(top.clut8_samples_o == static_cast<uint32_t>(W * H),
@@ -305,7 +305,7 @@ int main(int argc, char** argv) {
     // Reading it earlier is reading the value frame 1 itself ran under, which
     // is the reset value, and a bench that asserted on it would be asserting
     // the wrong frame's answer.
-    b.plane_draws = false;          // a view-masked slot: accepted, no sample
+    b.plane_draws = false;  // a view-masked slot: accepted, no sample
     int bad = 0, held = 0;
     run_frame(false, &bad, &held, 20000);
     zhao::check(top.atm_en_o == 1,
@@ -491,8 +491,8 @@ int main(int argc, char** argv) {
     top.sc_ready_i = 1;
     for (int i = 0; i < 8; ++i) zhao::tick(top);
 
-    zhao::check(accepted == offered, "every offered sprite pixel was eventually accepted",
-                offered, accepted);
+    zhao::check(accepted == offered, "every offered sprite pixel was eventually accepted", offered,
+                accepted);
     zhao::check(top.sprite_stalls_o > 0,
                 "and the refusal was a REFUSAL -- sprite_stalls_o saw the jam", 1,
                 top.sprite_stalls_o > 0 ? 1 : 0);
@@ -523,8 +523,8 @@ int main(int argc, char** argv) {
     const int got = run_frame(false, &bad, &held, 20000);
     top.sp_valid_i = 0;
     zhao::check(got == W * H,
-                "the atmosphere frame still completed with a sprite pushing on every cycle",
-                W * H, got);
+                "the atmosphere frame still completed with a sprite pushing on every cycle", W * H,
+                got);
     zhao::check(top.plane_samples_o == static_cast<uint32_t>(W * H),
                 "and the plane's samples were not displaced by it", W * H, top.plane_samples_o);
   }
@@ -601,8 +601,8 @@ int main(int argc, char** argv) {
     const uint32_t oob0 = top.page_oob_o;
     const uint32_t wrap0 = top.texel_wrapped_o;
     b.plane_free_run = true;
-    b.pend_x = 900;   // far outside a 16-texel row: the mask changes it
-    b.pend_y = 7;     // and with base 8180 the masked address still leaves the store
+    b.pend_x = 900;  // far outside a 16-texel row: the mask changes it
+    b.pend_y = 7;    // and with base 8180 the masked address still leaves the store
     for (int c = 0; c < 8; ++c) b.cycle();
     b.plane_free_run = false;
     for (int c = 0; c < 4; ++c) b.cycle();
@@ -636,8 +636,8 @@ int main(int argc, char** argv) {
     // (f) pal_refused_o -- a palette id this instance does not own.
     write_bind(kBindSpriteBase + 0, kClutBase, kLStride, kLHeight);
     sprite(0, 0, 1.0, 1.0, /*CLUT8*/ 0, /*src*/ 0, /*palette*/ 9, 0xFFFF);
-    zhao::check(top.pal_refused_o > 0, "FIRED: pal_refused_o sees a palette slot past PAL_SLOTS",
-                1, top.pal_refused_o > 0 ? 1 : 0);
+    zhao::check(top.pal_refused_o > 0, "FIRED: pal_refused_o sees a palette slot past PAL_SLOTS", 1,
+                top.pal_refused_o > 0 ? 1 : 0);
 
     // (g) tint_unapplied_o -- the omission this block declares rather than
     //     hides. A non-unity tint is forwarded and counted.
@@ -646,8 +646,8 @@ int main(int argc, char** argv) {
                 "FIRED: tint_unapplied_o counts every tint this block forwards rather than "
                 "applies",
                 1, top.tint_unapplied_o > 0 ? 1 : 0);
-    zhao::check(top.sc_tint_o == 0x8421, "and the tint itself reaches the consumer intact",
-                0x8421, top.sc_tint_o);
+    zhao::check(top.sc_tint_o == 0x8421, "and the tint itself reaches the consumer intact", 0x8421,
+                top.sc_tint_o);
 
     // (h) atm_underrun_o -- ask for a line while the sheet is enabled and the
     //     walk has not got there. Needs atm_en_o set, so run one good frame

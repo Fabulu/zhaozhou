@@ -12,7 +12,16 @@
 // claims. So the claim was checked before a line was written. The sweep
 // covered every RGB565 expansion, every palette lookup, every texel store and
 // every module whose ports are shaped like (u, v, format, palette) -> colour,
-// across `fpga/rtl/**`. What it found, file by file:
+// across every file under `fpga/rtl`. What it found, file by file:
+//
+// (A GLOB WITH TWO STARS AFTER A SLASH CANNOT BE WRITTEN IN THIS HEADER. The
+// sentence above used to spell that path as a shell glob, and the slash-star
+// it produced opened a block comment for `tools/quartus/gen_prod_top.py`'s
+// comment stripper. The whole first half of this file then read as one
+// comment, the module keyword vanished with it, and the generator reported
+// "no port list found" and SKIPPED the block -- which in that tool's output
+// is one indented line among sixty-three. A prose example of a glob silently
+// deleted a module from the production top.)
 //
 //   * `fpga/rtl/texture/zhao_texture_tmu_pipe.sv` -- IS the right SHAPE
 //     (`req_u_i`/`req_v_i`/`req_mode_i`/`req_pal_base_i` in, `smp_rgb_o` out)

@@ -1719,6 +1719,16 @@ targets:
     sources:
       - fpga/rtl/compositor/zhao_twod_sprite.sv
 
+  # TWOD.SAMPLER, added 2026-09-19. A LEAF ROW ON PURPOSE: this block is the
+  # first thing in the compositor to hold real M10K (a page store, a palette
+  # and an atmosphere line ring), and whether Quartus INFERS those or spends
+  # registers on them is exactly the question a leaf fit answers and lint
+  # cannot. It is composed in zhao_console_core as well, so this row is the
+  # differential rather than the only measurement.
+  - top: zhao_twod_sampler
+    sources:
+      - fpga/rtl/compositor/zhao_twod_sampler.sv
+
   # ==========================================================================
   # FOURTEEN MORE, and several already have a NUMBER but no way to reproduce it
   # ==========================================================================
@@ -2025,6 +2035,7 @@ targets:
       - fpga/rtl/common/zhao_project_core.sv
       - fpga/rtl/common/zhao_shell_top.sv
       - fpga/rtl/compositor/zhao_post_gather.sv
+      - fpga/rtl/compositor/zhao_twod_sampler.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
@@ -2544,6 +2555,9 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_loadq.sv
       - fpga/rtl/terrain/zhao_terrain_pageloader.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
+      - fpga/rtl/compositor/zhao_twod_plane.sv
+      - fpga/rtl/compositor/zhao_twod_sprite.sv
+      - fpga/rtl/compositor/zhao_twod_sampler.sv
       - fpga/rtl/measure/zhao_measure_histogram.sv
       # SURFACE, added 2026-09-19. The pair is composed CLOSED -- SURFACE.STAMP
       # is SURFACE.SHEET's only client and its only writer (terrain_rules 7:

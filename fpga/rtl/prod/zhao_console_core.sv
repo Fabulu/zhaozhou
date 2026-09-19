@@ -490,65 +490,118 @@
 //      put two producers on one framebuffer writer, which is worse than the
 //      gap.
 //
-// I17. POST.COMPOSITE's gather planes, atmosphere sheet, HUD, grading table,
-//      flash and ink (`post_gd_*`, `post_gg_*`, `post_atm_*`, `post_hud_*`,
-//      `post_pv_*`, `post_bias_*`, `post_flash_*`, `post_ink_*`,
-//      `post_bloom_gain_i`) -- BOUNDARY. The grading curves are generated
-//      ASSETS by design, so their load port is legitimately external; the
-//      plane ports are not, and are a gap.
+// I17. POST.COMPOSITE's gather planes, HUD, grading table, flash and ink
+//      (`post_gd_*`, `post_gg_*`, `post_hud_*`, `post_pv_*`, `post_bias_*`,
+//      `post_flash_*`, `post_ink_*`, `post_bloom_gain_i`) -- BOUNDARY. The
+//      grading curves are generated ASSETS by design, so their load port is
+//      legitimately external; the plane ports are not, and are a gap.
 //
-//      CORRECTED 2026-09-19, and the correction matters because acting on the
-//      old sentence would have sent somebody to build a block that exists.
-//      This entry used to read "TWOD.PLANE and the HUD source are not built".
-//      BOTH ARE BUILT AND BOTH ARE TESTED: `fpga/rtl/compositor/
-//      zhao_twod_plane.sv` and `zhao_twod_sprite.sv`, with
-//      `tests/compositor/twod_plane_directed.cpp`, `twod_plane_random.cpp`,
-//      `twod_sprite_directed.cpp` and `twod_sprite_random.cpp`. The completion
-//      register has counted both as BUILT-BUT-NOT-CONNECTED all along, so the
-//      header and the register disagreed and the header was the wrong one.
+//      THE ATMOSPHERE SHEET IS NO LONGER IN THIS LIST. `post_atm_*` is GONE
+//      FROM THIS MODULE'S EDGE as of 2026-09-19: TWOD.PLANE, TWOD.SPRITE and
+//      the new `fpga/rtl/compositor/zhao_twod_sampler.sv` are composed at the
+//      end of this file and the sheet never leaves. What follows is the record
+//      of why that took three refusals, because one of the three reasons was
+//      wrong and the wrong one is the one that did the refusing.
 //
-//      THE REAL OBSTACLE IS A MISSING BLOCK BETWEEN THEM, and it is one block
-//      for both ports. TWOD.PLANE and TWOD.SPRITE each emit a TEXEL SAMPLE
-//      REQUEST -- `s_texel_u_o`/`s_texel_v_o` with a format, a palette and a
-//      blend, and `s_u_o`/`s_v_o` with a format and a tint. POST.COMPOSITE's
-//      `atm_*` and `hud_*` ports hand back an RGB (plus opacity, plus an add
-//      bit). A request for a texel is not a colour, and the thing that turns
-//      one into the other is a CLUT8/RGB565 sampler with a page store behind
-//      it. Nothing in `fpga/rtl` is that: TEXTURE.CACHE and the TMU are
-//      fragment-shaped and sit on the raster path, and their pages come back
-//      through MEM.VRAM.ARBITER and `zhao_sdram_ctrl` -- the same absent
-//      behavioural model entry I23 refuses on. So this is I23's refusal in the
-//      compositor rather than "the producers do not exist".
+//      CORRECTED 2026-09-19 (first pass), and the correction matters because
+//      acting on the old sentence would have sent somebody to build a block
+//      that exists. This entry used to read "TWOD.PLANE and the HUD source are
+//      not built". BOTH ARE BUILT AND BOTH ARE TESTED:
+//      `fpga/rtl/compositor/zhao_twod_plane.sv` and `zhao_twod_sprite.sv`,
+//      with `tests/compositor/twod_plane_directed.cpp`, `twod_plane_random.cpp`,
+//      `twod_sprite_directed.cpp` and `twod_sprite_random.cpp`.
 //
-//      Wiring the two blocks in and inventing the sampler here would be the
-//      hidden adapter, and inventing the CLUT lookup would additionally be
-//      inventing a colour law. Both were refused 2026-09-19.
+//      CORRECTED AGAIN 2026-09-19 (second pass), and this one removes work
+//      rather than adding it. The entry then said the missing piece was "a
+//      CLUT8/RGB565 sampler with a page store behind it. Nothing in `fpga/rtl`
+//      is that", and added that "inventing the CLUT lookup would additionally
+//      be inventing a colour law". HALF OF THAT WAS RIGHT AND THE HALF THAT
+//      WAS WRONG IS WHAT KEPT THE SEAM SHUT.
 //
-//      POST.GATHER IS REFUSED SEPARATELY AND FOR A DIFFERENT REASON, recorded
-//      here because it is the named producer of the `gg_*`/`gd_*` planes and
-//      the next reader will look for it. `fpga/rtl/compositor/
-//      zhao_post_gather.sv` is built and tested; it is refused twice over:
+//        * RIGHT: there is no TEXEL PAGE STORE in the tree that a (u, v) can
+//          walk into without a VRAM fill agent. `zhao_texture_cache` is 1 KiB
+//          of line cache with a MANDATORY `fill_*` port; `zhao_texture_tmu_pipe`
+//          has the exactly right request and response shape and its `cac_*`
+//          group is equally mandatory. Both end at MEM.VRAM.ARBITER, which has
+//          no spare client index (see I15 item 2), and at `zhao_sdram_ctrl`,
+//          which is I23's absent behavioural model. That is a real wall and it
+//          is why the new block carries a page store of its own rather than a
+//          client.
+//        * WRONG: THERE WAS NO COLOUR LAW TO INVENT. `atm_rgb_i` and
+//          `hud_rgb_i` are RGB565. A CLUT8 palette entry is RGB565. An RGB565
+//          texel is RGB565. The sampler therefore performs ZERO colour
+//          arithmetic -- no expansion, no rounding, not one multiply -- and
+//          the expansion law (`exp5`/`exp6`, replicate the high bits) stays
+//          inside POST.COMPOSITE where it already lived. The refusal was
+//          written about a step the design does not contain.
+//
+//      That is this repository's own "first explanation that absolves the
+//      design" law: a refusal that means less work arrives first and explains
+//      almost all of the evidence. The check that separated the halves was one
+//      grep for `exp5` and one look at the width of `atm_rgb_i`.
+//
+//      WHAT IS COMPOSED NOW, and what each connection is:
+//        `u_twod_sampler.pw_*` -> `u_twod_plane.p_*`      the raster walk
+//        `u_twod_plane.s_*`    -> `u_twod_sampler.pl_*`   the texel request
+//        `u_twod_sampler.atm_*`-> `u_post_composite`      the colour
+//        `u_twod_sprite.s_*`   -> `u_twod_sampler.sp_*`   the texel request
+//      Not one of those is an adapter: every connection is a port to a port of
+//      the same width and meaning. The sampler owns the WALK because
+//      POST.COMPOSITE's `atm_*` group is a 1-cycle RANDOM ACCESS that must
+//      hold through a stall -- that block's own header says the fix is "a
+//      synchronous memory", and a bare streaming sampler could not have closed
+//      this seam however correct its colours were.
+//
+//      WHAT IS STILL A GAP, and the three are different from each other:
+//        1. `post_hud_*` -- BOUNDARY, and this is the obstacle the earlier
+//           refusals should have named. TWOD.SPRITE walks in DESCRIPTOR order,
+//           one whole sprite at a time; `hud_*` is a random access in RASTER
+//           order. Bridging them needs a frame-resident HUD store (384 x 240 x
+//           17 bits, about 1.6 Mbit -- SDRAM, so I23) or a display list that
+//           can re-walk ONE SCANLINE across many descriptors, which is a
+//           different block from the one TWOD.SPRITE is. A small line ring
+//           plus backpressure was worked through and REJECTED: it makes a
+//           sprite trickle one row per composited line, so ten 32-row sprites
+//           need 320 lines of a 240-line frame. That is a machine that passes
+//           its tests and cannot draw a HUD. The sprite's colours therefore
+//           leave on `twod_sc_*` and that port group is this entry's new gap,
+//           stated rather than dressed up.
+//        2. `twod_pd_*` and `twod_sd_*` -- the DESCRIPTORS. These are the CMD
+//           seam and they are the SAME gap I14 and I30 already describe, not a
+//           new one: `zhao_cmd_decoder` emits record headers, and the executor
+//           that would turn a SetPlane record into a plane descriptor does not
+//           exist.
+//        3. `twod_ld_*` -- NOT A GAP. A texture page, a palette and a binding
+//           are generated assets, which is this entry's own classification for
+//           the grading curves, applied to a texture.
+//
+//      POST.GATHER IS STILL REFUSED AND STILL FOR ITS OWN REASONS, which the
+//      new sampler does not touch. `fpga/rtl/compositor/zhao_post_gather.sv`
+//      is built and tested; it is refused three times over:
 //        * ITS INPUT DOES NOT EXIST IN THIS SHAPE. It takes per-fragment glow
 //          as three 8-bit channels, a signed 8.8 displacement pair and an ink
 //          bit. `zhao_raster_resolve` emits ONE 8-bit `fb_tag_o` -- an effect
 //          channel and a strength, `spec/stars_and_flares.md` 1. Expanding a
-//          tag byte into glow RGB plus a displacement vector is a colour and
-//          geometry law invented in the composer, and it is exactly the kind
-//          of plausible wrong number this repository has shipped before.
+//          tag byte into glow RGB plus a displacement vector IS a colour and
+//          geometry law invented in the composer -- and note that this is the
+//          claim the atmosphere half of this entry made falsely and this half
+//          makes truly. The difference is checkable: there, both sides of the
+//          seam were already RGB565; here, one side is 8 bits and the other is
+//          25, and nothing in the tree says how to get from one to the other.
 //        * AND THE STREAM IT WOULD READ IS INTERNAL ANYWAY. Corrected
 //          2026-09-19 with I15: the RESOLVED stream is not internal -- it is
 //          nine ports on `zhao_geom_bin_pipe_v2`. What never leaves is the
 //          PRE-RESOLVE FRAGMENT stream that POST.GATHER's per-fragment input
 //          actually describes; `stage_fragment_*` exposes a fragment's texel
 //          sample as a structural probe for the directed gate and the mutants,
-//          not as a handshaked stream and not as a glow value. So this bullet
-//          survives the correction, and the first bullet -- one tag byte
-//          against glow RGB plus a signed 8.8 displacement -- is still the
-//          load-bearing one.
-//      Its OUTPUT is a third gap on top: the block flushes sixteen cells per
-//      tile as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
-//      The store between a flush and a random access is the `lowres_buffers`
-//      the ledger puts behind MEM.GUARD, and that is I23's absent SDRAM again.
+//          not as a handshaked stream and not as a glow value.
+//        * ITS OUTPUT IS A THIRD GAP. The block flushes sixteen cells per tile
+//          as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
+//          The store between a flush and a random access is the same shape of
+//          thing TWOD.SAMPLER's atmosphere ring is -- so this one IS now
+//          buildable in principle, and it is NOT built here because the first
+//          bullet makes the contents of that store undefined. Building a
+//          correct store for an invented value is the worse half of the two.
 //
 // I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Nothing in
 //      the console produces an error-magnitude stream; the block measures a
@@ -1025,6 +1078,21 @@ module zhao_console_core
   parameter int unsigned POST_LAG_PX   = 9,
   parameter int unsigned POST_XW       = $clog2(POST_LINE_W + 1),
   parameter int unsigned POST_YW       = $clog2(POST_MAX_H + 1),
+
+  // ---- TWOD: the plane, the sprite walker and the sampler between them -----
+  // TWOD_LINE_W and TWOD_MAX_H are NOT separate numbers -- they are
+  // POST_LINE_W and POST_MAX_H, because the ring the sampler prepares is
+  // addressed by the compositor's own raster pointer and two blocks that
+  // disagree about what a line is would produce a picture sheared by the
+  // difference. They are written as expressions rather than repeated literals
+  // so the agreement cannot be broken by editing one of them.
+  parameter int unsigned TWOD_PAGE_WORDS = 8192,   // 16 KiB of texel page
+  parameter int unsigned TWOD_PAL_SLOTS  = 4,
+  parameter int unsigned TWOD_BIND_SLOTS = 8,
+  parameter int unsigned TWOD_ATM_LINES  = 4,
+  parameter int unsigned TWOD_PAW        = $clog2(TWOD_PAGE_WORDS),
+  parameter int unsigned TWOD_PALAW      = $clog2(TWOD_PAL_SLOTS * 256),
+  parameter int unsigned TWOD_BSW        = $clog2(TWOD_BIND_SLOTS),
 
   // ---- MEASURE -------------------------------------------------------------
   parameter int unsigned HIST_EW       = 32,
@@ -1657,14 +1725,10 @@ module zhao_console_core
   input  logic                    post_gg_present_i,
   input  logic [15:0]             post_gg_glow_i,
   input  logic                    post_gg_ink_i,
-  output logic                    post_atm_req_v_o,
-  output logic [POST_XW-1:0]      post_atm_req_x_o,
-  output logic [POST_YW-1:0]      post_atm_req_y_o,
-  input  logic                    post_atm_en_i,
-  input  logic                    post_atm_valid_i,
-  input  logic [15:0]             post_atm_rgb_i,
-  input  logic [7:0]              post_atm_opacity_i,
-  input  logic                    post_atm_add_i,
+  // The `atm_*` GROUP IS GONE FROM THIS EDGE, 2026-09-19. It is now internal:
+  // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
+  // this module and the atmosphere sheet never leaves. Entry I17 records what
+  // changed and what did not.
   input  logic [7:0]              post_bloom_gain_i,
   input  logic                    post_grade_valid_i,
   input  logic                    post_pv_we_i,
@@ -2111,6 +2175,116 @@ module zhao_console_core
   output logic        phy_dq_oe_o,
   output logic [1:0]  phy_dqm_o,
   input  logic [15:0] phy_dq_i,
+
+  // --------------------------------------------------------------------------
+  // TWOD: the plane descriptors, the sprite descriptors, the sampler's assets
+  // and the sprite colour stream.  Added 2026-09-19 with TWOD.SAMPLER.
+  // --------------------------------------------------------------------------
+  // WHAT IS AND IS NOT A GAP HERE, because the group is large and it would be
+  // easy to read all of it as one:
+  //   * the two DESCRIPTOR groups are the CMD seam. SetPlane and the sprite
+  //     display list are commands, `zhao_cmd_decoder` emits record headers and
+  //     not decoded descriptors, and the executor that would turn one into the
+  //     other is the same absent path entries I14 and I30 describe. GAP, and
+  //     it is the SAME gap those two already name rather than a new one.
+  //   * the three LOAD groups are ASSETS. Entry I17's own sentence about the
+  //     grading curves -- "generated ASSETS by design, so their load port is
+  //     legitimately external" -- covers a texture page, a palette and a
+  //     binding exactly. NOT a gap.
+  //   * `twod_sc_*` is the sprite colour, and it has no consumer HERE because
+  //     POST.COMPOSITE's `hud_*` port is a raster-order random access and
+  //     TWOD.SPRITE walks in descriptor order. GAP, and a NEW one -- see I17.
+  input  logic                    twod_pd_valid_i,
+  output logic                    twod_pd_ready_o,
+  input  logic                    twod_pd_slot_i,
+  input  logic [1:0]              twod_pd_role_i,
+  input  logic [1:0]              twod_pd_blend_i,
+  input  logic [7:0]              twod_pd_opacity_i,
+  input  logic                    twod_pd_format_i,
+  input  logic [15:0]             twod_pd_width_i,
+  input  logic [15:0]             twod_pd_height_i,
+  input  logic                    twod_pd_wrap_u_i,
+  input  logic                    twod_pd_wrap_v_i,
+  input  logic signed [31:0]      twod_pd_a_i,
+  input  logic signed [31:0]      twod_pd_b_i,
+  input  logic signed [31:0]      twod_pd_c_i,
+  input  logic signed [31:0]      twod_pd_d_i,
+  input  logic signed [31:0]      twod_pd_u0_i,
+  input  logic signed [31:0]      twod_pd_v0_i,
+  input  logic [1:0]              twod_pd_view_mask_i,
+  input  logic [7:0]              twod_pd_palette_i,
+
+  input  logic                    twod_sd_valid_i,
+  output logic                    twod_sd_ready_o,
+  input  logic signed [15:0]      twod_sd_x_i,
+  input  logic signed [15:0]      twod_sd_y_i,
+  input  logic [15:0]             twod_sd_w_i,
+  input  logic [15:0]             twod_sd_h_i,
+  input  logic signed [31:0]      twod_sd_u_i,
+  input  logic signed [31:0]      twod_sd_v_i,
+  input  logic signed [31:0]      twod_sd_a00_i,
+  input  logic signed [31:0]      twod_sd_a01_i,
+  input  logic signed [31:0]      twod_sd_a10_i,
+  input  logic signed [31:0]      twod_sd_a11_i,
+  input  logic [2:0]              twod_sd_format_i,
+  input  logic [7:0]              twod_sd_palette_i,
+  input  logic [15:0]             twod_sd_tint_i,
+  input  logic [1:0]              twod_sd_blend_i,
+  input  logic [1:0]              twod_sd_view_mask_i,
+  input  logic [7:0]              twod_sd_order_i,
+  input  logic [15:0]             twod_sd_src_id_i,
+
+  input  logic                    twod_ld_page_we_i,
+  input  logic [TWOD_PAW-1:0]     twod_ld_page_addr_i,
+  input  logic [15:0]             twod_ld_page_data_i,
+  input  logic                    twod_ld_pal_we_i,
+  input  logic [TWOD_PALAW-1:0]   twod_ld_pal_addr_i,
+  input  logic [15:0]             twod_ld_pal_data_i,
+  input  logic                    twod_ld_bind_we_i,
+  input  logic [TWOD_BSW-1:0]     twod_ld_bind_sel_i,
+  input  logic [TWOD_PAW-1:0]     twod_ld_bind_base_i,
+  input  logic [3:0]              twod_ld_bind_lstride_i,
+  input  logic [3:0]              twod_ld_bind_lheight_i,
+  input  logic                    twod_atm_slot_i,
+  input  logic signed [31:0]      twod_line_scroll_i,
+
+  output logic                    twod_sc_valid_o,
+  input  logic                    twod_sc_ready_i,
+  output logic [15:0]             twod_sc_rgb_o,
+  output logic signed [15:0]      twod_sc_x_o,
+  output logic signed [15:0]      twod_sc_y_o,
+  output logic [15:0]             twod_sc_tint_o,
+  output logic [1:0]              twod_sc_blend_o,
+  output logic [7:0]              twod_sc_order_o,
+  output logic [15:0]             twod_sc_src_id_o,
+  output logic                    twod_sc_last_o,
+
+  // ---- TWOD evidence -------------------------------------------------------
+  output logic [31:0]             twod_plane_pixels_o,
+  output logic [31:0]             twod_plane_refused_role_o,
+  output logic [31:0]             twod_plane_refused_blend_o,
+  output logic [31:0]             twod_plane_skipped_view_o,
+  output logic [31:0]             twod_plane_wrap_fail_o,
+  output logic [31:0]             twod_sprite_descriptors_o,
+  output logic [31:0]             twod_sprite_skipped_view_o,
+  output logic [31:0]             twod_sprite_refused_o,
+  output logic [31:0]             twod_sprite_pixels_o,
+  output logic [31:0]             twod_samples_o,
+  output logic [31:0]             twod_plane_samples_o,
+  output logic [31:0]             twod_sprite_samples_o,
+  output logic [31:0]             twod_clut8_samples_o,
+  output logic [31:0]             twod_rgb565_samples_o,
+  output logic [31:0]             twod_texel_wrapped_o,
+  output logic [31:0]             twod_page_oob_o,
+  output logic [31:0]             twod_bind_missing_o,
+  output logic [31:0]             twod_fmt_refused_o,
+  output logic [31:0]             twod_pal_refused_o,
+  output logic [31:0]             twod_skipped_fill_o,
+  output logic [31:0]             twod_atm_underrun_o,
+  output logic [31:0]             twod_walk_stalls_o,
+  output logic [31:0]             twod_sprite_stalls_o,
+  output logic [31:0]             twod_tint_unapplied_o,
+  output logic [31:0]             twod_pair_lost_o,
 
   // --------------------------------------------------------------------------
   // CMD.DECODER's record headers and verdict.  Added 2026-09-19.
@@ -3675,7 +3849,24 @@ module zhao_console_core
   // ==========================================================================
   // COMPOSITOR. On the real frame edge and the real video mode (glue 1 and 2),
   // and BESIDE the render path rather than in it -- header entry I15 says why.
+  //
+  // The ATMOSPHERE SHEET is internal as of 2026-09-19. These eight wires are
+  // the seam that used to be eight ports; their producer is `u_twod_sampler`
+  // at the end of this module, which is fed by `u_twod_plane`, which is walked
+  // by the sampler. The three blocks are declared together at the bottom
+  // rather than here so that this instance keeps the shape a reader already
+  // knows -- and because the walk is a LOOP (sampler -> plane -> sampler) and
+  // splitting a loop across two places in a file is how one half gets edited.
   // ==========================================================================
+  logic                   atm_req_v_c;
+  logic [POST_XW-1:0]     atm_req_x_c;
+  logic [POST_YW-1:0]     atm_req_y_c;
+  logic                   atm_en_c;
+  logic                   atm_valid_c;
+  logic [15:0]            atm_rgb_c;
+  logic [7:0]             atm_opacity_c;
+  logic                   atm_add_c;
+
   zhao_post_composite #(
     .LINE_W    (POST_LINE_W),
     .MAX_H     (POST_MAX_H),
@@ -3700,9 +3891,9 @@ module zhao_console_core
     .s_ready_o(post_s_ready_o),
     .s_rgb_i  (post_s_rgb_i),
 
-    // I17: TWOD.PLANE and TWOD.SPRITE are BUILT and are not composed -- they
-    // emit texel sample requests and these ports want RGB back, and the
-    // sampler between them does not exist. See the corrected entry I17.
+    // I17, CLOSED FOR THE ATMOSPHERE SHEET 2026-09-19: `atm_*` is now wired to
+    // TWOD.SAMPLER, which is wired to TWOD.PLANE, at the end of this module.
+    // The `gd_*`/`gg_*` planes and `hud_*` are still boundary and I17 says why.
     .gd_req_v_o  (post_gd_req_v_o),
     .gd_view_o   (post_gd_view_o),
     .gd_cx_o     (post_gd_cx_o),
@@ -3717,14 +3908,14 @@ module zhao_console_core
     .gg_present_i(post_gg_present_i),
     .gg_glow_i   (post_gg_glow_i),
     .gg_ink_i    (post_gg_ink_i),
-    .atm_req_v_o (post_atm_req_v_o),
-    .atm_req_x_o (post_atm_req_x_o),
-    .atm_req_y_o (post_atm_req_y_o),
-    .atm_en_i    (post_atm_en_i),
-    .atm_valid_i (post_atm_valid_i),
-    .atm_rgb_i   (post_atm_rgb_i),
-    .atm_opacity_i(post_atm_opacity_i),
-    .atm_add_i   (post_atm_add_i),
+    .atm_req_v_o (atm_req_v_c),
+    .atm_req_x_o (atm_req_x_c),
+    .atm_req_y_o (atm_req_y_c),
+    .atm_en_i    (atm_en_c),
+    .atm_valid_i (atm_valid_c),
+    .atm_rgb_i   (atm_rgb_c),
+    .atm_opacity_i(atm_opacity_c),
+    .atm_add_i   (atm_add_c),
     .bloom_gain_i(post_bloom_gain_i),
     .grade_valid_i(post_grade_valid_i),
     .pv_we_i     (post_pv_we_i),
@@ -4975,6 +5166,260 @@ module zhao_console_core
     .guard_denied_o   (terr_pl_guard_denied_o),
     .bridge_errs_o    (terr_pl_bridge_errs_o),
     .load_bytes_o     (terr_pl_load_bytes_o)
+  );
+
+  // ==========================================================================
+  // TWOD -- THE PLANE, THE SAMPLER AND THE SPRITE WALKER.  Added 2026-09-19,
+  // and this closes the atmosphere half of header entry I17.
+  // ==========================================================================
+  // THE ARRANGEMENT IS A LOOP AND THE LOOP IS THE POINT. TWOD.PLANE is a pure
+  // function of (x, y) and has no raster counter of its own -- its header says
+  // "the compositor owns the walk". TWOD.SAMPLER owns it, because the sampler
+  // is the only block that knows which line of its ring is free. So:
+  //
+  //     u_twod_sampler.pw_*  -->  u_twod_plane.p_*      (the walk)
+  //     u_twod_plane.s_*     -->  u_twod_sampler.pl_*   (the texel request)
+  //     u_twod_sampler.atm_* -->  u_post_composite      (the colour)
+  //
+  // NOTHING IS ADAPTED HERE. Every connection below is a port to a port of the
+  // same width and the same meaning; there is no widening, no field invented,
+  // no delay reconstructed and no arithmetic. That is the test entry I17's own
+  // "hidden adapter" refusal sets, and the reason it can be met is that the
+  // sampler was built to TWOD.PLANE's published request shape and to
+  // POST.COMPOSITE's published `atm_*` convention rather than to a convenient
+  // middle.
+  //
+  // THE SPRITE IS COMPOSED TO THE SAMPLER AND NOT TO THE COMPOSITOR, and that
+  // is deliberate -- see entry I17 and the sampler's own header. Its colours
+  // leave on `twod_sc_*`.
+  // The walk, the plane's texel request and the sprite's texel request.
+  logic                pw_valid_c, pw_ready_c, pw_slot_c;
+  logic [15:0]         pw_x_c, pw_y_c;
+  logic signed [31:0]  pw_scroll_c;
+
+  logic                pl_valid_c, pl_ready_c, pl_fmt_c;
+  logic [15:0]         pl_u_c, pl_v_c;
+  logic [7:0]          pl_pal_c, pl_opacity_c;
+  logic [1:0]          pl_blend_c, pl_role_c;
+
+  logic                sp_valid_c, sp_ready_c, sp_last_c;
+  logic signed [15:0]  sp_x_c, sp_y_c;
+  logic signed [31:0]  sp_u_c, sp_v_c;
+  logic [2:0]          sp_fmt_c;
+  logic [7:0]          sp_pal_c, sp_order_c;
+  logic [15:0]         sp_tint_c, sp_srcid_c;
+  logic [1:0]          sp_blend_c;
+
+  zhao_twod_plane #(
+    .CW (32)
+  ) u_twod_plane (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // The descriptor is the CMD seam, unchanged by this packet.
+    .d_valid_i    (twod_pd_valid_i),
+    .d_ready_o    (twod_pd_ready_o),
+    .d_slot_i     (twod_pd_slot_i),
+    .d_role_i     (twod_pd_role_i),
+    .d_blend_i    (twod_pd_blend_i),
+    .d_opacity_i  (twod_pd_opacity_i),
+    .d_format_i   (twod_pd_format_i),
+    .d_width_i    (twod_pd_width_i),
+    .d_height_i   (twod_pd_height_i),
+    .d_wrap_u_i   (twod_pd_wrap_u_i),
+    .d_wrap_v_i   (twod_pd_wrap_v_i),
+    .d_a_i        (twod_pd_a_i),
+    .d_b_i        (twod_pd_b_i),
+    .d_c_i        (twod_pd_c_i),
+    .d_d_i        (twod_pd_d_i),
+    .d_u0_i       (twod_pd_u0_i),
+    .d_v0_i       (twod_pd_v0_i),
+    .d_view_mask_i(twod_pd_view_mask_i),
+    .d_palette_i  (twod_pd_palette_i),
+
+    // REAL: the walk comes from the sampler, which is the block that knows
+    // which ring line is free.
+    .p_valid_i      (pw_valid_c),
+    .p_ready_o      (pw_ready_c),
+    .p_slot_i       (pw_slot_c),
+    .p_x_i          (pw_x_c),
+    .p_y_i          (pw_y_c),
+    .p_line_scroll_i(pw_scroll_c),
+    // view_sel_i is a 2-bit MASK here against POST.COMPOSITE's 1-bit view
+    // INDEX. One-hot of the index is the mask, and writing it as a one-hot
+    // rather than a zero-extension is the whole difference between "view 1"
+    // and "view 0 and 1".
+    .view_sel_i     (post_view_sel_i ? 2'b10 : 2'b01),
+
+    .s_valid_o  (pl_valid_c),
+    .s_ready_i  (pl_ready_c),
+    .s_texel_u_o(pl_u_c),
+    .s_texel_v_o(pl_v_c),
+    .s_format_o (pl_fmt_c),
+    .s_palette_o(pl_pal_c),
+    .s_blend_o  (pl_blend_c),
+    .s_opacity_o(pl_opacity_c),
+    .s_role_o   (pl_role_c),
+
+    .pixels_o        (twod_plane_pixels_o),
+    .refused_role_o  (twod_plane_refused_role_o),
+    .refused_blend_o (twod_plane_refused_blend_o),
+    .skipped_view_o  (twod_plane_skipped_view_o),
+    .wrap_fail_o     (twod_plane_wrap_fail_o)
+  );
+
+  zhao_twod_sprite #(
+    .UVW (32)
+  ) u_twod_sprite (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .d_valid_i    (twod_sd_valid_i),
+    .d_ready_o    (twod_sd_ready_o),
+    .d_x_i        (twod_sd_x_i),
+    .d_y_i        (twod_sd_y_i),
+    .d_w_i        (twod_sd_w_i),
+    .d_h_i        (twod_sd_h_i),
+    .d_u_i        (twod_sd_u_i),
+    .d_v_i        (twod_sd_v_i),
+    .d_a00_i      (twod_sd_a00_i),
+    .d_a01_i      (twod_sd_a01_i),
+    .d_a10_i      (twod_sd_a10_i),
+    .d_a11_i      (twod_sd_a11_i),
+    .d_format_i   (twod_sd_format_i),
+    .d_palette_i  (twod_sd_palette_i),
+    .d_tint_i     (twod_sd_tint_i),
+    .d_blend_i    (twod_sd_blend_i),
+    .d_view_mask_i(twod_sd_view_mask_i),
+    .d_order_i    (twod_sd_order_i),
+    .d_src_id_i   (twod_sd_src_id_i),
+    .view_sel_i   (post_view_sel_i ? 2'b10 : 2'b01),
+
+    // REAL: the sample requests go to the sampler.
+    .s_valid_o (sp_valid_c),
+    .s_ready_i (sp_ready_c),
+    .s_x_o     (sp_x_c),
+    .s_y_o     (sp_y_c),
+    .s_u_o     (sp_u_c),
+    .s_v_o     (sp_v_c),
+    .s_format_o(sp_fmt_c),
+    .s_palette_o(sp_pal_c),
+    .s_tint_o  (sp_tint_c),
+    .s_blend_o (sp_blend_c),
+    .s_order_o (sp_order_c),
+    .s_src_id_o(sp_srcid_c),
+    .s_last_o  (sp_last_c),
+
+    .descriptors_o (twod_sprite_descriptors_o),
+    .skipped_view_o(twod_sprite_skipped_view_o),
+    .refused_o     (twod_sprite_refused_o),
+    .pixels_o      (twod_sprite_pixels_o)
+  );
+
+  zhao_twod_sampler #(
+    .LINE_W     (POST_LINE_W),
+    .MAX_H      (POST_MAX_H),
+    .PAGE_WORDS (TWOD_PAGE_WORDS),
+    .PAL_SLOTS  (TWOD_PAL_SLOTS),
+    .BIND_SLOTS (TWOD_BIND_SLOTS),
+    .ATM_LINES  (TWOD_ATM_LINES)
+  ) u_twod_sampler (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the same frame edge and the same latched mode POST.COMPOSITE runs
+    // on. Giving the sampler a second opinion about where a frame starts or
+    // how wide a line is would put the ring and the compositor's raster out of
+    // step by exactly the disagreement.
+    .frame_start_i(core_tick_c),
+    .frame_w_i    (post_frame_w_c),
+    .frame_h_i    (post_frame_h_c),
+
+    // The page, the palette and the bindings are ASSETS -- I17's own
+    // classification for the grading curves, applied to a texture.
+    .ld_page_we_i     (twod_ld_page_we_i),
+    .ld_page_addr_i   (twod_ld_page_addr_i),
+    .ld_page_data_i   (twod_ld_page_data_i),
+    .ld_pal_we_i      (twod_ld_pal_we_i),
+    .ld_pal_addr_i    (twod_ld_pal_addr_i),
+    .ld_pal_data_i    (twod_ld_pal_data_i),
+    .ld_bind_we_i     (twod_ld_bind_we_i),
+    .ld_bind_sel_i    (twod_ld_bind_sel_i),
+    .ld_bind_base_i   (twod_ld_bind_base_i),
+    .ld_bind_lstride_i(twod_ld_bind_lstride_i),
+    .ld_bind_lheight_i(twod_ld_bind_lheight_i),
+
+    .atm_slot_i   (twod_atm_slot_i),
+    .line_scroll_i(twod_line_scroll_i),
+
+    .pw_valid_o      (pw_valid_c),
+    .pw_ready_i      (pw_ready_c),
+    .pw_slot_o       (pw_slot_c),
+    .pw_x_o          (pw_x_c),
+    .pw_y_o          (pw_y_c),
+    .pw_line_scroll_o(pw_scroll_c),
+
+    .pl_valid_i  (pl_valid_c),
+    .pl_ready_o  (pl_ready_c),
+    .pl_texel_u_i(pl_u_c),
+    .pl_texel_v_i(pl_v_c),
+    .pl_format_i (pl_fmt_c),
+    .pl_palette_i(pl_pal_c),
+    .pl_blend_i  (pl_blend_c),
+    .pl_opacity_i(pl_opacity_c),
+    .pl_role_i   (pl_role_c),
+
+    .sp_valid_i (sp_valid_c),
+    .sp_ready_o (sp_ready_c),
+    .sp_x_i     (sp_x_c),
+    .sp_y_i     (sp_y_c),
+    .sp_u_i     (sp_u_c),
+    .sp_v_i     (sp_v_c),
+    .sp_format_i(sp_fmt_c),
+    .sp_palette_i(sp_pal_c),
+    .sp_tint_i  (sp_tint_c),
+    .sp_blend_i (sp_blend_c),
+    .sp_order_i (sp_order_c),
+    .sp_src_id_i(sp_srcid_c),
+    .sp_last_i  (sp_last_c),
+
+    .sc_valid_o (twod_sc_valid_o),
+    .sc_ready_i (twod_sc_ready_i),
+    .sc_rgb_o   (twod_sc_rgb_o),
+    .sc_x_o     (twod_sc_x_o),
+    .sc_y_o     (twod_sc_y_o),
+    .sc_tint_o  (twod_sc_tint_o),
+    .sc_blend_o (twod_sc_blend_o),
+    .sc_order_o (twod_sc_order_o),
+    .sc_src_id_o(twod_sc_src_id_o),
+    .sc_last_o  (twod_sc_last_o),
+
+    // REAL: POST.COMPOSITE's atmosphere seam, closed.
+    .atm_req_v_i (atm_req_v_c),
+    .atm_req_x_i (atm_req_x_c),
+    .atm_req_y_i (atm_req_y_c),
+    .atm_en_o    (atm_en_c),
+    .atm_valid_o (atm_valid_c),
+    .atm_rgb_o   (atm_rgb_c),
+    .atm_opacity_o(atm_opacity_c),
+    .atm_add_o   (atm_add_c),
+
+    .samples_o        (twod_samples_o),
+    .plane_samples_o  (twod_plane_samples_o),
+    .sprite_samples_o (twod_sprite_samples_o),
+    .clut8_samples_o  (twod_clut8_samples_o),
+    .rgb565_samples_o (twod_rgb565_samples_o),
+    .texel_wrapped_o  (twod_texel_wrapped_o),
+    .page_oob_o       (twod_page_oob_o),
+    .bind_missing_o   (twod_bind_missing_o),
+    .fmt_refused_o    (twod_fmt_refused_o),
+    .pal_refused_o    (twod_pal_refused_o),
+    .skipped_fill_o   (twod_skipped_fill_o),
+    .atm_underrun_o   (twod_atm_underrun_o),
+    .walk_stalls_o    (twod_walk_stalls_o),
+    .sprite_stalls_o  (twod_sprite_stalls_o),
+    .tint_unapplied_o (twod_tint_unapplied_o),
+    .pair_lost_o      (twod_pair_lost_o)
   );
 
 endmodule : zhao_console_core
