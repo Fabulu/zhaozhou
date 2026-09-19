@@ -93,14 +93,34 @@
 // and this array is exactly its shape.
 //
 // ---------------------------------------------------------------------------
-// COMMIT ORDER IS VIEWS, THEN STAMPS -- and that is a REORDERING
+// COMMIT ORDER IS VIEWS, THEN STAMPS, THEN DRAWS -- and that is a REORDERING
 // ---------------------------------------------------------------------------
 // Records arrive interleaved and commit grouped. That is safe ONLY because the
-// two targets are disjoint machines: the projector's matrix bank and the
-// surface sheet share no state and no ordering law. A future arm whose command
+// targets are disjoint machines: the projector's matrix bank and the surface
+// sheet share no state and no ordering law. A future arm whose command
 // interacts with either of them -- anything that reads a matrix, or a second
 // writer of the sheet -- BREAKS this and needs one ordered queue instead of two
 // staging structures. Said here because the next person will add an arm.
+//
+// THE DRAW ARM IS THE NEXT PERSON, 2026-09-19, AND IT IS THE CASE THE
+// PARAGRAPH ABOVE WARNS ABOUT -- so the placement is argued rather than
+// assumed. A draw DOES read a matrix: `DrawForm`'s geometry is projected
+// through whatever `SetView` last wrote. It does not read it HERE, though;
+// nothing in this block touches `sv_mat` on the draw path. The interaction is
+// one stage downstream, and its only requirement is an ORDER: a draw must be
+// dispatched AFTER the view its own packet set, or the first frame of every
+// camera move renders through the previous frame's camera -- a wrong picture
+// with every counter balancing, which is the failure this file's rules exist
+// for. `EX_CFG -> EX_STAMP -> EX_DRAW` delivers exactly that order
+// STRUCTURALLY: the matrix bank has retired all 32 words before the first
+// draw leaves. It is not a second ordered queue because it does not need to
+// be -- draws commute with stamps (the sheet is not read by a draw) and are
+// strictly after views.
+//
+// DRAWS DO NOT COMMUTE WITH EACH OTHER, which is why the ring is a RING and
+// not a shadow: two DrawForms are two draws, and the ABI's submission order is
+// the order they must dispatch in. That is the same argument SurfaceStamp
+// already makes one paragraph up -- an EVENT does not collapse.
 //
 // ---------------------------------------------------------------------------
 // WHAT IS CARRIED, AND WHAT IS DECLARED NOT CARRIED
@@ -150,6 +170,63 @@
 //             low half is carried; a nonzero HIGH half is counted on
 //             `stamp_src_truncated_o` rather than dropped in silence.
 //
+// DrawForm 0x0300 -- ADDED 2026-09-19, and it carries ALL SIX of its fields
+// plus the record header's source_id. Nothing about this record is dropped:
+//   CARRIED   form, material_set, transform (three handle32), viewport_mask,
+//             semantic_weight, flags, and the header's source_id (narrowed to
+//             16 bits on `draw_src_truncated_o`, the SurfaceStamp rule).
+// Three handles leave this block as handles, UNRESOLVED and on purpose. See
+// the section below.
+//
+// ---------------------------------------------------------------------------
+// WHY THE DRAW ARM EMITS HANDLES AND NOT A MESHFETCH JOB
+// ---------------------------------------------------------------------------
+// This is the question the arm exists to answer honestly, so it is written out
+// rather than left to be discovered from a wrong address.
+//
+// `zhao_geom_meshfetch`'s job packet is
+// {instance_id, desc_addr[26:0], format, generation, active_mask, xform[12]}.
+// DrawForm supplies, RATIFIED, only part of it:
+//
+//   j_active_mask_i   <- viewport_mask[1:0].            AVAILABLE.
+//   j_generation_i    <- form handle32's generation:8.  AVAILABLE.
+//   j_desc_addr_i     -- NOT AVAILABLE, and it is a MISSING RULING rather than
+//                        missing wiring. `form` is handle32 {index:24,
+//                        generation:8} and turning an index into a 64-byte
+//                        aligned pool address needs the pool's internal
+//                        layout. SEARCHED: `spec/memory_rules.md` 5f ratifies
+//                        the REGION (`ZHAO_RENDER_ASSET_BASE` 0x06A0_0000,
+//                        22 MiB, ENGINE1, read-only) and then says in as many
+//                        words: "Not decided: the pool's internal layout
+//                        (descriptors vs index streams vs vertex records) ...
+//                        how it is carved up is the asset fetcher's business
+//                        and is still open." `design/contracts/
+//                        GEOM.ASSETFETCH.md` repeats it. There is no
+//                        `BASE + index*64` law to apply, and inventing one
+//                        here would be this block choosing a memory layout the
+//                        ABI declines to define -- the same refusal I33 and I7
+//                        already carry, one subsystem over.
+//   j_format_i        -- NOT AVAILABLE for the same reason. It is "the format
+//                        this reader speaks", checked against the descriptor's
+//                        own byte 0; no command carries it and no registry
+//                        defines it, so it is a caller declaration waiting on
+//                        the same ruling.
+//   j_xform_i[12]     -- NOT AVAILABLE. `transform` is handle32[transform], an
+//                        ID, and GEOM.MESHFETCH's own header says resolving an
+//                        id to a matrix "is a PALETTE LOOKUP, and this block
+//                        does not own it". SEARCHED: the resolver of this
+//                        shape is `zref::material::Resolver`
+//                        (`reference/include/zref/zref_material_resolve.hpp`),
+//                        whose RTL is `MATERIAL.RESOLVE` and whose contract's
+//                        line 4 reads "RTL: not built".
+//
+// A job is ATOMIC -- six fields in one handshake -- so half-driving it is not
+// a half closure, it is a fetch at whatever address the other half happened to
+// be holding. That is the join-between-two-things-that-move-independently
+// fault this tree has written down three times. So this block emits the
+// RATIFIED RECORD and stops, and the resolver is a named absent owner instead
+// of a plausible wrong address.
+//
 // ---------------------------------------------------------------------------
 // FRAMING
 // ---------------------------------------------------------------------------
@@ -170,7 +247,14 @@ module zhao_cmd_exec
 #(
     // Staged SurfaceStamp capacity. An owner knob, and the one number in this
     // block that can refuse a legal packet -- see `stamp_overflow_o`.
-    parameter int unsigned STAMP_Q = 8
+    parameter int unsigned STAMP_Q = 8,
+
+    // Staged DrawForm capacity, the same kind of knob and the same law: a
+    // packet carrying more draws than this is refused WHOLE on
+    // `draw_overflow_o`, never half-drawn. Smaller than STAMP_Q because a
+    // Phase-2 frame submits a handful of forms and the entry is wider (144
+    // bits against 208 x 8); raise it when a frame's form count does.
+    parameter int unsigned DRAW_Q = 4
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -235,6 +319,22 @@ module zhao_cmd_exec
     output logic signed [31:0] stamp_ring_width_o,
     output logic        [15:0] stamp_src_id_o,
 
+    // ---- I41: THE DRAW DISPATCH, the ratified fields only -------------------
+    // DrawForm 0x0300, whole. The three handles are NOT resolved here and the
+    // section above says why at length: the pool layout that would turn
+    // `form` into a descriptor address is `spec/memory_rules.md` 5f's
+    // explicitly UNDECIDED, and the palette that would turn `transform` into a
+    // 3x4 is MATERIAL.RESOLVE, whose RTL is not built.
+    output logic        draw_valid_o,
+    input  logic        draw_ready_i,
+    output logic [31:0] draw_form_o,           // handle32 {index:24, gen:8}
+    output logic [31:0] draw_material_set_o,   // handle32
+    output logic [31:0] draw_transform_o,      // handle32
+    output logic [ 7:0] draw_viewport_mask_o,
+    output logic [ 7:0] draw_semantic_weight_o,
+    output logic [15:0] draw_flags_o,
+    output logic [15:0] draw_src_id_o,
+
     // ---- evidence ----------------------------------------------------------
     // Every one of these is fired by a directed case in
     // tests/command/cmd_exec_directed.cpp. None is asserted zero without one.
@@ -245,6 +345,9 @@ module zhao_cmd_exec
     output logic [31:0] stamp_overflow_o,
     output logic [31:0] view_range_refused_o,
     output logic [31:0] stamp_src_truncated_o,
+    output logic [31:0] draws_issued_o,
+    output logic [31:0] draw_overflow_o,
+    output logic [31:0] draw_src_truncated_o,
     output logic [31:0] unsupported_o
 );
 
@@ -271,6 +374,14 @@ module zhao_cmd_exec
   // The record header's source_id, by the same rule.
   localparam int unsigned RH_SRC = ZHAO_SURFACE_STAMP_OFF_H_SOURCE_ID;
 
+  // DrawForm 0x0300, same rule, same package.
+  localparam int unsigned OFF_DF_FORM   = ZHAO_DRAW_FORM_OFF_FORM;
+  localparam int unsigned OFF_DF_MSET   = ZHAO_DRAW_FORM_OFF_MATERIAL_SET;
+  localparam int unsigned OFF_DF_XFORM  = ZHAO_DRAW_FORM_OFF_TRANSFORM;
+  localparam int unsigned OFF_DF_VPMASK = ZHAO_DRAW_FORM_OFF_VIEWPORT_MASK;
+  localparam int unsigned OFF_DF_WEIGHT = ZHAO_DRAW_FORM_OFF_SEMANTIC_WEIGHT;
+  localparam int unsigned OFF_DF_FLAGS  = ZHAO_DRAW_FORM_OFF_FLAGS;
+
   // Quartus 17.0 needs an elaboration check inside `initial begin ... end`; a
   // bare module-scope `if` is a syntax error there however clean the lint
   // (CLAUDE.md, "Verilator lint-clean is not Quartus-synthesizable"). And
@@ -289,6 +400,21 @@ module zhao_cmd_exec
       $fatal(1, "zhao_cmd_exec: mat4fx is no longer 16 words");
     if (STAMP_Q < 2)
       $fatal(1, "zhao_cmd_exec: STAMP_Q must be >= 2 (the pointers need a bit)");
+    if (DRAW_Q < 2)
+      $fatal(1, "zhao_cmd_exec: DRAW_Q must be >= 2 (the pointers need a bit)");
+    if (ZHAO_DRAW_FORM_BYTES != 32)
+      $fatal(1, "zhao_cmd_exec: DrawForm record size moved; re-read the offsets");
+    // Every other record in this block finishes its fields BEFORE its last
+    // byte, so a capture never collides with `rec_done`. DrawForm does NOT:
+    // `flags` occupies bytes 30..31 of a 32-byte record, so its high byte
+    // arrives on the very cycle the record ends. `df_flags_c` below is the
+    // combinational answer to that, and it is only correct while this equality
+    // holds -- if the layout grows a tail, the register value is already
+    // settled at `rec_done` and the bypass becomes wrong rather than needed.
+    if ((OFF_DF_FLAGS + 2) != ZHAO_DRAW_FORM_BYTES)
+      $fatal(1, "zhao_cmd_exec: DrawForm's flags are no longer its last field; df_flags_c is stale");
+    if (ZHAO_DRAW_FORM_OFF_H_SOURCE_ID != RH_SRC)
+      $fatal(1, "zhao_cmd_exec: DrawForm's header source_id moved off the shared offset");
   end
 
   // ---- the packet walk (glue 3's framing, port for port) -------------------
@@ -362,16 +488,64 @@ module zhao_cmd_exec
   assign stamp_ring_width_o = $signed(sq_head[SQ_RING_LO +: 32]);
   assign stamp_src_id_o     = sq_head[SQ_SRC_LO   +: 16];
 
+  // ---- DrawForm staging: a ring of EVENTS, for the same reason ------------
+  localparam int unsigned DQ_FORM_LO   = 0;
+  localparam int unsigned DQ_MSET_LO   = 32;
+  localparam int unsigned DQ_XFORM_LO  = 64;
+  localparam int unsigned DQ_VPMASK_LO = 96;
+  localparam int unsigned DQ_WEIGHT_LO = 104;
+  localparam int unsigned DQ_FLAGS_LO  = 112;
+  localparam int unsigned DQ_SRC_LO    = 128;
+  localparam int unsigned DRAW_W       = 144;
+  localparam int unsigned DQW          = $clog2(DRAW_Q);
+
+  logic [31:0] df_form, df_mset, df_xform;
+  logic [ 7:0] df_vpmask, df_weight;
+  logic [15:0] df_flags;
+  logic        df_src_hi_nz;   // the dropped half of source_id was not zero
+
+  // THE LAST BYTE OF A DrawForm IS A FIELD BYTE. `df_flags`'s high half
+  // arrives on the same cycle `rec_done` fires, so the register still holds
+  // the pre-shift value when the ring write reads it. This is the identical
+  // bypass `zhao_shell_top_v2`'s glue 3 builds as `w_final`, for the identical
+  // reason, and the elaboration guard above is what keeps it honest.
+  logic [15:0] df_flags_c;
+  always_comb begin
+    df_flags_c = df_flags;
+    if (in_rec_region && (r_op == ZHAO_OP_DRAW_FORM)
+        && (rpos == 16'(OFF_DF_FLAGS + 1)))
+      df_flags_c = {pkt_byte_i, df_flags[15:8]};
+  end
+
+  logic [DRAW_W-1:0] dq [0:DRAW_Q-1];
+  logic [DQW:0]      dq_wp, dq_rp;
+  logic [DQW:0]      dq_occ;
+  logic              dq_full;
+  assign dq_occ  = dq_wp - dq_rp;
+  assign dq_full = (dq_occ >= (DQW+1)'(DRAW_Q));
+
+  logic [DRAW_W-1:0] dq_head;
+  assign draw_form_o           = dq_head[DQ_FORM_LO   +: 32];
+  assign draw_material_set_o   = dq_head[DQ_MSET_LO   +: 32];
+  assign draw_transform_o      = dq_head[DQ_XFORM_LO  +: 32];
+  assign draw_viewport_mask_o  = dq_head[DQ_VPMASK_LO +: 8];
+  assign draw_semantic_weight_o = dq_head[DQ_WEIGHT_LO +: 8];
+  assign draw_flags_o          = dq_head[DQ_FLAGS_LO  +: 16];
+  assign draw_src_id_o         = dq_head[DQ_SRC_LO    +: 16];
+
   // A packet that overflowed the stamp ring is POISONED: it is refused WHOLE at
   // its own verdict, even if the verdict is ZH_ABI_OK. Half of a frame's scars
-  // is not a degraded frame, it is a wrong one.
+  // is not a degraded frame, it is a wrong one. A packet that overflowed the
+  // DRAW ring is poisoned by the same rule and for a sharper reason: half of a
+  // frame's forms is a frame with a creature missing from it.
   logic poisoned;
 
   // ---- commit ------------------------------------------------------------
   typedef enum logic [1:0] {
     EX_STAGE,  // walking a packet; NOTHING leaves this block
     EX_CFG,    // draining the view shadow into the matrix bank
-    EX_STAMP   // draining the stamp ring into SURFACE.STAMP
+    EX_STAMP,  // draining the stamp ring into SURFACE.STAMP
+    EX_DRAW    // draining the draw ring out of the console
   } ex_e;
   ex_e st;
 
@@ -395,6 +569,13 @@ module zhao_cmd_exec
       ss_oper <= 8'd0; ss_tag <= 8'd0; ss_str <= 16'd0; ss_src <= 16'd0;
       ss_src_hi_nz <= 1'b0;
       sq_wp <= '0; sq_rp <= '0; sq_head <= '0;
+      df_form <= 32'd0; df_mset <= 32'd0; df_xform <= 32'd0;
+      df_vpmask <= 8'd0; df_weight <= 8'd0; df_flags <= 16'd0;
+      df_src_hi_nz <= 1'b0;
+      dq_wp <= '0; dq_rp <= '0; dq_head <= '0;
+      draw_valid_o <= 1'b0;
+      draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
+      draw_src_truncated_o <= 32'd0;
       poisoned <= 1'b0;
       st <= EX_STAGE; cv <= 1'b0; cw <= 4'd0;
       proj_cfg_we_o <= 1'b0; proj_cfg_view_o <= 1'b0;
@@ -426,6 +607,12 @@ module zhao_cmd_exec
                 ss_src <= {pkt_byte_i, ss_src[15:8]};
               if ((rpos >= 16'(RH_SRC + 2)) && (rpos < 16'(RH_SRC + 4)) && (pkt_byte_i != 8'd0))
                 ss_src_hi_nz <= 1'b1;
+              // The DRAW arm keeps its OWN truncation flag rather than sharing
+              // `ss_src_hi_nz`: the two counters name two different records,
+              // and one flag for both would attribute a form's truncated id to
+              // a stamp. Same bytes, same offset, separate accounting.
+              if ((rpos >= 16'(RH_SRC + 2)) && (rpos < 16'(RH_SRC + 4)) && (pkt_byte_i != 8'd0))
+                df_src_hi_nz <= 1'b1;
 
               // ---- SetView ------------------------------------------------
               if (r_op == ZHAO_OP_SET_VIEW) begin
@@ -462,10 +649,27 @@ module zhao_cmd_exec
                   ss_ring <= {pkt_byte_i, ss_ring[31:8]};
               end
 
+              // ---- DrawForm -----------------------------------------------
+              if (r_op == ZHAO_OP_DRAW_FORM) begin
+                if ((rpos >= 16'(OFF_DF_FORM)) && (rpos < 16'(OFF_DF_FORM + 4)))
+                  df_form <= {pkt_byte_i, df_form[31:8]};
+                if ((rpos >= 16'(OFF_DF_MSET)) && (rpos < 16'(OFF_DF_MSET + 4)))
+                  df_mset <= {pkt_byte_i, df_mset[31:8]};
+                if ((rpos >= 16'(OFF_DF_XFORM)) && (rpos < 16'(OFF_DF_XFORM + 4)))
+                  df_xform <= {pkt_byte_i, df_xform[31:8]};
+                if (rpos == 16'(OFF_DF_VPMASK)) df_vpmask <= pkt_byte_i;
+                if (rpos == 16'(OFF_DF_WEIGHT)) df_weight <= pkt_byte_i;
+                if ((rpos >= 16'(OFF_DF_FLAGS)) && (rpos < 16'(OFF_DF_FLAGS + 2)))
+                  df_flags <= {pkt_byte_i, df_flags[15:8]};
+              end
+
               // ---- the record ends ----------------------------------------
-              // Every field above lands at or before the last field byte of a
-              // well-formed record (83 of 96 for SetView, 59 of 64 for
-              // SurfaceStamp), so no capture collides with this instant.
+              // Every SetView and SurfaceStamp field lands at or before the
+              // last field byte of a well-formed record (83 of 96, 59 of 64),
+              // so no capture of theirs collides with this instant. DrawForm
+              // is the EXCEPTION -- its `flags` end exactly at byte 31 of 32 --
+              // and `df_flags_c` is the bypass that makes the write below read
+              // the byte on the wires rather than the register behind it.
               if (rec_done) begin
                 if (r_op == ZHAO_OP_SET_VIEW) begin
                   if (sv_ok) sv_dirty[sv_view] <= 1'b1;
@@ -483,6 +687,19 @@ module zhao_cmd_exec
                                            ss_patch};
                     sq_wp <= sq_wp + (SQW+1)'(1);
                   end
+                end else if (r_op == ZHAO_OP_DRAW_FORM) begin
+                  if (df_src_hi_nz) begin
+                    `ZHAO_EXEC_INC(draw_src_truncated_o);
+                  end
+                  if (dq_full) begin
+                    poisoned <= 1'b1;
+                    `ZHAO_EXEC_INC(draw_overflow_o);
+                  end else begin
+                    dq[dq_wp[DQW-1:0]] <= {ss_src, df_flags_c, df_weight,
+                                           df_vpmask, df_xform, df_mset,
+                                           df_form};
+                    dq_wp <= dq_wp + (DQW+1)'(1);
+                  end
                 end else if (zhao_opcode_record_bytes(r_op) != 32'd0) begin
                   // A record the ABI defines and this block has no arm for.
                   // Counted rather than narrated, so the distance between the
@@ -494,6 +711,7 @@ module zhao_cmd_exec
 
                 rpos         <= 16'd0;
                 ss_src_hi_nz <= 1'b0;
+                df_src_hi_nz <= 1'b0;
               end else begin
                 rpos <= rpos + 16'd1;
               end
@@ -503,6 +721,7 @@ module zhao_cmd_exec
               pos          <= 32'd0;
               rpos         <= 16'd0;
               ss_src_hi_nz <= 1'b0;
+              df_src_hi_nz <= 1'b0;
             end else begin
               pos <= pos + 32'd1;
             end
@@ -522,6 +741,8 @@ module zhao_cmd_exec
               sv_dirty <= 2'd0;
               sq_wp    <= '0;
               sq_rp    <= '0;
+              dq_wp    <= '0;
+              dq_rp    <= '0;
               poisoned <= 1'b0;
             end
           end
@@ -586,9 +807,42 @@ module zhao_cmd_exec
             sq_head       <= sq[sq_rp[SQW-1:0]];
             stamp_valid_o <= 1'b1;
           end else begin
-            `ZHAO_EXEC_INC(packets_committed_o);
             sq_wp <= '0;
             sq_rp <= '0;
+            st    <= EX_DRAW;
+          end
+        end
+
+        // ------------------------------------------------------------------
+        // COMMIT phase 3 -- the draw ring out of the console
+        // ------------------------------------------------------------------
+        // LAST, and the order is the point rather than a convenience: by the
+        // time the first draw leaves, EX_CFG has retired every matrix word
+        // this packet carried, so a form is always dispatched against the
+        // camera its own packet set. The header argues this at length.
+        //
+        // One draw per two clocks, the stamp ring's shape and the stamp ring's
+        // reason: the head is registered and re-presented after each accept,
+        // and a frame's forms are a handful against a meshlet walk of
+        // thousands of vertices behind each one.
+        //
+        // `packets_committed_o` moved here from EX_STAMP. It still counts one
+        // per committed packet -- it is the LAST thing a commit does, and the
+        // last thing is now this.
+        EX_DRAW: begin
+          if (draw_valid_o) begin
+            if (draw_ready_i) begin
+              draw_valid_o <= 1'b0;
+              dq_rp        <= dq_rp + (DQW+1)'(1);
+              `ZHAO_EXEC_INC(draws_issued_o);
+            end
+          end else if (dq_occ != '0) begin
+            dq_head      <= dq[dq_rp[DQW-1:0]];
+            draw_valid_o <= 1'b1;
+          end else begin
+            `ZHAO_EXEC_INC(packets_committed_o);
+            dq_wp <= '0;
+            dq_rp <= '0;
             st    <= EX_STAGE;
           end
         end
