@@ -2823,7 +2823,14 @@ module tb_zhao_console_core_smoke
         else if (`PC_SHELL.ctrl_req.write) pc_bursts_wr_q <= pc_bursts_wr_q + 1;
         else pc_bursts_rd_q <= pc_bursts_rd_q + 1;
       end
-      if (`PC_SHELL.u_post_lease.u_engine0_share.st_q == 3'd3) pc_share_fill_q <= pc_share_fill_q + 1;
+      // A DEAD CENSUS FIELD, REPAIRED 2026-09-20 (mergefix). This read
+      // `u_engine0_share.st_q == 3'd3`, the old A_FILL state -- and R38's own
+      // rework DELETED A_FILL and narrowed `st_q` to two bits, so the comparison
+      // became structurally unsatisfiable and the field printed 0 for a pass
+      // that issues 11,520 ENGINE0 reads. A zero that cannot be anything else is
+      // the broken-instrument shape, and it reads as "the share never holds".
+      // The successor quantity is the in-flight table's occupancy.
+      if (`PC_SHELL.u_post_lease.u_engine0_share.fl_n_q != '0) pc_share_fill_q <= pc_share_fill_q + 1;
       if (`PC_SHELL.fbw_px_valid && !`PC_SHELL.fbw_px_ready) pc_fbw_stall_q <= pc_fbw_stall_q + 1;
       if (!`PC_SHELL.post_src_valid_o && `PC_SHELL.post_src_ready_i) pc_src_starve_q <= pc_src_starve_q + 1;
       if (`PC_SHELL.post_src_valid_o && !`PC_SHELL.post_src_ready_i) pc_src_block_q <= pc_src_block_q + 1;
@@ -3918,7 +3925,7 @@ module tb_zhao_console_core_smoke
                post_retire_unowned_o, post_share_contention_o, guard);
       $display("SMOKE: post       lease busy %0d gpu cycles, frame_end to last retired write-back word (contract: ~103,680 work items for Z60; ~461,000 = five passes)",
                post_busy_cycles_q);
-      $display("SMOKE: post census sdram_busy=%0d (%0d%%) bursts[e0 rd/wr, other]=[%0d/%0d, %0d] conflicts=%0d refresh_stalls=%0d share_in_read_fill=%0d fbw_px_stall=%0d src_starved=%0d src_blocked=%0d",
+      $display("SMOKE: post census sdram_busy=%0d (%0d%%) bursts[e0 rd/wr, other]=[%0d/%0d, %0d] conflicts=%0d refresh_stalls=%0d share_reads_in_flight_clks=%0d fbw_px_stall=%0d src_starved=%0d src_blocked=%0d",
                pc_ctrl_busy_q, (post_busy_cycles_q == 0) ? 0 : (pc_ctrl_busy_q * 100) / post_busy_cycles_q,
                pc_bursts_rd_q, pc_bursts_wr_q, pc_bursts_other_q,
                bank_conflicts_o - pc_conflicts0_q, `PC_SHELL.refresh_stalls_o - pc_refresh0_q,
