@@ -170,8 +170,14 @@ inline zc::RingPart make_loop() {
           (static_cast<int64_t>(half) * half));
       const int32_t w = static_cast<int32_t>(
           (static_cast<int64_t>(u) * u * (3000 - 2 * u)) / 1000000);
-      const int32_t ax = static_cast<int32_t>((static_cast<int64_t>(rx_mm) * w) / 1000);
-      const int32_t az = static_cast<int32_t>((static_cast<int64_t>(rz_mm) * w) / 1000);
+      const int32_t authored_rx = static_cast<int32_t>(
+          (static_cast<int64_t>(rx_mm) * g_u02_swell_pm) / 1000);
+      const int32_t authored_rz = static_cast<int32_t>(
+          (static_cast<int64_t>(rz_mm) * g_u02_swell_pm) / 1000);
+      const int32_t ax = static_cast<int32_t>(
+          (static_cast<int64_t>(authored_rx) * w) / 1000);
+      const int32_t az = static_cast<int32_t>(
+          (static_cast<int64_t>(authored_rz) * w) / 1000);
       if (ax > best_x) best_x = ax;
       if (az > best_z) best_z = az;
     };
@@ -207,7 +213,7 @@ inline zc::RingPart make_loop() {
       return static_cast<int32_t>(
           (static_cast<int64_t>(s - start) * 64) / (end - start));
     };
-    const int32_t stEnd = kKnuckleAtEndMm;
+    const int32_t stEnd = kLoopCarrierCoreAtMm[4];
     const int32_t inN0 = stNeck - kLoopCarrierCoreHalfMm[0] - kFoldBlendMm[0];
     const int32_t inN1 = stNeck - kLoopCarrierCoreHalfMm[0];
     const int32_t outN0 = stNeck + kLoopCarrierCoreHalfMm[0];
@@ -228,10 +234,70 @@ inline zc::RingPart make_loop() {
     const int32_t outE0 = stEnd + kLoopCarrierCoreHalfMm[4];
     const int32_t outE1 = outE0 + kFoldBlendMm[4];
 
-    if (s < inN1) {
+    if (!g_u02_root_authority_legacy_split) {
+      const int32_t front_in0 =
+          kRootSwellSupportStartMm[0] - kFoldBlendMm[0];
+      const int32_t front_in1 = kRootSwellSupportStartMm[0];
+      const int32_t front_delta0 = outN1;  // accepted v17 signed-run start
+      const int32_t front_delta1 = kRootSwellSupportEndMm[0];
+      const int32_t rear_support0 = kRootSwellSupportStartMm[1];
+      if (s < front_in1) {
+        set_pair(kBRoot, kBJunctionF, ramp64(front_in0, front_in1));
+      } else if (s < front_delta0) {
+        set_pair(kBJunctionF, kBJunctionF, 0);
+      } else if (s < front_delta1) {
+        // Same JunctionF rotation on both palettes; only the accepted signed
+        // translation fraction grows across the visible Front support.
+        set_pair(kBJunctionF, kBFrontRootDelta,
+                 ramp64(front_delta0, front_delta1));
+      } else if (s < inA0) {
+        set_pair(kBFrontRootDelta, kBSpanDeltaA,
+                 ramp64(front_delta1, inA0));
+      } else if (s < inA1) {
+        set_pair(kBSpanDeltaA, kBHingeA, ramp64(inA0, inA1));
+      } else if (s < outA0) {
+        set_pair(kBHingeA, kBHingeA, 0);
+      } else if (s < inB0) {
+        set_pair(kBHingeA, kBSpanDeltaB, ramp64(outA0, inB0));
+      } else if (s < inB1) {
+        set_pair(kBSpanDeltaB, kBHingeB, ramp64(inB0, inB1));
+      } else if (s < outB0) {
+        set_pair(kBHingeB, kBHingeB, 0);
+      } else if (s < inC0) {
+        set_pair(kBHingeB, kBSpanDeltaC, ramp64(outB0, inC0));
+      } else if (s < inC1) {
+        set_pair(kBSpanDeltaC, kBHingeC, ramp64(inC0, inC1));
+      } else if (s < outC0) {
+        set_pair(kBHingeC, kBHingeC, 0);
+      } else if (s < outC1) {
+        set_pair(kBHingeC, kBSpanDeltaEStart, ramp64(outC0, outC1));
+      } else if (s < midE) {
+        set_pair(kBSpanDeltaEStart, kBSpanDeltaEMid,
+                 ramp64(outC1, midE));
+      } else if (s < kRearRootRotationStartMm) {
+        set_pair(kBSpanDeltaEMid, kBSpanDeltaEPreSocket,
+                 ramp64(midE, inE0));
+      } else if (s < kRearRootRotationMidMm) {
+        set_pair(kBRearPreRootDelta, kBRearPreRootDelta, 0);
+      } else if (s < rear_support0) {
+        set_pair(kBRearRootTurnMid, kBRearRootTurnMid, 0);
+      } else if (s < inE1) {
+        // RearRootDelta and RearSocket share RearSocket rotation. Translation
+        // continues on the exact version-17 gradient to its old full endpoint.
+        set_pair(kBRearRootDelta, kBRearSocket,
+                 ramp64(rear_support0, inE1));
+      } else if (s < kRearTerminalTipStationMm) {
+        set_pair(kBRearSocket, kBRearSocket, 0);
+      } else {
+        // The terminal profile sample is the deliberately buried cap: ReturnTip
+        // only. Its body burial is swept by mspan/mprobe rather than hidden behind
+        // an impossible post-support blend beyond the mesh.
+        set_pair(kBReturnTip, kBReturnTip, 0);
+      }
+    } else if (s < inN1) {
       set_pair(kBRoot, kBJunctionF, ramp64(inN0, inN1));
     } else if (s < outN0) {
-      set_pair(kBJunctionF, kBNeck, 0);  // front swell belongs to JunctionF
+      set_pair(kBJunctionF, kBNeck, 0);  // legacy Front split authority
     } else if (s < outN1) {
       set_pair(kBJunctionF, kBNeck, ramp64(outN0, outN1));
     } else if (s < inA0) {
@@ -239,26 +305,23 @@ inline zc::RingPart make_loop() {
     } else if (s < inA1) {
       set_pair(kBSpanDeltaA, kBHingeA, ramp64(inA0, inA1));
     } else if (s < outA0) {
-      set_pair(kBHingeA, kBHingeA, 0);  // A rigid carrier core
+      set_pair(kBHingeA, kBHingeA, 0);
     } else if (s < inB0) {
       set_pair(kBHingeA, kBSpanDeltaB, ramp64(outA0, inB0));
     } else if (s < inB1) {
       set_pair(kBSpanDeltaB, kBHingeB, ramp64(inB0, inB1));
     } else if (s < outB0) {
-      set_pair(kBHingeB, kBHingeB, 0);  // B rigid carrier core
+      set_pair(kBHingeB, kBHingeB, 0);
     } else if (s < inC0) {
       set_pair(kBHingeB, kBSpanDeltaC, ramp64(outB0, inC0));
     } else if (s < inC1) {
       set_pair(kBSpanDeltaC, kBHingeC, ramp64(inC0, inC1));
     } else if (s < outC0) {
-      set_pair(kBHingeC, kBHingeC, 0);  // C rigid carrier core
+      set_pair(kBHingeC, kBHingeC, 0);
     } else if (s < outC1) {
-      // EStart is HingeD-identical at zero delta, so this remains the accepted
-      // 90 mm C->closure rotation ramp while beginning signed End translation.
       set_pair(kBHingeC, kBSpanDeltaEStart, ramp64(outC0, outC1));
     } else if (s < midE) {
-      set_pair(kBSpanDeltaEStart, kBSpanDeltaEMid,
-               ramp64(outC1, midE));
+      set_pair(kBSpanDeltaEStart, kBSpanDeltaEMid, ramp64(outC1, midE));
     } else if (s < inE0) {
       set_pair(kBSpanDeltaEMid, kBSpanDeltaEPreSocket,
                ramp64(midE, inE0));
@@ -266,7 +329,7 @@ inline zc::RingPart make_loop() {
       set_pair(kBSpanDeltaEPreSocket, kBRearSocket,
                ramp64(inE0, inE1));
     } else if (s < outE0) {
-      set_pair(kBRearSocket, kBRearSocket, 0);  // End rigid carrier core
+      set_pair(kBRearSocket, kBRearSocket, 0);
     } else if (s < outE1) {
       set_pair(kBRearSocket, kBReturnTip, ramp64(outE0, outE1));
     } else {

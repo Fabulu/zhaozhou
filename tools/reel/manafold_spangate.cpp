@@ -67,6 +67,7 @@ enum GateCategory : uint32_t {
   kCatContinuity = 1u << 8,
   kCatClosure = 1u << 9,
   kCatAttribution = 1u << 10,
+  kCatRootAuthority = 1u << 11,
 };
 uint32_t g_failure_bits = 0;
 uint32_t g_current_category = kCatConfig;
@@ -75,6 +76,12 @@ uint32_t g_current_category = kCatConfig;
 // 90 mm delta-to-socket bend zone. This is a structural coincidence tolerance,
 // not an art value; the observed shipping worst remains printed beside it.
 constexpr double kRearEndpointToleranceMm = 10.0;
+// A Root-child RearSocket orientation re-expressed through the quantized HingeD
+// hierarchy cannot be matrix-bit-identical after two fixed-point quaternion
+// products. 256 Q16 matrix LSB is under 0.4% and leaves measured headroom over
+// the 178-LSB shipping maximum; the legacy-split mutant is caught by actual skin
+// ownership, not by fitting this arithmetic tolerance.
+constexpr int32_t kRootRotationMatrixToleranceLsb = 256;
 
 void fail(const char* what) {
   std::printf("  FAIL: %s\n", what);
@@ -116,6 +123,16 @@ Vec3 posed_point(const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
 
 bool matrix_equal(const zc::mat3x4fx& a, const zc::mat3x4fx& b) {
   return std::memcmp(a.m, b.m, sizeof(a.m)) == 0;
+}
+
+int32_t rotation_max_lsb_delta(const zc::mat3x4fx& a,
+                               const zc::mat3x4fx& b) {
+  int32_t worst = 0;
+  for (int row = 0; row < 3; ++row)
+    for (int col = 0; col < 3; ++col)
+      worst = std::max(worst,
+                       std::abs(a.m[row * 4 + col] - b.m[row * 4 + col]));
+  return worst;
 }
 
 bool parse_strict_int(const char* name, const char* text,
@@ -214,7 +231,7 @@ struct Stations {
   int32_t st_c = st_b + u02::kLoopArcMm[3];
   int32_t st_d = st_c + u02::kLoopArcMm[4];
   int32_t total = st_d + u02::kLoopArcMm[5];
-  int32_t st_e = u02::kKnuckleAtEndMm;
+  int32_t st_e = u02::kLoopCarrierCoreAtMm[4];
 
   int32_t in_n0 = st_neck - u02::kLoopCarrierCoreHalfMm[0] - u02::kFoldBlendMm[0];
   int32_t in_n1 = st_neck - u02::kLoopCarrierCoreHalfMm[0];
@@ -236,6 +253,16 @@ struct Stations {
   int32_t in_e1 = st_e - u02::kLoopCarrierCoreHalfMm[4];
   int32_t out_e0 = st_e + u02::kLoopCarrierCoreHalfMm[4];
   int32_t out_e1 = out_e0 + u02::kFoldBlendMm[4];
+
+  bool integrated = !u02::g_u02_root_authority_legacy_split;
+  int32_t front_in0 = u02::kRootSwellSupportStartMm[0] - u02::kFoldBlendMm[0];
+  int32_t front_in1 = u02::kRootSwellSupportStartMm[0];
+  int32_t front_delta0 = out_n1;
+  int32_t front_delta1 = u02::kRootSwellSupportEndMm[0];
+  int32_t rear_rotation0 = u02::kRearRootRotationStartMm;
+  int32_t rear_rotation_mid = u02::kRearRootRotationMidMm;
+  int32_t rear_support0 = u02::kRootSwellSupportStartMm[1];
+  int32_t rear_support1 = u02::kRootSwellSupportEndMm[1];
 };
 
 constexpr int kSpanCount = 4;
@@ -277,7 +304,9 @@ bool is_loop_bone(uint8_t b) {
          b == u02::kBSpanDeltaA || b == u02::kBSpanDeltaB ||
          b == u02::kBSpanDeltaC || b == u02::kBSpanDeltaE ||
          b == u02::kBSpanDeltaEStart || b == u02::kBSpanDeltaEMid ||
-         b == u02::kBSpanDeltaEPreSocket;
+         b == u02::kBSpanDeltaEPreSocket ||
+         b == u02::kBFrontRootDelta || b == u02::kBRearRootDelta ||
+         b == u02::kBRearPreRootDelta || b == u02::kBRearRootTurnMid;
 }
 
 bool is_loop_meshlet(const zc::Meshlet& m) {
@@ -305,28 +334,89 @@ ExpectedSkin pair(uint8_t lower, uint8_t upper, int32_t t, int zone) {
 }
 
 ExpectedSkin expected_skin(int32_t x, const Stations& s) {
+  if (s.integrated) {
+    if (x < s.front_in1)
+      return pair(u02::kBRoot, u02::kBJunctionF,
+                  ramp64(x, s.front_in0, s.front_in1), 0);
+    if (x < s.front_delta0)
+      return pair(u02::kBJunctionF, u02::kBJunctionF, 0, 1);
+    if (x < s.front_delta1)
+      return pair(u02::kBJunctionF, u02::kBFrontRootDelta,
+                  ramp64(x, s.front_delta0, s.front_delta1), 2);
+    if (x < s.in_a0)
+      return pair(u02::kBFrontRootDelta, u02::kBSpanDeltaA,
+                  ramp64(x, s.front_delta1, s.in_a0), 3);
+    if (x < s.in_a1)
+      return pair(u02::kBSpanDeltaA, u02::kBHingeA,
+                  ramp64(x, s.in_a0, s.in_a1), 4);
+    if (x < s.out_a0)
+      return pair(u02::kBHingeA, u02::kBHingeA, 0, 5);
+    if (x < s.in_b0)
+      return pair(u02::kBHingeA, u02::kBSpanDeltaB,
+                  ramp64(x, s.out_a0, s.in_b0), 6);
+    if (x < s.in_b1)
+      return pair(u02::kBSpanDeltaB, u02::kBHingeB,
+                  ramp64(x, s.in_b0, s.in_b1), 7);
+    if (x < s.out_b0)
+      return pair(u02::kBHingeB, u02::kBHingeB, 0, 8);
+    if (x < s.in_c0)
+      return pair(u02::kBHingeB, u02::kBSpanDeltaC,
+                  ramp64(x, s.out_b0, s.in_c0), 9);
+    if (x < s.in_c1)
+      return pair(u02::kBSpanDeltaC, u02::kBHingeC,
+                  ramp64(x, s.in_c0, s.in_c1), 10);
+    if (x < s.out_c0)
+      return pair(u02::kBHingeC, u02::kBHingeC, 0, 11);
+    if (x < s.out_c1)
+      return pair(u02::kBHingeC, u02::kBSpanDeltaEStart,
+                  ramp64(x, s.out_c0, s.out_c1), 12);
+    if (x < s.mid_e)
+      return pair(u02::kBSpanDeltaEStart, u02::kBSpanDeltaEMid,
+                  ramp64(x, s.out_c1, s.mid_e), 13);
+    if (x < s.rear_rotation0)
+      return pair(u02::kBSpanDeltaEMid, u02::kBSpanDeltaEPreSocket,
+                  ramp64(x, s.mid_e, s.in_e0), 14);
+    if (x < s.rear_rotation_mid)
+      return pair(u02::kBRearPreRootDelta, u02::kBRearPreRootDelta, 0, 15);
+    if (x < s.rear_support0)
+      return pair(u02::kBRearRootTurnMid, u02::kBRearRootTurnMid, 0, 16);
+    if (x < s.in_e1)
+      return pair(u02::kBRearRootDelta, u02::kBRearSocket,
+                  ramp64(x, s.rear_support0, s.in_e1), 17);
+    if (x < u02::kRearTerminalTipStationMm)
+      return pair(u02::kBRearSocket, u02::kBRearSocket, 0, 18);
+    return pair(u02::kBReturnTip, u02::kBReturnTip, 0, 19);
+  }
   if (x < s.in_n1)
-    return pair(u02::kBRoot, u02::kBJunctionF, ramp64(x, s.in_n0, s.in_n1), 0);
+    return pair(u02::kBRoot, u02::kBJunctionF,
+                ramp64(x, s.in_n0, s.in_n1), 0);
   if (x < s.out_n0)
     return pair(u02::kBJunctionF, u02::kBNeck, 0, 1);
   if (x < s.out_n1)
-    return pair(u02::kBJunctionF, u02::kBNeck, ramp64(x, s.out_n0, s.out_n1), 2);
+    return pair(u02::kBJunctionF, u02::kBNeck,
+                ramp64(x, s.out_n0, s.out_n1), 2);
   if (x < s.in_a0)
-    return pair(u02::kBNeck, u02::kBSpanDeltaA, ramp64(x, s.out_n1, s.in_a0), 3);
+    return pair(u02::kBNeck, u02::kBSpanDeltaA,
+                ramp64(x, s.out_n1, s.in_a0), 3);
   if (x < s.in_a1)
-    return pair(u02::kBSpanDeltaA, u02::kBHingeA, ramp64(x, s.in_a0, s.in_a1), 4);
+    return pair(u02::kBSpanDeltaA, u02::kBHingeA,
+                ramp64(x, s.in_a0, s.in_a1), 4);
   if (x < s.out_a0)
     return pair(u02::kBHingeA, u02::kBHingeA, 0, 5);
   if (x < s.in_b0)
-    return pair(u02::kBHingeA, u02::kBSpanDeltaB, ramp64(x, s.out_a0, s.in_b0), 6);
+    return pair(u02::kBHingeA, u02::kBSpanDeltaB,
+                ramp64(x, s.out_a0, s.in_b0), 6);
   if (x < s.in_b1)
-    return pair(u02::kBSpanDeltaB, u02::kBHingeB, ramp64(x, s.in_b0, s.in_b1), 7);
+    return pair(u02::kBSpanDeltaB, u02::kBHingeB,
+                ramp64(x, s.in_b0, s.in_b1), 7);
   if (x < s.out_b0)
     return pair(u02::kBHingeB, u02::kBHingeB, 0, 8);
   if (x < s.in_c0)
-    return pair(u02::kBHingeB, u02::kBSpanDeltaC, ramp64(x, s.out_b0, s.in_c0), 9);
+    return pair(u02::kBHingeB, u02::kBSpanDeltaC,
+                ramp64(x, s.out_b0, s.in_c0), 9);
   if (x < s.in_c1)
-    return pair(u02::kBSpanDeltaC, u02::kBHingeC, ramp64(x, s.in_c0, s.in_c1), 10);
+    return pair(u02::kBSpanDeltaC, u02::kBHingeC,
+                ramp64(x, s.in_c0, s.in_c1), 10);
   if (x < s.out_c0)
     return pair(u02::kBHingeC, u02::kBHingeC, 0, 11);
   if (x < s.out_c1)
@@ -383,7 +473,7 @@ void mutate_rigid_span(zc::CreatureType& type, Span selected,
 void check_compiled_zones(const zc::CreatureType& type,
                           const Stations& stations) {
   const auto ring_map = ring_station_map(stations);
-  std::array<size_t, 19> zone_count{};
+  std::array<size_t, 20> zone_count{};
   size_t vertices = 0;
   size_t mismatches = 0;
   size_t bad_ring_y = 0;
@@ -420,16 +510,160 @@ void check_compiled_zones(const zc::CreatureType& type,
               vertices, mismatches, bad_ring_y, empty_zones);
   std::printf("   rigid carrier cores F/A/B/C/E: %zu/%zu/%zu/%zu/%zu vertices\n",
               zone_count[1], zone_count[5], zone_count[8], zone_count[11],
-              zone_count[16]);
+              zone_count[stations.integrated ? 18 : 16]);
   if (vertices == 0) fail("compiled loop skin was not found");
   if (mismatches != 0)
     fail("compiled loop ownership differs from the named signed-span zone table");
   if (bad_ring_y != 0)
     fail("a compiled loop vertex does not belong to one of the authored rings");
-  if (empty_zones != 0)
-    fail("one or more signed-span/core/bend zones have no compiled vertices");
+  const size_t expected_empty = stations.integrated ? 0u : 1u;
+  if (empty_zones != expected_empty)
+    fail("one or more signed-span/core/bend zones have unexpected coverage");
   if (bad_lane_meta != 0)
     fail("retired deform lanes 1..3 still own loop vertices");
+}
+
+void check_root_authority(const zc::CreatureType& type,
+                          const Stations& stations) {
+  const auto ring_map = ring_station_map(stations);
+  size_t front_vertices = 0, rear_vertices = 0, terminal_vertices_count = 0,
+         bad_front = 0, bad_rear = 0, bad_terminal = 0;
+  std::vector<zc::SkinVertex> terminal_vertices;
+  const auto allowed = [](uint8_t b, uint8_t a, uint8_t z) {
+    return b == a || b == z;
+  };
+  for (const zc::Meshlet& m : type.mesh) {
+    if (!is_loop_meshlet(m)) continue;
+    for (const zc::SkinVertex& v : m.verts) {
+      const auto it = ring_map.find(v.y);
+      if (it == ring_map.end()) continue;
+      const int32_t s = it->second;
+      if (s >= u02::kRootSwellSupportStartMm[0] &&
+          s <= u02::kRootSwellSupportEndMm[0]) {
+        ++front_vertices;
+        if ((v.w0 > 0 &&
+             !allowed(v.b0, u02::kBJunctionF, u02::kBFrontRootDelta)) ||
+            (v.w0 < 64 &&
+             !allowed(v.b1, u02::kBJunctionF, u02::kBFrontRootDelta)))
+          ++bad_front;
+      }
+      if (s == u02::kRearTerminalTipStationMm) {
+        ++terminal_vertices_count;
+        terminal_vertices.push_back(v);
+        if ((v.w0 > 0 && v.b0 != u02::kBReturnTip) ||
+            (v.w0 < 64 && v.b1 != u02::kBReturnTip))
+          ++bad_terminal;
+      } else if (s >= u02::kRootSwellSupportStartMm[1] &&
+                 s < u02::kRearTerminalTipStationMm) {
+        ++rear_vertices;
+        if ((v.w0 > 0 &&
+             !allowed(v.b0, u02::kBRearRootDelta, u02::kBRearSocket)) ||
+            (v.w0 < 64 &&
+             !allowed(v.b1, u02::kBRearRootDelta, u02::kBRearSocket)))
+          ++bad_rear;
+      }
+    }
+  }
+
+  size_t pose_samples = 0, front_rotation_mismatch = 0,
+         rear_rotation_mismatch = 0;
+  int32_t max_front_rotation_lsb = 0, max_rear_rotation_lsb = 0;
+  size_t terminal_pose_samples = 0;
+  double worst_terminal_rho_pm = 0.0;
+  for (const zc::Clip& clip : type.bank.clips) {
+    for (int f = 0; f < clip.frame_count; ++f) {
+      for (int sub = 0; sub < (clip.interpolate ? 2 : 1); ++sub) {
+        std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+        zc::decode_pose(type, clip, static_cast<uint16_t>(f), pose, nullptr,
+                        static_cast<uint8_t>(sub));
+        ++pose_samples;
+        const int32_t front_lsb = rotation_max_lsb_delta(
+            pose[u02::kBJunctionF], pose[u02::kBFrontRootDelta]);
+        const int32_t rear_lsb = rotation_max_lsb_delta(
+            pose[u02::kBRearRootDelta], pose[u02::kBRearSocket]);
+        max_front_rotation_lsb = std::max(max_front_rotation_lsb, front_lsb);
+        max_rear_rotation_lsb = std::max(max_rear_rotation_lsb, rear_lsb);
+        if (front_lsb > kRootRotationMatrixToleranceLsb)
+          ++front_rotation_mismatch;
+        if (rear_lsb > kRootRotationMatrixToleranceLsb)
+          ++rear_rotation_mismatch;
+
+        const zc::mat3x4fx& rm = pose[u02::kBRoot];
+        constexpr double kFxToMm = 1000.0 / 65536.0;
+        const double body_rx = static_cast<double>(u02::kBodyRadiusMm);
+        const double body_ry = static_cast<double>(u02::vmm(u02::kBodyRadiusMm));
+        for (const zc::SkinVertex& v : terminal_vertices) {
+          int32_t x = 0, y = 0, z = 0;
+          zc::skin_vertex(pose.data(), v, x, y, z, nullptr);
+          const int64_t dx = x - rm.m[3], dy = y - rm.m[7], dz = z - rm.m[11];
+          const int64_t lx =
+              (rm.m[0] * dx + rm.m[4] * dy + rm.m[8] * dz) >> 16;
+          const int64_t ly =
+              (rm.m[1] * dx + rm.m[5] * dy + rm.m[9] * dz) >> 16;
+          const int64_t lz =
+              (rm.m[2] * dx + rm.m[6] * dy + rm.m[10] * dz) >> 16;
+          const double xm = lx * kFxToMm, ym = ly * kFxToMm,
+                       zm = lz * kFxToMm;
+          const double rho = 1000.0 * std::sqrt(
+              (xm * xm + zm * zm) / (body_rx * body_rx) +
+              (ym * ym) / (body_ry * body_ry));
+          worst_terminal_rho_pm = std::max(worst_terminal_rho_pm, rho);
+          ++terminal_pose_samples;
+        }
+      }
+    }
+  }
+
+  u02::Rig base, tilt, yaw;
+  base.reset(); tilt.reset(); yaw.reset();
+  u02::HingePlay tilt_play, yaw_play;
+  tilt_play.tilt_front = 2048;
+  yaw_play.yaw_front = -1536;
+  u02::loop_pose(base, 1000, 1000, 1000, 1000);
+  u02::loop_pose(tilt, 1000, 1000, 1000, 1000, 0, 0, 0, 0,
+                 &tilt_play);
+  u02::loop_pose(yaw, 1000, 1000, 1000, 1000, 0, 0, 0, 0,
+                 &yaw_play);
+  const bool tilt_live = std::memcmp(&base.q[u02::kBJunctionF],
+                                     &tilt.q[u02::kBJunctionF],
+                                     sizeof(zc::quat16)) != 0;
+  const bool yaw_live = std::memcmp(&base.q[u02::kBJunctionF],
+                                    &yaw.q[u02::kBJunctionF],
+                                    sizeof(zc::quat16)) != 0;
+  size_t collateral = 0;
+  const uint8_t protected_local[] = {u02::kBNeck, u02::kBHingeA,
+                                     u02::kBHingeB, u02::kBHingeC,
+                                     u02::kBRearSocket};
+  for (uint8_t b : protected_local) {
+    if (std::memcmp(&base.q[b], &tilt.q[b], sizeof(zc::quat16)) != 0)
+      ++collateral;
+    if (std::memcmp(&base.q[b], &yaw.q[b], sizeof(zc::quat16)) != 0)
+      ++collateral;
+  }
+
+  std::printf("G1b root authority: support vertices F/E %zu/%zu, wrong %zu/%zu; "
+              "rotation samples %zu mismatch F/E %zu/%zu max %d/%d LSB; "
+              "Front X/Y %d/%d collateral local channels %zu\n",
+              front_vertices, rear_vertices, bad_front, bad_rear,
+              pose_samples, front_rotation_mismatch, rear_rotation_mismatch,
+              max_front_rotation_lsb, max_rear_rotation_lsb,
+              tilt_live ? 1 : 0, yaw_live ? 1 : 0, collateral);
+  std::printf("   terminal ReturnTip exception: %zu vertices, %zu wrong palettes; "
+              "%zu posed samples, worst ellipsoid rho %.2f pm\n",
+              terminal_vertices_count, bad_terminal, terminal_pose_samples,
+              worst_terminal_rho_pm);
+  if (front_vertices == 0 || rear_vertices == 0 || terminal_vertices_count == 0)
+    fail("root swell support rings or terminal exception were not found in the compiled skin");
+  if (bad_front != 0 || bad_rear != 0)
+    fail("a visible root swell mixes different rotation authorities");
+  if (bad_terminal != 0)
+    fail("the terminal rear profile ring is not ReturnTip-only");
+  if (terminal_pose_samples == 0 || worst_terminal_rho_pm > 1120.0)
+    fail("the terminal rear profile ring leaves its declared body burial");
+  if (front_rotation_mismatch != 0 || rear_rotation_mismatch != 0)
+    fail("a staged root helper does not share its semantic carrier rotation");
+  if (!tilt_live || !yaw_live || collateral != 0)
+    fail("Front X/Y capability is absent or directly writes another local carrier");
 }
 
 void check_lane_samples(const zc::CreatureType& type) {
@@ -467,19 +701,25 @@ void check_identity_palettes(const zc::CreatureType& type) {
   g.write(c, 0);
   std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
   zc::decode_pose(type, c, 0, pose, nullptr, 0);
-  constexpr uint8_t kParent[7] = {u02::kBNeck, u02::kBHingeA,
-                                  u02::kBHingeB, u02::kBHingeD,
-                                  u02::kBHingeD, u02::kBHingeD,
-                                  u02::kBHingeD};
-  constexpr uint8_t kHelper[7] = {u02::kBSpanDeltaA, u02::kBSpanDeltaB,
-                                  u02::kBSpanDeltaC, u02::kBSpanDeltaE,
-                                  u02::kBSpanDeltaEStart,
-                                  u02::kBSpanDeltaEMid,
-                                  u02::kBSpanDeltaEPreSocket};
+  constexpr uint8_t kParent[11] = {u02::kBNeck, u02::kBHingeA,
+                                   u02::kBHingeB, u02::kBHingeD,
+                                   u02::kBHingeD, u02::kBHingeD,
+                                   u02::kBHingeD, u02::kBJunctionF,
+                                   u02::kBRearSocket, u02::kBHingeD,
+                                   u02::kBHingeD};
+  constexpr uint8_t kHelper[11] = {u02::kBSpanDeltaA, u02::kBSpanDeltaB,
+                                   u02::kBSpanDeltaC, u02::kBSpanDeltaE,
+                                   u02::kBSpanDeltaEStart,
+                                   u02::kBSpanDeltaEMid,
+                                   u02::kBSpanDeltaEPreSocket,
+                                   u02::kBFrontRootDelta,
+                                   u02::kBRearRootDelta,
+                                   u02::kBRearPreRootDelta,
+                                   u02::kBRearRootTurnMid};
   int different = 0;
-  for (int i = 0; i < 7; ++i)
+  for (int i = 0; i < 11; ++i)
     if (!matrix_equal(pose[kParent[i]], pose[kHelper[i]])) ++different;
-  std::printf("G3 zero-delta helper identity: %d/7 palettes differ from parent\n",
+  std::printf("G3 zero-delta helper identity: %d/11 palettes differ from parent\n",
               different);
   if (different != 0)
     fail("a zero-delta helper palette is not exactly its parent palette");
@@ -502,6 +742,11 @@ void set_synthetic_delta(u02::Rig& g, int span_index, int32_t delta_mm,
         e_mid_drift ? 0 : u02::span_e_mid_delta_fx(t);
     g.local_t[u02::kBSpanDeltaEPreSocket][1] =
         e_presocket_drift ? 0 : u02::span_e_presocket_delta_fx(t);
+    g.local_t[u02::kBRearPreRootDelta][1] =
+        u02::rear_preroot_delta_fx(t);
+    g.local_t[u02::kBRearRootTurnMid][1] =
+        u02::rear_root_turn_mid_delta_fx(t);
+    g.local_t[u02::kBRearRootDelta][1] = u02::rear_root_delta_fx(t);
     g.local_t[u02::kBSpanDeltaE][1] = drift ? 0 : t;
     g.local_t[u02::kBRearSocket][1] = t;
     g.local_t[u02::kBReturnTip][1] = t;
@@ -1346,7 +1591,8 @@ void usage(const char* argv0) {
                "[--fail-posed-order] [--fail-order] "
                "[--fail-mute F|A|B|C|E] [--fail-antenna-snap] "
                "[--fail-accent-switch] [--fail-hold-tremor] "
-               "[--fail-compress-wrap] [--fail-final-dwell] [--motion-csv] "
+               "[--fail-compress-wrap] [--fail-final-dwell] "
+               "[--fail-root-authority] [--motion-csv] "
                "[--held-only]\n",
                argv0);
 }
@@ -1369,6 +1615,7 @@ int main(int argc, char** argv) {
   bool fail_hold_tremor = false;
   bool fail_compress_wrap = false;
   bool fail_final_dwell = false;
+  bool fail_root_authority = false;
   bool motion_csv = false;
   bool held_only = false;
   u02::PublicJointMute fail_mute = u02::PublicJointMute::kNone;
@@ -1408,6 +1655,8 @@ int main(int argc, char** argv) {
       fail_compress_wrap = true;
     } else if (std::strcmp(argv[i], "--fail-final-dwell") == 0) {
       fail_final_dwell = true;
+    } else if (std::strcmp(argv[i], "--fail-root-authority") == 0) {
+      fail_root_authority = true;
     } else if (std::strcmp(argv[i], "--motion-csv") == 0) {
       motion_csv = true;
     } else if (std::strcmp(argv[i], "--held-only") == 0) {
@@ -1463,6 +1712,8 @@ int main(int argc, char** argv) {
                 kCatContinuity);
   select_mutant(fail_final_dwell, "final-dwell", kCatContinuity,
                 kCatContinuity);
+  select_mutant(fail_root_authority, "root-authority", kCatRootAuthority,
+                kCatRootAuthority);
   if (mutant_count > 1 ||
       (held_only && mutant_count == 1 &&
        fail_mute == u02::PublicJointMute::kNone)) {
@@ -1482,6 +1733,8 @@ int main(int argc, char** argv) {
   if (fail_accent_switch) u02::g_u02_accent_switch_control = true;
   if (fail_hold_tremor) u02::g_u02_hold_tremor_control = true;
   if (fail_compress_wrap) u02::g_u02_compress_wrap_control = true;
+  if (fail_root_authority)
+    u02::g_u02_root_authority_legacy_split = true;
   if (fail_mute != u02::PublicJointMute::kNone && !held_only)
     u02::g_u02_public_joint_mute = fail_mute;
   const Stations stations;
@@ -1506,6 +1759,9 @@ int main(int argc, char** argv) {
               u02::kSpanMinRunMm);
   std::printf("  Taunt III held A punctuation %d mm\n",
               u02::g_u02_taunt3_punch_a_mm);
+  std::printf("  root authority %s; staged root helpers F/E %u/%u\n",
+              stations.integrated ? "integrated" : "legacy-split",
+              u02::kBFrontRootDelta, u02::kBRearRootDelta);
   if (rigid_span != Span::kNone)
     std::printf("  [MUTANT] rigid free span %s\n", span_name(rigid_span));
   if (clamp_span != Span::kNone)
@@ -1537,6 +1793,8 @@ int main(int argc, char** argv) {
     std::printf("  [MUTANT] restore raw u16 impact-deform wrap\n");
   if (fail_final_dwell)
     std::printf("  [MUTANT] fail to clamp the first held carrier tick\n");
+  if (fail_root_authority)
+    std::printf("  [MUTANT] restore split Front/End root rotation authority\n");
   std::printf("\n");
 
   g_current_category = kCatConfig;
@@ -1558,6 +1816,8 @@ int main(int argc, char** argv) {
   } else {
     g_current_category = kCatZones;
     check_compiled_zones(type, stations);
+    g_current_category = kCatRootAuthority;
+    check_root_authority(type, stations);
     g_current_category = kCatLanes;
     check_lane_samples(type);
     g_current_category = kCatIdentity;

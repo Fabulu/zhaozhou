@@ -33,15 +33,15 @@ struct Carrier {
 };
 
 inline std::array<Carrier, 5> carriers() {
-  return {{{"F", kBJunctionF, kKnuckleAtJfMm,
+  return {{{"F", kBJunctionF, kLoopCarrierCoreAtMm[0],
             kLoopCarrierCoreHalfMm[0], true},
-           {"A", kBHingeA, kKnuckleAtAMm,
+           {"A", kBHingeA, kLoopCarrierCoreAtMm[1],
             kLoopCarrierCoreHalfMm[1], false},
-           {"B", kBHingeB, kKnuckleAtBMm,
+           {"B", kBHingeB, kLoopCarrierCoreAtMm[2],
             kLoopCarrierCoreHalfMm[2], false},
-           {"C", kBHingeC, kKnuckleAtCMm,
+           {"C", kBHingeC, kLoopCarrierCoreAtMm[3],
             kLoopCarrierCoreHalfMm[3], false},
-           {"E", kBRearSocket, kKnuckleAtEndMm,
+           {"E", kBRearSocket, kLoopCarrierCoreAtMm[4],
             kLoopCarrierCoreHalfMm[4], true}}};
 }
 

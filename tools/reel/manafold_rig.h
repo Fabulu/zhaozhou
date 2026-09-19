@@ -132,8 +132,16 @@ enum BoneId : uint8_t {
   kBSpanDeltaEStart = 20,  // partial End delta across C's 90 mm exit bend
   kBSpanDeltaEMid = 21,    // half-run staging keeps 6-bit LBS monotone
   kBSpanDeltaEPreSocket = 22,  // partial delta before End's 90 mm bend
+  // VERSION 18: same-rotation, staged-translation root helpers. The Front helper
+  // inherits JunctionF rotation. RearPre inherits HingeD through the old run;
+  // RearRoot composes the relative rotation that makes its world orientation
+  // equal RearSocket. None is a new visible joint.
+  kBFrontRootDelta = 23,
+  kBRearRootDelta = 24,
+  kBRearPreRootDelta = 25,
+  kBRearRootTurnMid = 26,
 };
-constexpr int kBoneCount = 23;
+constexpr int kBoneCount = 27;
 static_assert(kBoneCount <= zc::kMaxBones, "Manafold exceeds the creature bone ceiling");
 
 /**
@@ -269,6 +277,18 @@ inline zc::Skeleton build_skeleton() {
   sk.bones[kBSpanDeltaEStart] = zc::Bone{kBHingeD, 0, 0, 0};
   sk.bones[kBSpanDeltaEMid] = zc::Bone{kBHingeD, 0, 0, 0};
   sk.bones[kBSpanDeltaEPreSocket] = zc::Bone{kBHingeD, 0, 0, 0};
+  sk.bones[kBFrontRootDelta] = zc::Bone{
+      kBJunctionF, 0,
+      fxu(kRootSwellSupportEndMm[0] - kLoopBuryMm), 0};
+  sk.bones[kBRearPreRootDelta] = zc::Bone{
+      kBHingeD, 0,
+      fxu(kRearRootRotationStartMm - kKnuckleAtCMm), 0};
+  sk.bones[kBRearRootTurnMid] = zc::Bone{
+      kBHingeD, 0,
+      fxu(kRearRootRotationMidMm - kKnuckleAtCMm), 0};
+  sk.bones[kBRearRootDelta] = zc::Bone{
+      kBHingeD, 0,
+      fxu(kRootSwellSupportStartMm[1] - kKnuckleAtCMm), 0};
   return sk;
 }
 

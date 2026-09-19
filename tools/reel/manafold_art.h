@@ -421,10 +421,9 @@ constexpr int32_t kLoopArcMm[6] = {0, 680, 340, 380, 0, 1280};
 // pass 16 gives every visible swell a rigid carrier core instead of blending
 // straight through its centre.
 constexpr int32_t kFoldBlendMm[5] = {90, 90, 90, 90, 90};
-// Half-width of the carrier-owned core around each visible swell. Independent
-// owner knobs: they decide how much of a ball/socket moves as one joint while
-// the continuous skin still feathers into each neighbouring span.
-constexpr int32_t kLoopCarrierCoreHalfMm[5] = {70, 50, 50, 50, 120};
+// Carrier core centres/widths live beside the authored swell stations below.
+// Keeping those two descriptions adjacent prevents a visible profile from moving
+// without its skin-ownership contract moving with it.
 // fold angles at the neck exit and hinges A..C (angle16, about Z); hinge D
 // has NO authored fold — loop_pose computes it per key (closure). Derived
 // from the sheet's ring read (tall upright egg, W/H ~0.8), tuned by LOOKING.
@@ -751,6 +750,61 @@ constexpr int32_t kKnuckleAtCMm = 1650;
 // PAST the body surface -- entirely buried, so the swell the side sheet draws
 // where the band returns to the body was invisible.
 constexpr int32_t kKnuckleAtEndMm = 2660;
+
+// VERSION 18: one named station table shared by model, public metrics and gates.
+// The old Front core was centred on the co-located skeleton pivot at 250 mm even
+// though its visible swell is centred at 320 mm. A/B/C/End already use their
+// visible stations. The legacy half-widths remain the public rigid-core witnesses;
+// root integration below uses same-rotation translation helpers so it does NOT
+// consume the signed run or weaken its 80 mm floor.
+constexpr int32_t kLoopCarrierCoreAtMm[5] = {
+    kKnuckleAtJfMm, kKnuckleAtAMm, kKnuckleAtBMm,
+    kKnuckleAtCMm, kKnuckleAtEndMm};
+constexpr int32_t kLoopCarrierCoreHalfMm[5] = {70, 50, 50, 50, 120};
+
+// Exact discrete ring support of the production swell PROFILE predicate
+// (`abs(station-at) < half`). This intentionally does not infer support from the
+// rounded rx/rz addition: the terminal rear profile is still active even when
+// its sub-millimetre integer addition rounds to zero.
+constexpr int32_t kLoopTotalMm =
+    kLoopBuryMm + kLoopArcMm[0] + kLoopArcMm[1] + kLoopArcMm[2] +
+    kLoopArcMm[3] + kLoopArcMm[4] + kLoopArcMm[5];
+constexpr int32_t loop_ring_station_mm(int ring) {
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(kLoopTotalMm) * ring) / (kLoopRings - 1));
+}
+constexpr bool swell_profile_active_at(int32_t station, int32_t at,
+                                       int32_t half) {
+  const int32_t d = station > at ? station - at : at - station;
+  return d < half;
+}
+constexpr int32_t first_sampled_swell_station(int32_t at, int32_t half) {
+  for (int ring = 0; ring < kLoopRings; ++ring)
+    if (swell_profile_active_at(loop_ring_station_mm(ring), at, half))
+      return loop_ring_station_mm(ring);
+  return -1;
+}
+constexpr int32_t last_sampled_swell_station(int32_t at, int32_t half) {
+  for (int ring = kLoopRings - 1; ring >= 0; --ring)
+    if (swell_profile_active_at(loop_ring_station_mm(ring), at, half))
+      return loop_ring_station_mm(ring);
+  return -1;
+}
+constexpr int32_t kRootSwellSupportStartMm[2] = {
+    first_sampled_swell_station(kKnuckleAtJfMm, kKnuckleSwellHalfMm[0]),
+    first_sampled_swell_station(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4])};
+constexpr int32_t kRootSwellSupportEndMm[2] = {
+    last_sampled_swell_station(kKnuckleAtJfMm, kKnuckleSwellHalfMm[0]),
+    last_sampled_swell_station(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4])};
+// The final rear ring is part of the mathematical swell support but is the
+// deliberately buried cap. It remains rigid ReturnTip-only and is proven inside
+// the body on every shipping key/midpoint instead of pretending an outside-
+// support rotation blend exists past the end of the mesh.
+constexpr int32_t kRearTerminalTipStationMm = kLoopTotalMm;
+static_assert(kRootSwellSupportEndMm[1] == kRearTerminalTipStationMm,
+              "rear terminal profile support must be the declared buried exception");
+inline bool g_u02_root_authority_legacy_split = false;
+inline int32_t g_u02_swell_pm = 1000;
 // Pass 16 carrier locations relative to the C/D shared pivot. Keep these
 // derived from authored semantic stations so the mesh swell and skeleton
 // carrier cannot silently drift apart again.
@@ -2189,6 +2243,32 @@ constexpr int32_t kSpanHelperRunMm[4] = {
     kSpanGradientMm[2] - kFoldBlendMm[3],
     kSpanGradientMm[3] - kFoldBlendMm[4],
 };
+// Version-18 root helpers retain the exact version-17 signed-gradient starts.
+// Their fractions reach the last/first visibly swollen production ring while
+// carrying JunctionF/RearSocket rotation, after which the existing staged
+// translation continues monotonically to the child/socket.
+constexpr int32_t kFrontSpanGradientStartMm =
+    kLoopBuryMm + kLoopArcMm[0] + kLoopCarrierCoreHalfMm[0] +
+    kFoldBlendMm[0];
+constexpr int32_t kFrontRootDeltaRunMm =
+    kRootSwellSupportEndMm[0] - kFrontSpanGradientStartMm;
+constexpr int32_t kRearSpanGradientStartMm =
+    kKnuckleAtCMm + kLoopCarrierCoreHalfMm[3];
+constexpr int32_t kRearRootRotationStartMm =
+    static_cast<int32_t>((static_cast<int64_t>(kLoopTotalMm) * 50) /
+                         (kLoopRings - 1));
+constexpr int32_t kRearRootRotationMidMm =
+    static_cast<int32_t>((static_cast<int64_t>(kLoopTotalMm) * 51) /
+                         (kLoopRings - 1));
+constexpr int32_t kRearPreRootDeltaRunMm =
+    kRearRootRotationStartMm - kRearSpanGradientStartMm;
+constexpr int32_t kRearRootTurnMidDeltaRunMm =
+    kRearRootRotationMidMm - kRearSpanGradientStartMm;
+constexpr int32_t kRearRootDeltaRunMm =
+    kRootSwellSupportStartMm[1] - kRearSpanGradientStartMm;
+static_assert(kFrontRootDeltaRunMm > 0 &&
+                  kFrontRootDeltaRunMm < kSpanHelperRunMm[0],
+              "Front root staged translation must stay inside the accepted run");
 constexpr int32_t kSpanMinRunMm = 80;
 static_assert(kSpanGradientMm[0] > kSpanHelperRunMm[0] &&
                   kSpanGradientMm[1] > kSpanHelperRunMm[1] &&
@@ -2216,6 +2296,11 @@ static_assert(kSpanEGradientMm == kSpanGradientMm[3] &&
                   kSpanEPreSocketRunMm > kSpanEMidRunMm &&
                   kSpanEMidRunMm > kSpanEStartRunMm,
               "C-End staged signed gradient must have four positive runs");
+static_assert(kRearPreRootDeltaRunMm > kSpanEMidRunMm &&
+                  kRearRootTurnMidDeltaRunMm > kRearPreRootDeltaRunMm &&
+                  kRearRootDeltaRunMm > kRearRootTurnMidDeltaRunMm &&
+                  kRearRootDeltaRunMm < kSpanEGradientMm,
+              "rear same-rotation stages must stay inside the accepted run");
 
 // Retained only as historical authorship for the rejected positive-lane path.
 // Pass 17 gives lanes 1..3 zero authority; signed LBS keeps constant gauge.

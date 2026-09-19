@@ -7795,6 +7795,26 @@ int main(int argc, char** argv) {
   }
   if (const char* fd = std::getenv("U02_FOLD_DEBUG"))
     u02::g_u02_fold_debug = std::string(fd) == "1" ? 1 : 0;
+  // VERSION 18 root-authority and swell-shape diagnostics. Both are parsed
+  // before u02::type() constructs the static creature bank.
+  if (const char* e = std::getenv("ZHAO_U02_ROOT_AUTHORITY")) {
+    if (std::strcmp(e, "integrated") == 0)
+      u02::g_u02_root_authority_legacy_split = false;
+    else if (std::strcmp(e, "legacy-split") == 0)
+      u02::g_u02_root_authority_legacy_split = true;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_ROOT_AUTHORITY=%s invalid "
+                   "(expected integrated|legacy-split)\n", e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_SWELL_PM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_SWELL_PM", e, 0, 1000, v))
+      return 2;
+    u02::g_u02_swell_pm = v;
+  }
   // PASS 17 / Direction 14: same-binary public five-carrier proof. The mute
   // is consumed only inside swallow_nodules; body/light/effects and the other
   // four authored inputs remain unchanged. Unset is the shipping default.

@@ -159,6 +159,27 @@ inline int32_t span_helper_delta_fx(int span, int32_t full_delta_fx) {
                                 kSpanGradientMm[span]);
 }
 
+inline int32_t front_root_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx, kFrontRootDeltaRunMm,
+                                kSpanGradientMm[0]);
+}
+
+inline int32_t rear_preroot_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx, kRearPreRootDeltaRunMm,
+                                kSpanEGradientMm);
+}
+
+inline int32_t rear_root_turn_mid_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx,
+                                kRearRootTurnMidDeltaRunMm,
+                                kSpanEGradientMm);
+}
+
+inline int32_t rear_root_delta_fx(int32_t full_delta_fx) {
+  return span_fraction_delta_fx(full_delta_fx, kRearRootDeltaRunMm,
+                                kSpanEGradientMm);
+}
+
 inline int32_t span_e_start_delta_fx(int32_t full_delta_fx) {
   return span_fraction_delta_fx(full_delta_fx, kSpanEStartRunMm,
                                 kSpanEGradientMm);
@@ -245,6 +266,16 @@ struct Rig {
     const int32_t full = fxu(delta_mm);
     local_t[kChild[span]][1] = full;
     local_t[kHelper[span]][1] = span_helper_delta_fx(span, full);
+    if (span == 0) {
+      // The version-18 Front root helper inherits JunctionF rotation. Express
+      // the accepted signed translation fraction in JunctionF local space by
+      // rotating Neck's local +Y displacement through Neck's authored axes.
+      int32_t x = 0, y = 0, z = 0;
+      quat_rot_vec(q[kBNeck], 0, front_root_delta_fx(full), 0, x, y, z);
+      local_t[kBFrontRootDelta][0] = x;
+      local_t[kBFrontRootDelta][1] = y;
+      local_t[kBFrontRootDelta][2] = z;
+    }
   }
   void write(zc::Clip& c, int f) const {
     for (int b = 0; b < kBoneCount; ++b) {
@@ -321,6 +352,10 @@ struct HingePlay {
   int32_t tilt_b = 0, yaw_b = 0;
   int32_t tilt_c = 0, yaw_c = 0;
   int32_t tilt_end = 0, yaw_end = 0;
+  // VERSION 18 append-only capability: the visible Front/JunctionF gains the
+  // missing out-of-plane axes. Shipping curves are authored later; zero keeps
+  // every existing aggregate/call byte-exact.
+  int32_t tilt_front = 0, yaw_front = 0;
 };
 
 /** Turn the span leaving `local`'s bone so it points at `target` instead of
@@ -387,16 +422,20 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   // bone (the old neck bind — accepted silhouette preserved verbatim).
   // The NEW kBNeck hinge is identity at rest: a pure articulation joint
   // the knead layer drives; the closure walk composes whatever it carries.
-  const zc::quat16 loc_junction = quat_mul(quat_y(kNeckRestYawA16), quat_z(fn));
-  // DIRECTION 7 §1: fold (Z) -> tilt (X) -> yaw (Y), in that fixed order at
-  // every station. The ORDER is what makes it read as a hinge rather than as a
-  // free ball joint, so it is written the same way four times on purpose.
+  // DIRECTION 7 §1 / VERSION 18: fold (Z) -> tilt (X) -> yaw (Y), in that
+  // fixed order at every station, now including the visible Front carrier.
+  const int32_t pt_f = play ? play->tilt_front : 0,
+                py_f = play ? play->yaw_front : 0;
   const int32_t pt_n = play ? play->tilt_neck : 0, py_n = play ? play->yaw_neck : 0;
   const int32_t pt_a = play ? play->tilt_a : 0, py_a = play ? play->yaw_a : 0;
   const int32_t pt_b = play ? play->tilt_b : 0, py_b = play ? play->yaw_b : 0;
   const int32_t pt_c = play ? play->tilt_c : 0, py_c = play ? play->yaw_c : 0;
   const int32_t pt_end = play ? play->tilt_end : 0,
                 py_end = play ? play->yaw_end : 0;
+  const zc::quat16 loc_junction = quat_mul(
+      quat_mul(quat_mul(quat_y(kNeckRestYawA16), quat_z(fn)),
+               quat_x(pt_f)),
+      quat_y(py_f));
   const zc::quat16 loc_a = quat_mul(
       quat_mul(quat_z(fa), quat_x(kLoopRestTiltA16 + tilt_a16 + pt_a)), quat_y(py_a));
   // PASS 6 C.1: B and C gain their out-of-plane axis. They were quat_z ONLY,
@@ -640,8 +679,33 @@ inline void finalize_rear_follow(zc::Clip& c) {
 
     const int64_t dx = sx_mm - px, dy = sy_mm - py, dz = sz_mm - pz;
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
-    write_rear_span_delta(c.local_translation, tbase,
-                          fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm));
+    const int32_t full_delta_fx =
+        fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm);
+    write_rear_span_delta(c.local_translation, tbase, full_delta_fx);
+
+    // Version 18 rear helpers retain the exact version-17 signed translation
+    // slope. RearPre remains HingeD-rotated through the free run; RearRoot adds
+    // only the relative rotation needed to equal the Root-attached RearSocket at
+    // the first visibly swollen ring. Their nearby pivots avoid the long-lever
+    // LBS reversal produced by a Root-child helper.
+    const zc::quat16 qd = quat_mul(Q, aim);
+    const zc::quat16 rear_relative = quat_mul(
+        quat_conj(qd), c.quats[qbase + kBRearSocket]);
+    const zc::quat16 identity = zc::quat16_identity();
+    c.quats[qbase + kBRearPreRootDelta] =
+        zc::quat16_nlerp(identity, rear_relative, 1, 3);
+    c.quats[qbase + kBRearRootTurnMid] =
+        zc::quat16_nlerp(identity, rear_relative, 2, 3);
+    c.quats[qbase + kBRearRootDelta] = rear_relative;
+    c.local_translation[
+        tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
+        rear_preroot_delta_fx(full_delta_fx);
+    c.local_translation[
+        tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
+        rear_root_turn_mid_delta_fx(full_delta_fx);
+    c.local_translation[
+        tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
+        rear_root_delta_fx(full_delta_fx);
     const int32_t tx_mm = mag > 0
         ? sx_mm + static_cast<int32_t>(dx * kRearSocketBurialMm / mag)
         : sx_mm;
@@ -734,6 +798,19 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
       c.mid_local_translation[helper_i] =
           span_helper_delta_fx(span, c.mid_local_translation[child_i]);
     }
+    {
+      const size_t child_i =
+          tbase + static_cast<size_t>(kBHingeA) * 3u + 1u;
+      const int32_t partial =
+          front_root_delta_fx(c.mid_local_translation[child_i]);
+      int32_t x = 0, y = 0, z = 0;
+      quat_rot_vec(c.mid_quats[qbase + kBNeck], 0, partial, 0, x, y, z);
+      const size_t helper_i =
+          tbase + static_cast<size_t>(kBFrontRootDelta) * 3u;
+      c.mid_local_translation[helper_i + 0] = x;
+      c.mid_local_translation[helper_i + 1] = y;
+      c.mid_local_translation[helper_i + 2] = z;
+    }
     // A held final segment already copied the final authored key exactly above.
     // Re-solving the same nonlinear closure through quantized aim can produce a
     // different quaternion representation by a few LSBs, creating a pose change
@@ -788,8 +865,28 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
 
     const int64_t dx = sx_mm - px, dy = sy_mm - py, dz = sz_mm - pz;
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
-    write_rear_span_delta(c.mid_local_translation, tbase,
-                          fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm));
+    const int32_t full_delta_fx =
+        fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm);
+    write_rear_span_delta(c.mid_local_translation, tbase, full_delta_fx);
+    const zc::quat16 qd =
+        quat_mul(Q, c.mid_quats[qbase + kBHingeD]);
+    const zc::quat16 rear_relative = quat_mul(
+        quat_conj(qd), c.mid_quats[qbase + kBRearSocket]);
+    const zc::quat16 identity = zc::quat16_identity();
+    c.mid_quats[qbase + kBRearPreRootDelta] =
+        zc::quat16_nlerp(identity, rear_relative, 1, 3);
+    c.mid_quats[qbase + kBRearRootTurnMid] =
+        zc::quat16_nlerp(identity, rear_relative, 2, 3);
+    c.mid_quats[qbase + kBRearRootDelta] = rear_relative;
+    c.mid_local_translation[
+        tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
+        rear_preroot_delta_fx(full_delta_fx);
+    c.mid_local_translation[
+        tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
+        rear_root_turn_mid_delta_fx(full_delta_fx);
+    c.mid_local_translation[
+        tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
+        rear_root_delta_fx(full_delta_fx);
     const int32_t tx_mm = mag > 0 ? sx_mm + static_cast<int32_t>(dx * kRearSocketBurialMm / mag) : sx_mm;
     const int32_t ty_mm = mag > 0 ? sy_mm + static_cast<int32_t>(dy * kRearSocketBurialMm / mag) : sy_mm;
     const int32_t tz_mm = mag > 0 ? sz_mm + static_cast<int32_t>(dz * kRearSocketBurialMm / mag) : sz_mm;
