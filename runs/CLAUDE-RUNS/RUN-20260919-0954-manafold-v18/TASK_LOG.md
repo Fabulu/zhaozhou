@@ -43,10 +43,15 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Front X/Y capability is append-only and mechanically isolated; no public mute was fabricated while shipping curves remain zero. `ZHAO_U02_SWELL_PM=1000` and explicit integrated mode are byte-identical to unset.
 - Clean direct/CMake builds and all protected gates pass; 32/32 span/root controls and 16/16 effect controls are attributed. Legacy split reproduces 2,048/2,048 version-17 frames across five root-heavy clips, and Zixxtrixx Idle remains 576/576 exact.
 - Complete integrated Hover/Rest/Taunt/Taunt-III/Trick sheets and exact 4× A/B show no new buckle, pinch, attachment/contact or outline regression. Material, size and public Front-flex likeness remain explicitly open for Waves C/D.
-- Independent Wave-B review caught that rear terminal ring 63 still satisfies the exact swell-profile predicate and that the new carrier-station table had no consumer. Support is now constexpr-derived from the production predicate; ring 63 is an explicit ReturnTip-only exception checked across 97,000 posed samples at worst rho `1090.13 pm` under the unchanged `1120 pm` burial ceiling. `kLoopCarrierCoreAtMm` now drives model, public metric and gate. Normal/all controls and the root-only mutant were rebuilt and remain green.
-- Independent Wave-B review reproduced the clean normal/root-mutant outcomes and found one blocking checker-truth gap: the declared rear swell support ends at ring 62, but the actual profile still has nonzero End swell on buried terminal ring 63. Model and checker share the incomplete interval, so the detector cannot see the omitted ring. The production mechanism otherwise survives review.
-- The same review found `kLoopCarrierCoreAtMm` is dead authorship despite its shared-source comment. Wave B cannot commit until actual sampled support is derived from the production profile, the terminal buried exception is explicitly proven across the bank, and the dead table is removed or consumed truthfully.
+- Independent Wave-B review initially caught that rear terminal ring 63 still satisfied the exact swell-profile predicate and that the new carrier-station table had no consumer. Both checker-truth gaps were repaired before commit: support is constexpr-derived from the production predicate; ring 63 is an explicit ReturnTip-only exception proven buried through 97,000 posed samples; `kLoopCarrierCoreAtMm` now drives model, public metric and gate. The corrected review verdict is PASS.
 - The helper staging reduces the worst C-End projection from legacy 6.882 mm to 3.466 mm while retaining positive 6.423 mm separation. Exact 4× Hover f0158 A/B shows no visible pinch; retain this comparison through later root art.
+- Wave C root material is selected in `V18-ROOT-MATERIAL-IMPLEMENTATION.md`. Four isolated deterministic page/build/render lanes compared legacy, 8/8, 16/16 and 24/24 root transition rows across 8,192 complete root-heavy frames.
+- Native multi-angle review selected **16/16 rows**: it carries body pigment/grain/stroke across both visible root supports while preserving the cooler/coarser A/B/C/free-middle antenna character. Narrow hands back inside the root; broad weakens the middle surface.
+- The generator remains sole page authority, adds strict legacy/bodyblend and width diagnostics, and regenerates a committed page header whose provenance is truthful. Selected regeneration is byte-identical (`95f90d...`); legacy contains 98,302/98,302 exact version-17 page words.
+- A separate selected-page/no-body-inner-ink diagnostic did not improve the connections enough to justify changing outline ownership and removed accepted internal contour elsewhere. Wave C leaves ink source untouched.
+- Final selected renderer MD5 `A5C94FEE8E0CA8A5FD19CC954E8B1DB6`; its 2,048 frames are exact to the reviewed medium candidate. All 32 span/root and 16 effect controls fire, protected gates pass, and Zixxtrixx Idle remains 576/576 exact.
+- Independent Wave-C review is PASS. Default regeneration matches the committed selected header SHA-256 exactly; legacy mode matches all 98,302 version-17 page words; selected base-atlas changes are confined to 16 front and 16 rear loop-band rows with exact legacy handoff rows and unchanged eye/star arrays. The five complete final renders are 2,048/2,048 exact to the reviewed medium candidate.
+- The review independently confirms 16/16 visually fuses both roots without flattening the free antenna, and the no-body-inner-ink diagnostic removes accepted contour without improving root fusion. One evidence-only typo in the legacy candidate renderer MD5 was corrected to `2FD9B451D8125DBEFAFAB7451BFBE570`; source/art bytes were unaffected.
 
 ---
 
@@ -60,6 +65,8 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 | 2026-09-19 | GPT fork Wave A archive | Preserve version-17 bytes; archive menu/lab; add immutable hash/declaration/playback/freshness gates | Complete locally — 56/56 pair hashes, 22+6+10 unique declarations, 1,420/1,420 decode | `V18-ARCHIVE-CLOSURE.md` |
 | 2026-09-19 | GPT fork Wave B root authority | Separate root rotation from signed translation; add Front axes, swell/root diagnostics and attributed gates | Complete after review repair — exact support predicate, terminal burial sweep, 27 bones, full matrix green | `V18-ROOT-AUTHORITY-IMPLEMENTATION.md` |
 | 2026-09-19 | GPT fork Wave B review | Audit helper hierarchy, sampled support, tracks, controls, gate reachability and pictures | Complete — terminal support and dead-authority findings repaired and reverified | `V18-ROOT-AUTHORITY-REVIEW.md` |
+| 2026-09-19 | GPT fork Wave C material | Generate isolated root-material ladder, select by complete motion, test conditional ink and run protected gates | Complete — 16/16 body-style transitions selected; no ink exclusion justified | `V18-ROOT-MATERIAL-IMPLEMENTATION.md` |
+| 2026-09-19 | GPT fork Wave C review | Audit generator determinism, exact legacy output, atlas isolation, candidate identity and native material/ink decision | Complete — source/pictures clean; one evidence hash typo corrected | `V18-ROOT-MATERIAL-REVIEW.md` |
 
 ---
 
@@ -76,6 +83,7 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - `Upheaval/creature/Manafold/VERSION-18-INVENTORY.md` and `VERSION-18-PLAN.md`.
 - `V18-ARCHIVE-CLOSURE.md`, `V17-ARCHIVE-SHA256.txt` and `v18-archive-gates.log`.
 - `V18-ROOT-AUTHORITY-IMPLEMENTATION.md`, `V18-ROOT-AUTHORITY-REVIEW.md`, five complete root-heavy integrated sheets, `V18-ROOT-AUTHORITY-AB-4X.png` and `V18-ROOT-REVIEW-WORST-F0158-4X.png`.
+- `V18-ROOT-MATERIAL-IMPLEMENTATION.md`, `V18-ROOT-MATERIAL-REVIEW.md`, selected five complete root-heavy sheets, the native four-rung ladder and enlarged root comparison.
 
 ---
 
@@ -96,12 +104,14 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Version-18 live/site bank has 22 subjects after the six-menu collection moves to archive; final encode therefore produces 44 live media files.
 - Trick's spin is authored/traced as unwrapped per-mille progress and converted to angle16 only at quaternion construction; support contact is proven on antenna-region vertices.
 - Version-17 archive integrity is a permanent deploy gate: immutable hashes, unique 22+6+10 declarations and archive-only playback cannot silently drift. Archived source-frame directories are explicit freshness exemptions, never missing live encodes.
+- Root material uses 16-row front/rear quintic body-style transitions. Narrow leaves loop character inside the connection; broad reaches too far into the free chain. The middle antenna keeps its cooler/coarser texture.
+- Material/profile repair removed the dominant visible root seam; a broad body-inner-ink suppression diagnostic did not earn a production change, so accepted outline ownership remains intact.
 
 ---
 
 ## Next Steps
 
-1. Commit/push the corrected Wave-B source packet, then its curated implementation/review evidence.
-2. Run Wave C root-material generator ladder on the settled authority; add posed root-ink exclusion only if native pictures still prove a seam.
-3. Continue Waves D–F in order, choosing swell, Front-flex, particle, Flight and Trick values only from complete native motion.
+1. Commit/push the independently accepted Wave-C generator/page source and curated evidence.
+2. Run Wave D swell-size and public Front-flex ladders on the settled material/root authority; choose values only from complete native motion.
+3. Continue Waves E–F for history/mana/particle cleanup, Flight and Trick.
 4. Run one integrated targeted gate, then one exact 22-subject version-18 bank, isolated review, encode, publication and production-byte verification.
