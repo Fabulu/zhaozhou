@@ -13022,3 +13022,30 @@ add_test(NAME geom_pose_palette_mutant_control
          COMMAND test_geom_pose_palette_mutant_control)
 set_tests_properties(geom_pose_palette_mutant_control PROPERTIES
   LABELS "fast;nightly" TIMEOUT 300)
+# ---------------------------------------------------------------------------
+# zhao_console_core SMOKE, and its slot-overflow POSITIVE CONTROL.
+#
+# Registered by the integration owner 2026-09-19. Both existed and neither was
+# a ctest, so both ran only when somebody remembered the script -- which is the
+# uncashed-cheque shape this repo has a chapter about, and the agent that built
+# the control said so in its own report rather than leaving it for someone to
+# find.
+#
+# These are PowerShell-driven rather than verilated targets: the script builds
+# the 120-source closure itself because `tests/CMakeLists.txt` cannot carry a
+# 3,800-line composer's parameter forwarding.
+#
+# The mutant runs with INVERTED POLARITY -- it passes only when
+# `terr_pl_slot_overflow_o` FIRES. Production under identical stimulus reads 0.
+# It is a WRAPPER, not a copy, so `mutant_copy_drift.py` skips it and there is
+# no copied body to go stale.
+add_test(NAME console_core_smoke
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1)
+set_tests_properties(console_core_smoke PROPERTIES LABELS "prod;smoke")
+
+add_test(NAME console_core_slot_overflow_control
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -Mutant)
+set_tests_properties(console_core_slot_overflow_control PROPERTIES
+  LABELS "prod;mutant")
