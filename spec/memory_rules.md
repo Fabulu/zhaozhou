@@ -470,6 +470,63 @@ priorities, and whether 22 MiB is the right size — that wants a real asset set
 not a guess. The region admits reads; how it is carved up is the asset
 fetcher's business and is still open.
 
+### 5f.1 A PUBLISHED SLOT IS NAMED BY THE HANDLE INDEX OF THE RESOURCE IT HOLDS
+
+Ruled 2026-09-19. This is the one sentence the paragraph above left open that
+something was actually waiting on, and it is a *naming* rule, not a layout one —
+the pool's internal carve-up above stays undecided and this does not decide it.
+
+**The rule.** For a resource named by a `handle32 {index:24, generation:8}` and
+made resident by `MEM.UPLOAD`, the arena slot the bytes were uploaded into is
+NAMED BY THAT RESOURCE'S HANDLE INDEX. So the residency directory for such a
+resource is
+
+    key   {index:24}
+    row   {slot:8, base:32, extent:32, kind:8}
+
+`base` and `extent` are the destination address and length `MEM.UPLOAD` already
+bounds-checks against `cfg_region_*` before it writes a byte, so the directory
+cannot name a range the guard would refuse; `kind` is the `.zpak` resource kind
+that already travels as `publish_tag_o` (`spec/cartridge.md` §4a: 10
+`TEXTURE_PAGE` 0x000E, 11 `MATERIAL_SET` 0x000F, 12 `MESH_STREAM` 0x0010);
+`slot` is `publish_slot_o`. The generation stays 16-bit and is `MEM.UPLOAD`'s
+own — owner ruling D-3's cache tag keys on all sixteen bits, and a directory
+that kept only the eight the handle carries would alias every 256th publication.
+
+**Why the INDEX and not the slot.** The index is the name the *game* uses; the
+slot is where the allocator happened to put it. A directory keyed on the slot
+can only answer "what is in slot 7", which is the question nobody asks — a
+consumer holds a handle. Keying on the index means a resolve that finds no row
+is a residency fault with a name, which is what lets `MATERIAL.RESOLVE`'s "a
+miss STALLS, it never guesses" law mean something: the alternative, resolving
+confidently to whatever occupies the slot, is a well-formed record for the
+wrong surface with every counter green.
+
+**What this obliges `MEM.UPLOAD` to carry.** The index must ride the REQUEST —
+`req_index_i` — and be published beside the slot. It is NOT derivable from
+anything else the block holds: `req_tag_i` is 8 bits of "which consumer asked"
+and `req_dst_slot_i` is 8 bits of arena slot, and neither is a 24-bit resource
+name. A publication that omitted it would name a row nobody can look up.
+
+**SCOPE, stated because the tree contains a second, different slot naming.**
+This rule governs resources published by `MEM.UPLOAD` under a handle32. It does
+NOT govern:
+
+* **TERRAIN pages.** Ruling T10's handle is `{resource_epoch:u32, slot:u10,
+  generation:u8}` — it names its slot *inside the handle* and carries no 24-bit
+  index. Terrain residency is `zhao_terrain_residency_v2`'s own 256×4
+  set-associative directory on ruling T1's canonical key, and that directory
+  keeps its own law.
+* **Framebuffer slots.** `DEBUG.FRAMEBLIT`'s `publish_slot_o` is a one-bit FB
+  slot consumed by `VIDEO.SLOTMGR`. Same word, different arena, unaffected.
+
+Searched before ruling, because a directory that resolves confidently to the
+wrong surface is exactly what this is supposed to prevent: every
+`publish_slot`/`publish_tag`/`publish_generation` site in `fpga/`, `tests/`,
+`spec/`, `design/` and `reference/`. `MEM.UPLOAD`'s publication has **no
+consumer at all** today — the only other `publish_slot_*` in the tree is the
+framebuffer pair above — so no block held a conflicting meaning for it.
+
 ## 5d. Memory clients — one addition (ruling T3)
 
 `ENGINE0` (framebuffer / render write) and `ENGINE1` (render-geometry domain,
