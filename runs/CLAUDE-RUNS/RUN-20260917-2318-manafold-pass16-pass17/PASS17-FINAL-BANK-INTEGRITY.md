@@ -1,15 +1,13 @@
 # Manafold Pass 17 exact final-bank integrity
 
 **Date:** 2026-09-19
-**Status:** **PASS — exact raw bank and every-frame sheets are complete**
+**Status:** **HISTORICAL INTEGRITY PASS / ART BLOCKED — batch 02 found the Death Drop cutoff; this bank must not ship**
 **Tracked HEAD:** `c41816d84e14a398450910e26d071f001c2a685a`
 **Accepted source commit:** `075d88af59873edd6e6a464d243a71ba84d0c094`
 **Branch:** `manafold-pass17`
 **Environment:** `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`
 
-This is an integrity receipt, not the final art verdict. Every shipping frame is now
-available for seven fresh isolated visual-review batches. No encode, site update,
-commit, push or deployment occurred in this lane.
+This was an integrity receipt, not an art verdict. Batch 02 subsequently found Death Drop's f0233→f0234 soft-opaque effect cutoff. `PASS17-DEATH-DROP-EFFECT-REPAIR.md` records the focused repair; because production output changed, every hash and sheet below is historical blocker evidence and a new 28-subject bank is required. No encode, site update or deployment used this generation.
 
 ## Exact build receipt
 
@@ -103,17 +101,6 @@ Validation proves:
 - every sheet is newer than its newest source frame;
 - all 11,592 frames are represented exactly once across the 28 sheets.
 
-## Next gate
+## Disposition
 
-Seven fresh isolated contexts must now review every tile, with native/enlarged
-crops for any candidate defect:
-
-1. Blown, Channel, Crackle, Curious;
-2. Damage, Death drop, Death gutter, Drift;
-3. Fall, Flight, Hasty, Hit;
-4. Hover, Inspect, Mana lasso, Mana Aqua;
-5. Mana Blue, Boil, Cyan, Green;
-6. Mana Stack, Pirouette, Rest, Startle;
-7. Taunt, Taunt II/Lasso, Taunt III, Trick.
-
-Only a 28/28 by-eye PASS may release this exact bank to encoding and publication.
+Batch 01 passed 4/4. Batch 02 passed Damage, Death Gutter and Drift but correctly blocked Death Drop. Stop review of this generation. After the focused repair is committed and independently verified, clean-build and rerender all 28 canonical subjects into a new root, issue a new integrity manifest, and restart isolated review from those exact sheets.

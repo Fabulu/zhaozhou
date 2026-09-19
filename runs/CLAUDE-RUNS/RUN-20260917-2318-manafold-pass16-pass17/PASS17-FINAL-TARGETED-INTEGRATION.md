@@ -1,7 +1,7 @@
 # Manafold Pass 17 final targeted integration
 
 **Date:** 2026-09-19
-**Status:** **PASS — clean post-palette targeted generation accepted**
+**Status:** **HISTORICAL TARGETED PASS — exact-bank batch 02 later exposed P3; see `PASS17-DEATH-DROP-EFFECT-REPAIR.md`**
 **Source base:** `31949deae836eb29a1add75da09f00dd6b09fc3e` plus the exact declared 12-path Pass-17 source packet
 **Environment:** `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`
 
@@ -207,4 +207,4 @@ Do not cite or stage as current acceptance:
 
 ## Disposition
 
-**Final targeted verdict: PASS.** The 12-path source packet is ready for its source commit/push, followed by the curated evidence commit/push. Only then should one new exact 28-subject renderer/bank be built and subjected to the final isolated review, encode, site integration and publication gates.
+**Historical targeted verdict: PASS for the pre-P3 packet.** The later exact bank exposed Death Drop's untraced soft-opaque alpha cutoff, so this renderer and its 15-control effect receipt are not final. `PASS17-DEATH-DROP-EFFECT-REPAIR.md` closes the focused source/gate/picture defect with a sixteenth control. Commit and independently review that repair, then rebuild the complete matrix and exact 28-subject bank before encoding.

@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19
 **Scope:** every current uncommitted production/gate/build change atop pushed `e150a384` / `31949dea`
-**Verdict:** **PASS — P1/P2 repaired; independent clean combined integration is green.**
+**Verdict:** **REOPENED/CORRECTED — P1/P2 remain closed; final-bank review found and the focused lane repaired P3. One new clean combined bank is required.**
 
 ## Findings
 
@@ -46,7 +46,28 @@ The ordering report starts with a current PASS verdict but its central “native
 132–144 release, including the intentional first-attack/shrug overlap. The
 ordering report labels `6720179D`, 45,255/30 and `B5438DEA`/nine-control sections
 as superseded history; its A80 held-punch section is current, and the clean
-post-palette integrated report remains the sole final renderer receipt.
+post-palette integrated report is explicitly the pre-P3 targeted receipt.
+
+### P3 — Death Drop's rendered opaque backing ignored its traced fade
+
+**Files:** `tools/reel/manafold_clips.h`; `tools/reel/manafold_fx.h`;
+`tools/reel/manafold_motiongate.cpp`; `tools/reel/zhao_reel.cpp`
+
+Exact final-bank review found a large navy/black folded-mana mass disappearing
+between Death Drop f0233 and f0234. The old instrument traced life, gain,
+visibility, stamp population and accumulated energy, all of which fell smoothly.
+The renderer's soft opaque alpha was a separate untraced operand: lowering a dark
+palette's gain made it black, not transparent, while alpha stayed full until the
+splat stopped existing.
+
+**Resolution (2026-09-19):** soft opaque splats now carry identity-defaulted
+`opacity_pm`; both death life laws use the full Q4 clock and a C2 envelope; fold
+backing/core/mote opacity follows that death envelope independently of colour
+gain. `msmooth` traces the exact backing-opacity operand through both settle tails.
+The strictly attributed `--fail-death-effect-cutoff` control restores the exact
+old 450-frame output and cutoff. Normal/new control are `0/1`, all sixteen effect
+controls remain attributed, and complete repaired Death Drop/Death Gutter sheets
+pass. See `PASS17-DEATH-DROP-EFFECT-REPAIR.md`.
 
 ## Combined-source checks that survived review
 
@@ -62,7 +83,7 @@ No additional source defect was found in these areas:
 - repeated-final dwell, loop frames 0–2, production stamp populations, radius-weighted energy, lab derivatives/layers and expected/allowed mutant-category attribution;
 - shared production/gate `fx_anchors_from_pose` and direct/CMake `msmooth` registration.
 
-The clean post-palette integration built current source once into one direct output. Renderer MD5 `8DD0AE74058E620C222289CB17A565B9`, `mspan` `C0991BA37FB3AEABEBE3A1253B261FC0`, and `msmooth` `E04B15D97C9456B0AAE0A2C4C202C57E` are the current receipts. `mspan` normal is RC 0 with all 31 attributed controls RC 1; `msmooth` normal is RC 0 with all 15 attributed controls RC 1. CMake configuration and the four newly registered gate targets also build RC 0. `PASS17-FINAL-TARGETED-INTEGRATION.md` records the complete matrix and 24,308-frame picture review.
+The pre-P3 post-palette integration built renderer MD5 `8DD0AE74058E620C222289CB17A565B9`, `mspan` `C0991BA37FB3AEABEBE3A1253B261FC0`, and `msmooth` `E04B15D97C9456B0AAE0A2C4C202C57E`; its 137/137 matrix and 24,308-frame pictures remain valid history for the unaffected packet, not the final renderer receipt. The focused P3 repair clean-build is renderer `19816A52B969C2BE65A797E3E17C1795` and `msmooth AB3520FEAC7BD90C2227E95EE4510427`: normal RC 0, all sixteen attributed controls RC 1, repaired Death Drop/Death Gutter pictures green, and Hover/Channel 1,020/1,020 byte-identical. A new combined build and exact 28-subject bank must supersede both generations.
 
 ## Exact source commit manifest after the P1/P2 repair
 
@@ -81,7 +102,7 @@ Stage these **12 paths only** for the production/gate/tools commit:
 11. `tools/reel/manafold_spangate.cpp`
 12. `tools/reel/zhao_reel.cpp`
 
-Do not include `TASK_LOG.md` in the source commit. Verify cached path count exactly 12, cached diff/check clean, clean direct cel + CMake/direct gate builds, normal matrices and all 31+15 controls before commit.
+Do not include `TASK_LOG.md` in the source commit. Verify cached path count exactly 12, cached diff/check clean, clean direct cel + CMake/direct gate builds, normal matrices and all 31+16 controls before commit.
 
 Suggested subject: `Complete Manafold smooth public performance`
 
@@ -111,7 +132,8 @@ After the final integrated rebuild, stage these text receipts (including this re
 - `.../PASS17-HELD-PUNCH-A-SELECTION.md`
 - `.../PASS17-FINAL-SOURCE-REVIEW.md`
 - `.../PASS17-BOIL-PALETTE-CONTINUITY.md`
-- `.../PASS17-FINAL-TARGETED-INTEGRATION.md` (must be generated from the post-P1 final binary)
+- `.../PASS17-DEATH-DROP-EFFECT-REPAIR.md`
+- `.../PASS17-FINAL-TARGETED-INTEGRATION.md` (pre-P3 targeted acceptance; historical after the death repair)
 
 Selection-ladder PNGs may accompany those reports only after `PASS17-FINAL-TARGETED-INTEGRATION.md` confirms the selected current source. The exact decision set is:
 
@@ -147,6 +169,11 @@ Selection-ladder PNGs may accompany those reports only after `PASS17-FINAL-TARGE
 - `PASS17-BOIL-PALETTE-C1-SEAM-4X.png`
 - `PASS17-BOIL-PALETTE-CONTROLS-4X.png`
 - `PASS17-BOIL-PALETTE-SELECTED-BLUE-ALLFRAMES.png`
+- `PASS17-DEATH-DROP-EFFECT-REPAIR-ACCEPTED-ALLFRAMES.png`
+- `PASS17-DEATH-GUTTER-EFFECT-REPAIR-ACCEPTED-ALLFRAMES.png`
+- `PASS17-DEATH-DROP-EFFECT-FADE-ACCEPTED-2X.png`
+- `PASS17-DEATH-DROP-EFFECT-HARD-CUT-CONTROL-2X.png`
+- `PASS17-DEATH-DROP-EFFECT-ACCEPTED-VS-CONTROL-NATIVE.png`
 
 Add only the final integration report's explicitly enumerated current-generation PNGs. Do **not** bulk-add other run-folder images.
 
@@ -163,9 +190,9 @@ Exclude from both commits:
 
 ## Acceptance boundary
 
-Before the combined packet is committed as final:
-
-1. **Done:** Boil CLUT loop is periodic, interpolating, visually reviewed and gated with two attributed controls.
-2. **Done:** stale comments/report generations are explicitly reconciled.
-3. **Done:** one clean integrated binary passes the full focused matrix and every targeted visual witness.
-4. the exact full 28-subject bank must now be rendered and reviewed in isolated image contexts.
+1. **Done/pushed:** P1 Boil CLUT is clip-periodic, interpolating, visually reviewed and gated with two attributed controls.
+2. **Done/pushed:** P2 stale comments/report generations are explicitly reconciled.
+3. **Historical:** the pre-P3 clean targeted binary passed its complete matrix and 33-subject visual review.
+4. **Correctly blocked:** the first exact 28-subject bank exposed P3's Death Drop soft-opaque cutoff at f0233→f0234.
+5. **Focused repair done:** soft-opaque death visibility now follows a C2 opacity envelope; the exact legacy output is a strictly attributed positive control; both complete deaths pass.
+6. **Still required:** commit/push the P3 source/evidence packet, clean-build one new combined renderer, rerun the complete 31+16 matrix, regenerate the exact 28-subject bank and resume isolated every-frame review from its new manifest.

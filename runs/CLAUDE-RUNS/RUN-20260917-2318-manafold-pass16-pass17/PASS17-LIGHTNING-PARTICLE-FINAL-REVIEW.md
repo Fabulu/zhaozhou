@@ -1,8 +1,8 @@
 # Manafold Pass 17 lightning/particle final review
 
 **Date:** 2026-09-19
-**Scope:** final palette-complete Direction-18 effect source and clean combined integration (`msmooth E04B15D97C9456B0AAE0A2C4C202C57E`)
-**Verdict:** **PASS.** The effect mechanism, fifteen attributed controls, selected A80 ordering and held five-carrier proof are green in the clean post-palette build; the exact targeted pictures reproduce the selected art.
+**Scope:** palette-complete Direction-18 packet plus exact-final-bank Death Drop visibility repair
+**Verdict:** **FOCUSED PASS / combined rebuild pending.** The original fifteen-control packet remains green; final-bank review exposed one missing rendered-opacity operand, now repaired with a sixteenth attributed control and complete death pictures. A new exact bank must supersede the rejected generation.
 
 ## Findings
 
@@ -104,6 +104,14 @@ bringing the palette-complete effect total to **15/15**. Final selected Boil/Blu
 frames are byte-identical to the reviewed one-cycle generation. See
 `PASS17-BOIL-PALETTE-CONTINUITY.md` for exact metrics and pictures.
 
+## Exact-bank Death Drop amendment
+
+The first exact 28-subject bank exposed one rendered operand outside the fifteen-control closure: Death Drop's soft opaque navy backing and mote hearts kept full blend alpha while their traced life/gain approached zero. A dark ramp at low gain becomes black, not transparent, so the large mass survived through f0233 and disappeared when the splats stopped at f0234.
+
+Production now separates soft-opaque `opacity_pm` from palette gain. Both deaths evaluate life on the full Q4 presentation clock through a C2 envelope; fold backing, non-strand core and mote-heart alpha consume that envelope. Default opacity 1000 is byte-exact outside death fades. `msmooth` traces the exact backing-opacity operand through both complete settle tails: Death Drop `11/2/3 pm`, Death Gutter `10/3/6 pm` step/acceleration/jerk.
+
+`--fail-death-effect-cutoff` restores the old integer life law and full opacity until zero. It is 450/450 byte-identical to the rejected bank (`0xFC405D06`), produces `1000/1000/2000 pm`, and returns attributed RC 1 with only the new death-opacity category. Normal plus all sixteen controls are exactly green/attributed. Complete repaired Death Drop (`0x4A8CE910`) and Death Gutter (`0x1D892126`) sheets pass by eye; Hover and Channel remain 1,020/1,020 byte-identical. Exact details are in `PASS17-DEATH-DROP-EFFECT-REPAIR.md`.
+
 ## Acceptance boundary
 
-Direction 18's palette-complete effect checker and Direction 16's selected A80 ordering/held/signed packet pass their complete reviewed mechanisms. The clean post-palette integration rebuilt renderer `8DD0AE74058E620C222289CB17A565B9`, `mspan C0991BA37FB3AEABEBE3A1253B261FC0`, and `msmooth E04B15D97C9456B0AAE0A2C4C202C57E`: both normal gates are RC 0, all 31 span and 15 effect controls are exactly attributed RC 1, and the 33-subject 24,308-frame targeted bank passed isolated every-frame review. The remaining boundary is the later exact 28-subject shipping generation.
+Direction 18's focused source, gate and picture repair is green with sixteen attributed effect controls. The previous clean targeted integration and exact bank are historical because the renderer changed. Commit/push this repair, rebuild the complete 31+16 matrix once, then render and review one new exact 28-subject generation before encoding or publication.

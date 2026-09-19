@@ -134,6 +134,9 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Committed and pushed the exact 12-path smooth-performance source packet as `075d88af59873edd6e6a464d243a71ba84d0c094`, then the 75-path curated targeted-evidence packet as `c41816d84e14a398450910e26d071f001c2a685a`; `origin/manafold-pass17` matches both checkpoints.
 - Built the distinct exact final-bank renderer clean at MD5 `3390F2B8214473FEBFA32092A98E9056`, SHA-256 `2A0C77BB321E09604AB5583147E54F2F4949D56C89EC25B8E0979DE0D4AF7E25`. A literal no-subject invocation exposed that the reel default is the whole global diagnostic catalogue, so that mixed root was preserved but explicitly excluded. One corrected process received all 28 canonical names together and produced the accepted raw root `pass17-final-reel-28`: 28 subjects, 11,592 contiguous header-valid frames, 3,205,048,896 bytes, exact metadata/receipt agreement, bank-manifest SHA-256 `560c12371251dae73e39c7be6e6caad8e0817cfbc6ae15fce75e586697dfe30d`. Committed `plates.py` then generated 28 nearest-downsample every-frame sheets at `pass17-final-sheets`; every one is complete and newer than its source. Integrity is recorded in `PASS17-FINAL-BANK-INTEGRITY.md`. The exact next gate is seven fresh isolated four-subject visual-review batches; encoding remains blocked until 28/28 pass.
 
+- Exact-bank visual batch 02 correctly blocked the `3390F2...` generation: Death Drop's traced life/gain reached a small value while the untraced soft-opaque alpha stayed full, leaving a black folded-mana mass through f0233 and removing it at f0234.
+- Focused repair separates opacity from palette gain, evaluates both death-life envelopes in Q4 with C2 easing, and traces the exact production backing alpha. Repaired Death Drop/Death Gutter complete sheets pass; normal `msmooth` is RC 0, all 16 controls are attributed RC 1, and the exact old 450-frame output is the positive control. The renderer changed, so all 28 subjects must be rerendered before visual review resumes.
+
 ---
 
 ## Subagent Spawns
@@ -168,6 +171,9 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 | 2026-09-19 | GPT fork Boil palette | Repair raw CLUT seam; gate emitted colour energy; review 1/2/3-cycle ladder | Complete — one-cycle C2 churn selected, normal green, raw/hard controls red | `PASS17-BOIL-PALETTE-CONTINUITY.md` |
 | 2026-09-19 | GPT fork final targeted integration | Independently audit, clean-build, run full matrix and review exact post-palette targeted bank | Complete — 137/137 matrix and 33 subjects / 24,308 frames pass | `PASS17-FINAL-TARGETED-INTEGRATION.md` |
 | 2026-09-19 | GPT fork exact final bank | Clean-build one renderer; render and validate exact canonical raw bank; generate every-frame sheets | Complete — 28 subjects / 11,592 frames and 28/28 complete sheets | `PASS17-FINAL-BANK-INTEGRITY.md` |
+| 2026-09-19 | GPT fork final batch 01 | Review every exact frame of Blown, Channel, Crackle and Curious | Complete — 4/4 pass | `PASS17-FINAL-BATCH-01.md` |
+| 2026-09-19 | GPT fork final batch 02 | Review every exact frame of Damage, both deaths and Drift | Correctly BLOCKED — 3/4 pass; Death Drop soft-opaque mass cuts off at f0234 | `PASS17-FINAL-BATCH-02.md` |
+| 2026-09-19 | GPT fork Death Drop effect | Repair/gate the missing rendered-opacity operand and review both complete deaths | Complete focused repair — C2 fade green; exact legacy control attributed; full-bank rerender required | `PASS17-DEATH-DROP-EFFECT-REPAIR.md` |
 
 ---
 
@@ -218,6 +224,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 ## Next Steps
 
-1. Run seven fresh isolated four-subject visual-review batches over the exact `pass17-final-sheets` generation, using native/enlarged crops wherever a thumbnail raises a candidate defect.
-2. If and only if all 28 subjects pass, encode WebMs/posters from `pass17-final-reel-28`, run freshness/full decode, and update findings/card.
-3. Commit/push both feature branches, fast-forward both mains, publish, verify production index plus all 56 live media bytes, and commit/push the deployment records.
+1. Independently review the four-file P3 source/gate repair, then commit/push its source and curated focused evidence.
+2. Clean-build one new combined renderer; rerun the complete `mspan` 31-control and `msmooth` 16-control matrix plus protected gates.
+3. Rerender the exact canonical 28-subject bank from that one binary and verify its new integrity manifest; the `3390F2...` / `560c1237...` generation is historical.
+4. Resume seven isolated four-subject visual-review batches from the new exact sheets. If and only if all 28 pass, encode, run freshness/playback/noindex/full decode, update findings/card, integrate, publish and verify every production byte.
