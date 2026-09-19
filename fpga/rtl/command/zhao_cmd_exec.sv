@@ -217,8 +217,14 @@
 //                        does not own it". SEARCHED: the resolver of this
 //                        shape is `zref::material::Resolver`
 //                        (`reference/include/zref/zref_material_resolve.hpp`),
-//                        whose RTL is `MATERIAL.RESOLVE` and whose contract's
-//                        line 4 reads "RTL: not built".
+//                        whose RTL is `MATERIAL.RESOLVE`. THE CITATION HERE
+//                        WAS A PHANTOM until 2026-09-19: it quoted "whose
+//                        contract's line 4 reads 'RTL: not built'", and that
+//                        line now reads "BUILT 2026-09-19". The block is BUILT
+//                        AND NOT COMPOSED, waiting on a
+//                        `spec/memory_rules.md` 5f ruling about the residency
+//                        directory's key, so this arm's conclusion stands on a
+//                        fact that is still true.
 //
 // A job is ATOMIC -- six fields in one handshake -- so half-driving it is not
 // a half closure, it is a fetch at whatever address the other half happened to
@@ -324,7 +330,9 @@ module zhao_cmd_exec
     // section above says why at length: the pool layout that would turn
     // `form` into a descriptor address is `spec/memory_rules.md` 5f's
     // explicitly UNDECIDED, and the palette that would turn `transform` into a
-    // 3x4 is MATERIAL.RESOLVE, whose RTL is not built.
+    // 3x4 is MATERIAL.RESOLVE, which is BUILT and NOT COMPOSED -- this line
+    // said "whose RTL is not built" until 2026-09-19, which was the right
+    // conclusion from a fact that had stopped being true.
     output logic        draw_valid_o,
     input  logic        draw_ready_i,
     output logic [31:0] draw_form_o,           // handle32 {index:24, gen:8}

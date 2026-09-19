@@ -810,6 +810,21 @@ blocks:
       zhao_geom_pose_cache gains `sub` in its tag -- the last is a live defect
       today, since a key and its 60 Hz midpoint alias and the cache returns the
       wrong palette.
+      BUILT 2026-09-19 (fpga/rtl/mem/zhao_mem_upload.sv, 89 directed checks) AND
+      NOT COMPOSED, and the reason is the FIRST of those four changes rather
+      than the request port. SEARCHED 2026-09-19 and named: zhao_hps_arbiter has
+      exactly TWO client ports -- c0 "high priority: CMD.DMA" and c1 "low
+      priority: DEBUG.FRAMEBLIT" -- and this block's `hps_req_o`/`hps_rsp_i` is
+      a third HPS burst master with nowhere to attach. Its `guard_req_o` is a
+      second MEM.GUARD question: the guard's client case is what
+      spec/memory_rules.md 5f's own "Why it was the blocker" section is about,
+      and RENDER.ASSET_POOL is admitted READ-ONLY (`!req.write`) while this
+      block writes. Composing it in this state would put boundaries on BOTH of
+      its memory masters, which is the test zhao_console_core.sv already applies
+      to TERRAIN.VISIBLE and GEOM.LOOM and refuses. Its `req_*` port is NOT the
+      obstacle and should not be reported as one: the contract makes SW.STREAM
+      the requester and SW.STREAM is HPS-side software, so a host-driven ingress
+      is the design rather than a gap.
   - id: MEM.GUARD
     name: Memory guard
     kind: rtl
@@ -4161,6 +4176,30 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
+    blocked_on: >-
+      A LEDGER DECISION ABOUT WHO OWNS `texture_samples`, not a wiring job.
+      Stated here 2026-09-19 after the small-cluster sweep, because
+      completion_register.py's _ALIAS carries the same refusal in a comment and
+      a refusal that lives only in a tool is a refusal nobody reading the ledger
+      can act on. design/prod_manifest.yml:700 supersedes this block "by the
+      Packet B texture plan/cache/dispatch PATH" -- by a PATH and not by a
+      module. V3 decomposes the sampler across zhao_texture_tmu_plan_v2,
+      zhao_texture_cache_pipe_v2, zhao_texture_bilerp_lane_v2,
+      zhao_texture_palette_res_v2 and zhao_texture_rsp_dispatch_v2, all five
+      live in the console; no single one of them IS the TMU, so pointing the
+      register at any of them would be the false reduction successor_in() was
+      written to refuse -- it would match zhao_texture_tmu_plan_v2, whose own
+      third line says it succeeds the PLANNER.
+      SEARCHED, and the search is the new fact: this row's `counters` field
+      names `texture_samples`, and NO MODULE IN THE V3 PATH EMITS A SAMPLES
+      COUNTER AT ALL. The only `samples_o` anywhere in fpga/rtl is
+      zhao_twod_sampler's five (samples/plane/sprite/clut8/rgb565), which count
+      2D compositor texels and are not this. So the capability's own evidence
+      port is unowned, and that -- not the sampling arithmetic, which is
+      composed and tested -- is what has to be decided: either a named V3 module
+      adopts `texture_samples` and this row's implementation points at it, or
+      the row is superseded_by the path and the counter moves to whichever block
+      the ledger says answers a request.
     notes: >-
       Sample modes are spec constants; secondary decal modes are cut-order 7
       (§26). Star ramp discipline (spec/stars_and_flares.md §1): one 64-entry
@@ -4449,6 +4488,31 @@ blocks:
       base address nor an extent nor a resource kind. So nothing can say WHERE a
       published MATERIAL_SET lives. The block's dir_* and mem_* ports are real
       and unproduced until that is ruled.
+      NARROWED 2026-09-19, and the narrowing removes two thirds of the work.
+      THE BASE AND THE EXTENT ARE NOT MISSING FROM THE DESIGN, THEY ARE MISSING
+      FROM THE PUBLICATION. zhao_mem_upload already TAKES `req_vram_addr_i` (32)
+      and `req_len_i` (32) on the request, and already bounds-checks both
+      against `cfg_region_base_i`/`cfg_region_bytes_i` before it writes a byte.
+      It simply drops them: `publish_*_o` is {slot, generation, tag} and nothing
+      else. So `dir_base_i` and `dir_count_i` cost two output ports carrying
+      values the block has already validated -- not a new law, not new
+      arithmetic, and no new producer. The resource KIND likewise already
+      travels, as `publish_tag_o`.
+      WHAT IS GENUINELY ABSENT IS THE KEY, and it is the sentence 5f has to add.
+      `req_material_set_i` is handle32 {index:24, gen:8} and `dir_set_index_i`
+      is that 24-bit index, but NOTHING IN THE TREE CARRIES IT: `req_tag_i` is 8
+      bits and means "which consumer asked", `publish_slot_o` is 8 bits of
+      arena slot, and no field anywhere maps a MATERIAL_SET index to a resident
+      slot. 5f's own closing paragraph is what has to move -- "Not decided: the
+      pool's internal layout (descriptors vs index streams vs vertex records)
+      ... how it is carved up is the asset fetcher's business and is still
+      open". The missing sentence is one that says a published slot is named by
+      the handle index of the resource it holds, so that {index:24} is the
+      directory key and {slot, base, extent, kind} is its row. That is an
+      owner ruling about the pool's naming, and it is NOT taken here: guessing
+      it would produce a directory that resolves confidently to the wrong
+      surface, which is the one failure this block's own "a miss STALLS rather
+      than returning a default" rule exists to prevent.
     notes: >-
       THE CARTRIDGE BLOCK (audit R4) IS DEAD AND WAS DEAD WHEN THIS ROW STILL
       CITED IT -- corrected 2026-09-19. Owner ruling D-2 chose option A on

@@ -1418,9 +1418,13 @@ module zhao_console_board
   // `zhao_geom_attrsetup`, with no block in front of it to ask three times.
   //
   // `tri_flat_request_i` STAYS AT THE EDGE and is not an oversight. It is the
-  // MATERIAL RECORD, and its owner is MATERIAL.RESOLVE, whose `design/blocks.yml`
-  // row reads `maturity: SPECIFIED` with both tests "PLANNED -- NOT WRITTEN"
-  // and a note blocking it on a cartridge decision. See entry I20.
+  // MATERIAL RECORD, and its owner is MATERIAL.RESOLVE, which is BUILT
+  // (`fpga/rtl/texture/zhao_material_resolve.sv`, UNIT_VERIFIED, 91 directed
+  // checks) and NOT COMPOSED. This line read "`maturity: SPECIFIED` with both
+  // tests PLANNED -- NOT WRITTEN and a note blocking it on a cartridge
+  // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
+  // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
+  // sentence naming the residency directory's KEY. See entry I20.
   input  logic [297:0] tri_flat_request_i,
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,

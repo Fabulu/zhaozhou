@@ -1156,7 +1156,9 @@
 //        tri_fragment_state_i    32b   OPEN, still a BOUNDARY
 //
 //      The three OPEN ports are a BOUNDARY and this entry stays one. Their
-//      owner is MATERIAL.RESOLVE and it is not built -- see below.
+//      owner is MATERIAL.RESOLVE, which IS built and is NOT composed -- the
+//      distinction matters and this line used to get it wrong ("it is not
+//      built"). See below.
 //
 //      HOW THE THREE PLANES CLOSED, and why it was a FRONT END and never
 //      missing arithmetic. `fpga/rtl/geometry/zhao_geom_attrsetup.sv` was real,
@@ -1176,12 +1178,42 @@
 //      response class, base rgb and alpha, the 224-bit aux surface context,
 //      aux_required, recipe weight, material recipe, LOD, base binding
 //      selector, sample count. Every one of those fields is
-//      MATERIAL.RESOLVE's output. `design/blocks.yml`'s MATERIAL.RESOLVE row
-//      reads `maturity: SPECIFIED`, both tests "PLANNED -- NOT WRITTEN", and a
-//      note recording that it is blocked on a cartridge decision (audit R4:
-//      .zpak has no generic texture-page or material-set kind). So this is not
-//      an unwired block -- it is an unbuilt one, and the honest place for that
-//      fact is the ledger and this entry, not a constant in the composer.
+//      MATERIAL.RESOLVE's output.
+//
+//      CORRECTED 2026-09-19, and the sentence it replaces was wrong in BOTH
+//      halves, each for a different reason. It read: "`design/blocks.yml`'s
+//      MATERIAL.RESOLVE row reads `maturity: SPECIFIED`, both tests 'PLANNED
+//      -- NOT WRITTEN', and a note recording that it is blocked on a cartridge
+//      decision (audit R4: .zpak has no generic texture-page or material-set
+//      kind). So this is not an unwired block -- it is an unbuilt one."
+//
+//        * THE BLOCK IS BUILT. `fpga/rtl/texture/zhao_material_resolve.sv`,
+//          UNIT_VERIFIED, differenced against `zref::material::Resolver` by
+//          `tests/texture/material_resolve_rtl_directed.cpp` -- 91 checks, 0
+//          failures, every counter seen to fire, with a committed positive
+//          control (`tests/mutants/zhao_material_resolve_gen8tag_mutant.sv`)
+//          for owner ruling D-3's cache tag. So it IS an unwired block, which
+//          is the opposite classification and a different repair.
+//        * THE CARTRIDGE BLOCKER WAS ALREADY DEAD WHEN THAT LINE WAS WRITTEN.
+//          Owner ruling D-2 chose option A on 2026-09-03 and
+//          `spec/cartridge.md` 4a allocates the kinds -- 10 TEXTURE_PAGE
+//          (0x000E), 11 MATERIAL_SET (0x000F), 12 MESH_STREAM (0x0010) -- and
+//          `spec/commands.zidl:220-262` froze the 32-byte record on
+//          2026-09-05. Sixteen days.
+//
+//      WHAT IT IS ACTUALLY BLOCKED ON IS A RULING AND IT IS NARROWER THAN THE
+//      ONE IT WAS BLAMED ON. The block needs the base and record count of the
+//      resident MATERIAL_SET on its `dir_*` port. `spec/memory_rules.md` 5f
+//      leaves the render asset pool's internal layout undecided, in as many
+//      words: "how it is carved up is the asset fetcher's business and is
+//      still open". And the BASE and EXTENT are not missing from the design --
+//      they are missing from the PUBLICATION: `zhao_mem_upload` already takes
+//      `req_vram_addr_i` and `req_len_i` and bounds-checks both against
+//      `cfg_region_*`, and then publishes only {slot, generation, tag}. What
+//      is genuinely absent is the KEY: nothing anywhere carries the 24-bit
+//      handle index that `dir_set_index_i` wants. That is one sentence of 5f,
+//      it is an owner ruling about the pool's naming, and the ledger row's
+//      `blocked_on` now states it rather than this file.
 //
 //      DRIVING THE REMAINING THREE FROM HERE IS STILL REFUSED for the usual
 //      reason: the only legal-value constructor in the tree is
@@ -1957,8 +1989,13 @@
 //        * `j_xform_i[12]` needs the instance-transform palette. SEARCHED:
 //          the resolver of this shape is
 //          `reference/include/zref/zref_material_resolve.hpp`'s
-//          `zref::material::Resolver`, whose RTL is MATERIAL.RESOLVE and
-//          whose contract's line 4 reads "RTL: not built".
+//          `zref::material::Resolver`, whose RTL is MATERIAL.RESOLVE. THE
+//          CITATION THAT STOOD HERE IS A PHANTOM: it read "whose contract's
+//          line 4 reads 'RTL: not built'", and that line now reads
+//          "RTL: `fpga/rtl/texture/zhao_material_resolve.sv` -- BUILT
+//          2026-09-19". The refusal survives on its other half -- the block is
+//          BUILT AND NOT COMPOSED, blocked on `spec/memory_rules.md` 5f
+//          (entry I20) -- so the port stays, for a reason that is true.
 //
 //      SO THE JOB PORT STAYS, AND IT IS NOT HALF-DRIVEN. A job is ATOMIC --
 //      six fields in one handshake -- so driving the two ratified fields
@@ -2129,7 +2166,10 @@
 //      leaves the render asset pool's internal layout undecided, so there is
 //      no law that turns `form`'s 24-bit index into a descriptor address, and
 //      MATERIAL.RESOLVE -- the resolver that would turn `transform` into a
-//      3x4 -- has no RTL. The handles therefore leave as HANDLES, unresolved,
+//      3x4 -- is BUILT and NOT COMPOSED, for the ruling reason entry I20 now
+//      states (this line said "has no RTL" until 2026-09-19; it is the same
+//      conclusion reached from a fact that stopped being true).
+//      The handles therefore leave as HANDLES, unresolved,
 //      which is the honest shape: a consumer that needs the pool layout gets
 //      the handle and the ruling it is waiting for, rather than an address
 //      this file made up.
@@ -3904,9 +3944,13 @@ module zhao_console_core
   // `zhao_geom_attrsetup`, with no block in front of it to ask three times.
   //
   // `tri_flat_request_i` STAYS AT THE EDGE and is not an oversight. It is the
-  // MATERIAL RECORD, and its owner is MATERIAL.RESOLVE, whose `design/blocks.yml`
-  // row reads `maturity: SPECIFIED` with both tests "PLANNED -- NOT WRITTEN"
-  // and a note blocking it on a cartridge decision. See entry I20.
+  // MATERIAL RECORD, and its owner is MATERIAL.RESOLVE, which is BUILT
+  // (`fpga/rtl/texture/zhao_material_resolve.sv`, UNIT_VERIFIED, 91 directed
+  // checks) and NOT COMPOSED. This line read "`maturity: SPECIFIED` with both
+  // tests PLANNED -- NOT WRITTEN and a note blocking it on a cartridge
+  // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
+  // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
+  // sentence naming the residency directory's KEY. See entry I20.
   input  logic [297:0] tri_flat_request_i,
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
