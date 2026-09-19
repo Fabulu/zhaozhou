@@ -283,9 +283,8 @@ modules:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_shell_fit_top:
-    disposition: superseded
-    superseded_by: zhao_shell_v2_fit_top
-    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+    disposition: instrument
+    why: "the v1 shell's generated fit instrument. The first-pass derivation called it superseded by 'zhao_shell_v2_fit_top', which is a FILENAME -- the module inside it is shell_v2_top. Same file-vs-module confusion that broke the gate; an instrument is not superseded by another instrument, it just measures a different shell."
   zhao_shell_top:
     disposition: superseded
     superseded_by: zhao_shell_top_v2
@@ -436,6 +435,47 @@ modules:
     disposition: superseded
     superseded_by: zhao_video_slotmgr_v2
     why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+
+  # ---- SECONDARY MODULES INSIDE MULTI-MODULE FILES -----------------------
+  # Five files in fpga/rtl declare more than one module, and that is exactly
+  # what broke the first version of the gate: it took a module's name to be its
+  # filename, so `zhao_raster_quant_fin` (the second module in
+  # zhao_raster_quant.sv) read as a dead file, I removed it on the gate's say-so
+  # and then added a source line for a .sv that does not exist. These entries
+  # exist because modules are now scanned rather than inferred.
+  shell_v2_top:
+    disposition: instrument
+    why: "generated shell-fit wrapper in fpga/rtl/generated; characterization only, never production"
+  shell_v2_stimulus:
+    disposition: instrument
+    why: "the shell-fit instrument's stimulus bank; invents legal traffic, ships nothing"
+  shell_v2_gpu_sink:
+    disposition: instrument
+    why: "gpu-domain capture bank of the shell-fit instrument"
+  shell_v2_video_sink:
+    disposition: instrument
+    why: "video-domain capture bank of the shell-fit instrument"
+  shell_v2_audio_sink:
+    disposition: instrument
+    why: "audio-domain capture bank of the shell-fit instrument"
+  zhao_shell_fit_stimulus:
+    disposition: instrument
+    why: "v1 shell-fit instrument's stimulus bank"
+  zhao_shell_fit_gpu_sink:
+    disposition: instrument
+    why: "v1 shell-fit instrument's gpu capture bank"
+  zhao_shell_fit_video_sink:
+    disposition: instrument
+    why: "v1 shell-fit instrument's video capture bank"
+  zhao_shell_fit_audio_sink:
+    disposition: instrument
+    why: "v1 shell-fit instrument's audio capture bank"
+  zhao_sys_pll_simclk:
+    disposition: pending_compose
+    why: "SYS.PLL's simulation clock divider, declared beside zhao_sys_pll in the same file; reaches the machine when the board joins the core"
+  zhao_sys_reset_sync:
+    disposition: pending_compose
+    why: "SYS.RESET's per-domain release synchroniser, declared beside zhao_sys_reset; reaches the machine when the board joins the core"
 
 # Modules the console elaborates DESPITE a newer sibling existing. Each needs a
 # reason good enough to survive the owner reading it.

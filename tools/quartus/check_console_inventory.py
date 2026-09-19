@@ -194,30 +194,93 @@ def run_check() -> int:
     inv = _read_inventory()
     mods, exceptions = inv["modules"], inv["version_exceptions"]
 
-    on_disk = {p.stem for p in RTL.rglob("*.sv")}
+    # A FILE IS NOT A MODULE, and assuming so put a real defect in this gate.
+    #
+    # The first version took the module universe to be `{p.stem for p in
+    # RTL.rglob("*.sv")}`. Five files in this tree declare more than one module,
+    # and one of them cost a breakage the same hour: `zhao_raster_quant_fin` is
+    # the SECOND module inside `zhao_raster_quant.sv`. G1 therefore called that
+    # file dead (no module of its NAME was live), I removed it from the console
+    # closure on the gate's say-so, and G2's complaint that `zhao_raster_quant_fin`
+    # was unlisted led me to add a source line for a file that does not exist --
+    # which broke the console lint outright. The FIELD packet found it and
+    # restored the real file.
+    #
+    # So: modules come from SCANNING (`module_graph.build` already does exactly
+    # that), files come from the fit list, and the two are related by a map
+    # rather than by a naming convention. This is the same lesson the completion
+    # register learned five times -- READ THE STRUCTURE, NOT THE CONVENTION --
+    # and I wrote it into that file's comments before repeating it here.
+    def _rel(q) -> str:
+        """Repo-relative posix, because the two sources agree on neither.
+
+        `module_graph.build()` yields repo-relative paths, `closure_paths()`
+        yields absolute ones, and on Windows one uses backslashes. The first
+        version compared them raw and G2 fired for EVERY module in the
+        console -- a gate that fails on everything is as useless as one that
+        fails on nothing, and rather more alarming.
+        """
+        r = pathlib.Path(q)
+        try:
+            r = r.resolve().relative_to(ROOT)
+        except (ValueError, OSError):
+            pass
+        return r.as_posix()
+
+    file_of = {mod: _rel(path) for mod, path in decl.items()}
+    modules_in = {}
+    for mod, path in decl.items():
+        modules_in.setdefault(_rel(path), set()).add(mod)
+
+    all_modules = set(decl)
     live = reachable_from(CONSOLE_ROOT, decl, inst)
-    closure = reg.console_closure()
+    closure_files = {_rel(p) for p in reg.closure_paths()}
 
     errors: list[str] = []
 
     # ---- G1: nothing dead in the closure -----------------------------------
-    for stem in sorted(closure - live):
-        if _is_package(stem, decl):
-            continue  # imported, not instantiated: legitimately present
+    # A FILE is dead when NONE of the modules it declares is reachable.
+    for f in sorted(closure_files):
+        declared = modules_in.get(f, set())
+        if not declared:
+            # declares no module: a package, or a file of typedefs
+            continue
+        if declared & live:
+            continue
+        # A FILE THAT DECLARES A PACKAGE is pulled in by `import`, not by
+        # instantiation, so reachability says nothing about it. Several here
+        # carry a package AND a small guard module beside it --
+        # zhao_render_texture_pkg.sv is package + layout guard -- and the
+        # guard being unreachable is not evidence the package is dead weight.
+        try:
+            if re.search(r"^\s*package\s+\w+\s*;",
+                         io.open(ROOT / f, encoding="utf-8",
+                                 errors="replace").read(), re.M):
+                continue
+        except OSError:
+            pass
         errors.append(
-            "G1 DEAD IN CLOSURE: %s is a console fit source but nothing "
-            "reachable from %s instantiates it. It is area the fit compiles "
-            "and the machine never uses." % (stem, CONSOLE_ROOT))
+            "G1 DEAD IN CLOSURE: %s is a console fit source and none of the "
+            "module(s) it declares (%s) is reachable from %s. It is area the "
+            "fit compiles and the machine never uses."
+            % (f, ", ".join(sorted(declared)), CONSOLE_ROOT))
 
     # ---- G2: nothing missing from the closure ------------------------------
-    for mod in sorted(live - closure):
-        errors.append(
-            "G2 MISSING FROM CLOSURE: %s is elaborated by the console but is "
-            "not in its fit source list -- the fit dies at elaboration." % mod)
+    # A live MODULE is missing when the file DECLARING it is not a source.
+    for mod in sorted(live):
+        path = file_of.get(mod)
+        if path is None:
+            continue
+        if path not in closure_files:
+            errors.append(
+                "G2 MISSING FROM CLOSURE: %s is elaborated by the console and "
+                "the file declaring it (%s) is not in the fit source list -- "
+                "the fit dies at elaboration."
+                % (mod, path))
 
     # ---- G3: the latest version, and only the latest ------------------------
     for mod in sorted(live):
-        newer = newer_siblings(mod, on_disk)
+        newer = newer_siblings(mod, all_modules)
         if not newer:
             continue
         if mod in exceptions:
@@ -230,7 +293,7 @@ def run_check() -> int:
             % (mod, ", ".join(newer), mod))
 
     # ---- G4: everything has a disposition ----------------------------------
-    for stem in sorted(on_disk - live):
+    for stem in sorted(all_modules - live):
         if _is_package(stem, decl):
             continue
         entry = mods.get(stem)
@@ -255,14 +318,15 @@ def run_check() -> int:
                 errors.append(
                     "G4 NO SUCCESSOR: %s is marked superseded and does not name "
                     "what superseded it." % stem)
-            elif by not in on_disk:
+            elif by not in all_modules:
                 errors.append(
                     "G4 PHANTOM SUCCESSOR: %s says it is superseded by %s, "
                     "which does not exist in fpga/rtl." % (stem, by))
 
     # ---- report -------------------------------------------------------------
-    print("console inventory: %d modules on disk, %d elaborated by %s, "
-          "%d fit sources" % (len(on_disk), len(live), CONSOLE_ROOT, len(closure)))
+    print("console inventory: %d modules declared, %d elaborated by %s, "
+          "%d fit source files" % (len(all_modules), len(live), CONSOLE_ROOT,
+                                    len(closure_files)))
     if not errors:
         print("console inventory OK -- every source is reachable, every "
               "reachable module is a source, the latest version is the one "
