@@ -42,13 +42,39 @@
 // `tests/geometry/skin_norm_split_directed.cpp`, one normal reused across three
 // lights against three independent reference calls, 20,000 vertices.
 //
-// THE OUTPUT IS `{direction, magnitude}` AND NOT A UNIT VECTOR. Normalising
+// THE OUTPUT IS THE RANGE-REDUCED DIRECTION AND NOT A UNIT VECTOR. Normalising
 // here would round twice, once into the unit vector and again in the Lambert
 // quotient, and the law has exactly ONE rounding.
 //
-// The square root is `zhao_field_isqrt`, driven as a service. It already cites
-// `zref::isqrt_u64` and returns the true floor; a second implementation would
-// be a second law.
+// ---------------------------------------------------------------------------
+// THE MAGNITUDE IS GEOM.LIGHT'S ROOT, NOT THIS BLOCK'S (owner ruling R31)
+// ---------------------------------------------------------------------------
+// Until 2026-09-19 this block also computed `mag = isqrt_u64(n.n)` itself, on
+// a `zhao_field_isqrt` service: 32 serial digit steps, one vertex at a time.
+// That made it a ~38-clock walk sitting on an AND-fork with GEOM.SKIN's twelve,
+// and the smoke bench measured the fork stalling the skinner 217 clocks over 8
+// vertices -- about 28 clocks per vertex, 2x the frame at the 120,000-vertex
+// tier (R31's second rate finding).
+//
+// The same root already exists, idle, one block downstream.
+// `zhao_light_stream` holds an exact II8 `zhao_light_isqrt64_ii8` for exactly
+// this quantity -- "the exact integer floor square root of the exact u64 sum
+// of three s32 squares", once per normal -- and on the creature path it was
+// never used, because this block handed the magnitude over already made. So
+// the root is now TIME-MULTIPLEXED rather than duplicated: this block emits the
+// direction, and GEOM.LIGHT squares and roots it (`n_mag_valid_i` low). One
+// root law, one root instance, and this block drops to six clocks a vertex.
+//
+// The LAW does not move. `n` is range-reduced here until max|n| < 2^30, so
+// every lane fits s32 and n.n < 3 * 2^60 fits u64: the light stream's sum of
+// three s32 squares and floor root compute exactly `zref::isqrt_u64(n.n)`.
+// tests/geometry/skin_norm_rtl_directed.cpp asserts that identity against
+// `zref::creature::skin_world_normal`'s own magnitude on every vertex.
+//
+// THE ZERO-LENGTH TEST NEEDS NO SQUARES. A sum of squares of integers is zero
+// iff every term is zero, so "the blend cancelled" is three compares against
+// zero. The three 64-bit squares this block used to form for that test alone
+// are gone with the root.
 //
 // ENFORCED-BY: tests/geometry/skin_norm_rtl_directed.cpp:main
 `default_nettype none
@@ -73,21 +99,13 @@ module zhao_geom_skin_norm #(
     input  var logic signed [31:0] a_i [12],
     input  var logic signed [31:0] b_i [12],
 
-    // ---- the isqrt service (zhao_field_isqrt) -------------------------------
-    output var logic              sq_valid_o,
-    input  var logic              sq_ready_i,
-    output var logic [63:0]       sq_n_o,
-    input  var logic              sq_rvalid_i,
-    output var logic              sq_rready_o,
-    input  var logic [63:0]       sq_r_i,
-
-    // ---- the world normal, as a pair ----------------------------------------
+    // ---- the world normal: the range-reduced direction ----------------------
+    // Its magnitude is GEOM.LIGHT's root (see the header), so none leaves here.
     output var logic              n_valid_o,
     input  var logic              n_ready_i,
     output var logic signed [63:0] n_x_o,
     output var logic signed [63:0] n_y_o,
     output var logic signed [63:0] n_z_o,
-    output var logic [63:0]       n_mag_o,
     output var logic              n_degenerate_o,  // no direction; light it black
     output var logic [SRCW-1:0]   n_src_id_o,
 
@@ -97,8 +115,8 @@ module zhao_geom_skin_norm #(
     output var logic [31:0]       reduced_o        // vertices that needed a shift
 );
 
-  typedef enum logic [2:0] {
-    S_IDLE, S_MUL, S_REDUCE, S_SQ, S_WAIT, S_EMIT
+  typedef enum logic [1:0] {
+    S_IDLE, S_MUL, S_REDUCE, S_EMIT
   } state_e;
   state_e st_q;
 
@@ -110,17 +128,13 @@ module zhao_geom_skin_norm #(
 
   logic signed [63:0] n_q [3];
   logic [3:0]         mi_q;          // 0..5: two dots per lane, one lane at a time
-  logic [63:0]        mag_q;
   logic               degen_q;
 
   assign v_ready_o      = (st_q == S_IDLE);
-  assign sq_valid_o     = (st_q == S_SQ);
-  assign sq_rready_o    = (st_q == S_WAIT);
   assign n_valid_o      = (st_q == S_EMIT);
   assign n_x_o          = n_q[0];
   assign n_y_o          = n_q[1];
   assign n_z_o          = n_q[2];
-  assign n_mag_o        = mag_q;
   assign n_degenerate_o = degen_q;
   assign n_src_id_o     = src_q;
 
@@ -162,14 +176,15 @@ module zhao_geom_skin_norm #(
     need_shift_c = (absmax_c >= (64'd1 << 30));
   end
 
-  assign sq_n_o = 64'(n_q[0] * n_q[0]) + 64'(n_q[1] * n_q[1]) + 64'(n_q[2] * n_q[2]);
+  // Zero length iff every lane is zero -- see the header; no squares needed.
+  logic zero_len_c;
+  assign zero_len_c = (n_q[0] == 64'sd0) && (n_q[1] == 64'sd0) && (n_q[2] == 64'sd0);
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       st_q         <= S_IDLE;
       mi_q         <= '0;
       degen_q      <= 1'b0;
-      mag_q        <= '0;
       vertices_o   <= '0;
       degenerate_o <= '0;
       reduced_o    <= '0;
@@ -192,7 +207,14 @@ module zhao_geom_skin_norm #(
           // refuses it before touching the palette.
           if (v_nx_i == 8'sd0 && v_ny_i == 8'sd0 && v_nz_i == 8'sd0) begin
             degen_q      <= 1'b1;
-            mag_q        <= '0;
+            // The direction LEAVES this block now (GEOM.LIGHT roots it), so a
+            // degenerate vertex must emit ZERO lanes, not the previous
+            // vertex's: a stale direction would root to a nonzero |n| beside a
+            // degenerate flag, and the stream would count a seam mismatch on a
+            // perfectly legal input. Found by skin_norm_rtl_directed section 2.
+            n_q[0]       <= 64'sd0;
+            n_q[1]       <= 64'sd0;
+            n_q[2]       <= 64'sd0;
             degenerate_o <= degenerate_o + 32'd1;
             st_q         <= S_EMIT;
           end else begin
@@ -212,22 +234,15 @@ module zhao_geom_skin_norm #(
             n_q[1]    <= n_q[1] >>> 1;
             n_q[2]    <= n_q[2] >>> 1;
             reduced_o <= reduced_o + 32'd1;
-          end else if (sq_n_o == 64'd0) begin
+          end else if (zero_len_c) begin
             // A blend that cancels to zero length. Degenerate for the same
             // reason a zero packed normal is, and counted the same way.
             degen_q      <= 1'b1;
-            mag_q        <= '0;
             degenerate_o <= degenerate_o + 32'd1;
             st_q         <= S_EMIT;
           end else begin
-            st_q <= S_SQ;
+            st_q <= S_EMIT;
           end
-        end
-
-        S_SQ:   if (sq_ready_i)   st_q <= S_WAIT;
-        S_WAIT: if (sq_rvalid_i) begin
-          mag_q <= sq_r_i;
-          st_q  <= S_EMIT;
         end
 
         S_EMIT: if (n_ready_i) st_q <= S_IDLE;

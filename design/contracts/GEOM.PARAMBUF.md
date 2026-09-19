@@ -55,6 +55,33 @@ choose the design.
     raster_state  u32
     source_id     u32
 
+#### `raster_state` — the layout (owner ruling R28, provisional, 2026-09-19)
+
+R28: *"Cull mode comes FIRST and from the DRAW (DrawForm flags); the remaining
+bits come from the material set."* Model: `zref::raster_state`
+(`reference/include/zref/zref_raster_state.hpp`), tested by
+`tests/geometry/raster_state_directed.cpp`.
+
+    bits [1:0]   cull_mode   = DrawForm.flags[3:2]
+                             0 NONE (double-sided), 1 NEG, 2 POS,
+                             3 RESERVED -- refused, never aliased
+    bits [31:2]  material    = MaterialRecord.raster_state[31:2], unchanged;
+                             no v1 consumer, so a v1 material writes 0
+
+`MaterialRecord.raster_state[1:0]` is reserved 0: the cull mode is the
+draw's. The encoding is the consumer's, not chosen here: `zhao_geom_clip`'s
+`cull_mode_i` (CULL_NEG = 1, CULL_POS = 2, NONE the default), which the test
+reads back from the RTL source. A draw that never set flags[3:2] reads NONE,
+the double-sided behaviour every existing capture was recorded under.
+
+The layout is RATIFIED; its PATH is not yet composed. The draw's flags reach
+the console on CMD.EXEC's `cmd_draw_*` (I41), but a draw becomes a meshlet
+job only through `geom_mf_job_*` (I36, owner ruling R29), so the core cannot
+yet pair a meshlet's triangles with the draw that issued them. Until it can,
+`geom_asm_raster_state_i` (I39) and `geom_clip_cull_mode_i` (I24) stay
+boundaries: tying `cmd_draw_flags_o` to them would pair meshlet N's
+triangles with draw M's cull mode -- the fault I39 refuses by name.
+
 ### Tile-reference chunk — 64 bytes
 
     next_chunk        u32

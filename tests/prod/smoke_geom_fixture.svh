@@ -10,6 +10,8 @@ localparam int unsigned SGF_N_TRIS  = 8;
 localparam logic signed [31:0] SGF_VX [0:7] = '{32'shFFFF8000, 32'sh00008000, 32'sh00000000, 32'shFFFF3334, 32'sh0000CCCC, 32'sh00004CCC, 32'sh00000000, 32'sh0000E666};
 localparam logic signed [31:0] SGF_VY [0:7] = '{32'shFFFF8000, 32'shFFFF8000, 32'sh00008000, 32'sh00009999, 32'sh0000B333, 32'shFFFF3334, 32'sh00000000, 32'sh0000E666};
 localparam logic signed [31:0] SGF_VZ [0:7] = '{32'sh00010000, 32'sh00010000, 32'sh00018000, 32'sh00020000, 32'sh00020000, 32'sh00030000, 32'shFFFF0000, 32'sh00014000};
+localparam logic signed [15:0] SGF_VU [0:7] = '{16'sh0800, 16'shF000, 16'sh2400, 16'sh0100, 16'shD000, 16'sh1800, 16'sh0000, 16'sh7000};
+localparam logic signed [15:0] SGF_VV [0:7] = '{16'shFC00, 16'sh0C00, 16'sh2000, 16'shD800, 16'sh3400, 16'sh0600, 16'sh0000, 16'sh9000};
 localparam logic [7:0] SGF_IX [0:23] = '{8'd0, 8'd1, 8'd2, 8'd0, 8'd2, 8'd3, 8'd1, 8'd4, 8'd2, 8'd3, 8'd2, 8'd4, 8'd5, 8'd1, 8'd0, 8'd0, 8'd1, 8'd6, 8'd7, 8'd4, 8'd1, 8'd3, 8'd4, 8'd7};
 localparam logic signed [31:0] SGF_MAT [0:15] = '{32'sh00010000, 32'sh00000000, 32'sh00000000, 32'sh00000000, 32'sh00000000, 32'sh00010000, 32'sh00000000, 32'sh00000000, 32'sh00000000, 32'sh00000000, 32'sh00010000, 32'sh00000000, 32'sh00000000, 32'sh00000000, 32'sh00010000, 32'sh00000000};
 localparam logic [31:0] SGF_VP0_ORG = 32'h00000000;  // x0=0 y0=0
@@ -22,7 +24,6 @@ localparam int unsigned SGF_EXP_CULLED   = 0;  // GEOM.CLIP `culled` (zero area 
 localparam int unsigned SGF_EXP_ACCEPTED = 14;  // into GEOM.SETUP
 localparam int unsigned SGF_EXP_TILES    = 10;  // union over both views
 localparam int unsigned SGF_EXP_PIXELS   = 2560;  // tiles x 16 x 16
-localparam logic signed [31:0] SGF_LIGHT_X = 32'sh0000999A, SGF_LIGHT_Y = 32'sh0000CCCD, SGF_LIGHT_Z = 32'sh00000000;
-localparam logic [19:0] SGF_LIGHT_GAIN = 20'h10000;
-localparam logic [16:0] SGF_EXP_LIT = 17'd39322;  // zref::creature::lambert_from_world_normal = 39322
+localparam logic [15:0] SGF_ENV_YAW = 16'h4000, SGF_ENV_PITCH = 16'h1000, SGF_ENV_SUN = 16'hFD0C, SGF_ENV_AMB = 16'h10C4;  // the SetEnvironment record
+localparam logic [16:0] SGF_EXP_LIT_R = 17'd64406, SGF_EXP_LIT_G = 17'd44459, SGF_EXP_LIT_B = 17'd31863;  // bank_of(record) -> L=(60547,25080,0), ndl 60547
 // Tiles, (tx,ty): (0,1) (0,2) (1,1) (1,2) (1,3) (2,1) (2,2) (3,1) (3,2) (3,3)

@@ -834,7 +834,7 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DRAW_SKY_OFF_RESERVED1 = 161;
   localparam int unsigned ZHAO_DRAW_SKY_OFF_PAD = 162;
 
-  // SetEnvironment 0x0311: 48-B record (reserved).
+  // SetEnvironment 0x0311: 48-B record (implemented).
   // Command header fields first on the wire, then payload; declared reversed.
   typedef struct packed {
     logic [95:0] pad;  // 12 zero byte(s) @36

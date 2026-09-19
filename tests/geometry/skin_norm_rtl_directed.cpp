@@ -1,15 +1,15 @@
 // skin_norm_rtl_directed.cpp — SKIN.NORM against zref::creature::skin_world_normal.
 //
-// The block owns one law and delegates the square root, so the comparison is
-// the pair it emits: the blended direction and its magnitude, EXACTLY. Not the
-// Lambert -- that is GEOM.LIGHT's, and the equivalence between "one normal, N
-// lights" and "N independent calls" is proved separately in
-// skin_norm_split_directed.cpp.
+// The block owns the blend and the range reduction; since owner ruling R31
+// (2026-09-19) the magnitude is GEOM.LIGHT's II8 root, computed from THIS
+// block's output. So the comparison is the direction, EXACTLY, and the root
+// identity the downstream root depends on: isqrt_u64 of the emitted
+// direction's sum of squares must equal the oracle's magnitude on every live
+// vertex -- that is the whole claim that moving the root moved no law. Not the
+// Lambert -- that is GEOM.LIGHT's, and "one normal, N lights" against "N
+// independent calls" is proved separately in skin_norm_split_directed.cpp.
 //
-// The testbench PLAYS zhao_field_isqrt rather than instantiating it. That block
-// has its own differential against `zref::isqrt_u64`, and instantiating it here
-// would re-prove the square root while hiding whether THIS block handed it the
-// right sum of squares.
+// Section 4 MEASURES the rate: vertices offered back to back, clocks counted.
 #include <cstdint>
 #include <cstdio>
 
@@ -40,13 +40,16 @@ struct Rng {
 struct Observed {
   bool got = false;
   int64_t n[3] = {0, 0, 0};
-  uint64_t mag = 0;
+  uint64_t mag = 0;  // isqrt_u64 of the emitted direction: what GEOM.LIGHT will root
   bool degenerate = false;
 };
 
-// Drive one vertex, answering the isqrt service from the same zref::isqrt_u64
-// the oracle uses -- so the two share one square root rather than two that
-// agree until they do not.
+uint64_t root_of(const int64_t n[3]) {
+  const uint64_t s = uint64_t(n[0] * n[0]) + uint64_t(n[1] * n[1]) + uint64_t(n[2] * n[2]);
+  return zref::isqrt_u64(s);
+}
+
+// Drive one vertex and collect the direction it emits.
 Observed run(Vzhao_geom_skin_norm& t, const zc::mat3x4fx& A, const zc::mat3x4fx& B,
              const zc::SkinVertex& v) {
   Observed o;
@@ -61,44 +64,25 @@ Observed run(Vzhao_geom_skin_norm& t, const zc::mat3x4fx& A, const zc::mat3x4fx&
     t.a_i[i] = static_cast<uint32_t>(A.m[i]);
     t.b_i[i] = static_cast<uint32_t>(B.m[i]);
   }
-  t.sq_ready_i = 0;
-  t.sq_rvalid_i = 0;
   t.n_ready_i = 1;
   t.eval();
   zhao::tick(t);
   t.v_valid_i = 0;
 
-  bool asked = false;
-  uint64_t answer = 0;
-  int delay = 0;
-
   for (int c = 0; c < 400; ++c) {
-    t.sq_ready_i = 1;
-    t.sq_rvalid_i = 0;
-    if (asked && delay > 0 && --delay == 0) {
-      t.sq_rvalid_i = 1;
-      t.sq_r_i = answer;
-    }
     t.eval();
-
-    if (t.sq_valid_o && !asked) {
-      asked = true;
-      answer = zref::isqrt_u64(t.sq_n_o);
-      delay = 2;
-    }
     if (t.n_valid_o) {
       o.got = true;
       o.n[0] = static_cast<int64_t>(t.n_x_o);
       o.n[1] = static_cast<int64_t>(t.n_y_o);
       o.n[2] = static_cast<int64_t>(t.n_z_o);
-      o.mag = t.n_mag_o;
+      o.mag = o.n[0] == 0 && o.n[1] == 0 && o.n[2] == 0 ? 0 : root_of(o.n);
       o.degenerate = t.n_degenerate_o != 0;
       zhao::tick(t);
       break;
     }
     zhao::tick(t);
   }
-  t.sq_rvalid_i = 0;
   return o;
 }
 
@@ -109,8 +93,6 @@ int main(int argc, char** argv) {
   Vzhao_geom_skin_norm top;
 
   top.v_valid_i = 0;
-  top.sq_ready_i = 0;
-  top.sq_rvalid_i = 0;
   top.n_ready_i = 1;
   top.rst_n = 0;
   for (int i = 0; i < 4; ++i) zhao::tick(top);
@@ -159,10 +141,11 @@ int main(int argc, char** argv) {
       }
     }
     zhao::check(bad == 0,
-                "the blended direction and its magnitude match "
-                "zref::creature::skin_world_normal EXACTLY -- the RTL accumulates "
-                "in 64 bits because the oracle does, so a narrowing on either "
-                "side would part company only on large coordinates",
+                "the blended direction matches zref::creature::skin_world_normal "
+                "EXACTLY, and isqrt_u64 of its sum of squares -- the root "
+                "GEOM.LIGHT now takes -- equals the oracle's magnitude. The RTL "
+                "accumulates in 64 bits because the oracle does, so a narrowing "
+                "on either side would part company only on large coordinates",
                 0, bad);
     zhao::check(compared == 400, "every vertex retired", 400, compared);
     zhao::check(live_cases > 300,
@@ -219,6 +202,49 @@ int main(int argc, char** argv) {
                 "the magnitude is the oracle's -- a case whose answer can be "
                 "read without running anything",
                 1, 1);
+  }
+
+  // ---- 4: THE RATE (owner ruling R31) -------------------------------------
+  // Vertices offered back to back with the consumer always ready. The block is
+  // one-at-a-time, so the figure is its whole cost per vertex: accept, three
+  // lane products, the reduction (plus one clock per range-reduction shift),
+  // emit. Before R31 the same loop also waited out a 32-step serial root.
+  {
+    zc::mat3x4fx A{}, B{};
+    for (int k = 0; k < 12; ++k) A.m[k] = r.sym(ONE);
+    for (int k = 0; k < 12; ++k) B.m[k] = r.sym(ONE);
+    for (int i = 0; i < 12; ++i) {
+      top.a_i[i] = static_cast<uint32_t>(A.m[i]);
+      top.b_i[i] = static_cast<uint32_t>(B.m[i]);
+    }
+    const uint32_t v0 = top.vertices_o;
+    const uint32_t red0 = top.reduced_o;
+    constexpr int kN = 200;
+    int emitted = 0;
+    long clocks = 0;
+    top.n_ready_i = 1;
+    while (emitted < kN && clocks < 100000) {
+      top.v_valid_i = (static_cast<int>(top.vertices_o - v0) < kN) ? 1 : 0;
+      top.v_nx_i = static_cast<int8_t>(r.sym(127));
+      top.v_ny_i = static_cast<int8_t>(r.sym(127));
+      top.v_nz_i = static_cast<int8_t>(r.sym(127));
+      top.v_w0_i = static_cast<uint8_t>(r.next() % 65u);
+      top.eval();
+      if (top.n_valid_o && top.n_ready_i) ++emitted;
+      zhao::tick(top);
+      ++clocks;
+    }
+    top.v_valid_i = 0;
+    const double per = static_cast<double>(clocks) / kN;
+    std::printf("  RATE: %d vertices in %ld clocks = %.2f clocks/vertex (%u range-reduction shifts)\n",
+                kN, clocks, per, top.reduced_o - red0);
+    zhao::check(emitted == kN, "every rate vertex retired", kN, emitted);
+    // GEOM.SKIN retires one vertex per twelve clocks (its header); the fork
+    // stalls the skinner only if this block is slower than that.
+    zhao::check(per <= 12.0,
+                "SKIN.NORM costs no more than GEOM.SKIN's twelve clocks a vertex, so "
+                "the AND-fork no longer stalls the skinner",
+                12, static_cast<uint32_t>(per));
   }
 
   std::printf("  %u vertices, %u degenerate, %u range-reduced\n", top.vertices_o, top.degenerate_o,

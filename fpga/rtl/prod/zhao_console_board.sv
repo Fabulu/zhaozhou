@@ -811,7 +811,6 @@ module zhao_console_board
   output logic signed [63:0]      geom_sn_n_x_o,
   output logic signed [63:0]      geom_sn_n_y_o,
   output logic signed [63:0]      geom_sn_n_z_o,
-  output logic [63:0]             geom_sn_n_mag_o,
   output logic                    geom_sn_n_degenerate_o,
   output logic [15:0]             geom_sn_n_src_id_o,
   output logic [31:0]             geom_sn_vertices_o,
@@ -824,19 +823,24 @@ module zhao_console_board
   output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
-  // I48: the prepared descriptor bank, written by the HOST. SetEnvironment
-  // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
-  // this bank's Q16.16 directions and u20 gains -- see I48.
-  input  logic                    geom_light_cfg_we_i,
-  input  logic                    geom_light_cfg_commit_i,
-  input  logic [7:0]              geom_light_cfg_addr_i,
-  input  logic [31:0]             geom_light_cfg_data_i,
+  // The prepared descriptor bank is loaded by COMMAND since owner ruling R25
+  // (entry I48, CLOSED 2026-09-19): SetEnvironment 0x0311 -> CMD.EXEC ->
+  // GEOM.LIGHT.ENV (`zhao_light_env`) -> the bank, and the power-on default is
+  // the same path applied to 4a's default record. The host ports that stood
+  // here are gone; the published generation stays as evidence.
   output logic                    geom_light_cfg_gen_o,
-  input  logic [3:0]              geom_light_nlights_i,
-  // I46: the lit vertex RGB -- the vertex-attribute store's r/g/b input, whose
-  // WRITER is not built. Out of the module, with a real ready.
+  // GEOM.LIGHT.ENV's evidence: bank loads published (the power-on load
+  // included), SetEnvironment records taken, and records replaced before they
+  // were loaded (fired in tests/geometry/light_env_directed.cpp case 4).
+  output logic [31:0]             geom_light_env_loads_o,
+  output logic [31:0]             geom_light_env_records_o,
+  output logic [31:0]             geom_light_env_superseded_o,
+  // The lit vertex RGB, OBSERVED. Its consumer is GEOM.VATTR (entry I46,
+  // CLOSED 2026-09-19): the ready is the store's, so the port that stood here
+  // as `_ready_i` is gone and the store's ready leaves as a tap beside it, so
+  // the smoke bench can count the handshakes it checks against the reference.
   output logic                    geom_light_valid_o,
-  input  logic                    geom_light_ready_i,
+  output logic                    geom_light_ready_o,
   output logic [16:0]             geom_light_r_o,
   output logic [16:0]             geom_light_g_o,
   output logic [16:0]             geom_light_b_o,
@@ -892,27 +896,27 @@ module zhao_console_board
   // GEOM.REPLAY and the release comes back from it. Sixteen ports left this
   // list rather than being driven; see the closed ledger in the header.
 
-  // ---- I12, NARROWED: the arena ORIGIN datum only ---------------------------
-  // The lookup port is GEOM.REPLAY's now. What is still at the edge is the
-  // per-arena origin, which nothing in this console writes and nothing reads.
-  input  logic                    geom_org_we_i,
-  input  logic [GEOM_ARENA_W-1:0] geom_org_arena_i,
-  input  logic signed [31:0]      geom_org_x_i,
-  input  logic signed [31:0]      geom_org_y_i,
-  input  logic signed [31:0]      geom_org_z_i,
-  output logic signed [31:0]      geom_rep_org_x_o,
-  output logic signed [31:0]      geom_rep_org_y_o,
-  output logic signed [31:0]      geom_rep_org_z_o,
+  // ---- I12 IS CLOSED (owner ruling R27): no arena origin is owed in v1 -----
+  // The eight geom_org_* / geom_rep_org_* ports left the list; see the ledger.
 
   // ---- GEOMETRY evidence ---------------------------------------------------
   output logic [31:0]             geom_groups_opened_o,
   output logic [31:0]             geom_groups_sealed_o,
-  output logic [31:0]             geom_vertices_sent_o,
+  // client-A accepts, one per vertex PER VIEW (2x the vertices in dual view)
+  output logic [31:0]             geom_view_vertices_sent_o,
   output logic [31:0]             geom_landings_o,
   output logic [31:0]             geom_jobs_refused_o,
   output logic [31:0]             geom_alloc_stall_cycles_o,
   output logic [31:0]             geom_rel_unheld_o,
   output logic                    geom_seal_early_o,
+  // R31: GEOM.VDECODE's refusals as GEOM.GROUP_SEQ absorbs them. A hole is a
+  // record that will never arrive; its batch is poisoned and dropped whole,
+  // and an EARLY hole is one that arrived with no batch held and was carried
+  // to the next (structurally excluded by ASSETFETCH's S_HAND -> S_SERVE
+  // handshake, so 0 here; fired by stimulus in the directed test).
+  output logic [31:0]             geom_holes_o,
+  output logic [31:0]             geom_groups_poisoned_o,
+  output logic [31:0]             geom_holes_early_o,
   output logic [31:0]             geom_arena_hits_o,
   output logic [31:0]             geom_arena_misses_o,
   output logic [31:0]             geom_arena_refusals_o,
@@ -924,17 +928,25 @@ module zhao_console_board
   // producer: the descriptor's raster word is I39's.
   input  logic [1:0]              geom_clip_cull_mode_i,
 
-  // ---- I46: THE VERTEX-ATTRIBUTE STORE (owner ruling R11, provisional) -----
-  // Slots 1..6 of the ruling-5 packet (u_over_w, v_over_w, r, g, b, alpha),
-  // per vertex per view, keyed EXACTLY like the arena. The store listens to
-  // GEOM.REPLAY's lookups -- these are the same nets that address the arena --
-  // and answers with the arena's timing. Its WRITER is not built; see I46.
-  output logic                    geom_att_look_valid_o,
-  output logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o,
-  output logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o,
-  output logic [GEOM_INDEX_W-1:0] geom_att_look_index_o,
-  input  logic                    geom_att_rep_valid_i,
-  input  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i,
+  // ---- GEOM.VATTR's evidence (entry I46 CLOSED; owner rulings R11, R31) ----
+  // The vertex-attribute store and its writer are INTERNAL: the eleven
+  // `geom_att_*` ports that modelled the store at the edge are gone. What
+  // leaves is the store's census and its faults, and the depth law's two
+  // faults, which moved here from GEOM.REPLAY with the law itself.
+  output logic [31:0]             geom_va_landings_o,
+  output logic [31:0]             geom_va_rows_written_o,
+  output logic [31:0]             geom_va_colours_written_o,
+  output logic [31:0]             geom_va_uv_staged_o,
+  output logic [31:0]             geom_va_lq_overflow_o,
+  output logic [31:0]             geom_va_index_oob_o,
+  output logic [31:0]             geom_va_look_oob_o,
+  output logic [31:0]             geom_va_profile_mixed_o,
+  output logic [31:0]             geom_va_dq_refused_o,
+  output logic [31:0]             geom_va_dq_stray_o,
+  // Review of d52ae6c0: depth results that WAITED for their u/v (a handshake,
+  // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
+  output logic [31:0]             geom_va_uv_waits_o,
+  output logic                    geom_va_poison_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -944,9 +956,9 @@ module zhao_console_board
   output logic [31:0]             geom_rp_refused_o,
   output logic [31:0]             geom_rp_missed_o,
   output logic [31:0]             geom_rp_att_skew_o,
-  output logic [31:0]             geom_rp_profile_mixed_o,
   output logic [31:0]             geom_rp_view_bad_o,
-  output logic [31:0]             geom_rp_dq_refused_o,
+  // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
+  output logic [31:0]             geom_rp_poisoned_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -2242,6 +2254,8 @@ module zhao_console_board
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
+  // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
+  output logic [31:0] cmd_exec_envs_o,
 
   // ==========================================================================
   // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
@@ -2717,21 +2731,18 @@ module zhao_console_board
       .geom_sn_n_x_o                     (geom_sn_n_x_o),
       .geom_sn_n_y_o                     (geom_sn_n_y_o),
       .geom_sn_n_z_o                     (geom_sn_n_z_o),
-      .geom_sn_n_mag_o                   (geom_sn_n_mag_o),
       .geom_sn_n_degenerate_o            (geom_sn_n_degenerate_o),
       .geom_sn_n_src_id_o                (geom_sn_n_src_id_o),
       .geom_sn_vertices_o                (geom_sn_vertices_o),
       .geom_sn_degenerate_o              (geom_sn_degenerate_o),
       .geom_sn_reduced_o                 (geom_sn_reduced_o),
       .geom_sn_fork_stall_o              (geom_sn_fork_stall_o),
-      .geom_light_cfg_we_i               (geom_light_cfg_we_i),
-      .geom_light_cfg_commit_i           (geom_light_cfg_commit_i),
-      .geom_light_cfg_addr_i             (geom_light_cfg_addr_i),
-      .geom_light_cfg_data_i             (geom_light_cfg_data_i),
       .geom_light_cfg_gen_o              (geom_light_cfg_gen_o),
-      .geom_light_nlights_i              (geom_light_nlights_i),
+      .geom_light_env_loads_o            (geom_light_env_loads_o),
+      .geom_light_env_records_o          (geom_light_env_records_o),
+      .geom_light_env_superseded_o       (geom_light_env_superseded_o),
       .geom_light_valid_o                (geom_light_valid_o),
-      .geom_light_ready_i                (geom_light_ready_i),
+      .geom_light_ready_o                (geom_light_ready_o),
       .geom_light_r_o                    (geom_light_r_o),
       .geom_light_g_o                    (geom_light_g_o),
       .geom_light_b_o                    (geom_light_b_o),
@@ -2769,33 +2780,34 @@ module zhao_console_board
       .geom_pal_bones_written_o          (geom_pal_bones_written_o),
       .geom_pal_bone_oob_o               (geom_pal_bone_oob_o),
       .geom_pal_bone_unset_o             (geom_pal_bone_unset_o),
-      .geom_org_we_i                     (geom_org_we_i),
-      .geom_org_arena_i                  (geom_org_arena_i),
-      .geom_org_x_i                      (geom_org_x_i),
-      .geom_org_y_i                      (geom_org_y_i),
-      .geom_org_z_i                      (geom_org_z_i),
-      .geom_rep_org_x_o                  (geom_rep_org_x_o),
-      .geom_rep_org_y_o                  (geom_rep_org_y_o),
-      .geom_rep_org_z_o                  (geom_rep_org_z_o),
       .geom_groups_opened_o              (geom_groups_opened_o),
       .geom_groups_sealed_o              (geom_groups_sealed_o),
-      .geom_vertices_sent_o              (geom_vertices_sent_o),
+      .geom_view_vertices_sent_o         (geom_view_vertices_sent_o),
       .geom_landings_o                   (geom_landings_o),
       .geom_jobs_refused_o               (geom_jobs_refused_o),
       .geom_alloc_stall_cycles_o         (geom_alloc_stall_cycles_o),
       .geom_rel_unheld_o                 (geom_rel_unheld_o),
       .geom_seal_early_o                 (geom_seal_early_o),
+      .geom_holes_o                      (geom_holes_o),
+      .geom_groups_poisoned_o            (geom_groups_poisoned_o),
+      .geom_holes_early_o                (geom_holes_early_o),
       .geom_arena_hits_o                 (geom_arena_hits_o),
       .geom_arena_misses_o               (geom_arena_misses_o),
       .geom_arena_refusals_o             (geom_arena_refusals_o),
       .geom_arena_overflow_o             (geom_arena_overflow_o),
       .geom_clip_cull_mode_i             (geom_clip_cull_mode_i),
-      .geom_att_look_valid_o             (geom_att_look_valid_o),
-      .geom_att_look_arena_o             (geom_att_look_arena_o),
-      .geom_att_look_gen_o               (geom_att_look_gen_o),
-      .geom_att_look_index_o             (geom_att_look_index_o),
-      .geom_att_rep_valid_i              (geom_att_rep_valid_i),
-      .geom_att_rep_data_i               (geom_att_rep_data_i),
+      .geom_va_landings_o                (geom_va_landings_o),
+      .geom_va_rows_written_o            (geom_va_rows_written_o),
+      .geom_va_colours_written_o         (geom_va_colours_written_o),
+      .geom_va_uv_staged_o               (geom_va_uv_staged_o),
+      .geom_va_lq_overflow_o             (geom_va_lq_overflow_o),
+      .geom_va_index_oob_o               (geom_va_index_oob_o),
+      .geom_va_look_oob_o                (geom_va_look_oob_o),
+      .geom_va_profile_mixed_o           (geom_va_profile_mixed_o),
+      .geom_va_dq_refused_o              (geom_va_dq_refused_o),
+      .geom_va_dq_stray_o                (geom_va_dq_stray_o),
+      .geom_va_uv_waits_o                (geom_va_uv_waits_o),
+      .geom_va_poison_o                  (geom_va_poison_o),
       .geom_rp_meshlets_o                (geom_rp_meshlets_o),
       .geom_rp_groups_o                  (geom_rp_groups_o),
       .geom_rp_triangles_in_o            (geom_rp_triangles_in_o),
@@ -2803,9 +2815,8 @@ module zhao_console_board
       .geom_rp_refused_o                 (geom_rp_refused_o),
       .geom_rp_missed_o                  (geom_rp_missed_o),
       .geom_rp_att_skew_o                (geom_rp_att_skew_o),
-      .geom_rp_profile_mixed_o           (geom_rp_profile_mixed_o),
       .geom_rp_view_bad_o                (geom_rp_view_bad_o),
-      .geom_rp_dq_refused_o              (geom_rp_dq_refused_o),
+      .geom_rp_poisoned_o                (geom_rp_poisoned_o),
       .geom_clip_attr_a_o                (geom_clip_attr_a_o),
       .geom_clip_attr_b_o                (geom_clip_attr_b_o),
       .geom_clip_attr_c_o                (geom_clip_attr_c_o),
@@ -3614,6 +3625,7 @@ module zhao_console_board
       .cmd_exec_view_refused_o           (cmd_exec_view_refused_o),
       .cmd_exec_src_truncated_o          (cmd_exec_src_truncated_o),
       .cmd_exec_unsupported_o            (cmd_exec_unsupported_o),
+      .cmd_exec_envs_o                   (cmd_exec_envs_o),
       .terr_mip_pages_mipped_o           (terr_mip_pages_mipped_o),
       .terr_mip_pages_faulted_o          (terr_mip_pages_faulted_o),
       .terr_mip_samples_sent_o           (terr_mip_samples_sent_o),

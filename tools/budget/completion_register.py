@@ -449,6 +449,27 @@ _ALIAS: dict[str, str | None] = {
     # instantiates and what the manifest calls the organ, and the engine inside
     # it can be re-parameterised or replaced without this line going stale.
     "FIELD.SEQ.CORE":    "zhao_field_host",
+    # ONE LAW, TWO SCHEDULES, AND THE CONSOLE RUNS THE SECOND (2026-09-19, geom2,
+    # owner ruling R31). This makes the number smaller, so it carries four
+    # independent witnesses rather than an argument. The convention constructs
+    # `zhao_geom_depthquant`, the one-vertex FSM schedule, which since R31 is
+    # used only by tests/shell/tb_zhao_shell.sv. The capability -- w to invw24
+    # under the profile, `zref::depth_of_raw` -- is performed in the console by
+    # `zhao_geom_depthquant_stream`, the tagged schedule of the SAME law:
+    #   1. the instantiation graph: `u_geom_vattr` (zhao_console_core section 11)
+    #      instantiates `zhao_geom_vattr`, which instantiates
+    #      `zhao_geom_depthquant_stream` (`u_dq`) on a private rcp24_v4;
+    #   2. both schedules instantiate the same two leaves,
+    #      `zhao_geom_depthquant_pre`/`_post`, declared in the SAME file -- the
+    #      arithmetic exists once (zhao_geom_depthquant.sv, "ONE LAW, TWO
+    #      SCHEDULES");
+    #   3. `design/console_inventory.yml` gives the FSM `superseded_by:
+    #      zhao_geom_depthquant_stream`, and `design/prod_manifest.yml` counts the
+    #      stream INSIDE `zhao_geom_vattr` and declares the FSM superseded;
+    #   4. the stream is differenced against `zref::depth_of_raw` itself, out of
+    #      order, in tests/geometry/geom_depthquant_stream_directed.cpp, and in
+    #      composition by tests/geometry/geom_vattr_directed.cpp (every row).
+    "GEOM.DEPTHQUANT":   "zhao_geom_depthquant_stream",
     "TERRAIN.COMPCACHE": "zhao_terrain_compcache_front",
     "TERRAIN.ISLAND":    "zhao_terrain_island_dir",
     # THE NAME CONVENTION RESOLVES THIS ONE TO A SUPERSEDED PROTOTYPE, which is

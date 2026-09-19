@@ -109,14 +109,21 @@ top:
   # DEPTHQUANT is R6, w to canonical invw24 under the selected depth profile;
   # twelve RTL files consume invw24 and nothing produced it.
   - zhao_geom_assemble
-  # GEOM.REPLAY (geom packet, 2026-09-19): the replay customer. It CONTAINS
-  # GEOM.DEPTHQUANT -- three lanes -- and a private zhao_raster_rcp24_v4, so
-  # depthquant is counted INSIDE it now rather than as a top of its own.
+  # GEOM.REPLAY (geom packet, 2026-09-19): the replay customer. Since owner
+  # ruling R31 (geom2, same day) it computes no depth and holds no reciprocal.
   - zhao_geom_replay
+  # GEOM.VATTR (geom2 packet, 2026-09-19): the vertex-attribute store and its
+  # writer, entry I46. It CONTAINS GEOM.DEPTHQUANT's stream (and the law's two
+  # leaves) and a private zhao_raster_rcp24_v4 -- moved here from REPLAY -- so
+  # they are counted INSIDE it rather than as tops of their own.
+  - zhao_geom_vattr
   # GEOM.LIGHT, by owner ruling R2 (2026-09-19): zhao_light_stream -- with its
   # two arithmetic leaves INSIDE it -- behind the creature seam adapter.
   - zhao_light_stream
   - zhao_light_skin_adapter
+  # GEOM.LIGHT.ENV (geom2, 2026-09-19, owner ruling R25): SetEnvironment ->
+  # the bank; its zhao_field_sin is counted inside it.
+  - zhao_light_env
   # Both built 2026-09-04. MESHFETCH is position 1 of the composition order --
   # the geometry front end's entry point, which nothing downstream could be fed
   # by until it existed. It cannot pass MEM.GUARD yet and that is a PHASE
@@ -457,6 +464,7 @@ excluded:
   # (4,494 ALM / 3,725 reg / 5 M10K / 3 DSP at 58.99 MHz) is the only measured
   # FIELD number this repo has.
   - zhao_mem_share2: superseded  the two-requester wrapper over zhao_mem_share_n (R4); since 2026-09-19 both console sites instantiate the N core -- u_geom_mem_adapter at N=3 (MATERIAL.RESOLVE, R20) and the terrain read share -- and the wrapper stays on disk for its directed test
+  - zhao_geom_depthquant: superseded  the depth law's one-vertex FSM schedule; the console runs the same law (the _pre/_post leaves) on zhao_geom_depthquant_stream inside zhao_geom_vattr, counted there (owner ruling R31, 2026-09-19); the FSM remains for tb_zhao_shell and its directed test
   - zhao_field_seq: superseded  the v1 sequencer; zhao_field_v3_engine is the composed engine, with the executor and service path under it
   - zhao_field_exec_shared: superseded  the v1 shared execution stage; zhao_field_v3_exec is the datapath now
   - zhao_field_curve: superseded  by zhao_field_v3_curve (with zhao_field_v3_spline under it)

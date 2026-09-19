@@ -86,7 +86,6 @@ struct Dut {
   void idle() {
     v->a_valid_i = 0;
     v->open_i = 0;
-    v->org_we_i = 0;
     v->seal_i = 0;
     v->look_valid_i = 0;
     v->eval();

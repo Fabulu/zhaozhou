@@ -330,6 +330,12 @@ class SoftwareRenderer {
 
   zhao_abi::video_mode latched_mode() const { return mode_latched_; }
 
+  /** The environment state SetEnvironment 0x0311 last committed (sky_and_beams
+   *  4a: a frame without one KEEPS the previous state; reset() restores the
+   *  power-on default). Its lowering into GEOM.LIGHT's bank is
+   *  zref::light_env::bank_of (owner ruling R25). */
+  const sky::EnvState& environment() const { return env_; }
+
   /** Persistent scar state (charter §12) — test/inspection hook. */
   const std::vector<std::pair<uint32_t, SurfaceSheet>>& sheets() const { return sheets_; }
   SurfaceSheet& sheet_for(uint32_t patch_handle);  // creates on first use
@@ -339,6 +345,8 @@ class SoftwareRenderer {
   // LATCH (used for the frame) happens at frame start — render_frame reads
   // mode_latched_ first, then the walk may rewrite it for the next frame.
   zhao_abi::video_mode mode_latched_ = zhao_abi::VIDEO_Z60;
+  // SetEnvironment 0x0311 (R25): persistent across frames, like the latch.
+  sky::EnvState env_{};
   std::vector<std::pair<uint32_t, SurfaceSheet>> sheets_;
   PreResolveFn pre_resolve_ = nullptr;  // [phase3-preview] celestial hook
   void* pre_ctx_ = nullptr;

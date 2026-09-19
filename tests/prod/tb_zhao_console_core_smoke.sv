@@ -21,7 +21,7 @@
 //                                              COLLIDE -> STATE -> the store
 //                                              -> DDR (entry I1 closed), no
 //                                              stimulus in between.
-//   4. `geom_vertices_sent_o` moves         -- GEOM.SKIN -> GROUP_SEQ ->
+//   4. `geom_view_vertices_sent_o` moves         -- GEOM.SKIN -> GROUP_SEQ ->
 //                                              client A of the projector.
 //   5. `proj_a_grants_o` moves              -- the shared projector GRANTED
 //                                              that client: the wire the
@@ -318,16 +318,14 @@ module tb_zhao_console_core_smoke
   // inside the core now; what leaves is a TAP of it, still differenced below.
   logic                    geom_sn_n_valid_o;
   // ---- GEOM.LIGHT = zhao_light_stream (owner ruling R2) --------------------
-  // I48: the descriptor bank, loaded here as the host would. I46: the lit RGB,
-  // whose consumer (the attribute store's writer) is unbuilt -- its ready is
-  // held HIGH for the reason SKIN.NORM's was: a low ready here backs up through
-  // the adapter into the AND-fork and throttles GEOM.SKIN.
-  logic                    geom_light_cfg_we_i, geom_light_cfg_commit_i;
-  logic [7:0]              geom_light_cfg_addr_i;
-  logic [31:0]             geom_light_cfg_data_i;
+  // The descriptor bank is loaded by COMMAND (owner ruling R25, I48 closed):
+  // this bench's packet carries a SetEnvironment and CMD.EXEC lowers it through
+  // GEOM.LIGHT.ENV. The lit RGB's consumer is GEOM.VATTR (I46, closed).
   logic                    geom_light_cfg_gen_o;
-  logic [3:0]              geom_light_nlights_i;
-  logic                    geom_light_valid_o, geom_light_ready_i;
+  logic [31:0]             geom_light_env_loads_o, geom_light_env_records_o;
+  logic [31:0]             geom_light_env_superseded_o;
+  logic [31:0]             cmd_exec_envs_o;
+  logic                    geom_light_valid_o, geom_light_ready_o;
   logic [16:0]             geom_light_r_o, geom_light_g_o, geom_light_b_o;
   logic                    geom_light_degenerate_vtx_o;
   logic [15:0]             geom_light_src_id_o;
@@ -336,7 +334,6 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_light_root_queue_overflow_o, geom_light_rgb_sat_o, geom_light_nlights_clamped_o;
   logic [31:0] geom_light_adapter_refused_o;
   logic signed [63:0]      geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o;
-  logic [63:0]             geom_sn_n_mag_o;
   logic                    geom_sn_n_degenerate_o;
   logic [15:0]             geom_sn_n_src_id_o;
   logic [31:0]             geom_sn_vertices_o;
@@ -378,22 +375,15 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_pal_bones_written_o;
   logic [31:0]             geom_pal_bone_oob_o;
   logic [31:0]             geom_pal_bone_unset_o;
-  logic                    geom_org_we_i;
-  logic [GEOM_ARENA_W-1:0] geom_org_arena_i;
-  logic signed [31:0]      geom_org_x_i;
-  logic signed [31:0]      geom_org_y_i;
-  logic signed [31:0]      geom_org_z_i;
-  logic signed [31:0]      geom_rep_org_x_o;
-  logic signed [31:0]      geom_rep_org_y_o;
-  logic signed [31:0]      geom_rep_org_z_o;
   logic [31:0]             geom_groups_opened_o;
   logic [31:0]             geom_groups_sealed_o;
-  logic [31:0]             geom_vertices_sent_o;
+  logic [31:0]             geom_view_vertices_sent_o;
   logic [31:0]             geom_landings_o;
   logic [31:0]             geom_jobs_refused_o;
   logic [31:0]             geom_alloc_stall_cycles_o;
   logic [31:0]             geom_rel_unheld_o;
   logic                    geom_seal_early_o;
+  logic [31:0]             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o;
   logic [31:0]             geom_arena_hits_o;
   logic [31:0]             geom_arena_misses_o;
   logic [31:0]             geom_arena_refusals_o;
@@ -1032,19 +1022,19 @@ module tb_zhao_console_core_smoke
   // ---- GEOM.CLIP's cull mode (entry I24, narrowed) and the CLIP/SETUP evidence
   // THE TRIANGLE DOOR IS GONE: GEOM.CLIP is fed by GEOM.REPLAY inside the core.
   localparam int unsigned GEOM_CLIP_ATTRW = 7 * 32;
-  localparam int unsigned GEOM_ATTR_STORE_W = 6 * 32;
-  // ---- I46: the vertex-attribute store, MODELLED here (its writer is unbuilt)
-  logic                    geom_att_look_valid_o;
-  logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o;
-  logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o;
-  logic [GEOM_INDEX_W-1:0] geom_att_look_index_o;
-  logic                    geom_att_rep_valid_i;
-  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i;
+  // ---- GEOM.VATTR's census (entry I46 CLOSED: the store is INSIDE the core now,
+  // so the bench's edge model of it is gone -- see the note where it stood)
+  logic [31:0] geom_va_landings_o, geom_va_rows_written_o, geom_va_colours_written_o;
+  logic [31:0] geom_va_uv_staged_o, geom_va_lq_overflow_o, geom_va_index_oob_o;
+  logic [31:0] geom_va_look_oob_o, geom_va_profile_mixed_o, geom_va_dq_refused_o;
+  logic [31:0] geom_va_dq_stray_o;
+  logic [31:0] geom_va_uv_waits_o;
+  logic        geom_va_poison_o;
   // ---- GEOM.REPLAY's evidence
   logic [31:0] geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o;
   logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
-  logic [31:0] geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o;
-  logic [31:0] geom_rp_dq_refused_o;
+  logic [31:0] geom_rp_att_skew_o, geom_rp_view_bad_o;
+  logic [31:0] geom_rp_poisoned_o;
   // GEOM.ATTRPACK's evidence, out of the core because a counter nobody can
   // read is not evidence. The RATIO is what gets asserted below.
   logic [31:0]             geom_attrpack_triangles_o;
@@ -2426,8 +2416,8 @@ module tb_zhao_console_core_smoke
       vdec_record = {64'd0,          // off 24..31 reserved, MUST be zero
                      16'd0,          // off 22 bone1 (== bone0 -> rigid)
                      16'd0,          // off 20 bone0
-                     16'sd0,         // off 18 v
-                     16'sd0,         // off 16 u
+                     SGF_VV[n],      // off 18 v (the fixture's own UV: GEOM.VATTR's
+                     SGF_VU[n],      // off 16 u  u/v_over_w carry real gradients)
                      8'd64,          // off 15 w0 == 64 -> rigid
                      8'sd0,          // off 14 nz
                      8'sd0,          // off 13 ny
@@ -2533,55 +2523,69 @@ module tb_zhao_console_core_smoke
   // so this bench stands in for the host exactly as it did for view 0 alone.
   // The profile (cfg 18) is left at its reset WORLD_LONG, which is what the
   // reference-derived depths assume.
-  // GEOM.LIGHT's bank, as the host would load it (I48): light 0 from the
-  // fixture (direction SGF_LIGHT_*, gain 1.0 on r/g/b, no emission), and an
-  // all-zero environment, then ONE commit. The layout is zhao_light_stream's
-  // own: cfg_addr = {light[3:0], half, word[2:0]}; half B is the 128-bit
-  // coefficient record {flags, eb, eg, er, cb, cg, cr} at 20 bits a field.
-  task automatic geom_load_light();
-    logic [127:0] hb;
-    int unsigned k;
-    begin
-      hb = {68'd0, SGF_LIGHT_GAIN, SGF_LIGHT_GAIN, SGF_LIGHT_GAIN};
-      for (k = 0; k < 4; k = k + 1) begin
-        geom_light_cfg_we_i   = 1'b1;
-        geom_light_cfg_addr_i = {4'd0, 1'b0, 3'(k)};
-        geom_light_cfg_data_i = (k == 0) ? SGF_LIGHT_X : (k == 1) ? SGF_LIGHT_Y
-                              : (k == 2) ? SGF_LIGHT_Z : 32'd0;
-        @(posedge gpu_clk);
-      end
-      for (k = 0; k < 4; k = k + 1) begin
-        geom_light_cfg_we_i   = 1'b1;
-        geom_light_cfg_addr_i = {4'd0, 1'b1, 3'(k)};
-        geom_light_cfg_data_i = hb[32 * k +: 32];
-        @(posedge gpu_clk);
-      end
-      for (k = 0; k < 6; k = k + 1) begin
-        geom_light_cfg_we_i   = 1'b1;
-        geom_light_cfg_addr_i = {4'hF, 1'b0, 3'(k)};
-        geom_light_cfg_data_i = 32'd0;
-        @(posedge gpu_clk);
-      end
-      geom_light_cfg_we_i     = 1'b0;
-      geom_light_cfg_commit_i = 1'b1;
-      @(posedge gpu_clk);
-      geom_light_cfg_commit_i = 1'b0;
-    end
-  endtask
 
-  // Every lit vertex, checked as it leaves: all three channels must equal the
-  // REFERENCE's response (SGF_EXP_LIT, from zref::creature::lambert_from_
-  // world_normal in the fixture generator) -- gain 1.0 and a zero environment
-  // make each channel exactly the law's answer.
+  // Every lit vertex, checked as it leaves, PER CHANNEL, against the reference
+  // applied to the SetEnvironment record this bench's packet carries:
+  // zref::light_env::bank_of(record) -> zref::creature::lambert_from_world_normal
+  // -> the stream's gain * ndl + ambient (SGF_EXP_LIT_R/G/B, fixture generator).
+  // ---- R31: THE GEOMETRY RATE, MEASURED IN THE COMPOSED MACHINE -----------
+  // First and last clock each stage's counter moved, and how many times. The
+  // steady interval is (last - first) / (moves - 1): it excludes the pipeline
+  // fill, which is latency, not rate. Printed on the `SMOKE: rate` line; the
+  // per-block benches (skin_norm_rtl_directed, geom_replay_directed) carry the
+  // long-run figures, this is the same quantity with every real neighbour live.
+  longint unsigned rt_clk_q;
+  longint unsigned rt_skin_first_q, rt_skin_last_q, rt_land_first_q, rt_land_last_q;
+  longint unsigned rt_tri_first_q, rt_tri_last_q, rt_vd_first_q, rt_rel_q;
+  int unsigned     rt_skin_n_q, rt_land_n_q, rt_tri_n_q;
+  logic [31:0]     rt_skin_prev_q, rt_land_prev_q, rt_tri_prev_q, rt_vd_prev_q, rt_rel_prev_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      rt_clk_q <= 0;
+      rt_skin_first_q <= 0; rt_skin_last_q <= 0; rt_skin_n_q <= 0; rt_skin_prev_q <= 0;
+      rt_land_first_q <= 0; rt_land_last_q <= 0; rt_land_n_q <= 0; rt_land_prev_q <= 0;
+      rt_tri_first_q  <= 0; rt_tri_last_q  <= 0; rt_tri_n_q  <= 0; rt_tri_prev_q  <= 0;
+      rt_vd_first_q   <= 0; rt_vd_prev_q   <= 0; rt_rel_q    <= 0; rt_rel_prev_q  <= 0;
+    end else begin
+      rt_clk_q <= rt_clk_q + 1;
+      if (geom_vd_vertices_o != rt_vd_prev_q) begin
+        if (rt_vd_prev_q == 0) rt_vd_first_q <= rt_clk_q;
+        rt_vd_prev_q <= geom_vd_vertices_o;
+      end
+      if (geom_skin_vertices_transformed_o != rt_skin_prev_q) begin
+        if (rt_skin_n_q == 0) rt_skin_first_q <= rt_clk_q;
+        rt_skin_last_q <= rt_clk_q;
+        rt_skin_n_q    <= rt_skin_n_q + 1;
+        rt_skin_prev_q <= geom_skin_vertices_transformed_o;
+      end
+      if (geom_landings_o != rt_land_prev_q) begin
+        if (rt_land_n_q == 0) rt_land_first_q <= rt_clk_q;
+        rt_land_last_q <= rt_clk_q;
+        rt_land_n_q    <= rt_land_n_q + 1;
+        rt_land_prev_q <= geom_landings_o;
+      end
+      if (geom_rp_triangles_out_o != rt_tri_prev_q) begin
+        if (rt_tri_n_q == 0) rt_tri_first_q <= rt_clk_q;
+        rt_tri_last_q <= rt_clk_q;
+        rt_tri_n_q    <= rt_tri_n_q + 1;
+        rt_tri_prev_q <= geom_rp_triangles_out_o;
+      end
+      if (geom_rp_meshlets_o != rt_rel_prev_q) begin
+        rt_rel_q      <= rt_clk_q;
+        rt_rel_prev_q <= geom_rp_meshlets_o;
+      end
+    end
+  end
+
   int unsigned geom_lit_seen_q, geom_lit_bad_q;
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
       geom_lit_seen_q <= 0;
       geom_lit_bad_q  <= 0;
-    end else if (geom_light_valid_o && geom_light_ready_i) begin
+    end else if (geom_light_valid_o && geom_light_ready_o) begin
       geom_lit_seen_q <= geom_lit_seen_q + 1;
-      if ((geom_light_r_o != SGF_EXP_LIT) || (geom_light_g_o != SGF_EXP_LIT) ||
-          (geom_light_b_o != SGF_EXP_LIT) || geom_light_degenerate_vtx_o)
+      if ((geom_light_r_o != SGF_EXP_LIT_R) || (geom_light_g_o != SGF_EXP_LIT_G) ||
+          (geom_light_b_o != SGF_EXP_LIT_B) || geom_light_degenerate_vtx_o)
         geom_lit_bad_q <= geom_lit_bad_q + 1;
     end
   end
@@ -2685,6 +2689,15 @@ module tb_zhao_console_core_smoke
     for (int unsigned n = 0; n < N_GEOM_VERTS; n = n + 1) begin
       automatic logic [255:0] rec;
       rec = vdec_record(n);
+`ifdef ZHAO_SMOKE_BAD_VERTEX
+      // THE R31 CONTROL (`-BadVertex`). Record 3's first reserved byte (off
+      // 24) is nonzero IN SDRAM, so GEOM.VDECODE refuses exactly that record
+      // and nothing else changes. Before the R31 fix this wedged GEOM.GROUP_SEQ
+      // in StFill for ever and the run died at "GEOM.REPLAY released no
+      // meshlet"; the checks below require the batch to be DROPPED and the
+      // frame to COMPLETE instead.
+      if (n == 3) rec[192 +: 8] = 8'h01;
+`endif
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  0, rec[63:0]);
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  8, rec[127:64]);
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 16, rec[191:128]);
@@ -2800,6 +2813,9 @@ module tb_zhao_console_core_smoke
         geom_job_sent_q     <= 1'b1;
       end else if (reset_released_q && init_done_o && geom_fixture_ready_q
                    && geom_camera_ready_q && render_frame_open_q
+                   // R25: the frame's own SetEnvironment is in the bank (load
+                   // 1 is the power-on default, load 2 is this packet's).
+                   && (geom_light_env_loads_o >= 32'd2)
                    && !geom_job_sent_q) begin
         // INSIDE THE OPEN RENDER FRAME: the meshlet's triangles reach the
         // shell's binner through GEOM.REPLAY, and a render frame does not
@@ -2816,76 +2832,20 @@ module tb_zhao_console_core_smoke
   // triangles GEOM.CLIP sees are the fixture meshlet's own, projected by the
   // shared projector in BOTH views and replayed out of the arena.
   //
-  // THE VERTEX-ATTRIBUTE STORE (core entry I46) IS MODELLED HERE, with the
-  // arena's own contract: it listens to the replay's lookups and answers ONE
-  // clock later. Its WRITER is the unbuilt half of owner ruling R11, so these
-  // values stand in for it exactly as the SDRAM model stands in for memory.
-  // They differ at every vertex, so GEOM.ATTRPACK's u/v planes have real
-  // gradients: u_over_w = index << 20, v_over_w = (index ^ arena) << 20, and
-  // the r/g/b/alpha slots carry the index for the day a Gouraud lane reads them.
+  // THE VERTEX-ATTRIBUTE STORE THAT WAS MODELLED HERE IS GONE (2026-09-19, geom2
+  // packet; core entry I46 CLOSED). It answered GEOM.REPLAY's lookups with
+  // index-derived stand-in values because the store's WRITER did not exist.
+  // `zhao_geom_vattr` is that writer and store, composed INSIDE the core on the
+  // real producers' nets, so the bench no longer plays it: every u/v_over_w,
+  // colour and depth the replay now reads was written by the machine from the
+  // fixture's own records (SGF_VU/SGF_VV above) and landings.
   //
-  // `-BadAttribute` (ZHAO_SMOKE_BAD_ATTR, inverted polarity) answers the FIRST
-  // lookup of the run one clock LATE. GEOM.REPLAY's `att_skew_o` -- two
-  // memories, two timings, independent operands -- must see it, and this bench
-  // asserts it zero, so the control passes only if the run FAILS.
+  // `-BadAttribute` RETIRED WITH IT. It made this bench-side store answer one
+  // lookup a clock late so that GEOM.REPLAY's `att_skew_o` could be seen to
+  // fire. There is no bench-side store to delay now; the detector is still
+  // fired by stimulus in tests/geometry/geom_replay_directed.cpp (case I), and
+  // this bench still asserts it zero in composition below.
   // --------------------------------------------------------------------------
-  logic                         att_pend_q;
-  logic [GEOM_ARENA_W-1:0]      att_arena_q;
-  logic [GEOM_INDEX_W-1:0]      att_index_q;
-  bit                           att_late_done_q;
-  logic                         att_late_q;
-
-  function automatic logic [GEOM_ATTR_STORE_W-1:0] att_word(
-      input logic [GEOM_ARENA_W-1:0] a, input logic [GEOM_INDEX_W-1:0] ix);
-    logic [GEOM_ATTR_STORE_W-1:0] w;
-    begin
-      w = '0;
-      w[31:0]    = 32'(ix) << 20;                           // u_over_w
-      w[63:32]   = (32'(ix) ^ 32'(a)) << 20;                // v_over_w
-      w[95:64]   = 32'(ix);                                  // r
-      w[127:96]  = 32'(ix) + 32'd1;                         // g
-      w[159:128] = 32'(ix) + 32'd2;                         // b
-      w[191:160] = 32'h0000_00FF;                            // alpha
-      return w;
-    end
-  endfunction
-
-  always @(posedge gpu_clk) begin
-    if (!rst_n) begin
-      att_pend_q           <= 1'b0;
-      att_late_q           <= 1'b0;
-      att_late_done_q      <= 1'b0;
-      geom_att_rep_valid_i <= 1'b0;
-      geom_att_rep_data_i  <= '0;
-    end else begin
-      geom_att_rep_valid_i <= 1'b0;
-`ifdef ZHAO_SMOKE_BAD_ATTR
-      // One reply, once, one clock late.
-      if (att_late_q) begin
-        geom_att_rep_valid_i <= 1'b1;
-        geom_att_rep_data_i  <= att_word(att_arena_q, att_index_q);
-        att_late_q           <= 1'b0;
-      end
-      if (geom_att_look_valid_o) begin
-        att_arena_q <= geom_att_look_arena_o;
-        att_index_q <= geom_att_look_index_o;
-        if (!att_late_done_q) begin
-          att_late_q      <= 1'b1;
-          att_late_done_q <= 1'b1;
-        end else begin
-          geom_att_rep_valid_i <= 1'b1;
-          geom_att_rep_data_i  <= att_word(geom_att_look_arena_o, geom_att_look_index_o);
-        end
-      end
-`else
-      if (geom_att_look_valid_o) begin
-        geom_att_rep_valid_i <= 1'b1;
-        geom_att_rep_data_i  <= att_word(geom_att_look_arena_o, geom_att_look_index_o);
-      end
-`endif
-      att_pend_q <= geom_att_look_valid_o;
-    end
-  end
 
   // --------------------------------------------------------------------------
   // THE PLAYED MEM.GUARD READ WINDOW, for TERRAIN.PAGESTREAM.
@@ -3091,15 +3051,6 @@ module tb_zhao_console_core_smoke
     // low ready parks the executor and stops the command path outright.
     cmd_draw_ready_i = 1'b1;
 
-    // GEOM.LIGHT's lit RGB (I46). HIGH, for the reason at its declaration.
-    // The bank starts empty and is loaded after reset (geom_load_light).
-    geom_light_ready_i      = 1'b1;
-    geom_light_cfg_we_i     = 1'b0;
-    geom_light_cfg_commit_i = 1'b0;
-    geom_light_cfg_addr_i   = '0;
-    geom_light_cfg_data_i   = '0;
-    geom_light_nlights_i    = 4'd1;
-
     // DEBUG.TRACE (core entry I45). ARM STAGE 0 -- `zref::trace::kCommandDecoder`
     // -- and nothing else, because stage 0 is the only one this console has a
     // producer for. Arming is one write; the mask is held by the block.
@@ -3150,11 +3101,6 @@ module tb_zhao_console_core_smoke
     geom_pose_quat_y_i = '0;
     geom_pose_quat_z_i = '0;
     geom_pose_inv_rest_i = '{default: '0};
-    geom_org_we_i = '0;
-    geom_org_arena_i = '0;
-    geom_org_x_i = '0;
-    geom_org_y_i = '0;
-    geom_org_z_i = '0;
     proj_cfg_we_i = '0;
     proj_cfg_view_i = '0;
     proj_cfg_addr_i = '0;
@@ -3454,7 +3400,10 @@ module tb_zhao_console_core_smoke
     terr_cfg_arena_bytes_i = 32'(HPS_WORDS * 8);
     terr_cfg_load_budget_i = 16'd32;   // T7's per-frame page budget
 
-    // ---- ONE COMMAND PACKET: BeginFrame, PublishResource, EndFrame ---------
+    // ---- ONE COMMAND PACKET: BeginFrame, PublishResource, SetEnvironment,
+    // EndFrame. SetEnvironment (owner ruling R25) is the record whose bank the
+    // geometry below is lit with; its values come from the fixture generator,
+    // which derives the expected lit colour from the same record.
     // Built from the GENERATED record packers and sealed with the generated
     // CRC-32C step -- the bench writes no layout by hand. It travels the whole
     // command path: FRAME_RING slot 0 -> CMD.SCHEDULER claim -> CMD.DMA fetch
@@ -3492,11 +3441,12 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
+      zhao_abi_pkg::zhao_rec_set_environment_t  se;
       logic [255:0] bfv, efv;
-      logic [383:0] prv;
+      logic [383:0] prv, sev;
       logic [31:0]  c;
       int unsigned  o;
-      bf = '0; pr = '0; ef = '0;
+      bf = '0; pr = '0; ef = '0; se = '0;
       bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
       bf.frame_id = 32'd1;
       pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
@@ -3511,30 +3461,38 @@ module tb_zhao_console_core_smoke
       pr.epoch          = UPL_EPOCH_C;
       pr.dst_slot       = UPL_SLOT_C;
       pr.kind           = UPL_KIND_C;
+      se.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_ENVIRONMENT;   se.h_record_bytes = 16'd48;
+      se.h_source_id = 32'd78;
+      se.sun_yaw     = SGF_ENV_YAW;
+      se.sun_pitch   = SGF_ENV_PITCH;
+      se.sun_colour  = SGF_ENV_SUN;
+      se.ambient     = SGF_ENV_AMB;
       ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
       prv = zhao_abi_pkg::zhao_pack_publish_resource(pr);
+      sev = zhao_abi_pkg::zhao_pack_set_environment(se);
       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]      = bfv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k] = prv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 80 + k] = efv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 80 + k] = sev[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 128 + k] = efv[8*k +: 8];
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), three records, 112 bytes of them
+      // deadline 0 (the mode's period), four records, 160 bytes of them
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd3;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd112;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd4;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd160;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 112; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+115], pkt_mem[o+114], pkt_mem[o+113], pkt_mem[o+112]} = ~c;
-      pkt_len_q   = o + 112 + 4;
+      for (int unsigned k = 0; k < 160; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+163], pkt_mem[o+162], pkt_mem[o+161], pkt_mem[o+160]} = ~c;
+      pkt_len_q   = o + 160 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
@@ -3551,7 +3509,6 @@ module tb_zhao_console_core_smoke
     // clocks on the real `proj_cfg_*` port; `geom_camera_ready_q` gates the
     // meshlet draw so no descriptor can be culled against an unwritten bank.
     geom_write_camera();
-    geom_load_light();
     geom_camera_ready_q = 1'b1;
 
     // ---- LOAD PART.TABLE, BEFORE ANY PARTICLE IS OFFERED ------------------
@@ -3911,24 +3868,45 @@ module tb_zhao_console_core_smoke
              geom_vd_reserved_nz_count_o, geom_vd_w0_illegal_count_o,
              geom_vd_format_bad_count_o);
     $display("SMOKE: geometry   skinned=%0d vertices_sent=%0d a_grants=%0d landings=%0d groups_opened=%0d groups_sealed=%0d",
-             geom_skin_vertices_transformed_o, geom_vertices_sent_o,
+             geom_skin_vertices_transformed_o, geom_view_vertices_sent_o,
              proj_a_grants_o, geom_landings_o,
              geom_groups_opened_o, geom_groups_sealed_o);    $display("SMOKE: pose pal   served=%0d bones_written=%0d bone_unset=%0d bone_oob=%0d palettes_decoded=%0d",
              geom_pal_vertices_served_o, geom_pal_bones_written_o,
              geom_pal_bone_unset_o, geom_pal_bone_oob_o,
              geom_pose_palettes_decoded_o);
+    $display("SMOKE: rate       skin %0d moves, steady %0d.%02d clk/vertex | landings %0d, steady %0d.%02d clk/landing | replay %0d view-tris, steady %0d.%02d clk/view-tri | meshlet loop %0d clk (first decode -> release)",
+             rt_skin_n_q,
+             (rt_skin_n_q > 1) ? (rt_skin_last_q - rt_skin_first_q) / (rt_skin_n_q - 1) : 0,
+             (rt_skin_n_q > 1) ? (((rt_skin_last_q - rt_skin_first_q) * 100) / (rt_skin_n_q - 1)) % 100 : 0,
+             rt_land_n_q,
+             (rt_land_n_q > 1) ? (rt_land_last_q - rt_land_first_q) / (rt_land_n_q - 1) : 0,
+             (rt_land_n_q > 1) ? (((rt_land_last_q - rt_land_first_q) * 100) / (rt_land_n_q - 1)) % 100 : 0,
+             rt_tri_n_q,
+             (rt_tri_n_q > 1) ? (rt_tri_last_q - rt_tri_first_q) / (rt_tri_n_q - 1) : 0,
+             (rt_tri_n_q > 1) ? (((rt_tri_last_q - rt_tri_first_q) * 100) / (rt_tri_n_q - 1)) % 100 : 0,
+             rt_rel_q - rt_vd_first_q);
     $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
              geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
              geom_sn_fork_stall_o);
-    $display("SMOKE: light      lit=%0d seen=%0d bad=%0d last_rgb=%0d/%0d/%0d (reference %0d) adapter_refused=%0d cfg_refused=%0d",
+    $display("SMOKE: light      lit=%0d seen=%0d bad=%0d last_rgb=%0d/%0d/%0d (reference %0d/%0d/%0d) adapter_refused=%0d cfg_refused=%0d",
              geom_light_vertices_lit_o, geom_lit_seen_q, geom_lit_bad_q,
-             geom_light_r_o, geom_light_g_o, geom_light_b_o, SGF_EXP_LIT,
+             geom_light_r_o, geom_light_g_o, geom_light_b_o,
+             SGF_EXP_LIT_R, SGF_EXP_LIT_G, SGF_EXP_LIT_B,
              geom_light_adapter_refused_o, geom_light_cfg_refused_o);
-    $display("SMOKE: replay     meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d refused=%0d missed=%0d att_skew=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
+    $display("SMOKE: light env  cmd_envs=%0d records=%0d loads=%0d superseded=%0d gen=%0d",
+             cmd_exec_envs_o, geom_light_env_records_o, geom_light_env_loads_o,
+             geom_light_env_superseded_o, geom_light_cfg_gen_o);
+    $display("SMOKE: replay     meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d refused=%0d missed=%0d att_skew=%0d view_bad=%0d",
              geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
              geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o,
-             geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o,
-             geom_rp_dq_refused_o);
+             geom_rp_att_skew_o, geom_rp_view_bad_o);
+    $display("SMOKE: vattr      landings=%0d rows=%0d colours=%0d uv=%0d lq_overflow=%0d index_oob=%0d look_oob=%0d profile_mixed=%0d dq_refused=%0d dq_stray=%0d",
+             geom_va_landings_o, geom_va_rows_written_o, geom_va_colours_written_o,
+             geom_va_uv_staged_o, geom_va_lq_overflow_o, geom_va_index_oob_o,
+             geom_va_look_oob_o, geom_va_profile_mixed_o, geom_va_dq_refused_o,
+             geom_va_dq_stray_o);
+    $display("SMOKE: r31        holes=%0d groups_poisoned=%0d holes_early=%0d replay_poisoned=%0d",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o, geom_rp_poisoned_o);
     $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference: %0d / %0d / %0d / %0d)",
              geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
              geom_setup_triangles_submitted_o, SGF_EXP_REPLAYED, SGF_EXP_CLIPPED,
@@ -4077,7 +4055,7 @@ module tb_zhao_console_core_smoke
 
     if (geom_skin_vertices_transformed_o == 0)
       $fatal(1, "SMOKE: GEOM.SKIN transformed nothing");
-    if (geom_vertices_sent_o == 0)
+    if (geom_view_vertices_sent_o == 0)
       $fatal(1, "SMOKE: GEOM.GROUP_SEQ sent no vertex to client A -- SKIN -> GROUP_SEQ is dead");
     if (proj_a_grants_o == 0)
       $fatal(1, "SMOKE: the shared projector granted client A zero times -- GROUP_SEQ -> PROJ_SUBSYSTEM is dead");
@@ -4537,6 +4515,38 @@ module tb_zhao_console_core_smoke
     // decoder directly, so this equality holding means the descriptor read,
     // the cull, the index run, the vertex run and the whole memory path
     // under them delivered what the fixture put in.
+`ifdef ZHAO_SMOKE_BAD_VERTEX
+    // ---- R31, the DIRECT-polarity control: one refused record ---------------
+    // Reaching this line at all is the first half of the evidence: the wait
+    // above for GEOM.REPLAY's release is where the pre-fix machine died. The
+    // second half is that every counter on the refusal's path moved by exactly
+    // what one hole in a two-view, SGF_N_TRIS-triangle batch implies, and that
+    // the render frame still closed.
+    if ((geom_vd_reserved_nz_count_o != 1) || (geom_vd_vertices_o != N_GEOM_VERTS - 1))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.VDECODE refused %0d / decoded %0d -- want exactly 1 / %0d",
+             geom_vd_reserved_nz_count_o, geom_vd_vertices_o, N_GEOM_VERTS - 1);
+    if ((geom_holes_o != 1) || (geom_groups_poisoned_o != 2) || (geom_holes_early_o != 0))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.GROUP_SEQ holes=%0d poisoned=%0d orphan=%0d -- want 1 / 2 / 0",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o);
+    if ((geom_rp_meshlets_o != 1) || (geom_rp_poisoned_o != SGF_N_TRIS) ||
+        (geom_rp_triangles_out_o != 0) || (geom_rp_refused_o != 0) || (geom_rp_missed_o != 0))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.REPLAY meshlets=%0d poisoned=%0d out=%0d refused=%0d missed=%0d -- want 1 / %0d / 0 / 0 / 0",
+             geom_rp_meshlets_o, geom_rp_poisoned_o, geom_rp_triangles_out_o,
+             geom_rp_refused_o, geom_rp_missed_o, SGF_N_TRIS);
+    if ((geom_landings_o != 2 * (N_GEOM_VERTS - 1)) || (geom_groups_sealed_o != 2))
+      $fatal(1, "SMOKE BAD_VERTEX: landings=%0d sealed=%0d -- want %0d / 2 (a hole never lands; the poisoned arenas still seal)",
+             geom_landings_o, geom_groups_sealed_o, 2 * (N_GEOM_VERTS - 1));
+    if ((v2_frames_admitted_o != 1) || (render_pixels_o != 0) || (render_issued_words_o != render_retired_words_o))
+      $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / 0 / equal (the batch drops, the frame completes)",
+             v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o);
+    $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed",
+             geom_rp_poisoned_o);
+    $finish;
+`else
+    // Everything from here to the PASS line is the CLEAN fixture's verdict. It is
+    // compiled out under ZHAO_SMOKE_BAD_VERTEX rather than jumped over: Verilator
+    // defers `\$finish` to the end of the time step, so the straight-line checks
+    // after it still run (the ZHAO_MUT_SLOT_OVERFLOW note above says the same).
     if (geom_vd_vertices_o != N_GEOM_VERTS)
       $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of the %0d records the descriptor declares -- the vertex stream does not cross from GEOM.ASSETFETCH into the decoder",
              geom_vd_vertices_o, N_GEOM_VERTS);
@@ -4596,10 +4606,11 @@ module tb_zhao_console_core_smoke
     //     n[1] = n[2] = 0                       (rows 1 and 2 select ny, nz)
     //     |n|  = isqrt(n[0]^2) = n[0]           (a perfect square, floor-exact)
     //
-    // That last line is the one worth having: the magnitude EQUALLING the x
-    // component is what an exact floor root of a perfect square gives and what
-    // an approximation would not, so this single equality is the evidence that
-    // the `zhao_field_isqrt` instance composed beside this block really ran.
+    // Since owner ruling R31 that root is GEOM.LIGHT's own II8 root, not a
+    // service beside this block, so it is no longer tapped here: the lit value
+    // below is compared against `zref::creature::lambert_from_world_normal`,
+    // whose quotient divides by exactly this |n| -- an approximate or missing
+    // root would move every channel off the reference.
     if (geom_sn_degenerate_o != 0)
       $fatal(1, "SMOKE: GEOM.SKIN.NORM called %0d normals degenerate -- the fixture's packed normal is (127,0,0) and blends to a real direction through either bone",
              geom_sn_degenerate_o);
@@ -4609,9 +4620,7 @@ module tb_zhao_console_core_smoke
     if ((geom_sn_n_y_o != 0) || (geom_sn_n_z_o != 0))
       $fatal(1, "SMOKE: GEOM.SKIN.NORM's world normal is (%0d, %0d, %0d) -- rows 1 and 2 select ny and nz, both zero in the fixture, so a nonzero lane means the row indexing is wrong",
              geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o);
-    if (geom_sn_n_mag_o != 64'(SN_EXPECT_NX))
-      $fatal(1, "SMOKE: GEOM.SKIN.NORM's magnitude is %0d, expected %0d -- isqrt of a perfect square must return it exactly, so this is the root service failing to answer or answering approximately",
-             geom_sn_n_mag_o, SN_EXPECT_NX);
+
 
     // `geom_sn_reduced_o` READS ZERO AND THE REASON IS STRUCTURAL, not untested.
     // The range reduction fires when max|n| >= 2^30, and the value computed
@@ -4629,8 +4638,17 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: GEOM.LIGHT lit %0d (%0d seen leaving) of %0d normals -- the SKIN.NORM -> adapter -> light_stream seam does not carry",
              geom_light_vertices_lit_o, geom_lit_seen_q, geom_vd_vertices_o);
     if (geom_lit_bad_q != 0)
-      $fatal(1, "SMOKE: GEOM.LIGHT emitted %0d colour(s) that are not the reference's %0d on every channel (last r/g/b = %0d/%0d/%0d)",
-             geom_lit_bad_q, SGF_EXP_LIT, geom_light_r_o, geom_light_g_o, geom_light_b_o);
+      $fatal(1, "SMOKE: GEOM.LIGHT emitted %0d colour(s) that are not the reference's %0d/%0d/%0d (last r/g/b = %0d/%0d/%0d)",
+             geom_lit_bad_q, SGF_EXP_LIT_R, SGF_EXP_LIT_G, SGF_EXP_LIT_B,
+             geom_light_r_o, geom_light_g_o, geom_light_b_o);
+    // R25: the packet's ONE SetEnvironment was committed, handed over once,
+    // taken once, and loaded after the power-on default -- two loads, nothing
+    // superseded.
+    if ((cmd_exec_envs_o != 32'd1) || (geom_light_env_records_o != 32'd1) ||
+        (geom_light_env_loads_o != 32'd2) || (geom_light_env_superseded_o != 32'd0))
+      $fatal(1, "SMOKE: SetEnvironment did not reach the bank: cmd_envs=%0d records=%0d loads=%0d superseded=%0d (want 1/1/2/0)",
+             cmd_exec_envs_o, geom_light_env_records_o, geom_light_env_loads_o,
+             geom_light_env_superseded_o);
     if ((geom_light_adapter_refused_o | geom_light_cfg_refused_o | geom_light_epoch_refusals_o |
          geom_light_seam_mismatch_o | geom_light_tag_mismatch_o | geom_light_root_queue_overflow_o |
          geom_light_degenerate_o | geom_light_nlights_clamped_o | geom_light_rgb_sat_o) != 0)
@@ -4654,13 +4672,38 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: GEOM.REPLAY meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d -- the reference wants 1 / 2 / %0d / %0d",
              geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
              geom_rp_triangles_out_o, SGF_N_TRIS, SGF_EXP_REPLAYED);
-    if ((geom_rp_refused_o | geom_rp_missed_o | geom_rp_profile_mixed_o |
-         geom_rp_view_bad_o | geom_rp_dq_refused_o) != 0)
-      $fatal(1, "SMOKE: GEOM.REPLAY dropped or faulted: refused=%0d missed=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
-             geom_rp_refused_o, geom_rp_missed_o, geom_rp_profile_mixed_o,
-             geom_rp_view_bad_o, geom_rp_dq_refused_o);
+    if ((geom_rp_refused_o | geom_rp_missed_o | geom_rp_view_bad_o) != 0)
+      $fatal(1, "SMOKE: GEOM.REPLAY dropped or faulted: refused=%0d missed=%0d view_bad=%0d",
+             geom_rp_refused_o, geom_rp_missed_o, geom_rp_view_bad_o);
+    // ---- GEOM.VATTR, the store every replayed corner read (entry I46) --------
+    // Every landing wrote its row (both views of every vertex), every decoded
+    // vertex was staged and lit into both views' arenas, and nothing was
+    // dropped, out of the store, mixed or refused. A row NOT written would be
+    // read by the replay as the previous occupant's attributes -- no pixel count
+    // could see it -- which is why the census is exact rather than nonzero.
+    if ((geom_va_landings_o != geom_landings_o) || (geom_va_rows_written_o != geom_landings_o) ||
+        (geom_va_uv_staged_o != N_GEOM_VERTS) || (geom_va_colours_written_o != 2 * N_GEOM_VERTS))
+      $fatal(1, "SMOKE: GEOM.VATTR landings=%0d rows=%0d uv=%0d colours=%0d -- want %0d / %0d / %0d / %0d",
+             geom_va_landings_o, geom_va_rows_written_o, geom_va_uv_staged_o,
+             geom_va_colours_written_o, geom_landings_o, geom_landings_o, N_GEOM_VERTS,
+             2 * N_GEOM_VERTS);
+    if ((geom_va_lq_overflow_o | geom_va_index_oob_o | geom_va_look_oob_o |
+         geom_va_profile_mixed_o | geom_va_dq_refused_o | geom_va_dq_stray_o) != 0)
+      $fatal(1, "SMOKE: GEOM.VATTR faulted: lq_overflow=%0d index_oob=%0d look_oob=%0d profile_mixed=%0d dq_refused=%0d dq_stray=%0d",
+             geom_va_lq_overflow_o, geom_va_index_oob_o, geom_va_look_oob_o,
+             geom_va_profile_mixed_o, geom_va_dq_refused_o, geom_va_dq_stray_o);
+    // Review of d52ae6c0: in composition decode precedes projection, so no
+    // depth result should have had to wait for its u/v, and a clean batch
+    // loses no row. (Both are fired in geom_vattr_directed cases I, C, G.)
+    $display("SMOKE: vattr join uv_waits=%0d poison=%0d", geom_va_uv_waits_o, geom_va_poison_o);
+    if (geom_va_poison_o)
+      $fatal(1, "SMOKE: GEOM.VATTR poisoned a clean batch");
     // The attribute store and the arena answered on the SAME clock every time.
-    // `-BadAttribute` makes one reply late; this is the check it trips.
+    // R31: a clean fixture has no hole, poisons nothing and orphans nothing.
+    // `-BadVertex` is the positive control that moves all four.
+    if ((geom_holes_o | geom_groups_poisoned_o | geom_holes_early_o | geom_rp_poisoned_o) != 0)
+      $fatal(1, "SMOKE: R31 counters moved on a clean fixture: holes=%0d poisoned=%0d orphan=%0d replay_poisoned=%0d",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o, geom_rp_poisoned_o);
     if (geom_rp_att_skew_o != 0)
       $fatal(1, "SMOKE: GEOM.REPLAY saw the attribute store answer out of step with the arena %0d time(s) -- slot 1..6 would belong to a different lookup",
              geom_rp_att_skew_o);
@@ -4903,8 +4946,8 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd3 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 3, 1, 1)",
+    if (cmd_commands_o != 32'd4 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 4, 1, 1)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
     if (upl_refused_o != '0)
       $fatal(1, "SMOKE: MEM.UPLOAD's refusal census moved (%032x) on a legal upload", upl_refused_o);
@@ -4966,6 +5009,7 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: CMD.DECODER walked 0 records -- the bench's command packet no longer arrives, so DEBUG.TRACE's equality above is two zeros agreeing");
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
+`endif  // ZHAO_SMOKE_BAD_VERTEX -- the clean verdict above is compiled OUT under the R31 control
   end
 
   // A bench that hangs must say so rather than be killed by a wrapper.

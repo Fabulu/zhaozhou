@@ -257,7 +257,10 @@ struct MaterialRecord {
   MaterialSample sample1;
   MaterialSample sample2;
   u32 palette_base;   // CLUT modes only; 0 when no sample is a CLUT mode
-  u32 raster_state;   // carried unchanged to the triangle descriptor
+  u32 raster_state;   // R28: bits 2-31 carried unchanged to the triangle
+                      // descriptor's raster_state[31:2] (no v1 consumer: 0);
+                      // bits 0-1 reserved 0 -- the cull mode is the DRAW's
+                      // (DrawForm flags[3:2]). Model: zref::raster_state.
   u32 rsv0;           // reserved, must be 0
   u32 rsv1;           // reserved, must be 0 (closes the record at 32 B)
 }
@@ -446,8 +449,15 @@ command SubmitTerrainSet 0x0230 reserved {
 // lowers here (spec/form/language-semantics.md 5). `form` names a cartridge
 // page (marker quad set); `transform` names the transform resource for the
 // entity. Payload flags bits [w3]: b0 = billboard (face the view camera),
-// b1 = screen-space size (marker law) vs world-space size; bits 2-15
-// reserved 0. semantic_weight feeds the Measure policy (degrade order).
+// b1 = screen-space size (marker law) vs world-space size; b2-3 = CULL MODE
+// (owner ruling R28, provisional: 0 NONE double-sided, 1 NEG, 2 POS,
+// 3 reserved and REFUSED) -- it becomes the triangle descriptor's
+// raster_state[1:0], FIRST and from the draw, the rest of that word being
+// the material's (MaterialRecord.raster_state[31:2]); layout in
+// design/contracts/GEOM.PARAMBUF.md, model zref::raster_state. A draw that
+// never set b2-3 is NONE, the behaviour every existing capture was recorded
+// under. Bits 4-15 reserved 0. semantic_weight feeds the Measure policy
+// (degrade order).
 command DrawForm 0x0300 implemented {
   handle32[form] form;
   handle32[material_set] material_set;
@@ -510,8 +520,20 @@ command DrawSky 0x0310 reserved {
 
 // [v3, sky_and_beams v1.2 §4a] Sky/environment extension — the FIRST
 // allocation from the sky extension range (0x0311..0x031F), made under that
-// file's version-bump law. Reserved: layout FROZEN, execution lands with the
-// weather/lighting wave. The world's ONE light/environment state record —
+// file's version-bump law. Layout FROZEN since v3.
+// IMPLEMENTED since owner ruling R25 (2026-09-19): "Promote SetEnvironment
+// 0x0311 from reserved to IMPLEMENTED. The bank's Q16.16 / u20-gain values are
+// THE LAW; section 4a's u8 formula becomes a derived view with a zref bridge.
+// CMD.EXEC lowers SetEnvironment into the bank." The bridge is
+// reference/include/zref/zref_light_env.hpp (bank_of); the lowering is
+// zhao_cmd_exec's environment arm -> zhao_light_env -> zhao_light_stream's
+// descriptor bank, loaded between vertices and committed as one generation.
+// sun_yaw/sun_pitch/sun_colour/ambient reach the bank; tint and fog travel
+// with the record and are NOT bank words (see the bridge header).
+// VERSION: unchanged. Promotion moves no opcode, field, size or offset --
+// the frame wire is byte-identical -- so by this file's own rule (the
+// QFMT 1 -> 2 precedent above) it is not a command-surface change.
+// The world's ONE light/environment state record —
 // the donor envi.d per-level lighting struct (sun direction/colour, ambient,
 // fog; S6 §1) ported to lawful widths. Per-frame GLOBAL state: no viewport
 // mask (one world, one sun; Duo views share it; SetView stays the per-view
@@ -519,7 +541,7 @@ command DrawSky 0x0310 reserved {
 // defaults) live in sky_and_beams 4a; the fog formula in qformats 8.
 // unit8 = qformats 2. pad[12] bytes 0-3 are the documented same-bytes site
 // for a future fog_density (exponential fog — deferred, qformats 8).
-command SetEnvironment 0x0311 reserved {
+command SetEnvironment 0x0311 implemented {
   angle16 sun_yaw;    // sun azimuth, turns (yaw 0 faces +Z); direction law: sky_and_beams 4a
   angle16 sun_pitch;  // sun elevation, turns (0x4000 = zenith)
   rgb565 sun_colour;  // sun colour (lanes carry the strength)

@@ -2142,9 +2142,14 @@ targets:
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv
       - fpga/rtl/geometry/zhao_geom_replay.sv
+      - fpga/rtl/geometry/zhao_geom_vattr.sv
       - fpga/rtl/geometry/zhao_light_div32_ii2.sv
       - fpga/rtl/geometry/zhao_light_isqrt64_ii8.sv
       - fpga/rtl/geometry/zhao_light_skin_adapter.sv
+      # Added 2026-09-19 (geom2 packet): GEOM.LIGHT.ENV, SetEnvironment -> the
+      # light bank (owner ruling R25, entry I48). Its sine is zhao_field_sin,
+      # already in this list.
+      - fpga/rtl/geometry/zhao_light_env.sv
       - fpga/rtl/geometry/zhao_light_stream.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/memory/zhao_mem_share2.sv
@@ -2665,11 +2670,19 @@ targets:
       # reciprocal is zhao_raster_rcp24_v4, already in this list.
       - fpga/rtl/geometry/zhao_geom_depthquant.sv
       - fpga/rtl/geometry/zhao_geom_replay.sv
+      # Added 2026-09-19 (geom2 packet): GEOM.VATTR, the vertex-attribute store
+      # and its writer (entry I46; owner rulings R11, R31). GEOM.DEPTHQUANT's
+      # stream and its zhao_raster_rcp24_v4 moved inside it from GEOM.REPLAY.
+      - fpga/rtl/geometry/zhao_geom_vattr.sv
       # Added 2026-09-19 (geom packet): GEOM.LIGHT, by owner ruling R2 --
       # zhao_light_stream behind the creature seam adapter, and its two leaves.
       - fpga/rtl/geometry/zhao_light_div32_ii2.sv
       - fpga/rtl/geometry/zhao_light_isqrt64_ii8.sv
       - fpga/rtl/geometry/zhao_light_skin_adapter.sv
+      # Added 2026-09-19 (geom2 packet): GEOM.LIGHT.ENV, SetEnvironment -> the
+      # light bank (owner ruling R25, entry I48). Its sine is zhao_field_sin,
+      # already in this list.
+      - fpga/rtl/geometry/zhao_light_env.sv
       - fpga/rtl/geometry/zhao_light_stream.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/geometry/zhao_geom_assemble.sv
