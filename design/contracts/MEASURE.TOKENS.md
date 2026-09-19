@@ -125,14 +125,22 @@ sets; the guard ENFORCES whatever five numbers it is handed.
 *Rejected:* hardcoding 45/45/10 and taking one total — it would make a ratified
 ABI field dead, and it would put a percentage-to-token division inside the
 guard's combinational grant path.
-*Observed and NOT ratified here:* the Nanquan compiler currently writes
-**percentages** into these u32 fields (`record.payload.geometry_tokens[0u] =
-80u`, `compiler/src/backends/cpp/emitter.ts`), while this block reads them as
-absolute token counts. The block is unit-agnostic — the guard is correct under
-either reading, since it only ever compares a cost against a budget in the same
-unit — but **the two producers do not agree with each other**, and that is
-written down here rather than papered over. Whoever ratifies the unit should
-amend this section; nothing in this block needs to change either way.
+*RATIFIED since (owner rulings R18 and R33, 2026-09-19):* the unit is COUNTS,
+end to end. The Nanquan compiler used to write the source's percentages into
+these u32 fields; R33 removed percentages from the budget surface entirely, so
+authors write `budget geometry G fragment F` and the compiler emits them as
+authored, and nothing converts. No per-frame capacity is ratified, and none is
+invented: if one is, it becomes a compiler-side lint, never a hardware input.
+R18 fixes ONE authority per level: SetPresentationContract's counts are the
+CEILING (`budget_*_i`), and SetView's per-view counts are that frame's REQUEST
+(`vreq_*_i`), which this block clamps to the ceiling -- min(request, ceiling)
+per class, the clamp counted in `vreq_clamped_o` -- and which becomes the view's
+allowance and refilled pool. A request is a load, so T9 covers it (no grant
+and no return that cycle), and it touches only its own view's two pools (T2;
+proved as P1/P2 with the request free, and P7 `a_allowance_within_ceiling`).
+CMD.EXEC is the producer (phase EX_TOK, ceiling first). The request side
+(`req_*`, `ret_*`) is still a core BOUNDARY: GEOM.BINNER's token client is one
+bit, tied off in the shell.
 
 **T4. A return names the pool its grant drew from.** `tok_shared_o` is presented
 with the grant; `ret_shared_i` echoes it back.

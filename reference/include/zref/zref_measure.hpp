@@ -57,6 +57,17 @@ struct TokenBudgets {
   uint32_t shared = 0;
 };
 
+/**
+ * SetView's per-view REQUEST (owner rulings R18/R33): token COUNTS, clamped by
+ * the guard to the contract's ceiling. `valid` is `vreq_valid_i`.
+ */
+struct ViewTokenRequest {
+  bool valid = false;
+  int view = 0;
+  uint32_t geom = 0;
+  uint32_t frag = 0;
+};
+
 /** One dispatch asking to spend. */
 struct TokenRequest {
   bool valid = false;
@@ -111,6 +122,7 @@ class TokenGuard {
    */
   void load(const TokenBudgets& b) {
     bud_ = b;
+    ceil_ = b;
     for (int v = 0; v < 2; ++v) {
       geom_[v] = b.geom[v];
       frag_[v] = b.frag[v];
@@ -130,18 +142,20 @@ class TokenGuard {
    * with a reason, never dropped.
    */
   TokenAnswer step(const TokenRequest& rq, const TokenReturn& rt, bool budget_valid,
-                   const TokenBudgets& budgets) {
+                   const TokenBudgets& budgets, const ViewTokenRequest& vr = {}) {
     TokenAnswer a;
+    // R18: a SetView request is a LOAD too, and law T9 covers it.
+    const bool load_now = budget_valid || vr.valid;
 
     const uint32_t avail_priv = priv(rq.view, rq.cls);
     const bool fits_priv = rq.cost <= avail_priv;
     const bool fits_shared = rq.cost <= shared_;
     const bool may_share = rq.essential && !fits_priv && fits_shared;
 
-    a.grant = rq.valid && !budget_valid && (fits_priv || may_share);
+    a.grant = rq.valid && !load_now && (fits_priv || may_share);
     a.shared = a.grant && !fits_priv;
     a.deny = rq.valid && !a.grant;
-    a.reason = budget_valid ? kDenyReload : (rq.essential ? kDenyExhausted : kDenyLowPriority);
+    a.reason = load_now ? kDenyReload : (rq.essential ? kDenyExhausted : kDenyLowPriority);
 
     // ---- counters (both are registered in the RTL; both move here) --------
     // LAW T7: `lod_representation_counts` is GRANTS per §9 ladder rung.
@@ -151,8 +165,19 @@ class TokenGuard {
     if (a.deny && rq.cls == 0) triangles_culled_ = cnt_add(triangles_culled_, rq.cost);
 
     // ---- pools ------------------------------------------------------------
-    if (budget_valid) {
-      load(budgets);
+    if (load_now) {
+      if (budget_valid) load(budgets);
+      if (vr.valid) {
+        // min(request, ceiling), per class; the ceiling is the one landing this
+        // cycle when the contract lands with it (it was just loaded above).
+        const int v = vr.view & 1;
+        const uint32_t g = vr.geom > ceil_.geom[v] ? ceil_.geom[v] : vr.geom;
+        const uint32_t f = vr.frag > ceil_.frag[v] ? ceil_.frag[v] : vr.frag;
+        const uint32_t cut = (vr.geom > ceil_.geom[v] ? 1u : 0u) + (vr.frag > ceil_.frag[v] ? 1u : 0u);
+        vreq_clamped_ = cnt_add(vreq_clamped_, cut);
+        bud_.geom[v] = geom_[v] = g;
+        bud_.frag[v] = frag_[v] = f;
+      }
       return a;
     }
 
@@ -186,6 +211,7 @@ class TokenGuard {
   uint32_t avail_shared() const { return shared_; }
   uint32_t rep_count(int lane) const { return rep_count_[lane & 7]; }
   uint32_t triangles_culled() const { return triangles_culled_; }
+  uint32_t vreq_clamped() const { return vreq_clamped_; }
 
  private:
   uint32_t priv(int view, int cls) const { return cls ? frag_[view & 1] : geom_[view & 1]; }
@@ -196,7 +222,9 @@ class TokenGuard {
     return w > cap ? cap : static_cast<uint32_t>(w);
   }
 
-  TokenBudgets bud_;
+  TokenBudgets bud_;   //!< the frame's allowance (what a return refills to)
+  TokenBudgets ceil_;  //!< the contract's ceiling a request clamps to (R18)
+  uint32_t vreq_clamped_ = 0;
   uint32_t geom_[2] = {0, 0};
   uint32_t frag_[2] = {0, 0};
   uint32_t shared_ = 0;

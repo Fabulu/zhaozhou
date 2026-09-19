@@ -85,7 +85,7 @@ struct Cosim {
   }
 
   Obs step(const Stim& s, const char* where) {
-    const zm::TokenAnswer a = ref.step(s.req, s.ret, s.budget_valid, s.budgets);
+    const zm::TokenAnswer a = ref.step(s.req, s.ret, s.budget_valid, s.budgets, s.vreq);
     const Obs o = cycle(dut, s);
 
     check(o.grant == a.grant, where, a.grant ? 1 : 0, o.grant ? 1 : 0);
@@ -112,6 +112,7 @@ struct Cosim {
 
     check(dut.triangles_culled_o == ref.triangles_culled(), where, ref.triangles_culled(),
           dut.triangles_culled_o);
+    check(dut.vreq_clamped_o == ref.vreq_clamped(), where, ref.vreq_clamped(), dut.vreq_clamped_o);
     const uint32_t rc[8] = {dut.tok_rep_count0_o, dut.tok_rep_count1_o, dut.tok_rep_count2_o,
                             dut.tok_rep_count3_o, dut.tok_rep_count4_o, dut.tok_rep_count5_o,
                             dut.tok_rep_count6_o, dut.tok_rep_count7_o};
@@ -488,6 +489,90 @@ void test_reload_collision(Cosim& c) {
   check(o.den_reason == zm::kDenyReload, "reload: reason is RELOAD", zm::kDenyReload, o.den_reason);
 }
 
+// ------------------------------------------------------------------- 9b --
+// R18/R33: SetView's REQUEST is clamped to SetPresentationContract's CEILING.
+// Counts, per class, per view; a request is a load (law T9); a request above
+// the ceiling is cut to it and COUNTED, and a request below it lowers the
+// view's allowance -- which a later return cannot refill past.
+void test_view_request_clamp(Cosim& c) {
+  c.reset();
+  c.load(mkbud(1000, 2000, 3000, 4000, 500), "vreq/ceiling");
+
+  Stim s;
+  s.budgets = c.budget_;
+  // view 0 asks for LESS than the ceiling in geometry and MORE in fragment
+  s.vreq.valid = true;
+  s.vreq.view = 0;
+  s.vreq.geom = 600;
+  s.vreq.frag = 9999;
+  s.req = mkreq(0, 0, true, 1, 0, 0xA1);  // lands on the load cycle: refused
+  Obs o = c.step(s, "vreq/view0");
+  check(!o.grant, "vreq: no grant on the cycle a request loads (T9)", 0, o.grant ? 1 : 0);
+  check(c.dut.avail_geom0_o == 600u, "vreq: a request below the ceiling becomes the allowance", 600,
+        c.dut.avail_geom0_o);
+  check(c.dut.avail_frag0_o == 3000u, "vreq: a request above the ceiling is CLAMPED to it", 3000,
+        c.dut.avail_frag0_o);
+  check(c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u,
+        "vreq: view 0's request does not touch view 1's pools (T2)", 1,
+        c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u);
+  check(c.dut.vreq_clamped_o == 1u, "vreq: the clamp is COUNTED, once per class cut", 1,
+        c.dut.vreq_clamped_o);
+  s.vreq = zm::ViewTokenRequest();
+  s.req = zm::TokenRequest();
+  o = c.idle("vreq/reason");
+  check(o.den_valid && o.den_reason == zm::kDenyReload, "vreq: the refusal says RELOAD", 1,
+        o.den_valid && o.den_reason == zm::kDenyReload);
+
+  // spend 600, return 900: the return clamps at the REQUEST, not the ceiling
+  s.req = mkreq(0, 0, false, 600, 1, 0xA2);
+  o = c.step(s, "vreq/spend");
+  check(o.grant, "vreq: the whole requested allowance is spendable", 1, o.grant ? 1 : 0);
+  s.req = zm::TokenRequest();
+  s.ret.valid = true;
+  s.ret.view = 0;
+  s.ret.cls = 0;
+  s.ret.cost = 900;
+  c.step(s, "vreq/return");
+  s.ret = zm::TokenReturn();
+  check(c.dut.avail_geom0_o == 600u, "vreq: a return refills to the request, never above it", 600,
+        c.dut.avail_geom0_o);
+
+  // both classes over the ceiling on view 1: two cuts
+  s.vreq.valid = true;
+  s.vreq.view = 1;
+  s.vreq.geom = 0xFFFFFFFFu;
+  s.vreq.frag = 4001;
+  c.step(s, "vreq/view1-both-over");
+  s.vreq = zm::ViewTokenRequest();
+  check(c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u,
+        "vreq: view 1 clamped in both classes", 1, c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u);
+  check(c.dut.vreq_clamped_o == 3u, "vreq: two more cuts counted", 3, c.dut.vreq_clamped_o);
+
+  // a request EXACTLY at the ceiling is not a cut
+  s.vreq.valid = true;
+  s.vreq.view = 1;
+  s.vreq.geom = 2000;
+  s.vreq.frag = 4000;
+  c.step(s, "vreq/exact");
+  s.vreq = zm::ViewTokenRequest();
+  check(c.dut.vreq_clamped_o == 3u, "vreq: exactly the ceiling is not counted as a cut", 3,
+        c.dut.vreq_clamped_o);
+
+  // a contract and a request on the SAME cycle: the request clamps to the NEW ceiling
+  s.budget_valid = true;
+  s.budgets = mkbud(50, 60, 70, 80, 90);
+  c.budget_ = s.budgets;
+  s.vreq.valid = true;
+  s.vreq.view = 0;
+  s.vreq.geom = 55;
+  s.vreq.frag = 40;
+  c.step(s, "vreq/with-contract");
+  check(c.dut.avail_geom0_o == 50u && c.dut.avail_frag0_o == 40u,
+        "vreq: landing with the contract, it meets the ceiling landing with it", 1,
+        c.dut.avail_geom0_o == 50u && c.dut.avail_frag0_o == 40u);
+  check(c.dut.vreq_clamped_o == 4u, "vreq: and that cut is counted too", 4, c.dut.vreq_clamped_o);
+}
+
 // -------------------------------------------------------------------- 10 --
 // Counters. All eight representation lanes move independently; triangles_culled
 // adds the COST of a denied geometry request and nothing for a fragment; and it
@@ -572,6 +657,7 @@ int main() {
   test_same_cycle_return(c);
   test_latency(c);
   test_reload_collision(c);
+  test_view_request_clamp(c);
   test_counters(c);
   test_sustained_rate(c);
 

@@ -58,6 +58,13 @@
 // time stuck on a 17-step restoring divide unrolled into SMT: a query that
 // cannot finish is worse than none, so this one is kept arithmetic-flat.
 //
+//   P7  a_allowance_within_ceiling   (R18, 2026-09-19) A SetView REQUEST can
+//                        lower a view's allowance but never raise it above the
+//                        contract's CEILING -- the clamp as an invariant over the
+//                        block's own registers. P1/P2 now also cover the
+//                        request: a view-1 request is not in view 0's
+//                        antecedent, so it is proved unable to touch view 0.
+//
 // WHAT IS NOT PROVED, stated plainly. Not the counters (they are pure
 // saturating adders, covered by the directed rail case and both random lanes),
 // not the denial payload's timing (`fixed:1`, measured in the directed lane),
@@ -84,7 +91,12 @@ module measure_tokens_fairness_fv (
     input logic        ret_view_i,
     input logic        ret_class_i,
     input logic        ret_shared_i,
-    input logic [31:0] ret_cost_i
+    input logic [31:0] ret_cost_i,
+    // R18: SetView's request, free, so the proof covers every request.
+    input logic        vreq_valid_i,
+    input logic        vreq_view_i,
+    input logic [31:0] vreq_geom_i,
+    input logic [31:0] vreq_frag_i
 );
 
   // ---- the SHIPPING instance: TOK_W = 32, the ABI's u32 -------------------
@@ -96,7 +108,7 @@ module measure_tokens_fairness_fv (
   logic [15:0] den_src_id;
   logic [31:0] den_cost;
   logic [31:0] g0, g1, f0, f1, sh;
-  logic [31:0] rc0, rc1, rc2, rc3, rc4, rc5, rc6, rc7, culled;
+  logic [31:0] rc0, rc1, rc2, rc3, rc4, rc5, rc6, rc7, culled, clamped;
 
   zhao_measure_tokens #(
       .TOK_W(32)
@@ -109,6 +121,10 @@ module measure_tokens_fairness_fv (
       .budget_frag0_i(budget_frag0_i),
       .budget_frag1_i(budget_frag1_i),
       .budget_shared_i(budget_shared_i),
+      .vreq_valid_i(vreq_valid_i),
+      .vreq_view_i(vreq_view_i),
+      .vreq_geom_i(vreq_geom_i),
+      .vreq_frag_i(vreq_frag_i),
       .req_valid_i(req_valid_i),
       .req_view_i(req_view_i),
       .req_class_i(req_class_i),
@@ -143,7 +159,8 @@ module measure_tokens_fairness_fv (
       .tok_rep_count5_o(rc5),
       .tok_rep_count6_o(rc6),
       .tok_rep_count7_o(rc7),
-      .triangles_culled_o(culled)
+      .triangles_culled_o(culled),
+      .vreq_clamped_o(clamped)
   );
 
   // ---- the tiny instance, for the covers ----------------------------------
@@ -158,7 +175,7 @@ module measure_tokens_fairness_fv (
   logic [15:0] s_den_src;
   logic [ 3:0] s_den_cost;
   logic [ 3:0] s_g0, s_g1, s_f0, s_f1, s_sh;
-  logic [31:0] s_rc0, s_rc1, s_rc2, s_rc3, s_rc4, s_rc5, s_rc6, s_rc7, s_culled;
+  logic [31:0] s_rc0, s_rc1, s_rc2, s_rc3, s_rc4, s_rc5, s_rc6, s_rc7, s_culled, s_clamped;
 
   zhao_measure_tokens #(
       .TOK_W(4)
@@ -171,6 +188,10 @@ module measure_tokens_fairness_fv (
       .budget_frag0_i(budget_frag0_i[3:0]),
       .budget_frag1_i(budget_frag1_i[3:0]),
       .budget_shared_i(budget_shared_i[3:0]),
+      .vreq_valid_i(vreq_valid_i),
+      .vreq_view_i(vreq_view_i),
+      .vreq_geom_i(vreq_geom_i[3:0]),
+      .vreq_frag_i(vreq_frag_i[3:0]),
       .req_valid_i(req_valid_i),
       .req_view_i(req_view_i),
       .req_class_i(req_class_i),
@@ -205,7 +226,8 @@ module measure_tokens_fairness_fv (
       .tok_rep_count5_o(s_rc5),
       .tok_rep_count6_o(s_rc6),
       .tok_rep_count7_o(s_rc7),
-      .triangles_culled_o(s_culled)
+      .triangles_culled_o(s_culled),
+      .vreq_clamped_o(s_clamped)
   );
 
   // ---- the initial state MUST be a reset ----------------------------------
@@ -224,7 +246,18 @@ module measure_tokens_fairness_fv (
   // on the same condition. It is not an assumption about the block: if the
   // block latched anything else, P3 would fail. Mirroring rather than reaching
   // into the instance keeps the property a statement about the PORTS.
+  // Since R18 the mirror carries the frame's ALLOWANCE: the contract's numbers,
+  // then any SetView request clamped to the ceiling -- written here from the
+  // RULING (min of request and ceiling), not copied from the block.
   logic [31:0] mb_g0, mb_g1, mb_f0, mb_f1, mb_sh;
+  logic [31:0] mc_g0, mc_g1, mc_f0, mc_f1;       // the ceiling
+  logic [31:0] nc_g, nc_f;                       // the ceiling a request meets
+  always_comb begin
+    nc_g = budget_valid_i ? (vreq_view_i ? budget_geom1_i : budget_geom0_i)
+                          : (vreq_view_i ? mc_g1 : mc_g0);
+    nc_f = budget_valid_i ? (vreq_view_i ? budget_frag1_i : budget_frag0_i)
+                          : (vreq_view_i ? mc_f1 : mc_f0);
+  end
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       mb_g0 <= 32'd0;
@@ -232,12 +265,31 @@ module measure_tokens_fairness_fv (
       mb_f0 <= 32'd0;
       mb_f1 <= 32'd0;
       mb_sh <= 32'd0;
-    end else if (budget_valid_i) begin
-      mb_g0 <= budget_geom0_i;
-      mb_g1 <= budget_geom1_i;
-      mb_f0 <= budget_frag0_i;
-      mb_f1 <= budget_frag1_i;
-      mb_sh <= budget_shared_i;
+      mc_g0 <= 32'd0;
+      mc_g1 <= 32'd0;
+      mc_f0 <= 32'd0;
+      mc_f1 <= 32'd0;
+    end else begin
+      if (budget_valid_i) begin
+        mb_g0 <= budget_geom0_i;
+        mb_g1 <= budget_geom1_i;
+        mb_f0 <= budget_frag0_i;
+        mb_f1 <= budget_frag1_i;
+        mb_sh <= budget_shared_i;
+        mc_g0 <= budget_geom0_i;
+        mc_g1 <= budget_geom1_i;
+        mc_f0 <= budget_frag0_i;
+        mc_f1 <= budget_frag1_i;
+      end
+      if (vreq_valid_i) begin
+        if (vreq_view_i) begin
+          mb_g1 <= (vreq_geom_i < nc_g) ? vreq_geom_i : nc_g;
+          mb_f1 <= (vreq_frag_i < nc_f) ? vreq_frag_i : nc_f;
+        end else begin
+          mb_g0 <= (vreq_geom_i < nc_g) ? vreq_geom_i : nc_g;
+          mb_f0 <= (vreq_frag_i < nc_f) ? vreq_frag_i : nc_f;
+        end
+      end
     end
   end
 
@@ -261,10 +313,12 @@ module measure_tokens_fairness_fv (
 
   // Everything that could legitimately move view v's private pools this cycle.
   logic touch0, touch1;
+  // A SetView request touches ITS OWN view only: a view-1 request is absent
+  // from view 0's antecedent, so P1 proves it cannot move view 0's pools.
   assign touch0 = budget_valid_i || (req_valid_i && grant && !req_view_i) ||
-      (ret_valid_i && !ret_shared_i && !ret_view_i);
+      (ret_valid_i && !ret_shared_i && !ret_view_i) || (vreq_valid_i && !vreq_view_i);
   assign touch1 = budget_valid_i || (req_valid_i && grant && req_view_i) ||
-      (ret_valid_i && !ret_shared_i && ret_view_i);
+      (ret_valid_i && !ret_shared_i && ret_view_i) || (vreq_valid_i && vreq_view_i);
 
   // A non-zero credit aimed at the small instance's view-0 geometry pool —
   // the precondition of the clamp cover.
@@ -337,6 +391,14 @@ module measure_tokens_fairness_fv (
       a_within_budget :
       assert (g0 <= mb_g0 && g1 <= mb_g1 && f0 <= mb_f0 && f1 <= mb_f1 && sh <= mb_sh);
 
+      // P7 -- R18: the allowance never exceeds the contract's ceiling.
+      a_allowance_within_ceiling :
+      assert (u_dut.bud_geom0_r <= u_dut.ceil_geom0_r && u_dut.bud_geom1_r <= u_dut.ceil_geom1_r &&
+              u_dut.bud_frag0_r <= u_dut.ceil_frag0_r && u_dut.bud_frag1_r <= u_dut.ceil_frag1_r);
+      a_ceiling_latched :
+      assert (mc_g0 == u_dut.ceil_geom0_r && mc_g1 == u_dut.ceil_geom1_r &&
+              mc_f0 == u_dut.ceil_frag0_r && mc_f1 == u_dut.ceil_frag1_r);
+
       // P4 — a grant never debits more than the pool it draws holds, so no
       // pool can wrap and P3's subtract is safe.
       if (grant) begin
@@ -364,6 +426,8 @@ module measure_tokens_fairness_fv (
       c_grant_private   : cover (s_grant && !s_shared);
       c_grant_reserve   : cover (s_grant && s_shared);
       c_denied          : cover (s_den_valid);
+      // R18: a request above the ceiling is reachable and is cut.
+      c_request_clamped : cover (s_clamped != 32'd0);
       c_pool_emptied    : cover (past_valid && s_g0 == 4'd0 && s_g0_q != 4'd0);
       c_reserve_emptied : cover (past_valid && s_sh == 4'd0 && s_sh_q != 4'd0);
       // A credit that landed on the ceiling: the pool is AT its budget after a

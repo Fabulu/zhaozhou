@@ -1042,7 +1042,9 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             cmd_exec_uploads_o,
   output logic [31:0]             cmd_exec_upload_overflow_o,
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
-  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
+  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit (in
+  // TERRAIN.PAGE_POOL always; in RENDER.ASSET_POOL through R32's arm, which is
+  // bounded by exactly this region), the HPS
   // staging arena the active epoch registered, and that epoch.
   input  logic [31:0]             upl_cfg_region_base_i,
   input  logic [31:0]             upl_cfg_region_bytes_i,
@@ -1935,6 +1937,55 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
+
+  // ==========================================================================
+  // MEASURE.TOKENS (rulings R18/R33, 2026-09-19, cmdmem packet)
+  // ==========================================================================
+  // Its BUDGET side is composed: CMD.EXEC commits SetPresentationContract's
+  // five counts as the CEILING and each SetView's two counts as that view's
+  // REQUEST, which the guard clamps to the ceiling. Its REQUEST/RETURN side is
+  // a BOUNDARY (entry I18): the one consumer that exists, GEOM.BINNER, offers a
+  // ONE-BIT token client (`tok_req_o`, tied off inside the shell) against this
+  // block's seven-field request, and the other five fields are policy nobody
+  // produces yet. So the request and return enter here, and everything the
+  // guard decides leaves here, where a bench -- or the next packet -- reads it.
+  input  logic        tok_req_valid_i,
+  input  logic        tok_req_view_i,
+  input  logic        tok_req_class_i,
+  input  logic        tok_req_essential_i,
+  input  logic [ 2:0] tok_req_rep_i,
+  input  logic [31:0] tok_req_cost_i,
+  input  logic [15:0] tok_req_src_id_i,
+  output logic        tok_grant_o,
+  output logic        tok_shared_o,
+  input  logic        tok_ret_valid_i,
+  input  logic        tok_ret_view_i,
+  input  logic        tok_ret_class_i,
+  input  logic        tok_ret_shared_i,
+  input  logic [31:0] tok_ret_cost_i,
+  output logic        tok_den_valid_o,
+  output logic        tok_den_view_o,
+  output logic        tok_den_class_o,
+  output logic [ 2:0] tok_den_rep_o,
+  output logic [ 1:0] tok_den_reason_o,
+  output logic [15:0] tok_den_src_id_o,
+  output logic [31:0] tok_den_cost_o,
+  output logic [31:0] tok_avail_geom0_o,
+  output logic [31:0] tok_avail_geom1_o,
+  output logic [31:0] tok_avail_frag0_o,
+  output logic [31:0] tok_avail_frag1_o,
+  output logic [31:0] tok_avail_shared_o,
+  output logic [31:0] tok_rep_count0_o,
+  output logic [31:0] tok_rep_count1_o,
+  output logic [31:0] tok_rep_count2_o,
+  output logic [31:0] tok_rep_count3_o,
+  output logic [31:0] tok_rep_count4_o,
+  output logic [31:0] tok_rep_count5_o,
+  output logic [31:0] tok_rep_count6_o,
+  output logic [31:0] tok_rep_count7_o,
+  output logic [31:0] tok_triangles_culled_o,
+  output logic [31:0] tok_vreq_clamped_o,
+  output logic [31:0] cmd_exec_contracts_o,
 
   // ==========================================================================
   // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
