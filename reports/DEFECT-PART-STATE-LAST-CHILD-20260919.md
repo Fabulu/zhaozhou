@@ -2,9 +2,12 @@
 
 **Found:** 2026-09-19, implementing owner ruling
 `reports/RULING-I4-COLLISION-SPAWN-20260919.md`.
-**Status:** NOT REPAIRED. Recorded so it is read rather than re-derived.
-**Reproducer:** `tests/prod/run_console_core_smoke.ps1` — it prints the loss on
-every run and does not fail on it.
+**Status: REPAIRED 2026-09-19.** See *The repair* at the foot of this file. The
+diagnosis below is kept verbatim because it is correct and because the next
+person should be able to read the reasoning without re-deriving it.
+**Reproducer:** `tests/prod/run_console_core_smoke.ps1` — it printed the loss on
+every run and did not fail on it. It now asserts the conservation law instead,
+and prints `children written=6`.
 
 ## The measurement
 
@@ -59,7 +62,7 @@ is not the cause: PART.SPAWN takes several cycles between accepting a parent and
 emitting its first child under either topology, so the last child of a
 generation always raced the tick boundary.
 
-## Why it is NOT repaired here
+## Why it was not repaired in the ruling-I4 packet
 
 It is outside the ruling, and a partial repair would be worse than none.
 Closing case (1) alone — `!(chl_valid_i && chl_ready_o)` in the exit condition —
@@ -87,3 +90,100 @@ a tick, in the console bench — the conservation law the present counters imply
 and do not enforce. And a directed case whose last child is emitted exactly on
 the append-phase boundary, so the repair is shown to hold at the edge it was
 written for rather than in the easy middle.
+
+---
+
+# THE REPAIR — 2026-09-19
+
+Both assertions above now exist. `tb_zhao_console_core_smoke.sv` `$fatal`s on
+the conservation law instead of `$display`ing a known defect, and the
+block-level gate is `tests/particles/part_state_tick_boundary.cpp`.
+
+## The gate does not guess where the window is
+
+A single hand-placed offer is a guess about a two-cycle window, and a guess
+that misses reads as a pass. The new suite **sweeps the child's arrival cycle
+across the whole tick** (delays 0..24) and holds `chl_valid_i` the way a real
+producer does, so all four regions — inside the survivor pass, on the
+append-phase edge, inside `S_DONE`, and after the tick — are visited by
+construction. Two of its eight checks are positive controls on the sweep
+itself, because a sweep that silently missed the window would satisfy every
+other check while testing nothing.
+
+On the **pre-repair** block it fails, with the arrival cycle named:
+
+    delay= 9  t1{accept=1@ 9 after_pass=1 wrote=0 drop=0 stall=0}
+    delay=10  t1{accept=1@10 after_pass=1 wrote=0 drop=0 stall=0}
+    FAIL: a child ACCEPTED at the handshake is written in the tick that
+          accepted it (0 = no record left the machine uncounted):
+          expected 0x0, got 0x2
+    FAIL: every refused OFFER moved staging_stall_cycles_o -- no refusal is
+          silent: expected 0x0, got 0x2
+    FAIL: conservation across the sweep: accepted == written +
+          dropped_capacity: expected 0x17, got 0x19
+    FAIL: the sweep actually REACHED the closed boundary (a child offered to a
+          live tick and refused for all of it): expected 0x1, got 0x0
+    4/8 checks FAILED
+
+After the repair, 8/8, `accepted=25 written=25 dropped=0 orphans=0`.
+
+## Why the loss is IMPOSSIBLE and not merely rarer
+
+This report warned that closing case (1) alone is the flattering direction.
+The repair is not a narrowed window; it is a closed enumeration.
+
+1. **A child can only ENTER staging in `S_SURVIVE` or `S_APPEND`.**
+   `chl_ready_o` is now `!chl_full_c && ((st_q == S_SURVIVE) || (st_q ==
+   S_APPEND))` — the two phases that can still drain it. `S_DONE` and `S_IDLE`
+   refuse at the handshake, so the producer HOLDS and the child belongs to the
+   next generation. That is option (b) of this report, declared in
+   `PART.STATE.md`.
+2. **The append phase cannot close underneath an accept.** Its exit gained
+   `&& !chl_wr_fire_c`, which is *the acceptance's own expression* — the same
+   wire the write into `chl_m` is gated on, read on the same edge. The original
+   exit differenced two quantities clocked differently (`chl_empty_c` from the
+   registered pointers, against an accept writing those pointers on that edge),
+   which is this tree's detector law applied to a state transition. They are now
+   one quantity.
+3. **Therefore staging is provably EMPTY on entry to `S_DONE`**, and nothing can
+   put anything into it in `S_DONE` or `S_IDLE`. `a_staging_empty_at_done` and
+   `a_no_accept_after_append` assert exactly that, and both can fail.
+4. **The assignment that actually destroyed the record is gone.** The
+   `chl_wp_q`/`chl_rp_q` reset at `tick_start_i` is a no-op given (3), and it is
+   REMOVED rather than kept — so if (2) were ever weakened, a late child would be
+   written at the head of the next generation instead of vanishing. Deferred, not
+   lost. Only `rst_n` clears the pointers, which the contract already declares.
+
+A record in `chl_m` now leaves by exactly three doors and there is no fourth:
+the write channel (`children_written_o`), the capacity drop
+(`children_dropped_capacity_o`), and `rst_n`. It cannot be overwritten
+(`chl_full_c` guards the write pointer and the occupancy is true at every
+instant now that nothing zeroes the pointers mid-stream), and it cannot be
+abandoned at a phase boundary.
+
+## And the refusal is countable
+
+`staging_stall_cycles_o` counted `chl_valid_i && chl_full_c && (st_q != S_IDLE)`
+— a condition **structurally incapable** of seeing a refusal that is not caused
+by a full FIFO. Had the repair been shipped with it unchanged, a silent loss
+would have been traded for a silent stall, which is the same disease one size
+smaller. It now counts every cycle in which a child is **offered and not
+accepted**, for any reason. `part_state_tick_boundary.cpp` asserts that no
+refused offer is silent, and that check is one of the four that fail on the
+pre-repair block.
+
+## Measured
+
+* `run_console_core_smoke.ps1`: `children written=6`,
+  `spawn_by_event=[0 0 6 0]`, `requested=6 emitted=6 written=6 dropped_cap=0
+  staging_stalls=0`, particles `written=12` (six survivors, six children). Was
+  five children and eleven records.
+* `part_state_directed` 78, `part_state_capacity_backstop` 9,
+  `part_state_child_order_control` 5, `part_spawn_directed` 22 — all unchanged.
+  The new work is a separate suite (`part_state_tick_boundary`, 8 checks) for the
+  reason `part_state_capacity_backstop.cpp` gives in its own header: those counts
+  are quoted as evidence and must not move when somebody adds a case.
+* `tests/mutants/zhao_part_state_child_order_mutant.sv` is a COPY of this block
+  and was re-cut onto the repaired body, carrying its one mutation forward and
+  nothing else (104 inserted lines against production, 0 deleted: its header plus
+  the MUTATION block). Its inverted-polarity driver still passes 5/5.

@@ -58,12 +58,83 @@
 //                      valid met a full FIFO, so as a child count it read high,
 //                      and "refused children" that the contract says cannot
 //                      exist is the worst possible thing for a number to claim.
+//   * tick boundary -> once the append phase has closed there is nothing left
+//                      to drain the FIFO, so chl_ready_o goes low in S_DONE
+//                      and S_IDLE and the producer HOLDS. The child belongs to
+//                      the next generation. This is a refusal, not a drop, and
+//                      staging_stall_cycles_o counts every cycle of it. See the
+//                      tick-boundary chapter below.
 //   * tick capacity -> later children dropped, survivors retained.
 //
 // The contract's reason is worth keeping in front of the reader: dropping under
 // backpressure in a timing-dependent way "would make the result depend on
 // memory timing, which is the same determinism failure as an evolving seed".
 // Every drop here is a function of the input sequence alone.
+//
+// ---------------------------------------------------------------------------
+// THE TICK BOUNDARY -- WHY A STAGED CHILD CANNOT BE LOST
+// ---------------------------------------------------------------------------
+// Repaired 2026-09-19. `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md`
+// recorded a child that was ACCEPTED at `chl_ready_o`, counted as emitted by
+// PART.SPAWN, and then discarded when the tick ended, with every counter in
+// this block reading zero. The composed console reproduced it on every run:
+// six children emitted, five written, nothing to say where the sixth went.
+//
+// THE MECHANISM was a decision whose two operands were clocked differently --
+// this tree's own detector law, applied to a state transition instead of to a
+// checker. The append phase left on
+//
+//     if (chl_empty_c && !wr_v_q) st_q <= S_DONE;
+//
+// where `chl_empty_c` is computed from the REGISTERED pointers, while the
+// accept that fills the FIFO writes those same pointers on the same edge. So
+// "the queue is empty" and "a child is arriving" could both be true at once.
+// `chl_ready_o` was additionally high in `S_DONE` (which satisfies
+// `st_q != S_IDLE`), and `tick_start_i` then reset `chl_wp_q`/`chl_rp_q` to
+// zero -- which is what actually DESTROYED the record.
+//
+// THE REPAIR IS THREE FACTS, AND TOGETHER THEY ARE AN ENUMERATION RATHER THAN
+// A NARROWED WINDOW. Closing only the one-cycle half makes the loss rarer, and
+// a defect that fires once an hour gets argued about instead of found.
+//
+//   1. A child can only ENTER staging in S_SURVIVE or S_APPEND -- the two
+//      phases that can still drain it. `chl_ready_o` is low in S_DONE and
+//      S_IDLE, so the producer is refused at the handshake and HOLDS, which is
+//      the contract's "stall, never drop" and not a new drop path.
+//   2. The append phase cannot close underneath an accept. Its exit now also
+//      requires `!chl_wr_fire_c`, which is the very same expression the
+//      acceptance itself is gated on, evaluated on the same edge. The two
+//      operands of the decision are now one operand.
+//   3. Therefore staging is provably EMPTY on entry to S_DONE, and nothing can
+//      put anything into it in S_DONE or S_IDLE. `a_staging_empty_at_done`
+//      below asserts exactly that, and it can fail.
+//
+// The pointer reset at `tick_start_i` is consequently a no-op, and it is
+// REMOVED rather than kept. That is deliberate defence in depth: the removal
+// means that if fact 2 were ever weakened, a late child would be written at
+// the head of the NEXT generation instead of being destroyed -- deferred, not
+// lost. Only `rst_n` clears the pointers, which is the contract's "reset
+// abandons the stream in flight".
+//
+// WHAT THIS MAKES IMPOSSIBLE, stated as the closed list it is. A record in
+// `chl_m` leaves by exactly three doors and there is no fourth:
+//   * the write channel            -> `children_written_o` moves;
+//   * the S_APPEND capacity drop   -> `children_dropped_capacity_o` moves;
+//   * `rst_n`                      -> declared by the contract.
+// It cannot be overwritten (`chl_full_c` guards the write pointer and the
+// occupancy is now true at every instant, because nothing zeroes the pointers
+// mid-stream), and it cannot be abandoned at a phase boundary (fact 2).
+//
+// AND THE REFUSAL IS COUNTABLE. `staging_stall_cycles_o` used to increment on
+// `chl_valid_i && chl_full_c && (st_q != S_IDLE)` -- a condition structurally
+// incapable of seeing the S_DONE refusal that fact 1 introduces, which is the
+// same blindness that let the defect hide. It now counts every cycle in which
+// a child is OFFERED AND NOT ACCEPTED, for any reason. A producer held at the
+// tick boundary therefore shows up as a number rather than as silence.
+//
+// The append phase's length is bounded by the producer: it is extended only by
+// an actual accept, and every accepted child is written or counted-dropped
+// within a bounded number of cycles.
 //
 // ---------------------------------------------------------------------------
 // THE CAPACITY BACKSTOP -- GAP I8, CLOSED HERE
@@ -265,10 +336,20 @@ module zhao_part_state #(
   // A verdict is taken only when the write channel can accept what it implies.
   assign vrd_ready_o = (st_q == S_SURVIVE) && wr_room_c;
 
-  // Children are accepted whenever staging has room, in ANY phase: SPAWN
-  // produces them during the survivor pass and they must not be lost to a
-  // phase boundary. Refusal is at the handshake so the producer sees it.
-  assign chl_ready_o = !chl_full_c && (st_q != S_IDLE);
+  // Children are accepted whenever staging has room, in the two phases that
+  // can still DRAIN them: SPAWN produces them during the survivor pass, and it
+  // may still be producing while the append phase runs. S_DONE and S_IDLE
+  // refuse -- not because a child arriving there is unwelcome, but because
+  // nothing in this tick would ever read it back out, and a queue entry nobody
+  // will drain is the defect this block was repaired for. Refusal is at the
+  // handshake, so the producer HOLDS and the child belongs to the next
+  // generation. See the tick-boundary chapter in the header.
+  assign chl_ready_o = !chl_full_c && ((st_q == S_SURVIVE) || (st_q == S_APPEND));
+
+  // The accept, as one named expression. The append phase's exit is gated on
+  // this SAME wire, so "the queue is empty" and "a child is arriving" are no
+  // longer two quantities that could disagree on one edge.
+  wire chl_wr_fire_c = chl_valid_i && chl_ready_o;
 
   assign wr_valid_o  = wr_v_q;
   assign wr_record_o = wr_rec_q;
@@ -309,10 +390,17 @@ module zhao_part_state #(
       tick_done_q <= 1'b0;
 
       // Staging backpressure, in CYCLES. Not a loss: see the header.
-      if (chl_valid_i && chl_full_c && (st_q != S_IDLE))
+      //
+      // The condition is the NEGATION OF THE HANDSHAKE and nothing narrower.
+      // It used to read `chl_full_c && (st_q != S_IDLE)`, which was
+      // structurally incapable of seeing a refusal that was not caused by a
+      // full FIFO -- so the S_DONE/S_IDLE boundary refusal would have been
+      // silent, which is precisely the shape of the defect being repaired. A
+      // child that is offered and not taken is a stall, whatever the reason.
+      if (chl_valid_i && !chl_ready_o)
         staging_stall_cycles_o <= staging_stall_cycles_o + 32'd1;
 
-      if (chl_valid_i && chl_ready_o) begin
+      if (chl_wr_fire_c) begin
         chl_m[chl_wp_q[CHILD_PW-1:0]] <= chl_record_i;
         chl_wp_q <= chl_wp_q + (CHILD_PW+1)'(1);
       end
@@ -325,8 +413,14 @@ module zhao_part_state #(
             st_q      <= S_SURVIVE;
             rd_done_q <= 1'b0;
             written_q <= '0;
-            chl_wp_q  <= '0;
-            chl_rp_q  <= '0;
+            // `chl_wp_q`/`chl_rp_q` ARE DELIBERATELY NOT CLEARED HERE. They
+            // used to be, and that is the assignment that destroyed the last
+            // child of a generation. Staging is provably empty at this point
+            // (a_staging_empty_at_done, plus S_DONE and S_IDLE refusing), so
+            // clearing them would be a no-op today -- and if that premise ever
+            // weakened, clearing them would silently discard a record while
+            // NOT clearing them writes it at the head of this generation.
+            // A no-op whose failure mode is a silent loss is not worth having.
           end
         end
 
@@ -377,7 +471,13 @@ module zhao_part_state #(
             end
             chl_rp_q <= chl_rp_q + (CHILD_PW+1)'(1);
           end
-          if (chl_empty_c && !wr_v_q) st_q <= S_DONE;
+          // THE EXIT. `chl_empty_c` alone reads the REGISTERED pointers while
+          // the accept above writes them on this same edge, so on its own it
+          // can be true while a child is landing. `!chl_wr_fire_c` is the
+          // accept's own condition, so the phase cannot close underneath one:
+          // the child that arrives here is drained by this phase, in this
+          // generation, on the next cycle.
+          if (chl_empty_c && !wr_v_q && !chl_wr_fire_c) st_q <= S_DONE;
         end
 
         S_DONE: begin
@@ -415,6 +515,20 @@ module zhao_part_state #(
 
       // The block must not invent a write out of nothing.
       a_write_implies_tick: assert (!wr_v_q || (st_q != S_IDLE));
+
+      // THE TICK-BOUNDARY REPAIR, AS A PROPERTY THAT CAN FAIL.
+      //
+      // Everything in the header's closed list rests on one premise: staging
+      // is EMPTY once the append phase has closed. If it is not, a record is
+      // sitting in `chl_m` with no phase left to drain it, which is exactly
+      // the state the 2026-09-19 defect report describes. Weakening the
+      // S_APPEND exit or re-opening `chl_ready_o` in S_DONE breaks this here
+      // rather than in a console bench six blocks away.
+      a_staging_empty_at_done: assert ((st_q != S_DONE) || chl_empty_c);
+
+      // ...and nothing may be admitted once there is no phase to drain it.
+      a_no_accept_after_append: assert (!chl_wr_fire_c ||
+                                        (st_q == S_SURVIVE) || (st_q == S_APPEND));
     end
   end
 `endif

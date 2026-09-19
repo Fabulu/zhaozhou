@@ -1215,22 +1215,26 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: PART.STATE wrote %0d children but %0d carry kPartBornThisTick",
              part_children_written_o, part_children_seen_q);
 
-    // A SEPARATE, PRE-EXISTING DEFECT, SURFACED BY THIS STIMULUS AND NOT BY IT.
-    // See `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md`. PART.SPAWN emits
-    // the last child of a generation within a cycle or two of PART.STATE
-    // leaving S_APPEND, the child is ACCEPTED into staging (so it is counted as
-    // emitted) and is then discarded when the tick ends -- with
-    // `children_refused_o`, `children_dropped_capacity_o` and
-    // `staging_stall_cycles_o` all reading zero. It was unreachable before this
-    // ruling because no event ever fired, so no child ever existed.
+    // THE CONSERVATION LAW, which the counters implied and did not enforce.
+    // `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md` asked for exactly this
+    // once the tick boundary was repaired: every child PART.SPAWN got ACCEPTED
+    // into staging is written, or dropped at capacity and counted. It used to
+    // be a $display of a known defect -- six emitted, five written, and every
+    // counter reading zero -- and it is a $fatal now because there is no third
+    // outcome left. A child that is REFUSED at the boundary was never accepted
+    // and never counted emitted, so it does not appear on either side here; it
+    // shows up as `staging_stalls`, printed above.
     //
-    // It is NOT fatal here on purpose: it is outside ruling I4 and repairing it
-    // is a PART.STATE tick-boundary decision. It is printed at every run so it
-    // cannot quietly become normal.
-    if (part_children_emitted_o != part_children_written_o)
-      $display("SMOKE: *** KNOWN DEFECT: %0d of %0d children emitted by PART.SPAWN were NOT written and NO counter recorded the loss. reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md",
-               part_children_emitted_o - part_children_written_o,
-               part_children_emitted_o);
+    // This is the composed statement of the law. The block-level gate, which
+    // sweeps the child's arrival cycle instead of taking the one arrival this
+    // stimulus happens to produce, is tests/particles/part_state_tick_boundary.cpp.
+    if (part_children_emitted_o !=
+        (part_children_written_o + part_children_dropped_capacity_o))
+      $fatal(1, "SMOKE: child conservation broken: emitted=%0d written=%0d dropped_cap=%0d -- %0d children left the machine with no counter naming them (see reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md)",
+             part_children_emitted_o, part_children_written_o,
+             part_children_dropped_capacity_o,
+             part_children_emitted_o - part_children_written_o -
+             part_children_dropped_capacity_o);
 
     // THE POSITIVE CONTROLS, separate on purpose. These two counters could not
     // move at all before 2026-09-19; `spawn_by_event2_o` is the one the ruling

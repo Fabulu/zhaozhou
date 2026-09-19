@@ -12943,3 +12943,35 @@ verilate(test_part_state_capacity_backstop
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv)
 add_test(NAME part_state_capacity_backstop COMMAND test_part_state_capacity_backstop)
 set_tests_properties(part_state_capacity_backstop PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# PART.STATE's TICK BOUNDARY -- the child that arrives as the tick is closing.
+#
+# `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md`: six children emitted into
+# the composed console, five written, and every counter that exists to explain a
+# missing child reading ZERO. The composed smoke bench shows it and cannot gate
+# against it, because it exercises exactly ONE arrival time -- whichever one
+# PART.SPAWN happens to produce.
+#
+# This suite sweeps the arrival cycle across the whole tick and holds the offer
+# the way a real producer holds `chl_valid_o`, so the append-phase edge and the
+# S_DONE window are visited BY CONSTRUCTION rather than by luck. Two of its
+# checks are positive controls on the sweep itself: a sweep that quietly missed
+# the window would satisfy every other check while testing nothing.
+#
+# A SEPARATE suite again, for the reason the backstop suite gives above:
+# part_state_directed's check count (78) is quoted as evidence.
+#
+# Same parameters as the other two PART.STATE suites -- at the required tier of
+# 32,768 neither capacity nor the boundary is reachable in a test at all.
+add_executable(test_part_state_tick_boundary particles/part_state_tick_boundary.cpp)
+# zhao_zref for zref/zref_particle.hpp: records are built with the RATIFIED
+# particle128 codec, never hand-written shifts.
+target_link_libraries(test_part_state_tick_boundary PRIVATE zhao_harness zhao_zref)
+verilate(test_part_state_tick_boundary
+  PREFIX Vzhao_part_state
+  TOP_MODULE zhao_part_state
+  VERILATOR_ARGS -GCAPACITY=8 -GSPECIES_N=4 -GCHILD_D=8
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv)
+add_test(NAME part_state_tick_boundary COMMAND test_part_state_tick_boundary)
+set_tests_properties(part_state_tick_boundary PROPERTIES LABELS "fast;particles" TIMEOUT 300)

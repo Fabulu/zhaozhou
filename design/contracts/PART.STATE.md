@@ -1,30 +1,48 @@
 # Contract — PART.STATE (Particle state stream)
 
-> ## KNOWN DEFECT — THE LAST CHILD OF A GENERATION IS LOST, UNCOUNTED.
+> ## THE TICK BOUNDARY — REPAIRED 2026-09-19, AND WHAT IT NOW MEANS
 >
-> Found 2026-09-19, **not repaired**, measured and written up in
-> `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md`. Reproduced on every run of
-> `tests/prod/run_console_core_smoke.ps1`, which prints it.
+> `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md` recorded a child that was
+> ACCEPTED at `chl_ready_o`, counted as emitted by PART.SPAWN, and then
+> discarded when the tick ended — with `children_refused_o`,
+> `children_dropped_capacity_o` and `staging_stall_cycles_o` **all zero**.
+> Six emitted, five written, and nothing to say where the sixth went.
 >
-> Six children emitted, five written, and `children_refused_o`,
-> `children_dropped_capacity_o` and `staging_stall_cycles_o` **all zero**. A
-> child accepted into staging on the edge the append phase decides it is empty
-> — or during `S_DONE`, which also passes the `st_q != S_IDLE` accept gate — is
-> discarded when the tick ends.
+> **It is repaired**, and the repair is a visible behaviour change that belongs
+> in this contract rather than only in the RTL:
 >
-> **This contradicts the overflow table below**, which admits exactly two
-> outcomes for a child: staged and written, or dropped at capacity and counted.
-> There is a third today and nothing records it. Do not read
-> `children_written_o` as "every child PART.SPAWN produced".
+> **`chl_ready_o` is low in `S_DONE` and `S_IDLE`.** Children are accepted only
+> in the two phases that can still drain staging — the survivor pass and the
+> append phase. A child offered once the append phase has closed is REFUSED at
+> the handshake; the producer holds it, and **it belongs to the next
+> generation**. That is a stall, which this contract permits twice over, and
+> not a drop, which it forbids.
+>
+> **The append phase cannot close underneath an accept.** Its exit requires
+> staging to be empty *and* no child to be arriving on that same edge, so the
+> child that arrives while the phase is live is written in its own generation.
+> Staging is therefore provably empty when the tick ends, which is asserted in
+> the RTL (`a_staging_empty_at_done`) rather than argued.
+>
+> **The refusal is countable.** `staging_stall_cycles_o` now counts every cycle
+> in which a child is offered and not accepted, for any reason — it previously
+> counted only full-FIFO stalls and was structurally incapable of seeing a
+> boundary refusal, which is how the original loss stayed silent.
+>
+> So the overflow table below is complete again: a child is staged and written,
+> or dropped at capacity and counted, or refused at the handshake and carried to
+> the next generation. There is no fourth outcome, and none of the three is
+> silent.
+>
+> Gated by `tests/particles/part_state_tick_boundary.cpp`, which sweeps the
+> child's arrival cycle across the whole tick instead of guessing where the
+> window is. It fails on the pre-repair block with
+> *"a child ACCEPTED at the handshake is written in the tick that accepted it:
+> expected 0x0, got 0x2"*.
 >
 > It was UNREACHABLE until 2026-09-19: no particle event could fire in the
-> composed console before ruling I4, so PART.SPAWN never emitted a child. It is
+> composed console before ruling I4, so PART.SPAWN never emitted a child. It was
 > not caused by that ruling; it was exposed by it.
->
-> Repairing it is a tick-boundary decision — either the append phase waits for a
-> `spawn_busy` level (the shape that closed gap I8) or `chl_ready_o` falls in
-> `S_DONE` and the child is DECLARED to belong to the next generation. Whichever
-> is chosen, the loss must become countable. See the report.
 
 > Ledger: `design/blocks.yml` · owner ZH-042 · phase 10 · maturity SPECIFIED
 
