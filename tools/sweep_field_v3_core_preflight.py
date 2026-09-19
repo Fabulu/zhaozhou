@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preflight for tools/sweep_field_v3_exec.sh: every mutant must LINT.
+"""Preflight for tools/sweep_field_v3_core.sh: every mutant must LINT.
 
 A mutant that fails to elaborate would be scored CAUGHT by a compile failure,
 which is the most flattering possible way to be wrong (house rule). Imports
@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sweep_field_v3_exec_mutants import MUTANTS, RTL, mutate  # noqa: E402
+from sweep_field_v3_core_mutants import MUTANTS, RTL, mutate  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VROOT = os.environ.get(
@@ -24,6 +24,8 @@ VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.ex
 CONE = [
     "fpga/rtl/field/zhao_field_ops_pkg.sv",
     RTL,
+    "fpga/rtl/field/zhao_field_v3_exec.sv",
+    "fpga/rtl/field/zhao_field_v3_mulbank.sv",
     "fpga/rtl/field/zhao_field_v3_rf.sv",
     "fpga/rtl/field/zhao_field_alu.sv",
     # ADDED 2026-09-19. The executor grew LANES and with it a
@@ -35,7 +37,7 @@ CONE = [
 ]
 
 CMD = [VBIN, "--lint-only", "-Wall", "-Wno-DECLFILENAME",
-       "--top-module", "zhao_field_v3_exec"] + [os.path.join(ROOT, f) for f in CONE]
+       "--top-module", "zhao_field_v3_core"] + [os.path.join(ROOT, f) for f in CONE]
 
 
 def main():

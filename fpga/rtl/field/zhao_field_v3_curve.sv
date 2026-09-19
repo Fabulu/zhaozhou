@@ -1,5 +1,11 @@
-// zhao_probe_curve_svc.sv — Field v3 decisive probe 4 (reports/Fieldv3.md
+// zhao_field_v3_curve.sv — Field v3 decisive probe 4 (reports/Fieldv3.md
 // Phase 3): the barrel curve service.
+//
+// PROMOTED 2026-09-19 from `fpga/rtl/synth/zhao_probe_curve_svc.sv`. It was
+// never a probe in the sense that directory means: `zhao_field_v3_svcpath`, a
+// production block, has instantiated it as its CURVE/DCURVE service since
+// 2026-08-28. A production module reaching into `synth/` is the tell, and the
+// file was on the wrong side of the line rather than the instantiation.
 //
 // TARGET: four-point CURVE initiation interval <= 14 clocks, timing-clean at
 // the gpu-domain constraint. The target is derived from memory-port demand,
@@ -56,7 +62,7 @@
 // {n, x[0], x[n-1], y[0], dy[0]}. Loading a table while requests against
 // THAT table are in flight is the loader's fault, exactly as FPLAN's
 // tables-resident-with-plan rule already requires (FIELD.PROGCACHE.md).
-module zhao_probe_curve_svc (
+module zhao_field_v3_curve (
     input logic clk,
     input logic rst_n,
 
@@ -212,7 +218,7 @@ module zhao_probe_curve_svc (
   // hull fast.
   //
   // ENFORCED-BY: tests/differential/field_curve_svc_directed.cpp:oracle
-  // ENFORCED-BY: tools/sweep_field_curve_svc_mutants.py:MUTANTS
+  // ENFORCED-BY: tools/sweep_field_v3_curve_mutants.py:MUTANTS
   //
   // The differential probes past both ends of every table, which is where
   // the clamp is the only thing between the cubic and its extrapolation,
@@ -887,4 +893,4 @@ module zhao_probe_curve_svc (
     end
   end
 
-endmodule : zhao_probe_curve_svc
+endmodule : zhao_field_v3_curve

@@ -66,7 +66,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_v3_full.h"
+#include "Vzhao_field_v3_engine.h"
 
 #include "zfield/zfield.hpp"
 #include "zfield/zfield_plan.hpp"
@@ -109,14 +109,14 @@ constexpr int kCtxPerGroup = kPointsPerDispatchGroup / kLanes;
 // Verilator hands a 32-bit port back as a scalar and a 128-bit one as an
 // indexable word array, so the two cannot share an accessor. Branching on the
 // width here keeps every call site below reading as if they could.
-inline void put_lane(Vzhao_probe_v3_full& t, const int32_t* v) {
+inline void put_lane(Vzhao_field_v3_engine& t, const int32_t* v) {
 #if ZHAO_EARTH_LANES == 1
   t.pre_data_i = (uint32_t)v[0];
 #else
   for (int l = 0; l < kLanes; ++l) t.pre_data_i[l] = (uint32_t)v[l];
 #endif
 }
-inline int32_t get_wr_lane(const Vzhao_probe_v3_full& t, int lane) {
+inline int32_t get_wr_lane(const Vzhao_field_v3_engine& t, int lane) {
 #if ZHAO_EARTH_LANES == 1
   (void)lane;
   return (int32_t)t.wr_data_o;
@@ -339,7 +339,7 @@ struct Translator {
 };
 
 struct Dut {
-  Vzhao_probe_v3_full& t;
+  Vzhao_field_v3_engine& t;
   int32_t shadow[kCtx][kRegs][kLanes] = {};
   long clocks = 0;
   long preload_clocks = 0;
@@ -424,7 +424,7 @@ struct Dut {
   };
   std::vector<Cap> caps[kCtx];
 
-  explicit Dut(Vzhao_probe_v3_full& top) : t(top) {}
+  explicit Dut(Vzhao_field_v3_engine& top) : t(top) {}
 
   void reset() {
     t.rst_n = 0;
@@ -514,7 +514,7 @@ struct Dut {
   void preload(int ctx, int reg, const int32_t* v) {
     // THE PRELOAD PORT STEALS THE REGISTER FILE.
     //
-    // `zhao_probe_v3_exec` gives the host preload absolute priority over the
+    // `zhao_field_v3_exec` gives the host preload absolute priority over the
     // machine's own write, on the stated ground that "the machine is not
     // running during preload". Under staggered drive that premise is false:
     // this harness reloads a retired context while seven others are still
@@ -1063,7 +1063,7 @@ Result run_program(const char* path, int points, uint64_t seed, int drive, int n
   }
 
   // ---- bring the machine up ------------------------------------------------
-  Vzhao_probe_v3_full top;
+  Vzhao_field_v3_engine top;
   Dut d(top);
   d.reset();
 

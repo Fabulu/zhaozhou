@@ -37,7 +37,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_curve_svc.h"
+#include "Vzhao_field_v3_curve.h"
 
 #include "zfield/zfield_steps.hpp"
 #include "zhao_sim.hpp"
@@ -90,7 +90,7 @@ void set66(W& w, int64_t p) {
 }
 
 /** One cycle: serve the mul bank, then clock the DUT. */
-void step(Vzhao_probe_curve_svc& dut, MulBank& mb) {
+void step(Vzhao_field_v3_curve& dut, MulBank& mb) {
   dut.mul_ready_i = mb.grant ? 1 : 0;
   if (mb.busy && mb.cnt == 0) {
     set66(dut.mul_p_0_i, mb.p[0]);
@@ -121,7 +121,7 @@ void step(Vzhao_probe_curve_svc& dut, MulBank& mb) {
 }
 
 // ---- table load ------------------------------------------------------------
-void load_table(Vzhao_probe_curve_svc& dut, MulBank& mb, int slot, const zfield::Table& t) {
+void load_table(Vzhao_field_v3_curve& dut, MulBank& mb, int slot, const zfield::Table& t) {
   const int n = (int)t.x.size();
   for (int i = 0; i < n; ++i) {
     dut.tl_we_i = 1;
@@ -167,7 +167,7 @@ Want oracle(const std::vector<zfield::Table>& tabs, int tbl, int mode, const int
   return w;
 }
 
-void drive_req(Vzhao_probe_curve_svc& dut, int tbl, int mode, const int32_t a[4], uint8_t tag) {
+void drive_req(Vzhao_field_v3_curve& dut, int tbl, int mode, const int32_t a[4], uint8_t tag) {
   dut.req_mode_i = (uint8_t)mode;
   dut.req_tbl_i = (uint8_t)tbl;
   dut.req_a_0_i = (uint32_t)a[0];
@@ -178,7 +178,7 @@ void drive_req(Vzhao_probe_curve_svc& dut, int tbl, int mode, const int32_t a[4]
   dut.req_valid_i = 1;
 }
 
-void check_rsp(Vzhao_probe_curve_svc& dut, const Want& w, uint8_t tag, const char* what) {
+void check_rsp(Vzhao_field_v3_curve& dut, const Want& w, uint8_t tag, const char* what) {
   const std::string t(what);
   const int32_t got[4] = {(int32_t)dut.rsp_r_0_o, (int32_t)dut.rsp_r_1_o, (int32_t)dut.rsp_r_2_o,
                           (int32_t)dut.rsp_r_3_o};
@@ -195,7 +195,7 @@ void check_rsp(Vzhao_probe_curve_svc& dut, const Want& w, uint8_t tag, const cha
 }
 
 /** One lone request through an idle service; returns reply latency. */
-int run_one(Vzhao_probe_curve_svc& dut, MulBank& mb, const std::vector<zfield::Table>& tabs,
+int run_one(Vzhao_field_v3_curve& dut, MulBank& mb, const std::vector<zfield::Table>& tabs,
             int tbl, int mode, const int32_t a[4], uint8_t tag, const char* what) {
   drive_req(dut, tbl, mode, a, tag);
   dut.rsp_ready_i = 1;
@@ -286,7 +286,7 @@ int main(int argc, char** argv) {
     if (!strcmp(argv[i], "--random") && i + 1 < argc) random_n = atoi(argv[i + 1]);
   }
 
-  Vzhao_probe_curve_svc dut;
+  Vzhao_field_v3_curve dut;
   MulBank mb;
   dut.rst_n = 0;
   dut.req_valid_i = 0;

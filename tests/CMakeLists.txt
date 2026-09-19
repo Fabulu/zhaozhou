@@ -1840,9 +1840,9 @@ set_tests_properties(field_dist_svc_random_nightly PROPERTIES LABELS "nightly" T
 add_executable(test_field_curve_svc_directed differential/field_curve_svc_directed.cpp)
 target_link_libraries(test_field_curve_svc_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_curve_svc_directed
-  PREFIX Vzhao_probe_curve_svc
-  TOP_MODULE zhao_probe_curve_svc
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+  PREFIX Vzhao_field_v3_curve
+  TOP_MODULE zhao_field_v3_curve
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv)
 add_test(NAME field_curve_svc_directed COMMAND test_field_curve_svc_directed)
 set_tests_properties(field_curve_svc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
@@ -1877,11 +1877,11 @@ set_tests_properties(field_v3_mulbank_random_nightly PROPERTIES LABELS "nightly"
 add_executable(test_field_v3_exec_directed differential/field_v3_exec_directed.cpp)
 target_link_libraries(test_field_v3_exec_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_exec_directed
-  PREFIX Vzhao_probe_v3_engine
-  TOP_MODULE zhao_probe_v3_engine
+  PREFIX Vzhao_field_v3_core
+  TOP_MODULE zhao_field_v3_core
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
@@ -1979,16 +1979,16 @@ set_tests_properties(field_v3_rot_random_nightly PROPERTIES LABELS "nightly" TIM
 add_executable(test_field_v3_full_directed differential/field_v3_full_directed.cpp)
 target_link_libraries(test_field_v3_full_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_full_directed
-  PREFIX Vzhao_probe_v3_full
-  TOP_MODULE zhao_probe_v3_full
+  PREFIX Vzhao_field_v3_engine
+  TOP_MODULE zhao_field_v3_engine
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
@@ -2011,19 +2011,107 @@ verilate(test_field_v3_full_directed
 add_test(NAME field_v3_full_directed COMMAND test_field_v3_full_directed)
 set_tests_properties(field_v3_full_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# THE PRODUCTION FIELD v3 ENGINE, LINTED AS ONE UNIT at -Wall.
+#
+# The composed machine had five differential gates on it and no LINT gate,
+# which is how four -Wall VARHIDDEN errors in zhao_field_v3_mulbank and
+# zhao_field_v3_ring_svc survived: every target that elaborates them is a
+# verilate() build, and verilate() does not pass -Wall. The errors were
+# found only when the whole engine was linted by hand, and one of them was
+# MASKING the svcpath mutation preflight, which had been dying on lint
+# before it checked a single anchor.
+#
+# UNUSEDSIGNAL is deliberately live here. A composition is exactly where a
+# response port carried and never read shows up, and it cannot show up in
+# the block that drives it.
+add_test(NAME lint_field_v3_engine
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_v3_engine
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
+set_tests_properties(lint_field_v3_engine PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# AND AT THE SHIPPED CONFIGURATION. field_v3_earth_quad gates the engine at
+# CTX=32 LANES=4 and the defaults below it are the SCALAR bench point, so a
+# lint of the defaults alone says nothing about the widths the console
+# instantiates. Both are cheap; only one of them is the machine.
+add_test(NAME lint_field_v3_engine_shipped
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 -GCTX=32 -GOUTSTANDING=16 -GLANES=4 -GLONGQ=16
+                 -GDIST_BANKS=8 -GRING_UNITS=8 -GREGS=64
+                 --top-module zhao_field_v3_engine
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rot.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_sbank.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring_svc.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_ring.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_trig.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_len.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_mulbank.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_wbarb.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_rf.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_mul.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv)
+set_tests_properties(lint_field_v3_engine_shipped PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+
 add_executable(test_field_v3_earth_directed differential/field_v3_earth_directed.cpp)
 target_link_libraries(test_field_v3_earth_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_earth_directed
-  PREFIX Vzhao_probe_v3_full
-  TOP_MODULE zhao_probe_v3_full
+  PREFIX Vzhao_field_v3_engine
+  TOP_MODULE zhao_field_v3_engine
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
@@ -2058,16 +2146,16 @@ set_tests_properties(field_v3_earth_directed PROPERTIES LABELS "fast;nightly" TI
 add_executable(test_field_v3_earth_wide differential/field_v3_earth_directed.cpp)
 target_link_libraries(test_field_v3_earth_wide PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_earth_wide
-  PREFIX Vzhao_probe_v3_full
-  TOP_MODULE zhao_probe_v3_full
+  PREFIX Vzhao_field_v3_engine
+  TOP_MODULE zhao_field_v3_engine
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
@@ -2151,16 +2239,16 @@ if(ZHAO_FIELD_SWEEP)
     add_executable(${tgt} differential/field_v3_earth_directed.cpp)
     target_link_libraries(${tgt} PRIVATE zhao_harness zhao_zref)
     verilate(${tgt}
-      PREFIX Vzhao_probe_v3_full
-      TOP_MODULE zhao_probe_v3_full
+      PREFIX Vzhao_field_v3_engine
+      TOP_MODULE zhao_field_v3_engine
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
@@ -2192,16 +2280,16 @@ endif()
 add_executable(test_field_v3_earth_quad differential/field_v3_earth_directed.cpp)
 target_link_libraries(test_field_v3_earth_quad PRIVATE zhao_harness zhao_zref)
 verilate(test_field_v3_earth_quad
-  PREFIX Vzhao_probe_v3_full
-  TOP_MODULE zhao_probe_v3_full
+  PREFIX Vzhao_field_v3_engine
+  TOP_MODULE zhao_field_v3_engine
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_ops_pkg.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_full.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_engine.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_v3_exec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_engine.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_core.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_exec.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv
@@ -4018,7 +4106,7 @@ verilate(test_field_v3_svcpath_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_svcpath.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_dispatch.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_noise.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_curve_svc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_curve.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_spline.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_v3_normalize.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_isqrt.sv

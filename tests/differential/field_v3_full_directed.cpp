@@ -15,7 +15,7 @@
 // Writing this file found a fifth before it ran a single clock: the executor
 // routes SPLINE and RING to the service path and the dispatcher refuses both,
 // so a program using either parks that context forever. That is in
-// zhao_probe_v3_full.sv's header and it is NOT fixed here, because the fix
+// zhao_field_v3_engine.sv's header and it is NOT fixed here, because the fix
 // follows a decision that is Fabian's.
 //
 // WHAT THE COMPOSITION ACTUALLY SUPPORTS TODAY, stated rather than implied:
@@ -36,7 +36,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_v3_full.h"
+#include "Vzhao_field_v3_engine.h"
 
 #include "zfield/zfield.hpp"
 #include "zfield/zfield_plan.hpp"
@@ -86,11 +86,11 @@ void oracle(uint8_t op, uint32_t imm, const int32_t* src, int32_t* dst) {
 }
 
 struct Dut {
-  Vzhao_probe_v3_full& t;
+  Vzhao_field_v3_engine& t;
   int32_t shadow[kCtx][kRegs] = {};
   int writes = 0;
 
-  explicit Dut(Vzhao_probe_v3_full& top) : t(top) {}
+  explicit Dut(Vzhao_field_v3_engine& top) : t(top) {}
 
   void reset(int policy) {
     t.rst_n = 0;
@@ -209,7 +209,7 @@ struct Dut {
 };
 
 /** One long op per context: preload x,y then run `op` into r2 (and r3). */
-int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs, const int32_t* ys,
+int run_long(Vzhao_field_v3_engine& top, uint8_t op, int n_ctx, const int32_t* xs, const int32_t* ys,
              uint32_t seed, int policy, bool rival, int32_t out[][2], int* clocks,
              bool reverse_start = false, const zfield::Table* tab = nullptr) {
   Dut d(top);
@@ -252,7 +252,7 @@ int run_long(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, const int32_t* xs,
 //
 // Each context gets its own op and its own immediate, and they are all started
 // before any finishes.
-int run_mixed(Vzhao_probe_v3_full& top, const uint8_t* ops, const uint32_t* imms, int n_ctx,
+int run_mixed(Vzhao_field_v3_engine& top, const uint8_t* ops, const uint32_t* imms, int n_ctx,
               const int32_t* xs, const int32_t* ys, int32_t out[][2], int* clocks,
               const zfield::Table* t0, const zfield::Table* t2) {
   Dut d(top);
@@ -286,7 +286,7 @@ int run_mixed(Vzhao_probe_v3_full& top, const uint8_t* ops, const uint32_t* imms
 // operand -- so NORMALIZE3 and ROT3 cannot be expressed in them at all. That
 // is not a small gap: it is why nothing in this file had ever run the two
 // widest ops through the whole machine.
-int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t src[5],
+int run_one(Vzhao_field_v3_engine& top, uint8_t op, uint32_t imm, const int32_t src[5],
             int32_t out[3], int* clocks, const zfield::Table* tab, const int32_t* uni = nullptr,
             const int* uni_slots = nullptr) {
   Dut d(top);
@@ -310,7 +310,7 @@ int run_one(Vzhao_probe_v3_full& top, uint8_t op, uint32_t imm, const int32_t sr
   return (fin == 1) ? d.alarms() : -1;
 }
 
-void check_group(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, uint32_t seed, int policy,
+void check_group(Vzhao_field_v3_engine& top, uint8_t op, int n_ctx, uint32_t seed, int policy,
                  bool rival, Prng& rng, const std::string& what) {
   // ZERO-INITIALISED, NOT MERELY DECLARED. Only n_ctx of kCtx entries are
   // filled, and all kCtx are passed down. A differential whose inputs are
@@ -354,7 +354,7 @@ void check_group(Vzhao_probe_v3_full& top, uint8_t op, int n_ctx, uint32_t seed,
 
 int main(int argc, char** argv) {
   Verilated::commandArgs(argc, argv);
-  Vzhao_probe_v3_full top;
+  Vzhao_field_v3_engine top;
   Prng rng(0xF0117Eu);
 
   printf("== section 1: ONE long op, all the way round the machine ==\n");

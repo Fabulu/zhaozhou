@@ -259,10 +259,10 @@ module zhao_field_v3_ring_svc #(
     have_free_c = 1'b0;
     free_u_c    = '0;
     // Lowest free unit, scanned downwards so unit 0 wins -- arbitrary but FIXED.
-    for (int u = UNITS - 1; u >= 0; u--)
-      if (!u_busy_r[u]) begin
+    for (int uu = UNITS - 1; uu >= 0; uu--)
+      if (!u_busy_r[uu]) begin
         have_free_c = 1'b1;
-        free_u_c    = UW'(u);
+        free_u_c    = UW'(uu);
       end
   end
 
@@ -375,14 +375,14 @@ module zhao_field_v3_ring_svc #(
       hand_wait_clocks_o <= 32'd0;
       desc_hit_o         <= 32'd0;
       desc_miss_o        <= 32'd0;
-      for (int u = 0; u < UNITS; u++) begin
-        u_busy_r[u] <= 1'b0;
-        u_off_r[u]  <= 1'b0;
-        u_tag_r[u]  <= 8'd0;
-        oq_u_r[u]   <= '0;
+      for (int uu = 0; uu < UNITS; uu++) begin
+        u_busy_r[uu] <= 1'b0;
+        u_off_r[uu]  <= 1'b0;
+        u_tag_r[uu]  <= 8'd0;
+        oq_u_r[uu]   <= '0;
         for (int i = 0; i < 4; i++) begin
-          u_d_r[u][i]   <= '0;
-          u_uni_r[u][i] <= '0;
+          u_d_r[uu][i]   <= '0;
+          u_uni_r[uu][i] <= '0;
         end
       end
     end else begin
@@ -472,8 +472,8 @@ module zhao_field_v3_ring_svc #(
       endcase
 
       // ---- each unit is offered its group exactly once ---------------------
-      for (int u = 0; u < UNITS; u++)
-        if (rg_v_valid[u] && rg_v_ready[u]) u_off_r[u] <= 1'b1;
+      for (int uu = 0; uu < UNITS; uu++)
+        if (rg_v_valid[uu] && rg_v_ready[uu]) u_off_r[uu] <= 1'b1;
 
       // ---- the prepared values changed, so the cache is worthless ----------
       // Bluntly, on any scalar-bank write. A finer rule -- invalidate only the

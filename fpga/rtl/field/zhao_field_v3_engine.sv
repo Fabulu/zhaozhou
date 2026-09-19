@@ -1,12 +1,44 @@
-// zhao_probe_v3_full.sv — the Field v3 engine and its long-op service path,
+// zhao_field_v3_engine.sv — the Field v3 engine and its long-op service path,
 // wired together as one machine.
 //
 // ENFORCED-BY: tests/differential/field_v3_full_directed.cpp:main
 //
+// THIS IS THE PRODUCTION FIELD v3 ENGINE. It was `fpga/rtl/synth/
+// zhao_probe_v3_full.sv` until 2026-09-19 and nothing about the circuit
+// changed in the move -- the same five gates drive the same wiring. What
+// changed is that it now has a NAME, a HOME and a FIT TARGET, which is the
+// whole of what was missing. `design/prod_manifest.yml` had named the two
+// conditions for v3 to displace v1 in the console: "when the v3 executor is
+// promoted out of `synth/` and its dispatcher disagreement settled". The
+// second was settled three weeks before the sentence was written (see the
+// section on `zhao_field_ops_pkg.sv` below); this file and its three siblings
+// -- `zhao_field_v3_exec.sv`, `zhao_field_v3_core.sv`, `zhao_field_v3_curve.sv`
+// -- are the first.
+//
+// TWO INPUTS ON THIS BLOCK ARE MEASUREMENT APPARATUS AND ARE SAID SO OUT LOUD,
+// because an undeclared test port in production RTL is how scaffolding ships:
+//
+//   * `rival_req_i` is a SECOND CLAIMANT on the engine's four-wide multiplier
+//     bank. Without it the arbiter always grants and every refusal path in the
+//     executor is unreachable dead code -- the engine's first sweep scored
+//     4 of 11 for exactly that reason. `zhao_field_v3_svcpath` carries the
+//     identical port for the identical reason and is production. The console
+//     ties it to 1'b0, which constant-folds claimant 1 out of the arbiter, so
+//     it is free in the shipped configuration and priceless in the bench.
+//   * `wb_policy_i` chooses between drain-first and ALU-first on the single
+//     register-file write port. It is an INPUT rather than a constant because
+//     the answer is a measurement -- see `zhao_field_v3_wbarb`.
+//
+// THE SHIPPED CONFIGURATION is the one `field_v3_earth_quad` gates:
+// CTX=32 OUTSTANDING=16 LANES=4 LONGQ=16 DIST_BANKS=8 RING_UNITS=8 REGS=64.
+// The defaults below are the SCALAR bench point (LANES=1, CTX=8) that every
+// older tally was taken at, and they are kept so those tallies still mean what
+// they meant. A fit that does not override them is measuring the bench.
+//
 // ---------------------------------------------------------------------------
 // WHY THIS IS A SEPARATE FILE AND NOT A CHANGE TO THE ENGINE
 // ---------------------------------------------------------------------------
-// `zhao_probe_v3_engine` is closed at 42/42 and `zhao_field_v3_svcpath` at
+// `zhao_field_v3_core` is closed at 42/42 and `zhao_field_v3_svcpath` at
 // 25/25. Both tallies describe the blocks AS THEY ARE. Editing either to make
 // them fit would invalidate the tally of the block edited, and this project has
 // already spent a day discovering that a tally quoted after its RTL moved is
@@ -49,45 +81,39 @@
 // measured wrong twice before the queue existed. That is the piece that makes
 // this composition safe, and it is why this file could not be written earlier.
 // ---------------------------------------------------------------------------
-// A DISAGREEMENT THE COMPOSITION EXPOSES, AND IT DEADLOCKS
+// THE DISAGREEMENT THIS COMPOSITION EXPOSED, AND WHERE IT WAS SETTLED
 // ---------------------------------------------------------------------------
-// The executor's `is_long()` routes TEN opcodes to the service path:
+// This header used to end with a live defect, and the sentence mattered enough
+// that `design/prod_manifest.yml` and `fpga/rtl/prod/zhao_console_core.sv` both
+// quote it as the reason the console composes FIELD v1 instead of v3:
 //
-//     NORMALIZE2 15  NORMALIZE3 16  CURVE 1A  SPLINE 1B  NOISE2 1C
-//     DCURVE 1D      RING 21        RIDGE 22  ROT2 28    ROT3 29
+//     "a program containing SPLINE or RING PARKS THAT CONTEXT FOREVER"
 //
-// The dispatcher's `dst_width_of()` knows EIGHT of them. It does not know
-// SPLINE (1B) or RING (21), and its default of width 0 means REFUSE -- which
-// is correct there and documented as deliberate, because a wrong width writes
-// the wrong number of registers.
+// IT IS FIXED, and it has been since 2026-08-29. The executor's `is_long()`
+// and the dispatcher's `dst_width_of()` each kept a private opcode list; they
+// disagreed about SPLINE (0x1B) and UOP_RING_PREP (0xF1), and an op offered by
+// one and refused by the other parked its context with nothing timing out.
 //
-// Put the two together and a program containing SPLINE or RING PARKS THAT
-// CONTEXT FOREVER: the executor hands the instruction over and waits for a
-// release that cannot come, because the dispatcher will never accept it.
-// Nothing times out. The context simply stops.
+// `fpga/rtl/field/zhao_field_ops_pkg.sv` is the repair, and it is structural
+// rather than a patch of the two lists:
 //
-// NEITHER BLOCK IS WRONG ON ITS OWN, which is why nine sweeps and two
-// closed compositions never saw it. The executor is right that SPLINE is a
-// long op; the dispatcher is right to refuse a width it does not know. The
-// defect is only in the pair, and only when a program uses one of those two.
+//     is_long(op)      := field_long_width(op) != 0
+//     dst_width_of(op) := field_long_width(op)
 //
-// IT IS NOT FIXED HERE, because the fix depends on a decision that is not an
-// agent's to make -- see STATUS.md:
+// ONE table, TWO readers, so the two CANNOT disagree -- the shape of fix this
+// file's own history argues for, because patching the lists to match would
+// have fixed that day's deadlock and left the next one. SPLINE and
+// UOP_RING_PREP joined the table only after a service could answer them, which
+// is why the table entry is the last step of an op's attachment and never the
+// first. OP_RING (0x21), the varying-radius form, is deliberately absent from
+// the table and therefore absent from BOTH readers: it stays cold, and
+// `zhao_field_curve.sv`'s scalar path implements it.
 //
-//   * if SPLINE stays COLD (the brief's position), `is_long()` should not
-//     route it at all: the scalar path in zhao_field_curve.sv implements the
-//     whole op, lookup included;
-//   * if it goes HOT, the dispatcher needs the case AND a four-point table
-//     lookup that does not exist yet.
-//
-// RING is the same shape with a different answer: the brief costs the PREPARED
-// ring (UOP_RING_PREP, 0xF1) as its hot path, and OP_RING (0x21) is the
-// varying-radius form that stays cold. So 0x21 probably should not be in
-// `is_long()` either, and 0xF1 probably should be in `dst_width_of()`.
-//
-// Until then the composed test drives only the eight both blocks agree on, and
-// says so rather than quietly avoiding the other two.
-module zhao_probe_v3_full #(
+// So the composed gate drives all fifteen served ops, not the eight of the
+// sentence above. The stale claim is recorded here rather than deleted,
+// because two production files cite it and a reader who finds only silence
+// cannot tell a repair from an oversight.
+module zhao_field_v3_engine #(
     parameter int CTX  = 8,
     parameter int OUTSTANDING = 4,
     // Points per context. Everything below simply carries it.
@@ -301,7 +327,7 @@ module zhao_probe_v3_full #(
   logic [7:0]  engine_bank_tag;
   /* verilator lint_on UNUSEDSIGNAL */
 
-  zhao_probe_v3_engine #(
+  zhao_field_v3_core #(
       .CTX(CTX), .REGS(REGS), .PLAN(PLAN), .LANES(LANES), .LONGQ(LONGQ)
   ) u_engine (
       .clk(clk), .rst_n(rst_n),
@@ -423,4 +449,4 @@ module zhao_probe_v3_full #(
     end
   end
 
-endmodule : zhao_probe_v3_full
+endmodule : zhao_field_v3_engine

@@ -1,5 +1,11 @@
-// zhao_probe_v3_engine.sv — the first composition: executor + shared
+// zhao_field_v3_core.sv — the first composition: executor + shared
 // multiplier bank. Field v3 Phase 4.
+//
+// PROMOTED 2026-09-19 from `fpga/rtl/synth/zhao_probe_v3_engine.sv` and
+// RENAMED: the name `engine` now belongs to `zhao_field_v3_engine.sv`, the
+// whole composed machine. This is the CORE -- the executor and the engine own
+// four-wide multiplier bank, without the service path -- and it is where the
+// executor REFUSAL paths are reachable, because the bank has a rival.
 //
 // WHAT THIS IS, AND WHAT IT IS NOT YET
 // -------------------------------------
@@ -11,7 +17,7 @@
 //
 // This composes the two pieces that exist and are measured:
 //
-//   * `zhao_probe_v3_exec`      — the datapath, swept 31/31, now with its
+//   * `zhao_field_v3_exec`      — the datapath, swept 31/31, now with its
 //                                 private multiplier REMOVED and a claimant
 //                                 port in its place;
 //   * `zhao_field_v3_mulbank`   — the four-wide bank and its arbiter, which
@@ -44,7 +50,7 @@
 
 `default_nettype none
 
-module zhao_probe_v3_engine #(
+module zhao_field_v3_core #(
     parameter int CTX  = 8,
     parameter int REGS = 32,
     parameter int PLAN = 32,
@@ -107,10 +113,10 @@ module zhao_probe_v3_engine #(
     input  var logic signed [32*LANES-1:0] wr_data_i,
     // The register file's own write count, so a test can check that the file
     // was written exactly as often as the port was asked -- see the port's
-    // comment in zhao_probe_v3_exec.
+    // comment in zhao_field_v3_exec.
     output var logic [31:0]             rf_writes_o,
     // A write was dropped for want of skid room -- sticky; see the port's
-    // comment in zhao_probe_v3_exec.
+    // comment in zhao_field_v3_exec.
     output var logic                    sk_overflow_o,
     output var logic [$clog2(CTX)-1:0]  wb_ctx_o,
     output var logic [$clog2(REGS)-1:0] wb_reg_o,
@@ -246,7 +252,7 @@ module zhao_probe_v3_engine #(
       .desync_o    (bank_desync_o)
   );
 
-  zhao_probe_v3_exec #(
+  zhao_field_v3_exec #(
       .LANES(LANES), .LONGQ(LONGQ),
       .CTX (CTX),
       .REGS(REGS),

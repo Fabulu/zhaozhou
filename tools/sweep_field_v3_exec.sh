@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sweep_field_v3_exec.sh — mutation sweep for the FIELD v3 four-bank patch
-# probe (fpga/rtl/synth/zhao_probe_v3_exec.sv; accumulator; Phase 3 probe 5 of
+# probe (fpga/rtl/field/zhao_field_v3_exec.sv; accumulator; Phase 3 probe 5 of
 # reports/Fieldv3.md).
 #
 # Inherits the house guards (sweep_geom_wcache.sh / sweep_cmd_dma.sh):
@@ -31,10 +31,10 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 
 MUT=tools/sweep_field_v3_exec_mutants.py
-RTL=fpga/rtl/synth/zhao_probe_v3_exec.sv
+RTL=fpga/rtl/field/zhao_field_v3_exec.sv
 # BOTH CONSUMERS, because the roster guard is right to insist.
 #
-# `zhao_probe_v3_full` elaborates this executor too, so a mutant reaches its
+# `zhao_field_v3_engine` elaborates this executor too, so a mutant reaches its
 # model as well. Running only one target would leave the other's binary
 # carrying mutant-derived code that nothing scores -- which is the exact hole
 # the guard exists to find, and it found it the moment the composed top was
@@ -67,7 +67,7 @@ hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 #
 # This guard used to be `grep -B12 "TOP_MODULE <module>"`, which was correct
 # only while every swept block was its own top. The DOT fix composed this
-# executor into zhao_probe_v3_engine, the grep found nothing, and the sweep
+# executor into zhao_field_v3_core, the grep found nothing, and the sweep
 # aborted naming an EMPTY roster. The guard was right to refuse -- it could no
 # longer see what it was guarding.
 #
@@ -104,9 +104,9 @@ check_consumers() {
 
 # THE MODEL DIRECTORY IS NAMED FOR THE TOP, NOT FOR THE MUTATED FILE.
 #
-# This driver hardcoded `Vzhao_probe_v3_exec.dir` for both the presence check
+# This driver hardcoded `Vzhao_field_v3_exec.dir` for both the presence check
 # and the binary-hash discard check. Once the executor became a submodule of
-# zhao_probe_v3_engine that directory stopped existing, and the sweep aborted
+# zhao_field_v3_core that directory stopped existing, and the sweep aborted
 # with "pristine model did not elaborate" over a build that had linked
 # cleanly.
 #
@@ -121,7 +121,7 @@ check_consumers() {
 #
 # It used to be resolved once from the first target. That was fine while every
 # sweep ran a single binary; with two targets whose models are named
-# differently -- Vzhao_probe_v3_engine and Vzhao_probe_v3_full -- a single
+# differently -- Vzhao_field_v3_core and Vzhao_field_v3_engine -- a single
 # prefix makes the hash check look at a directory that does not exist for the
 # second, which reads as "model absent" and aborts the run.
 #

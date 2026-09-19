@@ -1,5 +1,12 @@
-// zhao_probe_v3_exec.sv — Field v3 Phase 4: the vector executor DATAPATH,
+// zhao_field_v3_exec.sv — Field v3 Phase 4: the vector executor DATAPATH,
 // one lane.
+//
+// PROMOTED 2026-09-19 from `fpga/rtl/synth/zhao_probe_v3_exec.sv`, module name
+// and all. Nothing about the circuit changed: this is the same file, in the
+// production directory, under the name the thing it is deserves. It was called
+// a probe while it was the only executor FIELD v3 has, and prod_manifest.yml
+// read that name literally -- "the executor itself is NOT BUILT" -- which is
+// how a naming convention came to be quoted as a design gap.
 //
 // WHERE THIS SITS
 // ---------------
@@ -84,7 +91,7 @@
 //
 // LANES = 1 is the scalar machine this grew from, bit for bit, which is what
 // the executor, full and Earth differentials check today.
-module zhao_probe_v3_exec #(
+module zhao_field_v3_exec #(
     parameter int LANES = 1,
     // Depth of the long-op request queue. See LQD below.
     parameter int LONGQ = 4,
@@ -167,7 +174,7 @@ module zhao_probe_v3_exec #(
     // is a larger change to a block that is closed at 42/42, for no behaviour
     // that this does not already give.
     //
-    // `zhao_probe_v3_engine` loops this straight back from the ALU's own
+    // `zhao_field_v3_core` loops this straight back from the ALU's own
     // request, so an engine with nothing attached behaves exactly as it did --
     // which is what keeps every existing test meaningful rather than merely
     // passing.

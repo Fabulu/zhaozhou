@@ -49,7 +49,7 @@ hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 #
 # This guard used to be `grep -B12 "TOP_MODULE <module>"`, which was correct
 # only while every swept block was its own top. The DOT fix composed this
-# executor into zhao_probe_v3_engine, the grep found nothing, and the sweep
+# executor into zhao_field_v3_core, the grep found nothing, and the sweep
 # aborted naming an EMPTY roster. The guard was right to refuse -- it could no
 # longer see what it was guarding.
 #
@@ -88,7 +88,7 @@ check_consumers() {
 #
 # This driver hardcoded `Vzhao_field_v3_wbarb.dir` for both the presence check
 # and the binary-hash discard check. Once the executor became a submodule of
-# zhao_probe_v3_engine that directory stopped existing, and the sweep aborted
+# zhao_field_v3_core that directory stopped existing, and the sweep aborted
 # with "pristine model did not elaborate" over a build that had linked
 # cleanly.
 #

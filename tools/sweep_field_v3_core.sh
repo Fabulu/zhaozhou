@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# sweep_field_v3_mulbank.sh — mutation sweep for the FIELD v3 four-bank patch
-# probe (fpga/rtl/field/zhao_field_v3_mulbank.sv; accumulator; Phase 3 probe 5 of
+# sweep_field_v3_core.sh — mutation sweep for the FIELD v3 four-bank patch
+# probe (fpga/rtl/field/zhao_field_v3_core.sv; accumulator; Phase 3 probe 5 of
 # reports/Fieldv3.md).
 #
 # Inherits the house guards (sweep_geom_wcache.sh / sweep_cmd_dma.sh):
@@ -19,7 +19,7 @@
 #             7 pristine tests red, 8 preflight, 9 consumer roster,
 #             12 undeclared survivor.
 #
-# DEDICATED BUILD DIR (build-verify), added after a MEASURED collision:
+# DEDICATED BUILD DIR ($BUILD_DIR), added after a MEASURED collision:
 # 2026-08-27, this sweep ran against the shared build/ while a concurrent
 # session's ninja was live in it; nine of fifteen mutants were DISCARDED
 # with "model or exe absent after rebuild" -- two writers, one build dir.
@@ -30,36 +30,116 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-MUT=tools/sweep_field_v3_mulbank_mutants.py
-RTL=fpga/rtl/field/zhao_field_v3_mulbank.sv
-TARGETS="test_field_v3_mulbank_directed"
+MUT=tools/sweep_field_v3_core_mutants.py
+RTL=fpga/rtl/field/zhao_field_v3_core.sv
+# EVERY CONSUMER, because the roster guard is right to insist.
+#
+# A mutant reaches the model of ANY target that elaborates the mutated file, so
+# running only one leaves the others' binaries carrying mutant-derived code
+# that nothing scores -- the exact hole the guard exists to find. It found it
+# the moment zhao_field_v3_engine was added.
+#
+# Running them all is also stronger than merely legal: the composed lane drives
+# eight contexts through a real service path, which is where several of this
+# family's defects actually showed up.
+TARGETS="test_field_v3_exec_directed test_field_v3_full_directed"
 
 # An ABSOLUTE path inside the repo, not /tmp. Git-for-Windows bash and the
 # msys bash map /tmp to DIFFERENT directories, so a log written by a detached
 # runner was invisible to the shell reading it -- which is why the rebuild
 # diagnostics appeared to be missing entirely when they were simply somewhere
 # else.
-REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild.log}"
+# THE BUILD DIRECTORY IS A KNOB, so two sweeps can run at once in trees of
+# their own. Separate build directories have separate caches and the source
+# tree is only read, so concurrent sweeps in DIFFERENT trees are fine -- what
+# breaks is two writers in the SAME tree, because a sweep deletes its target's
+# model directory and exe before every rebuild.
+#
+# (An earlier note here claimed no build could run anywhere during a sweep.
+# That was inferred from a failure later explained by ccache, and is wrong.)
+BUILD_DIR="${BUILD_DIR:-build-verify}"
+REBUILD_LOG="${REBUILD_LOG:-$(pwd)/runs/CLAUDE-RUNS/sweep_rebuild_${BUILD_DIR}.log}"
 
 hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 
+# CONSUMERS ARE READ FROM SOURCES, NOT FROM TOP_MODULE.
+#
+# This guard used to be `grep -B12 "TOP_MODULE <module>"`, which was correct
+# only while every swept block was its own top. The DOT fix composed this
+# executor into zhao_field_v3_core, the grep found nothing, and the sweep
+# aborted naming an EMPTY roster. The guard was right to refuse -- it could no
+# longer see what it was guarding.
+#
+# The rule is now: every target this sweep RUNS must really elaborate the
+# file, and every OTHER target that elaborates it must be declared here with a
+# reason. A consumer that is neither run nor declared is the hole the guard
+# exists to find.
+UNRUN_CONSUMERS="${UNRUN_CONSUMERS:-}"
+
 check_consumers() {
-  local declared
-  declared=$(grep -B12 "TOP_MODULE zhao_field_v3_mulbank" tests/CMakeLists.txt \
-             | grep -oE "verilate\(test_[a-z_0-9]+" | sed 's/verilate(//' | sort -u)
-  if [ "$declared" != "$TARGETS" ]; then
-    echo "ABORT: tests/CMakeLists.txt elaborates zhao_field_v3_mulbank into target(s):"
-    echo "$declared"
-    echo "but this sweep runs: $TARGETS — update TARGETS or the roster."
+  local declared t c
+  declared=$(python tools/sweep_consumers.py "$RTL") || {
+    echo "ABORT: no verilate() target elaborates $RTL"
     return 1
-  fi
+  }
+  for t in $TARGETS; do
+    echo "$declared" | grep -qx "$t" || {
+      echo "ABORT: this sweep runs $t, which does not elaborate $RTL"
+      return 1
+    }
+  done
+  for c in $declared; do
+    case " $TARGETS $UNRUN_CONSUMERS " in
+      *" $c "*) ;;
+      *)
+        echo "ABORT: $c also elaborates $RTL and is neither run by this sweep"
+        echo "       nor declared in UNRUN_CONSUMERS -- its models would carry"
+        echo "       mutant-derived code that nothing scores."
+        return 1 ;;
+    esac
+  done
   return 0
 }
 
+# THE MODEL DIRECTORY IS NAMED FOR THE TOP, NOT FOR THE MUTATED FILE.
+#
+# This driver hardcoded `Vzhao_field_v3_exec.dir` for both the presence check
+# and the binary-hash discard check. Once the executor became a submodule of
+# zhao_field_v3_core that directory stopped existing, and the sweep aborted
+# with "pristine model did not elaborate" over a build that had linked
+# cleanly.
+#
+# The abort was the harmless outcome. The discard check hashes this directory
+# to prove a mutant really re-elaborated -- so if a directory of that name had
+# happened to exist, every mutant would have passed the check as "changed"
+# while the sweep scored a model the mutation never touched. Full marks over
+# nothing at all.
+#
+# It is read from the verilate() PREFIX now, so it cannot drift again.
+# THE PREFIX IS PER TARGET, not one for the sweep.
+#
+# It used to be resolved once from the first target, which was fine while every
+# sweep ran a single binary. With targets whose models are named differently a
+# single prefix makes the hash check look at a directory that does not exist
+# for the others -- and that check is what proves a mutant really
+# re-elaborated. Hashing a directory the mutation cannot reach would pass every
+# mutant as "changed" while scoring a model that never moved.
+prefix_of() {
+  python tools/sweep_consumers.py --prefix "$1"
+}
+
+for t in $TARGETS; do
+  if ! prefix_of "$t" >/dev/null; then
+    echo "ABORT: cannot resolve the verilate PREFIX for $t"
+    exit 9
+  fi
+done
+
 model_hash() {
-  local t h=""
+  local t p h=""
   for t in $TARGETS; do
-    h="$h$(find "build-verify/tests/CMakeFiles/$t.dir/Vzhao_field_v3_mulbank.dir" -type f \
+    p=$(prefix_of "$t")
+    h="$h$(find "$BUILD_DIR/tests/CMakeFiles/$t.dir/${p}.dir" -type f \
              \( -name "*.cpp" -o -name "*.h" \) 2>/dev/null \
            | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d" " -f1)"
   done
@@ -67,9 +147,10 @@ model_hash() {
 }
 
 models_present() {
-  local t
+  local t p
   for t in $TARGETS; do
-    [ -d "build-verify/tests/CMakeFiles/$t.dir/Vzhao_field_v3_mulbank.dir" ] || return 1
+    p=$(prefix_of "$t")
+    [ -d "$BUILD_DIR/tests/CMakeFiles/$t.dir/${p}.dir" ] || return 1
   done
   return 0
 }
@@ -77,7 +158,7 @@ models_present() {
 exes_present() {
   local t
   for t in $TARGETS; do
-    [ -x "build-verify/tests/$t.exe" ] || return 1
+    [ -x "$BUILD_DIR/tests/$t.exe" ] || return 1
   done
   return 0
 }
@@ -85,13 +166,13 @@ exes_present() {
 rebuild() {
   local t
   for t in $TARGETS; do
-    rm -rf "build-verify/tests/CMakeFiles/$t.dir"
+    rm -rf "$BUILD_DIR/tests/CMakeFiles/$t.dir"
     # guard 5: the exe lives OUTSIDE the target dir, so it must be deleted
     # too -- and it must be deleted from THIS sweep's own build dir. This
     # line said "build/tests" until 2026-08-27, which both left the real
     # stale exe in place (defeating the guard) and deleted another
     # session's binary out of the shared tree.
-    rm -f "build-verify/tests/$t.exe"
+    rm -f "$BUILD_DIR/tests/$t.exe"
   done
   # deleting a verilated target dir removes files only CONFIGURE regenerates
   # (the house sweeps learned this the same way); VERILATOR_ROOT must be set
@@ -121,10 +202,10 @@ rebuild() {
   # object cache OFF removes the dependency rather than negotiating with it.
   # A sweep rebuilds one target dozens of times, so losing the cache costs
   # real time -- but a sweep that cannot build costs all of it.
-  cmake -S . -B build-verify -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     -DOBJCACHE_ENABLED=OFF     >"$REBUILD_LOG" 2>&1
+  cmake -S . -B $BUILD_DIR -G Ninja -DCMAKE_BUILD_TYPE=Release     -DCMAKE_CXX_COMPILER=C:/programmieren/dsstuff/mingw64/bin/g++.exe     -DCMAKE_MAKE_PROGRAM=C:/programmieren/dsstuff/mingw64/bin/ninja.exe     -DOBJCACHE_ENABLED=OFF     >"$REBUILD_LOG" 2>&1
   echo "CMAKE_EXIT:$?" >>"$REBUILD_LOG"
   # shellcheck disable=SC2086
-  ninja -C build-verify $TARGETS >>"$REBUILD_LOG" 2>&1
+  ninja -C $BUILD_DIR $TARGETS >>"$REBUILD_LOG" 2>&1
   # THE EXIT CODES ARE RECORDED. Without them a failed rebuild surfaces only
   # as the downstream "pristine target did not link", and the log's last line
   # is ninja ANNOUNCING the link step -- ninja prints a step before running
@@ -146,9 +227,16 @@ rebuild() {
 # randomized lane is where contention between claimants actually happens; the
 # directed lane drives one saturating case and would miss a routing bug that
 # only appears when the winner changes clock to clock.
+# EVERY FAST CTEST LANE OF THIS BINARY, with the arguments
+# tests/CMakeLists.txt actually registers -- `--random 40`, not the bank's
+# 2000 this driver was derived with. The consumer-roster guard cannot catch a
+# mismatch here: it checks which TARGETS elaborate the module, not which
+# ARGUMENTS the lanes pass. CMD.DMA scored 6 of 21 instead of 12 for exactly
+# this reason.
 run_lanes() {
-  ./build-verify/tests/test_field_v3_mulbank_directed.exe >/dev/null 2>&1 || return 1
-  ./build-verify/tests/test_field_v3_mulbank_directed.exe --random 2000 >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_v3_exec_directed.exe >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_v3_exec_directed.exe --random 40 >/dev/null 2>&1 || return 1
+  ./$BUILD_DIR/tests/test_field_v3_full_directed.exe >/dev/null 2>&1 || return 1
   return 0
 }
 
@@ -156,7 +244,7 @@ echo "== consumer roster =="
 check_consumers || exit 9
 
 echo "== preflight =="
-python tools/sweep_field_v3_mulbank_preflight.py || exit 8
+python tools/sweep_field_v3_core_preflight.py || exit 8
 
 expected=$(python "$MUT" --count) || exit 3
 

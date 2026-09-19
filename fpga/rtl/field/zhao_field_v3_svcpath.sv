@@ -266,7 +266,7 @@ module zhao_field_v3_svcpath #(
   localparam logic [7:0] OP_DIST2 = 8'h14;
 
   // A DEBUGGING CONVENIENCE, AND NOT MORE THAN THAT. These are the same
-  // constants zhao_probe_v3_engine ties its spare bank lanes to, and this
+  // constants zhao_field_v3_core ties its spare bank lanes to, and this
   // comment used to repeat that block's argument: "recognisable, so a routing
   // bug into an unused lane looks wrong rather than convincing".
   //
@@ -458,7 +458,7 @@ module zhao_field_v3_svcpath #(
   assign cv_mode_c = (svc_op == OP_DCURVE) ? 2'd1
                    : (svc_op == OP_SPLINE) ? 2'd2 : 2'd0;
 
-  zhao_probe_curve_svc u_curve (
+  zhao_field_v3_curve u_curve (
       .clk(clk), .rst_n(rst_n),
       .tl_we_i(tl_we_i), .tl_tbl_i(tl_tbl_i), .tl_idx_i(tl_idx_i),
       .tl_x_i(tl_x_i), .tl_y_i(tl_y_i), .tl_dy_i(tl_dy_i),
@@ -508,7 +508,7 @@ module zhao_field_v3_svcpath #(
   // once is worth the comment.
   //
   // The four source ports are filled BY OPERAND GROUP, not by flattening:
-  // zhao_probe_v3_exec drives long_s0/s1/s2 from operand a's three members and
+  // zhao_field_v3_exec drives long_s0/s1/s2 from operand a's three members and
   // long_s3 from operand b's single member, whatever a's width. ROT2's angle
   // is operand b, so it arrives on s3 even though a uses only s0 and s1 and
   // leaves s2 idle.

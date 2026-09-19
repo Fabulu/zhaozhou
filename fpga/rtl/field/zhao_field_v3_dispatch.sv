@@ -40,7 +40,7 @@
 //
 // 2. PAD UNUSED LANES WITH A RECOGNISABLE VALUE, NEVER ZERO. Zero is a
 //    plausible coordinate and a plausible result, so a routing bug that let a
-//    padded lane reach a writeback would look correct. zhao_probe_v3_engine
+//    padded lane reach a writeback would look correct. zhao_field_v3_core
 //    ties its unused bank lanes to 3 and 5 for this reason and the same
 //    constants are reused here, so the two read as one decision rather than
 //    two coincidences.
@@ -191,14 +191,14 @@ module zhao_field_v3_dispatch #(
     // A reply whose tag is not the one outstanding. The service replies in
     // accept order and only one group is outstanding, so this can never fire.
     // It is an output rather than an assertion because the same choice caught
-    // a real pipeline bug in zhao_probe_v3_exec on its first run.
+    // a real pipeline bug in zhao_field_v3_exec on its first run.
     output var logic                          tag_mismatch_o
 );
 
   localparam int CTXW = $clog2(CONTEXTS);
   localparam int REGW = $clog2(REGS);
 
-  // The pad constants are zhao_probe_v3_engine's, deliberately. See rule 2.
+  // The pad constants are zhao_field_v3_core's, deliberately. See rule 2.
   localparam logic signed [31:0] PAD_A = 32'sd3;
   localparam logic signed [31:0] PAD_B = 32'sd5;
   localparam logic signed [31:0] PAD_C = 32'sd7;
@@ -226,7 +226,7 @@ module zhao_field_v3_dispatch #(
   //   OP_SPLINE (0x1B) -- DELIBERATE. Fieldv3.md section 6 puts spline on the
   //     COLD SERVICE LANE: keep the complete exact scalar implementation,
   //     classify it as exact but not certified for the maximum live-field
-  //     workload. zhao_probe_curve_svc.sv states the same in its own header --
+  //     workload. zhao_field_v3_curve.sv states the same in its own header --
   //     "MODES: CURVE (0) and DCURVE (1) only. SPLINE is COLD by the brief's
   //     own service split and is not barreled." The scalar path in
   //     zhao_field_curve.sv implements the whole op, lookup included, and is

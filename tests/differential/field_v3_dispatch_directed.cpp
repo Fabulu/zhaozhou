@@ -20,7 +20,7 @@
 //      plus `flush_i` must produce a request, because waiting for a fourth
 //      context that has already finished its program is a deadlock.
 //   3. PADDED LANES ARE VISIBLY NOT DATA, AND NEVER WRITTEN. The pad is 3/5/7,
-//      the same constants zhao_probe_v3_engine ties its unused bank lanes to.
+//      the same constants zhao_field_v3_core ties its unused bank lanes to.
 //      A padded lane must produce NO writeback at all.
 //   4. A CONTEXT IS RELEASED AFTER ITS LAST REGISTER, not before. Releasing
 //      early would let it re-issue and read a register the drain has not

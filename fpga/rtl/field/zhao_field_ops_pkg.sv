@@ -10,7 +10,7 @@
 // dispatcher decided which opcodes it would accept, and they each kept their
 // own list.
 //
-//     zhao_probe_v3_exec.sv   is_long()       routed TEN opcodes
+//     zhao_field_v3_exec.sv   is_long()       routed TEN opcodes
 //     zhao_field_v3_dispatch  dst_width_of()  knew EIGHT
 //
 // The two it did not know were SPLINE (0x1B) and RING (0x21), and a width of

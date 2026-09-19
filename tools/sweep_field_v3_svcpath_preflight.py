@@ -47,7 +47,7 @@ CONE = [
     # set of files -- the shape of seam defect this engine has produced
     # four times. They are not yet derived from one another; when this
     # list is next wrong, that is the fix.
-    "fpga/rtl/synth/zhao_probe_curve_svc.sv",
+    "fpga/rtl/field/zhao_field_v3_curve.sv",
     "fpga/rtl/field/zhao_field_v3_spline.sv",
     "fpga/rtl/field/zhao_field_v3_normalize.sv",
     "fpga/rtl/field/zhao_field_isqrt.sv",

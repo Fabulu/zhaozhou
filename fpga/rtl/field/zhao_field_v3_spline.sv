@@ -17,7 +17,7 @@
 // same reason: the half that needs a table cache is somebody else's, and
 // pretending otherwise would mean a second copy of the curve service.
 //
-// THAT SPLIT IS A REAL DECISION AND IT IS NOT FREE. `zhao_probe_curve_svc`
+// THAT SPLIT IS A REAL DECISION AND IT IS NOT FREE. `zhao_field_v3_curve`
 // already owns a table cache and a six-step search, and it CAPTURES ONE ENTRY
 // on the way down -- precisely because CURVE needs only one. SPLINE needs
 // FOUR, so it is a SECOND READER of that cache rather than another mode of the

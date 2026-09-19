@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The mutant table for zhao_probe_v3_exec.sv (FIELD.V3.EXEC).
+"""The mutant table for zhao_field_v3_exec.sv (FIELD.V3.EXEC).
 
 WHY THIS SWEEP EXISTS
 ---------------------
@@ -37,7 +37,7 @@ import io
 import os
 import sys
 
-RTL = "fpga/rtl/synth/zhao_probe_v3_exec.sv"
+RTL = "fpga/rtl/field/zhao_field_v3_exec.sv"
 RF = "fpga/rtl/field/zhao_field_v3_rf.sv"
 
 # Entries are (name, old, new) against RTL, or (name, path, old, new) when the
@@ -312,7 +312,7 @@ MUTANTS = [
      "                      !retire_hold_c;",
      "  assign wb_req_c   = s4_v_r && alu_writes && !alu_is_end && !dot_here_c;"),
     # X35, X36 and X37 targeted the writeback HOLD and its grant, which was measured wrong and
-    # removed the same day -- see zhao_probe_v3_exec.sv. They return with the
+    # removed the same day -- see zhao_field_v3_exec.sv. They return with the
     # skid; against a block that no longer holds they are mutants that cannot
     # fail. X33 and X34 stay: `retire_hold_c` and `mul_denied_c` still gate the
     # write, and X33 is the regression mutant for the duplicate-write bug.

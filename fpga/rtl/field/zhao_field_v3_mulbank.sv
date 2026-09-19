@@ -4,7 +4,7 @@
 // WHY THIS EXISTS
 // ---------------
 // `reports/FIELD_V3_SERVICE_ATTACH.md` found that the multiplier bank is not
-// a lane's private property. `zhao_probe_curve_svc` contains no multiplier at
+// a lane's private property. `zhao_field_v3_curve` contains no multiplier at
 // all — it DRIVES one, and says so: "the vector multiplier bank (engine
 // property, not probe silicon)". The distance service is the same shape. So
 // one four-wide bank has three claimants:
@@ -38,7 +38,7 @@
 // CORRECTED 2026-08-28: THIS IS NOT A CHOICE. It is a requirement, and round
 // robin would be actively wrong.
 //
-// Neither `zhao_probe_curve_svc` nor `zhao_probe_dist_svc` has a `mul_ready`
+// Neither `zhao_field_v3_curve` nor `zhao_probe_dist_svc` has a `mul_ready`
 // input -- grepped both, zero matches. The curve service asserts
 // `mul_issue_o = (f_state == F_ISSUE)` and advances on the next clock
 // regardless. A refused service does not retry; it proceeds as though the
@@ -112,7 +112,7 @@ module zhao_field_v3_mulbank #(
     // that did not ask for it -- a wrong answer, not a slow one.
     //
     // This port exists because p_valid_lane came back from the linter as an
-    // unused signal. The same choice arose in zhao_probe_v3_exec, where
+    // unused signal. The same choice arose in zhao_field_v3_exec, where
     // making it evidence rather than deleting it caught a real pipeline bug
     // on the very first run.
     output var logic desync_o
@@ -210,7 +210,9 @@ module zhao_field_v3_mulbank #(
   end
 
   always_comb begin
-    for (int l = 0; l < 4; l++) rsp_p_o[l] = p_lane[l];
+    // ln, not l: a genvar l is in scope above and -Wall VARHIDDEN is a
+    // real gate here, not noise -- the two would be different objects.
+    for (int ln = 0; ln < 4; ln++) rsp_p_o[ln] = p_lane[ln];
   end
   assign rsp_tag_o = tag_s2;
 

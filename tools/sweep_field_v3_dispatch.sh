@@ -30,7 +30,7 @@ RTL=fpga/rtl/field/zhao_field_v3_dispatch.sv
 # A mutant reaches the model of ANY target that elaborates the mutated file, so
 # running only one leaves the others' binaries carrying mutant-derived code
 # that nothing scores -- the exact hole the guard exists to find. It found it
-# the moment zhao_probe_v3_full was added.
+# the moment zhao_field_v3_engine was added.
 #
 # Running them all is also stronger than merely legal: the composed lane drives
 # eight contexts through a real service path, which is where several of this
@@ -70,7 +70,7 @@ hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 #
 # This guard used to be `grep -B12 "TOP_MODULE <module>"`, which was correct
 # only while every swept block was its own top. The DOT fix composed this
-# executor into zhao_probe_v3_engine, the grep found nothing, and the sweep
+# executor into zhao_field_v3_core, the grep found nothing, and the sweep
 # aborted naming an EMPTY roster. The guard was right to refuse -- it could no
 # longer see what it was guarding.
 #
@@ -109,7 +109,7 @@ check_consumers() {
 #
 # This driver hardcoded `Vzhao_field_v3_dispatch.dir` for both the presence check
 # and the binary-hash discard check. Once the executor became a submodule of
-# zhao_probe_v3_engine that directory stopped existing, and the sweep aborted
+# zhao_field_v3_core that directory stopped existing, and the sweep aborted
 # with "pristine model did not elaborate" over a build that had linked
 # cleanly.
 #

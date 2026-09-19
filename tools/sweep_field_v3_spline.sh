@@ -25,7 +25,7 @@ cd "$(dirname "$0")/.." || exit 1
 
 MUT=tools/sweep_field_v3_spline_mutants.py
 RTL=fpga/rtl/field/zhao_field_v3_spline.sv
-# TWO CONSUMERS SINCE 2026-08-29. zhao_probe_curve_svc began instantiating
+# TWO CONSUMERS SINCE 2026-08-29. zhao_field_v3_curve began instantiating
 # the spline unit when SPLINE went hot, so its differential elaborates this
 # file too. The roster guard caught that immediately and refused to run --
 # correctly: a mutant that dies in the spline's own test can still be alive in
@@ -57,7 +57,7 @@ hash_of() { sha256sum <"$1" | cut -d' ' -f1; }
 #
 # This guard used to be `grep -B12 "TOP_MODULE <module>"`, which was correct
 # only while every swept block was its own top. The DOT fix composed this
-# executor into zhao_probe_v3_engine, the grep found nothing, and the sweep
+# executor into zhao_field_v3_core, the grep found nothing, and the sweep
 # aborted naming an EMPTY roster. The guard was right to refuse -- it could no
 # longer see what it was guarding.
 #
@@ -96,7 +96,7 @@ check_consumers() {
 #
 # This driver hardcoded `Vzhao_field_v3_spline.dir` for both the presence check
 # and the binary-hash discard check. Once the executor became a submodule of
-# zhao_probe_v3_engine that directory stopped existing, and the sweep aborted
+# zhao_field_v3_core that directory stopped existing, and the sweep aborted
 # with "pristine model did not elaborate" over a build that had linked
 # cleanly.
 #
@@ -111,7 +111,7 @@ check_consumers() {
 # FIRST target and used it for every target in the roster. That is invisible
 # while the roster holds a single target and wrong the moment a second
 # consumer with a different PREFIX joins: the model directory under
-# test_field_curve_svc_directed.dir is Vzhao_probe_curve_svc.dir, so a
+# test_field_curve_svc_directed.dir is Vzhao_field_v3_curve.dir, so a
 # hardcoded Vzhao_field_v3_spline.dir is simply absent and EVERY mutant is
 # DISCARDED -- a sweep that scores nothing while printing a tally.
 MODELS=""

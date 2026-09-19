@@ -1,5 +1,5 @@
 // field_v3_exec_directed.cpp — the differential for the Field v3 executor
-// datapath (fpga/rtl/synth/zhao_probe_v3_exec.sv), Phase 4.
+// datapath (fpga/rtl/field/zhao_field_v3_exec.sv), Phase 4.
 //
 // THE ORACLE IS THE SHIPPED PLANNER, END TO END
 // ----------------------------------------------
@@ -55,7 +55,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_v3_engine.h"
+#include "Vzhao_field_v3_core.h"
 
 #include "zfield/zfield.hpp"
 #include "zfield/zfield_plan.hpp"
@@ -169,11 +169,11 @@ zfield::Decoded alu_program(Prng& rng, int n_in, int n_body) {
 // ---------------------------------------------------------------------------
 
 struct Dut {
-  Vzhao_probe_v3_engine& t;
+  Vzhao_field_v3_core& t;
   // Shadow of the register file, rebuilt from the writeback stream.
   int32_t shadow[kCtx][kRegs] = {};
 
-  explicit Dut(Vzhao_probe_v3_engine& top) : t(top) {}
+  explicit Dut(Vzhao_field_v3_core& top) : t(top) {}
 
   void reset() {
     t.rst_n = 0;
@@ -368,7 +368,7 @@ bool install(Dut& d, int ctx, const zfield::Fplan& fp, const int32_t* in, size_t
 // ---------------------------------------------------------------------------
 
 // One program, one point, compared against execute_point.
-void test_one_point_matches_the_interpreter(Vzhao_probe_v3_engine& top) {
+void test_one_point_matches_the_interpreter(Vzhao_field_v3_core& top) {
   printf("-- one point against zfield::execute_point\n");
   Dut d(top);
   d.reset();
@@ -423,7 +423,7 @@ void test_one_point_matches_the_interpreter(Vzhao_probe_v3_engine& top) {
 }
 
 // A DOT program must be REFUSED, not answered with a zero product.
-void test_dot_is_refused_not_answered(Vzhao_probe_v3_engine& top) {
+void test_dot_is_refused_not_answered(Vzhao_field_v3_core& top) {
   printf("-- DOT is now COMPUTED, and an unknown opcode is still refused\n");
   Dut d(top);
   d.reset();
@@ -509,7 +509,7 @@ void test_dot_is_refused_not_answered(Vzhao_probe_v3_engine& top) {
 // three flags are checked every time -- including sat_rescale, which no test
 // read at all until X17 pointed at it. OP_ABS is the reachable rescale: the
 // ALU sets sat_rescale_o from abs_sat_fired, and |INT32_MIN| is off the rail.
-void test_each_saturation_lane_alone(Vzhao_probe_v3_engine& top) {
+void test_each_saturation_lane_alone(Vzhao_field_v3_core& top) {
   printf("-- each saturation lane fires alone\n");
   struct Case {
     const char* what;
@@ -545,7 +545,7 @@ void test_each_saturation_lane_alone(Vzhao_probe_v3_engine& top) {
 }
 
 // The barrel property, measured on both sides of it.
-void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
+void test_barrel_occupancy(Vzhao_field_v3_core& top) {
   printf("-- the barrel: one context stalls, eight fill the pipe\n");
   Prng rng(0xBA22E1);
   const int n_in = 4;
@@ -642,7 +642,7 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
 // does not promise that any more: wb_ready_i gates the WRITE but not the
 // pipe, so a refused result is lost. A test kept behind a flag would document
 // a law nothing upholds, which is worse than no test at all -- the measurement
-// that killed the stall is written out in full in zhao_probe_v3_exec.sv.
+// that killed the stall is written out in full in zhao_field_v3_exec.sv.
 //
 // It comes back with the skid, and it is worth restoring verbatim: counting
 // TRANSFERS rather than comparing values, it caught a duplicate-write bug
@@ -650,7 +650,7 @@ void test_barrel_occupancy(Vzhao_probe_v3_engine& top) {
 // instruction sat at S4, so a DOT wrote its destination once per
 // accumulation clock and the last write always looked right.
 
-void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs) {
+void test_contention_with_many_contexts(Vzhao_field_v3_core& top, int programs) {
   printf("-- FOUR contexts while the bank is contended\n");
   Prng rng(0x0B7A1E5);
   int ran = 0, bad_val = 0, desyncs = 0;
@@ -725,7 +725,7 @@ void test_contention_with_many_contexts(Vzhao_probe_v3_engine& top, int programs
         (uint32_t)dbg_writes);
 }
 
-void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int programs) {
+void test_writes_survive_a_refusing_port(Vzhao_field_v3_core& top, int programs) {
   printf("-- the WRITE PORT refuses while the bank is contended; no write may be lost\n");
   Prng rng(0x0B7A1E5);
   int ran = 0, bad_val = 0, bad_count = 0, bad_rf = 0, total_denied = 0;
@@ -848,7 +848,7 @@ void test_writes_survive_a_refusing_port(Vzhao_probe_v3_engine& top, int program
 // So the rival now asks on a pseudo-random schedule while a real program
 // runs. The program's outputs must STILL match the interpreter: a refusal is
 // allowed to cost clocks and is not allowed to change an answer.
-void test_results_survive_contention(Vzhao_probe_v3_engine& top, int programs) {
+void test_results_survive_contention(Vzhao_field_v3_core& top, int programs) {
   printf("-- the rival contends; answers must not move\n");
   Prng rng(0xC047E17);
   int bad = 0, ran = 0;
@@ -915,7 +915,7 @@ void test_results_survive_contention(Vzhao_probe_v3_engine& top, int programs) {
 }
 
 // Randomized: many programs, many points.
-void test_random(Vzhao_probe_v3_engine& top, int iters) {
+void test_random(Vzhao_field_v3_core& top, int iters) {
   printf("-- randomized differential, %d programs\n", iters);
   Prng rng(0x5A1AD5);
   int bad = 0, scalar_plans = 0, ran = 0;
@@ -970,7 +970,7 @@ int main(int argc, char** argv) {
     if (std::string(argv[i]) == "--random" && i + 1 < argc) iters = std::atoi(argv[++i]);
   }
 
-  Vzhao_probe_v3_engine top;
+  Vzhao_field_v3_core top;
 
   if (iters > 0) {
     test_random(top, iters);
