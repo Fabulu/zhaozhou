@@ -3745,6 +3745,32 @@ verilate(test_twod_sprite_random
 add_test(NAME twod_sprite_random COMMAND test_twod_sprite_random)
 set_tests_properties(twod_sprite_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# TWOD.SAMPLER -- the block between TWOD.PLANE/TWOD.SPRITE and POST.COMPOSITE.
+# Header entry I17 refused this seam on the grounds that building it would mean
+# "inventing a colour law". It would not: POST.COMPOSITE consumes RGB565, a
+# CLUT8 palette entry IS RGB565, and the sampler performs no colour arithmetic
+# at all. What was genuinely missing was a texel PAGE STORE, which is here.
+#
+# THIS BENCH IS NOT A DIFFERENTIAL and the registration says so, because there
+# is nothing for an oracle to disagree with -- no expansion, no rounding, no
+# multiply. What it checks is ADDRESSING, PAIRING, RESIDENCY and BACKPRESSURE
+# against hand-computed expectations, with TWOD.PLANE and POST.COMPOSITE
+# MODELLED from their own published handshakes so the bench can violate them
+# on purpose.
+#
+# Case 9 is the positive-control block: every counter the earlier cases assert
+# is zero is fired there with legal stimulus. No committed mutant is needed --
+# each guard watches a CALLER's mistake rather than an internal invariant, so
+# each is reachable from the ports.
+add_executable(test_twod_sampler_directed compositor/twod_sampler_directed.cpp)
+target_link_libraries(test_twod_sampler_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_twod_sampler_directed
+  PREFIX Vzhao_twod_sampler
+  TOP_MODULE zhao_twod_sampler
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_twod_sampler.sv)
+add_test(NAME twod_sampler_directed COMMAND test_twod_sampler_directed)
+set_tests_properties(twod_sampler_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
 # PART.LADDER -- the representation ladder of the 2026-08-31 ruling. Its two
 # halves pull against each other: a particle MAY change representation while
 # alive (so there is hysteresis) and the simulation NEVER changes because of it
