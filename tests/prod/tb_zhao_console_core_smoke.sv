@@ -328,6 +328,149 @@ module tb_zhao_console_core_smoke
   logic [4:0]              terr_cs_ci_o;
   logic [4:0]              terr_cs_cj_o;
   logic [1:0]              terr_cs_substance_i;
+
+  // ---- PACKET P-TERRAIN: the paging spine's boundary ----------------------
+  // TERRAIN.CMD's command is a HOST PACKET (T5's SubmitTerrainSet from
+  // SW.STREAM), and the HPS/guard ports are MEMORY BEHAVIOUR. Both are in the
+  // completion plan's own list of what a harness may supply, which is why this
+  // bench may drive them and may not drive, say, a composed patch_state.
+  localparam int unsigned TERR_SLOTW_C   = 10;   // $clog2(256 sets x 4 ways)
+  localparam int unsigned TERR_GENW_C    = 8;
+  localparam int unsigned TERR_CSLOTW_C  = 8;    // $clog2(256 compose slots)
+
+  logic                    terr_cmd_valid_i;
+  logic                    terr_cmd_ready_o;
+  logic [31:0]             terr_cmd_epoch_i;
+  logic [31:0]             terr_cmd_list_off_i;
+  logic [31:0]             terr_cmd_list_bytes_i;
+  logic [31:0]             terr_cmd_list_crc_i;
+  logic [15:0]             terr_cmd_patch_count_i;
+  logic [31:0]             terr_cmd_sequence_i;
+  logic [31:0]             terr_cmd_src_id_i;
+  logic                    terr_cmd_done_valid_o;
+  logic                    terr_cmd_done_ready_i;
+  logic                    terr_cmd_done_ok_o;
+  logic [3:0]              terr_cmd_done_verdict_o;
+  logic [31:0]             terr_cmd_done_src_id_o;
+  logic [31:0]             terr_cmd_done_crc_seen_o;
+  logic [31:0]             terr_cfg_epoch_i;
+  logic [31:0]             terr_cfg_arena_base_i;
+  logic [31:0]             terr_cfg_arena_bytes_i;
+  logic [15:0]             terr_cfg_load_budget_i;
+
+  zhao_hps_burst_req_t     terr_hps_req_o;
+  logic                    terr_hps_grant_i;
+  logic                    terr_hps_wr_valid_o;
+  logic [63:0]             terr_hps_wr_data_o;
+  logic                    terr_hps_wr_last_o;
+  zhao_hps_burst_rsp_t     terr_hps_rsp_i;
+
+  zhao_guard_req_t         terr_guard_req_o;
+  zhao_guard_rsp_t         terr_guard_rsp_i;
+  logic [63:0]             terr_guard_wdata_o;
+  logic                    terr_guard_wvalid_o;
+  logic                    terr_guard_wready_i;
+  logic                    terr_guard_wlast_o;
+
+  logic                    terr_is_valid_o;
+  logic                    terr_is_ready_i;
+  logic [TERR_SLOTW_C-1:0] terr_is_slot_o;
+  logic [TERR_GENW_C-1:0]  terr_is_gen_o;
+  logic [31:0]             terr_is_epoch_o;
+  logic [31:0]             terr_is_island_o;
+  logic signed [15:0]      terr_is_ix_o;
+  logic signed [15:0]      terr_is_iz_o;
+  logic                    terr_is_cslot_valid_o;
+  logic [TERR_CSLOTW_C-1:0] terr_is_cslot_o;
+  logic [15:0]             terr_is_flags_o;
+  logic [7:0]              terr_is_view_mask_o;
+  logic [7:0]              terr_is_priority_o;
+  logic [31:0]             terr_is_src_id_o;
+
+  logic                    terr_dm_valid_i;
+  logic                    terr_dm_ready_o;
+  logic [TERR_SLOTW_C-1:0] terr_dm_slot_i;
+  logic [TERR_GENW_C-1:0]  terr_dm_gen_i;
+  logic [31:0]             terr_dm_epoch_i;
+  logic                    terr_dm_bd_i;
+  logic                    terr_dm_f_i;
+  logic                    terr_dm_mips_i;
+
+  logic                    terr_unpin_valid_i;
+  logic                    terr_unpin_ready_o;
+  logic [TERR_SLOTW_C-1:0] terr_unpin_slot_i;
+  logic [TERR_GENW_C-1:0]  terr_unpin_gen_i;
+  logic [31:0]             terr_unpin_epoch_i;
+
+  logic                    terr_chk_valid_i;
+  logic [TERR_SLOTW_C-1:0] terr_chk_slot_i;
+  logic [TERR_GENW_C-1:0]  terr_chk_gen_i;
+  logic [31:0]             terr_chk_epoch_i;
+  logic                    terr_chk_valid_o;
+  logic                    terr_chk_stale_o;
+
+  logic                    terr_wb_valid_o;
+  logic                    terr_wb_ready_i;
+  logic [TERR_SLOTW_C-1:0] terr_wb_slot_o;
+  logic [TERR_GENW_C-1:0]  terr_wb_gen_o;
+  logic [31:0]             terr_wb_epoch_o;
+  logic [31:0]             terr_wb_island_o;
+  logic signed [15:0]      terr_wb_ix_o;
+  logic signed [15:0]      terr_wb_iz_o;
+  logic [31:0]             terr_wb_src_id_o;
+  logic                    terr_wb_done_valid_i;
+  logic [TERR_SLOTW_C-1:0] terr_wb_done_slot_i;
+
+  logic                    terr_wback_valid_i;
+  logic                    terr_wback_ready_o;
+  logic [TERR_SLOTW_C-1:0] terr_wback_slot_i;
+  logic [TERR_GENW_C-1:0]  terr_wback_gen_i;
+  logic [31:0]             terr_wback_epoch_i;
+
+  logic [31:0]             terr_cmd_sets_accepted_o;
+  logic [31:0]             terr_cmd_sets_refused_o;
+  logic [31:0]             terr_cmd_records_emitted_o;
+  logic [31:0]             terr_cmd_crc_fails_o;
+  logic [31:0]             terr_cmd_bridge_errs_o;
+  logic                    terr_seq_busy_o;
+  logic                    terr_seq_done_o;
+  logic [31:0]             terr_seq_records_consumed_o;
+  logic [31:0]             terr_seq_patches_issued_o;
+  logic [31:0]             terr_seq_claims_issued_o;
+  logic [31:0]             terr_seq_claims_refused_o;
+  logic [31:0]             terr_seq_claims_same_o;
+  logic [31:0]             terr_seq_loads_issued_o;
+  logic [31:0]             terr_seq_skipped_not_resident_o;
+  logic [31:0]             terr_seq_frame_faults_o;
+  logic                    terr_seq_err_stray_ans_o;
+  logic [31:0]             terr_res_hits_o;
+  logic [31:0]             terr_res_misses_o;
+  logic [31:0]             terr_res_claims_o;
+  logic [31:0]             terr_res_evictions_o;
+  logic [31:0]             terr_res_crc_failures_o;
+  logic [31:0]             terr_res_resident_o;
+  logic [31:0]             terr_lq_accepted_o;
+  logic [31:0]             terr_lq_issued_o;
+  logic [31:0]             terr_lq_high_water_o;
+  logic [31:0]             terr_pl_pages_loaded_o;
+  logic [31:0]             terr_pl_pages_faulted_o;
+  logic [31:0]             terr_pl_crc_fails_o;
+  logic [31:0]             terr_pl_load_bytes_o;
+  logic [31:0]             terr_pl_guard_denied_o;
+  logic [31:0]             terr_pl_bridge_errs_o;
+  logic [31:0]             terr_pl_slot_overflow_o;
+  logic [31:0]             terr_pl_pages_refused_o;
+  logic [3:0]              terr_pl_fault_verdict_o;
+  logic [31:0]             terr_pl_fault_island_o;
+  logic signed [15:0]      terr_pl_fault_ix_o;
+  logic signed [15:0]      terr_pl_fault_iz_o;
+  logic [31:0]             terr_pl_fault_src_id_o;
+  logic [31:0]             terr_pl_incomplete_o;
+  logic [31:0]             terr_pl_hdr_ident_fails_o;
+  logic [31:0]             terr_hps_c0_bursts_o;
+  logic [31:0]             terr_hps_c1_bursts_o;
+  logic [31:0]             terr_hps_c1_wait_cycles_o;
+
   logic [PROJ_T_ARENAS-1:0] terr_held_o;
   logic                    terr_busy_o;
   logic [31:0]             terr_jobs_accepted_o;
@@ -687,6 +830,243 @@ module tb_zhao_console_core_smoke
   zhao_console_core dut (.*);
 
   // ==========================================================================
+  // PACKET P-TERRAIN: THE PLAYED HPS BRIDGE AND MEM.GUARD
+  // ==========================================================================
+  // WHAT THIS IS ALLOWED TO BE. The completion plan's sentence is the licence
+  // and also the limit: the harness supplies "external clocks, input events,
+  // MEMORY BEHAVIOR and host packets. It does NOT supply missing lighting,
+  // FIELD results, particle updates, prepared triangles or fake material
+  // records." A bridge that returns the bytes at an address is memory
+  // behaviour. Nothing below invents a patch, a height or a completion: every
+  // terrain counter this bench checks moves only because a real block read a
+  // real byte and handed a real record to the next real block.
+  //
+  // ONE ENGINE, because the DUT presents ONE bridge port: TERRAIN.CMD and
+  // TERRAIN.PAGELOADER are merged inside the core by the real
+  // `zhao_hps_arbiter`. That the two of them share this port WITHOUT either
+  // starving is itself part of what this bench exercises.
+  localparam int unsigned HPS_WORDS   = 8192;          // 64 KiB window
+  localparam logic [31:0] HPS_BASE    = 32'h2000_0000; // the staging arena
+  localparam int unsigned PAGE_BYTES_C = 21376;        // terrain_rules sec 2/7
+  localparam int unsigned LIST_OFF_C   = 0;
+  // ==========================================================================
+  // ONE RECORD, AND THE REASON IS A DEFECT THIS BENCH FOUND -- READ THIS BEFORE
+  // RAISING IT.
+  // ==========================================================================
+  // At N_TERR_REC = 1 the whole spine runs clean: one record, one lookup, one
+  // claim, one load job, 334 bursts, 21,376 bytes retired, one completion into
+  // the directory.
+  //
+  // AT 2 OR MORE, EVERY RECORD AFTER THE FIRST ARRIVES ALL-ZERO. Measured
+  // 2026-09-19, not inferred:
+  //
+  //   N=2:  cmd records=3 -> seq consumed=2, claims=2/0(same),
+  //         pl loaded=0 faulted=1 refused=1, fault island=0 ix=0 iz=0 src_id=0
+  //   N=3:  cmd records=3 -> seq consumed=3, claims=3/1(same),
+  //         pl loaded=0 faulted=1 refused=2, fault island=0 ix=0 iz=0 src_id=0
+  //
+  // Three things locate it, and the third is the one that matters:
+  //   * the first job reads its page in full (21,376 bytes) and fails only on
+  //     header identity, which is expected of a zero page -- so the path works
+  //     once;
+  //   * every later job is REFUSED with verdict 6 (V_SRC_ARENA) and an
+  //     identity of all zeros, which is a job whose payload never arrived;
+  //   * AT N=3 ONE CLAIM COMES BACK `same`. The claim key is
+  //     {epoch, island, ix, iz} and SEQ builds it from the RECORD, BEFORE
+  //     TERRAIN.LOADQ is involved. Two records that both present a zero key
+  //     collide, and that is exactly the one extra `same` at N=3 and the zero
+  //     at N=2. So the payload is already gone when TERRAIN.SEQ claims.
+  //     TERRAIN.LOADQ IS NOT THE SUSPECT; the loss is at or before SEQ's
+  //     capture of the record stream, i.e. in the TERRAIN.CMD -> TERRAIN.SEQ
+  //     seam.
+  //
+  // It is NOT the played bridge: TERRAIN.CMD folds the list's CRC in a first
+  // pass over the same bytes and `crc_fails=0`, so it had every byte of every
+  // record in hand and still emitted the later ones empty.
+  //
+  // THE REPRODUCER IS THIS CONSTANT. Set it to 2 and the check on
+  // `terr_pl_pages_refused_o` below fires immediately. That check asserts the
+  // CORRECT behaviour -- a well-formed record is never refused -- rather than
+  // the defect, so it keeps working after the repair instead of inverting.
+  localparam int unsigned N_TERR_REC   = 1;
+  localparam int unsigned LIST_BYTES_C = N_TERR_REC * 32;
+  localparam int unsigned PAGE0_OFF_C  = 4096;
+  localparam int unsigned PAGE1_OFF_C  = PAGE0_OFF_C + PAGE_BYTES_C;
+
+  logic [63:0] hps_mem [0:HPS_WORDS-1];
+
+  // The frozen sim profile the bridge's own comment names: a latency to first
+  // beat, then one beat per cycle. Held as a small state machine rather than a
+  // combinational echo, because a zero-latency bridge hides every handshake
+  // bug this composition could contain.
+  localparam int unsigned HPS_LAT = 16;
+
+  int unsigned  hps_state_qq;    // 0 idle, 1 waiting, 2 streaming
+  int unsigned  hps_wait_qq;
+  int unsigned  hps_beats_qq;    // beats still to send
+  logic [31:0]  hps_addr_qq;
+  int unsigned  hps_bursts_served_q;
+  logic         hps_grant_pulse_q;
+  assign terr_hps_grant_i = hps_grant_pulse_q;
+
+  function automatic logic [63:0] hps_read(input logic [31:0] byte_addr);
+    int unsigned w;
+    if (byte_addr < HPS_BASE) return 64'd0;
+    w = (byte_addr - HPS_BASE) >> 3;
+    if (w >= HPS_WORDS) return 64'd0;
+    return hps_mem[w];
+  endfunction
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      hps_state_qq        <= 0;
+      hps_wait_qq         <= 0;
+      hps_beats_qq        <= 0;
+      hps_addr_qq         <= 32'd0;
+      hps_grant_pulse_q   <= 1'b0;
+      hps_bursts_served_q <= 0;
+      terr_hps_rsp_i      <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b0};
+    end else begin
+      hps_grant_pulse_q <= 1'b0;
+      terr_hps_rsp_i    <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b0};
+
+      case (hps_state_qq)
+        0: if (terr_hps_req_o.valid && !terr_hps_req_o.write) begin
+             // A READ burst. `len` is BYTES (1..64); the bridge answers in
+             // 64-bit beats, so the beat count is len/8 and a len that is not
+             // a multiple of 8 would be a malformed burst -- reported as `err`
+             // rather than rounded, because rounding invents bytes.
+             hps_grant_pulse_q <= 1'b1;
+             hps_addr_qq       <= terr_hps_req_o.addr;
+             if ((terr_hps_req_o.len == 7'd0) || (terr_hps_req_o.len[2:0] != 3'd0)) begin
+               terr_hps_rsp_i <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b1};
+             end else begin
+               hps_beats_qq <= terr_hps_req_o.len >> 3;
+               hps_wait_qq  <= HPS_LAT;
+               hps_state_qq <= 1;
+             end
+           end else if (terr_hps_req_o.valid && terr_hps_req_o.write) begin
+             // Nothing in this composition writes over the bridge --
+             // TERRAIN.WRITEBACK is the only terrain writer and it is entry
+             // I28, not composed. Granting and dropping would be a lie; this
+             // reports a bridge error so a write that appears here is LOUD.
+             hps_grant_pulse_q <= 1'b1;
+             terr_hps_rsp_i <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b1};
+           end
+        1: if (hps_wait_qq > 1) hps_wait_qq <= hps_wait_qq - 1;
+           else                 hps_state_qq <= 2;
+        2: begin
+             terr_hps_rsp_i <= '{beat_valid: 1'b1,
+                                 data:       hps_read(hps_addr_qq),
+                                 last:       (hps_beats_qq == 1),
+                                 err:        1'b0};
+             hps_addr_qq  <= hps_addr_qq + 32'd8;
+             hps_beats_qq <= hps_beats_qq - 1;
+             if (hps_beats_qq == 1) begin
+               hps_state_qq        <= 0;
+               hps_bursts_served_q <= hps_bursts_served_q + 1;
+             end
+           end
+        default: hps_state_qq <= 0;
+      endcase
+    end
+  end
+
+  // ---- the played MEM.GUARD write window -----------------------------------
+  // TERRAIN.PAGELOADER writes the page into TERRAIN.PAGE_POOL through a guard
+  // client. The real `zhao_mem_guard` gives ZHAO_CLIENT_TERRAIN_BUILD a
+  // write-only window over that pool; this model accepts inside the pool and
+  // DENIES outside it, rather than accepting everything -- an always-ok guard
+  // would make `terr_pl_guard_denied_o` a counter that cannot move, which is
+  // the decoration this project's own rules forbid.
+  localparam logic [ZHAO_VRAM_ADDR_BITS-1:0] POOL_BASE_C  = 27'h400_0000;
+  localparam int unsigned                    POOL_SLOTS_C = 1024;
+
+  wire guard_in_pool = (terr_guard_req_o.addr >= POOL_BASE_C) &&
+                       (terr_guard_req_o.addr <
+                          POOL_BASE_C + (POOL_SLOTS_C * PAGE_BYTES_C));
+
+  // THE VERDICT IS A PULSE ONE CYCLE AFTER THE REQUEST, NOT A LEVEL WITH IT,
+  // and getting that wrong cost a diagnosis that looked exactly like an RTL
+  // deadlock. `zhao_terrain_pageloader` splits the handshake across two states
+  // and its own comments are the specification:
+  //
+  //   S_GREQ:  "`ready` is a LEVEL and moves the machine on. `ok` is NOT
+  //             tested here."
+  //   S_GVERD: "...it is tested HERE, one cycle later, where the guard
+  //             PULSES it."
+  //
+  // The first version of this model drove `ready`, `ok` and `violation`
+  // together, combinationally, off `guard_req_o.valid`. By the time the loader
+  // reached S_GVERD the request had dropped, so `ok` was low and it waited in
+  // S_GVERD forever. The symptom was a spine that carried records, claims and
+  // load jobs perfectly and then a loader that retired ZERO bytes with
+  // `pages_refused`, `guard_denied` and `bridge_errs` all clean -- which reads
+  // as a fault in the composition and was a fault in the harness. It was found
+  // by probing the DUT's own edge (`guard_req_cycles=1, guard_wbeats=0`), not
+  // by reading either file again.
+  logic guard_verd_q, guard_ok_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      guard_verd_q <= 1'b0;
+      guard_ok_q   <= 1'b0;
+    end else begin
+      guard_verd_q <= terr_guard_req_o.valid;
+      guard_ok_q   <= guard_in_pool;
+    end
+  end
+
+  always_comb begin
+    terr_guard_rsp_i.ready     = terr_guard_req_o.valid;
+    terr_guard_rsp_i.ok        = guard_verd_q &&  guard_ok_q;
+    terr_guard_rsp_i.violation = guard_verd_q && !guard_ok_q;
+  end
+
+  // ALWAYS READY ON THE WRITE CHANNEL, stated as a limit rather than left
+  // implicit: this model never backpressures the page write, so the loader's
+  // write-stall path is NOT exercised here. `tests/terrain/tb_pageloader.sv`
+  // is where that is tested; this bench is about the seams between blocks.
+  assign terr_guard_wready_i = 1'b1;
+
+  // ---- WHERE THE SPINE GOT TO, watched at the DUT's own edge ---------------
+  // Every signal here is a real port of zhao_console_core, so this needs no
+  // hierarchical reach into the loader and stays valid however Verilator
+  // partitions the design. It answers the one question a stalled block cannot:
+  // which handshake did it reach, and which did it not.
+  int unsigned pr_hps_req_cy, pr_hps_beats, pr_guard_req_cy, pr_guard_wbeats;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pr_hps_req_cy   <= 0;
+      pr_hps_beats    <= 0;
+      pr_guard_req_cy <= 0;
+      pr_guard_wbeats <= 0;
+    end else begin
+      if (terr_hps_req_o.valid)                        pr_hps_req_cy   <= pr_hps_req_cy + 1;
+      if (terr_hps_rsp_i.beat_valid)                   pr_hps_beats    <= pr_hps_beats + 1;
+      if (terr_guard_req_o.valid)                      pr_guard_req_cy <= pr_guard_req_cy + 1;
+      if (terr_guard_wvalid_o && terr_guard_wready_i)  pr_guard_wbeats <= pr_guard_wbeats + 1;
+    end
+  end
+
+  // ---- folding the list's CRC with the PRODUCTION folder -------------------
+  // WHAT THIS IS AND IS NOT EVIDENCE FOR. `zhao_terrain_cmd` verifies the list
+  // in a first pass and emits records only in a second, so a list whose CRC is
+  // wrong produces NO records and this bench would prove nothing about the
+  // spine. The harness therefore has to hand it a well-formed packet, and it
+  // folds the bytes with the SAME `zhao_crc32c_fold` the block uses.
+  //
+  // That makes this bench NO EVIDENCE WHATEVER about the CRC itself -- both
+  // sides would agree on an identical mistake. `tests/terrain/tb_terrain_cmd.sv`
+  // is where the CRC is tested. What this bench shows is the thing it can
+  // honestly show: a VALID list produces records, and those records reach
+  // TERRAIN.SEQ.
+  logic [31:0] fold_c_i;
+  logic [63:0] fold_d_i;
+  logic [3:0]  fold_n_i;
+  logic [31:0] fold_c_o;
+  zhao_crc32c_fold u_bench_fold (.c_i(fold_c_i), .d_i(fold_d_i), .n_i(fold_n_i), .c_o(fold_c_o));
+
+  // ==========================================================================
   // CLOCKS. The frozen ratios (plan R1): vid = gpu/2, audio = gpu/4, with
   // COINCIDENT POSEDGES. Written as three explicit waveforms rather than as a
   // divider, because a divider built out of always_ff puts each derived edge a
@@ -946,6 +1326,53 @@ module tb_zhao_console_core_smoke
     part_col_d_restitution_i = '0;
     part_col_d_friction_i = '0;
     part_col_d_damping_i = '0;
+    // ---- PACKET P-TERRAIN: the spine's inputs, all defined before reset ----
+    terr_cmd_valid_i = '0;
+    terr_cmd_epoch_i = '0;
+    terr_cmd_list_off_i = '0;
+    terr_cmd_list_bytes_i = '0;
+    terr_cmd_list_crc_i = '0;
+    terr_cmd_patch_count_i = '0;
+    terr_cmd_sequence_i = '0;
+    terr_cmd_src_id_i = '0;
+    terr_cmd_done_ready_i = 1'b1;
+    terr_cfg_epoch_i = '0;
+    terr_cfg_arena_base_i = '0;
+    terr_cfg_arena_bytes_i = '0;
+    terr_cfg_load_budget_i = '0;
+    // Entry I27: the compose engine is not composed. Its door is held READY so
+    // the sequencer is not stalled on a consumer that does not exist -- the
+    // patch issues are counted at `terr_seq_patches_issued_o` and go nowhere,
+    // which is exactly what a boundary looks like and is declared as such.
+    terr_is_ready_i = 1'b1;
+    terr_dm_valid_i = '0;
+    terr_dm_slot_i = '0;
+    terr_dm_gen_i = '0;
+    terr_dm_epoch_i = '0;
+    terr_dm_bd_i = '0;
+    terr_dm_f_i = '0;
+    terr_dm_mips_i = '0;
+    terr_unpin_valid_i = '0;
+    terr_unpin_slot_i = '0;
+    terr_unpin_gen_i = '0;
+    terr_unpin_epoch_i = '0;
+    terr_chk_valid_i = '0;
+    terr_chk_slot_i = '0;
+    terr_chk_gen_i = '0;
+    terr_chk_epoch_i = '0;
+    // Entry I28: TERRAIN.WRITEBACK is not composed. Its job port is held
+    // READY and its completion is NEVER asserted, which is the honest pair: a
+    // job that leaves and an answer that is not invented. Nothing in this
+    // bench can cause a writeback anyway -- that needs a dirty-F eviction and
+    // `terr_dm_f_i` is never raised.
+    terr_wb_ready_i = 1'b1;
+    terr_wb_done_valid_i = '0;
+    terr_wb_done_slot_i = '0;
+    terr_wback_valid_i = '0;
+    terr_wback_slot_i = '0;
+    terr_wback_gen_i = '0;
+    terr_wback_epoch_i = '0;
+
     part_ter_valid_i = '0;
     part_ter_height_i = '0;
     part_ter_nx_i = '0;
@@ -1200,10 +1627,81 @@ module tb_zhao_console_core_smoke
     geom_pose_inv_rest_i[5]  = FX16_ONE;
     geom_pose_inv_rest_i[10] = FX16_ONE;
 
+    // ---- PACKET P-TERRAIN: lay out the HPS arena BEFORE reset lifts -------
+    // The memory is the board's, not the frame's: it exists before the console
+    // starts and nothing in the DUT may depend on when it was written.
+    for (int unsigned w = 0; w < HPS_WORDS; w++) hps_mem[w] = 64'd0;
+
+    // T5's 32-byte record, four whole beats, little-endian, in the field order
+    // `zhao_terrain_cmd`'s own header tabulates. Written field by field from
+    // that table rather than as an opaque blob, so a layout change fails here
+    // loudly instead of producing plausible terrain in the wrong place.
+    //
+    // TWO records with DIFFERENT patch coordinates, and the difference is
+    // load-bearing: the directory keys on {epoch, island, ix, iz}, so two
+    // records that differ only in source id would land in one entry and the
+    // second would report SAME rather than a fresh claim. Two claims is the
+    // evidence that both records crossed every seam individually.
+    for (int unsigned r = 0; r < N_TERR_REC; r++) begin
+      int unsigned b = (LIST_OFF_C >> 3) + r * 4;
+      hps_mem[b + 0] = {16'(r + 7),          // patch_iz   i16  bytes 6..7
+                        16'(r + 3),          // patch_ix   i16  bytes 4..5
+                        32'h0000_0042};      // island_id  u32  bytes 0..3
+      hps_mem[b + 1] = 64'(HPS_BASE) +
+                       64'(r == 0 ? PAGE0_OFF_C : PAGE1_OFF_C); // hps_page_addr
+      hps_mem[b + 2] = {8'd0,                // priority   u8   byte 23
+                        8'h01,               // view_mask  u8   byte 22
+                        16'h0001,            // flags      u16  bytes 20..21 (REQUIRED)
+                        32'hDEAD_BEEF};      // expected_page_crc32c bytes 16..19
+      hps_mem[b + 3] = {32'd0,               // reserved   u32  bytes 28..31
+                        32'(1000 + r)};      // source_id  u32  bytes 24..27
+    end
+
+    // Fold the list with the PRODUCTION folder. See the declaration for why
+    // this makes the bench no evidence about the CRC and good evidence about
+    // the spine. Bytes are folded eight at a time, low byte first, which is
+    // the folder's own convention and the order the bridge returns them in.
+    fold_c_i = 32'hFFFF_FFFF;
+    fold_n_i = 4'd8;
+    for (int unsigned w = 0; w < (LIST_BYTES_C / 8); w++) begin
+      fold_d_i = hps_mem[(LIST_OFF_C >> 3) + w];
+      #1ns;
+      fold_c_i = fold_c_o;
+    end
+    terr_cmd_list_crc_i = ~fold_c_i;
+
+    terr_cfg_epoch_i       = 32'd9;
+    terr_cfg_arena_base_i  = HPS_BASE;
+    terr_cfg_arena_bytes_i = 32'(HPS_WORDS * 8);
+    terr_cfg_load_budget_i = 16'd32;   // T7's per-frame page budget
+
     repeat (20) @(posedge gpu_clk);
     rst_n = 1'b1;
     repeat (4) @(posedge gpu_clk);
     reset_released_q = 1'b1;
+
+    // ---- PACKET P-TERRAIN: one SubmitTerrainSet, then let the spine run ---
+    // A HOST PACKET, which is what the plan lets a harness present. Everything
+    // after it is the console's own work: TERRAIN.CMD reads the list over the
+    // bridge, emits records; TERRAIN.SEQ looks each up in the directory,
+    // claims a slot, issues a load; TERRAIN.LOADQ queues it; TERRAIN.PAGELOADER
+    // fetches 21,376 bytes and reports. Not one of those steps is written here.
+    terr_cmd_epoch_i       = 32'd9;
+    terr_cmd_list_off_i    = 32'(LIST_OFF_C);
+    terr_cmd_list_bytes_i  = 32'(LIST_BYTES_C);
+    terr_cmd_patch_count_i = 16'(N_TERR_REC);
+    terr_cmd_sequence_i    = 32'd1;
+    terr_cmd_src_id_i      = 32'd777;
+    terr_cmd_valid_i       = 1'b1;
+    guard = 0;
+    while (!(terr_cmd_valid_i && terr_cmd_ready_o) && (guard < 1000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    @(posedge gpu_clk);
+    terr_cmd_valid_i = 1'b0;
+    if (guard >= 1000)
+      $fatal(1, "SMOKE: TERRAIN.CMD never accepted the command -- j_ready_o stayed low");
 
     // ---- the geometry job -------------------------------------------------
     // One meshlet, one view. The vertices follow from the always block above.
@@ -1349,8 +1847,7 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: geometry   skinned=%0d vertices_sent=%0d a_grants=%0d landings=%0d groups_opened=%0d groups_sealed=%0d",
              geom_skin_vertices_transformed_o, geom_vertices_sent_o,
              proj_a_grants_o, geom_landings_o,
-             geom_groups_opened_o, geom_groups_sealed_o);
-    $display("SMOKE: pose pal   served=%0d bones_written=%0d bone_unset=%0d bone_oob=%0d palettes_decoded=%0d",
+             geom_groups_opened_o, geom_groups_sealed_o);    $display("SMOKE: pose pal   served=%0d bones_written=%0d bone_unset=%0d bone_oob=%0d palettes_decoded=%0d",
              geom_pal_vertices_served_o, geom_pal_bones_written_o,
              geom_pal_bone_unset_o, geom_pal_bone_oob_o,
              geom_pose_palettes_decoded_o);
@@ -1473,6 +1970,206 @@ module tb_zhao_console_core_smoke
         part_spawn_by_event3_o != 0)
       $fatal(1, "SMOKE: a non-collision event fired (%0d/%0d/%0d) -- the event vector crossing PART.COLLIDE is wrong",
              part_spawn_by_event0_o, part_spawn_by_event1_o, part_spawn_by_event3_o);
+
+    // ======================================================================
+    // PACKET P-TERRAIN, 2026-09-19: the paging spine must be SEEN TO CARRY
+    // DATA, block to block, not merely to elaborate.
+    //
+    // WAIT FOR THE WORK, DO NOT GUESS AT IT. Two pages is 2 x 334 bursts and
+    // each burst costs the played bridge's latency plus its beats, so a fixed
+    // `repeat` would either waste time or -- far worse -- expire early and
+    // read counters mid-flight, which looks exactly like a seam that does not
+    // carry. The loop watches the block's own completion law instead: every
+    // job produces exactly one completion, loaded or faulted.
+    // ======================================================================
+    guard = 0;
+    while (((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o) < N_TERR_REC) &&
+           (guard < 200000)) begin
+      @(posedge gpu_clk);
+      guard++;
+    end
+    repeat (64) @(posedge gpu_clk);
+
+    // EVIDENCE BEFORE VERDICT. Printed unconditionally and BEFORE the first
+    // check, because a $fatal on check 4 hides the eight numbers that say
+    // which seam actually failed -- and those numbers are the reason to run
+    // the bench at all.
+    $display("SMOKE: TERRAIN spine counters after guard=%0d cycles:", guard);
+    $display("SMOKE:   cmd   accepted=%0d refused=%0d verdict=%0d records=%0d crc_fails=%0d bridge_errs=%0d",
+             terr_cmd_sets_accepted_o, terr_cmd_sets_refused_o, terr_cmd_done_verdict_o,
+             terr_cmd_records_emitted_o, terr_cmd_crc_fails_o, terr_cmd_bridge_errs_o);
+    $display("SMOKE:   seq   consumed=%0d issued_patches=%0d claims=%0d/%0d(same) refused=%0d loads=%0d skipped=%0d busy=%0d faults=%0d stray=%0d",
+             terr_seq_records_consumed_o, terr_seq_patches_issued_o,
+             terr_seq_claims_issued_o, terr_seq_claims_same_o, terr_seq_claims_refused_o,
+             terr_seq_loads_issued_o, terr_seq_skipped_not_resident_o,
+             terr_seq_busy_o, terr_seq_frame_faults_o, terr_seq_err_stray_ans_o);
+    $display("SMOKE:   res   hits=%0d misses=%0d claims=%0d evictions=%0d crc_fail=%0d resident=%0d",
+             terr_res_hits_o, terr_res_misses_o, terr_res_claims_o,
+             terr_res_evictions_o, terr_res_crc_failures_o, terr_res_resident_o);
+    $display("SMOKE:   loadq accepted=%0d issued=%0d high_water=%0d",
+             terr_lq_accepted_o, terr_lq_issued_o, terr_lq_high_water_o);
+    $display("SMOKE:   pl    loaded=%0d faulted=%0d crc_fails=%0d bytes=%0d guard_denied=%0d bridge_errs=%0d overflow=%0d",
+             terr_pl_pages_loaded_o, terr_pl_pages_faulted_o, terr_pl_crc_fails_o,
+             terr_pl_load_bytes_o, terr_pl_guard_denied_o, terr_pl_bridge_errs_o,
+             terr_pl_slot_overflow_o);
+    $display("SMOKE:   pl2   refused=%0d verdict=%0d incomplete=%0d hdr_ident_fails=%0d",
+             terr_pl_pages_refused_o, terr_pl_fault_verdict_o, terr_pl_incomplete_o, terr_pl_hdr_ident_fails_o);
+    $display("SMOKE:   fault island=%0d ix=%0d iz=%0d src_id=%0d (verdict 1=UNALIGNED 3=SLOT 4=STALE 5=CRC 6=SRC_ARENA 7=UNREACH 8=HDR_IDENT 9=INCOMPLETE)",
+             terr_pl_fault_island_o, terr_pl_fault_ix_o, terr_pl_fault_iz_o, terr_pl_fault_src_id_o);
+    $display("SMOKE:   arb   c0_bursts=%0d c1_bursts=%0d c1_wait_cycles=%0d",
+             terr_hps_c0_bursts_o, terr_hps_c1_bursts_o, terr_hps_c1_wait_cycles_o);
+    $display("SMOKE:   probe hps_req_cycles=%0d hps_beats_in=%0d guard_req_cycles=%0d guard_wbeats=%0d",
+             pr_hps_req_cy, pr_hps_beats, pr_guard_req_cy, pr_guard_wbeats);
+    $display("SMOKE:   bridge bursts served by the played engine=%0d", hps_bursts_served_q);
+
+    // ---- 1. THE COMMAND WAS READ OVER THE BRIDGE -------------------------
+    if (terr_cmd_sets_accepted_o != 1)
+      $fatal(1, "SMOKE: TERRAIN.CMD accepted %0d sets and refused %0d (verdict %0d, crc seen %08x against %08x) -- the host packet was rejected",
+             terr_cmd_sets_accepted_o, terr_cmd_sets_refused_o,
+             terr_cmd_done_verdict_o, terr_cmd_done_crc_seen_o, terr_cmd_list_crc_i);
+    if (terr_cmd_crc_fails_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.CMD folded a different CRC than the bench did -- the played bridge is not returning the bytes that were written");
+    if (terr_cmd_bridge_errs_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.CMD saw %0d bridge errors -- the played HPS engine is malforming bursts",
+             terr_cmd_bridge_errs_o);
+    if (terr_cmd_records_emitted_o != N_TERR_REC)
+      $fatal(1, "SMOKE: TERRAIN.CMD emitted %0d of %0d records -- it read the list and did not produce it",
+             terr_cmd_records_emitted_o, N_TERR_REC);
+
+    // ---- 2. THE CMD -> SEQ SEAM ------------------------------------------
+    // The check that separates "CMD produced records" from "SEQ received
+    // them". These are two counters in two blocks and only a real handshake
+    // on a real wire can make them agree.
+    if (terr_seq_records_consumed_o != terr_cmd_records_emitted_o)
+      $fatal(1, "SMOKE: TERRAIN.CMD emitted %0d records and TERRAIN.SEQ consumed %0d -- the frame-ring/record seam is not carrying",
+             terr_cmd_records_emitted_o, terr_seq_records_consumed_o);
+
+    // ---- 3. THE SEQ <-> RESIDENCY SEAM, BOTH DIRECTIONS ------------------
+    // A lookup that was ASKED and a lookup that was ANSWERED are different
+    // facts in different blocks. An empty directory must miss both records,
+    // and `terr_res_misses_o` moving is the directory saying it saw them.
+    if (terr_res_misses_o < N_TERR_REC)
+      $fatal(1, "SMOKE: the directory recorded %0d misses for %0d fresh patches -- TERRAIN.SEQ's lookups are not reaching it",
+             terr_res_misses_o, N_TERR_REC);
+    if (terr_seq_claims_issued_o != terr_res_claims_o)
+      $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d claims and the directory recorded %0d -- the claim seam drops or duplicates",
+             terr_seq_claims_issued_o, terr_res_claims_o);
+    if (terr_seq_claims_issued_o != N_TERR_REC)
+      $fatal(1, "SMOKE: %0d claims for %0d distinct patches -- the answer path back into TERRAIN.SEQ is wrong",
+             terr_seq_claims_issued_o, N_TERR_REC);
+
+    // THE TRIPWIRE, QUOTED ONLY BECAUSE IT HAS BEEN SEEN TO FIRE ELSEWHERE.
+    // `err_stray_ans_o` latches when a directory answer arrives with nothing
+    // waiting for one -- the shape of an out-of-order or stale answer, whose
+    // every consequence is silent (another island's ground drawn in this
+    // island's place, with every count agreeing). It caught a real shim bug in
+    // `tb_terrain_world.sv`, so its silence here is a measurement rather than
+    // a decoration. This composition drives the directory WITHOUT that shim,
+    // which is precisely the arrangement the tripwire is watching.
+    if (terr_seq_err_stray_ans_o != 1'b0)
+      $fatal(1, "SMOKE: TERRAIN.SEQ latched err_stray_ans -- a directory answer arrived with nothing waiting for it");
+    if (terr_seq_frame_faults_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.SEQ raised %0d frame faults on a 2-record set against a 1,024-slot directory",
+             terr_seq_frame_faults_o);
+
+    // ---- 4. THE SEQ -> LOADQ -> PAGELOADER CHAIN -------------------------
+    if (terr_seq_loads_issued_o != N_TERR_REC)
+      $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d loads for %0d non-resident patches", terr_seq_loads_issued_o, N_TERR_REC);
+    if (terr_lq_accepted_o != terr_seq_loads_issued_o)
+      $fatal(1, "SMOKE: TERRAIN.SEQ issued %0d load jobs and TERRAIN.LOADQ accepted %0d -- the queue's job port is not carrying",
+             terr_seq_loads_issued_o, terr_lq_accepted_o);
+    if (terr_lq_issued_o != terr_lq_accepted_o)
+      $fatal(1, "SMOKE: TERRAIN.LOADQ took %0d jobs and handed on %0d -- jobs are stuck in the queue",
+             terr_lq_accepted_o, terr_lq_issued_o);
+
+    // THE LOADER ACTUALLY MOVED BYTES. This is the one check that cannot be
+    // satisfied by handshakes alone: `load_bytes_o` counts bytes retired off
+    // the bridge, so it can only move if the played engine's beats reached the
+    // loader through the real `zhao_hps_arbiter`.
+    if (terr_pl_load_bytes_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.PAGELOADER retired 0 bytes -- the HPS arbiter is not passing client 1's beats");
+    if (terr_pl_bridge_errs_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.PAGELOADER saw %0d bridge errors", terr_pl_bridge_errs_o);
+
+    // A WELL-FORMED RECORD IS NEVER REFUSED. Every record this bench writes is
+    // 64-B aligned, inside the declared staging arena, on the live epoch and
+    // names a slot the directory issued, so `pages_refused_o` must be zero.
+    // This is the tripwire for the multi-record defect documented at
+    // N_TERR_REC -- it asserts the CORRECT behaviour, so it survives the
+    // repair; raise N_TERR_REC to 2 and it fires.
+    if (terr_pl_pages_refused_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.PAGELOADER REFUSED %0d well-formed job(s), verdict %0d, identity island=%0d ix=%0d iz=%0d src_id=%0d -- a job reached the loader with no payload. See the note at N_TERR_REC.",
+             terr_pl_pages_refused_o, terr_pl_fault_verdict_o,
+             terr_pl_fault_island_o, terr_pl_fault_ix_o, terr_pl_fault_iz_o,
+             terr_pl_fault_src_id_o);
+
+    // AND EVERY CLAIM WAS A FRESH ONE. `claims_same_o` moving on records with
+    // distinct {island, ix, iz} is the other face of the same defect: two
+    // records that both present a zero key collide in the directory.
+    if (terr_seq_claims_same_o != 0)
+      $fatal(1, "SMOKE: %0d of %0d claims came back SAME for records with distinct patch coordinates -- two records are presenting one key",
+             terr_seq_claims_same_o, terr_seq_claims_issued_o);
+    if (terr_pl_guard_denied_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.PAGELOADER was denied %0d guard requests -- it is writing outside TERRAIN.PAGE_POOL",
+             terr_pl_guard_denied_o);
+
+    // ONE JOB, ONE COMPLETION -- the loader's own stated law.
+    // THREE TERMS, NOT TWO, and the third is the interesting one. The block's
+    // own comment draws the line: "A refusal here has moved ZERO bytes, which
+    // is what separates `pages_refused_o` from `pages_faulted_o`: the first is
+    // a bad request, the second is a bad page." A check written as
+    // loaded + faulted silently treats a REFUSED job as a lost one, which is
+    // the flattering direction for a spine that is dropping work -- and it
+    // read exactly that way on the first run here.
+    if ((terr_pl_pages_loaded_o + terr_pl_pages_faulted_o + terr_pl_pages_refused_o) != N_TERR_REC)
+      $fatal(1, "SMOKE: %0d jobs produced %0d loaded + %0d faulted + %0d refused completions -- 'one job, one completion' is broken (or the wait timed out at guard=%0d)",
+             N_TERR_REC, terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
+             terr_pl_pages_refused_o, guard);
+
+    // EVERY COMPLETION REACHED THE DIRECTORY. This is the return leg of the
+    // spine and the one a counter inside the loader cannot witness: the
+    // directory validates the CRC on every completion it accepts, so a
+    // completion that never arrived and one that arrived bad are told apart
+    // here and nowhere else.
+    if (terr_res_crc_failures_o != N_TERR_REC)
+      $fatal(1, "SMOKE: the directory recorded %0d completions for %0d jobs -- TERRAIN.PAGELOADER's fin_* is not reaching TERRAIN.RESIDENCY",
+             terr_res_crc_failures_o, N_TERR_REC);
+
+    // THE WIDTH STEP HELD. The pool index is one bit wider than the
+    // directory's handle; this composition drives it from a 10-bit wire, so
+    // the extra bit must never be set on the way back. NOTE HONESTLY: this
+    // counter is STRUCTURALLY unreachable in this arrangement, so its zero is
+    // an invariant restated, not a detector that has been seen to fire. It
+    // owes a committed mutant, and the core's header says so at its
+    // declaration.
+    if (terr_pl_slot_overflow_o != 0)
+      $fatal(1, "SMOKE: %0d completions carried a pool slot outside the directory's range", terr_pl_slot_overflow_o);
+
+    // ---- 5. WHAT IS *NOT* CLAIMED, stated so nobody reads more in --------
+    // `terr_res_resident_o` is ZERO here and that is the CORRECT reading of
+    // this composition, for two independent declared reasons:
+    //   * the pages this bench plays are ZEROS, so their CRC cannot match the
+    //     `expected_page_crc32c` in the record and ruling T7 says a CRC-failed
+    //     page is never rendered. The fault is the required behaviour on the
+    //     stimulus given, not a defect;
+    //   * even a clean page would stop in ST_MIPGEN, because the directory
+    //     publishes on TWO completions and the second's producer
+    //     (TERRAIN.MIPFEED) is not composed -- see the refusal list in
+    //     zhao_console_core.sv.
+    // Asserting `resident == 0` would be asserting the gap, so this is a
+    // $display. Asserting the CRC fault would be asserting a bug. What IS
+    // asserted is the refusal's own law: every faulted page was counted.
+    if (terr_pl_pages_faulted_o > 0)
+      $display("SMOKE: NOTE %0d page(s) FAULTED as required -- the bench plays a zero page whose CRC cannot match the record's declared expected_page_crc32c, and ruling T7 forbids rendering it. The spine is proven by bytes retired (%0d) and by the record/claim seams above, not by residency.",
+               terr_pl_pages_faulted_o, terr_pl_load_bytes_o);
+    if (terr_res_resident_o != 0)
+      $display("SMOKE: NOTE %0d page(s) reached RESIDENT, which this composition did not expect -- TERRAIN.MIPFEED is not composed, so check what produced the second completion.",
+               terr_res_resident_o);
+
+    $display("SMOKE: TERRAIN spine -- %0d records emitted and %0d consumed, %0d claims, %0d loads, %0d bytes retired over %0d played bursts.",
+             terr_cmd_records_emitted_o, terr_seq_records_consumed_o,
+             terr_res_claims_o, terr_lq_issued_o, terr_pl_load_bytes_o,
+             hps_bursts_served_q);
 
     // ======================================================================
     // PACKET P-GEOM, 2026-09-19: the three blocks composed this pass must be

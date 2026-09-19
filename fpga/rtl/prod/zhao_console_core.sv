@@ -1124,6 +1124,14 @@ module zhao_console_core
   // a refused job from a loader that never started.
   output logic [31:0]             terr_pl_pages_refused_o,
   output logic [3:0]              terr_pl_fault_verdict_o,
+  // THE FAILING PAGE, LATCHED. The block emits this trio precisely so that a
+  // refusal names WHICH page it refused -- its own header calls it
+  // "MEASURE.HISTOGRAM's refuse-loudly lane". Dropping it turns every fault
+  // into an anonymous count, which is a refusal that is not loud at all.
+  output logic [31:0]             terr_pl_fault_island_o,
+  output logic signed [15:0]      terr_pl_fault_ix_o,
+  output logic signed [15:0]      terr_pl_fault_iz_o,
+  output logic [31:0]             terr_pl_fault_src_id_o,
   output logic [31:0]             terr_pl_incomplete_o,
   output logic [31:0]             terr_pl_hdr_ident_fails_o,
   // THE ARBITER'S OWN STARVATION INSTRUMENT. Rule 5 says starvation must be
@@ -3942,8 +3950,6 @@ module zhao_console_core
   /* verilator lint_off UNUSEDSIGNAL */
   wire [3:0]         tpl_fin_verdict;
   wire [31:0]        tpl_fin_src_id;
-  wire [31:0]        tpl_fault_island, tpl_fault_src_id;
-  wire signed [15:0] tpl_fault_ix, tpl_fault_iz;
   wire [31:0]        tpl_fault_crc_seen, tpl_fault_crc_expect;
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -3997,10 +4003,10 @@ module zhao_console_core
     .fin_verdict_o(tpl_fin_verdict),
     .fin_src_id_o (tpl_fin_src_id),
 
-    .fault_island_o    (tpl_fault_island),
-    .fault_ix_o        (tpl_fault_ix),
-    .fault_iz_o        (tpl_fault_iz),
-    .fault_src_id_o    (tpl_fault_src_id),
+    .fault_island_o    (terr_pl_fault_island_o),
+    .fault_ix_o        (terr_pl_fault_ix_o),
+    .fault_iz_o        (terr_pl_fault_iz_o),
+    .fault_src_id_o    (terr_pl_fault_src_id_o),
     .fault_verdict_o   (terr_pl_fault_verdict_o),
     .fault_crc_seen_o  (tpl_fault_crc_seen),
     .fault_crc_expect_o(tpl_fault_crc_expect),
