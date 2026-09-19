@@ -228,12 +228,52 @@
 //      store to that bridge exists yet. Connecting them is a shell change.
 //
 //  I2. THE SPECIES DESCRIPTOR TABLE (`part_upd_spc_*`, `part_spw_spc_*`,
-//      `part_col_d_*`) -- BOUNDARY. NO OWNER EXISTS IN THE TREE.
+//      `part_col_d_*`) -- BOUNDARY.
 //      PART.COLLIDE's contract says "this block owns no memory"; PART.UPDATE's
 //      says the table "belongs to PART.STATE"; and `zhao_part_state.sv` has no
-//      descriptor port and no such memory. All three blocks read a table that
-//      nothing implements. A PART.TABLE owner must be built; when it is, these
-//      ports become internal and this entry is deleted.
+//      descriptor port and no such memory. All three blocks read a table this
+//      composition does not provide.
+//
+//      CORRECTED 2026-09-19. This entry used to say "NO OWNER EXISTS IN THE
+//      TREE ... A PART.TABLE owner must be built". IT WAS BUILT. The file is
+//      `fpga/rtl/particles/zhao_part_table.sv` and the commit that added it is
+//      named for this entry: "particles: PART.TABLE, the descriptor table
+//      nothing owned (gaps I2, I3, I8)". It has never been instantiated
+//      anywhere.
+//
+//      That is an UNCASHED CHEQUE of the exact shape CLAUDE.md records -- the
+//      prerequisite deliberately built, the final step never performed,
+//      nothing in the tree watching for it -- and it is worse than the
+//      projector's because the entry that commissioned the block still says
+//      the block does not exist. Anyone reading this header to decide what to
+//      do next was being told to build it again.
+//
+//      WHAT IS ACTUALLY LEFT, so the next packet starts from the real
+//      obstacle. Two of the three consumers are DROP-IN: PART.UPDATE drives
+//      `spc_index_o` and the table answers on `u_index_i`, field for field
+//      (recipe, lifetime, age_mark, drag, grav, strength, cx/cy/cz, p0/p1/p2),
+//      and PART.SPAWN's `spc_species_o`/`spc_event_o` meet `s_species_i`/
+//      `s_event_i` the same way. THE THIRD IS NOT: `zhao_part_collide` reads
+//      `d_response_i`/`d_restitution_i`/`d_friction_i`/`d_damping_i`
+//      combinationally and EMITS NO INDEX -- it decodes the species into an
+//      internal `u_spc` off `p_record_i` and keeps it. So the table's
+//      `c_index_i` has no driver, and supplying one from this file means
+//      instantiating a second `zhao_part_record` codec here purely to re-read
+//      a field the consumer has already read. That is a block added by the
+//      composer, and the honest fix is one port on PART.COLLIDE
+//      (`d_index_o`), which is a change to that block rather than to this one.
+//      Note the timing is NOT the hazard it looks like: the block's own
+//      descriptor read is combinational off `p_record_i`, so an index derived
+//      from the same wire in the same instant cannot swap against it.
+//
+//      Until that port exists, composing the table would close the UPDATE and
+//      SPAWN halves and leave the COLLIDE half open, so this entry would
+//      narrow rather than close. Its `ld_*` per-frame load would also become a
+//      new boundary with the same absent CMD.SCHEDULER owner as I14 and I30.
+//      That is a real net gain and it is left for the particles owner
+//      deliberately, not overlooked: this file is shared with live agents and
+//      the packet that owns PART.COLLIDE should make the port change and the
+//      composition in one pass.
 //
 //  I3. THE SIZE/COLOUR CURVE TABLE (`part_crv_*`) -- BOUNDARY, same gap as I2.
 //
@@ -342,14 +382,95 @@
 // I17. POST.COMPOSITE's gather planes, atmosphere sheet, HUD, grading table,
 //      flash and ink (`post_gd_*`, `post_gg_*`, `post_atm_*`, `post_hud_*`,
 //      `post_pv_*`, `post_bias_*`, `post_flash_*`, `post_ink_*`,
-//      `post_bloom_gain_i`) -- BOUNDARY. TWOD.PLANE and the HUD source are not
-//      built. The grading curves are generated ASSETS by design, so their load
-//      port is legitimately external; the plane ports are not, and are a gap.
+//      `post_bloom_gain_i`) -- BOUNDARY. The grading curves are generated
+//      ASSETS by design, so their load port is legitimately external; the
+//      plane ports are not, and are a gap.
+//
+//      CORRECTED 2026-09-19, and the correction matters because acting on the
+//      old sentence would have sent somebody to build a block that exists.
+//      This entry used to read "TWOD.PLANE and the HUD source are not built".
+//      BOTH ARE BUILT AND BOTH ARE TESTED: `fpga/rtl/compositor/
+//      zhao_twod_plane.sv` and `zhao_twod_sprite.sv`, with
+//      `tests/compositor/twod_plane_directed.cpp`, `twod_plane_random.cpp`,
+//      `twod_sprite_directed.cpp` and `twod_sprite_random.cpp`. The completion
+//      register has counted both as BUILT-BUT-NOT-CONNECTED all along, so the
+//      header and the register disagreed and the header was the wrong one.
+//
+//      THE REAL OBSTACLE IS A MISSING BLOCK BETWEEN THEM, and it is one block
+//      for both ports. TWOD.PLANE and TWOD.SPRITE each emit a TEXEL SAMPLE
+//      REQUEST -- `s_texel_u_o`/`s_texel_v_o` with a format, a palette and a
+//      blend, and `s_u_o`/`s_v_o` with a format and a tint. POST.COMPOSITE's
+//      `atm_*` and `hud_*` ports hand back an RGB (plus opacity, plus an add
+//      bit). A request for a texel is not a colour, and the thing that turns
+//      one into the other is a CLUT8/RGB565 sampler with a page store behind
+//      it. Nothing in `fpga/rtl` is that: TEXTURE.CACHE and the TMU are
+//      fragment-shaped and sit on the raster path, and their pages come back
+//      through MEM.VRAM.ARBITER and `zhao_sdram_ctrl` -- the same absent
+//      behavioural model entry I23 refuses on. So this is I23's refusal in the
+//      compositor rather than "the producers do not exist".
+//
+//      Wiring the two blocks in and inventing the sampler here would be the
+//      hidden adapter, and inventing the CLUT lookup would additionally be
+//      inventing a colour law. Both were refused 2026-09-19.
+//
+//      POST.GATHER IS REFUSED SEPARATELY AND FOR A DIFFERENT REASON, recorded
+//      here because it is the named producer of the `gg_*`/`gd_*` planes and
+//      the next reader will look for it. `fpga/rtl/compositor/
+//      zhao_post_gather.sv` is built and tested; it is refused twice over:
+//        * ITS INPUT DOES NOT EXIST IN THIS SHAPE. It takes per-fragment glow
+//          as three 8-bit channels, a signed 8.8 displacement pair and an ink
+//          bit. `zhao_raster_resolve` emits ONE 8-bit `fb_tag_o` -- an effect
+//          channel and a strength, `spec/stars_and_flares.md` 1. Expanding a
+//          tag byte into glow RGB plus a displacement vector is a colour and
+//          geometry law invented in the composer, and it is exactly the kind
+//          of plausible wrong number this repository has shipped before.
+//        * AND THAT STREAM IS INTERNAL ANYWAY. RASTER.RESOLVE sits inside
+//          `zhao_geom_bin_pipe_v2` and its fragments never leave it, which is
+//          entry I15's refusal reached from the other end.
+//      Its OUTPUT is a third gap on top: the block flushes sixteen cells per
+//      tile as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
+//      The store between a flush and a random access is the `lowres_buffers`
+//      the ledger puts behind MEM.GUARD, and that is I23's absent SDRAM again.
 //
 // I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Nothing in
 //      the console produces an error-magnitude stream; the block measures a
 //      difference against a reference and the console has no reference. Its
 //      INTERVAL is real (I5 of the connected list), its EVENTS are not.
+//
+//      ITS TWO MEASURE SIBLINGS ARE REFUSED, 2026-09-19, and the reasons are
+//      recorded here because "the histogram is composed, so its siblings must
+//      be nearly composable" is the plausible reading and it is wrong.
+//
+//      MEASURE.TOKENS has no producer for either of its two inputs.
+//      `budget_*` is SetPresentationContract's five per-frame budgets;
+//      `zhao_cmd_scheduler` decodes that opcode and emits `mode_o` and nothing
+//      else -- there is no budget port on it to connect. And the request side
+//      is worse than absent, it is MISMATCHED: GEOM.BINNER's token client is
+//      real and is already TIED OFF INSIDE THE SHELL --
+//      `zhao_shell_top_v2.sv` reads `.tok_req_o(rp_tok_unused),
+//      .tok_grant_i(1'b1)` -- and what it offers is ONE BIT, where
+//      MEASURE.TOKENS' `req_*` carries view, class, essential, rung, cost and
+//      source id. Adopting it would mean inventing five of the six fields,
+//      and `req_essential_i` and `req_rep_i` are policy rather than routing.
+//      That shell tie-off is inside I20's scope and is named here because it
+//      is the specific thing a later packet must repair.
+//
+//      MEASURE.GOVERNOR then fails for its own reasons even if TOKENS existed.
+//      Its `px_err0/1_i` is SetView's per-camera `fx16 pixel_error` and its
+//      `proj0/1_i` the camera projection scale -- the same absent CMD path
+//      I14 describes for the projection matrices, and the same one I30 now
+//      describes for the stamp dispatch. Its `starved0/1_i` would come from
+//      TOKENS' `den_*`, which is a one-cycle REGISTERED denial while the
+//      governor wants a per-frame per-view verdict: the latch between them is
+//      state, and state belongs in a file with a contract and a test. Its
+//      outputs go to TERRAIN.LOD, which is not composed (entry I21).
+//
+//      DEBUG.TRACE is refused by THIS ENTRY'S OWN ARGUMENT, one block over.
+//      Its event carries `ev_expected_fx_i` beside `ev_actual_fx_i` -- a
+//      differential against a reference -- and the console has no reference,
+//      which is the sentence above. The ledger's `upstream: [CMD.DECODER]` is
+//      not the RTL's seam either: the decoder emits record headers, not
+//      {stage, tile, primitive, pixel, expected, actual}.
 //
 // I19. MEASURE.HISTOGRAM's host read window (`hist_rd_*`) -- BOUNDARY. The
 //      host is the HPS; no register path from HPS to this block exists.
@@ -422,6 +543,43 @@
 //      `zhao_geom_clip`'s own header defines the rectangle as "a canvas in
 //      Z60/Storm, one 256x192 view block in Duo -- video_rules.md 3.1", which
 //      is that value and not a second opinion about it.
+//
+//      THE PARTICLE DRAW ENDPOINTS WOULD LAND HERE AND THEY ARE REFUSED,
+//      written down 2026-09-19 so the next packet does not re-derive it.
+//      `zhao_part_expand` emits a triangle and `zhao_part_soft` a scissored
+//      span, so this is the port they aim at. Both take an ALREADY PROJECTED
+//      particle -- `p_x_i`/`p_y_i` in S12.8 CANVAS units with a Q16.16 1/w and
+//      GEOM.PROJECT's own in-front verdict -- and NOTHING IN THIS CORE
+//      PROJECTS A PARTICLE. `zhao_proj_subsystem` has exactly two client ports
+//      and both are live (GEOM on A, TERRAIN on B), so a particle client is a
+//      third port and that is an owner ruling, not wiring. The particle ring
+//      composed above carries particle128 WORLD records and stops there.
+//
+//      `zhao_part_expand` IS ADDITIONALLY UNSAFE TO ADOPT TODAY, by its own
+//      testimony. Its header opens with a SUPERSEDED ASSUMPTION banner: it
+//      reads `size` as U 0.4.4 pixels per qformats 10, amendment C2 replaced
+//      that whole section with a U 2.4 WORLD-SCALE multiplier, and the block
+//      says "THIS BLOCK IS NOT FIXED HERE, deliberately" because converting a
+//      world radius to a screen half-side is a projection. `zhao_part_record
+//      .sv` names the same defect from the other side. Composing it would
+//      install a block whose own header says its arithmetic is wrong.
+//
+//      `zhao_part_ladder` is refused on two independent counts: its `p_size_i`
+//      is a PROJECTED size with the same absent producer, and its `p_prev_rung
+//      _i`/`p_hold_i` are per-(particle, camera) state its contract explicitly
+//      keeps OFF chip -- "a design that put the hold state on chip would be
+//      choosing 64 KiB of M10K to avoid a few bytes per particle of DDR
+//      traffic, and that trade should be measured, not assumed". The DDR is
+//      I23's absent model.
+//
+//      AND THE LEDGER'S EDGE HERE IS NOT THE RTL'S. `design/blocks.yml` gives
+//      PART.EXPAND and PART.SOFT `upstream: [PART.LADDER]`. The ladder emits a
+//      RUNG (`r_rung_o`, `r_hold_o`, `r_changed_o`); neither block has a port
+//      that takes one. The declared edge does not exist in the hardware, and a
+//      packet that wires by the ledger rather than by the ports would build
+//      it. (The same is true of CMD.DECODER -> DEBUG.TRACE: the decoder emits
+//      record headers, the trace ring takes {stage, tile, primitive, pixel,
+//      expected_fx, actual_fx}. Those are different things.)
 //
 // I25. GEOM.VDECODE's format selector (`v_format_i`) -- NOT a tie-off: the
 //      core assigns it, in the same standing as I9. There is exactly ONE
@@ -568,6 +726,48 @@
 //      would pull that whole subsystem in behind a seam I27 already records as
 //      unclosable today. The port is on this module's edge so the result
 //      stream is observable rather than dropped.
+//
+// ---------------------------------------------------------------------------
+// BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
+// ---------------------------------------------------------------------------
+// Fourteen of the sixteen blocks in the 2026-09-19 small-blocks packet were
+// refused. Ten of them are argued at the entry their port would have closed
+// (TWOD.PLANE, TWOD.SPRITE and POST.GATHER at I17; PART.EXPAND, PART.SOFT and
+// PART.LADDER at I24; MEASURE.TOKENS, MEASURE.GOVERNOR and DEBUG.TRACE at I18;
+// and see I2 for PART.TABLE, which is not in that packet and is an uncashed
+// cheque rather than a refusal). The remaining four have no such entry, so
+// they are here rather than nowhere:
+//
+//   CMD.DECODER. The stream it wants is REAL AND IS ALREADY FLOWING -- CMD.DMA
+//   emits `pkt_valid/pkt_byte/pkt_len` and the smoke bench's played HPS bridge
+//   puts genuine packet bytes on it. It is INTERNAL to `zhao_shell_top_v2`:
+//   those are body wires, not shell ports, and the shell's own inline record
+//   framer ("glue 3") is the consumer. Composing the decoder therefore needs a
+//   SHELL PORT CHANGE plus a fork on `pkt_ready` for the second consumer --
+//   additive and small in itself, but `zhao_shell_top_v2` is instantiated by
+//   seven things including a GENERATED fit top, a committed mutant copy and
+//   two Python consistency tests, so it is a shell-owner change and not a
+//   composer one. Its own verdict has no consumer either: nothing in the tree
+//   takes `decode_error_o`, and the shell's framer does not validate.
+//
+//   FIELD.PROGCACHE. Its `lu_*`/`cm_*` are a hash lookup and a commit with a
+//   decode verdict. Both ends are FIELD.SEQ blocks and none of them is
+//   composed; `zhao_field_v2_core` is itself in the register's
+//   built-but-not-connected list.
+//
+//   FORGE.PRIM and FORGE.PRIM_EVAL are the TOPOLOGY and the POSITIONS of one
+//   primitive -- indices from one, fx16 vertices from the other -- and they do
+//   NOT meet each other: neither has a port the other drives. Both take a job
+//   from CMD.SCHEDULER (absent, as at I14/I30) and both aim at GEOM.SETUP,
+//   which takes SCREEN triangles with edge functions. So composing them would
+//   put stimulus in at this module's edge and take results out at the same
+//   edge, with no producer and no consumer inside -- a disconnected
+//   implementation with extra steps, which is what the standard excludes.
+//
+//   FORGE.CLIFF needs a page ISSUER that walks the lattice, a 34x34 solid-bit
+//   window and a vdist read master. None exists; TERRAIN.TESS is composed but
+//   emits none of the three. Its own output is a RIM EDGE, not a triangle, so
+//   even the far end needs a block that is not built.
 //
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
@@ -3181,7 +3381,9 @@ module zhao_console_core
     .s_ready_o(post_s_ready_o),
     .s_rgb_i  (post_s_rgb_i),
 
-    // I17: TWOD.PLANE and the HUD source are not built.
+    // I17: TWOD.PLANE and TWOD.SPRITE are BUILT and are not composed -- they
+    // emit texel sample requests and these ports want RGB back, and the
+    // sampler between them does not exist. See the corrected entry I17.
     .gd_req_v_o  (post_gd_req_v_o),
     .gd_view_o   (post_gd_view_o),
     .gd_cx_o     (post_gd_cx_o),
