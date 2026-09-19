@@ -202,7 +202,7 @@ struct Outcome {
   int tag = -1;
   int bursts = 0;
   bool published_before_retire = false;
-  bool data_ok = true;  // every written beat was the staged beat, in order
+  bool data_ok = true;             // every written beat was the staged beat, in order
   int reoffers_after_refusal = 0;  // requests offered AFTER the bridge refused one
 };
 
@@ -223,8 +223,8 @@ Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guar
   bool verdict_pending = false;    // the guard accepted last cycle
   int reqs_accepted = 0;           // guard requests accepted so far
   int busy_left = 0;               // cycles the guard stays not-ready
-  bool granted = false;      // a burst has been granted and is being served
-  bool refused = false;      // the bridge has refused a request
+  bool granted = false;            // a burst has been granted and is being served
+  bool refused = false;            // the bridge has refused a request
 
   for (int cycle = 0; cycle < 50000; ++cycle) {
     d.eval();
@@ -426,7 +426,8 @@ void test_a_refused_request_is_answered_not_repeated() {
     const uint32_t len = 4 * kBurst;
     const uint32_t crc = crc32c_of(payload_of(len));
     const Outcome o = run_upload(d, len, crc, false, false, 0, /*refuse_burst=*/at);
-    check(o.status >= 0, "a refused HPS request ENDS the upload (done fired)", 1, o.status >= 0 ? 1 : 0);
+    check(o.status >= 0, "a refused HPS request ENDS the upload (done fired)", 1,
+          o.status >= 0 ? 1 : 0);
     check(o.reoffers_after_refusal == 0, "and the refused request is not offered again", 0,
           o.reoffers_after_refusal);
     check(!o.published, "and the slot is not published", 0, o.published ? 1 : 0);

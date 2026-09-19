@@ -545,7 +545,8 @@ void test_view_request_clamp(Cosim& c) {
   c.step(s, "vreq/view1-both-over");
   s.vreq = zm::ViewTokenRequest();
   check(c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u,
-        "vreq: view 1 clamped in both classes", 1, c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u);
+        "vreq: view 1 clamped in both classes", 1,
+        c.dut.avail_geom1_o == 2000u && c.dut.avail_frag1_o == 4000u);
   check(c.dut.vreq_clamped_o == 3u, "vreq: two more cuts counted", 3, c.dut.vreq_clamped_o);
 
   // a request EXACTLY at the ceiling is not a cut

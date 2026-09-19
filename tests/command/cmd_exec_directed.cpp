@@ -131,9 +131,8 @@ struct Run {
  * a fresh DUT, which is also what makes the counter assertions below absolute
  * rather than deltas.
  */
-Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
-              uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu,
-              uint32_t upl_mask = 0xFFFFFFFFu) {
+Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask, uint32_t cfg_mask = 0xFFFFFFFFu,
+              uint32_t draw_mask = 0xFFFFFFFFu, uint32_t upl_mask = 0xFFFFFFFFu) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
@@ -380,7 +379,8 @@ std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t 
 }
 
 // SetPresentationContract, the token CEILING (R18/R33), by the generated packer.
-std::vector<uint8_t> contractRecord(uint32_t g0, uint32_t g1, uint32_t f0, uint32_t f1, uint32_t sh) {
+std::vector<uint8_t> contractRecord(uint32_t g0, uint32_t g1, uint32_t f0, uint32_t f1,
+                                    uint32_t sh) {
   zhao_abi::ZhRecordSetPresentationContract rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;
   rec.hdr.record_bytes = 48;
@@ -406,7 +406,7 @@ std::vector<uint8_t> publishRecord(uint32_t k) {
   // handle32 {index:24, generation:8}, index HIGH (zcon::detail::handle32).
   rec.payload.resource = ((0x00ABC0u + k) << 8) | 0x2Au;
   rec.payload.hps_addr_lo = 0x3000'0000u + k * 0x1000u;
-  rec.payload.hps_addr_hi = k;                  // nonzero for k>0: carried, not narrowed
+  rec.payload.hps_addr_hi = k;  // nonzero for k>0: carried, not narrowed
   rec.payload.vram_dst = 0x054D'F000u + k * 0x100u;
   rec.payload.length = 256u + 64u * k;
   rec.payload.crc32c = 0xC0FF'EE00u + k;
@@ -424,7 +424,8 @@ void checkUpload(const UploadOut& u, uint32_t k, const std::string& tag) {
   check(u.kind == 11u + k, (tag + " kind").c_str(), 11u + k, u.kind);
   check(u.hps == ((static_cast<uint64_t>(k) << 32) | (0x3000'0000u + k * 0x1000u)),
         (tag + " hps address, all 64 bits").c_str(), 0, 0);
-  check(u.vram == 0x054D'F000u + k * 0x100u, (tag + " vram").c_str(), 0x054DF000u + k * 0x100u, u.vram);
+  check(u.vram == 0x054D'F000u + k * 0x100u, (tag + " vram").c_str(), 0x054DF000u + k * 0x100u,
+        u.vram);
   check(u.len == 256u + 64u * k, (tag + " length").c_str(), 256u + 64u * k, u.len);
   check(u.crc == 0xC0FF'EE00u + k, (tag + " crc32c").c_str(), 0xC0FFEE00u + k, u.crc);
   check(u.gen == 0x0102u + k, (tag + " new generation").c_str(), 0x0102u + k, u.gen);
@@ -554,19 +555,23 @@ int main(int argc, char** argv) {
       check(c.g0 == 40000u && c.g1 == 30000u && c.f0 == 90000u && c.f1 == 80000u && c.sh == 5000u,
             "case17: the five counts, as sent", 1,
             c.g0 == 40000u && c.g1 == 30000u && c.f0 == 90000u && c.f1 == 80000u && c.sh == 5000u);
-      check(!r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u && r.toks[1].frag == 67890u,
+      check(!r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u &&
+                r.toks[1].frag == 67890u,
             "case17: view 0's request, as sent", 1,
-            !r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u && r.toks[1].frag == 67890u);
+            !r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u &&
+                r.toks[1].frag == 67890u);
       // view 1 asked for MORE than its ceiling: the executor forwards it as sent
       // -- the CLAMP is MEASURE.TOKENS', one authority per level (R18).
-      check(!r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u && r.toks[2].frag == 20000u,
+      check(!r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u &&
+                r.toks[2].frag == 20000u,
             "case17: view 1's request, as sent (the clamp is the guard's)", 1,
-            !r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u && r.toks[2].frag == 20000u);
+            !r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u &&
+                r.toks[2].frag == 20000u);
       check(r.toks[0].cycle < r.toks[1].cycle && r.toks[1].cycle < r.toks[2].cycle,
             "case17: ceiling, then view 0, then view 1", 1, 1);
       const uint32_t first_cfg = r.cfg.empty() ? 0xFFFFFFFFu : r.cfg[0].cycle;
-      check(r.toks[2].cycle < first_cfg, "case17: every token load precedes the first matrix word", 1,
-            r.toks[2].cycle < first_cfg ? 1 : 0);
+      check(r.toks[2].cycle < first_cfg, "case17: every token load precedes the first matrix word",
+            1, r.toks[2].cycle < first_cfg ? 1 : 0);
       check(r.toks[0].cycle > r.verdict_cycle, "case17: nothing leaves before the verdict", 1,
             r.toks[0].cycle > r.verdict_cycle ? 1 : 0);
     }
@@ -989,7 +994,8 @@ int main(int argc, char** argv) {
     check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case15: payload CRC fails",
           zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, r.err);
     check(r.abandoned == 1, "case15: abandoned", 1, r.abandoned);
-    check(r.uploads.empty(), "case15: NO upload of a packet that failed its CRC", 0, r.uploads.size());
+    check(r.uploads.empty(), "case15: NO upload of a packet that failed its CRC", 0,
+          r.uploads.size());
   }
 
   // ---- 16. MEM.UPLOAD busy: the commit does NOT wait for it ----------------
@@ -1003,7 +1009,8 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x0u);
     check(r.committed == 1, "case16: committed with MEM.UPLOAD busy", 1, r.committed);
-    check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1, r.draws.size());
+    check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1,
+          r.draws.size());
     check(r.uploads.empty() && r.uploads_issued == 0, "case16: the upload is still pending", 0,
           r.uploads_issued);
   }

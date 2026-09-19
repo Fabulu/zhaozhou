@@ -335,7 +335,8 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
         ++burst_beat;
       }
     } else if (hps_req_valid(dut.hps_req_o) &&
-               (refused || (inj.bridge_refuse_after != UINT32_MAX && bytes_read >= inj.bridge_refuse_after))) {
+               (refused ||
+                (inj.bridge_refuse_after != UINT32_MAX && bytes_read >= inj.bridge_refuse_after))) {
       if (refused) {
         ++obs.reoffers_after_refusal;
       } else {
@@ -851,7 +852,8 @@ int main() {
     check(got.reoffers_after_refusal == 0, "and the refused request is not offered again", 0,
           got.reoffers_after_refusal);
     check(got.status == static_cast<uint8_t>(zd::BlitStatus::kBridgeErr),
-          "and it reports the bridge error", static_cast<uint8_t>(zd::BlitStatus::kBridgeErr), got.status);
+          "and it reports the bridge error", static_cast<uint8_t>(zd::BlitStatus::kBridgeErr),
+          got.status);
     check(!got.published, "and nothing is published", 0, got.published ? 1 : 0);
   }
 

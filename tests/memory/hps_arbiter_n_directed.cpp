@@ -207,7 +207,8 @@ struct Bench {
       Client& k = c[i];
       if (k.write && k.in_flight && k.wbeats_left > 0) {
         wv |= 1u << i;
-        set_wide64(dut.c_wr_data_i, i, hps_word(k.base + static_cast<uint32_t>(k.wbeats_sent) * 8u));
+        set_wide64(dut.c_wr_data_i, i,
+                   hps_word(k.base + static_cast<uint32_t>(k.wbeats_sent) * 8u));
         ++k.wbeats_sent;
         --k.wbeats_left;
         if (k.wbeats_left == 0) {
@@ -246,7 +247,14 @@ void reset(Vzhao_hps_arb_n_compose& dut) {
 uint32_t bursts(Vzhao_hps_arb_n_compose& dut, int i) { return dut.bursts_o[i]; }
 
 char nm[128];
-const char* name(const char* fmt, int a, int b = 0) {
+// Two arities rather than one with a defaulted second argument: passing an
+// unused argument to a one-placeholder format is what cppcheck's
+// wrongPrintfScanfArgNum reports, and it is right to.
+const char* name(const char* fmt, int a) {
+  std::snprintf(nm, sizeof nm, fmt, a);
+  return nm;
+}
+const char* name(const char* fmt, int a, int b) {
   std::snprintf(nm, sizeof nm, fmt, a, b);
   return nm;
 }
@@ -286,7 +294,8 @@ int main() {
   for (int first = 0; first < kN; ++first) {
     reset(dut);
     Bench b(dut);
-    for (int i = 0; i < kN; ++i) b.c[i].at(0x2000'0000u + static_cast<uint32_t>(i) * 0x0100'0000u, 0);
+    for (int i = 0; i < kN; ++i)
+      b.c[i].at(0x2000'0000u + static_cast<uint32_t>(i) * 0x0100'0000u, 0);
     b.c[first].bursts_wanted = 4;
     b.run(3);
     for (int i = 0; i < kN; ++i) {
@@ -301,11 +310,11 @@ int main() {
       check(b.c[i].errs == 0, name("2.head start %d: client %d saw no error", first, i), 0,
             static_cast<uint32_t>(b.c[i].errs));
       check(b.c[i].grants == 4 && bursts(dut, i) == 4,
-            name("2.head start %d: client %d grants == bursts == 4", first, i), 4,
-            bursts(dut, i));
+            name("2.head start %d: client %d grants == bursts == 4", first, i), 4, bursts(dut, i));
     }
-    check(b.multi_beat_cycles == 0, name("2.head start %d: never two clients beating at once", first),
-          0, static_cast<uint32_t>(b.multi_beat_cycles));
+    check(b.multi_beat_cycles == 0,
+          name("2.head start %d: never two clients beating at once", first), 0,
+          static_cast<uint32_t>(b.multi_beat_cycles));
     check(dut.hps_err_count_o == 0, name("2.head start %d: the bridge logged NO violation", first),
           0, dut.hps_err_count_o);
   }
@@ -329,7 +338,8 @@ int main() {
     reset(dut);
     Bench b(dut);
     b.grant_delay = delay;
-    for (int i = 0; i < kN; ++i) b.c[i].at(0x5000'0000u + static_cast<uint32_t>(i) * 0x0100'0000u, 2);
+    for (int i = 0; i < kN; ++i)
+      b.c[i].at(0x5000'0000u + static_cast<uint32_t>(i) * 0x0100'0000u, 2);
     b.run(900);
     check(b.watch_stable, name("4.hps delay %d: request held stable to the HPS", delay), 1,
           b.watch_stable);
@@ -369,7 +379,8 @@ int main() {
   {
     reset(dut);
     Bench b(dut);
-    for (int i = 0; i < kN; ++i) b.c[i].at(0x9000'0000u + static_cast<uint32_t>(i) * 0x0100'0000u, 6);
+    for (int i = 0; i < kN; ++i)
+      b.c[i].at(0x9000'0000u + static_cast<uint32_t>(i) * 0x0100'0000u, 6);
     b.run(1200);
     bool done = true;
     for (int i = 0; i < kN; ++i) done = done && b.c[i].beats == 48 && bursts(dut, i) == 6;
@@ -379,8 +390,9 @@ int main() {
     check(b.c[2].waited_cycles > b.c[1].waited_cycles, "6.client 2 waited longer than client 1",
           static_cast<uint32_t>(b.c[1].waited_cycles), static_cast<uint32_t>(b.c[2].waited_cycles));
     check(dut.c1_wait_cycles_o > 0, "6.client 1's waiting is counted", 1, dut.c1_wait_cycles_o);
-    check(dut.c2_wait_cycles_o > dut.c1_wait_cycles_o, "6.client 2's waiting is counted, and is larger",
-          dut.c1_wait_cycles_o, dut.c2_wait_cycles_o);
+    check(dut.c2_wait_cycles_o > dut.c1_wait_cycles_o,
+          "6.client 2's waiting is counted, and is larger", dut.c1_wait_cycles_o,
+          dut.c2_wait_cycles_o);
     std::printf("priority: waited c0 %d, c1 %d, c2 %d; counters c1 %u c2 %u\n",
                 b.c[0].waited_cycles, b.c[1].waited_cycles, b.c[2].waited_cycles,
                 dut.c1_wait_cycles_o, dut.c2_wait_cycles_o);
@@ -425,7 +437,8 @@ int main() {
     check(b.c[1].grants > 10, "6c.the middle client runs freely with client 0 idle", 1,
           static_cast<uint32_t>(b.c[1].grants));
     check(b.c[2].grants == 0, "6c.and starves client 2", 0, static_cast<uint32_t>(b.c[2].grants));
-    check(dut.c2_wait_cycles_o > 350, "6c.which client 2's counter shows", 350, dut.c2_wait_cycles_o);
+    check(dut.c2_wait_cycles_o > 350, "6c.which client 2's counter shows", 350,
+          dut.c2_wait_cycles_o);
 
     const int c1_before = b.c[1].grants;
     b.c[0].at(0xC000'0000u, 1);
@@ -481,7 +494,8 @@ int main() {
           b.hps_write_beats == 8 && b.hps_write_lasts == 1);
     bool wdata_ok = (b.hps_write_data.size() == 8);
     for (size_t i = 0; i < b.hps_write_data.size() && wdata_ok; ++i) {
-      if (b.hps_write_data[i] != hps_word(0xD200'0000u + static_cast<uint32_t>(i) * 8u)) wdata_ok = false;
+      if (b.hps_write_data[i] != hps_word(0xD200'0000u + static_cast<uint32_t>(i) * 8u))
+        wdata_ok = false;
     }
     check(wdata_ok, "7.and the data is client 2's", 1, wdata_ok);
     b.c[0].at(0xE000'0000u, 1);
@@ -505,8 +519,8 @@ int main() {
           b.c[0].beats == 24 && b.c[2].beats == 24);
     check(b.c[0].data_ok && b.c[2].data_ok, "7b.and their data is their own", 1,
           b.c[0].data_ok && b.c[2].data_ok);
-    check(b.c[1].grants == 3 && b.c[1].beats == 0, "7b.the writer got 3 bursts and no read beats", 1,
-          b.c[1].grants == 3 && b.c[1].beats == 0);
+    check(b.c[1].grants == 3 && b.c[1].beats == 0, "7b.the writer got 3 bursts and no read beats",
+          1, b.c[1].grants == 3 && b.c[1].beats == 0);
     check(b.hps_write_lasts == 3, "7b.three write bursts completed", 3,
           static_cast<uint32_t>(b.hps_write_lasts));
     check(dut.hps_err_count_o == 0, "7b.no violation", 0, dut.hps_err_count_o);
@@ -531,13 +545,15 @@ int main() {
     dut.c_addr_i[who] = p.addr;
     b.pulse = 1u << who;
     b.run(120);
-    check(p.beats == 8, name("8.client %d's ONE-cycle pulse during client 1's burst is served", who), 8,
+    check(p.beats == 8,
+          name("8.client %d's ONE-cycle pulse during client 1's burst is served", who), 8,
           static_cast<uint32_t>(p.beats));
     check(p.data_ok, name("8.client %d: from the address it pulsed", who), 1, p.data_ok);
     check(bursts(dut, who) == 1, name("8.client %d: exactly one burst, not a repeat", who), 1,
           bursts(dut, who));
-    check(b.c[1].beats == 8 && b.c[1].data_ok, name("8.client %d: the owner's burst is untouched", who),
-          1, b.c[1].beats == 8 && b.c[1].data_ok);
+    check(b.c[1].beats == 8 && b.c[1].data_ok,
+          name("8.client %d: the owner's burst is untouched", who), 1,
+          b.c[1].beats == 8 && b.c[1].data_ok);
     if (who == 2) {
       check(dut.c2_wait_cycles_o > 1, "8.client 2's pending wait is COUNTED, not frozen at one", 2,
             dut.c2_wait_cycles_o);
@@ -558,7 +574,8 @@ int main() {
     b.pulse = 1u << 2;
     b.run(160);
     check(b.c[0].beats == 8, "8b.the winner is served", 8, static_cast<uint32_t>(b.c[0].beats));
-    check(p.beats == 8 && p.data_ok, "8b.the pulse that lost the same-cycle pick is served after it", 1,
+    check(p.beats == 8 && p.data_ok,
+          "8b.the pulse that lost the same-cycle pick is served after it", 1,
           p.beats == 8 && p.data_ok);
     check(dut.hps_err_count_o == 0, "8b.no violation", 0, dut.hps_err_count_o);
   }

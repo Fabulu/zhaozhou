@@ -173,7 +173,8 @@ class TokenGuard {
         const int v = vr.view & 1;
         const uint32_t g = vr.geom > ceil_.geom[v] ? ceil_.geom[v] : vr.geom;
         const uint32_t f = vr.frag > ceil_.frag[v] ? ceil_.frag[v] : vr.frag;
-        const uint32_t cut = (vr.geom > ceil_.geom[v] ? 1u : 0u) + (vr.frag > ceil_.frag[v] ? 1u : 0u);
+        const uint32_t cut =
+            (vr.geom > ceil_.geom[v] ? 1u : 0u) + (vr.frag > ceil_.frag[v] ? 1u : 0u);
         vreq_clamped_ = cnt_add(vreq_clamped_, cut);
         bud_.geom[v] = geom_[v] = g;
         bud_.frag[v] = frag_[v] = f;

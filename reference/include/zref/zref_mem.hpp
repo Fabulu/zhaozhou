@@ -738,8 +738,8 @@ struct MemoryGuard {
         // POST.ECHO's capture (ruling R7, spec/memory_rules.md 5g): ENGINE0
         // WRITE-only, constant bounds, lease-gated (the writer test above) but
         // NOT frame-scoped -- no map input moves it, so `m.valid` is not read.
-        if (r.client == ENGINE0 && r.write &&
-            r.addr >= kPostEchoBase && end <= kPostEchoBase + kPostEchoSpan)
+        if (r.client == ENGINE0 && r.write && r.addr >= kPostEchoBase &&
+            end <= kPostEchoBase + kPostEchoSpan)
           return true;
         if (!m.valid) return false;
         const uint32_t base = m.blit_slot ? kFbSlot1Base : kFbSlot0Base;
