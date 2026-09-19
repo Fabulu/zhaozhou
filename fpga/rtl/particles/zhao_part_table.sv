@@ -153,7 +153,7 @@
 // ---------------------------------------------------------------------------
 // `ramstyle` IS A HINT, AND A HINT IS NOT AN INFERENCE
 // ---------------------------------------------------------------------------
-// The four arrays carry `/* synthesis ramstyle = "MLAB, no_rw_check" */`.
+// The four arrays carry `(* ramstyle = "MLAB, no_rw_check" *)`.
 // Quartus may decline. If it does, the arrays become the ~18,400-ALM flip-flop
 // table above and the block blows every ceiling in sight -- which is exactly
 // the kind of thing that must be MEASURED rather than assumed. Until a fit
@@ -424,10 +424,16 @@ module zhao_part_table #(
   // ---- the arrays -----------------------------------------------------------
   // RAM, not registers: see the header's arithmetic. The ramstyle is a HINT and
   // Quartus may decline it; only a fit says what these became.
-  logic [UPD_W-1:0]  upd_m[SPECIES_N] /* synthesis ramstyle = "MLAB, no_rw_check" */;
-  logic [COLD_W-1:0] col_m[SPECIES_N] /* synthesis ramstyle = "MLAB, no_rw_check" */;
-  logic [SPWD_W-1:0] spw_m[SPW_N] /* synthesis ramstyle = "MLAB, no_rw_check" */;
-  logic [CRVD_W-1:0] crv_m[CRV_N] /* synthesis ramstyle = "MLAB, no_rw_check" */;
+  // The ATTRIBUTE form, not the `/* synthesis ... */` comment form, because the
+  // attribute form is the one this repository has already put through Quartus:
+  // `fpga/rtl/field/zhao_field_progdir_scan.sv` carries
+  // `(* ramstyle = "M10K" *)` on exactly this kind of declaration. Choosing the
+  // proven spelling over the equivalent one costs nothing and removes a way for
+  // a first `quartus_map` to fail on syntax rather than on substance.
+  (* ramstyle = "MLAB, no_rw_check" *) logic [UPD_W-1:0]  upd_m[SPECIES_N];
+  (* ramstyle = "MLAB, no_rw_check" *) logic [COLD_W-1:0] col_m[SPECIES_N];
+  (* ramstyle = "MLAB, no_rw_check" *) logic [SPWD_W-1:0] spw_m[SPW_N];
+  (* ramstyle = "MLAB, no_rw_check" *) logic [CRVD_W-1:0] crv_m[CRV_N];
 
   // ---- the load -------------------------------------------------------------
   // Constant ready. A table that can stall its own load is a table whose
