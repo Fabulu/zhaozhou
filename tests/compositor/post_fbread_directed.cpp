@@ -31,6 +31,11 @@
 #include "post_mem_model.hpp"
 #include "zhao_sim.hpp"
 
+// The reader's queue depth this build was verilated with (-GFIFO_BEATS).
+#ifndef POST_FBREAD_FIFO
+#define POST_FBREAD_FIFO 16
+#endif
+
 namespace {
 
 uint16_t pattern(uint32_t addr) {
@@ -213,6 +218,99 @@ int main(int argc, char** argv) {
     fill(m, 0, 768 * 2);
     const auto r = run(top, m, 0x0, 768, 384, 2, 1, 1, 18);
     expect_pass(r, m, 0x0, 768, 384, 2, "the pass after a refusal starts clean");
+  }
+
+  // ---- 9. the first beat arrives ON the verdict cycle ------------------------
+  // The guard law says the verdict is a pulse one cycle after the accept and
+  // says nothing forbidding the data from arriving with it. `read_lat = 0`
+  // makes the model do exactly that. The reader used to subtract a beat only
+  // when something was ALREADY owed, so a request whose verdict found nothing
+  // owed kept one PHANTOM owed beat (Q004 F3). It is not a hang -- once owed is
+  // non-zero the next coincidence is subtracted -- it is a lost request slot:
+  // with a 16-beat queue the phantom leaves room for 7 beats, so the reader can
+  // never have its second eight-beat read in flight and runs at half its
+  // concurrency for the rest of the pass. At FIFO_BEATS=16 the head register's
+  // one beat of slack hides it exactly (measured: the pre-fix reader still
+  // queues two reads); at FIFO_BEATS=8, the block's own legal minimum, the
+  // phantom leaves 7 beats of room forever and the reader HANGS after its first
+  // read. So this bench is built at both depths (post_fbread_directed and
+  // post_fbread_directed_q8), and the pre-fix reader fails the q8 build.
+  {
+    postmem::Model m;
+    m.read_lat = 0;
+    fill(m, 0, 768 * 4);
+    top.start_i = 1;
+    top.origin_i = 0;
+    top.stride_i = 768;
+    top.w_i = 384;
+    top.h_i = 4;
+    top.px_ready_i = 0;
+    const uint32_t reads0 = top.reads_o;
+    for (int cyc = 0; cyc < 400; ++cyc) {
+      const auto d = m.drive();
+      top.guard_rsp_i = d.rsp;
+      top.beat_valid_i = d.beat_v;
+      top.beat_data_i = d.beat_d;
+      top.clk = 0;
+      top.eval();
+      const auto req = postmem::decode(top.guard_req_o);
+      top.clk = 1;
+      top.eval();
+      m.edge(d, req, false, 0, false);
+      top.start_i = 0;
+    }
+    zhao::check(top.reads_o - reads0 == POST_FBREAD_FIFO / 8,
+                "a stalled consumer gets FIFO_BEATS/8 reads queued when beats land on the verdict",
+                POST_FBREAD_FIFO / 8, top.reads_o - reads0);
+    zhao::check(top.overflow_o == 0, "and no beat is ever unowned", 0, top.overflow_o);
+    // Drain the rest so the next case starts from an idle block.
+    std::vector<uint16_t> got;
+    for (int cyc = 0; cyc < 20000 && top.busy_o; ++cyc) {
+      const auto d = m.drive();
+      top.guard_rsp_i = d.rsp;
+      top.beat_valid_i = d.beat_v;
+      top.beat_data_i = d.beat_d;
+      top.px_ready_i = 1;
+      top.clk = 0;
+      top.eval();
+      const auto req = postmem::decode(top.guard_req_o);
+      if (top.px_valid_o) got.push_back(uint16_t(top.px_rgb_o));
+      top.clk = 1;
+      top.eval();
+      m.edge(d, req, false, 0, false);
+    }
+    for (int i = 0; i < 8; ++i) zhao::tick(top);   // let done_o's pulse pass
+    unsigned bad = 0;
+    for (size_t i = 0; i < got.size(); ++i)
+      if (got[i] != m.rd16(uint32_t(i / 384) * 768 + uint32_t(i % 384) * 2)) ++bad;
+    zhao::check(got.size() == 384u * 4u && bad == 0, "and the pass completes, every pixel exact",
+                384 * 4, got.size() - bad);
+  }
+  {
+    postmem::Model m;
+    m.read_lat = 0;
+    fill(m, 0, 768 * 240);
+    const auto r = run(top, m, 0x0, 768, 384, 240, 1, 1, 19);
+    expect_pass(r, m, 0x0, 768, 384, 240,
+                "a memory whose first beat lands on the verdict cycle still completes Z60");
+    zhao::check(r.reads == 240 * 12, "and reads exactly the rows' worth", 240 * 12, r.reads);
+  }
+
+  // ---- 10. the tripwire FIRES on a beat nobody asked for --------------------
+  // `overflow_o` now also counts a beat that arrives with nothing owed even
+  // after this cycle's verdict. That state is unreachable through a legal guard,
+  // and it is reachable by STIMULUS here: one beat on an idle reader. (Last,
+  // because the counter is cumulative.)
+  {
+    const uint32_t ov0 = top.overflow_o;
+    top.guard_rsp_i = 4;   // ready, no verdict
+    top.beat_valid_i = 1;
+    top.beat_data_i = 0x1234;
+    zhao::tick(top);
+    top.beat_valid_i = 0;
+    zhao::tick(top);
+    zhao::check(top.overflow_o - ov0 == 1, "an unowned beat is counted on overflow_o (fired)", 1,
+                top.overflow_o - ov0);
   }
 
   std::printf("  post_fbread: %u reads, %u pixels, overflow %u\n", top.reads_o, top.pixels_o,

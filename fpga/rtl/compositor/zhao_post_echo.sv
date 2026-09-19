@@ -108,7 +108,7 @@ module zhao_post_echo
 
   localparam int unsigned QW = $clog2(SKID);
   localparam int unsigned CW = YW + 1;             // capture row: v*h + y
-  localparam int unsigned EW = 16 + XW + CW;       // one skid entry
+  localparam int unsigned EW = 16 + XW + CW + 1;   // one skid entry, + its pass's parity
 
   initial begin
     if ((SKID < 32) || ((SKID & (SKID - 1)) != 0))
@@ -133,16 +133,48 @@ module zhao_post_echo
   // ==========================================================================
   logic [EW-1:0] sk_mem [0:SKID-1];
   logic [QW-1:0] sk_wp_q, sk_rp_q;
-  logic [QW:0]   sk_count_q;
+  logic [QW:0]   sk_count_q;     // entries resident, committed or not (room)
   logic [EW-1:0] head_q;
   logic          head_v_q;
 
+  // ==========================================================================
+  // THE WRITER SEES WHOLE CHUNKS ONLY (repaired 2026-09-19, post pass 2)
+  // ==========================================================================
+  // Law 2 promised whole chunks, and admission kept the promise only while a
+  // pass ran to its end. A `pass_start_i` over a pass whose open chunk was
+  // part-way in (the contract's own "new pass over an open pass" row) left
+  // those pixels in FBWRITE's row buffer with no successor; the NEW pass's
+  // first pixel then broke FBWRITE's contiguity check, `stream_error` latched,
+  // and -- fault being sticky -- every capture after it was TORN until reset.
+  // Found by the directed case Q003 F4 asked for (a start over a live pass):
+  // one abandoned pass poisoned the echo for good.
+  //
+  // So a chunk is COMMITTED to the writer only once its sixteenth pixel is in
+  // the skid (`sk_cwp_q` / `sk_avail_q`), and a start that finds an uncommitted
+  // tail DISCARDS it, counting its pixels as dropped. The writer can then only
+  // ever see whole chunks, whatever the tap does. Throughput is unchanged: the
+  // next chunk collects while the writer bursts the last.
+  //
+  // AND EACH ENTRY CARRIES ITS PASS. The abandoned pass's committed chunks still
+  // drain behind the new pass's, and FBWRITE's stride and row end come from the
+  // width -- so a new pass with a different width would have written the old
+  // pass's rows at the NEW stride, possibly over the new capture. Two widths
+  // are held by pass parity and the head entry selects its own.
+  // ENFORCED-BY: tests/compositor/post_echo_directed.cpp (case 5c)
+  logic [QW-1:0] sk_cwp_q;       // write pointer at the last committed chunk
+  logic [QW:0]   sk_avail_q;     // committed entries not yet read
+  logic [QW-1:0] part_c;         // uncommitted entries (the open chunk's tail)
+  assign part_c = sk_wp_q - sk_cwp_q;
+
+  logic          par_q;          // the current pass's parity
+  logic [XW-1:0] w_par_q [0:1];  // each parity's width, for the writer
+
   logic          fbw_ready;
-  logic          push_c, rd_en_c, head_take_c;
+  logic          push_c, rd_en_c, head_take_c, commit_c;
   logic [EW-1:0] push_data_c;
 
   assign head_take_c = head_v_q && fbw_ready;
-  assign rd_en_c     = (sk_count_q != '0) && (!head_v_q || head_take_c);
+  assign rd_en_c     = (sk_avail_q != '0) && (!head_v_q || head_take_c);
 
   always_ff @(posedge clk) begin
     if (push_c)  sk_mem[sk_wp_q] <= push_data_c;
@@ -162,8 +194,12 @@ module zhao_post_echo
   assign admit_c = chunk_open_c ? room_c : keep_q;
   assign crow_c  = view_q ? (CW'(tap_y_i) + CW'(h_q)) : CW'(tap_y_i);
 
-  assign push_c      = tap_valid_i && open_q && admit_c;
-  assign push_data_c = {tap_rgb_i, tap_x_i, crow_c};
+  // A tap on the start cycle itself belongs to neither pass: it is dropped.
+  assign push_c      = tap_valid_i && open_q && admit_c && !pass_start_i;
+  assign push_data_c = {tap_rgb_i, tap_x_i, crow_c, par_q};
+  // A chunk's sixteenth pixel commits it (w is whole chunks, so a row's last
+  // pixel is always one).
+  assign commit_c    = push_c && (tap_x_i[3:0] == 4'hF);
 
   logic last_px_c;
   assign last_px_c = (tap_x_i == (w_q - XW'(1))) && (tap_y_i == (h_q - YW'(1)));
@@ -174,7 +210,10 @@ module zhao_post_echo
   logic [15:0]        px_rgb;
   logic [XW-1:0]      px_x;
   logic [CW-1:0]      px_row;
-  assign {px_rgb, px_x, px_row} = head_q;
+  logic               px_par;
+  logic [XW-1:0]      px_w;          // the width of the pass this entry belongs to
+  assign {px_rgb, px_x, px_row, px_par} = head_q;
+  assign px_w = w_par_q[px_par];
 
   logic signed [11:0] fbw_x, fbw_y;
   assign fbw_x = 12'($signed({1'b0, px_x}));
@@ -184,7 +223,7 @@ module zhao_post_echo
   // FBWRITE flushes on a full row buffer. `px_last_i` is still driven with the
   // true row end, which is the same event, so a short row could never linger.
   logic fbw_last;
-  assign fbw_last = (px_x == (w_q - XW'(1)));
+  assign fbw_last = (px_x == (px_w - XW'(1)));
 
   logic [31:0] fbw_pixels_unused, fbw_bursts_unused, fbw_stall_unused;
   logic [31:0] fbw_issued_unused, fbw_retired_unused;
@@ -193,7 +232,7 @@ module zhao_post_echo
   zhao_raster_fbwrite u_capture_writer (
     .clk(clk), .rst_n(rst_n),
     .fb_base_i  (ZHAO_VRAM_ADDR_BITS'(ZHAO_POST_ECHO_BASE)),
-    .fb_stride_i(16'({w_q, 1'b0})),
+    .fb_stride_i(16'({px_w, 1'b0})),
     .px_valid_i (head_v_q), .px_ready_o(fbw_ready),
     .px_rgb565_i(px_rgb), .px_x_i(fbw_x), .px_y_i(fbw_y), .px_last_i(fbw_last),
     // The writer's per-frame counter window is this block's pass.
@@ -250,6 +289,11 @@ module zhao_post_echo
       sk_wp_q           <= '0;
       sk_rp_q           <= '0;
       sk_count_q        <= '0;
+      sk_cwp_q          <= '0;
+      sk_avail_q        <= '0;
+      par_q             <= 1'b0;
+      w_par_q[0]        <= '0;
+      w_par_q[1]        <= '0;
       head_v_q          <= 1'b0;
       pass_complete_o   <= 1'b0;
       passes_complete_o <= '0;
@@ -259,18 +303,32 @@ module zhao_post_echo
     end else begin
       pass_complete_o <= 1'b0;
 
-      // ---- the skid, one occupancy assignment ------------------------------
-      sk_count_q <= sk_count_q + (push_c  ? (QW+1)'(1) : '0)
-                               - (rd_en_c ? (QW+1)'(1) : '0);
-      if (push_c)  sk_wp_q <= sk_wp_q + QW'(1);
+      // ---- the skid, one occupancy assignment each ---------------------------
+      // A start that finds an uncommitted tail discards it (see THE WRITER SEES
+      // WHOLE CHUNKS ONLY). Nothing is pushed on a start cycle, so the rewind
+      // and a push never coincide.
+      begin
+        automatic logic discard = pass_start_i && (part_c != '0);
+        sk_count_q <= sk_count_q + (push_c  ? (QW+1)'(1) : '0)
+                                 - (rd_en_c ? (QW+1)'(1) : '0)
+                                 - (discard ? (QW+1)'(part_c) : '0);
+        sk_avail_q <= sk_avail_q + (commit_c ? (QW+1)'(16) : '0)
+                                 - (rd_en_c  ? (QW+1)'(1)  : '0);
+        if (discard)     sk_wp_q <= sk_cwp_q;
+        else if (push_c) sk_wp_q <= sk_wp_q + QW'(1);
+        if (commit_c)    sk_cwp_q <= sk_wp_q + QW'(1);
+        // Drops: a tap nobody took, plus a discarded tail. One assignment.
+        pixels_dropped_o <= pixels_dropped_o
+            + ((tap_valid_i && (pass_start_i || !open_q || !admit_c)) ? 32'd1 : 32'd0)
+            + (discard ? 32'(part_c) : 32'd0);
+      end
       if (rd_en_c) sk_rp_q <= sk_rp_q + QW'(1);
       if (rd_en_c)          head_v_q <= 1'b1;
       else if (head_take_c) head_v_q <= 1'b0;
       if (head_take_c) pixels_written_o <= pixels_written_o + 32'd1;
 
       // ---- tap bookkeeping --------------------------------------------------
-      if (tap_valid_i) begin
-        if (!open_q || !admit_c) pixels_dropped_o <= pixels_dropped_o + 32'd1;
+      if (tap_valid_i && !pass_start_i) begin
         if (open_q) begin
           if (chunk_open_c) keep_q <= room_c;
           if (!admit_c)     torn_q <= 1'b1;
@@ -299,6 +357,8 @@ module zhao_post_echo
         view_q  <= view_i;
         w_q     <= w_i;
         h_q     <= h_i;
+        par_q   <= !par_q;
+        w_par_q[!par_q] <= w_i;
         keep_q  <= 1'b0;
         drain_q <= 1'b0;
         // A refused geometry opens no pass: every pixel of it is a drop, and

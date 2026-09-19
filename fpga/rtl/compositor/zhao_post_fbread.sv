@@ -141,6 +141,11 @@ module zhao_post_fbread
 
   logic [3:0]    req_beats_q;                      // beats of the request in flight
 
+  // What is owed once THIS cycle's verdict is counted (see the owed update).
+  logic [QW:0]   owed_now_c;
+  assign owed_now_c = owed_q + (((r_st_q == R_VERD) && guard_rsp_i.ok)
+                                ? (QW+1)'(req_beats_q) : '0);
+
   always_comb begin
     guard_req_o        = '0;
     guard_req_o.valid  = (r_st_q == R_REQ);
@@ -228,16 +233,30 @@ module zhao_post_fbread
         q_wp_q <= q_wp_q + QW'(1);
         // Structurally unreachable: a request is issued only with room for
         // every beat it returns. Counted rather than asserted so it ships.
-        if (q_count_q == (QW+1)'(FIFO_BEATS)) overflow_o <= overflow_o + 32'd1;
+        if ((q_count_q == (QW+1)'(FIFO_BEATS)) || (owed_now_c == '0))
+          overflow_o <= overflow_o + 32'd1;
       end
       if (rd_en_c) q_rp_q <= q_rp_q + QW'(1);
 
       // ---- owed beats: + at the verdict, - per arriving beat ---------------
-      begin
-        automatic logic [QW:0] add = '0;
-        if ((r_st_q == R_VERD) && guard_rsp_i.ok) add = (QW+1)'(req_beats_q);
-        owed_q <= owed_q + add - ((beat_valid_i && (owed_q != '0)) ? (QW+1)'(1) : '0);
-      end
+      // ONE assignment, and the subtract is qualified by what is owed AFTER
+      // this cycle's verdict, not before it. The old form tested `owed_q != 0`
+      // alone, so a first beat arriving ON the verdict cycle (owed 0, add 8)
+      // was not subtracted and `owed_q` kept a PHANTOM beat for the rest of the
+      // pass (once non-zero it never returns to zero, so there is at most one).
+      // At FIFO_BEATS=16 the head register's one beat of slack hides it; at 8,
+      // this block's own legal minimum, `room_c` is 7 forever after the first
+      // read and the pass HANGS (measured pre-fix: 750 overflow counts and
+      // corrupted pixels on the q8 build). (Found by review, Q004 F3;
+      // unreachable behind today's share, whose verdict pulse trails the
+      // guard's by a cycle, and a defect of this block's own contract all the
+      // same: the guard law allows it.)
+      // A beat with NOTHING owed even after the verdict is a beat nobody asked
+      // for; it is counted on `overflow_o`, the block's no-room tripwire, rather
+      // than being allowed to wrap `owed_q` to all-ones.
+      // ENFORCED-BY: tests/compositor/post_fbread_directed.cpp case 9, built at
+      // FIFO_BEATS 16 and 8 (post_fbread_directed, post_fbread_directed_q8)
+      owed_q <= owed_now_c - ((beat_valid_i && (owed_now_c != '0)) ? (QW+1)'(1) : '0);
 
       // ---- the head and the pixel walk --------------------------------------
       if (rd_en_c) begin

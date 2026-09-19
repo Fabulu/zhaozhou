@@ -2663,6 +2663,43 @@ module tb_zhao_console_core_smoke
   // POST.COMPOSITE.md prices the stream at ~103,680 work items per Z60 frame and
   // warns that a number near 461,000 means it has quietly become passes again.
   int unsigned post_busy_cycles_q;
+  // THE POST CENSUS (owner ruling R38, post pass 2): where the lease's busy
+  // clocks go, read hierarchically -- bench-only, nothing here is a port. The
+  // SDRAM controller's command state says whether the memory is working; the
+  // arbiter's grant stream says for whom; the ENGINE0 share's state says how
+  // long a read holds the one logical request slot; and the two FBWRITEs and
+  // the reader say who is waiting on whom.
+  // The shell's path: the mutant build's DUT is a wrapper around the core.
+`ifdef ZHAO_MUT_SLOT_OVERFLOW
+  `define PC_SHELL dut.u_dut.u_shell
+`else
+  `define PC_SHELL dut.u_shell
+`endif
+  int unsigned pc_ctrl_busy_q, pc_bursts_rd_q, pc_bursts_wr_q, pc_bursts_other_q;
+  int unsigned pc_share_fill_q, pc_fbw_stall_q, pc_src_starve_q, pc_src_block_q;
+  int unsigned pc_conflicts0_q, pc_refresh0_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      pc_ctrl_busy_q <= 0; pc_bursts_rd_q <= 0; pc_bursts_wr_q <= 0; pc_bursts_other_q <= 0;
+      pc_share_fill_q <= 0; pc_fbw_stall_q <= 0; pc_src_starve_q <= 0; pc_src_block_q <= 0;
+      pc_conflicts0_q <= 0; pc_refresh0_q <= 0;
+    end else if (post_busy_o) begin
+      if (pc_ctrl_busy_q == 0 && pc_bursts_rd_q == 0 && pc_bursts_wr_q == 0) begin
+        pc_conflicts0_q <= bank_conflicts_o;
+        pc_refresh0_q   <= `PC_SHELL.refresh_stalls_o;
+      end
+      if (`PC_SHELL.u_ctrl.state != 4'd7) pc_ctrl_busy_q <= pc_ctrl_busy_q + 1;
+      if (`PC_SHELL.ctrl_rsp.grant) begin
+        if (`PC_SHELL.ctrl_req.client != ZHAO_CLIENT_ENGINE0) pc_bursts_other_q <= pc_bursts_other_q + 1;
+        else if (`PC_SHELL.ctrl_req.write) pc_bursts_wr_q <= pc_bursts_wr_q + 1;
+        else pc_bursts_rd_q <= pc_bursts_rd_q + 1;
+      end
+      if (`PC_SHELL.u_post_lease.u_engine0_share.st_q == 3'd3) pc_share_fill_q <= pc_share_fill_q + 1;
+      if (`PC_SHELL.fbw_px_valid && !`PC_SHELL.fbw_px_ready) pc_fbw_stall_q <= pc_fbw_stall_q + 1;
+      if (!`PC_SHELL.post_src_valid_o && `PC_SHELL.post_src_ready_i) pc_src_starve_q <= pc_src_starve_q + 1;
+      if (`PC_SHELL.post_src_valid_o && !`PC_SHELL.post_src_ready_i) pc_src_block_q <= pc_src_block_q + 1;
+    end
+  end
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
       post_snap_taken_q  <= 1'b0;
@@ -3747,6 +3784,11 @@ module tb_zhao_console_core_smoke
                post_retire_unowned_o, post_share_contention_o, guard);
       $display("SMOKE: post       lease busy %0d gpu cycles, frame_end to last retired write-back word (contract: ~103,680 work items for Z60; ~461,000 = five passes)",
                post_busy_cycles_q);
+      $display("SMOKE: post census sdram_busy=%0d (%0d%%) bursts[e0 rd/wr, other]=[%0d/%0d, %0d] conflicts=%0d refresh_stalls=%0d share_in_read_fill=%0d fbw_px_stall=%0d src_starved=%0d src_blocked=%0d",
+               pc_ctrl_busy_q, (post_busy_cycles_q == 0) ? 0 : (pc_ctrl_busy_q * 100) / post_busy_cycles_q,
+               pc_bursts_rd_q, pc_bursts_wr_q, pc_bursts_other_q,
+               bank_conflicts_o - pc_conflicts0_q, `PC_SHELL.refresh_stalls_o - pc_refresh0_q,
+               pc_share_fill_q, pc_fbw_stall_q, pc_src_starve_q, pc_src_block_q);
       $display("SMOKE: echo       complete=%0d torn=%0d written=%0d dropped=%0d fault=%0d",
                echo_passes_complete_o, echo_passes_torn_o, echo_pixels_written_o,
                echo_pixels_dropped_o, echo_fault_o);
