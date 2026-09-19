@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 7640e0ff52ce894b3f547b855ab8ec2fb56752b2f2fe239f1448e9ecad244e7b
-//   zidl_sha256         = 11ceed86d0a24bffd2b4758ea4e72fd0182ed205de9bac3ce870abb6d57bb6b0
+//   abi_identity_sha256 = b57c282dc2c2ebc1ff4a6629caeb5d40643bfd07a15271844c93ec168f11dfbb
+//   zidl_sha256         = bc58321984e44530ae51c7b9960cb99431c38cf6ca0424e06d49008c5b9c1776
 #pragma once
 
 #include <cstdint>
@@ -71,6 +71,7 @@ constexpr uint16_t ZHAO_OP_EMIT_AUDIO_EVENT = 0x0400; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 constexpr uint16_t ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
+constexpr uint16_t ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -752,6 +753,39 @@ struct ZhRecordDebugRumble {
 };
 static_assert(sizeof(ZhRecordDebugRumble) == 32, "layout drift: DebugRumble record");
 
+// PublishResource 0x0030: 48-byte record (implemented)
+struct ZhCmdPublishResource {
+  uint32_t resource;  // handle32 {index:24, generation:8} kind=resource
+  uint32_t hps_addr_lo;
+  uint32_t hps_addr_hi;
+  uint32_t vram_dst;
+  uint32_t length;
+  uint32_t crc32c;
+  uint16_t new_generation;
+  uint16_t epoch;
+  uint8_t dst_slot;
+  uint8_t kind;
+  uint8_t pad[2];
+};
+static_assert(offsetof(ZhCmdPublishResource, resource) == 0, "layout drift: PublishResource.resource");
+static_assert(offsetof(ZhCmdPublishResource, hps_addr_lo) == 4, "layout drift: PublishResource.hps_addr_lo");
+static_assert(offsetof(ZhCmdPublishResource, hps_addr_hi) == 8, "layout drift: PublishResource.hps_addr_hi");
+static_assert(offsetof(ZhCmdPublishResource, vram_dst) == 12, "layout drift: PublishResource.vram_dst");
+static_assert(offsetof(ZhCmdPublishResource, length) == 16, "layout drift: PublishResource.length");
+static_assert(offsetof(ZhCmdPublishResource, crc32c) == 20, "layout drift: PublishResource.crc32c");
+static_assert(offsetof(ZhCmdPublishResource, new_generation) == 24, "layout drift: PublishResource.new_generation");
+static_assert(offsetof(ZhCmdPublishResource, epoch) == 26, "layout drift: PublishResource.epoch");
+static_assert(offsetof(ZhCmdPublishResource, dst_slot) == 28, "layout drift: PublishResource.dst_slot");
+static_assert(offsetof(ZhCmdPublishResource, kind) == 29, "layout drift: PublishResource.kind");
+static_assert(offsetof(ZhCmdPublishResource, pad[0]) == 30, "layout drift: PublishResource.pad");
+static_assert(sizeof(ZhCmdPublishResource) == 32, "layout drift: PublishResource payload");
+
+struct ZhRecordPublishResource {
+  ZhCmdHeader hdr;
+  ZhCmdPublishResource payload;
+};
+static_assert(sizeof(ZhRecordPublishResource) == 48, "layout drift: PublishResource record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1188,6 +1222,26 @@ inline ZhRecordDebugRumble zhao_sample_debug_rumble() {
   return r;
 }
 
+inline ZhRecordPublishResource zhao_sample_publish_resource() {
+  ZhRecordPublishResource r{};
+  r.hdr.opcode       = ZHAO_OP_PUBLISH_RESOURCE;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242834u; // kind 5, module 1, index 18
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.resource = 704643073u;
+  r.payload.hps_addr_lo = 0u;
+  r.payload.hps_addr_hi = 0u;
+  r.payload.vram_dst = 0u;
+  r.payload.length = 0u;
+  r.payload.crc32c = 0u;
+  r.payload.new_generation = 20931u;
+  r.payload.epoch = 64290u;
+  r.payload.dst_slot = 185u;
+  r.payload.kind = 85u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1441,6 +1495,23 @@ inline void zhao_pack_debug_rumble(const ZhRecordDebugRumble& r, std::vector<uin
   w.u8(r.payload.enable);
   w.u8(r.payload.strength);
   for (int i = 0; i < 13; ++i) w.u8(r.payload.pad[i]);
+}
+
+inline void zhao_pack_publish_resource(const ZhRecordPublishResource& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.resource);
+  w.u32(r.payload.hps_addr_lo);
+  w.u32(r.payload.hps_addr_hi);
+  w.u32(r.payload.vram_dst);
+  w.u32(r.payload.length);
+  w.u32(r.payload.crc32c);
+  w.u16(r.payload.new_generation);
+  w.u16(r.payload.epoch);
+  w.u8(r.payload.dst_slot);
+  w.u8(r.payload.kind);
+  for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -1854,6 +1925,25 @@ inline bool zhao_unpack_debug_rumble(ZhReader& r, ZhRecordDebugRumble& out) {
   return true;
 }
 
+inline bool zhao_unpack_publish_resource(ZhReader& r, ZhRecordPublishResource& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.resource = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.hps_addr_lo = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.hps_addr_hi = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.vram_dst = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.length = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.crc32c = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.new_generation = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.epoch = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.dst_slot = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.kind = t; }
+  if (!r.skip(2)) return false;
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -1872,6 +1962,7 @@ constexpr uint16_t ZHAO_PADS_DRAW_SKY[] = {146, 147, 148, 149, 150, 151, 152, 15
 constexpr uint16_t ZHAO_PADS_SET_ENVIRONMENT[] = {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_FRAME_BLIT[] = {2, 3, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+constexpr uint16_t ZHAO_PADS_PUBLISH_RESOURCE[] = {30, 31};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -1891,8 +1982,9 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DebugBootstrap", 0xF001, 64, false, nullptr, 0},
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
   {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
+  {"PublishResource", 0x0030, 48, true, ZHAO_PADS_PUBLISH_RESOURCE, 2},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 18;
+constexpr size_t ZHAO_COMMAND_COUNT = 19;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -1927,8 +2019,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x76, 0x40, 0xE0, 0xFF, 0x52, 0xCE, 0x89, 0x4B, 0x3F, 0x54, 0x7B, 0x85, 0x5A, 0xB8, 0xEC, 0x2F, 0xB5, 0x67, 0x52, 0xB2, 0xF2, 0xFE, 0x23, 0x9F, 0x14, 0x48, 0xE9, 0xEC, 0xAD, 0x24, 0x4E, 0x7B};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x11, 0xCE, 0xED, 0x86, 0xD0, 0xA2, 0x4B, 0xFF, 0xD2, 0xB4, 0x75, 0x8E, 0xA4, 0xE7, 0x2F, 0xD0, 0x18, 0x2E, 0xD2, 0x05, 0xDE, 0x9B, 0xAC, 0x3C, 0xE8, 0x70, 0xAB, 0xB6, 0xD5, 0x7B, 0xB6, 0xB0};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xB5, 0x7C, 0x28, 0x2D, 0xC2, 0xC2, 0xEB, 0xC1, 0xFF, 0x4A, 0x66, 0x29, 0xCA, 0xEB, 0x5D, 0x40, 0x64, 0x3B, 0xFD, 0x07, 0xA1, 0x52, 0x71, 0x84, 0x4C, 0x93, 0xEC, 0x16, 0x8F, 0x11, 0xDF, 0xBB};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBC, 0x58, 0x32, 0x19, 0x84, 0xE4, 0x45, 0x30, 0xAE, 0x51, 0xC7, 0xB9, 0x96, 0x0C, 0xB9, 0x94, 0x31, 0xC3, 0x8C, 0xF6, 0xCA, 0x04, 0x24, 0xE0, 0x6D, 0x49, 0x00, 0x8C, 0x5B, 0x9C, 0x17, 0x76};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

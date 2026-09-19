@@ -1363,13 +1363,15 @@
 //      ALREADY CARRIES -- which is the part worth keeping: the distance was
 //      written down in four places and nothing had added them up.
 //
-//        1. MEM.UPLOAD IS COMPOSED NOWHERE, so nothing can WRITE the
-//           directory. `zhao_hps_arbiter` has exactly two client ports and
-//           both are taken in both instances -- CMD.DMA and DEBUG.FRAMEBLIT
-//           inside `zhao_shell_top_v2`, TERRAIN.CMD and TERRAIN.PAGELOADER in
-//           `u_terr_hps_arb` below. Entry I27 already says a third client is
-//           an owner ruling; this is a SECOND customer for that same ruling,
-//           which is worth knowing before it is priced as a terrain-only one.
+//        1. CLOSED 2026-09-19 (cmdmem). MEM.UPLOAD is COMPOSED on the shell's
+//           TERRAIN.BUILD socket (the N-client HPS arbiter of ruling R4, VRAM
+//           slot 6 behind the real MEM.GUARD) and its request is CMD.EXEC's
+//           lowering of `PublishResource` (ruling R17). What it still cannot
+//           do is land a MATERIAL_SET where ENGINE1 reads it: MEM.GUARD's
+//           TERRAIN_BUILD arm admits TERRAIN.PAGE_POOL only, and
+//           RENDER.ASSET_POOL is read-only to everyone -- the "appended
+//           resource region" the MEM.UPLOAD contract calls an owner capacity
+//           decision. That is an owner decision now, not a seam.
 //        2. THE RECORD FETCH wants a third ENGINE1 requester.
 //           `u_geom_mem_adapter` has exactly two and they are spent on
 //           GEOM.MESHFETCH and GEOM.ASSETFETCH.
@@ -2419,32 +2421,6 @@
 //      both, and designing that owner is its own packet (the coordinator's
 //      split). Until it exists the store is a port pair, and the smoke bench
 //      models it with the arena's contract exactly as it models SDRAM.
-//
-// I47. MEM.UPLOAD's REQUEST (`upl_req_*`) -- BOUNDARY. NEW 2026-09-19 (cmdmem
-//      packet), opened DELIBERATELY in the same commit that COMPOSED the block
-//      it feeds, and it is the smaller of the two gaps: MEM.UPLOAD itself is
-//      now instantiated on the shell's new TERRAIN.BUILD socket, reading HPS
-//      through the real bridge and writing VRAM through the real MEM.GUARD
-//      slot 6, retiring on the real arbiter credits.
-//
-//      WHY THE REQUEST IS STILL A PORT. The ratified producer is CMD.EXEC
-//      lowering a `PublishResource` command, and owner ruling R17 is that
-//      command -- an ABI addition whose `spec/commands.zidl`, generator, zref
-//      and captures move together. Until it lands no command in the ABI carries
-//      {index, hps_addr, vram_dst, len, crc32c, dst_slot, new_gen, kind}, and
-//      inventing the request here would be the hidden contract CMD.EXEC's own
-//      header forbids.
-//
-//      TWO DEFECTS WERE REPAIRED TO GET HERE, both invisible to the old bench
-//      and both certain against the real socket. (1) Outstanding writes were
-//      counted in 64-bit BEATS against a retirement stream in 16-bit WORDS, so
-//      S_RETIRE ended after a quarter of the copy had landed and the slot was
-//      published over bytes still in flight. (2) HPS beats were "held" against
-//      a busy guard, but the bridge's response stream has no ready, so a held
-//      beat was a lost one. The block now owns the one burst buffer its
-//      contract grants it. `tests/mem/mem_upload_directed.cpp` fails 3 checks
-//      against the old RTL and passes 94 against the new; its early-publish
-//      detector had sat BELOW the loop's `return` and could never fire.
 //
 // I48. GEOM.LIGHT's DESCRIPTOR BANK (`geom_light_cfg_*`, `geom_light_nlights_i`)
 //      -- BOUNDARY. NEW 2026-09-19 (geom packet), opened by composing
@@ -3977,19 +3953,10 @@ module zhao_console_core
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
-  // I47: the upload REQUEST -- BOUNDARY until CMD.EXEC lowers the ratified
-  // `PublishResource` onto it (owner ruling R17).
-  input  logic                    upl_req_valid_i,
-  output logic                    upl_req_ready_o,
-  input  logic [ 7:0]             upl_req_tag_i,
-  input  logic [23:0]             upl_req_index_i,
-  input  logic [63:0]             upl_req_hps_addr_i,
-  input  logic [31:0]             upl_req_vram_addr_i,
-  input  logic [31:0]             upl_req_len_i,
-  input  logic [15:0]             upl_req_epoch_i,
-  input  logic [ 7:0]             upl_req_dst_slot_i,
-  input  logic [15:0]             upl_req_new_gen_i,
-  input  logic [31:0]             upl_req_crc_i,
+  // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
+  // onto it (owner ruling R17). These two are CMD.EXEC's upload evidence.
+  output logic [31:0]             cmd_exec_uploads_o,
+  output logic [31:0]             cmd_exec_upload_overflow_o,
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
   // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
   // staging arena the active epoch registered, and that epoch.
@@ -8091,8 +8058,18 @@ module zhao_console_core
   // REAL `zhao_mem_guard` / `zhao_vram_arbiter` slot 6, with retirement read
   // off the arbiter's own credit stream. Nothing between them is invented here.
   //
-  // Its REQUEST is entry I47 (a boundary) until CMD.EXEC lowers
-  // `PublishResource`; its PUBLICATION is `spec/memory_rules.md` 5f.1's row.
+  // Its REQUEST is CMD.EXEC's lowering of the ratified `PublishResource`
+  // 0x0030 (owner ruling R17): every field off the generated offsets, through a
+  // pending queue in CMD.EXEC that outlives the packet's commit, so a frame's
+  // draws are never held behind a background copy. Its PUBLICATION is
+  // `spec/memory_rules.md` 5f.1's row. (Entry I47 carried this request as a
+  // boundary for one commit, and is closed and deleted.)
+  logic        cmd_upl_valid, cmd_upl_ready;
+  logic [23:0] cmd_upl_index;
+  logic [ 7:0] cmd_upl_kind, cmd_upl_slot;
+  logic [63:0] cmd_upl_hps;
+  logic [31:0] cmd_upl_vram, cmd_upl_len, cmd_upl_crc;
+  logic [15:0] cmd_upl_epoch, cmd_upl_gen;
   zhao_guard_req_t         upl_guard_req;
   zhao_guard_rsp_t         upl_guard_rsp;
   logic [63:0]             upl_wdata;
@@ -8112,17 +8089,18 @@ module zhao_console_core
   zhao_mem_upload u_mem_upload (
     .clk                  (gpu_clk),
     .rst_n                (rst_n),
-    .req_valid_i          (upl_req_valid_i),
-    .req_ready_o          (upl_req_ready_o),
-    .req_tag_i            (upl_req_tag_i),
-    .req_index_i          (upl_req_index_i),
-    .req_hps_addr_i       (upl_req_hps_addr_i),
-    .req_vram_addr_i      (upl_req_vram_addr_i),
-    .req_len_i            (upl_req_len_i),
-    .req_epoch_i          (upl_req_epoch_i),
-    .req_dst_slot_i       (upl_req_dst_slot_i),
-    .req_new_gen_i        (upl_req_new_gen_i),
-    .req_crc_i            (upl_req_crc_i),
+    .req_valid_i          (cmd_upl_valid),
+    .req_ready_o          (cmd_upl_ready),
+    // the .zpak KIND is the tag: 5f.1 publishes it as the row's kind
+    .req_tag_i            (cmd_upl_kind),
+    .req_index_i          (cmd_upl_index),
+    .req_hps_addr_i       (cmd_upl_hps),
+    .req_vram_addr_i      (cmd_upl_vram),
+    .req_len_i            (cmd_upl_len),
+    .req_epoch_i          (cmd_upl_epoch),
+    .req_dst_slot_i       (cmd_upl_slot),
+    .req_new_gen_i        (cmd_upl_gen),
+    .req_crc_i            (cmd_upl_crc),
     .cfg_region_base_i    (upl_cfg_region_base_i),
     .cfg_region_bytes_i   (upl_cfg_region_bytes_i),
     .cfg_arena_base_i     (upl_cfg_arena_base_i),
@@ -10312,6 +10290,19 @@ module zhao_console_core
     .draw_flags_o          (cmd_draw_flags_o),
     .draw_src_id_o         (cmd_draw_src_id_o),
 
+    // R17: PublishResource -> MEM.UPLOAD's request port.
+    .upl_valid_o    (cmd_upl_valid),
+    .upl_ready_i    (cmd_upl_ready),
+    .upl_index_o    (cmd_upl_index),
+    .upl_kind_o     (cmd_upl_kind),
+    .upl_hps_addr_o (cmd_upl_hps),
+    .upl_vram_addr_o(cmd_upl_vram),
+    .upl_len_o      (cmd_upl_len),
+    .upl_epoch_o    (cmd_upl_epoch),
+    .upl_dst_slot_o (cmd_upl_slot),
+    .upl_new_gen_o  (cmd_upl_gen),
+    .upl_crc_o      (cmd_upl_crc),
+
     .packets_committed_o  (cmd_exec_committed_o),
     .packets_abandoned_o  (cmd_exec_abandoned_o),
     .views_written_o      (cmd_exec_views_o),
@@ -10322,6 +10313,8 @@ module zhao_console_core
     .draws_issued_o       (cmd_exec_draws_o),
     .draw_overflow_o      (cmd_exec_draw_overflow_o),
     .draw_src_truncated_o (cmd_exec_draw_src_truncated_o),
+    .uploads_issued_o     (cmd_exec_uploads_o),
+    .upload_overflow_o    (cmd_exec_upload_overflow_o),
     .unsupported_o        (cmd_exec_unsupported_o)
   );
 

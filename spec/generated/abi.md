@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 7640e0ff52ce894b3f547b855ab8ec2fb56752b2f2fe239f1448e9ecad244e7b
-zidl_sha256         = 11ceed86d0a24bffd2b4758ea4e72fd0182ed205de9bac3ce870abb6d57bb6b0
+abi_identity_sha256 = b57c282dc2c2ebc1ff4a6629caeb5d40643bfd07a15271844c93ec168f11dfbb
+zidl_sha256         = bc58321984e44530ae51c7b9960cb99431c38cf6ca0424e06d49008c5b9c1776
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-18 commands (13 implemented).
+19 commands (14 implemented).
 
 ## Commands
 
@@ -35,6 +35,7 @@ ABI version **3**, little-endian, command alignment
 | `DebugBootstrap` | `0xF001` | 64 | reserved |
 | `DebugFrameBlit` | `0xF002` | 48 | implemented |
 | `DebugRumble` | `0xF004` | 32 | implemented |
+| `PublishResource` | `0x0030` | 48 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -477,6 +478,29 @@ Golden sample: `tests/abi/golden/cmd_debug_rumble.bin` (C++ packer
 TS `zhaoPackDebugRumble(zhaoSampleDebugRumble(), ...)`, SV round-trips it via
 `zhao_unpack_debug_rumble`/`zhao_pack_debug_rumble`).
 
+### PublishResource — 0x0030 (48 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 4 | `resource` | handle32 [resource] |
+| 4 | 4 | `hps_addr_lo` | u32 |
+| 8 | 4 | `hps_addr_hi` | u32 |
+| 12 | 4 | `vram_dst` | u32 |
+| 16 | 4 | `length` | u32 |
+| 20 | 4 | `crc32c` | u32 |
+| 24 | 2 | `new_generation` | u16 |
+| 26 | 2 | `epoch` | u16 |
+| 28 | 1 | `dst_slot` | u8 |
+| 29 | 1 | `kind` | u8 |
+| 30 | 2 | `pad` | pad (zero) ×2 |
+
+Golden sample: `tests/abi/golden/cmd_publish_resource.bin` (C++ packer
+`zhao_abi::zhao_pack_publish_resource(zhao_abi::zhao_sample_publish_resource(), ...)`,
+TS `zhaoPackPublishResource(zhaoSamplePublishResource(), ...)`, SV round-trips it via
+`zhao_unpack_publish_resource`/`zhao_pack_publish_resource`).
+
 ## Composed structs
 
 ### rectfx — 16 B
@@ -634,6 +658,7 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_debug_bootstrap.bin` | canonical DebugBootstrap sample record |
 | `tests/abi/golden/cmd_debug_frame_blit.bin` | canonical DebugFrameBlit sample record |
 | `tests/abi/golden/cmd_debug_rumble.bin` | canonical DebugRumble sample record |
+| `tests/abi/golden/cmd_publish_resource.bin` | canonical PublishResource sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |
