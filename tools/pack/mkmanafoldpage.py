@@ -17,9 +17,13 @@ law). The crayon grain amplitude deliberately exceeds the light rig's own
 range: the +-16% grain of an early Zixxtrixx page measured fine and was
 invisible.
 
-Usage:  python tools/pack/mkmanafoldpage.py [out.h]
+Usage:
+  python tools/pack/mkmanafoldpage.py [out.h]
+      [--root-mode bodyblend|legacy]
+      [--front-root-rows N] [--rear-root-rows N]
 """
 
+import argparse
 import sys
 import zlib
 from pathlib import Path
@@ -97,6 +101,15 @@ BODY_V0, BODY_V1 = 8, 120
 LOOP_V0, LOOP_V1 = 136, 200
 HINGE_V0, HINGE_V1 = 208, 248
 
+# VERSION 18: the loop remains its own authored surface through the free middle,
+# but both body connections transition through BODY pigment/grain/stroke before
+# reaching that cooler/coarser field. These widths are atlas-row art knobs, not
+# measurements from a drawing. The selected defaults are set only after complete
+# native motion ladders; `legacy` reproduces the version-17 material field.
+ROOT_MATERIAL_MODE = "bodyblend"
+ROOT_FRONT_BLEND_ROWS = 16
+ROOT_REAR_BLEND_ROWS = 16
+
 
 def seed_of(tag: str) -> int:
     return zlib.crc32(tag.encode("ascii")) & 0xFFFFFFFF
@@ -145,18 +158,60 @@ def crayon(base, deep, h, w, tag, stroke_axis=0,
     return np.clip(field, 0, 255)
 
 
-def build_atlas():
+def smootherstep01(x):
+    """Quintic C2 0..1 transition, vectorised and endpoint exact."""
+    x = np.clip(x, 0.0, 1.0)
+    return x * x * x * (x * (x * 6.0 - 15.0) + 10.0)
+
+
+def loop_material(root_mode, front_rows, rear_rows):
+    """Build the loop band, optionally blending body surface into both roots.
+
+    The legacy field is constructed first and unchanged. `bodyblend` changes
+    only the loop band's connection rows; eye/body/hinge pages and the free
+    middle loop field retain their exact existing generators.
+    """
+    h = LOOP_V1 + 1 - LOOP_V0
+    loop = crayon(LOOP_PINK, LOOP_PINK_DEEP, h, ATLAS_W, "u02-loop",
+                  stroke_axis=1,
+                  grain_amp=LOOP_GRAIN_AMP,
+                  stroke_amp=LOOP_STROKE_AMP,
+                  stroke_freq=LOOP_STROKE_FREQ)
+    if root_mode == "legacy":
+        return loop
+    if root_mode != "bodyblend":
+        raise ValueError(f"unknown root material mode {root_mode!r}")
+    if not (1 <= front_rows < h and 1 <= rear_rows < h and
+            front_rows + rear_rows < h):
+        raise ValueError(
+            f"root blend rows must be positive, below {h}, and leave a free "
+            f"middle row (got front={front_rows}, rear={rear_rows})"
+        )
+
+    # The body-style comparison field owns body pigments, grain amplitude,
+    # stroke amplitude/frequency and stroke axis. Its independent deterministic
+    # seed keeps this generator reproducible; the picture—not the noise sample—
+    # selects transition width.
+    body = crayon(BODY_PINK, BODY_PINK_DEEP, h, ATLAS_W,
+                  "u02-loop-root-body", stroke_axis=0,
+                  grain_amp=GRAIN_AMP, stroke_amp=STROKE_AMP,
+                  stroke_freq=STROKE_FREQ)
+    rows = np.arange(h, dtype=np.float64)
+    front_body = 1.0 - smootherstep01(rows / float(front_rows))
+    rear_body = 1.0 - smootherstep01((h - 1 - rows) / float(rear_rows))
+    body_weight = np.maximum(front_body, rear_body)[:, None, None]
+    return body * body_weight + loop * (1.0 - body_weight)
+
+
+def build_atlas(root_mode=ROOT_MATERIAL_MODE,
+                front_rows=ROOT_FRONT_BLEND_ROWS,
+                rear_rows=ROOT_REAR_BLEND_ROWS):
     a = np.zeros((ATLAS_H, ATLAS_W, 3))
     # ground everything in body pink so bleed between families stays pink
     a[:] = crayon(BODY_PINK, BODY_PINK_DEEP, ATLAS_H, ATLAS_W, "u02-ground")
     a[BODY_V0:BODY_V1 + 1] = crayon(BODY_PINK, BODY_PINK_DEEP,
                                     BODY_V1 + 1 - BODY_V0, ATLAS_W, "u02-body")
-    a[LOOP_V0:LOOP_V1 + 1] = crayon(LOOP_PINK, LOOP_PINK_DEEP,
-                                    LOOP_V1 + 1 - LOOP_V0, ATLAS_W, "u02-loop",
-                                    stroke_axis=1,
-                                    grain_amp=LOOP_GRAIN_AMP,
-                                    stroke_amp=LOOP_STROKE_AMP,
-                                    stroke_freq=LOOP_STROKE_FREQ)
+    a[LOOP_V0:LOOP_V1 + 1] = loop_material(root_mode, front_rows, rear_rows)
     a[HINGE_V0:HINGE_V1 + 1] = crayon(HINGE_PINK, BODY_PINK,
                                       HINGE_V1 + 1 - HINGE_V0, ATLAS_W, "u02-hinge")
     return a
@@ -270,8 +325,10 @@ def mip_words(rgb, levels):
     return words
 
 
-def emit(dst: Path):
-    atlas = build_atlas()
+def emit(dst: Path, root_mode=ROOT_MATERIAL_MODE,
+         front_rows=ROOT_FRONT_BLEND_ROWS,
+         rear_rows=ROOT_REAR_BLEND_ROWS):
+    atlas = build_atlas(root_mode, front_rows, rear_rows)
     atlas = paint_white_band(atlas)
     eye = build_eye()
     star = build_star()
@@ -280,7 +337,8 @@ def emit(dst: Path):
     swords = mip_words(star, 7)    # 64 -> 1
 
     out = []
-    out.append("// GENERATED by tools/pack/mkmanafoldpage.py — do not edit, do not track.")
+    out.append("// GENERATED by tools/pack/mkmanafoldpage.py — committed production asset; do not edit.")
+    out.append(f"// Root material: mode={root_mode} front_rows={front_rows} rear_rows={rear_rows}.")
     out.append("// Creature 02 direct-colour page: one atlas (body/loop/hinge rows)")
     out.append("// + one separate eye page. Regenerate: python tools/pack/mkmanafoldpage.py")
     out.append("#ifndef ZHAO_REEL_UNNAMED02_PAGE_H")
@@ -308,9 +366,32 @@ def emit(dst: Path):
     dst.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {dst}: atlas {ATLAS_W}x{ATLAS_H} ({len(awords)} words) + "
           f"eye {EYE_TILE}x{EYE_TILE} ({len(ewords)} words) + "
-          f"star {EYE_TILE}x{EYE_TILE} ({len(swords)} words)")
+          f"star {EYE_TILE}x{EYE_TILE} ({len(swords)} words); "
+          f"root mode={root_mode} front_rows={front_rows} rear_rows={rear_rows}")
+
+
+def parse_args(argv):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("out", nargs="?",
+                    default=str(HERE.parents[1] / "tools" / "reel" /
+                                "manafold_page.h"))
+    ap.add_argument("--root-mode", choices=("bodyblend", "legacy"),
+                    default=ROOT_MATERIAL_MODE)
+    ap.add_argument("--front-root-rows", type=int,
+                    default=ROOT_FRONT_BLEND_ROWS)
+    ap.add_argument("--rear-root-rows", type=int,
+                    default=ROOT_REAR_BLEND_ROWS)
+    args = ap.parse_args(argv[1:])
+    h = LOOP_V1 + 1 - LOOP_V0
+    if args.root_mode == "bodyblend" and not (
+            1 <= args.front_root_rows < h and
+            1 <= args.rear_root_rows < h and
+            args.front_root_rows + args.rear_root_rows < h):
+        ap.error(f"bodyblend widths must be positive, below {h}, and leave a free middle row")
+    return args
 
 
 if __name__ == "__main__":
-    emit(Path(sys.argv[1]) if len(sys.argv) > 1
-         else HERE.parents[1] / "tools" / "reel" / "manafold_page.h")
+    args = parse_args(sys.argv)
+    emit(Path(args.out), args.root_mode,
+         args.front_root_rows, args.rear_root_rows)
