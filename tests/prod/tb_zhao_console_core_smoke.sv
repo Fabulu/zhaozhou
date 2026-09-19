@@ -3248,7 +3248,7 @@ module tb_zhao_console_core_smoke
     scanout_ack_i = '0;
     frame_swap_valid_i = '0;
     frame_swap_slot_i = '0;
-    // hps_state_i, hps_byte_len_i and ing_wr_ready_i are driven by the
+    // hps_state_i, hps_byte_len_i and ring_wr_ready_i are driven by the
     // FRAME_RING word-view model (harness-as-HPS), not tied here.
     pkt_armed_q = 1'b0;
     // `hps_req_grant_i` / `hps_rd_*_i` are no longer tied here: the shell's HPS
@@ -3519,6 +3519,16 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_set_grade_table_t  gt;
       logic [255:0] spv;
       logic [767:0] gtv2;
+      // EVERY RECORD IS CLEARED BEFORE ANY OF THEM IS FILLED, and the order is
+      // load-bearing rather than tidy. The 2026-09-20 merge of the geom and post
+      // packets moved this line BELOW the SetPresentationContract and SetView
+      // blocks, so two fully populated records were zeroed again before they
+      // were packed: CMD.DMA's record walk then read opcode 0x0000 / 0 bytes at
+      // offset 32, stamped ST_BAD_LENGTH, and no record ever reached CMD.EXEC.
+      // The visible symptom was six subsystems away -- the SetEnvironment never
+      // landed, so the smoke's geometry job (gated on `geom_light_env_loads_o
+      // >= 2`, ruling R25) was never issued and GEOM.REPLAY released no meshlet.
+      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; sp = '0; gt = '0;
       // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
       // already runs), two views, and the five token CEILINGS.
       pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
@@ -3536,9 +3546,6 @@ module tb_zhao_console_core_smoke
       sv.geometry_tokens = TOK_REQ_G1_C;
       sv.fragment_tokens = TOK_REQ_F1_C;
 
-
-
-      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; sp = '0; gt = '0;
       bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
       bf.frame_id = 32'd1;
       pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
@@ -3608,7 +3615,8 @@ module tb_zhao_console_core_smoke
       for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 304 + k] = gtv2[8*k +: 8];
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 400 + k] = efv[8*k +: 8];
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), eight records, 432 bytes of them      {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
+      // deadline 0 (the mode's period), eight records, 432 bytes of them
+      {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
