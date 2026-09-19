@@ -3868,6 +3868,46 @@ verilate(test_terrain_mipgen_directed
 add_test(NAME terrain_mipgen_directed COMMAND test_terrain_mipgen_directed)
 set_tests_properties(terrain_mipgen_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.MIPREQ and TERRAIN.PSMUX -- the two owners that make the SECOND
+# residency completion possible, composed into zhao_console_core 2026-09-19.
+# Both were named as missing by `tb_terrain_world.sv` rather than discovered:
+# the mip request had no owner in fpga/rtl at all, and the bench gave the mip
+# pass a second read engine because sharing one "would put a scheduler in the
+# bench".
+#
+# WHAT EACH TEST IS FOR, because neither block does anything interesting on its
+# own and the failure modes are silent:
+#   MIPREQ  -- a request never made, made twice, or made for the wrong page
+#     produces a page that is loaded, CRC-verified and NEVER CALLED GROUND, and
+#     nothing else in the machine says so. So: count, order, identity, and the
+#     held-offer trap that a level-triggered wiring would fall into.
+#   PSMUX   -- a beat delivered to the wrong client composes a real lattice
+#     from the wrong page, with every handshake legal and every counter
+#     balanced. So: ownership of every beat, and the fairness case, because
+#     starving the mip pass starves the residency the compose door depends on
+#     and presents as a machine that STOPS.
+#
+# Both suites FIRE their own zero-reading counters (`drops_o`, `stray_v_o`,
+# `stray_done_o`) with legal stimulus rather than asserting the zero, so
+# neither owes a committed mutant.
+add_executable(test_terrain_mipreq_directed terrain/terrain_mipreq_directed.cpp)
+target_link_libraries(test_terrain_mipreq_directed PRIVATE zhao_harness)
+verilate(test_terrain_mipreq_directed
+  PREFIX Vzhao_terrain_mipreq
+  TOP_MODULE zhao_terrain_mipreq
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_mipreq.sv)
+add_test(NAME terrain_mipreq_directed COMMAND test_terrain_mipreq_directed)
+set_tests_properties(terrain_mipreq_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_executable(test_terrain_psmux_directed terrain/terrain_psmux_directed.cpp)
+target_link_libraries(test_terrain_psmux_directed PRIVATE zhao_harness)
+verilate(test_terrain_psmux_directed
+  PREFIX Vzhao_terrain_psmux
+  TOP_MODULE zhao_terrain_psmux
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_psmux.sv)
+add_test(NAME terrain_psmux_directed COMMAND test_terrain_psmux_directed)
+set_tests_properties(terrain_psmux_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # Residency v2 -- the SET-ASSOCIATIVE directory of ruling T9/T10. Beside the
 # prototype, not replacing it: the prototype is what this is measured against.
 # Two of these cases cannot be written against the direct map at all, because

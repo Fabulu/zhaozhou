@@ -1698,6 +1698,131 @@
 //      10, DRAW_Q+1 forms in one packet) and `cmd_exec_draw_src_truncated_o`
 //      (case 11). None is asserted zero here.
 //
+// I42. TERRAIN.MIPGEN's COARSE-HEIGHT PLANES (`terr_mg_m17_*`,
+//      `terr_mg_m9_*`) -- BOUNDARY. NEW 2026-09-19, opened by composing the
+//      second completion (connected item 12), and it is the SUCCESSOR to a
+//      larger absence rather than a new discovery.
+//
+//      WHAT LEAVES. The 17x17 and 9x9 decimations of the page's height
+//      lattice, address and surface beside each value, one write per clock.
+//      `spec/terrain_rules.md` 2 calls them "17x17 + 9x9 ... for TERRAIN.LOD"
+//      and ruling T8 makes the decimation NESTED so shared vertices stay
+//      bit-identical -- the law is settled and the arithmetic is built and
+//      tested (`tests/terrain/terrain_mipgen_directed.cpp`).
+//
+//      WHAT IS ABSENT IS THE STORE, and the owner is not identified. It is
+//      1,024 patches x 2 surfaces x (289 + 81) words of height16, about 12
+//      Mbit if every resident page keeps both levels -- so it is an SDRAM
+//      structure with a residency of its own, not an M10K this composer could
+//      add. Nothing in `fpga/rtl` declares it: SEARCHED for a consumer of a
+//      17x17 or 9x9 height plane and the only block that names one is
+//      TERRAIN.LOD, which takes three PER-SUBPATCH DEVIATIONS (`sp_dev1_i`,
+//      `sp_dev2_i`, `sp_dev3_i`) and not the planes themselves. The block
+//      between them -- the one that keeps the mips and differences them
+//      against the fine lattice to produce a deviation -- has no name in the
+//      ledger and no file. Naming CMD.SCHEDULER or TERRAIN.SEQ here would be
+//      guessing; the honest statement is that the owner is UNIDENTIFIED.
+//
+//      WHY THE CHAIN IS COMPOSED ANYWAY, which is the part worth reading. The
+//      mip pass is composed for its COMPLETION, not for its planes.
+//      TERRAIN.RESIDENCY publishes on two completions and had one, so
+//      `resident_o` was structurally zero and the compose door could never be
+//      offered a patch (see item 8). TERRAIN.MIPGEN's `done_o` with its
+//      {slot, gen, epoch} is that second completion, and it is real whether or
+//      not the planes have a home: the block decimates the page it was given
+//      and reports on the page it was given. A composition that waited for the
+//      store would have kept a working machine switched off for a store
+//      nobody has specified.
+//
+//      THEY ARE PORTS AND NOT DROPPED OUTPUTS for the reason I32 gives about
+//      layer D: a decimated height written nowhere and a decimated height
+//      written wrongly are indistinguishable from inside this module, and a
+//      port is the one place the difference can be seen.
+//
+// ---------------------------------------------------------------------------
+// THE TERRAIN CLUSTER, SWEPT 2026-09-19 -- what was composed and what was not
+// ---------------------------------------------------------------------------
+// Twelve terrain capabilities were in the completion register's
+// built-but-not-connected list. TWO are composed by this packet (MIPFEED and
+// MIPGEN, connected item 12). The other ten were each read against what this
+// module can actually offer them, and the refusals are here rather than
+// nowhere, because "it was looked at" and "it was missed" are indistinguishable
+// from an empty list.
+//
+//   TERRAIN.PROJECT -- REFUSED, AND IT IS A SAVING RATHER THAN A GAP. It is a
+//   SECOND PROJECTOR. `design/blocks.yml` declares `zref::render::project_vertex`
+//   as the reference model of BOTH GEOM.PROJECT and TERRAIN.PROJECT, which is
+//   the duplication `tools/budget/uncashed_cheques.py` check 3 exists to find,
+//   and the block ledger prices it: 6,068 ALM and 33 DSP. Terrain already
+//   reaches the SHARED `zhao_proj_subsystem` on CLIENT B, through
+//   TERRAIN.GROUP_SEQ, and entry I13 records that seam as closed. So composing
+//   this block would spend 6,068 ALM and 33 DSP to compute a second time what
+//   the machine already computes -- and would undo the deduplication campaign
+//   that `zhao_project_core` exists because of. It is SUPERSEDED, not pending.
+//
+//   TERRAIN.NORMALS and TERRAIN.SHADE -- REFUSED TOGETHER, on a path that
+//   cannot be entered. They are a genuine pair: NORMALS takes a world triangle
+//   (`ax..cz` plus `src_id`) and emits an unnormalised face normal with a
+//   degenerate bit; SHADE takes exactly those fields. And NORMALS' input is
+//   exactly `zhao_terrain_tess`'s `tri_*` port, field for field -- which is
+//   why this looks composable and is not.
+//
+//   THE TESSELLATOR'S TRIANGLE PORT IS NEVER PRESENTED IN THIS COMPOSITION.
+//   `zhao_terrain_tess` expands a job into ModeTri (0), ModeVtx (1) or ModeRef
+//   (2), and `zhao_terrain_group_seq` declares only `ModeVtx = 2'd1` and
+//   `ModeRef = 2'd2` -- there is no mode-0 localparam in that file and no arm
+//   that could drive one. So `tri_valid_o` cannot fire while the sequencer
+//   owns the job port, and composing NORMALS onto it would add ~789 ALM (plus
+//   SHADE) for a path nothing can enter. That is entry I28's own argument, and
+//   it is the reason these two are refused rather than the reason they are
+//   hard: what they need is a SECOND PRESENTATION from TERRAIN.GROUP_SEQ, which
+//   is an RTL change to a block with its own differential and is not smuggled
+//   into a composition packet. SHADE's `sun_*` would be a boundary besides.
+//
+//   (The block ledger's 18-DSP row for `zhao_terrain_normals` is DIRTY --
+//   `rtlCleanAtHead: false`, dated before the 2026-08-24 change that took it
+//   from six multipliers to one -- so that number reads HIGH and should not be
+//   quoted as the cost. Named here so the next reader does not re-derive it.)
+//
+//   TERRAIN.VISIBLE and TERRAIN.ISLAND_DIR -- REFUSED as one, because VISIBLE
+//   INSTANTIATES the directory (`u_dir` at its line 334) and composing one
+//   composes both. It is refused because it would be a CENSUS INSTANCE and not
+//   a connection: all three of its input groups and its only output group
+//   would be boundaries. The view (`v_centre_ix/iz`, `v_radius`) is a camera in
+//   patch coordinates and no block here produces one; the island descriptor
+//   (`desc_extent_*`, `desc_pitch_log2`) is the frame-scoped value entry I35
+//   records as having no owner; and its `res_*` is a residency query of a
+//   DIFFERENT SHAPE from the one this core composes -- it asks {ix, iz} and
+//   wants a 32-bit HANDLE back, where `zhao_terrain_residency_v2` answers
+//   {slot, gen} against {epoch, island, ix, iz}. Adopting it would need an
+//   adapter that invents a handle encoding, and its `p_*` visible-patch stream
+//   has no consumer here either: TERRAIN.SEQ takes full command records with an
+//   HPS address and a CRC, not a coordinate pair.
+//
+//   TERRAIN.VELOCITY -- REFUSED, and it is entry I34's absent owner seen from a
+//   third side. Its `lane_velocity_i` is FIELD.SEQ.EARTH's out-lane 1, the same
+//   block I34 names and the same one that is not built. Its `lane_covers_i`
+//   DOES have a producer here -- TERRAIN.PATCH's `fld_covers_o`, exported
+//   deliberately for it -- but a covers answer without the velocity beside it
+//   is half a lane, and the block drives its own `vtx_vi/vj` address while
+//   TERRAIN.PAGESTREAM walks the lattice on its own schedule, so the two are
+//   different walkers over the same page and joining them is a scheduler.
+//
+//   TERRAIN.LOD -- REFUSED; entry I21 carries the whole argument and was
+//   CORRECTED by this sweep, because the blocker it named (TERRAIN.PATCH not
+//   composed) had expired and the real one is the deviation store of I42.
+//
+//   TERRAIN.BAKE and TERRAIN.WRITEBACK -- REFUSED; entries I32 and I28 carry
+//   those arguments unchanged. Both were re-read against the composed engine
+//   and neither refusal has expired.
+//
+//   TERRAIN.NORMALMAP -- REFUSED, and it is the one whose seam is furthest
+//   away. It is a FRAGMENT-stage block: its input is a perspective-correct
+//   terrain (u, v) with an integer mip level, "tapped from the stream that
+//   feeds the texture path". That stream is the pre-resolve fragment stream
+//   entry I17 records as never leaving `zhao_geom_bin_pipe_v2`, and its tile
+//   upload port wants a generated asset. Neither end is here.
+//
 // I42. THE FIELD ENGINE'S PROGRAM LOADER (`fld_ld_*`), ITS DIRECTORY PHASES
 //      (`fld_pc_*`) AND ITS SECOND CLIENT (`fld_req_*` / `fld_resp_*`) --
 //      BOUNDARY. NEW 2026-09-19, and it is ONE entry replacing part of THREE:
