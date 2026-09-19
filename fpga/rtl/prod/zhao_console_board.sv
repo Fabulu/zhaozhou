@@ -800,9 +800,9 @@ module zhao_console_board
   output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
-  // I47: the prepared descriptor bank, written by the HOST. SetEnvironment
+  // I48: the prepared descriptor bank, written by the HOST. SetEnvironment
   // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
-  // this bank's Q16.16 directions and u20 gains -- see I47.
+  // this bank's Q16.16 directions and u20 gains -- see I48.
   input  logic                    geom_light_cfg_we_i,
   input  logic                    geom_light_cfg_commit_i,
   input  logic [7:0]              geom_light_cfg_addr_i,
@@ -1307,6 +1307,44 @@ module zhao_console_board
   // arbiter). Its wait is the number that says what the loader costs it.
   output logic [31:0]             terr_hps_c2_bursts_o,
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
+
+  // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
+  // I47: the upload REQUEST -- BOUNDARY until CMD.EXEC lowers the ratified
+  // `PublishResource` onto it (owner ruling R17).
+  input  logic                    upl_req_valid_i,
+  output logic                    upl_req_ready_o,
+  input  logic [ 7:0]             upl_req_tag_i,
+  input  logic [23:0]             upl_req_index_i,
+  input  logic [63:0]             upl_req_hps_addr_i,
+  input  logic [31:0]             upl_req_vram_addr_i,
+  input  logic [31:0]             upl_req_len_i,
+  input  logic [15:0]             upl_req_epoch_i,
+  input  logic [ 7:0]             upl_req_dst_slot_i,
+  input  logic [15:0]             upl_req_new_gen_i,
+  input  logic [31:0]             upl_req_crc_i,
+  // Host configuration, the terrain spine's `terr_cfg_*` shape: the
+  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
+  // staging arena the active epoch registered, and that epoch.
+  input  logic [31:0]             upl_cfg_region_base_i,
+  input  logic [31:0]             upl_cfg_region_bytes_i,
+  input  logic [63:0]             upl_cfg_arena_base_i,
+  input  logic [31:0]             upl_cfg_arena_bytes_i,
+  input  logic [15:0]             upl_cfg_epoch_i,
+  // The PUBLICATION, `spec/memory_rules.md` 5f.1's directory row, and the
+  // verdict. Observable here as well as consumed inside, so a harness can
+  // difference a publication against `zref::mem` without reaching in.
+  output logic                    upl_publish_valid_o,
+  output logic [ 7:0]             upl_publish_slot_o,
+  output logic [15:0]             upl_publish_generation_o,
+  output logic [ 7:0]             upl_publish_tag_o,
+  output logic [23:0]             upl_publish_index_o,
+  output logic [31:0]             upl_publish_base_o,
+  output logic [31:0]             upl_publish_extent_o,
+  output logic                    upl_done_o,
+  output logic [ 7:0]             upl_status_o,
+  output logic [15:0]             upl_published_o,
+  output logic [127:0]            upl_refused_o,
+  output logic [31:0]             upl_hps_wait_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -2916,6 +2954,34 @@ module zhao_console_board
       .terr_hps_c1_wait_cycles_o         (terr_hps_c1_wait_cycles_o),
       .terr_hps_c2_bursts_o              (terr_hps_c2_bursts_o),
       .terr_hps_c2_wait_cycles_o         (terr_hps_c2_wait_cycles_o),
+      .upl_req_valid_i                   (upl_req_valid_i),
+      .upl_req_ready_o                   (upl_req_ready_o),
+      .upl_req_tag_i                     (upl_req_tag_i),
+      .upl_req_index_i                   (upl_req_index_i),
+      .upl_req_hps_addr_i                (upl_req_hps_addr_i),
+      .upl_req_vram_addr_i               (upl_req_vram_addr_i),
+      .upl_req_len_i                     (upl_req_len_i),
+      .upl_req_epoch_i                   (upl_req_epoch_i),
+      .upl_req_dst_slot_i                (upl_req_dst_slot_i),
+      .upl_req_new_gen_i                 (upl_req_new_gen_i),
+      .upl_req_crc_i                     (upl_req_crc_i),
+      .upl_cfg_region_base_i             (upl_cfg_region_base_i),
+      .upl_cfg_region_bytes_i            (upl_cfg_region_bytes_i),
+      .upl_cfg_arena_base_i              (upl_cfg_arena_base_i),
+      .upl_cfg_arena_bytes_i             (upl_cfg_arena_bytes_i),
+      .upl_cfg_epoch_i                   (upl_cfg_epoch_i),
+      .upl_publish_valid_o               (upl_publish_valid_o),
+      .upl_publish_slot_o                (upl_publish_slot_o),
+      .upl_publish_generation_o          (upl_publish_generation_o),
+      .upl_publish_tag_o                 (upl_publish_tag_o),
+      .upl_publish_index_o               (upl_publish_index_o),
+      .upl_publish_base_o                (upl_publish_base_o),
+      .upl_publish_extent_o              (upl_publish_extent_o),
+      .upl_done_o                        (upl_done_o),
+      .upl_status_o                      (upl_status_o),
+      .upl_published_o                   (upl_published_o),
+      .upl_refused_o                     (upl_refused_o),
+      .upl_hps_wait_o                    (upl_hps_wait_o),
       .terr_held_o                       (terr_held_o),
       .terr_busy_o                       (terr_busy_o),
       .terr_jobs_accepted_o              (terr_jobs_accepted_o),

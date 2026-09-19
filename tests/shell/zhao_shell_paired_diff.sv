@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 32 inputs exist only on the sibling. They get harness ports of
+// 37 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -115,6 +115,11 @@ module zhao_shell_paired_diff
   input  logic scanout_ack_i,
   input  logic frame_swap_valid_i,
   input  logic frame_swap_slot_i,
+  input  zhao_guard_req_t build_guard_req_i,
+  input  logic [63:0] build_wdata_i,
+  input  logic build_wvalid_i,
+  input  logic build_wlast_i,
+  input  zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
   input  logic cmd_pkt_ready_i,
   output logic v1_ring_wr_valid_o,
   output logic v2_ring_wr_valid_o,
@@ -471,7 +476,7 @@ module zhao_shell_paired_diff
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 35 outputs the historical shell never had
+  // The sibling has 44 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -643,6 +648,20 @@ module zhao_shell_paired_diff
     .geom_beat_valid_o(v2_geom_beat_valid_o),
     .geom_beat_data_o(v2_geom_beat_data_o),
     .geom_beat_last_o(v2_geom_beat_last_o),
+    .build_guard_req_i(build_guard_req_i),
+    .build_guard_rsp_o(),
+    .build_wdata_i(build_wdata_i),
+    .build_wvalid_i(build_wvalid_i),
+    .build_wready_o(),
+    .build_wlast_i(build_wlast_i),
+    .build_retire_words_o(),
+    .build_beat_valid_o(),
+    .build_beat_data_o(),
+    .build_beat_last_o(),
+    .build_hps_req_i(build_hps_req_i),
+    .build_hps_grant_o(),
+    .build_hps_rsp_o(),
+    .build_hps_wait_o(),
     .render_kx0_i(render_kx0_i),
     .render_ky0_i(render_ky0_i),
     .render_kc0_i(render_kc0_i),

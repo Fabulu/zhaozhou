@@ -3883,7 +3883,8 @@ blocks:
       zhao_console_core on GEOM.SKIN.NORM through zhao_light_skin_adapter, the
       creature path. The completion register resolves GEOM.LIGHT to
       zhao_light_stream. Still open: the bank's command producer (core entry
-      I47 -- no ratified SetEnvironment -> bank law) and the RGB's route to the
+      I48 -- SetEnvironment 0x0311 is still `reserved` and the u8 -> Q16.16
+      bridge is unratified) and the RGB's route to the
       raster through the vertex-attribute store (I46, owner ruling R11).
   - id: GEOM.DEPTHQUANT
     name: Depth profile application

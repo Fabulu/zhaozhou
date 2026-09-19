@@ -9285,6 +9285,42 @@ verilate(test_jdoorbell_mutant_control
 add_test(NAME jdoorbell_mutant_control COMMAND test_jdoorbell_mutant_control)
 set_tests_properties(jdoorbell_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# TERRAIN.LOD's three deviations (owner ruling R8), zhao_terrain_loddev.
+# Differential against zref::terrain::lod_deviation, built TWICE from one
+# source: at the block's DEFAULT selector (which must equal
+# zref::terrain::kLodDevIncludeBoundary, so the owner's pick cannot move in one
+# language only) and with DEV_INCLUDE_BOUNDARY=1 (the mesh reading).
+add_test(NAME lint_terrain_loddev
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_loddev
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
+set_tests_properties(lint_terrain_loddev PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_terrain_loddev_directed terrain/terrain_loddev_directed.cpp)
+target_link_libraries(test_terrain_loddev_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_loddev_directed
+  PREFIX Vzhao_terrain_loddev
+  TOP_MODULE zhao_terrain_loddev
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
+add_test(NAME terrain_loddev_directed COMMAND test_terrain_loddev_directed)
+set_tests_properties(terrain_loddev_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+add_executable(test_terrain_loddev_mesh_directed terrain/terrain_loddev_directed.cpp)
+target_compile_definitions(test_terrain_loddev_mesh_directed PRIVATE LODDEV_MESH=1)
+target_link_libraries(test_terrain_loddev_mesh_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_loddev_mesh_directed
+  PREFIX Vzhao_terrain_loddev_mesh
+  TOP_MODULE zhao_terrain_loddev
+  VERILATOR_ARGS -GDEV_INCLUDE_BOUNDARY=1
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
+add_test(NAME terrain_loddev_mesh_directed COMMAND test_terrain_loddev_mesh_directed)
+set_tests_properties(terrain_loddev_mesh_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+# R8's side-by-side render of both deviation readings (a tool, not a test):
+# tools/terrain/lod_readings_sheet.py builds it, runs it and assembles the PNG.
+add_executable(terrain_lod_readings_render ${CMAKE_SOURCE_DIR}/tools/terrain/lod_readings_render.cpp)
+target_link_libraries(terrain_lod_readings_render PRIVATE zhao_zref)
+
+
 # ---------------------------------------------------------------------------
 # TERRAIN.SEQ -- the terrain command path, against zref::terrain::seq::Sequencer.
 #

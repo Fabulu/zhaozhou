@@ -144,6 +144,8 @@ _ALLOWED_DRIVERS = {
     # it is the second consumer's veto on a stream the shell emits, which is
     # why it is its own handler rather than a member of one of them.
     "cmd_packet_sink",
+    # 2026-09-19: the TERRAIN.BUILD socket's client (slot 6 + HPS socket).
+    "build_socket_client",
 }
 _ALLOWED_SINKS = {"gpu_capture", "video_capture", "audio_capture"}
 

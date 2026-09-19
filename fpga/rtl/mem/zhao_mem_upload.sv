@@ -111,6 +111,36 @@
 // close.
 //
 // ---------------------------------------------------------------------------
+// THE BURST BUFFER, AND WHY IT IS NOT OPTIONAL (2026-09-19, cmdmem packet)
+// ---------------------------------------------------------------------------
+// The contract says this block owns "its request queue and ONE BURST BUFFER".
+// The first RTL had no buffer: it wrote each HPS beat to the guard the cycle it
+// arrived and, when the guard was busy, "held" the beat. `zhao_hps_bridge`'s
+// response stream has NO READY -- `zhao_hps_burst_rsp_t` is a pure stream and
+// `zhao_hps_arbiter_n` forwards it unconditionally -- so a held beat was a LOST
+// beat. It never showed because the bench's guard was always ready. Against the
+// real MEM.GUARD it cannot be: that guard's `ready` is `!fwd_active`, low for
+// as long as its previous request waits in `zhao_vram_arbiter`, and this is a
+// BACKGROUND client arbitrated below DEBUG (`spec/memory_rules.md` 5d).
+//
+// So a burst is now FILLED from the bridge into eight 64-bit words at the
+// bridge's own pace, and only then offered to the guard, whose verdict is read
+// BEFORE a single data beat is written. A denied request therefore leaves no
+// orphaned data in anybody's write queue -- which the old order (request and
+// beat 0 together) did, into a queue the next burst would then have popped.
+//
+// ---------------------------------------------------------------------------
+// OUTSTANDING WRITES ARE COUNTED IN 16-BIT WORDS (2026-09-19, cmdmem packet)
+// ---------------------------------------------------------------------------
+// `retire_words_i` is `zhao_vram_arbiter`'s `client_rsp[k].credits`: 16-bit
+// SDRAM WORDS, and a 64-bit beat is four of them. This block used to add ONE
+// per beat and subtract the arbiter's word count, so S_RETIRE ended after a
+// quarter of the copy had retired -- the exact premature publication this
+// contract's first law forbids. The bench modelled one word per beat and so
+// agreed with the defect; it now models the arbiter, and failed against the
+// old RTL before this repair (`tests/mem/mem_upload_directed.cpp`).
+//
+// ---------------------------------------------------------------------------
 // ONE BURST IN FLIGHT, ON PURPOSE
 // ---------------------------------------------------------------------------
 // This is a BACKGROUND client (contract: "No blocking of the render path... a
@@ -297,15 +327,24 @@ module zhao_mem_upload
   // ==========================================================================
   // STATE
   // ==========================================================================
-  localparam logic [2:0] S_IDLE    = 3'd0;
-  localparam logic [2:0] S_ISSUE   = 3'd1;  // offer the HPS burst
-  localparam logic [2:0] S_MOVE    = 3'd2;  // rsp beats -> guard writes
-  localparam logic [2:0] S_NEXT    = 3'd3;  // advance or finish
-  localparam logic [2:0] S_RETIRE  = 3'd4;  // every VRAM write must land
-  localparam logic [2:0] S_VERIFY  = 3'd5;  // CRC, then publish or discard
-  localparam logic [2:0] S_REPORT  = 3'd6;  // one done pulse
+  localparam logic [3:0] S_IDLE    = 4'd0;
+  localparam logic [3:0] S_ISSUE   = 4'd1;  // offer the HPS burst
+  localparam logic [3:0] S_FILL    = 4'd2;  // rsp beats -> the burst buffer
+  localparam logic [3:0] S_GREQ    = 4'd3;  // offer the guard its request
+  localparam logic [3:0] S_GVERD   = 4'd4;  // the guard's registered verdict
+  localparam logic [3:0] S_WDATA   = 4'd5;  // buffer -> guard write channel
+  localparam logic [3:0] S_NEXT    = 4'd6;  // advance or finish
+  localparam logic [3:0] S_RETIRE  = 4'd7;  // every VRAM write must land
+  localparam logic [3:0] S_VERIFY  = 4'd8;  // CRC, then publish or discard
+  localparam logic [3:0] S_REPORT  = 4'd9;  // one done pulse
 
-  logic [2:0]  st_q;
+  localparam logic [2:0] LAST_BEAT = 3'(BEATS_PER_BURST - 1);
+
+  logic [3:0]  st_q;
+  // The one burst buffer the contract grants this block. Eight words: small
+  // enough that it is registers rather than a RAM, and it is the reason a
+  // held-off guard can never cost a beat.
+  logic [63:0] bbuf_q [0:BEATS_PER_BURST-1];
   logic [31:0] src_q;        // current burst's HPS address
   logic [31:0] dst_q;        // current burst's VRAM address
   logic [31:0] bursts_left_q;
@@ -343,13 +382,15 @@ module zhao_mem_upload
   end
 
   // ---- guard write ---------------------------------------------------------
-  // One guard request per burst, offered with the burst's first beat; the data
-  // beats follow on the write channel. Byte enables are all ones because a
-  // refusal above has already guaranteed the length is a whole number of bursts
-  // -- there is no partial tail to mask, by construction rather than by luck.
+  // One guard request per burst, offered only once the burst is WHOLE in the
+  // buffer, and held until the guard's `ready` (a level: "I can take a request
+  // now"). The data beats follow only after the registered verdict says `ok`.
+  // Byte enables are all ones because a refusal above has already guaranteed
+  // the length is a whole number of bursts -- there is no partial tail to mask,
+  // by construction rather than by luck.
   always_comb begin
     guard_req_o        = '0;
-    guard_req_o.valid  = (st_q == S_MOVE) && (beat_q == '0) && hps_rsp_i.beat_valid;
+    guard_req_o.valid  = (st_q == S_GREQ);
     guard_req_o.write  = 1'b1;
     guard_req_o.client = ZHAO_CLIENT_TERRAIN_BUILD;
     guard_req_o.addr   = dst_q[ZHAO_VRAM_ADDR_BITS-1:0];
@@ -357,9 +398,9 @@ module zhao_mem_upload
     guard_req_o.be     = {64{1'b1}};
   end
 
-  assign guard_wdata_o  = hps_rsp_i.data;
-  assign guard_wvalid_o = (st_q == S_MOVE) && hps_rsp_i.beat_valid;
-  assign guard_wlast_o  = guard_wvalid_o && (beat_q == ($clog2(BEATS_PER_BURST+1))'(BEATS_PER_BURST - 1));
+  assign guard_wdata_o  = bbuf_q[beat_q[2:0]];
+  assign guard_wvalid_o = (st_q == S_WDATA);
+  assign guard_wlast_o  = guard_wvalid_o && (beat_q[2:0] == LAST_BEAT);
 
   assign req_ready_o = (st_q == S_IDLE);
 
@@ -388,9 +429,11 @@ module zhao_mem_upload
   // bench that retired everything at the end would have passed. Two writers of
   // one register is the bug, so there is now exactly one, and the increment and
   // the decrement meet as ARITHMETIC where both are visible at once.
-  wire took_beat_c = (st_q == S_MOVE) && guard_wvalid_o && guard_wready_i
-                  && !guard_rsp_i.violation;
-  wire [16:0] out_plus_c   = {1'b0, outstanding_q} + (took_beat_c ? 17'd1 : 17'd0);
+  // FOUR, NOT ONE: a 64-bit beat is four 16-bit words and the retirement
+  // stream counts words. See the header section on units.
+  localparam logic [16:0] WORDS_PER_BEAT = 17'(BEAT_BYTES / 2);
+  wire took_beat_c = guard_wvalid_o && guard_wready_i;
+  wire [16:0] out_plus_c   = {1'b0, outstanding_q} + (took_beat_c ? WORDS_PER_BEAT : 17'd0);
   wire [16:0] retire_c     = {9'd0, retire_words_i};
   wire [16:0] out_wide_c   = (out_plus_c > retire_c) ? (out_plus_c - retire_c) : 17'd0;
   // SATURATE rather than truncate. Bit 16 can only be set by more outstanding
@@ -484,11 +527,15 @@ module zhao_mem_upload
         S_ISSUE: begin
           if (hps_req_grant_i) begin
             beat_q <= '0;
-            st_q   <= S_MOVE;
+            st_q   <= S_FILL;
           end
         end
 
-        S_MOVE: begin
+        // ------------------------------------------------------------------
+        // FILL -- every bridge beat is TAKEN, the cycle it arrives. Nothing in
+        // this state can refuse one, because nothing downstream is consulted.
+        // ------------------------------------------------------------------
+        S_FILL: begin
           if (hps_rsp_i.err) begin
             // The bridge issued nothing. Treat it as a CRC-class failure: the
             // copy is incomplete, so the slot is discarded unpublished. It is
@@ -497,95 +544,89 @@ module zhao_mem_upload
             // still wanted.
             hps_err_q <= 1'b1;
             st_q      <= S_RETIRE;
-          end else if (guard_rsp_i.violation) begin
-            // DENIED by the region check, and `zhao_guard_rsp_t` says plainly
-            // that NOTHING was written. The copy would have a hole, so the slot
-            // is discarded unpublished.
-            //
-            // Reported with the GUARD's verdict rather than as a CRC failure:
-            // the CRC would also have failed, but saying "bad checksum" about a
-            // rejected address sends the next reader to the wrong question.
-            guard_denied_q <= 1'b1;
-            st_q           <= S_RETIRE;
-          end else if (guard_rsp_i.ok && guard_rsp_i.violation) begin
-            // THE VERDICT BITS ARE MUTUALLY EXCLUSIVE BY CONSTRUCTION -- the
-            // guard drives both from ONE registered decision
-            // (`zhao_mem_guard.sv:303-304`), so both high at once cannot happen
-            // while that block is correct. This arm is therefore UNREACHABLE
-            // with a correct guard, and it is here anyway for two reasons.
-            //
-            // First, `ok` is the only bit of `zhao_guard_rsp_t` this block would
-            // otherwise never read, and a carried-but-unread port bit is exactly
-            // the hole that put a real defect in these same lines: the
-            // acceptance test used to conjoin `ready` with `ok`, which the guard
-            // never raises together, and nothing noticed because the checker
-            // that watches for it had been crashing.
-            //
-            // Second, it fails in the safe direction. A guard that starts
-            // asserting both is broken in a way that would otherwise present as
-            // a silently truncated upload; here it discards the slot unpublished
-            // and says which block to look at.
-            //
-            // NO MUTANT IS OWED and the reason is structural rather than a
-            // promise: the two bits come from one decision register, so no
-            // stimulus presented at THIS block's ports can separate them. Firing
-            // it needs a broken guard, which is `zhao_mem_guard`'s own test to
-            // own. CLAUDE.md permits a stated structural reason in place of a
-            // control, and this is that statement rather than an omission.
-            guard_denied_q <= 1'b1;
-            st_q           <= S_RETIRE;
           end else if (hps_rsp_i.beat_valid) begin
-            // THE THREE RESPONSE BITS MEAN THREE DIFFERENT THINGS, and this
-            // block collapsed two of them anyway. The previous version of these
-            // lines said "`ready && ok` is positive acceptance of the burst's
-            // request" and tested exactly that. IT IS WRONG, and wrong in a way
-            // that would never have fired:
-            //
-            //   zhao_mem_guard.sv:302  rsp.ready = !fwd_active;  // LEVEL
-            //   zhao_mem_guard.sv:303  rsp.ok    = rsp_ok_q;     // REGISTERED
-            //
-            // and the guard's own header says "Verdict: fixed 1 cycle
-            // (registered rsp)". So `ready` means "I can take a request NOW" and
-            // `ok` is the verdict of the PREVIOUS one. The guard never raises
-            // them together on purpose, and a conjunction of the two is a
-            // condition that is true only by coincidence.
-            //
-            // The correct shape is the one the guard was built for: a request is
-            // ACCEPTED when `ready` is high, and its VERDICT arrives one cycle
-            // later as `ok`/`violation`. The violation arm above already reads
-            // it on that later cycle, which is why the refusal path was right
-            // while the acceptance path was not.
-            //
-            // Found by `tools/rtl/check_guard_verdict.py` after that tool was
-            // repaired -- it had been CRASHING on a cp1252 em dash in an
-            // unrelated file, so it never reached its coverage audit and every
-            // guard client added since went unscanned. A dead checker reports no
-            // faults, which reads exactly like no faults.
-            //
-            // `ready` low is the guard being BUSY, and that is a HOLD, not a
-            // failure. An earlier draft treated it as a denial and would have
-            // discarded a good upload whenever the arbiter was serving somebody
-            // else. Acceptance is only required on the beat that carries the
-            // request (beat 0); afterwards the burst is already accepted and the
-            // data channel's own `guard_wready_i` paces it.
-            if (guard_wready_i &&
-                ((beat_q != '0) || guard_rsp_i.ready)) begin
-              crc_q <= crc_next_w;
-              // The bridge's own `last` and our beat counter must agree. They
-              // are two independent statements about how many bytes moved, and
-              // a copy is exactly as correct as that agreement.
-              if (hps_rsp_i.last != (beat_q == ($clog2(BEATS_PER_BURST+1))'(BEATS_PER_BURST - 1))) begin
-                beat_mismatch_q <= 1'b1;
-              end
-              if (hps_rsp_i.last) begin
-                beat_q <= '0;
-                st_q   <= S_NEXT;
-              end else begin
-                beat_q <= beat_q + 1'b1;
-              end
+            bbuf_q[beat_q[2:0]] <= hps_rsp_i.data;
+            crc_q               <= crc_next_w;
+            // The bridge's own `last` and our beat counter must agree. They
+            // are two independent statements about how many bytes moved, and
+            // a copy is exactly as correct as that agreement. A disagreement
+            // DISCARDS the burst rather than writing it: a short burst would
+            // write stale buffer words into the slot, and although the slot is
+            // unpublished, a write nobody meant is a write nobody can audit.
+            if (hps_rsp_i.last != (beat_q[2:0] == LAST_BEAT)) begin
+              beat_mismatch_q <= 1'b1;
+              st_q            <= S_RETIRE;
+            end else if (hps_rsp_i.last) begin
+              beat_q <= '0;
+              st_q   <= S_GREQ;
+            end else begin
+              beat_q <= beat_q + 1'b1;
             end
-            // guard not ready: hold. The HPS side must hold the beat too; this
-            // block never drops a beat to keep moving.
+          end
+        end
+
+        // ------------------------------------------------------------------
+        // GUARD REQUEST -- held until the guard can take it
+        // ------------------------------------------------------------------
+        // THE THREE RESPONSE BITS MEAN THREE DIFFERENT THINGS:
+        //
+        //   zhao_mem_guard.sv:302  rsp.ready = !fwd_active;  // LEVEL
+        //   zhao_mem_guard.sv:303  rsp.ok    = rsp_ok_q;     // REGISTERED
+        //
+        // and the guard's own header says "Verdict: fixed 1 cycle (registered
+        // rsp)". So `ready` means "I can take a request NOW" and `ok` is the
+        // verdict of the PREVIOUS one; the guard never raises them together on
+        // purpose. An earlier version of this block conjoined them and was
+        // found by `tools/rtl/check_guard_verdict.py`. The request is ACCEPTED
+        // on `ready`; the VERDICT is read in S_GVERD.
+        //
+        // `ready` low is the guard being BUSY, and that is a HOLD, not a
+        // failure: this is a background client and the guard's previous
+        // forward may wait behind every guaranteed client in the arbiter.
+        // Holding costs nothing now that the burst sits in the buffer.
+        S_GREQ: begin
+          if (guard_rsp_i.ready) st_q <= S_GVERD;
+        end
+
+        S_GVERD: begin
+          if (guard_rsp_i.violation) begin
+            // DENIED, and `zhao_guard_rsp_t` says plainly that NOTHING was
+            // written. Reported with the GUARD's verdict rather than as a CRC
+            // failure: the CRC would also have failed, but saying "bad
+            // checksum" about a rejected address sends the next reader to the
+            // wrong question. And because the verdict is read BEFORE any data
+            // beat leaves, a denial leaves no orphaned words in a write queue.
+            //
+            // THE `ok && violation` CASE LANDS HERE TOO, on purpose. The bits
+            // come from one registered decision in the guard
+            // (`zhao_mem_guard.sv:303-304`), so both high cannot happen while
+            // that block is correct, and no stimulus at THIS block's ports can
+            // separate them -- firing it needs a broken guard, which is
+            // `zhao_mem_guard`'s own test to own. Testing `violation` first
+            // makes the broken-guard case fail SAFE (discarded, unpublished)
+            // instead of presenting as a silently truncated upload.
+            guard_denied_q <= 1'b1;
+            st_q           <= S_RETIRE;
+          end else if (guard_rsp_i.ok) begin
+            beat_q <= '0;
+            st_q   <= S_WDATA;
+          end
+          // Neither yet: wait. The guard's verdict is one cycle by its header;
+          // waiting rather than assuming it keeps this block correct if that
+          // latency ever grows.
+        end
+
+        // ------------------------------------------------------------------
+        // WRITE DATA -- buffer -> guard write channel, paced by its ready
+        // ------------------------------------------------------------------
+        S_WDATA: begin
+          if (guard_wready_i) begin
+            if (beat_q[2:0] == LAST_BEAT) begin
+              beat_q <= '0;
+              st_q   <= S_NEXT;
+            end else begin
+              beat_q <= beat_q + 1'b1;
+            end
           end
         end
 

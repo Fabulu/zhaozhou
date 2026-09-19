@@ -228,7 +228,7 @@ ambient / tint as `rgb565`, `tint_strength` unit8, fog mode + near/far
     which u20 gain an 8-bit sun channel becomes, where `tint` applies, and the
     u8 saturation point -- is NOT ratified by this amendment. Until it is, and
     until 0x0311 moves from `reserved` to `implemented`, the bank is host-loaded
-    (`zhao_console_core` entry I47).
+    (`zhao_console_core` entry I48).
 - **Global tint** (time-of-day / weather mood; the §1.3 crossfade's
   world-light leg). Per channel, applied to the LIT vertex colour before
   texture modulation (the donor's `lmap` position — tint the light, not
