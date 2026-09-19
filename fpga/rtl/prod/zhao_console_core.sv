@@ -12138,26 +12138,28 @@ module zhao_console_core
   // Two structural counts, both exact, and neither is a fit:
   //
   //   * ROOTS. `zhao_field_v3_len` instantiates BANKS x LANES
-  //     `zhao_field_isqrt` (its generate at :201-203) -- and note that
-  //     `zhao_field_v3_svcpath.sv:611` passes only `.BANKS(DIST_BANKS)`, NOT
-  //     LANES, so the distance service keeps its own LANES=4 default however
-  //     narrow the executor is. The roots are therefore BANKS x 4 always:
-  //     EIGHT here at DIST_BANKS=2, THIRTY-TWO at the shipped DIST_BANKS=8.
-  //     The whole-machine map probe corroborates the eight exactly --
-  //     `gen_bank[0..1].gen_root[0..3]`, 8 x 248 ALUT.
+  //     `zhao_field_isqrt`, and since 2026-09-19 `zhao_field_v3_svcpath`
+  //     passes it `.LANES(GROUP_PTS)` -- the dispatcher's group cap -- where it
+  //     used to pass only `.BANKS` and leave the default of four. So the roots
+  //     are DIST_BANKS x FAB_GROUP_PTS: TWO here (2 x 1), THIRTY-TWO at the
+  //     shipped 8 x 4. The whole-machine map probe measured the OLD eight --
+  //     `gen_bank[0..1].gen_root[0..3]`, 8 x 248 ALUT -- which is the figure the
+  //     six removed roots are priced against.
   //     `zhao_field_v3_len.sv:53` prices a root at ~251 ALM and eight at
   //     "roughly 2,000 ALMs", so the shipped point is about +6,000 ALM on this
   //     axis alone. `design/fit_targets.yml:1995` caps that module at
   //     `max_alms: 2000` -- a rule written for EIGHT roots, which the shipped
   //     configuration exceeds fourfold. That target has never been run.
   //
-  //     WORTH SAYING SEPARATELY, because it is a live inefficiency and not a
-  //     consequence of anything chosen here: the distance service is FOUR
-  //     POINTS WIDE while this console's executor is one. Eight floor-exact
-  //     roots are elaborated to serve a front that presents one point at a
-  //     time. Forwarding LANES into `zhao_field_v3_len` would cut that to two
-  //     and is a genuine saving, but it changes a module with its own closed
-  //     tally, so it belongs in a FIELD pass rather than in this instantiation.
+  //     SPENT 2026-09-19 (gz/pfs), AND THE SENTENCE THAT WAS HERE WAS WRONG
+  //     ABOUT HOW. It said "forwarding LANES into `zhao_field_v3_len` would cut
+  //     that to two". LANES is points per CONTEXT; at LANES=1 the dispatcher
+  //     gathers four CONTEXTS into one four-point group
+  //     (`zhao_field_v3_dispatch.sv` 17-20), so forwarding it would have
+  //     computed one of four real points. What makes a narrower service exact
+  //     is a cap on the GROUP, and that is `FAB_GROUP_PTS` below: the
+  //     dispatcher is capped and the service sized by the same value. Roots
+  //     here are now DIST_BANKS x GROUP_PTS = 2.
   //   * MULTIPLIERS. `zhao_field_v3_mulbank` hard-codes `for (l = 0; l < 4;)`
   //     -- four lanes ALWAYS, independent of LANES -- and the engine has TWO
   //     banks (`zhao_field_v3_core.sv:235`, `zhao_field_v3_svcpath.sv:768`).
@@ -12235,9 +12237,23 @@ module zhao_console_core
     .FAB_GATHERS    (4),
     // FAB_DIST_BANKS: shipped 8. THE most expensive parameter in the engine --
     // `zhao_field_v3_svcpath.sv:68` says so in as many words -- because each
-    // bank is four floor-exact roots. 2 banks = 8 roots here against the
-    // shipped 8 banks = 32, at ~251 ALM each.
+    // bank is FAB_GROUP_PTS floor-exact roots. 2 banks x 1 = 2 roots here
+    // against the shipped 8 banks x 4 = 32, at ~251 ALM each.
     .FAB_DIST_BANKS (2),
+    // FAB_GROUP_PTS: shipped 4. POINTS PER LONG-OP GROUP -- the dispatcher's
+    // group cap and the distance service's width, as one value. This front
+    // holds ONE point in flight, so no group here ever held a second point:
+    // lanes 1..3 of every group were padding, and the distance service still
+    // computed them on six of its eight roots. At 1 the cap makes that
+    // structural, so the service is built one lane wide and it is EXACT -- a
+    // real point cannot reach a lane that is not computed -- with no clock
+    // lost, because a group of one is all this front could ever form. Proven
+    // by `field_v3_earth_group1`: the real Earth programs, every value against
+    // the oracle, at GROUP_PTS=1. Handover 3 asked for LANES to be forwarded
+    // instead; that would have been WRONG (at LANES=1 the dispatcher gathers
+    // four CONTEXTS into one group), and this is the exact form of the same
+    // saving: six roots and their front-end and bank registers.
+    .FAB_GROUP_PTS  (1),
     // FAB_RING_UNITS: shipped 8. `zhao_field_v3_ring.sv:164` records a sweep
     // of RING_UNITS 8/16/32 against DIST_BANKS 4/8 that "moved the frame cost
     // by not one clock" -- so even on the Earth workload this axis is already

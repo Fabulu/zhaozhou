@@ -109,7 +109,18 @@ module zhao_field_v3_dispatch #(
     // At LANES = 4 the gather still exists and still costs a clock, but it has
     // nothing left to do -- which is the point. The half-empty groups it used
     // to issue were the executor's narrowness showing through.
-    parameter int LANES = 1
+    parameter int LANES = 1,
+    // POINTS PER GROUP, the CAP, 1..4 and a multiple of LANES. A group issues
+    // when it holds this many points; lanes at or above it are always padded.
+    // Four is the services' width and every existing tally was taken there.
+    // Added 2026-09-19 (gz/pfs) so a service may be built only as wide as a
+    // group can ever be: `zhao_field_v3_svcpath` passes this same value to the
+    // distance service as its LANES, and the cap HERE is what makes that exact
+    // -- no real point can reach a lane the service does not compute. A front
+    // that supplies one point at a time loses nothing by a cap of one: it
+    // could never fill a second lane anyway (`zhao_field_host`'s run state
+    // machine holds ONE point in flight).
+    parameter int GROUP_PTS = 4
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -199,6 +210,11 @@ module zhao_field_v3_dispatch #(
   localparam int REGW = $clog2(REGS);
 
   // The pad constants are zhao_field_v3_core's, deliberately. See rule 2.
+  initial begin
+    if (GROUP_PTS < 1 || GROUP_PTS > 4 || LANES < 1 || LANES > GROUP_PTS || (GROUP_PTS % LANES) != 0)
+      $fatal(1, "zhao_field_v3_dispatch: GROUP_PTS=%0d must be 1..4 and a multiple of LANES=%0d", GROUP_PTS, LANES);
+  end
+
   localparam logic signed [31:0] PAD_A = 32'sd3;
   localparam logic signed [31:0] PAD_B = 32'sd5;
   localparam logic signed [31:0] PAD_C = 32'sd7;
@@ -290,7 +306,7 @@ module zhao_field_v3_dispatch #(
     automatic logic [GW-1:0] slot_m = '0;
     automatic logic [GW-1:0] slot_f = '0;
     for (int i = GATHERS - 1; i >= 0; i--) begin
-      if (g_v_r[i] && (g_fill_r[i] <= 3'(4 - LANES)) && (g_op_r[i] == long_op_i) &&
+      if (g_v_r[i] && (g_fill_r[i] <= 3'(GROUP_PTS - LANES)) && (g_op_r[i] == long_op_i) &&
           (g_dst_r[i] == long_dst_i) && (g_imm_r[i] == long_imm_i)) begin
         found_m = 1'b1;
         slot_m  = GW'(i);
@@ -315,7 +331,7 @@ module zhao_field_v3_dispatch #(
     automatic logic [GW-1:0] slot_any  = '0;
     automatic logic [2:0]    best      = 3'd0;
     for (int i = GATHERS - 1; i >= 0; i--) begin
-      if (g_v_r[i] && (g_fill_r[i] == 3'd4)) begin
+      if (g_v_r[i] && (g_fill_r[i] == 3'(GROUP_PTS))) begin
         found_full = 1'b1;
         slot_full  = GW'(i);
       end
@@ -705,7 +721,7 @@ module zhao_field_v3_dispatch #(
             // and the slot must NOT be freed until the service has taken it.
             iss_slot_r <= iss_slot_c;
             istate_r <= I_ISSUE;
-            if (g_fill_r[iss_slot_c] != 3'd4) partial_o <= partial_o + 32'd1;
+            if (g_fill_r[iss_slot_c] != 3'(GROUP_PTS)) partial_o <= partial_o + 32'd1;
           end
         end
 

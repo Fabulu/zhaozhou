@@ -247,6 +247,11 @@ module zhao_field_host #(
     parameter int unsigned FAB_GATHERS = 4,
     // Root banks for LEN/DIST2, ring units, and the ring descriptor cache.
     parameter int unsigned FAB_DIST_BANKS = 2,
+    // Points per long-op GROUP, 1..4: the dispatcher's cap and the distance
+    // service's width together (zhao_field_v3_svcpath). Four is the shipped
+    // configuration's; a front that holds one point in flight -- this one
+    // does, see the run state machine -- can never fill a second lane.
+    parameter int unsigned FAB_GROUP_PTS = 4,
     parameter int unsigned FAB_RING_UNITS = 2,
     parameter int unsigned FAB_RING_DESC = 2,
 
@@ -623,6 +628,7 @@ module zhao_field_host #(
       .LONGQ      (FAB_LONGQ),
       .GATHERS    (FAB_GATHERS),
       .DIST_BANKS (FAB_DIST_BANKS),
+      .GROUP_PTS  (FAB_GROUP_PTS),
       .RING_UNITS (FAB_RING_UNITS),
       .RING_DESC  (FAB_RING_DESC),
       .REGS       (REGS),
