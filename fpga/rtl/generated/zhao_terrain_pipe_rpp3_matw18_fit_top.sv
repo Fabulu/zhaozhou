@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_terrain_pipe_rpp3_matw18_fit_top.py
 // generator-sha256: 002614c039bff7e0a924c69afa70723740ae8b5280df18563f5c0f155cb1ba30
-// template-sha256: f8cdd1f0289b439a2bed9e29e36918bb77710f766d82ec15a86246b060b97558
+// template-sha256: e73cf8326374c6193c9f9fb3816672498116b01898d001504641f4cb9eab2cf7
 // manifest: fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.manifest.json
 // Parameter witness: u_terrain_pipe sets ROWS_PER_PASS=3 and MATW=18
 // as LITERALS. The G8B target must not inherit either from a module
@@ -276,6 +276,10 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
   logic signed [31:0] a_d_w;
   logic [30:0] a_w_w;
   logic        a_behind_w, a_view_o_w;
+  // The depth profile (commit ac4f293d added both outputs to the pipe). They
+  // ride the padding of word 39 so the fitter keeps the profile register;
+  // an unread output here would be pruned and the row would under-count it.
+  logic [1:0]  a_profile_w, fill_profile_w;
   logic [G8B_PAYLOAD_A_W-1:0] a_payload_o_w;
 
   logic        idle_w;
@@ -436,7 +440,7 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       6'd36: signature_word_c = {a_x_w, a_y_w[10:0]};
       6'd37: signature_word_c = a_d_w;
       6'd38: signature_word_c = {1'b0, a_w_w};
-      6'd39: signature_word_c = {a_payload_o_w, 12'd0, a_valid_o_w, a_behind_w,
+      6'd39: signature_word_c = {a_payload_o_w, 8'd0, a_profile_w, fill_profile_w, a_valid_o_w, a_behind_w,
                                  a_view_o_w, a_ready_w};
       6'd40: signature_word_c = {28'd0, held_w};
       6'd41: signature_word_c = {29'd0, idle_w, arena_overflow_w,
@@ -474,6 +478,7 @@ module zhao_terrain_pipe_rpp3_matw18_fit_top (
       .a_valid_o(a_valid_o_w), .a_x_o(a_x_w), .a_y_o(a_y_w), .a_d_o(a_d_w),
       .a_w_o(a_w_w), .a_behind_o(a_behind_w), .a_view_o(a_view_o_w),
       .a_payload_o(a_payload_o_w),
+      .a_profile_o(a_profile_w), .fill_profile_o(fill_profile_w),
 
       .job_valid_i(job_valid_w), .job_ready_o(job_ready_w),
       .job_ox_i(job_ox_q), .job_oz_i(job_oz_q), .job_level_i(job_level_q),

@@ -1269,7 +1269,7 @@ module tb_zhao_shell (
       // MATW=32, where it is structurally zero; connected so the pin list is
       // complete, unread because the shell packet has no field for it.
       .mat_refused_o(pj_mat_refused),
-      .out_profile_o(pj_out_profile),);
+      .out_profile_o(pj_out_profile));
 
   // ---- D22 step 3: GEOM.CLIP ------------------------------------------------
   localparam int unsigned CLIP_ATTRS = 7;

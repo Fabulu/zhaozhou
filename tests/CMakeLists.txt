@@ -6760,7 +6760,8 @@ verilate(test_terrain_hdrread_directed
   PREFIX Vtb_terrain_hdrread
   TOP_MODULE tb_terrain_hdrread
   VERILATOR_ARGS --assert
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_hdrread.sv
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_hdrread.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_hdrread.sv)
 add_test(NAME terrain_hdrread_directed COMMAND test_terrain_hdrread_directed)
 set_tests_properties(terrain_hdrread_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
@@ -6784,7 +6785,8 @@ verilate(test_terrain_hdrread_mutant_control
   PREFIX Vtb_terrain_hdrread
   TOP_MODULE tb_terrain_hdrread
   VERILATOR_ARGS --assert -DZHAO_HDRREAD_LIVE_FORWARD_MUTANT -Wno-UNUSEDSIGNAL
-  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_hdrread_live_forward_mutant.sv
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG}
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_hdrread_live_forward_mutant.sv
           ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_terrain_hdrread.sv)
 add_test(NAME terrain_hdrread_mutant_control COMMAND test_terrain_hdrread_mutant_control)
 set_tests_properties(terrain_hdrread_mutant_control PROPERTIES LABELS "fast;nightly" TIMEOUT 300)

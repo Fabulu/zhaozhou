@@ -30,9 +30,9 @@
     "ROWS_PER_PASS": 3
   },
   "hashes": {
-    "generated_rtl_sha256": "745380998d4d263fa7e6b4a1fdb9c8678db5f577e30558156277225f483b6a60",
+    "generated_rtl_sha256": "f44d65d6627a0366ea67ca40c9975801fd17809caa8e9588ae570bd4d4109e5c",
     "generator_sha256": "002614c039bff7e0a924c69afa70723740ae8b5280df18563f5c0f155cb1ba30",
-    "template_sha256": "f8cdd1f0289b439a2bed9e29e36918bb77710f766d82ec15a86246b060b97558"
+    "template_sha256": "e73cf8326374c6193c9f9fb3816672498116b01898d001504641f4cb9eab2cf7"
   },
   "limitations": [
     "Subsystem-only terrain characterization; not production world throughput.",
@@ -46,22 +46,22 @@
     {
       "ordinal": 0,
       "path": "fpga/rtl/common/zhao_project_core.sv",
-      "sha256": "b55138e7a92e7a5e8181ac0fd7d9562d90d9a9a6ff20246d4ee0f0e648264362"
+      "sha256": "4c6d0375fb63067ca9115a7dcb3d625973119eeb2ef842e1e25d81ea9527a29a"
     },
     {
       "ordinal": 1,
       "path": "fpga/rtl/common/zhao_project_service.sv",
-      "sha256": "c9a72f7915cb9fa48d9416c1c0d70039b2c20f2bca1bf365a628e1e1fe4ea9c2"
+      "sha256": "bc3ee15c26271317490a42b610139a80083c7a74f69237ee8b870fc86648309a"
     },
     {
       "ordinal": 2,
       "path": "fpga/rtl/common/zhao_proj_subsystem.sv",
-      "sha256": "8e091ce68aa5331a87e45d8b650973ef708eb53311133bd926764a710f3f4e65"
+      "sha256": "3344f185268f94d9b2f49fc669718765b8c2ffd2d600319af074ed96c9411b0f"
     },
     {
       "ordinal": 3,
       "path": "fpga/rtl/geometry/zhao_vertex_arena.sv",
-      "sha256": "dffbacd48f5a6faf3b915a58153d8a50f3003822670048a1c8847437c778cf4a"
+      "sha256": "68b0b163b7fefe5682e2966f6bf1066d6a726c324dd66d25392b64c0a09681cf"
     },
     {
       "ordinal": 4,
@@ -81,12 +81,12 @@
     {
       "ordinal": 7,
       "path": "fpga/rtl/terrain/zhao_terrain_pipe.sv",
-      "sha256": "06c93906875bcbde5d76957d2a74eeae5452378a58b343114e690d8b1c4f9dd8"
+      "sha256": "3977f77184a6f45eefaad1c18768deb9121580f37f2790b20a64a4aa85c9fca9"
     },
     {
       "ordinal": 8,
       "path": "fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv",
-      "sha256": "745380998d4d263fa7e6b4a1fdb9c8678db5f577e30558156277225f483b6a60"
+      "sha256": "f44d65d6627a0366ea67ca40c9975801fd17809caa8e9588ae570bd4d4109e5c"
     }
   ],
   "traffic_profile": {
