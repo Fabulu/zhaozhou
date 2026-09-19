@@ -125,5 +125,41 @@ inline uint8_t grade_channel_table(const int32_t pr[3], const int32_t pg[3], con
   return grade_finalize(pr[row] + pg[row] + pb[row], bias);
 }
 
+// ===========================================================================
+// POST.ECHO -- the capture law (owner ruling R7, design/contracts/POST.ECHO.md)
+// ===========================================================================
+// The echo writes POST.COMPOSITE's post-ink/pre-HUD pixel, unchanged, into a
+// capture window. There is no colour law here -- only WHERE a pixel goes, which
+// passes are refused, and the granularity at which a starved echo drops. Those
+// three are what the RTL can get wrong, so they are what this owns.
+namespace echo {
+
+// zhao_pkg ZHAO_POST_ECHO_BASE / _SPAN (spec/memory_rules.md 5g).
+inline constexpr uint32_t kCaptureBase = 0x05C00000u;
+inline constexpr uint32_t kCaptureSpan = 0x0003C000u;
+// A chunk is one RASTER.FBWRITE row burst: 16 pixels, 32 bytes. Drops are whole
+// chunks, so a starved echo leaves clean holes and never a torn burst.
+inline constexpr unsigned kChunkPx = 16;
+
+// A pass is capturable only if its rows split into whole chunks and the stacked
+// image fits the window. Anything else is refused at pass start.
+inline bool geometry_ok(unsigned w, unsigned h, unsigned views) {
+  if (w == 0 || h == 0 || views == 0) return false;
+  if (w % kChunkPx != 0) return false;
+  return uint64_t(views) * h * w * 2u <= kCaptureSpan;
+}
+
+// Views are STACKED vertically: view v's row y is capture row v*h + y. The
+// stride is the view width, so no multiplier is needed to reach view 1.
+inline uint32_t capture_addr(unsigned view, unsigned x, unsigned y, unsigned w, unsigned h) {
+  return kCaptureBase + ((uint32_t(view) * h + y) * w + x) * 2u;
+}
+
+// Which chunk of its row a pixel belongs to, and whether it opens one.
+inline unsigned chunk_of(unsigned x) { return x / kChunkPx; }
+inline bool opens_chunk(unsigned x) { return (x % kChunkPx) == 0; }
+
+}  // namespace echo
+
 }  // namespace post
 }  // namespace zref

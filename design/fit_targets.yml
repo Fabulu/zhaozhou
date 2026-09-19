@@ -2331,6 +2331,10 @@ targets:
       - fpga/rtl/memory/zhao_hps_arbiter.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
       - fpga/rtl/raster/zhao_raster_fbwrite.sv
+      - fpga/rtl/memory/zhao_mem_share2.sv
+      - fpga/rtl/compositor/zhao_post_fbread.sv
+      - fpga/rtl/compositor/zhao_post_echo.sv
+      - fpga/rtl/compositor/zhao_post_lease.sv
       # THE GEOMETRY FRONT END WAS DECLARED HERE AND ELABORATED NOWHERE.
       # Removed 2026-09-18 after tools/budget/closure_liveness.py measured it:
       # zhao_geom_setup, meshfetch, assemble, vdecode, assetfetch, project,
@@ -2782,6 +2786,9 @@ targets:
       # zhao_field_v3_normalize, already in this list through the field engine.
       - fpga/rtl/terrain/zhao_terrain_heighttap.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
+      - fpga/rtl/compositor/zhao_post_fbread.sv
+      - fpga/rtl/compositor/zhao_post_echo.sv
+      - fpga/rtl/compositor/zhao_post_lease.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv
       - fpga/rtl/compositor/zhao_twod_sampler.sv

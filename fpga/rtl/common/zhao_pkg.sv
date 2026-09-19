@@ -159,6 +159,29 @@ package zhao_pkg;
   localparam logic [31:0] ZHAO_GEOM_ASSET_SPAN    = ZHAO_RENDER_ASSET_SPAN;
 
   // ---------------------------------------------------------------------
+  // POST.ECHO's capture buffer (owner ruling R7, 2026-09-19; spec/memory_rules.md
+  // 5g; design/contracts/POST.ECHO.md). The composited frame, post-ink and
+  // pre-HUD, is echoed here once per post pass.
+  //
+  // WHY BANK 2, AND NOT "RIGHT AFTER SLOT 0": banks come from byte-address
+  // bits [26:25]. Banks 0 and 1 are the FB slots, and while post writes the
+  // BACK slot the scanout reads the OTHER one -- so a capture in either FB
+  // bank shares a bank with scanout on every other frame, which is exactly
+  // the read/write row thrash W2.7 measured (~82 of 192 Duo lines starved).
+  // Bank 3 is full (PARAMBUF + RENDER.ASSET_POOL). Bank 2's tail,
+  // 0x0586_0000..0x05FF_FFFF, is reserved "until traces justify"; echo is
+  // the first block with traffic for it. Its neighbours there are terrain
+  // background loads, which ruling T3 already places below every guaranteed
+  // client.
+  //
+  // THE SPAN IS THE FB SLOT'S, and for the same reason: sized for the
+  // largest stored canvas (Duo, two 256x192 views stacked = 196,608 B) so a
+  // mode switch never moves the capture. BASE + SPAN = 0x05C3_C000 cannot
+  // wrap and ends 0x3C_4000 bytes below PARAMBUF. IT IS A KNOB.
+  localparam logic [31:0] ZHAO_POST_ECHO_BASE     = 32'h05C0_0000;
+  localparam logic [31:0] ZHAO_POST_ECHO_SPAN     = 32'h0003_C000; // 245,760
+
+  // ---------------------------------------------------------------------
   // TERRAIN.PAGE_POOL -- the bank-2 region (ruling T2, spec/memory_rules.md
   // 5b, 2026-09-06)
   //

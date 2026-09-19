@@ -694,6 +694,10 @@ constexpr uint32_t kGeomAssetSpan = kRenderAssetSpan;
 // ruling's inclusive 0x054D_FFFF, to the byte.
 constexpr uint32_t kTerrainPagePoolBase = 0x04000000u;
 constexpr uint32_t kTerrainPagePoolSpan = 0x014E0000u;
+// POST.ECHO's capture buffer (zhao_pkg ZHAO_POST_ECHO_*, ruling R7): ENGINE0,
+// WRITE-only, lease-gated, bank 2's reserved tail.
+constexpr uint32_t kPostEchoBase = 0x05C00000u;
+constexpr uint32_t kPostEchoSpan = 0x0003C000u;
 
 struct MemoryGuard {
   // client ids (zhao_client_e)
@@ -728,12 +732,24 @@ struct MemoryGuard {
         // same clamped slot span; what separates them is which one the lease
         // names. A writer without the lease is refused exactly as a request
         // outside the window is.
-        if (!r.write || !m.valid) return false;
         const unsigned want =
             (r.client == BLIT_DMA) ? GuardMap::WRITER_BLIT : GuardMap::WRITER_ENGINE0;
         if (m.writer != want) return false;
+        // POST.ECHO's capture (ruling R7, spec/memory_rules.md 5g): ENGINE0
+        // WRITE-only, constant bounds, lease-gated (the writer test above) but
+        // NOT frame-scoped -- no map input moves it, so `m.valid` is not read.
+        if (r.client == ENGINE0 && r.write &&
+            r.addr >= kPostEchoBase && end <= kPostEchoBase + kPostEchoSpan)
+          return true;
+        if (!m.valid) return false;
         const uint32_t base = m.blit_slot ? kFbSlot1Base : kFbSlot0Base;
-        return r.addr >= base && end <= base + m.blit_span;
+        const bool in_lease = r.addr >= base && end <= base + m.blit_span;
+        // The BLIT writes only. ENGINE0 also READS its leased window: that is
+        // POST.COMPOSITE's "exclusive framebuffer read/write lease after resolve
+        // and before publication" (2026-09-19), carried by the render engine's
+        // own identity while it holds the lease.
+        if (r.client == BLIT_DMA) return r.write && in_lease;
+        return in_lease;
       }
       case ENGINE1:
         // RENDER.ASSET_POOL, ENGINE1 READ-only (spec/memory_rules.md 5f).

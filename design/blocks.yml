@@ -5267,35 +5267,56 @@ blocks:
     notes: Palette/grading tables are generated assets, never runtime-computed.
 
   - id: POST.ECHO
-    name: Frame echo (optional)
+    name: Frame echo
     kind: rtl
     subsystem: compositor
     clock_domain: gpu
-    purpose: Optional echo of the composited frame back to a capture buffer; first on the §26 cut list.
+    purpose: Echo the composited frame (post-ink, pre-HUD) into a capture buffer in local VRAM once per post pass; never stalls the compositor, drops whole 16-pixel chunks when starved, reports a capture only when it is whole.
     contract: design/contracts/POST.ECHO.md
     phase: 11
     owner_issue: ZH-071
-    inputs: [fb_tiles]
+    inputs: [echo_tap]
     outputs: [echo_frame]
     upstream: [POST.COMPOSITE]
     downstream: [MEM.GUARD]
-    backpressure: ready_valid
+    backpressure: none
     latency: variable
-    target_throughput: 1 echo pixel per clock
-    reference_model: zref::PostEcho
+    target_throughput: 1 echo pixel per clock accepted at peak; sustains RASTER.FBWRITE's 16 px / ~22 clocks
+    reference_model: zref::post::echo
     tests:
       directed: tests/compositor/post_echo_directed.cpp
-      random: tests/compositor/post_echo_random.cpp
+      random: tests/compositor/post_echo_directed.cpp
     counters: [vram_bytes_by_client]
     source_ids: true
     budget_group: twod_post
-    maturity: SPECIFIED
-    maturity_log: []
-    deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-19"
+        commit: "c4606721"
+        evidence: reference/include/zref/zref_post.hpp
+      - state: UNIT_VERIFIED
+        date: "2026-09-19"
+        commit: "c4606721"
+        evidence: tests/compositor/post_echo_directed.cpp
+    deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn. Ruling R7 (2026-09-19): BUILD it.
     cut_order: 1
     superseded_by: null
-    notes: cut_order 1 — the first thing to go if synthesis fails (§26).
-
+    notes: >-
+      BUILT 2026-09-19 under owner ruling R7 (fpga/rtl/compositor/zhao_post_echo.sv):
+      the contract was written first (it had been deliberately unwritten while
+      deferred), then zref::post::echo, then the RTL and a 33-check directed
+      bench differencing every written word against the address law. COMPOSED
+      on POST.COMPOSITE's echo tap inside the shell's zhao_post_lease, as one of
+      ENGINE0's three logical requesters; the tap is qualified by the
+      compositor's output handshake so a stalled beat is echoed once. Capture
+      window ZHAO_POST_ECHO_BASE 0x05C0_0000 (bank 2 reserved tail,
+      spec/memory_rules.md 5g), write-only and lease-gated in MEM.GUARD. The
+      console smoke compares the capture against the framebuffer word for word.
+      The random column names the directed bench because its starvation case
+      is PCG-driven over two seeds; there is no separate random bench, and the
+      contract says why. cut_order 1 -- the first thing to go if synthesis
+      fails (26).
   # ===========================================================================
   # DEBUG (fpga/rtl/debug)
   # ===========================================================================

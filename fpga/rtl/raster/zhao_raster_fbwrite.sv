@@ -210,12 +210,6 @@ module zhao_raster_fbwrite
 
   assign busy_o = (w_state_r != W_IDLE) || row_open_r;
 
-  // `guard_rsp_i.violation` is the guard's own pulse for its own counter; this
-  // block acts on `ok` and needs no second copy of the same fact. Sunk so the
-  // linter's "bits not used" is answered by a statement rather than a waiver.
-  logic rsp_violation_unused;
-  assign rsp_violation_unused = guard_rsp_i.violation;
-
   // ---- guard master --------------------------------------------------------
   // `valid` is a function of registers only, never of `guard_rsp_i.ready`.
   always_comb begin
@@ -331,7 +325,18 @@ module zhao_raster_fbwrite
             // Words, not bytes: the arbiter's credits are 16-bit words and
             // the two ledgers have to be in the same unit to balance.
             issued_words_o  <= issued_words_o + 32'({27'd0, out_n_r});
-          end else begin
+          end else if (guard_rsp_i.violation) begin
+            // WAIT FOR AN ANSWER, DO NOT READ SILENCE AS ONE (2026-09-19).
+            // This arm was a bare `else`, which is right only while the guard
+            // answers in EXACTLY one cycle. spec/memory_rules.md 5 promises
+            // "exactly one registered rsp.ok or rsp.violation pulse" -- not
+            // when -- and the first time this block sat behind a share
+            // (`zhao_mem_share_n`, whose verdict is its own A_VERD a cycle
+            // later again) every row read as REFUSED and the frame went fatal
+            // against a guard that had refused nothing. Straight onto the
+            // guard the verdict still lands in this state's first cycle, so the
+            // timing there is unchanged.
+            //
             // The guard REFUSED: the write is outside the leased region and
             // nothing was written. Dropping the row is still correct -- the
             // guard has counted and latched the violation, and a retry would
