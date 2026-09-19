@@ -42,7 +42,11 @@ module zhao_geom_assetfetch
     // bigger, and it will never silently truncate a footprint that does not fit.
     parameter int unsigned MAX_VERTICES  = 64,
     parameter int unsigned MAX_TRIANGLES = 126,
-    parameter int unsigned SRCW          = 16
+    parameter int unsigned SRCW          = 16,
+    // The DRAW'S OWN STATE, carried beside the meshlet exactly as the visible
+    // mask and material id already are (owner rulings R28/R29, packed by
+    // zref::drawjob). This block reads no bit of it.
+    parameter int unsigned SIDEW         = 72
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -63,6 +67,7 @@ module zhao_geom_assetfetch
     // the same argument that puts `m_src_id_i` on this port.
     input  var logic [1:0]        m_visible_mask_i,
     input  var logic [15:0]       m_material_id_i,
+    input  var logic [SIDEW-1:0]  m_side_i,
     // The memory-client identity, an input for the same reason MESHFETCH takes
     // one: no block invents which client it is.
     input  var zhao_client_e      m_client_i,
@@ -82,6 +87,7 @@ module zhao_geom_assetfetch
     output var logic [SRCW-1:0]   s_src_id_o,
     output var logic [1:0]        s_visible_mask_o,
     output var logic [15:0]       s_material_id_o,
+    output var logic [SIDEW-1:0]  s_side_o,
     // The consumer pulses this when it has finished walking the meshlet. It is
     // EXPLICIT rather than inferred from "all vertices streamed and the last
     // triplet asked for", because two consumers finish independently and a
@@ -192,6 +198,7 @@ module zhao_geom_assetfetch
   logic [SRCW-1:0] src_q;
   logic [1:0]      vis_q;    // carried: see m_visible_mask_i
   logic [15:0]     mat_q;    // carried: see m_material_id_i
+  logic [SIDEW-1:0] side_q;  // carried: the draw's state, see m_side_i
   zhao_client_e    client_q;
 
   // Absolute LINE-ALIGNED bases, and the byte each stream starts at inside its
@@ -447,6 +454,7 @@ module zhao_geom_assetfetch
   assign s_src_id_o         = src_q;
   assign s_visible_mask_o   = vis_q;
   assign s_material_id_o    = mat_q;
+  assign s_side_o           = side_q;
 
   // ------------------------------------------------------------- control ---
   always_ff @(posedge clk) begin
@@ -472,6 +480,7 @@ module zhao_geom_assetfetch
       src_q     <= '0;
       vis_q     <= '0;
       mat_q     <= '0;
+      side_q    <= '0;
       client_q  <= zhao_client_e'(0);
       ix_line0_q  <= '0;
       vx_line0_q  <= '0;
@@ -535,6 +544,7 @@ module zhao_geom_assetfetch
           src_q  <= m_src_id_i;
           vis_q  <= m_visible_mask_i;
           mat_q  <= m_material_id_i;
+      side_q <= m_side_i;
           client_q <= m_client_i;
 
           if (refuse_c) begin

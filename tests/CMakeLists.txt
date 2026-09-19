@@ -14274,3 +14274,35 @@ add_test(NAME lint_zhao_part_terrain_tap
 set_tests_properties(lint_zhao_part_terrain_tap PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ===========================================================================
+# GEOM.DRAWJOB -- one DrawForm becomes GEOM.MESHFETCH's jobs (owner ruling R29)
+# ===========================================================================
+# The resolver core entries I36 and I41 both named. It is differentiated
+# against `zref::drawjob`, which is R29's FREEZE of the layout -- the test asks
+# that header for the law rather than restating it. Every refusal ORDINAL is
+# compared, not just the verdict: each reason is its own counter.
+add_executable(test_geom_drawjob_directed geometry/geom_drawjob_directed.cpp)
+target_link_libraries(test_geom_drawjob_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_drawjob_directed
+  PREFIX Vzhao_geom_drawjob
+  TOP_MODULE zhao_geom_drawjob
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_desc_crc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_drawjob.sv)
+add_test(NAME geom_drawjob_directed COMMAND test_geom_drawjob_directed)
+set_tests_properties(geom_drawjob_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# -Wall, and warnings FATAL: `verilate()` does not pass -Wall.
+add_test(NAME lint_geom_drawjob
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_drawjob
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_desc_crc.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_drawjob.sv)
+set_tests_properties(lint_geom_drawjob PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

@@ -29,6 +29,7 @@
 #include "Vzhao_geom_meshfetch.h"
 
 #include "zhao_sim.hpp"
+#include "zref/zref_drawjob.hpp"
 #include "zref/zref_meshfetch.hpp"
 
 using MF = zref::MeshFetch;
@@ -88,6 +89,8 @@ struct Observed {
   uint8_t vcount = 0, tcount = 0;
   uint16_t material = 0;
   uint8_t vis = 0;
+  // R29: the draw's state, carried through beside the meshlet.
+  uint32_t side0 = 0, side1 = 0, side2 = 0;
 };
 
 // Drive one job to completion, playing the guard and the cull service.
@@ -95,8 +98,13 @@ struct Observed {
 // oracle's, so a block that presented the wrong sphere still gets the right
 // answer and the DIFFERENCE shows up in `Observed`, not in the verdict.
 Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x, uint8_t active,
-             const zc::Verdict& cull_verdict, bool crc_ok = true) {
+             const zc::Verdict& cull_verdict, bool crc_ok = true, uint32_t stream_base = 0,
+             uint32_t side0 = 0, uint32_t side1 = 0, uint32_t side2 = 0) {
   Observed o;
+  t.j_stream_base_i = stream_base;
+  t.j_side_i[0] = side0;
+  t.j_side_i[1] = side1;
+  t.j_side_i[2] = side2;
 
   t.j_valid_i = 1;
   t.j_instance_id_i = 0x1234;
@@ -190,6 +198,9 @@ Observed run(Vzhao_geom_meshfetch& t, const Desc& d, const MF::InstanceXform& x,
       o.tcount = t.r_triangle_count_o;
       o.material = t.r_material_id_o;
       o.vis = t.r_visible_mask_o;
+      o.side0 = t.r_side_o[0];
+      o.side1 = t.r_side_o[1];
+      o.side2 = t.r_side_o[2];
       done = true;
     }
 
@@ -401,6 +412,43 @@ int main(int argc, char** argv) {
                 1, 1);
   }
 
+  // ---- 5: R29 -- the page base is added ONCE, and the draw's state rides --
+  // The descriptor's offsets are PAGE-relative and GEOM.ASSETFETCH's are
+  // POOL-relative, so this block adds the page's base. Zero reproduces the
+  // pre-R29 behaviour exactly, which every case above still asserts.
+  {
+    Desc d;
+    zc::Verdict v{};
+    v.visible_mask = 0b01;
+    const uint32_t base = 0x0004'0000u;
+    const Observed o =
+        run(top, d, xform(ONE, ONE, ONE, 0), 0b01, v, true, base, 0xDEADBEEFu, 0xCAFEBA02u, 0x5Au);
+    zhao::check(o.emitted && o.vertex_offset == zref::drawjob::rebase(base, 0x1000) &&
+                    o.index_offset == zref::drawjob::rebase(base, 0x2000),
+                "the page base is added to BOTH offsets, once, as zref::drawjob::rebase does",
+                static_cast<long long>(zref::drawjob::rebase(base, 0x1000)),
+                static_cast<long long>(o.vertex_offset));
+    zhao::check(o.side0 == 0xDEADBEEFu && o.side1 == 0xCAFEBA02u && o.side2 == 0x5Au,
+                "and the draw's state arrives in the SAME handshake as the "
+                "meshlet -- there is no second path it could arrive on", 1, 1);
+  }
+
+  // ---- 6: the rebase SATURATES rather than wrapping -----------------------
+  // A wrapped sum is a small, legal-looking address inside another asset. A
+  // saturated one reaches GEOM.ASSETFETCH's pool-end refusal, which is counted
+  // and has a name.
+  {
+    Desc d;
+    zc::Verdict v{};
+    v.visible_mask = 0b01;
+    const uint32_t base = 0xFFFF'F000u;   // + the descriptor's 0x1000 = 2^32
+    const Observed o = run(top, d, xform(ONE, ONE, ONE, 0), 0b01, v, true, base);
+    zhao::check(o.emitted && o.vertex_offset == 0xFFFF'FFFFu &&
+                    o.vertex_offset == zref::drawjob::rebase(base, 0x1000),
+                "an offset that overflows 32 bits saturates, so it cannot alias "
+                "onto a legal address in somebody else's asset",
+                static_cast<long long>(o.vertex_offset), 0xFFFFFFFFll);
+  }
   std::printf("  %u considered, %u fetched, %u culled, %u guard-denied\n",
               top.meshlets_considered_o, top.descriptors_fetched_o, top.culled_all_cameras_o,
               top.guard_denied_o);
