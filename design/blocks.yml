@@ -4415,25 +4415,57 @@ blocks:
     latency: variable
     target_throughput: see contract
     reference_model: zref::material::resolve
+    implementation: fpga/rtl/texture/zhao_material_resolve.sv
     tests:
-      directed: "PLANNED -- NOT WRITTEN"
+      directed: tests/texture/material_resolve_rtl_directed.cpp
+      oracle: tests/texture/material_resolve_directed.cpp
+      bridge: tests/texture/material_resolve_combine_bridge.cpp
+      mutant_control: tests/texture/material_resolve_gen8tag_control.cpp
       random: "PLANNED -- NOT WRITTEN"
     counters: [material_hits, material_misses, material_refused]
     source_ids: true
     budget_group: tile
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: REFERENCE_COMPLETE
+        date: "2026-09-05"
+        evidence: reference/include/zref/zref_material_resolve.hpp + tests/texture/material_resolve_directed.cpp (32 checks)
+      - state: UNIT_VERIFIED
+        date: "2026-09-19"
+        evidence: >-
+          fpga/rtl/texture/zhao_material_resolve.sv, differenced against
+          zref::material::Resolver by tests/texture/material_resolve_rtl_directed.cpp
+          -- 91 checks, 0 failures. Every counter SEEN TO FIRE. Owner ruling
+          D-3's coherence case has a committed positive control,
+          tests/mutants/zhao_material_resolve_gen8tag_mutant.sv, whose
+          inverted-polarity driver passes on the stale hit an 8-bit tag returns.
     deferred: false
     cut_order: null
     superseded_by: null
+    blocked_on: >-
+      SLOT -> EXTENT. NOT the cartridge decision -- see notes.
+      spec/memory_rules.md 5f leaves the render asset pool's internal layout
+      undecided, and MEM.UPLOAD publishes {slot, generation, tag} with neither a
+      base address nor an extent nor a resource kind. So nothing can say WHERE a
+      published MATERIAL_SET lives. The block's dir_* and mem_* ports are real
+      and unproduced until that is ruled.
     notes: >-
-      BLOCKED ON A CARTRIDGE DECISION (audit R4): .zpak has no generic
-      texture-page or material-set kind while three subsystems assume one.
-      Recommendation A -- generic TEXTURE_PAGE + MATERIAL_SET + MESH_STREAM --
-      because only that lets MEM.UPLOAD be one general mover. A miss STALLS rather
-      than returning a default: there is no sensible default material, and a
-      guessed one draws the wrong surface confidently. Pairs with TEXTURE.COMBINE;
-      shipping the resolver alone makes the machine fetch samples nothing combines.
+      THE CARTRIDGE BLOCK (audit R4) IS DEAD AND WAS DEAD WHEN THIS ROW STILL
+      CITED IT -- corrected 2026-09-19. Owner ruling D-2 chose option A on
+      2026-09-03 and spec/cartridge.md 4a ALLOCATES the kinds: 10 TEXTURE_PAGE
+      (0x000E), 11 MATERIAL_SET (0x000F), 12 MESH_STREAM (0x0010).
+      spec/commands.zidl:220-262 froze the record on 2026-09-05 as
+      zhao_abi::ZhMaterialRecord, 32 B. Both tests read "PLANNED -- NOT WRITTEN"
+      while the oracle suite had been green for a fortnight. A refusal outlived
+      its cause by sixteen days; what the block actually waits on is in
+      blocked_on above, and it is a different ruling.
+      BUILT BUT NOT COMPOSED. zhao_console_core does not instantiate it, because
+      with no producer for the residency directory, composing would move the
+      boundary rather than close it -- core entry I20's tri_flat_request_i stays
+      a BOUNDARY. A miss STALLS rather than returning a default: there is no
+      sensible default material, and a guessed one draws the wrong surface
+      confidently. Pairs with TEXTURE.COMBINE, which is built and live; this
+      block is the producer of the sample_count and recipe that combiner reads.
   - id: TEXTURE.MOSAIC
     name: Terrain Mosaic selector
     kind: rtl

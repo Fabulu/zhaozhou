@@ -63,6 +63,24 @@ targets:
 
   # --- texture island -------------------------------------------------------
 
+  # Added 2026-09-19, packet MATRES. MATERIAL.RESOLVE, the lookup that turns
+  # {material_set, material_id, quality_tier} into a 32-byte MaterialRecord.
+  # A STANDALONE target and deliberately NOT in the zhao_console_core closure:
+  # the core does not instantiate it, because its residency directory has no
+  # producer until spec/memory_rules.md 5f rules slot -> extent, and a file in
+  # a source list that nothing elaborates is how a filename becomes "progress"
+  # (completion_register.py's own words).
+  #
+  # THE QUESTION THIS FIT ANSWERS, named in advance as the fit rule requires:
+  # does the record cache infer M10K or burn flops? LINES*RECW = 16 x 256 =
+  # 4,096 bits, which is one M10K if Quartus infers it and ~4,100 registers if
+  # it does not -- and the owner has ruled that spending M10K to save ALMs is
+  # the trade to make. Nothing else here needs a fit: correctness, the D-3 tag,
+  # the refusals and the handshake are all Verilator and answer in seconds.
+  - top: zhao_material_resolve
+    sources:
+      - fpga/rtl/texture/zhao_material_resolve.sv
+
   - top: zhao_texture_tmu_plan
     sources:
       - fpga/rtl/texture/zhao_texture_tmu_plan.sv

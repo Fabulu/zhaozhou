@@ -166,7 +166,10 @@ module tb_zhao_material_resolve #(
   // The control's unread outputs are declared and left open DELIBERATELY: what
   // this instance is evidence about is its STATUS and its refusal tally, and
   // binding the rest would suggest the two copies are compared field by field
-  // when only the verdict is at issue.
+  // when only the verdict is at issue. The waiver is scoped to this one
+  // instantiation and says which pins and why, rather than silencing the class
+  // for the file -- an open pin somewhere else here would be a mistake.
+  /* verilator lint_off PINCONNECTEMPTY */
   zhao_material_resolve #(
       .RECW(RECW), .BEATW(BEATW), .SETS(SETS), .LINES(LINES),
       .RECIPE_COUNT(RECIPE_COUNT_OLD), .GENW(GENW), .IDW(IDW), .CW(32)
@@ -195,6 +198,7 @@ module tb_zhao_material_resolve #(
       .refused_id_o(), .refused_record_o(b_refused_record_o),
       .not_resident_o(), .selector_overflow_o(), .recipe_count_mismatch_o()
   );
+  /* verilator lint_on PINCONNECTEMPTY */
 
 endmodule
 

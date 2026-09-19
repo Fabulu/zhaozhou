@@ -1,7 +1,7 @@
 # Contract — MATERIAL.RESOLVE (Material record resolution)
 
-> Ledger: `design/blocks.yml` · gpu clock · maturity SPECIFIED
-> RTL: not built
+> Ledger: `design/blocks.yml` · gpu clock · maturity UNIT_VERIFIED
+> RTL: `fpga/rtl/texture/zhao_material_resolve.sv` — **BUILT 2026-09-19**
 > Reference: `zref::material::resolve` — **WRITTEN 2026-09-05**, `reference/include/zref/zref_material_resolve.hpp`
 
 ## Purpose and exclusions
@@ -163,6 +163,92 @@ The coherence case is the one that matters: a republish at a new generation is
 followed by a resolve that MISSES and returns the new record, with **no flush
 performed**, because D-3's tag is what makes the old line structurally
 unmatchable and a flush would hide a tag bug rather than prevent one.
+
+## The RTL, and the one ruling it waits on
+
+**BUILT 2026-09-19** -- `fpga/rtl/texture/zhao_material_resolve.sv`, enforced by
+`tests/texture/material_resolve_rtl_directed.cpp` (91 checks, differenced
+against the oracle rather than restating it).
+
+**THE CARTRIDGE QUESTION ABOVE WAS RULED ON 2026-09-03 AND THE LEDGER WENT ON
+CITING IT AS A BLOCKER UNTIL 2026-09-19.** This file said `RULED: A` in its own
+section above; `design/blocks.yml` said "BLOCKED ON A CARTRIDGE DECISION
+(audit R4)" and recorded both tests as "PLANNED -- NOT WRITTEN" while the oracle
+suite had been green for a fortnight. A contract and its ledger row disagreed
+for sixteen days and nothing compared them.
+
+**What the block actually waits on is SLOT -> EXTENT**, and it is a different
+ruling from R4:
+
+* the Memory ownership section above says records are read "from **local
+  SDRAM**, in a region owned by the render resource arena and uploaded through
+  `MEM.UPLOAD` like every other immutable asset". Both halves of that are true
+  and neither yields an ADDRESS.
+* `spec/memory_rules.md` 5f, under "It is a knob, and what is NOT decided
+  here", leaves open "the pool's internal layout (descriptors vs index streams
+  vs vertex records)". So no law turns a handle's 24-bit index into a base
+  inside `RENDER.ASSET_POOL`.
+* `MEM.UPLOAD`'s publication is `{publish_slot_o[7:0],
+  publish_generation_o[15:0], publish_tag_o[7:0]}` -- a slot and a generation,
+  carrying **neither a base address, nor an extent, nor a resource kind**.
+* `spec/commands.zidl` has no command that publishes a material set; by D-2's
+  design the route is the generic `.zpak` resource path.
+
+**The ruling needed, stated so it can be made:** *for a resource kind published
+by `MEM.UPLOAD`, what maps `{kind, handle index}` to `{base, extent}` in
+local SDRAM?* One sentence in 5f plus two fields on that publication closes it.
+
+Until then the block's `dir_*` (residency directory write) and `mem_*`
+(record fetch) ports are **real ports driven by nobody** -- the standing
+`zhao_console_core` entry I39 gives GEOM.ASSEMBLE's descriptor fields. It is
+therefore **not composed**: composing it would move core entry I20's
+`tri_flat_request_i` boundary rather than close it, and a zero flat request is
+a LEGAL profile, so a composer inventing plausible constants would produce a
+picture and prove nothing.
+
+### Three fields this contract implied were ours and are NOT
+
+Found while writing the projection, against `zhao_render_texture_pkg.sv` and
+`zhao_texture_binding_resolver_v2.sv`. `zhao_console_core` entry I20 said
+"Every one of those fields is MATERIAL.RESOLVE's output"; that is too strong:
+
+* `palette_slot`, `palette_generation` and `response_class` belong to the
+  **binding page**. The binding resolver holds them in `binding_row_t` and
+  takes the request's copies as **witnesses it checks**
+  (`witness_mismatch_o`). A resolver that emitted them would manufacture that
+  mismatch. This contract's record does carry `palette_base`, which is a
+  different thing -- the CLUT's address, not the slot.
+* `lod_q4_4` is excluded by this contract's own Purpose and exclusions
+  section ("No LOD selection. It returns the mip policy; the sampler picks the
+  level").
+* `base_rgb`/`base_alpha` are vertex colour and the 224-bit
+  `aux_surface_ctx` is terrain world context; zero is their legal non-terrain
+  value.
+
+### A narrowing the frozen layout contains, and the consumer already expects
+
+`MaterialSample.binding_slot` is **u16**; the flat request's
+`base_binding_selector` is **u8**. The RTL detects and counts the overflow on
+`rsp_selector_overflow_o` rather than truncating, because the binding resolver
+already has `req_selector_overflow_i` waiting for it. A silent truncation
+would name binding 0 for slot 256 and sample the wrong page with every gate
+green.
+
+### `count_legal` is deliberately not implemented here
+
+The recipe/count pairing is the **combiner's** law and it refuses and counts it.
+Implementing it here would be two implementations of one rule. It is OBSERVED
+without refusing, on `recipe_count_mismatch_o`.
+
+### Owner ruling D-3 has a committed positive control
+
+D-3's tag is a STRUCTURAL property -- the stale line is "structurally unable to
+match" -- not a guarded state with a counter, so no legal stimulus can make the
+shipping resolver fail its coherence case.
+`tests/mutants/zhao_material_resolve_gen8tag_mutant.sv` narrows the tag to the
+low 8 bits of the generation, which is the width a `handle32` carries and
+exactly what a reader who stopped at `{index:24, generation:8}` would write.
+Its driver has inverted polarity and passes on the stale hit. It does.
 
 ## Randomized differential tests
 
