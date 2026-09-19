@@ -1,4 +1,4 @@
-// zhao_geom_mem_adapter.sv -- two logical geometry requesters, one ENGINE1 client.
+// zhao_geom_mem_adapter.sv -- three logical ENGINE1 readers, one ENGINE1 client.
 //
 // Law: reports/COMBINE-ASSETFETCH-RECOVERY-20260906.txt 12
 //      spec/memory_rules.md 5f (the asset pool window, ENGINE1, read-only)
@@ -28,7 +28,11 @@
 // (`tools/rtl/check_guard_verdict.py`) that exists precisely because it WAS got
 // wrong, twice, in two clients that had each written it out separately.
 //
-// PORTS, DEFAULTS AND BEHAVIOUR ARE UNCHANGED. `tests/geometry/
+// (2026-09-19: requester C and `jobs_c_o` were ADDED for MATERIAL.RESOLVE;
+// A's and B's ports and counters kept their names, and the directed test
+// below runs against the widened adapter with C held idle.)
+//
+// PORTS, DEFAULTS AND BEHAVIOUR WERE UNCHANGED BY THE MOVE. `tests/geometry/
 // geom_mem_adapter_directed.cpp` is untouched and is the evidence for that:
 // the module name, every port name and width, and every counter are the same,
 // so a passing run of that test after the move is a statement about the move.
@@ -61,6 +65,21 @@ module zhao_geom_mem_adapter
     output var logic [63:0]     b_beat_data_o,
     output var logic            b_beat_last_o,
 
+    // ---- requester C: MATERIAL.RESOLVE, one record (32 bytes) -------------
+    // ADDED 2026-09-19 (cmdmem packet, ruling R20). `spec/memory_rules.md` 5f
+    // already says it: "immutable texture-line reads [are serialized] with the
+    // existing geometry adapter behind one local ENGINE1 mux, preserving the
+    // same client, direction, bounds and global arbiter slot". A material
+    // record is exactly such a read, so it joins HERE rather than getting a
+    // second ENGINE1 path. The guard's ENGINE1 arm still admits
+    // RENDER.ASSET_POOL reads and nothing else, so this requester can read
+    // nothing the other two could not.
+    input  var zhao_guard_req_t c_req_i,
+    output var zhao_guard_rsp_t c_rsp_o,
+    output var logic            c_beat_valid_o,
+    output var logic [63:0]     c_beat_data_o,
+    output var logic            c_beat_last_o,
+
     // ---- the one permitted client, downstream to MEM.GUARD ----------------
     output var zhao_guard_req_t m_req_o,
     input  var zhao_guard_rsp_t m_rsp_i,
@@ -71,7 +90,8 @@ module zhao_geom_mem_adapter
     // ---- evidence ---------------------------------------------------------
     output var logic [31:0]     jobs_a_o,          // logical requests served, A
     output var logic [31:0]     jobs_b_o,          // ...and B
-    output var logic [31:0]     denied_o,          // guard violations, either
+    output var logic [31:0]     jobs_c_o,          // ...and C
+    output var logic [31:0]     denied_o,          // guard violations, any
     output var logic [31:0]     contention_o,
     output var logic [31:0]     err_short_o,
     output var logic [31:0]     err_long_o,
@@ -81,24 +101,50 @@ module zhao_geom_mem_adapter
   // THE TRUSTED FIXED IDENTITY (11.2), stated here and forced inside the
   // share: a leaf test's generic client input must never be able to reach the
   // production guard through this path.
-  zhao_mem_share2 #(
+  //
+  // THE N-REQUESTER CORE (902949ea), at N=3 since requester C landed. Its
+  // round robin is bounded at N-1 turns, so C's addition lengthens A's and B's
+  // worst-case wait by at most one 32-byte record -- and it is the SAME core the
+  // two-port `zhao_mem_share2` instantiates, so nothing about the guard's
+  // two-cycle verdict law is re-derived here.
+  zhao_guard_req_t [2:0] s_req;
+  zhao_guard_rsp_t [2:0] s_rsp;
+  logic            [2:0] s_bv, s_bl;
+  logic           [63:0] s_bd;
+  logic      [2:0][31:0] s_jobs;
+
+  assign s_req[0] = a_req_i;
+  assign s_req[1] = b_req_i;
+  assign s_req[2] = c_req_i;
+  assign a_rsp_o = s_rsp[0];
+  assign b_rsp_o = s_rsp[1];
+  assign c_rsp_o = s_rsp[2];
+  assign a_beat_valid_o = s_bv[0];
+  assign b_beat_valid_o = s_bv[1];
+  assign c_beat_valid_o = s_bv[2];
+  assign a_beat_last_o  = s_bl[0];
+  assign b_beat_last_o  = s_bl[1];
+  assign c_beat_last_o  = s_bl[2];
+  assign a_beat_data_o  = s_bd;   // ONE bus; valid routes it
+  assign b_beat_data_o  = s_bd;
+  assign c_beat_data_o  = s_bd;
+  assign jobs_a_o = s_jobs[0];
+  assign jobs_b_o = s_jobs[1];
+  assign jobs_c_o = s_jobs[2];
+
+  zhao_mem_share_n #(
+    .N         (3),
     .CLIENT_ID (3),          // ZHAO_CLIENT_ENGINE1 -- see zhao_pkg
     .FORCE_READ(1'b1)        // the asset window is READ-ONLY by construction
   ) u_share (
     .clk  (clk),
     .rst_n(rst_n),
 
-    .a_req_i       (a_req_i),
-    .a_rsp_o       (a_rsp_o),
-    .a_beat_valid_o(a_beat_valid_o),
-    .a_beat_data_o (a_beat_data_o),
-    .a_beat_last_o (a_beat_last_o),
-
-    .b_req_i       (b_req_i),
-    .b_rsp_o       (b_rsp_o),
-    .b_beat_valid_o(b_beat_valid_o),
-    .b_beat_data_o (b_beat_data_o),
-    .b_beat_last_o (b_beat_last_o),
+    .req_i       (s_req),
+    .rsp_o       (s_rsp),
+    .beat_valid_o(s_bv),
+    .beat_data_o (s_bd),
+    .beat_last_o (s_bl),
 
     .m_req_o       (m_req_o),
     .m_rsp_i       (m_rsp_i),
@@ -106,15 +152,13 @@ module zhao_geom_mem_adapter
     .m_beat_data_i (m_beat_data_i),
     .m_beat_last_i (m_beat_last_i),
 
-    .jobs_a_o     (jobs_a_o),
-    .jobs_b_o     (jobs_b_o),
+    .jobs_o       (s_jobs),
     .denied_o     (denied_o),
     .contention_o (contention_o),
     .err_short_o  (err_short_o),
     .err_long_o   (err_long_o),
     .err_unowned_o(err_unowned_o)
   );
-
 endmodule
 
 `default_nettype wire

@@ -84,6 +84,7 @@ module tb_zhao_material_resolve #(
     input  logic             mem_req_ready_i,
     input  logic             mem_rsp_valid_i,
     input  logic [BEATW-1:0] mem_rsp_data_i,
+    input  logic             mem_rsp_denied_i,   // R20: the guard refused the fetch
     input  logic             rsp_ready_i,
 
     // ---- A: the shipping resolver -------------------------------------------
@@ -114,6 +115,7 @@ module tb_zhao_material_resolve #(
     output logic [31:0]      a_not_resident_o,
     output logic [31:0]      a_selector_overflow_o,
     output logic [31:0]      a_recipe_count_mismatch_o,
+    output logic [31:0]      a_fetch_denied_o,
 
     // ---- B: the 2026-09-05 ceiling, kept because it REFUSES -----------------
     output logic             b_req_ready_o,
@@ -139,6 +141,7 @@ module tb_zhao_material_resolve #(
       .mem_req_valid_o(a_mem_req_valid_o), .mem_req_ready_i(mem_req_ready_i),
       .mem_req_addr_o(a_mem_req_addr_o),
       .mem_rsp_valid_i(mem_rsp_valid_i), .mem_rsp_data_i(mem_rsp_data_i),
+      .mem_rsp_denied_i(mem_rsp_denied_i),
       .rsp_valid_o(a_rsp_valid_o), .rsp_ready_i(rsp_ready_i),
       .rsp_status_o(a_rsp_status_o), .rsp_has_record_o(a_rsp_has_record_o),
       .rsp_record_o(a_rsp_record_o), .rsp_quality_tier_o(a_rsp_quality_tier_o),
@@ -160,7 +163,8 @@ module tb_zhao_material_resolve #(
       .refused_record_o(a_refused_record_o),
       .not_resident_o(a_not_resident_o),
       .selector_overflow_o(a_selector_overflow_o),
-      .recipe_count_mismatch_o(a_recipe_count_mismatch_o)
+      .recipe_count_mismatch_o(a_recipe_count_mismatch_o),
+      .fetch_denied_o(a_fetch_denied_o)
   );
 
   // The control's unread outputs are declared and left open DELIBERATELY: what
@@ -185,6 +189,7 @@ module tb_zhao_material_resolve #(
       .mem_req_valid_o(), .mem_req_ready_i(mem_req_ready_i),
       .mem_req_addr_o(),
       .mem_rsp_valid_i(mem_rsp_valid_i), .mem_rsp_data_i(mem_rsp_data_i),
+      .mem_rsp_denied_i(mem_rsp_denied_i),
       .rsp_valid_o(b_rsp_valid_o), .rsp_ready_i(rsp_ready_i),
       .rsp_status_o(b_rsp_status_o), .rsp_has_record_o(b_rsp_has_record_o),
       .rsp_record_o(), .rsp_quality_tier_o(),
@@ -196,7 +201,8 @@ module tb_zhao_material_resolve #(
       .material_hits_o(), .material_misses_o(b_material_misses_o),
       .material_refused_o(),
       .refused_id_o(), .refused_record_o(b_refused_record_o),
-      .not_resident_o(), .selector_overflow_o(), .recipe_count_mismatch_o()
+      .not_resident_o(), .selector_overflow_o(), .recipe_count_mismatch_o(),
+      .fetch_denied_o()
   );
   /* verilator lint_on PINCONNECTEMPTY */
 

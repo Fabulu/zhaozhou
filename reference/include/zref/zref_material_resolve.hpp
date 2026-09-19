@@ -60,6 +60,11 @@ enum class Status : uint8_t {
   kRefusedId = 2,      // material_id past the set's count
   kRefusedRecord = 3,  // the stored record is malformed (sample_count > 3)
   kNotResident = 4,    // the material_set handle names no resident table
+  // The record fetch was DENIED by memory (MEM.GUARD refused the read), so no
+  // bytes will ever come. Added 2026-09-19 by coordinator ruling R20: a denied
+  // fetch resolves to this defined fault and is counted -- it NEVER hangs and
+  // it is never cached.
+  kFetchDenied = 5,
 };
 
 struct Request {
@@ -89,6 +94,7 @@ struct ResolveLedger {
   uint32_t refused_id = 0;
   uint32_t refused_record = 0;
   uint32_t not_resident = 0;
+  uint32_t fetch_denied = 0;
 };
 
 // A resident material table: an immutable, indexed set of records plus the
@@ -191,7 +197,10 @@ class Resolver {
     return nullptr;
   }
 
-  Result resolve(const Request& q, ResolveLedger* L = nullptr) {
+  // `fetch_denied` models the memory answering the MISS path's record fetch
+  // with a refusal (R20). It is consulted only where a fetch would happen: a
+  // hit, a refusal and a residency fault never fetch, so they are unaffected.
+  Result resolve(const Request& q, ResolveLedger* L = nullptr, bool fetch_denied = false) {
     Result out;
     const Table* t = find(q.material_set);
     if (t == nullptr) {
@@ -216,6 +225,12 @@ class Resolver {
       out.has_record = true;
       if (L) L->hits++;
       return out;
+    }
+
+    if (fetch_denied) {
+      out.status = Status::kFetchDenied;
+      if (L) L->fetch_denied++;
+      return out;  // no bytes arrived: nothing to judge, nothing to cache
     }
 
     const zhao_abi::ZhMaterialRecord& r = t->records[q.material_id];

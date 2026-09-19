@@ -648,7 +648,25 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_hps_c1_wait_cycles_o;
 
   // ---- MEM.UPLOAD on the TERRAIN.BUILD socket (2026-09-19, cmdmem) --------
-  logic [31:0]             cmd_exec_uploads_o;
+  // ---- MATERIAL.RESOLVE (R20): directory + fetch internal, request at I48 --
+  logic         mat_req_valid_i, mat_req_ready_o;
+  logic [31:0]  mat_req_material_set_i;
+  logic [15:0]  mat_req_material_id_i;
+  logic [ 7:0]  mat_req_quality_tier_i;
+  logic         mat_rsp_valid_o, mat_rsp_ready_i;
+  logic [ 2:0]  mat_rsp_status_o;
+  logic         mat_rsp_has_record_o;
+  logic [255:0] mat_rsp_record_o;
+  logic [ 7:0]  mat_rsp_quality_tier_o;
+  logic [ 1:0]  mat_rsp_sample_count_o;
+  logic [ 2:0]  mat_rsp_material_recipe_o;
+  logic [ 7:0]  mat_rsp_recipe_weight_o, mat_rsp_base_binding_o;
+  logic         mat_rsp_selector_overflow_o;
+  logic [31:0]  mat_rsp_palette_base_o, mat_rsp_raster_state_o;
+  logic [ 7:0]  mat_rsp_flags_o, mat_rsp_sample0_modes_o, mat_rsp_sample1_modes_o, mat_rsp_sample2_modes_o;
+  logic [31:0]  mat_hits_o, mat_misses_o, mat_refused_o, mat_refused_id_o, mat_refused_record_o;
+  logic [31:0]  mat_not_resident_o, mat_selector_overflow_o, mat_recipe_count_mismatch_o, mat_fetch_denied_o;
+  logic [31:0]  geom_ma_jobs_c_o;  logic [31:0]             cmd_exec_uploads_o;
   logic [31:0]             cmd_exec_upload_overflow_o;
   logic [31:0]             upl_cfg_region_base_i;
   logic [31:0]             upl_cfg_region_bytes_i;
@@ -1784,7 +1802,9 @@ module tb_zhao_console_core_smoke
   // published row against it.
   localparam logic [23:0] UPL_INDEX_C   = 24'h00_ABCD;
   localparam logic [ 7:0] UPL_KIND_C    = 8'd11;            // spec/cartridge.md 4a: MATERIAL_SET
-  localparam logic [ 7:0] UPL_SLOT_C    = 8'd5;
+  // Slot 1: MATERIAL.RESOLVE's directory has SETS = 4 entries and the arena
+  // slot IS the entry, so a MATERIAL_SET must land in slot 0..3 to be found.
+  localparam logic [ 7:0] UPL_SLOT_C    = 8'd1;
   localparam logic [15:0] UPL_GEN_C     = 16'h0102;
   localparam logic [15:0] UPL_EPOCH_C   = 16'd9;
   logic [63:0] upl_mem [0:UPL_WORDS_C-1];
@@ -1923,6 +1943,40 @@ module tb_zhao_console_core_smoke
         upl_pub_index_q  <= upl_publish_index_o;
         upl_pub_base_q   <= upl_publish_base_o;
         upl_pub_extent_q <= upl_publish_extent_o;
+      end
+    end
+  end
+  // ---- ONE MATERIAL RESOLVE, once the MATERIAL_SET has been published -------
+  // Request = the handle the PublishResource named ({index, low 8 bits of the
+  // new residency generation}) and material 0. Its REQUEST is a boundary
+  // (I48); what is real is the DIRECTORY it hits (MEM.UPLOAD's publication)
+  // and the FETCH it issues (requester C, the real MEM.GUARD).
+  logic         mat_fired_q;
+  int unsigned  mat_rsp_seen_q;
+  logic [2:0]   mat_status_seen_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      mat_req_valid_i        <= 1'b0;
+      mat_req_material_set_i <= '0;
+      mat_req_material_id_i  <= '0;
+      mat_req_quality_tier_i <= '0;
+      mat_rsp_ready_i        <= 1'b1;
+      mat_fired_q            <= 1'b0;
+      mat_rsp_seen_q         <= 0;
+      mat_status_seen_q      <= 3'd7;
+    end else begin
+      if ((upl_pub_seen_q != 0) && !mat_fired_q && !mat_req_valid_i) begin
+        mat_req_valid_i        <= 1'b1;
+        mat_req_material_set_i <= {UPL_INDEX_C, UPL_GEN_C[7:0]};
+        mat_req_material_id_i  <= 16'd0;
+      end
+      if (mat_req_valid_i && mat_req_ready_o) begin
+        mat_req_valid_i <= 1'b0;
+        mat_fired_q     <= 1'b1;
+      end
+      if (mat_rsp_valid_o && mat_rsp_ready_i) begin
+        mat_rsp_seen_q    <= mat_rsp_seen_q + 1;
+        mat_status_seen_q <= mat_rsp_status_o;
       end
     end
   end
@@ -3214,7 +3268,7 @@ module tb_zhao_console_core_smoke
       bf.frame_id = 32'd1;
       pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
       pr.h_source_id    = 32'd77;
-      pr.resource       = {8'h2A, UPL_INDEX_C};              // {generation, index}
+      pr.resource       = {UPL_INDEX_C, 8'h2A};              // {index:24, generation:8}, index HIGH
       pr.hps_addr_lo    = UPL_ARENA_C;
       pr.hps_addr_hi    = 32'd0;
       pr.vram_dst       = UPL_REGION_C;
@@ -4498,6 +4552,24 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the shell's write-queue (%b) or routing (%b) tripwire fired with the slot-6 socket live",
              shell_err_wfifo_o, shell_err_route_o);
 
+    // ---- MATERIAL.RESOLVE (R20): the directory HITS and the guard DENIES ----
+    // The published MATERIAL_SET is found (not NOT_RESIDENT): the directory is
+    // MEM.UPLOAD's publication. Its record fetch then goes to the REAL
+    // MEM.GUARD as ENGINE1 -- and is DENIED, because the bytes sit in
+    // TERRAIN.PAGE_POOL (the only window TERRAIN_BUILD may write) and ENGINE1
+    // may read only RENDER.ASSET_POOL. This is the owner decision the core's
+    // I48 entry names, shown end to end, and it resolves to kFetchDenied
+    // rather than hanging -- which is R20.
+    $display("SMOKE: material  responses=%0d status=%0d hits=%0d misses=%0d not_resident=%0d fetch_denied=%0d adapter_jobs_c=%0d adapter_denied=%0d",
+             mat_rsp_seen_q, mat_status_seen_q, mat_hits_o, mat_misses_o, mat_not_resident_o,
+             mat_fetch_denied_o, geom_ma_jobs_c_o, geom_ma_denied_o);
+    if (mat_rsp_seen_q != 1)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE answered %0d time(s) to one request -- a denied fetch must be ANSWERED, never waited on", mat_rsp_seen_q);
+    if (mat_not_resident_o != 0)
+      $fatal(1, "SMOKE: the published MATERIAL_SET was NOT RESIDENT -- MEM.UPLOAD's publication did not reach the directory");
+    if (mat_status_seen_q != 3'd5 || mat_fetch_denied_o != 32'd1)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE status %0d, fetch_denied %0d -- expected kFetchDenied (5) once: the guard admits ENGINE1 to RENDER.ASSET_POOL only, and this record sits in TERRAIN.PAGE_POOL",
+             mat_status_seen_q, mat_fetch_denied_o);
     // ---- DEBUG.TRACE against its producer (core entry I45) ----------------
     // The composition check the ring's contract asks for, and it is an
     // EQUALITY on purpose. `cmd_commands_o` is CMD.DECODER's own count of

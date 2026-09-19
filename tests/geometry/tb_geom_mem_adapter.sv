@@ -100,6 +100,7 @@ module tb_geom_mem_adapter
   assign m_client = mreq.client;
   assign m_write  = mreq.write;
 
+  /* verilator lint_off PINCONNECTEMPTY */
   zhao_geom_mem_adapter u_dut (
       .clk(clk), .rst_n(rst_n),
       .a_req_i(areq), .a_rsp_o(arsp),
@@ -108,12 +109,17 @@ module tb_geom_mem_adapter
       .b_req_i(breq), .b_rsp_o(brsp),
       .b_beat_valid_o(b_beat_valid), .b_beat_data_o(b_beat_data),
       .b_beat_last_o(b_beat_last),
+      // Requester C (MATERIAL.RESOLVE, 2026-09-19) held IDLE: this bench is the
+      // evidence that A and B behave exactly as before the widening.
+      .c_req_i('0), .c_rsp_o(), .c_beat_valid_o(), .c_beat_data_o(),
+      .c_beat_last_o(),
       .m_req_o(mreq), .m_rsp_i(mrsp),
       .m_beat_valid_i(m_beat_valid), .m_beat_data_i(m_beat_data),
       .m_beat_last_i(m_beat_last),
-      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .denied_o(denied),
+      .jobs_a_o(jobs_a), .jobs_b_o(jobs_b), .jobs_c_o(), .denied_o(denied),
       .contention_o(contention),
       .err_short_o(err_short), .err_long_o(err_long), .err_unowned_o(err_unowned)
   );
+  /* verilator lint_on PINCONNECTEMPTY */
 
 endmodule

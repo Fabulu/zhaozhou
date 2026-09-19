@@ -1058,11 +1058,18 @@ module zhao_prod_top (
   logic [1-1:0] u16_b_beat_valid_o;
   logic [64-1:0] u16_b_beat_data_o;
   logic [1-1:0] u16_b_beat_last_o;
+  zhao_guard_req_t u16_c_req_i;
+  assign u16_c_req_i = zhao_guard_req_t'(u16_src[14 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u16_c_rsp_o;
+  logic [1-1:0] u16_c_beat_valid_o;
+  logic [64-1:0] u16_c_beat_data_o;
+  logic [1-1:0] u16_c_beat_last_o;
   zhao_guard_req_t u16_m_req_o;
   zhao_guard_rsp_t u16_m_rsp_i;
-  assign u16_m_rsp_i = zhao_guard_rsp_t'(u16_src[14 +: $bits(zhao_guard_rsp_t)]);
+  assign u16_m_rsp_i = zhao_guard_rsp_t'(u16_src[21 +: $bits(zhao_guard_rsp_t)]);
   logic [32-1:0] u16_jobs_a_o;
   logic [32-1:0] u16_jobs_b_o;
+  logic [32-1:0] u16_jobs_c_o;
   logic [32-1:0] u16_denied_o;
   logic [32-1:0] u16_contention_o;
   logic [32-1:0] u16_err_short_o;
@@ -1081,13 +1088,19 @@ module zhao_prod_top (
       .b_beat_valid_o(u16_b_beat_valid_o),
       .b_beat_data_o(u16_b_beat_data_o),
       .b_beat_last_o(u16_b_beat_last_o),
+      .c_req_i(u16_c_req_i),
+      .c_rsp_o(u16_c_rsp_o),
+      .c_beat_valid_o(u16_c_beat_valid_o),
+      .c_beat_data_o(u16_c_beat_data_o),
+      .c_beat_last_o(u16_c_beat_last_o),
       .m_req_o(u16_m_req_o),
       .m_rsp_i(u16_m_rsp_i),
-      .m_beat_valid_i(u16_src[21 +: 1]),
-      .m_beat_data_i(u16_src[28 +: 64]),
-      .m_beat_last_i(u16_src[35 +: 1]),
+      .m_beat_valid_i(u16_src[28 +: 1]),
+      .m_beat_data_i(u16_src[35 +: 64]),
+      .m_beat_last_i(u16_src[42 +: 1]),
       .jobs_a_o(u16_jobs_a_o),
       .jobs_b_o(u16_jobs_b_o),
+      .jobs_c_o(u16_jobs_c_o),
       .denied_o(u16_denied_o),
       .contention_o(u16_contention_o),
       .err_short_o(u16_err_short_o),
@@ -1097,7 +1110,7 @@ module zhao_prod_top (
   logic u16_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u16_fold_q <= 1'b0;
-    else u16_fold_q <= u16_fold_q ^ (((^u16_a_rsp_o)) & u16_src[0]) ^ (((^u16_a_beat_valid_o)) & u16_src[1]) ^ (((^u16_a_beat_data_o)) & u16_src[2]) ^ (((^u16_a_beat_last_o)) & u16_src[3]) ^ (((^u16_b_rsp_o)) & u16_src[4]) ^ (((^u16_b_beat_valid_o)) & u16_src[5]) ^ (((^u16_b_beat_data_o)) & u16_src[6]) ^ (((^u16_b_beat_last_o)) & u16_src[7]) ^ (((^u16_m_req_o)) & u16_src[8]) ^ (((^u16_jobs_a_o)) & u16_src[9]) ^ (((^u16_jobs_b_o)) & u16_src[10]) ^ (((^u16_denied_o)) & u16_src[11]) ^ (((^u16_contention_o)) & u16_src[12]) ^ (((^u16_err_short_o)) & u16_src[13]) ^ (((^u16_err_long_o)) & u16_src[14]) ^ (((^u16_err_unowned_o)) & u16_src[15]);
+    else u16_fold_q <= u16_fold_q ^ (((^u16_a_rsp_o)) & u16_src[0]) ^ (((^u16_a_beat_valid_o)) & u16_src[1]) ^ (((^u16_a_beat_data_o)) & u16_src[2]) ^ (((^u16_a_beat_last_o)) & u16_src[3]) ^ (((^u16_b_rsp_o)) & u16_src[4]) ^ (((^u16_b_beat_valid_o)) & u16_src[5]) ^ (((^u16_b_beat_data_o)) & u16_src[6]) ^ (((^u16_b_beat_last_o)) & u16_src[7]) ^ (((^u16_c_rsp_o)) & u16_src[8]) ^ (((^u16_c_beat_valid_o)) & u16_src[9]) ^ (((^u16_c_beat_data_o)) & u16_src[10]) ^ (((^u16_c_beat_last_o)) & u16_src[11]) ^ (((^u16_m_req_o)) & u16_src[12]) ^ (((^u16_jobs_a_o)) & u16_src[13]) ^ (((^u16_jobs_b_o)) & u16_src[14]) ^ (((^u16_jobs_c_o)) & u16_src[15]) ^ (((^u16_denied_o)) & u16_src[16]) ^ (((^u16_contention_o)) & u16_src[17]) ^ (((^u16_err_short_o)) & u16_src[18]) ^ (((^u16_err_long_o)) & u16_src[19]) ^ (((^u16_err_unowned_o)) & u16_src[20]);
 
   // ---- zhao_geom_meshfetch ----
   logic [63:0] u17_lfsr_q;

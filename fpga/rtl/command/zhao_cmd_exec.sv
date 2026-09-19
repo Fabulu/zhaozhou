@@ -194,11 +194,11 @@
 //
 // PublishResource 0x0030 -- ADDED 2026-09-19 by owner ruling R17. Every field
 // is one of MEM.UPLOAD's request fields and is carried whole:
-//   CARRIED   resource[23:0] (5f.1's directory key), hps_addr_lo/hi (64 bits,
+//   CARRIED   resource[31:8] (5f.1's directory key), hps_addr_lo/hi (64 bits,
 //             so MEM.UPLOAD can REFUSE an unreachable source rather than this
 //             block narrowing it), vram_dst, length, crc32c, new_generation,
 //             epoch, dst_slot, kind (-> MEM.UPLOAD's req_tag_i).
-//   NOT       resource[31:24], the handle's generation byte: MEM.UPLOAD's
+//   NOT       resource[7:0], the handle's generation byte: MEM.UPLOAD's
 //             generation is the 16-bit RESIDENCY one and nothing in the upload
 //             path consumes the handle's. Sunk visibly, see `pq_handle_gen_unused`.
 //   NOT       the header's source_id: MEM.UPLOAD has no attribution port.
@@ -391,7 +391,7 @@ module zhao_cmd_exec
     // path consumes it. Carrying it to nothing would be a wire, not a check.
     output logic        upl_valid_o,
     input  logic        upl_ready_i,
-    output logic [23:0] upl_index_o,      // handle32 index: 5f.1's directory key
+    output logic [23:0] upl_index_o,      // handle32[31:8]: 5f.1's directory key
     output logic [ 7:0] upl_kind_o,       // .zpak kind -> MEM.UPLOAD req_tag_i
     output logic [63:0] upl_hps_addr_o,
     output logic [31:0] upl_vram_addr_o,
@@ -675,7 +675,13 @@ module zhao_cmd_exec
   logic [UPL_W-1:0] pq_head;
   assign pq_head         = pq[pq_rp[PQW-1:0]];
   assign upl_valid_o     = (pq_occ != '0);
-  assign upl_index_o     = pq_head[UQ_RES_LO   +: 24];
+  // handle32 is {index:24, generation:8} with the INDEX HIGH -- [31:8] -- the
+  // packing zcon::detail::handle32, zref::material::Resolver::find and
+  // zhao_material_resolve's eq_set_index_c all use. The first version of
+  // this line took [23:0], and its bench packed the handle the same wrong way,
+  // so the round trip agreed with itself; the smoke's MATERIAL_SET would have
+  // been published under a key no resolver looks up.
+  assign upl_index_o     = pq_head[UQ_RES_LO + 8 +: 24];
   assign upl_kind_o      = pq_head[UQ_KIND_LO  +: 8];
   assign upl_hps_addr_o  = {pq_head[UQ_HHI_LO +: 32], pq_head[UQ_HLO_LO +: 32]};
   assign upl_vram_addr_o = pq_head[UQ_VRAM_LO  +: 32];
@@ -684,10 +690,10 @@ module zhao_cmd_exec
   assign upl_dst_slot_o  = pq_head[UQ_SLOT_LO  +: 8];
   assign upl_new_gen_o   = pq_head[UQ_GEN_LO   +: 16];
   assign upl_crc_o       = pq_head[UQ_CRC_LO   +: 32];
-  // The handle's generation byte, [31:24] of the staged `resource`: see the
+  // The handle's generation byte, [7:0] of the staged `resource`: see the
   // port comment for why no port consumes it.
   /* verilator lint_off UNUSEDSIGNAL */
-  wire [7:0] pq_handle_gen_unused = pq_head[UQ_RES_LO + 24 +: 8];
+  wire [7:0] pq_handle_gen_unused = pq_head[UQ_RES_LO +: 8];
   /* verilator lint_on UNUSEDSIGNAL */
 
   // A packet that overflowed the stamp ring is POISONED: it is refused WHOLE at

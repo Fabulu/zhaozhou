@@ -1362,9 +1362,9 @@
 //           RENDER.ASSET_POOL is read-only to everyone -- the "appended
 //           resource region" the MEM.UPLOAD contract calls an owner capacity
 //           decision. That is an owner decision now, not a seam.
-//        2. THE RECORD FETCH wants a third ENGINE1 requester.
-//           `u_geom_mem_adapter` has exactly two and they are spent on
-//           GEOM.MESHFETCH and GEOM.ASSETFETCH.
+//        2. CLOSED 2026-09-19 (cmdmem, R20). The record fetch is requester C
+//           of `u_geom_mem_adapter`, now on the N-requester share, and a
+//           refused read resolves to kFetchDenied instead of hanging.
 //        3. THE RESOLVE REQUEST HAS NO HONEST PRODUCER, and this is the one
 //           that looks closed and is not. Both nouns are live in this module
 //           -- `cmd_draw_material_set_o` and `mf_r_material_id` -- and they
@@ -2467,7 +2467,37 @@
 //      split). Until it exists the store is a port pair, and the smoke bench
 //      models it with the arena's contract exactly as it models SDRAM.
 //
-// ---------------------------------------------------------------------------
+// I48. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
+//      BOUNDARY. NEW 2026-09-19 (cmdmem packet, ruling R20), opened in the
+//      commit that COMPOSED the block: its DIRECTORY is MEM.UPLOAD's
+//      MATERIAL_SET publications (5f.1's row) and its FETCH is requester C of
+//      the ENGINE1 adapter, with the new denied-fetch input. Both real.
+//
+//      THE ONE SEAM, and it is not GEOM.REPLAY. Replay has landed and emits a
+//      per-triangle `o_material_o` -- the material_id, correctly joined to its
+//      triangle. What no block in this core carries is the triangle's
+//      MATERIAL_SET HANDLE: it is DrawForm's `material_set`, which leaves
+//      through CMD.EXEC's draw dispatch (entry I41, a boundary), while the
+//      triangles that belong to that draw enter through GEOM.MESHFETCH's job
+//      port (entry I36, a boundary) whose six fields have no handle among
+//      them. Pairing `cmd_draw_material_set_o` with replay's triangles here
+//      would be the join I20 seam 3 and I39 refuse by name: two live wires,
+//      no owner, and meshlet N drawn with draw M's materials. The handle has
+//      to ride the job that produces the triangles, which is I36's ruling.
+//
+//      AND BEHIND IT, TWO MORE THINGS, NAMED SO THE NEXT READER COUNTS THEM:
+//      (a) the response feeds `tri_flat_request_i` together with the binding
+//      page's palette slot / generation / response class (I20 seam 4) and
+//      needs the material id carried with each triangle through GEOM.CLIP,
+//      GEOM.SETUP and GEOM.ATTRPACK, which carry `src_id` beside a triangle
+//      today and nothing else; (b) THE RECORD CANNOT YET BE READ where it
+//      lands. MEM.GUARD lets TERRAIN_BUILD -- MEM.UPLOAD's client -- write only
+//      TERRAIN.PAGE_POOL, and lets ENGINE1 read only RENDER.ASSET_POOL. The
+//      smoke bench shows it end to end: the published MATERIAL_SET is found in
+//      the directory, the fetch goes to the guard, and the guard DENIES it --
+//      `mat_fetch_denied_o` = 1, status kFetchDenied. That is an owner
+//      decision (the contract's "appended resource region"), not a seam.
+//// ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
 // Fourteen of the sixteen blocks in the 2026-09-19 small-blocks packet were
@@ -4053,6 +4083,42 @@ module zhao_console_core
   output logic [15:0]             upl_published_o,
   output logic [127:0]            upl_refused_o,
   output logic [31:0]             upl_hps_wait_o,
+
+  // ---- MATERIAL.RESOLVE (composed 2026-09-19, cmdmem packet, ruling R20) ---
+  // I48: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
+  // internal and real; see the entry for the one seam in the way.
+  input  logic                    mat_req_valid_i,
+  output logic                    mat_req_ready_o,
+  input  logic [31:0]             mat_req_material_set_i,
+  input  logic [15:0]             mat_req_material_id_i,
+  input  logic [ 7:0]             mat_req_quality_tier_i,
+  output logic                    mat_rsp_valid_o,
+  input  logic                    mat_rsp_ready_i,
+  output logic [ 2:0]             mat_rsp_status_o,
+  output logic                    mat_rsp_has_record_o,
+  output logic [255:0]            mat_rsp_record_o,
+  output logic [ 7:0]             mat_rsp_quality_tier_o,
+  output logic [ 1:0]             mat_rsp_sample_count_o,
+  output logic [ 2:0]             mat_rsp_material_recipe_o,
+  output logic [ 7:0]             mat_rsp_recipe_weight_o,
+  output logic [ 7:0]             mat_rsp_base_binding_o,
+  output logic                    mat_rsp_selector_overflow_o,
+  output logic [31:0]             mat_rsp_palette_base_o,
+  output logic [31:0]             mat_rsp_raster_state_o,
+  output logic [ 7:0]             mat_rsp_flags_o,
+  output logic [ 7:0]             mat_rsp_sample0_modes_o,
+  output logic [ 7:0]             mat_rsp_sample1_modes_o,
+  output logic [ 7:0]             mat_rsp_sample2_modes_o,
+  output logic [31:0]             mat_hits_o,
+  output logic [31:0]             mat_misses_o,
+  output logic [31:0]             mat_refused_o,
+  output logic [31:0]             mat_refused_id_o,
+  output logic [31:0]             mat_refused_record_o,
+  output logic [31:0]             mat_not_resident_o,
+  output logic [31:0]             mat_selector_overflow_o,
+  output logic [31:0]             mat_recipe_count_mismatch_o,
+  output logic [31:0]             mat_fetch_denied_o,
+  output logic [31:0]             geom_ma_jobs_c_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -10997,6 +11063,119 @@ module zhao_console_core
   );
 
   // --------------------------------------------------------------------------
+  // MATERIAL.RESOLVE (R20), composed 2026-09-19 (cmdmem packet)
+  // --------------------------------------------------------------------------
+  // THREE OF ITS FOUR SEAMS ARE REAL HERE, and the fourth is entry I48.
+  //
+  //   DIRECTORY <- MEM.UPLOAD's publication, `spec/memory_rules.md` 5f.1's row,
+  //     for resources of kind MATERIAL_SET (`spec/cartridge.md` 4 kind 11)
+  //     and nothing else: {index -> set_index, generation, base}, the arena
+  //     slot as the directory entry, and the record COUNT as extent / 32 --
+  //     the frozen record stride (`spec/commands.zidl` MaterialRecord, 32 B).
+  //     A count above what a 16-bit material_id can address saturates at
+  //     65,536, which loses nothing: no id can name a record past it. A slot at
+  //     or above SETS is not directory-visible and resolves as NOT_RESIDENT,
+  //     which is COUNTED -- a named fault, never a silent miss.
+  //   FETCH <- requester C of `u_geom_mem_adapter`, the ENGINE1 mux 5f says
+  //     texture reads join. A refused read (`violation`, no beats) is the new
+  //     `mem_rsp_denied_i` and resolves to kFetchDenied: counted, never a hang.
+  //   REQUEST / RESPONSE -> entry I48.
+  //
+  // THE SHIM BELOW IS FIELD MAPPING, not arbitration: a record is one 32-byte
+  // read, so `len` is the frozen record size; `client` and `write` are forced
+  // inside the adapter anyway. The 27-bit guard address is the low bits of the
+  // resolver's 32-bit one, the same narrowing MEM.UPLOAD's own guard request
+  // makes -- VRAM is 2^27 bytes and every region either block may name is
+  // inside it.
+  localparam logic [7:0] MAT_KIND_MATERIAL_SET = 8'd11;   // cartridge.md 4, kind 11
+
+  zhao_guard_req_t mr_guard_req;
+  zhao_guard_rsp_t mr_guard_rsp;
+  logic            mr_beat_valid;
+  logic [63:0]     mr_beat_data;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // `last` is not needed: the resolver counts its own four beats. `ok` is the
+  // acceptance verdict; only a DENIAL changes what the resolver does.
+  logic            mr_beat_last;
+  wire             mr_rsp_ok_unused = mr_guard_rsp.ok;
+  // Address bits above VRAM's 27. The directory's base is MEM.UPLOAD's own
+  // published destination, which that block bounds-checks in 32 bits against a
+  // HOST-configured region and then writes through the same 27-bit
+  // truncation -- so a region configured above 2^27 would ALIAS in both
+  // blocks, consistently. That is a MEM.UPLOAD configuration hazard recorded in
+  // the cmdmem findings, not something this shim can refuse without a status
+  // the oracle does not have.
+  wire [4:0]       mr_addr_hi_unused = mr_mem_req_addr[31:27];
+  /* verilator lint_on UNUSEDSIGNAL */
+  logic            mr_mem_req_valid;
+  logic [31:0]     mr_mem_req_addr;
+
+  always_comb begin
+    mr_guard_req        = '0;
+    mr_guard_req.valid  = mr_mem_req_valid;
+    mr_guard_req.write  = 1'b0;
+    mr_guard_req.client = ZHAO_CLIENT_ENGINE1;
+    mr_guard_req.addr   = mr_mem_req_addr[ZHAO_VRAM_ADDR_BITS-1:0];
+    mr_guard_req.len    = 7'd32;
+    mr_guard_req.be     = '1;
+  end
+
+  wire [26:0] mr_extent_records = upl_publish_extent_o[31:5];
+
+  zhao_material_resolve u_material_resolve (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .dir_we_i         (upl_publish_valid_o && (upl_publish_tag_o == MAT_KIND_MATERIAL_SET)),
+    .dir_entry_i      (upl_publish_slot_o),
+    .dir_valid_i      (1'b1),
+    .dir_set_index_i  (upl_publish_index_o),
+    .dir_generation_i (upl_publish_generation_o),
+    .dir_base_i       (upl_publish_base_o),
+    .dir_count_i      ((mr_extent_records > 27'd65536) ? 17'd65536 : mr_extent_records[16:0]),
+
+    .req_valid_i        (mat_req_valid_i),
+    .req_ready_o        (mat_req_ready_o),
+    .req_material_set_i (mat_req_material_set_i),
+    .req_material_id_i  (mat_req_material_id_i),
+    .req_quality_tier_i (mat_req_quality_tier_i),
+
+    .mem_req_valid_o  (mr_mem_req_valid),
+    .mem_req_ready_i  (mr_guard_rsp.ready),
+    .mem_req_addr_o   (mr_mem_req_addr),
+    .mem_rsp_valid_i  (mr_beat_valid),
+    .mem_rsp_data_i   (mr_beat_data),
+    .mem_rsp_denied_i (mr_guard_rsp.violation),
+
+    .rsp_valid_o            (mat_rsp_valid_o),
+    .rsp_ready_i            (mat_rsp_ready_i),
+    .rsp_status_o           (mat_rsp_status_o),
+    .rsp_has_record_o       (mat_rsp_has_record_o),
+    .rsp_record_o           (mat_rsp_record_o),
+    .rsp_quality_tier_o     (mat_rsp_quality_tier_o),
+    .rsp_sample_count_o     (mat_rsp_sample_count_o),
+    .rsp_material_recipe_o  (mat_rsp_material_recipe_o),
+    .rsp_recipe_weight_o    (mat_rsp_recipe_weight_o),
+    .rsp_base_binding_o     (mat_rsp_base_binding_o),
+    .rsp_selector_overflow_o(mat_rsp_selector_overflow_o),
+    .rsp_palette_base_o     (mat_rsp_palette_base_o),
+    .rsp_raster_state_o     (mat_rsp_raster_state_o),
+    .rsp_flags_o            (mat_rsp_flags_o),
+    .rsp_sample0_modes_o    (mat_rsp_sample0_modes_o),
+    .rsp_sample1_modes_o    (mat_rsp_sample1_modes_o),
+    .rsp_sample2_modes_o    (mat_rsp_sample2_modes_o),
+
+    .material_hits_o        (mat_hits_o),
+    .material_misses_o      (mat_misses_o),
+    .material_refused_o     (mat_refused_o),
+    .refused_id_o           (mat_refused_id_o),
+    .refused_record_o       (mat_refused_record_o),
+    .not_resident_o         (mat_not_resident_o),
+    .selector_overflow_o    (mat_selector_overflow_o),
+    .recipe_count_mismatch_o(mat_recipe_count_mismatch_o),
+    .fetch_denied_o         (mat_fetch_denied_o)
+  );
+  // --------------------------------------------------------------------------
   // GEOM.MEM_ADAPTER.  The whole reason the geometry front end can be in this
   // console at all: two logical requesters, one permitted client.  It forces
   // `client` to ENGINE1 and `write` low itself (its section 11.2), so the
@@ -11020,6 +11199,13 @@ module zhao_console_core
     .b_beat_data_o (af_beat_data),
     .b_beat_last_o (af_beat_last),
 
+    // REAL: requester C, MATERIAL.RESOLVE's 32-byte record fetch (R20).
+    .c_req_i       (mr_guard_req),
+    .c_rsp_o       (mr_guard_rsp),
+    .c_beat_valid_o(mr_beat_valid),
+    .c_beat_data_o (mr_beat_data),
+    .c_beat_last_o (mr_beat_last),
+
     // REAL: the one permitted client, into the shell's MEM.GUARD socket.
     .m_req_o      (ma_m_req),
     .m_rsp_i      (ma_m_rsp),
@@ -11029,6 +11215,7 @@ module zhao_console_core
 
     .jobs_a_o     (geom_ma_jobs_a_o),
     .jobs_b_o     (geom_ma_jobs_b_o),
+    .jobs_c_o     (geom_ma_jobs_c_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),

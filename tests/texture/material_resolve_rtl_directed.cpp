@@ -166,6 +166,7 @@ void hard_reset(Dut& top) {
   top.mem_req_ready_i = 0;
   top.mem_rsp_valid_i = 0;
   top.mem_rsp_data_i = 0;
+  top.mem_rsp_denied_i = 0;
   top.rsp_ready_i = 0;
   top.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(top);
@@ -220,7 +221,8 @@ RecordBytes read_record(Dut& top) {
 }
 
 Answer resolve_rtl(Dut& top, const Sdram& mem, uint32_t material_set,
-                   uint16_t material_id, uint8_t tier, int rsp_stall = 0) {
+                   uint16_t material_id, uint8_t tier, int rsp_stall = 0,
+                   bool deny_fetch = false) {
   Answer out;
 
   // ---- offer the request --------------------------------------------------
@@ -249,6 +251,15 @@ Answer resolve_rtl(Dut& top, const Sdram& mem, uint32_t material_set,
       top.mem_req_ready_i = 1;
       zhao::tick(top);
       top.mem_req_ready_i = 0;
+      if (deny_fetch) {
+        // R20: MEM.GUARD's refusal -- `violation` the cycle after the accept,
+        // and NO beats, ever. The block must answer, not wait.
+        top.mem_rsp_denied_i = 1;
+        zhao::tick(top);
+        top.mem_rsp_denied_i = 0;
+        top.eval();
+        continue;
+      }
       // Four beats, low beat first -- the record's own little-endian order.
       for (int beat = 0; beat < 4; ++beat) {
         top.mem_rsp_valid_i = 1;
@@ -901,6 +912,49 @@ int main(int argc, char** argv) {
                 top.a_material_refused_o, top.a_refused_id_o,
                 top.a_refused_record_o, top.a_not_resident_o,
                 top.a_selector_overflow_o);
+  }
+
+  // =========================================================================
+  // CASE R20 -- A DENIED FETCH is a defined fault, counted, never a hang, and
+  // never cached. Differenced against `zref::material::Resolver::resolve(...,
+  // fetch_denied = true)`, then the SAME request is served normally: it must
+  // MISS (a real fetch), because the denial cached nothing.
+  // =========================================================================
+  {
+    hard_reset(top);
+    const zhao_abi::ZhMaterialRecord rec = make_record(2, mat::kModulate);
+    Sdram mem;
+    mem.base = kBase;
+    for (uint32_t i = 0; i < kCount; ++i) mem.records.push_back(to_bytes(rec));
+    mat::Table tb;
+    tb.index = kSetIndex;
+    tb.generation = 0x0107;
+    for (uint32_t i = 0; i < kCount; ++i) tb.records.push_back(rec);
+    mat::Resolver<16> oracle;
+    oracle.publish(tb);
+    mat::ResolveLedger L{};
+    publish_dir(top, 0, true, kSetIndex, 0x0107, kBase, kCount);
+    const uint32_t h = handle32(kSetIndex, 0x07);
+
+    const mat::Result want = oracle.resolve({h, 2, 0}, &L, /*fetch_denied=*/true);
+    const Answer got = resolve_rtl(top, mem, h, 2, 0, 0, /*deny_fetch=*/true);
+    check(got.fetched, "case R20: the miss path asked memory", 1, got.fetched ? 1 : 0);
+    check(got.a_status == st(want.status), "case R20: a denied fetch resolves to kFetchDenied",
+          st(want.status), got.a_status);
+    check(!got.a_has_record && !want.has_record, "case R20: and returns NO record", 0,
+          got.a_has_record ? 1 : 0);
+    check(top.a_fetch_denied_o == L.fetch_denied, "case R20: fetch_denied_o counts it",
+          L.fetch_denied, top.a_fetch_denied_o);
+    check(top.a_material_refused_o == 1, "case R20: and it is a refusal in the catalog total", 1,
+          top.a_material_refused_o);
+
+    const mat::Result want2 = oracle.resolve({h, 2, 0}, &L);
+    const Answer got2 = resolve_rtl(top, mem, h, 2, 0);
+    check(got2.a_status == st(want2.status) && want2.status == mat::Status::kMiss,
+          "case R20: the retry MISSES -- the denial cached nothing", st(want2.status),
+          got2.a_status);
+    check(got2.a_has_record, "case R20: and the retry returns the record", 1,
+          got2.a_has_record ? 1 : 0);
   }
 
   top.final();

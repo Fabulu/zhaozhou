@@ -352,7 +352,8 @@ std::vector<uint8_t> publishRecord(uint32_t k) {
   rec.hdr.opcode = zhao_abi::ZHAO_OP_PUBLISH_RESOURCE;
   rec.hdr.record_bytes = 48;
   rec.hdr.source_id = 0x90u + k;
-  rec.payload.resource = (0x2Au << 24) | (0x00ABC0u + k);  // {gen 0x2A, index}
+  // handle32 {index:24, generation:8}, index HIGH (zcon::detail::handle32).
+  rec.payload.resource = ((0x00ABC0u + k) << 8) | 0x2Au;
   rec.payload.hps_addr_lo = 0x3000'0000u + k * 0x1000u;
   rec.payload.hps_addr_hi = k;                  // nonzero for k>0: carried, not narrowed
   rec.payload.vram_dst = 0x054D'F000u + k * 0x100u;

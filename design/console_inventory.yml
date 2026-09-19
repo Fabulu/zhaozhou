@@ -33,6 +33,10 @@ modules:
   zhao_field_exec_shared:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_mem_share2:
+    disposition: superseded
+    superseded_by: zhao_mem_share_n
+    why: "the two-requester wrapper over the N core (R4); both console sites instantiate zhao_mem_share_n directly since 2026-09-19 (the ENGINE1 adapter at N=3 for MATERIAL.RESOLVE, and the terrain read share); kept for its directed test"
   zhao_hps_arbiter:
     disposition: superseded
     superseded_by: zhao_hps_arbiter_n
@@ -160,9 +164,6 @@ modules:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_light_stream:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_material_resolve:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_measure_governor:

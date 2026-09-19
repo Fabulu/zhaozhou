@@ -294,6 +294,12 @@ module zhao_material_resolve_gen8tag_mutant #(
     output logic [31:0]              mem_req_addr_o,
     input  logic                     mem_rsp_valid_i,
     input  logic [BEATW-1:0]         mem_rsp_data_i,
+    // THE FETCH WAS DENIED (R20, 2026-09-19). MEM.GUARD answers a refused read
+    // with `violation` and NO beats -- `zhao_guard_rsp_t`: "request denied
+    // (dropped; NOTHING was written)". Without this input the block sat in
+    // S_FILL forever waiting for bytes that could not come. It now resolves to
+    // `zref::material::Status::kFetchDenied`, counts it, and caches nothing.
+    input  logic                     mem_rsp_denied_i,
 
     // ---- the resolved record ------------------------------------------------
     output logic                     rsp_valid_o,
@@ -328,7 +334,8 @@ module zhao_material_resolve_gen8tag_mutant #(
     output logic [CW-1:0]            refused_record_o,
     output logic [CW-1:0]            not_resident_o,
     output logic [CW-1:0]            selector_overflow_o,
-    output logic [CW-1:0]            recipe_count_mismatch_o
+    output logic [CW-1:0]            recipe_count_mismatch_o,
+    output logic [CW-1:0]            fetch_denied_o
 );
 
   // ---- derived widths ------------------------------------------------------
@@ -378,6 +385,7 @@ module zhao_material_resolve_gen8tag_mutant #(
   localparam logic [2:0] ST_REFUSED_ID      = 3'd2;
   localparam logic [2:0] ST_REFUSED_RECORD  = 3'd3;
   localparam logic [2:0] ST_NOT_RESIDENT    = 3'd4;
+  localparam logic [2:0] ST_FETCH_DENIED    = 3'd5;   // R20
 
   localparam logic [1:0] S_IDLE  = 2'd0;
   localparam logic [1:0] S_ADDR  = 2'd1;
@@ -612,7 +620,8 @@ module zhao_material_resolve_gen8tag_mutant #(
   logic fill_last_c;
   assign fill_last_c = (int'(beat_q) == (BEATS - 1));
 
-  logic [CW-1:0] hits_q, misses_q, refid_q, refrec_q, nores_q, selov_q, cntmm_q;
+  logic [CW-1:0] hits_q, misses_q, refid_q, refrec_q, nores_q, selov_q, cntmm_q, denied_q;
+  assign fetch_denied_o          = denied_q;
   assign material_hits_o         = hits_q;
   assign material_misses_o       = misses_q;
   assign refused_id_o            = refid_q;
@@ -622,7 +631,8 @@ module zhao_material_resolve_gen8tag_mutant #(
   assign recipe_count_mismatch_o = cntmm_q;
   // The catalog identity: every refusal, one number. Combinational over the
   // three tallies rather than a fourth register, so it cannot drift from them.
-  assign material_refused_o      = refid_q + refrec_q + nores_q;
+  // A denied fetch is a refusal too: the resolve produced no record.
+  assign material_refused_o      = refid_q + refrec_q + nores_q + denied_q;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -643,6 +653,7 @@ module zhao_material_resolve_gen8tag_mutant #(
       nores_q     <= '0;
       selov_q     <= '0;
       cntmm_q     <= '0;
+      denied_q    <= '0;
       for (int i = 0; i < LINES; i++) ln_v_q[i] <= 1'b0;
     end else begin
       case (state_q)
@@ -693,7 +704,15 @@ module zhao_material_resolve_gen8tag_mutant #(
         end
 
         S_FILL: begin
-          if (mem_rsp_valid_i) begin
+          // The guard's verdict arrives the cycle AFTER it accepted the
+          // request, i.e. here. A denial ends the resolve: no record, not
+          // cached, counted -- the defined fault R20 asks for.
+          if (mem_rsp_denied_i) begin
+            status_q  <= ST_FETCH_DENIED;
+            has_rec_q <= 1'b0;
+            if (denied_q != {CW{1'b1}}) denied_q <= denied_q + 1;
+            state_q   <= S_RSP;
+          end else if (mem_rsp_valid_i) begin
             rec_q <= fill_c;
             if (fill_last_c) begin
               if (record_ok_f(fill_c)) begin
