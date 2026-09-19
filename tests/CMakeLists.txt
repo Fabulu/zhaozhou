@@ -9182,6 +9182,14 @@ verilate(test_light_env_directed
 add_test(NAME light_env_directed COMMAND test_light_env_directed)
 set_tests_properties(light_env_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 
+# The raster_state u32 layout (owner ruling R28) against its model and against
+# GEOM.CLIP's own cull encoding, read from the RTL source.
+add_executable(test_raster_state_directed geometry/raster_state_directed.cpp)
+target_link_libraries(test_raster_state_directed PRIVATE zhao_zref)
+add_test(NAME raster_state_directed COMMAND test_raster_state_directed
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(raster_state_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 60)
+
 # THE SMOKE BENCH'S GEOMETRY FIXTURE, and every number the bench asserts about
 # it, derived from the reference (project_vertex -> Clip -> Setup -> Binner).
 # The bench `include`s the generated header; this test fails if it is stale.

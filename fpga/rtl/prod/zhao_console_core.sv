@@ -2217,8 +2217,17 @@
 //          GEOM.ASSETFETCH's `s_*` port". It rides to GEOM.REPLAY's output and
 //          its consumer there is MATERIAL.RESOLVE's request, entry I20.
 //        * THE TRIANGLE OUTPUT goes to GEOM.REPLAY.
-//      What stays is the descriptor's RASTER WORD: no producer anywhere, no
-//      ratified layout, and the cull mode (I24) is waiting on the same word.
+//      What stays is the descriptor's RASTER WORD, and the cull mode (I24) is
+//      waiting on the same word. Its LAYOUT is RATIFIED since 2026-09-19 (owner
+//      ruling R28, geom2): raster_state[1:0] = the draw's cull mode from
+//      DrawForm.flags[3:2], [31:2] = MaterialRecord.raster_state[31:2]
+//      (spec/commands.zidl, design/contracts/GEOM.PARAMBUF.md,
+//      `zref::raster_state`). What it still lacks is a PATH: the draw's flags
+//      leave CMD.EXEC on `cmd_draw_*` (I41) but reach no meshlet until a draw
+//      becomes a GEOM.MESHFETCH job (I36, owner ruling R29). Wiring
+//      `cmd_draw_flags_o` here before that would pair meshlet N's triangles
+//      with draw M's cull mode -- the drift this entry refuses for the
+//      material. So I39 and I24 stay open, now for ONE reason, and it is I36.
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
 //      the core assigns both, in the same standing as I9 and I25.
