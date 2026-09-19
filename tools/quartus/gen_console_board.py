@@ -361,7 +361,7 @@ HEADER = r"""// zhao_console_board.sv -- THE BOARD FRAMEWORK around the connecte
 // RE-EXPORTING IS NOT TYING OFF, and the distinction is the whole reason this
 // is allowed. A tie-off drives a constant into a port and tells the fitter the
 // producer does not exist. A re-export moves the seam one level out and leaves
-// it a seam: `part_rd_valid_i` is as unowned at the board's edge as it was at
+// it a seam: `part_fld_valid_i` is as unowned at the board's edge as it was at
 // the core's, it is listed in the core's "INCOMPLETE -- TIED OFF, AND WHY"
 // table under the owner that is missing, and NOTHING NEW became fake. This
 // pass adds ZERO tie-offs and removes none.

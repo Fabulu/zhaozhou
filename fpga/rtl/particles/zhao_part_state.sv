@@ -211,6 +211,17 @@ module zhao_part_state #(
     output wire                  rd_ready_o,
     input  wire [REC_W-1:0]      rd_record_i,
     input  wire                  rd_last_i,       // final record of the generation
+    // THE PREVIOUS GENERATION IS EMPTY. Sampled on the `tick_start_i` edge.
+    // Added 2026-09-19 (gz/pfs, entry I1) when a real store replaced the
+    // harness: `rd_last_i` rides a RECORD, so a generation of zero records had
+    // no way to say it was over and the survivor pass waited for a record that
+    // could never come -- the tick never finished and the population could
+    // never start from nothing. High here means "there is nothing to read":
+    // the survivor pass closes on its own `out_q == 0` exit and the append
+    // phase runs exactly as it does after a last record. Tie LOW where the
+    // previous generation is known to be non-empty; the block then behaves
+    // exactly as before.
+    input  wire                  rd_empty_i,
 
     // ---- offered to PART.UPDATE ----------------------------------------------
     output wire                  prt_valid_o,
@@ -436,7 +447,8 @@ module zhao_part_state #(
         S_IDLE: begin
           if (tick_start_i) begin
             st_q      <= S_SURVIVE;
-            rd_done_q <= 1'b0;
+            // An empty generation has already delivered its last record.
+            rd_done_q <= rd_empty_i;
             written_q <= '0;
             // `chl_wp_q`/`chl_rp_q` ARE DELIBERATELY NOT CLEARED HERE. They
             // used to be, and that is the assignment that destroyed the last

@@ -121,6 +121,8 @@ module zhao_field_v3_engine #(
     parameter int LONGQ = 4,
     parameter int GATHERS = 4,
     parameter int DIST_BANKS = 2,
+    // Points per long-op group, 1..4 -- see zhao_field_v3_svcpath.
+    parameter int GROUP_PTS = 4,
     parameter int RING_UNITS = 2,
     parameter int RING_DESC  = 2,
     parameter int REGS = 32,
@@ -374,8 +376,8 @@ module zhao_field_v3_engine #(
 
   zhao_field_v3_svcpath #(
       .CONTEXTS(CTX), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING), .LANES(LANES),
-      .GATHERS(GATHERS), .DIST_BANKS(DIST_BANKS), .RING_UNITS(RING_UNITS),
-      .RING_DESC(RING_DESC)
+      .GATHERS(GATHERS), .DIST_BANKS(DIST_BANKS), .GROUP_PTS(GROUP_PTS),
+      .RING_UNITS(RING_UNITS), .RING_DESC(RING_DESC)
   ) u_svc (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid), .long_ready_o(long_ready),

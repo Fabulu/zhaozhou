@@ -75,6 +75,15 @@
 // What is NOT negotiable is exactness. `len_of` is floor-exact and an
 // approximate root would be a different answer, not a faster one.
 module zhao_field_v3_len #(
+    // POINTS PER GROUP THAT CAN CARRY A REAL POINT, 1..4. The ports stay four
+    // wide because every service on the path is; lanes at or above LANES are
+    // never computed and answer 0. That is EXACT only because the dispatcher
+    // that feeds this service is built with the same number as its group cap
+    // (`zhao_field_v3_dispatch.GROUP_PTS`), so a real point can never sit in
+    // such a lane -- `zhao_field_v3_svcpath` passes ONE parameter to both.
+    // Added 2026-09-19 (gz/pfs): this was hard-wired to four, so a console
+    // whose front presents one point at a time elaborated eight floor-exact
+    // roots at DIST_BANKS=2 to compute one answer and three discarded pads.
     parameter int LANES = 4,
     // ROOT BANKS. The root is 32 fixed iterations and cannot be pipelined, so
     // throughput here is bought only by having more of them: while one bank
@@ -125,6 +134,11 @@ module zhao_field_v3_len #(
     input  var logic signed [65:0] mul_p_0_i, mul_p_1_i, mul_p_2_i, mul_p_3_i
     /* verilator lint_on UNUSEDSIGNAL */
 );
+
+  initial begin
+    if (LANES < 1 || LANES > 4)
+      $fatal(1, "zhao_field_v3_len: LANES=%0d must be 1..4 (the ports are four points wide)", LANES);
+  end
 
   localparam logic [1:0] M_LEN2  = 2'd0;
   localparam logic [1:0] M_LEN3  = 2'd1;
@@ -256,15 +270,37 @@ module zhao_field_v3_len #(
     next_bank = (p == BW'(BANKS - 1)) ? BW'(0) : BW'(p + BW'(1));
   endfunction
 
+  // ---- the four-wide ports, seen as arrays -------------------------------
+  // Lanes at or above LANES are neither read nor driven with anything but 0;
+  // see the LANES parameter for why that is exact.
+  logic signed [31:0] a0_c [4], a1_c [4], a2_c [4], b0_c [4], b1_c [4];
+  logic signed [65:0] mul_p_c [4];
+  assign a0_c = '{a0_0_i, a0_1_i, a0_2_i, a0_3_i};
+  assign a1_c = '{a1_0_i, a1_1_i, a1_2_i, a1_3_i};
+  assign a2_c = '{a2_0_i, a2_1_i, a2_2_i, a2_3_i};
+  assign b0_c = '{b0_0_i, b0_1_i, b0_2_i, b0_3_i};
+  assign b1_c = '{b1_0_i, b1_1_i, b1_2_i, b1_3_i};
+  assign mul_p_c = '{mul_p_0_i, mul_p_1_i, mul_p_2_i, mul_p_3_i};
+
+  logic signed [32:0] sq_c [4];
+  always_comb begin
+    for (int l = 0; l < 4; l++) begin
+      sq_c[l]  = 33'sd0;
+    end
+    for (int l = 0; l < LANES; l++) begin
+      sq_c[l]  = 33'(f_v_r[f_comp_r][l]);
+    end
+  end
+
   assign mul_issue_o = (f_state_r == F_ISSUE);
-  assign mul_a_0_o = 33'(f_v_r[f_comp_r][0]);
-  assign mul_a_1_o = 33'(f_v_r[f_comp_r][1]);
-  assign mul_a_2_o = 33'(f_v_r[f_comp_r][2]);
-  assign mul_a_3_o = 33'(f_v_r[f_comp_r][3]);
-  assign mul_b_0_o = 33'(f_v_r[f_comp_r][0]);
-  assign mul_b_1_o = 33'(f_v_r[f_comp_r][1]);
-  assign mul_b_2_o = 33'(f_v_r[f_comp_r][2]);
-  assign mul_b_3_o = 33'(f_v_r[f_comp_r][3]);
+  assign mul_a_0_o = sq_c[0];
+  assign mul_a_1_o = sq_c[1];
+  assign mul_a_2_o = sq_c[2];
+  assign mul_a_3_o = sq_c[3];
+  assign mul_b_0_o = sq_c[0];
+  assign mul_b_1_o = sq_c[1];
+  assign mul_b_2_o = sq_c[2];
+  assign mul_b_3_o = sq_c[3];
 
   // THE FRONT ACCEPTS WHENEVER IT IS FREE AND THE ORDER QUEUE HAS ROOM. It does
   // NOT wait for the roots, and that gate is the whole difference between II 42
@@ -273,11 +309,16 @@ module zhao_field_v3_len #(
 
   logic [BW-1:0] head_bk_c;
   assign head_bk_c = oq_bk_r[oq_head_r];
+  logic signed [31:0] res_c [4];
+  always_comb begin
+    for (int l = 0; l < 4; l++) res_c[l] = 32'sd0;
+    for (int l = 0; l < LANES; l++) res_c[l] = bk_res_r[head_bk_c][l];
+  end
   assign r_valid_o = (oq_count_r != '0) && bk_busy_r[head_bk_c] && bk_done_r[head_bk_c];
-  assign o0_0_o    = bk_res_r[head_bk_c][0];
-  assign o0_1_o    = bk_res_r[head_bk_c][1];
-  assign o0_2_o    = bk_res_r[head_bk_c][2];
-  assign o0_3_o    = bk_res_r[head_bk_c][3];
+  assign o0_0_o    = res_c[0];
+  assign o0_1_o    = res_c[1];
+  assign o0_2_o    = res_c[2];
+  assign o0_3_o    = res_c[3];
   assign sat_rescale_o = bk_sat_r[head_bk_c];
   assign tag_o     = bk_tag_r[head_bk_c];
 
@@ -313,10 +354,7 @@ module zhao_field_v3_len #(
       // still running. Placed before the case so a new group's reset of
       // `f_got_r` in F_IDLE wins over a stale increment.
       if (mul_valid_i) begin
-        f_n2_r[0] <= f_n2_r[0] + mul_p_0_i[63:0];
-        f_n2_r[1] <= f_n2_r[1] + mul_p_1_i[63:0];
-        f_n2_r[2] <= f_n2_r[2] + mul_p_2_i[63:0];
-        f_n2_r[3] <= f_n2_r[3] + mul_p_3_i[63:0];
+        for (int l = 0; l < LANES; l++) f_n2_r[l] <= f_n2_r[l] + mul_p_c[l][63:0];
         f_got_r   <= f_got_r + 2'd1;
       end
 
@@ -329,23 +367,16 @@ module zhao_field_v3_len #(
             f_got_r   <= 2'd0;
             for (int l = 0; l < LANES; l++) f_n2_r[l] <= 64'd0;
 
-            if (mode_i == M_DIST2) begin
-              f_v_r[0][0] <= sub_sat(a0_0_i, b0_0_i);
-              f_v_r[0][1] <= sub_sat(a0_1_i, b0_1_i);
-              f_v_r[0][2] <= sub_sat(a0_2_i, b0_2_i);
-              f_v_r[0][3] <= sub_sat(a0_3_i, b0_3_i);
-              f_v_r[1][0] <= sub_sat(a1_0_i, b1_0_i);
-              f_v_r[1][1] <= sub_sat(a1_1_i, b1_1_i);
-              f_v_r[1][2] <= sub_sat(a1_2_i, b1_2_i);
-              f_v_r[1][3] <= sub_sat(a1_3_i, b1_3_i);
-            end else begin
-              f_v_r[0][0] <= a0_0_i; f_v_r[0][1] <= a0_1_i;
-              f_v_r[0][2] <= a0_2_i; f_v_r[0][3] <= a0_3_i;
-              f_v_r[1][0] <= a1_0_i; f_v_r[1][1] <= a1_1_i;
-              f_v_r[1][2] <= a1_2_i; f_v_r[1][3] <= a1_3_i;
+            for (int l = 0; l < LANES; l++) begin
+              if (mode_i == M_DIST2) begin
+                f_v_r[0][l] <= sub_sat(a0_c[l], b0_c[l]);
+                f_v_r[1][l] <= sub_sat(a1_c[l], b1_c[l]);
+              end else begin
+                f_v_r[0][l] <= a0_c[l];
+                f_v_r[1][l] <= a1_c[l];
+              end
+              f_v_r[2][l] <= a2_c[l];
             end
-            f_v_r[2][0] <= a2_0_i; f_v_r[2][1] <= a2_1_i;
-            f_v_r[2][2] <= a2_2_i; f_v_r[2][3] <= a2_3_i;
             f_state_r <= F_ISSUE;
           end
         end
@@ -366,10 +397,7 @@ module zhao_field_v3_len #(
         // here rather than dropping it: back-pressure, not loss.
         F_HAND: begin
           if (have_free_c) begin
-            bk_n2_r[free_bank_c][0] <= f_n2_r[0];
-            bk_n2_r[free_bank_c][1] <= f_n2_r[1];
-            bk_n2_r[free_bank_c][2] <= f_n2_r[2];
-            bk_n2_r[free_bank_c][3] <= f_n2_r[3];
+            for (int l = 0; l < LANES; l++) bk_n2_r[free_bank_c][l] <= f_n2_r[l];
             bk_tag_r[free_bank_c]     <= f_tag_r;
             bk_busy_r[free_bank_c]    <= 1'b1;
             bk_done_r[free_bank_c]    <= 1'b0;

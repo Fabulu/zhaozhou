@@ -69,6 +69,10 @@ module zhao_field_v3_svcpath #(
     // in the engine -- each bank is four floor-exact roots -- and the one that
     // decides whether DIST2 fits the admission budget at all.
     parameter int DIST_BANKS = 2,
+    // POINTS PER GROUP (1..4): the dispatcher's group cap AND the distance
+    // service's width, passed as ONE value so the two cannot disagree -- the cap
+    // is what makes a narrower service exact. Four is every existing tally.
+    parameter int GROUP_PTS = 4,
     // Ring units. The nine products inside one are a dependency chain, so this
     // buys throughput the same way DIST_BANKS does and costs the same way.
     parameter int RING_UNITS = 2,
@@ -302,7 +306,7 @@ module zhao_field_v3_svcpath #(
 
   zhao_field_v3_dispatch #(
       .CONTEXTS(CONTEXTS), .REGS(REGS), .TAGW(TAGW), .OUTSTANDING(OUTSTANDING),
-      .LANES(LANES), .GATHERS(GATHERS)
+      .LANES(LANES), .GATHERS(GATHERS), .GROUP_PTS(GROUP_PTS)
   ) u_dispatch (
       .clk(clk), .rst_n(rst_n),
       .long_valid_i(long_valid_i), .long_ready_o(long_ready_o),
@@ -608,7 +612,14 @@ module zhao_field_v3_svcpath #(
   // DIST_BANKS is what decides whether Earth fits: at 2 the initiation interval
   // is 22 clocks against a 24.33 ceiling for the WHOLE program, so this service
   // alone took 90% of the budget. At 4 it is 12.
+  // LANES IS THE GROUP CAP, NOT THE EXECUTOR'S LANES. This passed only
+  // .BANKS, so the service kept its own default of four points whatever the
+  // front could supply. Forwarding the EXECUTOR's LANES instead would have been
+  // WRONG: at LANES=1 the dispatcher gathers FOUR CONTEXTS into one four-point
+  // group, so lanes 1..3 carry real points. GROUP_PTS is the number that bounds
+  // what a group can hold, and the dispatcher above is capped by it.
   zhao_field_v3_len #(
+      .LANES(GROUP_PTS),
       .BANKS(DIST_BANKS)
   ) u_len (
       .clk(clk), .rst_n(rst_n),
