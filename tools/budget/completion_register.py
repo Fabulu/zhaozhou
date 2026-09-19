@@ -195,6 +195,18 @@ _ALIAS: dict[str, str | None] = {
     "MEM.UPLOAD":        None,
     "GEOM.LOOM":         None,
     "FORGE.SHADOW":      None,
+    # the owner revoked their deferral 2026-09-18; all three were cut BEFORE
+    # their contracts were written, so each needs its spec authored first
+    "INPUT.SNAC":        None,
+    "GEOM.WARP":         None,
+    "POST.ECHO":         None,
+    # `deferred`/`blocked_on` used to skip these before resolution ever ran, so
+    # they never needed an alias. Now that nothing is excused by a bare flag,
+    # they reach the resolver and must resolve.
+    "SYS.CDC":           "zhao_cdc_snapshot",
+    "MEM.SDRAM":         "zhao_sdram_ctrl",
+    "SYS.PLL":           None,   # no RTL; board facts now exist, so this is a BUILD task
+    "SYS.RESET":         None,   # same
 }
 
 

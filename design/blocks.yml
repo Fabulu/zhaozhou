@@ -318,7 +318,7 @@ blocks:
     budget_group: platform
     maturity: SPECIFIED
     maturity_log: []
-    blocked_on: hardware   # controlling ruling 2026-08-31 SS8: "no owner action. They wait for the board." Pin assignments and PLL capabilities are properties of a physical device; see design/contracts/SYS.PLL.md, which repeats this in every section.
+    blocked_on: none   # WAS 'hardware' citing ruling 2026-08-31 SS8 ("they wait for the board"). THE BOARD HAS BEEN CHARACTERISED: zhaozhou-board-bringup-20260913/reports/board_truth.json, captured 2026-09-13, gives FPGA_CLK1/2/3_50 at 50 MHz on pins V11/Y13/E11 3.3-V LVTTL, hpsOsc1 25 MHz, and buildTarget 5CSEBA6U23I7. The ruling's condition is MET. Unmeasured still: SDRAM timing/bandwidth and power rails -- those bound MEM.SDRAM's parameters, not whether this wrapper can be written.
     deferred: false
     cut_order: null
     superseded_by: null
@@ -348,7 +348,7 @@ blocks:
     budget_group: platform
     maturity: SPECIFIED
     maturity_log: []
-    blocked_on: hardware   # controlling ruling 2026-08-31 SS8: "no owner action. They wait for the board." Pin assignments and PLL capabilities are properties of a physical device; see design/contracts/SYS.RESET.md, which repeats this in every section.
+    blocked_on: none   # WAS 'hardware' citing ruling 2026-08-31 SS8 ("they wait for the board"). THE BOARD HAS BEEN CHARACTERISED: zhaozhou-board-bringup-20260913/reports/board_truth.json, captured 2026-09-13, gives FPGA_CLK1/2/3_50 at 50 MHz on pins V11/Y13/E11 3.3-V LVTTL, hpsOsc1 25 MHz, and buildTarget 5CSEBA6U23I7. The ruling's condition is MET. Unmeasured still: SDRAM timing/bandwidth and power rails -- those bound MEM.SDRAM's parameters, not whether this wrapper can be written.
     deferred: false
     cut_order: null
     superseded_by: null
