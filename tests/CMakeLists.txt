@@ -13525,3 +13525,29 @@ add_test(NAME console_core_attrpack_control
           -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -BadAttribute)
 set_tests_properties(console_core_attrpack_control PROPERTIES
   LABELS "prod;mutant")
+
+# --------------------------------------------------------------------------
+# FIELD.SEQ.STAMP's STREAM ADAPTER -- the stencil walk.
+#
+# The engine is a MOCK here on purpose. This block computes nothing, so the
+# only thing it can get wrong is ALIGNMENT with `zhao_surface_stamp`'s cursor,
+# and a mock is what makes a FAULTING response reachable on cue. The mock is
+# written to the shared engine's real protocol -- one request in flight, the
+# answer HELD until taken -- because a mock that dropped an untaken answer
+# would have hidden the restart defect this driver found.
+add_executable(test_field_stamp_adapter_directed field/field_stamp_adapter_directed.cpp)
+target_link_libraries(test_field_stamp_adapter_directed PRIVATE zhao_harness)
+verilate(test_field_stamp_adapter_directed
+  PREFIX Vzhao_field_stamp_adapter
+  TOP_MODULE zhao_field_stamp_adapter
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_stamp_adapter.sv)
+add_test(NAME field_stamp_adapter_directed COMMAND test_field_stamp_adapter_directed)
+set_tests_properties(field_stamp_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+add_test(NAME lint_zhao_field_stamp_adapter
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_stamp_adapter
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_stamp_adapter.sv)
+set_tests_properties(lint_zhao_field_stamp_adapter PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
