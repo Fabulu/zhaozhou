@@ -131,6 +131,8 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - Compaction recovery resumed from `PASS17-COMPACTION-HANDOFF-20260919.md`. Owner explicitly set the goal to finish Manafold as specified, commit, push and publish. Re-read Directions 14–18, confirmed the sole active source lane is repairing the newly exposed Boil palette loop seam, and preserved the dirty art/smooth-motion tree for a fresh post-palette integration.
 - Closed the Boil/Blue CLUT seam exposed by final source review. The rejected raw clock ended the 600-frame menu loop at rotation 10 then reset to 0, while `msmooth` observed only mana-body motion. Production now passes the real clip period into `mana_build_ramps`, runs one complete visible Blue/Violet revolution with quintic C2 interpolation between exact authored entries, and strictly exposes 1/2/3-cycle plus raw/hard controls. Native full-loop review selected one cycle: the complete range remains visibly alive, while two/three repeat the high-contrast reversal and read as palette flicker. The gate checks all 126 integer phases byte-exact, every CLUT-entry RGB derivative, seam, and actual bloom-histogram-weighted emitted energy. Final focused renderer/gate MD5s `747CD6946C49EE05A248479EDECFF81A` / `E1DD063275637C1F4FC2D5525D7482AB`; normal RC 0, all 15 effect controls attributed RC 1, cycles 1/2/3 return 0/1/1, invalid selectors RC 2. Final Boil/Blue 1,200 frames are byte-identical to the reviewed selected generation. `PASS17-BOIL-PALETTE-CONTINUITY.md` carries receipts; one clean combined integration rebuild remains mandatory.
 - Independent clean post-palette integration is complete and **PASS**. One fresh direct output produced renderer `8DD0AE74058E620C222289CB17A565B9`, `mspan C0991BA37FB3AEABEBE3A1253B261FC0` and `msmooth E04B15D97C9456B0AAE0A2C4C202C57E`; direct and CMake registrations built RC 0. The exact 137-case matrix passed: mspan normal plus 31/31 attributed controls, held normal/five mutes/A ladder, msmooth normal plus 15/15 attributed controls, public/contact/eye/outline/shell/QA gates and strict malformed selectors. One renderer invocation produced 33 subjects / 24,308 contiguous validated frames; 6,772 same-binary control frames also validate. Isolated every-frame masters and native/2×/4× witnesses accept Trick, Taunt III A80/1450/750, Curious/Startle/Taunt eye acting, crown/spans, Channel and Boil seams, deaths/Damage/Startle/Fall, outline/shell and all ten labs. `PASS17-FINAL-TARGETED-INTEGRATION.md` is now the sole final targeted receipt; the source/evidence packet is ready to commit and push before the distinct exact 28-subject bank.
+- Committed and pushed the exact 12-path smooth-performance source packet as `075d88af59873edd6e6a464d243a71ba84d0c094`, then the 75-path curated targeted-evidence packet as `c41816d84e14a398450910e26d071f001c2a685a`; `origin/manafold-pass17` matches both checkpoints.
+- Built the distinct exact final-bank renderer clean at MD5 `3390F2B8214473FEBFA32092A98E9056`, SHA-256 `2A0C77BB321E09604AB5583147E54F2F4949D56C89EC25B8E0979DE0D4AF7E25`. A literal no-subject invocation exposed that the reel default is the whole global diagnostic catalogue, so that mixed root was preserved but explicitly excluded. One corrected process received all 28 canonical names together and produced the accepted raw root `pass17-final-reel-28`: 28 subjects, 11,592 contiguous header-valid frames, 3,205,048,896 bytes, exact metadata/receipt agreement, bank-manifest SHA-256 `560c12371251dae73e39c7be6e6caad8e0817cfbc6ae15fce75e586697dfe30d`. Committed `plates.py` then generated 28 nearest-downsample every-frame sheets at `pass17-final-sheets`; every one is complete and newer than its source. Integrity is recorded in `PASS17-FINAL-BANK-INTEGRITY.md`. The exact next gate is seven fresh isolated four-subject visual-review batches; encoding remains blocked until 28/28 pass.
 
 ---
 
@@ -165,6 +167,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 | 2026-09-19 | GPT fork final art | Select Trick axis and Taunt-III held punchline from same-binary full-frame ladders | Art selected — final post-checker rebuild pending | `PASS17-TRICK-AXIS-SELECTION.md` / `PASS17-TAUNT3-PUNCHLINE-IMPLEMENTATION.md` |
 | 2026-09-19 | GPT fork Boil palette | Repair raw CLUT seam; gate emitted colour energy; review 1/2/3-cycle ladder | Complete — one-cycle C2 churn selected, normal green, raw/hard controls red | `PASS17-BOIL-PALETTE-CONTINUITY.md` |
 | 2026-09-19 | GPT fork final targeted integration | Independently audit, clean-build, run full matrix and review exact post-palette targeted bank | Complete — 137/137 matrix and 33 subjects / 24,308 frames pass | `PASS17-FINAL-TARGETED-INTEGRATION.md` |
+| 2026-09-19 | GPT fork exact final bank | Clean-build one renderer; render and validate exact canonical raw bank; generate every-frame sheets | Complete — 28 subjects / 11,592 frames and 28/28 complete sheets | `PASS17-FINAL-BANK-INTEGRITY.md` |
 
 ---
 
@@ -194,6 +197,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `PASS17-TRICK-AXIS-SELECTION.md`, `PASS17-TAUNT3-PUNCHLINE-IMPLEMENTATION.md`, complete candidate sheets, selected every-frame sheets and native/4× mute/witness plates
 - `PASS17-BOIL-PALETTE-CONTINUITY.md`, selected/rejected 600-frame sheets, native cycle ladder and exact 4× seam/control plates
 - final `PASS17-FINAL-TARGETED-INTEGRATION.md`, seven 24,308-frame review masters and exact native/2×/4× Trick/Taunt III/eye/seam/outline witnesses
+- `PASS17-FINAL-BANK-INTEGRITY.md`, exact 28-subject/11,592-frame hashes and 28 complete external every-frame review sheets
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---
@@ -214,7 +218,6 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 ## Next Steps
 
-1. Commit/push the exact 12-path smooth-motion/final-expression source packet, then the explicitly curated evidence packet from `PASS17-FINAL-TARGETED-INTEGRATION.md`.
-2. Build one exact final renderer from the committed source and render the distinct 28-subject Pass-17 shipping bank.
-3. Review every shipping frame in fresh isolated contexts; only after 28/28 acceptance encode WebMs/posters, run freshness/full decode, and update findings/card.
-4. Commit/push both feature branches, fast-forward both mains, publish, verify production index plus all 56 live media bytes, and commit/push the deployment records.
+1. Run seven fresh isolated four-subject visual-review batches over the exact `pass17-final-sheets` generation, using native/enlarged crops wherever a thumbnail raises a candidate defect.
+2. If and only if all 28 subjects pass, encode WebMs/posters from `pass17-final-reel-28`, run freshness/full decode, and update findings/card.
+3. Commit/push both feature branches, fast-forward both mains, publish, verify production index plus all 56 live media bytes, and commit/push the deployment records.
