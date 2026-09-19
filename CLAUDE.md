@@ -638,6 +638,40 @@ so paths your commit changed then read as staged **reverts** in everyone else's
 index only) or the next agent will commit a revert of your work believing it is
 cleanup.
 
+#### `read-tree` and `commit` MUST BE ATOMIC — the recipe above is not enough
+
+Added 2026-09-19, after the recipe **reverted a whole packet in full**, 529
+deletions, having already been written down.
+
+`git read-tree HEAD` snapshots HEAD *at that moment*. Run it in one tool call and
+`git commit` in another, and any packet that commits in between makes your index
+describe a **tree that is now the past** — so your commit silently reverts
+everything they landed.
+
+Every local signal said it was fine. `git apply --cached` returned 0. The staged
+diff was exactly the author's own hunks. **The only tell was the commit summary
+reporting FOUR files changed when one had been staged.** Read that line.
+
+So either do the whole sequence in a single invocation, or re-check immediately
+before committing:
+
+```powershell
+$before = git rev-parse HEAD
+# ... read-tree, apply --cached, verify ...
+if ((git rev-parse HEAD) -ne $before) { throw "HEAD moved; re-seed the index" }
+git commit -F msg.txt
+```
+
+**A private index protects another agent's INDEX. It does nothing whatever for
+their COMMITS.** That is the distinction the first version of this section
+missed, and it cost a packet twice in one day — once to me, once to a worker
+following the recipe exactly as written.
+
+The general form, which is the thing to remember when the next variant of this
+appears: **any read-modify-write against a repository other agents are
+committing to is a race, and git gives you no lock.** Compare HEAD before and
+after, or expect to write somebody's work out of history.
+
 ### Lint the BLOB you are about to commit, not the working tree
 
 Same day, same cause. Two packets built a staged blob that was broken in ways
