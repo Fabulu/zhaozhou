@@ -507,20 +507,69 @@ module zhao_mem_upload
             // rejected address sends the next reader to the wrong question.
             guard_denied_q <= 1'b1;
             st_q           <= S_RETIRE;
-          end else if (hps_rsp_i.beat_valid) begin
-            // THE THREE RESPONSE BITS MEAN THREE DIFFERENT THINGS and collapsing
-            // any two of them is a bug. `violation` is a refusal and aborts,
-            // above. `ready && ok` is positive acceptance of the burst's
-            // request. NEITHER is the guard being BUSY, and that is a HOLD, not
-            // a failure -- an earlier draft of this block treated "not ready" as
-            // a denial, which would have discarded a perfectly good upload
-            // whenever the arbiter was serving someone else.
+          end else if (guard_rsp_i.ok && guard_rsp_i.violation) begin
+            // THE VERDICT BITS ARE MUTUALLY EXCLUSIVE BY CONSTRUCTION -- the
+            // guard drives both from ONE registered decision
+            // (`zhao_mem_guard.sv:303-304`), so both high at once cannot happen
+            // while that block is correct. This arm is therefore UNREACHABLE
+            // with a correct guard, and it is here anyway for two reasons.
             //
-            // Acceptance is only required on the beat that carries the request
-            // (beat 0); afterwards the burst is already accepted and the data
-            // channel's own `guard_wready_i` paces it.
+            // First, `ok` is the only bit of `zhao_guard_rsp_t` this block would
+            // otherwise never read, and a carried-but-unread port bit is exactly
+            // the hole that put a real defect in these same lines: the
+            // acceptance test used to conjoin `ready` with `ok`, which the guard
+            // never raises together, and nothing noticed because the checker
+            // that watches for it had been crashing.
+            //
+            // Second, it fails in the safe direction. A guard that starts
+            // asserting both is broken in a way that would otherwise present as
+            // a silently truncated upload; here it discards the slot unpublished
+            // and says which block to look at.
+            //
+            // NO MUTANT IS OWED and the reason is structural rather than a
+            // promise: the two bits come from one decision register, so no
+            // stimulus presented at THIS block's ports can separate them. Firing
+            // it needs a broken guard, which is `zhao_mem_guard`'s own test to
+            // own. CLAUDE.md permits a stated structural reason in place of a
+            // control, and this is that statement rather than an omission.
+            guard_denied_q <= 1'b1;
+            st_q           <= S_RETIRE;
+          end else if (hps_rsp_i.beat_valid) begin
+            // THE THREE RESPONSE BITS MEAN THREE DIFFERENT THINGS, and this
+            // block collapsed two of them anyway. The previous version of these
+            // lines said "`ready && ok` is positive acceptance of the burst's
+            // request" and tested exactly that. IT IS WRONG, and wrong in a way
+            // that would never have fired:
+            //
+            //   zhao_mem_guard.sv:302  rsp.ready = !fwd_active;  // LEVEL
+            //   zhao_mem_guard.sv:303  rsp.ok    = rsp_ok_q;     // REGISTERED
+            //
+            // and the guard's own header says "Verdict: fixed 1 cycle
+            // (registered rsp)". So `ready` means "I can take a request NOW" and
+            // `ok` is the verdict of the PREVIOUS one. The guard never raises
+            // them together on purpose, and a conjunction of the two is a
+            // condition that is true only by coincidence.
+            //
+            // The correct shape is the one the guard was built for: a request is
+            // ACCEPTED when `ready` is high, and its VERDICT arrives one cycle
+            // later as `ok`/`violation`. The violation arm above already reads
+            // it on that later cycle, which is why the refusal path was right
+            // while the acceptance path was not.
+            //
+            // Found by `tools/rtl/check_guard_verdict.py` after that tool was
+            // repaired -- it had been CRASHING on a cp1252 em dash in an
+            // unrelated file, so it never reached its coverage audit and every
+            // guard client added since went unscanned. A dead checker reports no
+            // faults, which reads exactly like no faults.
+            //
+            // `ready` low is the guard being BUSY, and that is a HOLD, not a
+            // failure. An earlier draft treated it as a denial and would have
+            // discarded a good upload whenever the arbiter was serving somebody
+            // else. Acceptance is only required on the beat that carries the
+            // request (beat 0); afterwards the burst is already accepted and the
+            // data channel's own `guard_wready_i` paces it.
             if (guard_wready_i &&
-                ((beat_q != '0) || (guard_rsp_i.ready && guard_rsp_i.ok))) begin
+                ((beat_q != '0) || guard_rsp_i.ready)) begin
               crc_q <= crc_next_w;
               // The bridge's own `last` and our beat counter must agree. They
               // are two independent statements about how many bytes moved, and
