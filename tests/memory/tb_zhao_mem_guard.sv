@@ -28,6 +28,12 @@ module tb_zhao_mem_guard
   // 1 = RASTER.FBWRITE. Driven by the harness so owner mismatch is a case
   // the directed test can actually construct.
   input logic        fb_writer,
+  // Owner ruling R32: the published-resource region the TERRAIN_BUILD client
+  // (MEM.UPLOAD) may write inside RENDER.ASSET_POOL. Driven by the harness so
+  // both sides of the bound are cases the directed test can construct.
+  input logic        res_valid,
+  input logic [31:0] res_base,
+  input logic [31:0] res_span,
 
   // ---- guard events --------------------------------------------------------
   output logic        guard_violation,
@@ -80,6 +86,7 @@ module tb_zhao_mem_guard
     .clk, .rst_n,
     .req (g_req), .rsp (g_rsp),
     .map_valid, .blit_slot, .blit_span, .fb_writer,
+    .res_valid, .res_base, .res_span,
     .arb_req, .arb_rsp,
     .guard_violation, .guard_violations,
     .guard_violation_req (viol_req)

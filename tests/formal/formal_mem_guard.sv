@@ -62,7 +62,13 @@ module formal_mem_guard
   // Which writer the lease names. Free, and held constant for the trace like
   // the rest of the map, because a lease that changed mid-frame is a different
   // property from the one this file proves.
-  input logic        env_fb_writer_i
+  input logic        env_fb_writer_i,
+  // The published-resource region (R32): HOST configuration, free and held
+  // constant like the map. NOT constrained to lie in the asset pool -- the DUT
+  // must refuse a region that does not, and that refusal is what is proved.
+  input logic        env_res_valid_i,
+  input logic [31:0] env_res_base_i,
+  input logic [31:0] env_res_span_i
 );
 
   // ------------------------------------------------------- reset discipline
@@ -88,8 +94,13 @@ module formal_mem_guard
   logic        env_blit_slot;
   logic [31:0] env_blit_span;
   logic        env_fb_writer;
+  logic        env_res_valid;
+  logic [31:0] env_res_base, env_res_span;
   always_ff @(posedge clk) begin
     if (cyc == 4'd0) begin
+      env_res_valid <= env_res_valid_i;
+      env_res_base  <= env_res_base_i;
+      env_res_span  <= env_res_span_i;
       env_map_valid <= env_map_valid_i;
       env_blit_slot <= env_blit_slot_i;
       env_blit_span <= env_blit_span_i;
@@ -115,11 +126,20 @@ module formal_mem_guard
   logic [31:0]     guard_violations;
   zhao_guard_req_t guard_violation_req;
 
+  // THE MUTANT SEAM (R32). A plain `ifdef selecting between two module
+  // names, which a -D does reach (CLAUDE.md: a function-like define does not).
+  // tests/formal/mem_guard_resbound_mutant.sby defines it and EXPECTS FAIL; the
+  // production proof leaves it undefined, which is the negative control.
+`ifdef ZHAO_GUARD_RESBOUND_MUT
+  zhao_mem_guard_resbound_mutant u_guard (
+`else
   zhao_mem_guard u_guard (
+`endif
     .clk, .rst_n,
     .req, .rsp,
     .map_valid (env_map_valid), .blit_slot (env_blit_slot),
     .blit_span (env_blit_span), .fb_writer (env_fb_writer),
+    .res_valid (env_res_valid), .res_base (env_res_base), .res_span (env_res_span),
     .arb_req, .arb_rsp,
     .guard_violation, .guard_violations, .guard_violation_req
   );
@@ -152,6 +172,14 @@ module formal_mem_guard
   // window in the map that carries traffic each way, which is why the
   // direction statements below are split PER DIRECTION rather than folded into
   // a1_region and trusted to the spelling of pass_ok.
+  // The published-resource region (R32), as the ENTITLEMENT, computed from
+  // the held config independently of the DUT: 33-bit end, and the region must
+  // lie wholly inside the asset pool or it entitles nothing.
+  wire [32:0] res_end33 = {1'b0, env_res_base} + {1'b0, env_res_span};
+  wire res_in_pool = env_res_valid && (env_res_base >= ZHAO_RENDER_ASSET_BASE)
+                  && (res_end33 <= {1'b0, ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN});
+  wire fwd_in_resource = res_in_pool && (fwd_addr32 >= env_res_base)
+                      && ({1'b0, fwd_end32} <= res_end33);
   wire fwd_in_terrain = (fwd_addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
                      && (fwd_end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
                                        + ZHAO_TERRAIN_PAGE_POOL_SPAN);
@@ -205,7 +233,12 @@ module formal_mem_guard
         // cannot wrap. The direction is still stated as a theorem, twice, at
         // a1_terrain_wr_owner / a1_terrain_rd_owner below.
         || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
-            && fwd_in_terrain));
+            && fwd_in_terrain)
+        // R32: the SIXTH law. TERRAIN_BUILD may WRITE the asset pool, and only
+        // inside the published-resource region -- which itself must lie
+        // inside the pool. It is a WRITE arm only: no read term is added.
+        || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD && arb_req.write
+            && fwd_in_resource));
 
       // DEBUG still owns nothing and must never be forwarded, and neither
       // does the client id ruling T3 leaves unspent
@@ -226,10 +259,18 @@ module formal_mem_guard
 
       // The render asset pool is read-only and has exactly one global owner.
       // Geometry and texture are local mux subowners, never new client IDs.
-      a1_render_asset_ro: assert (!(fwd_in_render_asset && arb_req.write));
-      a1_render_asset_owner:
-        assert (!(fwd_in_render_asset &&
+      // R32 AMENDED these two, and they are RESTATED PER DIRECTION rather than
+      // deleted -- the terrain amendment's pattern. The pool keeps ONE READER
+      // (ENGINE1) and gains ONE WRITER (TERRAIN_BUILD), and every write must
+      // land inside the published-resource region.
+      a1_render_asset_rd_owner:
+        assert (!(fwd_in_render_asset && !arb_req.write &&
                   arb_req.client != ZHAO_CLIENT_ENGINE1));
+      a1_render_asset_wr_owner:
+        assert (!(fwd_in_render_asset && arb_req.write &&
+                  arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
+      a1_resource_bounded:
+        assert (!(fwd_in_render_asset && arb_req.write) || fwd_in_resource);
       // Client 5 is deliberately unspent and cannot reach any forwarded arm.
       a1_no_forward_client5:
         assert (arb_req.client != zhao_client_e'(3'd5));
@@ -335,6 +376,10 @@ module formal_mem_guard
       c_forward_terrain_rd: cover (arb_req.valid
                                    && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
                                    && !arb_req.write && fwd_in_terrain);
+      // R32's arm must be REACHABLE, or a1_resource_bounded holds trivially.
+      c_forward_resource_wr: cover (arb_req.valid
+                                    && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+                                    && arb_req.write && fwd_in_render_asset);
       c_accept_ok:      cover (rsp.ok);
       c_violation:      cover (guard_violation);
       c_client5_denied: cover (client5_accept_q && rsp.violation &&

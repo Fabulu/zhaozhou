@@ -1,3 +1,22 @@
+// zhao_mem_guard_resbound_mutant.sv -- A POSITIVE CONTROL, NOT A DESIGN.
+//
+// DRIVEN-BY: tests/formal/mem_guard_resbound_mutant.sby -- INVERTED POLARITY:
+//            that proof is declared `expect fail` and PASSES when the
+//            no-escape theorem FAILS against this copy.
+//
+// WHAT ONE LINE WAS CHANGED. Owner ruling R32 (2026-09-19) gave TERRAIN_BUILD
+// a WRITE arm into RENDER.ASSET_POOL, bounded to the host-configured published-
+// resource region, and production refuses a region that does not lie wholly
+// inside the pool. This copy drops that containment term, so a region
+// configured over a framebuffer slot opens a write into it. If the proof still
+// passed against this copy, `a1_map` / `a1_region` / `a1_resource_bounded`
+// could not see the bound they claim to prove -- a detector that has not been
+// seen to fire is a claim, not an instrument.
+//
+// REGENERATE IT if zhao_mem_guard.sv changes shape: it is a COPY, and
+// tools/budget/mutant_copy_drift.py will say when it is stale. RENAMED so no
+// production source list can elaborate it.
+// ===========================================================================
 // zhao_mem_guard.sv — region/ownership checker between EVERY fabric VRAM
 // client and the memory system (plan W2.5). Law: spec/memory_rules.md §5;
 // contract design/contracts/MEM.GUARD.md.
@@ -52,7 +71,7 @@
 // Conservative SystemVerilog subset only (charter §2). Lint: clean under
 // `verilator --lint-only -Wall` (lint_mem_guard CTest).
 
-module zhao_mem_guard
+module zhao_mem_guard_resbound_mutant
   import zhao_pkg::*;
 (
   input  logic clk,
@@ -288,9 +307,13 @@ module zhao_mem_guard
   logic        res_in_pool, resource_wr_ok;
   assign res_end33   = {1'b0, res_base} + {1'b0, res_span};
   assign end33       = {1'b0, end32};
-  assign res_in_pool = res_valid
-                     && (res_base  >= ZHAO_RENDER_ASSET_BASE)
-                     && (res_end33 <= {1'b0, ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN});
+  // ======================= THE MUTATION, AND IT IS THIS ONE LINE ===========
+  // Production requires the configured region to lie WHOLLY INSIDE
+  // RENDER.ASSET_POOL. This copy trusts it: any configured region opens.
+  assign res_in_pool = res_valid;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire mut_res_end_unused = |res_end33;
+  /* verilator lint_on UNUSEDSIGNAL */
   assign resource_wr_ok = req.write && res_in_pool
                         && (addr32 >= res_base) && (end33 <= res_end33);
 

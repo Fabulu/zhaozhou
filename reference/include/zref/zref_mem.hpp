@@ -669,6 +669,13 @@ struct GuardMap {
   unsigned blit_slot = 0;         // 0/1 -- the leased slot
   uint32_t blit_span = 0;         // granted bytes (canvas_bytes(mode))
   unsigned writer = WRITER_BLIT;  // which client the lease is held BY
+  // Owner ruling R32 (provisional): the ONE published-resource region
+  // TERRAIN_BUILD (MEM.UPLOAD's client) may WRITE inside RENDER.ASSET_POOL.
+  // The RTL's `res_valid/res_base/res_span`; off by default, which is every
+  // guard but the shell's slot-6 one.
+  bool res_valid = false;
+  uint32_t res_base = 0;
+  uint32_t res_span = 0;
 };
 
 constexpr uint32_t kFbSlot0Base = 0x00000000u;
@@ -757,7 +764,14 @@ struct MemoryGuard {
             r.addr >= kTerrainPagePoolBase && end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
         const bool wr_ok = r.write && in_pool;   // pages in  (TERRAIN.PAGELOADER)
         const bool rd_ok = !r.write && in_pool;  // sheets out (TERRAIN.WRITEBACK)
-        return wr_ok || rd_ok;
+        // R32's THIRD arm: writes inside the published-resource region, and
+        // only while that region lies WHOLLY inside RENDER.ASSET_POOL. 64-bit
+        // ends, matching the RTL's 33-bit `res_end33`, so base+span cannot wrap.
+        const uint64_t res_end = uint64_t(m.res_base) + m.res_span;
+        const bool res_in_pool = m.res_valid && m.res_base >= kRenderAssetBase &&
+                                 res_end <= uint64_t(kRenderAssetBase) + kRenderAssetSpan;
+        const bool res_ok = r.write && res_in_pool && r.addr >= m.res_base && end <= res_end;
+        return wr_ok || rd_ok || res_ok;
       }
       default:
         return false;  // DEBUG owns nothing, and neither does the unspent 5

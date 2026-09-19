@@ -10,13 +10,13 @@
       "gpu": 2484,
       "video": 172
     },
-    "input_bits": 3069,
-    "input_ports": 96,
-    "non_clock_reset_input_bits": 3065,
+    "input_bits": 3134,
+    "input_ports": 99,
+    "non_clock_reset_input_bits": 3130,
     "output_bits": 2722,
     "output_ports": 139,
-    "port_count": 235,
-    "total_bits": 5791
+    "port_count": 238,
+    "total_bits": 5856
   },
   "external_ports": [
     {
@@ -92,15 +92,15 @@
       "unpacked_dimensions": []
     }
   ],
-  "generated_rtl_sha256": "ee74179038803464761316c9ad566886adf2f490d201602d94b0e76eece1038c",
+  "generated_rtl_sha256": "c2f7ef908a18275da3353c7df4aeff40e3c8c1e5195b94a36db510d9aa5c3768",
   "hashes": {
-    "generator": "b3d7b8d3bd4cb378329815aa89cb2da0dc58de124d17af5d63d9c37de4fc4279",
+    "generator": "eedec3cc8489aa4c267984e2fda3ed84b2479fb77189733cdf25e5b90aac62b0",
     "package_file": "d0c62815f5e45bbb34dc87b56f251434915b557d36975e16aed26c9db7b627bd",
     "packet": "bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51",
     "parser": "b279bc67b22d4308b415a3b7a15b0aa8dfae312161bc3ced1d27e340fd796198",
-    "policy": "4ccc3f83c1dcc59e169f7d2628d410fa045f67bc325fe3a94b01653a5159bf57",
-    "shell_declaration": "67da56b88456fb0e9d52c02344d9690b059f9dd810682f7ba78cbecd11f0ae37",
-    "shell_file": "3a2970c0a3856e9f5d1d5f4109c7c1ff699a9ba0d8d8eacfbf7e959eed0b818c"
+    "policy": "eaa3a2a6329ad0fad95e4fc2ddcd15cb9472ecdd114043702885aef4b0163fad",
+    "shell_declaration": "4319f3abfe3420625faba72482055fe0d5a3d491e70fb162ca03d2d9060a4d50",
+    "shell_file": "a0dba9a99556ab7f4d8e959990476dad499e489d0665db2e43c6a63122c50c61"
   },
   "hierarchy": {
     "remainder_attribution": "reported top row only; never inferred by subtraction",
@@ -5012,6 +5012,88 @@
       "unpacked_dimensions": []
     },
     {
+      "bit_width": 1,
+      "capture_register": null,
+      "connection": ".build_res_valid_i(shell_build_res_valid_i)",
+      "constant_reason": null,
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "build_socket_client",
+      "dynamic_mask": "0x1",
+      "element_width": 1,
+      "generated_signal": "shell_build_res_valid_i",
+      "name": "build_res_valid_i",
+      "ordinal": 179,
+      "packed_dimensions": [],
+      "registered_driver": "u_stimulus.build_res_valid_i",
+      "signal_type_text": "logic",
+      "signature_offset": null,
+      "signed": false,
+      "sink": null,
+      "type_text": "var logic",
+      "unpacked_dimensions": []
+    },
+    {
+      "bit_width": 32,
+      "capture_register": null,
+      "connection": ".build_res_base_i(shell_build_res_base_i)",
+      "constant_reason": null,
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "build_socket_client",
+      "dynamic_mask": "0xffffffff",
+      "element_width": 32,
+      "generated_signal": "shell_build_res_base_i",
+      "name": "build_res_base_i",
+      "ordinal": 180,
+      "packed_dimensions": [
+        {
+          "left": 31,
+          "left_text": "31",
+          "right": 0,
+          "right_text": "0",
+          "text": "[31:0]"
+        }
+      ],
+      "registered_driver": "u_stimulus.build_res_base_i",
+      "signal_type_text": "logic [31:0]",
+      "signature_offset": null,
+      "signed": false,
+      "sink": null,
+      "type_text": "var logic [31:0]",
+      "unpacked_dimensions": []
+    },
+    {
+      "bit_width": 32,
+      "capture_register": null,
+      "connection": ".build_res_span_i(shell_build_res_span_i)",
+      "constant_reason": null,
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "build_socket_client",
+      "dynamic_mask": "0xffffffff",
+      "element_width": 32,
+      "generated_signal": "shell_build_res_span_i",
+      "name": "build_res_span_i",
+      "ordinal": 181,
+      "packed_dimensions": [
+        {
+          "left": 31,
+          "left_text": "31",
+          "right": 0,
+          "right_text": "0",
+          "text": "[31:0]"
+        }
+      ],
+      "registered_driver": "u_stimulus.build_res_span_i",
+      "signal_type_text": "logic [31:0]",
+      "signature_offset": null,
+      "signed": false,
+      "sink": null,
+      "type_text": "var logic [31:0]",
+      "unpacked_dimensions": []
+    },
+    {
       "bit_width": 23,
       "capture_register": null,
       "connection": ".render_kx0_i(shell_render_kx0_i)",
@@ -5023,7 +5105,7 @@
       "element_width": 23,
       "generated_signal": "shell_render_kx0_i",
       "name": "render_kx0_i",
-      "ordinal": 179,
+      "ordinal": 182,
       "packed_dimensions": [
         {
           "left": 22,
@@ -5053,7 +5135,7 @@
       "element_width": 23,
       "generated_signal": "shell_render_ky0_i",
       "name": "render_ky0_i",
-      "ordinal": 180,
+      "ordinal": 183,
       "packed_dimensions": [
         {
           "left": 22,
@@ -5083,7 +5165,7 @@
       "element_width": 48,
       "generated_signal": "shell_render_kc0_i",
       "name": "render_kc0_i",
-      "ordinal": 181,
+      "ordinal": 184,
       "packed_dimensions": [
         {
           "left": 47,
@@ -5113,7 +5195,7 @@
       "element_width": 23,
       "generated_signal": "shell_render_kx1_i",
       "name": "render_kx1_i",
-      "ordinal": 182,
+      "ordinal": 185,
       "packed_dimensions": [
         {
           "left": 22,
@@ -5143,7 +5225,7 @@
       "element_width": 23,
       "generated_signal": "shell_render_ky1_i",
       "name": "render_ky1_i",
-      "ordinal": 183,
+      "ordinal": 186,
       "packed_dimensions": [
         {
           "left": 22,
@@ -5173,7 +5255,7 @@
       "element_width": 48,
       "generated_signal": "shell_render_kc1_i",
       "name": "render_kc1_i",
-      "ordinal": 184,
+      "ordinal": 187,
       "packed_dimensions": [
         {
           "left": 47,
@@ -5203,7 +5285,7 @@
       "element_width": 23,
       "generated_signal": "shell_render_kx2_i",
       "name": "render_kx2_i",
-      "ordinal": 185,
+      "ordinal": 188,
       "packed_dimensions": [
         {
           "left": 22,
@@ -5233,7 +5315,7 @@
       "element_width": 23,
       "generated_signal": "shell_render_ky2_i",
       "name": "render_ky2_i",
-      "ordinal": 186,
+      "ordinal": 189,
       "packed_dimensions": [
         {
           "left": 22,
@@ -5263,7 +5345,7 @@
       "element_width": 48,
       "generated_signal": "shell_render_kc2_i",
       "name": "render_kc2_i",
-      "ordinal": 187,
+      "ordinal": 190,
       "packed_dimensions": [
         {
           "left": 47,
@@ -5293,7 +5375,7 @@
       "element_width": 3,
       "generated_signal": "shell_render_tl_i",
       "name": "render_tl_i",
-      "ordinal": 188,
+      "ordinal": 191,
       "packed_dimensions": [
         {
           "left": 2,
@@ -5323,7 +5405,7 @@
       "element_width": 21,
       "generated_signal": "shell_render_ax_i",
       "name": "render_ax_i",
-      "ordinal": 189,
+      "ordinal": 192,
       "packed_dimensions": [
         {
           "left": 20,
@@ -5353,7 +5435,7 @@
       "element_width": 21,
       "generated_signal": "shell_render_ay_i",
       "name": "render_ay_i",
-      "ordinal": 190,
+      "ordinal": 193,
       "packed_dimensions": [
         {
           "left": 20,
@@ -5383,7 +5465,7 @@
       "element_width": 21,
       "generated_signal": "shell_render_bx_i",
       "name": "render_bx_i",
-      "ordinal": 191,
+      "ordinal": 194,
       "packed_dimensions": [
         {
           "left": 20,
@@ -5413,7 +5495,7 @@
       "element_width": 21,
       "generated_signal": "shell_render_by_i",
       "name": "render_by_i",
-      "ordinal": 192,
+      "ordinal": 195,
       "packed_dimensions": [
         {
           "left": 20,
@@ -5443,7 +5525,7 @@
       "element_width": 21,
       "generated_signal": "shell_render_cx_i",
       "name": "render_cx_i",
-      "ordinal": 193,
+      "ordinal": 196,
       "packed_dimensions": [
         {
           "left": 20,
@@ -5473,7 +5555,7 @@
       "element_width": 21,
       "generated_signal": "shell_render_cy_i",
       "name": "render_cy_i",
-      "ordinal": 194,
+      "ordinal": 197,
       "packed_dimensions": [
         {
           "left": 20,
@@ -5503,7 +5585,7 @@
       "element_width": 12,
       "generated_signal": "shell_render_min_x_i",
       "name": "render_min_x_i",
-      "ordinal": 195,
+      "ordinal": 198,
       "packed_dimensions": [
         {
           "left": 11,
@@ -5533,7 +5615,7 @@
       "element_width": 12,
       "generated_signal": "shell_render_max_x_i",
       "name": "render_max_x_i",
-      "ordinal": 196,
+      "ordinal": 199,
       "packed_dimensions": [
         {
           "left": 11,
@@ -5563,7 +5645,7 @@
       "element_width": 12,
       "generated_signal": "shell_render_min_y_i",
       "name": "render_min_y_i",
-      "ordinal": 197,
+      "ordinal": 200,
       "packed_dimensions": [
         {
           "left": 11,
@@ -5593,7 +5675,7 @@
       "element_width": 12,
       "generated_signal": "shell_render_max_y_i",
       "name": "render_max_y_i",
-      "ordinal": 198,
+      "ordinal": 201,
       "packed_dimensions": [
         {
           "left": 11,
@@ -5623,7 +5705,7 @@
       "element_width": 16,
       "generated_signal": "shell_render_src_id_i",
       "name": "render_src_id_i",
-      "ordinal": 199,
+      "ordinal": 202,
       "packed_dimensions": [
         {
           "left": 15,
@@ -5653,7 +5735,7 @@
       "element_width": 64,
       "generated_signal": "shell_render_fill_word_i",
       "name": "render_fill_word_i",
-      "ordinal": 200,
+      "ordinal": 203,
       "packed_dimensions": [
         {
           "left": 63,
@@ -5683,7 +5765,7 @@
       "element_width": 64,
       "generated_signal": "shell_render_clear_word_i",
       "name": "render_clear_word_i",
-      "ordinal": 201,
+      "ordinal": 204,
       "packed_dimensions": [
         {
           "left": 63,
@@ -5713,7 +5795,7 @@
       "element_width": 32,
       "generated_signal": "shell_render_state_i",
       "name": "render_state_i",
-      "ordinal": 202,
+      "ordinal": 205,
       "packed_dimensions": [
         {
           "left": 31,
@@ -5743,7 +5825,7 @@
       "element_width": 8,
       "generated_signal": "shell_render_src_a_i",
       "name": "render_src_a_i",
-      "ordinal": 203,
+      "ordinal": 206,
       "packed_dimensions": [
         {
           "left": 7,
@@ -5773,7 +5855,7 @@
       "element_width": 24,
       "generated_signal": "shell_render_texel_rgb_i",
       "name": "render_texel_rgb_i",
-      "ordinal": 204,
+      "ordinal": 207,
       "packed_dimensions": [
         {
           "left": 23,
@@ -5803,7 +5885,7 @@
       "element_width": 8,
       "generated_signal": "shell_render_texel_a_i",
       "name": "render_texel_a_i",
-      "ordinal": 205,
+      "ordinal": 208,
       "packed_dimensions": [
         {
           "left": 7,
@@ -5833,7 +5915,7 @@
       "element_width": 8,
       "generated_signal": "shell_render_texel_idx_i",
       "name": "render_texel_idx_i",
-      "ordinal": 206,
+      "ordinal": 209,
       "packed_dimensions": [
         {
           "left": 7,
@@ -5863,7 +5945,7 @@
       "element_width": 27,
       "generated_signal": "shell_render_fb_base_i",
       "name": "render_fb_base_i",
-      "ordinal": 207,
+      "ordinal": 210,
       "packed_dimensions": [
         {
           "left": 26,
@@ -5893,7 +5975,7 @@
       "element_width": 16,
       "generated_signal": "shell_render_fb_stride_i",
       "name": "render_fb_stride_i",
-      "ordinal": 208,
+      "ordinal": 211,
       "packed_dimensions": [
         {
           "left": 15,
@@ -5923,7 +6005,7 @@
       "element_width": 1,
       "generated_signal": "shell_fb_writer_i",
       "name": "fb_writer_i",
-      "ordinal": 209,
+      "ordinal": 212,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.fb_writer_i",
       "signal_type_text": "logic",
@@ -5945,7 +6027,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_drain_done_o",
       "name": "render_drain_done_o",
-      "ordinal": 210,
+      "ordinal": 213,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -5967,7 +6049,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_busy_o",
       "name": "render_busy_o",
-      "ordinal": 211,
+      "ordinal": 214,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -5989,7 +6071,7 @@
       "element_width": 32,
       "generated_signal": "shell_render_pixels_o",
       "name": "render_pixels_o",
-      "ordinal": 212,
+      "ordinal": 215,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6019,7 +6101,7 @@
       "element_width": 32,
       "generated_signal": "shell_render_bursts_o",
       "name": "render_bursts_o",
-      "ordinal": 213,
+      "ordinal": 216,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6049,7 +6131,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_stream_error_o",
       "name": "render_stream_error_o",
-      "ordinal": 214,
+      "ordinal": 217,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6071,7 +6153,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_drained_o",
       "name": "render_drained_o",
-      "ordinal": 215,
+      "ordinal": 218,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6093,7 +6175,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_fatal_o",
       "name": "render_fatal_o",
-      "ordinal": 216,
+      "ordinal": 219,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6115,7 +6197,7 @@
       "element_width": 32,
       "generated_signal": "shell_render_issued_words_o",
       "name": "render_issued_words_o",
-      "ordinal": 217,
+      "ordinal": 220,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6145,7 +6227,7 @@
       "element_width": 32,
       "generated_signal": "shell_render_retired_words_o",
       "name": "render_retired_words_o",
-      "ordinal": 218,
+      "ordinal": 221,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6175,7 +6257,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_overflow_o",
       "name": "render_overflow_o",
-      "ordinal": 219,
+      "ordinal": 222,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6197,7 +6279,7 @@
       "element_width": 1,
       "generated_signal": "shell_render_fragment_error_o",
       "name": "render_fragment_error_o",
-      "ordinal": 220,
+      "ordinal": 223,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6219,7 +6301,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_cs_n_o",
       "name": "phy_cs_n_o",
-      "ordinal": 221,
+      "ordinal": 224,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6241,7 +6323,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_ras_n_o",
       "name": "phy_ras_n_o",
-      "ordinal": 222,
+      "ordinal": 225,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6263,7 +6345,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_cas_n_o",
       "name": "phy_cas_n_o",
-      "ordinal": 223,
+      "ordinal": 226,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6285,7 +6367,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_we_n_o",
       "name": "phy_we_n_o",
-      "ordinal": 224,
+      "ordinal": 227,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6307,7 +6389,7 @@
       "element_width": 13,
       "generated_signal": "shell_phy_a_o",
       "name": "phy_a_o",
-      "ordinal": 225,
+      "ordinal": 228,
       "packed_dimensions": [
         {
           "left": 12,
@@ -6337,7 +6419,7 @@
       "element_width": 2,
       "generated_signal": "shell_phy_ba_o",
       "name": "phy_ba_o",
-      "ordinal": 226,
+      "ordinal": 229,
       "packed_dimensions": [
         {
           "left": 1,
@@ -6367,7 +6449,7 @@
       "element_width": 16,
       "generated_signal": "shell_phy_dq_o",
       "name": "phy_dq_o",
-      "ordinal": 227,
+      "ordinal": 230,
       "packed_dimensions": [
         {
           "left": 15,
@@ -6397,7 +6479,7 @@
       "element_width": 1,
       "generated_signal": "shell_phy_dq_oe_o",
       "name": "phy_dq_oe_o",
-      "ordinal": 228,
+      "ordinal": 231,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6419,7 +6501,7 @@
       "element_width": 2,
       "generated_signal": "shell_phy_dqm_o",
       "name": "phy_dqm_o",
-      "ordinal": 229,
+      "ordinal": 232,
       "packed_dimensions": [
         {
           "left": 1,
@@ -6449,7 +6531,7 @@
       "element_width": 16,
       "generated_signal": "shell_phy_dq_i",
       "name": "phy_dq_i",
-      "ordinal": 230,
+      "ordinal": 233,
       "packed_dimensions": [
         {
           "left": 15,
@@ -6479,7 +6561,7 @@
       "element_width": 1,
       "generated_signal": "shell_cmd_pkt_valid_o",
       "name": "cmd_pkt_valid_o",
-      "ordinal": 231,
+      "ordinal": 234,
       "packed_dimensions": [],
       "registered_driver": null,
       "signal_type_text": "logic",
@@ -6501,7 +6583,7 @@
       "element_width": 8,
       "generated_signal": "shell_cmd_pkt_byte_o",
       "name": "cmd_pkt_byte_o",
-      "ordinal": 232,
+      "ordinal": 235,
       "packed_dimensions": [
         {
           "left": 7,
@@ -6531,7 +6613,7 @@
       "element_width": 32,
       "generated_signal": "shell_cmd_pkt_len_o",
       "name": "cmd_pkt_len_o",
-      "ordinal": 233,
+      "ordinal": 236,
       "packed_dimensions": [
         {
           "left": 31,
@@ -6561,7 +6643,7 @@
       "element_width": 1,
       "generated_signal": "shell_cmd_pkt_ready_i",
       "name": "cmd_pkt_ready_i",
-      "ordinal": 234,
+      "ordinal": 237,
       "packed_dimensions": [],
       "registered_driver": "u_stimulus.cmd_pkt_ready_i",
       "signal_type_text": "logic",

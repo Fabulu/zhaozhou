@@ -236,6 +236,19 @@ of its own beyond its request queue and one burst buffer.
 size is a capacity decision that belongs to the owner and to a measured trace,
 and is deliberately not invented here.
 
+**Owner ruling R32 (provisional, 2026-09-19) answers WHERE, not how much.**
+Resources land inside `RENDER.ASSET_POOL`, where their `ENGINE1` readers
+(MATERIAL.RESOLVE, the geometry fetchers) can reach them. `MEM.GUARD`'s
+`TERRAIN_BUILD` client gains a WRITE arm on the pool bounded to the ONE region
+this block publishes into -- the same `cfg_region_*` every request is
+bounds-checked against, so the guard and this block cannot disagree -- and the
+arm closes whole unless that region lies entirely inside the pool.
+`mem_guard_no_escape` is re-proved with the arm, and the committed mutant
+`tests/mutants/zhao_mem_guard_resbound_mutant.sv` (pool containment removed)
+makes the proof fail. **Capacity comes from the pool's existing 22 MiB
+budget**; no new region is appended, so the sizing question above is still the
+owner's and still wants a trace.
+
 ## Q formats and rounding
 
 None. This block moves bytes and changes no bit.
@@ -347,7 +360,9 @@ This block cannot work alone. Each of these is somebody else's contract:
    third client and a priority rule that keeps the command stream ahead of bulk
    resource traffic.
 2. **`MEM.GUARD`** — needs the appended resource region **and** generation
-   rejection, which it does not do today.
+   rejection. The region is ANSWERED by owner ruling R32 (a bounded write arm
+   inside `RENDER.ASSET_POOL`, see Memory ownership); generation rejection is
+   still not done.
 3. **`CMD.SCHEDULER`** — needs a resource-pin table so a frame is sealed only
    when every referenced resource is resident and pinned. Without it, nothing
    enforces the ruling's frame-publication law.

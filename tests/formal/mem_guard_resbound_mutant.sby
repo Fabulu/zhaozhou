@@ -1,0 +1,29 @@
+# mem_guard_resbound_mutant.sby -- the POSITIVE CONTROL for owner ruling R32's
+# bound. INVERTED POLARITY: `expect fail`. It runs the SAME harness as
+# mem_guard_no_escape.sby against tests/mutants/zhao_mem_guard_resbound_mutant.sv,
+# a copy of the guard with the published-resource region's pool-containment term
+# removed, and it PASSES only when the no-escape proof FAILS on that copy.
+#
+# The seam is a plain `ifdef selecting the module name in formal_mem_guard.sv
+# (ZHAO_GUARD_RESBOUND_MUT). The production proof leaves it undefined; that run
+# passing while this one fails is the pair that shows the selector engaged.
+# Run with cwd = tests/formal.
+
+[options]
+mode bmc
+depth 30
+expect fail
+
+[engines]
+smtbmc boolector
+
+[script]
+read_slang -D ZHAO_GUARD_RESBOUND_MUT --top formal_mem_guard zhao_abi_pkg.sv zhao_pkg.sv zhao_sdram_params_pkg.sv zhao_mem_guard_resbound_mutant.sv formal_mem_guard.sv
+prep -top formal_mem_guard
+
+[files]
+../../fpga/rtl/generated/zhao_abi_pkg.sv
+../../fpga/rtl/common/zhao_pkg.sv
+../../fpga/rtl/memory/zhao_sdram_params_pkg.sv
+../../tests/mutants/zhao_mem_guard_resbound_mutant.sv
+formal_mem_guard.sv

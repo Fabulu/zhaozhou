@@ -1484,6 +1484,30 @@
     },
     {
       "ordinal": 179,
+      "name": "build_res_valid_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "build_socket_client",
+      "dynamic_mask": "0x1"
+    },
+    {
+      "ordinal": 180,
+      "name": "build_res_base_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "build_socket_client",
+      "dynamic_mask": "0xffffffff"
+    },
+    {
+      "ordinal": 181,
+      "name": "build_res_span_i",
+      "direction": "input",
+      "domain": "gpu",
+      "driver": "build_socket_client",
+      "dynamic_mask": "0xffffffff"
+    },
+    {
+      "ordinal": 182,
       "name": "render_kx0_i",
       "direction": "input",
       "domain": "gpu",
@@ -1492,7 +1516,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 180,
+      "ordinal": 183,
       "name": "render_ky0_i",
       "direction": "input",
       "domain": "gpu",
@@ -1501,7 +1525,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 181,
+      "ordinal": 184,
       "name": "render_kc0_i",
       "direction": "input",
       "domain": "gpu",
@@ -1510,7 +1534,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 182,
+      "ordinal": 185,
       "name": "render_kx1_i",
       "direction": "input",
       "domain": "gpu",
@@ -1519,7 +1543,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 183,
+      "ordinal": 186,
       "name": "render_ky1_i",
       "direction": "input",
       "domain": "gpu",
@@ -1528,7 +1552,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 184,
+      "ordinal": 187,
       "name": "render_kc1_i",
       "direction": "input",
       "domain": "gpu",
@@ -1537,7 +1561,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 185,
+      "ordinal": 188,
       "name": "render_kx2_i",
       "direction": "input",
       "domain": "gpu",
@@ -1546,7 +1570,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 186,
+      "ordinal": 189,
       "name": "render_ky2_i",
       "direction": "input",
       "domain": "gpu",
@@ -1555,7 +1579,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 187,
+      "ordinal": 190,
       "name": "render_kc2_i",
       "direction": "input",
       "domain": "gpu",
@@ -1564,7 +1588,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 188,
+      "ordinal": 191,
       "name": "render_tl_i",
       "direction": "input",
       "domain": "gpu",
@@ -1572,7 +1596,7 @@
       "dynamic_mask": "0x7"
     },
     {
-      "ordinal": 189,
+      "ordinal": 192,
       "name": "render_ax_i",
       "direction": "input",
       "domain": "gpu",
@@ -1581,7 +1605,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 190,
+      "ordinal": 193,
       "name": "render_ay_i",
       "direction": "input",
       "domain": "gpu",
@@ -1590,7 +1614,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 191,
+      "ordinal": 194,
       "name": "render_bx_i",
       "direction": "input",
       "domain": "gpu",
@@ -1599,7 +1623,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 192,
+      "ordinal": 195,
       "name": "render_by_i",
       "direction": "input",
       "domain": "gpu",
@@ -1608,7 +1632,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 193,
+      "ordinal": 196,
       "name": "render_cx_i",
       "direction": "input",
       "domain": "gpu",
@@ -1617,7 +1641,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 194,
+      "ordinal": 197,
       "name": "render_cy_i",
       "direction": "input",
       "domain": "gpu",
@@ -1626,7 +1650,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 195,
+      "ordinal": 198,
       "name": "render_min_x_i",
       "direction": "input",
       "domain": "gpu",
@@ -1635,7 +1659,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 196,
+      "ordinal": 199,
       "name": "render_max_x_i",
       "direction": "input",
       "domain": "gpu",
@@ -1644,7 +1668,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 197,
+      "ordinal": 200,
       "name": "render_min_y_i",
       "direction": "input",
       "domain": "gpu",
@@ -1653,7 +1677,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 198,
+      "ordinal": 201,
       "name": "render_max_y_i",
       "direction": "input",
       "domain": "gpu",
@@ -1662,7 +1686,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 199,
+      "ordinal": 202,
       "name": "render_src_id_i",
       "direction": "input",
       "domain": "gpu",
@@ -1671,7 +1695,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 200,
+      "ordinal": 203,
       "name": "render_fill_word_i",
       "direction": "input",
       "domain": "gpu",
@@ -1680,7 +1704,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 201,
+      "ordinal": 204,
       "name": "render_clear_word_i",
       "direction": "input",
       "domain": "gpu",
@@ -1689,7 +1713,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 202,
+      "ordinal": 205,
       "name": "render_state_i",
       "direction": "input",
       "domain": "gpu",
@@ -1698,7 +1722,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 203,
+      "ordinal": 206,
       "name": "render_src_a_i",
       "direction": "input",
       "domain": "gpu",
@@ -1706,7 +1730,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 204,
+      "ordinal": 207,
       "name": "render_texel_rgb_i",
       "direction": "input",
       "domain": "gpu",
@@ -1715,7 +1739,7 @@
       "constant_reason": "Alternating directed and entropy-width render phases drive this deterministic mask; unreached bits remain intentionally constant in the bounded two-job profile."
     },
     {
-      "ordinal": 205,
+      "ordinal": 208,
       "name": "render_texel_a_i",
       "direction": "input",
       "domain": "gpu",
@@ -1723,7 +1747,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 206,
+      "ordinal": 209,
       "name": "render_texel_idx_i",
       "direction": "input",
       "domain": "gpu",
@@ -1731,7 +1755,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 207,
+      "ordinal": 210,
       "name": "render_fb_base_i",
       "direction": "input",
       "domain": "gpu",
@@ -1740,7 +1764,7 @@
       "constant_reason": "The one-shot directed render intentionally uses framebuffer base zero, so every base-address bit remains constant."
     },
     {
-      "ordinal": 208,
+      "ordinal": 211,
       "name": "render_fb_stride_i",
       "direction": "input",
       "domain": "gpu",
@@ -1749,7 +1773,7 @@
       "constant_reason": "The one-shot legal directed triangle uses fixed field values; only bits differing across the driven phases toggle."
     },
     {
-      "ordinal": 209,
+      "ordinal": 212,
       "name": "fb_writer_i",
       "direction": "input",
       "domain": "gpu",
@@ -1757,7 +1781,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 210,
+      "ordinal": 213,
       "name": "render_drain_done_o",
       "direction": "output",
       "domain": "gpu",
@@ -1765,7 +1789,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 211,
+      "ordinal": 214,
       "name": "render_busy_o",
       "direction": "output",
       "domain": "gpu",
@@ -1773,7 +1797,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 212,
+      "ordinal": 215,
       "name": "render_pixels_o",
       "direction": "output",
       "domain": "gpu",
@@ -1782,7 +1806,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 213,
+      "ordinal": 216,
       "name": "render_bursts_o",
       "direction": "output",
       "domain": "gpu",
@@ -1791,7 +1815,7 @@
       "constant_reason": "The bounded characterization reaches only the listed counter bits; higher-order count bits remain constant."
     },
     {
-      "ordinal": 214,
+      "ordinal": 217,
       "name": "render_stream_error_o",
       "direction": "output",
       "domain": "gpu",
@@ -1800,7 +1824,7 @@
       "constant_reason": "The one-shot directed render keeps the stream error detector clear."
     },
     {
-      "ordinal": 215,
+      "ordinal": 218,
       "name": "render_drained_o",
       "direction": "output",
       "domain": "gpu",
@@ -1808,7 +1832,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 216,
+      "ordinal": 219,
       "name": "render_fatal_o",
       "direction": "output",
       "domain": "gpu",
@@ -1817,7 +1841,7 @@
       "constant_reason": "Accepted renderer work retires under its valid lease without guard denial or stream failure, so fatal stays clear."
     },
     {
-      "ordinal": 217,
+      "ordinal": 220,
       "name": "render_issued_words_o",
       "direction": "output",
       "domain": "gpu",
@@ -1826,7 +1850,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 218,
+      "ordinal": 221,
       "name": "render_retired_words_o",
       "direction": "output",
       "domain": "gpu",
@@ -1835,7 +1859,7 @@
       "constant_reason": "The bounded two-job render profile reaches exactly this deterministic counter/status mask; higher bits remain constant within the characterization horizon."
     },
     {
-      "ordinal": 219,
+      "ordinal": 222,
       "name": "render_overflow_o",
       "direction": "output",
       "domain": "gpu",
@@ -1844,7 +1868,7 @@
       "constant_reason": "The one-shot directed render remains within queue capacity, so overflow stays clear."
     },
     {
-      "ordinal": 220,
+      "ordinal": 223,
       "name": "render_fragment_error_o",
       "direction": "output",
       "domain": "gpu",
@@ -1853,7 +1877,7 @@
       "constant_reason": "The legal directed triangle keeps the fragment error detector clear."
     },
     {
-      "ordinal": 221,
+      "ordinal": 224,
       "name": "phy_cs_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -1862,7 +1886,7 @@
       "constant_reason": "The sampled capture sequence keeps chip-select at one invariant logic level."
     },
     {
-      "ordinal": 222,
+      "ordinal": 225,
       "name": "phy_ras_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -1870,7 +1894,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 223,
+      "ordinal": 226,
       "name": "phy_cas_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -1878,7 +1902,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 224,
+      "ordinal": 227,
       "name": "phy_we_n_o",
       "direction": "output",
       "domain": "gpu",
@@ -1886,7 +1910,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 225,
+      "ordinal": 228,
       "name": "phy_a_o",
       "direction": "output",
       "domain": "gpu",
@@ -1895,7 +1919,7 @@
       "constant_reason": "The deterministic bounded traffic profile produces only the listed changed bits; remaining payload bits stay invariant."
     },
     {
-      "ordinal": 226,
+      "ordinal": 229,
       "name": "phy_ba_o",
       "direction": "output",
       "domain": "gpu",
@@ -1903,7 +1927,7 @@
       "dynamic_mask": "0x3"
     },
     {
-      "ordinal": 227,
+      "ordinal": 230,
       "name": "phy_dq_o",
       "direction": "output",
       "domain": "gpu",
@@ -1911,7 +1935,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 228,
+      "ordinal": 231,
       "name": "phy_dq_oe_o",
       "direction": "output",
       "domain": "gpu",
@@ -1919,7 +1943,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 229,
+      "ordinal": 232,
       "name": "phy_dqm_o",
       "direction": "output",
       "domain": "gpu",
@@ -1928,7 +1952,7 @@
       "constant_reason": "All characterized SDR transfers use full-word masks, so both DQM bits remain constant."
     },
     {
-      "ordinal": 230,
+      "ordinal": 233,
       "name": "phy_dq_i",
       "direction": "input",
       "domain": "gpu",
@@ -1936,7 +1960,7 @@
       "dynamic_mask": "0xffff"
     },
     {
-      "ordinal": 231,
+      "ordinal": 234,
       "name": "cmd_pkt_valid_o",
       "direction": "output",
       "domain": "gpu",
@@ -1944,7 +1968,7 @@
       "dynamic_mask": "0x1"
     },
     {
-      "ordinal": 232,
+      "ordinal": 235,
       "name": "cmd_pkt_byte_o",
       "direction": "output",
       "domain": "gpu",
@@ -1952,7 +1976,7 @@
       "dynamic_mask": "0xff"
     },
     {
-      "ordinal": 233,
+      "ordinal": 236,
       "name": "cmd_pkt_len_o",
       "direction": "output",
       "domain": "gpu",
@@ -1960,7 +1984,7 @@
       "dynamic_mask": "0xffffffff"
     },
     {
-      "ordinal": 234,
+      "ordinal": 237,
       "name": "cmd_pkt_ready_i",
       "direction": "input",
       "domain": "gpu",

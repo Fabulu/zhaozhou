@@ -456,6 +456,9 @@ module tb_pageloader
       .blit_slot(1'b0),
       .blit_span(32'd0),
       .fb_writer(1'b0),
+      .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .arb_req(shadow_arb_req),
       .arb_rsp(shadow_arb_rsp),
       .guard_violation(shadow_viol_pulse),
@@ -517,6 +520,9 @@ module tb_pageloader
       .blit_slot(1'b0),
       .blit_span(32'd0),
       .fb_writer(1'b0),
+      .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .arb_req(probe_arb_req),
       .arb_rsp(probe_arb_rsp),
       .guard_violation(probe_viol_pulse),

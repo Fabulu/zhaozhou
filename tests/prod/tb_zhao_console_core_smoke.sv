@@ -1807,9 +1807,11 @@ module tb_zhao_console_core_smoke
   localparam int unsigned PKT_MAX_C     = 256;
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
-  // The top 4 KiB of TERRAIN.PAGE_POOL -- the only window MEM.GUARD's
-  // TERRAIN_BUILD arm admits -- well clear of the pages the spine loads.
-  localparam logic [31:0] UPL_REGION_C  = 32'h054D_F000;
+  // The top 4 KiB of RENDER.ASSET_POOL (0x06A0_0000 + 0x0160_0000), which
+  // MEM.GUARD's TERRAIN_BUILD arm may WRITE inside this one region since owner
+  // ruling R32 -- and which ENGINE1, MATERIAL.RESOLVE's fetch identity, may
+  // read. Well clear of the geometry assets the replay reads.
+  localparam logic [31:0] UPL_REGION_C  = 32'h07FF_F000;
   localparam logic [31:0] UPL_REGION_SZ = 32'h0000_1000;
   // The request the packet carries, named once so the checks can compare the
   // published row against it.
@@ -1821,6 +1823,7 @@ module tb_zhao_console_core_smoke
   localparam logic [15:0] UPL_GEN_C     = 16'h0102;
   localparam logic [15:0] UPL_EPOCH_C   = 16'd9;
   logic [63:0] upl_mem [0:UPL_WORDS_C-1];
+  logic [255:0] upl_rec0;         // record 0 of the uploaded MATERIAL_SET
   logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
   int unsigned pkt_len_q;
   logic        pkt_armed_q;       // set by the initial block once the packet is built
@@ -1967,6 +1970,8 @@ module tb_zhao_console_core_smoke
   logic         mat_fired_q;
   int unsigned  mat_rsp_seen_q;
   logic [2:0]   mat_status_seen_q;
+  logic         mat_rec_has_q;
+  logic [255:0] mat_rec_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       mat_req_valid_i        <= 1'b0;
@@ -1977,6 +1982,8 @@ module tb_zhao_console_core_smoke
       mat_fired_q            <= 1'b0;
       mat_rsp_seen_q         <= 0;
       mat_status_seen_q      <= 3'd7;
+      mat_rec_has_q          <= 1'b0;
+      mat_rec_q              <= '0;
     end else begin
       if ((upl_pub_seen_q != 0) && !mat_fired_q && !mat_req_valid_i) begin
         mat_req_valid_i        <= 1'b1;
@@ -1990,6 +1997,8 @@ module tb_zhao_console_core_smoke
       if (mat_rsp_valid_o && mat_rsp_ready_i) begin
         mat_rsp_seen_q    <= mat_rsp_seen_q + 1;
         mat_status_seen_q <= mat_rsp_status_o;
+        mat_rec_has_q     <= mat_rsp_has_record_o;
+        mat_rec_q         <= mat_rsp_record_o;
       end
     end
   end
@@ -3318,6 +3327,23 @@ module tb_zhao_console_core_smoke
     // as the terrain list above.
     for (int unsigned w = 0; w < UPL_WORDS_C; w++)
       upl_mem[w] = 64'hC0DE_5EED_0000_0000 + 64'(w * 32'h0101_0101);
+    // Record 0 of the MATERIAL_SET is a LEGAL MaterialRecord from the generated
+    // packer (one sample, recipe 0), so MATERIAL.RESOLVE's answer can be
+    // compared bit for bit against what the command uploaded. Records 1-7
+    // stay the fill pattern; nothing requests them.
+    begin : build_material
+      zhao_abi_pkg::zhao_material_record_t mr;
+      mr = '0;
+      mr.control                    = 8'h01;          // count 1, recipe 0
+      mr.recipe_weight              = 8'h80;
+      mr.sample0.binding_slot       = 16'h0003;
+      mr.sample0.binding_generation = 8'h05;
+      mr.sample0.modes              = 8'h00;          // wrap 0: legal
+      mr.palette_base               = 32'h0000_1200;
+      mr.raster_state               = 32'h0000_0007;
+      upl_rec0 = zhao_abi_pkg::zhao_pack_material_record(mr);
+      for (int unsigned w = 0; w < 4; w++) upl_mem[w] = upl_rec0[64*w +: 64];
+    end
     fold_c_i = 32'hFFFF_FFFF;
     fold_n_i = 4'd8;
     for (int unsigned w = 0; w < UPL_WORDS_C; w++) begin
@@ -4479,7 +4505,7 @@ module tb_zhao_console_core_smoke
     if (geom_attrpack_triangles_o == 0)
       $fatal(1, "SMOKE: GEOM.ATTRPACK never saw a triangle, so every plane the shell read was its reset value");
 
-    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END, and the three Packet-D attribute planes now have a PRODUCER: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) -- three lanes through one shared GEOM.ATTRSETUP -- from GEOM.CLIP's own winding-flipped vertex attributes, so depth and both texture coordinates vary across the surface instead of interpolating to zero. What is STILL not proven is the MATERIAL, and the REASON CHANGED AGAIN on 2026-09-19: THE RULING LANDED AND IT WAS NOT THE LAST THING. `spec/memory_rules.md` 5f.1 now rules that a published slot is named by the handle index of the resource it holds, making the residency directory {index:24} -> {slot, base, extent, kind}, and `zhao_mem_upload` publishes all five: base and extent were never missing VALUES, only dropped ones, already bounds-checked against `cfg_region_*` before a byte moved, and the kind already travelled as publish_tag_o. MATERIAL.RESOLVE is BUILT -- 91 directed checks differenced against `zref::material::Resolver`, every counter seen to fire, a committed positive control for owner ruling D-3's cache tag -- and is STILL NOT COMPOSED. The docket called the ruling the last thing between this island and sampling anything; it is not, and the four that remain are NAMED here rather than left to be rediscovered. (1) MEM.UPLOAD cannot be composed anywhere yet: `zhao_hps_arbiter` carries exactly TWO clients and both are taken in both instances -- CMD.DMA and DEBUG.FRAMEBLIT in `zhao_shell_top_v2`, TERRAIN.CMD and TERRAIN.PAGELOADER in `u_terr_hps_arb` -- so a third is the owner ruling core entry I27 already records. (2) The record fetch wants a third ENGINE1 requester and `zhao_geom_mem_adapter` has exactly two, GEOM.MESHFETCH and GEOM.ASSETFETCH. (3) The resolve REQUEST has no honest producer: `cmd_draw_material_set_o` (I41) and `geom_mf_job_*` (I36) are both boundaries while CMD.SCHEDULER's draw path is absent, and joining the two live wires that ARE here would pair meshlet N's triangles with meshlet M's material -- the fault entry I39 refuses by name, because GEOM.MESHFETCH's result register has moved on by the time the meshlet is offered. (4) `tri_flat_request_i` wants the binding page's palette slot, palette generation and response class besides, which MATERIAL.RESOLVE's own header says it does not own. So `tri_flat_request_i` still has no producer, sample_count, material_recipe and base_binding_selector are all still zero, and the texture island still samples nothing. Perspective-correct interpolation is composed; the surface it would sample is not bound. What changed is the SHAPE of the remaining distance: four composed seams, three of which are arbitration, rather than one undecided sentence.",
+    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END, and the three Packet-D attribute planes now have a PRODUCER: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) -- three lanes through one shared GEOM.ATTRSETUP -- from GEOM.CLIP's own winding-flipped vertex attributes, so depth and both texture coordinates vary across the surface instead of interpolating to zero. What is STILL not proven is the MATERIAL ON A TRIANGLE. The record half is now proven end to end (2026-09-19, cmdmem, rulings R17/R20/R32): a PublishResource in the command packet lands a MATERIAL_SET in RENDER.ASSET_POOL through MEM.UPLOAD on the TERRAIN.BUILD socket, MATERIAL.RESOLVE finds it in the 5f.1 directory, fetches record 0 as ENGINE1 through the adapter's third requester, and answers the uploaded record bit for bit (the `SMOKE: material` line). Two seams remain, NAMED so they are not rediscovered. (1) The resolve REQUEST has no honest producer: `cmd_draw_material_set_o` (I41) and `geom_mf_job_*` (I36) are both boundaries, and joining the two live wires that ARE here would pair meshlet N's triangles with meshlet M's material -- the fault entry I39 refuses by name; this bench drives the request itself, which is why the proof stops at the record. (2) `tri_flat_request_i` wants the binding page's palette slot, palette generation and response class besides, which MATERIAL.RESOLVE's own header says it does not own. So `tri_flat_request_i` still has no producer, sample_count, material_recipe and base_binding_selector are all still zero, and the texture island still samples nothing. Perspective-correct interpolation is composed; the surface it would sample is not bound.",
              render_pixels_o, render_bursts_o,
              geom_setup_triangles_submitted_o, v2_frames_admitted_o,
              geom_attrpack_planes_o, geom_attrpack_triangles_o);
@@ -4643,24 +4669,29 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the shell's write-queue (%b) or routing (%b) tripwire fired with the slot-6 socket live",
              shell_err_wfifo_o, shell_err_route_o);
 
-    // ---- MATERIAL.RESOLVE (R20): the directory HITS and the guard DENIES ----
+    // ---- MATERIAL.RESOLVE (R20 + R32): found, fetched, resolved ------------
     // The published MATERIAL_SET is found (not NOT_RESIDENT): the directory is
-    // MEM.UPLOAD's publication. Its record fetch then goes to the REAL
-    // MEM.GUARD as ENGINE1 -- and is DENIED, because the bytes sit in
-    // TERRAIN.PAGE_POOL (the only window TERRAIN_BUILD may write) and ENGINE1
-    // may read only RENDER.ASSET_POOL. This is the owner decision the core's
-    // I49 entry names, shown end to end, and it resolves to kFetchDenied
-    // rather than hanging -- which is R20.
+    // MEM.UPLOAD's publication. Its record fetch goes to the REAL MEM.GUARD as
+    // ENGINE1 through requester C, and is ADMITTED, because since owner ruling
+    // R32 MEM.UPLOAD writes the published region inside RENDER.ASSET_POOL.
+    // The answer is a first-touch MISS carrying the record, and the record is
+    // the one the PublishResource uploaded, bit for bit -- bytes that crossed
+    // the HPS bridge, the slot-6 write queue and VRAM, and came back as ENGINE1.
+    // (The denied path, kFetchDenied, is fired by the block's own bench, R20.)
     $display("SMOKE: material  responses=%0d status=%0d hits=%0d misses=%0d not_resident=%0d fetch_denied=%0d adapter_jobs_c=%0d adapter_denied=%0d",
              mat_rsp_seen_q, mat_status_seen_q, mat_hits_o, mat_misses_o, mat_not_resident_o,
              mat_fetch_denied_o, geom_ma_jobs_c_o, geom_ma_denied_o);
     if (mat_rsp_seen_q != 1)
-      $fatal(1, "SMOKE: MATERIAL.RESOLVE answered %0d time(s) to one request -- a denied fetch must be ANSWERED, never waited on", mat_rsp_seen_q);
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE answered %0d time(s) to one request -- expected exactly one answer", mat_rsp_seen_q);
     if (mat_not_resident_o != 0)
       $fatal(1, "SMOKE: the published MATERIAL_SET was NOT RESIDENT -- MEM.UPLOAD's publication did not reach the directory");
-    if (mat_status_seen_q != 3'd5 || mat_fetch_denied_o != 32'd1)
-      $fatal(1, "SMOKE: MATERIAL.RESOLVE status %0d, fetch_denied %0d -- expected kFetchDenied (5) once: the guard admits ENGINE1 to RENDER.ASSET_POOL only, and this record sits in TERRAIN.PAGE_POOL",
-             mat_status_seen_q, mat_fetch_denied_o);
+    if (mat_status_seen_q != 3'd1 || mat_fetch_denied_o != 32'd0 || mat_misses_o != 32'd1
+        || mat_refused_o != 32'd0 || geom_ma_denied_o != 32'd0)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE status %0d, misses %0d, refused %0d, fetch_denied %0d, adapter_denied %0d -- expected one kMiss (1) with the record: R32 puts the upload where ENGINE1 reads",
+             mat_status_seen_q, mat_misses_o, mat_refused_o, mat_fetch_denied_o, geom_ma_denied_o);
+    if (!mat_rec_has_q || mat_rec_q != upl_rec0)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE's record (has=%b) %064x is not the uploaded record %064x",
+             mat_rec_has_q, mat_rec_q, upl_rec0);
     // ---- DEBUG.TRACE against its producer (core entry I45) ----------------
     // The composition check the ring's contract asks for, and it is an
     // EQUALITY on purpose. `cmd_commands_o` is CMD.DECODER's own count of

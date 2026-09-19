@@ -680,7 +680,12 @@ if(ZHAO_SBY_BIN)
   # See the wave-3 TASK_LOG.
   # MEM.SDRAM is SPECIFIED / blocked_on: hardware, so no maturity claim rests
   # on it today.
-  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape)
+  # mem_guard_resbound_mutant is INVERTED (`expect fail`): the positive control
+  # for owner ruling R32's resource-write bound. It passes only when the
+  # no-escape proof FAILS on tests/mutants/zhao_mem_guard_resbound_mutant.sv
+  # (pool containment removed). Its wrapper message says "bmc + cover"; it
+  # carries bmc only.
+  foreach(sby_prop IN ITEMS mem_vram_arbiter_liveness mem_guard_no_escape mem_guard_resbound_mutant)
     set(PROP "${sby_prop}")
     set(FORMAL_WORK_ROOT "${ZHAO_MEM_FORMAL_WORK}")
     set(FORMAL_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/formal")

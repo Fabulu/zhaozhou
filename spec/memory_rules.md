@@ -414,6 +414,17 @@ The original geometry blocker and evidence remain below.
 | Range | Region | Size | Owner | Access |
 |---|---|---|---|---|
 | `0x06A0_0000` .. `0x07FF_FFFF` | `RENDER.ASSET_POOL` | 22 MiB | `ENGINE1` | **read-only** |
+| (inside the above) the published-resource region | `RENDER.ASSET_POOL` | `cfg_region_*` | `TERRAIN_BUILD` (MEM.UPLOAD) | **write-only**, ruling R32 |
+
+**Owner ruling R32 (provisional, 2026-09-19).** `ENGINE1` stays the pool's one
+READER. `TERRAIN_BUILD` -- MEM.UPLOAD's client -- may WRITE the one
+published-resource region (`res_base`, `res_span`: the host-configured region
+MEM.UPLOAD bounds every request against), and only while that region lies
+wholly inside the pool; a region straddling either edge, or whose end wraps 32
+bits, closes the arm whole rather than being clamped. The bound is the guard's
+second non-constant one (the framebuffer lease is the first), so it gets the
+same discipline: `mem_guard_no_escape` re-proved with a free region, and a
+committed mutant that widens the bound makes that proof fail.
 
 ### Why it was the blocker
 

@@ -1,8 +1,8 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
-// shell-declaration-sha256: 67da56b88456fb0e9d52c02344d9690b059f9dd810682f7ba78cbecd11f0ae37
-// policy-sha256: 4ccc3f83c1dcc59e169f7d2628d410fa045f67bc325fe3a94b01653a5159bf57
-// generator-sha256: b3d7b8d3bd4cb378329815aa89cb2da0dc58de124d17af5d63d9c37de4fc4279
+// shell-declaration-sha256: 4319f3abfe3420625faba72482055fe0d5a3d491e70fb162ca03d2d9060a4d50
+// policy-sha256: eaa3a2a6329ad0fad95e4fc2ddcd15cb9472ecdd114043702885aef4b0163fad
+// generator-sha256: eedec3cc8489aa4c267984e2fda3ed84b2479fb77189733cdf25e5b90aac62b0
 // parser-sha256: b279bc67b22d4308b415a3b7a15b0aa8dfae312161bc3ced1d27e340fd796198
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
@@ -196,6 +196,9 @@ module shell_v2_top
   (* keep = "true" *) logic [1-1:0] shell_build_hps_grant_o;
   (* keep = "true" *) zhao_hps_burst_rsp_t [1-1:0] shell_build_hps_rsp_o;
   (* keep = "true" *) logic [1-1:0] [31:0] shell_build_hps_wait_o;
+  (* keep = "true" *) logic shell_build_res_valid_i;
+  (* keep = "true" *) logic [31:0] shell_build_res_base_i;
+  (* keep = "true" *) logic [31:0] shell_build_res_span_i;
   (* keep = "true" *) logic signed [22:0] shell_render_kx0_i;
   (* keep = "true" *) logic signed [22:0] shell_render_ky0_i;
   (* keep = "true" *) logic signed [47:0] shell_render_kc0_i;
@@ -511,6 +514,9 @@ module shell_v2_top
     .build_wvalid_i(shell_build_wvalid_i),
     .build_wlast_i(shell_build_wlast_i),
     .build_hps_req_i(shell_build_hps_req_i),
+    .build_res_valid_i(shell_build_res_valid_i),
+    .build_res_base_i(shell_build_res_base_i),
+    .build_res_span_i(shell_build_res_span_i),
     .render_kx0_i(shell_render_kx0_i),
     .render_ky0_i(shell_render_ky0_i),
     .render_kc0_i(shell_render_kc0_i),
@@ -726,6 +732,9 @@ module shell_v2_top
     .build_hps_grant_o(shell_build_hps_grant_o),
     .build_hps_rsp_o(shell_build_hps_rsp_o),
     .build_hps_wait_o(shell_build_hps_wait_o),
+    .build_res_valid_i(shell_build_res_valid_i),
+    .build_res_base_i(shell_build_res_base_i),
+    .build_res_span_i(shell_build_res_span_i),
     .render_kx0_i(shell_render_kx0_i),
     .render_ky0_i(shell_render_ky0_i),
     .render_kc0_i(shell_render_kc0_i),
@@ -907,6 +916,9 @@ module shell_v2_stimulus
   (* preserve *) output var logic build_wvalid_i,
   (* preserve *) output var logic build_wlast_i,
   (* preserve *) output var zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
+  (* preserve *) output var logic build_res_valid_i,
+  (* preserve *) output var logic [31:0] build_res_base_i,
+  (* preserve *) output var logic [31:0] build_res_span_i,
   (* preserve *) output var logic signed [22:0] render_kx0_i,
   (* preserve *) output var logic signed [22:0] render_ky0_i,
   (* preserve *) output var logic signed [47:0] render_kc0_i,
@@ -1516,6 +1528,9 @@ module shell_v2_stimulus
       build_wvalid_i <= '0;
       build_wlast_i <= '0;
       build_hps_req_i <= '0;
+      build_res_valid_i <= '0;
+      build_res_base_i <= '0;
+      build_res_span_i <= '0;
       render_kx0_i <= '0;
       render_ky0_i <= '0;
       render_kc0_i <= '0;

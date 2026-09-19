@@ -398,7 +398,8 @@ module zhao_shell_top_v2
   //   * a MEM.GUARD client on VRAM slot 6 with BOTH directions -- the write
   //     channel (MEM.UPLOAD, TERRAIN.PAGELOADER, TERRAIN.WRITEBACK) and the
   //     read-beat return (TERRAIN.PAGESTREAM, TERRAIN.HDRREAD). The guard is
-  //     the one `zhao_mem_guard` law, so TERRAIN.PAGE_POOL is the window.
+  //     the one `zhao_mem_guard` law, so TERRAIN.PAGE_POOL is the window,
+  //     plus R32's write-only published-resource region (build_res_*).
   //   * BUILD_HPS_N read clients of the shell's HPS arbiter.
   //
   // Upstream sharing of the one guard port is the composer's, through
@@ -428,6 +429,14 @@ module zhao_shell_top_v2
   // the bridge and did not have it. A background client is ALLOWED to starve
   // (5d); it is not allowed to starve invisibly.
   output var logic [BUILD_HPS_N-1:0][31:0] build_hps_wait_o,
+  // Owner ruling R32 (provisional, 2026-09-19): the ONE region of
+  // RENDER.ASSET_POOL this socket's guard client may WRITE -- the resource
+  // region MEM.UPLOAD publishes into the residency directory. The guard admits
+  // it only while the whole region lies inside the pool, and only for writes;
+  // anything outside it in the pool stays refused. Zero/invalid = no region.
+  input  var logic            build_res_valid_i,
+  input  var logic [31:0]     build_res_base_i,
+  input  var logic [31:0]     build_res_span_i,
   input  logic signed [22:0] render_kx0_i, render_ky0_i,
   input  logic signed [47:0] render_kc0_i,
   input  logic signed [22:0] render_kx1_i, render_ky1_i,
@@ -906,6 +915,9 @@ module zhao_shell_top_v2
     // Scanout reads and never writes, so the lease owner cannot reach its
     // verdict. Tied to the blit writer rather than left dangling.
     .fb_writer  (1'b0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (scan_arb_req),
     .arb_rsp    (client_rsp[0]),
     .guard_violation     (scan_gv),
@@ -929,6 +941,9 @@ module zhao_shell_top_v2
     // The lease owner, shared with the render guard below. This guard passes
     // only when the lease names the blit.
     .fb_writer  (fb_writer_i),
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (blit_arb_req),
     .arb_rsp    (client_rsp[1]),
     .guard_violation     (blit_gv),
@@ -1220,6 +1235,9 @@ module zhao_shell_top_v2
     // lease names the render engine, so exactly one of the two writers can ever
     // pass in a frame -- the lease ruling in hardware rather than in a comment.
     .fb_writer  (fb_writer_i),
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (render_arb_req),
     .arb_rsp    (client_rsp[2]),
     .guard_violation     (render_gv),
@@ -1263,6 +1281,9 @@ module zhao_shell_top_v2
     // the framebuffer lease owner cannot reach its verdict -- same reasoning
     // as the scanout guard above.
     .fb_writer  (1'b0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (geom_arb_req),
     .arb_rsp    (client_rsp[3]),
     .guard_violation     (geom_gv),
@@ -1279,9 +1300,11 @@ module zhao_shell_top_v2
   assign client_req[5] = '0;
   // Slot 6 is TERRAIN.BUILD, and it is now a SOCKET rather than a reservation
   // (2026-09-19, cmdmem packet). Its guard is the one `zhao_mem_guard`, whose
-  // TERRAIN_BUILD arm admits TERRAIN.PAGE_POOL in both directions and nothing
-  // else -- so no client of this socket can reach a framebuffer or the asset
-  // pool, whatever it asks for.
+  // TERRAIN_BUILD arm admits TERRAIN.PAGE_POOL in both directions and, since
+  // owner ruling R32, WRITES inside the one published-resource region
+  // (build_res_*) when that region lies wholly inside RENDER.ASSET_POOL -- so no
+  // client of this socket can reach a framebuffer, or any other part of the
+  // asset pool, whatever it asks for (mem_guard_no_escape, re-proved).
   //
   // THE WRITE GATE. Slot 6 has its OWN write-data queue (`bq`, below), and the
   // arbiter must not accept a write request whose words are not all in it:
@@ -1307,6 +1330,9 @@ module zhao_shell_top_v2
     .blit_slot  (1'b0),   // TIE: TERRAIN.PAGE_POOL has constant bounds; no framebuffer map applies to slot 6
     .blit_span  (32'd0),  // TIE: TERRAIN.PAGE_POOL has constant bounds; no framebuffer map applies to slot 6
     .fb_writer  (1'b0),   // TIE: TERRAIN_BUILD holds no framebuffer lease; the guard's lease arms never name it
+    .res_valid  (build_res_valid_i),
+    .res_base   (build_res_base_i),
+    .res_span   (build_res_span_i),
     .arb_req    (build_arb_req),
     .arb_rsp    (client_rsp[6]),
     .guard_violation     (build_gv),

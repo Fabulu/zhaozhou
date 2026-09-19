@@ -335,6 +335,9 @@ module tb_packet_g_lease_cdc
       .rsp(render_guard_rsp_w), .map_valid(lease_valid_o),
       .blit_slot(lease_slot_o), .blit_span(lease_span_o),
       .fb_writer(lease_writer_o), .arb_req(render_arb_req_w),
+      .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .arb_rsp(render_arb_rsp_w),
       .guard_violation(unused_render_guard_pulse),
       .guard_violations(unused_render_guard_count),
@@ -344,6 +347,9 @@ module tb_packet_g_lease_cdc
       .rsp(blit_guard_rsp_w), .map_valid(lease_valid_o),
       .blit_slot(lease_slot_o), .blit_span(lease_span_o),
       .fb_writer(lease_writer_o), .arb_req(blit_arb_req_w),
+      .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+      .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
       .arb_rsp(blit_arb_rsp_w),
       .guard_violation(unused_blit_guard_pulse),
       .guard_violations(unused_blit_guard_count),

@@ -1366,12 +1366,14 @@
 //        1. CLOSED 2026-09-19 (cmdmem). MEM.UPLOAD is COMPOSED on the shell's
 //           TERRAIN.BUILD socket (the N-client HPS arbiter of ruling R4, VRAM
 //           slot 6 behind the real MEM.GUARD) and its request is CMD.EXEC's
-//           lowering of `PublishResource` (ruling R17). What it still cannot
-//           do is land a MATERIAL_SET where ENGINE1 reads it: MEM.GUARD's
-//           TERRAIN_BUILD arm admits TERRAIN.PAGE_POOL only, and
-//           RENDER.ASSET_POOL is read-only to everyone -- the "appended
-//           resource region" the MEM.UPLOAD contract calls an owner capacity
-//           decision. That is an owner decision now, not a seam.
+//           lowering of `PublishResource` (ruling R17). It lands a
+//           MATERIAL_SET where ENGINE1 reads it since owner ruling R32
+//           (provisional): MEM.GUARD's TERRAIN_BUILD arm WRITES the one
+//           published-resource region (the core's `upl_cfg_region_*`, the
+//           same bound MEM.UPLOAD checks) when it lies wholly inside
+//           RENDER.ASSET_POOL, and nothing else of the pool. mem_guard_no_escape
+//           is re-proved with it, and `tests/mutants/zhao_mem_guard_resbound_
+//           mutant.sv` (containment removed) makes that proof FAIL.
 //        2. CLOSED 2026-09-19 (cmdmem, R20). The record fetch is requester C
 //           of `u_geom_mem_adapter`, now on the N-requester share, and a
 //           refused read resolves to kFetchDenied instead of hanging.
@@ -2466,18 +2468,19 @@
 //      no owner, and meshlet N drawn with draw M's materials. The handle has
 //      to ride the job that produces the triangles, which is I36's ruling.
 //
-//      AND BEHIND IT, TWO MORE THINGS, NAMED SO THE NEXT READER COUNTS THEM:
+//      AND BEHIND IT, ONE MORE THING, NAMED SO THE NEXT READER COUNTS IT:
 //      (a) the response feeds `tri_flat_request_i` together with the binding
 //      page's palette slot / generation / response class (I20 seam 4) and
 //      needs the material id carried with each triangle through GEOM.CLIP,
 //      GEOM.SETUP and GEOM.ATTRPACK, which carry `src_id` beside a triangle
-//      today and nothing else; (b) THE RECORD CANNOT YET BE READ where it
-//      lands. MEM.GUARD lets TERRAIN_BUILD -- MEM.UPLOAD's client -- write only
-//      TERRAIN.PAGE_POOL, and lets ENGINE1 read only RENDER.ASSET_POOL. The
-//      smoke bench shows it end to end: the published MATERIAL_SET is found in
-//      the directory, the fetch goes to the guard, and the guard DENIES it --
-//      `mat_fetch_denied_o` = 1, status kFetchDenied. That is an owner
-//      decision (the contract's "appended resource region"), not a seam.
+//      today and nothing else. (b), "the record cannot be read where it
+//      lands", is CLOSED by owner ruling R32 (provisional): MEM.UPLOAD now
+//      writes the published region inside RENDER.ASSET_POOL, where ENGINE1
+//      reads. The smoke bench shows it end to end: PublishResource lands a
+//      MATERIAL_SET in the pool, MATERIAL.RESOLVE finds it in the directory,
+//      fetches the 32-byte record through requester C and the guard, and
+//      resolves it (`mat_fetch_denied_o` = 0). The denied path stays live
+//      and is fired by the block's own bench (case R20).
 //
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -3989,7 +3992,9 @@ module zhao_console_core
   output logic [31:0]             cmd_exec_uploads_o,
   output logic [31:0]             cmd_exec_upload_overflow_o,
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
-  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
+  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit (in
+  // TERRAIN.PAGE_POOL always; in RENDER.ASSET_POOL through R32's arm, which is
+  // bounded by exactly this region), the HPS
   // staging arena the active epoch registered, and that epoch.
   input  logic [31:0]             upl_cfg_region_base_i,
   input  logic [31:0]             upl_cfg_region_bytes_i,
@@ -8400,6 +8405,12 @@ module zhao_console_core
     .build_hps_grant_o         (upl_hps_grant),
     .build_hps_rsp_o           (upl_hps_rsp),
     .build_hps_wait_o          (upl_hps_wait_o),
+    // R32: the guard's write arm into RENDER.ASSET_POOL is bounded by the SAME
+    // region MEM.UPLOAD checks every request against and publishes into, so
+    // the two cannot disagree about where a resource may land.
+    .build_res_valid_i         (upl_cfg_region_bytes_i != 32'd0),
+    .build_res_base_i          (upl_cfg_region_base_i),
+    .build_res_span_i          (upl_cfg_region_bytes_i),
     .render_kx0_i              (st_kx0),
     .render_ky0_i              (st_ky0),
     .render_kc0_i              (st_kc0),
@@ -11189,7 +11200,11 @@ module zhao_console_core
     mr_guard_req.client = ZHAO_CLIENT_ENGINE1;
     mr_guard_req.addr   = mr_mem_req_addr[ZHAO_VRAM_ADDR_BITS-1:0];
     mr_guard_req.len    = 7'd32;
-    mr_guard_req.be     = '1;
+    // EXACTLY the record's 32 byte lanes. MEM.GUARD's shape rule demands a
+    // mask equal to the length's (`shape_ok`); an all-ones mask on a 32-byte
+    // read was refused on SHAPE, which hid behind the region refusal until
+    // R32 removed that one -- two reasons for one denial, agreeing.
+    mr_guard_req.be     = 64'h0000_0000_FFFF_FFFF;
   end
 
   wire [26:0] mr_extent_records = upl_publish_extent_o[31:5];

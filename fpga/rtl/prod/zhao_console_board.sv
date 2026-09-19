@@ -1314,7 +1314,9 @@ module zhao_console_board
   output logic [31:0]             cmd_exec_uploads_o,
   output logic [31:0]             cmd_exec_upload_overflow_o,
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
-  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
+  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit (in
+  // TERRAIN.PAGE_POOL always; in RENDER.ASSET_POOL through R32's arm, which is
+  // bounded by exactly this region), the HPS
   // staging arena the active epoch registered, and that epoch.
   input  logic [31:0]             upl_cfg_region_base_i,
   input  logic [31:0]             upl_cfg_region_bytes_i,

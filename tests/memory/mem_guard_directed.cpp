@@ -14,6 +14,9 @@
 //   * ENGINE1 16/32/64-byte reads accepted only in RENDER.ASSET_POOL;
 //     client 5 and every wrong owner remain denied
 //   * byte_enable holes rejected; map_valid=0 deny-all
+//   * owner ruling R32: TERRAIN_BUILD WRITES the published-resource region
+//     inside RENDER.ASSET_POOL, and nothing else there -- not a read, not a
+//     byte outside the region, not a region straddling the pool's edge
 
 #include "Vtb_zhao_mem_guard.h"
 #include "verilated.h"
@@ -99,6 +102,9 @@ struct GuardHarness {
     top.blit_slot = m.blit_slot;
     top.blit_span = m.blit_span;
     top.fb_writer = (m.writer == GuardMap::WRITER_ENGINE0) ? 1 : 0;
+    top.res_valid = m.res_valid;
+    top.res_base = m.res_base;
+    top.res_span = m.res_span;
     top.g_valid = 1;
     top.g_write = r.write;
     top.g_client = r.client;
@@ -290,6 +296,59 @@ int main(int argc, char** argv) {
     }
   }
 
+  // ---- R32: the published-resource WRITE arm ----------------------------------
+  // The top 4 KiB of RENDER.ASSET_POOL, where the console smoke lands its
+  // MATERIAL_SET. Writes inside land in the model; everything that is not a
+  // write inside a pool-contained region is refused with NOTHING written.
+  {
+    constexpr uint32_t rb = kRenderAssetBase + kRenderAssetSpan - 0x1000u;  // 0x07FF_F000
+    GuardMap res = map;
+    res.res_valid = true;
+    res.res_base = rb;
+    res.res_span = 0x1000u;
+    const unsigned TB = MemoryGuard::TERRAIN_BUILD;
+    auto pat = [](uint32_t w) { return uint16_t(((w * 2654435761u) >> 13) & 0xFFFF); };
+
+    h.request(MemoryGuard::Req{true, true, TB, rb, 64, full_be(64)}, res);
+    h.request(MemoryGuard::Req{true, true, TB, rb + 0x1000u - 64, 64, full_be(64)}, res);
+    chk(h.peek(rb >> 1) == pat(rb >> 1) && h.peek((rb + 0xFFEu) >> 1) == pat((rb + 0xFFEu) >> 1),
+        "R32: writes at both ends of the resource region land");
+    // one byte past the region's end, and one region-width below it (still
+    // INSIDE the pool): both refused, nothing written
+    h.request(MemoryGuard::Req{true, true, TB, rb + 0x1000u - 63, 64, full_be(64)}, res);
+    h.request(MemoryGuard::Req{true, true, TB, rb - 64, 64, full_be(64)}, res);
+    chk(h.peek((rb - 64) >> 1) == 0, "R32: a pool write outside the region leaves memory untouched");
+    // write-only: TERRAIN_BUILD may not READ the asset pool through this arm
+    h.request(MemoryGuard::Req{true, false, TB, rb, 64, full_be(64)}, res);
+    // other clients gain nothing from the region
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::ENGINE1, rb, 64, full_be(64)}, res);
+    h.request(MemoryGuard::Req{true, true, MemoryGuard::BLIT_DMA, rb, 64, full_be(64)}, res);
+    // the region switched off
+    GuardMap off = res;
+    off.res_valid = false;
+    h.request(MemoryGuard::Req{true, true, TB, rb, 64, full_be(64)}, off);
+    // regions that are NOT wholly inside the pool close the arm whole: past its
+    // end, below its start, and a base+span that wraps 32 bits
+    GuardMap hi = res;
+    hi.res_span = 0x2000u;
+    h.request(MemoryGuard::Req{true, true, TB, rb, 64, full_be(64)}, hi);
+    GuardMap lo = res;
+    lo.res_base = kRenderAssetBase - 0x1000u;
+    lo.res_span = 0x2000u;
+    h.request(MemoryGuard::Req{true, true, TB, kRenderAssetBase, 64, full_be(64)}, lo);
+    chk(h.peek(kRenderAssetBase >> 1) == 0, "R32: a region straddling the pool start writes nothing");
+    GuardMap wrap = res;
+    wrap.res_base = 0xFFFFF000u;
+    wrap.res_span = 0x2000u;
+    h.request(MemoryGuard::Req{true, true, TB, 0x00000000u, 64, full_be(64)}, wrap);
+    chk(h.peek(0) == pat(0), "R32: a wrapping region leaves framebuffer slot 0 as the blit wrote it");
+    // and a region inside TERRAIN.PAGE_POOL adds nothing to that arm's verdicts
+    GuardMap pp = res;
+    pp.res_base = kTerrainPagePoolBase;
+    pp.res_span = 0x1000u;
+    h.request(MemoryGuard::Req{true, false, TB, kTerrainPagePoolBase, 64, full_be(64)}, pp);
+  }
+
   // ---- byte_enable holes rejected ---------------------------------------------
   {
     h.request(
@@ -324,6 +383,10 @@ int main(int argc, char** argv) {
       m.valid = pcg.range(4) != 0;
       m.blit_slot = pcg.range(2);
       m.blit_span = 0x0003C000 - pcg.range(4) * 0x1000;
+      // R32's region, drawn from the same anchors so its edges meet the pool's
+      m.res_valid = pcg.range(2) != 0;
+      m.res_base = anchors[pcg.range(NANCHORS)] + pcg.range(0x200) - 0x100;
+      m.res_span = pcg.range(4) == 0 ? pcg.next() : 0x40u * (1 + pcg.range(0x80));
       MemoryGuard::Req r;
       r.valid = true;
       r.write = pcg.range(2) == 0;

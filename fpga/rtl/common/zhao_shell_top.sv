@@ -688,6 +688,9 @@ module zhao_shell_top
     // Scanout reads and never writes, so the lease owner cannot reach its
     // verdict. Tied to the blit writer rather than left dangling.
     .fb_writer  (1'b0),
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (scan_arb_req),
     .arb_rsp    (client_rsp[0]),
     .guard_violation     (scan_gv),
@@ -711,6 +714,9 @@ module zhao_shell_top
     // The lease owner, shared with the render guard below. This guard passes
     // only when the lease names the blit.
     .fb_writer  (fb_writer_i),
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (blit_arb_req),
     .arb_rsp    (client_rsp[1]),
     .guard_violation     (blit_gv),
@@ -876,6 +882,9 @@ module zhao_shell_top
     // lease names the render engine, so exactly one of the two writers can ever
     // pass in a frame -- the lease ruling in hardware rather than in a comment.
     .fb_writer  (fb_writer_i),
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (render_arb_req),
     .arb_rsp    (client_rsp[2]),
     .guard_violation     (render_gv),
@@ -919,6 +928,9 @@ module zhao_shell_top
     // the framebuffer lease owner cannot reach its verdict -- same reasoning
     // as the scanout guard above.
     .fb_writer  (1'b0),
+    .res_valid  (1'b0),   // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_base   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
+    .res_span   (32'd0),  // TIE: this client is not MEM.UPLOAD; the R32 resource-write arm names TERRAIN_BUILD alone
     .arb_req    (geom_arb_req),
     .arb_rsp    (client_rsp[3]),
     .guard_violation     (geom_gv),

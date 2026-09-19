@@ -12,7 +12,7 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 37 inputs exist only on the sibling. They get harness ports of
+// 40 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
@@ -120,6 +120,9 @@ module zhao_shell_paired_diff
   input  logic build_wvalid_i,
   input  logic build_wlast_i,
   input  zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
+  input  logic build_res_valid_i,
+  input  logic [31:0] build_res_base_i,
+  input  logic [31:0] build_res_span_i,
   input  logic cmd_pkt_ready_i,
   output logic v1_ring_wr_valid_o,
   output logic v2_ring_wr_valid_o,
@@ -662,6 +665,9 @@ module zhao_shell_paired_diff
     .build_hps_grant_o(),
     .build_hps_rsp_o(),
     .build_hps_wait_o(),
+    .build_res_valid_i(build_res_valid_i),
+    .build_res_base_i(build_res_base_i),
+    .build_res_span_i(build_res_span_i),
     .render_kx0_i(render_kx0_i),
     .render_ky0_i(render_ky0_i),
     .render_kc0_i(render_kc0_i),
