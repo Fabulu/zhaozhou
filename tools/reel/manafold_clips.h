@@ -3258,12 +3258,19 @@ inline int32_t trick_spin_a16(int64_t u) {
  *  through its planted support, overshoots by kTrickSpinOvershootPm and
  *  corrects back to exact identity before the unchanged righting
  *  (trick_spin_progress_u; mqa Q6 extracts and gates it against a no-spin
- *  control; mprobe owns carrier-B contact through the whole turn). */
+ *  control; mprobe owns carrier-B contact through the whole turn).
+ *  VERSION 18 integration: the PLANT PIN (TrickPlantPin) holds carrier B's
+ *  support XZ fixed through the whole contact window, so the balance wobble
+ *  sways the body about a planted tip instead of skating it ~178 mm; mqa Q6d
+ *  gates it and --fail-trick-plant-pin restores the Wave-F skate. */
 inline zc::Clip build_trick() {
   const int K = kTrickKeys;
   zc::Clip c = clip_shell(13, K, kHoverHeightMm);
   Rig g;
   int32_t planted_support_reference_y_mm = 0;
+  // VERSION 18 plant pin (TrickPlantPin): touchdown support XZ, and the root XZ
+  // offset held on the latest planted key (released over the lift).
+  int32_t pin_ref_x_um = 0, pin_ref_z_um = 0, pin_hold_x_um = 0, pin_hold_z_um = 0;
   // the pitch-over in thousandths of a half turn (32768); overshoot past
   // zero on the way home, then settle
   static const Key kFlip[] = {{0, 0},   {30, 0},   {42, 0},    {56, -420},
@@ -3356,16 +3363,49 @@ inline zc::Clip build_trick() {
     // byte-identical to the no-spin clip.
     int32_t root_x_um = 0, root_z_um = 0;
     {
+      const bool pinned = g_u02_trick_plant_pin == TrickPlantPin::kPinned;
+      const bool pin_window = pinned && f >= kTrickPlantKey && f < kTrickLiftKey;
       const int64_t spin_u = trick_spin_progress_u(f);
-      if (spin_u % 1000000 != 0) {
+      const bool spinning = spin_u % 1000000 != 0;
+      if (spinning || pin_window) {
         int32_t bx = 0, by = 0, bz = 0, ax = 0, ay = 0, az = 0;
+        // the support BEFORE the spin: the balance pose alone
         trick_support_center_xyz(g, 1000, bx, by, bz);
-        g.q[kBRoot] = quat_mul(quat_y(trick_spin_a16(spin_u)), g.q[kBRoot]);
-        trick_support_center_xyz(g, 1000, ax, ay, az);
-        if (g_u02_trick_spin_pivot == TrickSpinPivot::kSupport) {
-          root_x_um = bx - ax;
-          root_z_um = bz - az;
+        if (pin_window) {
+          // THE PLANT PIN: hold the support's XZ where it touched down.
+          if (f == kTrickPlantKey) {
+            pin_ref_x_um = bx;
+            pin_ref_z_um = bz;
+          }
+          root_x_um = pin_ref_x_um - bx;
+          root_z_um = pin_ref_z_um - bz;
         }
+        if (spinning) {
+          g.q[kBRoot] = quat_mul(quat_y(trick_spin_a16(spin_u)), g.q[kBRoot]);
+          trick_support_center_xyz(g, 1000, ax, ay, az);
+          if (g_u02_trick_spin_pivot == TrickSpinPivot::kSupport) {
+            root_x_um += bx - ax;
+            root_z_um += bz - az;
+          }
+        }
+        if (pin_window) {
+          pin_hold_x_um = root_x_um;
+          pin_hold_z_um = root_z_um;
+        }
+      } else if (pinned && f >= kTrickLiftKey &&
+                 f < kTrickLiftKey + g_u02_trick_pin_release_keys) {
+        // release the last planted offset to zero, C2 (quintic), over the lift
+        const int64_t n = g_u02_trick_pin_release_keys;
+        const int64_t x = f - kTrickLiftKey;
+        const int64_t num = n * n * n * n * n -
+                            x * x * x * (10 * n * n - 15 * x * n + 6 * x * x);
+        const int64_t den = n * n * n * n * n;
+        const auto rel = [&](int32_t v) {
+          const int64_t q = static_cast<int64_t>(v) * num;
+          return static_cast<int32_t>(q >= 0 ? (q + den / 2) / den : -((-q + den / 2) / den));
+        };
+        root_x_um = rel(pin_hold_x_um);
+        root_z_um = rel(pin_hold_z_um);
       }
     }
     int32_t root_y_mm = curve(kRootY, 12, f);
@@ -3380,7 +3420,8 @@ inline zc::Clip build_trick() {
                   trick_support_center_y_mm(g);
     }
     g.write(c, f);
-    // Root X/Z are zero in clip_shell and stay exactly zero outside the turn.
+    // Root X/Z are zero in clip_shell and stay exactly zero outside the turn,
+    // the plant pin window and its release.
     const auto um_q16 = [](int32_t um) {
       const int64_t v = static_cast<int64_t>(um) * 65536;
       return static_cast<int32_t>((v + (v >= 0 ? 500000 : -500000)) / 1000000);

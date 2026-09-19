@@ -39,7 +39,7 @@
 //     EXTRACTED, never read back from its own progress table: the shipped
 //     slot-13 root quaternion is divided by the same builder's output with the
 //     spin OFF (the no-spin control), and the relative rotation is unwrapped
-//     key by key. Three failable categories, each with its own control:
+//     key by key. Four failable categories, each with its own control:
 //       Q6a REVOLUTION  a pure world-vertical yaw; zero through the pause; ONE
 //           monotone turn to a declared small overshoot; ONE reversal; exact
 //           identity (1000 per-mille) before the righting; a bounded step.
@@ -51,6 +51,12 @@
 //       Q6c SUPPORT     carrier B's posed support centroid stays where the
 //           no-spin clip has it, key by key through the whole plant.
 //           --fail-trick-spin-pivot (turn about the root, no compensation)
+//       Q6d PLANT PIN   (integration) the NO-SPIN contact patch stays where it
+//           touched down through the WHOLE contact window: the balance wobble
+//           sways the body about a fixed support instead of skating it. With
+//           Q6c (spin vs no-spin) this bounds the shipped support's absolute
+//           XZ drift by the sum of the two bounds, which is also reported.
+//           --fail-trick-plant-pin (the Wave-F height-only pin: ~178 mm)
 //
 //  Q7 FLIGHT ONE CLOCK (version 18, Owner Direction 19 SS7). On the shipped
 //     slot-22 root: exactly the declared number of height maxima, the declared
@@ -116,6 +122,15 @@ constexpr double kJoinRootFloorMm = 0.5;
 // under the control, so it cannot be tripped by rounding or slipped past by a
 // root pivot. It bounds what the SPIN adds; the pause's own wander is reported.
 constexpr double kSupportDriftMaxMm = 24.0;
+// Q6d: the no-spin contact patch vs its own touchdown, every planted key. The
+// builder pins carrier B's CHAIN point exactly (micrometres); what remains is the
+// height-weighted contact rolling round the curved swell as the wobble tilts it.
+// Measured on the first pinned build: 12.99 mm (key 131), against 178.5 mm for
+// the Wave-F height-only pin (the control). 24 mm is about 1.5 px at the Trick
+// camera (Q6c: 16 mm is about one pixel), 1.85x the measured roll and 7x under
+// the control, so neither rounding nor a retune of the wobble trips it while a
+// skating support cannot slip past it.
+constexpr double kPlantDriftMaxMm = 24.0;
 // The contact patch: carrier-B vertices weighted exp(-height above the lowest
 // one / this scale), so the dirt-touching side dominates.
 constexpr double kContactPatchMm = 25.0;
@@ -174,6 +189,8 @@ int main(int argc, char** argv) {
   const bool spin_ease_leg = argc > 1 && std::strcmp(argv[1], "--fail-trick-spin-ease") == 0;
   const bool spin_pivot_leg = argc > 1 && std::strcmp(argv[1], "--fail-trick-spin-pivot") == 0;
   const bool flight_seam_leg = argc > 1 && std::strcmp(argv[1], "--fail-flight-seam") == 0;
+  const bool plant_pin_leg = argc > 1 && std::strcmp(argv[1], "--fail-trick-plant-pin") == 0;
+  if (plant_pin_leg) u02::g_u02_trick_plant_pin = u02::TrickPlantPin::kLegacy;
   if (spin_gain_leg) u02::g_u02_trick_spin_gain_pm = kSpinGainControlPm;
   if (spin_ease_leg) u02::g_u02_trick_spin_ease = u02::TrickSpinEase::kCubic;
   if (spin_pivot_leg) u02::g_u02_trick_spin_pivot = u02::TrickSpinPivot::kRoot;
@@ -655,7 +672,7 @@ int main(int argc, char** argv) {
   }
 
   // ---------------- Q6: TRICK PLANTED 360 ---------------------------------
-  int q6a_fails = 0, q6b_fails = 0, q6c_fails = 0;
+  int q6a_fails = 0, q6b_fails = 0, q6c_fails = 0, q6d_fails = 0;
   {
     std::printf("\nQ6 TRICK PLANTED 360 -- extracted from the shipped root vs the no-spin control\n");
     const zc::Clip* spin = nullptr;
@@ -752,10 +769,14 @@ int main(int argc, char** argv) {
         return v[static_cast<size_t>(i + 1)] - 2.0 * v[static_cast<size_t>(i)] +
                v[static_cast<size_t>(i - 1)];
       };
+      // The SPIN's compensation is the shipped root XZ minus the no-spin
+      // control's: since the plant pin, the control's root also moves in XZ
+      // (it absorbs the balance sway), and that motion is not the spin's join.
       std::vector<double> rxv(static_cast<size_t>(n)), rzv(static_cast<size_t>(n));
       for (int f = k0; f < k1; ++f) {
-        rxv[static_cast<size_t>(f - k0)] = spin->root[static_cast<size_t>(f) * 3 + 0] / 65536.0 * 1000.0;
-        rzv[static_cast<size_t>(f - k0)] = spin->root[static_cast<size_t>(f) * 3 + 2] / 65536.0 * 1000.0;
+        const size_t r = static_cast<size_t>(f) * 3;
+        rxv[static_cast<size_t>(f - k0)] = (spin->root[r + 0] - none.root[r + 0]) / 65536.0 * 1000.0;
+        rzv[static_cast<size_t>(f - k0)] = (spin->root[r + 2] - none.root[r + 2]) / 65536.0 * 1000.0;
       }
       const auto seg_peak = [&](const std::vector<double>& v, int lo, int hi) {
         double m = 0.0;
@@ -792,7 +813,8 @@ int main(int argc, char** argv) {
       // the arc and is REPORTED only (a turn carries it round a small circle).
       double drift_worst = 0.0, cen_worst = 0.0, wander_worst = 0.0;
       double wander_x0 = 0.0, wander_z0 = 0.0;
-      int drift_at = -1;
+      double ship_x0 = 0.0, ship_z0 = 0.0, ship_worst = 0.0;
+      int drift_at = -1, wander_at = -1;
       for (int f = k0; f < k1; ++f) {
         std::array<zc::mat3x4fx, zc::kMaxBones> ps, pn;
         zc::decode_pose(T, *spin, static_cast<uint16_t>(f), ps, nullptr, 0);
@@ -843,19 +865,30 @@ int main(int argc, char** argv) {
         cen_worst = std::max(cen_worst, dc);
         // PRE-EXISTING, reported only: how far the NO-SPIN contact wanders from
         // where it touched down (the balance wobble is height-pivoted only).
-        if (f == k0) { wander_x0 = ncx; wander_z0 = ncz; }
-        wander_worst = std::max(wander_worst, std::hypot((ncx - wander_x0) * k, (ncz - wander_z0) * k));
+        // Q6d gates it (the plant pin); the shipped absolute drift is reported.
+        if (f == k0) { wander_x0 = ncx; wander_z0 = ncz; ship_x0 = scx; ship_z0 = scz; }
+        const double wd = std::hypot((ncx - wander_x0) * k, (ncz - wander_z0) * k);
+        if (wd > wander_worst) { wander_worst = wd; wander_at = f; }
+        ship_worst = std::max(ship_worst, std::hypot((scx - ship_x0) * k, (scz - ship_z0) * k));
         if (d > drift_worst) { drift_worst = d; drift_at = f; }
       }
       const bool drift_ok = drift_worst <= kSupportDriftMaxMm;
       std::printf("   Q6c carrier-B contact-patch drift vs no-spin: worst %.2f mm at key %d (allowed %.0f)  %s\n"
                   "       reported only: whole-swell centroid %.2f mm; the NO-SPIN contact itself"
-                  " wanders %.1f mm from touchdown through the pause (pre-existing)\n",
+                  " is gated by Q6d below\n",
                   drift_worst, drift_at, kSupportDriftMaxMm,
-                  drift_ok ? "planted" : "FAIL -- THE SUPPORT SLIDES", cen_worst, wander_worst);
+                  drift_ok ? "planted" : "FAIL -- THE SUPPORT SLIDES", cen_worst);
       if (!drift_ok) ++q6c_fails;
+      const bool pin_ok = wander_worst <= kPlantDriftMaxMm;
+      std::printf("   Q6d no-spin contact patch vs touchdown, keys %d..%d: worst %.2f mm at key %d"
+                  " (allowed %.0f)  %s\n"
+                  "       reported: SHIPPED contact vs its touchdown worst %.2f mm (<= Q6c + Q6d bounds %.0f)\n",
+                  k0, k1 - 1, wander_worst, wander_at, kPlantDriftMaxMm,
+                  pin_ok ? "planted" : "FAIL -- THE PLANTED TIP SKATES", ship_worst,
+                  kSupportDriftMaxMm + kPlantDriftMaxMm);
+      if (!pin_ok) ++q6d_fails;
     }
-    fails += q6a_fails + q6b_fails + q6c_fails;
+    fails += q6a_fails + q6b_fails + q6c_fails + q6d_fails;
   }
 
   // ---------------- Q7: FLIGHT ONE CLOCK -----------------------------------
@@ -921,13 +954,15 @@ int main(int argc, char** argv) {
     return 0;
   };
   if (spin_gain_leg)
-    return attributed("--fail-trick-spin-gain [Q6a]", q6a_fails, q6b_fails + q6c_fails + q7_fails);
+    return attributed("--fail-trick-spin-gain [Q6a]", q6a_fails, q6b_fails + q6c_fails + q6d_fails + q7_fails);
   if (spin_ease_leg)
-    return attributed("--fail-trick-spin-ease [Q6b]", q6b_fails, q6a_fails + q6c_fails + q7_fails);
+    return attributed("--fail-trick-spin-ease [Q6b]", q6b_fails, q6a_fails + q6c_fails + q6d_fails + q7_fails);
   if (spin_pivot_leg)
-    return attributed("--fail-trick-spin-pivot [Q6c]", q6c_fails, q6a_fails + q6b_fails + q7_fails);
+    return attributed("--fail-trick-spin-pivot [Q6c]", q6c_fails, q6a_fails + q6b_fails + q6d_fails + q7_fails);
+  if (plant_pin_leg)
+    return attributed("--fail-trick-plant-pin [Q6d]", q6d_fails, q6a_fails + q6b_fails + q6c_fails + q7_fails);
   if (flight_seam_leg)
-    return attributed("--fail-flight-seam [Q7]", q7_fails, q6a_fails + q6b_fails + q6c_fails);
+    return attributed("--fail-flight-seam [Q7]", q7_fails, q6a_fails + q6b_fails + q6c_fails + q6d_fails);
 
   std::printf("\n%s: %d failure(s)%s\n", fails ? "FAIL" : "PASS", fails,
               fail_leg ? "   [FAILABLE LEG: lane 0 answered for every lane]" : "");

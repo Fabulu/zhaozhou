@@ -8208,6 +8208,23 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
+  // VERSION 18 integration: the Trick plant pin. `legacy` is the exact-off
+  // control (Wave-F bytes: the support skates with the balance wobble).
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_PLANT_PIN")) {
+    if (std::strcmp(e, "pinned") == 0)
+      u02::g_u02_trick_plant_pin = u02::TrickPlantPin::kPinned;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_trick_plant_pin = u02::TrickPlantPin::kLegacy;
+    else {
+      std::fprintf(stderr, "ZHAO_U02_TRICK_PLANT_PIN=%s invalid (expected pinned|legacy)\n", e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_PIN_RELEASE_KEYS")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_PIN_RELEASE_KEYS", e, 2, 30, v)) return 2;
+    u02::g_u02_trick_pin_release_keys = v;
+  }
   if (const char* e = std::getenv("ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM")) {
     int v = 0;
     if (!parse_strict_env_int("ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM", e, 0, 250, v)) return 2;

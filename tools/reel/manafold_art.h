@@ -3007,6 +3007,25 @@ inline int g_u02_trick_spin_settle_key = kTrickSpinSettleKey;
 inline int32_t g_u02_trick_spin_overshoot_pm = kTrickSpinOvershootPm;
 inline int32_t g_u02_trick_spin_gain_pm = kTrickSpinGainPm;
 
+// ---- VERSION 18 INTEGRATION: THE PLANT PIN ----------------------------------
+// Wave F found the planted antenna SKATING about 178 mm through the pause: the
+// inverted-pendulum balance wobble (and the JunctionF X balance flex) rotate the
+// body about its ROOT, and the plant was pinned in height only, so the support
+// swung sideways across the dirt. A planted tip must not skate. kPinned extends
+// the support-point XZ pivot (built for the spin) across the WHOLE contact
+// window [kTrickPlantKey, kTrickLiftKey): at every planted key the root XZ
+// absorbs the horizontal displacement of carrier B's chain point from where it
+// touched down, so the body sways about a FIXED support. The wobble's rotation,
+// the pause timing and the antenna flex are untouched; only the root's XZ moves.
+// At the lift the offset held on the last planted key is released to zero over
+// kTrickPinReleaseKeys with a C2 quintic, so the righting starts where the plant
+// left the body and blends home. kLegacy is the exact-off control: it reproduces
+// the Wave-F bytes (mqa --fail-trick-plant-pin fires Q6d on it).
+enum class TrickPlantPin : uint8_t { kPinned, kLegacy };
+inline TrickPlantPin g_u02_trick_plant_pin = TrickPlantPin::kPinned;
+constexpr int kTrickPinReleaseKeys = 12;  // 0.4 s: the release rides the righting
+inline int g_u02_trick_pin_release_keys = kTrickPinReleaseKeys;
+
 // PASS 4 (Stage H, Direction 4 §3b): DIRECTIONAL HITS. Four named
 // authored contact stations in one clip, the zixxtrixx-damage precedent;
 // no runtime collision -- the contact point is authored per station. It
