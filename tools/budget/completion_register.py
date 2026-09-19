@@ -127,6 +127,65 @@ def console_closure() -> set[str]:
     return out
 
 
+def instantiated_in(closure_files: list[pathlib.Path]) -> set[str]:
+    """Modules actually INSTANTIATED by something in the closure.
+
+    THIS FUNCTION EXISTS BECAUSE THE DOCSTRING ABOVE WAS A LIE FOR A DAY.
+
+    It claimed COMPOSED meant "in the closure AND instantiated", and the code
+    tested only closure membership. A worker composing the geometry front end
+    found it and said so. The consequence was not theoretical: **adding a
+    filename to `design/fit_targets.yml` would have lowered the mandatory-gap
+    count without connecting anything** -- the exact "make the number smaller
+    without doing the work" failure the owner's Phase 2 rules forbid, available
+    in the instrument that polices it.
+
+    The shell's own source list already records eight modules that were declared
+    and elaborated nowhere, so this is a failure mode this repository has met.
+
+    An instantiation is `zhao_foo #(` or `zhao_foo u_name` at statement
+    position. A mention inside a comment is not one, so comments are stripped.
+    """
+    text = []
+    for p in closure_files:
+        try:
+            src = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        src = re.sub(r"//[^\n]*", "", src)
+        src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+        text.append(src)
+    blob = "\n".join(text)
+    live = set(re.findall(r"^\s*(zhao_\w+)\s*(?:#\s*\(|\w+\s*\()", blob, re.M))
+    # A PACKAGE is imported, never instantiated, and so is the TOP. Counting
+    # either as "listed but not instantiated" would be a false alarm, and a
+    # checker that cries wolf gets suppressed -- this repo says so twice.
+    for p in closure_files:
+        stem = p.stem
+        if stem.endswith("_pkg") or stem == "zhao_console_core":
+            live.add(stem)
+    return live
+
+
+def closure_paths() -> list[pathlib.Path]:
+    if not TARGETS.exists():
+        return []
+    t = TARGETS.read_text(encoding="utf-8", errors="replace")
+    i = t.find("zhao_console_core")
+    if i < 0:
+        return []
+    out, started = [], False
+    for line in t[i:].splitlines()[1:]:
+        s = line.strip()
+        if s.startswith("- fpga/rtl/"):
+            out.append(ROOT / s[2:])
+            started = True
+            continue
+        if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
+            break
+    return out
+
+
 def has_test_target(module: str) -> bool:
     if not CMAKE.exists():
         return False
@@ -232,7 +291,9 @@ def disconnected() -> dict:
     and it is the one that cannot be satisfied by a file existing on disk.
     """
     closure = console_closure()
+    live = instantiated_in(closure_paths())   # the half the docstring promised
     absent, unbuilt, unresolvable, deferred_ok, connected = [], [], [], [], []
+    listed_not_live: list[str] = []
     uncited: list[str] = []
     for b in ledger_blocks():
         # THE OWNER'S RULE: "Only explicitly deferred/non-v1 features may remain
@@ -255,15 +316,22 @@ def disconnected() -> dict:
             unbuilt.append(b["id"])      # hand-searched and absent: a REAL gap
         elif mod is None:
             unresolvable.append(b["id"])
-        elif mod in closure:
+        elif mod in closure and mod in live:
             connected.append(b["id"])
+        elif mod in closure:
+            # in the source list but nothing instantiates it. NOT connected --
+            # this is the shell's eight-struck-modules failure, and counting it
+            # as present is how a filename becomes "progress".
+            listed_not_live.append(b["id"])
+            absent.append((b["id"], mod))
         elif list(RTL.rglob(mod + ".sv")):
             absent.append((b["id"], mod))          # built, NOT connected
         else:
             unbuilt.append(b["id"])                # no RTL at all
     return {"connected": connected, "built_not_connected": absent,
             "unbuilt": unbuilt, "unresolvable": unresolvable,
-            "deferred_or_blocked": deferred_ok, "uncited_excuse": uncited}
+            "deferred_or_blocked": deferred_ok, "uncited_excuse": uncited,
+            "listed_but_not_instantiated": listed_not_live}
 
 
 def audit() -> dict:
@@ -291,6 +359,7 @@ def audit() -> dict:
         "gaps": [{"id": t["id"], "kind": t["kind"],
                   "head": t["head"][:100]} for t in gaps],
         "capability": {k: len(v) for k, v in dis.items()},
+        "listed_but_not_instantiated": dis["listed_but_not_instantiated"],
         "built_not_connected": [m for _, m in dis["built_not_connected"]],
         "unbuilt": dis["unbuilt"],
         "unresolvable": dis["unresolvable"],
