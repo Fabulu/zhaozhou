@@ -13413,3 +13413,30 @@ add_test(NAME lint_zhao_geom_loom
 set_tests_properties(lint_zhao_geom_loom PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+# --------------------------------------------------------------------------
+# GEOM.ATTRPACK -- the three-plane front end over one shared GEOM.ATTRSETUP.
+#
+# The arithmetic is NOT re-tested here; `geom_attrsetup_directed` owns it. This
+# driver tests what the front end adds: which attribute slot reaches which
+# plane, that lane k's answer lands in plane k, and that a second triangle
+# inherits nothing from the first. Its counters are read as DELTAS, and the
+# invariant it asserts is `planes == 3 * triangles` -- a lane that stopped
+# asking breaks the ratio while every handshake still looks healthy.
+add_executable(test_geom_attrpack_directed geometry/geom_attrpack_directed.cpp)
+target_link_libraries(test_geom_attrpack_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_attrpack_directed
+  PREFIX Vzhao_geom_attrpack
+  TOP_MODULE zhao_geom_attrpack
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrpack.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+add_test(NAME geom_attrpack_directed COMMAND test_geom_attrpack_directed)
+set_tests_properties(geom_attrpack_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_geom_attrpack
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_attrpack
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrpack.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_attrsetup.sv)
+set_tests_properties(lint_geom_attrpack PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
