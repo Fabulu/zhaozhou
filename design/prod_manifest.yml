@@ -45,6 +45,11 @@ top:
   # The 99.50 MHz / 13,146 ALM renderer figure lives in here.
   - zhao_shell_top
   - zhao_cmd_decoder
+  # CMD.EXEC, composed into zhao_console_core 2026-09-19 (its section 7c).
+  # A TOP here for the same reason CMD.DECODER is: the resource top does not
+  # instantiate zhao_console_core, so neither block is reachable through it
+  # and neither can be inside anything. Counted once, on its own.
+  - zhao_cmd_exec
 
   # --- texture island (Packet B production accounting) ----------------------
   # Count the current texture implementation exactly once, at its composed V3

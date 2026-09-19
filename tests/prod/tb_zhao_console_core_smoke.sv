@@ -877,6 +877,37 @@ module tb_zhao_console_core_smoke
   logic [1:0]  phy_dqm_o;
   logic [15:0] phy_dq_i;
 
+  // ---- THE COMMAND FRONT (core sections 7b and 7c) -----------------------
+  // CMD.DECODER's record headers and verdict, and CMD.EXEC's evidence. All
+  // outputs; this bench declares them because `.*` binds by name and a port
+  // with no net here is a compile error rather than a floating wire -- which
+  // is the whole reason the comment at the head of this block says so.
+  //
+  // `cmd_exec_*` is what says a packet BECAME CONSOLE STATE rather than merely
+  // validating: `cmd_exec_views_o` moves when SetView's mat4fx reached the
+  // shared projector's matrix bank, `cmd_exec_stamps_o` when a SurfaceStamp
+  // reached SURFACE.STAMP. `cmd_exec_unsupported_o` is expected to be LARGE --
+  // it counts every ABI record the executor has no arm for, which today is
+  // most of them, and reading it as a fault would be reading the gap as a bug.
+  logic        cmd_rec_valid_o;
+  logic [15:0] cmd_rec_opcode_o;
+  logic [15:0] cmd_rec_bytes_o;
+  logic [31:0] cmd_rec_source_id_o;
+  logic [31:0] cmd_rec_index_o;
+  logic        cmd_decode_done_o;
+  logic [ 7:0] cmd_decode_error_o;
+  logic [31:0] cmd_bytes_consumed_o;
+  logic [31:0] cmd_commands_o;
+
+  logic [31:0] cmd_exec_committed_o;
+  logic [31:0] cmd_exec_abandoned_o;
+  logic [31:0] cmd_exec_views_o;
+  logic [31:0] cmd_exec_stamps_o;
+  logic [31:0] cmd_exec_stamp_overflow_o;
+  logic [31:0] cmd_exec_view_refused_o;
+  logic [31:0] cmd_exec_src_truncated_o;
+  logic [31:0] cmd_exec_unsupported_o;
+
   // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
   // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed
   // 2026-09-19. Declared here for the same reason the command front above is:

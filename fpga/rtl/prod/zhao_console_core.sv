@@ -371,9 +371,30 @@
 //      the corners into a port that wants edge functions would be exactly the
 //      hidden adapter this file must not contain.
 //
-// I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY.
-//      The camera matrices are host/CMD state and CMD.SCHEDULER has no
-//      projection-config path.
+// I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
+//      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
+//      closed is named here so nobody re-solves it.
+//
+//      CLOSED: THE CAMERA. This entry used to read "the camera matrices are
+//      host/CMD state and CMD.SCHEDULER has no projection-config path". They
+//      have one now, and it is not CMD.SCHEDULER: `zhao_cmd_exec` (section 7c)
+//      lowers `SetView 0x0010`'s `mat4fx view_projection` straight onto cfg
+//      addresses 0..15, one word per clock, out of a packet CMD.DECODER has
+//      already ratified. `cmd_exec_views_o` counts it.
+//
+//      STILL OPEN, and it is two different things:
+//        * THE VIEWPORT RECT, cfg addresses 16 and 17. SetView carries a
+//          `viewport_id` and NOT a rectangle, and the id-to-rectangle table is
+//          `spec/video_rules.md`'s -- it is not in the ABI at all. Deriving one
+//          here would be this file inventing a layout, which is the thing the
+//          whole ledger exists to refuse. The host port keeps them and the
+//          merge above is lossless in both directions, so this is a missing
+//          COMMAND rather than missing wiring.
+//        * `proj_en_i`, and `SetView`'s OTHER FIVE FIELDS. `flags[1:0]` is the
+//          depth profile of the frozen 2026-08-31 ruling and `zhao_project_core`
+//          has no port to put it on; `pixel_error` wants MEASURE.GOVERNOR and
+//          `geometry_tokens`/`fragment_tokens` want MEASURE.TOKENS, none of
+//          which is composed. A ratified field with no port is still a gap.
 //
 // I15. POST.COMPOSITE's SOURCE PIXELS (`post_s_*`) -- BOUNDARY, and this is
 //      the largest honest gap in the file.
@@ -923,16 +944,27 @@
 //      opened by composing the SURFACE pair (connected item 9).
 //      `spec/commands.zidl` carries SurfaceStamp with its `handle32[patch]`,
 //      operation byte, tag, strength, transform, radius and ring width, so the
-//      command is RATIFIED and the fields below are its fields -- what is
-//      missing is the path from CMD.SCHEDULER to here. `zhao_cmd_scheduler`
-//      decodes SetPresentationContract and the display/rumble/snapshot
-//      dispatches and nothing else; it has no SurfaceStamp arm and no port to
-//      put one on. This is the SAME absent path entry I14 describes for the
-//      projection matrices and I7 for the collision plane, and it should be
-//      closed with them rather than one at a time.
-//      The patch ENVELOPE (`surf_cmd_env_*`) rides the same port and has the
-//      same absent owner: it is the placement TERRAIN.PATCH would supply, and
-//      entry I27 already records that nothing in the tree emits placement.
+//      command is RATIFIED and the fields below are its fields -- what was
+//      missing was the path to here. HALF CLOSED 2026-09-19.
+//
+//      CLOSED: THE RATIFIED FIELDS. `zhao_cmd_exec` (section 7c) supplies the
+//      patch handle, operation, tag, strength, the transform's translation,
+//      radius, ring width and the record header's source id, out of a packet
+//      CMD.DECODER has ratified. `cmd_exec_stamps_o` counts the dispatches.
+//      The owner turned out NOT to be CMD.SCHEDULER, which this entry named:
+//      the scheduler works on framed 16-byte record payloads and a SurfaceStamp
+//      carries its transform at record byte 28, past the framer's window. The
+//      executor reads the byte stream itself, which is why it exists.
+//
+//      STILL OPEN: THE ENVELOPE AND THE POLICY. `surf_cmd_env_*` is the patch
+//      placement entry I27 records as having no owner anywhere in the tree, and
+//      `cmd_blend_en_i` / `cmd_blend_i` / `cmd_age_shift_i` / `cmd_field_en_i`
+//      are console policy that no opcode carries. An executor-issued stamp
+//      therefore rides the HOST port's envelope and policy, which is stated in
+//      the merge above rather than left to be discovered from a stamp landing
+//      in the wrong place. `brush` is a third kind of absence and
+//      `zhao_surface_stamp.sv` S5 owns it: nothing in this tree defines a brush
+//      page's format, so there is no port to drive.
 //
 // I31. SURFACE.STAMP's FIELD-DRIVEN BRUSH (`surf_fld_*`) -- BOUNDARY.
 //      FIELD.SEQ.STAMP is the named owner and it is not built. This is the
@@ -995,17 +1027,15 @@
 // entry, so
 // they are here rather than nowhere:
 //
-//   CMD.DECODER. The stream it wants is REAL AND IS ALREADY FLOWING -- CMD.DMA
-//   emits `pkt_valid/pkt_byte/pkt_len` and the smoke bench's played HPS bridge
-//   puts genuine packet bytes on it. It is INTERNAL to `zhao_shell_top_v2`:
-//   those are body wires, not shell ports, and the shell's own inline record
-//   framer ("glue 3") is the consumer. Composing the decoder therefore needs a
-//   SHELL PORT CHANGE plus a fork on `pkt_ready` for the second consumer --
-//   additive and small in itself, but `zhao_shell_top_v2` is instantiated by
-//   seven things including a GENERATED fit top, a committed mutant copy and
-//   two Python consistency tests, so it is a shell-owner change and not a
-//   composer one. Its own verdict has no consumer either: nothing in the tree
-//   takes `decode_error_o`, and the shell's framer does not validate.
+//   (CMD.DECODER was refused here and the refusal is SPENT. It is composed as
+//   section 7b, and CMD.EXEC beside it as section 7c. The refusal was accurate
+//   about the obstacle -- the stream was real, already flowing, and enclosed in
+//   `zhao_shell_top_v2` as body wires -- and the shell-owner port change it
+//   named is what happened. Left as a stub rather than deleted because this
+//   list is the record of what was OFFERED and why, and "it was refused, then
+//   the obstacle was removed" is the useful sentence. The refusal also said
+//   "its own verdict has no consumer either"; that is now the one input
+//   CMD.EXEC gates every console write on.)
 //
 //   FIELD.PROGCACHE. Its `lu_*`/`cm_*` are a hash lookup and a commit with a
 //   decode verdict. Both ends are FIELD.SEQ blocks and none of them is
@@ -1071,6 +1101,16 @@ module zhao_console_core
   // ---- the shell's own knobs, carried through ------------------------------
   parameter int unsigned FRAMER_Q = 8,
   parameter int unsigned WFIFO_W  = 64,
+
+  // ---- CMD.EXEC (section 7c) -----------------------------------------------
+  // How many SurfaceStamps one packet may carry. It is the ONE number in the
+  // executor that can refuse an otherwise legal packet, so it is a knob and not
+  // a constant: a packet with more stamps than this is refused WHOLE and
+  // counted on `cmd_exec_stamp_overflow_o`, never applied in part. Eight is
+  // chosen against the sheet, not against the ABI -- each stamp walks 4,096
+  // texels, so a frame that wants more than eight is asking the surface stage
+  // for more work than a frame has.
+  parameter int unsigned CMD_EXEC_STAMP_Q = 8,
 
   // ---- PARTICLES -----------------------------------------------------------
   parameter int unsigned PART_REC_W    = 128,     // particle128, amendment C2
@@ -2448,7 +2488,32 @@ module zhao_console_core
   output logic        cmd_decode_done_o,
   output logic [ 7:0] cmd_decode_error_o,
   output logic [31:0] cmd_bytes_consumed_o,
-  output logic [31:0] cmd_commands_o
+  output logic [31:0] cmd_commands_o,
+
+  // --------------------------------------------------------------------------
+  // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
+  // --------------------------------------------------------------------------
+  // OUTPUTS ONLY, driven by real logic below. The executor writes the
+  // projector's matrix bank and dispatches SURFACE.STAMP, and BOTH of those go
+  // to internal consumers -- so without these ports the only thing observable
+  // about whether a command was executed would be a downstream side effect two
+  // subsystems away. These are the numbers a bench reads to say "the packet
+  // became console state", and every one of them is fired by a named case in
+  // tests/command/cmd_exec_directed.cpp.
+  //
+  // `cmd_exec_unsupported_o` IS THE HONEST ONE. It counts records the ABI
+  // defines and this executor has no arm for -- BeginFrame, EndFrame,
+  // DrawForm, every reserved opcode. It is the distance between the command
+  // surface and the executor expressed as a NUMBER rather than as prose in a
+  // header, and it is expected to be large today.
+  output logic [31:0] cmd_exec_committed_o,
+  output logic [31:0] cmd_exec_abandoned_o,
+  output logic [31:0] cmd_exec_views_o,
+  output logic [31:0] cmd_exec_stamps_o,
+  output logic [31:0] cmd_exec_stamp_overflow_o,
+  output logic [31:0] cmd_exec_view_refused_o,
+  output logic [31:0] cmd_exec_src_truncated_o,
+  output logic [31:0] cmd_exec_unsupported_o
 );
 
   // ==========================================================================
@@ -3863,6 +3928,41 @@ module zhao_console_core
     .release_unsafe_o (terr_release_unsafe_o)
   );
 
+  // ==========================================================================
+  // THE MATRIX BANK HAS TWO WRITERS.  I14, and this is the closing half of it.
+  // ==========================================================================
+  // CMD.EXEC (section 7c) owns cfg addresses 0..15 -- SetView's `mat4fx`, the
+  // camera. The host port owns 16 and 17, the viewport origin and extent, and
+  // it keeps them because NO RATIFIED COMMAND CARRIES A VIEWPORT RECT: SetView
+  // has a `viewport_id`, and the id-to-rectangle table is `spec/video_rules.md`'s
+  // and is not in the ABI. Inventing that table here is precisely what this
+  // file may not do, so the port stays and the entry stays open for it.
+  //
+  // LOSSLESS, IN BOTH DIRECTIONS, AND THAT IS WHY THERE IS NO COUNTER HERE.
+  // The host takes any cycle it asks for; CMD.EXEC's `proj_cfg_ready_i` goes
+  // low for that cycle and it re-presents the identical word. A priority mux
+  // that dropped one write and counted it would have needed a detector nothing
+  // in this tree can fire -- and the thing being dropped would have been one
+  // matrix coefficient, which is a camera that is subtly wrong with every
+  // counter still reading right.
+  //
+  // ENFORCED-BY: tests/command/cmd_exec_directed.cpp case 8, which refuses the
+  // executor on 31 cycles in 32 and requires all 32 words to land once, in
+  // address order.
+  logic        cmd_exec_cfg_we_w, cmd_exec_cfg_view_w, cmd_exec_cfg_ready_w;
+  logic [ 4:0] cmd_exec_cfg_addr_w;
+  logic [31:0] cmd_exec_cfg_data_w;
+
+  logic        proj_cfg_we_m, proj_cfg_view_m;
+  logic [ 4:0] proj_cfg_addr_m;
+  logic [31:0] proj_cfg_data_m;
+
+  assign cmd_exec_cfg_ready_w = !proj_cfg_we_i;
+  assign proj_cfg_we_m        = proj_cfg_we_i || cmd_exec_cfg_we_w;
+  assign proj_cfg_view_m      = proj_cfg_we_i ? proj_cfg_view_i : cmd_exec_cfg_view_w;
+  assign proj_cfg_addr_m      = proj_cfg_we_i ? proj_cfg_addr_i : cmd_exec_cfg_addr_w;
+  assign proj_cfg_data_m      = proj_cfg_we_i ? proj_cfg_data_i : cmd_exec_cfg_data_w;
+
   zhao_proj_subsystem #(
     .PAYLOAD_A_W (GEOM_PAY_A_W),
     .ARENAS      (PROJ_T_ARENAS),
@@ -3872,11 +3972,12 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I14: the matrix bank; CMD.SCHEDULER has no projection-config path.
-    .cfg_we_i  (proj_cfg_we_i),
-    .cfg_view_i(proj_cfg_view_i),
-    .cfg_addr_i(proj_cfg_addr_i),
-    .cfg_data_i(proj_cfg_data_i),
+    // I14, HALF CLOSED: the camera words come from CMD.EXEC, the viewport rect
+    // still comes from the host port. See the merge directly above.
+    .cfg_we_i  (proj_cfg_we_m),
+    .cfg_view_i(proj_cfg_view_m),
+    .cfg_addr_i(proj_cfg_addr_m),
+    .cfg_data_i(proj_cfg_data_m),
     .en_i      (proj_en_i),
 
     // REAL: client A in, from GEOM.GROUP_SEQ -- THROUGH PART.PROJECT, which
@@ -4264,23 +4365,84 @@ module zhao_console_core
   wire        surf_wr_we_tag, surf_wr_we_strength;
   wire [15:0] surf_wr_src_id;
 
+  // ==========================================================================
+  // THE STAMP DISPATCH HAS TWO PRODUCERS.  I30, and this is its closing half.
+  // ==========================================================================
+  // CMD.EXEC (section 7c) supplies the RATIFIED fields -- `spec/commands.zidl`
+  // SurfaceStamp 0x0210's patch handle, operation, tag, strength, the
+  // transform's translation, radius, ring width, and the record header's
+  // source id. That is the whole of what the game can say.
+  //
+  // THE OTHER SIX FIELDS STAY ON THE HOST PORT AND THE DISTINCTION IS THE
+  // POINT. `cmd_env_*` is the patch ENVELOPE, which entry I27 records as having
+  // no placement owner anywhere in the tree; `cmd_blend_en_i`, `cmd_blend_i`,
+  // `cmd_age_shift_i` and `cmd_field_en_i` are console POLICY that no opcode
+  // carries. An executor that filled them in would be choosing values the ABI
+  // does not contain -- the hidden-contract failure this file exists to refuse.
+  // So an executor-issued stamp rides the host's envelope and policy, and that
+  // is stated here rather than discovered from a stamp landing in the wrong
+  // place.
+  //
+  // PRIORITY, WITH BACKPRESSURE, SO NOTHING IS DROPPED. The executor wins;
+  // `surf_cmd_ready_o` simply goes low for the host while it does, which is the
+  // host's own handshake doing its job. No arbiter state, no counter, nothing
+  // this file invented.
+  logic        cmd_exec_stamp_valid_w, cmd_exec_stamp_ready_w;
+  logic [31:0] cmd_exec_stamp_patch_w;
+  logic [ 7:0] cmd_exec_stamp_oper_w, cmd_exec_stamp_tag_w;
+  logic [15:0] cmd_exec_stamp_strength_w, cmd_exec_stamp_src_id_w;
+  logic signed [31:0] cmd_exec_stamp_tx_w, cmd_exec_stamp_ty_w;
+  logic signed [31:0] cmd_exec_stamp_radius_w, cmd_exec_stamp_ring_w;
+
+  logic        surf_cmd_valid_m;
+  logic [31:0] surf_cmd_handle_m;
+  logic [ 7:0] surf_cmd_operation_m, surf_cmd_tag_m;
+  logic [15:0] surf_cmd_strength_m, surf_cmd_src_id_m;
+  logic signed [31:0] surf_cmd_tx_m, surf_cmd_ty_m;
+  logic signed [31:0] surf_cmd_radius_m, surf_cmd_ring_width_m;
+  logic        surf_cmd_ready_int;
+
+  assign surf_cmd_valid_m       = cmd_exec_stamp_valid_w || surf_cmd_valid_i;
+  assign cmd_exec_stamp_ready_w = surf_cmd_ready_int;
+  assign surf_cmd_ready_o       = surf_cmd_ready_int && !cmd_exec_stamp_valid_w;
+
+  assign surf_cmd_handle_m     = cmd_exec_stamp_valid_w ? cmd_exec_stamp_patch_w
+                                                        : surf_cmd_handle_i;
+  assign surf_cmd_operation_m  = cmd_exec_stamp_valid_w ? cmd_exec_stamp_oper_w
+                                                        : surf_cmd_operation_i;
+  assign surf_cmd_tag_m        = cmd_exec_stamp_valid_w ? cmd_exec_stamp_tag_w
+                                                        : surf_cmd_tag_i;
+  assign surf_cmd_strength_m   = cmd_exec_stamp_valid_w ? cmd_exec_stamp_strength_w
+                                                        : surf_cmd_strength_i;
+  assign surf_cmd_tx_m         = cmd_exec_stamp_valid_w ? cmd_exec_stamp_tx_w
+                                                        : surf_cmd_tx_i;
+  assign surf_cmd_ty_m         = cmd_exec_stamp_valid_w ? cmd_exec_stamp_ty_w
+                                                        : surf_cmd_ty_i;
+  assign surf_cmd_radius_m     = cmd_exec_stamp_valid_w ? cmd_exec_stamp_radius_w
+                                                        : surf_cmd_radius_i;
+  assign surf_cmd_ring_width_m = cmd_exec_stamp_valid_w ? cmd_exec_stamp_ring_w
+                                                        : surf_cmd_ring_width_i;
+  assign surf_cmd_src_id_m     = cmd_exec_stamp_valid_w ? cmd_exec_stamp_src_id_w
+                                                        : surf_cmd_src_id_i;
+
   zhao_surface_stamp #(
     .SQ_RADIX (SURF_SQ_RADIX)
   ) u_surface_stamp (
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // I30: the SurfaceStamp dispatch has no producer in this tree.
-    .cmd_valid_i     (surf_cmd_valid_i),
-    .cmd_ready_o     (surf_cmd_ready_o),
-    .cmd_handle_i    (surf_cmd_handle_i),
-    .cmd_operation_i (surf_cmd_operation_i),
-    .cmd_tag_i       (surf_cmd_tag_i),
-    .cmd_strength_i  (surf_cmd_strength_i),
-    .cmd_tx_i        (surf_cmd_tx_i),
-    .cmd_ty_i        (surf_cmd_ty_i),
-    .cmd_radius_i    (surf_cmd_radius_i),
-    .cmd_ring_width_i(surf_cmd_ring_width_i),
+    // I30, HALF CLOSED: the ratified fields come from CMD.EXEC, the envelope
+    // and the blend policy still come from the host port. See above.
+    .cmd_valid_i     (surf_cmd_valid_m),
+    .cmd_ready_o     (surf_cmd_ready_int),
+    .cmd_handle_i    (surf_cmd_handle_m),
+    .cmd_operation_i (surf_cmd_operation_m),
+    .cmd_tag_i       (surf_cmd_tag_m),
+    .cmd_strength_i  (surf_cmd_strength_m),
+    .cmd_tx_i        (surf_cmd_tx_m),
+    .cmd_ty_i        (surf_cmd_ty_m),
+    .cmd_radius_i    (surf_cmd_radius_m),
+    .cmd_ring_width_i(surf_cmd_ring_width_m),
     .cmd_env_x0_i    (surf_cmd_env_x0_i),
     .cmd_env_z0_i    (surf_cmd_env_z0_i),
     .cmd_env_x1_i    (surf_cmd_env_x1_i),
@@ -4289,7 +4451,7 @@ module zhao_console_core
     .cmd_blend_i     (surf_cmd_blend_i),
     .cmd_age_shift_i (surf_cmd_age_shift_i),
     .cmd_field_en_i  (surf_cmd_field_en_i),
-    .cmd_src_id_i    (surf_cmd_src_id_i),
+    .cmd_src_id_i    (surf_cmd_src_id_m),
 
     // I31: FIELD.SEQ.STAMP is not built.
     .fld_valid_i   (surf_fld_valid_i),
@@ -4387,11 +4549,26 @@ module zhao_console_core
   // THE SHELL. Every port straight through; nothing renamed, nothing
   // reinterpreted. Its own header is the authority on its seams.
   // ==========================================================================
-  // The re-exported CMD.DMA packet stream, shell -> CMD.DECODER (section 7b).
+  // The re-exported CMD.DMA packet stream, shell -> CMD.DECODER (section 7b)
+  // AND -> CMD.EXEC (section 7c).
   logic        cmd_pkt_valid_w;
   logic [ 7:0] cmd_pkt_byte_w;
   logic [31:0] cmd_pkt_len_w;
   logic        cmd_pkt_ready_w;
+
+  // THE FORK NOW HAS THREE CONSUMERS AND THE AND IS THE WHOLE OF IT. The shell
+  // already ands its inline framer's ready with `cmd_pkt_ready_i`; this ands
+  // the decoder's with the executor's. A byte moves only when ALL THREE can
+  // take it, which is what makes the stream a fork rather than a tap.
+  //
+  // Getting this wrong is not loud. CMD.EXEC's first build took bytes on its
+  // OWN ready instead of the fork's, ran one byte ahead of the true stream for
+  // every packet, and reported every counter at a confident zero while the
+  // decoder beside it walked four records and the packet committed cleanly. It
+  // executed an empty frame and nothing failed.
+  logic        cmd_dec_pkt_ready_w;
+  logic        cmd_exe_pkt_ready_w;
+  assign cmd_pkt_ready_w = cmd_dec_pkt_ready_w && cmd_exe_pkt_ready_w;
 
   zhao_shell_top_v2 #(
     .FRAMER_Q (FRAMER_Q),
@@ -4665,7 +4842,7 @@ module zhao_console_core
     .rst_n            (rst_n),
 
     .pkt_valid_i      (cmd_pkt_valid_w),
-    .pkt_ready_o      (cmd_pkt_ready_w),
+    .pkt_ready_o      (cmd_dec_pkt_ready_w),
     .pkt_byte_i       (cmd_pkt_byte_w),
     .pkt_len_i        (cmd_pkt_len_w),
 
@@ -5973,6 +6150,81 @@ module zhao_console_core
     .s_src_id_o     (part_sft_src_id_o),
 
     .soft_particles_o(part_sft_sprites_o)
+  );
+
+  // ==========================================================================
+  // 7c. CMD.EXEC -- the packet becomes CONSOLE STATE
+  // ==========================================================================
+  // COMPOSED 2026-09-19. Section 7b's own text said what was still missing and
+  // this is it: "composing this does NOT by itself close I14, I30, I33 or I7 --
+  // those need the command EXECUTOR that spec/commands.zidl:382 says does not
+  // exist yet". The executor exists. It is `fpga/rtl/command/zhao_cmd_exec.sv`
+  // and its header is the authority on everything below.
+  //
+  // It sits on the SAME forked byte stream as the decoder, and it takes the
+  // decoder's verdict as an input rather than re-deriving it. The division is
+  // one sentence: CMD.DECODER owns the VERDICT, CMD.EXEC owns the PAYLOAD.
+  //
+  // NOTHING THIS BLOCK WRITES LEAVES IT BEFORE THE VERDICT, and that is
+  // structural rather than argued: `pkt_ready_o` is low outside its staging
+  // state, so the commit drain and the byte walk cannot overlap. The decoder's
+  // contract (its lines 70-75) is therefore obeyed literally. Its header
+  // carries the arithmetic that made literal compliance affordable -- staging
+  // the EFFECT of a command is 2,688 bits, staging the PACKET would be 8 Mbit.
+  //
+  // TWO OF THE FOUR GAPS ARE NOT CLOSED HERE AND MUST NOT BE. I33 (PART.TABLE's
+  // per-frame load) and I7 (PART.COLLIDE's plane) have NO command in
+  // `spec/commands.zidl`. Wiring either would mean this file choosing a wire
+  // layout the ABI does not define, which both entries already forbid in their
+  // own words. They need an ABI ruling, not an executor arm.
+  //
+  // And the two that ARE closed are closed by HALVES, deliberately: I14 keeps
+  // the viewport rect and I30 keeps the patch envelope, because no ratified
+  // command carries either. The merges above say which half is which.
+  zhao_cmd_exec #(
+    .STAMP_Q (CMD_EXEC_STAMP_Q)
+  ) u_cmd_exec (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .pkt_valid_i     (cmd_pkt_valid_w),
+    .pkt_ready_o     (cmd_exe_pkt_ready_w),
+    .pkt_fork_ready_i(cmd_pkt_ready_w),
+    .pkt_byte_i      (cmd_pkt_byte_w),
+    .pkt_len_i       (cmd_pkt_len_w),
+
+    // The verdict, from section 7b. Not re-derived.
+    .verdict_valid_i (cmd_decode_done_o),
+    .verdict_error_i (cmd_decode_error_o),
+
+    // I14's closing half: SetView's mat4fx -> cfg addresses 0..15.
+    .proj_cfg_we_o   (cmd_exec_cfg_we_w),
+    .proj_cfg_ready_i(cmd_exec_cfg_ready_w),
+    .proj_cfg_view_o (cmd_exec_cfg_view_w),
+    .proj_cfg_addr_o (cmd_exec_cfg_addr_w),
+    .proj_cfg_data_o (cmd_exec_cfg_data_w),
+
+    // I30's closing half: SurfaceStamp's ratified fields -> the dispatch.
+    .stamp_valid_o     (cmd_exec_stamp_valid_w),
+    .stamp_ready_i     (cmd_exec_stamp_ready_w),
+    .stamp_patch_o     (cmd_exec_stamp_patch_w),
+    .stamp_operation_o (cmd_exec_stamp_oper_w),
+    .stamp_tag_o       (cmd_exec_stamp_tag_w),
+    .stamp_strength_o  (cmd_exec_stamp_strength_w),
+    .stamp_tx_o        (cmd_exec_stamp_tx_w),
+    .stamp_ty_o        (cmd_exec_stamp_ty_w),
+    .stamp_radius_o    (cmd_exec_stamp_radius_w),
+    .stamp_ring_width_o(cmd_exec_stamp_ring_w),
+    .stamp_src_id_o    (cmd_exec_stamp_src_id_w),
+
+    .packets_committed_o  (cmd_exec_committed_o),
+    .packets_abandoned_o  (cmd_exec_abandoned_o),
+    .views_written_o      (cmd_exec_views_o),
+    .stamps_issued_o      (cmd_exec_stamps_o),
+    .stamp_overflow_o     (cmd_exec_stamp_overflow_o),
+    .view_range_refused_o (cmd_exec_view_refused_o),
+    .stamp_src_truncated_o(cmd_exec_src_truncated_o),
+    .unsupported_o        (cmd_exec_unsupported_o)
   );
 
 endmodule : zhao_console_core

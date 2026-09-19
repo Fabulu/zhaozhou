@@ -2027,6 +2027,7 @@ targets:
       - fpga/rtl/prod/zhao_prod_top.sv
       - fpga/rtl/audio/zhao_audio_fifo.sv
       - fpga/rtl/command/zhao_cmd_decoder.sv
+      - fpga/rtl/command/zhao_cmd_exec.sv
       - fpga/rtl/command/zhao_cmd_dma.sv
       - fpga/rtl/command/zhao_cmd_scheduler.sv
       - fpga/rtl/common/zhao_cdc_snapshot.sv
@@ -2419,6 +2420,7 @@ targets:
       - fpga/rtl/command/zhao_cmd_scheduler.sv
       - fpga/rtl/command/zhao_cmd_dma.sv
       - fpga/rtl/command/zhao_cmd_decoder.sv
+      - fpga/rtl/command/zhao_cmd_exec.sv
       - fpga/rtl/debug/zhao_debug_counters.sv
       - fpga/rtl/debug/zhao_debug_crc.sv
       - fpga/rtl/input/zhao_input_snapshot.sv
