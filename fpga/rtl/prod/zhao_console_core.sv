@@ -426,6 +426,26 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+//  * I1 was PART.STATE's GENERATION STORE (`part_rd_*`, `part_wr_*`), a
+//    boundary whose text said "MEM.HPS.BRIDGE is instantiated inside the shell
+//    and has no particle client port". CLOSED AND DELETED 2026-09-19 (gz/pfs).
+//    The provider was never the shell's bridge in particular -- it was a
+//    STREAMER, which nothing in the tree was: PART.STATE.md puts both
+//    generations in HPS DDR ("Dense sequential ping-pong ... Owns the two
+//    particle buffers in HPS DDR and nothing else on chip", 512 KiB each, so
+//    not M10K by contract or by arithmetic), and `zhao_part_state` streams
+//    records without knowing memory exists. `zhao_part_hps` is that streamer,
+//    composed as `u_part_hps`: ping-pong buffers swapped per tick, 64-byte
+//    bursts, the next generation's count taken from what was written. It is
+//    client 3 of `u_terr_hps_arb`, the socket this module already exposes
+//    (entry I26 -- the same move TERRAIN.WRITEBACK made when I28 closed).
+//    `zhao_part_state` gained `rd_empty_i`: an empty generation could not end
+//    its tick. Seven ports left the list; the HPS's buffer bases and its seed
+//    ({buffer, count}) arrive in the `terr_cfg_*` shape (plan D10). Evidence:
+//    tests/particles/part_hps_directed.cpp (93 checks; a record crosses DDR
+//    twice, bit for bit) and the smoke bench, whose particles now come out of
+//    its played DDR and go back into it.
+//
 //  * I6 was PART.COLLIDE's TERRAIN SAMPLE (`part_ter_*`), a boundary because
 //    "the collision test needs {height, nx, ny, nz}" and nothing in the tree
 //    emitted a normal -- the law for one was contradicted in writing
@@ -822,13 +842,7 @@
 //   fragment-seam wiring lands", which is the same statement from the ledger's
 //   side.
 //
-//  I1. PART.STATE's generation store (`part_rd_*`, `part_wr_*`) -- BOUNDARY.
-//      The plan lets the harness supply "memory behavior", and this is that.
-//      But the real provider is named nowhere: MEM.HPS.BRIDGE is instantiated
-//      inside the shell and has no particle client port, so no route from this
-//      store to that bridge exists yet. Connecting them is a shell change.
-//
-//
+
 //  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY, and the REASON
 //      CHANGED 2026-09-19. The old text said "FIELD.SEQ.FLOW is not composed",
 //      and that named a block `design/contracts/FIELD.SEQ.FLOW.md` rules will
@@ -3194,14 +3208,38 @@ module zhao_console_core
   // "INCOMPLETE -- TIED OFF, AND WHY" table with the owner that is missing.
   // ==========================================================================
 
-  // ---- I1: PART.STATE's generation store (harness = memory) ---------------
-  input  logic                    part_rd_valid_i,
-  output logic                    part_rd_ready_o,
-  input  logic [PART_REC_W-1:0]   part_rd_record_i,
-  input  logic                    part_rd_last_i,
-  output logic                    part_wr_valid_o,
-  input  logic                    part_wr_ready_i,
-  output logic [PART_REC_W-1:0]   part_wr_record_o,
+  // (I1's seven `part_rd_*` / `part_wr_*` ports were here. CLOSED 2026-09-19:
+  //  the generation store is HPS DDR by contract and `u_part_hps` streams it
+  //  through client 3 of `u_terr_hps_arb`. What crosses this edge now is the
+  //  HPS's own configuration, in the `terr_cfg_*` shape, below.)
+
+  // ---- PART.STATE's HPS DDR buffers: the HPS's configuration and seed ------
+  // NOT A TIE-OFF. PART.STATE.md: "Owns the two particle buffers in HPS DDR";
+  // the HPS allocates them (spec/memory_rules.md 5, "particle pools per the
+  // charter allocator") and in Verilator the harness IS the HPS (plan D10),
+  // exactly as for `terr_cfg_arena_*`. The seed says "buffer `buf` holds
+  // `count` records" -- the population descriptor's `active_count`
+  // (spec/qformats.md 10) -- and is taken only between ticks.
+  input  logic [31:0]             part_cfg_base0_i,
+  input  logic [31:0]             part_cfg_base1_i,
+  input  logic                    part_seed_valid_i,
+  output logic                    part_seed_ready_o,
+  input  logic                    part_seed_buf_i,
+  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // The store's evidence. `cur_count` is the generation's length as the
+  // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
+  // stimulus in tests/particles/part_hps_directed.cpp.
+  output logic                    part_hps_cur_buf_o,
+  output logic [$clog2(PART_CAPACITY):0] part_hps_cur_count_o,
+  output logic [31:0]             part_hps_ticks_o,
+  output logic [31:0]             part_hps_ticks_dropped_o,
+  output logic [31:0]             part_hps_ticks_unseeded_o,
+  output logic [31:0]             part_hps_seeds_o,
+  output logic [31:0]             part_hps_seeds_refused_o,
+  output logic [31:0]             part_hps_rd_bursts_o,
+  output logic [31:0]             part_hps_wr_bursts_o,
+  output logic [31:0]             part_hps_records_read_o,
+  output logic [31:0]             part_hps_records_written_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -3985,6 +4023,9 @@ module zhao_console_core
   // arbiter). Its wait is the number that says what the loader costs it.
   output logic [31:0]             terr_hps_c2_bursts_o,
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
+  // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
+  output logic [31:0]             terr_hps_c3_bursts_o,
+  output logic [31:0]             terr_hps_c3_wait_cycles_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -5415,6 +5456,94 @@ module zhao_console_core
     .load_refused_o (part_tbl_load_refused_o)
   );
 
+  // ==========================================================================
+  // PART.STATE's GENERATION STORE -- entry I1, CLOSED 2026-09-19 (gz/pfs).
+  // ==========================================================================
+  // PART.STATE.md puts both generations in HPS DDR ("Dense sequential
+  // ping-pong in HPS DDR ... Owns the two particle buffers in HPS DDR and
+  // nothing else on chip") -- 512 KiB each at the required tier, which no
+  // amount of M10K holds. `zhao_part_state` streams records and knows nothing
+  // of memory; `zhao_part_hps` is the streamer between it and the bridge: two
+  // buffers swapped per tick, 64-byte bursts of four records, a hardware count
+  // of what was written, and a tick that is atomic at the buffer level.
+  //
+  // IT ALSO OWNS THE TICK'S START. PART.STATE starts only when the store has a
+  // population and is not still flushing the previous generation's tail; a
+  // console tick that arrives while it is is counted (`part_hps_ticks_dropped_o`)
+  // -- the same drop PART.STATE already made silently while busy.
+  //
+  // `rd_empty` is new on PART.STATE with this closure: a generation of zero
+  // records had no way to say it was over, and the survivor pass waited for a
+  // last record that could not come.
+  //
+  // The bridge tag is ENGINE1. `zhao_client_e` is full at three bits and id 5
+  // is held unspent by ruling T3, so a new id is not available; the tag on an
+  // HPS burst selects only which `hps_ddr_bytes_by_client` row the bridge
+  // charges. Particle state is engine-side per-tick work, not background
+  // streaming (TERRAIN.BUILD) and not command acquisition (ENGINE0, CMD.DMA's).
+  // Provisional, one constant to change: `PART_HPS_CLIENT` below.
+  localparam zhao_client_e PART_HPS_CLIENT = ZHAO_CLIENT_ENGINE1;
+
+  zhao_hps_burst_req_t ptb_hps_req;
+  logic                ptb_hps_grant;
+  zhao_hps_burst_rsp_t ptb_hps_rsp;
+  logic [63:0]         ptb_hps_wdata;
+  logic                ptb_hps_wvalid, ptb_hps_wlast;
+
+  logic                   ph_tick_start, ph_rd_empty;
+  logic                   ph_rd_valid, ph_rd_ready, ph_rd_last;
+  logic [PART_REC_W-1:0]  ph_rd_record;
+  logic                   ph_wr_valid, ph_wr_ready;
+  logic [PART_REC_W-1:0]  ph_wr_record;
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic                   ph_busy_unused;   // PART.STATE's own tick_busy is the port
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_part_hps #(
+    .CAPACITY(PART_CAPACITY),
+    .CNT_W   ($clog2(PART_CAPACITY) + 1),
+    .CLIENT  (PART_HPS_CLIENT)
+  ) u_part_hps (
+    .clk              (gpu_clk),
+    .rst_n            (rst_n),
+    .cfg_base0_i      (part_cfg_base0_i),
+    .cfg_base1_i      (part_cfg_base1_i),
+    .seed_valid_i     (part_seed_valid_i),
+    .seed_ready_o     (part_seed_ready_o),
+    .seed_buf_i       (part_seed_buf_i),
+    .seed_count_i     (part_seed_count_i),
+    .tick_i           (core_tick_c),
+    .ps_tick_start_o  (ph_tick_start),
+    .ps_rd_empty_o    (ph_rd_empty),
+    .ps_tick_done_i   (part_tick_done_o),
+    .rd_valid_o       (ph_rd_valid),
+    .rd_ready_i       (ph_rd_ready),
+    .rd_record_o      (ph_rd_record),
+    .rd_last_o        (ph_rd_last),
+    .wr_valid_i       (ph_wr_valid),
+    .wr_ready_o       (ph_wr_ready),
+    .wr_record_i      (ph_wr_record),
+    .hps_req_o        (ptb_hps_req),
+    .hps_grant_i      (ptb_hps_grant),
+    .hps_rsp_i        (ptb_hps_rsp),
+    .hps_wr_valid_o   (ptb_hps_wvalid),
+    .hps_wr_data_o    (ptb_hps_wdata),
+    .hps_wr_last_o    (ptb_hps_wlast),
+    .hps_wr_ready_i   (terr_hps_wr_ready_i),
+    .busy_o           (ph_busy_unused),
+    .cur_buf_o        (part_hps_cur_buf_o),
+    .cur_count_o      (part_hps_cur_count_o),
+    .ticks_o          (part_hps_ticks_o),
+    .ticks_dropped_o  (part_hps_ticks_dropped_o),
+    .ticks_unseeded_o (part_hps_ticks_unseeded_o),
+    .seeds_o          (part_hps_seeds_o),
+    .seeds_refused_o  (part_hps_seeds_refused_o),
+    .rd_bursts_o      (part_hps_rd_bursts_o),
+    .wr_bursts_o      (part_hps_wr_bursts_o),
+    .records_read_o   (part_hps_records_read_o),
+    .records_written_o(part_hps_records_written_o)
+  );
+
   zhao_part_state #(
     .CAPACITY  (PART_CAPACITY),
     .CHILD_D   (PART_CHILD_D),
@@ -5423,7 +5552,7 @@ module zhao_console_core
   ) u_part_state (
     .clk          (gpu_clk),
     .rst_n        (rst_n),
-    .tick_start_i (core_tick_c),
+    .tick_start_i (ph_tick_start),
     .tick_busy_o  (part_tick_busy_o),
     .tick_done_o  (part_tick_done_o),
 
@@ -5432,12 +5561,13 @@ module zhao_console_core
     // edge instead of a pin the board had to drive.
     .capacity_full_o (part_capacity_full_c),
 
-    // I1: the generation store. Harness = memory; MEM.HPS.BRIDGE has no
-    // particle client port, so there is no route to it inside this core.
-    .rd_valid_i   (part_rd_valid_i),
-    .rd_ready_o   (part_rd_ready_o),
-    .rd_record_i  (part_rd_record_i),
-    .rd_last_i    (part_rd_last_i),
+    // REAL (I1 closed): the previous generation, read out of HPS DDR by
+    // `u_part_hps`.
+    .rd_valid_i   (ph_rd_valid),
+    .rd_ready_o   (ph_rd_ready),
+    .rd_record_i  (ph_rd_record),
+    .rd_last_i    (ph_rd_last),
+    .rd_empty_i   (ph_rd_empty),
 
     // REAL: straight into PART.UPDATE.
     .prt_valid_o  (ps_prt_valid),
@@ -5463,9 +5593,10 @@ module zhao_console_core
     // latency and exposed the race; this is the defect report's option (a).
     .chl_busy_i   (!sp_par_ready || fork_spw_valid_c),
 
-    .wr_valid_o   (part_wr_valid_o),
-    .wr_ready_i   (part_wr_ready_i),
-    .wr_record_o  (part_wr_record_o),
+    // REAL (I1 closed): the next generation, posted to `u_part_hps`.
+    .wr_valid_o   (ph_wr_valid),
+    .wr_ready_i   (ph_wr_ready),
+    .wr_record_o  (ph_wr_record),
 
     .survivors_o                  (part_survivors_o),
     .children_written_o           (part_children_written_o),
@@ -8745,32 +8876,47 @@ module zhao_console_core
   zhao_hps_burst_rsp_t twb_hps_rsp;
   logic [63:0]         twb_hps_wdata;
   logic                twb_hps_wvalid, twb_hps_wlast;
-  zhao_hps_burst_req_t [2:0]       thps_req;
-  logic                [2:0]       thps_grant;
-  logic                [2:0]       thps_wr_valid, thps_wr_last;
-  logic                [2:0][63:0] thps_wr_data;
-  zhao_hps_burst_rsp_t [2:0]       thps_rsp;
-  logic                [2:0][31:0] thps_bursts;
-  logic                [2:1][31:0] thps_wait;
+  // FOUR CLIENTS SINCE 2026-09-19 (gz/pfs, entry I1). PART.STATE's generation
+  // store takes index 3, the LOWEST, by the same argument the writeback's
+  // placement makes: a burst of page loads makes the particle stream wait,
+  // visibly, in `c3_wait_cycles`, and cannot deadlock it -- no terrain client
+  // waits on a particle. The store is a streamer with bounded staging on both
+  // sides, so waiting stalls PART.STATE's tick; it never drops a record. At the
+  // required tier a tick is 32,768 records in 8,192 read and 8,192 write bursts
+  // of 64 B (PART.STATE.md's 1 MiB per tick). Indices 0-2 keep their meaning.
+  // Like the writeback, the store gates its write beats on the bridge's level,
+  // `terr_hps_wr_ready_i`, and only the burst's owner is streaming.
+  // (`ptb_hps_*` are declared with `u_part_hps`, beside PART.STATE.)
+  zhao_hps_burst_req_t [3:0]       thps_req;
+  logic                [3:0]       thps_grant;
+  logic                [3:0]       thps_wr_valid, thps_wr_last;
+  logic                [3:0][63:0] thps_wr_data;
+  zhao_hps_burst_rsp_t [3:0]       thps_rsp;
+  logic                [3:0][31:0] thps_bursts;
+  logic                [3:1][31:0] thps_wait;
 
-  assign thps_req      = {twb_hps_req, tpl_hps_req, tcm_hps_req};
-  assign thps_wr_valid = {twb_hps_wvalid, 1'b0, 1'b0};
-  assign thps_wr_last  = {twb_hps_wlast, 1'b0, 1'b0};
-  assign thps_wr_data  = {twb_hps_wdata, 64'd0, 64'd0};
+  assign thps_req      = {ptb_hps_req, twb_hps_req, tpl_hps_req, tcm_hps_req};
+  assign thps_wr_valid = {ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
+  assign thps_wr_last  = {ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
+  assign thps_wr_data  = {ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
   assign tcm_hps_grant = thps_grant[0];
   assign tpl_hps_grant = thps_grant[1];
   assign twb_hps_grant = thps_grant[2];
+  assign ptb_hps_grant = thps_grant[3];
   assign tcm_hps_rsp   = thps_rsp[0];
   assign tpl_hps_rsp   = thps_rsp[1];
   assign twb_hps_rsp   = thps_rsp[2];
+  assign ptb_hps_rsp   = thps_rsp[3];
   assign terr_hps_c0_bursts_o      = thps_bursts[0];
   assign terr_hps_c1_bursts_o      = thps_bursts[1];
   assign terr_hps_c2_bursts_o      = thps_bursts[2];
+  assign terr_hps_c3_bursts_o      = thps_bursts[3];
   assign terr_hps_c1_wait_cycles_o = thps_wait[1];
   assign terr_hps_c2_wait_cycles_o = thps_wait[2];
+  assign terr_hps_c3_wait_cycles_o = thps_wait[3];
 
   zhao_hps_arbiter_n #(
-    .N(3)
+    .N(4)
   ) u_terr_hps_arb (
     .clk          (gpu_clk),
     .rst_n        (rst_n),

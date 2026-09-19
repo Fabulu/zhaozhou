@@ -71,6 +71,8 @@
 // Cut from zhao_part_state.sv at tree revision 3b16f35d, 2026-09-19 (re-cut after
 // the tick-boundary repair: production gained chl_wr_fire_c, a narrowed
 // chl_ready_o, the S_APPEND exit term and two assertions).
+// Carried forward 2026-09-19 (gz/pfs): production gained `rd_empty_i` and its
+// one assignment in S_IDLE; both are applied here verbatim, the mutation untouched.
 //
 // Everything below this line is zhao_part_state.sv verbatim except for the
 // module name, the `endmodule` label, and the block marked MUTATION.
@@ -289,6 +291,9 @@ module zhao_part_state_child_order_mutant #(
     output wire                  rd_ready_o,
     input  wire [REC_W-1:0]      rd_record_i,
     input  wire                  rd_last_i,       // final record of the generation
+    // THE PREVIOUS GENERATION IS EMPTY -- carried forward from production
+    // (2026-09-19, gz/pfs, entry I1); see zhao_part_state.sv for the argument.
+    input  wire                  rd_empty_i,
 
     // ---- offered to PART.UPDATE ----------------------------------------------
     output wire                  prt_valid_o,
@@ -514,7 +519,8 @@ module zhao_part_state_child_order_mutant #(
         S_IDLE: begin
           if (tick_start_i) begin
             st_q      <= S_SURVIVE;
-            rd_done_q <= 1'b0;
+            // An empty generation has already delivered its last record.
+            rd_done_q <= rd_empty_i;
             written_q <= '0;
             // `chl_wp_q`/`chl_rp_q` ARE DELIBERATELY NOT CLEARED HERE. They
             // used to be, and that is the assignment that destroyed the last

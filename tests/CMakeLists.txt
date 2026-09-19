@@ -6057,6 +6057,34 @@ verilate(test_part_state_directed
 add_test(NAME part_state_directed COMMAND test_part_state_directed)
 set_tests_properties(part_state_directed PROPERTIES LABELS "fast;particles")
 
+# PART.STATE's HPS DDR face (entry I1, closed 2026-09-19 on gz/pfs): the REAL
+# streamer + PART.STATE + N-client arbiter + bridge, with the C++ playing
+# UPDATE, SPAWN and the HPS. A record crosses DDR twice and is compared bit for
+# bit each time; an empty generation finishes its tick; every counter fires.
+add_executable(test_part_hps_directed particles/part_hps_directed.cpp)
+target_link_libraries(test_part_hps_directed PRIVATE zhao_harness)
+verilate(test_part_hps_directed
+  PREFIX Vtb_part_hps_chain
+  TOP_MODULE tb_part_hps_chain
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_arbiter.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_hps_bridge.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_state.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_hps.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/particles/tb_part_hps_chain.sv)
+add_test(NAME part_hps_directed COMMAND test_part_hps_directed)
+set_tests_properties(part_hps_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_hps
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_hps
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_hps.sv)
+set_tests_properties(lint_zhao_part_hps PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # ...and the POSITIVE CONTROL for its ordering check.
 #
 # zhao_part_state.sv carries NO assertion for "survivors compacted first,

@@ -16,10 +16,11 @@
 //   1. `gpu_tick_o` pulses                  -- the shell leaves reset and
 //                                              FRAMECTL reaches a frame edge.
 //   2. `part_tick_busy_o` rises after it    -- SHELL.gpu_tick -> PART.STATE.
-//   3. `part_wr_valid_o` fires              -- a record went
-//                                              STATE -> UPDATE -> COLLIDE ->
-//                                              STATE -> out. Four blocks, one
-//                                              beat, no stimulus in between.
+//   3. a record lands in the played DDR     -- a record went DDR -> the
+//                                              store -> STATE -> UPDATE ->
+//                                              COLLIDE -> STATE -> the store
+//                                              -> DDR (entry I1 closed), no
+//                                              stimulus in between.
 //   4. `geom_vertices_sent_o` moves         -- GEOM.SKIN -> GROUP_SEQ ->
 //                                              client A of the projector.
 //   5. `proj_a_grants_o` moves              -- the shared projector GRANTED
@@ -141,13 +142,29 @@ module tb_zhao_console_core_smoke
   // name, so a port this bench forgets is a compile error rather than a
   // silently floating input.
   // ==========================================================================
-  logic                    part_rd_valid_i;
-  logic                    part_rd_ready_o;
-  logic [PART_REC_W-1:0]   part_rd_record_i;
-  logic                    part_rd_last_i;
-  logic                    part_wr_valid_o;
-  logic                    part_wr_ready_i;
-  logic [PART_REC_W-1:0]   part_wr_record_o;
+  // PART.STATE's generation store (entry I1, CLOSED 2026-09-19). The seven
+  // record ports are gone: the core streams both generations through HPS DDR
+  // itself (`u_part_hps`, client 3 of the terrain HPS arbiter), and what this
+  // bench supplies is what the HPS supplies -- two buffer bases and a seed.
+  logic [31:0]             part_cfg_base0_i;
+  logic [31:0]             part_cfg_base1_i;
+  logic                    part_seed_valid_i;
+  logic                    part_seed_ready_o;
+  logic                    part_seed_buf_i;
+  logic [15:0]             part_seed_count_i;   // $clog2(PART_CAPACITY)+1
+  logic                    part_hps_cur_buf_o;
+  logic [15:0]             part_hps_cur_count_o;
+  logic [31:0]             part_hps_ticks_o;
+  logic [31:0]             part_hps_ticks_dropped_o;
+  logic [31:0]             part_hps_ticks_unseeded_o;
+  logic [31:0]             part_hps_seeds_o;
+  logic [31:0]             part_hps_seeds_refused_o;
+  logic [31:0]             part_hps_rd_bursts_o;
+  logic [31:0]             part_hps_wr_bursts_o;
+  logic [31:0]             part_hps_records_read_o;
+  logic [31:0]             part_hps_records_written_o;
+  logic [31:0]             terr_hps_c3_bursts_o;
+  logic [31:0]             terr_hps_c3_wait_cycles_o;
   // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
   // PORTS THAT USED TO BE DECLARED HERE ARE GONE: the core instantiates
   // `zhao_part_table` and answers its own descriptor reads (entries I2 and I3,
@@ -1720,12 +1737,39 @@ module tb_zhao_console_core_smoke
   int unsigned  hps_bursts_served_q;
   logic         hps_grant_pulse_q;
   assign terr_hps_grant_i = hps_grant_pulse_q;
-  // This played bridge accepts no write burst (see the write arm below), so
-  // its write-acceptance level is never high.
-  assign terr_hps_wr_ready_i = 1'b0;
+
+  // ---- THE PARTICLE BUFFERS, in the played DDR (entry I1 closed) ----------
+  // PART.STATE.md: "Dense sequential ping-pong in HPS DDR". The bench is the
+  // HPS, so it owns the two buffers, places the first generation in buffer 0
+  // before the machine starts, and seeds {buffer 0, N_PART_RECORDS}. After
+  // that every record PART.STATE sees has come OUT of this array through the
+  // bridge socket, and every record it writes goes back IN -- which is what
+  // the write arm below is for. It is the only region the played bridge
+  // accepts a write into; a write anywhere else is still answered with `err`.
+  localparam logic [31:0] PART_HPS_BASE0 = 32'h3000_0000;
+  localparam logic [31:0] PART_HPS_BASE1 = 32'h3000_1000;
+  localparam int unsigned PART_HPS_WORDS = 1024;          // 2 x 256 records
+  logic [63:0] part_mem [0:PART_HPS_WORDS-1];
+
+  function automatic bit in_part_region(input logic [31:0] a);
+    return (a >= PART_HPS_BASE0) && (a < PART_HPS_BASE0 + 32'(PART_HPS_WORDS * 8));
+  endfunction
+
+  // The write-acceptance LEVEL: high only while a granted particle write burst
+  // is streaming, which is exactly when the real bridge's `wr_ready` is.
+  assign terr_hps_wr_ready_i = (hps_state_qq == 4);
+
+  // What crossed the socket, as whole records -- the evidence that replaces
+  // the old `part_wr_*` / `part_rd_*` ports.
+  logic                  part_ddr_wr_rec_valid_q;
+  logic [PART_REC_W-1:0] part_ddr_wr_rec_q;
+  logic [63:0]           part_ddr_wr_lo_q;
+  logic                  part_ddr_wr_half_q;
+  int unsigned           part_ddr_rd_beats_q;
 
   function automatic logic [63:0] hps_read(input logic [31:0] byte_addr);
     int unsigned w;
+    if (in_part_region(byte_addr)) return part_mem[(byte_addr - PART_HPS_BASE0) >> 3];
     if (byte_addr < HPS_BASE) return 64'd0;
     w = (byte_addr - HPS_BASE) >> 3;
     if (w >= HPS_WORDS) return 64'd0;
@@ -1741,9 +1785,15 @@ module tb_zhao_console_core_smoke
       hps_grant_pulse_q   <= 1'b0;
       hps_bursts_served_q <= 0;
       terr_hps_rsp_i      <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b0};
+      part_ddr_wr_rec_valid_q <= 1'b0;
+      part_ddr_wr_rec_q       <= '0;
+      part_ddr_wr_lo_q        <= 64'd0;
+      part_ddr_wr_half_q      <= 1'b0;
+      part_ddr_rd_beats_q     <= 0;
     end else begin
       hps_grant_pulse_q <= 1'b0;
       terr_hps_rsp_i    <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b0};
+      part_ddr_wr_rec_valid_q <= 1'b0;
 
       case (hps_state_qq)
         0: if (terr_hps_req_o.valid && !terr_hps_req_o.write) begin
@@ -1760,13 +1810,22 @@ module tb_zhao_console_core_smoke
                hps_wait_qq  <= HPS_LAT;
                hps_state_qq <= 1;
              end
+           end else if (terr_hps_req_o.valid && terr_hps_req_o.write &&
+                        in_part_region(terr_hps_req_o.addr) &&
+                        (terr_hps_req_o.len != 7'd0) && (terr_hps_req_o.len[2:0] == 3'd0)) begin
+             // A PARTICLE write burst -- PART.STATE's next generation. Granted,
+             // then after the same latency the write level rises and the beats
+             // land in `part_mem` one per cycle until `wr_last`.
+             hps_grant_pulse_q <= 1'b1;
+             hps_addr_qq       <= terr_hps_req_o.addr;
+             hps_wait_qq       <= HPS_LAT;
+             hps_state_qq      <= 3;
            end else if (terr_hps_req_o.valid && terr_hps_req_o.write) begin
-             // Nothing in this BENCH can write over the bridge -- the only
+             // Nothing ELSE in this bench can write over the bridge -- the only
              // terrain writer is TERRAIN.WRITEBACK, composed since entry I28
              // closed, and it cannot be reached here (see the doorbell's
              // initialisation). Granting and dropping would be a lie; this
-             // reports a bridge error so a write that appears here is LOUD,
-             // and `terr_hps_wr_ready_i` below is never raised.
+             // reports a bridge error so a write that appears here is LOUD.
              hps_grant_pulse_q <= 1'b1;
              terr_hps_rsp_i <= '{beat_valid: 1'b0, data: 64'd0, last: 1'b0, err: 1'b1};
            end
@@ -1777,9 +1836,29 @@ module tb_zhao_console_core_smoke
                                  data:       hps_read(hps_addr_qq),
                                  last:       (hps_beats_qq == 1),
                                  err:        1'b0};
+             if (in_part_region(hps_addr_qq)) part_ddr_rd_beats_q <= part_ddr_rd_beats_q + 1;
              hps_addr_qq  <= hps_addr_qq + 32'd8;
              hps_beats_qq <= hps_beats_qq - 1;
              if (hps_beats_qq == 1) begin
+               hps_state_qq        <= 0;
+               hps_bursts_served_q <= hps_bursts_served_q + 1;
+             end
+           end
+        3: if (hps_wait_qq > 1) hps_wait_qq <= hps_wait_qq - 1;
+           else                 hps_state_qq <= 4;
+        4: if (terr_hps_wr_valid_o) begin
+             part_mem[(hps_addr_qq - PART_HPS_BASE0) >> 3] <= terr_hps_wr_data_o;
+             hps_addr_qq <= hps_addr_qq + 32'd8;
+             // two beats, low half first, make one particle128 record
+             if (!part_ddr_wr_half_q) begin
+               part_ddr_wr_lo_q   <= terr_hps_wr_data_o;
+               part_ddr_wr_half_q <= 1'b1;
+             end else begin
+               part_ddr_wr_rec_q       <= {terr_hps_wr_data_o, part_ddr_wr_lo_q};
+               part_ddr_wr_rec_valid_q <= 1'b1;
+               part_ddr_wr_half_q      <= 1'b0;
+             end
+             if (terr_hps_wr_last_o) begin
                hps_state_qq        <= 0;
                hps_bursts_served_q <= hps_bursts_served_q + 1;
              end
@@ -2122,7 +2201,6 @@ module tb_zhao_console_core_smoke
   // ==========================================================================
   int unsigned cycles_q;
   int unsigned ticks_seen_q;
-  int unsigned part_records_sent_q;
   int unsigned part_records_written_q;
   logic        render_frame_open_q;
   bit          part_tick_seen_q;
@@ -2148,12 +2226,15 @@ module tb_zhao_console_core_smoke
     if (reset_released_q) begin
       if (gpu_tick_o)                             ticks_seen_q     <= ticks_seen_q + 1;
       if (part_tick_busy_o)                       part_tick_seen_q <= 1'b1;
-      if (part_wr_valid_o && part_wr_ready_i) begin
+      // WATCHED IN DDR, since entry I1 closed: a record counts as written when
+      // its second beat lands in the played buffer, not when it leaves
+      // PART.STATE -- so this is also the evidence that the store delivered it.
+      if (part_ddr_wr_rec_valid_q) begin
         part_records_written_q <= part_records_written_q + 1;
-        if (part_wr_record_o[PART_KEY_BORN_BIT]) begin
+        if (part_ddr_wr_rec_q[PART_KEY_BORN_BIT]) begin
           part_children_seen_q <= part_children_seen_q + 1;
           // pos.y is the second 18-bit field of the ratified record.
-          if ($signed(part_wr_record_o[35:18]) == PART_POS_W'(PART_CONTACT_Y))
+          if ($signed(part_ddr_wr_rec_q[35:18]) == PART_POS_W'(PART_CONTACT_Y))
             part_children_at_contact_q <= part_children_at_contact_q + 1;
         end
       end
@@ -2281,37 +2362,32 @@ module tb_zhao_console_core_smoke
   end
 
   // --------------------------------------------------------------------------
-  // THE GENERATION STORE (entry I1: harness = memory).
+  // THE GENERATION STORE (entry I1 CLOSED 2026-09-19): THE BENCH IS THE HPS.
   //
-  // It offers N_PART_RECORDS particle128 records and then stops. The records
-  // are distinct so a swap would be visible, and they are DATA, not a
-  // workload: every field the blocks act on comes from the species descriptor,
-  // which this bench holds at its benign values.
+  // The first generation is placed in buffer 0 of the played DDR BEFORE the
+  // machine runs -- N_PART_RECORDS particle128 records, distinct so a swap
+  // would be visible, and DATA rather than a workload: every field the blocks
+  // act on comes from the species descriptor, which this bench holds at its
+  // benign values. Then the HPS seeds {buffer 0, N_PART_RECORDS} once, and
+  // from there the core owns both buffers: it reads this generation back out
+  // through the bridge socket and writes the next one into buffer 1.
   // --------------------------------------------------------------------------
-  always @(posedge gpu_clk) begin
-    if (!rst_n) begin
-      part_records_sent_q <= 0;
-      part_rd_valid_i     <= 1'b0;
-      part_rd_last_i      <= 1'b0;
-      part_rd_record_i    <= '0;
-    end else begin
-      if (part_rd_valid_i && part_rd_ready_o) begin
-        part_records_sent_q <= part_records_sent_q + 1;
-        part_rd_valid_i     <= 1'b0;
-        part_rd_last_i      <= 1'b0;
-      end
-      if (part_tick_busy_o && !part_rd_valid_i &&
-          (part_records_sent_q < N_PART_RECORDS)) begin
-        part_rd_valid_i  <= 1'b1;
-        part_rd_last_i   <= (part_records_sent_q == N_PART_RECORDS - 1);
-        // position X = the ordinal, so the records are distinguishable;
-        // everything else zero, which is a legal particle128.
-        part_rd_record_i <= {{(PART_REC_W-18){1'b0}},
-                             18'(part_records_sent_q + 1)};
-      end
+  initial begin : part_ddr_image
+    for (int w = 0; w < PART_HPS_WORDS; w++) part_mem[w] = 64'hDEAD_BEEF_DEAD_BEEF;
+    for (int r = 0; r < N_PART_RECORDS; r++) begin
+      // position X = the ordinal, so the records are distinguishable;
+      // everything else zero, which is a legal particle128.
+      part_mem[2 * r]     = 64'(18'(r + 1));
+      part_mem[2 * r + 1] = 64'd0;
     end
   end
 
+  bit part_seed_taken_q;
+  assign part_seed_valid_i = reset_released_q && !part_seed_taken_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n)                                        part_seed_taken_q <= 1'b0;
+    else if (part_seed_valid_i && part_seed_ready_o)   part_seed_taken_q <= 1'b1;
+  end
   // --------------------------------------------------------------------------
   // THE GEOMETRY VERTEX STREAM.
   //
@@ -2830,7 +2906,10 @@ module tb_zhao_console_core_smoke
     // Every DUT input to a defined value first. Generated from the DUT's own
     // port list, so a new input cannot arrive here undriven and X-propagate
     // into a pass.
-    part_wr_ready_i = '0;
+    part_cfg_base0_i = PART_HPS_BASE0;
+    part_cfg_base1_i = PART_HPS_BASE1;
+    part_seed_buf_i = 1'b0;
+    part_seed_count_i = 16'(N_PART_RECORDS);
     part_tbl_ld_valid_i = '0;
     part_tbl_ld_sel_i = '0;
     part_tbl_ld_index_i = '0;
@@ -3170,7 +3249,6 @@ module tb_zhao_console_core_smoke
     // owner (entries I2/I3). It does now, so they are LOADED below instead --
     // and every particle behaviour this bench already asserted is now evidence
     // that the load reached the consumer through `zhao_part_table`.
-    part_wr_ready_i         = 1'b1;
 
     // ---- SPAWN ON COLLISION, the acceptance for owner ruling I4 -------------
     // Before the ruling this bench held the collider quiet (response IGNORE, no
@@ -3661,7 +3739,7 @@ module tb_zhao_console_core_smoke
     // ======================================================================
     $display("SMOKE: cycles=%0d frame_edges=%0d", cycles_q, ticks_seen_q);
     $display("SMOKE: particles  read=%0d written=%0d survivors=%0d updated=%0d",
-             part_records_sent_q, part_records_written_q,
+             part_hps_records_read_o, part_records_written_q,
              part_survivors_o, part_updated_o);
     $display("SMOKE: assetpath  considered=%0d fetched=%0d culled=%0d refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]",
              geom_mf_meshlets_considered_o, geom_mf_descriptors_fetched_o,
@@ -3753,6 +3831,38 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: PART.STATE never went busy -- SHELL.gpu_tick_o does not reach it");
     if (part_records_written_q == 0)
       $fatal(1, "SMOKE: no particle reached the write-back -- the STATE/UPDATE/COLLIDE ring does not carry a beat");
+
+    // ---- THE GENERATION STORE (entry I1): every record crossed the socket ----
+    // The records PART.STATE judged came OUT of the played DDR, and the ones it
+    // wrote went back IN -- counted by the bench on the socket's beats, against
+    // the store's own counters, so neither side can agree with itself.
+    $display("SMOKE: particle store: seeds=%0d refused=%0d ticks=%0d dropped=%0d unseeded=%0d rd_bursts=%0d wr_bursts=%0d read=%0d written=%0d ddr_rd_beats=%0d ddr_records_landed=%0d cur_buf=%0d cur_count=%0d c3_bursts=%0d c3_wait=%0d",
+             part_hps_seeds_o, part_hps_seeds_refused_o, part_hps_ticks_o,
+             part_hps_ticks_dropped_o, part_hps_ticks_unseeded_o,
+             part_hps_rd_bursts_o, part_hps_wr_bursts_o,
+             part_hps_records_read_o, part_hps_records_written_o,
+             part_ddr_rd_beats_q, part_records_written_q,
+             part_hps_cur_buf_o, part_hps_cur_count_o,
+             terr_hps_c3_bursts_o, terr_hps_c3_wait_cycles_o);
+    if ((part_hps_seeds_o != 1) || (part_hps_seeds_refused_o != 0))
+      $fatal(1, "SMOKE: the HPS seed was not taken exactly once (seeds=%0d refused=%0d)",
+             part_hps_seeds_o, part_hps_seeds_refused_o);
+    if (part_hps_ticks_o == 0)
+      $fatal(1, "SMOKE: no particle tick completed through the generation store");
+    if (part_hps_records_read_o < N_PART_RECORDS)
+      $fatal(1, "SMOKE: the store handed PART.STATE %0d records; the seeded generation holds %0d",
+             part_hps_records_read_o, N_PART_RECORDS);
+    if (part_ddr_rd_beats_q < 2 * part_hps_records_read_o)
+      $fatal(1, "SMOKE: PART.STATE judged %0d records but only %0d beats came out of DDR -- a record reached it that the socket never carried",
+             part_hps_records_read_o, part_ddr_rd_beats_q);
+    if (part_hps_records_written_o != part_records_written_q)
+      $fatal(1, "SMOKE: the store took %0d records from PART.STATE but %0d landed in DDR",
+             part_hps_records_written_o, part_records_written_q);
+    if (terr_hps_c3_bursts_o != part_hps_rd_bursts_o + part_hps_wr_bursts_o)
+      $fatal(1, "SMOKE: the arbiter granted client 3 %0d bursts; the store asked for %0d",
+             terr_hps_c3_bursts_o, part_hps_rd_bursts_o + part_hps_wr_bursts_o);
+    if ((part_hps_ticks_o >= 2) && (part_hps_records_read_o <= N_PART_RECORDS))
+      $fatal(1, "SMOKE: %0d store ticks but no generation was read back out of DDR", part_hps_ticks_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is
     // downstream of a meshlet arriving. Firing the `-BadDescriptor` control
     // with these checks placed AFTER the ones below stopped the run at
