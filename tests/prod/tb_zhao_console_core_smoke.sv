@@ -877,6 +877,87 @@ module tb_zhao_console_core_smoke
   logic [1:0]  phy_dqm_o;
   logic [15:0] phy_dq_i;
 
+  // ---- THE PARTICLE DRAW PATH (core entry I24) ---------------------------
+  // PART.PROJECT -> PART.LADDER -> {PART.EXPAND, PART.SOFT}, composed
+  // 2026-09-19. Declared here for the same reason the command front above is:
+  // `.*` binds by name and a port with no net is a compile error.
+  //
+  // **THE THREE `_ready_i` HERE ARE NOT DECORATION AND MUST NOT BE TIED LOW.**
+  // PART.PROJECT takes a THIRD BRANCH of the fork on PART.COLLIDE's output, so
+  // a draw path that never drains holds its slots, refuses at `p_ready_o`, and
+  // STALLS THE WHOLE PARTICLE TICK -- the ring would stop and this bench's
+  // survivor and child checks would fail with no hint of where. That is the
+  // correct behaviour (backpressure, never a drop), and it is exactly why the
+  // consumer has to be modelled rather than grounded. They are held HIGH: this
+  // bench is a wiring smoke and the endpoints' real customer is the absent GEOM
+  // replay/setup path the core's I24 names.
+  logic signed [31:0] part_prj_base_radius_i;
+  logic               part_prj_view_i;
+  logic        [15:0] part_prj_trail_i;
+  logic               part_prj_narrow_i;
+  logic               part_prj_protected_i;
+  logic        [ 2:0] part_prj_gov_floor_i;
+  logic        [ 2:0] part_prj_prev_rung_i;
+  logic        [ 3:0] part_prj_hold_i;
+  logic               part_prj_first_i;
+  logic        [ 7:0] part_prj_r_i;
+  logic        [ 7:0] part_prj_g_i;
+  logic        [ 7:0] part_prj_b_i;
+  logic        [15:0] part_prj_src_id_i;
+
+  logic               part_rung_valid_o;
+  logic               part_rung_ready_i;
+  logic        [ 2:0] part_rung_o;
+  logic        [ 3:0] part_rung_hold_o;
+  logic               part_rung_changed_o;
+  logic        [15:0] part_rung_src_id_o;
+
+  logic               part_exp_valid_o;
+  logic               part_exp_ready_i;
+  logic signed [21:0] part_exp_ax_o;
+  logic signed [21:0] part_exp_ay_o;
+  logic signed [21:0] part_exp_bx_o;
+  logic signed [21:0] part_exp_by_o;
+  logic signed [21:0] part_exp_cx_o;
+  logic signed [21:0] part_exp_cy_o;
+  logic signed [31:0] part_exp_d_o;
+  logic        [ 7:0] part_exp_r_o;
+  logic        [ 7:0] part_exp_g_o;
+  logic        [ 7:0] part_exp_b_o;
+  logic               part_exp_depth_test_o;
+  logic               part_exp_depth_write_o;
+  logic        [15:0] part_exp_src_id_o;
+
+  logic               part_sft_valid_o;
+  logic               part_sft_ready_i;
+  logic signed [12:0] part_sft_min_x_o;
+  logic signed [12:0] part_sft_max_x_o;
+  logic signed [12:0] part_sft_min_y_o;
+  logic signed [12:0] part_sft_max_y_o;
+  logic signed [31:0] part_sft_d_o;
+  logic        [ 7:0] part_sft_r_o;
+  logic        [ 7:0] part_sft_g_o;
+  logic        [ 7:0] part_sft_b_o;
+  logic               part_sft_depth_test_o;
+  logic               part_sft_depth_write_o;
+  logic        [15:0] part_sft_src_id_o;
+
+  logic [31:0] part_prj_projected_o;
+  logic [31:0] part_prj_behind_o;
+  logic [31:0] part_prj_geom_grants_o;
+  logic [31:0] part_prj_part_grants_o;
+  logic [31:0] part_prj_contended_o;
+  logic [31:0] part_prj_size_sat_o;
+  logic [31:0] part_prj_slot_pressure_o;
+  logic [31:0] part_prj_tag_collision_o;
+  logic [31:0] part_prj_ladder_unexpected_o;
+  logic [31:0] part_lad_decisions_o;
+  logic [31:0] part_lad_changes_o;
+  logic [31:0] part_lad_held_o;
+  logic [31:0] part_lad_gov_forced_o;
+  logic [31:0] part_exp_polygons_o;
+  logic [31:0] part_sft_sprites_o;
+
   // ---- THE DUT, OR ITS POSITIVE CONTROL --------------------------------
   // A PLAIN `ifdef`, SELECTED BY A PLAIN `-D`, AND THAT SHAPE IS DELIBERATE.
   // CLAUDE.md: Verilator's `-D` cannot override a FUNCTION-LIKE `define` and
@@ -1686,6 +1767,34 @@ module tb_zhao_console_core_smoke
     part_plane_c_i = '0;
     part_cap_full_i = '0;
     part_hist_sel_i = '0;
+
+    // THE PARTICLE DRAW PATH (core entry I24). The three readies are HIGH, and
+    // the comment at their declaration says why holding them low would stall
+    // the whole particle tick rather than merely leaving the draw path idle.
+    part_rung_ready_i = 1'b1;
+    part_exp_ready_i  = 1'b1;
+    part_sft_ready_i  = 1'b1;
+    // One world unit of base radius, fx16. A VALUE, not a law: no species
+    // radius table exists anywhere in the tree and the reference says that is
+    // properly the owner's, so this bench picks one so that the projected size
+    // is non-zero and the ladder has something to decide about.
+    part_prj_base_radius_i = 32'sh0001_0000;
+    part_prj_view_i       = 1'b0;
+    part_prj_trail_i      = '0;
+    part_prj_narrow_i     = 1'b0;
+    part_prj_protected_i  = 1'b0;
+    part_prj_gov_floor_i  = '0;
+    part_prj_prev_rung_i  = '0;
+    part_prj_hold_i       = '0;
+    // No hold state exists off chip (I23's absent DDR), so every particle is a
+    // first sighting. That is the honest setting here, not a convenience: it
+    // makes PART.LADDER take its `p_first_i` path, which is the only one whose
+    // inputs this bench can actually supply.
+    part_prj_first_i      = 1'b1;
+    part_prj_r_i          = 8'hC0;
+    part_prj_g_i          = 8'h80;
+    part_prj_b_i          = 8'h40;
+    part_prj_src_id_i     = 16'h0BAD;
     geom_vd_v_bytes_i = '0;
     geom_vd_v_src_id_i = '0;
     geom_clip_tri_behind_i = '0;
