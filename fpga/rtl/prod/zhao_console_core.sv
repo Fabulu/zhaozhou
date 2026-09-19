@@ -844,56 +844,72 @@
 //
 //      NARROWED AND MADE SPECIFIC 2026-09-19, because "read that file's
 //      header" was hiding a group of six ports that file's header does not
-//      discuss and this one had never named. They are the PACKET-D ATTRIBUTE
-//      CARRIAGE, and they are a BOUNDARY with no producer anywhere in the
-//      tree:
+//      discuss and this one had never named -- the PACKET-D ATTRIBUTE
+//      CARRIAGE. HALF OF IT IS NOW CLOSED. What is left, and what it is
+//      waiting for, is the rest of this entry.
 //
-//        tri_invw_plane_i       240b   plane 0, {n0[95:0], dndx[71:0], dndy}
-//        tri_u_over_w_plane_i   240b   plane 1, same layout
-//        tri_v_over_w_plane_i   240b   plane 2, same layout
-//        tri_flat_request_i     298b   zhao_texture_v3_request_v2_t[297:0]
-//        tri_continuation_tail_i 48b
-//        tri_fragment_state_i    32b
+//        tri_invw_plane_i       240b   CLOSED -- GEOM.ATTRPACK, plane 0
+//        tri_u_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 1
+//        tri_v_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 2
+//        tri_flat_request_i     298b   OPEN, still a BOUNDARY
+//        tri_continuation_tail_i 48b   OPEN, still a BOUNDARY
+//        tri_fragment_state_i    32b   OPEN, still a BOUNDARY
 //
-//      SEARCHED BEFORE BEING CALLED ABSENT, because this repository has been
-//      sent to rebuild existing blocks by exactly this kind of claim. Every
-//      `[239:0]` and `[297:0]` in `fpga/rtl` is an INPUT; the chain is
-//      bin pipe <- shell <- this core, and it stops at a module boundary.
-//      `reports/PACKET-H-DRIVER-CONTRACT-20260917.md` section 3.2 lists these
-//      seven and, alone among its groups, carries no WIRED marker.
+//      The three OPEN ports are a BOUNDARY and this entry stays one. Their
+//      owner is MATERIAL.RESOLVE and it is not built -- see below.
 //
-//      AND THE NEAR-PRODUCER EXISTS, which is the part worth writing down so
-//      nobody builds it twice. `fpga/rtl/geometry/zhao_geom_attrsetup.sv` is
-//      real, is directed-tested, and emits `n0_o`/`dndx_o`/`dndy_o` -- 96+72+72
-//      = exactly the 240 bits of ONE plane. Its own header says "ONE ATTRIBUTE
-//      PER REQUEST. A textured Gouraud triangle needs seven planes and asks
-//      seven times." What does not exist is the block that ASKS three times and
-//      packs the answers, together with the flat request. So this is a missing
-//      FRONT END over an arithmetic core that is already built, not missing
-//      arithmetic -- and `zhao_geom_attrsetup`'s only instantiation today is an
-//      LFSR sizing harness in `zhao_prod_top.sv`, which is the "built,
-//      installed nowhere" shape CLAUDE.md names.
+//      HOW THE THREE PLANES CLOSED, and why it was a FRONT END and never
+//      missing arithmetic. `fpga/rtl/geometry/zhao_geom_attrsetup.sv` was real,
+//      directed-tested and emitting `n0_o`/`dndx_o`/`dndy_o` -- 96+72+72 =
+//      exactly the 240 bits of ONE plane -- the whole time. Its own header says
+//      "ONE ATTRIBUTE PER REQUEST. A textured Gouraud triangle needs seven
+//      planes and asks seven times." What did not exist was the block that
+//      ASKS. `zhao_geom_attrpack` is that block: one shared attrsetup core,
+//      three lanes, three packed plane words, composed below off GEOM.CLIP's
+//      own winding-flipped attribute packet -- which this module was ALREADY
+//      emitting to nobody through `geom_clip_attr_*_o`. The three ports are
+//      retired from this edge exactly as `tri_area2_i` was.
 //
-//      DRIVING THEM FROM HERE IS REFUSED for the usual reason: the only legal
-//      value constructor in the tree is `tools/quartus/gen_shell_fit_top.py`
-//      lines 596-654, which exists to keep a FIT honest and packs edge
-//      coefficients into plane words so the unpacker does not park in refusal.
-//      That is stimulus. A composer that produced the same words would be
-//      inventing GEOM.ATTRSETUP's front end in `zhao_console_core.sv`.
+//      THE MATERIAL RECORD IS A DIFFERENT KIND OF GAP and it is named now
+//      rather than described. `tri_flat_request_i` is
+//      `zhao_texture_v3_request_v2_t[297:0]`: palette generation and slot,
+//      response class, base rgb and alpha, the 224-bit aux surface context,
+//      aux_required, recipe weight, material recipe, LOD, base binding
+//      selector, sample count. Every one of those fields is
+//      MATERIAL.RESOLVE's output. `design/blocks.yml`'s MATERIAL.RESOLVE row
+//      reads `maturity: SPECIFIED`, both tests "PLANNED -- NOT WRITTEN", and a
+//      note recording that it is blocked on a cartridge decision (audit R4:
+//      .zpak has no generic texture-page or material-set kind). So this is not
+//      an unwired block -- it is an unbuilt one, and the honest place for that
+//      fact is the ledger and this entry, not a constant in the composer.
 //
-//      WHAT THIS MEANS FOR THE PICTURE, measured rather than assumed: with all
-//      six at zero the tile pipe still resolves and still writes -- 1,536
-//      pixels through RASTER.FBWRITE on the smoke bench -- because a zero flat
-//      request is a LEGAL profile (`profile_aux_bad_ref_c` is
-//      `flat_request[268] || flat_request[267:44] != 0`) and zero planes
-//      interpolate to zero without setting `attr_error`. So the path is proven
-//      and the SHADING is not: what comes out is the frame-clear colour and
-//      flat geometry, not a textured, perspective-correct surface. The gap is
-//      real, it is here, and it is no longer invisible.
+//      DRIVING THE REMAINING THREE FROM HERE IS STILL REFUSED for the usual
+//      reason: the only legal-value constructor in the tree is
+//      `tools/quartus/gen_shell_fit_top.py` lines 596-654, which exists to keep
+//      a FIT honest. That is stimulus. And a zero flat request is a LEGAL
+//      profile (`profile_aux_bad_ref_c` is `flat_request[268] ||
+//      flat_request[267:44] != 0`), so a composer that invented plausible
+//      constants here would produce a picture and prove nothing -- which is the
+//      most dangerous shape a fake connection can take in this file.
 //
-//      TWO THINGS LEFT THIS EDGE 2026-09-19 and are no longer provisional:
+//      WHAT THIS MEANS FOR THE PICTURE, measured rather than assumed. Before:
+//      all six at zero, 1,536 pixels through RASTER.FBWRITE, planes
+//      interpolating to zero without setting `attr_error` -- the path proven
+//      and the SHADING not. Now: the three interpolants are real functions of
+//      the triangle's own vertex attributes, so depth and the two texture
+//      coordinates vary across the surface for the first time. What is still
+//      flat is the MATERIAL -- with `sample_count`, `material_recipe` and
+//      `base_binding_selector` all zero the texture island runs and samples
+//      nothing. Perspective-correct interpolation is composed; the surface it
+//      would sample is not bound.
+//
+//      FIVE THINGS LEFT THIS EDGE 2026-09-19 and are no longer provisional:
 //        * `tri_area2_i` -- retired as a port, driven by GEOM.SETUP. See
 //          composition entry 7.
+//        * the three attribute planes -- retired as ports, driven by
+//          GEOM.ATTRPACK off GEOM.CLIP's attribute packet. See the
+//          GEOM.ATTRPACK composition block for the fork, the join and what
+//          the shared core costs in clocks.
 //        * the RENDER guard's window -- `zhao_shell_top_v2`'s `u_guard_render`
 //          took the BLITTER's `map_*` and now takes VIDEO.SLOTMGR's live lease.
 //      `fb_writer_i` is NOT one of them and stays exactly as that file
@@ -1934,6 +1950,15 @@ module zhao_console_core
   // and exists because a port list cannot call $clog2 on another port.
   parameter int unsigned GEOM_CLIP_ATTRS = 7,
   parameter int unsigned GEOM_CLIP_ATTRW = GEOM_CLIP_ATTRS * 32,
+  // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
+  // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
+  // that a ratified layout is still a knob: "this is generated from the
+  // reference, so it is not a knob" is how a wrong number becomes an
+  // unadjustable wrong number. The order is `zhao_geom_clip`'s ruling 5 and
+  // `tests/geometry/geom_clip_attrswap_directed.cpp`'s own line 41.
+  parameter int unsigned GEOM_ATTR_SLOT_INVW     = 0,
+  parameter int unsigned GEOM_ATTR_SLOT_U_OVER_W = 1,
+  parameter int unsigned GEOM_ATTR_SLOT_V_OVER_W = 2,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -2379,6 +2404,14 @@ module zhao_console_core
   output logic [31:0]             geom_clip_culled_o,
   output logic signed [47:0]      geom_setup_area2_o,
   output logic [31:0]             geom_setup_triangles_submitted_o,
+  // GEOM.ATTRPACK's two counters, out of the module for the same reason every
+  // other block's are: a counter nobody can read is not evidence. Their RATIO
+  // is the thing worth asserting -- `planes` must be exactly three times
+  // `triangles`, because one shared attrsetup core runs three lanes per
+  // triangle, and a lane that quietly stopped asking would leave every
+  // handshake and every other counter looking perfectly healthy.
+  output logic [31:0]             geom_attrpack_triangles_o,
+  output logic [31:0]             geom_attrpack_planes_o,
 
   // ---- I14: the shared projector's matrix bank ----------------------------
   input  logic                    proj_cfg_we_i,
@@ -2886,9 +2919,16 @@ module zhao_console_core
   // header entry 7. It was the twenty-first field of a twenty-one-field
   // packet whose other twenty were already internal, and leaving it at the
   // edge held every pixel out of the framebuffer.
-  input  logic [239:0] tri_invw_plane_i,
-  input  logic [239:0] tri_u_over_w_plane_i,
-  input  logic [239:0] tri_v_over_w_plane_i,
+  // AND THE THREE ATTRIBUTE PLANES LEFT THIS EDGE 2026-09-19, by the same act
+  // and for the same reason: `zhao_geom_attrpack` is composed below and is
+  // their producer. They were never a boundary in the sense the other entries
+  // mean -- the arithmetic was in the tree the whole time, in
+  // `zhao_geom_attrsetup`, with no block in front of it to ask three times.
+  //
+  // `tri_flat_request_i` STAYS AT THE EDGE and is not an oversight. It is the
+  // MATERIAL RECORD, and its owner is MATERIAL.RESOLVE, whose `design/blocks.yml`
+  // row reads `maturity: SPECIFIED` with both tests "PLANNED -- NOT WRITTEN"
+  // and a note blocking it on a cartridge decision. See entry I20.
   input  logic [297:0] tri_flat_request_i,
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
@@ -4637,13 +4677,25 @@ module zhao_console_core
   // performs when it drives this same port from the setup oracle.
   wire signed [47:0] st_area2;
   assign geom_setup_area2_o = st_area2;
+
+  // ---- the GEOM.SETUP / GEOM.ATTRPACK fork and join ------------------------
+  // Declared here because `u_geom_setup` below is the first user. `cl_o_ready`
+  // and `st_o_ready` are declared with their streams and are DRIVEN here; see
+  // the GEOM.ATTRPACK block for what each one is.
+  wire         st_tri_ready_w;
+  wire         ap_tri_ready_w, ap_o_valid_w;
+  wire [239:0] ap_invw_plane_w, ap_u_over_w_plane_w, ap_v_over_w_plane_w;
+  wire [ 15:0] ap_src_id_w;
+  wire [ 31:0] ap_triangles_w, ap_planes_w;
+  wire         door_tri_valid_w, door_tri_ready_w;
   zhao_geom_setup u_geom_setup (
     .clk         (gpu_clk),
     .rst_n       (rst_n),
 
-    // REAL: GEOM.CLIP's accepted packet, field for field.
-    .tri_valid_i (cl_o_valid),
-    .tri_ready_o (cl_o_ready),
+    // REAL: GEOM.CLIP's accepted packet, field for field -- now through the
+    // FORK declared above, because GEOM.ATTRPACK takes the same packet.
+    .tri_valid_i (cl_o_valid && ap_tri_ready_w),
+    .tri_ready_o (st_tri_ready_w),
     .tri_ax_i    (cl_o_ax),
     .tri_ay_i    (cl_o_ay),
     .tri_bx_i    (cl_o_bx),
@@ -4685,6 +4737,138 @@ module zhao_console_core
 
     .triangles_submitted_o (geom_setup_triangles_submitted_o)
   );
+
+  // ==========================================================================
+  // GEOM.ATTRPACK: the OTHER half of GEOM.CLIP's packet, and the producer the
+  // Packet-D attribute planes never had.
+  //
+  // GEOM.CLIP has always emitted two things and only one of them had a
+  // customer. The vertices went to GEOM.SETUP and became edge functions; the
+  // ruling-5 attribute packet -- invw24, u_over_w, v_over_w, lit r/g/b, alpha,
+  // winding-flipped with their vertices -- left this module through
+  // `geom_clip_attr_a_o` and was read by nothing, because the block that turns
+  // three of those slots into three interpolation planes did not exist. That
+  // is what `zhao_geom_attrpack` is, and its own header says why it holds ONE
+  // `zhao_geom_attrsetup` rather than three.
+  //
+  // THE FORK AND THE JOIN, AND WHY THE PLANES CANNOT BELONG TO ANOTHER
+  // TRIANGLE. This is the shape CLAUDE.md warns about most specifically: two
+  // streams derived from one, rejoined downstream, with a field that moves
+  // independently of the counters watching it. It is made safe structurally
+  // rather than by a detector:
+  //
+  //   * the FORK gives both consumers ONE ready. `cl_o_ready` is the AND, and
+  //     each consumer's valid is gated by the OTHER's ready, so an accept at
+  //     GEOM.CLIP's output is an accept at BOTH or at neither. Neither ready is
+  //     a function of its own valid, which is what makes that legal rather than
+  //     a deadlock.
+  //   * the JOIN gives the shell's triangle door ONE valid, the AND of the two,
+  //     and hands each side a ready qualified by the other's valid. Neither
+  //     block reorders, so same order in plus same accept edge equals same
+  //     triangle out.
+  //
+  // WHAT IT COSTS, stated rather than discovered later. GEOM.SETUP alone
+  // accepted a triangle per clock. The pair accepts one about every EIGHT,
+  // because the shared attrsetup core runs three lanes at two clocks each and
+  // the fork holds SETUP back to its rate. At the owner-ruled 120,000
+  // vertices/frame -- roughly 40,000 triangles at 60 Hz -- the budget is about
+  // 41 gpu clocks per triangle, so eight fits with room. Buying the clock back
+  // means three attrsetup cores or a two-deep pack, and both spend ALMs on a
+  // margin that is already there.
+  //
+  // THE IDENTITY RIDES ALONG (`ap_src_id_w`) so that a future consumer can
+  // check it. It is deliberately NOT differenced against `st_src_id` here: on
+  // a frame drawn from one source every triangle carries the same id, so that
+  // comparison would read zero for a reason that has nothing to do with
+  // whether the join is sound -- a detector wired to two operands that agree by
+  // accident. The lockstep check below differences two counters incremented by
+  // two DIFFERENT enables in two different modules instead, which is the
+  // comparison that can actually see a broken fork.
+  // ==========================================================================
+  zhao_geom_attrpack #(
+    .ATTRS         (GEOM_CLIP_ATTRS),
+    .SLOT_INVW     (GEOM_ATTR_SLOT_INVW),
+    .SLOT_U_OVER_W (GEOM_ATTR_SLOT_U_OVER_W),
+    .SLOT_V_OVER_W (GEOM_ATTR_SLOT_V_OVER_W),
+    .IDW           (16)
+  ) u_geom_attrpack (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the same GEOM.CLIP packet GEOM.SETUP takes, through the fork.
+    .tri_valid_i  (cl_o_valid && st_tri_ready_w),
+    .tri_ready_o  (ap_tri_ready_w),
+    .tri_ax_i     (cl_o_ax),
+    .tri_ay_i     (cl_o_ay),
+    .tri_bx_i     (cl_o_bx),
+    .tri_by_i     (cl_o_by),
+    .tri_cx_i     (cl_o_cx),
+    .tri_cy_i     (cl_o_cy),
+    // REAL: GEOM.CLIP's winding-flipped attributes, which until now left this
+    // module with no customer. Their own producer is still at the edge (I24),
+    // and that is the honest state: the PLANE now has a producer, the VERTEX
+    // ATTRIBUTE still arrives from outside.
+    .tri_attr_a_i (geom_clip_attr_a_o),
+    .tri_attr_b_i (geom_clip_attr_b_o),
+    .tri_attr_c_i (geom_clip_attr_c_o),
+    .tri_src_id_i (cl_o_src_id),
+
+    // REAL: the shell's Packet-D attribute carriage.
+    .out_valid_o          (ap_o_valid_w),
+    .out_ready_i          (door_tri_ready_w && st_o_valid),
+    .out_invw_plane_o     (ap_invw_plane_w),
+    .out_u_over_w_plane_o (ap_u_over_w_plane_w),
+    .out_v_over_w_plane_o (ap_v_over_w_plane_w),
+    .out_src_id_o         (ap_src_id_w),
+
+    .triangles_o (ap_triangles_w),
+    .planes_o    (ap_planes_w)
+  );
+
+  assign geom_attrpack_triangles_o = ap_triangles_w;
+  assign geom_attrpack_planes_o    = ap_planes_w;
+
+  // The fork's single ready and the join's single valid.
+  assign cl_o_ready       = st_tri_ready_w && ap_tri_ready_w;
+  assign st_o_ready       = door_tri_ready_w && ap_o_valid_w;
+  assign door_tri_valid_w = st_o_valid && ap_o_valid_w;
+
+  // THE LOCKSTEP CHECK. `geom_setup_triangles_submitted_o` increments inside
+  // `zhao_geom_setup`'s `if (pipe_en)` on `tri_valid_i`; `ap_triangles_w`
+  // increments inside `zhao_geom_attrpack` on `tri_valid_i && (state == IDLE)`.
+  // Two different expressions, in two different modules, on two different
+  // register enables -- so this is NOT the pattern where one enable drives both
+  // sides of a comparison and the check is blind to every fault that enable
+  // participates in. A fork that stopped ANDing the two readys would let one
+  // side take a triangle the other refused, and these two numbers would part
+  // company on that clock.
+  //
+  // `synthesis translate_off` keeps it out of the fabric and does NOT keep it
+  // out of Verilator, which is exactly what is wanted here.
+  // synthesis translate_off
+  always_ff @(posedge gpu_clk) begin
+    if (rst_n) begin
+      a_attrpack_setup_lockstep : assert
+          (ap_triangles_w == geom_setup_triangles_submitted_o)
+        else $fatal(1,
+            "GEOM.ATTRPACK and GEOM.SETUP disagree about how many triangles GEOM.CLIP handed over (%0d vs %0d) -- the fork is no longer giving them one ready",
+            ap_triangles_w, geom_setup_triangles_submitted_o);
+      if (door_tri_valid_w && door_tri_ready_w) begin
+        // AND THE IDENTITY, on the clock the door actually takes the pair.
+        // STATED WITHOUT OVERCLAIMING: on a frame drawn from a single source
+        // every triangle carries the same `src_id`, so this cannot fail there
+        // and is not evidence about the join on such a frame. It is a real
+        // check the moment two sources are in flight, and it is the only
+        // reason `ap_src_id_w` is carried at all -- the counter difference
+        // above is what watches the fork.
+        a_attrpack_setup_same_triangle : assert (ap_src_id_w == st_src_id)
+          else $fatal(1,
+              "the shell's triangle door took GEOM.SETUP's edge functions for source %0h beside GEOM.ATTRPACK's planes for source %0h",
+              st_src_id, ap_src_id_w);
+      end
+    end
+  end
+  // synthesis translate_on
 
   // ==========================================================================
   // TERRAIN: TESS -> GROUP_SEQ -> the SAME SHARED PROJECTOR, as CLIENT B.
@@ -5812,9 +5996,10 @@ module zhao_console_core
     // `st_area2` declaration for why this is 47 bits of a 48-bit value and
     // for what its absence did to the raster.
     .tri_area2_i               (st_area2[46:0]),
-    .tri_invw_plane_i          (tri_invw_plane_i),
-    .tri_u_over_w_plane_i      (tri_u_over_w_plane_i),
-    .tri_v_over_w_plane_i      (tri_v_over_w_plane_i),
+    // REAL: GEOM.ATTRPACK, one plane per lane of the shared attrsetup core.
+    .tri_invw_plane_i          (ap_invw_plane_w),
+    .tri_u_over_w_plane_i      (ap_u_over_w_plane_w),
+    .tri_v_over_w_plane_i      (ap_v_over_w_plane_w),
     .tri_flat_request_i        (tri_flat_request_i),
     .tri_continuation_tail_i   (tri_continuation_tail_i),
     .tri_fragment_state_i      (tri_fragment_state_i),
@@ -5946,8 +6131,11 @@ module zhao_console_core
     .render_grid_h_i           (render_grid_h_i),
     // REAL: GEOM.SETUP drives the triangle door. Every one of these was a
     // boundary input on this module until 2026-09-19.
-    .render_tri_valid_i        (st_o_valid),
-    .render_tri_ready_o        (st_o_ready),
+    // REAL: the JOIN of GEOM.SETUP's edge functions and GEOM.ATTRPACK's three
+    // planes. Both describe the same triangle by construction; see the
+    // GEOM.ATTRPACK composition block.
+    .render_tri_valid_i        (door_tri_valid_w),
+    .render_tri_ready_o        (door_tri_ready_w),
     // REAL: the shell's ONE geometry guard socket, driven by
     // `u_geom_mem_adapter`, which merges GEOM.MESHFETCH and GEOM.ASSETFETCH
     // into it. These five were boundary ports (a bench answered the grants

@@ -13503,3 +13503,25 @@ add_test(NAME lint_zhao_field_engine
 set_tests_properties(lint_zhao_field_engine PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+
+# --------------------------------------------------------------------------
+# THE PACKET-D ATTRIBUTE CARRIAGE'S POSITIVE CONTROL. Registered 2026-09-19
+# with GEOM.ATTRPACK.
+#
+# The smoke bench now asserts that GEOM.ATTRPACK packed three planes per
+# triangle and that its count agrees with GEOM.SETUP's. Neither of those can
+# tell whether the PLANES are what the rasteriser interpolates -- zero planes
+# interpolate to zero without setting any error, which is precisely how the
+# missing producer went unnoticed for so long, and a producer emitting
+# rubbish would write the same 1,536 pixels.
+#
+# -BadAttribute changes ONE NUMBER, vertex A's invw24, to a value whose
+# interpolant leaves 24 bits. The script inverts the verdict, so this test
+# PASSES when the bench fails. If the planes were not really reaching the
+# attribute lanes, changing a vertex attribute could not change the outcome.
+add_test(NAME console_core_attrpack_control
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_core_smoke.ps1 -BadAttribute)
+set_tests_properties(console_core_attrpack_control PROPERTIES
+  LABELS "prod;mutant")

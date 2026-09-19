@@ -99,6 +99,30 @@
 # the fixture descriptor". The negative control is this script WITHOUT the
 # switch: considered=1 fetched=1 culled=0, all seven refusals 0, beats=24,
 # decoded=4. Both halves are required before the zeros may be quoted.
+# ---------------------------------------------------------------------------
+# -BadAttribute: THE POSITIVE CONTROL FOR THE PACKET-D ATTRIBUTE CARRIAGE
+# ---------------------------------------------------------------------------
+# Added 2026-09-19 with GEOM.ATTRPACK, the composition that closed the first
+# three of core header entry I20's six ports. Those three planes used to be
+# boundary inputs this bench drove to zero, and zero planes interpolate to zero
+# WITHOUT setting any error -- which is exactly why the gap survived so long.
+# The same property makes the new wiring dangerous to trust: a producer that
+# emitted rubbish, or one whose planes never reached the rasteriser at all,
+# would produce exactly the 1,536 pixels the old zeros did.
+#
+# With -BadAttribute ONE NUMBER changes -- vertex A's invw24 in the ruling-5
+# attribute packet, from 0x00C00000 to 0x7F000000, through
+# `+define+ZHAO_SMOKE_BAD_ATTR` (a plain `ifdef`). Nothing else moves: same
+# triangles, same closure, same stimulus. Its interpolant sets bits above 24,
+# which is `zhao_raster_tile_pipe_v2`'s `incoming_range_bad_c`, so the pipe
+# raises `range_fault_event_w`, latches its abort and SINKS every job.
+#
+# That is worth more than a refusal check, and it is why this switch was chosen
+# over asserting the plane words in the bench: if GEOM.ATTRPACK's planes were
+# not really what the attribute lanes interpolate, changing a vertex attribute
+# could not change the outcome. Its polarity is INVERTED: the control passes
+# when the run FAILS.
+#
 [CmdletBinding()]
 param(
   [string]$Repo    = $null,
@@ -106,7 +130,8 @@ param(
   [switch]$SkipVerilate,
   [switch]$Mutant,
   [switch]$NoTableLoad,
-  [switch]$BadDescriptor
+  [switch]$BadDescriptor,
+  [switch]$BadAttribute
 )
 
 $ErrorActionPreference = 'Stop'
@@ -129,6 +154,7 @@ if (-not $BuildIn) {
   $tag = if ($Mutant) { 'zhao_console_core_smoke_mut' }
          elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
+         elseif ($BadAttribute) { 'zhao_console_core_smoke_badattr' }
          else { 'zhao_console_core_smoke' }
   $BuildIn = Join-Path $env:TEMP $tag
 }
@@ -173,6 +199,10 @@ if ($Mutant) {
 if ($NoTableLoad) {
   $defs += '+define+ZHAO_SMOKE_SKIP_TBL_LOAD'
   Write-Host 'NEGATIVE CONTROL: PART.TABLE is NOT loaded, INVERTED POLARITY (passes when the run FAILS)'
+}
+if ($BadAttribute) {
+  $defs += '+define+ZHAO_SMOKE_BAD_ATTR'
+  Write-Host 'POSITIVE CONTROL: vertex A''s invw24 is out of 24 bits, INVERTED POLARITY (passes when the run FAILS)'
 }
 if ($BadDescriptor) {
   $defs += '+define+ZHAO_SMOKE_BAD_DESC'
@@ -270,6 +300,18 @@ if ($BadDescriptor) {
     exit 1
   }
   Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one corrupted descriptor byte, as it must."
+  exit 0
+}
+if ($BadAttribute) {
+  # INVERTED. A zero here would mean the Packet-D attribute planes
+  # GEOM.ATTRPACK builds are not what the rasteriser interpolates, because
+  # changing a vertex attribute changed nothing. Everything the
+  # composition claims about the picture rests on this one.
+  if ($rc -eq 0) {
+    Write-Host 'POSITIVE CONTROL FAILED: the run PASSED with an out-of-range invw24 at vertex A. Either the tile pipe''s range refusal cannot fire or GEOM.ATTRPACK''s planes are not what it interpolates.'
+    exit 1
+  }
+  Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one out-of-range vertex attribute, as it must."
   exit 0
 }
 exit $rc

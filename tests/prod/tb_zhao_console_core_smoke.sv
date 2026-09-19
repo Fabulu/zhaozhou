@@ -772,9 +772,11 @@ module tb_zhao_console_core_smoke
   logic [15:0] pal_load_rgb565_i;
   logic        pal_load_crc_ok_i;
   logic [46:0]  tri_area2_i;
-  logic [239:0] tri_invw_plane_i;
-  logic [239:0] tri_u_over_w_plane_i;
-  logic [239:0] tri_v_over_w_plane_i;
+  // THE THREE ATTRIBUTE PLANES ARE GONE FROM HERE, and their absence is the
+  // whole point. They were core INPUTS this bench drove to zero; the core now
+  // contains their producer (GEOM.ATTRPACK), so a net here would bind to
+  // nothing under `.*` and, worse, would read as though this bench were still
+  // supplying them.
   logic [297:0] tri_flat_request_i;
   logic [47:0]  tri_continuation_tail_i;
   logic [31:0]  tri_fragment_state_i;
@@ -923,6 +925,10 @@ module tb_zhao_console_core_smoke
   logic [2:0]              geom_clip_tri_behind_i;
   logic [15:0]             geom_clip_tri_src_id_i;
   logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_i, geom_clip_attr_b_i, geom_clip_attr_c_i;
+  // GEOM.ATTRPACK's evidence, out of the core because a counter nobody can
+  // read is not evidence. The RATIO is what gets asserted below.
+  logic [31:0]             geom_attrpack_triangles_o;
+  logic [31:0]             geom_attrpack_planes_o;
   logic [1:0]              geom_clip_cull_mode_i;
   logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_o, geom_clip_attr_b_o, geom_clip_attr_c_o;
   logic                    geom_clip_flip_o;
@@ -2378,9 +2384,54 @@ module tb_zhao_console_core_smoke
     part_prj_b_i          = 8'h40;
     part_prj_src_id_i     = 16'h0BAD;
     geom_clip_tri_behind_i = '0;
+    // ------------------------------------------------------------------
+    // THE RULING-5 VERTEX ATTRIBUTE PACKET, and why it is no longer zero.
+    //
+    // This bench used to drive all three to '0. That was honest while nothing
+    // read them -- GEOM.CLIP carried them through the winding flip and handed
+    // them out of the core to nobody. Now GEOM.ATTRPACK is composed and turns
+    // slots 0, 1 and 2 into the three Packet-D interpolation planes, so zero
+    // here means three zero planes and a surface that is still flat. That is
+    // exactly the "a legal profile produces a picture and proves nothing"
+    // trap the core's entry I20 warns about, and it would have been INVISIBLE:
+    // every counter and every pixel count is identical either way.
+    //
+    // So the vertices carry real values, chosen to be DIFFERENT AT EVERY
+    // VERTEX so the planes have real gradients rather than three constants:
+    //
+    //   slot 0  invw24    U 0.0.24 depth, LARGER IS CLOSER. All three are well
+    //           inside 24 bits, which matters: the tile pipe's
+    //           `incoming_range_bad_c` refuses lane 0 the moment the quotient
+    //           sets any of bits [31:24], and the interpolant of a convex
+    //           combination never leaves [min, max], so these three values ARE
+    //           the proof that no legal pixel can trip it.
+    //   slot 1  u_over_w  S 8.24, 1.0 at B and 0 elsewhere
+    //   slot 2  v_over_w  S 8.24, 1.0 at C and 0 elsewhere
+    //
+    // Slots 3..6 (lit r/g/b, alpha) stay zero: GEOM.ATTRPACK does not read
+    // them, and giving them values would suggest a Gouraud path that is not
+    // composed.
+    //
+    // ZHAO_SMOKE_BAD_ATTR is the POSITIVE CONTROL for the whole carriage. It
+    // changes ONE THING -- vertex A's invw24 -- to a value whose interpolant
+    // sets bits above 24, and nothing else. If the planes were not really
+    // reaching the rasteriser's attribute lanes, changing this number could
+    // not change the outcome; because they are, the tile pipe raises
+    // `range_fault_event_w`, latches its abort and sinks every job, and the
+    // run stops at "rasterised 0 pixels". Its polarity is INVERTED: the
+    // control passes when the run FAILS.
     geom_clip_attr_a_i = '0;
     geom_clip_attr_b_i = '0;
     geom_clip_attr_c_i = '0;
+`ifdef ZHAO_SMOKE_BAD_ATTR
+    geom_clip_attr_a_i[31:0] = 32'h7F00_0000;   // out of 24 bits on purpose
+`else
+    geom_clip_attr_a_i[31:0] = 32'h00C0_0000;   // invw24 at A
+`endif
+    geom_clip_attr_b_i[31:0]   = 32'h0080_0000; // invw24 at B
+    geom_clip_attr_c_i[31:0]   = 32'h0040_0000; // invw24 at C
+    geom_clip_attr_b_i[63:32]  = 32'h0100_0000; // u_over_w = 1.0 at B
+    geom_clip_attr_c_i[95:64]  = 32'h0100_0000; // v_over_w = 1.0 at C
     geom_clip_cull_mode_i = '0;
     geom_clip_tri_ax_i = '0;
     geom_clip_tri_ay_i = '0;
@@ -2493,9 +2544,6 @@ module tb_zhao_console_core_smoke
     pal_load_rgb565_i = '0;
     pal_load_crc_ok_i = '0;
     tri_area2_i = '0;
-    tri_invw_plane_i = '0;
-    tri_u_over_w_plane_i = '0;
-    tri_v_over_w_plane_i = '0;
     tri_flat_request_i = '0;
     tri_continuation_tail_i = '0;
     tri_fragment_state_i = '0;
@@ -3660,9 +3708,28 @@ module tb_zhao_console_core_smoke
     if (render_retired_words_o != render_issued_words_o)
       $fatal(1, "SMOKE: the render path issued %0d word(s) and the arbiter retired %0d -- issued-but-not-landed is not a rendered frame",
              render_issued_words_o, render_retired_words_o);
-    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END. What is NOT proven is the SHADING: `tri_invw_plane_i`, `tri_u_over_w_plane_i`, `tri_v_over_w_plane_i` and `tri_flat_request_i` have no producer in this tree (core header I20), so these pixels are flat geometry and not a perspective-correct textured surface.",
+    // ----------------------------------------------------------------------
+    // GEOM.ATTRPACK, 2026-09-19. THE PLANES HAVE A PRODUCER.
+    //
+    // THE RATIO IS THE CHECK, not the absolute numbers. One shared
+    // `zhao_geom_attrsetup` core runs three lanes per triangle, so `planes`
+    // must be exactly three times `triangles`. A lane that stopped asking --
+    // the specific way a time-multiplexed front end goes wrong -- keeps the
+    // previous triangle's plane, breaks nothing else, and leaves every
+    // handshake, every pixel count and every other counter looking healthy.
+    if (geom_attrpack_triangles_o != geom_setup_triangles_submitted_o)
+      $fatal(1, "SMOKE: GEOM.ATTRPACK counted %0d triangle(s) and GEOM.SETUP counted %0d -- the fork off GEOM.CLIP is no longer handing both of them one ready",
+             geom_attrpack_triangles_o, geom_setup_triangles_submitted_o);
+    if (geom_attrpack_planes_o != 3 * geom_attrpack_triangles_o)
+      $fatal(1, "SMOKE: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) and three lanes per triangle is the contract -- a lane stopped asking and its plane is the PREVIOUS triangle's",
+             geom_attrpack_planes_o, geom_attrpack_triangles_o);
+    if (geom_attrpack_triangles_o == 0)
+      $fatal(1, "SMOKE: GEOM.ATTRPACK never saw a triangle, so every plane the shell read was its reset value");
+
+    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END, and the three Packet-D attribute planes now have a PRODUCER: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) -- three lanes through one shared GEOM.ATTRSETUP -- from GEOM.CLIP's own winding-flipped vertex attributes, so depth and both texture coordinates vary across the surface instead of interpolating to zero. What is STILL not proven is the MATERIAL: `tri_flat_request_i` has no producer because MATERIAL.RESOLVE is `maturity: SPECIFIED` with both tests PLANNED and NOT WRITTEN (core header I20), so sample_count, material_recipe and base_binding_selector are all zero and the texture island samples nothing. Perspective-correct interpolation is composed; the surface it would sample is not bound.",
              render_pixels_o, render_bursts_o,
-             geom_setup_triangles_submitted_o, v2_frames_admitted_o);
+             geom_setup_triangles_submitted_o, v2_frames_admitted_o,
+             geom_attrpack_planes_o, geom_attrpack_triangles_o);
     // ======================================================================
     // PACKET P-SURFACE, 2026-09-19: SURFACE.STAMP <-> SURFACE.SHEET.
     //

@@ -364,7 +364,89 @@ _ALIAS: dict[str, str | None] = {
     # NOT match v1's {px, py} lookup at all. `zhao_prod_top` instantiates v2.
     "TERRAIN.RESIDENCY": "zhao_terrain_residency_v2",
     "GEOM.POSE":         "zhao_geom_pose_decode",
-    "MATERIAL.RESOLVE":  "zhao_texture_material_combine_v2",
+    # ---- THE TEXTURE CLUSTER, hand-resolved 2026-09-19 ---------------------
+    #
+    # SIX capabilities resolved by the naming convention to SIX SUPERSEDED
+    # PROTOTYPES, which is the `TERRAIN.RESIDENCY` failure above repeated six
+    # times: the constructed name EXISTS, so nothing looked wrong, and the
+    # register sent readers to compose modules `design/prod_manifest.yml`
+    # explicitly forbids composing ("must not put a second root into the
+    # census").
+    #
+    # WHAT WAS ACTUALLY THE CASE, measured rather than argued:
+    # `zhao_texture_island_v3_top` is ALREADY in the console closure and
+    # ALREADY live -- `zhao_console_core` -> `zhao_shell_top_v2` ->
+    # `zhao_raster_tile_pipe_v2` (line 802) -> `zhao_raster_texture_stage_v3`
+    # (line 362) -> the island. Every one of its seventeen submodules returns
+    # True from both `console_closure()` and `instantiated_in(closure_paths())`.
+    # So the texture path was composed; only its NAMES were wrong here.
+    #
+    # `successor_in()` below cannot and must not fix this. Its comment already
+    # refuses `zhao_texture_cache_pipe_v2` as an automatic successor of
+    # `zhao_texture_cache`, correctly: the automatic rule would also match
+    # `zhao_texture_tmu_plan_v2` to `zhao_texture_tmu`, and that file's own
+    # third line says it succeeds the PLANNER. A loose prefix rule retires real
+    # gaps by coincidence of naming. These are hand resolutions with evidence
+    # instead, one per line, so a reader can re-check rather than trust.
+    #
+    # THIS CHANGE MAKES THE NUMBER SMALLER, so each entry carries TWO
+    # independent witnesses: what `prod_manifest.yml` says, and what the
+    # successor's own header says about the module it replaces.
+    #
+    #   prod_manifest.yml:699 "zhao_texture_cache: superseded  by
+    #   zhao_texture_cache_pipe_v2 inside the Packet B selected V3 root", and
+    #   that file's own line 9: "The unversioned cache remains the executable
+    #   old-island oracle."
+    "TEXTURE.CACHE":     "zhao_texture_cache_pipe_v2",
+    #   prod_manifest.yml:701 names zhao_texture_aux_pipe_v2, the ledger's own
+    #   TEXTURE.AUX row already points at `design/contracts/TEXTURE.AUX.V2.md`
+    #   with tests `texture_aux_pipe_v2_*`, and that file's line 3 says it "is
+    #   the versioned adapter owned by TEXTURE.AUX.V2".
+    "TEXTURE.AUX":       "zhao_texture_aux_pipe_v2",
+    #   prod_manifest.yml:474 "material_combine_v3 is the combiner inside the
+    #   Packet B selected V3 root"; the ledger's TEXTURE.COMBINE row already
+    #   describes the eight-recipe R9 engine and tests
+    #   `material_combine_v3_diff.cpp`; and v3's own header says "V2 remains
+    #   the executable oracle for the old island".
+    "TEXTURE.COMBINE":   "zhao_texture_material_combine_v3",
+    #   prod_manifest.yml:711 "zhao_texture_v3own is the sole owner inside the
+    #   selected V3 subsystem", and the island's own header: "zhao_texture_v3own
+    #   is the only fragment-lifecycle owner". FRAGROB was the differential
+    #   CANDIDATE beside TEXJOIN, which is why its row says `not-yet-adopted`
+    #   rather than `superseded` -- the CAPABILITY still has an owner.
+    "TEXTURE.FRAGROB":   "zhao_texture_v3own",
+    #
+    # TEXTURE.TMU IS DELIBERATELY NOT RESOLVED AND STAYS A GAP. The manifest's
+    # own words are the reason: line 700 says it is superseded "by the Packet B
+    # texture plan/cache/dispatch PATH", not by a module. V3 decomposes the
+    # sampler across `zhao_texture_tmu_plan_v2`, `zhao_texture_cache_pipe_v2`,
+    # `zhao_texture_bilerp_lane_v2`, `zhao_texture_palette_res_v2` and
+    # `zhao_texture_rsp_dispatch_v2`, all five live; no single one of them IS
+    # the TMU. Pointing this at the planner would be the exact false reduction
+    # `successor_in()` was written to refuse, and over-reporting one gap is the
+    # safe direction. Closing it needs a ledger decision about what owns
+    # "texture_samples", not an edit here.
+    #
+    # ---- AND ONE CORRECTION IN THE OTHER DIRECTION -------------------------
+    #
+    # MATERIAL.RESOLVE was aliased to `zhao_texture_material_combine_v2`, which
+    # made an UNBUILT capability read as BUILT-BUT-NOT-CONNECTED. That is the
+    # flattering direction and it is wrong on the tree's own evidence:
+    #
+    #   * the ledger row is `maturity: SPECIFIED` with `maturity_log: []` and
+    #     BOTH tests recorded as "PLANNED -- NOT WRITTEN", and its note says it
+    #     is blocked on a cartridge decision (audit R4);
+    #   * `zhao_texture_combine.sv`'s own header lists "resolution
+    #     (MATERIAL.RESOLVE's)" among the things it REFUSES to do. The combiner
+    #     consumes a material record; it does not produce one.
+    #
+    # So this is `None` -- searched and genuinely absent. The mandatory total
+    # does not fall because of this line; one capability moves from the
+    # disconnected bucket to the unbuilt one, which is where it belongs. It
+    # matters beyond bookkeeping: MATERIAL.RESOLVE is the owner of
+    # `tri_flat_request_i`, the half of the console core's entry I20 that
+    # GEOM.ATTRPACK did not close.
+    "MATERIAL.RESOLVE":  None,
     # searched and genuinely absent -- no file matches these at all
     # BUILT 2026-09-19 (fpga/rtl/mem/zhao_mem_upload.sv, 89 directed checks).
     # This entry said None until the block existed, and nothing would have

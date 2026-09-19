@@ -2536,6 +2536,15 @@ targets:
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
+      # Added 2026-09-19, packet TEX2. GEOM.ATTRPACK is the OTHER consumer of
+      # the same GEOM.CLIP packet: the vertices go to GEOM.SETUP and become
+      # edge functions, the ruling-5 attribute packet comes here and becomes
+      # the three Packet-D interpolation planes. It brings GEOM.ATTRSETUP into
+      # this closure with it -- ONE instance, time-multiplexed across three
+      # lanes, which is the whole reason the pair costs what a single setup
+      # block costs rather than three.
+      - fpga/rtl/geometry/zhao_geom_attrpack.sv
+      - fpga/rtl/geometry/zhao_geom_attrsetup.sv
       # THE GEOMETRY ASSET PATH, 2026-09-19. Core header connected item 11.
       # These five closed entry I23, whose refusal ("there is no behavioural
       # SDRAM model in this tree") was false: sim/models/zhao_sdram_model.sv
