@@ -328,5 +328,15 @@ int main(int argc, char** argv) {
 
   std::printf("geom_attrpack_directed: %d case(s), counters triangles=%u planes=%u, %d failure(s)\n",
               ncase, top.triangles_o, top.planes_o, fails);
-  return fails == 0 ? 0 : 1;
+
+  // NOT `return`. `zhao_sim.hpp` records the reason at `exit_hard`: Verilator
+  // 5.051 against winlibs libwinpthread deadlocks in `VlThreadPool::~VlThreadPool()`
+  // during exit-time static destruction, and the exe then sits ALIVE AT ~0 CPU
+  // with its verdict still in an unflushed buffer. This file was written with a
+  // plain `return` and reproduced it exactly: 0.02 CPU seconds after five
+  // minutes of wall time, a ctest TIMEOUT, and an empty output file -- while
+  // the identical sources built by hand outside CMake ran in under a second,
+  // which is the reading that sends you looking at the test logic instead of
+  // the toolchain.
+  zhao::exit_hard(fails == 0 ? 0 : 1);
 }
