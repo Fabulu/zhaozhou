@@ -9158,19 +9158,163 @@ module zhao_console_core
   // nine v1 modules that came back out of this console's closure.
   logic [2:0] fld_sat_c;
 
+  // ==========================================================================
+  // THE FABRIC'S PARAMETERISATION IS A DECISION, AND IT IS MADE HERE
+  // ==========================================================================
+  // `zhao_field_v3_engine.sv`'s header names the SHIPPED configuration and
+  // `tests/CMakeLists.txt:2326` proves it -- `field_v3_earth_quad`, the gate
+  // the engine names as its own, verilates at exactly:
+  //
+  //   CTX=32 OUTSTANDING=16 LANES=4 LONGQ=16 DIST_BANKS=8 RING_UNITS=8 REGS=64
+  //
+  // and the engine adds "a fit that does not override them is measuring the
+  // bench". Until 2026-09-19 five of those seven were LITERALS inside
+  // `zhao_field_host` and could not be reached from here at all. They are
+  // parameters now. What follows is why this console selects the values it
+  // selects, and it is an argument rather than a default.
+  //
+  // ---------------------------------------------------------------------------
+  // THE FRONT CANNOT SPEND THE WIDTH. THIS IS STRUCTURAL, NOT A TUNING OPINION.
+  // ---------------------------------------------------------------------------
+  // `zhao_field_host`'s run state machine holds ONE `state`, ONE `cur_slot`,
+  // ONE `cur_in[]` and ONE `cur_out[]`. It grants one client, zeroes one
+  // context, preloads one point's E record, waits for that context's `done`,
+  // and answers. Its own `resp_out_o` port comment states the fact outright:
+  // "exactly one point is in flight through this front". `req_in_i` carries
+  // CLIENTS * IN_LANES * 32 bits -- one E record per client, never four.
+  //
+  // So at the shipped numbers the machine degenerates on every axis at once:
+  //
+  //   * LANES=4 -- the front has one point, so the other three lanes recompute
+  //     it and are discarded. The linter says so at `fab_wr_data`: 96 of 128
+  //     result bits unused.
+  //   * CTX=32 -- the FSM never starts a second context before the first
+  //     retires, so thirty-one contexts of register file are state no client
+  //     can reach.
+  //   * GATHERS=4 -- the dispatcher gathers four long ops from four DIFFERENT
+  //     parked contexts. With one context live it can never gather more than
+  //     one, so OUTSTANDING=16, LONGQ=16, DIST_BANKS=8 and RING_UNITS=8 are
+  //     all downstream of a supply that does not exist.
+  //
+  // The deadline evidence that DEFINES the shipped configuration is
+  // `field_v3_earth_quad`, which drives the engine DIRECTLY from
+  // `tests/differential/field_v3_earth_directed.cpp` at 1024 points. No client
+  // wired to this console can present that workload: client 0 is the S-profile
+  // stamp adapter and client 1 is an edge seam, and BOTH go through the serial
+  // FSM above. The EARTH adapter is not built.
+  //
+  // ---------------------------------------------------------------------------
+  // WHAT THE SHIPPED NUMBERS WOULD COST, COUNTED RATHER THAN GUESSED
+  // ---------------------------------------------------------------------------
+  // Two structural counts, both exact, and neither is a fit:
+  //
+  //   * ROOTS. `zhao_field_v3_len` instantiates BANKS x LANES
+  //     `zhao_field_isqrt` (its generate at :201-203) -- and note that
+  //     `zhao_field_v3_svcpath.sv:611` passes only `.BANKS(DIST_BANKS)`, NOT
+  //     LANES, so the distance service keeps its own LANES=4 default however
+  //     narrow the executor is. The roots are therefore BANKS x 4 always:
+  //     EIGHT here at DIST_BANKS=2, THIRTY-TWO at the shipped DIST_BANKS=8.
+  //     The whole-machine map probe corroborates the eight exactly --
+  //     `gen_bank[0..1].gen_root[0..3]`, 8 x 248 ALUT.
+  //     `zhao_field_v3_len.sv:53` prices a root at ~251 ALM and eight at
+  //     "roughly 2,000 ALMs", so the shipped point is about +6,000 ALM on this
+  //     axis alone. `design/fit_targets.yml:1995` caps that module at
+  //     `max_alms: 2000` -- a rule written for EIGHT roots, which the shipped
+  //     configuration exceeds fourfold. That target has never been run.
+  //
+  //     WORTH SAYING SEPARATELY, because it is a live inefficiency and not a
+  //     consequence of anything chosen here: the distance service is FOUR
+  //     POINTS WIDE while this console's executor is one. Eight floor-exact
+  //     roots are elaborated to serve a front that presents one point at a
+  //     time. Forwarding LANES into `zhao_field_v3_len` would cut that to two
+  //     and is a genuine saving, but it changes a module with its own closed
+  //     tally, so it belongs in a FIELD pass rather than in this instantiation.
+  //   * MULTIPLIERS. `zhao_field_v3_mulbank` hard-codes `for (l = 0; l < 4;)`
+  //     -- four lanes ALWAYS, independent of LANES -- and the engine has TWO
+  //     banks (`zhao_field_v3_core.sv:235`, `zhao_field_v3_svcpath.sv:768`).
+  //     At LANES<4 the core ties the spare lanes to CONSTANTS, which Quartus
+  //     folds away; at LANES=4 all eight are live. The whole-machine map probe
+  //     measured one bank at 8 DSP, so this axis is roughly +12 DSP.
+  //
+  // AND THE NUMBER THAT MATTERS MOST IS THE ONE THAT IS MISSING. The console's
+  // 47,582 ALM / 151 DSP figure (`reports/synthesis/zhao_block_fit.json`, row
+  // `zhao_console_core@console-core-first-light`, rtlCleanAtHead true) does
+  // NOT CONTAIN FIELD. `reports/THE-NUMBER-20260919.md:62-69` says so and the
+  // fit's own `.sources.sha256` lists exactly one field file,
+  // `zhao_field_rcp24_rom.sv`. FIELD was composed into this console after that
+  // fit. So FIELD's whole cost is ADDITIVE to a budget already 5,672 ALM and
+  // 39 DSP over, and the roadmap charges the complete FIELD subsystem at about
+  // 13,700 ALM against a 4,500 ALM envelope AT THE BENCH POINT
+  // (`reports/RESOURCE-RESCUE-ROADMAP-CURRENT-20260913.md:1198`).
+  //
+  // NEITHER CONFIGURATION FITS. That is the finding and it is not fixed by
+  // choosing the smaller one; the smaller one is chosen because the front
+  // cannot use the larger, and the budget is over either way.
+  //
+  // ---------------------------------------------------------------------------
+  // SO: THE VALUES BELOW ARE THE CONSOLE'S, AND WHAT WOULD CHANGE THEM
+  // ---------------------------------------------------------------------------
+  // Every one is written out even where it equals the module default, because
+  // an absent parameter reads as an oversight and this one is a decision. The
+  // trigger to move them is A FRONT THAT GATHERS POINTS: when
+  // `zhao_field_host` can accept FAB_LANES points per grant and keep several
+  // contexts in flight, the shipped numbers become reachable and must be
+  // adopted together with the area they cost. Until then, widening the fabric
+  // buys area and no throughput, which is the one trade this device cannot
+  // afford.
   zhao_field_host #(
     .CLIENTS  (2),
     // PROGS is one number wearing three hats: the directory's ENTRIES, the
     // executor's CONTEXT count and the front's slot space. The v3 uop store is
     // indexed by context, so a program IS a context.
+    //
+    // The shipped CTX is 32. Eight is kept because the front runs ONE context
+    // at a time, so the other twenty-four would be register file nothing can
+    // reach -- and because PROGS is the only one of these knobs that is also a
+    // PORT WIDTH: SLOTW appears on five of this module's field ports, so
+    // PROGS=32 changes the console's edge and `zhao_prod_top` with it. That is
+    // a real change with a real cost and it belongs in the pass that builds
+    // the gathering front, not ahead of it.
     .PROGS    (8),
     // The executor's PLAN depth, not a memory this file owns.
     .INSTR_N  (32),
+    // The shipped REGS is 64, and 64 is also the uop encoding's native size --
+    // the 64-bit word packs four SIX-bit register fields, so at 32 the top bit
+    // of each is wasted (`zhao_field_host.sv` guards REGW > 6 for the other
+    // end of that). It is kept at 32 anyway, and for a reason that is the
+    // opposite of the usual one: REGS is the length of this front's E_ZERO
+    // state, which clears the context one register per clock ONCE PER POINT.
+    // REGS=64 would double that from 32 clocks to 64 on the critical path of
+    // every point the console answers, and buy capacity no shipped program
+    // asks for. Here the big number is the slower one.
     .REGS     (32),
     .TABLES   (2),
     .TBL_N    (64),
     .IN_LANES (12),
-    .OUT_LANES(4)
+    .OUT_LANES(4),
+
+    // ---- the fabric's own knobs. Shipped values in the comment, always. ----
+    // FAB_LANES: shipped 4. One point per grant means three discarded lanes,
+    // ~+2,200 ALM of vector ALU and ~+12 DSP for nothing.
+    .FAB_LANES      (1),
+    // FAB_OUTSTANDING/FAB_LONGQ: shipped 16/16. Long ops in flight across
+    // PARKED CONTEXTS; with one context live the supply is one.
+    .FAB_OUTSTANDING(4),
+    .FAB_LONGQ      (4),
+    // FAB_GATHERS: shipped 4, kept at 4. It is the only one of the seven that
+    // costs nothing to leave wide and it is already the shipped value.
+    .FAB_GATHERS    (4),
+    // FAB_DIST_BANKS: shipped 8. THE most expensive parameter in the engine --
+    // `zhao_field_v3_svcpath.sv:68` says so in as many words -- because each
+    // bank is four floor-exact roots. 2 banks = 8 roots here against the
+    // shipped 8 banks = 32, at ~251 ALM each.
+    .FAB_DIST_BANKS (2),
+    // FAB_RING_UNITS: shipped 8. `zhao_field_v3_ring.sv:164` records a sweep
+    // of RING_UNITS 8/16/32 against DIST_BANKS 4/8 that "moved the frame cost
+    // by not one clock" -- so even on the Earth workload this axis is already
+    // known to be past its knee.
+    .FAB_RING_UNITS (2),
+    .FAB_RING_DESC  (2)
   ) u_field_host (
     .clk  (gpu_clk),
     .rst_n(rst_n),
