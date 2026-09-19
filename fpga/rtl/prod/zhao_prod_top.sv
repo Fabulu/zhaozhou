@@ -1469,6 +1469,7 @@ module zhao_prod_top (
   logic [32-1:0] u22_profile_mixed_o;
   logic [32-1:0] u22_view_bad_o;
   logic [32-1:0] u22_dq_refused_o;
+  logic [32-1:0] u22_poisoned_o;
   zhao_geom_replay u22_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -1481,36 +1482,37 @@ module zhao_prod_top (
       .grp_arena_i(u22_src[28 +: 3]),
       .grp_gen_i(u22_src[35 +: 8]),
       .grp_view_i(u22_src[42 +: 1]),
+      .grp_poison_i(u22_src[49 +: 1]),
       .rel_valid_o(u22_rel_valid_o),
       .rel_arena_o(u22_rel_arena_o),
-      .op_valid_i(u22_src[49 +: 1]),
-      .op_arena_i(u22_src[56 +: 3]),
-      .fl_valid_i(u22_src[63 +: 1]),
-      .fl_arena_i(u22_src[70 +: 3]),
-      .fl_profile_i(u22_src[77 +: 2]),
-      .t_valid_i(u22_src[84 +: 1]),
+      .op_valid_i(u22_src[56 +: 1]),
+      .op_arena_i(u22_src[63 +: 3]),
+      .fl_valid_i(u22_src[70 +: 1]),
+      .fl_arena_i(u22_src[77 +: 3]),
+      .fl_profile_i(u22_src[84 +: 2]),
+      .t_valid_i(u22_src[91 +: 1]),
       .t_ready_o(u22_t_ready_o),
-      .t_v0_i(u22_src[91 +: 16]),
-      .t_v1_i(u22_src[98 +: 16]),
-      .t_v2_i(u22_src[105 +: 16]),
-      .t_material_i(u22_src[112 +: 16]),
-      .t_raster_i(u22_src[119 +: 32]),
-      .t_src_id_i(u22_src[126 +: 16]),
-      .m_done_i(u22_src[133 +: 1]),
+      .t_v0_i(u22_src[98 +: 16]),
+      .t_v1_i(u22_src[105 +: 16]),
+      .t_v2_i(u22_src[112 +: 16]),
+      .t_material_i(u22_src[119 +: 16]),
+      .t_raster_i(u22_src[126 +: 32]),
+      .t_src_id_i(u22_src[133 +: 16]),
+      .m_done_i(u22_src[140 +: 1]),
       .look_valid_o(u22_look_valid_o),
-      .look_ready_i(u22_src[140 +: 1]),
+      .look_ready_i(u22_src[147 +: 1]),
       .look_arena_o(u22_look_arena_o),
       .look_gen_o(u22_look_gen_o),
       .look_index_o(u22_look_index_o),
-      .rep_valid_i(u22_src[147 +: 1]),
-      .rep_hit_i(u22_src[154 +: 1]),
-      .rep_refuse_i(u22_src[161 +: 1]),
-      .rep_payload_i(u22_src[168 +: 106]),
-      .att_rep_valid_i(u22_src[175 +: 1]),
-      .att_rep_data_i(u22_src[182 +: 192]),
+      .rep_valid_i(u22_src[154 +: 1]),
+      .rep_hit_i(u22_src[161 +: 1]),
+      .rep_refuse_i(u22_src[168 +: 1]),
+      .rep_payload_i(u22_src[175 +: 106]),
+      .att_rep_valid_i(u22_src[182 +: 1]),
+      .att_rep_data_i(u22_src[189 +: 192]),
       .af_release_o(u22_af_release_o),
       .o_valid_o(u22_o_valid_o),
-      .o_ready_i(u22_src[189 +: 1]),
+      .o_ready_i(u22_src[196 +: 1]),
       .o_ax_o(u22_o_ax_o),
       .o_ay_o(u22_o_ay_o),
       .o_bx_o(u22_o_bx_o),
@@ -1537,12 +1539,13 @@ module zhao_prod_top (
       .att_skew_o(u22_att_skew_o),
       .profile_mixed_o(u22_profile_mixed_o),
       .view_bad_o(u22_view_bad_o),
-      .dq_refused_o(u22_dq_refused_o)
+      .dq_refused_o(u22_dq_refused_o),
+      .poisoned_o(u22_poisoned_o)
   );
   logic u22_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u22_fold_q <= 1'b0;
-    else u22_fold_q <= u22_fold_q ^ (((^u22_mt_ready_o)) & u22_src[0]) ^ (((^u22_grp_ready_o)) & u22_src[1]) ^ (((^u22_rel_valid_o)) & u22_src[2]) ^ (((^u22_rel_arena_o)) & u22_src[3]) ^ (((^u22_t_ready_o)) & u22_src[4]) ^ (((^u22_look_valid_o)) & u22_src[5]) ^ (((^u22_look_arena_o)) & u22_src[6]) ^ (((^u22_look_gen_o)) & u22_src[7]) ^ (((^u22_look_index_o)) & u22_src[8]) ^ (((^u22_af_release_o)) & u22_src[9]) ^ (((^u22_o_valid_o)) & u22_src[10]) ^ (((^u22_o_ax_o)) & u22_src[11]) ^ (((^u22_o_ay_o)) & u22_src[12]) ^ (((^u22_o_bx_o)) & u22_src[13]) ^ (((^u22_o_by_o)) & u22_src[14]) ^ (((^u22_o_cx_o)) & u22_src[15]) ^ (((^u22_o_cy_o)) & u22_src[16]) ^ (((^u22_o_behind_o)) & u22_src[17]) ^ (((^u22_o_invw_a_o)) & u22_src[18]) ^ (((^u22_o_invw_b_o)) & u22_src[19]) ^ (((^u22_o_invw_c_o)) & u22_src[20]) ^ (((^u22_o_attr_a_o)) & u22_src[21]) ^ (((^u22_o_attr_b_o)) & u22_src[22]) ^ (((^u22_o_attr_c_o)) & u22_src[23]) ^ (((^u22_o_view_o)) & u22_src[24]) ^ (((^u22_o_src_id_o)) & u22_src[25]) ^ (((^u22_o_material_o)) & u22_src[26]) ^ (((^u22_o_raster_o)) & u22_src[27]) ^ (((^u22_meshlets_o)) & u22_src[28]) ^ (((^u22_groups_o)) & u22_src[29]) ^ (((^u22_triangles_in_o)) & u22_src[30]) ^ (((^u22_triangles_out_o)) & u22_src[31]) ^ (((^u22_refused_o)) & u22_src[32]) ^ (((^u22_missed_o)) & u22_src[33]) ^ (((^u22_att_skew_o)) & u22_src[34]) ^ (((^u22_profile_mixed_o)) & u22_src[35]) ^ (((^u22_view_bad_o)) & u22_src[36]) ^ (((^u22_dq_refused_o)) & u22_src[37]);
+    else u22_fold_q <= u22_fold_q ^ (((^u22_mt_ready_o)) & u22_src[0]) ^ (((^u22_grp_ready_o)) & u22_src[1]) ^ (((^u22_rel_valid_o)) & u22_src[2]) ^ (((^u22_rel_arena_o)) & u22_src[3]) ^ (((^u22_t_ready_o)) & u22_src[4]) ^ (((^u22_look_valid_o)) & u22_src[5]) ^ (((^u22_look_arena_o)) & u22_src[6]) ^ (((^u22_look_gen_o)) & u22_src[7]) ^ (((^u22_look_index_o)) & u22_src[8]) ^ (((^u22_af_release_o)) & u22_src[9]) ^ (((^u22_o_valid_o)) & u22_src[10]) ^ (((^u22_o_ax_o)) & u22_src[11]) ^ (((^u22_o_ay_o)) & u22_src[12]) ^ (((^u22_o_bx_o)) & u22_src[13]) ^ (((^u22_o_by_o)) & u22_src[14]) ^ (((^u22_o_cx_o)) & u22_src[15]) ^ (((^u22_o_cy_o)) & u22_src[16]) ^ (((^u22_o_behind_o)) & u22_src[17]) ^ (((^u22_o_invw_a_o)) & u22_src[18]) ^ (((^u22_o_invw_b_o)) & u22_src[19]) ^ (((^u22_o_invw_c_o)) & u22_src[20]) ^ (((^u22_o_attr_a_o)) & u22_src[21]) ^ (((^u22_o_attr_b_o)) & u22_src[22]) ^ (((^u22_o_attr_c_o)) & u22_src[23]) ^ (((^u22_o_view_o)) & u22_src[24]) ^ (((^u22_o_src_id_o)) & u22_src[25]) ^ (((^u22_o_material_o)) & u22_src[26]) ^ (((^u22_o_raster_o)) & u22_src[27]) ^ (((^u22_meshlets_o)) & u22_src[28]) ^ (((^u22_groups_o)) & u22_src[29]) ^ (((^u22_triangles_in_o)) & u22_src[30]) ^ (((^u22_triangles_out_o)) & u22_src[31]) ^ (((^u22_refused_o)) & u22_src[32]) ^ (((^u22_missed_o)) & u22_src[33]) ^ (((^u22_att_skew_o)) & u22_src[34]) ^ (((^u22_profile_mixed_o)) & u22_src[35]) ^ (((^u22_view_bad_o)) & u22_src[36]) ^ (((^u22_dq_refused_o)) & u22_src[37]) ^ (((^u22_poisoned_o)) & u22_src[38]);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u23_lfsr_q;

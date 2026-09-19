@@ -118,7 +118,21 @@
 # independent operands -- and the bench asserts it zero. MEASURED 2026-09-19:
 # att_skew=1 and the run stops there. Its polarity is INVERTED: the control
 # passes when the run FAILS.
-#[CmdletBinding()]
+# ---------------------------------------------------------------------------
+# -BadVertex: THE R31 CONTROL -- one refused vertex record must NOT deadlock
+# ---------------------------------------------------------------------------
+# Added 2026-09-19 (geom2 packet, owner ruling R31). Record 3 of the fixture
+# meshlet gets one nonzero reserved byte IN SDRAM (`+define+ZHAO_SMOKE_BAD_VERTEX`,
+# a plain `ifdef`) and nothing else changes. GEOM.VDECODE refuses it; before the
+# fix GEOM.GROUP_SEQ then waited for a vertex that could never arrive and the
+# whole geometry path stopped -- the run died at "GEOM.REPLAY released no
+# meshlet". Now the refusal reaches GROUP_SEQ as a HOLE, both groups are handed
+# over POISONED, GEOM.REPLAY drops the batch's triangles and releases it.
+#
+# Its polarity is DIRECT, unlike the three above: the bench asserts the CORRECT
+# behaviour (refused=1, holes=1, groups_poisoned=2, replay_poisoned=SGF_N_TRIS,
+# pixels=0, frames_admitted=1) and passes only if all of it holds. The negative
+# control is the plain run, which asserts all four R31 counters ZERO.#[CmdletBinding()]
 param(
   [string]$Repo    = $null,
   [string]$BuildIn = $null,
@@ -126,7 +140,8 @@ param(
   [switch]$Mutant,
   [switch]$NoTableLoad,
   [switch]$BadDescriptor,
-  [switch]$BadAttribute
+  [switch]$BadAttribute,
+  [switch]$BadVertex
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,6 +165,7 @@ if (-not $BuildIn) {
          elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
          elseif ($BadAttribute) { 'zhao_console_core_smoke_badattr' }
+         elseif ($BadVertex) { 'zhao_console_core_smoke_badvtx' }
          else { 'zhao_console_core_smoke' }
   # PER CHECKOUT. The default used to be one %TEMP% directory for every
   # checkout on the machine, so concurrent packets in separate worktrees
@@ -207,6 +223,10 @@ if ($NoTableLoad) {
 if ($BadAttribute) {
   $defs += '+define+ZHAO_SMOKE_BAD_ATTR'
   Write-Host 'POSITIVE CONTROL: the attribute store answers one lookup ONE CLOCK LATE, INVERTED POLARITY (passes when the run FAILS)'
+}
+if ($BadVertex) {
+  $defs += '+define+ZHAO_SMOKE_BAD_VERTEX'
+  Write-Host 'R31 CONTROL: ONE vertex record carries a nonzero reserved byte IN SDRAM, DIRECT polarity (passes when the batch drops and the frame completes)'
 }
 if ($BadDescriptor) {
   $defs += '+define+ZHAO_SMOKE_BAD_DESC'

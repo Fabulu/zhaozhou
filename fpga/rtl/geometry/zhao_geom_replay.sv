@@ -87,6 +87,10 @@
 // cannot be drawn, and drawing it from a stale or unwritten vertex would put
 // somebody else's geometry on screen. A vertex id wider than the arena index is
 // forced to an index the arena REFUSES rather than truncated onto a real slot.
+// A meshlet whose GROUP_SEQ handle arrives POISONED (a record GEOM.VDECODE
+// refused, owner ruling R31) has every triangle taken and dropped WITHOUT a
+// lookup -- its later indices name the wrong vertices, so a lookup would HIT
+// -- counted on `poisoned_o`, and its arenas are released as usual.
 //
 // Throughput is stated, not claimed: see the directed test's measured clocks
 // per triangle. Conservative SystemVerilog subset only (charter section 2).
@@ -119,6 +123,10 @@ module zhao_geom_replay #(
     input  wire [ARENA_W-1:0]      grp_arena_i,
     input  wire [GEN_W-1:0]        grp_gen_i,
     input  wire                    grp_view_i,
+    // GEOM.GROUP_SEQ's verdict that the batch lost a record upstream (a
+    // GEOM.VDECODE refusal, owner ruling R31): the meshlet's triangles are
+    // taken and DROPPED, and its arenas are still released.
+    input  wire                    grp_poison_i,
     output wire                    rel_valid_o,
     output wire [ARENA_W-1:0]      rel_arena_o,
 
@@ -187,7 +195,8 @@ module zhao_geom_replay #(
     output logic [31:0]            att_skew_o,       // store and arena disagreed on timing
     output logic [31:0]            profile_mixed_o,  // one arena, two profiles
     output logic [31:0]            view_bad_o,       // a handle for a view not in the mask
-    output logic [31:0]            dq_refused_o      // DEPTHQUANT refusals, all lanes
+    output logic [31:0]            dq_refused_o,     // DEPTHQUANT refusals, all lanes
+    output logic [31:0]            poisoned_o        // dropped: the batch lost a record (R31)
 );
 
   localparam int unsigned NA = 1 << ARENA_W;
@@ -214,6 +223,7 @@ module zhao_geom_replay #(
   logic [1:0]         nh_q;            // handles taken
   logic [1:0]         mask_q;
   logic               done_seen_q;     // GEOM.ASSEMBLE's walk has ended
+  logic               pois_q;          // a handle of this meshlet was poisoned
   logic [ARENA_W-1:0] sl_arena_q [2];
   logic [GEN_W-1:0]   sl_gen_q   [2];
   logic               sl_view_q  [2];
@@ -483,6 +493,8 @@ module zhao_geom_replay #(
       nh_q            <= '0;
       mask_q          <= '0;
       done_seen_q     <= 1'b0;
+      pois_q          <= 1'b0;
+      poisoned_o      <= '0;
       sl_arena_q[0]   <= '0;
       sl_arena_q[1]   <= '0;
       sl_gen_q[0]     <= '0;
@@ -552,6 +564,7 @@ module zhao_geom_replay #(
             mask_q      <= mt_view_mask_i;
             nh_q        <= '0;
             done_seen_q <= 1'b0;
+            pois_q      <= 1'b0;
             rk_rel_q    <= 1'b0;
             st_q        <= (mt_need_c == 2'd0) ? S_TRI : S_HAND;
           end
@@ -562,6 +575,9 @@ module zhao_geom_replay #(
             sl_arena_q[nh_q[0]] <= grp_arena_i;
             sl_gen_q[nh_q[0]]   <= grp_gen_i;
             sl_view_q[nh_q[0]]  <= grp_view_i;
+            // One poisoned handle poisons the MESHLET: both views were filled
+            // from the same record stream, so the same hole is in both.
+            if (grp_poison_i) pois_q <= 1'b1;
             if (groups_o != 32'hFFFF_FFFF) groups_o <= groups_o + 32'd1;
             if (!mask_q[grp_view_i] && (view_bad_o != 32'hFFFF_FFFF))
               view_bad_o <= view_bad_o + 32'd1;
@@ -588,6 +604,12 @@ module zhao_geom_replay #(
             // taken and dropped as refused, so the walk still drains.
             if (need_q == 2'd0) begin
               if (refused_o != 32'hFFFF_FFFF) refused_o <= refused_o + 32'd1;
+            end else if (pois_q) begin
+              // R31: the batch lost a record, so every arena index after the
+              // hole names the wrong vertex. The descriptor is taken so the
+              // walk drains, and dropped WITHOUT a lookup -- a lookup would
+              // HIT, with a plausible corner from the wrong vertex.
+              if (poisoned_o != 32'hFFFF_FFFF) poisoned_o <= poisoned_o + 32'd1;
             end else begin
               st_q <= S_LOOK;
             end

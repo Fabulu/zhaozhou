@@ -377,6 +377,7 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_alloc_stall_cycles_o;
   logic [31:0]             geom_rel_unheld_o;
   logic                    geom_seal_early_o;
+  logic [31:0]             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o;
   logic [31:0]             geom_arena_hits_o;
   logic [31:0]             geom_arena_misses_o;
   logic [31:0]             geom_arena_refusals_o;
@@ -1015,6 +1016,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
   logic [31:0] geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o;
   logic [31:0] geom_rp_dq_refused_o;
+  logic [31:0] geom_rp_poisoned_o;
   // GEOM.ATTRPACK's evidence, out of the core because a counter nobody can
   // read is not evidence. The RATIO is what gets asserted below.
   logic [31:0]             geom_attrpack_triangles_o;
@@ -2496,6 +2498,15 @@ module tb_zhao_console_core_smoke
     for (int unsigned n = 0; n < N_GEOM_VERTS; n = n + 1) begin
       automatic logic [255:0] rec;
       rec = vdec_record(n);
+`ifdef ZHAO_SMOKE_BAD_VERTEX
+      // THE R31 CONTROL (`-BadVertex`). Record 3's first reserved byte (off
+      // 24) is nonzero IN SDRAM, so GEOM.VDECODE refuses exactly that record
+      // and nothing else changes. Before the R31 fix this wedged GEOM.GROUP_SEQ
+      // in StFill for ever and the run died at "GEOM.REPLAY released no
+      // meshlet"; the checks below require the batch to be DROPPED and the
+      // frame to COMPLETE instead.
+      if (n == 3) rec[192 +: 8] = 8'h01;
+`endif
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  0, rec[63:0]);
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  8, rec[127:64]);
       geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 16, rec[191:128]);
@@ -3550,6 +3561,8 @@ module tb_zhao_console_core_smoke
              geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o,
              geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o,
              geom_rp_dq_refused_o);
+    $display("SMOKE: r31        holes=%0d groups_poisoned=%0d holes_orphan=%0d replay_poisoned=%0d",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o, geom_rp_poisoned_o);
     $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference: %0d / %0d / %0d / %0d)",
              geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
              geom_setup_triangles_submitted_o, SGF_EXP_REPLAYED, SGF_EXP_CLIPPED,
@@ -4126,6 +4139,38 @@ module tb_zhao_console_core_smoke
     // decoder directly, so this equality holding means the descriptor read,
     // the cull, the index run, the vertex run and the whole memory path
     // under them delivered what the fixture put in.
+`ifdef ZHAO_SMOKE_BAD_VERTEX
+    // ---- R31, the DIRECT-polarity control: one refused record ---------------
+    // Reaching this line at all is the first half of the evidence: the wait
+    // above for GEOM.REPLAY's release is where the pre-fix machine died. The
+    // second half is that every counter on the refusal's path moved by exactly
+    // what one hole in a two-view, SGF_N_TRIS-triangle batch implies, and that
+    // the render frame still closed.
+    if ((geom_vd_reserved_nz_count_o != 1) || (geom_vd_vertices_o != N_GEOM_VERTS - 1))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.VDECODE refused %0d / decoded %0d -- want exactly 1 / %0d",
+             geom_vd_reserved_nz_count_o, geom_vd_vertices_o, N_GEOM_VERTS - 1);
+    if ((geom_holes_o != 1) || (geom_groups_poisoned_o != 2) || (geom_holes_orphan_o != 0))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.GROUP_SEQ holes=%0d poisoned=%0d orphan=%0d -- want 1 / 2 / 0",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o);
+    if ((geom_rp_meshlets_o != 1) || (geom_rp_poisoned_o != SGF_N_TRIS) ||
+        (geom_rp_triangles_out_o != 0) || (geom_rp_refused_o != 0) || (geom_rp_missed_o != 0))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.REPLAY meshlets=%0d poisoned=%0d out=%0d refused=%0d missed=%0d -- want 1 / %0d / 0 / 0 / 0",
+             geom_rp_meshlets_o, geom_rp_poisoned_o, geom_rp_triangles_out_o,
+             geom_rp_refused_o, geom_rp_missed_o, SGF_N_TRIS);
+    if ((geom_landings_o != 2 * (N_GEOM_VERTS - 1)) || (geom_groups_sealed_o != 2))
+      $fatal(1, "SMOKE BAD_VERTEX: landings=%0d sealed=%0d -- want %0d / 2 (a hole never lands; the poisoned arenas still seal)",
+             geom_landings_o, geom_groups_sealed_o, 2 * (N_GEOM_VERTS - 1));
+    if ((v2_frames_admitted_o != 1) || (render_pixels_o != 0) || (render_issued_words_o != render_retired_words_o))
+      $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / 0 / equal (the batch drops, the frame completes)",
+             v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o);
+    $display("SMOKE: BAD_VERTEX PASS -- one refused record dropped its batch (holes=1, groups_poisoned=2, replay_poisoned=%0d) and the frame completed",
+             geom_rp_poisoned_o);
+    $finish;
+`else
+    // Everything from here to the PASS line is the CLEAN fixture's verdict. It is
+    // compiled out under ZHAO_SMOKE_BAD_VERTEX rather than jumped over: Verilator
+    // defers `\$finish` to the end of the time step, so the straight-line checks
+    // after it still run (the ZHAO_MUT_SLOT_OVERFLOW note above says the same).
     if (geom_vd_vertices_o != N_GEOM_VERTS)
       $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of the %0d records the descriptor declares -- the vertex stream does not cross from GEOM.ASSETFETCH into the decoder",
              geom_vd_vertices_o, N_GEOM_VERTS);
@@ -4250,6 +4295,11 @@ module tb_zhao_console_core_smoke
              geom_rp_view_bad_o, geom_rp_dq_refused_o);
     // The attribute store and the arena answered on the SAME clock every time.
     // `-BadAttribute` makes one reply late; this is the check it trips.
+    // R31: a clean fixture has no hole, poisons nothing and orphans nothing.
+    // `-BadVertex` is the positive control that moves all four.
+    if ((geom_holes_o | geom_groups_poisoned_o | geom_holes_orphan_o | geom_rp_poisoned_o) != 0)
+      $fatal(1, "SMOKE: R31 counters moved on a clean fixture: holes=%0d poisoned=%0d orphan=%0d replay_poisoned=%0d",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o, geom_rp_poisoned_o);
     if (geom_rp_att_skew_o != 0)
       $fatal(1, "SMOKE: GEOM.REPLAY saw the attribute store answer out of step with the arena %0d time(s) -- slot 1..6 would belong to a different lookup",
              geom_rp_att_skew_o);
@@ -4530,6 +4580,7 @@ module tb_zhao_console_core_smoke
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;
+`endif  // ZHAO_SMOKE_BAD_VERTEX -- the clean verdict above is compiled OUT under the R31 control
   end
 
   // A bench that hangs must say so rather than be killed by a wrapper.

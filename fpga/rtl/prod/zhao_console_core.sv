@@ -3557,6 +3557,12 @@ module zhao_console_core
   output logic [31:0]             geom_alloc_stall_cycles_o,
   output logic [31:0]             geom_rel_unheld_o,
   output logic                    geom_seal_early_o,
+  // R31: GEOM.VDECODE's refusals as GEOM.GROUP_SEQ absorbs them. A hole is a
+  // record that will never arrive; its batch is poisoned and dropped whole,
+  // and an orphan is a hole with no batch held (unreachable, fired directly).
+  output logic [31:0]             geom_holes_o,
+  output logic [31:0]             geom_groups_poisoned_o,
+  output logic [31:0]             geom_holes_orphan_o,
   output logic [31:0]             geom_arena_hits_o,
   output logic [31:0]             geom_arena_misses_o,
   output logic [31:0]             geom_arena_refusals_o,
@@ -3591,6 +3597,8 @@ module zhao_console_core
   output logic [31:0]             geom_rp_profile_mixed_o,
   output logic [31:0]             geom_rp_view_bad_o,
   output logic [31:0]             geom_rp_dq_refused_o,
+  // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
+  output logic [31:0]             geom_rp_poisoned_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -5858,6 +5866,18 @@ module zhao_console_core
   // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
   // design; if this composer swallowed the flag, a malformed asset and an
   // absent asset would be indistinguishable from outside.
+  //
+  // AND IT REACHES GEOM.GROUP_SEQ AS A HOLE (owner ruling R31, 2026-09-19).
+  // Silent at the skinner is right; silent at the sequencer was a DEADLOCK: it
+  // waited for `count` skinned vertices, one never came, nothing sealed, and
+  // REPLAY, ASSETFETCH and the whole geometry path stopped with every counter
+  // still. `d_refused_o` now drives `u_geom_group_seq.hole_i`, the batch ends on
+  // vertices + holes == count, its groups are handed over POISONED, and
+  // GEOM.REPLAY drops the meshlet's triangles and releases it -- the contract's
+  // "a refusal drops the BATCH, not the frame". Counted on `geom_holes_o`,
+  // `geom_groups_poisoned_o` and `geom_rp_poisoned_o`; the smoke bench's
+  // `-BadVertex` control corrupts one record in SDRAM and requires all three to
+  // move and the frame to complete.
   // ==========================================================================
   // I25: one ratified vertex format, named rather than literal. See the header.
   localparam logic [2:0] GEOM_VERTEX_FORMAT_C = 3'd0;
@@ -6345,6 +6365,7 @@ module zhao_console_core
   wire                    gs_grp_valid, rp_grp_ready, gs_grp_view;
   wire [GEOM_ARENA_W-1:0] gs_grp_arena, rp_rel_arena;
   wire [GEOM_GEN_W-1:0]   gs_grp_gen;
+  wire                    gs_grp_poison;   // R31: the batch lost a record
   wire                    rp_rel_valid;
   // The handle's count and source id are not read: GEOM.REPLAY takes the
   // meshlet's vertex count from the dispatcher token, which is the SAME number
@@ -6395,6 +6416,10 @@ module zhao_console_core
     .v_x_i     (gs_v_x),
     .v_y_i     (gs_v_y),
     .v_z_i     (gs_v_z),
+    // REAL: GEOM.VDECODE's refusal pulse, one per record it refused -- the
+    // HOLE a batch must account for or wait for ever (owner ruling R31). The
+    // same net leaves the module as `geom_vd_refused_o` for evidence.
+    .hole_i    (geom_vd_refused_o),
 
     // REAL: client A of the shared projection service.
     .a_valid_o  (gs_a_valid),
@@ -6427,6 +6452,7 @@ module zhao_console_core
     .grp_count_o (gs_grp_count),
     .grp_view_o  (gs_grp_view),
     .grp_src_id_o(gs_grp_src_id),
+    .grp_poison_o(gs_grp_poison),
     .rel_valid_i (rp_rel_valid),
     .rel_arena_i (rp_rel_arena),
 
@@ -6437,6 +6463,9 @@ module zhao_console_core
     .jobs_refused_o      (geom_jobs_refused_o),
     .alloc_stall_cycles_o(geom_alloc_stall_cycles_o),
     .rel_unheld_o        (geom_rel_unheld_o),
+    .holes_o             (geom_holes_o),
+    .groups_poisoned_o   (geom_groups_poisoned_o),
+    .holes_orphan_o      (geom_holes_orphan_o),
     .seal_early_o        (geom_seal_early_o)
   );
 
@@ -11320,6 +11349,8 @@ module zhao_console_core
     .grp_arena_i (gs_grp_arena),
     .grp_gen_i   (gs_grp_gen),
     .grp_view_i  (gs_grp_view),
+    // REAL: R31 -- a batch GEOM.VDECODE refused part of is dropped here, whole.
+    .grp_poison_i(gs_grp_poison),
     .rel_valid_o (rp_rel_valid),
     .rel_arena_o (rp_rel_arena),
 
@@ -11389,7 +11420,8 @@ module zhao_console_core
     .att_skew_o      (geom_rp_att_skew_o),
     .profile_mixed_o (geom_rp_profile_mixed_o),
     .view_bad_o      (geom_rp_view_bad_o),
-    .dq_refused_o    (geom_rp_dq_refused_o)
+    .dq_refused_o    (geom_rp_dq_refused_o),
+    .poisoned_o      (geom_rp_poisoned_o)
   );
 
   // The attribute store listens to the arena's own lookup nets (I46).

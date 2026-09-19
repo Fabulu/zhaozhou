@@ -79,7 +79,7 @@ struct Bench {
   void zero_inputs() {
     t.mt_valid_i = 0; t.grp_valid_i = 0; t.t_valid_i = 0; t.m_done_i = 0;
     t.op_valid_i = 0; t.fl_valid_i = 0; t.o_ready_i = 1; t.look_ready_i = 1;
-    t.rep_valid_i = 0; t.att_rep_valid_i = 0;
+    t.rep_valid_i = 0; t.att_rep_valid_i = 0; t.grp_poison_i = 0;
   }
 
   void reset() {
@@ -224,9 +224,12 @@ struct Bench {
         [&](bool on) { t.mt_valid_i = on; t.mt_view_mask_i = mask; t.mt_vertex_count_i = vcount; },
         [&]() { return t.mt_ready_o != 0; });
   }
-  bool handle(unsigned arena, unsigned gen, unsigned view) {
+  bool handle(unsigned arena, unsigned gen, unsigned view, unsigned poison = 0) {
     return hold_until(
-        [&](bool on) { t.grp_valid_i = on; t.grp_arena_i = arena; t.grp_gen_i = gen; t.grp_view_i = view; },
+        [&](bool on) {
+          t.grp_valid_i = on; t.grp_arena_i = arena; t.grp_gen_i = gen; t.grp_view_i = view;
+          t.grp_poison_i = on ? poison : 0;
+        },
         [&]() { return t.grp_ready_o != 0; });
   }
   bool tri(unsigned a, unsigned b, unsigned c, unsigned src, unsigned mat) {
@@ -456,11 +459,52 @@ int main(int argc, char** argv) {
     ck(b.t.dq_refused_o == 3, "J: all three corners refused by GEOM.DEPTHQUANT, summed");
   }
 
-  ck(b.t.meshlets_o == 9, "the meshlet count is every token taken");
+  // ---- K: R31 -- a POISONED handle drops the whole meshlet, and releases it --
+  // GEOM.GROUP_SEQ marks a batch that lost a record upstream. One poisoned view
+  // poisons the meshlet (both views came from the same record stream). Every
+  // triangle is TAKEN (so ASSEMBLE's walk drains) and dropped WITHOUT a lookup
+  // -- a lookup would HIT, with a corner from the wrong vertex -- and both
+  // arenas still go back. Before the fix no poisoned handle could exist: the
+  // batch never sealed and this block waited on S_HAND for ever.
+  {
+    b.out.clear(); b.rels.clear();
+    b.make_arena(1, 6, 12);
+    b.make_arena(3, 6, 13);
+    b.open(1); b.open(3);
+    b.land(1, 0); b.land(3, 0);
+    const uint32_t p0 = b.t.poisoned_o, r0 = b.t.refused_o, m0 = b.t.missed_o;
+    const size_t looks0 = b.looked_index.size();
+    ck(b.token(0b11, 6), "K: token");
+    ck(b.handle(1, 12, 0, 1) && b.handle(3, 13, 1, 0), "K: view 0 poisoned, view 1 clean");
+    ck(b.tri(0, 1, 2, 1, 1) && b.tri(3, 4, 5, 1, 1) && b.tri(0, 2, 4, 1, 1), "K: three triangles taken");
+    b.done();
+    ck(b.drain_release(), "K: R31: the poisoned meshlet is RELEASED -- the frame completes");
+    ck(b.out.empty(), "K: nothing drawn from a poisoned meshlet, in EITHER view");
+    ck(b.t.poisoned_o - p0 == 3, "K: poisoned_o counts every dropped descriptor");
+    ck(b.t.refused_o == r0 && b.t.missed_o == m0, "K: ... and not as refused or missed");
+    ck(b.looked_index.size() == looks0, "K: no lookup was issued for a poisoned meshlet");
+    ck(b.rels.size() == 2, "K: both arenas are released back to GEOM.GROUP_SEQ");
+  }
+
+  // ---- L: the NEXT meshlet is clean again (the poison is per meshlet) -------
+  {
+    b.out.clear(); b.rels.clear();
+    b.make_arena(2, 4, 14);
+    b.open(2);
+    b.land(2, 0);
+    const uint32_t p0 = b.t.poisoned_o;
+    ck(b.token(0b01, 4) && b.handle(2, 14, 0, 0), "L: token and a clean handle");
+    ck(b.tri(0, 1, 2, 1, 1), "L: triangle");
+    b.done();
+    ck(b.drain_release(), "L: released");
+    ck(b.out.size() == 1 && b.t.poisoned_o == p0, "L: a clean meshlet after a poisoned one draws");
+  }
+
+  ck(b.t.meshlets_o == 11, "the meshlet count is every token taken");
   std::printf("geom_replay_directed: %d checks, %d failed (meshlets=%u groups=%u tri_in=%u "
-              "tri_out=%u refused=%u missed=%u skew=%u mixed=%u view_bad=%u dq_refused=%u)\n",
+              "tri_out=%u refused=%u missed=%u skew=%u mixed=%u view_bad=%u dq_refused=%u poisoned=%u)\n",
               g_checks, g_fail, b.t.meshlets_o, b.t.groups_o, b.t.triangles_in_o,
               b.t.triangles_out_o, b.t.refused_o, b.t.missed_o, b.t.att_skew_o,
-              b.t.profile_mixed_o, b.t.view_bad_o, b.t.dq_refused_o);
+              b.t.profile_mixed_o, b.t.view_bad_o, b.t.dq_refused_o, b.t.poisoned_o);
   zhao::exit_hard(g_fail ? 1 : 0);
 }

@@ -889,6 +889,12 @@ module zhao_console_board
   output logic [31:0]             geom_alloc_stall_cycles_o,
   output logic [31:0]             geom_rel_unheld_o,
   output logic                    geom_seal_early_o,
+  // R31: GEOM.VDECODE's refusals as GEOM.GROUP_SEQ absorbs them. A hole is a
+  // record that will never arrive; its batch is poisoned and dropped whole,
+  // and an orphan is a hole with no batch held (unreachable, fired directly).
+  output logic [31:0]             geom_holes_o,
+  output logic [31:0]             geom_groups_poisoned_o,
+  output logic [31:0]             geom_holes_orphan_o,
   output logic [31:0]             geom_arena_hits_o,
   output logic [31:0]             geom_arena_misses_o,
   output logic [31:0]             geom_arena_refusals_o,
@@ -923,6 +929,8 @@ module zhao_console_board
   output logic [31:0]             geom_rp_profile_mixed_o,
   output logic [31:0]             geom_rp_view_bad_o,
   output logic [31:0]             geom_rp_dq_refused_o,
+  // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
+  output logic [31:0]             geom_rp_poisoned_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -2710,6 +2718,9 @@ module zhao_console_board
       .geom_alloc_stall_cycles_o         (geom_alloc_stall_cycles_o),
       .geom_rel_unheld_o                 (geom_rel_unheld_o),
       .geom_seal_early_o                 (geom_seal_early_o),
+      .geom_holes_o                      (geom_holes_o),
+      .geom_groups_poisoned_o            (geom_groups_poisoned_o),
+      .geom_holes_orphan_o               (geom_holes_orphan_o),
       .geom_arena_hits_o                 (geom_arena_hits_o),
       .geom_arena_misses_o               (geom_arena_misses_o),
       .geom_arena_refusals_o             (geom_arena_refusals_o),
@@ -2731,6 +2742,7 @@ module zhao_console_board
       .geom_rp_profile_mixed_o           (geom_rp_profile_mixed_o),
       .geom_rp_view_bad_o                (geom_rp_view_bad_o),
       .geom_rp_dq_refused_o              (geom_rp_dq_refused_o),
+      .geom_rp_poisoned_o                (geom_rp_poisoned_o),
       .geom_clip_attr_a_o                (geom_clip_attr_a_o),
       .geom_clip_attr_b_o                (geom_clip_attr_b_o),
       .geom_clip_attr_c_o                (geom_clip_attr_c_o),
