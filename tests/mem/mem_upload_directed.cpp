@@ -203,10 +203,15 @@ struct Outcome {
   int bursts = 0;
   bool published_before_retire = false;
   bool data_ok = true;  // every written beat was the staged beat, in order
+  int reoffers_after_refusal = 0;  // requests offered AFTER the bridge refused one
 };
 
+// `refuse_burst` >= 0: the bridge REFUSES that burst's request the way the
+// real `zhao_hps_bridge` does -- `err` on the request, NO grant, nothing issued.
+// (`hps_error` injects an err in the middle of a granted burst, which the real
+// bridge never sends; it is kept because the block must survive it anyway.)
 Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guard = false,
-                   bool hps_error = false, int guard_busy = 0) {
+                   bool hps_error = false, int guard_busy = 0, int refuse_burst = -1) {
   Outcome o;
   present(d, kArenaBase, kRegionBase, len, kEpoch, crc);
 
@@ -219,6 +224,7 @@ Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guar
   int reqs_accepted = 0;           // guard requests accepted so far
   int busy_left = 0;               // cycles the guard stays not-ready
   bool granted = false;      // a burst has been granted and is being served
+  bool refused = false;      // the bridge has refused a request
 
   for (int cycle = 0; cycle < 50000; ++cycle) {
     d.eval();
@@ -240,10 +246,13 @@ Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guar
     // law is broken -- that is the whole point of the RETIRE state.
     if (d.publish_valid_o && outstanding != 0) o.published_before_retire = true;
 
-    // grant the HPS burst in the cycle it is offered
+    // grant the HPS burst in the cycle it is offered -- or refuse it
     const bool issuing = d.hps_req_valid_o;
-    d.hps_req_grant_i = issuing;
-    if (issuing && !granted) {
+    if (issuing && refused) ++o.reoffers_after_refusal;
+    const bool refuse_now = issuing && !granted && !refused && (o.bursts == refuse_burst);
+    d.hps_req_grant_i = issuing && !refuse_now && !refused;
+    if (refuse_now) refused = true;
+    if (issuing && !granted && !refuse_now && !refused) {
       ++o.bursts;
       granted = true;
     }
@@ -253,7 +262,7 @@ Outcome run_upload(Vtb_mem_upload& d, uint32_t len, uint32_t crc, bool deny_guar
     // includes the block's own S_NEXT cycle between bursts -- so the bench
     // counted beats the DUT never took and the two desynced.
     const bool serving = granted && !issuing && (beats_done < beats_total);
-    d.hps_err_i = hps_error && serving && (beats_done == 4);
+    d.hps_err_i = (hps_error && serving && (beats_done == 4)) || refuse_now;
     d.hps_beat_valid_i = serving && !d.hps_err_i;
     d.hps_data_i = 0x1122334455667788ull + beats_done;
     d.hps_last_i = serving && ((beats_done % 8) == 7);
@@ -406,6 +415,26 @@ void test_an_hps_error_does_not_publish() {
         o.status != zm::kUploadOk ? 1 : 0);
 }
 
+// S1 (2026-09-19): the bridge refuses a request with `err` and NO grant. The
+// block used to watch for `err` only in S_FILL -- after a grant the real bridge
+// never follows with an err -- so in S_ISSUE it went on holding its request,
+// and behind `zhao_hps_arbiter_n` that is re-served, refused again, forever.
+void test_a_refused_request_is_answered_not_repeated() {
+  for (int at : {0, 2}) {
+    Vtb_mem_upload d;
+    reset(d);
+    const uint32_t len = 4 * kBurst;
+    const uint32_t crc = crc32c_of(payload_of(len));
+    const Outcome o = run_upload(d, len, crc, false, false, 0, /*refuse_burst=*/at);
+    check(o.status >= 0, "a refused HPS request ENDS the upload (done fired)", 1, o.status >= 0 ? 1 : 0);
+    check(o.reoffers_after_refusal == 0, "and the refused request is not offered again", 0,
+          o.reoffers_after_refusal);
+    check(!o.published, "and the slot is not published", 0, o.published ? 1 : 0);
+    check(o.status != zm::kUploadOk, "and it is not reported as success", 1,
+          o.status != zm::kUploadOk ? 1 : 0);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 3. EVERY REFUSAL COUNTER FIRES.
 // ---------------------------------------------------------------------------
@@ -460,6 +489,7 @@ int main(int argc, char** argv) {
   test_a_bad_crc_does_not_publish();
   test_a_denied_guard_write_does_not_publish();
   test_an_hps_error_does_not_publish();
+  test_a_refused_request_is_answered_not_repeated();
   test_every_refusal_counter_fires();
   test_burst_decomposition_matches_the_oracle();
 

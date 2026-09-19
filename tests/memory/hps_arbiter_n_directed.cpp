@@ -99,6 +99,8 @@ struct Bench {
   int hps_write_lasts = 0;
   std::vector<uint64_t> hps_write_data;
   int multi_beat_cycles = 0;  // cycles on which >1 client port carried a beat
+  uint32_t pulse = 0;         // one-shot extra `valid`, CMD.DMA style (rule 6b)
+  uint32_t stray_wr = 0;      // clients that raise wr_valid while READING (S2)
 
   explicit Bench(Vzhao_hps_arb_n_compose& d) : dut(d) {
     for (int i = 0; i < kN; ++i) c[i].client = static_cast<uint32_t>(i + 1);
@@ -117,6 +119,8 @@ struct Bench {
       set_bits(len, 7 * i, 7, c[i].len);
       dut.c_addr_i[i] = c[i].addr;
     }
+    valid |= pulse;
+    pulse = 0;
     dut.c_valid_i = static_cast<uint8_t>(valid);
     dut.c_write_i = static_cast<uint8_t>(write);
     dut.c_client_i = client;
@@ -212,6 +216,8 @@ struct Bench {
         }
       }
     }
+    wv |= stray_wr;
+    wl |= stray_wr;
     dut.c_wr_valid_i = static_cast<uint8_t>(wv);
     dut.c_wr_last_i = static_cast<uint8_t>(wl);
     dut.eval();
@@ -504,6 +510,71 @@ int main() {
     check(b.hps_write_lasts == 3, "7b.three write bursts completed", 3,
           static_cast<uint32_t>(b.hps_write_lasts));
     check(dut.hps_err_count_o == 0, "7b.no violation", 0, dut.hps_err_count_o);
+  }
+
+  // ---- 8. RULE 6b: a PULSE while ANOTHER CLIENT OWNS THE BRIDGE ----------
+  // CMD.DMA raises `hps_req_v` for exactly one cycle and then waits for its
+  // response with no timeout. The arbiter used to look at requests in A_IDLE
+  // only, so a pulse landing while client 1 owned the bridge was dropped and
+  // CMD.DMA hung. These fail against that RTL (0 beats) and pass on the
+  // pending-slot repair.
+  for (int who : {0, 2}) {
+    reset(dut);
+    Bench b(dut);
+    b.c[1].at(0xA100'0000u, 1);
+    int guard = 0;
+    while (!b.c[1].in_flight && guard++ < 40) b.step();
+    b.run(2);  // mid-burst: client 1 owns the bridge
+    Client& p = b.c[who];
+    p.base = p.addr = p.next_addr = 0xA000'0000u + static_cast<uint32_t>(who) * 0x0200'0000u;
+    p.bursts_wanted = 0;
+    dut.c_addr_i[who] = p.addr;
+    b.pulse = 1u << who;
+    b.run(120);
+    check(p.beats == 8, name("8.client %d's ONE-cycle pulse during client 1's burst is served", who), 8,
+          static_cast<uint32_t>(p.beats));
+    check(p.data_ok, name("8.client %d: from the address it pulsed", who), 1, p.data_ok);
+    check(bursts(dut, who) == 1, name("8.client %d: exactly one burst, not a repeat", who), 1,
+          bursts(dut, who));
+    check(b.c[1].beats == 8 && b.c[1].data_ok, name("8.client %d: the owner's burst is untouched", who),
+          1, b.c[1].beats == 8 && b.c[1].data_ok);
+    if (who == 2) {
+      check(dut.c2_wait_cycles_o > 1, "8.client 2's pending wait is COUNTED, not frozen at one", 2,
+            dut.c2_wait_cycles_o);
+    }
+    check(dut.hps_err_count_o == 0, name("8.client %d: no violation", who), 0, dut.hps_err_count_o);
+  }
+
+  // ---- 8b. a pulse that LOSES an A_IDLE arbitration is kept too -----------
+  // Client 0 holds; client 2 pulses on the very cycle client 0 is chosen.
+  {
+    reset(dut);
+    Bench b(dut);
+    b.c[0].at(0xA400'0000u, 1);
+    Client& p = b.c[2];
+    p.base = p.addr = p.next_addr = 0xA600'0000u;
+    p.bursts_wanted = 0;
+    dut.c_addr_i[2] = p.addr;
+    b.pulse = 1u << 2;
+    b.run(160);
+    check(b.c[0].beats == 8, "8b.the winner is served", 8, static_cast<uint32_t>(b.c[0].beats));
+    check(p.beats == 8 && p.data_ok, "8b.the pulse that lost the same-cycle pick is served after it", 1,
+          p.beats == 8 && p.data_ok);
+    check(dut.hps_err_count_o == 0, "8b.no violation", 0, dut.hps_err_count_o);
+  }
+
+  // ---- 9. S2: a READING owner cannot put write beats on the bridge --------
+  {
+    reset(dut);
+    Bench b(dut);
+    b.c[0].at(0xA800'0000u, 2);
+    b.stray_wr = 1u << 0;  // client 0 reads, and wrongly raises wr_valid/wr_last
+    b.run(120);
+    check(b.hps_write_beats == 0, "9.no write beat reaches the HPS during a read burst", 0,
+          static_cast<uint32_t>(b.hps_write_beats));
+    check(b.c[0].beats == 16 && b.c[0].data_ok, "9.and the read bursts complete, whole", 1,
+          b.c[0].beats == 16 && b.c[0].data_ok);
+    check(dut.hps_err_count_o == 0, "9.no violation", 0, dut.hps_err_count_o);
   }
 
   dut.final();
