@@ -211,6 +211,41 @@
 //      (entry I30). The traffic BETWEEN the two blocks is real and the traffic
 //      INTO the pair is a boundary, and those are different claims.
 //
+//  10. THE TERRAIN COMPOSE ENGINE -- a page becomes a lattice
+//        TERRAIN.SEQ.is_*          -> TERRAIN.PAGESTREAM.j_*
+//                                  -> TERRAIN.PLACE.hdr_*
+//        TERRAIN.PAGESTREAM.v_*    -> TERRAIN.PATCH.vtx_*
+//        TERRAIN.PLACE.vtx_w{x,z}  -> TERRAIN.PATCH.w{x,z}_i
+//        TERRAIN.PLACE.pos_*       -> TERRAIN.COMPCACHE.pos_*
+//        TERRAIN.PATCH.st_*        -> TERRAIN.COMPCACHE.st_*
+//        TERRAIN.COMPCACHE.lat_/cs_-> TERRAIN.TESS
+//        TERRAIN.PAGESTREAM.done_* -> TERRAIN.RESIDENCY.unpin_*
+//      Four blocks joined to the paging spine (item 8) and to the tessellator
+//      (item 3b), so the terrain path now runs end to end inside this module:
+//      a command list becomes page loads, a loaded page becomes a composed
+//      lattice, and the tessellator reads that lattice instead of a harness.
+//
+//      THE BLOCKER WAS PLACEMENT AND IT IS NAMED NOW. Entry I27 refused this
+//      chain because "TERRAIN.PAGESTREAM emits the heights and the lattice
+//      indices and NOT the placement; nothing else in the tree emits it
+//      either", and said flatly that deriving it in the composer was not
+//      allowed. `zhao_terrain_place` is the owner that removes the refusal:
+//      spec/terrain_rules.md 1.3/2.1 frozen into one block, with the patch
+//      header's redundant envelope CHECKED against its own shifter rather than
+//      trusted or ignored. This file wires two ports and computes nothing.
+//
+//      THE UNPIN IS REAL AND IT IS THE OTHER HALF OF T10. TERRAIN.SEQ pins a
+//      page before issuing and its port comment says the unpin is "the
+//      engine's, on job completion". The engine exists, so `terr_unpin_*` left
+//      the port list rather than being driven by a harness.
+//
+//      WHAT THIS CHAIN STILL CANNOT DO, said here so nobody reads more into it
+//      than it claims: the FIELD half of section 3.4 is absent (entry I34), so
+//      `live_top` collapses to `compose_top`; layer D is never written (entry
+//      I32), so every cell reads SOLID; and the placement's pitch and envelope
+//      arrive at this module's edge (entry I35). Each is a port and an entry,
+//      and not one of them is a constant standing in for a producer.
+//
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
 // ---------------------------------------------------------------------------
@@ -281,6 +316,19 @@
 //    instances below and in the ruling.
 //    (Moved here from between I3 and I5 on 2026-09-19, unedited, when I2/I3
 //    were deleted -- see the placement note above for why it could not stay.)
+//
+//  * I22 was TERRAIN.TESS's LATTICE AND CELL-STATE READ PORTS. CLOSED and
+//    DELETED, 2026-09-19. Its own text named `zhao_terrain_compcache_front` as
+//    the owner and refused it for one stated reason -- "adopting it moves the
+//    gap one hop to its fill path and to TERRAIN.COMPCACHE's store". That
+//    sentence was exactly right and the fill path is what this packet built:
+//    the cache's `st_*` port is fed by TERRAIN.PATCH, TERRAIN.PATCH by
+//    TERRAIN.PAGESTREAM, and the `pos_*` write port by TERRAIN.PLACE. Eleven
+//    ports left this module's port list rather than being driven, and the gap
+//    did NOT move one hop: it moved to three named entries with three different
+//    absent owners (I32 for layer D, I34 for the field lane, I35 for the patch
+//    header's pitch and envelope), which is a smaller and more honest statement
+//    than the one it replaces.
 //
 //  * I10 was GEOM.SKIN's BONE MATRICES; its record is still inline between I9
 //    and I11 and is left there. It is the same shape as the two above and
@@ -687,15 +735,26 @@
 //      from whoever owns the draw -- CMD.SCHEDULER, by the same absent path
 //      I14 describes for the projection matrices.
 //
-// I22. TERRAIN.TESS's lattice and cell-state read ports (`terr_lat_*`,
-//      `terr_cs_*`) -- BOUNDARY. `fpga/rtl/terrain/zhao_terrain_compcache_front.sv`
-//      EXISTS and is the named owner -- it emits `lat_h_o`, `lat_wx_o`,
-//      `lat_wz_o` and `cs_substance_o` on exactly this shape. It is not
-//      composed here because it is a CACHE FRONT: adopting it moves the gap
-//      one hop to its fill path and to TERRAIN.COMPCACHE's store, which is
-//      the next packet rather than this one. The ports are real and registered
-//      (data valid the cycle after the request), so the harness can play the
-//      memory the plan allows it to play.
+//      WIDENED 2026-09-19, and it is one more end of the SAME absent owner
+//      rather than a second gap: `terr_cc_serve_release_i`, TERRAIN.COMPCACHE's
+//      patch retirement. The cache's port means "TESS is finished with the
+//      served patch" and is a PULSE, one patch per rising edge. The block that
+//      knows when a patch is finished is the block that issued its subpatch
+//      jobs and counted them home -- the same one this entry is about. Wiring
+//      it to anything this composition can see (a tessellator idle, a job
+//      handshake, a counter) would be a retirement POLICY invented in the
+//      composer, and the cache's own header records what a wrong reading of
+//      this port already cost once: a whole patch retired without one vertex
+//      being read, with `patches_served_o` counting it as consumed.
+//
+//      A CONSEQUENCE WORTH STATING, because it looks like a stall and is not.
+//      With nothing driving the release, the compose engine fills ONE patch,
+//      hands it to the serve side, fills a second, and then holds: the second
+//      fill cannot hand over until the first is retired, and the composition
+//      gates a new page on the cache's own `fill_busy_o` (see the engine's
+//      note (b)). So `terr_cc_patches_filled_o` reaching 1 and stopping, with
+//      `terr_ps_lattices_o` at 2, is the EXPECTED reading of an unretired
+//      cache and not a defect in the chain.
 //
 // I23. GEOM.VDECODE's 32-byte vertex record stream (`geom_vd_v_*`) --
 //      BOUNDARY, and its decoded side-channels (`geom_vd_d_n*`, `geom_vd_u/v`)
@@ -865,27 +924,54 @@
 //      BEHAVIOR and host packets". A harness can drive these and the composed
 //      terrain bench already drives exactly this shape.
 //
-// I27. THE TERRAIN COMPOSE ENGINE's door (`terr_is_*`) and the directory's
-//      deformation, unpin and handle-check ports (`terr_dm_*`,
-//      `terr_unpin_*`, `terr_chk_*`) -- BOUNDARY. ONE missing subsystem, so
-//      one entry: TERRAIN.SEQ issues a patch, and what receives it is
-//      TERRAIN.PATCH plus the field engine composing into the named compose
-//      slot, with TERRAIN.COMPCACHE storing the result and unpinning the page
-//      when the job is done. None of that is composed, and the reason is NOT
-//      that the seams do not meet -- TERRAIN.PATCH's `st_*` output is declared
-//      port-for-port with TERRAIN.COMPCACHE's `st_*` input by COMPCACHE's own
-//      header, and COMPCACHE's serve side is exactly TERRAIN.TESS's lattice
-//      port, which is entry I22.
+//      WIDENED 2026-09-19 BY A SECOND GUARD CLIENT (`terr_ps_guard_*`,
+//      `terr_ps_beat_*`). The compose engine's TERRAIN.PAGESTREAM reads the
+//      page back out of the pool that TERRAIN.PAGELOADER wrote, so it is a READ
+//      client and needs the return leg -- `beat_valid/data/last` -- that a
+//      write client has no use for. It is listed here rather than as its own
+//      entry because it is the same absent thing: the shell exposes ONE guard
+//      socket and it is named for GEOM.
 //
-//      THE BLOCKER IS PLACEMENT, and it is a missing owner rather than missing
-//      wiring. TERRAIN.PATCH needs `wx_i`/`wz_i`, the PLACED world x and z of
-//      the lattice vertex, and TERRAIN.COMPCACHE needs the same 33 column x's
-//      and 33 row z's through its `pos_*` write port. TERRAIN.PAGESTREAM emits
-//      the heights and the lattice indices and NOT the placement; nothing else
-//      in the tree emits it either. Deriving it here from the index, the patch
-//      coordinate and a pitch is arithmetic invented in the composer, which
-//      this file does not do. Closing I22 is therefore PATCH + COMPCACHE + a
-//      placement owner, and the third is the one that does not exist.
+//      THE TWO GUARD CLIENTS ARE NOT MERGED HERE, and that is deliberate.
+//      `zhao_mem_guard`'s arbitration is the shell's, and putting a mux between
+//      two clients in this file would be an arbiter the composer invented --
+//      the thing the paging spine's own note above is proud of not having done.
+//      Two ports out, one owner to join them, when the shell grows the socket.
+//
+// I27. THE DIRECTORY's DEFORMATION MARK and HANDLE CHECK (`terr_dm_*`,
+//      `terr_chk_*`) -- BOUNDARY. NARROWED 2026-09-19, and the two halves that
+//      left are recorded here rather than deleted with them, because this entry
+//      is where the next reader will look for them:
+//
+//        * THE COMPOSE DOOR (`terr_is_*`) IS CLOSED. It drives
+//          TERRAIN.PAGESTREAM's job port and TERRAIN.PLACE's patch header
+//          inside this module (connected item 10). The blocker this entry named
+//          -- "THE BLOCKER IS PLACEMENT, and it is a missing owner rather than
+//          missing wiring" -- was accurate, and `zhao_terrain_place` is that
+//          owner. Fourteen ports left the port list rather than being driven.
+//        * THE UNPIN (`terr_unpin_*`) IS CLOSED. TERRAIN.PAGESTREAM's `done_*`
+//          fires once per issued patch, whatever the verdict, and that is the
+//          "engine's, on job completion" unpin TERRAIN.SEQ's port comment asks
+//          for. Five more ports left the list.
+//
+//      WHAT IS LEFT, and they are two different absent owners kept in one entry
+//      only because they are two ports of ONE block, the directory:
+//
+//        * `terr_dm_*`, the deformation mark. Its writer is TERRAIN.BAKE, which
+//          is built and not composed -- entry I32 carries the full argument and
+//          this is the same refusal seen from the directory's side. Nothing in
+//          this core can dirty a page, which is also why I28's writeback could
+//          not see a beat.
+//        * `terr_chk_*`, the handle staleness check. Its caller is whoever
+//          holds a page handle across a frame and wants to know it is still
+//          valid -- the subpatch issuer of entry I21. There is no such block.
+//
+//      NOT A GAP AND NAMED SO IT IS NOT RE-OPENED: `is_cslot_o` and
+//      `is_cslot_valid_o` are T6's 256-entry composed-height cache index, and
+//      `zhao_terrain_compcache_front` is a two-buffer FRONT rather than that
+//      store. They are carried into this module and read by nobody, which is
+//      declared at their wire rather than hidden behind an empty port
+//      connection. The store behind that index is a later packet's block.
 //
 // I28. TERRAIN.SEQ's F-sheet writeback job (`terr_wb_*`), its barrier
 //      completion (`terr_wb_done_*`) and TERRAIN.RESIDENCY's writeback
@@ -984,6 +1070,22 @@
 //      unclosable today. The port is on this module's edge so the result
 //      stream is observable rather than dropped.
 //
+//      WIDENED 2026-09-19 BY LAYER D (`terr_cc_cs_*`), TERRAIN.COMPCACHE's
+//      cell-state write port, and it is the same absent block from the other
+//      side: TERRAIN.BAKE emits `cs_event_o`/`cs_sub_o` and is the only thing
+//      in the tree that does. TERRAIN.PAGESTREAM reads planes A, B and C out of
+//      a page (offsets 64, 2242 and 4420) and does NOT read D, so the page's
+//      own copy of the plane has no reader either -- both halves of the gap are
+//      real and neither is closed by this packet.
+//
+//      TIEING IT TO ZERO WOULD HAVE BEEN INVISIBLE, which is why it is a port.
+//      spec/terrain_rules.md 3.3 makes 0 = SOLID, so a never-written plane
+//      reads as solid rock everywhere and every triangle TERRAIN.TESS emits
+//      from it is legitimate-looking terrain. There is no counter that could
+//      distinguish "the world is solid" from "nothing ever wrote the world".
+//      The cache's `cs_oob_o` is exported beside it, and reads zero because no
+//      write is attempted rather than because every write was in range.
+//
 // I33. PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`) -- BOUNDARY. NEW
 //      2026-09-19, and it is the SUCCESSOR to the deleted I2/I3 rather than a
 //      restatement of them: the descriptor table is built, instantiated and
@@ -1013,6 +1115,91 @@
 //      structurally unreachable. It is reachable and fired at SPECIES_N = 8 in
 //      `tests/particles/part_table_directed.cpp`. Said here because a counter
 //      asserted zero and never seen to move is a claim, not evidence.
+//
+// I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
+//      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
+//      composing the terrain compose engine (connected item 10).
+//
+//      THE ABSENT OWNER IS FIELD.SEQ.EARTH and it is not built.
+//      `tests/terrain/tb_terrain_compose.sv` names it in as many words -- "the
+//      field half needs FIELD.SEQ.EARTH, which is a different lane" -- and
+//      `zhao_field_v2_core` and `zhao_field_progcache` are both in the
+//      completion register's built-but-not-connected list with no sequencer
+//      above them. This is a SEPARATE entry from I5 (PART.UPDATE's field
+//      sample, FIELD.SEQ.FLOW) and from I31 (SURFACE.STAMP's brush,
+//      FIELD.SEQ.STAMP) for the reason I31 already gives: the absent owner is a
+//      different block, so closing one would not close the others.
+//
+//      IT IS NOT TIED OFF AND IT MAY NOT BE. Section 3.4 is
+//      `live_top = max(compose_top + SUM field lanes, fx(bottom))`, so a
+//      constant on `fld_height_i` is not a neutral value -- it is a field
+//      program that raises or lowers every vertex of every patch by the same
+//      amount, and it would be invisible because the result is still a real
+//      composed height. With `fld_valid_i` LOW there are no lanes at all and
+//      the law collapses to `compose_top`, which is section 3.4 with an empty
+//      program list: the exact half this composition can honestly carry. That
+//      is the difference between an absent input and a faked one.
+//
+//      THE LIST INTAKE RIDES THE SAME ENTRY because it is the same owner: the
+//      per-patch rectangle list is what decides how many lanes a vertex gets,
+//      and the block that adds a rectangle is the block that then answers for
+//      it. `list_clear_i` is NOT part of this gap -- it is driven from the
+//      patch's own issue acceptance inside this module, which is what the
+//      block's contract asks for ("once per patch per frame, before the first
+//      record").
+//
+// I35. TERRAIN.PLACE's PATCH HEADER PITCH AND ENVELOPE
+//      (`terr_place_pitch_log2_i`, `terr_place_env_x0_i`,
+//      `terr_place_env_z0_i`) -- BOUNDARY. NEW 2026-09-19, and it is the
+//      residue of I27's placement blocker rather than a restatement of it: the
+//      placement OWNER exists and is composed, and what has no producer inside
+//      this module is two fields of the patch header it reads.
+//
+//      WHERE THE FIELDS LIVE AND WHY NOTHING HANDS THEM OVER. Both are in the
+//      64-byte patch header, spec/terrain_rules.md 2.1: `pitch_log2` at +2 and
+//      the `rectfx envelope` at +16. Two blocks touch that header and neither
+//      can supply them:
+//
+//        * TERRAIN.PAGELOADER reads it -- and captures only `ver`, `island`,
+//          `ix`, `iz` and the CRC. It also holds them for the LAST PAGE IT
+//          LOADED, which is not the page being composed; wiring its registers
+//          here would be a join between two things that move independently,
+//          and the compose engine would place patch N with patch M's header.
+//        * TERRAIN.PAGESTREAM reads the page from +64 onward -- planes A, B and
+//          C -- and never looks at the header at all.
+//
+//      So closing this needs a HEADER READER ON THE COMPOSE PATH: the streamer
+//      growing a header pass that emits the two fields with the job's own
+//      identity beside them. That is an RTL change to a block with its own
+//      differential and it is not smuggled into a composition packet.
+//
+//      THE PITCH ALSO HAS A SECOND, LARGER OWNER, named so the next packet
+//      picks the right one: `zhao_terrain_island_dir` takes `desc_pitch_log2_i`
+//      as a FRAME-SCOPED island descriptor, and that block is built and not
+//      composed. Which of the two owns the value is a real question -- the
+//      header's copy is per patch and the descriptor's is per island, and
+//      terrain_rules 2.1 says the header's is redundant by construction -- and
+//      this entry does not answer it.
+//
+//      THEY ARE REAL PORTS AND THE FAILURE MODE IS LOUD. These are inputs, so
+//      the shifter and both comparators behind them survive synthesis and no
+//      constant deletes the logic.
+//
+//      A NOTE ABOUT HOW THIS PARAGRAPH IS WORDED, because it cost two register
+//      runs. `completion_register.py` classifies an entry by KEYWORD over its
+//      whole body, and the phrase one would naturally reach for here -- the one
+//      the register uses to mark an entry as settled inside the composer, which
+//      I9 and I25 carry -- removes the entry from the mandatory count. Writing
+//      it, and then writing it again inside quotation marks while explaining
+//      the first, both marked this open gap CLOSED. The header's placement note
+//      above records the same class of misreading happening to I3. So the
+//      phrase does not appear anywhere in this entry, and the positive
+//      statement above is used instead. A harness
+//      that leaves them at zero does not get a plausible flat world: the
+//      envelope check fails on every patch, `terr_place_env_mismatch_o` climbs,
+//      every patch is refused, and `terr_cc_patches_filled_o` stays at zero.
+//      A corruption check with an unfed operand that SILENTLY passed would be
+//      the version of this worth being afraid of.
 //
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -1540,19 +1727,13 @@ module zhao_console_core
   input  logic [7:0]              terr_job_weight_i,
   input  logic                    terr_sparse_fill_i,
 
-  // ---- TERRAIN.TESS's lattice and cell-state read ports (I22) -------------
-  // `zhao_terrain_compcache_front` is the named owner and is not composed.
-  output logic                    terr_lat_req_o,
-  output logic [5:0]              terr_lat_vi_o,
-  output logic [5:0]              terr_lat_vj_o,
-  output logic                    terr_lat_surface_o,
-  input  logic signed [31:0]      terr_lat_h_i,
-  input  logic signed [31:0]      terr_lat_wx_i,
-  input  logic signed [31:0]      terr_lat_wz_i,
-  output logic                    terr_cs_req_o,
-  output logic [4:0]              terr_cs_ci_o,
-  output logic [4:0]              terr_cs_cj_o,
-  input  logic [1:0]              terr_cs_substance_i,
+  // TERRAIN.TESS's lattice and cell-state read ports USED TO BE HERE, as entry
+  // I22.  `zhao_terrain_compcache_front` is composed below and its serve side
+  // drives them, so the eleven ports are gone from this list rather than being
+  // driven by a harness.  The retirement pulse the cache's serve side needs --
+  // `terr_cc_serve_release_i` -- is further down with the rest of the compose
+  // engine's boundary, because its owner is the block that issues the subpatch
+  // jobs (entry I21) and not the cache.
 
   // ==========================================================================
   // THE TERRAIN PAGING SPINE'S OWN BOUNDARY (composed item 8 in the header)
@@ -1606,23 +1787,13 @@ module zhao_console_core
   input  logic                    terr_guard_wready_i,
   output logic                    terr_guard_wlast_o,
 
-  // ---- I27: the terrain COMPOSE ENGINE's door and the directory's ---------
-  //      deformation, unpin and handle-check ports.
-  output logic                    terr_is_valid_o,
-  input  logic                    terr_is_ready_i,
-  output logic [TERR_SLOTW-1:0]   terr_is_slot_o,
-  output logic [TERR_GENW-1:0]    terr_is_gen_o,
-  output logic [31:0]             terr_is_epoch_o,
-  output logic [31:0]             terr_is_island_o,
-  output logic signed [15:0]      terr_is_ix_o,
-  output logic signed [15:0]      terr_is_iz_o,
-  output logic                    terr_is_cslot_valid_o,
-  output logic [$clog2(TERR_CSLOTS)-1:0] terr_is_cslot_o,
-  output logic [15:0]             terr_is_flags_o,
-  output logic [7:0]              terr_is_view_mask_o,
-  output logic [7:0]              terr_is_priority_o,
-  output logic [31:0]             terr_is_src_id_o,
-
+  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  //      The COMPOSE DOOR (`terr_is_*`) and the UNPIN (`terr_unpin_*`) left this
+  //      list on 2026-09-19: TERRAIN.SEQ's issue now reaches TERRAIN.PAGESTREAM
+  //      and TERRAIN.PLACE inside this module, and the streamer's own completion
+  //      is what unpins the page.  What is left here is the deformation mark,
+  //      whose writer is TERRAIN.BAKE (entry I32), and the handle check, whose
+  //      caller is the same absent subpatch issuer as entry I21.
   input  logic                    terr_dm_valid_i,
   output logic                    terr_dm_ready_o,
   input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
@@ -1631,12 +1802,6 @@ module zhao_console_core
   input  logic                    terr_dm_bd_i,
   input  logic                    terr_dm_f_i,
   input  logic                    terr_dm_mips_i,
-
-  input  logic                    terr_unpin_valid_i,
-  output logic                    terr_unpin_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_unpin_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_unpin_gen_i,
-  input  logic [31:0]             terr_unpin_epoch_i,
 
   input  logic                    terr_chk_valid_i,
   input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
@@ -1664,6 +1829,105 @@ module zhao_console_core
   input  logic [TERR_SLOTW-1:0]   terr_wback_slot_i,
   input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
   input  logic [31:0]             terr_wback_epoch_i,
+
+  // ==========================================================================
+  // THE TERRAIN COMPOSE ENGINE'S OWN BOUNDARY (connected item 10)
+  // ==========================================================================
+
+  // ---- I26 (extended): TERRAIN.PAGESTREAM's MEM.GUARD READ client ---------
+  // A SECOND guard client, not a second opinion about the first.
+  // TERRAIN.PAGELOADER's client above WRITES a page into the pool; this one
+  // READS the same page back out, so it needs the return path
+  // (`beat_valid/data/last`) a write client has no use for.  The shell exposes
+  // one guard socket and it is named for GEOM, so both stop here -- see entry
+  // I26 for why that is a REACHABLE boundary and not I23's refusal.
+  output zhao_guard_req_t         terr_ps_guard_req_o,
+  input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
+  input  logic                    terr_ps_beat_valid_i,
+  input  logic [63:0]             terr_ps_beat_data_i,
+  input  logic                    terr_ps_beat_last_i,
+
+  // ---- I35: TERRAIN.PLACE's patch header, the two fields nothing reads -----
+  // The patch COORDINATE and the source id come from TERRAIN.SEQ inside this
+  // module.  The PITCH and the ENVELOPE do not; see entry I35.  They are NOT
+  // tied off, and a harness that leaves them zero sees the placement REFUSE
+  // every patch on `terr_place_env_mismatch_o` -- loudly, which is the correct
+  // standing for an unfed corruption check.
+  input  logic signed [7:0]       terr_place_pitch_log2_i,
+  input  logic signed [31:0]      terr_place_env_x0_i,
+  input  logic signed [31:0]      terr_place_env_z0_i,
+
+  // ---- I34: TERRAIN.PATCH's field lane and its 9.1 list intake ------------
+  input  logic                    terr_pt_fld_valid_i,
+  output logic                    terr_pt_fld_ready_o,
+  input  logic signed [31:0]      terr_pt_fld_height_i,
+  input  logic                    terr_pt_fld_add_valid_i,
+  output logic                    terr_pt_fld_add_ready_o,
+  input  logic signed [31:0]      terr_pt_fld_add_x0_i,
+  input  logic signed [31:0]      terr_pt_fld_add_z0_i,
+  input  logic signed [31:0]      terr_pt_fld_add_x1_i,
+  input  logic signed [31:0]      terr_pt_fld_add_z1_i,
+  input  logic [31:0]             terr_pt_fld_add_hash_i,
+  input  logic [15:0]             terr_pt_fld_add_cmd_i,
+  output logic                    terr_pt_fld_add_accept_o,
+  output logic                    terr_pt_fld_add_reject_o,
+  output logic                    terr_pt_fld_covers_o,
+  output logic [4:0]              terr_pt_fields_active_o,
+  output logic [15:0]             terr_pt_trace_patch_id_o,
+  output logic [31:0]             terr_pt_trace_hash_o,
+  output logic [15:0]             terr_pt_trace_cmd_o,
+  output logic [31:0]             terr_pt_programs_rejected_o,
+
+  // ---- I32 (extended): TERRAIN.COMPCACHE's layer-D cell-state write -------
+  input  logic                    terr_cc_cs_we_i,
+  input  logic [4:0]              terr_cc_cs_ci_i,
+  input  logic [4:0]              terr_cc_cs_cj_i,
+  input  logic [1:0]              terr_cc_cs_substance_i,
+
+  // ---- I21 (extended): the served patch's RETIREMENT pulse ---------------
+  // "TESS is finished with the served patch", one patch per RISING EDGE.  The
+  // block that knows is the one that issued the subpatch jobs, and that is the
+  // absent owner entry I21 already names.
+  input  logic                    terr_cc_serve_release_i,
+
+  // ---- THE COMPOSE ENGINE'S EVIDENCE --------------------------------------
+  // Events, never cycles.  These are what say a PAGE became a LATTICE rather
+  // than four blocks having elaborated next to each other.
+  output logic [31:0]             terr_ps_lattices_o,
+  output logic [31:0]             terr_ps_lattices_refused_o,
+  output logic [31:0]             terr_ps_vertices_o,
+  output logic [31:0]             terr_ps_bursts_o,
+  output logic [31:0]             terr_ps_guard_denied_o,
+  output logic [31:0]             terr_ps_incomplete_o,
+  output logic                    terr_ps_idle_o,
+  // A TAP on the streamer's completion, not a handshake: the READY belongs to
+  // TERRAIN.RESIDENCY's unpin port inside this module.  Exported so a refusal
+  // can be READ rather than only counted.
+  output logic                    terr_ps_done_valid_o,
+  output logic                    terr_ps_done_ok_o,
+  output logic [3:0]              terr_ps_done_verdict_o,
+
+  output logic                    terr_place_valid_o,
+  output logic [15:0]             terr_place_src_id_o,
+  output logic [15:0]             terr_place_env_mismatch_o,
+  output logic [15:0]             terr_place_pitch_bad_o,
+  output logic [15:0]             terr_place_range_o,
+  output logic [15:0]             terr_place_patches_o,
+
+  output logic [31:0]             terr_pt_samples_o,
+  output logic [15:0]             terr_pt_subpatch_dirty_o,
+  output logic                    terr_pt_idle_o,
+
+  output logic                    terr_cc_fill_busy_o,
+  output logic                    terr_cc_fill_done_o,
+  output logic                    terr_cc_serve_valid_o,
+  output logic [15:0]             terr_cc_serve_src_id_o,
+  output logic [31:0]             terr_cc_fill_records_o,
+  output logic [31:0]             terr_cc_patches_filled_o,
+  output logic [31:0]             terr_cc_patches_served_o,
+  output logic [31:0]             terr_cc_fill_overrun_o,
+  output logic [31:0]             terr_cc_lat_oob_o,
+  output logic [31:0]             terr_cc_cs_oob_o,
 
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
@@ -2617,7 +2881,6 @@ module zhao_console_core
   // earlier than the draw path is composed.
   wire                  pp_p_ready;
 
-
   // --------------------------------------------------------------------------
   // GLUE 3: THE ONE-TO-TWO FORK, NOW ON PART.COLLIDE'S OUTPUT.
   //
@@ -3166,7 +3429,6 @@ module zhao_console_core
   wire                     sv_a_behind;
   wire [GEOM_PAY_A_W-1:0]  sv_a_payload;
 
-
   wire                     gs_open, gs_seal;
   wire [GEOM_ARENA_W-1:0]  gs_open_arena, gs_seal_arena;
   wire [GEOM_GEN_W-1:0]    ln_open_gen;
@@ -3714,6 +3976,121 @@ module zhao_console_core
   wire                      tt_ref_valid, tt_ref_ready;
   wire [PROJ_T_IDX_W-1:0]   tt_ref_ia, tt_ref_ib, tt_ref_ic;
 
+  // ==========================================================================
+  // THE TERRAIN COMPOSE ENGINE'S NETS.  Added 2026-09-19 (connected item 10).
+  // ==========================================================================
+  // DECLARED HERE, DRIVEN AT `u_terrain_place` / `u_terrain_pagestream` /
+  // `u_terrain_patch` / `u_terrain_compcache` AT THE END OF THIS FILE.  The
+  // three blocks that READ them -- TERRAIN.TESS just below, TERRAIN.SEQ and
+  // TERRAIN.RESIDENCY a thousand lines down -- all come first in the file, so
+  // one declaration block ahead of the earliest reader is the only arrangement
+  // in which no name is an implicit net.
+
+  // TERRAIN.SEQ's compose door, internal from 2026-09-19.
+  wire                           tis_valid, tis_ready;
+  wire [TERR_SLOTW-1:0]          tis_slot;
+  wire [TERR_GENW-1:0]           tis_gen;
+  wire [31:0]                    tis_epoch;
+  wire signed [15:0]             tis_ix, tis_iz;
+  wire [15:0]                    tis_flags;
+  wire [31:0]                    tis_src_id;
+  // FOUR FIELDS OF THE DOOR HAVE NO CONSUMER IN THIS ENGINE, and they are named
+  // rather than left as an empty by-name connection, because `.is_island_o()`
+  // reads as "there is no such signal" when it means "nothing here consumes it".
+  // `is_island_o` identifies the island and the streamer addresses by POOL SLOT;
+  // `is_cslot_*` indexes T6's 256-entry composed-height cache and
+  // `zhao_terrain_compcache_front` is a two-buffer FRONT, not that store;
+  // `is_view_mask_o` and `is_priority_o` belong to the subpatch job TERRAIN.LOD
+  // would build, which is entry I21's boundary.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0]                    tis_island;
+  wire                           tis_cslot_valid;
+  wire [$clog2(TERR_CSLOTS)-1:0] tis_cslot;
+  wire [7:0]                     tis_view_mask, tis_priority;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // TERRAIN.PAGESTREAM.
+  wire                    tps_j_valid, tps_j_ready;
+  wire                    tps_v_valid, tps_v_ready;
+  wire signed [15:0]      tps_v_base, tps_v_scar, tps_v_bottom;
+  wire [5:0]              tps_v_vi, tps_v_vj;
+  wire                    tps_v_first;
+  wire [15:0]             tps_v_flags;
+  // TWO DELIBERATE NARROWINGS, WAIVED AT THE DECLARATION AND NOWHERE ELSE.
+  // `tps_v_src_id` is T5's 32-bit record id against TERRAIN.PATCH's 16-bit
+  // trace field; `tps_done_slot` is the POOL index against the directory's
+  // handle, one bit narrower, and that bit is structurally zero on this path --
+  // the argument is written out at the residency's unpin connection above.
+  // Both are named at the instance that drops the bits; the waiver sits here so
+  // the closure's lint stays SILENT rather than carrying two warnings whose
+  // reasoning a reader would have to re-derive every time.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0]             tps_v_src_id;
+  wire [TERR_MEMSLOT-1:0] tps_done_slot;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire                    tps_done_valid;
+  wire [TERR_GENW-1:0]    tps_done_gen;
+  wire [31:0]             tps_done_epoch;
+  // The identity riders the compose lane does not read.  TERRAIN.PATCH takes
+  // only the source id; the slot, generation and epoch that ride the stream are
+  // checked by the streamer's OWN differential, and re-deriving a verdict from
+  // them here would be a second place the same fact can disagree.  `v_last_o` is
+  // unread because the cache counts its own capacity.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                    tps_v_last;
+  wire [TERR_MEMSLOT-1:0] tps_v_slot;
+  wire [TERR_GENW-1:0]    tps_v_gen;
+  wire [31:0]             tps_v_epoch;
+  wire [31:0]             tps_done_src_id;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // TERRAIN.PLACE.
+  wire                tpc_pos_we, tpc_pos_axis;
+  wire [5:0]          tpc_pos_idx;
+  wire signed [31:0]  tpc_pos_val;
+  wire signed [31:0]  tpc_wx, tpc_wz;
+  wire                tpc_placed;
+  // `hdr_ready_o` is constant 1 by the block's contract -- a header is always
+  // retired, whatever the verdict -- and `pos_done_o` is the completion pulse of
+  // a 66-write burst nothing here has to wait on, because the burst finishes
+  // long before the first page beat returns.  Both named, neither consumed.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                tpc_hdr_ready, tpc_pos_done;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // TERRAIN.PATCH.
+  wire                tpt_vtx_valid, tpt_vtx_ready, tpt_st_valid;
+  wire signed [31:0]  tpt_top, tpt_bottom;
+  wire [15:0]         tpt_st_src_id;
+  // `compose_top_o` is the PRE-FIELD height, a diagnostic beside `top_o`, and
+  // `st_dirty_o` is the per-vertex moved bit whose consumer is the subpatch
+  // requester (entry I21).  The 4x4 mask those bits accumulate into IS exported,
+  // on `terr_pt_subpatch_dirty_o`.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire signed [31:0]  tpt_compose_top;
+  wire                tpt_st_dirty;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // TERRAIN.COMPCACHE, and TERRAIN.TESS's side of the same seam.
+  wire                tcc_fill_start, tcc_st_ready, tcc_fill_busy;
+  wire signed [31:0]  tcc_lat_h, tcc_lat_wx, tcc_lat_wz;
+  wire [1:0]          tcc_cs_substance;
+  wire                tt_lat_req, tt_lat_surface;
+  wire [5:0]          tt_lat_vi, tt_lat_vj;
+  wire                tt_cs_req;
+  wire [4:0]          tt_cs_ci, tt_cs_cj;
+  // `fill_accept_o` is the one-cycle echo of a start this composition already
+  // knows it made; the count that matters is `patches_filled_o`, exported.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire                tcc_fill_accept;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // TERRAIN.RESIDENCY's unpin ready, back to the streamer's completion.
+  wire                tres_unpin_ready;
+
+  // The gates.  See (b), (c) and the acceptance note at the engine below.
+  wire                tce_can_start, tce_job_take;
+
   // The tess's ModeTri leg. ModeTri (job_mode 0) is NEVER presented by the
   // sequencer -- it presents mode 1 then mode 2 -- so this port is dead by
   // construction, not by a tie-off. TERRAIN.NORMALS is its customer and
@@ -3756,18 +4133,22 @@ module zhao_console_core
     .job_dual_i   (tt_job_dual),
     .job_src_id_i (tt_job_src_id),
 
-    // I22: the lattice and cell-state stores have no owner composed here.
-    .lat_req_o     (terr_lat_req_o),
-    .lat_vi_o      (terr_lat_vi_o),
-    .lat_vj_o      (terr_lat_vj_o),
-    .lat_surface_o (terr_lat_surface_o),
-    .lat_h_i       (terr_lat_h_i),
-    .lat_wx_i      (terr_lat_wx_i),
-    .lat_wz_i      (terr_lat_wz_i),
-    .cs_req_o      (terr_cs_req_o),
-    .cs_ci_o       (terr_cs_ci_o),
-    .cs_cj_o       (terr_cs_cj_o),
-    .cs_substance_i(terr_cs_substance_i),
+    // REAL, from 2026-09-19: TERRAIN.COMPCACHE's serve side.  Entry I22 said
+    // `zhao_terrain_compcache_front` was the named owner and was not composed;
+    // it is composed at `u_terrain_compcache` below and these eleven wires are
+    // internal.  Nothing is adapted -- the cache's one-cycle read latency is its
+    // own published contract and this block was built to it.
+    .lat_req_o     (tt_lat_req),
+    .lat_vi_o      (tt_lat_vi),
+    .lat_vj_o      (tt_lat_vj),
+    .lat_surface_o (tt_lat_surface),
+    .lat_h_i       (tcc_lat_h),
+    .lat_wx_i      (tcc_lat_wx),
+    .lat_wz_i      (tcc_lat_wz),
+    .cs_req_o      (tt_cs_req),
+    .cs_ci_o       (tt_cs_ci),
+    .cs_cj_o       (tt_cs_cj),
+    .cs_substance_i(tcc_cs_substance),
 
     // ModeTri: never presented; see the declaration above.
     .tri_valid_o(tt_tri_valid),
@@ -5209,21 +5590,23 @@ module zhao_console_core
     .ld_expect_crc_o(tsq_ld_expect_crc),
     .ld_src_id_o    (tsq_ld_src_id),
 
-    // The terrain COMPOSE ENGINE's door -- entry I27.
-    .is_valid_o      (terr_is_valid_o),
-    .is_ready_i      (terr_is_ready_i),
-    .is_slot_o       (terr_is_slot_o),
-    .is_gen_o        (terr_is_gen_o),
-    .is_epoch_o      (terr_is_epoch_o),
-    .is_island_o     (terr_is_island_o),
-    .is_ix_o         (terr_is_ix_o),
-    .is_iz_o         (terr_is_iz_o),
-    .is_cslot_valid_o(terr_is_cslot_valid_o),
-    .is_cslot_o      (terr_is_cslot_o),
-    .is_flags_o      (terr_is_flags_o),
-    .is_view_mask_o  (terr_is_view_mask_o),
-    .is_priority_o   (terr_is_priority_o),
-    .is_src_id_o     (terr_is_src_id_o),
+    // The terrain COMPOSE ENGINE's door.  INTERNAL from 2026-09-19: it drives
+    // TERRAIN.PAGESTREAM's job port and TERRAIN.PLACE's patch header, both
+    // instantiated at the end of this file.  Entry I27 is narrowed accordingly.
+    .is_valid_o      (tis_valid),
+    .is_ready_i      (tis_ready),
+    .is_slot_o       (tis_slot),
+    .is_gen_o        (tis_gen),
+    .is_epoch_o      (tis_epoch),
+    .is_island_o     (tis_island),
+    .is_ix_o         (tis_ix),
+    .is_iz_o         (tis_iz),
+    .is_cslot_valid_o(tis_cslot_valid),
+    .is_cslot_o      (tis_cslot),
+    .is_flags_o      (tis_flags),
+    .is_view_mask_o  (tis_view_mask),
+    .is_priority_o   (tis_priority),
+    .is_src_id_o     (tis_src_id),
 
     .frame_fault_o  (tsq_frame_fault),
     .fault_src_id_o (tsq_fault_src_id),
@@ -5379,11 +5762,28 @@ module zhao_console_core
     .pin_gen_i  (tsq_pin_gen),
     .pin_epoch_i(tsq_pin_epoch),
 
-    .unpin_valid_i(terr_unpin_valid_i),
-    .unpin_ready_o(terr_unpin_ready_o),
-    .unpin_slot_i (terr_unpin_slot_i),
-    .unpin_gen_i  (terr_unpin_gen_i),
-    .unpin_epoch_i(terr_unpin_epoch_i),
+    // REAL, from 2026-09-19.  TERRAIN.SEQ's own port comment says the unpin is
+    // "the engine's, on job completion, and is deliberately not this block's --
+    // a pump that unpinned at issue would be promising the page is free while
+    // TESS is still reading it."  The engine exists now and its completion is
+    // TERRAIN.PAGESTREAM's `done_*`, which fires once per issued patch whatever
+    // the verdict, so a refused page unpins too rather than parking a slot for
+    // ever.
+    //
+    // THE SLOT NARROWS AND THE BIT IT DROPS IS STRUCTURALLY ZERO -- the same
+    // step `tpl_fin_over` above QUALIFIES rather than clamps.  Here it needs no
+    // counter, and the reason is that the argument is structural on BOTH ends
+    // rather than on one: the streamer's `j_slot_i` is `{1'b0, tis_slot}` with
+    // `tis_slot` TERR_SLOTW wide, and the block carries the job's slot to its
+    // completion verbatim (`job_slot_q <= j_slot_i`, emitted as `done_slot_o`).
+    // Bit TERR_MEMSLOT-1 cannot be set on this path by any stimulus, legal or
+    // otherwise, so a detector on it would be a counter reporting zero about a
+    // wire that is tied to zero -- which is not evidence about anything.
+    .unpin_valid_i(tps_done_valid),
+    .unpin_ready_o(tres_unpin_ready),
+    .unpin_slot_i (tps_done_slot[TERR_SLOTW-1:0]),
+    .unpin_gen_i  (tps_done_gen),
+    .unpin_epoch_i(tps_done_epoch),
 
     // I28, other end: the F-sheet journal barrier. TERRAIN.WRITEBACK owns it
     // and is not composed.
@@ -6238,6 +6638,352 @@ module zhao_console_core
     .view_range_refused_o (cmd_exec_view_refused_o),
     .stamp_src_truncated_o(cmd_exec_src_truncated_o),
     .unsupported_o        (cmd_exec_unsupported_o)
+  );
+
+  // ==========================================================================
+  // THE TERRAIN COMPOSE ENGINE.  Connected item 10, added 2026-09-19.
+  // ==========================================================================
+  // This is the chain entry I27 described and refused, with the block it was
+  // waiting for:
+  //
+  //   TERRAIN.SEQ.is_*          -> TERRAIN.PAGESTREAM.j_*
+  //                             -> TERRAIN.PLACE.hdr_*
+  //   TERRAIN.PAGESTREAM.v_*    -> TERRAIN.PATCH.vtx_*   (3 planes, one beat)
+  //   TERRAIN.PLACE.vtx_w{x,z}  -> TERRAIN.PATCH.w{x,z}_i
+  //   TERRAIN.PLACE.pos_*       -> TERRAIN.COMPCACHE.pos_*
+  //   TERRAIN.PATCH.st_*        -> TERRAIN.COMPCACHE.st_*
+  //   TERRAIN.COMPCACHE.lat_/cs_-> TERRAIN.TESS          (entry I22, closed)
+  //   TERRAIN.PAGESTREAM.done_* -> TERRAIN.RESIDENCY.unpin_*
+  //
+  // WHAT CHANGED SINCE I27 WAS WRITTEN.  That entry's whole argument was:
+  //
+  //     "THE BLOCKER IS PLACEMENT, and it is a missing owner rather than
+  //      missing wiring ... nothing else in the tree emits it either.  Deriving
+  //      it here from the index, the patch coordinate and a pitch is arithmetic
+  //      invented in the composer, which this file does not do."
+  //
+  // `fpga/rtl/terrain/zhao_terrain_place.sv` is that owner, built 2026-09-19,
+  // its law taken from spec/terrain_rules.md 1.3 and 2.1, with its own directed
+  // test and three census counters that have been fired.  The arithmetic is
+  // therefore RATIFIED and NAMED, and this file still does not do it: it wires
+  // two ports together.
+  //
+  // THE SEAMS ARE PORT-FOR-PORT AND NOTHING HERE ADAPTS ANYTHING.  The three
+  // height planes, the lattice indices, `st_*` into the cache's fill port and
+  // the cache's serve side into TESS are all name-for-name, width-for-width
+  // matches the blocks' own headers declare.
+  // `tests/terrain/tb_terrain_compose.sv` makes the same four-block claim on
+  // real page bytes and is the evidence that they meet.
+  //
+  // THE FOUR PLACES THIS COMPOSITION DECIDES SOMETHING, each named so it can be
+  // argued with rather than discovered:
+  //
+  //   (a) THE DUAL FLAG IS BIT 3.  `zref::swstream::kFlagDual` is `1u << 3` of
+  //       T5's patch-record flags; TERRAIN.SEQ carries all sixteen bits out on
+  //       `is_flags_o` and TERRAIN.PAGESTREAM carries them whole and
+  //       uninterpreted to every vertex, both deliberately.  SOMEBODY has to
+  //       read the bit, because the two consumers that need it
+  //       (`zhao_terrain_patch.dual_i` and the cache's `dual_i`) take a bit and
+  //       not a field.  It is a named localparam rather than a bare index so it
+  //       is greppable, and it is the same constant `tb_terrain_compose.sv`
+  //       uses.  A page composed with the wrong `dual` is a different island
+  //       underside, in the right shape, with every counter agreeing.
+  //
+  //   (b) A NEW PAGE MAY NOT START WHILE A FILL IS STILL IN THE CACHE.  The
+  //       cache's position planes are written through `pos_we_i`, which is NOT
+  //       gated on `fill_active_q` -- its own header says so, in the paragraph
+  //       explaining why `fill_par_q` has to move off a buffer at handover.  So
+  //       TERRAIN.PLACE writing patch N+1's 66 coordinates while patch N's fill
+  //       is complete-but-unretired would write them into N's buffer.  The gate
+  //       is the cache's OWN published `fill_busy_o`, not state invented here,
+  //       and it is exactly the backpressure a two-buffer store exists to give.
+  //
+  //   (c) A REFUSED PLACEMENT DISCARDS THE PAGE'S VERTICES.  TERRAIN.PLACE
+  //       exports `vtx_placed_o` -- "low = this patch was refused" -- precisely
+  //       so a consumer can act on it, and TERRAIN.PATCH has no such input.  A
+  //       bad pitch, a patch outside the representable world, or a page header
+  //       whose envelope disagrees with its coordinate all mean one thing: this
+  //       patch's world position is not known.  Composing it anyway would put
+  //       real composed heights at a STALE world position, which the block's own
+  //       header calls "the worst of the three outcomes: plausible geometry in
+  //       the wrong place".  So the vertices are consumed and dropped, no fill
+  //       is started, and three census counters move.  The page is still
+  //       streamed to completion and still unpinned, because a refusal that
+  //       stalled the page path would take the whole spine down with it.
+  //
+  //   (d) THE FIELD LANE IS A BOUNDARY AND IS NOT FAKED.  See entry I34.
+  //       `fld_valid_i` low means section 3.4's `live_top` collapses to
+  //       `compose_top`, which is that law with an empty program list and is
+  //       exactly the half this composition can honestly carry.  Tying a HEIGHT
+  //       here would be the fake stimulus the completion plan names by name.
+  // ==========================================================================
+
+  // `zref::swstream::kFlagDual`, T5's patch-record flags bit 3.  See (a).
+  localparam int unsigned TERR_FLAG_DUAL_BIT = 3;
+
+  assign tce_can_start = !tcc_fill_busy;
+  assign tps_j_valid   = tis_valid && tce_can_start;
+  assign tis_ready     = tps_j_ready && tce_can_start;
+
+  // ONE PULSE PER PATCH, AND IT IS THE ACCEPTANCE RATHER THAN THE OFFER.
+  // TERRAIN.SEQ HOLDS `is_valid_o` until its ready comes, so a header driven
+  // from the offer would re-latch and re-count `place_patches_o` on every cycle
+  // of the wait -- a census that measures how long the streamer was busy.
+  assign tce_job_take  = tps_j_valid && tps_j_ready;
+
+  assign tpt_vtx_valid  = tps_v_valid && tpc_placed;
+  assign tps_v_ready    = tpc_placed ? tpt_vtx_ready : 1'b1;
+  assign tcc_fill_start = tps_v_valid && tps_v_ready && tps_v_first && tpc_placed;
+
+  assign terr_cc_fill_busy_o  = tcc_fill_busy;
+  assign terr_ps_done_valid_o = tps_done_valid;
+
+  // ---- TERRAIN.PLACE -------------------------------------------------------
+  zhao_terrain_place #(
+    .LAT_W   (33),
+    .LAT_H   (33),
+    .CENSUS_W(16)
+  ) u_terrain_place (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // The patch header.  The coordinate and the source id are TERRAIN.SEQ's and
+    // are internal; the pitch and the envelope are entry I35's boundary.
+    .hdr_valid_i     (tce_job_take),
+    .hdr_ready_o     (tpc_hdr_ready),
+    .hdr_pitch_log2_i(terr_place_pitch_log2_i),
+    .hdr_patch_ix_i  (tis_ix),
+    .hdr_patch_iz_i  (tis_iz),
+    .hdr_env_x0_i    (terr_place_env_x0_i),
+    .hdr_env_z0_i    (terr_place_env_z0_i),
+    .hdr_src_id_i    (tis_src_id[15:0]),
+
+    // REAL: TERRAIN.COMPCACHE's position fill, 33 column x's then 33 row z's.
+    .pos_we_o  (tpc_pos_we),
+    .pos_axis_o(tpc_pos_axis),
+    .pos_idx_o (tpc_pos_idx),
+    .pos_val_o (tpc_pos_val),
+    .pos_done_o(tpc_pos_done),
+
+    // REAL: TERRAIN.PATCH's per-vertex placement, combinational off the
+    // streamer's own lattice indices and riding the same beat.
+    .vtx_vi_i    (tps_v_vi),
+    .vtx_vj_i    (tps_v_vj),
+    .vtx_wx_o    (tpc_wx),
+    .vtx_wz_o    (tpc_wz),
+    .vtx_placed_o(tpc_placed),
+
+    .place_valid_o       (terr_place_valid_o),
+    .place_env_mismatch_o(terr_place_env_mismatch_o),
+    .place_pitch_bad_o   (terr_place_pitch_bad_o),
+    .place_range_o       (terr_place_range_o),
+    .place_patches_o     (terr_place_patches_o),
+    .place_src_id_o      (terr_place_src_id_o)
+  );
+
+  // ---- TERRAIN.PAGESTREAM --------------------------------------------------
+  // THE POOL IS THE LOADER'S POOL, said by passing the same three parameters
+  // rather than by both defaulting to the same numbers: this block reads back
+  // exactly the bytes `u_terrain_pageloader` wrote, and a page size or a base
+  // that agreed only by coincidence would read half a page from the right slot.
+  zhao_terrain_pagestream #(
+    .PAGE_BYTES  (TERR_PAGE_BYTES),
+    .REGION_BASE (TERR_POOL_BASE),
+    .REGION_SLOTS(TERR_POOL_SLOTS),
+    .SLOTW       (TERR_MEMSLOT),
+    .GENW        (TERR_GENW)
+  ) u_terrain_pagestream (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cfg_vram_client_i(ZHAO_CLIENT_TERRAIN_BUILD),
+    .cfg_epoch_i      (terr_cfg_epoch_i),
+
+    // The same zero extension across the pool's extra refusal bit that
+    // `u_terrain_pageloader` gets, written here rather than assumed.
+    .j_valid_i (tps_j_valid),
+    .j_ready_o (tps_j_ready),
+    .j_slot_i  ({1'b0, tis_slot}),
+    .j_gen_i   (tis_gen),
+    .j_epoch_i (tis_epoch),
+    .j_src_id_i(tis_src_id),
+    .j_flags_i (tis_flags),
+
+    // I26, extended: the READ client and its beats leave this module.
+    .guard_req_o (terr_ps_guard_req_o),
+    .guard_rsp_i (terr_ps_guard_rsp_i),
+    .beat_valid_i(terr_ps_beat_valid_i),
+    .beat_data_i (terr_ps_beat_data_i),
+    .beat_last_i (terr_ps_beat_last_i),
+
+    .v_valid_o (tps_v_valid),
+    .v_ready_i (tps_v_ready),
+    .v_base_o  (tps_v_base),
+    .v_scar_o  (tps_v_scar),
+    .v_bottom_o(tps_v_bottom),
+    .v_vi_o    (tps_v_vi),
+    .v_vj_o    (tps_v_vj),
+    .v_first_o (tps_v_first),
+    .v_last_o  (tps_v_last),
+    .v_slot_o  (tps_v_slot),
+    .v_gen_o   (tps_v_gen),
+    .v_epoch_o (tps_v_epoch),
+    .v_src_id_o(tps_v_src_id),
+    .v_flags_o (tps_v_flags),
+
+    // REAL: one job, one completion, and the completion is the UNPIN.
+    .done_valid_o  (tps_done_valid),
+    .done_ready_i  (tres_unpin_ready),
+    .done_slot_o   (tps_done_slot),
+    .done_gen_o    (tps_done_gen),
+    .done_epoch_o  (tps_done_epoch),
+    .done_ok_o     (terr_ps_done_ok_o),
+    .done_verdict_o(terr_ps_done_verdict_o),
+    .done_src_id_o (tps_done_src_id),
+
+    .lattices_streamed_o(terr_ps_lattices_o),
+    .lattices_refused_o (terr_ps_lattices_refused_o),
+    .vertices_streamed_o(terr_ps_vertices_o),
+    .bursts_read_o      (terr_ps_bursts_o),
+    .guard_denied_o     (terr_ps_guard_denied_o),
+    .incomplete_o       (terr_ps_incomplete_o),
+    .idle_o             (terr_ps_idle_o)
+  );
+
+  // ---- TERRAIN.PATCH -------------------------------------------------------
+  // NO GLUE ON THE HEIGHT PATH: base/scar/bottom and the two lattice indices go
+  // straight across, which is why the streamer emits three planes on one beat.
+  zhao_terrain_patch u_terrain_patch (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // "Asserted once per patch per frame, BEFORE the first record."  The job
+    // acceptance is that cycle: the streamer has taken the patch and has not yet
+    // read a byte of it.
+    .list_clear_i(tce_job_take),
+    .patch_id_i  (tis_src_id[15:0]),
+
+    // I34: the section 9.1 live-field list intake.  FIELD.SEQ.EARTH is not built.
+    .fld_add_valid_i(terr_pt_fld_add_valid_i),
+    .fld_add_ready_o(terr_pt_fld_add_ready_o),
+    .fld_add_x0_i   (terr_pt_fld_add_x0_i),
+    .fld_add_z0_i   (terr_pt_fld_add_z0_i),
+    .fld_add_x1_i   (terr_pt_fld_add_x1_i),
+    .fld_add_z1_i   (terr_pt_fld_add_z1_i),
+    .fld_add_hash_i (terr_pt_fld_add_hash_i),
+    .fld_add_cmd_i  (terr_pt_fld_add_cmd_i),
+
+    .fld_add_accept_o(terr_pt_fld_add_accept_o),
+    .fld_add_reject_o(terr_pt_fld_add_reject_o),
+    .fields_active_o (terr_pt_fields_active_o),
+
+    .trace_patch_id_o   (terr_pt_trace_patch_id_o),
+    .trace_hash_o       (terr_pt_trace_hash_o),
+    .trace_cmd_o        (terr_pt_trace_cmd_o),
+    .programs_rejected_o(terr_pt_programs_rejected_o),
+
+    // REAL: the streamer's lattice, gated on the placement being legal.
+    // The source id NARROWS from 32 bits to 16 on this seam.  That is the
+    // streamer carrying T5's 32-bit record id against TERRAIN.PATCH's 16-bit
+    // trace field, and it is named here rather than left to a truncation nobody
+    // wrote down -- the same narrowing `tb_terrain_compose.sv` records.
+    .vtx_valid_i(tpt_vtx_valid),
+    .vtx_ready_o(tpt_vtx_ready),
+    .base_i     (tps_v_base),
+    .scar_i     (tps_v_scar),
+    .bottom_i   (tps_v_bottom),
+    .dual_i     (tps_v_flags[TERR_FLAG_DUAL_BIT]),
+    .wx_i       (tpc_wx),
+    .wz_i       (tpc_wz),
+    .vi_i       (tps_v_vi),
+    .vj_i       (tps_v_vj),
+    .src_id_i   (tps_v_src_id[15:0]),
+
+    // I34: the field-height lane.  NOT tied to a constant height -- see (d).
+    .fld_valid_i (terr_pt_fld_valid_i),
+    .fld_ready_o (terr_pt_fld_ready_o),
+    .fld_height_i(terr_pt_fld_height_i),
+    .fld_covers_o(terr_pt_fld_covers_o),
+
+    // REAL: TERRAIN.COMPCACHE's fill port, port-for-port, with the cache's own
+    // ready as the backpressure.  The cache accepts on alternate clocks -- one
+    // record is two writes -- and this lane obeys it rather than free-running.
+    .st_valid_o      (tpt_st_valid),
+    .st_ready_i      (tcc_st_ready),
+    .top_o           (tpt_top),
+    .bottom_o        (tpt_bottom),
+    .compose_top_o   (tpt_compose_top),
+    .st_dirty_o      (tpt_st_dirty),
+    .st_src_id_o     (tpt_st_src_id),
+    .subpatch_dirty_o(terr_pt_subpatch_dirty_o),
+
+    .terrain_samples_evaluated_o(terr_pt_samples_o),
+    .idle_o                     (terr_pt_idle_o)
+  );
+
+  // ---- TERRAIN.COMPCACHE (the front) --------------------------------------
+  zhao_terrain_compcache_front #(
+    .LAT_W(33),
+    .LAT_H(33)
+  ) u_terrain_compcache (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // The fill begins on the vertex that IS the first, not on a cycle this
+    // composition counted, so a lattice that began somewhere else would start
+    // the fill somewhere else too instead of quietly filling from the middle.
+    .fill_start_i (tcc_fill_start),
+    .fill_accept_o(tcc_fill_accept),
+    .fill_busy_o  (tcc_fill_busy),
+
+    .st_valid_i (tpt_st_valid),
+    .st_ready_o (tcc_st_ready),
+    .st_top_i   (tpt_top),
+    .st_bottom_i(tpt_bottom),
+    .st_src_id_i(tpt_st_src_id),
+
+    // REAL: TERRAIN.PLACE's 33 column x's and 33 row z's.
+    .pos_we_i  (tpc_pos_we),
+    .pos_axis_i(tpc_pos_axis),
+    .pos_idx_i (tpc_pos_idx),
+    .pos_val_i (tpc_pos_val),
+
+    // I32, extended: layer D.  TERRAIN.BAKE writes cell substance and is not
+    // composed; TERRAIN.PAGESTREAM reads planes A, B and C and not D.
+    .cs_we_i         (terr_cc_cs_we_i),
+    .cs_w_ci_i       (terr_cc_cs_ci_i),
+    .cs_w_cj_i       (terr_cc_cs_cj_i),
+    .cs_w_substance_i(terr_cc_cs_substance_i),
+
+    .dual_i(tps_v_flags[TERR_FLAG_DUAL_BIT]),
+
+    .fill_done_o(terr_cc_fill_done_o),
+
+    // I21, extended: the retirement pulse's owner is the subpatch issuer.
+    .serve_release_i(terr_cc_serve_release_i),
+    .serve_valid_o  (terr_cc_serve_valid_o),
+    .serve_src_id_o (terr_cc_serve_src_id_o),
+
+    // REAL: TERRAIN.TESS's lattice and cell-state read ports.  Entry I22.
+    .lat_req_i    (tt_lat_req),
+    .lat_vi_i     (tt_lat_vi),
+    .lat_vj_i     (tt_lat_vj),
+    .lat_surface_i(tt_lat_surface),
+    .lat_h_o      (tcc_lat_h),
+    .lat_wx_o     (tcc_lat_wx),
+    .lat_wz_o     (tcc_lat_wz),
+
+    .cs_req_i      (tt_cs_req),
+    .cs_ci_i       (tt_cs_ci),
+    .cs_cj_i       (tt_cs_cj),
+    .cs_substance_o(tcc_cs_substance),
+
+    .fill_records_o  (terr_cc_fill_records_o),
+    .patches_filled_o(terr_cc_patches_filled_o),
+    .patches_served_o(terr_cc_patches_served_o),
+    .fill_overrun_o  (terr_cc_fill_overrun_o),
+    .lat_oob_o       (terr_cc_lat_oob_o),
+    .cs_oob_o        (terr_cc_cs_oob_o)
   );
 
 endmodule : zhao_console_core

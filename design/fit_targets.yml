@@ -2570,6 +2570,42 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_residency_v2.sv
       - fpga/rtl/terrain/zhao_terrain_loadq.sv
       - fpga/rtl/terrain/zhao_terrain_pageloader.sv
+      # Added 2026-09-19, packet P-TERRAIN-COMPOSE. THE COMPOSE ENGINE: the
+      # four blocks that turn a resident page into the lattice TERRAIN.TESS
+      # reads. They close core header entry I22 whole and the DOOR and UNPIN
+      # halves of I27.
+      #
+      # THE REFUSAL DIRECTLY ABOVE IS SPENT AND IS LEFT STANDING. It says
+      # "zhao_terrain_patch / compcache_front (both need a PLACEMENT owner --
+      # wx/wz and the pos_* write port -- and no block produces one)". That was
+      # accurate on 2026-09-19 morning and `zhao_terrain_place` is the owner it
+      # asks for: spec/terrain_rules.md 1.3/2.1 in one block, no multiplier, no
+      # barrel shifter, with the patch header's redundant envelope CHECKED
+      # against its own shifter. The sentence about zhao_terrain_pagestream --
+      # "nothing in fpga/rtl can ASK for a page's mips" -- is still true of
+      # MIPFEED and MIPGEN and is not true of the streamer any more: TERRAIN.SEQ
+      # asks, through `is_*`. A stale reason beside a landed change is the
+      # failure CLAUDE.md has a chapter about, so this paragraph is the
+      # correction rather than an edit of the record.
+      #
+      # THE FIRST QUESTIONS FOR THIS FIT, in order:
+      #   1. M10K. zhao_terrain_compcache_front is the memory in this packet --
+      #      2 buffers x 2 surfaces x 1,089 vertices x 32 bits is ~139 kbit,
+      #      about 14 M10K, and its own header says an M10K output-register
+      #      absorption failure turns that into flip-flops. If the M10K count
+      #      moves by ~14 this row is right; if the ALM count moves by
+      #      thousands instead, the absorption did not happen.
+      #   2. zhao_terrain_place must be nearly free -- a 4-way mux over four
+      #      constant shifts, one adder and four saturating counters. If this
+      #      row shows a barrel shifter or a multiplier, something in it
+      #      elaborated as a variable shift and the block's whole argument for
+      #      the 4-way select is wrong.
+      #   3. zhao_terrain_patch carries section 3.4's clamps and a 16-entry
+      #      rectangle list; it is the ALM in this packet.
+      - fpga/rtl/terrain/zhao_terrain_place.sv
+      - fpga/rtl/terrain/zhao_terrain_pagestream.sv
+      - fpga/rtl/terrain/zhao_terrain_patch.sv
+      - fpga/rtl/terrain/zhao_terrain_compcache_front.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv

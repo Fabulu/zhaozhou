@@ -315,17 +315,10 @@ module tb_zhao_console_core_smoke
   logic [7:0]              terr_job_mat_b_i;
   logic [7:0]              terr_job_weight_i;
   logic                    terr_sparse_fill_i;
-  logic                    terr_lat_req_o;
-  logic [5:0]              terr_lat_vi_o;
-  logic [5:0]              terr_lat_vj_o;
-  logic                    terr_lat_surface_o;
-  logic signed [31:0]      terr_lat_h_i;
-  logic signed [31:0]      terr_lat_wx_i;
-  logic signed [31:0]      terr_lat_wz_i;
-  logic                    terr_cs_req_o;
-  logic [4:0]              terr_cs_ci_o;
-  logic [4:0]              terr_cs_cj_o;
-  logic [1:0]              terr_cs_substance_i;
+  // TERRAIN.TESS's lattice and cell-state ports are GONE from the DUT, and the
+  // flat-lattice memory model this bench used to play with them went with them
+  // (core header entry I22, closed 2026-09-19). `zhao_terrain_compcache_front`
+  // is composed inside the core now and serves those reads for real.
 
   // ---- PACKET P-TERRAIN: the paging spine's boundary ----------------------
   // TERRAIN.CMD's command is a HOST PACKET (T5's SubmitTerrainSet from
@@ -370,20 +363,78 @@ module tb_zhao_console_core_smoke
   logic                    terr_guard_wready_i;
   logic                    terr_guard_wlast_o;
 
-  logic                    terr_is_valid_o;
-  logic                    terr_is_ready_i;
-  logic [TERR_SLOTW_C-1:0] terr_is_slot_o;
-  logic [TERR_GENW_C-1:0]  terr_is_gen_o;
-  logic [31:0]             terr_is_epoch_o;
-  logic [31:0]             terr_is_island_o;
-  logic signed [15:0]      terr_is_ix_o;
-  logic signed [15:0]      terr_is_iz_o;
-  logic                    terr_is_cslot_valid_o;
-  logic [TERR_CSLOTW_C-1:0] terr_is_cslot_o;
-  logic [15:0]             terr_is_flags_o;
-  logic [7:0]              terr_is_view_mask_o;
-  logic [7:0]              terr_is_priority_o;
-  logic [31:0]             terr_is_src_id_o;
+  // ---- THE TERRAIN COMPOSE ENGINE's boundary (core header item 10) --------
+  // The compose DOOR and the UNPIN are gone from the DUT: TERRAIN.SEQ's issue
+  // reaches TERRAIN.PAGESTREAM and TERRAIN.PLACE inside the core, and the
+  // streamer's completion unpins the page. What is left here is the engine's
+  // own edge, and every one of these is a thing the completion plan lets a
+  // harness supply -- memory behaviour, or a field result this console has no
+  // producer for and must therefore NOT invent.
+  zhao_guard_req_t         terr_ps_guard_req_o;
+  zhao_guard_rsp_t         terr_ps_guard_rsp_i;
+  logic                    terr_ps_beat_valid_i;
+  logic [63:0]             terr_ps_beat_data_i;
+  logic                    terr_ps_beat_last_i;
+
+  logic signed [7:0]       terr_place_pitch_log2_i;
+  logic signed [31:0]      terr_place_env_x0_i;
+  logic signed [31:0]      terr_place_env_z0_i;
+
+  logic                    terr_pt_fld_valid_i;
+  logic                    terr_pt_fld_ready_o;
+  logic signed [31:0]      terr_pt_fld_height_i;
+  logic                    terr_pt_fld_add_valid_i;
+  logic                    terr_pt_fld_add_ready_o;
+  logic signed [31:0]      terr_pt_fld_add_x0_i;
+  logic signed [31:0]      terr_pt_fld_add_z0_i;
+  logic signed [31:0]      terr_pt_fld_add_x1_i;
+  logic signed [31:0]      terr_pt_fld_add_z1_i;
+  logic [31:0]             terr_pt_fld_add_hash_i;
+  logic [15:0]             terr_pt_fld_add_cmd_i;
+  logic                    terr_pt_fld_add_accept_o;
+  logic                    terr_pt_fld_add_reject_o;
+  logic                    terr_pt_fld_covers_o;
+  logic [4:0]              terr_pt_fields_active_o;
+  logic [15:0]             terr_pt_trace_patch_id_o;
+  logic [31:0]             terr_pt_trace_hash_o;
+  logic [15:0]             terr_pt_trace_cmd_o;
+  logic [31:0]             terr_pt_programs_rejected_o;
+
+  logic                    terr_cc_cs_we_i;
+  logic [4:0]              terr_cc_cs_ci_i;
+  logic [4:0]              terr_cc_cs_cj_i;
+  logic [1:0]              terr_cc_cs_substance_i;
+  logic                    terr_cc_serve_release_i;
+
+  logic [31:0]             terr_ps_lattices_o;
+  logic [31:0]             terr_ps_lattices_refused_o;
+  logic [31:0]             terr_ps_vertices_o;
+  logic [31:0]             terr_ps_bursts_o;
+  logic [31:0]             terr_ps_guard_denied_o;
+  logic [31:0]             terr_ps_incomplete_o;
+  logic                    terr_ps_idle_o;
+  logic                    terr_ps_done_valid_o;
+  logic                    terr_ps_done_ok_o;
+  logic [3:0]              terr_ps_done_verdict_o;
+  logic                    terr_place_valid_o;
+  logic [15:0]             terr_place_src_id_o;
+  logic [15:0]             terr_place_env_mismatch_o;
+  logic [15:0]             terr_place_pitch_bad_o;
+  logic [15:0]             terr_place_range_o;
+  logic [15:0]             terr_place_patches_o;
+  logic [31:0]             terr_pt_samples_o;
+  logic [15:0]             terr_pt_subpatch_dirty_o;
+  logic                    terr_pt_idle_o;
+  logic                    terr_cc_fill_busy_o;
+  logic                    terr_cc_fill_done_o;
+  logic                    terr_cc_serve_valid_o;
+  logic [15:0]             terr_cc_serve_src_id_o;
+  logic [31:0]             terr_cc_fill_records_o;
+  logic [31:0]             terr_cc_patches_filled_o;
+  logic [31:0]             terr_cc_patches_served_o;
+  logic [31:0]             terr_cc_fill_overrun_o;
+  logic [31:0]             terr_cc_lat_oob_o;
+  logic [31:0]             terr_cc_cs_oob_o;
 
   logic                    terr_dm_valid_i;
   logic                    terr_dm_ready_o;
@@ -393,12 +444,6 @@ module tb_zhao_console_core_smoke
   logic                    terr_dm_bd_i;
   logic                    terr_dm_f_i;
   logic                    terr_dm_mips_i;
-
-  logic                    terr_unpin_valid_i;
-  logic                    terr_unpin_ready_o;
-  logic [TERR_SLOTW_C-1:0] terr_unpin_slot_i;
-  logic [TERR_GENW_C-1:0]  terr_unpin_gen_i;
-  logic [31:0]             terr_unpin_epoch_i;
 
   logic                    terr_chk_valid_i;
   logic [TERR_SLOTW_C-1:0] terr_chk_slot_i;
@@ -1697,26 +1742,75 @@ module tb_zhao_console_core_smoke
   end
 
   // --------------------------------------------------------------------------
-  // THE TERRAIN LATTICE (entry I22: TERRAIN.COMPCACHE's front is not composed,
-  // so the harness plays the MEMORY -- which is exactly what the completion
-  // plan allows it to play, and nothing more).
+  // THE PLAYED MEM.GUARD READ WINDOW, for TERRAIN.PAGESTREAM.
   //
-  // A flat lattice: every vertex sits at height 0 with its placed world x/z
-  // taken from the requested (vi, vj). That is a memory MODEL, not a terrain:
-  // the bench asserts only that beats crossed wires, never a shape. The reply
-  // is REGISTERED one cycle after the request, which is the port's own law
-  // ("registered, data valid the cycle AFTER the request") -- answering
-  // combinationally would test a timing the real store does not offer.
+  // THE FLAT-LATTICE MODEL THAT USED TO BE HERE IS GONE. It answered
+  // TERRAIN.TESS's `lat_*` port because entry I22 had no owner composed;
+  // `zhao_terrain_compcache_front` is composed in the core now and answers it
+  // for real, so a harness playing that port would be a second store beside the
+  // one under test.
+  //
+  // What the harness plays instead is one hop further out: the streamer reading
+  // the page back out of TERRAIN.PAGE_POOL. Same shape as the WRITE window
+  // below -- `ready` is a level with the request, the verdict PULSES one cycle
+  // later -- because it is the same block's contract.
+  //
+  // THE IMAGE IT SERVES IS ZEROS, AND THIS BENCH CANNOT REACH IT ANYWAY. Every
+  // page in this run fails its CRC (that is asserted, at `terr_res_crc_failures_o
+  // == N_TERR_REC`), so no page reaches RESIDENT_CLEAN, TERRAIN.SEQ issues no
+  // patch, and the compose engine sits idle with `terr_ps_idle_o` high. The
+  // model exists so that the day a page does become resident this bench reports
+  // a lattice rather than a hang, and it is documented as UNEXERCISED here
+  // rather than quoted as evidence. The engine's own evidence is
+  // `tests/terrain/tb_terrain_compose.sv` (four blocks on real page bytes) and
+  // `tests/terrain/tb_terrain_place_cache.sv` (the placement seam this packet
+  // added).
   // --------------------------------------------------------------------------
-  always @(posedge gpu_clk) begin
+  wire ps_guard_in_pool = (terr_ps_guard_req_o.addr >= POOL_BASE_C) &&
+                          (terr_ps_guard_req_o.addr <
+                             POOL_BASE_C + (POOL_SLOTS_C * PAGE_BYTES_C));
+
+  logic ps_verd_q, ps_ok_q;
+  int unsigned ps_beats_qq;
+  int unsigned ps_wait_qq;
+
+  always_comb begin
+    terr_ps_guard_rsp_i.ready     = terr_ps_guard_req_o.valid;
+    terr_ps_guard_rsp_i.ok        = ps_verd_q &&  ps_ok_q;
+    terr_ps_guard_rsp_i.violation = ps_verd_q && !ps_ok_q;
+  end
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      terr_lat_h_i  <= '0;
-      terr_lat_wx_i <= '0;
-      terr_lat_wz_i <= '0;
-    end else if (terr_lat_req_o) begin
-      terr_lat_h_i  <= '0;
-      terr_lat_wx_i <= FX16_ONE * 32'(terr_lat_vi_o);
-      terr_lat_wz_i <= FX16_ONE * 32'(terr_lat_vj_o);
+      ps_verd_q            <= 1'b0;
+      ps_ok_q              <= 1'b0;
+      ps_beats_qq          <= 0;
+      ps_wait_qq           <= 0;
+      terr_ps_beat_valid_i <= 1'b0;
+      terr_ps_beat_data_i  <= 64'd0;
+      terr_ps_beat_last_i  <= 1'b0;
+    end else begin
+      ps_verd_q <= terr_ps_guard_req_o.valid;
+      ps_ok_q   <= ps_guard_in_pool;
+
+      terr_ps_beat_valid_i <= 1'b0;
+      terr_ps_beat_last_i  <= 1'b0;
+
+      // A granted read burst is eight 64-bit beats, the established shape three
+      // blocks in this tree already use.
+      if (terr_ps_guard_req_o.valid && ps_guard_in_pool && (ps_beats_qq == 0)) begin
+        ps_beats_qq <= 8;
+        ps_wait_qq  <= HPS_LAT;
+      end else if (ps_beats_qq != 0) begin
+        if (ps_wait_qq > 0) begin
+          ps_wait_qq <= ps_wait_qq - 1;
+        end else begin
+          terr_ps_beat_valid_i <= 1'b1;
+          terr_ps_beat_data_i  <= 64'd0;
+          terr_ps_beat_last_i  <= (ps_beats_qq == 1);
+          ps_beats_qq          <= ps_beats_qq - 1;
+        end
+      end
     end
   end
 
@@ -1753,11 +1847,43 @@ module tb_zhao_console_core_smoke
     terr_cfg_arena_base_i = '0;
     terr_cfg_arena_bytes_i = '0;
     terr_cfg_load_budget_i = '0;
-    // Entry I27: the compose engine is not composed. Its door is held READY so
-    // the sequencer is not stalled on a consumer that does not exist -- the
-    // patch issues are counted at `terr_seq_patches_issued_o` and go nowhere,
-    // which is exactly what a boundary looks like and is declared as such.
-    terr_is_ready_i = 1'b1;
+    // ---- THE COMPOSE ENGINE'S EDGE (core header item 10) ------------------
+    // The door is gone: TERRAIN.SEQ's issue is consumed inside the core now.
+    // What this bench drives is what the engine itself cannot produce.
+    //
+    // THE PITCH IS THE CANONICAL 2.0 m (spec/terrain_rules.md 1.3,
+    // `pitch_log2 = +1`) and the ENVELOPE IS ZERO, and that pair is a REFUSAL
+    // rather than a placement -- deliberately, and it is entry I35 seen from
+    // the far end. A patch at ix = 3 has origin 3 * 32 * 2.0 m, so an envelope
+    // of zero disagrees with it and `terr_place_env_mismatch_o` would count the
+    // patch and refuse it. This bench never gets that far (no page passes its
+    // CRC, so none is ever issued), so no counter here is quoted either way;
+    // what these three lines do is define the inputs rather than leave them X.
+    terr_place_pitch_log2_i = 8'sd1;
+    terr_place_env_x0_i = '0;
+    terr_place_env_z0_i = '0;
+    // I34: the field lane. LOW, never a constant height -- a constant on
+    // `fld_height_i` is a field program that moves every vertex of every patch
+    // by the same amount, and section 3.4 would still produce a real composed
+    // height. Absent and faked are different things.
+    terr_pt_fld_valid_i = '0;
+    terr_pt_fld_height_i = '0;
+    terr_pt_fld_add_valid_i = '0;
+    terr_pt_fld_add_x0_i = '0;
+    terr_pt_fld_add_z0_i = '0;
+    terr_pt_fld_add_x1_i = '0;
+    terr_pt_fld_add_z1_i = '0;
+    terr_pt_fld_add_hash_i = '0;
+    terr_pt_fld_add_cmd_i = '0;
+    // I32: layer D. No writer is composed, so the plane is never written and
+    // every cell reads SOLID, which terrain_rules 3.3 makes the zero encoding.
+    terr_cc_cs_we_i = '0;
+    terr_cc_cs_ci_i = '0;
+    terr_cc_cs_cj_i = '0;
+    terr_cc_cs_substance_i = '0;
+    // I21: the served patch's retirement. Never pulsed here, because the block
+    // that would pulse it is the absent subpatch issuer.
+    terr_cc_serve_release_i = '0;
     terr_dm_valid_i = '0;
     terr_dm_slot_i = '0;
     terr_dm_gen_i = '0;
@@ -1765,10 +1891,6 @@ module tb_zhao_console_core_smoke
     terr_dm_bd_i = '0;
     terr_dm_f_i = '0;
     terr_dm_mips_i = '0;
-    terr_unpin_valid_i = '0;
-    terr_unpin_slot_i = '0;
-    terr_unpin_gen_i = '0;
-    terr_unpin_epoch_i = '0;
     terr_chk_valid_i = '0;
     terr_chk_slot_i = '0;
     terr_chk_gen_i = '0;
@@ -1893,7 +2015,6 @@ module tb_zhao_console_core_smoke
     terr_job_mat_b_i = '0;
     terr_job_weight_i = '0;
     terr_sparse_fill_i = '0;
-    terr_cs_substance_i = '0;
     proj_out_ready_i = '0;
     post_view_sel_i = '0;
     post_s_valid_i = '0;

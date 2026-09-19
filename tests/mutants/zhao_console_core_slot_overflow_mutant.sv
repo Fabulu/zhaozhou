@@ -480,17 +480,8 @@ module zhao_console_core_slot_overflow_mutant
 
   // ---- TERRAIN.TESS's lattice and cell-state read ports (I22) -------------
   // `zhao_terrain_compcache_front` is the named owner and is not composed.
-  output logic                    terr_lat_req_o,
-  output logic [5:0]              terr_lat_vi_o,
-  output logic [5:0]              terr_lat_vj_o,
-  output logic                    terr_lat_surface_o,
-  input  logic signed [31:0]      terr_lat_h_i,
-  input  logic signed [31:0]      terr_lat_wx_i,
-  input  logic signed [31:0]      terr_lat_wz_i,
-  output logic                    terr_cs_req_o,
-  output logic [4:0]              terr_cs_ci_o,
-  output logic [4:0]              terr_cs_cj_o,
-  input  logic [1:0]              terr_cs_substance_i,
+  // TERRAIN.TESS's lattice and cell-state ports left the core on 2026-09-19
+  // when `zhao_terrain_compcache_front` was composed (core header I22, closed).
 
   // ==========================================================================
   // THE TERRAIN PAGING SPINE'S OWN BOUNDARY (composed item 8 in the header)
@@ -544,23 +535,9 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    terr_guard_wready_i,
   output logic                    terr_guard_wlast_o,
 
-  // ---- I27: the terrain COMPOSE ENGINE's door and the directory's ---------
-  //      deformation, unpin and handle-check ports.
-  output logic                    terr_is_valid_o,
-  input  logic                    terr_is_ready_i,
-  output logic [TERR_SLOTW-1:0]   terr_is_slot_o,
-  output logic [TERR_GENW-1:0]    terr_is_gen_o,
-  output logic [31:0]             terr_is_epoch_o,
-  output logic [31:0]             terr_is_island_o,
-  output logic signed [15:0]      terr_is_ix_o,
-  output logic signed [15:0]      terr_is_iz_o,
-  output logic                    terr_is_cslot_valid_o,
-  output logic [$clog2(TERR_CSLOTS)-1:0] terr_is_cslot_o,
-  output logic [15:0]             terr_is_flags_o,
-  output logic [7:0]              terr_is_view_mask_o,
-  output logic [7:0]              terr_is_priority_o,
-  output logic [31:0]             terr_is_src_id_o,
-
+  // ---- I27 (narrowed): the directory's deformation and handle-check ports --
+  //      The compose door and the unpin are internal to the core from
+  //      2026-09-19; see that file's header.
   input  logic                    terr_dm_valid_i,
   output logic                    terr_dm_ready_o,
   input  logic [TERR_SLOTW-1:0]   terr_dm_slot_i,
@@ -569,12 +546,6 @@ module zhao_console_core_slot_overflow_mutant
   input  logic                    terr_dm_bd_i,
   input  logic                    terr_dm_f_i,
   input  logic                    terr_dm_mips_i,
-
-  input  logic                    terr_unpin_valid_i,
-  output logic                    terr_unpin_ready_o,
-  input  logic [TERR_SLOTW-1:0]   terr_unpin_slot_i,
-  input  logic [TERR_GENW-1:0]    terr_unpin_gen_i,
-  input  logic [31:0]             terr_unpin_epoch_i,
 
   input  logic                    terr_chk_valid_i,
   input  logic [TERR_SLOTW-1:0]   terr_chk_slot_i,
@@ -602,6 +573,77 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [TERR_SLOTW-1:0]   terr_wback_slot_i,
   input  logic [TERR_GENW-1:0]    terr_wback_gen_i,
   input  logic [31:0]             terr_wback_epoch_i,
+
+  // ---- THE TERRAIN COMPOSE ENGINE's boundary (core header item 10) --------
+  output zhao_guard_req_t         terr_ps_guard_req_o,
+  input  zhao_guard_rsp_t         terr_ps_guard_rsp_i,
+  input  logic                    terr_ps_beat_valid_i,
+  input  logic [63:0]             terr_ps_beat_data_i,
+  input  logic                    terr_ps_beat_last_i,
+
+  input  logic signed [7:0]       terr_place_pitch_log2_i,
+  input  logic signed [31:0]      terr_place_env_x0_i,
+  input  logic signed [31:0]      terr_place_env_z0_i,
+
+  input  logic                    terr_pt_fld_valid_i,
+  output logic                    terr_pt_fld_ready_o,
+  input  logic signed [31:0]      terr_pt_fld_height_i,
+  input  logic                    terr_pt_fld_add_valid_i,
+  output logic                    terr_pt_fld_add_ready_o,
+  input  logic signed [31:0]      terr_pt_fld_add_x0_i,
+  input  logic signed [31:0]      terr_pt_fld_add_z0_i,
+  input  logic signed [31:0]      terr_pt_fld_add_x1_i,
+  input  logic signed [31:0]      terr_pt_fld_add_z1_i,
+  input  logic [31:0]             terr_pt_fld_add_hash_i,
+  input  logic [15:0]             terr_pt_fld_add_cmd_i,
+  output logic                    terr_pt_fld_add_accept_o,
+  output logic                    terr_pt_fld_add_reject_o,
+  output logic                    terr_pt_fld_covers_o,
+  output logic [4:0]              terr_pt_fields_active_o,
+  output logic [15:0]             terr_pt_trace_patch_id_o,
+  output logic [31:0]             terr_pt_trace_hash_o,
+  output logic [15:0]             terr_pt_trace_cmd_o,
+  output logic [31:0]             terr_pt_programs_rejected_o,
+
+  input  logic                    terr_cc_cs_we_i,
+  input  logic [4:0]              terr_cc_cs_ci_i,
+  input  logic [4:0]              terr_cc_cs_cj_i,
+  input  logic [1:0]              terr_cc_cs_substance_i,
+
+  input  logic                    terr_cc_serve_release_i,
+
+  output logic [31:0]             terr_ps_lattices_o,
+  output logic [31:0]             terr_ps_lattices_refused_o,
+  output logic [31:0]             terr_ps_vertices_o,
+  output logic [31:0]             terr_ps_bursts_o,
+  output logic [31:0]             terr_ps_guard_denied_o,
+  output logic [31:0]             terr_ps_incomplete_o,
+  output logic                    terr_ps_idle_o,
+  output logic                    terr_ps_done_valid_o,
+  output logic                    terr_ps_done_ok_o,
+  output logic [3:0]              terr_ps_done_verdict_o,
+
+  output logic                    terr_place_valid_o,
+  output logic [15:0]             terr_place_src_id_o,
+  output logic [15:0]             terr_place_env_mismatch_o,
+  output logic [15:0]             terr_place_pitch_bad_o,
+  output logic [15:0]             terr_place_range_o,
+  output logic [15:0]             terr_place_patches_o,
+
+  output logic [31:0]             terr_pt_samples_o,
+  output logic [15:0]             terr_pt_subpatch_dirty_o,
+  output logic                    terr_pt_idle_o,
+
+  output logic                    terr_cc_fill_busy_o,
+  output logic                    terr_cc_fill_done_o,
+  output logic                    terr_cc_serve_valid_o,
+  output logic [15:0]             terr_cc_serve_src_id_o,
+  output logic [31:0]             terr_cc_fill_records_o,
+  output logic [31:0]             terr_cc_patches_filled_o,
+  output logic [31:0]             terr_cc_patches_served_o,
+  output logic [31:0]             terr_cc_fill_overrun_o,
+  output logic [31:0]             terr_cc_lat_oob_o,
+  output logic [31:0]             terr_cc_cs_oob_o,
 
   // ---- TERRAIN PAGING evidence -------------------------------------------
   // Events, never cycles, except where the name says otherwise. These are the
