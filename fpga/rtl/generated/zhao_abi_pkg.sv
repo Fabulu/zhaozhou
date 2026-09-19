@@ -95,6 +95,7 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_DEBUG_BOOTSTRAP = 16'hF001;
   localparam logic [15:0] ZHAO_OP_DEBUG_FRAME_BLIT = 16'hF002;
   localparam logic [15:0] ZHAO_OP_DEBUG_RUMBLE = 16'hF004;
+  localparam logic [15:0] ZHAO_OP_PUBLISH_RESOURCE = 16'h0030;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
@@ -1075,6 +1076,47 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_ENABLE = 17;
   localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_STRENGTH = 18;
   localparam int unsigned ZHAO_DEBUG_RUMBLE_OFF_PAD = 19;
+
+  // PublishResource 0x0030: 48-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [15:0] pad;  // 2 zero byte(s) @46
+    logic [7:0] kind;  // u8 @45
+    logic [7:0] dst_slot;  // u8 @44
+    logic [15:0] epoch;  // u16 @42
+    logic [15:0] new_generation;  // u16 @40
+    logic [31:0] crc32c;  // u32 @36
+    logic [31:0] length;  // u32 @32
+    logic [31:0] vram_dst;  // u32 @28
+    logic [31:0] hps_addr_hi;  // u32 @24
+    logic [31:0] hps_addr_lo;  // u32 @20
+    logic [31:0] resource;  // handle32 @16  // handle32 {index:24, generation:8}
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_publish_resource_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_BYTES = 48;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_RESOURCE = 16;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_LO = 20;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_HI = 24;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_VRAM_DST = 28;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_LENGTH = 32;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_CRC32C = 36;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_NEW_GENERATION = 40;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_EPOCH = 42;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT = 44;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_KIND = 45;
+  localparam int unsigned ZHAO_PUBLISH_RESOURCE_OFF_PAD = 46;
 
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
@@ -2144,6 +2186,52 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [383:0] zhao_pack_publish_resource(input zhao_rec_publish_resource_t c);
+    logic [383:0] v;
+    begin
+      v[ZHAO_PUBLISH_RESOURCE_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_RESOURCE*8 +: 32] = c.resource;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_LO*8 +: 32] = c.hps_addr_lo;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_HI*8 +: 32] = c.hps_addr_hi;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_VRAM_DST*8 +: 32] = c.vram_dst;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_LENGTH*8 +: 32] = c.length;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_CRC32C*8 +: 32] = c.crc32c;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_NEW_GENERATION*8 +: 16] = c.new_generation;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_EPOCH*8 +: 16] = c.epoch;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT*8 +: 8] = c.dst_slot;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_KIND*8 +: 8] = c.kind;
+      v[ZHAO_PUBLISH_RESOURCE_OFF_PAD*8 +: 16] = c.pad;
+      zhao_pack_publish_resource = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_publish_resource_t zhao_unpack_publish_resource(input logic [383:0] v);
+    zhao_rec_publish_resource_t c;
+    begin
+      c.h_opcode = v[ZHAO_PUBLISH_RESOURCE_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_PUBLISH_RESOURCE_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_PUBLISH_RESOURCE_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_PUBLISH_RESOURCE_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_PUBLISH_RESOURCE_OFF_H_RESERVED0*8 +: 32];
+      c.resource = v[ZHAO_PUBLISH_RESOURCE_OFF_RESOURCE*8 +: 32];
+      c.hps_addr_lo = v[ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_LO*8 +: 32];
+      c.hps_addr_hi = v[ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_HI*8 +: 32];
+      c.vram_dst = v[ZHAO_PUBLISH_RESOURCE_OFF_VRAM_DST*8 +: 32];
+      c.length = v[ZHAO_PUBLISH_RESOURCE_OFF_LENGTH*8 +: 32];
+      c.crc32c = v[ZHAO_PUBLISH_RESOURCE_OFF_CRC32C*8 +: 32];
+      c.new_generation = v[ZHAO_PUBLISH_RESOURCE_OFF_NEW_GENERATION*8 +: 16];
+      c.epoch = v[ZHAO_PUBLISH_RESOURCE_OFF_EPOCH*8 +: 16];
+      c.dst_slot = v[ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT*8 +: 8];
+      c.kind = v[ZHAO_PUBLISH_RESOURCE_OFF_KIND*8 +: 8];
+      c.pad = v[ZHAO_PUBLISH_RESOURCE_OFF_PAD*8 +: 16];
+      zhao_unpack_publish_resource = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -2166,6 +2254,7 @@ package zhao_abi_pkg;
         ZHAO_OP_DEBUG_BOOTSTRAP: zhao_opcode_record_bytes = 64;
         ZHAO_OP_DEBUG_FRAME_BLIT: zhao_opcode_record_bytes = 48;
         ZHAO_OP_DEBUG_RUMBLE: zhao_opcode_record_bytes = 32;
+        ZHAO_OP_PUBLISH_RESOURCE: zhao_opcode_record_bytes = 48;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -2227,6 +2316,9 @@ package zhao_abi_pkg;
         end
         ZHAO_OP_DEBUG_RUMBLE: begin
           if (zhao_bytes_nonzero(p, base, 19, 13)) zhao_record_pad_nonzero = 1'b1;
+        end
+        ZHAO_OP_PUBLISH_RESOURCE: begin
+          if (zhao_bytes_nonzero(p, base, 46, 2)) zhao_record_pad_nonzero = 1'b1;
         end
         default: zhao_record_pad_nonzero = 1'b0;
       endcase
@@ -2342,6 +2434,7 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_debug_bootstrap_t) != 8*64) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_debug_frame_blit_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_debug_rumble_t) != 8*32) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_publish_resource_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;

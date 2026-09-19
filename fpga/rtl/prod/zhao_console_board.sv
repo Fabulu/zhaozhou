@@ -1296,19 +1296,10 @@ module zhao_console_board
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
-  // I46: the upload REQUEST -- BOUNDARY until CMD.EXEC lowers the ratified
-  // `PublishResource` onto it (owner ruling R17).
-  input  logic                    upl_req_valid_i,
-  output logic                    upl_req_ready_o,
-  input  logic [ 7:0]             upl_req_tag_i,
-  input  logic [23:0]             upl_req_index_i,
-  input  logic [63:0]             upl_req_hps_addr_i,
-  input  logic [31:0]             upl_req_vram_addr_i,
-  input  logic [31:0]             upl_req_len_i,
-  input  logic [15:0]             upl_req_epoch_i,
-  input  logic [ 7:0]             upl_req_dst_slot_i,
-  input  logic [15:0]             upl_req_new_gen_i,
-  input  logic [31:0]             upl_req_crc_i,
+  // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
+  // onto it (owner ruling R17). These two are CMD.EXEC's upload evidence.
+  output logic [31:0]             cmd_exec_uploads_o,
+  output logic [31:0]             cmd_exec_upload_overflow_o,
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
   // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
   // staging arena the active epoch registered, and that epoch.
@@ -2950,17 +2941,8 @@ module zhao_console_board
       .terr_hps_c1_wait_cycles_o         (terr_hps_c1_wait_cycles_o),
       .terr_hps_c2_bursts_o              (terr_hps_c2_bursts_o),
       .terr_hps_c2_wait_cycles_o         (terr_hps_c2_wait_cycles_o),
-      .upl_req_valid_i                   (upl_req_valid_i),
-      .upl_req_ready_o                   (upl_req_ready_o),
-      .upl_req_tag_i                     (upl_req_tag_i),
-      .upl_req_index_i                   (upl_req_index_i),
-      .upl_req_hps_addr_i                (upl_req_hps_addr_i),
-      .upl_req_vram_addr_i               (upl_req_vram_addr_i),
-      .upl_req_len_i                     (upl_req_len_i),
-      .upl_req_epoch_i                   (upl_req_epoch_i),
-      .upl_req_dst_slot_i                (upl_req_dst_slot_i),
-      .upl_req_new_gen_i                 (upl_req_new_gen_i),
-      .upl_req_crc_i                     (upl_req_crc_i),
+      .cmd_exec_uploads_o                (cmd_exec_uploads_o),
+      .cmd_exec_upload_overflow_o        (cmd_exec_upload_overflow_o),
       .upl_cfg_region_base_i             (upl_cfg_region_base_i),
       .upl_cfg_region_bytes_i            (upl_cfg_region_bytes_i),
       .upl_cfg_arena_base_i              (upl_cfg_arena_base_i),

@@ -28,7 +28,11 @@ module tb_cmd_exec_pair #(
     // legal stimulus -- five DrawForms in one packet -- rather than being a
     // counter asserted zero with an argument attached. CLAUDE.md: "a detector
     // that has not been shown to FIRE has not been tested".
-    parameter int unsigned DRAW_Q  = 4
+    parameter int unsigned DRAW_Q  = 4,
+    // Small for the same reason: five PublishResources in one packet fire
+    // upload_overflow_o with legal stimulus.
+    parameter int unsigned UPL_Q   = 4,
+    parameter int unsigned UPL_PQ  = 4
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -49,6 +53,8 @@ module tb_cmd_exec_pair #(
     // the host cfg port wins the cycle and CMD.EXEC re-presents. Driven here so
     // the re-presentation is exercised rather than assumed.
     input  logic        proj_cfg_ready_i,
+    // MEM.UPLOAD's request ready (R17): it takes one request at a time.
+    input  logic        upl_ready_i,
 
     // ---- CMD.DECODER's verdict, observable -------------------------------
     output logic        decode_done_o,
@@ -81,6 +87,17 @@ module tb_cmd_exec_pair #(
     output logic [15:0] draw_flags_o,
     output logic [15:0] draw_src_id_o,
 
+    output logic        upl_valid_o,
+    output logic [23:0] upl_index_o,
+    output logic [ 7:0] upl_kind_o,
+    output logic [63:0] upl_hps_addr_o,
+    output logic [31:0] upl_vram_addr_o,
+    output logic [31:0] upl_len_o,
+    output logic [15:0] upl_epoch_o,
+    output logic [ 7:0] upl_dst_slot_o,
+    output logic [15:0] upl_new_gen_o,
+    output logic [31:0] upl_crc_o,
+
     // ---- CMD.EXEC's evidence ---------------------------------------------
     output logic [31:0] packets_committed_o,
     output logic [31:0] packets_abandoned_o,
@@ -92,6 +109,8 @@ module tb_cmd_exec_pair #(
     output logic [31:0] draws_issued_o,
     output logic [31:0] draw_overflow_o,
     output logic [31:0] draw_src_truncated_o,
+    output logic [31:0] uploads_issued_o,
+    output logic [31:0] upload_overflow_o,
     output logic [31:0] unsupported_o
 );
 
@@ -132,7 +151,9 @@ module tb_cmd_exec_pair #(
 
   zhao_cmd_exec #(
       .STAMP_Q(STAMP_Q),
-      .DRAW_Q (DRAW_Q)
+      .DRAW_Q (DRAW_Q),
+      .UPL_Q  (UPL_Q),
+      .UPL_PQ (UPL_PQ)
   ) u_exec (
       .clk  (clk),
       .rst_n(rst_n),
@@ -174,6 +195,18 @@ module tb_cmd_exec_pair #(
       .draw_flags_o          (draw_flags_o),
       .draw_src_id_o         (draw_src_id_o),
 
+      .upl_valid_o    (upl_valid_o),
+      .upl_ready_i    (upl_ready_i),
+      .upl_index_o    (upl_index_o),
+      .upl_kind_o     (upl_kind_o),
+      .upl_hps_addr_o (upl_hps_addr_o),
+      .upl_vram_addr_o(upl_vram_addr_o),
+      .upl_len_o      (upl_len_o),
+      .upl_epoch_o    (upl_epoch_o),
+      .upl_dst_slot_o (upl_dst_slot_o),
+      .upl_new_gen_o  (upl_new_gen_o),
+      .upl_crc_o      (upl_crc_o),
+
       .packets_committed_o  (packets_committed_o),
       .packets_abandoned_o  (packets_abandoned_o),
       .views_written_o      (views_written_o),
@@ -184,6 +217,8 @@ module tb_cmd_exec_pair #(
       .draws_issued_o       (draws_issued_o),
       .draw_overflow_o      (draw_overflow_o),
       .draw_src_truncated_o (draw_src_truncated_o),
+      .uploads_issued_o     (uploads_issued_o),
+      .upload_overflow_o    (upload_overflow_o),
       .unsupported_o        (unsupported_o)
   );
 
