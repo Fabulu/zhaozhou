@@ -2661,6 +2661,7 @@ targets:
       # zhao_geom_cull shares the projector's matrix bank rather than a second.
       - fpga/rtl/geometry/zhao_geom_cull.sv
       - fpga/rtl/memory/zhao_mem_share2.sv
+      - fpga/rtl/memory/zhao_mem_share_wr.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.

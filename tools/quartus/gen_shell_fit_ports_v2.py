@@ -316,6 +316,8 @@ DRIVERS = {
     'build_socket_client': (
         'build_guard_req_i', 'build_wdata_i', 'build_wvalid_i',
         'build_wlast_i', 'build_hps_req_i',
+        # 2026-09-19 (terrain3, I26): the socket clients' HPS WRITE lanes.
+        'build_hps_wr_valid_i', 'build_hps_wr_data_i', 'build_hps_wr_last_i',
         # R32's published-resource region: configuration of the SAME client,
         # the region its guard may write in RENDER.ASSET_POOL.
         'build_res_valid_i', 'build_res_base_i', 'build_res_span_i',
