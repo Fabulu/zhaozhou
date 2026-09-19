@@ -37,20 +37,20 @@ Build in your worktree's own `build\` (`cmake --preset windows-native` from
 PowerShell with the env sourced). Your scratch files go in your worktree or are
 prefixed `gz-<lane>-`.
 
-**Landing** (do this as each gap closes, not once at the end — small landings
-conflict less):
+**Landing — CHANGED 2026-09-19 evening by the owner: the COORDINATOR merges. You never rebase.**
+
+Commit on your own branch `gz/<lane>` as work closes, gate it IN YOUR WORKTREE,
+and push ONLY your own branch:
 
 ```powershell
-git fetch origin claude/ceiling-architecture-20260912
-git rebase FETCH_HEAD            # resolve conflicts by KEEPING both sides' content
-# re-run the gate list below AT THIS REBASED COMMIT
-git push origin HEAD:claude/ceiling-architecture-20260912   # never --force
+git push origin HEAD:gz/<lane>      # your branch, never the shared one, never --force
 ```
 
-A rejected push means another packet landed: fetch, rebase, re-gate, push again.
-Generated files (`zhao_prod_top.sv`, `zhao_console_board.sv`) conflict — never
-hand-merge them; take either side and REGENERATE with their generator.
-`zhao_console_core.sv` header entries: on conflict keep BOTH packets' text.
+Do NOT fetch-and-rebase onto the shared branch, do NOT push to
+`claude/ceiling-architecture-20260912`, and do NOT re-gate after other packets
+land. The coordinator merges your branch, resolves conflicts, and runs the gates
+once on the merged result. If you need something another packet landed, ask the
+coordinator for the commit and `git merge` it into your branch.
 Commit messages via `git commit -F file` (PowerShell mangles `-m` multiline).
 End every commit message with:
 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
