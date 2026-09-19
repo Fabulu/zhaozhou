@@ -583,6 +583,32 @@ see.
 This is the live-tree trap one level up: the fit snapshots its sources, so a
 running fit is safe, and **the index does not snapshot anything**.
 
+### And the same cause in the other direction: `git checkout --` DISCARDS
+
+Added 2026-09-19, hours after the rule above, by the agent who wrote it.
+
+The section above warns that `git add <file>` sweeps in work you did not write.
+The inverse is worse. `git checkout -- <file>` **discards** everything in that
+file that is not staged, including another agent's uncommitted work, and
+**unstaged changes have no reflog** -- there is nothing to recover from.
+
+I reverted my own abandoned edit to `zhao_console_core.sv` while another packet
+had ~186 uncommitted lines in it. Its composition hunk was gone. It re-applied
+from its own context and committed immediately, so nothing was lost permanently
+-- but only because the author was still running and still remembered.
+
+**A bad commit is recoverable. A discarded working tree is not.**
+
+So before `git checkout -- <shared file>`:
+
+* run `git diff <file>` and read it. If it contains lines you did not write,
+  you are about to delete somebody's work.
+* revert your own hunk instead — apply the reverse patch, or rebuild the file
+  from `HEAD` plus the hunks that are yours.
+* and tell the other agent immediately if you do destroy something. They can
+  re-apply from context while they are still running; after they finish, the
+  work is gone and nobody knows what it was.
+
 ## Stopping an agent does not stop its background work
 
 A stop instruction was sent and obeyed, and a build it had already launched ran to
