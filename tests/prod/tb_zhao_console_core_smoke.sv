@@ -1429,6 +1429,24 @@ module tb_zhao_console_core_smoke
     // PACKET P-GEOM, 2026-09-19: the three blocks composed this pass must be
     // seen to CARRY DATA, not merely to elaborate.
     //
+    // THESE CHECKS HAVE BEEN SEEN TO FIRE. A check nobody has watched fail is
+    // a claim, so both were fired deliberately on the tree they guard and then
+    // reverted:
+    //
+    //   * one reserved byte in `vdec_record` set nonzero ->
+    //     "records_offered=4 decoded=0 refused[reserved/w0/format]=[4 0 0]"
+    //     and the run stopped. GEOM.VDECODE's refusal path is live and it is
+    //     the ONLY path to GEOM.SKIN -- the skinner transformed nothing.
+    //
+    //   * the triangle moved to x ~ 1172 px, outside the Z60 canvas ->
+    //     "clip_submitted=16 clipped=16 culled=0 setup_submitted=0" and the
+    //     scissor check below fired. That control is worth three things at
+    //     once: the check fires, the CLIP -> SETUP seam carries the RIGHT
+    //     triangles rather than any traffic (nothing reached setup), and the
+    //     scissor really is the mode-derived 384-wide canvas rather than a
+    //     constant or a stuck value -- a triangle at 4 px passes and one at
+    //     1172 px does not.
+    //
     // The shape of these checks is deliberate. Each one names the wire it is
     // evidence for and each is a CONSERVATION statement rather than "a counter
     // moved" -- `n offered == n decoded` cannot be satisfied by a block that
