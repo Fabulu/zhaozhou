@@ -2664,7 +2664,7 @@ blocks:
         evidence: tests/terrain/visible_rtl_directed.cpp
     deferred: false
     cut_order: null
-    superseded_by: null
+    superseded_by: "SW.STREAM, by ruling T5 (the HPS runs the visibility walk; the sealed SubmitTerrainSet list is what the hardware consumes, and replay does not rerun the walk) and owner ruling R16. The software visible set: reference/include/zref/zref_sw_stream.hpp (WorldStreamer, which calls zref::island::visible_set from reference/include/zref/zref_island.hpp), tested at island scale by tests/terrain/sw_stream_directed.cpp. Caveat, recorded not hidden: that is the SW.STREAM reference implementation; no HPS runtime exists for any SW block yet (runtime/mister is empty)."
     notes: >-
       COST IS DOMINATED BY THE PATCHES IT REJECTS, which is why the measured
       figure is per EXAMINED patch and not per emitted one. On an 8 km island

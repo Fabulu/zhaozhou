@@ -350,9 +350,19 @@ def ledger_blocks() -> list[dict]:
                 out.append(cur)
             cur = {"id": m.group(1), "kind": None, "deferred": None,
                    "blocked_on": None, "implementation": None,
-                   "deferred_note": None, "blocked_note": None}
+                   "deferred_note": None, "blocked_note": None,
+                   "superseded_by": None}
             continue
         if cur is None:
+            continue
+        # `superseded_by:` takes the WHOLE rest of the line, because its value
+        # is a citation (a ruling, a file, a test), not a token. See
+        # superseded_verdict() for what it must carry to excuse anything.
+        # Every block carries the field, and 118 of them say `null`.
+        m = re.match(r"\s*superseded_by:\s*(.+?)\s*$", line)
+        if m:
+            v = m.group(1).strip().strip('"').strip("'")
+            cur["superseded_by"] = None if v in ("null", "~", "") else v
             continue
         for key in ("kind", "deferred", "blocked_on", "implementation"):
             m = re.match(r"\s*%s:\s*(\S+)" % key, line)
@@ -857,6 +867,45 @@ def successor_in(mod: str, closure: set[str], live: set[str]) -> str | None:
     return None
 
 
+_CITED_PATH = re.compile(
+    r"\b((?:reference|tests|runtime|spec|design|tools|compiler|fpga)/"
+    r"[\w./-]+\.(?:hpp|cpp|h|sv|md|py|ts|zidl))\b")
+
+
+def superseded_verdict(note: str, cmake_text: str,
+                       exists=lambda rel: (ROOT / rel).exists()) -> str | None:
+    """Does a ledger `superseded_by:` note EXCUSE its capability? None = yes.
+
+    Added 2026-09-19 for owner ruling R16: a hardware block whose function a
+    RULING moved to another provider (TERRAIN.VISIBLE, moved into SW.STREAM by
+    T5) is a duplicate provider, and removing it is allowed -- but only if the
+    replacement is really there. THIS MAKES THE NUMBER SMALLER, so the bar is
+    the one `successor_in()` sets, applied to prose: every condition below is
+    checked against the TREE, and a note that fails any of them is counted AS A
+    GAP (reported with the uncited excuses), never as a pass.
+
+      1. it cites a RULING by name (`ruling T5`, `R16`), not an opinion;
+      2. it names at least one repository file, and EVERY file it names exists
+         -- a supersession pointing at a deleted file is an uncashed cheque;
+      3. at least one named file is a test under `tests/` that
+         `tests/CMakeLists.txt` actually builds -- "implemented and tested" is
+         the ruling's own condition, and a test nothing compiles tests nothing.
+    """
+    if not re.search(r"\bruling\s+[A-Z]+\d+\b|\bR\d+\b", note):
+        return "cites no ruling"
+    paths = _CITED_PATH.findall(note)
+    if not paths:
+        return "names no file"
+    missing = [p for p in paths if not exists(p)]
+    if missing:
+        return "names files that do not exist: %s" % ", ".join(missing)
+    tests = [p for p in paths if p.startswith("tests/")]
+    built = [p for p in tests if p[len("tests/"):] in cmake_text]
+    if not built:
+        return "names no test that tests/CMakeLists.txt builds"
+    return None
+
+
 def disconnected() -> dict:
     """Mandatory capabilities whose implementation is NOT in the console.
 
@@ -871,7 +920,19 @@ def disconnected() -> dict:
     listed_not_live: list[str] = []
     uncited: list[str] = []
     via_board: list[str] = []
+    superseded_ok: list[str] = []
+    cmake = ROOT / "tests" / "CMakeLists.txt"
+    cmake_text = cmake.read_text(encoding="utf-8", errors="replace") if cmake.exists() else ""
     for b in ledger_blocks():
+        if b["superseded_by"]:
+            why = superseded_verdict(b["superseded_by"], cmake_text)
+            if why is None:
+                superseded_ok.append(b["id"])
+                continue
+            # A supersession that does not check out is an excuse that does not
+            # hold: counted with the uncited flags, AS A GAP, and named.
+            uncited.append("%s (superseded_by: %s)" % (b["id"], why))
+            continue
         # THE OWNER'S RULE: "Only explicitly deferred/non-v1 features may remain
         # absent, and each must CITE THE CONTROLLING RULING/SPEC."
         #
@@ -917,7 +978,8 @@ def disconnected() -> dict:
             "unbuilt": unbuilt, "unresolvable": unresolvable,
             "deferred_or_blocked": deferred_ok, "uncited_excuse": uncited,
             "listed_but_not_instantiated": listed_not_live,
-            "connected_in_board": via_board}
+            "connected_in_board": via_board,
+            "superseded_by_ruling": superseded_ok}
 
 
 def audit() -> dict:
@@ -991,6 +1053,8 @@ def audit() -> dict:
         "built_not_connected": [m for _, m in dis["built_not_connected"]],
         "unbuilt": dis["unbuilt"],
         "unresolvable": dis["unresolvable"],
+        "uncited_excuse": dis["uncited_excuse"],
+        "superseded_by_ruling": dis["superseded_by_ruling"],
     }
 
 
@@ -1036,6 +1100,35 @@ def _self_test() -> None:
         except OSError:
             pass
     _board_self_test()
+    _superseded_self_test()
+
+
+def _superseded_self_test() -> None:
+    """superseded_verdict() excuses a gap, so it is FIRED on every note that
+    must not excuse one before its silence is believed."""
+    have = {"reference/include/zref/x.hpp", "tests/t/x_directed.cpp",
+            "tests/t/unbuilt.cpp"}
+    cm = "add_executable(test_x t/x_directed.cpp)\n"
+    ex = lambda rel: rel in have
+    good = "SW.STREAM, ruling T5: reference/include/zref/x.hpp, tests/t/x_directed.cpp"
+    must_fail = {
+        "no ruling":    "SW.STREAM: reference/include/zref/x.hpp, tests/t/x_directed.cpp",
+        "no file":      "SW.STREAM, ruling T5",
+        "missing file": good + ", reference/include/zref/gone.hpp",
+        "no test":      "SW.STREAM, ruling T5: reference/include/zref/x.hpp",
+        "unbuilt test": "SW.STREAM, ruling T5: reference/include/zref/x.hpp, tests/t/unbuilt.cpp",
+    }
+    bad = []
+    if superseded_verdict(good, cm, ex) is not None:
+        bad.append("a complete note was refused: %s" % superseded_verdict(good, cm, ex))
+    for k, note in must_fail.items():
+        if superseded_verdict(note, cm, ex) is None:
+            bad.append("a note with %s EXCUSED its capability" % k)
+    if bad:
+        sys.stderr.write("completion_register SUPERSEDED SELF-TEST FAILED:\n")
+        for b in bad:
+            sys.stderr.write("  %s\n" % b)
+        raise SystemExit(2)
 
 
 def _board_self_test() -> None:
@@ -1123,13 +1216,29 @@ def main(argv: list[str]) -> int:
           % c["unresolvable"])
     print("                                     UNDEMONSTRATED. Locate the module")
     print("                                     or add it to the alias table.")
+    print("    superseded by a ruling    : %d   (cites the ruling, the replacement"
+          % c["superseded_by_ruling"])
+    print("                                     file and a BUILT test; each named)")
+    # EVERY NAME IS PRINTED. These lists were sliced `[:20]` and on 2026-09-19
+    # the count read 22 while 20 names were shown, so zhao_forge_cliff and
+    # zhao_post_gather were counted and invisible -- a gap list that hides its
+    # tail is the flattering direction, and nobody audits a list that looks
+    # complete.
+    if rep["superseded_by_ruling"]:
+        print("\n  SUPERSEDED BY A RULING (not a gap; the note is checked against the tree):")
+        for m in rep["superseded_by_ruling"]:
+            print("    %s" % m)
+    if rep["uncited_excuse"]:
+        print("\n  EXCUSES THAT DO NOT HOLD (counted as gaps):")
+        for m in rep["uncited_excuse"]:
+            print("    %s" % m)
     if rep["built_not_connected"]:
         print("\n  BUILT BUT NOT CONNECTED (a disconnected implementation does not count):")
-        for m in rep["built_not_connected"][:20]:
+        for m in rep["built_not_connected"]:
             print("    %s" % m)
     if rep["unbuilt"]:
         print("\n  NOT BUILT AT ALL:")
-        for m in rep["unbuilt"][:20]:
+        for m in rep["unbuilt"]:
             print("    %s" % m)
 
     print("\nMANDATORY GAPS REMAINING          : %d" % rep["mandatory_gaps"])

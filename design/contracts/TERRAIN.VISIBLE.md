@@ -5,6 +5,14 @@
 > Reference model: `zref::island::visible_set` — `reference/include/zref/zref_island.hpp`
 > Test: `tests/terrain/visible_rtl_directed.cpp`
 
+> **SUPERSEDED 2026-09-19 by ruling T5, under owner ruling R16.** The visibility walk is the HPS's:
+> T5 says the sealed SubmitTerrainSet list is capture data and replay does not rerun the HPS
+> visibility walk, and the hardware consumes that list through TERRAIN.CMD -> TERRAIN.SEQ. The
+> software visible set is `zref::swstream::WorldStreamer` (`reference/include/zref/zref_sw_stream.hpp`),
+> tested by `tests/terrain/sw_stream_directed.cpp`. This block stays on disk, unit-verified, with
+> disposition `not_v1` in `design/console_inventory.yml`. Caveat: that is the reference
+> implementation; no HPS runtime exists for any SW block yet. Reverting is one ledger line.
+
 ## Purpose
 
 Given a **View** — a centre patch coordinate and a radius in patches — enumerate
