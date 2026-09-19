@@ -2513,6 +2513,19 @@ targets:
       - fpga/rtl/geometry/zhao_geom_vdecode.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
+      # THE GEOMETRY ASSET PATH, 2026-09-19. Core header connected item 11.
+      # These five closed entry I23, whose refusal ("there is no behavioural
+      # SDRAM model in this tree") was false: sim/models/zhao_sdram_model.sv
+      # is cycle-true and carries a poke backdoor written for this case, and
+      # tests/shell/tb_zhao_shell.sv already drives both fetchers through the
+      # real guard against it. zhao_geom_mem_adapter is why this costs the
+      # arbiter no client: two requesters, ONE ENGINE1 identity.
+      # zhao_geom_cull shares the projector's matrix bank rather than a second.
+      - fpga/rtl/geometry/zhao_geom_cull.sv
+      - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
+      - fpga/rtl/geometry/zhao_geom_meshfetch.sv
+      - fpga/rtl/geometry/zhao_geom_assetfetch.sv
+      - fpga/rtl/geometry/zhao_geom_assemble.sv
       # Added 2026-09-19, packet I10-PALETTE. GEOM.POSE, WHOLE.
       #
       # THE EXCLUSION NOTE ABOVE HAS EXPIRED. It says zhao_geom_pose_decode is

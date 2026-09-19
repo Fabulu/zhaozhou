@@ -74,13 +74,39 @@
 # spawn_by_event=[0 0 0 0], no children, and the run stops at "a collision
 # produced no child". It builds into its own directory so a stale object from
 # the loaded build cannot be mistaken for it.
+#
+# ---------------------------------------------------------------------------
+# -BadDescriptor: THE POSITIVE CONTROL FOR THE GEOMETRY ASSET PATH
+# ---------------------------------------------------------------------------
+# Added 2026-09-19 with the composition that closed core header entry I23. The
+# bench now writes a meshlet descriptor and its footprint into a behavioural
+# SDRAM and lets GEOM.MESHFETCH, GEOM.MEM_ADAPTER and GEOM.ASSETFETCH read them
+# through the real MEM.GUARD -- so ten counters are asserted ZERO, and a
+# counter asserted zero is a claim.
+#
+# With -BadDescriptor ONE byte of the descriptor's reserved span (36..59) is
+# poked nonzero IN MEMORY and nothing else changes
+# (`+define+ZHAO_SMOKE_BAD_DESC`, a plain `ifdef`). Its polarity is INVERTED:
+# the control PASSES when the run fails.
+#
+# It is worth more than a refusal check, and this is why it is the switch that
+# was chosen: if the machine were not really reading the bytes this bench
+# poked, changing one of them could not change the outcome. So it fires the
+# refusal AND proves the memory path is the descriptor's source.
+#
+# MEASURED 2026-09-19: refused[fmt/crc/gen/vc/tc/resv/bound]=[0 0 0 0 0 1 0],
+# meshlets=0, beats=0, decoded=0, and the run stops at "GEOM.MESHFETCH refused
+# the fixture descriptor". The negative control is this script WITHOUT the
+# switch: considered=1 fetched=1 culled=0, all seven refusals 0, beats=24,
+# decoded=4. Both halves are required before the zeros may be quoted.
 [CmdletBinding()]
 param(
   [string]$Repo    = $null,
   [string]$BuildIn = $null,
   [switch]$SkipVerilate,
   [switch]$Mutant,
-  [switch]$NoTableLoad
+  [switch]$NoTableLoad,
+  [switch]$BadDescriptor
 )
 
 $ErrorActionPreference = 'Stop'
@@ -102,6 +128,7 @@ $env:PATH = "C:\programmieren\zencrifice\.tools\oss-cad-suite\bin;C:\programmier
 if (-not $BuildIn) {
   $tag = if ($Mutant) { 'zhao_console_core_smoke_mut' }
          elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
+         elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
          else { 'zhao_console_core_smoke' }
   $BuildIn = Join-Path $env:TEMP $tag
 }
@@ -127,6 +154,15 @@ if ($srcRel.Count -lt 50) { throw "fit_targets.yml gave only $($srcRel.Count) so
 $repoFwd = $Repo.Replace('\', '/')
 $srcs = @("$repoFwd/tests/shell/v3_closure_inherited.vlt")
 $srcs += ($srcRel | ForEach-Object { "$repoFwd/$_" })
+# THE BEHAVIOURAL SDRAM, and it is added HERE and deliberately not to
+# design/fit_targets.yml. sim/models/zhao_sdram_model.sv is testbench-only and
+# non-synthesizable, and its own banner forbids it in any synthesis file list;
+# the closure above IS the fit's list, so the two must not be the same set. The
+# bench needs it because the geometry asset path (core connected item 11) reads
+# real memory through the shell's SDRAM controller: without a model behind
+# `phy_*` the fetchers elaborate and never see a beat, which is the exact
+# failure core entry I23 refused to ship.
+$srcs += "$repoFwd/sim/models/zhao_sdram_model.sv"
 $srcs += "$repoFwd/tests/prod/tb_zhao_console_core_smoke.sv"
 $defs = @()
 if ($Mutant) {
@@ -137,6 +173,10 @@ if ($Mutant) {
 if ($NoTableLoad) {
   $defs += '+define+ZHAO_SMOKE_SKIP_TBL_LOAD'
   Write-Host 'NEGATIVE CONTROL: PART.TABLE is NOT loaded, INVERTED POLARITY (passes when the run FAILS)'
+}
+if ($BadDescriptor) {
+  $defs += '+define+ZHAO_SMOKE_BAD_DESC'
+  Write-Host 'POSITIVE CONTROL: ONE reserved byte of the meshlet descriptor is nonzero IN SDRAM, INVERTED POLARITY (passes when the run FAILS)'
 }
 Write-Host "closure: $($srcRel.Count) RTL sources from fit_targets.yml"
 
@@ -218,6 +258,18 @@ if ($NoTableLoad) {
     exit 1
   }
   Write-Host "NEGATIVE CONTROL PASS: the run failed (rc=$rc) with PART.TABLE unloaded, as it must."
+  exit 0
+}
+if ($BadDescriptor) {
+  # INVERTED. A zero here would mean GEOM.MESHFETCH's reserved-byte refusal row
+  # cannot fire -- and, worse, that the descriptor the machine validates is not
+  # the one this bench wrote into SDRAM, because changing a byte of it changed
+  # nothing. Both halves of the asset path's evidence rest on this.
+  if ($rc -eq 0) {
+    Write-Host 'POSITIVE CONTROL FAILED: the run PASSED with a nonzero reserved byte in the descriptor. Either the refusal row cannot fire or the machine is not reading the bytes this bench poked.'
+    exit 1
+  }
+  Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one corrupted descriptor byte, as it must."
   exit 0
 }
 exit $rc

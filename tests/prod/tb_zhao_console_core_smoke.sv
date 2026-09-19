@@ -89,6 +89,7 @@ module tb_zhao_console_core_smoke
   localparam int unsigned GEOM_PAYLOAD_W = 106;
   localparam int unsigned GEOM_INDEX_W   = $clog2(GEOM_DEPTH) + 1;
   localparam int unsigned GEOM_ARENA_W   = $clog2(GEOM_ARENAS) + 1;
+  localparam int unsigned GEOM_ASM_VIDW  = 16;
   localparam int unsigned PROJ_T_ARENAS  = 4;
   localparam int unsigned PROJ_T_DEPTH   = 81;
   localparam int unsigned PROJ_T_INDEX_W = $clog2(PROJ_T_DEPTH) + 1;
@@ -215,10 +216,65 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_refused_unknown_species_o;
   logic [31:0]             part_refused_capacity_o;
   logic [31:0]             part_max_children_in_tick_o;
-  logic                    geom_vd_v_valid_i;
-  logic                    geom_vd_v_ready_o;
-  logic [255:0]            geom_vd_v_bytes_i;
-  logic [15:0]             geom_vd_v_src_id_i;
+  // ---- THE GEOMETRY ASSET PATH (core connected item 11) -------------------
+  // `geom_vd_v_*` IS GONE from the core's port list: GEOM.ASSETFETCH drives
+  // GEOM.VDECODE inside the module now. These fifty-two nets are what the
+  // path still asks of a harness, and every width below was generated from
+  // the core's own port list rather than typed -- a width that disagrees
+  // binds silently in one tool and loudly in another, and either way the
+  // bench is then measuring a different machine.
+  logic                    geom_mf_job_valid_i;
+  logic                    geom_mf_job_ready_o;
+  logic [15:0]             geom_mf_job_instance_id_i;
+  logic [26:0]             geom_mf_job_desc_addr_i;
+  logic [7:0]              geom_mf_job_format_i;
+  logic [15:0]             geom_mf_job_generation_i;
+  logic [1:0]              geom_mf_job_active_mask_i;
+  logic signed [31:0]      geom_mf_job_xform_i [0:11];
+  logic                    geom_mf_crc_ok_i;
+  logic                    geom_af_release_i;
+  logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i;
+  logic [15:0]              geom_asm_material_id_i;
+  logic [31:0]              geom_asm_raster_state_i;
+  logic                     geom_asm_t_valid_o;
+  logic                     geom_asm_t_ready_i;
+  logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v0_o;
+  logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v1_o;
+  logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v2_o;
+  logic [15:0]              geom_asm_t_material_o;
+  logic [31:0]              geom_asm_t_raster_o;
+  logic [15:0]              geom_asm_t_src_id_o;
+  logic                     geom_asm_t_last_o;
+  logic [31:0] geom_mf_meshlets_considered_o;
+  logic [31:0] geom_mf_culled_all_cameras_o;
+  logic [31:0] geom_mf_descriptors_fetched_o;
+  logic [31:0] geom_mf_guard_denied_o;
+  logic [31:0] geom_mf_refused_format_o;
+  logic [31:0] geom_mf_refused_crc_o;
+  logic [31:0] geom_mf_refused_generation_o;
+  logic [31:0] geom_mf_refused_vertex_count_o;
+  logic [31:0] geom_mf_refused_triangle_count_o;
+  logic [31:0] geom_mf_refused_reserved_o;
+  logic [31:0] geom_mf_refused_zero_bound_o;
+  logic [31:0] geom_ma_jobs_a_o;
+  logic [31:0] geom_ma_jobs_b_o;
+  logic [31:0] geom_ma_denied_o;
+  logic [31:0] geom_ma_contention_o;
+  logic [31:0] geom_ma_err_short_o;
+  logic [31:0] geom_ma_err_long_o;
+  logic [31:0] geom_ma_err_unowned_o;
+  logic [31:0] geom_af_meshlets_fetched_o;
+  logic [31:0] geom_af_beats_read_o;
+  logic [31:0] geom_af_guard_denied_o;
+  logic [31:0] geom_af_refused_footprint_o;
+  logic [31:0] geom_af_prefetch_stall_o;
+  logic [31:0] geom_af_err_beat_truncated_o;
+  logic [31:0] geom_af_err_beat_overrun_o;
+  logic [31:0] geom_af_err_beat_unowned_o;
+  logic [31:0] geom_asm_meshlets_o;
+  logic [31:0] geom_asm_triangles_o;
+  logic [31:0] geom_asm_refused_limits_o;
+  logic [31:0] geom_asm_refused_index_o;
   logic signed [7:0]       geom_vd_d_nx_o, geom_vd_d_ny_o, geom_vd_d_nz_o;
   logic signed [15:0]      geom_vd_d_u_o, geom_vd_d_v_o;
   logic                    geom_vd_refused_o, geom_vd_reserved_nz_o;
@@ -824,11 +880,12 @@ module tb_zhao_console_core_smoke
   // The triangle door is no longer at the core's edge -- GEOM.SETUP drives it
   // from inside. What this bench presents instead is GEOM.CLIP's input, one
   // block further up (entry I24).
-  zhao_guard_req_t geom_guard_req_i;
-  zhao_guard_rsp_t geom_guard_rsp_o;
-  logic            geom_beat_valid_o;
-  logic [63:0]     geom_beat_data_o;
-  logic            geom_beat_last_o;
+  // `geom_guard_req_i`, `geom_guard_rsp_o` and the three `geom_beat_*_o`
+  // ARE GONE from the core's port list too. They were the seam where this
+  // bench answered the geometry fetchers' grants and fabricated their beats;
+  // GEOM.MEM_ADAPTER drives the shell's socket now, so what this bench
+  // supplies is one level lower and is real memory -- see the SDRAM model
+  // and the asset fixture below.
   // ---- GEOM.CLIP's input (entry I24) and the CLIP/SETUP evidence ------------
   localparam int unsigned GEOM_CLIP_ATTRW = 7 * 32;
   logic                    geom_clip_tri_valid_i;
@@ -1563,7 +1620,6 @@ module tb_zhao_console_core_smoke
   int unsigned ticks_seen_q;
   int unsigned part_records_sent_q;
   int unsigned part_records_written_q;
-  int unsigned geom_verts_sent_q;
   int unsigned geom_tris_sent_q;
   logic        render_frame_open_q;
   bit          part_tick_seen_q;
@@ -1795,20 +1851,218 @@ module tb_zhao_console_core_smoke
     end
   endfunction
 
+  // ==========================================================================
+  // THE SAME RECORDS, THROUGH THE MACHINE INSTEAD OF AROUND IT.
+  //
+  // `vdec_record` above is unchanged and is still the fixture. What changed is
+  // WHERE IT IS PUT: it used to be driven onto `geom_vd_v_bytes_i`, a port that
+  // no longer exists, and it is now written into SDRAM, fetched by
+  // GEOM.ASSETFETCH through the real MEM.GUARD, MEM.VRAM.ARBITER and
+  // `zhao_sdram_ctrl`, and handed to GEOM.VDECODE inside the core.
+  //
+  // THAT IS THE WHOLE POINT AND IT IS WHY THE BYTES DID NOT CHANGE. If the
+  // decoded count still comes out at N_GEOM_VERTS with the identical records,
+  // the difference between the old reading and the new one is exactly the
+  // memory path -- a descriptor read, a cull, an index run and a vertex run --
+  // and nothing else. A new fixture would have made the comparison useless.
+  //
+  // THE MAP, all pool-relative to ZHAO_RENDER_ASSET_BASE = 0x06A0_0000:
+  //     +0x000   64 B  the meshlet descriptor        (64-byte aligned, ruled)
+  //     +0x080   64 B  the index run, 3 u8           ( 8-byte aligned, ruled)
+  //     +0x100  128 B  four 32-byte vertex records   (32-byte aligned, ruled)
+  // The three do not overlap, and the descriptor names the other two in its
+  // own `vertex_offset`/`index_offset` fields rather than the bench naming them
+  // twice: a fixture that agrees with itself by construction cannot drift.
+  // ==========================================================================
+  localparam int unsigned GEOM_POOL_BASE = 32'h06A0_0000;
+  localparam int unsigned GEOM_DESC_OFF  = 32'h0000_0000;
+  localparam int unsigned GEOM_IX_OFF    = 32'h0000_0080;
+  localparam int unsigned GEOM_VX_OFF    = 32'h0000_0100;
+  // The bound, in the meshlet's own space, and the identity instance transform
+  // that carries it to world. It sits at the clip origin under the identity
+  // camera written below, so GEOM.CULL must call it VISIBLE -- and its radius
+  // is NONZERO because GEOM.MESHFETCH's seventh refusal row rejects a zero
+  // radius on a meshlet that claims triangles.
+  localparam logic [31:0] GEOM_BOUND_R   = 32'h0000_4000;   // 0.25 in fx16
+
+  logic        geom_poke_en;
+  logic [25:0] geom_poke_waddr;
+  logic [15:0] geom_poke_data;
+  logic        geom_peek_en;
+  logic [25:0] geom_peek_waddr;
+  logic [15:0] geom_peek_data;
+  logic [5:0]  geom_model_err;
+  logic        geom_model_error;
+  bit          geom_fixture_ready_q;
+  bit          geom_camera_ready_q;
+  bit          geom_job_sent_q;
+
+  // ONE 16-BIT WORD PER CLOCK, at `byte_addr >> 1`, low byte of the word first
+  // -- `zhao_sdram_ctrl` computes `waddr = req.addr[26:1]` and the shell's read
+  // packer rebuilds four words per 64-bit beat low group first, so this is the
+  // same little-endian order in both directions.
+  task automatic geom_poke_w(input int unsigned byte_addr, input logic [15:0] d);
+    begin
+      geom_poke_en    = 1'b1;
+      geom_poke_waddr = 26'(byte_addr >> 1);
+      geom_poke_data  = d;
+      @(posedge gpu_clk);
+      geom_poke_en    = 1'b0;
+    end
+  endtask
+
+  task automatic geom_poke_q(input int unsigned byte_addr, input logic [63:0] d);
+    begin
+      geom_poke_w(byte_addr + 0, d[15:0]);
+      geom_poke_w(byte_addr + 2, d[31:16]);
+      geom_poke_w(byte_addr + 4, d[47:32]);
+      geom_poke_w(byte_addr + 6, d[63:48]);
+    end
+  endtask
+
+  // The camera, written into the ONE matrix bank the projector and GEOM.CULL
+  // share. It is IDENTITY, and it is written rather than left at zero because a
+  // cull verdict that happens to come out VISIBLE under an unwritten bank is an
+  // accident this bench would be resting on. Under identity the clip point is
+  // the world point and w is 1.0, so a bound at the origin is inside every
+  // plane by construction and the check below is about the WIRE.
+  task automatic geom_write_camera();
+    int unsigned i;
+    begin
+      for (i = 0; i < 16; i = i + 1) begin
+        proj_cfg_we_i   = 1'b1;
+        proj_cfg_view_i = 1'b0;
+        proj_cfg_addr_i = 5'(i);
+        proj_cfg_data_i = ((i == 0) || (i == 5) || (i == 10) || (i == 15))
+                          ? FX16_ONE : 32'sd0;
+        @(posedge gpu_clk);
+      end
+      proj_cfg_we_i = 1'b0;
+    end
+  endtask
+
+  initial begin
+    geom_poke_en         = 1'b0;
+    geom_poke_waddr      = '0;
+    geom_poke_data       = '0;
+    geom_peek_en         = 1'b0;
+    geom_peek_waddr      = '0;
+    geom_fixture_ready_q = 1'b0;
+    @(posedge gpu_clk);
+
+    // ---- the 64-byte meshlet descriptor, field by field -------------------
+    //   +0  format u8         (must equal the job's j_format_i)
+    //   +1  flags u8
+    //   +2  vertex_count u8   (<= 64)
+    //   +3  triangle_count u8 (<= 126)
+    //   +4  material_id u16
+    //   +8  bound centre x, y, z  i32 fx16
+    //   +20 bound radius u32      (nonzero, or refusal row 7)
+    //   +24 vertex_offset u32     pool-relative bytes
+    //   +28 index_offset  u32     pool-relative bytes
+    //   +32 generation u16        (must equal the job's j_generation_i)
+    //   +36..59 reserved, ALL ZERO or refusal row 6
+    //   +60 CRC word -- NOT READ BY THE RTL. The verdict arrives on
+    //       `crc_ok_i`, which is core entry I37's boundary; the fold that
+    //       would produce it has no owner. Written as zero so the line holds
+    //       no X rather than to be believed.
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF +  0,
+                {16'h0000, 16'h0001, 8'd1, 8'(N_GEOM_VERTS), 8'd0, 8'd1});
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF +  8, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 16, {GEOM_BOUND_R, 32'd0});
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 24, {GEOM_IX_OFF, GEOM_VX_OFF});
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 32, {32'd0, 16'd0, 16'd1});
+`ifdef ZHAO_SMOKE_BAD_DESC
+    // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`). Byte 40 is
+    // inside the descriptor's reserved span 36..59, which GEOM.MESHFETCH's
+    // sixth refusal row requires to be all zero. ONE BYTE, in memory, and
+    // nothing else in the bench changes -- so the run failing here is
+    // evidence about two things at once: the refusal group can fire, and the
+    // descriptor the machine validates is the one this bench wrote into
+    // SDRAM rather than anything it happened to have lying around.
+    // A plain `ifdef`, selected by `+define+`, because CLAUDE.md records
+    // that a command-line -D cannot override a FUNCTION-LIKE `define and
+    // says nothing when it fails to.
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 40, 64'h0000_0000_0000_0001);
+`else
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 40, 64'd0);
+`endif
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 48, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 56, 64'd0);
+
+    // ---- the index run: ONE triplet, {0, 1, 2}, three packed u8 -----------
+    // The whole 64-byte line is written even though only the first word is
+    // kept, so no beat of a line this bench caused to be read carries X.
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  0, {40'd0, 8'd2, 8'd1, 8'd0});
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  8, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 16, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 24, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 32, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 40, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 48, 64'd0);
+    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 56, 64'd0);
+
+    // ---- the vertex run: N_GEOM_VERTS x 32 bytes, byte k at bits [8k+:8] --
+    for (int unsigned n = 0; n < N_GEOM_VERTS; n = n + 1) begin
+      automatic logic [255:0] rec;
+      rec = vdec_record(n);
+      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  0, rec[63:0]);
+      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n +  8, rec[127:64]);
+      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 16, rec[191:128]);
+      geom_poke_q(GEOM_POOL_BASE + GEOM_VX_OFF + 32 * n + 24, rec[255:192]);
+    end
+
+    geom_fixture_ready_q = 1'b1;
+  end
+
+  // THE BEHAVIOURAL SDRAM. Core header entry I23's refusal said this did not
+  // exist; it is `sim/models/zhao_sdram_model.sv`, 219 lines, cycle-true, and
+  // its poke backdoor's own comment was written for exactly this use. Nine of
+  // the core's ten PHY ports carry an `_o` the model's do not, so every
+  // connection is named rather than shorthanded.
+  zhao_sdram_model u_geom_sdram (
+    .clk       (gpu_clk),
+    .phy_cs_n  (phy_cs_n_o),
+    .phy_ras_n (phy_ras_n_o),
+    .phy_cas_n (phy_cas_n_o),
+    .phy_we_n  (phy_we_n_o),
+    .phy_a     (phy_a_o),
+    .phy_ba    (phy_ba_o),
+    .phy_dq_o  (phy_dq_o),
+    .phy_dq_oe (phy_dq_oe_o),
+    .phy_dqm   (phy_dqm_o),
+    .phy_dq_i  (phy_dq_i),
+    .peek_en   (geom_peek_en),
+    .peek_waddr(geom_peek_waddr),
+    .peek_data (geom_peek_data),
+    .poke_en   (geom_poke_en),
+    .poke_waddr(geom_poke_waddr),
+    .poke_data (geom_poke_data),
+    .err_trcd            (geom_model_err[0]),
+    .err_trp             (geom_model_err[1]),
+    .err_trc             (geom_model_err[2]),
+    .err_refresh_interval(geom_model_err[3]),
+    .err_protocol        (geom_model_err[4]),
+    .err_mrs             (geom_model_err[5]),
+    .model_error         (geom_model_error)
+  );
+
+  // THE DRAW. One meshlet, once, after reset has lifted, the SDRAM controller
+  // has finished its PRECHARGE/REFRESH/MRS sequence and the fixture is in
+  // memory. The transform is the identity, so the descriptor's object-space
+  // bound is also its world bound and GEOM.CULL sees the sphere the fixture
+  // placed rather than one this bench moved.
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
-      geom_verts_sent_q <= 0;
-      geom_vd_v_valid_i <= 1'b0;
+      geom_mf_job_valid_i <= 1'b0;
+      geom_job_sent_q     <= 1'b0;
     end else begin
-      if (geom_vd_v_valid_i && geom_vd_v_ready_o) begin
-        geom_verts_sent_q <= geom_verts_sent_q + 1;
-        geom_vd_v_valid_i <= 1'b0;
-      end
-      if (reset_released_q && !geom_vd_v_valid_i &&
-          (geom_verts_sent_q < N_GEOM_VERTS)) begin
-        geom_vd_v_valid_i  <= 1'b1;
-        geom_vd_v_bytes_i  <= vdec_record(geom_verts_sent_q);
-        geom_vd_v_src_id_i <= 16'h00A1;
+      if (geom_mf_job_valid_i && geom_mf_job_ready_o) begin
+        geom_mf_job_valid_i <= 1'b0;
+        geom_job_sent_q     <= 1'b1;
+      end else if (reset_released_q && init_done_o && geom_fixture_ready_q
+                   && geom_camera_ready_q && !geom_job_sent_q) begin
+        geom_mf_job_valid_i <= 1'b1;
       end
     end
   end
@@ -2066,8 +2320,6 @@ module tb_zhao_console_core_smoke
     part_prj_g_i          = 8'h80;
     part_prj_b_i          = 8'h40;
     part_prj_src_id_i     = 16'h0BAD;
-    geom_vd_v_bytes_i = '0;
-    geom_vd_v_src_id_i = '0;
     geom_clip_tri_behind_i = '0;
     geom_clip_attr_a_i = '0;
     geom_clip_attr_b_i = '0;
@@ -2221,7 +2473,6 @@ module tb_zhao_console_core_smoke
     render_frame_end_i = '0;
     render_grid_w_i = '0;
     render_grid_h_i = '0;
-    geom_guard_req_i = '0;
 
     render_fill_word_i = '0;
     render_clear_word_i = '0;
@@ -2233,7 +2484,36 @@ module tb_zhao_console_core_smoke
     render_fb_base_i = '0;
     render_fb_stride_i = '0;
     fb_writer_i = '0;
-    phy_dq_i = '0;
+    // `phy_dq_i = '0` USED TO BE HERE. The SDRAM model drives it now, and a
+    // bench that also drove it would be two drivers on the data bus with the
+    // harness winning -- which reads as a memory that answers zero.
+
+    // ---- the geometry asset path's boundaries (core entries I36..I39) -----
+    geom_mf_job_instance_id_i = 16'h00A1;   // becomes the meshlet's src_id
+    geom_mf_job_desc_addr_i   = 27'(GEOM_POOL_BASE + GEOM_DESC_OFF);
+    geom_mf_job_format_i      = 8'd1;
+    geom_mf_job_generation_i  = 16'd1;
+    geom_mf_job_active_mask_i = 2'b01;      // camera 0
+    for (int unsigned i = 0; i < 12; i = i + 1)
+      geom_mf_job_xform_i[i] = ((i == 0) || (i == 5) || (i == 10))
+                               ? FX16_ONE : 32'sd0;
+    // I37: the CRC verdict has no producer in the tree -- the fold exists,
+    // the walker over the returning beats does not. Held HIGH, which is the
+    // direction that lets the path run; the direction that would be silent
+    // is the other one, and `geom_mf_refused_crc_o` is asserted zero below.
+    geom_mf_crc_ok_i          = 1'b1;
+    // I38: nothing in the console knows when BOTH readers have finished with
+    // the buffered meshlet, so it is never released and the path serves
+    // exactly one. That is the assertion below, not a workaround.
+    geom_af_release_i         = 1'b0;
+    // I39: the three fields GEOM.ASSEMBLE has no producer for in this core.
+    geom_asm_vertex_offset_i  = '0;
+    geom_asm_material_id_i    = '0;
+    geom_asm_raster_state_i   = '0;
+    // The TriangleDescriptor's customer is the absent replay block of I11,
+    // so the bench SINKS it. Holding ready low would back the walk up and
+    // the resulting stall would read as a wiring fault.
+    geom_asm_t_ready_i        = 1'b1;
 
     // ---- reset ------------------------------------------------------------
     rst_n            = 1'b0;
@@ -2285,6 +2565,12 @@ module tb_zhao_console_core_smoke
     // (the STICK response and the spawn rule are now LOADED INTO PART.TABLE
     //  after reset lifts -- see the load sequence below.)
     proj_en_i               = 1'b1;
+    // THE MATRIX BANK IS WRITTEN NOW, and it was not before. GEOM.CULL takes
+    // the same sixteen words at the same addresses as the projector -- its
+    // own port comment says so -- so leaving the bank at zero would have made
+    // the cull's verdict on the meshlet below an accident rather than a
+    // result. It is written AFTER `proj_en_i` rises, from a task, so the
+    // sixteen writes are one per clock on the real configuration port.
     // The replayed terrain triangle has no consumer in this core (entry I13),
     // so the bench SINKS it. Holding it low instead would back the replay up
     // into the sequencer and the resulting stall would read as a wiring fault.
@@ -2401,6 +2687,12 @@ module tb_zhao_console_core_smoke
     rst_n = 1'b1;
     repeat (4) @(posedge gpu_clk);
     reset_released_q = 1'b1;
+
+    // The camera, into the bank GEOM.PROJECT and GEOM.CULL share. Sixteen
+    // clocks on the real `proj_cfg_*` port; `geom_camera_ready_q` gates the
+    // meshlet draw so no descriptor can be culled against an unwritten bank.
+    geom_write_camera();
+    geom_camera_ready_q = 1'b1;
 
     // ---- LOAD PART.TABLE, BEFORE ANY PARTICLE IS OFFERED ------------------
     // Four words for species 0 -- the only species these records carry (the
@@ -2621,8 +2913,38 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: particles  read=%0d written=%0d survivors=%0d updated=%0d",
              part_records_sent_q, part_records_written_q,
              part_survivors_o, part_updated_o);
-    $display("SMOKE: vdecode    records_offered=%0d decoded=%0d refused[reserved/w0/format]=[%0d %0d %0d]",
-             geom_verts_sent_q, geom_vd_vertices_o,
+    $display("SMOKE: assetpath  considered=%0d fetched=%0d culled=%0d refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]",
+             geom_mf_meshlets_considered_o, geom_mf_descriptors_fetched_o,
+             geom_mf_culled_all_cameras_o,
+             geom_mf_refused_format_o, geom_mf_refused_crc_o,
+             geom_mf_refused_generation_o, geom_mf_refused_vertex_count_o,
+             geom_mf_refused_triangle_count_o, geom_mf_refused_reserved_o,
+             geom_mf_refused_zero_bound_o);
+    $display("SMOKE: assetpath  meshlets=%0d beats=%0d denied[mf/af]=[%0d %0d] footprint_refused=%0d beat_err[trunc/over/unowned]=[%0d %0d %0d]",
+             geom_af_meshlets_fetched_o, geom_af_beats_read_o,
+             geom_mf_guard_denied_o, geom_af_guard_denied_o,
+             geom_af_refused_footprint_o, geom_af_err_beat_truncated_o,
+             geom_af_err_beat_overrun_o, geom_af_err_beat_unowned_o);
+    // `contention` READS ZERO HERE FOR A STRUCTURAL REASON, and it is
+    // printed rather than asserted because of it. GEOM.MESHFETCH reads a
+    // descriptor and only THEN hands the meshlet to GEOM.ASSETFETCH, so with
+    // ONE draw in flight the two requesters can never want the shared client
+    // in the same cycle. It becomes reachable with a second draw overlapping
+    // the first -- MESHFETCH on descriptor N+1 while ASSETFETCH is still
+    // walking N's footprint -- which needs entry I38's release owner, so it
+    // is not reachable in this composition at all. Quoting the zero as
+    // "sharing costs nothing" would be quoting a workload, not a result.
+    $display("SMOKE: memadapter jobs[a/b]=[%0d %0d] denied=%0d contention=%0d err[short/long/unowned]=[%0d %0d %0d]",
+             geom_ma_jobs_a_o, geom_ma_jobs_b_o, geom_ma_denied_o,
+             geom_ma_contention_o, geom_ma_err_short_o, geom_ma_err_long_o,
+             geom_ma_err_unowned_o);
+    $display("SMOKE: assemble   meshlets=%0d triangles=%0d refused[limits/index]=[%0d %0d]",
+             geom_asm_meshlets_o, geom_asm_triangles_o,
+             geom_asm_refused_limits_o, geom_asm_refused_index_o);
+    $display("SMOKE: sdram      model_error=%0d kinds[trcd/trp/trc/refresh/protocol/mrs]=%b",
+             geom_model_error, geom_model_err);
+    $display("SMOKE: vdecode    records_expected=%0d decoded=%0d refused[reserved/w0/format]=[%0d %0d %0d]",
+             N_GEOM_VERTS, geom_vd_vertices_o,
              geom_vd_reserved_nz_count_o, geom_vd_w0_illegal_count_o,
              geom_vd_format_bad_count_o);
     $display("SMOKE: geometry   skinned=%0d vertices_sent=%0d a_grants=%0d landings=%0d groups_opened=%0d groups_sealed=%0d",
@@ -2666,6 +2988,78 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: PART.STATE never went busy -- SHELL.gpu_tick_o does not reach it");
     if (part_records_written_q == 0)
       $fatal(1, "SMOKE: no particle reached the write-back -- the STATE/UPDATE/COLLIDE ring does not carry a beat");
+    // ---- THE ASSET PATH FIRST, because everything geometric below it is
+    // downstream of a meshlet arriving. Firing the `-BadDescriptor` control
+    // with these checks placed AFTER the ones below stopped the run at
+    // "GEOM.SKIN transformed nothing" -- true, and three blocks away from
+    // the refused descriptor that caused it.
+    // ---- THE ASSET PATH, which is what makes the line below mean anything.
+    // Each check names the wire it is evidence for, and they are ordered so
+    // the FIRST one to fail is the furthest upstream: a dead descriptor read
+    // and a dead vertex run look identical from the decoded count alone.
+    if (geom_model_error)
+      $fatal(1, "SMOKE: the SDRAM model raised a timing/protocol error (kinds=%b) -- every number below describes a machine talking to a memory it is abusing",
+             geom_model_err);
+    if (geom_mf_descriptors_fetched_o == 0)
+      $fatal(1, "SMOKE: GEOM.MESHFETCH fetched no descriptor -- MESHFETCH -> MEM_ADAPTER -> the shell's guard -> SDRAM does not carry a read");
+    if ((geom_mf_refused_format_o | geom_mf_refused_crc_o |
+         geom_mf_refused_generation_o | geom_mf_refused_vertex_count_o |
+         geom_mf_refused_triangle_count_o | geom_mf_refused_reserved_o |
+         geom_mf_refused_zero_bound_o) != 0)
+      $fatal(1, "SMOKE: GEOM.MESHFETCH refused the fixture descriptor [fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d] -- the bench's descriptor packing is wrong, so nothing below this line means anything",
+             geom_mf_refused_format_o, geom_mf_refused_crc_o,
+             geom_mf_refused_generation_o, geom_mf_refused_vertex_count_o,
+             geom_mf_refused_triangle_count_o, geom_mf_refused_reserved_o,
+             geom_mf_refused_zero_bound_o);
+    // GEOM.CULL is a real block on the real matrix bank now. Under the
+    // identity camera the fixture's bound is at the clip origin, so a cull
+    // that rejects it is a wiring or configuration fault and not a verdict.
+    if (geom_mf_culled_all_cameras_o != 0)
+      $fatal(1, "SMOKE: GEOM.CULL rejected %0d meshlet(s) whose bound sits at the clip origin -- the shared matrix bank or the cull service is not carrying what it should",
+             geom_mf_culled_all_cameras_o);
+    if ((geom_mf_guard_denied_o != 0) || (geom_af_guard_denied_o != 0) ||
+        (geom_ma_denied_o != 0))
+      $fatal(1, "SMOKE: MEM.GUARD denied a geometry read (mf=%0d af=%0d adapter=%0d) -- the asset pool window or the ENGINE1 client identity is wrong",
+             geom_mf_guard_denied_o, geom_af_guard_denied_o, geom_ma_denied_o);
+    if (geom_af_refused_footprint_o != 0)
+      $fatal(1, "SMOKE: GEOM.ASSETFETCH refused the footprint %0d time(s) -- the descriptor's offsets are misaligned or outside the pool. They are POOL-RELATIVE; adding the base twice is the documented way to get this",
+             geom_af_refused_footprint_o);
+    // 24 beats: one 64-byte index line (8) plus two 64-byte vertex lines
+    // (16), for 1 triangle and 4 vertices. A COUNT and not a nonzero test --
+    // a block that re-reads a line delivers the right bytes and the wrong
+    // number of them, and only the count can see that.
+    if (geom_af_beats_read_o != 24)
+      $fatal(1, "SMOKE: GEOM.ASSETFETCH read %0d beats against the 24 this footprint is (8 index + 16 vertex) -- the machine did a different amount of work than the fixture describes",
+             geom_af_beats_read_o);
+    if ((geom_af_err_beat_truncated_o | geom_af_err_beat_overrun_o |
+         geom_af_err_beat_unowned_o | geom_ma_err_short_o |
+         geom_ma_err_long_o | geom_ma_err_unowned_o) != 0)
+      $fatal(1, "SMOKE: a beat-protocol fault on the shared geometry client [af trunc/over/unowned=%0d %0d %0d, adapter short/long/unowned=%0d %0d %0d]",
+             geom_af_err_beat_truncated_o, geom_af_err_beat_overrun_o,
+             geom_af_err_beat_unowned_o, geom_ma_err_short_o,
+             geom_ma_err_long_o, geom_ma_err_unowned_o);
+    // BOTH requesters used the ONE ENGINE1 client. If either is zero the
+    // sharing is not being exercised and `geom_ma_contention_o` below is a
+    // number about a machine with one requester in it.
+    if ((geom_ma_jobs_a_o == 0) || (geom_ma_jobs_b_o == 0))
+      $fatal(1, "SMOKE: GEOM.MEM_ADAPTER served a=%0d b=%0d logical requests -- one of the two fetchers never reached the shared client",
+             geom_ma_jobs_a_o, geom_ma_jobs_b_o);
+    // I38, stated as a check rather than left to be discovered: with no
+    // release owner the buffer is never freed, so EXACTLY ONE meshlet is
+    // served however long the bench runs. A second would mean something in
+    // this core is retiring a buffer nobody told it to.
+    if (geom_af_meshlets_fetched_o != 1)
+      $fatal(1, "SMOKE: GEOM.ASSETFETCH served %0d meshlets against the 1 an unreleased buffer allows (entry I38)",
+             geom_af_meshlets_fetched_o);
+    // GEOM.ASSEMBLE walked the index run the fetcher served. One triangle,
+    // and no refusal: the fixture's indices are 0, 1, 2 against a count of 4.
+    if (geom_asm_triangles_o != 1)
+      $fatal(1, "SMOKE: GEOM.ASSEMBLE emitted %0d triangles against the 1 the descriptor declares -- the ix_* index service between it and GEOM.ASSETFETCH is not carrying triplets",
+             geom_asm_triangles_o);
+    if ((geom_asm_refused_limits_o != 0) || (geom_asm_refused_index_o != 0))
+      $fatal(1, "SMOKE: GEOM.ASSEMBLE refused the fixture meshlet (limits=%0d index=%0d)",
+             geom_asm_refused_limits_o, geom_asm_refused_index_o);
+
     if (geom_skin_vertices_transformed_o == 0)
       $fatal(1, "SMOKE: GEOM.SKIN transformed nothing");
     if (geom_vertices_sent_o == 0)
@@ -3068,9 +3462,14 @@ module tb_zhao_console_core_smoke
     // `vdec_record` were wrong, the block would refuse every record, the
     // decoded count would be zero, and "the wire is dead" and "the bench builds
     // a bad record" would look identical from the decoded count alone.
-    if (geom_vd_vertices_o != geom_verts_sent_q)
-      $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of %0d offered records -- the vertex stream does not cross the block",
-             geom_vd_vertices_o, geom_verts_sent_q);
+    // ---- and now the same conservation statement as before, end to end.
+    // The records are byte-identical to the ones this bench used to hand the
+    // decoder directly, so this equality holding means the descriptor read,
+    // the cull, the index run, the vertex run and the whole memory path
+    // under them delivered what the fixture put in.
+    if (geom_vd_vertices_o != N_GEOM_VERTS)
+      $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of the %0d records the descriptor declares -- the vertex stream does not cross from GEOM.ASSETFETCH into the decoder",
+             geom_vd_vertices_o, N_GEOM_VERTS);
     if ((geom_vd_reserved_nz_count_o != 0) || (geom_vd_w0_illegal_count_o != 0) ||
         (geom_vd_format_bad_count_o != 0))
       $fatal(1, "SMOKE: GEOM.VDECODE refused a well-formed record (reserved=%0d w0=%0d format=%0d) -- the harness's format-0 packing is wrong, so nothing below this line means anything",

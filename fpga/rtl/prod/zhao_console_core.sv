@@ -246,6 +246,53 @@
 //      arrive at this module's edge (entry I35). Each is a port and an entry,
 //      and not one of them is a constant standing in for a producer.
 //
+//  11. THE GEOMETRY ASSET PATH -- five blocks, ONE memory client, and the
+//      first time this console reads a mesh out of memory.
+//        GEOM.MESHFETCH.guard  -> GEOM.MEM_ADAPTER requester A
+//        GEOM.ASSETFETCH.guard -> GEOM.MEM_ADAPTER requester B
+//        GEOM.MEM_ADAPTER.m_*  -> the shell's ONE geometry MEM.GUARD socket
+//        GEOM.MESHFETCH.cull_* <-> GEOM.CULL
+//        GEOM.MESHFETCH.r_*    -> GEOM.ASSETFETCH.m_* (the meshlet record)
+//        GEOM.ASSETFETCH.v_*   -> GEOM.VDECODE.v_*    (entry I23, CLOSED)
+//        GEOM.ASSETFETCH.s_*   -> GEOM.ASSEMBLE.m_*
+//        GEOM.ASSEMBLE.ix_*    <-> GEOM.ASSETFETCH.ix_* (the index service)
+//      Every seam is name for name and width for width. Nothing is renamed
+//      and nothing is computed between them, with ONE value assigned by this
+//      file, declared at entry I40.
+//
+//      SHARING BEAT BUILDING, AND THE BLOCK THAT DOES IT ALREADY EXISTED.
+//      Two fetchers want memory and `zhao_vram_arbiter` builds the
+//      controller's client tag by CASTING THE SLOT INDEX, so a client is
+//      POSITIONAL; `zhao_mem_guard` grants the render asset pool to ENGINE1
+//      alone and everything else falls to `default: pass_ok = 1'b0`. A
+//      second geometry client is therefore not a wire, it is a memory-rules
+//      ruling -- the same wall entry I15 item 2 records for the compositor.
+//      `zhao_geom_mem_adapter` is the owner's answer (recovery brief 12.1):
+//      round-robin at LOGICAL REQUEST boundaries, one request in flight, the
+//      client field forced to ENGINE1 and `write` forced low. So the console
+//      gains a whole asset path and MEM.VRAM.ARBITER gains no client, and
+//      `geom_ma_contention_o` is the number that says what the sharing cost.
+//      That counter could not move before this composition: until now only
+//      ONE requester was ever behind the adapter in any bench.
+//
+//      THE CULL IS SHARED TOO, AND IT SHARES THE MATRIX BANK RATHER THAN A
+//      SECOND ONE. `zhao_geom_cull`'s own port comment says its sixteen
+//      configuration words are "EXACTLY the words zhao_geom_project takes at
+//      the same addresses", and it deliberately ignores addr >= 16 because
+//      rejection happens in clip space and the viewport only maps NDC to
+//      pixels afterwards. So it is wired to `proj_cfg_*_m` -- the SAME
+//      merged bank CMD.EXEC's `SetView` already drives into the projector
+//      (entry I14's closed half) -- and this file adds no second
+//      configuration path and no second opinion about where a camera is.
+//
+//      WHAT THIS PATH DOES NOT YET DO, said here rather than left to be
+//      discovered: the DRAW that starts it arrives at this module's edge
+//      (I36), the descriptor's CRC verdict does (I37), and the meshlet
+//      release does (I38) -- so the chain fetches ONE meshlet and then
+//      holds, exactly as the terrain compose cache holds at I21 and for the
+//      same kind of missing owner. That is the EXPECTED reading of this
+//      composition, not a defect in it.
+//
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
 // ---------------------------------------------------------------------------
@@ -329,6 +376,47 @@
 //    absent owners (I32 for layer D, I34 for the field lane, I35 for the patch
 //    header's pitch and envelope), which is a smaller and more honest statement
 //    than the one it replaces.
+//
+//  * I23 was GEOM.VDECODE's 32-BYTE VERTEX RECORD STREAM. CLOSED and
+//    DELETED, 2026-09-19. Its own text said the wiring "is fully determined
+//    and was not the obstacle", and that half was exactly right:
+//    `zhao_geom_assetfetch` serves that port, `zhao_geom_meshfetch` feeds
+//    it, and `zhao_geom_mem_adapter` merges the two onto the socket the
+//    shell already exposes. All three are composed below and four ports left
+//    this module's port list rather than being driven.
+//
+//    THE OBSTACLE IT NAMED WAS NOT TRUE, and the correction is recorded
+//    rather than quietly acted on, because the sentence had already stopped
+//    two packets. It read: "there is NO BEHAVIOURAL SDRAM MODEL IN THIS
+//    TREE -- the smoke bench leaves `phy_*` unconnected". The second clause
+//    was true of the smoke bench and the first was false of the tree.
+//    SEARCHED, and naming what was searched is the point:
+//      * `sim/models/zhao_sdram_model.sv` -- 219 lines, cycle-true against
+//        `zhao_sdram_params_pkg`, with sticky per-law timing error outputs;
+//      * it carries a POKE BACKDOOR whose own header comment was written for
+//        this exact case -- "so a test can place asset bytes in memory
+//        BEFORE the machine reads them. Without it a fetcher pointed at real
+//        memory reads whatever the model was initialised to";
+//      * `tests/shell/tb_zhao_shell.sv` already instantiates that model
+//        against `zhao_shell_top_v2` and drives BOTH fetchers through the
+//        real guard and arbiter in `realmem_mode`
+//        (`tests/shell/shell_realmem_path_directed.cpp`);
+//      * and the denial that genuinely HAD kept the geometry front end out
+//        of the console was removed one level lower still --
+//        `ZHAO_RENDER_ASSET_BASE` in `zhao_pkg`, whose comment says in as
+//        many words that "every region MEM.GUARD knew was a FRAME BUFFER
+//        region, so `default: pass_ok = 1'b0` denied every meshlet
+//        descriptor read BY DESIGN. That denial -- not eighteen wiring jobs
+//        -- is what has kept the geometry front end out of the console".
+//
+//    So the refusal survived its own cause by four files and some days. It
+//    is this repository's "a thing BUILT is not a thing INSTALLED" chapter
+//    with the cheque written by the person who then refused to cash it, and
+//    the lesson worth keeping is the cheap one: a refusal that says
+//    something does not exist must name what it searched, and this one named
+//    nothing. The successor gaps are I36 (the draw), I37 (the CRC verdict)
+//    and I38 (the release), which are three narrower statements than the one
+//    they replace.
 //
 //  * I10 was GEOM.SKIN's BONE MATRICES; its record is still inline between I9
 //    and I11 and is left there. It is the same shape as the two above and
@@ -756,33 +844,6 @@
 //      `terr_ps_lattices_o` at 2, is the EXPECTED reading of an unretired
 //      cache and not a defect in the chain.
 //
-// I23. GEOM.VDECODE's 32-byte vertex record stream (`geom_vd_v_*`) --
-//      BOUNDARY, and its decoded side-channels (`geom_vd_d_n*`, `geom_vd_u/v`)
-//      leave this module because nothing here consumes them. `geom_vd_bone0/1`
-//      was in that list until 2026-09-19 and is not any more: the palette store
-//      consumes both, so they are internal wires (see the I10 closure note).
-//      THE NAMED OWNER EXISTS AND IS NOT COMPOSED, and the reason is worth
-//      writing down precisely so the next packet does not rediscover it:
-//
-//        `zhao_geom_assetfetch` serves exactly this port (`v_valid_o /
-//        v_bytes_o[255:0] / v_src_id_o`), is fed by `zhao_geom_meshfetch`'s
-//        result record, and the two share ONE MEM.GUARD client through
-//        `zhao_geom_mem_adapter` -- whose A port is named for MESHFETCH and
-//        whose B port is named for ASSETFETCH. `zhao_shell_top_v2` already
-//        exposes the socket that chain plugs into (`geom_guard_req_i`,
-//        `geom_guard_rsp_o`, `geom_beat_*_o`). So the WIRING is fully
-//        determined and was not the obstacle.
-//
-//        THE OBSTACLE IS THAT THE BEATS COME FROM INSIDE THE SHELL. That
-//        socket's read data returns through MEM.VRAM.ARBITER and
-//        `zhao_sdram_ctrl`, and there is NO BEHAVIOURAL SDRAM MODEL IN THIS
-//        TREE -- the smoke bench leaves `phy_*` unconnected. Composing the
-//        three blocks onto that socket would elaborate cleanly, pass lint, add
-//        their area to the fit, and never see a single beat: a disconnected
-//        implementation wearing a connection. They are therefore left for the
-//        packet that brings a memory model with it, and the register goes on
-//        counting them, which is correct.
-//
 // I24. GEOM.CLIP's projected-triangle input (`geom_clip_tri_*`), its three
 //      attribute packets (`geom_clip_attr_*`) and its cull mode
 //      (`geom_clip_cull_mode_i`) -- BOUNDARY. Same absent block as I11 and
@@ -1201,6 +1262,160 @@
 //      A corruption check with an unfed operand that SILENTLY passed would be
 //      the version of this worth being afraid of.
 //
+// I36. GEOM.MESHFETCH's DRAW JOB (`geom_mf_job_*`) -- BOUNDARY. NEW
+//      2026-09-19, opened by composing the geometry asset path (connected
+//      item 11), and it is one of I23's three successors.
+//
+//      THE ABSENT OWNER IS CMD.SCHEDULER, the same one I14, I30 and I33
+//      name, and the job is a DRAW: which instance, where its 64-byte
+//      descriptor lives, which asset format the reader speaks, the
+//      generation the handle claims, which cameras are active this frame,
+//      and the resolved 3x4 instance transform. `zhao_cmd_decoder` emits
+//      record headers and `zhao_cmd_exec` lowers SetView and SurfaceStamp;
+//      neither produces a mesh draw, and there is no opcode in
+//      `spec/commands.zidl` this file could lower into one without choosing
+//      the layout itself.
+//
+//      `j_xform_i` IS RESOLVED BY THE CALLER BY CONTRACT, which is why it is
+//      a port and not a lookup here: the block's own comment says "the
+//      contract's job packet names `instance_transform_id`. Resolving an id
+//      to a matrix is a PALETTE LOOKUP, and this block does not own it".
+//      GEOM.POSE's palette is composed above and holds BONE matrices for a
+//      creature, which is a different table from an instance transform;
+//      reading one as the other would be the hidden adapter this file
+//      refuses.
+//
+//      NOT part of this gap: `j_client_i`. See I40.
+//
+// I37. GEOM.MESHFETCH's DESCRIPTOR CRC VERDICT (`geom_mf_crc_ok_i`) --
+//      BOUNDARY. NEW 2026-09-19, and it is a MISSING BLOCK rather than
+//      missing wiring, which is why it is its own entry and not a clause of
+//      I36.
+//
+//      The block takes the verdict and does not compute it -- "the CRC over
+//      bytes 0..59, folded by the caller's `zhao_crc32c_fold`. Wired in
+//      rather than folded here: that block is the one implementation and a
+//      second would be a second law." SEARCHED:
+//      `fpga/rtl/common/zhao_crc32c_fold.sv` exists and is exactly that one
+//      implementation, but it is COMBINATIONAL -- {state, up to eight bytes,
+//      a count} in, next state out. What nothing in `fpga/rtl` owns is the
+//      WALKER: the thing that runs that fold across the descriptor's beats
+//      as they return, stops at byte 60, and compares the result with bytes
+//      60..63. That is a state machine with a beat-counting law, and a state
+//      machine belongs in a file with a contract and a test, not in this
+//      composer.
+//
+//      IT IS A PORT AND THE FAILURE MODE IS LOUD IN ONE DIRECTION ONLY,
+//      which is worth stating because the two directions are not
+//      symmetrical. Held LOW, every descriptor is refused, nothing reaches
+//      GEOM.ASSETFETCH, and `geom_mf_refused_crc_o` counts every one of
+//      them. Held HIGH, a corrupt descriptor is believed. The block's own
+//      formal lane already found and fixed the subtle half of this (it
+//      recomputed its refusal from the LIVE input instead of latching the
+//      verdict, `design/formal_runs.yml`), so what remains is only the
+//      absent producer. Taking the verdict from the caller is this tree's
+//      standing pattern for exactly this shape -- see
+//      `zhao_texture_palette_res`'s `ld_crc_ok_i`, whose END(slot,
+//      generation, crc_ok) protocol is the same split.
+//
+// I38. GEOM.ASSETFETCH's MESHLET RELEASE (`geom_af_release_i`) -- BOUNDARY.
+//      NEW 2026-09-19, the third of I23's successors, and it is the same
+//      SHAPE as I21's compose-cache retirement one subsystem over.
+//
+//      The port's owner is whoever knows that BOTH readers have finished
+//      with the buffered meshlet, and the block says why it refuses to guess:
+//      it is "EXPLICIT rather than inferred from 'all vertices streamed and
+//      the last triplet asked for', because two consumers finish
+//      independently and a buffer released on a guess is a buffer
+//      overwritten under a reader". The two consumers are composed here --
+//      GEOM.VDECODE on the vertex stream and GEOM.ASSEMBLE on the index
+//      service -- and neither emits a done. GEOM.ASSEMBLE's `t_last_o` marks
+//      the last TRIANGLE and says nothing about the vertex run; joining it
+//      to a guess about GEOM.VDECODE would be a retirement policy invented
+//      in the composer, which is the thing the terrain spine is proud of not
+//      having done.
+//
+//      A CONSEQUENCE WORTH STATING, because it looks like a stall and is
+//      not. With nothing driving the release, GEOM.ASSETFETCH fetches ONE
+//      meshlet's footprint, hands it over, serves it, and holds in S_SERVE.
+//      So `geom_af_meshlets_fetched_o` reaching 1 and stopping, while
+//      `geom_af_beats_read_o` shows a whole footprint and
+//      `geom_asm_triangles_o` shows the meshlet's triangles, is the EXPECTED
+//      reading of an unreleased buffer and not a defect in the chain.
+//
+// I39. GEOM.ASSEMBLE's THREE DESCRIPTOR FIELDS
+//      (`geom_asm_vertex_offset_i`, `geom_asm_material_id_i`,
+//      `geom_asm_raster_state_i`) and its TRIANGLE OUTPUT (`geom_asm_t_*`)
+//      -- BOUNDARY. NEW 2026-09-19. One entry because they are two ends of
+//      one block, and the SAME STANDING as I35: the block is composed on its
+//      real producer for everything that has one, and the fields that have
+//      no owner inside this module are real ports rather than constants.
+//
+//      WHAT IS REAL. `m_valid_i`/`m_ready_o`, `m_vertex_count_i`,
+//      `m_triangle_count_i` and `m_src_id_i` come from GEOM.ASSETFETCH's
+//      `s_*` port, and the whole `ix_*` index service is that block's, port
+//      for port: nine bits of triplet number out, three u8 local indices
+//      back, request/valid with no ready, exactly as both files declare it.
+//
+//      WHY THE VERTEX OFFSET IS NOT. `m_vertex_offset_i` is a PER-VIEW
+//      VERTEX-ID BASE: the block adds it to a u8 local index to name a
+//      projected vertex, and its own header says the field is per view
+//      because "a single walk emitting into both views gives view 1 the
+//      vertices of view 0". The nearby value that looks like it --
+//      GEOM.MESHFETCH's `r_vertex_offset_o` -- is a POOL-RELATIVE BYTE
+//      OFFSET into the render asset pool, which is what GEOM.ASSETFETCH's
+//      own port comment calls it and what that block adds
+//      `ZHAO_GEOM_ASSET_BASE` to. Those are different quantities in
+//      different spaces, and the one that would produce the first is the
+//      arena allocator inside GEOM.PARAMBUF, which has no composed owner
+//      (see the refusal list below). Truncating a byte offset to sixteen
+//      bits and calling it a vertex id is precisely the rename I13 refuses.
+//
+//      WHY THE MATERIAL IS NOT, AND IT IS NOT THE OBVIOUS REASON.
+//      GEOM.MESHFETCH DOES emit `r_material_id_o` -- but it emits it beside
+//      the descriptor it has just read, and by the time GEOM.ASSETFETCH has
+//      finished the footprint and offered the meshlet to GEOM.ASSEMBLE, the
+//      fetcher's result register has moved on. Wiring them would be a join
+//      between two things that move independently and would assemble meshlet
+//      N's triangles with meshlet M's material -- the identical fault I35
+//      records for the pageloader's header registers. Carrying it properly
+//      means a field on GEOM.ASSETFETCH's `s_*` port, which is an RTL change
+//      to a block with its own differential and is not smuggled into a
+//      composition packet. `raster_state` has no producer anywhere.
+//
+//      THE TRIANGLE OUTPUT's customer is the absent replay block of I11 --
+//      the specification written there takes "a TriangleDescriptor
+//      {v0,v1,v2} from GEOM.ASSEMBLE", and this is that port, leaving the
+//      module so the descriptors are observable rather than dropped.
+//
+// I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
+//      the core assigns both, in the same standing as I9 and I25.
+//
+//      THE MEMORY CLIENT (`j_client_i`, `m_client_i`). Both fetchers take
+//      one because, in their own words, "no block invents which client it
+//      is". In this console the answer is not a choice: `zhao_vram_arbiter`
+//      builds the controller's tag by casting the slot index, so slot 3 IS
+//      ENGINE1 positionally, and `zhao_mem_guard` grants the render asset
+//      pool to ENGINE1 alone. It is the named localparam
+//      `GEOM_ASSET_CLIENT_C` rather than a literal so the day client id 5 is
+//      spent -- `zhao_pkg` holds it deliberately unspent under ruling T3 --
+//      the thing that has to change is greppable. `zhao_geom_mem_adapter`
+//      forces the field to ENGINE1 downstream anyway, by its section 11.2,
+//      so this value is the truthful one and not the load-bearing one.
+//
+//      THE MESHLET'S SOURCE ID (GEOM.ASSETFETCH's `m_src_id_i`) is
+//      GEOM.MESHFETCH's `r_instance_id_o`, the job's own instance id echoed
+//      back beside the meshlet record it describes. The alternative was a
+//      separate port on this module's edge, and it was rejected for the
+//      reason I39 gives about the material: a draw identity arriving on an
+//      independent path can drift from the meshlet it is supposed to label,
+//      and a vertex attributed to the wrong draw is a measurement fault no
+//      output check can see. The echoed id cannot drift, because it travels
+//      in the same handshake as the counts beside it. Listed here because it
+//      is a decision taken in the composer: if `src_id` must ever mean
+//      something other than the instance that caused the fetch, the owner is
+//      whoever owns the draw and this assignment is wrong.
+//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -1243,13 +1458,135 @@
 //   emits none of the three. Its own output is a RIM EDGE, not a triangle, so
 //   even the far end needs a block that is not built.
 //
+//   GEOM.PARAMBUF is the ENGINE1 arena's RECORD LAYER -- 24-byte
+//   ProjectedVertex, 16-byte TriangleDescriptor and 64-byte tile-reference
+//   chunk, bytes in and fields out, with the s21 legality rule and the
+//   chunk's frame-generation staleness gate. Its three inputs are records
+//   READ BACK OUT of that arena, and SEARCHED: nothing in `fpga/rtl` writes
+//   one into memory. GEOM.ASSEMBLE, composed below, emits a
+//   TriangleDescriptor's FIELDS, which is this block's job run backwards --
+//   pairing the two would be an encode immediately undone by a decode with
+//   no memory between them, which is a disconnected implementation with
+//   extra steps whatever the handshakes did. The absent owner is the arena's
+//   WRITER and its allocator, which is the same one entry I39 names for
+//   GEOM.ASSEMBLE's per-view vertex-id base, one level up.
+//
+//   GEOM.DEPTHQUANT is refused for a HANDSHAKE and not for a missing
+//   producer, which is the opposite of what its entry would have said a day
+//   ago and is worth writing out because the producer half is genuinely
+//   closed. `zhao_proj_subsystem` is composed above and emits `w` twice
+//   over: per vertex on client A's `a_w_o`, and per triangle on
+//   `out_aw_o`/`out_bw_o`/`out_cw_o` -- its own header ends the list of what
+//   it exposes with "which is what GEOM.CLIP consumes today and what
+//   GEOM.DEPTHQUANT needs". Three things stand between that and a wire:
+//
+//     * THE PER-VERTEX PORT CANNOT BE BACK-PRESSURED. Client A's result port
+//       has no `ready`; it is a PUSH into `zhao_geom_proj_lane`'s arena, and
+//       `zhao_project_core` is fully pipelined at ONE VERTEX PER CLOCK (its
+//       stage-5b note: "LATENCY, NOT INITIATION INTERVAL ... a vertex still
+//       enters every cycle"). GEOM.DEPTHQUANT is strictly one at a time --
+//       S_IDLE, S_RCP, S_WAIT, S_COMB, S_HOLD, with a reciprocal in the
+//       middle -- so a tap there would silently drop vertices with every
+//       handshake legal and every counter balancing. "It keeps up at the
+//       rate GEOM.SKIN actually issues" is a WORKLOAD argument about a
+//       structural hazard, which is the shape of reasoning this file's own
+//       rules refuse.
+//     * THE TRIANGLE PORT HAS THE HANDSHAKE AND THE WRONG ARITY. `out_*` is
+//       ready/valid and carries all three corners' `w` with their behind
+//       bits and a source id -- but it presents three corners in ONE beat
+//       and the block takes one vertex. The thing between them is a
+//       three-corner serialiser with a reply join, which is a state machine,
+//       which belongs in a file with a contract and a test and not in this
+//       composer. That is the same sentence entry I11 writes about the
+//       replay customer, and it is the same missing block seen from the
+//       depth side.
+//     * AND THE RECIPROCAL SERVICE WOULD HAVE TO COME WITH IT.
+//       `rcp_valid_o`/`rcp_ready_i`/`rcp_d_o` and
+//       `rcp_rvalid_i`/`rcp_rready_o`/`rcp_r_i`/`rcp_k_i` match
+//       `fpga/rtl/raster/zhao_raster_rcp24.sv` port for port -- SEARCHED,
+//       and that is the golden implementation and the oracle -- but it is
+//       not in this closure and the shell's own reciprocal is internal to
+//       the raster path with no client port.
+//   `v_profile_i` is additionally SetView's `flags[1:0]`, which is entry
+//   I14's still-open half: a ratified field with no port on
+//   `zhao_project_core` to put it on.
+//
+//   GEOM.PROJECT IS NOT REFUSED AND IT IS NOT COMPOSED, which is a third
+//   thing and the only one of its kind in this file. `zhao_geom_project.sv`
+//   is BY ITS OWN HEADER "a thin shell" over
+//   `fpga/rtl/common/zhao_project_core.sv` -- "a ready/valid handshake, the
+//   accepted-vertex counter, and nothing else" -- and that core is already
+//   in this composition, inside `u_proj_subsystem`, serving GEOM on client A
+//   and TERRAIN on client B. Instantiating the shell as well would put a
+//   SECOND `zhao_project_core` in the console: about 6,199 ALM and 33 DSP,
+//   spent to re-do arithmetic the console already performs, in a design
+//   whose binding constraint is ALMs. That is the deduplication campaign
+//   undone to satisfy a ledger row.
+//
+//   THE LEDGER ALREADY KNOWS THIS, AND IT HAS ALREADY RULED WHEN TO ACT ON
+//   IT, which is why nothing about the ledger is changed here.
+//   `design/prod_manifest.yml` says of `zhao_geom_proj_lane` that
+//   "selecting one shared service instead of two wrappers (6,598 ALM / 33
+//   DSP against ~12,400 / 66) needs this composed AND a producer driving
+//   it", and of `zhao_geom_group_seq` that the producer now exists but
+//   "the selected census still counts zhao_geom_project and
+//   zhao_terrain_project separately, and changing that is one deliberate
+//   edit after the composed fit closes". Both preconditions except the fit
+//   are met. THE FIT IS NOT THIS PACKET'S TO SPEND, and flipping a census
+//   onto an arrangement nobody has measured is precisely what that row
+//   gated. So what this file adds is the observation and not the act: the
+//   capability is already PRESENT -- client A of `u_proj_subsystem` is
+//   `zhao_geom_project`'s port shape, vertex for vertex, minus the
+//   accepted-vertex counter -- and the remaining work is an accounting edit
+//   with a named precondition rather than a composition. The register goes
+//   on counting `zhao_geom_project` as unconnected until then, which is
+//   correct and is a cheaper wrong answer than a second projector.
+//
 // ---------------------------------------------------------------------------
-// LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
+// LIGHTING SEAM -- STILL NOT CONNECTED, FOR THREE NEW REASONS
 // ---------------------------------------------------------------------------
-// `zhao_geom_light.sv` and every `zhao_light_*` file are being refactored into
-// a lighting service while this file is written, so they are EXCLUDED from this
-// composition on purpose and none of them appears in its source closure. This
-// core therefore contains ZERO lighting logic and its resource number contains
+// CORRECTED 2026-09-19. This section used to read: "`zhao_geom_light.sv` and
+// every `zhao_light_*` file are being refactored into a lighting service
+// while this file is written, so they are EXCLUDED from this composition on
+// purpose". THAT REFACTOR HAS LANDED, so the exclusion's stated reason had
+// outlived its cause and the next reader would have been waiting for work
+// that was already done. SEARCHED: `zhao_light_stream.sv` is the streamed
+// service (commit fb3d30f4, "GEOM.LIGHT: streamed lighting service at II2"),
+// `zhao_geom_light.sv` is a shell AROUND the shared light engine (d4f837d8),
+// and `zhao_light_skin_adapter.sv` is the asserted narrowing between
+// SKIN.NORM's {direction:s64x3, magnitude:u64} and the service's s32/u32
+// prepared form. Nothing is mid-flight.
+//
+// The seam is still not connected, and the reasons are now specific:
+//
+//   * GEOM.SKIN.NORM's THREE OPERANDS ARE NEVER SIMULTANEOUSLY VALID IN THIS
+//     MODULE, and this is the interesting one because two of the three are
+//     already here and idle. It needs {packed bind-space normal, w0} AND the
+//     same two bone matrices its vertex was skinned with. The normal is
+//     GEOM.VDECODE's `d_nx_o`/`d_ny_o`/`d_nz_o`, which leave this module
+//     unused today; the matrices are `zhao_geom_pose_palette`'s `a_m_o` and
+//     `b_m_o`. But the palette store's pass-through payload is x, y, z, w0,
+//     rigid and src_id -- IT DOES NOT CARRY THE NORMAL -- so the normal is
+//     valid at the decoder's output and the matrices at the store's, several
+//     clocks and one lookup apart, for what may not even be the same vertex.
+//     Joining them here would be a composer pairing two things that move
+//     independently, producing a normal skinned by another vertex's bones,
+//     which is a lit vertex no output check can distinguish from a correct
+//     one. Closing it means `zhao_geom_pose_palette` carrying the normal
+//     through beside the vertex -- an RTL change to a block with its own
+//     directed test, not a composition.
+//   * GEOM.LIGHT's DESCRIPTOR BANK HAS NO PRODUCER. `cfg_we_i`/`cfg_addr_i`/
+//     `cfg_data_i` carry per-light direction, normal detail, colour gain and
+//     emission, plus the environment's ambient and spill, and `nlights_i`
+//     says how many to fold. No opcode in `spec/commands.zidl` carries any
+//     of it, so this is the same absent CMD path entry I14 describes for the
+//     viewport rect -- a missing COMMAND rather than missing wiring.
+//   * ITS OUTPUT IS A SHELL-SIDE CHANGE. The RGB term goes into the raster
+//     material stage inside `zhao_geom_bin_pipe_v2`, so the seam is not
+//     purely additive to this file and should be planned with I15.
+//
+// So no `zhao_light_*` file appears in this composition's source closure.
+// This core contains ZERO lighting logic and its resource number contains
 // none either.
 //
 // `light_seam_connected_o` is that statement made machine-readable: it is tied
@@ -1333,6 +1670,23 @@ module zhao_console_core
   parameter int unsigned GEOM_INDEX_W  = $clog2(GEOM_DEPTH) + 1,
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
   parameter int unsigned GEOM_MUL_LANES= 3,
+
+  // ---- GEOMETRY: the asset fetch path -------------------------------------
+  // ONE pair of limits for TWO blocks, written once for the same reason
+  // TWOD_LINE_W is: GEOM.ASSETFETCH sizes the private buffer it fills from
+  // these, and GEOM.ASSEMBLE decides which local index is legal against the
+  // same numbers. Two blocks disagreeing about how big a meshlet may be is a
+  // walk off the end of a buffer that every handshake calls legal, so they
+  // are one expression rather than two literals. Both are the owning blocks'
+  // own defaults (GEOM.MESHFETCH.md's ruling limits: a u8 local index cannot
+  // address past 255, and 126 triangles x 3 indices is 378 bytes).
+  parameter int unsigned GEOM_ASSET_MAX_VERTICES  = 64,
+  parameter int unsigned GEOM_ASSET_MAX_TRIANGLES = 126,
+  // GEOM.ASSEMBLE's vertex-id width. 16 is NOT a free choice and is named
+  // here so it reads as the constraint it is: it is GEOM.PARAMBUF's
+  // TriangleDescriptor field (`vertex_id[3] u16`, ruling R7), so widening it
+  // would emit a descriptor the record layer cannot store.
+  parameter int unsigned GEOM_ASM_VIDW = 16,
 
   // ---- GEOMETRY: the clip/setup triangle front door ------------------------
   // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
@@ -1541,13 +1895,87 @@ module zhao_console_core
   output logic [31:0]             part_refused_capacity_o,
   output logic [31:0]             part_max_children_in_tick_o,
 
-  // ---- I23: GEOM.VDECODE's 32-byte vertex record stream --------------------
-  // GEOM.ASSETFETCH is its named producer and is not composed; see I23 for the
-  // reason, which is a missing memory model rather than a missing wire.
-  input  logic                    geom_vd_v_valid_i,
-  output logic                    geom_vd_v_ready_o,
-  input  logic [255:0]            geom_vd_v_bytes_i,
-  input  logic [15:0]             geom_vd_v_src_id_i,
+  // ---- THE GEOMETRY ASSET PATH (connected item 11) -------------------------
+  // I23's four ports -- `geom_vd_v_valid_i`, `geom_vd_v_ready_o`,
+  // `geom_vd_v_bytes_i`, `geom_vd_v_src_id_i` -- LEFT THIS LIST on 2026-09-19
+  // rather than being driven: GEOM.ASSETFETCH is composed below and is that
+  // port's real producer. What follows is what the path still asks of the
+  // outside, and each group is one numbered entry in the header.
+
+  // ---- I36: GEOM.MESHFETCH's DRAW JOB -------------------------------------
+  input  logic                    geom_mf_job_valid_i,
+  output logic                    geom_mf_job_ready_o,
+  input  logic [15:0]             geom_mf_job_instance_id_i,
+  input  logic [26:0]             geom_mf_job_desc_addr_i,
+  input  logic [7:0]              geom_mf_job_format_i,
+  input  logic [15:0]             geom_mf_job_generation_i,
+  input  logic [1:0]              geom_mf_job_active_mask_i,
+  input  logic signed [31:0]      geom_mf_job_xform_i [0:11],
+
+  // ---- I37: the descriptor's CRC VERDICT ----------------------------------
+  input  logic                    geom_mf_crc_ok_i,
+
+  // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
+  input  logic                    geom_af_release_i,
+
+  // ---- I39: GEOM.ASSEMBLE's three descriptor fields -----------------------
+  input  logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i,
+  input  logic [15:0]              geom_asm_material_id_i,
+  input  logic [31:0]              geom_asm_raster_state_i,
+
+  // ---- I39: GEOM.ASSEMBLE's TriangleDescriptor, out to the absent replay --
+  output logic                     geom_asm_t_valid_o,
+  input  logic                     geom_asm_t_ready_i,
+  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v0_o,
+  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v1_o,
+  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v2_o,
+  output logic [15:0]              geom_asm_t_material_o,
+  output logic [31:0]              geom_asm_t_raster_o,
+  output logic [15:0]              geom_asm_t_src_id_o,
+  output logic                     geom_asm_t_last_o,
+
+  // ---- the asset path's evidence ------------------------------------------
+  // GEOM.MESHFETCH's seven refusal rows are exported SEPARATELY rather than
+  // as the block's `refused_o [7]`, in the block's own documented order
+  // (format, crc, generation, vertex_count, triangle_count, reserved,
+  // zero_bound). One counter for all seven would name none of them, which is
+  // that block's own argument for keeping them apart.
+  output logic [31:0] geom_mf_meshlets_considered_o,
+  output logic [31:0] geom_mf_culled_all_cameras_o,
+  output logic [31:0] geom_mf_descriptors_fetched_o,
+  output logic [31:0] geom_mf_guard_denied_o,
+  output logic [31:0] geom_mf_refused_format_o,
+  output logic [31:0] geom_mf_refused_crc_o,
+  output logic [31:0] geom_mf_refused_generation_o,
+  output logic [31:0] geom_mf_refused_vertex_count_o,
+  output logic [31:0] geom_mf_refused_triangle_count_o,
+  output logic [31:0] geom_mf_refused_reserved_o,
+  output logic [31:0] geom_mf_refused_zero_bound_o,
+
+  // GEOM.MEM_ADAPTER: `geom_ma_contention_o` is the number that says what
+  // sharing ONE ENGINE1 client between two fetchers actually costs, and it
+  // could not move until both of them were behind it.
+  output logic [31:0] geom_ma_jobs_a_o,
+  output logic [31:0] geom_ma_jobs_b_o,
+  output logic [31:0] geom_ma_denied_o,
+  output logic [31:0] geom_ma_contention_o,
+  output logic [31:0] geom_ma_err_short_o,
+  output logic [31:0] geom_ma_err_long_o,
+  output logic [31:0] geom_ma_err_unowned_o,
+
+  output logic [31:0] geom_af_meshlets_fetched_o,
+  output logic [31:0] geom_af_beats_read_o,
+  output logic [31:0] geom_af_guard_denied_o,
+  output logic [31:0] geom_af_refused_footprint_o,
+  output logic [31:0] geom_af_prefetch_stall_o,
+  output logic [31:0] geom_af_err_beat_truncated_o,
+  output logic [31:0] geom_af_err_beat_overrun_o,
+  output logic [31:0] geom_af_err_beat_unowned_o,
+
+  output logic [31:0] geom_asm_meshlets_o,
+  output logic [31:0] geom_asm_triangles_o,
+  output logic [31:0] geom_asm_refused_limits_o,
+  output logic [31:0] geom_asm_refused_index_o,
 
   // ---- GEOM.VDECODE's side-channels and evidence ---------------------------
   // These leave the module because nothing composed here consumes them, and an
@@ -2408,15 +2836,16 @@ module zhao_console_core
   // a memory that never says no, and `prefetch_stall_o` was connected before
   // this tread precisely so its uncontended reading (27) exists to compare
   // against.
-  input  var zhao_guard_req_t geom_guard_req_i,
-  output var zhao_guard_rsp_t geom_guard_rsp_o,
-  // ...and the beats coming back. Until this tread the shell had ONE reader,
-  // so read data was wired straight to the scanout packer. Now it has two, and
-  // which one a returning word belongs to is a fact that has to be tracked
-  // rather than assumed.
-  output var logic            geom_beat_valid_o,
-  output var logic [63:0]     geom_beat_data_o,
-  output var logic            geom_beat_last_o,
+  // THESE FIVE PORTS ARE GONE, 2026-09-19, and the sentence above is why the
+  // removal is the point rather than a tidy-up. `geom_guard_req_i`,
+  // `geom_guard_rsp_o` and the three `geom_beat_*_o` were this module's edge:
+  // the bench answered the grants and fabricated the beats, so "the whole
+  // staircase rested on a memory that granted immediately and answered in one
+  // cycle" was still true of the CONSOLE even after it stopped being true of
+  // the shell. `u_geom_mem_adapter` drives that socket now (connected item
+  // 11), so the fetchers are behind the real guard and the real controller
+  // and the only memory left for a harness to supply is the SDRAM itself, at
+  // `phy_*`, where the completion plan puts it.
 
   input  logic [63:0] render_fill_word_i,
   input  logic [63:0] render_clear_word_i,
@@ -3517,12 +3946,15 @@ module zhao_console_core
     .clk        (gpu_clk),
     .rst_n      (rst_n),
 
-    // I23: GEOM.ASSETFETCH is the producer and is not composed; see the header.
-    .v_valid_i  (geom_vd_v_valid_i),
-    .v_ready_o  (geom_vd_v_ready_o),
-    .v_bytes_i  (geom_vd_v_bytes_i),
+    // REAL: GEOM.ASSETFETCH's 32-byte vertex record. This was entry I23 and
+    // it is CLOSED -- the producer is `u_geom_assetfetch` at the end of this
+    // file, reading the render asset pool through the real MEM.GUARD. Name
+    // for name, width for width, nothing computed between them.
+    .v_valid_i  (af_v_valid),
+    .v_ready_o  (af_v_ready),
+    .v_bytes_i  (af_v_bytes),
     .v_format_i (GEOM_VERTEX_FORMAT_C),   // I25: assigned here, not tied off
-    .v_src_id_i (geom_vd_v_src_id_i),
+    .v_src_id_i (af_v_src_id),
 
     // REAL: the decoded vertex into GEOM.SKIN.
     .d_valid_o  (vd_d_valid),
@@ -5151,11 +5583,17 @@ module zhao_console_core
     // boundary input on this module until 2026-09-19.
     .render_tri_valid_i        (st_o_valid),
     .render_tri_ready_o        (st_o_ready),
-    .geom_guard_req_i          (geom_guard_req_i),
-    .geom_guard_rsp_o          (geom_guard_rsp_o),
-    .geom_beat_valid_o         (geom_beat_valid_o),
-    .geom_beat_data_o          (geom_beat_data_o),
-    .geom_beat_last_o          (geom_beat_last_o),
+    // REAL: the shell's ONE geometry guard socket, driven by
+    // `u_geom_mem_adapter`, which merges GEOM.MESHFETCH and GEOM.ASSETFETCH
+    // into it. These five were boundary ports (a bench answered the grants
+    // and fabricated the beats); they are internal wires now and the traffic
+    // on them is two real fetchers against the real MEM.GUARD, MEM.VRAM
+    // .ARBITER and `zhao_sdram_ctrl` this shell already instantiates.
+    .geom_guard_req_i          (ma_m_req),
+    .geom_guard_rsp_o          (ma_m_rsp),
+    .geom_beat_valid_o         (ma_m_beat_valid),
+    .geom_beat_data_o          (ma_m_beat_data),
+    .geom_beat_last_o          (ma_m_beat_last),
     .render_kx0_i              (st_kx0),
     .render_ky0_i              (st_ky0),
     .render_kc0_i              (st_kc0),
@@ -7018,6 +7456,327 @@ module zhao_console_core
     .fill_overrun_o  (terr_cc_fill_overrun_o),
     .lat_oob_o       (terr_cc_lat_oob_o),
     .cs_oob_o        (terr_cc_cs_oob_o)
+  );
+
+  // ==========================================================================
+  // 11. THE GEOMETRY ASSET PATH.  MESHFETCH and ASSETFETCH behind ONE ENGINE1
+  //     client, the cull they share a matrix bank with, and the index walk.
+  //
+  //       GEOM.MESHFETCH --- guard A ---\
+  //                                      GEOM.MEM_ADAPTER -> the shell's ONE
+  //       GEOM.ASSETFETCH -- guard B ---/   geometry MEM.GUARD socket
+  //             |  v_*  -> GEOM.VDECODE        (entry I23, CLOSED)
+  //             |  s_*  -> GEOM.ASSEMBLE
+  //             '  ix_* <-> GEOM.ASSEMBLE      (the index service)
+  //
+  //  Header connected item 11 carries the argument.  Declared at the END of the
+  //  instantiation region and not beside GEOM.VDECODE, even though it feeds it,
+  //  because these five blocks are one subsystem and splitting a subsystem
+  //  across two places in a file is how one half gets edited.
+  // ==========================================================================
+
+  // The memory-client identity.  Entry I40: assigned here, not tied off.
+  localparam zhao_client_e GEOM_ASSET_CLIENT_C = ZHAO_CLIENT_ENGINE1;
+
+  // ---- GEOM.MESHFETCH <-> GEOM.CULL ----------------------------------------
+  wire               mf_cull_tick, mf_cull_ready, mf_cull_valid, mf_cull_reject;
+  wire        [ 1:0] mf_cull_active, mf_cull_vis;
+  wire signed [31:0] mf_cull_cx, mf_cull_cy, mf_cull_cz, mf_cull_radius;
+
+  // ---- GEOM.MESHFETCH -> GEOM.ASSETFETCH: the meshlet record ---------------
+  wire        mf_r_valid, mf_r_ready;
+  wire [15:0] mf_r_instance_id;
+  wire [31:0] mf_r_vertex_offset, mf_r_index_offset;
+  wire [ 7:0] mf_r_vertex_count, mf_r_triangle_count;
+  // The descriptor's visible mask, material and flags are read by nothing in
+  // this module.  They are DECLARED here and left unread rather than hidden
+  // behind an empty port connection: entry I39 says why the material in
+  // particular may not be handed to GEOM.ASSEMBLE from this register.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [ 1:0] mf_r_visible_mask;
+  wire [15:0] mf_r_material_id;
+  wire [ 7:0] mf_r_flags;
+  /* verilator lint_on UNUSEDSIGNAL */
+  wire [31:0] mf_refused [7];
+
+  // ---- the two guard requesters, and the one client they share -------------
+  zhao_guard_req_t mf_guard_req, af_guard_req, ma_m_req;
+  zhao_guard_rsp_t mf_guard_rsp, af_guard_rsp, ma_m_rsp;
+  wire        mf_beat_valid, af_beat_valid, ma_m_beat_valid;
+  wire [63:0] mf_beat_data,  af_beat_data,  ma_m_beat_data;
+  wire        mf_beat_last,  af_beat_last,  ma_m_beat_last;
+
+  // ---- GEOM.ASSETFETCH -> GEOM.VDECODE: the 32-byte vertex record ----------
+  wire         af_v_valid, af_v_ready;
+  wire [255:0] af_v_bytes;
+  wire [15:0]  af_v_src_id;
+
+  // ---- GEOM.ASSETFETCH <-> GEOM.ASSEMBLE -----------------------------------
+  wire        af_s_valid, af_s_ready;
+  wire [ 7:0] af_s_vertex_count, af_s_triangle_count;
+  wire [15:0] af_s_src_id;
+  wire        asm_ix_req, af_ix_valid;
+  wire [ 8:0] asm_ix_index;
+  wire [ 7:0] af_ix_a, af_ix_b, af_ix_c;
+
+  // --------------------------------------------------------------------------
+  // GEOM.CULL.  MUL_LANES is LEFT AT THE BLOCK'S OWN DEFAULT (2, two shared
+  // 33x33 lanes with the products registered); restating it here would put a
+  // second copy of a measured frontier in a composer.
+  // --------------------------------------------------------------------------
+  zhao_geom_cull u_geom_cull (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL, AND SHARED: the same merged matrix bank CMD.EXEC's SetView drives
+    // into `u_proj_subsystem` (entry I14's closed half).  This block's own port
+    // comment says its words are "EXACTLY the words zhao_geom_project takes at
+    // the same addresses", and it ignores addr >= 16 on purpose -- rejection
+    // happens in clip space, so the viewport words pass it harmlessly.  One
+    // camera, one bank, no second opinion about where it is.
+    .cfg_we_i  (proj_cfg_we_m),
+    .cfg_view_i(proj_cfg_view_m),
+    .cfg_addr_i(proj_cfg_addr_m),
+    .cfg_data_i(proj_cfg_data_m),
+
+    // REAL: the instance bounding sphere, from GEOM.MESHFETCH's descriptor.
+    .tick_i    (mf_cull_tick),
+    .active_i  (mf_cull_active),
+    .centre_x_i(mf_cull_cx),
+    .centre_y_i(mf_cull_cy),
+    .centre_z_i(mf_cull_cz),
+    .radius_i  (mf_cull_radius),
+    .ready_o   (mf_cull_ready),
+
+    // REAL: the verdict, back to the block that asked.
+    .valid_o (mf_cull_valid),
+    .vis_o   (mf_cull_vis),
+    .reject_o(mf_cull_reject)
+  );
+
+  zhao_geom_meshfetch u_geom_meshfetch (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I36: the DRAW.  CMD.SCHEDULER is the absent owner; see the header.
+    .j_valid_i      (geom_mf_job_valid_i),
+    .j_ready_o      (geom_mf_job_ready_o),
+    .j_instance_id_i(geom_mf_job_instance_id_i),
+    .j_desc_addr_i  (geom_mf_job_desc_addr_i),
+    .j_format_i     (geom_mf_job_format_i),
+    .j_generation_i (geom_mf_job_generation_i),
+    .j_active_mask_i(geom_mf_job_active_mask_i),
+    .j_xform_i      (geom_mf_job_xform_i),
+    .j_client_i     (GEOM_ASSET_CLIENT_C),   // I40: assigned here
+
+    // REAL: requester A of the shared ENGINE1 client.
+    .guard_req_o (mf_guard_req),
+    .guard_rsp_i (mf_guard_rsp),
+    .beat_valid_i(mf_beat_valid),
+    .beat_data_i (mf_beat_data),
+    .beat_last_i (mf_beat_last),
+
+    // I37: the descriptor's CRC verdict.  `zhao_crc32c_fold` is the fold step
+    // and exists; the walker that runs it over the returning beats does not.
+    .crc_ok_i(geom_mf_crc_ok_i),
+
+    // REAL: the cull service, which is a block and not a played answer.
+    .cull_tick_o  (mf_cull_tick),
+    .cull_active_o(mf_cull_active),
+    .cull_cx_o    (mf_cull_cx),
+    .cull_cy_o    (mf_cull_cy),
+    .cull_cz_o    (mf_cull_cz),
+    .cull_radius_o(mf_cull_radius),
+    .cull_ready_i (mf_cull_ready),
+    .cull_valid_i (mf_cull_valid),
+    .cull_vis_i   (mf_cull_vis),
+    .cull_reject_i(mf_cull_reject),
+
+    // REAL: the meshlet record into GEOM.ASSETFETCH.  Ordinary ready/valid, so
+    // one accepted record is one meshlet -- the re-submission fault the shell
+    // bench hit came from driving `m_valid_i` off a held LEVEL, and there is no
+    // level here.
+    .r_valid_o         (mf_r_valid),
+    .r_ready_i         (mf_r_ready),
+    .r_instance_id_o   (mf_r_instance_id),
+    .r_visible_mask_o  (mf_r_visible_mask),
+    .r_vertex_offset_o (mf_r_vertex_offset),
+    .r_index_offset_o  (mf_r_index_offset),
+    .r_vertex_count_o  (mf_r_vertex_count),
+    .r_triangle_count_o(mf_r_triangle_count),
+    .r_material_id_o   (mf_r_material_id),
+    .r_flags_o         (mf_r_flags),
+
+    .meshlets_considered_o(geom_mf_meshlets_considered_o),
+    .culled_all_cameras_o (geom_mf_culled_all_cameras_o),
+    .descriptors_fetched_o(geom_mf_descriptors_fetched_o),
+    .guard_denied_o       (geom_mf_guard_denied_o),
+    .refused_o            (mf_refused)
+  );
+
+  // The seven refusal rows, in the block's own documented order.  Split rather
+  // than or-ed together because they have seven different causes.
+  assign geom_mf_refused_format_o         = mf_refused[0];
+  assign geom_mf_refused_crc_o            = mf_refused[1];
+  assign geom_mf_refused_generation_o     = mf_refused[2];
+  assign geom_mf_refused_vertex_count_o   = mf_refused[3];
+  assign geom_mf_refused_triangle_count_o = mf_refused[4];
+  assign geom_mf_refused_reserved_o       = mf_refused[5];
+  assign geom_mf_refused_zero_bound_o     = mf_refused[6];
+
+  // --------------------------------------------------------------------------
+  // GEOM.MEM_ADAPTER.  The whole reason the geometry front end can be in this
+  // console at all: two logical requesters, one permitted client.  It forces
+  // `client` to ENGINE1 and `write` low itself (its section 11.2), so the
+  // identity above is the truthful value rather than the load-bearing one.
+  // --------------------------------------------------------------------------
+  zhao_geom_mem_adapter u_geom_mem_adapter (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: requester A, GEOM.MESHFETCH's 32-byte descriptors.
+    .a_req_i       (mf_guard_req),
+    .a_rsp_o       (mf_guard_rsp),
+    .a_beat_valid_o(mf_beat_valid),
+    .a_beat_data_o (mf_beat_data),
+    .a_beat_last_o (mf_beat_last),
+
+    // REAL: requester B, GEOM.ASSETFETCH's 64-byte payload lines.
+    .b_req_i       (af_guard_req),
+    .b_rsp_o       (af_guard_rsp),
+    .b_beat_valid_o(af_beat_valid),
+    .b_beat_data_o (af_beat_data),
+    .b_beat_last_o (af_beat_last),
+
+    // REAL: the one permitted client, into the shell's MEM.GUARD socket.
+    .m_req_o      (ma_m_req),
+    .m_rsp_i      (ma_m_rsp),
+    .m_beat_valid_i(ma_m_beat_valid),
+    .m_beat_data_i (ma_m_beat_data),
+    .m_beat_last_i (ma_m_beat_last),
+
+    .jobs_a_o     (geom_ma_jobs_a_o),
+    .jobs_b_o     (geom_ma_jobs_b_o),
+    .denied_o     (geom_ma_denied_o),
+    .contention_o (geom_ma_contention_o),
+    .err_short_o  (geom_ma_err_short_o),
+    .err_long_o   (geom_ma_err_long_o),
+    .err_unowned_o(geom_ma_err_unowned_o)
+  );
+
+  zhao_geom_assetfetch #(
+    .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
+    .MAX_TRIANGLES (GEOM_ASSET_MAX_TRIANGLES),
+    .SRCW          (16)
+  ) u_geom_assetfetch (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: GEOM.MESHFETCH's own result record.  The two offsets are
+    // POOL-RELATIVE BYTES on both sides of this seam -- this block adds
+    // `ZHAO_GEOM_ASSET_BASE` itself -- so nothing is rebased here.
+    .m_valid_i         (mf_r_valid),
+    .m_ready_o         (mf_r_ready),
+    .m_vertex_offset_i (mf_r_vertex_offset),
+    .m_index_offset_i  (mf_r_index_offset),
+    .m_vertex_count_i  (mf_r_vertex_count),
+    .m_triangle_count_i(mf_r_triangle_count),
+    // I40: the job's instance id, echoed beside the meshlet it describes, so
+    // the label cannot drift from the thing it labels.
+    .m_src_id_i        (mf_r_instance_id),
+    .m_client_i        (GEOM_ASSET_CLIENT_C),
+
+    // REAL: requester B of the shared ENGINE1 client.
+    .guard_req_o (af_guard_req),
+    .guard_rsp_i (af_guard_rsp),
+    .beat_valid_i(af_beat_valid),
+    .beat_data_i (af_beat_data),
+    .beat_last_i (af_beat_last),
+
+    // REAL: the servable meshlet, into GEOM.ASSEMBLE.
+    .s_valid_o         (af_s_valid),
+    .s_ready_i         (af_s_ready),
+    .s_vertex_count_o  (af_s_vertex_count),
+    .s_triangle_count_o(af_s_triangle_count),
+    .s_src_id_o        (af_s_src_id),
+
+    // I38: the release.  Its owner is whoever knows BOTH readers are done, and
+    // neither GEOM.VDECODE nor GEOM.ASSEMBLE emits that.  See the header for
+    // what an unreleased buffer reads like, because it looks like a stall.
+    .release_i(geom_af_release_i),
+
+    // REAL: the index service, GEOM.ASSEMBLE's other half.
+    .ix_req_i  (asm_ix_req),
+    .ix_index_i(asm_ix_index),
+    .ix_valid_o(af_ix_valid),
+    .ix_a_o    (af_ix_a),
+    .ix_b_o    (af_ix_b),
+    .ix_c_o    (af_ix_c),
+
+    // REAL: the 32-byte vertex record into GEOM.VDECODE.  Entry I23, closed.
+    .v_valid_o (af_v_valid),
+    .v_ready_i (af_v_ready),
+    .v_bytes_o (af_v_bytes),
+    .v_src_id_o(af_v_src_id),
+
+    .meshlets_fetched_o  (geom_af_meshlets_fetched_o),
+    .beats_read_o        (geom_af_beats_read_o),
+    .guard_denied_o      (geom_af_guard_denied_o),
+    .refused_footprint_o (geom_af_refused_footprint_o),
+    .prefetch_stall_o    (geom_af_prefetch_stall_o),
+    .err_beat_truncated_o(geom_af_err_beat_truncated_o),
+    .err_beat_overrun_o  (geom_af_err_beat_overrun_o),
+    .err_beat_unowned_o  (geom_af_err_beat_unowned_o)
+  );
+
+  zhao_geom_assemble #(
+    .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
+    .MAX_TRIANGLES (GEOM_ASSET_MAX_TRIANGLES),
+    .VIDW          (GEOM_ASM_VIDW),
+    .SRCW          (16)
+  ) u_geom_assemble (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the meshlet, from GEOM.ASSETFETCH's servable port.  The counts come
+    // from the block that has BUFFERED the footprint, so they hold still for
+    // the whole walk by construction rather than by a latch this file added.
+    .m_valid_i         (af_s_valid),
+    .m_ready_o         (af_s_ready),
+    .m_vertex_count_i  (af_s_vertex_count),
+    .m_triangle_count_i(af_s_triangle_count),
+    .m_src_id_i        (af_s_src_id),
+
+    // I39: the three fields with no owner inside this module.
+    .m_vertex_offset_i(geom_asm_vertex_offset_i),
+    .m_material_id_i  (geom_asm_material_id_i),
+    .m_raster_state_i (geom_asm_raster_state_i),
+
+    // REAL: the index service.  `ix_valid_i` follows the FETCHER's valid and is
+    // not tied to the request -- the served answer has a real valid, and tying
+    // it high would turn a missed answer into a silently wrong triplet.
+    .ix_req_o  (asm_ix_req),
+    .ix_index_o(asm_ix_index),
+    .ix_valid_i(af_ix_valid),
+    .ix_a_i    (af_ix_a),
+    .ix_b_i    (af_ix_b),
+    .ix_c_i    (af_ix_c),
+
+    // I39: the TriangleDescriptor, out to the absent replay customer of I11.
+    .t_valid_o  (geom_asm_t_valid_o),
+    .t_ready_i  (geom_asm_t_ready_i),
+    .t_v0_o     (geom_asm_t_v0_o),
+    .t_v1_o     (geom_asm_t_v1_o),
+    .t_v2_o     (geom_asm_t_v2_o),
+    .t_material_o(geom_asm_t_material_o),
+    .t_raster_o (geom_asm_t_raster_o),
+    .t_src_id_o (geom_asm_t_src_id_o),
+    .t_last_o   (geom_asm_t_last_o),
+
+    .meshlets_o      (geom_asm_meshlets_o),
+    .triangles_o     (geom_asm_triangles_o),
+    .refused_limits_o(geom_asm_refused_limits_o),
+    .refused_index_o (geom_asm_refused_index_o)
   );
 
 endmodule : zhao_console_core
