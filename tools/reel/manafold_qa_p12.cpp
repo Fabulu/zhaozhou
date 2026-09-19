@@ -468,6 +468,7 @@ int main(int argc, char** argv) {
       {13, 240.0, "trick: the planted 360 swings the body round its planted antenna"},
   };
   int q3_fails = 0;
+  int q3_trick_fails = 0;  // slot 13 only: the Q6a control's declared consequence
   bool startle_over = false;
   std::printf("\nQ3 ROOT CONTINUITY -- largest single-key INTERIOR root step per clip, BOUNDED\n");
   std::printf("   Default ceiling %.0f mm; five clips declare their own (table in the source).\n",
@@ -501,6 +502,7 @@ int main(int argc, char** argv) {
     if (over) {
       ++q3_fails;
       if (c.slot_id == 4) startle_over = true;
+      if (c.slot_id == 13) ++q3_trick_fails;
     }
     std::printf("   slot %2u  worst step %7.1f mm at key %d -> %d  (ceiling %5.0f)  |  WRAP %7.1f mm%s%s\n",
                 c.slot_id, worst, at, at + 1, ceiling, wrap, flag,
@@ -942,27 +944,48 @@ int main(int argc, char** argv) {
     fails += q7_fails;
   }
 
-  // Each Wave-F leg is judged on its OWN category, and must leave the other
-  // Wave-F categories green, so a control cannot be certified by a neighbour.
-  const auto attributed = [&](const char* leg, int own, int others) {
-    if (own == 0 || others != 0) {
-      std::printf("qa-p12: %s did NOT fire alone (own %d, other Wave-F categories %d)\n", leg, own,
-                  others);
+  // Each Wave-F leg is judged on its OWN category, and must leave EVERY other
+  // category green: the other Wave-F counters AND the pre-existing Q1-Q5
+  // failures. Counting only the Wave-F neighbours let a control that also broke
+  // (say) root continuity be certified as firing "alone". `fails` holds every
+  // category's total at this point, so the pre-Wave-F remainder is exact.
+  const int pre_wave_f_fails = fails - q6a_fails - q6b_fails - q6c_fails - q6d_fails - q7_fails;
+  // `allowed_pre` names the ONE pre-Wave-F consequence a control is declared to
+  // cause, and nothing else. Only the Q6a control declares one: two revolutions
+  // in the same turn window must swing the root round its planted support twice
+  // as fast, so Q3's Trick (slot 13) root-step ceiling fires too (309.2 mm
+  // against 240 on 2026-09-19). That is Q3 working, not a neighbour certifying
+  // Q6a, and it is limited to slot 13's Q3 row: any other pre-Wave-F failure
+  // still fails the leg. Alternatives were tried and rejected: -1000 and 0 pm
+  // keep Q3 green but break Q6b's join detection instead.
+  const auto attributed = [&](const char* leg, int own, int other_wave_f, int allowed_pre,
+                              const char* allowed_what) {
+    if (own == 0 || other_wave_f != 0 || pre_wave_f_fails != allowed_pre) {
+      std::printf("qa-p12: %s did NOT fire alone (own %d, other Wave-F categories %d, "
+                  "pre-Wave-F categories %d, declared %d)\n",
+                  leg, own, other_wave_f, pre_wave_f_fails, allowed_pre);
       return 1;
     }
-    std::printf("qa-p12: FAILABLE LEG OK -- %s fired only its own category (%d item(s))\n", leg, own);
+    std::printf("qa-p12: FAILABLE LEG OK -- %s fired only its own category (%d item(s); "
+                "other Wave-F 0; pre-Wave-F %d = declared%s%s)\n",
+                leg, own, pre_wave_f_fails, allowed_pre ? ": " : "", allowed_pre ? allowed_what : "");
     return 0;
   };
   if (spin_gain_leg)
-    return attributed("--fail-trick-spin-gain [Q6a]", q6a_fails, q6b_fails + q6c_fails + q6d_fails + q7_fails);
+    return attributed("--fail-trick-spin-gain [Q6a]", q6a_fails, q6b_fails + q6c_fails + q6d_fails + q7_fails,
+                      q3_trick_fails, "Q3 slot-13 root step, two turns in one window");
   if (spin_ease_leg)
-    return attributed("--fail-trick-spin-ease [Q6b]", q6b_fails, q6a_fails + q6c_fails + q6d_fails + q7_fails);
+    return attributed("--fail-trick-spin-ease [Q6b]", q6b_fails, q6a_fails + q6c_fails + q6d_fails + q7_fails,
+                      0, "");
   if (spin_pivot_leg)
-    return attributed("--fail-trick-spin-pivot [Q6c]", q6c_fails, q6a_fails + q6b_fails + q6d_fails + q7_fails);
+    return attributed("--fail-trick-spin-pivot [Q6c]", q6c_fails, q6a_fails + q6b_fails + q6d_fails + q7_fails,
+                      0, "");
   if (plant_pin_leg)
-    return attributed("--fail-trick-plant-pin [Q6d]", q6d_fails, q6a_fails + q6b_fails + q6c_fails + q7_fails);
+    return attributed("--fail-trick-plant-pin [Q6d]", q6d_fails, q6a_fails + q6b_fails + q6c_fails + q7_fails,
+                      0, "");
   if (flight_seam_leg)
-    return attributed("--fail-flight-seam [Q7]", q7_fails, q6a_fails + q6b_fails + q6c_fails + q6d_fails);
+    return attributed("--fail-flight-seam [Q7]", q7_fails, q6a_fails + q6b_fails + q6c_fails + q6d_fails,
+                      0, "");
 
   std::printf("\n%s: %d failure(s)%s\n", fails ? "FAIL" : "PASS", fails,
               fail_leg ? "   [FAILABLE LEG: lane 0 answered for every lane]" : "");
