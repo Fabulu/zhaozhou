@@ -6504,6 +6504,26 @@ set_tests_properties(field_out_height_random PROPERTIES LABELS "fast;nightly" TI
 add_test(NAME field_out_height_random_nightly COMMAND test_field_out_height --random 4000)
 set_tests_properties(field_out_height_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# FORGE.SHADOW -- contact shadows as ordinary geometry. The bench checks the
+# frozen ladder, the governor floor as a MAX (never an override), one
+# unit-circle table shared by stride, the three CORRECT refusals (void, zero
+# radius, far rung) counted apart from the one real FAULT, and that the depth
+# bias is applied per rung. It deliberately does NOT judge the bias VALUES:
+# the contract puts those on a look-gate and CLAUDE.md says measurement cannot
+# choose a value.
+set(ZHAO_FORGE_SHADOW_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/forge/zhao_forge_shadow.sv)
+add_executable(test_forge_shadow_directed forge/forge_shadow_directed.cpp)
+target_link_libraries(test_forge_shadow_directed PRIVATE zhao_harness)
+verilate(test_forge_shadow_directed
+  PREFIX Vzhao_forge_shadow
+  TOP_MODULE zhao_forge_shadow
+  SOURCES ${ZHAO_FORGE_SHADOW_SV})
+add_test(NAME forge_shadow_directed COMMAND test_forge_shadow_directed)
+set_tests_properties(forge_shadow_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # MEM.UPLOAD -- the HPS->VRAM resource upload engine. Its oracle
 # (zref::mem::upload_verdict) was written BEFORE the RTL, so the bench is a
 # DIFFERENTIAL against that oracle rather than a second transcription of the

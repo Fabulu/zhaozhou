@@ -372,7 +372,10 @@ _ALIAS: dict[str, str | None] = {
     # fired on this very line.
     "MEM.UPLOAD":        "zhao_mem_upload",
     "GEOM.LOOM":         None,
-    "FORGE.SHADOW":      None,
+    # BUILT 2026-09-19 (fpga/rtl/forge/zhao_forge_shadow.sv, 39 directed checks).
+    # The SECOND entry _stale_none_aliases() has caught the same day it was
+    # added, which is the argument for the guard rather than for my memory.
+    "FORGE.SHADOW":      "zhao_forge_shadow",
     # the owner revoked their deferral 2026-09-18; all three were cut BEFORE
     # their contracts were written, so each needs its spec authored first
     "INPUT.SNAC":        None,

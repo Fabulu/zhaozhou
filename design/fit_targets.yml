@@ -2128,6 +2128,7 @@ targets:
       - fpga/rtl/terrain/zhao_terrain_mipgen.sv
       - fpga/rtl/terrain/zhao_terrain_normals.sv
       - fpga/rtl/terrain/zhao_terrain_island_dir.sv
+      - fpga/rtl/forge/zhao_forge_shadow.sv
       - fpga/rtl/mem/zhao_mem_upload.sv
       - fpga/rtl/terrain/zhao_terrain_place.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv

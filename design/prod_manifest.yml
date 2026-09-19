@@ -135,6 +135,9 @@ top:
   # TERRAIN.PLACE: the placement owner entry I27 recorded as absent. Pure shifts
   # of the lattice index under spec/terrain_rules.md 1.3/2.1, plus the envelope
   # redundancy check the page format was designed around.
+  # FORGE.SHADOW: contact shadows as ordinary geometry -- a primitive
+  # generator, a sibling of FORGE.PRIM, not a lighting stage.
+  - zhao_forge_shadow
   # MEM.UPLOAD: the HPS->VRAM resource upload engine. Its oracle
   # (zref::mem::upload_verdict) was written before the RTL.
   - zhao_mem_upload
