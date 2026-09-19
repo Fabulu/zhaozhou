@@ -620,9 +620,60 @@ inline int32_t signed_scaled_fx(int64_t value_mm, int32_t length_mm,
   return static_cast<int32_t>(n < 0 ? -q : q);
 }
 
+/** PASS 19: the arm's arrival frame at REST -- the same chain walk and two-stage
+ *  aim finalize_rear_follow performs, on loop_rest()'s pose and the undeformed
+ *  socket target. Only consulted when kRearSocketArmFollowPm < 1000. */
+inline zc::quat16 rear_rest_arrival() {
+  static const zc::quat16 q = [] {
+    Rig g;
+    g.reset();
+    loop_pose(g, 1000, 1000, 1000, 1000, 0, 0, 0, 0, nullptr);  // == loop_rest(), defined below
+    int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
+    zc::quat16 Q = g.q[kBJunctionF];
+    const zc::quat16 locs[4] = {g.q[kBNeck], g.q[kBHingeA], g.q[kBHingeB],
+                                g.q[kBHingeC]};
+    for (int i = 0; i < 5; ++i) {
+      int32_t dx, dy, dz;
+      quat_rot_vec(Q, 0, kLoopArcMm[i], 0, dx, dy, dz);
+      px += dx;
+      py += dy;
+      pz += dz;
+      if (i < 4) Q = quat_mul(Q, locs[i]);
+    }
+    int32_t vx, vy, vz;
+    quat_rot_vec(quat_conj(Q), kRearSocketTargetXMm - px,
+                 kRearSocketTargetYMm - py, kRearSocketTargetZMm - pz, vx, vy,
+                 vz);
+    const int32_t aim_z = angle16_of(vx, vy);
+    int32_t wx, wy, wz;
+    quat_rot_vec(quat_conj(quat_z(aim_z)), vx, vy, vz, wx, wy, wz);
+    (void)wx;
+    return quat_mul(Q, quat_mul(quat_z(aim_z), quat_x(angle16_of(-wz, wy))));
+  }();
+  return q;
+}
+
+/** PASS 19: the End carrier's pose = its base frame x its authored rotation.
+ *  `qd` is the arm's solved arrival frame (Root-relative, like every local
+ *  quat the chain walk composes); `authored` is the root-local composition of
+ *  every End authority the clip wrote. legacy-root returns `authored` itself,
+ *  which is the exact version-18 pose. Call once per freshly built key. */
+inline zc::quat16 rear_socket_compose(const zc::quat16& qd,
+                                      const zc::quat16& authored) {
+  if (g_u02_rear_socket_frame == RearSocketFrame::kLegacyRoot) return authored;
+  const int32_t follow = g_u02_rear_socket_follow_pm;
+  const zc::quat16 base =
+      follow >= 1000 ? qd
+                     : zc::quat16_nlerp(rear_rest_arrival(), qd, follow, 1000);
+  return quat_mul(base, authored);
+}
+
 // The clip builders historically solved closure before assigning c.deform[f].
 // Finish the rear attachment only after the whole clip exists, so the socket,
 // return solver and body surface all consume the exact same authored sample.
+// PASS 19: this is also where the End carrier receives the arm's frame
+// (rear_socket_compose), so it must run EXACTLY ONCE per freshly built clip --
+// every call site (bank, nodule, jointgate, qa, probe, spangate) does.
 inline void finalize_rear_follow(zc::Clip& c) {
   const size_t want_local = static_cast<size_t>(c.frame_count) * kBoneCount * 3u;
   if (c.local_translation.empty()) c.local_translation.assign(want_local, 0);
@@ -700,6 +751,8 @@ inline void finalize_rear_follow(zc::Clip& c) {
     // the first visibly swollen ring. Their nearby pivots avoid the long-lever
     // LBS reversal produced by a Root-child helper.
     const zc::quat16 qd = quat_mul(Q, aim);
+    c.quats[qbase + kBRearSocket] =
+        rear_socket_compose(qd, c.quats[qbase + kBRearSocket]);
     const zc::quat16 rear_relative = quat_mul(
         quat_conj(qd), c.quats[qbase + kBRearSocket]);
     const zc::quat16 identity = zc::quat16_identity();
@@ -1395,7 +1448,13 @@ inline void hinge_play(HingePlay& hp, int f, int keys, int cyc) {
   hp.tilt_a = t[1];    hp.yaw_a = y[1];
   hp.tilt_b = t[2];    hp.yaw_b = y[2];
   hp.tilt_c = t[3];    hp.yaw_c = y[3];
-  hp.tilt_end = t[4];  hp.yaw_end = y[4];
+  // PASS 19: the End station is one of the two AMBIENT End authorities; its
+  // share is the named kRearSocketAmbientGainPm (exactly 1000 under legacy-root).
+  const int32_t amb = rear_ambient_gain_pm();
+  hp.tilt_end = amb == 1000 ? t[4] : static_cast<int32_t>(
+      (static_cast<int64_t>(t[4]) * amb) / 1000);
+  hp.yaw_end = amb == 1000 ? y[4] : static_cast<int32_t>(
+      (static_cast<int64_t>(y[4]) * amb) / 1000);
 }
 
 inline void merge_front_play(HingePlay& hp, const HingePlay* front) {
@@ -2427,10 +2486,12 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
     // Direction 12: the old B2 wag moved only the closure target and made the
     // body attachment slide. Spend that authored beat on the real rear socket
     // carrier instead; its centre stays attached while its local joint turns.
+    // PASS 19: the second AMBIENT End authority -- shared named share.
     g.q[kBRearSocket] = quat_mul(
         g.q[kBRearSocket],
         quat_z(-static_cast<int32_t>(
-            (static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) * w2) >> 16)));
+            (static_cast<int64_t>(a(kKneadWagB2A16, ph.agit_pm)) *
+             rear_ambient_gain_pm() / 1000 * w2) >> 16)));
   }
 }
 

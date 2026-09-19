@@ -1833,7 +1833,50 @@ struct ManaSplat {
   // (kMoteSurfaceFade*). Lightning, endpoints and every other splat leave it
   // false and are never touched by that fade.
   bool surface_fade;
+  // PASS 19 (Owner Direction 20 item 3): this splat is part of a mana LINE --
+  // a fold-edge strand layer (navy backing, shimmer, white core, or the
+  // pass-13 outline) or a bolt strand. The renderer scales a line's radius by
+  // the creature's projected size (mana_line_r_px), the same operand the cel
+  // outline ink uses. Motes, bodies and glows leave it false and keep size.
+  bool line = false;
 };
+
+// ---- PASS 19: MANA LINES THIN WITH DISTANCE, LIKE THE INK -----------------
+// "whenever the creature is far away, like in drift, the ... lines between
+// them, are too thick. They're as thick as up close. Like the lines
+// surrounding the creature, these lines should depend on distance."
+// Every line splat was pushed with a constant SCREEN-PIXEL radius, so Drift
+// (projected radius 128 px, outline ink 1 px) drew the fold figure with the
+// close-up 14 px backing and 2 px core -- a glowing blob over a tiny antenna.
+// At draw time a line splat's radius becomes
+//     r * projected_radius / kManaLineFullRadiusPx   (rounded, >= 1 px, <= r)
+// where projected_radius is cel_main_ink_width()'s operand. At or above the
+// full radius the width is EXACTLY the legacy width, so close-up subjects are
+// byte-identical by construction.
+//   ZHAO_U02_MANA_LINE_SCALE=distance|legacy   legacy = exact v18 bytes
+//   ZHAO_U02_MANA_LINE_FULL_PX=<40..2000>       the authoring ladder
+// SELECTED BY EYE, pass 19: 360 px -- the ink's own close reference
+// (kCelInkCloseRadiusQ8) -- from a legacy/360/250/180 ladder on complete Drift
+// at 4x. Legacy and 180 kept the glowing blob; 250 was still bold; 360 turns the
+// figure into linework of the outline ink's weight (Drift: backing 14 -> 5 px,
+// core 2 -> 1 px). Inspect (>= 364 px) is byte-identical by construction; Hover
+// and Taunt III (285-403 px) thin modestly in step with the ink's 3 px rung.
+enum class ManaLineScale : uint8_t { kDistance, kLegacy };
+inline ManaLineScale g_u02_mana_line_scale = ManaLineScale::kDistance;
+constexpr int32_t kManaLineFullRadiusPx = 360;
+constexpr int32_t kManaLineMinRPx = 1;
+inline int32_t g_u02_mana_line_full_radius_px = kManaLineFullRadiusPx;
+inline int32_t mana_line_r_px(int32_t r_px, int32_t projected_radius_q8) {
+  if (g_u02_mana_line_scale == ManaLineScale::kLegacy || r_px <= 0 ||
+      projected_radius_q8 <= 0)
+    return r_px;
+  const int64_t full_q8 = static_cast<int64_t>(g_u02_mana_line_full_radius_px) * 256;
+  if (projected_radius_q8 >= full_q8) return r_px;
+  int64_t r = (static_cast<int64_t>(r_px) * projected_radius_q8 + full_q8 / 2) / full_q8;
+  if (r < kManaLineMinRPx) r = kManaLineMinRPx;
+  if (r > r_px) r = r_px;
+  return static_cast<int32_t>(r);
+}
 
 // ---- VERSION 18 WAVE E: MOTE / ANTENNA-SURFACE FADE (bounded attempt) -------
 // A mote is one flat disc depth-tested per pixel at its CENTRE depth. When that
@@ -1893,6 +1936,17 @@ inline void lightning_push(std::vector<ManaSplat>& out, int32_t x, int32_t y,
                            int opacity_pm = 1000) {
   mana_push(out, x, y, z, r_px, ramp, gain_pm, lightning_depth_test(), pre,
             opaque, soft, opacity_pm);
+}
+
+/** PASS 19: a lightning splat that is part of a LINE (see ManaSplat::line). */
+inline void line_push(std::vector<ManaSplat>& out, int32_t x, int32_t y,
+                      int32_t z, int32_t r_px, uint8_t ramp, int gain_pm,
+                      bool pre, bool opaque = false, bool soft = false,
+                      int opacity_pm = 1000) {
+  const size_t n = out.size();
+  lightning_push(out, x, y, z, r_px, ramp, gain_pm, pre, opaque, soft,
+                 opacity_pm);
+  if (out.size() > n) out.back().line = true;
 }
 
 inline int32_t fx_sin16(uint32_t ph) {
@@ -2104,8 +2158,8 @@ inline void bolt_stamp(std::vector<ManaSplat>& out, const int32_t pts[][3], int 
       const int32_t x = lerp32(pts[i][0], pts[i + 1][0], t, n);
       const int32_t y = lerp32(pts[i][1], pts[i + 1][1], t, n);
       const int32_t z = lerp32(pts[i][2], pts[i + 1][2], t, n);
-      lightning_push(out, x, y, z, kBoltHaloRPx, kRampCyan, gain_halo_pm, false);
-      lightning_push(out, x, y, z, kBoltCoreRPx, kRampWhite, gain_core_pm, false);
+      line_push(out, x, y, z, kBoltHaloRPx, kRampCyan, gain_halo_pm, false);
+      line_push(out, x, y, z, kBoltCoreRPx, kRampWhite, gain_core_pm, false);
     }
   }
 }
@@ -3370,7 +3424,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // is grounded, it is not energy shining through the animal.
               // It rides `lit` like everything else, so a figure that is not
               // gripping does not stamp a dark bruise on the sky.
-              lightning_push(out, x, y, z, dark_r, kRampStorm,
+              line_push(out, x, y, z, dark_r, kRampStorm,
                              dark_gain * lit / 1000 * edge_pm / 1000, false,
                              /*opaque=*/true, /*soft=*/true,
                              backing_opacity_pm);
@@ -3405,7 +3459,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
                     stamp_energy_pm(1, shimmer_gain_pm, shim_r,
                                     kFoldEdgeSegs * cap_n, 1200, shim_r);
               }
-              lightning_push(out, x, y, z, shim_r, kRampShimmer,
+              line_push(out, x, y, z, shim_r, kRampShimmer,
                              shimmer_gain_pm, false);
             } else {
               // LAYER 3: THE WHITE LINE, over the finished navy AND its
@@ -3414,11 +3468,11 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // is the difference between this and the lab's rejected white
               // outline -- and, per the plate above, between a line and a
               // string of pale blobs.
-              lightning_push(out, x, y, z, core_r, kRampWhite,
+              line_push(out, x, y, z, core_r, kRampWhite,
                              core_gain * lit / 1000 * edge_pm / 1000, false);
             }
           } else {
-            lightning_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
+            line_push(out, x, y, z, kFoldEdgeHaloRPx, ramp,
                            kFoldEdgeHaloGainPm * lit / 1000 * edge_pm / 1000, false);
             // The core is pass 8's SOFT body, in the fold's own ramp. The lab
             // measured that an outline stamped with the lightning primitive's
@@ -3426,7 +3480,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
             // dropped saturation to 108.9 against a 142.1 control -- true, and
             // superseded by Direction 10 above, which gives the white a dark
             // surround the lab's version never had.
-            lightning_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
+            line_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
                            kFoldEdgeCoreGainPm * lit / 1000 * edge_pm / 1000,
                            false, /*opaque=*/true,
                            /*soft=*/true, backing_opacity_pm);

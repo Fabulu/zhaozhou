@@ -121,3 +121,9 @@ Art is accepted by eye:
 - native and 4× rear plates, before and after;
 - a follow/joint-gain ladder on Inspect and Taunt III;
 - a line-reference ladder on Drift (far) against Hover (near).
+
+## Addendum after implementation (same day)
+
+- **The joint knob moved.** The plan above named `kRearSocketJointGainPm` as a gain on the End carrier's **whole** authored rotation. The ladder showed that at 300 it also fails mjointpub's 20 mm End floor, because it scales the **authored public beats** (swallow, Lasso) that Direction 14 asked to stay visible. The knob is therefore `kRearSocketAmbientGainPm` / `ZHAO_U02_REAR_AMBIENT_GAIN_PM`. It applies only at the two **ambient** End sources, hinge-play's End station and the knead B2 wag, and it is exactly 1000 under `legacy-root`.
+- **Follow:** the 500 rung measured a 48° arm/End mismatch (Flight), so the follow stays at 1000.
+- **Gate R2's frame control** fires R1 **and** R2, because v18 had both a hairpin and a fast joint. Its declared mask is 0x3, and the matrix checks that mask exactly.

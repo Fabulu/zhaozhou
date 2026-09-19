@@ -3283,8 +3283,12 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
           for (int ch = 0; ch < 3; ++ch)
             gf2.pal[i][ch] = static_cast<uint8_t>(gf2.pal[i][ch] * ms.gain_pm / 1000);
       }
+      // PASS 19: a mana LINE thins with the creature's projected size, on the
+      // cel ink's own operand (0 outside celmain == the legacy width).
+      const int32_t r_px =
+          ms.line ? u02::mana_line_r_px(ms.r_px, primary_radius_q8) : ms.r_px;
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
-                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
+                      r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
                       ms.soft, ms.opacity_pm);
     }
   }
@@ -3870,8 +3874,10 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       }
       const u02::GlowFrame& gf2 = u02::glow_frame_cached(
           s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, gain_pm);
+      const int32_t r_px =
+          ms.line ? u02::mana_line_r_px(ms.r_px, primary_radius_q8) : ms.r_px;
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
-                      ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
+                      r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
                       soft, opacity_pm);
     }
   }
@@ -7967,6 +7973,50 @@ int main(int argc, char** argv) {
                    "(expected integrated|legacy-split)\n", e);
       return 2;
     }
+  }
+  // PASS 19 rear-carrier frame and its two art knobs (manafold_art.h). Strict,
+  // parsed before u02::type(); legacy-root is the exact version-18 control.
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SOCKET_FRAME")) {
+    if (std::strcmp(e, "arm") == 0)
+      u02::g_u02_rear_socket_frame = u02::RearSocketFrame::kArm;
+    else if (std::strcmp(e, "legacy-root") == 0)
+      u02::g_u02_rear_socket_frame = u02::RearSocketFrame::kLegacyRoot;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_REAR_SOCKET_FRAME=%s invalid "
+                   "(expected arm|legacy-root)\n", e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_MANA_LINE_SCALE")) {
+    if (std::strcmp(e, "distance") == 0)
+      u02::g_u02_mana_line_scale = u02::ManaLineScale::kDistance;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_mana_line_scale = u02::ManaLineScale::kLegacy;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_MANA_LINE_SCALE=%s invalid "
+                   "(expected distance|legacy)\n", e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_MANA_LINE_FULL_PX")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_MANA_LINE_FULL_PX", e, 40, 2000, v))
+      return 2;
+    u02::g_u02_mana_line_full_radius_px = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_SOCKET_FOLLOW_PM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_SOCKET_FOLLOW_PM", e, 0, 1000, v))
+      return 2;
+    u02::g_u02_rear_socket_follow_pm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_AMBIENT_GAIN_PM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_AMBIENT_GAIN_PM", e, 0, 1000, v))
+      return 2;
+    u02::g_u02_rear_ambient_gain_pm = v;
   }
   if (const char* e = std::getenv("ZHAO_U02_SWELL_PM")) {
     int v = 0;

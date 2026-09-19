@@ -820,6 +820,52 @@ static_assert(kRootSwellSupportEndMm[1] == kRearTerminalTipStationMm,
               "rear terminal profile support must be the declared buried exception");
 inline bool g_u02_root_authority_legacy_split = false;
 inline int32_t g_u02_swell_pm = 1000;
+// PASS 19 (Owner Direction 20 items 1+2: the back ball "looks like it's almost
+// ripped off", and "the last ball and the last antennae part ... are too
+// animated ... like a bone too much"). THE END CARRIER HAD NO REST FRAME.
+// Pass 16 split kBRearSocket off the chain as a Root child with an identity
+// rest rotation, so its End rings were laid along Root +Y -- straight UP --
+// while the arm arrives travelling DOWN into the body. The tube hairpinned
+// 150-170 deg at the back ball on every sample of every clip, and rings 58-62
+// stood up to 207 mm out of the body as a stub that the End authorities swung
+// independently of the arm beside it (P19-DIAGNOSIS.md, manafold-rear-audit).
+//
+// The End carrier now acts in the ARM'S ARRIVAL FRAME: RearSocket = Base x
+// Authored, where Authored is the unchanged root-local composition of every End
+// authority (hinge play, knead wag, swallow, per-clip curves) and Base is the
+// rotation the closure already solves to reach the socket. The End rotation is
+// therefore a joint bend relative to the arm, and the rings continue straight
+// into the body along the same line the buried ReturnTip already used.
+//   ZHAO_U02_REAR_SOCKET_FRAME=arm|legacy-root   legacy-root = exact v18 bytes
+enum class RearSocketFrame : uint8_t { kArm, kLegacyRoot };
+inline RearSocketFrame g_u02_rear_socket_frame = RearSocketFrame::kArm;
+// How far Base follows the live arm (1000) rather than the constant rest
+// arrival (0). The arm swings up to 47 deg (Hover) to 60 deg (Flight) over a
+// loop, so a body-fixed frame re-creates the kink: the 500 rung measured a
+// 48 deg arm/End mismatch and was rejected. 1000 ships.
+constexpr int32_t kRearSocketArmFollowPm = 1000;
+inline int32_t g_u02_rear_socket_follow_pm = kRearSocketArmFollowPm;
+// THE "A BIT WIGGLY" KNOB: the share of the End carrier's AMBIENT rotation --
+// the two always-on oscillators that were written straight onto kBRearSocket
+// (hinge_play's End station and antenna_knead's B2 press-wave wag, 4600 a16 =
+// 25 deg) -- that survives, 1000 = as authored. It deliberately leaves the
+// AUTHORED performance beats (swallow, Lasso, nodule-solo) alone: those are the
+// End's public, owner-requested reads (Direction 14, mjointpub's 20 mm floor),
+// while the ambient pair is what snapped the joint at up to 5.8 deg per 60 Hz
+// sample. Legacy-root ignores it, so that control stays exactly version 18.
+// SELECTED BY EYE, pass 19: 400 from a 1000/600/400/300 ladder (Inspect orbit,
+// Pirouette's press-snap keys 22-24, Rest; native and 3x rear crops). At 1000 a
+// knee flicks at the body entry for 2-4 frames on every knead press; 600 still
+// flicked; 300 read nearly rigid. 400 keeps a gentle, visible bend -- "a bit
+// wiggly" -- with the snap gone (worst End joint step 5.84 -> 2.41 deg/sample).
+// Values above 1000 exist only for the rear gate's positive control.
+constexpr int32_t kRearSocketAmbientGainPm = 400;
+inline int32_t g_u02_rear_ambient_gain_pm = kRearSocketAmbientGainPm;
+inline int32_t rear_ambient_gain_pm() {
+  return g_u02_rear_socket_frame == RearSocketFrame::kLegacyRoot
+             ? 1000
+             : g_u02_rear_ambient_gain_pm;
+}
 // Pass 16 carrier locations relative to the C/D shared pivot. Keep these
 // derived from authored semantic stations so the mesh swell and skeleton
 // carrier cannot silently drift apart again.
