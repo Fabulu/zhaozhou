@@ -2117,6 +2117,15 @@ targets:
       - fpga/rtl/field/zhao_field_v3_spline.sv
       - fpga/rtl/field/zhao_field_v3_trig.sv
       - fpga/rtl/field/zhao_field_v3_wbarb.sv
+      # v3 FIELD, reachable through zhao_field_host since 2026-09-19. The census
+      # top instantiates the host; these are its children and the fit dies at
+      # elaboration without them.
+      - fpga/rtl/field/zhao_field_alu_vec.sv
+      - fpga/rtl/field/zhao_field_v3_core.sv
+      - fpga/rtl/field/zhao_field_v3_curve.sv
+      - fpga/rtl/field/zhao_field_v3_engine.sv
+      - fpga/rtl/field/zhao_field_v3_exec.sv
+      - fpga/rtl/field/zhao_field_v3_svcpath.sv
       - fpga/rtl/forge/zhao_forge_cliff.sv
       - fpga/rtl/forge/zhao_forge_prim.sv
       - fpga/rtl/geometry/zhao_geom_arena.sv

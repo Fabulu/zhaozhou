@@ -268,18 +268,12 @@ top:
   # deliberate RIVAL agent on the multiplier bank so refusal is reachable, and
   # it instantiates zhao_probe_curve_svc. Counting the machine through it would
   # bill the console for a probe and for a test rival.
-  - zhao_field_v3_dispatch
-  - zhao_field_v3_mulbank
-  - zhao_field_v3_wbarb
-  - zhao_field_v3_rf
-  - zhao_field_v3_ring_svc     # carries zhao_field_v3_ring inside it
-  - zhao_field_v3_len
-  - zhao_field_v3_noise
-  - zhao_field_v3_normalize
-  - zhao_field_v3_rot
-  - zhao_field_v3_trig
-  - zhao_field_v3_spline
-  - zhao_field_v3_sbank
+  # THE TWELVE v3 SERVICE MODULES WERE TOPS HERE UNTIL 2026-09-19 and are not
+  # any more: `zhao_field_host` composes `zhao_field_v3_engine`, which carries
+  # every one of them. A top that is also instantiated by another top is
+  # COUNTED TWICE, which inflates the very number this census exists to
+  # settle -- this file's own opening paragraph says so. The checker named all
+  # twelve as DOUBLE COUNT the moment v3 was promoted out of synth/.
 
 # ==============================================================================
 # LOGICAL OWNERSHIP ROLES -- role-aware, not merely graph containment
@@ -440,7 +434,27 @@ unpriced_requirements:
   # itself did.
 
 excluded:
-  # --- 2026-09-09, FORGE.PRIM.EVAL (the lightning evaluator) -----------------
+  # --- 2026-09-19, THE v1 FIELD DATAPATH -------------------------------------
+  # Owner ruling, 2026-09-19: "YOU ONLY GET TO FIT THE LATEST VERSION. IF IT IS
+  # BROKEN YOU FIX IT." FIELD v3 is the console's field engine as of `da57defe`;
+  # `zhao_field_host` composes `zhao_field_v3_engine` and none of these. They
+  # became UNACCOUNTED the moment v1 left the console closure -- neither counted
+  # nor declared absent -- which is the state this census exists to forbid.
+  #
+  # They stay ON DISK deliberately: each is the executable oracle its v3
+  # counterpart is differenced against, and `zhao_field_seq`'s leaf fit row
+  # (4,494 ALM / 3,725 reg / 5 M10K / 3 DSP at 58.99 MHz) is the only measured
+  # FIELD number this repo has.
+  - zhao_field_seq: superseded  the v1 sequencer; zhao_field_v3_engine is the composed engine, with the executor and service path under it
+  - zhao_field_exec_shared: superseded  the v1 shared execution stage; zhao_field_v3_exec is the datapath now
+  - zhao_field_curve: superseded  by zhao_field_v3_curve (with zhao_field_v3_spline under it)
+  - zhao_field_len: superseded  by zhao_field_v3_len
+  - zhao_field_noise: superseded  by zhao_field_v3_noise
+  - zhao_field_normalize: superseded  by zhao_field_v3_normalize
+  - zhao_field_ring: superseded  by zhao_field_v3_ring, which zhao_field_v3_ring_svc carries
+  - zhao_field_rot: superseded  by zhao_field_v3_rot, with zhao_field_v3_trig supplying sin/cos
+  - zhao_field_rcp: superseded  the v1 reciprocal; the v3 normalize path uses zhao_field_rcp24_rom, which stays counted because it is version-neutral and used outside FIELD
+  - zhao_field_rcp_rom: superseded  the v1 reciprocal table, read only by zhao_field_rcp  # --- 2026-09-09, FORGE.PRIM.EVAL (the lightning evaluator) -----------------
   # Both BUILT and composed nowhere -- deliberately. The evaluator emits the
   # vertex stream zhao_forge_prim's ribbon indices reference, but the seam
   # that pairs them (FX.LIGHTNING dispatch: one eval job + one prim ribbon job
@@ -822,7 +836,10 @@ excluded:
   # THE THREE THAT REMAIN are the ones nothing in the machine instantiates:
   # `alu_vec` is the v3 probe executor's vector wrapper, `rf_ram` belongs to v2,
   # and `sinks` has no caller at all.
-  - zhao_field_alu_vec: frozen  FIELD v1, used only by the v3 probe executor
+  # zhao_field_alu_vec was excluded as "used only by the v3 probe executor".
+  # The probe IS the production executor now (promoted out of synth/ 2026-09-19)
+  # and zhao_field_v3_exec.sv:731 instantiates it as the LANES-wide ALU, so it
+  # is in the machine whatever the manifest said. Counted inside zhao_field_host.
   - zhao_field_rf_ram: frozen  FIELD v1 register memory, used only by v2
   - zhao_field_sinks: frozen  FIELD v1, no caller
 
