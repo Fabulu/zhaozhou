@@ -1,9 +1,9 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
-// shell-declaration-sha256: 55040a693dfca2af1c3fb89444dea1642c0e8cd309c168102fa67bb1fe745fd4
-// policy-sha256: 96ed66516a163ae9c2a2adf44c07d507aa2e90e0ac0e2358e20c7f19eceaa44e
-// generator-sha256: 9198887ae17b79d78ba46cd964d54a9035fd9d58e697e5e42ef0727ef4833db3
-// parser-sha256: a9477386c85900bd866a6809010c6841d14e2eec7283ac3d985036e4408c0e10
+// shell-declaration-sha256: 67da56b88456fb0e9d52c02344d9690b059f9dd810682f7ba78cbecd11f0ae37
+// policy-sha256: 4ccc3f83c1dcc59e169f7d2628d410fa045f67bc325fe3a94b01653a5159bf57
+// generator-sha256: b3d7b8d3bd4cb378329815aa89cb2da0dc58de124d17af5d63d9c37de4fc4279
+// parser-sha256: b279bc67b22d4308b415a3b7a15b0aa8dfae312161bc3ced1d27e340fd796198
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
 
@@ -182,6 +182,20 @@ module shell_v2_top
   (* keep = "true" *) logic shell_geom_beat_valid_o;
   (* keep = "true" *) logic [63:0] shell_geom_beat_data_o;
   (* keep = "true" *) logic shell_geom_beat_last_o;
+  (* keep = "true" *) zhao_guard_req_t shell_build_guard_req_i;
+  (* keep = "true" *) zhao_guard_rsp_t shell_build_guard_rsp_o;
+  (* keep = "true" *) logic [63:0] shell_build_wdata_i;
+  (* keep = "true" *) logic shell_build_wvalid_i;
+  (* keep = "true" *) logic shell_build_wready_o;
+  (* keep = "true" *) logic shell_build_wlast_i;
+  (* keep = "true" *) logic [7:0] shell_build_retire_words_o;
+  (* keep = "true" *) logic shell_build_beat_valid_o;
+  (* keep = "true" *) logic [63:0] shell_build_beat_data_o;
+  (* keep = "true" *) logic shell_build_beat_last_o;
+  (* keep = "true" *) zhao_hps_burst_req_t [1-1:0] shell_build_hps_req_i;
+  (* keep = "true" *) logic [1-1:0] shell_build_hps_grant_o;
+  (* keep = "true" *) zhao_hps_burst_rsp_t [1-1:0] shell_build_hps_rsp_o;
+  (* keep = "true" *) logic [1-1:0] [31:0] shell_build_hps_wait_o;
   (* keep = "true" *) logic signed [22:0] shell_render_kx0_i;
   (* keep = "true" *) logic signed [22:0] shell_render_ky0_i;
   (* keep = "true" *) logic signed [47:0] shell_render_kc0_i;
@@ -239,9 +253,9 @@ module shell_v2_top
   (* keep = "true" *) logic [31:0] shell_cmd_pkt_len_o;
   (* keep = "true" *) logic shell_cmd_pkt_ready_i;
 
-  logic [2305:0] gpu_payload_c;
+  logic [2483:0] gpu_payload_c;
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [2305:0] gpu_capture_bus;
+  logic [2483:0] gpu_capture_bus;
   /* verilator lint_on UNUSEDSIGNAL */
   always_comb begin
     gpu_payload_c = '0;
@@ -341,29 +355,38 @@ module shell_v2_top
     gpu_payload_c[2026 +: 1] = shell_geom_beat_valid_o;
     gpu_payload_c[2027 +: 64] = shell_geom_beat_data_o;
     gpu_payload_c[2091 +: 1] = shell_geom_beat_last_o;
-    gpu_payload_c[2092 +: 1] = shell_render_drain_done_o;
-    gpu_payload_c[2093 +: 1] = shell_render_busy_o;
-    gpu_payload_c[2094 +: 32] = shell_render_pixels_o;
-    gpu_payload_c[2126 +: 32] = shell_render_bursts_o;
-    gpu_payload_c[2158 +: 1] = shell_render_stream_error_o;
-    gpu_payload_c[2159 +: 1] = shell_render_drained_o;
-    gpu_payload_c[2160 +: 1] = shell_render_fatal_o;
-    gpu_payload_c[2161 +: 32] = shell_render_issued_words_o;
-    gpu_payload_c[2193 +: 32] = shell_render_retired_words_o;
-    gpu_payload_c[2225 +: 1] = shell_render_overflow_o;
-    gpu_payload_c[2226 +: 1] = shell_render_fragment_error_o;
-    gpu_payload_c[2227 +: 1] = shell_phy_cs_n_o;
-    gpu_payload_c[2228 +: 1] = shell_phy_ras_n_o;
-    gpu_payload_c[2229 +: 1] = shell_phy_cas_n_o;
-    gpu_payload_c[2230 +: 1] = shell_phy_we_n_o;
-    gpu_payload_c[2231 +: 13] = shell_phy_a_o;
-    gpu_payload_c[2244 +: 2] = shell_phy_ba_o;
-    gpu_payload_c[2246 +: 16] = shell_phy_dq_o;
-    gpu_payload_c[2262 +: 1] = shell_phy_dq_oe_o;
-    gpu_payload_c[2263 +: 2] = shell_phy_dqm_o;
-    gpu_payload_c[2265 +: 1] = shell_cmd_pkt_valid_o;
-    gpu_payload_c[2266 +: 8] = shell_cmd_pkt_byte_o;
-    gpu_payload_c[2274 +: 32] = shell_cmd_pkt_len_o;
+    gpu_payload_c[2092 +: 3] = shell_build_guard_rsp_o;
+    gpu_payload_c[2095 +: 1] = shell_build_wready_o;
+    gpu_payload_c[2096 +: 8] = shell_build_retire_words_o;
+    gpu_payload_c[2104 +: 1] = shell_build_beat_valid_o;
+    gpu_payload_c[2105 +: 64] = shell_build_beat_data_o;
+    gpu_payload_c[2169 +: 1] = shell_build_beat_last_o;
+    gpu_payload_c[2170 +: 1] = shell_build_hps_grant_o;
+    gpu_payload_c[2171 +: 67] = shell_build_hps_rsp_o;
+    gpu_payload_c[2238 +: 32] = shell_build_hps_wait_o;
+    gpu_payload_c[2270 +: 1] = shell_render_drain_done_o;
+    gpu_payload_c[2271 +: 1] = shell_render_busy_o;
+    gpu_payload_c[2272 +: 32] = shell_render_pixels_o;
+    gpu_payload_c[2304 +: 32] = shell_render_bursts_o;
+    gpu_payload_c[2336 +: 1] = shell_render_stream_error_o;
+    gpu_payload_c[2337 +: 1] = shell_render_drained_o;
+    gpu_payload_c[2338 +: 1] = shell_render_fatal_o;
+    gpu_payload_c[2339 +: 32] = shell_render_issued_words_o;
+    gpu_payload_c[2371 +: 32] = shell_render_retired_words_o;
+    gpu_payload_c[2403 +: 1] = shell_render_overflow_o;
+    gpu_payload_c[2404 +: 1] = shell_render_fragment_error_o;
+    gpu_payload_c[2405 +: 1] = shell_phy_cs_n_o;
+    gpu_payload_c[2406 +: 1] = shell_phy_ras_n_o;
+    gpu_payload_c[2407 +: 1] = shell_phy_cas_n_o;
+    gpu_payload_c[2408 +: 1] = shell_phy_we_n_o;
+    gpu_payload_c[2409 +: 13] = shell_phy_a_o;
+    gpu_payload_c[2422 +: 2] = shell_phy_ba_o;
+    gpu_payload_c[2424 +: 16] = shell_phy_dq_o;
+    gpu_payload_c[2440 +: 1] = shell_phy_dq_oe_o;
+    gpu_payload_c[2441 +: 2] = shell_phy_dqm_o;
+    gpu_payload_c[2443 +: 1] = shell_cmd_pkt_valid_o;
+    gpu_payload_c[2444 +: 8] = shell_cmd_pkt_byte_o;
+    gpu_payload_c[2452 +: 32] = shell_cmd_pkt_len_o;
   end
 
   logic [171:0] video_payload_c;
@@ -414,21 +437,21 @@ module shell_v2_top
     .cnt_snap_id_o_captured_i(gpu_capture_bus[1711 +: 16]),
     .init_done_o_captured_i(gpu_capture_bus[1889 +: 1]),
     .render_tri_ready_o_native_i(shell_render_tri_ready_o),
-    .render_drained_o_captured_i(gpu_capture_bus[2159 +: 1]),
-    .render_issued_words_o_captured_i(gpu_capture_bus[2161 +: 32]),
-    .render_retired_words_o_captured_i(gpu_capture_bus[2193 +: 32]),
+    .render_drained_o_captured_i(gpu_capture_bus[2337 +: 1]),
+    .render_issued_words_o_captured_i(gpu_capture_bus[2339 +: 32]),
+    .render_retired_words_o_captured_i(gpu_capture_bus[2371 +: 32]),
     .geom_guard_rsp_o_captured_i(zhao_guard_rsp_t'(gpu_capture_bus[2023 +: 3])),
     .geom_beat_valid_o_captured_i(gpu_capture_bus[2026 +: 1]),
     .geom_beat_last_o_captured_i(gpu_capture_bus[2091 +: 1]),
-    .phy_cs_n_o_captured_i(gpu_capture_bus[2227 +: 1]),
-    .phy_ras_n_o_captured_i(gpu_capture_bus[2228 +: 1]),
-    .phy_cas_n_o_captured_i(gpu_capture_bus[2229 +: 1]),
-    .phy_we_n_o_captured_i(gpu_capture_bus[2230 +: 1]),
-    .phy_a_o_captured_i(gpu_capture_bus[2231 +: 13]),
-    .phy_ba_o_captured_i(gpu_capture_bus[2244 +: 2]),
-    .phy_dq_o_captured_i(gpu_capture_bus[2246 +: 16]),
-    .phy_dq_oe_o_captured_i(gpu_capture_bus[2262 +: 1]),
-    .phy_dqm_o_captured_i(gpu_capture_bus[2263 +: 2]),
+    .phy_cs_n_o_captured_i(gpu_capture_bus[2405 +: 1]),
+    .phy_ras_n_o_captured_i(gpu_capture_bus[2406 +: 1]),
+    .phy_cas_n_o_captured_i(gpu_capture_bus[2407 +: 1]),
+    .phy_we_n_o_captured_i(gpu_capture_bus[2408 +: 1]),
+    .phy_a_o_captured_i(gpu_capture_bus[2409 +: 13]),
+    .phy_ba_o_captured_i(gpu_capture_bus[2422 +: 2]),
+    .phy_dq_o_captured_i(gpu_capture_bus[2424 +: 16]),
+    .phy_dq_oe_o_captured_i(gpu_capture_bus[2440 +: 1]),
+    .phy_dqm_o_captured_i(gpu_capture_bus[2441 +: 2]),
     .cfg_valid_i(shell_cfg_valid_i),
     .cfg_op_i(shell_cfg_op_i),
     .cfg_page_generation_i(shell_cfg_page_generation_i),
@@ -483,6 +506,11 @@ module shell_v2_top
     .render_grid_h_i(shell_render_grid_h_i),
     .render_tri_valid_i(shell_render_tri_valid_i),
     .geom_guard_req_i(shell_geom_guard_req_i),
+    .build_guard_req_i(shell_build_guard_req_i),
+    .build_wdata_i(shell_build_wdata_i),
+    .build_wvalid_i(shell_build_wvalid_i),
+    .build_wlast_i(shell_build_wlast_i),
+    .build_hps_req_i(shell_build_hps_req_i),
     .render_kx0_i(shell_render_kx0_i),
     .render_ky0_i(shell_render_ky0_i),
     .render_kc0_i(shell_render_kc0_i),
@@ -684,6 +712,20 @@ module shell_v2_top
     .geom_beat_valid_o(shell_geom_beat_valid_o),
     .geom_beat_data_o(shell_geom_beat_data_o),
     .geom_beat_last_o(shell_geom_beat_last_o),
+    .build_guard_req_i(shell_build_guard_req_i),
+    .build_guard_rsp_o(shell_build_guard_rsp_o),
+    .build_wdata_i(shell_build_wdata_i),
+    .build_wvalid_i(shell_build_wvalid_i),
+    .build_wready_o(shell_build_wready_o),
+    .build_wlast_i(shell_build_wlast_i),
+    .build_retire_words_o(shell_build_retire_words_o),
+    .build_beat_valid_o(shell_build_beat_valid_o),
+    .build_beat_data_o(shell_build_beat_data_o),
+    .build_beat_last_o(shell_build_beat_last_o),
+    .build_hps_req_i(shell_build_hps_req_i),
+    .build_hps_grant_o(shell_build_hps_grant_o),
+    .build_hps_rsp_o(shell_build_hps_rsp_o),
+    .build_hps_wait_o(shell_build_hps_wait_o),
     .render_kx0_i(shell_render_kx0_i),
     .render_ky0_i(shell_render_ky0_i),
     .render_kc0_i(shell_render_kc0_i),
@@ -860,6 +902,11 @@ module shell_v2_stimulus
   (* preserve *) output var logic [5:0] render_grid_h_i,
   (* preserve *) output var logic render_tri_valid_i,
   (* preserve *) output var zhao_guard_req_t geom_guard_req_i,
+  (* preserve *) output var zhao_guard_req_t build_guard_req_i,
+  (* preserve *) output var logic [63:0] build_wdata_i,
+  (* preserve *) output var logic build_wvalid_i,
+  (* preserve *) output var logic build_wlast_i,
+  (* preserve *) output var zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
   (* preserve *) output var logic signed [22:0] render_kx0_i,
   (* preserve *) output var logic signed [22:0] render_ky0_i,
   (* preserve *) output var logic signed [47:0] render_kc0_i,
@@ -1464,6 +1511,11 @@ module shell_v2_stimulus
       render_grid_h_i <= '0;
       render_tri_valid_i <= '0;
       geom_guard_req_i <= '0;
+      build_guard_req_i <= '0;
+      build_wdata_i <= '0;
+      build_wvalid_i <= '0;
+      build_wlast_i <= '0;
+      build_hps_req_i <= '0;
       render_kx0_i <= '0;
       render_ky0_i <= '0;
       render_kc0_i <= '0;
@@ -2147,14 +2199,14 @@ endmodule
 module shell_v2_gpu_sink (
   input  logic clk,
   input  logic rst_n,
-  input  logic [2305:0] payload_i,
-  output logic [2305:0] capture_o,
+  input  logic [2483:0] payload_i,
+  output logic [2483:0] capture_o,
   output logic signature_o,
   output logic epoch_o
 );
 
   // Immediate native-domain endpoint for every shell output bit.
-  (* preserve *) logic [2305:0] capture_q;
+  (* preserve *) logic [2483:0] capture_q;
   always_ff @(posedge clk) capture_q <= payload_i;
   assign capture_o = capture_q;
 
@@ -2253,8 +2305,13 @@ module shell_v2_gpu_sink (
       7'd69: selected_c = capture_q[2208 +: 32];
       7'd70: selected_c = capture_q[2240 +: 32];
       7'd71: selected_c = capture_q[2272 +: 32];
-      7'd72: begin
-        selected_c[1:0] = capture_q[2304 +: 2];
+      7'd72: selected_c = capture_q[2304 +: 32];
+      7'd73: selected_c = capture_q[2336 +: 32];
+      7'd74: selected_c = capture_q[2368 +: 32];
+      7'd75: selected_c = capture_q[2400 +: 32];
+      7'd76: selected_c = capture_q[2432 +: 32];
+      7'd77: begin
+        selected_c[19:0] = capture_q[2464 +: 20];
       end
       default: selected_c = 32'h0;
     endcase
@@ -2299,7 +2356,7 @@ module shell_v2_gpu_sink (
       selected_q <= selected_c;
       selected_index_q <= chunk_index_q;
       selected_valid_q <= 1'b1;
-      if (chunk_index_q == 7'd72) begin
+      if (chunk_index_q == 7'd77) begin
         chunk_index_q <= '0;
       end else begin
         chunk_index_q <= chunk_index_q + 7'd1;
@@ -2307,7 +2364,7 @@ module shell_v2_gpu_sink (
 
       if (selected_valid_q) begin
         misr_q <= misr_next_c;
-        if (selected_index_q == 7'd72) begin
+        if (selected_index_q == 7'd77) begin
           chunk_wraps_q <= chunk_wraps_q + 32'd1;
           if (!serializer_busy_q) begin
             snapshot_q <= misr_next_c;

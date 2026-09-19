@@ -2489,6 +2489,32 @@
 //      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
 //      too. One absent owner, two blocks waiting on it.
 //
+// I46. MEM.UPLOAD's REQUEST (`upl_req_*`) -- BOUNDARY. NEW 2026-09-19 (cmdmem
+//      packet), opened DELIBERATELY in the same commit that COMPOSED the block
+//      it feeds, and it is the smaller of the two gaps: MEM.UPLOAD itself is
+//      now instantiated on the shell's new TERRAIN.BUILD socket, reading HPS
+//      through the real bridge and writing VRAM through the real MEM.GUARD
+//      slot 6, retiring on the real arbiter credits.
+//
+//      WHY THE REQUEST IS STILL A PORT. The ratified producer is CMD.EXEC
+//      lowering a `PublishResource` command, and owner ruling R17 is that
+//      command -- an ABI addition whose `spec/commands.zidl`, generator, zref
+//      and captures move together. Until it lands no command in the ABI carries
+//      {index, hps_addr, vram_dst, len, crc32c, dst_slot, new_gen, kind}, and
+//      inventing the request here would be the hidden contract CMD.EXEC's own
+//      header forbids.
+//
+//      TWO DEFECTS WERE REPAIRED TO GET HERE, both invisible to the old bench
+//      and both certain against the real socket. (1) Outstanding writes were
+//      counted in 64-bit BEATS against a retirement stream in 16-bit WORDS, so
+//      S_RETIRE ended after a quarter of the copy had landed and the slot was
+//      published over bytes still in flight. (2) HPS beats were "held" against
+//      a busy guard, but the bridge's response stream has no ready, so a held
+//      beat was a lost one. The block now owns the one burst buffer its
+//      contract grants it. `tests/mem/mem_upload_directed.cpp` fails 3 checks
+//      against the old RTL and passes 94 against the new; its early-publish
+//      detector had sat BELOW the loop's `return` and could never fire.
+//
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -4050,6 +4076,44 @@ module zhao_console_core
   // arbiter). Its wait is the number that says what the loader costs it.
   output logic [31:0]             terr_hps_c2_bursts_o,
   output logic [31:0]             terr_hps_c2_wait_cycles_o,
+
+  // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
+  // I46: the upload REQUEST -- BOUNDARY until CMD.EXEC lowers the ratified
+  // `PublishResource` onto it (owner ruling R17).
+  input  logic                    upl_req_valid_i,
+  output logic                    upl_req_ready_o,
+  input  logic [ 7:0]             upl_req_tag_i,
+  input  logic [23:0]             upl_req_index_i,
+  input  logic [63:0]             upl_req_hps_addr_i,
+  input  logic [31:0]             upl_req_vram_addr_i,
+  input  logic [31:0]             upl_req_len_i,
+  input  logic [15:0]             upl_req_epoch_i,
+  input  logic [ 7:0]             upl_req_dst_slot_i,
+  input  logic [15:0]             upl_req_new_gen_i,
+  input  logic [31:0]             upl_req_crc_i,
+  // Host configuration, the terrain spine's `terr_cfg_*` shape: the
+  // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit, the HPS
+  // staging arena the active epoch registered, and that epoch.
+  input  logic [31:0]             upl_cfg_region_base_i,
+  input  logic [31:0]             upl_cfg_region_bytes_i,
+  input  logic [63:0]             upl_cfg_arena_base_i,
+  input  logic [31:0]             upl_cfg_arena_bytes_i,
+  input  logic [15:0]             upl_cfg_epoch_i,
+  // The PUBLICATION, `spec/memory_rules.md` 5f.1's directory row, and the
+  // verdict. Observable here as well as consumed inside, so a harness can
+  // difference a publication against `zref::mem` without reaching in.
+  output logic                    upl_publish_valid_o,
+  output logic [ 7:0]             upl_publish_slot_o,
+  output logic [15:0]             upl_publish_generation_o,
+  output logic [ 7:0]             upl_publish_tag_o,
+  output logic [23:0]             upl_publish_index_o,
+  output logic [31:0]             upl_publish_base_o,
+  output logic [31:0]             upl_publish_extent_o,
+  output logic                    upl_done_o,
+  output logic [ 7:0]             upl_status_o,
+  output logic [15:0]             upl_published_o,
+  output logic [127:0]            upl_refused_o,
+  output logic [31:0]             upl_hps_wait_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -7926,9 +7990,81 @@ module zhao_console_core
   logic        cmd_exe_pkt_ready_w;
   assign cmd_pkt_ready_w = cmd_dec_pkt_ready_w && cmd_exe_pkt_ready_w;
 
+  // ==========================================================================
+  // MEM.UPLOAD -- the HPS->VRAM resource upload engine, on the shell's
+  // TERRAIN.BUILD socket (2026-09-19, cmdmem packet; owner rulings R4, R17)
+  // ==========================================================================
+  // It was "composable nowhere" (entry I20's first seam) because both HPS
+  // arbiters were full. Ruling R4 widened the arbiter; the shell now runs the
+  // N-client core with a socket below its two historical clients, and this is
+  // that socket's first client -- through the REAL `zhao_hps_bridge` and the
+  // REAL `zhao_mem_guard` / `zhao_vram_arbiter` slot 6, with retirement read
+  // off the arbiter's own credit stream. Nothing between them is invented here.
+  //
+  // Its REQUEST is entry I46 (a boundary) until CMD.EXEC lowers
+  // `PublishResource`; its PUBLICATION is `spec/memory_rules.md` 5f.1's row.
+  zhao_guard_req_t         upl_guard_req;
+  zhao_guard_rsp_t         upl_guard_rsp;
+  logic [63:0]             upl_wdata;
+  logic                    upl_wvalid, upl_wready, upl_wlast;
+  logic [7:0]              upl_retire_words;
+  zhao_hps_burst_req_t [0:0] upl_hps_req;
+  logic                [0:0] upl_hps_grant;
+  zhao_hps_burst_rsp_t [0:0] upl_hps_rsp;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The socket's READ leg. Its customers are the terrain readers (I26); until
+  // they move onto it nothing here reads a slot-6 beat, and a sink says so
+  // where an empty pin would say nothing.
+  logic                    sock_beat_valid, sock_beat_last;
+  logic [63:0]             sock_beat_data;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_mem_upload u_mem_upload (
+    .clk                  (gpu_clk),
+    .rst_n                (rst_n),
+    .req_valid_i          (upl_req_valid_i),
+    .req_ready_o          (upl_req_ready_o),
+    .req_tag_i            (upl_req_tag_i),
+    .req_index_i          (upl_req_index_i),
+    .req_hps_addr_i       (upl_req_hps_addr_i),
+    .req_vram_addr_i      (upl_req_vram_addr_i),
+    .req_len_i            (upl_req_len_i),
+    .req_epoch_i          (upl_req_epoch_i),
+    .req_dst_slot_i       (upl_req_dst_slot_i),
+    .req_new_gen_i        (upl_req_new_gen_i),
+    .req_crc_i            (upl_req_crc_i),
+    .cfg_region_base_i    (upl_cfg_region_base_i),
+    .cfg_region_bytes_i   (upl_cfg_region_bytes_i),
+    .cfg_arena_base_i     (upl_cfg_arena_base_i),
+    .cfg_arena_bytes_i    (upl_cfg_arena_bytes_i),
+    .cfg_epoch_i          (upl_cfg_epoch_i),
+    .hps_req_o            (upl_hps_req[0]),
+    .hps_req_grant_i      (upl_hps_grant[0]),
+    .hps_rsp_i            (upl_hps_rsp[0]),
+    .guard_req_o          (upl_guard_req),
+    .guard_rsp_i          (upl_guard_rsp),
+    .guard_wdata_o        (upl_wdata),
+    .guard_wvalid_o       (upl_wvalid),
+    .guard_wready_i       (upl_wready),
+    .guard_wlast_o        (upl_wlast),
+    .retire_words_i       (upl_retire_words),
+    .publish_valid_o      (upl_publish_valid_o),
+    .publish_slot_o       (upl_publish_slot_o),
+    .publish_generation_o (upl_publish_generation_o),
+    .publish_tag_o        (upl_publish_tag_o),
+    .publish_index_o      (upl_publish_index_o),
+    .publish_base_o       (upl_publish_base_o),
+    .publish_extent_o     (upl_publish_extent_o),
+    .done_o               (upl_done_o),
+    .status_o             (upl_status_o),
+    .uploads_published_o  (upl_published_o),
+    .refused_o            (upl_refused_o)
+  );
+
   zhao_shell_top_v2 #(
-    .FRAMER_Q (FRAMER_Q),
-    .WFIFO_W  (WFIFO_W)
+    .FRAMER_Q    (FRAMER_Q),
+    .WFIFO_W     (WFIFO_W),
+    .BUILD_HPS_N (1)
   ) u_shell (
     .gpu_clk                   (gpu_clk),
     .vid_clk                   (vid_clk),
@@ -8111,6 +8247,24 @@ module zhao_console_core
     .geom_beat_valid_o         (ma_m_beat_valid),
     .geom_beat_data_o          (ma_m_beat_data),
     .geom_beat_last_o          (ma_m_beat_last),
+    // THE TERRAIN.BUILD SOCKET (slot 6 + HPS client 2), 2026-09-19. MEM.UPLOAD
+    // is its first client. The READ-BEAT leg exists for the terrain readers
+    // (TERRAIN.PAGESTREAM / HDRREAD, entry I26), which have not moved onto it
+    // yet, so it is sunk below rather than left as an empty pin.
+    .build_guard_req_i         (upl_guard_req),
+    .build_guard_rsp_o         (upl_guard_rsp),
+    .build_wdata_i             (upl_wdata),
+    .build_wvalid_i            (upl_wvalid),
+    .build_wready_o            (upl_wready),
+    .build_wlast_i             (upl_wlast),
+    .build_retire_words_o      (upl_retire_words),
+    .build_beat_valid_o        (sock_beat_valid),
+    .build_beat_data_o         (sock_beat_data),
+    .build_beat_last_o         (sock_beat_last),
+    .build_hps_req_i           (upl_hps_req),
+    .build_hps_grant_o         (upl_hps_grant),
+    .build_hps_rsp_o           (upl_hps_rsp),
+    .build_hps_wait_o          (upl_hps_wait_o),
     .render_kx0_i              (st_kx0),
     .render_ky0_i              (st_ky0),
     .render_kc0_i              (st_kc0),

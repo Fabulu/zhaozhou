@@ -10,6 +10,7 @@ writes.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 from dataclasses import asdict, dataclass
 import hashlib
 import json
@@ -27,6 +28,7 @@ from shell_ports import (
     ShellPolicy,
     ShellPortError,
     assert_exact_port_sets,
+    discover_module_parameters,
     discover_type_signedness,
     discover_type_widths,
     domain_output_bits,
@@ -238,6 +240,17 @@ SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
     # gpu-domain, so the gpu-clocked stimulus bank can own it directly and it
     # needs none of the video-domain apparatus `video_host` above is waiting on.
     "cmd_packet_sink": ("cmd_pkt_ready_i",),
+    # 2026-09-19 (cmdmem): the TERRAIN.BUILD socket's one client -- slot 6's
+    # guard request and write channel, and the HPS read at the socket's index.
+    # Declared like the sibling's other channels: legal in the policy, held at
+    # reset by the paused instrument until it is given stimulus.
+    "build_socket_client": (
+        "build_guard_req_i",
+        "build_wdata_i",
+        "build_wvalid_i",
+        "build_wlast_i",
+        "build_hps_req_i",
+    ),
 }
 
 
@@ -2093,6 +2106,35 @@ def render_artifacts(
         type_widths=type_widths,
         type_signedness=type_signedness,
     )
+    # THE SHELL'S OWN PARAMETERS, RESOLVED IN THE TYPE TEXT this generator
+    # re-emits (2026-09-19). The sibling's `zhao_hps_burst_req_t
+    # [BUILD_HPS_N-1:0] build_hps_req_i` has its WIDTH resolved by the parser,
+    # but its type text still names BUILD_HPS_N -- and every line below copies
+    # that text into a wrapper module that has no such parameter, so the
+    # wrapper did not elaborate. The wrapper instantiates the shell at its
+    # defaults, so the default is the range's value here. Done in the
+    # generator, not in the shared parser, whose fixtures pin the text as
+    # written.
+    shell_params = discover_module_parameters(shell_text, SHELL_MODULE)
+    if shell_params:
+        def _resolve(text: str) -> str:
+            return re.sub(
+                r"\b([A-Za-z_]\w*)\b",
+                lambda m: str(shell_params[m.group(1)])
+                if m.group(1) in shell_params else m.group(1),
+                text,
+            )
+        declaration = dataclasses.replace(
+            declaration,
+            ports=tuple(
+                dataclasses.replace(
+                    p,
+                    type_text=_resolve(p.type_text),
+                    signal_type_text=_resolve(p.signal_type_text),
+                )
+                for p in declaration.ports
+            ),
+        )
     policy = load_policy_text(policy_text)
     validate_policy(declaration, policy)
     validate_handler_ownership(declaration, policy)

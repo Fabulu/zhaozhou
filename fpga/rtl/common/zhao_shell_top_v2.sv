@@ -132,7 +132,15 @@ module zhao_shell_top_v2
   import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;
 #(
   parameter int unsigned FRAMER_Q = 8,    // record-queue depth (glue 3)
-  parameter int unsigned WFIFO_W  = 64    // write-data queue, 16-bit words
+  parameter int unsigned WFIFO_W  = 64,   // write-data queue, 16-bit words
+  // THE TERRAIN.BUILD SOCKET's HPS clients (owner ruling R4). Each one is a
+  // client of the shell's ONE `zhao_hps_arbiter_n`, at indices 2.. -- BELOW
+  // CMD.DMA (0) and DEBUG.FRAMEBLIT (1), which is `spec/memory_rules.md` 5d's
+  // "best-effort / background" class said in the arbiter's own vocabulary.
+  // A composer that needs a second background reader raises this; it does not
+  // build a second socket.
+  parameter int unsigned BUILD_HPS_N = 1,
+  parameter int unsigned BUILD_WQ_W  = 64 // slot-6 write-data queue, 16-bit words
 ) (
   // ---- clocks + reset (harness-driven, frozen ratios: vid = gpu/2,
   // ---- audio = gpu/4, fixed phase — plan R1) -----------------------------
@@ -380,6 +388,46 @@ module zhao_shell_top_v2
   output var logic            geom_beat_valid_o,
   output var logic [63:0]     geom_beat_data_o,
   output var logic            geom_beat_last_o,
+
+  // ---- THE TERRAIN.BUILD SOCKET (VRAM slot 6 + HPS clients 2..) ------------
+  // Added 2026-09-19 (cmdmem packet) so that MEM.UPLOAD and the terrain
+  // paging spine reach the REAL MEM.HPS.BRIDGE and MEM.GUARD instead of each
+  // leaving the core as a boundary (core entries I26, I20). ONE socket, and it
+  // is shaped for every TERRAIN.BUILD client rather than for one of them:
+  //
+  //   * a MEM.GUARD client on VRAM slot 6 with BOTH directions -- the write
+  //     channel (MEM.UPLOAD, TERRAIN.PAGELOADER, TERRAIN.WRITEBACK) and the
+  //     read-beat return (TERRAIN.PAGESTREAM, TERRAIN.HDRREAD). The guard is
+  //     the one `zhao_mem_guard` law, so TERRAIN.PAGE_POOL is the window.
+  //   * BUILD_HPS_N read clients of the shell's HPS arbiter.
+  //
+  // Upstream sharing of the one guard port is the composer's, through
+  // `zhao_mem_share_n` for readers, exactly as `u_terrain_rdshare` already does.
+  //
+  // HPS WRITES ARE NOT OFFERED, and that is a property of the arbiter, not a
+  // choice here: `zhao_hps_arbiter_n` has no `b_wr_ready_i`, so the bridge's
+  // write READY cannot reach a writer (see the `hb_wr_ready` sink below). A
+  // socket port that accepted HPS write beats would lose them. The first HPS
+  // writer (TERRAIN.WRITEBACK) must add that ready to the arbiter first.
+  input  var zhao_guard_req_t build_guard_req_i,
+  output var zhao_guard_rsp_t build_guard_rsp_o,
+  input  var logic [63:0]     build_wdata_i,
+  input  var logic            build_wvalid_i,
+  output var logic            build_wready_o,
+  input  var logic            build_wlast_i,
+  // The VRAM arbiter's credit stream for slot 6, in 16-bit words. The ONLY
+  // thing that means "the write landed".
+  output var logic [ 7:0]     build_retire_words_o,
+  output var logic            build_beat_valid_o,
+  output var logic [63:0]     build_beat_data_o,
+  output var logic            build_beat_last_o,
+  input  var zhao_hps_burst_req_t [BUILD_HPS_N-1:0] build_hps_req_i,
+  output var logic                [BUILD_HPS_N-1:0] build_hps_grant_o,
+  output var zhao_hps_burst_rsp_t [BUILD_HPS_N-1:0] build_hps_rsp_o,
+  // Rule 7's starvation instrument for each socket client: cycles it wanted
+  // the bridge and did not have it. A background client is ALLOWED to starve
+  // (5d); it is not allowed to starve invisibly.
+  output var logic [BUILD_HPS_N-1:0][31:0] build_hps_wait_o,
   input  logic signed [22:0] render_kx0_i, render_ky0_i,
   input  logic signed [47:0] render_kc0_i,
   input  logic signed [22:0] render_kx1_i, render_ky1_i,
@@ -894,7 +942,7 @@ module zhao_shell_top_v2
   // The geometry guard's violations are ADDED, not left out. A guard whose
   // refusals are not totalled is a guard nobody reads.
   assign guard_violations_o =
-      scan_gv_cnt + blit_gv_cnt + render_gv_cnt + geom_gv_cnt;
+      scan_gv_cnt + blit_gv_cnt + render_gv_cnt + geom_gv_cnt + build_gv_cnt;
 
   // ---- GLUE 10: the blit pacer -------------------------------------------
   // Even with the FB-slot bank split (which removed the single-bank row
@@ -1229,12 +1277,59 @@ module zhao_shell_top_v2
   // arbiter refuses it at the port, and it is tied off here as well so the
   // refusal is never even exercised from this shell.
   assign client_req[5] = '0;
-  // Slot 6 is TERRAIN.BUILD. MEM.GUARD now has its window (TERRAIN.PAGE_POOL,
-  // write-only), but TERRAIN.PAGELOADER is not composed into this shell, so
-  // the port is a reservation exactly as slot 4 is. Wiring the loader in is
-  // its own pass: it needs the page-pool guard instance, the HPS bridge share
-  // and the residency directory, none of which are here.
-  assign client_req[6] = '0;
+  // Slot 6 is TERRAIN.BUILD, and it is now a SOCKET rather than a reservation
+  // (2026-09-19, cmdmem packet). Its guard is the one `zhao_mem_guard`, whose
+  // TERRAIN_BUILD arm admits TERRAIN.PAGE_POOL in both directions and nothing
+  // else -- so no client of this socket can reach a framebuffer or the asset
+  // pool, whatever it asks for.
+  //
+  // THE WRITE GATE. Slot 6 has its OWN write-data queue (`bq`, below), and the
+  // arbiter must not accept a write request whose words are not all in it:
+  // the controller pops a word per `wr_beat` from the moment of grant, and an
+  // empty queue would hand it garbage. Every other writer here pushes data
+  // with its request and relies on the arbiter's latency; this one does not
+  // rely on timing. `bq_free` is the queue's words NOT YET OWED to a request
+  // the arbiter already accepted, so the gate is exact, not a race.
+  zhao_arb_req_t   build_arb_req;
+  logic            build_gv;
+  logic [31:0]     build_gv_cnt;
+  zhao_guard_req_t build_gv_req;
+
+  zhao_mem_guard u_guard_build (
+    .clk        (gpu_clk),
+    .rst_n      (rst_n),
+    .req        (build_guard_req_i),
+    .rsp        (build_guard_rsp_o),
+    // The TERRAIN.PAGE_POOL window has CONSTANT bounds and consults no map
+    // (`zhao_mem_guard.sv`, "CONSTANT BOUNDS"), so the framebuffer-lease
+    // inputs have nothing to say about it -- the geometry guard's reasoning.
+    .map_valid  (1'b0),   // TIE: TERRAIN.PAGE_POOL has constant bounds; no framebuffer map applies to slot 6
+    .blit_slot  (1'b0),   // TIE: TERRAIN.PAGE_POOL has constant bounds; no framebuffer map applies to slot 6
+    .blit_span  (32'd0),  // TIE: TERRAIN.PAGE_POOL has constant bounds; no framebuffer map applies to slot 6
+    .fb_writer  (1'b0),   // TIE: TERRAIN_BUILD holds no framebuffer lease; the guard's lease arms never name it
+    .arb_req    (build_arb_req),
+    .arb_rsp    (client_rsp[6]),
+    .guard_violation     (build_gv),
+    .guard_violations    (build_gv_cnt),
+    .guard_violation_req (build_gv_req)
+  );
+
+  // words a request of `len` bytes occupies: the arbiter's own rounding
+  function automatic logic [6:0] build_words_of(input logic [6:0] len_b);
+    build_words_of = 7'((len_b + 7'd1) >> 1);
+  endfunction
+
+  logic [$clog2(BUILD_WQ_W):0] bq_occ;
+  logic [$clog2(BUILD_WQ_W):0] bq_owed;   // words promised to accepted requests
+  logic                        bq_room_for_req;
+  assign bq_room_for_req =
+      ({1'b0, bq_occ} - {1'b0, bq_owed}) >= ($bits(bq_occ)+1)'(build_words_of(build_arb_req.len));
+
+  always_comb begin
+    client_req[6]       = build_arb_req;
+    client_req[6].valid = build_arb_req.valid
+                       && (!build_arb_req.write || bq_room_for_req);
+  end
 
 
   logic [6:0][31:0] vram_bytes, vram_bytes_shadow;
@@ -1261,7 +1356,66 @@ module zhao_shell_top_v2
   logic [15:0] wdata_ctrl;
   logic [$clog2(WFIFO_W):0] wf_occ;
   assign wf_occ = wf_wp - wf_rp;
-  assign wdata_ctrl = wfifo[wf_rp[$clog2(WFIFO_W)-1:0]];
+
+  // ---- TWO WRITE QUEUES, and the burst says which one it pops ---------------
+  // The framebuffer queue above holds ONE writer per frame because the lease
+  // guarantees it. Slot 6 is not under that lease -- a TERRAIN.BUILD write can
+  // be in flight during a render frame -- so sharing the queue would interleave
+  // two writers' words and the controller would write one client's bytes at
+  // the other's address. So slot 6 has its own queue, and every `wr_beat` pops
+  // the queue of the client whose WRITE burst the controller granted.
+  //
+  // THE OWNER IS KNOWN AT GRANT, and word 0 can be needed IN THE GRANT CYCLE:
+  // `zhao_sdram_ctrl` raises `wr_beat` in S_RW, which is cycle G itself on a
+  // row hit. The arbiter's offer is still valid during G (it retires at the
+  // END of G), so during G the owner is read straight off `ctrl_req`, and it
+  // is registered for the burst's remaining beats.
+  logic wr_owner_build_r;
+  logic wr_sel_build;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) wr_owner_build_r <= 1'b0;
+    else if (ctrl_rsp.grant && ctrl_req.write)
+      wr_owner_build_r <= (ctrl_req.client == ZHAO_CLIENT_TERRAIN_BUILD);
+  end
+  assign wr_sel_build = (ctrl_rsp.grant && ctrl_req.write)
+                        ? (ctrl_req.client == ZHAO_CLIENT_TERRAIN_BUILD)
+                        : wr_owner_build_r;
+
+  logic [15:0] bq [0:BUILD_WQ_W-1];
+  logic [$clog2(BUILD_WQ_W):0] bq_wp, bq_rp;
+  logic bq_err;
+  assign bq_occ         = bq_wp - bq_rp;
+  assign build_wready_o = (bq_occ <= ($bits(bq_occ))'(BUILD_WQ_W - 4));
+
+  assign wdata_ctrl = wr_sel_build ? bq[bq_rp[$clog2(BUILD_WQ_W)-1:0]]
+                                   : wfifo[wf_rp[$clog2(WFIFO_W)-1:0]];
+
+  // the words the arbiter has been promised: + a request's words when it is
+  // ACCEPTED (registered `client_rsp[6].grant`, the cycle the guard still
+  // presents that very request), - one per word popped. ONE assignment, so a
+  // grant and a pop in the same cycle are both counted.
+  wire bq_pop = wr_beat_ctrl && wr_sel_build;
+  wire bq_promise = client_rsp[6].grant && build_arb_req.write;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      bq_wp <= '0; bq_rp <= '0; bq_owed <= '0; bq_err <= 1'b0;
+    end else begin
+      if (build_wvalid_i && build_wready_o) begin
+        for (int j = 0; j < 4; j++)
+          bq[($clog2(BUILD_WQ_W))'(bq_wp + ($bits(bq_wp))'(j))] <= build_wdata_i[16*j +: 16];
+        bq_wp <= bq_wp + ($bits(bq_wp))'(4);
+      end
+      if (bq_pop) begin
+        // A pop from an empty queue is a garbage word written to VRAM. The
+        // write gate makes it unreachable; this is the tripwire that says so.
+        if (bq_occ == '0) bq_err <= 1'b1;
+        else bq_rp <= bq_rp + ($bits(bq_rp))'(1);
+      end
+      bq_owed <= bq_owed
+               + (bq_promise ? ($bits(bq_owed))'(build_words_of(build_arb_req.len)) : '0)
+               - (bq_pop && (bq_owed != '0) ? ($bits(bq_owed))'(1) : '0);
+    end
+  end
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -1296,7 +1450,7 @@ module zhao_shell_top_v2
           wf_wp <= wf_wp + ($bits(wf_wp))'(4);
         end
       end
-      if (wr_beat_ctrl) begin
+      if (wr_beat_ctrl && !wr_sel_build) begin
         if (wf_occ == '0) wf_err <= 1'b1;      // underflow: garbage word
         else wf_rp <= wf_rp + ($bits(wf_rp))'(1);
       end
@@ -1310,7 +1464,9 @@ module zhao_shell_top_v2
   assign fbw_wready = (wf_occ <= ($bits(wf_occ))'(WFIFO_W - 4));
   assign blit_wready   = fbw_wready;
   assign render_wready = fbw_wready;
-  assign shell_err_wfifo_o = wf_err;
+  // BOTH write queues' tripwires: a word written from an empty queue is a
+  // garbage word in VRAM whichever queue it came from.
+  assign shell_err_wfifo_o = wf_err || bq_err;
 
   // read-beat packer (glue 2): 4 rdata words -> one 64-bit beat
   //
@@ -1330,10 +1486,17 @@ module zhao_shell_top_v2
   logic [1:0]  pack_cnt;
 
   logic rd_owner_geom_r;
+  // THE THIRD READ OWNER, slot 6 (the TERRAIN.BUILD socket). Captured at the
+  // same grant edge by the same rule; a returning word carries no tag.
+  logic rd_owner_build_r;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n) rd_owner_geom_r <= 1'b0;
-    else if (ctrl_rsp.grant && !ctrl_req.write)
-      rd_owner_geom_r <= (ctrl_req.client == ZHAO_CLIENT_ENGINE1);
+    if (!rst_n) begin
+      rd_owner_geom_r  <= 1'b0;
+      rd_owner_build_r <= 1'b0;
+    end else if (ctrl_rsp.grant && !ctrl_req.write) begin
+      rd_owner_geom_r  <= (ctrl_req.client == ZHAO_CLIENT_ENGINE1);
+      rd_owner_build_r <= (ctrl_req.client == ZHAO_CLIENT_TERRAIN_BUILD);
+    end
   end
 
   logic        packed_valid;
@@ -1406,8 +1569,30 @@ module zhao_shell_top_v2
     end
   end
 
-  assign scan_beat_valid = packed_valid && !rd_owner_geom_r;
+  assign scan_beat_valid = packed_valid && !rd_owner_geom_r && !rd_owner_build_r;
   assign scan_beat_data  = packed_data;
+
+  // ---- slot 6's read beats, with `last` counted from ITS request -----------
+  // The geometry path's lesson, not re-learned: `last` marks the end of the
+  // guard request, counted from that request's own `len`, never a constant.
+  logic [3:0] build_expect_r;
+  logic [3:0] build_beat_cnt_r;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      build_beat_cnt_r <= 4'd0;
+      build_expect_r   <= 4'd8;
+    end else if (build_guard_req_i.valid && build_guard_rsp_o.ready) begin
+      build_beat_cnt_r <= 4'd0;
+      build_expect_r   <= 4'(build_guard_req_i.len >> 3);
+    end else if (build_beat_valid_o) begin
+      build_beat_cnt_r <= build_beat_cnt_r + 4'd1;
+    end
+  end
+  assign build_beat_valid_o = packed_valid && rd_owner_build_r;
+  assign build_beat_data_o  = packed_data;
+  assign build_beat_last_o  = build_beat_valid_o &&
+                              (build_beat_cnt_r + 4'd1 == build_expect_r);
+  assign build_retire_words_o = client_rsp[6].credits;
 
   // burst-owner tracking (integrity tripwire, glue 2): reads must be
   // scanout's, writes must be THE CURRENT FRAMEBUFFER-WRITE LEASE HOLDER'S --
@@ -1432,7 +1617,14 @@ module zhao_shell_top_v2
     if (!rst_n) begin
       route_err <= 1'b0;
     end else if (ctrl_rsp.grant) begin
-      if (ctrl_req.write  && (ctrl_req.client != expected_writer))
+      // TERRAIN_BUILD is the second legal writer (the slot-6 socket, 2026-09-19)
+      // and is not under the framebuffer lease: MEM.GUARD confines it to
+      // TERRAIN.PAGE_POOL, which is disjoint from both FB slots. The tripwire
+      // learns it in the same edit the guard's client arm was connected --
+      // the mistake this block's own comment records twice was learning one
+      // and not the other.
+      if (ctrl_req.write  && (ctrl_req.client != expected_writer)
+                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD))
         route_err <= 1'b1;
       // TREAD 10: reads may now be SCANOUT'S OR ENGINE1'S. This is the same
       // mistake the write side already made once and is documented above --
@@ -1441,7 +1633,8 @@ module zhao_shell_top_v2
       // Widened DELIBERATELY and no further: ENGINE1 is the one identity
       // `zhao_mem_guard` grants the asset-pool window to.
       if (!ctrl_req.write && (ctrl_req.client != ZHAO_CLIENT_SCANOUT)
-                          && (ctrl_req.client != ZHAO_CLIENT_ENGINE1))
+                          && (ctrl_req.client != ZHAO_CLIENT_ENGINE1)
+                          && (ctrl_req.client != ZHAO_CLIENT_TERRAIN_BUILD))
         route_err <= 1'b1;
     end
   end
@@ -1901,30 +2094,63 @@ module zhao_shell_top_v2
   assign blit_done   = nb_done;
   assign blit_status = nb_status;
 
-  zhao_hps_arbiter u_hps_arb (
-    .clk            (gpu_clk),
-    .rst_n          (rst_n),
-    .c0_req_i       (dma_hps_req),
-    .c0_req_grant_o (dma_hps_grant),
-    .c0_wr_valid_i  (1'b0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
-    .c0_wr_data_i   (64'd0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
-    .c0_wr_last_i   (1'b0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
-    .c0_rsp_o       (dma_hps_rsp),
-    .c1_req_i       (blit_hps_req),
-    .c1_req_grant_o (blit_hps_grant),
-    .c1_wr_valid_i  (1'b0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
-    .c1_wr_data_i   (64'd0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
-    .c1_wr_last_i   (1'b0),  // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this packet carries rather than makes
-    .c1_rsp_o       (blit_hps_rsp),
-    .b_req_o        (arb_hps_req),
-    .b_req_grant_i  (arb_bridge_grant),
-    .b_wr_valid_o   (arb_wr_valid),
-    .b_wr_data_o    (arb_wr_data),
-    .b_wr_last_o    (arb_wr_last),
-    .b_rsp_i        (arb_hps_rsp),
-    .c0_bursts_o      (hps_arb_c0_bursts),
-    .c1_bursts_o      (hps_arb_c1_bursts),
-    .c1_wait_cycles_o (hps_arb_c1_wait)
+  // THE N-CLIENT ARBITER (owner ruling R4), not the two-port wrapper, since the
+  // TERRAIN.BUILD socket landed (2026-09-19, cmdmem packet). Index order IS
+  // the priority law (`zhao_hps_arbiter_n` rule 7): CMD.DMA 0 and
+  // DEBUG.FRAMEBLIT 1 keep exactly the ranks they had, and every socket client
+  // sits BELOW them, as `spec/memory_rules.md` 5d's background class requires.
+  // Clients 0 and 1 still see the same machine -- the wrapper this replaces is
+  // this core at N=2.
+  localparam int unsigned HPS_N = 2 + BUILD_HPS_N;
+  zhao_hps_burst_req_t [HPS_N-1:0]       hn_req;
+  logic                [HPS_N-1:0]       hn_grant;
+  zhao_hps_burst_rsp_t [HPS_N-1:0]       hn_rsp;
+  logic                [HPS_N-1:0][31:0] hn_bursts;
+  logic                [HPS_N-1:1][31:0] hn_wait;
+
+  always_comb begin
+    hn_req[0] = dma_hps_req;
+    hn_req[1] = blit_hps_req;
+    for (int i = 0; i < int'(BUILD_HPS_N); i++) hn_req[2 + i] = build_hps_req_i[i];
+  end
+  assign dma_hps_grant  = hn_grant[0];
+  assign blit_hps_grant = hn_grant[1];
+  assign dma_hps_rsp    = hn_rsp[0];
+  assign blit_hps_rsp   = hn_rsp[1];
+  assign hps_arb_c0_bursts = hn_bursts[0];
+  assign hps_arb_c1_bursts = hn_bursts[1];
+  assign hps_arb_c1_wait   = hn_wait[1];
+  always_comb begin
+    for (int i = 0; i < int'(BUILD_HPS_N); i++) begin
+      build_hps_grant_o[i] = hn_grant[2 + i];
+      build_hps_rsp_o[i]   = hn_rsp[2 + i];
+      build_hps_wait_o[i]  = hn_wait[2 + i];
+    end
+  end
+
+  zhao_hps_arbiter_n #(
+    .N (HPS_N)
+  ) u_hps_arb (
+    .clk        (gpu_clk),
+    .rst_n      (rst_n),
+    .req_i      (hn_req),
+    .req_grant_o(hn_grant),
+    // TIE: inherited verbatim from zhao_shell_top.sv; a V1 decision this
+    // packet carries rather than makes. No client here WRITES to HPS DDR --
+    // CMD.DMA and DEBUG.FRAMEBLIT never did, and the socket offers reads only
+    // (see its port comment: the arbiter has no write READY to give a writer).
+    .wr_valid_i ('0),
+    .wr_data_i  ('0),
+    .wr_last_i  ('0),
+    .rsp_o      (hn_rsp),
+    .b_req_o       (arb_hps_req),
+    .b_req_grant_i (arb_bridge_grant),
+    .b_wr_valid_o  (arb_wr_valid),
+    .b_wr_data_o   (arb_wr_data),
+    .b_wr_last_o   (arb_wr_last),
+    .b_rsp_i       (arb_hps_rsp),
+    .bursts_o      (hn_bursts),
+    .wait_cycles_o (hn_wait)
   );
 
   zhao_hps_bridge u_bridge (
@@ -1961,7 +2187,7 @@ module zhao_shell_top_v2
                     ^ bridge_req_grant ^ blit_hps_grant ^ ^blit_hps_rsp
                     ^ ^hps_arb_c0_bursts ^ ^hps_arb_c1_bursts ^ ^hps_arb_c1_wait
                     ^ ^client_rsp[2] ^ ^client_rsp[3]
-                    ^ ^client_rsp[4] ^ ^client_rsp[5] ^ ^client_rsp[6]
+                    ^ ^client_rsp[4] ^ ^client_rsp[5]
                     ^ ^{client_rsp[0].credits}
                     ^ client_rsp[0].grant ^ client_rsp[1].grant
                     // `guard_wlast_o` marks the last beat of a guard request.
@@ -2011,6 +2237,15 @@ module zhao_shell_top_v2
                     ^ ^slot_stale_events
                     ^ ^blits_published ^ ^blits_rejected
                     ^ geom_gv ^ ^geom_gv_req
+                    // The slot-6 socket's guard trace outputs, sunk as every other
+                    // guard's are; its violation COUNT is in the total above.
+                    // uild_wlast_i is sunk for the write queue's reason: the
+                    // arbiter counts words, so no beat has to be marked final.
+                    ^ build_gv ^ ^build_gv_req ^ build_wlast_i
+                    // Burst counts for the socket's HPS clients. Their WAIT counts
+                    // leave the shell as uild_hps_wait_o; a count of bursts
+                    // served is the composer's to read off its own client.
+                    ^ ^hn_bursts[HPS_N-1:2]
                     // THE HPS BRIDGE'S WRITE READY, AND WHY IT IS UNUSED --
                     // which is a different statement from "it is spare".
                     //
