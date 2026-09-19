@@ -173,8 +173,9 @@ export interface HirPresentation {
   module: number;
   order: number;
   name: string;
-  views: { id: number; camera: HirExpr | null; budgetPct: number; span: SourceSpan }[];
-  sharedBudgetPct: number;
+  /** Token COUNTS (owner ruling R33). */
+  views: { id: number; camera: HirExpr | null; geometryTokens: number; fragmentTokens: number; span: SourceSpan }[];
+  sharedTokens: number;
   emits: HirEmit[];
   span: SourceSpan;
 }

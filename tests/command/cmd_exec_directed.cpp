@@ -104,6 +104,14 @@ struct EnvOut {
   uint16_t yaw, pitch, sun, ambient;
 };
 
+// R18/R33: one token load, as it left the executor.
+struct TokOut {
+  uint32_t cycle = 0;
+  bool budget = false;  // true = the contract's ceiling, false = a view request
+  uint32_t g0 = 0, g1 = 0, f0 = 0, f1 = 0, sh = 0;  // ceiling (budget)
+  uint32_t view = 0, geom = 0, frag = 0;            // request
+};
+
 struct Run {
   bool done = false;
   uint8_t err = 0;
@@ -114,6 +122,8 @@ struct Run {
   std::vector<StampOut> stamps;
   std::vector<DrawOut> draws;
   std::vector<UploadOut> uploads;
+  std::vector<TokOut> toks;
+  uint32_t contracts = 0;
   uint32_t uploads_issued = 0, upload_overflow = 0;
   uint32_t committed = 0, abandoned = 0, views = 0, issued = 0;
   uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
@@ -238,6 +248,27 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     EnvOut ev{cyc, static_cast<uint16_t>(dut.env_sun_yaw_o), static_cast<uint16_t>(dut.env_sun_pitch_o),
               static_cast<uint16_t>(dut.env_sun_colour_o), static_cast<uint16_t>(dut.env_ambient_o)};
 
+    // The two token loads are one-cycle pulses with no ready: sampled pre-edge.
+    if (dut.tok_budget_valid_o) {
+      TokOut k;
+      k.cycle = cyc;
+      k.budget = true;
+      k.g0 = dut.tok_budget_geom0_o;
+      k.g1 = dut.tok_budget_geom1_o;
+      k.f0 = dut.tok_budget_frag0_o;
+      k.f1 = dut.tok_budget_frag1_o;
+      k.sh = dut.tok_budget_shared_o;
+      r.toks.push_back(k);
+    }
+    if (dut.tok_vreq_valid_o) {
+      TokOut k;
+      k.cycle = cyc;
+      k.view = dut.tok_vreq_view_o;
+      k.geom = dut.tok_vreq_geom_o;
+      k.frag = dut.tok_vreq_frag_o;
+      r.toks.push_back(k);
+    }
+
     zhao::tick(dut);
     if (env_fires) r.envs.push_back(ev);
     if (moved) ++i;
@@ -278,12 +309,14 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.uploads_issued = dut.uploads_issued_o;
   r.upload_overflow = dut.upload_overflow_o;
   r.envs_issued = dut.envs_issued_o;
+  r.contracts = dut.contracts_applied_o;
   return r;
 }
 
 // ---- record builders, all layout from the generated packers ---------------
 
-std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t first_word) {
+std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t first_word,
+                                   uint32_t gtok = 0, uint32_t ftok = 0) {
   zhao_abi::ZhRecordSetView rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
   rec.hdr.record_bytes = 96;
@@ -314,8 +347,8 @@ std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t 
   vp.m32 = first_word + 14;
   vp.m33 = first_word + 15;
   rec.payload.pixel_error = 0;
-  rec.payload.geometry_tokens = 0;
-  rec.payload.fragment_tokens = 0;
+  rec.payload.geometry_tokens = gtok;
+  rec.payload.fragment_tokens = ftok;
   std::vector<uint8_t> out;
   zhao_abi::zhao_pack_set_view(rec, out);
   return out;
@@ -364,6 +397,25 @@ std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t 
   return out;
 }
 
+// SetPresentationContract, the token CEILING (R18/R33), by the generated packer.
+std::vector<uint8_t> contractRecord(uint32_t g0, uint32_t g1, uint32_t f0, uint32_t f1,
+                                    uint32_t sh) {
+  zhao_abi::ZhRecordSetPresentationContract rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;
+  rec.hdr.record_bytes = 48;
+  rec.hdr.source_id = 0x31u;
+  rec.payload.mode = zhao_abi::VIDEO_DUO;
+  rec.payload.view_count = 2;
+  rec.payload.geometry_tokens[0] = g0;
+  rec.payload.geometry_tokens[1] = g1;
+  rec.payload.fragment_tokens[0] = f0;
+  rec.payload.fragment_tokens[1] = f1;
+  rec.payload.shared_tokens = sh;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_set_presentation_contract(rec, out);
+  return out;
+}
+
 // PublishResource (R17), packed by the GENERATED packer like every record here.
 std::vector<uint8_t> publishRecord(uint32_t k) {
   zhao_abi::ZhRecordPublishResource rec{};
@@ -373,7 +425,7 @@ std::vector<uint8_t> publishRecord(uint32_t k) {
   // handle32 {index:24, generation:8}, index HIGH (zcon::detail::handle32).
   rec.payload.resource = ((0x00ABC0u + k) << 8) | 0x2Au;
   rec.payload.hps_addr_lo = 0x3000'0000u + k * 0x1000u;
-  rec.payload.hps_addr_hi = k;                  // nonzero for k>0: carried, not narrowed
+  rec.payload.hps_addr_hi = k;  // nonzero for k>0: carried, not narrowed
   rec.payload.vram_dst = 0x054D'F000u + k * 0x100u;
   rec.payload.length = 256u + 64u * k;
   rec.payload.crc32c = 0xC0FF'EE00u + k;
@@ -391,7 +443,8 @@ void checkUpload(const UploadOut& u, uint32_t k, const std::string& tag) {
   check(u.kind == 11u + k, (tag + " kind").c_str(), 11u + k, u.kind);
   check(u.hps == ((static_cast<uint64_t>(k) << 32) | (0x3000'0000u + k * 0x1000u)),
         (tag + " hps address, all 64 bits").c_str(), 0, 0);
-  check(u.vram == 0x054D'F000u + k * 0x100u, (tag + " vram").c_str(), 0x054DF000u + k * 0x100u, u.vram);
+  check(u.vram == 0x054D'F000u + k * 0x100u, (tag + " vram").c_str(), 0x054DF000u + k * 0x100u,
+        u.vram);
   check(u.len == 256u + 64u * k, (tag + " length").c_str(), 256u + 64u * k, u.len);
   check(u.crc == 0xC0FF'EE00u + k, (tag + " crc32c").c_str(), 0xC0FFEE00u + k, u.crc);
   check(u.gen == 0x0102u + k, (tag + " new generation").c_str(), 0x0102u + k, u.gen);
@@ -517,6 +570,67 @@ int main(int argc, char** argv) {
             static_cast<uint32_t>(s.ring_width));
       check(s.src_id == 9, "case1: stamp source_id low half", 9, s.src_id);
     }
+  }
+
+  // ---- 17. R18/R33: the token CEILING, then each view's REQUEST ----------
+  // Counts, field for field off the generated packers; the ceiling leaves
+  // FIRST, then view 0's request, then view 1's, all before the first matrix
+  // word -- so a request always meets its own packet's ceiling. The contract is
+  // an executed record now, so unsupported_o counts BeginFrame + EndFrame only.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(contractRecord(40000u, 30000u, 90000u, 80000u, 5000u));
+    b.append_record(setViewRecord(1, 0x0000'0008u, 0x0022'0000, 0xFFFF'FFF0u, 20000u));
+    b.append_record(setViewRecord(0, 0x0000'0007u, 0x0011'0000, 12345u, 67890u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.done && r.err == zhao_abi::ZH_ABI_OK, "case17: well formed", 1, r.done ? 1 : 0);
+    check(r.committed == 1, "case17: committed", 1, r.committed);
+    check(r.contracts == 1, "case17: contracts_applied_o", 1, r.contracts);
+    check(r.unsupported == 2, "case17: the contract is no longer 'unsupported'", 2, r.unsupported);
+    check(r.toks.size() == 3, "case17: one ceiling and two requests left", 3, r.toks.size());
+    if (r.toks.size() == 3) {
+      const TokOut& c = r.toks[0];
+      check(c.budget, "case17: the CEILING leaves first", 1, c.budget ? 1 : 0);
+      check(c.g0 == 40000u && c.g1 == 30000u && c.f0 == 90000u && c.f1 == 80000u && c.sh == 5000u,
+            "case17: the five counts, as sent", 1,
+            c.g0 == 40000u && c.g1 == 30000u && c.f0 == 90000u && c.f1 == 80000u && c.sh == 5000u);
+      check(!r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u &&
+                r.toks[1].frag == 67890u,
+            "case17: view 0's request, as sent", 1,
+            !r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u &&
+                r.toks[1].frag == 67890u);
+      // view 1 asked for MORE than its ceiling: the executor forwards it as sent
+      // -- the CLAMP is MEASURE.TOKENS', one authority per level (R18).
+      check(!r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u &&
+                r.toks[2].frag == 20000u,
+            "case17: view 1's request, as sent (the clamp is the guard's)", 1,
+            !r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u &&
+                r.toks[2].frag == 20000u);
+      check(r.toks[0].cycle < r.toks[1].cycle && r.toks[1].cycle < r.toks[2].cycle,
+            "case17: ceiling, then view 0, then view 1", 1, 1);
+      const uint32_t first_cfg = r.cfg.empty() ? 0xFFFFFFFFu : r.cfg[0].cycle;
+      check(r.toks[2].cycle < first_cfg, "case17: every token load precedes the first matrix word",
+            1, r.toks[2].cycle < first_cfg ? 1 : 0);
+      check(r.toks[0].cycle > r.verdict_cycle, "case17: nothing leaves before the verdict", 1,
+            r.toks[0].cycle > r.verdict_cycle ? 1 : 0);
+    }
+  }
+
+  // ---- 17b. a packet that FAILS its CRC loads NO tokens --------------------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(contractRecord(1u, 2u, 3u, 4u, 5u));
+    b.append_record(setViewRecord(0, 0x0000'0007u, 0x0011'0000, 6u, 7u));
+    b.end_frame(0);
+    std::vector<uint8_t> p = b.seal(1, 1, 0);
+    p[36 + 32 + 20] = static_cast<uint8_t>(p[36 + 32 + 20] ^ 0xFFu);  // a contract count byte
+    const Run r = runPacket(p, 0xFFFFFFFFu);
+    check(r.abandoned == 1, "case17b: abandoned", 1, r.abandoned);
+    check(r.toks.empty() && r.contracts == 0, "case17b: no ceiling and no request escaped", 0,
+          r.toks.size() + r.contracts);
   }
 
   // ---- 2. the same packet with one payload byte flipped -------------------
@@ -921,7 +1035,8 @@ int main(int argc, char** argv) {
     check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case15: payload CRC fails",
           zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, r.err);
     check(r.abandoned == 1, "case15: abandoned", 1, r.abandoned);
-    check(r.uploads.empty(), "case15: NO upload of a packet that failed its CRC", 0, r.uploads.size());
+    check(r.uploads.empty(), "case15: NO upload of a packet that failed its CRC", 0,
+          r.uploads.size());
   }
 
   // ---- 16. MEM.UPLOAD busy: the commit does NOT wait for it ----------------
@@ -935,7 +1050,8 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x0u);
     check(r.committed == 1, "case16: committed with MEM.UPLOAD busy", 1, r.committed);
-    check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1, r.draws.size());
+    check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1,
+          r.draws.size());
     check(r.uploads.empty() && r.uploads_issued == 0, "case16: the upload is still pending", 0,
           r.uploads_issued);
   }

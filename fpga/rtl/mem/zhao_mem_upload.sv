@@ -525,7 +525,16 @@ module zhao_mem_upload
         end
 
         S_ISSUE: begin
-          if (hps_req_grant_i) begin
+          // `err` ON THE REQUEST, WITH NO GRANT, is how `zhao_hps_bridge`
+          // refuses a burst ("malformed burst / bridge error: NOTHING ISSUED").
+          // It used to be watched for only in S_FILL, which the refusal never
+          // reaches, so this state went on HOLDING its request -- and
+          // `zhao_hps_arbiter_n` re-serves a held request, so the pair spun on
+          // the refusal forever. TERRAIN.CMD found the same fault in itself.
+          if (hps_rsp_i.err) begin
+            hps_err_q <= 1'b1;
+            st_q      <= S_RETIRE;
+          end else if (hps_req_grant_i) begin
             beat_q <= '0;
             st_q   <= S_FILL;
           end

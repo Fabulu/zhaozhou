@@ -1214,19 +1214,21 @@
 //      recorded here because "the histogram is composed, so its siblings must
 //      be nearly composable" is the plausible reading and it is wrong.
 //
-//      MEASURE.TOKENS has no producer for either of its two inputs.
-//      `budget_*` is SetPresentationContract's five per-frame budgets;
-//      `zhao_cmd_scheduler` decodes that opcode and emits `mode_o` and nothing
-//      else -- there is no budget port on it to connect. And the request side
-//      is worse than absent, it is MISMATCHED: GEOM.BINNER's token client is
-//      real and is already TIED OFF INSIDE THE SHELL --
-//      `zhao_shell_top_v2.sv` reads `.tok_req_o(rp_tok_unused),
-//      .tok_grant_i(1'b1)` -- and what it offers is ONE BIT, where
-//      MEASURE.TOKENS' `req_*` carries view, class, essential, rung, cost and
-//      source id. Adopting it would mean inventing five of the six fields,
-//      and `req_essential_i` and `req_rep_i` are policy rather than routing.
-//      That shell tie-off is inside I20's scope and is named here because it
-//      is the specific thing a later packet must repair.
+//      MEASURE.TOKENS IS COMPOSED ON ITS BUDGET SIDE, 2026-09-19 (cmdmem,
+//      rulings R18/R33). The refusal that stood here -- "`zhao_cmd_scheduler`
+//      decodes that opcode and emits `mode_o` and nothing else" -- was true of
+//      the SCHEDULER and missed the EXECUTOR: CMD.EXEC walks every record of a
+//      committed packet, so it now lifts SetPresentationContract's five COUNTS
+//      (the ceiling) and each SetView's two (the request) and commits them in
+//      phase EX_TOK, ceiling first. MEASURE.TOKENS clamps each request to the
+//      ceiling and counts every cut (`tok_vreq_clamped_o`); nothing converts,
+//      and the compiler now writes counts as authored (R33 retired the
+//      percentages). THE REQUEST SIDE REMAINS A BOUNDARY (`tok_req_*`,
+//      `tok_ret_*`), for the reason this entry gave and which still holds:
+//      GEOM.BINNER's token client is ONE BIT, tied off inside the shell as
+//      `.tok_req_o(rp_tok_unused), .tok_grant_i(1'b1)`, against a seven-field
+//      request whose `essential` and `rep` are policy nobody produces. That
+//      shell tie-off is the specific thing a later packet must repair.
 //
 //      MEASURE.GOVERNOR then fails for its own reasons even if TOKENS existed.
 //      Its `px_err0/1_i` is SetView's per-camera `fx16 pixel_error` and its
@@ -4912,6 +4914,55 @@ module zhao_console_core
   output logic [31:0] cmd_exec_unsupported_o,
   // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
   output logic [31:0] cmd_exec_envs_o,
+
+  // ==========================================================================
+  // MEASURE.TOKENS (rulings R18/R33, 2026-09-19, cmdmem packet)
+  // ==========================================================================
+  // Its BUDGET side is composed: CMD.EXEC commits SetPresentationContract's
+  // five counts as the CEILING and each SetView's two counts as that view's
+  // REQUEST, which the guard clamps to the ceiling. Its REQUEST/RETURN side is
+  // a BOUNDARY (entry I18): the one consumer that exists, GEOM.BINNER, offers a
+  // ONE-BIT token client (`tok_req_o`, tied off inside the shell) against this
+  // block's seven-field request, and the other five fields are policy nobody
+  // produces yet. So the request and return enter here, and everything the
+  // guard decides leaves here, where a bench -- or the next packet -- reads it.
+  input  logic        tok_req_valid_i,
+  input  logic        tok_req_view_i,
+  input  logic        tok_req_class_i,
+  input  logic        tok_req_essential_i,
+  input  logic [ 2:0] tok_req_rep_i,
+  input  logic [31:0] tok_req_cost_i,
+  input  logic [15:0] tok_req_src_id_i,
+  output logic        tok_grant_o,
+  output logic        tok_shared_o,
+  input  logic        tok_ret_valid_i,
+  input  logic        tok_ret_view_i,
+  input  logic        tok_ret_class_i,
+  input  logic        tok_ret_shared_i,
+  input  logic [31:0] tok_ret_cost_i,
+  output logic        tok_den_valid_o,
+  output logic        tok_den_view_o,
+  output logic        tok_den_class_o,
+  output logic [ 2:0] tok_den_rep_o,
+  output logic [ 1:0] tok_den_reason_o,
+  output logic [15:0] tok_den_src_id_o,
+  output logic [31:0] tok_den_cost_o,
+  output logic [31:0] tok_avail_geom0_o,
+  output logic [31:0] tok_avail_geom1_o,
+  output logic [31:0] tok_avail_frag0_o,
+  output logic [31:0] tok_avail_frag1_o,
+  output logic [31:0] tok_avail_shared_o,
+  output logic [31:0] tok_rep_count0_o,
+  output logic [31:0] tok_rep_count1_o,
+  output logic [31:0] tok_rep_count2_o,
+  output logic [31:0] tok_rep_count3_o,
+  output logic [31:0] tok_rep_count4_o,
+  output logic [31:0] tok_rep_count5_o,
+  output logic [31:0] tok_rep_count6_o,
+  output logic [31:0] tok_rep_count7_o,
+  output logic [31:0] tok_triangles_culled_o,
+  output logic [31:0] tok_vreq_clamped_o,
+  output logic [31:0] cmd_exec_contracts_o,
 
   // ==========================================================================
   // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
@@ -10700,6 +10751,11 @@ module zhao_console_core
   // every abandon -- so it needs no change when the decoder learns to re-arm.
   // That change belongs to CMD.DECODER, whose verdict 19 committed goldens
   // pin, and it is not smuggled in here.
+  // R18/R33: CMD.EXEC's token outputs, declared ahead of both instances.
+  logic        cmd_tok_budget_valid, cmd_tok_vreq_valid, cmd_tok_vreq_view;
+  logic [31:0] cmd_tok_budget_geom0, cmd_tok_budget_geom1;
+  logic [31:0] cmd_tok_budget_frag0, cmd_tok_budget_frag1, cmd_tok_budget_shared;
+  logic [31:0] cmd_tok_vreq_geom, cmd_tok_vreq_frag;
   zhao_cmd_exec #(
     .STAMP_Q (CMD_EXEC_STAMP_Q)
   ) u_cmd_exec (
@@ -10772,6 +10828,18 @@ module zhao_console_core
     .env_sun_colour_o(cmd_env_sun),
     .env_ambient_o   (cmd_env_amb),
     .envs_issued_o   (cmd_exec_envs_o),
+    // R18/R33: the token CEILING and each view's REQUEST -> MEASURE.TOKENS.
+    .tok_budget_valid_o (cmd_tok_budget_valid),
+    .tok_budget_geom0_o (cmd_tok_budget_geom0),
+    .tok_budget_geom1_o (cmd_tok_budget_geom1),
+    .tok_budget_frag0_o (cmd_tok_budget_frag0),
+    .tok_budget_frag1_o (cmd_tok_budget_frag1),
+    .tok_budget_shared_o(cmd_tok_budget_shared),
+    .tok_vreq_valid_o   (cmd_tok_vreq_valid),
+    .tok_vreq_view_o    (cmd_tok_vreq_view),
+    .tok_vreq_geom_o    (cmd_tok_vreq_geom),
+    .tok_vreq_frag_o    (cmd_tok_vreq_frag),
+    .contracts_applied_o(cmd_exec_contracts_o),
 
     .packets_committed_o  (cmd_exec_committed_o),
     .packets_abandoned_o  (cmd_exec_abandoned_o),
@@ -10786,6 +10854,65 @@ module zhao_console_core
     .uploads_issued_o     (cmd_exec_uploads_o),
     .upload_overflow_o    (cmd_exec_upload_overflow_o),
     .unsupported_o        (cmd_exec_unsupported_o)
+  );
+
+  // ---- MEASURE.TOKENS, composed on its budget side (R18/R33) --------------
+  // ONE unit end to end: the counts CMD.EXEC lifted off the wire, unchanged.
+  // The contract's numbers are the ceiling; a SetView's are the request, and
+  // the guard clamps (and counts) any request above the ceiling. Nothing here
+  // converts, scales or invents a capacity.
+
+  zhao_measure_tokens #(
+    .TOK_W (32)
+  ) u_measure_tokens (
+    .clk             (gpu_clk),
+    .rst_n           (rst_n),
+    .budget_valid_i  (cmd_tok_budget_valid),
+    .budget_geom0_i  (cmd_tok_budget_geom0),
+    .budget_geom1_i  (cmd_tok_budget_geom1),
+    .budget_frag0_i  (cmd_tok_budget_frag0),
+    .budget_frag1_i  (cmd_tok_budget_frag1),
+    .budget_shared_i (cmd_tok_budget_shared),
+    .vreq_valid_i    (cmd_tok_vreq_valid),
+    .vreq_view_i     (cmd_tok_vreq_view),
+    .vreq_geom_i     (cmd_tok_vreq_geom),
+    .vreq_frag_i     (cmd_tok_vreq_frag),
+    .req_valid_i     (tok_req_valid_i),
+    .req_view_i      (tok_req_view_i),
+    .req_class_i     (tok_req_class_i),
+    .req_essential_i (tok_req_essential_i),
+    .req_rep_i       (tok_req_rep_i),
+    .req_cost_i      (tok_req_cost_i),
+    .req_src_id_i    (tok_req_src_id_i),
+    .tok_grant_o     (tok_grant_o),
+    .tok_shared_o    (tok_shared_o),
+    .ret_valid_i     (tok_ret_valid_i),
+    .ret_view_i      (tok_ret_view_i),
+    .ret_class_i     (tok_ret_class_i),
+    .ret_shared_i    (tok_ret_shared_i),
+    .ret_cost_i      (tok_ret_cost_i),
+    .den_valid_o     (tok_den_valid_o),
+    .den_view_o      (tok_den_view_o),
+    .den_class_o     (tok_den_class_o),
+    .den_rep_o       (tok_den_rep_o),
+    .den_reason_o    (tok_den_reason_o),
+    .den_src_id_o    (tok_den_src_id_o),
+    .den_cost_o      (tok_den_cost_o),
+    .avail_geom0_o   (tok_avail_geom0_o),
+    .avail_geom1_o   (tok_avail_geom1_o),
+    .avail_frag0_o   (tok_avail_frag0_o),
+    .avail_frag1_o   (tok_avail_frag1_o),
+    .avail_shared_o  (tok_avail_shared_o),
+    .tok_rep_count0_o(tok_rep_count0_o),
+    .tok_rep_count1_o(tok_rep_count1_o),
+    .tok_rep_count2_o(tok_rep_count2_o),
+    .tok_rep_count3_o(tok_rep_count3_o),
+    .tok_rep_count4_o(tok_rep_count4_o),
+    .tok_rep_count5_o(tok_rep_count5_o),
+    .tok_rep_count6_o(tok_rep_count6_o),
+    .tok_rep_count7_o(tok_rep_count7_o),
+    .triangles_culled_o(tok_triangles_culled_o),
+    .vreq_clamped_o  (tok_vreq_clamped_o)
   );
 
   // ==========================================================================

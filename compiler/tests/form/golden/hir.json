@@ -6,9 +6,9 @@
     {
      "name": "position",
      "span": {
-      "end": 47,
+      "end": 49,
       "file": "a_arena.form",
-      "start": 39
+      "start": 41
      },
      "type": {
       "t": "world3"
@@ -17,9 +17,9 @@
     {
      "name": "age",
      "span": {
-      "end": 64,
+      "end": 67,
       "file": "a_arena.form",
-      "start": 61
+      "start": 64
      },
      "type": {
       "t": "u32"
@@ -28,9 +28,9 @@
     {
      "name": "energy",
      "span": {
-      "end": 81,
+      "end": 85,
       "file": "a_arena.form",
-      "start": 75
+      "start": 79
      },
      "type": {
       "t": "unit8"
@@ -42,9 +42,9 @@
    "name": "particle",
    "order": 0,
    "span": {
-    "end": 93,
+    "end": 98,
     "file": "a_arena.form",
-    "start": 17
+    "start": 18
    }
   },
   {
@@ -53,9 +53,9 @@
     {
      "name": "height",
      "span": {
-      "end": 124,
+      "end": 130,
       "file": "a_arena.form",
-      "start": 118
+      "start": 124
      },
      "type": {
       "t": "fx16"
@@ -67,9 +67,9 @@
    "name": "pulse_params",
    "order": 1,
    "span": {
-    "end": 133,
+    "end": 139,
     "file": "a_arena.form",
-    "start": 96
+    "start": 102
    }
   },
   {
@@ -83,9 +83,9 @@
    "populationIndex": 0,
    "sourceId": 2684354560,
    "span": {
-    "end": 165,
+    "end": 173,
     "file": "a_arena.form",
-    "start": 137
+    "start": 145
    },
    "structModule": 0,
    "structName": "particle"
@@ -98,9 +98,9 @@
      "kind": "literal",
      "lit": "int",
      "span": {
-      "end": 191,
+      "end": 200,
       "file": "a_arena.form",
-      "start": 190
+      "start": 199
      },
      "text": "1"
     },
@@ -108,9 +108,9 @@
     "poolColumn": null,
     "rngSlot": null,
     "span": {
-     "end": 191,
+     "end": 200,
      "file": "a_arena.form",
-     "start": 190
+     "start": 199
     },
     "symbol": null,
     "type": {
@@ -122,9 +122,9 @@
    "name": "counter",
    "order": 3,
    "span": {
-    "end": 192,
+    "end": 201,
     "file": "a_arena.form",
-    "start": 168
+    "start": 177
    },
    "type": {
     "t": "u32"
@@ -138,9 +138,9 @@
       {
        "name": "x",
        "span": {
-        "end": 229,
+        "end": 239,
         "file": "a_arena.form",
-        "start": 228
+        "start": 238
        },
        "value": {
         "frac": {
@@ -151,9 +151,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 234,
+         "end": 244,
          "file": "a_arena.form",
-         "start": 232
+         "start": 242
         },
         "text": "0w"
        }
@@ -161,9 +161,9 @@
       {
        "name": "y",
        "span": {
-        "end": 237,
+        "end": 247,
         "file": "a_arena.form",
-        "start": 236
+        "start": 246
        },
        "value": {
         "frac": {
@@ -174,9 +174,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 242,
+         "end": 252,
          "file": "a_arena.form",
-         "start": 240
+         "start": 250
         },
         "text": "0w"
        }
@@ -184,9 +184,9 @@
       {
        "name": "z",
        "span": {
-        "end": 245,
+        "end": 255,
         "file": "a_arena.form",
-        "start": 244
+        "start": 254
        },
        "value": {
         "frac": {
@@ -197,9 +197,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 250,
+         "end": 260,
          "file": "a_arena.form",
-         "start": 248
+         "start": 258
         },
         "text": "0w"
        }
@@ -207,9 +207,9 @@
      ],
      "kind": "record",
      "span": {
-      "end": 252,
+      "end": 262,
       "file": "a_arena.form",
-      "start": 219
+      "start": 229
      },
      "typeName": "world3"
     },
@@ -224,9 +224,9 @@
        "kind": "literal",
        "lit": "frac",
        "span": {
-        "end": 234,
+        "end": 244,
         "file": "a_arena.form",
-        "start": 232
+        "start": 242
        },
        "text": "0w"
       },
@@ -234,9 +234,9 @@
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 234,
+       "end": 244,
        "file": "a_arena.form",
-       "start": 232
+       "start": 242
       },
       "symbol": null,
       "type": {
@@ -253,9 +253,9 @@
        "kind": "literal",
        "lit": "frac",
        "span": {
-        "end": 242,
+        "end": 252,
         "file": "a_arena.form",
-        "start": 240
+        "start": 250
        },
        "text": "0w"
       },
@@ -263,9 +263,9 @@
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 242,
+       "end": 252,
        "file": "a_arena.form",
-       "start": 240
+       "start": 250
       },
       "symbol": null,
       "type": {
@@ -282,9 +282,9 @@
        "kind": "literal",
        "lit": "frac",
        "span": {
-        "end": 250,
+        "end": 260,
         "file": "a_arena.form",
-        "start": 248
+        "start": 258
        },
        "text": "0w"
       },
@@ -292,9 +292,9 @@
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 250,
+       "end": 260,
        "file": "a_arena.form",
-       "start": 248
+       "start": 258
       },
       "symbol": null,
       "type": {
@@ -305,9 +305,9 @@
     "poolColumn": null,
     "rngSlot": null,
     "span": {
-     "end": 252,
+     "end": 262,
      "file": "a_arena.form",
-     "start": 219
+     "start": 229
     },
     "symbol": null,
     "type": {
@@ -319,9 +319,9 @@
    "name": "origin",
    "order": 4,
    "span": {
-    "end": 253,
+    "end": 263,
     "file": "a_arena.form",
-    "start": 195
+    "start": 205
    },
    "type": {
     "t": "world3"
@@ -334,44 +334,44 @@
       "kind": "spawn",
       "pool": "particles",
       "span": {
-       "end": 439,
+       "end": 459,
        "file": "a_arena.form",
-       "start": 343
+       "start": 359
       },
       "value": {
        "fields": [
         {
          "name": "position",
          "span": {
-          "end": 385,
+          "end": 402,
           "file": "a_arena.form",
-          "start": 377
+          "start": 394
          },
          "value": {
           "kind": "ident",
           "name": "origin",
           "span": {
-           "end": 394,
+           "end": 411,
            "file": "a_arena.form",
-           "start": 388
+           "start": 405
           }
          }
         },
         {
          "name": "age",
          "span": {
-          "end": 405,
+          "end": 423,
           "file": "a_arena.form",
-          "start": 402
+          "start": 420
          },
          "value": {
           "intVal": "0",
           "kind": "literal",
           "lit": "int",
           "span": {
-           "end": 409,
+           "end": 427,
            "file": "a_arena.form",
-           "start": 408
+           "start": 426
           },
           "text": "0"
          }
@@ -379,9 +379,9 @@
         {
          "name": "energy",
          "span": {
-          "end": 423,
+          "end": 442,
           "file": "a_arena.form",
-          "start": 417
+          "start": 436
          },
          "value": {
           "frac": {
@@ -392,9 +392,9 @@
           "kind": "literal",
           "lit": "frac",
           "span": {
-           "end": 430,
+           "end": 449,
            "file": "a_arena.form",
-           "start": 426
+           "start": 445
           },
           "text": "100%"
          }
@@ -402,9 +402,9 @@
        ],
        "kind": "record",
        "span": {
-        "end": 437,
+        "end": 457,
         "file": "a_arena.form",
-        "start": 360
+        "start": 376
        },
        "typeName": "particle"
       }
@@ -419,35 +419,35 @@
          {
           "name": "position",
           "span": {
-           "end": 385,
+           "end": 402,
            "file": "a_arena.form",
-           "start": 377
+           "start": 394
           },
           "value": {
            "kind": "ident",
            "name": "origin",
            "span": {
-            "end": 394,
+            "end": 411,
             "file": "a_arena.form",
-            "start": 388
+            "start": 405
            }
           }
          },
          {
           "name": "age",
           "span": {
-           "end": 405,
+           "end": 423,
            "file": "a_arena.form",
-           "start": 402
+           "start": 420
           },
           "value": {
            "intVal": "0",
            "kind": "literal",
            "lit": "int",
            "span": {
-            "end": 409,
+            "end": 427,
             "file": "a_arena.form",
-            "start": 408
+            "start": 426
            },
            "text": "0"
           }
@@ -455,9 +455,9 @@
          {
           "name": "energy",
           "span": {
-           "end": 423,
+           "end": 442,
            "file": "a_arena.form",
-           "start": 417
+           "start": 436
           },
           "value": {
            "frac": {
@@ -468,9 +468,9 @@
            "kind": "literal",
            "lit": "frac",
            "span": {
-            "end": 430,
+            "end": 449,
             "file": "a_arena.form",
-            "start": 426
+            "start": 445
            },
            "text": "100%"
           }
@@ -478,9 +478,9 @@
         ],
         "kind": "record",
         "span": {
-         "end": 437,
+         "end": 457,
          "file": "a_arena.form",
-         "start": 360
+         "start": 376
         },
         "typeName": "particle"
        },
@@ -490,18 +490,18 @@
           "kind": "ident",
           "name": "origin",
           "span": {
-           "end": 394,
+           "end": 411,
            "file": "a_arena.form",
-           "start": 388
+           "start": 405
           }
          },
          "children": [],
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 394,
+          "end": 411,
           "file": "a_arena.form",
-          "start": 388
+          "start": 405
          },
          "symbol": {
           "kind": "global",
@@ -518,9 +518,9 @@
           "kind": "literal",
           "lit": "int",
           "span": {
-           "end": 409,
+           "end": 427,
            "file": "a_arena.form",
-           "start": 408
+           "start": 426
           },
           "text": "0"
          },
@@ -528,9 +528,9 @@
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 409,
+          "end": 427,
           "file": "a_arena.form",
-          "start": 408
+          "start": 426
          },
          "symbol": null,
          "type": {
@@ -547,9 +547,9 @@
           "kind": "literal",
           "lit": "frac",
           "span": {
-           "end": 430,
+           "end": 449,
            "file": "a_arena.form",
-           "start": 426
+           "start": 445
           },
           "text": "100%"
          },
@@ -557,9 +557,9 @@
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 430,
+          "end": 449,
           "file": "a_arena.form",
-          "start": 426
+          "start": 445
          },
          "symbol": null,
          "type": {
@@ -570,9 +570,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 437,
+        "end": 457,
         "file": "a_arena.form",
-        "start": 360
+        "start": 376
        },
        "symbol": {
         "kind": "struct",
@@ -586,9 +586,9 @@
       }
      ],
      "span": {
-      "end": 439,
+      "end": 459,
       "file": "a_arena.form",
-      "start": 343
+      "start": 359
      },
      "target": {
       "kind": "pool",
@@ -609,9 +609,9 @@
    ],
    "sourceId": 2147483649,
    "span": {
-    "end": 443,
+    "end": 464,
     "file": "a_arena.form",
-    "start": 257
+    "start": 269
    },
    "staggerPool": null,
    "staggerRate": null,
@@ -627,48 +627,48 @@
        {
         "kind": "assign",
         "span": {
-         "end": 628,
+         "end": 656,
          "file": "a_arena.form",
-         "start": 588
+         "start": 616
         },
         "target": {
          "index": {
           "kind": "ident",
           "name": "i",
           "span": {
-           "end": 603,
+           "end": 631,
            "file": "a_arena.form",
-           "start": 602
+           "start": 630
           }
          },
          "kind": "index",
          "obj": {
           "field": "age",
           "fieldSpan": {
-           "end": 601,
+           "end": 629,
            "file": "a_arena.form",
-           "start": 598
+           "start": 626
           },
           "kind": "member",
           "obj": {
            "kind": "ident",
            "name": "particles",
            "span": {
-            "end": 597,
+            "end": 625,
             "file": "a_arena.form",
-            "start": 588
+            "start": 616
            }
           },
           "span": {
-           "end": 601,
+           "end": 629,
            "file": "a_arena.form",
-           "start": 588
+           "start": 616
           }
          },
          "span": {
-          "end": 604,
+          "end": 632,
           "file": "a_arena.form",
-          "start": 588
+          "start": 616
          }
         },
         "value": {
@@ -678,39 +678,39 @@
            "kind": "ident",
            "name": "i",
            "span": {
-            "end": 622,
+            "end": 650,
             "file": "a_arena.form",
-            "start": 621
+            "start": 649
            }
           },
           "kind": "index",
           "obj": {
            "field": "age",
            "fieldSpan": {
-            "end": 620,
+            "end": 648,
             "file": "a_arena.form",
-            "start": 617
+            "start": 645
            },
            "kind": "member",
            "obj": {
             "kind": "ident",
             "name": "particles",
             "span": {
-             "end": 616,
+             "end": 644,
              "file": "a_arena.form",
-             "start": 607
+             "start": 635
             }
            },
            "span": {
-            "end": 620,
+            "end": 648,
             "file": "a_arena.form",
-            "start": 607
+            "start": 635
            }
           },
           "span": {
-           "end": 623,
+           "end": 651,
            "file": "a_arena.form",
-           "start": 607
+           "start": 635
           }
          },
          "op": "+",
@@ -719,16 +719,16 @@
           "kind": "literal",
           "lit": "int",
           "span": {
-           "end": 627,
+           "end": 655,
            "file": "a_arena.form",
-           "start": 626
+           "start": 654
           },
           "text": "1"
          },
          "span": {
-          "end": 627,
+          "end": 655,
           "file": "a_arena.form",
-          "start": 607
+          "start": 635
          }
         }
        }
@@ -738,24 +738,24 @@
        "hi": {
         "field": "count",
         "fieldSpan": {
-         "end": 579,
+         "end": 606,
          "file": "a_arena.form",
-         "start": 574
+         "start": 601
         },
         "kind": "member",
         "obj": {
          "kind": "ident",
          "name": "particles",
          "span": {
-          "end": 573,
+          "end": 600,
           "file": "a_arena.form",
-          "start": 564
+          "start": 591
          }
         },
         "span": {
-         "end": 579,
+         "end": 606,
          "file": "a_arena.form",
-         "start": 564
+         "start": 591
         }
        },
        "kind": "range",
@@ -764,17 +764,17 @@
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 562,
+         "end": 589,
          "file": "a_arena.form",
-         "start": 561
+         "start": 588
         },
         "text": "0"
        }
       },
       "span": {
-       "end": 634,
+       "end": 663,
        "file": "a_arena.form",
-       "start": 552
+       "start": 579
       },
       "varName": "i"
      },
@@ -783,48 +783,48 @@
        "ast": {
         "kind": "assign",
         "span": {
-         "end": 628,
+         "end": 656,
          "file": "a_arena.form",
-         "start": 588
+         "start": 616
         },
         "target": {
          "index": {
           "kind": "ident",
           "name": "i",
           "span": {
-           "end": 603,
+           "end": 631,
            "file": "a_arena.form",
-           "start": 602
+           "start": 630
           }
          },
          "kind": "index",
          "obj": {
           "field": "age",
           "fieldSpan": {
-           "end": 601,
+           "end": 629,
            "file": "a_arena.form",
-           "start": 598
+           "start": 626
           },
           "kind": "member",
           "obj": {
            "kind": "ident",
            "name": "particles",
            "span": {
-            "end": 597,
+            "end": 625,
             "file": "a_arena.form",
-            "start": 588
+            "start": 616
            }
           },
           "span": {
-           "end": 601,
+           "end": 629,
            "file": "a_arena.form",
-           "start": 588
+           "start": 616
           }
          },
          "span": {
-          "end": 604,
+          "end": 632,
           "file": "a_arena.form",
-          "start": 588
+          "start": 616
          }
         },
         "value": {
@@ -834,39 +834,39 @@
            "kind": "ident",
            "name": "i",
            "span": {
-            "end": 622,
+            "end": 650,
             "file": "a_arena.form",
-            "start": 621
+            "start": 649
            }
           },
           "kind": "index",
           "obj": {
            "field": "age",
            "fieldSpan": {
-            "end": 620,
+            "end": 648,
             "file": "a_arena.form",
-            "start": 617
+            "start": 645
            },
            "kind": "member",
            "obj": {
             "kind": "ident",
             "name": "particles",
             "span": {
-             "end": 616,
+             "end": 644,
              "file": "a_arena.form",
-             "start": 607
+             "start": 635
             }
            },
            "span": {
-            "end": 620,
+            "end": 648,
             "file": "a_arena.form",
-            "start": 607
+            "start": 635
            }
           },
           "span": {
-           "end": 623,
+           "end": 651,
            "file": "a_arena.form",
-           "start": 607
+           "start": 635
           }
          },
          "op": "+",
@@ -875,16 +875,16 @@
           "kind": "literal",
           "lit": "int",
           "span": {
-           "end": 627,
+           "end": 655,
            "file": "a_arena.form",
-           "start": 626
+           "start": 654
           },
           "text": "1"
          },
          "span": {
-          "end": 627,
+          "end": 655,
           "file": "a_arena.form",
-          "start": 607
+          "start": 635
          }
         }
        },
@@ -898,39 +898,39 @@
            "kind": "ident",
            "name": "i",
            "span": {
-            "end": 603,
+            "end": 631,
             "file": "a_arena.form",
-            "start": 602
+            "start": 630
            }
           },
           "kind": "index",
           "obj": {
            "field": "age",
            "fieldSpan": {
-            "end": 601,
+            "end": 629,
             "file": "a_arena.form",
-            "start": 598
+            "start": 626
            },
            "kind": "member",
            "obj": {
             "kind": "ident",
             "name": "particles",
             "span": {
-             "end": 597,
+             "end": 625,
              "file": "a_arena.form",
-             "start": 588
+             "start": 616
             }
            },
            "span": {
-            "end": 601,
+            "end": 629,
             "file": "a_arena.form",
-            "start": 588
+            "start": 616
            }
           },
           "span": {
-           "end": 604,
+           "end": 632,
            "file": "a_arena.form",
-           "start": 588
+           "start": 616
           }
          },
          "children": [
@@ -938,24 +938,24 @@
            "ast": {
             "field": "age",
             "fieldSpan": {
-             "end": 601,
+             "end": 629,
              "file": "a_arena.form",
-             "start": 598
+             "start": 626
             },
             "kind": "member",
             "obj": {
              "kind": "ident",
              "name": "particles",
              "span": {
-              "end": 597,
+              "end": 625,
               "file": "a_arena.form",
-              "start": 588
+              "start": 616
              }
             },
             "span": {
-             "end": 601,
+             "end": 629,
              "file": "a_arena.form",
-             "start": 588
+             "start": 616
             }
            },
            "children": [],
@@ -966,9 +966,9 @@
            },
            "rngSlot": null,
            "span": {
-            "end": 601,
+            "end": 629,
             "file": "a_arena.form",
-            "start": 588
+            "start": 616
            },
            "symbol": null,
            "type": {
@@ -980,18 +980,18 @@
             "kind": "ident",
             "name": "i",
             "span": {
-             "end": 603,
+             "end": 631,
              "file": "a_arena.form",
-             "start": 602
+             "start": 630
             }
            },
            "children": [],
            "poolColumn": null,
            "rngSlot": null,
            "span": {
-            "end": 603,
+            "end": 631,
             "file": "a_arena.form",
-            "start": 602
+            "start": 630
            },
            "symbol": {
             "kind": "local",
@@ -1006,9 +1006,9 @@
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 604,
+          "end": 632,
           "file": "a_arena.form",
-          "start": 588
+          "start": 616
          },
          "symbol": null,
          "type": {
@@ -1023,39 +1023,39 @@
             "kind": "ident",
             "name": "i",
             "span": {
-             "end": 622,
+             "end": 650,
              "file": "a_arena.form",
-             "start": 621
+             "start": 649
             }
            },
            "kind": "index",
            "obj": {
             "field": "age",
             "fieldSpan": {
-             "end": 620,
+             "end": 648,
              "file": "a_arena.form",
-             "start": 617
+             "start": 645
             },
             "kind": "member",
             "obj": {
              "kind": "ident",
              "name": "particles",
              "span": {
-              "end": 616,
+              "end": 644,
               "file": "a_arena.form",
-              "start": 607
+              "start": 635
              }
             },
             "span": {
-             "end": 620,
+             "end": 648,
              "file": "a_arena.form",
-             "start": 607
+             "start": 635
             }
            },
            "span": {
-            "end": 623,
+            "end": 651,
             "file": "a_arena.form",
-            "start": 607
+            "start": 635
            }
           },
           "op": "+",
@@ -1064,16 +1064,16 @@
            "kind": "literal",
            "lit": "int",
            "span": {
-            "end": 627,
+            "end": 655,
             "file": "a_arena.form",
-            "start": 626
+            "start": 654
            },
            "text": "1"
           },
           "span": {
-           "end": 627,
+           "end": 655,
            "file": "a_arena.form",
-           "start": 607
+           "start": 635
           }
          },
          "children": [
@@ -1083,39 +1083,39 @@
              "kind": "ident",
              "name": "i",
              "span": {
-              "end": 622,
+              "end": 650,
               "file": "a_arena.form",
-              "start": 621
+              "start": 649
              }
             },
             "kind": "index",
             "obj": {
              "field": "age",
              "fieldSpan": {
-              "end": 620,
+              "end": 648,
               "file": "a_arena.form",
-              "start": 617
+              "start": 645
              },
              "kind": "member",
              "obj": {
               "kind": "ident",
               "name": "particles",
               "span": {
-               "end": 616,
+               "end": 644,
                "file": "a_arena.form",
-               "start": 607
+               "start": 635
               }
              },
              "span": {
-              "end": 620,
+              "end": 648,
               "file": "a_arena.form",
-              "start": 607
+              "start": 635
              }
             },
             "span": {
-             "end": 623,
+             "end": 651,
              "file": "a_arena.form",
-             "start": 607
+             "start": 635
             }
            },
            "children": [
@@ -1123,24 +1123,24 @@
              "ast": {
               "field": "age",
               "fieldSpan": {
-               "end": 620,
+               "end": 648,
                "file": "a_arena.form",
-               "start": 617
+               "start": 645
               },
               "kind": "member",
               "obj": {
                "kind": "ident",
                "name": "particles",
                "span": {
-                "end": 616,
+                "end": 644,
                 "file": "a_arena.form",
-                "start": 607
+                "start": 635
                }
               },
               "span": {
-               "end": 620,
+               "end": 648,
                "file": "a_arena.form",
-               "start": 607
+               "start": 635
               }
              },
              "children": [],
@@ -1151,9 +1151,9 @@
              },
              "rngSlot": null,
              "span": {
-              "end": 620,
+              "end": 648,
               "file": "a_arena.form",
-              "start": 607
+              "start": 635
              },
              "symbol": null,
              "type": {
@@ -1165,18 +1165,18 @@
               "kind": "ident",
               "name": "i",
               "span": {
-               "end": 622,
+               "end": 650,
                "file": "a_arena.form",
-               "start": 621
+               "start": 649
               }
              },
              "children": [],
              "poolColumn": null,
              "rngSlot": null,
              "span": {
-              "end": 622,
+              "end": 650,
               "file": "a_arena.form",
-              "start": 621
+              "start": 649
              },
              "symbol": {
               "kind": "local",
@@ -1191,9 +1191,9 @@
            "poolColumn": null,
            "rngSlot": null,
            "span": {
-            "end": 623,
+            "end": 651,
             "file": "a_arena.form",
-            "start": 607
+            "start": 635
            },
            "symbol": null,
            "type": {
@@ -1206,9 +1206,9 @@
             "kind": "literal",
             "lit": "int",
             "span": {
-             "end": 627,
+             "end": 655,
              "file": "a_arena.form",
-             "start": 626
+             "start": 654
             },
             "text": "1"
            },
@@ -1216,9 +1216,9 @@
            "poolColumn": null,
            "rngSlot": null,
            "span": {
-            "end": 627,
+            "end": 655,
             "file": "a_arena.form",
-            "start": 626
+            "start": 654
            },
            "symbol": null,
            "type": {
@@ -1229,9 +1229,9 @@
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 627,
+          "end": 655,
           "file": "a_arena.form",
-          "start": 607
+          "start": 635
          },
          "symbol": null,
          "type": {
@@ -1240,9 +1240,9 @@
         }
        ],
        "span": {
-        "end": 628,
+        "end": 656,
         "file": "a_arena.form",
-        "start": 588
+        "start": 616
        }
       }
      ],
@@ -1255,9 +1255,9 @@
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 562,
+         "end": 589,
          "file": "a_arena.form",
-         "start": 561
+         "start": 588
         },
         "text": "0"
        },
@@ -1265,9 +1265,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 562,
+        "end": 589,
         "file": "a_arena.form",
-        "start": 561
+        "start": 588
        },
        "symbol": null,
        "type": {
@@ -1278,33 +1278,33 @@
        "ast": {
         "field": "count",
         "fieldSpan": {
-         "end": 579,
+         "end": 606,
          "file": "a_arena.form",
-         "start": 574
+         "start": 601
         },
         "kind": "member",
         "obj": {
          "kind": "ident",
          "name": "particles",
          "span": {
-          "end": 573,
+          "end": 600,
           "file": "a_arena.form",
-          "start": 564
+          "start": 591
          }
         },
         "span": {
-         "end": 579,
+         "end": 606,
          "file": "a_arena.form",
-         "start": 564
+         "start": 591
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 579,
+        "end": 606,
         "file": "a_arena.form",
-        "start": 564
+        "start": 591
        },
        "symbol": {
         "kind": "pool",
@@ -1317,9 +1317,9 @@
       }
      ],
      "span": {
-      "end": 634,
+      "end": 663,
       "file": "a_arena.form",
-      "start": 552
+      "start": 579
      }
     }
    ],
@@ -1334,9 +1334,9 @@
    ],
    "sourceId": 2147483650,
    "span": {
-    "end": 638,
+    "end": 668,
     "file": "a_arena.form",
-    "start": 447
+    "start": 470
    },
    "staggerPool": {
     "module": 0,
@@ -1354,9 +1354,9 @@
       "kind": "field_let",
       "name": "shaped",
       "span": {
-       "end": 809,
+       "end": 845,
        "file": "a_arena.form",
-       "start": 757
+       "start": 793
       },
       "value": {
        "args": [
@@ -1369,9 +1369,9 @@
          "kind": "literal",
          "lit": "frac",
          "span": {
-          "end": 776,
+          "end": 812,
           "file": "a_arena.form",
-          "start": 774
+          "start": 810
          },
          "text": "0m"
         },
@@ -1380,24 +1380,24 @@
          "l": {
           "field": "height",
           "fieldSpan": {
-           "end": 791,
+           "end": 827,
            "file": "a_arena.form",
-           "start": 785
+           "start": 821
           },
           "kind": "member",
           "obj": {
            "kind": "ident",
            "name": "params",
            "span": {
-            "end": 784,
+            "end": 820,
             "file": "a_arena.form",
-            "start": 778
+            "start": 814
            }
           },
           "span": {
-           "end": 791,
+           "end": 827,
            "file": "a_arena.form",
-           "start": 778
+           "start": 814
           }
          },
          "op": "-",
@@ -1406,24 +1406,24 @@
            {
             "field": "x",
             "fieldSpan": {
-             "end": 806,
+             "end": 842,
              "file": "a_arena.form",
-             "start": 805
+             "start": 841
             },
             "kind": "member",
             "obj": {
              "kind": "ident",
              "name": "sample",
              "span": {
-              "end": 804,
+              "end": 840,
               "file": "a_arena.form",
-              "start": 798
+              "start": 834
              }
             },
             "span": {
-             "end": 806,
+             "end": 842,
              "file": "a_arena.form",
-             "start": 798
+             "start": 834
             }
            }
           ],
@@ -1431,22 +1431,22 @@
            "kind": "ident",
            "name": "abs",
            "span": {
-            "end": 797,
+            "end": 833,
             "file": "a_arena.form",
-            "start": 794
+            "start": 830
            }
           },
           "kind": "call",
           "span": {
-           "end": 807,
+           "end": 843,
            "file": "a_arena.form",
-           "start": 794
+           "start": 830
           }
          },
          "span": {
-          "end": 807,
+          "end": 843,
           "file": "a_arena.form",
-          "start": 778
+          "start": 814
          }
         }
        ],
@@ -1454,16 +1454,16 @@
         "kind": "ident",
         "name": "max",
         "span": {
-         "end": 773,
+         "end": 809,
          "file": "a_arena.form",
-         "start": 770
+         "start": 806
         }
        },
        "kind": "call",
        "span": {
-        "end": 808,
+        "end": 844,
         "file": "a_arena.form",
-        "start": 770
+        "start": 806
        }
       }
      },
@@ -1480,9 +1480,9 @@
           "kind": "literal",
           "lit": "frac",
           "span": {
-           "end": 776,
+           "end": 812,
            "file": "a_arena.form",
-           "start": 774
+           "start": 810
           },
           "text": "0m"
          },
@@ -1491,24 +1491,24 @@
           "l": {
            "field": "height",
            "fieldSpan": {
-            "end": 791,
+            "end": 827,
             "file": "a_arena.form",
-            "start": 785
+            "start": 821
            },
            "kind": "member",
            "obj": {
             "kind": "ident",
             "name": "params",
             "span": {
-             "end": 784,
+             "end": 820,
              "file": "a_arena.form",
-             "start": 778
+             "start": 814
             }
            },
            "span": {
-            "end": 791,
+            "end": 827,
             "file": "a_arena.form",
-            "start": 778
+            "start": 814
            }
           },
           "op": "-",
@@ -1517,24 +1517,24 @@
             {
              "field": "x",
              "fieldSpan": {
-              "end": 806,
+              "end": 842,
               "file": "a_arena.form",
-              "start": 805
+              "start": 841
              },
              "kind": "member",
              "obj": {
               "kind": "ident",
               "name": "sample",
               "span": {
-               "end": 804,
+               "end": 840,
                "file": "a_arena.form",
-               "start": 798
+               "start": 834
               }
              },
              "span": {
-              "end": 806,
+              "end": 842,
               "file": "a_arena.form",
-              "start": 798
+              "start": 834
              }
             }
            ],
@@ -1542,22 +1542,22 @@
             "kind": "ident",
             "name": "abs",
             "span": {
-             "end": 797,
+             "end": 833,
              "file": "a_arena.form",
-             "start": 794
+             "start": 830
             }
            },
            "kind": "call",
            "span": {
-            "end": 807,
+            "end": 843,
             "file": "a_arena.form",
-            "start": 794
+            "start": 830
            }
           },
           "span": {
-           "end": 807,
+           "end": 843,
            "file": "a_arena.form",
-           "start": 778
+           "start": 814
           }
          }
         ],
@@ -1565,16 +1565,16 @@
          "kind": "ident",
          "name": "max",
          "span": {
-          "end": 773,
+          "end": 809,
           "file": "a_arena.form",
-          "start": 770
+          "start": 806
          }
         },
         "kind": "call",
         "span": {
-         "end": 808,
+         "end": 844,
          "file": "a_arena.form",
-         "start": 770
+         "start": 806
         }
        },
        "children": [
@@ -1588,9 +1588,9 @@
           "kind": "literal",
           "lit": "frac",
           "span": {
-           "end": 776,
+           "end": 812,
            "file": "a_arena.form",
-           "start": 774
+           "start": 810
           },
           "text": "0m"
          },
@@ -1598,9 +1598,9 @@
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 776,
+          "end": 812,
           "file": "a_arena.form",
-          "start": 774
+          "start": 810
          },
          "symbol": null,
          "type": {
@@ -1613,24 +1613,24 @@
           "l": {
            "field": "height",
            "fieldSpan": {
-            "end": 791,
+            "end": 827,
             "file": "a_arena.form",
-            "start": 785
+            "start": 821
            },
            "kind": "member",
            "obj": {
             "kind": "ident",
             "name": "params",
             "span": {
-             "end": 784,
+             "end": 820,
              "file": "a_arena.form",
-             "start": 778
+             "start": 814
             }
            },
            "span": {
-            "end": 791,
+            "end": 827,
             "file": "a_arena.form",
-            "start": 778
+            "start": 814
            }
           },
           "op": "-",
@@ -1639,24 +1639,24 @@
             {
              "field": "x",
              "fieldSpan": {
-              "end": 806,
+              "end": 842,
               "file": "a_arena.form",
-              "start": 805
+              "start": 841
              },
              "kind": "member",
              "obj": {
               "kind": "ident",
               "name": "sample",
               "span": {
-               "end": 804,
+               "end": 840,
                "file": "a_arena.form",
-               "start": 798
+               "start": 834
               }
              },
              "span": {
-              "end": 806,
+              "end": 842,
               "file": "a_arena.form",
-              "start": 798
+              "start": 834
              }
             }
            ],
@@ -1664,22 +1664,22 @@
             "kind": "ident",
             "name": "abs",
             "span": {
-             "end": 797,
+             "end": 833,
              "file": "a_arena.form",
-             "start": 794
+             "start": 830
             }
            },
            "kind": "call",
            "span": {
-            "end": 807,
+            "end": 843,
             "file": "a_arena.form",
-            "start": 794
+            "start": 830
            }
           },
           "span": {
-           "end": 807,
+           "end": 843,
            "file": "a_arena.form",
-           "start": 778
+           "start": 814
           }
          },
          "children": [
@@ -1687,24 +1687,24 @@
            "ast": {
             "field": "height",
             "fieldSpan": {
-             "end": 791,
+             "end": 827,
              "file": "a_arena.form",
-             "start": 785
+             "start": 821
             },
             "kind": "member",
             "obj": {
              "kind": "ident",
              "name": "params",
              "span": {
-              "end": 784,
+              "end": 820,
               "file": "a_arena.form",
-              "start": 778
+              "start": 814
              }
             },
             "span": {
-             "end": 791,
+             "end": 827,
              "file": "a_arena.form",
-             "start": 778
+             "start": 814
             }
            },
            "children": [
@@ -1713,18 +1713,18 @@
               "kind": "ident",
               "name": "params",
               "span": {
-               "end": 784,
+               "end": 820,
                "file": "a_arena.form",
-               "start": 778
+               "start": 814
               }
              },
              "children": [],
              "poolColumn": null,
              "rngSlot": null,
              "span": {
-              "end": 784,
+              "end": 820,
               "file": "a_arena.form",
-              "start": 778
+              "start": 814
              },
              "symbol": {
               "kind": "local",
@@ -1740,9 +1740,9 @@
            "poolColumn": null,
            "rngSlot": null,
            "span": {
-            "end": 791,
+            "end": 827,
             "file": "a_arena.form",
-            "start": 778
+            "start": 814
            },
            "symbol": null,
            "type": {
@@ -1755,24 +1755,24 @@
              {
               "field": "x",
               "fieldSpan": {
-               "end": 806,
+               "end": 842,
                "file": "a_arena.form",
-               "start": 805
+               "start": 841
               },
               "kind": "member",
               "obj": {
                "kind": "ident",
                "name": "sample",
                "span": {
-                "end": 804,
+                "end": 840,
                 "file": "a_arena.form",
-                "start": 798
+                "start": 834
                }
               },
               "span": {
-               "end": 806,
+               "end": 842,
                "file": "a_arena.form",
-               "start": 798
+               "start": 834
               }
              }
             ],
@@ -1780,16 +1780,16 @@
              "kind": "ident",
              "name": "abs",
              "span": {
-              "end": 797,
+              "end": 833,
               "file": "a_arena.form",
-              "start": 794
+              "start": 830
              }
             },
             "kind": "call",
             "span": {
-             "end": 807,
+             "end": 843,
              "file": "a_arena.form",
-             "start": 794
+             "start": 830
             }
            },
            "children": [
@@ -1797,24 +1797,24 @@
              "ast": {
               "field": "x",
               "fieldSpan": {
-               "end": 806,
+               "end": 842,
                "file": "a_arena.form",
-               "start": 805
+               "start": 841
               },
               "kind": "member",
               "obj": {
                "kind": "ident",
                "name": "sample",
                "span": {
-                "end": 804,
+                "end": 840,
                 "file": "a_arena.form",
-                "start": 798
+                "start": 834
                }
               },
               "span": {
-               "end": 806,
+               "end": 842,
                "file": "a_arena.form",
-               "start": 798
+               "start": 834
               }
              },
              "children": [
@@ -1823,18 +1823,18 @@
                 "kind": "ident",
                 "name": "sample",
                 "span": {
-                 "end": 804,
+                 "end": 840,
                  "file": "a_arena.form",
-                 "start": 798
+                 "start": 834
                 }
                },
                "children": [],
                "poolColumn": null,
                "rngSlot": null,
                "span": {
-                "end": 804,
+                "end": 840,
                 "file": "a_arena.form",
-                "start": 798
+                "start": 834
                },
                "symbol": {
                 "kind": "local",
@@ -1850,9 +1850,9 @@
              "poolColumn": null,
              "rngSlot": null,
              "span": {
-              "end": 806,
+              "end": 842,
               "file": "a_arena.form",
-              "start": 798
+              "start": 834
              },
              "symbol": null,
              "type": {
@@ -1863,9 +1863,9 @@
            "poolColumn": null,
            "rngSlot": null,
            "span": {
-            "end": 807,
+            "end": 843,
             "file": "a_arena.form",
-            "start": 794
+            "start": 830
            },
            "symbol": {
             "kind": "intrinsic",
@@ -1880,9 +1880,9 @@
          "poolColumn": null,
          "rngSlot": null,
          "span": {
-          "end": 807,
+          "end": 843,
           "file": "a_arena.form",
-          "start": 778
+          "start": 814
          },
          "symbol": null,
          "type": {
@@ -1893,9 +1893,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 808,
+        "end": 844,
         "file": "a_arena.form",
-        "start": 770
+        "start": 806
        },
        "symbol": {
         "kind": "intrinsic",
@@ -1908,9 +1908,9 @@
       }
      ],
      "span": {
-      "end": 809,
+      "end": 845,
       "file": "a_arena.form",
-      "start": 757
+      "start": 793
      }
     },
     {
@@ -1919,26 +1919,26 @@
        {
         "name": "height",
         "span": {
-         "end": 843,
+         "end": 880,
          "file": "a_arena.form",
-         "start": 837
+         "start": 874
         },
         "value": {
          "kind": "ident",
          "name": "shaped",
          "span": {
-          "end": 852,
+          "end": 889,
           "file": "a_arena.form",
-          "start": 846
+          "start": 883
          }
         }
        },
        {
         "name": "velocity",
         "span": {
-         "end": 862,
+         "end": 899,
          "file": "a_arena.form",
-         "start": 854
+         "start": 891
         },
         "value": {
          "frac": {
@@ -1949,9 +1949,9 @@
          "kind": "literal",
          "lit": "frac",
          "span": {
-          "end": 867,
+          "end": 904,
           "file": "a_arena.form",
-          "start": 865
+          "start": 902
          },
          "text": "0m"
         }
@@ -1959,18 +1959,18 @@
        {
         "name": "material",
         "span": {
-         "end": 877,
+         "end": 914,
          "file": "a_arena.form",
-         "start": 869
+         "start": 906
         },
         "value": {
          "intVal": "0",
          "kind": "literal",
          "lit": "int",
          "span": {
-          "end": 881,
+          "end": 918,
           "file": "a_arena.form",
-          "start": 880
+          "start": 917
          },
          "text": "0"
         }
@@ -1978,9 +1978,9 @@
        {
         "name": "nav_cost",
         "span": {
-         "end": 891,
+         "end": 928,
          "file": "a_arena.form",
-         "start": 883
+         "start": 920
         },
         "value": {
          "frac": {
@@ -1991,9 +1991,9 @@
          "kind": "literal",
          "lit": "frac",
          "span": {
-          "end": 896,
+          "end": 933,
           "file": "a_arena.form",
-          "start": 894
+          "start": 931
          },
          "text": "0m"
         }
@@ -2002,9 +2002,9 @@
       "kind": "field_return",
       "record": "terrain_delta",
       "span": {
-       "end": 899,
+       "end": 936,
        "file": "a_arena.form",
-       "start": 814
+       "start": 851
       }
      },
      "expressions": [
@@ -2013,18 +2013,18 @@
         "kind": "ident",
         "name": "shaped",
         "span": {
-         "end": 852,
+         "end": 889,
          "file": "a_arena.form",
-         "start": 846
+         "start": 883
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 852,
+        "end": 889,
         "file": "a_arena.form",
-        "start": 846
+        "start": 883
        },
        "symbol": {
         "kind": "local",
@@ -2045,9 +2045,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 867,
+         "end": 904,
          "file": "a_arena.form",
-         "start": 865
+         "start": 902
         },
         "text": "0m"
        },
@@ -2055,9 +2055,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 867,
+        "end": 904,
         "file": "a_arena.form",
-        "start": 865
+        "start": 902
        },
        "symbol": null,
        "type": {
@@ -2070,9 +2070,9 @@
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 881,
+         "end": 918,
          "file": "a_arena.form",
-         "start": 880
+         "start": 917
         },
         "text": "0"
        },
@@ -2080,9 +2080,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 881,
+        "end": 918,
         "file": "a_arena.form",
-        "start": 880
+        "start": 917
        },
        "symbol": null,
        "type": {
@@ -2099,9 +2099,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 896,
+         "end": 933,
          "file": "a_arena.form",
-         "start": 894
+         "start": 931
         },
         "text": "0m"
        },
@@ -2109,9 +2109,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 896,
+        "end": 933,
         "file": "a_arena.form",
-        "start": 894
+        "start": 931
        },
        "symbol": null,
        "type": {
@@ -2120,9 +2120,9 @@
       }
      ],
      "span": {
-      "end": 899,
+      "end": 936,
       "file": "a_arena.form",
-      "start": 814
+      "start": 851
      }
     }
    ],
@@ -2153,9 +2153,9 @@
    "profile": "earth",
    "sourceId": 805306371,
    "span": {
-    "end": 903,
+    "end": 941,
     "file": "a_arena.form",
-    "start": 642
+    "start": 674
    }
   },
   {
@@ -2169,9 +2169,9 @@
     {
      "kind": "gain",
      "span": {
-      "end": 954,
+      "end": 996,
       "file": "a_arena.form",
-      "start": 950
+      "start": 992
      },
      "value": {
       "ast": {
@@ -2183,9 +2183,9 @@
        "kind": "literal",
        "lit": "frac",
        "span": {
-        "end": 958,
+        "end": 1000,
         "file": "a_arena.form",
-        "start": 955
+        "start": 997
        },
        "text": "50%"
       },
@@ -2193,9 +2193,9 @@
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 958,
+       "end": 1000,
        "file": "a_arena.form",
-       "start": 955
+       "start": 997
       },
       "symbol": null,
       "type": {
@@ -2206,9 +2206,9 @@
     {
      "kind": "pitch",
      "span": {
-      "end": 969,
+      "end": 1012,
       "file": "a_arena.form",
-      "start": 964
+      "start": 1007
      },
      "value": {
       "ast": {
@@ -2220,9 +2220,9 @@
        "kind": "literal",
        "lit": "frac",
        "span": {
-        "end": 972,
+        "end": 1015,
         "file": "a_arena.form",
-        "start": 970
+        "start": 1013
        },
        "text": "1m"
       },
@@ -2230,9 +2230,9 @@
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 972,
+       "end": 1015,
        "file": "a_arena.form",
-       "start": 970
+       "start": 1013
       },
       "symbol": null,
       "type": {
@@ -2243,9 +2243,9 @@
     {
      "kind": "pan",
      "span": {
-      "end": 981,
+      "end": 1025,
       "file": "a_arena.form",
-      "start": 978
+      "start": 1022
      },
      "value": {
       "ast": {
@@ -2253,9 +2253,9 @@
        "kind": "literal",
        "lit": "int",
        "span": {
-        "end": 983,
+        "end": 1027,
         "file": "a_arena.form",
-        "start": 982
+        "start": 1026
        },
        "text": "0"
       },
@@ -2263,9 +2263,9 @@
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 983,
+       "end": 1027,
        "file": "a_arena.form",
-       "start": 982
+       "start": 1026
       },
       "symbol": null,
       "type": {
@@ -2276,9 +2276,9 @@
    ],
    "sample": "tone/chime",
    "span": {
-    "end": 988,
+    "end": 1033,
     "file": "a_arena.form",
-    "start": 907
+    "start": 947
    }
   },
   {
@@ -2289,27 +2289,27 @@
       {
        "name": "pool",
        "span": {
-        "end": 1104,
+        "end": 1182,
         "file": "a_arena.form",
-        "start": 1100
+        "start": 1178
        },
        "value": {
         "ast": {
          "kind": "ident",
          "name": "particles",
          "span": {
-          "end": 1115,
+          "end": 1193,
           "file": "a_arena.form",
-          "start": 1106
+          "start": 1184
          }
         },
         "children": [],
         "poolColumn": null,
         "rngSlot": null,
         "span": {
-         "end": 1115,
+         "end": 1193,
          "file": "a_arena.form",
-         "start": 1106
+         "start": 1184
         },
         "symbol": {
          "kind": "pool",
@@ -2326,9 +2326,9 @@
       {
        "name": "view_mask",
        "span": {
-        "end": 1126,
+        "end": 1204,
         "file": "a_arena.form",
-        "start": 1117
+        "start": 1195
        },
        "value": {
         "ast": {
@@ -2336,9 +2336,9 @@
          "kind": "literal",
          "lit": "int",
          "span": {
-          "end": 1129,
+          "end": 1207,
           "file": "a_arena.form",
-          "start": 1128
+          "start": 1206
          },
          "text": "1"
         },
@@ -2346,9 +2346,9 @@
         "poolColumn": null,
         "rngSlot": null,
         "span": {
-         "end": 1129,
+         "end": 1207,
          "file": "a_arena.form",
-         "start": 1128
+         "start": 1206
         },
         "symbol": null,
         "type": {
@@ -2359,9 +2359,9 @@
       {
        "name": "weight",
        "span": {
-        "end": 1137,
+        "end": 1215,
         "file": "a_arena.form",
-        "start": 1131
+        "start": 1209
        },
        "value": {
         "ast": {
@@ -2373,9 +2373,9 @@
          "kind": "literal",
          "lit": "frac",
          "span": {
-          "end": 1143,
+          "end": 1221,
           "file": "a_arena.form",
-          "start": 1139
+          "start": 1217
          },
          "text": "100%"
         },
@@ -2383,9 +2383,9 @@
         "poolColumn": null,
         "rngSlot": null,
         "span": {
-         "end": 1143,
+         "end": 1221,
          "file": "a_arena.form",
-         "start": 1139
+         "start": 1217
         },
         "symbol": null,
         "type": {
@@ -2398,9 +2398,9 @@
      "kind": "emit",
      "sourceId": 2415919108,
      "span": {
-      "end": 1145,
+      "end": 1223,
       "file": "a_arena.form",
-      "start": 1079
+      "start": 1157
      }
     },
     {
@@ -2408,27 +2408,27 @@
       {
        "name": "sound",
        "span": {
-        "end": 1166,
+        "end": 1245,
         "file": "a_arena.form",
-        "start": 1161
+        "start": 1240
        },
        "value": {
         "ast": {
          "kind": "ident",
          "name": "chime",
          "span": {
-          "end": 1173,
+          "end": 1252,
           "file": "a_arena.form",
-          "start": 1168
+          "start": 1247
          }
         },
         "children": [],
         "poolColumn": null,
         "rngSlot": null,
         "span": {
-         "end": 1173,
+         "end": 1252,
          "file": "a_arena.form",
-         "start": 1168
+         "start": 1247
         },
         "symbol": {
          "kind": "sound",
@@ -2443,27 +2443,27 @@
       {
        "name": "at",
        "span": {
-        "end": 1177,
+        "end": 1256,
         "file": "a_arena.form",
-        "start": 1175
+        "start": 1254
        },
        "value": {
         "ast": {
          "kind": "ident",
          "name": "origin",
          "span": {
-          "end": 1185,
+          "end": 1264,
           "file": "a_arena.form",
-          "start": 1179
+          "start": 1258
          }
         },
         "children": [],
         "poolColumn": null,
         "rngSlot": null,
         "span": {
-         "end": 1185,
+         "end": 1264,
          "file": "a_arena.form",
-         "start": 1179
+         "start": 1258
         },
         "symbol": {
          "kind": "global",
@@ -2480,9 +2480,9 @@
      "kind": "emit",
      "sourceId": 2415919109,
      "span": {
-      "end": 1187,
+      "end": 1266,
       "file": "a_arena.form",
-      "start": 1150
+      "start": 1229
      }
     }
    ],
@@ -2490,32 +2490,31 @@
    "module": 0,
    "name": "main_view",
    "order": 9,
-   "sharedBudgetPct": 20,
+   "sharedTokens": 2000,
    "span": {
-    "end": 1191,
+    "end": 1271,
     "file": "a_arena.form",
-    "start": 992
+    "start": 1039
    },
    "views": [
     {
-     "budgetPct": 80,
      "camera": {
       "ast": {
        "kind": "ident",
        "name": "origin",
        "span": {
-        "end": 1039,
+        "end": 1087,
         "file": "a_arena.form",
-        "start": 1033
+        "start": 1081
        }
       },
       "children": [],
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 1039,
+       "end": 1087,
        "file": "a_arena.form",
-       "start": 1033
+       "start": 1081
       },
       "symbol": {
        "kind": "global",
@@ -2526,11 +2525,13 @@
        "t": "world3"
       }
      },
+     "fragmentTokens": 160000,
+     "geometryTokens": 80000,
      "id": 0,
      "span": {
-      "end": 1051,
+      "end": 1126,
       "file": "a_arena.form",
-      "start": 1021
+      "start": 1069
      }
     }
    ]
@@ -2542,17 +2543,17 @@
      "ast": {
       "kind": "seed",
       "span": {
-       "end": 1221,
+       "end": 1304,
        "file": "a_arena.form",
-       "start": 1217
+       "start": 1300
       },
       "value": "23063"
      },
      "expressions": [],
      "span": {
-      "end": 1221,
+      "end": 1304,
       "file": "a_arena.form",
-      "start": 1217
+      "start": 1300
      },
      "target": null
     },
@@ -2560,17 +2561,17 @@
      "ast": {
       "kind": "load",
       "span": {
-       "end": 1238,
+       "end": 1322,
        "file": "a_arena.form",
-       "start": 1234
+       "start": 1318
       },
       "target": "arena"
      },
      "expressions": [],
      "span": {
-      "end": 1238,
+      "end": 1322,
       "file": "a_arena.form",
-      "start": 1234
+      "start": 1318
      },
      "target": {
       "kind": "module",
@@ -2586,23 +2587,23 @@
         "kind": "ident",
         "name": "seed_wave",
         "span": {
-         "end": 1270,
+         "end": 1355,
          "file": "a_arena.form",
-         "start": 1261
+         "start": 1346
         }
        },
        "kind": "call",
        "span": {
-        "end": 1272,
+        "end": 1357,
         "file": "a_arena.form",
-        "start": 1261
+        "start": 1346
        }
       },
       "kind": "at",
       "span": {
-       "end": 1252,
+       "end": 1337,
        "file": "a_arena.form",
-       "start": 1250
+       "start": 1335
       },
       "tick": "2"
      },
@@ -2614,25 +2615,25 @@
          "kind": "ident",
          "name": "seed_wave",
          "span": {
-          "end": 1270,
+          "end": 1355,
           "file": "a_arena.form",
-          "start": 1261
+          "start": 1346
          }
         },
         "kind": "call",
         "span": {
-         "end": 1272,
+         "end": 1357,
          "file": "a_arena.form",
-         "start": 1261
+         "start": 1346
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 1272,
+        "end": 1357,
         "file": "a_arena.form",
-        "start": 1261
+        "start": 1346
        },
        "symbol": {
         "kind": "system",
@@ -2645,9 +2646,9 @@
       }
      ],
      "span": {
-      "end": 1252,
+      "end": 1337,
       "file": "a_arena.form",
-      "start": 1250
+      "start": 1335
      },
      "target": {
       "kind": "system",
@@ -2661,16 +2662,16 @@
       "kind": "capture",
       "name": "anchor",
       "span": {
-       "end": 1285,
+       "end": 1371,
        "file": "a_arena.form",
-       "start": 1278
+       "start": 1364
       }
      },
      "expressions": [],
      "span": {
-      "end": 1285,
+      "end": 1371,
       "file": "a_arena.form",
-      "start": 1278
+      "start": 1364
      },
      "target": null
     }
@@ -2681,9 +2682,9 @@
    "order": 10,
    "sourceId": 2952790022,
    "span": {
-    "end": 1310,
+    "end": 1397,
     "file": "a_arena.form",
-    "start": 1195
+    "start": 1277
    }
   },
   {
@@ -2694,9 +2695,9 @@
      "kind": "literal",
      "lit": "int",
      "span": {
-      "end": 70,
+      "end": 73,
       "file": "b_audit.form",
-      "start": 69
+      "start": 72
      },
      "text": "0"
     },
@@ -2704,9 +2705,9 @@
     "poolColumn": null,
     "rngSlot": null,
     "span": {
-     "end": 70,
+     "end": 73,
      "file": "b_audit.form",
-     "start": 69
+     "start": 72
     },
     "symbol": null,
     "type": {
@@ -2718,9 +2719,9 @@
    "name": "observed",
    "order": 0,
    "span": {
-    "end": 71,
+    "end": 74,
     "file": "b_audit.form",
-    "start": 46
+    "start": 49
    },
    "type": {
     "t": "u32"
@@ -2732,26 +2733,26 @@
      "ast": {
       "kind": "assign",
       "span": {
-       "end": 169,
+       "end": 178,
        "file": "b_audit.form",
-       "start": 150
+       "start": 159
       },
       "target": {
        "kind": "ident",
        "name": "observed",
        "span": {
-        "end": 158,
+        "end": 167,
         "file": "b_audit.form",
-        "start": 150
+        "start": 159
        }
       },
       "value": {
        "kind": "ident",
        "name": "counter",
        "span": {
-        "end": 168,
+        "end": 177,
         "file": "b_audit.form",
-        "start": 161
+        "start": 170
        }
       }
      },
@@ -2764,18 +2765,18 @@
         "kind": "ident",
         "name": "observed",
         "span": {
-         "end": 158,
+         "end": 167,
          "file": "b_audit.form",
-         "start": 150
+         "start": 159
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 158,
+        "end": 167,
         "file": "b_audit.form",
-        "start": 150
+        "start": 159
        },
        "symbol": {
         "kind": "global",
@@ -2791,18 +2792,18 @@
         "kind": "ident",
         "name": "counter",
         "span": {
-         "end": 168,
+         "end": 177,
          "file": "b_audit.form",
-         "start": 161
+         "start": 170
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 168,
+        "end": 177,
         "file": "b_audit.form",
-        "start": 161
+        "start": 170
        },
        "symbol": {
         "kind": "global",
@@ -2815,9 +2816,9 @@
       }
      ],
      "span": {
-      "end": 169,
+      "end": 178,
       "file": "b_audit.form",
-      "start": 150
+      "start": 159
      }
     }
    ],
@@ -2832,9 +2833,9 @@
    ],
    "sourceId": 2147549184,
    "span": {
-    "end": 173,
+    "end": 183,
     "file": "b_audit.form",
-    "start": 75
+    "start": 80
    },
    "staggerPool": null,
    "staggerRate": null,
@@ -2843,7 +2844,7 @@
    ]
   }
  ],
- "manifestCrc32c": 300725479,
+ "manifestCrc32c": 3902345470,
  "modules": [
   {
    "file": "a_arena.form",
@@ -2851,7 +2852,7 @@
    "index": 0,
    "name": "arena",
    "span": {
-    "end": 1313,
+    "end": 1402,
     "file": "a_arena.form",
     "start": 0
    }
@@ -2865,16 +2866,16 @@
       "counter"
      ],
      "span": {
-      "end": 42,
+      "end": 43,
       "file": "b_audit.form",
-      "start": 17
+      "start": 18
      }
     }
    ],
    "index": 1,
    "name": "audit",
    "span": {
-    "end": 176,
+    "end": 188,
     "file": "b_audit.form",
     "start": 0
    }
@@ -2891,9 +2892,9 @@
       "module": "arena",
       "name": "seed_wave",
       "span": {
-       "end": 443,
+       "end": 464,
        "file": "a_arena.form",
-       "start": 257
+       "start": 269
       }
      },
      {
@@ -2901,9 +2902,9 @@
       "module": "audit",
       "name": "observe",
       "span": {
-       "end": 173,
+       "end": 183,
        "file": "b_audit.form",
-       "start": 75
+       "start": 80
       }
      }
     ]
@@ -2916,9 +2917,9 @@
       "module": "arena",
       "name": "advance",
       "span": {
-       "end": 638,
+       "end": 668,
        "file": "a_arena.form",
-       "start": 447
+       "start": 470
       }
      }
     ]
@@ -2934,9 +2935,9 @@
    "programHash": null,
    "sourceId": 805306371,
    "span": {
-    "end": 903,
+    "end": 941,
     "file": "a_arena.form",
-    "start": 642
+    "start": 674
    }
   },
   {
@@ -2947,9 +2948,9 @@
    "programHash": null,
    "sourceId": 2147483649,
    "span": {
-    "end": 443,
+    "end": 464,
     "file": "a_arena.form",
-    "start": 257
+    "start": 269
    }
   },
   {
@@ -2960,9 +2961,9 @@
    "programHash": null,
    "sourceId": 2147483650,
    "span": {
-    "end": 638,
+    "end": 668,
     "file": "a_arena.form",
-    "start": 447
+    "start": 470
    }
   },
   {
@@ -2973,9 +2974,9 @@
    "programHash": null,
    "sourceId": 2147549184,
    "span": {
-    "end": 173,
+    "end": 183,
     "file": "b_audit.form",
-    "start": 75
+    "start": 80
    }
   },
   {
@@ -2986,9 +2987,9 @@
    "programHash": null,
    "sourceId": 2415919108,
    "span": {
-    "end": 1145,
+    "end": 1223,
     "file": "a_arena.form",
-    "start": 1079
+    "start": 1157
    }
   },
   {
@@ -2999,9 +3000,9 @@
    "programHash": null,
    "sourceId": 2415919109,
    "span": {
-    "end": 1187,
+    "end": 1266,
     "file": "a_arena.form",
-    "start": 1150
+    "start": 1229
    }
   },
   {
@@ -3012,9 +3013,9 @@
    "programHash": null,
    "sourceId": 2684354560,
    "span": {
-    "end": 165,
+    "end": 173,
     "file": "a_arena.form",
-    "start": 137
+    "start": 145
    }
   },
   {
@@ -3025,9 +3026,9 @@
    "programHash": null,
    "sourceId": 2952790022,
    "span": {
-    "end": 1310,
+    "end": 1397,
     "file": "a_arena.form",
-    "start": 1195
+    "start": 1277
    }
   }
  ]

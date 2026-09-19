@@ -99,8 +99,7 @@ RecordBytes to_bytes(const zhao_abi::ZhMaterialRecord& r) {
 
 uint64_t beat_of(const RecordBytes& rb, int beat) {
   uint64_t v = 0;
-  for (int i = 0; i < 8; ++i)
-    v |= static_cast<uint64_t>(rb.b[beat * 8 + i]) << (8 * i);
+  for (int i = 0; i < 8; ++i) v |= static_cast<uint64_t>(rb.b[beat * 8 + i]) << (8 * i);
   return v;
 }
 
@@ -175,8 +174,8 @@ void hard_reset(Dut& top) {
   zhao::tick(top);
 }
 
-void publish_dir(Dut& top, uint8_t entry, bool valid, uint32_t set_index,
-                 uint16_t generation, uint32_t base, uint32_t count) {
+void publish_dir(Dut& top, uint8_t entry, bool valid, uint32_t set_index, uint16_t generation,
+                 uint32_t base, uint32_t count) {
   top.dir_we_i = 1;
   top.dir_entry_i = entry;
   top.dir_valid_i = valid ? 1 : 0;
@@ -214,15 +213,13 @@ RecordBytes read_record(Dut& top) {
   RecordBytes rb{};
   for (int w = 0; w < 8; ++w) {
     const uint32_t word = top.a_rsp_record_o[w];
-    for (int b = 0; b < 4; ++b)
-      rb.b[w * 4 + b] = static_cast<uint8_t>((word >> (8 * b)) & 0xFFu);
+    for (int b = 0; b < 4; ++b) rb.b[w * 4 + b] = static_cast<uint8_t>((word >> (8 * b)) & 0xFFu);
   }
   return rb;
 }
 
-Answer resolve_rtl(Dut& top, const Sdram& mem, uint32_t material_set,
-                   uint16_t material_id, uint8_t tier, int rsp_stall = 0,
-                   bool deny_fetch = false) {
+Answer resolve_rtl(Dut& top, const Sdram& mem, uint32_t material_set, uint16_t material_id,
+                   uint8_t tier, int rsp_stall = 0, bool deny_fetch = false) {
   Answer out;
 
   // ---- offer the request --------------------------------------------------
@@ -331,17 +328,14 @@ int main(int argc, char** argv) {
     const Answer got = resolve_rtl(top, mem, h, 0, 0);
 
     check(got.a_status == st(want.status),
-          "case 1: an unpublished set is a residency fault, not a stall",
-          st(want.status), got.a_status);
-    check(got.a_has_record == want.has_record,
-          "case 1: a residency fault returns no record", want.has_record ? 1 : 0,
-          got.a_has_record ? 1 : 0);
-    check(!got.fetched, "case 1: a residency fault issues no memory read", 0,
-          got.fetched ? 1 : 0);
-    check(top.a_not_resident_o == L.not_resident,
-          "case 1: not_resident counted", L.not_resident, top.a_not_resident_o);
-    check(got.lockstep_ok, "case 1: both instances stay in lockstep", 1,
-          got.lockstep_ok ? 1 : 0);
+          "case 1: an unpublished set is a residency fault, not a stall", st(want.status),
+          got.a_status);
+    check(got.a_has_record == want.has_record, "case 1: a residency fault returns no record",
+          want.has_record ? 1 : 0, got.a_has_record ? 1 : 0);
+    check(!got.fetched, "case 1: a residency fault issues no memory read", 0, got.fetched ? 1 : 0);
+    check(top.a_not_resident_o == L.not_resident, "case 1: not_resident counted", L.not_resident,
+          top.a_not_resident_o);
+    check(got.lockstep_ok, "case 1: both instances stay in lockstep", 1, got.lockstep_ok ? 1 : 0);
   }
 
   // =========================================================================
@@ -373,13 +367,11 @@ int main(int argc, char** argv) {
     const mat::Result want = oracle.resolve({h, 3, 2}, &L);
     const Answer got = resolve_rtl(top, mem, h, 3, 2);
 
-    check(got.a_status == st(want.status), "case 2: a first resolve MISSES",
-          st(want.status), got.a_status);
-    check(got.fetched, "case 2: a miss issues a memory read", 1,
-          got.fetched ? 1 : 0);
-    check(got.mem_addr == kBase + 3 * 32,
-          "case 2: address is base + (material_id << 5)", kBase + 3 * 32,
-          got.mem_addr);
+    check(got.a_status == st(want.status), "case 2: a first resolve MISSES", st(want.status),
+          got.a_status);
+    check(got.fetched, "case 2: a miss issues a memory read", 1, got.fetched ? 1 : 0);
+    check(got.mem_addr == kBase + 3 * 32, "case 2: address is base + (material_id << 5)",
+          kBase + 3 * 32, got.mem_addr);
     check(same_bytes(got.a_record, to_bytes(want.record)),
           "case 2: the returned record is the stored bytes, all 32", 0,
           same_bytes(got.a_record, to_bytes(want.record)) ? 0 : 1);
@@ -387,31 +379,24 @@ int main(int argc, char** argv) {
     // THE PROJECTION, field by field, each against the ORACLE's accessor and
     // not against a literal -- so a change to the packing moves both.
     check(got.sample_count == mat::sample_count_of(want.record),
-          "case 2: sample_count <- control[1:0]",
-          mat::sample_count_of(want.record), got.sample_count);
-    check(got.recipe == mat::recipe_of(want.record),
-          "case 2: material_recipe <- control[4:2]", mat::recipe_of(want.record),
-          got.recipe);
-    check(got.weight == want.record.recipe_weight,
-          "case 2: recipe_weight carried whole", want.record.recipe_weight,
-          got.weight);
+          "case 2: sample_count <- control[1:0]", mat::sample_count_of(want.record),
+          got.sample_count);
+    check(got.recipe == mat::recipe_of(want.record), "case 2: material_recipe <- control[4:2]",
+          mat::recipe_of(want.record), got.recipe);
+    check(got.weight == want.record.recipe_weight, "case 2: recipe_weight carried whole",
+          want.record.recipe_weight, got.weight);
     check(got.binding == (want.record.sample0.binding_slot & 0xFFu),
           "case 2: base_binding_selector <- sample0.binding_slot",
           want.record.sample0.binding_slot & 0xFFu, got.binding);
-    check(!got.selector_overflow,
-          "case 2: a slot under 256 is NOT a selector overflow", 0,
+    check(!got.selector_overflow, "case 2: a slot under 256 is NOT a selector overflow", 0,
           got.selector_overflow ? 1 : 0);
-    check(got.palette_base == want.record.palette_base,
-          "case 2: palette_base carried whole", want.record.palette_base,
-          got.palette_base);
-    check(got.raster_state == want.record.raster_state,
-          "case 2: raster_state carried whole", want.record.raster_state,
-          got.raster_state);
-    check(got.flags == (want.record.flags & 0xFFu),
-          "case 2: flags low byte carried", want.record.flags & 0xFFu,
-          got.flags);
-    check(got.tier == 2, "case 2: the quality tier is echoed beside the answer",
-          2, got.tier);
+    check(got.palette_base == want.record.palette_base, "case 2: palette_base carried whole",
+          want.record.palette_base, got.palette_base);
+    check(got.raster_state == want.record.raster_state, "case 2: raster_state carried whole",
+          want.record.raster_state, got.raster_state);
+    check(got.flags == (want.record.flags & 0xFFu), "case 2: flags low byte carried",
+          want.record.flags & 0xFFu, got.flags);
+    check(got.tier == 2, "case 2: the quality tier is echoed beside the answer", 2, got.tier);
     check(top.a_rsp_sample0_modes_o == want.record.sample0.modes,
           "case 2: sample0 modes at its own offset", want.record.sample0.modes,
           top.a_rsp_sample0_modes_o);
@@ -425,36 +410,30 @@ int main(int argc, char** argv) {
     // ---- CASE 3, on the same fixture: the SECOND resolve HITS -------------
     const mat::Result want2 = oracle.resolve({h, 3, 2}, &L);
     const Answer got2 = resolve_rtl(top, mem, h, 3, 2);
-    check(got2.a_status == st(want2.status), "case 3: the second resolve HITS",
-          st(want2.status), got2.a_status);
-    check(!got2.fetched, "case 3: a hit issues NO memory read", 0,
-          got2.fetched ? 1 : 0);
-    check(same_bytes(got2.a_record, got.a_record),
-          "case 3: hit and miss return the SAME record", 0,
+    check(got2.a_status == st(want2.status), "case 3: the second resolve HITS", st(want2.status),
+          got2.a_status);
+    check(!got2.fetched, "case 3: a hit issues NO memory read", 0, got2.fetched ? 1 : 0);
+    check(same_bytes(got2.a_record, got.a_record), "case 3: hit and miss return the SAME record", 0,
           same_bytes(got2.a_record, got.a_record) ? 0 : 1);
-    check(top.a_material_hits_o == L.hits, "case 3: hits counted", L.hits,
-          top.a_material_hits_o);
-    check(top.a_material_misses_o == L.misses, "case 3: misses counted",
-          L.misses, top.a_material_misses_o);
+    check(top.a_material_hits_o == L.hits, "case 3: hits counted", L.hits, top.a_material_hits_o);
+    check(top.a_material_misses_o == L.misses, "case 3: misses counted", L.misses,
+          top.a_material_misses_o);
 
     // ---- CASE 4: a material_id at the count is REFUSED, not clamped -------
     const mat::Result want3 = oracle.resolve({h, kCount, 0}, &L);
     const Answer got3 = resolve_rtl(top, mem, h, static_cast<uint16_t>(kCount), 0);
-    check(got3.a_status == st(want3.status),
-          "case 4: material_id == count is refused", st(want3.status),
-          got3.a_status);
+    check(got3.a_status == st(want3.status), "case 4: material_id == count is refused",
+          st(want3.status), got3.a_status);
     check(!got3.a_has_record,
           "case 4: a refused id returns NO record -- material 0 is a real "
           "material and clamping to it hides the bug",
           0, got3.a_has_record ? 1 : 0);
-    check(!got3.fetched, "case 4: a refused id issues no memory read", 0,
-          got3.fetched ? 1 : 0);
-    check(top.a_refused_id_o == L.refused_id, "case 4: refused_id counted",
-          L.refused_id, top.a_refused_id_o);
+    check(!got3.fetched, "case 4: a refused id issues no memory read", 0, got3.fetched ? 1 : 0);
+    check(top.a_refused_id_o == L.refused_id, "case 4: refused_id counted", L.refused_id,
+          top.a_refused_id_o);
     check(top.a_material_refused_o == (L.refused_id + L.refused_record + L.not_resident),
           "case 4: material_refused is the sum of the three refusal classes",
-          L.refused_id + L.refused_record + L.not_resident,
-          top.a_material_refused_o);
+          L.refused_id + L.refused_record + L.not_resident, top.a_material_refused_o);
 
     // ---- CASE 5: THE COHERENCE CASE. D-3, and the one that matters. -------
     //
@@ -492,8 +471,8 @@ int main(int argc, char** argv) {
           "case 5 (D-3): and returns the NEW record, no flush performed", 0,
           same_bytes(got4.a_record, to_bytes(rec2)) ? 0 : 1);
     check(got4.palette_base == rec2.palette_base,
-          "case 5 (D-3): the projection follows the new record too",
-          rec2.palette_base, got4.palette_base);
+          "case 5 (D-3): the projection follows the new record too", rec2.palette_base,
+          got4.palette_base);
     // AND THE LOW BYTE IS THE SAME. This is the check that separates a 16-bit
     // tag from an 8-bit one: 0x0107 and 0x0207 are indistinguishable to the
     // handle, so a resolver tagging on the handle's byte would have HIT here
@@ -562,10 +541,8 @@ int main(int argc, char** argv) {
 
       const mat::Result want = oracle.resolve({h, 0, 0}, &L);
       const Answer got = resolve_rtl(top, mem, h, 0, 0);
-      check(got.a_status == st(want.status), bad.what, st(want.status),
-            got.a_status);
-      check(!got.a_has_record,
-            "case 6: a malformed record returns NO record", 0,
+      check(got.a_status == st(want.status), bad.what, st(want.status), got.a_status);
+      check(!got.a_has_record, "case 6: a malformed record returns NO record", 0,
             got.a_has_record ? 1 : 0);
 
       // AND IT IS NOT CACHED. Resolve again: a block that cached the malformed
@@ -575,9 +552,8 @@ int main(int argc, char** argv) {
             "case 6: a malformed record is never cached -- the second resolve "
             "refuses again rather than hitting",
             st(mat::Status::kRefusedRecord), again.a_status);
-      check(again.fetched,
-            "case 6: and it goes back to memory, proving no line was written",
-            1, again.fetched ? 1 : 0);
+      check(again.fetched, "case 6: and it goes back to memory, proving no line was written", 1,
+            again.fetched ? 1 : 0);
       ++id;
     }
     check(top.a_refused_record_o == 2 * bads.size(),
@@ -616,8 +592,7 @@ int main(int argc, char** argv) {
           "case 7: a reserved wrap on an UNCLAIMED sample does not refuse the "
           "record",
           st(want.status), got.a_status);
-    check(mat::record_legal(r),
-          "case 7: and the oracle agrees it is legal", 1,
+    check(mat::record_legal(r), "case 7: and the oracle agrees it is legal", 1,
           mat::record_legal(r) ? 1 : 0);
   }
 
@@ -644,8 +619,7 @@ int main(int argc, char** argv) {
           "case 8: rsp_selector_overflow_o fires, so the binding resolver's "
           "req_selector_overflow_i has something true to carry",
           1, got.selector_overflow ? 1 : 0);
-    check(got.binding == 0x40,
-          "case 8: and the truncated value is reported rather than hidden",
+    check(got.binding == 0x40, "case 8: and the truncated value is reported rather than hidden",
           0x40, got.binding);
     check(top.a_selector_overflow_o == 1, "case 8: selector_overflow counted", 1,
           top.a_selector_overflow_o);
@@ -661,8 +635,7 @@ int main(int argc, char** argv) {
     // refuse it downstream. The counter is how that becomes visible before
     // somebody debugs a blank triangle.
     zhao_abi::ZhMaterialRecord r = make_record(1, mat::kModulate);
-    check(mat::record_legal(r),
-          "case 9: the oracle's record_legal accepts a bad recipe/count pair",
+    check(mat::record_legal(r), "case 9: the oracle's record_legal accepts a bad recipe/count pair",
           1, mat::record_legal(r) ? 1 : 0);
     check(!mat::count_legal(mat::kModulate, 1),
           "case 9: and count_legal -- the COMBINER's rule -- rejects it", 0,
@@ -678,8 +651,7 @@ int main(int argc, char** argv) {
           "case 9: the resolve SUCCEEDS -- two implementations of one rule is "
           "the failure this block refuses",
           st(mat::Status::kMiss), got.a_status);
-    check(top.a_recipe_count_mismatch_o == 1,
-          "case 9: and recipe_count_mismatch_o fires", 1,
+    check(top.a_recipe_count_mismatch_o == 1, "case 9: and recipe_count_mismatch_o fires", 1,
           top.a_recipe_count_mismatch_o);
   }
 
@@ -691,8 +663,7 @@ int main(int argc, char** argv) {
     for (uint8_t recipe : {mat::kTerrainDetailLight, mat::kTerrainDetailMask}) {
       const uint8_t need = mat::samples_required(recipe);
       zhao_abi::ZhMaterialRecord r = make_record(need, recipe);
-      check(mat::record_legal(r),
-            "case 10: the terrain recipe is legal to the CURRENT oracle", 1,
+      check(mat::record_legal(r), "case 10: the terrain recipe is legal to the CURRENT oracle", 1,
             mat::record_legal(r) ? 1 : 0);
 
       Sdram mem;
@@ -710,15 +681,12 @@ int main(int argc, char** argv) {
             "case 10: the RECIPE_COUNT=6 control REFUSES it -- this is audit "
             "R1's defect, fired on purpose",
             st(mat::Status::kRefusedRecord), got.b_status);
-      check(got.lockstep_ok,
-            "case 10: and the two instances answered the same cycle", 1,
+      check(got.lockstep_ok, "case 10: and the two instances answered the same cycle", 1,
             got.lockstep_ok ? 1 : 0);
     }
-    check(top.b_refused_record_o == 2,
-          "case 10: the control's refusal counter moved, twice", 2,
+    check(top.b_refused_record_o == 2, "case 10: the control's refusal counter moved, twice", 2,
           top.b_refused_record_o);
-    check(top.a_refused_record_o == 0,
-          "case 10: and the shipping resolver refused nothing", 0,
+    check(top.a_refused_record_o == 0, "case 10: and the shipping resolver refused nothing", 0,
           top.a_refused_record_o);
   }
 
@@ -743,9 +711,8 @@ int main(int argc, char** argv) {
           "case 11: the record is unchanged after seven cycles of "
           "backpressure",
           0, same_bytes(got.a_record, to_bytes(r)) ? 0 : 1);
-    check(got.a_status == st(mat::Status::kMiss),
-          "case 11: and so is the status", st(mat::Status::kMiss),
-          got.a_status);
+    check(got.a_status == st(mat::Status::kMiss), "case 11: and so is the status",
+          st(mat::Status::kMiss), got.a_status);
 
     // And the requester really is stalled: req_ready must be low while a
     // response is pending. "A miss stalls the requester rather than returning
@@ -795,8 +762,7 @@ int main(int argc, char** argv) {
       // keep their own case, on fresh handles, where both instances fetch and
       // the divergence is the SUBJECT rather than a contaminant.
       const uint8_t recipe = static_cast<uint8_t>(i % 6u);
-      zhao_abi::ZhMaterialRecord r =
-          make_record(mat::samples_required(recipe), recipe);
+      zhao_abi::ZhMaterialRecord r = make_record(mat::samples_required(recipe), recipe);
       r.palette_base = 0xC0DE'0000u + i;
       r.raster_state = 0x0000'1000u + i;
       r.recipe_weight = static_cast<uint8_t>(i);
@@ -814,11 +780,9 @@ int main(int argc, char** argv) {
     std::vector<uint16_t> order;
     for (uint32_t i = 0; i < kN; ++i) order.push_back(static_cast<uint16_t>(i));
     for (uint32_t i = 0; i < 20; ++i) order.push_back(static_cast<uint16_t>(i));
-    for (uint32_t i = 0; i < kN; ++i)
-      order.push_back(static_cast<uint16_t>((i * 17) % kN));
+    for (uint32_t i = 0; i < kN; ++i) order.push_back(static_cast<uint16_t>((i * 17) % kN));
     // and a handful past the end, to keep the refusal path in the mix
-    for (uint32_t i = 0; i < 5; ++i)
-      order.push_back(static_cast<uint16_t>(kN + i));
+    for (uint32_t i = 0; i < 5; ++i) order.push_back(static_cast<uint16_t>(kN + i));
 
     int mismatches = 0;
     int status_mismatches = 0;
@@ -828,8 +792,7 @@ int main(int argc, char** argv) {
       if (got.a_status != st(want.status)) {
         ++status_mismatches;
         if (status_mismatches <= 3)
-          std::printf("  id %u: status want %u got %u\n", id, st(want.status),
-                      got.a_status);
+          std::printf("  id %u: status want %u got %u\n", id, st(want.status), got.a_status);
       }
       if (want.has_record && !same_bytes(got.a_record, to_bytes(want.record))) {
         ++mismatches;
@@ -837,11 +800,9 @@ int main(int argc, char** argv) {
       }
       if (!got.lockstep_ok) ++mismatches;
     }
-    check(status_mismatches == 0,
-          "case 12: every status in the sweep matches the oracle", 0,
+    check(status_mismatches == 0, "case 12: every status in the sweep matches the oracle", 0,
           status_mismatches);
-    check(mismatches == 0,
-          "case 12: every returned record in the sweep matches the oracle", 0,
+    check(mismatches == 0, "case 12: every returned record in the sweep matches the oracle", 0,
           mismatches);
     // The counters are the other half of the differential: a machine that
     // returns the right answers while missing twice as often is a machine with
@@ -850,10 +811,10 @@ int main(int argc, char** argv) {
           "case 12: the RTL's hit count equals the oracle's -- a cache that "
           "returns right answers and misses twice as often is still broken",
           L.hits, top.a_material_hits_o);
-    check(top.a_material_misses_o == L.misses, "case 12: and the miss count",
-          L.misses, top.a_material_misses_o);
-    check(top.a_refused_id_o == L.refused_id, "case 12: and the refusals",
-          L.refused_id, top.a_refused_id_o);
+    check(top.a_material_misses_o == L.misses, "case 12: and the miss count", L.misses,
+          top.a_material_misses_o);
+    check(top.a_refused_id_o == L.refused_id, "case 12: and the refusals", L.refused_id,
+          top.a_refused_id_o);
   }
 
   // =========================================================================
@@ -900,18 +861,17 @@ int main(int argc, char** argv) {
         {"selector_overflow_o", top.a_selector_overflow_o},
     };
     for (const Firing& f : firings)
-      check(f.value > 0,
-            "counter map: this counter was SEEN TO FIRE, not asserted at zero",
-            1, f.value);
+      check(f.value > 0, "counter map: this counter was SEEN TO FIRE, not asserted at zero", 1,
+            f.value);
     // `recipe_count_mismatch_o` fires in case 9 above; here the only pair-bad
     // record is also malformed, so it is refused before the pairing is read --
     // which is the correct order and is stated rather than left as a surprise.
-    std::printf("counter map: hits=%u misses=%u refused=%u id=%u rec=%u "
-                "nores=%u selov=%u\n",
-                top.a_material_hits_o, top.a_material_misses_o,
-                top.a_material_refused_o, top.a_refused_id_o,
-                top.a_refused_record_o, top.a_not_resident_o,
-                top.a_selector_overflow_o);
+    std::printf(
+        "counter map: hits=%u misses=%u refused=%u id=%u rec=%u "
+        "nores=%u selov=%u\n",
+        top.a_material_hits_o, top.a_material_misses_o, top.a_material_refused_o,
+        top.a_refused_id_o, top.a_refused_record_o, top.a_not_resident_o,
+        top.a_selector_overflow_o);
   }
 
   // =========================================================================
@@ -958,8 +918,7 @@ int main(int argc, char** argv) {
   }
 
   top.final();
-  std::printf("material_resolve_rtl_directed: %d checks, %d failures\n",
-              g_checks, g_fails);
+  std::printf("material_resolve_rtl_directed: %d checks, %d failures\n", g_checks, g_fails);
   // `zhao::exit_hard` and not `return`: a Verilated main that returns hangs
   // under ctest for the full timeout with ~0 CPU (the libwinpthread deadlock
   // documented in tests/harness/zhao_sim.hpp).

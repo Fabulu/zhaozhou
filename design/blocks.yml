@@ -32,215 +32,13 @@ schema_version: 1
 # §25 mandatory counters (snake_case) plus the declared platform extensions.
 # Block `counters` must be a subset of this catalog (rule V12).
 counter_catalog:
-  # FORGE.PRIM.EVAL (2026-09-09) — the lightning evaluator. `primeval_refused_limit`
-  # is the owner's caps enforced (24 segments / 2 branches / 8 branch segments,
-  # refused not clamped); `primeval_sat_events` is the fx16 domain edge made
-  # visible; `primeval_walk_overrun` is a guard unreachable by legal stimulus,
-  # whose positive control is tests/mutants/zhao_forge_prim_eval_mutant.sv.
-  - primeval_jobs
-  - primeval_points
-  - primeval_vertices
-  - primeval_refused_limit
-  - primeval_skipped_view
-  - primeval_sat_events
-  - primeval_walk_overrun
-  # TERRAIN.SHADE. Declared in the block's `counters` since the block was
-  # written and never added here, so V12 rejected all four -- and that rejection
-  # was INVISIBLE, because the schema stage fails before the rule stage runs and
-  # `tests.oracle` was failing the schema. All four are real ports on
-  # fpga/rtl/terrain/zhao_terrain_shade.sv with the default `<counter>_o`
-  # spelling, so none needs a counter_ports entry.
-  - triangles_shaded
-  - degenerate_count
-  - base_sat
-  - degen_mismatch
-  - combine_fragments
-  - combine_refused
-  - combine_saturated
-  # Packet-B R9 material and typed AUX accounting. These names are catalog
-  # identities; counter_ports below binds them to exact leaf ports.
-  - combine_jobs_accepted
-  - combine_jobs_completed
-  - combine_saturated_add
-  - combine_saturated_mul2x
-  - combine_recipe_0
-  - combine_recipe_1
-  - combine_recipe_2
-  - combine_recipe_3
-  - combine_recipe_4
-  - combine_recipe_5
-  - combine_recipe_6
-  - combine_recipe_7
-  - combine_phases_issued
-  - combine_phases_completed
-  - aux_jobs_accepted
-  - aux_sheet_reads
-  - aux_local_refused
-  - aux_jobs_completed
-  - aux_degenerate
-  - aux_sheet_hits
-  - aux_sheet_misses
-  - aux_sheet_wrong_op
-  - aux_sheet_wrong_status
-  - aux_sheet_wrong_src
-  - aux_sheet_unsolicited
-  - aux_credit_faults
-  # The BORING_3D_FUNDAMENTALS_AUDIT blocks (2026-09-03). Each refusal
-  # counter is the one that must never be silently zero: a refused
-  # triangle, material or depth is a picture that is wrong rather than a
-  # machine that is slow.
-  - assemble_triangles
-  - assemble_refused
-  - material_hits
-  - material_misses
-  - material_refused
-  - lit_vertices
-  - degenerate_normals
-  - depth_saturated
-  - depth_refused
-  # GEOM.DEPTHQUANT. `depth_clamped_near` and `depth_clamped_far` are the pair
-  # that says a view is using the wrong PROFILE: wmax is a depth clamp rather
-  # than a far-clip plane, so geometry past it is drawn at the floor instead of
-  # disappearing. Without these two the symptom is a scene whose distances stop
-  # separating -- flat, correct-looking, and untraceable.
-  - depth_vertices
-  - depth_clamped_near
-  - depth_clamped_far
-  - shadows_emitted
-  - shadows_skipped
-  # TEXTURE.FRAGROB -- the fragment transaction centre. `fragrob_id_errors`
-  # is the one that must never be silently zero: it counts returns whose
-  # {slot, generation} did not match a live slot, which is the property GENW=8
-  # exists to protect (ruling X5 -- a 2-bit generation wraps after four reuses
-  # and then matches the WRONG fragment silently).
-  - fragrob_fragments
-  - fragrob_samples
-  - fragrob_id_errors
-  # MEM.UPLOAD -- the HPS->VRAM resource path (owner direction 2026-09-03).
-  # crc_failures and guard_refusals are the two that must never be silently
-  # zero: a refused upload means a resource is NOT resident, and a frame that
-  # references it will be withheld under the whole-frame law.
-  - upload_bytes
-  - uploads_completed
-  - crc_failures
-  - guard_refusals
-  - epoch_stale
-  # TERRAIN.RESIDENCY (rulings T9/T10)
-  - residency_hits
-  - residency_misses
-  - residency_evictions
-  - residency_dirty_evictions
-  - residency_stale_events
-  - island_resident
-  - island_open_sky
-  - island_out_of_extent
-  - island_bad_pitch
-  - visible_examined
-  - visible_emitted
-  - visible_sky
-  - visible_out_of_extent
-  - visible_bad_pitch
-  - compcache_fill_records
-  - compcache_patches_filled
-  - compcache_patches_served
-  - compcache_fill_overrun
-  - compcache_lat_oob
-  - compcache_cs_oob
-  - terraincmd_sets_accepted
-  - terraincmd_sets_refused
-  - terraincmd_records
-  - terraincmd_list_bytes
-  - terraincmd_crc_fails
-  - terraincmd_bridge_errs
-  - mipfeed_pages_mipped
-  - mipfeed_pages_faulted
-  - mipfeed_samples
-  - pagestream_lattices
-  - pagestream_refused
-  - pagestream_vertices
-  - pagestream_bursts
-  - pagestream_guard_denied
-  - pagestream_incomplete
-  - loadq_accepted
-  - loadq_issued
-  - loadq_drained
-  - loadq_refused
-  - loadq_level
-  - loadq_inflight
-  - loadq_high_water
-  - pageloader_pages_loaded
-  - pageloader_pages_faulted
-  - pageloader_pages_refused
-  - pageloader_crc_fails
-  - pageloader_hdr_ident_fails
-  - pageloader_incomplete
-  - pageloader_guard_denied
-  - pageloader_bridge_errs
-  - pageloader_load_bytes
-  - seq_records_consumed
-  - seq_patches_issued
-  - seq_prefetch_resident
-  - seq_skipped_not_resident
-  - seq_claims_issued
-  - seq_claims_refused
-  - seq_claims_same
-  - seq_loads_issued
-  - seq_loads_deferred
-  - seq_writebacks_issued
-  - seq_compose_slots_used
-  - seq_pins_issued
-  - seq_drained
-  - seq_frame_faults
-  - writeback_sheets_written
-  - writeback_sheets_refused
-  - writeback_sheets_faulted
-  - writeback_hdr_ident_fails
-  - writeback_guard_denied
-  - writeback_bridge_errs
-  - writeback_acks_ok
-  - writeback_acks_nak
-  - writeback_acks_unmatched
-  - writeback_acks_after_epoch
-  - writeback_acks_overdue
-  - writeback_seq_conflicts
-  - writeback_wb_bytes
-  - writeback_outstanding_hwm
-  - writeback_ack_wait_max_cycles
-  - writeback_jobs_stall_cycles
-  # TERRAIN.MIPGEN (ruling T8)
-  - mipgen_samples
-  - mipgen_writes
-  - mipgen_aborts
-  # GEOM.PARAMBUF (ruling R7) -- the external geometry arena
-  - parambuf_records_written
-  - parambuf_chunks_allocated
-  - parambuf_stale_handles
-  - parambuf_overflow_frames
   # §25 minimum list
   - frame_cycles
   - deadline_faults
   - commands
   - meshlets_fetched
-  # GEOM.ASSETFETCH (2026-09-04). `prefetch_stall_cycles` is the load-bearing
-  # one: the contract's double buffering is an ASSUMPTION that one meshlet of
-  # lookahead hides the fetch, and this counter is what turns it into a
-  # measurement instead. `refused_footprint` must never be silently zero --
-  # a refused meshlet emits no triangles, so a picture missing geometry has
-  # exactly one place to look.
-  - beats_read
-  - guard_denied
-  - refused_footprint
-  - prefetch_stall_cycles
   - vertices_decoded
   - vertices_transformed
-  # GEOM.PROJECT / TERRAIN.PROJECT (2026-09-10, owner ruling R1): configuration
-  # writes the shared projection core REFUSED because a matrix product word did
-  # not fit the signed MATW-bit multiplier operand (+-1.99998 at MATW=18).
-  # Refused and counted, never clamped -- a clamped cot(fov/2) is a plausible
-  # wrong picture with nothing to say so. Structurally zero at the default
-  # MATW=32; seen to fire at MATW=18 by tests/geometry/proj_matw_directed.cpp,
-  # and its ABSENCE shown by tests/mutants/zhao_project_core_mutant.sv.
-  - mat_refused
   - triangles_submitted
   - triangles_clipped
   - triangles_culled
@@ -286,7 +84,297 @@ counter_catalog:
   # depends on somebody else's request pattern has to be visible.
   - hps_arb_bursts_by_client
   - hps_arb_wait_cycles
-
+  # GEOM.PARAMBUF (ruling R7) -- the external geometry arena
+  - parambuf_records_written
+  - parambuf_chunks_allocated
+  - parambuf_stale_handles
+  - parambuf_overflow_frames
+  # TERRAIN.MIPGEN (ruling T8)
+  - mipgen_samples
+  - mipgen_writes
+  - mipgen_aborts
+  # TERRAIN.RESIDENCY (rulings T9/T10)
+  - residency_hits
+  - residency_misses
+  - residency_evictions
+  - residency_dirty_evictions
+  - residency_stale_events
+  # MEM.UPLOAD -- the HPS->VRAM resource path (owner direction 2026-09-03).
+  # crc_failures and guard_refusals are the two that must never be silently
+  # zero: a refused upload means a resource is NOT resident, and a frame that
+  # references it will be withheld under the whole-frame law.
+  - upload_bytes
+  - uploads_completed
+  - crc_failures
+  - guard_refusals
+  - epoch_stale
+  # TEXTURE.FRAGROB -- the fragment transaction centre. `fragrob_id_errors`
+  # is the one that must never be silently zero: it counts returns whose
+  # {slot, generation} did not match a live slot, which is the property GENW=8
+  # exists to protect (ruling X5 -- a 2-bit generation wraps after four reuses
+  # and then matches the WRONG fragment silently).
+  - fragrob_fragments
+  - fragrob_samples
+  - fragrob_id_errors
+  # The BORING_3D_FUNDAMENTALS_AUDIT blocks (2026-09-03). Each refusal
+  # counter is the one that must never be silently zero: a refused
+  # triangle, material or depth is a picture that is wrong rather than a
+  # machine that is slow.
+  - assemble_triangles
+  - assemble_refused
+  - material_hits
+  - material_misses
+  - material_refused
+  - lit_vertices
+  - degenerate_normals
+  - depth_saturated
+  - depth_refused
+  - shadows_emitted
+  - shadows_skipped
+  - combine_fragments
+  - combine_refused
+  - combine_saturated
+  # GEOM.DEPTHQUANT. `depth_clamped_near` and `depth_clamped_far` are the pair
+  # that says a view is using the wrong PROFILE: wmax is a depth clamp rather
+  # than a far-clip plane, so geometry past it is drawn at the floor instead of
+  # disappearing. Without these two the symptom is a scene whose distances stop
+  # separating -- flat, correct-looking, and untraceable.
+  - depth_vertices
+  - depth_clamped_near
+  - depth_clamped_far
+  # GEOM.ASSETFETCH (2026-09-04). `prefetch_stall_cycles` is the load-bearing
+  # one: the contract's double buffering is an ASSUMPTION that one meshlet of
+  # lookahead hides the fetch, and this counter is what turns it into a
+  # measurement instead. `refused_footprint` must never be silently zero --
+  # a refused meshlet emits no triangles, so a picture missing geometry has
+  # exactly one place to look.
+  - beats_read
+  - guard_denied
+  - refused_footprint
+  - prefetch_stall_cycles
+  - island_resident
+  - island_open_sky
+  - island_out_of_extent
+  - island_bad_pitch
+  - visible_examined
+  - visible_emitted
+  - visible_sky
+  - visible_out_of_extent
+  - visible_bad_pitch
+  - compcache_fill_records
+  - compcache_patches_filled
+  - compcache_patches_served
+  - compcache_fill_overrun
+  - compcache_lat_oob
+  - compcache_cs_oob
+  - pageloader_pages_loaded
+  - pageloader_pages_faulted
+  - pageloader_pages_refused
+  - pageloader_crc_fails
+  - pageloader_hdr_ident_fails
+  - pageloader_incomplete
+  - pageloader_guard_denied
+  - pageloader_bridge_errs
+  - pageloader_load_bytes
+  - seq_records_consumed
+  - seq_patches_issued
+  - seq_prefetch_resident
+  - seq_skipped_not_resident
+  - seq_claims_issued
+  - seq_claims_refused
+  - seq_claims_same
+  - seq_loads_issued
+  - seq_loads_deferred
+  - seq_writebacks_issued
+  - seq_compose_slots_used
+  - seq_pins_issued
+  - seq_drained
+  - seq_frame_faults
+  - writeback_sheets_written
+  - writeback_sheets_refused
+  - writeback_sheets_faulted
+  - writeback_hdr_ident_fails
+  - writeback_guard_denied
+  - writeback_bridge_errs
+  - writeback_acks_ok
+  - writeback_acks_nak
+  - writeback_acks_unmatched
+  - writeback_acks_after_epoch
+  - writeback_acks_overdue
+  - writeback_seq_conflicts
+  - writeback_wb_bytes
+  - writeback_outstanding_hwm
+  - writeback_ack_wait_max_cycles
+  - writeback_jobs_stall_cycles
+  - loadq_accepted
+  - loadq_issued
+  - loadq_drained
+  - loadq_refused
+  - loadq_level
+  - loadq_inflight
+  - loadq_high_water
+  - pagestream_lattices
+  - pagestream_refused
+  - pagestream_vertices
+  - pagestream_bursts
+  - pagestream_guard_denied
+  - pagestream_incomplete
+  - mipfeed_pages_mipped
+  - mipfeed_pages_faulted
+  - mipfeed_samples
+  - terraincmd_sets_accepted
+  - terraincmd_sets_refused
+  - terraincmd_records
+  - terraincmd_list_bytes
+  - terraincmd_crc_fails
+  - terraincmd_bridge_errs
+  # FORGE.PRIM.EVAL (2026-09-09) — the lightning evaluator. `primeval_refused_limit`
+  # is the owner's caps enforced (24 segments / 2 branches / 8 branch segments,
+  # refused not clamped); `primeval_sat_events` is the fx16 domain edge made
+  # visible; `primeval_walk_overrun` is a guard unreachable by legal stimulus,
+  # whose positive control is tests/mutants/zhao_forge_prim_eval_mutant.sv.
+  - primeval_jobs
+  - primeval_points
+  - primeval_vertices
+  - primeval_refused_limit
+  - primeval_skipped_view
+  - primeval_sat_events
+  - primeval_walk_overrun
+  # GEOM.PROJECT / TERRAIN.PROJECT (2026-09-10, owner ruling R1): configuration
+  # writes the shared projection core REFUSED because a matrix product word did
+  # not fit the signed MATW-bit multiplier operand (+-1.99998 at MATW=18).
+  # Refused and counted, never clamped -- a clamped cot(fov/2) is a plausible
+  # wrong picture with nothing to say so. Structurally zero at the default
+  # MATW=32; seen to fire at MATW=18 by tests/geometry/proj_matw_directed.cpp,
+  # and its ABSENCE shown by tests/mutants/zhao_project_core_mutant.sv.
+  - mat_refused
+  # Packet-B R9 material and typed AUX accounting. These names are catalog
+  # identities; counter_ports below binds them to exact leaf ports.
+  - combine_jobs_accepted
+  - combine_jobs_completed
+  - combine_saturated_add
+  - combine_saturated_mul2x
+  - combine_recipe_0
+  - combine_recipe_1
+  - combine_recipe_2
+  - combine_recipe_3
+  - combine_recipe_4
+  - combine_recipe_5
+  - combine_recipe_6
+  - combine_recipe_7
+  - combine_phases_issued
+  - combine_phases_completed
+  - aux_jobs_accepted
+  - aux_sheet_reads
+  - aux_local_refused
+  - aux_jobs_completed
+  - aux_degenerate
+  - aux_sheet_hits
+  - aux_sheet_misses
+  - aux_sheet_wrong_op
+  - aux_sheet_wrong_status
+  - aux_sheet_wrong_src
+  - aux_sheet_unsolicited
+  - aux_credit_faults
+  # TERRAIN.SHADE. Declared in the block's `counters` since the block was
+  # written and never added here, so V12 rejected all four -- and that rejection
+  # was INVISIBLE, because the schema stage fails before the rule stage runs and
+  # `tests.oracle` was failing the schema. All four are real ports on
+  # fpga/rtl/terrain/zhao_terrain_shade.sv with the default `<counter>_o`
+  # spelling, so none needs a counter_ports entry.
+  - triangles_shaded
+  - degenerate_count
+  - base_sat
+  - degen_mismatch
+  # ---- R19 (owner ruling, provisional, 2026-09-19, cmdmem packet) ----------
+  # "Give each emitter its own catalog id. No counter is shared across
+  # emitters." Twenty-five names were declared by more than one block; each
+  # keeps its CANONICAL owner (for the phase-2 set, the block whose RTL
+  # actually presents that id to DEBUG.COUNTERS) and every other emitter gets
+  # the id below, appended -- never inserted -- so no existing id moves.
+  # The block's own port is kept through `counter_ports`.
+  - cmd_dma_commands
+  - cmd_dma_hps_ddr_bytes_by_client
+  - cmd_dma_deadline_faults
+  - cmd_decoder_commands
+  - mem_sdram_vram_bytes_by_client
+  - mem_vram_arbiter_deadline_faults
+  - mem_guard_vram_bytes_by_client
+  - mem_guard_hps_ddr_bytes_by_client
+  - field_seq_earth_field_instructions_by_profile
+  - field_seq_earth_terrain_samples_evaluated
+  - field_seq_warp_field_instructions_by_profile
+  - field_seq_flow_field_instructions_by_profile
+  - field_seq_formation_field_instructions_by_profile
+  - field_seq_stamp_field_instructions_by_profile
+  - input_snac_input_sequence_gaps
+  - video_mode_scanout_starvation_cycles
+  - video_scanout_frame_cycles
+  - video_scaler_scanout_starvation_cycles
+  - video_framectl_frame_cycles
+  - video_framectl_deadline_faults
+  - measure_tokens_lod_representation_counts
+  - measure_tokens_triangles_culled
+  - measure_histogram_lod_representation_counts
+  - terrain_normalmap_terrain_samples_evaluated
+  - terrain_normals_terrain_samples_evaluated
+  - terrain_velocity_terrain_samples_evaluated
+  - terrain_bake_surface_texels_touched
+  - terrain_lod_lod_representation_counts
+  - terrain_lod_terrain_triangles_emitted
+  - terrain_project_terrain_triangles_emitted
+  - terrain_project_mat_refused
+  - surface_sheet_surface_texels_touched
+  - geom_meshfetch_triangles_culled
+  - geom_assetfetch_meshlets_fetched
+  - geom_pose_cache_hits
+  - geom_pose_cache_misses
+  - geom_skin_norm_vertices_transformed
+  - geom_warp_vertices_transformed
+  - geom_wcache_cache_hits
+  - geom_wcache_cache_misses
+  - geom_wcache_vertices_transformed
+  - geom_project_vertices_transformed
+  - geom_clip_triangles_submitted
+  - geom_binner_triangles_culled
+  - raster_tilestore_tile_references
+  - raster_earlyz_covered_fragments
+  - raster_fragment_covered_fragments
+  - raster_resolve_tile_references
+  - mosaic_picks
+  - part_state_hps_ddr_bytes_by_client
+  - part_update_polygon_particles
+  - part_update_soft_particles
+  - part_collide_polygon_particles
+  - part_collide_soft_particles
+  - part_spawn_polygon_particles
+  - part_ladder_lod_representation_counts
+  - part_ladder_polygon_particles
+  - part_ladder_soft_particles
+  - part_expand_polygon_particles
+  - forge_prim_triangles_submitted
+  - forge_cliff_triangles_submitted
+  - twod_plane_blended_fragments
+  - twod_sprite_blended_fragments
+  - sprite_texels
+  - post_gather_vram_bytes_by_client
+  - post_composite_covered_fragments
+  - post_composite_blended_fragments
+  - post_echo_vram_bytes_by_client
+  - debug_counters_frame_cycles
+  - debug_crc_tile_references
+  - debug_frameblit_hps_ddr_bytes_by_client
+  - debug_trace_commands
+  # GEOM.LOOM and GEOM.REPLAY (2026-09-19) declared these in `counters:` and
+  # they were never catalogued -- a V12 violation that never ran (the schema
+  # stage fails first). Catalogued under each emitter's own name (R19), with
+  # the ports they already had bound through `counter_ports`.
+  - geom_loom_nodes_transformed
+  - geom_replay_triangles_out
+  - geom_replay_refused
+  - geom_replay_missed
+  - geom_replay_att_skew
+  - geom_replay_profile_mixed
 blocks:
 
   # ===========================================================================
@@ -409,15 +497,15 @@ blocks:
       directed: tests/command/cmd_dma_directed.cpp
       random: tests/command/cmd_dma_directed.cpp
       formal: tests/formal/cmd_dma_crc_gate.sby
-    counters: [commands, hps_ddr_bytes_by_client, deadline_faults]
+    counters: [cmd_dma_commands, cmd_dma_hps_ddr_bytes_by_client, cmd_dma_deadline_faults]
     # D19c. These are the D9 SNAP-CHANNEL form (spec/counters.md 3): the
     # block owns the counter locally and presents it as a
     # zhao_counter_snap_t, so there is no <counter>_o port and there is
     # not meant to be one. The mapping is what makes that legible.
     counter_ports:
-      commands: snap_cmds_o
-      hps_ddr_bytes_by_client: snap_bytes_o
-      deadline_faults: snap_drops_o
+      cmd_dma_commands: snap_cmds_o
+      cmd_dma_hps_ddr_bytes_by_client: snap_bytes_o
+      cmd_dma_deadline_faults: snap_drops_o
     source_ids: true
     async_bridge: true
     budget_group: command_debug
@@ -466,7 +554,9 @@ blocks:
     tests:
       directed: tests/command/cmd_decoder_directed.cpp
       random: tests/command/cmd_decoder_directed.cpp
-    counters: [commands]
+    counters: [cmd_decoder_commands]
+    counter_ports:
+      cmd_decoder_commands: commands_o
     source_ids: true
     budget_group: command_debug
     maturity: UNIT_VERIFIED
@@ -573,7 +663,7 @@ blocks:
     tests:
       directed: tests/memory/sdram_directed.cpp
       random: tests/memory/mem_random.cpp
-    counters: [sdram_refresh_stalls, sdram_bank_conflicts, vram_bytes_by_client]
+    counters: [sdram_refresh_stalls, sdram_bank_conflicts, mem_sdram_vram_bytes_by_client]
     source_ids: true
     async_bridge: true
     budget_group: platform
@@ -621,7 +711,7 @@ blocks:
       directed: tests/memory/vram_arbiter_directed.cpp
       random: tests/memory/mem_random.cpp
       formal: tests/formal/mem_vram_arbiter_liveness.sby
-    counters: [vram_bytes_by_client, deadline_faults]
+    counters: [vram_bytes_by_client, mem_vram_arbiter_deadline_faults]
     source_ids: true
     budget_group: platform
     maturity: RTL_VERIFIED
@@ -846,7 +936,7 @@ blocks:
       directed: tests/memory/mem_guard_directed.cpp
       random: tests/memory/mem_guard_directed.cpp
       formal: tests/formal/mem_guard_no_escape.sby
-    counters: [vram_bytes_by_client, hps_ddr_bytes_by_client]
+    counters: [mem_guard_vram_bytes_by_client, mem_guard_hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: command_debug
     maturity: RTL_VERIFIED
@@ -996,7 +1086,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    counters: [field_instructions_by_profile, terrain_samples_evaluated]
+    counters: [field_seq_earth_field_instructions_by_profile, field_seq_earth_terrain_samples_evaluated]
     source_ids: true
     maturity: SPECIFIED
     maturity_log: []
@@ -1022,7 +1112,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    counters: [field_instructions_by_profile]
+    counters: [field_seq_warp_field_instructions_by_profile]
     source_ids: true
     maturity: SPECIFIED
     maturity_log: []
@@ -1048,7 +1138,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    counters: [field_instructions_by_profile]
+    counters: [field_seq_flow_field_instructions_by_profile]
     source_ids: true
     maturity: SPECIFIED
     maturity_log: []
@@ -1074,7 +1164,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    counters: [field_instructions_by_profile]
+    counters: [field_seq_formation_field_instructions_by_profile]
     source_ids: true
     maturity: SPECIFIED
     maturity_log: []
@@ -1100,7 +1190,7 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 Field IR instruction per clock
-    counters: [field_instructions_by_profile]
+    counters: [field_seq_stamp_field_instructions_by_profile]
     source_ids: true
     maturity: SPECIFIED
     maturity_log: []
@@ -1223,7 +1313,7 @@ blocks:
     tests:
       directed: tests/input/input_snac_directed.cpp
       random: tests/input/input_snac_random.cpp
-    counters: [input_sequence_gaps]
+    counters: [input_snac_input_sequence_gaps]
     source_ids: true
     async_bridge: true
     budget_group: platform
@@ -1328,7 +1418,7 @@ blocks:
     tests:
       directed: tests/video/video_mode_directed.cpp
       random: tests/video/video_mode_random.cpp
-    counters: [scanout_starvation_cycles]
+    counters: [video_mode_scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
     maturity: RTL_VERIFIED
@@ -1371,7 +1461,7 @@ blocks:
     tests:
       directed: tests/video/video_scanout_directed.cpp
       random: tests/video/video_scanout_random.cpp
-    counters: [scanout_starvation_cycles, frame_cycles]
+    counters: [scanout_starvation_cycles, video_scanout_frame_cycles]
     source_ids: true
     async_bridge: true
     budget_group: platform
@@ -1415,7 +1505,7 @@ blocks:
     tests:
       directed: tests/video/video_scaler_directed.cpp
       random: tests/video/video_scaler_random.cpp
-    counters: [scanout_starvation_cycles]
+    counters: [video_scaler_scanout_starvation_cycles]
     source_ids: true
     budget_group: platform
     maturity: RTL_VERIFIED
@@ -1504,7 +1594,7 @@ blocks:
     tests:
       directed: tests/video/video_framectl_directed.cpp
       random: tests/video/video_framectl_random.cpp
-    counters: [frame_cycles, deadline_faults]
+    counters: [video_framectl_frame_cycles, video_framectl_deadline_faults]
     source_ids: true
     async_bridge: true
     budget_group: platform
@@ -1625,7 +1715,9 @@ blocks:
       directed: tests/measure/measure_tokens_directed.cpp
       random: tests/measure/measure_tokens_random.cpp
       formal: tests/formal/measure_tokens_fairness.sby
-    counters: [lod_representation_counts, triangles_culled]
+    counters: [measure_tokens_lod_representation_counts, measure_tokens_triangles_culled]
+    counter_ports:
+      measure_tokens_triangles_culled: triangles_culled_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -1685,7 +1777,7 @@ blocks:
     tests:
       directed: tests/measure/measure_histogram_directed.cpp
       random: tests/measure/measure_histogram_random.cpp
-    counters: [lod_representation_counts]
+    counters: [measure_histogram_lod_representation_counts]
     source_ids: true
     budget_group: geometry_mantle
     maturity: SPECIFIED
@@ -2783,7 +2875,7 @@ blocks:
     tests:
       directed: tests/texture/terrain_normalmap_directed.cpp
       random: tests/texture/terrain_normalmap_directed.cpp
-    counters: [terrain_samples_evaluated]
+    counters: [terrain_normalmap_terrain_samples_evaluated]
     source_ids: true
     budget_group: geometry_mantle
     maturity: REFERENCE_COMPLETE
@@ -2846,7 +2938,9 @@ blocks:
     tests:
       directed: tests/terrain/terrain_normals_directed.cpp
       random: tests/terrain/terrain_normals_random.cpp
-    counters: [terrain_samples_evaluated]
+    counters: [terrain_normals_terrain_samples_evaluated]
+    counter_ports:
+      terrain_normals_terrain_samples_evaluated: terrain_samples_evaluated_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -2885,7 +2979,9 @@ blocks:
     tests:
       directed: tests/terrain/terrain_velocity_directed.cpp
       random: tests/terrain/terrain_velocity_random.cpp
-    counters: [terrain_samples_evaluated]
+    counters: [terrain_velocity_terrain_samples_evaluated]
+    counter_ports:
+      terrain_velocity_terrain_samples_evaluated: terrain_samples_evaluated_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -2940,7 +3036,9 @@ blocks:
     tests:
       directed: tests/terrain/terrain_bake_directed.cpp
       random: tests/terrain/terrain_bake_random.cpp
-    counters: [surface_texels_touched]
+    counters: [terrain_bake_surface_texels_touched]
+    counter_ports:
+      terrain_bake_surface_texels_touched: surface_texels_touched_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -2992,7 +3090,9 @@ blocks:
     tests:
       directed: tests/terrain/terrain_lod_directed.cpp
       random: tests/terrain/terrain_lod_random.cpp
-    counters: [lod_representation_counts, terrain_triangles_emitted]
+    counters: [terrain_lod_lod_representation_counts, terrain_lod_terrain_triangles_emitted]
+    counter_ports:
+      terrain_lod_terrain_triangles_emitted: terrain_triangles_emitted_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3031,7 +3131,10 @@ blocks:
     tests:
       directed: tests/terrain/terrain_project_directed.cpp
       random: tests/terrain/terrain_project_random.cpp
-    counters: [terrain_triangles_emitted, mat_refused]
+    counters: [terrain_project_terrain_triangles_emitted, terrain_project_mat_refused]
+    counter_ports:
+      terrain_project_mat_refused: mat_refused_o
+      terrain_project_terrain_triangles_emitted: terrain_triangles_emitted_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3094,7 +3197,9 @@ blocks:
     tests:
       directed: tests/surface/surface_sheet_store_diff.cpp
       random: tests/surface/surface_sheet_store_diff.cpp
-    counters: [surface_texels_touched]
+    counters: [surface_sheet_surface_texels_touched]
+    counter_ports:
+      surface_sheet_surface_texels_touched: surface_texels_touched_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3202,7 +3307,7 @@ blocks:
     tests:
       directed: tests/geometry/geom_meshfetch_directed.cpp
       random: tests/geometry/geom_meshfetch_random.cpp
-    counters: [meshlets_fetched, triangles_culled]
+    counters: [meshlets_fetched, geom_meshfetch_triangles_culled]
     source_ids: true
     budget_group: geometry_mantle
     maturity: REFERENCE_COMPLETE
@@ -3236,7 +3341,9 @@ blocks:
     tests:
       directed: tests/geometry/assetfetch_rtl_directed.cpp
       random: tests/geometry/assetfetch_directed.cpp
-    counters: [meshlets_fetched, beats_read, guard_denied, refused_footprint, prefetch_stall_cycles]
+    counters: [geom_assetfetch_meshlets_fetched, beats_read, guard_denied, refused_footprint, prefetch_stall_cycles]
+    counter_ports:
+      geom_assetfetch_meshlets_fetched: meshlets_fetched_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3305,7 +3412,7 @@ blocks:
     tests:
       directed: tests/geometry/creature_core.cpp
       random: tests/geometry/creature_core.cpp
-    counters: [cache_hits, cache_misses]
+    counters: [geom_pose_cache_hits, geom_pose_cache_misses]
     source_ids: true
     budget_group: geometry_mantle
     maturity: REFERENCE_COMPLETE
@@ -3346,7 +3453,7 @@ blocks:
     tests:
       directed: tests/geometry/skin_norm_rtl_directed.cpp
       random: tests/geometry/skin_norm_split_directed.cpp
-    counters: [vertices_transformed]
+    counters: [geom_skin_norm_vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3433,7 +3540,9 @@ blocks:
       directed: tests/geometry/geom_loom_directed.cpp
       random: tests/geometry/geom_loom_directed.cpp
       formal: "PLANNED -- NOT WRITTEN"
-    counters: [nodes_transformed]
+    counters: [geom_loom_nodes_transformed]
+    counter_ports:
+      geom_loom_nodes_transformed: nodes_transformed_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3515,7 +3624,7 @@ blocks:
     tests:
       directed: tests/geometry/geom_warp_directed.cpp
       random: tests/geometry/geom_warp_random.cpp
-    counters: [vertices_transformed]
+    counters: [geom_warp_vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
     maturity: SPECIFIED
@@ -3546,7 +3655,7 @@ blocks:
       directed: tests/geometry/geom_wcache_directed.cpp
       random: tests/geometry/geom_wcache_random.cpp
       formal: tests/formal/geom_wcache_arena_bounds.sby
-    counters: [cache_hits, cache_misses, vertices_transformed]
+    counters: [geom_wcache_cache_hits, geom_wcache_cache_misses, geom_wcache_vertices_transformed]
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3626,7 +3735,9 @@ blocks:
     tests:
       directed: tests/geometry/geom_project_directed.cpp
       random: tests/geometry/geom_project_directed.cpp
-    counters: [vertices_transformed, mat_refused]
+    counters: [geom_project_vertices_transformed, mat_refused]
+    counter_ports:
+      geom_project_vertices_transformed: vertices_transformed_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3680,7 +3791,9 @@ blocks:
     tests:
       directed: tests/geometry/geom_clip_directed.cpp
       random: tests/geometry/geom_clip_random.cpp
-    counters: [triangles_submitted, triangles_clipped, triangles_culled]
+    counters: [geom_clip_triangles_submitted, triangles_clipped, triangles_culled]
+    counter_ports:
+      geom_clip_triangles_submitted: triangles_submitted_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3808,7 +3921,13 @@ blocks:
     tests:
       directed: tests/geometry/geom_replay_directed.cpp
       random: tests/geometry/geom_replay_directed.cpp
-    counters: [triangles_out, refused, missed, att_skew, profile_mixed]
+    counters: [geom_replay_triangles_out, geom_replay_refused, geom_replay_missed, geom_replay_att_skew, geom_replay_profile_mixed]
+    counter_ports:
+      geom_replay_triangles_out: triangles_out_o
+      geom_replay_refused: refused_o
+      geom_replay_missed: missed_o
+      geom_replay_att_skew: att_skew_o
+      geom_replay_profile_mixed: profile_mixed_o
     source_ids: true
     budget_group: geometry_mantle
     maturity: UNIT_VERIFIED
@@ -3980,7 +4099,9 @@ blocks:
       directed: tests/geometry/geom_binner_directed.cpp
       random: tests/geometry/geom_binner_random.cpp
       formal: tests/formal/geom_binner_arena_bounds.sby
-    counters: [tile_references, max_tile_list_depth, triangles_culled]
+    counters: [tile_references, max_tile_list_depth, geom_binner_triangles_culled]
+    counter_ports:
+      geom_binner_triangles_culled: triangles_culled_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4023,7 +4144,9 @@ blocks:
     tests:
       directed: tests/raster/raster_tilestore_directed.cpp
       random: tests/raster/raster_tilestore_random.cpp
-    counters: [tile_references]
+    counters: [raster_tilestore_tile_references]
+    counter_ports:
+      raster_tilestore_tile_references: tile_references_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4103,7 +4226,9 @@ blocks:
     tests:
       directed: tests/raster/raster_earlyz_directed.cpp
       random: tests/raster/raster_earlyz_random.cpp
-    counters: [early_z_rejects, covered_fragments]
+    counters: [early_z_rejects, raster_earlyz_covered_fragments]
+    counter_ports:
+      raster_earlyz_covered_fragments: covered_fragments_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4142,7 +4267,9 @@ blocks:
     tests:
       directed: tests/raster/raster_fragment_directed.cpp
       random: tests/raster/raster_fragment_random.cpp
-    counters: [covered_fragments, blended_fragments]
+    counters: [raster_fragment_covered_fragments, blended_fragments]
+    counter_ports:
+      raster_fragment_covered_fragments: covered_fragments_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4189,7 +4316,9 @@ blocks:
     tests:
       directed: tests/raster/raster_resolve_directed.cpp
       random: tests/raster/raster_resolve_random.cpp
-    counters: [tile_references]
+    counters: [raster_resolve_tile_references]
+    counter_ports:
+      raster_resolve_tile_references: tile_references_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4660,7 +4789,9 @@ blocks:
     tests:
       directed: tests/texture/texture_mosaic_directed.cpp
       random: tests/texture/texture_mosaic_random.cpp
-    counters: [texture_samples]
+    counters: [mosaic_picks]
+    counter_ports:
+      mosaic_picks: texture_samples_o
     source_ids: true
     budget_group: tile
     maturity: UNIT_VERIFIED
@@ -4702,7 +4833,7 @@ blocks:
     tests:
       directed: tests/particles/part_state_directed.cpp
       random: tests/particles/part_state_random.cpp
-    counters: [polygon_particles, hps_ddr_bytes_by_client]
+    counters: [polygon_particles, part_state_hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: myriad_forge
     maturity: SPECIFIED
@@ -4732,7 +4863,7 @@ blocks:
     tests:
       directed: tests/particles/part_update_directed.cpp
       random: tests/particles/part_update_random.cpp
-    counters: [polygon_particles, soft_particles]
+    counters: [part_update_polygon_particles, part_update_soft_particles]
     source_ids: true
     budget_group: myriad_forge
     maturity: SPECIFIED
@@ -4762,7 +4893,7 @@ blocks:
     tests:
       directed: tests/particles/part_collide_directed.cpp
       random: tests/particles/part_collide_random.cpp
-    counters: [polygon_particles, soft_particles]
+    counters: [part_collide_polygon_particles, part_collide_soft_particles]
     source_ids: true
     budget_group: myriad_forge
     maturity: SPECIFIED
@@ -4792,7 +4923,7 @@ blocks:
     tests:
       directed: tests/particles/part_spawn_directed.cpp
       random: tests/particles/part_spawn_random.cpp
-    counters: [polygon_particles]
+    counters: [part_spawn_polygon_particles]
     source_ids: true
     budget_group: myriad_forge
     maturity: SPECIFIED
@@ -4822,7 +4953,7 @@ blocks:
     tests:
       directed: tests/particles/part_ladder_directed.cpp
       random: tests/particles/part_ladder_random.cpp
-    counters: [lod_representation_counts, polygon_particles, soft_particles]
+    counters: [part_ladder_lod_representation_counts, part_ladder_polygon_particles, part_ladder_soft_particles]
     source_ids: true
     budget_group: myriad_forge
     maturity: REFERENCE_COMPLETE
@@ -4856,7 +4987,9 @@ blocks:
     tests:
       directed: tests/particles/part_expand_directed.cpp
       random: tests/particles/part_expand_directed.cpp
-    counters: [polygon_particles]
+    counters: [part_expand_polygon_particles]
+    counter_ports:
+      part_expand_polygon_particles: polygon_particles_o
     source_ids: true
     budget_group: myriad_forge
     maturity: UNIT_VERIFIED
@@ -4977,7 +5110,7 @@ blocks:
     tests:
       directed: tests/forge/forge_prim_directed.cpp
       random: tests/forge/forge_prim_directed.cpp
-    counters: [triangles_submitted]
+    counters: [forge_prim_triangles_submitted]
     source_ids: true
     budget_group: myriad_forge
     maturity: UNIT_VERIFIED
@@ -5102,7 +5235,9 @@ blocks:
     tests:
       directed: tests/forge/forge_cliff_directed.cpp
       random: tests/forge/forge_cliff_random.cpp
-    counters: [triangles_submitted]
+    counters: [forge_cliff_triangles_submitted]
+    counter_ports:
+      forge_cliff_triangles_submitted: triangles_submitted_o
     source_ids: true
     budget_group: myriad_forge
     maturity: UNIT_VERIFIED
@@ -5144,7 +5279,7 @@ blocks:
     tests:
       directed: tests/compositor/twod_plane_directed.cpp
       random: tests/compositor/twod_plane_random.cpp
-    counters: [blended_fragments]
+    counters: [twod_plane_blended_fragments]
     source_ids: true
     budget_group: twod_post
     maturity: REFERENCE_COMPLETE
@@ -5178,7 +5313,7 @@ blocks:
     tests:
       directed: tests/compositor/twod_sprite_directed.cpp
       random: tests/compositor/twod_sprite_random.cpp
-    counters: [blended_fragments, texture_samples]
+    counters: [twod_sprite_blended_fragments, sprite_texels]
     source_ids: true
     budget_group: twod_post
     maturity: REFERENCE_COMPLETE
@@ -5216,7 +5351,7 @@ blocks:
     tests:
       directed: tests/compositor/post_gather_directed.cpp
       random: tests/compositor/post_gather_random.cpp
-    counters: [vram_bytes_by_client]
+    counters: [post_gather_vram_bytes_by_client]
     source_ids: true
     budget_group: twod_post
     maturity: REFERENCE_COMPLETE
@@ -5256,7 +5391,7 @@ blocks:
     tests:
       directed: tests/compositor/post_composite_directed.cpp
       random: tests/compositor/post_composite_random.cpp
-    counters: [covered_fragments, blended_fragments]
+    counters: [post_composite_covered_fragments, post_composite_blended_fragments]
     source_ids: true
     budget_group: twod_post
     maturity: SPECIFIED
@@ -5286,7 +5421,7 @@ blocks:
     tests:
       directed: tests/compositor/post_echo_directed.cpp
       random: tests/compositor/post_echo_directed.cpp
-    counters: [vram_bytes_by_client]
+    counters: [post_echo_vram_bytes_by_client]
     source_ids: true
     budget_group: twod_post
     maturity: UNIT_VERIFIED
@@ -5341,7 +5476,7 @@ blocks:
     tests:
       directed: tests/debug/debug_counters_directed.cpp
       random: tests/debug/debug_counters_directed.cpp
-    counters: [frame_cycles]
+    counters: [debug_counters_frame_cycles]
     source_ids: true
     budget_group: command_debug
     maturity: RTL_VERIFIED
@@ -5392,7 +5527,7 @@ blocks:
     tests:
       directed: tests/debug/debug_crc_directed.cpp
       random: tests/debug/debug_crc_directed.cpp
-    counters: [tile_references]
+    counters: [debug_crc_tile_references]
     source_ids: true
     # The block sits ON the video/GPU boundary by design: it consumes the
     # DISPLAYED stream in vid_clk and publishes the finalized frame CRC to
@@ -5468,7 +5603,7 @@ blocks:
     tests:
       directed: tests/debug/debug_frameblit_directed.cpp
       random: tests/debug/debug_frameblit_directed.cpp
-    counters: [hps_ddr_bytes_by_client]
+    counters: [debug_frameblit_hps_ddr_bytes_by_client]
     source_ids: true
     budget_group: command_debug
     maturity: RTL_VERIFIED
@@ -5527,7 +5662,7 @@ blocks:
     tests:
       directed: tests/debug/debug_trace_rtl_directed.cpp
       random: tests/debug/debug_trace_rtl_directed.cpp
-    counters: [commands]
+    counters: [debug_trace_commands]
     source_ids: true
     budget_group: command_debug
     maturity: UNIT_VERIFIED

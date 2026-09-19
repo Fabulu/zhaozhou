@@ -46,8 +46,8 @@ module arena {
   }
 
   presentation main_view {
-    view 0 from origin budget 80%;
-    shared budget 20%;
+    view 0 from origin budget geometry 80000 fragment 160000;
+    shared budget 2000;
     emit draw_population(pool: particles, view_mask: 1, weight: 100%);
     emit audio(sound: chime, at: origin);
   }

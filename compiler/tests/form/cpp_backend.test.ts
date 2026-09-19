@@ -143,8 +143,9 @@ test('C++17 emission is byte-stable, module-partitioned, and phase-flat', () => 
   const view = arenaSource.indexOf('ZHAO_OP_SET_VIEW');
   const draw = arenaSource.indexOf('ZHAO_OP_DRAW_POPULATION');
   assert.ok(contract >= 0 && contract < view && view < draw);
-  assert.match(arenaSource, /record\.payload\.geometry_tokens\[0u\] = 80u/);
-  assert.match(arenaSource, /record\.payload\.shared_tokens = 20u/);
+  assert.match(arenaSource, /record\.payload\.geometry_tokens\[0u\] = 80000u/);  // COUNTS, as authored (R33)
+  assert.match(arenaSource, /record\.payload\.fragment_tokens\[0u\] = 160000u/);
+  assert.match(arenaSource, /record\.payload\.shared_tokens = 2000u/);
   assert.match(arenaSource, /view_projection\.m03 = fx16_sub\(0, fx16_from_fx24\(_view_camera_0\.x\)\)/);
   const game = byPath(first, 'form_game.hpp');
   assert.match(game, /struct FormState \{/);
@@ -405,7 +406,7 @@ test('transient resource allocator rejects duplicate sites and bounded-index exh
   const PAGE: u32 = 3;
   global camera: world3 = world3 { x = 0w, y = 0w, z = 0w };
   presentation showcase {
-    view 0 from camera budget 100%;
+    view 0 from camera budget geometry 100000 fragment 200000;
     emit draw_form(form: PAGE, transform: camera, view_mask: 1, weight: 100%);
     emit draw_form(form: PAGE, transform: camera, view_mask: 1, weight: 100%);
   }
@@ -464,7 +465,7 @@ test('native authored-resource table publishes page IDs 1 and 16777217 separatel
   const HIGH: u32 = 16777217;
   global camera: world3 = world3 { x = 0w, y = 0w, z = 0w };
   presentation showcase {
-    view 0 from camera budget 100%;
+    view 0 from camera budget geometry 100000 fragment 200000;
     emit draw_form(form: LOW, transform: camera, view_mask: 1, weight: 100%);
     emit draw_form(form: HIGH, transform: camera, view_mask: 1, weight: 100%);
   }
@@ -959,8 +960,8 @@ test('WinLibs decodes every presentation record and renders visible generated re
     pan -123;
   }
   presentation main {
-    view 0 from camera budget 90%;
-    shared budget 10%;
+    view 0 from camera budget geometry 90000 fragment 180000;
+    shared budget 1000;
     emit draw_form(form: FORM_PAGE, transform: authored, view_mask: 1, weight: 100%);
     emit draw_population(pool: motes, view_mask: 1, weight: 80%);
     emit draw_procedural(patch: PATCH_PAGE, transform: authored, screen_error: 0.5m);
@@ -1169,9 +1170,9 @@ test('module 0 and 256 presentation sites retain distinct persistent resources',
   global camera: world3 = world3 { x = 0w, y = 0w, z = 0w };
   global authored: world3 = world3 { x = ${module === 0 ? '-1w' : '1w'}, y = 0w, z = 1w };
   presentation showcase {
-    view 0 from camera budget 45%;
-    view 1 from camera budget 45%;
-    shared budget 10%;
+    view 0 from camera budget geometry 45000 fragment 90000;
+    view 1 from camera budget geometry 45000 fragment 90000;
+    shared budget 1000;
     emit draw_form(form: FORM_PAGE, transform: authored, view_mask: 3, weight: 100%);
     emit surface_stamp(brush: BRUSH_PAGE, at: authored, radius: 2m, ring_width: 0.5m,
                        tag: ${module === 0 ? 17 : 29}, strength: 80%);
@@ -1617,7 +1618,7 @@ test('native scenario driver consumes all seven explicit TestZIR operation kinds
   global origin: world3 = world3 { x = 1w, y = 2w, z = 3w };
   global counter: u32 = 0;
   system step every 1 ticks reads counter writes counter { counter = counter + 1; }
-  presentation limits { view 0 from origin budget 100%; }
+  presentation limits { view 0 from origin budget geometry 100000 fragment 200000; }
   scenario all_operations {
     seed 42;
     load scenario_ops;
@@ -1821,5 +1822,5 @@ int main() {
 }
 `);
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
-  assert.equal(run.stdout.replaceAll('\r', ''), 'd981e8e2 65c1abfe 07e322c7\n');
+  assert.equal(run.stdout.replaceAll('\r', ''), '45e82ced 65c1abfe 07e322c7\n');
 });

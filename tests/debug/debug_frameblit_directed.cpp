@@ -140,6 +140,11 @@ constexpr uint32_t kFbSlotBase[2] = {0x00000000u, 0x02000000u};
 struct Inject {
   uint32_t lease_lost_after = UINT32_MAX;
   uint32_t bridge_err_after = UINT32_MAX;
+  // The bridge REFUSES the request for the burst at this offset the way the
+  // real `zhao_hps_bridge` does: `err` on the request, NO grant, nothing
+  // issued. (`bridge_err_after` injects an err inside a granted burst, which
+  // that bridge never sends.)
+  uint32_t bridge_refuse_after = UINT32_MAX;
   uint32_t guard_deny_after = UINT32_MAX;
   bool regrant_lease = false;  // drop and re-issue with a NEW generation
   uint32_t stall_writes = 0;   // hold wready low every Nth beat (0 = never)
@@ -191,6 +196,7 @@ struct Observed {
   // whole transaction -- and would have accepted a second request on top of
   // the one it was running -- passed every check.
   bool ready_while_busy = false;
+  uint32_t reoffers_after_refusal = 0;  // requests offered after the bridge refused one
 
   // Identity carried by whichever terminal event fired.
   uint8_t publish_slot = 0xFF;
@@ -270,6 +276,7 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
   uint32_t hold_left = 0;
   bool hold_armed = false;
   uint32_t grant_wait = 0;
+  bool refused = false;
   uint32_t guard_wait_ctr = 0;
   bool lease_lost_seen = false;
 
@@ -327,6 +334,16 @@ Observed run(Vzhao_debug_frameblit& dut, const zd::BlitRequest& req, const zd::L
       } else {
         ++burst_beat;
       }
+    } else if (hps_req_valid(dut.hps_req_o) &&
+               (refused ||
+                (inj.bridge_refuse_after != UINT32_MAX && bytes_read >= inj.bridge_refuse_after))) {
+      if (refused) {
+        ++obs.reoffers_after_refusal;
+      } else {
+        set_hps_rsp(dut.hps_rsp_i, false, 0, true, true);  // err|last, no beat
+        refused = true;
+      }
+      dut.hps_req_grant_i = 0;
     } else if (hps_req_valid(dut.hps_req_o)) {
       // The bridge has ONE request-acceptance pulse and the block must wait for
       // it. Previously this harness armed the burst the instant it saw a valid
@@ -819,6 +836,24 @@ int main() {
     check(got.status == static_cast<uint8_t>(zd::BlitStatus::kBridgeErr),
           "an HPS bridge error aborts the transaction",
           static_cast<uint8_t>(zd::BlitStatus::kBridgeErr), got.status);
+    check(!got.published, "and nothing is published", 0, got.published ? 1 : 0);
+  }
+
+  // ---- 7b. S1: the bridge REFUSES a request (err, no grant) ---------------
+  // The block used to watch for `err` only in B_READ_CHUNK, which a refusal
+  // never reaches, so B_READ_REQUEST went on holding the request -- and behind
+  // `zhao_hps_arbiter_n` a held request is re-served and refused forever.
+  for (uint32_t at : {0u, canvas / 3}) {
+    Inject inj;
+    inj.bridge_refuse_after = at;
+    inj.max_cycles = 200000;
+    const Observed got = run(dut, req, lease, src, inj);
+    check(got.done, "a refused HPS request ENDS the blit", 1, got.done ? 1 : 0);
+    check(got.reoffers_after_refusal == 0, "and the refused request is not offered again", 0,
+          got.reoffers_after_refusal);
+    check(got.status == static_cast<uint8_t>(zd::BlitStatus::kBridgeErr),
+          "and it reports the bridge error", static_cast<uint8_t>(zd::BlitStatus::kBridgeErr),
+          got.status);
     check(!got.published, "and nothing is published", 0, got.published ? 1 : 0);
   }
 

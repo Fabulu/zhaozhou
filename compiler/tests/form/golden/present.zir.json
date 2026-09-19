@@ -5,27 +5,26 @@
    "contractRecordBytes": 48,
    "module": 0,
    "presentation": "main_view",
-   "sharedBudgetPct": 20,
+   "sharedTokens": 2000,
    "views": [
     {
-     "budgetPct": 80,
      "camera": {
       "ast": {
        "kind": "ident",
        "name": "origin",
        "span": {
-        "end": 1039,
+        "end": 1087,
         "file": "a_arena.form",
-        "start": 1033
+        "start": 1081
        }
       },
       "children": [],
       "poolColumn": null,
       "rngSlot": null,
       "span": {
-       "end": 1039,
+       "end": 1087,
        "file": "a_arena.form",
-       "start": 1033
+       "start": 1081
       },
       "symbol": {
        "kind": "global",
@@ -36,6 +35,8 @@
        "t": "world3"
       }
      },
+     "fragmentTokens": 160000,
+     "geometryTokens": 80000,
      "id": 0,
      "recordBytes": 96
     }
@@ -50,27 +51,27 @@
      {
       "name": "pool",
       "span": {
-       "end": 1104,
+       "end": 1182,
        "file": "a_arena.form",
-       "start": 1100
+       "start": 1178
       },
       "value": {
        "ast": {
         "kind": "ident",
         "name": "particles",
         "span": {
-         "end": 1115,
+         "end": 1193,
          "file": "a_arena.form",
-         "start": 1106
+         "start": 1184
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 1115,
+        "end": 1193,
         "file": "a_arena.form",
-        "start": 1106
+        "start": 1184
        },
        "symbol": {
         "kind": "pool",
@@ -87,9 +88,9 @@
      {
       "name": "view_mask",
       "span": {
-       "end": 1126,
+       "end": 1204,
        "file": "a_arena.form",
-       "start": 1117
+       "start": 1195
       },
       "value": {
        "ast": {
@@ -97,9 +98,9 @@
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 1129,
+         "end": 1207,
          "file": "a_arena.form",
-         "start": 1128
+         "start": 1206
         },
         "text": "1"
        },
@@ -107,9 +108,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 1129,
+        "end": 1207,
         "file": "a_arena.form",
-        "start": 1128
+        "start": 1206
        },
        "symbol": null,
        "type": {
@@ -120,9 +121,9 @@
      {
       "name": "weight",
       "span": {
-       "end": 1137,
+       "end": 1215,
        "file": "a_arena.form",
-       "start": 1131
+       "start": 1209
       },
       "value": {
        "ast": {
@@ -134,9 +135,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 1143,
+         "end": 1221,
          "file": "a_arena.form",
-         "start": 1139
+         "start": 1217
         },
         "text": "100%"
        },
@@ -144,9 +145,9 @@
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 1143,
+        "end": 1221,
         "file": "a_arena.form",
-        "start": 1139
+        "start": 1217
        },
        "symbol": null,
        "type": {
@@ -159,9 +160,9 @@
     "kind": "emit",
     "sourceId": 2415919108,
     "span": {
-     "end": 1145,
+     "end": 1223,
      "file": "a_arena.form",
-     "start": 1079
+     "start": 1157
     }
    },
    "module": 0,
@@ -175,27 +176,27 @@
      {
       "name": "sound",
       "span": {
-       "end": 1166,
+       "end": 1245,
        "file": "a_arena.form",
-       "start": 1161
+       "start": 1240
       },
       "value": {
        "ast": {
         "kind": "ident",
         "name": "chime",
         "span": {
-         "end": 1173,
+         "end": 1252,
          "file": "a_arena.form",
-         "start": 1168
+         "start": 1247
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 1173,
+        "end": 1252,
         "file": "a_arena.form",
-        "start": 1168
+        "start": 1247
        },
        "symbol": {
         "kind": "sound",
@@ -210,27 +211,27 @@
      {
       "name": "at",
       "span": {
-       "end": 1177,
+       "end": 1256,
        "file": "a_arena.form",
-       "start": 1175
+       "start": 1254
       },
       "value": {
        "ast": {
         "kind": "ident",
         "name": "origin",
         "span": {
-         "end": 1185,
+         "end": 1264,
          "file": "a_arena.form",
-         "start": 1179
+         "start": 1258
         }
        },
        "children": [],
        "poolColumn": null,
        "rngSlot": null,
        "span": {
-        "end": 1185,
+        "end": 1264,
         "file": "a_arena.form",
-        "start": 1179
+        "start": 1258
        },
        "symbol": {
         "kind": "global",
@@ -247,9 +248,9 @@
     "kind": "emit",
     "sourceId": 2415919109,
     "span": {
-     "end": 1187,
+     "end": 1266,
      "file": "a_arena.form",
-     "start": 1150
+     "start": 1229
     }
    },
    "module": 0,

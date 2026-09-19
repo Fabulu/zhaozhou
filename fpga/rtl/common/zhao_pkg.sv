@@ -500,6 +500,15 @@ package zhao_pkg;
   localparam logic [15:0] ZHAO_CNT_AUDIO_UNDERRUNS = 16'd31; // audio_underruns
   localparam logic [15:0] ZHAO_CNT_INPUT_SEQ_GAPS  = 16'd35; // input_sequence_gaps
   localparam logic [15:0] ZHAO_CNT_RUMBLE_DROPPED  = 16'd36; // rumble_frames_dropped
+  // Owner ruling R19 (2026-09-19): no counter id is shared across emitters.
+  // CMD.DMA presented its three snapshots under CMD.SCHEDULER's `commands` and
+  // `deadline_faults` ids and MEM.HPS.BRIDGE's `hps_ddr_bytes_by_client` id, so
+  // any bank that captured both providers would have held two different values
+  // under one id. Its own ids, appended to the catalog; every value here is
+  // checked against design/blocks.yml by tools/design/check_counter_ids.py.
+  localparam logic [15:0] ZHAO_CNT_CMD_DMA_COMMANDS  = 16'd198; // cmd_dma_commands
+  localparam logic [15:0] ZHAO_CNT_CMD_DMA_HPS_BYTES = 16'd199; // cmd_dma_hps_ddr_bytes_by_client
+  localparam logic [15:0] ZHAO_CNT_CMD_DMA_DROPS     = 16'd200; // cmd_dma_deadline_faults
   /* verilator lint_on UNUSEDPARAM */
 
 endpackage : zhao_pkg
