@@ -377,6 +377,45 @@ noticed had been told to look away.
 * When you add an ignore rule, ask what will now delete the thing. If the
   answer is nothing, you have moved the problem rather than fixed it.
 
+## ONLY THE LATEST VERSION GETS COMPOSED OR FITTED
+
+Fabian, 2026-09-19: *"YOU ONLY GET TO FIT THE LATEST VERSION. IF IT IS BROKEN
+YOU FIX IT."*
+
+Said after the console was found composing the **entire v1 FIELD datapath** --
+alu, seq, ring, rot, noise, mul, len, normalize -- while all fourteen
+`zhao_field_v3_*` modules sat outside the closure.
+
+This is not tidiness. Fitting an old version **measures a machine nobody ships**:
+it spends ALM and DSP on dead weight and makes the resource number describe the
+wrong design. On a device already over on both, that is the most expensive kind
+of wrong number, because it is wrong in a direction nobody questions -- a big
+number looks like honest bad news.
+
+**"It is broken so I composed the old one" is not an answer.** Repairing the
+current version IS the task. Falling back is a decision to ship the old thing,
+and it must not be made quietly inside a packet.
+
+Two traps that made this easy to do by accident:
+
+* **The naming is not consistent, so eyeballing fails.** This tree supersedes
+  both ways -- `zhao_texture_cache_pipe_v2` by SUFFIX, `zhao_field_v3_len` by
+  INFIX. A grep for `_v2$` finds half of it.
+* **The completion register pointed at the old ones.** `FIELD.SEQ.CORE`
+  resolved to `zhao_field_v2_core`, `FIELD.PROGCACHE` to the unversioned block,
+  and nothing named v3 at all -- so "connected" was satisfiable by wiring the
+  superseded module, and the instrument said fine.
+
+`completion_register.py:superseded_in_closure()` now reports every INSTANTIATED
+module for which a higher-versioned sibling exists on disk, in both naming
+shapes. Instantiated, not merely listed: a module nothing elaborates costs the
+fitter nothing, and a check that cries wolf about dead sources is one people
+learn to skip.
+
+It found two nobody was looking for, outside FIELD entirely:
+`zhao_geom_binner` against `zhao_geom_binner_v2`, and `zhao_raster_tile_pipe`
+against `zhao_raster_tile_pipe_v2`. **The ruling is general; check for it
+whenever you compose anything.**
 ## Fit at SUBSYSTEM BOUNDARIES, not after every nodule
 
 Fabian, 2026-09-08: *"fits are what's going to be the biggest blocker, they
