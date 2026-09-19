@@ -1,7 +1,7 @@
 # Manafold Pass 17 final targeted integration
 
 **Date:** 2026-09-19
-**Status:** **HISTORICAL TARGETED PASS — exact-bank batch 02 later exposed P3; see `PASS17-DEATH-DROP-EFFECT-REPAIR.md`**
+**Status:** **HISTORICAL TARGETED PASS — exact-bank review later exposed P3 Death opacity and P4 Trick identity; see focused repair reports**
 **Source base:** `31949deae836eb29a1add75da09f00dd6b09fc3e` plus the exact declared 12-path Pass-17 source packet
 **Environment:** `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`
 
@@ -146,7 +146,7 @@ Same-binary comparison controls add 6,772 validated contiguous frames across eye
 
 Seven reduced master sheets include every presentation frame of all 33 subjects. Native, 2× and exact 4× plates decide the named art questions.
 
-- **Trick:** PASS. The pure-X path approaches, plants, holds and recovers continuously. Both face-side eye forms remain available through the planted phrase; the antenna remains the visible support and the declared contact is intact. The same final binary's legacy Z/yaw control restores the broad rear-mass read.
+- **Trick (historical false acceptance):** the pure-X path kept contact and smooth mechanics, but the reduced targeted sheets did not expose that both eye plates remained edge-on through the hold. Exact-bank 4x review later rejected f0140–f0295. `PASS17-TRICK-FACE-REPAIR.md` supersedes this visual verdict with a planted +90-degree local face yaw.
 - **Taunt III:** PASS. The four crown arrivals read as deliberate rankings, not twitching. The held f0304–f0344 picture keeps both eyes, open O and persistent lightning readable. `1450/750 pm` gives an unmistakable large/small side-eye; A80 retains the selected stronger read. Legacy yaw/roll hides the face again. F/A/B/C/E mutes each change its named visible crown section, with attached F/End deliberately subtler.
 - **Curious / Startle / Taunt eyes:** PASS. Curious's `1250/820`, Startle's synchronized `1350/1350`, and Taunt's `1350/800` changes read at native resolution. Both-muted frames remove size acting without removing gaze/blink/roll; L/R controls isolate the named lens/star unit. No white/cyan child detachment or splinter regression appears.
 - **Carrier motion / signed spans:** PASS. Damage, Startle, crown reversals, deaths, Hover/Rest, Taunt/Taunt II and Lasso move continuously at every frame. A/B/C retain large independent travel and full ordering freedom; no C–End buckle, pinch, sliding socket or buried-tip exposure returns.
@@ -207,4 +207,4 @@ Do not cite or stage as current acceptance:
 
 ## Disposition
 
-**Historical targeted verdict: PASS for the pre-P3 packet.** The later exact bank exposed Death Drop's untraced soft-opaque alpha cutoff, so this renderer and its 15-control effect receipt are not final. `PASS17-DEATH-DROP-EFFECT-REPAIR.md` closes the focused source/gate/picture defect with a sixteenth control. Commit and independently review that repair, then rebuild the complete matrix and exact 28-subject bank before encoding.
+**Historical targeted verdict: PASS for the pre-P3/P4 packet.** The later exact banks exposed Death Drop's untraced soft-opaque alpha cutoff and Trick's still-edge-on planted eyes, so this renderer is not a final receipt. `PASS17-DEATH-DROP-EFFECT-REPAIR.md` and `PASS17-TRICK-FACE-REPAIR.md` close the focused source/gate/picture defects. Their source must be committed and one new exact 28-subject bank reviewed before encoding.

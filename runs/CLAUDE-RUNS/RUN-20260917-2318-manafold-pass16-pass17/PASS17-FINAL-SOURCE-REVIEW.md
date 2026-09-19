@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-19
 **Scope:** every current uncommitted production/gate/build change atop pushed `e150a384` / `31949dea`
-**Verdict:** **REOPENED/CORRECTED — P1/P2 remain closed; final-bank review found and the focused lane repaired P3. One new clean combined bank is required.**
+**Verdict:** **REOPENED/CORRECTED — P1/P2/P3 remain closed; exact-bank review exposed and the focused lane repaired P4 Trick identity. One new exact bank is required.**
 
 ## Findings
 
@@ -69,13 +69,40 @@ old 450-frame output and cutoff. Normal/new control are `0/1`, all sixteen effec
 controls remain attributed, and complete repaired Death Drop/Death Gutter sheets
 pass. See `PASS17-DEATH-DROP-EFFECT-REPAIR.md`.
 
+### P4 — pure X preserved contact but not the rendered face
+
+**Files:** `tools/reel/manafold_art.h`; `tools/reel/manafold_clips.h`;
+`tools/reel/zhao_reel.cpp`
+
+The repaired exact bank reached 27/28 before Batch 07 rejected Trick. Pure X
+preserved the nominal +X axis, contact and smooth righting, but the two radial
+camera-relative eye plates still projected edge-on from roughly f0140 through
+f0295. Reduced targeted sheets had produced a false visual acceptance.
+
+**Resolution (2026-09-19):** keep the pure-X contact half-turn and add a separate
+named planted local face yaw through the same continuous flip envelope. A complete
+`-12288..+16384` ladder selected `+16384` (+90 degrees) by eye: both almond lenses
+and stars face the fixed camera while the antenna remains the visible support.
+Yaw zero restores the exact rejected Trick CRC `0x58219E79`; legacy Z remains a
+second control. Selected CRC is `0x0BB73CDE`. Contact stays `-40 mm` inside the
+unchanged `-60..-5 mm` band, all protected gates pass, all 16 effect controls
+remain attributed, strict selector invalids are 5/5 RC 2, and a one-process bank
+proves all 27 non-Trick subjects / 11,192 frames byte-identical. See
+`PASS17-TRICK-FACE-REPAIR.md`.
+
+P4's exact source commit manifest is three paths:
+
+1. `tools/reel/manafold_art.h`
+2. `tools/reel/manafold_clips.h`
+3. `tools/reel/zhao_reel.cpp`
+
 ## Combined-source checks that survived review
 
 No additional source defect was found in these areas:
 
 - 23-bone signed spans, staged fractions, A80 budget, shared held/public carrier metric and anchored F/End semantics;
 - crown target separation, C2 interpolation, public mute path, body/eye parenting and strict renderer/checker selectors;
-- pure-X Trick composition and front-held Taunt III source controls;
+- pure-X Trick contact plus selected planted-face yaw, and front-held Taunt III source controls;
 - saturating deform representation and deliberate wrap mutant;
 - signed high-precision MVC weights, exact affine normalization and wrapped-weight control;
 - clip-periodic free/fold path clocks, actual final-shape release and narrow same-shape reversal exemption;

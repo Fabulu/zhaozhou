@@ -1,17 +1,19 @@
 # Manafold Pass 17 exact final-bank integrity v2
 
 **Date:** 2026-09-19
-**Status:** **PASS — repaired exact raw bank and every-frame sheets are complete**
+**Status:** **HISTORICAL INTEGRITY PASS — Batch 07 later rejected Trick identity; see `PASS17-TRICK-FACE-REPAIR.md`**
 **Tracked HEAD:** `59c5fc0a7bd019cfc384c22f4be1085a9d1b458d`
 **Accepted source commit:** `bd6135a42ad853a07fbdde14ea4bbe661533e489`
 **Branch:** `manafold-pass17`
 **Environment:** `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`
 
-This is the sole current shipping-bank integrity receipt. Renderer
+This is the integrity receipt for the second rejected shipping candidate. Renderer
+`6FD6147B43056E823F0487F9DFBB40BA` and manifest `7dbc84e2...` are historical:
+Batch 07 found Trick's eyes still edge-on through the planted phrase. Renderer
 `3390F2B8214473FEBFA32092A98E9056`, bank manifest `560c1237...`,
-`pass17-final-reel-28` and its sheets are permanently rejected because exact
+`pass17-final-reel-28` and its sheets are separately rejected because exact
 visual review found Death Drop's soft-opaque backing cutting off at f0234.
-They remain historical failure evidence only.
+Both banks remain historical failure evidence only.
 
 ## Exact build and invocation
 
@@ -107,8 +109,7 @@ source frame.
 
 ## Next gate
 
-1. Transfer batch 01 only through the exact 26-subject equality receipt.
-2. Freshly review every frame of repaired Death Drop and Death Gutter; Damage
-   and Drift transfer through exact equality.
-3. Run fresh isolated batches 03-07 from the v2 sheets.
-4. Only a current-bank 28/28 by-eye PASS may release these frames to encoding.
+1. Historical review reached 27/28: the repaired deaths and every non-Trick subject passed.
+2. Commit the focused Trick face repair, then build one new exact renderer/bank.
+3. Prove all 27 non-Trick subjects byte-identical and freshly review all 400 Trick frames.
+4. Only that current-bank 28/28 by-eye PASS may release frames to encoding.

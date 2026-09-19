@@ -6,16 +6,14 @@
 
 ## Verdict
 
-**Historical verdict:** **PASS for the selected art/source packet.** The later final integrated contact and frozen-checker acceptance is green in `PASS17-FINAL-TARGETED-INTEGRATION.md`.
-
-No correctness defect survived review. The source values, same-binary controls, comments and two implementation reports agree. The selected full-frame and focused plates support the stated art decisions without relying on diagnostic-only behavior.
+**Historical verdict:** Taunt III survived final-bank review, but the original pure-X/yaw-zero Trick selection did not. Exact-bank 4x review found both eye plates edge-on through the planted phrase. `PASS17-TRICK-FACE-REPAIR.md` supersedes only the Trick art verdict; the source/control review remains provenance.
 
 ## Trick
 
-- `manafold_art.h` selects pure X (`kTrickFlipXA16=-32768`, `kTrickFlipZA16=0`) and preserves the exact rejected Z-axis control (`0/-32768`). Shipping show-off yaw is `0`; legacy yaw `3000` remains separately selectable.
-- `build_trick()` composes the selected X/Z path only through the existing root flip envelope. Plant keys `78..148`, root-height/contact curve, balance wobble, antenna flex, righting, overshoot and recovery are unchanged.
-- Pure X keeps the face axis present through the plant. The fixed native comparison rejects legacy Z's rear mass and the mixed candidate's side-tumble read. Complete selected contact sheets show a continuous approach, planted hold and recovery rather than a camera concealment or cut.
-- `ZHAO_U02_TRICK_FLIP_X_A16`, `..._Z_A16` and `...SHOWOFF_YAW_A16` use strict full-string signed parsing, reject malformed/trailing/out-of-range values with RC 2, and default to the selected shipping constants before `u02::type()` construction. No diagnostic selector leaks into unset shipping behavior.
+- `manafold_art.h` retains pure X (`kTrickFlipXA16=-32768`, `kTrickFlipZA16=0`) for contact and preserves the rejected Z-axis control (`0/-32768`). Exact-bank review disproved the old claim that pure X alone kept the rendered face.
+- `build_trick()` now composes a separate `kTrickFaceYawA16=16384` through the existing flip envelope. The +90-degree local yaw changes the planted viewing azimuth continuously without moving the camera or changing plant keys `78..148`, root height/contact, balance wobble, antenna flex, righting, overshoot or recovery.
+- Complete 400-frame `-12288..+16384` yaw ladders select +16384 by eye. Both complete lenses/stars and the antenna support read from plant arrival through the hold; yaw zero restores the exact rejected bank output and legacy Z remains the earlier rear-mass control.
+- `ZHAO_U02_TRICK_FACE_YAW_A16` joins the X/Z/show-off selectors with strict full-string signed parsing. Five malformed/trailing/overflow/out-of-range/leading-space cases return RC 2, and unset uses the selected shipping constant before `u02::type()` construction.
 
 ## Taunt III
 
@@ -28,15 +26,16 @@ No correctness defect survived review. The source values, same-binary controls, 
 
 ## Evidence reviewed
 
-- `PASS17-TRICK-AXIS-WITNESSES-NATIVE-3COL.png`
-- `PASS17-TRICK-SELECTED-ALLFRAMES.png`
-- `PASS17-TRICK-SELECTED-FACE-4X.png`
+- `PASS17-TRICK-AXIS-WITNESSES-NATIVE-3COL.png` (historical ladder)
+- `PASS17-TRICK-SELECTED-ALLFRAMES.png` (rejected yaw-zero selection)
+- `PASS17-TRICK-SELECTED-FACE-4X.png` (rejected yaw-zero selection)
+- current `PASS17-TRICK-FACE-REPAIR-*` ladder/selected/control plates
 - `PASS17-TAUNT3-ORIENTATION-WITNESSES-NATIVE-3COL.png`
 - `PASS17-TAUNT3-SELECTED-ALLFRAMES.png`
 - `PASS17-TAUNT3-SELECTED-FACE-4X.png`
 - `PASS17-TAUNT3-EYE-MUTES-NATIVE.png`
 - `PASS17-TAUNT3-JOINT-MUTES-NATIVE.png`
 
-## Required final integration (not a defect in this packet)
+## Current integration boundary
 
-After the active checker source freezes, one clean integrated renderer must re-run Trick contact/clearance, `mspan` held-punchline attribution, `msmooth`, eye/public-joint/outline gates, invalid selector controls and exact selected-vs-legacy frames. The art-generation hash above must not be cited as the final Pass-17 bank generation.
+The focused Trick correction passes unchanged contact/clearance, `mqa`, `mspan`, `meyesize`, `msmooth` normal plus all 16 controls and strict selector tests. A one-process isolation bank keeps all 27 non-Trick subjects byte-identical. A new exact canonical bank and fresh 400-frame Trick verdict remain before encode; the historical art-generation hash above and both rejected bank hashes must not be cited as final.
