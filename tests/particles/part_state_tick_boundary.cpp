@@ -389,6 +389,58 @@ int main(int argc, char** argv) {
         "refused for all of it)",
         1, static_cast<uint64_t>(boundary_refusals));
 
+  // ---- SEVERAL RECORDS IN FLIGHT BELOW THIS BLOCK ------------------------------
+  // Added 2026-09-19 with `out_q`. Every case above returns a verdict while the
+  // NEXT record is being offered, i.e. at most one record in flight below
+  // PART.STATE -- the one depth at which the old exit ("a verdict taken after
+  // the last hand-off") happened to be right. Here ALL records are handed off
+  // first and the verdicts come back afterwards, one per cycle, the way a
+  // deeper UPDATE -> ... -> COLLIDE pipeline returns them. The survivor pass
+  // must take every one of them in THIS tick.
+  {
+    d.reset();
+    Vzhao_part_state& r = *d.v;
+    const int n = kSurvivors;
+    const uint32_t v0 = r.survivors_o;
+    r.tick_start_i = 1;
+    d.tick();
+    r.tick_start_i = 0;
+    int fed = 0, handed = 0, judged = 0;
+    bool done = false, done_before_all_judged = false;
+    for (int c = 0; c < 200 && !done; ++c) {
+      d.idle();
+      if (fed < n) {
+        r.rd_valid_i = 1;
+        r.rd_last_i = (fed == n - 1);
+        d.set_rec(r.rd_record_i, survivor(fed));
+      }
+      // Verdicts only once EVERY record has been handed off.
+      if (handed == n && judged < n) {
+        r.vrd_valid_i = 1;
+        r.vrd_survive_i = 1;
+        d.set_rec(r.vrd_record_i, survivor(judged));
+      }
+      r.eval();
+      const bool rd_fire = r.rd_valid_i && r.rd_ready_o;
+      const bool pr_fire = r.prt_valid_o && r.prt_ready_i;
+      const bool vr_fire = r.vrd_valid_i && r.vrd_ready_o;
+      d.tick();
+      if (rd_fire) ++fed;
+      if (pr_fire) ++handed;
+      if (vr_fire) ++judged;
+      if (r.tick_done_o) {
+        done = true;
+        if (judged < n) done_before_all_judged = true;
+      }
+    }
+    check(!done_before_all_judged,
+          "with every record in flight at once, the tick does not end before its last verdict",
+          0, done_before_all_judged ? 1 : 0);
+    check(judged == n && r.survivors_o - v0 == static_cast<uint32_t>(n),
+          "and every verdict is taken, as a survivor, in the tick that issued it",
+          static_cast<uint64_t>(n), static_cast<uint64_t>(r.survivors_o - v0));
+  }
+
   // ---- OPTION (a): THE PRODUCER SAYS IT IS BUSY ------------------------------
   // Added 2026-09-19 with `chl_busy_i`. The same sweep, with the producer
   // reporting that it still holds a parent of this generation until its child

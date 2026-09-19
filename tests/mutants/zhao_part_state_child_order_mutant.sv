@@ -395,6 +395,16 @@ module zhao_part_state_child_order_mutant #(
   logic [1:0]        st_q;
   logic              rd_done_q;      // the generation's last record was consumed
   logic [CNT_W-1:0]  written_q;      // survivors + children written this tick
+  // RECORDS ISSUED AND NOT YET JUDGED. Added 2026-09-19. The survivor pass used
+  // to end on "a verdict taken after the last record was handed to UPDATE" --
+  // which is the LAST verdict only if at most one record is in flight below
+  // this block. UPDATE plus COLLIDE was already two stages; a third
+  // (PART.TERRAIN_TAP, console item 14) made the race lose: the pass closed on
+  // record 5's verdict, record 6's verdict and its collision children spilled
+  // into the next generation, and every counter still balanced. The pass now
+  // ends when this count is zero -- a fact about THIS block's own handshakes,
+  // not an assumption about the depth of the pipeline below it.
+  logic [CNT_W:0]    out_q;
 
   // ---- child staging --------------------------------------------------------
   logic [REC_W-1:0]  chl_m [CHILD_D];
@@ -466,6 +476,7 @@ module zhao_part_state_child_order_mutant #(
       st_q        <= S_IDLE;
       rd_done_q   <= 1'b0;
       written_q   <= '0;
+      out_q       <= '0;
       chl_wp_q    <= '0;
       chl_rp_q    <= '0;
       prt_v_q     <= 1'b0;
@@ -513,10 +524,17 @@ module zhao_part_state_child_order_mutant #(
             // weakened, clearing them would silently discard a record while
             // NOT clearing them writes it at the head of this generation.
             // A no-op whose failure mode is a silent loss is not worth having.
+            out_q     <= '0;
           end
         end
 
         S_SURVIVE: begin
+          // Issued minus judged, from this block's own two handshakes.
+          out_q <= out_q + (CNT_W+1)'((prt_v_q && prt_ready_i) ? 1 : 0)
+                         - (CNT_W+1)'((vrd_valid_i && vrd_ready_o) ? 1 : 0);
+          // THE EXIT: every record read, handed to UPDATE, and judged. See
+          // `out_q` for why "a verdict after the last hand-off" was not this.
+          if (rd_done_q && !prt_v_q && (out_q == '0)) st_q <= S_APPEND;
           // offer the next record
           if (rd_valid_i && rd_ready_o) begin
             prt_rec_q <= rd_record_i;
@@ -571,7 +589,9 @@ module zhao_part_state_child_order_mutant #(
             //   below is belt-and-braces for a future tier, not the thing the
             //   claim rests on.
 
-            if (rd_done_q && !(prt_v_q && !prt_ready_i)) st_q <= S_APPEND;
+            // (The exit that stood here -- `rd_done_q && !(prt_v_q &&
+            // !prt_ready_i)` on a verdict take -- moved to the top of this
+            // state and now waits for `out_q` to reach zero.)
           end
         end
 
