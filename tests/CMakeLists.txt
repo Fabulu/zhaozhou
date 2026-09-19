@@ -13456,20 +13456,40 @@ set_tests_properties(lint_zhao_sys_reset PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# The board framework. It does NOT instantiate zhao_console_core -- read its
-# header for the port count that made a hand transcription the stale-copy
-# failure this repository has a chapter about -- so its closure is exactly the
-# two platform blocks and the lint is a real gate on the composition it does
-# make: pins -> PLL -> reset network.
+# The board framework, and since 2026-09-19 it DOES instantiate
+# zhao_console_core -- so this target no longer names three files.
+#
+# The comment here used to say the board "does NOT instantiate
+# zhao_console_core", and the three-file closure was correct for as long as that
+# was true. The board's closure is now the console's 170-odd sources plus the
+# two platform blocks, and a hand-typed list of them in this file would be a
+# SECOND copy of a source list the tree already keeps in one place. The runner
+# reads it from design/fit_targets.yml, exactly as run_console_core_smoke.ps1
+# does, so the board lint, the smoke bench and the fit measure the same files.
+#
+# It asserts SILENCE, not just RC 0: no %Warning and no %Error over 184
+# elaborated modules. That is a real gate on 1,038 generated port connections --
+# mistype one and it is IMPLICIT + UNDRIVEN + UNUSEDSIGNAL here in seconds
+# instead of a PINMISSING hours into a fit. Proven by doing exactly that.
 add_test(NAME lint_zhao_console_board
-         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
-                 --top-module zhao_console_board
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/prod/zhao_console_board.sv
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_pll.sv
-                 ${CMAKE_SOURCE_DIR}/fpga/rtl/sys/zhao_sys_reset.sv)
+  COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+          -File ${CMAKE_SOURCE_DIR}/tests/prod/run_console_board_lint.ps1)
 set_tests_properties(lint_zhao_console_board PROPERTIES
-  LABELS "lint;fast"
+  LABELS "lint;fast" TIMEOUT 900
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# And the staleness gate, which is the entire reason the board may be generated
+# at all. fpga/rtl/prod/zhao_console_board.sv is emitted from
+# zhao_console_core.sv's own port list by tools/quartus/gen_console_board.py; a
+# port added to the core and not regenerated here turns this RED IN SECONDS,
+# where the alternative -- a 1,038-port hand transcription -- goes stale
+# silently and in the flattering direction. This repository has a chapter about
+# generated files nobody regenerates, and it has been bitten by one three times.
+add_test(NAME console_board_generated_freshness
+  COMMAND "${Python3_EXECUTABLE}"
+          ${CMAKE_SOURCE_DIR}/tools/quartus/gen_console_board.py --check)
+set_tests_properties(console_board_generated_freshness PROPERTIES
+  LABELS "lint;fast")
 # ---------------------------------------------------------------------------
 # PART.PROJECT -- the particle's seat at the SHARED projector.
 #
