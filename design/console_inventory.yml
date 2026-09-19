@@ -75,8 +75,9 @@ modules:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_field_v2_core:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+    disposition: superseded
+    superseded_by: zhao_field_v3_core
+    why: "NOT a work item, and `pending_compose` said it was. FIELD.SEQ.CORE is composed -- `zhao_field_host` -> `zhao_field_v3_engine` -- so the old why (\"belongs to a capability the register still counts as a gap\") is false, and the disposition it justified was the one that means BELONGS IN THE CONSOLE. This block must never be composed: its own first lines carry STATUS RULING 2026-08-27, \"FIELD v2 IS FROZEN ... NOT the Earth60 production path, and it will not become it\", and design/prod_manifest.yml lists it `frozen`. It stays on disk as the differential reference RTL for v3 and as the exact fallback. (zhao_field_v2_front and zhao_field_v2_lanemux are the same frozen generation and still read pending_compose; they are left alone here only because neither has a named v3 sibling to point superseded_by at, and inventing one would be worse than the stale word.)"
   zhao_field_v2_front:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

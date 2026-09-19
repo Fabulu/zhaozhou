@@ -52,6 +52,11 @@ CORE = ROOT / "fpga" / "rtl" / "prod" / "zhao_console_core.sv"
 TARGETS = ROOT / "design" / "fit_targets.yml"
 CMAKE = ROOT / "tests" / "CMakeLists.txt"
 
+# The second root. See `board_addition()` for what it is allowed to do and for
+# the measurement that bounds it.
+CONSOLE_ROOT = "zhao_console_core"
+BOARD_ROOT = "zhao_console_board"
+
 # A tie-off entry in the core's header: "//  I4. NAME ... -- KIND."
 _TIEOFF = re.compile(r"^//\s*(I\d+)\.\s+(.*)$")
 _BOUNDARY = re.compile(r"\bBOUNDARY\b")
@@ -341,7 +346,44 @@ _ALIAS: dict[str, str | None] = {
     "MEM.VRAM.ARBITER":  "zhao_vram_arbiter",
     "MEM.HPS.ARBITER":   "zhao_hps_arbiter",
     "MEM.HPS.BRIDGE":    "zhao_hps_bridge",
-    "FIELD.SEQ.CORE":    "zhao_field_v2_core",
+    # THE ALIAS NAMED A FROZEN GENERATION. Corrected 2026-09-19, and this one
+    # MAKES THE NUMBER SMALLER, so it carries four independent witnesses rather
+    # than an argument. `zhao_field_v2_core` is not the console's field engine
+    # and cannot become it; the console's field engine is composed, and the
+    # register was pointed at the wrong file the entire time.
+    #
+    # This is the SAME defect `superseded_in_closure()`'s docstring already
+    # confesses to -- "the instrument could not see v3 at all, and 'connected'
+    # was satisfiable by wiring the old one" -- seen from the other side. That
+    # fix stopped the register REWARDING a v2 composition. It did not stop the
+    # register PUNISHING the v3 one, so the day FIELD v3 was composed the
+    # capability went on reading as a gap and nothing said why.
+    #
+    #   1. `design/prod_manifest.yml:253` heads its entry, in these words,
+    #      "FIELD.SEQ.CORE as a console organ: the sequencer, its program store
+    #      (two M10K-inferred RAMs), the residency directory above, and the
+    #      arbiter that lets the profiles take turns on ONE engine" -- and the
+    #      line under that heading is `- zhao_field_host`.
+    #   2. `zhao_console_core.sv`'s own header, in the FIELD.PROGCACHE entry:
+    #      "FIELD.SEQ.CORE is composed as `u_field_host`".
+    #   3. `zhao_field_host.sv` line 5 declares `Contract:
+    #      design/contracts/FIELD.SEQ.CORE.md`, and it instantiates
+    #      `zhao_field_v3_engine` -- the composed v3 machine, not v1 and not v2.
+    #      (The manifest comment above that list still says "so `zhao_field_host`
+    #      composes v1"; that sentence predates commit da57defe and the closure
+    #      disagrees with it. The instantiation is the evidence, not the prose.)
+    #   4. `zhao_field_v2_core.sv`'s own first lines: "STATUS RULING 2026-08-27
+    #      ... FIELD v2 IS FROZEN ... NOT the Earth60 production path, and it
+    #      will not become it." The core's header says the same and draws the
+    #      conclusion: v2 is unconnected, "and it is FROZEN as the fallback, so
+    #      that is a ruling rather than a gap."
+    #
+    # So the capability has a real producer, a real implementation and a real
+    # consumer; only this line disagreed. Aliasing to `zhao_field_host` rather
+    # than to `zhao_field_v3_engine` is deliberate: the host is what the console
+    # instantiates and what the manifest calls the organ, and the engine inside
+    # it can be re-parameterised or replaced without this line going stale.
+    "FIELD.SEQ.CORE":    "zhao_field_host",
     "TERRAIN.COMPCACHE": "zhao_terrain_compcache_front",
     "TERRAIN.ISLAND":    "zhao_terrain_island_dir",
     # THE NAME CONVENTION RESOLVES THIS ONE TO A SUPERSEDED PROTOTYPE, which is
@@ -559,6 +601,97 @@ def superseded_in_closure() -> list[tuple[str, list[str]]]:
     return out
 
 
+_BOARD_CACHE: dict[str, set[str]] = {}
+
+
+def board_addition() -> set[str]:
+    """Modules the BOARD composes that the CORE does not -- the second root.
+
+    WHY THIS EXISTS, and why it is not "widening the register".
+
+    `zhao_console_board` instantiates `zhao_console_core` and drives it from
+    `zhao_sys_pll` and `zhao_sys_reset`. It is the only module in this tree that
+    could be programmed onto hardware; the core is an organ of it. So SYS.PLL
+    and SYS.RESET are COMPOSED -- they have a real producer (the 50 MHz board
+    oscillator characterised in `board_truth.json`), a real implementation, and
+    a real consumer (every clock and reset the core runs on). The owner's
+    standard is that a capability is absent when it is "a disconnected
+    implementation". These are not disconnected. They are one level up.
+
+    THE OBJECTION THE BOARD PACKET RAISED, AND WHY IT DOES NOT SURVIVE
+    MEASUREMENT. It declined to re-point this register because "that would
+    change what CONNECTED means for all 77 capabilities at once, in the
+    direction that makes the number smaller". That is the right instinct and it
+    is the reason this function returns a DIFFERENCE rather than a union of
+    closures. The difference is measurable and it was measured:
+
+        board closure - core closure = {zhao_console_board, zhao_sys_pll,
+                                        zhao_sys_pll_simclk, zhao_sys_reset,
+                                        zhao_sys_reset_sync}
+
+    FIVE modules, of which TWO are ledger capabilities. It is not a change to 77
+    judgements; it is a change to exactly the judgements about modules the board
+    adds, and every run prints that set by name (`--json` carries it too), so a
+    sixth member could never arrive unnoticed. Nothing that the core composes
+    moves, in either direction, because the set is disjoint from the core's
+    closure by construction.
+
+    WHAT KEEPS IT FROM BECOMING A LAUNDRY. Three things, and the first is the
+    one that matters:
+
+      * THE BOARD MUST INSTANTIATE THE CORE. If it ever stops, this returns the
+        EMPTY SET rather than a five-module amnesty -- so a board that has been
+        detached from the machine cannot go on excusing the blocks hanging off
+        it. `check_console_inventory.py` makes the same check and fails loudly;
+        here the failure mode is chosen to be the one that COUNTS MORE GAPS,
+        because this file's whole discipline is to fail upward.
+      * It is derived from the instantiation graph (`module_graph.build`), the
+        same walk `check_console_inventory.py` uses for its second root, not
+        from a list anybody maintains. There is no fit target for the board and
+        this deliberately does not invent one -- a fit source list is a claim
+        about what gets MEASURED for area, and the board's own area question is
+        a separate packet.
+      * A module the board adds still has to be a ledger capability to count for
+        anything. `zhao_sys_pll_simclk` and `zhao_sys_reset_sync` are helpers
+        inside those two files and resolve to no block id at all.
+    """
+    if "d" in _BOARD_CACHE:
+        return _BOARD_CACHE["d"]
+    try:
+        sys.path.insert(0, str(ROOT / "tools" / "quartus"))
+        from module_graph import build            # noqa: PLC0415
+    except ImportError:                           # pragma: no cover
+        _BOARD_CACHE["d"] = set()
+        return _BOARD_CACHE["d"]
+    decl, inst = build(str(ROOT / "fpga" / "rtl"))
+    _BOARD_CACHE["d"] = _board_addition_from(decl, inst)
+    return _BOARD_CACHE["d"]
+
+
+def _reach(root: str, decl: dict, inst: dict) -> set[str]:
+    if root not in decl:
+        return set()
+    seen, stack = {root}, [root]
+    while stack:
+        cur = stack.pop()
+        for child in inst.get(decl[cur], ()):
+            if child not in seen and child in decl:
+                seen.add(child)
+                stack.append(child)
+    return seen
+
+
+def _board_addition_from(decl: dict, inst: dict) -> set[str]:
+    """The difference, split out so the self-test can drive it on a toy graph."""
+    board = _reach(BOARD_ROOT, decl, inst)
+    # THE GUARD, and it is the whole safety of this function: a board that does
+    # not contain the core is not the machine's top, so nothing under it is
+    # "composed into the console" by any reading.
+    if CONSOLE_ROOT not in board:
+        return set()
+    return board - _reach(CONSOLE_ROOT, decl, inst)
+
+
 def _stale_none_aliases() -> list[tuple[str, str]]:
     """Hand-resolved `None` entries for which a module now EXISTS.
 
@@ -644,9 +777,11 @@ def disconnected() -> dict:
     """
     closure = console_closure()
     live = instantiated_in(closure_paths())   # the half the docstring promised
+    board = board_addition()                  # the second root; see its docstring
     absent, unbuilt, unresolvable, deferred_ok, connected = [], [], [], [], []
     listed_not_live: list[str] = []
     uncited: list[str] = []
+    via_board: list[str] = []
     for b in ledger_blocks():
         # THE OWNER'S RULE: "Only explicitly deferred/non-v1 features may remain
         # absent, and each must CITE THE CONTROLLING RULING/SPEC."
@@ -670,6 +805,13 @@ def disconnected() -> dict:
             unresolvable.append(b["id"])
         elif mod in closure and mod in live:
             connected.append(b["id"])
+        elif mod in board:
+            # COMPOSED IN THE BOARD, not in the core. Named on every run rather
+            # than folded silently into `connected`, because this is the only
+            # reduction here that does not come from the core's own closure and
+            # it must stay auditable at a glance.
+            connected.append("%s (in %s)" % (b["id"], BOARD_ROOT))
+            via_board.append(b["id"])
         elif successor_in(mod, closure, live):
             connected.append("%s (via %s)" % (b["id"], successor_in(mod, closure, live)))
         elif mod in closure:
@@ -685,7 +827,8 @@ def disconnected() -> dict:
     return {"connected": connected, "built_not_connected": absent,
             "unbuilt": unbuilt, "unresolvable": unresolvable,
             "deferred_or_blocked": deferred_ok, "uncited_excuse": uncited,
-            "listed_but_not_instantiated": listed_not_live}
+            "listed_but_not_instantiated": listed_not_live,
+            "connected_in_board": via_board}
 
 
 def audit() -> dict:
@@ -750,6 +893,12 @@ def audit() -> dict:
                   "head": t["head"][:100]} for t in gaps],
         "capability": {k: len(v) for k, v in dis.items()},
         "listed_but_not_instantiated": dis["listed_but_not_instantiated"],
+        # THE SECOND ROOT, reported by name on every run. The modules are what
+        # `zhao_console_board` adds on top of the machine it contains; the
+        # capabilities are the subset of those that are ledger blocks. If the
+        # first list ever grows, the second is where to look and why.
+        "board_addition_modules": sorted(board_addition()),
+        "connected_in_board": dis["connected_in_board"],
         "built_not_connected": [m for _, m in dis["built_not_connected"]],
         "unbuilt": dis["unbuilt"],
         "unresolvable": dis["unresolvable"],
@@ -797,6 +946,41 @@ def _self_test() -> None:
             (ROOT / "tools" / "budget" / ".completion_selftest.sv").unlink()
         except OSError:
             pass
+    _board_self_test()
+
+
+def _board_self_test() -> None:
+    """The second root must ADD exactly the board's own blocks, and must STOP.
+
+    CLAUDE.md: a detector that has not been shown to fire has not been tested,
+    and this one's failure mode is an amnesty rather than an error message. The
+    dangerous direction is the board going on excusing SYS.PLL after it has
+    stopped instantiating the core -- there is nothing to notice, the count just
+    stays low. So the guard is driven on a graph where it must fire.
+    """
+    decl = {"zhao_console_board": "b.sv", "zhao_console_core": "c.sv",
+            "zhao_sys_pll": "p.sv", "zhao_inner": "i.sv", "zhao_orphan": "o.sv"}
+    joined = {"b.sv": {"zhao_console_core", "zhao_sys_pll"},
+              "c.sv": {"zhao_inner"}}
+    got = _board_addition_from(decl, joined)
+    bad = []
+    if got != {"zhao_console_board", "zhao_sys_pll"}:
+        bad.append("joined board should add exactly board+pll, got %r" % (got,))
+    # THE GUARD: the board no longer instantiates the core. The set must collapse
+    # to EMPTY, not merely lose the core -- otherwise SYS.PLL keeps its amnesty
+    # while the console is topless, which is the one outcome this must not have.
+    detached = {"b.sv": {"zhao_sys_pll"}, "c.sv": {"zhao_inner"}}
+    if _board_addition_from(decl, detached) != set():
+        bad.append("a board that dropped the core still granted membership: %r"
+                   % (_board_addition_from(decl, detached),))
+    # And a board that does not exist grants nothing either.
+    if _board_addition_from({"zhao_console_core": "c.sv"}, {}) != set():
+        bad.append("a missing board granted membership")
+    if bad:
+        sys.stderr.write("completion_register BOARD SELF-TEST FAILED:\n")
+        for b in bad:
+            sys.stderr.write("  %s\n" % b)
+        raise SystemExit(2)
 
 
 def main(argv: list[str]) -> int:
@@ -821,6 +1005,17 @@ def main(argv: list[str]) -> int:
         print()
 
     print("zhao_console_core closure modules : %d" % rep["closure_modules"])
+    if rep["board_addition_modules"]:
+        print("%s adds %d more    : %s"
+              % (BOARD_ROOT, len(rep["board_addition_modules"]),
+                 ", ".join(rep["board_addition_modules"])))
+        print("    capabilities that reach the machine only through the board: %s"
+              % (", ".join(rep["connected_in_board"]) or "none"))
+    else:
+        print("!! %s adds NOTHING -- either it is missing or it no longer "
+              "instantiates %s. Every block hanging off it now counts as a GAP, "
+              "which is the safe direction and probably not the true one."
+              % (BOARD_ROOT, CONSOLE_ROOT))
     print("tie-off entries in its header     : %d" % rep["tieoffs_total"])
     for k, n in sorted(rep["by_kind"].items()):
         print("    %-22s %d" % (k, n))
