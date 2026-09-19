@@ -2,8 +2,11 @@
 //
 // The arena and the vertex-attribute store are MODELLED here with the arena's
 // own contract (look_ready always 1, the reply one clock later, refusal before
-// presence), and depth is differenced against `zref::depth_of_raw` ITSELF --
-// the law GEOM.DEPTHQUANT implements -- not against a transcription.
+// presence). Since owner ruling R31 (2026-09-19) depth is NOT computed here: the
+// store (GEOM.VATTR) answers each vertex's invw24 beside its attributes, so the
+// check is that every corner carries ITS OWN store word, depth included. The
+// depth law itself is differenced against `zref::depth_of_raw` in
+// geom_vattr_directed.cpp and geom_depthquant_stream_directed.cpp.
 //
 // What each case asserts is in its own banner. Every counter the block exports
 // is seen to MOVE by legal stimulus at its ports, and seen to stay at zero on
@@ -35,8 +38,9 @@ constexpr unsigned kDepth = 1089;   // the console's GEOM_DEPTH
 
 struct Vtx {
   int32_t x, y;        // s21
-  uint32_t w;          // 31 bits
+  uint32_t w;          // 31 bits: in the arena payload, NOT read by replay
   bool behind;
+  uint32_t invw;       // the store's invw24 for this vertex in this view
   uint32_t attr[6];
   bool written;        // a MISS if false
 };
@@ -69,6 +73,7 @@ struct Bench {
   int att_delay_next = 0;     // >0: the store answers one clock LATE once
   bool att_late_pend = false;
   uint32_t att_late_data[6] = {};
+  uint32_t att_late_invw = 0;
   int stall_pct = 0;
   std::vector<Emitted> out;
   std::vector<unsigned> rels;
@@ -78,7 +83,7 @@ struct Bench {
 
   void zero_inputs() {
     t.mt_valid_i = 0; t.grp_valid_i = 0; t.t_valid_i = 0; t.m_done_i = 0;
-    t.op_valid_i = 0; t.fl_valid_i = 0; t.o_ready_i = 1; t.look_ready_i = 1;
+    t.o_ready_i = 1; t.look_ready_i = 1;
     t.rep_valid_i = 0; t.att_rep_valid_i = 0; t.grp_poison_i = 0;
   }
 
@@ -126,14 +131,17 @@ struct Bench {
       if (att_delay_next > 0) {
         --att_delay_next;
         att_late_pend = true;
+        att_late_invw = vx.invw;
         for (int k = 0; k < 6; ++k) att_late_data[k] = vx.attr[k];
       } else {
         t.att_rep_valid_i = 1;
+        t.att_invw_i = vx.invw;
         for (int k = 0; k < 6; ++k) t.att_rep_data_i[k] = vx.attr[k];
       }
     } else if (att_late_pend) {
       att_late_pend = false;
       t.att_rep_valid_i = 1;
+      t.att_invw_i = att_late_invw;
       for (int k = 0; k < 6; ++k) t.att_rep_data_i[k] = att_late_data[k];
     }
     t.o_ready_i = (int(rng() % 100) >= stall_pct) ? 1 : 0;
@@ -202,22 +210,17 @@ struct Bench {
           : pick == 1 ? (0x7FFFFFFFu - (rng() % 1000u))
           : (65536u + rng() % 200000000u);
       v.behind = (rng() % 5) == 0;
+      v.invw = rng() & 0xFFFFFFu;
       for (int k = 0; k < 6; ++k) v.attr[k] = rng();
       v.written = true;
     }
     return ar;
   }
 
-  void land(unsigned arena, unsigned profile) {
-    t.fl_valid_i = 1; t.fl_arena_i = arena; t.fl_profile_i = profile;
-    step();
-    t.fl_valid_i = 0;
-  }
-  void open(unsigned arena) {
-    t.op_valid_i = 1; t.op_arena_i = arena;
-    step();
-    t.op_valid_i = 0;
-  }
+  // The arena's lifetime is GEOM.GROUP_SEQ's and GEOM.VATTR's business now;
+  // these remain as one idle clock each so every case keeps its timing.
+  void land(unsigned, unsigned) { step(); }
+  void open(unsigned) { step(); }
 
   bool token(unsigned mask, unsigned vcount) {
     return hold_until(
@@ -252,11 +255,11 @@ struct Bench {
   }
 };
 
-bool corner_ok(const Emitted& e, int k, const Vtx& v, unsigned profile) {
+bool corner_ok(const Emitted& e, int k, const Vtx& v, unsigned /*profile: the store's business*/) {
   const int32_t xs[3] = {e.ax, e.bx, e.cx}, ys[3] = {e.ay, e.by, e.cy};
   if (xs[k] != v.x || ys[k] != v.y) return false;
   if (((e.behind >> k) & 1u) != (v.behind ? 1u : 0u)) return false;
-  if (e.invw[k] != zref::depth_of_raw(uint64_t(v.w), profile)) return false;
+  if (e.invw[k] != v.invw) return false;   // the STORE's word, for THIS vertex
   for (int j = 0; j < 6; ++j)
     if (e.attr[k][j] != v.attr[j]) return false;
   return true;
@@ -270,8 +273,8 @@ int main(int argc, char** argv) {
   b.reset();
 
   // ---- A: one view, twenty triangles, stalled consumer ----------------------
-  // Every corner's x/y/behind/attributes are the arena's and the store's at the
-  // looked-up index; invw24 is zref::depth_of_raw(w, the arena's LANDED profile).
+  // Every corner's x/y/behind are the arena's and its invw24 + attributes the
+  // store's, at the looked-up index.
   {
     b.stall_pct = 40;
     Arena& ar = b.make_arena(1, 40, 7);
@@ -300,7 +303,7 @@ int main(int argc, char** argv) {
     ck(bad == 0, "A: every corner, depth, attribute and pass-through field matches, in order");
     ck(b.rels.size() == 1 && b.rels[0] == 1, "A: arena 1 is released, once");
     ck(b.t.refused_o == 0 && b.t.missed_o == 0 && b.t.att_skew_o == 0 &&
-       b.t.profile_mixed_o == 0 && b.t.view_bad_o == 0 && b.t.dq_refused_o == 0,
+       b.t.view_bad_o == 0,
        "A: no fault counter moved on a clean meshlet");
     std::printf("  A: 20 triangles in %ld clocks at 40%% consumer stall\n", b.clocks);
   }
@@ -336,8 +339,8 @@ int main(int argc, char** argv) {
         if (!corner_ok(e1, k, a1.v[tris[n][k]], 2)) ++bad;
       }
     }
-    ck(bad == 0, "B: view 0 reads arena 2 under profile 0, view 1 reads arena 3 under "
-                 "profile 2 -- the second eye never sees the first eye's vertices");
+    ck(bad == 0, "B: view 0 reads arena 2, view 1 reads arena 3 -- the second eye never "
+                 "sees the first eye's vertices, nor their depth");
     ck(b.rels.size() == 2 && b.rels[0] == 2 && b.rels[1] == 3, "B: both arenas released");
     const long per = (b.clocks - c0) / 16;
     std::printf("  B: 16 view-triangles in %ld clocks (%ld per view-triangle, unstalled)\n",
@@ -421,17 +424,6 @@ int main(int argc, char** argv) {
     ck(b.t.view_bad_o == 1, "G: view_bad_o counts it");
   }
 
-  // ---- H: two landings in one arena under two profiles ---------------------
-  {
-    b.open(3);
-    b.land(3, 0);
-    b.land(3, 1);
-    ck(b.t.profile_mixed_o == 1, "H: profile_mixed_o counts one arena projected under two profiles");
-    b.open(3);
-    b.land(3, 2);
-    ck(b.t.profile_mixed_o == 1, "H: an OPEN starts the arena's profile afresh");
-  }
-
   // ---- I: the attribute store answering LATE is counted ---------------------
   {
     b.out.clear(); b.rels.clear();
@@ -446,18 +438,8 @@ int main(int argc, char** argv) {
     ck(b.t.att_skew_o >= 1, "I: att_skew_o moves when the store and the arena disagree on timing");
   }
 
-  // ---- J: a profile outside the three is REFUSED by DEPTHQUANT --------------
-  {
-    b.out.clear(); b.rels.clear();
-    b.make_arena(2, 4, 11);
-    b.open(2);
-    b.land(2, 3);                               // the reserved profile
-    ck(b.token(0b01, 4) && b.handle(2, 11, 0), "J: token and handle");
-    ck(b.tri(0, 1, 2, 1, 1), "J: triangle");
-    b.done();
-    ck(b.drain_release(), "J: released");
-    ck(b.t.dq_refused_o == 3, "J: all three corners refused by GEOM.DEPTHQUANT, summed");
-  }
+  // (H and J -- the per-arena profile and DEPTHQUANT's refusal -- moved to
+  // geom_vattr_directed.cpp with the depth law, owner ruling R31.)
 
   // ---- K: R31 -- a POISONED handle drops the whole meshlet, and releases it --
   // GEOM.GROUP_SEQ marks a batch that lost a record upstream. One poisoned view
@@ -500,11 +482,11 @@ int main(int argc, char** argv) {
     ck(b.out.size() == 1 && b.t.poisoned_o == p0, "L: a clean meshlet after a poisoned one draws");
   }
 
-  ck(b.t.meshlets_o == 11, "the meshlet count is every token taken");
+  ck(b.t.meshlets_o == 10, "the meshlet count is every token taken");
   std::printf("geom_replay_directed: %d checks, %d failed (meshlets=%u groups=%u tri_in=%u "
-              "tri_out=%u refused=%u missed=%u skew=%u mixed=%u view_bad=%u dq_refused=%u poisoned=%u)\n",
+              "tri_out=%u refused=%u missed=%u skew=%u view_bad=%u poisoned=%u)\n",
               g_checks, g_fail, b.t.meshlets_o, b.t.groups_o, b.t.triangles_in_o,
               b.t.triangles_out_o, b.t.refused_o, b.t.missed_o, b.t.att_skew_o,
-              b.t.profile_mixed_o, b.t.view_bad_o, b.t.dq_refused_o, b.t.poisoned_o);
+              b.t.view_bad_o, b.t.poisoned_o);
   zhao::exit_hard(g_fail ? 1 : 0);
 }

@@ -123,6 +123,11 @@ module zhao_geom_proj_lane #(
     // ---- landings, so a sequencer seals on ARRIVAL and not on acceptance ------
     output wire                     fill_landed_o,
     output wire [ARENA_W-1:0]       fill_arena_o,
+    // The landed vertex's INDEX, beside its arena (2026-09-19). GEOM.VATTR
+    // writes the vertex's attribute row at the moment its position lands, keyed
+    // by the same {arena, index}; the rider layout lives HERE, so the index is
+    // unpacked here too rather than re-sliced by the composer.
+    output wire [INDEX_W-1:0]       fill_index_o,
 
     // ---- lookups, straight out of the cache -----------------------------------
     input  wire                     look_valid_i,
@@ -224,6 +229,7 @@ module zhao_geom_proj_lane #(
 
   assign fill_landed_o = a_valid_i;
   assign fill_arena_o  = fill_arena_c;
+  assign fill_index_o  = fill_index_c;
 
 endmodule : zhao_geom_proj_lane
 

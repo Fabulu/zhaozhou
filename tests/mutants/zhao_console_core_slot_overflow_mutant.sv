@@ -536,10 +536,12 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [31:0]             geom_light_cfg_data_i,
   output logic                    geom_light_cfg_gen_o,
   input  logic [3:0]              geom_light_nlights_i,
-  // I46: the lit vertex RGB -- the vertex-attribute store's r/g/b input, whose
-  // WRITER is not built. Out of the module, with a real ready.
+  // The lit vertex RGB, OBSERVED. Its consumer is GEOM.VATTR (entry I46,
+  // CLOSED 2026-09-19): the ready is the store's, so the port that stood here
+  // as `_ready_i` is gone and the store's ready leaves as a tap beside it, so
+  // the smoke bench can count the handshakes it checks against the reference.
   output logic                    geom_light_valid_o,
-  input  logic                    geom_light_ready_i,
+  output logic                    geom_light_ready_o,
   output logic [16:0]             geom_light_r_o,
   output logic [16:0]             geom_light_g_o,
   output logic [16:0]             geom_light_b_o,
@@ -633,17 +635,21 @@ module zhao_console_core_slot_overflow_mutant
   // producer: the descriptor's raster word is I39's.
   input  logic [1:0]              geom_clip_cull_mode_i,
 
-  // ---- I46: THE VERTEX-ATTRIBUTE STORE (owner ruling R11, provisional) -----
-  // Slots 1..6 of the ruling-5 packet (u_over_w, v_over_w, r, g, b, alpha),
-  // per vertex per view, keyed EXACTLY like the arena. The store listens to
-  // GEOM.REPLAY's lookups -- these are the same nets that address the arena --
-  // and answers with the arena's timing. Its WRITER is not built; see I46.
-  output logic                    geom_att_look_valid_o,
-  output logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o,
-  output logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o,
-  output logic [GEOM_INDEX_W-1:0] geom_att_look_index_o,
-  input  logic                    geom_att_rep_valid_i,
-  input  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i,
+  // ---- GEOM.VATTR's evidence (entry I46 CLOSED; owner rulings R11, R31) ----
+  // The vertex-attribute store and its writer are INTERNAL: the eleven
+  // `geom_att_*` ports that modelled the store at the edge are gone. What
+  // leaves is the store's census and its faults, and the depth law's two
+  // faults, which moved here from GEOM.REPLAY with the law itself.
+  output logic [31:0]             geom_va_landings_o,
+  output logic [31:0]             geom_va_rows_written_o,
+  output logic [31:0]             geom_va_colours_written_o,
+  output logic [31:0]             geom_va_uv_staged_o,
+  output logic [31:0]             geom_va_lq_overflow_o,
+  output logic [31:0]             geom_va_index_oob_o,
+  output logic [31:0]             geom_va_look_oob_o,
+  output logic [31:0]             geom_va_profile_mixed_o,
+  output logic [31:0]             geom_va_dq_refused_o,
+  output logic [31:0]             geom_va_dq_stray_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -653,9 +659,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_rp_refused_o,
   output logic [31:0]             geom_rp_missed_o,
   output logic [31:0]             geom_rp_att_skew_o,
-  output logic [31:0]             geom_rp_profile_mixed_o,
   output logic [31:0]             geom_rp_view_bad_o,
-  output logic [31:0]             geom_rp_dq_refused_o,
   // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
   output logic [31:0]             geom_rp_poisoned_o,
 

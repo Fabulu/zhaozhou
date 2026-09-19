@@ -63,6 +63,16 @@ const V kVerts[] = {
 };
 constexpr int kNV = sizeof(kVerts) / sizeof(kVerts[0]);
 
+// Per-vertex texture coordinates, the record's s16 fx16 UV fields (GEOM.VDECODE
+// layout). DIFFERENT AT EVERY VERTEX (2026-09-19, entry I46) so the u/v_over_w
+// GEOM.VATTR writes -- zref::geom_over_w(uv, invw24) -- carry real gradients
+// into GEOM.ATTRPACK's planes. They do not move a single covered pixel: the
+// pixel gate is coverage, and coverage is geometry.
+const int16_t kU[] = {0x0800, -0x1000, 0x2400, 0x0100, -0x3000, 0x1800, 0x0000, 0x7000};
+const int16_t kV[] = {-0x0400, 0x0C00, 0x2000, -0x2800, 0x3400, 0x0600, 0x0000, -0x7000};
+static_assert(sizeof(kU) / sizeof(kU[0]) == kNV && sizeof(kV) / sizeof(kV[0]) == kNV,
+              "one UV pair per vertex");
+
 // Eight triangles, u8 local indices. Triangle 5 names the behind-the-eye vertex,
 // so GEOM.CLIP rejects it WHOLE in both views (the near plane is a whole-
 // primitive rejection here -- zhao_geom_clip.sv law 1) and counts it `clipped`.
@@ -196,6 +206,18 @@ std::string emit(const Result& r) {
   arr("SGF_VX", 0);
   arr("SGF_VY", 1);
   arr("SGF_VZ", 2);
+  auto arr16 = [&](const char* name, const int16_t* v) {
+    s += "localparam logic signed [15:0] ";
+    s += name;
+    std::snprintf(b, sizeof b, " [0:%d] = '{", kNV - 1); s += b;
+    for (int i = 0; i < kNV; ++i) {
+      std::snprintf(b, sizeof b, "16'sh%04X", static_cast<uint16_t>(v[i]));
+      s += b;
+      s += (i + 1 < kNV) ? ", " : "};\n";
+    }
+  };
+  arr16("SGF_VU", kU);
+  arr16("SGF_VV", kV);
   std::snprintf(b, sizeof b, "localparam logic [7:0] SGF_IX [0:%d] = '{", 3 * kNT - 1); s += b;
   for (int t = 0; t < kNT; ++t)
     for (int k = 0; k < 3; ++k) {

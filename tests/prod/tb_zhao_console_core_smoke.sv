@@ -310,7 +310,7 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_light_cfg_data_i;
   logic                    geom_light_cfg_gen_o;
   logic [3:0]              geom_light_nlights_i;
-  logic                    geom_light_valid_o, geom_light_ready_i;
+  logic                    geom_light_valid_o, geom_light_ready_o;
   logic [16:0]             geom_light_r_o, geom_light_g_o, geom_light_b_o;
   logic                    geom_light_degenerate_vtx_o;
   logic [15:0]             geom_light_src_id_o;
@@ -1002,19 +1002,16 @@ module tb_zhao_console_core_smoke
   // ---- GEOM.CLIP's cull mode (entry I24, narrowed) and the CLIP/SETUP evidence
   // THE TRIANGLE DOOR IS GONE: GEOM.CLIP is fed by GEOM.REPLAY inside the core.
   localparam int unsigned GEOM_CLIP_ATTRW = 7 * 32;
-  localparam int unsigned GEOM_ATTR_STORE_W = 6 * 32;
-  // ---- I46: the vertex-attribute store, MODELLED here (its writer is unbuilt)
-  logic                    geom_att_look_valid_o;
-  logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o;
-  logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o;
-  logic [GEOM_INDEX_W-1:0] geom_att_look_index_o;
-  logic                    geom_att_rep_valid_i;
-  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i;
+  // ---- GEOM.VATTR's census (entry I46 CLOSED: the store is INSIDE the core now,
+  // so the bench's edge model of it is gone -- see the note where it stood)
+  logic [31:0] geom_va_landings_o, geom_va_rows_written_o, geom_va_colours_written_o;
+  logic [31:0] geom_va_uv_staged_o, geom_va_lq_overflow_o, geom_va_index_oob_o;
+  logic [31:0] geom_va_look_oob_o, geom_va_profile_mixed_o, geom_va_dq_refused_o;
+  logic [31:0] geom_va_dq_stray_o;
   // ---- GEOM.REPLAY's evidence
   logic [31:0] geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o;
   logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
-  logic [31:0] geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o;
-  logic [31:0] geom_rp_dq_refused_o;
+  logic [31:0] geom_rp_att_skew_o, geom_rp_view_bad_o;
   logic [31:0] geom_rp_poisoned_o;
   // GEOM.ATTRPACK's evidence, out of the core because a counter nobody can
   // read is not evidence. The RATIO is what gets asserted below.
@@ -2238,8 +2235,8 @@ module tb_zhao_console_core_smoke
       vdec_record = {64'd0,          // off 24..31 reserved, MUST be zero
                      16'd0,          // off 22 bone1 (== bone0 -> rigid)
                      16'd0,          // off 20 bone0
-                     16'sd0,         // off 18 v
-                     16'sd0,         // off 16 u
+                     SGF_VV[n],      // off 18 v (the fixture's own UV: GEOM.VATTR's
+                     SGF_VU[n],      // off 16 u  u/v_over_w carry real gradients)
                      8'd64,          // off 15 w0 == 64 -> rigid
                      8'sd0,          // off 14 nz
                      8'sd0,          // off 13 ny
@@ -2439,7 +2436,7 @@ module tb_zhao_console_core_smoke
     if (!rst_n) begin
       geom_lit_seen_q <= 0;
       geom_lit_bad_q  <= 0;
-    end else if (geom_light_valid_o && geom_light_ready_i) begin
+    end else if (geom_light_valid_o && geom_light_ready_o) begin
       geom_lit_seen_q <= geom_lit_seen_q + 1;
       if ((geom_light_r_o != SGF_EXP_LIT) || (geom_light_g_o != SGF_EXP_LIT) ||
           (geom_light_b_o != SGF_EXP_LIT) || geom_light_degenerate_vtx_o)
@@ -2627,76 +2624,20 @@ module tb_zhao_console_core_smoke
   // triangles GEOM.CLIP sees are the fixture meshlet's own, projected by the
   // shared projector in BOTH views and replayed out of the arena.
   //
-  // THE VERTEX-ATTRIBUTE STORE (core entry I46) IS MODELLED HERE, with the
-  // arena's own contract: it listens to the replay's lookups and answers ONE
-  // clock later. Its WRITER is the unbuilt half of owner ruling R11, so these
-  // values stand in for it exactly as the SDRAM model stands in for memory.
-  // They differ at every vertex, so GEOM.ATTRPACK's u/v planes have real
-  // gradients: u_over_w = index << 20, v_over_w = (index ^ arena) << 20, and
-  // the r/g/b/alpha slots carry the index for the day a Gouraud lane reads them.
+  // THE VERTEX-ATTRIBUTE STORE THAT WAS MODELLED HERE IS GONE (2026-09-19, geom2
+  // packet; core entry I46 CLOSED). It answered GEOM.REPLAY's lookups with
+  // index-derived stand-in values because the store's WRITER did not exist.
+  // `zhao_geom_vattr` is that writer and store, composed INSIDE the core on the
+  // real producers' nets, so the bench no longer plays it: every u/v_over_w,
+  // colour and depth the replay now reads was written by the machine from the
+  // fixture's own records (SGF_VU/SGF_VV above) and landings.
   //
-  // `-BadAttribute` (ZHAO_SMOKE_BAD_ATTR, inverted polarity) answers the FIRST
-  // lookup of the run one clock LATE. GEOM.REPLAY's `att_skew_o` -- two
-  // memories, two timings, independent operands -- must see it, and this bench
-  // asserts it zero, so the control passes only if the run FAILS.
+  // `-BadAttribute` RETIRED WITH IT. It made this bench-side store answer one
+  // lookup a clock late so that GEOM.REPLAY's `att_skew_o` could be seen to
+  // fire. There is no bench-side store to delay now; the detector is still
+  // fired by stimulus in tests/geometry/geom_replay_directed.cpp (case I), and
+  // this bench still asserts it zero in composition below.
   // --------------------------------------------------------------------------
-  logic                         att_pend_q;
-  logic [GEOM_ARENA_W-1:0]      att_arena_q;
-  logic [GEOM_INDEX_W-1:0]      att_index_q;
-  bit                           att_late_done_q;
-  logic                         att_late_q;
-
-  function automatic logic [GEOM_ATTR_STORE_W-1:0] att_word(
-      input logic [GEOM_ARENA_W-1:0] a, input logic [GEOM_INDEX_W-1:0] ix);
-    logic [GEOM_ATTR_STORE_W-1:0] w;
-    begin
-      w = '0;
-      w[31:0]    = 32'(ix) << 20;                           // u_over_w
-      w[63:32]   = (32'(ix) ^ 32'(a)) << 20;                // v_over_w
-      w[95:64]   = 32'(ix);                                  // r
-      w[127:96]  = 32'(ix) + 32'd1;                         // g
-      w[159:128] = 32'(ix) + 32'd2;                         // b
-      w[191:160] = 32'h0000_00FF;                            // alpha
-      return w;
-    end
-  endfunction
-
-  always @(posedge gpu_clk) begin
-    if (!rst_n) begin
-      att_pend_q           <= 1'b0;
-      att_late_q           <= 1'b0;
-      att_late_done_q      <= 1'b0;
-      geom_att_rep_valid_i <= 1'b0;
-      geom_att_rep_data_i  <= '0;
-    end else begin
-      geom_att_rep_valid_i <= 1'b0;
-`ifdef ZHAO_SMOKE_BAD_ATTR
-      // One reply, once, one clock late.
-      if (att_late_q) begin
-        geom_att_rep_valid_i <= 1'b1;
-        geom_att_rep_data_i  <= att_word(att_arena_q, att_index_q);
-        att_late_q           <= 1'b0;
-      end
-      if (geom_att_look_valid_o) begin
-        att_arena_q <= geom_att_look_arena_o;
-        att_index_q <= geom_att_look_index_o;
-        if (!att_late_done_q) begin
-          att_late_q      <= 1'b1;
-          att_late_done_q <= 1'b1;
-        end else begin
-          geom_att_rep_valid_i <= 1'b1;
-          geom_att_rep_data_i  <= att_word(geom_att_look_arena_o, geom_att_look_index_o);
-        end
-      end
-`else
-      if (geom_att_look_valid_o) begin
-        geom_att_rep_valid_i <= 1'b1;
-        geom_att_rep_data_i  <= att_word(geom_att_look_arena_o, geom_att_look_index_o);
-      end
-`endif
-      att_pend_q <= geom_att_look_valid_o;
-    end
-  end
 
   // --------------------------------------------------------------------------
   // THE PLAYED MEM.GUARD READ WINDOW, for TERRAIN.PAGESTREAM.
@@ -2901,7 +2842,6 @@ module tb_zhao_console_core_smoke
 
     // GEOM.LIGHT's lit RGB (I46). HIGH, for the reason at its declaration.
     // The bank starts empty and is loaded after reset (geom_load_light).
-    geom_light_ready_i      = 1'b1;
     geom_light_cfg_we_i     = 1'b0;
     geom_light_cfg_commit_i = 1'b0;
     geom_light_cfg_addr_i   = '0;
@@ -3615,11 +3555,15 @@ module tb_zhao_console_core_smoke
              geom_light_vertices_lit_o, geom_lit_seen_q, geom_lit_bad_q,
              geom_light_r_o, geom_light_g_o, geom_light_b_o, SGF_EXP_LIT,
              geom_light_adapter_refused_o, geom_light_cfg_refused_o);
-    $display("SMOKE: replay     meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d refused=%0d missed=%0d att_skew=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
+    $display("SMOKE: replay     meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d refused=%0d missed=%0d att_skew=%0d view_bad=%0d",
              geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
              geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o,
-             geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o,
-             geom_rp_dq_refused_o);
+             geom_rp_att_skew_o, geom_rp_view_bad_o);
+    $display("SMOKE: vattr      landings=%0d rows=%0d colours=%0d uv=%0d lq_overflow=%0d index_oob=%0d look_oob=%0d profile_mixed=%0d dq_refused=%0d dq_stray=%0d",
+             geom_va_landings_o, geom_va_rows_written_o, geom_va_colours_written_o,
+             geom_va_uv_staged_o, geom_va_lq_overflow_o, geom_va_index_oob_o,
+             geom_va_look_oob_o, geom_va_profile_mixed_o, geom_va_dq_refused_o,
+             geom_va_dq_stray_o);
     $display("SMOKE: r31        holes=%0d groups_poisoned=%0d holes_orphan=%0d replay_poisoned=%0d",
              geom_holes_o, geom_groups_poisoned_o, geom_holes_orphan_o, geom_rp_poisoned_o);
     $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference: %0d / %0d / %0d / %0d)",
@@ -4346,13 +4290,27 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: GEOM.REPLAY meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d -- the reference wants 1 / 2 / %0d / %0d",
              geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
              geom_rp_triangles_out_o, SGF_N_TRIS, SGF_EXP_REPLAYED);
-    if ((geom_rp_refused_o | geom_rp_missed_o | geom_rp_profile_mixed_o |
-         geom_rp_view_bad_o | geom_rp_dq_refused_o) != 0)
-      $fatal(1, "SMOKE: GEOM.REPLAY dropped or faulted: refused=%0d missed=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
-             geom_rp_refused_o, geom_rp_missed_o, geom_rp_profile_mixed_o,
-             geom_rp_view_bad_o, geom_rp_dq_refused_o);
+    if ((geom_rp_refused_o | geom_rp_missed_o | geom_rp_view_bad_o) != 0)
+      $fatal(1, "SMOKE: GEOM.REPLAY dropped or faulted: refused=%0d missed=%0d view_bad=%0d",
+             geom_rp_refused_o, geom_rp_missed_o, geom_rp_view_bad_o);
+    // ---- GEOM.VATTR, the store every replayed corner read (entry I46) --------
+    // Every landing wrote its row (both views of every vertex), every decoded
+    // vertex was staged and lit into both views' arenas, and nothing was
+    // dropped, out of the store, mixed or refused. A row NOT written would be
+    // read by the replay as the previous occupant's attributes -- no pixel count
+    // could see it -- which is why the census is exact rather than nonzero.
+    if ((geom_va_landings_o != geom_landings_o) || (geom_va_rows_written_o != geom_landings_o) ||
+        (geom_va_uv_staged_o != N_GEOM_VERTS) || (geom_va_colours_written_o != 2 * N_GEOM_VERTS))
+      $fatal(1, "SMOKE: GEOM.VATTR landings=%0d rows=%0d uv=%0d colours=%0d -- want %0d / %0d / %0d / %0d",
+             geom_va_landings_o, geom_va_rows_written_o, geom_va_uv_staged_o,
+             geom_va_colours_written_o, geom_landings_o, geom_landings_o, N_GEOM_VERTS,
+             2 * N_GEOM_VERTS);
+    if ((geom_va_lq_overflow_o | geom_va_index_oob_o | geom_va_look_oob_o |
+         geom_va_profile_mixed_o | geom_va_dq_refused_o | geom_va_dq_stray_o) != 0)
+      $fatal(1, "SMOKE: GEOM.VATTR faulted: lq_overflow=%0d index_oob=%0d look_oob=%0d profile_mixed=%0d dq_refused=%0d dq_stray=%0d",
+             geom_va_lq_overflow_o, geom_va_index_oob_o, geom_va_look_oob_o,
+             geom_va_profile_mixed_o, geom_va_dq_refused_o, geom_va_dq_stray_o);
     // The attribute store and the arena answered on the SAME clock every time.
-    // `-BadAttribute` makes one reply late; this is the check it trips.
     // R31: a clean fixture has no hole, poisons nothing and orphans nothing.
     // `-BadVertex` is the positive control that moves all four.
     if ((geom_holes_o | geom_groups_poisoned_o | geom_holes_orphan_o | geom_rp_poisoned_o) != 0)

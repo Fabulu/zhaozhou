@@ -88,6 +88,31 @@ inline uint32_t depth_of(double metres, uint32_t profile) {
 }
 
 /**
+ * The per-VERTEX perspective attribute: `u_over_w` (or `v_over_w`), S8.24, of
+ * a vertex texture coordinate under its view's `invw24`.
+ *
+ * spec/qformats.md 8 fixes only the per-PIXEL recovery,
+ *     u = rescale((s64)u_over_w * rcp_u24(invw24_interp)),
+ * and `zhao_raster_perspuv` derives that shift from three published formats
+ * (u_over_w S8.24, invw24 U0.24, the TMU coordinate S15.16). This is the
+ * inverse on the SAME three formats, so it is derived rather than chosen:
+ *
+ *     value(u_over_w) = value(u) * value(invw24)
+ *     raw(u_over_w)   = rescale_s(sext(u) * invw24, 16)     (qformats 4)
+ *
+ * `uv` is the format-0 record's s16 UV field (fx16, GEOM.VDECODE's layout),
+ * sign-extended to the TMU's S15.16. |uv| < 2^15 and invw24 < 2^24 keep the
+ * product below 2^39, so the result is s24 and there is no saturation case.
+ * GEOM.VATTR (fpga/rtl/geometry/zhao_geom_vattr.sv) computes exactly this per
+ * landed vertex, and tests/geometry/geom_vattr_directed.cpp differences it.
+ * Added 2026-09-19 with that block (owner rulings R11, R31; entry I46).
+ */
+inline int32_t geom_over_w(int16_t uv, uint32_t invw24) {
+  const int64_t p = static_cast<int64_t>(uv) * static_cast<int64_t>(invw24 & 0xFFFFFFu);
+  return static_cast<int32_t>((p + (int64_t{1} << 15)) >> 16);
+}
+
+/**
  * The depth test, spec §8: pass iff strictly nearer. TIES FAIL -- decals use an
  * explicit bias rather than an epsilon, so that a scene is reproducible instead
  * of being one rounding mode away from flickering.

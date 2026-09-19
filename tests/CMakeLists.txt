@@ -9110,16 +9110,11 @@ add_test(NAME lint_geom_desc_crc
 set_tests_properties(lint_geom_desc_crc PROPERTIES
   LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
-# GEOM.REPLAY -- the geometry replay customer (core entries I11/I12/I24/I38/I39
-# and GEOM.DEPTHQUANT). The arena and the vertex-attribute store are modelled
-# with the arena's contract; depth is differenced against zref::depth_of_raw.
+# GEOM.REPLAY -- the geometry replay customer (core entries I11/I12/I24/I38/I39).
+# The arena and the vertex-attribute store are modelled with the arena's
+# contract. Since owner ruling R31 (2026-09-19) it computes no depth: GEOM.VATTR
+# answers invw24 with the vertex's attributes, so no reciprocal is in its closure.
 set(ZHAO_GEOM_REPLAY_SOURCES
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
-  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_replay.sv)
 add_executable(test_geom_replay_directed geometry/geom_replay_directed.cpp)
 target_link_libraries(test_geom_replay_directed PRIVATE zhao_harness zhao_zref)
@@ -9135,6 +9130,44 @@ add_test(NAME lint_geom_replay
     --top-module zhao_geom_replay ${ZHAO_GEOM_REPLAY_SOURCES})
 set_tests_properties(lint_geom_replay PROPERTIES
   LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# GEOM.VATTR -- the vertex-attribute store and its writer (core entry I46, owner
+# rulings R11 and R31): invw24 per landed vertex on the streaming DEPTHQUANT,
+# u/v_over_w by zref::geom_over_w, the lit colour, alpha. Every row differenced
+# against the reference; every counter fired by stimulus; case H measures rate.
+set(ZHAO_GEOM_VATTR_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_vattr.sv)
+add_executable(test_geom_vattr_directed geometry/geom_vattr_directed.cpp)
+target_link_libraries(test_geom_vattr_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_vattr_directed
+  PREFIX Vzhao_geom_vattr
+  TOP_MODULE zhao_geom_vattr
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_GEOM_VATTR_SOURCES})
+add_test(NAME geom_vattr_directed COMMAND test_geom_vattr_directed)
+set_tests_properties(geom_vattr_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+add_test(NAME lint_geom_vattr
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_vattr ${ZHAO_GEOM_VATTR_SOURCES})
+set_tests_properties(lint_geom_vattr PROPERTIES
+  LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# GEOM.DEPTHQUANT's TAGGED STREAM -- the same law on a schedule that keeps many
+# vertices in flight, answers completing out of order (owner ruling R31).
+add_executable(test_geom_depthquant_stream_directed geometry/geom_depthquant_stream_directed.cpp)
+target_link_libraries(test_geom_depthquant_stream_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_depthquant_stream_directed
+  PREFIX Vzhao_geom_depthquant_stream
+  TOP_MODULE zhao_geom_depthquant_stream
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv)
+add_test(NAME geom_depthquant_stream_directed COMMAND test_geom_depthquant_stream_directed)
+set_tests_properties(geom_depthquant_stream_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # THE SMOKE BENCH'S GEOMETRY FIXTURE, and every number the bench asserts about
 # it, derived from the reference (project_vertex -> Clip -> Setup -> Binner).
