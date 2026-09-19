@@ -230,6 +230,11 @@ int main(int argc, char** argv) {
     int32_t trick_support_deepest = INT32_MAX;
     int32_t trick_support_shallowest = INT32_MIN;
     size_t trick_support_diagnostics = 0;
+    // VERSION 18: the planted 360 gets its own explicit line. It is a subset of
+    // the contact window, so the window verdict already covers it; this makes
+    // "ownership and depth through the WHOLE spin" a stated, counted claim.
+    size_t spin_samples = 0, spin_owned = 0, spin_depth_fail = 0;
+    int32_t spin_deepest = INT32_MAX, spin_shallowest = INT32_MIN;
     uint16_t worst_frame = 0;
     uint8_t worst_sub = 0;
     for (uint16_t f = 0; f < clip.frame_count; ++f) {
@@ -347,6 +352,18 @@ int main(int argc, char** argv) {
               std::printf("TRICK_SUPPORT,%u,%u,%d\n", f, sub, support_mm);
             // Depth describes the declared support only where it IS the
             // contact; an unowned sample has already failed ownership.
+            const bool in_spin = f >= u02::g_u02_trick_spin_start_key &&
+                                 f <= u02::g_u02_trick_spin_settle_key;
+            if (in_spin) {
+              ++spin_samples;
+              if (owned) {
+                ++spin_owned;
+                if (support_mm > -kTrickDepthMinMm || support_mm < -kTrickDepthMaxMm)
+                  ++spin_depth_fail;
+                spin_deepest = std::min(spin_deepest, support_mm);
+                spin_shallowest = std::max(spin_shallowest, support_mm);
+              }
+            }
             if (owned) {
               if (support_mm > -kTrickDepthMinMm ||
                   support_mm < -kTrickDepthMaxMm)
@@ -401,6 +418,18 @@ int main(int argc, char** argv) {
           support_deep_mm, support_shallow_mm,
           support_ok ? "OK" : "FAIL");
       if (!support_ok) rc = 1;
+      const size_t spin_expected = static_cast<size_t>(
+          (u02::g_u02_trick_spin_settle_key - u02::g_u02_trick_spin_start_key + 1) * 2);
+      const bool spin_ok = spin_samples == spin_expected && spin_owned == spin_expected &&
+                           spin_depth_fail == 0;
+      std::printf(
+          "u02-probe: slot %u PLANTED 360 keys %d..%d%s: carrier-B owned %zu/%zu, "
+          "depth-fail %zu, range %d..%d mm — %s\n",
+          clip.slot_id, u02::g_u02_trick_spin_start_key, u02::g_u02_trick_spin_settle_key,
+          u02::g_u02_trick_spin == u02::TrickSpinMode::kNone ? " [SPIN OFF]" : "",
+          spin_owned, spin_samples, spin_depth_fail, spin_deepest, spin_shallowest,
+          spin_ok ? "OK" : "FAIL");
+      if (!spin_ok) rc = 1;
     }
     // ---- PASS 12 / WAVE 2b: THE DEATH CONTRACT --------------------------
     if (is_death) {
@@ -1967,6 +1996,7 @@ int main(int argc, char** argv) {
       // rise under the travelled root
       int32_t worst_eff = INT32_MAX;
       uint16_t worst_eff_key = 0;
+      int travel_contact_keys = 0;
       for (uint16_t f = 0; f < clip.frame_count; ++f) {
         const int32_t rx2 = clip.root[static_cast<size_t>(f) * 3 + 0];
         const int32_t rz2 = clip.root[static_cast<size_t>(f) * 3 + 2];
@@ -1994,7 +2024,16 @@ int main(int argc, char** argv) {
           }
         }
         const int32_t eff = key_min - rise;
-        if (eff < worst_eff) {
+        // VERSION 18: Trick's root now orbits its planted support during the
+        // 360, so it travels. Its DECLARED contact keys (window + apron) are
+        // owned by the contact contract above (depth band + carrier-B
+        // ownership); the float gate here judges only its airborne keys. The
+        // terrain rise is still taken on every key.
+        const bool declared_contact =
+            clip.slot_id == kTrickSlot && f >= u02::kTrickPlantKey - kTrickApronKeys &&
+            f < u02::kTrickLiftKey + kTrickApronKeys;
+        if (declared_contact) ++travel_contact_keys;
+        if (!declared_contact && eff < worst_eff) {
           worst_eff = eff;
           worst_eff_key = f;
         }
@@ -2005,9 +2044,11 @@ int main(int argc, char** argv) {
       std::printf(
           "u02-probe: TRAVEL slot %u (span %d mm, bump_ext %d): max terrain rise "
           "%d mm under the path (key %u); worst clearance-minus-rise %d mm "
-          "(key %u) — %s\n",
+          "(key %u)%s — %s\n",
           clip.slot_id, span_mm, bump_ext, rise_mm, worst_key, eff_mm,
-          worst_eff_key, ok ? "OK" : "FAIL");
+          worst_eff_key,
+          travel_contact_keys ? " [declared-contact keys judged by the contact contract]" : "",
+          ok ? "OK" : "FAIL");
       if (!ok) rc = 1;
     }
   }

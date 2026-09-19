@@ -1306,9 +1306,16 @@ inline void enable_eye_scale_track(zc::Clip& c) {
 
 /** The compression wave sample at key f: flatten = amp * (0.5 + 0.5 sin),
  *  spread the positive-volume partner. amp/period per clip. */
+inline zc::DeformSample compress_from_sin(int32_t sin_q16, int32_t amp);
 inline zc::DeformSample compress_at(int f, int keys, int cycles, int32_t amp,
                                     int32_t phase16 = 0) {
-  const int32_t w = (65536 + sinp(f, keys, cycles, phase16)) / 2;  // 0..65536
+  return compress_from_sin(sinp(f, keys, cycles, phase16), amp);
+}
+/** The same compression wave from an already-evaluated Q16 sine, so a clip that
+ *  warps its own clock (Flight, version 18) shares one arithmetic with every
+ *  other clip. compress_at() above is exactly this applied to sinp(). */
+inline zc::DeformSample compress_from_sin(int32_t sin_q16, int32_t amp) {
+  const int32_t w = (65536 + sin_q16) / 2;  // 0..65536
   int32_t flat = static_cast<int32_t>((static_cast<int64_t>(amp) * w) >> 16);
   // Direction 18: high impact amplitudes can exceed the u16 sidecar. Casting
   // wrapped Damage from a deep squash to nearly zero in one key, and the
@@ -3166,14 +3173,20 @@ inline zc::Clip build_taunt2() {
   return c;
 }
 
-inline int32_t trick_support_center_y_mm(const Rig& g) {
-  int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
+/** The planted support centre (carrier B's chain point), ROOT-RELATIVE in world
+ *  axes: rotated by the root quaternion, not translated. `scale` is units per
+ *  millimetre -- 1 reproduces the version-17 millimetre walk bit for bit, and
+ *  the version-18 spin compensation uses 1000 (micrometres) so the root XZ it
+ *  writes is smooth below one millimetre. */
+inline void trick_support_center_xyz(const Rig& g, int32_t scale, int32_t& ox,
+                                     int32_t& oy, int32_t& oz) {
+  int32_t px = kLoopTubeXMm * scale, py = kLoopNeckExitYMm * scale, pz = 0;
   zc::quat16 q = g.q[kBJunctionF];
   const zc::quat16 local[2] = {g.q[kBNeck], g.q[kBHingeA]};
   const uint8_t span_child[3] = {kBNeck, kBHingeA, kBHingeB};
   for (int i = 0; i < 3; ++i) {
-    const int32_t len = kLoopArcMm[i] + static_cast<int32_t>(
-        (static_cast<int64_t>(g.local_t[span_child[i]][1]) * 1000) >> 16);
+    const int32_t len = (kLoopArcMm[i] + static_cast<int32_t>(
+        (static_cast<int64_t>(g.local_t[span_child[i]][1]) * 1000) >> 16)) * scale;
     int32_t dx = 0, dy = 0, dz = 0;
     quat_rot_vec(q, 0, len, 0, dx, dy, dz);
     px += dx;
@@ -3181,9 +3194,48 @@ inline int32_t trick_support_center_y_mm(const Rig& g) {
     pz += dz;
     if (i < 2) q = quat_mul(q, local[i]);
   }
+  quat_rot_vec(g.q[kBRoot], px, py, pz, ox, oy, oz);
+}
+inline int32_t trick_support_center_y_mm(const Rig& g) {
   int32_t rx = 0, ry = 0, rz = 0;
-  quat_rot_vec(g.q[kBRoot], px, py, pz, rx, ry, rz);
+  trick_support_center_xyz(g, 1, rx, ry, rz);
   return ry;
+}
+
+/** VERSION 18: Trick's planted-yaw progress at key f, UNWRAPPED, in micro-turns
+ *  (1,000,000 = one full revolution; per-mille of a turn x 1000). Two segments,
+ *  each S(x) = 10x^3 - 15x^4 + 6x^5 in int64: 0 -> peak over [start, turn], then
+ *  peak -> final over [turn, settle]; held at final until the lift. Zero outside
+ *  the plant, and zero everywhere when the spin is off. */
+inline int64_t trick_spin_progress_u(int f) {
+  if (g_u02_trick_spin == TrickSpinMode::kNone) return 0;
+  const int s0 = g_u02_trick_spin_start_key;
+  const int s1 = g_u02_trick_spin_turn_key;
+  const int s2 = g_u02_trick_spin_settle_key;
+  if (f <= s0 || f >= kTrickLiftKey) return 0;
+  const int64_t final_u = static_cast<int64_t>(g_u02_trick_spin_gain_pm) * 1000;
+  const int64_t peak_u = final_u + static_cast<int64_t>(g_u02_trick_spin_overshoot_pm) * 1000;
+  const auto ease = [](int64_t from, int64_t to, int64_t x, int64_t n) {
+    // exact rational S(x/n) * (to - from); every term in int64
+    int64_t num, den;
+    if (g_u02_trick_spin_ease == TrickSpinEase::kCubic) {  // C1-only CONTROL
+      num = x * x * (3 * n - 2 * x);
+      den = n * n * n;
+    } else {
+      num = x * x * x * (10 * n * n - 15 * x * n + 6 * x * x);
+      den = n * n * n * n * n;
+    }
+    const int64_t d = to - from;
+    const int64_t q = d * num;
+    return from + (q >= 0 ? (q + den / 2) / den : -((-q + den / 2) / den));
+  };
+  if (f < s1) return ease(0, peak_u, f - s0, s1 - s0);
+  if (f < s2) return ease(peak_u, final_u, f - s1, s2 - s1);
+  return final_u;
+}
+/** micro-turns -> angle16, applied only at the quaternion. */
+inline int32_t trick_spin_a16(int64_t u) {
+  return static_cast<int32_t>((u * 65536 + (u >= 0 ? 500000 : -500000)) / 1000000);
 }
 
 /** THE HEADSTAND TRICK, slot 13 (PASS 3 — owner-suggested: "stand on its
@@ -3200,7 +3252,13 @@ inline int32_t trick_support_center_y_mm(const Rig& g) {
  *  moving the camera or changing contact; the rejected yaw-zero and show-off
  *  paths remain same-binary controls;
  *  148..186 it rights itself WITH OVERSHOOT and floats back up; then a pleased
- *  settle. */
+ *  settle.
+ *  VERSION 18 WAVE F (Owner Direction 19 §9): inside the planted hold, after a
+ *  pause, the creature turns ONE full revolution about the world vertical
+ *  through its planted support, overshoots by kTrickSpinOvershootPm and
+ *  corrects back to exact identity before the unchanged righting
+ *  (trick_spin_progress_u; mqa Q6 extracts and gates it against a no-spin
+ *  control; mprobe owns carrier-B contact through the whole turn). */
 inline zc::Clip build_trick() {
   const int K = kTrickKeys;
   zc::Clip c = clip_shell(13, K, kHoverHeightMm);
@@ -3244,8 +3302,10 @@ inline zc::Clip build_trick() {
         quat_mul(quat_mul(quat_x(flip_x), quat_z(flip_z)), quat_y(face_yaw)));
     // the balance layer FADES over the first keys of the righting instead
     // of cutting (a step in the quats is a one-frame snap)
-    static const Key kBalFade[] = {{0, 1000}, {148, 1000}, {158, 0}, {199, 0}};
-    const int32_t bal = f >= kTrickPlantKey && f < 158 ? curve(kBalFade, 4, f) : 0;
+    static const Key kBalFade[] = {{0, 1000}, {kTrickLiftKey, 1000},
+                                   {kTrickBalFadeEndKey, 0}, {199, 0}};
+    const int32_t bal =
+        f >= kTrickPlantKey && f < kTrickBalFadeEndKey ? curve(kBalFade, 4, f) : 0;
     const bool planted = bal > 0;
     const HingePlay front = front_flex_play(13, f, K);
     if (planted) {
@@ -3286,6 +3346,28 @@ inline zc::Clip build_trick() {
                       curve(kGazeDown, 9, f)) / 1000));
     // eyes wide through the balance (effort + delight), blinks never stop
     apply_squint(g, (planted ? -280 : 0) + blink_at(f, 61));
+    // ---- VERSION 18: THE PLANTED 360 --------------------------------------
+    // A WORLD-vertical yaw pre-multiplied onto the root, pivoting about the
+    // planted SUPPORT rather than the root: the root XZ is moved by exactly the
+    // horizontal displacement the yaw gives the support, so the support stays
+    // where the no-spin clip has it (a rotation about world Y leaves its height
+    // alone, so the Y pivot below is unaffected). A whole number of turns is
+    // skipped outright, so the hold before the turn and after the correction is
+    // byte-identical to the no-spin clip.
+    int32_t root_x_um = 0, root_z_um = 0;
+    {
+      const int64_t spin_u = trick_spin_progress_u(f);
+      if (spin_u % 1000000 != 0) {
+        int32_t bx = 0, by = 0, bz = 0, ax = 0, ay = 0, az = 0;
+        trick_support_center_xyz(g, 1000, bx, by, bz);
+        g.q[kBRoot] = quat_mul(quat_y(trick_spin_a16(spin_u)), g.q[kBRoot]);
+        trick_support_center_xyz(g, 1000, ax, ay, az);
+        if (g_u02_trick_spin_pivot == TrickSpinPivot::kSupport) {
+          root_x_um = bx - ax;
+          root_z_um = bz - az;
+        }
+      }
+    }
     int32_t root_y_mm = curve(kRootY, 12, f);
     if (f == kTrickPlantKey)
       planted_support_reference_y_mm = trick_support_center_y_mm(g);
@@ -3298,7 +3380,14 @@ inline zc::Clip build_trick() {
                   trick_support_center_y_mm(g);
     }
     g.write(c, f);
+    // Root X/Z are zero in clip_shell and stay exactly zero outside the turn.
+    const auto um_q16 = [](int32_t um) {
+      const int64_t v = static_cast<int64_t>(um) * 65536;
+      return static_cast<int32_t>((v + (v >= 0 ? 500000 : -500000)) / 1000000);
+    };
+    c.root[static_cast<size_t>(f) * 3 + 0] = um_q16(root_x_um);
     c.root[static_cast<size_t>(f) * 3 + 1] = fxu(root_y_mm);
+    c.root[static_cast<size_t>(f) * 3 + 2] = um_q16(root_z_um);
     c.deform[static_cast<size_t>(f)] = squash_impact(f, K, kSquash, 9);
   }
   return c;
@@ -4817,12 +4906,37 @@ inline zc::Clip build_taunt3() {
  *
  *  Mechanically: a straight, calm traverse along +x crossing the shot through
  *  its centre (the Zixxtrixx walk staging precedent, the same one hasty uses —
- *  start half the travel back), with ONE clock at kFlightBobPeriodKeys driving
+ *  start half the travel back), with ONE clock of kFlightBobCycles driving
  *  the height, the pitch, the breath and the antenna's hang-back at fixed phase
  *  to each other. The pitch is the bob's own DERIVATIVE — nose up while
  *  climbing, nose down while sinking — which is why this reads as a body
  *  bouncing rather than as a creature with a sine added to its altitude.
  */
+/** VERSION 18 (Owner Direction 19 §7): Flight's ONE clock with its shape knobs.
+ *  Returns the WARPED base phase in angle16 turns (unmasked) for key f:
+ *    t = f * cycles / K turns (exactly sinp's integer arithmetic)
+ *    w = t + c*sin(t) + h*cos(t)
+ *  c = pi*(1/2 - rise fraction) moves the apex earlier (quick climb, long glide)
+ *  and h > 0 lingers through the apex. One harmonic of one cycle, so w - t is
+ *  periodic and the loop seam stays exact for any integer cycle count; with both
+ *  terms zero it returns t unchanged, bit for bit (the version-17 clip). */
+inline int64_t flight_phase16(int f, int K, int cyc) {
+  const int denom = g_u02_flight_seam_control ? K + kFlightSeamControlExtraKeys : K;
+  const int64_t t = (static_cast<int64_t>(f) * cyc * 65536) / denom;
+  const int32_t c16 = (32768 - g_u02_flight_rise_frac16) / 2;
+  const int32_t h16 = g_u02_flight_top_hang16;
+  if (c16 == 0 && h16 == 0) return t;
+  const zref::angle16 a{static_cast<uint16_t>(t & 0xFFFF)};
+  const int64_t s = zref::fx_sin(a).raw;
+  const int64_t co = zref::fx_sin(zref::angle16{static_cast<uint16_t>((t + 0x4000) & 0xFFFF)}).raw;
+  return t + ((c16 * s) >> 16) + ((h16 * co) >> 16);
+}
+/** Q16 sine of the warped Flight clock plus a per-channel phase offset: the
+ *  exact expression sinp() evaluates, with the warped base substituted. */
+inline int32_t flight_sin(int64_t w16, int32_t phase16) {
+  return zref::fx_sin(zref::angle16{static_cast<uint16_t>((w16 + phase16) & 0xFFFF)}).raw;
+}
+
 inline zc::Clip build_flight() {
   const int K = kFlightKeys;
   zc::Clip c = clip_shell(kFlightSlot, K, kHoverHeightMm);
@@ -4838,14 +4952,17 @@ inline zc::Clip build_flight() {
   Rig g;
   // Integer cycles across the clip: the loop seam is exact by construction,
   // which is the same rule every other layer in this file obeys.
-  const int cyc = K / kFlightBobPeriodKeys > 0 ? K / kFlightBobPeriodKeys : 1;
+  // VERSION 18: an explicit integer cycle count (was K / kFlightBobPeriodKeys).
+  const int cyc = g_u02_flight_cycles > 0 ? g_u02_flight_cycles : 1;
   const int32_t breath = kCompressAmpPm * kFlightBreathGainPm / 1000;
   for (int f = 0; f < K; ++f) {
     g.reset();
     antenna_knead(g, kFlightSlot, EyeCam::kFixed, K, f);  // fills g.nod from the schedule
     // ---- THE ONE CLOCK ---------------------------------------------------
-    const int32_t bob = sinp(f, K, cyc);              // the height
-    const int32_t rise = sinp(f, K, cyc, 0x4000);     // d(height)/dt
+    const int64_t w16 = flight_phase16(f, K, cyc);   // the warped clock
+    const int32_t bob = flight_sin(w16, 0);           // the height
+    const int32_t rise =                              // d(height)/dt (+ lead)
+        flight_sin(w16, 0x4000 + g_u02_flight_pitch_lead16);
     // PITCH rides the derivative: nose UP on the way up. A standing lean into
     // the travel sits under it, small — this thing is flying, not diving.
     g.q[kBRoot] = quat_mul(
@@ -4858,7 +4975,7 @@ inline zc::Clip build_flight() {
     g.q[kBRoot] = quat_mul(
         g.q[kBRoot],
         quat_x(static_cast<int32_t>(
-            (static_cast<int64_t>(kFlightBankA16) * sinp(f, K, cyc, 0x2000)) >> 16)));
+            (static_cast<int64_t>(kFlightBankA16) * flight_sin(w16, 0x2000)) >> 16)));
     // ---- THE NODULE TRAIL: the antenna arrives AFTER the body -------------
     // Each ball hangs back on its own lag, so the bounce TRAVELS out along the
     // antenna instead of the three of them pumping in unison. Additive, so a
@@ -4868,11 +4985,11 @@ inline zc::Clip build_flight() {
     {
       const int32_t ty[3] = {
           static_cast<int32_t>((static_cast<int64_t>(kFlightTrailMm[0]) *
-                                sinp(f, K, cyc, -kFlightTrailLag16[0])) >> 16),
+                                flight_sin(w16, -kFlightTrailLag16[0])) >> 16),
           static_cast<int32_t>((static_cast<int64_t>(kFlightTrailMm[1]) *
-                                sinp(f, K, cyc, -kFlightTrailLag16[1])) >> 16),
+                                flight_sin(w16, -kFlightTrailLag16[1])) >> 16),
           static_cast<int32_t>((static_cast<int64_t>(kFlightTrailMm[2]) *
-                                sinp(f, K, cyc, -kFlightTrailLag16[2])) >> 16)};
+                                flight_sin(w16, -kFlightTrailLag16[2])) >> 16)};
       // NEGATED: when the body is high the balls have not caught up yet.
       g.nod.ay -= ty[0];
       g.nod.by -= ty[1];
@@ -4898,13 +5015,13 @@ inline zc::Clip build_flight() {
     // THE BOB. Written from the same `bob` the pitch differentiated, not from a
     // second call to hover_at — one clock means one expression.
     c.root[static_cast<size_t>(f) * 3 + 1] =
-        fxu(kHoverHeightMm) +
-        static_cast<int32_t>((static_cast<int64_t>(fxu(kFlightBobAmpMm)) * bob) >> 16);
+        fxu(kHoverHeightMm + g_u02_flight_lift_mm) +
+        static_cast<int32_t>((static_cast<int64_t>(fxu(g_u02_flight_amp_mm)) * bob) >> 16);
     // THE BREATH, on the same clock and phased to squash at the BOTTOM of the
     // arc: the bounce and the inhale are one motion, which is D5 §6's
     // "it's bouncy, its body stretches, inhales, exhales" read as one thing.
     c.deform[static_cast<size_t>(f)] =
-        compress_at(f, K, cyc, breath, kFlightBreathPhase16);
+        compress_from_sin(flight_sin(w16, g_u02_flight_breath_phase16), breath);
   }
   return c;
 }

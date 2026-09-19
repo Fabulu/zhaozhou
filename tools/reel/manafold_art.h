@@ -2708,7 +2708,32 @@ constexpr int32_t kU02CamKTraverse = 148000;
 // 8.3, so it can sit roughly midway and the creature reads at twice the size
 // hasty's framing gave it. Chosen by rendering it and looking, which is the
 // only way any of the camera constants in this file were chosen.
-constexpr int32_t kU02CamKFlight = 250000;
+constexpr int32_t kU02CamKFlight = 220000;  // WAVE F: pulled back from 250000
+// so the 800 mm bob's apex keeps its antenna in frame (by eye, L3).
+// VERSION 18 WAVE F framing. The camera stays FIXED (no chase). In cam_pitch,
+// a LARGER k is a larger creature (zoom IN), and a MORE NEGATIVE bias raises
+// the creature in the frame (raster y runs down). Every Manafold clip inherits
+// bias 0 from u02_common (zhao_reel.cpp) -- NOT SceneSubject's 14000, which the
+// Wave-F prep assumed; the neutral byte check against the Wave-E bank caught it.
+constexpr int32_t kU02CamBiasHouse = 0;
+constexpr int32_t kU02CamBiasFlight = 5000;  // WAVE F: aim lowered for apex headroom
+constexpr int32_t kU02CamBiasTrick = -10000;  // WAVE F by eye (L7, L12): lifts the
+// planted crown off the bottom edge onto a band of dirt. With kU02CamKTrick it
+// keeps the flip climb and the righting throw inside the top edge (0 frames of
+// antenna ink in the top 4 rows, where k360000/-12000 had 44).
+// Same-binary ladder overrides (ZHAO_U02_FLIGHT_CAM_K / _CAM_BIAS and
+// ZHAO_U02_TRICK_CAM_BIAS), strict-parsed by the reel.
+inline int32_t g_u02_flight_cam_k = kU02CamKFlight;
+inline int32_t g_u02_flight_cam_bias = kU02CamBiasFlight;
+inline int32_t g_u02_trick_cam_bias = kU02CamBiasTrick;
+// Drift's fixed-camera HORIZONTAL aim (the reel's cam_bias_x, held constant: no
+// tracker). Its traverse was framed lopsided -- starting ~3/4 across and leaving
+// the left edge over f260-298 -- so a constant offset recentres the whole journey.
+// Positive moves the content right. 0 = version 17. 14000 keeps the whole
+// journey inside (1 px left at f297, 9 px right at f0); the traverse is ~frame
+// wide, so no constant offset can buy margin at both ends.
+constexpr int32_t kU02DriftCamBiasX = 14000;  // WAVE F: by eye + two-edge check
+inline int32_t g_u02_drift_cam_bias_x = kU02DriftCamBiasX;
 constexpr int32_t kHastyPitchA16 = 2400;   // body pitched into the travel
 constexpr int32_t kHastyBankA16 = 1900;    // clumsy bank
 // PASS 6 F.1 (Direction 5 0-QUATER, and it is unambiguous): "hasty anim looks
@@ -2769,14 +2794,44 @@ constexpr int kFlightKeys = 176;             // 352 frames, ~5.9 s
 // 110 px across the clip. That reads as a zoom-in, not as flight across a
 // shot. Halved, with its own camera (kU02CamKFlight) instead of hasty's.
 constexpr int32_t kFlightSpeedMmPerKey = 25; // ~4.4 m traverse
-constexpr int kFlightBobPeriodKeys = 44;     // 88 frames -- 07-MOTION-STYLE's
-                                             // slow band, four bounces across
-                                             // the clip, an integer count so
-                                             // the loop seam is exact.
-constexpr int32_t kFlightBobAmpMm = 300;     // the DEEPEST bob in the bank, and
+// VERSION 18 (Owner Direction 19 §7: "Flight should move up and down so you
+// can actually see it's flight"). The implicit `176 / 44 = 4` period law is
+// replaced by an explicit INTEGER cycle count, so the loop seam stays exact by
+// construction for every rung of the ladder. Version 17 was 4 cycles.
+constexpr int kFlightBobCycles = 2;          // WAVE F: chosen by eye (v17: 4)
+constexpr int32_t kFlightBobAmpMm = 800;     // WAVE F: chosen by eye (v17: 300)
+                                             // -- 300 barely moved in frame. The
+                                             // DEEPEST bob in the bank, and
                                              // it should be: this is the clip
                                              // whose subject is bobbing. hover
                                              // 132, hasty 210.
+// ---- VERSION 18 FLIGHT SHAPE KNOBS -----------------------------------------
+// All four act on the ONE clock. The phase warp below is a single periodic
+// harmonic, w = t + c*sin(t) + h*cos(t), so it is C-infinity, periodic over one
+// cycle (the seam stays exact) and monotone while |(c,h)| < 1 radian. Height,
+// pitch, bank, breath and the nodule trail all read the WARPED phase, so they
+// stay one motion; the antenna sway (loop_alive) stays on the plain clock.
+// Every neutral value below reproduces the version-17 bytes exactly: the warp
+// returns its input unchanged when both terms are zero.
+//   RISE FRACTION: the share of each cycle spent CLIMBING, in 1/65536 of a
+//   cycle. 0x8000 = symmetric (v17). Below it the climb is a quicker beat and
+//   the sink a longer glide; the warp term c = pi*(1/2 - r).
+constexpr int32_t kFlightRiseFrac16 = 24000;  // WAVE F: 0.366, by eye (v17 0x8000)
+//   TOP HANG: slows the phase through the apex and speeds it through the
+//   trough without moving either in time, in angle16 of warp amplitude.
+//   0 = none (v17).
+constexpr int32_t kFlightTopHang16 = 4000;  // WAVE F: by eye (v17 0)
+//   PITCH LEAD: the nose leads (positive) or trails the climb, in angle16 of
+//   bob phase. 0 = pitch exactly on the bob's derivative (v17).
+constexpr int32_t kFlightPitchLead16 = 4096;  // WAVE F: 1/16 cycle, by eye (v17 0)
+//   CRUISE LIFT: raises the mean flight height above the hover. The v17 bob's
+//   trough cleared the dirt by 210 mm (committed probe), so a deeper bob needs
+//   the whole flight carried higher -- which is also simply what flying is.
+//   0 = the hover height (v17).
+constexpr int32_t kFlightCruiseLiftMm = 500;  // WAVE F: by eye (v17 0)
+// Monotone-warp guard: the combined harmonic must stay under one radian
+// (10430 angle16), or the phase would run backwards through part of a cycle.
+constexpr int32_t kFlightWarpMaxA16 = 10000;
 constexpr int32_t kFlightPitchA16 = 1800;    // +-9.9 deg, locked to the bob
 constexpr int32_t kFlightPitchLeanA16 = 500; // a standing nose-down lean into
                                              // the travel; small, because a
@@ -2795,6 +2850,19 @@ constexpr int32_t kFlightTrailMm[3] = {46, 74, 92};
 constexpr int32_t kFlightTrailLag16[3] = {0x1000, 0x1c00, 0x2800};
 // The antenna's own sway rides the bob's clock too, at the house amplitude.
 constexpr int32_t kFlightSwayPm = 60;
+// Same-binary ladder overrides (ZHAO_U02_FLIGHT_*), strict-parsed by the reel.
+// Defaults are the shipping constants above, so an unset environment is the
+// shipping clip. `g_u02_flight_seam_control` is a gate-only positive control:
+// it stretches the phase denominator so the loop no longer closes.
+inline int g_u02_flight_cycles = kFlightBobCycles;
+inline int32_t g_u02_flight_amp_mm = kFlightBobAmpMm;
+inline int32_t g_u02_flight_lift_mm = kFlightCruiseLiftMm;
+inline int32_t g_u02_flight_rise_frac16 = kFlightRiseFrac16;
+inline int32_t g_u02_flight_top_hang16 = kFlightTopHang16;
+inline int32_t g_u02_flight_pitch_lead16 = kFlightPitchLead16;
+inline int32_t g_u02_flight_breath_phase16 = kFlightBreathPhase16;
+inline bool g_u02_flight_seam_control = false;
+constexpr int kFlightSeamControlExtraKeys = 8;
 
 constexpr int kFallKeys = 170;
 constexpr int32_t kFallHeightMm = 3600;    // blown this high above the hover
@@ -2882,6 +2950,62 @@ inline int32_t g_u02_trick_face_yaw_a16 = kTrickFaceYawA16;
 constexpr int32_t kTrickLegacyShowoffYawA16 = 3000;
 constexpr int32_t kTrickShowoffYawA16 = 0;
 inline int32_t g_u02_trick_showoff_yaw_a16 = kTrickShowoffYawA16;
+
+// The balance layer fades out over the first keys of the righting. This was a
+// bare literal `158` in build_trick; it is tied to the lift key so moving the
+// lift can never silently desynchronise the fade window.
+constexpr int kTrickBalFadeKeys = 10;
+constexpr int kTrickBalFadeEndKey = kTrickLiftKey + kTrickBalFadeKeys;
+
+// ---- VERSION 18 WAVE F: THE PLANTED 360 (Owner Direction 19 §9) ------------
+// "did the 180, paused a bit like now, then did a 360, overshot a little, and
+// corrected back". After the existing pure-X half-turn plants carrier B, the
+// creature holds a pause, then turns one full revolution about the WORLD
+// VERTICAL through the planted support, overshoots by a named amount and
+// corrects back to exactly one revolution (orientation identity) before the
+// existing righting begins at kTrickLiftKey.
+//
+// Progress is authored UNWRAPPED in per-mille of one turn (0 .. 1000+over ..
+// 1000) as two quintic segments S(x) = 10x^3 - 15x^4 + 6x^5, which are C2 at
+// every join (velocity AND acceleration are zero at both ends of each
+// segment). It is converted to angle16 only at the quaternion.
+//
+// kTrickKeys DOES NOT GROW. Every sinp(f, K, n) oscillator, antenna_knead and
+// front_flex_play in the clip is periodic in K; growing K would re-phase the
+// whole clip, and pinning them to the old absolute period would break the loop
+// seam (n*K'/200 is not an integer for the clip's cycle counts). So the spin is
+// authored INSIDE the existing 70-key plant hold [kTrickPlantKey,
+// kTrickLiftKey), which re-partitions that hold into pause / turn / overshoot
+// correction / settle. Nothing outside the hold moves.
+constexpr int kTrickSpinStartKey = 100;     // WAVE F by eye: 22-key (0.73 s) pause
+constexpr int kTrickSpinTurnKey = 128;      // 28-key (0.93 s) turn to 1000 + over
+constexpr int kTrickSpinSettleKey = 140;    // 12-key correction; 8-key hold to lift
+constexpr int32_t kTrickSpinOvershootPm = 40;  // 14.4 deg past 360, by eye (L9)
+constexpr int32_t kTrickSpinGainPm = 1000;     // 1000 = one full revolution
+// Minimum keys per quintic segment: below this the discrete C2 evidence at the
+// join (mqa Q6) stops being meaningful, so the reel refuses such a ladder rung.
+constexpr int kTrickSpinMinSegmentKeys = 8;
+static_assert(kTrickSpinStartKey > kTrickPlantKey, "the pause needs keys");
+static_assert(kTrickSpinTurnKey - kTrickSpinStartKey >= kTrickSpinMinSegmentKeys,
+              "turn segment too short for C2 evidence");
+static_assert(kTrickSpinSettleKey - kTrickSpinTurnKey >= kTrickSpinMinSegmentKeys,
+              "correction segment too short for C2 evidence");
+static_assert(kTrickSpinSettleKey < kTrickLiftKey,
+              "the correction must finish before the righting begins");
+enum class TrickSpinMode : uint8_t { kNormal, kNone };
+// Gate-only positive controls: kRoot pivots the turn about the ROOT (no support
+// compensation, so the planted antenna is dragged round); kCubic swaps the
+// quintic for a C1-only smoothstep (acceleration jumps at every join).
+enum class TrickSpinPivot : uint8_t { kSupport, kRoot };
+enum class TrickSpinEase : uint8_t { kQuintic, kCubic };
+inline TrickSpinMode g_u02_trick_spin = TrickSpinMode::kNormal;
+inline TrickSpinPivot g_u02_trick_spin_pivot = TrickSpinPivot::kSupport;
+inline TrickSpinEase g_u02_trick_spin_ease = TrickSpinEase::kQuintic;
+inline int g_u02_trick_spin_start_key = kTrickSpinStartKey;
+inline int g_u02_trick_spin_turn_key = kTrickSpinTurnKey;
+inline int g_u02_trick_spin_settle_key = kTrickSpinSettleKey;
+inline int32_t g_u02_trick_spin_overshoot_pm = kTrickSpinOvershootPm;
+inline int32_t g_u02_trick_spin_gain_pm = kTrickSpinGainPm;
 
 // PASS 4 (Stage H, Direction 4 §3b): DIRECTIONAL HITS. Four named
 // authored contact stations in one clip, the zixxtrixx-damage precedent;
@@ -4065,6 +4189,11 @@ constexpr int kKneadClipSlots =
 // against their own traverse; nothing inherits this blindly.
 // ONE CONSTANT TO REVERT if the tighter framing reads wrong.
 constexpr int32_t kU02CamK = 360000;
+// VERSION 18 WAVE F: Trick's own fixed-camera zoom (default: the house k). With
+// the planted crown lifted off the bottom edge, the flip climb and the righting
+// throw need headroom at the top; a larger k is a larger creature.
+constexpr int32_t kU02CamKTrick = 330000;  // WAVE F by eye (L12; house 360000)
+inline int32_t g_u02_trick_cam_k = kU02CamKTrick;
 
 // ============================ END KNOBS ====================================
 

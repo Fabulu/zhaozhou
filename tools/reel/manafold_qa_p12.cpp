@@ -35,12 +35,36 @@
 //     translations, scale and every deform lane. --fail-fall-wrap restores the
 //     old root-only wrap and proves the gate sees the pose reset.
 //
+//  Q6 TRICK PLANTED 360 (version 18, Owner Direction 19 SS9). The spin is
+//     EXTRACTED, never read back from its own progress table: the shipped
+//     slot-13 root quaternion is divided by the same builder's output with the
+//     spin OFF (the no-spin control), and the relative rotation is unwrapped
+//     key by key. Three failable categories, each with its own control:
+//       Q6a REVOLUTION  a pure world-vertical yaw; zero through the pause; ONE
+//           monotone turn to a declared small overshoot; ONE reversal; exact
+//           identity (1000 per-mille) before the righting; a bounded step.
+//           --fail-trick-spin-gain (two revolutions, 2000 per-mille)
+//       Q6b C2 JOINS    the discrete acceleration AT each join (motion start,
+//           overshoot peak, correction end) is small against its segments' own
+//           peak acceleration, for the progress AND for the compensating root XZ.
+//           --fail-trick-spin-ease (C1-only smoothstep segments)
+//       Q6c SUPPORT     carrier B's posed support centroid stays where the
+//           no-spin clip has it, key by key through the whole plant.
+//           --fail-trick-spin-pivot (turn about the root, no compensation)
+//
+//  Q7 FLIGHT ONE CLOCK (version 18, Owner Direction 19 SS7). On the shipped
+//     slot-22 root: exactly the declared number of height maxima, the declared
+//     amplitude, and a loop seam whose step/acceleration/jerk are no larger than
+//     the clip's own interior maxima. --fail-flight-seam stretches the clock's
+//     denominator so the loop does not close.
+//
 // Build:
 //   g++ -O2 -std=c++17 -Ireference/include -Iruntime/include -Itests/render \
 //       -Ireference/src tools/reel/manafold_qa_p12.cpp -o manafold-qa-p12.exe
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <array>
 #include <vector>
 #include <cmath>
@@ -60,6 +84,63 @@ namespace zc = zref::creature;
 namespace {
 
 bool sample_zero(const zc::DeformSample& d) { return d.flatten == 0 && d.spread == 0; }
+
+// ---- VERSION 18 WAVE F bounds (declared, each with its reason) -------------
+// Q6a: the extracted relative rotation is quantised by quat16 (1/16384): about
+// 0.02 per-mille of a turn per key. 1 per-mille (0.36 deg) is 50x that, and
+// 5x below the smallest overshoot the gate accepts.
+constexpr double kSpinTolPm = 1.0;
+// The owner asked for a SLIGHT overshoot: at least visible (5 per-mille = 1.8
+// deg) and never a second partial turn (150 per-mille = 54 deg).
+constexpr double kSpinOvershootMinPm = 5.0, kSpinOvershootMaxPm = 150.0;
+// Largest turn per KEY (two presentation frames). 90 per-mille = 32 deg/key,
+// 16 deg per displayed frame: above that a 240p turn strobes instead of turning.
+constexpr double kSpinMaxStepPm = 90.0;
+// Off-axis content of the relative quaternion (x/z lanes of a unit quat): a
+// pure world-Y yaw has none; quat16 quantisation leaves well under 0.001.
+constexpr double kSpinAxisTol = 0.004;
+// Q6b: discrete acceleration AT a join over the peak acceleration of the
+// segments meeting there. A quintic (C2) sampled on n >= 8 keys gives <= 0.22;
+// a C1 smoothstep gives ~0.5 whatever n is.
+constexpr double kJoinAccelRatioMax = 0.25;
+// Root XZ joins are only judged when that segment's motion is measurable.
+constexpr double kJoinRootFloorMm = 0.5;
+// Q6c: carrier B's CONTACT PATCH vs the no-spin clip. The builder pivots about
+// the chain point at carrier B's core station (250 + 680 + 340 = 1270 mm =
+// kKnuckleAtBMm), close above the contact at the inverted loop peak.
+// Measured on the first build: 15.8 mm with the support pivot, 568 mm with the
+// root-pivot control. The builder pins the CHAIN point at carrier B's core
+// exactly; the height-weighted contact sits ~8 mm beside that vertical axis at
+// the bent inverted peak, so a full turn carries it round a circle of <= 2x8 mm
+// (about one pixel at the Trick camera). 24 mm = 1.5x that residual and 24x
+// under the control, so it cannot be tripped by rounding or slipped past by a
+// root pivot. It bounds what the SPIN adds; the pause's own wander is reported.
+constexpr double kSupportDriftMaxMm = 24.0;
+// The contact patch: carrier-B vertices weighted exp(-height above the lowest
+// one / this scale), so the dirt-touching side dominates.
+constexpr double kContactPatchMm = 25.0;
+// Join LOCATION: the last/first key whose progress differs from its hold by no
+// more than quat16 quantisation (~0.02 per-mille); a quintic's first moving key
+// on a 30-key segment already moves 0.4 per-mille.
+constexpr double kJoinDetectPm = 0.1;
+// Q6a control: TWO revolutions. It ends at orientation identity (so the root
+// compensation settles and Q6b/Q6c stay green) but is not the one turn asked for.
+constexpr int32_t kSpinGainControlPm = 2000;
+
+// Same predicate as manafold_probe.cpp's is_trick_support_vertex (carrier B):
+// membership from the UNDEFORMED bind vertex, weight-checked bone, and the
+// swell-core station window.
+bool is_support_b(const zc::SkinVertex& v) {
+  const uint8_t bone = u02::kBHingeB;
+  const bool b0_live = v.b0 == bone && v.w0 > 0;
+  const bool b1_live = v.b1 == bone && v.w0 < 64;
+  if (!b0_live && !b1_live) return false;
+  const int32_t bind_y_mm = static_cast<int32_t>((static_cast<int64_t>(v.y) * 1000) >> 16);
+  const int32_t station_mm = bind_y_mm - (u02::kLoopNeckExitYMm - u02::kLoopBuryMm);
+  const int32_t lo = u02::kLoopCarrierCoreAtMm[2] - u02::kKnuckleSwellHalfMm[2] - 1;
+  const int32_t hi = u02::kLoopCarrierCoreAtMm[2] + u02::kKnuckleSwellHalfMm[2] + 1;
+  return station_mm >= lo && station_mm <= hi;
+}
 
 }  // namespace
 
@@ -88,6 +169,15 @@ int main(int argc, char** argv) {
   const bool fall_wrap_leg =
       argc > 1 && std::strcmp(argv[1], "--fail-fall-wrap") == 0;
   if (fall_wrap_leg) u02::g_u02_fall_wrap_control = true;
+  // VERSION 18 WAVE F controls -- also set BEFORE the bank is built.
+  const bool spin_gain_leg = argc > 1 && std::strcmp(argv[1], "--fail-trick-spin-gain") == 0;
+  const bool spin_ease_leg = argc > 1 && std::strcmp(argv[1], "--fail-trick-spin-ease") == 0;
+  const bool spin_pivot_leg = argc > 1 && std::strcmp(argv[1], "--fail-trick-spin-pivot") == 0;
+  const bool flight_seam_leg = argc > 1 && std::strcmp(argv[1], "--fail-flight-seam") == 0;
+  if (spin_gain_leg) u02::g_u02_trick_spin_gain_pm = kSpinGainControlPm;
+  if (spin_ease_leg) u02::g_u02_trick_spin_ease = u02::TrickSpinEase::kCubic;
+  if (spin_pivot_leg) u02::g_u02_trick_spin_pivot = u02::TrickSpinPivot::kRoot;
+  if (flight_seam_leg) u02::g_u02_flight_seam_control = true;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) { std::fprintf(stderr, "qa-p12: compile produced no meshlets\n"); return 1; }
   int fails = 0;
@@ -355,11 +445,15 @@ int main(int argc, char** argv) {
       {14, 210.0, "damage: the knockback impact"},
       {17, 165.0, "death-drop: the float fails and it falls"},
       {20, 300.0, "blown: the blast off the ground and the fall into the catch (R4)"},
+      // VERSION 18 WAVE F: the planted 360 turns about the planted SUPPORT, so
+      // the body swings round its antenna on a ~0.4 m radius; at the turn's
+      // peak speed that is 178 mm/key, C2-smooth (Q6b), not a teleport.
+      {13, 240.0, "trick: the planted 360 swings the body round its planted antenna"},
   };
   int q3_fails = 0;
   bool startle_over = false;
   std::printf("\nQ3 ROOT CONTINUITY -- largest single-key INTERIOR root step per clip, BOUNDED\n");
-  std::printf("   Default ceiling %.0f mm; four clips declare their own (table in the source).\n",
+  std::printf("   Default ceiling %.0f mm; five clips declare their own (table in the source).\n",
               kRootStepDefaultMm);
   std::printf("   THE WRAP COLUMN IS THE LOOP SEAM (last key -> key 0), reported not gated. The\n"
               "   site loops every clip, so the seam is a frame the owner watches; a TRAVELLING\n"
@@ -559,6 +653,281 @@ int main(int argc, char** argv) {
                               sizeof(zc::DeformSample)) == 0;
     check("extra deform lanes", dex_shape, dex_equal);
   }
+
+  // ---------------- Q6: TRICK PLANTED 360 ---------------------------------
+  int q6a_fails = 0, q6b_fails = 0, q6c_fails = 0;
+  {
+    std::printf("\nQ6 TRICK PLANTED 360 -- extracted from the shipped root vs the no-spin control\n");
+    const zc::Clip* spin = nullptr;
+    for (const zc::Clip& c : T.bank.clips) if (c.slot_id == 13) spin = &c;
+    // The control: the SAME builder with the spin off, finalized like the bank.
+    const u02::TrickSpinMode saved = u02::g_u02_trick_spin;
+    u02::g_u02_trick_spin = u02::TrickSpinMode::kNone;
+    zc::Clip none = u02::build_trick();
+    u02::finalize_rear_follow(none);
+    u02::g_u02_trick_spin = saved;
+    const size_t bc = u02::kBoneCount;
+    if (spin == nullptr || spin->frame_count != none.frame_count) {
+      std::printf("   slot 13 MISSING or length mismatch\n");
+      ++q6a_fails;
+    } else {
+      const int k0 = u02::kTrickPlantKey, k1 = u02::kTrickLiftKey;
+      const int n = k1 - k0;
+      std::vector<double> pm(static_cast<size_t>(n), 0.0);
+      double prev = 0.0, axis_worst = 0.0;
+      for (int f = k0; f < k1; ++f) {
+        const zc::quat16& a = spin->quats[static_cast<size_t>(f) * bc + u02::kBRoot];
+        const zc::quat16& b = none.quats[static_cast<size_t>(f) * bc + u02::kBRoot];
+        // rel = a * conj(b), in doubles from the stored lanes
+        const double aw = a.q[0], ax = a.q[1], ay = a.q[2], az = a.q[3];
+        const double bw = b.q[0], bx = -b.q[1], by = -b.q[2], bz = -b.q[3];
+        double rw = aw * bw - ax * bx - ay * by - az * bz;
+        double rx = aw * bx + ax * bw + ay * bz - az * by;
+        double ry = aw * by - ax * bz + ay * bw + az * bx;
+        double rz = aw * bz + ax * by - ay * bx + az * bw;
+        const double nn = std::sqrt(rw * rw + rx * rx + ry * ry + rz * rz);
+        rw /= nn; rx /= nn; ry /= nn; rz /= nn;
+        axis_worst = std::max(axis_worst, std::max(std::fabs(rx), std::fabs(rz)));
+        // yaw in per-mille of a turn, unwrapped against the previous key (the
+        // quaternion sign ambiguity is a whole turn, removed by the same unwrap)
+        double th = std::atan2(ry, rw) / 3.14159265358979323846 * 1000.0;
+        while (th - prev > 500.0) th -= 1000.0;
+        while (th - prev < -500.0) th += 1000.0;
+        pm[static_cast<size_t>(f - k0)] = th;
+        prev = th;
+      }
+      int peak = 0;
+      for (int i = 1; i < n; ++i) if (pm[i] > pm[peak]) peak = i;
+      int start = 0;  // last key of the pause
+      while (start + 1 < n && std::fabs(pm[start + 1]) <= kJoinDetectPm) ++start;
+      const double final_pm = pm[n - 1];
+      int end = n - 1;  // first key of the corrected hold
+      while (end - 1 > peak && std::fabs(pm[end - 1] - final_pm) <= kJoinDetectPm) --end;
+      int reversals = 0, last_sign = 0;
+      double step_worst = 0.0;
+      for (int i = 1; i < n; ++i) {
+        const double d = pm[i] - pm[i - 1];
+        step_worst = std::max(step_worst, std::fabs(d));
+        const int sg = d > 0.2 ? 1 : d < -0.2 ? -1 : 0;
+        if (sg != 0) {
+          if (last_sign != 0 && sg != last_sign) ++reversals;
+          last_sign = sg;
+        }
+      }
+      const double over = pm[peak] - 1000.0;
+      const bool pause_ok = start > 0;
+      const bool ident_ok = std::fabs(final_pm - 1000.0) <= kSpinTolPm;
+      const bool over_ok = over >= kSpinOvershootMinPm && over <= kSpinOvershootMaxPm;
+      const bool rev_ok = reversals == 1;
+      const bool step_ok = step_worst <= kSpinMaxStepPm;
+      const bool axis_ok = axis_worst <= kSpinAxisTol;
+      std::printf("   Q6a pause keys %d..%d | turn to key %d peak %.2f pm (overshoot %.2f, declared %d)\n"
+                  "       corrected by key %d to %.2f pm | reversals %d | worst step %.2f pm/key"
+                  " | off-axis %.5f\n",
+                  k0, k0 + start, k0 + peak, pm[peak], over,
+                  static_cast<int>(u02::g_u02_trick_spin_overshoot_pm), k0 + end, final_pm,
+                  reversals, step_worst, axis_worst);
+      if (!pause_ok) { std::printf("   Q6a FAIL no pause: the turn starts at the plant\n"); ++q6a_fails; }
+      if (!ident_ok) { std::printf("   Q6a FAIL not ONE full revolution: %.2f pm before the righting\n", final_pm); ++q6a_fails; }
+      if (!over_ok) { std::printf("   Q6a FAIL overshoot %.2f pm outside %.0f..%.0f\n", over, kSpinOvershootMinPm, kSpinOvershootMaxPm); ++q6a_fails; }
+      if (!rev_ok) { std::printf("   Q6a FAIL %d reversals (exactly one: the correction)\n", reversals); ++q6a_fails; }
+      if (!step_ok) { std::printf("   Q6a FAIL step %.2f pm/key over %.0f\n", step_worst, kSpinMaxStepPm); ++q6a_fails; }
+      if (!axis_ok) { std::printf("   Q6a FAIL not a pure world-vertical yaw (off-axis %.5f)\n", axis_worst); ++q6a_fails; }
+      // identity from the lift through the rest of the clip (same rotation as
+      // the no-spin righting, either quaternion sign)
+      for (int f = k1; f < spin->frame_count; ++f) {
+        const zc::quat16& a = spin->quats[static_cast<size_t>(f) * bc + u02::kBRoot];
+        const zc::quat16& b = none.quats[static_cast<size_t>(f) * bc + u02::kBRoot];
+        const int64_t dot = static_cast<int64_t>(a.q[0]) * b.q[0] + static_cast<int64_t>(a.q[1]) * b.q[1] +
+                            static_cast<int64_t>(a.q[2]) * b.q[2] + static_cast<int64_t>(a.q[3]) * b.q[3];
+        if (std::llabs(dot) < 16384LL * 16384LL - 16384LL * 8LL) {
+          std::printf("   Q6a FAIL key %d after the lift differs from the no-spin righting\n", f);
+          ++q6a_fails;
+          break;
+        }
+      }
+
+      // Q6b: C2 at the three joins, progress and root XZ
+      const auto acc = [&](const std::vector<double>& v, int i) {
+        return v[static_cast<size_t>(i + 1)] - 2.0 * v[static_cast<size_t>(i)] +
+               v[static_cast<size_t>(i - 1)];
+      };
+      std::vector<double> rxv(static_cast<size_t>(n)), rzv(static_cast<size_t>(n));
+      for (int f = k0; f < k1; ++f) {
+        rxv[static_cast<size_t>(f - k0)] = spin->root[static_cast<size_t>(f) * 3 + 0] / 65536.0 * 1000.0;
+        rzv[static_cast<size_t>(f - k0)] = spin->root[static_cast<size_t>(f) * 3 + 2] / 65536.0 * 1000.0;
+      }
+      const auto seg_peak = [&](const std::vector<double>& v, int lo, int hi) {
+        double m = 0.0;
+        for (int i = std::max(1, lo); i <= std::min(n - 2, hi); ++i) m = std::max(m, std::fabs(acc(v, i)));
+        return m;
+      };
+      const int joins[3] = {start, peak, end};
+      const char* jname[3] = {"motion start", "overshoot peak", "correction end"};
+      for (int j = 0; j < 3; ++j) {
+        const int J = joins[j];
+        if (J < 1 || J > n - 2) {
+          std::printf("   Q6b FAIL join %s at the window edge\n", jname[j]);
+          ++q6b_fails;
+          continue;
+        }
+        const int lo = j == 2 ? peak : start;
+        const int hi = j == 0 ? peak : end;
+        const double pk = seg_peak(pm, lo, hi);
+        const double r = pk > 0 ? std::fabs(acc(pm, J)) / pk : 0.0;
+        double rr = 0.0;
+        const double rpk = std::max(seg_peak(rxv, lo, hi), seg_peak(rzv, lo, hi));
+        if (rpk > kJoinRootFloorMm)
+          rr = std::max(std::fabs(acc(rxv, J)), std::fabs(acc(rzv, J))) / rpk;
+        const bool ok = r <= kJoinAccelRatioMax && rr <= kJoinAccelRatioMax;
+        std::printf("   Q6b %-15s key %3d  progress accel ratio %.3f  root-XZ ratio %.3f"
+                    " (segment peak %.2f mm/key^2)  %s\n",
+                    jname[j], k0 + J, r, rr, rpk, ok ? "C2" : "FAIL -- ACCELERATION JUMPS");
+        if (!ok) ++q6b_fails;
+      }
+
+      // Q6c: carrier B's CONTACT PATCH (its vertices within kContactPatchMm of
+      // its lowest point) spin vs no-spin, every key of the plant. The patch is
+      // what touches the dirt; the centroid of the whole curved swell sits off
+      // the arc and is REPORTED only (a turn carries it round a small circle).
+      double drift_worst = 0.0, cen_worst = 0.0, wander_worst = 0.0;
+      double wander_x0 = 0.0, wander_z0 = 0.0;
+      int drift_at = -1;
+      for (int f = k0; f < k1; ++f) {
+        std::array<zc::mat3x4fx, zc::kMaxBones> ps, pn;
+        zc::decode_pose(T, *spin, static_cast<uint16_t>(f), ps, nullptr, 0);
+        zc::decode_pose(T, none, static_cast<uint16_t>(f), pn, nullptr, 0);
+        struct P { int32_t x, y, z; };
+        std::vector<P> vs, vn;
+        for (const zc::Meshlet& m : T.mesh)
+          for (size_t vi = 0; vi < m.verts.size(); ++vi) {
+            if (!is_support_b(m.verts[vi])) continue;
+            zc::SkinVertex a = m.verts[vi], b = m.verts[vi];
+            if (!m.deform.empty()) {
+              a = zc::deform_skin_vertex(a, m.deform[vi], spin->deform[static_cast<size_t>(f)]);
+              b = zc::deform_skin_vertex(b, m.deform[vi], none.deform[static_cast<size_t>(f)]);
+            }
+            P p1{}, p2{};
+            zc::skin_vertex(ps.data(), a, p1.x, p1.y, p1.z, nullptr);
+            zc::skin_vertex(pn.data(), b, p2.x, p2.y, p2.z, nullptr);
+            vs.push_back(p1);
+            vn.push_back(p2);
+          }
+        if (vs.empty()) {
+          ++q6c_fails;
+          std::printf("   Q6c FAIL no carrier-B vertices\n");
+          break;
+        }
+        const auto patch = [](const std::vector<P>& v, double& cx, double& cz, double& ax,
+                              double& az) {
+          // Height-weighted, so the estimate slides smoothly instead of jumping
+          // when the single lowest vertex changes (the loop has 8 vertices per
+          // ring, ~50 mm apart: a hard cut-off jitters by tens of mm).
+          int32_t ymin = INT32_MAX;
+          for (const P& p : v) ymin = std::min(ymin, p.y);
+          double sx = 0, sz = 0, sw = 0, tx = 0, tz = 0;
+          for (const P& p : v) {
+            tx += p.x; tz += p.z;
+            const double w = std::exp(-(p.y - ymin) / 65.536 / kContactPatchMm);
+            sx += w * p.x; sz += w * p.z; sw += w;
+          }
+          cx = sx / sw; cz = sz / sw;
+          ax = tx / v.size(); az = tz / v.size();
+        };
+        double scx, scz, sax, saz, ncx, ncz, nax, naz;
+        patch(vs, scx, scz, sax, saz);
+        patch(vn, ncx, ncz, nax, naz);
+        const double k = 1000.0 / 65536.0;
+        const double d = std::hypot((scx - ncx) * k, (scz - ncz) * k);
+        const double dc = std::hypot((sax - nax) * k, (saz - naz) * k);
+        cen_worst = std::max(cen_worst, dc);
+        // PRE-EXISTING, reported only: how far the NO-SPIN contact wanders from
+        // where it touched down (the balance wobble is height-pivoted only).
+        if (f == k0) { wander_x0 = ncx; wander_z0 = ncz; }
+        wander_worst = std::max(wander_worst, std::hypot((ncx - wander_x0) * k, (ncz - wander_z0) * k));
+        if (d > drift_worst) { drift_worst = d; drift_at = f; }
+      }
+      const bool drift_ok = drift_worst <= kSupportDriftMaxMm;
+      std::printf("   Q6c carrier-B contact-patch drift vs no-spin: worst %.2f mm at key %d (allowed %.0f)  %s\n"
+                  "       reported only: whole-swell centroid %.2f mm; the NO-SPIN contact itself"
+                  " wanders %.1f mm from touchdown through the pause (pre-existing)\n",
+                  drift_worst, drift_at, kSupportDriftMaxMm,
+                  drift_ok ? "planted" : "FAIL -- THE SUPPORT SLIDES", cen_worst, wander_worst);
+      if (!drift_ok) ++q6c_fails;
+    }
+    fails += q6a_fails + q6b_fails + q6c_fails;
+  }
+
+  // ---------------- Q7: FLIGHT ONE CLOCK -----------------------------------
+  int q7_fails = 0;
+  {
+    std::printf("\nQ7 FLIGHT ONE CLOCK -- slot 22 root height: cycles, amplitude, seam\n");
+    const zc::Clip* fl = nullptr;
+    for (const zc::Clip& c : T.bank.clips) if (c.slot_id == u02::kFlightSlot) fl = &c;
+    if (fl == nullptr || fl->frame_count < 8) {
+      std::printf("   slot %u MISSING\n", static_cast<unsigned>(u02::kFlightSlot));
+      ++q7_fails;
+    } else {
+      const int K = fl->frame_count;
+      std::vector<double> y(static_cast<size_t>(K));
+      double lo = 1e9, hi = -1e9, xabs = 0.0;
+      for (int f = 0; f < K; ++f) {
+        y[static_cast<size_t>(f)] = fl->root[static_cast<size_t>(f) * 3 + 1] / 65536.0 * 1000.0;
+        lo = std::min(lo, y[static_cast<size_t>(f)]);
+        hi = std::max(hi, y[static_cast<size_t>(f)]);
+        xabs = std::max(xabs, std::fabs(fl->root[static_cast<size_t>(f) * 3 + 0] / 65536.0 * 1000.0));
+      }
+      const auto Y = [&](int f) { return y[static_cast<size_t>(((f % K) + K) % K)]; };
+      int maxima = 0;
+      for (int f = 0; f < K; ++f)
+        if (Y(f) > Y(f - 1) && Y(f) >= Y(f + 1)) ++maxima;
+      const auto d1 = [&](int f) { return Y(f + 1) - Y(f); };
+      const auto d2 = [&](int f) { return Y(f + 1) - 2 * Y(f) + Y(f - 1); };
+      const auto d3 = [&](int f) { return Y(f + 2) - 3 * Y(f + 1) + 3 * Y(f) - Y(f - 1); };
+      // interior: every stencil that stays inside keys 0..K-1
+      double s1 = 0, s2 = 0, s3 = 0;
+      for (int f = 0; f + 1 < K; ++f) s1 = std::max(s1, std::fabs(d1(f)));
+      for (int f = 1; f + 1 < K; ++f) s2 = std::max(s2, std::fabs(d2(f)));
+      for (int f = 1; f + 2 < K; ++f) s3 = std::max(s3, std::fabs(d3(f)));
+      // the seam: every stencil that crosses key K-1 -> 0
+      const double e1 = std::fabs(d1(K - 1));
+      const double e2 = std::max(std::fabs(d2(K - 1)), std::fabs(d2(0)));
+      const double e3 = std::max(std::max(std::fabs(d3(K - 2)), std::fabs(d3(K - 1))), std::fabs(d3(0)));
+      const double amp = (hi - lo) / 2.0;
+      const double want = u02::g_u02_flight_amp_mm;
+      const bool cyc_ok = maxima == u02::g_u02_flight_cycles;
+      const bool amp_ok = std::fabs(amp - want) <= want * 0.02 + 2.0;
+      const bool seam_ok = e1 <= s1 * 1.05 + 0.5 && e2 <= s2 * 1.05 + 0.5 && e3 <= s3 * 1.05 + 0.5;
+      std::printf("   maxima %d (declared %d) | amplitude %.1f mm (declared %d) | root x max %.1f mm\n",
+                  maxima, u02::g_u02_flight_cycles, amp, static_cast<int>(want), xabs);
+      std::printf("   seam step/accel/jerk %.2f/%.3f/%.4f vs interior max %.2f/%.3f/%.4f mm  %s\n",
+                  e1, e2, e3, s1, s2, s3, seam_ok ? "closes" : "FAIL -- THE LOOP SEAM IS A POP");
+      if (!cyc_ok) { std::printf("   FAIL height maxima != declared cycles\n"); ++q7_fails; }
+      if (!amp_ok) { std::printf("   FAIL amplitude off the declared knob\n"); ++q7_fails; }
+      if (!seam_ok) ++q7_fails;
+    }
+    fails += q7_fails;
+  }
+
+  // Each Wave-F leg is judged on its OWN category, and must leave the other
+  // Wave-F categories green, so a control cannot be certified by a neighbour.
+  const auto attributed = [&](const char* leg, int own, int others) {
+    if (own == 0 || others != 0) {
+      std::printf("qa-p12: %s did NOT fire alone (own %d, other Wave-F categories %d)\n", leg, own,
+                  others);
+      return 1;
+    }
+    std::printf("qa-p12: FAILABLE LEG OK -- %s fired only its own category (%d item(s))\n", leg, own);
+    return 0;
+  };
+  if (spin_gain_leg)
+    return attributed("--fail-trick-spin-gain [Q6a]", q6a_fails, q6b_fails + q6c_fails + q7_fails);
+  if (spin_ease_leg)
+    return attributed("--fail-trick-spin-ease [Q6b]", q6b_fails, q6a_fails + q6c_fails + q7_fails);
+  if (spin_pivot_leg)
+    return attributed("--fail-trick-spin-pivot [Q6c]", q6c_fails, q6a_fails + q6b_fails + q7_fails);
+  if (flight_seam_leg)
+    return attributed("--fail-flight-seam [Q7]", q7_fails, q6a_fails + q6b_fails + q6c_fails);
 
   std::printf("\n%s: %d failure(s)%s\n", fails ? "FAIL" : "PASS", fails,
               fail_leg ? "   [FAILABLE LEG: lane 0 answered for every lane]" : "");

@@ -5939,6 +5939,10 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   // races away from it. So drift's brief left-edge clip is a WRAP question
   // for a later pass and is deliberately left open rather than papered over
   // with a camera constant that measurably harms it.
+  // VERSION 18 WAVE F: looked at again with every frame of the live bank. Drift
+  // keeps no tracker, but its framing was simply LOPSIDED: the journey began
+  // ~3/4 across and left through the left edge over f260-298 before the wrap.
+  // A CONSTANT horizontal aim (u02::kU02DriftCamBiasX, below) recentres it.
   if (slot == 8) {
     const int32_t bx = kU02HastyBiasX;
     s.cam_bias_x = bx;       // the aim starts AHEAD of the creature...
@@ -5951,7 +5955,21 @@ SceneSubject subject_u02_clip(int slot, const char* name, uint32_t keys, bool or
   }
   // ...except flight, whose traverse is half theirs and which was a thumbnail
   // at 148000 when it was rendered and looked at.
-  if (slot == u02::kFlightSlot) s.cam_k = u02::kU02CamKFlight;
+  if (slot == u02::kFlightSlot) {
+    s.cam_k = u02::g_u02_flight_cam_k;       // default kU02CamKFlight
+    s.cam_bias = u02::g_u02_flight_cam_bias;  // default the house bias
+  }
+  // VERSION 18 WAVE F: Trick's fixed camera, with a named aim (default = the
+  // house bias it has always inherited) so the planted crown can be lifted off
+  // the bottom edge without a chase.
+  if (slot == 1) {  // Drift: a constant horizontal aim, not a tracker
+    s.cam_bias_x = u02::g_u02_drift_cam_bias_x;
+    s.cam_bias_x_end = u02::g_u02_drift_cam_bias_x;
+  }
+  if (slot == 13) {
+    s.cam_k = u02::g_u02_trick_cam_k;
+    s.cam_bias = u02::g_u02_trick_cam_bias;
+  }
   // PASS 4 (Stage T -- the reviewer's fault 2b): the fall started ABOVE the
   // frame; 190 of 340 frames showed empty sky. The authored 3.6 m drop
   // stays (Direction 3 asked for it); the CAMERA pulls back and tips up so
@@ -8150,6 +8168,105 @@ int main(int argc, char** argv) {
                               -16384, 16384, v))
       return 2;
     u02::g_u02_trick_showoff_yaw_a16 = v;
+  }
+  // VERSION 18 WAVE F: Trick planted-360 and Flight ladder selectors. All are
+  // strict; unset is the shipping clip. Timing rungs must keep every quintic
+  // segment at least kTrickSpinMinSegmentKeys long and finish before the lift.
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_SPIN")) {
+    if (std::strcmp(e, "normal") == 0)
+      u02::g_u02_trick_spin = u02::TrickSpinMode::kNormal;
+    else if (std::strcmp(e, "none") == 0)
+      u02::g_u02_trick_spin = u02::TrickSpinMode::kNone;
+    else {
+      std::fprintf(stderr, "ZHAO_U02_TRICK_SPIN=%s invalid (expected normal|none)\n", e);
+      return 2;
+    }
+  }
+  {
+    struct { const char* name; int lo, hi; int* dst; } kSpinKeys[3] = {
+        {"ZHAO_U02_TRICK_SPIN_START_KEY", u02::kTrickPlantKey + 1, u02::kTrickLiftKey - 1,
+         &u02::g_u02_trick_spin_start_key},
+        {"ZHAO_U02_TRICK_SPIN_TURN_KEY", u02::kTrickPlantKey + 1, u02::kTrickLiftKey - 1,
+         &u02::g_u02_trick_spin_turn_key},
+        {"ZHAO_U02_TRICK_SPIN_SETTLE_KEY", u02::kTrickPlantKey + 1, u02::kTrickLiftKey - 1,
+         &u02::g_u02_trick_spin_settle_key}};
+    for (auto& k : kSpinKeys)
+      if (const char* e = std::getenv(k.name)) {
+        int v = 0;
+        if (!parse_strict_env_int(k.name, e, k.lo, k.hi, v)) return 2;
+        *k.dst = v;
+      }
+    if (u02::g_u02_trick_spin_turn_key - u02::g_u02_trick_spin_start_key <
+            u02::kTrickSpinMinSegmentKeys ||
+        u02::g_u02_trick_spin_settle_key - u02::g_u02_trick_spin_turn_key <
+            u02::kTrickSpinMinSegmentKeys) {
+      std::fprintf(stderr,
+                   "ZHAO_U02_TRICK_SPIN_*_KEY: start %d turn %d settle %d leaves a "
+                   "segment under %d keys\n",
+                   u02::g_u02_trick_spin_start_key, u02::g_u02_trick_spin_turn_key,
+                   u02::g_u02_trick_spin_settle_key, u02::kTrickSpinMinSegmentKeys);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_SPIN_OVERSHOOT_PM", e, 0, 250, v)) return 2;
+    u02::g_u02_trick_spin_overshoot_pm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_SPIN_GAIN_PM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_SPIN_GAIN_PM", e, 0, 2000, v)) return 2;
+    u02::g_u02_trick_spin_gain_pm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_DRIFT_CAM_BX")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_DRIFT_CAM_BX", e, -40000, 40000, v)) return 2;
+    u02::g_u02_drift_cam_bias_x = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_CAM_K")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_CAM_K", e, 60000, 600000, v)) return 2;
+    u02::g_u02_trick_cam_k = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_TRICK_CAM_BIAS")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_TRICK_CAM_BIAS", e, -40000, 40000, v)) return 2;
+    u02::g_u02_trick_cam_bias = v;
+  }
+  {
+    struct { const char* name; int lo, hi; int32_t* dst; } kFlight[] = {
+        {"ZHAO_U02_FLIGHT_BOB_MM", 0, 2000, &u02::g_u02_flight_amp_mm},
+        {"ZHAO_U02_FLIGHT_LIFT_MM", 0, 2000, &u02::g_u02_flight_lift_mm},
+        {"ZHAO_U02_FLIGHT_RISE_FRAC16", 16384, 49152, &u02::g_u02_flight_rise_frac16},
+        {"ZHAO_U02_FLIGHT_TOP_HANG16", -u02::kFlightWarpMaxA16, u02::kFlightWarpMaxA16,
+         &u02::g_u02_flight_top_hang16},
+        {"ZHAO_U02_FLIGHT_PITCH_LEAD16", -16384, 16384, &u02::g_u02_flight_pitch_lead16},
+        {"ZHAO_U02_FLIGHT_BREATH_PHASE16", 0, 65535, &u02::g_u02_flight_breath_phase16},
+        {"ZHAO_U02_FLIGHT_CAM_K", 60000, 400000, &u02::g_u02_flight_cam_k},
+        {"ZHAO_U02_FLIGHT_CAM_BIAS", -40000, 40000, &u02::g_u02_flight_cam_bias}};
+    for (auto& k : kFlight)
+      if (const char* e = std::getenv(k.name)) {
+        int v = 0;
+        if (!parse_strict_env_int(k.name, e, k.lo, k.hi, v)) return 2;
+        *k.dst = v;
+      }
+    if (const char* e = std::getenv("ZHAO_U02_FLIGHT_BOB_CYCLES")) {
+      int v = 0;
+      if (!parse_strict_env_int("ZHAO_U02_FLIGHT_BOB_CYCLES", e, 1, 12, v)) return 2;
+      u02::g_u02_flight_cycles = v;
+    }
+    // The warp must stay monotone: |(c, h)| under one radian.
+    const int64_t c16 = (32768 - u02::g_u02_flight_rise_frac16) / 2;
+    const int64_t h16 = u02::g_u02_flight_top_hang16;
+    if (c16 * c16 + h16 * h16 >
+        static_cast<int64_t>(u02::kFlightWarpMaxA16) * u02::kFlightWarpMaxA16) {
+      std::fprintf(stderr,
+                   "ZHAO_U02_FLIGHT_RISE_FRAC16/TOP_HANG16: warp |(%lld,%lld)| exceeds %d "
+                   "(the clock would run backwards)\n",
+                   static_cast<long long>(c16), static_cast<long long>(h16),
+                   u02::kFlightWarpMaxA16);
+      return 2;
+    }
   }
   if (const char* e = std::getenv("ZHAO_U02_TAUNT3_FLICK_YAW_A16")) {
     int v = 0;
