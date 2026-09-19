@@ -86,6 +86,31 @@
 //   * NO FRAMEBUFFER WRITES.
 //
 // ---------------------------------------------------------------------------
+// THE PUBLICATION IS A DIRECTORY ROW (spec/memory_rules.md 5f.1, 2026-09-19)
+// ---------------------------------------------------------------------------
+// Until this commit the publication was `{slot, generation, tag}`, and
+// `zhao_material_resolve.sv`'s header said of it, correctly, "a slot and a
+// generation, carrying NEITHER a base address, NOR an extent, NOR a resource
+// kind. A directory cannot be built from it."
+//
+// Two thirds of that was never a missing VALUE -- it was a dropped one. This
+// block already TAKES `req_vram_addr_i` and `req_len_i` and bounds-checks both
+// against `cfg_region_*` in `in_guard_c` before a byte moves, and the resource
+// kind already travelled as `publish_tag_o`. So base and extent are now two
+// output ports carrying quantities this block had already validated.
+//
+// What was genuinely absent is the KEY, and owner ruling 5f.1 supplies it: **a
+// published slot is named by the handle index of the resource it holds.** That
+// makes `{index:24}` the directory key and `{slot, base, extent, kind}` its
+// row, so `req_index_i` now rides the request and `publish_index_o` names the
+// row. Nothing else here carries a 24-bit resource name and nothing could
+// derive one -- see `req_index_i`'s own comment.
+//
+// THIS BLOCK STILL OWNS NO LAYOUT. It publishes where the bytes went; it does
+// not say how the region is carved up, which 5f leaves open and 5f.1 does not
+// close.
+//
+// ---------------------------------------------------------------------------
 // ONE BURST IN FLIGHT, ON PURPOSE
 // ---------------------------------------------------------------------------
 // This is a BACKGROUND client (contract: "No blocking of the render path... a
@@ -116,6 +141,19 @@ module zhao_mem_upload
     input  var logic        req_valid_i,
     output var logic        req_ready_o,
     input  var logic [ 7:0] req_tag_i,        // which consumer asked; echoed back
+    // THE RESOURCE'S OWN NAME -- `spec/memory_rules.md` 5f.1, ruled 2026-09-19:
+    // "a published slot is named by the handle index of the resource it holds".
+    // This is the 24-bit index half of the game's `handle32 {index:24,
+    // generation:8}`, and it is a SEPARATE port because nothing else this block
+    // holds is that name: `req_tag_i` is 8 bits of "which consumer asked" and
+    // `req_dst_slot_i` is 8 bits of arena slot. A publication without it names a
+    // directory row nobody can look up, which is precisely why MATERIAL.RESOLVE
+    // sat built and uncomposed for sixteen days after its cartridge blocker died.
+    //
+    // It is CARRIED, never consulted. This block has no opinion about resource
+    // naming and forms no address from it -- inventing one here would be the
+    // layout ruling 5f explicitly still leaves open.
+    input  var logic [23:0] req_index_i,
     input  var logic [63:0] req_hps_addr_i,   // may exceed 32 bits: then REFUSED
     input  var logic [31:0] req_vram_addr_i,
     input  var logic [31:0] req_len_i,
@@ -162,10 +200,31 @@ module zhao_mem_upload
     // publication -- a MAPPING update, one pulse, only after every write retired
     // and the CRC matched
     // -----------------------------------------------------------------------
+    // THE PUBLICATION IS A DIRECTORY ROW, `spec/memory_rules.md` 5f.1:
+    //
+    //     key   {index:24}
+    //     row   {slot:8, base:32, extent:32, kind:8}
+    //
+    // `publish_index_o` is the key; `publish_tag_o` IS the kind (`spec/
+    // cartridge.md` 4a's .zpak kinds, owner ruling D-2); base and extent are
+    // the destination range this block ALREADY bounds-checked against
+    // `cfg_region_*` in `in_guard_c` above, so a consumer cannot be handed a
+    // range MEM.GUARD would refuse. That check is why these two are output
+    // ports and not a new obligation: the values were validated and then
+    // dropped, which is a strictly smaller repair than it looked like.
+    //
+    // THEY ARE THE REQUEST'S, NOT THE WALKER'S. `dst_q` advances by
+    // BURST_BYTES on every burst, so it holds the LAST burst's address by the
+    // time publication fires; `base_q`/`extent_q` are captured whole on accept.
+    // Publishing `dst_q` would name a row 64 bytes short of the resource with
+    // nothing anywhere able to see it -- the wrong-surface fault in miniature.
     output var logic        publish_valid_o,
     output var logic [ 7:0] publish_slot_o,
     output var logic [15:0] publish_generation_o,
     output var logic [ 7:0] publish_tag_o,
+    output var logic [23:0] publish_index_o,
+    output var logic [31:0] publish_base_o,
+    output var logic [31:0] publish_extent_o,
 
     // -----------------------------------------------------------------------
     // verdict and census
@@ -252,6 +311,9 @@ module zhao_mem_upload
   logic [31:0] bursts_left_q;
   logic [31:0] crc_q;
   logic [ 7:0] tag_q, slot_q;
+  logic [23:0] index_q;      // 5f.1's directory key, carried from the request
+  logic [31:0] base_q;       // the request's vram address, before dst_q walks
+  logic [31:0] extent_q;     // the request's length, in bytes
   logic [15:0] gen_q;
   logic [31:0] exp_crc_q;
   logic [ 7:0] status_q;
@@ -308,6 +370,9 @@ module zhao_mem_upload
   assign publish_slot_o       = slot_q;
   assign publish_generation_o = gen_q;
   assign publish_tag_o        = tag_q;
+  assign publish_index_o      = index_q;
+  assign publish_base_o       = base_q;
+  assign publish_extent_o     = extent_q;
 
   // ==========================================================================
   // OUTSTANDING WRITES -- ONE ASSIGNMENT, AND THAT IS THE WHOLE POINT
@@ -357,6 +422,9 @@ module zhao_mem_upload
       crc_q         <= 32'hFFFF_FFFF;
       tag_q         <= '0;
       slot_q        <= '0;
+      index_q       <= '0;
+      base_q        <= '0;
+      extent_q      <= '0;
       gen_q         <= '0;
       exp_crc_q     <= '0;
       status_q      <= V_OK;
@@ -377,6 +445,16 @@ module zhao_mem_upload
             tag_q     <= req_tag_i;
             slot_q    <= req_dst_slot_i;
             gen_q     <= req_new_gen_i;
+            // ONE ENABLE FOR THE WHOLE ROW, and here that is the property we
+            // want rather than the one CLAUDE.md warns about. The warning is
+            // about a CHECKER whose two operands move together; this is a
+            // RECORD, and {index, slot, base, extent, kind, generation} are six
+            // fields of one publication that must never describe two different
+            // requests. Captured on the accept edge, all six, unconditionally --
+            // a refusal simply never reaches `publish_valid_o`.
+            index_q   <= req_index_i;
+            base_q    <= req_vram_addr_i;
+            extent_q  <= req_len_i;
             exp_crc_q <= req_crc_i;
             status_q  <= verdict_c;
             hps_err_q       <= 1'b0;

@@ -1950,10 +1950,10 @@ module zhao_prod_top (
   logic [1-1:0] u29_req_ready_o;
   zhao_hps_burst_req_t u29_hps_req_o;
   zhao_hps_burst_rsp_t u29_hps_rsp_i;
-  assign u29_hps_rsp_i = zhao_hps_burst_rsp_t'(u29_src[105 +: $bits(zhao_hps_burst_rsp_t)]);
+  assign u29_hps_rsp_i = zhao_hps_burst_rsp_t'(u29_src[112 +: $bits(zhao_hps_burst_rsp_t)]);
   zhao_guard_req_t u29_guard_req_o;
   zhao_guard_rsp_t u29_guard_rsp_i;
-  assign u29_guard_rsp_i = zhao_guard_rsp_t'(u29_src[112 +: $bits(zhao_guard_rsp_t)]);
+  assign u29_guard_rsp_i = zhao_guard_rsp_t'(u29_src[119 +: $bits(zhao_guard_rsp_t)]);
   logic [64-1:0] u29_guard_wdata_o;
   logic [1-1:0] u29_guard_wvalid_o;
   logic [1-1:0] u29_guard_wlast_o;
@@ -1961,6 +1961,9 @@ module zhao_prod_top (
   logic [8-1:0] u29_publish_slot_o;
   logic [16-1:0] u29_publish_generation_o;
   logic [8-1:0] u29_publish_tag_o;
+  logic [24-1:0] u29_publish_index_o;
+  logic [32-1:0] u29_publish_base_o;
+  logic [32-1:0] u29_publish_extent_o;
   logic [1-1:0] u29_done_o;
   logic [8-1:0] u29_status_o;
   logic [16-1:0] u29_uploads_published_o;
@@ -1971,32 +1974,36 @@ module zhao_prod_top (
       .req_valid_i(u29_src[0 +: 1]),
       .req_ready_o(u29_req_ready_o),
       .req_tag_i(u29_src[7 +: 8]),
-      .req_hps_addr_i(u29_src[14 +: 64]),
-      .req_vram_addr_i(u29_src[21 +: 32]),
-      .req_len_i(u29_src[28 +: 32]),
-      .req_epoch_i(u29_src[35 +: 16]),
-      .req_dst_slot_i(u29_src[42 +: 8]),
-      .req_new_gen_i(u29_src[49 +: 16]),
-      .req_crc_i(u29_src[56 +: 32]),
-      .cfg_region_base_i(u29_src[63 +: 32]),
-      .cfg_region_bytes_i(u29_src[70 +: 32]),
-      .cfg_arena_base_i(u29_src[77 +: 64]),
-      .cfg_arena_bytes_i(u29_src[84 +: 32]),
-      .cfg_epoch_i(u29_src[91 +: 16]),
+      .req_index_i(u29_src[14 +: 24]),
+      .req_hps_addr_i(u29_src[21 +: 64]),
+      .req_vram_addr_i(u29_src[28 +: 32]),
+      .req_len_i(u29_src[35 +: 32]),
+      .req_epoch_i(u29_src[42 +: 16]),
+      .req_dst_slot_i(u29_src[49 +: 8]),
+      .req_new_gen_i(u29_src[56 +: 16]),
+      .req_crc_i(u29_src[63 +: 32]),
+      .cfg_region_base_i(u29_src[70 +: 32]),
+      .cfg_region_bytes_i(u29_src[77 +: 32]),
+      .cfg_arena_base_i(u29_src[84 +: 64]),
+      .cfg_arena_bytes_i(u29_src[91 +: 32]),
+      .cfg_epoch_i(u29_src[98 +: 16]),
       .hps_req_o(u29_hps_req_o),
-      .hps_req_grant_i(u29_src[98 +: 1]),
+      .hps_req_grant_i(u29_src[105 +: 1]),
       .hps_rsp_i(u29_hps_rsp_i),
       .guard_req_o(u29_guard_req_o),
       .guard_rsp_i(u29_guard_rsp_i),
       .guard_wdata_o(u29_guard_wdata_o),
       .guard_wvalid_o(u29_guard_wvalid_o),
-      .guard_wready_i(u29_src[119 +: 1]),
+      .guard_wready_i(u29_src[126 +: 1]),
       .guard_wlast_o(u29_guard_wlast_o),
-      .retire_words_i(u29_src[126 +: 8]),
+      .retire_words_i(u29_src[133 +: 8]),
       .publish_valid_o(u29_publish_valid_o),
       .publish_slot_o(u29_publish_slot_o),
       .publish_generation_o(u29_publish_generation_o),
       .publish_tag_o(u29_publish_tag_o),
+      .publish_index_o(u29_publish_index_o),
+      .publish_base_o(u29_publish_base_o),
+      .publish_extent_o(u29_publish_extent_o),
       .done_o(u29_done_o),
       .status_o(u29_status_o),
       .uploads_published_o(u29_uploads_published_o),
@@ -2005,7 +2012,7 @@ module zhao_prod_top (
   logic u29_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u29_fold_q <= 1'b0;
-    else u29_fold_q <= u29_fold_q ^ (((^u29_req_ready_o)) & u29_src[0]) ^ (((^u29_hps_req_o)) & u29_src[1]) ^ (((^u29_guard_req_o)) & u29_src[2]) ^ (((^u29_guard_wdata_o)) & u29_src[3]) ^ (((^u29_guard_wvalid_o)) & u29_src[4]) ^ (((^u29_guard_wlast_o)) & u29_src[5]) ^ (((^u29_publish_valid_o)) & u29_src[6]) ^ (((^u29_publish_slot_o)) & u29_src[7]) ^ (((^u29_publish_generation_o)) & u29_src[8]) ^ (((^u29_publish_tag_o)) & u29_src[9]) ^ (((^u29_done_o)) & u29_src[10]) ^ (((^u29_status_o)) & u29_src[11]) ^ (((^u29_uploads_published_o)) & u29_src[12]) ^ (((^u29_refused_o)) & u29_src[13]);
+    else u29_fold_q <= u29_fold_q ^ (((^u29_req_ready_o)) & u29_src[0]) ^ (((^u29_hps_req_o)) & u29_src[1]) ^ (((^u29_guard_req_o)) & u29_src[2]) ^ (((^u29_guard_wdata_o)) & u29_src[3]) ^ (((^u29_guard_wvalid_o)) & u29_src[4]) ^ (((^u29_guard_wlast_o)) & u29_src[5]) ^ (((^u29_publish_valid_o)) & u29_src[6]) ^ (((^u29_publish_slot_o)) & u29_src[7]) ^ (((^u29_publish_generation_o)) & u29_src[8]) ^ (((^u29_publish_tag_o)) & u29_src[9]) ^ (((^u29_publish_index_o)) & u29_src[10]) ^ (((^u29_publish_base_o)) & u29_src[11]) ^ (((^u29_publish_extent_o)) & u29_src[12]) ^ (((^u29_done_o)) & u29_src[13]) ^ (((^u29_status_o)) & u29_src[14]) ^ (((^u29_uploads_published_o)) & u29_src[15]) ^ (((^u29_refused_o)) & u29_src[16]);
 
   // ---- zhao_part_expand ----
   logic [63:0] u30_lfsr_q;
