@@ -1,0 +1,2 @@
+8fb3f25262ac4ee23718e28374eec43b *.tmp/v18-mqa-attr/bin/manafold-qa-p12.exe
+c98afc06705f982589af95c3fd1bb9f49b1fde127b2d6905542dc93b9495a4eb *tools/reel/manafold_qa_p12.cpp

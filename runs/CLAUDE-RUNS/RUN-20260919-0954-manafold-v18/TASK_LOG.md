@@ -119,6 +119,8 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
   - Final bank: renderer MD5 `0f082622d4ca0c58d012d1f0de555723`, 22 subjects, 7,992 frames, manifest `bdaac548...28bd`. 21/22 byte-identical to Wave F; only Trick changed.
   - Frame root: `C:\programmieren\zencrifice\manafold-p16\v18-final-reel-22` (keep for the encode).
   - Every-frame sheets for all 22 were looked at (18 images). Fine detail of the byte-identical subjects transfers from Waves D/E/F.
+- 00:30: Integration packet READY-TO-ENCODE: `db2bcf0e` (Trick plant pin; drift 12.99 mm vs 178.46; legacy toggle byte-exact) + `09f10562` (evidence); 113/113 integrated gate; final bank 22 subjects / 7,992 frames, renderer MD5 `0f082622...`, manifest `bdaac548...`; 21/22 byte-identical to Wave F. Frame root `manafold-p16/v18-final-reel-22` is kept for the encode. Qwen Q017 (Wave-F motion review, xhigh) found nothing (verified). Q018 (Wave-F checkers) is running, then Q019 (final findings + blurb). Launched the Opus publish packet: encode 44 media, site v18, local gates, commit/push feature branches; it stops before merge/deploy for the coordinator's go.
+- 01:00: Qwen Q018 (Wave-F checkers, xhigh): partial. One real gap: the Wave-F fail-leg attribution ignores non-Wave-F categories (a self-certification overstatement; the normal run is unaffected). Checker-only fix sent to the publish worker. Q019 (final v18 findings + blurb, xhigh, 22.5k-token prompt): provenance exact vs the final bank report; handed to the publish worker as the site-copy source, with a correction against overclaiming the every-frame review.
 
 ## Subagent Spawns
 
@@ -196,3 +198,11 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 3. ~~Run Wave E~~ — done (`V18-WAVE-E-CLEANUP.md`). Drift left-edge framing at f260-298 is an open camera question.
 4. ~~Run Wave F~~ — done (`V18-WAVE-F-PERFORMANCES.md`). Owner calls: Trick pause contact wander (pre-existing), Drift margin.
 5. ~~Run one integrated targeted gate, then one exact 22-subject version-18 bank and every-frame review~~ -- done (`V18-FINAL-BANK-INTEGRITY.md`). Next: encode exactly that bank (frame root `manafold-p16/v18-final-reel-22`, manifest `bdaac548...`), publication and production-byte verification.
+
+## 2026-09-19 — Media closure (encode + local gates), Claude
+
+- Re-validated the accepted frame root: bank manifest `bdaac548…` unchanged. Repointed the `scratch-reel` junction only. `tovideo.py` encoded the 22 live subjects in one invocation, ENCODE_RC 0, 22/22 WebMs + posters. The 44/44 probe is clean. SHA-256 in `V18-LIVE-MEDIA-SHA256.txt` (also beside the creature).
+- The first no-skip gate failed at checkarchive: the Wave-A pair check had no post-encode phase. I made it phase-aware around the committed v18 receipt; its selftest now fires 5 red legs.
+- Final no-skip gate RC 0: 22 fresh / 0 stale, archive 56/56 + live 44/44, noindex, 1,420/1,420 decoded. Index sha256 `f7ba4175…`.
+- Coordinator item: mqa Wave-F legs now also require Q1–Q5 green (`0e84d60f`). The Q6a control genuinely co-fires Q3 slot 13; that is now declared.
+- Copy: Q019 (partial) with both coordinator corrections, plain-edited. Findings, plan, card and nine captions updated. Details in `V18-MEDIA-CLOSURE.md`. STOPPED before merge/deploy.

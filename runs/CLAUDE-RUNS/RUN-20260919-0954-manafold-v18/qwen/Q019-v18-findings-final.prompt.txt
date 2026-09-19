@@ -1,0 +1,575 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# CARRIED FORWARD FROM Q016
+- Done: Drafted VERSION-18-FINDINGS.md for Waves A–E and mapped all eleven Direction-19 items. Established: Wave A archived v17 with 56/56 locked files, 70,576,645 bytes, 22 live/6 menu/10 lab [V18-ARCHIVE-CLOSURE.md:13-14,27-29,61]; Wave C selected bodyblend 16/16 by eye [V18-ROOT-MATERIAL-IMPLEMENTATION.md:43,67]; Wave D selected 400 pm swells and 1500 pm Front gain, with repair closure 88/88 [V18-SWELL-FRONT-ART.md:14,44; V18-SWELL-FRONT-REPAIR.md:7,88]; Wave E removed live history mist from 22 subjects, shipped Crackle candidate 9 and 120 mm mote fade, and passed 97/97 [V18-WAVE-E-CLEANUP.md:8,22,42,74,76]. Latest source commit is Zhaozhou 0381bdec [V18-WAVE-E-CLEANUP.md:6]; latest production renderer hash is at [V18-WAVE-E-CLEANUP.md:88].
+- Open: Final bank provenance, final visual verdict, production deployment, and Wave F Flight/Trick are not shown. Also open/ambiguous: Drift framing [V18-WAVE-E-CLEANUP.md:53,103], End-swell stub [V18-SWELL-FRONT-REPAIR.md:118], Trick framing [V18-SWELL-FRONT-REPAIR.md:117], fade not gate-traced [V18-WAVE-E-CLEANUP.md:104], and intermediate Wave-D commit `6f0201e3` appears only in the superseded report [V18-SWELL-FRONT-ART.md:7].
+- Next chunk: When the Wave F report and final bank receipt exist, fill the Wave F placeholder, final bank provenance, site-blurb provenance, and delivery status. Inputs needed: Wave F report, final accepted bank hash/manifest, every-frame final review, and production verification/deployment receipt.
+
+## Coordinator verdict
+
+**verified** — xhigh, 26.5k-token prompt, 20k reasoning, 424s. spot 2/2: superseded-ART still says PASS (ART:3,8) and 400-rung 1 mm rounding note (REPAIR:104) both exact. Findings list honest and well sourced; draft usable as base - finalize via continuation once Wave F + final bank receipts exist.
+
+# TASK Q019: v18-findings-final
+## Brief
+Finalize the owner-facing Manafold VERSION 18 findings and live-card site blurb. Q016 drafted Waves A–E; its full draft is included as an input (the answer file). Now fill the Wave F placeholder and the final-bank provenance from the Wave F report and the final bank integrity report, and apply these coordinator corrections:
+- Q016 finding: V18-SWELL-FRONT-ART.md is superseded; cite V18-SWELL-FRONT-REPAIR.md for Wave D receipts.
+- Scope "no smear" to live subjects (archived/legacy controls intentionally keep the old effect).
+- The Trick planted-antenna slide (≈178 mm, legacy balance wobble) was fixed in the integration packet by pinning the support XZ through the whole contact window (12.99 mm vs 178.46 mm; toggle ZHAO_U02_TRICK_PLANT_PIN=legacy restores the old bytes).
+- Flight, Trick, Drift chosen values come from the Wave F report; all art values chosen by eye.
+- Final provenance = the final bank report's renderer MD5, manifest SHA-256, 22 subjects / frame count, source commit.
+Same rules as before: every number verbatim from the inputs with a [source] tag; if reports disagree, say so. Owner-facing plain language; "version 18" never "pass 18".
+
+## Questions
+1. The final `VERSION-18-FINDINGS.md` (complete markdown).
+2. The final live-card blurb ("MANAFOLD, version 18 — ..."), same style/length class as the Pass-17 blurb, with a real PROVENANCE paragraph.
+3. FINDINGS table: every conflict, ambiguity or unfilled item the coordinator must check.
+
+# INPUT zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/qwen/Q016-v18-findings-draft-xhigh.answer.md:1-207
+```
+    1| # Q016 answer — v18-findings-draft-xhigh
+    2| 
+    3| - model: qwen38-quasar-dflash2-k8v4-112k  dispatch: 132ae886a4be4d0b8907c6113ef7396d
+    4| - when: 2026-09-19T18:56:12  seconds: 424  finish: stop  status: ok
+    5| - usage: {"completion_tokens": 29508, "completion_tokens_details": {"reasoning_tokens": 20032}, "prompt_tokens": 28209, "prompt_tokens_details": {"cached_tokens": 0}, "total_tokens": 57717}
+    6| - inputs: [{"input": "Upheaval/creature/Manafold/OWNER-DIRECTION-19-2026-09-19.md:1-21", "sha256": "c4e32faf91efcc0e", "chars": 4612}, {"input": "Upheaval/creature/Manafold/PASS-17-FINDINGS.md:1-111", "sha256": "752d0c9fc3325a04", "chars": 12361}, {"input": "Upheaval/website/creatures.json:37-37", "sha256": "32f92ba41e1ed209", "chars": 2698}, {"input": "zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ARCHIVE-CLOSURE.md:1-94", "sha256": "35cdd71e5931db54", "chars": 5153}, {"input": "zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ROOT-AUTHORITY-IMPLEMENTATION.md:1-106", "sha256": "e8b0e9292c96ac8e", "chars": 8150}, {"input": "zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ROOT-MATERIAL-IMPLEMENTATION.md:1-113", "sha256": "3fda0473255e7e04", "chars": 7756}, {"input": "zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-ART.md:1-128", "sha256": "896c5514a21f93cb", "chars": 10619}, {"input": "zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:1-131", "sha256": "bc06392311d43ba3", "chars": 17442}, {"input": "zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:1-111", "sha256": "45415db985cf7465", "chars": 12597}]
+    7| - kind: task
+    8| 
+    9| ## Answer
+   10| 
+   11| ## FINDINGS
+   12| 
+   13| | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |
+   14| |---|---|---|---|---|
+   15| | 1 | P2 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-ART.md:3,8`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:7` | The superseded Wave-D report still says PASS, but its build/gate/CRC/picture receipts do not stand. | Line 3 says “SUPERSEDED… receipts do not”; line 8 still says “Verdict: PASS”; repair line 7 says it supersedes those receipts. |
+   16| | 2 | P2 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-ART.md:21`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:104` | The “equal to the integer output of the 400 pm rung” claim is only approximate. | ART line 21 says shipping values equal the selected 400 pm rung; repair line 104 says truncation/rounding leaves 1 mm differences on A rx, B rx/rz, End rz. |
+   17| | 3 | P2 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ROOT-AUTHORITY-IMPLEMENTATION.md:66`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ROOT-MATERIAL-IMPLEMENTATION.md:69`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:75`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:88` | Multiple renderer hashes exist across Waves B–E, and the final accepted bank provenance is still unfilled. | Each report gives a different production renderer hash; no final accepted v18 bank hash/manifest/visual verdict is shown. |
+   18| | 4 | P2 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:21` | A previous Wave-D checkpoint claimed mesh green while the actual mesh gate was red. | Line 21 says `manafold-meshcheck` returned RC 1 with 16 degenerate triangles while the crashed worker’s checkpoint claimed all protected normals green. |
+   19| | 5 | P2 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:104` | The renderer-side mote-surface fade is not traced by the effect gate. | Line 104 says msmooth traces mote visibility inside fx, not the renderer fade, and retuning requires re-looking. |
+   20| | 6 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-ART.md:7`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:6-7` | The intermediate Wave-D source base `6f0201e3` is ambiguous because it appears in the superseded report. | ART line 7 names source base `6f0201e3`; repair line 6-7 supersedes receipts but does not restate the source base. |
+   21| | 7 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:119`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:5,8` | The repair’s “Waves E/F” wording is stale relative to Wave E closure. | Repair line 119 says history/Flight/Trick remain Waves E/F; Wave E lines 5 and 8 say Wave F not started and history closed. |
+   22| | 8 | P3 | `Upheaval/creature/Manafold/OWNER-DIRECTION-19-2026-09-19.md:18`; `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:23,30,37` | “Hasty has no smear everywhere” must be scoped to live subjects because legacy/archive controls keep the old effect. | Direction line 18 says remove it everywhere; Wave E lines 23, 30 and 37 show live off but archived/legacy explicit mist remains. |
+   23| | 9 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:53,103` | Drift framing is open, not a Wave-E regression. | Lines 53 and 103 say f260–298 sit at the extreme left edge with antenna/mana partly cropped, a camera/owner question. |
+   24| | 10 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:118` | The End-swell stub remains an open owner-glance item. | Line 118 says it is visible at Rest 342, Taunt III 328, Trick 393, present in accepted Wave-C renders. |
+   25| | 11 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-SWELL-FRONT-REPAIR.md:117` | Trick crown framing remains open for Wave F. | Line 117 says planted crown sits at bottom of frame in Wave C and Wave D; Wave F should revisit camera/framing. |
+   26| | 12 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-E-CLEANUP.md:76,91,99` | Final v18 bank acceptance and final visual verdict are not shown. | Wave E shows 97/97 gate and final-bank CRC examples, but no accepted final bank hash/total frames/every-frame verdict. |
+   27| | 13 | P3 | `zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-ARCHIVE-CLOSURE.md:64,94` | No production deployment for version 18 is shown. | Line 64 says deployment none for `-AssembleOnly`; line 94 says no deployed site changed. |
+   28| | 14 | P3 | `Upheaval/website/creatures.json:37`; not shown | The site-blurb PROVENANCE paragraph must remain a placeholder because final bank provenance is not shown. | Pass-17 blurb style is at creatures.json:37; no final v18 bank provenance appears in the inputs. |
+   29| 
+   30| ### VERSION-18-FINDINGS.md (draft)
+   31| 
+   32| ```markdown
+   33| # Manafold version 18 findings — draft, Waves A–E
+   34| 
+   35| **Directions:** `OWNER-DIRECTION-19-2026-09-19.md` [OWNER-DIRECTION-19-2026-09-19.md:1]
+   36| **Inventory:** not shown
+   37| **Architecture:** `V18-ARCHITECTURE.md` is referenced, but its text is not shown [V18-ARCHIVE-CLOSURE.md:5; V18-ROOT-AUTHORITY-IMPLEMENTATION.md:5; V18-ROOT-MATERIAL-IMPLEMENTATION.md:5]
+   38| **Scope:** Waves A–E only. Wave F is still in progress and is left as a placeholder [V18-WAVE-E-CLEANUP.md:5].
+   39| 
+   40| ## Owner Direction 19 map
+   41| 
+   42| | # | Direction-19 item | Status | What was done, in plain language |
+   43| |---:|---|---|---|
+   44| | 1 | Front root flexibility is reopened [OWNER-DIRECTION-19-2026-09-19.md:11] | done | Root rotation authority was integrated, and real public JunctionF X/Y curves were selected so the front connection can flex in the shipping motion [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:18-24,42; V18-SWELL-FRONT-ART.md:33-44; V18-SWELL-FRONT-REPAIR.md:94]. |
+   45| | 2 | Both body connections must become body-smooth [OWNER-DIRECTION-19-2026-09-19.md:12] | done | The root material `bodyblend` was selected at `16 / 16` rows front/rear; no root-ink exclusion was shipped because the pictures did not justify it [V18-ROOT-MATERIAL-IMPLEMENTATION.md:43,62-67,71-75]. |
+   46| | 3 | All visible antenna balls become smaller [OWNER-DIRECTION-19-2026-09-19.md:13] | done | The 400 pm family was selected by eye, with named sizes Front `10 / 12`, A `26 / 34`, B `25 / 33`, C `24 / 31`, End `20 / 25` mm [V18-SWELL-FRONT-ART.md:14,25-29; V18-SWELL-FRONT-REPAIR.md:104,108]. |
+   47| | 4 | Archive both experiment collections [OWNER-DIRECTION-19-2026-09-19.md:14] | done | Version 17 and both experiment collections were archived; 56/56 source/archive pairs matched, 70,576,645 bytes were locked, and menu/lab no longer consume live tabs [V18-ARCHIVE-CLOSURE.md:10-14,21-31,43]. |
+   48| | 5 | Particle/antenna intersections get a bounded attempt [OWNER-DIRECTION-19-2026-09-19.md:15] | done-differently | The pre-layer route was declined because it flattens depth; instead a small 120 mm mote-surface fade was shipped [V18-WAVE-E-CLEANUP.md:58-64,74]. |
+   49| | 6 | Normalize relic mana [OWNER-DIRECTION-19-2026-09-19.md:16] | done | Crackle moved to normal candidate 9 under the day sky; Drift and Blown kept candidate 9 after the history trail was removed [V18-WAVE-E-CLEANUP.md:42-54]. |
+   50| | 7 | Flight needs unmistakable vertical travel [OWNER-DIRECTION-19-2026-09-19.md:17] | pending-Wave-F | No version-18 Flight vertical phrase was shipped in Waves A–E [V18-SWELL-FRONT-ART.md:108; V18-WAVE-E-CLEANUP.md:5]. |
+   51| | 8 | Hasty must have no frame-history smear [OWNER-DIRECTION-19-2026-09-19.md:18] | done | The old 48×30 creature-following history plane was identified as the Hasty smear and is now off for all 22 live subjects, with an exact legacy control and renderer assertion [V18-WAVE-E-CLEANUP.md:16,22,30-32,36-37]. |
+   52| | 9 | Trick gets a longer rotational phrase [OWNER-DIRECTION-19-2026-09-19.md:19] | pending-Wave-F | The planted 180 → pause → 360 → overshoot → correct phrase is not yet shipped [V18-SWELL-FRONT-ART.md:108; V18-WAVE-E-CLEANUP.md:5]. |
+   53| | 10 | This is version 18 [OWNER-DIRECTION-19-2026-09-19.md:20] | done | The Wave A–E reports and the site archive use “Manafold version 18” [V18-ARCHIVE-CLOSURE.md:1; V18-ROOT-AUTHORITY-IMPLEMENTATION.md:1; V18-ROOT-MATERIAL-IMPLEMENTATION.md:1; V18-WAVE-E-CLEANUP.md:1]. |
+   54| | 11 | Art acceptance remains visual [OWNER-DIRECTION-19-2026-09-19.md:21] | done | The picture values were chosen by eye from complete native motion, while gates checked structure, contacts, continuity and regressions [V18-ROOT-MATERIAL-IMPLEMENTATION.md:67; V18-SWELL-FRONT-ART.md:14; V18-WAVE-E-CLEANUP.md:74,99]. |
+   55| 
+   56| ## What was actually wrong
+   57| 
+   58| 1. **The front root still read like a stiff body-mounted peg.** The version-17 roots still used the cooler/coarser antenna atlas and the same swell sizes, so Wave B had to integrate root rotation authority before real Front motion could be judged [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:85].
+   59| 2. **The roots still read as a separate surface.** The legacy material retained a darker/coarser strip through the body crossings, and the root still read as a separately surfaced lobe [V18-ROOT-MATERIAL-IMPLEMENTATION.md:62].
+   60| 3. **The antenna balls still read as protruding beads.** At the `1000` rung the version-17 protruding-bead read remained [V18-SWELL-FRONT-ART.md:16].
+   61| 4. **The live history trail was still present.** The old `u02_mist` plane gave travelling clips a chunky grey-violet history trail; that plane was the Hasty smear and the Drift/Blown relic trail [V18-WAVE-E-CLEANUP.md:16].
+   62| 5. **Crackle was still on an old mana treatment.** It was the only live subject still on an old mana: candidate 4 under the night backdrop [V18-WAVE-E-CLEANUP.md:44].
+   63| 6. **Particles could still draw through antenna sticks.** The “through” read came from a flat mote disc’s centre crossing a stick’s front surface, so a narrow depth-based fade was needed [V18-WAVE-E-CLEANUP.md:58-60].
+   64| 7. **Flight and Trick were still not version-18.** Flight still needed its vertical phrase, and Trick still awaited the planted full turn [V18-SWELL-FRONT-ART.md:108].
+   65| 
+   66| ## What landed
+   67| 
+   68| ### Wave A — archive closure
+   69| 
+   70| The live version-17 media were locked as an immutable byte archive before any version-18 encode could overwrite live names. The archive contained 28 WebMs plus 28 posters, with 56/56 source/archive pairs matching exact SHA-256 and byte length, totaling 70,576,645 bytes [V18-ARCHIVE-CLOSURE.md:10-14].
+   71| 
+   72| The site now has one archive generation labelled exactly `Version 17 + mana experiments — 2026-09-19`, containing three collections: `Version 17` with exactly 22 non-menu production clips, `Mana menu` with exactly six clips, and `Mana lab · 2026-09-05` with exactly ten clips [V18-ARCHIVE-CLOSURE.md:21-29]. Menu and lab no longer consume live tabs, and the twelve now-undeclared live menu files were removed without deleting their immutable copies [V18-ARCHIVE-CLOSURE.md:31-33].
+   73| 
+   74| The permanent `checkarchive.py` gate verifies the locked archive, live/archive pairs, declarations, duplicate paths, absence of menu/lab from live tabs, and archived playback attributes [V18-ARCHIVE-CLOSURE.md:37-44]. The local assemble gate ran with RC 0, showing 22 live Manafold outer tabs, 13 archive generations, 22 live fresh / 6 archived freshness, 1,420 declared / 1,420 decoded media files, and no deployment [V18-ARCHIVE-CLOSURE.md:54-64].
+   75| 
+   76| ### Wave B — root authority
+   77| 
+   78| Manafold now uses 27/32 content bones, with four append-only helpers that are not visible joints: `FrontRootDelta`, `RearPreRootDelta`, `RearRootTurnMid`, and `RearRootDelta` [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:20-24].
+   79| 
+   80| The integrated skin preserves the original F–A/C–End gradient starts, helper fractions, full endpoints, burial behavior, and all seven version-17 signed helper IDs [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:26-32]. `ZHAO_U02_ROOT_AUTHORITY=integrated|legacy-split` is strict, and `legacy-split` restores the exact version-17 root palettes [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:34].
+   81| 
+   82| This wave deliberately did not ship a dishonest `normal|mute` presentation control because no shipping clip owned nonzero Front X/Y art yet; Wave D would add that only after real public curves existed [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:42]. The root gate checked compiled skin, shipping keys/midpoints, terminal rear exception, helper/carrier rotations, and 339,500 posed ring steps with zero reversal/pinch [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:48-56].
+   83| 
+   84| This was not final root likeness evidence: both roots still used the version-17 cooler/coarser antenna atlas and the same swell sizes [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:85].
+   85| 
+   86| ### Wave C — root material
+   87| 
+   88| The page generator now has named shipping controls `ROOT_MATERIAL_MODE = "bodyblend"`, `ROOT_FRONT_BLEND_ROWS = 16`, and `ROOT_REAR_BLEND_ROWS = 16` [V18-ROOT-MATERIAL-IMPLEMENTATION.md:15-18].
+   89| 
+   90| The safe deterministic ladder compared four candidates: version-17 legacy, narrow `8 / 8`, medium `16 / 16`, and broad `24 / 24` [V18-ROOT-MATERIAL-IMPLEMENTATION.md:39-44]. The selected medium candidate was chosen from the complete native motion, not from the atlas arithmetic [V18-ROOT-MATERIAL-IMPLEMENTATION.md:67].
+   91| 
+   92| The moving read was: legacy retained a separately surfaced lobe; narrow left a visible material change through the root support; medium made both connections carry the body’s pink/grain treatment while A/B/C and the free middle kept the cooler antenna character; broad carried body treatment too far into the free chain [V18-ROOT-MATERIAL-IMPLEMENTATION.md:62-65].
+   93| 
+   94| Wave C made no change to `add_visible_body_inner_edge()`, its outline gate, or render ordering, because a no-inner-ink diagnostic did not expose a root seam that justified changing production ink ownership [V18-ROOT-MATERIAL-IMPLEMENTATION.md:71-75].
+   95| 
+   96| ### Wave D — smaller swells and public Front flex
+   97| 
+   98| The 400 pm swell family was selected by eye: `1000` retained the bead read, `700` and `550` improved it but the free stations still dominated, `400` kept all five stations plainly thicker while reading as local thickening, and `250` flattened toward a nearly uniform strap [V18-SWELL-FRONT-ART.md:16-19; V18-SWELL-FRONT-REPAIR.md:108].
+   99| 
+  100| The shipping selected family is Front `10 / 12`, A `26 / 34`, B `25 / 33`, C `24 / 31`, End `20 / 25` mm, compared with exact version-17 controls Front `26 / 31`, A `64 / 86`, B `62 / 82`, C `60 / 78`, End `50 / 62` mm [V18-SWELL-FRONT-ART.md:23-29]. The repair notes that the diagnostic 400 rung is not an exact integer match to the shipping constants because of truncation/rounding, with no visual consequence [V18-SWELL-FRONT-REPAIR.md:104].
+  101| 
+  102| Real public Front/JunctionF X/Y performances were authored for the named clips, and the selected global gain is the named `1500 pm` owner knob [V18-SWELL-FRONT-ART.md:33-44]. The repair report confirms that `HingePlay::tilt_front/yaw_front` is the only Front X/Y authority and that the gate checked Front X/Y in 10 clips, with weakest Rest at `24.37 mm` above the unchanged 20 mm floor [V18-SWELL-FRONT-REPAIR.md:15,94].
+  103| 
+  104| The Wave-D review blockers were repaired: terminal taper was restored, Trick support ownership was hardened, and the duplicate Front API was removed [V18-SWELL-FRONT-REPAIR.md:11-15]. A zero-radius terminal cap mesh fault was found and repaired with a `2/2` mm real cap, and the wrong-presentation review sheets were regenerated from the production cel renderer [V18-SWELL-FRONT-REPAIR.md:21-29].
+  105| 
+  106| The closure gate matrix passed 88/88 [V18-SWELL-FRONT-REPAIR.md:88]. The production renderer receipt is in the repair report [V18-SWELL-FRONT-REPAIR.md:75].
+  107| 
+  108| ### Wave E — live presentation cleanup
+  109| 
+  110| The old live history mist was retired from all 22 live subjects. The cause was confirmed by picture: `subject_u02_clip` had given every non-slot-7 clip the persistent 48×30 creature-following plane, and that plane was the Hasty smear and the Drift/Blown relic trail [V18-WAVE-E-CLEANUP.md:16].
+  111| 
+  112| The live builder default is now mist off, with `ZHAO_U02_LIVE_MIST=off|legacy` as the strict control. `legacy` restores the version-17 builder default and produced RC 5, with 21/22 sequence CRCs equal to the Wave-D bank; the 22nd is Crackle because of the intended mana change [V18-WAVE-E-CLEANUP.md:30-32,37].
+  113| 
+  114| Crackle now uses the builder’s candidate 9 with no `u02_backdrop` call, placing it under the day sky and ending the deliberate Crackle/Channel backdrop pairing. Channel keeps its night backdrop [V18-WAVE-E-CLEANUP.md:42-44]. The exact legacy control `manafold-crackle-legacy` preserves the old bytes [V18-WAVE-E-CLEANUP.md:46].
+  115| 
+  116| Drift and Blown kept candidate 9 after the history removal. Drift is a continuous right-to-left traverse with no trail, and Blown is a continuous launch/tumble/drop/catch/settle phrase with f291 matching f0 [V18-WAVE-E-CLEANUP.md:51-54].
+  117| 
+  118| The bounded particle attempt shipped as a small mote-surface fade. The pre-layer route was declined because pre splats would draw while the depth buffer held only terrain and then be covered by the creature, flattening depth [V18-WAVE-E-CLEANUP.md:58]. The shipped route uses existing depth: for fold and surge mote bodies only, visibility ramps to zero as the disc centre’s view depth approaches the antenna surface within `kMoteSurfaceFadeMm` [V18-WAVE-E-CLEANUP.md:60]. The chosen shipped value is `120 mm`, because `240` began fading motes genuinely in front [V18-WAVE-E-CLEANUP.md:69-74].
+  119| 
+  120| The Wave E gate matrix passed 97/97 [V18-WAVE-E-CLEANUP.md:76]. The production renderer receipt is in the Wave E report [V18-WAVE-E-CLEANUP.md:88].
+  121| 
+  122| ## Failable evidence
+  123| 
+  124| - **Wave A:** `checkarchive.py` and `checkfresh.py` were wired into assemble/deploy; the local gate showed 22 live fresh / 6 archived / 0 stale / 0 absent / 0 unknown, 1,420 declared / 1,420 decoded, and RC 0 [V18-ARCHIVE-CLOSURE.md:37-48,54-63].
+  125| - **Wave B:** `mspan` added root-authority checks; normal gates were RC 0, and the root-authority control restored legacy palettes and fired only its attributed category [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:48-58,73].
+  126| - **Wave C:** deterministic regeneration was byte-exact, legacy material words were 98,302 / 98,302 exact, and the protected gate matrix stayed green [V18-ROOT-MATERIAL-IMPLEMENTATION.md:87-96].
+  127| - **Wave D:** the repair gate matrix was 88/88, including mspan 35/35 attributed, msmooth 16/16 attributed, protected legs 27/27, and 9/9 malformed selectors returning RC 2 [V18-SWELL-FRONT-REPAIR.md:88-95].
+  128| - **Wave E:** the gate matrix was 97/97, including live-history normal/legacy/list-drift, Crackle-legacy identity, fade exact-off/fires, non-live identity, and 6/6 malformed selectors returning RC 2 [V18-WAVE-E-CLEANUP.md:76-84].
+  129| 
+  130| ## Correction loops caught by looking
+  131| 
+  132| 1. **Wave C material ladder:** the atlas arithmetic explained coherence, but the 16/16 value was chosen from complete native motion [V18-ROOT-MATERIAL-IMPLEMENTATION.md:67].
+  133| 2. **Wave D review blockers:** the pre-review tree had terminal taper, Trick support ownership, and duplicate Front API problems; the repair closed them in source [V18-SWELL-FRONT-REPAIR.md:11-15].
+  134| 3. **Wave D mesh fault:** a zero-radius terminal cap produced 16 degenerate triangles even though an earlier checkpoint had reported green; the repair restored a `2/2` mm real cap [V18-SWELL-FRONT-REPAIR.md:21-23].
+  135| 4. **Wave D presentation:** review sheets rendered without the production environment were replaced by sheets from the production cel renderer [V18-SWELL-FRONT-REPAIR.md:27-29].
+  136| 5. **Wave E fade:** the first centre-pixel fade was rejected by reasoning, and the shipped form averages over a 5×5 disc footprint [V18-WAVE-E-CLEANUP.md:62].
+  137| 6. **Wave E Crackle:** the pictures agreed that candidate 9 under the day sky should ship, and the legacy relic read was preserved as a control [V18-WAVE-E-CLEANUP.md:48].
+  138| 
+  139| ## WAVE F — Flight + Trick 360 (in progress; placeholder)
+  140| 
+  141| - **Flight vertical travel:** pending-Wave-F. Direction 19 item 7 asks for unmistakable up/down flight travel [OWNER-DIRECTION-19-2026-09-19.md:17]. Wave E explicitly did not start Wave F [V18-WAVE-E-CLEANUP.md:5], and the earlier Wave-D report says Flight still needs its version-18 vertical phrase [V18-SWELL-FRONT-ART.md:108].
+  142| - **Trick 180 → pause → 360 → overshoot → correct:** pending-Wave-F. Direction 19 item 9 asks for the longer rotational phrase while preserving the accepted approach, plant, readable face and pause [OWNER-DIRECTION-19-2026-09-19.md:19]. The earlier Wave-D report says Trick still awaits Wave F’s planted full turn [V18-SWELL-FRONT-ART.md:108].
+  143| - **Open carried items:** Trick crown framing and the End-swell stub are carried into Wave F/final review [V18-SWELL-FRONT-REPAIR.md:117-118; V18-WAVE-E-CLEANUP.md:105].
+  144| - **No final Wave F picture, gate, or provenance claim is made in this draft.**
+  145| 
+  146| ## Exact final-bank acceptance
+  147| 
+  148| **Not shown.** The inputs show Wave E’s 97/97 gate matrix, final-bank CRC examples, and committed every-frame sheets, but they do not show an accepted final version-18 bank hash, total frame count, every-frame final review verdict, or production deployment receipt [V18-WAVE-E-CLEANUP.md:76,91,99].
+  149| 
+  150| ## Delivery status
+  151| 
+  152| - Wave A was closed locally and was ready for independent commit/push, with no production renderer source, version-18 media, main branch, or deployed site changed [V18-ARCHIVE-CLOSURE.md:94].
+  153| - Wave A’s generated site page was produced locally with deployment set to none because the gate ran assemble-only [V18-ARCHIVE-CLOSURE.md:64-66].
+  154| - No version-18 production deployment receipt is shown in the provided inputs.
+  155| 
+  156| ## Provenance
+  157| 
+  158| | Item | Value | Source |
+  159| |---|---|---|
+  160| | Version-17 accepted Zhaozhou source | `18e1d993` | [PASS-17-FINDINGS.md:7; V18-ARCHIVE-CLOSURE.md:15] |
+  161| | Version-17 accepted Zhaozhou evidence | `a4d08762` | [PASS-17-FINDINGS.md:8] |
+  162| | Version-17 accepted renderer MD5 | `67DCAFF8ABC0AA2BA830C439A4CD98C7` | [PASS-17-FINDINGS.md:9; V18-ARCHIVE-CLOSURE.md:15] |
+  163| | Version-17 accepted renderer SHA-256 | `D60EBA80C2547032A603365837690FB14B551D90D96FB5973F1C976C185C3FE9` | [PASS-17-FINDINGS.md:10] |
+  164| | Version-17 exact-bank manifest SHA-256 | `bc2d4d0bdce632815f42cca208763fb04bca62034e285ed1ef707c7f28d55d09` | [PASS-17-FINDINGS.md:11] |
+  165| | Version-17 Upheaval source generation | `664f415` | [V18-ARCHIVE-CLOSURE.md:15] |
+  166| | Wave A generated index.html | 425,157 bytes, SHA-256 `86626fcc13ae29fcc8c5df81111b8ad4becb00316bf27dd22a50f841b75720f7` | [V18-ARCHIVE-CLOSURE.md:66] |
+  167| | Wave C source base | `df072d47` | [V18-ROOT-MATERIAL-IMPLEMENTATION.md:6] |
+  168| | Wave C selected medium renderer MD5 | `95080A676C3B5315A9DBEF58D9D10BDA` | [V18-ROOT-MATERIAL-IMPLEMENTATION.md:43] |
+  169| | Wave C final working-tree renderer MD5 / SHA-256 | `A5C94FEE8E0CA8A5FD19CC954E8B1DB6` / `F9135C534F9B341FB494723ACA74E885320AC704C072D70776CD40EE3E3487D7` | [V18-ROOT-MATERIAL-IMPLEMENTATION.md:69] |
+  170| | Wave D repair production renderer MD5 / SHA-256 | `0FA8BAE0BF6A738C485FAD2DCB77A64B` / `2a1654207e2e09dee9a27dec98e6be1bc62d4dd28594ec434705c0f6b42cda30` | [V18-SWELL-FRONT-REPAIR.md:75] |
+  171| | Wave E Zhaozhou source commit | `0381bdec` on `manafold-v18` | [V18-WAVE-E-CLEANUP.md:6] |
+  172| | Wave E production renderer MD5 / SHA-256 | `ae7f03a5c32357d891e7915d758d316f` / `4b789bf1fb2a0fb92b688f11596b3f71b70fe60c944c084e5a37a17a22ecd8b8` | [V18-WAVE-E-CLEANUP.md:88] |
+  173| | Final bank provenance | `[final bank provenance — fill after the final render]` | not shown |
+  174| ```
+  175| 
+  176| ### Draft site blurb
+  177| 
+  178| ```text
+  179| MANAFOLD, version 18 — smaller carriers, fused roots, clean live mana, and a bounded particle answer.
+  180| 
+  181| THE BALLS ARE SMALLER, NOT GONE. The five antenna carriers were chosen by eye from the 400 pm family: Front 10/12, A 26/34, B 25/33, C 24/31 and End 20/25 mm. Each one still reads thicker than its stick, but as local thickening in one continuous antenna rather than version-17 beads.
+  182| 
+  183| THE ROOTS BELONG TO THE BODY. The front and rear roots now carry the body’s pink/grain treatment across the visible thickening, then hand gradually back to the cooler antenna surface. The selected 16/16 body-blend was chosen from complete native motion, and no root-ink exclusion was shipped.
+  184| 
+  185| THE FRONT CONNECTION FLEXES. Real public JunctionF X/Y curves now move the front antenna connection in the shipping motion, so the front ball and its connection are no longer a stiff body-mounted peg.
+  186| 
+  187| THE LIVE MANA IS CLEAN. The old creature-following history mist is off for all 22 live subjects. Hasty no longer drags its old smear, and Drift and Blown no longer carry their relic trails. Crackle now uses the normal candidate-9 day-sky presentation, with an exact legacy control preserved for review.
+  188| 
+  189| PARTICLES STAY HONEST. The pre-layer particle route was declined because it would flatten depth. A small 120 mm surface fade thins fold/surge motes as their disc centres meet an antenna surface, while motes genuinely in front still overlap.
+  190| 
+  191| THE EXPERIMENTS ARE ARCHIVED. The old Mana menu and Mana lab are out of the live tabs and live as one immutable version-17 experiment generation, with their media and provenance preserved.
+  192| 
+  193| FLIGHT AND TRICK ARRIVE IN THE FINAL WAVE. The version-18 Flight vertical phrase and the planted Trick 360 correction are still being finished; their final picture and provenance will be added with the final render.
+  194| 
+  195| PROVENANCE. [final bank provenance — fill after the final render]
+  196| ```
+  197| 
+  198| Blurb sourcing, not part of the site copy: ball sizes / 400 family [V18-SWELL-FRONT-ART.md:14,25-29; V18-SWELL-FRONT-REPAIR.md:104,108]; root blend / no ink exclusion [V18-ROOT-MATERIAL-IMPLEMENTATION.md:43,62-67,71-75]; front flex [V18-ROOT-AUTHORITY-IMPLEMENTATION.md:18-24,42; V18-SWELL-FRONT-ART.md:33-44; V18-SWELL-FRONT-REPAIR.md:15,94]; live mist / Hasty / Drift / Blown / Crackle [V18-WAVE-E-CLEANUP.md:8,16,22,30-32,42-54]; particle fade [V18-WAVE-E-CLEANUP.md:58-74]; archive [V18-ARCHIVE-CLOSURE.md:10-14,21-31,43]; Flight/Trick pending [V18-WAVE-E-CLEANUP.md:5; V18-SWELL-FRONT-ART.md:108].
+  199| 
+  200| ## CONTINUATION
+  201| - Done: Drafted VERSION-18-FINDINGS.md for Waves A–E and mapped all eleven Direction-19 items. Established: Wave A archived v17 with 56/56 locked files, 70,576,645 bytes, 22 live/6 menu/10 lab [V18-ARCHIVE-CLOSURE.md:13-14,27-29,61]; Wave C selected bodyblend 16/16 by eye [V18-ROOT-MATERIAL-IMPLEMENTATION.md:43,67]; Wave D selected 400 pm swells and 1500 pm Front gain, with repair closure 88/88 [V18-SWELL-FRONT-ART.md:14,44; V18-SWELL-FRONT-REPAIR.md:7,88]; Wave E removed live history mist from 22 subjects, shipped Crackle candidate 9 and 120 mm mote fade, and passed 97/97 [V18-WAVE-E-CLEANUP.md:8,22,42,74,76]. Latest source commit is Zhaozhou 0381bdec [V18-WAVE-E-CLEANUP.md:6]; latest production renderer hash is at [V18-WAVE-E-CLEANUP.md:88].
+  202| - Open: Final bank provenance, final visual verdict, production deployment, and Wave F Flight/Trick are not shown. Also open/ambiguous: Drift framing [V18-WAVE-E-CLEANUP.md:53,103], End-swell stub [V18-SWELL-FRONT-REPAIR.md:118], Trick framing [V18-SWELL-FRONT-REPAIR.md:117], fade not gate-traced [V18-WAVE-E-CLEANUP.md:104], and intermediate Wave-D commit `6f0201e3` appears only in the superseded report [V18-SWELL-FRONT-ART.md:7].
+  203| - Next chunk: When the Wave F report and final bank receipt exist, fill the Wave F placeholder, final bank provenance, site-blurb provenance, and delivery status. Inputs needed: Wave F report, final accepted bank hash/manifest, every-frame final review, and production verification/deployment receipt.
+  204| 
+  205| ## Coordinator verdict
+  206| 
+  207| **verified** — xhigh, 26.5k-token prompt, 20k reasoning, 424s. spot 2/2: superseded-ART still says PASS (ART:3,8) and 400-rung 1 mm rounding note (REPAIR:104) both exact. Findings list honest and well sourced; draft usable as base - finalize via continuation once Wave F + final bank receipts exist.
+```
+
+# INPUT zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-WAVE-F-PERFORMANCES.md:1-123
+```
+    1| # Manafold version 18 — Wave F: Flight and Trick performances
+    2| 
+    3| **Date:** 2026-09-19
+    4| **Worker:** Claude (sole Opus worker). The coordinator's `V18-WAVE-EF-PREP.md` was re-verified against source before use; two of its premises were wrong (§5).
+    5| **Scope:** Wave F only: Flight, Trick, and Drift framing (the prep's "fix only if cheap"). No other clip's motion changed.
+    6| **Verdict:** **CLOSED.** Flight now reads unmistakably as flight. Trick does the owner's 180 → pause → 360 → slight overshoot → correct → existing righting, pivoting about its planted antenna. Drift's framing no longer cuts the antenna. Gate matrix **115/115**, final bank 33/36 byte-identical to Wave E (the three that differ are exactly Flight/Trick/Drift), and every value was chosen by looking (`V18-WAVE-F-RECEIPTS/look-notes.md`: 16 looks, written down after each one).
+    7| 
+    8| ## 1. Flight (Owner Direction 19 §7: "move up and down so you can actually see it's flight")
+    9| 
+   10| **Diagnosis, confirmed by picture (L1).** The version-17 bob is four symmetric 300 mm bounces under a tight camera. In frame it moves about 10 px at half scale: the owner's complaint is literal. The committed 3D probe gives the second limit: the v17 trough clears the dirt by only **210 mm**, so any bob deeper than about 470 mm breaks the 40 mm float floor. A deeper bob therefore needs the whole flight carried higher.
+   11| 
+   12| **Mechanism.** One clock still drives everything. There is an explicit integer cycle count (`kFlightBobCycles`, replacing `K / kFlightBobPeriodKeys`), and one periodic phase warp, `w = t + c·sin t + h·cos t`. Height, pitch, bank, breath and the nodule trail all read the warped phase; the antenna sway stays on the plain clock. A single harmonic of one cycle is periodic, so the seam is exact for every rung. It is monotone while |(c,h)| < 1 rad, and the reel refuses a warp above `kFlightWarpMaxA16`. `compress_at` was split into `compress_from_sin`, so Flight's breath shares the bank's arithmetic.
+   13| 
+   14| | Knob (named constant) | v17 | Shipped | Chosen by |
+   15| |---|---|---|---|
+   16| | `kFlightBobCycles` | 4 | **2** | L2: c4 still reads as a bounce, c2 as a slow climb-and-sink |
+   17| | `kFlightBobAmpMm` | 300 | **800** | L1/L2: 700–900 is the first range that reads as travel |
+   18| | `kFlightCruiseLiftMm` (new) | 0 | **500** | probe trough limit; lift = amplitude − 300 keeps v17's trough |
+   19| | `kFlightRiseFrac16` (new) | 0x8000 | **24000** (0.366) | L3/L4: quick climb, long glide |
+   20| | `kFlightTopHang16` (new) | 0 | **4000** | L3/L4: floats at the apex |
+   21| | `kFlightPitchLead16` (new) | 0 | **4096** | L4: nose leads the climb by about 5 keys |
+   22| | `kU02CamKFlight` / `kU02CamBiasFlight` (new) | 250000 / 0 | **220000 / +5000** | L2/L3: the apex antenna was cut at 900 mm |
+   23| 
+   24| Every neutral value reproduces the version-17 bytes exactly: Flight with the v17 environment is `0x5B272AB3`, the Wave-E bank value.
+   25| 
+   26| **Looked at.** L1 amplitude ladder; L2 amplitude+lift × cycles; L3 shape rungs; L4 the builder's own height/pitch trace per rung (comparison side only, after a screen-colour tracker proved unusable, §5). L5 every frame of the shipped clip: 352 populated frames, no crop, no pop, continuous wrap. L6 native apex/trough against v17: roughly 70 px of travel against v17's roughly 10. The apexes lift the whole body above the horizon and the troughs carry it low over the dirt. The purple body patches also appear in v17's frames; they are pre-existing shading, not Wave F.
+   27| 
+   28| ## 2. Trick (Owner Direction 19 §9)
+   29| 
+   30| **Kept:** the v17 pure-X half-turn plant, the +90° face yaw, the fixed camera, the plant/lift keys, the righting, and `kTrickKeys = 200`.
+   31| 
+   32| **Decision: kTrickKeys does not grow.** Every `sinp(f,K,n)`, `antenna_knead` and `front_flex_play` in the clip is periodic in K. Growing K re-phases the whole clip, and pinning those oscillators to their old absolute period would break the loop seam (n·K′/200 is not an integer for the clip's cycle counts). The turn is therefore authored inside the existing 70-key plant hold, `[78,148)`, which is re-partitioned:
+   33| 
+   34| | Beat | Keys | Duration |
+   35| |---|---|---|
+   36| | touchdown → pause | 78–100 | 0.73 s |
+   37| | one full turn to 1000 + overshoot | 100–128 | 0.93 s |
+   38| | C2 correction back to exactly 1000 | 128–140 | 0.40 s |
+   39| | hold ("ta-da") | 140–148 | 0.27 s |
+   40| | existing righting | 148→ | unchanged |
+   41| 
+   42| **Mechanism.**
+   43| - `trick_spin_progress_u` authors unwrapped progress in micro-turns as two quintic segments `S(x)=10x³−15x⁴+6x⁵`, evaluated exactly in int64. It is converted to angle16 only at the quaternion. A whole number of turns is skipped outright, so the pause and the post-correction hold are byte-identical to the no-spin clip.
+   44| - The yaw is **world-vertical and pivots about the SUPPORT**. `trick_support_center_xyz` (the refactored walk; scale 1 reproduces the old millimetre Y walk bit for bit) is evaluated before and after the pre-multiply in micrometres, and the root X/Z absorbs exactly the horizontal displacement the yaw gives the support. Root X/Z are zero outside the turn.
+   45| - The walk runs after the planted branch's legacy JunctionF X balance flex (coordinator note), so both pivots include it. The Front table's ramp at keys 156–157 lies outside the spin window.
+   46| - The literal `158` is now `kTrickBalFadeEndKey = kTrickLiftKey + kTrickBalFadeKeys`.
+   47| - Selected values: start/turn/settle `100/128/140`, overshoot `kTrickSpinOvershootPm = 40` (14.4°), gain 1000.
+   48| 
+   49| **Framing.**
+   50| - The prep's premise was wrong: every Manafold clip inherits `cam_bias 0` from `u02_common`, not 14000.
+   51| - The bias ladder (L7) plus a numeric top-edge check validated on known negatives showed that at the house k no single aim holds both extremes. A bias of −12000 lifts the plant clear but puts antenna ink in the top 4 rows on 44 frames (the flip climb and the righting throw).
+   52| - A named `kU02CamKTrick` was added. **Shipped: k 330000, bias −10000** (L12). This gives 0 top-touch frames, and the planted crown sits on a band of dirt instead of the bottom edge (the Wave-D open item).
+   53| 
+   54| **Looked at.**
+   55| - L7 aim ladder.
+   56| - L8 timing ladder: every rung reads as one full turn; timing was decided on beats.
+   57| - L9 overshoot 20/40/70: 40 carries the eyes visibly past centre and settles back symmetric.
+   58| - L10/L11 every frame of the shipped clip in two halves: continuous, no pop at the spin joins or the lift, f399 matches f0.
+   59| - L12 zoom/aim.
+   60| - L13 the planted contact at 4× against the no-spin control: the crown stays on the dirt as the legs swap sides, with no float and no sink.
+   61| 
+   62| ## 3. Drift framing (fixed camera, cheap and clean)
+   63| 
+   64| L14 showed the journey framed lopsided: it starts about ¾ of the way across and leaves through the left edge over f260–298. The renderer comment blamed the wrap; in fact it is plain framing. `kU02DriftCamBiasX = 14000` is a **constant** horizontal aim (not a tracker). A two-edge column check, validated on a known-cut frame, gives leftmost ink at column 1 (f297) and rightmost at 9 px from the edge (f0). The antenna and mana are never cut, where v17 cut them for about 40 frames. **Residual (owner call):** the traverse is about as wide as the frame, so no constant aim buys margin at both ends. That would need a shorter traverse or a pulled-back camera.
+   65| 
+   66| ## 4. Gates — 115/115 (`V18-WAVE-F-RECEIPTS/gate-matrix.txt`)
+   67| 
+   68| - **Normals 11/11 RC 0**, including mmeshcheck `CLEAN 1416/4200`.
+   69| - **mspan 35/35**: normal output byte-identical to HEAD's.
+   70| - **msmooth 16/16**: all 16 attribution masks identical to Wave E.
+   71| - **Protected legs 27/27**: both Trick support controls now also fail the new PLANTED 360 line and nothing else.
+   72| - **New mqa Q6/Q7 and four new controls.** Each fires only its own category:
+   73|   - **Q6a revolution** (`--fail-trick-spin-gain`: two revolutions). Shipped: pause 78..100; peak 1039.98 pm at key 128; exactly 1000.00 pm by key 140; 1 reversal; worst step 69.4 pm/key (bound 90); off-axis 0.00004.
+   74|   - **Q6b C2 at joins** (`--fail-trick-spin-ease`: C1 smoothstep, ratios 0.52/0.64). Shipped: progress accel ratios 0.057/0.080/0.124, root-XZ 0.009/0.017/0.109 (bound 0.25).
+   75|   - **Q6c support drift** (`--fail-trick-spin-pivot`: turn about the root, 568 mm). Shipped: 15.75 mm, bound 24 mm, declared with reasons in source.
+   76|   - **Q7 Flight** (`--fail-flight-seam`). Shipped: 2 maxima, 800.0 mm; seam step/accel/jerk 77.5/4.8/1.07 within interior 86.4/9.4/1.45.
+   77| - **mprobe.** PLANTED 360 keys 100..140: carrier B owns 82/82 key+midpoint samples, depth −27..−18 mm. The whole window stays 140/140. Flight clearance is 211 mm.
+   78| - **Two gate adjustments, declared in source:**
+   79|   - mqa Q3 gains a Trick root-step ceiling of 240 mm. The body orbits its support at 178 mm/key at peak turn speed, which is C2 (Q6b), not a teleport.
+   80|   - mprobe's TRAVEL float gate now leaves Trick's declared contact keys to the contact contract. The Trick root now moves in XZ, and terrain rise is still taken on every key.
+   81| - **Selectors:** 14/14 malformed or out-of-range Wave-F values return RC 2.
+   82| - **Wave-E rows:** live-history gate normal 22/22 OK; `legacy` control fires on every live subject; list-drift control fires.
+   83| - **Byte identities (final binary):** Flight with v17-neutral knobs `0x5B272AB3`, Trick `SPIN=none` + v17 camera `0x22563A37`, Drift `CAM_BX=0` `0x3A11AB0C` -- each equals the Wave-E bank. Zixxtrixx Idle final == HEAD `0x1408F885`. The one-invocation bank of 22 live + Crackle-legacy + 13 non-live subjects is 33/36 identical to the Wave-E receipts; the 3 that differ are the intended Flight/Trick/Drift (`crc-final-live22-crackle-legacy-nonlive13.txt`).
+   84| 
+   85| ## 5. Findings recorded on the way (instrument honesty)
+   86| 
+   87| 1. **The prep's camera premise was wrong.** The house u02 bias is 0, not 14000. The neutral byte check against the Wave-E bank caught it before any art was chosen.
+   88| 2. **Screen-space trackers lied twice.**
+   89|    - Flight's magenta mask loses the body at the trough, dropping from about 2000 px to 15 px as pitch turns the lit face away.
+   90|    - Drift's lighting defeats it entirely (a known-positive failure).
+   91|    - A bottom-gap metric read the dirt as ink.
+   92|    - None of them was used for a decision. Every numeric framing check was first run on a known-negative and a known-positive frame.
+   93| 3. **Contact estimate.** A hard 25 mm contact patch holds 6–12 vertices on a ring mesh about 50 mm coarse, so it jitters. Q6c uses a height-weighted patch instead.
+   94| 4. **Pre-existing, out of scope, now reported every run by mqa:** in the untouched no-spin plant, the balance wobble is height-pivoted only. The weighted antenna contact wanders **178 mm** from touchdown during the pause (v17/Wave-D behaviour). The spin adds at most 15.75 mm to it. Pinning the plant's XZ would make the pause truly planted, but it changes the pause the brief said to keep. **Owner call.**
+   95| 5. Coordinator note verified: the legacy JunctionF X balance flex is included in the pivot math.
+   96| 
+   97| ## 6. Binaries and bytes
+   98| 
+   99| Direct clean build (`build-direct.sh --output .tmp/v18-waveF-final --clean`), g++ 16.1.0; every binary postdates the last source edit. No CMake result is claimed.
+  100| 
+  101| | Binary | MD5 |
+  102| |---|---|
+  103| | `zhao-reel-cel.exe` (production) | `e17c5306313e3bdca9763646d06986b5` (SHA-256 `6aa39a2a…ed27`) |
+  104| | gates | `V18-WAVE-F-RECEIPTS/binaries.txt` |
+  105| 
+  106| Shipped sequence CRCs (production invocation): Flight `0x9FBC05CB` (352), Trick `0xBF695C69` (400), Drift `0x69158A83` (300). Flight and Trick equal the renders reviewed in L5/L6 and L10–L13.
+  107| 
+  108| ## 7. Open
+  109| 
+  110| 1. The Trick pause contact wander, 178 mm (§5.4), is pre-existing and needs an owner call.
+  111| 2. Drift has no framing margin at either end (§3).
+  112| 3. From Wave D: the End-swell stub, unchanged.
+  113| 4. Flight's pitched underside reads darker at the troughs, as it does in v17. It is pre-existing shading.
+  114| 
+  115| ## 8. Files
+  116| 
+  117| - **Source:** `tools/reel/manafold_art.h`, `manafold_clips.h`, `zhao_reel.cpp`, `manafold_qa_p12.cpp`, `manafold_probe.cpp`.
+  118| - **Evidence:**
+  119|   - this report;
+  120|   - `V18-WAVE-F-RECEIPTS/` (gate matrix, CRC lists, binaries, mqa/mprobe logs, look notes);
+  121|   - the ladder/witness sheets `V18-WAVE-F-*.png|jpg`;
+  122|   - the every-frame sheets `V18-WAVE-F-MANAFOLD_FLIGHT-ALLFRAMES.png`, `..._TRICK-ALLFRAMES-A/B.png` and `..._DRIFT-ALLFRAMES.png`, made from the final bank.
+  123| - **Not committed:** `.tmp/`, raw `.rgb` frames and the viewing JPEGs.
+```
+
+# INPUT zhaozhou/runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/V18-FINAL-BANK-INTEGRITY.md:1-165
+```
+    1| # Manafold version 18: integrated gate and exact final bank
+    2| 
+    3| **Date:** 2026-09-19
+    4| **Worker:** Claude (sole Opus worker)
+    5| **Verdict:** **READY-TO-ENCODE.** No blocking item. The owner calls in §6 are recorded but do not block the encode.
+    6| 
+    7| **Source:** Zhaozhou `db2bcf0e` on `manafold-v18`. This commit adds the Trick plant pin; every other file is Wave F (`d7d51171`/`bf51325f`).
+    8| **Renderer:** `.tmp/v18-int-final/bin/zhao-reel-cel.exe`
+    9| - MD5 `0f082622d4ca0c58d012d1f0de555723`
+   10| - SHA-256 `52596ea411e57c2a7a2474dc39b39c76834e380d59e401a16760bb67d015ed03`
+   11| 
+   12| **Bank manifest SHA-256:** `bdaac548e5dc956b7aa4afac57dae73e265861b25e3160788a26cbd8aa0628bd` (22 subjects, 7,992 frames, 2,209,692,096 bytes).
+   13| **Raw frame root, kept for the encode:** `C:\programmieren\zencrifice\manafold-p16\v18-final-reel-22`
+   14| **Full-resolution every-frame sheets:** `C:\programmieren\zencrifice\manafold-p16\v18-final-sheets`. The viewing JPEGs are committed in `V18-FINAL-SHEETS/`.
+   15| 
+   16| ## 1. Part 1: the Trick planted-antenna slide
+   17| 
+   18| **Problem.** The balance wobble and the JunctionF X balance flex rotate the body about its root. The plant was pinned in height only, so carrier B's contact skated 178.5 mm through the pause.
+   19| 
+   20| **Change.** The support-point XZ pivot, built in Wave F for the spin, now runs across the whole contact window, keys `[kTrickPlantKey, kTrickLiftKey)` = 78..147:
+   21| - At every planted key, the root XZ absorbs the horizontal displacement of carrier B's chain point from where it touched down.
+   22| - The spin compensation is added on top of the pin, unchanged.
+   23| - At the lift, the offset held on the last planted key is released to zero with a C2 quintic over `kTrickPinReleaseKeys = 12` keys (0.4 s), riding the righting.
+   24| - The wobble's rotation, the pause timing (78..100), the flex and the timing of the spin, overshoot and correction are all untouched.
+   25| 
+   26| **Toggle.** `TrickPlantPin {kPinned, kLegacy}`, selected by `ZHAO_U02_TRICK_PLANT_PIN=pinned|legacy`, strict (RC 2 on a bad value). `ZHAO_U02_TRICK_PIN_RELEASE_KEYS` accepts 2..30. `legacy` is the exact-off control and reproduces Wave-F Trick `0xBF695C69` byte for byte.
+   27| 
+   28| **Gate.** mqa **Q6d PLANT PIN** checks the no-spin contact patch (height-weighted carrier-B vertices, the same estimator as Q6c) against touchdown on every key 78..147. The bound is **24 mm**: about 1.5 px at the Trick camera, 1.85x the measured roll of the contact round the curved swell, and 7x under the control. The reason is written in the source.
+   29| 
+   30| | Measure | Value |
+   31| |---|---|
+   32| | Shipped Q6d | **12.99 mm** (key 131) |
+   33| | Shipped contact vs its own touchdown (reported) | 13.89 mm |
+   34| | Positive control `--fail-trick-plant-pin` (legacy) | **178.46 mm**, fires Q6d only (attributed) |
+   35| 
+   36| Q6b is now judged on the spin's own compensation: the shipped root XZ minus the no-spin control's, because since the pin the control's root also moves in XZ. The spin join ratios are unchanged from Wave F: 0.009 / 0.017 / 0.109. Q3's worst Trick step is 172.7 mm, under the 240 mm ceiling.
+   37| 
+   38| **Decision by eye: ship the pin.**
+   39| - `V18-FINAL-TRICK-PIN-AB-NATIVE.jpg`: legacy and pinned at native scale, from touchdown through the lift.
+   40| - `V18-FINAL-TRICK-PIN-AB-CONTACT-SLITSCAN.jpg`: the contact band for every frame f140..f319, stacked. In legacy the whole contact weaves left and right through the pause and slants through the hold. Pinned, it stands nearly vertical.
+   41| - `V18-FINAL-TRICK-PIN-AB-RELEASE-NATIVE.jpg`: at f290..f322 the pinned body sits a few px left of legacy and converges by about f314. There is no pop.
+   42| - `V18-FINAL-TRICK-PLANT-3X.jpg`: final-bank 3x crops of f156..f298 against a fixed screen column. The crown holds its column on the dirt through the pause, the turn and the hold, and leaves only at the lift.
+   43| 
+   44| The body still sways visibly. The pinned version reads as balancing on a planted tip, and the legacy version as sliding. It does not read worse, so the pin ships and the toggle stays.
+   45| 
+   46| ## 2. Part 2: the integrated gate
+   47| 
+   48| **Build.** Clean direct build (`build-direct.sh --output .tmp/v18-int-final --clean cel`, then the 11 gate targets) from `db2bcf0e` with `tools/reel` clean, g++ 16.1.0. All binaries are listed in `V18-FINAL-RECEIPTS/binaries.txt`. The same build supplied the gates and the bank renderer.
+   49| 
+   50| **Not run: CMake.** The plan lists "direct/CMake builds". CMake was not run and no CMake result is claimed. Wave D recorded that the generated graph cannot rebuild itself (missing Verilator `*.cmake` copy inputs), and nothing here touches RTL.
+   51| 
+   52| **Gate matrix: 113/113** (`V18-FINAL-RECEIPTS/gate-matrix.txt`).
+   53| - **Normals, 11/11 RC 0:** mspan, msmooth, mprobe, mjointpub, mqa, mmeshcheck, moutline, mshell, mshell selftest, mnodule, meyesize.
+   54| - **mspan controls, 35/35.** Each fires its own attributed detector.
+   55| - **msmooth controls, 16/16.** Each fires inside its allowed mask.
+   56| - **Protected legs, 27/27.** These are the mjoint and mnodule mutes, the mprobe mirror/outline/scale/support/support-depth legs, the moutline self-tests, the six mqa legacy legs, and meyesize L/R/wrong-bone.
+   57| - **Wave F and integration controls, 5/5**, each firing only its own category: Q6a spin-gain, Q6b spin-ease, Q6c spin-pivot, **Q6d plant-pin**, Q7 flight-seam.
+   58| - **Selectors, 16/16 RC 2:** Wave F's 14 plus the plant-pin and pin-release selectors.
+   59| - **Live-history gate:** normal 22/22 OK; the `legacy` control fires on every live subject; the `list-drift` control fires.
+   60| 
+   61| **Exact-off identities** (`identity-renders.txt`), all rendered with the final binary:
+   62| 
+   63| | Identity | CRC | Matches |
+   64| |---|---|---|
+   65| | Flight, v17-neutral knobs | `0x5B272AB3` | Wave E |
+   66| | Trick, `SPIN=none` + `PLANT_PIN=legacy` + v17 camera (k 360000, bias 0) | `0x22563A37` | Wave E |
+   67| | Trick, `PLANT_PIN=legacy` | `0xBF695C69` | Wave F bank |
+   68| | Drift, `CAM_BX=0` | `0x3A11AB0C` | Wave E |
+   69| | crackle-legacy | `0xEDDC80D7` | Wave F |
+   70| | Zixxtrixx Idle, production env | `0x1408F885` | HEAD |
+   71| 
+   72| **The two gates Wave F loosened:**
+   73| 
+   74| 1. **mqa Q3 Trick root-step ceiling of 240 mm.**
+   75|    - **Declared:** a per-slot table row for slot 13 only, with its reason in the source.
+   76|    - **Bounded:** the measured step is 172.7 mm, at peak turn speed (key 111). 240 is 1.39x that.
+   77|    - **Cannot hide a fault elsewhere:** every other clip keeps its own ceiling or the 135 mm default, and the `--fail-rootstep` teleport control still fires.
+   78|    - **Residual:** a Trick-only teleport between 135 and 240 mm would pass Q3. Inside the contact window, Q6b (C2 joins), Q6c and Q6d (support drift) now cover root XZ. Outside it the Trick root is authored Y plus a C2 release. **Acceptable.**
+   79| 2. **mprobe TRAVEL float gate leaving Trick's declared contact keys (78-2..148+2) to the contact contract.**
+   80|    - **Declared:** slot 13 only, with a comment in the source.
+   81|    - **Bounded:** those keys are still judged by the contact contract. The deepest vertex is -36 mm (accepted -60..-5), and carrier B owns 140/140 support samples plus 82/82 during the turn. The float gate still judges every airborne Trick key (worst 68 mm) and every other clip.
+   82|    - **Residual, not blocking:** the contact contract assumes the snap plane. The TRAVEL row prints the terrain rise under the moved root on every key, and today it is **0 mm** on the whole path. It is printed but not gated inside the exempt window. A later change that puts Trick on sloped ground would have to gate it.
+   83| 
+   84| ## 3. Part 3: the exact final bank
+   85| 
+   86| The single hashed renderer received all 22 live names (`kU02LiveSiteSubjects`) in **one invocation**, with the production environment `ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross` and `ZHAO_U02_LIVE_MIST` unset. Renderer RC 0.
+   87| 
+   88| `V18-FINAL-RECEIPTS/v18-final-bank-validate.py` is the P17 validator narrowed to the 22 live subjects. It checks:
+   89| - every header, every byte count and the dimensions;
+   90| - contiguous zero-based names;
+   91| - meta subject, frame count and per-frame receipt rows.
+   92| 
+   93| **PASS: 22 subjects, 7,992 frames, 0 errors.** The manifest is `bank-manifest.tsv`: sorted subject rows of subject, frames, CRC32C, ordered-frame SHA-256 and bytes, tab-separated with LF. Its SHA-256 is `bdaac548...28bd`.
+   94| 
+   95| | Subject | Frames | Sequence CRC32C | Ordered frame bytes SHA-256 |
+   96| |---|---:|---|---|
+   97| | manafold-blown | 292 | `0x840DA184` | `57d09760d550ce40b0fc050ea7fe20ecf557b7c8f8ccda7ddb16a4085bc98547` |
+   98| | manafold-channel | 420 | `0xD49861D0` | `ea29946e11d28bdae7edfd452f19caea6d35b49a98f09b8d3a7fc000d70ed350` |
+   99| | manafold-crackle | 600 | `0xCC1BDA8B` | `1b04280607638734b45cc551d1c0e8813d2f76bbc5cb6d0060e87d488bb3281f` |
+  100| | manafold-curious | 180 | `0xFD63139B` | `d799c8958b56ff2afa1e332aa2da876985ae0c065366ff803d4e2334b403ddb8` |
+  101| | manafold-damage | 464 | `0xBADF776E` | `e26e0824468db7bfbab39ecda2ee587f2585ca57f4828c590ceebd4858c5653e` |
+  102| | manafold-death-drop | 450 | `0x99FCC8A1` | `865aad22aca5a7482a44908d587fed3328dd999e3c007dbc0aea27e51d5b1375` |
+  103| | manafold-death-gutter | 590 | `0x3BA123EC` | `09b2821ba88d09903c6cbb0a9de2d9b975c7019fa8e377bdffbcb45171287e09` |
+  104| | manafold-drift | 300 | `0x69158A83` | `06765873e5066ec11cc9353a2c638e5974b1cad621f5fa19f1c7f1184c5d6411` |
+  105| | manafold-fall | 340 | `0x1F062A86` | `f75ed433ffd9b3a4851276d65e22dbf3f83662208f5eba4973c9f27902e735bf` |
+  106| | manafold-flight | 352 | `0x9FBC05CB` | `8667e1455f465a7059fe26ace43edd30eb6d8c84d838e4275b647344a7c4e950` |
+  107| | manafold-hasty | 240 | `0xC6FB59FB` | `28642acaf21852fe76c051615ac7ab798f4b44c1975fb189d7d52297409532e0` |
+  108| | manafold-hit | 140 | `0x3BABB107` | `6e1d253fe8123a7899e570ae9569a48e5e5b1a572ec6841c5e1a850b32a554cb` |
+  109| | manafold-hover | 600 | `0x24B3FE60` | `2631dedc6775c32816cc12876eefb4aee47289bca2236660c5f0520dde6d02f9` |
+  110| | manafold-inspect | 600 | `0x95A27283` | `ea4359bf5f9799b7708f68a857e7b143db347d5a0fbd61a8b419360f38e56b86` |
+  111| | manafold-lasso | 336 | `0x26666BC0` | `965e85a84e42a055c4823ba38e47c8b3952a6fe0eb200ef424cc79bdeb54baaf` |
+  112| | manafold-pirouette | 240 | `0x18DB7B27` | `61e2f57bef172799022e32a1670c354a0a2d36b3c97ec41d10fee5b4589e4cf1` |
+  113| | manafold-rest | 400 | `0xD25EF330` | `35840a88d7c0805ba178f38a9d9a2e7d5efedfb185e212cc1bcc7ed670e6cd81` |
+  114| | manafold-startle | 160 | `0x11C587EF` | `5b4ac5a92c99768f736ff6a9ecc25d64bf310f11aad7916956131f8deec7f73e` |
+  115| | manafold-taunt | 280 | `0x3874DBF4` | `403220b92b95d691edd57b955f9dbfbd3acdf4174e18d7f72d191fee93ccb567` |
+  116| | manafold-taunt2 | 240 | `0x499AC40C` | `cb55c18b2e9d1064c91e6bb5bb69d181a83923883f5e3b4da7be451398f63f7a` |
+  117| | manafold-taunt3 | 368 | `0x07EACF1D` | `89e1b4339aca83d8aa0d9f852fd1251bb63c82fec0c319e1fb3b482c9ec74036` |
+  118| | manafold-trick | 400 | `0xAB4D78E9` | `f328dc5e3ba4d8a7b498703de9b1df93255a3d9a089dd13f22d6240786934f43` |
+  119| 
+  120| **Scope vs Wave F** (`scope-vs-waveF.txt`):
+  121| - **21/22 subjects are byte-identical** to the Wave-F final bank.
+  122| - **Only Trick changed** (`0xBF695C69` -> `0xAB4D78E9`), which is the intended plant pin.
+  123| - Against the same-binary `PLANT_PIN=legacy` render, Trick differs only on f156..f318, which is keys 78..159: the contact window plus the release.
+  124| - Key 78's frame differs even though its pin offset is exactly zero. The probable cause is a neighbour-reading post-pass such as `finalize_rear_follow`. This was not traced.
+  125| - The final Trick is byte-identical to the dev render reviewed in §1.
+  126| 
+  127| ## 4. Per-subject visual verdict
+  128| 
+  129| **Coverage.** 18 images were read in total. Every one of the 22 complete every-frame sheets was looked at, either whole or in a composite. The sheets were read at their <=1600 px JPEG scale, where each tile is about 55-80 px wide. At that scale I can judge continuity, pops, framing, seams and gross effect reads. **I cannot judge fine detail** such as root seams, ink ownership or particle crossings. For the 21 byte-identical subjects, that detail transfers from the Wave D/E/F reviews through exact byte equality, not from this pass.
+  130| 
+  131| | Subject | Verdict | Basis |
+  132| |---|---|---|
+  133| | Trick | **PASS** | Whole sheet: approach, flip, plant f156, pause, one turn with overshoot, correction, righting f296-324, recovery, seam. Native A/B, slit-scan, release and 3x plant witnesses (§1). |
+  134| | Flight | PASS | Whole sheet: two clear climb-and-sink cycles, apex above the horizon, low troughs, continuous seam. Detail from Wave F L5/L6 (bytes identical). |
+  135| | Drift | PASS, with the owner call below | Whole sheet: in frame for the whole traverse. The wrap f299->f0 is the authored travelling seam. The subject is tiny at sheet scale, so mana detail is not judged here. |
+  136| | Hasty | PASS at sheet scale | No trail or smear is visible at thumbnail scale. The no-history claim rests on the live-history gate (22/22 OK, control fires) and Wave E. The subject is too small here to confirm by eye. |
+  137| | Crackle | PASS | Whole sheet, 600 frames: day sky, normal mana, continuous. |
+  138| | Blown | PASS | Whole sheet: blast, tumble, catch, return, continuous seam. |
+  139| | Taunt III | PASS | Whole sheet, 368 frames: continuous flick sequence, seam. |
+  140| | Hover | PASS | Whole sheet, 600 frames. The seam was checked at native f597-f2 (`V18-FINAL-HOVER-SEAM-NATIVE.jpg`): continuous. |
+  141| | Death Drop | PASS | Whole sheet: fall, settle, held corpse. The old f0220-0236 cutoff region reads continuous at sheet scale. |
+  142| | Death Gutter | PASS | Whole sheet: fall into the dirt, continuous hold to f589. |
+  143| | Curious, Hit, Startle, Pirouette | PASS at composite scale | Continuous. Detail by byte identity. |
+  144| | Taunt, Taunt II, Fall | PASS at composite scale | Continuous. Taunt II's thrown loop crosses the right edge around f140-199, as it did before (bytes identical). Fall holds its last frame. |
+  145| | Channel, Lasso | PASS at composite scale | Continuous. Channel keeps night. Lasso's throw leaves and returns. |
+  146| | Damage, Rest | PASS at composite scale | Continuous. |
+  147| | Inspect | PASS at composite scale | Continuous. |
+  148| 
+  149| ## 5. Receipts
+  150| 
+  151| `V18-FINAL-RECEIPTS/` contains:
+  152| - `gate-matrix.txt`, `binaries.txt`, `identity-renders.txt`;
+  153| - `mqa-normal.log`, `mqa-control-trick-plant-pin.log`, `mprobe-normal.log`, `live-history-normal.log`;
+  154| - `bank-integrity.json`, `bank-manifest.tsv`, `scope-vs-waveF.txt`, `bank-render.log`;
+  155| - the scratch tools used: `v18-final-bank-validate.py`, `banksheets.py`, `gatematrix_int.sh`.
+  156| 
+  157| ## 6. Open items (owner calls, non-blocking)
+  158| 
+  159| 1. The plant pin ships, and the toggle is kept. If the owner prefers the old slide, the switch is `TrickPlantPin::kLegacy`.
+  160| 2. Drift has no framing margin at either end (Wave F).
+  161| 3. The End-swell stub is unchanged (Wave D).
+  162| 4. Flight's underside is darker at the troughs. This shading predates version 18.
+  163| 5. The TRAVEL exemption residual (§2.2).
+  164| 
+  165| The next packet is to encode exactly these 22 subjects from the frame root above. Do not re-render.
+```
+
+# INPUT Upheaval/creature/Manafold/OWNER-DIRECTION-19-2026-09-19.md:1-21
+```
+    1| # Owner Direction 19 — Manafold version 18 — 2026-09-19
+    2| 
+    3| ## Source direction (verbatim)
+    4| 
+    5| > Much better now. But the front part of the antenna, meaning the front ball and the connection to the creature, are not flexible enough. Also, the connections of the antennae to the creature look strange and warped. These need to be completely smooth and look like part of the creature's body. Right now they have a different texture and are glitched. And all the balls could be smaller. Still bigger then the antennae parts, but not so obviously big protruding balls. There is no need for the mana menu anymore, we have tested that enough. We also need the mana lab on the website. They should both go to archive. Sometimes the particles go through the andtennae and that looks strange. Don't know if there's an easy way to stop that. Don't spend too much effort but if there is, then fix it. Drift I think is a relic with a weird mana, crackle too. Maybe keep them but change the mana to the normal one? Blown has similar issues. Flight should move up and down so you can actually see it's flight. Hasty has the old smear effect again, we're getting rid of that everywhere. Trick makes a 180° turn and 180's back. I think it'd be cool if we did the 180, paused a bit like now, than did a 360, overshot a little, and corrected back.
+    6| 
+    7| > That's version 18
+    8| 
+    9| ## Binding interpretation for version 18
+   10| 
+   11| 1. **Front root flexibility is reopened.** Front/JunctionF and the visible stick between the body and Front ball must flex visibly in public motion rather than behaving like a stiff body-mounted peg. Preserve the continuous antenna and body attachment while increasing authored flexibility.
+   12| 2. **Both body connections must become body-smooth.** The antenna emergence and return/socket regions must look like the creature's own continuous body surface. Remove the warped/glitched/different-texture read at both connections. Audit geometry, skin weights, normals, pigment/grain, shell/ink ownership and depth before deciding which layer is wrong.
+   13| 3. **All visible antenna balls become smaller.** Front, A, B, C and End remain visibly thicker than their connecting sticks but should no longer read as large protruding beads. Size remains named editable art, chosen by native full-motion comparison rather than derived from a drawing measurement.
+   14| 4. **Archive both experiment collections.** The live Mana menu and Mana lab have finished their purpose. Move both to the site archive without deleting their media or provenance. They must no longer occupy current live presentation tabs.
+   15| 5. **Particle/antenna intersections get a bounded attempt.** First identify whether existing depth/attachment information offers a narrow reliable fix. If a simple production-depth or clearance rule prevents particles drawing through antenna sticks without harming the effect, implement and prove it. Do not spend a large architecture pass or weaken the mana to chase every overlap.
+   16| 6. **Normalize relic mana.** Drift, Crackle and Blown may remain as motions, but their old/special mana treatment is reopened. Compare them against the current normal shipping mana and use the normal mechanism unless a distinct treatment still earns its place visually.
+   17| 7. **Flight needs unmistakable vertical travel.** Re-author Flight so the creature visibly moves up and down as flight, while preserving framing, loop continuity, antenna/effect smoothness and the no-smear contract.
+   18| 8. **Hasty must have no frame-history smear.** Treat any returning old smear read as a real regression. Trace whether it is actual history-buffer smear, contour/trailing mist, or effect persistence before editing; remove the rejected history effect everywhere it survives.
+   19| 9. **Trick gets a longer rotational phrase.** Preserve the accepted approach, antenna plant/contact, readable face and current pause. Then perform the existing 180-degree turn, pause, continue through a 360-degree turn, overshoot slightly and correct back before the existing recovery. The motion must remain continuous, planted and readable; no camera chase or contact-gate weakening.
+   20| 10. **This is version 18.** All new plans, findings, archive labels, site copy, media provenance and publication records use Manafold version 18.
+   21| 11. **Art acceptance remains visual.** Gates protect contact, topology, continuity, ownership and regressions; complete native-resolution motion decides smoothness, body integration, carrier size, effect read and likeness.
+```
+
+# INPUT Upheaval/website/creatures.json:37-37
+```
+   37|       "blurb": "MANAFOLD, pass 17 — expression, elasticity and continuous motion.\n\nFIVE VISIBLE BALLS, FIVE PUBLIC PERFORMERS. Front, A, B, C and the rear socket each own their visible core and contribute separately in the shipping motion. Taunt III turns that rig into a four-stage crown: every free ball reaches the top and bottom, the paths cross, and the final accusation holds all five contributions at once.\n\nTHE STICKS STRETCH AND COMPACT. Seven helper bones carry signed endpoint distance through every bend and free run, so the continuous antenna can follow the larger independent motion without buckling, splitting, sliding off the body or exposing its buried tip. The rear socket follows the breathing body at authored rho 1.043; the full-bank surface range is 1.035–1.162.\n\nTHE EYES ACT NOW. The neutral lens is a wider 250×100×40 mm almond instead of the old splinter. Curious, Startle, Taunt and Taunt III visibly grow and shrink one or both eyes while each cyan/white star remains attached. Taunt III's held joke is an unmistakable 1450/750 large-small side-eye.\n\nTHE BODY IS SOLID; THE MIST IS A CONTOUR. Pass 16's broad see-through shell is gone. Pigment and cel shaping own most of the ball, while a narrow mist ridge begins near the ink, reaches only slightly inward and thins outside.\n\nTHE ENTIRE ANTENNA O IS INKED. The upper/head-top line remains, the lower and inside edges now close the outlined-stick read, and the opening stays negative space. Internal ink obeys depth, so nearer cyan lightning remains in front instead of being overpainted black.\n\nLIGHTNING MORPHS; IT DOES NOT SWITCH. Connected figures, topology, colour energy and particles carry persistent identities through every transition, hold and loop seam. Boil completes one smooth Blue/Violet colour revolution instead of snapping its raw clock at frame 599. Death mana now fades opacity as well as colour, so it never becomes a black mass that vanishes in one frame.\n\nFALL IS AN HONEST ONE-SHOT. It lands, settles and holds instead of wrapping to the high opening pose. TRICK KEEPS ITS FACE: the physical pure-X headstand remains planted on the antenna while a continuous local face turn keeps both complete eyes readable through the hold. TAUNT III resolves its smooth crown into a front-held A80 accusation rather than hiding the joke on the far side.\n\nPROVENANCE. Accepted source is zhaozhou 18e1d993. The exact one-binary renderer MD5 is 67DCAFF8ABC0AA2BA830C439A4CD98C7; bank manifest SHA-256 is bc2d4d0bdce632815f42cca208763fb04bca62034e285ed1ef707c7f28d55d09. All 28 live subjects — 11,592 frames — were rendered together and passed exact every-frame review as one generation.",
+```

@@ -1,0 +1,14 @@
+# mqa attribution fix: expected normal RC 0; each leg RC 0 = fired only its own category (matrix convention: gatematrix_int.sh 'run f-mqa-* 0')
+# positive control of the stricter rule (before the Q3 slot-13 declaration): mqa-attr-POSCTL-undeclared-trick-spin-gain.log RC 1, pre-Wave-F 1
+normal rc=0 :: PASS: 0 failure(s)
+trick-spin-gain rc=0 :: qa-p12: FAILABLE LEG OK -- --fail-trick-spin-gain [Q6a] fired only its own category (3 item(s); other Wave-F 0; pre-Wave-F 1 = declared: Q3 slot-13 root step, two turns in one window)
+trick-spin-ease rc=0 :: qa-p12: FAILABLE LEG OK -- --fail-trick-spin-ease [Q6b] fired only its own category (3 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+trick-spin-pivot rc=0 :: qa-p12: FAILABLE LEG OK -- --fail-trick-spin-pivot [Q6c] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+trick-plant-pin rc=0 :: qa-p12: FAILABLE LEG OK -- --fail-trick-plant-pin [Q6d] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+flight-seam rc=0 :: qa-p12: FAILABLE LEG OK -- --fail-flight-seam [Q7] fired only its own category (1 item(s); other Wave-F 0; pre-Wave-F 0 = declared)
+legacy-lane rc=0 :: qa-p12: FAILABLE LEG OK -- with lane 0 answering for every lane Q1 reports the corpse as dead, which is exactly what the shipped gate does
+legacy-seam rc=0 :: qa-p12: FAILABLE LEG OK -- with hold_last off Q4 reports 2 death(s) standing back up, which is the fault pass 12 shipped
+legacy-eyesnap rc=0 :: qa-p12: FAILABLE LEG OK -- Q2 rejects both death eye resets at their own settle keys
+legacy-startle-step rc=0 :: qa-p12: FAILABLE LEG OK -- legacy Startle timing exceeds its unchanged 260 mm ceiling
+legacy-rootstep rc=0 :: qa-p12: FAILABLE LEG OK -- with the sag carry at one key Q3 reports 1 clip(s) over ceiling, which is the 240 mm teleport pass 12 shipped
+legacy-fall-wrap rc=0 :: qa-p12: FAILABLE LEG OK -- legacy Fall wrap makes Q5 reject 4 contract/channel item(s), including the non-root pose reset
