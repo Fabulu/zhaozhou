@@ -318,7 +318,7 @@ blocks:
     budget_group: platform
     maturity: SPECIFIED
     maturity_log: []
-    blocked_on: hardware
+    blocked_on: hardware   # controlling ruling 2026-08-31 SS8: "no owner action. They wait for the board." Pin assignments and PLL capabilities are properties of a physical device; see design/contracts/SYS.PLL.md, which repeats this in every section.
     deferred: false
     cut_order: null
     superseded_by: null
@@ -348,7 +348,7 @@ blocks:
     budget_group: platform
     maturity: SPECIFIED
     maturity_log: []
-    blocked_on: hardware
+    blocked_on: hardware   # controlling ruling 2026-08-31 SS8: "no owner action. They wait for the board." Pin assignments and PLL capabilities are properties of a physical device; see design/contracts/SYS.RESET.md, which repeats this in every section.
     deferred: false
     cut_order: null
     superseded_by: null
@@ -378,7 +378,7 @@ blocks:
     budget_group: platform
     maturity: SPECIFIED
     maturity_log: []
-    blocked_on: hardware
+    blocked_on: none   # WAS 'hardware', struck 2026-09-19: zhao_cdc_snapshot.sv exists and is BUILT. Only the board WIRING waits, not the block.
     deferred: false
     cut_order: null
     superseded_by: null
@@ -594,7 +594,7 @@ blocks:
           (SKIPped on the oss-cad-suite yosys SV-frontend gap, see
           tests/formal/mem_formal_lane.cmake.in). ZH-004 obligations
           unfreeze the profile via zhao_sdram_params_pkg.sv.
-    blocked_on: hardware
+    blocked_on: none   # WAS 'hardware', struck 2026-09-19: zhao_sdram_ctrl.sv exists and is BUILT. Only the board WIRING waits, not the block.
     deferred: false
     cut_order: null
     superseded_by: null
@@ -1011,7 +1011,7 @@ blocks:
     source_ids: true
     maturity: SPECIFIED
     maturity_log: []
-    deferred: true
+    deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: 5
     superseded_by: null
     implemented_by: FIELD.SEQ.CORE
@@ -1214,7 +1214,7 @@ blocks:
     budget_group: platform
     maturity: SPECIFIED
     maturity_log: []
-    deferred: true
+    deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: null
     superseded_by: null
     notes: Deferred; registered so the ledger records the option without spending a directory.
@@ -3445,7 +3445,7 @@ blocks:
     budget_group: geometry_mantle
     maturity: SPECIFIED
     maturity_log: []
-    deferred: true
+    deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: 5
     superseded_by: null
     notes: Warp8 throughput is cut-order 5 (§26).
@@ -5033,7 +5033,7 @@ blocks:
     budget_group: twod_post
     maturity: SPECIFIED
     maturity_log: []
-    deferred: true
+    deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: 1
     superseded_by: null
     notes: cut_order 1 — the first thing to go if synthesis fails (§26).

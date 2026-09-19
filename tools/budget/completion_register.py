@@ -158,7 +158,8 @@ def ledger_blocks() -> list[dict]:
             if cur:
                 out.append(cur)
             cur = {"id": m.group(1), "kind": None, "deferred": None,
-                   "blocked_on": None, "implementation": None}
+                   "blocked_on": None, "implementation": None,
+                   "deferred_note": None, "blocked_note": None}
             continue
         if cur is None:
             continue
@@ -166,6 +167,10 @@ def ledger_blocks() -> list[dict]:
             m = re.match(r"\s*%s:\s*(\S+)" % key, line)
             if m:
                 cur[key] = m.group(1)
+                if key == "deferred":
+                    cur["deferred_note"] = line
+                elif key == "blocked_on":
+                    cur["blocked_note"] = line
     if cur:
         out.append(cur)
     return [b for b in out if b["kind"] == "rtl"]
@@ -216,13 +221,23 @@ def disconnected() -> dict:
     """
     closure = console_closure()
     absent, unbuilt, unresolvable, deferred_ok, connected = [], [], [], [], []
+    uncited: list[str] = []
     for b in ledger_blocks():
-        if b["deferred"] == "true":
-            deferred_ok.append(b["id"])            # cites its own ruling in the ledger
-            continue
-        if b["blocked_on"] == "hardware":
-            deferred_ok.append(b["id"])            # waits for the board, by ruling
-            continue
+        # THE OWNER'S RULE: "Only explicitly deferred/non-v1 features may remain
+        # absent, and each must CITE THE CONTROLLING RULING/SPEC."
+        #
+        # So a bare flag is not an excuse. On 2026-09-19 the ledger still carried
+        # `deferred: true` on four blocks the owner had revoked the day before --
+        # this register read that stale field and reported them as "not a gap",
+        # under-counting by four. A flag with no citation beside it is exactly
+        # how that happens, so an uncited flag is now counted AS A GAP.
+        cite = (b["deferred_note"] or "") + (b["blocked_note"] or "")
+        has_cite = bool(re.search(r"\b(ruling|SS\d|§\d|spec|charter|plan)\b", cite, re.I))
+        if b["deferred"] == "true" or b["blocked_on"] == "hardware":
+            if has_cite:
+                deferred_ok.append(b["id"])
+                continue
+            uncited.append(b["id"])                # excused by nothing: a GAP
         mod = resolve_module(b["id"], b["implementation"])
         if mod is None and b["id"] in _ALIAS:
             unbuilt.append(b["id"])      # hand-searched and absent: a REAL gap
@@ -236,7 +251,7 @@ def disconnected() -> dict:
             unbuilt.append(b["id"])                # no RTL at all
     return {"connected": connected, "built_not_connected": absent,
             "unbuilt": unbuilt, "unresolvable": unresolvable,
-            "deferred_or_blocked": deferred_ok}
+            "deferred_or_blocked": deferred_ok, "uncited_excuse": uncited}
 
 
 def audit() -> dict:
@@ -244,7 +259,16 @@ def audit() -> dict:
     closure = console_closure()
     gaps = [t for t in ties if t["mandatory_gap"]]
     dis = disconnected()
-    total = len(gaps) + len(dis["built_not_connected"]) + len(dis["unbuilt"])
+    # UNRESOLVABLE COUNTS AS A GAP. It was excluded at first on the reasoning
+    # that a name heuristic over-reports -- true, but the conclusion was wrong:
+    # a capability whose implementation cannot even be located is not EXCUSED,
+    # it is UNDEMONSTRATED, and the owner's standard is that a mandatory
+    # function does not count as present unless it is really there. Excluding it
+    # made the total smaller, which is the direction this file exists to resist.
+    # It is reported as its own class so nobody mistakes it for a build task.
+    total = (len(gaps) + len(dis["built_not_connected"])
+             + len(dis["unbuilt"]) + len(dis["uncited_excuse"])
+             + len(dis["unresolvable"]))
     return {
         "tieoffs_total": len(ties),
         "tieoff_gaps": len(gaps),
@@ -324,9 +348,14 @@ def main(argv: list[str]) -> int:
     print("    NOT BUILT AT ALL          : %d" % c["unbuilt"])
     print("    deferred / waits for board: %d   (cite the ruling, not a gap)"
           % c["deferred_or_blocked"])
-    print("    name unresolvable         : %d   (reported, never counted as a gap --"
+    print("    EXCUSED BY AN UNCITED FLAG: %d   <- counted AS GAPS: the owner's"
+          % c["uncited_excuse"])
+    print("                                     rule is that a deferral must CITE")
+    print("                                     its controlling ruling or spec")
+    print("    UNRESOLVABLE              : %d   <- counted AS GAPS: not excused,"
           % c["unresolvable"])
-    print("                                     a name heuristic over-reports)")
+    print("                                     UNDEMONSTRATED. Locate the module")
+    print("                                     or add it to the alias table.")
     if rep["built_not_connected"]:
         print("\n  BUILT BUT NOT CONNECTED (a disconnected implementation does not count):")
         for m in rep["built_not_connected"][:20]:
@@ -337,8 +366,9 @@ def main(argv: list[str]) -> int:
             print("    %s" % m)
 
     print("\nMANDATORY GAPS REMAINING          : %d" % rep["mandatory_gaps"])
-    print("  (%d tie-offs + %d built-not-connected + %d unbuilt)"
-          % (rep["tieoff_gaps"], c["built_not_connected"], c["unbuilt"]))
+    print("  (%d tie-offs + %d disconnected + %d unbuilt + %d uncited + %d unresolvable)"
+          % (rep["tieoff_gaps"], c["built_not_connected"], c["unbuilt"],
+             c["uncited_excuse"], c["unresolvable"]))
     if rep["gaps"]:
         print()
         for g in rep["gaps"]:
