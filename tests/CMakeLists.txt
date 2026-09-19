@@ -13154,3 +13154,46 @@ add_test(NAME lint_zhao_console_board
 set_tests_properties(lint_zhao_console_board PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+# ---------------------------------------------------------------------------
+# PART.PROJECT -- the particle's seat at the SHARED projector.
+#
+# zhao_console_core.sv header entry I24: "NOTHING IN THIS CORE PROJECTS A
+# PARTICLE", which blocked PART.EXPAND, PART.SOFT and PART.LADDER. The block
+# under test contains no projection arithmetic -- it time-multiplexes client A
+# of the one zhao_project_service so that a third CLIENT does not have to be a
+# third PORT.
+#
+# The bench MODELS the projector rather than instantiating it. That is not a
+# shortcut: what this block depends on is the client-A contract (in order, one
+# accept per clock, no backpressure on the way out), and a model states that
+# contract where an instance would merely satisfy it. Whether the projection is
+# RIGHT is zhao_project_core's law and geom_project_directed.cpp's bench; a
+# second opinion here would be a second implementation.
+#
+# SLOTS=4 for the reason part_table_directed runs SPECIES_N=8: the in-flight
+# backpressure is reachable with legal stimulus only below the projector's
+# latency, and above it the refusal that handles it is not evidence about
+# anything.
+#
+# zhao_zref for zref/zref_particle.hpp -- records are built with the RATIFIED
+# particle128 codec and the size oracle calls zref::particle_radius, never
+# hand-written shifts.
+add_executable(test_part_project_directed particles/part_project_directed.cpp)
+target_link_libraries(test_part_project_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_project_directed
+  PREFIX Vzhao_part_project
+  TOP_MODULE zhao_part_project
+  VERILATOR_ARGS -GSLOTS=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_project.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
+add_test(NAME part_project_directed COMMAND test_part_project_directed)
+set_tests_properties(part_project_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_project
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_project
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_project.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_record.sv)
+set_tests_properties(lint_zhao_part_project PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

@@ -528,8 +528,16 @@ module zhao_part_project #(
 
   logic signed [63:0] prod_c, rnd16_c;
   logic signed [31:0] wfx_c;
-  logic signed [23:0] half_c;
-  logic        [23:0] abs_c;
+  // 25 bits, NOT 24, and the width is load-bearing. The reference widens to
+  // int64 before the rounding add -- `rescale_s32(static_cast<int64_t>(
+  // w_fx.raw), 8, L)` -- so `w_fx + 128` cannot wrap. A 32-bit add here would
+  // wrap a saturated `wfx_c` straight to negative and turn the largest
+  // particle on screen into a zero-size one. The quotient needs 25 bits signed
+  // because (2^31 + 128) >> 8 is 2^23, which a 24-bit signed word reads as
+  // negative.
+  logic signed [32:0] wfx_ext_c;
+  logic signed [24:0] half_c;
+  logic        [24:0] abs_c;
   logic               sat16_c, sat8_c, s16_sat_c, s8_sat_c;
   logic        [15:0] size16_c;
   logic        [ 7:0] size8_c;
@@ -552,12 +560,13 @@ module zhao_part_project #(
     // range, so the reference's second saturation has no reachable clamp here
     // and the flag is a constant 0. It is NAMED rather than dropped so that the
     // two rescale sites in the law and the two here stay in correspondence.
-    half_c = 24'((wfx_c + 32'sd128) >>> 8);
-    sat8_c = 1'b0;
-    abs_c  = half_c[23] ? (24'd0 - 24'(half_c)) : 24'(half_c);
+    wfx_ext_c = 33'(wfx_c) + 33'sd128;
+    half_c    = 25'(wfx_ext_c >>> 8);
+    sat8_c    = 1'b0;
+    abs_c     = half_c[24] ? (25'd0 - 25'(half_c)) : 25'(half_c);
 
     // U 8.8 screen pixels: the DIAMETER, which is twice the half-extent.
-    if (abs_c > 24'd32767) begin
+    if (abs_c > 25'd32767) begin
       size16_c  = 16'hFFFF;
       s16_sat_c = 1'b1;
     end else begin
@@ -567,7 +576,7 @@ module zhao_part_project #(
 
     // U 0.4.4 screen pixels: the same diameter in sixteenths of a pixel, which
     // is `side_sub >> 4` and therefore `|half_sub| >> 3`.
-    if ((abs_c >> 3) > 24'd255) begin
+    if ((abs_c >> 3) > 25'd255) begin
       size8_c  = 8'hFF;
       s8_sat_c = 1'b1;
     end else begin
