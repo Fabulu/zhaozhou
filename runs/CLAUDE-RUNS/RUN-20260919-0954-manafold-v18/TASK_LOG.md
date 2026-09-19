@@ -1,7 +1,7 @@
 # Task Log: RUN-20260919-0954 - Manafold version 18
 
 **Created:** 2026-09-19 09:54 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260919-0954-manafold-v18/
 
 ---
@@ -206,3 +206,10 @@ Finish, verify, encode and publish Manafold version 18 from Owner Direction 19: 
 - Final no-skip gate RC 0: 22 fresh / 0 stale, archive 56/56 + live 44/44, noindex, 1,420/1,420 decoded. Index sha256 `f7ba4175…`.
 - Coordinator item: mqa Wave-F legs now also require Q1–Q5 green (`0e84d60f`). The Q6a control genuinely co-fires Q3 slot 13; that is now declared.
 - Copy: Q019 (partial) with both coordinator corrections, plain-edited. Findings, plan, card and nine captions updated. Details in `V18-MEDIA-CLOSURE.md`. STOPPED before merge/deploy.
+
+## 2026-09-19 — Publication and production verification, Claude
+
+- Coordinator GO. Both mains fast-forwarded and pushed: Zhaozhou `bd7de937`→`438e42f2`, Upheaval `664f415`→`a9ce5c8`.
+- Deployed with `deploy.ps1 -Project upheaval -Branch main`, no skip flags, RC 0. The deploy URL is `https://142475d3.upheaval.pages.dev`; the deploy record is `deploy-20260919-201401.txt`.
+- Cache-bypassed verification: 48/48 on the unique host and on `upheaval.pages.dev`. That covers the index, the 44 live files and 3 archive spot checks, 0 mismatches and 0 retries. `V18-PRODUCTION-VERIFY.md`.
+- Manafold version 18 is published. Status: Complete.
