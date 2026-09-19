@@ -127,6 +127,10 @@ top:
   # TERRAIN.ISLAND gives TERRAIN.RESIDENCY's miss its meaning: open sky rather
   # than a fault, on a grid that is 94.9% sky by design.
   - zhao_terrain_island_dir
+  # TERRAIN.PLACE: the placement owner entry I27 recorded as absent. Pure shifts
+  # of the lattice index under spec/terrain_rules.md 1.3/2.1, plus the envelope
+  # redundancy check the page format was designed around.
+  - zhao_terrain_place
   - zhao_terrain_patch
   - zhao_terrain_tess
   - zhao_terrain_normals

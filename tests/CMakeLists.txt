@@ -6476,6 +6476,23 @@ set_tests_properties(field_out_height_random PROPERTIES LABELS "fast;nightly" TI
 add_test(NAME field_out_height_random_nightly COMMAND test_field_out_height --random 4000)
 set_tests_properties(field_out_height_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# TERRAIN.PLACE -- the placement owner entry I27 said did not exist. The block is
+# pure shifts of the lattice index, so the test checks the ARITHMETIC against
+# spec/terrain_rules.md 1.3/2.1 written out by hand, and fires all four censuses:
+# a corrupt envelope, an illegal pitch, an out-of-range patch, and the accept
+# count. No mutant is needed -- every refusal is reachable from the header port,
+# which is the point of the envelope redundancy the format carries.
+set(ZHAO_TERRAIN_PLACE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_place.sv)
+add_executable(test_terrain_place_directed terrain/terrain_place_directed.cpp)
+target_link_libraries(test_terrain_place_directed PRIVATE zhao_harness)
+verilate(test_terrain_place_directed
+  PREFIX Vzhao_terrain_place
+  TOP_MODULE zhao_terrain_place
+  SOURCES ${ZHAO_TERRAIN_PLACE_SV})
+add_test(NAME terrain_place_directed COMMAND test_terrain_place_directed)
+set_tests_properties(terrain_place_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 add_executable(test_terrain_patch_directed terrain/terrain_patch_directed.cpp)
 target_link_libraries(test_terrain_patch_directed PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_terrain_patch_directed PRIVATE
