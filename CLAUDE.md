@@ -558,6 +558,31 @@ run is orphaned by the next. Durable direction belongs beside the creature it
 governs. And before starting any creature run, read every `OWNER-DIRECTION-*.md`
 in the creature folder and check `reports/` for anything newer than the last run.
 
+## Naming files in `git add` is not enough when two agents share one file
+
+Added 2026-09-19. Two packets ran concurrently, each told to commit only its own
+files. One ran `git add fpga/rtl/prod/zhao_console_core.sv` -- **its own file, by
+name, exactly as instructed** -- and swept in the other packet's uncommitted
+edits to that same file. The commit briefly could not elaborate, because it
+referenced a module the other agent had not yet committed.
+
+Naming the path is not the same as staging your change. `git add <file>` stages
+**whatever is in the working tree**, including work you did not write and cannot
+see.
+
+* For a file only you touch, `git add <file>` is fine.
+* For a SHARED file -- the composer top, `tests/CMakeLists.txt`,
+  `design/fit_targets.yml` -- stage the hunk, not the file. `git add -p` is not
+  available in this environment; two workers solved it independently with
+  `git update-index --cacheinfo` against a blob built from `HEAD` plus their own
+  edits, and with a marker-selected patch. Either is acceptable; silently
+  committing a file you share is not.
+* The tell is a commit whose diff contains lines you did not write. Look before
+  pushing, not after somebody reports a broken revision.
+
+This is the live-tree trap one level up: the fit snapshots its sources, so a
+running fit is safe, and **the index does not snapshot anything**.
+
 ## Stopping an agent does not stop its background work
 
 A stop instruction was sent and obeyed, and a build it had already launched ran to
