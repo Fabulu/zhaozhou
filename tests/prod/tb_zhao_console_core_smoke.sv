@@ -93,6 +93,15 @@ module tb_zhao_console_core_smoke
   localparam int unsigned HIST_BINW      = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS);
 
   localparam int unsigned N_PART_RECORDS = 6;
+
+  // ---- the terrain the particles are driven into (see the acceptance below) --
+  // Every record this bench offers sits at y = 0, so a heightfield at +100
+  // position LSBs puts all six INSIDE the surface and every one of them makes a
+  // contact. `PART_CLEAR_EPS` is `zhao_part_collide`'s own default; it is
+  // written here rather than read, so a change to that parameter fails this
+  // bench loudly instead of silently agreeing with itself.
+  localparam int signed   PART_TER_H     = 100;
+  localparam int unsigned PART_CLEAR_EPS = 2;
   localparam int unsigned N_GEOM_VERTS   = 4;
   localparam int unsigned CYCLE_LIMIT    = 1_500_000;
   localparam logic signed [31:0] FX16_ONE = 32'sh0001_0000;
@@ -666,13 +675,35 @@ module tb_zhao_console_core_smoke
   bit          part_tick_seen_q;
   bit          reset_released_q;
 
+  // ---- the spawn-on-collision acceptance, watched on the WRITE STREAM -------
+  // Ruling I4 (`reports/RULING-I4-COLLISION-SPAWN-20260919.md`) says a
+  // collision-spawned child is placed POST-CONTACT. On a flat heightfield with
+  // a STICK response the post-contact position is exact -- h + CLEAR_EPS,
+  // vertically, with no rounding at all -- so the expected value is a hand
+  // computed literal and not a re-implementation of the collider.
+  //
+  // The child is recognised by kPartBornThisTick, which PART.SPAWN writes and
+  // nothing else in this core does.
+  localparam int unsigned PART_KEY_BORN_BIT = 118;  // OFF_FLG 116 + kPartBornThisTick
+  localparam int signed   PART_CONTACT_Y    = PART_TER_H + PART_CLEAR_EPS;
+
+  int unsigned part_children_seen_q;
+  int unsigned part_children_at_contact_q;
+
   always @(posedge gpu_clk) begin
     cycles_q <= cycles_q + 1;
     if (reset_released_q) begin
       if (gpu_tick_o)                             ticks_seen_q     <= ticks_seen_q + 1;
       if (part_tick_busy_o)                       part_tick_seen_q <= 1'b1;
-      if (part_wr_valid_o && part_wr_ready_i)
+      if (part_wr_valid_o && part_wr_ready_i) begin
         part_records_written_q <= part_records_written_q + 1;
+        if (part_wr_record_o[PART_KEY_BORN_BIT]) begin
+          part_children_seen_q <= part_children_seen_q + 1;
+          // pos.y is the second 18-bit field of the ratified record.
+          if ($signed(part_wr_record_o[35:18]) == PART_POS_W'(PART_CONTACT_Y))
+            part_children_at_contact_q <= part_children_at_contact_q + 1;
+        end
+      end
     end
   end
 
@@ -976,18 +1007,44 @@ module tb_zhao_console_core_smoke
     ticks_seen_q           = 0;
     part_records_written_q = 0;
     part_tick_seen_q       = 1'b0;
+    part_children_seen_q       = 0;
+    part_children_at_contact_q = 0;
 
     // Benign, NON-ZERO configuration, chosen so nothing is refused for a
     // reason unrelated to wiring:
     //   species lifetime 0 = UNBOUNDED, so no particle dies of age and the
     //     survive verdict reaches PART.STATE;
-    //   collision response 0 = IGNORE, a KNOWN response, so PART.COLLIDE
-    //     reports alive rather than refusing;
+    //   collision response STICK (see the spawn-on-collision block below),
+    //     a KNOWN response, so PART.COLLIDE reports alive rather than refusing;
     //   the projector enabled and a rigid, unit-weight skin, so client A is
     //     offered real vertices.
     part_upd_spc_lifetime_i = '0;
-    part_col_d_response_i   = 3'd0;
     part_wr_ready_i         = 1'b1;
+
+    // ---- SPAWN ON COLLISION, the acceptance for owner ruling I4 -------------
+    // Before the ruling this bench held the collider quiet (response IGNORE, no
+    // terrain sample) and PRINTED two counters it knew could not move. Both of
+    // them CAN move now, and making them move is the point of this stimulus.
+    //
+    //   * a heightfield at +100 with an up normal, so every record -- all of
+    //     which sit at y = 0 -- is inside the surface and makes a contact;
+    //   * STICK (3'd2), the simplest PLACING response: both coefficients are
+    //     zero, so the velocity result needs no coefficient arithmetic and the
+    //     placement is the exact vertical h + CLEAR_EPS;
+    //   * a spawn descriptor that resolves, with one child per fired event.
+    //     ONLY event 2 fires here -- the records carry no born flag, the age
+    //     marker is disabled and the lifetime is unbounded -- so the other
+    //     three spawn counters staying at zero is a specificity check, not an
+    //     oversight.
+    part_ter_valid_i        = 1'b1;
+    part_ter_height_i       = PART_POS_W'(PART_TER_H);
+    part_ter_nx_i           = '0;
+    part_ter_ny_i           = PART_NRM_W'(1 << 10);   // NRM_Q = 10: a unit +Y normal
+    part_ter_nz_i           = '0;
+    part_col_d_response_i   = 3'd2;                   // STICK
+    part_spw_spc_known_i    = 1'b1;
+    part_spw_spc_child_spc_i = 7'd0;
+    part_spw_spc_count_i    = 5'd1;
     proj_en_i               = 1'b1;
     // The replayed terrain triangle has no consumer in this core (entry I13),
     // so the bench SINKS it. Holding it low instead would back the replay up
@@ -1094,13 +1151,18 @@ module tb_zhao_console_core_smoke
              proj_a_grants_o, proj_b_grants_o, proj_contended_o,
              proj_replay_triangles_o);
     $display("SMOKE: measure    snapshots=%0d", hist_snapshots_o);
-    // Entry I4's two stuck counters, PRINTED rather than asserted-about. The
-    // second one was found on 2026-09-19 and is the more alarming: event bit 2
-    // is COLLISION, PART.UPDATE builds it from the tied-off `col_valid_i`, so
-    // SPAWN-ON-COLLISION is dead in this console and its counter reads zero
-    // exactly as it would if no particle had ever hit anything.
-    $display("SMOKE: entry I4, both STRUCTURALLY stuck: collisions_applied=%0d spawn_by_event2(collision)=%0d",
-             part_collisions_applied_o, part_spawn_by_event2_o);
+    // Entry I4's two formerly-stuck counters. Both were structurally incapable
+    // of moving before owner ruling 2026-09-19; both are asserted below.
+    $display("SMOKE: spawn-on-collision: collisions_applied=%0d contacts_stick=%0d spawn_by_event=[%0d %0d %0d %0d]",
+             part_collisions_applied_o, part_contacts_stick_o,
+             part_spawn_by_event0_o, part_spawn_by_event1_o,
+             part_spawn_by_event2_o, part_spawn_by_event3_o);
+    $display("SMOKE: children written=%0d, of which at the POST-CONTACT position (y=%0d)=%0d",
+             part_children_seen_q, PART_CONTACT_Y, part_children_at_contact_q);
+    $display("SMOKE: child accounting: requested=%0d emitted=%0d refused=%0d written=%0d dropped_cap=%0d staging_stalls=%0d max_in_tick=%0d",
+             part_children_requested_o, part_children_emitted_o, part_children_refused_o,
+             part_children_written_o, part_children_dropped_capacity_o,
+             part_staging_stall_cycles_o, part_max_children_in_tick_o);
 
     if (!part_tick_seen_q)
       $fatal(1, "SMOKE: PART.STATE never went busy -- SHELL.gpu_tick_o does not reach it");
@@ -1134,12 +1196,59 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: TERRAIN.GROUP_SEQ released an arena with work outstanding (release_unsafe=%0d)",
              terr_release_unsafe_o);
 
-    // A NEGATIVE CONTROL for the header's entry I4, kept as an assertion about
-    // the CORRECT state of this core rather than about the defect: the step-6
-    // input is tied off, so this counter cannot move. If it ever does, someone
-    // has wired step 6 and entry I4 is stale.
-    if (part_collisions_applied_o != 0)
-      $fatal(1, "SMOKE: collisions_applied moved, but PART.UPDATE's step-6 input is tied off -- header entry I4 is out of date");
+    // ---- SPAWN ON COLLISION, owner ruling I4 ------------------------------
+    // THE ASSERTION IS THE CORRECT BEHAVIOUR: a collision produces a child, and
+    // the child is at the RULED position. The counters are kept beside it as a
+    // separate POSITIVE CONTROL, because a test that asserts only "the counter
+    // moved" is a test of the instrument and a test that asserts the defect
+    // stops meaning anything the moment the defect is repaired.
+    //
+    // Every record this bench offers sits at y = 0 inside a heightfield at
+    // +100, so all six contact and all six spawn one child each.
+    if (part_children_seen_q == 0)
+      $fatal(1, "SMOKE: a collision produced no child -- PART.COLLIDE -> PART.SPAWN does not carry the collision event");
+    if (part_children_at_contact_q != part_children_seen_q)
+      $fatal(1, "SMOKE: %0d of %0d collision-spawned children are NOT at the post-contact position y=%0d -- ruling I4 S3 says they must be",
+             part_children_seen_q - part_children_at_contact_q,
+             part_children_seen_q, PART_CONTACT_Y);
+    if (part_children_written_o != part_children_seen_q)
+      $fatal(1, "SMOKE: PART.STATE wrote %0d children but %0d carry kPartBornThisTick",
+             part_children_written_o, part_children_seen_q);
+
+    // A SEPARATE, PRE-EXISTING DEFECT, SURFACED BY THIS STIMULUS AND NOT BY IT.
+    // See `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md`. PART.SPAWN emits
+    // the last child of a generation within a cycle or two of PART.STATE
+    // leaving S_APPEND, the child is ACCEPTED into staging (so it is counted as
+    // emitted) and is then discarded when the tick ends -- with
+    // `children_refused_o`, `children_dropped_capacity_o` and
+    // `staging_stall_cycles_o` all reading zero. It was unreachable before this
+    // ruling because no event ever fired, so no child ever existed.
+    //
+    // It is NOT fatal here on purpose: it is outside ruling I4 and repairing it
+    // is a PART.STATE tick-boundary decision. It is printed at every run so it
+    // cannot quietly become normal.
+    if (part_children_emitted_o != part_children_written_o)
+      $display("SMOKE: *** KNOWN DEFECT: %0d of %0d children emitted by PART.SPAWN were NOT written and NO counter recorded the loss. reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md",
+               part_children_emitted_o - part_children_written_o,
+               part_children_emitted_o);
+
+    // THE POSITIVE CONTROLS, separate on purpose. These two counters could not
+    // move at all before 2026-09-19; `spawn_by_event2_o` is the one the ruling
+    // names as its acceptance.
+    if (part_spawn_by_event2_o == 0)
+      $fatal(1, "SMOKE: part_spawn_by_event2_o (COLLISION) is still zero -- the counter ruling I4 exists to unstick has not moved");
+    if (part_collisions_applied_o == 0)
+      $fatal(1, "SMOKE: part_collisions_applied_o is still zero -- PART.COLLIDE's collision_events_o does not reach the boundary");
+    if (part_contacts_stick_o == 0)
+      $fatal(1, "SMOKE: no STICK contact was counted -- the terrain sample does not reach PART.COLLIDE");
+
+    // SPECIFICITY. Only event 2 fires in this stimulus: the records carry no
+    // born flag, the age marker is disabled and the lifetime is unbounded. If
+    // another spawn counter moves, the event vector is not what it claims.
+    if (part_spawn_by_event0_o != 0 || part_spawn_by_event1_o != 0 ||
+        part_spawn_by_event3_o != 0)
+      $fatal(1, "SMOKE: a non-collision event fired (%0d/%0d/%0d) -- the event vector crossing PART.COLLIDE is wrong",
+             part_spawn_by_event0_o, part_spawn_by_event1_o, part_spawn_by_event3_o);
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;

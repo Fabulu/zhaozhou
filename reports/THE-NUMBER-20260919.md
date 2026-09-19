@@ -72,6 +72,16 @@ And **20 documented tie-offs**, two of which make this an UNDER-count:
 `part_collisions_applied_o` is structurally zero, and synthesis folds
 PART.UPDATE's step-6 datapath away.
 
+> **CORRECTED 2026-09-19, LATER THE SAME DAY.** The paragraph above describes
+> the tree the 47,582 was measured from, and is left intact because the number
+> belongs to that tree. It is no longer true of the tree. Owner ruling
+> `RULING-I4-COLLISION-SPAWN-20260919.md` RETIRED PART.UPDATE's four `col_*_i`
+> ports and the counter that watched them: there is no folded step-6 datapath
+> and no tie-off on it, `part_collisions_applied_o` is driven by PART.COLLIDE
+> and moves, and the count is **19 tie-offs**. That correction moves PART.UPDATE
+> DOWN, not up — it is the one place this report's "FLOOR" reading does not
+> apply, and the next fit should be expected to shrink there.
+
 **So 47,582 is a FLOOR.** It rises when lighting, the front end and the
 descriptor tables arrive. It is not a lower bound on the optimised machine in
 either direction (plan §14.1).

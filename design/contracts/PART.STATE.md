@@ -1,5 +1,31 @@
 # Contract — PART.STATE (Particle state stream)
 
+> ## KNOWN DEFECT — THE LAST CHILD OF A GENERATION IS LOST, UNCOUNTED.
+>
+> Found 2026-09-19, **not repaired**, measured and written up in
+> `reports/DEFECT-PART-STATE-LAST-CHILD-20260919.md`. Reproduced on every run of
+> `tests/prod/run_console_core_smoke.ps1`, which prints it.
+>
+> Six children emitted, five written, and `children_refused_o`,
+> `children_dropped_capacity_o` and `staging_stall_cycles_o` **all zero**. A
+> child accepted into staging on the edge the append phase decides it is empty
+> — or during `S_DONE`, which also passes the `st_q != S_IDLE` accept gate — is
+> discarded when the tick ends.
+>
+> **This contradicts the overflow table below**, which admits exactly two
+> outcomes for a child: staged and written, or dropped at capacity and counted.
+> There is a third today and nothing records it. Do not read
+> `children_written_o` as "every child PART.SPAWN produced".
+>
+> It was UNREACHABLE until 2026-09-19: no particle event could fire in the
+> composed console before ruling I4, so PART.SPAWN never emitted a child. It is
+> not caused by that ruling; it was exposed by it.
+>
+> Repairing it is a tick-boundary decision — either the append phase waits for a
+> `spawn_busy` level (the shape that closed gap I8) or `chl_ready_o` falls in
+> `S_DONE` and the child is DECLARED to belong to the next generation. Whichever
+> is chosen, the loss must become countable. See the report.
+
 > Ledger: `design/blocks.yml` · owner ZH-042 · phase 10 · maturity SPECIFIED
 
 ## Purpose and exclusions

@@ -83,6 +83,15 @@ Stated before the ALM figure lands, so it cannot be quietly dropped afterwards.
   projector. FIELD only one ROM.
 * **20 documented tie-offs**, two of which UNDER-COUNT: `part_collisions_applied_o`
   is structurally zero, and synthesis folds PART.UPDATE's step-6 datapath away.
+
+  > **CORRECTED 2026-09-19, LATER THE SAME DAY.** The bullet above describes the
+  > tree this measurement was taken from and is left intact for that reason, but
+  > it is no longer true of the tree. Owner ruling
+  > `RULING-I4-COLLISION-SPAWN-20260919.md` RETIRED PART.UPDATE's four `col_*_i`
+  > ports, so there is no step-6 datapath to fold and no tie-off on it;
+  > `part_collisions_applied_o` is driven by PART.COLLIDE and moves.
+  > **19 tie-offs**, and PART.UPDATE is now measured SMALLER, not larger — anyone
+  > budgeting for "step 6 once it is wired" should budget for nothing.
 * **10,833 virtual pins.** A large boundary inflates a block's apparent cost and
   its timing; this is not a pin-accurate measurement.
 * **No ALMs, no Fmax, no physical M10K count yet** — the Fitter is still running.
