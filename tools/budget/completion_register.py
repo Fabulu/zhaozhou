@@ -89,8 +89,43 @@ def tieoffs() -> list[dict]:
     if cur:
         out.append(cur)
     for t in out:
+        # THE MARKER COUNTS ONLY IN THE HEAD LINE, and that is a correctness fix
+        # rather than tidiness.
+        #
+        # This used to search `head + body`, so ANY occurrence of "NOT a tie-off"
+        # anywhere in an entry's prose removed that entry from the mandatory
+        # count. On 2026-09-19 the TERRAIN.COMPOSE worker watched its new entry
+        # I35 read as CLOSED twice -- once when it used the phrase in an
+        # explanation, and again when it QUOTED THE PHRASE while describing the
+        # first accident. An entry could be settled by writing a sentence about
+        # it.
+        #
+        # That is the flattering direction, in the instrument whose whole purpose
+        # is to prevent free reductions, and it is the same root cause as the
+        # three closure defects before it: THE REGISTER WAS READING A CONVENTION
+        # RATHER THAN A STRUCTURE. Prose is not a declaration. The head line is,
+        # because it is the one line that cannot be written by accident while
+        # discussing something else -- and both entries legitimately using this
+        # today (I9, I25) already declare it there.
+        #
+        # A body occurrence is now a HARD FAILURE rather than a silent exclusion,
+        # so an author who means it is told where to put it instead of being
+        # quietly obeyed.
+        if _NOT_A_TIEOFF.search(t["body"]) and not _NOT_A_TIEOFF.search(t["head"]):
+            raise SystemExit(
+                "completion_register: entry %s says 'NOT a tie-off' in its BODY.\n"
+                "  %s\n"
+                "That phrase settles an entry and must therefore be a DECLARATION, "
+                "not prose: put it in the entry's head line (the `// %s. ...` line), "
+                "as I9 and I25 do, or reword the body. An entry that can be closed "
+                "by a sentence about it is not a register."
+                % (t["id"], t["head"][:100], t["id"]))
+        # The OTHER two markers legitimately scan the whole entry: they make an
+        # entry MORE of a gap, not less, so prose that mentions them costs
+        # nothing but an over-report. Only the settling marker is head-only,
+        # because only it can make a gap disappear.
         blob = t["head"] + " " + t["body"]
-        t["kind"] = ("resolved-in-composer" if _NOT_A_TIEOFF.search(blob)
+        t["kind"] = ("resolved-in-composer" if _NOT_A_TIEOFF.search(t["head"])
                      else "tied-to-zero" if _TIED_ZERO.search(blob)
                      else "boundary" if _BOUNDARY.search(blob)
                      else "unclassified")
