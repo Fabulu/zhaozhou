@@ -1,10 +1,10 @@
-// part_update_directed.cpp — PART.UPDATE against the cases its contract names.
+// part_update_directed.cpp â€” PART.UPDATE against the cases its contract names.
 //
 // ---------------------------------------------------------------------------
 // THIS IS A SELF-CONSISTENCY TEST, NOT A DIFFERENTIAL ONE. SAY IT OUT LOUD.
 // ---------------------------------------------------------------------------
 // `design/blocks.yml` declares `reference_model: zref::ParticleUpdate` for this
-// block. THAT SYMBOL DOES NOT EXIST anywhere in the tree — it is a phantom of
+// block. THAT SYMBOL DOES NOT EXIST anywhere in the tree â€” it is a phantom of
 // the kind `reports/PHANTOM_REFERENCES.md` catalogues. So every expected number
 // below is HAND-COMPUTED from the formulae in `zhao_part_update.sv`'s own
 // header and written here as a literal.
@@ -12,7 +12,7 @@
 // That is weaker than a differential test and it is the honest maximum
 // available today. Writing a `zref::ParticleUpdate` to compare against would be
 // a second implementation by the same hand on the same afternoon, which agrees
-// with the first for the same reasons it is wrong — the tree already has a
+// with the first for the same reasons it is wrong â€” the tree already has a
 // chapter about a codec "verified against a transcription of itself".
 //
 // What IS ratified and IS used differentially: the particle128 codec. Every
@@ -32,18 +32,24 @@
 //     and a strong recipe together, where drag-before-recipe and
 //     drag-after-recipe give measurably different velocities. Both answers are
 //     computed here and the RTL is required to match one and NOT the other;
-//   * velocity saturation: clamps, counts, and does not wrap — the sign is
+//   * velocity saturation: clamps, counts, and does not wrap â€” the sign is
 //     asserted, which is what a wrap would destroy;
-//   * age at 2^10 − 1 then one more tick: dies;
+//   * age at 2^10 âˆ’ 1 then one more tick: dies;
 //   * unknown recipe id: refused, and no motion applied;
 //   * a Field/FLOW acceleration at its bound, and at zero, giving results
 //     identical to the no-Field path when zero.
 //
 // Plus the thing the contract does not list and the ledger's rules demand:
 // EVERY COUNTER IS FIRED. `velocity_saturations_o`, `position_saturations_o`,
-// `particles_died_by_age_o`, `particles_refused_o`, `collisions_applied_o` and
-// all twelve histogram bins are each seen to move, because a counter asserted
-// zero and never watched is a claim.
+// `particles_died_by_age_o`, `particles_refused_o` and all twelve histogram
+// bins are each seen to move, because a counter asserted zero and never watched
+// is a claim.
+//
+// `collisions_applied_o` WAS on that list and is GONE from the block. Owner
+// ruling I4 (2026-09-19) retired step 6 and the four `col_*_i` ports it was
+// wired to; a counter for a step this block no longer performs could only read
+// zero forever. PART.COLLIDE's `collision_events_o` is its live successor and
+// `tests/particles/part_collide_directed.cpp` fires it.
 
 #include <cstdint>
 #include <cstdio>
@@ -81,8 +87,6 @@ struct Stim {
   int p0 = 100, p1 = -50, p2 = 25;
   bool fld_valid = false;
   int fax = 0, fay = 0, faz = 0;
-  bool col_valid = false;
-  int cvx = 0, cvy = 0, cvz = 0;
   uint8_t crv_size = 0;
   uint8_t crv_colour = 0;
 };
@@ -100,7 +104,7 @@ struct Result {
 };
 
 struct Counters {
-  uint32_t updated, refused, died, vsat, psat, collisions;
+  uint32_t updated, refused, died, vsat, psat;
 };
 
 Vzhao_part_update* g = nullptr;
@@ -116,7 +120,6 @@ void idle() {
   g->in_valid_i = 0;
   g->out_ready_i = 0;
   g->fld_valid_i = 0;
-  g->col_valid_i = 0;
   g->hist_sel_i = 0;
   g->eval();
 }
@@ -156,11 +159,6 @@ void apply(const Stim& s) {
   g->fld_ax_i = static_cast<uint16_t>(u11(s.fax));
   g->fld_ay_i = static_cast<uint16_t>(u11(s.fay));
   g->fld_az_i = static_cast<uint16_t>(u11(s.faz));
-
-  g->col_valid_i = s.col_valid ? 1 : 0;
-  g->col_vx_i = static_cast<uint16_t>(u11(s.cvx));
-  g->col_vy_i = static_cast<uint16_t>(u11(s.cvy));
-  g->col_vz_i = static_cast<uint16_t>(u11(s.cvz));
 
   g->crv_size_i = s.crv_size;
   g->crv_colour_i = s.crv_colour;
@@ -205,8 +203,8 @@ Result run_one(const Stim& s) {
 }
 
 Counters snap() {
-  return Counters{g->particles_updated_o,    g->particles_refused_o,    g->particles_died_by_age_o,
-                  g->velocity_saturations_o, g->position_saturations_o, g->collisions_applied_o};
+  return Counters{g->particles_updated_o, g->particles_refused_o, g->particles_died_by_age_o,
+                  g->velocity_saturations_o, g->position_saturations_o};
 }
 
 uint32_t hist(int bin) {
@@ -425,29 +423,35 @@ int main(int argc, char** argv) {
   }
 
   // =========================================================================
-  // 4. THE COLLISION SLOT. The response is PART.COLLIDE's; this block places it
-  //    at step 6, AFTER the integration, so the tick's displacement uses the
-  //    PRE-collision velocity.
+  // 4. THERE IS NO COLLISION SLOT IN THIS BLOCK. Owner ruling I4, 2026-09-19
+  //    (`reports/RULING-I4-COLLISION-SPAWN-20260919.md`).
+  //
+  //    This case used to inject a resolved response through `col_valid_i` and
+  //    require the block to swap it in at step 6. Those four ports are RETIRED:
+  //    they had no legal producer, and PART.COLLIDE -- immediately downstream --
+  //    already resolves the response end to end, so a step 6 here would have
+  //    applied it a SECOND time. What is asserted now is the ruled behaviour.
+  //
+  //    THE POSITION CHECK IS UNCHANGED FROM THE OLD CASE ON PURPOSE. Step 5
+  //    integrated with the pre-collision velocity before and integrates with the
+  //    same velocity now, so the identical expected triple is the evidence that
+  //    the ruling removed a seam and changed no arithmetic.
   // =========================================================================
   {
-    const Counters before = snap();
     Stim s = baseline();
-    s.recipe = 4;
-    s.col_valid = true;
-    s.cvx = -100;
-    s.cvy = 200;
-    s.cvz = -300;
+    s.recipe = 4;  // repulsion: d = (1024, 512, -256), k = 64, >> 8
     const Result r = run_one(s);
 
-    check_vec("collision", "velocity is the response, verbatim", r.p.vel, -100, 200, -300);
-    check_vec("collision", "position used the PRE-collision velocity", r.p.pos, 1296, 632, -316);
-    check(r.events == 0x4, "collision event (bit 2) and nothing else", 0x4, r.events);
-    check((r.p.flags & zref::part::kPartCollidedThisTick) != 0,
-          "kPartCollidedThisTick is set on the record", 1,
+    // vel = (16, -8, 4) + (256, 128, -64); pos = (1024, 512, -256) + vel.
+    check_vec("no step 6", "the velocity that leaves is the INTEGRATED one", r.p.vel, 272, 120,
+              -60);
+    check_vec("no step 6", "position, unchanged from before the ruling", r.p.pos, 1296, 632, -316);
+    check((r.events & 0x4) == 0,
+          "the COLLISION event bit leaves PART.UPDATE zero -- it is PART.COLLIDE's", 0,
+          r.events & 0x4);
+    check((r.p.flags & zref::part::kPartCollidedThisTick) == 0,
+          "kPartCollidedThisTick leaves PART.UPDATE zero -- PART.COLLIDE writes it every beat", 0,
           (r.p.flags & zref::part::kPartCollidedThisTick) ? 1 : 0);
-    const Counters after = snap();
-    check(after.collisions - before.collisions == 1, "collisions_applied_o MOVED", 1,
-          after.collisions - before.collisions);
   }
 
   // =========================================================================
@@ -627,9 +631,7 @@ int main(int argc, char** argv) {
   }
 
   const Counters f = snap();
-  std::printf(
-      "[part_update_directed] updated=%u refused=%u died=%u vsat=%u psat=%u "
-      "collisions=%u\n",
-      f.updated, f.refused, f.died, f.vsat, f.psat, f.collisions);
+  std::printf("[part_update_directed] updated=%u refused=%u died=%u vsat=%u psat=%u\n", f.updated,
+              f.refused, f.died, f.vsat, f.psat);
   zhao::exit_hard(zhao::report_and_exit("part_update_directed"));
 }

@@ -65,12 +65,41 @@
 // shaped recipes, and it is asserted with hand-computed numbers so it cannot
 // drift silently into the other one.
 //
-// Step 6 takes the collision response and does NOT re-integrate position.
-// Re-integrating would be step 5 twice; the order says the response resolves
-// after the integration, so the tick's displacement is the pre-collision one
-// and the new velocity is what the NEXT tick sees. The RESPONSE ITSELF is
-// PART.COLLIDE's arithmetic and is never computed here — this block owns the
-// slot in the order, not the physics in it.
+// STEP 6 IS NOT IN THIS BLOCK AT ALL. RULED 2026-09-19.
+//
+// This file used to carry `col_valid_i/col_vx_i/col_vy_i/col_vz_i` and a mux
+// that swapped the integrated velocity for a resolved one, on the reading that
+// PART.UPDATE "owns the slot in the order, not the physics in it". Owner ruling
+// `reports/RULING-I4-COLLISION-SPAWN-20260919.md` §1 RETIRED those four ports.
+//
+// The reason is not tidiness, it is that they had NO LEGAL PRODUCER.
+// PART.COLLIDE is strictly downstream of this block (its contract calls itself
+// a leaf), so driving them closes a cycle; `zhao_console_core` therefore tied
+// them to zero, which left `collisions_applied_o` and the collision spawn event
+// structurally stuck at zero and SPAWN-ON-COLLISION dead in the console. And
+// the seam could not have worked even if something had driven it: PART.COLLIDE
+// already resolves the response END TO END -- `vout_c` is the responded
+// velocity, `pout_c` the contact-point placement, `w_flg` the collided flag --
+// and all three reach the particle through the record, so applying a velocity
+// here would apply the response A SECOND TIME. A velocity-only step 6 also
+// cannot satisfy PART.COLLIDE.md's "a contact must not leave the particle
+// inside the surface", because it does not move the position.
+//
+// So the eight-step order is unchanged as LAW and step 6 is executed by
+// PART.COLLIDE, immediately downstream, on the same particle in the same tick.
+// `design/contracts/PART.UPDATE.md` carries the amendment banner.
+//
+// The visible consequences here, so nobody reads them as an omission:
+//   * `out_events_o[2]`, the COLLISION event bit, leaves this block ZERO.
+//     PART.COLLIDE fills it from its own `c_contact_o` and hands the vector to
+//     PART.SPAWN. One author per bit; see `zhao_part_collide.sv`.
+//   * `kPartCollidedThisTick` is written ZERO here for the same reason. It is
+//     PART.COLLIDE's to write and it writes it every beat.
+//   * `collisions_applied_o` is GONE from this block's port list. A counter for
+//     a step this block no longer performs could only read zero forever, and a
+//     counter that cannot move is the thing CLAUDE.md says not to ship. The
+//     console's `part_collisions_applied_o` is now driven by PART.COLLIDE's
+//     `collision_events_o`, which can and does move.
 //
 // ---------------------------------------------------------------------------
 // THE RECIPE ARITHMETIC IS AUTHORED AND PROVISIONAL. THE IDS ARE NOT.
@@ -220,15 +249,9 @@ module zhao_part_update #(
     input  wire signed [10:0]    fld_ay_i,
     input  wire signed [10:0]    fld_az_i,
 
-    // ---- step 6: at most ONE collision response, computed by PART.COLLIDE -----
-    // The response arrives already resolved. This block never computes one; it
-    // owns the position of step 6 in the order and nothing else. Exactly one
-    // can apply per particle per tick because this block sees each particle
-    // once — the bound is structural, not a counter.
-    input  wire                  col_valid_i,
-    input  wire signed [10:0]    col_vx_i,
-    input  wire signed [10:0]    col_vy_i,
-    input  wire signed [10:0]    col_vz_i,
+    // ---- step 6 has NO PORTS HERE. Ruling I4 §1, 2026-09-19: `col_valid_i`,
+    // ---- `col_vx_i`, `col_vy_i` and `col_vz_i` are RETIRED. PART.COLLIDE
+    // ---- performs step 6 on this block's own output. See the header.
 
     // ---- step 7: curves are LOOKUPS, not evaluated polynomials ----------------
     // "A curve is authored content and a table keeps it exact." The bucket is
@@ -245,9 +268,16 @@ module zhao_part_update #(
     output wire                  out_survive_o,
     output wire                  out_refused_o,
 
-    // ---- the events, to PART.SPAWN -------------------------------------------
+    // ---- the events, ACROSS PART.COLLIDE, to PART.SPAWN -----------------------
     // {death, collision, age marker, birth} — the ruling's four, in one beat
     // with the verdict so PART.SPAWN never has to join two streams.
+    //
+    // BIT 2 (collision) IS ZERO HERE, always. Ruling I4 §2 gives the collision
+    // event to PART.COLLIDE, the only block that observes one; this vector
+    // crosses it on the same register enable as the record and comes out with
+    // bit 2 filled in. The bit stays in the vector rather than being deleted
+    // because the FOUR EVENTS ARE FROZEN (owner ruling 2026-08-31 §2.4) and
+    // "event order = bit order" is PART.SPAWN's determinism contract.
     output wire [3:0]            out_events_o,
     output wire                  out_colour_en_o,
     output wire [7:0]            out_colour_o,
@@ -259,7 +289,8 @@ module zhao_part_update #(
     output var logic [31:0]      particles_died_by_age_o,
     output var logic [31:0]      velocity_saturations_o,
     output var logic [31:0]      position_saturations_o,
-    output var logic [31:0]      collisions_applied_o,
+    // `collisions_applied_o` was here and is RETIRED with the ports it counted
+    // (ruling I4 §1). PART.COLLIDE's `collision_events_o` is the live one.
 
     // The contract asks for `recipe_histogram[12]`. Twelve 32-bit ports is 384
     // bits of boundary for a diagnostic, so it is a SELECT and a VALUE instead:
@@ -274,9 +305,10 @@ module zhao_part_update #(
   // R_INTEGRATE and F_COLLIDED are reported unused and they stay. The CLOSED
   // vocabulary and the ratified flag layout belong in the RTL that carries
   // them; `integrate` is selected by leaving the operand at zero and
-  // `kPartCollidedThisTick` is written by position, so neither name appears in
-  // an expression -- which is a fact about how they are implemented, not a
-  // reason to delete the law from the file.
+  // `kPartCollidedThisTick` is written by position -- as a constant ZERO since
+  // ruling I4 gave that bit to PART.COLLIDE -- so neither name appears in an
+  // expression, which is a fact about how they are implemented, not a reason to
+  // delete the law from the file.
   /* verilator lint_off UNUSEDPARAM */
   localparam logic [3:0] R_INTEGRATE = 4'd0;
   localparam logic [3:0] R_GRAVITY   = 4'd1;
@@ -454,12 +486,10 @@ module zhao_part_update #(
   logic signed [17:0] ctr_c [0:2];
   logic signed [10:0] par_c [0:2];
   logic signed [10:0] fld_a_c [0:2];
-  logic signed [10:0] col_v_c [0:2];
   always_comb begin
     ctr_c[0]   = spc_cx_i;  ctr_c[1]   = spc_cy_i;  ctr_c[2]   = spc_cz_i;
     par_c[0]   = spc_p0_i;  par_c[1]   = spc_p1_i;  par_c[2]   = spc_p2_i;
     fld_a_c[0] = fld_ax_i;  fld_a_c[1] = fld_ay_i;  fld_a_c[2] = fld_az_i;
-    col_v_c[0] = col_vx_i;  col_v_c[1] = col_vy_i;  col_v_c[2] = col_vz_i;
   end
 
   // d = pos - centre, in s19 so the difference of two s18 cannot overflow.
@@ -583,15 +613,14 @@ module zhao_part_update #(
   end
 
   // =========================================================================
-  // STEP 6 — at most ONE collision response, PART.COLLIDE's arithmetic.
-  // The position is NOT re-integrated; see the header.
+  // STEP 6 — PART.COLLIDE'S, WHOLE. Ruling I4 §1, 2026-09-19.
+  //
+  // There is no mux and no port here any more. The velocity that leaves this
+  // block is the integrated one; PART.COLLIDE, immediately downstream, resolves
+  // at most one contact on it and writes the responded velocity, the contact
+  // placement and the collided flag into the record it hands on. The order is
+  // preserved in the pipeline rather than inside one module.
   // =========================================================================
-  wire col_apply_c = motion_c && col_valid_i;
-  logic signed [10:0] vel_f_c [0:2];
-  always_comb begin
-    for (int i = 0; i < 3; i = i + 1)
-      vel_f_c[i] = col_apply_c ? col_v_c[i] : vel_n_c[i];
-  end
 
   // =========================================================================
   // STEP 7 — the curves, as LOOKUPS.
@@ -605,11 +634,13 @@ module zhao_part_update #(
     age_o_c = refuse_c ? age_i_c : age_next_c;
     // The born flag is CLEARED on the tick that reports it, so the birth event
     // fires exactly once however many ticks the particle lives. The reserved
-    // bit is driven to zero, per "zero in, preserved zero".
-    flg_o_c = refuse_c ? flg_i_c : {1'b0, 1'b0, col_apply_c, flg_i_c[F_STUCK]};
+    // bit is driven to zero, per "zero in, preserved zero". kPartCollidedThisTick
+    // is ZERO here and PART.COLLIDE writes it every beat downstream -- one
+    // author for the bit, which is what stops the two disagreeing.
+    flg_o_c = refuse_c ? flg_i_c : {1'b0, 1'b0, 1'b0, flg_i_c[F_STUCK]};
     for (int i = 0; i < 3; i = i + 1) begin
       pos_o_c[i] = pos_n_c[i];
-      vel_o_c[i] = vel_f_c[i];
+      vel_o_c[i] = vel_n_c[i];
     end
   end
 
@@ -620,7 +651,9 @@ module zhao_part_update #(
   wire ev_mark_c  = motion_c && (spc_age_mark_i != {AGE_W{1'b0}}) &&
                     (age_next_c == spc_age_mark_i);
   wire ev_death_c = !refuse_c && died_c;
-  wire [3:0] events_c = {ev_death_c, col_apply_c, ev_mark_c, ev_birth_c};
+  // Bit 2 is the COLLISION event and it leaves here ZERO: this block cannot
+  // observe a collision, which is the whole of ruling I4. PART.COLLIDE fills it.
+  wire [3:0] events_c = {ev_death_c, 1'b0, ev_mark_c, ev_birth_c};
 
   // A refused particle leaves BIT-IDENTICAL, by a mux rather than by trusting
   // a codec round trip: "refused, and no motion applied" is exact or it is not
@@ -681,7 +714,6 @@ module zhao_part_update #(
       particles_died_by_age_o <= 32'd0;
       velocity_saturations_o  <= 32'd0;
       position_saturations_o  <= 32'd0;
-      collisions_applied_o    <= 32'd0;
       for (int b = 0; b < 16; b = b + 1) hist_q[b] <= 32'd0;
     end else begin
       if (out_v_q && out_ready_i) out_v_q <= 1'b0;
@@ -701,7 +733,6 @@ module zhao_part_update #(
           particles_updated_o  <= particles_updated_o + 32'd1;
           hist_q[spc_recipe_i] <= hist_q[spc_recipe_i] + 32'd1;
           if (died_c)      particles_died_by_age_o <= particles_died_by_age_o + 32'd1;
-          if (col_apply_c) collisions_applied_o    <= collisions_applied_o + 32'd1;
           velocity_saturations_o <= velocity_saturations_o + {30'd0, vsat_n_c};
           position_saturations_o <= position_saturations_o + {30'd0, psat_n_c};
         end

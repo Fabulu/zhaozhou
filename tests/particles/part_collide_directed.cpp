@@ -87,6 +87,12 @@ struct Stim {
   bool pl_en = false;
   int32_t pnx = 0, pny = kNrmOne, pnz = 0;
   int32_t pl_c = 0;
+
+  // PART.UPDATE's own three events, riding beside the record (ruling I4 §2).
+  // {death, collision, age marker, birth}. BIT 2 IS NOT SETTABLE FROM HERE --
+  // `apply` masks it off -- because this block is its one author and the RTL
+  // asserts that it arrives zero.
+  uint8_t events = 0;
 };
 
 struct Res {
@@ -94,6 +100,11 @@ struct Res {
   uint64_t lo = 0, hi = 0;
   bool alive = false, contact = false, refused = false;
   uint8_t response = 0;
+  uint8_t events = 0;
+  // The parent record PART.SPAWN derives a child from. Ruling I4 §3 places it
+  // POST-CONTACT, so at the default `CHILD_AT_POST_CONTACT` it is `c_record_o`.
+  Particle128 spawn{};
+  uint64_t slo = 0, shi = 0;
 };
 
 // Snapshot of every counter, so a case can assert a DELTA rather than a total.
@@ -102,6 +113,10 @@ struct Res {
 struct Counters {
   uint32_t ignore, die, stick, slide, bounce;
   uint32_t terrain, plane, inside, unavail, refused, clamps;
+  // The instrument for the EVENT this block emits since ruling I4. It is the
+  // successor to PART.UPDATE's retired `collisions_applied_o` and it is what
+  // drives the console's `part_collisions_applied_o`.
+  uint32_t collision_events;
 };
 
 struct Dut {
@@ -146,6 +161,10 @@ struct Dut {
     v->pl_ny_i = bits(s.pny, 12);
     v->pl_nz_i = bits(s.pnz, 12);
     v->pl_c_i = bits(s.pl_c, 32);
+    // 0xB = bits 3, 1, 0. Bit 2 is the COLLISION event and PART.COLLIDE is its
+    // only author; driving it from upstream would be the two-author arrangement
+    // ruling I4 exists to end, and the RTL asserts against it.
+    v->p_events_i = static_cast<uint8_t>(s.events & 0x0B);
   }
 
   void reset() {
@@ -181,6 +200,9 @@ struct Dut {
     r.contact = v->c_contact_o != 0;
     r.refused = v->c_refused_o != 0;
     r.response = v->c_response_o;
+    r.events = v->c_events_o;
+    get128(v->c_spawn_record_o, &r.slo, &r.shi);
+    particle_unpack(r.slo, r.shi, &r.spawn);
     tick();  // retire
     v->eval();
     return r;
@@ -197,7 +219,8 @@ struct Dut {
                     v->already_inside_at_entry_o,
                     v->terrain_sample_unavailable_o,
                     v->response_refused_o,
-                    v->field_clamps_o};
+                    v->field_clamps_o,
+                    v->collision_events_o};
   }
 };
 
@@ -273,8 +296,10 @@ int main(int argc, char** argv) {
   d.reset();
 
   Counters c0 = d.counters();
-  check(c0.bounce == 0 && c0.terrain == 0 && c0.refused == 0 && c0.clamps == 0,
-        "all counters clear after reset", 0, c0.bounce + c0.terrain + c0.refused + c0.clamps);
+  check(c0.bounce == 0 && c0.terrain == 0 && c0.refused == 0 && c0.clamps == 0 &&
+            c0.collision_events == 0,
+        "all counters clear after reset", 0,
+        c0.bounce + c0.terrain + c0.refused + c0.clamps + c0.collision_events);
 
   // =========================================================================
   // 1. BOUNCE on a flat plane, hand computed.
@@ -316,6 +341,75 @@ int main(int argc, char** argv) {
           b.terrain - a.terrain);
     check(b.unavail - a.unavail == 1, "terrain_sample_unavailable moved with t_valid low", 1,
           b.unavail - a.unavail);
+  }
+
+  // =========================================================================
+  // 1b. THE COLLISION EVENT, AND WHERE A COLLISION-SPAWNED CHILD IS PLACED.
+  //     Owner ruling I4, 2026-09-19
+  //     (`reports/RULING-I4-COLLISION-SPAWN-20260919.md`).
+  //
+  //     This block is the only one that observes a collision, so it is the one
+  //     that announces it. `c_events_o` carries PART.UPDATE's other three bits
+  //     across unchanged and fills bit 2 from its own contact decision; the
+  //     record PART.SPAWN derives its child from is the POST-CONTACT one.
+  //
+  //     STICK on a flat heightfield is used because it is the simplest PLACING
+  //     response there is: both coefficients are zero, so the velocity result
+  //     needs no coefficient arithmetic and the placement is the exact vertical
+  //     one, h + EPS, with no rounding at all.
+  // =========================================================================
+  {
+    Stim s;
+    s.p = make(700, -50, -300, 0, -400, 0);
+    s.response = kStick;
+    s.t_valid = true;
+    s.t_height = 0;
+    s.events = 0x9;  // PART.UPDATE fired BIRTH (bit 0) and DEATH (bit 3)
+    Counters a = d.counters();
+    Res r = d.run(s);
+    Counters b = d.counters();
+
+    check(r.contact, "STICK on terrain reports a contact", 1, r.contact);
+    check(r.events == 0xD,
+          "the four events leave with COLLISION filled in and the other three carried", 0xD,
+          r.events);
+    check((r.p.flags & kFlagHit) != 0,
+          "the announced event and the recorded kPartCollidedThisTick agree", 1,
+          (r.p.flags & kFlagHit) != 0);
+    check(b.collision_events - a.collision_events == 1, "collision_events_o MOVED on a contact", 1,
+          b.collision_events - a.collision_events);
+
+    // RULING §3, and this is the whole of it: the child starts ON the surface,
+    // not inside the thing its parent just hit.
+    check_pos("post-contact", r.p, 700, kEps, -300);
+    check(r.slo == r.lo && r.shi == r.hi,
+          "the spawn parent record IS the post-contact record (CHILD_AT_POST_CONTACT=1)", 1,
+          (r.slo == r.lo && r.shi == r.hi) ? 1 : 0);
+    check(r.spawn.pos[1] == kEps, "so a collision-spawned child is placed at h + EPS", kEps,
+          static_cast<uint64_t>(r.spawn.pos[1]));
+  }
+
+  // The NEGATIVE CONTROL for the case above, and it is the half that makes the
+  // case mean anything: same block, same response, same event vector, no hit.
+  {
+    Stim s;
+    s.p = make(700, 5000, -300, 0, -400, 0);
+    s.response = kStick;
+    s.t_valid = true;
+    s.t_height = 0;
+    s.events = 0x9;
+    Counters a = d.counters();
+    Res r = d.run(s);
+    Counters b = d.counters();
+
+    check(!r.contact, "no contact well above the heightfield", 0, r.contact);
+    check(r.events == 0x9, "the event vector passes through UNCHANGED when nothing was hit", 0x9,
+          r.events);
+    check((r.p.flags & kFlagHit) == 0, "and kPartCollidedThisTick stays clear", 0,
+          (r.p.flags & kFlagHit) != 0);
+    check(b.collision_events - a.collision_events == 0,
+          "collision_events_o does NOT move without a contact", 0,
+          b.collision_events - a.collision_events);
   }
 
   // =========================================================================
@@ -699,12 +793,14 @@ int main(int argc, char** argv) {
     check(f.unavail > 0, "terrain_sample_unavailable fired", 1, f.unavail);
     check(f.refused > 0, "response_refused fired", 1, f.refused);
     check(f.clamps > 0, "field_clamps fired", 1, f.clamps);
+    check(f.collision_events > 0, "collision_events fired", 1, f.collision_events);
 
     std::printf(
         "[part_collide_directed] ignore=%u die=%u stick=%u slide=%u bounce=%u "
-        "terrain=%u plane=%u inside=%u unavail=%u refused=%u clamps=%u\n",
+        "terrain=%u plane=%u inside=%u unavail=%u refused=%u clamps=%u "
+        "collision_events=%u\n",
         f.ignore, f.die, f.stick, f.slide, f.bounce, f.terrain, f.plane, f.inside, f.unavail,
-        f.refused, f.clamps);
+        f.refused, f.clamps, f.collision_events);
   }
 
   zhao::exit_hard(zhao::report_and_exit("part_collide_directed"));

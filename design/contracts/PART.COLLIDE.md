@@ -1,31 +1,46 @@
 # Contract — PART.COLLIDE (Particle collision)
 
-> ## CONTESTED — THE STEP-6 BOUNDARY CONFLICTS WITH TWO SIBLINGS. NOT RULED.
+> ## AMENDED — THIS BLOCK OWNS STEP 6 AND EMITS THE COLLISION EVENT. RULED.
 >
-> Raised 2026-09-19. **Nothing below is amended and no reading is adopted
-> here.** This contract is self-consistent; the conflict is between it and
-> `PART.UPDATE.md` / `PART.SPAWN.md`, and it is recorded on all three so that
-> reading any one of them surfaces it.
+> Raised as CONTESTED 2026-09-19 and **ruled the same day**:
+> `reports/RULING-I4-COLLISION-SPAWN-20260919.md`, owner *"Go with your
+> recommendations on the whole goal run."* This contract was the SELF-CONSISTENT
+> one of the three; the conflict was between it and `PART.UPDATE.md` /
+> `PART.SPAWN.md`, and the ruling moved those two to agree with this one.
 >
-> This contract places this block strictly DOWNSTREAM of PART.UPDATE (**In**:
-> *"The updated particle from PART.UPDATE"*) and makes it a leaf (**Notes**:
-> *"results return through PART.STATE's writeback path"*). `PART.UPDATE.md`
-> nevertheless lists the collision response as **step 6 of ITS eight-step
-> order**, and `PART.SPAWN.md` requires the ruled **collision** event to reach
-> PART.SPAWN *"from PART.UPDATE"*. PART.UPDATE can therefore neither observe
-> nor announce a collision, and `zhao_part_update.sv`'s `col_*_i` port — the
-> seam cut to escape that — has no legal producer, because driving it from
-> this block would be a cycle.
+> **What this contract gains, and it is an output list, not a law:**
 >
-> Note for anyone tempted by "just add a velocity output here": this block
+> * `c_events_o` — the four FROZEN events (owner ruling 2026-08-31 §2.4).
+>   PART.UPDATE's three own bits cross this block on the same register enable as
+>   the record; **bit 2, COLLISION, is authored HERE**, from the same
+>   `c_contact_o` decision that writes `kPartCollidedThisTick`.
+> * `c_spawn_record_o` — the parent record PART.SPAWN derives a child from. Ruled
+>   **POST-CONTACT**, so at the default it is `c_record_o`. The parameter
+>   `CHILD_AT_POST_CONTACT` reverses it in one edit.
+> * `collision_events_o` — the counter for the event, wired to the event gate
+>   rather than to the response classification.
+>
+> **No collision arithmetic changed.** The response, the placement and the
+> anti-jitter property below are exactly as ratified.
+>
+> **What was wrong.** This contract placed the block strictly DOWNSTREAM of
+> PART.UPDATE (**In**: *"The updated particle from PART.UPDATE"*) and made it a
+> leaf. `PART.UPDATE.md` nevertheless listed the collision response as **step 6
+> of ITS eight-step order**, and `PART.SPAWN.md` required the ruled **collision**
+> event to reach PART.SPAWN *"from PART.UPDATE"*. PART.UPDATE could therefore
+> neither observe nor announce a collision, and `zhao_part_update.sv`'s `col_*_i`
+> ports — the seam cut to escape that — had no legal producer. They are retired.
+>
+> And for anyone tempted by "just add a velocity output here" instead: this block
 > already resolves step 6 END TO END. `vout_c` is the responded velocity,
 > `pout_c` the contact-point placement this contract's Q-format section
 > requires, and `w_flg` writes `kPartCollidedThisTick`; all three land in
 > `c_record_o`, which PART.STATE writes back. The response already reaches the
 > particle. Feeding it to PART.UPDATE as well would apply it TWICE.
 >
-> Full citations and a recommendation: entry **I4** of
-> `fpga/rtl/prod/zhao_console_core.sv`'s INCOMPLETE header.
+> **Notes** still calls this block a leaf and that is still true of the PARTICLE:
+> nothing returns to PART.UPDATE. What leaves besides the write-back is an EVENT
+> and the record it describes, forward to PART.SPAWN.
 
 > Ledger: `design/blocks.yml` · owner ZH-063 · phase 10 · maturity SPECIFIED
 

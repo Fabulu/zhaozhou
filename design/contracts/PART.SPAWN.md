@@ -21,28 +21,49 @@
 > These two did not, which is why a block was built in September 2026 citing
 > "the scale is unruled" as its reason for doing nothing.
 
-> ## CONTESTED — THE `collision` EVENT CANNOT COME FROM PART.UPDATE. NOT RULED.
+> ## AMENDED — THE EVENTS ARRIVE FROM **PART.COLLIDE**, NOT PART.UPDATE. RULED.
 >
-> Raised 2026-09-19. **Nothing below is amended and no reading is adopted
-> here.**
+> Raised as CONTESTED 2026-09-19 and **ruled the same day**:
+> `reports/RULING-I4-COLLISION-SPAWN-20260919.md`, owner *"Go with your
+> recommendations on the whole goal run."* This banner replaces the contested
+> one; the paragraphs below are the record of what was wrong.
 >
-> **In** requires *"The parent particle plus its spawn/death events from
-> `PART.UPDATE`"*, and the FROZEN event list (owner ruling 2026-08-31 §2.4) is
-> *"birth, a bounded age marker, **collision**, death"*. But `PART.COLLIDE.md`
-> places PART.COLLIDE strictly DOWNSTREAM of PART.UPDATE and calls it a leaf,
-> and `PART.UPDATE.md` excludes the collision response from its own oracle and
-> from its input list. PART.UPDATE therefore cannot know a collision occurred,
-> so it cannot author event bit 2.
+> **The amendment, and it is two sentences of this contract:**
 >
-> The measured consequence in the composed console: `spawn_by_event2_o` is
-> **structurally stuck at zero**. Spawn-on-collision — sparks on impact — does
-> not work, and no test said so, because the counter reads zero exactly as it
-> would if no collision had happened. Do not quote it as evidence.
+> | | this contract's text | binding after the ruling |
+> |---|---|---|
+> | **In** | events *"from `PART.UPDATE`"* | **from `PART.COLLIDE`** |
+> | parent record | the particle as PART.UPDATE left it | the **POST-CONTACT** record, i.e. `pout_c` |
 >
-> Resolving this decides a physics question no contract answers: whether a
-> collision-spawned child is placed at the parent's PRE- or POST-contact
-> position. Full citations and a recommendation: entry **I4** of
-> `fpga/rtl/prod/zhao_console_core.sv`'s INCOMPLETE header.
+> **The event's CONTENT is unchanged.** The four events stay FROZEN at birth /
+> age marker / collision / death (owner ruling 2026-08-31 §2.4); the count, the
+> order and the 16-child bound are untouched. Only the announced ORIGIN moves,
+> and it moves because it was wrong.
+>
+> **Why it was wrong.** **In** required *"The parent particle plus its
+> spawn/death events from `PART.UPDATE`"*, and the FROZEN event list includes
+> **collision**. But `PART.COLLIDE.md` places PART.COLLIDE strictly DOWNSTREAM
+> of PART.UPDATE and calls it a leaf, and `PART.UPDATE.md` excludes the collision
+> response from its own oracle and from its input list. PART.UPDATE therefore
+> could not know a collision had occurred, so it could not author event bit 2.
+>
+> The measured consequence in the composed console: `spawn_by_event2_o` was
+> **structurally stuck at zero**. Spawn-on-collision — sparks on impact — did not
+> work, and no test said so, because the counter read zero exactly as it would if
+> no collision had happened. **Do not quote any reading of it taken before
+> 2026-09-19 as evidence.**
+>
+> **Where the child is placed** is the physics question no contract answered.
+> Ruled: **POST-CONTACT**, because it is what PART.COLLIDE already computes (so
+> no second placement law enters the tree), because pre-contact puts the spark
+> inside the surface the particle just hit, and because `kPartStuck` already
+> describes a particle at rest ON the surface. It is reversible by one named
+> constant — `CHILD_AT_POST_CONTACT` in `fpga/rtl/particles/zhao_part_collide.sv`
+> — and CLAUDE.md's art law applies: judge it by looking at sparks in motion.
+>
+> In RTL: PART.UPDATE's three own event bits cross PART.COLLIDE on the same
+> register enable as the record, PART.COLLIDE fills bit 2 from its own
+> `c_contact_o`, and `c_spawn_record_o` is the parent record this block reads.
 
 > Ledger: `design/blocks.yml` · owner ZH-064 · phase 10 · maturity SPECIFIED
 
@@ -58,8 +79,14 @@ cannot leave half a burst in the stream.
 
 ## Input and output packet layouts
 ### In
-The parent particle plus its spawn/death events from `PART.UPDATE`, and the
+The parent particle plus its spawn/death events from `PART.COLLIDE`, and the
 parent's species descriptor.
+
+> **AMENDED 2026-09-19** (ruling I4). This sentence read *"from `PART.UPDATE`"*.
+> PART.UPDATE cannot observe a collision, so it could not author one of the four
+> frozen events; PART.COLLIDE carries PART.UPDATE's other three across and fills
+> that one in. The parent particle is the **post-contact** record. See the banner
+> at the head of this file.
 
 ### Spawn events — FROZEN, owner ruling 2026-08-31 §2.4
 

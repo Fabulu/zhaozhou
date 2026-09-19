@@ -2304,6 +2304,17 @@ targets:
   #   * PART.UPDATE's step-6 collision input is TIED TO ZERO because
   #     PART.COLLIDE emits no velocity triple, so synthesis folds that datapath
   #     away and this row UNDER-COUNTS PART.UPDATE.
+  #
+  # CORRECTED 2026-09-19 -- the paragraph immediately above is STALE and is left
+  # in place only so this correction has something to point at. Owner ruling
+  # `reports/RULING-I4-COLLISION-SPAWN-20260919.md` RETIRED PART.UPDATE's four
+  # `col_*_i` ports; there is no step-6 datapath in that block to fold away and
+  # no tie-off on it. So this row no longer under-counts PART.UPDATE -- it
+  # measures the smaller, correct block, and any number taken here after
+  # 2026-09-19 is expected to be LOWER for PART.UPDATE than one taken before it.
+  # PART.COLLIDE gains an event vector, a spawn-record port and one counter;
+  # zhao_console_core's fork moved from PART.UPDATE's output to PART.COLLIDE's.
+  # Header entry I4 is DELETED from `zhao_console_core.sv` because it is closed.
   # And it contains NO LIGHTING AT ALL -- `zhao_geom_light` and every
   # `zhao_light_*` file are excluded on purpose while that service is being
   # refactored, so nothing here should be read as "lighting fits in what is

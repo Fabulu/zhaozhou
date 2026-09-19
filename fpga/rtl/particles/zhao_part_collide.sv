@@ -111,6 +111,55 @@
 //     rather than assumed away.
 //
 // ---------------------------------------------------------------------------
+// THIS BLOCK EMITS THE COLLISION EVENT. RULED 2026-09-19.
+// ---------------------------------------------------------------------------
+// `reports/RULING-I4-COLLISION-SPAWN-20260919.md`. Three ratified contracts had
+// formed a closed contradiction: PART.SPAWN's four FROZEN events (owner ruling
+// 2026-08-31 §2.4) include COLLISION and were said to arrive "from PART.UPDATE";
+// PART.UPDATE's inputs contain no collision velocity; and this block is a leaf
+// downstream of it with no return edge. PART.UPDATE therefore had to announce a
+// collision it cannot observe, and in `zhao_console_core` the seam that was cut
+// to escape that was tied to zero -- so SPAWN-ON-COLLISION, sparks on impact,
+// did not work in this console and its counter read zero exactly as it would
+// have if nothing had ever collided.
+//
+// The ruling gives the event to the block that observes the collision. THE
+// EVENT'S CONTENT IS UNCHANGED; only its announced origin was wrong.
+//
+// Three things make this cheap rather than new machinery:
+//
+//   1. `p_events_i` -> `c_events_o` CARRIES PART.UPDATE'S OTHER THREE BITS
+//      ACROSS, on the SAME register enable as the record. That is deliberate
+//      and it is the point: a vector loaded by a second enable can separate
+//      from the record it describes on a stall, and deliver one particle's
+//      events with another particle's position. One enable, no join, nothing to
+//      drift across.
+//   2. BIT 2 IS OVERWRITTEN, not OR-ed. PART.UPDATE drives it zero, so the two
+//      forms are identical today -- and overwriting says there is exactly ONE
+//      author for the bit, which is what stops a future edit making two.
+//   3. The bit is `respond_c`, THE SAME WIRE that writes `kPartCollidedThisTick`
+//      into the record below. The announced event and the recorded flag are one
+//      decision, so they cannot disagree.
+//
+// WHERE THE CHILD IS PLACED -- the one question no contract answered, decided by
+// ruling §3 and REVERSIBLE BY ONE EDIT. `CHILD_AT_POST_CONTACT` selects what
+// PART.SPAWN receives as the parent record:
+//
+//   1 (default)  `c_record_o` -- the POST-CONTACT particle, at `pout_c`. The
+//                ruling's reasons: it is what this block already computes so no
+//                second placement law enters the tree; pre-contact puts the
+//                spark inside the surface the particle just hit, which is the
+//                visible artefact the whole collision response exists to
+//                remove; and `kPartStuck` already describes a particle at rest
+//                ON the surface, so the rest of the record agrees with it.
+//   0            the record exactly as PART.UPDATE handed it over, pre-contact.
+//
+// At the default this costs NOTHING -- `c_spawn_record_o` is `c_record_o`, the
+// same wires. Only the reversal pays for a second register, which is the right
+// way round. CLAUDE.md's art law applies to the choice itself: it is to be
+// judged by looking at sparks in motion, not by reasoning about it further.
+//
+// ---------------------------------------------------------------------------
 // SYNTHESIZABILITY
 // ---------------------------------------------------------------------------
 // This file has NOT been through `quartus_map`. Verilator lint-clean is one
@@ -150,7 +199,12 @@ module zhao_part_collide #(
     // How far OUTSIDE the surface the contact point is placed, in position
     // LSBs (1 LSB = 1/256 m). 2 LSBs ~= 7.8 mm. This is the anti-jitter
     // margin; see the bound above. Owner knob.
-    parameter int unsigned CLEAR_EPS = 2
+    parameter int unsigned CLEAR_EPS = 2,
+
+    // WHERE A COLLISION-SPAWNED CHILD IS PLACED. Owner ruling I4 §3,
+    // 2026-09-19: POST-CONTACT, and reversible by changing this one bit.
+    // See the header paragraph "WHERE THE CHILD IS PLACED".
+    parameter bit CHILD_AT_POST_CONTACT = 1'b1
 ) (
     input  var logic clk,
     input  var logic rst_n,
@@ -159,6 +213,21 @@ module zhao_part_collide #(
     input  var logic                    p_valid_i,
     output var logic                    p_ready_o,
     input  var logic [REC_W-1:0]        p_record_i,
+
+    // PART.UPDATE's own three events, riding beside the record it describes.
+    // {death, collision, age marker, birth}; bit 2 arrives ZERO and this block
+    // fills it. Ruling I4 §2 -- see the header.
+    //
+    // BIT 2 IS DELIBERATELY NOT READ, and Verilator is right to notice. The
+    // alternative spelling `p_events_i | {1'b0, respond_c, 2'b0}` would consume
+    // it and lint silently -- and it would make the collision bit have TWO
+    // authors the moment anyone upstream set it, which is the arrangement this
+    // ruling exists to end. The waiver is narrow, it names the bit, and
+    // `a_upstream_collision_bit_zero` below asserts in simulation that the bit
+    // really does arrive zero, so the claim is checked rather than assumed.
+    /* verilator lint_off UNUSEDSIGNAL */
+    input  var logic [3:0]              p_events_i,
+    /* verilator lint_on UNUSEDSIGNAL */
 
     // ---- the species descriptor, sampled with the particle -------------------
     // The response is SELECTED EXPLICITLY by the descriptor. Owner ruling
@@ -203,6 +272,13 @@ module zhao_part_collide #(
     output var logic [2:0]              c_response_o,
     output var logic                    c_refused_o,
 
+    // ---- to PART.SPAWN --------------------------------------------------------
+    // The four FROZEN events with bit 2 now filled in, and the parent record the
+    // child is derived from. Both leave on the same beat as `c_record_o` and are
+    // loaded by the same enable, so they cannot separate from it.
+    output var logic [3:0]              c_events_o,
+    output wire [REC_W-1:0]             c_spawn_record_o,
+
     // ---- counters ------------------------------------------------------------
     // The contract's list, one port each. Faults leave the module; a counter
     // that is asserted zero and never seen to move is not evidence.
@@ -216,6 +292,14 @@ module zhao_part_collide #(
     output var logic [31:0] already_inside_at_entry_o,
     output var logic [31:0] terrain_sample_unavailable_o,
     output var logic [31:0] response_refused_o,
+    // The instrument for the EVENT this block now emits. It is wired to the
+    // event gate, not to the response classification, and that is the whole
+    // reason it exists beside the five `contacts_*` counters whose sum it
+    // currently equals: if the two ever stop agreeing, the difference is the
+    // bug, and a counter derived from the other five could never show it.
+    // It is also what drives the console's `part_collisions_applied_o`, which
+    // before ruling I4 was a counter that could not move.
+    output var logic [31:0] collision_events_o,
     // Beyond the contract's list, deliberately: a response with a coefficient
     // above 1 can drive a component past its field, and a SILENT wrap would
     // reverse a particle's direction and read as a physics bug rather than a
@@ -619,6 +703,7 @@ module zhao_part_collide #(
       c_contact_o  <= 1'b0;
       c_response_o <= 3'd0;
       c_refused_o  <= 1'b0;
+      c_events_o   <= 4'd0;
       contacts_ignore_o            <= 32'd0;
       contacts_die_o               <= 32'd0;
       contacts_stick_o             <= 32'd0;
@@ -630,6 +715,7 @@ module zhao_part_collide #(
       terrain_sample_unavailable_o <= 32'd0;
       response_refused_o           <= 32'd0;
       field_clamps_o               <= 32'd0;
+      collision_events_o           <= 32'd0;
     end else begin
       if (c_valid_o && c_ready_i) c_valid_o <= 1'b0;
 
@@ -640,6 +726,15 @@ module zhao_part_collide #(
         c_contact_o  <= respond_c;
         c_response_o <= d_response_i;
         c_refused_o  <= refuse_c;
+
+        // THE COLLISION EVENT, ruling I4 §2. Bits 0/1/3 are PART.UPDATE's and
+        // ride across untouched; bit 2 is this block's `respond_c` -- the same
+        // wire that writes kPartCollidedThisTick into `w_flg` above, so the
+        // announced event and the recorded flag are one decision. Loaded by
+        // `take_c`, the enable that loads the record, so the two cannot part.
+        c_events_o   <= {p_events_i[3], respond_c, p_events_i[1], p_events_i[0]};
+
+        if (respond_c) collision_events_o <= collision_events_o + 32'd1;
 
         // "terrain sample unavailable: treat as no contact for this tick, count
         // it. Do not stall the particle path on a terrain read."
@@ -673,6 +768,28 @@ module zhao_part_collide #(
     end
   end
 
+  // ---- the parent record PART.SPAWN derives its child from ------------------
+  // Owner ruling I4 §3, and the whole of the reversal is the parameter above.
+  // Quartus 17.0 needs the explicit generate/endgenerate keywords; an implicit
+  // generate is a syntax error there however clean the Verilator lint.
+  generate
+    if (CHILD_AT_POST_CONTACT) begin : g_child_post
+      // THE RULED CHOICE, AND IT IS FREE: the same wires as `c_record_o`, which
+      // already carries `pout_c`, `vout_c` and kPartCollidedThisTick.
+      assign c_spawn_record_o = c_record_o;
+    end else begin : g_child_pre
+      // The reversal pays for its own register -- the record exactly as
+      // PART.UPDATE handed it over -- loaded by `take_c`, the SAME enable as
+      // `c_record_o`, so the two cannot come apart on a stall.
+      logic [REC_W-1:0] pre_rec_q;
+      always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)      pre_rec_q <= '0;
+        else if (take_c) pre_rec_q <= p_record_i;
+      end
+      assign c_spawn_record_o = pre_rec_q;
+    end
+  endgenerate
+
 `ifdef ZHAO_ASSERT
   logic armed_q;
   always_ff @(posedge clk or negedge rst_n) begin
@@ -694,6 +811,25 @@ module zhao_part_collide #(
       // Handshake hygiene: a raised valid holds until it is taken.
       if ($past(c_valid_o) && !$past(c_ready_i))
         a_valid_holds: assert (c_valid_o);
+
+      // THE EVENT VECTOR RETIRES WITH THE RECORD. This is deliberately a check
+      // about the ENABLE and not about the values: `c_events_o[2]` and the
+      // record's kPartCollidedThisTick come from the same wire, so a checker
+      // differencing them is blind by construction (CLAUDE.md, "a detector
+      // wired to two operands that move together cannot fire"). What CAN go
+      // wrong is somebody giving the event vector a second enable -- an
+      // unconditional load -- at which point a stall delivers one particle's
+      // record with the next particle's events. That fault moves `c_events_o`
+      // while the beat is held, and this fires on it.
+      if ($past(c_valid_o) && !$past(c_ready_i))
+        a_events_hold: assert (c_events_o == $past(c_events_o));
+
+      // ONE AUTHOR FOR THE COLLISION BIT. The port comment says bit 2 arrives
+      // zero; this is what makes that a checked claim rather than a promise.
+      // If PART.UPDATE ever starts authoring it, the overwrite above would
+      // silently discard it and this fires instead.
+      if (take_c)
+        a_upstream_collision_bit_zero: assert (!p_events_i[2]);
     end
   end
 `endif

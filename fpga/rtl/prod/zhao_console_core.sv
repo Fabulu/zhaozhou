@@ -51,10 +51,16 @@
 //
 //   1. THE PARTICLE RING (four blocks, one closed loop)
 //        PART.STATE.prt      -> PART.UPDATE.in
-//        PART.UPDATE.out     -> [fork] -> PART.COLLIDE.p
-//                                      -> PART.SPAWN.par  (+ its events)
-//        PART.COLLIDE.c      -> PART.STATE.vrd   (record AND survive verdict)
+//        PART.UPDATE.out     -> PART.COLLIDE.p   (record AND its three events)
+//        PART.COLLIDE.c      -> [fork] -> PART.STATE.vrd (record AND survive)
+//                                      -> PART.SPAWN.par (post-contact record,
+//                                         the four events with COLLISION filled
+//                                         in, and the parent ordinal)
 //        PART.SPAWN.chl      -> PART.STATE.chl
+//      The fork sits AFTER PART.COLLIDE, not after PART.UPDATE: owner ruling
+//      2026-09-19 (`reports/RULING-I4-COLLISION-SPAWN-20260919.md`). With
+//      PART.SPAWN in parallel, it saw the particle before the only block that
+//      knows whether it hit anything, and spawn-on-collision was dead.
 //      The fork is real glue and is documented at its declaration; it is the
 //      only arithmetic-free thing standing between two real ports.
 //
@@ -125,82 +131,16 @@
 //
 //  I3. THE SIZE/COLOUR CURVE TABLE (`part_crv_*`) -- BOUNDARY, same gap as I2.
 //
-//  I4. PART.UPDATE STEP 6, THE COLLISION RESPONSE (`col_valid_i`, `col_vx_i`,
-//      `col_vy_i`, `col_vz_i`) -- TIED TO ZERO. It is NOT an interface
-//      mismatch between two blocks that could be adapted. It is a CLOSED
-//      CONTRADICTION BETWEEN THREE RATIFIED CONTRACTS, and it needs an OWNER
-//      RULING, not a wire. Investigated 2026-09-19; the four citations are
-//      quoted rather than summarised because the summary is what keeps
-//      sending people to build an adapter.
-//
-//      (1) `design/contracts/PART.COLLIDE.md` "Input and output packet
-//          layouts / In": *"The updated particle from PART.UPDATE, its species
-//          descriptor, and the collision sources."* PART.COLLIDE is therefore
-//          strictly DOWNSTREAM of PART.UPDATE. Its "Notes" repeat it: *"leaf
-//          (results return through PART.STATE's writeback path)"* -- there is
-//          no return edge to PART.UPDATE anywhere in its contract.
-//      (2) `design/contracts/PART.UPDATE.md` "In" lists exactly three inputs:
-//          *"The 128-bit record from PART.STATE, the species descriptor, and a
-//          bounded Field/FLOW acceleration sample."* A RESOLVED COLLISION
-//          VELOCITY IS NOT AMONG THEM. Its "Scalar reference function" section
-//          removes it explicitly: `zref::ParticleUpdate` owns the recipes, the
-//          order and the saturation rules, *"Not the collision response
-//          (`zref::ParticleCollide`) ... which are separate stages with
-//          separate oracles."*
-//      (3) `design/contracts/PART.SPAWN.md` "In": *"The parent particle plus
-//          its spawn/death events from `PART.UPDATE`, and the parent's species
-//          descriptor."* And its FROZEN event list (owner ruling 2026-08-31
-//          §2.4) is *"birth, a bounded age marker, collision, death"*.
-//
-//      So PART.UPDATE must author a COLLISION event (3), and cannot know a
-//      collision has happened (1)+(2). `col_valid_i` is the seam somebody cut
-//      to escape that, and it has no legal producer: PART.COLLIDE is
-//      downstream, so driving it would be a cycle.
-//
-//      AND IT WOULD ALSO DOUBLE-APPLY THE RESPONSE, which is the fact that
-//      settles the "just add a velocity output to PART.COLLIDE" repair.
-//      `zhao_part_collide.sv` already resolves step 6 END TO END: `vout_c` is
-//      the responded velocity, `pout_c` the contact-point placement, and
-//      `w_flg` writes `kPartCollidedThisTick` -- all three go into
-//      `c_record_o`, which PART.STATE writes back and hands PART.UPDATE at the
-//      NEXT tick. The response therefore already reaches the particle, through
-//      the record, on PART.COLLIDE's own declared path. PART.UPDATE's step 6
-//      would apply it a second time. Note also that PART.UPDATE's step 6
-//      cannot satisfy PART.COLLIDE.md's *"A contact must not leave the
-//      particle inside the surface"*, because the block's own header says step
-//      6 *"does NOT re-integrate position"* -- a velocity-only step 6 can
-//      never place the contact point.
-//
-//      THE RECOMMENDATION, for the owner to accept or refuse -- NOT taken
-//      here, because a wrong ruling changes particle physics silently:
-//      retire `col_*_i` from PART.UPDATE (step 6 is PART.COLLIDE's, whole),
-//      and give the COLLISION EVENT to the block that owns the step -- carry
-//      PART.UPDATE's three own events across PART.COLLIDE on the same register
-//      enable as the record, and let PART.COLLIDE insert its own
-//      `c_contact_o` at the collision bit. That contradicts PART.SPAWN.md's
-//      "from PART.UPDATE" sentence, which is why it is a RULING and not an
-//      edit. It also decides a physics question no contract answers: whether a
-//      collision-spawned child is placed at the parent's PRE- or POST-contact
-//      position.
-//
-//      THREE CONSEQUENCES, STATED SO NOBODY QUOTES THEM AS EVIDENCE LATER:
-//        (a) `part_collisions_applied_o` is STRUCTURALLY STUCK AT ZERO in this
-//            core. It is not a working counter reading zero; it is a counter
-//            that cannot move. Do not read it as "no collisions occurred".
-//        (b) `part_spawn_by_event2_o` is STUCK AT ZERO FOR THE SAME REASON,
-//            and nothing said so until 2026-09-19. Event bit 2 is COLLISION
-//            (`zhao_part_spawn.sv`: "0 birth, 1 age marker, 2 collision,
-//            3 death"), PART.UPDATE builds that bit from `col_apply_c`, and
-//            `col_apply_c` is `motion_c && col_valid_i`. SPAWN-ON-COLLISION --
-//            sparks on impact, one of the ruling's four events -- IS DEAD IN
-//            THIS CONSOLE. A second counter reading zero beside the first is
-//            exactly the pattern CLAUDE.md says to check hardest.
-//        (c) synthesis will constant-fold PART.UPDATE's step-6 datapath, so
-//            this core UNDER-COUNTS PART.UPDATE's area. The resource number is
-//            a floor for that block, not its cost. Note the repair above
-//            REMOVES that datapath rather than driving it, so the corrected
-//            number is expected to go DOWN, not up -- anyone budgeting for
-//            "step 6 once it is wired" should budget for nothing.
+//      (I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
+//      closed contradiction between three ratified contracts rather than a
+//      wiring gap, and owner ruling 2026-09-19 settled it:
+//      `reports/RULING-I4-COLLISION-SPAWN-20260919.md`. The four `col_*_i`
+//      ports are RETIRED, PART.COLLIDE emits the collision event it already
+//      owned, and a collision-spawned child is placed POST-CONTACT. The entry
+//      is deleted rather than marked closed, because this block is what the
+//      completion register counts and a stale closed entry under-reports
+//      progress exactly as deleting an open one would over-report it. The
+//      closure is recorded at the instances below and in the ruling.)
 //
 //  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY. FIELD.SEQ.FLOW
 //      is not composed; `zhao_field_seq.sv` exists but exposes no bounded
@@ -485,7 +425,8 @@ module zhao_console_core
   output logic                    part_upd_beat_refused_o,
   output logic [31:0]             part_velocity_saturations_o,
   output logic [31:0]             part_position_saturations_o,
-  // I4: STRUCTURALLY STUCK AT ZERO. Not a working counter reading zero.
+  // WAS structurally stuck at zero (old header entry I4). Since the ruling of
+  // 2026-09-19 it is driven by PART.COLLIDE's `collision_events_o` and moves.
   output logic [31:0]             part_collisions_applied_o,
   input  logic [3:0]              part_hist_sel_i,
   output logic [31:0]             part_hist_val_o,
@@ -1192,6 +1133,8 @@ module zhao_console_core
   wire                  pc_p_ready;
   wire                  pc_c_valid, pc_c_alive;
   wire [PART_REC_W-1:0] pc_c_record;
+  wire [PART_REC_W-1:0] pc_c_spawn_record;
+  wire [3:0]            pc_c_events;
   wire                  ps_vrd_ready;
 
   wire                  sp_par_ready;
@@ -1199,64 +1142,92 @@ module zhao_console_core
   wire [PART_REC_W-1:0] sp_chl_record;
 
   // --------------------------------------------------------------------------
-  // GLUE 3: THE ONE-TO-TWO FORK ON PART.UPDATE'S VERDICT.
+  // GLUE 3: THE ONE-TO-TWO FORK, NOW ON PART.COLLIDE'S OUTPUT.
   //
-  // PART.UPDATE emits ONE stream that TWO blocks need: the record goes to
-  // PART.COLLIDE and the record-plus-events goes to PART.SPAWN. A plain
-  // `ready & ready` fork stalls both consumers whenever either is busy AND
-  // presents the beat twice to whichever accepted first. This keeps one
-  // "already took it" bit per branch instead, so each consumer sees the beat
-  // exactly once and the beat retires when both have taken it.
+  // REPLUMBED 2026-09-19 by owner ruling I4
+  // (`reports/RULING-I4-COLLISION-SPAWN-20260919.md`). It used to sit on
+  // PART.UPDATE's verdict, feeding PART.COLLIDE and PART.SPAWN IN PARALLEL.
+  // That arrangement is what made spawn-on-collision impossible: PART.SPAWN saw
+  // the particle BEFORE it had been through the only block that knows whether
+  // it hit anything, so the collision event bit could never be true and
+  // `part_spawn_by_event2_o` was structurally stuck at zero.
+  //
+  // The chain is now STATE -> UPDATE -> COLLIDE -> {STATE write-back, SPAWN}.
+  // PART.UPDATE has exactly ONE consumer and needs no fork at all; PART.COLLIDE
+  // has two, and they are the two this shape was written for. Note what did NOT
+  // change: no arithmetic moved into this file, and nothing was adapted -- the
+  // ruling REMOVES a seam (PART.UPDATE's four `col_*_i` ports) and this is the
+  // wire order that follows from it.
+  //
+  // The fork itself is unchanged in kind. A plain `ready & ready` fork stalls
+  // both consumers whenever either is busy AND presents the beat twice to
+  // whichever accepted first. This keeps one "already took it" bit per branch
+  // instead, so each consumer sees the beat exactly once and the beat retires
+  // when both have taken it.
   //
   // Neither branch's VALID reads the other branch's READY, so there is no
   // combinational loop through the consumers -- which is the failure mode this
   // shape exists to avoid, not a property to be argued about afterwards.
+  // PART.STATE's `vrd_ready_o` and PART.SPAWN's `par_ready_o` are both pure
+  // functions of their own state, so that property still holds after the move.
   // --------------------------------------------------------------------------
-  logic fork_col_done_q, fork_spw_done_q;
+  logic fork_vrd_done_q, fork_spw_done_q;
 
-  wire fork_col_valid_c = pu_out_valid && !fork_col_done_q;
-  wire fork_spw_valid_c = pu_out_valid && !fork_spw_done_q;
-  wire fork_col_take_c  = fork_col_valid_c && pc_p_ready;
+  wire fork_vrd_valid_c = pc_c_valid && !fork_vrd_done_q;
+  wire fork_spw_valid_c = pc_c_valid && !fork_spw_done_q;
+  wire fork_vrd_take_c  = fork_vrd_valid_c && ps_vrd_ready;
   wire fork_spw_take_c  = fork_spw_valid_c && sp_par_ready;
-  wire fork_col_held_c  = fork_col_done_q || fork_col_take_c;
+  wire fork_vrd_held_c  = fork_vrd_done_q || fork_vrd_take_c;
   wire fork_spw_held_c  = fork_spw_done_q || fork_spw_take_c;
-  wire pu_out_ready_c   = fork_col_held_c && fork_spw_held_c;
+  wire pc_out_ready_c   = fork_vrd_held_c && fork_spw_held_c;
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      fork_col_done_q <= 1'b0;
+      fork_vrd_done_q <= 1'b0;
       fork_spw_done_q <= 1'b0;
-    end else if (pu_out_valid && pu_out_ready_c) begin
-      fork_col_done_q <= 1'b0;
+    end else if (pc_c_valid && pc_out_ready_c) begin
+      fork_vrd_done_q <= 1'b0;
       fork_spw_done_q <= 1'b0;
     end else begin
-      if (fork_col_take_c) fork_col_done_q <= 1'b1;
+      if (fork_vrd_take_c) fork_vrd_done_q <= 1'b1;
       if (fork_spw_take_c) fork_spw_done_q <= 1'b1;
     end
   end
 
   // --------------------------------------------------------------------------
-  // GLUE 4: THE SURVIVE VERDICT ACROSS PART.COLLIDE.
+  // GLUE 4: THE SURVIVE VERDICT AND THE PARENT ID, ACROSS PART.COLLIDE.
   //
   // PART.STATE's write-back needs ONE survive bit and TWO blocks decide it:
   // PART.UPDATE kills on lifetime (`out_survive_o`) and PART.COLLIDE kills on a
   // DIE response (`c_alive_o`). PART.COLLIDE has no survive input and no
   // passthrough for one, so the update's verdict has to cross it beside the
-  // record.
+  // record. The parent ORDINAL (glue 5) has to cross for the same reason now
+  // that PART.SPAWN sits downstream: it belongs to the particle, not to the
+  // cycle.
   //
   // THE ALIGNMENT IS THE WHOLE POINT, and it is structural rather than argued:
   // PART.COLLIDE is "one beat in, one beat out, fixed latency" with
   // `p_ready_o = !c_valid_o || c_ready_i`, so exactly one beat is ever in
-  // flight and its record register is loaded on `p_valid_i && p_ready_o`. This
-  // register is loaded on THE SAME condition, rebuilt from the same two wires,
-  // so the survive bit cannot separate from the record it describes -- there is
-  // no second enable for them to drift across.
+  // flight and its record register is loaded on `p_valid_i && p_ready_o`. These
+  // registers are loaded on THE SAME condition, rebuilt from the same two
+  // wires, so neither can separate from the record it describes -- there is no
+  // second enable for them to drift across. The EVENTS cross inside
+  // PART.COLLIDE itself, on its own copy of that enable, for the same reason
+  // and because bit 2 is that block's to write.
   // --------------------------------------------------------------------------
-  logic pc_survive_q;
+  wire pu_take_c = pu_out_valid && pc_p_ready;
+
+  logic                  pc_survive_q;
+  logic [PART_PID_W-1:0] pc_ordinal_q;
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n)              pc_survive_q <= 1'b0;
-    else if (fork_col_take_c) pc_survive_q <= pu_out_survive;
+    if (!rst_n) begin
+      pc_survive_q <= 1'b0;
+      pc_ordinal_q <= '0;
+    end else if (pu_take_c) begin
+      pc_survive_q <= pu_out_survive;
+      pc_ordinal_q <= part_ordinal_q;
+    end
   end
 
   wire ps_vrd_survive_c = pc_c_alive && pc_survive_q;
@@ -1269,13 +1240,18 @@ module zhao_console_core
   // ORDINAL within the generation, cleared at every tick. See the header entry
   // I9 -- this is a decision taken here, not a port that was tied off, and it
   // is wrong if ids must survive compaction.
+  //
+  // It is counted at PART.UPDATE's retire, which is one particle per ordinal,
+  // and then TRAVELS WITH THE PARTICLE through glue 4. Reading the live counter
+  // at PART.SPAWN's input would be off by PART.COLLIDE's beat and would give
+  // two particles the same identity across a stall.
   // --------------------------------------------------------------------------
   logic [PART_PID_W-1:0] part_ordinal_q;
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
-    if (!rst_n)                              part_ordinal_q <= '0;
-    else if (core_tick_c)                    part_ordinal_q <= '0;
-    else if (pu_out_valid && pu_out_ready_c) part_ordinal_q <= part_ordinal_q + 1'b1;
+    if (!rst_n)           part_ordinal_q <= '0;
+    else if (core_tick_c) part_ordinal_q <= '0;
+    else if (pu_take_c)   part_ordinal_q <= part_ordinal_q + 1'b1;
   end
 
   wire part_capacity_full_c;   // I8: PART.STATE -> PART.SPAWN, internal
@@ -1310,8 +1286,8 @@ module zhao_console_core
     .prt_record_o (ps_prt_record),
 
     // REAL: the verdict comes back from PART.COLLIDE, with the survive bit
-    // that crossed it (glue 4).
-    .vrd_valid_i   (pc_c_valid),
+    // that crossed it (glue 4), through branch V of the fork (glue 3).
+    .vrd_valid_i   (fork_vrd_valid_c),
     .vrd_ready_o   (ps_vrd_ready),
     .vrd_survive_i (ps_vrd_survive_c),
     .vrd_record_i  (pc_c_record),
@@ -1366,23 +1342,22 @@ module zhao_console_core
     .fld_ay_i   (part_fld_ay_i),
     .fld_az_i   (part_fld_az_i),
 
-    // I4: TIED TO ZERO -- PART.COLLIDE emits no velocity triple, so step 6
-    // has no producer. `collisions_applied_o` below CANNOT MOVE in this core,
-    // and synthesis will fold this datapath away: read the header entry before
-    // quoting either the counter or this block's area.
-    .col_valid_i(1'b0),
-    .col_vx_i   ({PART_VEL_W{1'b0}}),
-    .col_vy_i   ({PART_VEL_W{1'b0}}),
-    .col_vz_i   ({PART_VEL_W{1'b0}}),
+    // I4 IS CLOSED. There is no step-6 port here any more: owner ruling
+    // 2026-09-19 RETIRED `col_valid_i`/`col_vx_i`/`col_vy_i`/`col_vz_i`, and
+    // PART.COLLIDE below performs step 6 on this block's own output. The four
+    // tie-offs that used to sit here are gone rather than driven, so this row's
+    // PART.UPDATE area goes DOWN, not up.
 
     // I3: the curve table has no owner in this tree.
     .crv_index_o (part_crv_index_o),
     .crv_size_i  (part_crv_size_i),
     .crv_colour_i(part_crv_colour_i),
 
-    // REAL: the verdict, forked to PART.COLLIDE and PART.SPAWN (glue 3).
+    // REAL: the verdict, straight into PART.COLLIDE. ONE consumer, no fork --
+    // the fork moved to PART.COLLIDE's output when ruling I4 put PART.SPAWN
+    // downstream of it (glue 3).
     .out_valid_o  (pu_out_valid),
-    .out_ready_i  (pu_out_ready_c),
+    .out_ready_i  (pc_p_ready),
     .out_record_o (pu_out_record),
     .out_survive_o(pu_out_survive),
     .out_refused_o(part_upd_beat_refused_o),
@@ -1395,7 +1370,8 @@ module zhao_console_core
     .particles_died_by_age_o (part_died_by_age_o),
     .velocity_saturations_o  (part_velocity_saturations_o),
     .position_saturations_o  (part_position_saturations_o),
-    .collisions_applied_o    (part_collisions_applied_o),
+    // `collisions_applied_o` was here. It was retired with the ports it
+    // counted; `part_collisions_applied_o` is driven from PART.COLLIDE below.
     .hist_sel_i              (part_hist_sel_i),
     .hist_val_o              (part_hist_val_o)
   );
@@ -1410,10 +1386,12 @@ module zhao_console_core
     .clk      (gpu_clk),
     .rst_n    (rst_n),
 
-    // REAL: branch A of the fork.
-    .p_valid_i(fork_col_valid_c),
+    // REAL: straight from PART.UPDATE, with its three own event bits riding
+    // beside the record. Bit 2 arrives zero and this block fills it (ruling I4).
+    .p_valid_i(pu_out_valid),
     .p_ready_o(pc_p_ready),
     .p_record_i(pu_out_record),
+    .p_events_i(pu_out_events),
 
     // I2: the same missing descriptor table.
     .d_response_i   (part_col_d_response_i),
@@ -1435,14 +1413,19 @@ module zhao_console_core
     .pl_nz_i(part_plane_nz_i),
     .pl_c_i (part_plane_c_i),
 
-    // REAL: straight back into PART.STATE's write-back channel.
+    // REAL: forked to PART.STATE's write-back channel and to PART.SPAWN
+    // (glue 3). `c_spawn_record_o` is the POST-CONTACT record by ruling I4 §3,
+    // reversible at PART.COLLIDE's `CHILD_AT_POST_CONTACT` parameter and
+    // nowhere else -- the choice does not live in this file.
     .c_valid_o  (pc_c_valid),
-    .c_ready_i  (ps_vrd_ready),
+    .c_ready_i  (pc_out_ready_c),
     .c_record_o (pc_c_record),
     .c_alive_o  (pc_c_alive),
     .c_contact_o(part_contact_o),
     .c_response_o(part_response_o),
     .c_refused_o(part_col_refused_o),
+    .c_events_o (pc_c_events),
+    .c_spawn_record_o (pc_c_spawn_record),
 
     .contacts_ignore_o           (part_contacts_ignore_o),
     .contacts_die_o              (part_contacts_die_o),
@@ -1454,7 +1437,11 @@ module zhao_console_core
     .already_inside_at_entry_o   (part_already_inside_at_entry_o),
     .terrain_sample_unavailable_o(part_terrain_sample_unavailable_o),
     .response_refused_o          (part_response_refused_o),
-    .field_clamps_o              (part_field_clamps_o)
+    .field_clamps_o              (part_field_clamps_o),
+    // The console's collision counter, finally driven by a block that can move
+    // it. Before ruling I4 this port was structurally stuck at zero and header
+    // entry I4 warned against reading it as "no collisions occurred".
+    .collision_events_o          (part_collisions_applied_o)
   );
 
   zhao_part_spawn #(
@@ -1467,13 +1454,15 @@ module zhao_console_core
     .rst_n       (rst_n),
     .tick_start_i(core_tick_c),
 
-    // REAL: branch B of the fork, with PART.UPDATE's own event bits and the
-    // shell's real frame id as the tick seed.
+    // REAL: branch S of the fork on PART.COLLIDE's output, with the four FROZEN
+    // events (bit 2 filled in by the block that observes a collision), the
+    // ruled POST-CONTACT parent record, the ordinal that crossed PART.COLLIDE
+    // with its particle, and the shell's real frame id as the tick seed.
     .par_valid_i (fork_spw_valid_c),
     .par_ready_o (sp_par_ready),
-    .par_record_i(pu_out_record),
-    .par_id_i    (part_ordinal_q),
-    .par_events_i(pu_out_events),
+    .par_record_i(pc_c_spawn_record),
+    .par_id_i    (pc_ordinal_q),
+    .par_events_i(pc_c_events),
     .tick_i      (gpu_tick_frame_id_o),
 
     // I2: the same missing descriptor table.

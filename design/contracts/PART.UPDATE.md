@@ -21,14 +21,30 @@
 > These two did not, which is why a block was built in September 2026 citing
 > "the scale is unruled" as its reason for doing nothing.
 
-> ## CONTESTED — STEP 6 CONFLICTS WITH TWO SIBLING CONTRACTS. NOT RULED.
+> ## AMENDED — STEP 6 IS PART.COLLIDE'S, WHOLE. RULED 2026-09-19.
 >
-> Raised 2026-09-19. **Nothing below is amended and no reading is adopted
-> here**; this banner exists so the conflict is read rather than re-derived,
-> and the next person to touch step 6 needs an owner ruling, not an adapter.
+> Raised as CONTESTED 2026-09-19 and **ruled the same day**:
+> `reports/RULING-I4-COLLISION-SPAWN-20260919.md`, owner *"Go with your
+> recommendations on the whole goal run."* This banner replaces the contested
+> one; the paragraphs below are the record of what was wrong.
 >
-> The eight-step order below puts *"6. resolve at most ONE collision response
-> for the tick"* inside this block. Three sentences make that unsatisfiable:
+> **The amendment.** The eight-step order below — which is unchanged as LAW —
+> lists *"6. resolve at most ONE collision response for the tick"*. **That step
+> is APPLIED BY `PART.COLLIDE`, immediately downstream, not consumed here.**
+> This block's output is the integrated velocity and position; PART.COLLIDE
+> resolves at most one contact on it in the same tick and writes the responded
+> velocity, the contact placement and `kPartCollidedThisTick` into the record it
+> hands on. The order is preserved in the pipeline rather than inside one module.
+>
+> **Consequently `col_valid_i`, `col_vx_i`, `col_vy_i` and `col_vz_i` are
+> RETIRED** from `fpga/rtl/particles/zhao_part_update.sv`, together with
+> `collisions_applied_o`, the counter that watched them. They were unreachable by
+> construction and already constant-folded, so removing them changes no behaviour
+> and **reduces** this block's area. PART.COLLIDE's `collision_events_o` is the
+> live successor counter. **Event bit 2 (collision) leaves this block ZERO** and
+> PART.COLLIDE fills it; see `PART.SPAWN.md`'s matching amendment.
+>
+> **Why it was wrong.** Three sentences made the old reading unsatisfiable:
 >
 > * this contract's own **In** lists three inputs — record, species descriptor,
 >   Field sample — and **a resolved collision velocity is not among them**;
@@ -37,18 +53,17 @@
 >   oracles"*;
 > * `PART.COLLIDE.md` **In** says it consumes *"The updated particle from
 >   PART.UPDATE"* and its Notes call it a *leaf* — so it is strictly
->   DOWNSTREAM and has no return edge, while `PART.SPAWN.md` **In** requires
+>   DOWNSTREAM and has no return edge, while `PART.SPAWN.md` **In** required
 >   the four ruled events, **collision among them**, to arrive *"from
 >   PART.UPDATE"*.
 >
-> So this block must author a collision event it cannot observe. The RTL
-> (`fpga/rtl/particles/zhao_part_update.sv`) carries `col_valid_i/col_vx_i/
-> col_vy_i/col_vz_i` as the seam cut to escape that, and it has **no legal
-> producer**; in `zhao_console_core` it is tied to zero, which also leaves
-> `collisions_applied_o` and `spawn_by_event2_o` structurally stuck at zero.
-> The full citation chain, the reason "give PART.COLLIDE a velocity output"
-> double-applies the response, and a recommendation are in entry **I4** of
-> `fpga/rtl/prod/zhao_console_core.sv`'s INCOMPLETE header.
+> So this block had to author a collision event it cannot observe. `col_valid_i`
+> was the seam cut to escape that and it had **no legal producer**; in
+> `zhao_console_core` it was tied to zero, which left `collisions_applied_o` and
+> `spawn_by_event2_o` structurally stuck at zero and spawn-on-collision dead in
+> the console. Driving it from PART.COLLIDE would also have applied the response
+> a SECOND time, because PART.COLLIDE already resolves it end to end and the
+> result reaches the particle through the record.
 
 > Ledger: `design/blocks.yml` · owner ZH-062 · phase 10 · maturity SPECIFIED
 
@@ -163,13 +178,22 @@ with separate oracles.
     3. evaluate the selected force/motion recipe
     4. apply drag
     5. integrate velocity and position
-    6. resolve at most ONE collision response for the tick
+    6. resolve at most ONE collision response for the tick   <- PART.COLLIDE's
     7. evaluate size and colour curves
     8. emit deterministic spawn/death events
 
 Drag after the recipe and before integration; curves after integration; events
 last. Reordering any pair changes the trajectory, so this list is reproduced in
 the oracle and asserted, not left to the implementation to imply.
+
+**AMENDED 2026-09-19 (ruling I4): step 6 is performed by `PART.COLLIDE`, not by
+this block.** The order is law and is unchanged; what changed is which module
+executes that one step. This block emits the integrated velocity and position at
+step 5 and PART.COLLIDE, the next stage, applies the response to them before the
+record reaches PART.STATE's write-back — so the tick's displacement is still the
+pre-collision one and the responded velocity is still what the NEXT tick sees.
+A collision response is never computed here and no port carries one. See the
+banner at the head of this file.
 
 ## Directed tests
 `tests/particles/part_update_directed.cpp`.
