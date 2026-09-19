@@ -108,6 +108,38 @@ double rel_angle_deg(const zc::mat3x4fx& a, const zc::mat3x4fx& b) {
   return std::acos(c) * 180.0 / 3.14159265358979;
 }
 
+// PASS 19 REVIEW: the relative rotation Ra^T Rb as a row-major 3x3, with the
+// columns normalized exactly as rel_angle_deg does.
+struct M3 {
+  double m[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+};
+M3 rel_matrix(const zc::mat3x4fx& a, const zc::mat3x4fx& b) {
+  V3 ca[3], cb[3];
+  for (int j = 0; j < 3; ++j) {
+    ca[j] = col(a, j);
+    cb[j] = col(b, j);
+    const double la = len(ca[j]), lb = len(cb[j]);
+    if (la > 1e-9) ca[j] = ca[j] * (1.0 / la);
+    if (lb > 1e-9) cb[j] = cb[j] * (1.0 / lb);
+  }
+  M3 r;
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j) r.m[3 * i + j] = dot(ca[i], cb[j]);
+  return r;
+}
+// The angle of P^T Q: how far the joint itself turned between two samples,
+// whatever the axis. (|angle(Q)| - |angle(P)| is only a lower bound on this and
+// reads ZERO for a joint sweeping round at constant bend -- e.g. the End's tilt
+// and yaw oscillators in quadrature.)
+double step_angle_deg(const M3& p, const M3& q) {
+  double tr = 0;
+  for (int k = 0; k < 3; ++k)
+    for (int i = 0; i < 3; ++i) tr += p.m[3 * i + k] * q.m[3 * i + k];
+  double c = (tr - 1.0) / 2.0;
+  c = std::max(-1.0, std::min(1.0, c));
+  return std::acos(c) * 180.0 / 3.14159265358979;
+}
+
 bool is_loop_bone(uint8_t b) {
   return (b >= u02::kBJunctionF && b <= u02::kBHingeD) ||
          b == u02::kBRearSocket || b == u02::kBReturnTip ||
@@ -142,6 +174,7 @@ struct Sample {
   double rel = 0, axis = 0, bend = 0, front_bend = 0, sock = 0, arm = 0;
   int bend_ring = 0;
   V3 end, last, c;
+  M3 relm;
 };
 
 struct Motion {
@@ -191,14 +224,19 @@ double angle_series_rate_max(const std::vector<double>& s) {
 //                 Control --fail-line-scale selects the legacy law.
 // The ceilings are regression guards chosen with margin over the looked-at
 // shipping values (P19-IMPLEMENTATION.md); they decide no art value. Shipping:
-// worst rotation 16.5 deg, worst turn ~35 deg, worst joint step 2.41 deg. The
+// worst rotation 16.5 deg, worst turn ~35 deg, worst joint step 2.76 deg. The
 // frame control genuinely violates R1 AND R2 (v18 had both a hairpin and a
 // fast joint): its DECLARED mask is 0x3 and any other mask fails the leg.
-// Raising kRearSocketAmbientGainPm past ~650 trips R2 by design -- move the
-// ceiling consciously with the picture that justifies it.
+// PASS 19 REVIEW: R2 now measures the joint's TRUE angular step (shipping
+// worst 2.76, Hover) and its ceiling moved 4.0 -> 6.0. At 4.0 it sat on the
+// 600 ambient rung (4.07) -- a rung judged by eye -- so the gate was holding an
+// art decision and would have refused the owner a notch more wiggle. 6.0 guards
+// the REGRESSION instead: the version-18 snap (ambient 1000 in the arm frame
+// 6.67; legacy-root frame 7.16) fires, and ambient values the eye may still
+// choose (up to ~850) are left to the eye.
 constexpr double kGateRelMaxDeg = 40.0;
 constexpr double kGateBendMaxDeg = 60.0;
-constexpr double kGateJointStepMaxDeg = 4.0;
+constexpr double kGateJointStepMaxDeg = 6.0;
 constexpr int32_t kGateLineFarRadiusPx = 128;  // Drift's projected radius
 
 struct ClipStats {
@@ -248,6 +286,7 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
         if (cnt[i] > 0) cen[i] = cen[i] * (1.0 / cnt[i]);
       Sample s;
       s.rel = rel_angle_deg(pose[u02::kBHingeD], pose[u02::kBRearSocket]);
+      s.relm = rel_matrix(pose[u02::kBHingeD], pose[u02::kBRearSocket]);
       s.axis = ang_deg(col(pose[u02::kBHingeD], 1), col(pose[u02::kBRearSocket], 1));
       s.sock = rel_angle_deg(R, pose[u02::kBRearSocket]);
       const V3 arm = to_root_dir(R, col(pose[u02::kBHingeD], 1));
@@ -310,7 +349,9 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       st.bend_at = i;
     }
     if (i > 0) {
-      const double dr = std::fabs(s.rel - seq[i - 1].rel);
+      // PASS 19 REVIEW: the joint's true angular step, not the change of its
+      // bend magnitude (see step_angle_deg).
+      const double dr = step_angle_deg(seq[i - 1].relm, s.relm);
       if (dr > st.rel_step) {
         st.rel_step = dr;
         st.rel_step_at = i;
@@ -378,6 +419,52 @@ int line_law_failures(bool verbose) {
   return fails;
 }
 
+// PASS 19 REVIEW: R3's law sweep proves mana_line_r_px is right, but not that
+// any production splat is routed through it. This census runs the production
+// fold + bolt producers (the same mana_fill(3)/mana_lightning msmooth traces)
+// over complete Drift and Hover and requires BOTH populations: flagged LINE
+// splats (so the renderer's scaling has something to act on) and unflagged
+// splats (so motes/bodies/glows kept their size). Control --fail-line-flag
+// strips the flags after production and must fire R3 alone.
+bool g_fail_line_flag = false;
+int line_flag_failures(const zc::CreatureType& T, bool verbose) {
+  int fails = 0;
+  for (int want : {1, 0}) {
+    const zc::Clip* clip = nullptr;
+    for (const zc::Clip& c : T.bank.clips)
+      if (c.slot_id == want) clip = &c;
+    if (!clip) {
+      ++fails;
+      continue;
+    }
+    u02::FoldState state{};
+    std::vector<u02::ManaSplat> splats;
+    size_t n_line = 0, n_other = 0;
+    const int samples = clip->frame_count * 2;
+    for (int pf = 0; pf < samples; ++pf) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+      zc::decode_pose(T, *clip, static_cast<uint16_t>(pf / 2), pose, nullptr,
+                      static_cast<uint8_t>(pf & 1));
+      const u02::FxAnchors anchors = u02::fx_anchors_from_pose(T, pose);
+      splats.clear();
+      int32_t agit = 0;
+      u02::mana_fill(3, static_cast<uint32_t>(pf), clip->slot_id,
+                     clip->frame_count, anchors, state, 1000, splats, &agit);
+      u02::mana_lightning(static_cast<uint32_t>(pf), clip->slot_id,
+                          clip->frame_count, anchors, splats, 1000);
+      for (u02::ManaSplat& ms : splats) {
+        if (g_fail_line_flag) ms.line = false;
+        (ms.line ? n_line : n_other) += 1;
+      }
+    }
+    if (verbose)
+      std::printf("  line census slot %d: %zu line splats, %zu other splats\n",
+                  want, n_line, n_other);
+    if (n_line == 0 || n_other == 0) ++fails;
+  }
+  return fails;
+}
+
 int main(int argc, char** argv) {
   std::vector<int> slots;
   bool csv = false;
@@ -400,6 +487,10 @@ int main(int argc, char** argv) {
       gate = true;
       u02::g_u02_rear_ambient_gain_pm = 3 * u02::kRearSocketAmbientGainPm;
       std::printf("MUTANT: --fail-rear-joint (End ambient rotation x3)\n");
+    } else if (std::strcmp(argv[i], "--fail-line-flag") == 0) {
+      gate = true;
+      g_fail_line_flag = true;
+      std::printf("MUTANT: --fail-line-flag (production line flags stripped)\n");
     } else if (std::strcmp(argv[i], "--fail-line-scale") == 0) {
       gate = true;
       u02::g_u02_mana_line_scale = u02::ManaLineScale::kLegacy;
@@ -487,7 +578,7 @@ int main(int argc, char** argv) {
     mask |= 0x2;
     std::printf("FAIL R2 JOINT: the End joint turns too fast\n");
   }
-  const int lf = line_law_failures(true);
+  const int lf = line_law_failures(true) + line_flag_failures(T, true);
   std::printf("R3 LINE: %d law violations\n", lf);
   if (lf != 0) {
     mask |= 0x4;

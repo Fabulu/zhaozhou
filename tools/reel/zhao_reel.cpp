@@ -8018,6 +8018,37 @@ int main(int argc, char** argv) {
       return 2;
     u02::g_u02_rear_ambient_gain_pm = v;
   }
+  // PASS 19 REVIEW: End swell / End ball authoring ladder (manafold_art.h).
+  {
+    struct EndKnob {
+      const char* name;
+      int lo, hi;
+      int32_t* dst;
+    };
+    const EndKnob knobs[] = {
+        {"ZHAO_U02_END_SWELL_RX_MM", 0, 80, &u02::g_u02_end_swell_rx_mm},
+        {"ZHAO_U02_END_SWELL_RZ_MM", 0, 80, &u02::g_u02_end_swell_rz_mm},
+        {"ZHAO_U02_END_BALL_RX_MM", 0, 80, &u02::g_u02_end_ball_rx_mm},
+        {"ZHAO_U02_END_BALL_RZ_MM", 0, 80, &u02::g_u02_end_ball_rz_mm},
+        {"ZHAO_U02_END_BALL_HALF_MM", 40, 280, &u02::g_u02_end_ball_half_mm},
+        {"ZHAO_U02_END_BALL_AT_MM", 2380, 2700, &u02::g_u02_end_ball_at_mm},
+    };
+    for (const EndKnob& k : knobs)
+      if (const char* e = std::getenv(k.name)) {
+        int v = 0;
+        if (!parse_strict_env_int(k.name, e, k.lo, k.hi, v)) return 2;
+        *k.dst = v;
+      }
+    // The ball must stay inside the long End swell's support (see the
+    // static_assert beside the constants): a rung outside it is refused.
+    if (u02::g_u02_end_ball_at_mm - u02::g_u02_end_ball_half_mm <
+            u02::kKnuckleAtEndMm - u02::kKnuckleSwellHalfMm[4] ||
+        u02::g_u02_end_ball_at_mm + u02::g_u02_end_ball_half_mm >
+            u02::kKnuckleAtEndMm + u02::kKnuckleSwellHalfMm[4]) {
+      std::fprintf(stderr, "ZHAO_U02_END_BALL_AT/HALF: ball leaves the End swell support\n");
+      return 2;
+    }
+  }
   if (const char* e = std::getenv("ZHAO_U02_SWELL_PM")) {
     int v = 0;
     if (!parse_strict_env_int("ZHAO_U02_SWELL_PM", e, 0, 1000, v))

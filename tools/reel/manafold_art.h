@@ -857,7 +857,8 @@ inline int32_t g_u02_rear_socket_follow_pm = kRearSocketArmFollowPm;
 // Pirouette's press-snap keys 22-24, Rest; native and 3x rear crops). At 1000 a
 // knee flicks at the body entry for 2-4 frames on every knead press; 600 still
 // flicked; 300 read nearly rigid. 400 keeps a gentle, visible bend -- "a bit
-// wiggly" -- with the snap gone (worst End joint step 5.84 -> 2.41 deg/sample).
+// wiggly" -- with the snap gone (worst End joint step 5.84 -> 2.41 deg/sample;
+// the review's true-step metric reads 6.67 -> 2.76).
 // Values above 1000 exist only for the rear gate's positive control.
 constexpr int32_t kRearSocketAmbientGainPm = 400;
 inline int32_t g_u02_rear_ambient_gain_pm = kRearSocketAmbientGainPm;
@@ -976,6 +977,32 @@ constexpr int32_t kKnuckleSwellCRxMm = 24, kKnuckleSwellCRzMm = 31;
 constexpr int32_t kKnuckleSwellEndLegacyRxMm = 50,
                   kKnuckleSwellEndLegacyRzMm = 62;
 constexpr int32_t kKnuckleSwellEndRxMm = 20, kKnuckleSwellEndRzMm = 25;
+// PASS 19 REVIEW (Direction 19 item 3: every ball "still bigger than the
+// antennae parts"). Until pass 19 the End read as a ball because the stub stood
+// out of the body; with the End carrier in the arm's frame the stub is gone and
+// the long low swell above is half buried, so the End read only as a faint
+// flare at the waterline. The END BALL is a second, SHORTER bump combined by
+// MAX with the long swell, centred just proud of the body surface (~2690 mm).
+// It lives entirely inside the long swell's support, so the swell-support
+// stations, the rear span gradient and every skin weight are unchanged: it is
+// mesh profile only. Legacy swell mode ignores it (exact version-17 family), and
+// so does ZHAO_U02_REAR_SOCKET_FRAME=legacy-root (the stub it replaces is back),
+// which keeps that control byte-exact version 18.
+// All four values are chosen by eye (P19-REVIEW-QA.md); the env knobs
+// ZHAO_U02_END_SWELL_RX_MM/RZ_MM and ZHAO_U02_END_BALL_{AT,HALF,RX,RZ}_MM exist
+// for the authoring ladder.
+constexpr int32_t kKnuckleEndBallAtMm = 2560;
+constexpr int32_t kKnuckleEndBallHalfMm = 150;
+constexpr int32_t kKnuckleEndBallRxMm = 30, kKnuckleEndBallRzMm = 36;
+static_assert(kKnuckleEndBallAtMm - kKnuckleEndBallHalfMm >=
+                  kKnuckleAtEndMm - kKnuckleSwellHalfMm[4],
+              "the End ball must stay inside the End swell's support");
+inline int32_t g_u02_end_swell_rx_mm = kKnuckleSwellEndRxMm;
+inline int32_t g_u02_end_swell_rz_mm = kKnuckleSwellEndRzMm;
+inline int32_t g_u02_end_ball_at_mm = kKnuckleEndBallAtMm;
+inline int32_t g_u02_end_ball_half_mm = kKnuckleEndBallHalfMm;
+inline int32_t g_u02_end_ball_rx_mm = kKnuckleEndBallRxMm;
+inline int32_t g_u02_end_ball_rz_mm = kKnuckleEndBallRzMm;
 inline bool g_u02_swell_legacy = false;
 inline bool g_u02_terminal_cap_control = false;
 inline bool g_u02_front_flex_mute = false;

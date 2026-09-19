@@ -203,9 +203,17 @@ inline zc::RingPart make_loop() {
           legacy_swell ? kKnuckleSwellCLegacyRzMm : kKnuckleSwellCRzMm,
           sw_x, sw_z);
     swell(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4],
-          legacy_swell ? kKnuckleSwellEndLegacyRxMm : kKnuckleSwellEndRxMm,
-          legacy_swell ? kKnuckleSwellEndLegacyRzMm : kKnuckleSwellEndRzMm,
+          legacy_swell ? kKnuckleSwellEndLegacyRxMm : g_u02_end_swell_rx_mm,
+          legacy_swell ? kKnuckleSwellEndLegacyRzMm : g_u02_end_swell_rz_mm,
           sw_x, sw_z);
+    // PASS 19 REVIEW: the End BALL (manafold_art.h), MAX-combined, mesh only.
+    // It replaces the read the upright stub used to give, so it belongs to the
+    // ARM frame: under legacy-root the stub is back and the ball stands down,
+    // which keeps that control exactly version 18.
+    if (!legacy_swell && g_u02_rear_socket_frame == RearSocketFrame::kArm &&
+        (g_u02_end_ball_rx_mm > 0 || g_u02_end_ball_rz_mm > 0))
+      swell(g_u02_end_ball_at_mm, g_u02_end_ball_half_mm, g_u02_end_ball_rx_mm,
+            g_u02_end_ball_rz_mm, sw_x, sw_z);
     const int32_t profile_rx_mm = taper(kLoopBladeRxMm, s) + sw_x;
     const int32_t profile_rz_mm = taper(kLoopBladeRzMm, s) + sw_z;
     // VERSION 18: the authored taper remains complete through its 42/26 final
