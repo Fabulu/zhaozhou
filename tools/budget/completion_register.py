@@ -122,6 +122,22 @@ def console_closure() -> set[str]:
         # between the target name and its entries ends the scan immediately and
         # the count reads 0 -- which it did on the first run, and a closure of
         # zero would have looked like "nothing is composed" rather than a bug.
+        # BOUND THE SCAN AT THE NEXT TARGET.
+        #
+        # The original stopped only on an unindented non-`-` key. A fit target's
+        # header is `- top: ...`, which STARTS WITH `-`, so the scan ran straight
+        # through into the next target and absorbed its sources. Since
+        # `zhao_console_core` is near the end of the file, every target appended
+        # after it silently joined this closure -- and closure membership is one
+        # of the two tests for "connected".
+        #
+        # That is a free, invisible reduction of the mandatory-gap count, inside
+        # the instrument whose whole purpose is to prevent exactly that. Found by
+        # the SYS.PLL worker, which declined to append a fit target rather than
+        # take the reduction. There WAS a target after it (line 2340), so this
+        # was not hypothetical.
+        if started and re.match(r"\s*-\s*top:", line):
+            break
         if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
             break
     return out
@@ -181,6 +197,26 @@ def closure_paths() -> list[pathlib.Path]:
             out.append(ROOT / s[2:])
             started = True
             continue
+        # same bound as console_closure(); if these two disagree about where the
+        # target ends, one of them is reading another target's sources
+        if started and re.match(r"\s*-\s*top:", line):
+            break
+        # BOUND THE SCAN AT THE NEXT TARGET.
+        #
+        # The original stopped only on an unindented non-`-` key. A fit target's
+        # header is `- top: ...`, which STARTS WITH `-`, so the scan ran straight
+        # through into the next target and absorbed its sources. Since
+        # `zhao_console_core` is near the end of the file, every target appended
+        # after it silently joined this closure -- and closure membership is one
+        # of the two tests for "connected".
+        #
+        # That is a free, invisible reduction of the mandatory-gap count, inside
+        # the instrument whose whole purpose is to prevent exactly that. Found by
+        # the SYS.PLL worker, which declined to append a fit target rather than
+        # take the reduction. There WAS a target after it (line 2340), so this
+        # was not hypothetical.
+        if started and re.match(r"\s*-\s*top:", line):
+            break
         if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
             break
     return out
