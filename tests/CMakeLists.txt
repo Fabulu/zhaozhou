@@ -13333,3 +13333,83 @@ add_test(NAME lint_zhao_part_project
 set_tests_properties(lint_zhao_part_project PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+# ===========================================================================
+# GEOM.LOOM -- the Transform Loom (fpga/rtl/geometry/zhao_geom_loom.sv)
+# ===========================================================================
+# THREE BUILDS OF ONE SOURCE, and each exists to reach something the others
+# cannot:
+#
+#   geom_loom_directed  the shipping parameters (MAX_NODES=1024, MUL_LANES=1).
+#                       Carries the 1,024-deep DRIFT MEASUREMENT the contract
+#                       asks for -- "a NUMBER for a question nobody has asked
+#                       yet" -- and the per-node clock cost the header's
+#                       frame-occupancy arithmetic is built on.
+#
+#   geom_loom_small     MAX_NODES=16 with IDXW still 10. The OVERFLOW refusal
+#                       is UNREACHABLE by legal stimulus at 1024/10 (the index
+#                       is ten bits and the bound is 1024), so this is its
+#                       POSITIVE CONTROL -- a legal parameterisation rather
+#                       than a committed mutant, which is why IDXW is
+#                       deliberately not derived from MAX_NODES.
+#
+#   geom_loom_lanes3    MUL_LANES=3. The knob's other position, held to the
+#                       SAME oracle. A knob whose alternative is never
+#                       exercised is a knob that has silently stopped turning
+#                       (the R4 note above zhao_geom_mat3x4_mul says the same).
+#                       The walk is 12 instead of 37, so the per-node cost
+#                       macro moves with it.
+#
+# The block's closure is its own file plus the two it REUSES rather than
+# reimplements: zhao_geom_mat3x4_mul (the compose and its rounding law) and
+# zhao_field_sin + its generated ROM.
+set(ZHAO_LOOM_SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_loom.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+
+add_executable(test_geom_loom_directed geometry/geom_loom_directed.cpp)
+target_link_libraries(test_geom_loom_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_loom_directed
+  PREFIX Vzhao_geom_loom
+  TOP_MODULE zhao_geom_loom
+  SOURCES ${ZHAO_LOOM_SOURCES})
+add_test(NAME geom_loom_directed COMMAND test_geom_loom_directed)
+set_tests_properties(geom_loom_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME geom_loom_random COMMAND test_geom_loom_directed --random 60)
+set_tests_properties(geom_loom_random PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+add_test(NAME geom_loom_random_nightly COMMAND test_geom_loom_directed --random 600)
+set_tests_properties(geom_loom_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
+
+add_executable(test_geom_loom_small geometry/geom_loom_directed.cpp)
+target_compile_definitions(test_geom_loom_small PRIVATE ZHAO_LOOM_MAX_NODES=16)
+target_link_libraries(test_geom_loom_small PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_loom_small
+  PREFIX Vzhao_geom_loom
+  TOP_MODULE zhao_geom_loom
+  VERILATOR_ARGS -GMAX_NODES=16
+  SOURCES ${ZHAO_LOOM_SOURCES})
+add_test(NAME geom_loom_small COMMAND test_geom_loom_small)
+set_tests_properties(geom_loom_small PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+add_executable(test_geom_loom_lanes3 geometry/geom_loom_directed.cpp)
+target_compile_definitions(test_geom_loom_lanes3 PRIVATE ZHAO_LOOM_NODE_CLOCKS=23)
+target_link_libraries(test_geom_loom_lanes3 PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_loom_lanes3
+  PREFIX Vzhao_geom_loom
+  TOP_MODULE zhao_geom_loom
+  VERILATOR_ARGS -GMUL_LANES=3
+  SOURCES ${ZHAO_LOOM_SOURCES})
+add_test(NAME geom_loom_lanes3 COMMAND test_geom_loom_lanes3)
+set_tests_properties(geom_loom_lanes3 PROPERTIES LABELS "fast;nightly" TIMEOUT 1800)
+
+add_test(NAME lint_zhao_geom_loom
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_loom
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_loom.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
+set_tests_properties(lint_zhao_geom_loom PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
