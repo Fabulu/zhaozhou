@@ -9021,6 +9021,12 @@ module zhao_console_core
   wire [31:0]        tcm_rec_src_id;
   /* verilator lint_off UNUSEDSIGNAL */
   wire [31:0]        tcm_list_bytes_read;
+  // The re-fetched lead of a burst resumed after an abandoned one: the cost of
+  // `zhao_hps_bridge`'s 64-byte alignment against T5's 32-byte record. Sunk
+  // here beside `list_bytes_read_o`, which is sunk for the same reason -- the
+  // block's own directed test owns both numbers
+  // (tests/terrain/terrain_cmd_rtl_directed.cpp, case C).
+  wire [31:0]        tcm_list_refetch;
   wire               tcm_idle;
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -9075,6 +9081,7 @@ module zhao_console_core
     .sets_refused_o   (terr_cmd_sets_refused_o),
     .records_emitted_o(terr_cmd_records_emitted_o),
     .list_bytes_read_o(tcm_list_bytes_read),
+    .list_refetch_bytes_o(tcm_list_refetch),
     .crc_fails_o      (terr_cmd_crc_fails_o),
     .bridge_errs_o    (terr_cmd_bridge_errs_o),
     .idle_o           (tcm_idle)

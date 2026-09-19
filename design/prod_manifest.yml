@@ -463,6 +463,7 @@ excluded:
   # counterpart is differenced against, and `zhao_field_seq`'s leaf fit row
   # (4,494 ALM / 3,725 reg / 5 M10K / 3 DSP at 58.99 MHz) is the only measured
   # FIELD number this repo has.
+  - zhao_mem_share_wr: absent  MEM.SHARE with writers, for the TERRAIN.BUILD socket (core entry I26): built, proved by tests/memory/mem_share_wr_directed.cpp, and NOT in the console until the shell's HPS arbiter keeps CMD.DMA's one-cycle request pulse -- it bills no resources while nothing instantiates it
   - zhao_mem_share2: superseded  the two-requester wrapper over zhao_mem_share_n (R4); since 2026-09-19 both console sites instantiate the N core -- u_geom_mem_adapter at N=3 (MATERIAL.RESOLVE, R20) and the terrain read share -- and the wrapper stays on disk for its directed test
   - zhao_geom_depthquant: superseded  the depth law's one-vertex FSM schedule; the console runs the same law (the _pre/_post leaves) on zhao_geom_depthquant_stream inside zhao_geom_vattr, counted there (owner ruling R31, 2026-09-19); the FSM remains for tb_zhao_shell and its directed test
   - zhao_field_seq: superseded  the v1 sequencer; zhao_field_v3_engine is the composed engine, with the executor and service path under it
