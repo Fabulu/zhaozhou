@@ -3276,7 +3276,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
       }
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
-                      ms.soft);
+                      ms.soft, ms.opacity_pm);
     }
   }
   if (g_exp_contour || g_exp_boil || g_cel_main)
@@ -3805,7 +3805,7 @@ void creature_hook(void* vctx, uint8_t* rgb, int32_t* depth, uint32_t w, uint32_
           s_draw_cache, c.u02_frame, s_mana_ramps, ms.ramp, ms.gain_pm);
       u02::glow_splat(rgb, depth, w, h, s_glow_assets, gf2, pm.s.x >> 8, pm.s.y >> 8,
                       ms.r_px, pm.s.d, ms.depth_test, /*bloom=*/true, ms.opaque,
-                      ms.soft);
+                      ms.soft, ms.opacity_pm);
     }
   }
   // Direction 17: internal ink is painted once before the depth-tested effects.
@@ -7854,6 +7854,19 @@ int main(int argc, char** argv) {
       std::fprintf(stderr,
                    "ZHAO_U02_DEATH_EYE_CONTROL=%s invalid (expected current|legacy)\n",
                    e);
+      return 2;
+    }
+  }
+  if (const char* e = std::getenv("ZHAO_U02_DEATH_EFFECT_CONTROL")) {
+    if (std::strcmp(e, "none") == 0)
+      u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kNone;
+    else if (std::strcmp(e, "hard-cut") == 0)
+      u02::g_u02_fx_continuity_fault =
+          u02::FxContinuityFault::kDeathEffectCutoff;
+    else {
+      std::fprintf(stderr,
+                   "ZHAO_U02_DEATH_EFFECT_CONTROL=%s invalid "
+                   "(expected none|hard-cut)\n", e);
       return 2;
     }
   }

@@ -55,6 +55,7 @@ enum FailureCategory : uint64_t {
   kFailMoteVisibility = 1ull << 19,
   kFailAttribution = 1ull << 20,
   kFailPalette = 1ull << 21,
+  kFailDeathBackingOpacity = 1ull << 22,
 };
 
 // Broad structural bands, authored after native every-frame and exact 4x review
@@ -123,6 +124,12 @@ constexpr double kPaletteEntryJerkMax = 60.0;
 constexpr double kPaletteEnergyStepMax = 80.0;
 constexpr double kPaletteEnergyAccelMax = 60.0;
 constexpr double kPaletteEnergyJerkMax = 60.0;
+// Soft opaque backing opacity is the rendered operand the first final-bank pass
+// exposed. Gain could fall smoothly while full opacity held a black silhouette;
+// these bands therefore gate opacity itself through both death settle tails.
+constexpr double kDeathBackingOpacityStepMaxPm = 80.0;
+constexpr double kDeathBackingOpacityAccelMaxPm = 80.0;
+constexpr double kDeathBackingOpacityJerkMaxPm = 120.0;
 
 void fail(uint64_t category, const char* what) {
   std::printf("  FAIL: %s\n", what);
@@ -1418,6 +1425,64 @@ PaletteMetrics check_boil_palette(const zc::CreatureType& type) {
   return m;
 }
 
+struct DeathBackingMetrics {
+  double step = 0.0, accel = 0.0, jerk = 0.0;
+  int step_slot = -1, step_frame = -1;
+  int clips = 0, repeated_tail_samples = 0;
+};
+
+DeathBackingMetrics check_death_backing_opacity(const zc::CreatureType& type) {
+  DeathBackingMetrics out;
+  for (const zc::Clip& clip : type.bank.clips) {
+    if (clip.slot_id != u02::kDeathSlot && clip.slot_id != u02::kDeathBSlot)
+      continue;
+    ++out.clips;
+    ScalarHistory opacity;
+    u02::FoldState state{};
+    std::vector<u02::ManaSplat> splats;
+    const int frames = static_cast<int>(clip.frame_count) * 2;
+    for (int sample = 0; sample < frames + 3; ++sample) {
+      // A death's site loop is an authored restart. This instrument instead
+      // repeats the last sample so it measures the fade, settle and corpse tail
+      // without misclassifying the intentional playback restart as resurrection.
+      const int pf = sample < frames ? sample : frames - 1;
+      if (sample >= frames) ++out.repeated_tail_samples;
+      const uint16_t key = static_cast<uint16_t>(pf / 2);
+      const uint8_t subframe = static_cast<uint8_t>(pf & 1);
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+      zc::decode_pose(type, clip, key, pose, nullptr, subframe);
+      const u02::FxAnchors anchors = u02::fx_anchors_from_pose(type, pose);
+      u02::FxContinuityTrace trace{};
+      splats.clear();
+      int32_t agit = 0;
+      u02::mana_fill(3, static_cast<uint32_t>(pf), clip.slot_id,
+                     clip.frame_count, anchors, state, 1000, splats, &agit,
+                     &trace);
+      opacity.push(trace.fold_backing_opacity_pm, sample);
+    }
+    std::printf("G8 death backing slot %u opacity step/accel/jerk "
+                "%.2f/%.2f/%.2f pm @f%d\n",
+                clip.slot_id, opacity.max_step, opacity.max_accel,
+                opacity.max_jerk, opacity.max_step_frame);
+    if (opacity.max_step > out.step) {
+      out.step = opacity.max_step;
+      out.step_slot = clip.slot_id;
+      out.step_frame = opacity.max_step_frame;
+    }
+    out.accel = std::max(out.accel, opacity.max_accel);
+    out.jerk = std::max(out.jerk, opacity.max_jerk);
+  }
+  if (out.clips != 2 || out.repeated_tail_samples != 6)
+    fail(kFailCoverage,
+         "death backing opacity did not cover both clips and repeated tails");
+  if (out.step > kDeathBackingOpacityStepMaxPm ||
+      out.accel > kDeathBackingOpacityAccelMaxPm ||
+      out.jerk > kDeathBackingOpacityJerkMaxPm)
+    fail(kFailDeathBackingOpacity,
+         "a death's soft opaque lightning backing cuts off instead of fading");
+  return out;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1452,6 +1517,8 @@ int main(int argc, char** argv) {
       u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kPaletteRawClock;
     else if (std::strcmp(argv[i], "--fail-palette-hard-switch") == 0)
       u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kPaletteHardSwitch;
+    else if (std::strcmp(argv[i], "--fail-death-effect-cutoff") == 0)
+      u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kDeathEffectCutoff;
     else if (std::strcmp(argv[i], "--boil-cycles") == 0 && i + 1 < argc) {
       const char* text = argv[++i];
       if (text[0] < '1' || text[0] > '3' || text[1] != '\0') return 2;
@@ -1472,7 +1539,8 @@ int main(int argc, char** argv) {
                    "--fail-morph-reverse|--fail-brightness-seam|"
                    "--fail-stamp-count|--fail-final-dwell|"
                    "--fail-mote-visibility|--fail-palette-raw-clock|"
-                   "--fail-palette-hard-switch|--boil-cycles 1|2|3|"
+                   "--fail-palette-hard-switch|--fail-death-effect-cutoff|"
+                   "--boil-cycles 1|2|3|"
                    "--star-heart-shift N]\n",
                    argv[0]);
       return 2;
@@ -1493,6 +1561,8 @@ int main(int argc, char** argv) {
   const LabMetrics lab_metrics = check_lab_continuity(type);
   check_shipping_mana_bodies(type);
   const PaletteMetrics palette_metrics = check_boil_palette(type);
+  const DeathBackingMetrics death_backing_metrics =
+      check_death_backing_opacity(type);
 
   ClipMetrics worst{};
   int blackouts = 0, roles = 0, counts = 0, chains = 0, reversals = 0;
@@ -1887,6 +1957,14 @@ int main(int argc, char** argv) {
           palette_metrics.energy_step > kPaletteEnergyStepMax &&
           palette_metrics.energy_accel > kPaletteEnergyAccelMax &&
           palette_metrics.energy_jerk > kPaletteEnergyJerkMax;
+      break;
+    case u02::FxContinuityFault::kDeathEffectCutoff:
+      fault_name = "death-effect-cutoff";
+      expected_categories = allowed_categories = kFailDeathBackingOpacity;
+      fault_caught =
+          death_backing_metrics.step > kDeathBackingOpacityStepMaxPm &&
+          death_backing_metrics.accel > kDeathBackingOpacityAccelMaxPm &&
+          death_backing_metrics.jerk > kDeathBackingOpacityJerkMaxPm;
       break;
   }
   if (u02::g_u02_fx_continuity_fault != u02::FxContinuityFault::kNone) {

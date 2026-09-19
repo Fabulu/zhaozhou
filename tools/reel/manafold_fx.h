@@ -719,6 +719,7 @@ enum class FxContinuityFault : uint8_t {
   kMoteVisibilityPop,
   kPaletteRawClock,
   kPaletteHardSwitch,
+  kDeathEffectCutoff,
 };
 inline FxContinuityFault g_u02_fx_continuity_fault = FxContinuityFault::kNone;
 
@@ -734,6 +735,7 @@ struct FxContinuityTrace {
   int32_t fold_station[kFxTraceStencilPts][3]{};
   int32_t coherence_pm = 0;
   int32_t edge_lit_pm = 0;
+  int32_t fold_backing_opacity_pm = 0;
   int32_t edge_energy_pm = 0;
   int32_t edge_presence_pm[kFxTraceStencilPts]{};
   int32_t edge_layer_gain_pm[kFxTraceStencilPts][3]{};  // backing, shimmer, core
@@ -1822,14 +1824,21 @@ struct ManaSplat {
   // core actually wants: saturated where it dominates, feathered at the rim,
   // and incapable of stacking to white because it is a blend, not an add.
   bool soft;
+  // Opacity is independent of palette gain for soft opaque splats. Scaling a
+  // dark ramp toward black does not fade it: without this operand, Death Drop's
+  // navy backing stayed a large opaque black mass until it vanished outright.
+  int16_t opacity_pm;
 };
 
 inline void mana_push(std::vector<ManaSplat>& out, int32_t x, int32_t y, int32_t z,
                       int32_t r_px, uint8_t ramp, int gain_pm, bool depth_test,
-                      bool pre, bool opaque = false, bool soft = false) {
-  if (gain_pm <= 0 || r_px <= 0) return;
+                      bool pre, bool opaque = false, bool soft = false,
+                      int opacity_pm = 1000) {
+  if (gain_pm <= 0 || r_px <= 0 || opacity_pm <= 0) return;
+  if (opacity_pm > 1000) opacity_pm = 1000;
   out.push_back(ManaSplat{x, y, z, r_px, ramp, static_cast<int16_t>(gain_pm),
-                          depth_test, opaque, pre, soft});
+                          depth_test, opaque, pre, soft,
+                          static_cast<int16_t>(opacity_pm)});
 }
 
 inline bool lightning_depth_test() {
@@ -1847,9 +1856,10 @@ inline bool lightning_depth_test() {
 // same binary and must make the occlusion gate/render turn red.
 inline void lightning_push(std::vector<ManaSplat>& out, int32_t x, int32_t y,
                            int32_t z, int32_t r_px, uint8_t ramp, int gain_pm,
-                           bool pre, bool opaque = false, bool soft = false) {
+                           bool pre, bool opaque = false, bool soft = false,
+                           int opacity_pm = 1000) {
   mana_push(out, x, y, z, r_px, ramp, gain_pm, lightning_depth_test(), pre,
-            opaque, soft);
+            opaque, soft, opacity_pm);
 }
 
 inline int32_t fx_sin16(uint32_t ph) {
@@ -2730,6 +2740,24 @@ inline int g_u02_fold_freeze = 0;
 // not pop from "trails" to "no trails". 1000 everywhere else.
 inline int32_t g_u02_fold_release_pm = 1000;
 
+inline int32_t legacy_fold_life_pm(uint32_t slot, int keys, int32_t kq4) {
+  const int f = kq4 / 16;
+  if (slot == kDeathSlot) {
+    if (f <= kDeathFailKey) return 1000;
+    const DeathBeats beats = death_beats();
+    if (f >= beats.settle) return 0;
+    const int span = beats.settle - kDeathFailKey;
+    return 1000 - 1000 * (f - kDeathFailKey) / (span > 0 ? span : 1);
+  }
+  if (slot == kDeathBSlot) {
+    const int out = kDeathBLimpKey[2];
+    if (f >= out) return 0;
+    return 1000 - 1000 * f / (out > 0 ? out : 1);
+  }
+  (void)keys;
+  return 1000;
+}
+
 inline int32_t fold_edge_lit_pm(int32_t coherence_pm, int32_t life_pm) {
   if (life_pm <= 0) return 0;
   if (life_pm > 1000) life_pm = 1000;
@@ -2949,10 +2977,22 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   // slot in the bank except the two deaths, so this scales nothing anywhere
   // else; on a death it takes the coherence, the agitation and the mote count
   // down together and then stops the fold outright at the settle key.
-  const int32_t life_pm = fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8);
+  int32_t life_pm = fold_life_pm(slot, keys, static_cast<int32_t>(frame) * 8);
+  if (g_u02_fx_continuity_fault == FxContinuityFault::kDeathEffectCutoff)
+    life_pm = legacy_fold_life_pm(slot, keys,
+                                 static_cast<int32_t>(frame) * 8);
+  // Palette gain and opacity are different physical operands for the soft opaque
+  // navy backing. A near-zero dark gain makes the pigment BLACK, not transparent;
+  // its opacity must follow the death envelope independently. The committed
+  // cutoff fault restores the old full-opacity-until-off behavior.
+  const int32_t backing_opacity_pm =
+      g_u02_fx_continuity_fault == FxContinuityFault::kDeathEffectCutoff
+          ? (life_pm > 0 ? 1000 : 0)
+          : life_pm;
   const int mote_domain_count = continuity_mote_count(frame, kMoteCount);
   if (trace != nullptr) {
     trace->life_pm = life_pm;
+    trace->fold_backing_opacity_pm = backing_opacity_pm;
     trace->fold = ph;
     trace->fold_active = life_pm > 0;
     trace->mote_count = mote_domain_count;
@@ -3297,7 +3337,8 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
               // gripping does not stamp a dark bruise on the sky.
               lightning_push(out, x, y, z, dark_r, kRampStorm,
                              dark_gain * lit / 1000 * edge_pm / 1000, false,
-                             /*opaque=*/true, /*soft=*/true);
+                             /*opaque=*/true, /*soft=*/true,
+                             backing_opacity_pm);
             } else if (pass == 1) {
               // LAYER 2: THE BLUE SHIMMER (D11) -- the layer this creature has
               // never had. ADDITIVE, because it is light and light adds;
@@ -3353,7 +3394,7 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
             lightning_push(out, x, y, z, kFoldEdgeCoreRPx, mana_core_ramp(ramp),
                            kFoldEdgeCoreGainPm * lit / 1000 * edge_pm / 1000,
                            false, /*opaque=*/true,
-                           /*soft=*/true);
+                           /*soft=*/true, backing_opacity_pm);
           }
         }
       }
@@ -3595,11 +3636,12 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
     const uint8_t mramp = (bolt_motes && m < n_shape)
                               ? static_cast<uint8_t>(kRampShimmer)
                               : ramp;
+    const int32_t mote_opacity_pm = backing_opacity_pm;
     mana_push(out, P[0], P[1], P[2], halo, mramp,
               kMoteHaloGainPm * visible_pm / 1000, true, false);
     mana_push(out, P[0], P[1], P[2], halo * kMoteCoreOfHaloPm / 1000,
               mana_core_ramp(mramp), visible_pm,
-              true, false, /*opaque=*/true, /*soft=*/true);
+              true, false, /*opaque=*/true, /*soft=*/true, mote_opacity_pm);
   }
   return agit;
 }
@@ -3891,8 +3933,10 @@ inline void mana_build_ramps(GlowFrame ramps[kRampCount], uint32_t frame,
 inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
                        const GlowAssets& g, const GlowFrame& f, int32_t cx, int32_t cy,
                        int32_t r, int32_t centre_d, bool depth_test = true,
-                       bool bloom = false, bool opaque = false, bool soft = false) {
-  if (r <= 0 || !g.baked) return;
+                       bool bloom = false, bool opaque = false, bool soft = false,
+                       int opacity_pm = 1000) {
+  if (r <= 0 || !g.baked || opacity_pm <= 0) return;
+  if (opacity_pm > 1000) opacity_pm = 1000;
   const zref::star::Sprite8& sp = bloom ? g.bloom : g.sprite;
   const int32_t qx0 = cx - r, qy0 = cy - r;
   int32_t x0 = qx0, y0 = qy0, x1 = cx + r, y1 = cy + r;
@@ -3915,7 +3959,9 @@ inline void glow_splat(uint8_t* rgb, int32_t* depth, uint32_t w, uint32_t h,
         if (soft) {
           // PASS 8: blend by the sprite's own intensity. t runs 1..63 on this
           // bake, so t/63 is the natural alpha and needs no knob.
-          const int a = static_cast<int>(t) * 1000 / 63;
+          // PASS 17: opacity is a separate production operand. A dark ramp at
+          // low gain approaches black; it does not approach transparency.
+          const int a = static_cast<int>(t) * opacity_pm / 63;
           for (int k = 0; k < 3; ++k)
             rgb[ri + k] = static_cast<uint8_t>(
                 (static_cast<int>(rgb[ri + k]) * (1000 - a) +

@@ -3437,29 +3437,35 @@ inline int32_t death_root_at(const DeathBeats& B, const int32_t* apex,
 
 /** ⚠ THE MANA MUST RESPOND — "a dead conduit should not keep folding shapes."
  *
- *  0 = dead, 1000 = alive. Read by manafold_fx.h, which scales the fold's
- *  coherence, its agitation and its mote count by it and cuts the lightning
- *  strand outright below kFoldLightningCutPm. Every other slot returns 1000,
- *  so no existing clip's mana changes by one splat.
+ *  0 = dead, 1000 = alive. Read by manafold_fx.h, which scales coherence,
+ *  agitation, mote visibility, additive gain AND the independent soft-opaque
+ *  alpha exposed by final-bank review. Both deaths evaluate the full Q4
+ *  presentation clock through a quintic C2 envelope; every other slot returns
+ *  1000, so no living clip changes by one splat.
  *
  *  The two deaths gutter DIFFERENTLY, which is half of what makes them two
  *  deaths: the drop keeps folding until the float fails and then loses it
  *  across the bounces; the gutter loses the mana FIRST and the body follows. */
 inline int32_t fold_life_pm(uint32_t slot, int keys, int32_t kq4) {
-  const int f = kq4 / 16;
   if (slot == kDeathSlot) {
-    if (f <= kDeathFailKey) return 1000;
     const DeathBeats B = death_beats();
-    if (f >= B.settle) return 0;  // eternal rest is DARK
-    const int span = B.settle - kDeathFailKey;
-    return 1000 - 1000 * (f - kDeathFailKey) / (span > 0 ? span : 1);
+    const int32_t start_q = kDeathFailKey * 16;
+    const int32_t end_q = B.settle * 16;
+    if (kq4 <= start_q) return 1000;
+    if (kq4 >= end_q) return 0;  // eternal rest is DARK
+    const int32_t t = (kq4 - start_q) * 1000 /
+                      (end_q - start_q > 0 ? end_q - start_q : 1);
+    return 1000 - motion_c2_ease(t);
   }
   if (slot == kDeathBSlot) {
-    // out by the time the third nodule goes limp -- 20 keys before the body
-    // even lets go. The light goes out, THEN the creature falls.
-    const int out = kDeathBLimpKey[2];
-    if (f >= out) return 0;
-    return 1000 - 1000 * f / (out > 0 ? out : 1);
+    // Out by the time the third nodule goes limp -- 20 keys before the body
+    // even lets go. The light goes out, THEN the creature falls. Evaluate the
+    // complete presentation clock through a C2 envelope rather than truncating
+    // key/midpoint pairs onto an integer ramp.
+    const int32_t out_q = kDeathBLimpKey[2] * 16;
+    if (kq4 >= out_q) return 0;
+    const int32_t t = kq4 * 1000 / (out_q > 0 ? out_q : 1);
+    return 1000 - motion_c2_ease(t);
   }
   (void)keys;
   return 1000;
