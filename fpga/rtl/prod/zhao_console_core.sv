@@ -2595,42 +2595,174 @@
 //       SURFACE.STAMP's terrain-deformation brush, live in this file, so wiring
 //       it would put a contact shadow under every crater and scar and none
 //       under a creature. Shape match, wrong source.
-//   SO THE BLOCKER IS NARROWER THAN "nobody emits a caster" AND IS STATED AS
-//   WHAT IT IS: no block emits a RUNG together with a world position, because
-//   the creature rung is unported state inside `zhao_geom_meshfetch`'s LodState
-//   (`zhao_geom_lod`'s own comment says that block "holds one LodState per live
-//   instance"), and NOTHING IN THE TREE EMITS A SHADOW STRENGTH AT ALL.
+//   SO THE BLOCKER IS NARROWER THAN "nobody emits a caster", AND THE VERSION OF
+//   IT THIS FILE CARRIED UNTIL 2026-09-19 WAS ITSELF FALSE. It said: "no block
+//   emits a RUNG together with a world position, because the creature rung is
+//   unported state inside `zhao_geom_meshfetch`'s LodState (`zhao_geom_lod`'s own
+//   comment says that block 'holds one LodState per live instance')."
 //
-//   IT ALSO NEEDS TERRAIN HEIGHT TAPS, a world-(x,z) -> {height, no_ground}
-//   service, and that half of the refusal SURVIVED the same re-search intact,
-//   with one precision correction. Across all of `fpga/rtl` -- every one of the
-//   23 subdirectories, `synth/` and every `probe`-named file included -- ZERO
-//   output ports match a height keyed by a world coordinate, and only THREE
-//   modules emit world x/z at all: `zhao_terrain_place` (`vtx_wx_o`/`vtx_wz_o`),
-//   `zhao_terrain_compcache_front` (`lat_wx_o`/`lat_wz_o`) and this block
-//   itself. Both of the first two are the FORWARD map, lattice index -> world;
-//   NOTHING IN THE TREE PERFORMS THE INVERSE. That is the missing half of a tap
-//   service, and it is a block rather than a wrapper.
+//   THERE IS NO LodState IN `zhao_geom_meshfetch`. The strings `rung`, `lod` and
+//   `LodState` occur exactly ONCE in all 505 lines of that file, in a header
+//   comment at line 18 pointing AT `zhao_geom_lod.sv`. The sentence quoted was
+//   `zhao_geom_lod`'s statement about its INTENDED consumer, and that same file
+//   says two hundred lines later that "the consumer (GEOM.MESHFETCH's descriptor
+//   fetch) is still unbuilt". So the rung is not unported state: NOBODY HOLDS
+//   LADDER STATE AT ALL, and `zhao_geom_lod` is a built, stateless evaluator
+//   waiting for an owner. This is the fifteenth false-absence claim found in this
+//   tree and the first that was false in the ARCHITECTURAL direction -- it named
+//   a block as the holder of state that block has never had, which would have
+//   sent the next reader to add a port to the wrong module.
 //
-//     - THE CORRECTION: this entry used to say the compose cache's `lat_req_i`
-//       "is keyed by LATTICE INDEX and carries no void bit". The first clause is
-//       right and the second is right ONLY of that port. The block DOES answer a
-//       void query -- `cs_req_i`/`cs_ci_i`/`cs_cj_i` -> `cs_substance_o`, where
-//       substance 0 is SOLID -- on a SEPARATE channel keyed by a 5-bit CELL
-//       index, unjoined to the height, and already contended: FORGE.CLIFF is
-//       refused over that very port two paragraphs above. Worth stating exactly,
-//       because "no void bit exists" would send somebody to build one.
-//     - AND THE TAP'S PROTOCOL SHAPE ALREADY EXISTS for a different quantity:
-//       `zhao_texture_aux` is a ready/valid service keyed by `req_wx_i`/
-//       `req_wz_i` ("fx16 world metres") with two no-answer bits. It is the
-//       closest architectural precedent, and it does not resolve world -> patch
-//       either: it makes the CALLER supply the patch envelope. Even the block
-//       shaped like the answer does not contain the missing piece.
+//   THE THREE CASTER FIELDS, EACH TRACED TO WHAT ACTUALLY STOPS IT:
 //
-//   That is the same absence entry I6 already records from the particle side,
-//   which is why `part_ter_*` is a boundary too -- and two independent blocks
-//   now want the one service nobody has written, which is the argument for
-//   building it rather than a reason to refuse again.
+//     * WORLD x/z, RADIUS AND src_id ARE AVAILABLE AND THE JOIN IS PROVABLE.
+//       `zhao_geom_meshfetch` is a STRICT SINGLE-IN-FLIGHT state machine --
+//       S_IDLE -> S_REQ -> S_VERD -> S_FILL -> S_BOUND -> S_CULL -> S_WAIT ->
+//       S_EMIT -- with the instance latched in `inst_q` at accept. So
+//       `cull_c{x,y,z}_o`/`cull_radius_o` at S_CULL and `r_instance_id_o` at
+//       S_EMIT describe the SAME instance by construction, not by an ordering
+//       assumption a workload happens to satisfy. A caster is a FANOUT of those
+//       registered outputs plus that join; it does not participate in the cull
+//       channel and cannot perturb it, which answers the "point-to-point request
+//       channel rather than a stream anyone may tap" objection above.
+//     * STRENGTH HAS NO PRODUCER AND MUST NOT ACQUIRE ONE. It is an ART value.
+//       CLAUDE.md's rule 6 puts every colour and timing value in a named,
+//       editable constant, and a per-rung authored strength IS its correct home.
+//       "Nothing emits a shadow strength" was read as a gap; it is a knob nobody
+//       has written down yet, which is a different and much smaller thing.
+//     * THE RUNG IS THE WHOLE REFUSAL, and it is not a missing block.
+//       `zhao_geom_lod` is BUILT and UNIT_VERIFIED. Its five inputs are the
+//       refusal, and each was searched:
+//         - `proj_radius_q8_i`, a PROJECTED bound radius. The arithmetic is
+//           SETTLED and already CALLED in this console: `zhao_part_project`
+//           transcribes `zref::render::draw_form_marker`'s world branch bit for
+//           bit -- half = |rescale_s32(fx_mul(radius_fx16, d), 8)| with d = 1/w
+//           in Q16.16 -- and its header warns that dividing by `d` instead makes
+//           markers GROW with distance. So what is missing is `1/w` FOR THE
+//           INSTANCE CENTRE, which means a PROJECTOR CLIENT. `zhao_part_project`
+//           is already the time-multiplexer in front of client A, so a third
+//           stream through it is the same question
+//           `reports/OWNER-DOCKET-20260919.md` already asks about a third
+//           projector port. FORGE.SHADOW is a second dependent on that decision
+//           and nobody knew it.
+//         - `thresh_q8_i`, the governor's per-camera pixel-error target.
+//           SEARCHED: `zhao_measure_governor` EXISTS and is UNIT_VERIFIED, is
+//           NOT composed in this file, and emits per-camera SCALES
+//           (`cam0_scale_o`/`cam1_scale_o`, default 16'd256) and no pixel-error
+//           threshold at all. The ledger edge GEOM.MESHFETCH `upstream:
+//           [..., MEASURE.GOVERNOR]` is an INTENTION, not a port that exists.
+//         - `bound_radius_i`, `micro_error_i`, `splat_error_i`, `glint_error_i`:
+//           per-creature-TYPE constants. `zhao_geom_meshfetch`'s `cull_radius_o`
+//           is the only bound-radius-shaped output in `fpga/rtl` and it is the
+//           wrong quantity -- a world-space INSTANCE bound scaled by the
+//           instance matrix, not the bind-pose type radius `zref::lod_raw`
+//           divides by. NO module emits a micro, splat or glint error.
+//
+//   AND THE REASON THAT LAST ONE CANNOT SIMPLY BE BUILT IS A RULING, NOT AN
+//   OMISSION. Those four live in the compiled creature form page,
+//   `spec/creature_rules.md` 5 kind 8 ("LOD ladder refs"), and
+//   `spec/cartridge.md` 202-208 says of kinds 8 and 9: "Byte-exact layouts
+//   freeze with SW.TOOLS.ASSET at Phase-12 entry (creature_rules 9); until then
+//   the packer refuses to emit them (deterministic refusal, never a guessed
+//   layout)." There is no layout to read because the project has ruled that
+//   there must not be one yet. Building a reader for it would be the guessed
+//   layout that sentence exists to forbid.
+//
+//     - AND A CORRECTION TO THE FORGE.PRIM PARAGRAPH ABOVE, which says "the
+//       missing owner is a PAGE READER". That is the right shape for the wrong
+//       layer. RE-SEARCHED: no RTL touches a `.zpak` container, a RESOURCE_PAGES
+//       record, `page_id`, `byte_length` or a `kind` byte -- zero hits on all
+//       four across `fpga/rtl` -- but that is because PARSING THE CARTRIDGE IS
+//       SOFTWARE'S JOB BY RULING. `design/contracts/SW.STREAM.md` 35-56 assigns
+//       it in as many words ("parse ISLAND_TABLE and the sparse page maps ...
+//       stage COMPLETE 21,376-byte pages in HPS DDR ... SW.STREAM stages; the
+//       loader fetches"), and hardware reads already-staged page BODIES:
+//       `zhao_terrain_hdrread`, `zhao_terrain_pageloader` and
+//       `zhao_terrain_writeback` all parse a page-body header per
+//       `spec/terrain_rules.md` 2.1. So "no RTL reads a cartridge page" is true
+//       and would mislead the next reader into building the wrong block. What
+//       FORGE.PRIM actually needs is a forge page KIND with a frozen layout and
+//       a staging path, on the terrain pattern -- not a hardware cartridge
+//       reader.
+//
+//   ITS TERRAIN HEIGHT TAPS ARE NO LONGER A REFUSAL. THE BLOCK IS BUILT.
+//   This entry used to end: "Across all of `fpga/rtl` -- every one of the 23
+//   subdirectories, `synth/` and every `probe`-named file included -- ZERO output
+//   ports match a height keyed by a world coordinate ... NOTHING IN THE TREE
+//   PERFORMS THE INVERSE. That is the missing half of a tap service, and it is a
+//   block rather than a wrapper." It was right, it was the argument for building
+//   rather than refusing again, and `fpga/rtl/terrain/zhao_terrain_heighttap.sv`
+//   is that block, committed 2026-09-19.
+//
+//     - It MIRRORS `zhao_forge_shadow.sv`'s `tap_*` port signal for signal, so
+//       there is no adapter between them.
+//     - The arithmetic is `spec/terrain_rules.md` 4.3 and the directed suite
+//       LINKS `zhao_zref` and differentials against `zref::terrain::column_query`
+//       ITSELF across all four frozen pitches -- 783 checks -- rather than
+//       transcribing the law into a test, which is the duplication CLAUDE.md
+//       records for the terrain shade header.
+//     - NO DIVIDER. `spec/terrain_rules.md` 1.3 froze the pitch set to powers of
+//       two so that world->cell is a shift, and two exact algebraic collapses
+//       spend that ruling: with ud == vd == D the cross-multiplied triangle pick
+//       is `un >= vn`, and `div_rhu(num, den)` becomes one arithmetic shift with
+//       a round-half-up bias. Both are licensed by a runtime check that D is what
+//       the pitch says, never assumed.
+//     - IT DOES NOT DELAY TERRAIN.TESS BY ONE CLOCK. The compose cache's lattice
+//       port has no handshake and its owner cannot be stalled, so the tap does
+//       not arbitrate for it: it sits in front as a pass-through and takes only
+//       cycles the owner did not want. `tap_stall_clocks_o` is what that costs
+//       the tap; the owner pays one 2:1 mux in its address path and nothing else.
+//     - AND IT NEVER LEARNS WHICH PATCH IS STAGED, deliberately. Taking a served
+//       patch index as a port and comparing would be a detector wired to two
+//       operands that move together, since this composer would drive that index
+//       from the same sequencer nets that placed the lattice. The containment
+//       test is instead the reference's own `un` read back through the RAM: a
+//       shift-derived index on one side, TERRAIN.PLACE's stored placement on the
+//       other, and they are clocked by different things.
+//
+//     - THE EARLIER CORRECTION STANDS and is kept: the compose cache's
+//       `lat_req_i` is keyed by LATTICE INDEX and carries no void bit, but the
+//       block DOES answer a void query on a SEPARATE channel -- `cs_req_i`/
+//       `cs_ci_i`/`cs_cj_i` -> `cs_substance_o`, substance 0 is SOLID -- keyed by
+//       a 5-bit CELL index. The tap consumes BOTH channels and joins them, which
+//       is what "unjoined to the height" was asking for.
+//     - AND `zhao_texture_aux` IS STILL THE CLOSEST PRECEDENT and still not the
+//       answer: a ready/valid service keyed by `req_wx_i`/`req_wz_i` with two
+//       no-answer bits, which makes the CALLER supply the patch envelope and so
+//       never resolves world -> patch. The new block does resolve it.
+//
+//   WHY THE TAP IS BUILT AND NOT COMPOSED, which is the honest state and not an
+//   oversight. It has no live consumer yet. FORGE.SHADOW cannot compose until the
+//   rung above is settled. Entry I6's PART.COLLIDE is the other customer and IT
+//   IS BLOCKED ON AN OWNER DECISION NOBODY HAD WRITTEN DOWN -- see the addition
+//   to I6. Composing the tap now would connect nothing at either end, which is
+//   the same test TERRAIN.VISIBLE and GEOM.LOOM fail below. It is carried with a
+//   disposition in `design/console_inventory.yml` and a `not-yet-adopted` row in
+//   `design/prod_manifest.yml` until one of its two customers can take it.
+//
+//   THE NEW FACT FOR ENTRY I6, recorded here because it was found from this side
+//   and I6 is where it must be read. I6 says PART.COLLIDE's normal has a named
+//   owner that does not emit one, and that "wiring height alone and inventing a
+//   normal would be the hidden-adapter failure". Both true. What is new is that
+//   THE NORMAL'S LAW IS NOT MERELY UNIMPLEMENTED, IT IS CONTRADICTED:
+//     * `spec/terrain_rules.md` 4.4: "Normals are derived from the composed
+//       lattice by FINITE DIFFERENCES at tessellation time";
+//     * `design/contracts/TERRAIN.NORMALS.md` 194: "This block emits FACE
+//       normals, not vertex normals ... Averaging adjacent face normals into a
+//       vertex normal is a real technique and is NOT RATIFIED ANYWHERE ...
+//       The vertex-normal question is left open for whoever ratifies it."
+//     * and the formats do not meet either: `zref::terrain::face_normal` is
+//       DELIBERATELY UNNORMALISED Q16.16 ("the ratified quantity is the
+//       unnormalised cross product"), while `zhao_part_collide` declares
+//       `NRM_W=12, NRM_Q=10` -- a UNIT normal. The bridge exists
+//       (`normalize3_approx`, qformats 7.4) but no contract says PART.COLLIDE's
+//       normal is `normalize3_approx(face_normal(...))`.
+//   `zref::terrain::column_query` returns no normal at all -- `ColumnResult` is
+//   {cls, top, bottom}. So a block holding the four corner heights could produce
+//   a normal with one cross product and NO new arithmetic, and it still must not,
+//   because WHICH normal is an unratified question with two written answers that
+//   disagree. That is an owner decision and it belongs on the docket, not in a
+//   composer.
 //
 //   GEOM.LOOM -- REFUSED, and the description this file carried of it was
 //   WRONG on two of three points. It is added to this list 2026-09-19 because
