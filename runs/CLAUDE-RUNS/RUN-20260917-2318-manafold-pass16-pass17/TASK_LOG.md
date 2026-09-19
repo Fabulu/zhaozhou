@@ -1,7 +1,7 @@
 # Task Log: RUN-20260917-2318 - Finish Manafold passes 16 and 17
 
 **Created:** 2026-09-17 23:18 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260917-2318-manafold-pass16-pass17/
 
 ---
@@ -145,6 +145,9 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - The first encode launch failed before completing a subject because this noninteractive shell did not have the installed FFmpeg directory on `PATH`. Prepended the exact FFmpeg 9.0.1 full-build bin and restarted all 28 subjects from the beginning. Final encode RC 0 consumed every declared frame and wrote 28 VP9 4:4:4 WebMs plus 28 posters. The 56 live files total 70,576,645 bytes; fast stream/poster validation reports zero errors and exact hashes are in `PASS17-LIVE-MEDIA-SHA256.txt`.
 - Rewrote the live Manafold card and durable Pass-17 findings/plans to the accepted source, current rear rho, solid contour mist, complete O, continuous carriers/effects/palette/death opacity, final face-readable Trick and 28/28 provenance. The Pass-16 archive group remains immutable.
 - Canonical local publication gate passed with no skips: 2 creatures / 694 render entries assembled; Fall controls-only/non-loop and Hover autoplay+loop; exact `noindex, nofollow`; freshness 28/28 with zero stale/absent; full decode 1,376/1,376; RC 0. After correcting the remaining site-wide Pass-16 summary sentence, regenerated the page and repeated the full no-skip gate with the installed FFmpeg directory explicitly on `PATH`; all 1,376 files decoded again. Final local index is 415,608 bytes, SHA-256 `431c2643682bf52012862b050e9a05d3e73aab5040254d3d0eeeb910f148db96`. `PASS17-MEDIA-CLOSURE.md` records the packet; no deployment occurred.
+- Committed/pushed the complete Pass-17 Upheaval findings/card/media packet as `e772dc9` and Zhaozhou media-closure receipts as `73dc9417`; both feature branches and both local/remote mains were fast-forwarded exactly to those commits before publication.
+- Published the finished pass with `deploy.ps1 -Project upheaval -Branch main -SkipDecodeSweep`; freshness remained 28/28 and Wrangler returned `https://e4b4a928.upheaval.pages.dev`. The skip is bounded by the immediately preceding unchanged-byte no-skip 1,376/1,376 decode.
+- Cache-bypassed production verification passed on both the unique deployment and `https://upheaval.pages.dev`: post-deploy index plus all 56 live Pass-17 media files matched SHA-256 and byte length, **57/57 per host**, 70,992,253 bytes per host, zero mismatches. The deployed index is 415,608 bytes / SHA-256 `39696c4ec636b82bbc5dd5ba6de24e5f894eda0668b0e0637629de10bdac51b9`; its only difference from the committed pre-deploy index is the generated footer timestamp. `PASS17-PRODUCTION-VERIFY.md` is the final receipt.
 
 ---
 
@@ -221,7 +224,8 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `PASS17-FINAL-BANK-INTEGRITY.md` (rejected P3 generation), `PASS17-FINAL-BANK-INTEGRITY-V2.md` (rejected yaw-zero Trick generation), and current `PASS17-FINAL-BANK-INTEGRITY-V3.md`; exact v3 hashes, 27-subject byte-equality proof and 28 complete external every-frame review sheets
 - `PASS17-TRICK-FACE-REPAIR.md`, full 400-frame yaw ladder, selected/contact controls and five curated native/2×/4× plates; `PASS17-FINAL2-BATCH-07.md` is the binding yaw-zero blocker evidence
 - `PASS17-FINAL3-TRICK-REVIEW.md` and three current-bank native/2×/4× phase/transition plates; final cumulative verdict 28/28
-- `pass17-final3-encode.log`, `PASS17-LIVE-MEDIA-SHA256.txt`, `pass17-media-gates.log` and `PASS17-MEDIA-CLOSURE.md`; exact local encode/freshness/playback/noindex/1,376-file decode closure
+- `pass17-final3-encode.log`, `PASS17-LIVE-MEDIA-SHA256.txt`, both media-gate logs and `PASS17-MEDIA-CLOSURE.md`; exact local encode/freshness/playback/noindex/1,376-file decode closure
+- `PASS17-PRODUCTION-VERIFY.md` and `pass17-production-verify.log`; cache-bypassed 57/57 exact-byte verification on the unique deployment and production alias
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---
@@ -242,7 +246,4 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 ## Next Steps
 
-1. Commit/push the exact Pass-17 media/findings/card packet in Upheaval and the media-closure receipts in Zhaozhou.
-2. Fast-forward both mains.
-3. Publish with `Upheaval/website/deploy.ps1 -Project upheaval -Branch main`.
-4. Verify the unique deployment and production alias index plus every live Pass-17 media byte, then commit/push deployment records.
+None. Manafold Pass 17 is committed, pushed, integrated to both mains, published and production-byte verified. The coordinator only needs to commit/push these final deployment-verification records and fast-forward mains to that receipt commit.
