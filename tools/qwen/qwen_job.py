@@ -53,10 +53,13 @@ from pathlib import Path
 CONTEXT_TOKENS = 112_000
 PROMPT_TOKEN_CEILING = 60_000
 CHARS_PER_TOKEN = 3.2
-DEFAULT_MAX_TOKENS = 12_000   # reasoning + answer; 1.5k truncated, 6k came back empty
-# Broker reasoning_effort: none/low/medium/xhigh. Unbounded review jobs at the
-# default effort spent 16k tokens thinking and answered nothing (Q002).
-DEFAULT_EFFORT = "medium"
+# Owner, 2026-09-19: the local Qwen is meant to run at its HIGHEST reasoning
+# setting; quality drops fast below it. Empty/truncated answers are a BUDGET
+# problem, never a reason to lower effort. So: effort xhigh, and max_tokens is
+# sized to whatever the window leaves after the prompt (auto), minus a margin.
+DEFAULT_EFFORT = "xhigh"
+DEFAULT_MAX_TOKENS = "auto"
+WINDOW_MARGIN_TOKENS = 4_000
 
 PREAMBLE = """You are a careful senior engineer doing ONE bounded chunk of a larger task.
 Rules:
@@ -64,7 +67,7 @@ Rules:
 - Cite exact file:line for every claim about code.
 - Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
 - Do not inflate severity. Say "none found" when that is the truth.
-- Keep private reasoning brief; spend tokens on the written answer.
+- Reason as thoroughly as you need; then write the answer in full.
 Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
 Finish with this exact section, max 400 words, for whoever continues after you:
 ## CONTINUATION
@@ -212,7 +215,9 @@ def cmd_run(job_path: Path, dry: bool) -> None:
     job = parse_job(job_path)
     prompt, receipts = assemble(job)
     est = int(len(prompt) / CHARS_PER_TOKEN)
-    max_tokens = int(job["max_tokens"] or DEFAULT_MAX_TOKENS)
+    mt = job["max_tokens"] or DEFAULT_MAX_TOKENS
+    room = CONTEXT_TOKENS - est - WINDOW_MARGIN_TOKENS
+    max_tokens = room if str(mt).strip() == "auto" else min(int(mt), room)
     print(f"{job['id']}: prompt {len(prompt)} chars ~{est} tokens; max_tokens {max_tokens}; "
           f"window {CONTEXT_TOKENS}")
     for r in receipts:
@@ -250,7 +255,7 @@ def cmd_run(job_path: Path, dry: bool) -> None:
                   f"| {job['id']} | {kind} | {job['title']} | {est} | "
                   f"{reasoning}/{usage.get('completion_tokens')} | {secs:.0f} | {status} | pending |")
     if status in ("EMPTY", "TRUNCATED"):
-        print("  -> split the chunk (fewer questions / narrower inputs) or lower effort; do not just raise max_tokens")
+        print("  -> the window ran out: split the chunk (narrower inputs / fewer questions). NEVER lower effort (owner).")
     print(f"{job['id']}: {status}; {usage.get('completion_tokens')} completion tokens "
           f"({reasoning} reasoning) in {secs:.0f}s -> {out}")
 

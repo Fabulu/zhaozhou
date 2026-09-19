@@ -29,13 +29,15 @@ One Qwen job at a time (two starve each other on the GPU).
    The ledger is the calibration record: what Qwen gets right, what it misses,
    and whether the Qwen reviewer caught it.
 
-## Budgets learned (2026-09-19)
+## Budgets (owner-corrected 2026-09-19)
 
-- 1,500 max_tokens truncated a short answer; 6,000 came back **empty** (the
-  reasoning ate it). A six-question design job used 9.6k reasoning tokens and
-  truncated at 14k. Default is 12k; design jobs 16k+; fewer questions beats
-  more tokens.
-- ~4.6k-token prompts answer in ~2–3 minutes.
+- **Effort is always `xhigh`.** The owner: quality deteriorates rapidly below
+  it. Never lower effort to get an answer out.
+- `max_tokens: auto` (default) gives the model everything the ~112k window
+  leaves after the prompt. An EMPTY or TRUNCATED answer means the window ran
+  out: split the input or ask fewer questions.
+- Early jobs Q003-Q013 ran at medium/low by mistake; their verdicts understate
+  Qwen at its intended setting.
 
 ## Files
 
