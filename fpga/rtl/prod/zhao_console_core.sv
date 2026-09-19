@@ -2975,9 +2975,15 @@
 //   capability is already PRESENT -- client A of `u_proj_subsystem` is
 //   `zhao_geom_project`'s port shape, vertex for vertex, minus the
 //   accepted-vertex counter -- and the remaining work is an accounting edit
-//   with a named precondition rather than a composition. The register goes
-//   on counting `zhao_geom_project` as unconnected until then, which is
-//   correct and is a cheaper wrong answer than a second projector.
+//   with a named precondition rather than a composition.
+//
+//   RESOLVED IN THE REGISTER 2026-09-19 BY OWNER RULING R3
+//   (`reports/OWNER-RULINGS-20260919-EVENING.md`: "Keep the time-multiplex.
+//   No third port in v1."). GEOM.PROJECT now resolves to `zhao_proj_subsystem`
+//   in `completion_register.py`'s `_ALIAS`, with four witnesses beside it, and
+//   `zhao_geom_project` carries `superseded_by: zhao_proj_subsystem` in
+//   `design/console_inventory.yml`. The CENSUS edit above is untouched: it is
+//   a different question (what the fit prices) with its own precondition.
 //
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- STILL NOT CONNECTED, FOR THREE NEW REASONS

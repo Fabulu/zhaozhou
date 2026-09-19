@@ -3645,6 +3645,13 @@ blocks:
       feature" is gone from the SOURCE; it is NOT gone from the silicon,
       because two instances hold two sets of multipliers. See the docket.
 
+      OWNER RULING R3 (2026-09-19, reports/OWNER-RULINGS-20260919-EVENING.md):
+      keep the time-multiplex, no third projector port. The capability is
+      therefore served by the ONE shared core as client A of
+      zhao_proj_subsystem, composed in zhao_console_core; this shell is
+      superseded (design/console_inventory.yml) and the completion register
+      resolves GEOM.PROJECT to zhao_proj_subsystem.
+
   - id: GEOM.CLIP
     name: Clip and cull
     kind: rtl

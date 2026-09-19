@@ -437,6 +437,27 @@ _ALIAS: dict[str, str | None] = {
     # NOT match v1's {px, py} lookup at all. `zhao_prod_top` instantiates v2.
     "TERRAIN.RESIDENCY": "zhao_terrain_residency_v2",
     "GEOM.POSE":         "zhao_geom_pose_decode",
+    # GEOM.PROJECT IS THE SHARED SERVICE'S CLIENT A, BY OWNER RULING. Resolved
+    # 2026-09-19 (geom packet). THIS MAKES THE NUMBER SMALLER, so it carries
+    # four witnesses, and the first is a ruling rather than an argument:
+    #   1. reports/OWNER-RULINGS-20260919-EVENING.md R3 (owner, explicit): "Keep
+    #      the time-multiplex. No third port in v1." -- geometry (and particles
+    #      and FORGE.SHADOW) are projected through `zhao_proj_subsystem` client A.
+    #      Composing `zhao_geom_project` as well would be a SECOND
+    #      `zhao_project_core` (~6,199 ALM / 33 DSP) doing arithmetic the console
+    #      already performs, which the ruling forbids.
+    #   2. `zhao_geom_project.sv`'s own header: "THIS BLOCK IS NOW A THIN SHELL"
+    #      around `zhao_project_core` -- "a ready/valid handshake, the accepted-
+    #      vertex counter, and nothing else".
+    #   3. design/blocks.yml GEOM.PROJECT notes: "MERGED 2026-08-24 ... a thin
+    #      shell around fpga/rtl/common/zhao_project_core.sv".
+    #   4. zhao_console_core.sv: `u_proj_subsystem` client A is driven by
+    #      GEOM.GROUP_SEQ (through PART.PROJECT) and its results land in
+    #      `u_geom_proj_lane` -- real producer, real core, real consumer.
+    # The CENSUS question (prod_manifest still prices the shell separately) is a
+    # different question with its own named precondition -- the composed fit --
+    # and is deliberately not touched here.
+    "GEOM.PROJECT":      "zhao_proj_subsystem",
     # ---- THE TEXTURE CLUSTER, hand-resolved 2026-09-19 ---------------------
     #
     # SIX capabilities resolved by the naming convention to SIX SUPERSEDED
