@@ -136,6 +136,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 - Exact-bank visual batch 02 correctly blocked the `3390F2...` generation: Death Drop's traced life/gain reached a small value while the untraced soft-opaque alpha stayed full, leaving a black folded-mana mass through f0233 and removing it at f0234.
 - Focused repair separates opacity from palette gain, evaluates both death-life envelopes in Q4 with C2 easing, and traces the exact production backing alpha. Repaired Death Drop/Death Gutter complete sheets pass; normal `msmooth` is RC 0, all 16 controls are attributed RC 1, and the exact old 450-frame output is the positive control. The renderer changed, so all 28 subjects must be rerendered before visual review resumes.
+- P3 source/evidence is pushed as Zhaozhou `bd6135a4` / `59c5fc0a`. A fresh renderer (`6FD6147B43056E823F0487F9DFBB40BA`, SHA-256 `E51F130B...`) produced the sole current bank at `pass17-final2-reel-28`: 28 subjects, 11,592 validated frames, bank-manifest SHA-256 `7dbc84e2eb4bcc1263d11209709d862b822d77aeb60875bedbdcc321a34427e1`. Exact old/new comparison proves 26 subjects (10,552 frames) byte-identical and only Death Drop/Gutter changed; 28/28 complete current sheets live at `pass17-final2-sheets`. Batch 01 transfers only through equality, both deaths require fresh review, and batches 03–07 remain fresh isolated reviews.
 
 ---
 
@@ -174,6 +175,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 | 2026-09-19 | GPT fork final batch 01 | Review every exact frame of Blown, Channel, Crackle and Curious | Complete — 4/4 pass | `PASS17-FINAL-BATCH-01.md` |
 | 2026-09-19 | GPT fork final batch 02 | Review every exact frame of Damage, both deaths and Drift | Correctly BLOCKED — 3/4 pass; Death Drop soft-opaque mass cuts off at f0234 | `PASS17-FINAL-BATCH-02.md` |
 | 2026-09-19 | GPT fork Death Drop effect | Repair/gate the missing rendered-opacity operand and review both complete deaths | Complete focused repair — C2 fade green; exact legacy control attributed; full-bank rerender required | `PASS17-DEATH-DROP-EFFECT-REPAIR.md` |
+| 2026-09-19 | GPT fork exact final bank v2 | Clean-build repaired renderer; rerender/validate exact bank; prove old/new scope; regenerate sheets | Complete — 28/11,592 green, 26 subjects exact, only both deaths changed | `PASS17-FINAL-BANK-INTEGRITY-V2.md` |
 
 ---
 
@@ -203,7 +205,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - `PASS17-TRICK-AXIS-SELECTION.md`, `PASS17-TAUNT3-PUNCHLINE-IMPLEMENTATION.md`, complete candidate sheets, selected every-frame sheets and native/4× mute/witness plates
 - `PASS17-BOIL-PALETTE-CONTINUITY.md`, selected/rejected 600-frame sheets, native cycle ladder and exact 4× seam/control plates
 - final `PASS17-FINAL-TARGETED-INTEGRATION.md`, seven 24,308-frame review masters and exact native/2×/4× Trick/Taunt III/eye/seam/outline witnesses
-- `PASS17-FINAL-BANK-INTEGRITY.md`, exact 28-subject/11,592-frame hashes and 28 complete external every-frame review sheets
+- `PASS17-FINAL-BANK-INTEGRITY.md` (rejected P3 generation) and current `PASS17-FINAL-BANK-INTEGRITY-V2.md`; exact v2 hashes, 26-subject byte-equality proof and 28 complete external every-frame review sheets
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---
@@ -224,7 +226,6 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 ## Next Steps
 
-1. Independently review the four-file P3 source/gate repair, then commit/push its source and curated focused evidence.
-2. Clean-build one new combined renderer; rerun the complete `mspan` 31-control and `msmooth` 16-control matrix plus protected gates.
-3. Rerender the exact canonical 28-subject bank from that one binary and verify its new integrity manifest; the `3390F2...` / `560c1237...` generation is historical.
-4. Resume seven isolated four-subject visual-review batches from the new exact sheets. If and only if all 28 pass, encode, run freshness/playback/noindex/full decode, update findings/card, integrate, publish and verify every production byte.
+1. Transfer batch 01 and Damage/Drift only through the committed 26-subject byte-equality receipt; freshly review every repaired frame of Death Drop and Death Gutter.
+2. Run fresh isolated every-frame batches 03–07 against `pass17-final2-sheets`.
+3. If and only if the current v2 bank reaches 28/28, encode those exact frames, run freshness/playback/noindex/full decode, update findings/card, integrate both mains, publish and verify every production byte.
