@@ -67,22 +67,27 @@
 // RTL and fails if it moves; these figures are the measurement, not a
 // prediction:
 //
-//   accept beat                                          1
-//   decode window D0..D3 (one shared sin walked twice,
-//     parent-store read hidden underneath it)            4
-//   compose issue + zhao_geom_mat3x4_mul walk            1 + WALK
-//   store write / counters                               1
-//   emit walk (order RAM -> store RAM -> output reg)      3
-//                                                      -----
-//   MUL_LANES = 1 (WALK = 37,  3 DSP)                   47
-//   MUL_LANES = 3 (WALK = 12,  9 DSP)                   22
+//   accept beat, decode window D0..D3 (one shared sin walked twice, with the
+//   parent-store read hidden underneath it), compose issue plus the
+//   zhao_geom_mat3x4_mul walk, the store write, and the three-stage emit walk
+//   (order RAM -> store RAM -> output register):
+//
+//   MUL_LANES = 1 (WALK = 37,  3 DSP)                   48 clocks per node
+//   MUL_LANES = 3 (WALK = 12,  9 DSP)                   23 clocks per node
+//
+// THOSE TWO NUMBERS ARE MEASURED, NOT COUNTED OFF THE STATE LIST. Counting the
+// states gives 47 and 22; the block delivers 48 and 23, and the one clock is
+// the multiplier's own accept edge. The draft of this header carried the
+// counted numbers and the test caught them, which is the only reason they are
+// right -- a throughput figure derived from a comment about a design is a
+// claim about the comment.
 //
 // Against the contract's own content tier -- 256 creatures at ~28 bones plus
 // attachments, ~9,000 nodes -- and a 1,333,333-clock frame:
 //
 //   one-per-clock (the declared target)   9,000 clocks     0.7 % of a frame
-//   MUL_LANES = 1                       423,000 clocks    31.7 %
-//   MUL_LANES = 3                       198,000 clocks    14.9 %
+//   MUL_LANES = 1                       432,000 clocks    32.4 %
+//   MUL_LANES = 3                       207,000 clocks    15.5 %
 //
 // THE DEFAULT IS MUL_LANES = 1, and the reason is the DSP budget, not laziness.
 // `reports/BUDGET_HEATMAP.md` has the top-level at 185 DSP against a 112-DSP
@@ -93,7 +98,7 @@
 // multiplier that cannot get a DSP is built in logic. Six DSPs is therefore
 // about 810 ALM against a block whose whole ALM ceiling is 1,500.
 //
-// 31.7 % is a third of a frame for ONE STAGE OF A PIPELINE, not a third of the
+// 32.4 % is a third of a frame for ONE STAGE OF A PIPELINE, not a third of the
 // frame time -- the geometry stages run concurrently with raster and texture,
 // and nothing here is the slowest of them. If a `FIELD.SEQ.FORMATION` trace
 // ever shows this block gating (the contract names that trace as the case that
@@ -115,7 +120,7 @@
 //    parent to be EARLIER, not NEARBY: node 1,023 may legally name node 0 as
 //    its parent. There is no locality to window over, so an on-chip window
 //    would be a cache with a worst case of a full SDRAM round trip per node --
-//    on a block that already spends 47 clocks per node, and against an SDRAM
+//    on a block that already spends 48 clocks per node, and against an SDRAM
 //    that has no behavioural model in this tree to measure it with.
 //
 //    COST, STATED: the store is MAX_NODES x 412 bits = 421,888 bits at the
@@ -272,9 +277,31 @@
 // The contract: "a 1,024-deep chain is legal and nobody has yet asked what the
 // drift looks like. That measurement is a directed test below, not an
 // assumption here." Section 7 of the directed test composes a maximal chain and
-// reports the worst element error of the fx16 chain against exact rational
-// arithmetic. It PRINTS A NUMBER for a question nobody has asked; it does not
-// assert a bound invented by its author.
+// reports the worst element error. It does not assert a bound invented by its
+// author; it prints the number. HERE IS THE NUMBER, as measured 2026-09-19:
+//
+//   depth      16      64     256    1023
+//   worst     7.9    20.3   143.6   613.6   LSB of a rotation element
+//
+//   613.6 LSB is 0.94 % of unit scale, on a matrix element.
+//
+// THE REFERENCE IS ANALYTIC, WHICH IS WHY THE NUMBER MEANS ANYTHING. Composing
+// N rotations of angle theta about Z is exactly a rotation of N*theta, so the
+// truth is closed-form and the error measured is the REAL error rather than the
+// disagreement between two approximations that could drift together.
+//
+// TWO THINGS THE SHAPE SAYS. The growth is roughly LINEAR in depth (78x over a
+// 64x depth increase), not the sqrt a random walk of independent roundings
+// would give -- which is the signature of a BIASED rounding, and `rescale_sat16`
+// is round-half-UP. And the figure is BIT-IDENTICAL at MUL_LANES = 1 and 3,
+// which is independent corroboration of `zhao_geom_mat3x4_mul`'s own claim that
+// its two arms are bit-identical and that "sequencing moves cycles, never bits".
+//
+// NOBODY HAS RULED ON WHETHER 0.94 % AT FULL DEPTH IS ACCEPTABLE. It is written
+// here so that the question can be asked with a number attached. A real
+// creature graph is tens deep, not a thousand, and at depth 64 the error is
+// 20 LSB -- 0.03 % -- so this is a statement about the BOUND, not about
+// shipping content.
 //
 module zhao_geom_loom #(
     // Parent-store depth AND the node-count bound. A stream that would exceed
@@ -403,7 +430,19 @@ module zhao_geom_loom #(
   // The scrub walk's final address. A localparam of the port width rather than
   // an inline (MAX_NODES - 1), which is a 32-bit constant and widens the
   // comparison.
-  localparam logic [IDXW-1:0] SCRUB_LAST = IDXW'(MAX_NODES - 1);
+  // THE STORE ADDRESS WIDTH IS NOT THE PORT INDEX WIDTH, and the gap is
+  // deliberate. MAX_NODES may legally be smaller than 2**IDXW -- that gap is
+  // exactly what makes the OVERFLOW guard reachable by a legal parameterisation
+  // -- so the arrays are AW deep and every index is truncated to AW on its way
+  // to one. The truncation is LOSSLESS FOR AN ACCEPTED BEAT, because a
+  // node_index at or past MAX_NODES is refused before it is latched and a
+  // parent_index is strictly below its child's.
+  localparam int AW = $clog2(MAX_NODES);
+
+  // The scrub walk's final address. A localparam of the address width rather
+  // than an inline (MAX_NODES - 1), which is a 32-bit constant and widens the
+  // comparison.
+  localparam logic [AW-1:0] SCRUB_LAST = AW'(MAX_NODES - 1);
 
   logic [3:0] state_q;
 
@@ -415,9 +454,9 @@ module zhao_geom_loom #(
   logic [SW-1:0]   store_q [MAX_NODES];
   logic [SW-1:0]   store_rd_q;
   logic            store_we;
-  logic [IDXW-1:0] store_wa;
+  logic [AW-1:0]   store_wa;
   logic [SW-1:0]   store_wd;
-  logic [IDXW-1:0] store_ra;
+  logic [AW-1:0]   store_ra;
 
   // ---- the emission-order list --------------------------------------------
   // order[k] = the node_index of the k-th node accepted. Emission walks it, so
@@ -426,9 +465,9 @@ module zhao_geom_loom #(
   logic [IDXW-1:0] order_q [MAX_NODES];
   logic [IDXW-1:0] order_rd_q;
   logic            order_we;
-  logic [IDXW-1:0] order_wa;
+  logic [AW-1:0]   order_wa;
   logic [IDXW-1:0] order_wd;
-  logic [IDXW-1:0] order_ra;
+  logic [AW-1:0]   order_ra;
 
   always_ff @(posedge clk) begin
     if (store_we) store_q[store_wa] <= store_wd;
@@ -439,7 +478,11 @@ module zhao_geom_loom #(
 
   // ---- latched beat -------------------------------------------------------
   logic [IDXW-1:0]    node_q;
-  logic [IDXW-1:0]    parent_q;
+  // TRUNCATED AT THE LATCH, not at the memory: an accepted beat's parent_index
+  // is strictly below its node_index, which is strictly below MAX_NODES, so the
+  // bits above AW are provably zero on everything that gets here. The FAULT
+  // check upstream reads the full-width port, where they are not.
+  logic [AW-1:0]      parent_q;
   logic [3:0]         kind_q;
   logic signed [31:0] param_q [12];
   logic [15:0]        angle_q;
@@ -450,7 +493,7 @@ module zhao_geom_loom #(
   // ---- stream bookkeeping -------------------------------------------------
   logic [15:0]     count_q;      // nodes accepted in this stream
   logic [IDXW-1:0] prev_idx_q;   // last node_index accepted, for the sort check
-  logic [IDXW-1:0] scrub_q;
+  logic [AW-1:0]   scrub_q;
   logic [15:0]     emit_k_q;
   logic [IDXW-1:0] emit_addr_q;  // the row emission is currently holding
   logic            ref_last_q;   // the refused beat carried `last`
@@ -468,7 +511,7 @@ module zhao_geom_loom #(
   // `is_cos` is a pure state decode: SIN is presented in S_D0, COS in S_D1, and
   // `zhao_field_sin`'s latency-2 puts them on the bus in S_D2 and S_D3. The
   // walk runs for EVERY node, not just ORBIT, which is what keeps the latency
-  // fixed -- the contract's word -- for the price of four clocks in forty-seven.
+  // fixed -- the contract's word -- for the price of four clocks in forty-eight.
   logic               sin_is_cos;
   logic signed [31:0] sin_result;
   assign sin_is_cos = (state_q == S_D1);
@@ -679,13 +722,13 @@ module zhao_geom_loom #(
   always_comb begin
     store_ra = parent_q;
     if (state_q == S_EB) begin
-      store_ra = order_rd_q;
+      store_ra = order_rd_q[AW-1:0];
     end else if ((state_q == S_EC) || (state_q == S_EDONE)) begin
-      store_ra = emit_addr_q;
+      store_ra = emit_addr_q[AW-1:0];
     end
   end
 
-  assign order_ra = emit_k_q[IDXW-1:0];
+  assign order_ra = emit_k_q[AW-1:0];
 
   // =========================================================================
   // THE SEQUENCER
@@ -772,7 +815,7 @@ module zhao_geom_loom #(
               state_q             <= S_REF;
             end else begin
               node_q   <= in_node_index_i;
-              parent_q <= in_parent_index_i;
+              parent_q <= in_parent_index_i[AW-1:0];
               kind_q   <= in_kind_i;
               angle_q  <= in_angle_i;
               axis_q   <= in_axis_i;
@@ -824,10 +867,10 @@ module zhao_geom_loom #(
           if (mul_in_valid && mul_in_ready) mul_issued_q <= 1'b1;
           if (mul_out_valid) begin
             store_we <= 1'b1;
-            store_wa <= node_q;
+            store_wa <= node_q[AW-1:0];
             store_wd <= node_word;
             order_we <= 1'b1;
-            order_wa <= count_q[IDXW-1:0] - 1'b1;
+            order_wa <= count_q[AW-1:0] - 1'b1;
             order_wd <= node_q;
             state_q  <= S_WR;
           end
