@@ -646,7 +646,9 @@ _ALIAS: dict[str, str | None] = {
     # their contracts were written, so each needs its spec authored first
     "INPUT.SNAC":        None,
     "GEOM.WARP":         None,
-    "POST.ECHO":         None,
+    # POST.ECHO: spec written and BUILT 2026-09-19 (ruling R7) -- composed on
+    # POST.COMPOSITE's echo tap inside the shell's zhao_post_lease.
+    "POST.ECHO":         "zhao_post_echo",
     # `deferred`/`blocked_on` used to skip these before resolution ever ran, so
     # they never needed an alias. Now that nothing is excused by a bare flag,
     # they reach the resolver and must resolve.

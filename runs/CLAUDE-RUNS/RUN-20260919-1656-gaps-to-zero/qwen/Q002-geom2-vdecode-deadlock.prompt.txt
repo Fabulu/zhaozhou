@@ -1,0 +1,1483 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q002: geom2-vdecode-deadlock
+## Brief
+Commit 3dae8f10 (not yet merged) fixes a DEADLOCK in the geometry path. The problem: GEOM.GROUP_SEQ
+issues a group of vertices and waits until every one of them has landed in the arena before it
+seals the group. VDECODE (upstream) may REFUSE a vertex (bad format), and a refused vertex never
+lands. So GROUP_SEQ waited forever, and so did everything behind it. The fix changes
+`zhao_geom_group_seq.sv` and `zhao_geom_replay.sv`, and adds a directed test and a committed
+mutant whose driver has inverted polarity (it passes when a counter FIRES).
+
+You are shown the full post-fix GROUP_SEQ, the commit's diffs of GROUP_SEQ, of replay and of the
+directed test, and the mutant. Judge whether the fix is CORRECT and COMPLETE.
+
+## Questions
+1. After the fix, is there ANY sequence of refused vertices (the first, the last, all of them,
+   two in a row, a refusal on the same cycle a vertex lands) that still hangs GROUP_SEQ or seals a
+   group while one of its vertices is still in flight?
+2. What does the sealed group carry for a refused vertex? Could replay later read an arena slot
+   that was never written, and produce a triangle from stale data? Check what replay does with it.
+3. Is the new counter clocked independently of what it detects (not "a detector wired to two
+   operands that move together")? Would it fire on the real fault?
+4. Does the directed test assert CORRECT behaviour (the group completes and the refused vertex is
+   excluded), rather than asserting that the bug happens?
+5. Is the mutant's ONE substantive change the thing its header says it is, and would it really
+   reintroduce the hang?
+
+# INPUT C:\Users\Fabs\AppData\Local\Temp\claude\C--programmieren-zencrifice\6dc16d10-374e-4090-84db-3119abad56bf\scratchpad\q002-group_seq-at-3dae8f10.sv:1-554
+```
+    1| // zhao_geom_group_seq.sv -- THE GEOMETRY CLIENT-A PRODUCER: one meshlet job in,
+    2| // one arena group per view out -- allocated, opened, filled through the shared
+    3| // projector, sealed, handed over, released.
+    4| //
+    5| //     zhao_geom_skin (skinned vertices, VIEW-INDEPENDENT)
+    6| //         | v_valid_i / v_ready_o
+    7| //         v
+    8| //     zhao_geom_group_seq  --- a_* --->  zhao_proj_subsystem CLIENT A
+    9| //         ^                                      | a_valid_o ...
+   10| //         | open / seal / rider                  v
+   11| //         +---------------------------  zhao_geom_proj_lane -> zhao_geom_wcache
+   12| //               fill_landed_i / fill_arena_i
+   13| //
+   14| // ---------------------------------------------------------------------------
+   15| // WHY THIS FILE EXISTS -- AND WHY IT IS NOT GEOM.WARP
+   16| // ---------------------------------------------------------------------------
+   17| // `design/prod_manifest.yml` (zhao_geom_proj_lane, 2026-09-18) states the gap
+   18| // this file closes, in its own words:
+   19| //
+   20| //   "Selecting one shared service instead of two wrappers (6,598 ALM / 33 DSP
+   21| //    against ~12,400 / 66) needs this composed AND a producer driving it; the
+   22| //    producer is still absent, so this is not yet adoptable on its own"
+   23| //
+   24| // `zhao_proj_subsystem`'s header names the same absence: "client A raw -- the
+   25| // geometry producer ... is not composed anywhere in this tree". The LANE was
+   26| // built on 2026-09-18 and computes nothing; what was missing is the thing that
+   27| // ALLOCATES an arena, walks a meshlet's vertices into client A with the
+   28| // {arena, index} rider attached, waits for the LANDINGS and seals. That is this
+   29| // block.
+   30| //
+   31| // It is deliberately NOT `GEOM.WARP`. GEOM.WARP is DEFERRED by owner ruling
+   32| // 2026-08-31 section 6.3 (cut-order 5), its contract is deliberately unwritten,
+   33| // `design/V1-RELEASE-DEFINITION.md` line 136 excludes it from v1, and
+   34| // `design/contracts/GEOM.PROJECT.md` line 67 puts it in the ALTERNATIVE
+   35| // position -- "the vertices arrive from GEOM.WCACHE **or** GEOM.WARP" -- so it
+   36| // is not on the fill path into the arena at all and cannot be what blocks the
+   37| // projector's adoption. Building it would have added area to a design already
+   38| // far over its ALM budget, for a function v1 refuses.
+   39| //
+   40| // ---------------------------------------------------------------------------
+   41| // LAW, IN CITATION ORDER
+   42| // ---------------------------------------------------------------------------
+   43| //   fpga/rtl/geometry/zhao_geom_proj_lane.sv -- THE RIDER LAYOUT LIVES THERE,
+   44| //       NOT HERE. This block hands the lane {arena, index} on
+   45| //       rider_arena_o/rider_index_o and takes the packed word back on
+   46| //       rider_payload_i; it never packs the field itself. One file owns the
+   47| //       layout, and duplicating the pack here is exactly the duplicate
+   48| //       arithmetic this repository has shipped three times. The lane's own
+   49| //       `initial` guard asserts the rider FITS PAYLOAD_A_W; it is not repeated
+   50| //       here for the same reason.
+   51| //   fpga/rtl/common/zhao_project_service.sv -- client A: `a_ready_o` is the
+   52| //       arbiter's grant, combinational from `a_valid_i`; the result lands many
+   53| //       cycles later with the rider intact, and the result port has NO
+   54| //       backpressure.
+   55| //   fpga/rtl/geometry/zhao_geom_wcache.sv -- instantiates `zhao_vertex_arena`
+   56| //       with `VALID_MODE(0)`, the BITMAP mode. So a geometry group may be
+   57| //       SHORTER than DEPTH and still seal; that is the difference from the
+   58| //       terrain side, whose 9x9 window `zhao_terrain_group_seq` always fills
+   59| //       completely -- an ASSUMPTION on that block, upheld there, not here.
+   60| //       `job_count_i` is therefore a real per-meshlet value and not a constant.
+   61| //       ENFORCED-BY: tests/geometry/geom_group_seq_directed.cpp -- CASE 2
+   62| //       offers job_count_i = 5 against the bench's DEPTH = 8 and requires the
+   63| //       group to SEAL with its handle carrying count == 5; a constant-DEPTH
+   64| //       reading would still be waiting for eight landings. CASE 1 refuses
+   65| //       count == 0 and count > DEPTH, so the bound is read as well.
+   66| //   fpga/rtl/terrain/zhao_terrain_group_seq.sv -- the proven sibling. Its
+   67| //       lowest-free-arena search, its slot fan-out and its "seal on LANDINGS,
+   68| //       never on ACCEPTS" rule are reproduced here because they are the same
+   69| //       problem; its ModeRef replay phase is NOT, because the geometry replay
+   70| //       customer is downstream of the handle this block emits.
+   71| //   design/contracts/GEOM.WCACHE.md -- the arena's law, including that
+   72| //       identity is GIVEN by the producer and never inferred. `job_count_i`
+   73| //       and the running index are that given identity.
+   74| //
+   75| // ---------------------------------------------------------------------------
+   76| // SEAL ON LANDINGS, NEVER ON ACCEPTS -- the one rule that is easy to get wrong
+   77| // ---------------------------------------------------------------------------
+   78| // The projector core is deep. A seal issued when the last vertex was ACCEPTED
+   79| // would seal an arena whose last vertices have not yet been WRITTEN, and in
+   80| // bitmap mode that does not even fail loudly: the seal succeeds and the
+   81| // missing slots answer MISS forever, which reads as a cold cache rather than
+   82| // as a bug. So `landed_q` counts the result port's own valid, per arena, and
+   83| // the seal waits for `landed == count` on every slot.
+   84| //
+   85| // `seal_early_o` is the detector for that fault and it is STRUCTURALLY
+   86| // UNREACHABLE with legal stimulus, because the state machine leaves StSealWait
+   87| // only when the drain condition holds. It is therefore evidenced by a
+   88| // committed mutant rather than by a claim -- see
+   89| // tests/mutants/zhao_geom_group_seq_mutant.sv, whose only substantive change
+   90| // is that StSealWait advances on the ACCEPT count instead of the landing
+   91| // count, and whose driver passes when the counter FIRES.
+   92| //
+   93| // ---------------------------------------------------------------------------
+   94| // A REFUSED RECORD IS A HOLE, AND A HOLE POISONS THE BATCH (owner ruling R31)
+   95| // ---------------------------------------------------------------------------
+   96| // GEOM.VDECODE refuses a malformed record INSTEAD of emitting it (its header;
+   97| // `design/contracts/GEOM.VDECODE.md`: "unknown format_id: refused, and NO
+   98| // VERTEX EMITTED"). Until 2026-09-19 this block waited for `job_count_i`
+   99| // skinned vertices regardless, so ONE refused record left it in StFill for
+  100| // ever: no seal, no handle, GEOM.REPLAY waiting on the handle, GEOM.ASSETFETCH
+  101| // waiting on REPLAY's release -- the whole geometry path deadlocked, and no
+  102| // counter anywhere moved, because every counter watches something that ARRIVES.
+  103| //
+  104| // `hole_i` is VDECODE's refusal pulse, one per refused record. Only one meshlet
+  105| // is ever between GEOM.ASSETFETCH and this block (the dispatcher fork takes a
+  106| // meshlet only when GEOM.REPLAY is idle, and REPLAY releases it only after this
+  107| // block's handles), so a hole that arrives while a job is held belongs to that
+  108| // job by construction. The fill ends when VERTICES + HOLES == count, and the
+  109| // drain waits for LANDINGS == VERTICES SENT (not count: a hole never lands).
+  110| //
+  111| // A group with a hole is SEALED AND HANDED OVER WITH `grp_poison_o` HIGH, never
+  112| // withheld. The contract's law is "a refusal drops the BATCH, not the frame":
+  113| // the indices after a hole are shifted, so no triangle of the meshlet may be
+  114| // drawn from this arena -- but the arena must still reach GEOM.REPLAY, because
+  115| // REPLAY is the block that proves both readers are done and releases the
+  116| // buffer. Withholding the handle would be the old deadlock with extra steps.
+  117| //
+  118| // `holes_o` counts holes absorbed into a job; `groups_poisoned_o` counts the
+  119| // handles marked; `holes_orphan_o` counts a hole with NO job held, which the
+  120| // dispatcher's one-meshlet law makes unreachable (a job this block refuses has
+  121| // no count to charge a hole against, and is the one legal way to get there --
+  122| // see `jobs_refused_o`). All three are fired by stimulus in
+  123| // tests/geometry/geom_group_seq_directed.cpp.
+  124| //
+  125| // ---------------------------------------------------------------------------
+  126| // THE MEMORY TRADE, WITH NUMBERS (standing owner direction: ALMs are the
+  127| // binding constraint, M10K is the slack, prefer a lookup over computation)
+  128| // ---------------------------------------------------------------------------
+  129| // THE LEVER DOES NOT APPLY HERE, and the numbers say why rather than a
+  130| // sentence asserting it:
+  131| //
+  132| //   * This block contains NO MULTIPLIER and NO TABLE. It is a state machine,
+  133| //     a running index and per-arena bookkeeping. 0 DSP is therefore an
+  134| //     ASSUMPTION, not a measurement, and it is upheld by the author of this
+  135| //     file: there is no `*` on a non-constant operand and no ROM anywhere in
+  136| //     it. Only a quartus_map report can close it and none has been run on this
+  137| //     block, so no enforcer is named here -- the assumption is stated with its
+  138| //     upholder instead. Under it, the "do not spend memory to remove DSPs"
+  139| //     half of the direction is moot.
+  140| //   * Its whole state at the defaults (ARENAS=4 -> ARENA_W=3, DEPTH=1089 ->
+  141| //     INDEX_W=12, CNT_W=11) is: held 8 bits + landed 8x11 = 88 bits + two slot
+  142| //     records (arena 3 + gen 8 + view 1) = 24 bits + job registers (count 12 +
+  143| //     src_id 16 + shape 4) = 32 bits + index/slot/state ~= 20 bits. About 172
+  144| //     flops.
+  145| //   * One M10K is 10,240 bits. Moving ~172 bits into one would spend 1 of the
+  146| //     device's 553 M10K blocks to save ~172 ALM flops -- but it would ADD
+  147| //     logic, not remove it: `held_q` must be searched COMBINATIONALLY in the
+  148| //     same cycle the open is issued, and `landed_q` must be incremented from
+  149| //     the result port while the drain comparison reads it. A synchronous-read
+  150| //     memory needs an address pipeline and a write-to-read bypass for both,
+  151| //     which costs more ALMs than the flops it removes.
+  152| //
+  153| // So the honest entry is: no M10K, 0 DSP, and the memory lever is declined
+  154| // with a reason rather than not considered.
+  155| //
+  156| // ---------------------------------------------------------------------------
+  157| // WHAT THIS BLOCK IS NOT
+  158| // ---------------------------------------------------------------------------
+  159| // It does not project (that is `zhao_project_core`, once, shared). It does not
+  160| // store (that is `zhao_vertex_arena` through the lane). It does not skin, and
+  161| // it does not decide which meshlet to draw. It holds no payload at any point:
+  162| // the vertex it forwards is the vertex it was handed, in the same cycle.
+  163| //
+  164| // Conservative SystemVerilog subset only (charter section 2).
+  165| `default_nettype none
+  166| 
+  167| module zhao_geom_group_seq #(
+  168|     parameter int unsigned ARENAS      = 4,
+  169|     parameter int unsigned DEPTH       = 1089,
+  170|     parameter int unsigned NVIEWS      = 2,
+  171|     parameter int unsigned GEN_W       = 8,
+  172|     parameter int unsigned PAYLOAD_A_W = 16,
+  173|     parameter int unsigned INDEX_W     = $clog2(DEPTH) + 1,
+  174|     parameter int unsigned ARENA_W     = $clog2(ARENAS) + 1
+  175| ) (
+  176|     input  wire clk,
+  177|     input  wire rst_n,
+  178| 
+  179|     // ---- the job: one meshlet, one or both views ---------------------------
+  180|     input  wire                     job_valid_i,
+  181|     output wire                     job_ready_o,
+  182|     input  wire [INDEX_W-1:0]       job_count_i,     // vertices, 1..DEPTH
+  183|     input  wire [NVIEWS-1:0]        job_view_mask_i, // which views to project
+  184|     input  wire [15:0]              job_src_id_i,    // opaque passthrough
+  185| 
+  186|     // ---- skinned vertices in, view-independent, LOCAL (rebased) coords -----
+  187|     input  wire                     v_valid_i,
+  188|     output wire                     v_ready_o,
+  189|     input  wire signed [31:0]       v_x_i,
+  190|     input  wire signed [31:0]       v_y_i,
+  191|     input  wire signed [31:0]       v_z_i,
+  192|     // One pulse per record GEOM.VDECODE REFUSED: a vertex that will never
+  193|     // arrive on `v_*`. See "A REFUSED RECORD IS A HOLE" in the header.
+  194|     input  wire                     hole_i,
+  195| 
+  196|     // ---- client A of the shared projection service -------------------------
+  197|     output wire                     a_valid_o,
+  198|     input  wire                     a_ready_i,
+  199|     output wire signed [31:0]       a_vx_o,
+  200|     output wire signed [31:0]       a_vy_o,
+  201|     output wire signed [31:0]       a_vz_o,
+  202|     output wire                     a_view_o,
+  203|     output wire [PAYLOAD_A_W-1:0]   a_payload_o,
+  204| 
+  205|     // ---- the lane's arena control; the lane owns the rider LAYOUT ----------
+  206|     output wire                     open_o,
+  207|     output wire [ARENA_W-1:0]       open_arena_o,
+  208|     input  wire [GEN_W-1:0]         open_gen_i,
+  209|     output wire [ARENA_W-1:0]       rider_arena_o,
+  210|     output wire [INDEX_W-1:0]       rider_index_o,
+  211|     input  wire [PAYLOAD_A_W-1:0]   rider_payload_i,
+  212|     output wire                     seal_o,
+  213|     output wire [ARENA_W-1:0]       seal_arena_o,
+  214| 
+  215|     // ---- landings, from the lane's result port -----------------------------
+  216|     input  wire                     fill_landed_i,
+  217|     input  wire [ARENA_W-1:0]       fill_arena_i,
+  218| 
+  219|     // ---- the sealed group handle, to the replay customer -------------------
+  220|     output wire                     grp_valid_o,
+  221|     input  wire                     grp_ready_i,
+  222|     output wire [ARENA_W-1:0]       grp_arena_o,
+  223|     output wire [GEN_W-1:0]         grp_gen_o,
+  224|     output wire [INDEX_W-1:0]       grp_count_o,
+  225|     output wire                     grp_view_o,
+  226|     output wire [15:0]              grp_src_id_o,
+  227|     // The batch lost a record: nothing in this arena may be drawn. REPLAY
+  228|     // still takes the handle, drops the meshlet's triangles and releases it.
+  229|     output wire                     grp_poison_o,
+  230| 
+  231|     // ---- release, driven by the replay customer when it is done ------------
+  232|     input  wire                     rel_valid_i,
+  233|     input  wire [ARENA_W-1:0]       rel_arena_i,
+  234| 
+  235|     // ---- counters ----------------------------------------------------------
+  236|     output logic [31:0]             groups_opened_o,
+  237|     output logic [31:0]             groups_sealed_o,
+  238|     output logic [31:0]             vertices_sent_o,
+  239|     output logic [31:0]             landings_o,
+  240|     output logic [31:0]             jobs_refused_o,
+  241|     output logic [31:0]             alloc_stall_cycles_o,
+  242|     output logic [31:0]             rel_unheld_o,
+  243|     output logic [31:0]             holes_o,
+  244|     output logic [31:0]             groups_poisoned_o,
+  245|     output logic [31:0]             holes_orphan_o,
+  246|     // FAULT, and structurally unreachable while the drain rule is correct --
+  247|     // see the header and the committed mutant.
+  248|     output logic                    seal_early_o
+  249| );
+  250| 
+  251|   localparam int unsigned CNT_W = $clog2(DEPTH + 1);
+  252|   // Per-arena tables are sized to the ENCODING, not to ARENAS. ARENA_W is
+  253|   // $clog2(ARENAS)+1, so a handle can name an arena that does not exist; giving
+  254|   // the tables every representable index means a stray handle writes a counter
+  255|   // nobody reads instead of aliasing a live arena or reading out of range.
+  256|   localparam int unsigned NA = 1 << ARENA_W;
+  257| 
+  258|   // Quartus 17 requires these inside `initial begin`; `--lint-only` does not
+  259|   // run them at all (CLAUDE.md, 2026-09-09), so a clean lint says nothing here.
+  260|   initial begin
+  261|     if (NVIEWS != 2)
+  262|       $fatal(1, "zhao_geom_group_seq: NVIEWS (%0d) must be 2 -- the slot fan-out is written for the camera pair",
+  263|              NVIEWS);
+  264|     if (ARENAS < NVIEWS)
+  265|       $fatal(1, "zhao_geom_group_seq: ARENAS (%0d) must be >= NVIEWS (%0d) -- a dual-view job holds one arena per view at once",
+  266|              ARENAS, NVIEWS);
+  267|     if (DEPTH < 1)
+  268|       $fatal(1, "zhao_geom_group_seq: DEPTH (%0d) must be positive", DEPTH);
+  269|   end
+  270| 
+  271|   // ---- state ---------------------------------------------------------------
+  272|   localparam logic [2:0] StIdle     = 3'd0;
+  273|   localparam logic [2:0] StAlloc    = 3'd1;
+  274|   localparam logic [2:0] StFill     = 3'd2;
+  275|   localparam logic [2:0] StSealWait = 3'd3;
+  276|   localparam logic [2:0] StSeal     = 3'd4;
+  277|   localparam logic [2:0] StHand     = 3'd5;
+  278| 
+  279|   logic [2:0] st;
+  280| 
+  281|   // the held job
+  282|   logic [INDEX_W-1:0] j_count;
+  283|   logic [15:0]        j_src;
+  284| 
+  285|   // the slots: slot 0 is the lowest view in the mask, slot 1 the other
+  286|   logic               two_slots_q;
+  287|   logic               slot_view_q [0:1];
+  288|   logic [ARENA_W-1:0] slot_arena_q[0:1];
+  289|   logic [GEN_W-1:0]   slot_gen_q  [0:1];
+  290| 
+  291|   // per arena
+  292|   logic [NA-1:0]      held_q;
+  293|   logic [CNT_W-1:0]   landed_q[0:NA-1];
+  294| 
+  295|   logic               alloc_slot_q;  // the slot being allocated
+  296|   logic               seal_slot_q;   // ... sealed
+  297|   logic               hand_slot_q;   // ... handed over
+  298|   logic               vs_q;          // the fan-out slot of the current vertex
+  299|   logic [INDEX_W-1:0] vi_q;          // the vertex index within the group
+  300|   logic [INDEX_W-1:0] holes_q;       // records of this job VDECODE refused
+  301| 
+  302|   // ---- the free arena, lowest index first ----------------------------------
+  303|   logic               any_free_c;
+  304|   logic [ARENA_W-1:0] free_c;
+  305|   integer fi;
+  306|   always_comb begin
+  307|     any_free_c = 1'b0;
+  308|     free_c     = '0;
+  309|     for (fi = ARENAS - 1; fi >= 0; fi = fi - 1) begin
+  310|       if (!held_q[fi]) begin
+  311|         any_free_c = 1'b1;
+  312|         free_c     = ARENA_W'(fi);
+  313|       end
+  314|     end
+  315|   end
+  316| 
+  317|   // ---- the drain condition: LANDINGS, per active slot ----------------------
+  318|   // Against the vertices actually SENT (`vi_q` once the fill has ended), not
+  319|   // against `j_count`: a hole never lands, so a batch with one would otherwise
+  320|   // wait in StSealWait for ever -- the R31 deadlock moved one state later.
+  321|   logic drain_done_c;
+  322|   always_comb begin
+  323|     drain_done_c = (landed_q[slot_arena_q[0]] == CNT_W'(vi_q));
+  324|     if (two_slots_q && (landed_q[slot_arena_q[1]] != CNT_W'(vi_q)))
+  325|       drain_done_c = 1'b0;
+  326|   end
+  327| 
+  328|   // ---- the job port --------------------------------------------------------
+  329|   //
+  330|   // `job_ready_o` is independent of `job_valid_i` (house hygiene). A MALFORMED
+  331|   // job is CONSUMED and counted, never held: refusing by stalling would wedge
+  332|   // the stream behind a job that can never become legal.
+  333|   assign job_ready_o = (st == StIdle);
+  334| 
+  335|   wire job_legal_c = (job_count_i != '0)
+  336|                   && (job_count_i <= INDEX_W'(DEPTH))
+  337|                   && (job_view_mask_i != '0);
+  338|   wire job_take_c  = job_valid_i && (st == StIdle);
+  339| 
+  340|   // ---- allocation ----------------------------------------------------------
+  341|   assign open_o       = (st == StAlloc) && any_free_c;
+  342|   assign open_arena_o = free_c;
+  343| 
+  344|   // ---- the vertex fan-out --------------------------------------------------
+  345|   wire last_slot_c = (vs_q == two_slots_q);
+  346| 
+  347|   assign a_valid_o = (st == StFill) && v_valid_i;
+  348|   assign a_vx_o    = v_x_i;
+  349|   assign a_vy_o    = v_y_i;
+  350|   assign a_vz_o    = v_z_i;
+  351|   assign a_view_o  = slot_view_q[vs_q];
+  352| 
+  353|   // The rider is built by the LANE and consumed here. This block states
+  354|   // {arena, index}; it never states the packing.
+  355|   assign rider_arena_o = slot_arena_q[vs_q];
+  356|   assign rider_index_o = vi_q;
+  357|   assign a_payload_o   = rider_payload_i;
+  358| 
+  359|   wire a_take_c = a_valid_o && a_ready_i;
+  360| 
+  361|   // ---- holes, and the end of the fill ----------------------------------------
+  362|   // A hole is charged to the job while its records can still be arriving
+  363|   // (StAlloc: the stream starts on the accept clock, so a record can be refused
+  364|   // before both arenas are open; StFill). Anywhere else there is no record
+  365|   // outstanding for it to stand for, and it is an ORPHAN.
+  366|   wire hole_in_job_c = hole_i && ((st == StAlloc) || (st == StFill));
+  367|   wire vtx_done_c    = a_take_c && last_slot_c;
+  368|   wire [INDEX_W-1:0] vi_next_c    = vi_q + (vtx_done_c ? INDEX_W'(1) : INDEX_W'(0));
+  369|   wire [INDEX_W-1:0] holes_next_c = holes_q + (hole_in_job_c ? INDEX_W'(1) : INDEX_W'(0));
+  370|   // Every record of the batch is accounted for: arrived, or refused upstream.
+  371|   wire fill_end_c = ((vi_next_c + holes_next_c) == j_count);
+  372| 
+  373|   // A vertex is consumed only when its LAST slot has been accepted: the stream
+  374|   // is view-independent and must not be skinned twice, so one vertex is held
+  375|   // across the fan-out rather than buffered.
+  376|   assign v_ready_o = (st == StFill) && last_slot_c && a_ready_i;
+  377| 
+  378|   // ---- seal ----------------------------------------------------------------
+  379|   assign seal_o       = (st == StSeal);
+  380|   assign seal_arena_o = slot_arena_q[seal_slot_q];
+  381| 
+  382|   // ---- the handle ----------------------------------------------------------
+  383|   assign grp_valid_o  = (st == StHand);
+  384|   assign grp_arena_o  = slot_arena_q[hand_slot_q];
+  385|   assign grp_gen_o    = slot_gen_q[hand_slot_q];
+  386|   assign grp_count_o  = j_count;
+  387|   assign grp_view_o   = slot_view_q[hand_slot_q];
+  388|   assign grp_src_id_o = j_src;
+  389|   assign grp_poison_o = (holes_q != '0);
+  390| 
+  391|   wire grp_take_c = grp_valid_o && grp_ready_i;
+  392| 
+  393|   // ---- release -------------------------------------------------------------
+  394|   wire rel_held_c = rel_valid_i && held_q[rel_arena_i];
+  395| 
+  396|   integer ai;
+  397|   always_ff @(posedge clk or negedge rst_n) begin
+  398|     if (!rst_n) begin
+  399|       st                   <= StIdle;
+  400|       j_count              <= '0;
+  401|       j_src                <= '0;
+  402|       two_slots_q          <= 1'b0;
+  403|       slot_view_q[0]       <= 1'b0;
+  404|       slot_view_q[1]       <= 1'b0;
+  405|       slot_arena_q[0]      <= '0;
+  406|       slot_arena_q[1]      <= '0;
+  407|       slot_gen_q[0]        <= '0;
+  408|       slot_gen_q[1]        <= '0;
+  409|       held_q               <= '0;
+  410|       alloc_slot_q         <= 1'b0;
+  411|       seal_slot_q          <= 1'b0;
+  412|       hand_slot_q          <= 1'b0;
+  413|       vs_q                 <= 1'b0;
+  414|       vi_q                 <= '0;
+  415|       holes_q              <= '0;
+  416|       holes_o              <= '0;
+  417|       groups_poisoned_o    <= '0;
+  418|       holes_orphan_o       <= '0;
+  419|       groups_opened_o      <= '0;
+  420|       groups_sealed_o      <= '0;
+  421|       vertices_sent_o      <= '0;
+  422|       landings_o           <= '0;
+  423|       jobs_refused_o       <= '0;
+  424|       alloc_stall_cycles_o <= '0;
+  425|       rel_unheld_o         <= '0;
+  426|       seal_early_o         <= 1'b0;
+  427|       for (ai = 0; ai < NA; ai = ai + 1) landed_q[ai] <= '0;
+  428|     end else begin
+  429|       // --- landings are counted wherever the machine is -------------------
+  430|       // The result port has no backpressure, so this is unconditional on
+  431|       // state; it is gated only by the port's own valid.
+  432|       if (fill_landed_i) begin
+  433|         landed_q[fill_arena_i] <= landed_q[fill_arena_i] + CNT_W'(1);
+  434|         if (landings_o != 32'hFFFF_FFFF) landings_o <= landings_o + 32'd1;
+  435|       end
+  436| 
+  437|       // --- release is independent of the job machine -----------------------
+  438|       if (rel_valid_i) begin
+  439|         if (rel_held_c) begin
+  440|           held_q[rel_arena_i] <= 1'b0;
+  441|         end else if (rel_unheld_o != 32'hFFFF_FFFF) begin
+  442|           rel_unheld_o <= rel_unheld_o + 32'd1;
+  443|         end
+  444|       end
+  445| 
+  446|       // --- holes: charged to the held job, or counted as orphans ------------
+  447|       if (hole_in_job_c) begin
+  448|         holes_q <= holes_next_c;
+  449|         if (holes_o != 32'hFFFF_FFFF) holes_o <= holes_o + 32'd1;
+  450|       end else if (hole_i && (holes_orphan_o != 32'hFFFF_FFFF)) begin
+  451|         holes_orphan_o <= holes_orphan_o + 32'd1;
+  452|       end
+  453| 
+  454|       case (st)
+  455|         StIdle: begin
+  456|           if (job_take_c) begin
+  457|             if (!job_legal_c) begin
+  458|               if (jobs_refused_o != 32'hFFFF_FFFF)
+  459|                 jobs_refused_o <= jobs_refused_o + 32'd1;
+  460|             end else begin
+  461|               j_count        <= job_count_i;
+  462|               j_src          <= job_src_id_i;
+  463|               holes_q        <= '0;
+  464|               two_slots_q    <= (&job_view_mask_i);
+  465|               slot_view_q[0] <= !job_view_mask_i[0];  // lowest set view
+  466|               slot_view_q[1] <= 1'b1;                 // only used when two
+  467|               alloc_slot_q   <= 1'b0;
+  468|               st             <= StAlloc;
+  469|             end
+  470|           end
+  471|         end
+  472| 
+  473|         StAlloc: begin
+  474|           if (any_free_c) begin
+  475|             slot_arena_q[alloc_slot_q] <= free_c;
+  476|             // SAMPLED COMBINATIONALLY IN THE OPEN CYCLE. The arena drives
+  477|             // `open_gen_o = gen_q[arena] + 1`, the generation this open is
+  478|             // about to install; reading it after the edge returns gen+1 again
+  479|             // and every later lookup misses with a perfect payload.
+  480|             slot_gen_q[alloc_slot_q]   <= open_gen_i;
+  481|             held_q[free_c]             <= 1'b1;
+  482|             landed_q[free_c]           <= '0;
+  483|             if (groups_opened_o != 32'hFFFF_FFFF)
+  484|               groups_opened_o <= groups_opened_o + 32'd1;
+  485| 
+  486|             if (alloc_slot_q == two_slots_q) begin
+  487|               vi_q <= '0;
+  488|               vs_q <= 1'b0;
+  489|               st   <= StFill;
+  490|             end else begin
+  491|               alloc_slot_q <= 1'b1;
+  492|             end
+  493|           end else if (alloc_stall_cycles_o != 32'hFFFF_FFFF) begin
+  494|             alloc_stall_cycles_o <= alloc_stall_cycles_o + 32'd1;
+  495|           end
+  496|         end
+  497| 
+  498|         StFill: begin
+  499|           if (a_take_c) begin
+  500|             if (vertices_sent_o != 32'hFFFF_FFFF)
+  501|               vertices_sent_o <= vertices_sent_o + 32'd1;
+  502|             if (last_slot_c) begin
+  503|               vs_q <= 1'b0;
+  504|               vi_q <= vi_next_c;
+  505|             end else begin
+  506|               vs_q <= 1'b1;
+  507|             end
+  508|           end
+  509|           // Evaluated every clock, not only on a vertex: the record that
+  510|           // completes the batch may be a HOLE, and a batch whose every record
+  511|           // was refused has no vertex at all to trigger the check.
+  512|           if (fill_end_c) st <= StSealWait;
+  513|         end
+  514| 
+  515|         StSealWait: begin
+  516|           // THE RULE: landings, never accepts. See the header.
+  517|           if (drain_done_c) begin
+  518|             seal_slot_q <= 1'b0;
+  519|             st          <= StSeal;
+  520|           end
+  521|         end
+  522| 
+  523|         StSeal: begin
+  524|           if (!drain_done_c) seal_early_o <= 1'b1;  // sticky fault
+  525|           if (groups_sealed_o != 32'hFFFF_FFFF)
+  526|             groups_sealed_o <= groups_sealed_o + 32'd1;
+  527|           if (seal_slot_q == two_slots_q) begin
+  528|             hand_slot_q <= 1'b0;
+  529|             st          <= StHand;
+  530|           end else begin
+  531|             seal_slot_q <= 1'b1;
+  532|           end
+  533|         end
+  534| 
+  535|         StHand: begin
+  536|           if (grp_take_c) begin
+  537|             if (grp_poison_o && (groups_poisoned_o != 32'hFFFF_FFFF))
+  538|               groups_poisoned_o <= groups_poisoned_o + 32'd1;
+  539|             if (hand_slot_q == two_slots_q) begin
+  540|               st <= StIdle;
+  541|             end else begin
+  542|               hand_slot_q <= 1'b1;
+  543|             end
+  544|           end
+  545|         end
+  546| 
+  547|         default: st <= StIdle;
+  548|       endcase
+  549|     end
+  550|   end
+  551| 
+  552| endmodule : zhao_geom_group_seq
+  553| 
+  554| `default_nettype wire
+```
+
+# INPUT git show 3dae8f10 -- fpga/rtl/geometry/zhao_geom_group_seq.sv
+```
+3dae8f10 R31 defect: a VDECODE refusal no longer deadlocks the geometry path
+
+diff --git a/fpga/rtl/geometry/zhao_geom_group_seq.sv b/fpga/rtl/geometry/zhao_geom_group_seq.sv
+index fb222514..bf82aed8 100644
+--- a/fpga/rtl/geometry/zhao_geom_group_seq.sv
++++ b/fpga/rtl/geometry/zhao_geom_group_seq.sv
+@@ -88,12 +88,44 @@
+ // committed mutant rather than by a claim -- see
+ // tests/mutants/zhao_geom_group_seq_mutant.sv, whose only substantive change
+ // is that StSealWait advances on the ACCEPT count instead of the landing
+ // count, and whose driver passes when the counter FIRES.
+ //
+ // ---------------------------------------------------------------------------
++// A REFUSED RECORD IS A HOLE, AND A HOLE POISONS THE BATCH (owner ruling R31)
++// ---------------------------------------------------------------------------
++// GEOM.VDECODE refuses a malformed record INSTEAD of emitting it (its header;
++// `design/contracts/GEOM.VDECODE.md`: "unknown format_id: refused, and NO
++// VERTEX EMITTED"). Until 2026-09-19 this block waited for `job_count_i`
++// skinned vertices regardless, so ONE refused record left it in StFill for
++// ever: no seal, no handle, GEOM.REPLAY waiting on the handle, GEOM.ASSETFETCH
++// waiting on REPLAY's release -- the whole geometry path deadlocked, and no
++// counter anywhere moved, because every counter watches something that ARRIVES.
++//
++// `hole_i` is VDECODE's refusal pulse, one per refused record. Only one meshlet
++// is ever between GEOM.ASSETFETCH and this block (the dispatcher fork takes a
++// meshlet only when GEOM.REPLAY is idle, and REPLAY releases it only after this
++// block's handles), so a hole that arrives while a job is held belongs to that
++// job by construction. The fill ends when VERTICES + HOLES == count, and the
++// drain waits for LANDINGS == VERTICES SENT (not count: a hole never lands).
++//
++// A group with a hole is SEALED AND HANDED OVER WITH `grp_poison_o` HIGH, never
++// withheld. The contract's law is "a refusal drops the BATCH, not the frame":
++// the indices after a hole are shifted, so no triangle of the meshlet may be
++// drawn from this arena -- but the arena must still reach GEOM.REPLAY, because
++// REPLAY is the block that proves both readers are done and releases the
++// buffer. Withholding the handle would be the old deadlock with extra steps.
++//
++// `holes_o` counts holes absorbed into a job; `groups_poisoned_o` counts the
++// handles marked; `holes_orphan_o` counts a hole with NO job held, which the
++// dispatcher's one-meshlet law makes unreachable (a job this block refuses has
++// no count to charge a hole against, and is the one legal way to get there --
++// see `jobs_refused_o`). All three are fired by stimulus in
++// tests/geometry/geom_group_seq_directed.cpp.
++//
++// ---------------------------------------------------------------------------
+ // THE MEMORY TRADE, WITH NUMBERS (standing owner direction: ALMs are the
+ // binding constraint, M10K is the slack, prefer a lookup over computation)
+ // ---------------------------------------------------------------------------
+ // THE LEVER DOES NOT APPLY HERE, and the numbers say why rather than a
+ // sentence asserting it:
+ //
+@@ -154,12 +186,15 @@ module zhao_geom_group_seq #(
+     // ---- skinned vertices in, view-independent, LOCAL (rebased) coords -----
+     input  wire                     v_valid_i,
+     output wire                     v_ready_o,
+     input  wire signed [31:0]       v_x_i,
+     input  wire signed [31:0]       v_y_i,
+     input  wire signed [31:0]       v_z_i,
++    // One pulse per record GEOM.VDECODE REFUSED: a vertex that will never
++    // arrive on `v_*`. See "A REFUSED RECORD IS A HOLE" in the header.
++    input  wire                     hole_i,
+ 
+     // ---- client A of the shared projection service -------------------------
+     output wire                     a_valid_o,
+     input  wire                     a_ready_i,
+     output wire signed [31:0]       a_vx_o,
+     output wire signed [31:0]       a_vy_o,
+@@ -186,12 +221,15 @@ module zhao_geom_group_seq #(
+     input  wire                     grp_ready_i,
+     output wire [ARENA_W-1:0]       grp_arena_o,
+     output wire [GEN_W-1:0]         grp_gen_o,
+     output wire [INDEX_W-1:0]       grp_count_o,
+     output wire                     grp_view_o,
+     output wire [15:0]              grp_src_id_o,
++    // The batch lost a record: nothing in this arena may be drawn. REPLAY
++    // still takes the handle, drops the meshlet's triangles and releases it.
++    output wire                     grp_poison_o,
+ 
+     // ---- release, driven by the replay customer when it is done ------------
+     input  wire                     rel_valid_i,
+     input  wire [ARENA_W-1:0]       rel_arena_i,
+ 
+     // ---- counters ----------------------------------------------------------
+@@ -199,12 +237,15 @@ module zhao_geom_group_seq #(
+     output logic [31:0]             groups_sealed_o,
+     output logic [31:0]             vertices_sent_o,
+     output logic [31:0]             landings_o,
+     output logic [31:0]             jobs_refused_o,
+     output logic [31:0]             alloc_stall_cycles_o,
+     output logic [31:0]             rel_unheld_o,
++    output logic [31:0]             holes_o,
++    output logic [31:0]             groups_poisoned_o,
++    output logic [31:0]             holes_orphan_o,
+     // FAULT, and structurally unreachable while the drain rule is correct --
+     // see the header and the committed mutant.
+     output logic                    seal_early_o
+ );
+ 
+   localparam int unsigned CNT_W = $clog2(DEPTH + 1);
+@@ -253,12 +294,13 @@ module zhao_geom_group_seq #(
+ 
+   logic               alloc_slot_q;  // the slot being allocated
+   logic               seal_slot_q;   // ... sealed
+   logic               hand_slot_q;   // ... handed over
+   logic               vs_q;          // the fan-out slot of the current vertex
+   logic [INDEX_W-1:0] vi_q;          // the vertex index within the group
++  logic [INDEX_W-1:0] holes_q;       // records of this job VDECODE refused
+ 
+   // ---- the free arena, lowest index first ----------------------------------
+   logic               any_free_c;
+   logic [ARENA_W-1:0] free_c;
+   integer fi;
+   always_comb begin
+@@ -270,16 +312,19 @@ module zhao_geom_group_seq #(
+         free_c     = ARENA_W'(fi);
+       end
+     end
+   end
+ 
+   // ---- the drain condition: LANDINGS, per active slot ----------------------
++  // Against the vertices actually SENT (`vi_q` once the fill has ended), not
++  // against `j_count`: a hole never lands, so a batch with one would otherwise
++  // wait in StSealWait for ever -- the R31 deadlock moved one state later.
+   logic drain_done_c;
+   always_comb begin
+-    drain_done_c = (landed_q[slot_arena_q[0]] == CNT_W'(j_count));
+-    if (two_slots_q && (landed_q[slot_arena_q[1]] != CNT_W'(j_count)))
++    drain_done_c = (landed_q[slot_arena_q[0]] == CNT_W'(vi_q));
++    if (two_slots_q && (landed_q[slot_arena_q[1]] != CNT_W'(vi_q)))
+       drain_done_c = 1'b0;
+   end
+ 
+   // ---- the job port --------------------------------------------------------
+   //
+   // `job_ready_o` is independent of `job_valid_i` (house hygiene). A MALFORMED
+@@ -310,12 +355,24 @@ module zhao_geom_group_seq #(
+   assign rider_arena_o = slot_arena_q[vs_q];
+   assign rider_index_o = vi_q;
+   assign a_payload_o   = rider_payload_i;
+ 
+   wire a_take_c = a_valid_o && a_ready_i;
+ 
++  // ---- holes, and the end of the fill ----------------------------------------
++  // A hole is charged to the job while its records can still be arriving
++  // (StAlloc: the stream starts on the accept clock, so a record can be refused
++  // before both arenas are open; StFill). Anywhere else there is no record
++  // outstanding for it to stand for, and it is an ORPHAN.
++  wire hole_in_job_c = hole_i && ((st == StAlloc) || (st == StFill));
++  wire vtx_done_c    = a_take_c && last_slot_c;
++  wire [INDEX_W-1:0] vi_next_c    = vi_q + (vtx_done_c ? INDEX_W'(1) : INDEX_W'(0));
++  wire [INDEX_W-1:0] holes_next_c = holes_q + (hole_in_job_c ? INDEX_W'(1) : INDEX_W'(0));
++  // Every record of the batch is accounted for: arrived, or refused upstream.
++  wire fill_end_c = ((vi_next_c + holes_next_c) == j_count);
++
+   // A vertex is consumed only when its LAST slot has been accepted: the stream
+   // is view-independent and must not be skinned twice, so one vertex is held
+   // across the fan-out rather than buffered.
+   assign v_ready_o = (st == StFill) && last_slot_c && a_ready_i;
+ 
+   // ---- seal ----------------------------------------------------------------
+@@ -326,12 +383,13 @@ module zhao_geom_group_seq #(
+   assign grp_valid_o  = (st == StHand);
+   assign grp_arena_o  = slot_arena_q[hand_slot_q];
+   assign grp_gen_o    = slot_gen_q[hand_slot_q];
+   assign grp_count_o  = j_count;
+   assign grp_view_o   = slot_view_q[hand_slot_q];
+   assign grp_src_id_o = j_src;
++  assign grp_poison_o = (holes_q != '0);
+ 
+   wire grp_take_c = grp_valid_o && grp_ready_i;
+ 
+   // ---- release -------------------------------------------------------------
+   wire rel_held_c = rel_valid_i && held_q[rel_arena_i];
+ 
+@@ -351,12 +409,16 @@ module zhao_geom_group_seq #(
+       held_q               <= '0;
+       alloc_slot_q         <= 1'b0;
+       seal_slot_q          <= 1'b0;
+       hand_slot_q          <= 1'b0;
+       vs_q                 <= 1'b0;
+       vi_q                 <= '0;
++      holes_q              <= '0;
++      holes_o              <= '0;
++      groups_poisoned_o    <= '0;
++      holes_orphan_o       <= '0;
+       groups_opened_o      <= '0;
+       groups_sealed_o      <= '0;
+       vertices_sent_o      <= '0;
+       landings_o           <= '0;
+       jobs_refused_o       <= '0;
+       alloc_stall_cycles_o <= '0;
+@@ -378,21 +440,30 @@ module zhao_geom_group_seq #(
+           held_q[rel_arena_i] <= 1'b0;
+         end else if (rel_unheld_o != 32'hFFFF_FFFF) begin
+           rel_unheld_o <= rel_unheld_o + 32'd1;
+         end
+       end
+ 
++      // --- holes: charged to the held job, or counted as orphans ------------
++      if (hole_in_job_c) begin
++        holes_q <= holes_next_c;
++        if (holes_o != 32'hFFFF_FFFF) holes_o <= holes_o + 32'd1;
++      end else if (hole_i && (holes_orphan_o != 32'hFFFF_FFFF)) begin
++        holes_orphan_o <= holes_orphan_o + 32'd1;
++      end
++
+       case (st)
+         StIdle: begin
+           if (job_take_c) begin
+             if (!job_legal_c) begin
+               if (jobs_refused_o != 32'hFFFF_FFFF)
+                 jobs_refused_o <= jobs_refused_o + 32'd1;
+             end else begin
+               j_count        <= job_count_i;
+               j_src          <= job_src_id_i;
++              holes_q        <= '0;
+               two_slots_q    <= (&job_view_mask_i);
+               slot_view_q[0] <= !job_view_mask_i[0];  // lowest set view
+               slot_view_q[1] <= 1'b1;                 // only used when two
+               alloc_slot_q   <= 1'b0;
+               st             <= StAlloc;
+             end
+@@ -427,20 +498,21 @@ module zhao_geom_group_seq #(
+         StFill: begin
+           if (a_take_c) begin
+             if (vertices_sent_o != 32'hFFFF_FFFF)
+               vertices_sent_o <= vertices_sent_o + 32'd1;
+             if (last_slot_c) begin
+               vs_q <= 1'b0;
+-              vi_q <= vi_q + INDEX_W'(1);
+-              if ((vi_q + INDEX_W'(1)) == j_count) begin
+-                st <= StSealWait;
+-              end
++              vi_q <= vi_next_c;
+             end else begin
+               vs_q <= 1'b1;
+             end
+           end
++          // Evaluated every clock, not only on a vertex: the record that
++          // completes the batch may be a HOLE, and a batch whose every record
++          // was refused has no vertex at all to trigger the check.
++          if (fill_end_c) st <= StSealWait;
+         end
+ 
+         StSealWait: begin
+           // THE RULE: landings, never accepts. See the header.
+           if (drain_done_c) begin
+             seal_slot_q <= 1'b0;
+@@ -459,12 +531,14 @@ module zhao_geom_group_seq #(
+             seal_slot_q <= 1'b1;
+           end
+         end
+ 
+         StHand: begin
+           if (grp_take_c) begin
++            if (grp_poison_o && (groups_poisoned_o != 32'hFFFF_FFFF))
++              groups_poisoned_o <= groups_poisoned_o + 32'd1;
+             if (hand_slot_q == two_slots_q) begin
+               st <= StIdle;
+             end else begin
+               hand_slot_q <= 1'b1;
+             end
+           end
+
+```
+
+# INPUT git show 3dae8f10 -- fpga/rtl/geometry/zhao_geom_replay.sv
+```
+3dae8f10 R31 defect: a VDECODE refusal no longer deadlocks the geometry path
+
+diff --git a/fpga/rtl/geometry/zhao_geom_replay.sv b/fpga/rtl/geometry/zhao_geom_replay.sv
+index 9ebb9027..0fbe2d5f 100644
+--- a/fpga/rtl/geometry/zhao_geom_replay.sv
++++ b/fpga/rtl/geometry/zhao_geom_replay.sv
+@@ -84,12 +84,16 @@
+ // ---------------------------------------------------------------------------
+ // A triangle with a REFUSED corner (bad arena, stale generation, unsealed, out
+ // of range) or a MISSED one (slot never written) is DROPPED and counted: it
+ // cannot be drawn, and drawing it from a stale or unwritten vertex would put
+ // somebody else's geometry on screen. A vertex id wider than the arena index is
+ // forced to an index the arena REFUSES rather than truncated onto a real slot.
++// A meshlet whose GROUP_SEQ handle arrives POISONED (a record GEOM.VDECODE
++// refused, owner ruling R31) has every triangle taken and dropped WITHOUT a
++// lookup -- its later indices name the wrong vertices, so a lookup would HIT
++// -- counted on `poisoned_o`, and its arenas are released as usual.
+ //
+ // Throughput is stated, not claimed: see the directed test's measured clocks
+ // per triangle. Conservative SystemVerilog subset only (charter section 2).
+ `default_nettype none
+ 
+ module zhao_geom_replay #(
+@@ -116,12 +120,16 @@ module zhao_geom_replay #(
+     // ---- sealed group handles, from GEOM.GROUP_SEQ ----------------------------
+     input  wire                    grp_valid_i,
+     output wire                    grp_ready_o,
+     input  wire [ARENA_W-1:0]      grp_arena_i,
+     input  wire [GEN_W-1:0]        grp_gen_i,
+     input  wire                    grp_view_i,
++    // GEOM.GROUP_SEQ's verdict that the batch lost a record upstream (a
++    // GEOM.VDECODE refusal, owner ruling R31): the meshlet's triangles are
++    // taken and DROPPED, and its arenas are still released.
++    input  wire                    grp_poison_i,
+     output wire                    rel_valid_o,
+     output wire [ARENA_W-1:0]      rel_arena_o,
+ 
+     // ---- arena lifetime and landings, for the per-arena depth profile -------
+     input  wire                    op_valid_i,     // GEOM.GROUP_SEQ open_o
+     input  wire [ARENA_W-1:0]      op_arena_i,
+@@ -184,13 +192,14 @@ module zhao_geom_replay #(
+     output logic [31:0]            triangles_out_o,  // triangles emitted (all views)
+     output logic [31:0]            refused_o,        // dropped: a corner refused
+     output logic [31:0]            missed_o,         // dropped: a corner missed
+     output logic [31:0]            att_skew_o,       // store and arena disagreed on timing
+     output logic [31:0]            profile_mixed_o,  // one arena, two profiles
+     output logic [31:0]            view_bad_o,       // a handle for a view not in the mask
+-    output logic [31:0]            dq_refused_o      // DEPTHQUANT refusals, all lanes
++    output logic [31:0]            dq_refused_o,     // DEPTHQUANT refusals, all lanes
++    output logic [31:0]            poisoned_o        // dropped: the batch lost a record (R31)
+ );
+ 
+   localparam int unsigned NA = 1 << ARENA_W;
+ 
+   initial begin
+     if (PAYLOAD_W != 106)
+@@ -211,12 +220,13 @@ module zhao_geom_replay #(
+   logic [2:0] st_q;
+ 
+   logic [1:0]         need_q;          // handles this meshlet expects, 0..2
+   logic [1:0]         nh_q;            // handles taken
+   logic [1:0]         mask_q;
+   logic               done_seen_q;     // GEOM.ASSEMBLE's walk has ended
++  logic               pois_q;          // a handle of this meshlet was poisoned
+   logic [ARENA_W-1:0] sl_arena_q [2];
+   logic [GEN_W-1:0]   sl_gen_q   [2];
+   logic               sl_view_q  [2];
+   logic               vs_q;            // the slot being replayed
+   logic               rk_rel_q;        // the slot being released
+ 
+@@ -480,12 +490,14 @@ module zhao_geom_replay #(
+     if (!rst_n) begin
+       st_q            <= S_IDLE;
+       need_q          <= '0;
+       nh_q            <= '0;
+       mask_q          <= '0;
+       done_seen_q     <= 1'b0;
++      pois_q          <= 1'b0;
++      poisoned_o      <= '0;
+       sl_arena_q[0]   <= '0;
+       sl_arena_q[1]   <= '0;
+       sl_gen_q[0]     <= '0;
+       sl_gen_q[1]     <= '0;
+       sl_view_q[0]    <= 1'b0;
+       sl_view_q[1]    <= 1'b0;
+@@ -549,22 +561,26 @@ module zhao_geom_replay #(
+         S_IDLE: begin
+           if (mt_valid_i) begin
+             need_q      <= mt_need_c;
+             mask_q      <= mt_view_mask_i;
+             nh_q        <= '0;
+             done_seen_q <= 1'b0;
++            pois_q      <= 1'b0;
+             rk_rel_q    <= 1'b0;
+             st_q        <= (mt_need_c == 2'd0) ? S_TRI : S_HAND;
+           end
+         end
+ 
+         S_HAND: begin
+           if (grp_valid_i) begin
+             sl_arena_q[nh_q[0]] <= grp_arena_i;
+             sl_gen_q[nh_q[0]]   <= grp_gen_i;
+             sl_view_q[nh_q[0]]  <= grp_view_i;
++            // One poisoned handle poisons the MESHLET: both views were filled
++            // from the same record stream, so the same hole is in both.
++            if (grp_poison_i) pois_q <= 1'b1;
+             if (groups_o != 32'hFFFF_FFFF) groups_o <= groups_o + 32'd1;
+             if (!mask_q[grp_view_i] && (view_bad_o != 32'hFFFF_FFFF))
+               view_bad_o <= view_bad_o + 32'd1;
+             nh_q <= nh_q + 2'd1;
+             if ((nh_q + 2'd1) == need_q) st_q <= S_TRI;
+           end
+@@ -585,12 +601,18 @@ module zhao_geom_replay #(
+             any_ref_q  <= 1'b0;
+             any_miss_q <= 1'b0;
+             // A meshlet that holds no arena cannot draw: its triangles are
+             // taken and dropped as refused, so the walk still drains.
+             if (need_q == 2'd0) begin
+               if (refused_o != 32'hFFFF_FFFF) refused_o <= refused_o + 32'd1;
++            end else if (pois_q) begin
++              // R31: the batch lost a record, so every arena index after the
++              // hole names the wrong vertex. The descriptor is taken so the
++              // walk drains, and dropped WITHOUT a lookup -- a lookup would
++              // HIT, with a plausible corner from the wrong vertex.
++              if (poisoned_o != 32'hFFFF_FFFF) poisoned_o <= poisoned_o + 32'd1;
+             end else begin
+               st_q <= S_LOOK;
+             end
+           end else if (done_seen_q || m_done_i) begin
+             rk_rel_q <= 1'b0;
+             st_q     <= S_REL;
+
+```
+
+# INPUT git show 3dae8f10 -- tests/geometry/geom_group_seq_directed.cpp
+```
+3dae8f10 R31 defect: a VDECODE refusal no longer deadlocks the geometry path
+
+diff --git a/tests/geometry/geom_group_seq_directed.cpp b/tests/geometry/geom_group_seq_directed.cpp
+index 1a09fe2d..f2c25d78 100644
+--- a/tests/geometry/geom_group_seq_directed.cpp
++++ b/tests/geometry/geom_group_seq_directed.cpp
+@@ -76,12 +76,21 @@ struct Env {
+     v->v_valid_i = 0;
+     v->a_ready_i = 0;
+     v->grp_ready_i = 0;
+     v->rel_valid_i = 0;
+     v->fill_landed_i = 0;
+     v->fill_arena_i = 0;
++    v->hole_i = 0;
++  }
++
++  // One clock with VDECODE's refusal pulse raised: a record of the held job
++  // that will never arrive on the vertex stream.
++  void hole() {
++    v->hole_i = 1;
++    step();
++    v->hole_i = 0;
+   }
+ 
+   // One cycle with every modelled peer live. Returns nothing; all observation
+   // is accumulated in the members above.
+   void step() {
+     // --- the lane's two combinational replies, settled against whatever the
+@@ -177,23 +186,24 @@ struct Env {
+     v->v_valid_i = 0;
+     step();
+   }
+ 
+   // Let the machine drain, seal and offer its handles; collect them.
+   struct Handle {
+-    uint32_t arena, gen, count, view, src;
++    uint32_t arena, gen, count, view, src, poison;
+   };
+   std::vector<Handle> collect(int want, int guard_cycles = 400) {
+     std::vector<Handle> out;
+     v->a_ready_i = 1;
+     v->grp_ready_i = 1;
+     for (int g = 0; g < guard_cycles && static_cast<int>(out.size()) < want; ++g) {
+       v->eval();
+       if (v->grp_valid_o && v->grp_ready_i) {
+         out.push_back(
+-            Handle{v->grp_arena_o, v->grp_gen_o, v->grp_count_o, v->grp_view_o, v->grp_src_id_o});
++            Handle{v->grp_arena_o, v->grp_gen_o, v->grp_count_o, v->grp_view_o, v->grp_src_id_o,
++                   v->grp_poison_o});
+       }
+       step();
+     }
+     v->grp_ready_i = 0;
+     return out;
+   }
+@@ -312,12 +322,13 @@ int main(int argc, char** argv) {
+ 
+     if (!handles.empty()) {
+       case2_arena = handles[0].arena;
+       check(handles[0].count == 5, "handle carries the job's count", 5, handles[0].count);
+       check(handles[0].view == 0, "handle carries view 0 for mask 0b01", 0, handles[0].view);
+       check(handles[0].src == 0xBEEF, "handle carries src_id unchanged", 0xBEEF, handles[0].src);
++      check(handles[0].poison == 0, "a batch with no hole is NOT poisoned", 0, handles[0].poison);
+       // The generation the LANE offered in the open cycle, not one sampled a
+       // cycle late. e.opens was 0 before this open, so 0x50 was offered.
+       check(handles[0].gen == 0x50,
+             "handle carries the generation offered IN the open cycle -- a "
+             "generation sampled after the edge makes every later lookup miss "
+             "with a perfect payload",
+@@ -466,12 +477,100 @@ int main(int argc, char** argv) {
+     check(r.rel_unheld_o - ru0 == 1,
+           "releasing an arena that is not held is counted, not ignored -- a "
+           "double release would otherwise free a live arena silently",
+           1, r.rel_unheld_o - ru0);
+   }
+ 
++  // =========================================================================
++  // CASE 7 -- R31: a record GEOM.VDECODE REFUSES is a HOLE, and the batch still
++  // ends. Before the fix every sub-case below wedged in StFill (or StSealWait)
++  // for ever -- no seal, no handle -- and no counter moved. Each sub-case
++  // asserts the CORRECT behaviour (the handle arrives, poisoned); the counters
++  // are asserted as deltas beside it.
++  //
++  // Fresh reset: case 5 leaves a dual-view job parked in StAlloc on purpose.
++  // =========================================================================
++  e.reset();
++  {
++    // ---- 7a: one hole in the middle of a single-view batch -----------------
++    const uint32_t h0 = r.holes_o, p0 = r.groups_poisoned_o, ld0 = r.landings_o;
++    const uint32_t sl0 = r.groups_sealed_o;
++    const int short0 = e.seal_while_short;
++    e.offer_job(5, 0x1, 0x0701);
++    e.settle(2);
++    e.feed_vertices(2);
++    e.hole();  // record 2 of 5 was refused upstream
++    e.feed_vertices(2);
++    const auto hs = e.collect(1);
++    check(hs.size() == 1,
++          "R31: a batch with ONE refused record still seals and hands over -- "
++          "before the fix it waited in StFill for a fifth vertex that could "
++          "never arrive, and the whole geometry path deadlocked",
++          1, hs.size());
++    if (!hs.empty()) {
++      check(hs[0].poison == 1, "R31: that handle is POISONED (the batch drops, not the frame)", 1,
++            hs[0].poison);
++    }
++    check(r.holes_o - h0 == 1, "R31: holes_o counts the refused record", 1, r.holes_o - h0);
++    check(r.groups_poisoned_o - p0 == 1, "R31: groups_poisoned_o counts the marked handle", 1,
++          r.groups_poisoned_o - p0);
++    check(r.landings_o - ld0 == 4, "R31: four vertices sent, four landings -- a hole never lands", 4,
++          r.landings_o - ld0);
++    check(r.groups_sealed_o - sl0 == 1, "R31: the poisoned arena is sealed exactly once", 1,
++          r.groups_sealed_o - sl0);
++    check(e.seal_while_short - short0 == 0,
++          "R31: the seal still waited for every landing of the vertices that WERE sent", 0,
++          e.seal_while_short - short0);
++    if (!hs.empty()) e.release(hs[0].arena);
++
++    // ---- 7b: EVERY record refused, both views, holes arriving in StAlloc ---
++    const uint32_t h1 = r.holes_o, p1 = r.groups_poisoned_o, ld1 = r.landings_o;
++    const uint32_t vs1 = r.vertices_sent_o;
++    e.offer_job(3, 0x3, 0x0702);
++    e.hole();  // the first refusal lands while the SECOND arena is being opened
++    e.hole();
++    e.hole();
++    const auto hb = e.collect(2);
++    check(hb.size() == 2,
++          "R31: a batch whose every record was refused still hands over BOTH "
++          "views' groups -- there is no vertex at all to trigger the fill's end",
++          2, hb.size());
++    if (hb.size() == 2) {
++      check(hb[0].poison == 1 && hb[1].poison == 1, "R31: both views' handles are poisoned", 1,
++            (hb[0].poison && hb[1].poison) ? 1 : 0);
++    }
++    check(r.holes_o - h1 == 3, "R31: three holes charged to the job", 3, r.holes_o - h1);
++    check(r.groups_poisoned_o - p1 == 2, "R31: two poisoned handles", 2, r.groups_poisoned_o - p1);
++    check(r.landings_o - ld1 == 0 && r.vertices_sent_o - vs1 == 0,
++          "R31: nothing projected, nothing landed", 0, (r.landings_o - ld1) + (r.vertices_sent_o - vs1));
++    for (const auto& h : hb) e.release(h.arena);
++
++    // ---- 7c: an ORPHAN hole (no job held) is counted and charges nothing ---
++    const uint32_t o0 = r.holes_orphan_o, h2 = r.holes_o, p2 = r.groups_poisoned_o;
++    e.settle(4);
++    e.hole();
++    check(r.holes_orphan_o - o0 == 1,
++          "R31: a hole with no job held is counted as an ORPHAN -- it stands for "
++          "no record this block was waiting on",
++          1, r.holes_orphan_o - o0);
++    check(r.holes_o - h2 == 0, "R31: ... and is not charged to any job", 0, r.holes_o - h2);
++
++    // ---- 7d: the NEXT clean batch is clean: holes do not leak across jobs --
++    e.offer_job(2, 0x1, 0x0703);
++    e.settle(2);
++    e.feed_vertices(2);
++    const auto hc = e.collect(1);
++    check(hc.size() == 1 && hc[0].poison == 0,
++          "R31: a clean batch after a poisoned one is NOT poisoned -- the hole "
++          "count is per job",
++          0, hc.empty() ? 99u : hc[0].poison);
++    check(r.groups_poisoned_o - p2 == 0, "R31: no poisoned handle for the clean batch", 0,
++          r.groups_poisoned_o - p2);
++    check(r.seal_early_o == 0, "R31: no early seal anywhere in the hole cases", 0, r.seal_early_o);
++  }
++
+   // =========================================================================
+   // The detector's own claim, stated as what it is
+   // =========================================================================
+   check(r.seal_early_o == 0,
+         "seal_early_o reads 0 across the whole suite. That is a CLAIM about "
+         "unreachability, not evidence the detector works; the evidence is the "
+
+```
+
+# INPUT git show 3dae8f10 -- tests/mutants/zhao_geom_group_seq_mutant.sv
+```
+3dae8f10 R31 defect: a VDECODE refusal no longer deadlocks the geometry path
+
+diff --git a/tests/mutants/zhao_geom_group_seq_mutant.sv b/tests/mutants/zhao_geom_group_seq_mutant.sv
+index 3c536a84..131f107a 100644
+--- a/tests/mutants/zhao_geom_group_seq_mutant.sv
++++ b/tests/mutants/zhao_geom_group_seq_mutant.sv
+@@ -81,14 +81,20 @@
+ //       arbiter's grant, combinational from `a_valid_i`; the result lands many
+ //       cycles later with the rider intact, and the result port has NO
+ //       backpressure.
+ //   fpga/rtl/geometry/zhao_geom_wcache.sv -- instantiates `zhao_vertex_arena`
+ //       with `VALID_MODE(0)`, the BITMAP mode. So a geometry group may be
+ //       SHORTER than DEPTH and still seal; that is the difference from the
+-//       terrain side, whose 9x9 window is dense by construction. `job_count_i`
+-//       is therefore a real per-meshlet value and not a constant.
++//       terrain side, whose 9x9 window `zhao_terrain_group_seq` always fills
++//       completely -- an ASSUMPTION on that block, upheld there, not here.
++//       `job_count_i` is therefore a real per-meshlet value and not a constant.
++//       ENFORCED-BY: tests/geometry/geom_group_seq_directed.cpp -- CASE 2
++//       offers job_count_i = 5 against the bench's DEPTH = 8 and requires the
++//       group to SEAL with its handle carrying count == 5; a constant-DEPTH
++//       reading would still be waiting for eight landings. CASE 1 refuses
++//       count == 0 and count > DEPTH, so the bound is read as well.
+ //   fpga/rtl/terrain/zhao_terrain_group_seq.sv -- the proven sibling. Its
+ //       lowest-free-arena search, its slot fan-out and its "seal on LANDINGS,
+ //       never on ACCEPTS" rule are reproduced here because they are the same
+ //       problem; its ModeRef replay phase is NOT, because the geometry replay
+ //       customer is downstream of the handle this block emits.
+ //   design/contracts/GEOM.WCACHE.md -- the arena's law, including that
+@@ -111,21 +117,58 @@
+ // committed mutant rather than by a claim -- see
+ // tests/mutants/zhao_geom_group_seq_mutant.sv, whose only substantive change
+ // is that StSealWait advances on the ACCEPT count instead of the landing
+ // count, and whose driver passes when the counter FIRES.
+ //
+ // ---------------------------------------------------------------------------
++// A REFUSED RECORD IS A HOLE, AND A HOLE POISONS THE BATCH (owner ruling R31)
++// ---------------------------------------------------------------------------
++// GEOM.VDECODE refuses a malformed record INSTEAD of emitting it (its header;
++// `design/contracts/GEOM.VDECODE.md`: "unknown format_id: refused, and NO
++// VERTEX EMITTED"). Until 2026-09-19 this block waited for `job_count_i`
++// skinned vertices regardless, so ONE refused record left it in StFill for
++// ever: no seal, no handle, GEOM.REPLAY waiting on the handle, GEOM.ASSETFETCH
++// waiting on REPLAY's release -- the whole geometry path deadlocked, and no
++// counter anywhere moved, because every counter watches something that ARRIVES.
++//
++// `hole_i` is VDECODE's refusal pulse, one per refused record. Only one meshlet
++// is ever between GEOM.ASSETFETCH and this block (the dispatcher fork takes a
++// meshlet only when GEOM.REPLAY is idle, and REPLAY releases it only after this
++// block's handles), so a hole that arrives while a job is held belongs to that
++// job by construction. The fill ends when VERTICES + HOLES == count, and the
++// drain waits for LANDINGS == VERTICES SENT (not count: a hole never lands).
++//
++// A group with a hole is SEALED AND HANDED OVER WITH `grp_poison_o` HIGH, never
++// withheld. The contract's law is "a refusal drops the BATCH, not the frame":
++// the indices after a hole are shifted, so no triangle of the meshlet may be
++// drawn from this arena -- but the arena must still reach GEOM.REPLAY, because
++// REPLAY is the block that proves both readers are done and releases the
++// buffer. Withholding the handle would be the old deadlock with extra steps.
++//
++// `holes_o` counts holes absorbed into a job; `groups_poisoned_o` counts the
++// handles marked; `holes_orphan_o` counts a hole with NO job held, which the
++// dispatcher's one-meshlet law makes unreachable (a job this block refuses has
++// no count to charge a hole against, and is the one legal way to get there --
++// see `jobs_refused_o`). All three are fired by stimulus in
++// tests/geometry/geom_group_seq_directed.cpp.
++//
++// ---------------------------------------------------------------------------
+ // THE MEMORY TRADE, WITH NUMBERS (standing owner direction: ALMs are the
+ // binding constraint, M10K is the slack, prefer a lookup over computation)
+ // ---------------------------------------------------------------------------
+ // THE LEVER DOES NOT APPLY HERE, and the numbers say why rather than a
+ // sentence asserting it:
+ //
+ //   * This block contains NO MULTIPLIER and NO TABLE. It is a state machine,
+-//     a running index and per-arena bookkeeping. 0 DSP by construction, so the
+-//     "do not spend memory to remove DSPs" half of the direction is moot.
++//     a running index and per-arena bookkeeping. 0 DSP is therefore an
++//     ASSUMPTION, not a measurement, and it is upheld by the author of this
++//     file: there is no `*` on a non-constant operand and no ROM anywhere in
++//     it. Only a quartus_map report can close it and none has been run on this
++//     block, so no enforcer is named here -- the assumption is stated with its
++//     upholder instead. Under it, the "do not spend memory to remove DSPs"
++//     half of the direction is moot.
+ //   * Its whole state at the defaults (ARENAS=4 -> ARENA_W=3, DEPTH=1089 ->
+ //     INDEX_W=12, CNT_W=11) is: held 8 bits + landed 8x11 = 88 bits + two slot
+ //     records (arena 3 + gen 8 + view 1) = 24 bits + job registers (count 12 +
+ //     src_id 16 + shape 4) = 32 bits + index/slot/state ~= 20 bits. About 172
+ //     flops.
+ //   * One M10K is 10,240 bits. Moving ~172 bits into one would spend 1 of the
+@@ -172,12 +215,15 @@ module zhao_geom_group_seq #(
+     // ---- skinned vertices in, view-independent, LOCAL (rebased) coords -----
+     input  wire                     v_valid_i,
+     output wire                     v_ready_o,
+     input  wire signed [31:0]       v_x_i,
+     input  wire signed [31:0]       v_y_i,
+     input  wire signed [31:0]       v_z_i,
++    // One pulse per record GEOM.VDECODE REFUSED: a vertex that will never
++    // arrive on `v_*`. See "A REFUSED RECORD IS A HOLE" in the header.
++    input  wire                     hole_i,
+ 
+     // ---- client A of the shared projection service -------------------------
+     output wire                     a_valid_o,
+     input  wire                     a_ready_i,
+     output wire signed [31:0]       a_vx_o,
+     output wire signed [31:0]       a_vy_o,
+@@ -204,12 +250,15 @@ module zhao_geom_group_seq #(
+     input  wire                     grp_ready_i,
+     output wire [ARENA_W-1:0]       grp_arena_o,
+     output wire [GEN_W-1:0]         grp_gen_o,
+     output wire [INDEX_W-1:0]       grp_count_o,
+     output wire                     grp_view_o,
+     output wire [15:0]              grp_src_id_o,
++    // The batch lost a record: nothing in this arena may be drawn. REPLAY
++    // still takes the handle, drops the meshlet's triangles and releases it.
++    output wire                     grp_poison_o,
+ 
+     // ---- release, driven by the replay customer when it is done ------------
+     input  wire                     rel_valid_i,
+     input  wire [ARENA_W-1:0]       rel_arena_i,
+ 
+     // ---- counters ----------------------------------------------------------
+@@ -217,12 +266,15 @@ module zhao_geom_group_seq #(
+     output logic [31:0]             groups_sealed_o,
+     output logic [31:0]             vertices_sent_o,
+     output logic [31:0]             landings_o,
+     output logic [31:0]             jobs_refused_o,
+     output logic [31:0]             alloc_stall_cycles_o,
+     output logic [31:0]             rel_unheld_o,
++    output logic [31:0]             holes_o,
++    output logic [31:0]             groups_poisoned_o,
++    output logic [31:0]             holes_orphan_o,
+     // FAULT, and structurally unreachable while the drain rule is correct --
+     // see the header and the committed mutant.
+     output logic                    seal_early_o
+ );
+ 
+   localparam int unsigned CNT_W = $clog2(DEPTH + 1);
+@@ -271,12 +323,13 @@ module zhao_geom_group_seq #(
+ 
+   logic               alloc_slot_q;  // the slot being allocated
+   logic               seal_slot_q;   // ... sealed
+   logic               hand_slot_q;   // ... handed over
+   logic               vs_q;          // the fan-out slot of the current vertex
+   logic [INDEX_W-1:0] vi_q;          // the vertex index within the group
++  logic [INDEX_W-1:0] holes_q;       // records of this job VDECODE refused
+ 
+   // ---- the free arena, lowest index first ----------------------------------
+   logic               any_free_c;
+   logic [ARENA_W-1:0] free_c;
+   integer fi;
+   always_comb begin
+@@ -288,16 +341,19 @@ module zhao_geom_group_seq #(
+         free_c     = ARENA_W'(fi);
+       end
+     end
+   end
+ 
+   // ---- the drain condition: LANDINGS, per active slot ----------------------
++  // Against the vertices actually SENT (`vi_q` once the fill has ended), not
++  // against `j_count`: a hole never lands, so a batch with one would otherwise
++  // wait in StSealWait for ever -- the R31 deadlock moved one state later.
+   logic drain_done_c;
+   always_comb begin
+-    drain_done_c = (landed_q[slot_arena_q[0]] == CNT_W'(j_count));
+-    if (two_slots_q && (landed_q[slot_arena_q[1]] != CNT_W'(j_count)))
++    drain_done_c = (landed_q[slot_arena_q[0]] == CNT_W'(vi_q));
++    if (two_slots_q && (landed_q[slot_arena_q[1]] != CNT_W'(vi_q)))
+       drain_done_c = 1'b0;
+   end
+ 
+   // ---- the job port --------------------------------------------------------
+   //
+   // `job_ready_o` is independent of `job_valid_i` (house hygiene). A MALFORMED
+@@ -328,12 +384,24 @@ module zhao_geom_group_seq #(
+   assign rider_arena_o = slot_arena_q[vs_q];
+   assign rider_index_o = vi_q;
+   assign a_payload_o   = rider_payload_i;
+ 
+   wire a_take_c = a_valid_o && a_ready_i;
+ 
++  // ---- holes, and the end of the fill ----------------------------------------
++  // A hole is charged to the job while its records can still be arriving
++  // (StAlloc: the stream starts on the accept clock, so a record can be refused
++  // before both arenas are open; StFill). Anywhere else there is no record
++  // outstanding for it to stand for, and it is an ORPHAN.
++  wire hole_in_job_c = hole_i && ((st == StAlloc) || (st == StFill));
++  wire vtx_done_c    = a_take_c && last_slot_c;
++  wire [INDEX_W-1:0] vi_next_c    = vi_q + (vtx_done_c ? INDEX_W'(1) : INDEX_W'(0));
++  wire [INDEX_W-1:0] holes_next_c = holes_q + (hole_in_job_c ? INDEX_W'(1) : INDEX_W'(0));
++  // Every record of the batch is accounted for: arrived, or refused upstream.
++  wire fill_end_c = ((vi_next_c + holes_next_c) == j_count);
++
+   // A vertex is consumed only when its LAST slot has been accepted: the stream
+   // is view-independent and must not be skinned twice, so one vertex is held
+   // across the fan-out rather than buffered.
+   assign v_ready_o = (st == StFill) && last_slot_c && a_ready_i;
+ 
+   // ---- seal ----------------------------------------------------------------
+@@ -344,12 +412,13 @@ module zhao_geom_group_seq #(
+   assign grp_valid_o  = (st == StHand);
+   assign grp_arena_o  = slot_arena_q[hand_slot_q];
+   assign grp_gen_o    = slot_gen_q[hand_slot_q];
+   assign grp_count_o  = j_count;
+   assign grp_view_o   = slot_view_q[hand_slot_q];
+   assign grp_src_id_o = j_src;
++  assign grp_poison_o = (holes_q != '0);
+ 
+   wire grp_take_c = grp_valid_o && grp_ready_i;
+ 
+   // ---- release -------------------------------------------------------------
+   wire rel_held_c = rel_valid_i && held_q[rel_arena_i];
+ 
+@@ -369,12 +438,16 @@ module zhao_geom_group_seq #(
+       held_q               <= '0;
+       alloc_slot_q         <= 1'b0;
+       seal_slot_q          <= 1'b0;
+       hand_slot_q          <= 1'b0;
+       vs_q                 <= 1'b0;
+       vi_q                 <= '0;
++      holes_q              <= '0;
++      holes_o              <= '0;
++      groups_poisoned_o    <= '0;
++      holes_orphan_o       <= '0;
+       groups_opened_o      <= '0;
+       groups_sealed_o      <= '0;
+       vertices_sent_o      <= '0;
+       landings_o           <= '0;
+       jobs_refused_o       <= '0;
+       alloc_stall_cycles_o <= '0;
+@@ -396,21 +469,30 @@ module zhao_geom_group_seq #(
+           held_q[rel_arena_i] <= 1'b0;
+         end else if (rel_unheld_o != 32'hFFFF_FFFF) begin
+           rel_unheld_o <= rel_unheld_o + 32'd1;
+         end
+       end
+ 
++      // --- holes: charged to the held job, or counted as orphans ------------
++      if (hole_in_job_c) begin
++        holes_q <= holes_next_c;
++        if (holes_o != 32'hFFFF_FFFF) holes_o <= holes_o + 32'd1;
++      end else if (hole_i && (holes_orphan_o != 32'hFFFF_FFFF)) begin
++        holes_orphan_o <= holes_orphan_o + 32'd1;
++      end
++
+       case (st)
+         StIdle: begin
+           if (job_take_c) begin
+             if (!job_legal_c) begin
+               if (jobs_refused_o != 32'hFFFF_FFFF)
+                 jobs_refused_o <= jobs_refused_o + 32'd1;
+             end else begin
+               j_count        <= job_count_i;
+               j_src          <= job_src_id_i;
++              holes_q        <= '0;
+               two_slots_q    <= (&job_view_mask_i);
+               slot_view_q[0] <= !job_view_mask_i[0];  // lowest set view
+               slot_view_q[1] <= 1'b1;                 // only used when two
+               alloc_slot_q   <= 1'b0;
+               st             <= StAlloc;
+             end
+@@ -445,20 +527,21 @@ module zhao_geom_group_seq #(
+         StFill: begin
+           if (a_take_c) begin
+             if (vertices_sent_o != 32'hFFFF_FFFF)
+               vertices_sent_o <= vertices_sent_o + 32'd1;
+             if (last_slot_c) begin
+               vs_q <= 1'b0;
+-              vi_q <= vi_q + INDEX_W'(1);
+-              if ((vi_q + INDEX_W'(1)) == j_count) begin
+-                st <= StSealWait;
+-              end
++              vi_q <= vi_next_c;
+             end else begin
+               vs_q <= 1'b1;
+             end
+           end
++          // Evaluated every clock, not only on a vertex: the record that
++          // completes the batch may be a HOLE, and a batch whose every record
++          // was refused has no vertex at all to trigger the check.
++          if (fill_end_c) st <= StSealWait;
+         end
+ 
+         StSealWait: begin
+           // THE MUTATION, and the only substantive change in this file: the
+           // drain condition is gone, so the machine seals on the ACCEPT count
+           // and the landings are still in flight when the seal is issued.
+@@ -479,12 +562,14 @@ module zhao_geom_group_seq #(
+             seal_slot_q <= 1'b1;
+           end
+         end
+ 
+         StHand: begin
+           if (grp_take_c) begin
++            if (grp_poison_o && (groups_poisoned_o != 32'hFFFF_FFFF))
++              groups_poisoned_o <= groups_poisoned_o + 32'd1;
+             if (hand_slot_q == two_slots_q) begin
+               st <= StIdle;
+             end else begin
+               hand_slot_q <= 1'b1;
+             end
+           end
+
+```

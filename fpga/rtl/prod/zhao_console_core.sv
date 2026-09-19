@@ -303,7 +303,9 @@
 //      POSITIONAL; `zhao_mem_guard` grants the render asset pool to ENGINE1
 //      alone and everything else falls to `default: pass_ok = 1'b0`. A
 //      second geometry client is therefore not a wire, it is a memory-rules
-//      ruling -- the same wall entry I15 item 2 records for the compositor.
+//      ruling -- the same wall the compositor met, and answered the same way:
+//      by sharing the one permitted client (post shares ENGINE0; see the
+//      I15/I16 closure record at the compositor instance).
 //      `zhao_geom_mem_adapter` is the owner's answer (recovery brief 12.1):
 //      round-robin at LOGICAL REQUEST boundaries, one request in flight, the
 //      client field forced to ENGINE1 and `write` forced low. So the console
@@ -982,121 +984,6 @@
 //      `zhao_vertex_arena`'s payload would have to widen, and that is a change
 //      to that block rather than to a composer.
 //
-// I15. POST.COMPOSITE's SOURCE PIXELS (`post_s_*`) -- BOUNDARY, and this is
-//      the largest honest gap in the file.
-//
-//      CORRECTED 2026-09-19. This entry used to read "RASTER.RESOLVE's output
-//      is INTERNAL to `zhao_geom_bin_pipe_v2` ... interposing it is a change to
-//      ... `zhao_geom_bin_pipe_v2`'s port list". THAT IS FALSE, and it sent the
-//      next reader at the wrong file. The resolved stream is NINE PORTS on that
-//      module -- `fb_valid_o`/`fb_ready_i`/`fb_rgb565_o`/`fb_tag_o`/
-//      `fb_addr_o`/`fb_x_o`/`fb_y_o`/`fb_last_o`/`fb_src_id_o`, under its own
-//      comment "Resolved framebuffer stream". No bin-pipe port change is needed
-//      for anything. What is internal is one level up: `zhao_shell_top_v2`
-//      carries it on the `rpx_*` wires from `u_render_bin` straight into
-//      `u_render_fbw` and re-exports none of it, so the shell has no pixel-
-//      stream port -- but that is an ordinary port addition on a file this
-//      packet may edit, and it is NOT why the compositor is unconnected.
-//
-//      THE REAL OBSTACLE IS ORDER AND DENSITY, AND IT IS NOT WIRING.
-//
-//        * `post_s_*` IS ADDRESSLESS. `zhao_post_composite` has no source
-//          coordinate port; it derives one from `x_in_q`/`y_in_q`, counters
-//          that step on every accepted pixel and wrap at `frame_w_i` and
-//          `frame_h_i`. The Nth pixel it accepts IS, by construction, frame
-//          pixel (N mod W, N div W). Its nine-line ring is built on that: the
-//          write pointer and the read pointer walk the same raster at the same
-//          rate, which is the whole LAG_PX argument in that file's header.
-//        * RASTER.RESOLVE IS TILE-ORDERED. It resolves "one finished 16x16
-//          tile"; `fb_addr_o` is `{row[3:0], col[3:0]}` WITHIN the tile and
-//          `zhao_raster_tile_pipe_v2` forms the surface coordinate as tile
-//          origin plus that. So stream pixel 17 is frame (0,1) of one tile
-//          while the compositor's counter is at (16,0) of the frame. Feeding
-//          one to the other scrambles every pixel after the first sixteen, and
-//          it does so with every handshake legal, `s_ready_o`/`fb_ready_i`
-//          balanced, and `output_writes_o` counting a full frame. This is the
-//          plausible wrong picture with a clean instrument beside it, which is
-//          the failure this file's rules are written about.
-//        * AND IT IS SPARSE. `resolve_start_w` fires only out of `RS_SWAP`,
-//          which a tile reaches only after the binner hands it a job sequence.
-//          A tile no triangle touches is never resolved and emits no pixels at
-//          all, while the compositor waits for exactly `frame_w * frame_h` of
-//          them before `o_last_o`. On any frame that is not fully covered the
-//          block would simply never finish a pass.
-//        * `zhao_raster_fbwrite` EXISTS BECAUSE THE STREAM IS SCATTERED. It
-//          recomputes a VRAM address per tile row from `px_x_i`/`px_y_i` and
-//          raises `stream_error_o` if a pixel is not its predecessor's
-//          successor within a row. A dense raster stream would need neither.
-//
-//      SO THE REORDER BUFFER BETWEEN THE TWO IS A WHOLE FRAME, and the frame
-//      store that already exists is the framebuffer. That is exactly what
-//      POST.COMPOSITE.md means by "an exclusive framebuffer read/write lease
-//      after resolve and before publication": post reads the COMPLETED
-//      framebuffer back in raster order. Interposing before FBWRITE is not a
-//      cheaper version of that arrangement, it is a different and wrong one.
-//
-//      WHAT IS MISSING IS THEREFORE THREE THINGS, NAMED SO THE NEXT PACKET
-//      DOES NOT GO LOOKING FOR A PORT:
-//        1. A RASTER-ORDER FRAMEBUFFER READ MASTER in the gpu-clock domain,
-//           AND IT IS NOT A NEW INVENTION -- searched, and this entry is
-//           narrower than it first said. `zhao_scanout_fetch` is already
-//           exactly that shape: its own header says "gpu domain", it reads a
-//           slot READ-ONLY through MEM.GUARD in 64-B bursts, one display line
-//           at a time, in raster order. Three things make it not droppable in
-//           as it stands, and all three are bounded:
-//             - it fetches `display_slot_sync`, the DISPLAYED slot, and post
-//               must read the BACK buffer. Pointing it at the front one is the
-//               use `zhao_post_composite`'s own header forbids by name --
-//               "NEVER POST-PROCESS THE CURRENTLY SCANNED-OUT FRONT BUFFER";
-//             - it re-arms on `dec_sync`/`frame_start_sync`, the VIDEO
-//               raster's swap decision, not on render drain -- which is item 3;
-//             - its output is 64-bit beats into `zhao_scanout_linebuf`, while
-//               `s_rgb_i` wants one RGB565 at a time. That unpack is a
-//               byte-lane split under `spec/video_rules.md` 3 (little-endian
-//               halfwords, row-major, no row padding), NOT a colour law and not
-//               arithmetic this file would be inventing.
-//           So the source side is a re-armed variant of a block that exists,
-//           not a block nobody has written. It is still a MODULE and a memory
-//           client, which is why it is not done here as wiring.
-//        2. A MEMORY IDENTITY FOR A THIRD FRAMEBUFFER AGENT, AND THIS IS THE
-//           REAL BLOCKER once item 1 is read properly. The shell's lease is ONE
-//           BIT -- `fb_writer_i`, 0 = DEBUG.FRAMEBLIT, 1 = RASTER.FBWRITE --
-//           and `zhao_mem_guard` passes on that bit. Post is a reader AND a
-//           writer inside one frame. `zhao_vram_arbiter` builds the
-//           controller's client tag by CASTING THE SLOT INDEX, so the client is
-//           POSITIONAL, not configurable, and the shell's five slots are all
-//           spoken for: 0 SCANOUT, 1 BLIT_DMA, 2 ENGINE0 (render), 3 ENGINE1
-//           (geometry fetch), 4 DEBUG. There is no index post could present
-//           that both the guard admits and the arbiter would carry -- exactly
-//           the refusal `zhao_shell_top_v2` already writes out at its
-//           `client_req[3]` note for a second geometry fetcher. That is a
-//           decision for the memory rules, not for this file.
-//        3. A FRAME-COMPLETION EVENT to start the pass on. `frame_start_i` is
-//           `core_tick_c` here, which is the console tick, not render drain.
-//
-//      REFUSED 2026-09-19, and this is the fourth refusal of this seam. The
-//      earlier three were right to refuse and gave a reason that pointed at the
-//      wrong file; the reason above points at the right ones.
-//      AND `reports/APPROACH-CORRECTION-20260919.md` SHOULD BE READ WITH THIS.
-//      Its root-cause list names "RESOLVE internal to `zhao_geom_bin_pipe_v2`
-//      -- blocks the whole post path". That sentence is the one corrected
-//      above: RESOLVE's output is nine ports, the internality is one level up
-//      and is a port addition, and the thing that actually blocks the post path
-//      is the order/density mismatch plus item 2. Same document's rule, applied
-//      to this entry: a refusal must name what it searched, so item 1 names
-//      `zhao_scanout_fetch` and says what is and is not missing about it rather
-//      than claiming nothing exists.
-//
-//
-// I16. POST.COMPOSITE's output and echo tap (`post_o_*`, `post_echo_*`) --
-//      BOUNDARY, the other end of I15. The output end is the SMALLER half and
-//      it is still blocked by I15's item 2: `o_x_o`/`o_y_o`/`o_last_o` are
-//      shaped exactly like `zhao_raster_fbwrite`'s `px_x_i`/`px_y_i`/
-//      `px_last_i`, so the composited stream has a writer the moment post has a
-//      lease -- and until then, wiring it to the EXISTING `u_render_fbw` would
-//      put two producers on one framebuffer writer, which is worse than the
-//      gap.
-//
 // I17. POST.COMPOSITE's gather planes, HUD, grading table, flash and ink
 //      (`post_gd_*`, `post_gg_*`, `post_hud_*`, `post_pv_*`, `post_bias_*`,
 //      `post_flash_*`, `post_ink_*`, `post_bloom_gain_i`) -- BOUNDARY. The
@@ -1129,9 +1016,11 @@
 //          walk into without a VRAM fill agent. `zhao_texture_cache` is 1 KiB
 //          of line cache with a MANDATORY `fill_*` port; `zhao_texture_tmu_pipe`
 //          has the exactly right request and response shape and its `cac_*`
-//          group is equally mandatory. Both end at MEM.VRAM.ARBITER, which has
-//          no spare client index (see I15 item 2), and at `zhao_sdram_ctrl`,
-//          which is I23's absent behavioural model. That is a real wall and it
+//          group is equally mandatory. Both end at MEM.VRAM.ARBITER. (The
+//          'no spare client index' this used to cite was I15's item 2 and
+//          is ANSWERED for post by sharing ENGINE0 under the render lease --
+//          `zhao_post_lease`; a texel page fill is a different client with a
+//          different window and is not answered by it.) That is a real wall and it
 //          is why the new block carries a page store of its own rather than a
 //          client.
 //        * WRONG: THERE WAS NO COLOUR LAW TO INVENT. `atm_rgb_i` and
@@ -1210,6 +1099,30 @@
 //          bullet makes the contents of that store undefined. Building a
 //          correct store for an invented value is the worse half of the two.
 //
+//
+//      REFUSED AGAIN 2026-09-19 BY THE POST PACKET, which closed I15 and I16
+//      beside it, and the three remaining halves each need a DECISION rather
+//      than a composer. Searched, and named: `spec/commands.zidl` (no opcode
+//      carries bloom gain, grading bias, flash, ink colour or a grading-table
+//      load -- grep for Post/Grade/Flash/Ink/Hud/Echo returns nothing but
+//      comments), `fpga/rtl/command/` (CMD.EXEC lowers SurfaceStamp,
+//      PublishResource and the draw path; nothing post-shaped),
+//      `fpga/rtl/synth/` and probe-named files (no post, grading or HUD probe),
+//      `spec/stars_and_flares.md` 1 (the tag is `(channel << 6) | strength`
+//      with ONE channel defined, GLOW = 0b01 -- no refraction, shockwave or ink
+//      channel and no glow-RGB law), `design/contracts/POST.GATHER.md` ("Resolved
+//      tile pixels with their material tags" -- the tag byte, not a glow RGB).
+//        a. `post_bloom_gain_i`, `post_bias_*`, `post_flash_*`, `post_ink_rgb_i`,
+//           `post_grade_valid_i`: per-frame LOOK values with no ABI carrier. An
+//           ABI addition (a `SetPost` record, zidl + emitter + zref + captures
+//           together, the R17/R21 pattern) is an owner decision.
+//        b. `post_pv_*`: the grading product-vector table. A generated asset by
+//           design (this entry's own classification), and its load path is the
+//           same undecided carrier as (a) -- or MEM.UPLOAD, which cannot yet
+//           land in a block-local table.
+//        c. `post_gd_*` / `post_gg_*` (POST.GATHER): the tag->glow/displacement
+//           law is unwritten, as the bullets above say; `post_hud_*`: the HUD
+//           store is unbuilt, as bullet 1 says. Both unchanged by this pass.
 // I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Nothing in
 //      the console produces an error-magnitude stream; the block measures a
 //      difference against a reference and the console has no reference. Its
@@ -4134,11 +4047,10 @@ module zhao_console_core
   output logic [31:0]             proj_contended_o,
   output logic [31:0]             proj_mat_refused_o,
 
-  // ---- I15/I16/I17: the compositor's absent neighbours --------------------
-  input  logic                    post_view_sel_i,
-  input  logic                    post_s_valid_i,
-  output logic                    post_s_ready_o,
-  input  logic [15:0]             post_s_rgb_i,
+  // ---- I17: the compositor's absent neighbours ----------------------------
+  // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
+  // (I15, 2026-09-19): the pass, its view and its pixels come from the shell's
+  // `zhao_post_lease`, which reads the back buffer in raster order.
   output logic                    post_gd_req_v_o,
   output logic                    post_gd_view_o,
   output logic [POST_XW-3:0]      post_gd_cx_o,
@@ -4174,14 +4086,24 @@ module zhao_console_core
   output logic [POST_YW-1:0]      post_hud_req_y_o,
   input  logic                    post_hud_valid_i,
   input  logic [15:0]             post_hud_rgb_i,
-  output logic                    post_o_valid_o,
-  input  logic                    post_o_ready_i,
-  output logic [15:0]             post_o_rgb_o,
-  output logic [POST_XW-1:0]      post_o_x_o,
-  output logic [POST_YW-1:0]      post_o_y_o,
-  output logic                    post_o_last_o,
-  output logic                    post_echo_valid_o,
-  output logic [15:0]             post_echo_rgb_o,
+  // `post_o_*` and `post_echo_*` are GONE FROM THIS EDGE (I16, 2026-09-19):
+  // the composited stream is written back through RASTER.FBWRITE inside the
+  // shell's post lease, and the echo tap feeds POST.ECHO there.
+
+  // ---- POST.COMPOSITE's LEASE and POST.ECHO: evidence ----------------------
+  output logic                    post_busy_o,             // armed/running: frame not publishable
+  output logic [31:0]             post_passes_o,           // compositor passes written back
+  output logic [31:0]             post_frames_o,           // render frames fully post-processed
+  output logic                    post_fault_o,            // a refused source read
+  output logic [31:0]             post_src_reads_o,        // 64-byte back-buffer reads
+  output logic [31:0]             post_src_pixels_o,       // pixels handed to the compositor
+  output logic [31:0]             post_retire_unowned_o,   // tripwire: must read 0
+  output logic [31:0]             post_share_contention_o, // ENGINE0 share waits
+  output logic [31:0]             echo_passes_complete_o,  // WHOLE captures
+  output logic [31:0]             echo_passes_torn_o,
+  output logic [31:0]             echo_pixels_written_o,
+  output logic [31:0]             echo_pixels_dropped_o,
+  output logic                    echo_fault_o,
 
   // ---- COMPOSITOR evidence -------------------------------------------------
   output logic [31:0]             post_displacement_edge_clamps_o,
@@ -7719,8 +7641,9 @@ module zhao_console_core
   );
 
   // ==========================================================================
-  // COMPOSITOR. On the real frame edge and the real video mode (glue 1 and 2),
-  // and BESIDE the render path rather than in it -- header entry I15 says why.
+  // COMPOSITOR. On the real video mode (glue 1), and IN the render path since
+  // 2026-09-19: between the raster's drain and publication, through the shell's
+  // post lease -- the I15/I16 closure record below says how.
   //
   // The ATMOSPHERE SHEET is internal as of 2026-09-19. These eight wires are
   // the seam that used to be eight ports; their producer is `u_twod_sampler`
@@ -7751,6 +7674,50 @@ module zhao_console_core
   logic [7:0]             atm_opacity_c;
   logic                   atm_add_c;
 
+  // ==========================================================================
+  // I15 AND I16 ARE CLOSED (2026-09-19). What they were, and what closed them.
+  // ==========================================================================
+  // I15 was "POST.COMPOSITE's SOURCE PIXELS (`post_s_*`) -- BOUNDARY, and this
+  // is the largest honest gap in the file". Its last refusal named three
+  // missing things; each is now a block or a law, and none is a tie-off moved:
+  //   1. A RASTER-ORDER READ MASTER on the BACK buffer, re-armed on render
+  //      drain: `fpga/rtl/compositor/zhao_post_fbread.sv` (41 directed checks,
+  //      tests/compositor/post_fbread_directed.cpp).
+  //   2. A MEMORY IDENTITY. Not a new client: ENGINE0, the render engine's own,
+  //      under the render lease -- POST.COMPOSITE.md's "exclusive framebuffer
+  //      read/write lease after resolve and before publication" is the render
+  //      lease extended past the raster. `zhao_mem_guard` gains ENGINE0's READ
+  //      arm inside the leased window (lease-gated) and POST.ECHO's capture
+  //      WRITE arm; `mem_guard_no_escape` re-proven with both (bmc + every
+  //      cover, including one per ENGINE0 arm), and a scratch mutant that drops
+  //      the capture's lease term makes a1_echo_lease and a1_region FAIL.
+  //      Client 5 stays unspent (T3).
+  //   3. A FRAME-COMPLETION EVENT: `zhao_post_lease` arms on the render frame's
+  //      `frame_end` and starts only when the bin pipe is quiet, no raster
+  //      pixel is on offer and RASTER.FBWRITE has RETIRED every word.
+  // I16 was the output end and the echo tap. The output is written back IN
+  // PLACE through the SAME RASTER.FBWRITE (switched at the phase change, so
+  // there is still exactly one producer on it at a time -- the objection I16
+  // recorded), and the tap feeds POST.ECHO (`zhao_post_echo.sv`, owner ruling
+  // R7, 33 directed checks against `zref::post::echo`). The smoke bench shows
+  // the value traverse: the capture equals the framebuffer word for word.
+  // ---- THE POST LEASE's seam (I15/I16, 2026-09-19) --------------------------
+  // The shell's `zhao_post_lease` owns the pass: it starts it when the raster
+  // has drained, names the view, reads the back buffer in raster order into
+  // `s_*`, writes `o_*` back through RASTER.FBWRITE in place, and hands the
+  // `echo_*` tap -- qualified by the output handshake -- to POST.ECHO. Every
+  // connection below is a port to a port of the same width and meaning.
+  logic                   post_pass_start_c;
+  logic                   post_view_c;
+  logic                   post_s_valid_c, post_s_ready_c;
+  logic [15:0]            post_s_rgb_c;
+  logic                   post_o_valid_c, post_o_ready_c, post_o_last_c;
+  logic [15:0]            post_o_rgb_c;
+  logic [POST_XW-1:0]     post_o_x_c;
+  logic [POST_YW-1:0]     post_o_y_c;
+  logic                   post_echo_valid_c;
+  logic [15:0]            post_echo_rgb_c;
+
   zhao_post_composite #(
     .LINE_W    (POST_LINE_W),
     .MAX_H     (POST_MAX_H),
@@ -7761,19 +7728,20 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // REAL: the shell's frame boundary and its latched mode.
-    .frame_start_i(core_tick_c),
+    // REAL: the PASS is the post lease's, not the console tick. It starts only
+    // after the raster has drained into the back buffer (I15, closed
+    // 2026-09-19); the geometry is the shell's latched mode.
+    .frame_start_i(post_pass_start_c),
     .frame_w_i    (post_frame_w_c),
     .frame_h_i    (post_frame_h_c),
-    .view_sel_i   (post_view_sel_i),
+    .view_sel_i   (post_view_c),
 
-    // I15: not a missing port -- a missing ORDER. This port is addressless and
-    // the block counts its own raster; RASTER.RESOLVE emits 16x16 tiles, and
-    // only the tiles a triangle touched. The reorder buffer between them is a
-    // whole frame, so post reads the COMPLETED framebuffer or it reads nothing.
-    .s_valid_i(post_s_valid_i),
-    .s_ready_o(post_s_ready_o),
-    .s_rgb_i  (post_s_rgb_i),
+    // REAL (I15): the COMPLETED back buffer, read back in raster order by
+    // `zhao_post_fbread` inside the shell's lease. The order this port counts
+    // is the order the reader walks; the reorder buffer is the framebuffer.
+    .s_valid_i(post_s_valid_c),
+    .s_ready_o(post_s_ready_c),
+    .s_rgb_i  (post_s_rgb_c),
 
     // I17, CLOSED FOR THE ATMOSPHERE SHEET 2026-09-19: `atm_*` is now wired to
     // TWOD.SAMPLER, which is wired to TWOD.PLANE, at the end of this module.
@@ -7818,16 +7786,17 @@ module zhao_console_core
     .hud_valid_i (post_hud_valid_i),
     .hud_rgb_i   (post_hud_rgb_i),
 
-    // I16: the framebuffer writer inside the shell is already fed by
-    // RASTER.FBWRITE, so this output has no consumer here.
-    .o_valid_o(post_o_valid_o),
-    .o_ready_i(post_o_ready_i),
-    .o_rgb_o  (post_o_rgb_o),
-    .o_x_o    (post_o_x_o),
-    .o_y_o    (post_o_y_o),
-    .o_last_o (post_o_last_o),
-    .echo_valid_o(post_echo_valid_o),
-    .echo_rgb_o  (post_echo_rgb_o),
+    // REAL (I16): written back IN PLACE through the shell's RASTER.FBWRITE --
+    // the same engine that wrote the raster, switched at the phase change --
+    // and the echo tap feeds POST.ECHO (ruling R7) beside it.
+    .o_valid_o(post_o_valid_c),
+    .o_ready_i(post_o_ready_c),
+    .o_rgb_o  (post_o_rgb_c),
+    .o_x_o    (post_o_x_c),
+    .o_y_o    (post_o_y_c),
+    .o_last_o (post_o_last_c),
+    .echo_valid_o(post_echo_valid_c),
+    .echo_rgb_o  (post_echo_rgb_c),
 
     .displacement_edge_clamps_o(post_displacement_edge_clamps_o),
     .bloom_cells_contributing_o(post_bloom_cells_contributing_o),
@@ -8504,6 +8473,37 @@ module zhao_console_core
     .render_retired_words_o    (render_retired_words_o),
     .render_overflow_o         (render_overflow_o),
     .render_fragment_error_o   (render_fragment_error_o),
+    // ---- POST.COMPOSITE's lease (I15/I16) and POST.ECHO --------------------
+    .post_frame_w_i            (post_frame_w_c),
+    .post_frame_h_i            (post_frame_h_c),
+    // Duo exactly where `post_frame_w_c/h_c` chose the Duo view (the case's default).
+    .post_duo_i                ((mode_act_o != MODE_Z60_C) && (mode_act_o != MODE_STORM_C)),
+    .post_pass_start_o         (post_pass_start_c),
+    .post_view_o               (post_view_c),
+    .post_src_valid_o          (post_s_valid_c),
+    .post_src_ready_i          (post_s_ready_c),
+    .post_src_rgb_o            (post_s_rgb_c),
+    .post_out_valid_i          (post_o_valid_c),
+    .post_out_ready_o          (post_o_ready_c),
+    .post_out_rgb_i            (post_o_rgb_c),
+    .post_out_x_i              (post_o_x_c),
+    .post_out_y_i              (post_o_y_c),
+    .post_out_last_i           (post_o_last_c),
+    .post_echo_valid_i         (post_echo_valid_c),
+    .post_echo_rgb_i           (post_echo_rgb_c),
+    .post_busy_o               (post_busy_o),
+    .post_passes_o             (post_passes_o),
+    .post_frames_o             (post_frames_o),
+    .post_fault_o              (post_fault_o),
+    .post_src_reads_o          (post_src_reads_o),
+    .post_src_pixels_o         (post_src_pixels_o),
+    .post_retire_unowned_o     (post_retire_unowned_o),
+    .post_share_contention_o   (post_share_contention_o),
+    .echo_passes_complete_o    (echo_passes_complete_o),
+    .echo_passes_torn_o        (echo_passes_torn_o),
+    .echo_pixels_written_o     (echo_pixels_written_o),
+    .echo_pixels_dropped_o     (echo_pixels_dropped_o),
+    .echo_fault_o              (echo_fault_o),
     .phy_cs_n_o                (phy_cs_n_o),
     .phy_ras_n_o               (phy_ras_n_o),
     .phy_cas_n_o               (phy_cas_n_o),
@@ -9785,7 +9785,7 @@ module zhao_console_core
     // INDEX. One-hot of the index is the mask, and writing it as a one-hot
     // rather than a zero-extension is the whole difference between "view 1"
     // and "view 0 and 1".
-    .view_sel_i     (post_view_sel_i ? 2'b10 : 2'b01),
+    .view_sel_i     (post_view_c ? 2'b10 : 2'b01),
 
     .s_valid_o  (pl_valid_c),
     .s_ready_i  (pl_ready_c),
@@ -9829,7 +9829,7 @@ module zhao_console_core
     .d_view_mask_i(twod_sd_view_mask_i),
     .d_order_i    (twod_sd_order_i),
     .d_src_id_i   (twod_sd_src_id_i),
-    .view_sel_i   (post_view_sel_i ? 2'b10 : 2'b01),
+    .view_sel_i   (post_view_c ? 2'b10 : 2'b01),
 
     // REAL: the sample requests go to the sampler.
     .s_valid_o (sp_valid_c),

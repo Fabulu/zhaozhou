@@ -309,7 +309,16 @@ module zhao_mem_share_n
         A_VERD: begin
           if (m_rsp_i.ok) begin
             rsp_ok_q <= 1'b1;
-            st_q     <= A_FILL;
+            // A WRITE RETURNS NO BEATS (2026-09-19, the ENGINE0 share of
+            // POST.COMPOSITE's lease). A passed write is COMPLETE at this
+            // block's boundary once the guard has said ok: its data travels on
+            // the requester's own write channel, never through here, so A_FILL
+            // would wait for read beats that are never coming. Constant-false
+            // at every FORCE_READ site, so they are unchanged.
+            // The ordering of the write DATA across requesters is the
+            // integrator's (see `zhao_post_lease`): this block only promises
+            // the guard sees one request at a time.
+            st_q     <= (!FORCE_READ && sel_q.write) ? A_IDLE : A_FILL;
             jobs_o[own_q] <= jobs_o[own_q] + 32'd1;
           end else if (m_rsp_i.violation) begin
             rsp_viol_q <= 1'b1;

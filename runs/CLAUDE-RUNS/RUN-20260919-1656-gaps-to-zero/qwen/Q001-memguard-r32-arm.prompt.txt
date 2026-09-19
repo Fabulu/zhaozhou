@@ -1,0 +1,756 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q001: memguard-r32-arm
+## Brief
+`zhao_mem_guard` is the memory-protection block: every VRAM write from every client passes
+through it, and it refuses writes outside the regions that client may touch. Commit 37bef328
+added owner ruling R32: the TERRAIN_BUILD client (which MEM.UPLOAD uses) gets a WRITE arm into
+RENDER.ASSET_POOL. That arm is limited to the region named by `res_valid`/`res_base`/`res_span`,
+and it opens only when that whole region lies inside RENDER.ASSET_POOL. Before R32,
+RENDER.ASSET_POOL was read-only to every client. The formal property `mem_guard_no_escape` was
+re-proved, and a committed mutant that drops the pool-containment check makes the proof fail.
+
+You are shown the full current guard, the commit's diff of the guard, the reference model's
+diff and the formal harness's diff. This is a SECURITY-style review: can anything get written
+where it should not?
+
+## Questions
+1. Can the new arm let TERRAIN_BUILD write any byte outside RENDER.ASSET_POOL, or outside
+   [res_base, res_base+res_span)? Look at overflow and wrap of base+span, span = 0, a region
+   exactly at the pool's end, and a write burst that STARTS inside and ENDS outside.
+2. Can the new arm let any client OTHER than TERRAIN_BUILD write into RENDER.ASSET_POOL?
+3. Is the RTL's containment test exactly the reference model's (zref) test? Name any
+   inequality whose strictness (< vs <=) or width differs.
+4. Does the formal harness's change actually constrain the new arm, or could the proof pass
+   vacuously (e.g. an assumption that makes res_valid never true, or an assertion that does
+   not cover the new arm)?
+5. If res_* changes WHILE a burst is in flight, can a burst that was checked against the old
+   region write under the new one?
+
+# INPUT fpga/rtl/memory/zhao_mem_guard.sv:1-408
+```
+    1| // zhao_mem_guard.sv — region/ownership checker between EVERY fabric VRAM
+    2| // client and the memory system (plan W2.5). Law: spec/memory_rules.md §5;
+    3| // contract design/contracts/MEM.GUARD.md.
+    4| //
+    5| // Phase-2 region map (mode-independent — both slots are sized for the
+    6| // LARGEST canvas, so a mode switch never moves a slot):
+    7| //   FB slot 0 : [0x0000_0000, 0x0003_C000)   245,760 B  (DRAM bank 0)
+    8| //   FB slot 1 : [0x0200_0000, 0x0203_C000)   245,760 B  (DRAM bank 1 —
+    9| //               the W2.7 bank split; see zhao_pkg ZHAO_FB_SLOT1_BASE)
+   10| //   everything else: unmapped — violation by construction.
+   11| //   ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+   12| //
+   13| // Phase-3 extensions, each a window opened WITH the block that needed it:
+   14| //   RENDER.ASSET_POOL : [0x06A0_0000, 0x0800_0000)  22 MiB, ENGINE1, READ-only
+   15| //   TERRAIN.PAGE_POOL : [0x0400_0000, 0x054E_0000)  20.875 MiB,
+   16| //                       TERRAIN.BUILD, WRITE (pages in) and READ (F sheets
+   17| //                       out) -- ONE window, TWO arms, TWO theorems
+   18| //                       (rulings T2 / T3 / T4, §5b)
+   19| //
+   20| // Ownership law:
+   21| //   * SCANOUT owns BOTH slots, READ-ONLY (a write is a violation).
+   22| //   * BLIT_DMA owns exactly the CMD-granted slot window
+   23| //     [slot_base, slot_base + blit_span) — blit_span = canvas_bytes(mode),
+   24| //     written by CMD.SCHEDULER at frame grant. Writes only (Phase-2 blit
+   25| //     never reads VRAM: a read is a violation by construction).
+   26| //     map_valid=0 (no grant this frame) => deny-all.
+   27| //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+   28| //   * ENGINE0/ENGINE1/DEBUG own nothing in Phase 2 (reserved ports) —
+   29| //     violation by construction. (ENGINE0 and ENGINE1 acquired windows in
+   30| //     Phase 3; DEBUG still owns nothing, and neither does the unspent
+   31| //     client 5.)
+   32| //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+   33| //   * TERRAIN.BUILD owns TERRAIN.PAGE_POOL IN BOTH DIRECTIONS, and no other
+   34| //     client reaches it in either. Spatially the WHOLE pool, not the LOADING
+   35| //     slot T2 eventually wants — the difference is spelled out at
+   36| //     `terrain_ok` below rather than left for a reader to discover.
+   37| //     ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+   38| //
+   39| // Request law: len 1..64 bytes; byte_enable must be the FULL contiguous mask
+   40| // over [addr, addr+len) (Phase-2 clients issue whole spans; partial-word
+   41| // tails are a Phase-3 map concern). Span arithmetic is done at 32 bits so
+   42| // addr+len can never wrap past the map.
+   43| //
+   44| // Verdict: fixed 1 cycle (registered rsp). A passing request is forwarded to
+   45| // the arbiter port and held there until the arbiter grants it (ready/valid
+   46| // end-to-end — the guard never drops a legal request, never invents one).
+   47| // A denied request is ANSWERED (guard_violation pulse + count + latched
+   48| // trace record, charter §29-17 lane) and NOTHING is forwarded — the formal
+   49| // property mem_guard_no_escape proves no violating request ever reaches the
+   50| // arbiter port and no partial forward exists.
+   51| //
+   52| // Conservative SystemVerilog subset only (charter §2). Lint: clean under
+   53| // `verilator --lint-only -Wall` (lint_mem_guard CTest).
+   54| 
+   55| module zhao_mem_guard
+   56|   import zhao_pkg::*;
+   57| (
+   58|   input  logic clk,
+   59|   input  logic rst_n,
+   60| 
+   61|   // client port (muxed upstream; the client field identifies the owner)
+   62|   input  zhao_guard_req_t req,
+   63|   output zhao_guard_rsp_t rsp,
+   64| 
+   65|   // region map inputs (CMD.SCHEDULER grants at frame start; deny-all below)
+   66|   input  logic        map_valid,     // a blit grant exists this frame
+   67|   input  logic        blit_slot,     // 0/1: the leased FB slot
+   68|   input  logic [31:0] blit_span,     // granted bytes (canvas_bytes(mode))
+   69|   // WHICH WRITER HOLDS THE LEASE. 0 = DEBUG.FRAMEBLIT, 1 = RASTER.FBWRITE.
+   70|   // Two blocks now write an inactive framebuffer slot and they share the
+   71|   // SPATIAL window but not the TEMPORAL permission: a second overlapping region
+   72|   // entry would copy the same address law, cost more plumbing, and still not
+   73|   // stop them corrupting each other. VIDEO.SLOTMGR already guarantees one lease
+   74|   // at a time with a generation, so the lease is where the writer is named.
+   75|   //
+   76|   // A v1 frame uses the renderer or DebugFrameBlit, never both.
+   77|   //
+   78|   // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_region
+   79|   input  logic        fb_writer,
+   80| 
+   81|   // THE PUBLISHED-RESOURCE REGION (owner ruling R32, 2026-09-19). MEM.UPLOAD --
+   82|   // TERRAIN_BUILD's client -- may WRITE here, and only here, inside
+   83|   // RENDER.ASSET_POOL: the host-configured destination region whose uploads
+   84|   // MEM.UPLOAD publishes into the residency directory (spec/memory_rules.md
+   85|   // 5f.1). A region that does not lie wholly inside the asset pool OPENS
+   86|   // NOTHING -- it is refused, not clamped. Tie `res_valid` low on a guard
+   87|   // instance whose client is never TERRAIN_BUILD.
+   88|   // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_resource_*
+   89|   input  logic        res_valid,
+   90|   input  logic [31:0] res_base,
+   91|   input  logic [31:0] res_span,
+   92| 
+   93|   // forwarded side (guard -> MEM.VRAM.ARBITER), ready/valid
+   94|   output zhao_arb_req_t arb_req,
+   95|   input  zhao_arb_rsp_t arb_rsp,
+   96| 
+   97|   // events / trace (violations are not a catalog counter; they trace to the
+   98|   // harness with the full request — the saved-failing-vector lane)
+   99|   output logic           guard_violation,      // one-cycle pulse
+  100|   output logic [31:0]    guard_violations,
+  101|   output zhao_guard_req_t guard_violation_req   // latched violating request
+  102| );
+  103| 
+  104|   // ------------------------------------------------------------ verdict ----
+  105|   // full contiguous byte mask over len bytes
+  106|   function automatic logic [63:0] mask_of(input logic [6:0] len_b);
+  107|     mask_of = '0;
+  108|     for (int b = 0; b < 64; b++) begin
+  109|       if (b < len_b) mask_of[b] = 1'b1;
+  110|     end
+  111|   endfunction
+  112| 
+  113|   logic [31:0] addr32, end32;
+  114|   logic        len_ok, be_ok, shape_ok;
+  115|   logic        scan_ok, blit_ok, render_asset_ok;
+  116|   logic        pass_ok;
+  117| 
+  118|   assign addr32   = {5'b0, req.addr};
+  119|   assign end32    = addr32 + {25'b0, req.len};   // 32-bit: cannot wrap the map
+  120|   assign len_ok   = (req.len >= 7'd1) && (req.len <= 7'd64);
+  121|   assign be_ok    = (req.be == mask_of(req.len));
+  122|   assign shape_ok = len_ok && be_ok;
+  123| 
+  124|   // scanout: read-only, within EITHER FB slot. The slots are DISJOINT
+  125|   // regions since the bank split (zhao_pkg ZHAO_FB_SLOT1_BASE note): the
+  126|   // old single-comparison form (end <= SLOT1+SPAN) relied on the slots
+  127|   // being contiguous and would have admitted reads from the hole between
+  128|   // them. A <=64-B request can never bridge from slot 0 into slot 1, so
+  129|   // per-slot containment is exact.
+  130|   assign scan_ok = !req.write
+  131|                  && ((end32 <= ZHAO_FB_SLOT0_BASE + ZHAO_FB_SLOT_SPAN)
+  132|                      || ((addr32 >= ZHAO_FB_SLOT1_BASE)
+  133|                          && (end32 <= ZHAO_FB_SLOT1_BASE + ZHAO_FB_SLOT_SPAN)));
+  134| 
+  135|   // blit: write-only, within the granted slot window.
+  136|   // blit_span is clamped to the slot's own span before use. CMD.SCHEDULER is
+  137|   // specified to write canvas_bytes(mode) (<= ZHAO_FB_SLOT_SPAN), but the
+  138|   // guard must not TRUST that: an over-large span made blit_base + blit_span
+  139|   // wrap 32 bits, and a wrapped window admitted writes far outside the map —
+  140|   // an escape, in the one block whose entire contract is that no escape
+  141|   // exists. Clamping keeps every legal request legal (they never exceed the
+  142|   // slot) and closes the wrap by construction. Removing the clamp fails
+  143|   // the proof again (design/formal_runs.yml notes).
+  144|   // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  145|   logic [31:0] blit_base, blit_end, blit_span_eff;
+  146|   assign blit_base     = blit_slot ? ZHAO_FB_SLOT1_BASE : ZHAO_FB_SLOT0_BASE;
+  147|   assign blit_span_eff = (blit_span > ZHAO_FB_SLOT_SPAN) ? ZHAO_FB_SLOT_SPAN : blit_span;
+  148|   assign blit_end      = blit_base + blit_span_eff;
+  149|   // The window check, shared by both writers. `fb_window_ok` is the name the
+  150|   // ruling gives it; `blit_ok` is kept as the identifier so the proof's own
+  151|   // wording still lines up with the code it proves.
+  152|   assign blit_ok       = req.write && map_valid
+  153|                          && (addr32 >= blit_base) && (end32 <= blit_end);
+  154| 
+  155|   // render asset pool: READ-ONLY, ENGINE1's shared geometry/texture region
+  156|   // (spec/memory_rules.md 5f). Historical geometry constants remain aliases.
+  157|   // The original reason for the window remains: every MESHFETCH descriptor read
+  158|   // otherwise landed on `default: pass_ok = 1'b0`; Packet E now serializes
+  159|   // immutable texture-line reads through the same local ENGINE1 owner.
+  160|   //
+  161|   // A THIRD WINDOW IS OPENED HERE, unlike the ENGINE0 change which admitted a
+  162|   // client to an existing one -- so it is stated plainly rather than folded in.
+  163|   // What keeps the no-escape guarantee intact is that the window is
+  164|   // READ-ONLY and its bounds are CONSTANTS: `!req.write` means nothing in this
+  165|   // region can alter a frame buffer, and BASE + SPAN is 0x0800_0000 exactly,
+  166|   // computed at elaboration, so the wrap the blit clamp exists to prevent
+  167|   // cannot arise here. No map input is consulted, so unlike the blit window
+  168|   // this one is not frame-scoped and does not depend on `map_valid`.
+  169|   // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  170|   assign render_asset_ok = !req.write
+  171|                   && (addr32 >= ZHAO_RENDER_ASSET_BASE)
+  172|                   && (end32  <= ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN);
+  173| 
+  174|   // terrain page pool: TERRAIN.BUILD's bank-2 region, WRITE for the loader and
+  175|   // READ for the writeback (rulings T2 / T3 / T4, spec/memory_rules.md 5b).
+  176|   // This is the FOURTH window, and like the asset pool it is stated plainly
+  177|   // rather than folded into an existing one.
+  178|   //
+  179|   // IT IS THE NARROWEST READING OF T2/T4 THAT LETS A PAGE BE LOADED AND ITS
+  180|   // DIRTY SHEET BE SAVED AT ALL:
+  181|   //   * ONE region of the six T2 names in bank 2. RESIDENT_MIP_POOL,
+  182|   //     COMPOSED_HEIGHT, COMPOSED_VELOCITY, WRITEBACK_STAGING and
+  183|   //     COMPOSED_MIP_POOL stay unmapped until the blocks that touch them
+  184|   //     exist. TERRAIN.PAGELOADER writes pages and nothing else;
+  185|   //     TERRAIN.WRITEBACK reads sheets out of those same pages and nothing
+  186|   //     else. In particular WRITEBACK_STAGING/journal at 0x0578_0000 stays
+  187|   //     unmapped: v1's writeback goes straight across MEM.HPS.BRIDGE, so
+  188|   //     opening it would be a hole with a plan attached.
+  189|   //   * ONE client. Only ZHAO_CLIENT_TERRAIN_BUILD reaches it (the case arm
+  190|   //     below); ENGINE1 does not, DEBUG does not, and the framebuffer writers
+  191|   //     do not.
+  192|   //   * TWO DIRECTIONS, TWO ARMS, ONE WINDOW. `terrain_ok` REQUIRES
+  193|   //     `req.write`; `terrain_rd_ok` REQUIRES `!req.write`; the bounds are the
+  194|   //     same two constants. The write arm is TERRAIN.PAGELOADER depositing
+  195|   //     pages. The read arm is TERRAIN.WRITEBACK evacuating a dirty layer F,
+  196|   //     which T2 places INSIDE the page ("no separate permanent E/F/H pools"),
+  197|   //     so there IS no F pool to read and the sheet is reachable only here.
+  198|   //     Both are ruled traffic for this one client: T3 names page loads AND
+  199|   //     F-sheet writeback as TERRAIN_BUILD's, and T4 REQUIRES the writeback.
+  200|   //     Client id 5 stays unspent because T3 forbids spending it pre-emptively,
+  201|   //     so a second client id for the reader was neither available nor narrower
+  202|   //     -- it would have put two clients in one region.
+  203|   //
+  204|   //     `terrain_ok || terrain_rd_ok` is the window test with the direction bit
+  205|   //     factored back out, and one comparison would synthesise identically. The
+  206|   //     arms are kept SEPARATE because the PROOF states them separately: two
+  207|   //     theorems name WHICH direction regressed, and a merged arm would satisfy
+  208|   //     both non-vacuity covers while proving neither.
+  209|   //
+  210|   //     THE READ WAS WITHHELD UNTIL ITS BLOCK EXISTED, and this comment is
+  211|   //     where that promise was made: "when the block that does it exists, it
+  212|   //     brings its own arm and its own proof. Admitting the read now would
+  213|   //     admit it for a writeback path that has never been written."
+  214|   //     `fpga/rtl/terrain/zhao_terrain_writeback.sv` now exists, is registered
+  215|   //     in tools/rtl/check_guard_verdict.py's client list, and reads exactly
+  216|   //     the 64-byte page header plus the 129 chunks spanning layer F -- 130
+  217|   //     requests per sheet, asserted as an exact count by its bench.
+  218|   //
+  219|   //     A READ CANNOT ALTER A FRAME BUFFER. That is the GEOM.ASSET_POOL
+  220|   //     argument and it holds twice over here: a forwarded read carries no
+  221|   //     write data at all, and this window's CONSTANT bounds are disjoint from
+  222|   //     both framebuffer slots (0x0000_0000 and 0x0200_0000) and from the asset
+  223|   //     pool. The widening is confined to bank 2, and the no-escape theorem is
+  224|   //     unchanged in meaning -- what changes is one direction bit, for one
+  225|   //     client, over one region it already owned.
+  226|   //   * CONSTANT BOUNDS. No map input is consulted, so this window is not
+  227|   //     frame-scoped and cannot be moved by a grant; BASE + SPAN is
+  228|   //     0x054E_0000 exactly, computed at elaboration, so the wrap the blit
+  229|   //     clamp exists to prevent cannot arise here.
+  230|   //
+  231|   // WHAT THIS WINDOW DOES **NOT** DO, SAID OUT LOUD.
+  232|   // T2 asks for STATE-AWARE permission -- "a loader may write only a LOADING
+  233|   // slot" -- and this is not that. The guard has one muxed request port and no
+  234|   // residency context; knowing which slot is LOADING means a 1,024-entry state
+  235|   // shadow plus an address-to-slot decode by 21,376 (not a power of two) on the
+  236|   // verdict path of the block whose counter enable was already the largest
+  237|   // negative-slack family in the composed shell. The interface that would carry
+  238|   // that state -- who owns the bitmap, how it crosses to the guard, what a
+  239|   // stale copy means -- is NOT ruled anywhere, so it is not invented here.
+  240|   //
+  241|   // The residual, precisely: a faulty TERRAIN.BUILD may write a page slot other
+  242|   // than the one it was told to load. It cannot touch a framebuffer, cannot
+  243|   // touch the asset pool, cannot touch the rest of bank 2, and cannot leave the
+  244|   // map -- so the no-escape theorem is unchanged and the worst case is corrupt
+  245|   // GROUND for one page, caught by the CRC the directory checks before it
+  246|   // publishes. TERRAIN.PAGELOADER already refuses an out-of-pool slot itself
+  247|   // (its slot index is one bit wider than the pool so the refusal is reachable
+  248|   // rather than truncated). Tightening this to the LOADING slot is a separate,
+  249|   // ruled piece of work and it needs the residency-to-guard interface first.
+  250|   //
+  251|   // THE NEW RESIDUAL THE READ ARM CREATES, said out loud like the write one.
+  252|   // Client 6 may now read ANY page in the pool, so a faulty writeback could
+  253|   // journal ANOTHER PATCH'S scars into the HPS journal. MEM.GUARD cannot see
+  254|   // that -- it is the same state-awareness gap as the write side, for the same
+  255|   // reason, and it is NOT closed here. It is answered one block up:
+  256|   // TERRAIN.WRITEBACK reads the evicted page's 64-byte HEADER FIRST and refuses
+  257|   // (`kSheetHeaderIdent`) before a single journal byte moves, if
+  258|   // {island_id, patch_ix, patch_iz} does not match the job. That is
+  259|   // spec/terrain_rules.md 2.1's "redundancy is a corruption check" spent on
+  260|   // exactly the failure this arm creates, and it costs one 64-byte read of 130.
+  261|   // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby
+  262|   logic terrain_ok, terrain_rd_ok;
+  263|   assign terrain_ok = req.write
+  264|                     && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+  265|                     && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+  266|                                   + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+  267|   // The READ arm. Same two constants, opposite direction bit, deliberately a
+  268|   // SEPARATE assign so the two directions stay two theorems.
+  269|   assign terrain_rd_ok = !req.write
+  270|                        && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+  271|                        && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+  272|                                      + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+  273| 
+  274|   // THE FIFTH WINDOW (R32): a WRITE arm into RENDER.ASSET_POOL for
+  275|   // TERRAIN_BUILD, bounded to the published-resource region. Stated as its own
+  276|   // window for the reasons the terrain arm gives: one client, one direction,
+  277|   // one region -- and the region is the only non-constant bound in this block
+  278|   // besides the blit's, so it gets the blit's discipline. The end is computed
+  279|   // in 33 bits so `res_base + res_span` cannot wrap, and the region must lie
+  280|   // WHOLLY inside the asset pool or the arm is closed: a region straddling a
+  281|   // framebuffer is refused whole rather than clamped into something legal-
+  282|   // looking. ENGINE1's read arm is untouched, so the asset pool gains a WRITER
+  283|   // and keeps its one READER.
+  284|   // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby, and the committed
+  285|   // mutant tests/mutants/zhao_mem_guard_resbound_mutant.sv (the pool-
+  286|   // containment term removed) that makes that proof FAIL.
+  287|   logic [32:0] res_end33, end33;
+  288|   logic        res_in_pool, resource_wr_ok;
+  289|   assign res_end33   = {1'b0, res_base} + {1'b0, res_span};
+  290|   assign end33       = {1'b0, end32};
+  291|   assign res_in_pool = res_valid
+  292|                      && (res_base  >= ZHAO_RENDER_ASSET_BASE)
+  293|                      && (res_end33 <= {1'b0, ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN});
+  294|   assign resource_wr_ok = req.write && res_in_pool
+  295|                         && (addr32 >= res_base) && (end33 <= res_end33);
+  296| 
+  297|   // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
+  298|   // clamped slot span; what separates them is which one the lease names. A
+  299|   // writer without the lease is refused exactly as a request outside the window
+  300|   // is, and the region this block guarantees nothing escapes is unchanged.
+  301|   always_comb begin
+  302|     unique case (req.client)
+  303|       ZHAO_CLIENT_SCANOUT:  pass_ok = shape_ok && scan_ok;
+  304|       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
+  305|       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
+  306|       ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && render_asset_ok;
+  307|       ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok
+  308|                                                         || resource_wr_ok);
+  309|       default: pass_ok = 1'b0;      // DEBUG still owns nothing, and neither
+  310|                                     // does the unspent client 5
+  311|     endcase
+  312|   end
+  313| 
+  314|   // --------------------------------------------------------- forwarding ----
+  315|   // a passing request is latched and presented to the arbiter until granted;
+  316|   // ready/valid end-to-end: the guard is ready exactly when its forwarding
+  317|   // stage is free (an offered request is held upstream, never dropped)
+  318|   logic           fwd_active;
+  319|   zhao_arb_req_t  fwd_req;
+  320| 
+  321|   always_comb begin
+  322|     arb_req       = fwd_req;
+  323|     arb_req.valid = fwd_active;
+  324|   end
+  325| 
+  326|   // `rsp` gets exactly ONE kind of driver. Continuously assigning rsp.ready
+  327|   // while driving rsp.ok/rsp.violation from the always_ff below mixes a
+  328|   // continuous and a procedural driver on one variable, which IEEE 1800
+  329|   // forbids (a variable may be written by procedural statements OR by a
+  330|   // single continuous assignment, never both) — packed struct fields are not
+  331|   // separate variables. Tools that accept it resolve the struct
+  332|   // inconsistently: in the elaborated formal model arb_req.valid became
+  333|   // unreachable, which silently made the no-escape assertions VACUOUS.
+  334|   // The verdict bits are registered here and the whole struct is assembled
+  335|   // by this single always_comb.
+  336|   logic rsp_ok_q, rsp_violation_q;
+  337|   always_comb begin
+  338|     rsp.ready     = !fwd_active;   // level; verdict 1 cycle after accept
+  339|     rsp.ok        = rsp_ok_q;
+  340|     rsp.violation = rsp_violation_q;
+  341|   end
+  342| 
+  343|   // ------------------------------------------------------------- seq core --
+  344|   always_ff @(posedge clk or negedge rst_n) begin
+  345|     if (!rst_n) begin
+  346|       fwd_active          <= 1'b0;
+  347|       fwd_req             <= '0;
+  348|       rsp_ok_q            <= 1'b0;
+  349|       rsp_violation_q     <= 1'b0;
+  350|       guard_violation     <= 1'b0;
+  351|       guard_violations    <= 32'd0;
+  352|       guard_violation_req <= '0;
+  353|     end else begin
+  354|       // defaults: one-cycle verdict pulses
+  355|       rsp_ok_q         <= 1'b0;
+  356|       rsp_violation_q  <= 1'b0;
+  357|       guard_violation  <= 1'b0;
+  358| 
+  359|       // THE COUNTER FOLLOWS THE PULSE, NOT THE DECISION.
+  360|       //
+  361|       // `guard_violations` used to increment in the same cycle as the verdict,
+  362|       // which put the whole range-check chain -- the requester's address, the
+  363|       // end address, four bounds compares, the client case -- on the ENABLE of
+  364|       // a 32-bit register bank. The full negative-slack census made it the
+  365|       // largest remaining family in the composed shell:
+  366|       //
+  367|       //   1,383 paths  scanout|fetch -> mem_guard|guard_violations   -0.195
+  368|       //
+  369|       // It counts the same events either way. `guard_violation` is already the
+  370|       // registered one-cycle pulse for exactly this verdict, so counting off
+  371|       // IT costs one cycle of latency on an observability counter and takes
+  372|       // the comparison chain off the counter entirely.
+  373|       //
+  374|       // The SAFETY path is untouched: rsp_ok_q, rsp_violation_q, fwd_active
+  375|       // and fwd_req still resolve in the accepting cycle, which is what
+  376|       // tests/formal/mem_guard_no_escape.sby proves about.
+  377|       if (guard_violation) guard_violations <= guard_violations + 32'd1;
+  378| 
+  379|       // forwarded request leaves when the arbiter accepts it
+  380|       if (fwd_active && arb_rsp.grant) fwd_active <= 1'b0;
+  381| 
+  382|       // accept at most one request per cycle (rsp.ready level above)
+  383|       if (req.valid && !fwd_active) begin
+  384|         if (pass_ok) begin
+  385|           rsp_ok_q          <= 1'b1;
+  386|           fwd_active        <= 1'b1;
+  387|           fwd_req.write     <= req.write;
+  388|           fwd_req.client    <= req.client;
+  389|           fwd_req.addr      <= req.addr;
+  390|           fwd_req.len       <= req.len;
+  391|         end else begin
+  392|           rsp_violation_q     <= 1'b1;
+  393|           guard_violation     <= 1'b1;
+  394|           guard_violation_req <= req;   // full request traced to the harness
+  395|         end
+  396|       end
+  397|     end
+  398|   end
+  399| 
+  400|   // arb_rsp.credits is not consumed here (the guard is request-path only;
+  401|   // the arbiter owns credit law) — keep the frozen port type and silence
+  402|   // the field-unused lint.
+  403|   /* verilator lint_off UNUSEDSIGNAL */
+  404|   logic [7:0] unused_arb_credits;
+  405|   assign unused_arb_credits = arb_rsp.credits;
+  406|   /* verilator lint_on UNUSEDSIGNAL */
+  407| 
+  408| endmodule
+```
+
+# INPUT git show 37bef328 -- fpga/rtl/memory/zhao_mem_guard.sv
+```
+37bef328 R20 + R32: MATERIAL.RESOLVE resolves an uploaded record end to end
+
+diff --git a/fpga/rtl/memory/zhao_mem_guard.sv b/fpga/rtl/memory/zhao_mem_guard.sv
+index 3de763ce..c619f353 100644
+--- a/fpga/rtl/memory/zhao_mem_guard.sv
++++ b/fpga/rtl/memory/zhao_mem_guard.sv
+@@ -75,12 +75,24 @@ module zhao_mem_guard
+   //
+   // A v1 frame uses the renderer or DebugFrameBlit, never both.
+   //
+   // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_region
+   input  logic        fb_writer,
+ 
++  // THE PUBLISHED-RESOURCE REGION (owner ruling R32, 2026-09-19). MEM.UPLOAD --
++  // TERRAIN_BUILD's client -- may WRITE here, and only here, inside
++  // RENDER.ASSET_POOL: the host-configured destination region whose uploads
++  // MEM.UPLOAD publishes into the residency directory (spec/memory_rules.md
++  // 5f.1). A region that does not lie wholly inside the asset pool OPENS
++  // NOTHING -- it is refused, not clamped. Tie `res_valid` low on a guard
++  // instance whose client is never TERRAIN_BUILD.
++  // ENFORCED-BY: tests/formal/formal_mem_guard.sv:a1_resource_*
++  input  logic        res_valid,
++  input  logic [31:0] res_base,
++  input  logic [31:0] res_span,
++
+   // forwarded side (guard -> MEM.VRAM.ARBITER), ready/valid
+   output zhao_arb_req_t arb_req,
+   input  zhao_arb_rsp_t arb_rsp,
+ 
+   // events / trace (violations are not a catalog counter; they trace to the
+   // harness with the full request — the saved-failing-vector lane)
+@@ -256,23 +268,47 @@ module zhao_mem_guard
+   // SEPARATE assign so the two directions stay two theorems.
+   assign terrain_rd_ok = !req.write
+                        && (addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+                        && (end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+                                      + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+ 
++  // THE FIFTH WINDOW (R32): a WRITE arm into RENDER.ASSET_POOL for
++  // TERRAIN_BUILD, bounded to the published-resource region. Stated as its own
++  // window for the reasons the terrain arm gives: one client, one direction,
++  // one region -- and the region is the only non-constant bound in this block
++  // besides the blit's, so it gets the blit's discipline. The end is computed
++  // in 33 bits so `res_base + res_span` cannot wrap, and the region must lie
++  // WHOLLY inside the asset pool or the arm is closed: a region straddling a
++  // framebuffer is refused whole rather than clamped into something legal-
++  // looking. ENGINE1's read arm is untouched, so the asset pool gains a WRITER
++  // and keeps its one READER.
++  // ENFORCED-BY: tests/formal/mem_guard_no_escape.sby, and the committed
++  // mutant tests/mutants/zhao_mem_guard_resbound_mutant.sv (the pool-
++  // containment term removed) that makes that proof FAIL.
++  logic [32:0] res_end33, end33;
++  logic        res_in_pool, resource_wr_ok;
++  assign res_end33   = {1'b0, res_base} + {1'b0, res_span};
++  assign end33       = {1'b0, end32};
++  assign res_in_pool = res_valid
++                     && (res_base  >= ZHAO_RENDER_ASSET_BASE)
++                     && (res_end33 <= {1'b0, ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN});
++  assign resource_wr_ok = req.write && res_in_pool
++                        && (addr32 >= res_base) && (end33 <= res_end33);
++
+   // ONE WINDOW, ONE OWNER AT A TIME. Both writers are checked against the same
+   // clamped slot span; what separates them is which one the lease names. A
+   // writer without the lease is refused exactly as a request outside the window
+   // is, and the region this block guarantees nothing escapes is unchanged.
+   always_comb begin
+     unique case (req.client)
+       ZHAO_CLIENT_SCANOUT:  pass_ok = shape_ok && scan_ok;
+       ZHAO_CLIENT_BLIT_DMA: pass_ok = shape_ok && blit_ok && (fb_writer == 1'b0);
+       ZHAO_CLIENT_ENGINE0:  pass_ok = shape_ok && blit_ok && (fb_writer == 1'b1);
+       ZHAO_CLIENT_ENGINE1:  pass_ok = shape_ok && render_asset_ok;
+-      ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok);
++      ZHAO_CLIENT_TERRAIN_BUILD: pass_ok = shape_ok && (terrain_ok || terrain_rd_ok
++                                                        || resource_wr_ok);
+       default: pass_ok = 1'b0;      // DEBUG still owns nothing, and neither
+                                     // does the unspent client 5
+     endcase
+   end
+ 
+   // --------------------------------------------------------- forwarding ----
+
+```
+
+# INPUT git show 37bef328 -- reference/include/zref/zref_mem.hpp
+```
+37bef328 R20 + R32: MATERIAL.RESOLVE resolves an uploaded record end to end
+
+diff --git a/reference/include/zref/zref_mem.hpp b/reference/include/zref/zref_mem.hpp
+index f28a3eb8..6e6243e3 100644
+--- a/reference/include/zref/zref_mem.hpp
++++ b/reference/include/zref/zref_mem.hpp
+@@ -666,12 +666,19 @@ struct GuardMap {
+   enum Writer { WRITER_BLIT = 0, WRITER_ENGINE0 = 1 };
+ 
+   bool valid = false;             // a framebuffer-write lease exists this frame
+   unsigned blit_slot = 0;         // 0/1 -- the leased slot
+   uint32_t blit_span = 0;         // granted bytes (canvas_bytes(mode))
+   unsigned writer = WRITER_BLIT;  // which client the lease is held BY
++  // Owner ruling R32 (provisional): the ONE published-resource region
++  // TERRAIN_BUILD (MEM.UPLOAD's client) may WRITE inside RENDER.ASSET_POOL.
++  // The RTL's `res_valid/res_base/res_span`; off by default, which is every
++  // guard but the shell's slot-6 one.
++  bool res_valid = false;
++  uint32_t res_base = 0;
++  uint32_t res_span = 0;
+ };
+ 
+ constexpr uint32_t kFbSlot0Base = 0x00000000u;
+ // bank split (W2.7): slot 1 lives in DRAM bank 1 — zhao_pkg ZHAO_FB_SLOT1_BASE
+ constexpr uint32_t kFbSlot1Base = 0x02000000u;
+ constexpr uint32_t kFbSlotSpan = 0x0003C000u;
+@@ -754,13 +761,20 @@ struct MemoryGuard {
+         // into a bare range test would be the same verdict and would lose the
+         // record of which ruling admitted which direction.
+         const bool in_pool =
+             r.addr >= kTerrainPagePoolBase && end <= kTerrainPagePoolBase + kTerrainPagePoolSpan;
+         const bool wr_ok = r.write && in_pool;   // pages in  (TERRAIN.PAGELOADER)
+         const bool rd_ok = !r.write && in_pool;  // sheets out (TERRAIN.WRITEBACK)
+-        return wr_ok || rd_ok;
++        // R32's THIRD arm: writes inside the published-resource region, and
++        // only while that region lies WHOLLY inside RENDER.ASSET_POOL. 64-bit
++        // ends, matching the RTL's 33-bit `res_end33`, so base+span cannot wrap.
++        const uint64_t res_end = uint64_t(m.res_base) + m.res_span;
++        const bool res_in_pool = m.res_valid && m.res_base >= kRenderAssetBase &&
++                                 res_end <= uint64_t(kRenderAssetBase) + kRenderAssetSpan;
++        const bool res_ok = r.write && res_in_pool && r.addr >= m.res_base && end <= res_end;
++        return wr_ok || rd_ok || res_ok;
+       }
+       default:
+         return false;  // DEBUG owns nothing, and neither does the unspent 5
+     }
+   }
+ };
+
+```
+
+# INPUT git show 37bef328 -- tests/formal/formal_mem_guard.sv
+```
+37bef328 R20 + R32: MATERIAL.RESOLVE resolves an uploaded record end to end
+
+diff --git a/tests/formal/formal_mem_guard.sv b/tests/formal/formal_mem_guard.sv
+index b259d3ff..720cce84 100644
+--- a/tests/formal/formal_mem_guard.sv
++++ b/tests/formal/formal_mem_guard.sv
+@@ -59,13 +59,19 @@ module formal_mem_guard
+   input logic        env_map_valid_i,
+   input logic        env_blit_slot_i,
+   input logic [31:0] env_blit_span_i,
+   // Which writer the lease names. Free, and held constant for the trace like
+   // the rest of the map, because a lease that changed mid-frame is a different
+   // property from the one this file proves.
+-  input logic        env_fb_writer_i
++  input logic        env_fb_writer_i,
++  // The published-resource region (R32): HOST configuration, free and held
++  // constant like the map. NOT constrained to lie in the asset pool -- the DUT
++  // must refuse a region that does not, and that refusal is what is proved.
++  input logic        env_res_valid_i,
++  input logic [31:0] env_res_base_i,
++  input logic [31:0] env_res_span_i
+ );
+ 
+   // ------------------------------------------------------- reset discipline
+   // The DUT resets asynchronously but is sampled on posedge clk; with a free
+   // rst_n the solver simply starts mid-reset with arbitrary state and the
+   // proof fails for reasons that say nothing about the design (the free-init
+@@ -85,14 +91,19 @@ module formal_mem_guard
+   // so it is constant for the whole trace by construction (see header). The
+   // DUT is fed from these registers, never from the raw inputs.
+   logic        env_map_valid;
+   logic        env_blit_slot;
+   logic [31:0] env_blit_span;
+   logic        env_fb_writer;
++  logic        env_res_valid;
++  logic [31:0] env_res_base, env_res_span;
+   always_ff @(posedge clk) begin
+     if (cyc == 4'd0) begin
++      env_res_valid <= env_res_valid_i;
++      env_res_base  <= env_res_base_i;
++      env_res_span  <= env_res_span_i;
+       env_map_valid <= env_map_valid_i;
+       env_blit_slot <= env_blit_slot_i;
+       env_blit_span <= env_blit_span_i;
+       env_fb_writer <= env_fb_writer_i;
+     end
+   end
+@@ -112,17 +123,26 @@ module formal_mem_guard
+   assign arb_rsp.credits = 8'd0;
+ 
+   logic            guard_violation;
+   logic [31:0]     guard_violations;
+   zhao_guard_req_t guard_violation_req;
+ 
++  // THE MUTANT SEAM (R32). A plain `ifdef selecting between two module
++  // names, which a -D does reach (CLAUDE.md: a function-like define does not).
++  // tests/formal/mem_guard_resbound_mutant.sby defines it and EXPECTS FAIL; the
++  // production proof leaves it undefined, which is the negative control.
++`ifdef ZHAO_GUARD_RESBOUND_MUT
++  zhao_mem_guard_resbound_mutant u_guard (
++`else
+   zhao_mem_guard u_guard (
++`endif
+     .clk, .rst_n,
+     .req, .rsp,
+     .map_valid (env_map_valid), .blit_slot (env_blit_slot),
+     .blit_span (env_blit_span), .fb_writer (env_fb_writer),
++    .res_valid (env_res_valid), .res_base (env_res_base), .res_span (env_res_span),
+     .arb_req, .arb_rsp,
+     .guard_violation, .guard_violations, .guard_violation_req
+   );
+ 
+   // Acceptance and verdict are distinct edges. This witness makes client 5's
+   // deny cover prove the real accepted-request protocol rather than a coincident
+@@ -149,12 +169,20 @@ module formal_mem_guard
+                    && (fwd_end32 <= ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN);
+   // TERRAIN.PAGE_POOL (rulings T2 / T3 / T4, spec/memory_rules.md 5b):
+   // constant bounds, TERRAIN.BUILD's alone, BOTH DIRECTIONS. It is the only
+   // window in the map that carries traffic each way, which is why the
+   // direction statements below are split PER DIRECTION rather than folded into
+   // a1_region and trusted to the spelling of pass_ok.
++  // The published-resource region (R32), as the ENTITLEMENT, computed from
++  // the held config independently of the DUT: 33-bit end, and the region must
++  // lie wholly inside the asset pool or it entitles nothing.
++  wire [32:0] res_end33 = {1'b0, env_res_base} + {1'b0, env_res_span};
++  wire res_in_pool = env_res_valid && (env_res_base >= ZHAO_RENDER_ASSET_BASE)
++                  && (res_end33 <= {1'b0, ZHAO_RENDER_ASSET_BASE + ZHAO_RENDER_ASSET_SPAN});
++  wire fwd_in_resource = res_in_pool && (fwd_addr32 >= env_res_base)
++                      && ({1'b0, fwd_end32} <= res_end33);
+   wire fwd_in_terrain = (fwd_addr32 >= ZHAO_TERRAIN_PAGE_POOL_BASE)
+                      && (fwd_end32  <= ZHAO_TERRAIN_PAGE_POOL_BASE
+                                        + ZHAO_TERRAIN_PAGE_POOL_SPAN);
+ 
+   // --------------------------------------------------------- A1 + A2 + A3 --
+   always_ff @(posedge clk) begin
+@@ -202,13 +230,18 @@ module formal_mem_guard
+         // instead is the CLIENT term -- the region belongs to TERRAIN_BUILD and
+         // to nobody else, whichever way the bytes move -- plus constant bounds,
+         // so no map input can move this window and BASE + SPAN (0x054E_0000)
+         // cannot wrap. The direction is still stated as a theorem, twice, at
+         // a1_terrain_wr_owner / a1_terrain_rd_owner below.
+         || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+-            && fwd_in_terrain));
++            && fwd_in_terrain)
++        // R32: the SIXTH law. TERRAIN_BUILD may WRITE the asset pool, and only
++        // inside the published-resource region -- which itself must lie
++        // inside the pool. It is a WRITE arm only: no read term is added.
++        || (arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD && arb_req.write
++            && fwd_in_resource));
+ 
+       // DEBUG still owns nothing and must never be forwarded, and neither
+       // does the client id ruling T3 leaves unspent
+       a1_client: assert (arb_req.client == ZHAO_CLIENT_SCANOUT
+                       || arb_req.client == ZHAO_CLIENT_BLIT_DMA
+                       || arb_req.client == ZHAO_CLIENT_ENGINE0
+@@ -223,16 +256,24 @@ module formal_mem_guard
+       // the new region from its scope.
+       a1_map: assert (fwd_in_slot0 || fwd_in_slot1 || fwd_in_render_asset
+                    || fwd_in_terrain);
+ 
+       // The render asset pool is read-only and has exactly one global owner.
+       // Geometry and texture are local mux subowners, never new client IDs.
+-      a1_render_asset_ro: assert (!(fwd_in_render_asset && arb_req.write));
+-      a1_render_asset_owner:
+-        assert (!(fwd_in_render_asset &&
++      // R32 AMENDED these two, and they are RESTATED PER DIRECTION rather than
++      // deleted -- the terrain amendment's pattern. The pool keeps ONE READER
++      // (ENGINE1) and gains ONE WRITER (TERRAIN_BUILD), and every write must
++      // land inside the published-resource region.
++      a1_render_asset_rd_owner:
++        assert (!(fwd_in_render_asset && !arb_req.write &&
+                   arb_req.client != ZHAO_CLIENT_ENGINE1));
++      a1_render_asset_wr_owner:
++        assert (!(fwd_in_render_asset && arb_req.write &&
++                  arb_req.client != ZHAO_CLIENT_TERRAIN_BUILD));
++      a1_resource_bounded:
++        assert (!(fwd_in_render_asset && arb_req.write) || fwd_in_resource);
+       // Client 5 is deliberately unspent and cannot reach any forwarded arm.
+       a1_no_forward_client5:
+         assert (arb_req.client != zhao_client_e'(3'd5));
+ 
+       // WHAT `a1_terrain_wo` BECAME, AND WHY IT IS REPLACED RATHER THAN
+       // DELETED.
+@@ -332,12 +373,16 @@ module formal_mem_guard
+       // a1_region arm would both hold trivially if `terrain_rd_ok` were dead
+       // logic, and the proof would report PASS for a guard that still refuses
+       // every sheet read. Reaching it is what makes the pass mean anything.
+       c_forward_terrain_rd: cover (arb_req.valid
+                                    && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
+                                    && !arb_req.write && fwd_in_terrain);
++      // R32's arm must be REACHABLE, or a1_resource_bounded holds trivially.
++      c_forward_resource_wr: cover (arb_req.valid
++                                    && arb_req.client == ZHAO_CLIENT_TERRAIN_BUILD
++                                    && arb_req.write && fwd_in_render_asset);
+       c_accept_ok:      cover (rsp.ok);
+       c_violation:      cover (guard_violation);
+       c_client5_denied: cover (client5_accept_q && rsp.violation &&
+                                guard_violation);
+       c_handshake:      cover (arb_req.valid && arb_rsp.grant);
+       c_two_violations: cover (guard_violations >= 32'd2);
+
+```

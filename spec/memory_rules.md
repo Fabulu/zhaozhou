@@ -538,6 +538,49 @@ wrong surface is exactly what this is supposed to prevent: every
 consumer at all** today — the only other `publish_slot_*` in the tree is the
 framebuffer pair above — so no block held a conflicting meaning for it.
 
+## 5g. ENGINE0 under the render lease: POST.COMPOSITE's read, POST.ECHO's capture (2026-09-19)
+
+Two ENGINE0 arms, added with the blocks that use them (core entries I15/I16,
+owner ruling R7). **No client id is spent** -- client 5 stays unspent (T3) --
+and no FB window moves.
+
+| Range | Region | Owner | Access |
+|---|---|---|---|
+| the leased FB slot window | (unchanged) | `ENGINE0`, while `fb_writer == 1` | **read + write** (was write) |
+| `0x05C0_0000` .. `0x05C3_BFFF` | `POST.ECHO` capture | `ENGINE0`, while `fb_writer == 1` | **write-only** |
+
+**The read arm is POST.COMPOSITE's lease, not a new permission.**
+`POST.COMPOSITE.md`: "POST.COMPOSITE owns an exclusive framebuffer read/write
+lease after resolve and before publication." Post runs inside the RENDER lease
+-- after the raster has drained, before anything publishes -- so it carries the
+render engine's identity. `zhao_post_lease` shares ENGINE0 between
+RASTER.FBWRITE, the source read-back (`zhao_post_fbread`) and POST.ECHO through
+one `zhao_mem_share_n`, the §5d/§5f pattern ("a client identity is a PRIVILEGE,
+not a slot"). A read cannot alter a frame buffer; what the guard must stop is a
+read OUTSIDE the lease, and `a1_engine0_rd_lease` proves it does.
+
+**The capture is bank 2's reserved tail.** Banks 0 and 1 hold the FB slots and
+the scanout reads one of them while post writes the other, so a capture there
+would thrash a bank against scanout on every other frame (the W2.7 finding).
+Bank 3 is full. `0x0586_0000..0x05FF_FFFF` was reserved "until traces justify";
+the echo is that traffic. Span = one FB slot (0x3C000), so the largest stored
+canvas (Duo, 196,608 B, views stacked) fits and a mode switch never moves it.
+Constant bounds, not frame-scoped, disjoint from every other window
+(`a1_echo_not_fb`), write-only (`a1_echo_wo`), ENGINE0's alone
+(`a1_echo_owner`), lease-gated (`a1_echo_lease`).
+
+**Proof re-run 2026-09-19** (`tests/formal/mem_guard_no_escape.sby`): bmc PASS
+at depth 30; cover PASS with every cover reached, including one per ENGINE0 arm
+(`c_forward_engine_wr`, `c_forward_engine_rd`, `c_forward_echo`). A scratch
+mutant that drops the capture arm's lease term fails `a1_echo_lease` and
+`a1_region` -- the new theorems fire.
+
+**The route tripwire** in `zhao_shell_top_v2` learned ENGINE0 reads (lease-gated)
+in the same edit. **ENGINE0 writes now wait for their data**: the arbiter sees an
+ENGINE0 write only when all its words are queued and not owed (`wf_owed`), the
+slot-6 gate applied to the framebuffer queue, because behind a share the
+verdict reaches a writer later and the old latency race is no longer won by
+construction.
 ## 5d. Memory clients — one addition (ruling T3)
 
 `ENGINE0` (framebuffer / render write) and `ENGINE1` (render-geometry domain,
