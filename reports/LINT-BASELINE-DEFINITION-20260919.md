@@ -65,3 +65,47 @@ positive-controlling the linter on a planted width mismatch first, which is the
 only reason the zero was not believed. It is the launcher-popup trap wearing a
 different exit code, and the defence is the same: fire the detector before
 quoting its silence.
+
+---
+
+## THE UNWAIVED COUNT MOVED, 114 -> 120, and it is not a regression
+
+2026-09-19, later the same day. The console closure grew from 125 files to 143
+as four packets composed, and the GEOMETRY ASSET PATH brought
+`zhao_geom_assetfetch.sv` in with it. That file carries SIX inherited
+`-Wall` diagnostics that nobody touched and nobody introduced.
+
+Attribution of the current 120, by file:
+
+```
+  86  zhao_texture_island_v3_top.sv
+  17  zhao_render_texture_pkg.sv
+   6  zhao_texture_binding_resolver_v2.sv
+   6  zhao_geom_assetfetch.sv        <- NEW: joined the closure 2026-09-19
+   3  zhao_texture_frag_expand_v2.sv
+   1  zhao_console_core.sv
+   1  zhao_texture_material_combine_v3.sv
+```
+
+**THE WAIVED RUN IS STILL SILENT, RC 0**, which is the half that actually gates.
+The waiver matches `*fpga?rtl?geometry*`, so the six are covered; they show up
+only in the raw run.
+
+THE HAZARD THIS NUMBER ALWAYS HAD, now demonstrated: an absolute count is a
+baseline that COMPOSING ANYTHING invalidates. A packet that adds a clean file
+and a packet that adds a noisy one both "break" it, and the second is not worse
+engineering -- it is a file the console now actually contains. Read the number
+WITH its attribution or do not read it: "120, of which 6 are the asset path's
+inherited diagnostics" is a fact; "120 > 114, therefore a regression" is not.
+
+The gate that does not have this problem is the waived run, because it is an
+absolute ZERO and cannot drift upward without something genuinely new and
+unwaived appearing. Prefer it. Quote the unwaived number as evidence about
+WHICH warnings exist, never as a pass/fail threshold.
+
+A note on separators, because it has now cost two people time: the waiver globs
+are `*fpga?rtl?texture*` with `?`, not `/`. They were forward-slash-only until
+2026-09-19 and matched NOTHING when the caller passed Windows paths -- 112
+phantom warnings in a subtree nobody had touched, which reads exactly like a
+regression somebody just caused. `completion_register.closure_paths()` returns
+backslash paths; convert with `.as_posix()` or rely on the `?` globs.
