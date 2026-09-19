@@ -23,7 +23,12 @@
 // one changes, this must change with it -- the ONE place this harness can
 // drift from the composition it stands for.
 module tb_cmd_exec_pair #(
-    parameter int unsigned STAMP_Q = 8
+    parameter int unsigned STAMP_Q = 8,
+    // Deliberately SMALL by default so `draw_overflow_o` is reachable with
+    // legal stimulus -- five DrawForms in one packet -- rather than being a
+    // counter asserted zero with an argument attached. CLAUDE.md: "a detector
+    // that has not been shown to FIRE has not been tested".
+    parameter int unsigned DRAW_Q  = 4
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -36,6 +41,10 @@ module tb_cmd_exec_pair #(
 
     // SURFACE.STAMP's backpressure, so the drain can be stalled on purpose
     input  logic        stamp_ready_i,
+    // The draw dispatch's backpressure, same purpose. In the composition this
+    // is the console boundary (entry I41), so it is genuinely an outside
+    // opinion and is driven here rather than tied high.
+    input  logic        draw_ready_i,
     // The matrix bank's refusal. In the composer this is `!proj_cfg_we_i` --
     // the host cfg port wins the cycle and CMD.EXEC re-presents. Driven here so
     // the re-presentation is exercised rather than assumed.
@@ -63,6 +72,15 @@ module tb_cmd_exec_pair #(
     output logic signed [31:0] stamp_ring_width_o,
     output logic        [15:0] stamp_src_id_o,
 
+    output logic        draw_valid_o,
+    output logic [31:0] draw_form_o,
+    output logic [31:0] draw_material_set_o,
+    output logic [31:0] draw_transform_o,
+    output logic [ 7:0] draw_viewport_mask_o,
+    output logic [ 7:0] draw_semantic_weight_o,
+    output logic [15:0] draw_flags_o,
+    output logic [15:0] draw_src_id_o,
+
     // ---- CMD.EXEC's evidence ---------------------------------------------
     output logic [31:0] packets_committed_o,
     output logic [31:0] packets_abandoned_o,
@@ -71,6 +89,9 @@ module tb_cmd_exec_pair #(
     output logic [31:0] stamp_overflow_o,
     output logic [31:0] view_range_refused_o,
     output logic [31:0] stamp_src_truncated_o,
+    output logic [31:0] draws_issued_o,
+    output logic [31:0] draw_overflow_o,
+    output logic [31:0] draw_src_truncated_o,
     output logic [31:0] unsupported_o
 );
 
@@ -110,7 +131,8 @@ module tb_cmd_exec_pair #(
   );
 
   zhao_cmd_exec #(
-      .STAMP_Q(STAMP_Q)
+      .STAMP_Q(STAMP_Q),
+      .DRAW_Q (DRAW_Q)
   ) u_exec (
       .clk  (clk),
       .rst_n(rst_n),
@@ -142,6 +164,16 @@ module tb_cmd_exec_pair #(
       .stamp_ring_width_o(stamp_ring_width_o),
       .stamp_src_id_o    (stamp_src_id_o),
 
+      .draw_valid_o          (draw_valid_o),
+      .draw_ready_i          (draw_ready_i),
+      .draw_form_o           (draw_form_o),
+      .draw_material_set_o   (draw_material_set_o),
+      .draw_transform_o      (draw_transform_o),
+      .draw_viewport_mask_o  (draw_viewport_mask_o),
+      .draw_semantic_weight_o(draw_semantic_weight_o),
+      .draw_flags_o          (draw_flags_o),
+      .draw_src_id_o         (draw_src_id_o),
+
       .packets_committed_o  (packets_committed_o),
       .packets_abandoned_o  (packets_abandoned_o),
       .views_written_o      (views_written_o),
@@ -149,6 +181,9 @@ module tb_cmd_exec_pair #(
       .stamp_overflow_o     (stamp_overflow_o),
       .view_range_refused_o (view_range_refused_o),
       .stamp_src_truncated_o(stamp_src_truncated_o),
+      .draws_issued_o       (draws_issued_o),
+      .draw_overflow_o      (draw_overflow_o),
+      .draw_src_truncated_o (draw_src_truncated_o),
       .unsupported_o        (unsupported_o)
   );
 

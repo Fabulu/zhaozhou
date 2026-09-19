@@ -29,6 +29,16 @@
 //      commit twice.
 //   7  the same packet as case 1 under stamp backpressure: identical results,
 //      only slower.
+//   8  the matrix bank refusing at every phase: 32 words, none lost, none
+//      doubled, in order.
+//   9  the DRAW arm: all six DrawForm fields plus the header source_id, read
+//      back off the dispatch. `flags` is the record's LAST two bytes and is
+//      the case that catches `df_flags_c`'s removal.
+//  10  draw_overflow_o, on DRAW_Q+1 forms -- LEGAL stimulus, so no mutant --
+//      and the poisoned packet is abandoned WHOLE.
+//  11  draw_src_truncated_o, and the proof that the stamp counter stayed put.
+//  12  VIEWS BEFORE DRAWS, measured: the first form leaves after the last
+//      matrix word, under three draw-ready patterns, in submission order.
 
 #include "Vtb_cmd_exec_pair.h"
 #include "verilated.h"
@@ -65,6 +75,17 @@ struct StampOut {
   uint16_t src_id;
 };
 
+struct DrawOut {
+  uint32_t cycle;
+  uint32_t form;
+  uint32_t material_set;
+  uint32_t transform;
+  uint8_t viewport_mask;
+  uint8_t semantic_weight;
+  uint16_t flags;
+  uint16_t src_id;
+};
+
 struct Run {
   bool done = false;
   uint8_t err = 0;
@@ -72,8 +93,10 @@ struct Run {
   uint32_t verdict_cycle = 0;
   std::vector<CfgWrite> cfg;
   std::vector<StampOut> stamps;
+  std::vector<DrawOut> draws;
   uint32_t committed = 0, abandoned = 0, views = 0, issued = 0;
   uint32_t overflow = 0, refused = 0, truncated = 0, unsupported = 0;
+  uint32_t draws_issued = 0, draw_overflow = 0, draw_truncated = 0;
 };
 
 /**
@@ -86,7 +109,7 @@ struct Run {
  * rather than deltas.
  */
 Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
-              uint32_t cfg_mask = 0xFFFFFFFFu) {
+              uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
@@ -94,6 +117,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   dut.pkt_len_i = 0;
   dut.stamp_ready_i = 1;
   dut.proj_cfg_ready_i = 1;
+  dut.draw_ready_i = 1;
   dut.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(dut);
   dut.rst_n = 1;
@@ -120,6 +144,10 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     // the host cfg port taking the cycle. A word refused here must be
     // RE-PRESENTED unchanged, never skipped and never duplicated.
     dut.proj_cfg_ready_i = ((cfg_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    // The draw dispatch's consumer is the console boundary (entry I41), so it
+    // can refuse for as long as it likes and every form must still arrive,
+    // once, in submission order.
+    dut.draw_ready_i = ((draw_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     dut.eval();
 
     const bool moved = have && dut.pkt_ready_o;
@@ -149,10 +177,24 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
       w.data = dut.proj_cfg_data_o;
     }
 
+    const bool draw_fires = (dut.draw_valid_o != 0) && (dut.draw_ready_i != 0);
+    DrawOut d;
+    if (draw_fires) {
+      d.cycle = cyc;
+      d.form = dut.draw_form_o;
+      d.material_set = dut.draw_material_set_o;
+      d.transform = dut.draw_transform_o;
+      d.viewport_mask = static_cast<uint8_t>(dut.draw_viewport_mask_o);
+      d.semantic_weight = static_cast<uint8_t>(dut.draw_semantic_weight_o);
+      d.flags = static_cast<uint16_t>(dut.draw_flags_o);
+      d.src_id = static_cast<uint16_t>(dut.draw_src_id_o);
+    }
+
     zhao::tick(dut);
     if (moved) ++i;
     if (stamp_fires) r.stamps.push_back(s);
     if (cfg_fires) r.cfg.push_back(w);
+    if (draw_fires) r.draws.push_back(d);
 
     if (dut.decode_done_o && !r.done) {
       r.done = true;
@@ -175,6 +217,9 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.refused = dut.view_range_refused_o;
   r.truncated = dut.stamp_src_truncated_o;
   r.unsupported = dut.unsupported_o;
+  r.draws_issued = dut.draws_issued_o;
+  r.draw_overflow = dut.draw_overflow_o;
+  r.draw_truncated = dut.draw_src_truncated_o;
   return r;
 }
 
@@ -243,6 +288,24 @@ std::vector<uint8_t> surfaceStampRecord(uint32_t source_id, uint32_t patch, uint
   return out;
 }
 
+std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t material_set,
+                                    uint32_t transform, uint8_t viewport_mask,
+                                    uint8_t semantic_weight, uint16_t flags) {
+  zhao_abi::ZhRecordDrawForm rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_DRAW_FORM;
+  rec.hdr.record_bytes = 32;
+  rec.hdr.source_id = source_id;
+  rec.payload.form = form;
+  rec.payload.material_set = material_set;
+  rec.payload.transform = transform;
+  rec.payload.viewport_mask = viewport_mask;
+  rec.payload.semantic_weight = semantic_weight;
+  rec.payload.flags = flags;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_draw_form(rec, out);
+  return out;
+}
+
 // The stamp this test uses wherever the values themselves are not the point.
 constexpr uint32_t kPatch = 0x0A0B0C0Du;
 constexpr uint8_t kOp = 1;
@@ -264,6 +327,11 @@ void checkNothingEscapedEarly(const Run& r, const char* what) {
         0, early_cfg);
   check(early_stamp == 0, (std::string(what) + ": no stamp at or before the verdict").c_str(), 0,
         early_stamp);
+  uint32_t early_draw = 0;
+  for (const DrawOut& d : r.draws)
+    if (d.cycle <= r.verdict_cycle) ++early_draw;
+  check(early_draw == 0, (std::string(what) + ": no draw at or before the verdict").c_str(), 0,
+        early_draw);
 }
 
 }  // namespace
@@ -536,6 +604,148 @@ int main(int argc, char** argv) {
       // The stamp drain sits behind the cfg drain, so a bank that refuses for
       // a long time must not lose the stamp queued behind it.
       check(r.issued == 1, (tag + ": the stamp behind the drain still lands").c_str(), 1, r.issued);
+    }
+  }
+
+  // ---- 9. one DrawForm, whole -------------------------------------------
+  // Every one of DrawForm's six fields plus the header's source_id, packed by
+  // `zhao_pack_draw_form` and read back off the dispatch port. The values are
+  // deliberately all-different and byte-asymmetric: a transposed field, a
+  // byte-swapped handle or an offset one out fails on the value and names the
+  // field, rather than producing a plausible draw nobody can distinguish.
+  //
+  // `flags` IS THE INTERESTING ONE and 0xBEEF is chosen for it. It occupies
+  // record bytes 30..31 of a 32-byte record, so its HIGH byte arrives on the
+  // very cycle the record completes and the ring write happens. Without
+  // `df_flags_c`'s bypass the ring captures the register one shift early and
+  // this reads 0xEFxx. That is the whole reason the bypass exists, and this is
+  // the case that would catch its removal.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawFormRecord(0x0000'0021u, 0x1234'56A7u, 0x89AB'CD03u, 0x0F1E'2D5Cu, 0x03u,
+                                   0x77u, 0xBEEFu));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case9: the packet is well formed", zhao_abi::ZH_ABI_OK,
+          r.err);
+    checkNothingEscapedEarly(r, "case9");
+    check(r.committed == 1, "case9: packets_committed_o", 1, r.committed);
+    check(r.draws_issued == 1, "case9: draws_issued_o", 1, r.draws_issued);
+    check(r.draws.size() == 1, "case9: exactly one dispatch left the block", 1, r.draws.size());
+    check(r.draw_overflow == 0, "case9: draw_overflow_o", 0, r.draw_overflow);
+    check(r.draw_truncated == 0, "case9: draw_src_truncated_o", 0, r.draw_truncated);
+    // DrawForm now has an arm, so it must NOT be counted as unsupported.
+    check(r.unsupported == 2, "case9: unsupported_o is BeginFrame + EndFrame only", 2,
+          r.unsupported);
+    if (r.draws.size() == 1) {
+      const DrawOut& d = r.draws[0];
+      check(d.form == 0x1234'56A7u, "case9: form handle", 0x1234'56A7u, d.form);
+      check(d.material_set == 0x89AB'CD03u, "case9: material_set handle", 0x89AB'CD03u,
+            d.material_set);
+      check(d.transform == 0x0F1E'2D5Cu, "case9: transform handle", 0x0F1E'2D5Cu, d.transform);
+      check(d.viewport_mask == 0x03u, "case9: viewport_mask", 0x03u, d.viewport_mask);
+      check(d.semantic_weight == 0x77u, "case9: semantic_weight", 0x77u, d.semantic_weight);
+      check(d.flags == 0xBEEFu, "case9: flags, the record's LAST two bytes", 0xBEEFu, d.flags);
+      check(d.src_id == 0x0021u, "case9: the record header's source_id", 0x0021u, d.src_id);
+    }
+  }
+
+  // ---- 10. the draw ring overflows, and the packet is refused WHOLE -------
+  // DRAW_Q is 4 in the bench, so five forms in one packet is LEGAL stimulus
+  // that reaches the guard. The counter fires without a committed mutant, and
+  // the packet is abandoned rather than half-drawn: a frame with four of its
+  // five creatures in it is a wrong frame, not a degraded one.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(0, 0x40u, 0x0099'0000));
+    for (uint32_t k = 0; k < 5; ++k)
+      b.append_record(drawFormRecord(0x50u + k, 0x1000u + k, 0x2000u + k, 0x3000u + k, 1,
+                                     static_cast<uint8_t>(k), static_cast<uint16_t>(0x0100u + k)));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.err == zhao_abi::ZH_ABI_OK, "case10: the PACKET is well formed -- the refusal is ours",
+          zhao_abi::ZH_ABI_OK, r.err);
+    check(r.draw_overflow == 1, "case10: draw_overflow_o FIRED", 1, r.draw_overflow);
+    check(r.abandoned == 1, "case10: the poisoned packet is abandoned", 1, r.abandoned);
+    check(r.committed == 0, "case10: nothing was committed", 0, r.committed);
+    check(r.draws.empty(), "case10: not one form was dispatched", 0, r.draws.size());
+    check(r.cfg.empty(), "case10: and the view did not commit either", 0, r.cfg.size());
+  }
+
+  // ---- 11. a source_id whose high half cannot fit ------------------------
+  // The SurfaceStamp narrowing rule, applied to the draw arm and counted on
+  // its OWN counter: one flag for both records would attribute a form's
+  // truncated id to a stamp.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawFormRecord(0x00CD'1234u, 0xAAAAu, 0xBBBBu, 0xCCCCu, 2, 9, 0x0007u));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.draw_truncated == 1, "case11: draw_src_truncated_o FIRED", 1, r.draw_truncated);
+    check(r.truncated == 0, "case11: and the STAMP counter did not move", 0, r.truncated);
+    check(r.draws_issued == 1, "case11: the draw still dispatches", 1, r.draws_issued);
+    if (r.draws.size() == 1)
+      check(r.draws[0].src_id == 0x1234u, "case11: the low half is carried", 0x1234u,
+            r.draws[0].src_id);
+  }
+
+  // ---- 12. VIEWS BEFORE DRAWS, under backpressure ------------------------
+  // The ordering claim the header makes structurally, measured rather than
+  // argued: every matrix word of this packet retires BEFORE the first form
+  // leaves. A draw that overtook its own packet's SetView would render the
+  // first frame of every camera move through the previous camera -- a wrong
+  // picture with every counter balancing, which no output check can see.
+  //
+  // Also the submission ORDER: draws are events and do not collapse, so three
+  // forms must arrive as three forms, in the order the packet wrote them, and
+  // a hostile ready pattern must not reorder or lose one.
+  {
+    const uint32_t draw_masks[3] = {0xFFFFFFFFu, 0x55555555u, 0x00000003u};
+    for (int m = 0; m < 3; ++m) {
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(setViewRecord(0, 0x60u, 0x00AA'0000));
+      b.append_record(setViewRecord(1, 0x61u, 0x00BB'0000));
+      for (uint32_t k = 0; k < 3; ++k)
+        b.append_record(drawFormRecord(0x70u + k, 0xF00Du + k, 0xBEA7u + k, 0xC0DEu + k,
+                                       static_cast<uint8_t>(1 + k), static_cast<uint8_t>(k),
+                                       static_cast<uint16_t>(0xAB00u + k)));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, draw_masks[m]);
+      const std::string tag = "case12[draw mask " + std::to_string(m) + "]";
+
+      check(r.err == zhao_abi::ZH_ABI_OK, (tag + ": well formed").c_str(), zhao_abi::ZH_ABI_OK,
+            r.err);
+      checkNothingEscapedEarly(r, tag.c_str());
+      check(r.committed == 1, (tag + ": committed").c_str(), 1, r.committed);
+      check(r.cfg.size() == 32, (tag + ": both views' words").c_str(), 32, r.cfg.size());
+      check(r.draws.size() == 3, (tag + ": three forms, none lost, none doubled").c_str(), 3,
+            r.draws.size());
+      check(r.draws_issued == 3, (tag + ": draws_issued_o").c_str(), 3, r.draws_issued);
+
+      if (r.cfg.size() == 32 && r.draws.size() == 3) {
+        const uint32_t last_cfg = r.cfg[31].cycle;
+        check(r.draws[0].cycle > last_cfg,
+              (tag + ": the first form leaves AFTER the last matrix word").c_str(), 1,
+              r.draws[0].cycle > last_cfg ? 1 : 0);
+        for (uint32_t k = 0; k < 3; ++k) {
+          check(r.draws[k].form == 0xF00Du + k,
+                (tag + ": form " + std::to_string(k) + " in submission order").c_str(), 0xF00Du + k,
+                r.draws[k].form);
+          check(r.draws[k].flags == 0xAB00u + k,
+                (tag + ": form " + std::to_string(k) + " flags").c_str(), 0xAB00u + k,
+                r.draws[k].flags);
+          check(r.draws[k].src_id == 0x70u + k,
+                (tag + ": form " + std::to_string(k) + " source_id").c_str(), 0x70u + k,
+                r.draws[k].src_id);
+        }
+      }
     }
   }
 
