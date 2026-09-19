@@ -9109,6 +9109,42 @@ add_test(NAME lint_geom_desc_crc
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_desc_crc.sv)
 set_tests_properties(lint_geom_desc_crc PROPERTIES
   LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# GEOM.REPLAY -- the geometry replay customer (core entries I11/I12/I24/I38/I39
+# and GEOM.DEPTHQUANT). The arena and the vertex-attribute store are modelled
+# with the arena's contract; depth is differenced against zref::depth_of_raw.
+set(ZHAO_GEOM_REPLAY_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_rcp24_rom.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_ticketq_rh.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_mul.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_rcp24_v4.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_depthquant.sv
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_replay.sv)
+add_executable(test_geom_replay_directed geometry/geom_replay_directed.cpp)
+target_link_libraries(test_geom_replay_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_replay_directed
+  PREFIX Vzhao_geom_replay
+  TOP_MODULE zhao_geom_replay
+  VERILATOR_ARGS --assert
+  SOURCES ${ZHAO_GEOM_REPLAY_SOURCES})
+add_test(NAME geom_replay_directed COMMAND test_geom_replay_directed)
+set_tests_properties(geom_replay_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+add_test(NAME lint_geom_replay
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_replay ${ZHAO_GEOM_REPLAY_SOURCES})
+set_tests_properties(lint_geom_replay PROPERTIES
+  LABELS "fast;nightly" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE SMOKE BENCH'S GEOMETRY FIXTURE, and every number the bench asserts about
+# it, derived from the reference (project_vertex -> Clip -> Setup -> Binner).
+# The bench `include`s the generated header; this test fails if it is stale.
+add_executable(smoke_geom_fixture_gen prod/smoke_geom_fixture_gen.cpp)
+target_link_libraries(smoke_geom_fixture_gen PRIVATE zhao_zref)
+target_include_directories(smoke_geom_fixture_gen PRIVATE ${CMAKE_SOURCE_DIR}/reference/src)
+add_test(NAME smoke_geom_fixture_fresh
+  COMMAND smoke_geom_fixture_gen --check ${CMAKE_CURRENT_SOURCE_DIR}/prod/smoke_geom_fixture.svh)
+set_tests_properties(smoke_geom_fixture_fresh PROPERTIES LABELS "fast;nightly" TIMEOUT 60)
 set_tests_properties(geom_meshfetch_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
 # SKIN.NORM's licence: one transformed-and-renormalised normal reused across

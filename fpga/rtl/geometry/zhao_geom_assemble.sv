@@ -85,6 +85,17 @@ module zhao_geom_assemble #(
     output var logic [SRCW-1:0]   t_src_id_o,
     output var logic              t_last_o,
 
+    // ---- the walk ENDED -----------------------------------------------------
+    // One registered pulse per ACCEPTED meshlet, on EVERY way its walk can end:
+    // the last triangle taken, the last triplet REFUSED, a meshlet with no
+    // triangles, and a meshlet refused whole for its limits. `t_last_o` cannot
+    // say this -- it rides an EMITTED triangle, so a refused last triplet or an
+    // empty meshlet ends the walk with no `t_last_o` at all, and a consumer that
+    // waits for it waits forever. A downstream owner of the meshlet's lifetime
+    // (the replay, which releases GEOM.ASSETFETCH's buffer) needs the ending,
+    // not the last emission.
+    output var logic              m_done_o,
+
     // ---- evidence -----------------------------------------------------------
     output var logic [31:0]       meshlets_o,
     output var logic [31:0]       triangles_o,
@@ -140,16 +151,20 @@ module zhao_geom_assemble #(
       t_material_o     <= '0;
       t_raster_o       <= '0;
       t_src_id_o       <= '0;
+      m_done_o         <= 1'b0;
     end else begin
+      m_done_o <= 1'b0;
       case (st_q)
         S_IDLE: begin
           if (m_valid_i) begin
             meshlets_o <= meshlets_o + 32'd1;
             if (limits_bad_c) begin
               refused_limits_o <= refused_limits_o + 32'd1;
+              m_done_o         <= 1'b1;
             end else if (m_triangle_count_i == 8'd0) begin
               // A meshlet with no triangles is legal and emits nothing. It is
               // not a refusal and must not be counted as one.
+              m_done_o <= 1'b1;
             end else begin
               voff_q   <= m_vertex_offset_i;
               vcount_q <= m_vertex_count_i;
@@ -171,8 +186,12 @@ module zhao_geom_assemble #(
               // already checked, so this is a corrupt index rather than a
               // corrupt descriptor.
               refused_index_o <= refused_index_o + 32'd1;
-              if (tri_q + 9'd1 == 9'(tcount_q)) st_q <= S_IDLE;
-              else tri_q <= tri_q + 9'd1;
+              if (tri_q + 9'd1 == 9'(tcount_q)) begin
+                st_q     <= S_IDLE;
+                m_done_o <= 1'b1;
+              end else begin
+                tri_q <= tri_q + 9'd1;
+              end
             end else begin
               // THE ONE ARITHMETIC ACT: local -> global, per view.
               t_v0_o       <= voff_q + VIDW'(ix_a_i);
@@ -194,7 +213,8 @@ module zhao_geom_assemble #(
           if (t_ready_i) begin
             triangles_o <= triangles_o + 32'd1;
             if (tri_q + 9'd1 == 9'(tcount_q)) begin
-              st_q <= S_IDLE;
+              st_q     <= S_IDLE;
+              m_done_o <= 1'b1;
             end else begin
               tri_q <= tri_q + 9'd1;
               st_q  <= S_FETCH;

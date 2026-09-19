@@ -107,9 +107,6 @@ modules:
     disposition: superseded
     superseded_by: zhao_geom_binner_v2
     why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
-  zhao_geom_depthquant:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_geom_fogfactor:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

@@ -325,6 +325,9 @@ module zhao_console_board
   // and exists because a port list cannot call $clog2 on another port.
   parameter int unsigned GEOM_CLIP_ATTRS = 7,
   parameter int unsigned GEOM_CLIP_ATTRW = GEOM_CLIP_ATTRS * 32,
+  // The vertex-attribute store's word (owner ruling R11): slots 1..6 of the
+  // packet above -- everything but invw24, which is GEOM.DEPTHQUANT's alone.
+  parameter int unsigned GEOM_ATTR_STORE_W = (GEOM_CLIP_ATTRS - 1) * 32,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -673,24 +676,13 @@ module zhao_console_board
   output logic [31:0]             geom_mf_crc_fail_o,
   output logic [31:0]             geom_mf_crc_framing_o,
 
-  // ---- I38: GEOM.ASSETFETCH's meshlet RELEASE -----------------------------
-  input  logic                    geom_af_release_i,
+  // ---- I38 IS CLOSED: GEOM.REPLAY releases the meshlet, by proof ---------
 
-  // ---- I39: GEOM.ASSEMBLE's three descriptor fields -----------------------
-  input  logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i,
-  input  logic [15:0]              geom_asm_material_id_i,
+  // ---- I39, NARROWED: GEOM.ASSEMBLE's RASTER STATE only -------------------
+  // The vertex offset is the named constant 0 (arena-local ids), the material
+  // is carried by GEOM.ASSETFETCH beside its meshlet, and the TriangleDescriptor
+  // goes to GEOM.REPLAY. The descriptor's raster word has no producer anywhere.
   input  logic [31:0]              geom_asm_raster_state_i,
-
-  // ---- I39: GEOM.ASSEMBLE's TriangleDescriptor, out to the absent replay --
-  output logic                     geom_asm_t_valid_o,
-  input  logic                     geom_asm_t_ready_i,
-  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v0_o,
-  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v1_o,
-  output logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v2_o,
-  output logic [15:0]              geom_asm_t_material_o,
-  output logic [31:0]              geom_asm_t_raster_o,
-  output logic [15:0]              geom_asm_t_src_id_o,
-  output logic                     geom_asm_t_last_o,
 
   // ---- I41: CMD.EXEC's DRAW DISPATCH, the ratified DrawForm ---------------
   // NEW 2026-09-19. DrawForm 0x0300 now reaches the console; what has no
@@ -843,37 +835,19 @@ module zhao_console_board
   output logic [31:0]             geom_pal_bone_oob_o,
   output logic [31:0]             geom_pal_bone_unset_o,
 
-  // ---- I11: GEOM.GROUP_SEQ's job in, sealed group out ---------------------
-  input  logic                    geom_job_valid_i,
-  output logic                    geom_job_ready_o,
-  input  logic [GEOM_INDEX_W-1:0] geom_job_count_i,
-  input  logic [GEOM_NVIEWS-1:0]  geom_job_view_mask_i,
-  input  logic [15:0]             geom_job_src_id_i,
-  output logic                    geom_grp_valid_o,
-  input  logic                    geom_grp_ready_i,
-  output logic [GEOM_ARENA_W-1:0] geom_grp_arena_o,
-  output logic [GEOM_GEN_W-1:0]   geom_grp_gen_o,
-  output logic [GEOM_INDEX_W-1:0] geom_grp_count_o,
-  output logic                    geom_grp_view_o,
-  output logic [15:0]             geom_grp_src_id_o,
-  input  logic                    geom_rel_valid_i,
-  input  logic [GEOM_ARENA_W-1:0] geom_rel_arena_i,
+  // ---- I11 IS CLOSED: GEOM.GROUP_SEQ's job, handle and release are INTERNAL.
+  // The job comes from the meshlet dispatcher fork, the handle goes to
+  // GEOM.REPLAY and the release comes back from it. Sixteen ports left this
+  // list rather than being driven; see the closed ledger in the header.
 
-  // ---- I12: GEOM.PROJ_LANE's arena origin and lookup port -----------------
+  // ---- I12, NARROWED: the arena ORIGIN datum only ---------------------------
+  // The lookup port is GEOM.REPLAY's now. What is still at the edge is the
+  // per-arena origin, which nothing in this console writes and nothing reads.
   input  logic                    geom_org_we_i,
   input  logic [GEOM_ARENA_W-1:0] geom_org_arena_i,
   input  logic signed [31:0]      geom_org_x_i,
   input  logic signed [31:0]      geom_org_y_i,
   input  logic signed [31:0]      geom_org_z_i,
-  input  logic                    geom_look_valid_i,
-  output logic                    geom_look_ready_o,
-  input  logic [GEOM_ARENA_W-1:0] geom_look_arena_i,
-  input  logic [GEOM_GEN_W-1:0]   geom_look_gen_i,
-  input  logic [GEOM_INDEX_W-1:0] geom_look_index_i,
-  output logic                    geom_rep_valid_o,
-  output logic                    geom_rep_hit_o,
-  output logic                    geom_rep_refuse_o,
-  output logic [GEOM_PAYLOAD_W-1:0] geom_rep_payload_o,
   output logic signed [31:0]      geom_rep_org_x_o,
   output logic signed [31:0]      geom_rep_org_y_o,
   output logic signed [31:0]      geom_rep_org_z_o,
@@ -892,24 +866,35 @@ module zhao_console_board
   output logic [31:0]             geom_arena_refusals_o,
   output logic                    geom_arena_overflow_o,
 
-  // ---- I24: GEOM.CLIP's projected triangle, attributes and cull mode -------
-  // The three SCREEN corners with GEOM.PROJECT's behind verdicts. The absent
-  // replay customer specified at I11 is what drives these. The SCISSOR is NOT
-  // here because it is real -- see GLUE 1.
-  input  logic                    geom_clip_tri_valid_i,
-  output logic                    geom_clip_tri_ready_o,
-  input  logic signed [20:0]      geom_clip_tri_ax_i,
-  input  logic signed [20:0]      geom_clip_tri_ay_i,
-  input  logic signed [20:0]      geom_clip_tri_bx_i,
-  input  logic signed [20:0]      geom_clip_tri_by_i,
-  input  logic signed [20:0]      geom_clip_tri_cx_i,
-  input  logic signed [20:0]      geom_clip_tri_cy_i,
-  input  logic [2:0]              geom_clip_tri_behind_i,
-  input  logic [15:0]             geom_clip_tri_src_id_i,
-  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_i,
-  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_b_i,
-  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_c_i,
+  // ---- I24, NARROWED: GEOM.CLIP's cull mode only ----------------------------
+  // The triangle and its attribute packets come from GEOM.REPLAY (the bench's
+  // triangle door is GONE). The cull mode is per-draw raster state and has no
+  // producer: the descriptor's raster word is I39's.
   input  logic [1:0]              geom_clip_cull_mode_i,
+
+  // ---- I46: THE VERTEX-ATTRIBUTE STORE (owner ruling R11, provisional) -----
+  // Slots 1..6 of the ruling-5 packet (u_over_w, v_over_w, r, g, b, alpha),
+  // per vertex per view, keyed EXACTLY like the arena. The store listens to
+  // GEOM.REPLAY's lookups -- these are the same nets that address the arena --
+  // and answers with the arena's timing. Its WRITER is not built; see I46.
+  output logic                    geom_att_look_valid_o,
+  output logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o,
+  output logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o,
+  output logic [GEOM_INDEX_W-1:0] geom_att_look_index_o,
+  input  logic                    geom_att_rep_valid_i,
+  input  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i,
+
+  // ---- GEOM.REPLAY's evidence ----------------------------------------------
+  output logic [31:0]             geom_rp_meshlets_o,
+  output logic [31:0]             geom_rp_groups_o,
+  output logic [31:0]             geom_rp_triangles_in_o,
+  output logic [31:0]             geom_rp_triangles_out_o,
+  output logic [31:0]             geom_rp_refused_o,
+  output logic [31:0]             geom_rp_missed_o,
+  output logic [31:0]             geom_rp_att_skew_o,
+  output logic [31:0]             geom_rp_profile_mixed_o,
+  output logic [31:0]             geom_rp_view_bad_o,
+  output logic [31:0]             geom_rp_dq_refused_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -2393,6 +2378,7 @@ module zhao_console_board
       .GEOM_ASM_VIDW            (GEOM_ASM_VIDW),
       .GEOM_CLIP_ATTRS          (GEOM_CLIP_ATTRS),
       .GEOM_CLIP_ATTRW          (GEOM_CLIP_ATTRW),
+      .GEOM_ATTR_STORE_W        (GEOM_ATTR_STORE_W),
       .GEOM_ATTR_SLOT_INVW      (GEOM_ATTR_SLOT_INVW),
       .GEOM_ATTR_SLOT_U_OVER_W  (GEOM_ATTR_SLOT_U_OVER_W),
       .GEOM_ATTR_SLOT_V_OVER_W  (GEOM_ATTR_SLOT_V_OVER_W),
@@ -2528,19 +2514,7 @@ module zhao_console_board
       .geom_mf_crc_descriptors_o         (geom_mf_crc_descriptors_o),
       .geom_mf_crc_fail_o                (geom_mf_crc_fail_o),
       .geom_mf_crc_framing_o             (geom_mf_crc_framing_o),
-      .geom_af_release_i                 (geom_af_release_i),
-      .geom_asm_vertex_offset_i          (geom_asm_vertex_offset_i),
-      .geom_asm_material_id_i            (geom_asm_material_id_i),
       .geom_asm_raster_state_i           (geom_asm_raster_state_i),
-      .geom_asm_t_valid_o                (geom_asm_t_valid_o),
-      .geom_asm_t_ready_i                (geom_asm_t_ready_i),
-      .geom_asm_t_v0_o                   (geom_asm_t_v0_o),
-      .geom_asm_t_v1_o                   (geom_asm_t_v1_o),
-      .geom_asm_t_v2_o                   (geom_asm_t_v2_o),
-      .geom_asm_t_material_o             (geom_asm_t_material_o),
-      .geom_asm_t_raster_o               (geom_asm_t_raster_o),
-      .geom_asm_t_src_id_o               (geom_asm_t_src_id_o),
-      .geom_asm_t_last_o                 (geom_asm_t_last_o),
       .cmd_draw_valid_o                  (cmd_draw_valid_o),
       .cmd_draw_ready_i                  (cmd_draw_ready_i),
       .cmd_draw_form_o                   (cmd_draw_form_o),
@@ -2632,34 +2606,11 @@ module zhao_console_board
       .geom_pal_bones_written_o          (geom_pal_bones_written_o),
       .geom_pal_bone_oob_o               (geom_pal_bone_oob_o),
       .geom_pal_bone_unset_o             (geom_pal_bone_unset_o),
-      .geom_job_valid_i                  (geom_job_valid_i),
-      .geom_job_ready_o                  (geom_job_ready_o),
-      .geom_job_count_i                  (geom_job_count_i),
-      .geom_job_view_mask_i              (geom_job_view_mask_i),
-      .geom_job_src_id_i                 (geom_job_src_id_i),
-      .geom_grp_valid_o                  (geom_grp_valid_o),
-      .geom_grp_ready_i                  (geom_grp_ready_i),
-      .geom_grp_arena_o                  (geom_grp_arena_o),
-      .geom_grp_gen_o                    (geom_grp_gen_o),
-      .geom_grp_count_o                  (geom_grp_count_o),
-      .geom_grp_view_o                   (geom_grp_view_o),
-      .geom_grp_src_id_o                 (geom_grp_src_id_o),
-      .geom_rel_valid_i                  (geom_rel_valid_i),
-      .geom_rel_arena_i                  (geom_rel_arena_i),
       .geom_org_we_i                     (geom_org_we_i),
       .geom_org_arena_i                  (geom_org_arena_i),
       .geom_org_x_i                      (geom_org_x_i),
       .geom_org_y_i                      (geom_org_y_i),
       .geom_org_z_i                      (geom_org_z_i),
-      .geom_look_valid_i                 (geom_look_valid_i),
-      .geom_look_ready_o                 (geom_look_ready_o),
-      .geom_look_arena_i                 (geom_look_arena_i),
-      .geom_look_gen_i                   (geom_look_gen_i),
-      .geom_look_index_i                 (geom_look_index_i),
-      .geom_rep_valid_o                  (geom_rep_valid_o),
-      .geom_rep_hit_o                    (geom_rep_hit_o),
-      .geom_rep_refuse_o                 (geom_rep_refuse_o),
-      .geom_rep_payload_o                (geom_rep_payload_o),
       .geom_rep_org_x_o                  (geom_rep_org_x_o),
       .geom_rep_org_y_o                  (geom_rep_org_y_o),
       .geom_rep_org_z_o                  (geom_rep_org_z_o),
@@ -2675,20 +2626,23 @@ module zhao_console_board
       .geom_arena_misses_o               (geom_arena_misses_o),
       .geom_arena_refusals_o             (geom_arena_refusals_o),
       .geom_arena_overflow_o             (geom_arena_overflow_o),
-      .geom_clip_tri_valid_i             (geom_clip_tri_valid_i),
-      .geom_clip_tri_ready_o             (geom_clip_tri_ready_o),
-      .geom_clip_tri_ax_i                (geom_clip_tri_ax_i),
-      .geom_clip_tri_ay_i                (geom_clip_tri_ay_i),
-      .geom_clip_tri_bx_i                (geom_clip_tri_bx_i),
-      .geom_clip_tri_by_i                (geom_clip_tri_by_i),
-      .geom_clip_tri_cx_i                (geom_clip_tri_cx_i),
-      .geom_clip_tri_cy_i                (geom_clip_tri_cy_i),
-      .geom_clip_tri_behind_i            (geom_clip_tri_behind_i),
-      .geom_clip_tri_src_id_i            (geom_clip_tri_src_id_i),
-      .geom_clip_attr_a_i                (geom_clip_attr_a_i),
-      .geom_clip_attr_b_i                (geom_clip_attr_b_i),
-      .geom_clip_attr_c_i                (geom_clip_attr_c_i),
       .geom_clip_cull_mode_i             (geom_clip_cull_mode_i),
+      .geom_att_look_valid_o             (geom_att_look_valid_o),
+      .geom_att_look_arena_o             (geom_att_look_arena_o),
+      .geom_att_look_gen_o               (geom_att_look_gen_o),
+      .geom_att_look_index_o             (geom_att_look_index_o),
+      .geom_att_rep_valid_i              (geom_att_rep_valid_i),
+      .geom_att_rep_data_i               (geom_att_rep_data_i),
+      .geom_rp_meshlets_o                (geom_rp_meshlets_o),
+      .geom_rp_groups_o                  (geom_rp_groups_o),
+      .geom_rp_triangles_in_o            (geom_rp_triangles_in_o),
+      .geom_rp_triangles_out_o           (geom_rp_triangles_out_o),
+      .geom_rp_refused_o                 (geom_rp_refused_o),
+      .geom_rp_missed_o                  (geom_rp_missed_o),
+      .geom_rp_att_skew_o                (geom_rp_att_skew_o),
+      .geom_rp_profile_mixed_o           (geom_rp_profile_mixed_o),
+      .geom_rp_view_bad_o                (geom_rp_view_bad_o),
+      .geom_rp_dq_refused_o              (geom_rp_dq_refused_o),
       .geom_clip_attr_a_o                (geom_clip_attr_a_o),
       .geom_clip_attr_b_o                (geom_clip_attr_b_o),
       .geom_clip_attr_c_o                (geom_clip_attr_c_o),

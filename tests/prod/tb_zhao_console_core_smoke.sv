@@ -123,12 +123,16 @@ module tb_zhao_console_core_smoke
   // bench loudly instead of silently agreeing with itself.
   localparam int signed   PART_TER_H     = 100;
   localparam int unsigned PART_CLEAR_EPS = 2;
-  localparam int unsigned N_GEOM_VERTS   = 4;
-  // Triangles offered to GEOM.CLIP. Three, not one: one proves a wire, three
-  // prove the handshake releases and can be offered again, which is the bug
-  // shape this repository has already been bitten by (a level held for a whole
-  // offer window re-submitted one meshlet fifteen times).
-  localparam int unsigned N_GEOM_TRIS    = 16;
+  // THE GEOMETRY FIXTURE AND EVERY NUMBER ASSERTED ABOUT IT come from ONE
+  // generated header, written by `tests/prod/smoke_geom_fixture_gen.cpp` from
+  // the REFERENCE (project_vertex -> Clip -> Setup -> Binner) and held fresh by
+  // the ctest `smoke_geom_fixture_fresh`. Nothing below re-derives a count.
+`include "smoke_geom_fixture.svh"
+  localparam int unsigned N_GEOM_VERTS   = SGF_N_VERTS;
+  // Whole 64-byte lines of eight beats: the index run starts line-aligned
+  // (GEOM_IX_OFF = 0x80) and so does the vertex run (0x100), 32 B per vertex.
+  localparam int unsigned GEOM_FOOTPRINT_BEATS =
+      8 * (((3 * SGF_N_TRIS) + 63) / 64) + 8 * (((32 * SGF_N_VERTS) + 63) / 64);
   localparam int unsigned CYCLE_LIMIT    = 1_500_000;
   localparam logic signed [31:0] FX16_ONE = 32'sh0001_0000;
 
@@ -249,19 +253,9 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_mf_crc_descriptors_o;
   logic [31:0]             geom_mf_crc_fail_o;
   logic [31:0]             geom_mf_crc_framing_o;
-  logic                    geom_af_release_i;
-  logic [GEOM_ASM_VIDW-1:0] geom_asm_vertex_offset_i;
-  logic [15:0]              geom_asm_material_id_i;
+  // I38 and I11 CLOSED, I39 narrowed to the raster word: GEOM.REPLAY owns the
+  // release, the handle and the TriangleDescriptor inside the core now.
   logic [31:0]              geom_asm_raster_state_i;
-  logic                     geom_asm_t_valid_o;
-  logic                     geom_asm_t_ready_i;
-  logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v0_o;
-  logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v1_o;
-  logic [GEOM_ASM_VIDW-1:0] geom_asm_t_v2_o;
-  logic [15:0]              geom_asm_t_material_o;
-  logic [31:0]              geom_asm_t_raster_o;
-  logic [15:0]              geom_asm_t_src_id_o;
-  logic                     geom_asm_t_last_o;
   logic [31:0] geom_mf_meshlets_considered_o;
   logic [31:0] geom_mf_culled_all_cameras_o;
   logic [31:0] geom_mf_descriptors_fetched_o;
@@ -354,34 +348,11 @@ module tb_zhao_console_core_smoke
   logic [31:0]             geom_pal_bones_written_o;
   logic [31:0]             geom_pal_bone_oob_o;
   logic [31:0]             geom_pal_bone_unset_o;
-  logic                    geom_job_valid_i;
-  logic                    geom_job_ready_o;
-  logic [GEOM_INDEX_W-1:0] geom_job_count_i;
-  logic [GEOM_NVIEWS-1:0]  geom_job_view_mask_i;
-  logic [15:0]             geom_job_src_id_i;
-  logic                    geom_grp_valid_o;
-  logic                    geom_grp_ready_i;
-  logic [GEOM_ARENA_W-1:0] geom_grp_arena_o;
-  logic [GEOM_GEN_W-1:0]   geom_grp_gen_o;
-  logic [GEOM_INDEX_W-1:0] geom_grp_count_o;
-  logic                    geom_grp_view_o;
-  logic [15:0]             geom_grp_src_id_o;
-  logic                    geom_rel_valid_i;
-  logic [GEOM_ARENA_W-1:0] geom_rel_arena_i;
   logic                    geom_org_we_i;
   logic [GEOM_ARENA_W-1:0] geom_org_arena_i;
   logic signed [31:0]      geom_org_x_i;
   logic signed [31:0]      geom_org_y_i;
   logic signed [31:0]      geom_org_z_i;
-  logic                    geom_look_valid_i;
-  logic                    geom_look_ready_o;
-  logic [GEOM_ARENA_W-1:0] geom_look_arena_i;
-  logic [GEOM_GEN_W-1:0]   geom_look_gen_i;
-  logic [GEOM_INDEX_W-1:0] geom_look_index_i;
-  logic                    geom_rep_valid_o;
-  logic                    geom_rep_hit_o;
-  logic                    geom_rep_refuse_o;
-  logic [GEOM_PAYLOAD_W-1:0] geom_rep_payload_o;
   logic signed [31:0]      geom_rep_org_x_o;
   logic signed [31:0]      geom_rep_org_y_o;
   logic signed [31:0]      geom_rep_org_z_o;
@@ -985,16 +956,22 @@ module tb_zhao_console_core_smoke
   // GEOM.MEM_ADAPTER drives the shell's socket now, so what this bench
   // supplies is one level lower and is real memory -- see the SDRAM model
   // and the asset fixture below.
-  // ---- GEOM.CLIP's input (entry I24) and the CLIP/SETUP evidence ------------
+  // ---- GEOM.CLIP's cull mode (entry I24, narrowed) and the CLIP/SETUP evidence
+  // THE TRIANGLE DOOR IS GONE: GEOM.CLIP is fed by GEOM.REPLAY inside the core.
   localparam int unsigned GEOM_CLIP_ATTRW = 7 * 32;
-  logic                    geom_clip_tri_valid_i;
-  logic                    geom_clip_tri_ready_o;
-  logic signed [20:0]      geom_clip_tri_ax_i, geom_clip_tri_ay_i;
-  logic signed [20:0]      geom_clip_tri_bx_i, geom_clip_tri_by_i;
-  logic signed [20:0]      geom_clip_tri_cx_i, geom_clip_tri_cy_i;
-  logic [2:0]              geom_clip_tri_behind_i;
-  logic [15:0]             geom_clip_tri_src_id_i;
-  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_i, geom_clip_attr_b_i, geom_clip_attr_c_i;
+  localparam int unsigned GEOM_ATTR_STORE_W = 6 * 32;
+  // ---- I46: the vertex-attribute store, MODELLED here (its writer is unbuilt)
+  logic                    geom_att_look_valid_o;
+  logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o;
+  logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o;
+  logic [GEOM_INDEX_W-1:0] geom_att_look_index_o;
+  logic                    geom_att_rep_valid_i;
+  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i;
+  // ---- GEOM.REPLAY's evidence
+  logic [31:0] geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o;
+  logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
+  logic [31:0] geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o;
+  logic [31:0] geom_rp_dq_refused_o;
   // GEOM.ATTRPACK's evidence, out of the core because a counter nobody can
   // read is not evidence. The RATIO is what gets asserted below.
   logic [31:0]             geom_attrpack_triangles_o;
@@ -1882,7 +1859,6 @@ module tb_zhao_console_core_smoke
   int unsigned ticks_seen_q;
   int unsigned part_records_sent_q;
   int unsigned part_records_written_q;
-  int unsigned geom_tris_sent_q;
   logic        render_frame_open_q;
   bit          part_tick_seen_q;
   bit          reset_released_q;
@@ -2097,9 +2073,11 @@ module tb_zhao_console_core_smoke
   function automatic logic [255:0] vdec_record(input int unsigned n);
     logic signed [31:0] px, py, pz;
     begin
-      px = FX16_ONE * 32'sh2 + 32'(n);
-      py = FX16_ONE;
-      pz = FX16_ONE * 32'sh4;
+      // The fixture's positions (smoke_geom_fixture.svh), fx16 world = model:
+      // no pose is decoded (I29), so the identity bind pose applies.
+      px = SGF_VX[n];
+      py = SGF_VY[n];
+      pz = SGF_VZ[n];
       vdec_record = {64'd0,          // off 24..31 reserved, MUST be zero
                      16'd0,          // off 22 bone1 (== bone0 -> rigid)
                      16'd0,          // off 20 bone0
@@ -2205,16 +2183,25 @@ module tb_zhao_console_core_smoke
   // accident this bench would be resting on. Under identity the clip point is
   // the world point and w is 1.0, so a bound at the origin is inside every
   // plane by construction and the check below is about the WIRE.
+  // BOTH VIEWS, from the fixture: the w = z camera (SGF_MAT) and each view's
+  // viewport rectangle at cfg 16/17 -- the host port is entry I14's boundary,
+  // so this bench stands in for the host exactly as it did for view 0 alone.
+  // The profile (cfg 18) is left at its reset WORLD_LONG, which is what the
+  // reference-derived depths assume.
   task automatic geom_write_camera();
     int unsigned i;
+    int unsigned v;
     begin
-      for (i = 0; i < 16; i = i + 1) begin
-        proj_cfg_we_i   = 1'b1;
-        proj_cfg_view_i = 1'b0;
-        proj_cfg_addr_i = 5'(i);
-        proj_cfg_data_i = ((i == 0) || (i == 5) || (i == 10) || (i == 15))
-                          ? FX16_ONE : 32'sd0;
-        @(posedge gpu_clk);
+      for (v = 0; v < 2; v = v + 1) begin
+        for (i = 0; i < 18; i = i + 1) begin
+          proj_cfg_we_i   = 1'b1;
+          proj_cfg_view_i = v[0];
+          proj_cfg_addr_i = 5'(i);
+          if (i < 16)       proj_cfg_data_i = SGF_MAT[i];
+          else if (i == 16) proj_cfg_data_i = (v == 0) ? SGF_VP0_ORG : SGF_VP1_ORG;
+          else              proj_cfg_data_i = (v == 0) ? SGF_VP0_EXT : SGF_VP1_EXT;
+          @(posedge gpu_clk);
+        end
       end
       proj_cfg_we_i = 1'b0;
     end
@@ -2249,9 +2236,11 @@ module tb_zhao_console_core_smoke
     //       not the CRC row.
     begin : g_desc
       logic [63:0] dw [8];
-      dw[0] = {16'h0000, 16'h0001, 8'd1, 8'(N_GEOM_VERTS), 8'd0, 8'd1};
+      dw[0] = {16'h0000, 16'h0001, 8'(SGF_N_TRIS), 8'(N_GEOM_VERTS), 8'd0, 8'd1};
       dw[1] = 64'd0;
-      dw[2] = {GEOM_BOUND_R, 32'd0};
+      // Bound centre z = 1.5 (bytes 16..19), inside the w = z camera's view,
+      // so GEOM.CULL keeps the meshlet in both views; radius 0.25 (20..23).
+      dw[2] = {GEOM_BOUND_R, 32'h0001_8000};
       dw[3] = {GEOM_IX_OFF, GEOM_VX_OFF};
       dw[4] = {32'd0, 16'd0, 16'd1};
 `ifdef ZHAO_SMOKE_BAD_DESC
@@ -2276,12 +2265,18 @@ module tb_zhao_console_core_smoke
         geom_poke_q(GEOM_POOL_BASE + GEOM_DESC_OFF + 8 * k, dw[k]);
     end
 
-    // ---- the index run: ONE triplet, {0, 1, 2}, three packed u8 -----------
-    // The whole 64-byte line is written even though only the first word is
-    // kept, so no beat of a line this bench caused to be read carries X.
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  0, {40'd0, 8'd2, 8'd1, 8'd0});
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  8, 64'd0);
-    geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 16, 64'd0);
+    // ---- the index run: SGF_N_TRIS triplets of packed u8, from the fixture --
+    // The whole 64-byte line is written, so no beat of a line this bench caused
+    // to be read carries X.
+    begin : g_ix
+      logic [191:0] ixw;
+      ixw = '0;
+      for (int unsigned k = 0; k < 3 * SGF_N_TRIS; k = k + 1)
+        ixw[8 * k +: 8] = SGF_IX[k];
+      geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  0, ixw[63:0]);
+      geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF +  8, ixw[127:64]);
+      geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 16, ixw[191:128]);
+    end
     geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 24, 64'd0);
     geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 32, 64'd0);
     geom_poke_q(GEOM_POOL_BASE + GEOM_IX_OFF + 40, 64'd0);
@@ -2347,55 +2342,91 @@ module tb_zhao_console_core_smoke
         geom_mf_job_valid_i <= 1'b0;
         geom_job_sent_q     <= 1'b1;
       end else if (reset_released_q && init_done_o && geom_fixture_ready_q
-                   && geom_camera_ready_q && !geom_job_sent_q) begin
+                   && geom_camera_ready_q && render_frame_open_q
+                   && !geom_job_sent_q) begin
+        // INSIDE THE OPEN RENDER FRAME: the meshlet's triangles reach the
+        // shell's binner through GEOM.REPLAY, and a render frame does not
+        // survive the console's frame boundary (the note at the frame open).
         geom_mf_job_valid_i <= 1'b1;
       end
     end
   end
 
   // --------------------------------------------------------------------------
-  // THE TRIANGLE FRONT DOOR (entry I24: the replay customer specified at I11
-  // does not exist, so the harness presents the three PROJECTED screen corners
-  // it would emit -- and nothing downstream of that).
+  // THE TRIANGLE FRONT DOOR IS GONE (2026-09-19, geom packet). It presented
+  // sixteen copies of one hand-placed SCREEN triangle at GEOM.CLIP's input
+  // because the replay customer did not exist. GEOM.REPLAY does now, so the
+  // triangles GEOM.CLIP sees are the fixture meshlet's own, projected by the
+  // shared projector in BOTH views and replayed out of the arena.
   //
-  // This path was COMPLETELY DEAD before this pass: `render_tri_valid_i` was a
-  // boundary input on the core and this bench tied it to zero, so the shell's
-  // rasteriser had never seen a triangle in a connected-core run. It is now
-  // GEOM.CLIP -> GEOM.SETUP -> the shell, and the test is that a triangle put
-  // in at CLIP comes out of SETUP as edge functions AND that the shell's
-  // rasteriser reports pixels for it.
+  // THE VERTEX-ATTRIBUTE STORE (core entry I46) IS MODELLED HERE, with the
+  // arena's own contract: it listens to the replay's lookups and answers ONE
+  // clock later. Its WRITER is the unbuilt half of owner ruling R11, so these
+  // values stand in for it exactly as the SDRAM model stands in for memory.
+  // They differ at every vertex, so GEOM.ATTRPACK's u/v planes have real
+  // gradients: u_over_w = index << 20, v_over_w = (index ^ arena) << 20, and
+  // the r/g/b/alpha slots carry the index for the day a Gouraud lane reads them.
   //
-  // The triangle is deliberately front-facing, wholly inside the Z60 canvas and
-  // wholly in front of the camera (`behind` = 0), because this bench asserts
-  // that beats crossed wires, not that a clipper clips. S12.8 subpixels: 256
-  // subpixels to the pixel.
+  // `-BadAttribute` (ZHAO_SMOKE_BAD_ATTR, inverted polarity) answers the FIRST
+  // lookup of the run one clock LATE. GEOM.REPLAY's `att_skew_o` -- two
+  // memories, two timings, independent operands -- must see it, and this bench
+  // asserts it zero, so the control passes only if the run FAILS.
   // --------------------------------------------------------------------------
-  localparam int unsigned SUBPX = 256;
+  logic                         att_pend_q;
+  logic [GEOM_ARENA_W-1:0]      att_arena_q;
+  logic [GEOM_INDEX_W-1:0]      att_index_q;
+  bit                           att_late_done_q;
+  logic                         att_late_q;
+
+  function automatic logic [GEOM_ATTR_STORE_W-1:0] att_word(
+      input logic [GEOM_ARENA_W-1:0] a, input logic [GEOM_INDEX_W-1:0] ix);
+    logic [GEOM_ATTR_STORE_W-1:0] w;
+    begin
+      w = '0;
+      w[31:0]    = 32'(ix) << 20;                           // u_over_w
+      w[63:32]   = (32'(ix) ^ 32'(a)) << 20;                // v_over_w
+      w[95:64]   = 32'(ix);                                  // r
+      w[127:96]  = 32'(ix) + 32'd1;                         // g
+      w[159:128] = 32'(ix) + 32'd2;                         // b
+      w[191:160] = 32'h0000_00FF;                            // alpha
+      return w;
+    end
+  endfunction
 
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
-      geom_tris_sent_q      <= 0;
-      geom_clip_tri_valid_i <= 1'b0;
+      att_pend_q           <= 1'b0;
+      att_late_q           <= 1'b0;
+      att_late_done_q      <= 1'b0;
+      geom_att_rep_valid_i <= 1'b0;
+      geom_att_rep_data_i  <= '0;
     end else begin
-      if (geom_clip_tri_valid_i && geom_clip_tri_ready_o) begin
-        geom_tris_sent_q      <= geom_tris_sent_q + 1;
-        geom_clip_tri_valid_i <= 1'b0;
+      geom_att_rep_valid_i <= 1'b0;
+`ifdef ZHAO_SMOKE_BAD_ATTR
+      // One reply, once, one clock late.
+      if (att_late_q) begin
+        geom_att_rep_valid_i <= 1'b1;
+        geom_att_rep_data_i  <= att_word(att_arena_q, att_index_q);
+        att_late_q           <= 1'b0;
       end
-      if (render_frame_open_q && !geom_clip_tri_valid_i &&
-          (geom_tris_sent_q < N_GEOM_TRIS)) begin
-        // Pixels (4,4) (40,4) (4,40), in S12.8 subpixels. 2A is positive, so
-        // GEOM.CLIP does not have to flip it -- the flip is exercised by that
-        // block's own directed test and asserting it here would be a second,
-        // weaker copy of a check that already exists.
-        geom_clip_tri_valid_i  <= 1'b1;
-        geom_clip_tri_ax_i     <= 21'sd1024;
-        geom_clip_tri_ay_i     <= 21'sd1024;
-        geom_clip_tri_bx_i     <= 21'sd10240;
-        geom_clip_tri_by_i     <= 21'sd1024;
-        geom_clip_tri_cx_i     <= 21'sd1024;
-        geom_clip_tri_cy_i     <= 21'sd10240;
-        geom_clip_tri_src_id_i <= 16'h00B2;
+      if (geom_att_look_valid_o) begin
+        att_arena_q <= geom_att_look_arena_o;
+        att_index_q <= geom_att_look_index_o;
+        if (!att_late_done_q) begin
+          att_late_q      <= 1'b1;
+          att_late_done_q <= 1'b1;
+        end else begin
+          geom_att_rep_valid_i <= 1'b1;
+          geom_att_rep_data_i  <= att_word(geom_att_look_arena_o, geom_att_look_index_o);
+        end
       end
+`else
+      if (geom_att_look_valid_o) begin
+        geom_att_rep_valid_i <= 1'b1;
+        geom_att_rep_data_i  <= att_word(geom_att_look_arena_o, geom_att_look_index_o);
+      end
+`endif
+      att_pend_q <= geom_att_look_valid_o;
     end
   end
 
@@ -2636,63 +2667,10 @@ module tb_zhao_console_core_smoke
     part_prj_g_i          = 8'h80;
     part_prj_b_i          = 8'h40;
     part_prj_src_id_i     = 16'h0BAD;
-    geom_clip_tri_behind_i = '0;
-    // ------------------------------------------------------------------
-    // THE RULING-5 VERTEX ATTRIBUTE PACKET, and why it is no longer zero.
-    //
-    // This bench used to drive all three to '0. That was honest while nothing
-    // read them -- GEOM.CLIP carried them through the winding flip and handed
-    // them out of the core to nobody. Now GEOM.ATTRPACK is composed and turns
-    // slots 0, 1 and 2 into the three Packet-D interpolation planes, so zero
-    // here means three zero planes and a surface that is still flat. That is
-    // exactly the "a legal profile produces a picture and proves nothing"
-    // trap the core's entry I20 warns about, and it would have been INVISIBLE:
-    // every counter and every pixel count is identical either way.
-    //
-    // So the vertices carry real values, chosen to be DIFFERENT AT EVERY
-    // VERTEX so the planes have real gradients rather than three constants:
-    //
-    //   slot 0  invw24    U 0.0.24 depth, LARGER IS CLOSER. All three are well
-    //           inside 24 bits, which matters: the tile pipe's
-    //           `incoming_range_bad_c` refuses lane 0 the moment the quotient
-    //           sets any of bits [31:24], and the interpolant of a convex
-    //           combination never leaves [min, max], so these three values ARE
-    //           the proof that no legal pixel can trip it.
-    //   slot 1  u_over_w  S 8.24, 1.0 at B and 0 elsewhere
-    //   slot 2  v_over_w  S 8.24, 1.0 at C and 0 elsewhere
-    //
-    // Slots 3..6 (lit r/g/b, alpha) stay zero: GEOM.ATTRPACK does not read
-    // them, and giving them values would suggest a Gouraud path that is not
-    // composed.
-    //
-    // ZHAO_SMOKE_BAD_ATTR is the POSITIVE CONTROL for the whole carriage. It
-    // changes ONE THING -- vertex A's invw24 -- to a value whose interpolant
-    // sets bits above 24, and nothing else. If the planes were not really
-    // reaching the rasteriser's attribute lanes, changing this number could
-    // not change the outcome; because they are, the tile pipe raises
-    // `range_fault_event_w`, latches its abort and sinks every job, and the
-    // run stops at "rasterised 0 pixels". Its polarity is INVERTED: the
-    // control passes when the run FAILS.
-    geom_clip_attr_a_i = '0;
-    geom_clip_attr_b_i = '0;
-    geom_clip_attr_c_i = '0;
-`ifdef ZHAO_SMOKE_BAD_ATTR
-    geom_clip_attr_a_i[31:0] = 32'h7F00_0000;   // out of 24 bits on purpose
-`else
-    geom_clip_attr_a_i[31:0] = 32'h00C0_0000;   // invw24 at A
-`endif
-    geom_clip_attr_b_i[31:0]   = 32'h0080_0000; // invw24 at B
-    geom_clip_attr_c_i[31:0]   = 32'h0040_0000; // invw24 at C
-    geom_clip_attr_b_i[63:32]  = 32'h0100_0000; // u_over_w = 1.0 at B
-    geom_clip_attr_c_i[95:64]  = 32'h0100_0000; // v_over_w = 1.0 at C
+    // THE RULING-5 PACKET IS NO LONGER DRIVEN HERE. Slot 0 (invw24) is
+    // GEOM.DEPTHQUANT's, inside GEOM.REPLAY, and slots 1..6 are the modelled
+    // attribute store's (I46) -- see the store above.
     geom_clip_cull_mode_i = '0;
-    geom_clip_tri_ax_i = '0;
-    geom_clip_tri_ay_i = '0;
-    geom_clip_tri_bx_i = '0;
-    geom_clip_tri_by_i = '0;
-    geom_clip_tri_cx_i = '0;
-    geom_clip_tri_cy_i = '0;
-    geom_clip_tri_src_id_i = '0;
     render_frame_open_q = 1'b0;
     geom_pose_start_i = 1'b0;
     geom_pose_bone_count_i = '0;
@@ -2708,22 +2686,11 @@ module tb_zhao_console_core_smoke
     geom_pose_quat_y_i = '0;
     geom_pose_quat_z_i = '0;
     geom_pose_inv_rest_i = '{default: '0};
-    geom_job_valid_i = '0;
-    geom_job_count_i = '0;
-    geom_job_view_mask_i = '0;
-    geom_job_src_id_i = '0;
-    geom_grp_ready_i = '0;
-    geom_rel_valid_i = '0;
-    geom_rel_arena_i = '0;
     geom_org_we_i = '0;
     geom_org_arena_i = '0;
     geom_org_x_i = '0;
     geom_org_y_i = '0;
     geom_org_z_i = '0;
-    geom_look_valid_i = '0;
-    geom_look_arena_i = '0;
-    geom_look_gen_i = '0;
-    geom_look_index_i = '0;
     proj_cfg_we_i = '0;
     proj_cfg_view_i = '0;
     proj_cfg_addr_i = '0;
@@ -2851,22 +2818,12 @@ module tb_zhao_console_core_smoke
     geom_mf_job_desc_addr_i   = 27'(GEOM_POOL_BASE + GEOM_DESC_OFF);
     geom_mf_job_format_i      = 8'd1;
     geom_mf_job_generation_i  = 16'd1;
-    geom_mf_job_active_mask_i = 2'b01;      // camera 0
+    geom_mf_job_active_mask_i = 2'b11;      // BOTH cameras
     for (int unsigned i = 0; i < 12; i = i + 1)
       geom_mf_job_xform_i[i] = ((i == 0) || (i == 5) || (i == 10))
                                ? FX16_ONE : 32'sd0;
-    // I38: nothing in the console knows when BOTH readers have finished with
-    // the buffered meshlet, so it is never released and the path serves
-    // exactly one. That is the assertion below, not a workaround.
-    geom_af_release_i         = 1'b0;
-    // I39: the three fields GEOM.ASSEMBLE has no producer for in this core.
-    geom_asm_vertex_offset_i  = '0;
-    geom_asm_material_id_i    = '0;
+    // I39, narrowed: the descriptor's raster word has no producer anywhere.
     geom_asm_raster_state_i   = '0;
-    // The TriangleDescriptor's customer is the absent replay block of I11,
-    // so the bench SINKS it. Holding ready low would back the walk up and
-    // the resulting stall would read as a wiring fault.
-    geom_asm_t_ready_i        = 1'b1;
 
     // ---- reset ------------------------------------------------------------
     rst_n            = 1'b0;
@@ -3195,7 +3152,7 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the renderer lease admitted no frame in %0d cycles with the request HELD -- granted=%0d refused=%0d clears=%0d. A held request that is never accepted is the barrier or the slot state, not the stimulus",
              guard, v2_leases_granted_o, v2_leases_refused_o,
              v2_clear_handshakes_o);
-    render_frame_open_q  <= 1'b1;         // releases the triangle offer above
+    render_frame_open_q  <= 1'b1;         // releases the meshlet draw above
 
     // THE RENDER FRAME IS OPENED, FILLED AND CLOSED IN ONE SEQUENCE, and that
     // is a correction rather than a style choice. The first version opened it
@@ -3206,14 +3163,25 @@ module tb_zhao_console_core_smoke
     // not that: a render frame does not survive the console's frame boundary.
     // Reading the reassuring zeros as evidence about the door would have sent
     // the next person to re-check wiring that was already correct.
+    // WAIT FOR THE MESHLET TO BE RELEASED: GEOM.REPLAY releases it only after
+    // its last triangle has been emitted in every view, which is the whole
+    // frame's geometry here. Descriptor fetch, footprint, skin, projection and
+    // replay all run inside this window.
     guard = 0;
-    while ((geom_tris_sent_q < N_GEOM_TRIS) && (guard < 20000)) begin
+    while ((geom_rp_meshlets_o == 0) && (guard < 200000)) begin
       @(posedge gpu_clk);
       guard = guard + 1;
     end
-    if (geom_tris_sent_q < N_GEOM_TRIS)
-      $fatal(1, "SMOKE: GEOM.CLIP accepted only %0d of %0d offered triangles -- backpressure from GEOM.SETUP or from the shell's binner",
-             geom_tris_sent_q, N_GEOM_TRIS);
+    if (geom_rp_meshlets_o == 0)
+      $fatal(1, "SMOKE: GEOM.REPLAY released no meshlet in %0d cycles -- replayed %0d of %0d view-triangles, handles=%0d, fetched=%0d meshlet(s), skinned=%0d, landings=%0d, descriptor refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]",
+             guard, geom_rp_triangles_out_o, SGF_EXP_REPLAYED, geom_rp_groups_o,
+             geom_af_meshlets_fetched_o, geom_skin_vertices_transformed_o, geom_landings_o,
+             geom_mf_refused_format_o, geom_mf_refused_crc_o,
+             geom_mf_refused_generation_o, geom_mf_refused_vertex_count_o,
+             geom_mf_refused_triangle_count_o, geom_mf_refused_reserved_o,
+             geom_mf_refused_zero_bound_o);
+    // Let the last accepted triangles clear GEOM.SETUP and the binner.
+    repeat (200) @(posedge gpu_clk);
 
     @(posedge gpu_clk);
     render_frame_end_i <= 1'b1;
@@ -3229,21 +3197,8 @@ module tb_zhao_console_core_smoke
       $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
     repeat (4000) @(posedge gpu_clk);
 
-    @(posedge gpu_clk);
-    geom_job_count_i     <= GEOM_INDEX_W'(N_GEOM_VERTS);
-    geom_job_view_mask_i <= 2'b01;
-    geom_job_src_id_i    <= 16'h1234;
-    geom_job_valid_i     <= 1'b1;
-    geom_grp_ready_i     <= 1'b1;
-    guard = 0;
-    while (!(geom_job_valid_i && geom_job_ready_o) && (guard < 1000)) begin
-      @(posedge gpu_clk);
-      guard = guard + 1;
-    end
-    @(posedge gpu_clk);
-    geom_job_valid_i <= 1'b0;
-    if (guard >= 1000)
-      $fatal(1, "SMOKE: GEOM.GROUP_SEQ never accepted a job (job_ready_o stuck low)");
+    // (GEOM.GROUP_SEQ's job is no longer injected here: the meshlet dispatcher
+    // fork inside the core issues it, from the meshlet the draw above fetched.)
 
     // ---- the terrain job --------------------------------------------------
     // One subpatch, one view, level 0, top surface, no geomorph. The tess
@@ -3345,9 +3300,15 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
              geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
              geom_sn_fork_stall_o);
-    $display("SMOKE: tri door   offered=%0d clip_submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d",
-             geom_tris_sent_q, geom_clip_submitted_o, geom_clip_clipped_o,
-             geom_clip_culled_o, geom_setup_triangles_submitted_o);
+    $display("SMOKE: replay     meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d refused=%0d missed=%0d att_skew=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
+             geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
+             geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o,
+             geom_rp_att_skew_o, geom_rp_profile_mixed_o, geom_rp_view_bad_o,
+             geom_rp_dq_refused_o);
+    $display("SMOKE: clip       submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d (reference: %0d / %0d / %0d / %0d)",
+             geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
+             geom_setup_triangles_submitted_o, SGF_EXP_REPLAYED, SGF_EXP_CLIPPED,
+             SGF_EXP_CULLED, SGF_EXP_ACCEPTED);
     $display("SMOKE: raster     pixels=%0d bursts=%0d issued=%0d retired=%0d busy=%0d drained=%0d fatal=%0d stream_err=%0d overflow=%0d",
              render_pixels_o, render_bursts_o, render_issued_words_o,
              render_retired_words_o, render_busy_o, render_drained_o,
@@ -3422,13 +3383,14 @@ module tb_zhao_console_core_smoke
     if (geom_af_refused_footprint_o != 0)
       $fatal(1, "SMOKE: GEOM.ASSETFETCH refused the footprint %0d time(s) -- the descriptor's offsets are misaligned or outside the pool. They are POOL-RELATIVE; adding the base twice is the documented way to get this",
              geom_af_refused_footprint_o);
-    // 24 beats: one 64-byte index line (8) plus two 64-byte vertex lines
-    // (16), for 1 triangle and 4 vertices. A COUNT and not a nonzero test --
-    // a block that re-reads a line delivers the right bytes and the wrong
-    // number of them, and only the count can see that.
-    if (geom_af_beats_read_o != 24)
-      $fatal(1, "SMOKE: GEOM.ASSETFETCH read %0d beats against the 24 this footprint is (8 index + 16 vertex) -- the machine did a different amount of work than the fixture describes",
-             geom_af_beats_read_o);
+    // THE FOOTPRINT IN BEATS, from the fixture: whole 64-byte lines of eight
+    // beats -- the index run (3 bytes per triangle, line-aligned at
+    // GEOM_IX_OFF) and the vertex run (32 bytes per vertex). A COUNT and not a
+    // nonzero test -- a block that re-reads a line delivers the right bytes and
+    // the wrong number of them, and only the count can see that.
+    if (geom_af_beats_read_o != GEOM_FOOTPRINT_BEATS)
+      $fatal(1, "SMOKE: GEOM.ASSETFETCH read %0d beats against the %0d this footprint is -- the machine did a different amount of work than the fixture describes",
+             geom_af_beats_read_o, GEOM_FOOTPRINT_BEATS);
     if ((geom_af_err_beat_truncated_o | geom_af_err_beat_overrun_o |
          geom_af_err_beat_unowned_o | geom_ma_err_short_o |
          geom_ma_err_long_o | geom_ma_err_unowned_o) != 0)
@@ -3442,18 +3404,17 @@ module tb_zhao_console_core_smoke
     if ((geom_ma_jobs_a_o == 0) || (geom_ma_jobs_b_o == 0))
       $fatal(1, "SMOKE: GEOM.MEM_ADAPTER served a=%0d b=%0d logical requests -- one of the two fetchers never reached the shared client",
              geom_ma_jobs_a_o, geom_ma_jobs_b_o);
-    // I38, stated as a check rather than left to be discovered: with no
-    // release owner the buffer is never freed, so EXACTLY ONE meshlet is
-    // served however long the bench runs. A second would mean something in
-    // this core is retiring a buffer nobody told it to.
+    // ONE draw, so ONE meshlet served -- and (entry I38, CLOSED) it was
+    // RELEASED: GEOM.REPLAY's meshlet count moves only on the release it
+    // proves, which the replay block above already asserted to be 1.
     if (geom_af_meshlets_fetched_o != 1)
-      $fatal(1, "SMOKE: GEOM.ASSETFETCH served %0d meshlets against the 1 an unreleased buffer allows (entry I38)",
+      $fatal(1, "SMOKE: GEOM.ASSETFETCH served %0d meshlets for the ONE draw this bench issued",
              geom_af_meshlets_fetched_o);
-    // GEOM.ASSEMBLE walked the index run the fetcher served. One triangle,
-    // and no refusal: the fixture's indices are 0, 1, 2 against a count of 4.
-    if (geom_asm_triangles_o != 1)
-      $fatal(1, "SMOKE: GEOM.ASSEMBLE emitted %0d triangles against the 1 the descriptor declares -- the ix_* index service between it and GEOM.ASSETFETCH is not carrying triplets",
-             geom_asm_triangles_o);
+    // GEOM.ASSEMBLE walked the index run the fetcher served: every triplet of
+    // the fixture, none refused (every index is below the vertex count).
+    if (geom_asm_triangles_o != SGF_N_TRIS)
+      $fatal(1, "SMOKE: GEOM.ASSEMBLE emitted %0d triangles against the %0d the descriptor declares -- the ix_* index service between it and GEOM.ASSETFETCH is not carrying triplets",
+             geom_asm_triangles_o, SGF_N_TRIS);
     if ((geom_asm_refused_limits_o != 0) || (geom_asm_refused_index_o != 0))
       $fatal(1, "SMOKE: GEOM.ASSEMBLE refused the fixture meshlet (limits=%0d index=%0d)",
              geom_asm_refused_limits_o, geom_asm_refused_index_o);
@@ -4010,38 +3971,41 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: GEOM.SKIN.NORM range-reduced %0d vertices -- with identity bones the blend is bounded by 2^29 and cannot reach the 2^30 threshold",
              geom_sn_reduced_o);
 
-    // GEOM.CLIP -> GEOM.SETUP -> the shell's triangle door (the far end of I13).
-    // Every triangle offered is front-facing and wholly inside the canvas, so
-    // none may be clipped or culled; anything else means the scissor this core
-    // derives from the video mode is not the rectangle the block was given.
-    if (geom_clip_submitted_o != geom_tris_sent_q)
-      $fatal(1, "SMOKE: GEOM.CLIP saw %0d of %0d offered triangles -- the front door does not accept",
-             geom_clip_submitted_o, geom_tris_sent_q);
-    if ((geom_clip_clipped_o != 0) || (geom_clip_culled_o != 0))
-      $fatal(1, "SMOKE: GEOM.CLIP clipped %0d and culled %0d of a triangle set that is wholly inside the canvas and front-facing -- the scissor taken from mode_act_o is not the pass rectangle",
-             geom_clip_clipped_o, geom_clip_culled_o);
-    if (geom_setup_triangles_submitted_o != geom_clip_submitted_o)
-      $fatal(1, "SMOKE: GEOM.SETUP received %0d of GEOM.CLIP's %0d accepted triangles -- the clip->setup seam does not carry",
-             geom_setup_triangles_submitted_o, geom_clip_submitted_o);
+    // ---- GEOM.REPLAY: the fixture meshlet, replayed into BOTH views --------
+    // Every number here is the REFERENCE's (smoke_geom_fixture.svh): the replay
+    // takes each of the meshlet's SGF_N_TRIS triangles once and emits it once
+    // per visible view, drops nothing (every corner is written and every handle
+    // current), and releases the meshlet exactly once.
+    if ((geom_rp_meshlets_o != 1) || (geom_rp_groups_o != 2) ||
+        (geom_rp_triangles_in_o != SGF_N_TRIS) ||
+        (geom_rp_triangles_out_o != SGF_EXP_REPLAYED))
+      $fatal(1, "SMOKE: GEOM.REPLAY meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d -- the reference wants 1 / 2 / %0d / %0d",
+             geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
+             geom_rp_triangles_out_o, SGF_N_TRIS, SGF_EXP_REPLAYED);
+    if ((geom_rp_refused_o | geom_rp_missed_o | geom_rp_profile_mixed_o |
+         geom_rp_view_bad_o | geom_rp_dq_refused_o) != 0)
+      $fatal(1, "SMOKE: GEOM.REPLAY dropped or faulted: refused=%0d missed=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
+             geom_rp_refused_o, geom_rp_missed_o, geom_rp_profile_mixed_o,
+             geom_rp_view_bad_o, geom_rp_dq_refused_o);
+    // The attribute store and the arena answered on the SAME clock every time.
+    // `-BadAttribute` makes one reply late; this is the check it trips.
+    if (geom_rp_att_skew_o != 0)
+      $fatal(1, "SMOKE: GEOM.REPLAY saw the attribute store answer out of step with the arena %0d time(s) -- slot 1..6 would belong to a different lookup",
+             geom_rp_att_skew_o);
 
-    // AND THE DOOR MUST ACTUALLY HAVE OPENED. This is the check that separates
-    // "GEOM.SETUP's counter moved" from "the shell accepted the triangles",
-    // and it needs the argument written down because the counter alone does
-    // not carry it:
-    //
-    //   `triangles_submitted_o` counts ACCEPTANCES AT SETUP'S INPUT, gated on
-    //   `pipe_en`. A four-deep pipe with a dead output can therefore swallow
-    //   about four triangles and count them. N_GEOM_TRIS is 16 -- comfortably
-    //   more than the pipe holds -- so the only way all sixteen are accepted
-    //   is if `out_ready_i` went high repeatedly, and `out_ready_i` IS the
-    //   shell's `render_tri_ready_o`. Backpressure propagates the whole way:
-    //   sixteen through CLIP means sixteen through the door.
-    //
-    // This is why the count is 16 and not 1, and lowering it would quietly
-    // turn this from evidence into a pipe-depth measurement.
-    if (geom_setup_triangles_submitted_o != geom_tris_sent_q)
-      $fatal(1, "SMOKE: GEOM.SETUP took %0d of %0d -- the shell's triangle door is not accepting",
-             geom_setup_triangles_submitted_o, geom_tris_sent_q);
+    // ---- GEOM.CLIP -> GEOM.SETUP, EXACTLY the reference's split -------------
+    // `clipped` is the behind-the-eye triangle in both views -- the near plane
+    // is a whole-primitive rejection -- so this equality holding means the
+    // projector's behind verdict crossed the arena and the replay intact.
+    if ((geom_clip_submitted_o != SGF_EXP_REPLAYED) ||
+        (geom_clip_clipped_o != SGF_EXP_CLIPPED) ||
+        (geom_clip_culled_o != SGF_EXP_CULLED))
+      $fatal(1, "SMOKE: GEOM.CLIP submitted=%0d clipped=%0d culled=%0d -- the reference wants %0d / %0d / %0d",
+             geom_clip_submitted_o, geom_clip_clipped_o, geom_clip_culled_o,
+             SGF_EXP_REPLAYED, SGF_EXP_CLIPPED, SGF_EXP_CULLED);
+    if (geom_setup_triangles_submitted_o != SGF_EXP_ACCEPTED)
+      $fatal(1, "SMOKE: GEOM.SETUP took %0d of the reference's %0d accepted triangles -- the clip->setup seam or the shell's triangle door is not carrying",
+             geom_setup_triangles_submitted_o, SGF_EXP_ACCEPTED);
 
     // A PIXEL NOW TRAVERSES THE RENDER PATH, so this is a CHECK and no longer
     // a note. What stood here said "raster pixels=0 because frames_admitted=0
@@ -4078,6 +4042,16 @@ module tb_zhao_console_core_smoke
     if (render_pixels_o == 0)
       $fatal(1, "SMOKE: %0d frame(s) were ADMITTED and the shell still rasterised 0 pixels from %0d triangles -- that is a real render-path fault. Check `tri_area2_i` (0 is PROFILE AREA BAD and sinks every job) and the render guard's window before anything else",
              v2_frames_admitted_o, geom_setup_triangles_submitted_o);
+    // EXACTLY THE REFERENCE'S PIXELS. `render_pixels_o` counts pixels WRITTEN
+    // and the pipeline resolves WHOLE tiles, so the count is the union of the
+    // tiles `zref::Binner` names across both views, times 256 -- derived in
+    // smoke_geom_fixture_gen.cpp from project_vertex, Clip and Setup, never read
+    // off a run. It was 1536 when sixteen copies of one hand-placed triangle
+    // came through the bench's door (6 tiles); it is SGF_EXP_PIXELS now because
+    // the triangles are the meshlet's own, in two views.
+    if (render_pixels_o != SGF_EXP_PIXELS)
+      $fatal(1, "SMOKE: the render path wrote %0d pixels and the reference names %0d tiles = %0d pixels",
+             render_pixels_o, SGF_EXP_TILES, SGF_EXP_PIXELS);
     if (render_fatal_o)
       $fatal(1, "SMOKE: the render path wrote %0d pixel(s) and latched fatal_error_o -- a guard denial or a broken pixel stream; the frame is unpublishable",
              render_pixels_o);

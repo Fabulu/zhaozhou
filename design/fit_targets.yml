@@ -2141,6 +2141,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_loom.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv
+      - fpga/rtl/geometry/zhao_geom_replay.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
@@ -2598,7 +2599,10 @@ targets:
       # tree, so they would elaborate and never see one), zhao_geom_parambuf
       # (nothing composed produces the byte blobs it decodes) and
       # zhao_geom_depthquant (zhao_raster_rcp24_svc answers out of order with a
-      # token and the block's reciprocal port has neither).
+      # token and the block's reciprocal port has neither). THAT LAST ONE HAS
+      # EXPIRED TOO (geom packet, 2026-09-19): GEOM.REPLAY holds three
+      # depthquant lanes on one zhao_raster_rcp24_v4, steers replies by the
+      # service's own token and latches each lane's reply at its own handshake.
       #
       # THREE OF THOSE SENTENCES HAVE EXPIRED and the row no longer repeats
       # them. zhao_geom_pose_decode IS added below with the palette store it
@@ -2641,6 +2645,11 @@ targets:
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       # Added 2026-09-19 (geom packet): the descriptor CRC walker, entry I37.
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv
+      # Added 2026-09-19 (geom packet): GEOM.REPLAY and the GEOM.DEPTHQUANT
+      # lanes inside it. Entries I11/I38 and GEOM.DEPTHQUANT close with it; its
+      # reciprocal is zhao_raster_rcp24_v4, already in this list.
+      - fpga/rtl/geometry/zhao_geom_depthquant.sv
+      - fpga/rtl/geometry/zhao_geom_replay.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/geometry/zhao_geom_assemble.sv
       # Added 2026-09-19, packet I10-PALETTE. GEOM.POSE, WHOLE.
