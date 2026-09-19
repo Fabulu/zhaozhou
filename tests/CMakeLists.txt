@@ -1006,6 +1006,58 @@ target_link_libraries(test_material_resolve_combine_bridge PRIVATE zhao_zref)
 add_test(NAME material_resolve_combine_bridge COMMAND test_material_resolve_combine_bridge)
 set_tests_properties(material_resolve_combine_bridge PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# --------------------------------------------------------------------------
+# MATERIAL.RESOLVE's RTL, against the oracle two files above.
+#
+# The suite above proves the LOOKUP RULES and has since 2026-09-05; what had
+# never existed is the silicon. `zhao_material_resolve` is that block, and this
+# target differences it against `zref::material::Resolver` rather than
+# restating the rules a third time.
+#
+# TWO INSTANCES, ONE STIMULUS. `tb_zhao_material_resolve.sv` wraps the shipping
+# resolver (RECIPE_COUNT = 8) beside a copy at the HISTORICAL ceiling of 6. At
+# 8 the recipe arm of `refused_record_o` is structurally unreachable -- the
+# field is three bits -- so the control is the parameter, which is one of the
+# three firings CLAUDE.md accepts as stimulus rather than a committed mutant.
+# The difference between the two response streams on a terrain recipe IS audit
+# R1's defect, asserted rather than narrated.
+add_executable(test_material_resolve_rtl_directed texture/material_resolve_rtl_directed.cpp)
+target_link_libraries(test_material_resolve_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_material_resolve_rtl_directed
+  PREFIX Vtb_zhao_material_resolve
+  TOP_MODULE tb_zhao_material_resolve
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/texture/tb_zhao_material_resolve.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_resolve.sv)
+add_test(NAME material_resolve_rtl_directed COMMAND test_material_resolve_rtl_directed)
+set_tests_properties(material_resolve_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_material_resolve
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_material_resolve
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_resolve.sv)
+set_tests_properties(lint_zhao_material_resolve PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE POSITIVE CONTROL FOR OWNER RULING D-3. Inverted polarity: it PASSES when
+# the coherence case BREAKS. D-3's tag is a STRUCTURAL property -- the stale
+# line is "structurally unable to match" -- so no legal stimulus can make the
+# shipping resolver fail case 5 of the suite above, and that case had therefore
+# never been seen to go red. The committed mutant narrows the tag comparison to
+# the low eight bits of the residency generation (the width a handle32 carries)
+# and this driver REQUIRES the stale hit.
+add_executable(test_material_resolve_gen8tag_control
+  texture/material_resolve_gen8tag_control.cpp)
+target_link_libraries(test_material_resolve_gen8tag_control PRIVATE zhao_harness zhao_zref)
+verilate(test_material_resolve_gen8tag_control
+  PREFIX Vzhao_material_resolve_gen8tag_mutant
+  TOP_MODULE zhao_material_resolve_gen8tag_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_material_resolve_gen8tag_mutant.sv)
+add_test(NAME material_resolve_gen8tag_control
+         COMMAND test_material_resolve_gen8tag_control)
+set_tests_properties(material_resolve_gen8tag_control PROPERTIES
+  LABELS "fast;nightly;mutant" TIMEOUT 300)
+
 add_executable(test_material_combine_directed texture/material_combine_directed.cpp)
 target_link_libraries(test_material_combine_directed PRIVATE zhao_zref)
 add_test(NAME material_combine_directed COMMAND test_material_combine_directed)
