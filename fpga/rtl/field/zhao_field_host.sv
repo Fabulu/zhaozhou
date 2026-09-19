@@ -101,10 +101,60 @@
 //     files, which FIELD.SEQ.CORE.md permits by name: "Adapters generate and
 //     consume streams; they NEVER re-implement an op, and there are not five
 //     engines."
-//   * THE BANK RIVAL. `zhao_field_v3_engine`'s ival_req_i exists so a test can make
+//   * THE BANK RIVAL. `zhao_field_v3_engine`'s rival_req_i exists so a test can make
 //     the multiplier bank refuse. It is tied LOW here, which is a tie-off of a
 //     TEST STIMULUS rather than of a producer: with it low, bank claimant 0 is
 //     never asked and the refusal path is exercised by the real services.
+//
+// ---------------------------------------------------------------------------
+// THE FABRIC'S PARAMETERISATION IS THE CONSOLE'S CHOICE, AND UNTIL 2026-09-19
+// IT WAS NOT ANYBODY'S
+// ---------------------------------------------------------------------------
+// `zhao_field_v3_engine.sv` names the SHIPPED configuration in its own header:
+//
+//   CTX=32 OUTSTANDING=16 LANES=4 LONGQ=16 DIST_BANKS=8 RING_UNITS=8 REGS=64
+//
+// and `tests/CMakeLists.txt` proves it -- `field_v3_earth_quad`, the gate the
+// engine names, verilates at exactly those seven `-G` values. The engine's
+// defaults are the SCALAR bench point and its header says so: "a fit that does
+// not override them is measuring the bench."
+//
+// THIS FILE WAS OVERRIDING NOTHING. Two of the seven (CTX, REGS) arrived from
+// `PROGS` and `REGS` here; the other FIVE were LITERALS in the instantiation --
+// `.OUTSTANDING(4) .LANES(1) .LONGQ(4) .DIST_BANKS(2) .RING_UNITS(2)`. So the
+// shipped configuration could not be selected from the console by anyone, not
+// merely by nobody, and a console fit could only ever have measured a one-lane
+// eight-context machine. That is the FLATTERING direction: a smaller number
+// than the design ships, reported as the design's number.
+//
+// All seven are parameters now (`FAB_*` for the five that were literals). The
+// defaults are the values this file already hard-coded, so exposing them
+// changed no elaborated circuit -- the change is that there is now a knob.
+//
+// WHAT THE KNOB CANNOT FIX, SAID PLAINLY. The width is not free and this front
+// cannot spend it. The run state machine below grants ONE client, zeroes ONE
+// context, preloads ONE point's E record and answers ONCE:
+//
+//   E_IDLE -> E_ZERO (REGS clocks) -> E_WRITE (IN_LANES clocks) -> E_START
+//          -> E_RUN -> E_RESP
+//
+// There is exactly one point in flight and exactly one context active, which
+// the port comment on `resp_out_o` already states as a design fact. So:
+//
+//   * FAB_LANES>1 computes the same point on every lane and discards all but
+//     lane 0 -- the linter says so itself at the `fab_wr_data` declaration.
+//   * PROGS>8 buys RESIDENCY (more programs cached, fewer directory misses),
+//     which is real, but not CONCURRENCY, because the front runs one at a time.
+//   * REGS=64 is the uop encoding's native size -- the 64-bit word packs four
+//     SIX-bit register fields -- but it also makes E_ZERO cost 64 clocks per
+//     point instead of 32, on the critical path of every point this front
+//     answers.
+//
+// The engine is not the thing that needs changing; THE FRONT IS. A front that
+// gathers FAB_LANES points per grant, and keeps several contexts in flight, is
+// what makes the shipped width pay, and it is not built. Until it is, the
+// console's setting is an engineering argument rather than a default, and that
+// argument lives at the instantiation in `zhao_console_core.sv`.
 //
 // ---------------------------------------------------------------------------
 // THE ONE THING THAT IS ABSENT, NAMED PRECISELY
@@ -166,6 +216,39 @@ module zhao_field_host #(
     // carries.
     parameter int unsigned IN_LANES = 12,
     parameter int unsigned OUT_LANES = 4,
+
+    // ---- THE FABRIC'S OWN KNOBS, FORWARDED ----------------------------------
+    // Until 2026-09-19 these were LITERALS in the `zhao_field_v3_engine`
+    // instantiation below, which meant the engine's shipped parameterisation
+    // could not be selected from the console BY ANYONE -- not merely that
+    // nobody had. `field_v3_earth_quad` gates the engine at
+    //
+    //   CTX=32 OUTSTANDING=16 LANES=4 LONGQ=16 DIST_BANKS=8 RING_UNITS=8 REGS=64
+    //
+    // and `zhao_field_v3_engine.sv`'s own header says so in as many words,
+    // adding "a fit that does not override them is measuring the bench". Five
+    // of those seven had no route through this module at all, so the console's
+    // fit could only ever have measured the scalar bench point. They are
+    // parameters now, prefixed `FAB_` because `LANES` next to `IN_LANES` and
+    // `OUT_LANES` in one parameter list means three different things.
+    //
+    // THE DEFAULTS HERE ARE THE VALUES THIS FILE ALREADY HARD-CODED, so
+    // exposing them changes no elaborated circuit. What the console chooses is
+    // `zhao_console_core.sv`'s business and the argument lives there.
+    //
+    // FAB_LANES is POINTS PER CONTEXT -- one instruction, FAB_LANES ALUs, one
+    // register write carrying all of the results. It is not a lane of the E
+    // record; `IN_LANES`/`OUT_LANES` are those.
+    parameter int unsigned FAB_LANES = 1,
+    // Long ops in flight, the depth of the long-op queue, and how many the
+    // dispatcher gathers into one service request.
+    parameter int unsigned FAB_OUTSTANDING = 4,
+    parameter int unsigned FAB_LONGQ = 4,
+    parameter int unsigned FAB_GATHERS = 4,
+    // Root banks for LEN/DIST2, ring units, and the ring descriptor cache.
+    parameter int unsigned FAB_DIST_BANKS = 2,
+    parameter int unsigned FAB_RING_UNITS = 2,
+    parameter int unsigned FAB_RING_DESC = 2,
 
     // ---- DERIVED, AND WRITTEN OUT AS LITERALS ON PURPOSE. --------------------
     // These belong in the parameter list because the PORT list needs them and a
@@ -327,6 +410,27 @@ module zhao_field_host #(
       $fatal(1, "zhao_field_host: OUT_LANES=%0d exceeds REGS=%0d", OUT_LANES, REGS);
     end
     if (CLIENTS < 1) $fatal(1, "zhao_field_host: CLIENTS must be at least 1");
+    // A replication of zero is illegal and a fabric of zero lanes has no
+    // result to read; see `fab_pre_data`.
+    if (FAB_LANES < 1) $fatal(1, "zhao_field_host: FAB_LANES must be at least 1");
+    if (FAB_OUTSTANDING < 1 || FAB_LONGQ < 1 || FAB_GATHERS < 1 ||
+        FAB_DIST_BANKS < 1 || FAB_RING_UNITS < 1 || FAB_RING_DESC < 1) begin
+      $fatal(1, "zhao_field_host: every fabric knob must be at least 1");
+    end
+    // THE 64-BIT UOP WORD IS WHY REGS=64 IS THE CEILING AND NOT A PREFERENCE.
+    // The loader unpacks `ld_data_i` as
+    //   [7:0] op  [13:8] dst  [19:14] a  [25:20] b  [31:26] c  [63:32] imm
+    // which is FOUR SIX-BIT register fields, packed edge to edge with the
+    // immediate. So the encoding's native register file is 64 deep: at REGS=32
+    // the top bit of each field is read as zero and wasted, and at REGS=128
+    // REGW becomes 7 and each `[N +: REGW]` slice OVERLAPS the next field --
+    // `dst` would eat bit 14, which is `a`'s bit 0. That corruption is silent
+    // and produces a program that runs and computes the wrong thing, which is
+    // the worst available failure for a field. The shipped REGS=64 is exactly
+    // the layout's size, and this guard is what says so at elaboration.
+    if (REGW > 6) begin
+      $fatal(1, "zhao_field_host: REGS=%0d needs REGW=%0d, but the 64-bit uop word packs four 6-bit register fields; REGS>64 overlaps them", REGS, REGW);
+    end
     // Every derived width, checked against the expression it stands for. These
     // are the price of writing them as literals so the production-top generator
     // can size the ports; see the note in the parameter list.
@@ -444,7 +548,11 @@ module zhao_field_host #(
   logic                     fab_pre_we;
   logic [SLOTW-1:0]         fab_pre_ctx;
   logic [REGW-1:0]          fab_pre_reg;
-  logic signed [31:0]       fab_pre_data;
+  // THE FABRIC'S DATA PORTS ARE LANE-WIDE. A context holds FAB_LANES points and
+  // one register write carries all of their results, so these are 32*FAB_LANES
+  // however many points THIS FRONT has. At FAB_LANES=1 they are the 32 bits
+  // they have always been and nothing below changes.
+  logic signed [32*FAB_LANES-1:0] fab_pre_data;
 
   // `pre_ready_o` is READ, not merely observed -- see the E_ZERO comment.
   logic                     fab_pre_ready;
@@ -466,7 +574,17 @@ module zhao_field_host #(
   logic                     fab_wr_en;
   logic [SLOTW-1:0]         fab_wr_ctx;
   logic [REGW-1:0]          fab_wr_reg;
-  logic signed [31:0]       fab_wr_data;
+  // THE UNUSED BITS HERE ARE THE MEASUREMENT, NOT AN OVERSIGHT. At FAB_LANES=4
+  // the linter reports "Bits of signal are not used: 'fab_wr_data'[127:32]" --
+  // ninety-six of the fabric's one hundred and twenty-eight result bits, three
+  // quarters of a quad machine's output, discarded because this front has one
+  // point in flight and reads lane 0. That warning is the clearest single piece
+  // of evidence that the width cannot pay behind a scalar front, so it is
+  // recorded here in the waiver rather than deleted by silencing it globally.
+  // At FAB_LANES=1 there is nothing to waive and the warning does not arise.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic signed [32*FAB_LANES-1:0] fab_wr_data;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   logic                     fab_unsupported, fab_exec_desync, fab_bank_desync;
   logic                     fab_svc_bank_desync, fab_tag_mismatch, fab_wrong_op;
@@ -500,13 +618,13 @@ module zhao_field_host #(
 
   zhao_field_v3_engine #(
       .CTX        (PROGS),
-      .OUTSTANDING(4),
-      .LANES      (1),
-      .LONGQ      (4),
-      .GATHERS    (4),
-      .DIST_BANKS (2),
-      .RING_UNITS (2),
-      .RING_DESC  (2),
+      .OUTSTANDING(FAB_OUTSTANDING),
+      .LANES      (FAB_LANES),
+      .LONGQ      (FAB_LONGQ),
+      .GATHERS    (FAB_GATHERS),
+      .DIST_BANKS (FAB_DIST_BANKS),
+      .RING_UNITS (FAB_RING_UNITS),
+      .RING_DESC  (FAB_RING_DESC),
       .REGS       (REGS),
       .PLAN       (INSTR_N),
       .TAGW       (8)
@@ -741,7 +859,26 @@ module zhao_field_host #(
                    ((state == E_WRITE) && (lane_i < (LANEW+1)'(IN_LANES)));
     fab_pre_ctx  = cur_slot;
     fab_pre_reg  = (state == E_ZERO) ? zero_i[REGW-1:0] : REGW'(lane_i);
-    fab_pre_data = (state == E_ZERO) ? 32'sd0 : cur_in[lane_sel];
+    // THE POINT IS REPLICATED ACROSS THE FABRIC'S LANES, AND THAT IS THE COST
+    // OF A QUAD FABRIC BEHIND A SCALAR FRONT, SAID OUT LOUD. This front has
+    // EXACTLY ONE POINT IN FLIGHT -- `req_in_i` carries one E record, the run
+    // state machine grants one client, zeroes one context and answers once --
+    // so at FAB_LANES>1 the other lanes recompute the same point and their
+    // results are discarded.
+    //
+    // They are fed the REAL point rather than zero on purpose. A fabricated
+    // zero point is stimulus this front never received, and it would reach the
+    // saturation ledger and the service alarms, which are latched over the run
+    // and reported to the caller as `sat_o` and `resp_status_o`. Padding with a
+    // value that can raise an alarm makes the status describe the padding.
+    // Replication cannot: every lane computes what lane 0 computes.
+    //
+    // This is a WASTE, not a fix, and it is the reason FAB_LANES>1 is not the
+    // console's setting -- see the argument at the instantiation in
+    // `zhao_console_core.sv`. A front that gathers FAB_LANES points per grant
+    // is the thing that makes the width pay, and it is not built.
+    fab_pre_data = (state == E_ZERO) ? '0
+                                     : {FAB_LANES{cur_in[lane_sel]}};
 
     fab_start     = (state == E_START);
     fab_start_ctx = cur_slot;
@@ -819,7 +956,9 @@ module zhao_field_host #(
       // point's context, and a late drain write landing then belongs to the run
       // that has already answered.
       if ((state == E_RUN) && out_hit_c) begin
-        cur_out[out_idx_c]      <= fab_wr_data;
+        // Lane 0 is this front's point. The rest are the replicas the preload
+        // wrote; see the note there.
+        cur_out[out_idx_c]      <= fab_wr_data[31:0];
         cur_out_seen[out_idx_c] <= 1'b1;
       end
       if (state == E_RUN) begin
