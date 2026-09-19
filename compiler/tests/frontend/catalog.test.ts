@@ -20,9 +20,9 @@ test('catalog: compiler set === spec set (both directions)', () => {
   assert.deepEqual(ours, specCodes, 'compiler catalog must equal the spec §7 code list');
 });
 
-test('catalog: the spec defines exactly 136 codes', () => {
+test('catalog: the spec defines exactly 138 codes', () => {
   // Pins the frozen size; a change here is a spec event, not a compiler tweak.
-  assert.equal(specCodes.length, 136);
+  assert.equal(specCodes.length, 138);  // +611/+612, owner ruling R33 (605 retired, still listed)
 });
 
 test('catalog: negative corpus covers every frontend-raisable code', () => {
@@ -43,6 +43,6 @@ test('catalog: corpus only uses codes the spec defines', () => {
 test('catalog: exempt codes are exactly the documented non-frontend codes', () => {
   assert.deepEqual(
     [...EXEMPT_CODES].sort(),
-    ['FORM-E-668', 'FORM-E-821', 'FORM-E-822', 'FORM-E-830', 'FORM-E-831'],
+    ['FORM-E-605', 'FORM-E-668', 'FORM-E-821', 'FORM-E-822', 'FORM-E-830', 'FORM-E-831'],
   );
 });

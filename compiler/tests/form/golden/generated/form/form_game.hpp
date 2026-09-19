@@ -7,7 +7,7 @@
 #include "audit.hpp"
 
 namespace form {
-inline constexpr u32 kProgramManifestCrc32c = 0x11ecb4e7u;
+inline constexpr u32 kProgramManifestCrc32c = 0xe89910feu;
 inline constexpr std::size_t kCanonicalStateMaxBytes = 152u;
 using TerrainHeightSampler = Fx16 (*)(World2);
 

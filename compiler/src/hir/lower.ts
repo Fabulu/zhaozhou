@@ -207,16 +207,16 @@ class HirLowerer {
         return this.field(module, order, decl);
       case 'Presentation': {
         const views = [];
-        let sharedBudgetPct = 0;
+        let sharedTokens = 0;
         const emits = [];
         for (const item of decl.items) {
           if (item.kind === 'view') {
             views.push({
               id: Number(item.id), camera: item.camera ? this.expr(module, item.camera, T.world3, new Map()) : null,
-              budgetPct: Number(item.budgetPct), span: item.span,
+              geometryTokens: Number(item.geometryTokens), fragmentTokens: Number(item.fragmentTokens), span: item.span,
             });
           } else if (item.kind === 'shared_budget') {
-            sharedBudgetPct = Number(item.pct);
+            sharedTokens = Number(item.tokens);
           } else if (item.kind === 'emit') {
             emits.push({
               kind: 'emit' as const, emitKind: item.emitKind,
@@ -226,7 +226,7 @@ class HirLowerer {
             });
           }
         }
-        return { kind: 'presentation', domain: 'present', module, order, name: decl.name, views, sharedBudgetPct, emits, span: decl.span };
+        return { kind: 'presentation', domain: 'present', module, order, name: decl.name, views, sharedTokens, emits, span: decl.span };
       }
       case 'Scenario':
         return {

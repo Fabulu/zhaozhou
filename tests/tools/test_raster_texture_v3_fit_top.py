@@ -55,7 +55,13 @@ receipt_spec.loader.exec_module(receipt)
 
 PROTECTED = {
     "fpga/rtl/common/zhao_shell_top.sv":
-        "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783",
+        # RE-PINNED under owner ruling R39 (provisional, 2026-09-19): the ONLY change
+        # to the protected V1 shell is R32's tie-off of MEM.GUARD's new region inputs,
+        # 3 lines x 4 zhao_mem_guard instances = 12 lines, each
+        #   .res_valid (1'b0) / .res_base (32'd0) / .res_span (32'd0)   // TIE: ...
+        # (the R32 write arm names TERRAIN_BUILD alone; V1 has no such client).
+        # No behaviour moves. Previous pin: 00fdd2387ffea985...
+        "9ab87fd9ceeb5efb1333c2023cc4cf9a565b6f4d75633facfa33c9f6640b91cc",
     "fpga/rtl/generated/zhao_texture_island_v3_top.interface.json":
     # Refreshed twice on 2026-09-18, for two timing changes inside
     # zhao_texture_binding_resolver_v2. Both times the manifest was field-diffed

@@ -79,6 +79,23 @@
 //    the owner is chosen, and the pulse driven from that capture. Both client
 //    styles then work, and neither has to know about the other.
 //
+//    6b. **A PULSE THAT ARRIVES WHILE THE BRIDGE IS SOMEONE ELSE'S IS KEPT.**
+//    (2026-09-19, cmdmem packet, found by review and verified.) The rule above
+//    was only half built: the owner was chosen from `req_i` in A_IDLE alone, so
+//    a pulse landing while another client owned the bridge -- or on an A_IDLE
+//    cycle where a lower index won -- was never seen again. CMD.DMA pulses and
+//    then waits for its response with no timeout, so a lost pulse was a HANG,
+//    and `wait_cycles_o` ticked once and froze, which reads as "it waited one
+//    cycle". Each client now has a PENDING slot: a request that is valid while
+//    that client is neither being chosen nor the owner is captured, and the
+//    pick is made over {pending, live}. A holding client simply re-presents
+//    the same request, so capturing it changes nothing it can see.
+//    THE COST, stated: a request, once offered, WILL be served. A client may
+//    not withdraw an offered request (none in the console does: every holding
+//    client leaves its request state only on grant or on `err`), and a client
+//    that ignores a refusal `err` while holding re-requests forever -- which
+//    is why MEM.UPLOAD and DEBUG.FRAMEBLIT now leave their request states on it.
+//
 // 7. **CLIENT 0 HAS STRICT PRIORITY, AND THE WAITING IS COUNTED.** Command
 //    packet acquisition outranks a debug blit, which is not game-facing and may
 //    wait. Strict priority means client 1 can be starved by a client 0 that
@@ -165,6 +182,21 @@ module zhao_hps_arbiter_n #(
   // has already taken its request down by the time A_PULSE drives the bridge.
   zhao_pkg::zhao_hps_burst_req_t held_req;
 
+  // Rule 6b: one pending request per client, and the view the pick is made
+  // over. A pending request is served exactly like a live one, from the
+  // capture, so a client that pulsed long ago and one that is holding now are
+  // indistinguishable to everything below.
+  logic                          [N-1:0] pend_v;
+  zhao_pkg::zhao_hps_burst_req_t [N-1:0] pend_req;
+  logic                          [N-1:0] eff_v;
+  zhao_pkg::zhao_hps_burst_req_t [N-1:0] eff_req;
+  always_comb begin
+    for (int i = 0; i < N; i++) begin
+      eff_v[i]   = pend_v[i] || req_i[i].valid;
+      eff_req[i] = pend_v[i] ? pend_req[i] : req_i[i];
+    end
+  end
+
   // Rule 7: the LOWEST asking index wins. The loop runs downward so the last
   // assignment -- the lowest index -- is the one that stands.
   logic          any_req;
@@ -173,7 +205,7 @@ module zhao_hps_arbiter_n #(
     any_req = 1'b0;
     pick = '0;
     for (int i = N - 1; i >= 0; i--) begin
-      if (req_i[i].valid) begin
+      if (eff_v[i]) begin
         any_req = 1'b1;
         pick = IW'(i);
       end
@@ -199,7 +231,10 @@ module zhao_hps_arbiter_n #(
         b_req_o.valid = 1'b1;
       end
       A_ACTIVE: begin
-        // Write beats belong to the owner alone.
+        // Write beats belong to the owner alone. A READING owner that raised
+        // `wr_valid` is harmless and deliberately not gated twice: the bridge
+        // takes a write beat only while `busy_write`, and `burst_done`'s write
+        // term requires `owner_write` (checked 2026-09-19; directed case 9).
         b_wr_valid_o = wr_valid_i[owner];
         b_wr_data_o  = wr_data_i[owner];
         b_wr_last_o  = wr_last_i[owner];
@@ -235,6 +270,8 @@ module zhao_hps_arbiter_n #(
       owner <= '0;
       owner_write <= 1'b0;
       held_req <= '0;
+      pend_v <= '0;
+      pend_req <= '0;
       req_grant_o <= '0;
       bursts_o <= '0;
       wait_cycles_o <= '0;
@@ -244,9 +281,23 @@ module zhao_hps_arbiter_n #(
       // Rule 7: every client that can be made to wait, waiting while it wants
       // the bridge and does not have it. Strict priority is the policy; this is
       // what makes its cost legible.
+      // A PENDING request is still waiting: counting only the live `valid`
+      // is what let a pulsing client's wait read one cycle and freeze.
       for (int i = 1; i < N; i++) begin
-        if (req_i[i].valid && !((state != A_IDLE) && (owner == IW'(i)))) begin
+        if (eff_v[i] && !((state != A_IDLE) && (owner == IW'(i)))) begin
           if (wait_cycles_o[i] != 32'hFFFF_FFFF) wait_cycles_o[i] <= wait_cycles_o[i] + 32'd1;
+        end
+      end
+
+      // Rule 6b: capture every live request that this edge does not serve and
+      // that is not already the owner's. The chosen client's slot is cleared
+      // below, on the same edge it is served from.
+      for (int i = 0; i < N; i++) begin
+        if (req_i[i].valid && !pend_v[i]
+            && !((state == A_IDLE) && any_req && (pick == IW'(i)))
+            && !((state != A_IDLE) && (owner == IW'(i)))) begin
+          pend_v[i]   <= 1'b1;
+          pend_req[i] <= req_i[i];
         end
       end
 
@@ -254,9 +305,10 @@ module zhao_hps_arbiter_n #(
         A_IDLE: begin
           if (any_req) begin
             owner <= pick;
-            owner_write <= req_i[pick].write;
+            owner_write <= eff_req[pick].write;
             // Rule 6: captured HERE. The client may take it down next cycle.
-            held_req <= req_i[pick];
+            held_req <= eff_req[pick];
+            pend_v[pick] <= 1'b0;
             state <= A_PULSE;
           end
         end

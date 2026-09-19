@@ -160,8 +160,14 @@
 //                                  0x8261, so demanding zero would refuse a
 //                                  legal command.
 //   NOT       pixel_error       -- MEASURE.GOVERNOR is not composed.
-//   NOT       geometry_tokens   -- MEASURE.TOKENS is not composed.
-//   NOT       fragment_tokens   -- likewise.
+//   READ      geometry_tokens   -- the view's token REQUEST (rulings R18/R33),
+//   READ      fragment_tokens      committed to MEASURE.TOKENS as `tok_vreq_*`,
+//                                  which clamps it to the contract's ceiling.
+//
+// SetPresentationContract's five token counts are that CEILING, committed as
+// `tok_budget_*` BEFORE the views' requests (phase EX_TOK), so a request always
+// meets the ceiling of its own packet. COUNTS, as the wire carries them:
+// nothing here converts or scales anything (R33).
 //
 // `view_id` IS A u8 AND THE BANK HAS TWO VIEWS. It is NOT masked down to one
 // bit: a `view_id` the bank cannot address is REFUSED, the record is not
@@ -413,6 +419,21 @@ module zhao_cmd_exec
     output logic [15:0] env_ambient_o,      // rgb565
     output logic [31:0] envs_issued_o,
 
+    // ---- MEASURE.TOKENS (R18/R33): the ceiling, then each view's request ---
+    // One-cycle pulses in commit phase EX_TOK. MEASURE.TOKENS takes both every
+    // cycle (a load is never refused), so no ready is needed or offered.
+    output logic        tok_budget_valid_o,
+    output logic [31:0] tok_budget_geom0_o,
+    output logic [31:0] tok_budget_geom1_o,
+    output logic [31:0] tok_budget_frag0_o,
+    output logic [31:0] tok_budget_frag1_o,
+    output logic [31:0] tok_budget_shared_o,
+    output logic        tok_vreq_valid_o,
+    output logic        tok_vreq_view_o,
+    output logic [31:0] tok_vreq_geom_o,
+    output logic [31:0] tok_vreq_frag_o,
+    output logic [31:0] contracts_applied_o,  // SetPresentationContract records committed
+
     // ---- evidence ----------------------------------------------------------
     // Every one of these is fired by a directed case in
     // tests/command/cmd_exec_directed.cpp. None is asserted zero without one.
@@ -466,6 +487,15 @@ module zhao_cmd_exec
   localparam int unsigned OFF_DF_WEIGHT = ZHAO_DRAW_FORM_OFF_SEMANTIC_WEIGHT;
   localparam int unsigned OFF_DF_FLAGS  = ZHAO_DRAW_FORM_OFF_FLAGS;
 
+  // SetView's token request and SetPresentationContract's ceilings (R18/R33).
+  localparam int unsigned OFF_SV_GTOK = ZHAO_SET_VIEW_OFF_GEOMETRY_TOKENS;
+  localparam int unsigned OFF_SV_FTOK = ZHAO_SET_VIEW_OFF_FRAGMENT_TOKENS;
+  localparam int unsigned OFF_PC_G0 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_GEOMETRY_TOKENS_0;
+  localparam int unsigned OFF_PC_G1 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_GEOMETRY_TOKENS_1;
+  localparam int unsigned OFF_PC_F0 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_FRAGMENT_TOKENS_0;
+  localparam int unsigned OFF_PC_F1 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_FRAGMENT_TOKENS_1;
+  localparam int unsigned OFF_PC_SH = ZHAO_SET_PRESENTATION_CONTRACT_OFF_SHARED_TOKENS;
+
   // PublishResource 0x0030 (R17), same rule, same package.
   localparam int unsigned OFF_PR_RES   = ZHAO_PUBLISH_RESOURCE_OFF_RESOURCE;
   localparam int unsigned OFF_PR_HLO   = ZHAO_PUBLISH_RESOURCE_OFF_HPS_ADDR_LO;
@@ -518,6 +548,8 @@ module zhao_cmd_exec
     // DrawForm hazard, which that arm needs a bypass for and this one does not.
     if ((OFF_PR_KIND + 1) >= ZHAO_PUBLISH_RESOURCE_BYTES)
       $fatal(1, "zhao_cmd_exec: PublishResource's kind is its last byte; add the df_flags_c-style bypass");
+    if (ZHAO_SET_PRESENTATION_CONTRACT_BYTES != 48)
+      $fatal(1, "zhao_cmd_exec: SetPresentationContract record size moved; re-read the offsets");
     if (UPL_Q < 2 || UPL_PQ < 2)
       $fatal(1, "zhao_cmd_exec: UPL_Q and UPL_PQ must be >= 2 (the pointers need a bit)");
   end
@@ -550,6 +582,14 @@ module zhao_cmd_exec
   // committing them under two flags would let a view run with this frame's
   // matrix and last frame's profile.
   logic [ 1:0] sv_prof [0:1];
+  // The view's token REQUEST, shadowed per view like the profile, and
+  // committed under the same dirty bit: one record, one commit (R18).
+  logic [31:0] sv_gtok [0:1];
+  logic [31:0] sv_ftok [0:1];
+  // SetPresentationContract's ceiling, staged whole; `pc_dirty` is its
+  // presence in THIS packet. The last contract in a packet wins.
+  logic [31:0] pc_g0, pc_g1, pc_f0, pc_f1, pc_sh;
+  logic        pc_dirty;
   logic [ 1:0] sv_dirty;
   logic        sv_view;   // the bank view this record targets
   logic        sv_ok;     // ... and whether view_id could address it at all
@@ -722,6 +762,7 @@ module zhao_cmd_exec
   // MATERIAL.RESOLVE's "a miss STALLS, it never guesses" -- not this block's.
   typedef enum logic [2:0] {
     EX_STAGE,  // walking a packet; NOTHING leaves this block
+    EX_TOK,    // the token ceiling, then each view's request (R18)
     EX_CFG,    // draining the view shadow into the matrix bank
     EX_STAMP,  // draining the stamp ring into SURFACE.STAMP
     EX_UPL,    // moving staged uploads into the pending queue
@@ -734,6 +775,7 @@ module zhao_cmd_exec
   // steps per view -- matrix words 0..15 at cfg addresses 0..15, then step 16
   // carrying SetView's depth profile to cfg address 18.
   logic [4:0] cw;   // commit step: 0..15 matrix word, 16 depth profile
+  logic [1:0] tk;   // EX_TOK step: 0 contract, 1 view 0, 2 view 1
 
   // The byte stream is accepted only while staging. During a commit the fork's
   // AND holds CMD.DMA off, which is what makes "nothing escapes early" a
@@ -749,6 +791,17 @@ module zhao_cmd_exec
         // 2'd0 is WORLD_LONG, the ruling's own zero meaning: a console that
         // never issues a profile behaves as it did before this field existed.
         sv_prof[vi] <= 2'd0;
+      for (vi = 0; vi < 2; vi = vi + 1) begin
+        sv_gtok[vi] <= 32'd0;
+        sv_ftok[vi] <= 32'd0;
+      end
+      pc_g0 <= 32'd0; pc_g1 <= 32'd0; pc_f0 <= 32'd0; pc_f1 <= 32'd0; pc_sh <= 32'd0;
+      pc_dirty <= 1'b0; tk <= 2'd0;
+      tok_budget_valid_o <= 1'b0; tok_vreq_valid_o <= 1'b0; tok_vreq_view_o <= 1'b0;
+      tok_budget_geom0_o <= 32'd0; tok_budget_geom1_o <= 32'd0;
+      tok_budget_frag0_o <= 32'd0; tok_budget_frag1_o <= 32'd0;
+      tok_budget_shared_o <= 32'd0; tok_vreq_geom_o <= 32'd0; tok_vreq_frag_o <= 32'd0;
+      contracts_applied_o <= 32'd0;
       sv_dirty <= 2'd0; sv_view <= 1'b0; sv_ok <= 1'b0; wacc <= 24'd0;
       ss_patch <= 32'd0; ss_tx <= 32'd0; ss_ty <= 32'd0;
       ss_rad <= 32'd0; ss_ring <= 32'd0;
@@ -778,6 +831,8 @@ module zhao_cmd_exec
       stamp_src_truncated_o <= 32'd0; unsupported_o <= 32'd0;
     end else begin
       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
+      tok_budget_valid_o <= 1'b0;   // both token loads are one-cycle pulses
+      tok_vreq_valid_o   <= 1'b0;
 
       // THE PENDING UPLOAD QUEUE DRAINS IN EVERY STATE. Its entries are
       // committed already; MEM.UPLOAD takes one whenever it is idle.
@@ -830,11 +885,28 @@ module zhao_cmd_exec
                 // guard on the record size rather than assumed.
                 if ((rpos == 16'(SV_FLAGS)) && sv_ok)
                   sv_prof[sv_view] <= pkt_byte_i[1:0];
+                // The token REQUEST (R18). `fragment_tokens` ends on the
+                // record's LAST byte, so its final shift lands on the same edge
+                // as `rec_done`; that is safe because it goes into a shadow
+                // register that nothing reads until EX_TOK.
+                if ((rpos >= 16'(OFF_SV_GTOK)) && (rpos < 16'(OFF_SV_GTOK + 4)) && sv_ok)
+                  sv_gtok[sv_view] <= {pkt_byte_i, sv_gtok[sv_view][31:8]};
+                if ((rpos >= 16'(OFF_SV_FTOK)) && (rpos < 16'(OFF_SV_FTOK + 4)) && sv_ok)
+                  sv_ftok[sv_view] <= {pkt_byte_i, sv_ftok[sv_view][31:8]};
                 if (sv_in_mat) begin
                   wacc <= {pkt_byte_i, wacc[23:8]};
                   if ((mo[1:0] == 2'd3) && sv_ok)
                     sv_mat[sv_view][mo[5:2]] <= {pkt_byte_i, wacc};
                 end
+              end
+
+              // ---- SetPresentationContract (R18/R33): the ceiling ----------
+              if (r_op == ZHAO_OP_SET_PRESENTATION_CONTRACT) begin
+                if ((rpos >= 16'(OFF_PC_G0)) && (rpos < 16'(OFF_PC_G0 + 4))) pc_g0 <= {pkt_byte_i, pc_g0[31:8]};
+                if ((rpos >= 16'(OFF_PC_G1)) && (rpos < 16'(OFF_PC_G1 + 4))) pc_g1 <= {pkt_byte_i, pc_g1[31:8]};
+                if ((rpos >= 16'(OFF_PC_F0)) && (rpos < 16'(OFF_PC_F0 + 4))) pc_f0 <= {pkt_byte_i, pc_f0[31:8]};
+                if ((rpos >= 16'(OFF_PC_F1)) && (rpos < 16'(OFF_PC_F1 + 4))) pc_f1 <= {pkt_byte_i, pc_f1[31:8]};
+                if ((rpos >= 16'(OFF_PC_SH)) && (rpos < 16'(OFF_PC_SH + 4))) pc_sh <= {pkt_byte_i, pc_sh[31:8]};
               end
 
               // ---- SurfaceStamp -------------------------------------------
@@ -901,6 +973,8 @@ module zhao_cmd_exec
               if (rec_done) begin
                 if (r_op == ZHAO_OP_SET_VIEW) begin
                   if (sv_ok) sv_dirty[sv_view] <= 1'b1;
+                end else if (r_op == ZHAO_OP_SET_PRESENTATION_CONTRACT) begin
+                  pc_dirty <= 1'b1;
                 end else if (r_op == ZHAO_OP_SURFACE_STAMP) begin
                   if (ss_src_hi_nz) begin
                     `ZHAO_EXEC_INC(stamp_src_truncated_o);
@@ -975,12 +1049,14 @@ module zhao_cmd_exec
           // while this block is committing the previous one.
           if (verdict_valid_i) begin
             if ((verdict_error_i == ZH_ABI_OK) && !poisoned) begin
-              st <= EX_CFG;
+              st <= EX_TOK;
+              tk <= 2'd0;
               cv <= 1'b0;
               cw <= 5'd0;
             end else begin
               `ZHAO_EXEC_INC(packets_abandoned_o);
               sv_dirty <= 2'd0;
+              pc_dirty <= 1'b0;
               sq_wp    <= '0;
               sq_rp    <= '0;
               dq_wp    <= '0;
@@ -992,6 +1068,43 @@ module zhao_cmd_exec
               poisoned <= 1'b0;
             end
           end
+        end
+
+        // ------------------------------------------------------------------
+        // COMMIT phase 0 -- the token CEILING, then each view's REQUEST (R18)
+        // ------------------------------------------------------------------
+        // Three steps, one clock each, in this order and for this reason: the
+        // contract's ceiling lands FIRST, so the requests of the same packet
+        // are clamped against it rather than against last frame's. A view
+        // with no SetView in this packet sends no request and keeps whatever
+        // the contract (or its last request) gave it.
+        EX_TOK: begin
+          unique case (tk)
+            2'd0: begin
+              if (pc_dirty) begin
+                tok_budget_valid_o  <= 1'b1;
+                tok_budget_geom0_o  <= pc_g0;
+                tok_budget_geom1_o  <= pc_g1;
+                tok_budget_frag0_o  <= pc_f0;
+                tok_budget_frag1_o  <= pc_f1;
+                tok_budget_shared_o <= pc_sh;
+                pc_dirty            <= 1'b0;
+                `ZHAO_EXEC_INC(contracts_applied_o);
+              end
+              tk <= 2'd1;
+            end
+            2'd1, 2'd2: begin
+              if (sv_dirty[tk == 2'd2]) begin
+                tok_vreq_valid_o <= 1'b1;
+                tok_vreq_view_o  <= (tk == 2'd2);
+                tok_vreq_geom_o  <= sv_gtok[tk == 2'd2];
+                tok_vreq_frag_o  <= sv_ftok[tk == 2'd2];
+              end
+              if (tk == 2'd2) st <= EX_CFG;
+              tk <= tk + 2'd1;
+            end
+            default: st <= EX_CFG;
+          endcase
         end
 
         // ------------------------------------------------------------------

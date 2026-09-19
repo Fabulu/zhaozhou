@@ -831,8 +831,8 @@ for (const auto& info : zhao_abi::ZHAO_COMMAND_TABLE) {
   t.load(kSlotBody0, pkt);
   t.fetch(kSlotBody0, static_cast<uint32_t>(pkt.size()), 0);
   const std::string tag = std::string("table: ") + info.name;
-  check(!t.verdicts_.empty() && t.verdicts_[0].status != 7, (tag + " is a known opcode").c_str(),
-        0, t.verdicts_.empty() ? 99 : t.verdicts_[0].status);
+  check(!t.verdicts_.empty() && t.verdicts_[0].status != 7, (tag + " is a known opcode").c_str(), 0,
+        t.verdicts_.empty() ? 99 : t.verdicts_[0].status);
   check(!t.verdicts_.empty() && t.verdicts_[0].status == 0, (tag + " walks OK").c_str(), 0,
         t.verdicts_.empty() ? 99 : t.verdicts_[0].status);
 }

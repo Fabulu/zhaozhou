@@ -2817,14 +2817,13 @@ class Checker {
 
   private checkPresentation(ms: ModuleSym, d: PresentationDecl): void {
     const ctx = this.ctxFor(ms, 'present');
-    const views: { id: bigint; pct: bigint; span: SourceSpan }[] = [];
-    let shared = 0n;
+    const views: { id: bigint; span: SourceSpan }[] = [];
     for (const item of d.items) {
       if (item.kind === 'view') {
-        views.push({ id: item.id, pct: item.budgetPct, span: item.span });
+        views.push({ id: item.id, span: item.span });
         if (item.camera === null) {
           this.sink.error('FORM-E-607', item.span,
-            `view ${item.id} has no camera binding ('view N from <world3> budget P%')`);
+            `view ${item.id} has no camera binding ('view N from <world3> budget geometry G fragment F')`);
         } else {
           const ct = this.checkExpr(ctx, item.camera, T.world3);
           if (!tAgree(ct, T.world3) && !tAgree(ct, T.unknown)) {
@@ -2832,8 +2831,6 @@ class Checker {
               `camera binding must be a world3 transform source, got ${typeName(ct)} (FORM-E-464)`);
           }
         }
-      } else if (item.kind === 'shared_budget') {
-        shared = item.pct;
       } else if (item.kind === 'emit') {
         this.checkEmit(ctx, item, ms, d);
       } else if (item.kind === 'assign') {
@@ -2867,11 +2864,10 @@ class Checker {
       }
       seenIds.add(v.id);
     }
-    const sum = views.reduce((a, v) => a + v.pct, 0n) + shared;
-    if (sum > 100n) {
-      this.sink.error('FORM-E-605', d.span,
-        `view budgets (${views.map((v) => v.pct).join('% + ')}%) plus shared (${shared}%) sum to ${sum}% > 100% (FORM-E-605)`);
-    }
+    // FORM-E-605 (budgets sum to more than 100%) is RETIRED by owner ruling
+    // R33: budgets are token counts, and no per-frame capacity is ratified to
+    // sum them against. If one is ratified it returns here as a LINT, never as
+    // a hardware input.
   }
 
   private static readonly EMIT_ARGS: Record<string, Record<string, string>> = {

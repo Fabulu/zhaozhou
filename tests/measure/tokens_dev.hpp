@@ -32,6 +32,7 @@ struct Stim {
   zm::TokenBudgets budgets;
   zm::TokenRequest req;
   zm::TokenReturn ret;
+  zm::ViewTokenRequest vreq;  // R18: SetView's request, clamped to the ceiling
 };
 
 /** What one cycle produced: the combinational answer, and the PREVIOUS
@@ -61,6 +62,10 @@ inline void reset_dut(Vzhao_measure_tokens& dut) {
   dut.req_rep_i = 0;
   dut.req_cost_i = 0;
   dut.req_src_id_i = 0;
+  dut.vreq_valid_i = 0;
+  dut.vreq_view_i = 0;
+  dut.vreq_geom_i = 0;
+  dut.vreq_frag_i = 0;
   dut.ret_valid_i = 0;
   dut.ret_view_i = 0;
   dut.ret_class_i = 0;
@@ -97,6 +102,10 @@ inline Obs cycle(Vzhao_measure_tokens& dut, const Stim& s) {
   dut.ret_class_i = static_cast<uint8_t>(s.ret.cls & 1);
   dut.ret_shared_i = s.ret.shared ? 1 : 0;
   dut.ret_cost_i = s.ret.cost;
+  dut.vreq_valid_i = s.vreq.valid ? 1 : 0;
+  dut.vreq_view_i = static_cast<uint8_t>(s.vreq.view & 1);
+  dut.vreq_geom_i = s.vreq.geom;
+  dut.vreq_frag_i = s.vreq.frag;
 
   dut.clk = 0;
   dut.eval();  // the combinational grant settles here

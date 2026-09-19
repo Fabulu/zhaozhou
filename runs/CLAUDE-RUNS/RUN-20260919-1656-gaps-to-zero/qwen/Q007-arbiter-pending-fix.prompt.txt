@@ -1,0 +1,774 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q007: arbiter-pending-fix
+## Brief
+An earlier review found a HIGH bug in `zhao_hps_arbiter_n`: the arbiter sampled client requests only in
+A_IDLE, so a client that PULSES its request for one cycle (CMD.DMA) lost the request if another client owned
+the bridge at that moment, and then waited forever. Commit 525a3f6d adds "rule 6b": a per-client PENDING slot
+that captures a request while the client is not the owner and serves it on a later idle window. The same
+commit fixes two clients (MEM.UPLOAD and DEBUG.FRAMEBLIT) that ignored a bridge refusal `err` while holding
+their request. Bridge facts: one burst in flight; it accepts when idle, raises busy on the same edge and grant
+the NEXT cycle; a request while busy is a protocol violation; a malformed request is answered `err|last`
+with NO grant.
+
+## Questions
+1. Is the pending capture correct for BOTH client styles: a HOLDER (keeps valid until granted) and a PULSER
+   (one cycle)? Can a HOLDER now be served TWICE (once from pending, once from its still-held live request)?
+2. Priority and starvation: does serving pending slots preserve "lower index wins", and are the wait counters
+   still correct (neither double-counting nor freezing)?
+3. Can a pending slot hold a STALE request: the client pulsed, then withdrew or changed its request before
+   service?
+4. The `err` fixes in the two clients: does each now leave its request state cleanly on a refusal with no
+   grant, and can either still spin?
+5. Do the new directed cases fail on the old RTL for the right reason?
+
+# INPUT fpga/rtl/memory/zhao_hps_arbiter.sv:1-416
+```
+    1| // zhao_hps_arbiter.sv — MEM.HPS.ARBITER: N clients (R4), one HPS bridge port.
+    2| //
+    3| // Contract: design/contracts/MEM.HPS.ARBITER.md
+    4| // Design:   reports/DEBUG.FRAMEBLIT_Integration_Corrections.md §7 (Step 3)
+    5| //
+    6| // ---------------------------------------------------------------------------
+    7| // WHY THIS EXISTS
+    8| // ---------------------------------------------------------------------------
+    9| // Splitting the blit out of CMD.DMA gave the machine two things that want the
+   10| // HPS bridge:
+   11| //
+   12| //     CMD.DMA          \
+   13| //                       -> this -> zhao_hps_bridge
+   14| //     DEBUG.FRAMEBLIT  /
+   15| //
+   16| // `zhao_hps_bridge` has ONE client port and ONE burst in flight. Wiring two
+   17| // requesters to it without an arbiter does not merely risk a collision — the
+   18| // bridge treats a request arriving while it is busy as a PROTOCOL VIOLATION and
+   19| // answers it with `err`. The loser of an unarbitrated race does not wait; it is
+   20| // told its transfer failed.
+   21| //
+   22| // ---------------------------------------------------------------------------
+   23| // THE SEVEN RULES
+   24| // ---------------------------------------------------------------------------
+   25| // 1. **ONE OWNER AT A TIME, AND THE OWNER IS LATCHED.** Ownership is decided
+   26| //    once, when the bridge is idle, and does not change until the burst ends.
+   27| //    Re-deciding while a burst is in flight is how a response beat reaches the
+   28| //    wrong client.
+   29| //
+   30| // 2. **A RESPONSE BEAT GOES TO THE OWNER AND NOWHERE ELSE.** The non-owner's
+   31| //    response port is held quiet for the whole transaction. This is the rule
+   32| //    the review names, and it is the one that corrupts data rather than merely
+   33| //    stalling it: a beat delivered to the wrong client is written into the
+   34| //    wrong buffer with no error anywhere.
+   35| //
+   36| // 3. **THE BRIDGE REQUEST IS A ONE-CYCLE PULSE, AND THAT IS NOT NEGOTIABLE.**
+   37| //    This is the rule that is easy to get exactly backwards, and I did.
+   38| //    `zhao_hps_bridge` accepts combinationally and sets `busy` on the same
+   39| //    edge, then raises `req_grant` the NEXT cycle. So a request still asserted
+   40| //    on the cycle the grant arrives is a request arriving WHILE BUSY -- which
+   41| //    the bridge treats as a protocol violation and answers with `err`.
+   42| //
+   43| //    "Hold the request stable until grant" is therefore the correct rule for
+   44| //    the CLIENT-facing side and precisely the wrong one for the bridge-facing
+   45| //    side. CMD.DMA already knew this: its `hps_req_v` is set in one state and
+   46| //    cleared by a default assignment the next cycle, a one-cycle pulse.
+   47| //
+   48| //    Converting between the two is the arbiter's job, and arguably its most
+   49| //    useful one: clients get a proper ready/valid handshake they can hold, and
+   50| //    the bridge gets the single pulse it requires, issued only when the arbiter
+   51| //    KNOWS the bridge is idle -- which no individual client can know.
+   52| //
+   53| // 4. **AN `err` WITHOUT A GRANT STILL ENDS THE TRANSACTION.** A malformed burst
+   54| //    is rejected by the bridge with `err | last` and NO grant and NO busy — so
+   55| //    an arbiter that waits only for `req_grant` waits forever, holding the port
+   56| //    against a client that will never be served. This is not a corner case; it
+   57| //    is what happens to every malformed request.
+   58| //
+   59| // 5. **A WRITE BURST ENDS ON `wr_last`, NOT ON A RESPONSE.** The bridge sends
+   60| //    NO response beats for a write: it forwards the data and clears `busy` when
+   61| //    `wr_last` goes through. An arbiter that waits for `rsp.last` therefore
+   62| //    holds the port forever on the first write it ever arbitrates.
+   63| //
+   64| //    Nothing in Phase 2 writes to HPS DDR, which is exactly why this was worth
+   65| //    getting right rather than leaving to be discovered later: an untested path
+   66| //    with a latent hang in it is worse than an absent one, because it looks
+   67| //    finished. The mutation sweep is what surfaced it -- a mutation that routed
+   68| //    write data from the wrong client SURVIVED, because no test issued a write
+   69| //    at all.
+   70| //
+   71| // 6. **THE REQUEST IS LATCHED WHEN THE OWNER IS CHOSEN, NOT RE-SAMPLED.**
+   72| //    The two clients do not agree on how long a request stays up.
+   73| //    DEBUG.FRAMEBLIT HOLDS its request until granted; CMD.DMA PULSES it for a
+   74| //    single cycle and then relies on the response stream. An arbiter that
+   75| //    re-reads the client port a cycle after deciding works with the first and
+   76| //    silently loses every request from the second.
+   77| //
+   78| //    So the address, length, direction and client id are captured on the edge
+   79| //    the owner is chosen, and the pulse driven from that capture. Both client
+   80| //    styles then work, and neither has to know about the other.
+   81| //
+   82| //    6b. **A PULSE THAT ARRIVES WHILE THE BRIDGE IS SOMEONE ELSE'S IS KEPT.**
+   83| //    (2026-09-19, cmdmem packet, found by review and verified.) The rule above
+   84| //    was only half built: the owner was chosen from `req_i` in A_IDLE alone, so
+   85| //    a pulse landing while another client owned the bridge -- or on an A_IDLE
+   86| //    cycle where a lower index won -- was never seen again. CMD.DMA pulses and
+   87| //    then waits for its response with no timeout, so a lost pulse was a HANG,
+   88| //    and `wait_cycles_o` ticked once and froze, which reads as "it waited one
+   89| //    cycle". Each client now has a PENDING slot: a request that is valid while
+   90| //    that client is neither being chosen nor the owner is captured, and the
+   91| //    pick is made over {pending, live}. A holding client simply re-presents
+   92| //    the same request, so capturing it changes nothing it can see.
+   93| //    THE COST, stated: a request, once offered, WILL be served. A client may
+   94| //    not withdraw an offered request (none in the console does: every holding
+   95| //    client leaves its request state only on grant or on `err`), and a client
+   96| //    that ignores a refusal `err` while holding re-requests forever -- which
+   97| //    is why MEM.UPLOAD and DEBUG.FRAMEBLIT now leave their request states on it.
+   98| //
+   99| // 7. **CLIENT 0 HAS STRICT PRIORITY, AND THE WAITING IS COUNTED.** Command
+  100| //    packet acquisition outranks a debug blit, which is not game-facing and may
+  101| //    wait. Strict priority means client 1 can be starved by a client 0 that
+  102| //    never stops asking, so `c1_wait_cycles_o` exists to make that visible
+  103| //    rather than leaving it to be discovered as "the debug blit sometimes never
+  104| //    happens".
+  105| //
+  106| // Client 0 is CMD.DMA; client 1 is DEBUG.FRAMEBLIT. The mapping is the shell's
+  107| // to make, and it is encoded and tested here rather than assumed: even if the
+  108| // scheduler's ordering makes the two mutually exclusive today, that is a
+  109| // property of the scheduler and not of this wire.
+  110| //
+  111| // ---------------------------------------------------------------------------
+  112| // N CLIENTS -- owner ruling R4 (reports/OWNER-RULINGS-20260919-EVENING.md)
+  113| // ---------------------------------------------------------------------------
+  114| // Both two-port instances in the console were full (CMD.DMA + DEBUG.FRAMEBLIT
+  115| // in the shell; TERRAIN.CMD + TERRAIN.PAGELOADER in the core) and two more
+  116| // blocks wanted a port: MEM.UPLOAD, and the terrain directory's clients (I26,
+  117| // I27). The owner ruled: widen to N, preserve the starvation law, re-prove it.
+  118| //
+  119| // So the machine above lives ONCE, in `zhao_hps_arbiter_n`, and
+  120| // `zhao_hps_arbiter` is its N=2 instance with the historical port names. Every
+  121| // existing instantiation and the 66-check directed test therefore run against
+  122| // the N core unchanged; `tests/memory/hps_arbiter_n_directed.cpp` re-proves
+  123| // the laws at N=3.
+  124| //
+  125| // THE STARVATION LAW, generalised and NOT weakened. Rule 7 becomes: the LOWER
+  126| // index has strict priority over every higher one, and every client that can
+  127| // be made to wait -- index 1 and up -- has its waiting counted in
+  128| // `wait_cycles_o[i]`. Client 0 keeps rule 7's guarantee exactly (it never
+  129| // waits behind anyone for a NEW burst). Client k's guarantee is exactly client
+  130| // 1's today: nothing, if any lower index asks continuously -- and it is
+  131| // VISIBLE. A continuously-asking MIDDLE client starves every client above it,
+  132| // which is the same law applied twice, and is pinned by the N=3 test. The
+  133| // bounded yield the contract describes is still not implemented; placing a
+  134| // client at an index is the composer's statement of what may wait for it.
+  135| //
+  136| // It shares this file with its N=2 wrapper so every existing source list keeps
+  137| // naming one file; DECLFILENAME is waived for this module alone.
+  138| /* verilator lint_off DECLFILENAME */
+  139| module zhao_hps_arbiter_n #(
+  140|     parameter int unsigned N = 3
+  141| ) (
+  142|     input logic clk,
+  143|     input logic rst_n,
+  144| 
+  145|     // ---- clients, index 0 highest priority ----------------------------------
+  146|     input  zhao_pkg::zhao_hps_burst_req_t [N-1:0]       req_i,
+  147|     output logic                          [N-1:0]       req_grant_o,
+  148|     input  logic                          [N-1:0]       wr_valid_i,
+  149|     input  logic                          [N-1:0][63:0] wr_data_i,
+  150|     input  logic                          [N-1:0]       wr_last_i,
+  151|     output zhao_pkg::zhao_hps_burst_rsp_t [N-1:0]       rsp_o,
+  152| 
+  153|     // ---- the one bridge port ------------------------------------------------
+  154|     output zhao_pkg::zhao_hps_burst_req_t b_req_o,
+  155|     input  logic                          b_req_grant_i,
+  156|     output logic                          b_wr_valid_o,
+  157|     output logic [63:0]                   b_wr_data_o,
+  158|     output logic                          b_wr_last_o,
+  159|     input  zhao_pkg::zhao_hps_burst_rsp_t b_rsp_i,
+  160| 
+  161|     // ---- counters -----------------------------------------------------------
+  162|     output logic [N-1:0][31:0] bursts_o,
+  163|     output logic [N-1:1][31:0] wait_cycles_o  // rule 7: starvation must be visible
+  164| );
+  165| 
+  166|   localparam int unsigned IW = (N > 1) ? $clog2(N) : 1;
+  167| 
+  168|   initial begin
+  169|     if (N < 2) $fatal(1, "zhao_hps_arbiter_n: N must be at least 2 (got %0d)", N);
+  170|   end
+  171| 
+  172|   localparam logic [1:0] A_IDLE = 2'd0;
+  173|   localparam logic [1:0] A_PULSE = 2'd1;  // the request is on the wire, ONE cycle
+  174|   localparam logic [1:0] A_WAIT = 2'd2;   // awaiting the grant (or an err)
+  175|   localparam logic [1:0] A_ACTIVE = 2'd3; // the burst is the owner's
+  176| 
+  177|   logic [1:0]    state;
+  178|   logic [IW-1:0] owner;        // meaningful outside A_IDLE
+  179|   logic          owner_write;  // rule 5: a write burst ends differently
+  180| 
+  181|   // Rule 6: the request as it was when the owner was chosen. A pulsing client
+  182|   // has already taken its request down by the time A_PULSE drives the bridge.
+  183|   zhao_pkg::zhao_hps_burst_req_t held_req;
+  184| 
+  185|   // Rule 6b: one pending request per client, and the view the pick is made
+  186|   // over. A pending request is served exactly like a live one, from the
+  187|   // capture, so a client that pulsed long ago and one that is holding now are
+  188|   // indistinguishable to everything below.
+  189|   logic                          [N-1:0] pend_v;
+  190|   zhao_pkg::zhao_hps_burst_req_t [N-1:0] pend_req;
+  191|   logic                          [N-1:0] eff_v;
+  192|   zhao_pkg::zhao_hps_burst_req_t [N-1:0] eff_req;
+  193|   always_comb begin
+  194|     for (int i = 0; i < N; i++) begin
+  195|       eff_v[i]   = pend_v[i] || req_i[i].valid;
+  196|       eff_req[i] = pend_v[i] ? pend_req[i] : req_i[i];
+  197|     end
+  198|   end
+  199| 
+  200|   // Rule 7: the LOWEST asking index wins. The loop runs downward so the last
+  201|   // assignment -- the lowest index -- is the one that stands.
+  202|   logic          any_req;
+  203|   logic [IW-1:0] pick;
+  204|   always_comb begin
+  205|     any_req = 1'b0;
+  206|     pick = '0;
+  207|     for (int i = N - 1; i >= 0; i--) begin
+  208|       if (eff_v[i]) begin
+  209|         any_req = 1'b1;
+  210|         pick = IW'(i);
+  211|       end
+  212|     end
+  213|   end
+  214| 
+  215|   // Rule 1: the request presented to the bridge is the OWNER's once one is
+  216|   // chosen -- never a fresh re-decision, which is how a grant lands on one
+  217|   // client while the beats belong to another.
+  218|   always_comb begin
+  219|     b_req_o = '0;
+  220|     b_wr_valid_o = 1'b0;
+  221|     b_wr_data_o = 64'd0;
+  222|     b_wr_last_o = 1'b0;
+  223| 
+  224|     case (state)
+  225|       // Rule 3: the request appears for EXACTLY ONE CYCLE, from the latched
+  226|       // owner, and only in this state. Driving it in A_IDLE as well -- which is
+  227|       // the obvious way to save a cycle -- presents it twice: the bridge
+  228|       // accepts on the first and counts the second as a violation.
+  229|       A_PULSE: begin
+  230|         b_req_o = held_req;
+  231|         b_req_o.valid = 1'b1;
+  232|       end
+  233|       A_ACTIVE: begin
+  234|         // Write beats belong to the owner alone. A READING owner that raised
+  235|         // `wr_valid` is harmless and deliberately not gated twice: the bridge
+  236|         // takes a write beat only while `busy_write`, and `burst_done`'s write
+  237|         // term requires `owner_write` (checked 2026-09-19; directed case 9).
+  238|         b_wr_valid_o = wr_valid_i[owner];
+  239|         b_wr_data_o  = wr_data_i[owner];
+  240|         b_wr_last_o  = wr_last_i[owner];
+  241|       end
+  242|       default: begin
+  243|         b_req_o = '0;
+  244|       end
+  245|     endcase
+  246|   end
+  247| 
+  248|   // Rule 2: a response beat reaches the OWNER and nobody else. In A_IDLE it
+  249|   // reaches nobody, because there is nothing in flight to answer.
+  250|   always_comb begin
+  251|     for (int i = 0; i < N; i++) begin
+  252|       rsp_o[i] = '0;
+  253|       if ((state != A_IDLE) && (owner == IW'(i))) rsp_o[i] = b_rsp_i;
+  254|     end
+  255|   end
+  256| 
+  257|   // When the burst is over.
+  258|   //
+  259|   //   * a READ ends on the last response beat;
+  260|   //   * a WRITE ends when the last write beat goes through, because the bridge
+  261|   //     answers a write with NOTHING (rule 5);
+  262|   //   * either ends on `err` (rule 4), which can arrive before any grant.
+  263|   logic burst_done;
+  264|   assign burst_done = (b_rsp_i.beat_valid && b_rsp_i.last) || b_rsp_i.err ||
+  265|                       (owner_write && b_wr_valid_o && b_wr_last_o);
+  266| 
+  267|   always_ff @(posedge clk or negedge rst_n) begin
+  268|     if (!rst_n) begin
+  269|       state <= A_IDLE;
+  270|       owner <= '0;
+  271|       owner_write <= 1'b0;
+  272|       held_req <= '0;
+  273|       pend_v <= '0;
+  274|       pend_req <= '0;
+  275|       req_grant_o <= '0;
+  276|       bursts_o <= '0;
+  277|       wait_cycles_o <= '0;
+  278|     end else begin
+  279|       req_grant_o <= '0;
+  280| 
+  281|       // Rule 7: every client that can be made to wait, waiting while it wants
+  282|       // the bridge and does not have it. Strict priority is the policy; this is
+  283|       // what makes its cost legible.
+  284|       // A PENDING request is still waiting: counting only the live `valid`
+  285|       // is what let a pulsing client's wait read one cycle and freeze.
+  286|       for (int i = 1; i < N; i++) begin
+  287|         if (eff_v[i] && !((state != A_IDLE) && (owner == IW'(i)))) begin
+  288|           if (wait_cycles_o[i] != 32'hFFFF_FFFF) wait_cycles_o[i] <= wait_cycles_o[i] + 32'd1;
+  289|         end
+  290|       end
+  291| 
+  292|       // Rule 6b: capture every live request that this edge does not serve and
+  293|       // that is not already the owner's. The chosen client's slot is cleared
+  294|       // below, on the same edge it is served from.
+  295|       for (int i = 0; i < N; i++) begin
+  296|         if (req_i[i].valid && !pend_v[i]
+  297|             && !((state == A_IDLE) && any_req && (pick == IW'(i)))
+  298|             && !((state != A_IDLE) && (owner == IW'(i)))) begin
+  299|           pend_v[i]   <= 1'b1;
+  300|           pend_req[i] <= req_i[i];
+  301|         end
+  302|       end
+  303| 
+  304|       case (state)
+  305|         A_IDLE: begin
+  306|           if (any_req) begin
+  307|             owner <= pick;
+  308|             owner_write <= eff_req[pick].write;
+  309|             // Rule 6: captured HERE. The client may take it down next cycle.
+  310|             held_req <= eff_req[pick];
+  311|             pend_v[pick] <= 1'b0;
+  312|             state <= A_PULSE;
+  313|           end
+  314|         end
+  315| 
+  316|         A_PULSE: begin
+  317|           // The request was on the wire for this cycle and no longer will be.
+  318|           state <= A_WAIT;
+  319|         end
+  320| 
+  321|         A_WAIT: begin
+  322|           // Rule 4 first: a malformed burst is answered with err and NO grant
+  323|           // and NO busy. An arbiter that waits only for the grant holds the
+  324|           // port forever -- and the symptom is not this transfer failing, it is
+  325|           // the NEXT one never happening.
+  326|           if (b_rsp_i.err) begin
+  327|             state <= A_IDLE;
+  328|           end else if (b_req_grant_i) begin
+  329|             req_grant_o[owner] <= 1'b1;
+  330|             if (bursts_o[owner] != 32'hFFFF_FFFF) bursts_o[owner] <= bursts_o[owner] + 32'd1;
+  331|             state <= A_ACTIVE;
+  332|           end
+  333|         end
+  334| 
+  335|         A_ACTIVE: begin
+  336|           if (burst_done) state <= A_IDLE;
+  337|         end
+  338| 
+  339|         default: state <= A_IDLE;
+  340|       endcase
+  341|     end
+  342|   end
+  343| 
+  344| endmodule : zhao_hps_arbiter_n
+  345| /* verilator lint_on DECLFILENAME */
+  346| 
+  347| // The two-client arbiter every existing site instantiates: the N core at N=2,
+  348| // with the historical port names. Nothing here decides anything.
+  349| module zhao_hps_arbiter (
+  350|     input logic clk,
+  351|     input logic rst_n,
+  352| 
+  353|     // ---- client 0 (high priority: CMD.DMA) ---------------------------------
+  354|     input  zhao_pkg::zhao_hps_burst_req_t c0_req_i,
+  355|     output logic                          c0_req_grant_o,
+  356|     input  logic                          c0_wr_valid_i,
+  357|     input  logic [63:0]                   c0_wr_data_i,
+  358|     input  logic                          c0_wr_last_i,
+  359|     output zhao_pkg::zhao_hps_burst_rsp_t c0_rsp_o,
+  360| 
+  361|     // ---- client 1 (low priority: DEBUG.FRAMEBLIT) --------------------------
+  362|     input  zhao_pkg::zhao_hps_burst_req_t c1_req_i,
+  363|     output logic                          c1_req_grant_o,
+  364|     input  logic                          c1_wr_valid_i,
+  365|     input  logic [63:0]                   c1_wr_data_i,
+  366|     input  logic                          c1_wr_last_i,
+  367|     output zhao_pkg::zhao_hps_burst_rsp_t c1_rsp_o,
+  368| 
+  369|     // ---- the one bridge port ------------------------------------------------
+  370|     output zhao_pkg::zhao_hps_burst_req_t b_req_o,
+  371|     input  logic                          b_req_grant_i,
+  372|     output logic                          b_wr_valid_o,
+  373|     output logic [63:0]                   b_wr_data_o,
+  374|     output logic                          b_wr_last_o,
+  375|     input  zhao_pkg::zhao_hps_burst_rsp_t b_rsp_i,
+  376| 
+  377|     // ---- counters -----------------------------------------------------------
+  378|     output logic [31:0] c0_bursts_o,
+  379|     output logic [31:0] c1_bursts_o,
+  380|     output logic [31:0] c1_wait_cycles_o   // rule 5: starvation must be visible
+  381| );
+  382| 
+  383|   zhao_pkg::zhao_hps_burst_req_t [1:0] req;
+  384|   zhao_pkg::zhao_hps_burst_rsp_t [1:0] rsp;
+  385|   logic [1:0]       grant;
+  386|   logic [1:0][31:0] bursts;
+  387| 
+  388|   assign req[0] = c0_req_i;
+  389|   assign req[1] = c1_req_i;
+  390|   assign c0_req_grant_o = grant[0];
+  391|   assign c1_req_grant_o = grant[1];
+  392|   assign c0_rsp_o = rsp[0];
+  393|   assign c1_rsp_o = rsp[1];
+  394|   assign c0_bursts_o = bursts[0];
+  395|   assign c1_bursts_o = bursts[1];
+  396| 
+  397|   zhao_hps_arbiter_n #(.N(2)) u_core (
+  398|       .clk          (clk),
+  399|       .rst_n        (rst_n),
+  400|       .req_i        (req),
+  401|       .req_grant_o  (grant),
+  402|       .wr_valid_i   ({c1_wr_valid_i, c0_wr_valid_i}),
+  403|       .wr_data_i    ({c1_wr_data_i, c0_wr_data_i}),
+  404|       .wr_last_i    ({c1_wr_last_i, c0_wr_last_i}),
+  405|       .rsp_o        (rsp),
+  406|       .b_req_o      (b_req_o),
+  407|       .b_req_grant_i(b_req_grant_i),
+  408|       .b_wr_valid_o (b_wr_valid_o),
+  409|       .b_wr_data_o  (b_wr_data_o),
+  410|       .b_wr_last_o  (b_wr_last_o),
+  411|       .b_rsp_i      (b_rsp_i),
+  412|       .bursts_o     (bursts),
+  413|       .wait_cycles_o(c1_wait_cycles_o)
+  414|   );
+  415| 
+  416| endmodule : zhao_hps_arbiter
+```
+
+# INPUT git show 525a3f6d -- fpga/rtl/memory/zhao_hps_arbiter.sv
+```
+525a3f6d MEM.HPS.ARBITER lost a pulsed request and hung CMD.DMA; two clients spun on a refusal
+
+diff --git a/fpga/rtl/memory/zhao_hps_arbiter.sv b/fpga/rtl/memory/zhao_hps_arbiter.sv
+index 98230ee8..b3f716c1 100644
+--- a/fpga/rtl/memory/zhao_hps_arbiter.sv
++++ b/fpga/rtl/memory/zhao_hps_arbiter.sv
+@@ -76,12 +76,29 @@
+ //    silently loses every request from the second.
+ //
+ //    So the address, length, direction and client id are captured on the edge
+ //    the owner is chosen, and the pulse driven from that capture. Both client
+ //    styles then work, and neither has to know about the other.
+ //
++//    6b. **A PULSE THAT ARRIVES WHILE THE BRIDGE IS SOMEONE ELSE'S IS KEPT.**
++//    (2026-09-19, cmdmem packet, found by review and verified.) The rule above
++//    was only half built: the owner was chosen from `req_i` in A_IDLE alone, so
++//    a pulse landing while another client owned the bridge -- or on an A_IDLE
++//    cycle where a lower index won -- was never seen again. CMD.DMA pulses and
++//    then waits for its response with no timeout, so a lost pulse was a HANG,
++//    and `wait_cycles_o` ticked once and froze, which reads as "it waited one
++//    cycle". Each client now has a PENDING slot: a request that is valid while
++//    that client is neither being chosen nor the owner is captured, and the
++//    pick is made over {pending, live}. A holding client simply re-presents
++//    the same request, so capturing it changes nothing it can see.
++//    THE COST, stated: a request, once offered, WILL be served. A client may
++//    not withdraw an offered request (none in the console does: every holding
++//    client leaves its request state only on grant or on `err`), and a client
++//    that ignores a refusal `err` while holding re-requests forever -- which
++//    is why MEM.UPLOAD and DEBUG.FRAMEBLIT now leave their request states on it.
++//
+ // 7. **CLIENT 0 HAS STRICT PRIORITY, AND THE WAITING IS COUNTED.** Command
+ //    packet acquisition outranks a debug blit, which is not game-facing and may
+ //    wait. Strict priority means client 1 can be starved by a client 0 that
+ //    never stops asking, so `c1_wait_cycles_o` exists to make that visible
+ //    rather than leaving it to be discovered as "the debug blit sometimes never
+ //    happens".
+@@ -162,21 +179,36 @@ module zhao_hps_arbiter_n #(
+   logic          owner_write;  // rule 5: a write burst ends differently
+ 
+   // Rule 6: the request as it was when the owner was chosen. A pulsing client
+   // has already taken its request down by the time A_PULSE drives the bridge.
+   zhao_pkg::zhao_hps_burst_req_t held_req;
+ 
++  // Rule 6b: one pending request per client, and the view the pick is made
++  // over. A pending request is served exactly like a live one, from the
++  // capture, so a client that pulsed long ago and one that is holding now are
++  // indistinguishable to everything below.
++  logic                          [N-1:0] pend_v;
++  zhao_pkg::zhao_hps_burst_req_t [N-1:0] pend_req;
++  logic                          [N-1:0] eff_v;
++  zhao_pkg::zhao_hps_burst_req_t [N-1:0] eff_req;
++  always_comb begin
++    for (int i = 0; i < N; i++) begin
++      eff_v[i]   = pend_v[i] || req_i[i].valid;
++      eff_req[i] = pend_v[i] ? pend_req[i] : req_i[i];
++    end
++  end
++
+   // Rule 7: the LOWEST asking index wins. The loop runs downward so the last
+   // assignment -- the lowest index -- is the one that stands.
+   logic          any_req;
+   logic [IW-1:0] pick;
+   always_comb begin
+     any_req = 1'b0;
+     pick = '0;
+     for (int i = N - 1; i >= 0; i--) begin
+-      if (req_i[i].valid) begin
++      if (eff_v[i]) begin
+         any_req = 1'b1;
+         pick = IW'(i);
+       end
+     end
+   end
+ 
+@@ -196,13 +228,16 @@ module zhao_hps_arbiter_n #(
+       // accepts on the first and counts the second as a violation.
+       A_PULSE: begin
+         b_req_o = held_req;
+         b_req_o.valid = 1'b1;
+       end
+       A_ACTIVE: begin
+-        // Write beats belong to the owner alone.
++        // Write beats belong to the owner alone. A READING owner that raised
++        // `wr_valid` is harmless and deliberately not gated twice: the bridge
++        // takes a write beat only while `busy_write`, and `burst_done`'s write
++        // term requires `owner_write` (checked 2026-09-19; directed case 9).
+         b_wr_valid_o = wr_valid_i[owner];
+         b_wr_data_o  = wr_data_i[owner];
+         b_wr_last_o  = wr_last_i[owner];
+       end
+       default: begin
+         b_req_o = '0;
+@@ -232,34 +267,51 @@ module zhao_hps_arbiter_n #(
+   always_ff @(posedge clk or negedge rst_n) begin
+     if (!rst_n) begin
+       state <= A_IDLE;
+       owner <= '0;
+       owner_write <= 1'b0;
+       held_req <= '0;
++      pend_v <= '0;
++      pend_req <= '0;
+       req_grant_o <= '0;
+       bursts_o <= '0;
+       wait_cycles_o <= '0;
+     end else begin
+       req_grant_o <= '0;
+ 
+       // Rule 7: every client that can be made to wait, waiting while it wants
+       // the bridge and does not have it. Strict priority is the policy; this is
+       // what makes its cost legible.
++      // A PENDING request is still waiting: counting only the live `valid`
++      // is what let a pulsing client's wait read one cycle and freeze.
+       for (int i = 1; i < N; i++) begin
+-        if (req_i[i].valid && !((state != A_IDLE) && (owner == IW'(i)))) begin
++        if (eff_v[i] && !((state != A_IDLE) && (owner == IW'(i)))) begin
+           if (wait_cycles_o[i] != 32'hFFFF_FFFF) wait_cycles_o[i] <= wait_cycles_o[i] + 32'd1;
+         end
+       end
+ 
++      // Rule 6b: capture every live request that this edge does not serve and
++      // that is not already the owner's. The chosen client's slot is cleared
++      // below, on the same edge it is served from.
++      for (int i = 0; i < N; i++) begin
++        if (req_i[i].valid && !pend_v[i]
++            && !((state == A_IDLE) && any_req && (pick == IW'(i)))
++            && !((state != A_IDLE) && (owner == IW'(i)))) begin
++          pend_v[i]   <= 1'b1;
++          pend_req[i] <= req_i[i];
++        end
++      end
++
+       case (state)
+         A_IDLE: begin
+           if (any_req) begin
+             owner <= pick;
+-            owner_write <= req_i[pick].write;
++            owner_write <= eff_req[pick].write;
+             // Rule 6: captured HERE. The client may take it down next cycle.
+-            held_req <= req_i[pick];
++            held_req <= eff_req[pick];
++            pend_v[pick] <= 1'b0;
+             state <= A_PULSE;
+           end
+         end
+ 
+         A_PULSE: begin
+           // The request was on the wire for this cycle and no longer will be.
+
+```
+
+# INPUT git show 525a3f6d -- fpga/rtl/mem/zhao_mem_upload.sv
+```
+525a3f6d MEM.HPS.ARBITER lost a pulsed request and hung CMD.DMA; two clients spun on a refusal
+
+diff --git a/fpga/rtl/mem/zhao_mem_upload.sv b/fpga/rtl/mem/zhao_mem_upload.sv
+index 7becdb3d..0c952493 100644
+--- a/fpga/rtl/mem/zhao_mem_upload.sv
++++ b/fpga/rtl/mem/zhao_mem_upload.sv
+@@ -522,13 +522,22 @@ module zhao_mem_upload
+               st_q <= S_REPORT;
+             end
+           end
+         end
+ 
+         S_ISSUE: begin
+-          if (hps_req_grant_i) begin
++          // `err` ON THE REQUEST, WITH NO GRANT, is how `zhao_hps_bridge`
++          // refuses a burst ("malformed burst / bridge error: NOTHING ISSUED").
++          // It used to be watched for only in S_FILL, which the refusal never
++          // reaches, so this state went on HOLDING its request -- and
++          // `zhao_hps_arbiter_n` re-serves a held request, so the pair spun on
++          // the refusal forever. TERRAIN.CMD found the same fault in itself.
++          if (hps_rsp_i.err) begin
++            hps_err_q <= 1'b1;
++            st_q      <= S_RETIRE;
++          end else if (hps_req_grant_i) begin
+             beat_q <= '0;
+             st_q   <= S_FILL;
+           end
+         end
+ 
+         // ------------------------------------------------------------------
+
+```
+
+# INPUT git show 525a3f6d -- tests/memory/hps_arbiter_n_directed.cpp
+```
+525a3f6d MEM.HPS.ARBITER lost a pulsed request and hung CMD.DMA; two clients spun on a refusal
+
+diff --git a/tests/memory/hps_arbiter_n_directed.cpp b/tests/memory/hps_arbiter_n_directed.cpp
+index 8ae9d2c8..d008a172 100644
+--- a/tests/memory/hps_arbiter_n_directed.cpp
++++ b/tests/memory/hps_arbiter_n_directed.cpp
+@@ -96,12 +96,14 @@ struct Bench {
+   uint32_t last_req_len = 0;
+   bool last_req_valid = false;
+   int hps_write_beats = 0;
+   int hps_write_lasts = 0;
+   std::vector<uint64_t> hps_write_data;
+   int multi_beat_cycles = 0;  // cycles on which >1 client port carried a beat
++  uint32_t pulse = 0;         // one-shot extra `valid`, CMD.DMA style (rule 6b)
++  uint32_t stray_wr = 0;      // clients that raise wr_valid while READING (S2)
+ 
+   explicit Bench(Vzhao_hps_arb_n_compose& d) : dut(d) {
+     for (int i = 0; i < kN; ++i) c[i].client = static_cast<uint32_t>(i + 1);
+   }
+ 
+   void drive_requests() {
+@@ -114,12 +116,14 @@ struct Bench {
+       }
+       if (c[i].write) write |= 1u << i;
+       client = static_cast<uint16_t>(client | ((c[i].client & 7u) << (3 * i)));
+       set_bits(len, 7 * i, 7, c[i].len);
+       dut.c_addr_i[i] = c[i].addr;
+     }
++    valid |= pulse;
++    pulse = 0;
+     dut.c_valid_i = static_cast<uint8_t>(valid);
+     dut.c_write_i = static_cast<uint8_t>(write);
+     dut.c_client_i = client;
+     dut.c_len_i = len;
+   }
+ 
+@@ -209,12 +213,14 @@ struct Bench {
+         if (k.wbeats_left == 0) {
+           wl |= 1u << i;
+           k.in_flight = false;
+         }
+       }
+     }
++    wv |= stray_wr;
++    wl |= stray_wr;
+     dut.c_wr_valid_i = static_cast<uint8_t>(wv);
+     dut.c_wr_last_i = static_cast<uint8_t>(wl);
+     dut.eval();
+   }
+ 
+   void run(int cycles) {
+@@ -503,9 +509,74 @@ int main() {
+           b.c[1].grants == 3 && b.c[1].beats == 0);
+     check(b.hps_write_lasts == 3, "7b.three write bursts completed", 3,
+           static_cast<uint32_t>(b.hps_write_lasts));
+     check(dut.hps_err_count_o == 0, "7b.no violation", 0, dut.hps_err_count_o);
+   }
+ 
++  // ---- 8. RULE 6b: a PULSE while ANOTHER CLIENT OWNS THE BRIDGE ----------
++  // CMD.DMA raises `hps_req_v` for exactly one cycle and then waits for its
++  // response with no timeout. The arbiter used to look at requests in A_IDLE
++  // only, so a pulse landing while client 1 owned the bridge was dropped and
++  // CMD.DMA hung. These fail against that RTL (0 beats) and pass on the
++  // pending-slot repair.
++  for (int who : {0, 2}) {
++    reset(dut);
++    Bench b(dut);
++    b.c[1].at(0xA100'0000u, 1);
++    int guard = 0;
++    while (!b.c[1].in_flight && guard++ < 40) b.step();
++    b.run(2);  // mid-burst: client 1 owns the bridge
++    Client& p = b.c[who];
++    p.base = p.addr = p.next_addr = 0xA000'0000u + static_cast<uint32_t>(who) * 0x0200'0000u;
++    p.bursts_wanted = 0;
++    dut.c_addr_i[who] = p.addr;
++    b.pulse = 1u << who;
++    b.run(120);
++    check(p.beats == 8, name("8.client %d's ONE-cycle pulse during client 1's burst is served", who), 8,
++          static_cast<uint32_t>(p.beats));
++    check(p.data_ok, name("8.client %d: from the address it pulsed", who), 1, p.data_ok);
++    check(bursts(dut, who) == 1, name("8.client %d: exactly one burst, not a repeat", who), 1,
++          bursts(dut, who));
++    check(b.c[1].beats == 8 && b.c[1].data_ok, name("8.client %d: the owner's burst is untouched", who),
++          1, b.c[1].beats == 8 && b.c[1].data_ok);
++    if (who == 2) {
++      check(dut.c2_wait_cycles_o > 1, "8.client 2's pending wait is COUNTED, not frozen at one", 2,
++            dut.c2_wait_cycles_o);
++    }
++    check(dut.hps_err_count_o == 0, name("8.client %d: no violation", who), 0, dut.hps_err_count_o);
++  }
++
++  // ---- 8b. a pulse that LOSES an A_IDLE arbitration is kept too -----------
++  // Client 0 holds; client 2 pulses on the very cycle client 0 is chosen.
++  {
++    reset(dut);
++    Bench b(dut);
++    b.c[0].at(0xA400'0000u, 1);
++    Client& p = b.c[2];
++    p.base = p.addr = p.next_addr = 0xA600'0000u;
++    p.bursts_wanted = 0;
++    dut.c_addr_i[2] = p.addr;
++    b.pulse = 1u << 2;
++    b.run(160);
++    check(b.c[0].beats == 8, "8b.the winner is served", 8, static_cast<uint32_t>(b.c[0].beats));
++    check(p.beats == 8 && p.data_ok, "8b.the pulse that lost the same-cycle pick is served after it", 1,
++          p.beats == 8 && p.data_ok);
++    check(dut.hps_err_count_o == 0, "8b.no violation", 0, dut.hps_err_count_o);
++  }
++
++  // ---- 9. S2: a READING owner cannot put write beats on the bridge --------
++  {
++    reset(dut);
++    Bench b(dut);
++    b.c[0].at(0xA800'0000u, 2);
++    b.stray_wr = 1u << 0;  // client 0 reads, and wrongly raises wr_valid/wr_last
++    b.run(120);
++    check(b.hps_write_beats == 0, "9.no write beat reaches the HPS during a read burst", 0,
++          static_cast<uint32_t>(b.hps_write_beats));
++    check(b.c[0].beats == 16 && b.c[0].data_ok, "9.and the read bursts complete, whole", 1,
++          b.c[0].beats == 16 && b.c[0].data_ok);
++    check(dut.hps_err_count_o == 0, "9.no violation", 0, dut.hps_err_count_o);
++  }
++
+   dut.final();
+   return zhao::report_and_exit("hps_arbiter_n_directed");
+ }
+
+```

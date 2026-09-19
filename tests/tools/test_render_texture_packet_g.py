@@ -31,7 +31,13 @@ ATTRS = REPO / ".gitattributes"
 COLLISION = REPO / "tests/tools/test_packet_g_selector_collision.py"
 ASSERTION_CONTROL = REPO / "tests/tools/test_packet_g_assertion_control.py"
 
-SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
+# RE-PINNED under owner ruling R39 (provisional, 2026-09-19): the ONLY change
+# to the protected V1 shell is R32's tie-off of MEM.GUARD's new region inputs,
+# 3 lines x 4 zhao_mem_guard instances = 12 lines, each
+#   .res_valid (1'b0) / .res_base (32'd0) / .res_span (32'd0)   // TIE: ...
+# (the R32 write arm names TERRAIN_BUILD alone; V1 has no such client).
+# No behaviour moves. Previous pin: 00fdd2387ffea985...
+SHELL_SHA256 = "9ab87fd9ceeb5efb1333c2023cc4cf9a565b6f4d75633facfa33c9f6640b91cc"
 SLOT_SOURCES = (
     "fpga/rtl/generated/zhao_abi_pkg.sv",
     "fpga/rtl/common/zhao_pkg.sv",

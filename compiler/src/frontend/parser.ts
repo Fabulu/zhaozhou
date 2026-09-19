@@ -659,9 +659,9 @@ export class Parser {
         if (t.kind === 'kw' && t.text === 'shared') {
           this.next();
           this.expectKw('budget');
-          const pct = this.parsePercent('shared budget');
+          const tokens = this.parseTokenCount('shared budget');
           this.expectPunct(';');
-          items.push({ kind: 'shared_budget', pct, span: t.span });
+          items.push({ kind: 'shared_budget', tokens, span: t.span });
           continue;
         }
         if (t.kind === 'kw' && t.text === 'emit') { items.push(this.parseEmit()); continue; }
@@ -673,6 +673,47 @@ export class Parser {
     }
     this.expectPunct('}');
     return { kind: 'Presentation', name: name.text, items, span: join(kw.span, this.tokens[this.idx - 1]!.span) };
+  }
+
+  /**
+   * A token COUNT (owner ruling R33): a plain integer literal. A percentage is
+   * refused with FORM-E-611 rather than converted -- no per-frame token
+   * capacity is ratified, so a percentage has no denominator, and the compiler
+   * does not invent one.
+   */
+  private parseTokenCount(what: string): bigint {
+    const t = this.peek();
+    if (t.kind === 'frac' && t.frac?.suffix === '%') {
+      this.next();
+      this.error('FORM-E-611', t.span,
+        `${what} is a token COUNT, not a percentage (owner ruling R33: nothing converts, no capacity is invented)`);
+      return 0n;
+    }
+    if (t.kind === 'int') {
+      this.next();
+      if (this.atPunct('%')) {
+        this.next();
+        this.error('FORM-E-611', t.span,
+          `${what} is a token COUNT, not a percentage (owner ruling R33: nothing converts, no capacity is invented)`);
+        return 0n;
+      }
+      const v = t.intVal!;
+      if (v > 0xFFFFFFFFn) {
+        this.error('FORM-E-612', t.span, `${what} ${v} does not fit the ABI's u32 token field (FORM-E-612)`);
+        return 0n;
+      }
+      return v;
+    }
+    this.error('FORM-E-100', t.span, `expected a token count for ${what}, found '${t.text}'`);
+    throw ParseError;
+  }
+
+  /** `name` as a contextual word (not a reserved keyword). */
+  private expectWord(word: string, what: string): void {
+    const t = this.peek();
+    if ((t.kind === 'ident' || t.kind === 'kw') && t.text === word) { this.next(); return; }
+    this.error('FORM-E-100', t.span, `expected '${word}' in ${what}, found '${t.text}'`);
+    throw ParseError;
   }
 
   /** `45%` — the lexer's percent token or a spaced `45 %` pair. */
@@ -701,9 +742,17 @@ export class Parser {
       camera = this.parseExpr({ allowRange: false, recordLits: true });
     }
     this.expectKw('budget');
-    const budgetPct = this.parsePercent('view budget');
+    // `budget geometry <count> fragment <count>` -- the two per-view ABI
+    // fields, SetPresentationContract's ceiling (rulings R18/R33).
+    this.expectWord('geometry', 'view budget');
+    const geometryTokens = this.parseTokenCount('view geometry budget');
+    this.expectWord('fragment', 'view budget');
+    const fragmentTokens = this.parseTokenCount('view fragment budget');
     this.expectPunct(';');
-    return { kind: 'view', id, camera, budgetPct, span: join(kw.span, this.tokens[this.idx - 1]!.span) };
+    return {
+      kind: 'view', id, camera, geometryTokens, fragmentTokens,
+      span: join(kw.span, this.tokens[this.idx - 1]!.span),
+    };
   }
 
   private parseEmit(): EmitStmt {

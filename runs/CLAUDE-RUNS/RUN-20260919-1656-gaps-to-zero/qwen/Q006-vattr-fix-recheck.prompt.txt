@@ -1,0 +1,1166 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# CARRIED FORWARD FROM Q005
+- Done: Per-view row index comes from the landing tag, not from the uv counter: `q005-zhao_geom_vattr.sv:550-554,418`; the u/v value is read from `uv_mem` indexed by that tag: `q005-zhao_geom_vattr.sv:417,383`. Alignment therefore depends on the external contract that `fl_index` equals the uv/lit ordinal and that uv has already been staged; the block has no interlock: `q005-zhao_geom_vattr.sv:416`. Colour uses lit ordinal and opened arenas: `q005-zhao_geom_vattr.sv:393-404,566-581`; `lit_ready_o` waits for opens, and `done_o` waits for lit==uv and colour writer idle: `q005-zhao_geom_vattr.sv:448`. The u/v×1/w arithmetic uses 16-bit signed u/v, 24-bit `invw24`, 41-bit product, add 2^15, and arithmetic shift 16: `q005-zhao_geom_vattr.sv:364-368`; it uses the same view because the landing queue carries per-landing w/profile/tag: `q005-zhao_geom_vattr.sv:293,530-532,552-553`. The lookup port is synchronous one-clock and has no per-row valid, so a lookup before `done_o` returns old memory: `q005-zhao_geom_vattr.sv:419,421,425,586-587`. The test uses `zref::depth_of_raw`/`zref::geom_over_w` for invw/uow/vow and unchanged rgb/constant alpha: `q005-geom_vattr_directed.cpp:200-204`. It covers dual view A/H, single view B, colour hold B, drops C, OOB D/F/G, and rate H, but does not cover holes, read-before-write, or uv-before-landing content: `q005-geom_vattr_directed.cpp:132-137,262-266,368-371`. `lq_overflow`, `index_oob`, `look_oob`, `profile_mixed`, and `dq_refused` are fired; `dq_stray` is not: `q005-geom_vattr_directed.cpp:238,375`. No counter/guard in this file is proven unable to fire; `dq_stray` is only unexercised.
+- Open: Not shown: whether REPLAY waits for `done_o`, whether faults poison the batch, whether uv can legally arrive after a landing, and the `u_dq` internals for `dq_stray`/`dq_idle`; the `zref` code is not shown, so independence is only as far as the calls shown.
+- Next chunk: Add a directed case where a landing for index K is processed before or same-cycle with `uv_valid_i` for K and verify the row, plus a lookup-before-done check. If the producer contract guarantees uv-before-landing, document it and add an interlock/valid bit or a poison check on `done_o`/faults. Needs the GEOM.GROUP_SEQ/PROJ_LANE timing contract and `u_dq`/`zref` code if proving counter fireability.
+
+## Coordinator verdict
+
+**partial** — spot 3: F1 CONFIRMED in source: uv_mem is read at uv_ra = dq_tag (vattr:381, 417) with no check that uv for that ordinal was staged (uv_ord_q > tag). Correctness rests on the upstream order (decode before projection), a TIMING join with no guard: a real hazard class, and forwarded. F3 is by design per the block's own comment (vattr:438-440: a drop counts as finished AND as a fault), so it is valid only if the consumer ignores the fault; forwarded as a question. F2 depends on whether REPLAY waits for done_o (not shown), forwarded. F6/F8 (batch_i guard asymmetry) are plausible and unchecked. No false claims.
+
+# TASK Q006: vattr-fix-recheck
+## Brief
+Q005 reviewed GEOM.VATTR (commit d52ae6c0) and found: (1) a landing reads u/v for its index with no check
+that u/v was staged; (2) a lookup before done_o reads stale rows; (3) done_o rises with dropped rows;
+(6)/(8) events on the batch_i cycle update arrays or counters asymmetrically. Commit 94add368 claims to fix
+all of them: the u/v join is now a handshake with a firing counter; a dropped or out-of-store row poisons
+the batch through REPLAY's poison input; batch-boundary events go to the new batch; REPLAY cannot look up
+before the done_o-gated handle.
+
+VERIFY THE FIX, finding by finding. For each of (1), (2), (3), (6), (8): FIXED / PARTLY FIXED / NOT FIXED,
+with file:line. Then list anything the fix itself introduced (a new hang, e.g. a landing that waits for
+u/v which never comes because its vertex was a hole; a poison that never clears; a new counter that
+cannot fire).
+
+## Questions
+1. (1)-(8) status, each with evidence.
+2. New defects introduced by the fix.
+3. Does the directed test now exercise each fixed case, and would each case FAIL on the old RTL?
+
+# INPUT fpga/rtl/geometry/zhao_geom_vattr.sv:1-652
+```
+    1| // zhao_geom_vattr.sv -- GEOM.VATTR: the vertex-attribute store and its writer.
+    2| // Per landed vertex, per view: invw24, u_over_w, v_over_w; per vertex: lit r, g,
+    3| // b and alpha. Keyed EXACTLY like the arena, and read by GEOM.REPLAY's own three
+    4| // lookups with the arena's own one-clock timing.
+    5| //
+    6| //     GEOM.VDECODE -- u, v (decode order) ----------------------\
+    7| //     GEOM.LIGHT   -- lit r, g, b (decode order) --------------->\
+    8| //     GEOM.GROUP_SEQ -- opens (the batch's arenas) -------------->  GEOM.VATTR
+    9| //     GEOM.PROJ_LANE -- LANDINGS {arena, index, w, profile} ---->/     |
+   10| //     GEOM.REPLAY  -- look_* (the arena's nets) ---------------->/      v
+   11| //                                             rep_* (same clock as the arena)
+   12| //
+   13| // ---------------------------------------------------------------------------
+   14| // WHY THIS FILE EXISTS: ENTRY I46, OWNER RULING R11, AND R31's REPLAY RATE
+   15| // ---------------------------------------------------------------------------
+   16| // R11 (provisional): "A vertex-attribute store keyed like the arena, M10K-
+   17| // backed, written at the same moment and by the same producers that write the
+   18| // arena position (VDECODE/SKIN for u/v; zhao_light_stream per R2 for
+   19| // rgb/alpha). The palette/skin/group payloads are NOT widened. Replay reads it
+   20| // with the same per-triangle lookups, so there is no timing join."
+   21| //
+   22| // The join problem entry I46 names -- "keying a value that exists at decode
+   23| // time by an arena index that exists only at GEOM.GROUP_SEQ's issue" -- is
+   24| // solved by OWNING the index's definition rather than joining two streams:
+   25| //
+   26| //   * GROUP_SEQ's arena index IS the vertex's ordinal among the batch's
+   27| //     DECODED vertices: it counts skinned vertices, SKIN is one-in-one-out in
+   28| //     order, and a record VDECODE refuses is a hole that advances nothing
+   29| //     (R31; such a batch is poisoned and never read). This block counts the
+   30| //     SAME events -- decoded vertices, in the same order -- so the ordinal it
+   31| //     stages u/v and colour under is that index by construction, not by a
+   32| //     comparison between two streams.
+   33| //   * The per-VIEW attributes are written at the one moment {arena, index}
+   34| //     exists as a fact rather than a count: the LANDING, when the projector's
+   35| //     result writes the arena position. The rider on that landing is the
+   36| //     arena address, so the store row is the arena row, by the same bits.
+   37| //
+   38| // And R31 moved GEOM.DEPTHQUANT here. REPLAY ran three DEPTHQUANT lanes per
+   39| // TRIANGLE CORNER -- 56 clocks per view-triangle, dominated by the reciprocal
+   40| // round trip, 2.7x the frame at the 120,000-vertex tier. invw24 is a property
+   41| // of the landed VERTEX in its view, so it is computed once per landing on
+   42| // `zhao_geom_depthquant_stream` (one law, see that file), stored beside the
+   43| // perspective attributes that need it, and REPLAY simply reads it.
+   44| //
+   45| // ---------------------------------------------------------------------------
+   46| // THE PERSPECTIVE ATTRIBUTE LAW, DERIVED -- NOT CHOSEN
+   47| // ---------------------------------------------------------------------------
+   48| // spec/qformats.md 8 fixes the per-pixel recovery `u = rescale((s64)u_over_w *
+   49| // rcp_u24(invw24_interp))`, and `zhao_raster_perspuv` derives its shift from
+   50| // three published formats: u_over_w S8.24, invw24 U0.24, the TMU's coordinate
+   51| // S15.16. The per-VERTEX side is the inverse of that recovery on the same
+   52| // three formats, so it is not free either:
+   53| //
+   54| //     value(u_over_w) = value(u) * value(invw24)
+   55| //     raw(u_over_w)   = (raw(u)/2^16) * (invw24/2^24) * 2^24
+   56| //                     = rescale_s(sext(u) * invw24, 16)          (qformats 4)
+   57| //
+   58| // with u the record's s16 UV field in fx16 (GEOM.VDECODE's layout),
+   59| // sign-extended to the TMU's S15.16. |u| < 2^15 and invw24 < 2^24 bound the
+   60| // product below 2^39, so the result fits s24 and NO saturation case exists.
+   61| // The reference is `zref::geom_over_w` (zref_depth.hpp), written with this
+   62| // block; tests/geometry/geom_vattr_directed.cpp differences every row against it
+   63| // and against `zref::depth_of_raw` for invw24.
+   64| //
+   65| // ---------------------------------------------------------------------------
+   66| // COLOUR AND ALPHA
+   67| // ---------------------------------------------------------------------------
+   68| // r, g, b are `zhao_light_stream`'s lit channels (17 bits, 1.0 = 0x10000),
+   69| // zero-extended into their 32-bit slots unchanged. ALPHA HAS NO PRODUCER: the
+   70| // format-0 vertex record carries none (GEOM.VDECODE's layout) and GEOM.LIGHT
+   71| // emits none, so R11's "rgb/alpha from zhao_light_stream" names a quantity that
+   72| // does not exist. The slot is the named constant ALPHA_C, fx16 1.0 (opaque) --
+   73| // an editable value, not a derived one (CLAUDE.md rule 6), recorded as a
+   74| // decision in the geom2 findings.
+   75| //
+   76| // Colour arrives once per VERTEX but is read per VIEW, so each lit result is
+   77| // written into every arena the batch opened (one or two rows). It may arrive
+   78| // before those arenas are known (GEOM.GROUP_SEQ's allocation can wait while the
+   79| // normal path runs ahead), so `lit_ready_o` holds until the batch's opens are
+   80| // in -- backpressure into GEOM.LIGHT, which nothing upstream waits on.
+   81| //
+   82| // ---------------------------------------------------------------------------
+   83| // THE BATCH IS COMPLETE ONLY WHEN THE STORE SAYS SO (`done_o`)
+   84| // ---------------------------------------------------------------------------
+   85| // GEOM.GROUP_SEQ seals on LANDINGS; the rows those landings owe are written
+   86| // here ~45 clocks later (the reciprocal), and the last colour can be later
+   87| // still. A handle released at the seal would let REPLAY read rows that are not
+   88| // written yet -- a stale-attribute race that no pixel count would ever show.
+   89| // So the composer gates the handle on `done_o`: every landing of the batch has
+   90| // its row, and every decoded vertex has its colour.
+   91| //
+   92| // ---------------------------------------------------------------------------
+   93| // THE MEMORY TRADE (standing owner direction: M10K is the slack, ALMs are not)
+   94| // ---------------------------------------------------------------------------
+   95| // Rows = ARENAS * VSLOTS = 4 * 64 = 256 (GEOM.ASSETFETCH's MAX_VERTICES bounds
+   96| // a batch). Per-view plane 24+32+32 = 88 bits, colour plane 3*17 = 51 bits, the
+   97| // u/v stage 64 x 32. All three are single-write, single-read, synchronous-read
+   98| // arrays -- the M10K template -- so the state is ~6 M10K rather than ~35,000
+   99| // flops. The arithmetic is ONE shared 16x24 product, used twice per row (u then
+  100| // v): time-multiplexed, because rows arrive at most one per four clocks.
+  101| // `zhao_raster_rcp24_v4` is the tree's latest reciprocal (a second INSTANCE of
+  102| // the one law -- the `zhao_field_isqrt` precedent), at NCTX 16.
+  103| //
+  104| // ---------------------------------------------------------------------------
+  105| // FAULTS, COUNTED
+  106| // ---------------------------------------------------------------------------
+  107| //   lq_overflow_o  a landing arrived with the landing queue full. The lane's
+  108| //                  result port has no backpressure, so it is DROPPED -- and
+  109| //                  counted as a row so `done_o` cannot hang on it. Reachable by
+  110| //                  a landing burst above the reciprocal's rate; fired by
+  111| //                  stimulus in the directed test.
+  112| //   index_oob_o    a landing outside ARENAS x VSLOTS: no row is written (its
+  113| //                  colour and u/v are not staged either, silently -- one
+  114| //                  event, counted once, here).
+  115| //   look_oob_o     a lookup outside ARENAS x VSLOTS; answered with zeros.
+  116| //   profile_mixed_o one arena landed under two depth profiles (moved here from
+  117| //                  GEOM.REPLAY with the depth law itself).
+  118| //   dq_refused_o / dq_stray_o  the depth stream's own, forwarded (stray is
+  119| //                  fired in geom_depthquant_stream_directed case 2).
+  120| //   poison_o       not a counter: the batch lost a row (a drop or an
+  121| //                  out-of-store landing), ORed into REPLAY's handle poison.
+  122| //   uv_waits_o     not a fault: depth results that waited for their u/v.
+  123| //
+  124| // Conservative SystemVerilog subset only (charter section 2).
+  125| `default_nettype none
+  126| 
+  127| module zhao_geom_vattr #(
+  128|     parameter int unsigned ARENAS   = 4,
+  129|     parameter int unsigned ARENA_W  = 3,
+  130|     parameter int unsigned INDEX_W  = 12,
+  131|     // Rows per arena: the most vertices one batch can hold (GEOM.ASSETFETCH's
+  132|     // MAX_VERTICES). A power of two, so a row address is {arena, index}.
+  133|     parameter int unsigned VSLOTS   = 64,
+  134|     parameter int unsigned RCP_NCTX = 16,
+  135|     parameter int unsigned DQ_SLOTS = 16,
+  136|     // The landing queue. The lane's result port cannot stall, so this absorbs
+  137|     // bursts (two views of one vertex land back to back) against a depth
+  138|     // stream that takes one landing a clock while a context is free.
+  139|     parameter int unsigned LQ_DEPTH = 8,
+  140|     // Opaque, fx16 1.0: format 0 carries no alpha (see the header).
+  141|     parameter logic [31:0] ALPHA_C  = 32'h0001_0000
+  142| ) (
+  143|     input  wire clk,
+  144|     input  wire rst_n,
+  145| 
+  146|     // ---- the batch: the dispatcher took a meshlet; its records start --------
+  147|     input  wire                     batch_i,
+  148|     input  wire [1:0]               batch_views_i,   // its visible mask
+  149| 
+  150|     // ---- GEOM.GROUP_SEQ's opens: the batch's arenas, in slot order ----------
+  151|     input  wire                     op_valid_i,
+  152|     input  wire [ARENA_W-1:0]       op_arena_i,
+  153| 
+  154|     // ---- u, v at decode: one per DECODED vertex, in batch order -------------
+  155|     input  wire                     uv_valid_i,
+  156|     input  wire signed [15:0]       uv_u_i,
+  157|     input  wire signed [15:0]       uv_v_i,
+  158| 
+  159|     // ---- the lit colour: one per decoded vertex, in batch order -------------
+  160|     input  wire                     lit_valid_i,
+  161|     output wire                     lit_ready_o,
+  162|     input  wire [16:0]              lit_r_i,
+  163|     input  wire [16:0]              lit_g_i,
+  164|     input  wire [16:0]              lit_b_i,
+  165| 
+  166|     // ---- the landing: the arena position is written now ---------------------
+  167|     input  wire                     fl_valid_i,
+  168|     input  wire [ARENA_W-1:0]       fl_arena_i,
+  169|     input  wire [INDEX_W-1:0]       fl_index_i,
+  170|     input  wire [30:0]              fl_w_i,
+  171|     input  wire [1:0]               fl_profile_i,
+  172| 
+  173|     // ---- every write the current batch owes is in the store -----------------
+  174|     output wire                     done_o,
+  175|     // The batch lost a row -- a landing dropped by the full queue, or outside
+  176|     // the store -- so some corner REPLAY reads for it is not this batch's.
+  177|     // The composer ORs it into the handle's poison beside GROUP_SEQ's (R31:
+  178|     // the batch drops, not the frame). Cleared at the next `batch_i`.
+  179|     output logic                    poison_o,
+  180| 
+  181|     // ---- lookups: GEOM.REPLAY's own, as the arena accepted them -------------
+  182|     input  wire                     look_valid_i,
+  183|     input  wire [ARENA_W-1:0]       look_arena_i,
+  184|     input  wire [INDEX_W-1:0]       look_index_i,
+  185|     output logic                    rep_valid_o,
+  186|     output logic [23:0]             rep_invw24_o,
+  187|     // {alpha, b, g, r, v_over_w, u_over_w}, 32 bits a slot, low slot first --
+  188|     // the ruling-5 packet's slots 1..6 in order.
+  189|     output logic [6*32-1:0]         rep_data_o,
+  190| 
+  191|     // ---- evidence ------------------------------------------------------------
+  192|     output logic [31:0]             landings_o,
+  193|     output logic [31:0]             rows_written_o,
+  194|     output logic [31:0]             colours_written_o,
+  195|     output logic [31:0]             uv_staged_o,
+  196|     output logic [31:0]             lq_overflow_o,
+  197|     output logic [31:0]             index_oob_o,
+  198|     output logic [31:0]             look_oob_o,
+  199|     output logic [31:0]             profile_mixed_o,
+  200|     output logic [31:0]             dq_refused_o,
+  201|     output logic [31:0]             dq_stray_o,
+  202|     // A depth result whose vertex's u/v was NOT yet staged: the row writer
+  203|     // WAITS for it (see "u/v BEFORE ITS ROW") and this counts each such result
+  204|     // once. Not a fault -- the wait makes the row right -- but the evidence
+  205|     // that the join is a HANDSHAKE rather than a timing assumption.
+  206|     output logic [31:0]             uv_waits_o
+  207| );
+  208| 
+  209|   localparam int unsigned VIW  = $clog2(VSLOTS);
+  210|   localparam int unsigned AW   = $clog2(ARENAS);
+  211|   localparam int unsigned ROWS = ARENAS * VSLOTS;
+  212|   localparam int unsigned RW   = AW + VIW;
+  213|   localparam int unsigned NA   = 1 << ARENA_W;
+  214|   localparam int unsigned TAGW = ARENA_W + INDEX_W;
+  215|   localparam int unsigned LQW  = (LQ_DEPTH <= 2) ? 1 : $clog2(LQ_DEPTH);
+  216| 
+  217|   initial begin
+  218|     if ((VSLOTS & (VSLOTS - 1)) != 0 || VSLOTS < 2)
+  219|       $fatal(1, "zhao_geom_vattr: VSLOTS (%0d) must be a power of two >= 2", VSLOTS);
+  220|     if ((ARENAS & (ARENAS - 1)) != 0 || ARENAS < 2)
+  221|       $fatal(1, "zhao_geom_vattr: ARENAS (%0d) must be a power of two >= 2", ARENAS);
+  222|     if (ARENAS > NA)
+  223|       $fatal(1, "zhao_geom_vattr: ARENAS (%0d) exceeds what ARENA_W (%0d) can name", ARENAS, ARENA_W);
+  224|     if (VSLOTS > (1 << INDEX_W))
+  225|       $fatal(1, "zhao_geom_vattr: VSLOTS (%0d) exceeds what INDEX_W (%0d) can name", VSLOTS, INDEX_W);
+  226|     if ((LQ_DEPTH & (LQ_DEPTH - 1)) != 0 || LQ_DEPTH < 2)
+  227|       $fatal(1, "zhao_geom_vattr: LQ_DEPTH (%0d) must be a power of two >= 2", LQ_DEPTH);
+  228|   end
+  229| 
+  230|   // A row address, or "no row" when {arena, index} is outside the store.
+  231|   function automatic logic in_store(input logic [ARENA_W-1:0] a, input logic [INDEX_W-1:0] ix);
+  232|     in_store = (32'(a) < ARENAS) && (32'(ix) < VSLOTS);
+  233|   endfunction
+  234|   // Only the low bits address a row; in_store has already judged the rest.
+  235|   /* verilator lint_off UNUSEDSIGNAL */
+  236|   function automatic logic [RW-1:0] row_of(input logic [ARENA_W-1:0] a, input logic [INDEX_W-1:0] ix);
+  237|     row_of = {a[AW-1:0], ix[VIW-1:0]};
+  238|   endfunction
+  239|   /* verilator lint_on UNUSEDSIGNAL */
+  240| 
+  241|   // ==========================================================================
+  242|   // THE BATCH: its expected views, its arenas, its ordinals
+  243|   // ==========================================================================
+  244|   logic [1:0]         views_need_q;   // 0..2 arenas the batch will open
+  245|   logic [1:0]         op_n_q;         // opens seen this batch
+  246|   logic [ARENA_W-1:0] sl_arena_q [2];
+  247|   logic [VIW:0]       uv_ord_q;       // decoded vertices staged this batch
+  248|   logic [VIW:0]       lit_ord_q;      // colours taken this batch
+  249|   logic [31:0]        lands_b_q;      // landings this batch (all, incl. dropped)
+  250|   logic [31:0]        rows_b_q;       // rows finished this batch (incl. dropped)
+  251| 
+  252|   wire [1:0] views_c = 2'(batch_views_i[0]) + 2'(batch_views_i[1]);
+  253| 
+  254|   // THE BATCH'S ORDINALS AS SEEN THIS CLOCK. On the `batch_i` clock they are
+  255|   // already the NEW batch's zeros, so an event coinciding with the boundary is
+  256|   // counted, addressed and stored as the new batch's first -- the arrays and
+  257|   // the ordinals cannot disagree (review of d52ae6c0: they used to, the arrays
+  258|   // taking the old ordinal while the counters held). In composition no event
+  259|   // coincides: the job accept that raises `batch_i` precedes the meshlet's
+  260|   // first vertex record (GEOM.ASSETFETCH's S_HAND -> S_SERVE), and `done_o`
+  261|   // gates the previous batch's handle, so its last event is already in.
+  262|   wire [1:0]   op_n_c    = batch_i ? 2'd0 : op_n_q;
+  263|   wire [VIW:0] uv_ord_c  = batch_i ? '0   : uv_ord_q;
+  264|   wire [VIW:0] lit_ord_c = batch_i ? '0   : lit_ord_q;
+  265|   wire [31:0]  lands_b_c = batch_i ? '0   : lands_b_q;
+  266|   wire [31:0]  rows_b_c  = batch_i ? '0   : rows_b_q;
+  267| 
+  268|   // ==========================================================================
+  269|   // THE u/v STAGE: decode order, keyed by ordinal == the arena index
+  270|   // ==========================================================================
+  271|   logic [31:0] uv_mem [VSLOTS];
+  272|   logic [VIW-1:0] uv_ra;
+  273|   logic [31:0] uv_rd_q;
+  274| 
+  275|   // ==========================================================================
+  276|   // THE LANDING QUEUE, and the per-arena profile evidence
+  277|   // ==========================================================================
+  278|   logic [TAGW-1:0] lq_tag_q  [LQ_DEPTH];
+  279|   logic [30:0]     lq_w_q    [LQ_DEPTH];
+  280|   logic [1:0]      lq_prof_q [LQ_DEPTH];
+  281|   logic [LQW:0]    lq_wr_q, lq_rd_q;
+  282|   wire lq_empty_c = (lq_wr_q == lq_rd_q);
+  283|   wire lq_full_c  = ((lq_wr_q - lq_rd_q) == (LQW+1)'(LQ_DEPTH));
+  284| 
+  285|   logic [1:0]    prof_q [NA];
+  286|   logic [NA-1:0] prof_seen_q;
+  287| 
+  288|   // ==========================================================================
+  289|   // THE DEPTH STREAM and its reciprocal
+  290|   // ==========================================================================
+  291|   wire             dq_v_ready;
+  292|   wire             dq_d_valid;
+  293|   logic            dq_d_ready;
+  294|   wire [23:0]      dq_invw;
+  295|   wire [TAGW-1:0]  dq_tag;
+  296|   wire             rcp_v_valid, rcp_v_ready, rcp_r_valid, rcp_r_ready;
+  297|   wire [23:0]      rcp_d, rcp_r;
+  298|   wire [5:0]       rcp_k;
+  299|   wire [7:0]       rcp_v_tok, rcp_r_tok;
+  300|   /* verilator lint_off UNUSEDSIGNAL */
+  301|   // Throughput observers and the law's normal clamps: read by the directed
+  302|   // test through the hierarchy, not faults.
+  303|   wire [31:0] dq_vertices, dq_near, dq_far, dq_sat;
+  304|   wire        dq_idle;
+  305|   wire        rcp_d_zero, rcp_qerr, rcp_idle;
+  306|   wire [31:0] rcp_accepted, rcp_completed, rcp_mul_jobs, rcp_zero_jobs,
+  307|               rcp_phase_jobs, rcp_negcorr_jobs;
+  308|   wire [5:0]  rcp_occupancy;
+  309|   /* verilator lint_on UNUSEDSIGNAL */
+  310| 
+  311|   wire lq_pop_c = !lq_empty_c && dq_v_ready;
+  312| 
+  313|   zhao_geom_depthquant_stream #(
+  314|       .TAGW (TAGW),
+  315|       .NSLOT(DQ_SLOTS)
+  316|   ) u_dq (
+  317|       .clk           (clk),
+  318|       .rst_n         (rst_n),
+  319|       .v_valid_i     (!lq_empty_c),
+  320|       .v_ready_o     (dq_v_ready),
+  321|       .v_w_i         ({9'd0, lq_w_q[lq_rd_q[LQW-1:0]]}),
+  322|       .v_profile_i   (lq_prof_q[lq_rd_q[LQW-1:0]]),
+  323|       .v_tag_i       (lq_tag_q[lq_rd_q[LQW-1:0]]),
+  324|       .d_valid_o     (dq_d_valid),
+  325|       .d_ready_i     (dq_d_ready),
+  326|       .d_invw24_o    (dq_invw),
+  327|       .d_tag_o       (dq_tag),
+  328|       .rcp_valid_o   (rcp_v_valid),
+  329|       .rcp_ready_i   (rcp_v_ready),
+  330|       .rcp_d_o       (rcp_d),
+  331|       .rcp_tok_o     (rcp_v_tok),
+  332|       .rcp_rvalid_i  (rcp_r_valid),
+  333|       .rcp_rready_o  (rcp_r_ready),
+  334|       .rcp_r_i       (rcp_r),
+  335|       .rcp_k_i       (rcp_k),
+  336|       .rcp_tok_i     (rcp_r_tok),
+  337|       .vertices_o    (dq_vertices),
+  338|       .clamped_near_o(dq_near),
+  339|       .clamped_far_o (dq_far),
+  340|       .saturated_o   (dq_sat),
+  341|       .refused_o     (dq_refused_o),
+  342|       .tok_stray_o   (dq_stray_o),
+  343|       .idle_o        (dq_idle)
+  344|   );
+  345| 
+  346|   zhao_raster_rcp24_v4 #(
+  347|       .NCTX(RCP_NCTX),
+  348|       .TOKW(8)
+  349|   ) u_rcp (
+  350|       .clk           (clk),
+  351|       .rst_n         (rst_n),
+  352|       .v_valid_i     (rcp_v_valid),
+  353|       .v_ready_o     (rcp_v_ready),
+  354|       .d_i           (rcp_d),
+  355|       .v_tok_i       (rcp_v_tok),
+  356|       .r_valid_o     (rcp_r_valid),
+  357|       .r_ready_i     (rcp_r_ready),
+  358|       .r_o           (rcp_r),
+  359|       .k_o           (rcp_k),
+  360|       .d_zero_o      (rcp_d_zero),
+  361|       .r_tok_o       (rcp_r_tok),
+  362|       .accepted_o    (rcp_accepted),
+  363|       .completed_o   (rcp_completed),
+  364|       .mul_jobs_o    (rcp_mul_jobs),
+  365|       .zero_jobs_o   (rcp_zero_jobs),
+  366|       .phase_jobs_o  (rcp_phase_jobs),
+  367|       .negcorr_jobs_o(rcp_negcorr_jobs),
+  368|       .occupancy_o   (rcp_occupancy),
+  369|       .qerr_o        (rcp_qerr),
+  370|       .idle_o        (rcp_idle)
+  371|   );
+  372| 
+  373|   // ==========================================================================
+  374|   // THE ROW WRITER: invw24 in, two products, one row out
+  375|   // ==========================================================================
+  376|   // W_IDLE takes a depth result and issues the u/v stage read; W_U forms
+  377|   // u*invw (the stage word is there now); W_V forms v*invw and writes the row.
+  378|   localparam logic [1:0] W_IDLE = 2'd0, W_U = 2'd1, W_V = 2'd2;
+  379|   logic [1:0]         w_st_q;
+  380|   logic [23:0]        w_invw_q;
+  381|   logic [ARENA_W-1:0] w_arena_q;
+  382|   logic [INDEX_W-1:0] w_index_q;
+  383|   logic signed [31:0] w_uow_q;
+  384| 
+  385|   // u/v BEFORE ITS ROW -- A HANDSHAKE, NOT A TIMING (review of d52ae6c0). A
+  386|   // row needs its vertex's u/v, staged at decode under the ordinal the landing
+  387|   // names. Decode precedes projection for the same vertex in composition, but
+  388|   // that is an ORDER between two independent paths, and the first version read
+  389|   // `uv_mem` at the landing's index with no check that the ordinal had been
+  390|   // staged: a landing that outran its decode would have multiplied the
+  391|   // PREVIOUS batch's u/v into this one's row, silently. Now the depth result
+  392|   // is not taken until its ordinal is staged (`uv_ord_q` has passed it); an
+  393|   // index outside the store has no u/v to wait for (it is index_oob's).
+  394|   wire [INDEX_W-1:0] dq_index_c = dq_tag[INDEX_W-1:0];
+  395|   wire dq_in_store_c = in_store(dq_tag[TAGW-1 -: ARENA_W], dq_index_c);
+  396|   wire uv_have_c     = !dq_in_store_c || (32'(dq_index_c) < 32'(uv_ord_q));
+  397|   assign dq_d_ready  = (w_st_q == W_IDLE) && uv_have_c;
+  398|   logic uv_wait_seen_q;   // this result's wait is already counted
+  399| 
+  400|   // THE ONE MULTIPLIER, and the one rounding (qformats 4, round-half-up).
+  401|   logic signed [15:0] mul_a_c;
+  402|   logic signed [40:0] mul_p_c;
+  403|   logic signed [31:0] mul_r_c;
+  404|   always_comb begin
+  405|     mul_a_c = (w_st_q == W_U) ? $signed(uv_rd_q[15:0]) : $signed(uv_rd_q[31:16]);
+  406|     mul_p_c = 41'(mul_a_c) * $signed({17'd0, w_invw_q});
+  407|     // rescale_s(p, 16) = (p + 2^15) >>> 16. |p| < 2^39, so the result is s24
+  408|     // and the s32 slot holds it with no saturation case (see the header).
+  409|     mul_r_c = 32'((mul_p_c + 41'sd32768) >>> 16);
+  410|   end
+  411| 
+  412|   // ---- the per-view plane: {invw24, v_over_w, u_over_w} -------------------
+  413|   logic [87:0]   pv_mem [ROWS];
+  414|   logic          pv_we_c;
+  415|   logic [RW-1:0] pv_wa_c;
+  416|   logic [87:0]   pv_wd_c;
+  417|   wire           w_in_store_c = in_store(w_arena_q, w_index_q);
+  418|   always_comb begin
+  419|     pv_we_c = (w_st_q == W_V) && w_in_store_c;
+  420|     pv_wa_c = row_of(w_arena_q, w_index_q);
+  421|     pv_wd_c = {w_invw_q, mul_r_c, w_uow_q};
+  422|   end
+  423| 
+  424|   assign uv_ra = (w_st_q == W_IDLE) ? dq_tag[VIW-1:0] : w_index_q[VIW-1:0];
+  425| 
+  426|   // ==========================================================================
+  427|   // THE COLOUR WRITER: one lit result, one row per opened arena
+  428|   // ==========================================================================
+  429|   localparam logic [1:0] C_IDLE = 2'd0, C_W0 = 2'd1, C_W1 = 2'd2;
+  430|   logic [1:0]     c_st_q;
+  431|   logic [50:0]    c_rgb_q;
+  432|   logic [VIW:0]   c_ord_q;
+  433| 
+  434|   assign lit_ready_o = (c_st_q == C_IDLE) && (op_n_q == views_need_q);
+  435|   wire lit_take_c = lit_valid_i && lit_ready_o;
+  436| 
+  437|   logic [50:0]   cl_mem [ROWS];
+  438|   logic          cl_we_c;
+  439|   logic [RW-1:0] cl_wa_c;
+  440|   wire [ARENA_W-1:0] c_arena_c = (c_st_q == C_W1) ? sl_arena_q[1] : sl_arena_q[0];
+  441|   wire               c_in_c    = in_store(c_arena_c, INDEX_W'(c_ord_q));
+  442|   always_comb begin
+  443|     cl_we_c = ((c_st_q == C_W0) || (c_st_q == C_W1)) && c_in_c;
+  444|     cl_wa_c = row_of(c_arena_c, INDEX_W'(c_ord_q));
+  445|   end
+  446| 
+  447|   // ==========================================================================
+  448|   // THE READ PORT: the arena's timing, one clock after the lookup
+  449|   // ==========================================================================
+  450|   wire [RW-1:0] rd_row_c = row_of(look_arena_i, look_index_i);
+  451|   logic [87:0]  pv_rd_q;
+  452|   logic [50:0]  cl_rd_q;
+  453|   logic         rd_in_q;
+  454| 
+  455|   always_ff @(posedge clk) begin
+  456|     // The three arrays: one synchronous write and one synchronous read each.
+  457|     if (uv_valid_i && (32'(uv_ord_c) < VSLOTS)) uv_mem[uv_ord_c[VIW-1:0]] <= {uv_v_i, uv_u_i};
+  458|     uv_rd_q <= uv_mem[uv_ra];
+  459|     if (pv_we_c) pv_mem[pv_wa_c] <= pv_wd_c;
+  460|     pv_rd_q <= pv_mem[rd_row_c];
+  461|     if (cl_we_c) cl_mem[cl_wa_c] <= c_rgb_q;
+  462|     cl_rd_q <= cl_mem[rd_row_c];
+  463|   end
+  464| 
+  465|   always_comb begin
+  466|     rep_invw24_o = rd_in_q ? pv_rd_q[87:64] : 24'd0;
+  467|     rep_data_o   = '0;
+  468|     if (rd_in_q) begin
+  469|       rep_data_o[ 31:  0] = pv_rd_q[31:0];                 // u_over_w
+  470|       rep_data_o[ 63: 32] = pv_rd_q[63:32];                // v_over_w
+  471|       rep_data_o[ 95: 64] = {15'd0, cl_rd_q[16:0]};        // r
+  472|       rep_data_o[127: 96] = {15'd0, cl_rd_q[33:17]};       // g
+  473|       rep_data_o[159:128] = {15'd0, cl_rd_q[50:34]};       // b
+  474|       rep_data_o[191:160] = ALPHA_C;                        // alpha
+  475|     end
+  476|   end
+  477| 
+  478|   // ==========================================================================
+  479|   // ROWS FINISHED THIS CLOCK: a written row, an out-of-store row, or a landing
+  480|   // dropped by the full queue (a row that will never be written, counted as
+  481|   // finished so `done_o` cannot wait for it -- and counted as a FAULT).
+  482|   // ==========================================================================
+  483|   wire lq_drop_c = fl_valid_i && lq_full_c && !lq_pop_c;
+  484|   wire [1:0] rows_inc_c = 2'(lq_drop_c) + 2'(w_st_q == W_V);
+  485| 
+  486|   // ==========================================================================
+  487|   // DONE: every landing has its row, every decoded vertex its colour
+  488|   // ==========================================================================
+  489|   wire row_lost_c = lq_drop_c || ((w_st_q == W_V) && !w_in_store_c);
+  490|   assign done_o = (rows_b_q == lands_b_q) && (lit_ord_q == uv_ord_q) &&
+  491|                   lq_empty_c && dq_idle && (w_st_q == W_IDLE) && (c_st_q == C_IDLE);
+  492| 
+  493|   // ==========================================================================
+  494|   // THE MACHINE
+  495|   // ==========================================================================
+  496|   integer ai;
+  497|   always_ff @(posedge clk or negedge rst_n) begin
+  498|     if (!rst_n) begin
+  499|       views_need_q     <= '0;
+  500|       op_n_q           <= '0;
+  501|       sl_arena_q[0]    <= '0;
+  502|       sl_arena_q[1]    <= '0;
+  503|       uv_ord_q         <= '0;
+  504|       lit_ord_q        <= '0;
+  505|       lands_b_q        <= '0;
+  506|       rows_b_q         <= '0;
+  507|       lq_wr_q          <= '0;
+  508|       lq_rd_q          <= '0;
+  509|       prof_seen_q      <= '0;
+  510|       for (ai = 0; ai < NA; ai = ai + 1) prof_q[ai] <= '0;
+  511|       w_st_q           <= W_IDLE;
+  512|       w_invw_q         <= '0;
+  513|       w_arena_q        <= '0;
+  514|       w_index_q        <= '0;
+  515|       w_uow_q          <= '0;
+  516|       c_st_q           <= C_IDLE;
+  517|       c_rgb_q          <= '0;
+  518|       c_ord_q          <= '0;
+  519|       poison_o         <= 1'b0;
+  520|       uv_wait_seen_q   <= 1'b0;
+  521|       uv_waits_o       <= '0;
+  522|       rep_valid_o      <= 1'b0;
+  523|       rd_in_q          <= 1'b0;
+  524|       landings_o       <= '0;
+  525|       rows_written_o   <= '0;
+  526|       colours_written_o<= '0;
+  527|       uv_staged_o      <= '0;
+  528|       lq_overflow_o    <= '0;
+  529|       index_oob_o      <= '0;
+  530|       look_oob_o       <= '0;
+  531|       profile_mixed_o  <= '0;
+  532|     end else begin
+  533|       // --- the batch boundary ---------------------------------------------
+  534|       // One meshlet is between GEOM.ASSETFETCH and GEOM.REPLAY at a time (the
+  535|       // dispatcher takes a meshlet only when REPLAY is idle), so the previous
+  536|       // batch's writes are all in and read by now; see the header.
+  537|       if (batch_i) begin
+  538|         views_need_q <= views_c;
+  539|         op_n_q       <= '0;
+  540|         uv_ord_q     <= '0;
+  541|         lit_ord_q    <= '0;
+  542|         lands_b_q    <= '0;
+  543|         rows_b_q     <= '0;
+  544|       end
+  545| 
+  546|       // --- opens: the batch's arenas, and a fresh profile per arena --------
+  547|       if (op_valid_i) begin
+  548|         if (op_n_c < 2'd2) sl_arena_q[op_n_c[0]] <= op_arena_i;
+  549|         op_n_q <= op_n_c + 2'd1;
+  550|         prof_seen_q[op_arena_i] <= 1'b0;
+  551|       end
+  552| 
+  553|       // --- u/v, staged by ordinal ------------------------------------------
+  554|       if (uv_valid_i) begin
+  555|         // An ordinal past VSLOTS is not staged; the landing it would serve is
+  556|         // outside the store too and is counted there, once, on index_oob_o.
+  557|         if ((32'(uv_ord_c) < VSLOTS) && (uv_staged_o != 32'hFFFF_FFFF))
+  558|           uv_staged_o <= uv_staged_o + 32'd1;
+  559|         uv_ord_q <= uv_ord_c + (VIW+1)'(1);
+  560|       end
+  561| 
+  562|       // --- landings: queued, or dropped and counted ------------------------
+  563|       if (fl_valid_i) begin
+  564|         if (landings_o != 32'hFFFF_FFFF) landings_o <= landings_o + 32'd1;
+  565|         lands_b_q <= lands_b_c + 32'd1;
+  566|         if (!prof_seen_q[fl_arena_i]) begin
+  567|           prof_q[fl_arena_i]      <= fl_profile_i;
+  568|           prof_seen_q[fl_arena_i] <= 1'b1;
+  569|         end else if ((prof_q[fl_arena_i] != fl_profile_i) &&
+  570|                      (profile_mixed_o != 32'hFFFF_FFFF)) begin
+  571|           profile_mixed_o <= profile_mixed_o + 32'd1;
+  572|         end
+  573|       end
+  574|       if (fl_valid_i && !lq_drop_c) begin
+  575|         lq_tag_q [lq_wr_q[LQW-1:0]] <= {fl_arena_i, fl_index_i};
+  576|         lq_w_q   [lq_wr_q[LQW-1:0]] <= fl_w_i;
+  577|         lq_prof_q[lq_wr_q[LQW-1:0]] <= fl_profile_i;
+  578|         lq_wr_q <= lq_wr_q + (LQW+1)'(1);
+  579|       end
+  580|       if (lq_pop_c) lq_rd_q <= lq_rd_q + (LQW+1)'(1);
+  581| 
+  582|       // --- rows finished (see rows_inc_c) ------------------------------------
+  583|       if (lq_drop_c && (lq_overflow_o != 32'hFFFF_FFFF)) lq_overflow_o <= lq_overflow_o + 32'd1;
+  584|       if (w_st_q == W_V) begin
+  585|         if (w_in_store_c) begin
+  586|           if (rows_written_o != 32'hFFFF_FFFF) rows_written_o <= rows_written_o + 32'd1;
+  587|         end else if (index_oob_o != 32'hFFFF_FFFF) begin
+  588|           index_oob_o <= index_oob_o + 32'd1;
+  589|         end
+  590|       end
+  591|       if (batch_i || (rows_inc_c != 2'd0)) rows_b_q <= rows_b_c + 32'(rows_inc_c);
+  592| 
+  593|       // --- the batch's poison: a row it owes will never be right -------------
+  594|       if (batch_i)         poison_o <= row_lost_c;
+  595|       else if (row_lost_c) poison_o <= 1'b1;
+  596| 
+  597|       // --- a depth result that had to wait for its u/v, counted once ---------
+  598|       if (dq_d_valid && (w_st_q == W_IDLE) && !uv_have_c && !uv_wait_seen_q) begin
+  599|         uv_wait_seen_q <= 1'b1;
+  600|         if (uv_waits_o != 32'hFFFF_FFFF) uv_waits_o <= uv_waits_o + 32'd1;
+  601|       end
+  602|       if (dq_d_valid && dq_d_ready) uv_wait_seen_q <= 1'b0;
+  603| 
+  604|       // --- the row writer ----------------------------------------------------
+  605|       case (w_st_q)
+  606|         W_IDLE: if (dq_d_valid && dq_d_ready) begin   // the SAME handshake the stream sees
+  607|           w_invw_q  <= dq_invw;
+  608|           w_arena_q <= dq_tag[TAGW-1 -: ARENA_W];
+  609|           w_index_q <= dq_tag[INDEX_W-1:0];
+  610|           w_st_q    <= W_U;
+  611|         end
+  612|         W_U: begin
+  613|           w_uow_q <= mul_r_c;
+  614|           w_st_q  <= W_V;
+  615|         end
+  616|         W_V:     w_st_q <= W_IDLE;
+  617|         default: w_st_q <= W_IDLE;
+  618|       endcase
+  619| 
+  620|       // --- the colour writer -------------------------------------------------
+  621|       case (c_st_q)
+  622|         C_IDLE: if (lit_take_c) begin
+  623|           c_rgb_q <= {lit_b_i, lit_g_i, lit_r_i};
+  624|           c_ord_q <= lit_ord_c;
+  625|           lit_ord_q <= lit_ord_c + (VIW+1)'(1);
+  626|           c_st_q  <= (views_need_q == 2'd0) ? C_IDLE : C_W0;
+  627|         end
+  628|         C_W0: begin
+  629|           if (c_in_c && (colours_written_o != 32'hFFFF_FFFF))
+  630|             colours_written_o <= colours_written_o + 32'd1;
+  631|           c_st_q <= (views_need_q == 2'd2) ? C_W1 : C_IDLE;
+  632|         end
+  633|         C_W1: begin
+  634|           if (c_in_c && (colours_written_o != 32'hFFFF_FFFF))
+  635|             colours_written_o <= colours_written_o + 32'd1;
+  636|           c_st_q <= C_IDLE;
+  637|         end
+  638|         default: c_st_q <= C_IDLE;
+  639|       endcase
+  640| 
+  641|       // --- the read port's valid, the arena's one-clock timing -------------
+  642|       rep_valid_o <= look_valid_i;
+  643|       rd_in_q     <= look_valid_i && in_store(look_arena_i, look_index_i);
+  644|       if (look_valid_i && !in_store(look_arena_i, look_index_i) &&
+  645|           (look_oob_o != 32'hFFFF_FFFF))
+  646|         look_oob_o <= look_oob_o + 32'd1;
+  647|     end
+  648|   end
+  649| 
+  650| endmodule : zhao_geom_vattr
+  651| 
+  652| `default_nettype wire
+```
+
+# INPUT git show 94add368 -- fpga/rtl/geometry/zhao_geom_vattr.sv
+```
+94add368 GEOM.VATTR review of d52ae6c0: the u/v join is a HANDSHAKE, lost rows POISON the batch
+
+diff --git a/fpga/rtl/geometry/zhao_geom_vattr.sv b/fpga/rtl/geometry/zhao_geom_vattr.sv
+index f592e585..4eb23970 100644
+--- a/fpga/rtl/geometry/zhao_geom_vattr.sv
++++ b/fpga/rtl/geometry/zhao_geom_vattr.sv
+@@ -112,13 +112,17 @@
+ //   index_oob_o    a landing outside ARENAS x VSLOTS: no row is written (its
+ //                  colour and u/v are not staged either, silently -- one
+ //                  event, counted once, here).
+ //   look_oob_o     a lookup outside ARENAS x VSLOTS; answered with zeros.
+ //   profile_mixed_o one arena landed under two depth profiles (moved here from
+ //                  GEOM.REPLAY with the depth law itself).
+-//   dq_refused_o / dq_stray_o  the depth stream's own, forwarded.
++//   dq_refused_o / dq_stray_o  the depth stream's own, forwarded (stray is
++//                  fired in geom_depthquant_stream_directed case 2).
++//   poison_o       not a counter: the batch lost a row (a drop or an
++//                  out-of-store landing), ORed into REPLAY's handle poison.
++//   uv_waits_o     not a fault: depth results that waited for their u/v.
+ //
+ // Conservative SystemVerilog subset only (charter section 2).
+ `default_nettype none
+ 
+ module zhao_geom_vattr #(
+     parameter int unsigned ARENAS   = 4,
+@@ -165,12 +169,17 @@ module zhao_geom_vattr #(
+     input  wire [INDEX_W-1:0]       fl_index_i,
+     input  wire [30:0]              fl_w_i,
+     input  wire [1:0]               fl_profile_i,
+ 
+     // ---- every write the current batch owes is in the store -----------------
+     output wire                     done_o,
++    // The batch lost a row -- a landing dropped by the full queue, or outside
++    // the store -- so some corner REPLAY reads for it is not this batch's.
++    // The composer ORs it into the handle's poison beside GROUP_SEQ's (R31:
++    // the batch drops, not the frame). Cleared at the next `batch_i`.
++    output logic                    poison_o,
+ 
+     // ---- lookups: GEOM.REPLAY's own, as the arena accepted them -------------
+     input  wire                     look_valid_i,
+     input  wire [ARENA_W-1:0]       look_arena_i,
+     input  wire [INDEX_W-1:0]       look_index_i,
+     output logic                    rep_valid_o,
+@@ -186,13 +195,18 @@ module zhao_geom_vattr #(
+     output logic [31:0]             uv_staged_o,
+     output logic [31:0]             lq_overflow_o,
+     output logic [31:0]             index_oob_o,
+     output logic [31:0]             look_oob_o,
+     output logic [31:0]             profile_mixed_o,
+     output logic [31:0]             dq_refused_o,
+-    output logic [31:0]             dq_stray_o
++    output logic [31:0]             dq_stray_o,
++    // A depth result whose vertex's u/v was NOT yet staged: the row writer
++    // WAITS for it (see "u/v BEFORE ITS ROW") and this counts each such result
++    // once. Not a fault -- the wait makes the row right -- but the evidence
++    // that the join is a HANDSHAKE rather than a timing assumption.
++    output logic [31:0]             uv_waits_o
+ );
+ 
+   localparam int unsigned VIW  = $clog2(VSLOTS);
+   localparam int unsigned AW   = $clog2(ARENAS);
+   localparam int unsigned ROWS = ARENAS * VSLOTS;
+   localparam int unsigned RW   = AW + VIW;
+@@ -234,12 +248,26 @@ module zhao_geom_vattr #(
+   logic [VIW:0]       lit_ord_q;      // colours taken this batch
+   logic [31:0]        lands_b_q;      // landings this batch (all, incl. dropped)
+   logic [31:0]        rows_b_q;       // rows finished this batch (incl. dropped)
+ 
+   wire [1:0] views_c = 2'(batch_views_i[0]) + 2'(batch_views_i[1]);
+ 
++  // THE BATCH'S ORDINALS AS SEEN THIS CLOCK. On the `batch_i` clock they are
++  // already the NEW batch's zeros, so an event coinciding with the boundary is
++  // counted, addressed and stored as the new batch's first -- the arrays and
++  // the ordinals cannot disagree (review of d52ae6c0: they used to, the arrays
++  // taking the old ordinal while the counters held). In composition no event
++  // coincides: the job accept that raises `batch_i` precedes the meshlet's
++  // first vertex record (GEOM.ASSETFETCH's S_HAND -> S_SERVE), and `done_o`
++  // gates the previous batch's handle, so its last event is already in.
++  wire [1:0]   op_n_c    = batch_i ? 2'd0 : op_n_q;
++  wire [VIW:0] uv_ord_c  = batch_i ? '0   : uv_ord_q;
++  wire [VIW:0] lit_ord_c = batch_i ? '0   : lit_ord_q;
++  wire [31:0]  lands_b_c = batch_i ? '0   : lands_b_q;
++  wire [31:0]  rows_b_c  = batch_i ? '0   : rows_b_q;
++
+   // ==========================================================================
+   // THE u/v STAGE: decode order, keyed by ordinal == the arena index
+   // ==========================================================================
+   logic [31:0] uv_mem [VSLOTS];
+   logic [VIW-1:0] uv_ra;
+   logic [31:0] uv_rd_q;
+@@ -351,13 +379,26 @@ module zhao_geom_vattr #(
+   logic [1:0]         w_st_q;
+   logic [23:0]        w_invw_q;
+   logic [ARENA_W-1:0] w_arena_q;
+   logic [INDEX_W-1:0] w_index_q;
+   logic signed [31:0] w_uow_q;
+ 
+-  assign dq_d_ready = (w_st_q == W_IDLE);
++  // u/v BEFORE ITS ROW -- A HANDSHAKE, NOT A TIMING (review of d52ae6c0). A
++  // row needs its vertex's u/v, staged at decode under the ordinal the landing
++  // names. Decode precedes projection for the same vertex in composition, but
++  // that is an ORDER between two independent paths, and the first version read
++  // `uv_mem` at the landing's index with no check that the ordinal had been
++  // staged: a landing that outran its decode would have multiplied the
++  // PREVIOUS batch's u/v into this one's row, silently. Now the depth result
++  // is not taken until its ordinal is staged (`uv_ord_q` has passed it); an
++  // index outside the store has no u/v to wait for (it is index_oob's).
++  wire [INDEX_W-1:0] dq_index_c = dq_tag[INDEX_W-1:0];
++  wire dq_in_store_c = in_store(dq_tag[TAGW-1 -: ARENA_W], dq_index_c);
++  wire uv_have_c     = !dq_in_store_c || (32'(dq_index_c) < 32'(uv_ord_q));
++  assign dq_d_ready  = (w_st_q == W_IDLE) && uv_have_c;
++  logic uv_wait_seen_q;   // this result's wait is already counted
+ 
+   // THE ONE MULTIPLIER, and the one rounding (qformats 4, round-half-up).
+   logic signed [15:0] mul_a_c;
+   logic signed [40:0] mul_p_c;
+   logic signed [31:0] mul_r_c;
+   always_comb begin
+@@ -410,13 +451,13 @@ module zhao_geom_vattr #(
+   logic [87:0]  pv_rd_q;
+   logic [50:0]  cl_rd_q;
+   logic         rd_in_q;
+ 
+   always_ff @(posedge clk) begin
+     // The three arrays: one synchronous write and one synchronous read each.
+-    if (uv_valid_i && (32'(uv_ord_q) < VSLOTS)) uv_mem[uv_ord_q[VIW-1:0]] <= {uv_v_i, uv_u_i};
++    if (uv_valid_i && (32'(uv_ord_c) < VSLOTS)) uv_mem[uv_ord_c[VIW-1:0]] <= {uv_v_i, uv_u_i};
+     uv_rd_q <= uv_mem[uv_ra];
+     if (pv_we_c) pv_mem[pv_wa_c] <= pv_wd_c;
+     pv_rd_q <= pv_mem[rd_row_c];
+     if (cl_we_c) cl_mem[cl_wa_c] <= c_rgb_q;
+     cl_rd_q <= cl_mem[rd_row_c];
+   end
+@@ -442,12 +483,13 @@ module zhao_geom_vattr #(
+   wire lq_drop_c = fl_valid_i && lq_full_c && !lq_pop_c;
+   wire [1:0] rows_inc_c = 2'(lq_drop_c) + 2'(w_st_q == W_V);
+ 
+   // ==========================================================================
+   // DONE: every landing has its row, every decoded vertex its colour
+   // ==========================================================================
++  wire row_lost_c = lq_drop_c || ((w_st_q == W_V) && !w_in_store_c);
+   assign done_o = (rows_b_q == lands_b_q) && (lit_ord_q == uv_ord_q) &&
+                   lq_empty_c && dq_idle && (w_st_q == W_IDLE) && (c_st_q == C_IDLE);
+ 
+   // ==========================================================================
+   // THE MACHINE
+   // ==========================================================================
+@@ -471,12 +513,15 @@ module zhao_geom_vattr #(
+       w_arena_q        <= '0;
+       w_index_q        <= '0;
+       w_uow_q          <= '0;
+       c_st_q           <= C_IDLE;
+       c_rgb_q          <= '0;
+       c_ord_q          <= '0;
++      poison_o         <= 1'b0;
++      uv_wait_seen_q   <= 1'b0;
++      uv_waits_o       <= '0;
+       rep_valid_o      <= 1'b0;
+       rd_in_q          <= 1'b0;
+       landings_o       <= '0;
+       rows_written_o   <= '0;
+       colours_written_o<= '0;
+       uv_staged_o      <= '0;
+@@ -497,30 +542,30 @@ module zhao_geom_vattr #(
+         lands_b_q    <= '0;
+         rows_b_q     <= '0;
+       end
+ 
+       // --- opens: the batch's arenas, and a fresh profile per arena --------
+       if (op_valid_i) begin
+-        if (op_n_q < 2'd2) sl_arena_q[op_n_q[0]] <= op_arena_i;
+-        if (!batch_i) op_n_q <= op_n_q + 2'd1;
++        if (op_n_c < 2'd2) sl_arena_q[op_n_c[0]] <= op_arena_i;
++        op_n_q <= op_n_c + 2'd1;
+         prof_seen_q[op_arena_i] <= 1'b0;
+       end
+ 
+       // --- u/v, staged by ordinal ------------------------------------------
+       if (uv_valid_i) begin
+         // An ordinal past VSLOTS is not staged; the landing it would serve is
+         // outside the store too and is counted there, once, on index_oob_o.
+-        if ((32'(uv_ord_q) < VSLOTS) && (uv_staged_o != 32'hFFFF_FFFF))
++        if ((32'(uv_ord_c) < VSLOTS) && (uv_staged_o != 32'hFFFF_FFFF))
+           uv_staged_o <= uv_staged_o + 32'd1;
+-        if (!batch_i) uv_ord_q <= uv_ord_q + (VIW+1)'(1);
++        uv_ord_q <= uv_ord_c + (VIW+1)'(1);
+       end
+ 
+       // --- landings: queued, or dropped and counted ------------------------
+       if (fl_valid_i) begin
+         if (landings_o != 32'hFFFF_FFFF) landings_o <= landings_o + 32'd1;
+-        if (!batch_i) lands_b_q <= lands_b_q + 32'd1;
++        lands_b_q <= lands_b_c + 32'd1;
+         if (!prof_seen_q[fl_arena_i]) begin
+           prof_q[fl_arena_i]      <= fl_profile_i;
+           prof_seen_q[fl_arena_i] <= 1'b1;
+         end else if ((prof_q[fl_arena_i] != fl_profile_i) &&
+                      (profile_mixed_o != 32'hFFFF_FFFF)) begin
+           profile_mixed_o <= profile_mixed_o + 32'd1;
+@@ -540,17 +585,28 @@ module zhao_geom_vattr #(
+         if (w_in_store_c) begin
+           if (rows_written_o != 32'hFFFF_FFFF) rows_written_o <= rows_written_o + 32'd1;
+         end else if (index_oob_o != 32'hFFFF_FFFF) begin
+           index_oob_o <= index_oob_o + 32'd1;
+         end
+       end
+-      if (!batch_i) rows_b_q <= rows_b_q + 32'(rows_inc_c);
++      if (batch_i || (rows_inc_c != 2'd0)) rows_b_q <= rows_b_c + 32'(rows_inc_c);
++
++      // --- the batch's poison: a row it owes will never be right -------------
++      if (batch_i)         poison_o <= row_lost_c;
++      else if (row_lost_c) poison_o <= 1'b1;
++
++      // --- a depth result that had to wait for its u/v, counted once ---------
++      if (dq_d_valid && (w_st_q == W_IDLE) && !uv_have_c && !uv_wait_seen_q) begin
++        uv_wait_seen_q <= 1'b1;
++        if (uv_waits_o != 32'hFFFF_FFFF) uv_waits_o <= uv_waits_o + 32'd1;
++      end
++      if (dq_d_valid && dq_d_ready) uv_wait_seen_q <= 1'b0;
+ 
+       // --- the row writer ----------------------------------------------------
+       case (w_st_q)
+-        W_IDLE: if (dq_d_valid) begin
++        W_IDLE: if (dq_d_valid && dq_d_ready) begin   // the SAME handshake the stream sees
+           w_invw_q  <= dq_invw;
+           w_arena_q <= dq_tag[TAGW-1 -: ARENA_W];
+           w_index_q <= dq_tag[INDEX_W-1:0];
+           w_st_q    <= W_U;
+         end
+         W_U: begin
+@@ -562,14 +618,14 @@ module zhao_geom_vattr #(
+       endcase
+ 
+       // --- the colour writer -------------------------------------------------
+       case (c_st_q)
+         C_IDLE: if (lit_take_c) begin
+           c_rgb_q <= {lit_b_i, lit_g_i, lit_r_i};
+-          c_ord_q <= lit_ord_q;
+-          if (!batch_i) lit_ord_q <= lit_ord_q + (VIW+1)'(1);
++          c_ord_q <= lit_ord_c;
++          lit_ord_q <= lit_ord_c + (VIW+1)'(1);
+           c_st_q  <= (views_need_q == 2'd0) ? C_IDLE : C_W0;
+         end
+         C_W0: begin
+           if (c_in_c && (colours_written_o != 32'hFFFF_FFFF))
+             colours_written_o <= colours_written_o + 32'd1;
+           c_st_q <= (views_need_q == 2'd2) ? C_W1 : C_IDLE;
+
+```
+
+# INPUT git show 94add368 -- fpga/rtl/geometry/zhao_geom_replay.sv
+```
+(no diff)
+```
+
+# INPUT git show 94add368 -- tests/geometry/geom_vattr_directed.cpp
+```
+94add368 GEOM.VATTR review of d52ae6c0: the u/v join is a HANDSHAKE, lost rows POISON the batch
+
+diff --git a/tests/geometry/geom_vattr_directed.cpp b/tests/geometry/geom_vattr_directed.cpp
+index b0ca68e1..1ebc808b 100644
+--- a/tests/geometry/geom_vattr_directed.cpp
++++ b/tests/geometry/geom_vattr_directed.cpp
+@@ -15,12 +15,23 @@
+ // in bursts of two (one per view) -- and then reads every row back through the
+ // lookup port with the arena's one-clock timing.
+ //
+ // Every counter the block exports is seen to MOVE by legal stimulus at its
+ // ports (cases C..G), and to stay at zero on the clean cases, so no mutant is
+ // owed. Case H MEASURES the rate R31 asks about.
++//
++// Review of d52ae6c0 (cases I..K, and the poison checks in A, C and G):
++//   I  landings AHEAD of their u/v -- the row writer WAITS (uv_waits_o fires)
++//      and every row is still the reference's; before the fix it multiplied
++//      the stage's stale words into the row.
++//   J  events ON the batch_i clock (an open and the first u/v) are the NEW
++//      batch's -- stored and counted under the same ordinal.
++//   K  done_o, read the way the composer reads it: at the first clock it is
++//      high after the last landing, every landing is a row or a counted loss.
++//   poison_o rises on a lost row (C drop, G out of store) and is low on a
++//   clean batch (A) -- the composer ORs it into REPLAY's handle poison.
+ #include <cstdint>
+ #include <cstdio>
+ #include <deque>
+ #include <random>
+ #include <vector>
+ 
+@@ -94,13 +105,14 @@ struct Bench {
+   }
+ 
+   // One batch through the producers. `land_every` spaces the vertices' landing
+   // PAIRS (both views back to back), `lit_lag` delays each colour after its
+   // u/v. Returns the clocks from the first landing to `done_o`.
+   long run_batch(const std::vector<Vtx>& vs, unsigned mask, const unsigned arena[2],
+-                 const unsigned prof[2], int land_every, int lit_lag, bool lit_before_opens = false) {
++                 const unsigned prof[2], int land_every, int lit_lag, bool lit_before_opens = false,
++                 int uv_delay = 0) {
+     const unsigned nviews = (mask & 1u) + ((mask >> 1) & 1u);
+     // batch boundary
+     zero();
+     t.batch_i = 1; t.batch_views_i = mask;
+     step();
+     zero();
+@@ -126,19 +138,22 @@ struct Bench {
+     }
+     // the event schedule
+     const unsigned first_uv = lit_before_opens ? 1u : 0u;
+     std::deque<std::pair<long, int>> uv_ev, lit_ev;      // (cycle, vertex)
+     std::deque<std::pair<long, std::pair<int, int>>> land_ev;  // (cycle, (vertex, view))
+     const long base = clocks + 2;
+-    for (unsigned i = first_uv; i < vs.size(); ++i) uv_ev.push_back({base + 2 * i, static_cast<int>(i)});
++    for (unsigned i = first_uv; i < vs.size(); ++i)
++      uv_ev.push_back({base + uv_delay + 2 * i, static_cast<int>(i)});
+     for (unsigned i = lit_before_opens ? 0u : 0u; i < vs.size(); ++i)
+-      lit_ev.push_back({base + 2 * i + lit_lag, static_cast<int>(i)});
++      lit_ev.push_back({base + uv_delay + 2 * i + lit_lag, static_cast<int>(i)});
+     for (unsigned i = 0; i < vs.size(); ++i)
+       for (unsigned k = 0; k < nviews; ++k)
+         land_ev.push_back({base + 20 + static_cast<long>(land_every) * i + k, {static_cast<int>(i), static_cast<int>(k)}});
+     const long first_land = land_ev.empty() ? clocks : land_ev.front().first;
++    const uint32_t land0 = t.landings_o, rows0 = t.rows_written_o, drop0 = t.lq_overflow_o,
++                   oob0 = t.index_oob_o;
+     int lit_pending = -1;
+     for (long guard = 0; guard < 200000; ++guard) {
+       zero();
+       if (!uv_ev.empty() && uv_ev.front().first <= clocks) {
+         const Vtx& x = vs[uv_ev.front().second];
+         t.uv_valid_i = 1; t.uv_u_i = static_cast<uint16_t>(x.u); t.uv_v_i = static_cast<uint16_t>(x.v);
+@@ -161,14 +176,21 @@ struct Bench {
+       t.eval();
+       const bool lit_took = t.lit_valid_i && t.lit_ready_o;
+       step();
+       if (lit_took) lit_pending = -1;
+       zero();
+       t.eval();
+-      if (uv_ev.empty() && lit_ev.empty() && land_ev.empty() && lit_pending < 0 && t.done_o)
++      if (uv_ev.empty() && lit_ev.empty() && land_ev.empty() && lit_pending < 0 && t.done_o) {
++        // K: what `done_o` promises the composer, checked at the clock it is
++        // first read: every landing of the batch is a written row or a
++        // counted loss -- no row is still owed.
++        const uint32_t owed = (t.landings_o - land0) - ((t.rows_written_o - rows0) +
++                                                        (t.lq_overflow_o - drop0) + (t.index_oob_o - oob0));
++        ck(owed == 0, "K: when done_o is first high, no landing's row is still owed");
+         return clocks - first_land;
++      }
+     }
+     return -1;
+   }
+ 
+   struct Row {
+     bool valid;
+@@ -234,12 +256,13 @@ int main(int argc, char** argv) {
+     ck(b.t.rows_written_o == 128 && b.t.landings_o == 128, "A: 128 landings, 128 rows");
+     ck(b.t.colours_written_o == 128, "A: 64 colours, each written into both views' arenas");
+     ck(b.t.uv_staged_o == 64, "A: 64 u/v staged");
+     ck(b.t.lq_overflow_o == 0 && b.t.index_oob_o == 0 && b.t.look_oob_o == 0 &&
+            b.t.profile_mixed_o == 0 && b.t.dq_refused_o == 0 && b.t.dq_stray_o == 0,
+        "A: no fault counter moved on a clean batch");
++    ck(b.t.poison_o == 0, "A: a clean batch is not poisoned");
+     std::printf("  A: 64 vertices x 2 views, landing pairs every 10 clocks: done %ld clocks after the first landing\n", t);
+   }
+ 
+   // ---- B: one view; colour offered before the opens is HELD, not mis-keyed --
+   {
+     const unsigned arena[2] = {3, 0}, prof[2] = {1, 1};
+@@ -261,12 +284,15 @@ int main(int argc, char** argv) {
+     const long t = b.run_batch(vs, 0b01, arena, prof, 1, 3);
+     ck(t > 0, "C: a batch with dropped landings still completes");
+     const uint32_t drops = b.t.lq_overflow_o - o0;
+     ck(drops > 0, "C: lq_overflow_o FIRES on a landing burst above the reciprocal's rate");
+     ck((b.t.rows_written_o - r0) + drops == b.t.landings_o - l0,
+        "C: every landing is either a written row or a counted drop -- none vanishes");
++    ck(b.t.poison_o == 1,
++       "C: a batch that dropped a row is POISONED -- REPLAY must not draw the stale row "
++       "the drop left behind");
+     std::printf("  C: 40 landings in 40 clocks -> %u dropped and counted, %u written\n", drops,
+                 b.t.rows_written_o - r0);
+   }
+ 
+   // ---- D: one arena, two profiles, is counted -------------------------------
+   {
+@@ -340,12 +366,13 @@ int main(int argc, char** argv) {
+     b.t.fl_valid_i = 1; b.t.fl_arena_i = 0; b.t.fl_index_i = 100; b.t.fl_w_i = 0x20000; b.t.fl_profile_i = 0;
+     b.step();
+     b.zero();
+     for (int g = 0; g < 400 && !b.t.done_o; ++g) { b.step(); b.t.eval(); }
+     ck(b.t.index_oob_o == i0 + 1, "G: index_oob_o counts a landing outside ARENAS x VSLOTS");
+     ck(b.t.done_o, "G: ... and the batch still completes");
++    ck(b.t.poison_o == 1, "G: ... POISONED, because the row it owes is nowhere");
+   }
+ 
+   // ---- H: THE RATE (owner ruling R31) ---------------------------------------
+   // The landing port cannot stall, so the store's capacity must exceed the
+   // arena's landing rate. That rate is bounded by GEOM.SKIN: two landings (one
+   // per view) per skinned vertex, one vertex per 12 clocks by construction and
+@@ -368,12 +395,67 @@ int main(int argc, char** argv) {
+       if (every >= 8) {
+         ck(t > 0 && drops == 0, "H: at and above the composed landing rate, nothing is dropped");
+         ck(b.verify(vs, 2, arena, prof) == 0, "H: and every row is the reference's");
+       }
+     }
+   }
++  // ---- I: landings AHEAD of their u/v (review of d52ae6c0) ------------------
++  // Every u/v arrives 600 clocks late -- after every landing of the batch. The
++  // depth results must WAIT for their ordinal to be staged; the rows must be
++  // the reference's (the previous batch's u/v sits in the stage the whole
++  // time, so a writer that did not wait would multiply it in).
++  {
++    const unsigned arena[2] = {1, 3}, prof[2] = {2, 0};
++    const auto vs = b.make(8, prof[0], prof[1]);  // 16 landings: fits the 16 contexts
++    const uint32_t w0 = b.t.uv_waits_o, d0 = b.t.lq_overflow_o;
++    const long t = b.run_batch(vs, 0b11, arena, prof, 10, 4, false, 600);
++    ck(t > 0, "I: a batch whose landings outran its u/v completes");
++    ck(b.t.lq_overflow_o == d0, "I: ... without dropping a landing while the writer waited");
++    ck(b.t.uv_waits_o - w0 > 0, "I: uv_waits_o FIRES -- depth results waited for their u/v");
++    ck(b.verify(vs, 2, arena, prof) == 0, "I: every row is the reference's: the wait made the join right");
++    ck(b.t.poison_o == 0, "I: waiting is not a loss -- the batch is not poisoned");
++    std::printf("  I: u/v 600 clocks behind the landings: %u result(s) waited\n", b.t.uv_waits_o - w0);
++  }
++
++  // ---- J: events ON the batch_i clock belong to the NEW batch -----------------
++  // The batch boundary, the first open and the first u/v on ONE clock. Before
++  // the review fix the array took the old ordinal and the counters held, so
++  // vertex 0's u/v landed at the previous batch's end and vertex 1 overwrote
++  // slot 0.
++  {
++    const unsigned arena[2] = {2, 0}, prof[2] = {1, 1};
++    const auto vs = b.make(6, prof[0], prof[1]);
++    b.zero();
++    b.t.batch_i = 1; b.t.batch_views_i = 0b01;
++    b.t.op_valid_i = 1; b.t.op_arena_i = arena[0];
++    b.t.uv_valid_i = 1; b.t.uv_u_i = static_cast<uint16_t>(vs[0].u); b.t.uv_v_i = static_cast<uint16_t>(vs[0].v);
++    b.step();
++    for (unsigned i = 1; i < vs.size(); ++i) {
++      b.zero();
++      b.t.uv_valid_i = 1; b.t.uv_u_i = static_cast<uint16_t>(vs[i].u); b.t.uv_v_i = static_cast<uint16_t>(vs[i].v);
++      b.step();
++    }
++    for (unsigned i = 0; i < vs.size(); ++i) {
++      b.zero();
++      b.t.lit_valid_i = 1; b.t.lit_r_i = vs[i].r; b.t.lit_g_i = vs[i].g; b.t.lit_b_i = vs[i].b;
++      b.t.eval();
++      for (int g = 0; g < 100 && !b.t.lit_ready_o; ++g) { b.step(); b.t.eval(); }
++      b.step();
++      b.zero();
++      b.t.fl_valid_i = 1; b.t.fl_arena_i = arena[0]; b.t.fl_index_i = i;
++      b.t.fl_w_i = vs[i].w[0]; b.t.fl_profile_i = prof[0];
++      b.step();
++      for (int g = 0; g < 8; ++g) { b.zero(); b.step(); }
++    }
++    b.zero();
++    for (int g = 0; g < 400 && !b.t.done_o; ++g) { b.step(); b.t.eval(); }
++    ck(b.t.done_o, "J: the batch whose open and first u/v rode the batch_i clock completes");
++    ck(b.verify(vs, 1, arena, prof) == 0,
++       "J: vertex 0's u/v, staged ON the boundary clock, keys row 0 of the NEW batch");
++  }
++
+   std::printf("geom_vattr_directed: %d checks, %d failed (landings=%u rows=%u colours=%u uv=%u "
+               "lq_overflow=%u index_oob=%u look_oob=%u mixed=%u dq_refused=%u dq_stray=%u)\n",
+               g_checks, g_fail, b.t.landings_o, b.t.rows_written_o, b.t.colours_written_o,
+               b.t.uv_staged_o, b.t.lq_overflow_o, b.t.index_oob_o, b.t.look_oob_o,
+               b.t.profile_mixed_o, b.t.dq_refused_o, b.t.dq_stray_o);
+   zhao::exit_hard(g_fail ? 1 : 0);
+
+```

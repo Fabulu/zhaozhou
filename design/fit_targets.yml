@@ -2526,6 +2526,8 @@ targets:
       - fpga/rtl/mem/zhao_mem_upload.sv
       # MATERIAL.RESOLVE, composed 2026-09-19 (cmdmem, R20).
       - fpga/rtl/texture/zhao_material_resolve.sv
+      # MEASURE.TOKENS, composed on its budget side 2026-09-19 (cmdmem, R18/R33).
+      - fpga/rtl/measure/zhao_measure_tokens.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv
       - fpga/rtl/raster/zhao_raster_fbwrite.sv
       # NOT zhao_raster_quant_fin.sv -- THERE IS NO SUCH FILE. The module is
