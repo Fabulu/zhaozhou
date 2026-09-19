@@ -392,3 +392,13 @@ tests/shell/v3_closure_inherited.vlt text eol=lf
 # regenerating it means diffing the two. Pinned on one side and not the other,
 # every line differs and the diff stops being evidence.
 tests/mutants/zhao_console_core_slot_overflow_mutant.sv text eol=lf
+
+# SYS.PLL / SYS.RESET and the board framework, added 2026-09-19. Pinned to LF
+# for the same reason as their siblings above: the Quartus-17 syntax gate and
+# the lint targets read these byte for byte, and git config --system
+# core.autocrlf is 	rue on this machine.
+fpga/rtl/sys/zhao_sys_pll.sv text eol=lf
+fpga/rtl/sys/zhao_sys_reset.sv text eol=lf
+fpga/rtl/prod/zhao_console_board.sv text eol=lf
+tests/platform/tb_zhao_sys_pll.sv text eol=lf
+tests/platform/tb_zhao_sys_reset.sv text eol=lf
