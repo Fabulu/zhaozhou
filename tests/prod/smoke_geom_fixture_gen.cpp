@@ -40,6 +40,7 @@
 
 #include "zref/zref_creature.hpp"
 #include "zref/zref_geom.hpp"
+#include "zref/zref_light_env.hpp"
 #include "zrender/internal.hpp"
 
 namespace zr = zref::render;
@@ -62,6 +63,16 @@ const V kVerts[] = {
     { 9 * kOne / 10, 9 * kOne / 10, kOne + kOne / 4},  // 7
 };
 constexpr int kNV = sizeof(kVerts) / sizeof(kVerts[0]);
+
+// Per-vertex texture coordinates, the record's s16 fx16 UV fields (GEOM.VDECODE
+// layout). DIFFERENT AT EVERY VERTEX (2026-09-19, entry I46) so the u/v_over_w
+// GEOM.VATTR writes -- zref::geom_over_w(uv, invw24) -- carry real gradients
+// into GEOM.ATTRPACK's planes. They do not move a single covered pixel: the
+// pixel gate is coverage, and coverage is geometry.
+const int16_t kU[] = {0x0800, -0x1000, 0x2400, 0x0100, -0x3000, 0x1800, 0x0000, 0x7000};
+const int16_t kV[] = {-0x0400, 0x0C00, 0x2000, -0x2800, 0x3400, 0x0600, 0x0000, -0x7000};
+static_assert(sizeof(kU) / sizeof(kU[0]) == kNV && sizeof(kV) / sizeof(kV[0]) == kNV,
+              "one UV pair per vertex");
 
 // Eight triangles, u8 local indices. Triangle 5 names the behind-the-eye vertex,
 // so GEOM.CLIP rejects it WHOLE in both views (the near plane is a whole-
@@ -89,13 +100,19 @@ const int32_t kMat[16] = {
 struct VP { uint32_t x0, y0, w, h; };
 const VP kVp[2] = {{0, 0, 32, 64}, {32, 0, 32, 64}};
 
-// ---- THE LIGHT (GEOM.LIGHT = zhao_light_stream, owner ruling R2) -----------
-// One light, gain 1.0 on all three channels, no emission, zero environment --
-// light_stream_directed.cpp's own convention, under which each output channel
-// IS the light response and is compared against the SHIPPED law. The direction
-// is (0.6, 0.8, 0), so the response to the fixture's normal is a real fraction.
-constexpr int32_t kLightX = 39322, kLightY = 52429, kLightZ = 0;
-constexpr uint32_t kGain = 0x10000;
+// ---- THE LIGHT: SetEnvironment 0x0311 -> GEOM.LIGHT's bank (owner ruling R25)
+// The smoke packet carries this record; CMD.EXEC lowers it through
+// GEOM.LIGHT.ENV into zhao_light_stream's bank. The expected lit colour is
+// derived from THE RECORD through the bridge (`zref::light_env::bank_of`) and
+// the light law, per channel. Yaw a quarter turn puts the sun in the x/y plane
+// and pitch 0x1000 (22.5 degrees) gives the fixture's +x normal a real
+// fraction; the three channels' colours differ so a channel swap shows, and
+// sun + ambient stays under 1.0 so nothing saturates. The power-on default
+// (sun at the zenith) lights a +x normal with ambient ONLY, so a vertex lit
+// before the record lands fails every channel.
+constexpr uint16_t kEnvYaw = 0x4000, kEnvPitch = 0x1000;
+constexpr uint16_t kEnvSun = (31u << 11) | (40u << 5) | 12u;  // 0xFD0C
+constexpr uint16_t kEnvAmb = (2u << 11) | (6u << 5) | 4u;     // 0x10C4
 // GEOM.SKIN.NORM's world normal for every fixture record: the packed normal is
 // (127, 0, 0) and w0 = 64 through the IDENTITY bind pose (no pose decoded, I29),
 // so n = (64 * 65536 * 127, 0, 0) and |n| = n.x (a perfect square). The smoke
@@ -196,6 +213,18 @@ std::string emit(const Result& r) {
   arr("SGF_VX", 0);
   arr("SGF_VY", 1);
   arr("SGF_VZ", 2);
+  auto arr16 = [&](const char* name, const int16_t* v) {
+    s += "localparam logic signed [15:0] ";
+    s += name;
+    std::snprintf(b, sizeof b, " [0:%d] = '{", kNV - 1); s += b;
+    for (int i = 0; i < kNV; ++i) {
+      std::snprintf(b, sizeof b, "16'sh%04X", static_cast<uint16_t>(v[i]));
+      s += b;
+      s += (i + 1 < kNV) ? ", " : "};\n";
+    }
+  };
+  arr16("SGF_VU", kU);
+  arr16("SGF_VV", kV);
   std::snprintf(b, sizeof b, "localparam logic [7:0] SGF_IX [0:%d] = '{", 3 * kNT - 1); s += b;
   for (int t = 0; t < kNT; ++t)
     for (int k = 0; k < 3; ++k) {
@@ -226,17 +255,36 @@ std::string emit(const Result& r) {
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_TILES    = %zu;  // union over both views\n", r.tiles.size()); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_EXP_PIXELS   = %zu;  // tiles x 16 x 16\n", r.tiles.size() * 256); s += b;
   {
+    zref::sky::EnvState env;
+    env.sun_yaw = zref::angle16{kEnvYaw};
+    env.sun_pitch = zref::angle16{kEnvPitch};
+    env.sun_colour.bits = kEnvSun;
+    env.ambient.bits = kEnvAmb;
+    const zref::light_env::Bank bank = zref::light_env::bank_of(env);
     const int64_t n[3] = {kSnNx, 0, 0};
-    const int32_t ndl = zref::creature::lambert_from_world_normal(n, kSnNx, kLightX, kLightY, kLightZ);
-    // rhu16(gain * ndl), then + ambient + spill (both zero), saturated at 1.0.
-    uint64_t lit = (uint64_t(kGain) * uint64_t(uint32_t(ndl)) + 32768u) >> 16;
-    if (lit > 65536u) lit = 65536u;
-    std::snprintf(b, sizeof b, "localparam logic signed [31:0] SGF_LIGHT_X = %s, SGF_LIGHT_Y = %s, SGF_LIGHT_Z = %s;\n",
-                  hex32(kLightX).c_str(), hex32(kLightY).c_str(), hex32(kLightZ).c_str());
+    const int32_t ndl = zref::creature::lambert_from_world_normal(
+        n, kSnNx, bank.light0_a[0], bank.light0_a[1], bank.light0_a[2]);
+    // Per channel: rhu16(gain_c * ndl) + ambient_c + spill_c (spill 0),
+    // saturated at 1.0 -- zhao_light_stream's law on the bank the record made.
+    unsigned __int128 rec = 0;
+    for (int w = 0; w < 4; ++w) rec |= static_cast<unsigned __int128>(bank.light0_b[w]) << (32 * w);
+    uint64_t lit[3];
+    for (int c = 0; c < 3; ++c) {
+      const uint64_t g20 = static_cast<uint64_t>(rec >> (20 * c)) & 0xFFFFFu;  // gain r, g, b
+      lit[c] = ((g20 * uint64_t(uint32_t(ndl)) + 32768u) >> 16) + bank.env[c] + bank.env[3 + c];
+      if (lit[c] > 65536u) lit[c] = 65536u;
+    }
+    std::snprintf(b, sizeof b,
+                  "localparam logic [15:0] SGF_ENV_YAW = 16'h%04X, SGF_ENV_PITCH = 16'h%04X, "
+                  "SGF_ENV_SUN = 16'h%04X, SGF_ENV_AMB = 16'h%04X;  // the SetEnvironment record\n",
+                  kEnvYaw, kEnvPitch, kEnvSun, kEnvAmb);
     s += b;
-    std::snprintf(b, sizeof b, "localparam logic [19:0] SGF_LIGHT_GAIN = 20'h%05X;\n", kGain); s += b;
-    std::snprintf(b, sizeof b, "localparam logic [16:0] SGF_EXP_LIT = 17'd%llu;  // zref::creature::lambert_from_world_normal = %d\n",
-                  static_cast<unsigned long long>(lit), ndl);
+    std::snprintf(b, sizeof b,
+                  "localparam logic [16:0] SGF_EXP_LIT_R = 17'd%llu, SGF_EXP_LIT_G = 17'd%llu, "
+                  "SGF_EXP_LIT_B = 17'd%llu;  // bank_of(record) -> L=(%d,%d,%d), ndl %d\n",
+                  static_cast<unsigned long long>(lit[0]), static_cast<unsigned long long>(lit[1]),
+                  static_cast<unsigned long long>(lit[2]), bank.light0_a[0], bank.light0_a[1],
+                  bank.light0_a[2], ndl);
     s += b;
   }
   s += "// Tiles, (tx,ty):";

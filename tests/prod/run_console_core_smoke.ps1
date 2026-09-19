@@ -100,25 +100,32 @@
 # switch: considered=1 fetched=1 culled=0, all seven refusals 0, beats=24,
 # decoded=4. Both halves are required before the zeros may be quoted.
 # ---------------------------------------------------------------------------
-# -BadAttribute: THE POSITIVE CONTROL FOR THE VERTEX-ATTRIBUTE STORE SEAM
+# -BadAttribute: RETIRED 2026-09-19 (geom2 packet, core entry I46 CLOSED)
 # ---------------------------------------------------------------------------
-# RETARGETED 2026-09-19 (geom packet), and the old target is written down so
-# nobody reaches for it again. It used to change vertex A's invw24 at the
-# bench's triangle door to 0x7F000000 so `zhao_raster_tile_pipe_v2`'s range
-# refusal sank every job. THE DOOR IS GONE: invw24 now comes from
-# GEOM.DEPTHQUANT inside GEOM.REPLAY, which cannot leave 24 bits by its own
-# law, so no bench stimulus can put an out-of-range value on lane 0 any more.
+# It made the bench's MODEL of the vertex-attribute store answer one lookup a
+# clock late, so GEOM.REPLAY's `att_skew_o` could be seen to fire in
+# composition. The store is no longer modelled: `zhao_geom_vattr` is composed
+# inside the core, so there is no bench-side store left to delay. The detector
+# is still fired by stimulus in tests/geometry/geom_replay_directed.cpp (case
+# I), and the plain run still asserts it zero. The switch is removed rather
+# than kept, because an inverted-polarity control whose define no longer
+# changes anything would PASS by failing for an unrelated reason -- or fail
+# forever -- and neither is evidence.
+# ---------------------------------------------------------------------------
+# -BadVertex: THE R31 CONTROL -- one refused vertex record must NOT deadlock
+# ---------------------------------------------------------------------------
+# Added 2026-09-19 (geom2 packet, owner ruling R31). Record 3 of the fixture
+# meshlet gets one nonzero reserved byte IN SDRAM (`+define+ZHAO_SMOKE_BAD_VERTEX`,
+# a plain `ifdef`) and nothing else changes. GEOM.VDECODE refuses it; before the
+# fix GEOM.GROUP_SEQ then waited for a vertex that could never arrive and the
+# whole geometry path stopped -- the run died at "GEOM.REPLAY released no
+# meshlet". Now the refusal reaches GROUP_SEQ as a HOLE, both groups are handed
+# over POISONED, GEOM.REPLAY drops the batch's triangles and releases it.
 #
-# What the switch proves now is the NEW seam that composition opened: the
-# vertex-attribute store (core entry I46, owner ruling R11) must answer on the
-# same clock as the arena, or slots 1..6 belong to a different lookup than
-# the corner they ride with. With -BadAttribute the bench's store model answers
-# the FIRST lookup of the run ONE CLOCK LATE (`+define+ZHAO_SMOKE_BAD_ATTR`, a
-# plain `ifdef`). GEOM.REPLAY's `att_skew_o` compares two memories' timings --
-# independent operands -- and the bench asserts it zero. MEASURED 2026-09-19:
-# att_skew=1 and the run stops there. Its polarity is INVERTED: the control
-# passes when the run FAILS.
-#[CmdletBinding()]
+# Its polarity is DIRECT, unlike the three above: the bench asserts the CORRECT
+# behaviour (refused=1, holes=1, groups_poisoned=2, replay_poisoned=SGF_N_TRIS,
+# pixels=0, frames_admitted=1) and passes only if all of it holds. The negative
+# control is the plain run, which asserts all four R31 counters ZERO.#[CmdletBinding()]
 param(
   [string]$Repo    = $null,
   [string]$BuildIn = $null,
@@ -126,7 +133,7 @@ param(
   [switch]$Mutant,
   [switch]$NoTableLoad,
   [switch]$BadDescriptor,
-  [switch]$BadAttribute
+  [switch]$BadVertex
 )
 
 $ErrorActionPreference = 'Stop'
@@ -149,7 +156,7 @@ if (-not $BuildIn) {
   $tag = if ($Mutant) { 'zhao_console_core_smoke_mut' }
          elseif ($NoTableLoad) { 'zhao_console_core_smoke_notbl' }
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
-         elseif ($BadAttribute) { 'zhao_console_core_smoke_badattr' }
+         elseif ($BadVertex) { 'zhao_console_core_smoke_badvtx' }
          else { 'zhao_console_core_smoke' }
   # PER CHECKOUT. The default used to be one %TEMP% directory for every
   # checkout on the machine, so concurrent packets in separate worktrees
@@ -204,9 +211,9 @@ if ($NoTableLoad) {
   $defs += '+define+ZHAO_SMOKE_SKIP_TBL_LOAD'
   Write-Host 'NEGATIVE CONTROL: PART.TABLE is NOT loaded, INVERTED POLARITY (passes when the run FAILS)'
 }
-if ($BadAttribute) {
-  $defs += '+define+ZHAO_SMOKE_BAD_ATTR'
-  Write-Host 'POSITIVE CONTROL: the attribute store answers one lookup ONE CLOCK LATE, INVERTED POLARITY (passes when the run FAILS)'
+if ($BadVertex) {
+  $defs += '+define+ZHAO_SMOKE_BAD_VERTEX'
+  Write-Host 'R31 CONTROL: ONE vertex record carries a nonzero reserved byte IN SDRAM, DIRECT polarity (passes when the batch drops and the frame completes)'
 }
 if ($BadDescriptor) {
   $defs += '+define+ZHAO_SMOKE_BAD_DESC'
@@ -306,18 +313,6 @@ if ($BadDescriptor) {
     exit 1
   }
   Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one corrupted descriptor byte, as it must."
-  exit 0
-}
-if ($BadAttribute) {
-  # INVERTED. A zero here would mean the Packet-D attribute planes
-  # GEOM.ATTRPACK builds are not what the rasteriser interpolates, because
-  # changing a vertex attribute changed nothing. Everything the
-  # composition claims about the picture rests on this one.
-  if ($rc -eq 0) {
-    Write-Host 'POSITIVE CONTROL FAILED: the run PASSED with the attribute store out of step with the arena. GEOM.REPLAY''s att_skew_o cannot fire, or the bench no longer asserts it.'
-    exit 1
-  }
-  Write-Host "POSITIVE CONTROL PASS: the run failed (rc=$rc) with one late attribute-store reply, as it must."
   exit 0
 }
 exit $rc

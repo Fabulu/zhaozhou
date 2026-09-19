@@ -79,6 +79,15 @@ struct Env {
     v->rel_valid_i = 0;
     v->fill_landed_i = 0;
     v->fill_arena_i = 0;
+    v->hole_i = 0;
+  }
+
+  // One clock with VDECODE's refusal pulse raised: a record of the held job
+  // that will never arrive on the vertex stream.
+  void hole() {
+    v->hole_i = 1;
+    step();
+    v->hole_i = 0;
   }
 
   // One cycle with every modelled peer live. Returns nothing; all observation
@@ -180,7 +189,7 @@ struct Env {
 
   // Let the machine drain, seal and offer its handles; collect them.
   struct Handle {
-    uint32_t arena, gen, count, view, src;
+    uint32_t arena, gen, count, view, src, poison;
   };
   std::vector<Handle> collect(int want, int guard_cycles = 400) {
     std::vector<Handle> out;
@@ -190,7 +199,8 @@ struct Env {
       v->eval();
       if (v->grp_valid_o && v->grp_ready_i) {
         out.push_back(
-            Handle{v->grp_arena_o, v->grp_gen_o, v->grp_count_o, v->grp_view_o, v->grp_src_id_o});
+            Handle{v->grp_arena_o, v->grp_gen_o, v->grp_count_o, v->grp_view_o, v->grp_src_id_o,
+                   v->grp_poison_o});
       }
       step();
     }
@@ -282,7 +292,7 @@ int main(int argc, char** argv) {
   {
     const uint32_t op0 = r.groups_opened_o;
     const uint32_t sl0 = r.groups_sealed_o;
-    const uint32_t vs0 = r.vertices_sent_o;
+    const uint32_t vs0 = r.view_vertices_sent_o;
     const uint32_t ld0 = r.landings_o;
     const int seals0 = e.seal_pulses;
     const int short0 = e.seal_while_short;
@@ -293,8 +303,8 @@ int main(int argc, char** argv) {
           r.groups_opened_o - op0);
 
     e.feed_vertices(5);
-    check(r.vertices_sent_o - vs0 == 5, "five vertices, one view: five client-A accepts", 5,
-          r.vertices_sent_o - vs0);
+    check(r.view_vertices_sent_o - vs0 == 5, "five vertices, one view: five client-A accepts", 5,
+          r.view_vertices_sent_o - vs0);
 
     // The seal must NOT have happened yet: the landings are still in flight.
     // This is the load-bearing check of the whole file.
@@ -315,6 +325,7 @@ int main(int argc, char** argv) {
       check(handles[0].count == 5, "handle carries the job's count", 5, handles[0].count);
       check(handles[0].view == 0, "handle carries view 0 for mask 0b01", 0, handles[0].view);
       check(handles[0].src == 0xBEEF, "handle carries src_id unchanged", 0xBEEF, handles[0].src);
+      check(handles[0].poison == 0, "a batch with no hole is NOT poisoned", 0, handles[0].poison);
       // The generation the LANE offered in the open cycle, not one sampled a
       // cycle late. e.opens was 0 before this open, so 0x50 was offered.
       check(handles[0].gen == 0x50,
@@ -336,7 +347,7 @@ int main(int argc, char** argv) {
   {
     const uint32_t op0 = r.groups_opened_o;
     const uint32_t sl0 = r.groups_sealed_o;
-    const uint32_t vs0 = r.vertices_sent_o;
+    const uint32_t vs0 = r.view_vertices_sent_o;
     const uint32_t ld0 = r.landings_o;
     const int vt0 = e.vertices_taken;
     const int short0 = e.seal_while_short;
@@ -351,8 +362,8 @@ int main(int argc, char** argv) {
           "the vertex stream is consumed ONCE -- skinning is view-independent "
           "and must not be paid for twice",
           3, e.vertices_taken - vt0);
-    check(r.vertices_sent_o - vs0 == 6, "... and each vertex is projected TWICE, once per view", 6,
-          r.vertices_sent_o - vs0);
+    check(r.view_vertices_sent_o - vs0 == 6, "... and each vertex is projected TWICE, once per view", 6,
+          r.view_vertices_sent_o - vs0);
 
     const auto handles = e.collect(2);
     check(handles.size() == 2, "a dual-view job hands over TWO groups", 2, handles.size());
@@ -467,6 +478,141 @@ int main(int argc, char** argv) {
           "releasing an arena that is not held is counted, not ignored -- a "
           "double release would otherwise free a live arena silently",
           1, r.rel_unheld_o - ru0);
+  }
+
+  // =========================================================================
+  // CASE 7 -- R31: a record GEOM.VDECODE REFUSES is a HOLE, and the batch still
+  // ends. Before the fix every sub-case below wedged in StFill (or StSealWait)
+  // for ever -- no seal, no handle -- and no counter moved. Each sub-case
+  // asserts the CORRECT behaviour (the handle arrives, poisoned); the counters
+  // are asserted as deltas beside it.
+  //
+  // Fresh reset: case 5 leaves a dual-view job parked in StAlloc on purpose.
+  // =========================================================================
+  e.reset();
+  {
+    // ---- 7a: one hole in the middle of a single-view batch -----------------
+    const uint32_t h0 = r.holes_o, p0 = r.groups_poisoned_o, ld0 = r.landings_o;
+    const uint32_t sl0 = r.groups_sealed_o;
+    const int short0 = e.seal_while_short;
+    e.offer_job(5, 0x1, 0x0701);
+    e.settle(2);
+    e.feed_vertices(2);
+    e.hole();  // record 2 of 5 was refused upstream
+    e.feed_vertices(2);
+    const auto hs = e.collect(1);
+    check(hs.size() == 1,
+          "R31: a batch with ONE refused record still seals and hands over -- "
+          "before the fix it waited in StFill for a fifth vertex that could "
+          "never arrive, and the whole geometry path deadlocked",
+          1, hs.size());
+    if (!hs.empty()) {
+      check(hs[0].poison == 1, "R31: that handle is POISONED (the batch drops, not the frame)", 1,
+            hs[0].poison);
+    }
+    check(r.holes_o - h0 == 1, "R31: holes_o counts the refused record", 1, r.holes_o - h0);
+    check(r.groups_poisoned_o - p0 == 1, "R31: groups_poisoned_o counts the marked handle", 1,
+          r.groups_poisoned_o - p0);
+    check(r.landings_o - ld0 == 4, "R31: four vertices sent, four landings -- a hole never lands", 4,
+          r.landings_o - ld0);
+    check(r.groups_sealed_o - sl0 == 1, "R31: the poisoned arena is sealed exactly once", 1,
+          r.groups_sealed_o - sl0);
+    check(e.seal_while_short - short0 == 0,
+          "R31: the seal still waited for every landing of the vertices that WERE sent", 0,
+          e.seal_while_short - short0);
+    if (!hs.empty()) e.release(hs[0].arena);
+
+    // ---- 7b: EVERY record refused, both views, holes arriving in StAlloc ---
+    const uint32_t h1 = r.holes_o, p1 = r.groups_poisoned_o, ld1 = r.landings_o;
+    const uint32_t vs1 = r.view_vertices_sent_o;
+    e.offer_job(3, 0x3, 0x0702);
+    e.hole();  // the first refusal lands while the SECOND arena is being opened
+    e.hole();
+    e.hole();
+    const auto hb = e.collect(2);
+    check(hb.size() == 2,
+          "R31: a batch whose every record was refused still hands over BOTH "
+          "views' groups -- there is no vertex at all to trigger the fill's end",
+          2, hb.size());
+    if (hb.size() == 2) {
+      check(hb[0].poison == 1 && hb[1].poison == 1, "R31: both views' handles are poisoned", 1,
+            (hb[0].poison && hb[1].poison) ? 1 : 0);
+    }
+    check(r.holes_o - h1 == 3, "R31: three holes charged to the job", 3, r.holes_o - h1);
+    check(r.groups_poisoned_o - p1 == 2, "R31: two poisoned handles", 2, r.groups_poisoned_o - p1);
+    check(r.landings_o - ld1 == 0 && r.view_vertices_sent_o - vs1 == 0,
+          "R31: nothing projected, nothing landed", 0, (r.landings_o - ld1) + (r.view_vertices_sent_o - vs1));
+    for (const auto& h : hb) e.release(h.arena);
+
+    // ---- 7c: an EARLY hole (no job held) is CARRIED to the next job --------
+    // Review of 3dae8f10: the first version counted this as an orphan and
+    // charged nothing, so the next job waited for vertices + holes == count
+    // with one record missing -- the R31 hang moved one state earlier.
+    const uint32_t o0 = r.holes_early_o, h2 = r.holes_o, p2 = r.groups_poisoned_o;
+    e.settle(4);
+    e.hole();
+    check(r.holes_early_o - o0 == 1, "R31: a hole with no job held is counted as EARLY", 1,
+          r.holes_early_o - o0);
+    e.offer_job(3, 0x1, 0x0704);
+    e.settle(2);
+    e.feed_vertices(2);
+    const auto he = e.collect(1);
+    check(he.size() == 1,
+          "R31: the early hole is charged to the NEXT job, which ends at 2 vertices "
+          "+ 1 hole == 3 -- it did not wait for a third vertex that never comes",
+          1, he.size());
+    if (!he.empty()) {
+      check(he[0].poison == 1, "R31: ... and that job's handle is poisoned", 1, he[0].poison);
+      e.release(he[0].arena);
+    }
+    check(r.holes_o - h2 == 1, "R31: holes_o counts it once", 1, r.holes_o - h2);
+    check(r.groups_poisoned_o - p2 == 1, "R31: one poisoned handle", 1, r.groups_poisoned_o - p2);
+
+    // ---- 7d: a hole ON the StIdle -> StAlloc boundary (the accept clock) ----
+    {
+      const uint32_t o1 = r.holes_early_o, p3 = r.groups_poisoned_o;
+      e.settle(4);
+      e.v->job_valid_i = 1;
+      e.v->job_count_i = 2;
+      e.v->job_view_mask_i = 0x3;
+      e.v->job_src_id_i = 0x0705;
+      e.v->hole_i = 1;
+      e.v->eval();
+      check(e.v->job_ready_o == 1, "R31: the job is accepted on the very clock the hole arrives", 1,
+            e.v->job_ready_o);
+      e.step();
+      e.v->hole_i = 0;
+      e.v->job_valid_i = 0;
+      e.settle(2);
+      e.feed_vertices(1);
+      const auto hd = e.collect(2);
+      check(hd.size() == 2,
+            "R31: a hole on the accept clock is charged to the job accepted: 1 vertex "
+            "+ 1 hole == 2 ends the fill for both views",
+            2, hd.size());
+      if (hd.size() == 2) {
+        check(hd[0].poison == 1 && hd[1].poison == 1, "R31: both handles poisoned", 1,
+              (hd[0].poison && hd[1].poison) ? 1 : 0);
+      }
+      check(r.holes_early_o - o1 == 0, "R31: ... and it was NOT carried as early", 0,
+            r.holes_early_o - o1);
+      check(r.groups_poisoned_o - p3 == 2, "R31: two poisoned handles", 2, r.groups_poisoned_o - p3);
+      for (const auto& h : hd) e.release(h.arena);
+    }
+
+    // ---- 7e: the NEXT clean batch is clean: holes do not leak across jobs --
+    const uint32_t p4 = r.groups_poisoned_o;
+    e.offer_job(2, 0x1, 0x0703);
+    e.settle(2);
+    e.feed_vertices(2);
+    const auto hc = e.collect(1);
+    check(hc.size() == 1 && hc[0].poison == 0,
+          "R31: a clean batch after a poisoned one is NOT poisoned -- the hole "
+          "count is per job",
+          0, hc.empty() ? 99u : hc[0].poison);
+    check(r.groups_poisoned_o - p4 == 0, "R31: no poisoned handle for the clean batch", 0,
+          r.groups_poisoned_o - p4);
+    check(r.seal_early_o == 0, "R31: no early seal anywhere in the hole cases", 0, r.seal_early_o);
   }
 
   // =========================================================================

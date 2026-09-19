@@ -97,6 +97,14 @@ module tb_cmd_exec_pair #(
     output logic [ 7:0] upl_dst_slot_o,
     output logic [15:0] upl_new_gen_o,
     output logic [31:0] upl_crc_o,
+    // ---- R25: SetEnvironment, toward zhao_light_env -----------------------
+    output logic        env_valid_o,
+    input  logic        env_ready_i,
+    output logic [15:0] env_sun_yaw_o,
+    output logic [15:0] env_sun_pitch_o,
+    output logic [15:0] env_sun_colour_o,
+    output logic [15:0] env_ambient_o,
+    output logic [31:0] envs_issued_o,
 
     // ---- CMD.EXEC's evidence ---------------------------------------------
     output logic [31:0] packets_committed_o,
@@ -206,6 +214,13 @@ module tb_cmd_exec_pair #(
       .upl_dst_slot_o (upl_dst_slot_o),
       .upl_new_gen_o  (upl_new_gen_o),
       .upl_crc_o      (upl_crc_o),
+      .env_valid_o     (env_valid_o),
+      .env_ready_i     (env_ready_i),
+      .env_sun_yaw_o   (env_sun_yaw_o),
+      .env_sun_pitch_o (env_sun_pitch_o),
+      .env_sun_colour_o(env_sun_colour_o),
+      .env_ambient_o   (env_ambient_o),
+      .envs_issued_o   (envs_issued_o),
 
       .packets_committed_o  (packets_committed_o),
       .packets_abandoned_o  (packets_abandoned_o),

@@ -527,8 +527,65 @@
 //    own handshake through `zhao_light_skin_adapter` -- the creature seam,
 //    narrowed by assertion -- on the creature path the two blocks' contracts
 //    name (magnitude supplied, early clamp). The normal still leaves as a TAP;
-//    its `_ready_i` port is gone. What the light produces is I46's (the store
-//    writer's r/g/b), and what configures it is I48.
+//    its `_ready_i` port is gone. What the light produces is GEOM.VATTR's r/g/b
+//    (I46, closed), and what configures it is SetEnvironment (I48, closed).
+//
+//  * I48 was GEOM.LIGHT's DESCRIPTOR BANK (`geom_light_cfg_*`,
+//    `geom_light_nlights_i`), host-written. CLOSED AND DELETED 2026-09-19 (geom2
+//    packet) by owner ruling R25: "Promote SetEnvironment 0x0311 from reserved
+//    to IMPLEMENTED. The bank's Q16.16 / u20-gain values are THE LAW; section
+//    4a's u8 formula becomes a derived view with a zref bridge. CMD.EXEC lowers
+//    SetEnvironment into the bank." 0x0311 is `implemented` in
+//    spec/commands.zidl; the bridge is `zref::light_env::bank_of`
+//    (reference/include/zref/zref_light_env.hpp), every value derived from a
+//    4a sentence it quotes; CMD.EXEC stages the record like SetView and
+//    presents it only on a clean verdict; `zhao_light_env` (GEOM.LIGHT.ENV,
+//    `u_light_env`) computes the sun direction on its own `zhao_field_sin`,
+//    writes light 0 and the environment words and commits once, holding the
+//    stream's vertex input until the stream is idle, so no vertex is lit under
+//    a half-written bank and no bank write can be refused. The power-on default
+//    is that same path applied to 4a's default record, not a reset constant.
+//    Five host ports left the list. TINT and FOG ride the record and are NOT
+//    bank words; the bridge header says why and where they go.
+//    Evidence: light_env_directed (every bank word of 400 random records and
+//    the power-on default against the bridge, hold, supersede fired),
+//    cmd_exec_directed cases 17/18, and the smoke bench, whose packet now
+//    carries a SetEnvironment and whose every lit vertex is checked per channel
+//    against the reference applied to THAT record.
+//
+//  * I46 was THE VERTEX-ATTRIBUTE STORE's WRITER (`geom_att_look_*`,
+//    `geom_att_rep_*`, and GEOM.LIGHT's ready). CLOSED AND DELETED 2026-09-19
+//    (geom2 packet), under owner rulings R11 and R31. It said the writer was
+//    "a join between two things that move independently unless one block owns
+//    both". `zhao_geom_vattr` (GEOM.VATTR) is that block, composed as
+//    `u_geom_vattr` at section 11. It owns the INDEX'S DEFINITION rather than
+//    joining streams: GROUP_SEQ's arena index is the ordinal of a batch's
+//    decoded vertices, and the store keys u/v and colour by the same ordinal
+//    of the same events; the per-view row is written at the LANDING, whose
+//    rider IS {arena, index}. invw24 (GEOM.DEPTHQUANT, now streamed once per
+//    landed vertex instead of three lanes per triangle corner inside REPLAY),
+//    u_over_w/v_over_w (`zref::geom_over_w`, derived from qformats 8's three
+//    formats), the lit colour and alpha (ALPHA_C, opaque: format 0 carries no
+//    alpha and GEOM.LIGHT emits none) are all its rows; its `done_o` gates
+//    GROUP_SEQ's handle so REPLAY never reads a row that is not written yet.
+//    Eleven `geom_att_*` ports and `geom_light_ready_i` left the list rather
+//    than being driven; REPLAY's per-view-triangle cost went from 56 clocks
+//    to 5 (geom_replay_directed case B). Evidence: geom_vattr_directed (every
+//    row both views against zref::depth_of_raw and zref::geom_over_w, every
+//    counter fired), geom_depthquant_stream_directed, the smoke's VATTR census.
+//
+//  * I12 was GEOM.PROJ_LANE's ARENA ORIGIN (`geom_org_*`, `geom_rep_org_*`).
+//    CLOSED AND DELETED 2026-09-19 (geom2 packet) by owner ruling R27: "No
+//    arena-origin producer is owed in v1: the projector consumes WORLD
+//    positions, so nothing reads the origin. Remove the dead port pair and
+//    record the ruling. It carries no function, so removing it removes none."
+//    The entry itself had said so -- "nothing in this console writes it and
+//    nothing reads it" -- and that was checked before removing: the only
+//    reader of the arena's rep_org_* was this module's edge. Eight ports left
+//    the list; `zhao_geom_proj_lane` holds the shared arena primitive's origin
+//    write disabled, as `zhao_terrain_wcache` always has, and the primitive's
+//    own tested origin feature is untouched. If a rebased-coordinate producer
+//    is ever ruled in, it arrives as a NEW entry against that ruling.
 //
 //  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
 //    closed contradiction between three ratified contracts rather than a
@@ -909,17 +966,6 @@
 //      Deleted rather than marked closed, for the reason I4 gives above: a
 //      stale closed entry under-reports progress exactly as deleting an open
 //      one would over-report it. The successor gap is I29, one level up.)
-//
-// I12. GEOM.PROJ_LANE's ARENA ORIGIN (`geom_org_*`, `geom_rep_org_*`) --
-//      BOUNDARY, NARROWED 2026-09-19. The lookup/reply half is CLOSED:
-//      GEOM.REPLAY (`zhao_geom_replay`) is the customer I11 specified and it
-//      drives the lane's lookup port. What stays at the edge is the per-arena
-//      ORIGIN datum: nothing in this console writes it and nothing reads it --
-//      the replay's screen triangles never need a world origin, because the
-//      projector is handed world positions. Whether a rebased-coordinate
-//      producer is ever owed (group_seq's header says its vertices are
-//      "LOCAL (rebased) coords") is the question this entry now carries, and it
-//      is a ruling about coordinates, not a wire.
 //
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
 //      CORRECTED 2026-09-19 (geom packet): the GEOMETRY side of this sentence
@@ -1490,9 +1536,9 @@
 // I24. GEOM.CLIP's CULL MODE (`geom_clip_cull_mode_i`) -- BOUNDARY, NARROWED
 //      2026-09-19 (geom packet). The TRIANGLE and its three ATTRIBUTE PACKETS
 //      are CLOSED: GEOM.REPLAY presents the corners and behind bits straight
-//      out of the arena, and the packet is built at section 11 from
-//      GEOM.DEPTHQUANT's invw24 (slot 0) and the vertex-attribute store's
-//      slots 1..6 (whose writer is entry I46). The bench's triangle door and
+//      out of the arena, and the packet is built at section 11 from GEOM.VATTR's
+//      answer: invw24 (slot 0, GEOM.DEPTHQUANT's, streamed per landed vertex)
+//      and slots 1..6 (entry I46, closed 2026-09-19). The bench's triangle door and
 //      its sixteen hand-placed triangles are GONE. The cull mode is per-draw
 //      RASTER STATE; the descriptor's raster word is I39's and has no producer,
 //      so this port stays, and its reset value NONE is `zhao_geom_clip`'s
@@ -2100,8 +2146,17 @@
 //          GEOM.ASSETFETCH's `s_*` port". It rides to GEOM.REPLAY's output and
 //          its consumer there is MATERIAL.RESOLVE's request, entry I20.
 //        * THE TRIANGLE OUTPUT goes to GEOM.REPLAY.
-//      What stays is the descriptor's RASTER WORD: no producer anywhere, no
-//      ratified layout, and the cull mode (I24) is waiting on the same word.
+//      What stays is the descriptor's RASTER WORD, and the cull mode (I24) is
+//      waiting on the same word. Its LAYOUT is RATIFIED since 2026-09-19 (owner
+//      ruling R28, geom2): raster_state[1:0] = the draw's cull mode from
+//      DrawForm.flags[3:2], [31:2] = MaterialRecord.raster_state[31:2]
+//      (spec/commands.zidl, design/contracts/GEOM.PARAMBUF.md,
+//      `zref::raster_state`). What it still lacks is a PATH: the draw's flags
+//      leave CMD.EXEC on `cmd_draw_*` (I41) but reach no meshlet until a draw
+//      becomes a GEOM.MESHFETCH job (I36, owner ruling R29). Wiring
+//      `cmd_draw_flags_o` here before that would pair meshlet N's triangles
+//      with draw M's cull mode -- the drift this entry refuses for the
+//      material. So I39 and I24 stay open, now for ONE reason, and it is I36.
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
 //      the core assigns both, in the same standing as I9 and I25.
@@ -2322,60 +2377,6 @@
 //      `actual_fx` is a differential against a reference, and the console has
 //      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
 //      too. One absent owner, two blocks waiting on it.
-//
-// I46. THE VERTEX-ATTRIBUTE STORE's WRITER (`geom_att_look_*`,
-//      `geom_att_rep_*`, and GEOM.LIGHT's `geom_light_valid_o`/`_r/g/b_o`) --
-//      BOUNDARY. GEOM.LIGHT is composed (R2) and its lit RGB is exactly the
-//      r/g/b this writer is to store, so it leaves the module here with a real
-//      ready rather than being dropped. NEW 2026-09-19 (geom packet), and it is
-//      the one seam composing GEOM.REPLAY OPENED rather than closed.
-//
-//      WHAT IS REAL. Slots 1..6 of the ruling-5 packet -- u_over_w, v_over_w,
-//      r, g, b, alpha -- are per-vertex, per-view quantities, and owner ruling
-//      R11 (provisional, 2026-09-19) puts them in a store KEYED EXACTLY LIKE
-//      THE ARENA and read by the SAME three lookups. So the READ side is real
-//      and composed: the store listens to GEOM.REPLAY's lookup nets
-//      (`geom_att_look_*` are those nets, not a copy), and the replay counts
-//      every clock the store and the arena disagree about timing on
-//      `geom_rp_att_skew_o` -- two memories, independent operands, fired in the
-//      directed test and by the smoke bench's `-BadAttribute` control.
-//
-//      WHAT IS NOT. The store's WRITER. R11 rules it is written "at the same
-//      moment and from the same producer that writes the arena position":
-//      VDECODE/SKIN for u/v (times the view's 1/w for the over-w form) and
-//      `zhao_light_stream` (R2) for r/g/b/alpha -- WITHOUT widening the
-//      palette, skin or group payloads. Keying a value that exists at decode
-//      time by an arena index that exists only at GEOM.GROUP_SEQ's issue is a
-//      join between two things that move independently unless one block owns
-//      both, and designing that owner is its own packet (the coordinator's
-//      split). Until it exists the store is a port pair, and the smoke bench
-//      models it with the arena's contract exactly as it models SDRAM.
-//
-// I48. GEOM.LIGHT's DESCRIPTOR BANK (`geom_light_cfg_*`, `geom_light_nlights_i`)
-//      -- BOUNDARY. NEW 2026-09-19 (geom packet), opened by composing
-//      `zhao_light_stream` under owner ruling R2.
-//
-//      The bank is prepared state -- per light a Q16.16 direction and detail, six
-//      u20 gains; an environment of ambient and spill -- published atomically by
-//      `cfg_commit_i`. Its host is the HPS, as for I14's matrices. Its COMMAND is
-//      `SetEnvironment 0x0311` (`spec/sky_and_beams.md` 4a), and two things stand
-//      between that record and these ports -- stated precisely, because the first
-//      draft of this entry said "no ratified law" and that was FALSE:
-//        * RATIFIED, and so NOT the blocker: the sun DIRECTION law,
-//          L = (fx_mul(cos p, sin y), sin p, fx_mul(cos p, cos y)) with fx_sin /
-//          fx_cos (qformats 7.1), and the rgb565 -> 8-bit expansion by bit
-//          replication. Both are 4a's own text.
-//        * NOT ratified: (1) the opcode is `reserved`, not `implemented` -- its
-//          execution "lands with the weather/lighting wave", an ABI status only
-//          the owner moves; (2) the BRIDGE from 4a's u8 lit law,
-//          sat_u8(ambient_c + rescale_u(sun_c * ndl, 8)), to this bank's Q16.16
-//          gains and separately-rounded products. R2 moved OWNERSHIP to
-//          `zhao_light_stream` (4a is amended to say so, 2026-09-19) but did not
-//          write the numeric bridge, and the two laws round differently.
-//      OWNER DECISION (recommendation in FINDINGS-geom.md): mark 0x0311
-//      implemented and ratify the bridge; then CMD.EXEC lowers it onto these
-//      ports as it lowers SetView onto the projector's, with the 4a direction
-//      computed by the existing `zhao_field_sin`.
 //
 // I49. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
 //      BOUNDARY. NEW 2026-09-19 (cmdmem packet, ruling R20), opened in the
@@ -2915,21 +2916,22 @@
 //     `console_inventory.yml` and `prod_manifest.yml` record the supersession,
 //     so the rename-shaped supersession no tool detects is now written down in
 //     all three places a tool reads.
-//   * THE DESCRIPTOR BANK -- still has no COMMAND producer, and the reason is
-//     now exactly one sentence: no ratified law converts SetEnvironment's
-//     one-sun rgb565/angle16 record into the bank's Q16.16 / u20 form. Entry I48.
+//   * THE DESCRIPTOR BANK -- CLOSED 2026-09-19 (geom2, owner ruling R25):
+//     SetEnvironment is implemented and lowered by CMD.EXEC through
+//     GEOM.LIGHT.ENV (`u_light_env`). Entry I48 is in the CLOSED ledger.
 //
 // WHAT IS COMPOSED. GEOM.SKIN.NORM -> `zhao_light_skin_adapter` (the creature
 // seam, narrowed by assertion) -> `zhao_light_stream` on the creature path,
 // with the service's two arithmetic leaves inside it. Entry I43 is closed.
-// The smoke bench loads one light and checks every lit vertex against
-// `zref::creature::lambert_from_world_normal`, through the fixture generator.
+// The smoke bench's command packet carries a SetEnvironment, and every lit
+// vertex is checked per channel against `zref::light_env::bank_of` of THAT
+// record and `zref::creature::lambert_from_world_normal`, through the fixture
+// generator.
 //
 // WHAT IS STILL OPEN, and `light_seam_connected_o` stays LOW until it is:
-//   * the BANK's command producer (I48);
-//   * the lit RGB's route to the raster: it is the vertex-attribute store's
-//     r/g/b input (owner ruling R11), and the store's WRITER is I46. Until it
-//     exists the colour leaves the module on `geom_light_*` with a real ready.
+//   * the lit RGB's route to the RASTER. GEOM.VATTR stores it (I46, closed)
+//     and GEOM.REPLAY reads it with every corner, but GEOM.ATTRPACK's three
+//     planes are invw, u_over_w and v_over_w, and none of them is colour.
 //     Nothing here should be read as "the raster is lit".
 //
 // ---------------------------------------------------------------------------
@@ -3416,7 +3418,6 @@ module zhao_console_core
   output logic signed [63:0]      geom_sn_n_x_o,
   output logic signed [63:0]      geom_sn_n_y_o,
   output logic signed [63:0]      geom_sn_n_z_o,
-  output logic [63:0]             geom_sn_n_mag_o,
   output logic                    geom_sn_n_degenerate_o,
   output logic [15:0]             geom_sn_n_src_id_o,
   output logic [31:0]             geom_sn_vertices_o,
@@ -3429,19 +3430,24 @@ module zhao_console_core
   output logic [31:0]             geom_sn_fork_stall_o,
 
   // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
-  // I48: the prepared descriptor bank, written by the HOST. SetEnvironment
-  // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
-  // this bank's Q16.16 directions and u20 gains -- see I48.
-  input  logic                    geom_light_cfg_we_i,
-  input  logic                    geom_light_cfg_commit_i,
-  input  logic [7:0]              geom_light_cfg_addr_i,
-  input  logic [31:0]             geom_light_cfg_data_i,
+  // The prepared descriptor bank is loaded by COMMAND since owner ruling R25
+  // (entry I48, CLOSED 2026-09-19): SetEnvironment 0x0311 -> CMD.EXEC ->
+  // GEOM.LIGHT.ENV (`zhao_light_env`) -> the bank, and the power-on default is
+  // the same path applied to 4a's default record. The host ports that stood
+  // here are gone; the published generation stays as evidence.
   output logic                    geom_light_cfg_gen_o,
-  input  logic [3:0]              geom_light_nlights_i,
-  // I46: the lit vertex RGB -- the vertex-attribute store's r/g/b input, whose
-  // WRITER is not built. Out of the module, with a real ready.
+  // GEOM.LIGHT.ENV's evidence: bank loads published (the power-on load
+  // included), SetEnvironment records taken, and records replaced before they
+  // were loaded (fired in tests/geometry/light_env_directed.cpp case 4).
+  output logic [31:0]             geom_light_env_loads_o,
+  output logic [31:0]             geom_light_env_records_o,
+  output logic [31:0]             geom_light_env_superseded_o,
+  // The lit vertex RGB, OBSERVED. Its consumer is GEOM.VATTR (entry I46,
+  // CLOSED 2026-09-19): the ready is the store's, so the port that stood here
+  // as `_ready_i` is gone and the store's ready leaves as a tap beside it, so
+  // the smoke bench can count the handshakes it checks against the reference.
   output logic                    geom_light_valid_o,
-  input  logic                    geom_light_ready_i,
+  output logic                    geom_light_ready_o,
   output logic [16:0]             geom_light_r_o,
   output logic [16:0]             geom_light_g_o,
   output logic [16:0]             geom_light_b_o,
@@ -3497,27 +3503,27 @@ module zhao_console_core
   // GEOM.REPLAY and the release comes back from it. Sixteen ports left this
   // list rather than being driven; see the closed ledger in the header.
 
-  // ---- I12, NARROWED: the arena ORIGIN datum only ---------------------------
-  // The lookup port is GEOM.REPLAY's now. What is still at the edge is the
-  // per-arena origin, which nothing in this console writes and nothing reads.
-  input  logic                    geom_org_we_i,
-  input  logic [GEOM_ARENA_W-1:0] geom_org_arena_i,
-  input  logic signed [31:0]      geom_org_x_i,
-  input  logic signed [31:0]      geom_org_y_i,
-  input  logic signed [31:0]      geom_org_z_i,
-  output logic signed [31:0]      geom_rep_org_x_o,
-  output logic signed [31:0]      geom_rep_org_y_o,
-  output logic signed [31:0]      geom_rep_org_z_o,
+  // ---- I12 IS CLOSED (owner ruling R27): no arena origin is owed in v1 -----
+  // The eight geom_org_* / geom_rep_org_* ports left the list; see the ledger.
 
   // ---- GEOMETRY evidence ---------------------------------------------------
   output logic [31:0]             geom_groups_opened_o,
   output logic [31:0]             geom_groups_sealed_o,
-  output logic [31:0]             geom_vertices_sent_o,
+  // client-A accepts, one per vertex PER VIEW (2x the vertices in dual view)
+  output logic [31:0]             geom_view_vertices_sent_o,
   output logic [31:0]             geom_landings_o,
   output logic [31:0]             geom_jobs_refused_o,
   output logic [31:0]             geom_alloc_stall_cycles_o,
   output logic [31:0]             geom_rel_unheld_o,
   output logic                    geom_seal_early_o,
+  // R31: GEOM.VDECODE's refusals as GEOM.GROUP_SEQ absorbs them. A hole is a
+  // record that will never arrive; its batch is poisoned and dropped whole,
+  // and an EARLY hole is one that arrived with no batch held and was carried
+  // to the next (structurally excluded by ASSETFETCH's S_HAND -> S_SERVE
+  // handshake, so 0 here; fired by stimulus in the directed test).
+  output logic [31:0]             geom_holes_o,
+  output logic [31:0]             geom_groups_poisoned_o,
+  output logic [31:0]             geom_holes_early_o,
   output logic [31:0]             geom_arena_hits_o,
   output logic [31:0]             geom_arena_misses_o,
   output logic [31:0]             geom_arena_refusals_o,
@@ -3529,17 +3535,25 @@ module zhao_console_core
   // producer: the descriptor's raster word is I39's.
   input  logic [1:0]              geom_clip_cull_mode_i,
 
-  // ---- I46: THE VERTEX-ATTRIBUTE STORE (owner ruling R11, provisional) -----
-  // Slots 1..6 of the ruling-5 packet (u_over_w, v_over_w, r, g, b, alpha),
-  // per vertex per view, keyed EXACTLY like the arena. The store listens to
-  // GEOM.REPLAY's lookups -- these are the same nets that address the arena --
-  // and answers with the arena's timing. Its WRITER is not built; see I46.
-  output logic                    geom_att_look_valid_o,
-  output logic [GEOM_ARENA_W-1:0] geom_att_look_arena_o,
-  output logic [GEOM_GEN_W-1:0]   geom_att_look_gen_o,
-  output logic [GEOM_INDEX_W-1:0] geom_att_look_index_o,
-  input  logic                    geom_att_rep_valid_i,
-  input  logic [GEOM_ATTR_STORE_W-1:0] geom_att_rep_data_i,
+  // ---- GEOM.VATTR's evidence (entry I46 CLOSED; owner rulings R11, R31) ----
+  // The vertex-attribute store and its writer are INTERNAL: the eleven
+  // `geom_att_*` ports that modelled the store at the edge are gone. What
+  // leaves is the store's census and its faults, and the depth law's two
+  // faults, which moved here from GEOM.REPLAY with the law itself.
+  output logic [31:0]             geom_va_landings_o,
+  output logic [31:0]             geom_va_rows_written_o,
+  output logic [31:0]             geom_va_colours_written_o,
+  output logic [31:0]             geom_va_uv_staged_o,
+  output logic [31:0]             geom_va_lq_overflow_o,
+  output logic [31:0]             geom_va_index_oob_o,
+  output logic [31:0]             geom_va_look_oob_o,
+  output logic [31:0]             geom_va_profile_mixed_o,
+  output logic [31:0]             geom_va_dq_refused_o,
+  output logic [31:0]             geom_va_dq_stray_o,
+  // Review of d52ae6c0: depth results that WAITED for their u/v (a handshake,
+  // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
+  output logic [31:0]             geom_va_uv_waits_o,
+  output logic                    geom_va_poison_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
   output logic [31:0]             geom_rp_meshlets_o,
@@ -3549,9 +3563,9 @@ module zhao_console_core
   output logic [31:0]             geom_rp_refused_o,
   output logic [31:0]             geom_rp_missed_o,
   output logic [31:0]             geom_rp_att_skew_o,
-  output logic [31:0]             geom_rp_profile_mixed_o,
   output logic [31:0]             geom_rp_view_bad_o,
-  output logic [31:0]             geom_rp_dq_refused_o,
+  // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
+  output logic [31:0]             geom_rp_poisoned_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -4850,6 +4864,8 @@ module zhao_console_core
   output logic [31:0] cmd_exec_view_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
+  // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
+  output logic [31:0] cmd_exec_envs_o,
 
   // ==========================================================================
   // TERRAIN.MIPFEED / TERRAIN.MIPGEN -- THE SECOND COMPLETION.  Added
@@ -5020,10 +5036,10 @@ module zhao_console_core
   end
 
   // ==========================================================================
-  // THE LIGHTING SEAM. LOW on purpose: GEOM.LIGHT is composed (R2), but its
-  // bank has no command producer (I48) and its RGB does not yet reach the
-  // raster (the attribute store's writer, I46). The header's lighting section
-  // says what is connected and what is not.
+  // THE LIGHTING SEAM. LOW on purpose: GEOM.LIGHT is composed (R2) and its
+  // bank is loaded by SetEnvironment (R25, I48 closed), but its RGB stops at
+  // GEOM.REPLAY -- the raster's attribute planes carry no colour. The header's
+  // lighting section says what is connected and what is not.
   // ==========================================================================
   assign light_seam_connected_o = 1'b0;
 
@@ -5910,6 +5926,14 @@ module zhao_console_core
   wire [GEOM_PAY_A_W-1:0]  ln_rider_payload;
   wire                     ln_fill_landed;
   wire [GEOM_ARENA_W-1:0]  ln_fill_arena;
+  wire [GEOM_INDEX_W-1:0]  ln_fill_index;   // the landed vertex's arena index (GEOM.VATTR)
+  // GEOM.VATTR's colour ready (into GEOM.LIGHT) and its batch-complete verdict
+  // (the gate on GROUP_SEQ's handle into REPLAY). Declared here, ahead of their
+  // first readers; the block is instantiated at section 11 beside GEOM.REPLAY.
+  wire                     va_lit_ready;
+  wire                     va_done;
+  wire                     va_poison;   // the batch lost a row (VATTR)
+  assign geom_va_poison_o = va_poison;
 
   // ==========================================================================
   // GEOM.VDECODE -> GEOM.POSE's PALETTE STORE -> GEOM.SKIN.  ENTRY I10, WHOLE.
@@ -5950,6 +5974,18 @@ module zhao_console_core
   // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
   // design; if this composer swallowed the flag, a malformed asset and an
   // absent asset would be indistinguishable from outside.
+  //
+  // AND IT REACHES GEOM.GROUP_SEQ AS A HOLE (owner ruling R31, 2026-09-19).
+  // Silent at the skinner is right; silent at the sequencer was a DEADLOCK: it
+  // waited for `count` skinned vertices, one never came, nothing sealed, and
+  // REPLAY, ASSETFETCH and the whole geometry path stopped with every counter
+  // still. `d_refused_o` now drives `u_geom_group_seq.hole_i`, the batch ends on
+  // vertices + holes == count, its groups are handed over POISONED, and
+  // GEOM.REPLAY drops the meshlet's triangles and releases it -- the contract's
+  // "a refusal drops the BATCH, not the frame". Counted on `geom_holes_o`,
+  // `geom_groups_poisoned_o` and `geom_rp_poisoned_o`; the smoke bench's
+  // `-BadVertex` control corrupts one record in SDRAM and requires all three to
+  // move and the frame to complete.
   // ==========================================================================
   // I25: one ratified vertex format, named rather than literal. See the header.
   localparam logic [2:0] GEOM_VERTEX_FORMAT_C = 3'd0;
@@ -5998,16 +6034,16 @@ module zhao_console_core
   assign skin_v_valid = pal_o_valid && sn_v_ready;
   assign sn_v_valid   = pal_o_valid && skin_v_ready;
 
-  // The root service GEOM.SKIN.NORM names by file. `zhao_field_isqrt` is
-  // already in this closure (the FIELD engine instantiates it), so this costs a
-  // second instance and NOT a second law -- and a second LAW is what would have
-  // been wrong: that block's header says "a second implementation would be a
-  // second law", and `zref::isqrt_u64` is the one both cite.
-  wire        sn_sq_valid, sn_sq_ready, sn_sq_rvalid, sn_sq_rready;
+  // GEOM.SKIN.NORM's ROOT IS GONE FROM HERE (owner ruling R31, 2026-09-19). A
+  // second `zhao_field_isqrt` instance used to serve it: 32 serial steps a
+  // vertex, which made the AND-fork above stall GEOM.SKIN ~27 clocks a vertex
+  // (smoke: fork_stall_cycles=217 over 8). The magnitude is now taken by
+  // GEOM.LIGHT's own II8 root -- idle on the creature path until now -- so the
+  // root is time-multiplexed, not duplicated. See `zhao_geom_skin_norm`.
+  //
   // GEOM.LIGHT's skin adapter takes the normal (entry I43 closed); its ready
   // is read by GEOM.SKIN.NORM just below, so it is declared here.
   wire        la_s_ready;
-  wire [63:0] sn_sq_n, sn_sq_r;
 
   zhao_geom_vdecode #(
     .SRCW (16)
@@ -6233,13 +6269,6 @@ module zhao_console_core
     .a_i        (pal_a_m),
     .b_i        (pal_b_m),
 
-    // REAL: the exact floor root, as a service.
-    .sq_valid_o  (sn_sq_valid),
-    .sq_ready_i  (sn_sq_ready),
-    .sq_n_o      (sn_sq_n),
-    .sq_rvalid_i (sn_sq_rvalid),
-    .sq_rready_o (sn_sq_rready),
-    .sq_r_i      (sn_sq_r),
 
     // I43: the world normal leaves the module. Its consumer is GEOM.LIGHT and
     // that seam is refused for reasons of its own -- see the lighting section.
@@ -6248,7 +6277,6 @@ module zhao_console_core
     .n_x_o          (geom_sn_n_x_o),
     .n_y_o          (geom_sn_n_y_o),
     .n_z_o          (geom_sn_n_z_o),
-    .n_mag_o        (geom_sn_n_mag_o),
     .n_degenerate_o (geom_sn_n_degenerate_o),
     .n_src_id_o     (geom_sn_n_src_id_o),
 
@@ -6257,28 +6285,21 @@ module zhao_console_core
     .reduced_o    (geom_sn_reduced_o)
   );
 
-  zhao_field_isqrt u_geom_skin_norm_isqrt (
-    .clk       (gpu_clk),
-    .rst_n     (rst_n),
-    .n_valid_i (sn_sq_valid),
-    .n_ready_o (sn_sq_ready),
-    .n_i       (sn_sq_n),
-    .r_valid_o (sn_sq_rvalid),
-    .r_ready_i (sn_sq_rready),
-    .r_o       (sn_sq_r)
-  );
 
   // --------------------------------------------------------------------------
   // GEOM.LIGHT -- `zhao_light_stream`, composed 2026-09-19 by owner ruling R2
   // ("zhao_light_stream owns vertex light; zhao_geom_light is superseded").
   //
-  //   GEOM.SKIN.NORM --{s64x3, u64 mag}--> zhao_light_skin_adapter
-  //                  --{s32x3, u32 mag}--> zhao_light_stream --> RGB (I46)
+  //   GEOM.SKIN.NORM --{s64x3}--> zhao_light_skin_adapter
+  //                  --{s32x3}--> zhao_light_stream (|n| rooted HERE) --> RGB
   //
-  // THE CREATURE PATH, by both blocks' own contracts: SKIN.NORM supplies the
-  // magnitude with the direction, so `n_mag_valid_i` is HIGH (no root job, the
-  // `supplied_mags` case) and the profile is CREATURE (no detail term, the early
-  // clamp) -- the two constants below are that contract, named, not tie-offs.
+  // THE CREATURE PATH, by both blocks' own contracts: the profile is CREATURE
+  // (no detail term, the early clamp), and since owner ruling R31 the stream
+  // ROOTS the normal itself (`n_mag_valid_i` LOW -- the stream's own
+  // "computed here, ONCE" case), because its II8 root is the one root this
+  // path needs and SKIN.NORM's serial one was stalling the skinner. The two
+  // constants below are that contract, named, not tie-offs; `n_mag_i` is not
+  // read while `n_mag_valid_i` is low (the stream seals the slot on its root).
   // The adapter NARROWS by assertion, not by cast, and refuses and counts a
   // tuple outside the producer's range reduction.
   //
@@ -6287,12 +6308,12 @@ module zhao_console_core
   // `zhao_geom_light` -- the scalar arrangement measured at II = 167 -- is NOT
   // composed (console_inventory: superseded, R2).
   // --------------------------------------------------------------------------
-  localparam logic GEOM_LIGHT_MAG_SUPPLIED_C = 1'b1;  // SKIN.NORM hands |n|
+  localparam logic GEOM_LIGHT_MAG_SUPPLIED_C = 1'b0;  // GEOM.LIGHT roots |n| (R31)
   localparam logic GEOM_LIGHT_PROFILE_C      = 1'b1;  // 1 = creature
+  assign geom_light_ready_o = va_lit_ready;
 
   wire               la_p_valid, la_p_ready;
   wire signed [31:0] la_p_nx, la_p_ny, la_p_nz;
-  wire        [31:0] la_p_mag;
   wire               la_p_degenerate;
   wire        [ 3:0] la_p_nlights;
   wire        [15:0] la_p_src_id;
@@ -6305,8 +6326,51 @@ module zhao_console_core
               ls_normal_queue_wait, ls_descriptor_wait, ls_dot_slots, ls_square_slots,
               ls_unused_slots, ls_divider_bp, ls_colour_bp, ls_output_bp,
               ls_raw_sat, ls_degen_terms, ls_clamp_lo, ls_clamp_hi;
-  wire        ls_idle;
   /* verilator lint_on UNUSEDSIGNAL */
+  wire        ls_idle, ls_v_ready;
+
+  // ---- GEOM.LIGHT.ENV: SetEnvironment -> the bank (owner ruling R25, I48) ---
+  // CMD.EXEC presents the committed record (section 7b's u_cmd_exec, further
+  // down; the nets are declared here, ahead of their first reader). The block
+  // computes 4a's sun direction on its own `zhao_field_sin`, writes light 0 and
+  // the environment words, and publishes them with ONE commit -- while HOLDING
+  // the stream's vertex input, and only once the stream reports idle, so the
+  // environment never changes under a vertex and no bank write can be refused.
+  wire        cmd_env_valid, cmd_env_ready;
+  wire [15:0] cmd_env_yaw, cmd_env_pitch, cmd_env_sun, cmd_env_amb;
+  wire        le_cfg_we, le_cfg_commit, le_hold;
+  wire [7:0]  le_cfg_addr;
+  wire [31:0] le_cfg_data;
+  wire [3:0]  le_nlights;
+
+  zhao_light_env u_light_env (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .e_valid_i      (cmd_env_valid),
+    .e_ready_o      (cmd_env_ready),
+    .e_sun_yaw_i    (cmd_env_yaw),
+    .e_sun_pitch_i  (cmd_env_pitch),
+    .e_sun_colour_i (cmd_env_sun),
+    .e_ambient_i    (cmd_env_amb),
+
+    .cfg_we_o     (le_cfg_we),
+    .cfg_commit_o (le_cfg_commit),
+    .cfg_addr_o   (le_cfg_addr),
+    .cfg_data_o   (le_cfg_data),
+
+    .hold_o         (le_hold),
+    .stream_idle_i  (ls_idle),
+    .nlights_o      (le_nlights),
+
+    .loads_o      (geom_light_env_loads_o),
+    .records_o    (geom_light_env_records_o),
+    .superseded_o (geom_light_env_superseded_o)
+  );
+
+  // The hold is an AND on BOTH halves of the adapter -> stream handshake, so a
+  // held vertex is neither taken nor lost: it waits in the adapter.
+  assign la_p_ready = ls_v_ready && !le_hold;
 
   zhao_light_skin_adapter #(
     .SRCW (16)
@@ -6320,10 +6384,9 @@ module zhao_console_core
     .s_nx_i         (geom_sn_n_x_o),
     .s_ny_i         (geom_sn_n_y_o),
     .s_nz_i         (geom_sn_n_z_o),
-    .s_mag_i        (geom_sn_n_mag_o),
     .s_degenerate_i (geom_sn_n_degenerate_o),
-    // I48: how many lights the published set holds is the host's, with the set.
-    .s_nlights_i    (geom_light_nlights_i),
+    // How many lights the published set holds: GEOM.LIGHT.ENV's, with the set.
+    .s_nlights_i    (le_nlights),
     .s_src_id_i     (geom_sn_n_src_id_o),
 
     .p_valid_o      (la_p_valid),
@@ -6331,7 +6394,6 @@ module zhao_console_core
     .p_nx_o         (la_p_nx),
     .p_ny_o         (la_p_ny),
     .p_nz_o         (la_p_nz),
-    .p_mag_o        (la_p_mag),
     .p_degenerate_o (la_p_degenerate),
     .p_nlights_o    (la_p_nlights),
     .p_src_id_o     (la_p_src_id),
@@ -6346,21 +6408,21 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I48: the prepared descriptor bank, host-written, published atomically.
-    .cfg_we_i     (geom_light_cfg_we_i),
-    .cfg_commit_i (geom_light_cfg_commit_i),
-    .cfg_addr_i   (geom_light_cfg_addr_i),
-    .cfg_data_i   (geom_light_cfg_data_i),
+    // The prepared descriptor bank, loaded by GEOM.LIGHT.ENV (R25, I48 closed).
+    .cfg_we_i     (le_cfg_we),
+    .cfg_commit_i (le_cfg_commit),
+    .cfg_addr_i   (le_cfg_addr),
+    .cfg_data_i   (le_cfg_data),
     .cfg_gen_o    (geom_light_cfg_gen_o),
 
-    // REAL: the prepared normal, from the adapter.
-    .v_valid_i      (la_p_valid),
-    .v_ready_o      (la_p_ready),
+    // REAL: the prepared normal, from the adapter -- held while the bank loads.
+    .v_valid_i      (la_p_valid && !le_hold),
+    .v_ready_o      (ls_v_ready),
     .n_x_i          (la_p_nx),
     .n_y_i          (la_p_ny),
     .n_z_i          (la_p_nz),
     .n_mag_valid_i  (GEOM_LIGHT_MAG_SUPPLIED_C),
-    .n_mag_i        (la_p_mag),
+    .n_mag_i        (32'd0),   // not read: n_mag_valid_i is low
     .n_degenerate_i (la_p_degenerate),
     .n_profile_i    (GEOM_LIGHT_PROFILE_C),
     .n_lights_i     (la_p_nlights),
@@ -6368,7 +6430,7 @@ module zhao_console_core
 
     // I46: the lit RGB, the attribute store's r/g/b input.
     .r_valid_o        (geom_light_valid_o),
-    .r_ready_i        (geom_light_ready_i),
+    .r_ready_i        (va_lit_ready),   // GEOM.VATTR takes the colour (I46)
     .rgb_r_o          (geom_light_r_o),
     .rgb_g_o          (geom_light_g_o),
     .rgb_b_o          (geom_light_b_o),
@@ -6409,10 +6471,11 @@ module zhao_console_core
 
   // THE FORK'S COST, COUNTED RATHER THAN ARGUED (I43). A cycle in which the
   // store is offering a vertex, GEOM.SKIN would take it and GEOM.SKIN.NORM
-  // would not. This number is EXPECTED to be large -- the normal path is a
-  // ~38-clock one-at-a-time walk against the skinner's twelve -- and it is a
-  // port so that the rate is measured in the composed machine instead of
-  // being asserted in a comment.
+  // would not. It WAS large -- 217 over the smoke's 8 vertices, the normal path
+  // then being a ~38-clock walk with a serial root against the skinner's
+  // twelve -- and owner ruling R31 moved that root into GEOM.LIGHT, leaving
+  // SKIN.NORM at six clocks a vertex. It stays a port so the rate is measured
+  // in the composed machine instead of being asserted in a comment.
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       geom_sn_fork_stall_o <= '0;
@@ -6437,6 +6500,7 @@ module zhao_console_core
   wire                    gs_grp_valid, rp_grp_ready, gs_grp_view;
   wire [GEOM_ARENA_W-1:0] gs_grp_arena, rp_rel_arena;
   wire [GEOM_GEN_W-1:0]   gs_grp_gen;
+  wire                    gs_grp_poison;   // R31: the batch lost a record
   wire                    rp_rel_valid;
   // The handle's count and source id are not read: GEOM.REPLAY takes the
   // meshlet's vertex count from the dispatcher token, which is the SAME number
@@ -6487,6 +6551,10 @@ module zhao_console_core
     .v_x_i     (gs_v_x),
     .v_y_i     (gs_v_y),
     .v_z_i     (gs_v_z),
+    // REAL: GEOM.VDECODE's refusal pulse, one per record it refused -- the
+    // HOLE a batch must account for or wait for ever (owner ruling R31). The
+    // same net leaves the module as `geom_vd_refused_o` for evidence.
+    .hole_i    (geom_vd_refused_o),
 
     // REAL: client A of the shared projection service.
     .a_valid_o  (gs_a_valid),
@@ -6511,24 +6579,32 @@ module zhao_console_core
     .fill_landed_i (ln_fill_landed),
     .fill_arena_i  (ln_fill_arena),
 
-    // REAL: the sealed handle into GEOM.REPLAY, and its release back.
+    // REAL: the sealed handle into GEOM.REPLAY, and its release back. The
+    // handle is GATED on GEOM.VATTR's verdict that every row and colour the
+    // batch owes is in the store (va_done): the seal waits for LANDINGS, the
+    // rows those landings owe are written ~45 clocks later, and REPLAY must
+    // not read a row before it exists. Same gate on both sides of the handshake.
     .grp_valid_o (gs_grp_valid),
-    .grp_ready_i (rp_grp_ready),
+    .grp_ready_i (rp_grp_ready && va_done),
     .grp_arena_o (gs_grp_arena),
     .grp_gen_o   (gs_grp_gen),
     .grp_count_o (gs_grp_count),
     .grp_view_o  (gs_grp_view),
     .grp_src_id_o(gs_grp_src_id),
+    .grp_poison_o(gs_grp_poison),
     .rel_valid_i (rp_rel_valid),
     .rel_arena_i (rp_rel_arena),
 
     .groups_opened_o     (geom_groups_opened_o),
     .groups_sealed_o     (geom_groups_sealed_o),
-    .vertices_sent_o     (geom_vertices_sent_o),
+    .view_vertices_sent_o(geom_view_vertices_sent_o),
     .landings_o          (geom_landings_o),
     .jobs_refused_o      (geom_jobs_refused_o),
     .alloc_stall_cycles_o(geom_alloc_stall_cycles_o),
     .rel_unheld_o        (geom_rel_unheld_o),
+    .holes_o             (geom_holes_o),
+    .groups_poisoned_o   (geom_groups_poisoned_o),
+    .holes_early_o       (geom_holes_early_o),
     .seal_early_o        (geom_seal_early_o)
   );
 
@@ -7688,16 +7764,13 @@ module zhao_console_core
     .seal_i      (gs_seal),
     .seal_arena_i(gs_seal_arena),
 
-    // I12: the arena origin and the lookup port; same absent customer.
-    .org_we_i   (geom_org_we_i),
-    .org_arena_i(geom_org_arena_i),
-    .org_x_i    (geom_org_x_i),
-    .org_y_i    (geom_org_y_i),
-    .org_z_i    (geom_org_z_i),
+    // (I12's arena origin is not owed in v1 -- owner ruling R27; the lane no
+    // longer has the port pair.)
 
     // REAL: landings back to the sequencer.
     .fill_landed_o(ln_fill_landed),
     .fill_arena_o (ln_fill_arena),
+    .fill_index_o (ln_fill_index),
 
     // REAL: GEOM.REPLAY's three lookups per triangle per view. Entry I12's
     // lookup half, CLOSED.
@@ -7710,9 +7783,6 @@ module zhao_console_core
     .rep_hit_o   (ln_rep_hit),
     .rep_refuse_o(ln_rep_refuse),
     .rep_payload_o(ln_rep_payload),
-    .rep_org_x_o (geom_rep_org_x_o),
-    .rep_org_y_o (geom_rep_org_y_o),
-    .rep_org_z_o (geom_rep_org_z_o),
 
     .arena_hits_o    (geom_arena_hits_o),
     .arena_misses_o  (geom_arena_misses_o),
@@ -10527,6 +10597,15 @@ module zhao_console_core
     .upl_new_gen_o  (cmd_upl_gen),
     .upl_crc_o      (cmd_upl_crc),
 
+    // R25: SetEnvironment -> GEOM.LIGHT.ENV (u_light_env, beside u_light_stream).
+    .env_valid_o     (cmd_env_valid),
+    .env_ready_i     (cmd_env_ready),
+    .env_sun_yaw_o   (cmd_env_yaw),
+    .env_sun_pitch_o (cmd_env_pitch),
+    .env_sun_colour_o(cmd_env_sun),
+    .env_ambient_o   (cmd_env_amb),
+    .envs_issued_o   (cmd_exec_envs_o),
+
     .packets_committed_o  (cmd_exec_committed_o),
     .packets_abandoned_o  (cmd_exec_abandoned_o),
     .views_written_o      (cmd_exec_views_o),
@@ -11622,11 +11701,16 @@ module zhao_console_core
   assign dsp_job_src   = af_s_src_id;
 
   // --------------------------------------------------------------------------
-  // GEOM.REPLAY -- the replay customer entries I11 and I12 specified, and the
-  // owner of GEOM.DEPTHQUANT (three lanes on one rcp24_v4, inside it). Entries
-  // I11, I38 and GEOM.DEPTHQUANT CLOSE here; I12, I24 and I39 narrow; the
-  // vertex-attribute store's absent writer opens as I46.
+  // GEOM.REPLAY -- the replay customer entries I11 and I12 specified -- and
+  // GEOM.VATTR, the vertex-attribute store it reads (entry I46, CLOSED
+  // 2026-09-19; owner rulings R11 and R31). Depth is no longer computed per
+  // triangle corner inside REPLAY: GEOM.VATTR computes invw24 once per LANDED
+  // vertex on the streaming GEOM.DEPTHQUANT and answers it with the vertex's
+  // other attributes, on the arena's own lookup nets and clock.
   // --------------------------------------------------------------------------
+  wire                         va_rep_valid;
+  wire [23:0]                  va_rep_invw;
+  wire [GEOM_ATTR_STORE_W-1:0] va_rep_data;
   wire [23:0]                  rp_invw_a, rp_invw_b, rp_invw_c;
   wire [GEOM_ATTR_STORE_W-1:0] rp_st_a, rp_st_b, rp_st_c;
   // The triangle's view, material and raster word ride out of GEOM.REPLAY and
@@ -11656,23 +11740,21 @@ module zhao_console_core
     .mt_view_mask_i   (af_s_visible_mask),
     .mt_vertex_count_i(af_s_vertex_count),
 
-    // REAL: GEOM.GROUP_SEQ's sealed handles, and their release.
-    .grp_valid_i (gs_grp_valid),
+    // REAL: GEOM.GROUP_SEQ's sealed handles, and their release -- through the
+    // store's batch-complete gate (see GEOM.GROUP_SEQ's instance).
+    .grp_valid_i (gs_grp_valid && va_done),
     .grp_ready_o (rp_grp_ready),
     .grp_arena_i (gs_grp_arena),
     .grp_gen_i   (gs_grp_gen),
     .grp_view_i  (gs_grp_view),
+    // REAL: R31 -- a batch GEOM.VDECODE refused part of is dropped here, whole.
+    // R31 poison, from BOTH owners of a batch's rows: GROUP_SEQ (a refused
+    // record) and GEOM.VATTR (a row dropped or outside the store) -- a batch
+    // whose store rows are not all its own is dropped, never drawn.
+    .grp_poison_i(gs_grp_poison || va_poison),
     .rel_valid_o (rp_rel_valid),
     .rel_arena_o (rp_rel_arena),
 
-    // REAL: the arena opens and the geometry landings, with the profile each
-    // vertex was PROJECTED under -- `proj_a_profile_o` is the service's, on the
-    // same clock as `ln_fill_landed` (PART.PROJECT's demux is combinational).
-    .op_valid_i  (gs_open),
-    .op_arena_i  (gs_open_arena),
-    .fl_valid_i  (ln_fill_landed),
-    .fl_arena_i  (ln_fill_arena),
-    .fl_profile_i(proj_a_profile_o),
 
     // REAL: GEOM.ASSEMBLE's triangles and the end of its walk.
     .t_valid_i    (asm_t_valid),
@@ -11695,8 +11777,9 @@ module zhao_console_core
     .rep_hit_i      (ln_rep_hit),
     .rep_refuse_i   (ln_rep_refuse),
     .rep_payload_i  (ln_rep_payload),
-    .att_rep_valid_i(geom_att_rep_valid_i),
-    .att_rep_data_i (geom_att_rep_data_i),
+    .att_rep_valid_i(va_rep_valid),
+    .att_invw_i     (va_rep_invw),
+    .att_rep_data_i (va_rep_data),
 
     // REAL: GEOM.ASSETFETCH's release (entry I38, closed).
     .af_release_o (rp_af_release),
@@ -11729,16 +11812,83 @@ module zhao_console_core
     .refused_o       (geom_rp_refused_o),
     .missed_o        (geom_rp_missed_o),
     .att_skew_o      (geom_rp_att_skew_o),
-    .profile_mixed_o (geom_rp_profile_mixed_o),
     .view_bad_o      (geom_rp_view_bad_o),
-    .dq_refused_o    (geom_rp_dq_refused_o)
+    .poisoned_o      (geom_rp_poisoned_o)
   );
 
-  // The attribute store listens to the arena's own lookup nets (I46).
-  assign geom_att_look_valid_o = rp_look_valid && ln_look_ready;
-  assign geom_att_look_arena_o = rp_look_arena;
-  assign geom_att_look_gen_o   = rp_look_gen;
-  assign geom_att_look_index_o = rp_look_index;
+  // --------------------------------------------------------------------------
+  // GEOM.VATTR. Every input is a REAL producer's own net, in its own handshake:
+  //
+  //   batch   the dispatcher fork's accept (af_s_valid && af_s_ready) and the
+  //           meshlet's visible mask -- the clock the record stream begins;
+  //   opens   GEOM.GROUP_SEQ's open_o/open_arena_o -- the batch's arenas;
+  //   u, v    GEOM.VDECODE's decoded vertex, on its handshake INTO the palette
+  //           store (vd_d_valid && vd_d_ready): one per DECODED vertex, in
+  //           order -- exactly the events GROUP_SEQ's arena index counts, so the
+  //           ordinal the store keys u/v by IS the arena index (its header);
+  //   colour  GEOM.LIGHT's lit result; the store owns the ready (va_lit_ready);
+  //   landing GEOM.PROJ_LANE's fill_landed/arena/index, with `w` and the profile
+  //           off client A's result port on the same clock (pj_a_w is the lane's
+  //           own a_w_i; proj_a_profile_o is the service's, as REPLAY used it);
+  //   lookup  GEOM.REPLAY's lookups as the arena ACCEPTED them.
+  //
+  // It answers REPLAY on the arena's clock (att_skew_o watches), and its
+  // `done_o` gates GROUP_SEQ's handle into REPLAY (see those instances).
+  // `GEOM_ASSET_MAX_VERTICES` sizes its rows: no batch holds more.
+  // --------------------------------------------------------------------------
+  zhao_geom_vattr #(
+    .ARENAS  (GEOM_ARENAS),
+    .ARENA_W (GEOM_ARENA_W),
+    .INDEX_W (GEOM_INDEX_W),
+    .VSLOTS  (GEOM_ASSET_MAX_VERTICES)
+  ) u_geom_vattr (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .batch_i       (af_s_valid && af_s_ready),
+    .batch_views_i (af_s_visible_mask),
+
+    .op_valid_i    (gs_open),
+    .op_arena_i    (gs_open_arena),
+
+    .uv_valid_i    (vd_d_valid && vd_d_ready),
+    .uv_u_i        (geom_vd_d_u_o),
+    .uv_v_i        (geom_vd_d_v_o),
+
+    .lit_valid_i   (geom_light_valid_o),
+    .lit_ready_o   (va_lit_ready),
+    .lit_r_i       (geom_light_r_o),
+    .lit_g_i       (geom_light_g_o),
+    .lit_b_i       (geom_light_b_o),
+
+    .fl_valid_i    (ln_fill_landed),
+    .fl_arena_i    (ln_fill_arena),
+    .fl_index_i    (ln_fill_index),
+    .fl_w_i        (pj_a_w),
+    .fl_profile_i  (proj_a_profile_o),
+
+    .done_o        (va_done),
+    .poison_o      (va_poison),
+
+    .look_valid_i  (rp_look_valid && ln_look_ready),
+    .look_arena_i  (rp_look_arena),
+    .look_index_i  (rp_look_index),
+    .rep_valid_o   (va_rep_valid),
+    .rep_invw24_o  (va_rep_invw),
+    .rep_data_o    (va_rep_data),
+
+    .landings_o        (geom_va_landings_o),
+    .rows_written_o    (geom_va_rows_written_o),
+    .colours_written_o (geom_va_colours_written_o),
+    .uv_staged_o       (geom_va_uv_staged_o),
+    .lq_overflow_o     (geom_va_lq_overflow_o),
+    .index_oob_o       (geom_va_index_oob_o),
+    .look_oob_o        (geom_va_look_oob_o),
+    .profile_mixed_o   (geom_va_profile_mixed_o),
+    .dq_refused_o      (geom_va_dq_refused_o),
+    .dq_stray_o        (geom_va_dq_stray_o),
+    .uv_waits_o        (geom_va_uv_waits_o)
+  );
 
   // THE RULING-5 PACKET, per corner: slot 0 is GEOM.DEPTHQUANT's invw24,
   // zero-extended (the tile pipe refuses anything above bit 23), and slots 1..6

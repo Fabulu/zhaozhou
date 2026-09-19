@@ -3,10 +3,16 @@
 // WHAT CROSSES HERE
 // -----------------
 // `zhao_geom_skin_norm` / `zref::creature::skin_world_normal` hand out a
-// {direction:s64x3, magnitude:u64} PAIR. The lighting service's prepared
-// form is {direction:s32x3, magnitude:u32}. Those are different widths, and
-// the whole reason this file exists is that narrowing them is a CLAIM about
-// the producer's range reduction, not a free cast.
+// range-reduced direction, s64x3. The lighting service's prepared form is
+// s32x3. Those are different widths, and the whole reason this file exists is
+// that narrowing them is a CLAIM about the producer's range reduction, not a
+// free cast.
+//
+// NO MAGNITUDE CROSSES HERE ANY MORE (owner ruling R31, 2026-09-19). The
+// magnitude is computed ONCE, downstream, by `zhao_light_stream`'s own II8
+// root (`n_mag_valid_i` low) -- the root this seam used to bypass. See
+// `zhao_geom_skin_norm`'s header for why the root moved and why the law did
+// not.
 //
 // The claim, from the producer's own source (creature_core.cpp,
 // `skin_world_normal`):
@@ -18,8 +24,7 @@
 // toward minus infinity and can land exactly on -2^30 while the tracked
 // maximum is 2^30 - 1. Asserting a strict |n| < 2^30 would therefore reject a
 // legal tuple, which is why this block asserts the property that is actually
-// true: the value SIGN-EXTENDS from 32 bits. The magnitude is the floor root
-// of at most 3 * 2^60 and so fits u32 with room; that is asserted too.
+// true: the value SIGN-EXTENDS from 32 bits.
 //
 // WHY REFUSE AND COUNT RATHER THAN TRUNCATE
 // -----------------------------------------
@@ -29,23 +34,38 @@
 // producer's domain being quietly narrowed into a plausible-looking normal:
 // the result would be a lit vertex computed from a different vector, which no
 // output check can distinguish from a correct one. So an out-of-domain tuple
-// is REFUSED at the port, counted on `refused_o`, and never enters the arena.
+// is REFUSED at the port and counted on `refused_o` -- its DIRECTION never
+// crosses.
 //
-// NO RENORMALIZATION, NO SECOND ROOT
-// ----------------------------------
-// The pair arrives with its magnitude already computed by the producer's own
-// `isqrt_u64`. This block does not recompute it, does not round the direction
-// into a unit vector, and does not reinterpret the tuple as Q1.15. The
-// producer's comment says why in one sentence -- "normalising here would
-// round twice, once into the unit vector and again in the Lambert quotient,
-// and the law has exactly ONE rounding" -- and a magnitude arriving through
-// this port is the `supplied_mags` case downstream, costing zero root jobs.
+// BUT ITS VERTEX DOES, AS A DECLARED-DEGENERATE ZERO (2026-09-19, owner ruling
+// R31 / entry I46). This block used to drop the refused tuple outright, which
+// was harmless while the lit colour was only observed. It is not harmless now:
+// GEOM.VATTR stores each lit colour by its ORDER in the batch, so a dropped
+// vertex shifts every later colour onto the wrong vertex, and the batch can
+// never be complete -- the R31 deadlock in a new place. A refusal pulse beside
+// the stream cannot fix it, because the pulse for vertex j can arrive before
+// the light stream has emitted vertex i < j. So the refused vertex is emitted
+// IN ORDER with zero lanes and the degenerate flag: GEOM.LIGHT lights it as it
+// lights any direction-less vertex (DEGEN_BLACK's reading), and one output per
+// input holds by construction. The defined fault response, counted, never a
+// hang -- the shape of owner ruling R20.
+//
+// NO RENORMALIZATION, AND THE ONE ROOT IS DOWNSTREAM
+// --------------------------------------------------
+// This block does not compute a magnitude, does not round the direction into
+// a unit vector, and does not reinterpret the tuple as Q1.15. The producer's
+// comment says why in one sentence -- "normalising here would round twice,
+// once into the unit vector and again in the Lambert quotient, and the law
+// has exactly ONE rounding".
 //
 // DEGENERACY. `skin_world_normal` returns false for a zero-length blend.
-// That verdict rides `degenerate_i`; a zero magnitude with the flag low, or a
-// nonzero magnitude with it high, is a seam disagreement and is the
-// downstream service's `seam_mismatch` to count -- this block forwards both
-// and judges neither, so the two sides of that comparison stay independent.
+// That verdict rides `degenerate_i`; the light stream roots the direction
+// itself, and a zero root with the flag low, or a nonzero root with it high,
+// is a seam disagreement and is its `seam_mismatch` to count -- this block
+// forwards the flag and judges nothing, so the two sides of that comparison
+// stay independent (one is SKIN.NORM's verdict, the other the stream's root).
+//
+
 //
 // Quartus 17 form law obeyed (guard inside `initial begin`). Lint-clean is
 // not synthesizability; this block has not been through `quartus_map`.
@@ -64,7 +84,6 @@ module zhao_light_skin_adapter #(
     input  var logic signed [63:0]       s_nx_i,
     input  var logic signed [63:0]       s_ny_i,
     input  var logic signed [63:0]       s_nz_i,
-    input  var logic        [63:0]       s_mag_i,
     input  var logic                     s_degenerate_i,
     input  var logic [3:0]               s_nlights_i,
     input  var logic [SRCW-1:0]          s_src_id_i,
@@ -75,7 +94,6 @@ module zhao_light_skin_adapter #(
     output var logic signed [31:0]       p_nx_o,
     output var logic signed [31:0]       p_ny_o,
     output var logic signed [31:0]       p_nz_o,
-    output var logic        [31:0]       p_mag_o,
     output var logic                     p_degenerate_o,
     output var logic [3:0]               p_nlights_o,
     output var logic [SRCW-1:0]          p_src_id_o,
@@ -100,17 +118,14 @@ module zhao_light_skin_adapter #(
     fits_s32 = (ext == '0) || (ext == '1);
   endfunction
 
-  logic lanes_ok_c, mag_ok_c, domain_ok_c;
+  logic domain_ok_c;
   always_comb begin
-    lanes_ok_c  = fits_s32(s_nx_i[63:31]) && fits_s32(s_ny_i[63:31]) && fits_s32(s_nz_i[63:31]);
-    mag_ok_c    = (s_mag_i[63:32] == 32'd0);
-    domain_ok_c = lanes_ok_c && mag_ok_c;
+    domain_ok_c = fits_s32(s_nx_i[63:31]) && fits_s32(s_ny_i[63:31]) && fits_s32(s_nz_i[63:31]);
   end
 
-  // A refused tuple is consumed and dropped; it must not stall the producer
-  // and must not reach the arena. An accepted tuple obeys ordinary
-  // ready/valid.
-  assign s_ready_o = domain_ok_c ? (!p_valid_o || p_ready_i) : 1'b1;
+  // Both outcomes emit exactly one prepared record, so both obey ordinary
+  // ready/valid: a refused tuple waits for room like any other.
+  assign s_ready_o = !p_valid_o || p_ready_i;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -118,7 +133,6 @@ module zhao_light_skin_adapter #(
       p_nx_o         <= '0;
       p_ny_o         <= '0;
       p_nz_o         <= '0;
-      p_mag_o        <= '0;
       p_degenerate_o <= 1'b0;
       p_nlights_o    <= '0;
       p_src_id_o     <= '0;
@@ -132,13 +146,21 @@ module zhao_light_skin_adapter #(
           p_nx_o         <= s_nx_i[31:0];
           p_ny_o         <= s_ny_i[31:0];
           p_nz_o         <= s_nz_i[31:0];
-          p_mag_o        <= s_mag_i[31:0];
           p_degenerate_o <= s_degenerate_i;
           p_nlights_o    <= s_nlights_i;
           p_src_id_o     <= s_src_id_i;
           accepted_o     <= accepted_o + CNTW'(1);
         end else begin
-          refused_o <= refused_o + CNTW'(1);
+          // The vertex crosses, its direction does not: zero lanes, declared
+          // degenerate, same source id. See "BUT ITS VERTEX DOES" above.
+          p_valid_o      <= 1'b1;
+          p_nx_o         <= '0;
+          p_ny_o         <= '0;
+          p_nz_o         <= '0;
+          p_degenerate_o <= 1'b1;
+          p_nlights_o    <= s_nlights_i;
+          p_src_id_o     <= s_src_id_i;
+          refused_o      <= refused_o + CNTW'(1);
         end
       end
     end
@@ -158,7 +180,6 @@ module zhao_light_skin_adapter #(
       a_nx_lossless : assert ($signed({{32{s_nx_i[31]}}, s_nx_i[31:0]}) == s_nx_i);
       a_ny_lossless : assert ($signed({{32{s_ny_i[31]}}, s_ny_i[31:0]}) == s_ny_i);
       a_nz_lossless : assert ($signed({{32{s_nz_i[31]}}, s_nz_i[31:0]}) == s_nz_i);
-      a_mag_lossless : assert ({32'd0, s_mag_i[31:0]} == s_mag_i);
     end
   end
 `endif

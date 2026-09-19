@@ -5,9 +5,9 @@
 //     GEOM.GROUP_SEQ --- grp_* (1 or 2 sealed handles) ---\
 //     GEOM.ASSEMBLE  --- t_* (v0,v1,v2) + m_done -----------> GEOM.REPLAY --> GEOM.CLIP
 //                                                         |      |   ^
-//     GEOM.PROJ_LANE <-- look_* (3 per triangle per view) -'      |   |
-//     vertex-attribute store <-- the SAME look_* nets ------------'   |
-//     GEOM.DEPTHQUANT x3 + one rcp24 (inside) --------------------------'
+//     GEOM.PROJ_LANE <-- look_* (3 per triangle per view) -'      |
+//     GEOM.VATTR     <-- the SAME look_* nets -------------------'
+//                        (invw24 + slots 1..6, on the arena's clock)
 //
 // ---------------------------------------------------------------------------
 // WHY THIS FILE EXISTS
@@ -54,30 +54,28 @@
 // or no visible view) expects NO handles, so it cannot wedge here.
 //
 // ---------------------------------------------------------------------------
-// DEPTH: GEOM.DEPTHQUANT, THREE LANES, ONE RECIPROCAL
+// DEPTH IS READ, NOT COMPUTED HERE (owner ruling R31, 2026-09-19)
 // ---------------------------------------------------------------------------
 // Slot 0 of the ruling-5 packet is invw24, which only GEOM.DEPTHQUANT may make
-// (owner ruling D-4: "no consumer performs its own profile conversion"). It is
-// strictly one vertex at a time, so the three corners get three lanes; the
-// lanes share ONE `zhao_raster_rcp24_v4` (the latest reciprocal, a second
-// INSTANCE of the one law -- the `zhao_field_isqrt` precedent), steered by the
-// token that service already carries. The profile is the one each vertex was
-// PROJECTED under: a per-arena table written from the projector's own landings
-// (the arena, not the view, because a view's profile is SetView state and may
-// change between frames while a group from the previous frame is still here).
-// Two landings in one arena with different profiles are counted on
-// `profile_mixed_o` -- independent operands, two different landings.
+// (owner ruling D-4). This block used to run three DEPTHQUANT lanes per
+// TRIANGLE CORNER on a private reciprocal: MEASURED 56 clocks per
+// view-triangle, 2.7x the frame at the 120,000-vertex tier, because a vertex
+// shared by six corners paid for its depth six times and every triangle waited
+// out a ~40-clock reciprocal round trip. invw24 is a property of the landed
+// VERTEX in its view, so GEOM.VATTR now computes it once per landing (on
+// `zhao_geom_depthquant_stream`, the same law) and returns it here on
+// `att_invw_i` with the rest of the vertex's attributes. The per-arena profile
+// table and `profile_mixed_o` moved with it.
 //
 // ---------------------------------------------------------------------------
-// THE VERTEX-ATTRIBUTE STORE (owner ruling R11, provisional)
+// THE VERTEX-ATTRIBUTE STORE (owner ruling R11; entry I46, CLOSED)
 // ---------------------------------------------------------------------------
-// Slots 1..6 (u_over_w, v_over_w, r, g, b, alpha) are per-vertex, per-view, and
-// live in a store keyed EXACTLY like the arena. It listens to this block's
-// `look_*` nets -- the same three lookups -- and must answer with the arena's
-// timing: `att_rep_valid_i` in the same cycle as `rep_valid_i`. A disagreement
-// is counted on `att_skew_o`, whose operands come from two different memories.
-// The store's WRITER is not built (R11 names it); the store is this block's
-// peer, not its part.
+// invw24 and slots 1..6 (u_over_w, v_over_w, r, g, b, alpha) are per-vertex,
+// per-view, and live in GEOM.VATTR, keyed EXACTLY like the arena. It listens to
+// this block's `look_*` nets -- the same three lookups -- and must answer with
+// the arena's timing: `att_rep_valid_i` in the same cycle as `rep_valid_i`. A
+// disagreement is counted on `att_skew_o`, whose operands come from two
+// different memories. The store is this block's peer, not its part.
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS BLOCK REFUSES
@@ -87,6 +85,10 @@
 // cannot be drawn, and drawing it from a stale or unwritten vertex would put
 // somebody else's geometry on screen. A vertex id wider than the arena index is
 // forced to an index the arena REFUSES rather than truncated onto a real slot.
+// A meshlet whose GROUP_SEQ handle arrives POISONED (a record GEOM.VDECODE
+// refused, owner ruling R31) has every triangle taken and dropped WITHOUT a
+// lookup -- its later indices name the wrong vertices, so a lookup would HIT
+// -- counted on `poisoned_o`, and its arenas are released as usual.
 //
 // Throughput is stated, not claimed: see the directed test's measured clocks
 // per triangle. Conservative SystemVerilog subset only (charter section 2).
@@ -100,9 +102,7 @@ module zhao_geom_replay #(
     parameter int unsigned SRCW      = 16,
     parameter int unsigned PAYLOAD_W = 106,
     // Attribute store words per vertex (u_over_w, v_over_w, r, g, b, alpha).
-    parameter int unsigned ATTRW     = 6 * 32,
-    // Contexts in the private reciprocal. Three lanes, one request each.
-    parameter int unsigned RCP_NCTX  = 4
+    parameter int unsigned ATTRW     = 6 * 32
 ) (
     input  wire clk,
     input  wire rst_n,
@@ -119,15 +119,12 @@ module zhao_geom_replay #(
     input  wire [ARENA_W-1:0]      grp_arena_i,
     input  wire [GEN_W-1:0]        grp_gen_i,
     input  wire                    grp_view_i,
+    // GEOM.GROUP_SEQ's verdict that the batch lost a record upstream (a
+    // GEOM.VDECODE refusal, owner ruling R31): the meshlet's triangles are
+    // taken and DROPPED, and its arenas are still released.
+    input  wire                    grp_poison_i,
     output wire                    rel_valid_o,
     output wire [ARENA_W-1:0]      rel_arena_o,
-
-    // ---- arena lifetime and landings, for the per-arena depth profile -------
-    input  wire                    op_valid_i,     // GEOM.GROUP_SEQ open_o
-    input  wire [ARENA_W-1:0]      op_arena_i,
-    input  wire                    fl_valid_i,     // a geometry landing
-    input  wire [ARENA_W-1:0]      fl_arena_i,
-    input  wire [1:0]              fl_profile_i,
 
     // ---- TriangleDescriptors, from GEOM.ASSEMBLE -----------------------------
     input  wire                    t_valid_i,
@@ -151,6 +148,7 @@ module zhao_geom_replay #(
     input  wire                    rep_refuse_i,
     input  wire [PAYLOAD_W-1:0]    rep_payload_i,
     input  wire                    att_rep_valid_i,
+    input  wire [23:0]             att_invw_i,     // GEOM.VATTR's invw24 (R31)
     input  wire [ATTRW-1:0]        att_rep_data_i,
 
     // ---- GEOM.ASSETFETCH's buffer release (entry I38) ------------------------
@@ -185,12 +183,9 @@ module zhao_geom_replay #(
     output logic [31:0]            refused_o,        // dropped: a corner refused
     output logic [31:0]            missed_o,         // dropped: a corner missed
     output logic [31:0]            att_skew_o,       // store and arena disagreed on timing
-    output logic [31:0]            profile_mixed_o,  // one arena, two profiles
     output logic [31:0]            view_bad_o,       // a handle for a view not in the mask
-    output logic [31:0]            dq_refused_o      // DEPTHQUANT refusals, all lanes
+    output logic [31:0]            poisoned_o        // dropped: the batch lost a record (R31)
 );
-
-  localparam int unsigned NA = 1 << ARENA_W;
 
   initial begin
     if (PAYLOAD_W != 106)
@@ -204,7 +199,6 @@ module zhao_geom_replay #(
   localparam logic [2:0] S_HAND  = 3'd1;
   localparam logic [2:0] S_TRI   = 3'd2;
   localparam logic [2:0] S_LOOK  = 3'd3;
-  localparam logic [2:0] S_DEPTH = 3'd4;
   localparam logic [2:0] S_EMIT  = 3'd5;
   localparam logic [2:0] S_REL   = 3'd6;
 
@@ -214,6 +208,7 @@ module zhao_geom_replay #(
   logic [1:0]         nh_q;            // handles taken
   logic [1:0]         mask_q;
   logic               done_seen_q;     // GEOM.ASSEMBLE's walk has ended
+  logic               pois_q;          // a handle of this meshlet was poisoned
   logic [ARENA_W-1:0] sl_arena_q [2];
   logic [GEN_W-1:0]   sl_gen_q   [2];
   logic               sl_view_q  [2];
@@ -232,17 +227,9 @@ module zhao_geom_replay #(
   logic               any_ref_q, any_miss_q;
   logic signed [20:0] cx_q [3];
   logic signed [20:0] cy_q [3];
-  logic [30:0]        cw_q [3];
   logic [2:0]         cb_q;
   logic [ATTRW-1:0]   ca_q [3];
-
-  // depth
-  logic [2:0]         dq_started_q, dq_got_q;
   logic [23:0]        invw_q [3];
-
-  // per-arena projection profile
-  logic [1:0]         prof_q [NA];
-  logic [NA-1:0]      prof_seen_q;
 
   // ---- handshakes ----------------------------------------------------------
   assign mt_ready_o  = (st_q == S_IDLE);
@@ -300,175 +287,12 @@ module zhao_geom_replay #(
   assign o_material_o = tmat_q;
   assign o_raster_o   = trast_q;
 
-  // ---- DEPTHQUANT x3 on one reciprocal --------------------------------------
-  wire [1:0] cur_prof_c = prof_q[sl_arena_q[vs_q]];
-
-  logic        dq_v_valid [3];
-  logic        dq_v_ready [3];
-  logic        dq_d_valid [3];
-  logic        dq_d_ready [3];
-  logic [23:0] dq_invw    [3];
-  logic        dq_rcp_valid [3];
-  logic        dq_rcp_ready [3];
-  logic [23:0] dq_rcp_d     [3];
-  logic        dq_rcp_rvalid [3];
-  logic        dq_rcp_rready [3];
-  logic [31:0] dq_refused_c  [3];
-  // SATURATION IS NOT SUMMED OUT, deliberately: for the three shipped profiles
-  // it is unreachable -- the generator solves each SCALE so the near pin lands
-  // EXACTLY on 0xFFFFFF (GEOM.DEPTHQUANT's own header) -- so a port for it
-  // could never be seen to fire, and a counter nobody can fire is not evidence.
-  // The refusal IS summed: a profile outside the three is refused, and the
-  // directed test fires it from `fl_profile_i`.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [31:0] dq_sat_c      [3];
-  /* verilator lint_on UNUSEDSIGNAL */
-  logic [23:0] lane_r_q      [3];
-  logic [5:0]  lane_k_q      [3];
-
-  // Unread per-lane outputs, named rather than left as empty connections: the
-  // behind bit and source id come back unchanged from what this block sent,
-  // and the near/far clamps are the LAW's normal behaviour, not faults.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic        dq_d_behind [3];
-  logic [SRCW-1:0] dq_d_src [3];
-  logic [31:0] dq_vertices_c [3];
-  logic [31:0] dq_near_c     [3];
-  logic [31:0] dq_far_c      [3];
-  /* verilator lint_on UNUSEDSIGNAL */
-
-  // the shared reciprocal
-  logic        rcp_v_valid, rcp_v_ready, rcp_r_valid, rcp_r_ready;
-  logic [23:0] rcp_d, rcp_r;
-  logic [5:0]  rcp_k;
-  logic [7:0]  rcp_v_tok, rcp_r_tok;
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic        rcp_d_zero, rcp_qerr, rcp_idle;
-  logic [31:0] rcp_accepted, rcp_completed, rcp_mul_jobs, rcp_zero_jobs,
-               rcp_phase_jobs, rcp_negcorr_jobs;
-  logic [5:0]  rcp_occupancy;
-  /* verilator lint_on UNUSEDSIGNAL */
-
-  genvar L;
-  generate
-    for (L = 0; L < 3; L = L + 1) begin : g_dq
-      assign dq_v_valid[L] = (st_q == S_DEPTH) && !dq_started_q[L];
-      assign dq_d_ready[L] = (st_q == S_DEPTH) && !dq_got_q[L];
-
-      zhao_geom_depthquant #(
-          .SRCW(SRCW)
-      ) u_dq (
-          .clk         (clk),
-          .rst_n       (rst_n),
-          .v_valid_i   (dq_v_valid[L]),
-          .v_ready_o   (dq_v_ready[L]),
-          .v_w_i       ({9'd0, cw_q[L]}),
-          .v_behind_i  (cb_q[L]),
-          .v_profile_i (cur_prof_c),
-          .v_src_id_i  (tsrc_q),
-          .d_valid_o   (dq_d_valid[L]),
-          .d_ready_i   (dq_d_ready[L]),
-          .d_invw24_o  (dq_invw[L]),
-          .d_behind_o  (dq_d_behind[L]),
-          .d_src_id_o  (dq_d_src[L]),
-          .rcp_valid_o (dq_rcp_valid[L]),
-          .rcp_ready_i (dq_rcp_ready[L]),
-          .rcp_d_o     (dq_rcp_d[L]),
-          .rcp_rvalid_i(dq_rcp_rvalid[L]),
-          .rcp_rready_o(dq_rcp_rready[L]),
-          .rcp_r_i     (lane_r_q[L]),
-          .rcp_k_i     (lane_k_q[L]),
-          .vertices_o     (dq_vertices_c[L]),
-          .clamped_near_o (dq_near_c[L]),
-          .clamped_far_o  (dq_far_c[L]),
-          .saturated_o    (dq_sat_c[L]),
-          .refused_o      (dq_refused_c[L])
-      );
-
-      // Results come back in COMPLETION order, steered by the token.
-      assign dq_rcp_rvalid[L] = rcp_r_valid && (rcp_r_tok == 8'(L));
-
-      // LATCHED AT THIS LANE'S OWN HANDSHAKE. GEOM.DEPTHQUANT reads the reply
-      // in S_COMB, the clock AFTER it accepted it -- correct against a service
-      // that holds its answer, wrong against a SHARED one: by then the bus may
-      // carry another lane's result. Each lane is shown the value it took.
-      always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-          lane_r_q[L] <= '0;
-          lane_k_q[L] <= '0;
-        end else if (dq_rcp_rvalid[L] && dq_rcp_rready[L]) begin
-          lane_r_q[L] <= rcp_r;
-          lane_k_q[L] <= rcp_k;
-        end
-      end
-    end
-  endgenerate
-
-  // Request side: fixed priority, lane 0 first. Each lane asks at most once per
-  // triangle, so priority cannot starve a lane of this triangle's work.
-  always_comb begin
-    rcp_v_valid     = 1'b0;
-    rcp_d           = '0;
-    rcp_v_tok       = '0;
-    dq_rcp_ready[0] = 1'b0;
-    dq_rcp_ready[1] = 1'b0;
-    dq_rcp_ready[2] = 1'b0;
-    if (dq_rcp_valid[0]) begin
-      rcp_v_valid = 1'b1; rcp_d = dq_rcp_d[0]; rcp_v_tok = 8'd0;
-      dq_rcp_ready[0] = rcp_v_ready;
-    end else if (dq_rcp_valid[1]) begin
-      rcp_v_valid = 1'b1; rcp_d = dq_rcp_d[1]; rcp_v_tok = 8'd1;
-      dq_rcp_ready[1] = rcp_v_ready;
-    end else if (dq_rcp_valid[2]) begin
-      rcp_v_valid = 1'b1; rcp_d = dq_rcp_d[2]; rcp_v_tok = 8'd2;
-      dq_rcp_ready[2] = rcp_v_ready;
-    end
-  end
-
-  always_comb begin
-    rcp_r_ready = 1'b0;
-    if (rcp_r_tok == 8'd0) rcp_r_ready = dq_rcp_rready[0];
-    if (rcp_r_tok == 8'd1) rcp_r_ready = dq_rcp_rready[1];
-    if (rcp_r_tok == 8'd2) rcp_r_ready = dq_rcp_rready[2];
-  end
-
-  zhao_raster_rcp24_v4 #(
-      .NCTX(RCP_NCTX),
-      .TOKW(8)
-  ) u_rcp (
-      .clk        (clk),
-      .rst_n      (rst_n),
-      .v_valid_i  (rcp_v_valid),
-      .v_ready_o  (rcp_v_ready),
-      .d_i        (rcp_d),
-      .v_tok_i    (rcp_v_tok),
-      .r_valid_o  (rcp_r_valid),
-      .r_ready_i  (rcp_r_ready),
-      .r_o        (rcp_r),
-      .k_o        (rcp_k),
-      .d_zero_o   (rcp_d_zero),
-      .r_tok_o    (rcp_r_tok),
-      .accepted_o (rcp_accepted),
-      .completed_o(rcp_completed),
-      .mul_jobs_o (rcp_mul_jobs),
-      .zero_jobs_o(rcp_zero_jobs),
-      .phase_jobs_o(rcp_phase_jobs),
-      .negcorr_jobs_o(rcp_negcorr_jobs),
-      .occupancy_o(rcp_occupancy),
-      .qerr_o     (rcp_qerr),
-      .idle_o     (rcp_idle)
-  );
-
-  // The lanes' fault counters, summed: one number per fault kind.
-  always_comb begin
-    dq_refused_o   = dq_refused_c[0] + dq_refused_c[1] + dq_refused_c[2];
-  end
-
   // ---- the machine ----------------------------------------------------------
-  // The arena's `d` field (the projector's Q16.16 1/w, bits 73:42) is NOT read:
-  // depth is invw24, which only GEOM.DEPTHQUANT makes, from `w` (owner ruling
-  // D-4). Reading `d` as a depth would be the second profile conversion that
-  // ruling forbids.
+  // The arena's `d` field (the projector's Q16.16 1/w, bits 73:42) and `w`
+  // (bits 104:74) are NOT read: depth is invw24, which only GEOM.DEPTHQUANT
+  // makes, from `w` (owner ruling D-4) -- once per landed vertex, in GEOM.VATTR,
+  // which answers it on `att_invw_i`. Reading `d` as a depth would be the second
+  // profile conversion that ruling forbids.
   /* verilator lint_off UNUSEDSIGNAL */
   wire [PAYLOAD_W-1:0] rp = rep_payload_i;
   /* verilator lint_on UNUSEDSIGNAL */
@@ -483,6 +307,8 @@ module zhao_geom_replay #(
       nh_q            <= '0;
       mask_q          <= '0;
       done_seen_q     <= 1'b0;
+      pois_q          <= 1'b0;
+      poisoned_o      <= '0;
       sl_arena_q[0]   <= '0;
       sl_arena_q[1]   <= '0;
       sl_gen_q[0]     <= '0;
@@ -502,17 +328,12 @@ module zhao_geom_replay #(
       any_ref_q       <= 1'b0;
       any_miss_q      <= 1'b0;
       cb_q            <= '0;
-      dq_started_q    <= '0;
-      dq_got_q        <= '0;
-      prof_seen_q     <= '0;
       for (ai = 0; ai < 3; ai = ai + 1) begin
         cx_q[ai]   <= '0;
         cy_q[ai]   <= '0;
-        cw_q[ai]   <= '0;
         ca_q[ai]   <= '0;
         invw_q[ai] <= '0;
       end
-      for (ai = 0; ai < NA; ai = ai + 1) prof_q[ai] <= '0;
       meshlets_o      <= '0;
       groups_o        <= '0;
       triangles_in_o  <= '0;
@@ -520,23 +341,8 @@ module zhao_geom_replay #(
       refused_o       <= '0;
       missed_o        <= '0;
       att_skew_o      <= '0;
-      profile_mixed_o <= '0;
       view_bad_o      <= '0;
     end else begin
-      // --- the per-arena profile, from the projector's own landings ---------
-      // An OPEN clears the arena's entry; its first landing sets it; a later
-      // landing that disagrees is counted. Open wins on a same-cycle collision
-      // because GEOM.GROUP_SEQ never lands into an arena it is opening.
-      if (fl_valid_i) begin
-        if (!prof_seen_q[fl_arena_i]) begin
-          prof_q[fl_arena_i]      <= fl_profile_i;
-          prof_seen_q[fl_arena_i] <= 1'b1;
-        end else if ((prof_q[fl_arena_i] != fl_profile_i) &&
-                     (profile_mixed_o != 32'hFFFF_FFFF)) begin
-          profile_mixed_o <= profile_mixed_o + 32'd1;
-        end
-      end
-      if (op_valid_i) prof_seen_q[op_arena_i] <= 1'b0;
 
       // --- the attribute store must answer with the arena's timing ---------
       if ((att_rep_valid_i != rep_valid_i) && (att_skew_o != 32'hFFFF_FFFF))
@@ -552,6 +358,7 @@ module zhao_geom_replay #(
             mask_q      <= mt_view_mask_i;
             nh_q        <= '0;
             done_seen_q <= 1'b0;
+            pois_q      <= 1'b0;
             rk_rel_q    <= 1'b0;
             st_q        <= (mt_need_c == 2'd0) ? S_TRI : S_HAND;
           end
@@ -562,6 +369,9 @@ module zhao_geom_replay #(
             sl_arena_q[nh_q[0]] <= grp_arena_i;
             sl_gen_q[nh_q[0]]   <= grp_gen_i;
             sl_view_q[nh_q[0]]  <= grp_view_i;
+            // One poisoned handle poisons the MESHLET: both views were filled
+            // from the same record stream, so the same hole is in both.
+            if (grp_poison_i) pois_q <= 1'b1;
             if (groups_o != 32'hFFFF_FFFF) groups_o <= groups_o + 32'd1;
             if (!mask_q[grp_view_i] && (view_bad_o != 32'hFFFF_FFFF))
               view_bad_o <= view_bad_o + 32'd1;
@@ -588,6 +398,12 @@ module zhao_geom_replay #(
             // taken and dropped as refused, so the walk still drains.
             if (need_q == 2'd0) begin
               if (refused_o != 32'hFFFF_FFFF) refused_o <= refused_o + 32'd1;
+            end else if (pois_q) begin
+              // R31: the batch lost a record, so every arena index after the
+              // hole names the wrong vertex. The descriptor is taken so the
+              // walk drains, and dropped WITHOUT a lookup -- a lookup would
+              // HIT, with a plausible corner from the wrong vertex.
+              if (poisoned_o != 32'hFFFF_FFFF) poisoned_o <= poisoned_o + 32'd1;
             end else begin
               st_q <= S_LOOK;
             end
@@ -602,9 +418,9 @@ module zhao_geom_replay #(
           if (rep_valid_i) begin
             cx_q[rk_q] <= $signed(rp[20:0]);
             cy_q[rk_q] <= $signed(rp[41:21]);
-            cw_q[rk_q] <= rp[104:74];
             cb_q[rk_q] <= rp[105];
-            ca_q[rk_q] <= att_rep_data_i;
+            ca_q[rk_q]   <= att_rep_data_i;
+            invw_q[rk_q] <= att_invw_i;
             if (rep_bad_ref_c)  any_ref_q  <= 1'b1;
             if (rep_bad_miss_c) any_miss_q <= 1'b1;
             rk_q <= rk_q + 2'd1;
@@ -617,25 +433,12 @@ module zhao_geom_replay #(
                 if (missed_o != 32'hFFFF_FFFF) missed_o <= missed_o + 32'd1;
                 st_q <= S_EMIT;
               end else begin
-                dq_started_q <= '0;
-                dq_got_q     <= '0;
-                st_q         <= S_DEPTH;
+                // All three corners, their depth and their attributes are in
+                // hand on this clock: nothing left to wait for (R31).
+                st_q <= S_EMIT;
               end
             end
           end
-        end
-
-        S_DEPTH: begin
-          for (ai = 0; ai < 3; ai = ai + 1) begin
-            if (dq_v_valid[ai] && dq_v_ready[ai]) dq_started_q[ai] <= 1'b1;
-            if (dq_d_valid[ai] && dq_d_ready[ai]) begin
-              dq_got_q[ai] <= 1'b1;
-              invw_q[ai]   <= dq_invw[ai];
-            end
-          end
-          if ((dq_got_q | ({dq_d_valid[2], dq_d_valid[1], dq_d_valid[0]} &
-                           {dq_d_ready[2], dq_d_ready[1], dq_d_ready[0]})) == 3'b111)
-            st_q <= S_EMIT;
         end
 
         S_EMIT: begin

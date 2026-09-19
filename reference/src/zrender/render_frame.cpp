@@ -105,6 +105,7 @@ SurfaceSheet& SoftwareRenderer::sheet_for(uint32_t patch_handle) {
 void SoftwareRenderer::reset() {
   mode_latched_ = zhao_abi::VIDEO_Z60;
   sheets_.clear();
+  env_ = sky::EnvState{};
 }
 
 RenderResult SoftwareRenderer::render_frame(const std::vector<uint8_t>& pkt, uint32_t dst_slot,
@@ -341,6 +342,23 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
         }
         has_sky = true;
         sky = SkyDraw{set, c};
+        break;
+      }
+      case zhao_abi::ZHAO_OP_SET_ENVIRONMENT: {
+        // IMPLEMENTED since owner ruling R25 (2026-09-19). The record's first
+        // 20 payload bytes ARE the ENVIRONMENT_STATE body (capture_format 4.2,
+        // a byte mirror), so the one deserializer reads both. The state
+        // PERSISTS -- 4a: "a frame with no SetEnvironment keeps the previous
+        // state" -- and the last record in a frame wins.
+        //
+        // STORED, AND NOT YET OBSERVED BY THIS RENDERER'S SHADING. The
+        // hardware law for what it does to a lit vertex is
+        // zref::light_env::bank_of -> GEOM.LIGHT's bank (zhao_light_env.sv);
+        // this software renderer's form shading predates the record and is not
+        // re-derived here. Said so a reader does not conclude otherwise.
+        const uint8_t* rec = pkt + zhao_abi::ZHAO_FRAME_HEADER_BYTES + r.pos;
+        env_ = sky::env_state_deserialize(rec + 16);
+        r.pos += rbytes;
         break;
       }
       case zhao_abi::ZHAO_OP_EMIT_AUDIO_EVENT: {

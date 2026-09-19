@@ -37,6 +37,10 @@ modules:
     disposition: superseded
     superseded_by: zhao_mem_share_n
     why: "the two-requester wrapper over the N core (R4); both console sites instantiate zhao_mem_share_n directly since 2026-09-19 (the ENGINE1 adapter at N=3 for MATERIAL.RESOLVE, and the terrain read share); kept for its directed test"
+  zhao_geom_depthquant:
+    disposition: superseded
+    superseded_by: zhao_geom_depthquant_stream
+    why: "the one-vertex-at-a-time FSM schedule of the depth law. Since 2026-09-19 (owner ruling R31, geom2) the console runs the SAME law -- the two leaves zhao_geom_depthquant_pre/_post in the same file -- on the tagged stream schedule inside GEOM.VATTR, once per landed vertex, instead of three FSM lanes per triangle corner inside GEOM.REPLAY. The FSM remains for tests/shell/tb_zhao_shell.sv and its own directed test (geom_depthquant_directed), exactly as zhao_hps_arbiter remains beside zhao_hps_arbiter_n"
   zhao_hps_arbiter:
     disposition: superseded
     superseded_by: zhao_hps_arbiter_n
