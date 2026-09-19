@@ -302,6 +302,43 @@ def resolve_module(block_id: str, implementation: str | None) -> str | None:
     return None
 
 
+def successor_in(mod: str, closure: set[str], live: set[str]) -> str | None:
+    """Is a VERSIONED SUCCESSOR of `mod` composed instead of `mod` itself?
+
+    TEXTURE.CACHE resolves by convention to `zhao_texture_cache`, which nothing
+    composes -- but `zhao_texture_island_v3_top` IS composed and instantiates
+    `zhao_texture_cache_pipe_v2`. The capability is present; the resolver was
+    naming the superseded file. Counting that as a mandatory gap inflates the
+    number and sends someone to compose a module the tree has already replaced.
+
+    THIS CORRECTION MAKES THE NUMBER SMALLER, which is the flattering direction,
+    so the bar is deliberately high: the successor must be BOTH in the closure
+    AND instantiated, and its name must be `mod` plus a version suffix -- never a
+    fuzzy match. The successor is reported by name so every reduction is
+    auditable rather than asserted.
+    """
+    for cand in sorted(closure & live):
+        if cand == mod or not cand.startswith(mod + "_"):
+            continue
+        tail = cand[len(mod) + 1:]
+        # THE TAIL MUST BE A VERSION AND NOTHING ELSE.
+        #
+        # The first draft allowed `(?:\w+_)?v\d+`, and it immediately produced a
+        # FALSE reduction: it matched `zhao_texture_tmu_plan_v2` as a successor
+        # of `zhao_texture_tmu`. That file's own third line says it is the
+        # successor of `zhao_texture_tmu_plan.sv` -- the PLANNER, not the
+        # sampler. Two different modules whose names happen to share a prefix.
+        #
+        # Same for `zhao_texture_cache_pipe_v2` (successor of
+        # `..._cache_pipe`) and `zhao_texture_aux_pipe_v2`. A loose prefix rule
+        # retires a real gap by coincidence of naming, and it does so in the
+        # direction that makes the campaign look further along than it is --
+        # which is the one direction this register must never fail in.
+        if re.fullmatch(r"v\d+", tail):
+            return cand
+    return None
+
+
 def disconnected() -> dict:
     """Mandatory capabilities whose implementation is NOT in the console.
 
@@ -337,6 +374,8 @@ def disconnected() -> dict:
             unresolvable.append(b["id"])
         elif mod in closure and mod in live:
             connected.append(b["id"])
+        elif successor_in(mod, closure, live):
+            connected.append("%s (via %s)" % (b["id"], successor_in(mod, closure, live)))
         elif mod in closure:
             # in the source list but nothing instantiates it. NOT connected --
             # this is the shell's eight-struck-modules failure, and counting it
