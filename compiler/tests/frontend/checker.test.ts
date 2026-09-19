@@ -1163,7 +1163,7 @@ test('top-level and selective roots precede whole-module declaration operands', 
     'game.form': `module game {
       global game: world3 = world3 { x = 0w, y = 0w, z = 0w };
       global start: world3 = world3 { x = 1w, y = 2w, z = 3w };
-      presentation limits { shared budget 100%; }
+      presentation limits { shared budget 10000; }
       system advance every 1 ticks reads writes { }
       scenario bad {
         seed 1;
@@ -1198,7 +1198,7 @@ test('stagger and scenario resources retain checker-owned owner identities', () 
       pool items: row[2];
       global start: world3 = world3 { x = 0w, y = 0w, z = 0w };
       system advance every 1 ticks reads writes { }
-      presentation limits { shared budget 100%; }
+      presentation limits { shared budget 10000; }
     }\n`,
     'app.form': `module app {
       import world;

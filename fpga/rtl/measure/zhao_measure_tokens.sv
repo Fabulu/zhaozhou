@@ -110,12 +110,9 @@
 //     handed. REJECTED: hardcoding 45/45/10 and taking one total. It would
 //     make a ratified ABI field dead, and it would put a percentage-to-token
 //     division inside the guard's combinational grant path.
-//     (Observed and NOT ratified here: the Nanquan compiler currently writes
-//     PERCENTAGES into these u32 fields — `record.payload.geometry_tokens[0u]
-//     = 80u` — while this block reads them as absolute token counts. The
-//     block is unit-agnostic, so it is correct under either reading, but the
-//     two producers do not agree with each other and that is written down in
-//     the contract rather than papered over.)
+//     (RATIFIED 2026-09-19, rulings R18/R33: COUNTS end to end. The compiler
+//     used to write percentages here; it now writes the authored counts and
+//     nothing converts. See the R18/R33 block above the module.)
 // T4. A RETURN NAMES THE POOL ITS GRANT DREW FROM. `tok_shared_o` is presented
 //     with the grant; `ret_shared_i` echoes it back. REJECTED: returning to
 //     the private pool first and spilling to shared. That MOVES tokens
@@ -187,6 +184,28 @@
 // 17.0 rejects it outright, and it cost GEOM.BINNER a synthesis failure that
 // every simulation lane passed.
 
+// ---------------------------------------------------------------------------
+// R18 / R33 -- THE CEILING AND THE REQUEST (owner rulings, 2026-09-19)
+// ---------------------------------------------------------------------------
+// ONE unit, COUNTS, end to end: nothing in this block converts anything, and
+// no per-frame capacity is assumed. ONE authority per level:
+//
+//   * SetPresentationContract's five numbers are the CEILING (`budget_*_i`).
+//     A load latches them as the ceiling AND as the frame's allowance, and
+//     refills every pool -- exactly what it did before.
+//   * SetView's two per-view numbers are that frame's REQUEST (`vreq_*_i`). A
+//     request CLAMPS to the ceiling -- min(request, ceiling), per class -- and
+//     becomes that view's allowance and its refilled pool. A request above the
+//     ceiling is not an error, it is a request that did not get everything it
+//     asked for, and `vreq_clamped_o` counts every class that was cut.
+//
+// A request is a LOAD, so law T9 applies to it as to the contract: the cycle a
+// load lands, no grant is made and no return is applied (the refused request
+// is answered REASON_RELOAD). Only the requested view's two pools change;
+// view 1's request cannot touch view 0's pools (law T2 holds for loads too).
+// A MEASURE.GOVERNOR that lowers a request is working within the ceiling by
+// construction: nothing it sends can exceed what this block clamps it to.
+
 module zhao_measure_tokens #(
     parameter int unsigned TOK_W = 32
 ) (
@@ -205,6 +224,14 @@ module zhao_measure_tokens #(
     input logic [TOK_W-1:0] budget_frag0_i,
     input logic [TOK_W-1:0] budget_frag1_i,
     input logic [TOK_W-1:0] budget_shared_i,
+
+    // -----------------------------------------------------------------------
+    // SetView's per-view REQUEST (R18): clamped to the ceiling above.
+    // -----------------------------------------------------------------------
+    input logic             vreq_valid_i,
+    input logic             vreq_view_i,
+    input logic [TOK_W-1:0] vreq_geom_i,
+    input logic [TOK_W-1:0] vreq_frag_i,
 
     // -----------------------------------------------------------------------
     // The request. COMBINATIONAL in / COMBINATIONAL out — GEOM.BINNER's law E.
@@ -267,7 +294,9 @@ module zhao_measure_tokens #(
     output logic [31:0] tok_rep_count5_o,
     output logic [31:0] tok_rep_count6_o,
     output logic [31:0] tok_rep_count7_o,
-    output logic [31:0] triangles_culled_o
+    output logic [31:0] triangles_culled_o,
+    // R18: classes whose SetView request exceeded the contract's ceiling.
+    output logic [31:0] vreq_clamped_o
 );
 
   // Denial reasons. 3 is unused and never presented.
@@ -278,7 +307,10 @@ module zhao_measure_tokens #(
   localparam logic [31:0] CNT_MAX = 32'hFFFF_FFFF;
 
   // ---- the five budgets and the five pools ---------------------------------
+  // `bud_*` is the frame's ALLOWANCE (what a return may refill a pool back
+  // to); `ceil_*` is the CONTRACT's ceiling a request is clamped to (R18).
   logic [TOK_W-1:0] bud_geom0_r, bud_geom1_r, bud_frag0_r, bud_frag1_r, bud_shared_r;
+  logic [TOK_W-1:0] ceil_geom0_r, ceil_geom1_r, ceil_frag0_r, ceil_frag1_r;
   logic [TOK_W-1:0] avail_geom0_r, avail_geom1_r, avail_frag0_r, avail_frag1_r;
   logic [TOK_W-1:0] avail_shared_r;
 
@@ -304,8 +336,10 @@ module zhao_measure_tokens #(
   assign may_share   = req_essential_i && !fits_priv && fits_shared;
 
   // A budget load owns the pools this cycle (law T9): no grant is made against
-  // state that is being replaced.
-  assign tok_grant_o  = req_valid_i && !budget_valid_i && (fits_priv || may_share);
+  // state that is being replaced. A SetView request is a load too (R18).
+  logic load_c;
+  assign load_c = budget_valid_i || vreq_valid_i;
+  assign tok_grant_o  = req_valid_i && !load_c && (fits_priv || may_share);
   assign tok_shared_o = tok_grant_o && !fits_priv;
 
   // ---- per-pool debit and credit ------------------------------------------
@@ -359,6 +393,25 @@ module zhao_measure_tokens #(
     end
   endfunction
 
+  // ---- R18: the request, clamped to the ceiling ----------------------------
+  // The ceiling a request meets is the one being loaded THIS cycle when the
+  // contract and a request land together, and the latched one otherwise.
+  logic [TOK_W-1:0] vceil_geom, vceil_frag, vreq_geom_eff, vreq_frag_eff;
+  logic             vclamp_geom, vclamp_frag;
+  always_comb begin
+    if (budget_valid_i) begin
+      vceil_geom = vreq_view_i ? budget_geom1_i : budget_geom0_i;
+      vceil_frag = vreq_view_i ? budget_frag1_i : budget_frag0_i;
+    end else begin
+      vceil_geom = vreq_view_i ? ceil_geom1_r : ceil_geom0_r;
+      vceil_frag = vreq_view_i ? ceil_frag1_r : ceil_frag0_r;
+    end
+    vclamp_geom   = vreq_valid_i && (vreq_geom_i > vceil_geom);
+    vclamp_frag   = vreq_valid_i && (vreq_frag_i > vceil_frag);
+    vreq_geom_eff = vclamp_geom ? vceil_geom : vreq_geom_i;
+    vreq_frag_eff = vclamp_frag ? vceil_frag : vreq_frag_i;
+  end
+
   // ---- the one sequential block -------------------------------------------
   logic denied;
   assign denied = req_valid_i && !tok_grant_o;
@@ -383,6 +436,11 @@ module zhao_measure_tokens #(
       bud_frag0_r        <= '0;
       bud_frag1_r        <= '0;
       bud_shared_r       <= '0;
+      ceil_geom0_r       <= '0;
+      ceil_geom1_r       <= '0;
+      ceil_frag0_r       <= '0;
+      ceil_frag1_r       <= '0;
+      vreq_clamped_o     <= 32'd0;
       avail_geom0_r      <= '0;
       avail_geom1_r      <= '0;
       avail_frag0_r      <= '0;
@@ -410,7 +468,30 @@ module zhao_measure_tokens #(
         avail_frag0_r  <= budget_frag0_i;
         avail_frag1_r  <= budget_frag1_i;
         avail_shared_r <= budget_shared_i;
-      end else begin
+        ceil_geom0_r   <= budget_geom0_i;
+        ceil_geom1_r   <= budget_geom1_i;
+        ceil_frag0_r   <= budget_frag0_i;
+        ceil_frag1_r   <= budget_frag1_i;
+      end
+      // R18: a SetView request replaces ITS view's two allowances and pools
+      // with min(request, ceiling). Written after the contract load, so when
+      // both land together the request wins for its view, clamped to the
+      // ceiling that is landing with it.
+      if (vreq_valid_i) begin
+        if (vreq_view_i) begin
+          bud_geom1_r   <= vreq_geom_eff;
+          bud_frag1_r   <= vreq_frag_eff;
+          avail_geom1_r <= vreq_geom_eff;
+          avail_frag1_r <= vreq_frag_eff;
+        end else begin
+          bud_geom0_r   <= vreq_geom_eff;
+          bud_frag0_r   <= vreq_frag_eff;
+          avail_geom0_r <= vreq_geom_eff;
+          avail_frag0_r <= vreq_frag_eff;
+        end
+        vreq_clamped_o <= cnt_add(vreq_clamped_o, 32'(vclamp_geom) + 32'(vclamp_frag));
+      end
+      if (!load_c) begin
         avail_geom0_r <= pool_next(avail_geom0_r, bud_geom0_r, sel_g0, req_cost_i, rsel_g0,
                                    ret_cost_i);
         avail_geom1_r <= pool_next(avail_geom1_r, bud_geom1_r, sel_g1, req_cost_i, rsel_g1,
@@ -430,7 +511,7 @@ module zhao_measure_tokens #(
       den_rep_o    <= req_rep_i;
       den_src_id_o <= req_src_id_i;
       den_cost_o   <= req_cost_i;
-      if (budget_valid_i) den_reason_o <= REASON_RELOAD;
+      if (load_c) den_reason_o <= REASON_RELOAD;
       else if (req_essential_i) den_reason_o <= REASON_EXHAUSTED;
       else den_reason_o <= REASON_LOW_PRIORITY;
 

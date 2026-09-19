@@ -1161,11 +1161,15 @@ class CppEmitter {
     o.line(`${pad}  record.hdr.source_id = 0u;`);
     o.line(`${pad}  record.payload.mode = zhao_abi::${mode};`);
     o.line(`${pad}  record.payload.view_count = ${layout.views.length}u;`);
+    // COUNTS, written as authored (rulings R18/R33): this record's counts ARE
+    // the per-view CEILING, and nothing converts them. The compiler used to
+    // write the source's PERCENTAGES into these u32 fields, which MEASURE.TOKENS
+    // reads as absolute counts.
     for (const view of layout.views) {
-      o.line(`${pad}  record.payload.geometry_tokens[${view.id}u] = ${view.budgetPct}u;`);
-      o.line(`${pad}  record.payload.fragment_tokens[${view.id}u] = ${view.budgetPct}u;`);
+      o.line(`${pad}  record.payload.geometry_tokens[${view.id}u] = ${view.geometryTokens}u;`);
+      o.line(`${pad}  record.payload.fragment_tokens[${view.id}u] = ${view.fragmentTokens}u;`);
     }
-    o.line(`${pad}  record.payload.shared_tokens = ${layout.sharedBudgetPct}u;`);
+    o.line(`${pad}  record.payload.shared_tokens = ${layout.sharedTokens}u;`);
     o.line(`${pad}  std::vector<u8> bytes;`);
     o.line(`${pad}  zhao_abi::zhao_pack_set_presentation_contract(record, bytes);`);
     o.line(`${pad}  builder.append_record(bytes);`);
@@ -1188,8 +1192,11 @@ class CppEmitter {
       o.line(`${pad}  record.payload.view_projection.m13 = fx16_sub(0, fx16_from_fx24(${camera}.y));`);
       o.line(`${pad}  record.payload.view_projection.m23 = fx16_sub(0, fx16_from_fx24(${camera}.z));`);
       o.line(`${pad}  record.payload.pixel_error = 0x10000;`);
-      o.line(`${pad}  record.payload.geometry_tokens = ${view.budgetPct}u;`);
-      o.line(`${pad}  record.payload.fragment_tokens = ${view.budgetPct}u;`);
+      // The frame's REQUEST (R18): the authored count, which MEASURE.TOKENS
+      // clamps to the contract's ceiling. L1 has one number per view, so the
+      // request equals the ceiling; a governor may lower it, never raise it.
+      o.line(`${pad}  record.payload.geometry_tokens = ${view.geometryTokens}u;`);
+      o.line(`${pad}  record.payload.fragment_tokens = ${view.fragmentTokens}u;`);
       o.line(`${pad}  std::vector<u8> bytes;`);
       o.line(`${pad}  zhao_abi::zhao_pack_set_view(record, bytes);`);
       o.line(`${pad}  builder.append_record(bytes);`);

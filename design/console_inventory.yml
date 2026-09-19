@@ -161,9 +161,6 @@ modules:
   zhao_measure_governor:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_measure_tokens:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_pair_fragment_tilestore:
     disposition: instrument
     why: "synthesis probe under fpga/rtl/synth; measures, never ships"

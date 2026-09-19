@@ -291,23 +291,28 @@ int main(int argc, char** argv) {
     // POST.ECHO's CAPTURE (ruling R7, spec/memory_rules.md 5g): ENGINE0,
     // WRITE-only, constant bounds, lease-gated. Both ends, one past, the read
     // direction, the blit's lease, and every other client.
-    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
-                   eng, true, "echo write at the capture base");
+    expect_verdict(
+        MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)}, eng,
+        true, "echo write at the capture base");
     expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0,
                                     kPostEchoBase + kPostEchoSpan - 32, 32, full_be(32)},
                    eng, true, "echo write at the capture's last line");
     expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0,
                                     kPostEchoBase + kPostEchoSpan - 31, 32, full_be(32)},
                    eng, false, "echo write one byte past the capture");
-    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase - 8, 32, full_be(32)},
-                   eng, false, "echo write below the capture");
-    expect_verdict(MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
-                   eng, false, "a READ of the capture");
-    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
-                   map, false, "echo write under the blit's lease");
+    expect_verdict(
+        MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase - 8, 32, full_be(32)}, eng,
+        false, "echo write below the capture");
+    expect_verdict(
+        MemoryGuard::Req{true, false, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)}, eng,
+        false, "a READ of the capture");
+    expect_verdict(
+        MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)}, map,
+        false, "echo write under the blit's lease");
     // Not frame-scoped: the capture is a constant window, so no map is needed.
-    expect_verdict(MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)},
-                   none, true, "echo write with the lease named but no slot window");
+    expect_verdict(
+        MemoryGuard::Req{true, true, MemoryGuard::ENGINE0, kPostEchoBase, 32, full_be(32)}, none,
+        true, "echo write with the lease named but no slot window");
     for (unsigned c : {unsigned(MemoryGuard::SCANOUT), unsigned(MemoryGuard::BLIT_DMA),
                        unsigned(MemoryGuard::ENGINE1), unsigned(MemoryGuard::DEBUG), 5u,
                        unsigned(MemoryGuard::TERRAIN_BUILD)}) {
@@ -369,7 +374,8 @@ int main(int argc, char** argv) {
     // INSIDE the pool): both refused, nothing written
     h.request(MemoryGuard::Req{true, true, TB, rb + 0x1000u - 63, 64, full_be(64)}, res);
     h.request(MemoryGuard::Req{true, true, TB, rb - 64, 64, full_be(64)}, res);
-    chk(h.peek((rb - 64) >> 1) == 0, "R32: a pool write outside the region leaves memory untouched");
+    chk(h.peek((rb - 64) >> 1) == 0,
+        "R32: a pool write outside the region leaves memory untouched");
     // write-only: TERRAIN_BUILD may not READ the asset pool through this arm
     h.request(MemoryGuard::Req{true, false, TB, rb, 64, full_be(64)}, res);
     // other clients gain nothing from the region
@@ -388,12 +394,14 @@ int main(int argc, char** argv) {
     lo.res_base = kRenderAssetBase - 0x1000u;
     lo.res_span = 0x2000u;
     h.request(MemoryGuard::Req{true, true, TB, kRenderAssetBase, 64, full_be(64)}, lo);
-    chk(h.peek(kRenderAssetBase >> 1) == 0, "R32: a region straddling the pool start writes nothing");
+    chk(h.peek(kRenderAssetBase >> 1) == 0,
+        "R32: a region straddling the pool start writes nothing");
     GuardMap wrap = res;
     wrap.res_base = 0xFFFFF000u;
     wrap.res_span = 0x2000u;
     h.request(MemoryGuard::Req{true, true, TB, 0x00000000u, 64, full_be(64)}, wrap);
-    chk(h.peek(0) == pat(0), "R32: a wrapping region leaves framebuffer slot 0 as the blit wrote it");
+    chk(h.peek(0) == pat(0),
+        "R32: a wrapping region leaves framebuffer slot 0 as the blit wrote it");
     // and a region inside TERRAIN.PAGE_POOL adds nothing to that arm's verdicts
     GuardMap pp = res;
     pp.res_base = kTerrainPagePoolBase;

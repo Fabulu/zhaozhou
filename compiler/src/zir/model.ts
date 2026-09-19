@@ -45,10 +45,11 @@ export interface ZirViewLayout {
   views: {
     id: number;
     camera: HirExpr;
-    budgetPct: number;
+    geometryTokens: number;  // token COUNTS (owner ruling R33)
+    fragmentTokens: number;
     recordBytes: 96;
   }[];
-  sharedBudgetPct: number;
+  sharedTokens: number;
   contractRecordBytes: 48;
 }
 

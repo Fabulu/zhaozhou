@@ -492,7 +492,7 @@ test('top-level declaration roots reject specialized qualification before HIR', 
         'game.form': `module game {
           global game: world3 = world3 { x = 0w, y = 0w, z = 0w };
           global start: world3 = world3 { x = 1w, y = 2w, z = 3w };
-          presentation limits { shared budget 100%; }
+          presentation limits { shared budget 10000; }
           scenario bad { seed 1; spawn player 0 at game.start; assert_budget game.limits; }
         }\n`,
       },
@@ -680,7 +680,7 @@ test('TestZIR explicitly lowers every scenario operation with resolved owner ide
   global origin: world3 = world3 { x = 1w, y = 2w, z = 3w };
   global counter: u32 = 0;
   system step every 1 ticks reads counter writes counter { counter = counter + 1; }
-  presentation limits { view 0 from origin budget 100%; }
+  presentation limits { view 0 from origin budget geometry 100000 fragment 200000; }
   scenario all_operations {
     seed 42;
     load scenario_ops;
@@ -850,9 +850,9 @@ test('multi-rate and stagger lower to compile-time ZIR constants', () => {
     module: layout.module,
     presentation: layout.presentation,
     viewIds: layout.views.map((view) => view.id),
-    budgets: layout.views.map((view) => view.budgetPct),
-    shared: layout.sharedBudgetPct,
-  })), [{ module: 0, presentation: 'main_view', viewIds: [0], budgets: [80], shared: 20 }]);
+    budgets: layout.views.map((view) => [view.geometryTokens, view.fragmentTokens]),
+    shared: layout.sharedTokens,
+  })), [{ module: 0, presentation: 'main_view', viewIds: [0], budgets: [[80000, 160000]], shared: 2000 }]);
   assert.equal(zir.present.perFrameEstimateBytes, 208);
 });
 

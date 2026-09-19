@@ -1249,6 +1249,29 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_src_truncated_o;
   logic [31:0] cmd_exec_unsupported_o;
 
+  // ---- MEASURE.TOKENS (R18/R33), composed on its budget side -------------
+  // The request/return side is the core's BOUNDARY (entry I18): held idle
+  // here, so every pool the bench reads is exactly what the packet loaded.
+  logic        tok_req_valid_i = 1'b0, tok_req_view_i = 1'b0, tok_req_class_i = 1'b0;
+  logic        tok_req_essential_i = 1'b0;
+  logic [ 2:0] tok_req_rep_i = 3'd0;
+  logic [31:0] tok_req_cost_i = 32'd0;
+  logic [15:0] tok_req_src_id_i = 16'd0;
+  logic        tok_ret_valid_i = 1'b0, tok_ret_view_i = 1'b0, tok_ret_class_i = 1'b0;
+  logic        tok_ret_shared_i = 1'b0;
+  logic [31:0] tok_ret_cost_i = 32'd0;
+  logic        tok_grant_o, tok_shared_o;
+  logic        tok_den_valid_o, tok_den_view_o, tok_den_class_o;
+  logic [ 2:0] tok_den_rep_o;
+  logic [ 1:0] tok_den_reason_o;
+  logic [15:0] tok_den_src_id_o;
+  logic [31:0] tok_den_cost_o;
+  logic [31:0] tok_avail_geom0_o, tok_avail_geom1_o, tok_avail_frag0_o, tok_avail_frag1_o;
+  logic [31:0] tok_avail_shared_o;
+  logic [31:0] tok_rep_count0_o, tok_rep_count1_o, tok_rep_count2_o, tok_rep_count3_o;
+  logic [31:0] tok_rep_count4_o, tok_rep_count5_o, tok_rep_count6_o, tok_rep_count7_o;
+  logic [31:0] tok_triangles_culled_o, tok_vreq_clamped_o, cmd_exec_contracts_o;
+
   // ---- THE DRAW DISPATCH (core entry I41), added 2026-09-19 --------------
   // `DrawForm 0x0300` lowered by CMD.EXEC's draw arm. Declared here for the
   // `.*` reason above.
@@ -1877,7 +1900,15 @@ module tb_zhao_console_core_smoke
   // A write, or a read anywhere else, is something this bench has no bytes
   // for, and serving zeros would be inventing them.
   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
-  localparam int unsigned PKT_MAX_C     = 256;
+  localparam int unsigned PKT_MAX_C     = 512;
+  // The token counts the packet carries (R18/R33): the CONTRACT's ceiling per
+  // view and class, and view 1's SetView REQUEST -- geometry ABOVE its ceiling
+  // (so it is clamped, and counted) and fragment BELOW it (so it lowers the
+  // allowance). Counts, as authored; nothing converts them.
+  localparam logic [31:0] TOK_G0_C = 32'd40000, TOK_G1_C = 32'd30000;
+  localparam logic [31:0] TOK_F0_C = 32'd90000, TOK_F1_C = 32'd80000;
+  localparam logic [31:0] TOK_SH_C = 32'd5000;
+  localparam logic [31:0] TOK_REQ_G1_C = 32'd50000, TOK_REQ_F1_C = 32'd20000;
   localparam logic [31:0] UPL_ARENA_C   = 32'h3000_0000;
   localparam int unsigned UPL_WORDS_C   = 32;               // 256 B, four bursts
   // The top 4 KiB of RENDER.ASSET_POOL (0x06A0_0000 + 0x0160_0000), which
@@ -3439,14 +3470,34 @@ module tb_zhao_console_core_smoke
     end
     begin : build_packet
       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
+      zhao_abi_pkg::zhao_rec_set_presentation_contract_t pc;
+      zhao_abi_pkg::zhao_rec_set_view_t         sv;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
       zhao_abi_pkg::zhao_rec_set_environment_t  se;
       logic [255:0] bfv, efv;
-      logic [383:0] prv, sev;
+      logic [383:0] prv, pcv, sev;
+      logic [767:0] svv;
+      logic [511:0] matv;
       logic [31:0]  c;
       int unsigned  o;
-      bf = '0; pr = '0; ef = '0; se = '0;
+      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0;
+      // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
+      // already runs), two views, and the five token CEILINGS.
+      pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
+      pc.mode = 8'd0; pc.view_count = 8'd2;
+      pc.geometry_tokens_0 = TOK_G0_C; pc.geometry_tokens_1 = TOK_G1_C;
+      pc.fragment_tokens_0 = TOK_F0_C; pc.fragment_tokens_1 = TOK_F1_C;
+      pc.shared_tokens     = TOK_SH_C;
+      // SetView, view 1, carrying THE SAME camera the host already wrote
+      // (SGF_MAT, profile 0) so the raster is unchanged -- and view 1's REQUEST.
+      for (int unsigned k = 0; k < 16; k++) matv[32*k +: 32] = SGF_MAT[k];
+      sv.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_VIEW; sv.h_record_bytes = 16'd96;
+      sv.view_id = 8'd1; sv.viewport_id = 8'd1; sv.flags = 16'd0;
+      sv.view_projection = zhao_abi_pkg::zhao_mat4fx_t'(matv);
+      sv.pixel_error     = 32'h0001_0000;
+      sv.geometry_tokens = TOK_REQ_G1_C;
+      sv.fragment_tokens = TOK_REQ_F1_C;
       bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
       bf.frame_id = 32'd1;
       pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
@@ -3472,27 +3523,33 @@ module tb_zhao_console_core_smoke
       prv = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       sev = zhao_abi_pkg::zhao_pack_set_environment(se);
       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
+      pcv = zhao_abi_pkg::zhao_pack_set_presentation_contract(pc);
+      svv = zhao_abi_pkg::zhao_pack_set_view(sv);
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]      = bfv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k] = prv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 80 + k] = sev[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 128 + k] = efv[8*k +: 8];
+      // BeginFrame 32 | SetPresentationContract 48 | SetView 96 |
+      // PublishResource 48 | SetEnvironment 48 | EndFrame 32 = 304 bytes, six records
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]       = bfv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k]  = pcv[8*k +: 8];
+      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 80 + k]  = svv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 176 + k] = prv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = sev[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 272 + k] = efv[8*k +: 8];
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), four records, 160 bytes of them
+      // deadline 0 (the mode's period), six records, 304 bytes of them
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd4;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd160;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd6;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd304;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 160; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+163], pkt_mem[o+162], pkt_mem[o+161], pkt_mem[o+160]} = ~c;
-      pkt_len_q   = o + 160 + 4;
+      for (int unsigned k = 0; k < 304; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+307], pkt_mem[o+306], pkt_mem[o+305], pkt_mem[o+304]} = ~c;
+      pkt_len_q   = o + 304 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
@@ -4946,9 +5003,25 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd4 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 4, 1, 1)",
+    if (cmd_commands_o != 32'd6 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd1)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 6, 1, 1)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+    // ---- MEASURE.TOKENS (R18/R33): the CEILING and the REQUEST ----------
+    // Counts off the wire, unchanged. View 0 sent no SetView, so it keeps the
+    // contract's ceiling; view 1 asked for MORE geometry than its ceiling (cut
+    // to it, and counted once) and LESS fragment (its allowance drops to it).
+    $display("SMOKE: tokens    contracts=%0d views=%0d avail g0=%0d g1=%0d f0=%0d f1=%0d shared=%0d clamped=%0d",
+             cmd_exec_contracts_o, cmd_exec_views_o, tok_avail_geom0_o, tok_avail_geom1_o,
+             tok_avail_frag0_o, tok_avail_frag1_o, tok_avail_shared_o, tok_vreq_clamped_o);
+    if (cmd_exec_contracts_o != 32'd1 || cmd_exec_views_o != 32'd1)
+      $fatal(1, "SMOKE: CMD.EXEC applied %0d contract(s) and %0d view(s), expected 1 and 1",
+             cmd_exec_contracts_o, cmd_exec_views_o);
+    if (tok_avail_geom0_o != TOK_G0_C || tok_avail_frag0_o != TOK_F0_C || tok_avail_shared_o != TOK_SH_C)
+      $fatal(1, "SMOKE: view 0 / shared pools %0d/%0d/%0d are not the contract's ceiling %0d/%0d/%0d",
+             tok_avail_geom0_o, tok_avail_frag0_o, tok_avail_shared_o, TOK_G0_C, TOK_F0_C, TOK_SH_C);
+    if (tok_avail_geom1_o != TOK_G1_C || tok_avail_frag1_o != TOK_REQ_F1_C || tok_vreq_clamped_o != 32'd1)
+      $fatal(1, "SMOKE: view 1's request did not clamp: geom %0d (want the ceiling %0d), frag %0d (want the request %0d), clamps %0d (want 1)",
+             tok_avail_geom1_o, TOK_G1_C, tok_avail_frag1_o, TOK_REQ_F1_C, tok_vreq_clamped_o);
     if (upl_refused_o != '0)
       $fatal(1, "SMOKE: MEM.UPLOAD's refusal census moved (%032x) on a legal upload", upl_refused_o);
     if (shell_err_wfifo_o || shell_err_route_o)

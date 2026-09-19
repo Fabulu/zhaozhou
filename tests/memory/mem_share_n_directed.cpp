@@ -51,8 +51,10 @@ void set_field(VlWide<3>& w, int lsb, int width, uint32_t v) {
   for (int k = 0; k < width; ++k) {
     const int b = lsb + k;
     const uint32_t m = 1u << (b % 32);
-    if ((v >> k) & 1u) w[b / 32] |= m;
-    else w[b / 32] &= ~m;
+    if ((v >> k) & 1u)
+      w[b / 32] |= m;
+    else
+      w[b / 32] &= ~m;
   }
 }
 
@@ -92,8 +94,8 @@ struct Bench {
   uint32_t serve_addr = 0;
   int serve_beat = 0;
   int serve_words = 0;
-  int serve_extra = 0;     // >0: over-serve by this many words
-  int serve_short = 0;     // >0: end this many words early
+  int serve_extra = 0;  // >0: over-serve by this many words
+  int serve_short = 0;  // >0: end this many words early
   bool pending_short = false;
   bool pending_long = false;
   bool pending_verdict_deny = false;
@@ -213,8 +215,10 @@ struct Bench {
       }
     }
     if (serving && d.m_beat_valid) {
-      if (d.m_beat_last) serving = false;
-      else ++serve_beat;
+      if (d.m_beat_last)
+        serving = false;
+      else
+        ++serve_beat;
     }
   }
 
@@ -316,7 +320,8 @@ int main() {
       int prev = -1;
       for (size_t k = 0; k < b.grant_order.size(); ++k) {
         if (b.grant_order[k] == i) {
-          if (prev >= 0 && static_cast<int>(k) - prev - 1 > worst_gap) worst_gap = static_cast<int>(k) - prev - 1;
+          if (prev >= 0 && static_cast<int>(k) - prev - 1 > worst_gap)
+            worst_gap = static_cast<int>(k) - prev - 1;
           prev = static_cast<int>(k);
         }
       }
@@ -356,9 +361,12 @@ int main() {
     for (int i = 0; i < kN; ++i) b.r[i].todo.push_back({base_of(i), 64});
     b.run_until_idle();
     bool ok = true;
-    for (int i = 0; i < kN; ++i) ok = ok && b.r[i].oks == 1 && b.r[i].viols == 0 && b.r[i].beats == 8 && b.r[i].data_ok;
-    check(ok, name("3.verdict %d cycles late: every request still served, none denied", delay), 1, ok);
-    check(d.denied == 0, name("3.verdict %d cycles late: no false denial counted", delay), 0, d.denied);
+    for (int i = 0; i < kN; ++i)
+      ok = ok && b.r[i].oks == 1 && b.r[i].viols == 0 && b.r[i].beats == 8 && b.r[i].data_ok;
+    check(ok, name("3.verdict %d cycles late: every request still served, none denied", delay), 1,
+          ok);
+    check(d.denied == 0, name("3.verdict %d cycles late: no false denial counted", delay), 0,
+          d.denied);
   }
 
   // ---- 4. a DENIAL goes to its owner only, and the share lives ------------
@@ -370,7 +378,8 @@ int main() {
     for (int i = 0; i < kN; ++i) b.r[i].todo.push_back({base_of(i), 64});
     b.r[1].todo.push_back({base_of(1) + 0x40u, 64});  // it asks again after the denial
     b.run_until_idle();
-    check(b.r[1].viols == 1, "4.the denied requester is told", 1, static_cast<uint32_t>(b.r[1].viols));
+    check(b.r[1].viols == 1, "4.the denied requester is told", 1,
+          static_cast<uint32_t>(b.r[1].viols));
     check(b.r[0].viols + b.r[2].viols == 0, "4.and nobody else is", 0,
           static_cast<uint32_t>(b.r[0].viols + b.r[2].viols));
     check(b.r[0].beats == 8 && b.r[2].beats == 8 && b.r[1].beats == 8,
@@ -388,8 +397,10 @@ int main() {
       b.r[i].todo.push_back(q);
     }
     b.run_until_idle();
-    check(b.m_offers == 3, "5.three requests reached the guard", 3, static_cast<uint32_t>(b.m_offers));
-    check(b.m_identity_ok, "5.every one as ENGINE1, whatever the requester claimed", 1, b.m_identity_ok);
+    check(b.m_offers == 3, "5.three requests reached the guard", 3,
+          static_cast<uint32_t>(b.m_offers));
+    check(b.m_identity_ok, "5.every one as ENGINE1, whatever the requester claimed", 1,
+          b.m_identity_ok);
     check(b.m_read_only, "5.every one as a READ, whatever the requester asked", 1, b.m_read_only);
   }
 

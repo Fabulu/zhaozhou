@@ -513,7 +513,17 @@ module zhao_debug_frameblit
           // already gone we do NOT withdraw a request that is on the wire --
           // the bridge protocol wants it stable -- we take the grant and drain
           // the burst in B_ABORT_STOP without writing any of it anywhere.
-          if (hps_req_grant_i) begin
+          //
+          // `err` WITH NO GRANT is the bridge REFUSING the request ("malformed
+          // burst / bridge error: nothing issued"). It was watched for only in
+          // B_READ_CHUNK, which a refusal never reaches, so this state went on
+          // holding the request -- and `zhao_hps_arbiter_n` re-serves a held
+          // request, so the pair spun on the refusal forever (2026-09-19).
+          if (hps_rsp_i.err) begin
+            if (fail == ST_OK) fail <= ST_BRIDGE_ERR;
+            abort_pending <= 1'b1;
+            state <= B_ABORT_STOP;
+          end else if (hps_req_grant_i) begin
             hps_inflight <= 1'b1;
             beat <= '0;
             state <= abort_pending ? B_ABORT_STOP : B_READ_CHUNK;

@@ -74,6 +74,17 @@ of the same shape.
   arrives is a request-while-busy, which is a violation. CMD.DMA already knew
   this: its `hps_req_v` is set in one state and cleared by a default assignment
   the next cycle.
+- **A client that PULSES is served too, whenever it pulses** (rule 6b,
+  2026-09-19). CMD.DMA raises its request for one cycle and then waits for the
+  response with no timeout. The arbiter used to read requests only while idle,
+  so a pulse arriving while another client owned the bridge -- or on an idle
+  cycle a lower index won -- was lost and CMD.DMA hung. Each client now has a
+  PENDING slot, filled by any request the arbiter cannot serve on that edge,
+  and the pick is made over {pending, live}. The cost: an offered request WILL
+  be served, so a client may not withdraw one, and a holding client must leave
+  its request state on a refusal `err` (MEM.UPLOAD and DEBUG.FRAMEBLIT were
+  corrected to). Directed: `hps_arbiter_n_directed` cases 8/8b fail against
+  the earlier RTL and pass on this one.
 
 "Hold the request stable until grant" is therefore right for one side and
 exactly wrong for the other, and getting them the wrong way round costs an `err`

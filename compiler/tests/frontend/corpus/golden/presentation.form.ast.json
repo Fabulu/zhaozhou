@@ -508,7 +508,6 @@
   {
    "items": [
     {
-     "budgetPct": "45",
      "camera": {
       "kind": "ident",
       "name": "cam_a",
@@ -518,41 +517,44 @@
        "start": 863
       }
      },
+     "fragmentTokens": "90000",
+     "geometryTokens": "45000",
      "id": "0",
      "kind": "view",
      "span": {
-      "end": 880,
+      "end": 906,
       "file": "presentation.form",
       "start": 851
      }
     },
     {
-     "budgetPct": "45",
      "camera": {
       "kind": "ident",
       "name": "cam_b",
       "span": {
-       "end": 902,
+       "end": 928,
        "file": "presentation.form",
-       "start": 897
+       "start": 923
       }
      },
+     "fragmentTokens": "90000",
+     "geometryTokens": "45000",
      "id": "1",
      "kind": "view",
      "span": {
-      "end": 914,
+      "end": 966,
       "file": "presentation.form",
-      "start": 885
+      "start": 911
      }
     },
     {
      "kind": "shared_budget",
-     "pct": "10",
      "span": {
-      "end": 925,
+      "end": 977,
       "file": "presentation.form",
-      "start": 919
-     }
+      "start": 971
+     },
+     "tokens": "1000"
     },
     {
      "args": [
@@ -560,17 +562,17 @@
        "kind": "emit_arg",
        "name": "form",
        "span": {
-        "end": 961,
+        "end": 1014,
         "file": "presentation.form",
-        "start": 957
+        "start": 1010
        },
        "value": {
         "kind": "ident",
         "name": "FORM_PAGE",
         "span": {
-         "end": 972,
+         "end": 1025,
          "file": "presentation.form",
-         "start": 963
+         "start": 1016
         }
        }
       },
@@ -578,17 +580,17 @@
        "kind": "emit_arg",
        "name": "transform",
        "span": {
-        "end": 983,
+        "end": 1036,
         "file": "presentation.form",
-        "start": 974
+        "start": 1027
        },
        "value": {
         "kind": "ident",
         "name": "hit_point",
         "span": {
-         "end": 994,
+         "end": 1047,
          "file": "presentation.form",
-         "start": 985
+         "start": 1038
         }
        }
       },
@@ -596,18 +598,18 @@
        "kind": "emit_arg",
        "name": "view_mask",
        "span": {
-        "end": 1005,
+        "end": 1058,
         "file": "presentation.form",
-        "start": 996
+        "start": 1049
        },
        "value": {
         "intVal": "3",
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 1008,
+         "end": 1061,
          "file": "presentation.form",
-         "start": 1007
+         "start": 1060
         },
         "text": "3"
        }
@@ -616,9 +618,9 @@
        "kind": "emit_arg",
        "name": "weight",
        "span": {
-        "end": 1016,
+        "end": 1069,
         "file": "presentation.form",
-        "start": 1010
+        "start": 1063
        },
        "value": {
         "frac": {
@@ -629,9 +631,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 1022,
+         "end": 1075,
          "file": "presentation.form",
-         "start": 1018
+         "start": 1071
         },
         "text": "100%"
        }
@@ -640,9 +642,9 @@
      "emitKind": "draw_form",
      "kind": "emit",
      "span": {
-      "end": 1024,
+      "end": 1077,
       "file": "presentation.form",
-      "start": 942
+      "start": 995
      }
     },
     {
@@ -651,17 +653,17 @@
        "kind": "emit_arg",
        "name": "pool",
        "span": {
-        "end": 1054,
+        "end": 1107,
         "file": "presentation.form",
-        "start": 1050
+        "start": 1103
        },
        "value": {
         "kind": "ident",
         "name": "creatures",
         "span": {
-         "end": 1065,
+         "end": 1118,
          "file": "presentation.form",
-         "start": 1056
+         "start": 1109
         }
        }
       },
@@ -669,18 +671,18 @@
        "kind": "emit_arg",
        "name": "view_mask",
        "span": {
-        "end": 1076,
+        "end": 1129,
         "file": "presentation.form",
-        "start": 1067
+        "start": 1120
        },
        "value": {
         "intVal": "3",
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 1079,
+         "end": 1132,
          "file": "presentation.form",
-         "start": 1078
+         "start": 1131
         },
         "text": "3"
        }
@@ -689,9 +691,9 @@
        "kind": "emit_arg",
        "name": "weight",
        "span": {
-        "end": 1087,
+        "end": 1140,
         "file": "presentation.form",
-        "start": 1081
+        "start": 1134
        },
        "value": {
         "frac": {
@@ -702,9 +704,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 1092,
+         "end": 1145,
          "file": "presentation.form",
-         "start": 1089
+         "start": 1142
         },
         "text": "80%"
        }
@@ -713,9 +715,9 @@
      "emitKind": "draw_population",
      "kind": "emit",
      "span": {
-      "end": 1094,
+      "end": 1147,
       "file": "presentation.form",
-      "start": 1029
+      "start": 1082
      }
     },
     {
@@ -724,17 +726,17 @@
        "kind": "emit_arg",
        "name": "patch",
        "span": {
-        "end": 1125,
+        "end": 1178,
         "file": "presentation.form",
-        "start": 1120
+        "start": 1173
        },
        "value": {
         "kind": "ident",
         "name": "PATCH_PAGE",
         "span": {
-         "end": 1137,
+         "end": 1190,
          "file": "presentation.form",
-         "start": 1127
+         "start": 1180
         }
        }
       },
@@ -742,17 +744,17 @@
        "kind": "emit_arg",
        "name": "transform",
        "span": {
-        "end": 1148,
+        "end": 1201,
         "file": "presentation.form",
-        "start": 1139
+        "start": 1192
        },
        "value": {
         "kind": "ident",
         "name": "hit_point",
         "span": {
-         "end": 1159,
+         "end": 1212,
          "file": "presentation.form",
-         "start": 1150
+         "start": 1203
         }
        }
       },
@@ -760,17 +762,17 @@
        "kind": "emit_arg",
        "name": "screen_error",
        "span": {
-        "end": 1173,
+        "end": 1226,
         "file": "presentation.form",
-        "start": 1161
+        "start": 1214
        },
        "value": {
         "kind": "ident",
         "name": "screen_err",
         "span": {
-         "end": 1185,
+         "end": 1238,
          "file": "presentation.form",
-         "start": 1175
+         "start": 1228
         }
        }
       }
@@ -778,9 +780,9 @@
      "emitKind": "draw_procedural",
      "kind": "emit",
      "span": {
-      "end": 1187,
+      "end": 1240,
       "file": "presentation.form",
-      "start": 1099
+      "start": 1152
      }
     },
     {
@@ -789,17 +791,17 @@
        "kind": "emit_arg",
        "name": "brush",
        "span": {
-        "end": 1216,
+        "end": 1269,
         "file": "presentation.form",
-        "start": 1211
+        "start": 1264
        },
        "value": {
         "kind": "ident",
         "name": "BRUSH_PAGE",
         "span": {
-         "end": 1228,
+         "end": 1281,
          "file": "presentation.form",
-         "start": 1218
+         "start": 1271
         }
        }
       },
@@ -807,17 +809,17 @@
        "kind": "emit_arg",
        "name": "at",
        "span": {
-        "end": 1232,
+        "end": 1285,
         "file": "presentation.form",
-        "start": 1230
+        "start": 1283
        },
        "value": {
         "kind": "ident",
         "name": "hit_point",
         "span": {
-         "end": 1243,
+         "end": 1296,
          "file": "presentation.form",
-         "start": 1234
+         "start": 1287
         }
        }
       },
@@ -825,9 +827,9 @@
        "kind": "emit_arg",
        "name": "radius",
        "span": {
-        "end": 1251,
+        "end": 1304,
         "file": "presentation.form",
-        "start": 1245
+        "start": 1298
        },
        "value": {
         "frac": {
@@ -838,9 +840,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 1255,
+         "end": 1308,
          "file": "presentation.form",
-         "start": 1253
+         "start": 1306
         },
         "text": "2m"
        }
@@ -849,9 +851,9 @@
        "kind": "emit_arg",
        "name": "ring_width",
        "span": {
-        "end": 1267,
+        "end": 1320,
         "file": "presentation.form",
-        "start": 1257
+        "start": 1310
        },
        "value": {
         "frac": {
@@ -862,9 +864,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 1273,
+         "end": 1326,
          "file": "presentation.form",
-         "start": 1269
+         "start": 1322
         },
         "text": "0.5m"
        }
@@ -873,18 +875,18 @@
        "kind": "emit_arg",
        "name": "tag",
        "span": {
-        "end": 1278,
+        "end": 1331,
         "file": "presentation.form",
-        "start": 1275
+        "start": 1328
        },
        "value": {
         "intVal": "1",
         "kind": "literal",
         "lit": "int",
         "span": {
-         "end": 1281,
+         "end": 1334,
          "file": "presentation.form",
-         "start": 1280
+         "start": 1333
         },
         "text": "1"
        }
@@ -893,9 +895,9 @@
        "kind": "emit_arg",
        "name": "strength",
        "span": {
-        "end": 1291,
+        "end": 1344,
         "file": "presentation.form",
-        "start": 1283
+        "start": 1336
        },
        "value": {
         "frac": {
@@ -906,9 +908,9 @@
         "kind": "literal",
         "lit": "frac",
         "span": {
-         "end": 1296,
+         "end": 1349,
          "file": "presentation.form",
-         "start": 1293
+         "start": 1346
         },
         "text": "80%"
        }
@@ -917,9 +919,9 @@
      "emitKind": "surface_stamp",
      "kind": "emit",
      "span": {
-      "end": 1298,
+      "end": 1351,
       "file": "presentation.form",
-      "start": 1192
+      "start": 1245
      }
     },
     {
@@ -928,17 +930,17 @@
        "kind": "emit_arg",
        "name": "sound",
        "span": {
-        "end": 1319,
+        "end": 1372,
         "file": "presentation.form",
-        "start": 1314
+        "start": 1367
        },
        "value": {
         "kind": "ident",
         "name": "earth_break",
         "span": {
-         "end": 1332,
+         "end": 1385,
          "file": "presentation.form",
-         "start": 1321
+         "start": 1374
         }
        }
       },
@@ -946,17 +948,17 @@
        "kind": "emit_arg",
        "name": "at",
        "span": {
-        "end": 1336,
+        "end": 1389,
         "file": "presentation.form",
-        "start": 1334
+        "start": 1387
        },
        "value": {
         "kind": "ident",
         "name": "hit_point",
         "span": {
-         "end": 1347,
+         "end": 1400,
          "file": "presentation.form",
-         "start": 1338
+         "start": 1391
         }
        }
       }
@@ -964,16 +966,16 @@
      "emitKind": "audio",
      "kind": "emit",
      "span": {
-      "end": 1349,
+      "end": 1402,
       "file": "presentation.form",
-      "start": 1303
+      "start": 1356
      }
     }
    ],
    "kind": "Presentation",
    "name": "duo",
    "span": {
-    "end": 1353,
+    "end": 1406,
     "file": "presentation.form",
     "start": 828
    }
@@ -1009,7 +1011,7 @@
  "kind": "Module",
  "name": "wound_present",
  "span": {
-  "end": 1356,
+  "end": 1409,
   "file": "presentation.form",
   "start": 300
  }

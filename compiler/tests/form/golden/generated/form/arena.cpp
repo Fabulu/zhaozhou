@@ -50,9 +50,9 @@ void present_main_view(const FormState& state, zref::FrameBuilder& builder, cons
     record.hdr.source_id = 0u;
     record.payload.mode = zhao_abi::VIDEO_Z60;
     record.payload.view_count = 1u;
-    record.payload.geometry_tokens[0u] = 80u;
-    record.payload.fragment_tokens[0u] = 80u;
-    record.payload.shared_tokens = 20u;
+    record.payload.geometry_tokens[0u] = 80000u;
+    record.payload.fragment_tokens[0u] = 160000u;
+    record.payload.shared_tokens = 2000u;
     std::vector<u8> bytes;
     zhao_abi::zhao_pack_set_presentation_contract(record, bytes);
     builder.append_record(bytes);
@@ -73,8 +73,8 @@ void present_main_view(const FormState& state, zref::FrameBuilder& builder, cons
     record.payload.view_projection.m13 = fx16_sub(0, fx16_from_fx24(_view_camera_0.y));
     record.payload.view_projection.m23 = fx16_sub(0, fx16_from_fx24(_view_camera_0.z));
     record.payload.pixel_error = 0x10000;
-    record.payload.geometry_tokens = 80u;
-    record.payload.fragment_tokens = 80u;
+    record.payload.geometry_tokens = 80000u;
+    record.payload.fragment_tokens = 160000u;
     std::vector<u8> bytes;
     zhao_abi::zhao_pack_set_view(record, bytes);
     builder.append_record(bytes);

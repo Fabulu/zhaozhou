@@ -43,7 +43,13 @@ V2_NAME = 'zhao_shell_top_v2.sv'
 
 # The protected hash of the seed. If the V1 shell ever moves, this comparison
 # is against a different baseline and the result means something else.
-V1_SHA = '00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783'
+# RE-PINNED under owner ruling R39 (provisional, 2026-09-19): the ONLY change
+# to the protected V1 shell is R32's tie-off of MEM.GUARD's new region inputs,
+# 3 lines x 4 zhao_mem_guard instances = 12 lines, each
+#   .res_valid (1'b0) / .res_base (32'd0) / .res_span (32'd0)   // TIE: ...
+# (the R32 write arm names TERRAIN_BUILD alone; V1 has no such client).
+# No behaviour moves. Previous pin: 00fdd2387ffea985...
+V1_SHA = '9ab87fd9ceeb5efb1333c2023cc4cf9a565b6f4d75633facfa33c9f6640b91cc'
 
 # The controls cannot fire this by editing production RTL -- that is the
 # live-tree hazard, and it would leave no evidence behind either. So the
@@ -102,6 +108,43 @@ DECLARED = [
      'its video-domain half'),
     ('endmodule : zhao_shell_top_v2',
      'the module rename, closing'),
+    # ---- DECLARED 2026-09-19 with owner ruling R39 ----------------------------
+    # This table stopped being checked when the V1 seed hash went stale: the
+    # tool fails on the hash BEFORE it looks at the diff, so every V2 change
+    # landed after that went undeclared without anything going red that had not
+    # already been red. Re-pinning the seed (R39) surfaced them; each is named
+    # here by the packet that made it, from that packet's own comment in V2.
+    ("CMD.DMA's PACKET STREAM, RE-EXPORTED.",
+     'the CMD.DMA packet stream re-exported for CMD.DECODER (ports)'),
+    ("honour the re-exported stream's second consumer",
+     'the CMD.DMA packet stream re-exported: the accept fork'),
+    ('THE TERRAIN.BUILD SOCKET (VRAM slot 6 + HPS clients 2..)',
+     'cmdmem: the TERRAIN.BUILD socket ports (rulings R4/R17/R32)'),
+    ('+ geom_gv_cnt + build_gv_cnt',
+     'cmdmem: slot 6 guard violations totalled with the others'),
+    ('Slot 6 is TERRAIN.BUILD, and it is now a SOCKET',
+     'cmdmem: slot 6 guard (R32 region) and its write gate'),
+    ('TWO WRITE QUEUES, and the burst says which one it pops',
+     'cmdmem: the slot-6 write queue beside the framebuffer one'),
+    ('THE THIRD READ OWNER, slot 6',
+     'cmdmem: slot-6 read ownership and its beats'),
+    ('TERRAIN_BUILD is the second legal writer (the slot-6 socket',
+     'cmdmem: the routing tripwire admits TERRAIN_BUILD'),
+    ('^ ^client_rsp[4] ^ ^client_rsp[5]',
+     'cmdmem: client_rsp[6] leaves the unused sink (the socket reads it)'),
+    ("POST.COMPOSITE's FRAMEBUFFER LEASE (core entries I15/I16",
+     'post: the framebuffer lease ports (I15/I16)'),
+    ('post lease, because three requesters share ENGINE0',
+     'post: ENGINE0 retirement attributed per requester'),
+    ("`render_pixels_o` / `render_bursts_o` are the RASTER's",
+     'post: the post lease composed on ENGINE0'),
+    ("ENGINE0's WRITES WAIT FOR THEIR DATA",
+     'post: ENGINE0 writes wait for their data'),
+    # Inside each carried-over zhao_mem_guard instance: R32's three new inputs,
+    # tied off on every guard but the socket's. The marker is the TIE comment
+    # itself, so it un-seals exactly the instances that carry the tie.
+    ('the R32 resource-write arm names TERRAIN_BUILD alone',
+     'cmdmem: R32 region inputs tied off on the non-socket guards'),
 ]
 
 COMMENT = re.compile(r'^\s*(//.*)?$')
