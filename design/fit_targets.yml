@@ -2455,6 +2455,18 @@ targets:
       # this row moves by that much. The arithmetic is in the file's header and
       # is arithmetic, not a measurement.
       - fpga/rtl/particles/zhao_part_table.sv
+      # THE PARTICLE DRAW PATH, added 2026-09-19 with the composition that
+      # closes core header I24's producer half. PART.PROJECT is the new block
+      # -- it holds NO projection arithmetic and shares client A of the one
+      # zhao_proj_subsystem, so the FIRST QUESTION FOR THIS FIT is whether
+      # this row is a few hundred ALM of mux, slot store and one signed 32x32
+      # product, and NOT another ~6,200 ALM / 33 DSP projector. If the delta
+      # looks like a projector, something instantiated one. The three
+      # endpoints are pre-existing blocks, composed unchanged.
+      - fpga/rtl/particles/zhao_part_project.sv
+      - fpga/rtl/particles/zhao_part_ladder.sv
+      - fpga/rtl/particles/zhao_part_expand.sv
+      - fpga/rtl/particles/zhao_part_soft.sv
       - fpga/rtl/geometry/zhao_geom_skin.sv
       - fpga/rtl/geometry/zhao_geom_group_seq.sv
       - fpga/rtl/geometry/zhao_vertex_arena.sv
@@ -2581,11 +2593,7 @@ targets:
       # this block wants glow RGB + a signed 8.8 displacement; expanding one
       # into the other is a colour law invented in the composer, and resolve's
       # stream is internal to zhao_geom_bin_pipe_v2 besides -- entry I15),
-      # zhao_part_expand / zhao_part_soft (both take an ALREADY PROJECTED
-      # particle and nothing projects particles; zhao_part_expand additionally
-      # carries a SUPERSEDED-ASSUMPTION banner of its own saying its `size <<
-      # 4` predates amendment C2), zhao_part_ladder (its projected size has no
-      # producer and its hold state is contract-bound to DDR), zhao_cmd_decoder
+      # zhao_cmd_decoder
       # (the byte stream it wants is real and is INTERNAL to zhao_shell_top_v2),
       # zhao_measure_tokens / zhao_measure_governor (the binner's token client
       # is one bit against a seven-field request, and the budgets and the
@@ -2594,6 +2602,15 @@ targets:
       # refusal, one block over), zhao_field_progcache, zhao_forge_prim,
       # zhao_forge_prim_eval and zhao_forge_cliff (all four wait on a dispatch
       # or an issuer that is not built).
+      #
+      # THREE NAMES LEFT THIS LIST ON 2026-09-19: zhao_part_expand,
+      # zhao_part_soft and zhao_part_ladder are now IN the closure above. The
+      # refusal recorded here was "nothing projects particles" plus expand's
+      # own superseded-assumption banner; zhao_part_project supplies the
+      # projection by SHARING the one projector, and it supplies a SCREEN size
+      # computed by the ratified law the banner was waiting for, so all three
+      # are composed UNCHANGED. Core header I24 carries the full account,
+      # including which of the original refusals were right and which was not.
       - fpga/rtl/surface/zhao_surface_blend.sv
       - fpga/rtl/surface/zhao_surface_sq.sv
       - fpga/rtl/surface/zhao_surface_sheet.sv

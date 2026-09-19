@@ -715,42 +715,96 @@
 //      Z60/Storm, one 256x192 view block in Duo -- video_rules.md 3.1", which
 //      is that value and not a second opinion about it.
 //
-//      THE PARTICLE DRAW ENDPOINTS WOULD LAND HERE AND THEY ARE REFUSED,
-//      written down 2026-09-19 so the next packet does not re-derive it.
-//      `zhao_part_expand` emits a triangle and `zhao_part_soft` a scissored
-//      span, so this is the port they aim at. Both take an ALREADY PROJECTED
-//      particle -- `p_x_i`/`p_y_i` in S12.8 CANVAS units with a Q16.16 1/w and
-//      GEOM.PROJECT's own in-front verdict -- and NOTHING IN THIS CORE
-//      PROJECTS A PARTICLE. `zhao_proj_subsystem` has exactly two client ports
-//      and both are live (GEOM on A, TERRAIN on B), so a particle client is a
-//      third port and that is an owner ruling, not wiring. The particle ring
-//      composed above carries particle128 WORLD records and stops there.
+//      THE PARTICLE DRAW ENDPOINTS ARE NOW COMPOSED, and the paragraph that
+//      refused them is kept below with its errors marked, because three of its
+//      four refusals were right for the wrong reason and the fourth was simply
+//      wrong. `zhao_part_expand`'s triangle and `zhao_part_soft`'s span now
+//      leave this module as `part_exp_*` / `part_sft_*` -- so what is still a
+//      BOUNDARY here is only their CUSTOMER, which is the same absent GEOM
+//      replay/setup path I11, I12 and I13 name. The producer exists.
 //
-//      `zhao_part_expand` IS ADDITIONALLY UNSAFE TO ADOPT TODAY, by its own
-//      testimony. Its header opens with a SUPERSEDED ASSUMPTION banner: it
-//      reads `size` as U 0.4.4 pixels per qformats 10, amendment C2 replaced
-//      that whole section with a U 2.4 WORLD-SCALE multiplier, and the block
-//      says "THIS BLOCK IS NOT FIXED HERE, deliberately" because converting a
-//      world radius to a screen half-side is a projection. `zhao_part_record
-//      .sv` names the same defect from the other side. Composing it would
-//      install a block whose own header says its arithmetic is wrong.
+//      WHAT IT SAID: "NOTHING IN THIS CORE PROJECTS A PARTICLE.
+//      `zhao_proj_subsystem` has exactly two client ports and both are live
+//      (GEOM on A, TERRAIN on B), so a particle client is a third port and that
+//      is an owner ruling, not wiring. The particle ring composed above carries
+//      particle128 WORLD records and stops there."
 //
-//      `zhao_part_ladder` is refused on two independent counts: its `p_size_i`
-//      is a PROJECTED size with the same absent producer, and its `p_prev_rung
-//      _i`/`p_hold_i` are per-(particle, camera) state its contract explicitly
-//      keeps OFF chip -- "a design that put the hold state on chip would be
-//      choosing 64 KiB of M10K to avoid a few bytes per particle of DDR
-//      traffic, and that trade should be measured, not assumed". The DDR is
-//      I23's absent model.
+//      WHY THAT WAS TOO STRONG. A third CLIENT does not have to be a third
+//      PORT. `fpga/rtl/particles/zhao_part_project.sv` (2026-09-19) sits IN
+//      FRONT OF client A and time-multiplexes it -- geometry straight through,
+//      particles round-robin on the cycles geometry does not want, results
+//      demultiplexed by the rider's top bit, which `zhao_geom_proj_lane`'s own
+//      zero padding leaves free (ARENA_W 3 + INDEX_W 12 of GEOM_PAY_A_W 16).
+//      Nothing inside `zhao_project_service`, `zhao_project_core` or
+//      `zhao_proj_subsystem` changed by one character, so no verified block's
+//      starvation law was touched and the owner ruling the entry called for is
+//      not needed. The block contains NO projection arithmetic: a second
+//      `zhao_project_core` would be 6,199 ALM and 33 DSP, and undoing the
+//      deduplication campaign to draw a sprite is the trade that was actually
+//      being refused. The composed demand is client A's own plus about 3.9% of
+//      the frame at SLOTS = 40, and about 17.7% at the shipping SLOTS = 8 --
+//      the knob and its arithmetic are in that block's header.
 //
-//      AND THE LEDGER'S EDGE HERE IS NOT THE RTL'S. `design/blocks.yml` gives
-//      PART.EXPAND and PART.SOFT `upstream: [PART.LADDER]`. The ladder emits a
-//      RUNG (`r_rung_o`, `r_hold_o`, `r_changed_o`); neither block has a port
-//      that takes one. The declared edge does not exist in the hardware, and a
-//      packet that wires by the ledger rather than by the ports would build
-//      it. (The same is true of CMD.DECODER -> DEBUG.TRACE: the decoder emits
-//      record headers, the trace ring takes {stage, tile, primitive, pixel,
-//      expected_fx, actual_fx}. Those are different things.)
+//      And the ring no longer stops: PART.PROJECT takes a THIRD BRANCH of the
+//      fork on PART.COLLIDE's output (glue 3), so the records it projects are
+//      the ring's own and no new record boundary was invented for them.
+//
+//      WHAT IT SAID: "`zhao_part_expand` IS ADDITIONALLY UNSAFE TO ADOPT
+//      TODAY, by its own testimony... converting a world radius to a screen
+//      half-side is a projection."
+//
+//      WHY THAT WAS WRONG, and this is the instructive one. The conversion was
+//      ALREADY RATIFIED and the refusal was reading a stale warning.
+//      `reference/include/zref/zref_particle.hpp` carries a correction dated
+//      2026-09-06 whose entire purpose is to say so: "THE PROJECTION IS NOT THE
+//      MISSING PIECE. Turning a world radius into a screen half-extent is
+//      already implemented, already tested, and already has its trap written
+//      down -- `zref::render::draw_form_marker`", whose world-space branch is
+//      `half_sub = rescale_s32(fx_mul(size_fx16, c.s.d), 8)` at projection
+//      scale 1. PART.PROJECT implements that expression bit for bit and hands
+//      `zhao_part_expand` a SCREEN size, which is exactly the input its banner
+//      asks for -- so `size << 4` is correct rather than superseded and the
+//      block is composed UNCHANGED. What the reference says IS missing is
+//      `base_radius_fx16`, a per-species content decision; it arrives here as
+//      the declared owner port `part_prj_base_radius_i` at the end of the
+//      port list.
+//
+//      This is the "read the SIBLING contract" lesson with the roles reversed:
+//      the refusal quoted `zhao_part_expand`'s header, which was accurate about
+//      itself, and never read the reference file that had already withdrawn the
+//      warning it was leaning on. An instruction is not delivered until it is
+//      read, and a REFUSAL is an instruction too.
+//
+//      WHAT IT SAID about `zhao_part_ladder`: two refusals. The first --
+//      "`p_size_i` is a PROJECTED size with the same absent producer" -- is
+//      closed by the above. THE SECOND STANDS AND IS NOT REPAIRED HERE: its
+//      `p_prev_rung_i`/`p_hold_i` are per-(particle, camera) state its contract
+//      explicitly keeps OFF chip, and I23's DDR is still absent. What changed
+//      is that the state is now PAIRED: it rides PART.PROJECT's slot store with
+//      its particle and comes back beside the rung that consumed it, on
+//      `part_rung_*`. Where it comes FROM is the declared boundary
+//      `part_prj_prev_rung_i`/`part_prj_hold_i`/`part_prj_first_i`, which is a
+//      narrower gap than "nothing projects a particle" and a different one.
+//
+//      AND THE LEDGER'S EDGE HERE IS STILL NOT THE RTL'S, exactly as written.
+//      `design/blocks.yml` gives PART.EXPAND and PART.SOFT
+//      `upstream: [PART.LADDER]`; the ladder emits a RUNG and neither block has
+//      a port that takes one. That is why the composition below routes BY the
+//      rung with a stateless demux rather than wiring the ladder's output into
+//      a port that does not exist. The declared edge is a ROUTING fact, and it
+//      is implemented as one. (The same is still true of CMD.DECODER ->
+//      DEBUG.TRACE: the decoder emits record headers, the trace ring takes
+//      {stage, tile, primitive, pixel, expected_fx, actual_fx}. Those are
+//      different things.)
+//
+//      TWO OF THE SIX RUNGS HAVE AN ENDPOINT IN THIS TREE. SHARD -> PART.EXPAND
+//      and SPRITE -> PART.SOFT. MESHLET, RIBBON, GLINT and CULLED have no block
+//      built, so a particle on one of those rungs leaves only on
+//      `part_rung_*` -- it is not silently dropped, it is emitted with its rung
+//      and nothing here claims to draw it. Do not "fix" that by routing GLINT
+//      into PART.SOFT: a glint is its own representation on the frozen ladder
+//      and inventing the equivalence in a composer is the hidden adapter this
+//      file must not contain.
 //
 // I25. GEOM.VDECODE's format selector (`v_format_i`) -- NOT a tie-off: the
 //      core assigns it, in the same standing as I9. There is exactly ONE
@@ -2164,6 +2218,98 @@ module zhao_console_core
   output logic [31:0] surf_stamps_o,
   output logic [31:0] surf_stamp_texels_touched_o,
 
+  // ==========================================================================
+  // I24: THE PARTICLE DRAW PATH'S TWO ENDS.
+  //
+  // The MIDDLE is now internal -- PART.COLLIDE's records fork into
+  // PART.PROJECT, which shares the one projector, and on into PART.LADDER and
+  // the two endpoints. What leaves the module is:
+  //
+  //   * the owner values PART.PROJECT and the ladder need and nothing here
+  //     produces: the per-(particle, camera) hold state (I23's absent DDR), the
+  //     ladder's species/governor inputs, and the particle's RGB. PART.TABLE's
+  //     `v_colour_o` is an INDEX and no palette block exists to turn it into a
+  //     colour, which is why the colour is a value here rather than a lookup;
+  //   * the two endpoints' packets, whose customer is the same absent GEOM
+  //     replay/setup path I11, I12 and I13 name;
+  //   * the rung write-back, which is where the hold state has to GO for the
+  //     next frame to have any.
+  //
+  // The SCISSOR is NOT here: PART.SOFT takes the same mode-derived rectangle
+  // GEOM.CLIP does (GLUE 1), because it is the console's own pass geometry and
+  // not a second opinion about it.
+  // ==========================================================================
+  input  logic signed [31:0] part_prj_base_radius_i,
+  input  logic               part_prj_view_i,
+  input  logic        [15:0] part_prj_trail_i,
+  input  logic               part_prj_narrow_i,
+  input  logic               part_prj_protected_i,
+  input  logic        [ 2:0] part_prj_gov_floor_i,
+  input  logic        [ 2:0] part_prj_prev_rung_i,
+  input  logic        [ 3:0] part_prj_hold_i,
+  input  logic               part_prj_first_i,
+  input  logic        [ 7:0] part_prj_r_i,
+  input  logic        [ 7:0] part_prj_g_i,
+  input  logic        [ 7:0] part_prj_b_i,
+  input  logic        [15:0] part_prj_src_id_i,
+
+  // the rung and the hold state it produced, for the next frame's store
+  output logic               part_rung_valid_o,
+  input  logic               part_rung_ready_i,
+  output logic        [ 2:0] part_rung_o,
+  output logic        [ 3:0] part_rung_hold_o,
+  output logic               part_rung_changed_o,
+  output logic        [15:0] part_rung_src_id_o,
+
+  // PART.EXPAND's three-vertex screen fan
+  output logic               part_exp_valid_o,
+  input  logic               part_exp_ready_i,
+  output logic signed [21:0] part_exp_ax_o,
+  output logic signed [21:0] part_exp_ay_o,
+  output logic signed [21:0] part_exp_bx_o,
+  output logic signed [21:0] part_exp_by_o,
+  output logic signed [21:0] part_exp_cx_o,
+  output logic signed [21:0] part_exp_cy_o,
+  output logic signed [31:0] part_exp_d_o,
+  output logic        [ 7:0] part_exp_r_o,
+  output logic        [ 7:0] part_exp_g_o,
+  output logic        [ 7:0] part_exp_b_o,
+  output logic               part_exp_depth_test_o,
+  output logic               part_exp_depth_write_o,
+  output logic        [15:0] part_exp_src_id_o,
+
+  // PART.SOFT's scissored whole-pixel span
+  output logic               part_sft_valid_o,
+  input  logic               part_sft_ready_i,
+  output logic signed [12:0] part_sft_min_x_o,
+  output logic signed [12:0] part_sft_max_x_o,
+  output logic signed [12:0] part_sft_min_y_o,
+  output logic signed [12:0] part_sft_max_y_o,
+  output logic signed [31:0] part_sft_d_o,
+  output logic        [ 7:0] part_sft_r_o,
+  output logic        [ 7:0] part_sft_g_o,
+  output logic        [ 7:0] part_sft_b_o,
+  output logic               part_sft_depth_test_o,
+  output logic               part_sft_depth_write_o,
+  output logic        [15:0] part_sft_src_id_o,
+
+  // the draw path's evidence
+  output logic [31:0] part_prj_projected_o,
+  output logic [31:0] part_prj_behind_o,
+  output logic [31:0] part_prj_geom_grants_o,
+  output logic [31:0] part_prj_part_grants_o,
+  output logic [31:0] part_prj_contended_o,
+  output logic [31:0] part_prj_size_sat_o,
+  output logic [31:0] part_prj_slot_pressure_o,
+  output logic [31:0] part_prj_tag_collision_o,
+  output logic [31:0] part_prj_ladder_unexpected_o,
+  output logic [31:0] part_lad_decisions_o,
+  output logic [31:0] part_lad_changes_o,
+  output logic [31:0] part_lad_held_o,
+  output logic [31:0] part_lad_gov_forced_o,
+  output logic [31:0] part_exp_polygons_o,
+  output logic [31:0] part_sft_sprites_o,
+
   // ---- SDR PHY pins (behavioural model in the tb wrapper; D2) ------------
   output logic        phy_cs_n_o,
   output logic        phy_ras_n_o,
@@ -2401,6 +2547,12 @@ module zhao_console_core
   wire                  sp_chl_valid, sp_chl_ready;
   wire [PART_REC_W-1:0] sp_chl_record;
 
+  // PART.PROJECT's acceptance, branch P of the fork below. Declared here rather
+  // than beside its instance because the fork reads it eight hundred lines
+  // earlier than the draw path is composed.
+  wire                  pp_p_ready;
+
+
   // --------------------------------------------------------------------------
   // GLUE 3: THE ONE-TO-TWO FORK, NOW ON PART.COLLIDE'S OUTPUT.
   //
@@ -2431,26 +2583,46 @@ module zhao_console_core
   // PART.STATE's `vrd_ready_o` and PART.SPAWN's `par_ready_o` are both pure
   // functions of their own state, so that property still holds after the move.
   // --------------------------------------------------------------------------
-  logic fork_vrd_done_q, fork_spw_done_q;
+  // A THIRD BRANCH, 2026-09-19, and it is the SAME SHAPE rather than a new
+  // mechanism. Entry I24's "the particle ring composed above carries particle128
+  // WORLD records and stops there" is what this closes: PART.PROJECT is the
+  // draw pass's head and it reads the ring's own records, so no new record
+  // boundary was invented to feed it.
+  //
+  // The property the shape was chosen for still holds, and it is the one to
+  // check: NO BRANCH'S VALID READS ANOTHER BRANCH'S READY, so there is no
+  // combinational loop through the consumers. `zhao_part_project.p_ready_o` is
+  // `a_ready_i && sel_p && !slot_full` -- the shared projector's grant and its
+  // own slot state, neither of which can see PART.STATE's or PART.SPAWN's
+  // ready. The cost is the documented one: the beat retires when all THREE have
+  // taken it, so a stalled draw path stalls the tick rather than dropping a
+  // particle, which is what `part_prj_slot_pressure_o` measures.
+  logic fork_vrd_done_q, fork_spw_done_q, fork_prj_done_q;
 
   wire fork_vrd_valid_c = pc_c_valid && !fork_vrd_done_q;
   wire fork_spw_valid_c = pc_c_valid && !fork_spw_done_q;
+  wire fork_prj_valid_c = pc_c_valid && !fork_prj_done_q;
   wire fork_vrd_take_c  = fork_vrd_valid_c && ps_vrd_ready;
   wire fork_spw_take_c  = fork_spw_valid_c && sp_par_ready;
+  wire fork_prj_take_c  = fork_prj_valid_c && pp_p_ready;
   wire fork_vrd_held_c  = fork_vrd_done_q || fork_vrd_take_c;
   wire fork_spw_held_c  = fork_spw_done_q || fork_spw_take_c;
-  wire pc_out_ready_c   = fork_vrd_held_c && fork_spw_held_c;
+  wire fork_prj_held_c  = fork_prj_done_q || fork_prj_take_c;
+  wire pc_out_ready_c   = fork_vrd_held_c && fork_spw_held_c && fork_prj_held_c;
 
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
       fork_vrd_done_q <= 1'b0;
       fork_spw_done_q <= 1'b0;
+      fork_prj_done_q <= 1'b0;
     end else if (pc_c_valid && pc_out_ready_c) begin
       fork_vrd_done_q <= 1'b0;
       fork_spw_done_q <= 1'b0;
+      fork_prj_done_q <= 1'b0;
     end else begin
       if (fork_vrd_take_c) fork_vrd_done_q <= 1'b1;
       if (fork_spw_take_c) fork_spw_done_q <= 1'b1;
+      if (fork_prj_take_c) fork_prj_done_q <= 1'b1;
     end
   end
 
@@ -2910,6 +3082,25 @@ module zhao_console_core
   wire [30:0]              pj_a_w;
   wire                     pj_a_behind;
   wire [GEOM_PAY_A_W-1:0]  pj_a_payload;
+
+  // ---- the shared port, between PART.PROJECT and the subsystem -------------
+  // `gs_a_*` is still GEOM.GROUP_SEQ's output and `pj_a_*` is still what the
+  // arena lane consumes; those two names did NOT move, so the geometry path
+  // reads exactly as it did. What is new is the pair in the middle: `pa_a_*` is
+  // the multiplexed request PART.PROJECT presents to client A, and `sv_a_*` is
+  // client A's result on its way back into the demux. Entry I24.
+  wire                     pa_a_valid, pa_a_ready;
+  wire signed [31:0]       pa_a_vx, pa_a_vy, pa_a_vz;
+  wire                     pa_a_view;
+  wire [GEOM_PAY_A_W-1:0]  pa_a_payload;
+
+  wire                     sv_a_valid;
+  wire signed [20:0]       sv_a_x, sv_a_y;
+  wire signed [31:0]       sv_a_d;
+  wire [30:0]              sv_a_w;
+  wire                     sv_a_behind;
+  wire [GEOM_PAY_A_W-1:0]  sv_a_payload;
+
 
   wire                     gs_open, gs_seal;
   wire [GEOM_ARENA_W-1:0]  gs_open_arena, gs_seal_arena;
@@ -3688,24 +3879,36 @@ module zhao_console_core
     .cfg_data_i(proj_cfg_data_i),
     .en_i      (proj_en_i),
 
-    // REAL: client A in, from GEOM.GROUP_SEQ.
-    .a_valid_i  (gs_a_valid),
-    .a_ready_o  (gs_a_ready),
-    .a_vx_i     (gs_a_vx),
-    .a_vy_i     (gs_a_vy),
-    .a_vz_i     (gs_a_vz),
-    .a_view_i   (gs_a_view),
-    .a_payload_i(gs_a_payload),
+    // REAL: client A in, from GEOM.GROUP_SEQ -- THROUGH PART.PROJECT, which
+    // time-multiplexes this one port between geometry and the particle draw
+    // pass (entry I24). Geometry's beats are untouched; the block forwards them
+    // on the cycles it is not using the port itself and never inserts a stage.
+    // The subsystem, the service and the core are unmodified: the guest sits in
+    // front of the port, not inside it.
+    .a_valid_i  (pa_a_valid),
+    .a_ready_o  (pa_a_ready),
+    .a_vx_i     (pa_a_vx),
+    .a_vy_i     (pa_a_vy),
+    .a_vz_i     (pa_a_vz),
+    .a_view_i   (pa_a_view),
+    .a_payload_i(pa_a_payload),
 
-    // REAL: client A's results out, into the geometry arena lane.
-    .a_valid_o  (pj_a_valid),
-    .a_x_o      (pj_a_x),
-    .a_y_o      (pj_a_y),
-    .a_d_o      (pj_a_d),
-    .a_w_o      (pj_a_w),
-    .a_behind_o (pj_a_behind),
+    // REAL: client A's results out, back into PART.PROJECT, which demultiplexes
+    // them by the rider's top bit and hands geometry's on to the arena lane
+    // unchanged as `pj_a_*`.
+    .a_valid_o  (sv_a_valid),
+    .a_x_o      (sv_a_x),
+    .a_y_o      (sv_a_y),
+    .a_d_o      (sv_a_d),
+    .a_w_o      (sv_a_w),
+    .a_behind_o (sv_a_behind),
+    // The view tag is the SERVICE's, and it now reports whichever client won
+    // the cycle. Both clients project through the same per-view matrix bank --
+    // that is the property `zhao_project_service`'s header check 2 establishes
+    // -- so this remains "the view this result was projected in"; it is simply
+    // no longer geometry's alone.
     .a_view_o   (proj_a_view_o),
-    .a_payload_o(pj_a_payload),
+    .a_payload_o(sv_a_payload),
 
     // REAL: client B in, from TERRAIN.GROUP_SEQ. This is the composition the
     // shared projector was built for -- BOTH of its clients are live here, and
@@ -5420,6 +5623,356 @@ module zhao_console_core
     .sprite_stalls_o  (twod_sprite_stalls_o),
     .tint_unapplied_o (twod_tint_unapplied_o),
     .pair_lost_o      (twod_pair_lost_o)
+  );
+
+  // ==========================================================================
+  // THE PARTICLE DRAW PATH.  ENTRY I24's PRODUCER HALF, CLOSED.
+  //
+  //   PART.COLLIDE --(fork branch P)--> PART.PROJECT --> PART.LADDER
+  //                                          ^  |            |
+  //                                          |  |            v
+  //                     client A of the ONE  |  +--- rung ---+
+  //                     shared projector <---+                |
+  //                                                           v
+  //                                        rung write-back + SHARD -> EXPAND
+  //                                                          SPRITE -> SOFT
+  //
+  // FOUR BLOCKS, NO ARITHMETIC IN THIS FILE. Every connection below is one net
+  // to one net; the only expressions are the rung comparison, which is the
+  // ledger's declared PART.LADDER -> {EXPAND, SOFT} edge implemented as the
+  // ROUTING it actually is, and the fork that lets the rung write-back and an
+  // endpoint take the same beat.
+  //
+  // WHY THE ENDPOINTS ARE SAFE TO ADOPT UNCHANGED is the whole argument of the
+  // I24 entry above and is not repeated here; the one-line version is that
+  // PART.PROJECT hands them a SCREEN size computed by the ratified law in
+  // `zref::render::draw_form_marker`, which is the input their headers were
+  // always written against.
+  // ==========================================================================
+
+  // The two rungs that have an endpoint built in this tree, named rather than
+  // written as literals for the reason GEOM_VERTEX_FORMAT_C is (entry I25):
+  // the day a meshlet, ribbon or glint endpoint exists, the thing that has to
+  // change is greppable instead of being a `3'd1` in a comparison. The values
+  // are `zhao_part_ladder`'s own RUNG_SHARD and RUNG_SPRITE.
+  localparam logic [2:0] PART_RUNG_SHARD_C  = 3'd1;
+  localparam logic [2:0] PART_RUNG_SPRITE_C = 3'd3;
+
+  // In-flight particles at the shared projector. A FRONTIER KNOB and the block
+  // prices it: 8 caps the particle stream at 8/36 of a projection per clock
+  // (about 17.7% of the frame at the required tier of 32,768 across two views),
+  // 40 would cost 3.9% and several thousand ALM of slot store. Named here so
+  // the console keeps the choice after the composed fit measures it.
+  localparam int unsigned PART_PROJ_SLOTS_C = 8;
+
+  wire        pp_lad_valid, pp_lad_ready;
+  wire [15:0] pp_lad_size, pp_lad_trail;
+  wire        pp_lad_narrow, pp_lad_protected, pp_lad_first;
+  wire [ 2:0] pp_lad_gov, pp_lad_prev;
+  wire [ 3:0] pp_lad_hold;
+
+  wire        pl_r_valid, pl_r_ready;
+  wire [ 2:0] pl_r_rung;
+  wire [ 3:0] pl_r_hold;
+  wire        pl_r_changed;
+
+  wire               pq_valid, pq_ready;
+  wire               pq_in;
+  wire signed [20:0] pq_x, pq_y;
+  wire signed [31:0] pq_d;
+  wire        [ 7:0] pq_size;
+  wire        [ 7:0] pq_r, pq_g, pq_b;
+  wire        [15:0] pq_src_id;
+  wire        [ 2:0] pq_rung;
+  wire        [ 3:0] pq_hold;
+  wire               pq_changed;
+
+  // The U 8.8 form of the same half-extent. PART.LADDER has already consumed it
+  // on `pp_lad_size` and neither endpoint takes that width, so it is named and
+  // left unread rather than connected by an empty port -- the reason is in the
+  // source instead of in a silence, exactly as zhao_geom_project does it.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [15:0] pq_size16;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  wire pe_p_ready, pf_p_ready;
+
+  zhao_part_project #(
+    .REC_W    (PART_REC_W),
+    .PAY_W    (GEOM_PAY_A_W),
+    .SLOTS    (PART_PROJ_SLOTS_C)
+    // LAD_D and POS_SHIFT stay at the block's own defaults. LAD_D=2 is already
+    // slack against a one-deep PART.LADDER, and POS_SHIFT=8 is the unruled
+    // Class-C position scale -- a console-level opinion about it would be a
+    // second opinion, and the block's header is where that knob is explained.
+  ) u_part_project (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I24: the owner values. The base radius is the piece zref_particle.hpp
+    // names as missing and as a content decision; the view is which camera this
+    // pass is for, because ladder selection is PER CAMERA.
+    .cfg_base_radius_i(part_prj_base_radius_i),
+    .cfg_view_i       (part_prj_view_i),
+
+    // REAL: branch P of the fork on PART.COLLIDE's output. The draw pass reads
+    // the ring's OWN records; nothing here mints a second record stream.
+    .p_valid_i (fork_prj_valid_c),
+    .p_ready_o (pp_p_ready),
+    .p_record_i(pc_c_record),
+
+    // I24: the ladder's species/governor inputs, the per-(particle, camera)
+    // hold state (I23's absent DDR) and the particle's colour. They ride
+    // PART.PROJECT's slot store with their particle, which is the whole reason
+    // they enter here rather than being joined to the ladder by hand.
+    .p_trail_i    (part_prj_trail_i),
+    .p_narrow_i   (part_prj_narrow_i),
+    .p_protected_i(part_prj_protected_i),
+    .p_gov_floor_i(part_prj_gov_floor_i),
+    .p_prev_rung_i(part_prj_prev_rung_i),
+    .p_hold_i     (part_prj_hold_i),
+    .p_first_i    (part_prj_first_i),
+    .p_r_i        (part_prj_r_i),
+    .p_g_i        (part_prj_g_i),
+    .p_b_i        (part_prj_b_i),
+    .p_src_id_i   (part_prj_src_id_i),
+
+    // REAL: geometry in, from GEOM.GROUP_SEQ, and straight out again.
+    .g_valid_i  (gs_a_valid),
+    .g_ready_o  (gs_a_ready),
+    .g_vx_i     (gs_a_vx),
+    .g_vy_i     (gs_a_vy),
+    .g_vz_i     (gs_a_vz),
+    .g_view_i   (gs_a_view),
+    .g_payload_i(gs_a_payload),
+
+    // REAL: the multiplexed request into client A of the ONE projector.
+    .a_valid_o  (pa_a_valid),
+    .a_ready_i  (pa_a_ready),
+    .a_vx_o     (pa_a_vx),
+    .a_vy_o     (pa_a_vy),
+    .a_vz_o     (pa_a_vz),
+    .a_view_o   (pa_a_view),
+    .a_payload_o(pa_a_payload),
+
+    // REAL: client A's result, demultiplexed by the rider's top bit.
+    .a_valid_i  (sv_a_valid),
+    .a_x_i      (sv_a_x),
+    .a_y_i      (sv_a_y),
+    .a_d_i      (sv_a_d),
+    .a_w_i      (sv_a_w),
+    .a_behind_i (sv_a_behind),
+    .a_payload_i(sv_a_payload),
+
+    // REAL: geometry's half of that result, into the arena lane, untouched.
+    .h_valid_o  (pj_a_valid),
+    .h_x_o      (pj_a_x),
+    .h_y_o      (pj_a_y),
+    .h_d_o      (pj_a_d),
+    .h_w_o      (pj_a_w),
+    .h_behind_o (pj_a_behind),
+    .h_payload_o(pj_a_payload),
+
+    // REAL: the ladder loop, both directions.
+    .lad_valid_o    (pp_lad_valid),
+    .lad_ready_i    (pp_lad_ready),
+    .lad_size_o     (pp_lad_size),
+    .lad_trail_o    (pp_lad_trail),
+    .lad_narrow_o   (pp_lad_narrow),
+    .lad_protected_o(pp_lad_protected),
+    .lad_gov_floor_o(pp_lad_gov),
+    .lad_prev_rung_o(pp_lad_prev),
+    .lad_hold_o     (pp_lad_hold),
+    .lad_first_o    (pp_lad_first),
+    .rng_valid_i    (pl_r_valid),
+    .rng_ready_o    (pl_r_ready),
+    .rng_rung_i     (pl_r_rung),
+    .rng_hold_i     (pl_r_hold),
+    .rng_changed_i  (pl_r_changed),
+
+    // REAL: the projected particle, with its verdict attached.
+    .q_valid_o   (pq_valid),
+    .q_ready_i   (pq_ready),
+    .q_in_o      (pq_in),
+    .q_x_o       (pq_x),
+    .q_y_o       (pq_y),
+    .q_d_o       (pq_d),
+    .q_size_o    (pq_size),
+    .q_size16_o  (pq_size16),
+    .q_r_o       (pq_r),
+    .q_g_o       (pq_g),
+    .q_b_o       (pq_b),
+    .q_src_id_o  (pq_src_id),
+    .q_rung_o    (pq_rung),
+    .q_hold_new_o(pq_hold),
+    .q_changed_o (pq_changed),
+
+    .particles_projected_o(part_prj_projected_o),
+    .particles_behind_o   (part_prj_behind_o),
+    .geom_grants_o        (part_prj_geom_grants_o),
+    .part_grants_o        (part_prj_part_grants_o),
+    .contended_o          (part_prj_contended_o),
+    .size_saturations_o   (part_prj_size_sat_o),
+    .slot_pressure_o      (part_prj_slot_pressure_o),
+    .geom_tag_collision_o (part_prj_tag_collision_o),
+    .ladder_unexpected_o  (part_prj_ladder_unexpected_o)
+  );
+
+  zhao_part_ladder u_part_ladder (
+    // Every threshold stays at the block's own default. They are Class B --
+    // evidence-driven defaults, not ABI -- and a console-level override here
+    // would be a second opinion the owner never took.
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: PART.PROJECT's ladder loop. `p_size_i` is a PROJECTED U 8.8 screen
+    // size, which is what this block's port comment asks for and what I24 said
+    // had no producer.
+    .v_valid_i    (pp_lad_valid),
+    .v_ready_o    (pp_lad_ready),
+    .p_size_i     (pp_lad_size),
+    .p_trail_i    (pp_lad_trail),
+    .p_narrow_i   (pp_lad_narrow),
+    .p_protected_i(pp_lad_protected),
+    .p_gov_floor_i(pp_lad_gov),
+    .p_prev_rung_i(pp_lad_prev),
+    .p_hold_i     (pp_lad_hold),
+    .p_first_i    (pp_lad_first),
+
+    .r_valid_o  (pl_r_valid),
+    .r_ready_i  (pl_r_ready),
+    .r_rung_o   (pl_r_rung),
+    .r_hold_o   (pl_r_hold),
+    .r_changed_o(pl_r_changed),
+
+    .decisions_o  (part_lad_decisions_o),
+    .changes_o    (part_lad_changes_o),
+    .held_o       (part_lad_held_o),
+    .gov_forced_o (part_lad_gov_forced_o)
+  );
+
+  // --------------------------------------------------------------------------
+  // GLUE 6: THE RUNG DEMUX, AND THE FORK THAT LETS THE WRITE-BACK SEE EVERY
+  // BEAT.
+  //
+  // `design/blocks.yml` declares PART.LADDER -> {PART.EXPAND, PART.SOFT} and
+  // neither endpoint has a port that takes a rung, which entry I24 records as
+  // the ledger's edge not being the RTL's. It is not a missing port: it is a
+  // ROUTING relation, and this is it -- stateless, two named rungs, no counter
+  // and no register.
+  //
+  // The rung write-back must see EVERY beat, including the four rungs that have
+  // no endpoint built. So it is an AND-fork: the beat retires when the
+  // write-back and the selected endpoint have both accepted, and a rung with no
+  // endpoint has a ready of constant 1. This is the plain fork glue 3's comment
+  // calls out as stalling both consumers when either is busy; that cost is
+  // accepted here because there are exactly two consumers, only one of which
+  // ever takes a given beat, so the "presented twice" hazard the done-bit fork
+  // exists to solve cannot arise.
+  //
+  // NO CONSUMER'S READY READS ITS OWN VALID, and that is the property to check
+  // rather than assume: `zhao_part_expand.p_ready_o` and
+  // `zhao_part_soft.p_ready_o` are both `!out_valid || out_ready`, functions of
+  // their own output register and a boundary input, and `part_rung_ready_i` is
+  // a boundary input. So nothing below closes a combinational loop.
+  // --------------------------------------------------------------------------
+  wire pq_to_exp_c = pq_valid && (pq_rung == PART_RUNG_SHARD_C);
+  wire pq_to_sft_c = pq_valid && (pq_rung == PART_RUNG_SPRITE_C);
+  wire pq_ep_ready_c = pq_to_exp_c ? pe_p_ready : (pq_to_sft_c ? pf_p_ready : 1'b1);
+
+  assign pq_ready = part_rung_ready_i && pq_ep_ready_c;
+
+  assign part_rung_valid_o   = pq_valid && pq_ep_ready_c;
+  assign part_rung_o         = pq_rung;
+  assign part_rung_hold_o    = pq_hold;
+  assign part_rung_changed_o = pq_changed;
+  assign part_rung_src_id_o  = pq_src_id;
+
+  wire pe_p_valid_c = pq_to_exp_c && part_rung_ready_i;
+  wire pf_p_valid_c = pq_to_sft_c && part_rung_ready_i;
+
+  zhao_part_expand u_part_expand (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the SHARD rung of PART.LADDER's verdict, carrying PART.PROJECT's
+    // projected particle. `p_size_i` is now a SCREEN size in U 0.4.4 pixels,
+    // which is what this block's `size << 4` was always written for.
+    .p_valid_i (pe_p_valid_c),
+    .p_ready_o (pe_p_ready),
+    .p_in_i    (pq_in),
+    .p_x_i     (pq_x),
+    .p_y_i     (pq_y),
+    .p_d_i     (pq_d),
+    .p_size_i  (pq_size),
+    .p_r_i     (pq_r),
+    .p_g_i     (pq_g),
+    .p_b_i     (pq_b),
+    .p_src_id_i(pq_src_id),
+
+    // I24: the triangle's customer is the same absent GEOM replay/setup path
+    // I11, I12 and I13 name, so the packet leaves the module.
+    .t_valid_o      (part_exp_valid_o),
+    .t_ready_i      (part_exp_ready_i),
+    .t_ax_o         (part_exp_ax_o),
+    .t_ay_o         (part_exp_ay_o),
+    .t_bx_o         (part_exp_bx_o),
+    .t_by_o         (part_exp_by_o),
+    .t_cx_o         (part_exp_cx_o),
+    .t_cy_o         (part_exp_cy_o),
+    .t_d_o          (part_exp_d_o),
+    .t_r_o          (part_exp_r_o),
+    .t_g_o          (part_exp_g_o),
+    .t_b_o          (part_exp_b_o),
+    .t_depth_test_o (part_exp_depth_test_o),
+    .t_depth_write_o(part_exp_depth_write_o),
+    .t_src_id_o     (part_exp_src_id_o),
+
+    .polygon_particles_o(part_exp_polygons_o)
+  );
+
+  zhao_part_soft u_part_soft (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: the scissor is the console's own pass geometry -- the SAME nets
+    // GEOM.CLIP takes (GLUE 1 extended). Not a boundary and not a second
+    // opinion: `zhao_part_soft` defines the rectangle exactly as
+    // `zhao_geom_clip` does.
+    .vp_x0_i(12'd0),
+    .vp_y0_i(12'd0),
+    .vp_w_i (clip_vp_w_c),
+    .vp_h_i (clip_vp_h_c),
+
+    // REAL: the SPRITE rung.
+    .p_valid_i (pf_p_valid_c),
+    .p_ready_o (pf_p_ready),
+    .p_in_i    (pq_in),
+    .p_x_i     (pq_x),
+    .p_y_i     (pq_y),
+    .p_d_i     (pq_d),
+    .p_size_i  (pq_size),
+    .p_r_i     (pq_r),
+    .p_g_i     (pq_g),
+    .p_b_i     (pq_b),
+    .p_src_id_i(pq_src_id),
+
+    // I24: the span's customer is RASTER.FRAGMENT, which lives in the shell.
+    .s_valid_o      (part_sft_valid_o),
+    .s_ready_i      (part_sft_ready_i),
+    .s_min_x_o      (part_sft_min_x_o),
+    .s_max_x_o      (part_sft_max_x_o),
+    .s_min_y_o      (part_sft_min_y_o),
+    .s_max_y_o      (part_sft_max_y_o),
+    .s_d_o          (part_sft_d_o),
+    .s_r_o          (part_sft_r_o),
+    .s_g_o          (part_sft_g_o),
+    .s_b_o          (part_sft_b_o),
+    .s_depth_test_o (part_sft_depth_test_o),
+    .s_depth_write_o(part_sft_depth_write_o),
+    .s_src_id_o     (part_sft_src_id_o),
+
+    .soft_particles_o(part_sft_sprites_o)
   );
 
 endmodule : zhao_console_core
