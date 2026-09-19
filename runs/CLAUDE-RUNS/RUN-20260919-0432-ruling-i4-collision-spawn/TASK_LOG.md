@@ -130,3 +130,41 @@ core is contended by two live agents, so hunk-level staging and `git commit --on
 now"), but INPUT.SNAC, GEOM.WARP and POST.ECHO have DELIBERATELY BLANK contracts --
 every section reads "Deliberately unwritten" -- so each needs a contract authored
 before any RTL exists to write.
+## 2026-09-19 later -- 70 gaps, and the console executes a command and carries traffic
+
+**Where I am.** 78 -> 70 mandatory gaps (27 tie-offs + 38 disconnected + 5 unbuilt).
+All four agent packets landed: TWOD sampler, PART.PROJECT, CMD.EXEC, TERRAIN compose.
+
+**Two things the console can do now that it could not this morning:** execute a
+ratified command (SetView reaches the projector's matrix bank, SurfaceStamp reaches
+the sheet), and pass its integration smoke bench -- "the connected core carries
+traffic on every wire this bench can reach", 64,128 terrain bytes retired over 1,007
+played bursts.
+
+**Built by me:** TERRAIN.PLACE (the placement owner I27 said did not exist) and
+MEM.UPLOAD (the HPS->VRAM path the contract opens by saying does not exist).
+
+**FIVE register defects found and fixed, all in one family.** Closure membership
+counted as connection; the unbounded scan that absorbed the next fit target; the
+substring anchor that matched a COMMENT; a hand-resolved alias that outlived its
+search; and a settling marker that matched PROSE, so an entry closed itself when
+someone wrote a sentence about it -- and closed again when the sentence explaining
+that was quoted. Every one read a CONVENTION where it should have read a STRUCTURE.
+Each now has a guard I FIRED before trusting.
+
+**The biggest remaining functional gap is that NO PIXEL TRAVERSES THE RENDER PATH.**
+The smoke bench says it in its own voice: `raster pixels=0 because
+frames_admitted=0 -- the V2 renderer lease is not driven by this bench;
+VIDEO.SLOTMGR is still not connected`. That is the next wave's first packet.
+
+**NEXT STEP, written down before reading any agent result:** wave of three --
+VIDEO.SLOTMGR + the renderer lease (pixels), the geometry cluster (8 disconnected),
+the texture cluster (6). Mine: compose MEM.UPLOAD into the core, and author the
+three missing contracts.
+
+**Still open for the owner:** INPUT.SNAC, GEOM.WARP and POST.ECHO have DELIBERATELY
+BLANK contracts -- every section reads "Deliberately unwritten" -- because they were
+cut on 2026-08-31 before their specs were written. The ledger records the revocation
+verbatim ("I don't want to defer any unfinished blocks now ... the 2026-08-31 SS6.3
+cut is withdrawn"), so I am treating them as mandatory and authoring the contracts.
+Flagged rather than assumed.
