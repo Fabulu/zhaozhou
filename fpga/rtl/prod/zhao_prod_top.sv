@@ -83,6 +83,14 @@ module zhao_prod_top (
   logic signed [32-1:0] u01_stamp_radius_o;
   logic signed [32-1:0] u01_stamp_ring_width_o;
   logic [16-1:0] u01_stamp_src_id_o;
+  logic [1-1:0] u01_draw_valid_o;
+  logic [32-1:0] u01_draw_form_o;
+  logic [32-1:0] u01_draw_material_set_o;
+  logic [32-1:0] u01_draw_transform_o;
+  logic [8-1:0] u01_draw_viewport_mask_o;
+  logic [8-1:0] u01_draw_semantic_weight_o;
+  logic [16-1:0] u01_draw_flags_o;
+  logic [16-1:0] u01_draw_src_id_o;
   logic [32-1:0] u01_packets_committed_o;
   logic [32-1:0] u01_packets_abandoned_o;
   logic [32-1:0] u01_views_written_o;
@@ -90,6 +98,9 @@ module zhao_prod_top (
   logic [32-1:0] u01_stamp_overflow_o;
   logic [32-1:0] u01_view_range_refused_o;
   logic [32-1:0] u01_stamp_src_truncated_o;
+  logic [32-1:0] u01_draws_issued_o;
+  logic [32-1:0] u01_draw_overflow_o;
+  logic [32-1:0] u01_draw_src_truncated_o;
   logic [32-1:0] u01_unsupported_o;
   zhao_cmd_exec u01_i (
       .clk(clk),
@@ -117,6 +128,15 @@ module zhao_prod_top (
       .stamp_radius_o(u01_stamp_radius_o),
       .stamp_ring_width_o(u01_stamp_ring_width_o),
       .stamp_src_id_o(u01_stamp_src_id_o),
+      .draw_valid_o(u01_draw_valid_o),
+      .draw_ready_i(u01_src[56 +: 1]),
+      .draw_form_o(u01_draw_form_o),
+      .draw_material_set_o(u01_draw_material_set_o),
+      .draw_transform_o(u01_draw_transform_o),
+      .draw_viewport_mask_o(u01_draw_viewport_mask_o),
+      .draw_semantic_weight_o(u01_draw_semantic_weight_o),
+      .draw_flags_o(u01_draw_flags_o),
+      .draw_src_id_o(u01_draw_src_id_o),
       .packets_committed_o(u01_packets_committed_o),
       .packets_abandoned_o(u01_packets_abandoned_o),
       .views_written_o(u01_views_written_o),
@@ -124,12 +144,15 @@ module zhao_prod_top (
       .stamp_overflow_o(u01_stamp_overflow_o),
       .view_range_refused_o(u01_view_range_refused_o),
       .stamp_src_truncated_o(u01_stamp_src_truncated_o),
+      .draws_issued_o(u01_draws_issued_o),
+      .draw_overflow_o(u01_draw_overflow_o),
+      .draw_src_truncated_o(u01_draw_src_truncated_o),
       .unsupported_o(u01_unsupported_o)
   );
   logic u01_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u01_fold_q <= 1'b0;
-    else u01_fold_q <= u01_fold_q ^ (((^u01_pkt_ready_o)) & u01_src[0]) ^ (((^u01_proj_cfg_we_o)) & u01_src[1]) ^ (((^u01_proj_cfg_view_o)) & u01_src[2]) ^ (((^u01_proj_cfg_addr_o)) & u01_src[3]) ^ (((^u01_proj_cfg_data_o)) & u01_src[4]) ^ (((^u01_stamp_valid_o)) & u01_src[5]) ^ (((^u01_stamp_patch_o)) & u01_src[6]) ^ (((^u01_stamp_operation_o)) & u01_src[7]) ^ (((^u01_stamp_tag_o)) & u01_src[8]) ^ (((^u01_stamp_strength_o)) & u01_src[9]) ^ (((^u01_stamp_tx_o)) & u01_src[10]) ^ (((^u01_stamp_ty_o)) & u01_src[11]) ^ (((^u01_stamp_radius_o)) & u01_src[12]) ^ (((^u01_stamp_ring_width_o)) & u01_src[13]) ^ (((^u01_stamp_src_id_o)) & u01_src[14]) ^ (((^u01_packets_committed_o)) & u01_src[15]) ^ (((^u01_packets_abandoned_o)) & u01_src[16]) ^ (((^u01_views_written_o)) & u01_src[17]) ^ (((^u01_stamps_issued_o)) & u01_src[18]) ^ (((^u01_stamp_overflow_o)) & u01_src[19]) ^ (((^u01_view_range_refused_o)) & u01_src[20]) ^ (((^u01_stamp_src_truncated_o)) & u01_src[21]) ^ (((^u01_unsupported_o)) & u01_src[22]);
+    else u01_fold_q <= u01_fold_q ^ (((^u01_pkt_ready_o)) & u01_src[0]) ^ (((^u01_proj_cfg_we_o)) & u01_src[1]) ^ (((^u01_proj_cfg_view_o)) & u01_src[2]) ^ (((^u01_proj_cfg_addr_o)) & u01_src[3]) ^ (((^u01_proj_cfg_data_o)) & u01_src[4]) ^ (((^u01_stamp_valid_o)) & u01_src[5]) ^ (((^u01_stamp_patch_o)) & u01_src[6]) ^ (((^u01_stamp_operation_o)) & u01_src[7]) ^ (((^u01_stamp_tag_o)) & u01_src[8]) ^ (((^u01_stamp_strength_o)) & u01_src[9]) ^ (((^u01_stamp_tx_o)) & u01_src[10]) ^ (((^u01_stamp_ty_o)) & u01_src[11]) ^ (((^u01_stamp_radius_o)) & u01_src[12]) ^ (((^u01_stamp_ring_width_o)) & u01_src[13]) ^ (((^u01_stamp_src_id_o)) & u01_src[14]) ^ (((^u01_draw_valid_o)) & u01_src[15]) ^ (((^u01_draw_form_o)) & u01_src[16]) ^ (((^u01_draw_material_set_o)) & u01_src[17]) ^ (((^u01_draw_transform_o)) & u01_src[18]) ^ (((^u01_draw_viewport_mask_o)) & u01_src[19]) ^ (((^u01_draw_semantic_weight_o)) & u01_src[20]) ^ (((^u01_draw_flags_o)) & u01_src[21]) ^ (((^u01_draw_src_id_o)) & u01_src[22]) ^ (((^u01_packets_committed_o)) & u01_src[23]) ^ (((^u01_packets_abandoned_o)) & u01_src[24]) ^ (((^u01_views_written_o)) & u01_src[25]) ^ (((^u01_stamps_issued_o)) & u01_src[26]) ^ (((^u01_stamp_overflow_o)) & u01_src[27]) ^ (((^u01_view_range_refused_o)) & u01_src[28]) ^ (((^u01_stamp_src_truncated_o)) & u01_src[29]) ^ (((^u01_draws_issued_o)) & u01_src[30]) ^ (((^u01_draw_overflow_o)) & u01_src[31]) ^ (((^u01_draw_src_truncated_o)) & u01_src[32]) ^ (((^u01_unsupported_o)) & u01_src[33]);
 
   // ---- zhao_field_progcache ----
   logic [63:0] u02_lfsr_q;
