@@ -451,3 +451,20 @@ different hands.
   cannot see it because the path resolves.
 - **22 modules inside `zhao_console_core`'s closure are marked `excluded`** in
   the manifest. Delegated with the 13 UNACCOUNTED rows.
+
+### STANDING CORRECTION 2026-09-19 — FIT AT COMPLETION ONLY
+
+Owner: *"don't fit at milestones. Fit at completion only"*. This supersedes my
+stated plan of "fits at meaningful milestones".
+
+**No Quartus run of any kind until Phase 1 reports ZERO mandatory gaps.** Not a
+milestone fit, not a subsystem fit, not a reassurance fit. The completion
+register is the only progress instrument until then, and it costs seconds.
+
+Why this is right and not merely cheaper: a fit of an incomplete console
+measures a machine nobody intends to build, and this session has already spent
+~3.5 hours on exactly that once. The plan's own §13.12 says a fit that measures
+a circuit you already know is wrong is wasted, and every intermediate specimen
+between here and zero gaps is knowably wrong.
+
+Current: **85 mandatory gaps** (20 tie-offs + 57 disconnected + 8 unbuilt).
