@@ -70,9 +70,9 @@ PROTECTED = {
         # The field diff that justifies it is recorded once, beside the pin in
         # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
         # 119 -> 119, parameters 16 -> 16.
-        "91b17f5d8b9c05bd155da9062cf97741b66d894f57a8834703471167b87a7b94",
+        "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437",
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38",
+        "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875",
 }
 EXPECTED_TESTS = (
     "raster_texture_v3_fit_top_directed",

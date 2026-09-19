@@ -135,6 +135,7 @@ module zhao_raster_texture_stage_v3 #(
     output logic [31:0]  cnt_palette_lookups_o,
     output logic [31:0]  cnt_bilerp_jobs_o,
     output logic [31:0]  cnt_mosaic_samples_o,
+    output logic [31:0]  cnt_texture_samples_o,  // R9: TEXTURE.TMU's texture_samples
     output logic [31:0]  cnt_aux_accepted_o,
     output logic [31:0]  cnt_combine_refused_o,
     output logic [31:0]  cnt_combine_phases_o,
@@ -464,6 +465,7 @@ module zhao_raster_texture_stage_v3 #(
       .cnt_palette_lookups_o(cnt_palette_lookups_o),
       .cnt_bilerp_jobs_o(cnt_bilerp_jobs_o),
       .cnt_mosaic_samples_o(cnt_mosaic_samples_o),
+      .cnt_texture_samples_o(cnt_texture_samples_o),
       .cnt_aux_accepted_o(cnt_aux_accepted_o),
       .cnt_combine_refused_o(cnt_combine_refused_o),
       .cnt_combine_phases_o(cnt_combine_phases_o),

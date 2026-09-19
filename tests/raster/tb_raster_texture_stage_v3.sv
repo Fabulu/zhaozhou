@@ -157,6 +157,7 @@ module tb_raster_texture_stage_v3 #(
   logic [31:0] unused_cnt_palette_lookups;
   logic [31:0] unused_cnt_bilerp_jobs;
   logic [31:0] unused_cnt_mosaic_samples;
+  logic [31:0] unused_cnt_texture_samples;
   logic [31:0] unused_cnt_aux_accepted;
   logic [31:0] unused_cnt_combine_phases;
   logic [31:0] unused_cnt_rcp_completed;
@@ -303,6 +304,7 @@ module tb_raster_texture_stage_v3 #(
       .cnt_palette_lookups_o(unused_cnt_palette_lookups),
       .cnt_bilerp_jobs_o(unused_cnt_bilerp_jobs),
       .cnt_mosaic_samples_o(unused_cnt_mosaic_samples),
+      .cnt_texture_samples_o(unused_cnt_texture_samples),
       .cnt_aux_accepted_o(unused_cnt_aux_accepted),
       .cnt_combine_refused_o(combine_refused_o),
       .cnt_combine_phases_o(unused_cnt_combine_phases),

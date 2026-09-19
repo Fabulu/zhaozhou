@@ -92,7 +92,7 @@ PROTECTED_HASHES = {
     "fpga/rtl/prod/zhao_prod_top.sv":
         "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61",
     "fpga/rtl/raster/zhao_raster_texture_stage_v3.sv":
-        "f2c0ee4d054e2f70a37c4179c4fb985b0ba3f95c5533f598858b3b315e57497b",
+        "a3fbf98d0778c780c61b2ee63ae26aaf7344204af569358eff956715735488e5",
 
     # `fpga/rtl/raster/zhao_raster_attrgrad_v2.sv` WAS HERE and is now in
     # CURRENT_HASHES below. Owner decision, 2026-09-18, asked rather than
@@ -185,7 +185,7 @@ CURRENT_HASHES = {
     # Packet-D bit positions cannot drift between the two files that now state
     # them. The assertion is live in Verilator and absent from the fabric.
     "fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv":
-        "dfc64deef75ef9404ecbfbbfc95f234eaaddcc832ccec49e7e7cb0bb5c09ecce",
+        "73b4f4432f1d8b17956cbeb56b333a4e3eb2f5e349271a64271b97ea361b39e5",
     "fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv":
         "e3080d6619ac3edb9a08abfad40406a61bec7f04b4c4cdcb88fa4cebca519eca",
     "fpga/rtl/raster/zhao_raster_attrdiv_v2.sv":
@@ -207,7 +207,7 @@ CURRENT_HASHES = {
     # changed -- `zhao_prod_top` was regenerated and confirmed byte-identical,
     # not assumed to be.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38",
+        "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875",
     # Refreshed 2026-09-16. The .sv hash is UNCHANGED; only the generated
     # interface manifest moved, because two files in its source closure gained
     # ENFORCED-BY comments (zhao_texture_v3own.sv, zhao_texture_uv_join.sv) and
@@ -228,7 +228,7 @@ CURRENT_HASHES = {
     # named for did not move: `cmb_owner_all_o` and `cmb_rp_o` are new ports of
     # zhao_texture_v3own, which is a CHILD, and the island consumes them
     # internally.
-        "91b17f5d8b9c05bd155da9062cf97741b66d894f57a8834703471167b87a7b94",
+        "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437",
 }
 
 
@@ -739,7 +739,7 @@ class PacketEClosureTests(unittest.TestCase):
         payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["module"]["name"], "zhao_texture_island_v3_top")
         self.assertEqual(len(payload["parameters"]), 16)
-        self.assertEqual(len(payload["ports"]), 119)
+        self.assertEqual(len(payload["ports"]), 120)  # R9: cnt_texture_samples_o
         self.assertIn("lifetime_structural_fault_o",
                       {row["name"] for row in payload["ports"]})
         self.assertEqual(

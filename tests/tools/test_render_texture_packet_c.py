@@ -87,8 +87,8 @@ PACKET_C_SOURCES = (
 # The field diff that justifies it is recorded once, beside the pin in
 # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
 # 119 -> 119, parameters 16 -> 16.
-INTERFACE_SHA256 = "91b17f5d8b9c05bd155da9062cf97741b66d894f57a8834703471167b87a7b94"
-PACKET_B_TOP_SHA256 = "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38"
+INTERFACE_SHA256 = "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437"  # R9: cnt_texture_samples_o
+PACKET_B_TOP_SHA256 = "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875"  # R9: cnt_texture_samples_o
 PROTECTED_SHELL_SHA256 = "00fdd2387ffea985bb6d3d0e2a9b21bde2913478d33333d30d11b64ae5450783"
 PROD_TOP_SHA256 = "96121488fabef50e9c4c3181d038b64ce4450c84c2b48713383f06aab192ff61"
 

@@ -536,18 +536,29 @@ _ALIAS: dict[str, str | None] = {
     #   rather than `superseded` -- the CAPABILITY still has an owner.
     "TEXTURE.FRAGROB":   "zhao_texture_v3own",
     #
-    # TEXTURE.TMU IS DELIBERATELY NOT RESOLVED AND STAYS A GAP. The manifest's
-    # own words are the reason: line 700 says it is superseded "by the Packet B
-    # texture plan/cache/dispatch PATH", not by a module. V3 decomposes the
-    # sampler across `zhao_texture_tmu_plan_v2`, `zhao_texture_cache_pipe_v2`,
-    # `zhao_texture_bilerp_lane_v2`, `zhao_texture_palette_res_v2` and
-    # `zhao_texture_rsp_dispatch_v2`, all five live; no single one of them IS
-    # the TMU. Pointing this at the planner would be the exact false reduction
-    # `successor_in()` was written to refuse, and over-reporting one gap is the
-    # safe direction. Closing it needs a ledger decision about what owns
-    # "texture_samples", not an edit here.
+    # TEXTURE.TMU RESOLVES TO THE V3 OWNER, BY OWNER RULING R9 (provisional,
+    # reports/OWNER-RULINGS-20260919-EVENING.md): "Retire TEXTURE.TMU as a
+    # single module in favour of the v3 path, and give `texture_samples` ONE
+    # owner: the v3 block that retires a filtered sample to the fragment. It
+    # counts samples it actually delivered."
     #
-    # ---- AND ONE CORRECTION IN THE OTHER DIRECTION -------------------------
+    # It stayed a gap until 2026-09-19 evening for a reason that was right: the
+    # manifest supersedes the old TMU "by the Packet B texture plan/cache/
+    # dispatch PATH", and no single stage of that path IS the TMU -- pointing
+    # this at the planner would be the false reduction `successor_in()` refuses.
+    # R9 answers the question that refusal asked, by naming the RETIREMENT
+    # rather than a sampling stage. Two witnesses, as for FRAGROB above:
+    #   * `zhao_texture_v3own.sv` publishes a TMU response into its fragment's
+    #     commit bitplane only when C4 is valid and the slot generation holds,
+    #     and `ev_texture_samples_o` counts exactly those published sample bits;
+    #   * the island exports it as `cnt_texture_samples_o`, and
+    #     tests/texture/texture_island_v3_packet_b_directed.cpp asserts it
+    #     exactly: +0 for a count-zero PASSTHRU, +1 NEAR, +1 CLUT.
+    # Two capabilities resolving to one module is deliberate: the ruling makes
+    # the fragment owner the sample owner. If R9 is revised, THIS LINE is the
+    # edit, and `zhao_texture_tmu` goes back to `pending_compose`.
+    "TEXTURE.TMU":       "zhao_texture_v3own",
+    #    # ---- AND ONE CORRECTION IN THE OTHER DIRECTION -------------------------
     #
     # MATERIAL.RESOLVE was aliased to `zhao_texture_material_combine_v2`, which
     # made an UNBUILT capability read as BUILT-BUT-NOT-CONNECTED. That is the

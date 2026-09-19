@@ -174,6 +174,10 @@ module zhao_texture_island_v3_top #(
     output var logic [31:0]             cnt_palette_lookups_o,
     output var logic [31:0]             cnt_bilerp_jobs_o,
     output var logic [31:0]             cnt_mosaic_samples_o,
+    // R9's `texture_samples`: filtered TMU samples PUBLISHED into their fragment by
+    // `zhao_texture_v3own` -- the one owner the ruling names. NOT the mosaic count
+    // above, which counts MOSAIC picks and belongs to TEXTURE.MOSAIC.
+    output var logic [31:0]             cnt_texture_samples_o,
     output var logic [31:0]             cnt_aux_accepted_o,
     output var logic [31:0]             cnt_combine_refused_o,
     output var logic [31:0]             cnt_combine_phases_o,
@@ -2284,6 +2288,7 @@ module zhao_texture_island_v3_top #(
       .out_ctx_o(owner_out_context_w), .ev_admitted_o(owner_admitted_w),
       .ev_emitted_o(owner_emitted_w), .ev_commits_o(owner_commits_w),
       .ev_tmu_commits_o(owner_tmu_commits_w),
+      .ev_texture_samples_o(cnt_texture_samples_o),
       .ev_aux_commits_o(owner_aux_commits_w), .ev_tickets_o(owner_tickets_w),
       .ev_reorder_held_o(cnt_reorder_held_o),
       .ev_err_range_o(owner_err_range_w), .ev_err_stale_o(owner_err_stale_w),

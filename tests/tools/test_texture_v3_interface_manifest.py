@@ -104,7 +104,8 @@ EXPECTED_PRODUCTION_PORT_NAMES = (
     "err_fragrob_id_error_o", "err_aux_degenerate_o", "err_rcp_q_o",
     "cnt_reorder_held_o", "cnt_live_peak_o", "cnt_fragments_o",
     "cnt_cache_hits_o", "cnt_cache_misses_o", "cnt_palette_lookups_o",
-    "cnt_bilerp_jobs_o", "cnt_mosaic_samples_o", "cnt_aux_accepted_o",
+    "cnt_bilerp_jobs_o", "cnt_mosaic_samples_o", "cnt_texture_samples_o",
+    "cnt_aux_accepted_o",
     "cnt_combine_refused_o", "cnt_combine_phases_o", "cnt_rcp_completed_o",
     "cnt_persp_fragments_o", "cnt_dispatch_accepted_o",
     "cnt_plan_accepted_o", "cnt_fragrob_id_errors_o", "shadow_present_o",
@@ -1711,9 +1712,10 @@ class ProductionParameterInventoryTests(unittest.TestCase):
         self.assertEqual(actual, EXPECTED_PRODUCTION_PARAMETER_INVENTORY)
         self.assertTrue(all(row["declared_kind"] == "parameter" for row in parameters))
 
-    def test_exact_119_production_ports_match_frozen_inventory(self) -> None:
+    def test_exact_120_production_ports_match_frozen_inventory(self) -> None:
         ports = self.artifact.payload["ports"]
-        self.assertEqual(len(EXPECTED_PRODUCTION_PORT_NAMES), 119)
+        # 120 since owner ruling R9 added cnt_texture_samples_o (TEXTURE.TMU's counter).
+        self.assertEqual(len(EXPECTED_PRODUCTION_PORT_NAMES), 120)
         self.assertEqual(
             tuple(row["name"] for row in ports),
             EXPECTED_PRODUCTION_PORT_NAMES,

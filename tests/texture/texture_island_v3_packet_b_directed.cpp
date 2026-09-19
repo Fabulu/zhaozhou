@@ -1392,6 +1392,12 @@ void run_directed() {
   run_material_hostile_cases(h);
 #endif
 
+  // R9: TEXTURE.TMU's `texture_samples` is owned by zhao_texture_v3own and counts
+  // filtered samples PUBLISHED into a fragment. These three fragments run alone
+  // and in order, so the count is exact: +0 for count-zero PASSTHRU (no TMU
+  // source), +1 for NEAR, +1 for CLUT. A counter that moved on the PASSTHRU
+  // fragment would be counting requests or fragments, not delivered samples.
+  const uint32_t r9_samples0 = h.dut.cnt_texture_samples_o;
   // Count-zero PASSTHRU uses admitted base and no TMU/AUX source.
   set_fragment(h, 0x1001, 0xa0000001u, 0, 0, 0, false, 0, 0);
   const auto count0_ctx = current_retire(h);
@@ -1414,6 +1420,8 @@ void run_directed() {
   return;
 #endif
   expect_result(h.retired.back(), 0x123456u, 0x7a, 0, 0, 0x1001, count0_ctx, h.cycle);
+  require(h.dut.cnt_texture_samples_o == r9_samples0,
+          "R9 texture_samples moved on a count-zero PASSTHRU fragment", h.cycle);
 
   // NEAR tuple: direct RGB565 decode, opaque alpha, raw index zero.
   set_fragment(h, 0x1002, 0xa0000002u, 1, 1, 0, false, 1, 0);
@@ -1447,6 +1455,8 @@ void run_directed() {
   return;
 #endif
   expect_result(h.retired.back(), 0xff0000u, 0xff, 0, 0, 0x1002, near_ctx, h.cycle);
+  require(h.dut.cnt_texture_samples_o == r9_samples0 + 1u,
+          "R9 texture_samples did not count the NEAR fragment's one delivered sample", h.cycle);
 #ifdef PACKET_B_EXPECT_RSP_DROP_OBSERVATION
   require(h.dut.err_rsp_dropped_o && h.dut.frame_fault_o && !h.dut.frag_ready_o,
           "response hold-violation mutant did not enter shipped reset-lifetime barrier", h.cycle);
@@ -1482,6 +1492,10 @@ void run_directed() {
   return;
 #endif
   expect_result(h.retired.back(), 0x00ff00u, 0xff, 5, 0, 0x1003, clut_ctx, h.cycle);
+  require(h.dut.cnt_texture_samples_o == r9_samples0 + 2u,
+          "R9 texture_samples did not count the CLUT fragment's one delivered sample", h.cycle);
+  std::printf("packet-b R9 texture_samples: +0 passthru, +1 near, +1 clut (now %u)\n",
+              static_cast<unsigned>(h.dut.cnt_texture_samples_o));
 
   // Selected-top format seams removed with the historical composed driver.
   // Exercise CLUT4 nibble selection and both direct alpha formats here instead

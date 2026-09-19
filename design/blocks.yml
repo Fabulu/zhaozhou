@@ -4171,6 +4171,7 @@ blocks:
       tests/texture/texture_tmu_directed.cpp
       test_throughput_against_the_derived_demand.
     reference_model: zref::Tmu
+    implementation: fpga/rtl/texture/zhao_texture_v3own.sv
     tests:
       directed: tests/texture/texture_tmu_directed.cpp
       random: tests/texture/texture_tmu_random.cpp
@@ -4191,31 +4192,30 @@ blocks:
     deferred: false
     cut_order: null
     superseded_by: null
-    blocked_on: >-
-      A LEDGER DECISION ABOUT WHO OWNS `texture_samples`, not a wiring job.
-      Stated here 2026-09-19 after the small-cluster sweep, because
-      completion_register.py's _ALIAS carries the same refusal in a comment and
-      a refusal that lives only in a tool is a refusal nobody reading the ledger
-      can act on. design/prod_manifest.yml:700 supersedes this block "by the
-      Packet B texture plan/cache/dispatch PATH" -- by a PATH and not by a
-      module. V3 decomposes the sampler across zhao_texture_tmu_plan_v2,
-      zhao_texture_cache_pipe_v2, zhao_texture_bilerp_lane_v2,
-      zhao_texture_palette_res_v2 and zhao_texture_rsp_dispatch_v2, all five
-      live in the console; no single one of them IS the TMU, so pointing the
-      register at any of them would be the false reduction successor_in() was
-      written to refuse -- it would match zhao_texture_tmu_plan_v2, whose own
-      third line says it succeeds the PLANNER.
-      SEARCHED, and the search is the new fact: this row's `counters` field
-      names `texture_samples`, and NO MODULE IN THE V3 PATH EMITS A SAMPLES
-      COUNTER AT ALL. The only `samples_o` anywhere in fpga/rtl is
-      zhao_twod_sampler's five (samples/plane/sprite/clut8/rgb565), which count
-      2D compositor texels and are not this. So the capability's own evidence
-      port is unowned, and that -- not the sampling arithmetic, which is
-      composed and tested -- is what has to be decided: either a named V3 module
-      adopts `texture_samples` and this row's implementation points at it, or
-      the row is superseded_by the path and the counter moves to whichever block
-      the ledger says answers a request.
     notes: >-
+      RESOLVED 2026-09-19 evening BY OWNER RULING R9 (provisional,
+      reports/OWNER-RULINGS-20260919-EVENING.md): "Retire TEXTURE.TMU as a
+      single module in favour of the v3 path, and give texture_samples ONE
+      owner: the v3 block that retires a filtered sample to the fragment. It
+      counts samples it actually delivered." That block is zhao_texture_v3own:
+      a TMU response is PUBLISHED into its fragment's commit bitplane only when
+      C4 is valid and the slot generation holds, and ev_texture_samples_o
+      counts exactly those sample bits (island port cnt_texture_samples_o;
+      tests/texture/texture_island_v3_packet_b_directed.cpp asserts +0 for a
+      count-zero PASSTHRU, +1 NEAR, +1 CLUT). The old zhao_texture_tmu and
+      zhao_texture_tmu_pipe are `superseded` by it in
+      design/console_inventory.yml, and completion_register.py's _ALIAS
+      resolves this row to it. If R9 is revised, those three lines revert.
+      CORRECTION to the refusal that stood here: it said "NO MODULE IN THE V3
+      PATH EMITS A SAMPLES COUNTER AT ALL. The only samples_o anywhere in
+      fpga/rtl is zhao_twod_sampler's five". FALSE -- zhao_texture_mosaic_v2
+      emits texture_samples_o and it is live in the island (wired to
+      cnt_mosaic_samples_o). It counts MOSAIC PICKS, so it was never this
+      counter and the conclusion held; the stated fact did not. OPEN, for the
+      counter catalog's owner: TEXTURE.MOSAIC and TWOD.SPRITE still list the
+      catalog counter `texture_samples` beside this row. Giving it ONE owner
+      in the catalog means new catalog ids for those two, which is a
+      spec/counters.md index change and is not taken here.
       Sample modes are spec constants; secondary decal modes are cut-order 7
       (§26). Star ramp discipline (spec/stars_and_flares.md §1): one 64-entry
       CLUT palette page per active near star (max 2) is ARM-rebuilt and

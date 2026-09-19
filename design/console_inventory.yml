@@ -443,11 +443,13 @@ modules:
     superseded_by: zhao_texture_rsp_dispatch_v2
     why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
   zhao_texture_tmu:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+    disposition: superseded
+    superseded_by: zhao_texture_v3own
+    why: "owner ruling R9 (provisional, reports/OWNER-RULINGS-20260919-EVENING.md): TEXTURE.TMU is retired as a single module in favour of the v3 path, and texture_samples is owned by zhao_texture_v3own, the block that retires a filtered sample to the fragment (ev_texture_samples_o)"
   zhao_texture_tmu_pipe:
-    disposition: pending_compose
-    why: "built and not composed; belongs to a capability the register still counts as a gap"
+    disposition: superseded
+    superseded_by: zhao_texture_v3own
+    why: "owner ruling R9 (provisional, reports/OWNER-RULINGS-20260919-EVENING.md): TEXTURE.TMU is retired as a single module in favour of the v3 path, and texture_samples is owned by zhao_texture_v3own, the block that retires a filtered sample to the fragment (ev_texture_samples_o)"
   zhao_texture_tmu_plan:
     disposition: superseded
     superseded_by: zhao_texture_tmu_plan_v2

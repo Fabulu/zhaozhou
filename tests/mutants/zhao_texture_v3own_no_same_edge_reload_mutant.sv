@@ -322,6 +322,15 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
     // not gate or alter lifecycle state; their independent positive control is
     // what makes a zero typed count meaningful.
     output var logic [31:0]       ev_tmu_commits_o,
+    // TEXTURE_SAMPLES -- owner ruling R9 (reports/OWNER-RULINGS-20260919-EVENING.md):
+    // "give `texture_samples` ONE owner: the v3 block that retires a filtered
+    // sample to the fragment. It counts samples it actually delivered." This
+    // block is that retirement: a TMU response is PUBLISHED into its fragment's
+    // commit bitplane (`cmt_n_c`) only when C4 is valid AND the slot's
+    // generation still matches (`c4t_gen_ok_c`). So this counts the sample
+    // bits actually published -- not `ev_tmu_commits_o`, which also counts a C4
+    // commit whose generation check failed and so delivered nothing.
+    output var logic [31:0]       ev_texture_samples_o,
     output var logic [31:0]       ev_aux_commits_o,
     output var logic [31:0]       ev_tickets_o,
     // Newly ready owners whose slot is not the current ordered head. This is
@@ -1936,6 +1945,13 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
     end
   end
 
+  // R9's `texture_samples`: the sample bits C4 actually published -- the same
+  // condition that ORs `c4t_mask_q` into `cmt_n_c` above.
+  logic [31:0] tmu_published_c;
+  assign tmu_published_c = (c4t_v_q && c4t_gen_ok_c)
+                         ? (32'(c4t_mask_q[0]) + 32'(c4t_mask_q[1]) + 32'(c4t_mask_q[2]))
+                         : 32'd0;
+
   // ---- evidence counters ---------------------------------------------------
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -1943,6 +1959,7 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       ev_emitted_o     <= 32'd0;
       ev_commits_o     <= 32'd0;
       ev_tmu_commits_o <= 32'd0;
+      ev_texture_samples_o <= 32'd0;
       ev_aux_commits_o <= 32'd0;
       ev_tickets_o     <= 32'd0;
       ev_reorder_held_o<= 32'd0;
@@ -1960,6 +1977,7 @@ module zhao_texture_v3own_no_same_edge_reload_mutant #(
       ev_emitted_o     <= ev_emitted_o     + 32'(out_fire_c);
       ev_commits_o     <= ev_commits_o     + 32'(d_commit_c);
       ev_tmu_commits_o <= ev_tmu_commits_o + 32'(c4t_v_q);
+      ev_texture_samples_o <= ev_texture_samples_o + tmu_published_c;
       ev_aux_commits_o <= ev_aux_commits_o + 32'(c4a_v_q);
       ev_tickets_o     <= ev_tickets_o     + 32'(d_ticket_c);
       ev_reorder_held_o<= ev_reorder_held_o+ 32'(d_reorder_c);

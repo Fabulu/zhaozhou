@@ -119,7 +119,7 @@ PROTECTED_HASHES = {
         # The field diff that justifies it is recorded once, beside the pin in
         # tests/tools/test_render_texture_packet_e.py -- five hash fields, ports
         # 119 -> 119, parameters 16 -> 16.
-        "91b17f5d8b9c05bd155da9062cf97741b66d894f57a8834703471167b87a7b94",
+        "17e04fe48cbe7e74013582ffc49d9c921f0668019f8984b47b7903f165654437",
     # REFRESHED 2026-09-18 FOR A CHANGE TO THE FILE ITSELF, which is a different
     # act from the interface-manifest refreshes above and says so plainly.
     #
@@ -149,7 +149,7 @@ PROTECTED_HASHES = {
     # manifest entry above has done twice. Same treatment, louder note, because
     # this one is a change to LOGIC PLACEMENT rather than to a derived artifact.
     "fpga/rtl/texture/zhao_texture_island_v3_top.sv":
-        "c85bcf05fd719fdc6347653fc556affac2977e783a2a268852cf0123ab3dff38",
+        "e52cb53ea02fb8dfc4f1bd1e9b34b36c9ddd2aaa7e257fd0fe88f89904868875",
     "fpga/rtl/raster/zhao_raster_attrdiv.sv":
         "5f5e9b0dbd3d1c23d4b0b55c84aaa06e873d0aee72be25bed2d64e7ff1424eca",
     "fpga/rtl/raster/zhao_raster_attrstep.sv":
