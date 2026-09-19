@@ -1,0 +1,17 @@
+﻿# pass-19 no-skip local gate 2026-09-19T22:52:10
+checkarchive: SELFTEST OK valid contract passes and nine red legs fire
+CHECKARCHIVE_SELFTEST_RC=0
+checkfresh: SELFTEST OK live/archive classification and orphan red leg fire
+CHECKFRESH_SELFTEST_RC=0
+assemble: wrote C:\programmieren\zencrifice\manafold-p16\Upheaval\website\public\index.html - 2 creature(s), 738 render(s)
+checkplayback: OK Fall is controls-only/non-looping and Hover remains autoplay+loop
+checkarchive: OK version-17 56/56 archive files, 70576645 bytes; version-18 44/44 archive files, 44743343 bytes, equal to the published version-18 receipt; live names match the pass-19 receipt 44/44; 22 version-18 clips, 22+6 version-17 clips and 10 labs declared once; archived playback is controls+loop/no-autoplay/preload-none
+gate: robots meta is 'noindex, nofollow' - private, ok
+gate: is the encoded bank all one generation?
+checkfresh: 22 rendered subject(s) -- 22 live fresh, 0 archived, 0 STALE, 0 absent, 0 unknown
+checkfresh: OK every live encoded clip is newer than its source; archived source exemptions are explicit
+gate: decoding every declared media file (~22 min; -SkipDecodeSweep to bypass)
+checkmedia: 1464 declared files, 1464 decoded
+checkmedia: every declared file decodes
+assembled only (-AssembleOnly); nothing deployed.
+DEPLOY_ASSEMBLEONLY_RC=0

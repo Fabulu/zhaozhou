@@ -90,3 +90,8 @@ Manafold pass 19 from Owner Direction 20: smooth, whole rear antenna connection 
   - The bank reproduces the review's 9 shipping CRCs exactly.
   - Scope: the same-binary legacy bank equals v18 on 22/22. The rear changes 22/22 and the lines 21/22 (Inspect's lines are unchanged by construction).
   - Review: all 22 sheets plus 6 close looks, 19 images. No fault. READY-TO-ENCODE.
+- **Steps 4-7 done** (`P19-MEDIA-CLOSURE.md`):
+  - Junction repointed. ENCODE_RC 0, 22/22 WebMs and posters, probe 44/44. `P19-LIVE-MEDIA-SHA256.txt` covers 44 files, 44,320,731 bytes.
+  - Real-tree control: without the receipt, checkarchive failed on all 44 live names.
+  - No-skip gate RC 0: fresh 22/0/0, v17 56/56 + v18 44/44 + live 44/44, noindex, decode 1,464/1,464. Index sha `6092a642...`.
+  - Card, captions, findings and plan committed as Upheaval `f9e98ba`.
