@@ -79,36 +79,135 @@
 // `design/fit_targets.yml`, never this top's.
 //
 // ---------------------------------------------------------------------------
-// THREE PORT FACTS ABOUT THE CORE, REPORTED RATHER THAN EDITED AROUND
+// THE THREE PORT FACTS, NOW RESOLVED -- 2026-09-19
 // ---------------------------------------------------------------------------
-// The brief's rule was: if the core lacks a port you need, REPORT IT AND STOP
-// rather than edit the file. Three such gaps exist, and they are the real work
-// of closing this seam:
+// An earlier revision of this header listed three port gaps on the core and
+// stopped. All three have now been chased to their source. TWO OF THEM WERE
+// NOT WHERE THIS FILE SAID THEY WERE, and the correction is recorded here
+// rather than by quietly rewriting the list, because the wrong diagnosis is
+// what the next packet would otherwise have acted on.
 //
-//   1. THE CORE TAKES ONE `rst_n`, THIS BLOCK PRODUCES FOUR. The core's
-//      clock/reset group is exactly `gpu_clk`, `vid_clk`, `audio_clk`,
-//      `rst_n` -- a single shared reset. SYS.RESET's whole point, and the
-//      board's own proven contract ("synchronized release after core PLL
-//      lock", per domain), is a release retimed INTO EACH DOMAIN. Wiring
-//      `rst_n_gpu_o` to the core's one `rst_n` would hand the video and
-//      audio domains a reset released on the GPU clock -- an unsynchronised
-//      release into two domains, which is the defect the sequencer exists to
-//      prevent. THE CORE NEEDS `rst_n_vid` AND `rst_n_audio` PORTS.
+//   1. THE `rst_n_vid` / `rst_n_audio` GAP IS NOT IN THE CORE.
 //
-//   2. THE CORE HAS NO `sdram_clk`. SYS.PLL emits one and MEM.SDRAM.md
-//      specifies the controller in it. The core's memory path currently lives
-//      entirely in `gpu_clk`. Either the core gains the port or SDRAM stays
-//      outside the core, and that is a composition decision, not this block's.
+//      The observation was right: this block produces four resets, the core
+//      takes one, and handing `rst_n_gpu_o` to it releases the video and audio
+//      domains on the GPU clock -- exactly what SYS.RESET exists to prevent.
+//      The CONCLUSION drawn from it ("the core needs two more ports") was
+//      wrong, and measuring the core says why:
 //
-//   3. THE CORE NAMES IT `vid_clk`, THIS BLOCK NAMES IT `video_clk_o`.
-//      `design/blocks.yml` gives SYS.PLL the output `video_clk`; the shell
-//      lineage has said `vid_clk` since W2. Both names are correct in their
-//      own document and one of them has to give at the seam. Flagged, not
-//      silently renamed.
+//        * `zhao_console_core.sv` contains exactly FOUR occurrences of
+//          `vid_clk`/`audio_clk`: the two port declarations, and the two
+//          connections to `u_shell`. Nothing else in the file mentions them.
+//        * EVERY `always_ff` in the core is `@(posedge gpu_clk or negedge
+//          rst_n)` -- four of four, no exceptions.
 //
-// And the core's port count is NOT STABLE while this is written: it read 687 at
-// the start of this pass and 732 forty minutes later, which is the concurrent
-// rewrite above, measured rather than asserted.
+//      The core has no video or audio domain of its own. Its single vid/audio
+//      consumer is `u_shell`, and `zhao_shell_top_v2.sv` declares exactly one
+//      `rst_n`. So two new core ports would terminate nowhere -- and that is
+//      worse than useless, it is ACTIVELY MISLEADING: a board author would
+//      wire `rst_n_video_o` to `rst_n_vid`, and believe video was correctly
+//      released, while the shell went on resetting its video flops from the
+//      one shared net. A SEAM THAT ACCEPTS A PER-DOMAIN RESET AND DROPS IT IS
+//      A LIE. The core's single `rst_n` is honest: it says "this core has one
+//      reset domain", and that is true.
+//
+//      THE DEFECT IS REAL AND IT IS ONE LEVEL DOWN, and it is an uncashed
+//      cheque in this repository's exact sense -- the per-domain reset ports
+//      ALREADY EXIST on the shell's own children, and the shell feeds every
+//      one of them the same net:
+//
+//        zhao_shell_top_v2.sv  .gpu_rst_n(rst_n), .vid_rst_n(rst_n)  u_fb_cdc
+//                              .gpu_rst_n(rst_n), .vid_rst_n(rst_n)  u_ready_bridge
+//                              .src_rst_n(rst_n), .dst_rst_n(rst_n)  u_starve_mbx
+//                              .rst_audio_n(rst_n)                   audio fifo
+//
+//      plus the pure vid-domain `u_mode`, `u_scaler`, `u_framectl`, `u_crc`
+//      and three vid-domain `always_ff` blocks, all on `rst_n`. Somebody built
+//      the split and nobody ever drove it.
+//
+//      So the fix is a `zhao_shell_top_v2` packet -- two new shell ports, about
+//      a dozen rewires, and a reset-port SPLIT in `zhao_video_scanout`, which
+//      is genuinely dual-domain (it clocks flops on both `gpu_clk` and
+//      `vid_clk` off one `rst_n`). The core and this board then follow in two
+//      lines each. It is not done in this pass because changing the shell's
+//      declaration invalidates `shell-declaration-sha256` in
+//      `fpga/rtl/generated/zhao_shell_v2_fit_top.sv` and trips
+//      `shell_v2_fit_generated_freshness`, `gen_shell_fit_ports_v2.py --check`,
+//      `gen_shell_paired_diff.py --check`, `test_shell_fit_preflight.py` and
+//      the shell lint targets -- a gate set this packet is not permitted to
+//      run. RTL whose gates you may not run is an unmeasured claim.
+//
+//   2. `sdram_clk` DOES NOT BELONG ON THE CORE YET, AND THE REASON IS NOT
+//      "NOBODY ASKED FOR IT".
+//
+//      The premise was wrong in a useful way: MEM.SDRAM is not outside the
+//      core at all. `zhao_sdram_ctrl` is instantiated INSIDE it, by the shell,
+//      as `.clk(gpu_clk), .rst_n(rst_n)`. So the real question is not "does
+//      the core need the port" but "does the SDRAM controller move into its
+//      own domain", and today it does not:
+//
+//        * this board's own parameters set SDRAM_CLK_HZ == GPU_CLK_HZ ==
+//          100 MHz, so a separate clock buys nothing the design lacks;
+//        * moving it demands a real CDC between `zhao_vram_arbiter` (gpu_clk)
+//          and the controller, and `zhao_sdram_ctrl`'s FROZEN LAW TABLE is a
+//          cycle-exact contract mirrored by `zref::SdramController` and
+//          `sim/models/zhao_sdram_model.sv`. A CDC re-times every span in it;
+//        * `design/blocks.yml` holds MEM.SDRAM at maturity SPECIFIED,
+//          blocked_on: hardware, and MEM.SDRAM.md says the block "never leaves
+//          SPECIFIED -- evidence banked, advancement gated on the hardware
+//          lane" until ZH-004 delivers device code, speed grade and measured
+//          tRCD/tRP/tRC;
+//        * and the PHY pins (`phy_cs_n`, `phy_a`, `phy_dq_*`, ...) do not reach
+//          the core boundary at all. They would have to become board ports and
+//          then QSF assignments -- and there is no QSF, and board_truth.json
+//          holds futurePhysicalLoadsAuthorized: false.
+//
+//      So: NO `sdram_clk` PORT ON THE CORE. It would be a port nothing uses,
+//      added ahead of the decision that would give it meaning. `sdram_clk_o`
+//      stays an output of this block, available the day MEM.SDRAM's domain
+//      question is actually answered.
+//
+//   3. BOTH NAMES STAY. THE SEAM IS ALLOWED TWO NAMES; A FILE IS NOT ALLOWED
+//      TO RENAME ANOTHER FILE'S PORT.
+//
+//      * The PRODUCER side keeps `video_clk`. `design/blocks.yml` gives SYS.PLL
+//        `outputs: [gpu_clk, sdram_clk, video_clk, audio_clk, pll_locked]`, and
+//        the ledger is the authority on a block's declared ports. `zhao_sys_pll`
+//        and this top keep `video_clk_o`.
+//      * The CONSUMER side keeps `vid_clk`. `zhao_console_core.sv` carries
+//        `zhao_shell_top_v2`'s declaration through VERBATIM by its own stated
+//        rule -- "this core neither renames nor reinterprets any of them" --
+//        and the shell has said `vid_clk` since W2. Renaming it at the core
+//        would make the core a renaming layer and would break `u_shell`'s
+//        connection, the smoke bench's `.*`, and the mutant wrapper.
+//
+//      AUTHORITY FOLLOWED: `design/blocks.yml` on the producer, the shell
+//      lineage on the consumer. Neither document gives, because neither has to:
+//      the seam is one explicit connection, `.vid_clk (video_clk_o)`, in the
+//      instantiation below. What was feared as a rename is simply not required.
+//
+//      This does, however, settle the instantiation question -- see next.
+//
+// ---------------------------------------------------------------------------
+// AND SO `.*` IS NOT AVAILABLE, WHICH IS A FACT AND NOT A PREFERENCE
+// ---------------------------------------------------------------------------
+// `zhao_console_core u_core (.*);` binds each port to an identically-named net
+// in this scope. Per fact 3 the four clock/reset ports deliberately do NOT
+// match (`gpu_clk`/`gpu_clk_o`, `vid_clk`/`video_clk_o`, `audio_clk`/
+// `audio_clk_o`, `rst_n`/`rst_n_gpu_o`), and that mismatch is CORRECT and
+// permanent rather than an accident to be tidied away. So `.*` would still
+// require ~730 identically-named declarations in this scope plus explicit
+// overrides for the four -- the hand copy, with extra steps.
+//
+// And the file is still moving while this is written, measured rather than
+// asserted: `zhao_console_core.sv` read 4,266 lines and then 4,474 within one
+// session, gaining eleven `part_tbl_*` ports; `design/fit_targets.yml` and
+// `tests/prod/tb_zhao_console_core_smoke.sv` both changed underneath a
+// measurement that was in progress at the time.
+//
+// THE SEAM THEREFORE STAYS DECLARED AND NOT SOLDERED -- and after this pass the
+// only thing still standing between it and one instantiation is item 1, which
+// is a shell packet, not a board one.
 //
 // ===========================================================================
 // WHAT ELSE IS MISSING FROM "THE BOARD BOUNDARY", listed so its absence is not
@@ -269,15 +368,22 @@ module zhao_console_board #(
   //
   //   zhao_console_core u_core (
   //       .gpu_clk   (gpu_clk_o),
-  //       .vid_clk   (video_clk_o),
+  //       .vid_clk   (video_clk_o),    // <- fact 3: two names, one connection
   //       .audio_clk (audio_clk_o),
-  //       .rst_n     (rst_n_gpu_o),   // <- see port fact 1: WRONG for two domains
-  //       ... ~728 more ...
+  //       .rst_n     (rst_n_gpu_o),    // <- fact 1: CORRECT ONLY for gpu today,
+  //                                    //    and the core honestly claims no
+  //                                    //    more than that. Video and audio are
+  //                                    //    reset from this net INSIDE the
+  //                                    //    shell; splitting them is a
+  //                                    //    zhao_shell_top_v2 packet.
+  //       ... ~730 more ...
   //   );
   //
-  // Not written. See the file header for why, and for what closing it costs.
-  // The ports above are named so that closing it is an instantiation and not a
-  // redesign.
+  // Not written. `.*` is unavailable (see the header), and the header also says
+  // what the remaining blocker is: it is item 1, and it lives in the shell.
+  // Note the three clock connections above are already RIGHT -- the naming
+  // question is settled and cost nothing. The ports on this module are named so
+  // that closing the seam is an instantiation and not a redesign.
   // ---------------------------------------------------------------------------
 
 endmodule
