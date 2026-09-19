@@ -1897,6 +1897,28 @@ targets:
       max_alms: 2225
       max_dsp: 9
 
+  # GEOM.LOOM -- the Transform Loom. FIT GATE G-LOOM1, and the question it
+  # answers is stated in advance as design/fit_targets.yml's own discipline
+  # requires: HOW MUCH M10K DOES THE PARENT STORE ACTUALLY INFER, and does the
+  # 412-bit x 1,024 array come back as block RAM at all rather than as 421,888
+  # flops? That is the ONE question here that Verilator cannot answer, and it
+  # is the one the contract's NO M10K for the parent store line is being
+  # argued against. DSP is predicted at 3 (one zhao_geom_mat3x4_mul at
+  # MUL_LANES=1) and ALMs are unpredicted.
+  #
+  # NO RULES, deliberately, and for zhao_geom_skin_norm's stated reason: this
+  # block has never been fitted, so every bound I could write here would be one
+  # I invented, which is the rule-written-after-the-fit that reports a pass.
+  # The contract's ceiling (1,500 ALM / 12 DSP / no M10K) is the CONTRACT's
+  # number and is quoted in the block header; it is not a measurement and does
+  # not become one by being copied into a gate.
+  - top: zhao_geom_loom
+    sources:
+      - fpga/rtl/geometry/zhao_geom_loom.sv
+      - fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+      - fpga/rtl/field/zhao_field_sin.sv
+      - fpga/rtl/field/zhao_field_sin_rom.sv
+
   - top: zhao_geom_skin_norm
     sources:
       - fpga/rtl/geometry/zhao_geom_skin_norm.sv
@@ -2071,6 +2093,7 @@ targets:
       - fpga/rtl/geometry/zhao_geom_cull.sv
       - fpga/rtl/geometry/zhao_geom_depthquant.sv
       - fpga/rtl/geometry/zhao_geom_lod.sv
+      - fpga/rtl/geometry/zhao_geom_loom.sv
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv

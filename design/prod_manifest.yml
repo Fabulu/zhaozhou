@@ -136,6 +136,26 @@ top:
   # the arbiter carries, so this is the only route MESHFETCH has to real memory.
   - zhao_geom_mem_adapter
   - zhao_geom_skin_norm
+  # GEOM.LOOM: the Transform Loom, the streaming matrix composer the owner's
+  # 2026-08-31 SS6.4 ruling left behind when it deleted recursion, cycle
+  # detection, matrix inversion and autonomous gait from the block. BUILT
+  # 2026-09-19 and composed into zhao_console_core NOWHERE, deliberately: its
+  # producer is CMD.SCHEDULER (the same absent owner core entries I14, I30,
+  # I33 and I36 already name) and its consumer GEOM.WARP has no RTL and no
+  # contract, so every one of its ports would be a boundary and the
+  # composition would connect nothing while opening four new tie-off entries.
+  # It is a fit top here for the same reason zhao_forge_shadow and
+  # zhao_mem_upload are -- so that it is PRICED at the next fit rather than
+  # standing as an unmeasured claim.
+  #
+  # ADDING A TOP RENUMBERS zhao_prod_top, AND THAT IS INHERENT, NOT A CHOICE
+  # ABOUT WHERE THIS LINE SITS. gen_prod_top.py numbers instances over
+  # sorted(live | tombstones), so a new name renumbers every top after it
+  # alphabetically whatever order this file lists them in -- ~2,900 lines of
+  # generated diff here. The retired_census_slots tombstones below exist
+  # because the same thing happens on REMOVAL; there is no equivalent for
+  # ADDITION, and this note is so the next person does not go looking for one.
+  - zhao_geom_loom
 
   # --- terrain (the 8 km island) -------------------------------------------
   # TERRAIN.ISLAND gives TERRAIN.RESIDENCY's miss its meaning: open sky rather
