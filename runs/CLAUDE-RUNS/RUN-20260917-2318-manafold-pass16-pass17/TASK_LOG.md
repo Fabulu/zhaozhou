@@ -139,7 +139,8 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - P3 source/evidence is pushed as Zhaozhou `bd6135a4` / `59c5fc0a`. A fresh renderer (`6FD6147B43056E823F0487F9DFBB40BA`, SHA-256 `E51F130B...`) produced the sole current bank at `pass17-final2-reel-28`: 28 subjects, 11,592 validated frames, bank-manifest SHA-256 `7dbc84e2eb4bcc1263d11209709d862b822d77aeb60875bedbdcc321a34427e1`. Exact old/new comparison proves 26 subjects (10,552 frames) byte-identical and only Death Drop/Gutter changed; 28/28 complete current sheets live at `pass17-final2-sheets`. Batch 01 transfers only through equality, both deaths require fresh review, and batches 03–07 remain fresh isolated reviews.
 - Final2 isolated batches reached **27/28**: batch 01 transferred through exact equality, repaired deaths passed fresh review, and batches 03–06 plus Taunt/Taunt II/Taunt III passed. Batch 07 correctly rejected Trick again: yaw-zero pure X kept contact but rendered both camera-relative eye plates as edge-on slivers through f0140–f0295. Encoding remains blocked.
 - Focused Trick repair keeps the pure-X contact half-turn and authors a separate local planted face yaw through the same flip envelope. Complete `-12288..+16384` 400-frame ladders selected `+16384` by eye: both lenses/stars and the antenna support read through the hold. Clean renderer MD5 `60F8AAF3C87AF9BB2B7A6D6338DCA5C6`; selected/yaw-zero/legacy CRCs `0x0BB73CDE / 0x58219E79 / 0x7F5BBEDD`; contact remains `-40 mm`, protected gates return 0, all 16 effect controls are attributed, selector invalids are 5/5 RC 2, and all 27 non-Trick subjects / 11,192 frames are byte-identical. A new exact bank remains mandatory.
-- Built the superseding exact v3 renderer clean at MD5 `67DCAFF8ABC0AA2BA830C439A4CD98C7`, SHA-256 `D60EBA80C2547032A603365837690FB14B551D90D96FB5973F1C976C185C3FE9`. One 28-subject invocation produced `pass17-final3-reel-28`: 28 subjects, 11,592 contiguous validated frames, 3,205,048,896 bytes, bank-manifest SHA-256 `bc2d4d0bdce632815f42cca208763fb04bca62034e285ed1ef707c7f28d55d09`. Exact comparison proves 27 subjects / 11,192 frames byte-identical to v2 and only Trick changed; current Trick is 400/400 byte-identical to the reviewed +16384 candidate (`0x0BB73CDE`). Twenty-eight complete nearest-downsample sheets validate at `pass17-final3-sheets`. `PASS17-FINAL-BANK-INTEGRITY-V3.md` is the sole current receipt; one fresh complete Trick review remains before 28/28 acceptance.
+- Built the superseding exact v3 renderer clean at MD5 `67DCAFF8ABC0AA2BA830C439A4CD98C7`, SHA-256 `D60EBA80C2547032A603365837690FB14B551D90D96FB5973F1C976C185C3FE9`. One 28-subject invocation produced `pass17-final3-reel-28`: 28 subjects, 11,592 contiguous validated frames, 3,205,048,896 bytes, bank-manifest SHA-256 `bc2d4d0bdce632815f42cca208763fb04bca62034e285ed1ef707c7f28d55d09`. Exact comparison proves 27 subjects / 11,192 frames byte-identical to v2 and only Trick changed; current Trick is 400/400 byte-identical to the reviewed +16384 candidate (`0x0BB73CDE`). Twenty-eight complete nearest-downsample sheets validate at `pass17-final3-sheets`. `PASS17-FINAL-BANK-INTEGRITY-V3.md` is the sole current receipt.
+- Fresh isolated current-bank Trick review inspected all 400 tiles plus native/2×/4× plant, hold and recovery witnesses. The +90-degree local face yaw keeps both complete almond lenses/stars readable from plant arrival through the hold while the antenna remains visibly load-bearing; transitions, contact, outline, effects and recovery remain continuous. Trick is PASS 400/400. Combined with the committed 11,192-frame equality transfer for the other 27 subjects, the exact v3 bank is **PASS 28/28** and is authorized for encoding. `PASS17-FINAL3-TRICK-REVIEW.md` is the binding final visual verdict.
 
 ---
 
@@ -183,6 +184,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 | 2026-09-19 | GPT fork final2 batch 07 | Review Taunt, Taunt II, Taunt III and Trick | Correctly BLOCKED — 3/4 pass; Trick face still edge-on | `PASS17-FINAL2-BATCH-07.md` |
 | 2026-09-19 | GPT fork Trick face repair | Trace composed orientation; render yaw ladder; preserve contact and all non-Trick bytes | Complete focused repair — +90 planted face yaw selected; full-bank rerender required | `PASS17-TRICK-FACE-REPAIR.md` |
 | 2026-09-19 | GPT fork exact final bank v3 | Clean-build Trick-repaired renderer; rerender/validate exact bank; prove v2/v3 scope; regenerate sheets | Complete — 28/11,592 green, 27 subjects exact, only Trick changed | `PASS17-FINAL-BANK-INTEGRITY-V3.md` |
+| 2026-09-19 | GPT fork final3 Trick review | Review all 400 current Trick frames and native/2×/4× plant/hold/recovery witnesses | Complete — Trick PASS; cumulative current bank 28/28 | `PASS17-FINAL3-TRICK-REVIEW.md` |
 
 ---
 
@@ -214,6 +216,7 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 - final `PASS17-FINAL-TARGETED-INTEGRATION.md`, seven 24,308-frame review masters and exact native/2×/4× Trick/Taunt III/eye/seam/outline witnesses
 - `PASS17-FINAL-BANK-INTEGRITY.md` (rejected P3 generation), `PASS17-FINAL-BANK-INTEGRITY-V2.md` (rejected yaw-zero Trick generation), and current `PASS17-FINAL-BANK-INTEGRITY-V3.md`; exact v3 hashes, 27-subject byte-equality proof and 28 complete external every-frame review sheets
 - `PASS17-TRICK-FACE-REPAIR.md`, full 400-frame yaw ladder, selected/contact controls and five curated native/2×/4× plates; `PASS17-FINAL2-BATCH-07.md` is the binding yaw-zero blocker evidence
+- `PASS17-FINAL3-TRICK-REVIEW.md` and three current-bank native/2×/4× phase/transition plates; final cumulative verdict 28/28
 - This run's `TASK_LOG.md` and `SPEC_v1.md`
 
 ---
@@ -234,5 +237,8 @@ Finish, verify, integrate, encode, and publish Manafold Pass 16 from its exact f
 
 ## Next Steps
 
-1. Freshly review all 400 current-bank Trick frames and named native/4× plant/hold/recovery witnesses; the other 27 subjects transfer only through exact byte equality.
-2. If and only if Trick passes, record the 28/28 verdict, encode the exact v3 frames, run freshness/playback/noindex/full decode, update findings/card, integrate both mains, publish and verify every production byte.
+1. Commit/push the final current-bank Trick verdict and witnesses.
+2. Encode WebMs/posters from `pass17-final3-reel-28` only; record exact media hashes and frame/decode receipts.
+3. Update Pass-17 findings/card and durable Upheaval plans, then run freshness, playback, noindex and full declared-media decode gates.
+4. Commit/push both feature branches; fast-forward both mains; publish with explicit project/branch.
+5. Verify the unique deployment and production alias index plus every live Pass-17 media byte, then commit/push deployment records.

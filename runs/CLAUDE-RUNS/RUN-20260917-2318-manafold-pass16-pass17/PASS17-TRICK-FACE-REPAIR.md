@@ -3,7 +3,7 @@
 **Date:** 2026-09-19
 **Trigger:** repaired exact-bank batch 07
 **Focused verdict:** **PASS — the complete headstand now keeps a readable face**
-**Pass verdict:** a new exact 28-subject bank is mandatory before review resumes
+**Pass verdict:** exact v3 bank and fresh 400-frame Trick review PASS; see `PASS17-FINAL3-TRICK-REVIEW.md`
 
 ## Final-bank blocker
 
@@ -79,6 +79,11 @@ All other candidate sheets and `.tmp` frames are exploratory and remain unstaged
 
 No contact, camera, clip timing, root-height, antenna, eye form, effect, gate threshold or non-Trick art value changed.
 
-## Remaining boundary
+## Final integration
 
-The focused source/gates/pictures pass. Because Trick output and the renderer binary changed, renderer `6FD6147B...`, bank manifest `7dbc84e2...` and its 27/28 review are historical. Build one new exact renderer, rerender all 28 subjects in one invocation, prove 27-subject byte equality, and freshly review all 400 Trick frames before encoding.
+The exact v3 renderer `67DCAFF8ABC0AA2BA830C439A4CD98C7` produced one
+canonical 28-subject bank. Twenty-seven subjects / 11,192 frames are exact to v2,
+and current Trick is exact to the selected candidate. Fresh isolated review of all
+400 current Trick frames accepts the readable face, antenna support, contact and
+continuous recovery. `PASS17-FINAL3-TRICK-REVIEW.md` promotes the exact v3 bank
+to **PASS 28/28** and authorizes it for encoding.

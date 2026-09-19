@@ -7,10 +7,10 @@
 **Branch:** `manafold-pass17`
 **Environment:** `ZIXX_EXP=celmain`, `ZIXX_LIGHT=diagonal-cool-cross`
 
-This is the sole current shipping-bank integrity receipt. It is not the final art
-verdict: one fresh isolated context must still review all 400 current Trick
-frames. The other 27 subjects transfer only through the exact byte-equality
-receipt below.
+This is the sole current shipping-bank integrity receipt. Fresh isolated review in
+`PASS17-FINAL3-TRICK-REVIEW.md` accepts all 400 current Trick frames; the other
+27 subjects transfer through the exact byte-equality receipt below. The combined
+current-bank visual verdict is **PASS 28/28**.
 
 ## Rejected-bank history
 
@@ -115,8 +115,9 @@ Validation proves exactly 28 PNGs, correct dimensions for every declared frame
 count, all 11,592 frames represented once, and every sheet newer than its newest
 source frame.
 
-## Next gate
+## Final visual gate
 
-A fresh isolated context must review every tile of current Trick plus native/4x
-plant/hold/recovery witnesses. Only a current-bank Trick PASS can promote the
-transferred 27/28 verdict to 28/28 and release this exact bank to encoding.
+`PASS17-FINAL3-TRICK-REVIEW.md` reviews every current Trick tile plus exact
+native/2x/4x plant, hold and recovery witnesses and returns PASS. Combined with
+the exact 27-subject transfer above, this bank is **PASS 28/28** and is the only
+bank authorized for encoding.
