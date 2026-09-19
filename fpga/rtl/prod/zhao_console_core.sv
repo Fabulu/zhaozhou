@@ -147,6 +147,19 @@
 //      that -- it is the block whose job is to derive them, doing it.
 //      GEOM.CLIP's own input is still a boundary (I24).
 //
+//      CORRECTED 2026-09-19: "port for port" was TWENTY OF TWENTY-ONE. The
+//      packet's twenty-first field is `out_area2_o`, and it went to
+//      `geom_setup_area2_o` -- out of the module, as evidence -- while the
+//      door's `tri_area2_i` stayed a boundary port that nothing in this tree
+//      drives. It is wired now (see `st_area2`), and the omission was not
+//      cosmetic: `zhao_raster_tile_pipe_v2` reads `tri_area2_i == 47'd0` as
+//      PROFILE AREA BAD, so the FIRST job of every frame raised
+//      `range_fault_event_w`, latched `local_abort_q` and made the tile pipe
+//      SINK the rest. 72 jobs taken, 72 sunk, 0 started, 0 pixels -- a
+//      reading indistinguishable from a binner that was never fed.
+//
+//      The lesson is the entry itself: a composition entry that says CLOSED
+//      is a claim about a LIST, and nobody had counted the list.//
 //   8. THE TERRAIN PAGING SPINE -- five blocks in one chain
 //        TERRAIN.CMD.fr_*/rec_*  -> TERRAIN.SEQ.fr_*/rec_*
 //        TERRAIN.SEQ.lu_/cl_/pin_ <-> TERRAIN.RESIDENCY (the v2 directory)
@@ -808,6 +821,64 @@
 //      geometry memory clients -- is UNCHANGED and still provisional. This
 //      file adds no opinion about them; read that file's header.
 //
+//      NARROWED AND MADE SPECIFIC 2026-09-19, because "read that file's
+//      header" was hiding a group of six ports that file's header does not
+//      discuss and this one had never named. They are the PACKET-D ATTRIBUTE
+//      CARRIAGE, and they are a BOUNDARY with no producer anywhere in the
+//      tree:
+//
+//        tri_invw_plane_i       240b   plane 0, {n0[95:0], dndx[71:0], dndy}
+//        tri_u_over_w_plane_i   240b   plane 1, same layout
+//        tri_v_over_w_plane_i   240b   plane 2, same layout
+//        tri_flat_request_i     298b   zhao_texture_v3_request_v2_t[297:0]
+//        tri_continuation_tail_i 48b
+//        tri_fragment_state_i    32b
+//
+//      SEARCHED BEFORE BEING CALLED ABSENT, because this repository has been
+//      sent to rebuild existing blocks by exactly this kind of claim. Every
+//      `[239:0]` and `[297:0]` in `fpga/rtl` is an INPUT; the chain is
+//      bin pipe <- shell <- this core, and it stops at a module boundary.
+//      `reports/PACKET-H-DRIVER-CONTRACT-20260917.md` section 3.2 lists these
+//      seven and, alone among its groups, carries no WIRED marker.
+//
+//      AND THE NEAR-PRODUCER EXISTS, which is the part worth writing down so
+//      nobody builds it twice. `fpga/rtl/geometry/zhao_geom_attrsetup.sv` is
+//      real, is directed-tested, and emits `n0_o`/`dndx_o`/`dndy_o` -- 96+72+72
+//      = exactly the 240 bits of ONE plane. Its own header says "ONE ATTRIBUTE
+//      PER REQUEST. A textured Gouraud triangle needs seven planes and asks
+//      seven times." What does not exist is the block that ASKS three times and
+//      packs the answers, together with the flat request. So this is a missing
+//      FRONT END over an arithmetic core that is already built, not missing
+//      arithmetic -- and `zhao_geom_attrsetup`'s only instantiation today is an
+//      LFSR sizing harness in `zhao_prod_top.sv`, which is the "built,
+//      installed nowhere" shape CLAUDE.md names.
+//
+//      DRIVING THEM FROM HERE IS REFUSED for the usual reason: the only legal
+//      value constructor in the tree is `tools/quartus/gen_shell_fit_top.py`
+//      lines 596-654, which exists to keep a FIT honest and packs edge
+//      coefficients into plane words so the unpacker does not park in refusal.
+//      That is stimulus. A composer that produced the same words would be
+//      inventing GEOM.ATTRSETUP's front end in `zhao_console_core.sv`.
+//
+//      WHAT THIS MEANS FOR THE PICTURE, measured rather than assumed: with all
+//      six at zero the tile pipe still resolves and still writes -- 1,536
+//      pixels through RASTER.FBWRITE on the smoke bench -- because a zero flat
+//      request is a LEGAL profile (`profile_aux_bad_ref_c` is
+//      `flat_request[268] || flat_request[267:44] != 0`) and zero planes
+//      interpolate to zero without setting `attr_error`. So the path is proven
+//      and the SHADING is not: what comes out is the frame-clear colour and
+//      flat geometry, not a textured, perspective-correct surface. The gap is
+//      real, it is here, and it is no longer invisible.
+//
+//      TWO THINGS LEFT THIS EDGE 2026-09-19 and are no longer provisional:
+//        * `tri_area2_i` -- retired as a port, driven by GEOM.SETUP. See
+//          composition entry 7.
+//        * the RENDER guard's window -- `zhao_shell_top_v2`'s `u_guard_render`
+//          took the BLITTER's `map_*` and now takes VIDEO.SLOTMGR's live lease.
+//      `fb_writer_i` is NOT one of them and stays exactly as that file
+//      declares it: the manager's `lease_writer_o` is the value it will
+//      become, and making that substitution is CMD.SCHEDULER's act, not this
+//      composer's.//
 // I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
 //      that is NOT wired, which is worth stating precisely so nobody wires it

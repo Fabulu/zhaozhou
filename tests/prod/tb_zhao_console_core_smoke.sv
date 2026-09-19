@@ -2805,10 +2805,39 @@ module tb_zhao_console_core_smoke
     render_texel_idx_i   <= 8'd1;
     render_grid_w_i      <= 6'd4;
     render_grid_h_i      <= 6'd4;
+    // THE FRAME REQUEST IS HELD UNTIL IT IS ACCEPTED, NOT PULSED.
+    //
+    // `render_frame_begin_i` is `zhao_renderer_lease_v2`'s `frame_req_valid_i`,
+    // and that is a ready/valid port with a real READY: the lease withholds it
+    // while the reset-epoch barrier is closed, while a lease is already live
+    // and while neither slot is FREE. A one-cycle pulse offered to it is simply
+    // LOST, and nothing retries.
+    //
+    // This bench pulsed it, and the pulse landed at cycle 12 against a gate
+    // that opens at cycle 16 -- measured with a bind-in probe:
+    // `frame_req valid first=12 cycles=1, ready first=16, fire first=never`.
+    // Four cycles, and the entire render path downstream read as absent. It
+    // later began passing by ACCIDENT, when unrelated stimulus added ahead of
+    // it pushed the pulse past cycle 16; a gate that passes because of where
+    // somebody else's code sits is not a gate.
+    //
+    // `frame_req_ready_o` is not observable here -- `zhao_shell_top_v2` leaves
+    // it an empty pin connection -- so the acceptance is read from
+    // `v2_frames_admitted_o`, which is the lease's own count of frames it let
+    // through. Holding valid past the fire is harmless: `frame_req_ready_o`
+    // requires `!lease_valid_i`, so a live lease cannot admit a second frame.
     @(posedge gpu_clk);
     render_frame_begin_i <= 1'b1;
-    @(posedge gpu_clk);
+    guard = 0;
+    while ((v2_frames_admitted_o == 0) && (guard < 20000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
     render_frame_begin_i <= 1'b0;
+    if (v2_frames_admitted_o == 0)
+      $fatal(1, "SMOKE: the renderer lease admitted no frame in %0d cycles with the request HELD -- granted=%0d refused=%0d clears=%0d. A held request that is never accepted is the barrier or the slot state, not the stimulus",
+             guard, v2_leases_granted_o, v2_leases_refused_o,
+             v2_clear_handshakes_o);
     render_frame_open_q  <= 1'b1;         // releases the triangle offer above
 
     // THE RENDER FRAME IS OPENED, FILLED AND CLOSED IN ONE SEQUENCE, and that
@@ -3533,27 +3562,50 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: GEOM.SETUP took %0d of %0d -- the shell's triangle door is not accepting",
              geom_setup_triangles_submitted_o, geom_tris_sent_q);
 
-    // WHY `render_pixels_o` IS STILL ZERO, MEASURED RATHER THAN ASSUMED, and
-    // left as a $display rather than promoted to a check because it is NOT
-    // this packet's seam and asserting it would assert someone else's gap.
+    // A PIXEL NOW TRAVERSES THE RENDER PATH, so this is a CHECK and no longer
+    // a note. What stood here said "raster pixels=0 because frames_admitted=0
+    // -- the V2 renderer lease is not driven by this bench ... driving the
+    // lease belongs with VIDEO.SLOTMGR, which the completion register still
+    // lists as not connected", and it was wrong three times over. Kept as
+    // quotation rather than deleted, because each error is a different way to
+    // be wrong and all three are cheap to make again:
     //
-    // `zhao_shell_top_v2` does not give the bin pipe `render_frame_begin_i`.
-    // It gives it `v2_frame_admit_w` -- the ADMITTED frame -- and its own
-    // comment is the law: "the renderer's work is withheld until the lease is
-    // granted and the clear accepted". This bench drives no renderer lease, so
-    // no frame is admitted, the bin pipe never starts one, and every counter
-    // downstream reads a clean zero with `fatal`, `stream_error` and
-    // `overflow` all low.
+    //   * THE LEASE WAS ALWAYS DRIVEN. `render_frame_begin_i` is this bench's,
+    //     and a bind-in probe measured `lease_open` opening at cycle 16 and
+    //     staying open for all 500,391 cycles. Nothing about the barrier, the
+    //     CDC, the bridge or the manager was missing.
+    //   * THE REGISTER DOES NOT LIST VIDEO.SLOTMGR. `completion_register.py`'s
+    //     BUILT-BUT-NOT-CONNECTED list has 36 names and no slot manager in it.
+    //     A sentence about another tool's output is a claim, and this one had
+    //     never been read back.
+    //   * WHAT WAS ACTUALLY MISSING WAS TWO WIRES, neither of them a lease:
+    //     GEOM.SETUP's `out_area2_o` never reached `tri_area2_i` (so the tile
+    //     pipe read PROFILE AREA BAD and SANK all 72 jobs), and
+    //     `u_guard_render` was handed the BLITTER's window (so MEM.GUARD
+    //     deny-all'd every burst and FBWRITE latched `fatal_error_o`).
     //
-    // That set of clean zeros is exactly what a broken triangle door would
-    // also produce, which is the whole reason the check above is written
-    // against backpressure rather than against pixels.
-    if ((render_pixels_o == 0) && (v2_frames_admitted_o == 0))
-      $display("SMOKE: NOTE raster pixels=0 because frames_admitted=0 -- the V2 renderer lease is not driven by this bench. The triangle door is proven above by backpressure, not by pixels. Driving the lease belongs with VIDEO.SLOTMGR, which the completion register still lists as not connected.");
-    else if (render_pixels_o == 0)
-      $fatal(1, "SMOKE: %0d frame(s) were ADMITTED and the shell still rasterised 0 pixels from %0d triangles -- that is a real render-path fault, not the missing lease",
+    // The moral is the one this file already keeps for the triangle door: a
+    // confident sentence naming an absent owner is the most expensive kind of
+    // wrong, because it sends the next reader somewhere else entirely.
+    //
+    // `retired_words_o` is checked and not just `pixels_written_o`: retirement
+    // is the VRAM arbiter's credit stream, which is the only thing that means
+    // the words LANDED. The block's own issue count says nothing about that.
+    if (v2_frames_admitted_o == 0)
+      $fatal(1, "SMOKE: no frame was ADMITTED -- the renderer lease granted %0d and refused %0d; the request is held until admission, so this is the lease or the barrier, not the stimulus",
+             v2_leases_granted_o, v2_leases_refused_o);
+    if (render_pixels_o == 0)
+      $fatal(1, "SMOKE: %0d frame(s) were ADMITTED and the shell still rasterised 0 pixels from %0d triangles -- that is a real render-path fault. Check `tri_area2_i` (0 is PROFILE AREA BAD and sinks every job) and the render guard's window before anything else",
              v2_frames_admitted_o, geom_setup_triangles_submitted_o);
-
+    if (render_fatal_o)
+      $fatal(1, "SMOKE: the render path wrote %0d pixel(s) and latched fatal_error_o -- a guard denial or a broken pixel stream; the frame is unpublishable",
+             render_pixels_o);
+    if (render_retired_words_o != render_issued_words_o)
+      $fatal(1, "SMOKE: the render path issued %0d word(s) and the arbiter retired %0d -- issued-but-not-landed is not a rendered frame",
+             render_issued_words_o, render_retired_words_o);
+    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END. What is NOT proven is the SHADING: `tri_invw_plane_i`, `tri_u_over_w_plane_i`, `tri_v_over_w_plane_i` and `tri_flat_request_i` have no producer in this tree (core header I20), so these pixels are flat geometry and not a perspective-correct textured surface.",
+             render_pixels_o, render_bursts_o,
+             geom_setup_triangles_submitted_o, v2_frames_admitted_o);
     // ======================================================================
     // PACKET P-SURFACE, 2026-09-19: SURFACE.STAMP <-> SURFACE.SHEET.
     //
