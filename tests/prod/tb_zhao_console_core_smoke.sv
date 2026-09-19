@@ -212,17 +212,42 @@ module tb_zhao_console_core_smoke
   logic [15:0]             geom_vd_v_src_id_i;
   logic signed [7:0]       geom_vd_d_nx_o, geom_vd_d_ny_o, geom_vd_d_nz_o;
   logic signed [15:0]      geom_vd_d_u_o, geom_vd_d_v_o;
-  logic [15:0]             geom_vd_bone0_o, geom_vd_bone1_o;
   logic                    geom_vd_refused_o, geom_vd_reserved_nz_o;
   logic                    geom_vd_w0_illegal_o, geom_vd_format_bad_o;
   logic [31:0]             geom_vd_vertices_o;
   logic [31:0]             geom_vd_reserved_nz_count_o;
   logic [31:0]             geom_vd_w0_illegal_count_o;
   logic [31:0]             geom_vd_format_bad_count_o;
-  logic signed [31:0]      geom_skin_a_m_i [0:11];
-  logic signed [31:0]      geom_skin_b_m_i [0:11];
   logic [15:0]             geom_skin_src_id_o;
   logic [31:0]             geom_skin_vertices_transformed_o;
+
+  // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
+  // GEOM.SKIN's two matrix arrays USED TO BE HERE and the bench drove them with
+  // an identity. They are gone because zhao_geom_pose_palette is composed in
+  // the core and drives them from a real store -- which is what closing entry
+  // I10 means. What this bench can reach is one level up: the DECODER's source.
+  logic                    geom_pose_start_i;
+  logic [5:0]              geom_pose_bone_count_i;
+  logic signed [31:0]      geom_pose_root_dx_i;
+  logic signed [31:0]      geom_pose_root_dy_i;
+  logic signed [31:0]      geom_pose_root_dz_i;
+  logic [4:0]              geom_pose_bone_idx_o;
+  logic [4:0]              geom_pose_bone_parent_i;
+  logic signed [31:0]      geom_pose_bone_tx_i;
+  logic signed [31:0]      geom_pose_bone_ty_i;
+  logic signed [31:0]      geom_pose_bone_tz_i;
+  logic signed [15:0]      geom_pose_quat_w_i;
+  logic signed [15:0]      geom_pose_quat_x_i;
+  logic signed [15:0]      geom_pose_quat_y_i;
+  logic signed [15:0]      geom_pose_quat_z_i;
+  logic signed [31:0]      geom_pose_inv_rest_i [0:11];
+  logic                    geom_pose_busy_o;
+  logic                    geom_pose_done_o;
+  logic [31:0]             geom_pose_palettes_decoded_o;
+  logic [31:0]             geom_pal_vertices_served_o;
+  logic [31:0]             geom_pal_bones_written_o;
+  logic [31:0]             geom_pal_bone_oob_o;
+  logic [31:0]             geom_pal_bone_unset_o;
   logic                    geom_job_valid_i;
   logic                    geom_job_ready_o;
   logic [GEOM_INDEX_W-1:0] geom_job_count_i;
@@ -951,8 +976,20 @@ module tb_zhao_console_core_smoke
     geom_clip_tri_cy_i = '0;
     geom_clip_tri_src_id_i = '0;
     render_frame_open_q = 1'b0;
-    geom_skin_a_m_i = '{default: '0};
-    geom_skin_b_m_i = '{default: '0};
+    geom_pose_start_i = 1'b0;
+    geom_pose_bone_count_i = '0;
+    geom_pose_root_dx_i = '0;
+    geom_pose_root_dy_i = '0;
+    geom_pose_root_dz_i = '0;
+    geom_pose_bone_parent_i = '0;
+    geom_pose_bone_tx_i = '0;
+    geom_pose_bone_ty_i = '0;
+    geom_pose_bone_tz_i = '0;
+    geom_pose_quat_w_i = '0;
+    geom_pose_quat_x_i = '0;
+    geom_pose_quat_y_i = '0;
+    geom_pose_quat_z_i = '0;
+    geom_pose_inv_rest_i = '{default: '0};
     geom_job_valid_i = '0;
     geom_job_count_i = '0;
     geom_job_view_mask_i = '0;
@@ -1144,16 +1181,24 @@ module tb_zhao_console_core_smoke
     // so the bench SINKS it. Holding it low instead would back the replay up
     // into the sequencer and the resulting stall would read as a wiring fault.
     proj_out_ready_i        = 1'b1;
-    for (int i = 0; i < 12; i++) begin
-      geom_skin_a_m_i[i] = '0;
-      geom_skin_b_m_i[i] = '0;
-    end
-    geom_skin_a_m_i[0]  = FX16_ONE;       // row-major 3x4, the identity
-    geom_skin_a_m_i[5]  = FX16_ONE;
-    geom_skin_a_m_i[10] = FX16_ONE;
-    geom_skin_b_m_i[0]  = FX16_ONE;
-    geom_skin_b_m_i[5]  = FX16_ONE;
-    geom_skin_b_m_i[10] = FX16_ONE;
+    // THE BENCH NO LONGER HANDS GEOM.SKIN AN IDENTITY MATRIX. It cannot:
+    // zhao_geom_pose_palette owns those ports now (entry I10, closed). The
+    // vertices still skin against the identity, because a palette holding no
+    // decoded pose substitutes the identity bind pose per bone reference and
+    // SAYS SO on geom_pal_bone_unset_o. So the skinned counts below are
+    // unchanged, and the reason they are unchanged has moved from a harness
+    // constant to a stated, counted behaviour of the design.
+    //
+    // WHAT THIS BENCH THEREFORE DOES NOT EXERCISE: a real decoded palette. The
+    // decoder's source is entry I29 and has no producer in this tree; driving a
+    // synthetic skeleton here would be this bench inventing an asset. The
+    // palette PATH is checked below; the palette CONTENT is
+    // geom_pose_palette_directed's job, against thirty-two distinct matrices.
+    geom_pose_quat_w_i = 16'sd16384;      // quat16 is S1.0.14: this is 1.0
+    for (int i = 0; i < 12; i++) geom_pose_inv_rest_i[i] = '0;
+    geom_pose_inv_rest_i[0]  = FX16_ONE;  // row-major 3x4, the identity
+    geom_pose_inv_rest_i[5]  = FX16_ONE;
+    geom_pose_inv_rest_i[10] = FX16_ONE;
 
     repeat (20) @(posedge gpu_clk);
     rst_n = 1'b1;
@@ -1305,6 +1350,10 @@ module tb_zhao_console_core_smoke
              geom_skin_vertices_transformed_o, geom_vertices_sent_o,
              proj_a_grants_o, geom_landings_o,
              geom_groups_opened_o, geom_groups_sealed_o);
+    $display("SMOKE: pose pal   served=%0d bones_written=%0d bone_unset=%0d bone_oob=%0d palettes_decoded=%0d",
+             geom_pal_vertices_served_o, geom_pal_bones_written_o,
+             geom_pal_bone_unset_o, geom_pal_bone_oob_o,
+             geom_pose_palettes_decoded_o);
     $display("SMOKE: tri door   offered=%0d clip_submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d",
              geom_tris_sent_q, geom_clip_submitted_o, geom_clip_clipped_o,
              geom_clip_culled_o, geom_setup_triangles_submitted_o);
@@ -1471,6 +1520,27 @@ module tb_zhao_console_core_smoke
     if (geom_skin_vertices_transformed_o != geom_vd_vertices_o)
       $fatal(1, "SMOKE: GEOM.SKIN transformed %0d of GEOM.VDECODE's %0d vertices -- the decoder's output does not reach the skinner",
              geom_skin_vertices_transformed_o, geom_vd_vertices_o);
+
+    // GEOM.VDECODE -> GEOM.POSE's PALETTE STORE -> GEOM.SKIN. This is entry
+    // I10's other half, the one that was a missing BLOCK rather than missing
+    // wiring. The store is now the ONLY path between those two blocks, so the
+    // check above cannot pass unless this one did -- and asserting it
+    // separately is what tells a dead store apart from a dead decoder.
+    if (geom_pal_vertices_served_o != geom_vd_vertices_o)
+      $fatal(1, "SMOKE: the pose palette served %0d of GEOM.VDECODE's %0d vertices -- the store between the decoder and the skinner passes no traffic",
+             geom_pal_vertices_served_o, geom_vd_vertices_o);
+    // NO POSE WAS DECODED (entry I29), so every bone reference must have taken
+    // the identity substitution: two per vertex, since these records are rigid
+    // and name bone 0 twice. A ZERO here would mean the store handed out
+    // whatever its memory happened to hold, which is the one outcome that must
+    // never be silent -- and it is also this check's own positive control,
+    // because the number can only be right if the substitution really ran.
+    if (geom_pal_bone_unset_o != (geom_vd_vertices_o * 2))
+      $fatal(1, "SMOKE: the pose palette counted %0d non-resident bone references against %0d expected -- with no decoded pose every reference must be substituted AND counted",
+             geom_pal_bone_unset_o, geom_vd_vertices_o * 2);
+    if (geom_pal_bone_oob_o != 0)
+      $fatal(1, "SMOKE: the pose palette saw %0d out-of-range bone indices -- every record this bench builds names bone 0",
+             geom_pal_bone_oob_o);
 
     // GEOM.CLIP -> GEOM.SETUP -> the shell's triangle door (the far end of I13).
     // Every triangle offered is front-facing and wholly inside the canvas, so
