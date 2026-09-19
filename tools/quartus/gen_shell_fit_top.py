@@ -250,6 +250,10 @@ SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
         "build_wvalid_i",
         "build_wlast_i",
         "build_hps_req_i",
+        # 2026-09-19 (terrain3, I26): the socket clients' HPS WRITE lanes.
+        "build_hps_wr_valid_i",
+        "build_hps_wr_data_i",
+        "build_hps_wr_last_i",
         # R32: the socket's published-resource region (a write window in
         # RENDER.ASSET_POOL). Configuration of the same client.
         "build_res_valid_i",
