@@ -491,3 +491,24 @@ destroyed"*, which is the impossible-not-rarer shape that was required.
 
 **Standing:** FIT AT COMPLETION ONLY. Quartus is idle and stays idle until the
 register reads zero. Verified idle at every check.
+
+### Phase 1 running total — 2026-09-19
+
+| | gaps | tie-offs | disconnected | connected | unbuilt |
+|---|---:|---:|---:|---:|---:|
+| register built | 85 | 20 | 57 | 30 | 8 |
+| after ruling I4 | 84 | 19 | 57 | 33 | 8 |
+| after P-GEOM (3 of 12) | 83 | 21 | 54 | 36 | 8 |
+| **after P-TERRAIN paging spine** | **80** | 24 | **48** | **42** | 8 |
+
+Connected is climbing 30 -> 42 and disconnected falling 57 -> 48 while tie-offs
+rise 20 -> 24. That shape is correct: composing a module closes some gaps and
+honestly declares the seams it cannot reach. A packet that only lowered the
+count would be hiding something.
+
+`zhao_geom_pose_palette` built and accounted -- the bone-matrix latch that I10
+needed. It was never a wiring gap: `pose_decode` emits ONE BONE PER BEAT,
+`geom_skin` wants TWO WHOLE MATRICES latched with the vertex, and nothing in the
+tree stored them in between. `GEOM.POSE.md` names the storage itself ("M10K
+staging for the pose in use"), so the block follows the contract rather than
+inventing a shape.
