@@ -2436,6 +2436,33 @@ targets:
       # first that measures the projector with BOTH clients live.
       - fpga/rtl/terrain/zhao_terrain_tess.sv
       - fpga/rtl/terrain/zhao_terrain_group_seq.sv
+      # Added 2026-09-19, packet P-GEOM. THREE blocks, each with a REAL
+      # producer or a REAL consumer inside this closure and not one of them a
+      # file added to make a count move:
+      #   zhao_geom_vdecode  drives GEOM.SKIN's vertex port, which was a
+      #     boundary (header entry I10) and is now internal. I10 survives,
+      #     narrowed to the bone-matrix palette, because that half is a MISSING
+      #     BLOCK and deleting the entry would report work that was not done.
+      #   zhao_geom_clip -> zhao_geom_setup -> zhao_shell_top_v2's triangle
+      #     door. The shell's `render_kx0_i` and its twenty siblings were
+      #     boundary inputs on zhao_console_core and are now driven by the
+      #     block whose contract is that arithmetic. Entry I13's refusal --
+      #     never rename corners into edge functions -- is unaffected and
+      #     restated there.
+      # NOT ADDED, and the reasons are in the core's header rather than here:
+      # zhao_geom_project (carries a PRIVATE zhao_project_core and would put a
+      # second projector beside the shared one this row exists to measure),
+      # zhao_geom_light and zhao_geom_skin_norm (the lighting seam is excluded
+      # on purpose), zhao_geom_pose_decode (no palette store exists to join it
+      # to GEOM.SKIN), zhao_geom_meshfetch / assetfetch / assemble (their beats
+      # return from inside the shell and no behavioural SDRAM exists in the
+      # tree, so they would elaborate and never see one), zhao_geom_parambuf
+      # (nothing composed produces the byte blobs it decodes) and
+      # zhao_geom_depthquant (zhao_raster_rcp24_svc answers out of order with a
+      # token and the block's reciprocal port has neither).
+      - fpga/rtl/geometry/zhao_geom_vdecode.sv
+      - fpga/rtl/geometry/zhao_geom_clip.sv
+      - fpga/rtl/geometry/zhao_geom_setup.sv
       - fpga/rtl/compositor/zhao_post_composite.sv
       - fpga/rtl/measure/zhao_measure_histogram.sv
       - fpga/rtl/prod/zhao_console_core.sv

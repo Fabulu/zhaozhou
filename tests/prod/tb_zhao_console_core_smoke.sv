@@ -103,6 +103,11 @@ module tb_zhao_console_core_smoke
   localparam int signed   PART_TER_H     = 100;
   localparam int unsigned PART_CLEAR_EPS = 2;
   localparam int unsigned N_GEOM_VERTS   = 4;
+  // Triangles offered to GEOM.CLIP. Three, not one: one proves a wire, three
+  // prove the handshake releases and can be offered again, which is the bug
+  // shape this repository has already been bitten by (a level held for a whole
+  // offer window re-submitted one meshlet fifteen times).
+  localparam int unsigned N_GEOM_TRIS    = 16;
   localparam int unsigned CYCLE_LIMIT    = 1_500_000;
   localparam logic signed [31:0] FX16_ONE = 32'sh0001_0000;
 
@@ -201,14 +206,19 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_refused_unknown_species_o;
   logic [31:0]             part_refused_capacity_o;
   logic [31:0]             part_max_children_in_tick_o;
-  logic                    geom_skin_v_valid_i;
-  logic                    geom_skin_v_ready_o;
-  logic signed [31:0]      geom_skin_v_x_i;
-  logic signed [31:0]      geom_skin_v_y_i;
-  logic signed [31:0]      geom_skin_v_z_i;
-  logic [6:0]              geom_skin_v_w0_i;
-  logic                    geom_skin_v_rigid_i;
-  logic [15:0]             geom_skin_v_src_id_i;
+  logic                    geom_vd_v_valid_i;
+  logic                    geom_vd_v_ready_o;
+  logic [255:0]            geom_vd_v_bytes_i;
+  logic [15:0]             geom_vd_v_src_id_i;
+  logic signed [7:0]       geom_vd_d_nx_o, geom_vd_d_ny_o, geom_vd_d_nz_o;
+  logic signed [15:0]      geom_vd_d_u_o, geom_vd_d_v_o;
+  logic [15:0]             geom_vd_bone0_o, geom_vd_bone1_o;
+  logic                    geom_vd_refused_o, geom_vd_reserved_nz_o;
+  logic                    geom_vd_w0_illegal_o, geom_vd_format_bad_o;
+  logic [31:0]             geom_vd_vertices_o;
+  logic [31:0]             geom_vd_reserved_nz_count_o;
+  logic [31:0]             geom_vd_w0_illegal_count_o;
+  logic [31:0]             geom_vd_format_bad_count_o;
   logic signed [31:0]      geom_skin_a_m_i [0:11];
   logic signed [31:0]      geom_skin_b_m_i [0:11];
   logic [15:0]             geom_skin_src_id_o;
@@ -589,26 +599,34 @@ module tb_zhao_console_core_smoke
   logic        render_frame_end_i;
   logic [5:0]  render_grid_w_i;
   logic [5:0]  render_grid_h_i;
-  logic               render_tri_valid_i;
-  logic               render_tri_ready_o;
+  // The triangle door is no longer at the core's edge -- GEOM.SETUP drives it
+  // from inside. What this bench presents instead is GEOM.CLIP's input, one
+  // block further up (entry I24).
   zhao_guard_req_t geom_guard_req_i;
   zhao_guard_rsp_t geom_guard_rsp_o;
   logic            geom_beat_valid_o;
   logic [63:0]     geom_beat_data_o;
   logic            geom_beat_last_o;
-  logic signed [22:0] render_kx0_i, render_ky0_i;
-  logic signed [47:0] render_kc0_i;
-  logic signed [22:0] render_kx1_i, render_ky1_i;
-  logic signed [47:0] render_kc1_i;
-  logic signed [22:0] render_kx2_i, render_ky2_i;
-  logic signed [47:0] render_kc2_i;
-  logic        [ 2:0] render_tl_i;
-  logic signed [20:0] render_ax_i, render_ay_i;
-  logic signed [20:0] render_bx_i, render_by_i;
-  logic signed [20:0] render_cx_i, render_cy_i;
-  logic signed [11:0] render_min_x_i, render_max_x_i;
-  logic signed [11:0] render_min_y_i, render_max_y_i;
-  logic        [15:0] render_src_id_i;
+  // ---- GEOM.CLIP's input (entry I24) and the CLIP/SETUP evidence ------------
+  localparam int unsigned GEOM_CLIP_ATTRW = 7 * 32;
+  logic                    geom_clip_tri_valid_i;
+  logic                    geom_clip_tri_ready_o;
+  logic signed [20:0]      geom_clip_tri_ax_i, geom_clip_tri_ay_i;
+  logic signed [20:0]      geom_clip_tri_bx_i, geom_clip_tri_by_i;
+  logic signed [20:0]      geom_clip_tri_cx_i, geom_clip_tri_cy_i;
+  logic [2:0]              geom_clip_tri_behind_i;
+  logic [15:0]             geom_clip_tri_src_id_i;
+  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_i, geom_clip_attr_b_i, geom_clip_attr_c_i;
+  logic [1:0]              geom_clip_cull_mode_i;
+  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_o, geom_clip_attr_b_o, geom_clip_attr_c_o;
+  logic                    geom_clip_flip_o;
+  logic                    geom_clip_ret_valid_o;
+  logic [2:0]              geom_clip_ret_verdict_o;
+  logic [31:0]             geom_clip_submitted_o;
+  logic [31:0]             geom_clip_clipped_o;
+  logic [31:0]             geom_clip_culled_o;
+  logic signed [47:0]      geom_setup_area2_o;
+  logic [31:0]             geom_setup_triangles_submitted_o;
   logic [63:0] render_fill_word_i;
   logic [63:0] render_clear_word_i;
   logic [31:0] render_state_i;
@@ -672,6 +690,8 @@ module tb_zhao_console_core_smoke
   int unsigned part_records_sent_q;
   int unsigned part_records_written_q;
   int unsigned geom_verts_sent_q;
+  int unsigned geom_tris_sent_q;
+  logic        render_frame_open_q;
   bit          part_tick_seen_q;
   bit          reset_released_q;
 
@@ -740,24 +760,107 @@ module tb_zhao_console_core_smoke
   end
 
   // --------------------------------------------------------------------------
-  // THE GEOMETRY VERTEX STREAM (entry I10: GEOM.POSE/VDECODE are absent, so
-  // the harness plays the content source). One job, then its vertices.
+  // THE GEOMETRY VERTEX STREAM.
+  //
+  // MOVED ONE BLOCK UPSTREAM, 2026-09-19. This used to drive `geom_skin_v_*`
+  // directly, because GEOM.VDECODE was not composed and GEOM.SKIN's vertex port
+  // was at the module edge. It is now composed, so the harness presents what a
+  // harness is allowed to present -- BYTES -- and the decoder makes the vertex.
+  // The path under test is therefore VDECODE -> SKIN -> GROUP_SEQ -> the shared
+  // projector, and `geom_vd_vertices_o` and `geom_skin_vertices_transformed_o`
+  // must BOTH move or the new block is passing nothing on.
+  //
+  // THE RECORD IS THE REAL FORMAT-0 LAYOUT (zhao_geom_vdecode.sv's header):
+  //   off  0  12  position s32 x3, fx16
+  //   off 12   3  normal s8 x3
+  //   off 15   1  w0, 1/64 quanta (64 == rigid)
+  //   off 16   4  UV, 2 x s16
+  //   off 20   2  bone0
+  //   off 22   2  bone1
+  //   off 24   8  reserved, MUST BE ZERO -- a nonzero byte here is a REFUSAL,
+  //               which is why this is packed field by field rather than
+  //               smeared with a pattern.
+  // Little-endian, byte 0 at bit 0, so the concatenation runs high byte first.
   // --------------------------------------------------------------------------
+  function automatic logic [255:0] vdec_record(input int unsigned n);
+    logic signed [31:0] px, py, pz;
+    begin
+      px = FX16_ONE * 32'sh2 + 32'(n);
+      py = FX16_ONE;
+      pz = FX16_ONE * 32'sh4;
+      vdec_record = {64'd0,          // off 24..31 reserved, MUST be zero
+                     16'd0,          // off 22 bone1 (== bone0 -> rigid)
+                     16'd0,          // off 20 bone0
+                     16'sd0,         // off 18 v
+                     16'sd0,         // off 16 u
+                     8'd64,          // off 15 w0 == 64 -> rigid
+                     8'sd0,          // off 14 nz
+                     8'sd0,          // off 13 ny
+                     8'sd127,        // off 12 nx
+                     pz, py, px};    // off 0..11 position
+    end
+  endfunction
+
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
-      geom_verts_sent_q   <= 0;
-      geom_skin_v_valid_i <= 1'b0;
+      geom_verts_sent_q <= 0;
+      geom_vd_v_valid_i <= 1'b0;
     end else begin
-      if (geom_skin_v_valid_i && geom_skin_v_ready_o) begin
-        geom_verts_sent_q   <= geom_verts_sent_q + 1;
-        geom_skin_v_valid_i <= 1'b0;
+      if (geom_vd_v_valid_i && geom_vd_v_ready_o) begin
+        geom_verts_sent_q <= geom_verts_sent_q + 1;
+        geom_vd_v_valid_i <= 1'b0;
       end
-      if (reset_released_q && !geom_skin_v_valid_i &&
+      if (reset_released_q && !geom_vd_v_valid_i &&
           (geom_verts_sent_q < N_GEOM_VERTS)) begin
-        geom_skin_v_valid_i <= 1'b1;
-        geom_skin_v_x_i     <= FX16_ONE * 32'sh2 + 32'(geom_verts_sent_q);
-        geom_skin_v_y_i     <= FX16_ONE;
-        geom_skin_v_z_i     <= FX16_ONE * 32'sh4;
+        geom_vd_v_valid_i  <= 1'b1;
+        geom_vd_v_bytes_i  <= vdec_record(geom_verts_sent_q);
+        geom_vd_v_src_id_i <= 16'h00A1;
+      end
+    end
+  end
+
+  // --------------------------------------------------------------------------
+  // THE TRIANGLE FRONT DOOR (entry I24: the replay customer specified at I11
+  // does not exist, so the harness presents the three PROJECTED screen corners
+  // it would emit -- and nothing downstream of that).
+  //
+  // This path was COMPLETELY DEAD before this pass: `render_tri_valid_i` was a
+  // boundary input on the core and this bench tied it to zero, so the shell's
+  // rasteriser had never seen a triangle in a connected-core run. It is now
+  // GEOM.CLIP -> GEOM.SETUP -> the shell, and the test is that a triangle put
+  // in at CLIP comes out of SETUP as edge functions AND that the shell's
+  // rasteriser reports pixels for it.
+  //
+  // The triangle is deliberately front-facing, wholly inside the Z60 canvas and
+  // wholly in front of the camera (`behind` = 0), because this bench asserts
+  // that beats crossed wires, not that a clipper clips. S12.8 subpixels: 256
+  // subpixels to the pixel.
+  // --------------------------------------------------------------------------
+  localparam int unsigned SUBPX = 256;
+
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      geom_tris_sent_q      <= 0;
+      geom_clip_tri_valid_i <= 1'b0;
+    end else begin
+      if (geom_clip_tri_valid_i && geom_clip_tri_ready_o) begin
+        geom_tris_sent_q      <= geom_tris_sent_q + 1;
+        geom_clip_tri_valid_i <= 1'b0;
+      end
+      if (render_frame_open_q && !geom_clip_tri_valid_i &&
+          (geom_tris_sent_q < N_GEOM_TRIS)) begin
+        // Pixels (4,4) (40,4) (4,40), in S12.8 subpixels. 2A is positive, so
+        // GEOM.CLIP does not have to flip it -- the flip is exercised by that
+        // block's own directed test and asserting it here would be a second,
+        // weaker copy of a check that already exists.
+        geom_clip_tri_valid_i  <= 1'b1;
+        geom_clip_tri_ax_i     <= 21'sd1024;
+        geom_clip_tri_ay_i     <= 21'sd1024;
+        geom_clip_tri_bx_i     <= 21'sd10240;
+        geom_clip_tri_by_i     <= 21'sd1024;
+        geom_clip_tri_cx_i     <= 21'sd1024;
+        geom_clip_tri_cy_i     <= 21'sd10240;
+        geom_clip_tri_src_id_i <= 16'h00B2;
       end
     end
   end
@@ -833,9 +936,21 @@ module tb_zhao_console_core_smoke
     part_spw_spc_count_i = '0;
     part_cap_full_i = '0;
     part_hist_sel_i = '0;
-    geom_skin_v_w0_i = '0;
-    geom_skin_v_rigid_i = '0;
-    geom_skin_v_src_id_i = '0;
+    geom_vd_v_bytes_i = '0;
+    geom_vd_v_src_id_i = '0;
+    geom_clip_tri_behind_i = '0;
+    geom_clip_attr_a_i = '0;
+    geom_clip_attr_b_i = '0;
+    geom_clip_attr_c_i = '0;
+    geom_clip_cull_mode_i = '0;
+    geom_clip_tri_ax_i = '0;
+    geom_clip_tri_ay_i = '0;
+    geom_clip_tri_bx_i = '0;
+    geom_clip_tri_by_i = '0;
+    geom_clip_tri_cx_i = '0;
+    geom_clip_tri_cy_i = '0;
+    geom_clip_tri_src_id_i = '0;
+    render_frame_open_q = 1'b0;
     geom_skin_a_m_i = '{default: '0};
     geom_skin_b_m_i = '{default: '0};
     geom_job_valid_i = '0;
@@ -965,29 +1080,8 @@ module tb_zhao_console_core_smoke
     render_frame_end_i = '0;
     render_grid_w_i = '0;
     render_grid_h_i = '0;
-    render_tri_valid_i = '0;
     geom_guard_req_i = '0;
-    render_kx0_i = '0;
-    render_ky0_i = '0;
-    render_kc0_i = '0;
-    render_kx1_i = '0;
-    render_ky1_i = '0;
-    render_kc1_i = '0;
-    render_kx2_i = '0;
-    render_ky2_i = '0;
-    render_kc2_i = '0;
-    render_tl_i = '0;
-    render_ax_i = '0;
-    render_ay_i = '0;
-    render_bx_i = '0;
-    render_by_i = '0;
-    render_cx_i = '0;
-    render_cy_i = '0;
-    render_min_x_i = '0;
-    render_max_x_i = '0;
-    render_min_y_i = '0;
-    render_max_y_i = '0;
-    render_src_id_i = '0;
+
     render_fill_word_i = '0;
     render_clear_word_i = '0;
     render_state_i = '0;
@@ -1050,9 +1144,6 @@ module tb_zhao_console_core_smoke
     // so the bench SINKS it. Holding it low instead would back the replay up
     // into the sequencer and the resulting stall would read as a wiring fault.
     proj_out_ready_i        = 1'b1;
-    geom_skin_v_w0_i        = 7'd64;      // 64/64 == rigid
-    geom_skin_v_rigid_i     = 1'b1;
-    geom_skin_v_src_id_i    = 16'h00A1;
     for (int i = 0; i < 12; i++) begin
       geom_skin_a_m_i[i] = '0;
       geom_skin_b_m_i[i] = '0;
@@ -1071,6 +1162,71 @@ module tb_zhao_console_core_smoke
 
     // ---- the geometry job -------------------------------------------------
     // One meshlet, one view. The vertices follow from the always block above.
+    // ---- OPEN A RENDER FRAME ----------------------------------------------
+    // The triangle door needs one, and nothing in this bench opened one before
+    // 2026-09-19 because nothing offered a triangle: `render_tri_valid_i` was
+    // tied low here and the shell's rasteriser was never asked to do anything.
+    // The protocol is `tests/shell/shell_harness.hpp`'s and is copied from it
+    // rather than guessed: grid size, then a ONE-CYCLE `frame_begin` pulse.
+    //
+    // 4x4 tiles is 64x64 pixels. The triangle offered to GEOM.CLIP sits inside
+    // it AND inside the Z60 scissor the core derives from `mode_act_o`, so the
+    // clipper passing it and the binner binning it are consistent facts rather
+    // than a coincidence of two different rectangles.
+    //
+    // `fb_writer_i` is 1: RASTER.FBWRITE holds the lease, not DEBUG.FRAMEBLIT.
+    // With it at 0 the guard denies every render burst and `render_pixels_o`
+    // stays at zero for a reason that has nothing to do with this packet.
+    @(posedge gpu_clk);
+    fb_writer_i          <= 1'b1;
+    render_fb_base_i     <= 27'd0;
+    render_fb_stride_i   <= 16'd128;      // 64 px * 2 bytes
+    render_fill_word_i   <= 64'hA5A5_A5A5_A5A5_A5A5;
+    render_clear_word_i  <= 64'h5A5A_5A5A_5A5A_5A5A;
+    render_src_a_i       <= 8'hFF;
+    render_texel_rgb_i   <= 24'hFF00FF;
+    render_texel_a_i     <= 8'hFF;
+    render_texel_idx_i   <= 8'd1;
+    render_grid_w_i      <= 6'd4;
+    render_grid_h_i      <= 6'd4;
+    @(posedge gpu_clk);
+    render_frame_begin_i <= 1'b1;
+    @(posedge gpu_clk);
+    render_frame_begin_i <= 1'b0;
+    render_frame_open_q  <= 1'b1;         // releases the triangle offer above
+
+    // THE RENDER FRAME IS OPENED, FILLED AND CLOSED IN ONE SEQUENCE, and that
+    // is a correction rather than a style choice. The first version opened it
+    // here and closed it after the run's two-frame wait -- half a million gpu
+    // cycles and two `gpu_tick_o` edges later. Every counter read clean
+    // (`drained=1 busy=0 fatal=0 stream_err=0`) and `render_pixels_o` was 0,
+    // which reads exactly like "the triangles never reached the binner" and is
+    // not that: a render frame does not survive the console's frame boundary.
+    // Reading the reassuring zeros as evidence about the door would have sent
+    // the next person to re-check wiring that was already correct.
+    guard = 0;
+    while ((geom_tris_sent_q < N_GEOM_TRIS) && (guard < 20000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
+    if (geom_tris_sent_q < N_GEOM_TRIS)
+      $fatal(1, "SMOKE: GEOM.CLIP accepted only %0d of %0d offered triangles -- backpressure from GEOM.SETUP or from the shell's binner",
+             geom_tris_sent_q, N_GEOM_TRIS);
+
+    @(posedge gpu_clk);
+    render_frame_end_i <= 1'b1;
+    @(posedge gpu_clk);
+    render_frame_end_i <= 1'b0;
+
+    guard = 0;
+    while (!render_drain_done_o && (guard < 200000)) begin
+      @(posedge gpu_clk);
+      guard = guard + 1;
+    end
+    if (!render_drain_done_o)
+      $display("SMOKE: NOTE render_drain_done_o never rose after %0d cycles", guard);
+    repeat (4000) @(posedge gpu_clk);
+
     @(posedge gpu_clk);
     geom_job_count_i     <= GEOM_INDEX_W'(N_GEOM_VERTS);
     geom_job_view_mask_i <= 2'b01;
@@ -1133,6 +1289,7 @@ module tb_zhao_console_core_smoke
     // let the tick's generation drain
     repeat (2000) @(posedge gpu_clk);
 
+
     // ======================================================================
     // THE VERDICT. Each line names the wire it is evidence for.
     // ======================================================================
@@ -1140,10 +1297,24 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: particles  read=%0d written=%0d survivors=%0d updated=%0d",
              part_records_sent_q, part_records_written_q,
              part_survivors_o, part_updated_o);
+    $display("SMOKE: vdecode    records_offered=%0d decoded=%0d refused[reserved/w0/format]=[%0d %0d %0d]",
+             geom_verts_sent_q, geom_vd_vertices_o,
+             geom_vd_reserved_nz_count_o, geom_vd_w0_illegal_count_o,
+             geom_vd_format_bad_count_o);
     $display("SMOKE: geometry   skinned=%0d vertices_sent=%0d a_grants=%0d landings=%0d groups_opened=%0d groups_sealed=%0d",
              geom_skin_vertices_transformed_o, geom_vertices_sent_o,
              proj_a_grants_o, geom_landings_o,
              geom_groups_opened_o, geom_groups_sealed_o);
+    $display("SMOKE: tri door   offered=%0d clip_submitted=%0d clipped=%0d culled=%0d setup_submitted=%0d",
+             geom_tris_sent_q, geom_clip_submitted_o, geom_clip_clipped_o,
+             geom_clip_culled_o, geom_setup_triangles_submitted_o);
+    $display("SMOKE: raster     pixels=%0d bursts=%0d issued=%0d retired=%0d busy=%0d drained=%0d fatal=%0d stream_err=%0d overflow=%0d",
+             render_pixels_o, render_bursts_o, render_issued_words_o,
+             render_retired_words_o, render_busy_o, render_drained_o,
+             render_fatal_o, render_stream_error_o, render_overflow_o);
+    $display("SMOKE: renderlease leases_granted=%0d refused=%0d clears=%0d frames_admitted=%0d",
+             v2_leases_granted_o, v2_leases_refused_o,
+             v2_clear_handshakes_o, v2_frames_admitted_o);
     $display("SMOKE: terrain    tess_vertices=%0d tess_refs=%0d fills_forwarded=%0d refs_forwarded=%0d groups_opened=%0d b_grants=%0d",
              terr_tess_vertices_o, terr_tess_refs_o, terr_fills_forwarded_o,
              terr_refs_forwarded_o, terr_groups_opened_o, proj_b_grants_o);
@@ -1253,6 +1424,89 @@ module tb_zhao_console_core_smoke
         part_spawn_by_event3_o != 0)
       $fatal(1, "SMOKE: a non-collision event fired (%0d/%0d/%0d) -- the event vector crossing PART.COLLIDE is wrong",
              part_spawn_by_event0_o, part_spawn_by_event1_o, part_spawn_by_event3_o);
+
+    // ======================================================================
+    // PACKET P-GEOM, 2026-09-19: the three blocks composed this pass must be
+    // seen to CARRY DATA, not merely to elaborate.
+    //
+    // The shape of these checks is deliberate. Each one names the wire it is
+    // evidence for and each is a CONSERVATION statement rather than "a counter
+    // moved" -- `n offered == n decoded` cannot be satisfied by a block that
+    // passes some records and swallows others, which a nonzero test can.
+    // ======================================================================
+
+    // GEOM.VDECODE -> GEOM.SKIN (entry I10's vertex half).
+    // The records this bench offers are well-formed format-0, so every one must
+    // decode and NONE may be refused. The three refusal counters are read as a
+    // group for a specific reason: if the reserved-byte packing in
+    // `vdec_record` were wrong, the block would refuse every record, the
+    // decoded count would be zero, and "the wire is dead" and "the bench builds
+    // a bad record" would look identical from the decoded count alone.
+    if (geom_vd_vertices_o != geom_verts_sent_q)
+      $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of %0d offered records -- the vertex stream does not cross the block",
+             geom_vd_vertices_o, geom_verts_sent_q);
+    if ((geom_vd_reserved_nz_count_o != 0) || (geom_vd_w0_illegal_count_o != 0) ||
+        (geom_vd_format_bad_count_o != 0))
+      $fatal(1, "SMOKE: GEOM.VDECODE refused a well-formed record (reserved=%0d w0=%0d format=%0d) -- the harness's format-0 packing is wrong, so nothing below this line means anything",
+             geom_vd_reserved_nz_count_o, geom_vd_w0_illegal_count_o,
+             geom_vd_format_bad_count_o);
+    if (geom_skin_vertices_transformed_o != geom_vd_vertices_o)
+      $fatal(1, "SMOKE: GEOM.SKIN transformed %0d of GEOM.VDECODE's %0d vertices -- the decoder's output does not reach the skinner",
+             geom_skin_vertices_transformed_o, geom_vd_vertices_o);
+
+    // GEOM.CLIP -> GEOM.SETUP -> the shell's triangle door (the far end of I13).
+    // Every triangle offered is front-facing and wholly inside the canvas, so
+    // none may be clipped or culled; anything else means the scissor this core
+    // derives from the video mode is not the rectangle the block was given.
+    if (geom_clip_submitted_o != geom_tris_sent_q)
+      $fatal(1, "SMOKE: GEOM.CLIP saw %0d of %0d offered triangles -- the front door does not accept",
+             geom_clip_submitted_o, geom_tris_sent_q);
+    if ((geom_clip_clipped_o != 0) || (geom_clip_culled_o != 0))
+      $fatal(1, "SMOKE: GEOM.CLIP clipped %0d and culled %0d of a triangle set that is wholly inside the canvas and front-facing -- the scissor taken from mode_act_o is not the pass rectangle",
+             geom_clip_clipped_o, geom_clip_culled_o);
+    if (geom_setup_triangles_submitted_o != geom_clip_submitted_o)
+      $fatal(1, "SMOKE: GEOM.SETUP received %0d of GEOM.CLIP's %0d accepted triangles -- the clip->setup seam does not carry",
+             geom_setup_triangles_submitted_o, geom_clip_submitted_o);
+
+    // AND THE DOOR MUST ACTUALLY HAVE OPENED. This is the check that separates
+    // "GEOM.SETUP's counter moved" from "the shell accepted the triangles",
+    // and it needs the argument written down because the counter alone does
+    // not carry it:
+    //
+    //   `triangles_submitted_o` counts ACCEPTANCES AT SETUP'S INPUT, gated on
+    //   `pipe_en`. A four-deep pipe with a dead output can therefore swallow
+    //   about four triangles and count them. N_GEOM_TRIS is 16 -- comfortably
+    //   more than the pipe holds -- so the only way all sixteen are accepted
+    //   is if `out_ready_i` went high repeatedly, and `out_ready_i` IS the
+    //   shell's `render_tri_ready_o`. Backpressure propagates the whole way:
+    //   sixteen through CLIP means sixteen through the door.
+    //
+    // This is why the count is 16 and not 1, and lowering it would quietly
+    // turn this from evidence into a pipe-depth measurement.
+    if (geom_setup_triangles_submitted_o != geom_tris_sent_q)
+      $fatal(1, "SMOKE: GEOM.SETUP took %0d of %0d -- the shell's triangle door is not accepting",
+             geom_setup_triangles_submitted_o, geom_tris_sent_q);
+
+    // WHY `render_pixels_o` IS STILL ZERO, MEASURED RATHER THAN ASSUMED, and
+    // left as a $display rather than promoted to a check because it is NOT
+    // this packet's seam and asserting it would assert someone else's gap.
+    //
+    // `zhao_shell_top_v2` does not give the bin pipe `render_frame_begin_i`.
+    // It gives it `v2_frame_admit_w` -- the ADMITTED frame -- and its own
+    // comment is the law: "the renderer's work is withheld until the lease is
+    // granted and the clear accepted". This bench drives no renderer lease, so
+    // no frame is admitted, the bin pipe never starts one, and every counter
+    // downstream reads a clean zero with `fatal`, `stream_error` and
+    // `overflow` all low.
+    //
+    // That set of clean zeros is exactly what a broken triangle door would
+    // also produce, which is the whole reason the check above is written
+    // against backpressure rather than against pixels.
+    if ((render_pixels_o == 0) && (v2_frames_admitted_o == 0))
+      $display("SMOKE: NOTE raster pixels=0 because frames_admitted=0 -- the V2 renderer lease is not driven by this bench. The triangle door is proven above by backpressure, not by pixels. Driving the lease belongs with VIDEO.SLOTMGR, which the completion register still lists as not connected.");
+    else if (render_pixels_o == 0)
+      $fatal(1, "SMOKE: %0d frame(s) were ADMITTED and the shell still rasterised 0 pixels from %0d triangles -- that is a real render-path fault, not the missing lease",
+             v2_frames_admitted_o, geom_setup_triangles_submitted_o);
 
     $display("SMOKE: PASS -- the connected core carries traffic on every wire this bench can reach.");
     $finish;

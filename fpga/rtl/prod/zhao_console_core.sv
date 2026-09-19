@@ -105,6 +105,32 @@
 //   5. THE MEASUREMENT INTERVAL IS THE FRAME
 //        SHELL.gpu_tick_o -> MEASURE.HISTOGRAM.snapshot_i
 //
+//   6. THE VERTEX DECODER FEEDS THE SKINNER
+//        GEOM.VDECODE.d_{x,y,z,w0,rigid,src_id} -> GEOM.SKIN.v_*
+//      Name for name, width for width, no arithmetic between them. Until this
+//      composition GEOM.SKIN's vertex port was a boundary (entry I10) and the
+//      only thing that had ever driven it was a harness. It now has its real
+//      producer, and the decoder's REFUSAL path (`d_refused_o` and its three
+//      causes) leaves this module rather than being dropped, because a vertex
+//      the decoder rejected must not look like a vertex that never arrived.
+//      GEOM.SKIN's BONE MATRICES are still a boundary -- see I10, which is now
+//      about the palette and nothing else.
+//
+//   7. THE TRIANGLE FRONT DOOR, CLOSED WITH ITS REAL PRODUCER
+//        GEOM.CLIP.out_*  -> GEOM.SETUP.tri_*
+//        GEOM.SETUP.out_* -> SHELL.render_tri_* (the raster door)
+//      This is the seam entry I13 said was missing, from the other side. The
+//      shell's triangle port takes EDGE FUNCTIONS -- `render_kx0_i` and its
+//      siblings -- and `zhao_geom_setup` emits exactly those, port for port and
+//      width for width, together with the triangle corners, the top-left mask,
+//      the scan box and the source id. It is the producer, and the shell's own
+//      source list records that it "starts at the binner and has no vertex
+//      front end at all" precisely because this block was never composed.
+//      Nothing is renamed and nothing is computed here: the refusal recorded at
+//      I13 was against renaming CORNERS into edge functions, and this is not
+//      that -- it is the block whose job is to derive them, doing it.
+//      GEOM.CLIP's own input is still a boundary (I24).
+//
 // ---------------------------------------------------------------------------
 // INCOMPLETE -- TIED OFF, AND WHY
 // ---------------------------------------------------------------------------
@@ -162,19 +188,64 @@
 //      decision taken in the composer: if ids must survive compaction, a real
 //      PART.ID owner is needed and this counter is wrong.
 //
-// I10. GEOM.SKIN's vertex and bone-matrix inputs (`geom_skin_v_*`,
-//      `geom_skin_a_m_i`, `geom_skin_b_m_i`) -- BOUNDARY. GEOM.POSE owns the
-//      matrix palette and GEOM.VDECODE the vertex stream; neither is composed
-//      in this tree (the shell's own source list records that its geometry
-//      front end elaborated nowhere and was struck).
+// I10. GEOM.SKIN's BONE MATRICES (`geom_skin_a_m_i`, `geom_skin_b_m_i`) --
+//      BOUNDARY. NARROWED 2026-09-19: the VERTEX half of this entry is CLOSED.
+//      `zhao_geom_vdecode` is composed below and drives `v_x/v_y/v_z/v_w0/
+//      v_rigid/v_src_id` directly, so those six ports are no longer boundary
+//      and no longer appear in the port list. What remains is the palette, and
+//      it is a MISSING BLOCK rather than missing wiring:
+//
+//        `zhao_geom_pose_decode` (GEOM.POSE) exists, is tested, and emits the
+//        palette ONE BONE PER BEAT on `out_valid_o / out_bone_o / out_m_o[12]`.
+//        GEOM.SKIN wants TWO WHOLE MATRICES presented WITH the vertex and
+//        latched on accept, addressed by that vertex's `bone0`/`bone1`. A
+//        streamed producer and a random-access consumer do not meet: something
+//        must STORE the decoded palette and answer two reads per vertex.
+//        Nothing in the tree does. Grepped 2026-09-19 -- `zhao_geom_pose_cache`
+//        is NOT it (it is the {type,clip,frame,sub,gen} tuple cache that
+//        answers "which slot", not a matrix store), and no other file holds a
+//        bone-indexed matrix memory.
+//
+//      So GEOM.POSE is deliberately NOT composed here: instantiating it with no
+//      consumer would be a disconnected implementation with extra steps, and
+//      building the palette store inside this composer is exactly the hidden
+//      adapter this file must not contain. The address it needs is already on
+//      this module's edge -- `geom_vd_bone0_o` / `geom_vd_bone1_o` come out of
+//      the decoder below and go nowhere, which is what the gap looks like.
+//      Closing this is one new block (a GEOM.POSE palette store), not wiring.
 //
 // I11. GEOM.GROUP_SEQ's job port and its sealed-group output (`geom_job_*`,
-//      `geom_grp_*`, `geom_rel_*`) -- BOUNDARY. The replay customer is
-//      GEOM.SETUP, and the shell "starts at the binner and has no vertex front
-//      end at all" (its own source list says so).
+//      `geom_grp_*`, `geom_rel_*`) -- BOUNDARY.
+//      CORRECTED 2026-09-19. This entry used to say "the replay customer is
+//      GEOM.SETUP". THAT IS WRONG, and it was worth the five minutes to check,
+//      because acting on it would have produced exactly the hidden adapter I13
+//      refuses. `zhao_geom_setup`'s input port is a triangle of THREE SCREEN
+//      VERTICES with a signed 2A and a scissored scan box -- it is GEOM.CLIP's
+//      output, and GEOM.CLIP is composed below to drive it. A sealed-group
+//      handle {arena, generation, count, view, src_id} is not that and cannot
+//      be turned into it by naming.
+//
+//      THE REPLAY CUSTOMER IS A BLOCK THAT DOES NOT EXIST. What it must do is
+//      now fully determined by the two ports either side of it, so this is a
+//      specification rather than a guess:
+//        * take a sealed handle here and a TriangleDescriptor {v0,v1,v2} from
+//          GEOM.ASSEMBLE;
+//        * issue THREE lookups on GEOM.PROJ_LANE (`look_arena/look_gen/
+//          look_index`, entry I12) and collect three replies;
+//        * slice each 106-bit reply -- the layout is exactly
+//          {x[20:0], y[20:0], d[31:0], w[30:0], behind}, which is 106 -- into
+//          the corner and its behind bit;
+//        * present {ax,ay,bx,by,cx,cy,behind[2:0]} to GEOM.CLIP (entry I24);
+//        * pulse `rel_valid_o` back here when the group is done with.
+//      The slicing is field routing. The THREE-LOOKUP SEQUENCING IS NOT: it is
+//      a state machine with a reply join, and a state machine belongs in a
+//      file with a contract and a test, not in this composer. It is also NOT
+//      GEOM.LOOM (that is SKIN -> WARP deformation, and it is in the register's
+//      NOT-BUILT list for its own reasons).
 //
 // I12. GEOM.PROJ_LANE's lookup/reply and arena origin (`geom_look_*`,
-//      `geom_rep_*`, `geom_org_*`) -- BOUNDARY, same absent customer as I11.
+//      `geom_rep_*`, `geom_org_*`) -- BOUNDARY, same absent customer as I11,
+//      and see the specification written there.
 //
 // I13. PROJ_SUBSYSTEM's TRIANGLE OUTPUT (`proj_out_*`) -- BOUNDARY.
 //      CLIENT B and the reference port are CLOSED: `zhao_terrain_group_seq`
@@ -247,6 +318,53 @@
 //      (data valid the cycle after the request), so the harness can play the
 //      memory the plan allows it to play.
 //
+// I23. GEOM.VDECODE's 32-byte vertex record stream (`geom_vd_v_*`) --
+//      BOUNDARY, and its decoded side-channels (`geom_vd_d_n*`, `geom_vd_u/v`,
+//      `geom_vd_bone0/1`) leave this module because nothing here consumes them.
+//      THE NAMED OWNER EXISTS AND IS NOT COMPOSED, and the reason is worth
+//      writing down precisely so the next packet does not rediscover it:
+//
+//        `zhao_geom_assetfetch` serves exactly this port (`v_valid_o /
+//        v_bytes_o[255:0] / v_src_id_o`), is fed by `zhao_geom_meshfetch`'s
+//        result record, and the two share ONE MEM.GUARD client through
+//        `zhao_geom_mem_adapter` -- whose A port is named for MESHFETCH and
+//        whose B port is named for ASSETFETCH. `zhao_shell_top_v2` already
+//        exposes the socket that chain plugs into (`geom_guard_req_i`,
+//        `geom_guard_rsp_o`, `geom_beat_*_o`). So the WIRING is fully
+//        determined and was not the obstacle.
+//
+//        THE OBSTACLE IS THAT THE BEATS COME FROM INSIDE THE SHELL. That
+//        socket's read data returns through MEM.VRAM.ARBITER and
+//        `zhao_sdram_ctrl`, and there is NO BEHAVIOURAL SDRAM MODEL IN THIS
+//        TREE -- the smoke bench leaves `phy_*` unconnected. Composing the
+//        three blocks onto that socket would elaborate cleanly, pass lint, add
+//        their area to the fit, and never see a single beat: a disconnected
+//        implementation wearing a connection. They are therefore left for the
+//        packet that brings a memory model with it, and the register goes on
+//        counting them, which is correct.
+//
+// I24. GEOM.CLIP's projected-triangle input (`geom_clip_tri_*`), its three
+//      attribute packets (`geom_clip_attr_*`) and its cull mode
+//      (`geom_clip_cull_mode_i`) -- BOUNDARY. Same absent block as I11 and
+//      I12: the three screen corners and their behind bits are the replay
+//      customer's output, and the attribute packets are GEOM.ATTRSETUP's.
+//      NOT a boundary, and listed here so nobody re-opens it: the SCISSOR
+//      (`vp_x0/vp_y0/vp_w/vp_h`) is REAL. It is driven from the same
+//      mode-derived pass geometry the compositor uses (GLUE 1 below), because
+//      `zhao_geom_clip`'s own header defines the rectangle as "a canvas in
+//      Z60/Storm, one 256x192 view block in Duo -- video_rules.md 3.1", which
+//      is that value and not a second opinion about it.
+//
+// I25. GEOM.VDECODE's format selector (`v_format_i`) -- NOT a tie-off: the
+//      core assigns it, in the same standing as I9. There is exactly ONE
+//      ratified vertex format and the block's own port comment says "must be
+//      0"; a constant here is the ABI, not a missing owner. It is a NAMED
+//      localparam (`GEOM_VERTEX_FORMAT_C`) rather than a literal so that the
+//      day a second format is ratified, the thing that has to change is
+//      visible and greppable instead of being a `3'd0` in a port map. If that
+//      day comes, the owner is whoever owns the draw -- the same absent
+//      CMD.SCHEDULER path I14 describes -- and this becomes a real entry.
+//
 // ---------------------------------------------------------------------------
 // LIGHTING SEAM -- DELIBERATELY NOT CONNECTED
 // ---------------------------------------------------------------------------
@@ -316,6 +434,14 @@ module zhao_console_core
   parameter int unsigned GEOM_INDEX_W  = $clog2(GEOM_DEPTH) + 1,
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
   parameter int unsigned GEOM_MUL_LANES= 3,
+
+  // ---- GEOMETRY: the clip/setup triangle front door ------------------------
+  // `zhao_geom_clip`'s ruling-5 attribute packet: invw24, u_over_w, v_over_w,
+  // lit r/g/b and alpha. The block never interprets them; it only keeps them
+  // with their vertices across the winding flip. ATTRW is the flattened width
+  // and exists because a port list cannot call $clog2 on another port.
+  parameter int unsigned GEOM_CLIP_ATTRS = 7,
+  parameter int unsigned GEOM_CLIP_ATTRW = GEOM_CLIP_ATTRS * 32,
 
   // ---- GEOMETRY: the client-B/terrain side of the same projector ----------
   parameter int unsigned PROJ_T_ARENAS = 4,
@@ -458,15 +584,36 @@ module zhao_console_core
   output logic [31:0]             part_refused_capacity_o,
   output logic [31:0]             part_max_children_in_tick_o,
 
-  // ---- I10: GEOM.SKIN's vertex and bone matrices --------------------------
-  input  logic                    geom_skin_v_valid_i,
-  output logic                    geom_skin_v_ready_o,
-  input  logic signed [31:0]      geom_skin_v_x_i,
-  input  logic signed [31:0]      geom_skin_v_y_i,
-  input  logic signed [31:0]      geom_skin_v_z_i,
-  input  logic [6:0]              geom_skin_v_w0_i,
-  input  logic                    geom_skin_v_rigid_i,
-  input  logic [15:0]             geom_skin_v_src_id_i,
+  // ---- I23: GEOM.VDECODE's 32-byte vertex record stream --------------------
+  // GEOM.ASSETFETCH is its named producer and is not composed; see I23 for the
+  // reason, which is a missing memory model rather than a missing wire.
+  input  logic                    geom_vd_v_valid_i,
+  output logic                    geom_vd_v_ready_o,
+  input  logic [255:0]            geom_vd_v_bytes_i,
+  input  logic [15:0]             geom_vd_v_src_id_i,
+
+  // ---- GEOM.VDECODE's side-channels and evidence ---------------------------
+  // These leave the module because nothing composed here consumes them, and an
+  // output left open is an output nobody reads. `geom_vd_bone0_o`/`bone1_o` in
+  // particular ARE the address the absent GEOM.POSE palette store needs: I10's
+  // remaining gap is visible on this edge rather than buried.
+  output logic signed [7:0]       geom_vd_d_nx_o,
+  output logic signed [7:0]       geom_vd_d_ny_o,
+  output logic signed [7:0]       geom_vd_d_nz_o,
+  output logic signed [15:0]      geom_vd_d_u_o,
+  output logic signed [15:0]      geom_vd_d_v_o,
+  output logic [15:0]             geom_vd_bone0_o,
+  output logic [15:0]             geom_vd_bone1_o,
+  output logic                    geom_vd_refused_o,
+  output logic                    geom_vd_reserved_nz_o,
+  output logic                    geom_vd_w0_illegal_o,
+  output logic                    geom_vd_format_bad_o,
+  output logic [31:0]             geom_vd_vertices_o,
+  output logic [31:0]             geom_vd_reserved_nz_count_o,
+  output logic [31:0]             geom_vd_w0_illegal_count_o,
+  output logic [31:0]             geom_vd_format_bad_count_o,
+
+  // ---- I10: GEOM.SKIN's bone matrices (the vertex half is CLOSED) ----------
   input  logic signed [31:0]      geom_skin_a_m_i [0:11],
   input  logic signed [31:0]      geom_skin_b_m_i [0:11],
   output logic [15:0]             geom_skin_src_id_o,
@@ -520,6 +667,41 @@ module zhao_console_core
   output logic [31:0]             geom_arena_misses_o,
   output logic [31:0]             geom_arena_refusals_o,
   output logic                    geom_arena_overflow_o,
+
+  // ---- I24: GEOM.CLIP's projected triangle, attributes and cull mode -------
+  // The three SCREEN corners with GEOM.PROJECT's behind verdicts. The absent
+  // replay customer specified at I11 is what drives these. The SCISSOR is NOT
+  // here because it is real -- see GLUE 1.
+  input  logic                    geom_clip_tri_valid_i,
+  output logic                    geom_clip_tri_ready_o,
+  input  logic signed [20:0]      geom_clip_tri_ax_i,
+  input  logic signed [20:0]      geom_clip_tri_ay_i,
+  input  logic signed [20:0]      geom_clip_tri_bx_i,
+  input  logic signed [20:0]      geom_clip_tri_by_i,
+  input  logic signed [20:0]      geom_clip_tri_cx_i,
+  input  logic signed [20:0]      geom_clip_tri_cy_i,
+  input  logic [2:0]              geom_clip_tri_behind_i,
+  input  logic [15:0]             geom_clip_tri_src_id_i,
+  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_i,
+  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_b_i,
+  input  logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_c_i,
+  input  logic [1:0]              geom_clip_cull_mode_i,
+
+  // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
+  // The attributes and the flip leave the module for the same reason I23's
+  // side-channels do: GEOM.ATTRSETUP is not composed, and dropping the swapped
+  // packets here would lose the one thing GEOM.CLIP does to them.
+  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_a_o,
+  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_b_o,
+  output logic [GEOM_CLIP_ATTRW-1:0] geom_clip_attr_c_o,
+  output logic                    geom_clip_flip_o,
+  output logic                    geom_clip_ret_valid_o,
+  output logic [2:0]              geom_clip_ret_verdict_o,
+  output logic [31:0]             geom_clip_submitted_o,
+  output logic [31:0]             geom_clip_clipped_o,
+  output logic [31:0]             geom_clip_culled_o,
+  output logic signed [47:0]      geom_setup_area2_o,
+  output logic [31:0]             geom_setup_triangles_submitted_o,
 
   // ---- I14: the shared projector's matrix bank ----------------------------
   input  logic                    proj_cfg_we_i,
@@ -947,8 +1129,16 @@ module zhao_console_core
   input  logic [5:0]  render_grid_w_i,
   input  logic [5:0]  render_grid_h_i,
 
-  input  logic               render_tri_valid_i,
-  output logic               render_tri_ready_o,
+  // THE TRIANGLE PORT IS NO LONGER AT THIS EDGE. `render_tri_valid_i`,
+  // `render_tri_ready_o`, the nine edge-function words, the top-left mask, the
+  // six corners, the scan box and the source id were boundary inputs here and
+  // are now driven INTERNALLY by `zhao_geom_setup`, which is composed below
+  // and is their real producer. The paragraph above says "when the command
+  // front end grows a draw path these become internal" -- that is half true and
+  // the half that mattered was different: what was missing was not CMD but the
+  // SETUP block itself, and it existed all along. The door is now fed; what
+  // feeds GEOM.CLIP in front of it is entry I24.
+  //
   // ---- D22 TREAD 10: the geometry memory clients -----------------------------
   // The last thing the bench still PLAYED was memory itself. Every earlier
   // tread took something the bench supplied and gave it to a composed block;
@@ -975,19 +1165,6 @@ module zhao_console_core
   output var logic            geom_beat_valid_o,
   output var logic [63:0]     geom_beat_data_o,
   output var logic            geom_beat_last_o,
-  input  logic signed [22:0] render_kx0_i, render_ky0_i,
-  input  logic signed [47:0] render_kc0_i,
-  input  logic signed [22:0] render_kx1_i, render_ky1_i,
-  input  logic signed [47:0] render_kc1_i,
-  input  logic signed [22:0] render_kx2_i, render_ky2_i,
-  input  logic signed [47:0] render_kc2_i,
-  input  logic        [ 2:0] render_tl_i,
-  input  logic signed [20:0] render_ax_i, render_ay_i,
-  input  logic signed [20:0] render_bx_i, render_by_i,
-  input  logic signed [20:0] render_cx_i, render_cy_i,
-  input  logic signed [11:0] render_min_x_i, render_max_x_i,
-  input  logic signed [11:0] render_min_y_i, render_max_y_i,
-  input  logic        [15:0] render_src_id_i,
 
   input  logic [63:0] render_fill_word_i,
   input  logic [63:0] render_clear_word_i,
@@ -1526,21 +1703,96 @@ module zhao_console_core
   wire                     ln_fill_landed;
   wire [GEOM_ARENA_W-1:0]  ln_fill_arena;
 
+  // ==========================================================================
+  // GEOM.VDECODE -> GEOM.SKIN.  REAL, and it is half of entry I10.
+  //
+  // The decoder takes one 32-byte vertex record and hands the skinner the six
+  // fields it wants, under the same names and the same widths. Nothing sits
+  // between them: no repack, no requantisation, no width surgery. That is the
+  // whole test of whether two blocks written months apart actually meet, and
+  // these two do.
+  //
+  // WHAT DOES NOT MEET, and is entry I10's remaining half: the decoder also
+  // emits `d_bone0_o` and `d_bone1_o`, which are the two palette ADDRESSES for
+  // this vertex, and GEOM.SKIN wants the two 3x4 MATRICES those addresses
+  // select. No block in the tree turns one into the other. They leave this
+  // module on `geom_vd_bone0_o`/`geom_vd_bone1_o` beside the matrices' own
+  // boundary inputs, so the missing store is visible as a gap between two
+  // adjacent ports rather than as prose.
+  //
+  // THE REFUSAL PATH IS FORWARDED, NOT DROPPED. `d_refused_o` is raised
+  // INSTEAD of `d_valid_o`, so a refused record is silent at the skinner by
+  // design; if this composer swallowed the flag, a malformed asset and an
+  // absent asset would be indistinguishable from outside.
+  // ==========================================================================
+  // I25: one ratified vertex format, named rather than literal. See the header.
+  localparam logic [2:0] GEOM_VERTEX_FORMAT_C = 3'd0;
+
+  wire               vd_d_valid, vd_d_ready;
+  wire signed [31:0] vd_d_x, vd_d_y, vd_d_z;
+  wire        [ 6:0] vd_d_w0;
+  wire               vd_d_rigid;
+  wire        [15:0] vd_d_src_id;
+
+  zhao_geom_vdecode #(
+    .SRCW (16)
+  ) u_geom_vdecode (
+    .clk        (gpu_clk),
+    .rst_n      (rst_n),
+
+    // I23: GEOM.ASSETFETCH is the producer and is not composed; see the header.
+    .v_valid_i  (geom_vd_v_valid_i),
+    .v_ready_o  (geom_vd_v_ready_o),
+    .v_bytes_i  (geom_vd_v_bytes_i),
+    .v_format_i (GEOM_VERTEX_FORMAT_C),   // I25: assigned here, not tied off
+    .v_src_id_i (geom_vd_v_src_id_i),
+
+    // REAL: the decoded vertex into GEOM.SKIN.
+    .d_valid_o  (vd_d_valid),
+    .d_ready_i  (vd_d_ready),
+    .d_x_o      (vd_d_x),
+    .d_y_o      (vd_d_y),
+    .d_z_o      (vd_d_z),
+    .d_w0_o     (vd_d_w0),
+    .d_rigid_o  (vd_d_rigid),
+    .d_src_id_o (vd_d_src_id),
+
+    // I10's remaining half and the attribute path, both out at the edge.
+    .d_nx_o     (geom_vd_d_nx_o),
+    .d_ny_o     (geom_vd_d_ny_o),
+    .d_nz_o     (geom_vd_d_nz_o),
+    .d_u_o      (geom_vd_d_u_o),
+    .d_v_o      (geom_vd_d_v_o),
+    .d_bone0_o  (geom_vd_bone0_o),
+    .d_bone1_o  (geom_vd_bone1_o),
+
+    .d_refused_o     (geom_vd_refused_o),
+    .d_reserved_nz_o (geom_vd_reserved_nz_o),
+    .d_w0_illegal_o  (geom_vd_w0_illegal_o),
+    .d_format_bad_o  (geom_vd_format_bad_o),
+
+    .vertices_o    (geom_vd_vertices_o),
+    .reserved_nz_o (geom_vd_reserved_nz_count_o),
+    .w0_illegal_o  (geom_vd_w0_illegal_count_o),
+    .format_bad_o  (geom_vd_format_bad_count_o)
+  );
+
   zhao_geom_skin #(
     .MUL_LANES (GEOM_MUL_LANES)
   ) u_geom_skin (
     .clk       (gpu_clk),
     .rst_n     (rst_n),
 
-    // I10: GEOM.POSE and GEOM.VDECODE are not composed in this tree.
-    .v_valid_i (geom_skin_v_valid_i),
-    .v_ready_o (geom_skin_v_ready_o),
-    .v_x_i     (geom_skin_v_x_i),
-    .v_y_i     (geom_skin_v_y_i),
-    .v_z_i     (geom_skin_v_z_i),
-    .v_w0_i    (geom_skin_v_w0_i),
-    .v_rigid_i (geom_skin_v_rigid_i),
-    .v_src_id_i(geom_skin_v_src_id_i),
+    // REAL: from GEOM.VDECODE. This half of I10 is closed.
+    .v_valid_i (vd_d_valid),
+    .v_ready_o (vd_d_ready),
+    .v_x_i     (vd_d_x),
+    .v_y_i     (vd_d_y),
+    .v_z_i     (vd_d_z),
+    .v_w0_i    (vd_d_w0),
+    .v_rigid_i (vd_d_rigid),
+    .v_src_id_i(vd_d_src_id),
+    // I10: the palette store between GEOM.POSE and here does not exist.
     .a_m_i     (geom_skin_a_m_i),
     .b_m_i     (geom_skin_b_m_i),
 
@@ -1621,6 +1873,189 @@ module zhao_console_core
     .alloc_stall_cycles_o(geom_alloc_stall_cycles_o),
     .rel_unheld_o        (geom_rel_unheld_o),
     .seal_early_o        (geom_seal_early_o)
+  );
+
+  // ==========================================================================
+  // GEOM.CLIP -> GEOM.SETUP -> THE SHELL'S TRIANGLE DOOR.  REAL, all three.
+  //
+  // Entry I13 refused to wire the projector's replayed CORNERS into
+  // `render_kx0_i`, because that port wants EDGE FUNCTIONS and renaming one
+  // into the other is arithmetic invented in a composer. That refusal stands
+  // and this is not a way around it: `zhao_geom_setup` is the block whose
+  // contract IS that arithmetic -- E_i(px,py) = kx_i*px + ky_i*py + kc_i,
+  // exact, in subpixel squared -- and it was sitting unbuilt-into-anything
+  // while the door it fits went to the module edge instead.
+  //
+  // The match was checked port by port before anything was typed, because "it
+  // is drop-in" is the sentence this repository has learned to distrust:
+  //   out_kx0_o/ky0/kc0, kx1/ky1/kc1, kx2/ky2/kc2 -> render_k*_i   (23/23/48)
+  //   out_tl_o                                    -> render_tl_i   (3)
+  //   out_ax_o..out_cy_o                          -> render_a..c_i (21)
+  //   out_min_x_o..out_max_y_o                    -> render_*_i    (12)
+  //   out_src_id_o                                -> render_src_id_i (16)
+  //   out_valid_o / out_ready_i                   -> render_tri_valid_i /
+  //                                                  render_tri_ready_o
+  // Every width is identical and every name is the counterpart's. `out_area2_o`
+  // is the one output the door does not take -- 2A is setup's evidence, not the
+  // rasteriser's input -- so it leaves this module rather than being dropped.
+  //
+  // AND GEOM.CLIP FEEDS SETUP EXACTLY. `tri_*` is `out_*`, field for field,
+  // including the signed 2A and the scissored scan box. This is the ratified
+  // pipeline order, not a convenient pairing.
+  //
+  // GLUE 1 EXTENDS HERE, and it is the same fact rather than a second one. The
+  // compositor's pass geometry is derived from `mode_act_o` above; the clip
+  // scissor is the same rectangle -- `zhao_geom_clip`'s header defines it as
+  // "a canvas in Z60/Storm, one 256x192 view block in Duo -- video_rules.md
+  // 3.1", which is what `post_frame_w_c`/`post_frame_h_c` already hold. Using
+  // it twice is one source of truth used twice; recomputing it here would be a
+  // second opinion about the console's own mode.
+  //
+  // WHAT IS STILL MISSING is in front of CLIP, not behind SETUP: entry I24.
+  // ==========================================================================
+  logic [11:0] clip_vp_w_c, clip_vp_h_c;
+  always_comb begin
+    // Widened, not converted. POST_XW/POST_YW are narrower than the clip's
+    // 12-bit pixel fields, so the value is placed in the low bits and the rest
+    // are zero -- there is no arithmetic here and there must not be.
+    clip_vp_w_c = '0;
+    clip_vp_h_c = '0;
+    clip_vp_w_c[POST_XW-1:0] = post_frame_w_c;
+    clip_vp_h_c[POST_YW-1:0] = post_frame_h_c;
+  end
+
+  // Quartus 17.0 requires an elaboration check to live inside `initial begin`
+  // (QUARTUS_GOTCHAS: a bare module-scope `if` is a syntax error there). A
+  // silent truncation of the scissor would put the clip window somewhere the
+  // video mode never asked for, which is a picture bug with no counter.
+  // synthesis translate_off
+  initial begin
+    if ((POST_XW > 12) || (POST_YW > 12))
+      $fatal(1, "zhao_console_core: POST_XW/POST_YW exceed the clip viewport's 12-bit fields");
+  end
+  // synthesis translate_on
+
+  wire               cl_o_valid, cl_o_ready;
+  wire signed [20:0] cl_o_ax, cl_o_ay, cl_o_bx, cl_o_by, cl_o_cx, cl_o_cy;
+  wire signed [47:0] cl_o_area2;
+  wire signed [11:0] cl_o_min_x, cl_o_max_x, cl_o_min_y, cl_o_max_y;
+  wire        [15:0] cl_o_src_id;
+
+  zhao_geom_clip #(
+    .ATTRS (GEOM_CLIP_ATTRS)
+  ) u_geom_clip (
+    .clk          (gpu_clk),
+    .rst_n        (rst_n),
+
+    // I24: the absent replay customer specified at I11 drives these.
+    .tri_valid_i  (geom_clip_tri_valid_i),
+    .tri_ready_o  (geom_clip_tri_ready_o),
+    .tri_ax_i     (geom_clip_tri_ax_i),
+    .tri_ay_i     (geom_clip_tri_ay_i),
+    .tri_bx_i     (geom_clip_tri_bx_i),
+    .tri_by_i     (geom_clip_tri_by_i),
+    .tri_cx_i     (geom_clip_tri_cx_i),
+    .tri_cy_i     (geom_clip_tri_cy_i),
+    .tri_behind_i (geom_clip_tri_behind_i),
+    .tri_src_id_i (geom_clip_tri_src_id_i),
+    .tri_attr_a_i (geom_clip_attr_a_i),
+    .tri_attr_b_i (geom_clip_attr_b_i),
+    .tri_attr_c_i (geom_clip_attr_c_i),
+
+    // REAL: the scissor is the console's own pass geometry (GLUE 1).
+    .vp_x0_i      (12'd0),
+    .vp_y0_i      (12'd0),
+    .vp_w_i       (clip_vp_w_c),
+    .vp_h_i       (clip_vp_h_c),
+    // I24: draw state, no owner composed.
+    .cull_mode_i  (geom_clip_cull_mode_i),
+
+    // REAL: into GEOM.SETUP.
+    .out_valid_o  (cl_o_valid),
+    .out_ready_i  (cl_o_ready),
+    .out_ax_o     (cl_o_ax),
+    .out_ay_o     (cl_o_ay),
+    .out_bx_o     (cl_o_bx),
+    .out_by_o     (cl_o_by),
+    .out_cx_o     (cl_o_cx),
+    .out_cy_o     (cl_o_cy),
+    .out_area2_o  (cl_o_area2),
+    .out_min_x_o  (cl_o_min_x),
+    .out_max_x_o  (cl_o_max_x),
+    .out_min_y_o  (cl_o_min_y),
+    .out_max_y_o  (cl_o_max_y),
+    .out_src_id_o (cl_o_src_id),
+
+    // The winding-flipped attributes and the verdict leave the module: their
+    // customer (GEOM.ATTRSETUP) is not composed, and dropping the swap here
+    // would lose the only thing this block does to them.
+    .out_attr_a_o (geom_clip_attr_a_o),
+    .out_attr_b_o (geom_clip_attr_b_o),
+    .out_attr_c_o (geom_clip_attr_c_o),
+    .out_flip_o   (geom_clip_flip_o),
+    .ret_valid_o  (geom_clip_ret_valid_o),
+    .ret_verdict_o(geom_clip_ret_verdict_o),
+
+    .triangles_submitted_o (geom_clip_submitted_o),
+    .triangles_clipped_o   (geom_clip_clipped_o),
+    .triangles_culled_o    (geom_clip_culled_o)
+  );
+
+  wire               st_o_valid, st_o_ready;
+  wire signed [22:0] st_kx0, st_ky0, st_kx1, st_ky1, st_kx2, st_ky2;
+  wire signed [47:0] st_kc0, st_kc1, st_kc2;
+  wire        [ 2:0] st_tl;
+  wire signed [20:0] st_ax, st_ay, st_bx, st_by, st_cx, st_cy;
+  wire signed [11:0] st_min_x, st_max_x, st_min_y, st_max_y;
+  wire        [15:0] st_src_id;
+
+  zhao_geom_setup u_geom_setup (
+    .clk         (gpu_clk),
+    .rst_n       (rst_n),
+
+    // REAL: GEOM.CLIP's accepted packet, field for field.
+    .tri_valid_i (cl_o_valid),
+    .tri_ready_o (cl_o_ready),
+    .tri_ax_i    (cl_o_ax),
+    .tri_ay_i    (cl_o_ay),
+    .tri_bx_i    (cl_o_bx),
+    .tri_by_i    (cl_o_by),
+    .tri_cx_i    (cl_o_cx),
+    .tri_cy_i    (cl_o_cy),
+    .tri_area2_i (cl_o_area2),
+    .tri_min_x_i (cl_o_min_x),
+    .tri_max_x_i (cl_o_max_x),
+    .tri_min_y_i (cl_o_min_y),
+    .tri_max_y_i (cl_o_max_y),
+    .tri_src_id_i(cl_o_src_id),
+
+    // REAL: the shell's triangle door.
+    .out_valid_o (st_o_valid),
+    .out_ready_i (st_o_ready),
+    .out_kx0_o   (st_kx0),
+    .out_ky0_o   (st_ky0),
+    .out_kc0_o   (st_kc0),
+    .out_kx1_o   (st_kx1),
+    .out_ky1_o   (st_ky1),
+    .out_kc1_o   (st_kc1),
+    .out_kx2_o   (st_kx2),
+    .out_ky2_o   (st_ky2),
+    .out_kc2_o   (st_kc2),
+    .out_tl_o    (st_tl),
+    .out_area2_o (geom_setup_area2_o),
+    .out_ax_o    (st_ax),
+    .out_ay_o    (st_ay),
+    .out_bx_o    (st_bx),
+    .out_by_o    (st_by),
+    .out_cx_o    (st_cx),
+    .out_cy_o    (st_cy),
+    .out_min_x_o (st_min_x),
+    .out_max_x_o (st_max_x),
+    .out_min_y_o (st_min_y),
+    .out_max_y_o (st_max_y),
+    .out_src_id_o(st_src_id),
+
+    .triangles_submitted_o (geom_setup_triangles_submitted_o)
   );
 
   // ==========================================================================
@@ -2355,34 +2790,36 @@ module zhao_console_core
     .render_frame_end_i        (render_frame_end_i),
     .render_grid_w_i           (render_grid_w_i),
     .render_grid_h_i           (render_grid_h_i),
-    .render_tri_valid_i        (render_tri_valid_i),
-    .render_tri_ready_o        (render_tri_ready_o),
+    // REAL: GEOM.SETUP drives the triangle door. Every one of these was a
+    // boundary input on this module until 2026-09-19.
+    .render_tri_valid_i        (st_o_valid),
+    .render_tri_ready_o        (st_o_ready),
     .geom_guard_req_i          (geom_guard_req_i),
     .geom_guard_rsp_o          (geom_guard_rsp_o),
     .geom_beat_valid_o         (geom_beat_valid_o),
     .geom_beat_data_o          (geom_beat_data_o),
     .geom_beat_last_o          (geom_beat_last_o),
-    .render_kx0_i              (render_kx0_i),
-    .render_ky0_i              (render_ky0_i),
-    .render_kc0_i              (render_kc0_i),
-    .render_kx1_i              (render_kx1_i),
-    .render_ky1_i              (render_ky1_i),
-    .render_kc1_i              (render_kc1_i),
-    .render_kx2_i              (render_kx2_i),
-    .render_ky2_i              (render_ky2_i),
-    .render_kc2_i              (render_kc2_i),
-    .render_tl_i               (render_tl_i),
-    .render_ax_i               (render_ax_i),
-    .render_ay_i               (render_ay_i),
-    .render_bx_i               (render_bx_i),
-    .render_by_i               (render_by_i),
-    .render_cx_i               (render_cx_i),
-    .render_cy_i               (render_cy_i),
-    .render_min_x_i            (render_min_x_i),
-    .render_max_x_i            (render_max_x_i),
-    .render_min_y_i            (render_min_y_i),
-    .render_max_y_i            (render_max_y_i),
-    .render_src_id_i           (render_src_id_i),
+    .render_kx0_i              (st_kx0),
+    .render_ky0_i              (st_ky0),
+    .render_kc0_i              (st_kc0),
+    .render_kx1_i              (st_kx1),
+    .render_ky1_i              (st_ky1),
+    .render_kc1_i              (st_kc1),
+    .render_kx2_i              (st_kx2),
+    .render_ky2_i              (st_ky2),
+    .render_kc2_i              (st_kc2),
+    .render_tl_i               (st_tl),
+    .render_ax_i               (st_ax),
+    .render_ay_i               (st_ay),
+    .render_bx_i               (st_bx),
+    .render_by_i               (st_by),
+    .render_cx_i               (st_cx),
+    .render_cy_i               (st_cy),
+    .render_min_x_i            (st_min_x),
+    .render_max_x_i            (st_max_x),
+    .render_min_y_i            (st_min_y),
+    .render_max_y_i            (st_max_y),
+    .render_src_id_i           (st_src_id),
     .render_fill_word_i        (render_fill_word_i),
     .render_clear_word_i       (render_clear_word_i),
     .render_state_i            (render_state_i),
