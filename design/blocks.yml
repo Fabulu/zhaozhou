@@ -2627,7 +2627,21 @@ blocks:
         evidence: tests/terrain/island_dir_rtl_directed.cpp
     deferred: false
     cut_order: null
-    superseded_by: null
+    superseded_by: "SW.STREAM, by ruling T5 and owner ruling R23. T5 puts the visibility walk and the patch directory on the HPS -- the sealed SubmitTerrainSet list is what the hardware consumes and replay does not rerun the walk -- and the software streamer asks BOTH questions there: reference/include/zref/zref_sw_stream.hpp says 'what a camera sees -> zref::island::visible_set' and 'which patches EXIST -> zref::island::Directory', both in reference/include/zref/zref_island.hpp, and its WorldStreamer holds a const island::Directory& . Tested at island scale by tests/terrain/sw_stream_directed.cpp and tests/terrain/island_8km_directed.cpp. THE EVIDENCE THAT MAKES THIS A DUPLICATE RATHER THAN A CHOICE: the only RTL that instantiates zhao_terrain_island_dir is fpga/rtl/terrain/zhao_terrain_visible.sv, which ruling R16 already superseded by the same T5 flow, and the ledger's other two consumers are TERRAIN.PROJECT (superseded by the shared projector) and TERRAIN.LOD, whose ports take per-subpatch deviations and no island answer at all. Caveat, recorded not hidden: that is the SW.STREAM REFERENCE implementation; no HPS runtime exists for any SW block yet."
+    notes: >-
+      OWNER RULING R6 IS MOOT IN RTL, AND THIS IS THE RECORD OF WHY (2026-09-19,
+      terrain3). R6 says "widen the RTL to 50 bits; T10 stands as written",
+      against this block's 32-bit `res_ans_handle_i` / `a_handle_o`. SEARCHED
+      `fpga/rtl` for every carrier of an island page handle: the only two are
+      this block and `zhao_terrain_visible`, and BOTH are superseded by T5 (R16
+      and R23). Nothing in the composed console carries a packed island handle
+      at any width -- the live path carries T10's CONTENT as separate fields
+      ({epoch:32, slot, generation} through TERRAIN.RESIDENCY, TERRAIN.SEQ and
+      the compose door), which is what T5's sealed record hands it. So there is
+      no 32-bit port left to widen, and widening a superseded block's port would
+      be work on a machine nobody ships. If an island handle is ever packed into
+      one word in RTL, T10's 50 bits is the width it takes.
+
     notes: >-
       IT COMPOSES THE STORE RATHER THAN DUPLICATING IT, and the arithmetic is
       why. A dense handle table for a 125 x 125 grid would be 16,384 x 32 bits
