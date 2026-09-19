@@ -159,7 +159,8 @@
 //      reading indistinguishable from a binner that was never fed.
 //
 //      The lesson is the entry itself: a composition entry that says CLOSED
-//      is a claim about a LIST, and nobody had counted the list.//
+//      is a claim about a LIST, and nobody had counted the list.
+//
 //   8. THE TERRAIN PAGING SPINE -- five blocks in one chain
 //        TERRAIN.CMD.fr_*/rec_*  -> TERRAIN.SEQ.fr_*/rec_*
 //        TERRAIN.SEQ.lu_/cl_/pin_ <-> TERRAIN.RESIDENCY (the v2 directory)
@@ -466,7 +467,7 @@
 //      and that named a block `design/contracts/FIELD.SEQ.FLOW.md` rules will
 //      never exist: "one engine, five profiles ... There is no separate
 //      FIELD.SEQ.FLOW sequencer in hardware and there is not going to be one."
-//      The engine IS composed now -- `u_field_engine`, at the end of this
+//      The engine IS composed now -- `u_field_host`, at the end of this
 //      module -- so what this seam lacks is its own stream adapter, and the
 //      adapter lacks one specific thing.
 //
@@ -1293,7 +1294,7 @@
 //      exist -- `design/contracts/FIELD.SEQ.STAMP.md`: "one engine, five
 //      profiles ... There is no separate FIELD.SEQ.STAMP sequencer in hardware
 //      and there is not going to be one." What was missing was the engine,
-//      which is `u_field_engine` now, and the S profile's STREAM ADAPTER, which
+//      which is `u_field_host` now, and the S profile's STREAM ADAPTER, which
 //      FIELD.SEQ.CORE.md permits by name and which is
 //      `u_field_stamp_adapter`. `surf_fld_valid_i`, `surf_fld_ready_o`,
 //      `surf_fld_tag_op_i` and `surf_fld_strength_i` are GONE from the port
@@ -1382,7 +1383,7 @@
 //      have moved. `design/contracts/FIELD.SEQ.EARTH.md` rules that owner out
 //      of existence -- "one engine, five profiles ... There is no separate
 //      FIELD.SEQ.EARTH sequencer in hardware and there is not going to be one"
-//      -- and the sequencer is composed here as `u_field_engine`, with
+//      -- and the FIELD v3 fabric is composed here as `u_field_host`, with
 //      FIELD.PROGCACHE inside it.
 //
 //      WHAT ACTUALLY BLOCKS THE HEIGHT LANE IS THE UNIFORMS, and it is a
@@ -1869,7 +1870,7 @@
 //      actually waiting on is here.
 //
 //      THE LOADER. `zhao_field_seq`'s own header says the shell owns the
-//      instruction and table memories, and `zhao_field_engine` is that shell.
+//      knot tables and uniform bank, and `zhao_field_host` is that shell.
 //      Nothing inside this console fills them. The named owner is CMD.EXEC's
 //      `TerrainField 0x0200` arm -- `handle32[program] program` naming a
 //      cartridge PROGRAM page, spec/cartridge.md 3 kind 0 -- with
@@ -1902,10 +1903,10 @@
 //      with it the only positive control for two of its counters.
 //
 //      EVERY COUNTER BEHIND THIS PORT HAS BEEN FIRED except one, and that one
-//      is structural rather than untested: `fld_pc_oob_o` watches for a fetch
+//      is structural rather than untested: `fld_ld_oob_o` watches for a write
 //      outside a slot's window, and the header clamp that fires
-//      `fld_hdr_clamped_o` is exactly what makes that state unreachable. The
-//      other eight are driven by `tests/field/field_engine_directed.cpp`.
+//      `fld_ld_oob_o` is exactly what makes that state unreachable. The
+//      other eight are driven by `tests/field/field_host_directed.cpp`.
 //
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
@@ -1935,7 +1936,7 @@
 //   first half was wrong even then: the lookup end is the program LOADER, which
 //   is software plus CMD.EXEC, not a FIELD.SEQ block -- that block's own
 //   contract says the caller decodes and reports one bit. The second half is
-//   what changed: FIELD.SEQ.CORE is composed as `u_field_engine`, and the
+//   what changed: FIELD.SEQ.CORE is composed as `u_field_host`, and the
 //   directory is INSIDE it, because the edge that matters is internal. An
 //   insert invalidates the store's slot, so no profile can run microcode the
 //   directory has already promised to another hash -- the stale-prepared-values
@@ -3501,7 +3502,7 @@ module zhao_console_core
 
   // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
   // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
-  // `u_field_engine` runs the program. The four ports are GONE from this edge
+  // `u_field_host` runs the program. The four ports are GONE from this edge
   // rather than driven from it, which is the difference between a seam that
   // closed and a seam that acquired a producer.
 
@@ -3882,7 +3883,7 @@ module zhao_console_core
   // not evidence about the thing it watches.
   //
   // The two widths are literals because a port list cannot see a body
-  // localparam. `u_field_engine` is instantiated with IN_LANES = 12 (the
+  // localparam. `u_field_host` is instantiated with IN_LANES = 12 (the
   // ratified E record of spec/form/field-ir.md 7.1) and OUT_LANES = 4, and the
   // elaboration guard beside the instance refuses any disagreement rather than
   // leaving the two places to drift.
@@ -3904,12 +3905,28 @@ module zhao_console_core
   output logic [31:0]  fld_load_defers_o,
   output logic [31:0]  fld_grants_o,
   output logic [31:0]  fld_contended_grants_o,
-  output logic [31:0]  fld_hdr_clamped_o,
-  output logic [31:0]  fld_tbl_oob_o,
-  output logic [31:0]  fld_pc_oob_o,
-  // {rcp0, sat_rcp, sat_rescale, sat_mul, sat_add} -- the SatLedger of the LAST
-  // completed run, straight off the sequencer.
-  output logic [ 4:0]  fld_sat_o,
+  // A load word addressed past the uop store. CLAMPED, not wrapped: a wrapped
+  // uop write lands on another instruction of the same program, which is silent
+  // and produces a plausible field.
+  output logic [31:0]  fld_ld_oob_o,
+  // A point whose run wrote NOTHING into its declared output window. The lanes
+  // then hold the zeroes the front cleared them to, and a caller reading only
+  // the lanes could not tell that from a field whose value is zero.
+  output logic [31:0]  fld_no_result_o,
+  // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
+  // `zhao_field_v3_engine`'s own header is right that five faults reduced to
+  // one bit is a bit that says "something, somewhere", and a guard that cannot
+  // name its own failure gets read as noise.
+  output logic [31:0]  fld_exec_desync_o,
+  output logic [31:0]  fld_bank_desync_o,
+  output logic [31:0]  fld_svc_bank_desync_o,
+  output logic [31:0]  fld_tag_mismatch_o,
+  output logic [31:0]  fld_wrong_op_o,
+  output logic [31:0]  fld_unsupported_o,
+  output logic [31:0]  fld_skid_overflow_o,
+  output logic [31:0]  fld_uniform_bad_o,
+  // {sat_rescale, sat_mul, sat_add} -- the op ledger, latched over the run.
+  output logic [ 2:0]  fld_sat_o,
   output logic [31:0]  fld_pc_hits_o,
   output logic [31:0]  fld_pc_misses_o,
   output logic [31:0]  fld_pc_rejected_o,
@@ -5042,7 +5059,7 @@ module zhao_console_core
   // SINKS every job of the frame instead of starting it.
   //
   // Measured on the console smoke bench with the port still at the edge:
-  // 96 tile references, 72 jobs taken, 72 SUNK, 0 started, one
+  // 96 tile references, 72 jobs taken, 72 sunk, 0 STARTED, one
   // `range_fault_count_o`, `raster_abort_o` high, 0 fragments. Every one of
   // those reads like a binner that never got any work, which is why it
   // survived: the counters that were zero were the reassuring ones.
@@ -5067,6 +5084,7 @@ module zhao_console_core
   wire [ 15:0] ap_src_id_w;
   wire [ 31:0] ap_triangles_w, ap_planes_w;
   wire         door_tri_valid_w, door_tri_ready_w;
+
   zhao_geom_setup u_geom_setup (
     .clk         (gpu_clk),
     .rst_n       (rst_n),
@@ -5934,7 +5952,7 @@ module zhao_console_core
   // splitting a loop across two places in a file is how one half gets edited.
   // ==========================================================================
   // ---- the FIELD engine's internal client and its shared response bus -----
-  // Client 0 of `u_field_engine`, driven by `u_field_stamp_adapter`. Both are
+  // Client 0 of `u_field_host`, driven by `u_field_stamp_adapter`. Both are
   // declared at the end of this module; these wires are here so the engine's
   // port map can be read without scrolling for a declaration.
   logic         sfa_req_valid, sfa_req_ready;
@@ -9122,26 +9140,38 @@ module zhao_console_core
   // 6 DSP are not spent -- and the program store is M10K rather than logic,
   // which is the owner's ruling that memory is the slack and ALMs are the debt.
   //
-  // WHY v1 AND NOT v3, stated so it is a decision rather than an omission. The
-  // v3 executor is a PROBE under `fpga/rtl/synth/`, its only composition
-  // (`zhao_probe_v3_full.sv`) carries a live deadlock in its own header -- "a
-  // program containing SPLINE or RING PARKS THAT CONTEXT FOREVER" -- whose
-  // repair that file says is not an agent's to make, and no production
-  // `zhao_field_v3_*` module has a fit row at all. Composing a machine already
-  // known to park a context forever would be composing a circuit already known
-  // to be wrong. When v3 is promoted and its dispatcher disagreement settled it
-  // replaces `u_seq` INSIDE `zhao_field_engine`, and nothing here changes.
-  logic [4:0] fld_sat_c;
+  // IT IS v3, AND AN EARLIER REVISION OF THIS FILE GOT THAT WRONG. The wrong
+  // version was composed here for a reason that had gone stale:
+  // `zhao_field_v3_engine`'s own header still said "a program containing SPLINE
+  // or RING PARKS THAT CONTEXT FOREVER ... IT IS NOT FIXED HERE". It IS fixed --
+  // `zhao_field_ops_pkg` is the one table and BOTH the executor's `is_long` and
+  // the dispatcher's `dst_width_of` call it, so an op cannot be offered by one
+  // and refused by the other. A comment describing a bug that no longer exists
+  // is the one kind of bug that never shows up red, and this one cost a
+  // composition built on a superseded generation.
+  //
+  // The owner's ruling of 2026-09-19 is the law here: "YOU ONLY GET TO FIT THE
+  // LATEST VERSION. IF IT IS BROKEN YOU FIX IT." Fitting v1 would have spent
+  // ALM and DSP on a machine that is not being shipped and produced a number
+  // describing the wrong design. `tools/quartus/check_console_inventory.py` is
+  // the gate that now says so mechanically, and its G1 named every one of the
+  // nine v1 modules that came back out of this console's closure.
+  logic [2:0] fld_sat_c;
 
-  zhao_field_engine #(
+  zhao_field_host #(
     .CLIENTS  (2),
+    // PROGS is one number wearing three hats: the directory's ENTRIES, the
+    // executor's CONTEXT count and the front's slot space. The v3 uop store is
+    // indexed by context, so a program IS a context.
     .PROGS    (8),
-    .INSTR_N  (64),
+    // The executor's PLAN depth, not a memory this file owns.
+    .INSTR_N  (32),
+    .REGS     (32),
     .TABLES   (2),
     .TBL_N    (64),
     .IN_LANES (12),
     .OUT_LANES(4)
-  ) u_field_engine (
+  ) u_field_host (
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
@@ -9196,14 +9226,17 @@ module zhao_console_core
     .load_defers_o     (fld_load_defers_o),
     .grants_o          (fld_grants_o),
     .contended_grants_o(fld_contended_grants_o),
-    .hdr_clamped_o     (fld_hdr_clamped_o),
-    .tbl_oob_o         (fld_tbl_oob_o),
-    .pc_oob_o          (fld_pc_oob_o),
-    .sat_add_o         (fld_sat_c[0]),
-    .sat_mul_o         (fld_sat_c[1]),
-    .sat_rescale_o     (fld_sat_c[2]),
-    .sat_rcp_o         (fld_sat_c[3]),
-    .rcp0_o            (fld_sat_c[4])
+    .ld_oob_o          (fld_ld_oob_o),
+    .no_result_o       (fld_no_result_o),
+    .exec_desync_o     (fld_exec_desync_o),
+    .bank_desync_o     (fld_bank_desync_o),
+    .svc_bank_desync_o (fld_svc_bank_desync_o),
+    .tag_mismatch_o    (fld_tag_mismatch_o),
+    .wrong_op_o        (fld_wrong_op_o),
+    .unsupported_o     (fld_unsupported_o),
+    .skid_overflow_o   (fld_skid_overflow_o),
+    .uniform_bad_o     (fld_uniform_bad_o),
+    .sat_o             (fld_sat_c)
   );
 
   assign fld_sat_o         = fld_sat_c;

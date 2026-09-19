@@ -8,9 +8,9 @@
 // from the consumer's writes every texel of a stamp to the wrong place while
 // every handshake still looks healthy.
 //
-// So the engine is a MOCK here, and deliberately. A real `zhao_field_engine`
+// So the engine is a MOCK here, and deliberately. A real `zhao_field_host`
 // would make each case a hundred times slower and would re-answer a question
-// `field_engine_directed` already answers; what the mock adds is the ability to
+// `field_host_directed` already answers; what the mock adds is the ability to
 // return a FAULT on demand, which is the case that matters most and which a
 // loaded program cannot be made to produce on cue.
 //

@@ -1,4 +1,4 @@
-// field_engine_directed.cpp — FIELD.SEQ.CORE composed: does the organ run a
+// field_host_directed.cpp — FIELD.SEQ.CORE composed: does the organ run a
 // program, refuse one it does not hold, and share itself fairly?
 //
 // WHAT THIS FILE IS FOR, AND WHAT IT DELIBERATELY IS NOT.
@@ -37,7 +37,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_field_engine.h"
+#include "Vzhao_field_host.h"
 
 #include "zhao_sim.hpp"
 
@@ -51,7 +51,7 @@ constexpr uint8_t kOpAdd = 0x03;
 constexpr uint8_t kOpCurve = 0x1A;
 
 // The engine's load kinds, from the block header.
-constexpr uint8_t kLdInstr = 0;
+constexpr uint8_t kLdUop = 0;
 constexpr uint8_t kLdTable = 1;
 constexpr uint8_t kLdHeader = 2;
 
@@ -63,7 +63,7 @@ uint64_t instr(uint8_t op, uint8_t dst, uint8_t a, uint8_t b, uint8_t c, uint32_
          (static_cast<uint64_t>(c & 0x3F) << 26) | (static_cast<uint64_t>(imm) << 32);
 }
 
-using Dut = Vzhao_field_engine;
+using Dut = Vzhao_field_host;
 
 void step(Dut& d) { zhao::tick(d); }
 
@@ -115,8 +115,8 @@ uint64_t header_word(uint8_t count, uint8_t out_base, uint8_t tbl_n0 = 0, uint8_
 
 // Load `R[out_base] = R0 + R1`, then END. Two instructions.
 bool load_add_program(Dut& d, uint8_t slot, uint8_t out_base) {
-  if (!load_word(d, kLdInstr, slot, 0, instr(kOpAdd, out_base, 0, 1, 0, 0))) return false;
-  if (!load_word(d, kLdInstr, slot, 1, instr(kOpEnd, 0, 0, 0, 0, 0))) return false;
+  if (!load_word(d, kLdUop, slot, 0, instr(kOpAdd, out_base, 0, 1, 0, 0))) return false;
+  if (!load_word(d, kLdUop, slot, 1, instr(kOpEnd, 0, 0, 0, 0, 0))) return false;
   return load_word(d, kLdHeader, slot, 0, header_word(2, out_base));
 }
 
@@ -200,13 +200,13 @@ int main(int argc, char** argv) {
   check(st == 0, "status is OK", 0, st);
   check(out == 42, "R0 + R1 reaches out lane 0", 42, static_cast<uint64_t>(out));
   check(dut.runs_o == 1, "runs_o fired", 1, dut.runs_o);
-  // ONE, not two. `zhao_field_seq` pulses `instr_retired_o` for instructions it
-  // EXECUTES, and OP_END terminates the walk rather than being executed. Stated
-  // as an exact count rather than a `>= 1` because the counter's whole value is
-  // that it sees how many times the machine did the work -- a wrapper that
-  // re-issued a program would still produce the right sum.
-  check(dut.instr_retired_o == 1, "exactly one instruction retired (END is not one)", 1,
-        dut.instr_retired_o);
+  // The executor's own uop count, passed straight through. It is checked as a
+  // NONZERO rather than an exact number because the v3 fabric issues per
+  // context and the front does not own the schedule -- but it must MOVE, and a
+  // test that checks only the sum cannot see how many times the machine did the
+  // work.
+  const uint32_t uops_after_1 = dut.instr_retired_o;
+  check(uops_after_1 > 0, "the executor issued uops", 1, uops_after_1);
 
   // The SAME engine answers a second client with a different input, which is
   // the whole sharing claim. If the wrapper leaked state between clients the
@@ -290,7 +290,7 @@ int main(int argc, char** argv) {
   dut.req_valid_i = 0x1;
   set_req_slot(dut, 0, 2);
   dut.ld_valid_i = 1;
-  dut.ld_kind_i = kLdInstr;
+  dut.ld_kind_i = kLdUop;
   dut.ld_slot_i = 4;
   dut.ld_addr_i = 0;
   set_ld_data(dut, instr(kOpEnd, 0, 0, 0, 0, 0), 0);
@@ -313,35 +313,39 @@ int main(int argc, char** argv) {
   check(dut.load_defers_o > defers_before, "load_defers_o fired", defers_before + 1,
         dut.load_defers_o);
 
-  // ---- 6. an over-long header is clamped, not wrapped ---------------------
-  // INSTR_N is 64. A header claiming 200 instructions would walk the sequencer
-  // past the slot's window and into the NEXT slot's microcode -- a different
-  // program, executing silently, producing a perfectly well-formed field.
-  check(dut.hdr_clamped_o == 0, "hdr_clamped_o starts at zero", 0, dut.hdr_clamped_o);
-  check(load_word(dut, kLdHeader, 3, 0, header_word(200, 2)), "an over-long header loads", 1, 1);
-  check(dut.hdr_clamped_o == 1, "hdr_clamped_o fired", 1, dut.hdr_clamped_o);
-
-  // ---- 7. a program naming a table the store does not hold is SEEN --------
-  // TABLES is 2, so a CURVE whose immediate is 5 names a table that is not
-  // there. The read wraps rather than refusing, which is silent and produces a
-  // wrong curve with no other symptom; the counter is what makes it loud.
-  check(dut.tbl_oob_o == 0, "tbl_oob_o starts at zero", 0, dut.tbl_oob_o);
-  check(load_word(dut, kLdInstr, 6, 0, instr(kOpCurve, 4, 0, 0, 0, 5)), "curve loads", 1, 1);
-  check(load_word(dut, kLdInstr, 6, 1, instr(kOpEnd, 0, 0, 0, 0, 0)), "end loads", 1, 1);
-  check(load_word(dut, kLdHeader, 6, 0, header_word(2, 4, 4, 4)), "curve header loads", 1, 1);
-  set_req_slot(dut, 0, 6);
-  set_req_in(dut, 0, 0, 0);
-  run_once(dut, 0, &out, &st);
-  check(dut.tbl_oob_o > 0, "tbl_oob_o fired", 1, dut.tbl_oob_o);
+  // ---- 6. a uop addressed past the plan is REFUSED, not wrapped -----------
+  // INSTR_N is the executor's PLAN depth, 32. A uop written at pc 40 would wrap
+  // into another instruction of the SAME program -- silent, well formed, and a
+  // plausible field. It is refused at the load port and counted.
+  check(dut.ld_oob_o == 0, "ld_oob_o starts at zero", 0, dut.ld_oob_o);
+  check(load_word(dut, kLdUop, 3, 40, instr(kOpEnd, 0, 0, 0, 0, 0)),
+        "an out-of-plan uop is accepted at the port", 1, 1);
+  check(dut.ld_oob_o == 1, "ld_oob_o fired", 1, dut.ld_oob_o);
 
   // ---- 8. loads are counted ----------------------------------------------
-  check(dut.loads_o >= 10, "loads_o counted every accepted word", 10, dut.loads_o);
+  // EIGHT, counted out rather than bounded, because a `>=` would not notice a
+  // load the port accepted twice: 3 for the ADD program (two uops and a
+  // header), 3 for the second copy of it, 1 for the load that was deferred past
+  // a client in case 5, and 1 for the out-of-plan uop in case 6. An accepted
+  // word is counted whether or not it was written, which is what makes
+  // `ld_oob_o` a REFUSAL count rather than a second load count.
+  check(dut.loads_o == 8, "loads_o counted every accepted word, and only once", 8,
+        dut.loads_o);
 
-  // The one counter with no legal stimulus, recorded rather than faked. The
-  // clamp in case 6 is precisely what makes this state unreachable, so a test
-  // that made it fire would be a test of a broken clamp.
-  check(dut.pc_oob_o == 0, "pc_oob_o is unreachable while the clamp is correct", 0,
-        dut.pc_oob_o);
+  // ---- 9. THE FABRIC'S ALARMS ALL READ ZERO, and that is a claim ----------
+  // Every one of these is a fault `zhao_field_v3_engine` owns and reports
+  // separately. They are asserted zero here because the stimulus above is
+  // lawful; each one's POSITIVE control lives with the block that raises it
+  // (tests/differential/field_v3_full_directed.cpp drives every alarm it has),
+  // which is where a fault can actually be constructed. Asserting them here is
+  // a regression guard on the COMPOSITION, not evidence that the detectors work.
+  check(dut.exec_desync_o == 0, "no executor desync", 0, dut.exec_desync_o);
+  check(dut.bank_desync_o == 0, "no engine bank desync", 0, dut.bank_desync_o);
+  check(dut.svc_bank_desync_o == 0, "no service bank desync", 0, dut.svc_bank_desync_o);
+  check(dut.tag_mismatch_o == 0, "no service tag mismatch", 0, dut.tag_mismatch_o);
+  check(dut.wrong_op_o == 0, "no op reached neither service", 0, dut.wrong_op_o);
+  check(dut.skid_overflow_o == 0, "no writeback skid overflow", 0, dut.skid_overflow_o);
+  check(dut.uniform_bad_o == 0, "no bad uniform or immediate", 0, dut.uniform_bad_o);
 
-  return zhao::report_and_exit("field_engine_directed");
+  return zhao::report_and_exit("field_host_directed");
 }

@@ -217,17 +217,17 @@ top:
   # THAT CONTEXT FOREVER" -- whose repair that file says is not an agent's to
   # make; and no production `zhao_field_v3_*` module has a fit row at all.
   #
-  # So `zhao_field_engine` composes v1. FROZEN is a ruling about CHANGES, not
+  # So `zhao_field_host` composes v1. FROZEN is a ruling about CHANGES, not
   # about composition: `design/contracts/FIELD.SEQ.CORE.md` names v1 "the exact
   # serial reference and differential oracle" AND the FALLBACK, and a fallback
   # that is not composed is not a fallback. When the v3 executor is promoted out
   # of `synth/` and its dispatcher disagreement settled, it replaces `u_seq`
-  # inside `zhao_field_engine` and this list changes by one line.
+  # inside `zhao_field_host` and this list changes by one line.
   #
   # v2 remains out of the machine, unchanged (reports/Fieldv3.md Phase 1).
   #
   # FIELD.PROGCACHE IS NO LONGER LISTED HERE and that is not a demotion: it is
-  # INSIDE zhao_field_engine now, so the checker derives it from the real
+  # INSIDE zhao_field_host now, so the checker derives it from the real
   # instantiation graph. Leaving it as a top as well would double-count the
   # directory against the budget.
   # FIELD.SEQ.CORE as a console organ: the sequencer, its program store (two
@@ -238,7 +238,7 @@ top:
   # separate FIELD.SEQ.EARTH sequencer in hardware and there is not going to be
   # one" -- so the five profiles are program sets plus stream adapters, and
   # counting them as blocks would count one engine five times.
-  - zhao_field_engine
+  - zhao_field_host
   # The S profile's STREAM ADAPTER, which FIELD.SEQ.CORE.md permits by name.
   # Counted because zhao_console_core instantiates it and it closes entry I31:
   # SURFACE.STAMP's field-driven brush has a producer.
@@ -791,7 +791,7 @@ excluded:
   #
   # FROZEN IS A RULING ABOUT CHANGES, NOT ABOUT COMPOSITION. v1 stays the exact
   # reference the differential tests run against and takes correctness repairs
-  # only. It is ALSO the fallback engine, and `zhao_field_engine` composes it
+  # only. It is ALSO the fallback engine, and `zhao_field_host` composes it
   # into `zhao_console_core` because v3's executor is a probe with a live
   # deadlock (see the FIELD block in `top:` above). Eleven of the fourteen
   # modules below are therefore reachable from a counted top and have moved out
