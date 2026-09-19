@@ -3842,13 +3842,17 @@ blocks:
     target_throughput: see contract
     reference_model: zref::render::shade_flat_tri_dir
     tests:
-      directed: "PLANNED -- NOT WRITTEN"
-      random: "PLANNED -- NOT WRITTEN"
+      directed: tests/geometry/light_stream_directed.cpp
+      random: tests/geometry/light_stream_directed.cpp
     counters: [lit_vertices, degenerate_normals]
     source_ids: true
     budget_group: geometry_mantle
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-18"
+        commit: "fb3d30f4"
+        evidence: tests/geometry/light_stream_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -3870,6 +3874,18 @@ blocks:
       engines merely because ten light terms are legal -- sequenced accumulation
       at the skinner's own rate (one weighted vertex per 12 clocks) is the
       default and the DSP lever.
+
+      OWNER RULING R2 (2026-09-19, reports/OWNER-RULINGS-20260919-EVENING.md):
+      zhao_light_stream OWNS vertex light and zhao_geom_light is superseded.
+      The row above was stale on three counts (SPECIFIED, both tests
+      "PLANNED -- NOT WRITTEN") while light_stream_directed.cpp had existed
+      since fb3d30f4; corrected here. COMPOSED 2026-09-19 (geom packet) in
+      zhao_console_core on GEOM.SKIN.NORM through zhao_light_skin_adapter, the
+      creature path. The completion register resolves GEOM.LIGHT to
+      zhao_light_stream. Still open: the bank's command producer (core entry
+      I48 -- SetEnvironment 0x0311 is still `reserved` and the u8 -> Q16.16
+      bridge is unratified) and the RGB's route to the
+      raster through the vertex-attribute store (I46, owner ruling R11).
   - id: GEOM.DEPTHQUANT
     name: Depth profile application
     kind: rtl

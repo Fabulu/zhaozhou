@@ -297,14 +297,27 @@ module tb_zhao_console_core_smoke
   logic [15:0]             geom_skin_src_id_o;
   logic [31:0]             geom_skin_vertices_transformed_o;
 
-  // ---- GEOM.SKIN.NORM, composed 2026-09-19 (core entry I43) ----------------
-  // `geom_sn_n_ready_i` is driven HIGH below and that is a real decision, not a
-  // convenience: the block emits into a boundary and a bench that held the
-  // consumer's ready low would stall the AND-fork on GEOM.POSE's palette store
-  // and throttle GEOM.SKIN with it, which would make every skinned-vertex count
-  // in this file a measurement of the bench's own backpressure.
+  // ---- GEOM.SKIN.NORM (core entry I43, CLOSED): its normal feeds GEOM.LIGHT
+  // inside the core now; what leaves is a TAP of it, still differenced below.
   logic                    geom_sn_n_valid_o;
-  logic                    geom_sn_n_ready_i;
+  // ---- GEOM.LIGHT = zhao_light_stream (owner ruling R2) --------------------
+  // I48: the descriptor bank, loaded here as the host would. I46: the lit RGB,
+  // whose consumer (the attribute store's writer) is unbuilt -- its ready is
+  // held HIGH for the reason SKIN.NORM's was: a low ready here backs up through
+  // the adapter into the AND-fork and throttles GEOM.SKIN.
+  logic                    geom_light_cfg_we_i, geom_light_cfg_commit_i;
+  logic [7:0]              geom_light_cfg_addr_i;
+  logic [31:0]             geom_light_cfg_data_i;
+  logic                    geom_light_cfg_gen_o;
+  logic [3:0]              geom_light_nlights_i;
+  logic                    geom_light_valid_o, geom_light_ready_i;
+  logic [16:0]             geom_light_r_o, geom_light_g_o, geom_light_b_o;
+  logic                    geom_light_degenerate_vtx_o;
+  logic [15:0]             geom_light_src_id_o;
+  logic [31:0] geom_light_vertices_lit_o, geom_light_degenerate_o, geom_light_cfg_refused_o;
+  logic [31:0] geom_light_epoch_refusals_o, geom_light_seam_mismatch_o, geom_light_tag_mismatch_o;
+  logic [31:0] geom_light_root_queue_overflow_o, geom_light_rgb_sat_o, geom_light_nlights_clamped_o;
+  logic [31:0] geom_light_adapter_refused_o;
   logic signed [63:0]      geom_sn_n_x_o, geom_sn_n_y_o, geom_sn_n_z_o;
   logic [63:0]             geom_sn_n_mag_o;
   logic                    geom_sn_n_degenerate_o;
@@ -648,7 +661,7 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_hps_c1_wait_cycles_o;
 
   // ---- MEM.UPLOAD on the TERRAIN.BUILD socket (2026-09-19, cmdmem) --------
-  // ---- MATERIAL.RESOLVE (R20): directory + fetch internal, request at I48 --
+  // ---- MATERIAL.RESOLVE (R20): directory + fetch internal, request at I49 --
   logic         mat_req_valid_i, mat_req_ready_o;
   logic [31:0]  mat_req_material_set_i;
   logic [15:0]  mat_req_material_id_i;
@@ -1949,7 +1962,7 @@ module tb_zhao_console_core_smoke
   // ---- ONE MATERIAL RESOLVE, once the MATERIAL_SET has been published -------
   // Request = the handle the PublishResource named ({index, low 8 bits of the
   // new residency generation}) and material 0. Its REQUEST is a boundary
-  // (I48); what is real is the DIRECTORY it hits (MEM.UPLOAD's publication)
+  // (I49); what is real is the DIRECTORY it hits (MEM.UPLOAD's publication)
   // and the FETCH it issues (requester C, the real MEM.GUARD).
   logic         mat_fired_q;
   int unsigned  mat_rsp_seen_q;
@@ -2431,6 +2444,59 @@ module tb_zhao_console_core_smoke
   // so this bench stands in for the host exactly as it did for view 0 alone.
   // The profile (cfg 18) is left at its reset WORLD_LONG, which is what the
   // reference-derived depths assume.
+  // GEOM.LIGHT's bank, as the host would load it (I48): light 0 from the
+  // fixture (direction SGF_LIGHT_*, gain 1.0 on r/g/b, no emission), and an
+  // all-zero environment, then ONE commit. The layout is zhao_light_stream's
+  // own: cfg_addr = {light[3:0], half, word[2:0]}; half B is the 128-bit
+  // coefficient record {flags, eb, eg, er, cb, cg, cr} at 20 bits a field.
+  task automatic geom_load_light();
+    logic [127:0] hb;
+    int unsigned k;
+    begin
+      hb = {68'd0, SGF_LIGHT_GAIN, SGF_LIGHT_GAIN, SGF_LIGHT_GAIN};
+      for (k = 0; k < 4; k = k + 1) begin
+        geom_light_cfg_we_i   = 1'b1;
+        geom_light_cfg_addr_i = {4'd0, 1'b0, 3'(k)};
+        geom_light_cfg_data_i = (k == 0) ? SGF_LIGHT_X : (k == 1) ? SGF_LIGHT_Y
+                              : (k == 2) ? SGF_LIGHT_Z : 32'd0;
+        @(posedge gpu_clk);
+      end
+      for (k = 0; k < 4; k = k + 1) begin
+        geom_light_cfg_we_i   = 1'b1;
+        geom_light_cfg_addr_i = {4'd0, 1'b1, 3'(k)};
+        geom_light_cfg_data_i = hb[32 * k +: 32];
+        @(posedge gpu_clk);
+      end
+      for (k = 0; k < 6; k = k + 1) begin
+        geom_light_cfg_we_i   = 1'b1;
+        geom_light_cfg_addr_i = {4'hF, 1'b0, 3'(k)};
+        geom_light_cfg_data_i = 32'd0;
+        @(posedge gpu_clk);
+      end
+      geom_light_cfg_we_i     = 1'b0;
+      geom_light_cfg_commit_i = 1'b1;
+      @(posedge gpu_clk);
+      geom_light_cfg_commit_i = 1'b0;
+    end
+  endtask
+
+  // Every lit vertex, checked as it leaves: all three channels must equal the
+  // REFERENCE's response (SGF_EXP_LIT, from zref::creature::lambert_from_
+  // world_normal in the fixture generator) -- gain 1.0 and a zero environment
+  // make each channel exactly the law's answer.
+  int unsigned geom_lit_seen_q, geom_lit_bad_q;
+  always @(posedge gpu_clk) begin
+    if (!rst_n) begin
+      geom_lit_seen_q <= 0;
+      geom_lit_bad_q  <= 0;
+    end else if (geom_light_valid_o && geom_light_ready_i) begin
+      geom_lit_seen_q <= geom_lit_seen_q + 1;
+      if ((geom_light_r_o != SGF_EXP_LIT) || (geom_light_g_o != SGF_EXP_LIT) ||
+          (geom_light_b_o != SGF_EXP_LIT) || geom_light_degenerate_vtx_o)
+        geom_lit_bad_q <= geom_lit_bad_q + 1;
+    end
+  end
+
   task automatic geom_write_camera();
     int unsigned i;
     int unsigned v;
@@ -2602,7 +2668,7 @@ module tb_zhao_console_core_smoke
   // triangles GEOM.CLIP sees are the fixture meshlet's own, projected by the
   // shared projector in BOTH views and replayed out of the arena.
   //
-  // THE VERTEX-ATTRIBUTE STORE (core entry I47) IS MODELLED HERE, with the
+  // THE VERTEX-ATTRIBUTE STORE (core entry I46) IS MODELLED HERE, with the
   // arena's own contract: it listens to the replay's lookups and answers ONE
   // clock later. Its WRITER is the unbuilt half of owner ruling R11, so these
   // values stand in for it exactly as the SDRAM model stands in for memory.
@@ -2874,10 +2940,14 @@ module tb_zhao_console_core_smoke
     // low ready parks the executor and stops the command path outright.
     cmd_draw_ready_i = 1'b1;
 
-    // GEOM.SKIN.NORM's world normal (core entry I43). HIGH, for the reason at
-    // its declaration: this consumer sits on the far side of an AND-fork that
-    // GEOM.SKIN is on too, so a low ready here is backpressure on the SKINNER.
-    geom_sn_n_ready_i = 1'b1;
+    // GEOM.LIGHT's lit RGB (I46). HIGH, for the reason at its declaration.
+    // The bank starts empty and is loaded after reset (geom_load_light).
+    geom_light_ready_i      = 1'b1;
+    geom_light_cfg_we_i     = 1'b0;
+    geom_light_cfg_commit_i = 1'b0;
+    geom_light_cfg_addr_i   = '0;
+    geom_light_cfg_data_i   = '0;
+    geom_light_nlights_i    = 4'd1;
 
     // DEBUG.TRACE (core entry I45). ARM STAGE 0 -- `zref::trace::kCommandDecoder`
     // -- and nothing else, because stage 0 is the only one this console has a
@@ -3318,6 +3388,7 @@ module tb_zhao_console_core_smoke
     // clocks on the real `proj_cfg_*` port; `geom_camera_ready_q` gates the
     // meshlet draw so no descriptor can be culled against an unwritten bank.
     geom_write_camera();
+    geom_load_light();
     geom_camera_ready_q = 1'b1;
 
     // ---- LOAD PART.TABLE, BEFORE ANY PARTICLE IS OFFERED ------------------
@@ -3612,6 +3683,10 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
              geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
              geom_sn_fork_stall_o);
+    $display("SMOKE: light      lit=%0d seen=%0d bad=%0d last_rgb=%0d/%0d/%0d (reference %0d) adapter_refused=%0d cfg_refused=%0d",
+             geom_light_vertices_lit_o, geom_lit_seen_q, geom_lit_bad_q,
+             geom_light_r_o, geom_light_g_o, geom_light_b_o, SGF_EXP_LIT,
+             geom_light_adapter_refused_o, geom_light_cfg_refused_o);
     $display("SMOKE: replay     meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d refused=%0d missed=%0d att_skew=%0d profile_mixed=%0d view_bad=%0d dq_refused=%0d",
              geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
              geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o,
@@ -4279,6 +4354,22 @@ module tb_zhao_console_core_smoke
     // is `tests/geometry/skin_norm_rtl_directed.cpp`, which drives the block
     // directly with real matrices large enough to trip it. Asserted zero here
     // WITH that reason, rather than quietly not looked at.
+    // ---- GEOM.LIGHT (owner ruling R2), the normal's consumer ----------------
+    // Every skinned normal is lit, once, and every lit colour is the reference's.
+    if ((geom_light_vertices_lit_o != geom_vd_vertices_o) || (geom_lit_seen_q != geom_vd_vertices_o))
+      $fatal(1, "SMOKE: GEOM.LIGHT lit %0d (%0d seen leaving) of %0d normals -- the SKIN.NORM -> adapter -> light_stream seam does not carry",
+             geom_light_vertices_lit_o, geom_lit_seen_q, geom_vd_vertices_o);
+    if (geom_lit_bad_q != 0)
+      $fatal(1, "SMOKE: GEOM.LIGHT emitted %0d colour(s) that are not the reference's %0d on every channel (last r/g/b = %0d/%0d/%0d)",
+             geom_lit_bad_q, SGF_EXP_LIT, geom_light_r_o, geom_light_g_o, geom_light_b_o);
+    if ((geom_light_adapter_refused_o | geom_light_cfg_refused_o | geom_light_epoch_refusals_o |
+         geom_light_seam_mismatch_o | geom_light_tag_mismatch_o | geom_light_root_queue_overflow_o |
+         geom_light_degenerate_o | geom_light_nlights_clamped_o | geom_light_rgb_sat_o) != 0)
+      $fatal(1, "SMOKE: GEOM.LIGHT faulted: adapter_refused=%0d cfg_refused=%0d epoch=%0d seam=%0d tag=%0d rootq=%0d degen=%0d nl_clamp=%0d rgb_sat=%0d",
+             geom_light_adapter_refused_o, geom_light_cfg_refused_o, geom_light_epoch_refusals_o,
+             geom_light_seam_mismatch_o, geom_light_tag_mismatch_o, geom_light_root_queue_overflow_o,
+             geom_light_degenerate_o, geom_light_nlights_clamped_o, geom_light_rgb_sat_o);
+
     if (geom_sn_reduced_o != 0)
       $fatal(1, "SMOKE: GEOM.SKIN.NORM range-reduced %0d vertices -- with identity bones the blend is bounded by 2^29 and cannot reach the 2^30 threshold",
              geom_sn_reduced_o);
@@ -4558,7 +4649,7 @@ module tb_zhao_console_core_smoke
     // MEM.GUARD as ENGINE1 -- and is DENIED, because the bytes sit in
     // TERRAIN.PAGE_POOL (the only window TERRAIN_BUILD may write) and ENGINE1
     // may read only RENDER.ASSET_POOL. This is the owner decision the core's
-    // I48 entry names, shown end to end, and it resolves to kFetchDenied
+    // I49 entry names, shown end to end, and it resolves to kFetchDenied
     // rather than hanging -- which is R20.
     $display("SMOKE: material  responses=%0d status=%0d hits=%0d misses=%0d not_resident=%0d fetch_denied=%0d adapter_jobs_c=%0d adapter_denied=%0d",
              mat_rsp_seen_q, mat_status_seen_q, mat_hits_o, mat_misses_o, mat_not_resident_o,

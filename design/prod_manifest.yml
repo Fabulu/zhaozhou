@@ -113,6 +113,10 @@ top:
   # GEOM.DEPTHQUANT -- three lanes -- and a private zhao_raster_rcp24_v4, so
   # depthquant is counted INSIDE it now rather than as a top of its own.
   - zhao_geom_replay
+  # GEOM.LIGHT, by owner ruling R2 (2026-09-19): zhao_light_stream -- with its
+  # two arithmetic leaves INSIDE it -- behind the creature seam adapter.
+  - zhao_light_stream
+  - zhao_light_skin_adapter
   # Both built 2026-09-04. MESHFETCH is position 1 of the composition order --
   # the geometry front end's entry point, which nothing downstream could be fed
   # by until it existed. It cannot pass MEM.GUARD yet and that is a PHASE
@@ -987,11 +991,7 @@ excluded:
   # zhao_light_stream's header says it "REPLACES THE OWNER". No adoption ruling
   # has been taken, neither arrangement is composed anywhere, and a `superseded`
   # row would CLOSE a question that is open. Both stay pending until the ruling.
-  - zhao_geom_light: not-yet-adopted  GEOM.LIGHT, the vertex-RGB composition: one zhao_terrain_shade instance plus the colour fold, holding no second copy of the ratified dot/isqrt/divide law. MEASURED at II = 167.0 clocks per light term, 48.1x over the frame for the ruled 120,000-vertex / 480,000-term profile, which is why zhao_light_stream exists beside it. Unadopted pending the owner ruling on which arrangement ships and the three seams named above
-  - zhao_light_stream: not-yet-adopted  GEOM.LIGHT as a STREAMED service, one light term every two clocks and one exact magnitude per normal; the declared streamed replacement for zhao_geom_light, same law, different interface. Composed nowhere; adoption needs the ruling plus the vertex/normal, parameter-load and RGB-out seams
-  - zhao_light_div32_ii2: not-yet-adopted  the shared light-term quotient folded to II=2; qualified against the compiled renderer law by tests/geometry/light_div32_ii2_directed.cpp after arriving UNSIMULATED in the 2026-09-18 rescue appendix. Instantiated by zhao_light_stream only; adopted the moment its parent is
-  - zhao_light_isqrt64_ii8: not-yet-adopted  exact floor sqrt of u64 folded to II=8, one root per normal rather than per light term; qualified against the compiled zref::isqrt_u64 by tests/geometry/light_isqrt64_ii8_directed.cpp after arriving UNSIMULATED in the same appendix. Instantiated by zhao_light_stream only; adopted the moment its parent is
-  - zhao_light_skin_adapter: not-yet-adopted  the CREATURE seam: the s64x3 direction / u64 magnitude pair from zhao_geom_skin_norm narrowed to the service's s32x3 / u32 prepared form, with the producer's range reduction ASSERTED rather than cast. Instantiated by nothing yet -- zhao_geom_skin_norm is a selected top and this adapter is the unbuilt half of the join, so it is pending on the same ruling as the service it feeds
+  - zhao_geom_light: superseded  by zhao_light_stream, owner ruling R2 2026-09-19 (reports/OWNER-RULINGS-20260919-EVENING.md): "zhao_light_stream owns vertex light; zhao_geom_light is superseded". The scalar arrangement, MEASURED at II = 167.0 clocks per light term, 48.1x over the frame -- kept as the reference arrangement it was measured against
 
   # --- 2026-09-19, TERRAIN.HEIGHTTAP -----------------------------------------
   # The INVERSE of TERRAIN.PLACE, and the block the console header called "the

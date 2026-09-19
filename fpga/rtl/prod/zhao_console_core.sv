@@ -498,6 +498,16 @@
 //    The smoke bench now draws the fixture meshlet through all of it, in both
 //    views, and pins the pixel count the REFERENCE derives.
 //
+//  * I43 was GEOM.SKIN.NORM's WORLD NORMAL, out of the module because its
+//    consumer GEOM.LIGHT was refused (two owners, and the one in the register was
+//    the superseded scalar block). CLOSED AND DELETED 2026-09-19 by owner ruling
+//    R2: `zhao_light_stream` owns vertex light. It is composed on the normal's
+//    own handshake through `zhao_light_skin_adapter` -- the creature seam,
+//    narrowed by assertion -- on the creature path the two blocks' contracts
+//    name (magnitude supplied, early clamp). The normal still leaves as a TAP;
+//    its `_ready_i` port is gone. What the light produces is I46's (the store
+//    writer's r/g/b), and what configures it is I48.
+//
 //  * I4 was PART.UPDATE's step-6 collision response, tied to zero. It was a
 //    closed contradiction between three ratified contracts rather than a
 //    wiring gap, and owner ruling 2026-09-19 settled it:
@@ -2340,64 +2350,6 @@
 //      `fld_ld_oob_o` is exactly what makes that state unreachable. The
 //      other eight are driven by `tests/field/field_host_directed.cpp`.
 //
-// I43. GEOM.SKIN.NORM's WORLD NORMAL (`geom_sn_n_*`) -- BOUNDARY. NEW
-//      2026-09-19, and it is the SUCCESSOR to the lighting seam's first
-//      bullet, which is CLOSED. The block is COMPOSED; what leaves is its
-//      output, and only its output.
-//
-//      WHAT CLOSED, AND THE REFUSAL WAS ACCURATE RIGHT UP TO ITS LAST CLAUSE.
-//      The lighting section used to say this block's "THREE OPERANDS ARE NEVER
-//      SIMULTANEOUSLY VALID IN THIS MODULE" -- the normal valid at
-//      GEOM.VDECODE's output, the matrices at the palette store's, "several
-//      clocks and one lookup apart, for what may not even be the same vertex".
-//      That was exactly true, it named the fix ("`zhao_geom_pose_palette`
-//      carrying the normal through beside the vertex"), and it classified the
-//      fix correctly as "an RTL change to a block with its own directed test,
-//      not a composition". So this entry is not a correction of a wrong
-//      refusal: it is a refusal whose stated price was PAID.
-//
-//      THE RTL CHANGE IS A PAYLOAD AND NOTHING ELSE. `v_nx_i/v_ny_i/v_nz_i` in,
-//      `o_nx_o/o_ny_o/o_nz_o` out, captured in R_IDLE by THE SAME ENABLE, on
-//      THE SAME CLOCK, as the two bone indices that select the matrices, and
-//      held through R_HOLD with the rest of the record. No arithmetic was added
-//      to that block and none was added here. The point of putting it inside
-//      the store rather than joining it outside is the record-swap law: two
-//      quantities a composer pairs from independent paths produce a normal
-//      skinned by another vertex's bones, and a lit vertex no output check can
-//      distinguish from a correct one.
-//
-//      THE FORK IS AN AND-FORK AND ITS COST IS MEASURED, NOT ARGUED.
-//      GEOM.SKIN and GEOM.SKIN.NORM accept the same beat on the same clock.
-//      Neither block's `ready` is a function of its own `valid`, so it cannot
-//      deadlock. What it CAN do is throttle, and it does: GEOM.SKIN.NORM is
-//      strictly ONE AT A TIME -- S_IDLE, S_MUL x3, S_REDUCE, S_SQ, S_WAIT,
-//      S_EMIT with a THIRTY-TWO ITERATION serial root in the middle -- against
-//      GEOM.SKIN's one weighted vertex per twelve clocks. That is stated here
-//      because the block's OWN comment says the opposite: "this block runs at
-//      vertex rate behind GEOM.SKIN's one-per-twelve-clocks, so three clocks of
-//      transform is free". The three transform clocks ARE free; the root is not
-//      counted in that sentence, and it dominates. `geom_sn_fork_stall_o`
-//      counts the cycles the skinner waits, and the composed smoke bench reads
-//      63 of them over 4 vertices -- so the number is real, it is on a port,
-//      and nobody has to take a comment's word for it.
-//
-//      WHY THE OUTPUT IS A PORT. Its consumer is GEOM.LIGHT, refused below for
-//      reasons of its own, and I42's argument applies unchanged: a world normal
-//      written nowhere and a world normal written WRONGLY are indistinguishable
-//      from inside this module, and a port is the one place the difference can
-//      be seen. The smoke bench uses it as exactly that -- the fixture's normal
-//      (127, 0, 0) at w0 = 64 through the identity substitution must give
-//      n = (64 * 65536 * 127, 0, 0) and |n| equal to that x component, since the
-//      square is perfect and the root is floor-exact. That last equality is the
-//      evidence that the `zhao_field_isqrt` instance beside the block answered
-//      at all, and an approximation would not satisfy it.
-//
-//      NOT A GAP, and listed so nobody re-opens it: the ROOT is a second
-//      INSTANCE of a block already in this closure, not a second LAW. Both
-//      `zhao_geom_skin_norm` and the FIELD engine cite `zref::isqrt_u64`, and
-//      the block's own header says a second implementation would be the fault.
-//      No source file joined the fit for it.
-//
 // I45. DEBUG.TRACE's ARMING AND HOST READOUT (`dbg_trace_arm_*`,
 //      `dbg_trace_clear_i`, `dbg_trace_rd_*`) -- BOUNDARY. NEW 2026-09-19 with
 //      the ring at section 7b-ii, and it is the SMALL half that the composition
@@ -2443,7 +2395,10 @@
 //      too. One absent owner, two blocks waiting on it.
 //
 // I46. THE VERTEX-ATTRIBUTE STORE's WRITER (`geom_att_look_*`,
-//      `geom_att_rep_*`) -- BOUNDARY. NEW 2026-09-19 (geom packet), and it is
+//      `geom_att_rep_*`, and GEOM.LIGHT's `geom_light_valid_o`/`_r/g/b_o`) --
+//      BOUNDARY. GEOM.LIGHT is composed (R2) and its lit RGB is exactly the
+//      r/g/b this writer is to store, so it leaves the module here with a real
+//      ready rather than being dropped. NEW 2026-09-19 (geom packet), and it is
 //      the one seam composing GEOM.REPLAY OPENED rather than closed.
 //
 //      WHAT IS REAL. Slots 1..6 of the ruling-5 packet -- u_over_w, v_over_w,
@@ -2467,7 +2422,33 @@
 //      split). Until it exists the store is a port pair, and the smoke bench
 //      models it with the arena's contract exactly as it models SDRAM.
 //
-// I48. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
+// I48. GEOM.LIGHT's DESCRIPTOR BANK (`geom_light_cfg_*`, `geom_light_nlights_i`)
+//      -- BOUNDARY. NEW 2026-09-19 (geom packet), opened by composing
+//      `zhao_light_stream` under owner ruling R2.
+//
+//      The bank is prepared state -- per light a Q16.16 direction and detail, six
+//      u20 gains; an environment of ambient and spill -- published atomically by
+//      `cfg_commit_i`. Its host is the HPS, as for I14's matrices. Its COMMAND is
+//      `SetEnvironment 0x0311` (`spec/sky_and_beams.md` 4a), and two things stand
+//      between that record and these ports -- stated precisely, because the first
+//      draft of this entry said "no ratified law" and that was FALSE:
+//        * RATIFIED, and so NOT the blocker: the sun DIRECTION law,
+//          L = (fx_mul(cos p, sin y), sin p, fx_mul(cos p, cos y)) with fx_sin /
+//          fx_cos (qformats 7.1), and the rgb565 -> 8-bit expansion by bit
+//          replication. Both are 4a's own text.
+//        * NOT ratified: (1) the opcode is `reserved`, not `implemented` -- its
+//          execution "lands with the weather/lighting wave", an ABI status only
+//          the owner moves; (2) the BRIDGE from 4a's u8 lit law,
+//          sat_u8(ambient_c + rescale_u(sun_c * ndl, 8)), to this bank's Q16.16
+//          gains and separately-rounded products. R2 moved OWNERSHIP to
+//          `zhao_light_stream` (4a is amended to say so, 2026-09-19) but did not
+//          write the numeric bridge, and the two laws round differently.
+//      OWNER DECISION (recommendation in FINDINGS-geom.md): mark 0x0311
+//      implemented and ratify the bridge; then CMD.EXEC lowers it onto these
+//      ports as it lowers SetView onto the projector's, with the 4a direction
+//      computed by the existing `zhao_field_sin`.
+//
+// I49. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
 //      BOUNDARY. NEW 2026-09-19 (cmdmem packet, ruling R20), opened in the
 //      commit that COMPOSED the block: its DIRECTORY is MEM.UPLOAD's
 //      MATERIAL_SET publications (5f.1's row) and its FETCH is requester C of
@@ -2497,7 +2478,8 @@
 //      the directory, the fetch goes to the guard, and the guard DENIES it --
 //      `mat_fetch_denied_o` = 1, status kFetchDenied. That is an owner
 //      decision (the contract's "appended resource region"), not a seam.
-//// ---------------------------------------------------------------------------
+//
+// ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
 // Fourteen of the sixteen blocks in the 2026-09-19 small-blocks packet were
@@ -2990,117 +2972,35 @@
 //   a different question (what the fit prices) with its own precondition.
 //
 // ---------------------------------------------------------------------------
-// LIGHTING SEAM -- STILL NOT CONNECTED, FOR THREE NEW REASONS
+// LIGHTING SEAM -- GEOM.LIGHT COMPOSED (owner ruling R2), TWO SEAMS STILL OPEN
 // ---------------------------------------------------------------------------
-// CORRECTED 2026-09-19. This section used to read: "`zhao_geom_light.sv` and
-// every `zhao_light_*` file are being refactored into a lighting service
-// while this file is written, so they are EXCLUDED from this composition on
-// purpose". THAT REFACTOR HAS LANDED, so the exclusion's stated reason had
-// outlived its cause and the next reader would have been waiting for work
-// that was already done. SEARCHED: `zhao_light_stream.sv` is the streamed
-// service (commit fb3d30f4, "GEOM.LIGHT: streamed lighting service at II2"),
-// `zhao_geom_light.sv` is a shell AROUND the shared light engine (d4f837d8),
-// and `zhao_light_skin_adapter.sv` is the asserted narrowing between
-// SKIN.NORM's {direction:s64x3, magnitude:u64} and the service's s32/u32
-// prepared form. Nothing is mid-flight.
+// REWRITTEN 2026-09-19 (geom packet). This section used to say the seam was
+// "STILL NOT CONNECTED, FOR THREE NEW REASONS". Each reason's fate:
 //
-// The seam is still not connected, and the reasons are now specific:
+//   * GEOM.SKIN.NORM's three operands -- closed earlier the same day (the
+//     palette store carries the normal); its OUTPUT was entry I43.
+//   * TWO OWNERS -- RULED. R2 (owner, explicit): `zhao_light_stream` owns
+//     vertex light and `zhao_geom_light` is superseded. The register resolves
+//     GEOM.LIGHT to `zhao_light_stream` (with witnesses at its alias) and
+//     `console_inventory.yml` and `prod_manifest.yml` record the supersession,
+//     so the rename-shaped supersession no tool detects is now written down in
+//     all three places a tool reads.
+//   * THE DESCRIPTOR BANK -- still has no COMMAND producer, and the reason is
+//     now exactly one sentence: no ratified law converts SetEnvironment's
+//     one-sun rgb565/angle16 record into the bank's Q16.16 / u20 form. Entry I48.
 //
-//   * GEOM.SKIN.NORM's THREE OPERANDS -- CLOSED 2026-09-19, see entry I43.
-//     The paragraph that stood here was right in every particular: the normal
-//     was GEOM.VDECODE's and the matrices `zhao_geom_pose_palette`'s, and the
-//     store's pass-through payload did not carry the normal, so the two were
-//     several clocks and one lookup apart, for what may not even be the same
-//     vertex. It named the fix and priced it as an RTL change rather than a
-//     composition. The change is made -- the store carries the normal now,
-//     captured by the same enable as the two bone indices -- and the block is
-//     composed on an AND-fork beside GEOM.SKIN. Its OUTPUT is the gap now,
-//     which is a narrower statement than this one was.
-//   * GEOM.LIGHT's DESCRIPTOR BANK HAS NO PRODUCER -- the conclusion is TRUE
-//     and the REASON GIVEN HERE WAS FALSE, corrected 2026-09-19. It read: "No
-//     opcode in `spec/commands.zidl` carries any of it." SEARCHED, and naming
-//     what was searched is the point: `spec/commands.zidl:522` defines
-//     `SetEnvironment 0x0311` with `angle16 sun_yaw`, `angle16 sun_pitch`,
-//     `rgb565 sun_colour`, `rgb565 ambient`, `rgb565 tint`, `u8 tint_strength`
-//     and the fog fields -- a sun direction, a sun colour and an ambient,
-//     roughly HALF this bank. `zhao_abi_pkg.sv:93` already declares
-//     `ZHAO_OP_SET_ENVIRONMENT`, so the opcode is visible to RTL today.
+// WHAT IS COMPOSED. GEOM.SKIN.NORM -> `zhao_light_skin_adapter` (the creature
+// seam, narrowed by assertion) -> `zhao_light_stream` on the creature path,
+// with the service's two arithmetic leaves inside it. Entry I43 is closed.
+// The smoke bench loads one light and checks every lit vertex against
+// `zref::creature::lambert_from_world_normal`, through the fixture generator.
 //
-//     The sentence was the flattering simplification of one this tree already
-//     had RIGHT: `zhao_cmd_exec.sv:40-43` says 0x0311 "is the nearest thing in
-//     the opcode space and it carries sun, ambient, tint and fog -- no
-//     geometry -- and it is `reserved`, not `implemented`, so it has no
-//     execution semantics to borrow even if it did". Two files in this tree
-//     disagreed about a checkable fact, and the looser one was the one doing
-//     the refusing.
-//
-//     AND THE REAL BLOCKER IS AN OWNERSHIP AND FORMAT CONFLICT, which has to be
-//     RULED rather than built, and is a harder thing than a missing command.
-//     `spec/sky_and_beams.md` 4a assigns vertex light to GEOM.PROJECT, not to
-//     GEOM.LIGHT, and ratifies a ONE-SUN rgb565 model -- ndl = clamp(N.L, 0, 1)
-//     then lit = sat_u8(ambient_c + rescale_u(sun_c * ndl, 8)) -- saying in as
-//     many words "no dynamic point lights in the format (the donor never had
-//     them)". `zhao_geom_light` implements an EIGHT-LIGHT, ten-word Q16.16 bank
-//     with emission and spill and an `nlights_i`; normal detail, emission,
-//     spill and `nlights` have no ABI representation at all. The numeric forms
-//     do not match either -- an angle16 pair against an s32 direction vector,
-//     rgb565 against u20 Q16.16. Wiring 0x0311 into `cfg_*` would be choosing
-//     between two ratified laws inside a composition packet.
-//     `design/blocks.yml`'s own GEOM.LIGHT row carries the other half of the
-//     contradiction: "the ledger's description of GEOM.PROJECT as
-//     projection-plus-lighting is aspirational".
-//
-//   * AND `zhao_geom_light` IS THE SUPERSEDED IMPLEMENTATION BESIDES, which is
-//     the finding that matters most here and is new on 2026-09-19. Even if the
-//     bank had a producer, THIS is not the block to wire it to.
-//     `fpga/rtl/geometry/zhao_light_stream.sv` opens "THIS REPLACES THE OWNER,
-//     IT DOES NOT ADD A SECOND LAW", and prices what it replaces:
-//     "`zhao_geom_light.sv` is the scalar arrangement: one `zhao_terrain_shade`
-//     turn per light term, MEASURED at II = 167.0 clocks, which is 48.1x over
-//     the frame for the ruled 120,000-vertex / 480,000-term stress profile."
-//
-//     So composing `zhao_geom_light` would be the owner's 2026-09-19 ruling
-//     broken exactly as it was broken for FIELD -- fitting a machine nobody
-//     ships, spending ALM and DSP on dead weight on a device already over on
-//     both. And it would not be CAUGHT, because
-//     `completion_register.superseded_in_closure()` matches a version SUFFIX or
-//     INFIX and `zhao_light_stream` is neither: it supersedes by RENAME, a
-//     third shape the tree now has and no tool looks for. The capability
-//     GEOM.LIGHT resolves to `zhao_geom_light` in the register, so "connected"
-//     is today satisfiable by wiring the superseded block and the instrument
-//     would say fine -- the identical defect CLAUDE.md records for
-//     FIELD.SEQ.CORE resolving to `zhao_field_v2_core`.
-//
-//     `design/console_inventory.yml` now carries the disposition, so the gate
-//     holds the ruling even though the register cannot see it. What is NOT done
-//     here, and is named so it is not mistaken for done: `design/blocks.yml`'s
-//     GEOM.LIGHT row still reads `maturity: SPECIFIED`, `superseded_by: null`
-//     and both tests "PLANNED -- NOT WRITTEN", which is stale on all three
-//     counts. Correcting a ledger row is not this packet's to do quietly while
-//     two other packets hold that file open.
-//   * ITS OUTPUT IS A SHELL-SIDE CHANGE. The RGB term goes into the raster
-//     material stage inside `zhao_geom_bin_pipe_v2`, so the seam is not
-//     purely additive to this file and should be planned with I15.
-//
-// So no `zhao_light_*` file appears in this composition's source closure.
-// This core contains ZERO lighting logic and its resource number contains
-// none either.
-//
-// `light_seam_connected_o` is that statement made machine-readable: it is tied
-// low and a hierarchy census can see it. WHAT MUST BE CONNECTED HERE LATER:
-//
-//   * the lighting service's VERTEX/NORMAL input, from GEOM.SKIN -- the
-//     skinned-normal sibling `zhao_geom_skin_norm.sv` is its producer, and it
-//     is deliberately NOT instantiated here for the same exclusion reason;
-//   * the service's per-light parameter load, from the same host/CMD path that
-//     I14 describes for the projection matrices;
-//   * the service's RGB term OUT, into the raster material stage inside
-//     `zhao_geom_bin_pipe_v2` -- which is a shell-side change, so the seam is
-//     not purely additive and should be planned with I15;
-//   * the tie-low below becomes a real driven level once all three exist.
-//
-// Nothing here should be read as "lighting fits in the remaining area". It has
-// not been measured in this core at all.
+// WHAT IS STILL OPEN, and `light_seam_connected_o` stays LOW until it is:
+//   * the BANK's command producer (I48);
+//   * the lit RGB's route to the raster: it is the vertex-attribute store's
+//     r/g/b input (owner ruling R11), and the store's WRITER is I46. Until it
+//     exists the colour leaves the module on `geom_light_*` with a real ready.
+//     Nothing here should be read as "the raster is lit".
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS CORE IS NOT
@@ -3552,18 +3452,13 @@ module zhao_console_core
   output logic [31:0]             geom_skin_vertices_transformed_o,
 
   // ---- GEOM.SKIN.NORM's world normal and evidence --------------------------
-  // NEW 2026-09-19. GEOM.SKIN.NORM is COMPOSED below, and this is its OUTPUT
-  // leaving the module because its consumer does not exist -- see entry I43.
-  // The block's INPUTS are all real: the packed normal is GEOM.VDECODE's and
-  // the two matrices are GEOM.POSE's palette store's, arriving in one
-  // handshake because the palette now carries the normal through beside them.
-  //
-  // It is a PORT and not a dropped output for the reason I42 gives about the
-  // mip planes: a world normal computed and written nowhere and a world normal
-  // computed WRONGLY are indistinguishable from inside this module, and a port
-  // is the one place the difference can be seen.
+  // GEOM.SKIN.NORM's world normal, OBSERVED. Entry I43 is CLOSED
+  // (2026-09-19, owner ruling R2): its consumer is GEOM.LIGHT --
+  // `zhao_light_stream`, through `zhao_light_skin_adapter` -- composed below.
+  // The ready is the adapter's, so the port that stood here as `_ready_i`
+  // is gone; the normal itself still leaves as a TAP, because the smoke
+  // bench differences it against a hand computation and a tap costs nothing.
   output logic                    geom_sn_n_valid_o,
-  input  logic                    geom_sn_n_ready_i,
   output logic signed [63:0]      geom_sn_n_x_o,
   output logic signed [63:0]      geom_sn_n_y_o,
   output logic signed [63:0]      geom_sn_n_z_o,
@@ -3578,6 +3473,39 @@ module zhao_console_core
   // GEOM.SKIN.NORM was not. See I43 for why that number is expected to be
   // large and what it means.
   output logic [31:0]             geom_sn_fork_stall_o,
+
+  // ---- GEOM.LIGHT (owner ruling R2: `zhao_light_stream` owns vertex light) --
+  // I48: the prepared descriptor bank, written by the HOST. SetEnvironment
+  // 0x0311 carries a one-sun rgb565 record and no ratified law turns it into
+  // this bank's Q16.16 directions and u20 gains -- see I48.
+  input  logic                    geom_light_cfg_we_i,
+  input  logic                    geom_light_cfg_commit_i,
+  input  logic [7:0]              geom_light_cfg_addr_i,
+  input  logic [31:0]             geom_light_cfg_data_i,
+  output logic                    geom_light_cfg_gen_o,
+  input  logic [3:0]              geom_light_nlights_i,
+  // I46: the lit vertex RGB -- the vertex-attribute store's r/g/b input, whose
+  // WRITER is not built. Out of the module, with a real ready.
+  output logic                    geom_light_valid_o,
+  input  logic                    geom_light_ready_i,
+  output logic [16:0]             geom_light_r_o,
+  output logic [16:0]             geom_light_g_o,
+  output logic [16:0]             geom_light_b_o,
+  output logic                    geom_light_degenerate_vtx_o,
+  output logic [15:0]             geom_light_src_id_o,
+  // Evidence: the lit count, the adapter's narrowing refusals, and every
+  // FAULT counter the service has. Its throughput observers (slot and
+  // backpressure clocks) stay inside; its directed test is where they are read.
+  output logic [31:0]             geom_light_vertices_lit_o,
+  output logic [31:0]             geom_light_degenerate_o,
+  output logic [31:0]             geom_light_cfg_refused_o,
+  output logic [31:0]             geom_light_epoch_refusals_o,
+  output logic [31:0]             geom_light_seam_mismatch_o,
+  output logic [31:0]             geom_light_tag_mismatch_o,
+  output logic [31:0]             geom_light_root_queue_overflow_o,
+  output logic [31:0]             geom_light_rgb_sat_o,
+  output logic [31:0]             geom_light_nlights_clamped_o,
+  output logic [31:0]             geom_light_adapter_refused_o,
 
   // ---- I29: GEOM.POSE's clip page and skeleton bake ------------------------
   // The palette store closed I10 by giving GEOM.POSE's decoder a consumer; the
@@ -4085,7 +4013,7 @@ module zhao_console_core
   output logic [31:0]             upl_hps_wait_o,
 
   // ---- MATERIAL.RESOLVE (composed 2026-09-19, cmdmem packet, ruling R20) ---
-  // I48: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
+  // I49: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
   // internal and real; see the entry for the one seam in the way.
   input  logic                    mat_req_valid_i,
   output logic                    mat_req_ready_o,
@@ -5124,8 +5052,10 @@ module zhao_console_core
   end
 
   // ==========================================================================
-  // THE LIGHTING SEAM. Tied low on purpose -- see the header for exactly what
-  // must be connected here, and why none of it is.
+  // THE LIGHTING SEAM. LOW on purpose: GEOM.LIGHT is composed (R2), but its
+  // bank has no command producer (I48) and its RGB does not yet reach the
+  // raster (the attribute store's writer, I46). The header's lighting section
+  // says what is connected and what is not.
   // ==========================================================================
   assign light_seam_connected_o = 1'b0;
 
@@ -6016,6 +5946,9 @@ module zhao_console_core
   // been wrong: that block's header says "a second implementation would be a
   // second law", and `zref::isqrt_u64` is the one both cite.
   wire        sn_sq_valid, sn_sq_ready, sn_sq_rvalid, sn_sq_rready;
+  // GEOM.LIGHT's skin adapter takes the normal (entry I43 closed); its ready
+  // is read by GEOM.SKIN.NORM just below, so it is declared here.
+  wire        la_s_ready;
   wire [63:0] sn_sq_n, sn_sq_r;
 
   zhao_geom_vdecode #(
@@ -6253,7 +6186,7 @@ module zhao_console_core
     // I43: the world normal leaves the module. Its consumer is GEOM.LIGHT and
     // that seam is refused for reasons of its own -- see the lighting section.
     .n_valid_o      (geom_sn_n_valid_o),
-    .n_ready_i      (geom_sn_n_ready_i),
+    .n_ready_i      (la_s_ready),
     .n_x_o          (geom_sn_n_x_o),
     .n_y_o          (geom_sn_n_y_o),
     .n_z_o          (geom_sn_n_z_o),
@@ -6275,6 +6208,145 @@ module zhao_console_core
     .r_valid_o (sn_sq_rvalid),
     .r_ready_i (sn_sq_rready),
     .r_o       (sn_sq_r)
+  );
+
+  // --------------------------------------------------------------------------
+  // GEOM.LIGHT -- `zhao_light_stream`, composed 2026-09-19 by owner ruling R2
+  // ("zhao_light_stream owns vertex light; zhao_geom_light is superseded").
+  //
+  //   GEOM.SKIN.NORM --{s64x3, u64 mag}--> zhao_light_skin_adapter
+  //                  --{s32x3, u32 mag}--> zhao_light_stream --> RGB (I46)
+  //
+  // THE CREATURE PATH, by both blocks' own contracts: SKIN.NORM supplies the
+  // magnitude with the direction, so `n_mag_valid_i` is HIGH (no root job, the
+  // `supplied_mags` case) and the profile is CREATURE (no detail term, the early
+  // clamp) -- the two constants below are that contract, named, not tie-offs.
+  // The adapter NARROWS by assertion, not by cast, and refuses and counts a
+  // tuple outside the producer's range reduction.
+  //
+  // NO SECOND LAW: the service holds the shared dot/root/divide, the
+  // `zhao_light_div32_ii2` and `zhao_light_isqrt64_ii8` leaves inside it, and
+  // `zhao_geom_light` -- the scalar arrangement measured at II = 167 -- is NOT
+  // composed (console_inventory: superseded, R2).
+  // --------------------------------------------------------------------------
+  localparam logic GEOM_LIGHT_MAG_SUPPLIED_C = 1'b1;  // SKIN.NORM hands |n|
+  localparam logic GEOM_LIGHT_PROFILE_C      = 1'b1;  // 1 = creature
+
+  wire               la_p_valid, la_p_ready;
+  wire signed [31:0] la_p_nx, la_p_ny, la_p_nz;
+  wire        [31:0] la_p_mag;
+  wire               la_p_degenerate;
+  wire        [ 3:0] la_p_nlights;
+  wire        [15:0] la_p_src_id;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire        [31:0] la_accepted;
+  // The service's throughput observers: read by its directed test, where a
+  // stall has a stimulus to be measured against; not faults.
+  wire [31:0] ls_normal_inputs, ls_normal_prepared, ls_roots_issued, ls_roots_retired,
+              ls_supplied_mags, ls_terms_accepted, ls_terms_retired, ls_terms_null,
+              ls_normal_queue_wait, ls_descriptor_wait, ls_dot_slots, ls_square_slots,
+              ls_unused_slots, ls_divider_bp, ls_colour_bp, ls_output_bp,
+              ls_raw_sat, ls_degen_terms, ls_clamp_lo, ls_clamp_hi;
+  wire        ls_idle;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_light_skin_adapter #(
+    .SRCW (16)
+  ) u_light_skin_adapter (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: GEOM.SKIN.NORM's world normal. Entry I43, CLOSED.
+    .s_valid_i      (geom_sn_n_valid_o),
+    .s_ready_o      (la_s_ready),
+    .s_nx_i         (geom_sn_n_x_o),
+    .s_ny_i         (geom_sn_n_y_o),
+    .s_nz_i         (geom_sn_n_z_o),
+    .s_mag_i        (geom_sn_n_mag_o),
+    .s_degenerate_i (geom_sn_n_degenerate_o),
+    // I48: how many lights the published set holds is the host's, with the set.
+    .s_nlights_i    (geom_light_nlights_i),
+    .s_src_id_i     (geom_sn_n_src_id_o),
+
+    .p_valid_o      (la_p_valid),
+    .p_ready_i      (la_p_ready),
+    .p_nx_o         (la_p_nx),
+    .p_ny_o         (la_p_ny),
+    .p_nz_o         (la_p_nz),
+    .p_mag_o        (la_p_mag),
+    .p_degenerate_o (la_p_degenerate),
+    .p_nlights_o    (la_p_nlights),
+    .p_src_id_o     (la_p_src_id),
+
+    .accepted_o     (la_accepted),
+    .refused_o      (geom_light_adapter_refused_o)
+  );
+
+  zhao_light_stream #(
+    .SRCW (16)
+  ) u_light_stream (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // I48: the prepared descriptor bank, host-written, published atomically.
+    .cfg_we_i     (geom_light_cfg_we_i),
+    .cfg_commit_i (geom_light_cfg_commit_i),
+    .cfg_addr_i   (geom_light_cfg_addr_i),
+    .cfg_data_i   (geom_light_cfg_data_i),
+    .cfg_gen_o    (geom_light_cfg_gen_o),
+
+    // REAL: the prepared normal, from the adapter.
+    .v_valid_i      (la_p_valid),
+    .v_ready_o      (la_p_ready),
+    .n_x_i          (la_p_nx),
+    .n_y_i          (la_p_ny),
+    .n_z_i          (la_p_nz),
+    .n_mag_valid_i  (GEOM_LIGHT_MAG_SUPPLIED_C),
+    .n_mag_i        (la_p_mag),
+    .n_degenerate_i (la_p_degenerate),
+    .n_profile_i    (GEOM_LIGHT_PROFILE_C),
+    .n_lights_i     (la_p_nlights),
+    .n_src_id_i     (la_p_src_id),
+
+    // I46: the lit RGB, the attribute store's r/g/b input.
+    .r_valid_o        (geom_light_valid_o),
+    .r_ready_i        (geom_light_ready_i),
+    .rgb_r_o          (geom_light_r_o),
+    .rgb_g_o          (geom_light_g_o),
+    .rgb_b_o          (geom_light_b_o),
+    .degenerate_vtx_o (geom_light_degenerate_vtx_o),
+    .src_id_o         (geom_light_src_id_o),
+
+    .normal_inputs_o         (ls_normal_inputs),
+    .normal_prepared_o       (ls_normal_prepared),
+    .roots_issued_o          (ls_roots_issued),
+    .roots_retired_o         (ls_roots_retired),
+    .supplied_mags_o         (ls_supplied_mags),
+    .terms_accepted_o        (ls_terms_accepted),
+    .terms_retired_o         (ls_terms_retired),
+    .terms_null_o            (ls_terms_null),
+    .normal_queue_wait_o     (ls_normal_queue_wait),
+    .descriptor_wait_o       (ls_descriptor_wait),
+    .dot_product_slots_o     (ls_dot_slots),
+    .square_product_slots_o  (ls_square_slots),
+    .unused_product_slots_o  (ls_unused_slots),
+    .divider_backpressure_o  (ls_divider_bp),
+    .colour_backpressure_o   (ls_colour_bp),
+    .output_backpressure_o   (ls_output_bp),
+    .epoch_refusals_o        (geom_light_epoch_refusals_o),
+    .logical_raw_saturations_o(ls_raw_sat),
+    .degenerate_terms_o      (ls_degen_terms),
+    .vertices_lit_o          (geom_light_vertices_lit_o),
+    .degenerate_o            (geom_light_degenerate_o),
+    .ndl_clamp_lo_o          (ls_clamp_lo),
+    .ndl_clamp_hi_o          (ls_clamp_hi),
+    .rgb_sat_o               (geom_light_rgb_sat_o),
+    .cfg_refused_o           (geom_light_cfg_refused_o),
+    .nlights_clamped_o       (geom_light_nlights_clamped_o),
+    .seam_mismatch_o         (geom_light_seam_mismatch_o),
+    .tag_mismatch_o          (geom_light_tag_mismatch_o),
+    .root_queue_overflow_o   (geom_light_root_queue_overflow_o),
+    .idle_o                  (ls_idle)
   );
 
   // THE FORK'S COST, COUNTED RATHER THAN ARGUED (I43). A cycle in which the
@@ -11065,7 +11137,7 @@ module zhao_console_core
   // --------------------------------------------------------------------------
   // MATERIAL.RESOLVE (R20), composed 2026-09-19 (cmdmem packet)
   // --------------------------------------------------------------------------
-  // THREE OF ITS FOUR SEAMS ARE REAL HERE, and the fourth is entry I48.
+  // THREE OF ITS FOUR SEAMS ARE REAL HERE, and the fourth is entry I49.
   //
   //   DIRECTORY <- MEM.UPLOAD's publication, `spec/memory_rules.md` 5f.1's row,
   //     for resources of kind MATERIAL_SET (`spec/cartridge.md` 4 kind 11)
@@ -11079,7 +11151,7 @@ module zhao_console_core
   //   FETCH <- requester C of `u_geom_mem_adapter`, the ENGINE1 mux 5f says
   //     texture reads join. A refused read (`violation`, no beats) is the new
   //     `mem_rsp_denied_i` and resolves to kFetchDenied: counted, never a hang.
-  //   REQUEST / RESPONSE -> entry I48.
+  //   REQUEST / RESPONSE -> entry I49.
   //
   // THE SHIM BELOW IS FIELD MAPPING, not arbitration: a record is one 32-byte
   // read, so `len` is the frozen record size; `client` and `write` are forced

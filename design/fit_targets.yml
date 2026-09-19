@@ -2142,6 +2142,10 @@ targets:
       - fpga/rtl/geometry/zhao_geom_meshfetch.sv
       - fpga/rtl/geometry/zhao_geom_desc_crc.sv
       - fpga/rtl/geometry/zhao_geom_replay.sv
+      - fpga/rtl/geometry/zhao_light_div32_ii2.sv
+      - fpga/rtl/geometry/zhao_light_isqrt64_ii8.sv
+      - fpga/rtl/geometry/zhao_light_skin_adapter.sv
+      - fpga/rtl/geometry/zhao_light_stream.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/memory/zhao_mem_share2.sv
       - fpga/rtl/geometry/zhao_geom_mem_adapter.sv
@@ -2654,6 +2658,12 @@ targets:
       # reciprocal is zhao_raster_rcp24_v4, already in this list.
       - fpga/rtl/geometry/zhao_geom_depthquant.sv
       - fpga/rtl/geometry/zhao_geom_replay.sv
+      # Added 2026-09-19 (geom packet): GEOM.LIGHT, by owner ruling R2 --
+      # zhao_light_stream behind the creature seam adapter, and its two leaves.
+      - fpga/rtl/geometry/zhao_light_div32_ii2.sv
+      - fpga/rtl/geometry/zhao_light_isqrt64_ii8.sv
+      - fpga/rtl/geometry/zhao_light_skin_adapter.sv
+      - fpga/rtl/geometry/zhao_light_stream.sv
       - fpga/rtl/geometry/zhao_geom_assetfetch.sv
       - fpga/rtl/geometry/zhao_geom_assemble.sv
       # Added 2026-09-19, packet I10-PALETTE. GEOM.POSE, WHOLE.

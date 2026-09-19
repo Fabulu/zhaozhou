@@ -50,7 +50,7 @@ Do NOT fetch-and-rebase onto the shared branch, do NOT push to
 `claude/ceiling-architecture-20260912`, and do NOT re-gate after other packets
 land. The coordinator merges your branch, resolves conflicts, and runs the gates
 once on the merged result. If you need something another packet landed, ask the
-coordinator for the commit and `git merge` it into your branch.
+coordinator for the commit and `git merge <commit-hash>` it into your branch. Merge the HASH: in a worktree, `git fetch` may not advance the `origin/...` tracking ref, and merging that ref then says "Already up to date", which reads as good news and is not.
 Commit messages via `git commit -F file` (PowerShell mangles `-m` multiline).
 End every commit message with:
 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
@@ -67,7 +67,8 @@ End every commit message with:
 | `python tools/budget/mutant_copy_drift.py` | no NEW drift you caused |
 | `python tools/quartus/check_quartus17_syntax.py` | RC 0 |
 | console-board lint (see handover §4, and "Lint, both halves") | waived: silent RC 0 |
-| `powershell -NoProfile -ExecutionPolicy Bypass -File tests/prod/run_console_core_smoke.ps1` | PASS, `raster pixels=1536`, `frames_admitted=1` |
+| `powershell -NoProfile -ExecutionPolicy Bypass -File tests/prod/run_console_core_smoke.ps1` | PASS, `raster pixels=2560` (reference-derived by `smoke_geom_fixture_gen.cpp`; ctest `smoke_geom_fixture_fresh`), `frames_admitted=1` |
+| the same script with `-Mutant` | PASS (the slot-overflow mutant wrapper fires; it went 129 ports stale because nothing ran it) |
 
 Plus your own directed test for anything you built, linted with `-Wall`
 explicitly (`verilate()` does not pass it). Any new guard/counter must be seen
