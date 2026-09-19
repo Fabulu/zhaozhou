@@ -1,0 +1,15 @@
+ca6a184bd783d8419dcabee505f4f9ed *bin/manafold-eyesize.exe
+781c62b3c98535f2729397e6c6ac66bd *bin/manafold-meshcheck.exe
+8eea5e4ae24e1df6a69dcad3458ee6c6 *bin/manafold-motiongate.exe
+dbe09aaf8fb1bc451e330c67cb7b5bf6 *bin/manafold-nodule.exe
+1da9051ed1e9482c4a4f953a7c0efe58 *bin/manafold-outlinegate.exe
+974e35957a133e2b00c655cba021fe53 *bin/manafold-probe.exe
+bc9681f5134f5fbe2bc13aa73ef47400 *bin/manafold-public-jointgate.exe
+fa732d8b7280631b98b871eeb296c698 *bin/manafold-qa-p12.exe
+865cc7e054c6695e4da668fee2c9319b *bin/manafold-shellgate.exe
+19e0b61cf3996a1302318f38354b4e9b *bin/manafold-spangate.exe
+0fa8bae0bf6a738c485fad2dcb77a64b *bin/zhao-reel-cel.exe
+2dc018b4945531ef3332981c555585bb *bin/zhao-reel.exe
+2a1654207e2e09dee9a27dec98e6be1bc62d4dd28594ec434705c0f6b42cda30 *bin/zhao-reel-cel.exe
+458bb7f11a028cc07e5f1acd42d3ab646791a61e19a51c96d09a6abb75c82844 *bin/zhao-reel.exe
+g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r2) 16.1.0

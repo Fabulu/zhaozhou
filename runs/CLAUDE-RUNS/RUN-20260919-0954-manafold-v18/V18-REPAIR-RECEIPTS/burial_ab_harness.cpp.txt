@@ -1,0 +1,49 @@
+// Scratch A/B harness (not committed): per-vertex hash of every posed position
+// across every clip key+midpoint, plus the loop ring profile.
+#include <cstdio>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+#include <array>
+#include <algorithm>
+#include <cmath>
+#include "zref/zref.hpp"
+#include "zref/zref_trig.hpp"
+#include "zref/zref_creature.hpp"
+#include "zref/zref_star.hpp"
+#include "zref/zref_render.hpp"
+#include "zref/zref_texture.hpp"
+#include "render_helpers.hpp"
+#include "zrender/internal.hpp"
+namespace zc = zref::creature;
+#include "manafold.h"
+namespace zc = zref::creature;
+int main() {
+  const zc::RingPart loop = u02::make_loop();
+  for (size_t i = 0; i < loop.rings.size(); ++i)
+    std::printf("RING,%zu,%d,%d\n", i, loop.rings[i].rx, loop.rings[i].rz);
+  const zc::CreatureType& T = u02::type();
+  std::vector<uint64_t> h;
+  std::vector<const zc::SkinVertex*> vv;
+  for (const zc::Meshlet& m : T.mesh) for (const auto& v : m.verts) vv.push_back(&v);
+  h.assign(vv.size(), 1469598103934665603ull);
+  for (const zc::Clip& clip : T.bank.clips) {
+    for (uint16_t f = 0; f < clip.frame_count; ++f) for (uint8_t sub = 0; sub < 2; ++sub) {
+      std::array<zc::mat3x4fx, zc::kMaxBones> pose;
+      zc::decode_pose(T, clip, f, pose, nullptr, sub);
+      const zc::DeformSample d = zc::deformation_sample(T, clip.slot_id, f, sub);
+      size_t gi = 0;
+      for (const zc::Meshlet& m : T.mesh) for (size_t vi = 0; vi < m.verts.size(); ++vi, ++gi) {
+        zc::SkinVertex sv = m.verts[vi];
+        if (!m.deform.empty()) sv = zc::deform_skin_vertex(sv, m.deform[vi], d);
+        int32_t x, y, z; zc::skin_vertex(pose.data(), sv, x, y, z, nullptr);
+        for (int32_t c : {x, y, z}) { h[gi] ^= static_cast<uint32_t>(c); h[gi] *= 1099511628211ull; }
+      }
+    }
+  }
+  for (size_t i = 0; i < vv.size(); ++i)
+    std::printf("V,%zu,%016llx,%u,%u,%u,%d\n", i, (unsigned long long)h[i], vv[i]->b0, vv[i]->b1, vv[i]->w0,
+                static_cast<int32_t>((static_cast<int64_t>(vv[i]->y) * 1000) >> 16));
+  return 0;
+}

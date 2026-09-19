@@ -1,0 +1,13 @@
+kRearSocketBurialMm 200 (shipping) vs 270 (v17) -- scratch harness, every clip key+midpoint, per-vertex posed-position hash
+loop rings compared: 64, profile (rx/rz) differences: 0
+vertices compared: 2039, vertices whose posed positions differ: 10
+  vertex 1353: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1354: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1355: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1356: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1357: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1358: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1359: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1360: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1361: b0=15 b1=15 w0=64/64 bind-y=3343 mm
+  vertex 1362: b0=15 b1=15 w0=64/64 bind-y=3343 mm

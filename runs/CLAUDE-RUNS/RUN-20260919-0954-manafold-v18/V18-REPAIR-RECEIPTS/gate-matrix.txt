@@ -1,0 +1,88 @@
+PASS n-mspan rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-msmooth rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mprobe rc=0 exp=0 | u02-probe: slot 13 ANTENNA SUPPORT carrier B key+midpoints 140/140 owned, missing 0 depth-fail 0, range -33..-18 mm — OK
+PASS n-mjointpub rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mqa rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mmeshcheck rc=0 exp=0 | 
+PASS n-moutline rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-mshell rc=0 exp=0 | 
+PASS n-mnodule rc=0 exp=0 | PASS: 0 failure(s)
+PASS n-meyesize rc=0 exp=0 | PASS: 0 failure(s)
+PASS s-rigid-F-A rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x802)
+PASS s-rigid-A-B rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x82)
+PASS s-rigid-B-C rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x82)
+PASS s-rigid-C-E rc=1 exp=1 | MUTANT rigid-span: attributed detector fired (0x882)
+PASS s-clamp-F-A rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-clamp-A-B rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-clamp-B-C rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-clamp-C-E rc=1 exp=1 | MUTANT clamp-negative: attributed detector fired (0x10)
+PASS s-drift-A rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-drift-B rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-drift-C rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-drift-E rc=1 exp=1 | MUTANT delta-drift: attributed detector fired (0x10)
+PASS s-over-F-A rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-over-A-B rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-over-B-C rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-over-C-E rc=1 exp=1 | MUTANT overcompact: attributed detector fired (0x10)
+PASS s-e-start rc=1 exp=1 | MUTANT e-start: attributed detector fired (0x10)
+PASS s-e-mid rc=1 exp=1 | MUTANT e-mid: attributed detector fired (0x10)
+PASS s-e-presocket rc=1 exp=1 | MUTANT e-presocket: attributed detector fired (0x10)
+PASS s-posed-order rc=1 exp=1 | MUTANT posed-order: attributed detector fired (0x40)
+PASS s-order rc=1 exp=1 | MUTANT crown-order: attributed detector fired (0x80)
+PASS s-antenna-snap rc=1 exp=1 | MUTANT antenna-snap: attributed detector fired (0x120)
+PASS s-accent-switch rc=1 exp=1 | MUTANT accent-switch: attributed detector fired (0x100)
+PASS s-hold-tremor rc=1 exp=1 | MUTANT hold-tremor: attributed detector fired (0x120)
+PASS s-compress-wrap rc=1 exp=1 | MUTANT compress-wrap: attributed detector fired (0x100)
+PASS s-final-dwell rc=1 exp=1 | MUTANT final-dwell: attributed detector fired (0x100)
+PASS s-root-authority rc=1 exp=1 | MUTANT root-authority: attributed detector fired (0x1880)
+PASS s-front-flex rc=1 exp=1 | MUTANT front-flex: attributed detector fired (0x1000)
+PASS s-swell-size rc=1 exp=1 | MUTANT swell-size: attributed detector fired (0x2000)
+PASS s-terminal-cap rc=1 exp=1 | MUTANT terminal-cap: attributed detector fired (0x4800)
+PASS s-mute-F rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x80)
+PASS s-mute-A rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x1A0)
+PASS s-mute-B rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x2A0)
+PASS s-mute-C rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x80)
+PASS s-mute-E rc=1 exp=1 | MUTANT carrier-mute: attributed detector fired (0x80)
+PASS m-lightning-switch rc=1 exp=1 | MUTANT lightning-switch: attributed detector fired categories=0x4c20 expected=0x800 allowed=0x4c20
+PASS m-shape-blackout rc=1 exp=1 | MUTANT shape-blackout: attributed detector fired categories=0x10 expected=0x10 allowed=0x58010
+PASS m-particle-reseed rc=1 exp=1 | MUTANT fold-particle-reseed: attributed detector fired categories=0x2024 expected=0x4 allowed=0x2024
+PASS m-surge-reseed rc=1 exp=1 | MUTANT surge-reseed: attributed detector fired categories=0x4420 expected=0x4000 allowed=0x4420
+PASS m-loop-seam rc=1 exp=1 | MUTANT loop-seam: attributed detector fired categories=0x1480 expected=0x400 allowed=0x1480
+PASS m-mote-count rc=1 exp=1 | MUTANT mote-count: attributed detector fired categories=0x82028 expected=0x8 allowed=0x82028
+PASS m-mote-role rc=1 exp=1 | MUTANT mote-role: attributed detector fired categories=0x2428 expected=0x8 allowed=0x2428
+PASS m-weight-wrap rc=1 exp=1 | MUTANT mvc-weight-wrap: attributed detector fired categories=0x1001 expected=0x1 allowed=0x1001
+PASS m-morph-reverse rc=1 exp=1 | MUTANT morph-reverse: attributed detector fired categories=0x1b500 expected=0x1100 allowed=0x1b500
+PASS m-brightness-seam rc=1 exp=1 | MUTANT brightness-seam: attributed detector fired categories=0x18000 expected=0x18000 allowed=0x58000
+PASS m-stamp-count rc=1 exp=1 | MUTANT stamp-count-pop: attributed detector fired categories=0x60040 expected=0x60040 allowed=0x60040
+PASS m-final-dwell rc=1 exp=1 | MUTANT final-dwell: attributed detector fired categories=0x18000 expected=0x10000 allowed=0x58000
+PASS m-mote-visibility rc=1 exp=1 | MUTANT mote-visibility-pop: attributed detector fired categories=0x80000 expected=0x80000 allowed=0x80000
+PASS m-palette-raw-clock rc=1 exp=1 | MUTANT palette-raw-clock: attributed detector fired categories=0x200000 expected=0x200000 allowed=0x200000
+PASS m-palette-hard-switch rc=1 exp=1 | MUTANT palette-hard-switch: attributed detector fired categories=0x200000 expected=0x200000 allowed=0x200000
+PASS m-death-effect-cutoff rc=1 exp=1 | MUTANT death-effect-cutoff: attributed detector fired categories=0x400000 expected=0x400000 allowed=0x400000
+PASS p-mjoint-F rc=0 exp=0 | FAIL: 1 failure(s) [FAILABLE PUBLIC MUTE ENGAGED]
+PASS p-mjoint-A rc=0 exp=0 | FAIL: 1 failure(s) [FAILABLE PUBLIC MUTE ENGAGED]
+PASS p-mjoint-B rc=0 exp=0 | FAIL: 1 failure(s) [FAILABLE PUBLIC MUTE ENGAGED]
+PASS p-mjoint-C rc=0 exp=0 | FAIL: 1 failure(s) [FAILABLE PUBLIC MUTE ENGAGED]
+PASS p-mjoint-E rc=0 exp=0 | FAIL: 1 failure(s) [FAILABLE PUBLIC MUTE ENGAGED]
+PASS p-mnodule-F rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-A rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-B rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-C rc=0 exp=0 | FAIL: 2 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-E rc=0 exp=0 | FAIL: 1 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mnodule-ignore rc=0 exp=0 | FAIL: 6 failure(s)   [FAILABLE LEG ENGAGED -- a failure here is the gate working]
+PASS p-mprobe-mirror rc=1 exp=1 | u02-probe: slot 13 ANTENNA SUPPORT carrier B key+midpoints 140/140 owned, missing 0 depth-fail 0, range -33..-18 mm — OK
+PASS p-mprobe-outline rc=1 exp=1 | u02-probe: slot 13 ANTENNA SUPPORT carrier B key+midpoints 140/140 owned, missing 0 depth-fail 0, range -33..-18 mm — OK
+PASS p-mprobe-scale rc=1 exp=1 | u02-probe: slot 13 ANTENNA SUPPORT carrier B key+midpoints 140/140 owned, missing 0 depth-fail 0, range -33..-18 mm — OK
+PASS p-mprobe-support rc=1 exp=1 | u02-probe: slot 13 ANTENNA SUPPORT carrier A [CONTROL] key+midpoints 0/140 owned, missing 0 depth-fail 0, range 2147483647..-2147483648 mm — FAIL
+PASS p-mprobe-support-depth rc=1 exp=1 | u02-probe: slot 13 ANTENNA SUPPORT carrier B [DEPTH CONTROL +40 mm] key+midpoints 140/140 owned, missing 0 depth-fail 140, range 7..22 mm — FAIL
+PASS p-moutline-owner rc=1 exp=1 | FAIL: 1 failure(s)
+PASS p-moutline-repaint rc=1 exp=1 | FAIL: 1 failure(s)
+PASS p-mqa-lane rc=0 exp=0 | PASS: 0 failure(s)   [FAILABLE LEG: lane 0 answered for every lane]
+PASS p-mqa-seam rc=0 exp=0 | FAIL: 4 failure(s)
+PASS p-mqa-eye rc=0 exp=0 | FAIL: 2 failure(s)
+PASS p-mqa-startle rc=0 exp=0 | FAIL: 1 failure(s)
+PASS p-mqa-root rc=0 exp=0 | FAIL: 1 failure(s)
+PASS p-mqa-fall rc=0 exp=0 | FAIL: 4 failure(s)
+PASS p-meyesize-L rc=0 exp=0 | RED LEG OK: mute L restores only its eye to identity
+PASS p-meyesize-R rc=0 exp=0 | RED LEG OK: mute R restores only its eye to identity
+PASS p-meyesize-wrong rc=0 exp=0 | RED LEG OK: wrong-bone scale fails only left Eye->Pupil registration
