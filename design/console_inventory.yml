@@ -1,0 +1,442 @@
+# THE CONSOLE INVENTORY -- what is allowed to be in zhao_console_core.
+#
+# Owner, 2026-09-19: "we need a big inventory about what actually gets to be
+# in the console and a hard gate to exclude the stuff that doesn't go in."
+#
+# THIS FILE HOLDS ONLY WHAT CANNOT BE DERIVED. Membership itself is computed:
+# a module REACHABLE from zhao_console_core by instantiation is in the console
+# and needs no entry here. This file says why everything ELSE is out.
+#
+# Enforced by tools/quartus/check_console_inventory.py. A new .sv with no
+# disposition FAILS the gate, so nothing drifts in unclassified.
+#
+# GENERATED FIRST PASS 2026-09-19 by deriving each disposition from the tree;
+# every `why` states the EVIDENCE used, not a guess dressed as a fact. Where a
+# derivation is wrong, correct the entry -- that is what it is for.
+#
+# pending_compose is A WORK LIST, not an excuse: it means the block belongs in
+# the console and is not wired yet.
+
+modules:
+  zhao_console_board:
+    disposition: top
+    why: "a top in its own right; not composed into the console"
+  zhao_debug_trace:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_engine1_raw_last_v2:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_fb_tuple_contract:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_curve:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_exec_shared:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_len:
+    disposition: superseded
+    superseded_by: zhao_field_v3_len
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_field_noise:
+    disposition: superseded
+    superseded_by: zhao_field_v3_noise
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_field_normalize:
+    disposition: superseded
+    superseded_by: zhao_field_v3_normalize
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_field_progdir:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_progdir_scan:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_rcp:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_rcp_rom:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_rf_ram:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_ring:
+    disposition: superseded
+    superseded_by: zhao_field_v3_ring
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_field_rot:
+    disposition: superseded
+    superseded_by: zhao_field_v3_rot
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_field_sinks:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_v2_core:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_v2_front:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_field_v2_lanemux:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_cliff:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_cliff_ram:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_jitter_rom:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_prim:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_prim_eval:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_forge_shadow:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_bin_pipe:
+    disposition: superseded
+    superseded_by: zhao_geom_bin_pipe_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_geom_binner:
+    disposition: superseded
+    superseded_by: zhao_geom_binner_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_geom_depthquant:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_fogfactor:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_light:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_lod:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_loom:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_parambuf:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_pose_cache:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_project:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_geom_skin_norm:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_light_div32_ii2:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_light_isqrt64_ii8:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_light_skin_adapter:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_light_stream:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_material_resolve:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_measure_governor:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_measure_tokens:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_mem_upload:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_pair_fragment_tilestore:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_pair_pagestream_patch:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_pair_setup_binner:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_pair_tess_normals:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_pair_tmu_cache:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_post_gather:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_probe_banked_rf:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_compose_pipe:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_ctx_fifo:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_dist_svc:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_patch_acc:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_ram_infer:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_render_fb:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_v3rq_queue:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_probe_walk_earth:
+    disposition: instrument
+    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
+  zhao_prod_top:
+    disposition: top
+    why: "a top in its own right; not composed into the console"
+  zhao_proj_arena3:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_qsq_bytemul:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_attrdiv:
+    disposition: superseded
+    superseded_by: zhao_raster_attrdiv_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_raster_attrdiv_svc:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_attrinterp:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_attrstep:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_attrwalk:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_blend:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_fog:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_perspuv:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_perspuv_pairpipe:
+    disposition: superseded
+    superseded_by: zhao_raster_perspuv_pairpipe_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_raster_perspuv_svc:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_quant:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_rcp24:
+    disposition: superseded
+    superseded_by: zhao_raster_rcp24_v4
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_raster_rcp24_svc:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_rcp24_v3:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_texjoin:
+    disposition: superseded
+    superseded_by: zhao_raster_texjoin_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_raster_texjoin_v2:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_texture_v3_fit_top:
+    disposition: top
+    why: "a top in its own right; not composed into the console"
+  zhao_raster_tile_pipe:
+    disposition: superseded
+    superseded_by: zhao_raster_tile_pipe_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_raster_toon:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_raster_toon_div:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_render_asset_mux:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_shell_fit_top:
+    disposition: superseded
+    superseded_by: zhao_shell_v2_fit_top
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_shell_top:
+    disposition: superseded
+    superseded_by: zhao_shell_top_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_shell_v2_fit_top:
+    disposition: top
+    why: "a top in its own right; not composed into the console"
+  zhao_stub_top:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_synth_probe:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_sys_pll:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_sys_reset:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_bake:
+    disposition: superseded
+    superseded_by: zhao_terrain_bake_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_terrain_bake_delta:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_bake_v2:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_island_dir:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_lod:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_normalmap:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_normals:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_pipe:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_pipe_rpp3_matw18_fit_top:
+    disposition: top
+    why: "a top in its own right; not composed into the console"
+  zhao_terrain_project:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_residency:
+    disposition: superseded
+    superseded_by: zhao_terrain_residency_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_terrain_shade:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_topo:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_velocity:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_visible:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_writeback:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_aux:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_aux_pipe:
+    disposition: superseded
+    superseded_by: zhao_texture_aux_pipe_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_bilerp:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_bilerp_lane:
+    disposition: superseded
+    superseded_by: zhao_texture_bilerp_lane_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_cache:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_cache_pipe:
+    disposition: superseded
+    superseded_by: zhao_texture_cache_pipe_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_combine:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_early_desc:
+    disposition: superseded
+    superseded_by: zhao_texture_early_desc_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_frag_expand:
+    disposition: superseded
+    superseded_by: zhao_texture_frag_expand_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_fragrob:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_ident_probe:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_island_top:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_material_combine_v1:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_material_combine_v2:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_metajoin:
+    disposition: superseded
+    superseded_by: zhao_texture_metajoin_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_mosaic:
+    disposition: superseded
+    superseded_by: zhao_texture_mosaic_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_palette_res:
+    disposition: superseded
+    superseded_by: zhao_texture_palette_res_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_rsp_dispatch:
+    disposition: superseded
+    superseded_by: zhao_texture_rsp_dispatch_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_tmu:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_tmu_pipe:
+    disposition: pending_compose
+    why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_texture_tmu_plan:
+    disposition: superseded
+    superseded_by: zhao_texture_tmu_plan_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_texture_uv_join:
+    disposition: superseded
+    superseded_by: zhao_texture_uv_join_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+  zhao_video_slotmgr:
+    disposition: superseded
+    superseded_by: zhao_video_slotmgr_v2
+    why: "a newer version exists on disk; owner ruling 2026-09-19 "only the latest version""
+
+# Modules the console elaborates DESPITE a newer sibling existing. Each needs a
+# reason good enough to survive the owner reading it.
+version_exceptions:
