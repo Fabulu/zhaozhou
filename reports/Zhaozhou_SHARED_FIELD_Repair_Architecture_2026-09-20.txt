@@ -1,0 +1,3108 @@
+ZHAOZHOU -- SHARED FIELD PRODUCTION REPAIR
+=======================================
+Architecture, implementation mandate, migration plan and acceptance contract
+Revision 1.0 -- 20 September 2026; final live-repository reconciliation included
+
+Primary repository snapshot:
+  Fabulu/zhaozhou
+  claude/ceiling-architecture-20260912
+  c55e0417c85af2891d5a4f8f95d1bd6a749c3c37
+Related Warp findings snapshot:
+  gz/warp, c91b32706928d2c8d8504e42bc764c746130363c
+Related owner directive:
+  reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt
+  Owner delivery commit 4c256137bba97bb272696782bb1756c10407f70b
+
+LATE LIVE-REPOSITORY RECONCILIATION -- START HERE
+------------------------------------------------
+The repository advanced during this architecture review. Final retrieved heads:
+  hardware coordinator: a72d631d2f8f5fc222e9f64efc78ea114706fc05
+  new gz/fieldp4 lane:  f98e7f864d7266f0ed51d18d5dd8f9b1148ee5ae
+The detailed structural analysis below remains pinned to H=c55e0417 plus its
+explicit sources. This reconciliation overrides its description of what still
+needs to be STARTED, not its numerical or interface requirements.
+
+R101's P4 repair NOW EXISTS on gz/fieldp4. Preserve and integrate it rather than
+reimplementing Commit A blindly. It adds hdr_outreq at loader-header bits
+[32 +: OUT_LANES], ST_PARTIAL=0xF3 and out_incomplete_o. The branch reports
+54 directed checks and a reverted-guard discriminator that fails 6 of them.
+I read the updated host loader/state code and its findings; I did not run them.
+
+It deliberately preserves mask==0 legacy behavior. FH2's strict nonzero
+required-output contract is a NEW versioned production rule, not permission to
+break the legacy R101 fixture meaning. Keep both modes explicit and do not let
+a production capsule accidentally select the permissive mode.
+
+IMPORTANT: R101's mask addresses CONTIGUOUS CAPTURE-WINDOW POSITIONS; FH2's
+mask addresses CANONICAL OUTPUT ORDINALS. They are not the same bit numbering.
+The new sparse output map supplies the translation, not a direct wire.
+
+The new lane also reports that the ordinary composed smoke EXPECTS fld_runs_o
+==0 because it loads no FIELD programs. Preserve that as a negative test, but
+add a real positive installed-program traverse. A green no-program refusal
+path is not evidence that a program ran through this host. Its output-coverage
+probe finds real Earth programs with sparse output registers, so sparse mapping
+is required for actual content, not just an artificial stress test. [S30]
+
+The official a72d631d merge primarily updates projector/resource-root adoption
+and related diagnostics. Do not undo it while changing FIELD's generated
+instances. Refresh again when this directive is received; the uncommitted work
+of live agents remains outside this review. [S31]
+
+STATUS
+------
+This is a NEW, owner-ready implementation directive. Decisions FH01--FH30 are
+proposed resolutions, not claims that older rulings already authorized their
+particular implementation. On adoption, record the new authority and date.
+The canonical numerical laws and the already-ratified Warp decisions remain
+binding. Explicit amendments to transport and scheduling are identified below.
+
+This review read the actual shared host, doorbell, adapters, executor, register
+file, uniform bank, opcode routing, planner, decoder, Earth benchmark driver,
+Earth accumulator probe, terrain consumer, contracts and command definitions.
+It did not run the repository tests, Quartus, Verilator, or a physical board.
+No new ALM, DSP, M10K, throughput, timing, or complete-console fit result is
+claimed. Numerical resource examples are structural calculations, not fits.
+References [Sxx] at the end identify the inspected files and useful line ranges.
+
+READ THIS FIRST: THE ASSIGNMENT IS IMPLEMENTATION, NOT ANOTHER REFUSAL REPORT
+=========================================================================
+
+Repair the ONE shared FIELD production path so that its actual consumers can
+submit correctly identified work, execute supported programs with the exact
+Field semantics, receive every declared output and status, and use the existing
+v3 fabric without clearing/reloading the entire machine for every point.
+Then connect the real Earth and Warp consumers through it, preserving Stamp
+and Flow. Do not make each consumer build a private loader or executor.
+
+The shared prerequisites discovered by the Warp packet ARE this assignment.
+Do not return "Warp is blocked by FIELD" after restating them. A prerequisite
+with a known owner, port change, and test is an implementation task, not a new
+owner question. No block is to be called complete solely because a reference,
+a contract, a filename, or a standalone unit test now exists.
+
+At the same time, do not confuse honest intermediate commits with dishonesty:
+a tested shared-host repair may close ZERO completion-register entries and
+still be necessary progress. Land and label it. The prohibition is against
+CLAIMING completion by moving an unbuilt function to an unconnected stub, not
+against building and testing dependencies in a reviewable order.
+
+COORDINATOR ACTION ON RECEIPT
+-----------------------------
+1. Refresh the hardware branch and all relevant working lanes. Reconcile the
+   Warp findings and any newer FIELD changes before editing. Preserve unrelated
+   work. This document's pin is a baseline, not permission to revert newer RTL.
+2. Assign ONE integration owner for FIELD host/doorbell/protocol and the core
+   composition. Grant that owner responsibility for the shared migrations in
+   this brief. Parallel workers may own the C++ lowerer, tests, and adapters,
+   but not competing edits to the same shared protocol or generated files.
+3. Merge/coordinate the current production-top adoption work. A file being
+   edited by another packet is a scheduling conflict to resolve, not a reason
+   to abandon a mandatory capability. Use isolated worktrees and the current
+   packet protocol; the coordinator owns merges and regeneration.
+4. Start with the explicit-output-contract repair, then productionize the
+   existing prepared-program driver, loader/lifetime protocol, and scheduler.
+   Keep a checked scalar configuration as the correctness control. Prove the
+   actual required rate with useful distinct points, not replicated inputs.
+5. Drive the work through its real consumers. Report exactness, integration,
+   workload deadlines and physical feasibility as FOUR separate results.
+
+The instruction to fit only the complete console is NOT overridden here.
+Use lint, elaboration, differential simulation and structural resource sheets
+now. Obtain a new owner authorization before running an earlier physical fit.
+Never claim that these checks prove placement or timing closure.
+
+CONTENTS
+--------
+  1  Decisions and scope
+  2  Verified starting point and corrections to prior conclusions
+  3  The physical architecture and ownership table
+  4  Canonical profile contracts and transport dimensions
+  5  Canonical program -> FPLAN -> physical executable
+  6  Safe removal of per-point clearing
+  7  Required outputs, uniform outputs and retirement
+  8  Numeric status, faults and point identity
+  9  Program, association and execution-context lifetimes
+ 10  Transactional loading, binding and the doorbell
+ 11  Frozen host-image envelope and metadata records
+ 12  Scheduler, batching, fairness and activation costs
+ 13  Earth: solve the actual producer/consumer mismatch
+ 14  Warp: finish the previous directive through the repaired service
+ 15  Flow, Stamp and Formation compatibility
+ 16  Abort, reset, recovery and backpressure
+ 17  Resource accounting and timing boundaries
+ 18  Performance acceptance: what must really be measured
+ 19  Software, capture, ABI and generated-artifact migration
+ 20  Implementation packets and commit sequence
+ 21  Acceptance tests and deliberate defects
+ 22  Completion rules and required evidence
+ 23  Source register
+ Appendix A: immediate coordinator message
+ Appendix B: numerical sanity checks and invariants
+
+
+1. DECISIONS AND SCOPE
+======================
+
+FH01 -- ONE FABRIC, NOT FIVE ENGINES.
+Keep zhao_field_v3_engine as the shared arithmetic fabric. No private Warp
+executor, no resurrected v1 sequencer, no per-profile copies of the multiplier,
+root, curve, noise or trig services. Common missing opcode support is repaired
+at the shared service/dispatch layer, not hidden in an adapter. [S01,S05,S06]
+
+FH02 -- A PRODUCTION HOST, NOT THE SCALAR TEST DRIVER.
+Replace the production behavior of zhao_field_host with a versioned,
+association-aware front. Retain the old transaction behavior as a named test
+oracle/compatibility instrument, not a second engine in the shipping hierarchy.
+Use zhao_field_host_v2 or an equally unambiguous production name, and update
+all selection/alias/generator sites together. A newer name alone is no evidence.
+
+FH03 -- THREE IDENTITIES, THREE OWNERS.
+A resident program, a prepared association, and an execution context are not
+the same object. Do not keep the old equality "program slot == execution
+context" as the new architecture. Section 9 defines all three lifetimes.
+
+FH04 -- PROMOTE EXISTING WORK BEFORE INVENTING REPLACEMENTS.
+Productionize the Translator, uniform broadcasts, and context refill discipline
+already present in field_v3_earth_directed.cpp. Generalize its incomplete
+opcode-shape handling and remove test-only assumptions. Do not import its
+shadow register file, idealized timing, or non-gating diagnostics as hardware.
+The production packer and the benchmark must call ONE lowerer. [S07,S08]
+
+FH05 -- FULL DECLARED OUTPUTS, NOT "ANY OUTPUT".
+Every runnable strict descriptor specifies a nonempty required-output mask,
+its output count, and an output-source map. Successful completion proves every
+required output is available for THIS point AND all its writes have retired.
+A zero required mask is invalid in production. A real zero value is valid.
+
+FH06 -- UNIFORM OUTPUTS ARE RESULTS.
+A plan may return a prepared scalar with no vector write at all. Seed such
+exports from validated association data; do not require a fictitious write.
+Vector outputs are captured from actual granted writeback. Preserve both paths.
+
+FH07 -- THREE DIFFERENT STATUS FAMILIES.
+Canonical numeric Status{sat,rcp0}, adapter arithmetic status, and execution/
+transport refusal are distinct. Legal numeric saturation is not a failed
+execution. A missing output is not a numeric zero. [S03,S04,S19]
+
+FH08 -- SKIP CLEAR ONLY UNDER A CHECKED INITIALIZATION CONTRACT.
+Validated canonical code cannot read undefined scratch. Prepared native code
+must carry the equivalent physical-register proof. Reload changing inputs,
+restore association state when necessary, and reset validity/status bookkeeping;
+never erase the entire RF per point just because that was the old loop.
+
+FH09 -- ONE ACTIVE PREPARED-DATA DOMAIN, MULTIPLE RUNNING POINTS.
+The initial production implementation may have several execution contexts
+running distinct points of ONE active association. Tables and prepared-ring
+scalars belong exclusively to that association until the fabric drains.
+This deliberately avoids widening every existing service with a new program
+namespace. It is not permission to run different associations against one
+unqualified scalar/table bank. [S09,S10]
+
+FH10 -- ASSOCIATION SWITCHES ARE COUNTED WORK.
+To switch prepared data, stop issuing, drain internal work, preserve completed
+responses in reserved storage, then activate the next association. Reuse only
+explicitly matching table/code generations. Never assert that switching is free.
+The scheduler quantum is a measured/proven envelope, not "run a whole draw
+forever" or "switch tables after every point".
+
+FH11 -- USEFUL LANES, EXACT STATUS.
+At LANES=4 feed four distinct valid points where available. Carry a live mask
+and per-point status. Replicated padding may occupy physical lanes only if it
+cannot add logical outputs or contaminate live status/counters. The current
+OR-reduced ALU flags are insufficient for exact per-point status. [S11]
+
+FH12 -- LEGAL COLD DOES NOT MEAN INCORRECT OR SILENTLY DISABLED.
+HOT admission is distinct from canonical legality. Preserve an exact route
+for legal programs that fail the native prepared packing or rate certificate.
+The default non-HOT hardware route is canonical code on the SAME v3 fabric,
+with shared support completed for any missing canonical operations. It may be
+slower. A software route is used only when explicitly selected under the
+existing cost-class law and actually implemented; it is never substituted
+silently in a hardware-completion test.
+
+FH13 -- AUTHORITATIVE RESERVATION BEFORE PUBLICATION.
+New loading uses reserve -> fill -> validate -> seal -> bind. The allocator
+chooses the slot before writes. A binding becomes executable only after its
+own bytes, maps and metadata are complete. The existing low-level commit/
+re-header behavior remains an explicitly versioned legacy protocol, not an
+accidental implementation of this new transaction.
+
+FH14 -- OP 3 IS EXPLICITLY DECODED.
+The old doorbell's catch-all LOAD arm currently catches post_op=3. Replace it
+with exhaustive decoding before introducing the extension. Unknown operations
+must return a counted refusal, never become a load. [S12]
+
+FH15 -- BACKING STORAGE AND ACTIVE CACHES ARE DIFFERENT.
+Keep immutable canonical/physical program images and prepared associations in
+bounded, pinned HPS staging, reached through the real bridge. On-chip storage
+holds descriptors, the working code, active tables/scalars, contexts and
+credited queues. Do not automatically allocate four full tables for every
+resident program in on-chip RAM. Memory traffic and activation costs count.
+
+FH16 -- NO PER-POINT DIRECTORY LOOKUP.
+Acquire and pin at association open. A live execution refers to a checked
+association generation; raw cache-slot numbers are not a game-facing binding.
+Program eviction or epoch changes cannot silently retarget an association.
+
+FH17 -- ALL CONSUMERS SPEAK THE SAME RESULT CONTRACT.
+Stamp and Flow migrate with the host; Earth and Warp enter through it; Formation
+is supported by the same signature and program path. A missing actual Formation
+caller is not disguised as a tied-off fifth active client. Semantic profile
+support and physical client-port count are separately declared.
+
+FH18 -- EARTH GETS ONE COMMAND-ORDERED REDUCER.
+Resolve the existing field-major/vertex-major conflict explicitly. The selected
+production Earth path is field-major within one patch working set, with the
+existing terrain composition law preserved and exactly one accumulator owner.
+This amends the MEANS of R91 and the old vertex-major port arrangement, NOT the
+height/velocity/material/nav semantics or the content tier. See section 13.
+It avoids a huge matrix of all per-field results merely to transpose streams.
+
+FH19 -- WARP SEMANTICS STAY W01--W18.
+Post-skin, view-independent deformation; exact normal representation; proper
+culling bounds; identity preservation; both views reuse one deformation.
+This directive replaces the shared-FIELD prerequisite discussion, not the
+Warp application or visual laws. [S19,S20]
+
+FH20 -- CREDIT BEFORE ACCEPTANCE.
+Accepting work reserves a terminal-result location. Neither a stalled consumer
+nor a queued maintenance command may prevent an already issued internal result
+from draining. Contexts cannot be recycled while old writes can still arrive.
+
+FH21 -- ONE GENERATED HARDWARE-CAPABILITY TABLE.
+Opcode shape, service destination, supported execution forms, required operand
+counts and result width are checked from one machine-readable source. Retain
+the existing single-routing-table fix; do not recreate two diverging lists.
+Generate or mechanically cross-check C++/SV tables. [S06]
+
+FH22 -- PROGRAM SHAPE IS NOT INSTRUCTION COUNT.
+The Warp ceiling stays 48 canonical instructions; the global canonical ceiling
+stays 64. A physical code-store capacity is a separate field. Parameter values
+may not silently truncate a six-bit canonical register index or a legal program.
+Initial exact configuration uses REGS=64 and physical capacity >=64 words.
+
+FH23 -- FREEZE PRICED TOPOLOGY, NOT INVENTED ALM LIMITS.
+Publish physical memory shapes, arithmetic instances and marginal changes.
+There is no proved ALM allocation for this repair. Do not promise one, count
+an existing engine five times, or describe every RAM as bits/10,240 blocks.
+
+FH24 -- FOUR GATES, NOT ONE GREEN NUMBER.
+Report semantic conformance, composed functionality, workload deadlines, and
+physical fit/timing independently. Passing the first two does not establish
+that the complete console fits or sustains its guaranteed workload.
+
+FH25 -- NO UNOWNED SHARED PREREQUISITES.
+The integration owner owns loader, mappings, context control, export/status,
+common parameters and both existing-adapter migrations. A worker may report
+a new defect, but the coordinator assigns and closes it rather than sending
+another Warp packet to discover the same absence.
+
+FH26 -- LEGACY IS AN EXPLICIT MODE, NEVER THE STRICT DEFAULT.
+Keep old raw-port fixtures usable only through a named compatibility decoder.
+They must specify their actual output count. No production program is made
+successful by omitting its output contract or taking an implicit zero-mask
+compatibility escape.
+
+FH27 -- BOUNDS AND SIGNATURES ARE CHECKED ABOVE NUMERIC EXECUTION.
+A Field program's generic decoder validation is necessary but not sufficient
+to bind it as a particular engine profile. Validate counts, lane types, map
+indices, immutable input set and the chosen adapter signature as well.
+
+FH28 -- CAPTURE EVERYTHING THAT SELECTS A RESULT.
+Frame/epoch identity, canonical bytes, derived-plan versions, prepared values,
+consumer selection and association ordering must be reconstructible from the
+capture and its resources. Captures never rely on a mutable live HPS pointer
+whose historical contents were not recorded.
+
+FH29 -- FAIRNESS INCLUDES ACTIVATION AND MAINTENANCE.
+Bound execution batches and maintenance slices; reserve bandwidth for mandatory
+clients. A fairness argument omitting scalar/table loads, retries, result
+storage, or consumer waits is not an admission proof.
+
+FH30 -- IMPLEMENT THE ENTIRE COMMISSIONED SLICE.
+End the campaign with strict real Stamp/Flow host traffic, real command-driven
+Earth evaluation, and active DrawWarpedForm deformation through the repaired
+service. Shared-library conformance for Formation is required; completion of
+an unrelated missing Formation application must not be claimed by a test client.
+Do not wait for a decreasing gap count to decide that a shared correctness
+repair deserves a commit.
+
+
+2. VERIFIED STARTING POINT -- WHAT IS REALLY WRONG
+==================================================
+
+2.1 The old host is narrower than its advertised generality
+---------------------------------------------------------
+The inspected host grants one client, clears REGS, writes IN_LANES, starts one
+context, and waits for END and a single response. The core uses Stamp/Flow
+clients and 13 input / 7 output transport lanes. The Warp profile needs 15
+inputs and 6 outputs. The core's 32-word code and 32-register settings cannot
+represent all legal canonical Warp programs. See [S01,S13,S20].
+
+Widening those constants is necessary, but does not repair scalar operand
+mapping, table ownership, output extraction, or throughput.
+
+2.2 A 7-lane bus does NOT mean every program declares 7 outputs
+------------------------------------------------------------
+The current header gives an output base but no output count/mask. Its
+cur_out_seen != 0 condition only proves that at least one position in the
+transport window was written. At the baseline it cannot prove completeness because it
+was never told which positions were required. R101 now adds a window mask;
+the late reconciliation [S30] records that narrower repair. [S01]
+
+Important correction to earlier commentary: a test using one actual output on
+a four-word bus is NOT, by itself, proof that the program promised four
+outputs and violated that promise. Transport width and declared arity differ.
+The demonstrated defect is the inability to represent and enforce the true
+output contract. Repair the metadata and test valid one-output and invalid
+partial-multi-output cases separately. Do not "fix" the test by demanding all
+padding lanes be written. The same distinction applies to inputs: the raw
+add fixture uses R0/R1 and writes R2, even though the transport preloads twelve
+words. A strict import must declare its actual two-input signature; the bus
+width is not evidence that R2 was a canonical read-only input. [S29]
+
+2.3 FPLAN already separates uniforms -- the production host does not use it
+-------------------------------------------------------------------------
+zfield::plan, prepare and execute_point already exist. They distinguish scalar
+and vector sources and have an explicit OutTag map. The Earth benchmark already
+broadcasts prepared scalar values into upper RF registers, maps native uops,
+preloads different points and keeps contexts supplied. [S03,S07,S08]
+
+Therefore "there is no useful fast-path machinery anywhere" is too broad.
+The absent piece is the PRODUCTION transport/scheduler/lifetime implementation.
+Promote the real lowerer and driving discipline, not a new approximate design.
+
+However, its Translator is not a complete general Field lowering library:
+its manually selected src_group_width and map_one cases cover its corpus, not
+all op shapes. Mixed scalar/vector members may also break group adjacency.
+Do not turn a test helper into universal production law merely by moving it.
+
+2.4 The engine does not natively understand all FPLAN source tags
+----------------------------------------------------------------
+The executor uop store has op,dst,a,b,c,imm and its ordinary operands all come
+from the RF. Prepared RING has a special scalar-bank path. A generic FPLAN
+UopSrc{kind,index} cannot simply be written into those register-number fields.
+The software-to-physical lowering must make that translation explicit. [S05,S08]
+
+2.5 Global tables/scalars are not isolated by a program slot
+-----------------------------------------------------------
+zhao_field_v3_sbank is one 64-slot bank. zhao_field_v3_ring_svc caches prepared
+descriptors and invalidates on sb_we. Table loading addresses a table id and
+entry, not an independent program namespace. [S09,S10]
+
+Eight program slots do not buy eight independently active table/scalar sets.
+FH09 makes exclusive association ownership enforce this fact. Concurrency
+between associations is a later priced option, not assumed behavior.
+
+2.6 Canonical RCP and varying-radius RING need explicit execution coverage
+-------------------------------------------------------------------------
+The current ordinary ALU handles END/MOV/LDC, arithmetic/select/compare and
+DOT2/3. The shared long-op table covers many other operations, including the
+prepared RING uop, but not canonical RCP 0x17 or varying-radius RING 0x21.
+The latter is explicitly called cold in the routing source. [S06,S14]
+
+A legal program failing HOT preparation must not be handed to a supposedly
+universal canonical path without checking these operations. Finish them as
+shared service work or use an explicitly commissioned exact software route.
+The full-silicon conformance endpoint in this brief requires the shared
+hardware route; a deliberate cold classification remains a RATE distinction.
+
+2.7 Skipping E_ZERO is justified by a real existing validator, not optimism
+-------------------------------------------------------------------------
+zfield::decode checks every source member is defined before use, every
+instruction destination lies outside the input interval, and every declared
+output is defined. [S04]
+
+That establishes a useful canonical no-scratch-clear proof. It does not, by
+itself, prove the physical prepared register assignment or the caller's claim
+that an input remains constant over an association. Those need the checks in
+section 6. In particular, a register that was uniform before lowering can be
+reused/overwritten; inspect the lowered program, not only the canonical input.
+
+2.8 Per-lane status is lost by the current vector ALU wrapper
+-----------------------------------------------------------
+The wrapper has per-lane saturation flags internally, then ORs them into group
+flags. That is adequate for a group aggregate, not a returned Status for each
+individual Warp or Flow point. Preserve the narrow flags before reduction and
+carry them with actual context/lane identity through retirement. [S11]
+
+2.9 The Earth consumer mismatch is not fixed by a fast host alone
+--------------------------------------------------------------
+FIELD.SEQ.EARTH requires field-major work and uniform preparation once per
+association. The actual zhao_terrain_patch loop requests field results
+vertex-major to avoid a lattice accumulator. Its own header describes the
+trade and says a cache-backed implementation may transpose it. [S15,S16]
+
+A globally shared table bank plus a vertex-major loop over different programs
+can force an association switch at nearly every point. That destroys the
+amortization this repair is supposed to buy. Section 13 chooses one bounded,
+field-major TERRAIN.PATCH owner rather than ignoring the ordering mismatch.
+
+2.10 A useful older rate is not the current whole-slice deadline
+--------------------------------------------------------------
+The familiar 10,416 clocks is an older comparison allowance. The amended Earth
+contract states <=6,000 clocks per full association and <=850,000 for the
+128-association stress slice. It also corrects UPDATE to 297 row-bounded quad
+groups, while INIT/DRAIN use 273 flat groups. [S15]
+
+The benchmark driver still contains a 273-group scaling assumption and can
+separate gating from diagnostic failures. Its throughput is useful evidence,
+not automatic proof of the amended full production slice. Correct the harness
+scope before inheriting any pass label. [S07,S08]
+
+
+3. SELECTED PHYSICAL ARCHITECTURE
+================================
+
+          Immutable canonical program + capture identity
+                              |
+                  zfield::decode / plan / prepare
+                              |
+               Production physical lowerer + validator
+                              |
+                  Pinned HPS host-image capsules
+                              |
+                 Existing HPS bridge / arbitration
+                              |
+                Transactional FIELD capsule loader
+                              |
+        Program catalogue ----+---- Association descriptor/store
+                              |
+                    Resolve / acquire / pin
+                              |
+                 Bounded association scheduler
+                              |
+             ONE active table + prepared-scalar domain
+                              |
+                Context feeder / native input map
+                              |
+                ONE zhao_field_v3_engine fabric
+                   several live point contexts
+                              |
+                  Granted writeback + END/drain
+                              |
+           Per-context export/status and credited retirement
+                              |
+             Per-client ordered result delivery / adapters
+                   /       |       |       \
+                Earth     Warp    Flow     Stamp
+
+Formation uses the same profile service when its real caller is introduced.
+Do not instantiate an otherwise unconnected fake Formation producer for a
+smaller gap number or for a claim of five live profiles.
+
+3.1 Owners
+----------
+Canonical bytes and numeric semantics: zfield decoder/interpreter + frozen
+Field IR and Q-format specifications. No new opcode semantics in host C++.
+
+Physical lowering: new production library extracted from the current Earth
+benchmark Translator and its proven contraction/preparation helpers, with
+complete generated opcode-shape handling and explicit fallback classification.
+
+Program catalogue: the FIELD residency layer, adapted from the existing
+progcache/progdir implementation. It owns valid identities, ready state,
+pins, eviction and publication. One authority, not two shadow directories.
+
+Association state: new shared-host owner. It binds a program identity, prepared
+uniforms, caller/frame identity, input variability contract, output contract
+and scheduling position. A change of uniforms creates a new generation.
+
+Active scalar/table stores: existing v3 stores behind the activation owner.
+They are caches of the selected immutable association/program, not global
+mutable registers that software may overwrite while any context executes.
+
+Context feeder: tracks free/preloading/running/retiring contexts and owns all
+preload/start writes. It observes all executor events on every clock, including
+clocks spent loading a different context.
+
+Export collector: captures actual committed RF writes, seeds uniform exports,
+accumulates numeric status and fences END against outstanding writes.
+
+Client adapters: translate their EXISTING application records, retain their
+identities, and apply only their application laws. No adapter runs the Field
+interpreter in RTL or creates a private residency namespace.
+
+3.2 Keep the existing context-indexed uop store initially
+-------------------------------------------------------
+The existing executor stores uops by {context,pc}. Do not redesign that store
+solely to make this migration look elegant. On first activation of a code image,
+load that code into the execution contexts assigned to the association; tag
+each context's loaded code with the complete physical-code identity. Reuse
+those words only on an identity match. Copying code is activation cost and is
+counted. PROGS and CTX are no longer required to be equal.
+
+A subsequent measured optimization may share one program store plus a context
+program-base lookup. It must preserve ready/valid and registered fetch timing,
+show a real resource/activation benefit, and not get mixed into first conformance.
+This keeps the first repair smaller and lets the existing full-engine tests
+continue to exercise the actual arithmetic/execution path.
+
+3.3 Do not replicate everything to make isolation easy
+-----------------------------------------------------
+Exclusive active-association ownership is deliberate. A separate four-table
+cache and scalar bank for each of eight programs is not necessary for correctness
+when at most one prepared-data domain executes at once. Context parallelism
+still hides the v3 instruction pipeline within that domain.
+
+The price is nonzero switching cost. If mixed-workload acceptance proves this
+choice insufficient, measure a TWO-domain tagged-cache candidate, including
+all service-cache keys and grouping keys. Do not jump directly to five engines.
+Such a change needs a new physical resource sheet and re-run mixed-identity tests.
+
+
+4. CANONICAL PROFILES AND TRANSPORT DIMENSIONS
+=============================================
+
+Canonical lanes in spec/form/field-ir.md, by listed field rather than its
+occasionally wrong parenthetical count:
+
+ Profile    Input lanes                                            Outputs
+ Earth 0    x,z,age,phase,p0..p7                       12            4
+ Warp 1     px,py,pz,nx,ny,nz,a0..a3,time,p0..p3       15            6
+ Flow 2     px,py,pz,vx,vy,vz,age,seed,dt,p0..p3       13            7
+ Formation3 index,time,parent_rot[2],parent_trans[2],p0..p5 12       6
+ Stamp 4    u,v,age,strength,p0..p3                     8            3
+
+Warp's old "14" is a count typo, not permission to remove p3. Formation's
+listed fields likewise add to 12, not the old parenthetical 11. Validate the
+full profile-specific type/order list in the shared signature registry.
+The decoder currently permits generic program I/O records; it does not enforce
+these exact per-profile signatures. Keep generic decoder tests valid while
+making APPLICATION binding strict. [S03,S04,S20]
+
+Canonical outputs:
+ Earth: height, velocity, material(u32), nav_cost.
+ Warp: displacement dx,dy,dz and replacement nx,ny,nz.
+ Flow: replacement position[3], replacement velocity[3], attr0.
+ Formation: translation[3], rotation(angle), scale, material phase.
+ Stamp: tag_op(u32), strength(unit fx16), emissive(unit fx16).
+
+Capacity constants:
+  FIELD_MAX_INPUTS = 15
+  FIELD_MAX_OUTPUTS = 7
+  canonical register count = 64
+  canonical instruction ceiling = 64 globally, profile ceilings unchanged
+  active canonical tables = 4, each with independent 2..64-entry count
+
+These are semantic transport maxima, NOT a promise to preload every lane on
+all profiles or to execute every program in one cycle. Request metadata carries
+the actual input and output contracts. Padding is zeroed, ignored and never
+considered an output obligation.
+
+Maintain semantic profile id separately from physical client id. For example,
+legacy clients Stamp=0 and Flow=1 may remain numbered that way while their
+profiles remain Stamp=4 and Flow=2. Generate the mapping; never infer one from
+the other's array index.
+
+Do not reset payload RAM arrays asynchronously. Reset validity, generations,
+credits and small control registers. Payload becomes readable only after its
+own complete write and publication condition.
+
+
+5. CANONICAL PROGRAM -> FPLAN -> PHYSICAL EXECUTABLE
+===================================================
+
+5.1 Three representations, one numerical authority
+--------------------------------------------------
+A. Canonical .zprog: the game-visible semantic object. Existing validation,
+   instruction encoding, hash and interpreter remain authoritative.
+B. Logical FPLAN: existing exact uniform/varying decomposition, source-kind
+   tags, output map, preparation block and demand vector.
+C. Host physical image: a versioned mapping to the CURRENT v3 ports, preload
+   schedule, output registers/scalars, supported service routes and capacities.
+
+Do not write B directly into C's old 64-bit words by stripping source tags.
+Do not invent a new arithmetic interpreter for C. Its C++ executable model
+calls the existing semantic step layer for operations and models only physical
+placement, data ownership and ordering.
+
+5.2 Productionize the existing native-register lowering
+------------------------------------------------------
+Move the useful Earth benchmark logic into a library such as:
+  reference/include/zfield/zfield_host_plan.hpp
+  reference/src/zfield/zfield_host_plan.cpp
+and a tool:
+  tools/field/pack_field_host.cpp
+These are PROPOSED new paths, not existing evidence.
+
+The first native mapping is the existing strategy:
+  physical varying registers: lower region
+  broadcast prepared scalar registers: upper region
+  prepared RING descriptors: existing 64-slot scalar bank
+
+Use the existing FPLAN n_vreg, scalar slot identity and OutTag objects. The
+physical mapper may compact actually referenced scalar slots, provided every
+reference, preparation export and source-map entry moves consistently. It
+must check the final register high-water mark, not assume n_vreg alone is the
+RF requirement. The current corpus example needing 7+29=36 is a concrete
+reason REGS=32 is insufficient. [S07]
+
+5.3 Complete opcode shapes, rather than expanding the helper's guesses
+---------------------------------------------------------------------
+For every canonical opcode, read the generated source group widths and operand
+roles. Map flattened FPLAN sources back to the actual A/B/C group starts.
+Examples that must be explicit:
+  DOT3: A[3], B[3], one destination.
+  LEN3/NORMALIZE3: A[3], no invented B group.
+  DIST2: A[2], B[2], not A[3]+B[1].
+  ROT2: A[2] and angle B, not the third flattened source as C.
+  ROT3: A[3] and angle B plus the axis immediate.
+  MAD/SELECT/CLAMP: three scalar operands in their canonical roles.
+
+Check physical adjacency for EVERY multi-member group. A logical group with
+some scalar and some vector members may not remain adjacent after the split.
+The initial mapper may insert exact MOV packing into reserved scratch if it
+proves space and counts the added instructions. It may not alias neighboring
+registers and hope the resulting numbers agree.
+
+If the native mapping cannot meet physical register/code capacity or adjacency,
+select the exact canonical execution form described in 5.5. Do not reject an
+otherwise valid .zprog solely because this optimization failed.
+
+5.4 Prepared RING and smoothstep contraction
+-------------------------------------------
+Preserve the existing UOP_RING_PREP encoding and its scalar index checks.
+Four six-bit scalar indices occupy bits 0..23. The CURRENT Earth translator
+also carries smooth mode in bit 24. Some older comments still describe bits
+31..24 as wholly reserved; do not implement the old comment over the live
+smooth-mode consumer. Reconcile documentation with source and tests. [S08,S10]
+
+Promote the proven contraction once, with its differential control. Do not
+hand-copy pattern matching into each profile or packer. The untouched logical
+FPLAN and canonical interpreter remain the comparison oracles. The optimization
+must preserve outputs AND numerical status, including intermediate saturation.
+A shorter instruction stream with different sticky flags is not equivalent.
+
+5.5 Exact canonical form on the same fabric
+-------------------------------------------
+Every canonical input already occupies R0..R(n_in-1), and input registers are
+read-only. A canonical execution image can keep the original register numbering,
+original instruction count and original output-register map. Uniform input
+registers are loaded once per context activation; varying inputs change per
+point. Scratch does not require per-point clear under section 6.
+
+Complete shared opcode coverage before calling this a universal exact route:
+- Add canonical RCP to the shared dispatch/service fabric using the existing
+  exact Field reciprocal law/leaf, including rcp0. Do not substitute the
+  raster/projector reciprocal merely because its width looks similar.
+- Add a bounded canonical varying-radius RING route. It must evaluate the same
+  midpoint, saturating differences, reciprocals and separately rounded products
+  as the canonical step law. Sequence those through the shared services; factor
+  reusable v3 ring product logic instead of building a private Warp arithmetic
+  copy. Prepared uniform RING remains the faster route.
+- All other long op routes must be verified from actual service dispatch, not
+  only from field_long_width. A classified opcode with no live consumer fails
+  structural conformance.
+
+This adds support to the existing engine generation; it is not resurrection of
+the v1/v2 sequencer. Distinct cold service microsequences are permitted; a second
+complete interpreter datapath is not. Their costs and op matrices are explicit.
+
+Canonical legality does not guarantee realtime admission. The actual code and
+service demand decide HOT/COLD. Keep the caller's selected execution class in
+captures and completion evidence. A cold failure to meet a HOT deadline is
+reported as such, not hidden by reduced work or a silent software substitution.
+
+5.6 Versions and identities
+---------------------------
+Keep FIELD_IR_VERSION unchanged unless canonical semantics/validation changes.
+Keep the logical FPLAN ABI unchanged if its existing schema is unchanged.
+Introduce FIELD_HOST_PROTOCOL_VERSION=2 and FIELD_HOST_IMAGE_VERSION=1 for this
+new transport/image. Allocate a new fabric version/capability revision when
+the new physical opcode routes or packing become active; do not execute a
+cached physical image certified for the previous fabric by matching only hash.
+Record the actual newly assigned version in ONE generated registry.
+
+The canonical hash omits some metadata, including the output map, because its
+law hashes code and tables. It is an attribution/cache component, NOT proof
+that two complete program objects have identical binding semantics. The program
+record also identifies the full canonical image (byte length + validated image
+CRC, and the capture/resource identity). A same-hash different-image collision
+must never silently select another output map. Do not change the canonical hash
+formula to make this problem disappear.
+
+CRC equality is not byte equality. Deduplication of independently supplied
+canonical objects requires software's exact byte comparison, or else keep them
+as distinct immutable object generations. Never deduplicate solely on a pair of
+32-bit checksums. A repeated canonical resource handle/epoch must identify the
+same immutable canonical bytes; a different object requires a new generation.
+
+A canonical program may have multiple physical images (different varying masks,
+execution forms or capacity-certified layouts). Each installed image gets its
+own generation-checked PROGRAM image handle. An association names a binding to
+ONE such image. Its varying mask and output/preload maps must match that image;
+changing them does not mutate an older pinned variant. This is metadata inside
+the program catalogue, not another private execution engine.
+
+
+6. SAFE REMOVAL OF PER-POINT CLEARING
+====================================
+
+6.1 Canonical proof
+-------------------
+For every validated canonical program:
+  - every instruction source is an input or was defined by a preceding op;
+  - no instruction writes an input register;
+  - every declared output is defined by the program;
+  - the program is straight-line and terminates at the validated END.
+
+Therefore, after loading all changing inputs for the new point and ensuring
+unchanged inputs still belong to this association, previous-point scratch
+contents cannot affect a legal execution. This is an induction over the
+instruction sequence, not a performance heuristic. [S04]
+
+Erase the blanket E_ZERO walk from the strict validated path. Keep a slow
+clear control for differential testing and explicit legacy unvalidated bench
+images only. Production may not bypass validation to enter the fast path.
+
+6.2 Native physical initialization proof
+----------------------------------------
+The production lowerer/validator emits and checks:
+  - physical varying input map and required per-point write set;
+  - association preload set, values and destination registers;
+  - physical instruction definitions and reads, including expanded group members;
+  - immutable broadcast registers not clobbered by the vector program;
+  - output-source maps and their required validity;
+  - code/register bounds after any packing or contraction.
+
+Start the symbolic defined-set with this association's committed preload set
+plus this point's accepted varying writes. Walk every physical instruction,
+checking reads before adding its destination group. Reject the physical image
+if a read is unsupported by that set. Never "repair" a bad proof by setting
+all registers defined because a previous context happened to use them.
+
+6.3 Input immutability is a caller contract
+-----------------------------------------
+zfield::decode does NOT discover whether time, p0 or a vertex attribute is
+constant across a caller's work. zfield::plan accepts a varying mask.
+The association builder chooses the mask from the real producer and freezes
+all uniform values. The host validates that point traffic cannot overwrite
+uniform-only lanes. Changing one of those values requires a new association
+version or an explicit close/reactivate, never a live pin change.
+
+Typical masks, subject to the actual application signature:
+  Earth: x,z vary; age,phase,p0..p7 uniform for one field/patch/tick association.
+  Flow: position,velocity,age,seed vary; dt and p0..p3 uniform for one selected
+        population/program/tick cohort.
+  Warp: position,normal vary; STREAM4 attributes vary; INLINE attributes can be
+        uniform; time and p0..p3 uniform per immutable draw descriptor.
+  Stamp: u,v vary; age,strength,p0..p3 are explicit frozen association inputs.
+  Formation: index varies; any other value declared varying by the actual
+        caller must remain varying rather than being guessed uniform.
+
+6.4 State that DOES reset per point
+-----------------------------------
+Clear export seen/required bookkeeping, point-local status/ledger, pending END,
+write obligations, point identity and any service request state whose lifetime
+is one point. This is small control state, not a 64-word payload clear.
+
+After context reassignment, do not reuse a previously loaded uniform register
+unless its association-generation tag matches. A matching program hash is not
+a matching parameter set. Check retained code identity separately from retained
+prepared-data identity.
+
+6.5 Proof controls
+------------------
+Run the same legal corpus through slow-clear and no-clear forms with deliberately
+different initial RF garbage, alternate associations, and reused contexts.
+Compare all outputs, flags and final terminal classification. Poison the scratch
+set in the test model; a real source read from stale storage must fail visibly.
+The proof must cover the maximum register indices and all adjacent groups.
+
+
+7. REQUIRED OUTPUTS, UNIFORM OUTPUTS AND RETIREMENT
+===================================================
+
+7.1 Strict output contract
+--------------------------
+Each physical image carries:
+  output_count: 1..7 at a production profile binding;
+  required_mask: exactly the declared output ordinals, never bus padding;
+  source[output_ordinal]: VECTOR_REG or PREPARED_SCALAR plus checked index;
+  canonical output ordinal/type correspondence;
+  physical image/signature version.
+
+An internal test/compatibility binding may declare a smaller arity than a full
+application profile. It remains explicitly such a binding. A proper canonical
+Earth application declares its four outputs; Warp declares six; Flow seven.
+Two output ordinals may reference one prepared scalar if the logical FPLAN
+legitimately produces that result. Capture by output ordinal, not by a unique
+register-to-output assumption. The canonical decoder's distinct output-register
+rule still applies to canonical bytes; physical aliasing is a different layer.
+
+7.2 Immediate corrective commit on the old host
+----------------------------------------------
+At the final refresh, gz/fieldp4 has already implemented R101's window mask
+at header bits [32 +: OUT_LANES], ST_PARTIAL=0xF3 and out_incomplete_o. Integrate
+that work and its controls first. Complete the larger migration from it;
+do not recreate the same patch from the older baseline. [S30]
+
+Update every strict producer/fixture to supply its actual output contract. A header extension can use a
+versioned field in currently unused header bits, after verifying all consumers.
+Do not treat nonzero old unused bits as silently valid on a legacy decoder.
+
+For contiguous legacy physical images:
+  required_count <= OUT_LANES;
+  required_mask derived from that count, or explicitly checked;
+  out_base + required_count <= REGS using a carry-preserving expression.
+
+Replace the any-output success decision with a next-state mask comparison:
+  seen_next = seen_before | writes_accepted_this_clock | valid_uniform_seeds;
+  complete_outputs = (seen_next & required_mask) == required_mask;
+
+For legacy fixtures whose program has one output, declare one. Do not change
+it to pretend the program promised four. For new strict imports, absent
+metadata or zero required_mask is a load-time refusal. Do not use zero to mean
+"accept whatever happened" in the selected production host.
+
+R101 uses a PHYSICAL WINDOW mask, not an output-ordinal mask. For example,
+the new lane reports crater_ring outputs R13,R14,R15,R17: with out_base=13 the
+window mask is 0x17, while four required canonical output ordinals have mask
+0x0F. A window mask can detect a missing write; it cannot compact window slots
+0,1,2,4 into canonical result slots 0,1,2,3. Name those quantities separately
+in the generated schema and implement the actual map in the new host.
+
+This patch is not the final sparse/uniform-output implementation. Label that
+scope precisely; it is a useful first commit, not a reason to stop the campaign.
+
+7.3 Sparse and uniform exports
+------------------------------
+For VECTOR_REG output j, a granted write to its physical register updates
+export_value[j] and sets seen[j] for that context/lane. If several outputs name
+the register, update all matching ordinals. A later write replaces an earlier
+value, so the result at retirement is the FINAL value.
+
+For PREPARED_SCALAR output j, validate the scalar's written bit and preparation
+identity at association seal, then seed the export when a point/context starts.
+The value zero is fully valid if those provenance conditions hold. Do not wait
+for a vector write which an all-uniform program will never generate.
+
+All-uniform programs need a defined terminal path: prepare once, seed every
+required output and numeric status, and produce one response for each accepted
+point. This is exact constant-result execution, not a fake program result.
+Do not start a context that can never emit END merely to make a counter move.
+
+7.4 END is not sufficient by itself
+------------------------------------
+Publish a successful response only after:
+  - the point/group has a currently RUNNING identity;
+  - a genuine terminal END has been observed for that identity, OR the
+    validated UNIFORM_ONLY form has generated its explicit zero-body terminal;
+  - all prior ALU and long-op writes have retired;
+  - no instruction/service completion can still modify its outputs;
+  - every required export is valid for this point;
+  - no transport/execution fault has invalidated it;
+  - its terminal-result credit is still owned by this request.
+
+Important: a mask alone cannot catch a missing FINAL overwrite of an output
+that was already written earlier. The engine's write/drain fence is necessary
+in addition to the mask. Verify the current END/release pipeline; repair the
+engine if END can precede earlier committed work. A fixed guessed "wait five
+clocks after END" is not a fence and fails with service backpressure.
+
+The Earth benchmark already records duplicate/late done and late writes.
+Production must own this state in hardware. Observe executor events on EVERY
+clock, including loader/preload/refill clocks. [S08]
+
+7.5 Context and response lifetimes differ
+-----------------------------------------
+Reserve an output slot before accepting a point/group. Once the final result
+has been copied to that reserved slot and all internal work is drained, the
+execution context can be reused even if the application has not consumed the
+response. The reserved slot cannot be reused until response delivery or a
+counted cancellation terminal event.
+
+No consumer may hold the physical Field fabric in E_RESP forever. A stalled
+client may consume its own finite output credits; it must not hold table/
+scalar ownership after all its arithmetic is done. Separate client result
+queues or reserved shares of a common ROB provide this isolation.
+
+
+8. NUMERIC STATUS, FAULTS AND POINT IDENTITY
+===========================================
+
+8.1 Result shape
+-----------------
+Logical result fields, carried directly or through an indexed owned record:
+  session_epoch u32;
+  association_handle {index,generation} u32;
+  request_sequence u32;
+  original_point_ordinal u32;
+  client_cookie u64;
+  output_present_mask u8;
+  output_words[7] s32/raw32, canonical output order;
+  numeric_sat bool;
+  numeric_rcp0 bool;
+  numeric_ledger cause bits/counters at the scope the numerical contract requires;
+  terminal_code enum;
+  source_id u32 for attribution.
+
+client_id is fixed in the association and result-router record. If separately
+carried, compare it. The client_cookie refers to the adapter's full point
+identity; it is NOT a truncated source_id. Warp's geometry token remains in
+its owned join table or is carried whole; a lookup cookie has an index and a
+generation with a bounded-outstanding proof.
+
+request_sequence is a dense acceptance order. original_point_ordinal is the
+application's index and can be sparse (e.g. covered lattice points). Do not
+confuse the two when ordering returns or checking counts.
+
+8.2 Suggested terminal-code meanings
+--------------------------------------
+Names are proposed; allocate exact numbers in one generated host-protocol enum:
+  OK; NO_PROGRAM; STALE_BINDING; BAD_SIGNATURE; BAD_IMAGE; BAD_PREPARATION;
+  INCOMPLETE_OUTPUT; UNSUPPORTED_PHYSICAL_OP; EXECUTION_FAULT; CANCELLED;
+  NO_CAPACITY; BAD_ORDER; BAD_VERSION; MEMORY_REFUSED.
+
+Every refused accepted transaction receives exactly one terminal event. Unaccepted
+ready/valid offers owe no response. Never interpret the old 0xF0--0xF2 namespace
+as canonical sat/rcp0. The legacy bridge translates it explicitly.
+
+8.3 Per-point numeric status
+----------------------------
+Uniform numeric status is attached to the association preparation. Varying
+status is collected from that point's actual executed operations. Return their
+logical OR, exactly as the canonical interpreter would for one evaluation.
+Where a full SatLedger is part of a differential, preserve its specified
+per-cause semantics as well; do not replace counts with booleans unnoticed.
+
+The existing vector ALU's l_sadd/l_smul/l_srescale arrays provide an extraction
+point BEFORE group reduction. The long-op services need the corresponding
+lane/context attribution through their tagged completion path. Prepared RING
+already has per-lane reply flags; carry them instead of OR-ing them early.
+Expose rcp0 from the shared reciprocal/normalization/ring paths where the
+canonical step law reports it. [S09,S10,S11]
+
+A global sticky fabric alarm is useful for diagnosing fabric corruption, but
+cannot supply exact per-point numerical status when contexts overlap.
+For unrecoverable fabric-internal corruption, fail the active execution domain
+and drain/reset it safely; do not guess which innocent point to blame.
+
+8.4 Tail masks
+--------------
+A quad contains 1..4 live points. Invalid lanes must not create results, advance
+logical point counters, change terrain material/dirty state, or contribute flags
+to a live lane. Duplicate a live lane as safe physical padding only when no
+lane-specific numeric path can contaminate another; otherwise gate lane effects.
+A group-level aggregate may OR only LIVE lane statuses.
+
+8.5 Fault is not zero, but adapters may have explicit fallback laws
+------------------------------------------------------------------
+The host always returns the real terminal classification. An application may
+then use its already-declared failure policy: Warp poisons a batch, Flow may
+continue without field acceleration under its existing policy, and Stamp must
+finish/cancel its traversal without orphaning the shared service. Those policies
+belong in the adapter contract and their tests. They are never implemented by
+making the host return OK with fabricated zeros.
+
+An unused result lane at an application seam is not an absent result from the
+host. R40 deliberately consumes only Flow's returned velocity at PART.UPDATE.
+The host must still correctly evaluate and return every declared Field output.
+
+
+9. PROGRAM, ASSOCIATION AND CONTEXT LIFETIMES
+============================================
+
+9.1 Program object
+-------------------
+One immutable loaded program object records:
+  full handle32 (current convention: index in high 24, generation in low 8);
+  resource/session epoch;
+  canonical hash, canonical full-image length and CRC/fingerprint;
+  logical-plan version, host-image version, fabric capability version;
+  profile and application signature;
+  native/canonical execution form and its validated physical image;
+  code/map/table counts and bounds;
+  pinned backing image address/extent;
+  directory generation, valid/ready state, references, replacement information.
+
+Use full handle/epoch validation. Do not compare only the 24-bit index or only
+the content hash. The hash remains useful for content reuse; a share is legal
+only if all semantic metadata required by the binding is identical.
+
+9.2 Association object
+-----------------------
+An association is a program applied to a fixed set of uniform values and an
+ordered stream of varying points. It records:
+  owner/client, frame identity and full source attribution;
+  pinned program object/generation and selected physical form;
+  prepared-input values and prepared scalar image;
+  preparation serial/generation, not merely the program hash;
+  varying-input mask, required input map and actual output contract;
+  expected point/work bound and next request/retirement sequence;
+  scheduled work class/quantum and cancellation state;
+  pinned backing storage plus a ready/validated state.
+
+Two draws using one .zprog with different time/parameters are two associations.
+Two different programs using scalar slot 5 do not share the meaning of slot 5.
+A preparation can be reused only when its entire immutable-input contract and
+version identity match. Immutable content sharing does not imply shared state.
+
+9.3 Execution context
+----------------------
+An execution context temporarily owns a point group:
+  state FREE / PRELOAD / READY / RUNNING / END_PENDING / EXPORT / DRAINING;
+  association and code/preparation identities;
+  1..LANES live points, their cookies and original ordinals;
+  reserved result credits;
+  per-point exports/status and generation;
+  engine-write/service obligations.
+
+A context index is never sent as a persistent program handle. On reuse, all
+control/provenance fields change atomically and old replies must be impossible
+or rejected. Existing narrow service tags may remain narrow only under the
+proved rule that no context/tag is reused before its entire old transaction
+is drained. Do not add a generation field in prose and omit it from the path
+where reuse can occur.
+
+9.4 Directory and binding services
+----------------------------------
+Extend the existing residency implementation rather than maintaining a parallel
+"Warp binding cache". Program lookup returns a logical program identity and
+ready state; association OPEN acquires a pin and creates a checked association
+handle. Every context references that handle/generation.
+
+An evictable programme-directory slot may move/reuse after its references reach
+zero. An existing association cannot silently start executing its replacement.
+Either retain its pinned backing program or reject its subsequent work as stale
+BEFORE execution. Pinned objects cannot be evicted simply because they are LRU.
+If no legal victim exists, return bounded NO_CAPACITY/BUSY and let the host
+retry; do not overwrite live data or block result draining behind the request.
+
+9.5 Active working data
+-----------------------
+At any instant, scalar/table caches have:
+  active_program_image_identity;
+  active_preparation_identity;
+  active_generation;
+  outstanding-context/service count.
+
+Activation completes only after all required words and independent table counts
+are installed. No request sees a partially activated set. On a domain switch,
+all old internal work drains, caches invalidate where their data changed, and
+new valid tags are committed last. A same-program/different-parameter switch
+may retain immutable knot tables but MUST update prepared scalars and any
+prepared descriptor caches. Do not infer this from coincidentally equal slots.
+
+9.6 Resource lifetime and replay
+--------------------------------
+HPS backing is immutable while referenced. A capsule address is not ownership.
+Use the project's staging-region/epoch discipline, hold references until all
+accepted work and loader reads finish, and record canonical/prepared bytes in
+captures. A user/controller resetting the Field domain does not authorize HPS
+to recycle the memory before the reset/drain acknowledgment.
+
+Generation wrap is handled by a quiescent epoch reset, not by assuming the
+counter never wraps. Reject creation that would alias a still-live generation.
+
+
+10. TRANSACTIONAL LOADING, BINDING AND THE DOORBELL
+==================================================
+
+10.1 Do not silently change the old protocol's meaning
+------------------------------------------------------
+The current doorbell supports LOAD, COMMIT and LOOKUP. Its final else selects
+LOAD for every other op. Its COMMIT can leave the target header invalid until
+re-headering, as expected by the existing raw host tests. [S12]
+
+That is not a safe turnkey install transaction for a new consumer, but it is
+not to be "repaired" by deleting an invalidation on a guess. Keep the old
+protocol's tests as a labeled compatibility surface. New production installs
+use the explicit FH2 transaction below and never depend on software guessing
+which directory slot will be allocated after the bytes were written.
+
+10.2 Chosen extension of the existing posted mailbox
+----------------------------------------------------
+Use the currently encodable post_op=3 ONLY AFTER exhaustive decoding is added.
+For op 3, post_kind selects:
+  0: INSTALL_CAPSULE
+  1: BIND_PROGRAM
+  2: CONTROL
+  3: reserved, answered as BAD_OPERATION
+
+All operands are captured on POST ACCEPTANCE, including plan/frame identity.
+The old drain samples cfg_plan_base_i later; do not propagate that live-pin
+metadata pattern into FH2. Payloads remain stable under backpressure.
+Every FH2 accepted post reserves one completion record. Raw LOAD words inside
+the legacy protocol may keep their old acknowledgment policy, distinctly.
+
+INSTALL_CAPSULE payload:
+  post_data[63:0]  = HPS source address, little-endian words;
+  post_data[95:64] = byte length, positive multiple of 64;
+  post_hash       = expected capsule CRC32C using the SAME zeroed-field rule
+                    as header.body_crc32c (bytes 12..15 treated as zero);
+  post_ticket     = opaque caller ticket;
+  post_slot/post_addr = reserved zero (the capsule names its object).
+The address stays 64-bit until the real bridge's reachable-range check. A
+source above the supported address space is refused, never truncated.
+
+BIND_PROGRAM payload:
+  post_data[31:0]  = full canonical program handle32;
+  post_data[63:32] = READY program-image handle returned by INSTALL, including
+                    its generation (NOT a raw physical cache slot);
+  post_data[95:64] = resource epoch;
+  post_hash       = expected canonical full-image CRC;
+  post_ticket     = caller ticket;
+  other FH2 operands reserved zero.
+It resolves that exact READY program-image object and verifies its canonical
+handle, epoch and complete image identity. Its reply is a checked binding handle
+with generation. The canonical hash is taken from the matched object/header,
+not reconstructed from a physical slot. Alias/collision mismatches refuse.
+Different physical variants of the SAME canonical program can coexist as
+different image handles; BIND never chooses the first matching canonical hash.
+
+CONTROL payload:
+  post_addr[7:0] = control verb; higher bits zero if the port is wider;
+  post_data[31:0]  = association/binding handle;
+  post_data[63:32] = session/resource epoch as specified by that verb;
+  post_data[95:64] = verb argument;
+  post_hash = reserved zero unless the generated verb schema assigns it;
+  post_ticket = caller ticket.
+Verbs: OPEN_ASSOCIATION, CLOSE_ASSOCIATION, CANCEL_ASSOCIATION, RELEASE_BINDING,
+QUERY_OBJECT and EPOCH_BARRIER. OPEN names a READY association capsule handle.
+CLOSE means no more points will be offered, not "throw away owed results".
+EPOCH_BARRIER completes only under the full drain/lifetime rule.
+
+The present LDADDRW default is 7. FH2 control decoding needs 8 bits only if
+using this proposed 8-bit verb field; widen that mailbox field explicitly to
+at least 8 through its wrappers. Alternatively use a generated 7-bit verb
+schema consistently. Do not write [7:0] onto an unchanged 7-bit port. This
+brief selects an 8-bit FH2 control address; legacy loader addressing retains
+its separately derived width.
+
+10.3 Install FSM
+-----------------
+  ACCEPT: reserve completion credit and capture the full request.
+  VALIDATE_ENVELOPE: alignment, length, carry-safe range and allowed staging region.
+  READ_HEADER: actual HPS bridge transaction and exact received-byte accounting.
+  RESERVE_OBJECT: select an unpinned slot; never publish it yet.
+  READ_AND_CHECK: receive every required section, validate framing/CRC and
+                  physical structural metadata, count each written item.
+  SEAL: publish READY only if all section/schema/version checks passed.
+  RETURN: reply with the caller's original ticket and full object generation.
+
+On any failure, discard the incomplete staging object, retain prior ready
+objects unless explicitly replaced under the transaction, and return a failure.
+CRC checked only after bytes have already made a slot executable is too late.
+
+An INSTALL or BIND on a full catalogue must not monopolize the maintenance head
+while the only operation that could release capacity is queued behind it.
+Return BUSY/NO_CAPACITY promptly or use an independent release/cancel queue.
+The result/drain/control progress path always remains available.
+
+10.4 Bridge correctness
+------------------------
+Use real existing bridge/arbiter request semantics and the current guard.
+Match burst alignment, length, byte enables, verdict latency and response shape.
+Do not assume a response channel can be backpressured if it has no ready.
+Reserve whole-burst receive space before issuing such a read. Early last,
+late/extra data, refusal without grant, and orphan responses are separate cases.
+
+A loader retry is bounded and tied to the same immutable object generation.
+An infinite retry loop is not a fairness mechanism. Failure leaves no runnable
+partial image and never grants an association referring to missing tables.
+
+10.5 Hardware validation vs software decoding
+---------------------------------------------
+SW.STREAM runs the actual canonical decoder and production lowerer. The FPGA
+checks the compact physical envelope, identities, bounds, completeness, field
+versions and destination ownership. This is not a second implementation of the
+canonical opcode interpreter or its full high-level validator.
+
+A bare software "ok" bit is not a substitute for all bytes arriving, all
+output-map fields being present, or the object's identity matching the request.
+Trusted software and deterministic capture are the intended trust model; a
+CRC is an integrity check, not cryptographic authorization.
+
+
+11. FROZEN HOST-IMAGE ENVELOPE AND RECORDS
+=========================================
+
+This is a PROPOSED physical transport format, separate from the frozen .zprog
+format and from any game-facing command record. Generate C++/SV constants and
+packer/reader tests from one schema. Do not hand-maintain offsets in three
+languages. Validate sizes BEFORE using counts to allocate/read arrays.
+
+11.1 Common 64-byte header
+--------------------------
+Offset  Bytes  Field
+ 0      4      magic = ASCII ZFH2 (bytes 5A 46 48 32)
+ 4      2      image_version = 1
+ 6      1      object_kind: 0 PROGRAM, 1 ASSOCIATION
+ 7      1      flags: zero in this revision
+ 8      4      total_bytes, positive, 64-byte aligned
+12      4      body_crc32c: whole image with bytes 12..15 zero
+16      2      host_protocol_version = 2
+18      2      reserved zero
+20      4      canonical_program_hash
+24      4      canonical_program_handle32
+28      4      resource_epoch
+32      4      logical_fplan_abi_version
+36      4      execution_fabric_version
+40      4      source_id32
+44      2      section_count
+46      2      header_bytes = 64
+48      4      parent_binding_handle (zero for unbound PROGRAM install)
+52      4      canonical_full_image_crc32c (all serialized .zprog bytes)
+56      4      object_serial (software identity; hardware also assigns generation)
+60      4      reserved zero
+
+A PROGRAM's semantic identity is not object_serial alone. The return ticket
+belongs to the mailbox and is not duplicated in this header. An ASSOCIATION
+must match its pinned parent program across handle, epoch, hash and versions.
+canonical_full_image_crc32c covers the EXACT complete serialized .zprog,
+including that file's own embedded CRC field. The canonical decoder separately
+checks its existing zeroed-field CRC law. This full-image integrity value is
+not a replacement canonical program hash and is never the sole dedup key.
+
+11.2 Section directory
+-----------------------
+section_count entries immediately follow the header, each 16 bytes:
+  kind:u16, element_bytes:u16, element_count:u32, offset:u32, byte_length:u32.
+The directory is followed by zero padding to a 64-byte boundary. Section bodies
+are 64-byte-aligned, bounds checked, nonoverlapping and fully covered by CRC.
+byte_length equals checked element_bytes * element_count (widen before multiply).
+The last body is zero-padded to total_bytes. All unknown section kinds refuse
+in image revision 1. An optional section is a KNOWN section that may be absent,
+not permission to ignore an unknown schema. Reserved fields/bits must be zero.
+Duplicate singleton sections refuse. Directory entries are sorted by kind; body
+padding is outside byte_length and must be zero.
+
+Section-kind assignments for this proposed image revision:
+  0x0001 CANONICAL_IMAGE       0x0002 PROGRAM_META
+  0x0003 PHYSICAL_UOPS         0x0004 INPUT_MAP
+  0x0005 OUTPUT_MAP            0x0006 INIT_PROOF
+  0x0007 DEMAND                0x0010..0x0013 TABLE[0..3]
+  0x0020 ASSOCIATION_META      0x0021 CANONICAL_INPUTS
+  0x0022 PREPARED_SCALARS      0x0023 PRELOAD
+  0x0024 LEDGER
+These are FH image section kinds, NOT cartridge page/section allocations.
+
+11.3 PROGRAM sections
+----------------------
+CANONICAL_IMAGE: the validated .zprog, exact bytes. Source-map/name metadata
+remains canonical and is not silently stripped before identity comparison.
+
+PROGRAM_META, one 64-byte record:
+  profile:u8, binding_signature:u8, execution_form:u8, flags:u8;
+  input_count:u8, output_count:u8, required_mask:u8, table_count:u8;
+  canonical_instruction_count:u16, physical_uop_count:u16;
+  physical_register_count:u16, prepared_scalar_count:u16;
+  varying_input_mask:u32, point_preload_mask:u32;
+  code_image_crc:u32, maps_crc:u32;
+  logical_plan_identity:u32, reserved:u32[7].
+Exactly 64 bytes: first 8 + next 8 + next 8 + next 8 + next 4 + final 28.
+The final reserved words are not capacity for undocumented policy.
+varying_input_mask and point_preload_mask are CANONICAL INPUT ORDINAL masks
+(at most fifteen meaningful bits), NOT physical RF register masks. Physical
+register coverage is sixty-four bits and belongs to INIT_PROOF below.
+execution_form: 0 CANONICAL, 1 PREPARED_REGISTER, 2 UNIFORM_ONLY.
+UNIFORM_ONLY requires a checked logical plan with no varying instructions,
+all output sources valid prepared scalars, and zero physical uops. It produces
+an explicit terminal result per accepted useful point without an engine start.
+The other forms include their actual terminating END within physical_uop_count.
+An empty arbitrary physical program is NOT the uniform-only optimization.
+
+PHYSICAL_UOPS: 8-byte native words for the current exact register-based format;
+registered addresses and immediate interpretation validated against the selected
+fabric capability table. A new word layout requires an image version change.
+
+INPUT_MAP: one 8-byte record per canonical input ordinal:
+  ordinal:u8, lane_type:u8, source_class:u8, flags:u8,
+  physical_register:u16, prepared_slot:u16.
+source_class: 0 VARYING_INPUT, 1 UNIFORM_INPUT, 2 UNUSED_PROVEN. Only an actually
+unused input may be UNUSED_PROVEN; declared input values still exist in the
+canonical association record for validation/capture. The unused address field
+in a map row is 0xFFFF, never an implicitly valid register/slot zero. Lane-type
+codes come from the existing canonical Field I/O-map registry.
+
+OUTPUT_MAP: one 8-byte record per output ordinal:
+  ordinal:u8, lane_type:u8, source_kind:u8, flags:u8,
+  source_index:u16, reserved:u16.
+source_kind: 0 VECTOR_REG, 1 PREPARED_SCALAR. Reserved/unknown kinds refuse.
+Flags include REQUIRED and no undocumented meanings. Required fields agree
+with PROGRAM_META.required_mask. Validate the map as a complete ordinal set.
+
+TABLE[t], zero to four separately numbered sections: use the EXISTING canonical
+table body bytes: kind:u8, reserved:u8=0, entry_count:u16, then entry_count
+{x:s32,y:s32,dy:s32} triples. Directory kind identifies t; element_bytes=1 and
+element_count=byte_length=4+12*entry_count. Each t retains its independent
+2..64-entry count. A zero-table program invalidates all old active table-valid
+bits on activation. Do not include alignment padding in the table's entry count.
+
+INIT_PROOF, one 64-byte record:
+  offset  0: proof_version:u16=1, record_bytes:u16=64, flags:u32;
+  offset  8: association_register_mask:u64;
+  offset 16: point_register_mask:u64;
+  offset 24: immutable_register_mask:u64;
+  offset 32: initial_defined_mask:u64;
+  offset 40: vector_write_mask:u64;
+  offset 48: code_image_crc:u32, maps_crc:u32;
+  offset 56: expected_association_preload_count:u16, reserved:u16=0;
+  offset 60: reserved:u32=0.
+flags: bit0 canonical validation, bit1 prepared physical validation; exactly the
+one corresponding to execution_form is set, and other bits are zero. A checked
+UNIFORM_ONLY image uses bit1 and empty execution-register masks.
+
+Every mask above is indexed by PHYSICAL REGISTER 0..63. initial_defined_mask
+must equal association_register_mask | point_register_mask. Immutable registers
+are association-owned; they must not overlap vector_write_mask or the changing
+point writes. All set bits fit the selected register count. The complete physical
+read-before-definition walk is checked by the C++ physical-image validator,
+including every actual instruction operand group and contraction. The hardware
+checks the bounded masks/counts, installed identity and required accepted preload
+writes before start. The preload count is the mask population count, not the
+highest register number plus one.
+
+This is not a claim that a CRC mathematically proves the program. Software
+verification establishes the physical initialization proof; hardware ensures
+that it installed the certified image and did not skip a required preload.
+No u32 mask may silently discard physical registers 32..63.
+
+Optional DEMAND: validated per-resource counts for the SELECTED physical form.
+A demand vector from the unlowered logical plan is not automatically the count
+of added MOVs, padded groups, setup loads or cold service microsteps.
+
+11.4 ASSOCIATION sections
+--------------------------
+ASSOCIATION_META, one 64-byte record:
+  association_serial:u32, frame_id:u32, client_id:u8, profile:u8,
+  execution_class:u8, flags:u8, expected_points:u32;
+  varying_input_mask:u32, uniform_input_mask:u32;
+  preparation_serial:u32, max_group_quantum:u32;
+  source_id:u32, numeric_uniform_status:u32;
+  client_binding_cookie:u64;
+  reserved:u32[4].
+Exactly 64 bytes. Uniform numeric status only uses generated defined bits.
+Masks are disjoint and cover required used inputs; unused inputs are declared.
+expected_points counts useful application points, not physical padding lanes.
+
+CANONICAL_INPUTS: 15 raw s32/u32 words, 60 bytes plus four zero pad bytes.
+Uniform positions have their actual values. Varying positions are declared
+placeholders whose values are supplied only by actual point traffic; they must
+not become default point data in hardware.
+
+PREPARED_SCALARS: exact values from zfield::prepare, with explicit count.
+For the native HOT form, the active scalar-bank indices must fit its measured
+capacity. An overflowing native preparation selects the exact canonical form
+or a separately commissioned larger layout, never a modulo index.
+
+PRELOAD: 8-byte rows {physical_register:u16, flags:u16, value:s32}.
+Every required register is supplied exactly as its map demands. Duplicates
+with conflicting values refuse; same-value duplicates may be canonicalized
+by the packer but must not weaken the installed completeness check.
+
+Optional LEDGER: exact uniform per-cause ledger when required by the profile
+instrumentation. Its units/scope must be stated: events executed once during
+preparation versus the canonical per-evaluation status represented at each
+point are not the same reporting counter.
+
+11.5 Required installation checks
+----------------------------------
+Check cross-record agreement, not just each record separately:
+  header profile/identity vs decoded program;
+  association vs pinned program;
+  maps vs counts/masks;
+  exact required table set vs actually received table set;
+  preload destinations vs physical source/use proof;
+  output scalar indices vs actually prepared/written scalars;
+  code length vs END and physical instruction store capacity;
+  desired execution class vs actual supported native operations.
+
+The packer emits a machine-readable manifest and golden capsule bytes. The
+hardware loader test receives THOSE bytes over the modeled real bridge, not a
+parallel handwritten sequence of raw loader writes assumed to be equivalent.
+
+
+12. SCHEDULING, BATCHING, FAIRNESS AND ACTIVATION
+================================================
+
+12.1 Two levels, not a single round-robin pointer
+------------------------------------------------
+Association scheduler: chooses a ready client's bounded batch, taking mandatory
+reservations, deadlines, activation cost and fairness into account.
+Context scheduler: fills several contexts with distinct point groups from the
+currently active association and reuses each only after real retirement.
+
+The current executor's issue selection is a lowest-ready scan. Do not assume
+it supplies a hard fairness bound. Either prove a bounded result for the selected
+constant-size workload or adopt a round-robin/age-based issue selector and
+measure the cost. Changes to issue policy need the full engine regressions.
+
+12.2 Activation sequence
+-------------------------
+  stop new starts for the old association;
+  flush incomplete service gather groups when no further matching work can join;
+  drain all old instructions/services/writebacks;
+  copy finished replies into reserved storage independent of client readiness;
+  invalidate changed scalar/table/descriptor caches;
+  install the new code where context code tags do not match;
+  install changed knot tables with all four independent count/valid fields;
+  install preparation and broadcast uniform registers into reusable contexts;
+  seed uniform output descriptors/status;
+  commit the active association identity;
+  enable new point acceptance/start.
+
+There is no overlap between old execution and mutable replacement of its active
+prepared data in the selected initial implementation. Loading a new immutable
+backing capsule into a disjoint staging object may overlap; writing the live
+fabric's tables/scalars may not.
+
+12.3 Useful batching
+--------------------
+Earth generates up to four adjacent points per row-bounded group. Warp batches
+vertices of one immutable draw/association. Flow may gather records from the
+same population/program/parameter generation. Stamp walks one stamp's ordered
+texels. Do not group points from distinct preparation identities merely because
+they use the same opcode or canonical program hash.
+
+A scalar input source must be decoupled from its output with a real finite
+capture queue if multiple points are to be outstanding. Changing FAB_LANES or
+CTX while retaining a consumer that refuses to present point N+1 until N returns
+does not manufacture concurrency. All such queues are included in the resource
+sheet and stress tests.
+
+12.4 Frame and fairness certificate
+------------------------------------
+For each mandatory profile workload, the admission certificate includes:
+  maximum ready-to-service wait;
+  maximum groups before a scheduling yield;
+  activation/reload clocks and memory beats;
+  execution/service demand;
+  output drain cost;
+  other admitted clients' blocking envelopes;
+  required frame deadline and the clock assumption.
+
+A sufficient nonpreemptive blocking bound includes the largest permitted batch
+of another client PLUS its unavoidable drain/switch cost. The sum of admitted
+work/reservations must fit every shared resource, not just a scalar cycle sum.
+
+Choose a bounded quantum from the real workload measurements. Do not invent
+"20% per profile" or one universal quantum that was never tested. Store the
+selected machine constants/certificates centrally, fail admission or report a
+miss rather than silently increasing the quantum forever, and retain the
+failing sweep point that establishes why the chosen value is needed.
+
+No scheme earns realtime acceptance until Earth, active Warp, actual Flow/Stamp,
+memory contention, and the applicable render/post load have been exercised
+together at their required tier. If the exclusive-domain design fails due to
+switch cost, quantify that failure and build the bounded two-domain alternative;
+do not label the workload unreasonable after previously promising it.
+
+12.5 Result credits and stalled clients
+---------------------------------------
+Give each live client reserved minimum output capacity and a bounded share of
+any common overflow pool. Reserve a slot before accepting the request, not at
+END. Export can drain into that slot even if the external client never asserts
+ready. That client's new work then stops at its credit limit while other clients
+and maintenance progress remain possible.
+
+A shared response bus with one valid bit can still be used physically, but its
+storage/arbiter must not be a single head-of-line queue that lets one blocked
+client prevent every other client from consuming its result. State the exact
+queue organization and derive its M10K/ALM cost.
+
+12.6 Loader fairness
+---------------------
+The old host gives ld_valid priority over the next client grant. Replace that
+unbounded global precedence with explicit maintenance admission. Installation
+into staging, activation into live storage, cancellation, and result draining
+have different dependencies. A full staging job cannot hold a lock needed by
+an active result, and a continuous series of valid load offers cannot starve
+mandatory evaluation indefinitely.
+
+
+13. EARTH: SOLVE THE ACTUAL PRODUCER/CONSUMER MISMATCH
+=====================================================
+
+13.1 Do not connect a field-major producer to a vertex-major consumer
+--------------------------------------------------------------------
+Current production zhao_terrain_patch consumes:
+  vertex 0: field 0, field 1, ...;
+  vertex 1: field 0, field 1, ...;
+while the efficient prepared engine wants:
+  field 0: vertex 0, vertex 1, ...;
+  field 1: vertex 0, vertex 1, ... .
+
+One globally owned table/scalar set cannot switch cheaply between unrelated
+associations at every field/vertex pair. A whole matrix storing all 16 fields'
+four results over 1,089 vertices would cost 2,230,272 payload bits BEFORE ports,
+packing, tags and validity. That is NOT the selected solution.
+
+FH18 deliberately selects the field-major patch-working-set form, already
+represented by zhao_probe_patch_acc and the amended Earth contract. R91's goal
+is retained; its claim that a front-only three-clock transport change is the
+whole fix is not. Record this explicit resolution in the affected contracts
+and current ruling addendum. Do not leave two opposite stream-order laws alive.
+
+13.2 One TERRAIN.PATCH capability owner
+--------------------------------------
+Introduce the production field-major implementation under the TERRAIN.PATCH
+capability (for example zhao_terrain_patch_v2), retaining the old implementation
+as a transaction/numeric oracle for paired tests. It owns:
+  the bounded 16-entry field intake in command order;
+  patch/page identity, placed origin/pitch and epoch;
+  field-to-association mapping for its accepted list;
+  the single canonical footprint test;
+  one patch working accumulator;
+  ordered application of all four Earth result channels;
+  final clamps, source attribution and subpatch dirty mask;
+  publication/drain to the existing composed-height/velocity consumers.
+
+Do not bolt the probe accumulator after the old height reducer. That would
+add height twice and potentially reduce velocity twice. The new capability
+owns the computation once, and the old serial implementation is not in the
+shipping datapath for the same patch.
+
+The old fld_add_hash_i/fld_add_cmd_i fields are trace-only in the current RTL.
+Store the actual required association identity in the new list explicitly;
+do not pretend the existing block already retained a program binding.
+
+13.3 Exact semantic equivalence
+-------------------------------
+For each vertex independently:
+  compose_top = the canonical base/scar composition and first bottom clamp;
+  acc_height = compose_top;
+  acc_velocity = 0;
+  acc_material = 0;
+  acc_nav = 0;
+  for each accepted, active field in ORIGINAL COMMAND ORDER:
+    if the canonical CLOSED-interval footprint covers this vertex:
+      consume the exact declared Earth result;
+      height = fx_add(height, result.height);
+      velocity = the existing command-ordered saturating accumulation;
+      material = last covering writer of that lane, opaque u32;
+      nav = the declared command-ordered saturating accumulation;
+  apply the canonical final bottom clamp;
+  derive dirty from final live_top versus the original base and mark every
+  neighboring subpatch owning a shared border/corner vertex.
+
+Follow the actual dual/legacy single-surface law, not an unconditional bottom
+clamp. Match existing reference helpers exactly. Converting height16 by a safe
+multiply/defined sign extension must not introduce C++ negative-shift UB.
+
+The loop transpose is permitted because the order of additions at EACH vertex
+is unchanged. Saturating arithmetic is not associative: never sum all deltas
+wide and clamp once, and never sort fields by program to reduce table switches.
+You may batch adjacent compatible associations without reordering their effects.
+
+The output-presence map is distinct from execution success. A declared output
+that fails to arrive is a fault. A genuinely absent optional lane under an
+explicit compatible program signature is not a write of zero. Do not conflate
+those to make material reduction plausible.
+
+13.4 Reuse the probe, but repair its interface assumptions
+---------------------------------------------------------
+zhao_probe_patch_acc already has four exact reducers and a pipelined RMW bypass.
+Its INIT/ACCUM/DRAIN inputs currently have no ready, and its comments require
+phase separation and a nonstalling drain sink. Those are obligations, not a
+ready/valid interface. [S17]
+
+Promote/factor its numerical implementation, give it an explicit phase owner,
+and add a drain skid/credit adapter or ready/valid handling so actual cache
+backpressure cannot lose a group. Enforce phase exclusivity and pipeline-drain
+conditions in hardware and tests; do not leave a "two idle cycles" convention
+as an unverified promise in a top-level comment.
+
+The footprint law remains one implementation: extract/reuse the terrain-owned
+closed-rectangle helper and have the production walker use its accepted-list
+semantics. Do not copy an approximate rectangle test into FIELD. The walker
+may omit uncovered evaluations only if the reference's arithmetic/status and
+the new counter definitions match that omission. No fabricated zero evaluation
+is needed for a point that the reference never evaluates.
+
+13.5 Bounded working storage, with an honest physical price
+-----------------------------------------------------------
+Four 32-bit result channels over 1,089 vertices contain 139,392 payload bits.
+That is only a BIT lower bound. The probe's four banks x four channels give
+16 separate 273-deep x32 memories. A 273x32 memory does not fit a single
+256x32 M10K configuration. A straightforward mapping can require 32 M10Ks,
+not the old prose's 16--20. Verify actual synthesis when authorized. [S17,S27]
+
+Commission a smaller serial-channel organization as the production candidate:
+  four vertex-residue banks;
+  one 32-bit word per {local_vertex,channel};
+  four channel phases per quad update, skipping unwritten channels;
+  height/velocity/nav share the corresponding four saturating add lanes;
+  material uses its own selection policy in its channel phase;
+  one bounded input skid and explicit backpressure.
+
+Each bank holds roughly 273*4 = 1,092 x32 words. Explicitly splitting a 1,024-word
+main region and a bounded tail can target five 256x32 blocks per bank, about
+20 M10Ks for the four accumulators. This is a PACKING CANDIDATE, not a fitted
+claim; a naive power-of-two depth inference could still allocate more. Count
+address mux/control, base/bottom replay storage, tags and buffers separately.
+
+It accepts at most one four-channel quad update per four channel phases, not
+one per clock. Price that actual service rate in the full Earth slice. If it
+misses the workload, use the fully parallel candidate and report its real cost;
+do not use the smaller number with the larger version's throughput.
+
+Keep one patch working set initially. More patch buffers require an observed
+pipeline benefit and a complete memory price. Never multiply it by resident
+terrain-page count or by the number of live fields.
+
+13.6 Patch lifecycle
+--------------------
+  acquire/check the actual page/epoch identity;
+  seal its accepted command-ordered association list;
+  read the existing A/B/C substrate through the real page/guard path;
+  INIT the working set and retain/re-read substrate needed at finalization;
+  for each accepted association:
+      activate prepared data once, walk its valid points in row order,
+      accept exact output groups, retire every update, then close this pass;
+  DRAIN final results through the real cache interface;
+  publish the patch only after all required outputs/writes complete;
+  release page/association references exactly once.
+
+Reject/cancel a failed patch without exposing a partially updated composed
+lattice as ready. Existing previous-generation fallback/display behavior, if
+used, remains explicit; it is not a successful new compose.
+
+The velocity lattice consumes the SAME evaluation's velocity. Do not run Earth
+a second time just for TERRAIN.VELOCITY. Reconcile that module's old per-lane
+reduction interface by factoring a reduced-stream input/encoder or retiring a
+duplicate reduction stage with an equivalence test. Preserve its bake-back,
+scaling and storage law; no second accumulator under a different name.
+
+13.7 Command and uniform producer
+----------------------------------
+Implement the missing TerrainField lowering as part of the Earth integration
+packet, not as an unrelated future prerequisite. The actual command carries
+program handle, footprint, start tick, duration and parameters. [S23]
+
+The shared frame/command identity ties hardware's accepted TerrainField record
+to SW.STREAM's prepared association. Software uses the existing canonical
+age/phase helper/model and exact parameter unpacking; hardware consumes the
+same frozen descriptor and verifies the association belongs to that frame and
+command. No new approximate phase divider is invented in the core composer.
+
+Software keeps its existing responsibility for binning bounded field lists to
+patches. Do not add an unbounded hardware scan of all spells. The hardware
+still enforces the 16-field tail-reject policy in command order. Metadata from
+one frame cannot be paired with the next frame's node/field list because its
+pointer happened to remain on an HPS pin.
+
+A bring-up bench may act as HPS by submitting bytes produced by this real
+software path. It may not hand the patch a ready-made height result, an idealized
+field answer, or an untracked association assembled differently from production.
+
+Add a positive composed mode such as -FieldActive using that software producer.
+The current no-program smoke, identified in [S30], explicitly asserts zero
+completed FIELD runs; keep it as a refusal/control case instead of treating it
+as the positive gate. The new active mode must require nonzero actual runs,
+correct complete output values, actual terrain consumption and successful
+recovery after a deliberately bad program/association. -WarpActive must likewise
+run the real Warp program, not reuse a zero-program geometry smoke.
+
+
+14. WARP: COMPLETE THE EXISTING OWNER DIRECTIVE
+===============================================
+
+W01--W18 remain the application authority. Complete their remaining commits
+through this shared service rather than commission another isolated Warp audit.
+
+14.1 Required binding
+----------------------
+DrawWarpedForm captures its immutable descriptor and preparation identity before
+any affected meshlet is admitted. The reference/producer supplies all 15 inputs:
+world position, reduced direction normal, four attributes, time and p0..p3.
+The consumer requires six output words with exact ordering and separate numeric
+status/transport failure. Do not replace normal output with the input normal
+because the host still only reads displacement.
+
+14.2 Point grouping and identity
+---------------------------------
+The Warp join SPECIFIED by W01--W18 must own position, normal, attributes and
+original geometry identity; its existence is not assumed at the baseline. It may submit several vertices of the same draw as a group, but it
+must retain each complete token. A Field context/slot/source_id is not that
+token. Preserve the original raw vertex ordinal even when an earlier malformed
+vertex created a hole. A result for vertex j cannot slide into vertex j+1.
+
+Returned results may be internally out of order; the adapter/credited retirement
+store restores the ordering its existing geometry consumer requires. The same
+world vertex is deformed once before the per-view fork. Two cameras must not
+cause two Field evaluations or share another draw's parameters.
+
+14.3 Application and normal law
+--------------------------------
+Use zref::GeomWarp and the existing fixed-point primitives. Keep displacement
+application saturation distinct from the program's status. Preserve the stated
+normal representation/range reduction and the real LIGHT magnitude ownership.
+Do not normalize merely to fit an assumed unit-vector API. A bypass/no-Warp
+case must remain bit-identical in existing geometry, lighting and material
+behavior; an ACTIVE nonzero deformation case must independently traverse the
+Field fabric and change expected geometry/lighting.
+
+14.4 Existing integration requirements stay owed
+-------------------------------------------------
+DrawWarpedForm command, resource/attribute bytes, bound expansion before culling,
+actual data producers, group/arena completion, poison handling and final pixel
+checks remain required. The new host does not make missing UV/color/join
+producers disappear. Preserve shared projector client A and the current
+no-third-projector decision. Neither this repair nor Warp creates a second
+Field engine to bypass a shared scheduling problem.
+
+14.5 Acceptance boundary
+-------------------------
+A reference and six populated result registers are not Warp completion.
+Prove real command -> binding/preparation -> asset/skin/join -> shared engine ->
+Warp application -> LIGHT/projection -> visible output in both views, with a
+nonzero effect, identity-preserving negative controls and complete retirement.
+Then, separately, prove the selected guaranteed active-Warp workload fits its
+shared-frame schedule. Do not quote the application add stage's II=1 as full
+program throughput.
+
+
+15. FLOW, STAMP AND FORMATION COMPATIBILITY
+===========================================
+
+15.1 Flow: preserve the actual R40 seam
+---------------------------------------
+The current Flow adapter converts Particle128 through the shared record codec,
+uses the population origin, and consumes returned velocity to form s11
+acceleration. R40 does not replace PART.UPDATE's own position integration with
+Field's returned position. Preserve that law and its named rounding/scale knobs.
+Return all seven canonical Field outputs correctly even though the application
+uses only three of them. [S21]
+
+Replace persistent raw slot selection with a checked association/binding.
+Latch parameters, origin, dt, frame and the actual particle record at request
+capture. Derive no later result from unrelated live rec_i or par_i pins.
+Distinguish upstream capture from final PART.UPDATE consumption. A record queue
+can allow several independent particles into the host while retaining the
+ordered original records for PART.UPDATE.
+
+If buffering is added, name both handshakes. Do not reuse rec_take_i to mean
+"the upstream record was captured" when the existing adapter interprets it as
+"the update consumed this record's answer". Preserve particle order, collision/
+spawn behavior, population-frame boundaries and the existing identity guard.
+A result belonging to a previous generation cannot drive a new population.
+
+The bypass path with no configured field remains explicit and tested. Numeric
+sat/rcp0 does not turn a valid Field result into the no-field bypass. Genuine
+host failure uses the existing application fault policy with a non-OK counter.
+
+15.2 Stamp: do not promote its comments into the canonical signature
+--------------------------------------------------------------------
+The current adapter drives two raw integer texel indices, zeros other transport
+lanes, reads tag_op and a 16-bit strength, and describes that as the S record.
+The canonical Field table describes eight inputs and three outputs, with unit
+fx16 strength/emissive. These are not identical contracts. [S03,S22]
+
+Separate two named application bindings during migration:
+  LEGACY_STAMP_BRUSH: exact existing raw-index/strength bridge for existing
+                     physical fixture/program behavior.
+  CANONICAL_STAMP: full eight-input, three-output Field signature.
+
+Both use the same repaired host and explicitly declared arity/maps. The legacy
+bridge is not evidence that the full canonical Stamp binding works. Do not
+break the existing stamp pictures by silently interpreting raw texel indices
+as Q16.16 units, or by taking the low 16 bits of Q16.16 1.0 (which is zero).
+
+Implement the canonical binding adapter with written conversions:
+  u/v sample centers follow the surface sheet's actual texel-center convention;
+  a 64-wide unit center (2*i+1)/128 maps exactly to fx16 (2*i+1)*512;
+  age, strength and p0..p3 come from a captured, typed association descriptor;
+  unit strength converted to the consumer's u16 range is explicitly clamped
+  and rounded, mapping fx16 0 -> 0 and fx16 1 -> 65535;
+  preserve tag_op's exact existing tag/blend/age-shift interpretation;
+  the host returns emissive as the third declared output, even where the
+  present surface consumer has no emissive input.
+
+The u16 conversion can be defined as:
+  u = clamp(signed_fx16, 0, 65536)
+  strength16 = floor((u * 65535 + 32768) / 65536)
+using a wide intermediate. This is a NEW explicit adapter conversion, not a
+change to Field arithmetic. Put it beside the adapter contract and test both
+endpoints, half cases and out-of-range values. Make any visual adoption of this
+canonical binding distinct from retaining the legacy bridge.
+
+Do not claim the surface renderer uses the emissive output if it does not.
+Retaining and correctly returning it is shared-host conformance; commissioning
+its eventual surface effect is a separate application policy, exactly as R40
+explicitly does not consume all Flow outputs. List that exclusion honestly,
+not as an undocumented discarded lane in the host.
+
+The stamp traversal still owes exactly one terminal field record per texel its
+consumer commits to visiting, in the existing order. Batch computation is allowed;
+batch delivery must preserve this contract. Restart/abort must drain old requests
+without delivering their results into the next stamp. Missing program before
+start and a fault mid-walk remain distinct cases.
+
+15.3 Formation: supported signature, no phantom production caller
+------------------------------------------------------------------
+Correct the parenthetical input count to the 12 actually listed fields.
+Support the profile in decoder/binding/plan/host conformance tests. Use the
+same association mechanism and full output map.
+
+The existing GEOM.LOOM does not become a Field Formation consumer merely
+because a ledger arrow mentions the profile. It already implements a transform
+path. Retain its actual contract. Only claim Formation composition after a
+real command/resource producer and real transform consumer are connected and
+tested. A profile test client is valid conformance evidence, not a console
+feature-closure receipt.
+
+15.4 Parameter propagation
+---------------------------
+One generated package owns MAX_INPUTS, MAX_OUTPUTS, mailbox widths, result/token
+layout and protocol versions. Forward it explicitly through the host, Stamp,
+Flow, new adapters, core, generated census top and all test wrappers. Do not
+edit only one IN_LANES literal and let two consumers silently keep defaults.
+
+Add guards for the entire composed configuration, not only at the first leaf.
+Exercise their failure with an actual elaborated/simulated negative control;
+--lint-only does not execute an initial-block $fatal.
+
+
+16. ABORT, RESET, RECOVERY AND BACKPRESSURE
+===========================================
+
+16.1 Ready/valid ownership
+--------------------------
+Every offer remains stable until transfer or an explicitly defined cancellation
+handshake. A request cannot change operands because another context became
+available. A response cannot disappear because its client lowered valid on a
+different channel. Keep registered boundaries across the scheduler/loader/core
+and result router; no multi-island combinational ready chain.
+
+16.2 Cancel without orphaning shared work
+------------------------------------------
+Cancel marks the association as no-new-work, drains or discards already accepted
+results with exact accounting, and releases resources only after internal
+retirement. It does not immediately mark contexts free. A later result from
+an old context must never update a new association with the same index.
+
+Queued but unstarted requests receive CANCELLED; started requests either finish
+and are discarded/count-cancelled or use a proven context abort. The current
+engine has no magic per-context abort guarantee simply because the host needs
+one. For unrecoverable internal failure, stop admission, quarantine all active
+contexts in the domain and perform a coordinated fabric reset/epoch barrier.
+Do not reuse state until that barrier completes.
+
+16.3 Reset protocol
+---------------------
+Reset clears small valid/control state, not large payload memories. New-session
+validity prevents reads of old bytes. External memory responses already issued
+must be drained/discarded by their ownership tag or prevented by the enclosing
+bridge reset protocol. Do not assume resetting the local counter cancels a
+transaction elsewhere in the system.
+
+Clear/rebuild the active code/table/scalar-valid tags. Previously READY backing
+objects may be reinstalled or reacquired under the new session epoch; they do
+not remain implicitly runnable because their RAM still contains bits.
+
+16.4 Watchdogs
+----------------
+Separate:
+  active arithmetic progress;
+  waiting for accepted internal service work;
+  waiting for external memory;
+  waiting for result/ingress credits;
+  waiting for an application's ready.
+
+A counter is useful even when no valid cycle bound is known. A destructive
+watchdog timeout is allowed only with the stated assumptions that make its
+bound valid. Do not abort a correct job simply because an external consumer
+legally holds ready low. Result credit isolation should make that hold unable
+to block already accepted arithmetic.
+
+An engine hard hang after accepted bounded internal work must become a visible
+fault with a safe reset/recovery path, not infinite silence. Test the next good
+association after each injected failure; surviving the bad job alone is not
+proof that the shared fabric recovered.
+
+16.5 No unbounded maintenance dependency cycle
+------------------------------------------------
+Specifically test this graph:
+  pending install wants a free program/association slot;
+  a live job wants result space;
+  the application wants a completion before releasing its binding;
+  a release/cancel command is behind the blocked install.
+
+Break it by reserved completion credits, independent progress for cancellation/
+release and bounded BUSY refusals. Do not solve it with a larger FIFO alone.
+
+
+17. RESOURCE ACCOUNTING AND TIMING BOUNDARIES
+=============================================
+
+17.1 A resource sheet, not arbitrary department budgets
+-------------------------------------------------------
+For each selected configuration report:
+  program/association descriptor entries and actual row widths;
+  active code words and whether replicated per context;
+  RF contexts x registers x lanes x read replicas/banks;
+  active table store and table-count/valid metadata;
+  active scalar/preparation storage;
+  export registers/RAM, input capture, result queues and credits;
+  per-client identity/ordering buffers;
+  Earth working accumulator and substrate/drain buffering;
+  additional shared opcode service/control resources;
+  HPS fetch/arbiter/guard integration delta;
+  unchanged shared arithmetic explicitly counted once.
+
+No fixed ALM ceiling is asserted by this brief. Estimate ranges, identify the
+unmeasured terms and price them at the authorized physical fit. If a selected
+microarchitecture cannot meet its allowed total, redesign it; do not reinterpret
+"mandatory" to remove a function or erase its data from a fit harness.
+
+17.2 Memory shapes must include port topology
+---------------------------------------------
+The current RF has four residue banks and three read copies. At 8 contexts,
+64 registers and four lanes, each of the 12 memories is 128 x128 bits. A direct
+simple-dual-port M10K implementation can need four width slices per memory,
+about 48 M10Ks, although the logical bit count alone suggests far fewer.
+At 32 contexts that row depth becomes 512 and the direct width/depth price
+can double. These are STRUCTURAL EXPECTATIONS, not measured results. [S18,S27]
+
+Consequently increasing CTX and LANES cannot be sold as a free way to fix the
+front. Measure the 8/16/32-context and scalar/quad frontier with the SAME actual
+workload. The old quad benchmark's chosen configuration remains an evidence
+point; its throughput is not inherited by an eight-context scalar composition.
+
+The Earth accumulator's 273-word tail problem is described in 13.5. The same
+rule applies everywhere: round width/depth to a legal physical mode per bank,
+include replication, byte-enable/read-during-write requirements and valid bits,
+then verify inference. M10K is not a bottomless ALM replacement currency.
+
+17.3 Intended savings and additions
+------------------------------------
+Expected architectural benefits, NOT fitted savings claims:
+  remove the per-point 64-word clear;
+  replace repeated uniform loading with association/context activation;
+  fill existing vector lanes with useful distinct work;
+  amortize code/table setup and directory acquisition;
+  reuse shared arithmetic instead of private profile engines;
+  reuse the existing lowerer/driver knowledge rather than duplicate it.
+
+Expected additions that must be charged:
+  descriptors and generations, stricter output maps/validity;
+  credited result routing and adapter identity queues;
+  real activation/association scheduler;
+  hardware loader and checked image metadata;
+  full canonical register/code capacity;
+  per-point status propagation;
+  missing shared exact-op routes;
+  the bounded Earth working set.
+
+A faster correct machine can cost more than the incomplete scalar front.
+That is not a surprising regression to hide. Report both the functional
+coverage difference and the area delta.
+
+17.4 Timing rules
+------------------
+Register request arbitration, descriptor reads, RF preload selection and output
+routing at explicit boundaries. Use RAM-backed indexed state rather than wide
+all-entry combinational compares when the transaction rate permits a scan.
+A request/response token lookup may take several clocks; it must not create a
+long combinational path across memory, scheduler, executor and consumer.
+
+Do not widen multiplier operands as a side effect of writing address math with
+large signed temporaries. Use widened ADDRESSES for overflow checking, and
+correctly bounded arithmetic operands for computation. The host itself should
+not acquire new DSP-heavy numerical datapaths beyond the explicitly added
+shared canonical services.
+
+Check inferred RAM lists, hierarchical logic/DSP ownership, critical path
+families and routing/logic split when the authorized complete fit is run.
+One attractive leaf Fmax or a clean Verilator run proves none of those.
+
+
+18. PERFORMANCE ACCEPTANCE -- MEASURE THE WHOLE SLICE
+=====================================================
+
+18.1 Do not claim "three clocks per point" solves Earth
+-------------------------------------------------------
+The old transport lower bound of REGS + IN_LANES is before program execution,
+control, contention and result delivery. Removing that cost is valuable, but
+is not a complete deadline result. Report:
+  install/activation clocks;
+  preload clocks and overlapped execution;
+  issued useful groups/points;
+  service request/retirement counts;
+  end-to-end first-accept to final-delivery clocks;
+  consumer/cache/bridge stalls;
+  output/cancel counts;
+  peak queue occupancy and context utilization.
+
+Count each physical clock once. Do not omit events that happen while a test
+helper loads another context. The production driver replaces the benchmark's
+idealized host activity; real packets traverse the real loader and bridge.
+
+18.2 Earth hard gates
+----------------------
+Use the amended contract unless the owner explicitly ratifies a different one:
+  <=6,000 clocks per full 1,089-vertex association;
+  <=850,000 clocks for the 128-association stress slice, with initialization,
+  finalization and plan/table/setup costs included at their defined scope.
+
+UPDATE is 33 * ceil(33/4) = 297 row-bounded quad groups, not 273.
+INIT/DRAIN may be ceil(1089/4) = 273 aligned groups. Test the actual walker
+rather than multiplying a convenient steady-state II by the wrong group count.
+
+Run cold and warm activations separately, and mixed-program/parameter switches
+rather than one warmed program forever. The frame-level certificate must state
+which cold loads can occur inside the guaranteed frame and charge them.
+An explanatory older 10,416-clock allowance cannot replace the stricter active
+contract without a recorded amendment.
+
+18.3 Warp and other profiles
+-----------------------------
+For each named program record actual native/canonical form, useful vertices,
+operation count, table/preparation changes, outputs/status checked and shared
+clock demand. Include a 48-instruction Warp with high registers and all six
+outputs. Legal cold programs are still exercised exactly; do not call their
+slower measurements HOT or restrict the canonical whitelist to make them pass.
+
+Flow must be fed by the actual Particle128 adapter, not a free-running ideal
+request generator while the real adapter remains single-outstanding. Stamp
+must be delivered at the order/count its actual surface consumer requires.
+Formation conformance uses its real declared signature and is labeled as such.
+
+18.4 Shared frame
+-------------------
+Combine Earth, active Warp, Flow/Stamp load, normal geometry, texture/memory
+traffic and post where the guaranteed scene requires them. Treat program,
+scalar, table, writeback, register preload, memory and output ports as separate
+resources with their measured service rates and overlap.
+
+Use measured queue burst maxima AND conservative declared bounds; a trace
+maximum is a sample, not proof that no larger legal burst exists. No private
+client benchmark can establish whole-frame feasibility on its own.
+
+State clock assumptions separately. Cycle acceptance at assumed 100 MHz does
+not fix the historical placed 18.5-MHz result. Until the composed physical clock
+is certified, publish cycle demand and the corresponding required frequency,
+not a claim that real hardware now delivers 60 Hz.
+
+18.5 Throughput evidence integrity
+-----------------------------------
+All mismatched outputs, statuses, lane masks, lost/duplicate completions and
+late writes must gate the result. The Earth driver's diag_failures/gating
+mechanism must not leave a correctness defect as a nonfailing diagnostic in a
+production qualification run. Warmup exclusion is permitted for a stated
+steady-state metric, not for the full association/frame metric.
+
+Keep two named receipts:
+  microbenchmark steady-state service rate;
+  complete production-transport scenario.
+Do not put the second title on the first test's number.
+
+
+19. SOFTWARE, CAPTURE, ABI AND GENERATED-ARTIFACT MIGRATION
+===========================================================
+
+19.1 The production software path must exist in the repository
+--------------------------------------------------------------
+Implement one reusable route:
+  canonical .zprog bytes
+    -> zfield::decode
+    -> application signature validation
+    -> zfield::plan and zfield::prepare
+    -> physical native lowering or exact canonical-form selection
+    -> physical initialization/output/capability validation
+    -> canonical host-image serialization
+    -> ticketed installation/binding/open
+    -> real point submission and attributed completion.
+
+The code must be callable by the HPS-side stream producer and by desktop tests.
+Do not leave the only implementation inside a Verilator test driver. The
+benchmark must call the production functions rather than retaining a copy.
+Keep byte packing independent of native C++ struct layout, compiler padding,
+host endianness and pointer width. Serialize every integer explicitly LE.
+
+Prepared data is immutable input to execution. A host process that changes
+parameters computes a new Prepared object and association image; it does not
+write into the active scalar bank through an untracked shortcut.
+
+19.2 Changes to current files are one migration, not separate favors
+--------------------------------------------------------------------
+At minimum, inspect and update the applicable current versions of:
+  fpga/rtl/field/zhao_field_host.sv and its selected replacement;
+  fpga/rtl/field/zhao_field_doorbell.sv and its selected replacement;
+  fpga/rtl/field/zhao_field_flow_adapter.sv;
+  fpga/rtl/field/zhao_field_stamp_adapter.sv;
+  fpga/rtl/field/zhao_field_v3_engine.sv and actual changed descendants;
+  fpga/rtl/prod/zhao_console_core.sv;
+  design/contracts/FIELD.SEQ.CORE.md and FIELD.PROGCACHE.md;
+  design/contracts/FIELD.SEQ.EARTH.md and the other application bindings;
+  design/contracts/TERRAIN.PATCH.md;
+  spec/form/field-ir.md, only its corrected signature prose unless a separately
+    justified canonical change is actually required;
+  spec/form/cost-model.md and the measured-demand reporting path;
+  design/blocks.yml, console_inventory.yml, prod_manifest.yml, fit_targets.yml;
+  production-top/console-board generation and paired-diff inputs;
+  tests/CMakeLists.txt, real smoke stimuli and all affected test wrappers;
+  counter catalogue/port mapping, preserving already assigned counter ids.
+
+Derive the full instantiation closure from the current source tree. A grep for
+one familiar module spelling is not a substitute for finding wrappers, test
+tops, generated instances and parameterized alternatives. In particular,
+IN_LANES, OUT_LANES, CLIENTS, REGS, PLAN, tag widths and message widths must
+come from the same current machine descriptor at every composed call site.
+
+Use absolute worktree paths for scripted edits. Preserve or deliberately
+normalize the repository's actual newline policy; do not let an LF-only anchor
+silently skip a CRLF file. Generated files are regenerated from their authority,
+not merged by taking both conflicting port blocks.
+
+19.3 Do not manufacture an unnecessary game-ABI change
+-------------------------------------------------------
+The shared service, host-image version and mailbox protocol are not automatically
+new game-facing commands. Preserve existing TerrainField, SurfaceStamp,
+DrawPopulation and environment/pose semantics while changing their lowering.
+If a new command is genuinely necessary for captured caller selection, allocate
+it through commands.zidl and implement all of its real consumers.
+
+DrawWarpedForm is the already-commissioned additive Warp command. Implement it
+under the Warp directive, not under an invented alternative Warp doorbell.
+Recheck the free opcode at the actual merge point rather than assuming the
+previously proposed 0x0304 is still free. Preserve the existing DrawForm path.
+Append to the command declaration order where the current generator uses ordinal
+numbers in its golden stimuli, unless that generator dependency is deliberately
+repaired in the same change. Do not rearrange unrelated records casually.
+
+ABI, Q-format, canonical Field IR, logical FPLAN, physical-fabric and host-image
+versions are DIFFERENT namespaces. Bump the one whose contract changed and
+record the reason. A new physical host protocol is not grounds to rewrite all
+canonical arithmetic or to silently reinterpret an old captured record.
+
+19.4 Captures and prepared artifacts
+--------------------------------------
+A complete replay bundle contains the canonical program resource, its output
+map and signature, the selected physical image version, preparation inputs or
+the exact prepared image with its provenance, association identity, and the
+commands/point records that select it. Capture the actual chosen cold/hot route.
+
+Capturing only a hash and a current HPS address is insufficient. Replay must
+not require the old live machine's contents or an external mutable program
+registry. If physical prepared images are derived at replay time, the derivation
+version must be fixed and reproducible, and canonical outputs remain the
+semantic check. Do not let a newer lowerer retroactively redefine an old result.
+
+Produce goldens through their actual producers. Record hashes and byte-diff
+classification. Metadata-only changes may have a small predictable diff; do not
+copy a historical fixed byte-count expectation blindly when this commit adds
+an actual new command, new resource or different semantic fixture. Explain
+which bytes should change and check that content outside that set did not.
+
+19.5 Compatibility containment
+--------------------------------
+The old raw host and old doorbell are allowed as named simulation oracles and
+legacy fixture adapters. They are not additional production executors. The
+selected console must have one authoritative install path and one shared
+arithmetic fabric.
+
+Every legacy fixture that is migrated supplies its ACTUAL output arity. A
+one-output fixture does not become a four-output program because the old bus
+had four words. Conversely, a strict six-output Warp descriptor cannot opt into
+a legacy zero-mask path to conceal a missing lane.
+
+Mark old contradictory headers as historical and point to the new authority.
+Do not erase the evidence trail, but do not leave an active interface claiming
+that Stamp has only two canonical outputs, Warp has fourteen inputs, or every
+resident program owns an independent scalar bank when none of those is true.
+
+
+20. IMPLEMENTATION PACKETS AND COMMIT SEQUENCE
+==============================================
+
+20.1 Ownership and authorization
+---------------------------------
+One integration owner is responsible for finishing this slice. That owner can
+assign disjoint workers under the current concurrency limit, but owns the
+shared protocol, core integration, generated files and final acceptance.
+
+Recommended disjoint work packages:
+  SOFTWARE: physical lowering/validation, capsule packer and software models.
+  FABRIC: output/status/completion and missing shared operation routes.
+  INTEGRATION: loader/catalogue/association scheduler/core/adapters.
+The later Earth and Warp application work can use freed slots. Nobody patches
+the same host/engine interface independently without coordinating its exact
+schema. Workers report actual blockers; the integration owner resolves shared
+file conflicts and assigns missing prerequisites instead of abandoning them.
+
+On adoption of FH01--FH30, the decisions are implementation authority for this
+scope. A new contradiction with a later explicit owner ruling is recorded and
+resolved by the coordinator. A missing producer already named and designed here
+is not such a contradiction: it is the work the packet was commissioned to do.
+
+20.2 Commit A -- Correct output contracts immediately
+-------------------------------------------------------
+PARTLY SATISFIED BY NEW WORK: merge/adopt gz/fieldp4's R101 repair [S30],
+then finish the strict producer metadata and final-retirement obligations.
+Do not duplicate its header-mask/counter change or overwrite its tests.
+Preserve its mask==0 legacy interpretation behind an explicit compatibility
+mode; FH2 has no production zero-mask escape.
+Handle the write coincident with completion correctly. Separate seen outputs
+from final outstanding-write completion. Add the partial-output fault counter
+and negative controls that distinguish a valid zero from an absent output.
+
+This is a real shared correctness commit even if the mandatory gap count stays
+21 or changes on unrelated work. Do not wait for Warp to exist before fixing it.
+Do not claim the whole shared service repaired when only this commit is done.
+
+20.3 Commit B -- Extract production lowering and executable image law
+---------------------------------------------------------------------
+Move the benchmark Translator/preparation/contraction logic into the production
+library. Complete opcode shapes, validate physical initialization, support
+sparse/uniform exports, preserve numeric status, add the exact canonical-form
+fallback classification, and serialize PROGRAM/ASSOCIATION capsules.
+
+Land decoder-backed conformance tests and golden byte images. Keep the original
+canonical and logical-FPLAN reference paths independent of the physical layout.
+A capability not yet in hardware is reported as a named outstanding route, not
+marked executable by changing a support bitmap ahead of its implementation.
+
+20.4 Commit C -- Shared fabric result and operation completion
+---------------------------------------------------------------
+Propagate per-lane numeric status and all required status causes through the
+actual ALU/service/writeback paths. Add safe context-finished/drained semantics
+and credited export capture. Complete canonical RCP and varying-radius RING
+through shared resources, with full opcode conformance and deliberate-fault
+tests. Keep prepared RING/smooth mode and existing arithmetic results exact.
+
+Changes may be broken into small reviewed commits, but the support table must
+only advertise an operation when its request, service, result and status all
+work. Do not create a new offer-with-no-reader deadlock.
+
+20.5 Commit D -- Real transactional loader and catalogue
+---------------------------------------------------------
+Implement the FH2 mailbox decoder, real HPS capsule reads, bounded receive
+storage, reserve/fill/check/seal, binding and association objects. Add per-object
+ready state and lifetime references. Exercise it with the production packer's
+bytes through the real bridge/arbiter shape.
+
+Keep canonical validation in the existing software authority; the compact FPGA
+loader verifies the certified physical object and every installed count/range.
+One declared software preparation path is allowed. A testbench secretly writing
+the engine's private uop/table/scalar ports is not that path.
+
+20.6 Commit E -- Association host and context scheduler
+--------------------------------------------------------
+Implement the host replacement, single active prepared-data domain, useful
+point grouping, multicontext refill, initialization-proof enforcement, no-clear
+fast path, per-client credits/order, bounded switching and full drain barriers.
+Exercise multiple preparations with identical scalar/table indices to force
+ownership mistakes into observable wrong answers.
+
+First qualify scalar operation; then qualify the selected vector configuration
+with distinct points and masks. Scalar conformance is not the final rate gate.
+Do not quote LANES=4 performance while the host still broadcasts point 0 into
+all four lanes and discards the other answers.
+
+20.7 Commit F -- Migrate Stamp and Flow with the production core
+----------------------------------------------------------------
+Replace both existing raw-slot connections in the SAME integration campaign.
+Preserve their old authored fixture behavior via explicit legacy signatures,
+and separately qualify the canonical profile signatures. Capture full caller
+identity at ingress and preserve final rec_take/field-consumption semantics.
+
+Every new exposed host input has a real internal producer or an explicitly
+contracted external HPS transport owner. Missing association data may not be
+moved to hundreds of raw top-level pins and called a closed service.
+
+20.8 Commit G -- Earth production path and one reducer
+-------------------------------------------------------
+Implement the bounded command/association bridge, field-major scheduler and
+single patch-working-set accumulator. Reuse the existing probe's numerical
+reducers with real phase/backpressure/lifetime control. Preserve the rest of
+the terrain page/cache interface rather than treating a probe as a whole
+terrain subsystem.
+
+Route height, velocity, material and nav outputs from the same evaluation to
+their real owners. Do not close I34 by wiring only height while declaring the
+other three channels present because they have spare bus bits. The no-field
+path and invalid-page behavior must continue to work.
+
+Measure actual row-bounded groups, cold/warm activation and the amended
+6000/850000 envelopes. If a resource/cycle gate fails, keep the exactness gate
+and the failing measurement intact and optimize the named bottleneck. Do not
+change the content tier or define every failing program as optional.
+
+20.9 Commit H -- Warp command, join, application and pixels
+------------------------------------------------------------
+Continue the existing Warp packet from its ratified reference; do not regenerate
+its law from scratch. Implement the remaining directive commits on the shared
+service, including DrawWarpedForm, bounds-aware draw admission, carried Warp
+identity, attribute join, application, normal handling and two-view projection.
+
+Use real program installation and resources. The active deformation must change
+reference-derived geometry/pixels, not only increment a counter. Identity Warp
+and unwarped DrawForm retain the required exact baseline. Malformed Warp data
+must retire/refuse according to the batch law rather than wedge VATTR/replay.
+
+20.10 Commit I -- Qualified production selection and receipts
+--------------------------------------------------------------
+Update all production selection roots and generated artifacts; prove exactly
+one v3 arithmetic fabric in the selected console hierarchy and no superseded
+host privately instantiated behind a convenient wrapper. Check actual parameter
+values and port widths, not merely filenames in source lists.
+
+Run the complete acceptance matrix at the pinned merged commit, publish a
+physical structure sheet, and report the four independent gates. If the current
+owner's complete-console-only fit policy still applies, state PHYSICAL FIT
+PENDING rather than launching an unauthorized fit or inventing its result.
+
+20.11 What is and is not a legitimate stop
+------------------------------------------
+Legitimate intermediate report:
+  "A/B/C landed; output contract and canonical execution conformance pass;
+   D loader is in progress; these exact remaining gates fail/not yet run."
+
+Not legitimate completion:
+  "Warp requires fifteen lanes, so I wrote down that fifteen lanes are needed."
+  "The program returned one output, therefore all requested outputs exist."
+  "The reference supports five profiles, therefore the console executes them."
+  "A mock produced the correct answer, therefore shared FIELD is composed."
+  "The resource spreadsheet has a ceiling, therefore the design fits it."
+
+A newly discovered technical prerequisite inside this scope gets a task and an
+owner. A resource failure gets a measured architectural experiment. Neither is
+converted into an undefined external requirement and handed back unchanged.
+
+
+21. ACCEPTANCE TESTS AND DELIBERATE DEFECTS
+==========================================
+
+These are REQUIRED TESTS TO IMPLEMENT, not a claim they already exist or pass.
+Use the current C++ canonical decoder/interpreter as the semantic comparison.
+Every identifier below needs a real test target/case and captured result.
+Several checks may share one executable; one boolean pass must not conceal
+which discriminator was actually exercised.
+
+21.1 Canonical signatures, lowering and numeric conformance
+-----------------------------------------------------------
+FT001. Decode and bind a full fifteen-input/six-output Warp; vary p3 alone and
+       require a changed declared output. A fourteen-input mutant must fail.
+FT002. Validate all five canonical signatures including Formation's twelve
+       listed inputs and Stamp's eight inputs/three outputs. Reject mismatched
+       application bindings without breaking generic decoder test programs.
+FT003. Run a legal forty-eight-instruction Warp using R63. No truncation to
+       thirty-two words/registers; compare all outputs and status.
+FT004. Run a legal sixty-four-instruction canonical program at the global
+       ceiling and refuse sixty-five at canonical decode, not after execution.
+FT005. Map DOT2/DOT3 groups across register-bank boundaries. Compare every
+       signed extreme and a mixed positive/negative exact-half case.
+FT006. Map LEN3/NORMALIZE3 as one three-member A group, never an inferred pair
+       of groups. Deliberately miswire the extra member and require failure.
+FT007. Map ROT2/ROT3 angle and axis correctly from flattened FPLAN sources.
+       Swapping the angle with a neighboring flattened source must fail.
+FT008. Map DIST2 A[2]/B[2] and MAD/CLAMP/SELECT roles from generated shapes.
+       Include nonadjacent physical scalar/vector groups.
+FT009. Native packing that cannot preserve adjacency either inserts checked
+       exact MOV packing or selects the canonical form; it must not misread
+       adjacent registers and return a plausible native result.
+FT010. Native register/code overflow selects the exact canonical form for a
+       legal program. Record the selected form and its cost; no silent refusal.
+FT011. Prepared RING and smooth-mode contraction equal untouched canonical
+       interpretation in values AND status over boundary and random vectors.
+FT012. Canonical RCP covers zero, positive/negative values and saturation,
+       including rcp0, through the actual shared service route.
+FT013. Varying-radius canonical RING executes with different radii per point;
+       it must not reuse a prepared descriptor from a previous uniform case.
+FT014. Every advertised canonical opcode has a live request/service/result
+       path and correct destination width. Unknown opcodes fail before start.
+FT015. Physical lowering is deterministic: identical canonical/prepared inputs
+       yield byte-identical capsules, maps and source attribution.
+FT016. A changed fabric/host-image version refuses an old incompatible image;
+       equal canonical hash alone is not sufficient for execution admission.
+
+21.2 Output completeness and precise retirement
+-------------------------------------------------
+FT017. Valid one-output program on a seven-word bus succeeds; padding is not
+       required and is reported as padding, not missing results.
+FT018. Six required outputs with one genuinely omitted physical write refuse
+       as MISSING_OUTPUT; the unwritten cleared word cannot masquerade as zero.
+FT019. Six actual zero-valued outputs succeed. Missing-value and zero-value
+       cases must be distinguished by independently driven validity.
+FT020. Sparse output registers return in declared output order, not physical
+       register order or a contiguous out_base window.
+FT021. A uniform-only program returns every prepared output without a vector
+       write and without waiting forever for cur_out_seen to become nonzero.
+FT022. Mixed scalar/vector exports seed only verified scalar outputs and wait
+       for actual vector writes. Remove a prepared scalar-valid bit to fail.
+FT023. Two physical output ordinals legitimately alias one prepared scalar;
+       both outputs are present without violating canonical decode rules.
+FT024. A final output write arrives in the same clock as END observation;
+       the next-state seen/data calculation includes it exactly once.
+FT025. An output register is written twice and the LAST write is delayed;
+       END cannot publish the earlier value merely because seen was already set.
+FT026. A writeback request refused by the arbiter cannot count as a committed
+       output. Only the actual granted RF write populates the export.
+FT027. A long operation completes after other outputs are seen; retirement
+       waits for its final actual write and proper service release.
+FT028. END held high over several clocks produces one terminal event for the
+       running context, not one result per clock.
+FT029. A completion arrives while the feeder preloads another context; it is
+       captured and retired once rather than overwritten by a test helper flag.
+FT030. A zero required-mask production descriptor refuses. A legacy fixture
+       must explicitly state its actual nonzero arity to execute.
+FT031. Wrong-context or stale-generation writeback does not satisfy current
+       exports; fault attribution names the affected work.
+FT032. Export ready/data remain stable under consumer backpressure, including
+       when other contexts finish and other clients consume concurrently.
+
+21.3 Initialization, statuses and masks
+----------------------------------------
+FT033. Slow-clear and validated no-clear execution agree from independently
+       randomized initial RF contents over the legal canonical corpus.
+FT034. Native initialization proof detects a read absent from both association
+       preload and current-point defined sets; execution never starts.
+FT035. Input-only immutability is enforced: a point cannot silently change a
+       lane frozen as uniform for the association.
+FT036. Same program, new parameter/time generation changes the correct outputs
+       in reused contexts. Program identity alone cannot reuse old uniforms.
+FT037. A physical vector destination aliasing an immutable broadcast register
+       is rejected or safely remapped before installation.
+FT038. A preparation with a scalar output but no corresponding prepared value
+       fails before activation; zero-filled RAM is not a substitute.
+FT039. One SIMD lane saturates while the other three do not. Per-point numeric
+       flags remain distinct and the group aggregate equals their masked OR.
+FT040. rcp0 in one lane does not label all neighboring points as rcp0. Exercise
+       the actual shared reciprocal route and status return.
+FT041. Uniform preparation saturates or takes rcp0; each relevant evaluation
+       receives the correct canonical sticky status without repeating the PREP
+       instruction count as if hardware actually executed it per point.
+FT042. Adapter saturation (Warp displacement add or Flow acceleration clamp)
+       is distinct from the Field program's own status and from transport fault.
+FT043. A legal saturated answer is delivered, not dropped by resp_status != 0.
+FT044. An early transient execution fault remains attributed until terminal;
+       checking only a live alarm level on END is insufficient.
+FT045. A masked tail has one valid point; padding produces no extra result,
+       accumulator write, source event or logical saturation contamination.
+FT046. Two active contexts produce independent faults/statuses. A sticky global
+       diagnostic flag cannot automatically redefine both point outcomes.
+FT047. Reusing a context clears point-local bookkeeping but not valid reusable
+       association payload; the next point never inherits an old seen bit.
+FT048. The source/read initialization certificate is checked AFTER physical
+       lowering, including any added packing MOVs and contractions.
+
+21.4 Loader, ownership and recovery
+-------------------------------------
+FT049. Install a real PROGRAM capsule emitted by the production packer through
+       the actual bridge-shaped test path. No private direct uop-port stimulus.
+FT050. Every version/reserved/count/offset/stride/alignment check has an invalid
+       capsule control that fails before a runnable object is published.
+FT051. Capsule section overlap, address-add overflow, invalid extent and an HPS
+       address above the reachable range refuse without truncation or writes
+       outside the reserved staging object.
+FT052. Early burst last, missing beat, extra beat and unowned response each
+       produce the declared counted failure, not stale RAM as valid payload.
+FT053. Bridge refusal without grant terminates/retries under the bounded rule;
+       the client does not wait forever for a grant that was refused.
+FT054. Independent four-table counts survive activation: four different sizes,
+       kinds and data values; changing table 3 must affect only its consumers.
+FT055. A zero-table program after a four-table program cannot accidentally read
+       a valid table left over from the previous activation.
+FT056. Interrupted installation leaves no READY program/binding. A subsequent
+       valid install succeeds without inheriting stale completeness bits.
+FT057. Loader targets the allocator's RESERVED slot, not software's guessed
+       pre-commit slot. Force an eviction selection different from the hint.
+FT058. Equal canonical code/table hash but different I/O metadata does not
+       cause semantic object aliasing. Compare exact stored image identity.
+FT059. Deliberate checksum collision in a test double cannot bypass the full
+       resource/object identity rule or authorize deduplication without equality.
+FT060. post_op=3 reaches FH2, never the catch-all LOAD arm. Unknown kind/verb
+       receives a refusal and no uop/table/scalar write.
+FT061. Two queued mailbox posts with different plan/epoch metadata retain their
+       own metadata while the live cfg pins change before either is drained.
+FT062. Same program in two associations with different scalar slot 5 values
+       returns different correct outputs; cache identity includes preparation.
+FT063. Table/scalar/code activation cannot begin while an old service still
+       reads the active namespace. Force the overlap attempt and block it.
+FT064. An association pins its program/backing bytes across LRU pressure;
+       replacement cannot retarget existing accepted work.
+FT065. Full catalogue returns NO_CAPACITY/BUSY without blocking a release or
+       cancellation queued behind it. Drain remains available.
+FT066. CLOSE stops further input only after the declared close condition and
+       preserves all owed terminal results. CLOSE is not cancellation.
+FT067. CANCEL drains accepted operations, suppresses application publication as
+       specified, returns its terminal count, and permits the next association.
+FT068. Reset during header read, preload, long service and export cannot emit
+       an old result into the next session. Check actual external responses.
+FT069. Generation wrap requires the quiescent epoch procedure; two live objects
+       can never alias after a narrow counter rollover.
+FT070. Every accepted FH2 command has exactly one terminal reply or an explicitly
+       defined reset cancellation; return-credit exhaustion backpressures posts.
+
+21.5 Scheduler, clients and shared progress
+---------------------------------------------
+FT071. Distinct points occupy all enabled physical lanes/contexts; a mutant
+       broadcasting lane 0 into every lane fails value comparisons.
+FT072. Actual point-source queues permit overlap; measure occupancy and source
+       stalls instead of assuming a wider engine created more requests.
+FT073. A permanently blocked client reaches its result-credit limit while other
+       admitted clients, releases and maintenance continue to make progress.
+FT074. Per-client results remain in required submission order even when contexts
+       and services complete out of order.
+FT075. An incomplete service group is flushed when no matching work can arrive;
+       it cannot wait indefinitely for padding that the caller will never send.
+FT076. Continuous loader offers cannot starve the admitted evaluation schedule,
+       and continuous evaluation cannot starve bounded required maintenance.
+FT077. Frequent same-program/different-parameter switches count their actual
+       preparation activation and descriptor-cache invalidation costs.
+FT078. Mixed programs with different tables and different execution forms meet
+       the declared nonpreemptive blocking certificate or fail the rate gate.
+FT079. Selected context-issue policy supplies its stated fairness bound; a
+       lowest-index context cannot indefinitely prevent a waiting one retiring.
+FT080. Every physical clock is counted once through loading, switching, preload,
+       execution and drain. Inject a completion on a preload clock to check it.
+FT081. The slowest accepted operation cannot exceed the job watchdog without
+       attribution; a merely stalled external consumer must not be mistaken
+       for a hung internal computation.
+FT082. The maximum supported queue fill, zero-free-slot condition, simultaneous
+       accept/retire, and first wrap of each queue pointer all execute correctly.
+
+21.6 Real application integration
+-----------------------------------
+FT083. Earth no-field patch equals existing reference composition, including
+       dual/single-surface bottom behavior and all dirty-mask edges.
+FT084. Earth field-major evaluation equals the reference per-vertex command
+       chain for adversarial positive/negative saturating additions; reordering
+       two fields or widening then clamping once must fail.
+FT085. Earth height, velocity, material and nav all come from the same program
+       evaluation. Last material writer is selected by command order and mask,
+       not maximum numeric value or completion arrival order.
+FT086. Earth seventeen overlapping commands preserve the first sixteen and
+       reject/count/attribute the tail under the existing intake law.
+FT087. Earth closed-interval footprint boundaries, partial final rows, nonzero
+       patch origin/pitch and both surfaces match the existing coordinate law.
+FT088. Actual Earth UPDATE emits 297 row-bounded quads for a full patch;
+       INIT/DRAIN emit the distinct 273 aligned groups with the correct mask.
+FT089. The accumulator's same-address RMW bypass and four-channel serialization
+       remain exact across stalls and phase changes; wrong previous-read data
+       must be detected even when all counters still balance.
+FT090. Patch drain output survives a stopped cache consumer, and no next patch
+       overwrites the workspace before every final record is accepted.
+FT091. TerrainField command bytes, actual program binding, actual uniforms and
+       the real page/cache path produce changed terrain in a composed test.
+FT092. Unwarped DrawForm and identity Warp preserve the required exact baseline;
+       no extra normalization or duplicate application changes lighting.
+FT093. Nonidentity DrawWarpedForm uses real uploaded resources and the shared
+       host, then changes reference-derived geometry/pixels in both views.
+FT094. Warp evaluates deformation once for shared geometry; the second camera
+       does not spend another Field evaluation. Check source identities/counts.
+FT095. Warp displacement exceeds its declared bound: use the directive's
+       refusal/poison law, not silent clamping or undeformed-bounds culling.
+FT096. Warp STREAM4/inline attributes, output normals and sparse exports stay
+       attached to their own vertices under stalls, refusals and meshlet reuse.
+FT097. Flow preserves Particle128 conversion, R40 acceleration, the real
+       rec_take lifetime and no-second-integrator rule through queued execution.
+FT098. Stamp consumes exactly one result per visited texel, including uncovered
+       texels. A failed/restarted stamp drains its old association and the NEXT
+       stamp still works. Compare explicit legacy and canonical signatures.
+FT099. Canonical Stamp unit endpoints and texel-center coordinates are exact;
+       emissive is returned by the host and not falsely claimed as applied by
+       a consumer without an emissive input.
+FT100. Formation's full twelve-input/six-output signature executes through the
+       same service conformance driver. Label whether a production caller exists;
+       do not count a test driver as composed Formation functionality.
+
+21.7 Tooling, resource, negative-control and workload integrity
+--------------------------------------------------------------
+FT101. Every new directed/mutation test target actually builds and runs from a
+       clean committed worktree; no green inventory-only claim substitutes.
+FT102. Every committed mutant has a real driver that observes the intended
+       semantic fault. Test a correct production control before/after mutation.
+FT103. Wide packed-array and user-defined-type ports elaborate at their real
+       widths through core, board, resource top and wrappers. Deliberately omit
+       one lane and require the gate to fail.
+FT104. Every production selection root chooses the intended host/fabric/reducer
+       versions and actual parameters. Retained oracles are explicitly separate.
+FT105. Package imports and generated command-size tables are in the exact fit
+       source closure; a missing package positive control fails early.
+FT106. Numerical code compiles with the applicable warnings and sanitizers;
+       negative shifts, signed overflow and narrow cast assumptions cannot make
+       a false equality appear stable on only one compiler.
+FT107. Capsule pack/check and capture replay are byte-stable across two clean
+       runs, with exact canonical/prepared identity and no timestamp dependency.
+FT108. Structural memory sheet enumerates every port replica and shape. The
+       273x32 boundary is represented in its accounting, not rounded down to a
+       single 10,240-bit block by payload division.
+FT109. All semantic/status/lane-identity defects fail the Earth performance
+       executable's exit code. A nonzero diag_failures cannot coexist with a
+       published production throughput PASS.
+FT110. Full association/frame performance includes actual UPDATE groups, cold
+       and warm setup, mixed preparation changes, real consumers and memory/post
+       contention. Preserve and report a failing configuration as a control.
+
+21.8 Formal and assertion obligations
+---------------------------------------
+Use formal verification on bounded control subproblems where tractable, and
+explicit simulations/structural proofs where whole arithmetic is not tractable.
+Do not claim an SMT proof for a test that only ran a few deterministic cycles.
+
+Prove or assert, with an independent observation point:
+  a) Accepted work <= reserved terminal capacity; no credited queue overflows.
+  b) A context is never reused before its write/service obligations reach zero.
+  c) A READY object implies every mandatory section and map was installed.
+  d) An active association's scalar/table namespace cannot be written by another.
+  e) No inactive/padded point can publish an application output or accumulator write.
+  f) Every success has a complete required mask and final-value retirement fence.
+  g) No rejected/partial object can become a binding target.
+  h) Payload/identity stable while valid and not ready, at every registered seam.
+  i) Reset/epoch separation prevents old accepted replies satisfying new work.
+  j) No subsystem silently relies on a ready signal that the real port lacks.
+
+For liveness properties state the environment assumptions: response eventuality,
+bounded memory refusal, and downstream credit availability as appropriate.
+"Eventually completes under arbitrary permanently blocked memory" is not a
+meaningful promise. The failure must still be bounded/attributed under the
+explicit timeout/abort contract without corrupting the next session.
+
+21.9 Mandatory mutant classes
+-------------------------------
+At least these planted defects must be caught by actual semantic tests:
+  required mask tested as ANY instead of ALL;
+  final overwrite dropped after an earlier output already set seen;
+  uniform output seeded from the previous preparation;
+  scalar tag stripped and interpreted as a vector register;
+  op 3 aliased to LOAD;
+  raw persistent slot reused after eviction;
+  mixed-table association switched before the old service drains;
+  canonical RCP0 lost or treated as execution failure;
+  SIMD flags ORed back into every point;
+  padded lane writes or counts enabled;
+  Earth field completion order substituted for command order;
+  273 UPDATE groups used in place of 297;
+  point N+1's cookie paired with point N's result;
+  a pulse completion lost while another context is preloaded;
+  an unknown physical opcode classified before its service exists;
+  a partial image published READY before CRC/completeness verification.
+
+Do not write a test whose only expected behavior is that the buggy design
+returns a wrong answer. Assert the correct behavior; the planted mutant must
+make that assertion fail. A coverage counter that still balances under a wrong
+answer is not a substitute for comparing the answer.
+
+
+22. COMPLETION RULES AND REQUIRED EVIDENCE
+==========================================
+
+22.1 Four independent conclusions
+----------------------------------
+SEMANTICALLY CONFORMANT means:
+  valid canonical programs produce the correct declared outputs and numeric
+  status through the selected physical form, including full profile signatures,
+  uniform/sparse outputs, maximum canonical bounds, and actual cold operations.
+  No claimed operation relies on a mock or on an unimplemented service route.
+
+COMPOSED means:
+  the selected console accepts the real producer's captured command/resource
+  data, loads and binds it through the actual host path, runs useful points,
+  and the real consumer uses the results. Correctly disconnected intermediates
+  remain labeled as such. A testbench may model HPS and physical memory; it
+  may not stand in for a missing FIELD loader, result producer or application.
+
+WORKLOAD-QUALIFIED means:
+  the complete production-transport scenarios meet the declared deadlines,
+  including switching/preload/activation, real masks/ordering and competing
+  clients. State the exact program set, content tier and clock assumption.
+  A scalar correctness pass does not qualify a vector throughput promise.
+
+PHYSICALLY QUALIFIED means:
+  the actual selected hierarchy with its real parameters has a provenance-pinned
+  synthesis/fit/timing result on the relevant device. An isolated leaf, a flat
+  census, a parser pass, and a complete board fit answer different questions.
+  No result from one is relabeled as another.
+
+These four statuses are published separately even when the headline is only
+one line. If the implementation is correct but exceeds a resource/deadline,
+say exactly that and retain its useful correctness evidence. Do not pretend
+that a failed physical gate retroactively proves the numerical law impossible.
+
+22.2 What closes the shared-FIELD commission
+---------------------------------------------
+All the following must be true before reporting this commission DONE:
+  - the real production packer and loader are used, not only described;
+  - the selected host carries full signatures and required output metadata;
+  - canonical and prepared physical forms have honest operation coverage;
+  - association, program-image, context and result lifetimes are enforced;
+  - uniform data and all four table identities are safe across switches;
+  - no-clear execution has a real validation proof and differential controls;
+  - meaningful context/lane overlap is driven by actual producer queues;
+  - numerical flags, omissions and transport failures remain distinguishable;
+  - current Flow/Stamp behavior is preserved under explicit bindings;
+  - Earth and Warp use the repaired service through their real application paths;
+  - the 110-case matrix has actual case/target mappings and results;
+  - selection/generation/inventory reflect the same composed machine;
+  - every unmet performance/physical condition is stated explicitly, not hidden.
+
+The commissioned FUNCTIONAL build cannot be declared complete merely because
+its proposed interfaces now exist. The overall hardware project cannot be
+declared physically ready solely because the functional commission is done.
+
+22.3 Receipt format
+---------------------
+Commit one evidence manifest, generated where possible, containing:
+  pinned source commit and a clean/dirty-worktree statement;
+  exact top, source closure and elaborated parameter set;
+  protocol/image/fabric/canonical versions;
+  test executable, arguments, seed and expected configuration;
+  actual return code and unfiltered log file;
+  checked outputs/status/identity counts and refusal mix;
+  mutant id, changed semantic condition, driver and observed failure;
+  cycle partitions, queue peaks, useful-lane counts and activation counts;
+  structural memory/arithmetic sheet;
+  physical fit/timing receipt OR an explicit NOT RUN status;
+  unresolved requirements with a named owner and next concrete implementation.
+
+Capture full logs first, then summarize them. A tail of a log that drops the
+actual gate evidence is not the receipt. Test count is not proof of coverage;
+name the case that discriminates the defect from a correct implementation.
+
+22.4 Read-only architecture-review limitations
+------------------------------------------------
+This document is based on the listed committed files, not access to the user's
+uncommitted worktrees or live agents. It does not establish that a concurrent
+worker has or has not started a repair since the pinned snapshot. Refresh on
+receipt and preserve newer correct implementation.
+
+The architecture intentionally makes several NEW choices: strict output
+metadata; versioned host capsules and transactional publication; distinct
+association/context identities; exclusive active prepared data with several
+contexts; canonical exact support on the shared fabric; field-major Earth
+composition with one working-set reducer. They require implementation and
+measurement. They are not claimed as already fitted, universally optimal,
+or a guarantee that the complete Zhaozhou fits the target FPGA.
+
+What this document does provide is an explicit implementation decision for the
+shared prerequisites. The agent does not need to discover again that Warp needs
+fifteen lanes, tables need ownership, or Earth needs a compatible consumer.
+The remaining uncertainty is to be reduced by code, differential tests and
+measured physical/workload evidence, not by repeating the absence report.
+
+
+23. SOURCE REGISTER
+====================
+
+Repository: Fabulu/zhaozhou.
+H = c55e0417c85af2891d5a4f8f95d1bd6a749c3c37 (hardware baseline)
+W = c91b32706928d2c8d8504e42bc764c746130363c (Warp findings/reference)
+B = 8d351ea9794816de57ac9ab7069e2b7737000380 (earlier pinned Warp review)
+O = 4c256137bba97bb272696782bb1756c10407f70b (owner-delivered Warp directive)
+
+Resolve a source as repository path at the stated commit, not the moving
+main branch. Line ranges identify the inspected material; later revisions may
+move them. A file header's historical claim is not automatically the current
+circuit. This review distinguishes actual declarations/logic from stale prose.
+For files inspected at B, verify the current diff before implementation; do not
+assume this document's older path comment overrides newer RTL.
+
+[S01] H: fpga/rtl/field/zhao_field_host.sv
+  Key range 735--1095: loader wiring, E_ZERO/E_WRITE sequence, output window,
+  status and header invalidation. Blob 7e788de2f0dc04056a5f27a0d88bfb26b0760b0e.
+  Also read its parameter/port and ownership comments at B; the same blob.
+
+[S02] B: spec/form/field-ir.md, sections 1, 4, 5 and 7.
+  Canonical encoding, validation, hash scope, exact tables, lane records and
+  instruction ceilings. Blob a3bff339a946d95cb64812f642057028dcddaf7e.
+  W corrects Warp's parenthetical count without dropping a named field.
+  B: reference/include/zfield/zfield.hpp, Decoded/IoLane/Status and constants.
+  Blob 9c3887a1ace2b58256f88645636af2ae814c011f.
+
+[S03] H: reference/src/zfield/zfield_plan.cpp, lines 1--255.
+  Lowerer, scalar/varying locations, prepared ring, output map and compaction.
+  Blob 5de5e3b137cb7357ee4f5c6e5adc973cb80ed1e0.
+  B: reference/include/zfield/zfield_plan.hpp, complete public plan API.
+  Blob 7225083ef26ff9a4d30865f6bb537d3c5af8e4b4.
+  Profile signatures are from [S02]; their production binding is distinct from
+  the generic Decoded API and from the logical FPLAN source-kind representation.
+
+[S04] H: reference/src/zfield/zfield_decode.cpp, lines 300--440 and V12 tail;
+  B review also read the image/CRC/profile/table parsing preceding it.
+  Input ordinal, output-map and def-before-use laws, including source groups.
+  Blob 4607166fa27b7d69d935555614792e7193f582be.
+
+[S05] H: fpga/rtl/field/zhao_field_v3_exec.sv, lines 1--485.
+  Real uop/preload/writeback ports, context lifecycle, ordinary RF operands,
+  issue selection, group reading and long-op ownership.
+  Blob ca8faa08bf33e1459b6c8d90f108d0a59699c909.
+  The complete engine composition and services must be re-gated after changes;
+  an executor header listing formerly unsupported ops is not a fresh census.
+
+[S06] H: fpga/rtl/field/zhao_field_ops_pkg.sv, complete file.
+  field_long_width/field_is_long and canonical/prepared service routes.
+  Blob ebaa92601a6154e09daf617069f98d338d02332a.
+
+[S07] H: tests/differential/field_v3_earth_directed.cpp, lines 1--290.
+  Existing production-shaped benchmark setup, parameter knobs, uniform RF
+  broadcast rationale, smoothstep contraction and current scaling assumptions.
+  Blob 32361e33e33698e91cf57115a022c15ef0687ca8.
+
+[S08] H: same file, lines 255--530.
+  Translator::reg_of/map_one, prepared-ring scalar packing, operand-group
+  limitations, context done queue, running identity, late-write observations,
+  single advance() clock accounting and pre_ready discipline.
+
+[S09] H: fpga/rtl/field/zhao_field_v3_sbank.sv, complete file.
+  One 64-slot global scalar bank, registered read, wide checked write address.
+  Blob 61fa4873370ef7157a16290a2524c4e3967d2240.
+
+[S10] H: fpga/rtl/field/zhao_field_v3_ring_svc.sv, lines 1--170.
+  Scalar-index immediate, request ownership, descriptor cache, invalidation,
+  shared-bank arithmetic and per-lane response flags.
+  Blob 9e25ea93e8e0217354d1ee5e77e466e7e672406e.
+  Smooth-mode use is independently visible in the translator [S08].
+
+[S11] H: fpga/rtl/field/zhao_field_alu_vec.sv, complete file.
+  Actual per-lane flags and their group OR reduction; opcode/data distinctions.
+  Blob 3815a83b06a5880903ddfd7c44e1e1c4089e1678.
+
+[S12] H: fpga/rtl/field/zhao_field_doorbell.sv, lines 245--510;
+  B: same blob, lines 1--230 for mailbox ports and documented exchange.
+  Explicit current decode, catch-all LOAD, header shadow, post capture,
+  live plan-base sampling, return credit and commit/lookup retirement.
+  Blob e9c0428547f22f13beca641d14b3eb81899b6bcb.
+
+[S13] B/H: fpga/rtl/prod/zhao_console_core.sv, current composition and parameters.
+  B ranges 6700--7380 reviewed for decode/palette/skin/normal/light joins;
+  H's selected FIELD parameters and adapters are also inspected in [S20]'s
+  source-level audit. The exact current instantiation graph/parameter overrides
+  must be regenerated before implementation; no claim of a fresh full fit here.
+
+[S14] H: fpga/rtl/field/zhao_field_alu.sv, lines 220--360.
+  Ordinary supported op cases, numeric cause flags and unsupported behavior.
+  Blob 7fd6ede923a1d0214110754e69ae21743f844fd2.
+  Read with [S06]; an op absent from both must not be assumed executable.
+
+[S15] H: design/contracts/FIELD.SEQ.EARTH.md, lines 1--205.
+  Profile bindings, field-major requirement, uniform preparation, 297 vs 273
+  groups and the amended 6000/850000 performance envelopes.
+  Blob 80d340203f21dbe12b2b18bdeccccb9b2c10903c.
+
+[S16] H: fpga/rtl/terrain/zhao_terrain_patch.sv, lines 1--240.
+  Actual vertex-major port, ordered saturating law, footprint ownership,
+  accepted-list semantics and trace-only hash/command fields.
+  Blob 2df435f955d254f2e97d89f286be258dc5cfbc87.
+  H: design/contracts/TERRAIN.PATCH.md, lines 1--150.
+  Blob 1cd44bed88542d3b8b993c68879976b92db7d7ad.
+
+[S17] H: fpga/rtl/synth/zhao_probe_patch_acc.sv, lines 1--205.
+  Existing four-channel field-major math, write mask, banking, RMW bypass,
+  INIT/ACCUM/DRAIN assumptions and actual non-handshaked port shapes.
+  Blob 3c9ebebdd29e018ea8269d1216cf8c25704f91c0.
+  A reusable numerical probe, not a complete production terrain owner.
+
+[S18] H: fpga/rtl/field/zhao_field_v3_rf.sv, complete file.
+  Four banks, three read replicas, register-group address rotation, vector
+  width, context depth and reset-free payload storage.
+  Blob 4afa4b7a39e9a1bbcc120f1d5d9d4dad3c7052cf.
+
+[S19] O: reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt.
+  Owner-delivered W01--W18 application architecture and acceptance design.
+  This FIELD brief preserves its application semantics and explicitly replaces
+  only the shared service's prerequisite design/implementation route.
+
+[S20] W: findings commit c91b32706928d2c8d8504e42bc764c746130363c;
+  reports/OWNER-RATIFICATION-20260920-WARP.md;
+  reference/include/zref/zref_geom_warp.hpp (lines 1--145 re-read for this brief).
+  Reference blob 6796e6bb319212bd8a01e8faa029c8e475795bf7.
+  The findings are hypotheses/evidence to check, not instructions to inherit
+  every diagnosis. Section 2.2 qualifies the output-arity overstatement.
+
+[S21] H: fpga/rtl/field/zhao_field_flow_adapter.sv, lines 80--320.
+  Current 13/7 record, raw slot seam, Particle128 conversion, R40 output use,
+  held-record identity and final rec_take lifetime.
+  Blob 925befbd92cd6abf3deba56e6a33d9bf7bf93bf3.
+
+[S22] H: fpga/rtl/field/zhao_field_stamp_adapter.sv, lines 1--225.
+  Current raw-coordinate/reduced-output binding, all-texel stream order,
+  arm policy and S_DROP restart/drain reasoning.
+  Blob d4003399730dbf94670703fae7a9a0e3670f92d8.
+  Compare [S02]'s canonical signature; the difference is real, not bus padding.
+
+[S23] H: spec/commands.zidl, lines 325--430; B review also read form/resource
+  commands, byte-generation rules and the version notes.
+  TerrainField and SurfaceStamp actual carried inputs, program/resource
+  identities, full-record lowering and generated ABI ownership.
+  Blob a94c9515d83904eb33f8129d53c6490e91bcc7c8.
+
+[S24] B: design/contracts/FIELD.PROGCACHE.md, lines 1--210.
+  Logical plan identity, scanned-directory candidate, lookup latency,
+  association acquisition/lifetime and caller-owned program storage.
+  Blob 60f111dd2458ff85d3db827e37ebb971e0fb2993.
+  This brief adds explicit pin/publication semantics rather than pretending
+  the old LRU directory already enforces every new lifetime rule.
+
+[S25] B: spec/form/cost-model.md, sections 1--5.
+  Canonical limits vs physical resource-demand admission, prepare-once work,
+  cold/software classification, and reproducible cost artifact conventions.
+  Blob bbb5ef385d6659422c19d2e138e6dd503f26bf5a.
+  H: reference/src/zrender/terrain.cpp was identified for existing age/phase
+  and compose_lattice law; reuse its actual current implementation and tests
+  rather than inferring a new division/expiration policy from command names.
+
+[S26] H/B: reports/OWNER-RULINGS-20260919-EVENING.md and the completion campaign.
+  Relevant authority: one current engine, mandatory capability preservation,
+  R40/R43/R44/R91 shared FIELD work, R80/R86 fit provenance, and the current
+  complete-console-only fit sequencing. FH18 explicitly amends transport means
+  rather than claiming R91 already authorized a field-major consumer replacement.
+
+[S27] Primary device/tool documentation consulted for RAM accounting:
+  Altera Cyclone V Device Handbook, Volume 1, M10K Blocks Mixed-Width
+  Configurations (Simple Dual-Port and True Dual-Port tables).
+  Altera/Intel Quartus Prime Standard Edition User Guide: Design
+  Recommendations, Controlling RAM Inference and Implementation.
+  The actual simple-dual-port shape includes 256x32/40; the true-dual-port
+  widths differ. Tables specify legal shapes, not what an arbitrary RTL array
+  will infer. Target-device synthesis remains the actual implementation check.
+  Official documentation identifiers: handbook 683375; recommendations 683323.
+
+[S28] H: tests/differential/field_v3_full_directed.cpp, lines 1--270.
+  Existing actual engine driver, table/scalar writes, granted writeback and
+  mixed-service tests. Blob 6ec54561b45f3adf3dc7954aca3cb8af5ef1e7b5.
+  Historical header claims are not used to infer the current support matrix.
+
+[S29] H: tests/field/field_host_directed.cpp, lines 1--190.
+  Actual one-output add program, four-word host transport, raw header packing,
+  preload/handshake helper and legacy invalidation test descriptions.
+  Blob 8aa69169360d8782bdb690423ee38136969ab1be.
+  This is why a one-output success on a wider bus is not, alone, a proven
+  partial-multi-output bug: the missing declared-output contract is the defect.
+
+
+[S30] Final refresh: gz/fieldp4 at
+  f98e7f864d7266f0ed51d18d5dd8f9b1148ee5ae, FINDINGS-fieldp4 commit.
+  Actual host source re-read at lines 1005--1145, blob
+  e5acb14461c007a15647c6390ca2baa181d9d8be.
+  R101 required-window mask, legacy-zero compatibility, ST_PARTIAL and counter;
+  the findings report active tests, sparse real-program output maps and the
+  current ordinary smoke's intentional no-program condition. These test
+  results are repository-reported, not independently executed in this review.
+
+[S31] Final official head:
+  a72d631d2f8f5fc222e9f64efc78ea114706fc05, merge of gz/projadopt.
+  Commit metadata/diff read for the final synchronization note. Preserve its
+  adopted projector/resource-root changes and re-derive FIELD's instantiation
+  and generated artifacts on the merged tree rather than reverting them.
+
+
+APPENDIX A -- IMMEDIATE COORDINATOR MESSAGE
+============================================
+
+Read reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt in full.
+On adoption, record FH01--FH30 as the new implementation authority for the
+shared FIELD repair, preserving the existing canonical numerical laws and
+W01--W18 Warp application semantics. Do not attribute these new transport
+choices to an older ruling.
+
+Assign one integration owner now. The Warp packet's shared-host prerequisites
+are the assignment, not grounds to stop. First adopt the new gz/fieldp4 output-mask repair and complete strict declared-
+output metadata/final retirement; do not redo the already-landed patch. Then promote the existing Earth benchmark's useful FPLAN
+lowering, uniform broadcast and context-refill mechanisms into production;
+build the real versioned loader/catalogue/association scheduler; carry exact
+per-point status and all required outputs; complete missing canonical shared
+operation routes; migrate Stamp/Flow; connect command-driven Earth and Warp.
+
+Use one v3 fabric. Separate program images, prepared associations, execution
+contexts and result credits. Keep one active scalar/table namespace initially,
+with multiple useful point contexts and counted switch costs. Do not clear
+all registers per point once the real initialization proof holds. Do not use
+raw persistent slots, implicit zero masks, shared live parameter pins, mocks,
+or replicated input lanes to manufacture progress.
+
+Resolve Earth field-major versus vertex-major at the real consumer with one
+bounded working-set reducer, preserving per-vertex command-order saturation
+and the existing clamps. Do not stack a second reducer or allocate the full
+sixteen-field result matrix. Keep the actual 297 UPDATE group count and the
+amended 6000/850000 gates in the performance measurement.
+
+Coordinate shared-file edits and regenerate all affected artifacts. Land
+correct dependency commits even when the completion count stays unchanged;
+label them accurately. Run and map FT001--FT110, including the planted defects,
+through real producers and consumers. Publish semantic, composed, workload and
+physical status separately. Follow the current complete-console-only fit rule.
+A missing prerequisite within this scope gets implemented and tested, not
+returned as the same refusal for the next packet to discover.
+
+
+APPENDIX B -- NUMERICAL SANITY CHECKS AND INVARIANTS
+===================================================
+
+These calculations check this brief's own accounting. They are not Quartus
+or runtime results.
+
+B1. Canonical lane counts, by fields:
+  Warp = 3 position + 3 normal + 4 attributes + 1 time + 4 parameters = 15.
+  Formation = 1 index + 1 time + 2 rotation + 2 translation + 6 params = 12.
+  Maximum listed input/output transport = 15 words / 7 words.
+
+B2. Profile limits are not the physical store size:
+  Warp canonical ceiling 48, global canonical ceiling 64.
+  A 32-word store cannot hold all legal Warp programs.
+  A physical native plan may add packing operations; count the final image.
+
+B3. Earth traversal:
+  vertices = 33*33 = 1089.
+  row-bounded UPDATE quads = 33*ceil(33/4) = 297.
+  aligned INIT or DRAIN quads = ceil(1089/4) = 273.
+  Difference = 24 UPDATE groups/association, 3072 over 128 associations.
+  Logical vertices remain 1089; padded physical lanes are not logical work.
+
+B4. Old per-point transport illustration:
+  old lower bound from clear and input walk at REGS32/IN13 is 46 clocks,
+  and the reported full FSM expression is 49 + T_run before further stalls.
+  Widening to IN15 changes that expression to 51 + T_run.
+  Removing clear/preload cost alone does not remove actual instruction,
+  activation, contention and consumer costs; no three-clock FULL evaluation
+  is promised by a three-clock transport estimate.
+
+B5. Rejected complete intermediate matrix:
+  16 fields * 1089 vertices * 4 output words * 32 bits = 2,230,272 bits.
+  This excludes its ports/replicas, metadata and validity. It is not the chosen
+  Earth transpose solution.
+
+B6. Patch working-set baseline:
+  4 vertex banks * 4 channels * 273 rows * 32 bits = 139,776 payload bits.
+  Sixteen independent 273x32 memories exceed the 256-row wide-word mode;
+  a straightforward mapping can cost two M10Ks per array, i.e. 32 blocks.
+  Candidate serialization: four banks each 1092x32, explicitly split into
+  1024x32 + 68x32, has a structural 4+1 blocks per bank, i.e. 20 blocks,
+  if the intended modes and controls actually infer. Extra state still counts.
+
+B7. Example register file at CTX8/REGS64/LANES4:
+  4 banks * 3 copies = 12 physical logical arrays.
+  depth per array = 8*(64/4) = 128; width = 4*32 = 128.
+  A direct width partition against 256x32/40 modes is roughly four blocks per
+  array, 48 M10Ks. A denser transformed layout is a different implementation
+  to measure, not free packing. At CTX32 depth becomes 512 and may double it.
+
+B8. Host-image fixed records:
+  common header = 64 bytes; each section directory entry = 16 bytes.
+  PROGRAM_META = 64 bytes; ASSOCIATION_META = 64 bytes.
+  INPUT_MAP and OUTPUT_MAP rows = 8 bytes; PRELOAD rows = 8 bytes.
+  INIT_PROOF = 64 bytes, with five physical-register u64 masks.
+  canonical table section payload = 4 + 12*entry_count bytes.
+  max input record = 15*4 = 60 bytes plus 4 explicit padding bytes.
+  Every range/product is widened before bounds checking.
+
+B9. Output completion:
+  success requires required_mask != 0 AND
+    (seen_next & required_mask) == required_mask AND
+    terminal_for_this_identity AND no_outstanding_modifying_write AND
+    no_execution_fault AND owned_result_credit.
+  A previously set seen bit does not prove a later overwrite has retired.
+  UNIFORM_ONLY uses a validated explicit terminal without pretending to run END
+  on a nonexistent physical program.
+
+B10. Lifetime separation:
+  Canonical resource identity != physical program-image identity.
+  Program-image identity != association/preparation identity.
+  Association identity != execution context index.
+  Execution completion != application response consumption.
+  Content hash equality != complete semantic object equality.
+  A CRC is not proof of cryptographic identity or authorization.
+
+B11. Claims permitted at this document's creation:
+  architectural choices, source-grounded defects/mismatches, an implementation
+  sequence, required tests and structural arithmetic.
+  Claims NOT permitted: tests executed here, fitted ALMs/DSP/M10K, achieved Fmax,
+  deadline compliance, independent verification of the user's uncommitted tree,
+  or certainty that the final console fits.
+
+END OF DIRECTIVE
