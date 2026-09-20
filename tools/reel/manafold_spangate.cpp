@@ -71,6 +71,7 @@ enum GateCategory : uint32_t {
   kCatFrontFlex = 1u << 12,
   kCatSwellSize = 1u << 13,
   kCatTerminalCap = 1u << 14,
+  kCatWalk = 1u << 15,
 };
 uint32_t g_failure_bits = 0;
 uint32_t g_current_category = kCatConfig;
@@ -1829,6 +1830,72 @@ void check_carrier_continuity(const zc::CreatureType& type, bool motion_csv,
     fail("a shipping visible carrier has an angular step/acceleration/jerk discontinuity");
 }
 
+// ---- G11 WALK PAIRING (pass 20 packet 6) -----------------------------------
+//
+// ⚠ THIS LEG EXISTS BECAUSE TWO COPIES OF ONE WALK DRIFTED AT BIRTH. Packet 5's
+// dent carried a private chain walk that paired kLoopArcMm[i] with span_child
+// [i-1] -- one bone early on all three spans. A span's delta lives on the bone
+// that ENDS it (set_span_delta(0) writes kBHingeA), and with the ambient duck
+// at 1000 every delta is zero, so the two walks agreed in exactly the row that
+// was quoted as evidence and disagreed everywhere else, by up to 344 mm at C.
+//
+// There is now one `u02::loop_walk`, and this leg pins its pairing: distinct
+// per-span deltas go in, and each segment's reconstructed length must be
+// kLoopArcMm[i] plus THAT span's delta. A walk shifted by one bone fails on
+// every span. The control (`--fail-walk-pairing`) runs the one-bone-early walk
+// against the same rig, so the detector is shown firing on the defect it was
+// written for rather than asserted to work.
+void check_loop_walk_pairing(bool fail_walk_pairing) {
+  u02::Rig g;
+  g.reset();
+  // Distinct per span (so a shift by one bone cannot cancel), and multiples of
+  // 125 mm so the fx16 round trip through set_span_delta is EXACT -- fxu()
+  // scales by 65536/1000 = 8192/125, and a delta that is not a multiple of 125
+  // loses a millimetre to the floor, which would make this leg red for a
+  // rounding reason and hide the pairing it exists to check.
+  static constexpr int32_t kProbeDelta[3] = {125, 375, 750};
+  for (int i = 0; i < 3; ++i) g.set_span_delta(i, kProbeDelta[i]);
+  // Identity rotations after reset, so the walk is a straight run up +Y and a
+  // segment's length is exactly the difference of two walk endpoints.
+  int32_t px[6]{}, py[6]{}, pz[6]{};
+  for (int k = 0; k <= 5; ++k) {
+    zc::quat16 q;
+    u02::loop_walk(g, k, px[k], py[k], pz[k], q);
+  }
+  // span i ends on span_child[i]; kBNeck and kBHingeD carry no span delta.
+  const int32_t expect[5] = {
+      u02::kLoopArcMm[0],
+      u02::kLoopArcMm[1] + kProbeDelta[0],
+      u02::kLoopArcMm[2] + kProbeDelta[1],
+      u02::kLoopArcMm[3] + kProbeDelta[2],
+      u02::kLoopArcMm[4]};
+  int mismatches = 0;
+  int32_t worst = 0;
+  for (int i = 0; i < 5; ++i) {
+    int32_t got = py[i + 1] - py[i];
+    if (fail_walk_pairing) {
+      // THE CONTROL: the packet-5 walk, verbatim -- arc[i] paired with the bone
+      // that BEGINS the span. It skips span 0's delta and lags the other two.
+      static constexpr uint8_t kEarly[5] = {u02::kBRoot, u02::kBNeck,
+                                            u02::kBHingeA, u02::kBHingeB,
+                                            u02::kBHingeC};
+      got = u02::kLoopArcMm[i] + static_cast<int32_t>(
+          (static_cast<int64_t>(g.local_t[kEarly[i]][1]) * 1000) >> 16);
+    }
+    const int32_t d = got - expect[i];
+    if (d != 0) {
+      ++mismatches;
+      if (std::abs(d) > std::abs(worst)) worst = d;
+    }
+  }
+  std::printf("G11 loop walk pairing: probe deltas %d/%d/%d mm, %d of 5 "
+              "segments mispaired, worst %+d mm%s\n",
+              kProbeDelta[0], kProbeDelta[1], kProbeDelta[2], mismatches,
+              worst, fail_walk_pairing ? " [MUTANT: one-bone-early walk]" : "");
+  if (mismatches != 0)
+    fail("loop_walk pairs a span's arc with the wrong bone's span delta");
+}
+
 void check_rear_closure(const zc::CreatureType& type,
                         const Stations& stations) {
   const int32_t x = u02::fxu(u02::kLoopTubeXMm);
@@ -1895,7 +1962,8 @@ void usage(const char* argv0) {
                "[--fail-accent-switch] [--fail-hold-tremor] "
                "[--fail-compress-wrap] [--fail-final-dwell] "
                "[--fail-root-authority] [--fail-front-flex] "
-               "[--fail-swell-size] [--fail-terminal-cap] [--motion-csv] "
+               "[--fail-swell-size] [--fail-terminal-cap] [--fail-walk-pairing] "
+               "[--motion-csv] "
                "[--held-only]\n",
                argv0);
 }
@@ -1925,6 +1993,7 @@ int main(int argc, char** argv) {
   bool fail_front_flex = false;
   bool fail_swell_size = false;
   bool fail_terminal_cap = false;
+  bool fail_walk_pairing = false;
   bool motion_csv = false;
   bool held_only = false;
   u02::PublicJointMute fail_mute = u02::PublicJointMute::kNone;
@@ -1970,6 +2039,8 @@ int main(int argc, char** argv) {
       fail_front_flex = true;
     } else if (std::strcmp(argv[i], "--fail-swell-size") == 0) {
       fail_swell_size = true;
+    } else if (std::strcmp(argv[i], "--fail-walk-pairing") == 0) {
+      fail_walk_pairing = true;
     } else if (std::strcmp(argv[i], "--fail-terminal-cap") == 0) {
       fail_terminal_cap = true;
     } else if (std::strcmp(argv[i], "--motion-csv") == 0) {
@@ -2032,6 +2103,7 @@ int main(int argc, char** argv) {
                 kCatRootAuthority | kCatFrontFlex | kCatCrown);
   select_mutant(fail_front_flex, "front-flex", kCatFrontFlex,
                 kCatFrontFlex);
+  select_mutant(fail_walk_pairing, "walk-pairing", kCatWalk, kCatWalk);
   select_mutant(fail_swell_size, "swell-size", kCatSwellSize,
                 kCatSwellSize);
   select_mutant(fail_terminal_cap, "terminal-cap", kCatTerminalCap,
@@ -2135,6 +2207,8 @@ int main(int argc, char** argv) {
     std::printf("  [MUTANT] restore version-17 protruding swell amplitudes\n");
   if (fail_terminal_cap)
     std::printf("  [MUTANT] restore the authored 42/26 profile on the buried terminal ring\n");
+  if (fail_walk_pairing)
+    std::printf("  [MUTANT] restore the packet-5 one-bone-early dent walk\n");
   std::printf("\n");
 
   g_current_category = kCatConfig;
@@ -2142,6 +2216,9 @@ int main(int argc, char** argv) {
     fail("compiled skeleton does not carry all Manafold bones");
   if (u02::kBoneCount > zc::kMaxBones)
     fail("Manafold exceeds the 32-bone donor ceiling");
+
+  g_current_category = kCatWalk;
+  check_loop_walk_pairing(fail_walk_pairing);
 
   if (held_only) {
     g_current_category = kCatCrown;

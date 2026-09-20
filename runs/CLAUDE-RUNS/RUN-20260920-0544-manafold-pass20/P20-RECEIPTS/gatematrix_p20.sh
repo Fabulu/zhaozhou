@@ -116,6 +116,12 @@ sel bow-bogus ZHAO_U02_REAR_BOW=curve
 sel bow-sign ZHAO_U02_REAR_BOW_SIGN=2
 sel bow-onset ZHAO_U02_REAR_BOW_ONSET_MM=2001
 sel bow-maxa ZHAO_U02_REAR_BOW_MAX_A16=32001
+# pass 20 packet 6: the walk, the swing
+sel dent-solver ZHAO_U02_KNEAD_DIP_SOLVER=fold
+sel dent-swing ZHAO_U02_KNEAD_DENT_SWING_PM=1001
+sel dent-overpress ZHAO_U02_KNEAD_DENT_OVERPRESS_PM=3001
+sel dent-depth ZHAO_U02_KNEAD_DENT_DEPTH_PM=6001
+run s-walk-pairing 1 "$B/manafold-spangate.exe" --fail-walk-pairing
 # live-history gate (Wave E)
 LH="python $REPO/tools/reel/manafold_live_history_gate.py --renderer $R"
 run e-live-history-normal 0 $LH --out "$L/lh-normal"

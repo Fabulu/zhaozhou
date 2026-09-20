@@ -1,0 +1,5 @@
+manafold-hover: 600 frames _crc32c=0x79D3F0C5
+manafold-inspect: 600 frames _crc32c=0x0710E704
+manafold-still: 4 frames _crc32c=0x138FE8B0
+manafold-taunt3: 368 frames _crc32c=0xC81598AA
+legacy (ZHAO_U02_REAR_BOW=legacy) vs b7c096c2: hover 0xE6DD5EBA, inspect 0xDE1F5918, taunt3 0x75BC4777 -- 3/3 byte-exact

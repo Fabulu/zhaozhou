@@ -265,3 +265,42 @@ same invocation.
   full duck, inside 480/400. No bound changes; fallback named in R2.5.
 - Next experiment: three render-free runs, central claim A-B/B-C <= 1 mm from
   no-dip with swing 1000 / duck 0.
+
+### 2026-09-20 - PACKET 6: the walk, the swing, the look (P20-PACKET6-RESULT.md)
+- ONE loop_walk. Factored out of the closure walk verbatim; the dent calls it
+  for A (2 segments), B (3) and C + the entering frame (4). Off path is bytes:
+  hover 0x79D3F0C5, inspect 0x0710E704, still 0x138FE8B0, taunt3 0xC81598AA.
+- STALE BINARY TRAP, caught: build-direct.sh takes ONE target, so
+  "build-direct.sh ... mspan mrear" built only mrear and the first old-vs-new
+  comparison ran a spangate from before the fix. The tell was exactly the one
+  CLAUDE.md names - old and new produced byte-identical CSVs after a change
+  that had to move them. One target per invocation from here.
+- Corrected vs old (dent=press, depth 2000, duck 0): C-E envelope -698..+324 ->
+  -687..+304 (no-dip -687..+305), worst per-sample C-E delta -157 mm -> +21 mm,
+  breaches 286 -> 255. The +19 mm leak WAS the walk. The 3x interior compaction
+  was NOT: corrected it is worse at the extremes (A-B -217, B-C -256).
+- The 21 mm residual is nodule_aim's own angular resolution (asin16 near its
+  pole), measured with a committed probe (-DZHAO_P20_PINPROBE): C moves 38 mm
+  L1 worst while B is reproduced to 3 mm. Renormalising the aim-touched quats
+  changed nothing, which is how we know it is the angle, not the norm.
+- THE SWING (kKneadDentSwingPm, 1000 = rigid circle, 0 = packet 5's press bit
+  for bit). Central claim HOLDS: 0 bound breaches at every depth, F-A identical
+  per sample, A-B 3 mm, B-C 5 mm, C-E envelope never exceeds no-dip.
+- BUT: 55-80 deg angular step on carrier B at every swing setting (G9 ceiling
+  8 deg; the press stays at the 7.59 deg baseline). Position step untouched, so
+  it is a ROLL FLIP - nodule_aim's z-then-x aim is degenerate out of plane,
+  which is where the swing sends B. R2.2 named this risk.
+- Overpress buys nothing (R5 count unchanged) and costs 379 breaches at 1000.
+  Stays 0.
+- R5 vs depth (swing 1000, gain 550): 6/3/3/2/2 clips never lowest at depth
+  1940/2200/2425/2700/3000 - so 18 of 21 at s ~ 1.0, not the s ~ 1.35 the
+  design estimated.
+- THE LOOK: at s >~ 1.4 the loop apex becomes a hard rectangular slab on both
+  Inspect and Hover - and the PRESS does it too, so it is the fold, not the
+  swing. At s ~ 1.0 it reads as a tube pressed down in the middle. Plates in
+  P20-LOOKS/p20_depth_ladder.jpg, p20_hover.jpg, p20_w_ladder.jpg.
+- GATE: mspan G11 WALK PAIRING + --fail-walk-pairing (fires: 4 of 5 segments
+  mispaired, +750 mm, attributed 0x8000). Four new strict selectors. Dent depth
+  range 4000 -> 6000 (a range, not a bound; no gate reads it). Nothing relaxed.
+- Ship state unchanged: kKneadDipSolver = kCarried, dent OFF, bank bytes equal.
+- Gate matrix 149/149 PASS, 0 FAIL (P20-RECEIPTS/gate-matrix.txt).

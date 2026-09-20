@@ -411,3 +411,39 @@ window at 2x; a dip strength A/B at 3x; a before/after dip pair at 3x.
    the shipping dip the worst rear rail is exactly the dip-off value.
 4. **The pass-19 CRC discrepancy above.**
 5. **Not done here:** the 22-subject bank, encode, merge and deploy.
+
+---
+
+# Packet 6 — the walk and the swing
+
+Result, numbers and plates: **`P20-PACKET6-RESULT.md`**. Gate changes:
+**`P20-GATE-CHANGES.md`**, "Packet 6".
+
+New code:
+
+* `u02::loop_walk(const Rig&, int spans, int32_t& px, py, pz, zc::quat16& Q)`
+  in `manafold_clips.h` — the closure walk, factored out verbatim, now the ONE
+  walk. The closure calls it with 5 segments; the dent calls it with 2, 3 and 4
+  for A, B, C and the frame that enters the closure. `finalize_rear_follow`
+  keeps its own copy because it walks clip tracks rather than a `Rig`; its
+  pairing is the reference G11 checks against.
+* `dent_target_mm` gained THE SWING: `kKneadDentSwingPm` rotates B rigidly about
+  the A-C chord (`B(s) = foot + cos t h + w sin t (u x h)/|u|`, `t = s pi/2`,
+  clamped at the mirror) and `kKneadDentOverpressPm` continues past the mirror
+  along `-h`. Swing 0 is packet 5's linear press, bit for bit.
+* Both aims in the dent now renormalise every quat they touch
+  (`quat16_nlerp(q, q, 1, 2)`), for the reason `rear_socket_compose` gives.
+  It did not move the pin residual, which is how we learned the residual is
+  `nodule_aim`'s angle and not its norm.
+* `-DZHAO_P20_PINPROBE`: a committed probe that reports how far the dent moves
+  the pinned C. 38 mm (L1) worst at depth 2000.
+* `apply_knead_dip_env()` parses `ZHAO_U02_KNEAD_DENT_SWING_PM` and
+  `..._OVERPRESS_PM`, so the two new knobs are live in every binary that builds
+  clips rather than in one.
+* `manafold_spangate.cpp`: `check_loop_walk_pairing()` (G11) and
+  `--fail-walk-pairing`.
+
+Two NUL bytes that a heredoc had written into `'\0'` character literals in
+`apply_knead_dip_env` were replaced with proper escapes. They compiled and
+behaved correctly (gcc: "null character(s) preserved in literal"), but a source
+file with raw NULs in it is a trap for the next reader.

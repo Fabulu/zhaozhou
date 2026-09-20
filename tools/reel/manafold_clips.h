@@ -645,6 +645,48 @@ inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
   pz += dz;
 }
 
+/** PASS 20 PACKET 6: THE ONE LOOP WALK.
+ *
+ *  Walks the loop chain from the tube base through `spans` segments (0 <= spans
+ *  <= 5), leaving (px,py,pz) at the far end of segment `spans-1` and `Q` as the
+ *  world frame ENTERING segment `spans` -- i.e. every local rotation up to and
+ *  including the one at that joint is composed in.
+ *
+ *  ⚠ SEGMENT i IS kLoopArcMm[i] PLUS THE SPAN DELTA CARRIED ON span_child[i] --
+ *  THE BONE THAT *ENDS* IT. `set_span_delta(0, ...)` writes `kBHingeA`, so the
+ *  680 mm F->A span reads `local_t[kBHingeA][1]`, not `local_t[kBNeck][1]`.
+ *  Revision 1 of the dent kept a private copy of this walk that was one bone
+ *  early on all three spans; with the ambient duck at 1000 every delta is zero
+ *  and the two copies agreed, so the defect only showed mid-ramp. There is now
+ *  exactly ONE walk and every caller uses it (P20-SOLVER-ARCHITECTURE §R2.1).
+ *
+ *  `span_child[i] == locs[i]` for i < 4, so the rotation composed after segment
+ *  i is the bone that ends it -- the same identity the closure walk always had,
+ *  written once.
+ *
+ *  `finalize_rear_follow` keeps its own copy because it walks CLIP TRACKS and
+ *  not a `Rig`; its pairing is the reference this helper is checked against, by
+ *  the spangate's G11 WALK leg. */
+inline void loop_walk(const Rig& g, int spans, int32_t& px, int32_t& py,
+                      int32_t& pz, zc::quat16& Q) {
+  static constexpr uint8_t span_child[5] = {kBNeck, kBHingeA, kBHingeB,
+                                            kBHingeC, kBHingeD};
+  px = kLoopTubeXMm;
+  py = kLoopNeckExitYMm;
+  pz = 0;
+  Q = g.q[kBJunctionF];
+  for (int i = 0; i < spans && i < 5; ++i) {
+    const int32_t len = kLoopArcMm[i] + static_cast<int32_t>(
+        (static_cast<int64_t>(g.local_t[span_child[i]][1]) * 1000) >> 16);
+    int32_t dx, dy, dz;
+    quat_rot_vec(Q, 0, len, 0, dx, dy, dz);
+    px += dx;
+    py += dy;
+    pz += dz;
+    if (i < 4) Q = quat_mul(Q, g.q[span_child[i]]);
+  }
+}
+
 /** PASS 20 PACKET 5: where B goes during the DENT.
  *
  *  Given the three carrier positions the EXISTING pose already produced, press
@@ -689,9 +731,61 @@ inline void dent_target_mm(int32_t ax, int32_t ay, int32_t az,
   const int64_t hx = vx - rdiv(dot * ux, den);
   const int64_t hy = vy - rdiv(dot * uy, den);
   const int64_t hz = vz - rdiv(dot * uz, den);
-  ox = static_cast<int32_t>(bx - rdiv(hx * s_pm, 1000));
-  oy = static_cast<int32_t>(by - rdiv(hy * s_pm, 1000));
-  oz = static_cast<int32_t>(bz - rdiv(hz * s_pm, 1000));
+  if (g_u02_knead_dent_swing_pm <= 0) {
+    // THE PRESS (packet 5), bit for bit. Planar, and it pays the crossing.
+    ox = static_cast<int32_t>(bx - rdiv(hx * s_pm, 1000));
+    oy = static_cast<int32_t>(by - rdiv(hy * s_pm, 1000));
+    oz = static_cast<int32_t>(bz - rdiv(hz * s_pm, 1000));
+    return;
+  }
+  // THE SWING (packet 6). B rotates rigidly about the A-C chord, so |AB| and
+  // |BC| are constants of the motion and there is no crossing to pay for.
+  //
+  //   n_hat = (u x h) / (|u| |h|)   -- h is perpendicular to u by construction,
+  //                                    so |u x h| == |u| |h| exactly.
+  //   B(s)  = foot + cos(theta) h + w sin(theta) |h| n_hat
+  //         = foot + cos(theta) h + w sin(theta) (u x h) / |u|
+  //
+  // which needs no |h| at all: one isqrt64 for |u|, one cross product, and the
+  // same fx_sin the bow uses. theta = s * pi/2, so theta16 = s_pm * 16384/1000
+  // and s = 2000 lands on 32768 = half a turn = the mirror, exactly.
+  // ⚠ CLAMPED AT THE MIRROR. Past 180 degrees the circle comes back UP, so a
+  // deeper `s` would undo the dent; depth beyond the mirror is the overpress
+  // below and nothing else.
+  int32_t theta16 = static_cast<int32_t>(
+      (static_cast<int64_t>(s_pm) * 16384) / 1000);
+  if (theta16 > 32768) theta16 = 32768;
+  const int64_t sinv = zref::fx_sin(
+      zref::angle16{static_cast<uint16_t>(theta16 & 0xFFFF)}).raw;
+  const int64_t cosv = zref::fx_sin(
+      zref::angle16{static_cast<uint16_t>((theta16 + 16384) & 0xFFFF)}).raw;
+  const int64_t nx = uy * hz - uz * hy;
+  const int64_t ny = uz * hx - ux * hz;
+  const int64_t nz = ux * hy - uy * hx;
+  const int64_t ulen = isqrt64(den);
+  const int64_t fx = bx - hx, fy = by - hy, fz = bz - hz;   // the foot
+  const int64_t w = g_u02_knead_dent_swing_pm;
+  const auto swing = [&](int64_t h_comp, int64_t n_comp) {
+    // cos(theta) h + w sin(theta) (u x h)/|u|, both rounded once.
+    const int64_t a = rdiv(cosv * h_comp, 65536);
+    const int64_t b = ulen > 0 ? rdiv(rdiv(w * sinv * n_comp, 65536000), ulen) : 0;
+    return a + b;
+  };
+  int64_t px = fx + swing(hx, nx);
+  int64_t py = fy + swing(hy, ny);
+  int64_t pz = fz + swing(hz, nz);
+  // THE OVERPRESS: depth beyond the mirror, a straight continuation along
+  // -h_hat from B(2). Only reachable when the caller asks for s > 2000.
+  if (s_pm > 2000 && g_u02_knead_dent_overpress_pm > 0) {
+    const int64_t extra = static_cast<int64_t>(s_pm - 2000) *
+                          g_u02_knead_dent_overpress_pm;   // per mille^2 of |h|
+    px -= rdiv(hx * extra, 1000000);
+    py -= rdiv(hy * extra, 1000000);
+    pz -= rdiv(hz * extra, 1000000);
+  }
+  ox = static_cast<int32_t>(px);
+  oy = static_cast<int32_t>(py);
+  oz = static_cast<int32_t>(pz);
 }
 
 inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
@@ -822,29 +916,18 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   // instructions on the off path and every existing clip poses exactly as it
   // did.
   if (g.dent_pm > 0) {
-    // The walk, copied verbatim from the closure walk below -- including the
-    // >> 16 that floors a negative delta -- so all three walks (this, the
-    // closure, and finalize_rear_follow's) agree on every length to the LSB.
-    const auto len_of = [&](uint8_t bone, int arc) {
-      return arc + static_cast<int32_t>(
-                       (static_cast<int64_t>(g.local_t[bone][1]) * 1000) >> 16);
-    };
-    int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
-    zc::quat16 Q = quat_mul(g.q[kBJunctionF], g.q[kBNeck]);
-    int32_t dx, dy, dz;
-    quat_rot_vec(Q, 0, len_of(kBNeck, kLoopArcMm[1]), 0, dx, dy, dz);
-    px += dx; py += dy; pz += dz;              // A
-    const int32_t pax = px, pay = py, paz = pz;
-    const zc::quat16 Q1 = quat_mul(Q, g.q[kBHingeA]);
-    quat_rot_vec(Q1, 0, len_of(kBHingeA, kLoopArcMm[2]), 0, dx, dy, dz);
-    const int32_t pbx = px + dx, pby = py + dy, pbz = pz + dz;   // B
-    const zc::quat16 Q2 = quat_mul(Q1, g.q[kBHingeB]);
-    quat_rot_vec(Q2, 0, len_of(kBHingeB, kLoopArcMm[3]), 0, dx, dy, dz);
-    const int32_t pcx = pbx + dx, pcy = pby + dy, pcz = pbz + dz;  // C
-    // The frame that ENTERS the closure walk. Pinning this is what keeps
-    // HingeD's aim, the arm's arrival frame, the End frame, the rear helpers
-    // and the socket at their pre-dent values.
-    const zc::quat16 qc_world = quat_mul(Q2, g.q[kBHingeC]);
+    // THE ONE WALK. `loop_walk` is the closure's own walk, factored out: A is
+    // the end of segment 1, B of segment 2, C of segment 3, and the frame it
+    // leaves after 4 segments is exactly the frame that ENTERS the closure walk
+    // at HingeD. Pinning that frame is what keeps HingeD's aim, the arm's
+    // arrival frame, the End frame, the rear helpers and the socket at their
+    // pre-dent values.
+    int32_t pax, pay, paz, pbx, pby, pbz, pcx, pcy, pcz;
+    zc::quat16 Q1, Q2, qc_world;
+    loop_walk(g, 2, pax, pay, paz, Q1);   // A, frame entering A->B
+    loop_walk(g, 3, pbx, pby, pbz, Q2);   // B, frame entering B->C
+    loop_walk(g, 4, pcx, pcy, pcz, qc_world);  // C, frame entering C->D
+    (void)Q2;
 
     int32_t btx, bty, btz;
     dent_target_mm(pax, pay, paz, pbx, pby, pbz, pcx, pcy, pcz,
@@ -858,10 +941,24 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     int32_t d1 = 0, d2 = 0;
     nodule_aim(g.q[kBHingeA], NQ, kLoopArcMm[2], p2x, p2y, p2z,
                btx, bty, btz, &g.span_pm[1], &d1);
+    // ⚠ RENORMALISE EVERY QUAT THE AIM TOUCHED. quat16_to_mat3 scales a vector
+    // by |q|^2, so a local rotation left a few LSB short SHORTENS the segment
+    // the closure walk then rebuilds from it, and the dent adds two products
+    // (the two aim corrections) that the closure never had. Same renormaliser
+    // as the pin, for the reason rear_socket_compose gives.
+    //
+    // ⚠ IT DID NOT MOVE THE PIN'S RESIDUAL -- 38 mm (L1) at depth 2000 with and
+    // without these four lines. That is the evidence that the residual is the
+    // AIM'S ANGLE and not its norm. Kept anyway: a norm left to drift is a real
+    // hazard even when it is not today's.
+    g.q[kBHingeA] = zc::quat16_nlerp(g.q[kBHingeA], g.q[kBHingeA], 1, 2);
+    NQ = zc::quat16_nlerp(NQ, NQ, 1, 2);
     g.set_span_delta(1, d1);
     NQ = quat_mul(NQ, g.q[kBHingeB]);
     nodule_aim(g.q[kBHingeB], NQ, kLoopArcMm[3], p2x, p2y, p2z,
                pcx, pcy, pcz, &g.span_pm[2], &d2);
+    g.q[kBHingeB] = zc::quat16_nlerp(g.q[kBHingeB], g.q[kBHingeB], 1, 2);
+    NQ = zc::quat16_nlerp(NQ, NQ, 1, 2);
     g.set_span_delta(2, d2);
     // THE PIN. HingeC's local rotation becomes whatever returns its WORLD
     // frame to qc_world. Renormalised with the production renormaliser for the
@@ -869,6 +966,35 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     // quat16_to_mat3 scales by |q|^2.
     const zc::quat16 pin = quat_mul(quat_conj(NQ), qc_world);
     g.q[kBHingeC] = zc::quat16_nlerp(pin, pin, 1, 2);
+#ifdef ZHAO_P20_PINPROBE
+    // THE COMMITTED PIN PROBE. Build any clip-building binary with
+    // -DZHAO_P20_PINPROBE and it reports, on stderr at exit, how far the dent
+    // moves the pinned carrier C -- the quantity the C-E span is charged for.
+    //
+    // It measured 38 mm (L1) worst over the bank at depth 2000 while B was
+    // reproduced to 3 mm, which is what showed the pin's residual is NOT the
+    // walk and not the pin: it is `nodule_aim` itself, whose z-then-x aim goes
+    // ill-conditioned (asin16 near its pole) exactly where the dent sends it.
+    // Committed rather than thrown away, because the number is otherwise
+    // unreproducible (CLAUDE.md, "commit the probe").
+    {
+      struct Pin {
+        long long n = 0, worst = 0;
+        ~Pin() {
+          std::fprintf(stderr, "[pinprobe] %lld dent samples, worst "
+                               "|C_after - C_before| %lld mm (L1)\n", n, worst);
+        }
+      };
+      static Pin pp;
+      ++pp.n;
+      int32_t cx2, cy2, cz2;
+      zc::quat16 qq;
+      loop_walk(g, 4, cx2, cy2, cz2, qq);
+      const long long e = std::llabs(cx2 - pcx) + std::llabs(cy2 - pcy) +
+                          std::llabs(cz2 - pcz);
+      if (e > pp.worst) pp.worst = e;
+    }
+#endif
   }
 
   // ---- the closure aim, in 3D: quaternion-walk the chain to hinge D
@@ -878,22 +1004,13 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   // can only aim within D's local XY plane, so the out-of-plane residual is
   // projected away — the anchor is deep enough that the committed closure
   // probe still proves burial across the whole fold-scale range.
-  int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
-  zc::quat16 Q = g.q[kBJunctionF];
-  const zc::quat16 locs[4] = {g.q[kBNeck], g.q[kBHingeA], g.q[kBHingeB],
-                              g.q[kBHingeC]};
-  const uint8_t span_child[5] = {kBNeck, kBHingeA, kBHingeB, kBHingeC,
-                                 kBHingeD};
-  for (int i = 0; i < 5; ++i) {
-    int32_t dx, dy, dz;
-    const int32_t translated_len = kLoopArcMm[i] + static_cast<int32_t>(
-        (static_cast<int64_t>(g.local_t[span_child[i]][1]) * 1000) >> 16);
-    quat_rot_vec(Q, 0, translated_len, 0, dx, dy, dz);
-    px += dx;
-    py += dy;
-    pz += dz;
-    if (i < 4) Q = quat_mul(Q, locs[i]);
-  }
+  // PASS 20 PACKET 6: this IS `loop_walk` -- it was factored out of here
+  // verbatim so the dent cannot walk a different chain. Same expression, same
+  // >> 16, same arc/bone pairing; the 4-subject CRC identity leg proves it did
+  // not move a byte.
+  int32_t px, py, pz;
+  zc::quat16 Q;
+  loop_walk(g, 5, px, py, pz, Q);
   // ---- PASS 10 C.1: AIM AT THE POSED ANCHOR, NOT THE BIND ONE -------------
   // kBLoopBase2 was dead twice over. It skins nothing (nothing is bound to it;
   // its ball part went when the knuckles moved into the chain's own skin at
@@ -2631,20 +2748,31 @@ inline bool apply_knead_dip_env() {
   const auto num = [](const char* name, int lo, int hi, int32_t& dst) {
     const char* e = std::getenv(name);
     if (e == nullptr) return true;
-    if (*e == ' ') return false;
+    if (*e == '\0') return false;
     char* end = nullptr;
     const long v = std::strtol(e, &end, 10);
-    if (end == nullptr || *end != ' ' || v < lo || v > hi) return false;
+    if (end == nullptr || *end != '\0' || v < lo || v > hi) return false;
     dst = static_cast<int32_t>(v);
     return true;
   };
   if (!num("ZHAO_U02_KNEAD_DIP_PM", 0, 1000, g_u02_knead_dip_gain_pm)) return false;
-  if (!num("ZHAO_U02_KNEAD_DENT_DEPTH_PM", 0, 4000, g_u02_knead_dent_depth_pm))
+  // ⚠ THE RANGE IS 0..6000 BECAUSE s IS A PRODUCT, not this knob alone:
+  //   s = kKneadDipClipPm[slot]/1000 * motion/1000 * dip gain/1000 * depth/1000
+  // With the shipping gain (550) and a typical clip share (750) the mirror
+  // (s = 2000) needs depth 4850, which a 4000 cap made unreachable -- a knob
+  // whose useful setting is outside its own range is the inert-control trap in
+  // another costume.
+  if (!num("ZHAO_U02_KNEAD_DENT_DEPTH_PM", 0, 6000, g_u02_knead_dent_depth_pm))
     return false;
   if (!num("ZHAO_U02_KNEAD_DENT_CROSS_PM", -800, 800, g_u02_knead_dent_cross_pm))
     return false;
   if (!num("ZHAO_U02_KNEAD_DENT_DUCK_PM", 0, 1000,
            g_u02_knead_dent_ambient_duck_pm))
+    return false;
+  if (!num("ZHAO_U02_KNEAD_DENT_SWING_PM", 0, 1000, g_u02_knead_dent_swing_pm))
+    return false;
+  if (!num("ZHAO_U02_KNEAD_DENT_OVERPRESS_PM", 0, 3000,
+           g_u02_knead_dent_overpress_pm))
     return false;
   return true;
 }

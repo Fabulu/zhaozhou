@@ -131,3 +131,44 @@ decision rather than its absence.
   212 mm, nowhere near it.
 
 The full ledger, per station, before and after, is in `P20-DIP-STOP.md`.
+
+---
+
+## Packet 6 (2026-09-20)
+
+### NEW: mspan **G11 WALK PAIRING** (category `kCatWalk`, 0x8000)
+
+* **What it protects.** That a loop span's arc is paired with the span delta on
+  the bone that ENDS it. Nothing protected this before, and two copies of the
+  same walk drifted at birth: packet 5's dent read each delta one bone early,
+  which moved C by up to 344 mm on 3365 of 3424 dent samples and was invisible
+  in the one configuration (duck 1000) that zeroes every delta.
+* **How.** Distinct probe deltas (125 / 375 / 750 mm, multiples of 125 so the
+  fx16 round trip through `set_span_delta` is exact) on a rest rig; each
+  reconstructed segment must equal `kLoopArcMm[i]` plus that span's delta.
+* **Positive control.** `--fail-walk-pairing` runs the packet-5 one-bone-early
+  walk against the same rig: **4 of 5 segments mispaired, worst +750 mm**,
+  attributed to `kCatWalk` alone. Normal: 0 of 5, +0 mm.
+* **Not a loosening.** It is an addition; no existing ceiling, floor or
+  tolerance moved.
+
+### NEW strict selectors (RC 2)
+
+`ZHAO_U02_KNEAD_DIP_SOLVER=fold` (unknown name),
+`ZHAO_U02_KNEAD_DENT_SWING_PM=1001`,
+`ZHAO_U02_KNEAD_DENT_OVERPRESS_PM=3001`,
+`ZHAO_U02_KNEAD_DENT_DEPTH_PM=6001`.
+
+### RANGE (not a bound) widened
+
+`ZHAO_U02_KNEAD_DENT_DEPTH_PM` accepts 0..6000 instead of 0..4000. `s` is the
+product of four per-mille factors (clip share x motion x dip gain x depth), so
+at the shipping gain the mirror sits at depth 4850 and the old cap made the
+knob's own useful setting unreachable. No gate reads this value; it selects an
+experiment, and the strict selector above still rejects anything past it.
+
+### Not changed
+
+`kSpanStretchMaxPm`, `kSpanCompactionMinPm`, `kSpanMinRunMm`, every R1..R5
+ceiling, G5..G10's thresholds, and `kAntennaMaxAngularStepDeg/AccelDeg/JerkDeg`
+(8/6/6) — which is what the swing fails, and it was left exactly where it was.

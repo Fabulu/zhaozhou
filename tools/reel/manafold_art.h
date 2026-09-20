@@ -4676,8 +4676,47 @@ inline int32_t g_u02_knead_dent_cross_pm = kKneadDentCrossPm;
 // REDUCE an existing excursion.
 constexpr int32_t kKneadDentAmbientDuckPm = 1000;
 inline int32_t g_u02_knead_dent_ambient_duck_pm = kKneadDentAmbientDuckPm;
+// ---- PASS 20 PACKET 6: THE SWING ------------------------------------------
+//
+// P20-SOLVER-ARCHITECTURE §R2.2. A PLANAR press must cross the A-C chord, and
+// at the crossing |AB| + |BC| == |AC| -- so the two interior spans give up the
+// whole deficit, measured at up to -217 / -256 mm and 255 bound breaches. A
+// RIGID ROTATION of the same triangle about the A-C chord reaches the same
+// mirror endpoint with NO length change at any angle: B travels on a circle of
+// radius |h| about the chord, so |AB| and |BC| are constants of the motion.
+//
+//     n     = u x h_hat                (unit normal of the A-C-B plane)
+//     theta = s * pi/2                 (s in [0,2]: 0 = rest, 2 = mirror)
+//     B(s)  = foot + |h| * (cos theta * h_hat + w * sin theta * n)
+//
+// w = kKneadDentSwingPm / 1000. w = 1000 is the rigid circle. The cost is that
+// B leaves the loop plane by up to w*|h| -- the loop plane is the sagittal
+// plane and the house camera looks along it, so the excursion is toward or away
+// from the viewer, but on Inspect's orbit it is visible AS A SWING. That is an
+// art question and the ladder answers it.
+//
+// ⚠ swing 0 is THE PRESS, bit-for-bit as packet 5 shipped it (the linear
+// B - s*h path), not a cosine-timed press. That keeps the packet-5
+// measurements meaningful and gives a future G10 rigid leg a positive control
+// that is a real alternative mechanism rather than a perturbation.
+constexpr int32_t kKneadDentSwingPm = 1000;
+inline int32_t g_u02_knead_dent_swing_pm = kKneadDentSwingPm;
+// Depth BEYOND the mirror, for the clips whose mirror is not 20 mm under A or
+// C. The rotation cannot go past 180 degrees (it comes back up), so extra depth
+// is a straight continuation from the mirror along -h_hat, per mille of |h|.
+// It stretches A-B and B-C only, at full envelope where the ambient duck is
+// complete -- so the duck is load-bearing FOR THE OVERPRESS, not for the pin.
+constexpr int32_t kKneadDentOverpressPm = 0;
+inline int32_t g_u02_knead_dent_overpress_pm = kKneadDentOverpressPm;
 // Gate constant (mspan G10), not a solver input.
 constexpr int32_t kKneadDentPinToleranceMm = 2;
+// The measured budget for "the swing changes no span length": how far a span
+// may move from its no-dip value under the rigid rotation. Not yet read by a
+// gate -- the dent does not ship (P20-PACKET6-RESULT.md), so a G10 rigid leg
+// would be asserting a mechanism nothing runs. The NUMBER is the receipt. Zero by construction; the budget is the
+// production aim primitive's own angular resolution (asin16 is ill-conditioned
+// near its poles), measured at 3 mm on A-B and 5 mm on B-C over the bank.
+constexpr int32_t kKneadDentRigidToleranceMm = 6;
 
 // ---- THE CARRY CANCEL: why B's descent no longer reaches the attachment -----
 //

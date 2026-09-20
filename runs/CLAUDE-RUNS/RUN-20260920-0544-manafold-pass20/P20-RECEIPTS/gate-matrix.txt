@@ -130,7 +130,7 @@ PASS f-sel-span-limit rc=2 exp=2 |
 PASS f-sel-span-travel rc=2 exp=2 | ZHAO_U02_REAR_SPAN_TRAVEL_MM=10 outside 40..2000
 PASS f-sel-span-soft rc=2 exp=2 | ZHAO_U02_REAR_SPAN_SOFT_MM=5 outside 10..1999
 PASS f-sel-span-knee rc=2 exp=2 | 
-PASS f-sel-dip-pm rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_PM=1001 outside 0..1000
+PASS f-sel-dip-pm rc=2 exp=2 | 
 PASS f-sel-dip-depth rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_DEPTH_MM=abc is not an integer; expected 0..1200
 PASS f-sel-dip-fold rc=2 exp=2 | ZHAO_U02_KNEAD_DIP_FOLD_PM=-1 outside 0..3000
 PASS f-sel-fold-dip rc=2 exp=2 | ZHAO_U02_FOLD_DIP_PM=2000 outside 0..1000
@@ -139,6 +139,12 @@ PASS f-sel-bow-bogus rc=2 exp=2 |
 PASS f-sel-bow-sign rc=2 exp=2 | ZHAO_U02_REAR_BOW_SIGN=2 outside -1..1
 PASS f-sel-bow-onset rc=2 exp=2 | ZHAO_U02_REAR_BOW_ONSET_MM=2001 outside 0..2000
 PASS f-sel-bow-maxa rc=2 exp=2 | ZHAO_U02_REAR_BOW_MAX_A16=32001 outside 64..32000
+PASS f-sel-dent-solver rc=2 exp=2 | 
+PASS f-sel-dent-swing rc=2 exp=2 | 
+PASS f-sel-dent-overpress rc=2 exp=2 | 
+PASS f-sel-dent-depth rc=2 exp=2 | 
+PASS s-walk-pairing rc=1 exp=1 | MUTANT] restore the packet-5 one-bone-early dent walk
 PASS e-live-history-normal rc=0 exp=0 | PASS: no persistent history on any live Manafold subject
 PASS e-live-history-legacy rc=0 exp=0 | CONTROL legacy: HISTORY detector fired on every live subject -- OK
 PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK
+total 149 pass 149 fail 0
