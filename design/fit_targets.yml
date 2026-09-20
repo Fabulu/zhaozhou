@@ -1709,6 +1709,23 @@ targets:
     sources:
       - fpga/rtl/compositor/zhao_post_gather.sv
 
+  # POST.GATHER's other two thirds, built 2026-09-21 (owner ruling R195).
+  # They are separate leaf rows rather than sources of the row above because
+  # they answer separate questions. The LAW is combinational arithmetic -- six
+  # 8x8 unit multiplies and a 64-entry knee ramp -- so its row answers "does
+  # R195 cost a DSP block, and does it meet gpu_clk in one stage?". The STORE
+  # is memory -- 8,192 x 16 plus 8,192 x 17 -- so its row answers "does the
+  # plane infer M10K at 27, under POST.GATHER.md's ceiling of 30, or does it
+  # fall back to registers?". Folding them into one row would average two
+  # answers nobody asked in that form.
+  - top: zhao_post_gather_tag
+    sources:
+      - fpga/rtl/compositor/zhao_post_gather_tag.sv
+
+  - top: zhao_post_gather_store
+    sources:
+      - fpga/rtl/compositor/zhao_post_gather_store.sv
+
   - top: zhao_raster_attrdiv_svc
     sources:
       - fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
@@ -2107,6 +2124,12 @@ targets:
       - fpga/rtl/common/zhao_dc_sdp_ram.sv
       - fpga/rtl/common/zhao_project_core.sv
       - fpga/rtl/compositor/zhao_post_gather.sv
+      # POST.GATHER's law and its plane (owner ruling R195, 2026-09-21).
+      # Registering a block in the ledger, the manifest and THIS list are
+      # three different acts -- CLAUDE.md's build chapter -- and this is
+      # the third.
+      - fpga/rtl/compositor/zhao_post_gather_tag.sv
+      - fpga/rtl/compositor/zhao_post_gather_store.sv
       - fpga/rtl/compositor/zhao_twod_sampler.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv

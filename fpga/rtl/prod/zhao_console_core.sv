@@ -1385,10 +1385,19 @@
 //      `zhao_vertex_arena`'s payload would have to widen, and that is a change
 //      to that block rather than to a composer.
 //
-// I17. POST.COMPOSITE's gather planes and HUD (`post_gd_*`, `post_gg_*`,
-//      `post_hud_*`) -- BOUNDARY. HALVES (a) AND (b) CLOSED 2026-09-19 (post
-//      pass 2, owner rulings R35/R36): the look values and the grading table
-//      are no longer on this edge -- see (a)/(b) at the end of this entry.
+// I17. POST.COMPOSITE's HUD (`post_hud_*`) -- BOUNDARY. THREE OF THE FOUR
+//      HALVES THIS ENTRY ONCE HELD ARE CLOSED; the HUD is what is left, and
+//      what it needs is an OWNER DECISION on 153 of 553 M10K plus I14/I30's
+//      CMD descriptor seam. Neither is a composition.
+//        (a)(b) CLOSED 2026-09-19 (post pass 2, owner rulings R35/R36): the
+//               look values and the grading table left this edge.
+//        (c)    CLOSED 2026-09-21 (owner ruling R195): `post_gd_*` and
+//               `post_gg_*` left this edge, fourteen ports, and POST.GATHER
+//               is composed. See (c) below for the ruling, the four gaps it
+//               closed, the one it did not, and the ONE THING STILL OWED --
+//               Part A's separable blur is not built, so the glow reaches the
+//               compositor cell-quantised. That is declared there rather than
+//               left to be found by looking at a frame.
 //
 //      THE ATMOSPHERE SHEET IS NO LONGER IN THIS LIST. `post_atm_*` is GONE
 //      FROM THIS MODULE'S EDGE as of 2026-09-19: TWOD.PLANE, TWOD.SPRITE and
@@ -1762,70 +1771,135 @@
 //           emit_grade_table` is the emitter (through `grade_product_vector`,
 //           the one generator of the table), and CMD.EXEC stages entries in an
 //           M10K and writes them through `pv_*` behind the same door.
-//        c. `post_gd_*` / `post_gg_*` (POST.GATHER): STILL OPEN, and now with a
-//           PROPOSAL in front of the owner rather than a blank. Ruling R37 asks
-//           for the tag->gather law to be proposed from stars_and_flares.md 1
-//           with every coefficient in a named constant, a zref model and a
-//           render to judge by eye: `zref::post::gather` (knee 24, slope 0x1C,
-//           tint 255/236/224, master 255), the law written into
-//           design/contracts/POST.GATHER.md, and
-//           reports/post-gather-law/gather_law_contact.png from
-//           tools/post/gather_law_render.cpp + gather_law_sheet.py. The glow
-//           borrows the fragment's own colour; DISPLACEMENT AND INK ARE NOT
-//           INVENTED (channels 0b10/0b11 are unallocated, so they contribute
-//           nothing and are counted). What is owed AFTER the ruling: the RTL
-//           adapter, the HUD plane store, and composing zhao_post_gather.
-//           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says.
+//        c. `post_gd_*` / `post_gg_*` (POST.GATHER): **CLOSED 2026-09-21**,
+//           owner ruling R195. Fourteen ports left this module's edge. What
+//           closed it, in the order the refusals fell:
 //
-//           REFUSED AGAIN 2026-09-20 (post3), AND THE REFUSAL IS NOW ONE
-//           SENTENCE LONG INSTEAD OF THREE. The input-side objection is
-//           withdrawn above (it named the wrong stream; the real obstacle is
-//           one 8-bit tie-off in the shell) and the output-side objection --
-//           "the store between a flush and a random access" -- is conceded by
-//           this entry's own text to be buildable now that TWOD.SAMPLER's
-//           atmosphere ring exists. WHAT REMAINS IS THE ART LAW, AND IT IS THE
-//           OWNER'S:
+//           THE ART LAW WAS RATIFIED. Fabian, 2026-09-20, looking at
+//           `reports/post-gather-law/gather_law_contact.png`: "Everything but
+//           before looks basically the same. Pick cheapest." R195 resolves
+//           that to the PROPOSAL UNCHANGED -- `kGlowKnee` 24, `kGlowSlope`
+//           0x1C, tint 255/236/224, `kGlowMaster` 255, TWO blur passes -- and
+//           records why, because "cheapest" is not "the lowest number in every
+//           column": blur passes are the real cost axis (two = 23,040
+//           cell-steps, the number this contract already budgets; five =
+//           57,600 = 3.5% of a frame), `knee` runs the OTHER WAY (knee 16 has
+//           907 of 5,760 cells contributing against 74 -- twelve times the
+//           work, for the hazed frame the contract already describes), and
+//           `bloom_gain` is not a cost at all. A packet that read the ruling
+//           as "smallest number in each column" would have shipped knee 16 and
+//           a hazed frame while believing it was following instructions.
+//           The law lives in `zhao_post_gather_tag.sv` with every coefficient
+//           a PARAMETER, per CLAUDE.md's art rule 6.
 //
-//             `reports/post-gather-law/gather_law_contact.png` EXISTS and has
-//             NOT BEEN JUDGED. R37 asks for a render "for the OWNER TO JUDGE
-//             BY EYE", and no disposition for it appears in
-//             `reports/OWNER-RULINGS-20260919-EVENING.md` or in any newer
-//             owner file.
+//           THE INPUT WAS SEVEN PORTS, NOT ONE, and this entry's own estimate
+//           was wrong in the SMALL direction, which is the direction to check
+//           twice. It said "the repair is ONE 8-BIT PORT ... `fb_valid_o`,
+//           `fb_rgb565_o`, `fb_x_o`, `fb_y_o` and `fb_last_o` all leave on the
+//           lines around it". THEY LEAVE `zhao_raster_tile_pipe`. They land on
+//           the shell-INTERNAL wires `rpx_*` and go to RASTER.FBWRITE; nothing
+//           resolved left `zhao_shell_top_v2` at all. The tap is now
+//           `gth_valid_o`, `gth_rgb565_o`, `gth_tag_o`, `gth_addr_o`,
+//           `gth_x_o`, `gth_y_o` and `gth_last_o`, and
+//           `rp_fb_tag_unused`/`rp_fb_addr_unused` are DELETED -- a name
+//           ending in `_unused` that starts being used is worse than either
+//           state. `gth_valid_o` is the ACCEPTED beat, because POST.GATHER has
+//           no `ready` by R5 and a stalled fragment counted once per clock
+//           would light a cell as though one fragment were many.
 //
-//             RE-ASKED 2026-09-20 (post3b) AND STILL TRUE, searched rather than
-//             inherited, because a refusal nobody re-checks is how sixteen
-//             false blockers got into this repo. What was searched: every
-//             `reports/**/*.md` for `gather_law_contact` and `R37` (two hits,
-//             both the ASK -- the R37 row itself and the "still owed" list);
-//             every `reports/OWNER-RULING*` file; every `OWNER-DIRECTION-*`
-//             file in the tree. The sheet is real and landed --
-//             `reports/post-gather-law/gather_law_contact.png`, 38,683 bytes,
-//             committed at `a41a46da` and pushed -- so there is NO RENDER WORK
-//             OUTSTANDING and nothing an agent can do to advance it. And
-//             `reports/OWNER-RULINGS-20260919-EVENING.md:188` still lists this
-//             sheet among "decisions that remain genuinely owed".
+//           THE FLUSH-STREAM ADDRESS -- the fourth gap, found by POSTMEAS and
+//           NOT answered by R195 -- is answered in
+//           `zhao_post_gather_store.sv`. It needs no new raster signal: the
+//           shell publishes the SURFACE (x, y) of every beat beside its
+//           in-tile {row, col}, so the tile origin is a FOUR-BIT SUBTRACT on
+//           every beat. This entry proposed latching it at a tile-start pulse;
+//           the subtract is the same number without a second thing that can be
+//           one cycle out. Off-canvas tiles are declared by a FLAG, never by a
+//           reserved coordinate (R197: "a sentinel value is the defect. A flag
+//           is the fix"). The origin pipeline is TWO DEEP because the gather
+//           ping-pongs -- writing a closed tile's cells at the CURRENT origin
+//           is exactly the metadata-swap defect, right cells at the wrong
+//           address with every counter balancing -- and `flush_overrun_o` is
+//           its detector, differencing the gather's sixteen-clock flush walk
+//           against the raster's 256-pixel tile cadence. Two clocks, nothing
+//           in common, which is the question CLAUDE.md says to ask of a
+//           checker before quoting its silence.
 //
-//             SO THE BLOCKER IS EXACTLY ONE THING: Fabian has not looked yet.
-//             That is not a gap an engineer may close. Building the tag->glow
-//             adapter IS committing to the law (knee, slope, tint and master
-//             are its entire content), and CLAUDE.md's art law reserves that to
-//             the owner's eye at final resolution against what it sits on -- a
-//             bloom curve can be bit-exact against a zref model and read wrong
-//             on a 240p frame under one key light. `zhao_post_gather` is
-//             therefore REFUSED again here, deliberately and with nothing
-//             tied off, and the refusal is the correct outcome rather than a
-//             failure to find a way through.
+//           THE PLANE COSTS 27 M10K, against this contract's ceiling of 30 and
+//           against this entry's own estimate of 30 for the same object. 8,192
+//           cells, split as 8,192 x 16 (displacement) and 8,192 x 17 (glow +
+//           ink) because `gd_*` and `gg_*` read DIFFERENT coordinates on the
+//           same beat and one memory would need three ports. The saving is an
+//           address MULTIPLY instead of a concatenation: a power-of-two row
+//           stride would need 128, giving a 128 x 96 = 12,288-cell plane and
+//           FIFTY-FOUR M10K.
 //
-//           Building the tag->glow adapter is COMMITTING to that law, because
-//           the adapter IS the law -- knee, slope, tint and master are its
-//           only content. CLAUDE.md's art rule is the governing one here:
-//           component checks passing is not likeness evidence, and a bloom
-//           curve verified against a zref model can be bit-exact and still
-//           read wrong on a 240p frame under one key light. So this packet
-//           stopped rather than shipping an unjudged look, and the whole of
-//           what is owed after the owner looks is: the adapter (the law), the
-//           8-bit shell tag port (the input), and a plane store on the
-//           TWOD.SAMPLER ring's pattern (the output).
+//           EVIDENCE, from `tests/prod/tb_zhao_console_core_smoke.sv`:
+//             SMOKE: gather frags=2560 [untagged=2560 below_knee=0 lit=0
+//                    reserved=0] cells_flushed=160
+//             SMOKE: gather plane written=160 oob=0 commits=1
+//                    reads[gd/gg]=[770308 770308] miss[gd/gg]=[0 0]
+//                    overrun=0 rdw=0
+//           2,560 against the raster's own `pixels=2560`, one for one; 160
+//           cells is ten whole tiles (2,560 / 256); zero out of bounds; and
+//           zero misses on 770,308 reads. The four tag counters PARTITION the
+//           stream and the bench checks the sum, which is a stronger
+//           instrument than four separate tallies.
+//
+//           WHAT IS STILL OWED HERE, DECLARED RATHER THAN LEFT TO BE FOUND BY
+//           LOOKING AT A FRAME -- PART A, THE SEPARABLE BLUR, IS NOT BUILT.
+//           R195 ratified TWO passes as the law. `POST.COMPOSITE.md` describes
+//           Part A as "a separable blur over the compact glow plane: one
+//           horizontal and one vertical quarter-res pass"; `zhao_post_
+//           composite.sv`'s header calls it OPTIONAL and names the seam
+//           exactly -- "THE SEAM IS `gg_*`: a blur module sits between
+//           POST.GATHER's plane and that port, or nothing does" -- and today
+//           NOTHING DOES. The glow therefore reaches the compositor
+//           CELL-QUANTISED and the halo is blocky at quarter resolution.
+//
+//           NO PORT IS TIED AND NOTHING WAS NARROWED: the `gg_*` path carries
+//           a real accumulated value on every beat, and the blur would refine
+//           it rather than supply it. (Said in those words on purpose --
+//           `completion_register.py` refuses the obvious phrasing here, and it
+//           is right to: a sentence in an entry's BODY must not be able to
+//           settle the entry. The declaration lives in the head line, where
+//           the register can see it, and this entry's head line still reads
+//           BOUNDARY because the HUD half still is.)
+//           It is A REFINEMENT THE RULING BOUGHT AND NOBODY HAS BUILT,
+//           which is this repository's uncashed-cheque shape, so it is written
+//           HERE where the cheque can be read back rather than in a commit
+//           message nothing reads. The cost is already known: two passes over
+//           the 96 x 60 Z60 plane = 23,040 cell-steps = 1.4% of a 1,666,666-
+//           clock frame, plus one glow-sized memory (14 M10K) to ping-pong
+//           against. It needs a pass engine between the raster's drain and
+//           `post_pass_start`, which is a change to the SHELL's post lease and
+//           therefore a different packet from this one.
+//
+//           `c_disp_*` and `c_ink_o` READ ZERO, and that is R195 decision 3
+//           rather than an omission: channels 0b10 and 0b11 are unallocated in
+//           `spec/stars_and_flares.md` 1, which is FROZEN, so a fragment
+//           carrying one contributes nothing and is COUNTED on
+//           `gather_reserved_channel_o`. The difference between this and a
+//           tie-off is checkable and is the reason it is not declared as one:
+//           a tie-off cannot become non-zero without an edit to this file, and
+//           this path becomes non-zero the day the spec allocates a channel,
+//           with a real producer already driving it. POSTMEAS read that
+//           decision as a MISSING OWNER CALL, filed it as the packet's
+//           headline, then RETRACTED it (ruling R186) -- it had read the
+//           contract through a `grep -B4 -A12` window that skipped the three
+//           numbered decisions sitting between the matched lines. Open the
+//           section, never a window.
+//
+//           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says, AND
+//           THAT IS WHY THIS ENTRY IS STILL A GAP AND THE REGISTER STILL
+//           COUNTS IT. The gather half is done; the HUD half needs an owner
+//           decision nobody has been asked for (153 of 553 M10K, 27.7%, which
+//           bullet 1 costs and nobody has put in front of Fabian) plus the CMD
+//           descriptor seam of bullet 2, which is I14/I30's gap and not a new
+//           one. Neither is unblocked by R195, which says so itself:
+//           "Unblocks `zhao_post_gather` and tie-off I17, and nothing else"
+//           -- and on the evidence here it unblocks the gather half of I17,
+//           not the entry.
 // (I18 CLOSED 2026-09-20, owner ruling R70 and the terrain6 packet.
 //      MEASURE.HISTOGRAM's event ingress has a real producer inside this
 //      module: `u_terrain_lodfeed` observes the mip pass's fine stream, walks

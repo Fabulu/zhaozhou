@@ -495,7 +495,7 @@ module zhao_shell_paired_diff
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 71 outputs the historical shell never had
+  // The sibling has 78 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -738,6 +738,13 @@ module zhao_shell_paired_diff
     .render_texture_dispatch_accepted_o(),
     .render_texture_combine_refused_o(),
     .render_texture_samples_o(),
+    .gth_valid_o(),
+    .gth_rgb565_o(),
+    .gth_tag_o(),
+    .gth_addr_o(),
+    .gth_x_o(),
+    .gth_y_o(),
+    .gth_last_o(),
     .post_frame_w_i(post_frame_w_i),
     .post_frame_h_i(post_frame_h_i),
     .post_duo_i(post_duo_i),
