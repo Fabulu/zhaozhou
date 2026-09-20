@@ -86,7 +86,7 @@ reduction (there is no FIELD.OUT.MATERIAL / FIELD.OUT.NAV entry in
   same one-reduction argument TERRAIN.VELOCITY's V1 makes: one evaluation
   must never be reduced by two different rules.
 
-Declared in `fpga/rtl/synth/zhao_probe_patch_acc.sv` (the probe that first
+Declared in `fpga/rtl/terrain/zhao_terrain_patch_acc.sv` (the probe that first
 needed them) and pinned by
 `tests/differential/field_patch_acc_directed.cpp`. Recorded here for
 negotiation: amending either is a contract change plus a probe-test change,

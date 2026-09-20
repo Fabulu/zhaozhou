@@ -4585,9 +4585,9 @@ set_tests_properties(field_v3_spline_random PROPERTIES LABELS "fast;nightly" TIM
 add_executable(test_field_walk_earth_directed differential/field_walk_earth_directed.cpp)
 target_link_libraries(test_field_walk_earth_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_walk_earth_directed
-  PREFIX Vzhao_probe_walk_earth
-  TOP_MODULE zhao_probe_walk_earth
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_walk_earth.sv)
+  PREFIX Vzhao_terrain_field_walk
+  TOP_MODULE zhao_terrain_field_walk
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_field_walk.sv)
 add_test(NAME field_walk_earth_directed COMMAND test_field_walk_earth_directed)
 set_tests_properties(field_walk_earth_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_walk_earth_random COMMAND test_field_walk_earth_directed --random 40)
@@ -4602,9 +4602,9 @@ set_tests_properties(field_walk_earth_random_nightly PROPERTIES LABELS "nightly"
 add_executable(test_field_patch_acc_directed differential/field_patch_acc_directed.cpp)
 target_link_libraries(test_field_patch_acc_directed PRIVATE zhao_harness zhao_zref)
 verilate(test_field_patch_acc_directed
-  PREFIX Vzhao_probe_patch_acc
-  TOP_MODULE zhao_probe_patch_acc
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/synth/zhao_probe_patch_acc.sv)
+  PREFIX Vzhao_terrain_patch_acc
+  TOP_MODULE zhao_terrain_patch_acc
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_acc.sv)
 add_test(NAME field_patch_acc_directed COMMAND test_field_patch_acc_directed)
 set_tests_properties(field_patch_acc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_patch_acc_random COMMAND test_field_patch_acc_directed --random 40)

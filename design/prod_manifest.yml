@@ -697,6 +697,25 @@ excluded:
   # See design/console_inventory.yml's version_exceptions entry, which is the
   # other half of this and is meant to be DELETED when C1 lands.
   - zhao_field_host_v2: not-yet-adopted  the strict-output-contract FIELD host (owner directive sections 6/7, decisions FH02/FH03/FH05/FH06/FH08/FH09/FH20); 152 checks in field_host_v2_directed, R126's elaboration guard fired by field_host_v2_r126_guard, and R101's ANY-not-ALL defect re-planted as tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv with its negative control in case 1d; adopt in place of zhao_field_host when C1 composes it
+  #
+  # zhao_terrain_field_walk and zhao_terrain_patch_acc are the Earth lattice
+  # walker and the four-bank patch accumulator, PROMOTED 2026-09-20 by packet
+  # E1 out of fpga/rtl/synth/ under owner ruling R44 and the directive's FH18 /
+  # sections 13.1-13.4. They were `probe` in this file and `instrument` in
+  # design/console_inventory.yml, and BOTH of those are settled reasons, so
+  # uncashed_cheques.py could never flag them: the two ledgers between them
+  # suppressed the exact cheque R44 wrote. The wording below is `not-yet-adopted`
+  # for the reason stated at the top of this block -- the question is open.
+  #
+  # The promotion commit changed module names, headers and homes and NO LOGIC,
+  # so the diff against each probe's final revision is the evidence that
+  # behaviour is unchanged. They are not composed because the console boundary
+  # is packet C1's serialised act: gap I34 cannot be closed by wiring only
+  # height (directive section 20.8), and zhao_terrain_patch.sv:154-156 carries
+  # fld_valid_i/fld_ready_o/fld_height_i and no velocity, material or nav input
+  # at all.
+  - zhao_terrain_field_walk: not-yet-adopted  the Earth lattice walker (owner ruling R44, directive FH18/13.1-13.4); generates lattice points from two prepared 33-entry tables and deletes the v2 front's 27,225-clock/association transport; applies section 9.1's closed-interval test PER VERTEX with the covered box as a hint only; emits 297 row-bounded UPDATE groups, not 273; 23 checks in field_walk_earth_directed plus field_walk_earth_random, 17 mutants caught and 1 proven equivalent; adopt when C1 composes the Earth datapath
+  - zhao_terrain_patch_acc: not-yet-adopted  the four-bank patch accumulator (owner ruling R44, directive section 13.4); four exact reducers -- height/velocity/nav saturating fx_add, material last-covering-writer wholesale -- over four vertex-residue banks with a one-deep same-address RMW bypass; INIT/DRAIN walk the aligned 273 groups while UPDATE costs 297; KNOWN OPEN and not hidden: no ready/valid and no backpressure on any phase, and phase exclusivity plus the "two idle cycles" are caller obligations the RTL does not enforce, which is the repair section 13.4 commissions and which is deliberately NOT in the promotion commit so the rename stays a provable no-op; adopt when C1 composes the Earth datapath
   - zhao_field_rcp: superseded  the v1 reciprocal; the v3 normalize path uses zhao_field_rcp24_rom, which stays counted because it is version-neutral and used outside FIELD
   - zhao_field_rcp_rom: superseded  the v1 reciprocal table, read only by zhao_field_rcp  # --- 2026-09-09, FORGE.PRIM.EVAL (the lightning evaluator) -----------------
   # Both BUILT and composed nowhere -- deliberately. The evaluator emits the
@@ -1006,9 +1025,15 @@ excluded:
   - zhao_probe_compose_pipe: probe  composition timing experiment
   - zhao_probe_ctx_fifo: probe  context FIFO sizing experiment
   - zhao_probe_dist_svc: probe  distance service fit probe
-  - zhao_probe_patch_acc: probe  patch accumulator fit probe
   - zhao_probe_render_fb: probe  renderer+framebuffer fit probe
-  - zhao_probe_walk_earth: probe  Earth60 walk probe
+  # zhao_probe_patch_acc and zhao_probe_walk_earth WERE HERE, marked `probe`,
+  # until 2026-09-20. They are now zhao_terrain_patch_acc and
+  # zhao_terrain_field_walk under the FIELD-repair block above -- promoted per
+  # owner ruling R44, and re-worded because `probe` is a SETTLED reason that
+  # closes the question, and this question was never settled: it was two
+  # finished, differentially tested, mutation-swept engines that no tool could
+  # see, because the word `probe` in a filename and a settled reason in two
+  # ledgers told every one of them to look away.
   # FIVE ENTRIES REMOVED 2026-09-19. zhao_probe_v3_{exec,engine,full} and
   # zhao_probe_curve_svc no longer exist under those names -- they are
   # zhao_field_v3_{exec,core,engine,curve} in fpga/rtl/field/ and are counted

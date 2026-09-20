@@ -1,4 +1,4 @@
-// zhao_probe_patch_acc.sv — Field v3 decisive probe 5 (reports/Fieldv3.md
+// zhao_terrain_patch_acc.sv — Field v3 decisive probe 5 (reports/Fieldv3.md
 // Phase 3): the four-bank patch accumulator with exact command-order
 // reducers (the TERRAIN.PATCH field-major amendment, 2026-08-27).
 //
@@ -71,7 +71,7 @@
 // TERRAIN.PATCH's as-built RTL), the footprint test (the Earth walker
 // walks only covered vertices — coverage is geometric at this seam), the
 // program evaluation (FIELD.SEQ.EARTH), and the height16 bake-backs.
-module zhao_probe_patch_acc (
+module zhao_terrain_patch_acc (
     input logic clk,
     input logic rst_n,
 
@@ -518,4 +518,4 @@ module zhao_probe_patch_acc (
     end
   end
 
-endmodule : zhao_probe_patch_acc
+endmodule : zhao_terrain_patch_acc

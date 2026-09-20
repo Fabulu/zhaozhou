@@ -19,7 +19,7 @@ VROOT = os.environ.get(
 VBIN = os.path.normpath(os.path.join(VROOT, "..", "..", "bin", "verilator_bin.exe"))
 
 CMD = [VBIN, "--lint-only", "-Wall", "-Wno-DECLFILENAME",
-       "--top-module", "zhao_probe_walk_earth", os.path.join(ROOT, RTL)]
+       "--top-module", "zhao_terrain_field_walk", os.path.join(ROOT, RTL)]
 
 
 def main():
