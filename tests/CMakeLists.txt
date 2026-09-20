@@ -15819,3 +15819,78 @@ add_test(NAME lint_warp_field_chain
     ${CMAKE_SOURCE_DIR}/tests/field/tb_warp_field_chain.sv)
 set_tests_properties(lint_warp_field_chain PROPERTIES
   LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# OWNER RULING R168 -- THE SPARSE ORDINAL DISCRIMINATOR, AND ITS CONTROL
+# ---------------------------------------------------------------------------
+# R168, adopting W1: `zhao_field_warp_adapter`'s host-side ports match the OLD
+# `zhao_field_host` name-for-name and the NEW `zhao_field_host_v2` in MEANING.
+# Wire it to the old host and it elaborates, runs and passes every gate while
+# reading window positions as ordinals. R168 action 1, "and the first is not
+# optional": the SPARSE case must be a NAMED test, not a case inside a bench.
+#
+# WHY A NAMED TARGET RATHER THAN LEAVING IT IN warp_field_chain_directed. That
+# bench is a systems test with a dozen concerns; this is the ONE stimulus in
+# the tree that separates a correct wiring from a wrong one. A discriminator
+# buried among other cases is one refactor away from being dropped as
+# redundant, and nothing would report the loss -- the remaining cases would all
+# still pass, because they are contiguous and therefore blind.
+add_executable(test_warp_sparse_ordinal_directed field/warp_sparse_ordinal_directed.cpp)
+target_link_libraries(test_warp_sparse_ordinal_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_warp_sparse_ordinal_directed
+  PRIVATE ${CMAKE_SOURCE_DIR}/tests/field)
+verilate(test_warp_sparse_ordinal_directed
+  PREFIX Vtb_warp_field_chain
+  TOP_MODULE tb_warp_field_chain
+  SOURCES
+    ${ZHAO_FIELD_HOST_V2_SOURCES}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv
+    ${CMAKE_SOURCE_DIR}/tests/field/tb_warp_field_chain.sv)
+add_test(NAME warp_sparse_ordinal_directed COMMAND test_warp_sparse_ordinal_directed)
+set_tests_properties(warp_sparse_ordinal_directed
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# THE POSITIVE CONTROL, WITH ITS POLARITY INVERTED: it passes when the defect
+# is DETECTED. The source list is the production one with the host SUBSTITUTED
+# -- note that `zhao_field_host_v2.sv` is ABSENT from it, so the mutant cannot
+# silently be measuring production. Everything else, `zhao_geom_warp` and
+# `zhao_field_warp_adapter` included, is the REAL production file.
+set(ZHAO_FIELD_HOST_V2_WINIDX_MUTANT_SOURCES ${ZHAO_FIELD_HOST_V2_SOURCES})
+list(REMOVE_ITEM ZHAO_FIELD_HOST_V2_WINIDX_MUTANT_SOURCES
+  ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_host_v2.sv)
+list(APPEND ZHAO_FIELD_HOST_V2_WINIDX_MUTANT_SOURCES
+  ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_host_v2_winidx_mutant.sv)
+
+add_executable(test_warp_sparse_ordinal_winidx_mutant
+  mutants/warp_sparse_ordinal_mutant_driver.cpp)
+target_link_libraries(test_warp_sparse_ordinal_winidx_mutant
+  PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_warp_sparse_ordinal_winidx_mutant
+  PRIVATE ${CMAKE_SOURCE_DIR}/tests/field)
+verilate(test_warp_sparse_ordinal_winidx_mutant
+  PREFIX Vtb_warp_field_chain_winidx_mutant
+  TOP_MODULE tb_warp_field_chain_winidx_mutant
+  SOURCES
+    ${ZHAO_FIELD_HOST_V2_WINIDX_MUTANT_SOURCES}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/tb_warp_field_chain_winidx_mutant.sv)
+add_test(NAME warp_sparse_ordinal_winidx_mutant
+         COMMAND test_warp_sparse_ordinal_winidx_mutant)
+set_tests_properties(warp_sparse_ordinal_winidx_mutant
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# Same waivers as lint_warp_field_chain, and for the same reason: UNUSEDPARAM
+# and UNUSEDSIGNAL are INHERITED from the field closure, not produced by the
+# mutation.
+add_test(NAME lint_warp_field_chain_winidx_mutant
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL
+    --top-module tb_warp_field_chain_winidx_mutant
+    ${ZHAO_FIELD_HOST_V2_WINIDX_MUTANT_SOURCES}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv
+    ${CMAKE_SOURCE_DIR}/tests/mutants/tb_warp_field_chain_winidx_mutant.sv)
+set_tests_properties(lint_warp_field_chain_winidx_mutant PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")

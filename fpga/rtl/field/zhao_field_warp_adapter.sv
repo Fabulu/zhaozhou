@@ -124,9 +124,48 @@
 // height lane. One law, three consumers. That is FH17.
 //
 // Each reason for `warp_valid_o` being low is COUNTED SEPARATELY --
-// `bypassed_o`, `noprog_o`, `sig_refused_o`, `faults_o` -- because a merged
-// "no result" total cannot tell an unarmed console from a wrong-profile
-// program from a broken one.
+// `bypassed_o`, `noprog_o`, `sig_refused_o`, `faults_o`, `absent_outputs_o` --
+// because a merged "no result" total cannot tell an unarmed console from a
+// wrong-profile program from a broken one from a short record.
+//
+// ===========================================================================
+// R168 -- THE SAME LAW ONE LEVEL DOWN, AND THE MIS-WIRING IT CLOSES
+// ===========================================================================
+// Owner ruling R168, 2026-09-20, from packet W1, about THIS FILE:
+//
+//   > "`zhao_field_warp_adapter`'s host-side ports match the OLD host
+//   > name-for-name and the NEW host in MEANING. Wire it to the old host and
+//   > it elaborates, runs, and passes every gate -- while reading window
+//   > positions as ordinals. Nothing in either port list distinguishes
+//   > correct from wrong."
+//
+// Two things were wrong and they are one thing. `resp_out_i` is ORDINAL-
+// indexed (see above); `zhao_field_host.resp_out_o` is WINDOW-indexed; the
+// names, the widths and the directions all agree, so elaboration agrees. And
+// the block decided a run was a result from `resp_status_i == 0` ALONE --
+// which cannot separate "ordinal 5 is a value" from "ordinal 5 is the zero
+// that was cleared at grant".
+//
+// THE REPAIR IS BOTH HALVES, and neither is sufficient:
+//
+//   * `resp_present_i` is READ, so a short record is refused rather than
+//     published. That closes the SEMANTIC hole, and it is reachable with
+//     entirely legal stimulus -- see the port's own comment.
+//   * `resp_present_i` EXISTS, so the old host cannot satisfy this port list.
+//     That closes the STRUCTURAL hole: the wrong wiring is now a PINMISSING
+//     instead of a silent plausible number.
+//
+// WHAT WATCHES IT. A contiguous Warp program makes ordinal and window
+// position THE SAME INTEGER, so no contiguous stimulus can tell the two
+// wirings apart -- and every Warp test in this tree but one is contiguous.
+// That is CLAUDE.md's "a gate that cannot reach the state is not evidence
+// about the state". The discriminating stimulus is SPARSE: the six canonical
+// outputs at R15,R16,R17,R18,R19 and R21, so ordinal 5 lives at R21 and
+// window lane 5 (R20) is never written. It is a NAMED test --
+// `warp_sparse_ordinal_directed` -- and its positive control is
+// `warp_sparse_ordinal_winidx_mutant`, whose polarity is inverted: it passes
+// when the wrong-wiring value IS detected. Neither run is evidence without
+// the other.
 //
 // ===========================================================================
 // FH27 -- THE SIGNATURE IS CHECKED ABOVE NUMERIC EXECUTION
@@ -165,6 +204,7 @@
 // `if`, and there is no `generate` here at all.
 //
 // ENFORCED-BY: tests/field/field_warp_adapter_directed.cpp:main
+// ENFORCED-BY: tests/field/warp_sparse_ordinal_directed.cpp:main
 `default_nettype none
 
 module zhao_field_warp_adapter #(
@@ -242,6 +282,33 @@ module zhao_field_warp_adapter #(
     /* verilator lint_off UNUSEDSIGNAL */
     input  var logic [OUT_LANES*32-1:0]  resp_out_i,
     /* verilator lint_on UNUSEDSIGNAL */
+    // DIRECTIVE 8.1's `output_present_mask`, ORDINAL-INDEXED, bit j set when
+    // ordinal j is a VALUE and clear when it is a HOLE. Owner ruling R168.
+    //
+    // WHY THIS PORT IS NOT OPTIONAL, AND WHY ITS ABSENCE WAS INVISIBLE.
+    // Before it, this block decided on `resp_status_i == 8'h00` alone -- and a
+    // status of zero cannot distinguish "this ordinal was not requested" from
+    // "this ordinal was requested and came back zero". That is W10's
+    // absent-versus-zero failure ONE LEVEL DOWN from the one the header above
+    // is so careful about: `warp_valid_o` separates "no Field result" from "an
+    // identity", and this port is what separates "six results" from "five
+    // results and a cleared register".
+    //
+    // IT IS REACHABLE WITH LEGAL STIMULUS, which is the part that matters.
+    // `zhao_field_host_v2` answers StOk when every ordinal in the slot's
+    // REQUIRED mask landed -- `complete_c = ((seen_next_c & req_mask_c) ==
+    // req_mask_c)`. A Warp image whose required mask declares five of the six
+    // canonical ordinals therefore retires StOk with `resp_present_o` bit 5
+    // CLEAR, and the word at ordinal 5 is the zero cleared at grant. Reading
+    // the status alone publishes that zero as a replacement normal component.
+    // W10 forbids exactly this: "publish no partially warped meshlet".
+    //
+    // AND IT IS THE STRUCTURAL HALF OF R168's REPAIR. The old
+    // `zhao_field_host` has no such port, so an attempt to wire this adapter
+    // to the old host can no longer be a silent success -- it is a
+    // PINMISSING, which is the one mis-wiring signal every tool in this tree
+    // already knows how to shout about.
+    input  var logic [OUT_LANES-1:0]     resp_present_i,
     input  var logic [7:0]               resp_status_i,
 
     // ---- the answer, to zhao_geom_warp's field port ------------------------
@@ -266,6 +333,13 @@ module zhao_field_warp_adapter #(
     output var logic [31:0] noprog_o,        // the engine had no program in the slot
     output var logic [31:0] sig_refused_o,   // FH27: the slot is not a Warp program
     output var logic [31:0] faults_o,        // the run ended on an alarm
+    // R168/W10: the host called the run OK and did NOT hand back all six
+    // canonical ordinals. Counted APART from `faults_o` because it is a
+    // different fault with a different file to open: the run executed and the
+    // IMAGE declared fewer outputs than the W profile has. Merging it into
+    // faults would say "the engine broke" about a program that is simply not
+    // a whole Warp.
+    output var logic [31:0] absent_outputs_o,
     output var logic [31:0] stall_cycles_o,  // a vertex offered with no answer yet
     // THE IDENTITY GUARD, in the metadata-swap sense rather than the Warp
     // sense. It fires when the vertex being offered while `ans_valid_o` is
@@ -392,6 +466,27 @@ module zhao_field_warp_adapter #(
   // "not one of the four I remembered".
   wire status_ok_c = (resp_status_i == 8'h00);
 
+  // THE PRESENCE RULE (R168). A status is a verdict on the RUN; the present
+  // mask is a statement about the RECORD, and the two are not the same claim.
+  //
+  // `W_PRESENT_MASK` is written as a plain sized localparam on purpose. The
+  // obvious alternatives are both portability traps at the parameterisations
+  // this block actually ships: a zero-count replication
+  // (`{{(OUT_LANES-6){1'b0}}, ...}` at OUT_LANES == 6) and a
+  // parameter-sized cast (`OUT_LANES'(...)`) which Quartus 17.0 is not
+  // reliable about. An assignment to a sized localparam truncates, which is
+  // defined, and gives 6'b111111 at OUT_LANES == 6 and 7'b0111111 at 7.
+  localparam logic [OUT_LANES-1:0] W_PRESENT_MASK = (1 << W_CANONICAL_OUTPUTS) - 1;
+
+  // ALL SIX, not any. This is owner ruling R101's "ALL becomes ANY" defect
+  // read across the seam: a subset test here would accept exactly the record
+  // the host already refuses to call complete.
+  wire present_ok_c = ((resp_present_i & W_PRESENT_MASK) == W_PRESENT_MASK);
+
+  // A deformation requires BOTH. The status says the engine finished; the
+  // mask says it finished with a whole Warp record.
+  wire result_ok_c = status_ok_c && present_ok_c;
+
   integer k;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -409,6 +504,7 @@ module zhao_field_warp_adapter #(
       noprog_o       <= 32'd0;
       sig_refused_o  <= 32'd0;
       faults_o       <= 32'd0;
+      absent_outputs_o <= 32'd0;
       stall_cycles_o <= 32'd0;
     end else begin
       // A vertex offered with no answer yet. The cost of a scalar front,
@@ -461,7 +557,7 @@ module zhao_field_warp_adapter #(
 
         W_WAIT: begin
           if (resp_valid_i) begin
-            if (status_ok_c) begin
+            if (result_ok_c) begin
               // A REAL result, including the identity case. W03: the
               // displacement and the replacement normal are handed over
               // exactly as the program produced them -- no add, no gain, no
@@ -485,6 +581,13 @@ module zhao_field_warp_adapter #(
               end
               if (resp_status_i == StNoProgram) begin
                 if (noprog_o != 32'hFFFF_FFFF) noprog_o <= noprog_o + 32'd1;
+              end else if (status_ok_c) begin
+                // The run SUCCEEDED and the record is short. R168: this is the
+                // case a zero status cannot describe, and the only reason this
+                // arm can be reached at all is that presence is now read.
+                if (absent_outputs_o != 32'hFFFF_FFFF) begin
+                  absent_outputs_o <= absent_outputs_o + 32'd1;
+                end
               end else begin
                 if (faults_o != 32'hFFFF_FFFF) faults_o <= faults_o + 32'd1;
               end

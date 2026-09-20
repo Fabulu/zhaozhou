@@ -1,4 +1,38 @@
-// tb_warp_field_chain.sv -- THE THREE REAL MODULES, JOINED.
+// tb_warp_field_chain_winidx_mutant.sv -- THE MUTANT ARRANGEMENT.
+// THIS IS NOT PRODUCTION RTL and it is not a test bench anybody should reach
+// for. It is a COPY of tests/field/tb_warp_field_chain.sv differing in exactly
+// TWO textual substitutions, ONE of which is substantive:
+//
+//   production:  zhao_field_host_v2 #( ... ) u_host ( ... );
+//   here:        zhao_field_host_v2_winidx_mutant #( ... ) u_host ( ... );
+//
+// The other is the bench's own module name, so the two can be elaborated in
+// one tree.
+//
+// WHY THE COPY IS THE RIGHT SHAPE HERE. SystemVerilog has no way to make the
+// instantiated module a parameter, so "the same bench with a different host"
+// can only be spelled as a second file. Keeping the difference down to one
+// instantiation line is what makes the pair a LIKE-FOR-LIKE comparison rather
+// than two experiments: `zhao_geom_warp` and `zhao_field_warp_adapter` below
+// are the REAL production modules in both arrangements, and the stimulus is
+// built by the same shared header in both drivers.
+//
+// WHAT IT IS EVIDENCE ABOUT. `zhao_field_host_v2_winidx_mutant` publishes its
+// results WINDOW-indexed, which is the old `zhao_field_host`'s meaning and
+// owner ruling R168's defect. Driven by the SPARSE program -- Warp's six
+// canonical outputs at R15,R16,R17,R18,R19 and R21, so ordinal 5 lives at R21
+// and window lane 5 (R20) is never written -- this arrangement hands the
+// adapter the cleared zero from R20 where the program's nz' should be.
+//
+// Its driver, tests/mutants/warp_sparse_ordinal_mutant_driver.cpp, HAS
+// INVERTED POLARITY: it passes when that wrong value IS detected. It is
+// evidence about the INSTRUMENT, not about the design.
+//
+// REGENERATE IT if tests/field/tb_warp_field_chain.sv changes shape. This is a
+// COPY and a stale copy is a positive control for an arrangement that no
+// longer exists.
+
+// tb_warp_field_chain_winidx_mutant.sv -- THE THREE REAL MODULES, JOINED.
 //
 // `zhao_geom_warp` -> `zhao_field_warp_adapter` -> `zhao_field_host_v2`.
 // No played adapter, no played host, no stubbed response. This is the bench
@@ -82,7 +116,7 @@
 
 `default_nettype none
 
-module tb_warp_field_chain #(
+module tb_warp_field_chain_winidx_mutant #(
     // Warp's canonical shape. W01: FIFTEEN in, SIX out. Not fourteen.
     parameter int unsigned W_IN_LANES = 15,
     parameter int unsigned W_ORDINALS = 6,
@@ -321,7 +355,7 @@ module tb_warp_field_chain #(
       .stall_cycles_o(a_stall_cycles_o), .vtx_changed_o()
   );
 
-  zhao_field_host_v2 #(
+  zhao_field_host_v2_winidx_mutant #(
       .CLIENTS     (CLIENTS),
       .IN_LANES    (W_IN_LANES),
       .OUT_LANES   (HOST_WINDOW),
@@ -375,13 +409,13 @@ module tb_warp_field_chain #(
 
   initial begin
     if (WARP_CLIENT >= CLIENTS)
-      $fatal(1, "tb_warp_field_chain: WARP_CLIENT=%0d is not a client of CLIENTS=%0d",
+      $fatal(1, "tb_warp_field_chain_winidx_mutant: WARP_CLIENT=%0d is not a client of CLIENTS=%0d",
              WARP_CLIENT, CLIENTS);
     if (W_ORDINALS != 6)
-      $fatal(1, "tb_warp_field_chain: W01 fixes Warp at SIX output ordinals, not %0d",
+      $fatal(1, "tb_warp_field_chain_winidx_mutant: W01 fixes Warp at SIX output ordinals, not %0d",
              W_ORDINALS);
     if (W_IN_LANES != 15)
-      $fatal(1, "tb_warp_field_chain: W01 fixes Warp at FIFTEEN input lanes, not %0d",
+      $fatal(1, "tb_warp_field_chain_winidx_mutant: W01 fixes Warp at FIFTEEN input lanes, not %0d",
              W_IN_LANES);
   end
 
