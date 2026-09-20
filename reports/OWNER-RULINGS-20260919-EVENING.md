@@ -2875,3 +2875,145 @@ strings, and a parser that choked on one would take the whole heatmap down. Its
 failure mode degrades to the old behaviour — the row simply is not struck —
 **which is the safe direction for a cosmetic annotation and the WRONG direction
 for anything load-bearing. It must not be reused as a gate.**
+
+## R186 — A PACKET RETRACTED ITS OWN HEADLINE, AND NAMED THE INCENTIVE BEHIND IT
+
+**2026-09-20, POSTMEAS, and this is the best single paragraph any lane has
+written this campaign.**
+
+It concluded from a **correct measurement** — the spec defines exactly one tag
+channel, `GLOW = 0b01` — that R37 covers only one of POST.GATHER's three planes
+and therefore could not unblock composition. It filed that as **a new owner
+decision**. Then it checked, and **retracted it**:
+
+> R37's proposal decides all three explicitly. `POST.GATHER.md` decision 3 rules
+> `c_disp_*` / `c_ink_o` **zero in v1**, and `zref::post::gather` implements it
+> with `kChannelReserved2/3` and a `reserved_channel` counter. **There is no new
+> owner decision; strike commit 4 §5.**
+
+**The cause is exact, and it is the one TERRCOMP diagnosed the day before, in a
+packet that had READ the diagnosis:** it read the R37 section through a
+`grep -B4 -A12` window **that skipped the three numbered decisions sitting
+between the matched lines.**
+
+**And then it named why that direction of error is the dangerous one:**
+
+> *"My error ran in the direction that made the gap look bigger and my own
+> finding look more important. Nobody audits good news, and good news for a
+> packet is not good news for the design."*
+
+That is `CLAUDE.md`'s broken-instrument law turned on **the agent's own
+incentives**, and it is a genuinely new formulation. The law says a broken tool
+lies in the direction that makes the answer look better. **An agent's bias runs
+the other way — toward the finding that makes its own work look more
+significant** — and the two failure modes are therefore *different* and need
+different guards. A lane that finds a NEW BLOCKER has just made its own refusal
+more defensible, and that is precisely when it should check hardest.
+
+**The general rule, and it now has three instances in two days: OPEN THE FILE
+AND READ THE SECTION, NEVER A GREP WINDOW.** A `-B4 -A12` window is a sample of
+a document, and a document's structure — numbered decisions, a retraction, a
+banner on line 1 — is exactly what a sample destroys.
+
+POSTMEAS also caught two further wrong numbers of its own by re-counting
+(census 90/84 → **88/87**; `check_counters` rows "fifteen" → **119**), and it
+validated a null with a **positive control**: its first port sweep saw **zero**
+matches because the core writes `input logic` without `var`, so it re-ran
+against **283 visible input ports** before trusting the single match it found.
+
+**Corrections to my brief, both accepted:** **R65 is NOT load-bearing for
+POST.GATHER** — zero citations in its contract or RTL; it is terrain's. And the
+tie-off audit baseline is **8/1/10/0**, not the 7/1/10/1 I quoted, which was the
+pre-fix number.
+
+## R187 — THE ARBITER WAS THE SMALLEST OF FOUR BLOCKERS, AND ONE DECISION UNBLOCKS TWO SUBSYSTEMS
+
+**SETUPDOOR, refusing the packet I commissioned on R180's reading.** The *shape*
+half of R180 is confirmed; **the conclusion is not**, and the correction is
+worth more than the arbiter would have been.
+
+**`zhao_geom_setup`'s arm is not a stream endpoint.** It is one tine of a
+**THREE-WAY ORDERED JOIN** — setup's edge functions, `zhao_geom_attrpack`'s
+three 240-bit planes, and `u_material_window`'s resolved material *plus an
+occupancy accounting* — **pairing by ARRIVAL ORDER with no tag.** The window's
+own comment states the invariant a particle breaks: *"There is no fourth outcome
+for a triangle in that span."*
+
+Feeding a particle in **deadlocks combinationally**, proved from three assigns
+in the core: `st_o_ready` needs `ap_o_valid_w`; ATTRPACK never saw the particle;
+SETUP cannot drain; `cl_o_ready` falls; GEOM.CLIP stalls — **and ATTRPACK is fed
+only THROUGH GEOM.CLIP.** A closed cycle. The other branch is worse: the
+particle's edge functions would join a *mesh* triangle's planes and material,
+**skewed by one for the rest of the frame**. Two committed error counters would
+fire on every particle, so the interlock is already instrumented.
+
+**THE BINDING BLOCKER IS NOT THE ARBITER. It is the seven-slot attribute
+packet** — `GEOM_CLIP_ATTRS = 7` per corner — **the same wall entry (b) already
+records for TERRAIN.** A polygon particle has a flat colour, one shared 1/w and
+**no texture coordinates by law**; zeroing u/w and v/w would sample texel (0,0)
+on every particle.
+
+**TERRAIN AND PARTICLES REACHED THAT WALL INDEPENDENTLY, in two packets that
+never spoke. So ONE owner decision — an untextured attribute law — unblocks
+BOTH**, and it is now the highest-leverage open item in the campaign.
+
+**Recommendation recorded, not acted on:** the honest door is at **GEOM.CLIP's
+input**, not GEOM.SETUP's — it yields winding normalisation, 2A, bbox,
+zero-area reject and three-tine lockstep for free.
+
+## R188 — REASONING FROM A PORT WIDTH IS REASONING FROM A PROJECTION
+
+SETUPDOOR's width answer, and it is `CLAUDE.md`'s art law arriving in RTL.
+
+The brief demanded the 22-vs-21-bit question be **answered, not assumed**. The
+answer: **the 22nd bit is HEADROOM, never RANGE.**
+`zhao_project_core::to_screen_xy` clamps to **±524288** — *"the clamp is the
+law"* — and is the only producer of `p_x_i`/`p_y_i`; max offset 4080, so
+**max |vertex| = 528368 < 2^20.**
+
+**Proved exhaustively** over all 256 size bytes × four rail corners, asserted on
+every vector of both lanes, and — the part that matters — **SEEN TO FIRE**: a
+positive control with the clamp premise withdrawn failed **exactly 1 of 757
+checks, and only that one.** A control that fails everything proves nothing
+about the specific premise.
+
+**And it corrected a shipped header while it was there:** `zhao_part_expand.sv`
+reasoned from **the port width** — *a projection of the value rather than its
+law*. That is `CLAUDE.md`'s **"measure things that ARE the thing, never a
+projection of them"**, written about a creature's body taper derived from a 2D
+drawing, recurring verbatim in SystemVerilog.
+
+The practical consequence is the opposite of what the packet was commissioned to
+do: a future door may narrow **22 → 21 losslessly and provably**, rather than
+widening the arm, the core's `render_ax_i`, both shell tops and the raster **for
+a bit that cannot be set.**
+
+**Bonus, both now pinned by committed checks:** the particle fan is
+**negatively wound** against setup's stated `2A > 0` precondition, and **size 0
+is a zero-area triangle setup does not reject.**
+
+## R189 — EIGHT PACKETS AT 21, AND THAT IS THE REAL STATUS
+
+The register has read **21** across eight consecutive packets: E1, W1, CMDFIELD,
+TERRCOMP, WARPFIX, FORGE4, POSTMEAS, SETUPDOOR.
+
+**None of them failed.** Between them they composed `zhao_field_host_v2`, built
+GEOM.WARP, adopted a variant worth **5,698 ALM**, repaired a live ordinal
+defect, corrected an admission classifier that was admitting programs over their
+deadline, and produced the instrument findings this ledger is mostly made of.
+**Every refusal came with a measured blocker**, and several blockers were found
+to have expired rather than being inherited.
+
+**The honest reading is structural: what remains is not wiring.** Of the twelve
+disconnected modules, eight have now been refused by packets that measured
+*why*, and the blockers are **missing producers** and **decisions only the owner
+can make**. A ninth packet aimed at composition would very likely return 21
+again, with a ninth well-measured refusal.
+
+**So the fastest remaining path to zero runs through the owner's inbox**, and
+that is where the effort should go: `gz/dossier` is consolidating every open
+decision with its evidence, its cost and what it unblocks. **The single
+highest-leverage item is the untextured attribute law (R187), because two
+subsystems hit it independently.** The cheapest is **R37**, which needs the
+owner's *eye* on a contact sheet **already rendered and committed** at
+`reports/post-gather-law/gather_law_contact.png`.
