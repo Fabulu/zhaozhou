@@ -1957,6 +1957,80 @@
 //      block's contract asks for ("once per patch per frame, before the first
 //      record").
 //
+//      ---------------------------------------------------------------------
+//      WORKED 2026-09-20 (gz/field) AND STOPPED ON AN OWNER DECISION. Three
+//      things were established; the entry stays OPEN and is not half-built.
+//      Its two prerequisites, I42 and I5, are CLOSED above, so what remains is
+//      this seam alone.
+//
+//      (1) R44's MEANS DOES NOT FIT THIS SEAM, with evidence. The ruling says
+//      to "promote `zhao_probe_walk_earth`/`zhao_probe_patch_acc` out of
+//      `fpga/rtl/synth/` ... rather than rebuilding them". READ BOTH FILES
+//      BEFORE INHERITING THAT: they are the FIELD-MAJOR, FOUR-WIDE, WHOLE-PATCH
+//      topology of reports/Fieldv3.md Phase 4, and this console composes the
+//      VERTEX-MAJOR one.
+//        * `zhao_probe_walk_earth` GENERATES lattice points from two prepared
+//          33-entry tables, precisely to "delete that transport". But
+//          `zhao_terrain_patch` ALREADY OFFERS the point -- `vtx_valid_i` with
+//          `wx_i`/`wz_i`/`vi_i`/`vj_i` -- so on this seam the walker would be a
+//          second producer of a coordinate the consumer just handed over.
+//        * `zhao_probe_patch_acc` is not a feeder of this port, it is a
+//          REPLACEMENT FOR THE BLOCK BEHIND IT: four M10K banks by vertex mod
+//          4, sixteen RAMs, with its own height/velocity/material/nav_cost
+//          reducers and INIT/ACCUM/DRAIN phases. It has no `fld_height` lane
+//          because it IS the reducer `zhao_terrain_patch` already is, composed,
+//          fit-targeted and in the manifest.
+//        * The console's own FIELD parameterisation argues the other way too:
+//          `FAB_GROUP_PTS=1`, because this front holds one point in flight. The
+//          probes' four-wide group is the configuration that setting rejects.
+//      So promoting them is not a wiring act: it is swapping TERRAIN.PATCH's
+//      composed architecture for another one, which is an owner call and not a
+//      packet's. R44's GOAL -- do not rebuild what exists -- still stands, and
+//      on this seam the thing that already exists is TERRAIN.PATCH.
+//
+//      (2) THE FRAME TICK IS AVAILABLE, so that half of R44 is fine.
+//      `gpu_tick_o` is the shell's frame boundary (already `core_tick_c` in
+//      this file) and the shell publishes a frame id beside it, which
+//      PART.SPAWN's `tick_i` already consumes. `age = tick - start_tick` and
+//      the phase are computable from it.
+//
+//      (3) THE BLOCKER IS THE HANDLE -> PROGRAM-HASH MAPPING, AND IT HAS NO
+//      PRODUCER. R43 gives CMD.EXEC "only the handle -> program-hash lookup
+//      that TerrainField needs", and TerrainField 0x0200 carries
+//      `handle32[program] program`. But FIELD.PROGCACHE's contract fixes the
+//      directory key as a CONTENT hash -- "the program hash
+//      `CRC32C(code||tables) + instr_count`", computed by
+//      `zfield::programHashOfBytes` -- so the handle is NOT the key and
+//      CMD.EXEC cannot derive one from the other without reading and hashing
+//      the cartridge page.
+//      SEARCHED, and named so the next reader does not repeat it:
+//      `program_hash`, `prog_hash` and `programHash` across all of `fpga/rtl`
+//      (including `synth/`) -- ZERO hits; `programHashOfBytes` exists only in
+//      `reference/src/zfield/zfield_decode.cpp`. Nothing in hardware publishes
+//      {handle -> hash}.
+//      RECOMMENDED, for the owner to confirm: SW.STREAM owns the mapping,
+//      because it is the only party that has both -- it names the program by
+//      handle in the plan and computes the hash with `zfield::programHashOfBytes`
+//      to post the commit. A fourth doorbell post kind, BIND {handle32, hash32},
+//      writing a small handle->hash table that CMD.EXEC's TerrainField arm
+//      reads, closes it with no ABI change and no second hashing law. The
+//      alternative -- re-key the directory by handle -- is cheaper still but
+//      contradicts FIELD.PROGCACHE's contract in writing, which is why it is
+//      not taken here.
+//
+//      WHAT IS THEN LEFT TO BUILD, so the next packet can be scoped rather than
+//      re-derived: (a) CMD.EXEC's TerrainField arm, staging ~480 bits per
+//      record (program, four footprint fx16, start_tick, duration_ticks and
+//      p0..p7) and emitting {footprint, hash, cmd index} onto
+//      `terr_pt_fld_add_*` at commit -- area-significant, so it wants a
+//      measurement; (b) a descriptor table keyed by that cmd index holding the
+//      uniforms; (c) the EARTH stream adapter, which on each accepted vertex
+//      issues one E record per active lane and returns `height` on
+//      `terr_pt_fld_*`, reading the patch's own `fld_covers_o` to skip a run
+//      for a lane that does not cover rather than re-deciding the section 9.1
+//      test it owns; (d) a two-client share on the host's single `pc_lu_*`
+//      port, since the doorbell holds it for the HPS.
+//
 //
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
@@ -13202,6 +13276,17 @@ module zhao_console_core
     // with empty parentheses -- rather than deleting them from the instance --
     // is what makes the retirement visible at the point of use instead of
     // being a silent absence somebody later reads as an oversight.
+    //
+    // THE WAIVER IS SCOPED TO THESE EIGHT PINS AND CITES ITS RULING, added
+    // 2026-09-20 (gz/field). The eight empty pins are DELIBERATE by R64, and
+    // the linter cannot tell a deliberate one from a forgotten one -- so
+    // unwaived they turned the console-board lint gate from "silent RC 0" into
+    // eight warnings and a non-zero exit, for every packet in this run. A gate
+    // that is red for a reason nobody owns is a gate people learn to skip,
+    // which is the more expensive failure. The waiver is deliberately NOT
+    // file-wide: a pin left empty by accident anywhere else in this module
+    // still fails, which is the property worth keeping.
+    /* verilator lint_off PINCONNECTEMPTY */
     .m17_valid_o(),
     .m17_addr_o (),
     .m17_surf_o (),
@@ -13210,6 +13295,7 @@ module zhao_console_core
     .m9_addr_o  (),
     .m9_surf_o  (),
     .m9_h_o     (),
+    /* verilator lint_on PINCONNECTEMPTY */
 
     .samples_o   (tmg_samples),
     .m17_writes_o(terr_mg_m17_writes_o),
