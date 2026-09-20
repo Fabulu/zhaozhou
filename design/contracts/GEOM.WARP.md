@@ -26,15 +26,34 @@ never lets the three read alike.
 | part | state |
 |---|---|
 | Semantics (lanes, application law, bounds, failure taxonomy) | **RATIFIED** — W01–W18 |
-| Scalar reference `zref::GeomWarp` | **BUILT AND TESTED** — `reference/include/zref/zref_geom_warp.hpp`, 95 directed checks, 3 fired mutants |
-| `DrawWarpedForm 0x0304` ABI | **NOT BUILT** |
-| `zhao_geom_warp.sv` and the join | **NOT BUILT** |
-| Composition into `zhao_console_core` | **BLOCKED** — on the shared Field host, below |
-| Throughput / resources | **UNMEASURED** — no fit, no cycle count, no claim |
+| Scalar reference `zref::GeomWarp` | **BUILT AND TESTED** — `reference/include/zref/zref_geom_warp.hpp`, **102** directed checks, 3 fired mutants |
+| `DrawWarpedForm 0x0304` ABI | **NOT BUILT** — and 0x0304 re-verified free 2026-09-20 |
+| `zhao_geom_warp.sv` and the application stage | **BUILT AND TESTED 2026-09-20** — `fpga/rtl/geometry/zhao_geom_warp.sv`, 2,468 directed checks against `zref::geom_warp::apply_outputs`, every counter seen to fire, one committed mutant with a measured fire rate |
+| The join (descriptor sidecar, meshlet poison/drain) | **NOT BUILT** |
+| Composition into `zhao_console_core` | **BLOCKED** — on P1, P2, P7 and the absent command; see the prerequisite table |
+| Throughput / resources | **UNMEASURED** — no fit, no cycle count, no claim. **PHYSICAL FIT PENDING.** |
 
-**GEOM.WARP is still `NOT BUILT AT ALL` in the completion register, and this
-contract does not change that.** [W18]: "A built block, zero gap counter, or a
-picture alone is not sufficient."
+**THE CHECK COUNT WAS WRONG IN TWO PLACES AND IS CORRECTED BY MEASUREMENT.**
+This table and §12 both read *95 checks*; `design/blocks.yml` said 95 too.
+Built and run 2026-09-20: `geom_warp_reference_directed: 102 checks, 0 failed`.
+Ruling R102 said 102 all along. A number repeated from a draft is not a
+measurement, and three files agreeing with each other is not corroboration when
+none of them ran the binary.
+
+**GEOM.WARP is `BUILT BUT NOT CONNECTED` in the completion register as of
+2026-09-20, and the register TOTAL DID NOT MOVE: 21 → 21.**
+`completion_register.py:1480-1482` sums `built_not_connected` and `unbuilt`
+together, so reclassification cancels exactly. [W18]: "A built block, zero gap
+counter, or a picture alone is not sufficient." **The Field request port is NOT
+tied off** — "not connected" and "tied off" are different statements, and only
+the first is true here.
+
+**AND THE REGISTER CANNOT TELL THE DIFFERENCE.** There is no structural scan for
+a port tied to a constant anywhere in `completion_register.py`; its tie-off list
+is parsed out of `zhao_console_core.sv`'s own `INCOMPLETE -- TIED OFF` header
+comment block (`:67-244`). A composition that tied this block's Field port off
+would read **CONNECTED** and drop the total to 20 — green, and wrong. The guard
+is this contract, the ledger note and the packet protocol. Not the instrument.
 
 ## 1 Purpose and exclusions
 
@@ -249,8 +268,9 @@ performance.
 
 ## 12 Directed tests
 
-`tests/geometry/geom_warp_reference_directed.cpp` — **BUILT, 95 checks,
-passing.** Covers §22.1 T01–T09 at the reference level: the 15/6 signature and
+`tests/geometry/geom_warp_reference_directed.cpp` — **BUILT, 102 checks,
+passing** (built and run 2026-09-20; this line read "95" and was wrong, as was
+`design/blocks.yml`). Covers §22.1 T01–T09 at the reference level: the 15/6 signature and
 the explicit refusal of the 14-input legacy typo, profile mismatch, identity
 exactness, p3 and all four params, all four attributes including negatives,
 signed rails and ±1 LSB with **separate** application status, bound violation
@@ -261,6 +281,30 @@ shift, and sparse/high output registers.
 Fixtures are real `.zprog` images pushed through the **real** `zfield::decode`
 validator: IDENTITY, TRANSLATE, P3_SENTINEL, ATTRIBUTES, ZERO_NORMAL,
 SPARSE_OUTPUTS [§21.3].
+
+**THE RTL HALF, ADDED 2026-09-20.**
+`tests/geometry/geom_warp_rtl_directed.cpp` — **BUILT, 2,468 checks, passing.**
+Every numeric expectation comes from calling `zref::geom_warp::apply_outputs`
+with the **hardware's own six output words**; nothing is compared against a C++
+restatement of the application law. That is what `apply_outputs` was split out
+of `apply` for, and §11 says so. Covers FT092 identity exactness, FT093
+non-identity, FT094 both signed rails with application saturation counted
+separately, FT095 the `>` (not `≥`) bound boundary in both directions with the
+returned displacement preserved, FT096 the reduction including the
+`-(2^31 - 1)` case, the all-three-zero degeneracy rule against its
+one-nonzero-word discriminator, W09's bypass **measured to perform zero Field
+offers**, the three refusals the oracle cannot see (profile, transport fault,
+the 64-bit seam) each with a fired counter and the seam's negative control, the
+fork under skewed backpressure with independent accept counters, and a
+600-vertex randomized differential over hostile values.
+
+**Two defects it found that inspection had not**: a zero-extending `abs33`
+(945 of 2,468 checks red on the first run, one cause with two symptoms), and a
+Field offer asserted for one cycle before an invalid draw was refused.
+
+`tests/mutants/zhao_geom_warp_shift_oneliner_mutant.sv` + its driver — a
+committed positive control, polarity inverted. Measured: **0 of 20,000 random
+triples catch it; the directed value −2147483647 does.**
 
 **Owed** (§22.2–22.7): the program-binding and shared-host cases T13–T24, the
 join/order/backpressure cases T25–T36, the resource and command-path cases
@@ -311,24 +355,48 @@ second Field loader inside GEOM.WARP to avoid doing this."* Each was **checked
 in the tree**, not assumed. Full evidence and file:line citations are in
 `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-warp.md`.
 
-| # | prerequisite | state |
-|---|---|---|
-| P1 | **15 input lanes.** `zhao_field_host` is composed at `IN_LANES(13)`, `OUT_LANES(7)`. | **ABSENT** — 2 lanes short. Outputs suffice. |
-| P2 | **A client port.** `CLIENTS=2`; client 0 is the S-profile stamp adapter, client 1 the F-profile flow adapter. | **ABSENT** — no free port; and there is no Warp adapter. |
-| P3 | **Sparse output map.** Capture is one CONTIGUOUS window from `hdr_outbase`. | **ABSENT** — §5.2 and T09 require a per-output map. |
-| P4 | **ALL-outputs completion.** Completion tests `cur_out_seen == '0'` — i.e. **ANY** output, not all required ones. | **ABSENT, and it is a live defect class**: a point writing 5 of 6 lanes reports success with the sixth reading the cleared zero. That is W10's "an absent output must not look like a zero result", in shipped shared RTL. §12.3 requires a per-output seen bit. |
-| P5 | **Per-context prepared uniforms.** The scalar bank is one flat 64-slot array with no context dimension. | **ABSENT** — §12.5 / §9.5 require isolation per simultaneously eligible plan. |
-| P6 | **Four independent tables.** The fabric carries 4 with per-table counts; the host exposes `TABLES=2` and commits one table per header write. | **PARTIAL** |
-| P7 | **48-instruction capacity.** Warp's ceiling is 48; the host is composed at `INSTR_N=32`. | **ABSENT** — a full-length Warp program does not fit the uop store. |
-| P8 | **Handle → resident-slot binding.** Only a content-hash directory exists; the client supplies the raw slot itself. `post_op` is 2 bits with 0/1/2 used — value 3 is **encodable but not inert**, it currently falls through to the LOAD path. | **ABSENT** — §9.3's BIND/SEAL is a protocol extension, not an unused number. |
-| P9 | **Per-point cost.** Measured from the FSM: `REGS + IN_LANES + 4 + T_run`; 49 + T_run at today's 32/13, **51 + T_run** at Warp's 15 lanes. The "uniforms once per association" fast path of ruling **R91** does **not** exist anywhere in the tree. | **ABSENT** — and it is the same lever I5 needs. |
+**RE-MEASURED 2026-09-20 BY PACKET W1, AT `55ec050b`, AFTER H1'S HOST LANDED.**
+The table below is not inherited: every row was checked in the tree again, and
+**four of the nine moved.** Three of the plan's own mappings were wrong, and one
+standing ruling turns out to be discharged. The lesson is the ordinary one —
+a prerequisite table is a measurement with a timestamp, and this one was taken
+before the host it depends on existed.
 
-**Consequence, stated plainly.** GEOM.WARP cannot be composed as a real Field
-client until P1, P2, P3, P4 and P8 are repaired in the **shared** host. Building
-`zhao_geom_warp.sv` and tying its Field request port off would move the register
-entry from *not built* to *tie-off* — closing a gap by opening one, which the
-packet protocol forbids. The block is therefore specified, referenced and tested
-here, and **not** composed.
+| # | prerequisite | state, MEASURED |
+|---|---|---|
+| P1 | **15 input lanes.** | **ABSENT.** `.IN_LANES(13)` at `zhao_console_core.sv:15930, 16150, 16212` — three sites, and a tree-wide sweep finds **no others**. *Correction:* the repair plan says "three core sites **plus generated tops**"; the generated tops carry **no `IN_LANES` override at all** (`zhao_prod_top.sv:493` instantiates `zhao_field_host` with none). Three sites, not five. |
+| P2 | **A free client port.** | **ABSENT.** `.CLIENTS(2)` at `:15875`, one site tree-wide; both taken by the stamp and flow adapters. |
+| P3 | **Sparse output map.** | **PRESENT — in `zhao_field_host_v2`, which is not composed.** `omap_kind[slot][j]` / `omap_index[slot][j]` are the ordinal↔window translation, aliasing falls out for free, and an `OUTPUT_MAP` row naming a `VECTOR_REG` outside the window is a **load-time refusal** (`:402`). H1 closed this. |
+| P4 | **ALL-outputs completion.** | **PRESENT — in `zhao_field_host_v2`.** `complete_c = ((seen_next_c & req_mask_c) == req_mask_c)` at `:926` — ALL required ordinals, not ANY — with `StPartial = 8'hF3` at `:468`. R101's defect is repaired and re-planted as a committed mutant. |
+| P5 | **Per-context prepared uniforms.** | **DEFERRED, NOT CLOSED, and here is exactly what the weaker means is.** `prep_value[0:PREP_SCALARS-1]` (`:622`) is still **one flat 64-entry array** with no context dimension. What H1 added beside it is a per-slot **generation stamp** (`prep_gen`, `prep_valid`) — which detects a stale prepared scalar but does **not** isolate two simultaneously eligible plans. That satisfies Warp only if Warp never interleaves with Earth inside a frame. **Report it as deferred. It is not closed.** |
+| P6 | **Four independent tables.** | **STILL PARTIAL — and the plan says YES.** `zhao_field_host_v2.sv:230` declares `parameter int unsigned TABLES = 2`, the same as the old host; the fabric carries 4. H1 did not raise it and nothing else did. *Correction to the repair plan §4.* |
+| P7 | **48-instruction capacity.** | **ABSENT.** `.INSTR_N(32)` at `:15889`, and host_v2's own default is 32 as well. A full-length Warp program does not fit the uop store. |
+| P8 | **Handle → resident-slot binding.** | **STILL ABSENT — and the plan says YES.** `zhao_field_doorbell.sv:440-442`: the final `else` still sends **everything** to `D_LOAD`, and `post_op_i` is still `[1:0]` (`:157`), so value 3 remains encodable and not inert. A tree-wide search of `fpga/rtl/field/` for `D_BIND`, `D_SEAL`, `bind_slot` or `handle_to_slot` returns **nothing**. D1's branch exists and is **not merged into this base**. *Correction to the repair plan §4.* |
+| P9 | **Per-point cost / the R91 lever.** | **NOW EXISTS — and this DISCHARGES a standing claim.** `zhao_field_host_v2.sv:1167-1171`: *"E_ZERO is skipped entirely under FH08, so the fast path's preload is IN_LANES clocks where the oracle's is REGS + IN_LANES"*, gated on an accepted `INIT_PROOF` (`hdr_ipok[slot]`). **R103 states that the R91 fast path "does NOT exist anywhere in the tree." It does now**, in H1's host. Still **unmeasured in clocks** — see below. |
+
+**THE COST NUMBER IS ARITHMETIC ON THE FSM, NOT A RESULT.** `51 + T_run` at
+Warp's fifteen lanes comes from `REGS + IN_LANES + 4 + T_run` with the old host's
+unconditional clear. With P9's fast path that term becomes `IN_LANES + 4 + T_run`
+= **19 + T_run**. Both numbers are FSM arithmetic. Neither is a benchmark and
+neither is a fit. **PHYSICAL FIT PENDING**, and the clock count is a Verilator
+question that has not been asked yet.
+
+**Consequence, stated plainly, and it has CHANGED.** P3 and P4 are built and P9's
+lever exists — all three in `zhao_field_host_v2`, which **the console does not
+compose**. What still blocks a live composition is **P1, P2 and P7** (all three
+one-line parameter changes in `zhao_console_core.sv`, which is C1's file and
+C1's act), **P8**, and one thing no prerequisite table listed:
+
+**THERE IS NO `DrawWarpedForm` COMMAND, SO NO DRAW CAN EVER ENABLE WARP.** A
+composed `zhao_geom_warp` with today's ABI would sit permanently in its W09
+bypass — function present and structurally unreachable. That is not a
+composition; see the owner decision in `FINDINGS-fieldw1.md`.
+
+**What W1 did instead of tying the port off.** The block is built, and its Field
+request port is a real client port shaped to `zhao_field_warp_adapter`'s declared
+consumer contract — that adapter's own header names `zhao_geom_warp.sv` as the
+consumer which "DOES NOT EXIST YET, and that is the point: this file is its
+prerequisite, not its replacement." Nothing is tied off, and nothing is composed.
 
 ## Notes
 
