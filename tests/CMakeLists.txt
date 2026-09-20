@@ -14705,6 +14705,57 @@ add_test(NAME lint_zhao_geom_loom
 set_tests_properties(lint_zhao_geom_loom PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# --------------------------------------------------------------------------
+# GEOM.LOOM's NODE-STREAM CARRIER -- zhao_console_core entry I50, owner
+# rulings R58 and R69.
+#
+# SW.STREAM stages the topologically sorted node stream in HPS DDR; a CSR
+# mailbox names it; hardware acknowledges. The DUT is the carrier WITH THE REAL
+# LOOM behind it, because both of its hard laws are statements about the loom's
+# own S_RUN/S_DRAIN behaviour and a mock would have been written to agree with
+# whatever the carrier does -- which is exactly how the first draft of law 4
+# came to be backwards. What IS played here is the HPS-DDR bridge.
+set(ZHAO_LOOMFEED_SOURCES
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_loomfeed.sv
+    ${ZHAO_LOOM_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_loomfeed_chain.sv)
+
+add_executable(test_geom_loomfeed_directed geometry/geom_loomfeed_directed.cpp)
+target_link_libraries(test_geom_loomfeed_directed PRIVATE zhao_harness)
+verilate(test_geom_loomfeed_directed
+  PREFIX Vtb_geom_loomfeed_chain
+  TOP_MODULE tb_geom_loomfeed_chain
+  SOURCES ${ZHAO_LOOMFEED_SOURCES})
+add_test(NAME geom_loomfeed_directed COMMAND test_geom_loomfeed_directed)
+set_tests_properties(geom_loomfeed_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# THE POSITIVE CONTROL for `ret_overflow_o`. INVERTED POLARITY: it passes when
+# the counter FIRES. Its DUT is the committed mutant, whose one substantive
+# change is the removal of the return credit.
+add_executable(test_geom_loomfeed_mutant_control geometry/geom_loomfeed_mutant_control.cpp)
+target_link_libraries(test_geom_loomfeed_mutant_control PRIVATE zhao_harness)
+verilate(test_geom_loomfeed_mutant_control
+  PREFIX Vtb_geom_loomfeed_mutant
+  TOP_MODULE tb_geom_loomfeed_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_loomfeed_mutant.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/mutants/tb_geom_loomfeed_mutant.sv)
+add_test(NAME geom_loomfeed_mutant_control COMMAND test_geom_loomfeed_mutant_control)
+set_tests_properties(geom_loomfeed_mutant_control PROPERTIES LABELS "fast;mutant" TIMEOUT 600)
+
+add_test(NAME lint_zhao_geom_loomfeed
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_loomfeed
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_loomfeed.sv)
+set_tests_properties(lint_zhao_geom_loomfeed PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 # MATERIAL.RESOLVE's REQUEST ISSUE POINT and RESPONSE JOIN (core entry I49).

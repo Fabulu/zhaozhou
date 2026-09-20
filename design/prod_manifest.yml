@@ -331,6 +331,12 @@ top:
   # pattern). Counted because zhao_console_core instantiates it and it
   # closes entry I42: the loader and both directory phases have an owner.
   - zhao_field_doorbell
+  # GEOM.LOOM's NODE-STREAM CARRIER (owner rulings R58 and R69, on the same
+  # R14 doorbell pattern). Counted because zhao_console_core instantiates it
+  # and it closes entry I50: SW.STREAM's topologically sorted stream reaches
+  # the loom from HPS DDR as client 4 of the terrain arbiter, at a frozen
+  # 64-byte record, instead of arriving as 672 bits of console port.
+  - zhao_geom_loomfeed
   # The long-op services are listed INDIVIDUALLY rather than through
   # zhao_field_v3_svcpath. That composition exists to test wiring: it carries a
   # deliberate RIVAL agent on the multiplier bank so refusal is reachable, and
