@@ -15206,3 +15206,21 @@ add_test(NAME lint_geom_drawjob
     ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_drawjob.sv)
 set_tests_properties(lint_geom_drawjob PROPERTIES
   LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# ---------------------------------------------------------------------------
+# GEOM.WARP -- the REFERENCE half only (owner directive
+# reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt, owner commit
+# 4c256137; ratified in reports/OWNER-RATIFICATION-20260920-WARP.md).
+#
+# This is the directive's COMMIT A gate and nothing more: "reference tests/
+# decoder/program hash/map tests pass; NO RTL CLAIM YET". There is deliberately
+# no verilate() here, because there is no zhao_geom_warp.sv at this commit --
+# see FINDINGS-warp.md for the shared Field host prerequisites that block it.
+#
+# It links zhao_zref only (the pattern of field_crater_ring / field_fplan_diff):
+# every fixture is assembled as a real .zprog image and pushed through the REAL
+# zfield::decode validator, so nothing here is asserted past the decoder.
+add_executable(test_geom_warp_reference_directed geometry/geom_warp_reference_directed.cpp)
+target_link_libraries(test_geom_warp_reference_directed PRIVATE zhao_zref)
+add_test(NAME geom_warp_reference_directed COMMAND test_geom_warp_reference_directed)
+set_tests_properties(geom_warp_reference_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
