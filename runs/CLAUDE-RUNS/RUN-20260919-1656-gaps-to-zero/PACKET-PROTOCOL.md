@@ -6,7 +6,9 @@ root. This file is the brief's common half; your prompt carries only your lane.
 
 ## The goal and the two rules that were broken most often
 
-Drive `python tools/budget/completion_register.py` from **61** to zero.
+Drive `python tools/budget/completion_register.py` to zero. It opened this run
+at **61**; at 2026-09-20 morning it reads **27** (14 tie-offs + 11 disconnected
++ 2 unbuilt). Quote the number you measured, never this one.
 
 1. **Never close a gap by removing, narrowing, stubbing, tying off or
    disconnecting function.** A gap closes when a REAL producer drives a REAL
@@ -69,10 +71,26 @@ End every commit message with:
 | console-board lint (see handover §4, and "Lint, both halves") | waived: silent RC 0 |
 | `powershell -NoProfile -ExecutionPolicy Bypass -File tests/prod/run_console_core_smoke.ps1` | PASS, `raster pixels=2560` (reference-derived by `smoke_geom_fixture_gen.cpp`; ctest `smoke_geom_fixture_fresh`), `frames_admitted=1` |
 | the same script with `-Mutant` | PASS (the slot-overflow mutant wrapper fires; it went 129 ports stale because nothing ran it) |
+| `-BadVertex`, `-NoEchoArm`, `-BadTraceArm` | PASS — the three other committed controls. **Every new switch needs its own build-directory TAG** in the script, or it silently shares the plain run's object directory |
+| `python tools/design/gen_shell_paired_diff.py --check` | fresh (regenerate after ANY shell port change — three packets were stopped by a stale one) |
+| `python tools/budget/check_case_labels.py` | OK (ruling R62: a `"caseN:"` label must sit in block N) |
+| `npm run abi:check` | clean, if you touched `spec/commands.zidl` |
 
 Plus your own directed test for anything you built, linted with `-Wall`
 explicitly (`verilate()` does not pass it). Any new guard/counter must be seen
 to FIRE — by stimulus, or by a committed mutant under `tests/mutants/`.
+
+**RULING R60: the directed tests must BUILD and RUN, not merely lint.** The
+static gate set is all Python plus Verilator lint and it stayed green through a
+merge that broke `cmd_exec_directed`'s braces, so the test was not running at
+all. Build and run `test_cmd_exec_directed` plus your own lane's directed tests
+at the commit you push, and quote their check counts.
+
+**A port you add to a block adds a PINMISSING to every bench that instantiates
+it.** `zhao_cmd_exec` gained five trace ports and `tb_cmd_exec_pair` was not
+updated, so the whole verilate step failed on the merged tree — on a file the
+packet never touched. Grep the tree for every instantiation of anything whose
+ports you change, benches included, and connect them.
 
 ## Traps (full list in handover §5)
 
