@@ -114,6 +114,21 @@
 // counters, the handshake free-slot argument. Where v1's comment said why, the
 // why is unchanged and not repeated here — read v1 alongside this file.
 //
+//
+// RE-LIFTED 2026-09-20 and verified IDENTICAL. mutant_copy_drift.py flagged
+// this copy after the terrain7 merge touched production. It was re-lifted from
+// zhao_terrain_bake_v2.sv by script, renamed, and the one mutation re-applied
+// -- and the result was BYTE-IDENTICAL to what was already here, because
+// terrain7's changes were in production's HEADER and a copy keeps its own.
+// So the alarm was PROVENANCE, not content: the tool compares commit dates and
+// cannot see that a body is already current. That is the safe direction for it
+// to fail in, and this line is what clears it honestly rather than by a
+// cosmetic diff. The re-lift script REFUSES if production no longer carries the
+// line being mutated, which is the check that would have mattered.
+//
+// AND SEE RULING R93: nothing in 	ests/ drives this mutant. One grep hit --
+// this file. It demonstrates nothing until it has a driver, and the next
+// terrain packet decides between giving it one and retiring it.
 // Conservative SystemVerilog subset only (charter §2).
 
 module zhao_terrain_bake_v2_mutant (
