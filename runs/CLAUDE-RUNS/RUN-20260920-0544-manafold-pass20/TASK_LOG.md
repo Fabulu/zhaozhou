@@ -89,3 +89,36 @@ Items 2 and 3 unchanged. Continuing from orientation, not restarting.
 - The single production consumption point for carrier heights is
   `swallow_nodules(g, swal[5], lean_pm)` (manafold_clips.h:1824), described as
   keeping everything "under the same F/A/B/C/E public mute and attachment law".
+
+### 2026-09-20 - Pass 20 closed
+**Nothing ships on by default; the bank is byte-identical to pre-pass.**
+
+- **Item 1 (rip):** root cause found and named -- ARC vs CHORD. The rear span's
+  rest length `kRearSocketFromCMm` is an arc (1010 mm) while
+  `finalize_rear_follow` measures a chord, so a band that should BOW when the
+  loop closes is told to SHORTEN, by up to 662 mm (66% of itself). The skin
+  folds to 0.129 of rest length at ring 49. Three repairs built, measured and
+  rejected (span travel limit, carrier calm, deep bias) -- all recorded with
+  their ladders as committed negative controls.
+- **Why pass 19 missed it:** every rear metric is built from ring CENTROIDS,
+  which cancel a surface fold. No leg of the 128-leg matrix measured a posed
+  surface at all. New R4 STRAIN gate (mask 0x8) fixes that, with two floors so
+  it cannot be read as blessing the defect, and a fired control.
+- **Items 2+3 (dip, particles):** built, gated (R5 DIP, mask 0x10, fired
+  control), C2, exact loop seam, generalised from Taunt III's crown shuffle as
+  instructed. SHIP OFF: enabling the dip reds three mspan legs at ANY strength,
+  including the signed-span contract. Enable with `ZHAO_U02_KNEAD_DIP_PM=1000`.
+- **All 11 gate normals green.** Renderer MD5 `6fe99845defe8ab0f9b49b73d86b4cc8`.
+- **Not done:** the 22-subject bank, encode, merge, deploy. Correctly so --
+  there is no visible change to publish.
+- **Found en route:** the pass-19 recorded CRCs do not reproduce in this tree
+  (pre-edit binary gives hover 0xA2D0E051 vs P19's 0x40E1DBF1). Predates this
+  pass. Chase before the next bank render.
+
+### Gate matrix: 140/140 PASS, 0 FAIL
+Including `n-mrear-dip` (R5 judged with the dip enabled), the two new controls
+(`--fail-rear-strain` mask 0x9 declared, `--fail-no-dip` mask 0x10) and nine new
+strict selectors. The pass-19 rear controls' declared masks were updated
+honestly: `--fail-rear-frame` 0x3 -> 0xB, `--fail-rear-joint` 0x2 -> 0xA,
+because those mutations genuinely strain the skin too -- a new true category,
+not a moved goalpost.
