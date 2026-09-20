@@ -1745,7 +1745,7 @@ int main(int argc, char** argv) {
       zref::render::Viewport vp[2];
       const uint32_t n = zref::render::viewports_of(m, vp);
       if (id >= n) { org = 0; ext = 0; return false; }
-      org = (static_cast<uint32_t>(vp[id].y) << 16) | static_cast<uint32_t>(vp[id].x);
+      org = (static_cast<uint32_t>(vp[id].y0) << 16) | static_cast<uint32_t>(vp[id].x0);
       ext = (static_cast<uint32_t>(vp[id].h) << 16) | static_cast<uint32_t>(vp[id].w);
       return true;
     };
@@ -1849,7 +1849,7 @@ int main(int argc, char** argv) {
       // Duo's view 1 is at y = 192, NOT x = 256 -- the stacked stored surface.
       zref::render::Viewport vp[2];
       (void)zref::render::viewports_of(zhao_abi::VIDEO_DUO, vp);
-      const uint32_t org = (static_cast<uint32_t>(vp[1].y) << 16) | static_cast<uint32_t>(vp[1].x);
+      const uint32_t org = (static_cast<uint32_t>(vp[1].y0) << 16) | static_cast<uint32_t>(vp[1].x0);
       check(r.rects[0].data == org, "case34: and it is the STACKED origin, y=192 and not x=256",
             org, r.rects[0].data);
     }
