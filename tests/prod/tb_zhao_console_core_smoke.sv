@@ -1056,6 +1056,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_rp_triangles_out_o, geom_rp_refused_o, geom_rp_missed_o;
   logic [31:0] geom_rp_att_skew_o, geom_rp_view_bad_o;
   logic [31:0] geom_rp_poisoned_o;
+  logic [31:0] geom_rp_triq_stall_o;   // R57: the descriptor queue's backpressure
   // GEOM.ATTRPACK's evidence, out of the core because a counter nobody can
   // read is not evidence. The RATIO is what gets asserted below.
   logic [31:0]             geom_attrpack_triangles_o;

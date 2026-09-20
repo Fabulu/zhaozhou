@@ -722,6 +722,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_rp_view_bad_o,
   // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
   output logic [31:0]             geom_rp_poisoned_o,
+  // R57: a TriangleDescriptor refused because the two-meshlet descriptor queue
+  // was full. Backpressure, never a drop -- and the instrument that says the
+  // queue's sizing assumption (twice MAX_TRIANGLES) still holds.
+  output logic [31:0]             geom_rp_triq_stall_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
