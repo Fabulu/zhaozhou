@@ -16,7 +16,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from module_graph import build, strip_comments  # noqa: E402
+from module_graph import build, load, strip_comments  # noqa: E402
 from check_ownership_roles import (  # noqa: E402
     ElaborationError,
     RoleManifestError,
@@ -648,6 +648,29 @@ def apply_parameterized_elaboration(decl, edges, tops, parameter_overrides):
     other roots retain the conservative graph. The exact flattened cell set is
     installed as the root's closure so false generate arms cannot masquerade as
     production hardware or force their candidate sources into the production fit.
+
+    THE SENTENCE ABOVE WAS ONLY TRUE WHILE THE FALSE ARM WAS A DIRECT CHILD, and
+    that was luck, not design. `selected[root] = exact` replaces the ROOT's edge
+    set; `closure()` then walks each member of `exact` through its own
+    CONSERVATIVE edges, so every false arm one level further down comes straight
+    back in. It was invisible while the only overridden root was
+    `zhao_texture_island_v3_top`, whose false `BILERP_DSP2` arm hangs off the
+    root itself. R86 moved the root up to `zhao_shell_top_v2` on 2026-09-20 and
+    the promise failed immediately: Verilator elaborated 77 cells, and
+    `closure()` returned 82 -- `zhao_texture_bilerp_lane_dsp2`, `zhao_dual18_mul`,
+    `zhao_mul27_exact`, `zhao_attr_mul72x13_dsp3` and `zhao_raster_attrgrad_dsp3`,
+    every one of them the unselected arm of a DSP-versus-logic choice. Five
+    modules the fitter will never build, about to be counted as the console's
+    DSPs on a device already 35% over its DSP ceiling.
+
+    So the exact set is returned as a CLOSURE in its own right (third element of
+    every observation, which is what callers must use for an elaborated root)
+    rather than as an edge substitution the graph walk can undo. It is not
+    narrowed into the shared edge map, because the same module can be composed
+    twice with different parameters -- `zhao_texture_island_v3_top` is also
+    instantiated by a generated fit instrument whose BILERP_DSP2 is a knob -- and
+    a global narrowing would hide a real edge somewhere else, which is this
+    repository's standing failure shape wearing the repair's clothes.
     """
     selected = {module: set(children) for module, children in edges.items()}
     observations = []
@@ -683,6 +706,28 @@ def apply_parameterized_elaboration(decl, edges, tops, parameter_overrides):
     return selected, observations
 
 
+def exact_closures(observations):
+    """``{root: exact flattened closure}`` for every elaborated production root.
+
+    Built from the observations rather than from a fourth return value so the
+    two-tuple contract other callers rely on does not move.
+    """
+    return {root: set(reachable) for root, _overrides, reachable in observations}
+
+
+def selected_closure(edges, root, exact=None):
+    """The closure to COUNT for ``root``.
+
+    Exact when the root was elaborated with its pinned production parameters,
+    conservative otherwise. Anything asking "what is in the machine" must come
+    through here; ``closure()`` alone re-expands an elaborated root's children
+    through both arms of every generate they contain.
+    """
+    if exact and root in exact:
+        return set(exact[root])
+    return closure(edges, root)
+
+
 
 def generated_top_direct_modules(text):
     """Modules instantiated directly by the generated accounting top.
@@ -699,7 +744,7 @@ def generated_top_direct_modules(text):
     ))
 
 
-def check_fit_sources(decl, edges=None,
+def check_fit_sources(decl, edges=None, exact=None,
                       top_path="fpga/rtl/prod/zhao_prod_top.sv",
                       yml="design/fit_targets.yml"):
     """Every module in the GENERATED production top's INSTANTIATION CLOSURE must
@@ -756,10 +801,64 @@ def check_fit_sources(decl, edges=None,
     # instantiates has to be compiled too, or elaboration stops -- and Quartus
     # reports that as a missing module, which reads like a typo rather than a
     # source-list gap.
+    # An elaborated root contributes its EXACT cells. Demanding the unselected
+    # arm's file too would be harmless for Quartus and misleading for a reader:
+    # a source list is read as the bill of materials, and it should not name a
+    # module the fitter is guaranteed not to build.
     inst = set(direct)
     if edges:
         for m in direct:
-            inst |= closure(edges, m)
+            inst |= selected_closure(edges, m, exact)
+
+    # ---- AND THE PACKAGES THEY IMPORT ---------------------------------------
+    # A MODULE IS NOT THE ONLY THING A SOURCE LIST HAS TO CARRY, and this gate
+    # could not see the other kind. On 2026-09-20 the R86 shell swap put
+    # `zhao_shell_top_v2.sv` into the production closure; its line 132 reads
+    # `import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;` and
+    # `zhao_fb_tuple_pkg.sv` was not in the list. This function printed OK, and
+    # Verilator said `Import package not found` -- the same shape as the 2026-09-09
+    # zhao_skid2 repair one declaration kind over: a gate that inspects one kind
+    # of dependency is not a gate on the dependencies, and it reads exactly like
+    # one.
+    #
+    # Scanned from the FILES of the closure, not from the module graph, because
+    # `module_graph.build()` only ever looks for instantiations -- a package is
+    # never instantiated, so no amount of graph work can reach it.
+    # SCANNED FROM THE DIRECTORY, NOT FROM `decl`, and the first version of this
+    # got it wrong in the flattering direction: `decl` maps MODULE names to
+    # files, and a pure package file declares no module, so `zhao_abi_pkg.sv`
+    # and `zhao_fb_tuple_pkg.sv` were not in it at all. Every package therefore
+    # resolved to None and was skipped as "not ours", and the gate reported
+    # clean on a list missing every one of them. The positive control below
+    # caught it on its first run, which is the entire argument for having one.
+    pkg_decl = {}
+    for path, text in sorted(load("fpga/rtl").items()):
+        body = strip_comments(text)
+        for name in re.findall(r"^\s*package\s+(\w+)\s*;", body, re.M):
+            pkg_decl.setdefault(name, path)
+
+    closure_files = {decl[m] for m in inst if m in decl} | {top_path}
+    imported = set()
+    for path in sorted(closure_files):
+        try:
+            with io.open(path, encoding="utf-8", errors="replace") as stream:
+                body = strip_comments(stream.read())
+        except OSError:
+            continue
+        for clause in re.findall(r"\bimport\b([^;]*);", body):
+            imported.update(re.findall(r"(\w+)\s*::", clause))
+    for name in sorted(imported):
+        src = pkg_decl.get(name)
+        if src is None:
+            # Not ours to resolve -- a package this tree does not declare is a
+            # different problem and saying so here would be a guess.
+            continue
+        if src not in listed:
+            out.append(
+                "package '%s' (%s) is IMPORTED by the generated production "
+                "top's closure but is NOT in zhao_prod_top's source list in "
+                "design/fit_targets.yml -- the fit would die at elaboration "
+                "with 'Import package not found'" % (name, src))
 
     for m in sorted(inst):
         src = decl.get(m)
@@ -782,6 +881,66 @@ def check_fit_sources(decl, edges=None,
                 "design/fit_targets.yml -- the fit would die at elaboration"
                 % (m, src, how))
     return out
+
+
+def _fit_sources_package_self_test(decl, edges, exact=None,
+                                   yml="design/fit_targets.yml"):
+    """FIRE the package half of check_fit_sources before believing its silence.
+
+    The import walk added on 2026-09-20 is a detector, and a detector that has
+    not been seen to fire has not been tested -- this file's own history is the
+    argument: the MODULE half of this gate printed OK for months on a list that
+    was missing `zhao_skid2`, and the PACKAGE half printed OK on a list missing
+    `zhao_fb_tuple_pkg` the day it was needed.
+
+    So one package line is removed from a COPY of the real target and the real
+    check is run against it. It is a positive control on live data: if the walk
+    ever stops matching the `import a::*, b::*;` form -- a rename, a changed
+    regex, a comment stripper that eats the clause -- this refuses to run rather
+    than reporting a reassuring nothing.
+    """
+    try:
+        with io.open(yml, encoding="utf-8", errors="replace") as stream:
+            text = stream.read()
+    except OSError:
+        return ["fit-target manifest unreadable, so its package gate is unproven"]
+    lines = text.split("\n")
+    try:
+        start = next(i for i, l in enumerate(lines)
+                     if l.strip() == "- top: zhao_prod_top")
+        end = next(i for i in range(start + 1, len(lines))
+                   if lines[i].startswith("  - top:"))
+    except StopIteration:
+        return ["no zhao_prod_top target, so its package gate is unproven"]
+    victim = None
+    for i in range(start, end):
+        m = re.fullmatch(r"\s+-\s+(fpga/rtl/\S*pkg\.sv)\s*", lines[i])
+        if m:
+            victim = (i, m.group(1))
+            break
+    if victim is None:
+        return ["zhao_prod_top lists no package at all -- either the closure "
+                "genuinely imports none (check that) or this control is blind"]
+    index, path = victim
+    name = os.path.basename(path)[:-3]
+    doctored = "\n".join(lines[:index] + lines[index + 1:])
+    tmp = os.path.join(os.path.dirname(os.path.abspath(yml)),
+                       ".fit_targets.pkg_control.tmp.yml")
+    try:
+        with io.open(tmp, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(doctored)
+        fired = [e for e in check_fit_sources(decl, edges, exact, yml=tmp)
+                 if name in e and "Import package not found" in e]
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+    if not fired:
+        return ["PACKAGE GATE IS DEAD: removing %s from zhao_prod_top's source "
+                "list produced no complaint, so this checker's silence about "
+                "packages is worth nothing" % path]
+    return []
 
 
 def check_top_fresh(command=None):
@@ -889,11 +1048,13 @@ def main():
         except (OSError, RoleManifestError, ElaborationError) as exc:
             errors.append("production parameter elaboration is invalid: %s" % exc)
 
+    exact = exact_closures(parameter_elaboration_observations)
+
     inside = {}
     for t in tops:
         if t not in decl:
             continue
-        for m in closure(edges, t):
+        for m in selected_closure(edges, t, exact):
             inside.setdefault(m, []).append(t)
 
     # A top that is also inside another top would be counted twice -- once
@@ -925,7 +1086,8 @@ def main():
     # The manifest gate and the fit source list were one step apart and only
     # the first of them was mechanical. This closes the gap: whatever the
     # generated top instantiates must be compilable.
-    errors.extend(check_fit_sources(decl, edges))
+    errors.extend(_fit_sources_package_self_test(decl, edges, exact))
+    errors.extend(check_fit_sources(decl, edges, exact))
     errors.extend(check_top_fresh())
 
     accounted = set(tops) | set(inside) | set(excluded)

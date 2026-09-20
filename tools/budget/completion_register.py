@@ -605,6 +605,20 @@ _ALIAS: dict[str, str | None] = {
     # port ({epoch, island, ix, iz} key, SEQW claim sequence, pin/unpin) and do
     # NOT match v1's {px, py} lookup at all. `zhao_prod_top` instantiates v2.
     "TERRAIN.RESIDENCY": "zhao_terrain_residency_v2",
+    # TERRAIN.BAKE FOLLOWS THE SELECTED CENSUS, 2026-09-20, owner ruling R86.
+    # This alias makes the number NEITHER smaller NOR larger -- both modules are
+    # unconnected today, so the capability is a gap either way -- and that is
+    # exactly why it has to be written now rather than when it closes. The
+    # convention resolves TERRAIN.BAKE to `zhao_terrain_bake`, which
+    # `design/console_inventory.yml` records as `superseded_by:
+    # zhao_terrain_bake_v2` and `design/prod_manifest.yml` now excludes on that
+    # ground. Leaving the alias unwritten means the gap would be CLOSEABLE BY
+    # WIRING THE SUPERSEDED MODULE, and the register would have said "connected"
+    # -- which is the defect `superseded_in_closure()`'s docstring confesses to,
+    # arriving a second time by the same route. Checked against blocks.yml's own
+    # TERRAIN.BAKE row: its contract, directed and random tests are shared by
+    # both implementations, so nothing in that row prefers v1.
+    "TERRAIN.BAKE":      "zhao_terrain_bake_v2",
     "GEOM.POSE":         "zhao_geom_pose_decode",
     # GEOM.PROJECT IS THE SHARED SERVICE'S CLIENT A, BY OWNER RULING. Resolved
     # 2026-09-19 (geom packet). THIS MAKES THE NUMBER SMALLER, so it carries
@@ -875,6 +889,196 @@ def superseded_in_closure() -> list[tuple[str, list[str]]]:
     return out
 
 
+def newer_versions(mod: str, on_disk: set[str]) -> list[str]:
+    """Higher-versioned siblings of `mod` that exist on disk, in both shapes.
+
+    ONE COPY, because there were three and they had to be kept in step by
+    somebody remembering -- which is how `superseded_in_closure()` and
+    `superseded_in_prod_fit()` came to hold byte-identical loops.
+    """
+    newer: list[str] = []
+    for cand in on_disk:
+        if cand == mod:
+            continue
+        # suffix:  <mod>_v2, <mod>_v3, ...
+        if re.fullmatch(re.escape(mod) + r"_v(\d+)", cand):
+            newer.append(cand)
+            continue
+        # infix:   zhao_<sub>_v3_<rest>  against  zhao_<sub>_<rest>
+        m = re.fullmatch(r"(zhao_[a-z0-9]+)_v(\d+)_(.+)", cand)
+        if m and "%s_%s" % (m.group(1), m.group(3)) == mod:
+            newer.append(cand)
+    return sorted(newer)
+
+
+def ledger_superseded() -> dict[str, str]:
+    """`{module: superseded_by}` from `design/console_inventory.yml`.
+
+    THE THIRD NAMING SHAPE, AND THE ONLY ONE THAT IS NOT A CONVENTION.
+    `newer_versions()` keys on the FILENAME -- `_v2` suffix, `_v3_` infix -- and
+    CLAUDE.md already warns that a grep for one finds half. It is worse than
+    half, because this tree also supersedes with no version number anywhere in
+    the name:
+
+        zhao_mem_share2    -> zhao_mem_share_n      (owner ruling R4)
+        zhao_hps_arbiter   -> zhao_hps_arbiter_n    (the same ruling)
+        zhao_geom_project  -> zhao_proj_subsystem   (owner ruling R3)
+        zhao_terrain_project -> zhao_proj_subsystem (owner ruling R3)
+
+    A shape check is structurally blind to all four. The ledger is not a
+    convention -- it is a declared fact with a cited ruling beside it -- so
+    reading it back is the check that cannot be fooled by a rename. And reading
+    it back is the whole point: on 2026-09-20 `zhao_prod_top` composed
+    `zhao_geom_project` AND `zhao_terrain_project`, each of which the ledger
+    describes as "a second projector", ~6,100 ALM and 33 DSP apiece, while
+    `check_console_inventory` printed "the latest version is the one wired".
+    """
+    inv = ROOT / "design" / "console_inventory.yml"
+    if not inv.exists():
+        return {}
+    out: dict[str, str] = {}
+    cur = None
+    disposition = None
+    for line in inv.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"^  (zhao_\w+):\s*$", line)
+        if m:
+            cur, disposition = m.group(1), None
+            continue
+        if cur is None:
+            continue
+        d = re.match(r"^\s+disposition:\s*(\S+)\s*$", line)
+        if d:
+            disposition = d.group(1)
+            continue
+        s = re.match(r"^\s+superseded_by:\s*(\S+)\s*$", line)
+        if s and disposition == "superseded":
+            out[cur] = s.group(1)
+    return out
+
+
+def declaring_file(mod: str) -> pathlib.Path | None:
+    """The .sv file that DECLARES `mod`, not the one whose stem matches it.
+
+    `p.stem` is right for almost every module here and wrong for the ones that
+    matter: `zhao_mem_share_n` is declared inside `zhao_mem_share2.sv`, and
+    `zhao_sys_pll_simclk` inside `zhao_sys_pll.sv`. A stem lookup returns None
+    for those, and a root that returns None gets SKIPPED -- silence in the
+    flattering direction, which is the whole family of defect this file is
+    about.
+    """
+    return _declaration_index().get(mod)
+
+
+_DECL_INDEX: dict[str, pathlib.Path] = {}
+
+
+def _declaration_index() -> dict[str, pathlib.Path]:
+    """`{module: file}` for every module under fpga/rtl, built once.
+
+    Cached because the sweep asks this of ~140 roots and the uncached version
+    re-read every file each time.
+    """
+    if _DECL_INDEX:
+        return _DECL_INDEX
+    pat = re.compile(r"^\s*module\s+(\w+)", re.M)
+    for p in sorted(RTL.rglob("*.sv")):
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for name in pat.findall(text):
+            _DECL_INDEX.setdefault(name, p)
+    return _DECL_INDEX
+
+
+def production_roots() -> list[str]:
+    """Every root whose closure the console SHIPS or PRICES.
+
+    R86, 2026-09-20: *"extend the superseded check to EVERY root, not just the
+    core: a blind spot the size of a top-level is not a gap in coverage, it is a
+    second machine nobody audits."*
+
+    WHAT "EVERY ROOT" HAD TO MEAN, because the literal reading is a check that
+    cries wolf and therefore a check nobody runs. `design/fit_targets.yml` has
+    ~100 `- top:` rows and most of them are LEAF MEASUREMENTS or retained
+    ORACLES -- `zhao_texture_tmu_pipe` and `zhao_raster_rcp24_v3` are kept
+    precisely because they are the superseded version, and a gate that fails on
+    them is teaching people to pass `--no-verify` to their own instrument.
+
+    So the fatal set is the set of roots that CLAIM TO BE THE MACHINE:
+
+      * `zhao_console_board` -- the only module in this tree that could be
+        programmed onto hardware;
+      * `zhao_console_core`  -- the machine inside it (already covered by
+        `superseded_in_closure()`, kept here so the two cannot drift);
+      * `zhao_prod_top`      -- what R80's completion fit actually measures;
+      * every `top:` in `design/prod_manifest.yml` -- the owner's own list of
+        "exactly one chosen implementation of every intended production block".
+        If one of THOSE wires a superseded module, the superseded module is in
+        the console by the manifest's own definition.
+
+    Everything else in `design/fit_targets.yml` is reported separately and is
+    not fatal, so the blind spot stays visible without the gate going soft.
+    """
+    roots = {BOARD_ROOT, CONSOLE_ROOT, "zhao_prod_top"}
+    manifest = ROOT / "design" / "prod_manifest.yml"
+    if manifest.exists():
+        text = manifest.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"^top:\s*$", text, re.M)
+        if m:
+            for line in text[m.end():].splitlines():
+                if re.match(r"^[A-Za-z_]", line):      # the next section
+                    break
+                hit = re.match(r"^\s{2}-\s+(zhao_\w+)\s*$", line)
+                if hit:
+                    roots.add(hit.group(1))
+    return sorted(roots)
+
+
+def advisory_roots() -> list[str]:
+    """Fit-target tops that are NOT production roots: instruments and oracles."""
+    if not TARGETS.exists():
+        return []
+    text = TARGETS.read_text(encoding="utf-8", errors="replace")
+    tops = set(re.findall(r"^\s*-\s*top:\s*(zhao_\w+)\s*$", text, re.M))
+    return sorted(tops - set(production_roots()))
+
+
+def superseded_in_roots(
+    roots: list[str] | None = None,
+) -> tuple[list[tuple[str, str, list[str]]], list[str]]:
+    """`(root, wired_module, newer)` for every root, plus roots not found.
+
+    A root is asked only about what IT INSTANTIATES, one file deep, for the same
+    reason `superseded_in_closure()` gives: a module in a source list that
+    nothing elaborates costs the fitter nothing, and a check that cries wolf
+    about dead sources is one people learn to skip. The transitive case is
+    covered because every intermediate module of the production hierarchy is
+    itself a `top:` in the manifest and therefore itself a root here.
+    """
+    on_disk = {p.stem for p in RTL.rglob("*.sv")}
+    ledger = ledger_superseded()
+    out: list[tuple[str, str, list[str]]] = []
+    unfound: list[str] = []
+    for root in (roots if roots is not None else production_roots()):
+        path = declaring_file(root)
+        if path is None:
+            unfound.append(root)
+            continue
+        for mod in sorted(instantiated_in([path])):
+            if mod == root:
+                continue
+            # BOTH SIGNALS, UNIONED. The shape check finds what the ledger has
+            # not been told about yet; the ledger finds what no filename could
+            # express. Either alone reads clean on half of this tree.
+            newer = newer_versions(mod, on_disk)
+            if mod in ledger and ledger[mod] not in newer:
+                newer = sorted(newer + [ledger[mod]])
+            if newer:
+                out.append((root, mod, newer))
+    return out, unfound
+
+
 def superseded_in_prod_fit(
     core_hits: list[tuple[str, list[str]]] | None = None,
 ) -> list[tuple[str, list[str]]]:
@@ -904,15 +1108,12 @@ def superseded_in_prod_fit(
     cashed. `zhao_prod_top` is GENERATED, so it wears a reassuring provenance
     line while doing it.
 
-    REPORTED, NOT FATAL, and deliberately so. Turning it fatal today would put
-    a pre-existing condition in every concurrent worker's path for a defect
-    none of them caused, which is the "never close one gap by opening another"
-    rule applied to instruments. The swap is an owner/coordinator decision --
-    it moves the production fit's closure and area and it touches three
-    generated files several lanes gate on. **TURN THIS FATAL once that decision
-    lands**, exactly as `superseded_in_closure()`'s own docstring says of
-    itself; a report nobody is forced to read is how the v1 datapath got
-    composed in the first place.
+    IT IS FATAL SINCE 2026-09-20, and it is no longer alone: the decision landed
+    (owner ruling R86), the swap is committed, and `superseded_in_roots()` above
+    asks the same question of every production root rather than of this one.
+    This function is retained because it names the incident, and because a
+    narrow re-derivation of the same query is a cheap independent check on the
+    general one.
 
     Same two naming shapes, same INSTANTIATED-not-listed rule, same reasons.
     """
@@ -1292,16 +1493,33 @@ def audit() -> dict:
     # function and folding it in would make the headline number mean two
     # things. It is its own list, and it gates the exit code beside the total.
     sup = superseded_in_closure()
+    _root_hits = superseded_in_roots()
     return {
         "tieoffs_total": len(ties),
         "tieoff_gaps": len(gaps),
         "mandatory_gaps": total,
         "superseded_composed": [[mod, list(newer)] for mod, newer in sup],
-        # The production fit's own root, reported beside the core's and NOT in
-        # the exit code -- see superseded_in_prod_fit()'s docstring for why it
-        # is not fatal yet and what has to happen before it is.
+        # The production fit's own root, reported beside the core's. FATAL since
+        # 2026-09-20 (owner ruling R86); see superseded_in_prod_fit()'s docstring.
         "superseded_in_prod_fit": [
             [mod, list(newer)] for mod, newer in superseded_in_prod_fit(sup)],
+        # EVERY production root, not just the two we happened to know about.
+        # `superseded_roots_unfound` is not cosmetic: a root whose file cannot
+        # be located is a root that was NOT CHECKED, and a silent skip there
+        # reads exactly like a clean result.
+        "superseded_in_roots": [[root, mod, list(newer)]
+                                for root, mod, newer in _root_hits[0]],
+        "superseded_roots_unfound": list(_root_hits[1]),
+        "superseded_roots_checked": production_roots(),
+        # ASKED, AND REPORTED WITHOUT BEING FATAL. An earlier draft listed these
+        # as "not checked", which is a truthful label on a useless field: a list
+        # of roots nobody asked is precisely the blind spot R86 is about. They
+        # are asked; they do not gate, because most are leaf measurements and
+        # retained oracles that exist BECAUSE they are the superseded version.
+        "superseded_in_advisory_roots": [
+            [root, mod, list(newer)]
+            for root, mod, newer in superseded_in_roots(advisory_roots())[0]],
+        "superseded_roots_advisory": advisory_roots(),
         "closure_modules": len(closure),
         "by_kind": {k: sum(1 for t in ties if t["kind"] == k)
                     for k in sorted({t["kind"] for t in ties})},
@@ -1477,6 +1695,43 @@ def _blind_root_self_test() -> None:
     if _done({"mandatory_gaps": 3, "superseded_composed": []}) != 1:
         bad.append("_done returned SUCCESS with gaps remaining")
 
+    # 4. THE R86 ROOT SWEEP, FIRED IN EVERY DIRECTION IT CAN FAIL IN.
+    #    A detector that has not been seen to fire has not been tested, and this
+    #    one replaces a check that was deliberately non-fatal -- so its silence
+    #    is exactly the claim that needs the hardest evidence.
+    if _done({"mandatory_gaps": 0, "superseded_composed": [],
+              "superseded_in_roots": [["zhao_root", "zhao_old",
+                                       ["zhao_old_v2"]]]}) != 1:
+        bad.append("_done returned SUCCESS with a superseded module wired in a "
+                   "production root (R86)")
+    if _done({"mandatory_gaps": 0, "superseded_composed": [],
+              "superseded_in_prod_fit": [["zhao_old", ["zhao_old_v2"]]]}) != 1:
+        bad.append("_done returned SUCCESS with a superseded module wired in "
+                   "zhao_prod_top -- the defect R86 was written about")
+    #    A root nobody could find is NOT a clean root. This is the half a
+    #    `continue` would have swallowed.
+    if _done({"mandatory_gaps": 0, "superseded_composed": [],
+              "superseded_roots_unfound": ["zhao_vanished"]}) != 1:
+        bad.append("_done returned SUCCESS with a production root that was "
+                   "never checked at all")
+
+    # 5. newer_versions() IS THE ONE PREDICATE ALL THREE CHECKS RESTITE ON.
+    #    Both naming shapes, and the two near-misses that must NOT match: a
+    #    module whose name merely starts with another's, and a lower version.
+    shapes = {"zhao_field_len": ({"zhao_field_len", "zhao_field_v3_len"},
+                                 ["zhao_field_v3_len"]),
+              "zhao_shell_top": ({"zhao_shell_top", "zhao_shell_top_v2"},
+                                 ["zhao_shell_top_v2"]),
+              "zhao_terrain_bake": ({"zhao_terrain_bake",
+                                     "zhao_terrain_bake_delta"}, []),
+              "zhao_geom_binner_v2": ({"zhao_geom_binner_v2",
+                                       "zhao_geom_binner"}, [])}
+    for mod, (disk, want) in shapes.items():
+        got = newer_versions(mod, disk)
+        if got != want:
+            bad.append("newer_versions(%s) = %s, expected %s"
+                       % (mod, got, want))
+
     if bad:
         sys.stderr.write("completion_register BLIND-ROOT SELF-TEST FAILED:\n")
         for b in bad:
@@ -1552,9 +1807,17 @@ def _done(rep: dict) -> int:
     Zero gaps is necessary and not sufficient: a superseded module in the
     closure blocks completion too, because fitting an old version measures a
     machine nobody ships.
+
+    SINCE 2026-09-20 (owner ruling R86) that applies to EVERY production root,
+    not only the console core's closure, and a root whose file could not be
+    found is treated as a failure rather than as a pass. A check that skips what
+    it cannot locate reports the same thing as a check that found nothing wrong.
     """
     return 0 if (rep["mandatory_gaps"] == 0
-                 and not rep["superseded_composed"]) else 1
+                 and not rep["superseded_composed"]
+                 and not rep.get("superseded_in_prod_fit")
+                 and not rep.get("superseded_in_roots")
+                 and not rep.get("superseded_roots_unfound")) else 1
 
 
 def main(argv: list[str]) -> int:
@@ -1590,11 +1853,46 @@ def main(argv: list[str]) -> int:
         print("provenance line while doing this.")
         for mod, newer in pfs:
             print("   wired    %-30s superseded by %s" % (mod, ", ".join(newer)))
-        print("REPORTED, NOT FATAL: the swap moves the production fit's closure")
-        print("and area and touches generated files several lanes gate on, so it")
-        print("is the coordinator's.  TURN THIS FATAL once that decision lands.")
+        print("FATAL SINCE 2026-09-20, owner ruling R86.  The production fit's")
+        print("root is what R80 measures; an old version there makes the area")
+        print("number wrong in the direction nobody questions.")
         print("-" * 74)
         print()
+
+    roots = [(root, mod, newer)
+             for root, mod, newer in rep["superseded_in_roots"]]
+    unfound = rep["superseded_roots_unfound"]
+    if roots or unfound:
+        print("!" * 74)
+        print("SUPERSEDED MODULES ARE WIRED IN A PRODUCTION ROOT -- %d hit(s)"
+              % len(roots))
+        print("across %d roots checked (owner ruling R86: 'extend the superseded"
+              % len(rep["superseded_roots_checked"]))
+        print("check to EVERY root ... a blind spot the size of a top-level is")
+        print("not a gap in coverage, it is a second machine nobody audits').")
+        for root, mod, newer in roots:
+            print("   %-24s wires %-28s superseded by %s"
+                  % (root, mod, ", ".join(newer)))
+        for root in unfound:
+            print("   %-24s NOT CHECKED -- no file declares this module, so its"
+                  % root)
+            print("   %-24s silence is not evidence" % "")
+        print("THIS ALONE MAKES THE EXIT CODE NONZERO, however many gaps remain.")
+        print("!" * 74)
+        print()
+    else:
+        print("superseded check: %d production roots CLEAN"
+              % len(rep["superseded_roots_checked"]))
+
+    adv = rep["superseded_in_advisory_roots"]
+    print("    %d further fit-target tops asked, NOT fatal (leaf measurements"
+          % len(rep["superseded_roots_advisory"]))
+    print("    and retained oracles, kept BECAUSE they are the old version)"
+          "  -- %d hit(s)" % len(adv))
+    for root, mod, newer in adv:
+        print("      note   %-26s wires %-26s superseded by %s"
+              % (root, mod, ", ".join(newer)))
+    print()
 
     print("zhao_console_core closure modules : %d" % rep["closure_modules"])
     if rep["board_addition_modules"]:
