@@ -1370,15 +1370,39 @@
 //      own list of inventions opens with it: "the error metric -- what number
 //      goes in a bucket. Charter says 'candidate error buckets' and stops."
 //
-//      IT IS REFUSED RATHER THAN WIRED, and this is the reason that decides it.
-//      Charter section 9 Version 1 has the ARM predict a PIXEL-error threshold
-//      PER CAMERA from these counters. Putting a world-space terrain page
-//      deviation into that organ would close this entry and put the WRONG
+//      IT WAS REFUSED RATHER THAN WIRED, and this is the reason that decided
+//      it. Charter section 9 Version 1 has the ARM predict a PIXEL-error
+//      threshold PER CAMERA from these counters. Putting a world-space terrain
+//      page deviation into that organ would close this entry and put the WRONG
 //      QUANTITY in it, and NOTHING WOULD CATCH IT, because the block is
 //      metric-agnostic by design. That is this contract's own named failure
 //      mode -- "two blocks disagreeing about one policy" -- manufactured
 //      deliberately. A gap closed by a producer that is real but WRONG is worse
 //      than an open gap.
+//
+//      RULING R70 (provisional, coordinator, 2026-09-20) ANSWERS IT: the v1
+//      metric IS the terrain page-load LOD deviation. So the quantity above is
+//      no longer "wrong" -- it is the ratified one, and the charter's
+//      screen-space pixel error per camera becomes the v2 refinement the
+//      governor will want, which needs a projector-side residual nothing
+//      computes (R68 work, not wiring).
+//
+//      THREE THINGS THE RULING REQUIRES OF WHOEVER CLOSES THIS, and it is the
+//      TERRAIN lane's work, not the debug lane's -- their stream, their block:
+//
+//        1. the metric is written into `spec/` as the v1 definition, with the
+//           interval's `src_id` recording which source an interval came from,
+//           so the ratification is a document and not a wiring decision;
+//        2. the width adaptation is declared: three lanes of four carry
+//           `dev1/2/3` zero-extended 24 to 32 and the fourth `lane_valid`
+//           stays low. The log2 bucketing makes that a constant shift of the
+//           bin index and no change of shape, which is why it is an adaptation
+//           and not an invention -- say so where it is done;
+//        3. CHECK FIRST THAT THE SMOKE'S STIMULUS DRIVES MIPFEED'S FINE STREAM
+//           AT ALL. hostdbg explicitly did NOT verify that, its three pages
+//           fault on CRC, and the smoke prints no mip counter. A traverse
+//           quoted against a stream that never moves is the gap re-opened
+//           under a green gate.
 //
 //      DO NOT READ THIS ENTRY AS "BUILD A PRODUCER". One exists, it is tested,
 //      and building a second would be the duplication `uncashed_cheques.py`
