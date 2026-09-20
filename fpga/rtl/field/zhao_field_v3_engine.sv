@@ -324,6 +324,24 @@ module zhao_field_v3_engine #(
   /* verilator lint_off UNUSEDSIGNAL */
   logic [31:0] svc_bank_grants, svc_bank_stalls;
   logic        svc_rival_grant, svc_rival_rsp;
+
+  // The two halves of the engine's numeric ledger, ORed after both
+  // instantiations. See the assignment below for why this stopped being one
+  // wire straight from the executor.
+  logic        exec_sat_add, exec_sat_mul, exec_sat_rescale;
+  logic        svc_sat_add,  svc_sat_mul,  svc_sat_rescale;
+
+  // Read by the service path's directed test at its own boundary; it has no
+  // host counter yet. Named rather than hidden -- see the port connection.
+  //
+  // NO lint_off PAIR OF ITS OWN: this declaration is already inside the
+  // UNUSEDSIGNAL waiver opened above. Adding a nested pair CLOSES that waiver
+  // early -- Verilator's lint_on does not nest, it just switches the warning
+  // back on -- which re-exposed the three engine_* signals below and produced
+  // four warnings that looked pre-existing and were not. Caught by running
+  // -Wall against HEAD~1 and finding the baseline CLEAN.
+  logic [31:0] svc_pad_status_masked;
+
   logic [31:0] engine_lane_stalls, engine_bank_grants;
   logic        engine_rival_grant, engine_rival_rsp;
   logic [7:0]  engine_bank_tag;
@@ -362,7 +380,10 @@ module zhao_field_v3_engine #(
       .skid_clocks_o(skid_clocks_o),
       .rival_grant_o(engine_rival_grant), .rival_rsp_o(engine_rival_rsp),
       .lane_stalls_o(engine_lane_stalls),
-      .sat_add_o(sat_add_o), .sat_mul_o(sat_mul_o), .sat_rescale_o(sat_rescale_o),
+      // THE EXECUTOR'S HALF of the numeric ledger. It used to BE the ledger;
+      // see the OR below for what was missing from it.
+      .sat_add_o(exec_sat_add), .sat_mul_o(exec_sat_mul),
+      .sat_rescale_o(exec_sat_rescale),
       .bank_tag_o(engine_bank_tag), .bank_grants_o(engine_bank_grants),
 
       // SEAM 1: the long op leaves, and the release brings the context back.
@@ -415,8 +436,40 @@ module zhao_field_v3_engine #(
       .tl_x_i(tl_x_i), .tl_y_i(tl_y_i), .tl_dy_i(tl_dy_i),
       .tl_commit_i(tl_commit_i), .tl_n_i(tl_n_i),
       .sb_we_i(sb_we_i), .sb_waddr_i(sb_waddr_i), .sb_wdata_i(sb_wdata_i),
-      .sb_bad_o(sb_bad_o), .imm_bad_o(imm_bad_o)
+      .sb_bad_o(sb_bad_o), .imm_bad_o(imm_bad_o),
+
+      // THE LONG OPS' HALF of the numeric ledger, new on 2026-09-20.
+      .svc_sat_add_o(svc_sat_add), .svc_sat_mul_o(svc_sat_mul),
+      .svc_sat_rescale_o(svc_sat_rescale),
+      // The mask's positive control. It is read by the service path's own
+      // directed test, which drives zhao_field_v3_svcpath as its top and can
+      // therefore see this port directly. Promoting it to a host counter
+      // beside `wrong_op_o` needs a host port and a console port, which are
+      // H1's and C1's acts; it is named here rather than silently dropped.
+      .pad_status_masked_o(svc_pad_status_masked)
   );
+
+  // ---- ONE NUMERIC LEDGER FOR THE WHOLE ENGINE ----------------------------
+  //
+  // THIS OR IS THE REPAIR. Until 2026-09-20 these three outputs carried the
+  // EXECUTOR'S saturation and nothing else, while all seven services on the
+  // long-op path computed per-lane saturation that `zhao_field_v3_svcpath`
+  // terminated in `*_unused` wires.
+  //
+  // The host latches these into `sat_o` and the console exports them as
+  // `fld_sat_o`, so a caller asking "did this program saturate?" was answered
+  // by the scalar ALU alone. A curve, spline, normalize, rot, ring or length
+  // op could saturate in every point of every group and the ledger still read
+  // clean. That is a broken instrument reading LOW -- the direction CLAUDE.md
+  // says nobody audits -- and it is why this is a correctness repair and not a
+  // new feature.
+  //
+  // The two halves are ORed and not merged upstream deliberately: the executor
+  // and the service path retire on different clocks, and a single shared
+  // register would be a detector whose two operands move independently.
+  assign sat_add_o     = exec_sat_add     | svc_sat_add;
+  assign sat_mul_o     = exec_sat_mul     | svc_sat_mul;
+  assign sat_rescale_o = exec_sat_rescale | svc_sat_rescale;
 
 
   assign mul_grants_o      = svc_bank_grants;

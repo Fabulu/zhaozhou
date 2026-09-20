@@ -115,6 +115,9 @@ struct Dut {
     t.svc_ready_i = 0;
     t.rsp_valid_i = 0;
     t.wb_ready_i = 0;
+    t.rsp_sat_add_i = 0;
+    t.rsp_sat_mul_i = 0;
+    t.rsp_sat_rescale_i = 0;
     t.eval();
     for (int i = 0; i < 4; ++i) zhao::tick(t);
     t.rst_n = 1;
@@ -188,11 +191,17 @@ struct Dut {
     t.eval();
   }
 
-  /** Hand back four lanes of results with the given tag. */
+  /** Hand back four lanes of results with the given tag, and optionally the
+      per-point numeric status that travels with them. The status defaults to
+      clean, so every existing caller is unchanged. */
   void reply(uint8_t tag, const int32_t r0[kLanes], const int32_t r1[kLanes],
-             const int32_t r2[kLanes]) {
+             const int32_t r2[kLanes], uint8_t sat_add = 0, uint8_t sat_mul = 0,
+             uint8_t sat_rescale = 0) {
     t.rsp_valid_i = 1;
     t.rsp_tag_i = tag;
+    t.rsp_sat_add_i = sat_add;
+    t.rsp_sat_mul_i = sat_mul;
+    t.rsp_sat_rescale_i = sat_rescale;
     for (int l = 0; l < kLanes; ++l) {
       t.rsp_r0_i[l] = (uint32_t)r0[l];
       t.rsp_r1_i[l] = (uint32_t)r1[l];
@@ -203,6 +212,9 @@ struct Dut {
     while (!t.rsp_ready_o && guard++ < 64) step();
     step();
     t.rsp_valid_i = 0;
+    t.rsp_sat_add_i = 0;
+    t.rsp_sat_mul_i = 0;
+    t.rsp_sat_rescale_i = 0;
     t.eval();
   }
 
@@ -754,6 +766,131 @@ int main(int argc, char** argv) {
     check(tags[2] != tags[1], "and the third from the second", 1, tags[2] != tags[1] ? 1 : 0);
     printf("   MEASURED tags: %u, %u, %u\n", tags[0], tags[1], tags[2]);
     check(d.t.groups_o == 3u, "three groups issued", 3, (int)d.t.groups_o);
+  }
+
+  printf("== section 12: the services' NUMERIC STATUS, masked to the live lanes ==\n");
+  {
+    // FT039 / FT045 at the dispatcher, and the repair of a defect that was NOT
+    // a missing feature.
+    //
+    // Every service on the long-op path has always computed per-lane
+    // saturation. `zhao_field_v3_svcpath` terminated all of it in `*_unused`
+    // wires, so `zhao_field_host`'s `sat_o` -- exported by the console as
+    // `fld_sat_o` -- described the scalar ALU and nothing else. A NORMALIZE or
+    // a RING could saturate in every point and the ledger still read clean.
+    //
+    // The status is captured HERE, with the data, because this is the only
+    // block that knows how many lanes of the group are real: a short group is
+    // padded to four with the PAD_* constants, and padding arithmetic is real
+    // arithmetic that can raise real flags.
+    //
+    // BOTH POLARITIES ARE DRIVEN WITH LEGAL STIMULUS. The status inputs are
+    // ports of this block, so no mutant is needed to reach either case -- the
+    // same reply is delivered twice with the flag on a padded lane and then on
+    // a live one, and only the lane moves.
+    int32_t r[kLanes] = {0x11, 0x22, 0x33, 0x44};
+
+    // --- a PADDED lane raises a flag: it must reach nothing ----------------
+    Dut d(top);
+    d.reset();
+    d.offer({0, 5, 0, 0}, OP_CURVE, 7);  // ONE live context of four lanes
+    d.t.flush_i = 1;
+    d.t.eval();
+    bool got = d.take_request();
+    check(got, "status: the one-context group issued", 1, got ? 1 : 0);
+    uint8_t tag = (uint8_t)d.t.svc_tag_o;
+    d.accept_request();
+    d.t.flush_i = 0;
+    d.t.eval();
+
+    // Lane 3 is padding -- only lane 0 holds a point.
+    d.reply(tag, r, r, r, /*sat_add=*/0x8);
+    d.drain();
+
+    check(d.t.svc_sat_add_o == 0,
+          "FT045: a PADDED lane's saturation does not reach the fabric ledger", 0,
+          (int)d.t.svc_sat_add_o);
+    check(d.t.pad_status_masked_o == 1u,
+          "and the mask says so out loud -- pad_status_masked_o FIRED", 1,
+          (uint32_t)d.t.pad_status_masked_o);
+
+    // --- the SAME flag on a LIVE lane: it must reach the ledger ------------
+    //
+    // This is the check that separates "the mask works" from "the status path
+    // is dead". Without it, a capture that dropped EVERYTHING would pass the
+    // two checks above perfectly.
+    d.offer({1, 6, 0, 0}, OP_CURVE, 7);
+    d.t.flush_i = 1;
+    d.t.eval();
+    got = d.take_request();
+    check(got, "status: the second one-context group issued", 1, got ? 1 : 0);
+    tag = (uint8_t)d.t.svc_tag_o;
+    d.accept_request();
+    d.t.flush_i = 0;
+    d.t.eval();
+
+    d.reply(tag, r, r, r, /*sat_add=*/0x1);  // lane 0 IS live
+    d.drain();
+
+    check(d.t.svc_sat_add_o == 1,
+          "a LIVE lane's saturation DOES reach the fabric ledger", 1,
+          (int)d.t.svc_sat_add_o);
+    check(d.t.pad_status_masked_o == 1u,
+          "and it was not miscounted as padding", 1, (uint32_t)d.t.pad_status_masked_o);
+
+    // --- the three causes stay APART ---------------------------------------
+    //
+    // The reference keeps add, mul and rescale in separate ledger lanes and
+    // `zhao_field_rcp.sv` records why: a block that returned the right number
+    // in the wrong lane would still be wrong. A single merged "something
+    // saturated" bit would pass every check above.
+    check(d.t.svc_sat_mul_o == 0, "a saturating ADD is not reported as a MUL", 0,
+          (int)d.t.svc_sat_mul_o);
+    check(d.t.svc_sat_rescale_o == 0, "nor as a RESCALE", 0, (int)d.t.svc_sat_rescale_o);
+
+    Dut e(top);
+    e.reset();
+    e.offer({2, 7, 0, 0}, OP_CURVE, 7);
+    e.t.flush_i = 1;
+    e.t.eval();
+    got = e.take_request();
+    check(got, "status: the rescale group issued", 1, got ? 1 : 0);
+    tag = (uint8_t)e.t.svc_tag_o;
+    e.accept_request();
+    e.t.flush_i = 0;
+    e.t.eval();
+    e.reply(tag, r, r, r, /*sat_add=*/0, /*sat_mul=*/0, /*sat_rescale=*/0x1);
+    e.drain();
+    check(e.t.svc_sat_rescale_o == 1, "a RESCALE saturation lands in the RESCALE lane", 1,
+          (int)e.t.svc_sat_rescale_o);
+    check(e.t.svc_sat_add_o == 0, "and not in the ADD lane", 0, (int)e.t.svc_sat_add_o);
+    check(e.t.svc_sat_mul_o == 0, "nor the MUL lane", 0, (int)e.t.svc_sat_mul_o);
+
+    // --- and a clean run leaves the ledger clean ---------------------------
+    //
+    // The detector must be capable of reading ZERO, or every check above is
+    // satisfied by a bit that is simply stuck high.
+    Dut f(top);
+    f.reset();
+    check(f.t.svc_sat_add_o == 0, "after reset the fabric ledger is CLEAR", 0,
+          (int)f.t.svc_sat_add_o);
+    check(f.t.pad_status_masked_o == 0u, "and so is the pad counter", 0,
+          (uint32_t)f.t.pad_status_masked_o);
+    f.offer({3, 8, 0, 0}, OP_CURVE, 7);
+    f.t.flush_i = 1;
+    f.t.eval();
+    got = f.take_request();
+    check(got, "status: the quiet group issued", 1, got ? 1 : 0);
+    tag = (uint8_t)f.t.svc_tag_o;
+    f.accept_request();
+    f.t.flush_i = 0;
+    f.t.eval();
+    f.reply(tag, r, r, r);  // no status at all
+    f.drain();
+    check(f.t.svc_sat_add_o == 0, "a clean response leaves the ledger clean", 0,
+          (int)f.t.svc_sat_add_o);
+    check(f.t.pad_status_masked_o == 0u, "and the pad counter unmoved", 0,
+          (uint32_t)f.t.pad_status_masked_o);
   }
 
   return zhao::report_and_exit("field_v3_dispatch_directed");

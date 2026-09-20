@@ -380,5 +380,134 @@ int main(int argc, char** argv) {
     }
   }
 
+  printf("== section 6: FT014 -- EVERY ADVERTISED OPCODE HAS A LIVE ROUTE ==\n");
+  {
+    // FT014 is "every advertised canonical opcode has a live request/service/
+    // result path", and the directive is explicit that it must be established
+    // from ACTUAL SERVICE DISPATCH rather than from the table
+    // (section 5.5: "All other long op routes must be verified from actual
+    // service dispatch, not only from field_long_width. A classified opcode
+    // with no live consumer fails structural conformance.").
+    //
+    // So this is a census WITH A DRIVER. Reading `field_long_width` and
+    // reading the service predicates and observing that they match is exactly
+    // the kind of two-table comparison that produced the SPLINE/RING deadlock
+    // in the first place -- both lists agreed with themselves and neither was
+    // executed.
+    //
+    // Each opcode is OFFERED and then followed to the per-service counter that
+    // owns it. `svc_taken_o` is indexed 0 noise, 1 curve, 2 normalize, 3 rot,
+    // 4 ring, 5 trig, 6 len.
+    //
+    // THIS LIST MIRRORS zhao_field_ops_pkg::field_long_width BY HAND, and that
+    // is deliberate: if the table gains an opcode and this list does not, the
+    // total below disagrees and the test says so. A list generated from the
+    // same source it is checking would prove nothing.
+    struct Adv {
+      uint8_t op;
+      const char* name;
+      int svc;
+    };
+    static const Adv kAdv[] = {
+        {0x12, "LEN2", 6},       {0x13, "LEN3", 6},   {0x14, "DIST2", 6},
+        {0x15, "NORMALIZE2", 2}, {0x16, "NORMALIZE3", 2},
+        {0x18, "SIN", 5},        {0x19, "COS", 5},
+        {0x1A, "CURVE", 1},      {0x1B, "SPLINE", 1}, {0x1D, "DCURVE", 1},
+        {0x1C, "NOISE2", 0},     {0x22, "RIDGE", 0},
+        {0x28, "ROT2", 3},       {0x29, "ROT3", 3},
+        {0xF1, "RING_PREP", 4},
+    };
+    static const char* kSvcName[7] = {"noise", "curve", "normalize", "rot",
+                                      "ring",  "trig",  "len"};
+    int per_svc[7] = {0, 0, 0, 0, 0, 0, 0};
+
+    for (const Adv& a : kAdv) {
+      Dut d(top);
+      d.reset(POL_DRAIN_FIRST);
+      const std::string w = std::string("FT014 ") + a.name;
+
+      const bool ok = d.offer({0, 0x00012345, 0x00023456}, a.op, 8, 0u);
+      check(ok, (w + ": the fabric ACCEPTS it").c_str(), 1, ok ? 1 : 0);
+      if (!ok) continue;
+
+      d.t.flush_i = 1;
+      d.t.eval();
+      for (int i = 0; i < 200; ++i) d.step();
+      d.t.flush_i = 0;
+      d.t.eval();
+
+      check(d.t.groups_o == 1u, (w + ": one group was issued").c_str(), 1, (int)d.t.groups_o);
+
+      // THE CHECK THAT MATTERS: it reached the service that OWNS it, not
+      // merely some service. A routing table that sent every op to the noise
+      // unit would satisfy "a group was issued" perfectly -- and did, once:
+      // the "not curve" arm of an earlier mux answered NORMALIZE and ROT with
+      // noise values.
+      const uint32_t mine = d.t.svc_taken_o[a.svc];
+      check(mine >= 1u, (w + ": reached the " + kSvcName[a.svc] + " service").c_str(), 1,
+            mine);
+
+      // And NO OTHER service took it.
+      uint32_t others = 0;
+      for (int s = 0; s < 7; ++s)
+        if (s != a.svc) others += d.t.svc_taken_o[s];
+      check(others == 0u, (w + ": and NO other service took it").c_str(), 0, others);
+
+      check(d.t.wrong_op_o == 0, (w + ": wrong_op_o stayed clear").c_str(), 0,
+            (int)d.t.wrong_op_o);
+      if (mine >= 1u && others == 0u) per_svc[a.svc]++;
+    }
+
+    printf("   MEASURED routes: noise %d, curve %d, normalize %d, rot %d, ring %d, "
+           "trig %d, len %d\n",
+           per_svc[0], per_svc[1], per_svc[2], per_svc[3], per_svc[4], per_svc[5],
+           per_svc[6]);
+
+    int total = 0;
+    for (int s = 0; s < 7; ++s) total += per_svc[s];
+    check(total == 15, "FT014: all FIFTEEN advertised opcodes have a live route", 15,
+          (uint32_t)total);
+    for (int s = 0; s < 7; ++s)
+      check(per_svc[s] > 0,
+            (std::string("FT014: the ") + kSvcName[s] + " service answers at least one op")
+                .c_str(),
+            1, per_svc[s] > 0 ? 1 : 0);
+
+    // --- AND THE OTHER DIRECTION: an opcode NOT in the table is REFUSED -----
+    //
+    // This is the half that makes the census meaningful. "Everything is
+    // accepted" is not conformance, it is an absent guard; the table's zero
+    // width must actually refuse, or a wrong width would write the wrong
+    // number of registers -- a corruption rather than an error.
+    //
+    // 0x17 and 0x21 are the two canonical opcodes this fabric does NOT yet
+    // implement, and their refusal here is the standing evidence for that:
+    //   OP_RCP  (0x17) -- canonical reciprocal, no service on this path
+    //   OP_RING (0x21) -- varying-radius ring; needs a per-point reciprocal,
+    //                     where UOP_RING_PREP (0xF1) above has two prepared
+    //                     once by software. They are NOT the same op.
+    struct Ref {
+      uint8_t op;
+      const char* name;
+    };
+    static const Ref kRefused[] = {
+        {0x17, "OP_RCP (canonical reciprocal, absent)"},
+        {0x21, "OP_RING (varying radius, absent)"},
+        {0x01, "OP_MOV (a short op, never a long one)"},
+        {0xFE, "0xFE (no such opcode)"},
+    };
+    for (const Ref& r : kRefused) {
+      Dut d(top);
+      d.reset(POL_DRAIN_FIRST);
+      const std::string w = std::string("FT014 ") + r.name;
+      const bool ok = d.offer({0, 0x00012345, 0x00023456}, r.op, 8, 0u, 64);
+      check(!ok, (w + ": is REFUSED, not guessed at").c_str(), 0, ok ? 1 : 0);
+      check(d.t.groups_o == 0u, (w + ": and no group was issued").c_str(), 0,
+            (int)d.t.groups_o);
+      check(d.t.wrong_op_o == 0, (w + ": refused BEFORE any service saw it").c_str(), 0,
+            (int)d.t.wrong_op_o);
+    }
+  }
+
   return zhao::report_and_exit("field_v3_svcpath_directed");
 }
