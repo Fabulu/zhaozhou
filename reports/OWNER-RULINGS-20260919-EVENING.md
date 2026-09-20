@@ -1622,3 +1622,163 @@ found in the campaign, and it is worth about a seventh of the whole device.**
 functionally — that is `tests/forge/forge_cliff_ram_differential.cpp`'s job, and
 Verilator's, not Quartus's. Declared in the plan before the run and repeated here
 so no one reads a fitted number as a correctness result.
+
+## R143 — THE PRE-FIT PRECONDITION IS UNMET AGAIN, and the register is RIGHT to say so
+
+**2026-09-20, on merging H1.** `superseded check` went **0 → 2**:
+`zhao_console_core` and `zhao_prod_top` both wire `zhao_field_host`, now
+superseded by `zhao_field_host_v2`.
+
+**This is not a regression in the gate. It is the gate working.** Verified
+directly: `zhao_console_core.sv` references `zhao_field_host` **ten times** and
+`zhao_field_host_v2` **zero** times. The console genuinely does compose a
+superseded module right now, and R86 exists exactly to stop a console being
+fitted in that state.
+
+**So I am NOT teaching `completion_register.py` to honour the exception, and the
+precondition I declared met four hours ago is UNMET again until C1 composes.**
+Saying otherwise would be closing a gate by narrowing it — the campaign's first
+prohibition, applied to a gate instead of to RTL.
+
+**H1 did nothing wrong.** Building the new host without composing it is exactly
+what the FIELD plan assigns: `zhao_console_core.sv` is C1's **serialised,
+never-concurrent** act, the response bus changes width (`OUT_ORDINALS`, not
+`OUT_LANES`) and gains three ports, so the composition, both adapters and both
+generated tops must move together or the next fit finds a `PINMISSING`. H1 doing
+that concurrently is the live-tree hazard this run has already paid for twice.
+
+### TWO GATES NOW DISAGREE, and that is its own defect
+
+* `check_console_inventory.py` → **RC 0.** It reads `version_exceptions` and
+  honours H1's entry.
+* `completion_register.py` → **RC 1.** Its R86 superseded check **does not read
+  that section at all.**
+
+**A reader can now quote whichever gate suits the answer they want.** That is
+worse than either verdict alone, and it is the same family as a checker that
+looks one way down its own comparison. **Recorded rather than resolved**, because
+resolving it means choosing which gate is authoritative, and that is an owner-
+level call about what `version_exceptions` is *for*:
+
+* if it means *"this is fine, stop reporting it"* → the register should read it,
+  and R86 gets a documented escape hatch;
+* if it means *"this is a declared, time-boxed debt"* → the register is right to
+  stay fatal and **`check_console_inventory.py` is the one that is too lenient.**
+
+**My recommendation is the second.** An exception that silences the gate which
+guards fitting is an exception that will one day be fitted through. A declared
+debt that keeps the gate red is self-extinguishing: it cannot be forgotten,
+because nothing ships past it.
+
+### H1's own entry is the best-behaved version of this I have seen
+
+It is written as **a work item with a deletion condition**, not a settlement:
+*"WHAT REMOVES THIS ENTRY: C1 composing `zhao_field_host_v2` and regenerating
+`gen_prod_top.py` and `gen_console_board.py`. Deleting these lines is part of that
+packet's definition of done, and if this entry is still here after C1 has landed,
+the composition did not happen and this file is the only thing that will say so."*
+
+**That is how an exception should read.** It names who removes it, what removing
+it requires, and what its continued presence proves. Deleting it is now part of
+C1's definition of done.
+
+**And it carries a parser trap worth keeping:** `version_exceptions` entries
+**silently register as NOTHING if nested**, because that section's parser matches
+`^  (\S+):\s*(.+)$` — the reason must be on the SAME LINE — while the `modules:`
+section directly above wants a nested `why:` block. **Two sections of one file,
+two incompatible shapes, and the wrong one fails silently in the reassuring
+direction**: the gate goes on failing while the file looks as though it carries
+an exception.
+
+## R144 — I CITED TWO RULINGS THAT DID NOT EXIST IN THE LANE'S BASE
+
+H1 reported that **R136 and R137 do not exist**, having searched the rulings
+file, all of `reports/`, and every `.md`. It was right about its base: `1a021945`
+ends at **R132**.
+
+They exist now — the file runs to R142 with no duplicates, verified — but I wrote
+them into H1's brief **as binding** before they were in the commit the lane would
+branch from. **I briefed from my working tree's future.**
+
+**Third instance of this family today**, each in a different direction:
+* **R106** — me citing an *unmerged branch* as tree state;
+* **R128** — a packet citing *its own base* as current;
+* **this** — me citing *my own uncommitted rulings* as though a lane could read them.
+
+The common root is that **a citation is a claim about a specific tree, and none
+of us has been dating them.** H1 did the right thing and the thing that makes
+this cheap: it **verified the underlying facts directly** rather than trusting the
+numbers, so the work is sound and only the provenance was wrong.
+
+**The fix is the same one R130 prescribed and it needs extending to citations:**
+a brief must cite rulings by *content* as well as number, or state the commit
+they landed in. A bare number is unverifiable by the reader and looks
+authoritative — which is precisely how R117 laundered an inherited claim.
+
+## R145 — `rcp0` is FOUR unassigned files, not one, and the lane that owned them has closed
+
+**2026-09-20, H1.** I wrote into two briefs that *"one piece of work unblocks
+both"* OP_RCP and OP_RING — the `sat_o` widening. **That understated it, and H1
+measured the difference rather than accepting the framing.**
+
+`rcp0` has **no port at all** on `svcpath`, `dispatch`, `core` or `engine`. It
+stops dead at `zhao_field_v3_svcpath.sv:437` as `nm_rcp0_unconsumed`. So the
+chain is **four files**, not one widened field.
+
+**H1 built and proved the DESTINATION** — `num_status_o[3]`, demonstrated in both
+polarities and deliberately **not folded into saturation**, because a reciprocal-
+by-zero and an arithmetic saturation are different facts and merging them is the
+mismatched-quantity error this run keeps finding.
+
+**But the four fabric files are F1's territory, and F1 has closed.** So this is
+now **unassigned work sitting between two finished packets** — precisely the kind
+of gap that a run loses when both lanes report success and neither owns the seam.
+H1 left the recipe in its FINDINGS: it mirrors `sat_rescale` exactly, and the
+ports are outputs.
+
+**Routed to C1**, which already owns the composition edits and both generated
+tops, so the port chain lands in the same serialised act rather than as a fifth
+concurrent lane touching `zhao_console_core.sv`.
+
+**Until it lands, FT040 cannot pass for any route** and OP_RCP/OP_RING stay
+correctly unrouted — proven, not asserted, by F1's driver-backed census (15
+opcodes routed, 4 refused).
+
+## R146 — a `6'(64) == 0` bound that was CONSTANT-FALSE, and would have silently killed FH06
+
+H1 found a width-truncated comparison that can never be true: `6'(64)` is `0` in
+six bits, so the guard it forms is dead. **Had it shipped, it would have disabled
+FH06 — uniform outputs as results — entirely and silently**, which is the whole
+half of the host that L1 measured to be non-optional: every shipped Earth program
+has uniform outputs no window mask can observe.
+
+**It is the oracle's own `7'(128)` defect with the polarity reversed.** The same
+truncation mistake, in the same family of code, expressed the other way round —
+which means this is a *pattern in this codebase*, not a one-off slip, and a
+width-cast comparison against a power of two deserves a look everywhere it
+appears.
+
+**A constant-false guard is the exact mirror of today's dominant defect.** Nine
+instruments were found reading green while unable to see their fault; this is a
+guard that reads green because it can never fire *at all*. Both are silent, both
+are flattering, and both are invisible to any test that only exercises the
+passing path.
+
+## R147 — the `version_exceptions` PARSER TRAP, recorded because it fails in the reassuring direction
+
+Two sections of `design/console_inventory.yml` want **incompatible shapes**:
+
+* `modules:` wants a **nested `why:` block**;
+* `version_exceptions:` wants the reason **on the SAME LINE as the name** — its
+  parser at `check_console_inventory.py:153` matches `^  (\S+):\s*(.+)$`.
+
+**Write the nested form in the exceptions section and the entry registers as
+NOTHING.** No error, no warning. The gate goes on failing while the file looks as
+though it carries an exception — so the reader concludes the gate is broken, and
+the truth is that their entry was never read.
+
+**This is a trap that only fires in one direction**, and it is the flattering one
+for the file and the punishing one for the person: the document *appears* to have
+been updated. H1 wrote the shape requirement into the entry itself, which is the
+right place — beside the thing that must obey it, not in a tool's docstring
+nobody opens.
