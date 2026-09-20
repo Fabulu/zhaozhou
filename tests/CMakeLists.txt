@@ -9296,6 +9296,96 @@ set_tests_properties(lint_measure_governor PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ---------------------------------------------------------------------------
+# MEASURE.GOVERNOR's two INPUT-SIDE producers (post3, 2026-09-20).
+#
+# Both exist because `zhao_console_core.sv`'s I18 entry names them as the
+# reason the governor cannot be composed. Neither is composed yet -- the
+# governor's OUTPUT side is still the blocker (see FINDINGS-post3.md) -- so
+# these are built and tested standalone, which is CLAUDE.md's "build new blocks
+# standalone, wire several in at once".
+# ---------------------------------------------------------------------------
+set(ZHAO_MEASURE_STARVE_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_starve.sv)
+
+add_executable(test_measure_starve_directed measure/measure_starve_directed.cpp)
+target_link_libraries(test_measure_starve_directed PRIVATE zhao_harness)
+target_include_directories(test_measure_starve_directed PRIVATE
+                           ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_starve_directed
+  PREFIX Vzhao_measure_starve
+  TOP_MODULE zhao_measure_starve
+  SOURCES ${ZHAO_MEASURE_STARVE_SV})
+add_test(NAME measure_starve_directed COMMAND test_measure_starve_directed)
+set_tests_properties(measure_starve_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_measure_starve
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_measure_starve
+                 ${ZHAO_MEASURE_STARVE_SV})
+set_tests_properties(lint_measure_starve PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# The elaboration guard, FIRED. `--lint-only` does not run `initial` blocks
+# (CLAUDE.md), so a clean lint says nothing whatever about this check; the only
+# way to know it works is to break the parameter on purpose and watch it stop
+# the build. Run through the expect-fatal wrapper for the reason
+# early_desc_layout_guard records: Verilator's abort path does not return under
+# ctest's pipes on Windows.
+add_executable(test_measure_starve_mask_guard measure/measure_starve_directed.cpp)
+target_link_libraries(test_measure_starve_mask_guard PRIVATE zhao_harness)
+target_include_directories(test_measure_starve_mask_guard PRIVATE
+                           ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_starve_mask_guard
+  PREFIX Vzhao_measure_starve
+  TOP_MODULE zhao_measure_starve
+  SOURCES ${ZHAO_MEASURE_STARVE_SV}
+  VERILATOR_ARGS -GSTARVE_REASON_MASK=0)
+add_test(NAME measure_starve_mask_guard
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:test_measure_starve_mask_guard>
+    -DEXPECT=STARVE_REASON_MASK\ is\ zero
+    -DRUN_TIMEOUT=10
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
+set_tests_properties(measure_starve_mask_guard PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 120)
+
+# The wrapper's own negative control, exactly as early_desc does it: the
+# wrapper reports a pass on a process that never exits, so the branch that must
+# be shown to work is the one where the diagnostic is ABSENT. Pointed at the
+# healthy build, which runs the same module with a legal mask.
+add_test(NAME measure_starve_mask_guard_wrapper_control
+  COMMAND ${CMAKE_COMMAND}
+    -DEXE=$<TARGET_FILE:test_measure_starve_directed>
+    -DEXPECT=STARVE_REASON_MASK\ is\ zero
+    -DRUN_TIMEOUT=60
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_expect_fatal.cmake)
+set_tests_properties(measure_starve_mask_guard_wrapper_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 120 WILL_FAIL TRUE)
+
+set(ZHAO_VIEW_PROJQ88_SV
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projq88.sv)
+
+add_executable(test_view_projq88_directed measure/view_projq88_directed.cpp)
+target_link_libraries(test_view_projq88_directed PRIVATE zhao_harness)
+target_include_directories(test_view_projq88_directed PRIVATE
+                           ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_view_projq88_directed
+  PREFIX Vzhao_view_projq88
+  TOP_MODULE zhao_view_projq88
+  SOURCES ${ZHAO_VIEW_PROJQ88_SV})
+add_test(NAME view_projq88_directed COMMAND test_view_projq88_directed)
+set_tests_properties(view_projq88_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_view_projq88
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_view_projq88
+                 ${ZHAO_VIEW_PROJQ88_SV})
+set_tests_properties(lint_view_projq88 PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.DEPTHQUANT â€” w to canonical invw24 under the selected depth profile.
 # Checked against `zref::depth_of_raw`, the ratified law the golden captures
 # already pin, rather than against a second implementation of it.
