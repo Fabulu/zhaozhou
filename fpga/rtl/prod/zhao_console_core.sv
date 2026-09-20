@@ -1017,7 +1017,43 @@
 //   side.
 //
 
-//  I5. PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY, and the REASON
+// (I5 CLOSED 2026-09-20 (gz/field), under owner ruling R40. PART.UPDATE's
+//      field sample has a producer: `zhao_field_flow_adapter`, the F profile's
+//      stream adapter, composed as CLIENT 1 of the one `u_field_host`. The
+//      entry is kept in full below rather than deleted, because it names the
+//      exact thing that was missing and the next reader is owed the closure
+//      against it.
+//
+//      WHAT CLOSED IT, ITEM BY ITEM AGAINST THE ENTRY'S OWN TEXT:
+//
+//      * "nothing in this tree says which fields of the 128-bit particle128
+//        record become which registers". `spec/form/field-ir.md` 7.1 does, and
+//        it is ratified: the flow profile's input record is
+//        px,py,pz,vx,vy,vz:fx, age:u32, seed:u32, dt:fx, p0..p3:fx, mapped to
+//        R0.. in that order. The adapter presents exactly that, and it unpacks
+//        the record through `zhao_part_record` -- the one codec -- rather than
+//        re-slicing it.
+//      * "nor which registers the three s11 accelerations are read back from".
+//        7.1's output record is px',py',pz',vx',vy',vz':fx, attr0:fx, and R40
+//        rules the mapping: `acceleration = sat_s11((v' - v) >> 8)`, seed = the
+//        variation byte, dt = 1 tick. Every constant of it is a parameter of
+//        the adapter, because R40 is provisional and says particle motion is
+//        judged by eye.
+//      * "the host widened to 13 inputs / 7 outputs" -- R40 again, and done:
+//        `u_field_host` and both adapters carry IN_LANES 13 / OUT_LANES 7.
+//      * "the join is already solved" -- and it is written where the entry said
+//        a composer may write it, at PART.UPDATE below, with an identity guard
+//        (`part_fld_rec_changed_o`) whose two operands are clocked by different
+//        things so it can actually fire.
+//
+//      WHAT IS NOT CLOSED BY THIS AND IS NOT A GAP: the RATE. One particle per
+//      field run against PART.UPDATE's one per clock. `part_fld_stall_cycles_o`
+//      measures it, and the lever is the gathering front `zhao_field_host`'s
+//      header calls for, not this seam.
+//
+//      The original entry, unedited:
+//
+//      PART.UPDATE's field sample (`part_fld_*`) -- BOUNDARY, and the REASON
 //      CHANGED 2026-09-19. The old text said "FIELD.SEQ.FLOW is not composed",
 //      and that named a block `design/contracts/FIELD.SEQ.FLOW.md` rules will
 //      never exist: "one engine, five profiles ... There is no separate
@@ -1047,7 +1083,7 @@
 //      across." So a FLOW adapter needs NO new port on that block -- this file
 //      gates `in_valid_i` and PART.STATE's `prt_ready_i` on "the answer for
 //      THIS record is ready", and the record is held stable for the whole
-//      offer. That is a join a composer may write. The binding is not.
+//      offer. That is a join a composer may write. The binding is not.)
 //
 //  I9. PART.SPAWN's parent id (`par_id_i`) -- NOT a tie-off: the core assigns
 //      it. The particle128 record (amendment C2) carries no id field, so the
@@ -2075,6 +2111,80 @@
 //      block's contract asks for ("once per patch per frame, before the first
 //      record").
 //
+//      ---------------------------------------------------------------------
+//      WORKED 2026-09-20 (gz/field) AND STOPPED ON AN OWNER DECISION. Three
+//      things were established; the entry stays OPEN and is not half-built.
+//      Its two prerequisites, I42 and I5, are CLOSED above, so what remains is
+//      this seam alone.
+//
+//      (1) R44's MEANS DOES NOT FIT THIS SEAM, with evidence. The ruling says
+//      to "promote `zhao_probe_walk_earth`/`zhao_probe_patch_acc` out of
+//      `fpga/rtl/synth/` ... rather than rebuilding them". READ BOTH FILES
+//      BEFORE INHERITING THAT: they are the FIELD-MAJOR, FOUR-WIDE, WHOLE-PATCH
+//      topology of reports/Fieldv3.md Phase 4, and this console composes the
+//      VERTEX-MAJOR one.
+//        * `zhao_probe_walk_earth` GENERATES lattice points from two prepared
+//          33-entry tables, precisely to "delete that transport". But
+//          `zhao_terrain_patch` ALREADY OFFERS the point -- `vtx_valid_i` with
+//          `wx_i`/`wz_i`/`vi_i`/`vj_i` -- so on this seam the walker would be a
+//          second producer of a coordinate the consumer just handed over.
+//        * `zhao_probe_patch_acc` is not a feeder of this port, it is a
+//          REPLACEMENT FOR THE BLOCK BEHIND IT: four M10K banks by vertex mod
+//          4, sixteen RAMs, with its own height/velocity/material/nav_cost
+//          reducers and INIT/ACCUM/DRAIN phases. It has no `fld_height` lane
+//          because it IS the reducer `zhao_terrain_patch` already is, composed,
+//          fit-targeted and in the manifest.
+//        * The console's own FIELD parameterisation argues the other way too:
+//          `FAB_GROUP_PTS=1`, because this front holds one point in flight. The
+//          probes' four-wide group is the configuration that setting rejects.
+//      So promoting them is not a wiring act: it is swapping TERRAIN.PATCH's
+//      composed architecture for another one, which is an owner call and not a
+//      packet's. R44's GOAL -- do not rebuild what exists -- still stands, and
+//      on this seam the thing that already exists is TERRAIN.PATCH.
+//
+//      (2) THE FRAME TICK IS AVAILABLE, so that half of R44 is fine.
+//      `gpu_tick_o` is the shell's frame boundary (already `core_tick_c` in
+//      this file) and the shell publishes a frame id beside it, which
+//      PART.SPAWN's `tick_i` already consumes. `age = tick - start_tick` and
+//      the phase are computable from it.
+//
+//      (3) THE BLOCKER IS THE HANDLE -> PROGRAM-HASH MAPPING, AND IT HAS NO
+//      PRODUCER. R43 gives CMD.EXEC "only the handle -> program-hash lookup
+//      that TerrainField needs", and TerrainField 0x0200 carries
+//      `handle32[program] program`. But FIELD.PROGCACHE's contract fixes the
+//      directory key as a CONTENT hash -- "the program hash
+//      `CRC32C(code||tables) + instr_count`", computed by
+//      `zfield::programHashOfBytes` -- so the handle is NOT the key and
+//      CMD.EXEC cannot derive one from the other without reading and hashing
+//      the cartridge page.
+//      SEARCHED, and named so the next reader does not repeat it:
+//      `program_hash`, `prog_hash` and `programHash` across all of `fpga/rtl`
+//      (including `synth/`) -- ZERO hits; `programHashOfBytes` exists only in
+//      `reference/src/zfield/zfield_decode.cpp`. Nothing in hardware publishes
+//      {handle -> hash}.
+//      RECOMMENDED, for the owner to confirm: SW.STREAM owns the mapping,
+//      because it is the only party that has both -- it names the program by
+//      handle in the plan and computes the hash with `zfield::programHashOfBytes`
+//      to post the commit. A fourth doorbell post kind, BIND {handle32, hash32},
+//      writing a small handle->hash table that CMD.EXEC's TerrainField arm
+//      reads, closes it with no ABI change and no second hashing law. The
+//      alternative -- re-key the directory by handle -- is cheaper still but
+//      contradicts FIELD.PROGCACHE's contract in writing, which is why it is
+//      not taken here.
+//
+//      WHAT IS THEN LEFT TO BUILD, so the next packet can be scoped rather than
+//      re-derived: (a) CMD.EXEC's TerrainField arm, staging ~480 bits per
+//      record (program, four footprint fx16, start_tick, duration_ticks and
+//      p0..p7) and emitting {footprint, hash, cmd index} onto
+//      `terr_pt_fld_add_*` at commit -- area-significant, so it wants a
+//      measurement; (b) a descriptor table keyed by that cmd index holding the
+//      uniforms; (c) the EARTH stream adapter, which on each accepted vertex
+//      issues one E record per active lane and returns `height` on
+//      `terr_pt_fld_*`, reading the patch's own `fld_covers_o` to skip a run
+//      for a lane that does not cover rather than re-deciding the section 9.1
+//      test it owns; (d) a two-client share on the host's single `pc_lu_*`
+//      port, since the doorbell holds it for the HPS.
+//
 //
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
@@ -2203,7 +2313,52 @@
 //      build an SDRAM mip-pool residency engine that nothing needs.)
 //
 //
-// I42. THE FIELD ENGINE'S PROGRAM LOADER (`fld_ld_*`), ITS DIRECTORY PHASES
+// (I42 CLOSED 2026-09-20 (gz/field), under owner rulings R43, R20 and R55.
+//      All three of its parts have producers, and the entry is kept in full
+//      below because it argued each of them and is owed the answer beside the
+//      question.
+//
+//      THE LOADER and BOTH DIRECTORY PHASES are `zhao_field_doorbell`,
+//      composed below. R43: "A doorbell contract on the R14 pattern:
+//      SW.STREAM stages the plan and writes the EXISTING loader words". That
+//      is the same pattern I28 closed the F-sheet journal with, and what
+//      crosses the console's edge now is the HPS itself -- posts and ticketed
+//      returns -- not a raw leaf port. The three tie-offs the entry priced are
+//      therefore not taken: the store is filled, `hdr_loaded` is a live bit,
+//      and the invalidation edge stays internal.
+//
+//      WHY THE LOOKUP PHASE IS THE HPS's TOO, which the entry left open. The
+//      caller of a lookup is whoever can act on a miss, and only software can:
+//      `zfield::decode` is software by FIELD.PROGCACHE's own contract, which
+//      this entry quotes. Hardware asking and software repairing would put the
+//      two halves of one decision on opposite sides of the edge.
+//
+//      THE ORDER LAW IS NEW AND IT IS THE REASON THE BLOCK IS NOT A FIFO. A
+//      COMMIT for a slot whose HEADER was not written since the last commit is
+//      REFUSED without the directory ever seeing the hash, ANSWERED with a
+//      return record, and COUNTED on `fld_db_commits_refused_o` -- ruling R20's
+//      shape exactly, and it removes the failure class FIELD.PROGCACHE's
+//      contract names (a directory promising a hash to microcode that is not
+//      there). It is reachable with legal stimulus and is fired by
+//      `tests/field/field_doorbell_directed.cpp`.
+//
+//      A POST THAT CANNOT BE TAKEN IS HELD, NEVER DROPPED (ruling R55's
+//      shape), and `fld_db_post_stalls_o` counts the cycles.
+//
+//      THE SECOND CLIENT is `zhao_field_flow_adapter`, entry I5's closure.
+//      The entry's stated reason for the port -- "it is what makes the
+//      arbiter's contention reachable with legal stimulus" -- is better served
+//      by it: two REAL profiles offering in the same cycle is the traffic
+//      `fld_contended_grants_o` exists to measure, where the edge client was a
+//      stand-in for one.
+//
+//      WHAT IS STILL OPEN AND IS SOMEBODY ELSE'S ENTRY: `fld_ld_oob_o` remains
+//      structurally unreachable, exactly as the entry says. It is not made
+//      reachable by this change and it is not claimed to be.
+//
+//      The original entry, unedited:
+//
+//      THE FIELD ENGINE'S PROGRAM LOADER (`fld_ld_*`), ITS DIRECTORY PHASES
 //      (`fld_pc_*`) AND ITS SECOND CLIENT (`fld_req_*` / `fld_resp_*`) --
 //      BOUNDARY. NEW 2026-09-19, and it is ONE entry replacing part of THREE:
 //      I5, I31 and I34 each named a different absent FIELD.SEQ.* block, and all
@@ -2247,7 +2402,7 @@
 //      is structural rather than untested: `fld_ld_oob_o` watches for a write
 //      outside a slot's window, and the header clamp that fires
 //      `fld_ld_oob_o` is exactly what makes that state unreachable. The
-//      other eight are driven by `tests/field/field_host_directed.cpp`.
+//      other eight are driven by `tests/field/field_host_directed.cpp`.)
 //
 // I49. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
 //      BOUNDARY. NEW 2026-09-19 (cmdmem packet, ruling R20), opened in the
@@ -3104,11 +3259,38 @@ module zhao_console_core
   output logic [31:0]             part_tbl_truncated_o,
   output logic [31:0]             part_tbl_denied_o,
 
-  // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
-  input  logic                    part_fld_valid_i,
-  input  logic signed [10:0]      part_fld_ax_i,
-  input  logic signed [10:0]      part_fld_ay_i,
-  input  logic signed [10:0]      part_fld_az_i,
+  // ---- (I5's four `part_fld_*` inputs were here. CLOSED 2026-09-20 under
+  //  owner ruling R40: `zhao_field_flow_adapter` is the F profile's stream
+  //  adapter and it is composed below as client 1 of `u_field_host`. The
+  //  acceleration is computed from the flow program's own velocity output by
+  //  R40's law, joined to the record it belongs to in the same cycle. The
+  //  evidence below is that adapter's.)
+  //
+  // WHICH RESIDENT PROGRAM IS THE WIND, and whether one is resident at all.
+  // NOT A TIE-OFF and not I5 moved sideways: it is the same console-policy
+  // shape as `fld_stamp_slot_i` below, for the same reason I30 records --
+  // no ratified opcode carries it, so an executor filling it in would be
+  // choosing a value the ABI does not contain. With `slot_valid` LOW the
+  // adapter answers every record immediately with the sample ABSENT, which
+  // PART.UPDATE already handles by not adding the term; that is a console
+  // with no wind armed, not a wind of zero.
+  input  logic [2:0]              fld_flow_slot_i,
+  input  logic                    fld_flow_slot_valid_i,
+  // p0..p3 of the flow profile's input record (spec/form/field-ir.md 7.1).
+  // The PROGRAM's parameters, not the particle's -- SW.STREAM's, travelling
+  // with the plan that named the program (owner ruling R43).
+  input  logic [127:0]            fld_flow_par_i,
+
+  output logic [31:0]             part_fld_samples_o,
+  output logic [31:0]             part_fld_bypassed_o,
+  output logic [31:0]             part_fld_noprog_o,
+  output logic [31:0]             part_fld_faults_o,
+  output logic [31:0]             part_fld_saturations_o,
+  output logic [31:0]             part_fld_stall_cycles_o,
+  // The identity guard: the record offered while an answer is held is not the
+  // record that answer was computed from. Its two operands are clocked by
+  // different things, which is what makes it able to fire at all.
+  output logic [31:0]             part_fld_rec_changed_o,
 
   // (I2's PART.COLLIDE slice -- `part_col_d_response_i` and the three
   //  coefficients -- was here. CLOSED: PART.TABLE serves it below, addressed by
@@ -4979,41 +5161,54 @@ module zhao_console_core
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
   // ==========================================================================
-  // THE PROGRAM LOADER. Nothing inside this console loads a field program, and
-  // the named owner is CMD.EXEC's TerrainField 0x0200 arm (spec/commands.zidl:
-  // `handle32[program] program` -> the cartridge PROGRAM page, spec/cartridge.md
-  // 3 kind 0) together with the software decoder. `ld_kind_i` is 0 instruction,
-  // 1 table entry, 2 header; the header is written LAST and is what marks a slot
-  // runnable, so a partially written program can never execute.
-  input  logic         fld_ld_valid_i,
-  output logic         fld_ld_ready_o,
-  input  logic [ 1:0]  fld_ld_kind_i,
-  input  logic [ 2:0]  fld_ld_slot_i,
-  input  logic [ 6:0]  fld_ld_addr_i,
-  input  logic [95:0]  fld_ld_data_i,
-
-  // FIELD.PROGCACHE's TWO PHASES. Both face outward because the decode a miss
-  // requires is `zfield::decode`'s and lives in software -- that block's own
-  // contract says the caller decodes and reports one bit. What is INTERNAL, and
-  // is why the directory is composed rather than left at this edge, is the
-  // insert: it invalidates the program store's slot, so no profile can run
-  // microcode the directory has already promised to another hash.
-  input  logic         fld_pc_lu_valid_i,
-  output logic         fld_pc_lu_ready_o,
-  input  logic [31:0]  fld_pc_lu_hash_i,
-  output logic         fld_pc_lu_resp_valid_o,
-  input  logic         fld_pc_lu_resp_ready_i,
-  output logic         fld_pc_lu_hit_o,
-  output logic [ 2:0]  fld_pc_lu_slot_o,
-  input  logic         fld_pc_cm_valid_i,
-  output logic         fld_pc_cm_ready_o,
-  input  logic [31:0]  fld_pc_cm_hash_i,
-  input  logic         fld_pc_cm_ok_i,
-  output logic         fld_pc_cm_resp_valid_o,
-  input  logic         fld_pc_cm_resp_ready_i,
-  output logic         fld_pc_cm_inserted_o,
-  output logic         fld_pc_cm_evicted_o,
-  output logic [ 2:0]  fld_pc_cm_slot_o,
+  // THE FIELD PROGRAM DOORBELL -- SW.STREAM's own words, owner ruling R43.
+  // NOT A TIE-OFF, and not entry I42 moved sideways: I42 is CLOSED. The
+  // loader words and both directory phases are driven by
+  // `zhao_field_doorbell` below, and what crosses THIS edge is the HPS
+  // itself -- the plan's epoch identity, the posts it makes and the ticketed
+  // returns hardware hands back. In Verilator the harness IS the HPS,
+  // exactly as it is for `terr_jdb_*` above (owner ruling R14, the pattern
+  // R43 names) and for the FRAME_RING view.
+  //
+  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP. For a LOAD WORD,
+  // `post_kind_i` is the host's own 0 uop / 1 table entry / 2 header /
+  // 3 uniform, and the HEADER is written LAST because it is what marks a slot
+  // runnable -- so a partially written program can never execute.
+  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, trace only
+  input  logic         fld_db_post_valid_i,
+  output logic         fld_db_post_ready_o,
+  input  logic [ 1:0]  fld_db_post_op_i,
+  input  logic [ 1:0]  fld_db_post_kind_i,
+  input  logic [ 2:0]  fld_db_post_slot_i,
+  input  logic [ 6:0]  fld_db_post_addr_i,
+  input  logic [95:0]  fld_db_post_data_i,
+  input  logic [31:0]  fld_db_post_hash_i,
+  input  logic         fld_db_post_ok_i,
+  input  logic [31:0]  fld_db_post_ticket_i,
+  output logic         fld_db_ret_valid_o,
+  input  logic         fld_db_ret_ready_i,
+  output logic [31:0]  fld_db_ret_ticket_o,
+  output logic [ 1:0]  fld_db_ret_op_o,
+  output logic         fld_db_ret_ok_o,
+  output logic         fld_db_ret_refused_o,
+  output logic         fld_db_ret_inserted_o,
+  output logic         fld_db_ret_evicted_o,
+  output logic [ 2:0]  fld_db_ret_slot_o,
+  output logic [31:0]  fld_db_ret_plan_o,
+  output logic [31:0]  fld_db_posts_o,
+  output logic [31:0]  fld_db_load_words_o,
+  output logic [31:0]  fld_db_lookups_o,
+  output logic [31:0]  fld_db_commits_o,
+  // A COMMIT for a slot whose HEADER was not written since the last commit.
+  // REFUSED, ANSWERED and COUNTED (owner ruling R20) -- the directory is never
+  // offered a hash for microcode that is not there.
+  output logic [31:0]  fld_db_commits_refused_o,
+  // Cycles a post was offered into a full mailbox. HELD, never dropped: owner
+  // ruling R55's shape, and the number that says whether POSTS is big enough.
+  output logic [31:0]  fld_db_post_stalls_o,
+  // Unreachable while the return credit is right, so its zero is an argument
+  // and not a measurement. Fired by tests/mutants/zhao_field_doorbell_mutant.sv.
+  output logic [31:0]  fld_db_ret_overflow_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one
   // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
@@ -5023,25 +5218,14 @@ module zhao_console_core
   input  logic [ 2:0]  fld_stamp_slot_i,
   input  logic         fld_stamp_slot_valid_i,
 
-  // THE ENGINE'S SECOND CLIENT. It is the seam the FLOW and EARTH adapters take
-  // over when I5 and I34 close, and until then it is what makes the arbiter's
-  // contention reachable with legal stimulus: a counter that cannot be fired is
-  // not evidence about the thing it watches.
-  //
-  // The two widths are literals because a port list cannot see a body
-  // localparam. `u_field_host` is instantiated with IN_LANES = 12 (the
-  // ratified E record of spec/form/field-ir.md 7.1) and OUT_LANES = 4, and the
-  // elaboration guard beside the instance refuses any disagreement rather than
-  // leaving the two places to drift.
-  input  logic          fld_req_valid_i,
-  output logic          fld_req_ready_o,
-  input  logic [  2:0]  fld_req_slot_i,
-  input  logic          fld_req_noprog_i,
-  input  logic [383:0]  fld_req_in_i,
-  output logic          fld_resp_valid_o,
-  input  logic          fld_resp_ready_i,
-  output logic [127:0]  fld_resp_out_o,
-  output logic [  7:0]  fld_resp_status_o,
+  // (THE ENGINE'S SECOND CLIENT was here, as `fld_req_*` / `fld_resp_*`. It is
+  //  CLOSED 2026-09-20: entry I42 said it "is the seam the FLOW and EARTH
+  //  adapters take over when I5 and I34 close", and the FLOW adapter has taken
+  //  it. `zhao_field_flow_adapter` is client 1 and `zhao_field_stamp_adapter`
+  //  is client 0, so the arbiter's contention is still reachable with legal
+  //  stimulus -- two REAL profiles offering in the same cycle, which is what
+  //  the edge port was standing in for. `fld_contended_grants_o` below is the
+  //  counter that was the entry's reason for keeping it.)
 
   output logic [31:0]  fld_runs_o,
   output logic [31:0]  fld_run_faults_o,
@@ -5770,6 +5954,16 @@ module zhao_console_core
     .species_refused_o            (part_species_refused_o)
   );
 
+  // The field join's three wires (entry I5). `pu_in_ready_c` is PART.UPDATE's
+  // own ready; PART.STATE sees it ANDed with the answer's presence, and
+  // `pfa_rec_take` is the one cycle the record actually moves -- which is what
+  // retires the adapter's answer. Retiring on `ps_prt_valid` falling instead
+  // would carry record A's acceleration into record B's offer whenever
+  // PART.STATE presents back to back, which is the metadata-swap shape.
+  logic pu_in_ready_c;
+  assign ps_prt_ready  = pu_in_ready_c && pfa_ans_valid;
+  assign pfa_rec_take  = ps_prt_valid && pfa_ans_valid && pu_in_ready_c;
+
   zhao_part_update #(
     .SPECIES_N (PART_SPECIES_N),
     .REC_W     (PART_REC_W),
@@ -5778,9 +5972,20 @@ module zhao_console_core
     .clk        (gpu_clk),
     .rst_n      (rst_n),
 
-    // REAL: from PART.STATE.
-    .in_valid_i (ps_prt_valid),
-    .in_ready_o (ps_prt_ready),
+    // REAL: from PART.STATE, THROUGH THE FIELD JOIN (entry I5, closed
+    // 2026-09-20). The entry named this join itself and said a composer may
+    // write it: "this file gates `in_valid_i` and PART.STATE's `prt_ready_i`
+    // on 'the answer for THIS record is ready', and the record is held stable
+    // for the whole offer."
+    //
+    // So the record is offered to PART.UPDATE only while the FLOW adapter is
+    // holding the acceleration computed FROM THAT RECORD, and PART.STATE's
+    // ready is the AND of the two. Both sides of every comparison inside
+    // PART.UPDATE are then the same cycle's wires, which is what its own
+    // header requires of this seam. `part_fld_rec_changed_o` is the guard that
+    // says so out loud rather than leaving it as an argument.
+    .in_valid_i (ps_prt_valid && pfa_ans_valid),
+    .in_ready_o (pu_in_ready_c),
     .in_record_i(ps_prt_record),
 
     // REAL: I2 CLOSED 2026-09-19. The species descriptor comes from PART.TABLE
@@ -5799,11 +6004,15 @@ module zhao_console_core
     .spc_p1_i      (ptb_u_p1),
     .spc_p2_i      (ptb_u_p2),
 
-    // I5: FIELD.SEQ.FLOW is not composed.
-    .fld_valid_i(part_fld_valid_i),
-    .fld_ax_i   (part_fld_ax_i),
-    .fld_ay_i   (part_fld_ay_i),
-    .fld_az_i   (part_fld_az_i),
+    // I5 CLOSED 2026-09-20: the F profile's stream adapter, on client 1 of the
+    // one field engine. `fld_valid_i` LOW is the honest answer when no wind is
+    // armed or the run refused -- PART.UPDATE adds the term only when it is
+    // high, so a low valid REMOVES the acceleration rather than adding a zero
+    // one, which is the same distinction entry I34 draws for terrain height.
+    .fld_valid_i(pfa_fld_valid),
+    .fld_ax_i   (pfa_fld_ax),
+    .fld_ay_i   (pfa_fld_ay),
+    .fld_az_i   (pfa_fld_az),
 
     // I4 IS CLOSED. There is no step-6 port here any more: owner ruling
     // 2026-09-19 RETIRED `col_valid_i`/`col_vx_i`/`col_vy_i`/`col_vz_i`, and
@@ -8165,13 +8374,48 @@ module zhao_console_core
   // Client 0 of `u_field_host`, driven by `u_field_stamp_adapter`. Both are
   // declared at the end of this module; these wires are here so the engine's
   // port map can be read without scrolling for a declaration.
+  // The two widths are IN_LANES*32 and OUT_LANES*32 at the values the
+  // instantiation below selects (13 and 7, owner ruling R40). They are
+  // literals because a body localparam declared here would still have to agree
+  // with the instance's parameter overrides; the host's own elaboration guards
+  // are what refuse a disagreement, and a width mismatch on these wires is
+  // caught as a WIDTH error by the linter rather than silently truncated.
   logic         sfa_req_valid, sfa_req_ready;
   logic [  2:0] sfa_req_slot;
   logic         sfa_req_noprog;
-  logic [383:0] sfa_req_in;
+  logic [415:0] sfa_req_in;
   logic         sfa_resp_valid, sfa_resp_ready;
-  logic [127:0] fld_resp_out_c;
+  logic [223:0] fld_resp_out_c;
   logic [  7:0] fld_resp_status_c;
+
+  // ---- the FIELD engine's SECOND client, and the doorbell in front of it ---
+  // Client 1, driven by `u_field_flow_adapter` (entry I5, owner ruling R40).
+  logic         pfa_req_valid, pfa_req_ready;
+  logic [  2:0] pfa_req_slot;
+  logic         pfa_req_noprog;
+  logic [415:0] pfa_req_in;
+  logic         pfa_resp_valid, pfa_resp_ready;
+  logic         pfa_ans_valid, pfa_fld_valid;
+  logic signed [10:0] pfa_fld_ax, pfa_fld_ay, pfa_fld_az;
+  logic         pfa_rec_take;
+
+  // The doorbell's side of the loader and of both directory phases (entry I42,
+  // owner ruling R43).
+  logic        fdb_ld_valid, fdb_ld_ready;
+  logic [ 1:0] fdb_ld_kind;
+  logic [ 2:0] fdb_ld_slot;
+  logic [ 6:0] fdb_ld_addr;
+  logic [95:0] fdb_ld_data;
+  logic        fdb_lu_valid, fdb_lu_ready;
+  logic [31:0] fdb_lu_hash;
+  logic        fdb_lu_resp_valid, fdb_lu_resp_ready, fdb_lu_hit;
+  logic [ 2:0] fdb_lu_slot;
+  logic        fdb_cm_valid, fdb_cm_ready;
+  logic [31:0] fdb_cm_hash;
+  logic        fdb_cm_ok;
+  logic        fdb_cm_resp_valid, fdb_cm_resp_ready;
+  logic        fdb_cm_inserted, fdb_cm_evicted;
+  logic [ 2:0] fdb_cm_slot;
 
   logic                   atm_req_v_c;
   logic [POST_XW-1:0]     atm_req_x_c;
@@ -13356,6 +13600,17 @@ module zhao_console_core
     // with empty parentheses -- rather than deleting them from the instance --
     // is what makes the retirement visible at the point of use instead of
     // being a silent absence somebody later reads as an oversight.
+    //
+    // THE WAIVER IS SCOPED TO THESE EIGHT PINS AND CITES ITS RULING, added
+    // 2026-09-20 (gz/field). The eight empty pins are DELIBERATE by R64, and
+    // the linter cannot tell a deliberate one from a forgotten one -- so
+    // unwaived they turned the console-board lint gate from "silent RC 0" into
+    // eight warnings and a non-zero exit, for every packet in this run. A gate
+    // that is red for a reason nobody owns is a gate people learn to skip,
+    // which is the more expensive failure. The waiver is deliberately NOT
+    // file-wide: a pin left empty by accident anywhere else in this module
+    // still fails, which is the property worth keeping.
+    /* verilator lint_off PINCONNECTEMPTY */
     .m17_valid_o(),
     .m17_addr_o (),
     .m17_surf_o (),
@@ -13364,6 +13619,7 @@ module zhao_console_core
     .m9_addr_o  (),
     .m9_surf_o  (),
     .m9_h_o     (),
+    /* verilator lint_on PINCONNECTEMPTY */
 
     .samples_o   (tmg_samples),
     .m17_writes_o(terr_mg_m17_writes_o),
@@ -13548,8 +13804,20 @@ module zhao_console_core
     .REGS     (32),
     .TABLES   (2),
     .TBL_N    (64),
-    .IN_LANES (12),
-    .OUT_LANES(4),
+    // 13 IN / 7 OUT, and the number is owner ruling R40's ("the host widened to
+    // 13 inputs / 7 outputs"), which is `spec/form/field-ir.md` 7.1's FLOW
+    // record -- the widest of the profiles this console composes. It was 12/4,
+    // the EARTH record, chosen when the S profile was the only client; the F
+    // profile needs px,py,pz,vx,vy,vz,age,seed,dt,p0..p3 in and
+    // px',py',pz',vx',vy',vz',attr0 out, and a lane it cannot present is a lane
+    // its program reads as whatever the front cleared the register to.
+    //
+    // WHAT IS NOT WIDE ENOUGH, SAID HERE SO IT IS NOT DISCOVERED LATER: the
+    // WARP profile is 14 in. GEOM.WARP is NOT BUILT AT ALL (the register's own
+    // list), so nothing offers a warp record today; the day it does, this pair
+    // moves to 14/7 and the adapters' elaboration guards are what will say so.
+    .IN_LANES (13),
+    .OUT_LANES(7),
 
     // ---- the fabric's own knobs. Shipped values in the comment, always. ----
     // FAB_LANES: shipped 4. One point per grant means three discarded lanes,
@@ -13591,46 +13859,53 @@ module zhao_console_core
     .clk  (gpu_clk),
     .rst_n(rst_n),
 
-    // I42: the program loader. CMD.EXEC's TerrainField arm is the named owner.
-    .ld_valid_i(fld_ld_valid_i),
-    .ld_ready_o(fld_ld_ready_o),
-    .ld_kind_i (fld_ld_kind_i),
-    .ld_slot_i (fld_ld_slot_i),
-    .ld_addr_i (fld_ld_addr_i),
-    .ld_data_i (fld_ld_data_i),
+    // I42 CLOSED: the program loader is `u_field_doorbell` below, SW.STREAM's
+    // mailbox on the R14 pattern that owner ruling R43 names.
+    .ld_valid_i(fdb_ld_valid),
+    .ld_ready_o(fdb_ld_ready),
+    .ld_kind_i (fdb_ld_kind),
+    .ld_slot_i (fdb_ld_slot),
+    .ld_addr_i (fdb_ld_addr),
+    .ld_data_i (fdb_ld_data),
 
-    // I42: FIELD.PROGCACHE's two phases. The insert edge is internal.
-    .pc_lu_valid_i     (fld_pc_lu_valid_i),
-    .pc_lu_ready_o     (fld_pc_lu_ready_o),
-    .pc_lu_hash_i      (fld_pc_lu_hash_i),
-    .pc_lu_resp_valid_o(fld_pc_lu_resp_valid_o),
-    .pc_lu_resp_ready_i(fld_pc_lu_resp_ready_i),
-    .pc_lu_hit_o       (fld_pc_lu_hit_o),
-    .pc_lu_slot_o      (fld_pc_lu_slot_o),
-    .pc_cm_valid_i     (fld_pc_cm_valid_i),
-    .pc_cm_ready_o     (fld_pc_cm_ready_o),
-    .pc_cm_hash_i      (fld_pc_cm_hash_i),
-    .pc_cm_ok_i        (fld_pc_cm_ok_i),
-    .pc_cm_resp_valid_o(fld_pc_cm_resp_valid_o),
-    .pc_cm_resp_ready_i(fld_pc_cm_resp_ready_i),
-    .pc_cm_inserted_o  (fld_pc_cm_inserted_o),
-    .pc_cm_evicted_o   (fld_pc_cm_evicted_o),
-    .pc_cm_slot_o      (fld_pc_cm_slot_o),
+    // I42 CLOSED: FIELD.PROGCACHE's two phases, both driven by the same
+    // doorbell. The insert edge stays internal, which is why the directory is
+    // composed inside the engine.
+    .pc_lu_valid_i     (fdb_lu_valid),
+    .pc_lu_ready_o     (fdb_lu_ready),
+    .pc_lu_hash_i      (fdb_lu_hash),
+    .pc_lu_resp_valid_o(fdb_lu_resp_valid),
+    .pc_lu_resp_ready_i(fdb_lu_resp_ready),
+    .pc_lu_hit_o       (fdb_lu_hit),
+    .pc_lu_slot_o      (fdb_lu_slot),
+    .pc_cm_valid_i     (fdb_cm_valid),
+    .pc_cm_ready_o     (fdb_cm_ready),
+    .pc_cm_hash_i      (fdb_cm_hash),
+    .pc_cm_ok_i        (fdb_cm_ok),
+    .pc_cm_resp_valid_o(fdb_cm_resp_valid),
+    .pc_cm_resp_ready_i(fdb_cm_resp_ready),
+    .pc_cm_inserted_o  (fdb_cm_inserted),
+    .pc_cm_evicted_o   (fdb_cm_evicted),
+    .pc_cm_slot_o      (fdb_cm_slot),
     .pc_hits_o         (fld_pc_hits_o),
     .pc_misses_o       (fld_pc_misses_o),
     .pc_rejected_o     (fld_pc_rejected_o),
     .pc_evictions_o    (fld_pc_evictions_o),
     .pc_occupancy_o    (fld_pc_occupancy_o),
 
-    // Client 0 is REAL: the S-profile adapter below. Client 1 is at this
-    // module's edge and is the seam I5 and I34 will take.
-    .req_valid_i ({fld_req_valid_i, sfa_req_valid}),
-    .req_ready_o ({fld_req_ready_o, sfa_req_ready}),
-    .req_slot_i  ({fld_req_slot_i, sfa_req_slot}),
-    .req_noprog_i({fld_req_noprog_i, sfa_req_noprog}),
-    .req_in_i    ({fld_req_in_i, sfa_req_in}),
-    .resp_valid_o({fld_resp_valid_o, sfa_resp_valid}),
-    .resp_ready_i({fld_resp_ready_i, sfa_resp_ready}),
+    // BOTH CLIENTS ARE REAL AS OF 2026-09-20. Client 0 is the S-profile stamp
+    // adapter below; client 1 is the F-profile FLOW adapter, which is what
+    // entry I5 called "its own stream adapter" and what entry I42 said would
+    // take the edge seam. Two live profiles is also what makes
+    // `fld_contended_grants_o` reachable with legal stimulus -- the reason the
+    // edge client existed at all.
+    .req_valid_i ({pfa_req_valid, sfa_req_valid}),
+    .req_ready_o ({pfa_req_ready, sfa_req_ready}),
+    .req_slot_i  ({pfa_req_slot, sfa_req_slot}),
+    .req_noprog_i({pfa_req_noprog, sfa_req_noprog}),
+    .req_in_i    ({pfa_req_in, sfa_req_in}),
+    .resp_valid_o({pfa_resp_valid, sfa_resp_valid}),
+    .resp_ready_i({pfa_resp_ready, sfa_resp_ready}),
     .resp_out_o  (fld_resp_out_c),
     .resp_status_o(fld_resp_status_c),
 
@@ -13655,9 +13930,156 @@ module zhao_console_core
     .sat_o             (fld_sat_c)
   );
 
-  assign fld_sat_o         = fld_sat_c;
-  assign fld_resp_out_o    = fld_resp_out_c;
-  assign fld_resp_status_o = fld_resp_status_c;
+  assign fld_sat_o = fld_sat_c;
+
+  // ==========================================================================
+  // THE FIELD PROGRAM DOORBELL -- entry I42, owner ruling R43
+  // ==========================================================================
+  // R43: "A doorbell contract on the R14 pattern: SW.STREAM stages the plan and
+  // writes the EXISTING loader words". It writes them through this block, which
+  // is `zhao_terrain_jdoorbell`'s shape with this seam's fields: a posted
+  // mailbox, an order law, a ticketed return and a credit that makes the return
+  // queue unoverflowable.
+  //
+  // WHY IT IS A CLOSURE AND NOT A PORT RENAME. `fld_ld_*` at the edge was four
+  // fields with no identity, no ordering law and no answer -- a raw leaf port
+  // with nobody on the far side. What is there now is a CONTRACT: every post is
+  // answered, a commit that would promise the directory a slot whose header was
+  // never written is refused and counted, a post that cannot be taken is held
+  // rather than dropped, and the HPS gets a ticket back naming the plan. The
+  // HPS is genuinely across this edge -- `zfield::decode` is software by
+  // FIELD.PROGCACHE's own contract -- so the exchange is the thing that can be
+  // built here, and it is built.
+  zhao_field_doorbell #(
+    .PROGS  (8),
+    .SLOTW  (3),
+    .LDADDRW(7),
+    // Four posts staged ahead of the fabric going idle. The host accepts a
+    // load word only while the fabric is IDLE (its own law), so a mailbox is
+    // what keeps the HPS from having to watch for that window.
+    .POSTS  (4),
+    .RETQ   (4)
+  ) u_field_doorbell (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cfg_plan_base_i(fld_cfg_plan_base_i),
+
+    .post_valid_i (fld_db_post_valid_i),
+    .post_ready_o (fld_db_post_ready_o),
+    .post_op_i    (fld_db_post_op_i),
+    .post_kind_i  (fld_db_post_kind_i),
+    .post_slot_i  (fld_db_post_slot_i),
+    .post_addr_i  (fld_db_post_addr_i),
+    .post_data_i  (fld_db_post_data_i),
+    .post_hash_i  (fld_db_post_hash_i),
+    .post_ok_i    (fld_db_post_ok_i),
+    .post_ticket_i(fld_db_post_ticket_i),
+
+    .ld_valid_o(fdb_ld_valid),
+    .ld_ready_i(fdb_ld_ready),
+    .ld_kind_o (fdb_ld_kind),
+    .ld_slot_o (fdb_ld_slot),
+    .ld_addr_o (fdb_ld_addr),
+    .ld_data_o (fdb_ld_data),
+
+    .pc_lu_valid_o     (fdb_lu_valid),
+    .pc_lu_ready_i     (fdb_lu_ready),
+    .pc_lu_hash_o      (fdb_lu_hash),
+    .pc_lu_resp_valid_i(fdb_lu_resp_valid),
+    .pc_lu_resp_ready_o(fdb_lu_resp_ready),
+    .pc_lu_hit_i       (fdb_lu_hit),
+    .pc_lu_slot_i      (fdb_lu_slot),
+
+    .pc_cm_valid_o     (fdb_cm_valid),
+    .pc_cm_ready_i     (fdb_cm_ready),
+    .pc_cm_hash_o      (fdb_cm_hash),
+    .pc_cm_ok_o        (fdb_cm_ok),
+    .pc_cm_resp_valid_i(fdb_cm_resp_valid),
+    .pc_cm_resp_ready_o(fdb_cm_resp_ready),
+    .pc_cm_inserted_i  (fdb_cm_inserted),
+    .pc_cm_evicted_i   (fdb_cm_evicted),
+    .pc_cm_slot_i      (fdb_cm_slot),
+
+    .ret_valid_o   (fld_db_ret_valid_o),
+    .ret_ready_i   (fld_db_ret_ready_i),
+    .ret_ticket_o  (fld_db_ret_ticket_o),
+    .ret_op_o      (fld_db_ret_op_o),
+    .ret_ok_o      (fld_db_ret_ok_o),
+    .ret_refused_o (fld_db_ret_refused_o),
+    .ret_inserted_o(fld_db_ret_inserted_o),
+    .ret_evicted_o (fld_db_ret_evicted_o),
+    .ret_slot_o    (fld_db_ret_slot_o),
+    .ret_plan_o    (fld_db_ret_plan_o),
+
+    .posts_o           (fld_db_posts_o),
+    .load_words_o      (fld_db_load_words_o),
+    .lookups_o         (fld_db_lookups_o),
+    .commits_o         (fld_db_commits_o),
+    .commits_refused_o (fld_db_commits_refused_o),
+    .post_stalls_o     (fld_db_post_stalls_o),
+    .ret_overflow_o    (fld_db_ret_overflow_o)
+  );
+
+  // ==========================================================================
+  // THE F PROFILE'S STREAM ADAPTER -- entry I5, owner ruling R40
+  // ==========================================================================
+  // The lane map is `spec/form/field-ir.md` 7.1's flow record and the
+  // acceleration law is R40's `sat_s11((v' - v) >> 8)`; both live in that
+  // file, with every constant R40 names as a parameter here so the owner's
+  // revision is a one-line change (R40 is provisional and says particle motion
+  // is judged by eye).
+  //
+  // THE JOIN IS THE ONE ENTRY I5 ALREADY SOLVED and it is written below at
+  // PART.UPDATE rather than inside the adapter: this file gates `in_valid_i`
+  // and PART.STATE's `prt_ready_i` on "the answer for THIS record is ready".
+  zhao_field_flow_adapter #(
+    .SLOTW    (3),
+    .IN_LANES (13),
+    .OUT_LANES(7)
+  ) u_field_flow_adapter (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .rec_valid_i(ps_prt_valid),
+    .rec_i      (ps_prt_record),
+    .rec_take_i (pfa_rec_take),
+
+    // The SAME population origin PART.COLLIDE and PART.TERRAIN_TAP read, so a
+    // particle's world position is one law in this console and not two.
+    .origin_x_i(pop_origin_x_c),
+    .origin_y_i(pop_origin_y_c),
+    .origin_z_i(pop_origin_z_c),
+
+    .par_i(fld_flow_par_i),
+
+    .slot_i      (fld_flow_slot_i),
+    .slot_valid_i(fld_flow_slot_valid_i),
+
+    .req_valid_o  (pfa_req_valid),
+    .req_ready_i  (pfa_req_ready),
+    .req_slot_o   (pfa_req_slot),
+    .req_noprog_o (pfa_req_noprog),
+    .req_in_o     (pfa_req_in),
+    .resp_valid_i (pfa_resp_valid),
+    .resp_ready_o (pfa_resp_ready),
+    .resp_out_i   (fld_resp_out_c),
+    .resp_status_i(fld_resp_status_c),
+
+    .ans_valid_o(pfa_ans_valid),
+    .fld_valid_o(pfa_fld_valid),
+    .fld_ax_o   (pfa_fld_ax),
+    .fld_ay_o   (pfa_fld_ay),
+    .fld_az_o   (pfa_fld_az),
+
+    .samples_o     (part_fld_samples_o),
+    .bypassed_o    (part_fld_bypassed_o),
+    .noprog_o      (part_fld_noprog_o),
+    .faults_o      (part_fld_faults_o),
+    .saturations_o (part_fld_saturations_o),
+    .stall_cycles_o(part_fld_stall_cycles_o),
+    .rec_changed_o (part_fld_rec_changed_o)
+  );
 
   // The S profile's stream adapter. It computes nothing -- no coverage, no
   // blend, no arithmetic -- because `zhao_surface_stamp`'s S2 chose to deliver
@@ -13670,8 +14092,13 @@ module zhao_console_core
     .SHEET_W  (64),
     .SHEET_H  (64),
     .SLOTW    (3),
-    .IN_LANES (12),
-    .OUT_LANES(4)
+    // The SHARED port's lane counts, not the S profile's own (8 in / 3 out).
+    // They follow `u_field_host`'s, which owner ruling R40 set to the FLOW
+    // record's 13/7; the stamp adapter fills lanes 0 and 1 and reads lanes 0
+    // and 1, and the rest are the wider client's. Two different numbers here
+    // and there would be a silent width truncation on the concatenated bus.
+    .IN_LANES (13),
+    .OUT_LANES(7)
   ) u_field_stamp_adapter (
     .clk  (gpu_clk),
     .rst_n(rst_n),

@@ -234,7 +234,13 @@ top:
   - zhao_forge_cliff
   - zhao_part_expand
   - zhao_part_ladder
-  - zhao_part_record
+  # zhao_part_record WAS A TOP HERE UNTIL 2026-09-20 and is not any more, under
+  # this file own rule that a module its parent instantiates is not a top. It
+  # was countable standalone only because its three particle-lane instantiators
+  # are all not-yet-adopted; zhao_field_flow_adapter (entry I5, owner ruling
+  # R40) is a counted top and INSTANTIATES it, so leaving it here would count
+  # the particle128 codec twice. The census total is unchanged: one instance,
+  # counted inside its parent instead of beside it.
   - zhao_part_soft
   - zhao_post_gather
   - zhao_twod_plane
@@ -316,6 +322,15 @@ top:
   # Counted because zhao_console_core instantiates it and it closes entry I31:
   # SURFACE.STAMP's field-driven brush has a producer.
   - zhao_field_stamp_adapter
+  # The F profile's STREAM ADAPTER, the same standing as the S one.
+  # Counted because zhao_console_core instantiates it as client 1 and it
+  # closes entry I5 under owner ruling R40: PART.UPDATE's acceleration
+  # sample has a producer, and it is the one engine rather than a second.
+  - zhao_field_flow_adapter
+  # SW.STREAM's program-load mailbox (owner ruling R43, on R14's doorbell
+  # pattern). Counted because zhao_console_core instantiates it and it
+  # closes entry I42: the loader and both directory phases have an owner.
+  - zhao_field_doorbell
   # The long-op services are listed INDIVIDUALLY rather than through
   # zhao_field_v3_svcpath. That composition exists to test wiring: it carries a
   # deliberate RIVAL agent on the multiplier bank so refusal is reachable, and

@@ -220,10 +220,11 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_tbl_loads_spawn_o;
   logic [31:0]             part_tbl_loads_curve_o;
   logic [31:0]             part_tbl_load_refused_o;
-  logic                    part_fld_valid_i;
-  logic signed [10:0]      part_fld_ax_i;
-  logic signed [10:0]      part_fld_ay_i;
-  logic signed [10:0]      part_fld_az_i;
+  // (the four `part_fld_*` INPUTS were here. Entry I5 closed 2026-09-20 under
+  //  owner ruling R40: `zhao_field_flow_adapter` computes the acceleration
+  //  inside the core from the FLOW program's own velocity output, so these
+  //  nets are GONE rather than held at zero. What the adapter reports is
+  //  declared with the rest of the field evidence below.)
   // I6 CLOSED: the terrain sample is the core's own now. Its census and the
   // population origin (I7, widened) take the five retired inputs' place.
   logic [31:0]             part_ter_particles_o;
@@ -1152,39 +1153,52 @@ module tb_zhao_console_core_smoke
   // Widths generated from the core's own port list, including the two wide
   // ones: `fld_req_in_i` is IN_LANES x 32 = 384 and `fld_resp_out_o` is
   // OUT_LANES x 32 = 128, at the parameters the core instantiates.
-  logic               fld_ld_valid_i;
-  logic               fld_ld_ready_o;
-  logic        [ 1:0] fld_ld_kind_i;
-  logic        [ 2:0] fld_ld_slot_i;
-  logic        [ 6:0] fld_ld_addr_i;
-  logic        [95:0] fld_ld_data_i;
-  logic               fld_pc_lu_valid_i;
-  logic               fld_pc_lu_ready_o;
-  logic        [31:0] fld_pc_lu_hash_i;
-  logic               fld_pc_lu_resp_valid_o;
-  logic               fld_pc_lu_resp_ready_i;
-  logic               fld_pc_lu_hit_o;
-  logic        [ 2:0] fld_pc_lu_slot_o;
-  logic               fld_pc_cm_valid_i;
-  logic               fld_pc_cm_ready_o;
-  logic        [31:0] fld_pc_cm_hash_i;
-  logic               fld_pc_cm_ok_i;
-  logic               fld_pc_cm_resp_valid_o;
-  logic               fld_pc_cm_resp_ready_i;
-  logic               fld_pc_cm_inserted_o;
-  logic               fld_pc_cm_evicted_o;
-  logic        [ 2:0] fld_pc_cm_slot_o;
+  // THE LOADER AND BOTH DIRECTORY PHASES ARE BEHIND THE DOORBELL as of
+  // 2026-09-20 (entry I42 closed, owner ruling R43), so what this bench drives
+  // is the HPS side of a contract rather than a leaf port: posts in, ticketed
+  // returns out. `zhao_field_doorbell` is the R14 pattern with this seam's
+  // fields.
+  logic        [31:0] fld_cfg_plan_base_i;
+  logic               fld_db_post_valid_i;
+  logic               fld_db_post_ready_o;
+  logic        [ 1:0] fld_db_post_op_i;
+  logic        [ 1:0] fld_db_post_kind_i;
+  logic        [ 2:0] fld_db_post_slot_i;
+  logic        [ 6:0] fld_db_post_addr_i;
+  logic        [95:0] fld_db_post_data_i;
+  logic        [31:0] fld_db_post_hash_i;
+  logic               fld_db_post_ok_i;
+  logic        [31:0] fld_db_post_ticket_i;
+  logic               fld_db_ret_valid_o;
+  logic               fld_db_ret_ready_i;
+  logic        [31:0] fld_db_ret_ticket_o;
+  logic        [ 1:0] fld_db_ret_op_o;
+  logic               fld_db_ret_ok_o;
+  logic               fld_db_ret_refused_o;
+  logic               fld_db_ret_inserted_o;
+  logic               fld_db_ret_evicted_o;
+  logic        [ 2:0] fld_db_ret_slot_o;
+  logic        [31:0] fld_db_ret_plan_o;
+  logic        [31:0] fld_db_posts_o;
+  logic        [31:0] fld_db_load_words_o;
+  logic        [31:0] fld_db_lookups_o;
+  logic        [31:0] fld_db_commits_o;
+  logic        [31:0] fld_db_commits_refused_o;
+  logic        [31:0] fld_db_post_stalls_o;
+  logic        [31:0] fld_db_ret_overflow_o;
   logic        [ 2:0] fld_stamp_slot_i;
   logic               fld_stamp_slot_valid_i;
-  logic               fld_req_valid_i;
-  logic               fld_req_ready_o;
-  logic        [ 2:0] fld_req_slot_i;
-  logic               fld_req_noprog_i;
-  logic [383:0]       fld_req_in_i;
-  logic               fld_resp_valid_o;
-  logic               fld_resp_ready_i;
-  logic [127:0]       fld_resp_out_o;
-  logic        [ 7:0] fld_resp_status_o;
+  // The F profile's arm and its four program parameters (entry I5, R40).
+  logic        [ 2:0] fld_flow_slot_i;
+  logic               fld_flow_slot_valid_i;
+  logic [127:0]       fld_flow_par_i;
+  logic        [31:0] part_fld_samples_o;
+  logic        [31:0] part_fld_bypassed_o;
+  logic        [31:0] part_fld_noprog_o;
+  logic        [31:0] part_fld_faults_o;
+  logic        [31:0] part_fld_saturations_o;
+  logic        [31:0] part_fld_stall_cycles_o;
+  logic        [31:0] part_fld_rec_changed_o;
   logic        [31:0] fld_runs_o;
   logic        [31:0] fld_run_faults_o;
   logic        [31:0] fld_noprog_o;
@@ -1621,47 +1635,100 @@ module tb_zhao_console_core_smoke
   // this composition. That is deliberate -- this bench's surface acceptance
   // below must measure the same stamp it measured yesterday, or the composition
   // would be hiding a regression behind a new feature.
-  assign fld_ld_valid_i         = 1'b0;
-  assign fld_ld_kind_i          = 2'd0;
-  assign fld_ld_slot_i          = 3'd0;
-  assign fld_ld_addr_i          = 7'd0;
-  assign fld_ld_data_i          = 96'd0;
-  assign fld_pc_lu_valid_i      = 1'b0;
-  assign fld_pc_lu_hash_i       = 32'd0;
-  assign fld_pc_lu_resp_ready_i = 1'b1;
-  assign fld_pc_cm_valid_i      = 1'b0;
-  assign fld_pc_cm_hash_i       = 32'd0;
-  assign fld_pc_cm_ok_i         = 1'b0;
-  assign fld_pc_cm_resp_ready_i = 1'b1;
+  // D0: the plan's epoch identity. Trace only -- it rides every return so a
+  // return can be tied to the plan that produced it, and this bench checks
+  // nothing about its value. A recognisable constant is easier to see in a
+  // waveform than a zero that could be a floating net.
+  assign fld_cfg_plan_base_i    = 32'hF1E1_D000;
   assign fld_stamp_slot_i       = 3'd0;
   assign fld_stamp_slot_valid_i = 1'b0;
-  assign fld_req_slot_i         = 3'd0;
-  assign fld_req_noprog_i       = 1'b0;
-  assign fld_req_in_i           = 384'd0;
-  assign fld_resp_ready_i       = 1'b1;
+  assign fld_db_ret_ready_i     = 1'b1;
+  assign fld_db_post_kind_i     = 2'd0;
+  assign fld_db_post_addr_i     = 7'd0;
+  assign fld_db_post_data_i     = 96'd0;
 
-  // ---- THE ONE THING THIS BENCH ASKS THE ENGINE -----------------------------
-  // A single request on the edge client, at a slot nothing was ever loaded
-  // into. The right answer is a REFUSAL, and the point of asking is that a
-  // refusal can only come back if the whole path exists: the core's port, the
-  // arbiter, the slot's `hdr_loaded` bit, the response bus and the status.
+  // ---- THE F PROFILE IS ARMED AT A SLOT NOTHING WAS LOADED INTO ------------
+  // Entry I5's closure, exercised the only way a smoke bench honestly can.
+  // Arming it means EVERY particle offered walks the whole join: PART.STATE's
+  // offer, the adapter's request, the arbiter's grant, the `hdr_loaded`
+  // interlock, the shared response bus, the status, and the answer joined back
+  // to the record it belongs to. LOADING a program instead would mean choosing
+  // one, and a composed engine that returns a plausible number is exactly what
+  // a smoke bench cannot tell from a composed engine returning a plausible
+  // number for the wrong reason. A refusal has a named status and a counter.
+  assign fld_flow_slot_i       = 3'd0;
+  assign fld_flow_slot_valid_i = 1'b1;
+  assign fld_flow_par_i        = 128'd0;
+
+  // ---- THE TWO THINGS THIS BENCH ASKS THE DOORBELL -------------------------
+  // Entry I42's closure. Both posts are answered, and both answers can only
+  // come back if the whole path exists -- the core's port, the mailbox, the
+  // directory, the return queue and the ticket.
   //
-  // IT IS DELIBERATELY NOT A SUCCESSFUL RUN. Loading a program here would mean
-  // choosing one, and a composed engine that returns a plausible number is
-  // exactly the thing a smoke bench cannot tell apart from a composed engine
-  // that returns a plausible number for the wrong reason. A refusal has a
-  // named status and a counter, and neither can be produced by accident.
-  logic fld_probe_done_q;
+  //   post 0  a LOOKUP of a hash nothing was ever loaded. The right answer is
+  //           ok=1, inserted=0: the directory ANSWERED and the hash is not
+  //           resident. Those two bits apart is what separates "not resident"
+  //           from "nobody asked", which is the silence ruling R20 forbids.
+  //   post 1  a COMMIT for slot 0, whose HEADER was never written. The right
+  //           answer is REFUSED -- the directory never sees the hash -- and it
+  //           fires `fld_db_commits_refused_o`, which is this bench's proof
+  //           that the order law is a guard and not a paragraph.
+  //
+  // The tickets are distinct so the returns cannot be confused for each other.
+  localparam logic [31:0] FLD_TICKET_LU = 32'hFD10_0001;
+  localparam logic [31:0] FLD_TICKET_CM = 32'hFD10_0002;
+
+  logic [1:0]  fld_probe_step_q;      // 0 post LU, 1 post CM, 2 done
+  logic [31:0] fld_ret_lu_ok_q;
+  logic [31:0] fld_ret_lu_hit_q;
+  logic [31:0] fld_ret_cm_refused_q;
+  logic [31:0] fld_ret_seen_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      fld_req_valid_i  <= 1'b0;
-      fld_probe_done_q <= 1'b0;
-    end else if (!fld_probe_done_q) begin
-      if (fld_req_valid_i && fld_req_ready_o) begin
-        fld_req_valid_i  <= 1'b0;
-        fld_probe_done_q <= 1'b1;
-      end else begin
-        fld_req_valid_i <= 1'b1;
+      fld_db_post_valid_i  <= 1'b0;
+      fld_db_post_op_i     <= 2'd0;
+      fld_db_post_slot_i   <= 3'd0;
+      fld_db_post_hash_i   <= 32'd0;
+      fld_db_post_ok_i     <= 1'b0;
+      fld_db_post_ticket_i <= 32'd0;
+      fld_probe_step_q     <= 2'd0;
+      fld_ret_lu_ok_q      <= 32'd0;
+      fld_ret_lu_hit_q     <= 32'd0;
+      fld_ret_cm_refused_q <= 32'd0;
+      fld_ret_seen_q       <= 32'd0;
+    end else begin
+      if (fld_db_post_valid_i && fld_db_post_ready_o) begin
+        fld_db_post_valid_i <= 1'b0;
+        fld_probe_step_q    <= fld_probe_step_q + 2'd1;
+      end else if (!fld_db_post_valid_i && (fld_probe_step_q != 2'd2)) begin
+        fld_db_post_valid_i <= 1'b1;
+        if (fld_probe_step_q == 2'd0) begin
+          fld_db_post_op_i     <= 2'd2;                  // LOOKUP
+          fld_db_post_hash_i   <= 32'hFEED_BEEF;
+          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_ok_i     <= 1'b0;
+          fld_db_post_ticket_i <= FLD_TICKET_LU;
+        end else begin
+          fld_db_post_op_i     <= 2'd1;                  // COMMIT, no header
+          fld_db_post_hash_i   <= 32'hFEED_BEEF;
+          fld_db_post_slot_i   <= 3'd0;
+          fld_db_post_ok_i     <= 1'b1;
+          fld_db_post_ticket_i <= FLD_TICKET_CM;
+        end
+      end
+
+      // The returns, latched by TICKET rather than by arrival order: an order
+      // assumption is exactly the thing a join gets wrong, and the ticket is
+      // the field that cannot be right by accident.
+      if (fld_db_ret_valid_o && fld_db_ret_ready_i) begin
+        fld_ret_seen_q <= fld_ret_seen_q + 32'd1;
+        if (fld_db_ret_ticket_o == FLD_TICKET_LU) begin
+          if (fld_db_ret_ok_o)       fld_ret_lu_ok_q  <= fld_ret_lu_ok_q + 32'd1;
+          if (fld_db_ret_inserted_o) fld_ret_lu_hit_q <= fld_ret_lu_hit_q + 32'd1;
+        end
+        if ((fld_db_ret_ticket_o == FLD_TICKET_CM) && fld_db_ret_refused_o) begin
+          fld_ret_cm_refused_q <= fld_ret_cm_refused_q + 32'd1;
+        end
       end
     end
   end
@@ -3099,10 +3166,6 @@ module tb_zhao_console_core_smoke
     part_cfg_base1_i = PART_HPS_BASE1;
 
 
-    part_fld_valid_i = '0;
-    part_fld_ax_i = '0;
-    part_fld_ay_i = '0;
-    part_fld_az_i = '0;
     // ---- PACKET P-TERRAIN: the spine's inputs, all defined before reset ----
     terr_cmd_valid_i = '0;
     terr_cmd_epoch_i = '0;
@@ -5672,24 +5735,58 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: stamp_results delivered %0d beats against %0d texels retired -- the result port and the write port disagree about how many texels this stamp touched",
              surf_res_records_q, surf_stamp_texels_touched_o);
 
-    // 5. THE FIELD ENGINE IS COMPOSED AND REACHABLE (entry I42). One request
-    //    was offered at the edge, at a slot nothing was loaded into. All three
-    //    of these must hold together: a grant proves the arbiter accepted it, a
-    //    noprog proves the `hdr_loaded` interlock answered, and the status
-    //    proves the answer came back down the shared response bus. Any one of
-    //    them alone could be produced by a stuck signal.
-    if (fld_grants_o != 32'd1)
-      $fatal(1, "SMOKE: FIELD's arbiter granted %0d requests against exactly one offered -- 0 means the edge client does not reach the engine, >1 means the bench re-offered",
-             fld_grants_o);
-    if (fld_noprog_o != 32'd1)
-      $fatal(1, "SMOKE: FIELD refused %0d runs against one request at an unloaded slot -- 0 means the program store's loaded interlock is not consulted, so a slot with no microcode would have been WALKED",
-             fld_noprog_o);
-    if (fld_resp_status_o != 8'hF0)
-      $fatal(1, "SMOKE: FIELD answered status %02x, not ST_NO_PROGRAM -- the refusal did not reach the shared response bus, and a caller reading only the lanes would have taken four zeroes for a field",
-             fld_resp_status_o);
+    // 5. THE FIELD ENGINE IS COMPOSED AND REACHABLE (entries I5 and I42).
+    //    The F profile is ARMED at a slot nothing was loaded into, so every
+    //    particle offered walked the whole join. Each of these fails for a
+    //    DIFFERENT reason, which is why they are separate: a grant proves the
+    //    arbiter accepted the adapter's request, a noprog proves the
+    //    `hdr_loaded` interlock answered, and the adapter's own noprog proves
+    //    the status came back down the shared response bus to the client that
+    //    asked.
+    if (fld_grants_o == 32'd0)
+      $fatal(1, "SMOKE: FIELD's arbiter granted nothing while the FLOW adapter was armed -- client 1 does not reach the engine");
+    if (fld_noprog_o == 32'd0)
+      $fatal(1, "SMOKE: FIELD refused no run at an unloaded slot -- the program store's loaded interlock is not consulted, so a slot with no microcode would have been WALKED");
+    if (part_fld_noprog_o != fld_noprog_o)
+      $fatal(1, "SMOKE: the FLOW adapter saw %0d refusals against the engine's %0d -- the status did not reach the client that asked, and a caller reading only the lanes would have taken zeroes for a field",
+             part_fld_noprog_o, fld_noprog_o);
+    if (part_fld_samples_o != 32'd0)
+      $fatal(1, "SMOKE: the FLOW adapter delivered %0d real accelerations with no program resident",
+             part_fld_samples_o);
     if (fld_runs_o != 32'd0)
       $fatal(1, "SMOKE: FIELD completed %0d walks against zero loaded programs -- the sequencer ran something, and there is nothing in the store for it to have run",
              fld_runs_o);
+    //    THE IDENTITY GUARD. It differences a record captured at request time
+    //    against the live wire, so it CAN fire; a zero here is a measurement.
+    if (part_fld_rec_changed_o != 32'd0)
+      $fatal(1, "SMOKE: the FLOW adapter answered %0d records with an acceleration computed from a DIFFERENT record -- the join is carrying A's field onto B's particle",
+             part_fld_rec_changed_o);
+
+    // 5b. THE PROGRAM DOORBELL ANSWERS BOTH POSTS (entry I42, rulings R43/R20).
+    if (fld_db_posts_o != 32'd2)
+      $fatal(1, "SMOKE: the field doorbell consumed %0d posts against two offered", fld_db_posts_o);
+    if (fld_db_lookups_o != 32'd1)
+      $fatal(1, "SMOKE: the field doorbell handed %0d lookups to the directory against one posted -- the lookup phase has no producer",
+             fld_db_lookups_o);
+    if (fld_ret_seen_q != 32'd2)
+      $fatal(1, "SMOKE: %0d returns came back for two answerable posts -- a post was consumed and never answered, which is the hang ruling R20 forbids",
+             fld_ret_seen_q);
+    if (fld_ret_lu_ok_q != 32'd1)
+      $fatal(1, "SMOKE: the lookup's return did not say the directory answered");
+    if (fld_ret_lu_hit_q != 32'd0)
+      $fatal(1, "SMOKE: the directory reported a HIT for a hash nothing ever loaded");
+    //    The order law FIRES. This is the positive control for
+    //    `fld_db_commits_refused_o`, with legal stimulus, in the smoke itself.
+    if (fld_db_commits_refused_o != 32'd1)
+      $fatal(1, "SMOKE: a COMMIT for a slot whose header was never written was NOT refused (%0d refusals) -- the directory was offered a hash for microcode that is not there",
+             fld_db_commits_refused_o);
+    if (fld_ret_cm_refused_q != 32'd1)
+      $fatal(1, "SMOKE: the refused commit's return did not carry the refusal back to the HPS -- refused and unanswered are the same thing from there");
+    if (fld_db_commits_o != 32'd0)
+      $fatal(1, "SMOKE: the field doorbell handed %0d commits to the directory, and the only one posted was refused",
+             fld_db_commits_o);
+    if (fld_db_ret_overflow_o != 32'd0)
+      $fatal(1, "SMOKE: the field doorbell's return queue overflowed -- the credit reservation is wrong");
 
     // 6. THE STAMP BRUSH STAYED DISARMED, which is what makes check 3 above
     //    still a measurement of the same stamp. `fld_stamp_slot_valid_i` is low

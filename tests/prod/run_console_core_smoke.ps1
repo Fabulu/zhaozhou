@@ -347,8 +347,20 @@ $ErrorActionPreference = 'Continue'   # g++ writes warnings to stderr
 $fail = 0
 foreach ($p in $pairs) {
   if (-not (Test-Path $p[0])) { Write-Host "MISSING SOURCE: $($p[0])"; $fail++; continue }
-  & g++ @flags -c $p[0] -o $p[1] 2>&1 | Out-Null
-  if (-not (Test-Path $p[1])) { Write-Host "COMPILE FAILED: $($p[0])"; $fail++ }
+  # THE COMPILER'S OUTPUT IS KEPT, and it used to be piped to Out-Null.
+  # CLAUDE.md, Build note: "Never send a build's output to `Out-Null` -- a
+  # build wrapped in a helper that discards its output cannot be seen to have
+  # failed or to have done nothing." This script did exactly that, and it cost
+  # two undiagnosable runs on 2026-09-20: `COMPILE FAILED: <path>` and nothing
+  # else, twice, with the reason already thrown away. A failure report that
+  # names the file and withholds the error is worse than a crash, because it
+  # looks like information.
+  $out = & g++ @flags -c $p[0] -o $p[1] 2>&1
+  if (-not (Test-Path $p[1])) {
+    Write-Host "COMPILE FAILED: $($p[0])"
+    $out | Select-Object -Last 40 | ForEach-Object { Write-Host "    $_" }
+    $fail++
+  }
 }
 if ($fail -gt 0) { throw "$fail translation unit(s) failed" }
 Write-Host "compiled $($pairs.Count) translation units"
