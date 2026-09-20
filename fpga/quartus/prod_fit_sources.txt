@@ -94,7 +94,6 @@ fpga/rtl/particles/zhao_part_expand.sv
 fpga/rtl/particles/zhao_part_ladder.sv
 fpga/rtl/particles/zhao_part_record.sv
 fpga/rtl/particles/zhao_part_soft.sv
-fpga/rtl/raster/zhao_raster_attrdiv.sv
 fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
 fpga/rtl/raster/zhao_raster_attrinterp.sv
 fpga/rtl/raster/zhao_raster_attrstep.sv

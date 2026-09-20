@@ -172,7 +172,14 @@ module zhao_raster_attrgrad_dsp3 #(
       .divides_o      (dv_divides),
       .saturations_o  (dv_saturations),
       .errors_o       (dv_errors),
-      .busy_clocks_o  (unused_dv_busy)
+      .busy_clocks_o  (unused_dv_busy),
+      // Sunk for the same reason as in zhao_raster_attrgrad_v2: this lane
+      // consumes the quotient only. Keeping the two files' port maps identical
+      // is also what lets raster_attrgrad_dsp3_diff compare them cycle by cycle.
+      /* verilator lint_off PINCONNECTEMPTY */
+      .rem_o           (),
+      .rem_range_err_o ()
+      /* verilator lint_on PINCONNECTEMPTY */
   );
 
   assign divides_o       = dv_divides;

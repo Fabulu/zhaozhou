@@ -10,6 +10,59 @@
 // 2026-09-18 to take the saturation compare off the input edge; see D_SAT.
 //
 // ENFORCED-BY: tests/raster/raster_attrgrad_v2_directed.cpp
+// ENFORCED-BY: tests/raster/raster_attrdiv_v2_rem_directed.cpp
+//
+// ---------------------------------------------------------------------------
+// THE REMAINDER IS AN OUTPUT (added 2026-09-20 under owner ruling R104)
+// ---------------------------------------------------------------------------
+// `zhao_raster_attrdiv_svc` and `zhao_raster_attrstep` seed an exact
+// quotient/remainder recurrence and could not move off the superseded v1
+// divider while v2 published no remainder. R104 funded publishing it.
+//
+// WHAT IS PUBLISHED IS NOT `rem_r`, AND NOT v1's `rem_o`. Three distinct
+// quantities live here and conflating any two of them is the whole trap:
+//
+//   v1's rem_o      = (2|n| + A) mod 2A          -- divisor 2A, range [0, 2A)
+//   v2's rem_r      = (|M| + A - 1) mod A        -- the raw restoring residue
+//   v2's rem_o      = M - q_o*A,  M = n + A/2    -- the TRUE floor remainder,
+//                                                   range [0, A)
+//
+// v1 divides a DOUBLED dividend by a DOUBLED divisor, so its remainder is mod
+// 2A and cannot be produced here at any price short of changing v2's
+// arithmetic. `design/prod_manifest.yml` said so before this port existed and
+// it was right: the consumers' algebra is re-derived, not transplanted.
+//
+// The raw residue is not published either, because the negative branch divides
+// `|M| + A - 1` (the bit-vector identity in the magnitude comment below), so
+// `rem_r` is off by the fixup
+//
+//     rem_o = neg_r ? (A - 1 - rem_r) : rem_r
+//
+// which is one conditional subtract on the edge that already latches the
+// quotient -- no extra clock, no second divider, no DSP. With it, the pair
+// this block publishes satisfies the plain Euclidean invariant
+//
+//     q_o * A + rem_o == n + floor(A/2),   0 <= rem_o < A
+//
+// for every non-saturated, non-error completion, which is exactly the seed a
+// floor-quotient recurrence wants and is CONTINUOUS ACROSS ZERO -- unlike v1's
+// magnitude pair, which is why v1's consumers need two sign branches and v2's
+// do not.
+//
+// THE WIDTH IS 47 BITS AND THAT IS MEASURED, NOT ASSUMED. R104 asked for the
+// top bit of the 49-bit `rem_r` to be proven clear at publication rather than
+// argued from the mathematics, because the mathematics describes the converged
+// value and a port publishes whatever is in the register. A restoring divider
+// leaves `rem_r < den_r <= 2^47 - 1`, so bits 48 AND 47 are both clear -- and
+// `rem_range_err_o` is the standing instrument that says so out loud instead of
+// the comment being the only evidence. It is UNREACHABLE by legal stimulus
+// while the restoring compare is correct, so its positive control is the
+// committed mutant `tests/mutants/zhao_raster_attrdiv_v2_remwidth_mutant.sv`.
+//
+// ON SATURATION AND ERROR the pair is meaningless and `rem_o` reads zero, the
+// same convention v1 used for `bad_r`. A saturated quotient is clamped, so
+// `q_o*A + rem_o == M` cannot hold; consumers must read `q_saturated_o` and
+// `q_error_o` before using the pair.
 `default_nettype none
 
 // Test-only selector hooks are defined by the committed mutant source compiled
@@ -17,6 +70,22 @@
 `ifndef ZHAO_ATTR_V2_ROUND_NUM
 `define ZHAO_ATTR_V2_ROUND_NUM(num, area_ext) \
     ($signed(num) + ($signed(area_ext) >>> 1))
+`endif
+
+// The restoring compare, as a selectable leaf for the SAME reason the rounding
+// law is one: `rem_range_err_o` watches for a residue that outgrew 47 bits, and
+// that state is UNREACHABLE while this compare is correct. No legal stimulus
+// can move the counter, so "it can fire" would stay an argument forever. The
+// mutant turns `>=` into `>`, which lets a residue equal to the divisor survive
+// a step and grow past 2^47 on a large area.
+//
+// This is a seam, not a knob: production gets the identity law below, and
+// nothing but tests/mutants/zhao_raster_attrdiv_v2_remwidth_mutant.sv ever
+// defines it otherwise. A COPY of this divider was deliberately not taken --
+// see tests/mutants/zhao_raster_attr_v2_mutants.sv's header for why, and
+// CLAUDE.md for the three lanes that paid for a copy going stale.
+`ifndef ZHAO_ATTR_V2_REM_GE
+`define ZHAO_ATTR_V2_REM_GE(rem, den) ((rem) >= (den))
 `endif
 
 module zhao_raster_attrdiv_v2 #(
@@ -35,11 +104,20 @@ module zhao_raster_attrdiv_v2 #(
     output var logic signed [31:0] q_o,
     output var logic               q_saturated_o,
     output var logic               q_error_o,
+    // The TRUE floor remainder of this divide: q_o*area_i + rem_o == num_i +
+    // floor(area_i/2), with 0 <= rem_o < area_i. Zero and meaningless when
+    // q_saturated_o or q_error_o is set. See THE REMAINDER IS AN OUTPUT above.
+    output var logic [46:0]        rem_o,
 
     output var logic [31:0]        divides_o,
     output var logic [31:0]        saturations_o,
     output var logic [31:0]        errors_o,
-    output var logic [31:0]        busy_clocks_o
+    output var logic [31:0]        busy_clocks_o,
+    // Completions whose raw restoring residue did not fit 47 bits. Unreachable
+    // while the restoring compare below is correct; it exists so the width
+    // claim on rem_o is a live instrument rather than a sentence in a header.
+    // Positive control: tests/mutants/zhao_raster_attrdiv_v2_remwidth_mutant.sv
+    output var logic [31:0]        rem_range_err_o
 );
 
   localparam int unsigned RBITS = (RADIX == 4) ? 2 : 1;
@@ -82,6 +160,11 @@ module zhao_raster_attrdiv_v2 #(
   logic signed [31:0] final_q_r;
   logic               final_sat_r;
   logic               final_err_r;
+  // The floor remainder, already fixed up for the negative branch. Loaded on
+  // the same edge that loads final_q_r, so publishing it costs no clock -- the
+  // exact-latency gate in raster_attrgrad_v2_directed.cpp would catch it if it
+  // did.
+  logic        [46:0] final_rem_r;
 
   logic signed [96:0] area_ext_c;
   logic signed [96:0] rounded_num_r_c;
@@ -174,7 +257,7 @@ module zhao_raster_attrdiv_v2 #(
       end
     end else begin
       rem_shift_c = (rem_r << 1) | 49'({48'd0, dividend_r[97]});
-      if (rem_shift_c >= d1_c) begin
+      if (`ZHAO_ATTR_V2_REM_GE(rem_shift_c, d1_c)) begin
         digit_c    = 2'd1;
         rem_next_c = rem_shift_c - d1_c;
       end else begin
@@ -203,14 +286,17 @@ module zhao_raster_attrdiv_v2 #(
       final_q_r      <= 32'sd0;
       final_sat_r    <= 1'b0;
       final_err_r    <= 1'b0;
+      final_rem_r    <= 47'd0;
       r_valid_o      <= 1'b0;
       q_o            <= 32'sd0;
       q_saturated_o  <= 1'b0;
       q_error_o      <= 1'b0;
+      rem_o          <= 47'd0;
       divides_o      <= 32'd0;
       saturations_o  <= 32'd0;
       errors_o       <= 32'd0;
       busy_clocks_o  <= 32'd0;
+      rem_range_err_o <= 32'd0;
     end else begin
       if (st_r != D_IDLE) busy_clocks_o <= busy_clocks_o + 32'd1;
 
@@ -245,6 +331,11 @@ module zhao_raster_attrdiv_v2 #(
         end
 
         D_SAT: begin
+          // A saturated or refused divide has no meaningful pair: the quotient
+          // is clamped, so q*A + rem cannot equal M. Publish zero, as v1 did
+          // for `bad_r`. The D_RUN branch below overwrites this with the real
+          // remainder on a different edge, so there is no conflict.
+          final_rem_r <= 47'd0;
           if (final_err_r) begin
             final_q_r <= 32'sd0;
             st_r      <= D_DONE;
@@ -272,6 +363,18 @@ module zhao_raster_attrdiv_v2 #(
                 : 32'($signed({1'b0, qmag_next_c[31:0]}));
             final_sat_r <= 1'b0;
             final_err_r <= 1'b0;
+            // THE FIXUP. The negative branch divided |M| + A - 1, so its
+            // residue is (|M| - 1) mod A and the true floor remainder is
+            // A - 1 - that. The positive branch divided M itself, so its
+            // residue already IS the floor remainder. One conditional subtract
+            // on the edge that already latches the quotient.
+            final_rem_r <= neg_r ? (den_r - 47'd1 - rem_next_c[46:0])
+                                 : rem_next_c[46:0];
+            // THE WIDTH CLAIM, AS AN INSTRUMENT. A correct restoring compare
+            // leaves rem_next_c < den_r <= 2^47-1, so these two bits are dead.
+            // If they are ever live the truncation above is silently wrong, and
+            // this counter is the only thing that would say so.
+            if (|rem_next_c[48:47]) rem_range_err_o <= rem_range_err_o + 32'd1;
             st_r        <= D_DONE;
           end else begin
             iter_r <= iter_r - 7'd1;
@@ -282,6 +385,7 @@ module zhao_raster_attrdiv_v2 #(
           q_o           <= final_q_r;
           q_saturated_o <= final_sat_r;
           q_error_o     <= final_err_r;
+          rem_o         <= final_rem_r;
           r_valid_o     <= 1'b1;
           divides_o     <= divides_o + 32'd1;
           if (final_sat_r) saturations_o <= saturations_o + 32'd1;
@@ -299,4 +403,5 @@ module zhao_raster_attrdiv_v2 #(
 endmodule : zhao_raster_attrdiv_v2
 
 `undef ZHAO_ATTR_V2_ROUND_NUM
+`undef ZHAO_ATTR_V2_REM_GE
 `default_nettype wire

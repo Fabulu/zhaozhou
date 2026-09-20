@@ -14,65 +14,124 @@
 // pixel-attributes, zero mismatches, 0.099 divides per pixel against 1.000 --
 // AND EVERY RENDERED BIT UNCHANGED. This block is the RTL of that proof.
 //
-// The law does not move. RASTER.ATTRDIV stays the oracle:
+// ---------------------------------------------------------------------------
+// THE LAW MOVED ON 2026-09-20, AND THE MACHINERY GOT SMALLER (R100 / R104)
+// ---------------------------------------------------------------------------
+// This block seeded from `zhao_raster_attrdiv` (v1) until today, whose law is
 //
-//     q(N) = sign(N) * floor((2|N| + A) / (2A))
+//     q(N) = sign(N) * floor((2|N| + A) / (2A))        round half AWAY FROM ZERO
 //
-// which rounds half AWAY FROM ZERO. The ruling stated the target as
-// floor((N + floor(A/2))/A), and the proof's first finding is that THOSE ARE
-// DIFFERENT LAWS -- they disagree on every negative exact half, which would
-// move every golden capture CRC. This block implements ours.
+// The ratified law is round-half-UP -- `spec/qformats.md:53` and `:147`,
+// `rast.cpp:31-41`'s `div_rhu_s128`, all three agreeing:
+//
+//     q(N) = floor((N + floor(A/2)) / A)               ties toward +INFINITY
+//
+// R100 measured the difference over 640,000 sampled pairs: v2 matches the
+// reference EXACTLY in every sweep, v1 disagrees on 100% of negative exact
+// halves with an even divisor, a rate of about 1/(4d) -- over 10% on a
+// one-subpixel triangle. ADOPTING V2 IS A BUG FIX, and R86 makes composing the
+// superseded module fatal besides.
 //
 // ---------------------------------------------------------------------------
-// THE RECURRENCE, AND WHY IT NEEDS TWO BRANCHES
+// ONE BRANCH, NOT TWO -- AND THAT IS THE REAL CONTENT OF THIS CHANGE
 // ---------------------------------------------------------------------------
-// Write the shipped law as two floor divisions, one per sign of N:
+// The old law is SYMMETRIC ABOUT ZERO, so its quotient is a magnitude and the
+// representation BREAKS AT ZERO. Everything below existed to serve that break:
+// two step decompositions (qxp/rxp and qxn/rxn) muxed per pixel, a `sign_r`
+// bit, a 96-bit shadow accumulator stepped purely to learn the NEXT pixel's
+// sign, and a RESEED THROUGH THE DIVIDER whenever a row crossed zero.
 //
-//     N >= 0 :  q =  floor(M  / D),  M  =  2N + A,   M  steps by  +2*dNdx
-//     N <  0 :  q = -floor(M' / D),  M' = -2N + A,   M' steps by  -2*dNdx
+// The ratified law is a plain floor division, and floor is CONTINUOUS ACROSS
+// ZERO. Write M = N + floor(A/2); M advances by dNdx exactly, because the bias
+// is a constant. Then for any signs whatever,
 //
-// with D = 2A. Within one sign region each is a plain floor division of an
-// integer advancing by a constant, so the Euclidean recurrence
+//     q = floor(M / A),   r = M - q*A,   0 <= r < A
+//     dNdx = dq*A + dr,   0 <= dr < A
+//     per pixel:  q += dq;  r += dr;  if (r >= A) { r -= A; ++q; }
 //
-//     q += qd;  r += rd;  if (r >= D) { r -= D; ++q; }
+// is exact everywhere, with no case at zero. So this change DELETES the second
+// decomposition, the sign bit, the shadow accumulator's per-pixel add and the
+// mid-row reseed. None of that is function being removed: the function is
+// "the correct attribute at every covered pixel", and it is preserved and
+// measured across zero -- `raster_attrdiv_v2_rem_directed` walks the pair
+// through zero one unit at a time over six sign crossings with zero breaks,
+// and section 2 of this block's own directed test drives planes that cross.
+// What is removed is machinery that only ever compensated for the old law.
 //
-// is exact. N is stepped as an ordinary integer add -- RASTER.INTERP already
-// does exactly that -- so the sign is known for free and a crossing simply
-// reseeds. A row is 16 pixels and N is linear, so A ROW CROSSES ZERO AT MOST
-// ONCE.
+// This is also, deliberately, the representation `zhao_raster_attrwalk` uses.
+// That block is the divider-free successor to this one; it cannot replace it
+// today because NOTHING IN THE TREE BUILDS THE THREE EUCLIDEAN PAIRS ITS JOB
+// PORT REQUIRES -- there is no seed stage, verified by search, so adopting it
+// here would have converted a working self-contained block into a port with no
+// producer. This block keeps its own divider and therefore keeps working.
 //
 // ---------------------------------------------------------------------------
-// WHERE THE STEP DECOMPOSITION COMES FROM: ONE DIVIDE, NOT FOUR
+// WHERE THE STEP DECOMPOSITION COMES FROM: STILL ONE DIVIDE
 // ---------------------------------------------------------------------------
-// The recurrence needs (qd, rd) with 2*dNdx = qd*D + rd. Since D = 2A that is
-// just the Euclidean division of dNdx by A, doubled:
+// The recurrence needs (dq, dr) with dNdx = dq*A + dr, which is the plain
+// Euclidean division of dNdx by A. v2 does not publish that directly, because
+// it ALWAYS adds the rounding bias h = floor(A/2). Undoing the bias is one
+// compare and one add: from dNdx + h = q'*A + r',
 //
-//     dNdx = A*f + g   =>   qd = f,  rd = 2g
+//     r' >= h :  dq = q',      dr = r' - h
+//     r' <  h :  dq = q' - 1,  dr = r' + A - h
 //
-// and RASTER.ATTRDIV already computes exactly that pair, in disguise. It
-// returns q_mag = floor((2|n|+A)/(2A)) and rem = (2|n|+A) mod 2A, from which
+// which replaces the old f/g recovery line for line -- the same shape, against
+// the correct divisor. It is proved against the REAL divider rather than a
+// restatement of it, over 3,026 decompositions with zero wrong, in
+// `tests/raster/raster_attrdiv_v2_rem_directed.cpp` section 5.
 //
-//     rem >= A :  f = q_mag,      g = (rem - A)/2
-//     rem <  A :  f = q_mag - 1,  g = (rem + A)/2
+// The negative branch's step used to be derived from the positive one by
+// `-dM = (rd == 0) ? (-qd)*D : (-qd-1)*D + (D-rd)`. There is no negative
+// branch now, so that identity and its two registers are gone.
 //
-// recovers the magnitude pair exactly, and the sign is applied by
+// ---------------------------------------------------------------------------
+// SATURATION IS REFUSED AT A SEED, AND THAT IS A DECISION
+// ---------------------------------------------------------------------------
+// v1 published `q_overflow_o` and a zero quotient. v2 publishes `q_error_o`
+// (zero area, quotient meaningless) and `q_saturated_o` (quotient clamped to
+// INT32_MAX/MIN -- a VALID answer, and the one the reference gives).
 //
-//     n <  0, g > 0 :  floor = -f-1,  mod = A-g
-//     n <  0, g = 0 :  floor = -f,    mod = 0
+// This block refuses on BOTH, so its observable behaviour on the overflow path
+// is exactly v1's. The reason is not caution, it is arithmetic: a saturated
+// quotient is clamped, so `q*A + r == M` no longer holds and the pair is not a
+// legal recurrence seed. Stepping a clamped pair would produce sixteen
+// confidently wrong pixels instead of sixteen flagged ones. Emitting the
+// saturated VALUE per pixel would be strictly better than refusing, and
+// `zhao_raster_attrwalk` already does it by carrying the pair at full width
+// and range-checking at emit -- but that needs v2 to publish the UNSATURATED
+// quotient, which it does not, so it is named here and not faked.
 //
-// Both identities are checked over 200,000 random cases in the directed test
-// before any of this is trusted. So ONE divide yields the x step, and the
-// negative branch's step is derived from it without a second:
-//
-//     dM = qd*D + rd   =>   -dM = (rd == 0) ? (-qd)*D : (-qd-1)*D + (D-rd)
+// NOT FIXED HERE, AND NOT MADE WORSE: `q_o` is `p_r[31:0]` with no per-pixel
+// range check, so a quotient that grows past 2^31 MID-ROW is emitted
+// sign-flipped and unflagged. That is a pre-existing defect of this block
+// (attrwalk's header records it at :66-70) and the v2 swap neither causes nor
+// repairs it -- v1 truncated identically. The repair is attrwalk's full-width
+// pair plus an emit-time check; doing it here would be a second implementation
+// of that.
 //
 // ---------------------------------------------------------------------------
 // WHAT IT COSTS
 // ---------------------------------------------------------------------------
-// Per attribute per tile: one divide for the x step, one to seed each covered
-// row, and at most one more per row at a sign crossing. Per pixel: one add,
-// one compare, one conditional subtract. The proof measures the total at 0.099
-// divides a pixel.
+// Per attribute per tile: one divide for the x step and one to seed each
+// covered row. THE SIGN-CROSSING RESEED IS GONE -- that was v1's law needing a
+// new branch, and the ratified law has no branches, so a row costs exactly one
+// divide however many times it crosses zero. Measured by the directed test:
+// 1,536 pixel-attributes with 69 SIGN CHANGES inside the walk, zero reseeds,
+// every pixel matching the reference; and a 256-pixel tile at 17 divides,
+// 0.066 a pixel against 1.000 through the bare divider, 15.1x.
+//
+// Per pixel: one add, one compare, one conditional subtract -- and no branch
+// mux and no 96-bit shadow accumulator, both of which existed only to answer
+// "which side of zero is the next pixel on".
+//
+// THE DIVIDES THEMSELVES GOT LONGER, and that is the other half of the trade.
+// v2 walks 98 quotient positions where v1 walked 33, so a seed is 52 clocks at
+// radix 4 rather than 20. Fewer divides, each about 2.6x longer: on this tile
+// 17 x 52 = 884 clocks against v1's 17 x 20 = 340 plus its crossing reseeds.
+// The rounding is the reason for the swap and it is not negotiable (R100), but
+// the occupancy is a real cost and recovering it -- teaching v2 v1's window
+// trick, which touches no rounding -- is a named follow-on, not an assumption.
 //
 // This block is a PROTOTYPE in the ruling's sense: it exists so the recurrence
 // can be composed against the divider path and compared for resource and Fmax
@@ -121,26 +180,38 @@ module zhao_raster_attrstep (
   // be offered while one is in flight. Sunk rather than wired into a condition
   // that would make `valid` depend on `ready`.
   /* verilator lint_off UNUSEDSIGNAL */
-  logic               dv_valid, dv_ready, dv_rvalid, dv_rready, dv_ovf;
+  logic               dv_valid, dv_ready, dv_rvalid, dv_rready;
+  logic               dv_sat, dv_err;
+  logic [31:0]        dv_remerr;
   /* verilator lint_on UNUSEDSIGNAL */
   logic signed [95:0] dv_num;
   logic signed [31:0] dv_q;
-  logic [47:0]        dv_rem;
-  zhao_raster_attrdiv #(.RADIX(4)) u_div (
-      .clk          (clk),
-      .rst_n        (rst_n),
-      .v_valid_i    (dv_valid),
-      .v_ready_o    (dv_ready),
-      .num_i        (dv_num),
-      .area_i       (job_area_r),
-      .r_valid_o    (dv_rvalid),
-      .r_ready_i    (dv_rready),
-      .q_o          (dv_q),
-      .q_overflow_o (dv_ovf),
-      .rem_o        (dv_rem),
+  logic [46:0]        dv_rem;
+  // V2 AS OF 2026-09-20 (R100/R104). `rem_o` is 47 bits and is the TRUE FLOOR
+  // remainder of M = num + floor(A/2) by A -- not v1's remainder, which was mod
+  // 2A on a doubled dividend. `rem_range_err_o` is the unit's own width guard;
+  // it is sunk here because this block reads the PAIR, and a pair that failed
+  // the width check would already have broken the invariant the seed relies on.
+  // Its positive control is the committed mutant beside the divider.
+  zhao_raster_attrdiv_v2 #(.RADIX(4)) u_div (
+      .clk             (clk),
+      .rst_n           (rst_n),
+      .v_valid_i       (dv_valid),
+      .v_ready_o       (dv_ready),
+      .num_i           (dv_num),
+      .area_i          (job_area_r),
+      .r_valid_o       (dv_rvalid),
+      .r_ready_i       (dv_rready),
+      .q_o             (dv_q),
+      .q_saturated_o   (dv_sat),
+      .q_error_o       (dv_err),
+      .rem_o           (dv_rem),
+      .rem_range_err_o (dv_remerr),
       /* verilator lint_off PINCONNECTEMPTY */
-      .divides_o    (),
-      .busy_clocks_o()
+      .divides_o     (),
+      .saturations_o (),
+      .errors_o      (),
+      .busy_clocks_o ()
       /* verilator lint_on PINCONNECTEMPTY */
   );
 
@@ -152,26 +223,28 @@ module zhao_raster_attrstep (
 
   logic [2:0]         st_r;
   logic signed [95:0] dndx_r, dndy_r, base_r, acc_n_r;
-  logic [46:0]        job_area_r;
-  logic [48:0]        d_r;          // D = 2A
+  logic [46:0]        job_area_r;   // A, the divisor. v1 carried D = 2A here.
 
-  // the x step, both branches
-  logic signed [95:0] qxp_r, qxn_r;   // quotient part of the step
-  logic [48:0]        rxp_r, rxn_r;   // remainder part, 0 <= r < D
+  // ---- the x step: ONE decomposition, because floor does not break at zero --
+  // dNdx = dqx*A + drx, 0 <= drx < A. v1 needed a second pair (qxn/rxn) for the
+  // negative branch and a mux per pixel; the ratified law has no branches, so
+  // there is nothing to mux and nothing to negate.
+  logic signed [95:0] qxp_r;     // dqx
+  logic [46:0]        rxp_r;     // drx, 0 <= drx < A
 
   // ---- the running pair -----------------------------------------------------
-  // p_r is the MAGNITUDE-side quotient: floor(M/D) in the positive branch and
-  // floor(M'/D) in the negative one. The emitted attribute is its negation when
-  // the branch is negative.
+  // p_r is now the SIGNED quotient floor(M/A) directly -- not a magnitude. That
+  // is the whole simplification: v1's pair was a magnitude because its law was
+  // symmetric about zero, which forced a sign bit, a shadow accumulator and a
+  // reseed at every crossing.
   //
-  // The first version tracked the SIGNED quotient and added the branch step to
-  // it, which stepped the negative branch the wrong way -- the error grew by
-  // exactly two steps a pixel and the directed test caught it on the second
-  // pixel of the first case. q = -P means q steps by MINUS what P steps by, and
-  // conflating the two is the whole bug.
+  // (The historical hazard that comment recorded is gone with the branch: v1's
+  // first version added the branch step to a SIGNED quotient, which stepped the
+  // negative branch the wrong way. There is one branch now and one step, so the
+  // two quantities cannot be conflated.)
   logic signed [95:0] p_r;
-  logic [48:0]        r_r;
-  logic               sign_r, seeded_r;
+  logic [47:0]        r_r;       // 0 <= r < A, one spare bit for the pre-wrap sum
+  logic               seeded_r;
 
   logic [15:0] mask_r;
   logic [3:0]  row_r, col_r;
@@ -197,68 +270,42 @@ module zhao_raster_attrstep (
     rowbase_c = base_r + rowoff_c;
   end
 
-  // ---- recover the Euclidean pair from the divider's (q, rem) --------------
-  // See WHERE THE STEP DECOMPOSITION COMES FROM. `dv_q` carries the sign; the
-  // magnitude pair is recovered from |q| and the remainder, then the sign is
-  // applied.
-  logic signed [95:0] mag_q_c;
-  logic [47:0]        f_g_c;      // g, the magnitude remainder
-  logic signed [95:0] f_c;        // f, the magnitude quotient
+  // ---- undo the divider's rounding bias to get the PLAIN Euclidean pair ----
+  // See WHERE THE STEP DECOMPOSITION COMES FROM. v2 returns the pair of
+  // M = dNdx + h against A, where h = floor(A/2); this block needs the pair of
+  // dNdx itself. One compare and one add, replacing v1's f/g recovery line for
+  // line -- same shape, correct divisor, and no sign fixup because there is no
+  // magnitude to re-sign.
+  //
+  // Proved against the real divider, not a restatement, over 3,026
+  // decompositions with zero wrong: raster_attrdiv_v2_rem_directed section 5.
+  logic [46:0]        bias_c;     // h = floor(A/2)
+  logic signed [95:0] qp_c;       // dqx
+  logic [46:0]        rp_c;       // drx
   always_comb begin
-    mag_q_c = (dv_q[31]) ? (-(96'(dv_q))) : 96'(dv_q);
-    if (dv_rem >= 48'({1'b0, job_area_r})) begin
-      f_c   = mag_q_c;
-      f_g_c = (dv_rem - 48'({1'b0, job_area_r})) >> 1;
+    bias_c = {1'b0, job_area_r[46:1]};
+    if (dv_rem >= bias_c) begin
+      qp_c = 96'(dv_q);
+      rp_c = dv_rem - bias_c;
     end else begin
-      f_c   = mag_q_c - 96'sd1;
-      f_g_c = (dv_rem + 48'({1'b0, job_area_r})) >> 1;
-    end
-  end
-
-  // ---- the x step in the POSITIVE branch, and its negation ----------------
-  // Hoisted to module scope: SystemVerilog will not take a bit-select of a
-  // parenthesised expression, and will not accept a declaration after a
-  // statement inside an unnamed block. Both were syntax errors in the first
-  // version of this file.
-  logic signed [95:0] qp_c, qxn_c;
-  logic [48:0]        rp_c, rxn_c;
-  always_comb begin
-    if (!dndx_r[95]) begin
-      qp_c = f_c;
-      rp_c = 49'({1'b0, f_g_c}) << 1;
-    end else if (f_g_c != 48'd0) begin
-      qp_c = -f_c - 96'sd1;
-      rp_c = (49'({1'b0, job_area_r}) - 49'({1'b0, f_g_c})) << 1;
-    end else begin
-      qp_c = -f_c;
-      rp_c = 49'd0;
-    end
-    // -dM = (rd == 0) ? (-qd)*D : (-qd-1)*D + (D - rd)
-    if (rp_c == 49'd0) begin
-      qxn_c = -qp_c;
-      rxn_c = 49'd0;
-    end else begin
-      qxn_c = -qp_c - 96'sd1;
-      rxn_c = d_r - rp_c;
+      qp_c = 96'(dv_q) - 96'sd1;
+      rp_c = (dv_rem + job_area_r) - bias_c;
     end
   end
 
   // ---- one pixel of the walk ----------------------------------------------
-  // Only next_n_c's SIGN is read -- it exists to answer "does the next pixel
-  // belong to the other branch", not to be an accumulator.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic signed [95:0] next_n_c;
-  /* verilator lint_on UNUSEDSIGNAL */
+  // ONE add, ONE compare, ONE conditional subtract, with no branch mux and no
+  // shadow accumulator. v1 stepped a 96-bit `next_n_c` here purely to learn the
+  // NEXT pixel's sign so it could decide whether to reseed; the floor pair is
+  // continuous across zero, so nothing needs to know the sign and the adder is
+  // gone with the question.
   logic signed [95:0] nq_c;
-  logic [48:0]        rsum_c, nr_c;
+  logic [47:0]        rsum_c, nr_c;
   always_comb begin
-    next_n_c = acc_n_r + dndx_r;
-    // Both branches ADD their own step to the magnitude quotient; what differs
-    // is which decomposition is used, not the direction of the add.
-    nq_c     = p_r + (sign_r ? qxn_r : qxp_r);
-    rsum_c   = r_r + (sign_r ? rxn_r : rxp_r);
-    if (rsum_c >= d_r) begin
-      nr_c = rsum_c - d_r;
+    nq_c   = p_r + qxp_r;
+    rsum_c = r_r + 48'({1'b0, rxp_r});
+    if (rsum_c >= 48'({1'b0, job_area_r})) begin
+      nr_c = rsum_c - 48'({1'b0, job_area_r});
       nq_c = nq_c + 96'sd1;
     end else begin
       nr_c = rsum_c;
@@ -269,8 +316,9 @@ module zhao_raster_attrstep (
   assign cov_ready_o = (st_r == S_ROW);
 
   assign q_valid_o = (st_r == S_WALK) && mask_r[col_r] && seeded_r;
-  assign q_o       = err_r ? 32'sd0
-                   : (sign_r ? 32'(-p_r[31:0]) : 32'(p_r[31:0]));
+  // p_r IS the signed quotient now, so there is no sign to re-apply. v1 carried
+  // a magnitude and negated it here.
+  assign q_o       = err_r ? 32'sd0 : 32'(p_r[31:0]);
   assign q_row_o   = row_r;
   assign q_col_o   = col_r;
   assign q_error_o = err_r;
@@ -305,14 +353,10 @@ module zhao_raster_attrstep (
       base_r     <= 96'sd0;
       acc_n_r    <= 96'sd0;
       job_area_r <= 47'd0;
-      d_r        <= 49'd0;
       qxp_r      <= 96'sd0;
-      qxn_r      <= 96'sd0;
-      rxp_r      <= 49'd0;
-      rxn_r      <= 49'd0;
+      rxp_r      <= 47'd0;
       p_r        <= 96'sd0;
-      r_r        <= 49'd0;
-      sign_r     <= 1'b0;
+      r_r        <= 48'd0;
       seeded_r   <= 1'b0;
       mask_r     <= 16'd0;
       row_r      <= 4'd0;
@@ -329,7 +373,6 @@ module zhao_raster_attrstep (
             dndy_r     <= dndy_c;
             base_r     <= base_c;
             job_area_r <= job_area_i;
-            d_r        <= {1'b0, job_area_i, 1'b0};  // D = 2A
             err_r      <= (job_area_i == 47'd0);
             st_r       <= (job_area_i == 47'd0) ? S_ROW : S_STEP;
           end
@@ -339,14 +382,16 @@ module zhao_raster_attrstep (
         S_STEP: begin
           if (dv_rvalid) begin
             divides_o <= divides_o + 32'd1;
-            if (dv_ovf) begin
+            // REFUSE ON BOTH. `dv_err` is v1's refusal; `dv_sat` is new and is
+            // NOT a refusal at the divider -- but a clamped quotient breaks
+            // q*A + r == M, so it is not a legal step decomposition. See
+            // SATURATION IS REFUSED AT A SEED in the header.
+            if (dv_sat || dv_err) begin
               err_r <= 1'b1;
             end else begin
-              // qd = floor(dNdx/A), rd = 2*(dNdx mod A), and the negated branch
+              // dqx = floor(dNdx/A), drx = dNdx mod A. One pair; v1 stored two.
               qxp_r <= qp_c;
               rxp_r <= rp_c;
-              qxn_r <= qxn_c;
-              rxn_r <= rxn_c;
             end
             st_r <= S_ROW;
           end
@@ -373,13 +418,14 @@ module zhao_raster_attrstep (
         S_SEED: begin
           if (dv_rvalid) begin
             divides_o <= divides_o + 32'd1;
-            if (dv_ovf) begin
+            if (dv_sat || dv_err) begin
               err_r <= 1'b1;
             end else begin
-              // |dv_q| is exactly floor(M/D) for the branch acc_n_r is in.
-              p_r    <= dv_q[31] ? (-(96'(dv_q))) : 96'(dv_q);
-              r_r    <= 49'({1'b0, dv_rem});
-              sign_r <= acc_n_r[95];
+              // DIRECT. dv_q IS floor(M/A) -- the attribute itself, signed --
+              // and dv_rem IS its floor remainder. v1 had to take a magnitude,
+              // re-sign it, and latch which branch it belonged to.
+              p_r <= 96'(dv_q);
+              r_r <= 48'({1'b0, dv_rem});
             end
             seeded_r <= 1'b1;
             st_r     <= S_WALK;
@@ -392,19 +438,16 @@ module zhao_raster_attrstep (
             if (col_r == 4'd15) begin
               st_r <= last_row_r ? S_IDLE : S_ROW;
             end else begin
-              col_r   <= col_r + 4'd1;
-              acc_n_r <= acc_n_r + dndx_r;
-              // Advance the pair in the CURRENT branch. A sign change is caught
-              // below and forces a reseed rather than a wrong step.
+              col_r <= col_r + 4'd1;
+              // Advance the pair. NO BRANCH, NO CROSSING TEST, NO RESEED: the
+              // floor pair is exact for every sign of M and dNdx, so a row is
+              // now exactly ONE divide instead of one plus a reseed per
+              // crossing. v1 also stepped a 96-bit acc_n_r here to learn the
+              // next pixel's sign; nothing asks that question any more, so the
+              // adder is gone rather than left driving nothing.
               if (!err_r) begin
                 p_r <= nq_c;
                 r_r <= nr_c;
-                // If the NEXT pixel's N has a different sign, the pair belongs
-                // to the wrong branch and must be reseeded rather than stepped.
-                if (next_n_c[95] != sign_r) begin
-                  seeded_r <= 1'b0;
-                  st_r     <= S_SEED;
-                end
               end
             end
           end

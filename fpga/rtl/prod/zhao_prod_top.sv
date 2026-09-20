@@ -3513,12 +3513,14 @@ module zhao_prod_top (
   logic [1-1:0] u47_v_ready_o;
   logic [1-1:0] u47_r_valid_o;
   logic signed [32-1:0] u47_q_o;
-  logic [1-1:0] u47_q_overflow_o;
-  logic [48-1:0] u47_rem_o;
+  logic [1-1:0] u47_q_saturated_o;
+  logic [1-1:0] u47_q_error_o;
+  logic [47-1:0] u47_rem_o;
   logic [16-1:0] u47_tag_o;
   logic [32-1:0] u47_accepted_o;
   logic [32-1:0] u47_retired_o;
   logic [32-1:0] u47_stall_clocks_o;
+  logic [1-1:0] u47_rem_range_seen_o;
   zhao_raster_attrdiv_svc u47_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -3530,17 +3532,19 @@ module zhao_prod_top (
       .r_valid_o(u47_r_valid_o),
       .r_ready_i(u47_src[28 +: 1]),
       .q_o(u47_q_o),
-      .q_overflow_o(u47_q_overflow_o),
+      .q_saturated_o(u47_q_saturated_o),
+      .q_error_o(u47_q_error_o),
       .rem_o(u47_rem_o),
       .tag_o(u47_tag_o),
       .accepted_o(u47_accepted_o),
       .retired_o(u47_retired_o),
-      .stall_clocks_o(u47_stall_clocks_o)
+      .stall_clocks_o(u47_stall_clocks_o),
+      .rem_range_seen_o(u47_rem_range_seen_o)
   );
   logic u47_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u47_fold_q <= 1'b0;
-    else u47_fold_q <= u47_fold_q ^ (((^u47_v_ready_o)) & u47_src[0]) ^ (((^u47_r_valid_o)) & u47_src[1]) ^ (((^u47_q_o)) & u47_src[2]) ^ (((^u47_q_overflow_o)) & u47_src[3]) ^ (((^u47_rem_o)) & u47_src[4]) ^ (((^u47_tag_o)) & u47_src[5]) ^ (((^u47_accepted_o)) & u47_src[6]) ^ (((^u47_retired_o)) & u47_src[7]) ^ (((^u47_stall_clocks_o)) & u47_src[8]);
+    else u47_fold_q <= u47_fold_q ^ (((^u47_v_ready_o)) & u47_src[0]) ^ (((^u47_r_valid_o)) & u47_src[1]) ^ (((^u47_q_o)) & u47_src[2]) ^ (((^u47_q_saturated_o)) & u47_src[3]) ^ (((^u47_q_error_o)) & u47_src[4]) ^ (((^u47_rem_o)) & u47_src[5]) ^ (((^u47_tag_o)) & u47_src[6]) ^ (((^u47_accepted_o)) & u47_src[7]) ^ (((^u47_retired_o)) & u47_src[8]) ^ (((^u47_stall_clocks_o)) & u47_src[9]) ^ (((^u47_rem_range_seen_o)) & u47_src[10]);
 
   // ---- zhao_raster_attrinterp ----
   logic [63:0] u48_lfsr_q;

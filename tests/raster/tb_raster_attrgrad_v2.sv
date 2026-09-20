@@ -16,6 +16,11 @@ module tb_raster_attrgrad_v2 #(
     output logic signed [31:0] d_q_o,
     output logic               d_saturated_o,
     output logic               d_error_o,
+    // The floor remainder and its width guard, added 2026-09-20 under R104 so
+    // the directed test can assert the Euclidean invariant on the pair and read
+    // the guard rather than trusting the header's arithmetic.
+    output logic        [46:0] d_rem_o,
+    output logic [31:0]        d_rem_range_err_o,
     output logic [31:0]        d_divides_o,
     output logic [31:0]        d_saturations_o,
     output logic [31:0]        d_errors_o,
@@ -64,6 +69,8 @@ module tb_raster_attrgrad_v2 #(
       .q_o           (d_q_o),
       .q_saturated_o (d_saturated_o),
       .q_error_o     (d_error_o),
+      .rem_o           (d_rem_o),
+      .rem_range_err_o (d_rem_range_err_o),
       .divides_o     (d_divides_o),
       .saturations_o (d_saturations_o),
       .errors_o      (d_errors_o),
