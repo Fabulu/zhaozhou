@@ -143,6 +143,29 @@ def tieoffs() -> list[dict]:
             "it `//`."
             % (len(out), ", ".join(missed)))
 
+    # AND A BLOCK THAT YIELDS NO ENTRIES AT ALL IS A FAILURE. Added 2026-09-20
+    # (review Q011, finding 6). The guard above compares what was parsed
+    # against what appears LATER, so it is blind to the case where NOTHING
+    # matches `_TIEOFF` anywhere: `out` is empty, `missed` is empty, and the
+    # function returns a clean `[]`. Renumber the ids, change the leading
+    # punctuation, wrap the heads differently -- any of it -- and the register
+    # reports every tie-off closed.
+    #
+    # The docstring above already states the disposition for a genuinely empty
+    # block: "Either every gap is closed and the block was removed -- in which
+    # case delete this check deliberately." A block that still EXISTS and
+    # parses to nothing has not been deleted deliberately; it has stopped being
+    # readable, and that is the reformatted-header blindness the same paragraph
+    # warns about.
+    if not out:
+        raise SystemExit(
+            "completion_register: the 'INCOMPLETE -- TIED OFF' block is present "
+            "in zhao_console_core.sv and NOT ONE entry matched. That is not an "
+            "empty gap list -- it is a parser that has gone blind on a block it "
+            "can see. If every gap really is closed, delete the block and this "
+            "check together, deliberately."
+        )
+
     # DUPLICATE ENTRY IDS ARE A HARD FAILURE.
     #
     # On 2026-09-19 two packets, within one hour, both numbered a new entry I42
@@ -299,10 +322,33 @@ def console_closure() -> set[str]:
         # the SYS.PLL worker, which declined to append a fit target rather than
         # take the reduction. There WAS a target after it (line 2340), so this
         # was not hypothetical.
-        if started and re.match(r"\s*-\s*top:", line):
+        # THE `- top:` BREAK IS NOT GUARDED BY `started`, AND THAT MATTERS.
+        # Added 2026-09-20 (review Q011) -- the same defect as the paragraph
+        # above, one layer down. `started` exists so a `sources:` line between
+        # the target name and its first entry cannot end the scan; it has
+        # nothing to do with reaching ANOTHER TARGET'S HEADER, which means we
+        # have left this target whatever we have seen. With the guard on, a
+        # core target whose source lines stopped being recognised -- a path
+        # spelling, a `- ./fpga/rtl/...`, a YAML anchor -- left `started` false,
+        # so NEITHER break could fire and the walk ran to end of file absorbing
+        # every later target's sources. Closure membership is one of the two
+        # tests for "connected", so that is a free, invisible reduction of the
+        # gap count inside the instrument meant to prevent one.
+        if re.match(r"\s*-\s*top:", line):
             break
         if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
             break
+    # AND AN EMPTY CLOSURE IS A FAILURE, NEVER AN ANSWER. If the target was
+    # found but contributed no source line, every module reads "not in the
+    # closure" and the capability walk loses its footing. That is the
+    # zero-shaped answer this file's own law says to distrust hardest.
+    if not started:
+        raise SystemExit(
+            "completion_register: the `zhao_console_core` fit target was found "
+            "in design/fit_targets.yml but contributed NO source line matching "
+            "`- fpga/rtl/...`. Either the path spelling changed or the target "
+            "was emptied; this register does not guess."
+        )
     return out
 
 
@@ -367,8 +413,11 @@ def closure_paths() -> list[pathlib.Path]:
             started = True
             continue
         # same bound as console_closure(); if these two disagree about where the
-        # target ends, one of them is reading another target's sources
-        if started and re.match(r"\s*-\s*top:", line):
+        # target ends, one of them is reading another target's sources.
+        # NOT guarded by `started` -- see console_closure() for why. (The
+        # duplicate copy of this same test below was dead code even before that
+        # change; review Q011 finding 19.)
+        if re.match(r"\s*-\s*top:", line):
             break
         # BOUND THE SCAN AT THE NEXT TARGET.
         #
@@ -384,10 +433,14 @@ def closure_paths() -> list[pathlib.Path]:
         # the SYS.PLL worker, which declined to append a fit target rather than
         # take the reduction. There WAS a target after it (line 2340), so this
         # was not hypothetical.
-        if started and re.match(r"\s*-\s*top:", line):
-            break
         if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
             break
+    if not started:
+        raise SystemExit(
+            "completion_register: closure_paths() found the `zhao_console_core` "
+            "fit target and no `- fpga/rtl/...` source under it. See "
+            "console_closure() for why an empty closure is a failure."
+        )
     return out
 
 
@@ -411,8 +464,20 @@ def ledger_blocks() -> list[dict]:
     missing, because a name heuristic over-reports and an over-reported gap list
     sends people to build things that already exist.
     """
+    # A MISSING LEDGER IS A FAILURE, NOT AN EMPTY ONE. Added 2026-09-20
+    # (review Q011, finding 1). This returned `[]`, which deletes EVERY
+    # capability gap -- the disconnected, the unbuilt, the unresolvable, all of
+    # it -- and prints a smaller total with no complaint. `tieoffs()` has
+    # refused a missing core since it was written, for exactly this reason; the
+    # other of the register's two roots had no such guard, and a moved or
+    # renamed ledger would have read as a finished console.
     if not BLOCKS.exists():
-        return []
+        raise SystemExit(
+            "completion_register: design/blocks.yml is missing. It is one of "
+            "the register's TWO roots, and without it every capability gap "
+            "vanishes from the total. That is not an empty ledger, it is a "
+            "blind instrument."
+        )
     text = BLOCKS.read_text(encoding="utf-8", errors="replace")
     out: list[dict] = []
     cur: dict | None = None
@@ -1142,10 +1207,24 @@ def audit() -> dict:
     total = (len(gaps) + len(dis["built_not_connected"])
              + len(dis["unbuilt"]) + len(dis["uncited_excuse"])
              + len(dis["unresolvable"]))
+    # SUPERSEDED MODULES BLOCK COMPLETION, and until 2026-09-20 they did not.
+    # `superseded_in_closure()` was computed in main(), printed inside a row of
+    # exclamation marks, and then DROPPED: it was absent from `--json`, absent
+    # from this dict, and absent from the exit code -- so the campaign could
+    # reach "0 gaps, exit 0" with the old version of a block composed, and the
+    # honest fit would then measure a machine nobody ships. That is the one
+    # thing the owner put in capitals: "YOU ONLY GET TO FIT THE LATEST
+    # VERSION." Found by review Q011, finding 7.
+    #
+    # It is NOT added to `mandatory_gaps`, because it is not a missing
+    # function and folding it in would make the headline number mean two
+    # things. It is its own list, and it gates the exit code beside the total.
+    sup = superseded_in_closure()
     return {
         "tieoffs_total": len(ties),
         "tieoff_gaps": len(gaps),
         "mandatory_gaps": total,
+        "superseded_composed": [[mod, list(newer)] for mod, newer in sup],
         "closure_modules": len(closure),
         "by_kind": {k: sum(1 for t in ties if t["kind"] == k)
                     for k in sorted({t["kind"] for t in ties})},
@@ -1218,6 +1297,27 @@ def _self_test() -> None:
         if "WALK STOPPED EARLY" not in fired or "I2" not in fired or "I3" not in fired:
             bad.append("the truncation guard did not fire on a planted blank "
                        "line (got %r)" % fired[:120])
+
+        # THE BLIND-BLOCK CONTROL (2026-09-20, review Q011 finding 6). The
+        # truncation guard above compares what was parsed against what appears
+        # LATER, so it is structurally blind to "nothing matched anywhere":
+        # both lists are empty and the register returns a clean zero. The block
+        # here is present and every head is unreadable.
+        blind = (
+            "// INCOMPLETE -- TIED OFF, AND WHY\n"
+            "//  J1) SOMETHING (`a_i`) -- BOUNDARY. no owner exists.\n"
+            "//  J2) OTHER (`b_i`) -- TIED TO ZERO.\n"
+        )
+        tmp.write_text(blind, encoding="utf-8")
+        fired = ""
+        try:
+            tieoffs()
+        except SystemExit as exc:
+            fired = str(exc)
+        if "NOT ONE entry matched" not in fired:
+            bad.append("the blind-block guard did not fire on a block whose "
+                       "entry heads all stopped matching (got %r)" % fired[:120])
+
         if bad:
             sys.stderr.write("completion_register SELF-TEST FAILED:\n")
             for b in bad:
@@ -1231,6 +1331,80 @@ def _self_test() -> None:
             pass
     _board_self_test()
     _superseded_self_test()
+    _blind_root_self_test()
+
+
+def _blind_root_self_test() -> None:
+    """FIRE the three guards that stop a blind root reading as a finished
+    console, plus the exit rule that superseded modules block completion.
+
+    All four were added 2026-09-20 from review Q011, and all four guard the
+    same shape: an input that VANISHES makes the total SMALLER, which is the
+    direction nobody audits. Each is proved to fire here, because a guard whose
+    alarm nobody has heard is an argument.
+    """
+    global BLOCKS, TARGETS
+    real_blocks, real_targets = BLOCKS, TARGETS
+    bad = []
+    tmp = ROOT / "tools" / "budget" / ".completion_selftest.yml"
+    try:
+        # 1. A MISSING LEDGER must refuse, not return an empty capability list.
+        BLOCKS = ROOT / "tools" / "budget" / ".no_such_blocks.yml"
+        fired = ""
+        try:
+            ledger_blocks()
+        except SystemExit as exc:
+            fired = str(exc)
+        if "blind instrument" not in fired:
+            bad.append("a missing design/blocks.yml did not refuse (got %r)"
+                       % fired[:120])
+        BLOCKS = real_blocks
+
+        # 2. A CORE TARGET WITH NO SOURCES must refuse. Before the fix this
+        #    walked to end of file absorbing every later target's sources.
+        tmp.write_text(
+            "targets:\n"
+            "  - top: zhao_console_core\n"
+            "    sources:\n"
+            "  - top: zhao_other\n"
+            "    sources:\n"
+            "      - fpga/rtl/common/zhao_pkg.sv\n",
+            encoding="utf-8")
+        TARGETS = tmp
+        for fn, name in ((console_closure, "console_closure"),
+                         (closure_paths, "closure_paths")):
+            fired = ""
+            try:
+                fn()
+            except SystemExit as exc:
+                fired = str(exc)
+            if "NO source line" not in fired and "no `- fpga/rtl/" not in fired:
+                bad.append("%s did not refuse an empty core closure (got %r)"
+                           % (name, fired[:120]))
+    finally:
+        BLOCKS, TARGETS = real_blocks, real_targets
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+    # 3. ZERO GAPS IS NOT ENOUGH while a superseded module is composed. This is
+    #    the one that could have ended the campaign early, so it is asserted
+    #    both ways round rather than only in the failing direction.
+    if _done({"mandatory_gaps": 0, "superseded_composed": []}) != 0:
+        bad.append("_done refused a genuinely finished design")
+    if _done({"mandatory_gaps": 0,
+              "superseded_composed": [["zhao_old", ["zhao_old_v2"]]]}) != 1:
+        bad.append("_done returned SUCCESS with a superseded module composed "
+                   "-- the owner's one capitalised rule")
+    if _done({"mandatory_gaps": 3, "superseded_composed": []}) != 1:
+        bad.append("_done returned SUCCESS with gaps remaining")
+
+    if bad:
+        sys.stderr.write("completion_register BLIND-ROOT SELF-TEST FAILED:\n")
+        for b in bad:
+            sys.stderr.write("  %s\n" % b)
+        raise SystemExit(2)
 
 
 def _superseded_self_test() -> None:
@@ -1295,16 +1469,27 @@ def _board_self_test() -> None:
         raise SystemExit(2)
 
 
+def _done(rep: dict) -> int:
+    """The exit code, in ONE place so the two returns cannot drift apart.
+
+    Zero gaps is necessary and not sufficient: a superseded module in the
+    closure blocks completion too, because fitting an old version measures a
+    machine nobody ships.
+    """
+    return 0 if (rep["mandatory_gaps"] == 0
+                 and not rep["superseded_composed"]) else 1
+
+
 def main(argv: list[str]) -> int:
     _self_test()
     rep = audit()
     if "--json" in argv:
         print(json.dumps(rep, indent=2))
-        return 0 if rep["mandatory_gaps"] == 0 else 1
+        return _done(rep)
 
     print("completion register -- computed from the tree, not maintained by hand")
     print("self-test PASSED: the parser sees a planted gap and classifies it\n")
-    sup = superseded_in_closure()
+    sup = [(mod, newer) for mod, newer in rep["superseded_composed"]]
     if sup:
         print("!" * 74)
         print("SUPERSEDED MODULES ARE COMPOSED -- %d of them." % len(sup))
@@ -1313,6 +1498,7 @@ def main(argv: list[str]) -> int:
         print("machine nobody ships and spends budget on dead weight.")
         for mod, newer in sup:
             print("   composed %-30s superseded by %s" % (mod, ", ".join(newer)))
+        print("THIS ALONE MAKES THE EXIT CODE NONZERO, however many gaps remain.")
         print("!" * 74)
         print()
 
@@ -1383,9 +1569,16 @@ def main(argv: list[str]) -> int:
         print("stimulus, an external placeholder for hardware storage, a")
         print("disconnected implementation, pruned dead logic, a stub, a TODO,")
         print("or an unimplemented contract. Drive this to ZERO.")
+    elif sup:
+        print("\nZero mandatory gaps -- AND THE DESIGN IS NOT READY TO FREEZE.")
+        print("%d superseded module(s) are composed (listed at the top). Fitting"
+              % len(sup))
+        print("an old version measures a machine nobody ships, so this run still")
+        print("exits nonzero. Replace them, then read this line again.")
     else:
-        print("\nZERO mandatory gaps. Freeze this design and measure it.")
-    return 0 if rep["mandatory_gaps"] == 0 else 1
+        print("\nZERO mandatory gaps and no superseded module composed.")
+        print("Freeze this design and measure it.")
+    return _done(rep)
 
 
 if __name__ == "__main__":
