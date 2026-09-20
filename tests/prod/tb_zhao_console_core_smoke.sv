@@ -863,20 +863,13 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_light_shaded_o;
   logic [31:0]             terr_light_degenerate_count_o;
   logic [31:0]             terr_light_base_sat_o;
-  logic [31:0]             terr_light_degen_mismatch_o;  logic                    post_gd_req_v_o;
-  logic                    post_gd_view_o;
-  logic [POST_XW-3:0]      post_gd_cx_o;
-  logic [POST_YW-3:0]      post_gd_cy_o;
-  logic                    post_gd_present_i;
-  logic signed [7:0]       post_gd_dx_i;
-  logic signed [7:0]       post_gd_dy_i;
-  logic                    post_gg_req_v_o;
-  logic                    post_gg_view_o;
-  logic [POST_XW-3:0]      post_gg_cx_o;
-  logic [POST_YW-3:0]      post_gg_cy_o;
-  logic                    post_gg_present_i;
-  logic [15:0]             post_gg_glow_i;
-  logic                    post_gg_ink_i;
+  logic [31:0]             terr_light_degen_mismatch_o;
+  // `post_gd_*` and `post_gg_*` ARE GONE, 2026-09-21 (owner ruling R195).
+  // POST.GATHER, its R195 tag law and its plane store are composed inside the
+  // core, so the gather planes are no longer nets this bench has to invent.
+  // Their stimulus here was six lines of zero -- which is precisely what W10
+  // warns about, an absent output that looks like a zero result, and the
+  // bench could not tell the two apart either.
   logic                    post_atm_req_v_o;
   logic [POST_XW-1:0]      post_atm_req_x_o;
   logic [POST_YW-1:0]      post_atm_req_y_o;
@@ -916,6 +909,25 @@ module tb_zhao_console_core_smoke
   logic [31:0]             post_output_writes_o;
   logic [31:0]             post_plane_reads_o;
   logic [31:0]             post_ring_hazard_o;
+
+  // ---- POST.GATHER evidence (composed 2026-09-21, owner ruling R195) ------
+  logic [31:0]             gather_frag_untagged_o;
+  logic [31:0]             gather_frag_below_knee_o;
+  logic [31:0]             gather_frag_lit_o;
+  logic [31:0]             gather_reserved_channel_o;
+  logic [31:0]             gather_fragments_o;
+  logic [31:0]             gather_glow_saturations_o;
+  logic [31:0]             gather_disp_clamps_o;
+  logic [31:0]             gather_cells_flushed_o;
+  logic [31:0]             gather_cells_written_o;
+  logic [31:0]             gather_oob_writes_o;
+  logic [31:0]             gather_gd_reads_o;
+  logic [31:0]             gather_gg_reads_o;
+  logic [31:0]             gather_gd_miss_o;
+  logic [31:0]             gather_gg_miss_o;
+  logic [31:0]             gather_flush_overrun_o;
+  logic [31:0]             gather_rdw_collide_o;
+  logic [31:0]             gather_plane_commits_o;
   // `hist_ev_*` IS GONE from the core's edge too (entry I18 closed 2026-09-20,
   // owner ruling R70): `zhao_terrain_lodfeed` is composed inside the core and
   // its deviation records ARE the events. This bench used to drive five ports
@@ -3701,12 +3713,6 @@ module tb_zhao_console_core_smoke
     terr_job_weight_i = '0;
     terr_sparse_fill_i = '0;
     proj_out_ready_i = '0;
-    post_gd_present_i = '0;
-    post_gd_dx_i = '0;
-    post_gd_dy_i = '0;
-    post_gg_present_i = '0;
-    post_gg_glow_i = '0;
-    post_gg_ink_i = '0;
     post_atm_en_i = '0;
     post_atm_valid_i = '0;
     post_atm_rgb_i = '0;
@@ -6338,6 +6344,59 @@ module tb_zhao_console_core_smoke
              render_texture_cache_hits_o, render_texture_cache_misses_o,
              render_texture_palette_lookups_o, render_texture_plan_accepted_o,
              render_texture_dispatch_accepted_o, render_texture_combine_refused_o);
+    // ======================================================================
+    // POST.GATHER, composed 2026-09-21 (entry I17 (c), owner ruling R195)
+    // ======================================================================
+    // WHAT THIS PROVES AND WHAT IT DOES NOT. It proves the SEAM carries: the
+    // shell's resolved-fragment tap reaches R195's law, the law reaches R5's
+    // accumulator, the accumulator's tile flush reaches the plane, and the
+    // plane answers POST.COMPOSITE. It does NOT prove the bloom looks right;
+    // that is `reports/post-gather-law/gather_law_contact.png`, which the
+    // owner has already judged, and it is not a thing a bench can assert.
+    //
+    // THE FOUR TAG COUNTERS ARE A PARTITION, and the sum is checked rather
+    // than the parts. Every accepted fragment lands in exactly one of
+    // untagged / below-knee / lit / reserved-channel, so if the four do not
+    // add up to `gather_fragments_o` a branch is wrong -- and no single
+    // counter read on its own could have told anyone. CLAUDE.md: a test that
+    // checks WHAT came out cannot see HOW MANY TIMES the machine did it.
+    $display("SMOKE: gather   frags=%0d [untagged=%0d below_knee=%0d lit=%0d reserved=%0d] sat=%0d clamps=%0d cells_flushed=%0d",
+             gather_fragments_o, gather_frag_untagged_o,
+             gather_frag_below_knee_o, gather_frag_lit_o,
+             gather_reserved_channel_o, gather_glow_saturations_o,
+             gather_disp_clamps_o, gather_cells_flushed_o);
+    $display("SMOKE: gather   plane written=%0d oob=%0d commits=%0d | reads[gd/gg]=[%0d %0d] miss[gd/gg]=[%0d %0d] | overrun=%0d rdw=%0d",
+             gather_cells_written_o, gather_oob_writes_o,
+             gather_plane_commits_o, gather_gd_reads_o, gather_gg_reads_o,
+             gather_gd_miss_o, gather_gg_miss_o,
+             gather_flush_overrun_o, gather_rdw_collide_o);
+    if (gather_fragments_o == 0)
+      $fatal(1, "SMOKE: POST.GATHER accumulated NOTHING while the raster resolved %0d pixel(s). The shell's gth_* tap, entry I17's own named obstacle, is not carrying.",
+             render_pixels_o);
+    if ((gather_frag_untagged_o + gather_frag_below_knee_o
+       + gather_frag_lit_o + gather_reserved_channel_o) != gather_fragments_o)
+      $fatal(1, "SMOKE: the tag law's four counters do not partition the stream: %0d + %0d + %0d + %0d != %0d. A fragment was counted twice or not at all.",
+             gather_frag_untagged_o, gather_frag_below_knee_o,
+             gather_frag_lit_o, gather_reserved_channel_o, gather_fragments_o);
+    // Every tile writes all SIXTEEN cells including zeros -- that is R5's
+    // reason there is no giant reset loop -- so a flush that is not a
+    // multiple of sixteen means a burst was cut short.
+    if ((gather_cells_flushed_o % 32'd16) != 32'd0)
+      $fatal(1, "SMOKE: %0d cells flushed, which is not a whole number of tiles. A flush burst was interrupted.",
+             gather_cells_flushed_o);
+    if (gather_cells_written_o == 0)
+      $fatal(1, "SMOKE: POST.GATHER flushed %0d cell(s) and the plane store accepted NONE (oob=%0d). The tile origin or the plane geometry is wrong, not the gather.",
+             gather_cells_flushed_o, gather_oob_writes_o);
+    // TWO TRIPWIRES. Both are DELIBERATELY FIRED in
+    // `tests/compositor/post_gather_store_directed.cpp`, so quoting their
+    // silence here is quoting an instrument that has been seen to work --
+    // which is the whole of CLAUDE.md's rule about a detector reading zero.
+    if (gather_flush_overrun_o != 32'd0)
+      $fatal(1, "SMOKE: a tile closed %0d time(s) while a flush was still draining. The store's origin moved out from under a burst, so cells landed at the wrong screen address -- the metadata-swap shape, in the plane.",
+             gather_flush_overrun_o);
+    if (gather_rdw_collide_o != 32'd0)
+      $fatal(1, "SMOKE: the plane was read and written on the same cell %0d time(s). The raster and post phases OVERLAPPED, and the single-plane decision rests on them not doing so.",
+             gather_rdw_collide_o);
     if (geom_attrpack_triangles_o == 0)
       $fatal(1, "SMOKE: GEOM.ATTRPACK never saw a triangle, so every plane the shell read was its reset value");
     // THE SAMPLE IS A HARD GATE, and it is asserted several ways because a

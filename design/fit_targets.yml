@@ -2947,6 +2947,23 @@ targets:
       - fpga/rtl/compositor/zhao_twod_plane.sv
       - fpga/rtl/compositor/zhao_twod_sprite.sv
       - fpga/rtl/compositor/zhao_twod_sampler.sv
+      # POST.GATHER, composed 2026-09-21 (entry I17 (c), owner ruling R195).
+      # Three files because the gap was three separate things: the ART LAW
+      # (`_tag`, R195's coefficients, every one a parameter), R5's tile-local
+      # accumulator (`zhao_post_gather.sv`, UNCHANGED -- it was built, tested
+      # and disconnected, and not one line moved to compose it) and the PLANE
+      # (`_store`, which turns a sixteen-cell tile flush into the random
+      # access by {view, cx, cy} composite has always asked for).
+      #
+      # THIS ROW'S M10K FIGURE IS THE ONE TO READ IN ITS DELTA. The store is
+      # two simple dual-port memories over 8,192 cells -- 8,192 x 16 for
+      # displacement and 8,192 x 17 for glow+ink, about 27 M10K, against
+      # POST.GATHER.md's ceiling of 30. Its ALM figure should move by a few
+      # hundred at most: three 7x7 address multiplies and six 8x8 unit
+      # multiplies in the law.
+      - fpga/rtl/compositor/zhao_post_gather_tag.sv
+      - fpga/rtl/compositor/zhao_post_gather.sv
+      - fpga/rtl/compositor/zhao_post_gather_store.sv
       - fpga/rtl/measure/zhao_measure_histogram.sv
       # SURFACE, added 2026-09-19. The pair is composed CLOSED -- SURFACE.STAMP
       # is SURFACE.SHEET's only client and its only writer (terrain_rules 7:
@@ -2966,11 +2983,7 @@ targets:
       # what it added should name what it did not: zhao_twod_plane and
       # zhao_twod_sprite (both emit TEXEL SAMPLE REQUESTS and POST.COMPOSITE's
       # atm_*/hud_* ports want RGB back -- the sampler between them is not
-      # built), zhao_post_gather (RASTER.RESOLVE emits an 8-bit effect TAG and
-      # this block wants glow RGB + a signed 8.8 displacement; expanding one
-      # into the other is a colour law invented in the composer, and resolve's
-      # stream is internal to zhao_geom_bin_pipe_v2 besides -- entry I15),
-      # zhao_cmd_decoder
+      # built), zhao_cmd_decoder
       # (the byte stream it wants is real and is INTERNAL to zhao_shell_top_v2),
       # zhao_measure_tokens / zhao_measure_governor (the binner's token client
       # is one bit against a seven-field request, and the budgets and the
@@ -2979,6 +2992,16 @@ targets:
       # refusal, one block over), zhao_field_progcache, zhao_forge_prim,
       # zhao_forge_prim_eval and zhao_forge_cliff (all four wait on a dispatch
       # or an issuer that is not built).
+      #
+      # zhao_post_gather LEFT THIS LIST ON 2026-09-21, and its refusal is
+      # deleted above rather than annotated because the list is a list of
+      # what is refused NOW. What it said was: "expanding a tag byte into
+      # glow RGB is a colour law invented in the composer, and resolve's
+      # stream is internal besides -- entry I15". THE FIRST HALF WAS RIGHT,
+      # and the answer was to get the law RULED rather than to invent it:
+      # owner ruling R195 ratified it and `zhao_post_gather_tag.sv` carries
+      # it as named parameters, outside any composer. The second half named
+      # the WRONG STREAM and entry I17 withdrew it on 2026-09-20.
       #
       # THREE NAMES LEFT THIS LIST ON 2026-09-19: zhao_part_expand,
       # zhao_part_soft and zhao_part_ladder are now IN the closure above. The

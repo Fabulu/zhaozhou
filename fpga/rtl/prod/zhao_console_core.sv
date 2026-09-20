@@ -6036,20 +6036,12 @@ module zhao_console_core
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
   // (I15, 2026-09-19): the pass, its view and its pixels come from the shell's
   // `zhao_post_lease`, which reads the back buffer in raster order.
-  output logic                    post_gd_req_v_o,
-  output logic                    post_gd_view_o,
-  output logic [POST_XW-3:0]      post_gd_cx_o,
-  output logic [POST_YW-3:0]      post_gd_cy_o,
-  input  logic                    post_gd_present_i,
-  input  logic signed [7:0]       post_gd_dx_i,
-  input  logic signed [7:0]       post_gd_dy_i,
-  output logic                    post_gg_req_v_o,
-  output logic                    post_gg_view_o,
-  output logic [POST_XW-3:0]      post_gg_cx_o,
-  output logic [POST_YW-3:0]      post_gg_cy_o,
-  input  logic                    post_gg_present_i,
-  input  logic [15:0]             post_gg_glow_i,
-  input  logic                    post_gg_ink_i,
+  // THE `post_gd_*` AND `post_gg_*` GROUPS ARE GONE FROM THIS EDGE,
+  // 2026-09-21, owner ruling R195. Fourteen ports. They are now internal:
+  // `u_post_gather_tag` -> `u_post_gather` -> `u_post_gather_store` ->
+  // `u_post_composite`, all in this module, fed by the shell's
+  // resolved-fragment tap. Entry I17 bullet (c) records what closed them and
+  // what the ruling did NOT answer.
   // The `atm_*` GROUP IS GONE FROM THIS EDGE, 2026-09-19. It is now internal:
   // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
   // this module and the atmosphere sheet never leaves. Entry I17 records what
@@ -6092,6 +6084,45 @@ module zhao_console_core
   output logic [31:0]             post_output_writes_o,
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
+
+  // ---- POST.GATHER evidence (composed 2026-09-21, ruling R195) -------------
+  // THE FOUR TAG COUNTERS PARTITION THE RESOLVED STREAM, which is what makes
+  // them readable together: every accepted fragment lands in exactly one of
+  // untagged / below-knee / lit / reserved-channel, and the four must sum to
+  // `gather_fragments_o`. A partition is a much stronger instrument than four
+  // independent tallies -- one wrong branch breaks the sum, and no single
+  // counter can hide a miscount by being read on its own.
+  output logic [31:0]             gather_frag_untagged_o,
+  output logic [31:0]             gather_frag_below_knee_o,
+  output logic [31:0]             gather_frag_lit_o,
+  // R195 decision 3's instrument: channels 0b10 and 0b11 are unallocated in
+  // the frozen spec, so this reads the number of fragments that asked for a
+  // displacement or an ink bit the law does not yet supply. The day
+  // `stars_and_flares.md` allocates one, this says whether anything was
+  // already drawing it.
+  output logic [31:0]             gather_reserved_channel_o,
+  output logic [31:0]             gather_fragments_o,
+  output logic [31:0]             gather_glow_saturations_o,
+  output logic [31:0]             gather_disp_clamps_o,
+  output logic [31:0]             gather_cells_flushed_o,
+  // ---- the plane store -----------------------------------------------------
+  output logic [31:0]             gather_cells_written_o,
+  output logic [31:0]             gather_oob_writes_o,     // a cell off the plane
+  output logic [31:0]             gather_gd_reads_o,
+  output logic [31:0]             gather_gg_reads_o,
+  output logic [31:0]             gather_gd_miss_o,
+  output logic [31:0]             gather_gg_miss_o,
+  // TRIPWIRES, and they are named as such so that nobody quotes their silence
+  // without firing them first. `flush_overrun_o` differences the gather's own
+  // sixteen-clock flush walk against the raster's 256-pixel tile cadence --
+  // two operands, two clocks, nothing in common. `rdw_collide_o` is the
+  // instrument for the claim that one plane is enough, i.e. that the raster
+  // and post phases never overlap. Both are fired deliberately in
+  // `tests/compositor/post_gather_store_directed.cpp`; in the composed
+  // console both must read ZERO.
+  output logic [31:0]             gather_flush_overrun_o,
+  output logic [31:0]             gather_rdw_collide_o,
+  output logic [31:0]             gather_plane_commits_o,
 
   // ---- THE HISTOGRAM. Its EVENTS ARE NO LONGER HERE ------------------------
   // I18 CLOSED 2026-09-20 (owner ruling R70). `hist_ev_valid_i`,
@@ -10677,6 +10708,284 @@ module zhao_console_core
   logic signed [8:0] post_look_bias_r_w, post_look_bias_g_w, post_look_bias_b_w;
   logic [15:0]       post_look_flash_rgb_w, post_look_ink_rgb_w;
 
+  // ==========================================================================
+  // POST.GATHER, COMPOSED 2026-09-21. Entry I17 bullet (c), owner ruling R195.
+  // ==========================================================================
+  // Three blocks close the gather half of I17, and they are three because the
+  // gap was three separate things and collapsing them into one composer would
+  // have buried the art law inside the wiring.
+  //
+  //   `u_post_gather_tag`    R195's tag-to-gather LAW. An 8-bit effect tag
+  //                          plus the fragment's own RGB565 becomes three
+  //                          8-bit glow channels. Every coefficient is a
+  //                          parameter; the defaults are the ratified ones.
+  //   `u_post_gather`        R5's tile-local accumulator, UNCHANGED. It was
+  //                          built and tested and disconnected; not one line
+  //                          of it moved to compose it.
+  //   `u_post_gather_store`  the plane. It turns a sixteen-cell tile FLUSH
+  //                          into the random access by {view, cx, cy} that
+  //                          POST.COMPOSITE has always asked for.
+  //
+  // WHAT THE OWNER RULED, so the next reader does not have to find it. Fabian,
+  // 2026-09-20, looking at reports/post-gather-law/gather_law_contact.png:
+  // "Everything but before looks basically the same. Pick cheapest." R195
+  // resolves that to the proposal UNCHANGED -- knee 24, slope 0x1C, tint
+  // 255/236/224, master 255 -- and records why "cheapest" is not "the lowest
+  // number in every column": knee runs the other way, and knee 16 has 907 of
+  // 5,760 cells contributing against 74, which is twelve times the work for
+  // the hazed frame the contract already describes.
+  //
+  // THE FOURTH GAP, which R195 does NOT address and which packet POSTMEAS
+  // found: the flush stream carries no address. `c_index_o` is four bits
+  // "within the tile" and composite reads absolute {view, cx, cy}. It is
+  // answered in `zhao_post_gather_store.sv`, whose header carries the full
+  // argument. The glue below supplies the two things that block needs and
+  // this one can see: the TILE ORIGIN and the PLANE'S LIFETIME.
+  // --------------------------------------------------------------------------
+  logic               gth_valid_w;
+  logic [15:0]        gth_rgb565_w;
+  logic [7:0]         gth_tag_w;
+  logic [7:0]         gth_addr_w;
+  logic signed [11:0] gth_x_w, gth_y_w;
+  logic               gth_last_w;
+
+  localparam int unsigned GTH_CW = 7;   // cell-coordinate width, 0..127
+
+  // ---- the tile origin, from the raster's own surface coordinates ----------
+  // The shell publishes the SURFACE (x, y) of every accepted beat beside its
+  // position INSIDE the 16x16 tile, so the origin is a four-bit subtract and
+  // needs no tile-start handshake. A pulse is a second thing that can be one
+  // cycle out; a subtraction is not.
+  logic signed [11:0] gth_org_x_c, gth_org_y_c;
+  logic               gth_org_ok_c;
+  logic [GTH_CW-1:0]  gth_org_cx_c, gth_org_cy_c;
+
+  always_comb begin
+    gth_org_x_c = gth_x_w - $signed({8'd0, gth_addr_w[3:0]});
+    gth_org_y_c = gth_y_w - $signed({8'd0, gth_addr_w[7:4]});
+    // DECLARED, not encoded (R197). `fb_x_o`/`fb_y_o` are signed, so a tile
+    // the binner places off the left or top edge arrives negative, and
+    // narrowing a negative coordinate into seven bits aliases it back INTO
+    // the plane. The store takes the flag and suppresses the whole tile's
+    // flush rather than trusting a coordinate.
+    gth_org_ok_c = (gth_org_x_c >= 12'sd0) && (gth_org_y_c >= 12'sd0)
+                && (gth_org_x_c[11:2] < 10'd128) && (gth_org_y_c[11:2] < 10'd128);
+    gth_org_cx_c = GTH_CW'(gth_org_x_c[11:2]);
+    gth_org_cy_c = GTH_CW'(gth_org_y_c[11:2]);
+  end
+
+  // The origin, registered so it sits beside `u_post_gather_tag`'s output
+  // beat. Both registers are unconditional and clocked by the same edge, so
+  // the coordinate and the fragment it describes cannot skew -- the positive
+  // reading of CLAUDE.md's metadata chapter, where one gated enable on two
+  // fields produced A's data with B's metadata.
+  logic [GTH_CW-1:0] gth_org_cx_q, gth_org_cy_q;
+  logic              gth_org_ok_q;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      gth_org_cx_q <= '0;
+      gth_org_cy_q <= '0;
+      gth_org_ok_q <= 1'b0;
+    end else begin
+      gth_org_cx_q <= gth_org_cx_c;
+      gth_org_cy_q <= gth_org_cy_c;
+      gth_org_ok_q <= gth_org_ok_c;
+    end
+  end
+
+  // ---- the tile cadence ----------------------------------------------------
+  // `gth_last_w` marks the 256th pixel of a tile. The gather's `tile_start_i`
+  // must land AFTER that fragment has been accumulated and BEFORE the flush
+  // that drains its bank, so the two pulses are one and two clocks behind the
+  // close. They ride through `u_post_gather_tag`'s register stage with the
+  // fragments themselves, which is what keeps a tile boundary between the
+  // same two fragments it was between at resolve.
+  logic gth_close_q, gth_close_d_q;
+
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      gth_close_q   <= 1'b0;
+      gth_close_d_q <= 1'b0;
+    end else begin
+      gth_close_q   <= gth_valid_w && gth_last_w;
+      gth_close_d_q <= gth_close_q;
+    end
+  end
+
+  logic               gtag_valid_w;
+  logic [7:0]         gtag_r_w, gtag_g_w, gtag_b_w;
+  logic signed [15:0] gtag_dx_w, gtag_dy_w;
+  logic               gtag_ink_w;
+  logic [3:0]         gtag_x_w, gtag_y_w;
+  logic               gtag_tstart_w, gtag_tflush_w;
+
+  zhao_post_gather_tag u_post_gather_tag (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    // REAL: the shell's POST.GATHER tap, the ACCEPTED resolved beat. Entry
+    // I17's "the tag is DISCARDED INSIDE THE SHELL" -- it is not, any more.
+    .f_valid_i  (gth_valid_w),
+    .f_tag_i    (gth_tag_w),
+    .f_rgb565_i (gth_rgb565_w),
+    .f_x_i      (gth_addr_w[3:0]),
+    .f_y_i      (gth_addr_w[7:4]),
+    .tile_start_i(gth_close_q),
+    .tile_flush_i(gth_close_d_q),
+    .g_valid_o     (gtag_valid_w),
+    .g_glow_r_o    (gtag_r_w),
+    .g_glow_g_o    (gtag_g_w),
+    .g_glow_b_o    (gtag_b_w),
+    .g_disp_x_o    (gtag_dx_w),
+    .g_disp_y_o    (gtag_dy_w),
+    .g_ink_o       (gtag_ink_w),
+    .g_x_o         (gtag_x_w),
+    .g_y_o         (gtag_y_w),
+    .g_tile_start_o(gtag_tstart_w),
+    .g_tile_flush_o(gtag_tflush_w),
+    .frag_untagged_o   (gather_frag_untagged_o),
+    .frag_below_knee_o (gather_frag_below_knee_o),
+    .frag_lit_o        (gather_frag_lit_o),
+    .reserved_channel_o(gather_reserved_channel_o)
+  );
+
+  logic               gcell_valid_w, gcell_ink_w, gth_busy_w;
+  logic [3:0]         gcell_index_w;
+  logic [15:0]        gcell_glow_w;
+  logic signed [7:0]  gcell_dx_w, gcell_dy_w;
+
+  zhao_post_gather u_post_gather (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    // REAL (R195): the law's output, one clock behind the resolved beat, with
+    // the fragment's in-tile position delayed by the same one clock. There is
+    // no `ready` on this group and there must not be: R5 forbids this block
+    // from ever backpressuring RASTER.RESOLVE, and an interface without a
+    // ready is that ruling said in ports.
+    .f_valid_i  (gtag_valid_w),
+    .f_x_i      (gtag_x_w),
+    .f_y_i      (gtag_y_w),
+    .f_glow_r_i (gtag_r_w),
+    .f_glow_g_i (gtag_g_w),
+    .f_glow_b_i (gtag_b_w),
+    // REAL, and ZERO BY RULING, which is not the same as tied off. R195
+    // decision 3: channels 0b10 and 0b11 are unallocated in the frozen spec,
+    // so a fragment carrying one contributes nothing and is COUNTED on
+    // `reserved_channel_o` above. These are driven by a real producer that
+    // will carry values the day a channel is allocated.
+    .f_disp_x_i (gtag_dx_w),
+    .f_disp_y_i (gtag_dy_w),
+    .f_ink_i    (gtag_ink_w),
+    .tile_start_i(gtag_tstart_w),
+    .tile_flush_i(gtag_tflush_w),
+    .flush_busy_o(gth_busy_w),
+    .c_valid_o  (gcell_valid_w),
+    .c_index_o  (gcell_index_w),
+    .c_glow_o   (gcell_glow_w),
+    .c_disp_x_o (gcell_dx_w),
+    .c_disp_y_o (gcell_dy_w),
+    .c_ink_o    (gcell_ink_w),
+    .fragments_o       (gather_fragments_o),
+    .glow_saturations_o(gather_glow_saturations_o),
+    .disp_clamps_o     (gather_disp_clamps_o),
+    .cells_flushed_o   (gather_cells_flushed_o)
+  );
+
+  // ---- the plane's lifetime ------------------------------------------------
+  // A frame's gather is complete exactly when the raster has drained, and
+  // `post_pass_start_c` is the shell's own statement of that -- `zhao_post_
+  // lease` asserts it only when the bin pipe is quiet, no raster pixel is on
+  // offer and RASTER.FBWRITE has retired every word. So the plane COMMITS on
+  // the pass start and OPENS on the frame tick that begins the next raster.
+  //
+  // Reusing the pass start rather than inventing a second completion event is
+  // deliberate: two events that are meant to mean the same thing are two
+  // events that can disagree, and this one is already the thing the
+  // compositor itself starts on.
+  logic [GTH_CW-1:0] gth_plane_w_c, gth_plane_rows_c, gth_view_rows_c;
+  logic              gth_duo_c;
+
+  always_comb begin
+    gth_duo_c        = (mode_act_o != MODE_Z60_C) && (mode_act_o != MODE_STORM_C);
+    // Pixels to CELLS, and this divide-by-four is the quarter-resolution
+    // ruling. It is applied HERE, once, from the same `post_frame_*_c` the
+    // compositor and the lease are driven by, so the three cannot disagree
+    // about how big a view is.
+    gth_plane_w_c    = GTH_CW'(post_frame_w_c >> 2);
+    gth_view_rows_c  = GTH_CW'(post_frame_h_c >> 2);
+    // Duo STACKS: `zhao_post_lease` reads one tall source of `frame_h << 1`,
+    // so the canvas is two views deep and view 1 is the lower half.
+    gth_plane_rows_c = gth_duo_c ? GTH_CW'(gth_view_rows_c << 1) : gth_view_rows_c;
+  end
+
+  logic        gd_present_w, gg_present_w, gg_ink_w;
+  logic signed [7:0] gd_dx_w, gd_dy_w;
+  logic [15:0] gg_glow_w;
+  logic        gd_req_v_w, gd_view_w, gg_req_v_w, gg_view_w;
+  logic [POST_XW-3:0] gd_cx_w, gg_cx_w;
+  logic [POST_YW-3:0] gd_cy_w, gg_cy_w;
+
+  zhao_post_gather_store #(
+    .CELLS(8192),
+    .CW   (GTH_CW)
+  ) u_post_gather_store (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+    .plane_w_cells_i(gth_plane_w_c),
+    .plane_rows_i   (gth_plane_rows_c),
+    .view_rows_i    (gth_view_rows_c),
+    // REAL: the tile origin, delayed by one clock so that it describes the
+    // same beat `u_post_gather_tag` is presenting. The origin registers here
+    // and the fragment register there are both unconditional, so they cannot
+    // skew -- the positive reading of CLAUDE.md's metadata chapter.
+    .org_valid_i(gtag_valid_w),
+    .org_cx_i   (gth_org_cx_q),
+    .org_cy_i   (gth_org_cy_q),
+    .org_ok_i   (gth_org_ok_q),
+    // The SAME pulse that swaps the gather's banks, so the two blocks cannot
+    // disagree about which tile is closing.
+    .org_close_i(gtag_tstart_w),
+    .w_busy_i   (gth_busy_w),
+    .w_valid_i(gcell_valid_w),
+    .w_index_i(gcell_index_w),
+    .w_glow_i (gcell_glow_w),
+    .w_dx_i   (gcell_dx_w),
+    .w_dy_i   (gcell_dy_w),
+    .w_ink_i  (gcell_ink_w),
+    // REAL: the frame's gather is complete exactly when the raster has
+    // drained, and `post_pass_start_c` is the shell's own statement of that.
+    // There is no matching `open`: the plane opens when the next raster's
+    // first cell overwrites it, which is an event on the store's own write
+    // port. An earlier version took the open from the console frame tick and
+    // the smoke bench measured what that costs -- the post pass runs for
+    // 823,547 gpu cycles, so the tick fires inside it and cleared the plane
+    // under the compositor's own read.
+    .plane_commit_i(post_pass_start_c),
+    .gd_req_v_i (gd_req_v_w),
+    .gd_view_i  (gd_view_w),
+    .gd_cx_i    (GTH_CW'(gd_cx_w)),
+    .gd_cy_i    (GTH_CW'(gd_cy_w)),
+    .gd_present_o(gd_present_w),
+    .gd_dx_o    (gd_dx_w),
+    .gd_dy_o    (gd_dy_w),
+    .gg_req_v_i (gg_req_v_w),
+    .gg_view_i  (gg_view_w),
+    .gg_cx_i    (GTH_CW'(gg_cx_w)),
+    .gg_cy_i    (GTH_CW'(gg_cy_w)),
+    .gg_present_o(gg_present_w),
+    .gg_glow_o  (gg_glow_w),
+    .gg_ink_o   (gg_ink_w),
+    .cells_written_o(gather_cells_written_o),
+    .oob_writes_o   (gather_oob_writes_o),
+    .gd_reads_o     (gather_gd_reads_o),
+    .gg_reads_o     (gather_gg_reads_o),
+    .gd_miss_o      (gather_gd_miss_o),
+    .gg_miss_o      (gather_gg_miss_o),
+    .flush_overrun_o(gather_flush_overrun_o),
+    .rdw_collide_o  (gather_rdw_collide_o),
+    .plane_commits_o(gather_plane_commits_o)
+  );
+
   zhao_post_composite #(
     .LINE_W    (POST_LINE_W),
     .MAX_H     (POST_MAX_H),
@@ -10704,21 +11013,34 @@ module zhao_console_core
 
     // I17, CLOSED FOR THE ATMOSPHERE SHEET 2026-09-19: `atm_*` is now wired to
     // TWOD.SAMPLER, which is wired to TWOD.PLANE, at the end of this module.
-    // The `gd_*`/`gg_*` planes and `hud_*` are still boundary and I17 says why.
-    .gd_req_v_o  (post_gd_req_v_o),
-    .gd_view_o   (post_gd_view_o),
-    .gd_cx_o     (post_gd_cx_o),
-    .gd_cy_o     (post_gd_cy_o),
-    .gd_present_i(post_gd_present_i),
-    .gd_dx_i     (post_gd_dx_i),
-    .gd_dy_i     (post_gd_dy_i),
-    .gg_req_v_o  (post_gg_req_v_o),
-    .gg_view_o   (post_gg_view_o),
-    .gg_cx_o     (post_gg_cx_o),
-    .gg_cy_o     (post_gg_cy_o),
-    .gg_present_i(post_gg_present_i),
-    .gg_glow_i   (post_gg_glow_i),
-    .gg_ink_i    (post_gg_ink_i),
+    // I17's GATHER PLANES CLOSED 2026-09-21 (owner ruling R195): `gd_*` and
+    // `gg_*` no longer leave this module. They go to `u_post_gather_store`
+    // above, which is fed by POST.GATHER, which is fed by the shell's
+    // resolved-fragment tap. `hud_*` is still boundary and I17 says why.
+    //
+    // REAL: the displacement plane. It reads ZERO under R195 -- decision 3
+    // rules `c_disp_*` zero in v1 because channels 0b10/0b11 are unallocated
+    // in the frozen spec -- and it is a REAL PATH carrying a ruled value, not
+    // a tie-off. The difference is checkable and worth stating: a tie-off
+    // cannot become non-zero without an edit here, and this one becomes
+    // non-zero the day `stars_and_flares.md` allocates a channel.
+    .gd_req_v_o  (gd_req_v_w),
+    .gd_view_o   (gd_view_w),
+    .gd_cx_o     (gd_cx_w),
+    .gd_cy_o     (gd_cy_w),
+    .gd_present_i(gd_present_w),
+    .gd_dx_i     (gd_dx_w),
+    .gd_dy_i     (gd_dy_w),
+    // REAL: the glow and ink plane, at the DISPLACED coordinate. Cell-
+    // quantised -- Part A's separable blur is not built, which is declared in
+    // the INCOMPLETE block rather than left to be found by looking at a frame.
+    .gg_req_v_o  (gg_req_v_w),
+    .gg_view_o   (gg_view_w),
+    .gg_cx_o     (gg_cx_w),
+    .gg_cy_o     (gg_cy_w),
+    .gg_present_i(gg_present_w),
+    .gg_glow_i   (gg_glow_w),
+    .gg_ink_i    (gg_ink_w),
     .atm_req_v_o (atm_req_v_c),
     .atm_req_x_o (atm_req_x_c),
     .atm_req_y_o (atm_req_y_c),
@@ -11877,6 +12199,21 @@ module zhao_console_core
     .render_texture_dispatch_accepted_o(render_texture_dispatch_accepted_o),
     .render_texture_combine_refused_o  (render_texture_combine_refused_o),
     .render_texture_samples_o          (render_texture_samples_o),
+    // ---- POST.GATHER's resolved-fragment tap (I17 (c), ruling R195) --------
+    // REAL: the effect tag, the fragment's own colour, its surface position
+    // and its position inside the tile. This is the group entry I17 spent
+    // three refusals on -- "the tag is DISCARDED INSIDE THE SHELL, not absent
+    // from the machine" -- and it now leaves. There is no `ready`: R5 forbids
+    // POST.GATHER from backpressuring RASTER.RESOLVE, and `gth_valid_o` is
+    // already the ACCEPTED beat, so a stalled fragment is presented once.
+    .gth_valid_o               (gth_valid_w),
+    .gth_rgb565_o              (gth_rgb565_w),
+    .gth_tag_o                 (gth_tag_w),
+    .gth_addr_o                (gth_addr_w),
+    .gth_x_o                   (gth_x_w),
+    .gth_y_o                   (gth_y_w),
+    .gth_last_o                (gth_last_w),
+
     // ---- POST.COMPOSITE's lease (I15/I16) and POST.ECHO --------------------
     .post_frame_w_i            (post_frame_w_c),
     .post_frame_h_i            (post_frame_h_c),

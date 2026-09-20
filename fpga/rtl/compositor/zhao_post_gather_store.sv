@@ -171,6 +171,22 @@ module zhao_post_gather_store #(
     input  var logic          org_valid_i,
     input  var logic [CW-1:0] org_cx_i,
     input  var logic [CW-1:0] org_cy_i,
+    // `org_ok_i` DECLARES that this tile's origin lies on the canvas at all.
+    // `zhao_raster_tile_pipe`'s `fb_x_o`/`fb_y_o` are SIGNED, so a tile the
+    // binner places off the left or top edge arrives negative, and narrowing
+    // a negative coordinate into CW bits ALIASES it back into the plane --
+    // one tile's halo drawn somewhere it never was.
+    //
+    // It is a FLAG rather than a reserved coordinate, and that is R197's
+    // binding constraint applied here: "the absence must be DECLARED, never
+    // ENCODED ... a sentinel value is the defect. A flag is the fix." Forcing
+    // cx to 127 would also work today, purely because no mode is 128 cells
+    // wide, and would become a silent defect the day one is.
+    //
+    // It travels through the SAME two-deep pipeline as the coordinates, for
+    // the reason the coordinates need one: the flag has to describe the tile
+    // being FLUSHED, not the one streaming.
+    input  var logic          org_ok_i,
     input  var logic          org_close_i,
     input  var logic          w_busy_i,         // POST.GATHER's `flush_busy_o`
 
@@ -188,7 +204,21 @@ module zhao_post_gather_store #(
     // because an absent output must not look like a zero result (W10). The
     // first frame of a run therefore has no bloom, honestly, instead of a
     // bloom built from whatever the memory powered up holding.
-    input  var logic          plane_open_i,     // a new frame's raster begins
+    //
+    // THERE IS ONE INPUT HERE AND THERE WAS BRIEFLY TWO, which is worth
+    // recording because the second one was WRONG AND MEASURABLY SO. The first
+    // version took a `plane_open_i` from the console's frame tick. The post
+    // pass runs for 823,547 gpu cycles -- most of a frame -- so the tick fires
+    // DURING IT, cleared the plane under the compositor's own read, and the
+    // smoke bench reported 582,252 misses against 188,056 hits on a plane that
+    // was complete the whole time. It looked like a plane that was mostly
+    // absent; it was an instrument clearing itself.
+    //
+    // So the plane is opened by THE THING THAT ACTUALLY OPENS IT: the first
+    // cell written after a commit. A plane stops being the completed frame's
+    // plane exactly when something overwrites it, and that event is on this
+    // block's own write port. CLAUDE.md's rule 3 -- measure the thing, never a
+    // proxy for it -- and one event rather than two that can disagree.
     input  var logic          plane_commit_i,   // the frame's gather is complete
 
     // ---- read A: DISPLACEMENT, POST.COMPOSITE stage 0 -> stage 1 -----------
@@ -234,6 +264,7 @@ module zhao_post_gather_store #(
   // ---- the origin pipeline ------------------------------------------------
   logic [CW-1:0] org_cur_cx_q, org_cur_cy_q;
   logic [CW-1:0] org_fl_cx_q,  org_fl_cy_q;
+  logic          org_cur_ok_q, org_fl_ok_q;
   logic          plane_valid_q;
 
   // ---- write address ------------------------------------------------------
@@ -250,7 +281,11 @@ module zhao_post_gather_store #(
     w_cy_c  = {1'b0, org_fl_cy_q} + (CW+1)'(w_index_i[3:2]);
     w_lin_c = ((CW+CW+1)'(w_cy_c) * (CW+CW+1)'(plane_w_cells_i))
             +  (CW+CW+1)'(w_cx_c);
-    w_in_range_c = (w_cx_c < {1'b0, plane_w_cells_i})
+    // `org_fl_ok_q` resets to 0, which also disposes of the first-tile case:
+    // a flush that somehow arrives before any tile has closed writes nothing
+    // and is counted, rather than depositing a tile's cells at (0, 0).
+    w_in_range_c = org_fl_ok_q
+                && (w_cx_c < {1'b0, plane_w_cells_i})
                 && (w_cy_c < {1'b0, plane_rows_i})
                 && (w_lin_c < (CW+CW+1)'(CELLS));
     w_addr_c = w_lin_c[AW-1:0];
@@ -318,6 +353,8 @@ module zhao_post_gather_store #(
       org_cur_cy_q <= '0;
       org_fl_cx_q  <= '0;
       org_fl_cy_q  <= '0;
+      org_cur_ok_q <= 1'b0;
+      org_fl_ok_q  <= 1'b0;
       plane_valid_q <= 1'b0;
       gd_present_o  <= 1'b0;
       gg_present_o  <= 1'b0;
@@ -337,21 +374,24 @@ module zhao_post_gather_store #(
       if (org_valid_i) begin
         org_cur_cx_q <= org_cx_i;
         org_cur_cy_q <= org_cy_i;
+        org_cur_ok_q <= org_ok_i;
       end
 
-      // The tile closes: what was streaming is now what is flushing.
+      // The tile closes: what was streaming is now what is flushing. The
+      // flag moves with the coordinates because it describes the same tile.
       if (org_close_i) begin
         org_fl_cx_q <= org_cur_cx_q;
         org_fl_cy_q <= org_cur_cy_q;
+        org_fl_ok_q <= org_cur_ok_q;
         // ...and if a flush was still running, that move corrupts it. Two
         // operands, two clocks, nothing in common -- see the header.
         if (w_busy_i) flush_overrun_o <= flush_overrun_o + 32'd1;
       end
 
-      // Lifetime. `plane_open_i` wins over `plane_commit_i` on the same clock
-      // because a frame that has just started gathering has NOT got a plane,
+      // Lifetime. A WRITE wins over a commit on the same clock, because a
+      // plane that is being overwritten has not got a complete frame in it
       // and the flattering direction here is the wrong one.
-      if (plane_open_i) begin
+      if (w_go_c) begin
         plane_valid_q <= 1'b0;
       end else if (plane_commit_i) begin
         plane_valid_q   <= 1'b1;
