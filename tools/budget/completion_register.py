@@ -797,7 +797,21 @@ _ALIAS: dict[str, str | None] = {
     # 2026-09-20 under ruling R7, and COMPOSED in zhao_console_core between its
     # pad_*_i ports and the shell's INPUT.SNAPSHOT. It is no longer a None.
     "INPUT.SNAC":        "zhao_input_snac",
-    "GEOM.WARP":         None,
+    # GEOM.WARP: BUILT 2026-09-20 as fpga/rtl/geometry/zhao_geom_warp.sv by
+    # packet W1, so this is no longer a None. It moves the block from
+    # `unbuilt` to `built_not_connected` and THE TOTAL DOES NOT CHANGE --
+    # :1480-1482 sums both terms, which is the register working as designed.
+    #
+    # It is NOT connected and the Field port is NOT tied off. Those are two
+    # different statements and only the first is visible to this tool: the
+    # tie-off list is parsed out of zhao_console_core.sv's own header block
+    # (:67-244) and there is NO structural scan for a port tied to a constant.
+    # So a future composition that ties the Field request port off would read
+    # CONNECTED here and drop the total to 20 -- green, and wrong. The guard
+    # against that is design/blocks.yml's GEOM.WARP note and the packet
+    # protocol, not this instrument. Written down because an instrument that
+    # cannot see a fault must say so where somebody will read it.
+    "GEOM.WARP":         "zhao_geom_warp",
     # POST.ECHO: spec written and BUILT 2026-09-19 (ruling R7) -- composed on
     # POST.COMPOSITE's echo tap inside the shell's zhao_post_lease.
     "POST.ECHO":         "zhao_post_echo",

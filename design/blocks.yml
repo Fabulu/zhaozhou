@@ -3690,9 +3690,18 @@ blocks:
     # zref::GeomWarp phantom two lines above -- it reads as coverage. Only what
     # exists is named; what is owed is named as owed.
     tests:
-      directed: tests/geometry/geom_warp_reference_directed.cpp   # REFERENCE ONLY, 95 checks
+      # 95 was WRONG in this file and in the contract, in two places each. Built
+      # and run 2026-09-20: "geom_warp_reference_directed: 102 checks, 0 failed".
+      # Ruling R102 said 102 all along. Three files agreeing with each other is
+      # not corroboration when none of them ran the binary.
+      directed: tests/geometry/geom_warp_reference_directed.cpp   # REFERENCE ONLY, 102 checks
       random: "OWED -- NOT WRITTEN"
-      rtl_directed: "OWED -- NOT WRITTEN (no zhao_geom_warp.sv exists)"
+      # WRITTEN 2026-09-20 by packet W1: 2,468 checks against
+      # zref::geom_warp::apply_outputs, fed the HARDWARE's six output words.
+      # Plus tests/mutants/zhao_geom_warp_shift_oneliner_mutant.sv, a committed
+      # positive control whose fire rate is MEASURED: 0 of 20,000 random triples,
+      # caught by the one directed value -2147483647.
+      rtl_directed: tests/geometry/geom_warp_rtl_directed.cpp      # 2468 checks
       formal: "OWED -- NOT WRITTEN"
     counters: [geom_warp_vertices_transformed]
     source_ids: true
@@ -3708,33 +3717,61 @@ blocks:
       profile is FIFTEEN input lanes and six output lanes, not eight of
       anything (decision W01).
 
-      SPECIFIED AND REFERENCED 2026-09-20, NOT BUILT. The contract is filled
-      from the owner directive
+      SPECIFIED AND REFERENCED 2026-09-20. The contract is filled from the
+      owner directive
       reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt (owner commit
       4c256137), whose decisions W01-W18 are ratified in
       reports/OWNER-RATIFICATION-20260920-WARP.md.
 
       zref::GeomWarp EXISTS as of this commit --
       reference/include/zref/zref_geom_warp.hpp, exercised by
-      tests/geometry/geom_warp_reference_directed.cpp at 95 directed checks
-      with three fired mutation controls. It was item 9 of
-      reports/PHANTOM_REFERENCES.md until now.
+      tests/geometry/geom_warp_reference_directed.cpp at 102 directed checks
+      (MEASURED; this line read 95 and was wrong) with three fired mutation
+      controls. It was item 9 of reports/PHANTOM_REFERENCES.md until now.
 
-      THERE IS NO zhao_geom_warp.sv AND THIS ENTRY DOES NOT IMPLY ONE. The
-      block is NOT composed, and composing it is BLOCKED on shared Field host
-      work that was measured rather than assumed on 2026-09-20: the host is
-      composed at IN_LANES=13 against Warp's 15; CLIENTS=2 with both ports
-      occupied by the stamp and flow adapters; output capture is a single
-      CONTIGUOUS window from hdr_outbase, so a sparse output map cannot be
-      captured; completion tests cur_out_seen == '0', i.e. ANY output rather
-      than ALL required ones; the prepared-scalar bank is one flat 64-slot
-      array with no per-context dimension; INSTR_N=32 against Warp's 48-op
-      ceiling; and there is no handle-to-resident-slot binding table. See the
-      contract's prerequisite table P1-P9 and FINDINGS-warp.md.
+      BUILT 2026-09-20 BY PACKET W1, AND NOT COMPOSED. The preceding paragraph
+      used to read "THERE IS NO zhao_geom_warp.sv AND THIS ENTRY DOES NOT IMPLY
+      ONE". There is now: fpga/rtl/geometry/zhao_geom_warp.sv, the application
+      stage, with 2,468 directed checks against the reference and every counter
+      it declares seen to fire. The register total DID NOT MOVE -- 21 -> 21 --
+      because completion_register.py sums built_not_connected and unbuilt
+      together, so the reclassification cancels exactly. That is the honest
+      number and it is recorded as such.
 
-      Building the block with its Field request port tied off would move this
-      entry from NOT BUILT to a TIE-OFF, which is closing a gap by opening
-      one. It is deliberately left unbuilt instead.
+      ITS FIELD REQUEST PORT IS NOT TIED OFF. "Not connected" and "tied off" are
+      different statements and only the first is true. The port is shaped to
+      zhao_field_warp_adapter's declared consumer contract; that adapter's
+      header names zhao_geom_warp.sv as the consumer that does not exist yet.
+
+      COMPOSITION IS BLOCKED, and the blockers were RE-MEASURED at 55ec050b
+      rather than inherited -- four of the nine prerequisites had moved since
+      the table above was written, because H1's zhao_field_host_v2 landed in
+      between. STILL BLOCKING: IN_LANES=13 against Warp's 15 (three sites in
+      zhao_console_core.sv, and contrary to the repair plan NOT in the generated
+      tops); CLIENTS=2 with both ports occupied; INSTR_N=32 against Warp's 48-op
+      ceiling; no handle-to-resident-slot binding (zhao_field_doorbell.sv:440-442
+      still sends everything to D_LOAD); and, listed by no prerequisite table,
+      THERE IS NO DrawWarpedForm COMMAND, so no draw could set d_warp_en_i and a
+      composed block would sit permanently in its W09 bypass.
+      NO LONGER BLOCKING, all three inside zhao_field_host_v2 which the console
+      does not yet compose: the sparse output map (omap_kind/omap_index, with a
+      load-time refusal), ALL-outputs completion (complete_c compares against the
+      full required mask, with StPartial 0xF3), and R91's uniforms-once fast path
+      (E_ZERO skipped under FH08) -- which discharges R103's claim that that lever
+      "does NOT exist anywhere in the tree". STILL DEFERRED: per-context prepared
+      uniforms (the bank is still one flat 64-entry array; what was added is a
+      per-slot generation stamp, which detects staleness but does not isolate two
+      eligible plans) and four independent tables (host_v2 still declares
+      TABLES=2). See the contract's re-measured prerequisite table P1-P9 and
+      packet W1's commit messages on branch gz/fieldw1 (the harness refuses .md under runs/).
+
+      Composing this block with its Field request port tied off would move the
+      entry from BUILT-NOT-CONNECTED to a TIE-OFF, which is closing a gap by
+      opening one -- AND THE REGISTER COULD NOT SEE IT. completion_register.py
+      has no structural scan for a port tied to a constant; its tie-off list is
+      parsed from zhao_console_core.sv's own header comment block. A tied-off
+      composition would read CONNECTED and drop the total to 20. This note is the
+      guard, together with the packet protocol. The instrument is not.
 
   - id: GEOM.WCACHE
     name: Projected-vertex arena

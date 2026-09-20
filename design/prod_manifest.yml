@@ -775,6 +775,23 @@ excluded:
   # counterpart is differenced against, and `zhao_field_seq`'s leaf fit row
   # (4,494 ALM / 3,725 reg / 5 M10K / 3 DSP at 58.99 MHz) is the only measured
   # FIELD number this repo has.
+  # --- 2026-09-20, the W profile's stream adapter -------------------------
+  # W1 carried `zhao_field_warp_adapter` here as `not-yet-adopted` so its
+  # three-module Warp chain bench could build, and left a standing
+  # instruction: *"When gz/fielda1 merges, DELETE THIS ROW and keep A1's
+  # `top:` entry."* A1 is merged, so the row is deleted and A1's placement
+  # stands -- the module is a production top with a
+  # `production_parameter_overrides` entry at 15/7. Recorded rather than
+  # removed silently, because a packet that writes its own deletion
+  # condition and has it carried out is the pattern worth keeping.
+  # --- 2026-09-20, GEOM.WARP's application stage, packet W1 ------------------
+  # `not-yet-adopted` and NOT `superseded`, chosen deliberately: CLAUDE.md
+  # records that a note saying `unused` or `not-yet-adopted` is A DEFERRAL
+  # WRITTEN DOWN and leaves the question OPEN, while `superseded` closes it.
+  # This block must keep being watched by tools/budget/uncashed_cheques.py until
+  # it is composed, because "built and never installed" is precisely the shape
+  # that cost this repo a projector.
+  - zhao_geom_warp: not-yet-adopted  GEOM.WARP's application stage (W03's saturating add, W03/5.4's normal range reduction, W10's poison), built 2026-09-20 and differentially tested against zref::geom_warp::apply_outputs at 2,468 checks with a committed one-line mutant whose fire rate is measured. It is NOT in the console and its Field request port is NOT tied off. Composition is blocked on three things outside this block: the shared Field host composed at IN_LANES=13 against Warp's 15 (R103 P1), CLIENTS=2 with both ports taken (P2), and the absence of a DrawWarpedForm 0x0304 command -- without which no draw can set d_warp_en_i and the block would sit permanently in its W09 bypass path. See packet W1's commit messages on branch gz/fieldw1 (the harness refuses .md under runs/)
   - zhao_mem_share2: superseded  the two-requester wrapper over zhao_mem_share_n (R4); since 2026-09-19 both console sites instantiate the N core -- u_geom_mem_adapter at N=3 (MATERIAL.RESOLVE, R20) and the terrain read share -- and the wrapper stays on disk for its directed test
   - zhao_geom_depthquant: superseded  the depth law's one-vertex FSM schedule; the console runs the same law (the _pre/_post leaves) on zhao_geom_depthquant_stream inside zhao_geom_vattr, counted there (owner ruling R31, 2026-09-19); the FSM remains for tb_zhao_shell and its directed test
   - zhao_field_seq: superseded  the v1 sequencer; zhao_field_v3_engine is the composed engine, with the executor and service path under it
