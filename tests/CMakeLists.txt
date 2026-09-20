@@ -4224,6 +4224,45 @@ verilate(test_post_gather_random
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_gather.sv)
 add_test(NAME post_gather_random COMMAND test_post_gather_random)
 set_tests_properties(post_gather_random PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# POST.GATHER's other two thirds, built 2026-09-21 (owner ruling R195, core
+# entry I17 (c)). R60: a directed test must BUILD AND RUN, not merely lint --
+# `--lint-only` does not execute an `initial` block, so the elaboration guards
+# in both of these blocks are checked by these targets and by nothing else.
+#
+# THE TAG LAW sweeps the (tag, rgb565) space against `zref::post::gather`
+# rather than sampling it, because the space is 2^24 and every point is
+# independent. The defect that motivates a sweep is specific: the model does
+# `unit_mul(unit_mul(channel, gain), tint)` -- TWO roundings, in that order --
+# and folding gain with tint first is algebraically identical, arithmetically
+# different, and agrees with the model on most inputs.
+add_executable(test_post_gather_tag_directed compositor/post_gather_tag_directed.cpp)
+target_link_libraries(test_post_gather_tag_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_post_gather_tag_directed
+  PREFIX Vzhao_post_gather_tag
+  TOP_MODULE zhao_post_gather_tag
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_gather_tag.sv)
+add_test(NAME post_gather_tag_directed COMMAND test_post_gather_tag_directed)
+set_tests_properties(post_gather_tag_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# THE PLANE STORE. Its most valuable case is not an address case: it streams
+# tile A, closes it, STARTS TILE B and only then flushes A's cells, requiring
+# them at A's address. That is CLAUDE.md's metadata-swap shape, and a store
+# with one origin register passes every other case in the file and fails that
+# one.
+#
+# It is also where both of the composed console's POST.GATHER tripwires are
+# FIRED. `tb_zhao_console_core_smoke.sv` quotes `flush_overrun_o` and
+# `rdw_collide_o` at zero and $fatals otherwise; a detector reading zero is
+# only evidence once it has been seen to fire, and these are the firings.
+add_executable(test_post_gather_store_directed compositor/post_gather_store_directed.cpp)
+target_link_libraries(test_post_gather_store_directed PRIVATE zhao_harness)
+verilate(test_post_gather_store_directed
+  PREFIX Vzhao_post_gather_store
+  TOP_MODULE zhao_post_gather_store
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/compositor/zhao_post_gather_store.sv)
+add_test(NAME post_gather_store_directed COMMAND test_post_gather_store_directed)
+set_tests_properties(post_gather_store_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 # POST.COMPOSITE's framebuffer lease (core entries I15/I16, 2026-09-19): the
 # SOURCE read-back and POST.ECHO (owner ruling R7). Both benches play MEM.GUARD's
 # real two-cycle law from tests/compositor/post_mem_model.hpp -- ready a level,
