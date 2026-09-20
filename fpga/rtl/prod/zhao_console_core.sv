@@ -14821,6 +14821,18 @@ module zhao_console_core
 
     .dir_we_i         (upl_publish_valid_o && (upl_publish_tag_o == MAT_KIND_MATERIAL_SET)),
     .dir_entry_i      (upl_publish_slot_o),
+    // REAL: `dir_valid_i` is the validity BIT WRITTEN INTO the directory row,
+    // not a handshake. The write itself is gated by `dir_we_i` above, which
+    // fires only on a MATERIAL_SET publication -- and a published set is by
+    // definition a valid entry, so there is no state in which this console
+    // writes a row and wants it marked invalid. A producer here could only
+    // ever drive the same constant.
+    //
+    // Written down 2026-09-20 because it was the ONLY literal in this file
+    // with no reason anywhere near it (owner ruling R167), out of nineteen the
+    // tie-off audit first reported. The other eighteen already had their
+    // reasons and the tool could not see them; this one was real, and it is a
+    // comment rather than a change.
     .dir_valid_i      (1'b1),
     .dir_set_index_i  (upl_publish_index_o),
     .dir_generation_i (upl_publish_generation_o),
