@@ -2334,23 +2334,26 @@ constexpr uint8_t kLoopStretchStrength = 0;
 // common percentage is structurally dishonest because the centre distances and
 // visible translation runs differ. These authored limits bound the expression;
 // the separate positive run-length law rejects collapse regardless of percent.
-// PASS 20: A-B stretch 480 -> 490 and B-C compaction -430 -> -450, and NOTHING
-// ELSE. Both are spans BETWEEN THE FREE CARRIERS, which is where a knead is
-// supposed to be absorbed; neither is an attachment span.
+// ⚠ THIS BLOCK ONCE DESCRIBED VALUES THE ARRAYS BELOW DO NOT CONTAIN. It said
+// "A-B stretch 480 -> 490 and B-C compaction -430 -> -450", which was written
+// while those widenings were being prototyped and left standing after they were
+// REJECTED (P20-GATE-CHANGES.md 7). A comment that contradicts its own constant
+// is the wrong-number-with-reassuring-provenance trap: the next reader trusts
+// the prose, not the array. Repaired 2026-09-20.
 //
-// ⚠ C-E IS UNTOUCHED, DELIBERATELY, AND IT IS THE POINT. The kneading dip's
-// depth is now capped by that bound and not by taste: at the shipping amplitude
-// C-E reads 438 per mille against its 440 ceiling. Pass 20 exists because that
-// attachment tore, so the bound protecting it does not move to fit a new beat --
-// the beat stops where the attachment says it stops. What the dip needed was a
-// mechanism that does not spend the attachment's headroom (the carry cancel,
-// see kKneadDipCarryCancelPm), and once it had one the residual landed on these
-// two interior spans instead.
+// THE ARRAYS ARE EXACTLY AS PASS 19 LEFT THEM. Nothing in pass 20 widened a
+// span bound, and two separate attempts to do so were measured and abandoned:
+//   * A-B 490 / B-C -450, to let the carried dip reach "B lowest" -- cleared
+//     the bound breaches and immediately turned two OTHER mspan legs red
+//     (carrier jerk, and SpanDeltaE/RearSocket meeting at End), so it bought a
+//     red gate with a widened bound. Not shipped.
+//   * C-E, the attachment bound, refused outright by the owner and by the
+//     ledger: pass 20 exists because that attachment tore.
 //
-// The amounts are the measured overshoot plus a little: A-B reached 482 pm and
-// B-C -442 pm. kSpanMinRunMm is untouched and is the guard that actually keeps
-// the antenna attached -- at B-C's new floor the remaining run is 212 mm
-// against that 80 mm floor, so the dongle guard is nowhere near engaged.
+// C-E IS THE ONE THAT CAPS THE KNEAD'S DEPTH, and that is the right way round:
+// the beat stops where the attachment says it stops, not where taste says.
+// kSpanMinRunMm is the guard that actually keeps the antenna attached and is
+// likewise untouched.
 constexpr int32_t kSpanStretchMaxPm[4] = {320, 480, 400, 440};
 constexpr int32_t kSpanCompactionMinPm[4] = {-320, -330, -430, -700};
 

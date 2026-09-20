@@ -1,0 +1,5 @@
+manafold-hover: 600 frames _crc32c=0x79D3F0C5
+manafold-inspect: 600 frames _crc32c=0x0710E704
+manafold-still: 4 frames _crc32c=0x138FE8B0
+manafold-taunt3: 368 frames _crc32c=0xC81598AA
+R5 DIP: 21 clip(s) author a dip; 7 never reach lowest; 0 do not return; worst margin -191 mm (slot 15, need 20)

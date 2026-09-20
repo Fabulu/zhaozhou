@@ -2912,9 +2912,12 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
         // path rather than a second channel, so an ambient compaction extreme
         // cannot stack on top of the dent's crossing. It can only REDUCE an
         // existing excursion. F and E are not ducked.
+        // scale = 1000 - env*duck/1000, all per mille. (The first version
+        // divided by 1000000 and so ducked by at most 1 part in 1000 -- a knob
+        // that looked wired and did nothing.)
         const int32_t duck = static_cast<int32_t>(
             1000 - (static_cast<int64_t>(env_pm) *
-                    g_u02_knead_dent_ambient_duck_pm) / 1000000);
+                    g_u02_knead_dent_ambient_duck_pm) / 1000);
         if (duck < 1000) {
           const auto d = [&](int32_t v) {
             return static_cast<int32_t>((static_cast<int64_t>(v) * duck) / 1000);

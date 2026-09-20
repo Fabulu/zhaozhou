@@ -226,3 +226,26 @@ same invocation.
   gain 1000), R5 promoted to hard, R4 front-window floor (+ --fail-dent-overfold),
   CRC identity legs. No bound changed. kSpanStretchMaxPm comment at
   manafold_art.h:2337-2353 contradicts its array and must be repaired.
+
+### 2026-09-20 - PACKET 5: THE DENT built; §9 experiment FALSIFIED on 2 of 4
+- Steps 1-2 of the architect's order built exactly as specified. Off path is
+  bytes (4/4), all 11 gate normals green, and BOTH identity controls pass:
+  under `dent`, Taunt III and Still are byte-identical while Inspect changes.
+- One implementation bug found and fixed BEFORE judging: the ambient duck
+  divided by 1000000 instead of 1000, so at full envelope it scaled the ambient
+  by 999/1000 -- a knob that looked wired and did nothing. Judging the design
+  through it would have falsified it for the wrong reason.
+- **Criterion 1 (F-A unchanged): PASSES.** -198..+199 in every configuration.
+- **Criterion 2 (C-E within 1 mm): FALSIFIED.** With the duck off the pin leaks
+  +19 mm / -11 mm. With the duck on, C-E sits at or below its no-dip values --
+  but that is the duck compensating, not the pin holding.
+- **Criterion 3 (interior compaction ~170 pm): FALSIFIED, ~3x.** A-B -365 pm
+  (bound -330), B-C -482 pm (bound -430), ducked. The rest-pose estimate of
+  ~102 mm at the crossing is far under the posed reality.
+- **Criterion 4 (R5 strictly lowest on Inspect at s=2000): PASSES.** And
+  bank-wide the dent reaches B-lowest on 13/21 at s=2000, 19/21 at s=3000 --
+  the first mechanism this pass that makes B genuinely the lowest ball.
+- STOPPED as instructed; no alternative mechanism improvised. Report with all
+  numbers in P20-DENT-EXPERIMENT.md. Dent ships OFF; shipping bank unchanged.
+- Repaired the stale kSpanStretchMaxPm comment (manafold_art.h:2337-2353) that
+  described 490/-450 values the arrays never contained.
