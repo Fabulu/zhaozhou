@@ -1,0 +1,21 @@
+# Pass 20 CLOSE -- the binaries every close receipt in this folder came from.
+#
+# Direct build with the committed recipe:
+#   tools/reel/build-direct.sh --output .tmp/p20-ship <target>
+# g++ 16.1.0 (MinGW-W64 x86_64-ucrt-posix-seh), zhao-env.ps1 toolchain.
+# No CMake result is claimed. A direct build is not byte-reproducible across
+# environments, so an md5 identifies a BUILD, not a tree -- the identity legs
+# in the gate matrix are the TREE's receipt.
+
+8577360b558f574c7af36fd9f3ae0c7e *manafold-eyesize.exe
+4a4d8ad06a31b2e11cc9fcce1becb499 *manafold-meshcheck.exe
+7e0ef79085c5794ddc74df5dc9d574fe *manafold-motiongate.exe
+9746d41bf9d8d377d9317fca4cf0027e *manafold-nodule.exe
+7bb86f528f302eb56c1612ac1c3060f5 *manafold-outlinegate.exe
+53c3c96b8273430edbbab2d0e99daa12 *manafold-probe.exe
+5eccc2e8837d1bc0971af646e4dfef28 *manafold-public-jointgate.exe
+bfe4eef2a36613025f27eb4215577b3d *manafold-qa-p12.exe
+0fd4afabf8861c3e9074b8780e1ea3e2 *manafold-rear-audit.exe
+16ded5e2ca110c607aa155dbbc3c337f *manafold-shellgate.exe
+8baeb0591f6324a9848aa1ea152a3397 *manafold-spangate.exe
+9981455757223cf98f05dd572dbdc78e *zhao-reel-cel.exe

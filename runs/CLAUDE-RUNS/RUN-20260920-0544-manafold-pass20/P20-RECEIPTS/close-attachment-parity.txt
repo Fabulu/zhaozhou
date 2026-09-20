@@ -1,0 +1,16 @@
+# Pass 20 CLOSE -- the attachment parity, at 1.9x the previous depth.
+#
+# The dent's central claim is that F-A and C-E have NO TERM in the solve, so
+# the attachment cannot be charged for the gesture. It is not a tolerance, it
+# is an absence -- and at depth 4200 with a 30-key ramp every R1 and R4 number
+# is IDENTICAL to the dip switched off, digit for digit.
+#
+# That is also the strongest corroboration of G10 DENT PIN (0.066 deg of frame
+
+SHIPPING (dip on, depth 4200, ramp 30):
+R1 FRAME: worst arm<->End rotation 16.48 deg (slot 16, ceiling 40.0); worst rear centreline turn 113.03 deg (slot 2, ceiling 140.0)
+R4 STRAIN: worst rear rail 0.692 (slot 2, ring 45) .. 2.052 (slot 2); worst hand-off 361 mm (slot 2); worst rail step 0.1630
+
+ZHAO_U02_KNEAD_DIP_PM=0:
+R1 FRAME: worst arm<->End rotation 16.48 deg (slot 16, ceiling 40.0); worst rear centreline turn 113.03 deg (slot 2, ceiling 140.0)
+R4 STRAIN: worst rear rail 0.692 (slot 2, ring 45) .. 2.052 (slot 2); worst hand-off 361 mm (slot 2); worst rail step 0.1630

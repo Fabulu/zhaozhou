@@ -136,11 +136,26 @@ sel dent-swing ZHAO_U02_KNEAD_DENT_SWING_PM=1001
 sel dent-overpress ZHAO_U02_KNEAD_DENT_OVERPRESS_PM=3001
 sel dent-depth ZHAO_U02_KNEAD_DENT_DEPTH_PM=6001
 run s-walk-pairing 1 "$B/manafold-spangate.exe" --fail-walk-pairing
+# pass 20 CLOSE: the specified-but-never-built G10, R5's second arm, the ramp knob
+run s-dent-pin 1 "$B/manafold-spangate.exe" --fail-dent-pin
+runmask r-dip-stuck 0x10 "$B/manafold-rear-audit.exe" --fail-dip-stuck
+sel dip-ramp ZHAO_U02_KNEAD_DIP_RAMP_KEYS=61
+sel dip-ramp-zero ZHAO_U02_KNEAD_DIP_RAMP_KEYS=0
+sel dent-cross ZHAO_U02_KNEAD_DENT_CROSS_PM=801
+sel dent-duck ZHAO_U02_KNEAD_DENT_DUCK_PM=1001
 # live-history gate (Wave E)
 LH="python $REPO/tools/reel/manafold_live_history_gate.py --renderer $R"
 run e-live-history-normal 0 $LH --out "$L/lh-normal"
 run e-live-history-legacy 0 $LH --out "$L/lh-legacy" --control legacy
 run e-live-history-list-drift 0 $LH --out "$L/lh-drift" --control list-drift
-idleg e-identity-carried "0x79D3F0C5 0x0710E704 0xC81598AA " ZHAO_U02_KNEAD_DIP_SOLVER=carried
-idleg e-identity-legacy "0xE6DD5EBA 0xDE1F5918 0x75BC4777 " ZHAO_U02_KNEAD_DIP_SOLVER=carried ZHAO_U02_REAR_BOW=legacy
+# ⚠ THE PASS-19 CONTRACT IS THIS ONE, and it is the leg that must never move:
+# the dip switched OFF plus the pass-19 bow reproduces P19-FINAL-BANK-INTEGRITY's
+# own recorded CRCs exactly. The two carried-solver legs below are WITHIN-pass
+# identities of a selectable alternative mechanism, and they were re-baselined at
+# the pass-20 close because the dip's SHARED schedule moved (the 30-key ramp
+# floor and the re-trimmed per-clip shares feed both solvers, by design).
+idleg e-identity-pass19 "0xA2D0E051 0x779615BB 0x75BC4777 " ZHAO_U02_KNEAD_DIP_PM=0 ZHAO_U02_REAR_BOW=legacy
+idleg e-identity-dipoff "0xEFE5AFC1 0x9E71DF79 0xC81598AA " ZHAO_U02_KNEAD_DIP_PM=0
+idleg e-identity-carried "0x40AA70E8 0xF6BD3444 0xC81598AA " ZHAO_U02_KNEAD_DIP_SOLVER=carried
+idleg e-identity-legacy "0x46A9C936 0x99CCAC21 0x75BC4777 " ZHAO_U02_KNEAD_DIP_SOLVER=carried ZHAO_U02_REAR_BOW=legacy
 echo "total $(wc -l < "$OUT") pass $(grep -c '^PASS' "$OUT") fail $(grep -c '^FAIL' "$OUT")"

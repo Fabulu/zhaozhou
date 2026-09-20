@@ -1,5 +1,11 @@
 # Manafold pass 20: implementation
 
+> WARNING: **READ THE `CLOSE` SECTION AT THE END OF THIS FILE FIRST.** It
+> supersedes every figure here that was measured under an override, and names
+> each one in a table. The pass-20 review found that `mrear --gate --dip` set
+> the dip gain to 1000 while the tree shipped 550, so the headline counts below
+> describe a creature nobody renders.
+
 **Date:** 2026-09-20
 **Direction:** `Upheaval/creature/Manafold/OWNER-DIRECTION-21-2026-09-20.md`, plus
 the owner's mid-run correction to item 1.
@@ -469,3 +475,463 @@ The particle reaction needed no work: manafold_fx.h reads B's sag from the POSED
 rig, not from the dip's schedule, so it followed the solver change by itself.
 `ZHAO_U02_FOLD_DIP_PM=0` still reverts the mana to its version-18/19 bytes
 (inspect 0xE5C1D75B against the shipping 0xFD8D4D0E).
+
+---
+
+# CLOSE — the review's block, cleared
+
+**This section supersedes every figure above that was measured under an
+override, and it names each one.** The rule it enforces: a gate reads the
+shipping constants; it does not choose them, and a number quoted from a run that
+moved one is not a shipping number.
+
+## 0. Corrections to the figures above
+
+| where | said | truth, at the shipping constants |
+|---|---|---|
+| packet 7 §3, and "B reaches the bottom of the ranking on 14 of 21" in the packet-6 status list | 19 of 21 / 14 of 21 | Both came from runs at a dip gain of **1000** while the tree shipped **550** (`mrear --gate --dip` overrode the gain). At 550 with the packet-7 aim it was **4 of 21**. The number that ships now is **19 of 19 hosting clips**, measured with no override at all — see §3. |
+| `-DZHAO_P20_PINPROBE`: "38 mm (L1) worst at depth 2000" | 38 mm | Measured through the *pre*-roll-stable aim. The review re-measured it at **7 mm**; at the values that ship now it is **8 mm (L1) and 0.066° of frame**, and it is a gate leg rather than a private define — see §5. |
+| packet 7: "`kKneadDentDepthPm = 2200`… the depth was chosen to fit the ceiling" | 2200 | The *direction* of that trade was right and the *number* was the roll flip's, not the gesture's. With the flip repaired the same 8° ceiling admits **4200** — see §1 and §2. |
+| packet 7: "the particle reaction needed no work" | needed no work | It needed all of it: 588 of 600 Hover frames were byte-identical to the reaction switched off. Re-authored — see §4. |
+| packet 7: `kKneadDipClipPm[20]` 750 → 900 | — | Superseded. The whole table was re-trimmed one clip at a time — see §3. |
+| gate-change 3: hand-off "hard bound 320 mm → REPORTED ONLY" | reported only | Re-bounded at **420 mm** for the new solve, with a fired control — see §5. |
+| gate-change 4: the stretch ceiling rise credited to "the dip ladder (1.919)" | the dip | The review measured it: with `KNEAD_DIP_PM=0` the bank still reads 2.052. **The bow raised it, not the dip.** Unchanged here; recorded so the attribution stops being repeated. |
+
+## 1. The roll flip — cause, and a repair by construction
+
+The reviewer's ladder reproduced exactly: G9 worst angular step **7.772** at gain
+550, **11.283** at 750, **50.963** at 1000, with the position step flat at
+72.30→72.36 mm. A carrier whose position moves smoothly while its frame jumps 51°
+in one 60 Hz sample is a rotation fault, not a motion one.
+
+**It is not the named flip branch.** `shortest_arc_from_y`'s exact-pole guard
+(`x == 0 && z == 0 && y < 0`) is never entered. It is the branch's
+*neighbourhood*, and the mechanism is **quantisation, not discontinuity**:
+
+* the shortest arc is `q ∝ (|v| + v_y, v_z, 0, −v_x)`, whose vector part is
+  `a × v`;
+* the dent presses B along its perpendicular to the A–C chord, which drives the
+  A→B segment toward **antiparallel with where it already points** — and there
+  `|a × v| → 0`;
+* the axis direction is then recovered from `(v_z, 0, −v_x)`, two **millimetre
+  integers** that have both collapsed to a handful of counts. The axis is
+  quantised to tens of degrees, and a ~180° turn about an axis tens of degrees
+  wrong is an orientation tens of degrees wrong.
+
+In exact arithmetic the rotation is continuous through that neighbourhood. In
+int16 lanes it is not, and no amount of care in the *branch* helps, because the
+fault is in the approach.
+
+**The repair is to stop deriving the axis from the thing that vanishes.**
+`u02::arc_from_y_about(v, u)` takes the turn as an **angle about a named axis**:
+
+* the axis is the normal of the **pre-dent (A, B, C) triangle**, computed once
+  per sample from the carriers as the ambient pose left them. It has **no term
+  in `dent_pm` at all**, so it cannot move when the beat deepens — it is the
+  continuous reference the beat itself defines, not a constant chosen at one
+  instant;
+* `|N|` is `|AB||AC|sin(ABC)`, ~10⁵ mm², and never collapses;
+* the half angle comes from the production `quat_axis` (`fx_sin`/`fx_cos`), so
+  it is never recovered from a near-zero norm. A 179.9° turn is as accurate as a
+  5° one, and there is no ill-conditioned region left to stay out of;
+* the residual out-of-plane component is finished by the old shortest arc, which
+  is well conditioned once the big angle has gone. (The shipping dent is the
+  rigid **swing** about the chord, so B does leave the triangle's plane; the
+  normal is a conditioner, and the measurement below is what chose it.)
+* `nodule_aim_rollstable` takes the world axis **append-only**. With no axis it
+  is the old function byte for byte, so nothing else in the tree moves.
+
+**The chord was the other candidate and it measured worse.** The chord is the
+swing's own rotation axis, so it looked exactly right on paper — but it is not
+perpendicular to the segment, and the function's +Y-component drop mangles it.
+Measured on the same ladder: 9.773° at depth 2200 and 164.5° at 6000, against the
+triangle normal's 7.591 and 15.9. Measurement on the **comparison** side chose
+between two authored candidates; it did not pick a value.
+
+| configuration | OLD aim | NEW aim, shipping build |
+|---|---|---|
+| gain 550 / depth 2200 (was shipping) | 7.772 | **7.591** — the dip-off bank's own worst; the dent is invisible to the gate |
+| gain 550 / depth 3400 | 9.928 **FAIL** | **7.591** — still invisible |
+| gain 550 / depth 4200 (**ships**) | — | **7.642** — the dent's whole cost is 0.051° |
+| gain 550 / depth 4800 | — | 8.198 FAIL — the ceiling is reached at about 4750 |
+| gain 1000 / depth 2200 | **50.963 FAIL** | **7.591** |
+
+The last row is the review's own worst case, configuration for configuration.
+The flip is not smaller; it is gone. (`P20-RECEIPTS/close-gain-ladder-newaim.txt`
+and `close-override-audit.txt`; the depth rows are taken at the shipping
+per-clip shares and every run prints its own `CONFIG JUDGED` line.)
+
+### 1a. "Does any other aim path still compose z-then-x?" — yes, four, and here is why they are not at risk
+
+The brief asked, so it was checked rather than assumed. `grep` over `tools/reel`
+finds the z-then-x composition at five live sites:
+
+| site | what it aims | status |
+|---|---|---|
+| `nodule_aim` (three callers) | the AMBIENT nodule solve for carriers A, B, C | untouched, deliberately: it is the pass-11 pose the whole bank is byte-compatible with, and the dent runs *after* it |
+| `loop_pose`'s HingeD closure (2 sites) and `finalize_rear_follow`'s two HingeD writes | the return arm's last segment, at the re-entry anchor and at the rear socket | untouched, pre-existing |
+
+**Why the HingeD family is not the same hazard.** The quantisation fault needs
+the aim's target to approach **antiparallel with where the segment already
+points**, which is what collapses `a × v`. HingeD aims at a fixed anchor deep
+inside the body, from a segment that already points at it; the turn is small and
+its cross product never collapses. The dent cannot push it there either, because
+HingeC is **pinned** — the closure walk enters at exactly its pre-dent frame,
+which is the contract G10 now gates (0.066° of drift).
+
+**What would show it if that ever changed**, so the next reader has a check
+rather than an assurance: mspan's G6 bounds the worst consecutive-step turn on
+the posed rings (shipping **66.43°** against a 140 ceiling) and G7 bounds the
+closure endpoint (**6.065 mm**, straightness sin 0.0077). A HingeD roll flip
+would show in both. Both are green and neither moved this pass.
+
+**`nodule_aim`'s three callers are the interesting residual.** They are exact-off
+by construction today, but they are the same function with the same
+near-antiparallel blind spot, and a future beat that drives an ambient carrier
+offset hard enough would hit it. `arc_from_y_about` is available to them
+append-only — the axis argument is all it needs. Not done here, because changing
+them moves every byte in the bank and this pass had a block to clear.
+
+## 2. What capped the depth next, and the second repair
+
+With the flip gone, G9's worst moved off carrier B and became an honest **rate**
+on carrier A. The per-slot angular trace (`mspan --motion-csv`) shows the whole
+beat on the limiting clips as **one smooth symmetric 16-frame hump** — no spike,
+no flip — peaking at exactly the rate `kKneadDipMinRampKeys = 9` sets.
+
+Nine keys is 0.3 s at 30 Hz. That is a jab, not a knead, and the clips it bound
+were precisely the short ones whose ramps sit on the floor rather than on the
+130‰ fraction. Scanning the floor against "how many hosting clips can reach the
+ranking inside the unmoved 8° ceiling":
+
+| ramp floor (keys) | hosting clips that can reach B-lowest | the clip that cannot |
+|---|---|---|
+| 18 | 17 / 19 | 3 and 20 |
+| 20 | 18 / 19 | 3 |
+| 22 | 17 / 19 | 3, 11 |
+| 24 | 18 / 19 | 11 |
+| 26, 28 | 18 / 19 | 8 |
+| **30** | **19 / 19** | — |
+| 34 | 19 / 19 | — |
+
+The rungs between 18 and 28 each lose a *different* clip because the dip COUNT
+flips between two and one at different clip lengths; 30 is where every clip is on
+the same side of that flip. **30 keys ships** — one second of press, and on a clip
+under ~230 keys one deliberate knead instead of two fast ones, which is the
+gesture the owner named rather than a compromise made for the gate.
+`win_keys` already clamps every window at `span/3`, so the floor can never push a
+short clip's window past its own length.
+
+## 3. B strictly the lowest carrier — the shipping figure
+
+`kKneadDentDepthPm` **2200 → 4200**, `kKneadDipMinRampKeys` **9 → 30**, and
+`kKneadDipClipPm` re-trimmed one clip at a time against the measured pair (that
+clip's R5 margin, and that clip's own worst 60 Hz angular step). The target was
+a readable margin — 70–180 mm where the mechanism gives a choice — and no deeper,
+because depth a clip does not need is continuity headroom spent for nothing.
+
+**19 of 19 hosting clips reach B strictly lowest. Worst margin +37 mm (slot 9,
+against a 20 mm gate). G9 worst 7.642° against the UNMOVED 8.0° ceiling.**
+Measured with `CONFIG JUDGED (mrear): every shipping constant at its shipped
+value` printed on the same run.
+
+| slot | share pm | B-lowest margin | returns to | | slot | share pm | B-lowest margin | returns to |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 715 | +171 | +444 | | 11 | 815 | +105 | +422 |
+| 1 | 730 | +99 | +401 | | 12 | 650 | +157 | +434 |
+| 2 | 680 | +188 | +468 | | 14 | 635 | +123 | +363 |
+| 3 | 730 | +137 | +435 | | 17 | 635 | +132 | +377 |
+| 4 | 650 | +144 | +456 | | 18 | 590 | +112 | +407 |
+| 5 | 770 | +150 | +436 | | 19 | 645 | +131 | +417 |
+| 6 | 730 | +161 | +414 | | 20 | 815 | +67 | +452 |
+| 8 | 770 | +83 | +431 | | 22 | 800 | +70 | +447 |
+| 9 | 950 | +37 | +400 | | 23 | 715 | +171 | +444 |
+| 10 | 820 | +80 | +401 | | | | | |
+
+⚠ **Slot 23 caught a third report naming the wrong operand.** It is the
+fixed-camera bake of the idle and every SCHEDULED layer is called with
+`kIdleOrbitSlot`, so it renders on slot 0's share (715) while its own
+`slot_id` is 23 — past the end of the table. Three lookups indexed on the clip's
+`slot_id` and fell onto a 750 default the renderer never used: R5's printed
+share, R5's "does this clip author a dip" test, and `swallow_nodules`' own
+fallback. `u02::knead_schedule_slot()` names the mapping once and all three use
+it. Production is unaffected — the shipping Hover / Inspect / Taunt III / Blown
+sequence CRCs are byte-identical across the change (`0x93B95AEE`, `0xD00478A1`,
+`0xC81598AA`, `0xC6AAF7AD`) — because production already passed slot 0. The
+fallback was a silent default waiting for the next clip whose slot runs past the
+table, which is the pass-5 orphaned-index fault exactly.
+
+**The clips that do NOT host the beat, and why — every one named:**
+
+| slot | what it is | why it does not host a dip |
+|---|---|---|
+| 7 | Still | a two-frame form diagnostic; there is no time for a gesture |
+| 13 | Trick | the plant contact is pinned; a carrier beat under it would fight the contact |
+| 21 | Taunt III | its own crown shuffle already owns the carrier rankings — and it reads **+64 mm**, i.e. B *is* the lowest ball there, by the mechanism the owner named as the reference |
+| **15** | the mana lab (lane-only, Direction 6) | **it never calls `antenna_knead`/`swallow_nodules`.** It runs a forked `lab_antenna_knead` on its own timeline, so the dent could not reach it however the table were set |
+| **16** | nodule-solo | same: `build_nodule_solo` does not call the knead layer, and the clip exists to show each nodule moving **independently** — a dip pressing B would be the two-authorities fault against the thing it demonstrates |
+
+15 and 16 carried **750** before this close, so R5 counted them as hosting and
+reported them permanently short (−191 and −74 mm, flat at every depth). That is a
+gate leg that **cannot reach its state** being read as a finding. They are now
+**0**, the honest declaration, and R5 judges 19 clips instead of 21.
+
+So: of the 24 clips in the bank, **20 have B strictly the lowest ball** (19 by
+the dent, Taunt III by its crown shuffle), and the four that do not are two
+diagnostics that cannot run the layer, one two-frame form plate, and the pinned
+Trick plant.
+
+## 4. The particle reaction, re-authored so it READS
+
+The first version added `dip_pm` to `agit`, the agitation scalar the fold already
+runs near the top of. Measured against the reaction switched off, on Hover, in
+production ink: **588 of 600 frames byte-identical**, 72 px of 92,160 past
+24/255 at the strongest, against 6,145 for the geometry beside it. At 10× it was
+one lightning bolt a few pixels longer. CLAUDE.md's crayon grain, exactly — and
+the identity leg ("`FOLD_DIP_PM=0` changes the bytes") was **true** and said
+nothing about visibility.
+
+It is now a **motion of the whole mana body**, in the owner's own Direction 7
+vocabulary ("the shapes should look a bit malleable like they're being knead").
+When B presses down, the lightning figure and its particle cloud — including the
+wanderers, which are the mana that gets pushed *out* of the pocket — flatten,
+spread sideways and ride down, about the **same pivot** and through the **same
+separable law**, and come back with the press:
+
+* `kFoldDipDropMm = 330`, `kFoldDipSquashPm = 430`, `kFoldDipSpreadPm = 700`,
+  all per mille of the full reaction and all scaled by `dip_pm`, so
+  `ZHAO_U02_FOLD_DIP_PM` still ladders the whole thing and **0 is still the
+  exact-off control** (`dip_squeeze` returns before a single arithmetic
+  operation). Population, palette and the distance-scaled line law are untouched.
+
+**How it was judged.** By eye, at native and 3×, on Inspect, Hover and Drift,
+against the exact-off bank at the same frames, off the ladder
+`ZHAO_U02_FOLD_DIP_PM ∈ {0, 300, 650, 1000}`. At 0→300 the bolt figure barely
+moves; at 650 the figure and the mote cloud visibly drop and spread while the
+press is on and are identical to the control outside the window; at 1000 it
+starts to read as the mana sliding rather than being squeezed. **650 ships.**
+Drift is far enough away that the reaction is properly small there and the thin
+distance-scaled lines are unchanged.
+
+The measurement is on the comparison side only, and it was **re-taken from the
+shipping build after the constants were raised** — quoting the ladder rung the
+eye rejected would be this pass's own defect:
+
+| subject | frames not byte-identical to the reaction off | strongest frame, px past 24/255 |
+|---|---|---|
+| Hover (600) | **127** (was 12) | **2,745** (was 72) |
+| Inspect (600) | 127 | **3,417** |
+| Drift (300) | 40 | 283 — correctly small at that distance |
+
+Those numbers are not the acceptance — the pictures are — but they are the bias
+check the earlier version failed.
+
+## 5. The three gate items
+
+### 5a. G10 DENT PIN — built, and its control caught it being blind
+
+Specified in `P20-SOLVER-ARCHITECTURE.md` revision 1 and never built; the dent's
+central contract ("A and C keep their world position AND frame, which is why the
+attachment is charged nothing") existed only behind a private
+`-DZHAO_P20_PINPROBE` rebuild. The probe is now a runtime-gated accumulator the
+gate switches on before the bank is built, and the leg bounds it.
+
+**Its first version measured POSITION only, and under its own control it read an
+unchanged 8 mm** while the closure and continuity legs went red downstream. The
+reason is structural: `loop_walk(g, 4, …)` composes HingeC's rotation into `Q`
+*after* it has advanced the position, so C's **position does not depend on the
+pin at all**. That is CLAUDE.md's "detector wired to two operands that move
+together" — the quantity being differenced was blind to the fault the leg was
+built for, and it would have shipped reading a reassuring number.
+
+It now measures the **frame** as well:
+
+| | position (L1) | frame drift |
+|---|---|---|
+| shipping | 8 mm (ceiling 20) | **0.066°** (ceiling 4.0) |
+| `--fail-dent-pin` | 8 mm | **93.658°** |
+
+attributed `0x10300`. The allowed category set is wider than the expected one on
+purpose, and the reason *is* the leg's argument: dropping the pin breaks G10 and
+the two things the pin exists to protect. A control that fired G10 alone would
+have to be a perturbation rather than the real defect.
+
+### 5b. R5's `dip_stuck` arm — a control, and the same law again
+
+`--fail-dip-stuck` freezes `knead_dip_window_env` at a full envelope: the dip
+goes down on the first key and never returns.
+
+Building it exposed the arm as blind too. It differenced **B's own vertical
+travel** over the clip and asked for 60 mm — a quantity dominated by every other
+layer (the ambient nodule schedule, the breathing, the body's own rise and fall),
+so a dip frozen permanently at the bottom still measured **280–520 mm** and the
+control returned **rc 0**.
+
+The dip's contract is a *ranking* that goes and returns, so the return is now
+measured on the ranking: somewhere in the clip B must be at least 60 mm **above**
+the lower of A and C again. Nothing but the dip can hide that. Shipping clips
+return to **+363…+468 mm**; the control fires mask `0x10`. The per-slot R5 line
+prints the margin on every clip, passing or not, so the leg can be read for
+margin rather than only for failure.
+
+### 5c. The hand-off — governance restored, not just reported
+
+Row 3 of the audit: the bound went 320 mm hard → reported-only, and shipping read
+**361 mm** — past a number the gate was still printing, with nothing guarding it.
+
+The demotion's *reasoning* was right about the old number (320 was calibrated
+against a band that could not bend), and wrong to conclude "therefore no bound".
+So the bound is **re-calibrated for the new solve rather than removed**:
+`kGateHandoffMaxMm = 420`, 16% over the shipping 361 — and the shipping 361 is
+identical with `ZHAO_U02_KNEAD_DIP_PM=0`, so the beat costs it nothing. It is a
+regression ceiling and claims nothing about what the right curvature is.
+
+**Fired:** `--fail-rear-frame` (the version-18 legacy-root End frame — the defect
+this pass repaired) drives it to **523 mm**, and R4 now prints which of its four
+conditions breached: `[rail-floor rail-ceiling hand-off ]`. `--fail-rear-joint`
+reads 393 and deliberately stays under, so it keeps failing only its own R1
+detector and the matrix masks are unchanged.
+
+## 6. The override audit
+
+Swept every gate and driver (`manafold_{spangate,rear_audit,nodule,motiongate,
+probe,outlinegate,shellgate,meshcheck,public_jointgate,qa_p12,eyesize}.cpp`) for
+assignments to a `g_u02_*` shipping global. Every remaining one is:
+
+* a **declared mutant** behind a `--fail-*` flag or `break_check`, saved and
+  restored around the leg, and printed in a `[MUTANT]` banner; or
+* **strict environment parsing** (a malformed value returns RC 2); or
+* `manafold_shellgate.cpp`'s `regression_control()`, which sets the pass-15
+  shell wholesale and is an explicitly **inverted-polarity** control that says so
+  in its own banner.
+
+**No second `--dip` was found.** One weakness is recorded rather than fixed:
+`manafold_rear_audit.cpp` parses six of its authoring-ladder environment
+variables with bare `std::atoi`, so a malformed value silently becomes 0 instead
+of returning RC 2 the way the reel's own parser does. The banner below makes the
+*consequence* visible even so.
+
+**The durable fix is the banner.** `u02::print_judged_config(who)`
+(`manafold_art.h`) prints, in one line, the value each override-reachable
+constant is **actually being judged at**, beside its shipping value, and marks
+any that differ with `**OVERRIDE, shipping N**`. mspan and mrear both print it
+before their first figure. A deliberate override is now named in the log by
+construction, and a headline taken from an overridden run cannot be mistaken for
+a shipping one by a reader, a later session or a matrix. The rule the rows
+encode: *a gate reads the shipping constants; it does not choose them.*
+
+## 7. Identity, and what moved
+
+**The pass-19 contract holds exactly.** `ZHAO_U02_KNEAD_DIP_PM=0
+ZHAO_U02_REAR_BOW=legacy` reproduces `P19-FINAL-BANK-INTEGRITY.md`'s own recorded
+sequence CRCs: Hover `0xA2D0E051`, Inspect `0x779615BB`, Taunt III `0x75BC4777`.
+That leg is now in the matrix (`e-identity-pass19`), where it was not before.
+
+Three identity legs are re-baselined, and the reason is declared rather than
+absorbed: the dip's **shared schedule** (the ramp floor and the per-clip shares)
+feeds the carried solver as well as the dent, by design, so a legitimate change
+to the beat moves the carried bank too. The carried solver is a *selectable
+alternative mechanism*, not a legacy contract; the legacy contract is the leg
+above, and it did not move.
+
+| leg | configuration | CRCs (hover / inspect / taunt3) |
+|---|---|---|
+| `e-identity-pass19` | `KNEAD_DIP_PM=0 REAR_BOW=legacy` | `0xA2D0E051 0x779615BB 0x75BC4777` — **unchanged, = pass 19** |
+| `e-identity-dipoff` | `KNEAD_DIP_PM=0` | `0xEFE5AFC1 0x9E71DF79 0xC81598AA` (new leg) |
+| `e-identity-carried` | `KNEAD_DIP_SOLVER=carried` | `0x40AA70E8 0xF6BD3444 0xC81598AA` (re-baselined) |
+| `e-identity-legacy` | `carried` + `REAR_BOW=legacy` | `0x46A9C936 0x99CCAC21 0x75BC4777` (re-baselined) |
+
+## 8. Bounds
+
+**No bound was relaxed.** `kAntennaMaxAngularStepDeg` (8.0), the accel and jerk
+ceilings, `kSpanStretchMaxPm`, `kSpanCompactionMinPm`, `kSpanMinRunMm`, the ±2 pm
+bound tolerance, `kGateDipMarginMm` (20) and the R4 rail floors and ceiling are
+byte-identical to the branch point. Two bounds were **added** (`kDentPinMaxMm`,
+`kDentPinMaxFrameA16`) and one was **raised from a demoted state back into
+force** (`kGateHandoffMaxMm`, 320 reported-only → 420 enforced), which is the
+review's follow-up 5.
+
+## 9. Files changed at the close
+
+* `tools/reel/manafold_clips.h` — `arc_from_y_about`; the world axis on
+  `nodule_aim_rollstable`; the fold-plane normal carried into both dent aims; the
+  always-available G10 pin accumulator (position **and** frame) and its control;
+  the `dip_stuck` control in `knead_dip_window_env`; the ramp-floor global and
+  `ZHAO_U02_KNEAD_DIP_RAMP_KEYS`.
+* `tools/reel/manafold_art.h` — `kKneadDentDepthPm` 4200; `kKneadDipMinRampKeys`
+  30 and its global; the re-trimmed `kKneadDipClipPm`;
+  `kFoldDipDropMm/SquashPm/SpreadPm`; `kDentPinMaxMm`, `kDentPinMaxFrameA16` and
+  the pin globals; `g_u02_knead_dip_stuck_control`; `print_judged_config()`.
+* `tools/reel/manafold_fx.h` — the dip squeeze (`dip_ax` / `dip_squeeze`) applied
+  to the lightning figure in `place()`, to the independent mote lane and to the
+  wanderers.
+* `tools/reel/manafold_spangate.cpp` — G10 DENT PIN, `--fail-dent-pin`,
+  `kCatDentPin`, the judged-configuration banner.
+* `tools/reel/manafold_rear_audit.cpp` — `--fail-dip-stuck`; the ranking-based
+  return measurement; the per-slot R5 margin line; `kGateHandoffMaxMm` 420 back
+  in force with per-condition attribution; the judged-configuration banner.
+* `P20-RECEIPTS/gatematrix_p20.sh` — `s-dent-pin`, `r-dip-stuck`, four new
+  selectors, `e-identity-pass19`, `e-identity-dipoff`, two re-baselines.
+
+## 10. The attachment parity, at 1.9x the previous depth
+
+The dent's central claim is that F–A and C–E have **no term in the solve** — not
+a tolerance, an absence — so the attachment cannot be charged for the gesture.
+At depth 4200 with a 30-key ramp, every R1 and R4 number is **identical to the
+dip switched off, digit for digit**:
+
+| | shipping (dip on) | `ZHAO_U02_KNEAD_DIP_PM=0` |
+|---|---|---|
+| worst arm↔End rotation | 16.48° | 16.48° |
+| worst rear centreline turn | 113.03° | 113.03° |
+| worst rear rail | 0.692 .. 2.052 | 0.692 .. 2.052 |
+| worst hand-off | 361 mm | 361 mm |
+| worst rail step | 0.1630 | 0.1630 |
+
+`P20-RECEIPTS/close-attachment-parity.txt`. This is also the strongest
+corroboration of G10 DENT PIN's 0.066° of frame drift at C: **if the pin leaked,
+these rows could not match.** The gate and the parity are independent
+instruments agreeing, which is the only kind of agreement worth quoting.
+
+It also retires the last doubt about item 1. The pass exists because the rear
+attachment tore; the beat that was supposed to threaten it most, at nearly twice
+the depth the review measured, moves it by nothing at all.
+
+## 10a. The review's five follow-ups, answered
+
+| # | the review asked for | what happened |
+|---|---|---|
+| 1 | *"Decide item 2 with the owner's eye, not with a knob. The dent cannot reach 'B lowest on every animation' inside G9. The path named by the pass's own earlier packets — redistribute across A/B/C as Taunt III's crown shuffle does — is still the right one, and it is authoring."* | **Answered differently, and the redistribution was not needed.** The premise was the pass's own conclusion, and it was wrong: the dent *can* reach it inside G9, because the trade the ladder showed was a property of the AIM's axis quantisation, not of the mechanism. 19 of 19 hosting clips, G9 at 7.642. The eye still chose the depth — off a rendered ladder — but it was choosing inside a range the repair opened, not between two things that could not both exist. |
+| 2 | *"Item 3 needs a visible amplitude. `kFoldDipOnsetMm` = 90 against a sag that rarely clears it. Lower the onset, or drive the reaction from the dip's schedule rather than from the achieved sag, then look at it."* | Done, and by a third route the review did not name. The onset was **not** lowered and the reaction still reads from the POSE rather than the schedule — both of those were right and neither was the problem. The problem was that the reaction had no visible CHANNEL: it only added to a scalar the fold already ran near the top of. It is now a motion of the whole mana body. §4. |
+| 3 | *"Build G10 DENT PIN with `--fail-dent-pin`. The probe already exists and the shipping number is 7 mm; a leg bounding it would cost little."* | Done — and the leg's first version was blind, which the control caught. §5a. |
+| 4 | *"Give R5's `dip_stuck` arm a control, or fold the arm into the one that has one."* | Given a control, and the arm turned out to be measuring an operand no control could move. Both repaired. §5b. |
+| 5 | *"Put a regression ceiling back on the hand-off — reported **and** bounded, at a number above the shipping 361 with margin."* | Done: 420 mm, enforced, fired at 523 by an existing causal control. §5c. |
+
+Two of the five were answered by disagreeing with the review's diagnosis while
+agreeing with its finding, which is the useful kind of disagreement: in both
+cases the review was right that the thing was broken and right about how to tell.
+
+## 11. Evidence index
+
+| picture | what it decides |
+|---|---|
+| `P20-LOOKS/CLOSE-DEPTH-LADDER-JUDGING-3X.jpg` | the depth ladder {OFF, 2800, 3400, 3800, 4200} on the fixed antenna judging view — a smooth progression from pointed arch to sagged bar, tube throughout, no slab and no kink |
+| `P20-LOOKS/CLOSE-DEPTH-LADDER-TOPRUN-4X.jpg` | the same ladder on the top run alone, where the ranking reads |
+| `P20-LOOKS/CLOSE-KNEAD-OFF-VS-SHIP-5X.jpg` | dip off vs shipping at three frames of the beat |
+| `P20-LOOKS/CLOSE-KNEAD-NATIVE.jpg` | **the shipping read, at native resolution**: the press, the recovery, the resting loop, and the off control |
+| `P20-LOOKS/CLOSE-JUDGING-ALLFRAMES-SHEET.jpg` | all 420 frames of the judging view — breakage check |
+| `P20-LOOKS/CLOSE-HOVER-ALLFRAMES-SHEET.jpg` | all 600 frames of Hover at the shipping configuration — breakage check |
+| `P20-LOOKS/CLOSE-PARTICLE-BEFORE-REAUTHOR-4X.jpg` | what the reaction looked like before: one bolt a few pixels longer |
+| `P20-LOOKS/CLOSE-PARTICLE-REACTION-AB-3X.jpg` | **the shipping reaction**, off vs on, on Hover f269 and Inspect f268 — taken from the shipping build |
+| `P20-LOOKS/CLOSE-PARTICLE-REACTION-WINDOW-2X.jpg` | the reaction across the whole dip window, off vs on, including f340 outside it where the two are identical |
+| `P20-LOOKS/CLOSE-PARTICLE-INSPECT-DRIFT-3X.jpg` | the reaction on Inspect, and on Drift where the distance-scaled lines are thin |
+
+| receipt | what it holds |
+|---|---|
+| `P20-RECEIPTS/gate-matrix-close.txt` | the full matrix, one invocation, the beat ON |
+| `P20-RECEIPTS/close-gain-ladder-newaim.txt` | the gain and depth ladders with the repaired aim, against the review's own |
+| `P20-RECEIPTS/close-override-audit.txt` | the audit, and the banner's own positive control |
+| `P20-RECEIPTS/close-attachment-parity.txt` | §10 |
+| `P20-RECEIPTS/close-mrear-normal.txt`, `close-mspan-normal.txt` | the shipping runs, banner included |
+| `P20-RECEIPTS/close-control-dent-pin.txt`, `close-control-dip-stuck.txt`, `close-control-handoff.txt` | the three new controls, fired |
+| `P20-RECEIPTS/close-binaries-md5.txt` | the build the receipts came from |

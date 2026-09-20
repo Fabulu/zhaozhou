@@ -1,5 +1,11 @@
 # Pass 20: every gate threshold and status I changed
 
+> WARNING: **READ THE `CLOSE` SECTION AT THE END OF THIS FILE FIRST.** It
+> supersedes every figure here that was measured under an override, and names
+> each one in a table. The pass-20 review found that `mrear --gate --dip` set
+> the dip gain to 1000 while the tree shipped 550, so the headline counts below
+> describe a creature nobody renders.
+
 For the reviewer. One row per change, with what it protected before, what it
 protects now, why it is not a loosening, and the fired control that proves it
 still catches the real fault.
@@ -205,3 +211,143 @@ is exactly how a receipt goes stale. They are now legs that fail.
 `n-mrear-dip` now judges R5 on the shipping configuration rather than on a knob
 turned on for the leg. The comment that said "the dip ships OFF" was updated
 with it.
+
+---
+
+# CLOSE — the gate changes made to clear the review
+
+The review's audit table stands; this section records what changed after it, and
+corrects the two rows it marked.
+
+## Corrections to the rows above
+
+| row | said | truth |
+|---|---|---|
+| **3 — R4 hand-off, "hard bound 320 mm → REPORTED ONLY"** | ACCEPT WITH A GAP | The gap is closed. The bound is back in force at **420 mm**, re-calibrated for the bowed band instead of removed, with a fired control. See §3 below. |
+| **4 — R4 stretch 1.80 → 2.10 "credited to the dip ladder (1.919)"** | the dip raised it | **The bow raised it, not the dip.** The review measured 2.052 / step 0.1630 with `KNEAD_DIP_PM=0`. The threshold is unchanged; only the attribution was wrong, and it is corrected here so it stops being repeated. |
+| **8 — "depth fitted to the ceiling"** | 2200 fits 8° at gain 550 | The *direction* of the trade was right and the *number* was the roll flip's. With the flip repaired by construction the same unmoved 8° ceiling admits **4200**. The ceiling still did not move. |
+| **"`n-mrear-dip` now judges R5 on the shipping configuration"** (packet 7) | it did not | It does now, and it is no longer a matter of trust: every mrear and mspan run prints a **judged-configuration banner** naming any constant that is not at its shipped value. See §5. |
+
+## 1. New leg — mspan **G10 DENT PIN** (`kCatDentPin`, `--fail-dent-pin`)
+
+Specified in `P20-SOLVER-ARCHITECTURE.md` revision 1, never built, and the
+review's finding "the dent's central contract is ungated" was correct.
+
+* **What it bounds.** How far the dent moves the **pinned** carrier C between the
+  pose it was handed and the pose it produces — position (L1, mm) *and* world
+  frame (degrees) — over every dent sample of every clip. C is where the return
+  arm starts, so this is exactly why the C–E attachment is charged nothing for
+  the gesture.
+* **Shipping:** 1,811 dent samples, **8 mm** (ceiling `kDentPinMaxMm = 20`) and
+  **0.066°** (ceiling `kDentPinMaxFrameA16` = 4°).
+* **Control fired:** `--fail-dent-pin` drops the HingeC world-frame pin — the
+  real defect, not a perturbation — and reads **93.658°**, attributed `0x10300`.
+* **Does it encode an art value?** No. It bounds a solver invariant that is zero
+  by construction; the numbers above the rounding floor are integer rounding in
+  two aims and one renormalisation.
+* ⚠ **Its first version could not fire.** It measured position alone, and
+  `loop_walk(g, 4, …)` composes HingeC's rotation *after* advancing the position,
+  so C's position is structurally independent of the pin. Under its own control
+  it read an unchanged 8 mm. The frame half exists because the control caught it.
+
+## 2. R5 DIP — the `dip_stuck` arm gets a control, and a working operand
+
+* **Control:** `--fail-dip-stuck` freezes the dip envelope at full — B presses
+  down on the first key and never comes back. Fires mask `0x10`.
+* ⚠ **The arm was measuring the wrong quantity.** It differenced B's own
+  vertical travel over the clip against 60 mm; that travel is dominated by the
+  ambient nodule schedule, the breathing and the body's own rise and fall, so a
+  permanently stuck dip still measured 280–520 mm and the control returned rc 0.
+  It now measures the RETURN **on the ranking**: somewhere in the clip B must be
+  ≥ 60 mm **above** the lower of A and C again.
+* **Shipping:** every hosting clip returns to **+363…+468 mm** above.
+* The per-slot R5 line now prints the margin on **every** clip, passing or not
+  (`B lowest margin … returns to … B travel … dip share …`), so the leg can be
+  read for margin and the per-clip share table can be steered by it. Same repair
+  the review made to G6.
+* **R5 now judges 19 clips, not 21.** `kKneadDipClipPm[15]` and `[16]` are 0:
+  neither clip calls `antenna_knead`/`swallow_nodules`, so the dent could never
+  run on them, and a nonzero entry made R5 report two permanently-short clips
+  whose state no legal input could reach. That is a **gate bookkeeping repair**,
+  and the honest declaration of what those two diagnostics do.
+
+## 3. R4 STRAIN — the hand-off bound is back, at 420 mm
+
+* **Then:** hard 320 mm (calibrated against a rear band that could not bend) →
+  demoted to reported-only when the bow made a legitimately curved band read as
+  disagreement. Shipping then read **361 mm**, past a number the gate was still
+  printing, with no guard at all.
+* **Now:** `kGateHandoffMaxMm = 420`, enforced in the R4 mask. 16% over the
+  shipping 361 — and 361 is **identical** with `ZHAO_U02_KNEAD_DIP_PM=0`, so the
+  beat costs the hand-off nothing.
+* **Does it encode an art value?** No, and the comment says so: it is a
+  *regression* ceiling and claims nothing about what the right curvature is, only
+  that from here on a band whose two influencing bones disagree by more than
+  420 mm about the same vertex is a skinning-smear risk that has to be looked at.
+  (The review is also right that the quantity is a smear risk, not curvature; the
+  constant's comment now says that too.)
+* **Control fired:** `--fail-rear-frame` (the version-18 legacy-root End frame,
+  the defect this pass repaired) drives it to **523 mm**. `--fail-rear-joint`
+  reads **393** and deliberately stays under, so it keeps failing only its own R1
+  detector — no matrix mask changed.
+* R4 now prints **which** of its four conditions fired
+  (`[rail-floor rail-ceiling rail-step hand-off ]`), because four quantities
+  sharing one mask bit cannot otherwise be attributed to a cause.
+
+## 4. Continuity ceiling — still not moved
+
+`kAntennaMaxAngularStepDeg` is **8.0**, unchanged since pass 19 (`075d88af`).
+The shipping bank reads **7.642**. The depth was fitted to the ceiling; the
+ceiling was not fitted to the depth. (The review's note that pass 20 did not
+author G9 at all is correct and is recorded here so the next reader does not look
+for it in this pass's diff.)
+
+## 5. No gate may override a shipping value again — the judged-configuration banner
+
+`u02::print_judged_config(who)` in `manafold_art.h`. One line, printed by mspan
+and mrear before their first figure, listing every override-reachable constant
+whose live value differs from its `constexpr` shipping value, as
+`name LIVE **OVERRIDE, shipping SHIP**`; when none differ it says so and names
+the four headline constants explicitly.
+
+Shipping run:
+
+```
+CONFIG JUDGED (mrear): every shipping constant at its shipped value
+  (dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)
+```
+
+Rows covered today: the dip gain, the dent depth / cross / swing / overpress /
+ambient duck, the dip ramp floor, the carried depth and fold share, the fold's
+dip reaction, the rear socket follow and ambient gain, and the rear bow sign and
+onset. **A row is added whenever a knob gains an override path.**
+
+This is the `--dip` defect's permanent answer. It does not forbid an override —
+ladders are how art values get chosen — it makes one impossible to take for a
+shipping figure, by a reader, a later session or a matrix leg.
+
+**Audit result:** every other `g_u02_*` assignment in every gate and driver is a
+declared mutant (saved, set, restored, `[MUTANT]`-banner'd), strict environment
+parsing, or `manafold_shellgate.cpp`'s explicitly inverted-polarity pass-15
+regression control. No second `--dip`. One weakness recorded but not fixed:
+`manafold_rear_audit.cpp` parses six authoring ladders with bare `std::atoi`, so
+a malformed value becomes 0 instead of returning RC 2 — the banner makes the
+consequence visible even so.
+
+## 6. Matrix
+
+`P20-RECEIPTS/gatematrix_p20.sh` gains, in one invocation:
+
+| leg | what it is |
+|---|---|
+| `s-dent-pin` | G10's control, rc 1 |
+| `r-dip-stuck` | R5's second arm, mask `0x10` |
+| `f-sel-dip-ramp`, `f-sel-dip-ramp-zero` | the new ramp-floor selector, strict RC 2 |
+| `f-sel-dent-cross`, `f-sel-dent-duck` | two dent selectors that had no leg |
+| `e-identity-pass19` | **the pass-19 contract**: `KNEAD_DIP_PM=0 REAR_BOW=legacy` → `0xA2D0E051 0x779615BB 0x75BC4777`, byte-identical to `P19-FINAL-BANK-INTEGRITY.md` |
+| `e-identity-dipoff` | the dip switched off on this tree |
+
+`e-identity-carried` and `e-identity-legacy` are **re-baselined**, declared: the
+dip's shared schedule (ramp floor, per-clip shares) feeds the carried solver too,
+by design. The carried solver is a selectable alternative mechanism; the legacy
+contract is `e-identity-pass19`, and it did not move.

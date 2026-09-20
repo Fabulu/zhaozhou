@@ -1,0 +1,9 @@
+gain 550   angular step 7.642 deg slot 8 f0101 B
+gain 750   angular step 9.291 deg slot 11 f0110 B
+gain 1000  angular step 10.976 deg slot 8 f0107 B
+depth 2200  angular step 7.591 deg slot 20 f0053 C
+depth 2700  angular step 7.591 deg slot 20 f0053 C
+depth 3400  angular step 7.591 deg slot 20 f0053 C
+depth 4200  angular step 7.642 deg slot 8 f0101 B
+depth 4800  angular step 8.198 deg slot 22 f0246 A
+depth 5400  angular step 9.096 deg slot 11 f0110 B

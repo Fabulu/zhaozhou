@@ -1,0 +1,74 @@
+# Pass 20 CLOSE -- the override audit
+#
+# The question: does any gate or driver hard-code an override of a SHIPPED
+# constant, the way `mrear --gate --dip` set the dip gain to 1000 while the
+# tree shipped 550 and then had its figure quoted as a shipping one?
+#
+# Method: every assignment to a g_u02_* global in every gate and driver, read
+# and classified:
+#   for f in tools/reel/manafold_*.cpp; do
+#     grep -nE 'g_u02_[a-z_]+ *=' "$f" | grep -vE 'getenv|parse_|strtol'
+#   done
+#
+# RESULT: NO SECOND --dip. Every remaining assignment is one of three kinds.
+#
+# 1. DECLARED MUTANT -- set behind a --fail-* flag or a break_check, restored
+#    around the leg where the leg is local, printed in a [MUTANT] banner, and
+#    attributed to a category by select_mutant.
+#      manafold_spangate.cpp   front-flex, swell, terminal-cap, order gain,
+#                              public-joint mute, root authority, snap,
+#                              accent, hold tremor, compress wrap, dent pin
+#      manafold_rear_audit.cpp rear-frame, rear-joint, no-dip, dip-stuck,
+#                              rear-strain, line-scale, line-flag
+#      manafold_motiongate.cpp the sixteen FxContinuityFault controls
+#      manafold_shellgate.cpp  the eight break_check perturbations
+#      manafold_probe.cpp      g_u02_death_fail
+#      manafold_nodule.cpp, manafold_outlinegate.cpp, manafold_meshcheck.cpp,
+#      manafold_public_jointgate.cpp, manafold_qa_p12.cpp,
+#      manafold_eyesize.cpp -- no assignments at all
+#
+# 2. ENVIRONMENT LADDER. The reel and mspan parse strictly (a malformed value
+#    returns RC 2) and the matrix has a selector leg for each.
+#
+#    RECORDED, NOT FIXED: manafold_rear_audit.cpp parses eight of its ladders
+#    with bare std::atoi, so a malformed value silently becomes 0 instead of
+#    returning RC 2 the way the reel's parser does. The banner below makes the
+#    CONSEQUENCE visible even so -- the wrong value prints as an override.
+#
+# 3. AN EXPLICITLY INVERTED-POLARITY CONTROL. manafold_shellgate.cpp's
+#    regression_control() sets the whole pass-15 shell and says so in its own
+#    banner: 'Polarity is INVERTED: rc 0 = the gate caught it.'
+#
+# THE DURABLE FIX: u02::print_judged_config() in manafold_art.h. mspan and
+# mrear print it before their first figure. It names every override-reachable
+# constant whose LIVE value differs from its constexpr SHIPPING value, so a
+# deliberate override is named in the log by construction and a headline taken
+# from an overridden run cannot be mistaken for a shipping one. A row is added
+# whenever a knob gains an override path.
+
+## The banner on the shipping runs
+
+CONFIG JUDGED (mrear): every shipping constant at its shipped value (dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)
+CONFIG JUDGED (mspan): every shipping constant at its shipped value (dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)
+
+## POSITIVE CONTROL FOR THE BANNER ITSELF -- a line saying 'no override' is a
+## CLAIM, and the claim to check hardest. Fired deliberately:
+
+$ ZHAO_U02_KNEAD_DIP_PM=1000 ZHAO_U02_KNEAD_DENT_DEPTH_PM=2200 manafold-spangate.exe
+CONFIG JUDGED (mspan): knead dip gain pm 1000 **OVERRIDE, shipping 550**; dent depth pm 2200 **OVERRIDE, shipping 4200**
+   angular step 7.591 deg slot 20 f0053 C; accel 5.303 slot 10 f0033 C; jerk 5.275 slot 10 f0033 C
+
+$ ZHAO_U02_KNEAD_DIP_RAMP_KEYS=9 manafold-rear-audit.exe --gate
+CONFIG JUDGED (mrear): dip ramp floor keys 9 **OVERRIDE, shipping 30**
+R5 DIP: 19 clip(s) author a dip; 2 never reach lowest; 0 do not return; worst margin -11 mm (slot 4, need 20)
+
+## Two things those rows show, both worth keeping.
+##
+## 1. gain 1000 / depth 2200 is EXACTLY the configuration the review measured
+##    at 50.963 deg -- the roll flip at its worst. The repaired aim reads
+##    7.591, which is the dip-off bank's own worst. The flip is not smaller;
+##    it is gone.
+##
+## 2. A ramp floor of 9 -- the value that shipped before the close -- takes
+##    the ranking from 19 of 19 down again, at the same depth. The floor is
+##    load-bearing, not cosmetic.

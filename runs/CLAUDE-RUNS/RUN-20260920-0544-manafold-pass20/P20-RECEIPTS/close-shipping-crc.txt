@@ -1,0 +1,9 @@
+# Pass 20 CLOSE -- shipping sequence CRCs (production ink, celmain + diagonal-cool-cross)
+#
+# Captured BEFORE and AFTER the knead_schedule_slot change; identical, which is
+# how that change was shown to move no production byte.
+
+manafold-hover    600 frames  0x93B95AEE
+manafold-inspect  600 frames  0xD00478A1
+manafold-blown    292 frames  0xC6AAF7AD
+manafold-taunt3   368 frames  0xC81598AA

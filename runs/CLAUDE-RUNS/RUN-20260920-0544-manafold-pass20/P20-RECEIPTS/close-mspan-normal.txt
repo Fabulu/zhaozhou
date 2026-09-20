@@ -1,0 +1,53 @@
+MANAFOLD PASS-17 SIGNED-SPAN GATE
+CONFIG JUDGED (mspan): every shipping constant at its shipped value (dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)
+  bones 27/32; helpers A/B/C/E/EStart/EMid/EPre = 16/17/18/19/20/21/22
+  signed bounds pm F-A -320..320, A-B -330..480, B-C -430..400, C-E -700..440; minimum signed run 80 mm
+  Taunt III held A punctuation 80 mm
+  root authority integrated; staged root helpers F/E 23/24
+
+G11 loop walk pairing: probe deltas 125/375/750 mm, 0 of 5 segments mispaired, worst +0 mm
+G10 dent pin: 1811 dent samples, worst |C_after - C_before| 8 mm (L1, ceiling 20), worst frame drift 0.066 deg (ceiling 3.999)
+G1 compiled zones: 668 loop vertices, 0 pair/weight mismatches, 0 unknown ring-y, 0 empty zones
+   rigid carrier cores F/A/B/C/E: 72/27/18/27/81 vertices
+G1b root authority: support vertices F/E 117/117, wrong 0/0; rotation samples 9700 mismatch F/E 0/0 max 0/64 LSB; Front X/Y 1/1 collateral local channels 0
+   terminal ReturnTip exception: 10 vertices, 0 wrong palettes; 97000 posed samples, worst ellipsoid rho 1086.22 pm
+G6b public Front X/Y: 10 clips, 1799 changed frames, weakest max 24.37 mm slot 5; closure/nodule/unexpected 1795/5907/0 production mismatch 0 seams 0 missing 0
+G6c swell size: 64 rings, selected/legacy differ 36, selected swell live on 36, actual mismatches 0
+G6d terminal cap: 1 profile diff at ring 63/63, nonterminal 0 collateral 0 actual mismatch 0; collapsed 131/131 authored 3015/1769
+G2 retired lane samples: 14550 checked, 0 nonzero
+G3 zero-delta helper identity: 0/11 palettes differ from parent
+G4 synthetic F-A extend +217 mm: endpoint err 0.000, signed y +217.00, run 687, min ring dy 66.09 mm
+G4 synthetic F-A compact -217 mm: endpoint err 0.000, signed y -217.00, run 253, min ring dy 24.23 mm
+G4 synthetic A-B extend +163 mm: endpoint err 0.000, signed y +162.99, run 403, min ring dy 76.25 mm
+G4 synthetic A-B compact -112 mm: endpoint err 0.000, signed y -112.00, run 128, min ring dy 24.02 mm
+G4 synthetic B-C extend +152 mm: endpoint err 0.000, signed y +151.99, run 432, min ring dy 70.16 mm
+G4 synthetic B-C compact -163 mm: endpoint err 0.000, signed y -162.99, run 117, min ring dy 18.26 mm
+G4 synthetic C-E extend +444 mm: endpoint err 0.000, signed y +444.00, run 1284, min ring dy 69.53 mm
+G4 synthetic C-E compact -707 mm: endpoint err 0.000, signed y -707.00, run 133, min ring dy 4.65 mm
+G5 shipping signed tracks: A/B/C fraction mismatches 0, E-stage fraction mismatches 0, bound/margin breaches 0
+   F-A signed delta -198..+199 mm (both signs)
+   A-B signed delta -105..+164 mm (both signs)
+   B-C signed delta -159..+145 mm (both signs)
+   C-E signed delta -687..+274 mm (both signs)
+G6 shipping posed ring order: 339500 steps, min projection -82.393 mm, separation 102.251 mm at slot 2 key 80 sub 0 C-E; 0 reversed, 0 pinched, worst consecutive-step turn 66.43 deg (ceiling 140.0)
+G8 tableau f0142: A/B/C 1538.2/1465.1/950.7 mm, top A bottom C
+G8 tableau f0178: A/B/C 1167.9/1618.0/1557.9 mm, top B bottom A
+G8 tableau f0212: A/B/C 1306.9/1251.6/1383.7 mm, top C bottom B
+G8 tableau f0268: A/B/C 1530.8/1465.9/957.5 mm, top A bottom C
+G8 public crown shuffle: witness failures 0, crossings AB/AC/BC 4/2/2, endpoint live F/E 86/88
+   phrase span deltas F-A -176..+199, A-B -94..+164, B-C -40..+145, C-E -517..+158 mm
+G8 held punchline f0324 mute F core 36 centroid/max 13.18/30.03 mm (anchored-max metric) OK
+G8 held punchline f0324 mute A core 27 centroid/max 80.56/83.19 mm (centroid+max metric) OK
+G8 held punchline f0324 mute B core 18 centroid/max 185.52/206.27 mm (centroid+max metric) OK
+G8 held punchline f0324 mute C core 27 centroid/max 165.18/195.34 mm (centroid+max metric) OK
+G8 held punchline f0324 mute E core 81 centroid/max 11.61/39.04 mm (anchored-max metric) OK
+   shipping-vs-normal held-punchline worst 0.000 mm
+G9 full-bank 60Hz carrier continuity: 48500 samples, 9 held-tail samples
+   position step 72.303 mm slot 20 f0053 C; accel 49.150 slot 13 f0157 B; jerk 49.055 slot 13 f0158 B
+   angular step 7.642 deg slot 8 f0101 B; accel 5.311 slot 10 f0033 C; jerk 5.284 slot 10 f0033 C
+   worst-position fold phase: prev seg/amp/agit/morph 3/1000/602/843 8->0; at 3/1000/347/906 8->0
+   lagged key 26 phases J/N/A/B/C: 3/1000/602 3/1000/602 2/1000/0 2/1000/0 1/575/0
+   lagged key 26+1 phases: 3/1000/134 3/1000/964 2/1000/0 2/1000/0 1/729/0
+G7 rear key/midpoint closure: 9700 samples, endpoint 6.065 mm, tip-length error 0.510 mm, straightness sin 0.007657
+
+PASS: 0 failure(s)
