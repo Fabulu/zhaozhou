@@ -640,6 +640,105 @@ Derived costs at the frozen budget, at the contract's 1 bake texel
    law when they were recorded, and a retune is a semantic change to be
    recorded like a profile version, never a silent tweak.
 
+### 9.3 Stamp-to-bake: the two laws TERRAIN.BAKE was missing — 2026-09-20
+
+Owner rulings R15 and R56. `design/blocks.yml` says TERRAIN.BAKE's `inputs:
+[stamp_results]`, and until now that was a sentence with nothing behind it:
+`zhao_surface_stamp`'s results are **per texel of a 64×64 layer-F sheet**
+(`res_texel_o[11:0]`, `res_tag_o`, `res_strength_o`) while
+`zhao_terrain_bake_v2`'s `cmd_*` is **one circular dig per patch**. The block's
+own header refused to bridge them because two laws did not exist anywhere in
+this tree. Here they are.
+
+#### (a) strength → depth is an ART TABLE, not a formula
+
+A stamp's `strength` is a `u8` output of the stamp profile vocabulary
+(`field-ir.md` §7.1); a bake's depth is `fx16` metres. Nothing derives one from
+the other, and nothing should: how deep a given scar *reads* is a look
+decision, so it is a **named, editable constant table** (CLAUDE.md rule 6) and
+not a curve someone fitted.
+
+`zref::terrain::kStampDepthTable` is that table: 16 entries of `fx16` metres,
+indexed by `strength >> 4`, interpolated linearly in the low nibble with ONE
+round-half-up (qformats §3's shape: an exact add of a rounded delta). Depth is
+signed — a negative entry RAISES ground, which is what a Volcano needs — and
+the shipped values are provisional and are meant to be looked at in scene, at
+final resolution, before anyone calls them right.
+
+The table is indexed, not fitted, for the reason CLAUDE.md's art law gives: a
+measurement can remove a bias and cannot choose a value.
+
+#### (b) 64×64 → 33×33 is NEAREST-TEXEL, and the seam error is DECLARED
+
+Ruling R56 preferred layer F at **65×65 and vertex-aligned** and allowed the
+fallback "nearest-texel, and DECLARE the measured seam error" if the format
+must stay frozen. **The format must stay frozen in v1**, and the reason is not
+cost — it is that three independent elaboration guards reject the vertex-aligned
+size and one of them cannot be paid at R56's price:
+
+* 65 × 65 × 2 = **8,450 bytes**, which is not a whole number of 64-B bursts.
+  `zhao_terrain_writeback.sv:346` `$fatal`s: *"F_BYTES is not a whole number of
+  bursts"*.
+* The page body would end at 21,578, and 21,578 % 8 = 2.
+  `zhao_terrain_pageloader.sv:297` `$fatal`s on a CRC range that is not a whole
+  beat.
+* **`zhao_terrain_jdoorbell.sv:143` `$fatal`s unless F_BYTES is a POWER OF TWO**,
+  because the journal entry address is `base + slot × F_BYTES` *as a shift*, a
+  law the block states in its own first lines. The next power of two above
+  8,450 is **16,384** — `+8,192 B/page, +38.3% of the page stride`, against
+  R56's stated `+258 B, +1.2%`.
+
+Padding to 8,512 (the smallest size that clears the beat and burst guards)
+costs +1.50% of stride, moves the page pool's end past `0x054E_0000` and so
+relocates a `spec/memory_rules.md` §5b region, and re-shapes
+`zhao_surface_sheet`'s `Slots × Texels` array away from a power of two — an
+array whose last shape change cost 95,947 ALMs when it stopped inferring
+memory. That is a subsystem packet with a fit gate, not a format tweak.
+
+One correction to the ruling's premise, since it names the work: **there is no
+packer.** `tools/pack/` holds an atlas PNG and a creature web-page script;
+`design/contracts/SW.TOOLS.ASSET.md:9` scopes the page packer to wave 3. Page
+images are built only inside the directed tests today. So "the page format
+moves with its spec, zref and packer in one pass" is cheaper now than it will
+ever be again — which is the strongest argument FOR R56's literal option, and
+is recorded here rather than buried, because the doorbell's shift law is the
+thing that actually has to give.
+
+**The law, then.** Layer F is an AREA grid: texel *i*'s centre sits at
+`(2i+1)/128` of the patch (`zhao_surface_stamp.sv:35`,
+`zref::surface::texel_wx`). The lattice is a VERTEX grid: vertex *v* sits at
+`v/32`. Solving `(2i+1)/4 = v` gives `i = 2v − ½` — never an integer, always an
+exact tie. The tie is broken DOWNWARD, which is the same direction
+`zref::render::sample_sheet` already breaks it:
+
+```
+sheet_texel_for_vertex(v) = min(2v, 63)          // v in 0..32
+```
+
+**THE DECLARED ERROR, measured rather than estimated:**
+
+| where | displacement |
+|---|---|
+| every vertex 0..31 | **+¼ cell** (texel centre at `v + 0.25` cells) |
+| vertex 32, the far edge | **−¼ cell** (texel 63's centre at 31.75 cells) |
+| across a patch seam | **½ cell**, and the two samples come from DIFFERENT PAGES |
+
+At the 1 m pitch (a 32 m patch) that is **0.25 m per vertex and a 0.50 m tear
+at every patch seam**. The interior figure is a constant offset, not a
+gradient: the whole scar field is misregistered against the geometry by a
+quarter cell, uniformly, which reads as the dig being slightly off-centre
+rather than as distortion. The seam figure is the visible fault R56 names, and
+it is the price of the frozen format.
+
+Choosing the other tie-break (`max(2v−1, 0)`) flips the interior sign and
+leaves the seam discontinuity at exactly ½ cell. **No integer rounding rule
+removes it**, because the area grid has no sample AT either edge: its extreme
+centres span 31.5 cells of a 32-cell patch. That one-cell span deficit, ½ at
+each end, is the entire case for 65×65.
+
+`zref::terrain::stamp_depth_at_vertex` is both laws in one call and is the
+oracle TERRAIN.BAKE's per-vertex depth mode is written against.
+
 ## 10. Test plan (obligations for Phase 6/7 owners)
 
 1. `physics_equals_pixels`: random columns; `zref::terrain::column_query` ==

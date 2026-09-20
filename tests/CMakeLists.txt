@@ -9564,6 +9564,14 @@ verilate(test_terrain_loddev_morph_directed
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv)
 add_test(NAME terrain_loddev_morph_directed COMMAND test_terrain_loddev_morph_directed)
 set_tests_properties(terrain_loddev_morph_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+# The two laws TERRAIN.BAKE was missing (owner rulings R15/R56, spec 9.3):
+# zref::terrain::stamp_depth (the ART table) and sheet_texel_for_vertex (the
+# 64x64 -> 33x33 nearest-texel resample). Pure zref, no RTL: the laws are what
+# had to be RATIFIED before the block's per-vertex depth mode can be written.
+add_executable(test_stamp_to_bake_laws_directed terrain/stamp_to_bake_laws_directed.cpp)
+target_link_libraries(test_stamp_to_bake_laws_directed PRIVATE zhao_zref)
+add_test(NAME stamp_to_bake_laws_directed COMMAND test_stamp_to_bake_laws_directed)
+set_tests_properties(stamp_to_bake_laws_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 # ---------------------------------------------------------------------------
 # THE PAGE-LOAD DEVIATION PATH (owner rulings R22/R24/R59):
 #   zhao_terrain_lodfeed (the mip pass's fine stream, buffered, walked)

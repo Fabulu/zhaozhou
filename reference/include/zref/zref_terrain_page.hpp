@@ -447,9 +447,130 @@ static_assert(kSheetReadChunks == 129 && kSheetWriteBursts == 128,
 // the v1 layout (10,694 % 64 = 6 < 8); the RTL $fatals if an override breaks it.
 static_assert((kLayerFOff % kPageBurstBytes) < 8, "the sheet must begin in its chunk's first beat");
 
+// AND THE TWO DIVISIONS ABOVE TRUNCATE SILENTLY, WHICH NOTHING CHECKED.
+// `kSheetBeats` and `kSheetWriteBursts` are plain integer divisions of
+// `kLayerFBytes`. At 8,192 both are exact; at any size that is NOT a whole
+// number of beats or bursts they round DOWN, and the evacuation ships a sheet
+// short by the remainder with every count agreeing -- the flattering
+// direction, and invisible. What stood between the tree and that was
+// `kSheetReadChunks == 129 && kSheetWriteBursts == 128` above, which pins the
+// OLD ANSWERS: it fires for any new value, and the moment somebody updates
+// those two numbers to the new ones the truncation goes silent again.
+//
+// Added 2026-09-20 while pricing owner ruling R56 (layer F 64x64 -> 65x65,
+// which is 8,450 bytes and divides by neither). `zhao_terrain_writeback.sv`
+// 346 already $fatals on the burst case; the oracle did not, and an oracle
+// more permissive than the hardware is the wrong way round.
+static_assert((kLayerFBytes % 8) == 0,
+              "layer F must be a whole number of 64-bit beats -- kSheetBeats truncates");
+static_assert((kLayerFBytes % kPageBurstBytes) == 0,
+              "layer F must be a whole number of 64-B bursts -- kSheetWriteBursts truncates");
+
 // The payload oracle: exactly the 8,192 bytes T4 says to copy, and nothing else.
 inline void sheet_extract(const uint8_t* page, uint8_t* out) {
   for (uint32_t i = 0; i < kLayerFBytes; ++i) out[i] = page[kLayerFOff + i];
+}
+
+// ===========================================================================
+// STAMP -> BAKE: THE TWO LAWS (owner rulings R15 and R56, spec 9.3)
+// ===========================================================================
+// `design/blocks.yml` has said TERRAIN.BAKE `inputs: [stamp_results]` for
+// months with nothing behind it. SURFACE.STAMP writes PER TEXEL of a 64x64
+// AREA sheet; TERRAIN.BAKE digs PER VERTEX of a 33x33 lattice and takes an
+// fx16 depth. Two laws are needed, neither existed anywhere in this tree, and
+// that is exactly what `zhao_terrain_bake.sv` 29-48 refused to invent.
+
+// (a) STRENGTH -> DEPTH IS AN ART TABLE (CLAUDE.md rule 6).
+//
+// Sixteen fx16 metres, indexed by `strength >> 4`, interpolated in the low
+// nibble. IT IS A TABLE AND NOT A CURVE ON PURPOSE: how deep a scar READS is a
+// look decision, and a fitted formula is a value chosen by a measurement --
+// the failure the art law is about. Every entry is editable and the shipped
+// set is PROVISIONAL: it has not been looked at in scene at final resolution,
+// which is the only thing that can settle it.
+//
+// SIGNED, because a negative entry RAISES ground and a Volcano is an
+// incremental bake that does exactly that (spec 9.2). Monotonic here only
+// because the provisional shape is; nothing depends on it.
+//
+// Entry n is the depth at strength n*16, in fx16 (65,536 = one metre).
+inline constexpr int32_t kStampDepthTable[16] = {
+    0,        //   0   0.00 m  no scar
+    -6553,    //  16  -0.10 m  a scuff
+    -19661,   //  32  -0.30 m
+    -39322,   //  48  -0.60 m
+    -65536,   //  64  -1.00 m  a footfall crater
+    -98304,   //  80  -1.50 m
+    -131072,  //  96  -2.00 m
+    -170394,  // 112  -2.60 m
+    -212992,  // 128  -3.25 m  a spell impact
+    -262144,  // 144  -4.00 m
+    -314573,  // 160  -4.80 m
+    -370606,  // 176  -5.65 m
+    -432013,  // 192  -6.59 m
+    -498073,  // 208  -7.60 m
+    -569344,  // 224  -8.69 m
+    -655360,  // 240 -10.00 m  the deepest a single stamp digs
+};
+
+// The interpolation: an exact add of a ROUNDED DELTA, one rounding, exactly
+// the shape `zref::terrain::coarse_height` and `morph_height` use. Strength
+// 255 extrapolates no further than entry 15 -- the last segment is HELD, so
+// the deepest value is one somebody chose rather than one the arithmetic ran
+// off the end of.
+inline constexpr int32_t stamp_depth(uint8_t strength) {
+  const int hi = strength >> 4;
+  const int fr = strength & 15;
+  const int32_t a = kStampDepthTable[hi];
+  if (fr == 0 || hi == 15) return a;
+  const int32_t b = kStampDepthTable[hi + 1];
+  const int64_t d = (static_cast<int64_t>(b) - a) * fr;
+  const int64_t r = (d >= 0) ? ((d + 8) >> 4) : -(((-d) + 8) >> 4);
+  return a + static_cast<int32_t>(r);
+}
+
+// (b) 64x64 -> 33x33 IS NEAREST-TEXEL, AND THE SEAM ERROR IS DECLARED.
+//
+// Layer F is an AREA grid: texel i's centre sits at (2i+1)/128 of the patch
+// (`zhao_surface_stamp.sv` 35, `zref::surface::texel_wx`). The lattice is a
+// VERTEX grid: vertex v sits at v/32. Solving (2i+1)/4 = v gives
+// i = 2v - 1/2 -- never an integer, ALWAYS AN EXACT TIE. The tie breaks
+// downward, the same direction `zref::render::sample_sheet` already breaks it.
+//
+// THE DECLARED ERROR (spec 9.3), measured rather than estimated:
+//   vertices 0..31   +1/4 cell   the texel centre sits at v + 0.25 cells
+//   vertex 32        -1/4 cell   texel 63's centre is at 31.75 cells
+//   across a seam     1/2 cell   and the two samples come from DIFFERENT pages
+//
+// At the 1 m pitch that is 0.25 m per vertex and a 0.50 m tear per seam. The
+// interior figure is a CONSTANT OFFSET, not a gradient, so it reads as a dig
+// slightly off-centre rather than as distortion. The seam figure is the
+// visible fault ruling R56 names, and NO integer rounding rule removes it: the
+// area grid's extreme centres span 31.5 cells of a 32-cell patch, and that
+// one-cell deficit is the entire case for a 65x65 vertex-aligned sheet.
+//
+// R56's literal option is REFUSED in v1 for three elaboration guards, one of
+// which -- `zhao_terrain_jdoorbell.sv` 143's POWER-OF-TWO journal address
+// shift -- prices it at +38.3% of the page stride rather than R56's +1.2%.
+// spec/terrain_rules.md 9.3 carries the full pricing.
+inline constexpr uint32_t kSheetEdge = 64;
+inline constexpr uint32_t sheet_texel_for_vertex(uint32_t v) {
+  const uint32_t i = 2u * v;
+  return i > (kSheetEdge - 1u) ? (kSheetEdge - 1u) : i;
+}
+static_assert(kSheetEdge * kSheetEdge * 2u == kLayerFBytes,
+              "the sheet edge and layer F must describe the same sheet");
+static_assert(sheet_texel_for_vertex(0) == 0 && sheet_texel_for_vertex(31) == 62 &&
+                  sheet_texel_for_vertex(32) == 63,
+              "nearest-texel: the far edge is the only clamped vertex");
+
+// Both laws in one call: the fx16 depth TERRAIN.BAKE's per-vertex mode digs at
+// lattice vertex (vi, vj), given the sheet's 4,096 strengths in scan order
+// (j*64 + i, the order `zhao_surface_sheet.sv` 108 states).
+inline int32_t stamp_depth_at_vertex(const uint8_t* strength, uint32_t vi, uint32_t vj) {
+  const uint32_t ti = sheet_texel_for_vertex(vi);
+  const uint32_t tj = sheet_texel_for_vertex(vj);
+  return stamp_depth(strength[tj * kSheetEdge + ti]);
 }
 
 // ===========================================================================
