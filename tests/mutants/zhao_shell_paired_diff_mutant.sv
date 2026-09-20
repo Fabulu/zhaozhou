@@ -12,10 +12,24 @@
 // every name on that list is a claim WITHDRAWN, which is why it
 // is short and why it is argued rather than discovered.
 //
-// 51 inputs exist only on the sibling. They get harness ports of
+// 54 inputs exist only on the sibling. They get harness ports of
 // their own so a test can exercise the new lifecycle without
 // disturbing the paired comparison.
 
+//
+// THIS IS THE COMMITTED MUTANT, NOT THE GENERATED HARNESS. It is a COPY of
+// tests/shell/zhao_shell_paired_diff.sv with the module renamed and ONE
+// substantive line changed: the V2 side of mm_c[18] is negated. Its driver's
+// polarity is inverted (WILL_FAIL), so it passes when the differential
+// correctly reports a divergence that is not really there.
+//
+// REGENERATE IT whenever the generated harness changes shape: re-run
+// tools/design/gen_shell_paired_diff.py, rename the module, and re-apply the
+// one negation. A copy of an old harness is a positive control for a
+// comparison that no longer exists. Refreshed 2026-09-19 evening (gz/pfs2),
+// when the shells gained four build_hps_wr_* ports and BOTH this file and
+// the generated harness stopped elaborating.
+//
 module zhao_shell_paired_diff_mut
   // The same import the two shells carry. Some ports are typedefs
   // -- `geom_guard_req_i` is a 103-bit `zhao_guard_req_t` -- and
@@ -120,6 +134,9 @@ module zhao_shell_paired_diff_mut
   input  logic build_wvalid_i,
   input  logic build_wlast_i,
   input  zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
+  input  logic [1-1:0] build_hps_wr_valid_i,
+  input  logic [1-1:0][63:0] build_hps_wr_data_i,
+  input  logic [1-1:0] build_hps_wr_last_i,
   input  logic build_res_valid_i,
   input  logic [31:0] build_res_base_i,
   input  logic [31:0] build_res_span_i,
@@ -490,7 +507,7 @@ module zhao_shell_paired_diff_mut
     .phy_dq_i(phy_dq_i)
   );
 
-  // The sibling has 62 outputs the historical shell never had
+  // The sibling has 63 outputs the historical shell never had
   // -- the v2_* lifecycle counters and the new lease surface.
   // They are left unconnected ON PURPOSE: this harness exists to
   // compare the SHARED surface, and a V2-only output has nothing
@@ -676,6 +693,10 @@ module zhao_shell_paired_diff_mut
     .build_hps_grant_o(),
     .build_hps_rsp_o(),
     .build_hps_wait_o(),
+    .build_hps_wr_valid_i(build_hps_wr_valid_i),
+    .build_hps_wr_data_i(build_hps_wr_data_i),
+    .build_hps_wr_last_i(build_hps_wr_last_i),
+    .build_hps_wr_ready_o(),
     .build_res_valid_i(build_res_valid_i),
     .build_res_base_i(build_res_base_i),
     .build_res_span_i(build_res_span_i),
