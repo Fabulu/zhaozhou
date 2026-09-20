@@ -419,3 +419,55 @@ the INCOMPLETE block.**
 missing door is holding composed `zhao_part_expand` at boundary I24, and there
 is a real 22-vs-21-bit width question it must ANSWER, not assume) and TERRLAW
 (R176 — three implementations of a terrain law with one ratified statement).
+
+## All twelve dossier decisions answered (2026-09-20 late / 09-21)
+
+**Where I am:** head `16a70239`, register **21**, all gates green, core tie-off
+audit **0 SILENT**. Three packets running: SEAMDIG, UNTEX, POSTGATHER.
+**Next step: attend whichever lands first and check its diff against the
+INCOMPLETE block.**
+
+**The owner took the two that needed an eye**, after asking to be quizzed and
+linked to the sheets:
+
+* **R194 — the seam dig ACCEPTED.** *"Shipped is fine. Slightly different but
+  not off."* Terrain page format **frozen at 64x64**. Unblocks I32 and
+  `zhao_terrain_bake_v2`'s layer-F reader, whose address generator was *exactly*
+  the contested thing. Six terrain lanes had closed none of it — **the blocker
+  was a question nobody had been asked.**
+* **R195 — the gather law RATIFIED as proposed**, two blur passes. *"Everything
+  but before looks basically the same. Pick cheapest."* **"Cheapest" did not
+  mean the lowest number in every column** — knee runs the other way (knee 16 is
+  907 of 5,760 cells against 74, and hazes), and `bloom_gain` is not a cost at
+  all. So cheapest landed on the existing default, unchanged.
+* **R196** logs an unprompted observation on a sheet that was *not* a live
+  decision: the mesh *"looks like an awesome canyon-like rig"*, the morph
+  *"doesn't look like much"*. **Not acted on** — a contact sheet of stills
+  cannot separate "a transition doing its job invisibly" from "silicon the eye
+  cannot see", and that wants a trajectory plot.
+
+**I took the other four** (owner: *"answer dossier questions yourself"*):
+**R197** the untextured attribute law — option A, a profile **declared by a
+flag, never encoded**, because zero samples texel (0,0) and that is the exact
+shape that bit us twice today; **R198** FH11 semantics yes / width deferred, the
+price corrected to ~+2,200 ALM and the deferral citing the fact that the console
+budget row **does not contain FIELD at all**; **R199** forge page kind deferred
+(it buys one family of six); **R200** the scoping call — **HOLD, the owner
+already answered it**: the active goal says *"Fit at completion only"*.
+
+**Six more were struck as already spent by DOSSIERCHECK**, one of which matters
+a great deal: the dossier's closing call to action was to supersede
+`zhao_terrain_normalmap` — **a capability the owner ruled IN** (D-8, D-1, and
+`V1-RELEASE-DEFINITION.md`), with the supporting quote **inverted** from a brief
+titled *"normal maps stay"*. It would have arrived as a recommendation **to the
+owner**, through the one door nobody watches.
+
+**Merged since:** PROJBOUND (I14's viewport-rect bullet closed; `viewport_id`
+turned out never to have been *parsed*), TERRLAW (R176 was right and too
+small — five implementations, not three), DOSSIER, DOSSIERCHECK.
+
+**A red I cleared myself:** the G8B gate failed post-merge on **line endings**
+while the content was perfect. `git ls-files --eol` said it in one line:
+`i/lf w/crlf attr/text eol=lf`. **A `.gitattributes` pin governs future
+checkouts and does not rewrite a copy already on disk** — the `.gitignore`
+lesson in a line-ending costume.
