@@ -738,6 +738,52 @@ So before `git checkout -- <shared file>`:
   re-apply from context while they are still running; after they finish, the
   work is gone and nobody knows what it was.
 
+### `[IO.File]` IGNORES `cd`, AND ITS WRITES LAND IN ANOTHER AGENT'S TREE
+
+Added 2026-09-20 by the terrain8 packet, which did exactly this and caught it
+only because `git status` in its own worktree came back **clean after a write
+that reported success**.
+
+`[Environment]::CurrentDirectory` — which every `System.IO` call resolves a
+relative path against — is set once when the shell starts and **is never
+updated by `cd` or `Set-Location`.** In an agent session it therefore stays at
+the PRIMARY working directory for the whole run. Measured, in a worktree,
+after an explicit `cd`:
+
+```
+PS $PWD                              = ...\gz-terrain8          <- mine
+[Environment]::CurrentDirectory      = ...\zhaozhou-ceiling-lane-20260912
+[IO.Path]::GetFullPath('tests\x.sv') = ...\zhaozhou-ceiling-lane-20260912\tests\x.sv
+python -c "print(os.getcwd())"       = ...\gz-terrain8          <- mine
+```
+
+So **native children (`python`, `git`, `cmake`, `verilator`) get `$PWD` and are
+fine; .NET file APIs do not.** That split is the whole trap: every gate you run
+reads the right tree, and the one file you write goes somewhere else.
+
+The consequences are the worst available. The write **succeeds**, silently, into
+the coordinator's checkout — a tree this protocol forbids you to touch, that
+other packets are gating against, and where it reads as an uncommitted edit
+somebody else may `git add` or `git checkout --` away. Nothing in the gate set
+can see it, because the gates all measure your own tree, correctly.
+
+And note WHERE it comes from: PACKET-PROTOCOL.md says *"Read/write files with
+`[IO.File]::ReadAllText/WriteAllText`, not `Get-Content | -join`."* That advice
+is right — and followed literally, with a relative path, it aims every packet's
+writes at the coordinator. A rule written down without the trap that comes with
+it is this file's most repeated shape.
+
+**So: pass `[IO.File]` an ABSOLUTE path, always.** Never a relative one, never
+one built from `$PWD` implicitly. Belt and braces, at the top of any script
+that writes: `[Environment]::CurrentDirectory = $PWD.Path`.
+
+**And the tell is a clean `git status` after a successful write.** If a write
+reported success and the file is not modified, it was written — look for where.
+`git -C <the other checkout> status --porcelain` finds it. To undo it, build the
+reverse patch (`git diff -- <file> | git apply --reverse`) rather than
+`git checkout --`: the reverse patch REFUSES if the file moved underneath you,
+and `checkout --` would take another agent's uncommitted work with it.
+
 ## Stopping an agent does not stop its background work
 
 A stop instruction was sent and obeyed, and a build it had already launched ran to

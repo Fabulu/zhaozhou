@@ -23,7 +23,7 @@
 // this is where the next person composing it will look, and three of the four
 // items below were found by re-checking a blocker that had stopped being true.
 //
-// 1. THE READ SIDE IS SOLVED AND THE ENTRY USED TO SAY IT WAS NOT.
+// 1. THE A/B/C READ SIDE IS SOLVED. THE LAYER-D READ SIDE IS NOT, AND
 //    `u_terrain_pagestream` already emits `v_base_o`/`v_scar_o`/`v_bottom_o`/
 //    `v_vi_o`/`v_vj_o` — this block's `vtx_base_i`/`vtx_scar_i`/`vtx_bottom_i`
 //    and its two index outputs PORT FOR PORT, same widths, same signedness,
@@ -31,6 +31,43 @@
 //    two-client share of that exact stream, so a third client is a widening,
 //    not a new arbiter. What is left is a CURSOR-MATCH ADAPTER (the streamer
 //    pushes, this block pulls) and `vtx_nobake_i`, which has no producer.
+//
+// 1b. **LAYER D HAS NO READER ANYWHERE IN THE MACHINE**, and this block needs
+//    it on TWO ports, one per phase. Found 2026-09-20 (terrain8) by re-checking
+//    item 1 rather than inheriting it; the correction runs in the direction of
+//    MORE missing work, which is why it had not been made.
+//      * `vtx_nobake_i` -- the sec 3.3 corner shadow, a reduction over up to
+//        four layer-D cells. The entry above already names it.
+//      * `cell_state_i` (with `cell_ci_o`/`cell_cj_o`) -- the BREACH phase's
+//        32x32 layer-D read-modify-write. NOT previously recorded anywhere.
+//    `zref_terrain_page.hpp:317` puts layer D at page offset 6,598. SEARCHED
+//    every .sv/.v/.txt/.qsf/.yml under fpga/ for 6598, `D_OFF` and kLayerDOff:
+//    ZERO hits that are a page offset (the matches are `d_off`/`rd_off` in
+//    FIELD and CMD.DMA, and the area figure "6,598 ALM"). `pagestream.sv:251`
+//    reads exactly '{A_OFF, B_OFF, C_OFF}; `pageloader` writes whole pages and
+//    reads none back; `writeback` is layer F only. This is the same shape as
+//    the layer-E absence at offset 7,622: TWO of the eight page layers have no
+//    reader, and both are on this block's critical path.
+//
+// 1c. AND THE SEAM `zhao_console_core.sv:2546-2551` NAMES IS NOT A PAGE WRITE.
+//    Mapping `cs_event_o`/`cs_sub_o`/`cs_ci_o`/`cs_cj_o` onto
+//    `zhao_terrain_compcache_front`'s `cs_we_i`/`cs_w_substance_i`/`cs_w_ci_i`/
+//    `cs_w_cj_i` is real and useful and it is an ON-CHIP MIRROR: that block has
+//    no VRAM port, and it stores `logic [1:0] sub_m` -- the SUBSTANCE field
+//    only. This block preserves sec 3.3's flag bits deliberately
+//    (`cs_state_o <= {cell_state_i[7:2], sub_out}`) and through that seam all
+//    six are DROPPED, while `cs_state_o`, the byte that carries them, has no
+//    consumer at all. Both consumers are wanted; they are different consumers,
+//    and only a page write discharges terrain_rules sec 7.
+//
+// 1d. THE FOUR UNSERVED PORTS ARE ONE BLOCK, NOT FOUR OWNERS.
+//    `design/contracts/TERRAIN.PAGEIO.md` (written 2026-09-20, NOT BUILT)
+//    specifies it: every one of them needs the same residency slot, the same
+//    generation and the same guard socket on the page pool, and this block
+//    bakes ONE record at a time with strictly sequential phases, so one agent
+//    per bake serves all four by construction. It also makes that agent the
+//    only honest writer of entry I27's `terr_dm_*`, because it is the only
+//    thing that holds the slot and generation the patch was served under.
 //
 // 2. THE WRITE SIDE IS THE REAL HOLE AND NOBODY HAD WRITTEN IT DOWN.
 //    **`sc_*`, the layer-B scar writeback, HAS NO CONSUMER ANYWHERE.**

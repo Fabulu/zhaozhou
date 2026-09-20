@@ -126,9 +126,41 @@
 // cosmetic diff. The re-lift script REFUSES if production no longer carries the
 // line being mutated, which is the check that would have mattered.
 //
-// AND SEE RULING R93: nothing in 	ests/ drives this mutant. One grep hit --
-// this file. It demonstrates nothing until it has a driver, and the next
-// terrain packet decides between giving it one and retiring it.
+// PROVENANCE, 2026-09-20 (terrain8, second commit): production's header gained
+// items 1b-1d -- the layer-D read absence -- in the same commit as this line.
+// THE BODY DID NOT MOVE. This line exists so mutant_copy_drift.py's provenance
+// test (it compares commit dates and cannot see that a body is already current)
+// clears honestly rather than by a cosmetic diff, exactly as the RE-LIFT note
+// above did for the same cause on the same day.
+//// RULING R93 IS DISCHARGED, 2026-09-20 (terrain8): IT HAS A DRIVER.
+//   tests/terrain/terrain_bake_v2_mutant_control.cpp
+//   ctest `terrain_bake_v2_mutant_control`    -- passes when this copy FIRES
+//   ctest `terrain_bake_v2_mutant_negative`   -- the SAME driver against
+//        PRODUCTION, WILL_FAIL: the negative control that proves the driver
+//        discriminates rather than merely runs. Without it, "the control
+//        passed" is evidence that an executable ran and none about which
+//        module it ran.
+// A driver was chosen over retirement because the fault class is real and is
+// UNREACHABLE BY LEGAL STIMULUS: the window fill is internal and no input can
+// make the prefetch land on a different row, so CLAUDE.md's committed-mutant
+// rule applies exactly. Measured at the driver's first run: 160 of 1,024
+// layer-D cells wrong on the banded fixture and 164 wrong under a real dig,
+// while layer B is bit-identical to the oracle on all 1,089 vertices and every
+// counter balances the stream it counts.
+//
+// AND THE FIRST RUN CORRECTED THIS FILE'S OWN DESCRIPTION OF ITS FAULT, which
+// is the whole of R93's argument about an unrun control. The sentence above --
+// "at each row advance `mrow_hi` receives the row the window ALREADY holds in
+// `mrow_lo`" -- is true of the FIRST advance and of no other. The slide is
+// `mrow_lo <= mrow_hi; mrow_hi <= mq` (production :865), so:
+//     window(0)     = (0, 1)       the explicit StBrA/StBrB/StBrC fill: CORRECT
+//     window(1)     = (1, 1)       the described fault, once
+//     window(cj>=2) = (cj-1, cj)   A ONE-ROW LAG, for the rest of the scan
+// The control's first fixture was built from that sentence and used a
+// row-alternating `meets` plane -- for which (cj, cj+1) and (cj-1, cj) are
+// indistinguishable -- so it reported ZERO disagreements against a mutant that
+// is genuinely broken. Three passes had read the sentence and none could have
+// caught it, because nothing had ever executed it.
 // Conservative SystemVerilog subset only (charter §2).
 
 module zhao_terrain_bake_v2_mutant (

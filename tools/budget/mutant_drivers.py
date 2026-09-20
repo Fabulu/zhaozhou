@@ -83,9 +83,21 @@ LINE_COMMENT = {".txt": "#", ".cmake": "#", ".py": "#", ".ps1": "#",
 # instead of forgotten. An entry that GAINS a driver is reported too, so the
 # list cannot rot in the flattering direction.
 KNOWN_UNDRIVEN = {
-    "zhao_terrain_bake_v2_mutant.sv":
-        "owner ruling R93, 2026-09-20: 'it gets a driver or it gets retired, and "
-        "the next terrain packet decides which'. Not refreshed again until then.",
+    # `zhao_terrain_bake_v2_mutant.sv` WAS HERE and is DISCHARGED, 2026-09-20:
+    # the terrain8 packet gave it a driver (`terrain_bake_v2_mutant_control`)
+    # plus `terrain_bake_v2_mutant_negative`, the same driver run against
+    # PRODUCTION under WILL_FAIL -- which proves the driver DISCRIMINATES
+    # rather than merely runs. Removed here because this tool reported the
+    # entry as stale and told me to: "an allowlist that outlives its reason is
+    # the next silent pass." It was right, and the one-line removal is the
+    # whole cost of it being right.
+    #
+    # WHAT THE DRIVER FOUND, and it is why R93 understated the problem: the
+    # mutant's HEADER DESCRIBED THE WRONG FAULT. It said the row window
+    # duplicates a row; it actually LAGS BY ONE from row 2 on. A fixture built
+    # from that sentence reported ZERO disagreements against a genuinely
+    # broken mutant. An unrun control is not merely unproven -- nothing ever
+    # pushes back on its prose, so it is UNCORRECTED, and it is being cited.
     "shell_fit_postmap_connectivity_dangling_mutant.sv":
         "found 2026-09-20 by this tool's first run. Undecided: the shell lane owns it.",
     "zhao_texture_timing4_r1t_e1_mutants.sv":
