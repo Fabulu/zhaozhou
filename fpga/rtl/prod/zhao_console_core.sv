@@ -1142,10 +1142,38 @@
 //      is NO TWO-PRODUCER MERGE. Terrain's projected corners leave this module
 //      on `proj_out_*` and its lit colour on `terr_light_*`, and both land
 //      nowhere. So the missing pieces are (a) the merge into GEOM.CLIP and
-//      (b) terrain's `invw24` -- GEOM.DEPTHQUANT lives inside GEOM.VATTR and
-//      serves the geometry lane only. Wiring the corners into a port that
+//      (b) terrain's attribute packet. Wiring the corners into a port that
 //      wants edge functions would still be the hidden adapter this file must
 //      not contain; that part of the old text stands.
+//
+//      (b) WAS UNDERSTATED AND IS CORRECTED HERE, 2026-09-20 (projinput). It
+//      used to read "terrain's `invw24` -- GEOM.DEPTHQUANT lives inside
+//      GEOM.VATTR and serves the geometry lane only". That is ONE slot of
+//      SEVEN. `GEOM_CLIP_ATTRS = 7`: GEOM.CLIP's ratified per-corner packet is
+//      invw24, u/w, v/w, lit r, g, b, alpha, and a terrain triangle entering
+//      `tri_*` has to fill all of it. Terrain today has:
+//
+//        invw24    -- needs a DEPTHQUANT on `proj_out_aw/bw/cw`; the composed
+//                     one (`zhao_geom_depthquant_stream`) is inside GEOM.VATTR
+//                     on the geometry lane's tagged schedule. As the old text
+//                     said.
+//        u/w, v/w  -- NO PRODUCER ANYWHERE. Searched `fpga/rtl/terrain/**` for
+//                     `u_over_w`, `v_over_w`, `out_u_o` and `tex_u`: ZERO hits.
+//                     The projector carries terrain's `mat_a`/`mat_b`/`weight`,
+//                     which is the Mosaic layer-E triple -- it names WHICH
+//                     materials blend, not WHERE on them to sample. A terrain
+//                     texture-coordinate law does not exist in this tree.
+//        lit r/g/b -- `terr_light_base_o` is ONE signed 32-bit SCALAR shade,
+//                     not three channels. Turning it into lit rgb needs the
+//                     material's colour, which is the same missing binding
+//                     `tri_flat_request_i` waits on (entry I49).
+//        alpha     -- owner ruling R48's named constant. NOT a gap.
+//
+//      So this entry is blocked on TWO ABSENT LAWS and not on one absent wire,
+//      and both of them are TERRAIN-lane laws with art content -- which is what
+//      the sentence above already meant by "terrain-lane work, named here so it
+//      is not mistaken for wiring". The difference matters for scheduling: the
+//      merge in (a) is a day's work once (b) exists, and (b) is not.
 //
 // I14. PROJ_SUBSYSTEM's matrix bank (`proj_cfg_*`, `proj_en_i`) -- BOUNDARY,
 //      and HALF CLOSED 2026-09-19. The entry stays open, and the half that
@@ -1162,18 +1190,77 @@
 //      addresses 0..15, one word per clock, out of a packet CMD.DECODER has
 //      already ratified. `cmd_exec_views_o` counts it.
 //
-//      STILL OPEN, and it is two different things:
+//      STILL OPEN, and it is THREE things. It used to say two, and both of
+//      those sentences were wrong when re-read on 2026-09-20 (projinput).
+//
 //        * THE VIEWPORT RECT, cfg addresses 16 and 17. SetView carries a
-//          `viewport_id` and NOT a rectangle, and the id-to-rectangle table is
+//          `viewport_id` and NOT a rectangle.
+//
+//          THE REST OF WHAT THIS BULLET USED TO SAY WAS FALSE, and it is the
+//          expensive kind of false -- it asserted a PRESENCE and then refused
+//          on it. It read: "the id-to-rectangle table is
 //          `spec/video_rules.md`'s -- it is not in the ABI at all. Deriving one
 //          here would be this file inventing a layout, which is the thing the
-//          whole ledger exists to refuse. The host port keeps them and the
-//          merge above is lossless in both directions, so this is a missing
-//          COMMAND rather than missing wiring.
-//        * `proj_en_i`, and `SetView`'s OTHER FOUR FIELDS. `pixel_error` wants
-//          MEASURE.GOVERNOR and `geometry_tokens`/`fragment_tokens` want
-//          MEASURE.TOKENS, none of which is composed. A ratified field with no
-//          port is still a gap.
+//          whole ledger exists to refuse."
+//
+//          THERE WAS NO SUCH TABLE IN `video_rules.md`. A case-insensitive
+//          search of `spec/*.md` and `spec/*.zidl` for "viewport" returns five
+//          hits: four `viewport_mask` fields on DrawSky/DrawForm, and the
+//          `SetView.viewport_id` declaration. The same sentence is in
+//          `zhao_cmd_exec.sv` and in owner ruling R30, which says to MOVE a
+//          table that does not exist.
+//
+//          AND DERIVING IT WOULD INVENT NOTHING, which is the half that cost
+//          the month: `zref::render::viewports_of()`
+//          (`reference/src/zrender/internal.hpp:41`) has held the table since
+//          the 2026-08-15 ratification -- Duo to {0,0,256,192} and
+//          {0,192,256,192} returning 2, every other mode to the full canvas
+//          returning 1 -- and the reference oracle is the thing RTL is
+//          verified AGAINST. Two other sites had derived the same rectangles
+//          independently (`terrain_project_directed.cpp:462`,
+//          `GEOM.BINNER.md:25`).
+//
+//          The table is now WRITTEN, in `spec/video_rules.md` section 3.2,
+//          citing all three. It is DERIVED and not an ABI field (owner ruling
+//          R73's distinction), so the lowering costs no zidl change and no
+//          capture regeneration. What is still owed here is the LOWERING --
+//          CMD.EXEC indexing that table and writing cfg 16/17 -- plus R67's
+//          fixture move to Duo, and one decision: section 1.1 latches the mode
+//          at frame start while a SetView commits immediately, so WHICH mode
+//          indexes the table is a real choice and is recorded as OPEN in 3.2
+//          rather than picked here.
+//
+//        * `proj_en_i`. THIS BULLET USED TO SAY "and `SetView`'s OTHER FOUR
+//          FIELDS ... `geometry_tokens`/`fragment_tokens` want MEASURE.TOKENS,
+//          none of which is composed". TWO OF THE FOUR ARE NOT OPEN, and have
+//          not been since the CMD.EXEC packet landed R18/R33: MEASURE.TOKENS
+//          IS composed, as `u_measure_tokens` in this file, and both token
+//          fields traverse -- `sv_gtok`/`sv_ftok` in `zhao_cmd_exec.sv` (lines
+//          1203/1205) onto `tok_vreq_geom_o`/`tok_vreq_frag_o` (1529/1530) and
+//          into the guard's `vreq_*_i`. The smoke prints it
+//          (`SMOKE: tokens contracts=1 views=1 ... clamped=1`). The entry was
+//          simply never re-read afterwards.
+//
+//          `proj_en_i` itself is still a tie-off and still has NO producer
+//          anywhere: every instantiation of `zhao_proj_subsystem` (this file
+//          and `zhao_terrain_pipe`) and of `zhao_project_service` passes `en_i`
+//          straight through from its own port, and the smoke bench drives it
+//          with a literal 1. It is an OWNER DECISION and not wiring, because
+//          `zhao_project_core.sv:53` calls it "the rigid-pipeline enable,
+//          owned by the CALLER", and BOTH callers are now internal to the
+//          subsystem -- there is no caller left outside to own it. See
+//          FINDINGS-projinput.md decision D-1: the recommendation is to give
+//          it the CONFIG-VALID meaning the smoke bench is already faking with
+//          `geom_camera_ready_q` (hold the projector off until a view's matrix
+//          bank has been written), rather than R27's remove-the-dead-port
+//          route, because under that reading the port does carry function.
+//
+//        * `pixel_error` -> MEASURE.GOVERNOR. `zhao_measure_governor` is BUILT
+//          and NOT COMPOSED; its `px_err0_i`/`px_err1_i` are exactly this
+//          field. That block is another lane's (the packet queue gives it to
+//          POST3/MEASURE, and R68 gives its `thresh_q8` half to GEOM.LOD), so
+//          THIS ENTRY CANNOT CLOSE UNTIL IT COMPOSES, whatever is done to the
+//          viewport.
 //
 //      CLOSED 2026-09-19: THE DEPTH PROFILE. This entry used to read
 //      "`flags[1:0]` is the depth profile of the frozen 2026-08-31 ruling and
@@ -8089,9 +8176,17 @@ module zhao_console_core
   // CMD.EXEC (section 7c) owns cfg addresses 0..15 -- SetView's `mat4fx`, the
   // camera. The host port owns 16 and 17, the viewport origin and extent, and
   // it keeps them because NO RATIFIED COMMAND CARRIES A VIEWPORT RECT: SetView
-  // has a `viewport_id`, and the id-to-rectangle table is `spec/video_rules.md`'s
+  // has a `viewport_id` and not a rectangle.
+  //
+  // THE REASON THIS SENTENCE USED TO GIVE WAS FALSE, corrected 2026-09-20
+  // (projinput). It said "the id-to-rectangle table is `spec/video_rules.md`'s
   // and is not in the ABI. Inventing that table here is precisely what this
-  // file may not do, so the port stays and the entry stays open for it.
+  // file may not do." `video_rules.md` contained no such table -- and
+  // `zref::render::viewports_of()` has contained it since 2026-08-15, so
+  // lowering it would invent nothing. The table is now written down, in
+  // `spec/video_rules.md` section 3.2, with the oracle named as the thing to
+  // differential against. Entry I14 carries the full correction and what is
+  // still owed; the host port stays until the lowering lands.
   //
   // LOSSLESS, IN BOTH DIRECTIONS, AND THAT IS WHY THERE IS NO COUNTER HERE.
   // The host takes any cycle it asks for; CMD.EXEC's `proj_cfg_ready_i` goes

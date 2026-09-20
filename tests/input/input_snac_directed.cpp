@@ -524,5 +524,48 @@ int main() {
                 top.input_snac_input_sequence_gaps_o > gaps_before ? 1 : 0);
   }
 
+  // =========================================================== case 7 ======
+  // THE ROUND-ROBIN ACTUALLY REACHES PORT 1.
+  //
+  // Nothing above could tell the difference between an engine that walks the
+  // connectors and one permanently parked on port 0: every earlier case drives
+  // port 0, and case 1's timeout counter fires whether one port or two are
+  // being polled. An engine stuck on port 0 would have passed all six. So this
+  // case attaches a pad to port 1 ONLY -- a different button held, so the
+  // answer cannot be port 0's leaking across -- and requires slot 1 to go
+  // present while slot 0 falls back to the host route.
+  resetDut();
+  for (int i = 0; i < 4; ++i) driveHost(i, hostFixture(i));
+  top.eval();
+  {
+    zref::SnacReply r = zref::snacNoPad();
+    r.mode = zref::SnacAdapter::kModeDigital;
+    r.ready = zref::SnacAdapter::kReadyByte;
+    r.btn_lo = static_cast<uint8_t>(~(1u << 0));  // SELECT: canonical bit 14
+    r.btn_hi = 0xFF;
+    pads[1].attached = true;
+    pads[1].reply = r;
+
+    if (!waitPolls(2)) zhao::check(false, "case7: a poll completed on port 1", 1, 0);
+
+    const zref::PadRawState want = zref::SnacAdapter::decode(r);
+    const zref::PadRawState got = readOut(1);
+    zhao::check(((top.snac_present_o >> 1) & 1) == 1,
+                "case7: the round-robin REACHES port 1 (slot 1 present)", 1,
+                (top.snac_present_o >> 1) & 1);
+    zhao::check(got.buttons == want.buttons, "case7: port 1 decodes to slot 1's buttons",
+                want.buttons, got.buttons);
+    zhao::check(((top.snac_present_o >> 0) & 1) == 0,
+                "case7: slot 0 is NOT claimed by a pad on port 1", 0,
+                (top.snac_present_o >> 0) & 1);
+    const bool ok0 = same(readOut(0), hostFixture(0));
+    zhao::check(ok0, "case7: slot 0 still carries the host route", 1, ok0 ? 1 : 0);
+    zhao::check(pads[1].cmdSeen(1) == 0x42, "case7: the poll on port 1 was a real read", 0x42,
+                pads[1].cmdSeen(1));
+    zhao::check(pads[0].cmdSeenCount() > 0,
+                "case7: port 0 is still being polled too (the walk did not park on 1)", 1,
+                pads[0].cmdSeenCount() > 0 ? 1 : 0);
+  }
+
   return zhao::report_and_exit("input_snac_directed");
 }
