@@ -78,12 +78,12 @@ All of these, green, before you report. Run them **after** you commit
 about the tree before your merge — R121):
 
 ```
-python tools/design/check_console_inventory.py
+python tools/quartus/check_console_inventory.py
 python tools/quartus/check_prod_manifest.py
-python tools/design/check_quartus17_syntax.py
-python tools/design/check_case_labels.py
+python tools/quartus/check_quartus17_syntax.py
+python tools/budget/check_case_labels.py
 python tools/budget/mutant_copy_drift.py
-python tools/design/mutant_drivers.py
+python tools/budget/mutant_drivers.py
 python tools/budget/uncashed_cheques.py
 python tools/design/check_counters.py
 python tools/budget/refmodel_liveness.py
@@ -256,3 +256,30 @@ or you will silently revert whatever landed in between.
 And **`[IO.File]` ignores `cd`** — pass it an ABSOLUTE path or your writes land
 in the coordinator's checkout, silently, where no gate of yours can see them.
 The tell is a clean `git status` after a write that reported success.
+
+---
+
+## CORRECTION, 2026-09-20 21:20 — FOUR GATE PATHS IN THIS FILE WERE WRONG
+
+The gate list above originally named `check_console_inventory.py`,
+`check_quartus17_syntax.py`, `check_case_labels.py` and `mutant_drivers.py`
+under `tools/design/`. **None of the four is there.** Corrected above:
+
+```
+tools/quartus/check_console_inventory.py
+tools/quartus/check_quartus17_syntax.py
+tools/budget/check_case_labels.py
+tools/budget/mutant_drivers.py
+```
+
+I found this by running the list myself on the merged tree, where four of nine
+returned `RC=2 -- can't open file`. **A gate that cannot be found reports a
+non-zero exit code that is not a failing gate**, and a packet reading only the
+number would have chased a phantom regression; a packet reading it as "the
+script is missing, so skip it" would have shipped without the check. Both
+readings are wrong and both are available.
+
+This is the brief-citation failure this file warns YOU about, committed by the
+coordinator in the same file that warns about it. **Run `--help` or check the
+path exists before concluding a gate is red.** The full set, verified green on
+`75b96d26`, is in the run's `TASK_LOG.md`.
