@@ -207,6 +207,72 @@ int main(int argc, char** argv) {
               "shared vertices are exact, which is why seams cannot crack",
               0, nest_bad);
 
+  // ---- 3b: THE REDUNDANCY, ruling R64 -------------------------------------
+  //
+  // This is the case the ruling asked to exist AS A TEST rather than as prose,
+  // and it is a different claim from case 2 in a way that matters.
+  //
+  // Case 2 compares the RTL against `zref::terrain::mipgen`. That is the right
+  // check for "is the mip law implemented correctly" and it is USELESS for the
+  // question R64 actually asks, because both sides could round, average or
+  // clamp in the same way and agree perfectly. What R64 needs to know is
+  // whether a coarse vertex carries ANY INFORMATION the fine lattice does not
+  // already have -- and the only way to answer that is to compare against the
+  // FINE LATTICE ITSELF, with the strides written out, no oracle in between.
+  //
+  //     T8 / TERRAIN.MIPGEN.md 44-45:  mip17[i,j] = fine33[2i, 2j]
+  //                                    mip9 [i,j] = fine33[4i, 4j]
+  //
+  // Nested and UNROUNDED. If that holds bit for bit over a non-trivial
+  // surface, then TERRAIN.RESIDENT_MIP_POOL stores a strided copy of bytes
+  // that are already resident, a reader of the pool can always read the fine
+  // lattice at stride instead, and the planes are a DUPLICATE PROVIDER rather
+  // than a source. That is the whole evidential basis for retiring them (core
+  // entry I44) and it belongs in a file that runs, not in a header that does
+  // not.
+  //
+  // It is also the check that fires if anyone ever "improves" the decimation to
+  // an average. An averaged mip would be a real second source of information --
+  // and the seams would crack, because shared vertices would stop matching.
+  // This case failing is therefore not a nuisance: it means the retirement
+  // argument has expired and the pool has to come back.
+  int r64_bad17 = 0, r64_bad9 = 0;
+  for (int s = 0; s < kSurfs; ++s) {
+    for (int i = 0; i < kC17; ++i)
+      for (int j = 0; j < kC17; ++j)
+        if (m17[s][i * kC17 + j] != static_cast<int32_t>(sample_of(s, 2 * i, 2 * j))) ++r64_bad17;
+    for (int i = 0; i < kC9; ++i)
+      for (int j = 0; j < kC9; ++j)
+        if (m9[s][i * kC9 + j] != static_cast<int32_t>(sample_of(s, 4 * i, 4 * j))) ++r64_bad9;
+  }
+  zhao::check(r64_bad17 == 0,
+              "R64: mip17[i,j] IS fine33[2i,2j] -- the RTL plane against the FINE "
+              "lattice itself, no oracle in between",
+              0, r64_bad17);
+  zhao::check(r64_bad9 == 0, "R64: mip9[i,j] IS fine33[4i,4j], same reading", 0, r64_bad9);
+
+  // And the ORACLE owes the same proof, or the redundancy argument holds for
+  // the hardware while `zref` quietly models something else -- which is how a
+  // reference model and the thing it references come to disagree without any
+  // test noticing. Same strides, same surfaces, zref alone.
+  int r64_zref = 0;
+  for (int s = 0; s < kSurfs; ++s) {
+    std::vector<uint16_t> fine(kFine * kFine);
+    for (int r = 0; r < kFine; ++r)
+      for (int c = 0; c < kFine; ++c) fine[r * kFine + c] = sample_of(s, r, c);
+    std::vector<uint16_t> z17(kC17 * kC17), z9(kC9 * kC9);
+    zref::terrain::mipgen(fine.data(), z17.data(), z9.data());
+    for (int i = 0; i < kC17; ++i)
+      for (int j = 0; j < kC17; ++j)
+        if (z17[i * kC17 + j] != fine[(2 * i) * kFine + (2 * j)]) ++r64_zref;
+    for (int i = 0; i < kC9; ++i)
+      for (int j = 0; j < kC9; ++j)
+        if (z9[i * kC9 + j] != fine[(4 * i) * kFine + (4 * j)]) ++r64_zref;
+  }
+  zhao::check(r64_zref == 0,
+              "R64: zref::terrain::mipgen is a strided subset of the fine lattice too",
+              0, r64_zref);
+
   // ---- 4: the surfaces do not bleed into one another ----------------------
   int cross = 0;
   for (int i = 0; i < kC17 * kC17; ++i)

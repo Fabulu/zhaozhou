@@ -106,9 +106,27 @@ Per patch (all little-endian; offsets within the VRAM-resident page):
 | H | Vertex tint | 33×33 | RGB565 | 2,178 | LMAP heir, per-VERTEX (§6.4) |
 | | **Total** | | | **21,320** | page stride 21,376 B (334 × 64-B bursts, 56 B pad) |
 
-Layers derived at load/bake, not streamed: coarse height mips per surface
-(17×17 + 9×9 = 740 B ×2 surfaces = 1,480 B/patch) for TERRAIN.LOD, and the
-per-frame composed-height cache (§4.2).
+Layers derived at load/bake, not streamed: ~~coarse height mips per surface
+(17×17 + 9×9 = 740 B ×2 surfaces = 1,480 B/patch) for TERRAIN.LOD~~ (**RETIRED,
+owner ruling R64, 2026-09-20 — see below**), and the per-frame composed-height
+cache (§4.2).
+
+> **The coarse height mips are RETIRED as a duplicate provider.** The clause
+> above is the only place a mip STORE was ever specified, and the consumer it
+> names never read one: `zref::terrain::lod_deviation` walks the fine lattice at
+> stride `1 << level` and takes no mip array at all. Ruling T8's decimation is
+> nested and unrounded, so `mip17[i,j] = fine33[2i,2j]` bit for bit — a coarse
+> vertex IS a fine vertex — and a store of them can never yield a number the
+> fine lattice does not already contain. The bit identity is a committed test
+> (`tests/terrain/terrain_mipgen_directed.cpp` case 3b), not prose here.
+>
+> `TERRAIN.MIPGEN` is NOT retired: it still walks the fine lattice at page load,
+> its `done_o` is `TERRAIN.RESIDENCY`'s second completion, and the R24 deviation
+> pass rides the same stream. What is gone is the claim that anything downstream
+> needs the decimated planes, and the console boundary that carried them. The
+> two pools in `spec/memory_rules.md` §5b go with it; the guard regions behind
+> them are still live and are owed to the memory packet. **A named consumer
+> reverts this in one ledger line.**
 
 ### 2.1 Header (64 B)
 
