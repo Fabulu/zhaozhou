@@ -11221,6 +11221,22 @@ add_test(NAME case_labels
 set_tests_properties(case_labels PROPERTIES
   LABELS "fast;lint;nightly" TIMEOUT 120)
 
+# A number written beside a DERIVED localparam is a claim about its value, and
+# nothing read it back.  `zhao_terrain_devstore`'s record gained 16 bits; the
+# two localparams computed from it kept their old comments (`// 576` against
+# 704), and the block's whole owner-ruling-R59 size report was then computed
+# from the stale figure and published at 116 M10K against a real 141.  It was
+# quoted onward into `zhao_console_core.sv` and two packet reports as the price
+# of composing the block -- understated, which is the direction nobody audits.
+# The script carries its own positive control (`--self-test`) and asserts it at
+# import, because a self-check that matches nothing prints reassurance forever.
+add_test(NAME localparam_comments
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/design/check_localparam_comments.py
+    --root ${CMAKE_SOURCE_DIR})
+set_tests_properties(localparam_comments PROPERTIES
+  LABELS "fast;lint;nightly" TIMEOUT 120)
+
 # counter_id = catalog index, APPEND-ONLY (spec/counters.md 2, ruling R19):
 # design/blocks.yml's counter_catalog must begin with design/counter_ids.lock,
 # and every zhao_pkg ZHAO_CNT_* id must be its name's index. The script

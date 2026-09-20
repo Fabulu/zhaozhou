@@ -1959,10 +1959,19 @@
 //          observes TERRAIN.MIPFEED's fine stream and emits the sixteen
 //          records. So `sp_dev1/2/3` now has a LIVE producer in this module;
 //        * the STORE exists: `zhao_terrain_devstore`, built and tested by
-//          `terrain_lodpath_directed`, priced by ruling R59 at ~77 M10K.
+//          `terrain_lodpath_directed`. RULING R59 PRICED IT AT ~77 M10K AND
+//          THAT NUMBER IS WRONG BY 2.4x -- corrected 2026-09-20 (terrain7)
+//          against the block's own localparams rather than against its prose.
+//          R59's "~786 kbit" is 1,024 x 16 x 3 x **16** bits: a 16-bit
+//          deviation where `DEVW` is 24, and no history counted at all. The
+//          store's real price is **185 M10K of 553, 33%** (141 deviations +
+//          44 history). See `zhao_terrain_devstore.sv`'s R59 section, which
+//          had the same error from a stale `// 576` beside a 704-bit row.
 //
-//      SO WHAT IS LEFT OF THE DEVIATIONS IS A COST, NOT AN ABSENCE. Composing
-//      the store today spends ~77 M10K of 553 on records whose only reader is
+//      SO WHAT IS LEFT OF THE DEVIATIONS IS A COST, NOT AN ABSENCE -- AND THE
+//      COST IS 2.4x WHAT THIS ENTRY USED TO SAY. Composing
+//      the store today spends **185 M10K of 553 (33%)** on records whose only
+//      reader is
 //      TERRAIN.LOD, which the rest of this entry still refuses -- the
 //      "BUILT, INSTALLED NOWHERE" shape. `u_terrain_lodfeed`'s `tlf_w_ready`
 //      is a named wire for that reason: the store joins as an AND and nothing
@@ -1971,6 +1980,70 @@
 //      tested. What has NOT moved is everything below this paragraph: the
 //      job port's three material fields, the view-mask reconciliation, the
 //      neighbour edge levels and the compose-cache retirement. Read on.
+//
+//      >> THE FIVE THAT REMAIN, EACH RE-SEARCHED 2026-09-20 (terrain7) RATHER
+//      >> THAN INHERITED. Four survived; the fifth did not, and it asserted an
+//      >> absence twice over.
+//      >>
+//      >> 1. THE LAYER-E READER. CONFIRMED ABSENT. `zref_terrain_page.hpp:318`
+//      >>    puts layer E at page offset 7,622; **that literal appears in zero
+//      >>    files under `fpga/`.** `zhao_terrain_pagestream.sv:251` reads
+//      >>    exactly `'{A_OFF, B_OFF, C_OFF}` and `zhao_terrain_compcache_front`
+//      >>    holds layer D and composed heights and no material plane. The
+//      >>    whole console treats matA/matB/weight as values handed IN at this
+//      >>    module's edge (`terr_job_mat_a_i`), forwarded through
+//      >>    `zhao_terrain_project` ("layer E candidates, FORWARDED") to the
+//      >>    texture mosaic. Nothing reads a material out of a page anywhere.
+//      >>    Ruling R13 says the join is PER TRIANGLE by the triangle's cell,
+//      >>    which is a change to TESS and GROUP_SEQ, not a wire here.
+//      >>
+//      >> 2. THE NEIGHBOUR EDGE LEVELS. CONFIRMED ABSENT, and deliberately so.
+//      >>    `edge_nz/pz/nx/px` has exactly ten hits in the tree; the only RTL
+//      >>    driver is the LFSR `u59_src` in the generated `zhao_prod_top`.
+//      >>    `design/contracts/MEASURE.GOVERNOR.md:243-248` REFUSES ownership
+//      >>    in writing -- "none of them can come from a block that sees one
+//      >>    number per frame per camera". `zhao_terrain_lod` self-supplies the
+//      >>    twelve INTERIOR subpatch neighbours from its own `lvl[]`; the four
+//      >>    `edge_*` ports are exactly the inter-patch cases it cannot.
+//      >>
+//      >> 3. THE VIEW-MASK RECONCILIATION. Unchanged and still an owner
+//      >>    question: eight bits of PLAYER mask at the door against two bits
+//      >>    of PROJECTOR VIEW mask at the job port. See below.
+//      >>
+//      >> 4. `terr_cc_serve_release_i`. Unchanged; same absent owner.
+//      >>
+//      >> 5. `cam0_scale_i`/`cam1_scale_i` -- **THE RECORDED BLOCKER IS FALSE
+//      >>    ON EXISTENCE, TWICE.** Both halves are BUILT and neither was
+//      >>    named here:
+//      >>      * `zhao_measure_governor.sv:228-229` emits `cam0_scale_o` and
+//      >>        `cam1_scale_o`, 16-bit, reset 16'd256 -- TERRAIN.LOD's
+//      >>        `cam*_scale_i` port for port. It is fit-targeted and in the
+//      >>        production source list.
+//      >>      * `zhao_view_projscale.sv` EXISTS, in `fpga/rtl/common/` (which
+//      >>        is why a terrain-scoped grep misses it), built for ruling R68
+//      >>        and tested by `geom_projradius_directed`. It emits `kx0_o/
+//      >>        kx1_o` and `vw0_o/vw1_o` -- the raw factors, not the product.
+//      >>    Neither is instantiated in this file, and **`zhao_view_projscale`
+//      >>    is instantiated by no production root at all**
+//      >>    (`design/prod_manifest.yml:1019`, "not-yet-adopted ... Instantiated
+//      >>    by no production root yet") -- the BUILT-INSTALLED-NOWHERE shape,
+//      >>    and a deferral that cites no ruling is an open question, not a
+//      >>    settled one. So this is not an absence: it is a composition plus
+//      >>    ruling R73's one multiply, `proj = rhu(kx_raw * viewport_w / 512)`.
+//      >>
+//      >>    AND THERE IS A SILENT DEFECT IN THE WAY, WHICH IS WHY THIS IS
+//      >>    FLAGGED RATHER THAN WIRED. **Ruling R83 amends R73**: the derived
+//      >>    `proj` reaches 443.41 at 60 degrees over 512 px, and the
+//      >>    governor's `proj0_i` is `[15:0]` **Q8.8, which caps at 255.996**.
+//      >>    It saturates below 90 degrees hfov single-view and below 53.13 on
+//      >>    Duo, and a saturated `proj` pegs the LOD ladder at its FINEST
+//      >>    rung: maximum triangle cost, no visible symptom, no counter that
+//      >>    can see it. R83 rules 20-bit Q12.8. Wiring TERRAIN.LOD's scale
+//      >>    input before that container moves would compose a block whose
+//      >>    answer is wrong in the expensive direction wherever the camera is
+//      >>    wide -- the exact "fit a circuit you already know is wrong" trap,
+//      >>    one layer up. **The Q12.8 widening belongs to whoever owns
+//      >>    MEASURE.GOVERNOR and is not terrain7's to make.**
 //
 //      THE ORIGINAL STATEMENT IS KEPT BELOW because the argument it makes --
 //      that `zhao_terrain_patch.st_*` and `zhao_terrain_lod.sp_*` are
@@ -2151,6 +2224,29 @@
 //          this is the same refusal seen from the directory's side. Nothing in
 //          this core can dirty a page, which is also why I28's writeback could
 //          not see a beat.
+//
+//          AND THAT SENTENCE ASSERTS A PRESENCE THAT IS NOT THERE. Corrected
+//          2026-09-20 (terrain7), against `zhao_terrain_bake_v2`'s port list
+//          rather than against the ledger. **TERRAIN.BAKE HAS NO DEFORMATION
+//          MARK PORT OF ANY KIND.** Its whole output set is `sc_*` (the layer-B
+//          scar writeback), `cs_*` (the layer-D cell-state write),
+//          `dig_done_o`/`bake_done_o` (one-cycle pulses), `breach_active_o`,
+//          `trace_patch_id_o` and six counters. There is no `slot`, no
+//          generation, no epoch and no per-layer dirty bit anywhere on it --
+//          which is exactly what `terr_dm_slot_i`, `terr_dm_gen_i`,
+//          `terr_dm_epoch_i`, `terr_dm_bd_i`, `terr_dm_f_i` and
+//          `terr_dm_mips_i` are. Bake never learns the page identity of the
+//          patch it digs: it takes a `cmd_patch_id_i` and a `cmd_src_id_i` and
+//          neither is a residency handle.
+//
+//          So "its writer is TERRAIN.BAKE" is an INTENTION in the ledger, not
+//          a port match, and composing bake would NOT close this half. Whoever
+//          drives the mark has to hold the slot and generation the patch was
+//          served under and pair them with bake's completion -- and that is a
+//          third block, not a wire. This is the handover's failure number
+//          fifteen, the one that asserts a PRESENCE: acting on the old
+//          sentence meant connecting ports to a module that does not have
+//          them.
 //        * `terr_chk_*`, the handle staleness check. Its caller is whoever
 //          holds a page handle across a frame and wants to know it is still
 //          valid -- the subpatch issuer of entry I21. There is no such block.
@@ -2297,6 +2393,39 @@
 //      blocker is gone" would put a fabrication under every permanent wound in
 //      the game after all -- just one ruling later.
 //
+//      >> THAT DECISION HAS BEEN TAKEN: **OPTION A**. Recorded 2026-09-20
+//      >> (terrain7) so it is not re-opened. `zhao_terrain_bake_v2` KEEPS its
+//      >> parametric disc -- it is what `zref::terrain::bake_dig` models, what
+//      >> 267 directed checks hold, and what a gameplay dig naturally produces
+//      >> (a spell has a centre and a radius, not a 64x64 sheet) -- and GAINS a
+//      >> second, per-vertex depth input mode fed from layer F through the R15
+//      >> laws. The new mode is additive and independently testable;
+//      >> `zref::terrain::stamp_depth_at_vertex` is already the oracle it is
+//      >> written against (`spec/terrain_rules.md` 9.3(c)'s closing line says
+//      >> so in as many words).
+//
+//      >> AND IT IS STILL NOT BUILDABLE TODAY, FOR A REASON THAT IS AN ART
+//      >> JUDGEMENT AND NOT AN ENGINEERING ONE. Option A needs a layer-F
+//      >> reader, and a layer-F reader IS an implementation of 9.3(b)'s
+//      >> `sheet_texel_for_vertex` -- the NEAREST-TEXEL fallback whose
+//      >> acceptability is the open question of ruling **R65**. R65 owes the
+//      >> OWNER'S EYE a render of a dig across a patch seam; the render was
+//      >> made (`reports/terrain-seam-dig/seam_dig_contact.png`) and it CHANGED
+//      >> THE QUESTION rather than answering it. Section 9.3(c) records the
+//      >> finding: the fallback "does not produce a visible CRACK ALONG THE
+//      >> SEAM. It produces a rim that is wrong by up to one vertex,
+//      >> EVERYWHERE, and the seam is one of the places it is wrong."
+//      >>
+//      >> Whether a rim wrong by up to one vertex everywhere is acceptable is
+//      >> a question nobody has put to the owner, and only looking settles it.
+//      >> If the answer is no, the page format moves to a vertex-aligned 65x65
+//      >> and `sheet_texel_for_vertex` becomes the identity -- so the reader's
+//      >> address generator is EXACTLY the contested thing. Building it now
+//      >> would commit the silicon to a format decision the owner has not
+//      >> made, which is why terrain7 did not build it. The depth table
+//      >> (9.3(a), `kStampDepthTable`) is format-INDEPENDENT and could be
+//      >> built today; on its own it would be a block nothing drives.
+//
 //      A THIRD ABSENCE, AND IT IS ARBITRATION: `zhao_surface_sheet` IS COMPOSED
 //      in this module (search for `u_surface_sheet`) and holds layer F, so the
 //      sheet is NOT missing -- that would have been a false-absence claim. But
@@ -2305,17 +2434,71 @@
 //      reads layer F for the dig is its SECOND requester, and choosing between
 //      them is a scheduler, which a composer may not write.
 //
+//      >> STILL TRUE, AND MIS-SCOPED. Narrowed 2026-09-20 (terrain7): this
+//      >> reads as though a scheduler had to be INVENTED, and it does not.
+//      >> `zhao_terrain_psmux` is a two-client round-robin share of a
+//      >> handshaked stream, composed in this module, with a contract and a
+//      >> test, and its own header states the governing rule -- "arbitration is
+//      >> state, state belongs in a file with a contract and a test, and a mux
+//      >> written inline in a composer is an arbiter nobody can point at".
+//      >> `zhao_mem_share_n` is the same machine with N a parameter. Neither
+//      >> has the sheet port's TYPE ({op[1:0], handle[31:0], texel[11:0],
+//      >> src_id} out, {op, status, tag, strength, src_id} back), so neither
+//      >> drops in -- but this is ONE SMALL BLOCK WITH A CONTRACT, of a shape
+//      >> already built twice here, not a subsystem. It is not what blocks
+//      >> this entry; `sc_*` and R65 are.
+//
 //      AND THERE IS A SECOND, INDEPENDENT ABSENCE: THE PAGE PORT. Bake's DIG
 //      phase drives `vtx_vi_o`/`vtx_vj_o` and expects layers A, B and C back
 //      ({base, scar, bottom, nobake}) with a layer-B writeback on `sc_*`, and
 //      its BREACH phase does the same for layer D on `cell_*`. It has no VRAM
 //      port by design ("no VRAM port and no residency directory", its lines
-//      118-124), so a composer must SERVE those. `zhao_terrain_compcache_front`
-//      cannot: it holds COMPOSED HEIGHTS (top/bottom) and a cell-state plane,
-//      not the page's A/B/C layers, and the resident page itself is reachable
-//      from in here only through the guard socket entry I26 records as absent.
-//      So two of bake's four input groups have no server in this module even
-//      if the stamp seam were ratified tomorrow.
+//      118-124), so a composer must SERVE those.
+//
+//      >> THE READ HALF OF THAT PARAGRAPH EXPIRED AND IS STRUCK. Corrected
+//      >> 2026-09-20 (terrain7); this is the SIXTH refusal in this file found
+//      >> still quoting a lapsed cause, and it is the one that was hiding the
+//      >> real blocker. The struck sentence read: "`zhao_terrain_compcache_front`
+//      >> cannot: it holds COMPOSED HEIGHTS (top/bottom) and a cell-state
+//      >> plane, not the page's A/B/C layers, **and the resident page itself is
+//      >> reachable from in here only through the guard socket entry I26
+//      >> records as absent**. So two of bake's four input groups have no
+//      >> server in this module."
+//      >>
+//      >> The first clause is still true and the second is dead: **I26 closed
+//      >> on 2026-09-19** (see its own entry above), and the page is served in
+//      >> this module today. `u_terrain_pagestream` emits `v_base_o`,
+//      >> `v_scar_o`, `v_bottom_o`, `v_vi_o`, `v_vj_o` -- which is bake's
+//      >> `vtx_base_i`, `vtx_scar_i`, `vtx_bottom_i` and its two index outputs
+//      >> PORT FOR PORT, same widths, same signedness, same vi=column /
+//      >> vj=row convention. And the arbitration precedent is composed too:
+//      >> `u_terrain_psmux` already shares that exact stream between the
+//      >> compose door and the mip pass, so a third client is a widening of a
+//      >> block that has a contract and a test, not a mux invented here.
+//      >>
+//      >> WHAT IS GENUINELY LEFT ON THE READ SIDE is therefore small and
+//      >> nameable: (a) the streamer PUSHES (`v_vi_o` is its output) while bake
+//      >> PULLS (`vtx_vi_o` is bake's output), so the join is a cursor-match
+//      >> adapter -- not a memory, not a reorder buffer; (b) `vtx_nobake_i`,
+//      >> the section 3.3 corner shadow, is the one DIG input the stream does
+//      >> not carry and it has no producer anywhere.
+//
+//      >> AND THE BLOCKER NOBODY HAD WRITTEN DOWN IS ON THE OTHER SIDE:
+//      >> **`sc_*`, BAKE'S LAYER-B SCAR WRITEBACK, HAS NO CONSUMER ANYWHERE IN
+//      >> THIS TREE.** SEARCHED: `zhao_terrain_compcache_front` accepts
+//      >> cell-state writes (`cs_we_i`/`cs_w_ci_i`/`cs_w_cj_i`/
+//      >> `cs_w_substance_i`) and composed heights (`st_*`) and never a scar;
+//      >> `zhao_terrain_pagestream` is read-only; `zhao_terrain_writeback`
+//      >> writes the F SHEET, not layer B. Nothing in the closure writes a
+//      >> page's height layers at all.
+//      >>
+//      >> That inverts the shape of this refusal and is worth stating plainly:
+//      >> the DIG phase's INPUT is now served and its OUTPUT is the hole. A
+//      >> bake whose scar cannot be stored has not deformed anything -- it has
+//      >> computed a deformation and dropped it -- which is also, from the
+//      >> other end, why entry I27's deformation mark has no writer and why
+//      >> I28's writeback could not see a beat. One absent owner, three
+//      >> entries, and the previous reading had it filed under the wrong one.
 //
 //      WHAT WOULD BE FIELD ROUTING, SAID SO NOBODY RE-DERIVES IT: the layer-D
 //      WRITE half matches. Bake's `cs_event_o`/`cs_sub_o`/`cs_ci_o`/`cs_cj_o`
@@ -2967,6 +3150,16 @@
 //           (`cam0_scale_o`/`cam1_scale_o`, default 16'd256) and no pixel-error
 //           threshold at all. The ledger edge GEOM.MESHFETCH `upstream:
 //           [..., MEASURE.GOVERNOR]` is an INTENTION, not a port that exists.
+//
+//           CORRECTED 2026-09-20 (terrain7): **"no pixel-error threshold at
+//           all" IS NO LONGER TRUE.** `zhao_measure_governor.sv:258-259`
+//           declares `cam0_thresh_q8_o`/`cam1_thresh_q8_o`, signed [31:0],
+//           reset 32'sd256 and assigned from `thresh_of(px, nd)` at :563-564 --
+//           landed under ruling R26 by the geomlod lane. So the port DOES
+//           exist and `thresh_q8_i` has a named producer; what is still true
+//           is only that the governor is not composed in this file. A refusal
+//           that survived its own cause, corrected in place rather than
+//           deleted so the next reader can see which half moved.
 //         - `bound_radius_i`, `micro_error_i`, `splat_error_i`, `glint_error_i`:
 //           per-creature-TYPE constants. `zhao_geom_meshfetch`'s `cull_radius_o`
 //           is the only bound-radius-shaped output in `fpga/rtl` and it is the
@@ -8113,9 +8306,11 @@ module zhao_console_core
   // waived AT the declaration rather than left as empty pins.
   //
   // WHY THE STORE IS ABSENT AND THIS IS NOT A HALF-COMPOSITION.  The store's
-  // only reader is `zhao_terrain_lod`, which entry I21 still refuses, and ruling
-  // R59 prices the store at ~77 M10K of 553.  Composing 77 M10K of RAM whose
-  // every word is unread is the "BUILT, INSTALLED NOWHERE" shape CLAUDE.md
+  // only reader is `zhao_terrain_lod`, which entry I21 still refuses, and the
+  // store costs **185 M10K of 553, 33%** (ruling R59 said ~77; it computed a
+  // 16-bit deviation where `DEVW` is 24 and counted no history -- corrected
+  // 2026-09-20 in the block's own R59 section).  Composing 185 M10K of RAM
+  // whose every word is unread is the "BUILT, INSTALLED NOWHERE" shape CLAUDE.md
   // names, and it would buy nothing this pass: the histogram is a SECOND
   // consumer of the same records, not a substitute for the first.  When I21
   // closes, the store joins this stream and `w_ready_i` becomes the AND of the

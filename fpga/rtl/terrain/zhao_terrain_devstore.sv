@@ -44,14 +44,38 @@
 // R59: "the packet must first show the EXACT same law in a smaller form ...
 // and take the smaller one if it is bit-identical.  Report both sizes."
 //
+// >> EVERY NUMBER IN THIS SECTION WAS WRONG UNTIL 2026-09-20 (terrain7), AND
+// >> WRONG IN THE FLATTERING DIRECTION.  The record gained a 16-bit subpatch
+// >> centre height (`RECW = 3*DEVW + 16`, 88 bits) after this section was
+// >> written, and the two localparams DERIVED from it kept their old comments:
+// >> `ROWW` said 576 when the parameters say 704, `ACCW` said 504 against 616.
+// >> The prose below then computed the store's price from 72-bit records.  The
+// >> published figure was 116 M10K; the block's own parameters say 141.
+// >>
+// >> RULING R59'S OWN PREMISE IS THE SAME ERROR ONE STEP FURTHER BACK.  It
+// >> prices this store at "~786 kbit = ~77 M10K of 553 (14%)".  786,432 bits is
+// >> 1,024 x 16 x 3 x **16** -- a 16-bit deviation, not `DEVW`'s 24 -- and it
+// >> counts no history at all.  `zhao_console_core.sv` entry I21 and two packet
+// >> reports quote that 77 as the price of composing this block.  The real
+// >> figure is 185 M10K, 33% of the device: **2.4x** what the ruling was
+// >> decided against.  14% is affordable and 33% is an argument, which is
+// >> exactly why nobody audited it.
+// >>
+// >> `tools/design/check_localparam_comments.py` now watches the derived
+// >> constants, and it fires on this file's pre-repair state.  It cannot watch
+// >> prose, so the arithmetic below is spelled out term by term instead.
+//
 // THE NAIVE FORM, which is what a first pass writes: both surfaces, because
 // `zhao_terrain_loddev` has a `start_surface_i` and the mip pass streams the
 // page twice, once per surface, so two sets of records fall out.
 //
-//     1,024 slots x 2 surfaces x 16 subpatches x 3 levels x 24 bits
-//       = 2,359,296 bits = 231 M10K of 553  (42%)
-//   + history 1,024 x 16 x (2 + 17 + 8) = 442,368 bits = 44 M10K
-//       = 275 M10K  (50%)
+//     deviations  1,024 slots x 2 surfaces x 16 subpatches x 88 bits
+//                   = 2,883,584 bits.  Two banks of the shape below:
+//                   2 x 141 = 282 M10K
+//   + history     1,024 x 16 x (2 + 17 + 8) = 442,368 bits = 44 M10K
+//                   (the history is per SUBPATCH, not per surface -- law 7
+//                    below -- so it does not double)
+//       = 326 M10K of 553  (59%)
 //
 // THE SMALLER FORM, TAKEN HERE, AND WHY IT IS BIT-IDENTICAL: the underside's
 // records are never read.  `zhao_terrain_lod` law 7 -- "THE UNDERSIDE TAKES
@@ -60,51 +84,62 @@
 // field at all.  So a second surface's deviations can be computed and thrown
 // away with no effect on one output bit, which is the definition R59 asks for.
 //
-//     1,024 slots x 16 subpatches x 3 levels x 24 bits
-//       = 1,179,648 bits = 116 M10K of 553  (21%)
-//   + history 442,368 bits = 44 M10K
-//       = 160 M10K  (29%)
+//     deviations  1,024 slots x 16 subpatches x 88 bits = 1,441,792 bits,
+//                   as 2,048 rows x 704 (`ROWS` x `ROWW`).  At 2,048 deep an
+//                   M10K runs 2,048 x 5, so ceil(704 / 5) = 141 M10K and the
+//                   payload packs at 99.9%.
+//   + history     1,024 rows x 432 (`SLOTS` x `HROWW`).  At 1,024 deep an
+//                   M10K runs 1,024 x 10, so ceil(432 / 10) = 44 M10K at 98%.
+//       = 185 M10K of 553  (33%)
 //
-// A FURTHER 29% WAS FOUND AND IS REFUSED, and it is refused for a reason worth
+// SO THE SAVING R59 ASKED FOR IS REAL AND IS 141 M10K (326 -> 185), and the
+// RESIDUAL PRICE IS 33% OF THE DEVICE'S MEMORY.  R59 said the store was
+// "acceptable in principle" against 14%.  Whether it still is at 33% is the
+// owner's to say, and the third form below is the lever if it is not.
+//
+// A FURTHER 23% WAS FOUND AND IS REFUSED, and it is refused for a reason worth
 // keeping: every lattice height reaching `zhao_terrain_loddev` today is
 // `height16 << 8` (qformats 9's exact up-conversion), so every deviation is a
-// multiple of 128 and its low SEVEN BITS ARE PROVABLY ZERO -- 3 x 17 bits
-// instead of 3 x 24 would be exact, 82 M10K instead of 116.  It is refused
-// because the invariant is upstream, unenforced and invisible: the moment a
-// composed height carries a FIELD delta (entry I34's lane, `zref::terrain`'s
-// live-field arithmetic) the low bits stop being zero and every deviation
-// silently quantises to 128ths with no counter able to see it.  A packing that
-// is exact only while somebody else keeps a promise they never made is the
-// broken-instrument shape, and 34 M10K is not worth it.
+// multiple of 128 and its low SEVEN BITS ARE PROVABLY ZERO -- 3 x 17 + 16 = 67
+// bits per record instead of 88 would be exact, `ROWW` 536 and 108 M10K
+// instead of 141.  It is refused because the invariant is upstream, unenforced
+// and invisible: the moment a composed height carries a FIELD delta (entry
+// I34's lane, `zref::terrain`'s live-field arithmetic) the low bits stop being
+// zero and every deviation silently quantises to 128ths with no counter able
+// to see it.  A packing that is exact only while somebody else keeps a promise
+// they never made is the broken-instrument shape, and 33 M10K is not worth it.
 //
-// AND A THIRD FORM IS AN OWNER DECISION, NOT TAKEN HERE.  These 160 M10K are
+// AND A THIRD FORM IS AN OWNER DECISION, NOT TAKEN HERE.  These 185 M10K are
 // per-page DERIVED data, which is exactly what `spec/memory_rules.md` 5b gives
 // an SDRAM home to for the coarse-height mips (TERRAIN.RESIDENT_MIP_POOL,
-// 1,024 x 1,536 B).  144 B per patch of deviations would fit the same pattern
-// at 147 KB of SDRAM and 36 KB/frame of read bandwidth, and cost no M10K at
-// all.  It is not taken here because ruling R24 says M10K in as many words and
-// because it needs a new guarded region, which is an ABI act.  Recorded so the
-// owner can spend the 160 M10K deliberately or move it.
+// 1,024 x 1,536 B).  176 B per patch of deviations (16 x 88 bits) would fit
+// the same pattern at 176 KB of SDRAM and 44 KB/frame of read bandwidth, and
+// cost no M10K at all.  It is not taken here because ruling R24 says M10K in
+// as many words and because it needs a new guarded region, which is an ABI
+// act.  Recorded so the owner can spend the 185 M10K deliberately or move it
+// -- and at 33% rather than the 14% the ruling was given, that choice is
+// materially different from the one R59 was actually asked.
 //
 // ===========================================================================
 // THE SHAPE, AND WHY IT IS NOT THE OBVIOUS ONE
 // ===========================================================================
-// The obvious array is `mem[SLOTS*16]` of 72 bits -- one record per row.  On
-// Cyclone V that is 16,384 deep, and an M10K's deepest mode is 8,192 x 1, so a
-// 72-bit word costs 72 bit-planes x 2 depth banks = 144 M10K for 1,179,648
-// bits of payload: 80% efficient, 28 M10K wasted on the shape alone.
+// The obvious array is `mem[SLOTS*16]` of `RECW` bits -- one record per row.
+// On Cyclone V that is 16,384 deep, and an M10K's deepest mode is 8,192 x 1,
+// so an 88-bit word costs 88 bit-planes x 2 depth banks = 176 M10K for
+// 1,441,792 bits of payload: 80% efficient, 35 M10K wasted on the shape alone.
 //
-// This array is EIGHT RECORDS PER ROW: 2,048 rows x 576 bits.  At 2,048 deep
-// an M10K runs in its 2,048 x 5 mode, so 576 / 5 = 116 M10K and the payload
-// packs at 99%.  The price is a 576-bit staging register on each side, about
-// 1,200 flops, and ALMs are the binding constraint -- so it is stated rather
-// than assumed: 28 M10K bought for ~1,200 flops is the wrong trade if the
-// device is short of ALMs and the right one if it is short of M10K.  Both
-// numbers are here so the next pass can reverse it with one localparam.
+// This array is EIGHT RECORDS PER ROW: 2,048 rows x 704 bits.  At 2,048 deep
+// an M10K runs in its 2,048 x 5 mode, so ceil(704 / 5) = 141 M10K and the
+// payload packs at 99.9%.  The price is a 704-bit staging register on each
+// side, about 1,400 flops, and ALMs are the binding constraint -- so it is
+// stated rather than assumed: 35 M10K bought for ~1,400 flops is the wrong
+// trade if the device is short of ALMs and the right one if it is short of
+// M10K.  Both numbers are here so the next pass can reverse it with one
+// localparam.
 //
 // The history is 1,024 x 432 (all sixteen records of one patch in one row),
 // because it is read whole at the start of a patch and written whole at the
-// end -- 1,024 deep runs in 1,024 x 10, so 432 / 10 = 44 M10K at 96%.
+// end -- 1,024 deep runs in 1,024 x 10, so ceil(432 / 10) = 44 M10K at 98%.
 //
 // ===========================================================================
 // WHAT AN UNWRITTEN SLOT ANSWERS, AND WHY IT IS NOT ZERO
@@ -211,12 +246,12 @@ module zhao_terrain_devstore #(
   // page's own unit.
   localparam int unsigned RECW   = 3 * DEVW + 16;       // 88
   localparam int unsigned HALF   = SUBS / 2;            // 8 records per row
-  localparam int unsigned ROWW   = HALF * RECW;         // 576
+  localparam int unsigned ROWW   = HALF * RECW;         // 704
   localparam int unsigned ROWS   = 2 * SLOTS;           // 2,048
   // The accumulator holds the SEVEN records before the one that commits the
   // row; the eighth is merged on its own cycle rather than stored and read
-  // back, so there are 72 fewer flops and one fewer state.
-  localparam int unsigned ACCW   = ROWW - RECW;         // 504
+  // back, so there are 88 fewer flops and one fewer state.
+  localparam int unsigned ACCW   = ROWW - RECW;         // 616
 
   localparam int unsigned HISTW  = 2 + MORPHW + 8;      // 27
   localparam int unsigned HROWW  = SUBS * HISTW;        // 432
@@ -234,7 +269,7 @@ module zhao_terrain_devstore #(
   // synthesis translate_on
 
   // ---- the two memories ---------------------------------------------------
-  // 2,048 x 576 deviations, 1,024 x 432 history.  Written and read on ONE
+  // 2,048 x 704 deviations, 1,024 x 432 history.  Written and read on ONE
   // address each per cycle so both infer.
   logic [ROWW-1:0]  dev_mem  [ROWS];
   logic [HROWW-1:0] hist_mem [SLOTS];

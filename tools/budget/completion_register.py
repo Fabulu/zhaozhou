@@ -875,6 +875,75 @@ def superseded_in_closure() -> list[tuple[str, list[str]]]:
     return out
 
 
+def superseded_in_prod_fit(
+    core_hits: list[tuple[str, list[str]]] | None = None,
+) -> list[tuple[str, list[str]]]:
+    """The same question asked of the PRODUCTION FIT's root, not the core's.
+
+    WHY THIS EXISTS (terrain7, 2026-09-20). `superseded_in_closure()` above is
+    scoped to `console_closure()` -- the modules under `zhao_console_core`'s fit
+    target. `zhao_prod_top` is a DIFFERENT ROOT, it is what the production fit
+    actually builds, and nothing was asking it this question. So the owner's
+    capitalised ruling had a blind spot exactly the size of the pin-out top.
+
+    IT IS NOT HYPOTHETICAL. On the day this was written:
+
+      * `fpga/rtl/prod/zhao_prod_top.sv:4076` instantiates `zhao_terrain_bake`;
+      * `design/console_inventory.yml:360` records that very module as
+        `disposition: superseded`, `superseded_by: zhao_terrain_bake_v2`,
+        `why: "... owner ruling 2026-09-19 'only the latest version'"`;
+      * `fpga/quartus/prod_fit_sources.txt:122` carries `zhao_terrain_bake.sv`
+        into the production fit;
+      * and `check_console_inventory.py`, `check_prod_manifest.py` and
+        `gen_prod_top.py --check` were all GREEN.
+
+    The ledger recorded the ruling, the fit list ignored it, and every gate
+    agreed. That is this repository's standing shape -- the knowledge was
+    written down, correctly, and nothing read it back -- and it is the same
+    shape as the `.gitignore` that hid 33 GB and the projector cheque nobody
+    cashed. `zhao_prod_top` is GENERATED, so it wears a reassuring provenance
+    line while doing it.
+
+    REPORTED, NOT FATAL, and deliberately so. Turning it fatal today would put
+    a pre-existing condition in every concurrent worker's path for a defect
+    none of them caused, which is the "never close one gap by opening another"
+    rule applied to instruments. The swap is an owner/coordinator decision --
+    it moves the production fit's closure and area and it touches three
+    generated files several lanes gate on. **TURN THIS FATAL once that decision
+    lands**, exactly as `superseded_in_closure()`'s own docstring says of
+    itself; a report nobody is forced to read is how the v1 datapath got
+    composed in the first place.
+
+    Same two naming shapes, same INSTANTIATED-not-listed rule, same reasons.
+    """
+    top = RTL / "prod" / "zhao_prod_top.sv"
+    if not top.exists():
+        return []
+    on_disk = {p.stem for p in RTL.rglob("*.sv")}
+    live = instantiated_in([top])
+    # Anything the CORE closure already reports is that check's to raise; this
+    # one exists for what only the pin-out top wires, so the two lists do not
+    # double-count the same module and neither reads as the other's echo.
+    already = {mod for mod, _ in
+               (superseded_in_closure() if core_hits is None else core_hits)}
+    out: list[tuple[str, list[str]]] = []
+    for mod in sorted(live - already):
+        newer: list[str] = []
+        for cand in on_disk:
+            if cand == mod:
+                continue
+            m = re.fullmatch(re.escape(mod) + r"_v(\d+)", cand)
+            if m:
+                newer.append(cand)
+                continue
+            m2 = re.fullmatch(r"(zhao_[a-z0-9]+)_v(\d+)_(.+)", cand)
+            if m2 and "%s_%s" % (m2.group(1), m2.group(3)) == mod:
+                newer.append(cand)
+        if newer:
+            out.append((mod, sorted(newer)))
+    return out
+
+
 _BOARD_CACHE: dict[str, set[str]] = {}
 
 
@@ -1228,6 +1297,11 @@ def audit() -> dict:
         "tieoff_gaps": len(gaps),
         "mandatory_gaps": total,
         "superseded_composed": [[mod, list(newer)] for mod, newer in sup],
+        # The production fit's own root, reported beside the core's and NOT in
+        # the exit code -- see superseded_in_prod_fit()'s docstring for why it
+        # is not fatal yet and what has to happen before it is.
+        "superseded_in_prod_fit": [
+            [mod, list(newer)] for mod, newer in superseded_in_prod_fit(sup)],
         "closure_modules": len(closure),
         "by_kind": {k: sum(1 for t in ties if t["kind"] == k)
                     for k in sorted({t["kind"] for t in ties})},
@@ -1503,6 +1577,23 @@ def main(argv: list[str]) -> int:
             print("   composed %-30s superseded by %s" % (mod, ", ".join(newer)))
         print("THIS ALONE MAKES THE EXIT CODE NONZERO, however many gaps remain.")
         print("!" * 74)
+        print()
+
+    pfs = [(mod, newer) for mod, newer in rep["superseded_in_prod_fit"]]
+    if pfs:
+        print("-" * 74)
+        print("SUPERSEDED MODULES ARE WIRED IN THE PRODUCTION FIT's ROOT")
+        print("(`zhao_prod_top`) -- %d of them.  The check above asks this of the"
+              % len(pfs))
+        print("CONSOLE CORE's closure; the pin-out top is a different root and")
+        print("nothing was asking it.  A generated file carries a reassuring")
+        print("provenance line while doing this.")
+        for mod, newer in pfs:
+            print("   wired    %-30s superseded by %s" % (mod, ", ".join(newer)))
+        print("REPORTED, NOT FATAL: the swap moves the production fit's closure")
+        print("and area and touches generated files several lanes gate on, so it")
+        print("is the coordinator's.  TURN THIS FATAL once that decision lands.")
+        print("-" * 74)
         print()
 
     print("zhao_console_core closure modules : %d" % rep["closure_modules"])
