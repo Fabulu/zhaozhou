@@ -205,7 +205,43 @@ module zhao_measure_governor #(
     input logic [ 1:0] view_count_i,  // SetPresentationContract.view_count
     input logic [31:0] px_err0_i,     // SetView.pixel_error, fx16 unsigned
     input logic [31:0] px_err1_i,
-    input logic [15:0] proj0_i,       // camera projection scale, Q8.8 unsigned
+    // -----------------------------------------------------------------------
+    // THE CAMERA PROJECTION SCALE, Q8.8 unsigned.
+    //
+    // A PRODUCER EXISTS AS OF 2026-09-20: `zhao_view_projq88` derives it under
+    // owner ruling R73 as `rhu(kx_raw * viewport_w / 512)` from
+    // `zhao_view_projscale`'s snoop of the projector cfg bus. No ABI field was
+    // added, because the quantity is already defined by
+    // `zref::creature::projected_bound_radius_q8`'s NDC-to-pixel factor.
+    //
+    // AND THIS PORT IS TOO NARROW TO CARRY IT. AN OWNER DECISION (post3).
+    // Q8.8 in 16 bits tops out at 255.996 px per unit tangent, and
+    // `proj = kx * vw / 2` with `kx = 1/tan(hfov/2)` exceeds that across most
+    // of the console's own operating range:
+    //
+    //     viewport   90 deg   75 deg   60 deg   50 deg   saturates below
+    //     256 (Duo)  128.00   166.81   221.70   274.50*      53.13 deg
+    //     512 (one)  256.00*  333.63*  443.41*  548.99*      90.00 deg
+    //                                                   (* does not fit)
+    //
+    // The contract's own worked example is the 60 deg / 256 cell -- 221.70,
+    // which is 87% of full scale. So the port fits the ONE camera anybody
+    // worked by hand and fails just outside it, which is why nothing caught
+    // it. A single-view camera saturates for ANY horizontal FOV narrower than
+    // 90 degrees, and a saturated `proj` pegs `cam*_scale_o` at SCALE_MAX and
+    // holds the whole ladder at its finest rung: silent, plausible, and
+    // expensive. `view_projq88_directed` case 3 asserts the clamp rather than
+    // letting it wrap.
+    //
+    // RECOMMENDED: widen to 20 bits (Q12.8, ceiling 4095.996), which covers
+    // 512-wide down to about 7 degrees. Law G1's numerator grows from under
+    // 2^33 to under 2^37, so STEPS goes 33 -> 37 -- a local change to a block
+    // that runs once per frame. Do NOT rescale the units to fit Q8.8: that
+    // would be a second statement of the law R73 chose precisely to avoid
+    // restating. R73 is provisional and this is the cheapest it will ever be,
+    // because the port has no producer wired yet and no capture has pinned it.
+    // -----------------------------------------------------------------------
+    input logic [15:0] proj0_i,
     input logic [15:0] proj1_i,
     input logic [15:0] src_id_i,      // `source_ids: true`
 
