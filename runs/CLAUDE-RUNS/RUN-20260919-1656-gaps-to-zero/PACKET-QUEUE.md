@@ -24,39 +24,39 @@ should change how the next slots are spent.
 
 ## Running
 
+*(Updated 2026-09-20 late evening. The previous table listed three lanes that had
+all landed -- exactly the fiction this file exists to prevent. Verify against
+`git ls-remote origin` before filling a slot from it.)*
+
 | lane | owns | branch |
 |---|---|---|
-| FIELD-F1 | FIELD fabric: per-lane status with attribution, canonical RCP through the SHARED SERVICE ROUTE, bounded varying-radius RING | `gz/fieldf1` |
-| FIELD-L1 | the production lowerer (C++ only), plus R127's third opcode table | `gz/fieldl1` |
-| ENGINE1 | the ENGINE1 share + page-publication + third client-A arm, plus `zhao_geom_parambuf` | `gz/engine1` |
+| FIELD-H1 | the new host: FH02/03/05/06/08/09/20, **R126's elaboration guard**, and the `sat_o` widening `rcp0` needs | `gz/fieldh1` |
+| FIELD-D1 | doorbell + loader: FH13/FH14, the `cfg_plan_base_i` live-pin defect, and the doorbell mutant refresh | `gz/fieldd1` |
+| FIELD-A1 | adapters: FH17/FH26, the two named stamp bindings, and GEOM.WARP's P2 warp adapter | `gz/fielda1` |
+
+**Landed today:** field, geomlod, texmat2, terrain6, projinput, post3, terrain7,
+forge, carriers, warp, projadopt, forgeconnect, fieldp4, terrain9, post3b,
+attrdiv, geompay4, engine1, forgeshadow, zidl, and FIELD Wave 1 (S1/L1/F1).
 
 ## Queued, in the order I would start them
 
-### 1. The zidl bundle — ONE fare, THREE debts (R108)
+### 1. ~~The zidl bundle~~ -- LANDED 2026-09-20 (`968d414e`)
 
-Owner-ruled and ready. `forge_kind` has one member against FORGE.PRIM's six
-families, and the zidl **rules its own extension**: *"new kinds are additive
-members"*, with `fog_mode` citing *"the forge_kind member-0 precedent"*. No
-`abi_version` bump implied.
+R108's five additive `forge_kind` members, the DebugTraceArm over-broad
+guarantee and R77's `tmu_mode` comment, all in ONE commit. All five golden
+captures regenerated through their real producers and verified byte-wise to
+differ **only** in the container CRC `[56..59]` and the two 32-byte sha fields.
+`abi_version` unmoved, `abi:check` clean.
 
-Every edit to `spec/commands.zidl` moves `ZHAO_ZIDL_SHA256` and forces all five
-golden captures through their real producers — `demo_duo_markers --write` alone
-is 600 Duo frames, about an hour. **So all three land in ONE commit:**
+**Kept here rather than deleted, because it carries a landmine worth
+remembering: `forge_kind` is NOT `j_family_i`.** They differ by
+`(FAM_* + 1) mod 6`, so a straight-through assignment is silently wrong for all
+six values. The mapping table is in the zidl.
 
-1. the five additive `forge_kind` members (R108),
-2. the **DebugTraceArm** comment's over-broad guarantee — it says flatly that
-   the arming record is never traced and every record after it is; neither holds
-   without qualifiers (a SECOND arm in an already-armed packet IS traced, and
-   later records only if the arm was accepted, the mask sets bit 0, and the ring
-   has room). The corrected statement is in `zhao_cmd_exec.sv`'s R52 comment,
-3. **R77's `tmu_mode`** comment.
-
-Then `npm run abi:check`, and each capture must differ **only** in the container
-CRC (offset 56..59) and the two 32-byte sha fields.
-
-**It closes no gap alone** and R108 says so: a forge page kind must still be
-frozen and four of six families have no evaluator. It removes the ABI as the
-blocker; it does not become the implementation.
+**Still open: D-ZIDL-1** -- the five-for-six arithmetic works only if member 0
+already names a family, and nothing written says which. Recommendation accepted
+as implemented; if the owner rules otherwise, cliff/skirt appends at `6` under
+the same additive law, no renumber, nothing shipped changes.
 
 ### 2. FORGE.CLIFF adoption — R117, and the data is already in hand
 
