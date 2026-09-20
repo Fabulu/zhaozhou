@@ -264,41 +264,40 @@ module zhao_field_v3_dispatch #(
   // guessed: a wrong width writes the wrong number of registers, which is a
   // corruption rather than an error.
   //
-  // TWO OPS HAVE FOUR-POINT BLOCKS BUILT AND CLOSED AND ARE STILL ABSENT FROM
-  // THIS LIST. That is worth saying out loud, because absence here looks
-  // exactly like an omission and one of the two IS deliberate. A reader who
-  // finds no OP_SPLINE case, knowing zhao_field_v3_spline.sv is closed at
-  // 21/21, has every reason to think a case was forgotten.
+  // CORRECTED 2026-09-20. THE PARAGRAPHS THAT STOOD HERE SAID OP_SPLINE AND
+  // UOP_RING_PREP WERE ABSENT FROM THIS LIST. BOTH ARE IN IT, and have been
+  // since 2026-08-29 -- `zhao_field_ops_pkg.sv` gives OP_SPLINE (0x1B) and
+  // UOP_RING_PREP (0xF1) a width of 1, and `zhao_field_v3_svcpath.sv`
+  // instantiates the services that answer them.
   //
-  //   OP_SPLINE (0x1B) -- DELIBERATE. Fieldv3.md section 6 puts spline on the
-  //     COLD SERVICE LANE: keep the complete exact scalar implementation,
-  //     classify it as exact but not certified for the maximum live-field
-  //     workload. zhao_field_v3_curve.sv states the same in its own header --
-  //     "MODES: CURVE (0) and DCURVE (1) only. SPLINE is COLD by the brief's
-  //     own service split and is not barreled." The scalar path in
-  //     zhao_field_curve.sv implements the whole op, lookup included, and is
-  //     live in four test targets. A SPLINE arriving here SHOULD be refused.
+  // THE CORRECTION IS THE POINT, NOT THE TYPO. The old text was true when it
+  // was written and nobody re-asked. It said, in capitals, that two built and
+  // closed blocks were unreachable -- so a reader arriving later, finding a
+  // route they needed, would read this and conclude it did not exist. That is
+  // the false-absence pattern this repository has now produced seventeen times,
+  // and prose in a header is where it survives longest, because no gate reads
+  // prose.
   //
-  //     What is not settled is whether that stays true. The four-point block
-  //     exists and its shape only pays if SPLINE becomes hot -- a decision
-  //     recorded in STATUS.md and reports/FIELD_V3_REMAINING_OPS.md, not one
-  //     this file may make. If it goes hot, this case list is the first thing
-  //     that changes, and it needs a four-point table lookup that does not
-  //     exist yet.
+  // WHAT IS STILL TRUE AND STILL LOAD-BEARING:
   //
-  //   UOP_RING_PREP (0xF1) -- NOT YET WIRED, and NOT for the cold-lane reason.
-  //     The brief cools "unprepared ring" only; the PREPARED ring is its hot
-  //     path, costed there at "approximately nine vector-multiplier issue
-  //     slots, not four scalar runs through a 50-clock FSM", which is exactly
-  //     what zhao_field_v3_ring.sv implements and what its 23/23 sweep scores.
-  //     So this one is a genuine gap rather than a decision: the block is
-  //     ready and the dispatcher cannot reach it.
+  //   The canonical OP_RING (0x21) is NOT UOP_RING_PREP (0xF1). 0xF1 is a
+  //   plan-internal uop the lowerer emits when both radii are uniform; 0x21 is
+  //   the canonical varying-radius opcode and is genuinely absent. Confusing
+  //   the two would route the expensive form into a block that does not
+  //   implement it.
   //
-  //     Note it is 0xF1, a UOP, not OP_RING (0x21) -- the canonical opcode a
-  //     varying-radius ring would arrive as, which stays cold. Adding the
-  //     wrong one of those two would route the expensive form into a block
-  //     that does not implement it, which is the mistake wrong_op_o in
-  //     zhao_field_v3_svcpath.sv exists to catch.
+  //   0x21's blocker was re-asked on 2026-09-20 and STILL HOLDS: per point it
+  //   needs `m = ring_mid(r0,r1)` and TWO reciprocals, where the prepared form
+  //   has them computed once by software and loaded as uniforms
+  //   (reference/src/zfield/zfield_plan.cpp:137-151). zhao_field_v3_ring.sv
+  //   opens with "nine separately-rounded products on the shared bank, and NO
+  //   reciprocal" and records the deferral deliberately at its lines 32-37. So
+  //   0x21 waits on a per-point reciprocal service, which is also what
+  //   canonical OP_RCP (0x17) waits on -- one piece of work unblocks both.
+  //
+  //   OP_SPLINE's own history is worth keeping: Fieldv3.md section 6 had put it
+  //   on the cold lane, and the owner chose the hot path instead ("spend the
+  //   work", 2026-08-28). That is why it is here now.
   // DERIVED, NOT DECLARED -- see zhao_field_ops_pkg.sv. The executor asks
   // the same table whether to offer an op that this one asks whether to
   // accept, so the two cannot disagree. They did, and it deadlocked.

@@ -45,9 +45,20 @@
 // ---------------------------------------------------------------------------
 // * THE EXECUTOR. Its long-op path does not exist yet, and inventing one here
 //   would test this file's guess rather than the engine.
-// * A SECOND SERVICE. One is enough to prove the round trip; two is what makes
-//   the bank's fixed priority a starvation question, and that needs the curve
-//   service attached, which is the next step rather than this one.
+// * A SECOND SERVICE -- CORRECTED 2026-09-20, AND THIS LINE IS NOW FALSE.
+//   It said "One is enough to prove the round trip; two is what makes the
+//   bank's fixed priority a starvation question, and that needs the curve
+//   service attached, which is the next step rather than this one."
+//
+//   THERE ARE SEVEN SERVICES ON THIS PATH: noise (:438), curve (:465),
+//   normalize (:490), rot (:528), ring (:561), trig (:596) and len (:621) --
+//   line numbers as of this correction. The starvation question is live, not
+//   prospective, and the fixed-priority response ladder below orders all seven.
+//
+//   The sentence is corrected in place rather than deleted because it was TRUE
+//   WHEN WRITTEN and nobody re-asked, which is the shape that has produced
+//   seventeen false "X does not exist" claims in this repository. A header is
+//   where such a claim survives longest: no gate reads prose.
 // * THE REGISTER FILE. The arbiter's output IS the write port, so the file
 //   adds storage and no new behaviour. The test checks the port.
 module zhao_field_v3_svcpath #(
