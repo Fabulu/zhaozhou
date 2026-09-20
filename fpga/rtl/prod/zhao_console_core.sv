@@ -6060,12 +6060,21 @@ module zhao_console_core
   // recorded above. Searched 2026-09-20 (post3b), and the governor's OWN
   // RATIFIED CONTRACT SETTLES IT AGAINST THE WIRING:
   //
-  //   * `design/contracts/MEASURE.GOVERNOR.md:251` lists `deg0_o` / `deg1_o`
-  //     in its output table with the consumer column reading
-  //     "-- (capture / post-mortem)". The contract does not merely fail to
-  //     define a mapping; it classifies these two ports as NOT a policy feed.
-  //     Wiring them into a consumer would contradict the document, not fill a
-  //     hole in it.
+  //   * `design/contracts/MEASURE.GOVERNOR.md`'s output table has THREE columns
+  //     -- port, width, and THE CONSUMER PORT IT DRIVES. Read down the third:
+  //       `cam0_scale_o` `cam1_scale_o` | 16 | `cam0_scale_i` / `cam1_scale_i`
+  //       `cam0_en_o` `cam1_en_o`       |  1 | `cam0_en_i` / `cam1_en_i`
+  //       `hyst_o`                      | 16 | `hyst_i`
+  //       `min_hold_o`                  |  8 | `min_hold_i`
+  //       `morph_step_o`                | 17 | `morph_step_i`
+  //       `src_id_o`                    | 16 | rides the decision
+  //       `deg0_o` `deg1_o`             |  2 | -- (capture / post-mortem)
+  //     EVERY policy output NAMES A CONSUMER PORT. `deg0_o`/`deg1_o` name NONE,
+  //     and the dash is spelled out as "capture / post-mortem". Note also WHICH
+  //     block each named consumer port belongs to: `cam*_scale_i`, `cam*_en_i`,
+  //     `hyst_i`, `min_hold_i` and `morph_step_i` are all TERRAIN.LOD's. The
+  //     governor's ratified output table is written ENTIRELY against TERRAIN.LOD
+  //     and gives PART.LADDER NOTHING.
   //   * `design/contracts/PART.LADDER.md` never contains the words "deg",
   //     "floor" or "degrade" at all. Its `:20` in-packet names a
   //     `governor_target` with NO units, NO range and NO law, and its `:101`
@@ -6075,9 +6084,12 @@ module zhao_console_core
   //     (MEASURE.GOVERNOR -> PART.LADDER) and the abstract packet name
   //     `lod_targets`. An edge is not a field mapping.
   //
-  // So the two documents do not disagree; between them they define no
-  // conversion, and one of them rules its own port out of the job. Neither the
-  // composer nor this block may invent it.
+  // SO THE FINDING IS SHARPER THAN "NOBODY CHOSE A MAPPING", which is how it
+  // was recorded before. THE LEDGER ASSERTS AN EDGE THAT NEITHER CONTRACT
+  // REALISES AT PORT LEVEL: the producer's table routes every policy output to
+  // a DIFFERENT block and rules its remaining two ports out of policy
+  // altogether, while the consumer's contract never names the quantity at all.
+  // Neither the composer nor either block may invent it.
   //
   // RECOMMENDATION (owner's call; see the FINDINGS file above). The
   // dimensionally correct mapping is NOT a floor. `deg` multiplies the ALLOWED
