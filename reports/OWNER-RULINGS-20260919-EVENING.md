@@ -3017,3 +3017,144 @@ highest-leverage item is the untextured attribute law (R187), because two
 subsystems hit it independently.** The cheapest is **R37**, which needs the
 owner's *eye* on a contact sheet **already rendered and committed** at
 `reports/post-gather-law/gather_law_contact.png`.
+
+## R190 — THE DOSSIER STRUCK NINE DECISIONS AS SPENT. FIVE CAME FROM MY OWN BRIEF
+
+**2026-09-20, DOSSIER. 12 live decisions, 9 struck.**
+
+**Five of the nine were handed to it as live, by me.** My brief listed ten known
+items and told it they were "a starting list, NOT a complete one, and some may
+be SPENT" — which was the right hedge, and it was also the only reason the
+packet went looking. But the underlying fact stands: **half the decisions I
+believed were blocking the console were already decided**, and I had been
+quoting several of them to the owner.
+
+**The strike that matters most, because it had been disproved once already:**
+
+> **`{handle → hash}` HAS a hardware producer.** Op 3 is FH2 sub-kind 1,
+> `BIND_PROGRAM`, and `zhao_field_loader` exports `pub_handle_o` /
+> `pub_prog_hash_o` from `obj_handle32[]` / `obj_prog_hash[]`, composed in the
+> core. Its own comment says the mux *"costs one mux the descriptor table needs
+> anyway"* — **it was built for this consumer.**
+
+**Why it kept being re-asserted is the general lesson.** The sweep searched
+`program_hash|prog_hash|programHash` — and **`pub_prog_hash_o` MATCHES
+`prog_hash`.** The pattern was never wrong. **The search was run before the
+producer landed, and the producer landed the same day.**
+
+**A SEARCH IS A CLAIM ABOUT A MOMENT**, exactly as a refusal is (R165). And
+this one is worse than a stale refusal, because **R165 already flagged this
+blocker as expired, and the core entry re-asserted it afterwards anyway.** A
+disproved blocker came back. So:
+
+* **a zero-hit sweep needs a date**, and it needs re-running before it is
+  quoted, not when it was written;
+* **and when a blocker is struck, the strike has to land in the ENTRY**, not
+  only in a ruling. R165 recorded the expiry in the ledger; the core's own
+  INCOMPLETE text went on asserting the opposite, and the core is what the next
+  packet reads.
+
+Also struck, each with primary evidence: the cliff decision (made **and**
+executed, −5,698 ALM), R83's Q8.8 governor saturation (repaired, `PROJW = 20`),
+`forge_kind`'s "EXACTLY ONE member" (R108 granted five), and **R13, which
+already answers I21's layer-E join.**
+
+And it confirmed POSTMEAS against my brief: **R65 has zero citations in
+POST.GATHER's contract or RTL.** R65 is terrain's; R37 is POST.GATHER's. I had
+the two tangled and had said so out loud.
+
+## R191 — I STRUCK A TENTH IN ONE CHECK, AND IT WAS THE DOSSIER'S OWN NEW FINDING
+
+The dossier's headline discovery was a decision nobody had written down — the
+**untextured attribute law** — and its sharpest supporting claim was that
+FORGE.PRIM's case is a hang:
+
+> *"`zhao_geom_vattr`'s `done_o` ANDs `lit_ord_q == uv_ord_q`, so a hull with
+> neither colour nor u/v wedges the entire front end **with no timeout, no abort
+> and no counter**."*
+
+**All three absences are false, and I found it in one read** — while verifying
+before commissioning a packet to build the missing detector.
+
+`zhao_geom_vattr.sv` carries a section headed **"`done_o` CAN WEDGE THE WHOLE
+GEOMETRY FRONT END, AND NOW IT SAYS SO"**, citing **owner ruling R88**, which
+had already ruled on precisely this hazard in almost the same words. What is
+there:
+
+* **`done_stall_o`**, counting episodes where the store owes something and
+  nothing has moved for `STALL_LIMIT` clocks;
+* **its two sides clocked by different things, deliberately**, citing
+  `CLAUDE.md`'s *"a detector wired to two operands that move together cannot
+  fire"*;
+* **every term an EVENT, never a busy LEVEL** — *"a hang holds a busy level
+  high forever, so a watchdog that trusts one is silent through the hang it
+  exists for"*;
+* **fired by legal stimulus** in `geom_vattr_directed` cases L and M, and
+  asserted **zero** on every clean batch, so no mutant is owed;
+* and **no abort, deliberately** — because releasing a batch early would serve
+  REPLAY rows that were never written, which is a **policy** change and not a
+  block's to make.
+
+**The underlying decision is still live** — the attribute law is genuinely
+undecided, and three lanes hit it independently. **What is dead is the alarm
+attached to it.**
+
+**Two things this says, and the second is the uncomfortable one:**
+
+1. **A false absence survived a packet whose entire purpose was checking for
+   false absences.** The dossier struck nine and introduced a tenth. That is
+   not carelessness — it is the same structural pull POSTMEAS named: **a lane is
+   rewarded for finding something, and "there is no detector for this hang" is a
+   far more compelling sentence than "there is one and it is good."**
+2. **I nearly commissioned a packet to build it.** The check that stopped me
+   cost one `grep -c` and one `sed`, and it is the check `CLAUDE.md` already
+   prescribes — *"before commissioning a new block, grep the tree for the thing
+   it replaces"* — written after a vertex arena was built beside an existing one
+   that had 58 formal assertions and a committed proof.
+
+**So the verification pass is now its own packet** (`gz/dossiercheck`), briefed
+to attack all twelve, with the warning that **its incentive runs the opposite
+way from the dossier's**: it is rewarded for striking, so its characteristic
+error is striking something genuinely live, and every strike must quote primary
+evidence rather than a summary.
+
+## R192 — TWO CONTACT SHEETS ARE NOW THE CAMPAIGN'S CRITICAL PATH
+
+**R65 unblocks the most** — I32, `zhao_terrain_bake_v2` and the terrain page
+format — and **six lanes have closed none of those.** **R37** is second, gating
+POST.GATHER and I17 and nothing else.
+
+Both sheets are rendered, committed and pushed. **Verified, by hash, in the
+commit that is on origin** — because telling the owner "just look at this" and
+being wrong about where it is would waste exactly the attention the dossier
+exists to save:
+
+```
+reports/terrain-seam-dig/seam_dig_contact.png    246,790 bytes
+reports/post-gather-law/gather_law_contact.png    38,683 bytes
+```
+
+**No agent can advance either by any amount of work.** That is the whole point
+and it is worth stating plainly: this is not a task that is hard, or expensive,
+or waiting on a fit. It is a task that requires eyes, and the campaign has
+produced eight consecutive well-measured refusals partly because nobody has
+looked.
+
+## R193 — FOUR MORE DECISIONS THAT WERE BEING CARRIED AS FACTS
+
+The dossier's most useful category: things treated as settled background that
+are actually unmade decisions.
+
+* **Terrain's two absent art laws.** **I13 has been mis-scheduled as wiring six
+  times.** Six passes read a missing *law* as a missing *connection* — which is
+  R180's `upstream:` trap one level up, and it is why I13 keeps costing packets.
+* **The devstore at 185 of 553 M10K.** That is **2.4× R59's stated 14%
+  premise** — and the dossier names why it survived: *"which is why nobody
+  audited it."* A premise stated once, in a ruling, and then treated as a
+  measurement. **33% of the device's memory is spoken for by a block whose
+  budget line says 14%.**
+* **The I21 view-mask reconciliation** — one sentence, unresolved across six
+  passes.
+* **FH11's width**, ~+6,000 ALM, against a `zhao_block_fit.json` row that
+  **does not contain FIELD at all** — a cost quoted from a receipt that does not
+  describe the subsystem being priced.
