@@ -169,14 +169,12 @@ void bake_dig(render::TerrainPatch& patch, const DigStamp& st, fx16 depth_from, 
       // cell keeps base + scar >= bottom + 1 height16 LSB — the cell can
       // never satisfy the breach equality
       if (dual && has_cells) {
-        bool guarded = false;
-        for (int cj = j - 1; cj <= j && !guarded; ++cj) {
-          for (int ci = i - 1; ci <= i && !guarded; ++ci) {
-            if (ci < 0 || cj < 0 || ci >= w - 1 || cj >= h - 1) continue;
-            if (patch.cell_state[static_cast<size_t>(cj) * (w - 1) + ci] & kNoBakeBit)
-              guarded = true;
-          }
-        }
+        // ONE statement of §3.3's four-corner reduction, in zref::terrain,
+        // shared with tests/terrain/bake_dev.hpp and with TERRAIN.PAGEIO's
+        // `nb_o` in RTL. It used to be an inline loop here and a second inline
+        // loop in the test helper; lifted 2026-09-21 (charter §29-6).
+        const bool guarded =
+            nobake_corner_shadow(patch.cell_state.data(), w - 1, h - 1, i, j);
         if (guarded) {
           const int64_t min_scar = static_cast<int64_t>(patch.bottom[k]) + 1 - patch.heights[k];
           if (scar < min_scar) scar = min_scar;
