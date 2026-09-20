@@ -774,6 +774,48 @@ targets:
   # 512-bit register that got turned into a memory would be worse, not better:
   # the extraction is a combinational part-select on the SAME cycle, so an
   # inferred M10K there would add a cycle to every vertex.
+  # F-PAGEIO1 -- TERRAIN.PAGEIO, and the question is the SHADOW PLANE.
+  #
+  # `nb_o` must answer any (vi,vj) COMBINATIONALLY, because in contract form (b)
+  # the page server delivers base/scar/bottom/nobake on one beat or the vertex
+  # is not ready, and this block does not own that valid. A RAM cannot do that,
+  # so `nbv_q` is 1,089 FLOPS plus one variable bit-select. That is the block's
+  # one flop-heavy structure and this fit is what prices it. The cheaper
+  # alternative is written into the module header -- a two-row register window,
+  # 66 flops -- and it is only correct for a cursor that scans z-then-x, so it
+  # buys area with a coupling to TERRAIN.BAKE's traversal order. Do not take it
+  # on an argument; take it on this number, if this number says to.
+  - top: zhao_terrain_pageio
+    sources:
+      - fpga/rtl/generated/zhao_abi_pkg.sv
+      - fpga/rtl/common/zhao_pkg.sv
+      - fpga/rtl/terrain/zhao_terrain_pageio.sv
+    rules:
+      # THE PAGE BUFFERS MUST BE MEMORIES, which is the opposite of
+      # zhao_terrain_pagestream's rule above and for the opposite reason: those
+      # are read combinationally by a byte lane on the emit cycle, these are
+      # read one word per guard beat with a cycle to spare. 280 x 64 for layer
+      # B's write window and 136 x 64 for layer D's shared window is 26,624
+      # bits; at 10,240 bits per M10K that is 3 if the aspect cooperates and
+      # more if it does not. min_m10k is the interesting half -- a fit that
+      # reports ZERO has put 26,624 bits in flops, which is the failure this
+      # rule exists to catch.
+      min_m10k: 2
+      max_m10k: 6
+      # slot_scaled() is the shift-and-add copied from
+      # zhao_terrain_pagestream.sv; vj*33 is one shift and one adder. There is
+      # no multiply anywhere in this block and a DSP here means one appeared.
+      max_dsp: 0
+      # 1,089 shadow-plane flops, 11 counters at 32, two 3-bit lane latches, the
+      # job record, the cursors and the bake-face holding registers. Set from
+      # that arithmetic BEFORE the fit, so the number it reports is a
+      # measurement and not a target.
+      max_registers: 1800
+      min_fmax_mhz: 100
+      # NOT YET MEASURED. This row is written before the fit deliberately, so
+      # that the first receipt is a measurement against a number chosen without
+      # sight of it.
+
   - top: zhao_terrain_pagestream
     sources:
       - fpga/rtl/generated/zhao_abi_pkg.sv

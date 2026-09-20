@@ -2697,6 +2697,35 @@
 //          fifteen, the one that asserts a PRESENCE: acting on the old
 //          sentence meant connecting ports to a module that does not have
 //          them.
+//
+//          THAT THIRD BLOCK NOW EXISTS. `zhao_terrain_pageio` (TERRAIN.PAGEIO,
+//          built 2026-09-21 under owner ruling R210;
+//          design/contracts/TERRAIN.PAGEIO.md) is the block this paragraph
+//          commissioned, and it is recorded HERE so the next reader does not
+//          build it a second time -- the entry describes a missing owner so
+//          exactly that it reads as a work order. It takes the slot, the
+//          generation and the epoch on its job port, learns from
+//          `bake_done_i` that the record retired, and emits
+//          `dm_slot_o`/`dm_gen_o`/`dm_epoch_o`/`dm_bd_o`/`dm_f_o`/`dm_mips_o`
+//          -- port for port what `terr_dm_*_i` want. It exists because it is
+//          already the block that HOLDS that identity: its real job is serving
+//          the four TERRAIN.BAKE page ports nothing served (layer D had zero
+//          readers anywhere under fpga/; layers B and D had no writer), and the
+//          residency handle is what all four of those need.
+//
+//          THIS HALF STILL DOES NOT CLOSE, and the reason is one level further
+//          out: `zhao_terrain_pageio` is BUILT and NOT COMPOSED, because its
+//          own consumer `zhao_terrain_bake_v2` is not composed either. Entry
+//          I32 carries that argument. Wiring the mark alone would connect a
+//          port to a block nothing drives.
+//
+//          `terr_dm_gen_i` ALSO CARRIES A RULING THIS ENTRY SHOULD NAME: a bake
+//          does NOT bump the generation (the slot still holds the same patch,
+//          and the per-layer dirty bits are the mechanism for "this content
+//          moved"). If it did, every handle held across a bake would be stale
+//          and `terr_chk_stale_o` below would start firing on live handles --
+//          so the two halves of this entry are coupled, and the coupling is a
+//          decision rather than an accident.
 //        * `terr_chk_*`, the handle staleness check. Its caller is whoever
 //          holds a page handle across a frame and wants to know it is still
 //          valid -- the subpatch issuer of entry I21. There is no such block.

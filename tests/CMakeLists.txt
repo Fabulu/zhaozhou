@@ -10430,6 +10430,46 @@ set_tests_properties(lint_terrain_pagestream PROPERTIES
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
 # ---------------------------------------------------------------------------
+# TERRAIN.PAGEIO -- bake's page window (design/contracts/TERRAIN.PAGEIO.md).
+#
+# Layer D had ZERO readers under fpga/ and layers B and D had no writer, so
+# TERRAIN.BAKE could compute a scar and a breach and had nowhere to put either.
+# This block serves all four of those ports.
+#
+# THE ACCEPTANCE TEST IS THAT LAYERS A, C AND E DO NOT MOVE. The guard has no
+# byte enables -- `be_ok = (req.be == mask_of(req.len))` -- so a whole 64-byte
+# burst is the smallest writable thing, and layer B's and layer D's edge bursts
+# carry 2, 4, 6 and 58 foreign bytes. NOTHING IN THE MACHINE READS THOSE LAYERS
+# BACK, so a block that clobbered them would pass every other gate forever.
+# The bench reads the image back and compares byte for byte.
+#
+# It also checks the `nb_o` SCATTER against `zref::terrain::nobake_corner_shadow`
+# (the gather), fires all five fault counters by stimulus, and asserts every
+# one of them ZERO on the clean bake.
+add_test(NAME lint_terrain_pageio
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_terrain_pageio
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageio.sv)
+set_tests_properties(lint_terrain_pageio PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_executable(test_pageio_rtl_directed terrain/pageio_rtl_directed.cpp)
+target_link_libraries(test_pageio_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_pageio_rtl_directed
+  PREFIX Vtb_pageio
+  TOP_MODULE tb_pageio
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/memory/zhao_mem_guard.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pageio.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/terrain/tb_pageio.sv)
+add_test(NAME pageio_rtl_directed COMMAND test_pageio_rtl_directed)
+set_tests_properties(pageio_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
 # TERRAIN.LOADQ -- the load queue, against its reference model.
 #
 # A queue is the block whose test writes itself badly: push some, pop some,

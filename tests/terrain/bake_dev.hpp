@@ -100,18 +100,22 @@ inline void reset_dut(DUT& d) {
   zhao::tick(d);
 }
 
-/** The §3.3 no_bake corner shadow of one lattice vertex, from layer D. */
+/**
+ * The §3.3 no_bake corner shadow of one lattice vertex, from layer D.
+ *
+ * THIS IS A FORWARDER, NOT AN IMPLEMENTATION, and that changed on 2026-09-21.
+ * It used to carry its own copy of the four-corner loop, which made a TEST
+ * helper the only standalone statement of a ratified law -- and TERRAIN.PAGEIO
+ * owns that reduction in RTL (`nb_o` is layer D reduced to one bit), so RTL
+ * built against this file would have been a second implementation. The law now
+ * lives in `zref::terrain::nobake_corner_shadow`; this keeps the patch-shaped
+ * signature the drivers already call and does the size check the oracle cannot
+ * do from a raw pointer.
+ */
 inline bool nobake_shadow(const zref::render::TerrainPatch& p, int i, int j) {
   const int w = p.width, h = p.height;
   if (p.cell_state.size() != static_cast<size_t>(w - 1) * static_cast<size_t>(h - 1)) return false;
-  for (int cj = j - 1; cj <= j; ++cj) {
-    for (int ci = i - 1; ci <= i; ++ci) {
-      if (ci < 0 || cj < 0 || ci >= w - 1 || cj >= h - 1) continue;
-      if (p.cell_state[static_cast<size_t>(cj) * (w - 1) + ci] & zref::terrain::kNoBakeBit)
-        return true;
-    }
-  }
-  return false;
+  return zref::terrain::nobake_corner_shadow(p.cell_state.data(), w - 1, h - 1, i, j);
 }
 
 /**

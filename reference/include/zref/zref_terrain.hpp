@@ -53,6 +53,44 @@ inline constexpr uint8_t kVoidBreached = 2;  // destroyed at runtime (bake)
 inline constexpr uint8_t kSubstanceMask = 0x03;
 inline constexpr uint8_t kNoBakeBit = 0x04;  // bit 2: bakes clamp, never breach
 
+// ---- the no_bake CORNER SHADOW (terrain_rules.md §3.3) ---------------------
+
+/**
+ * Is lattice vertex (vi, vj) shadowed by a protected cell?
+ *
+ * The law: the OR of `cell_state[cj][ci] & kNoBakeBit` over the up-to-four
+ * cells ci in {vi-1, vi}, cj in {vj-1, vj} that lie inside the cell grid. A
+ * vertex in the shadow keeps `base + scar >= bottom + 1` LSB, so the cell it
+ * corners can never satisfy §3.4's breach equality.
+ *
+ * WHY IT IS HERE AND NOT INLINE IN THREE PLACES. Until 2026-09-21 the only
+ * standalone statement of this reduction was `nobake_shadow()` in
+ * `tests/terrain/bake_dev.hpp` -- a TEST helper -- while `bake_dig()` carried
+ * its own copy of the loop. TERRAIN.PAGEIO owns the reduction in RTL (it is
+ * the block that reduces layer D to `vtx_nobake_i`), and building RTL against
+ * a test helper is how a second implementation of a ratified law is born.
+ * So the law is lifted here, the test helper forwards to it, and `bake_dig()`
+ * calls it: one statement, three callers, per charter §29-6.
+ *
+ * `cells_w`/`cells_h` are the CELL grid (w-1, h-1 for a w x h lattice).
+ * `cell_state` may be null or short, which is the "no layer D" page: no cell
+ * is protected, so nothing is shadowed.
+ */
+inline bool nobake_corner_shadow(const uint8_t* cell_state, int cells_w, int cells_h,
+                                 int vi, int vj) {
+  if (cell_state == nullptr || cells_w <= 0 || cells_h <= 0) return false;
+  for (int cj = vj - 1; cj <= vj; ++cj) {
+    for (int ci = vi - 1; ci <= vi; ++ci) {
+      if (ci < 0 || cj < 0 || ci >= cells_w || cj >= cells_h) continue;
+      if (cell_state[static_cast<size_t>(cj) * static_cast<size_t>(cells_w) +
+                     static_cast<size_t>(ci)] &
+          kNoBakeBit)
+        return true;
+    }
+  }
+  return false;
+}
+
 // ---- shared lattice interpolation helper -----------------------------------
 
 // a + (b-a)*num/den with ONE rounding (qformats §4 family; den > 0). The
