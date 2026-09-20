@@ -2630,11 +2630,13 @@ set_tests_properties(depth_profile_abi_directed PROPERTIES LABELS "fast;nightly"
 # halves.
 add_executable(test_raster_attrstep_directed raster/raster_attrstep_directed.cpp)
 target_link_libraries(test_raster_attrstep_directed PRIVATE zhao_harness zhao_zref)
+# The oracle is the compiled reference, not a restatement of it (R100/R104).
+target_include_directories(test_raster_attrstep_directed PRIVATE ${CMAKE_SOURCE_DIR}/reference/src)
 verilate(test_raster_attrstep_directed
   PREFIX Vzhao_raster_attrstep
   TOP_MODULE zhao_raster_attrstep
   SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrstep.sv
-          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv)
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv)
 add_test(NAME raster_attrstep_directed COMMAND test_raster_attrstep_directed)
 set_tests_properties(raster_attrstep_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 

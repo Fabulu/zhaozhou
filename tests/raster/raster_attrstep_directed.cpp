@@ -8,18 +8,26 @@
 // path. That is worth nothing if it changes a single attribute value, because
 // every golden capture CRC depends on them.
 //
-// So the oracle here is not a restatement of the law -- it is
-// `zhao_raster_attrdiv` itself, the block ATTRSTEP replaces, driven with the
-// same numerator at the same pixel. Anything less would let the two agree about
-// a shared misunderstanding.
+// THE ORACLE IS `zref::render::div_rhu_s128`, THE COMPILED REFERENCE, as of
+// 2026-09-20 (owner rulings R100 / R104). Until today this file's header
+// claimed the oracle was "`zhao_raster_attrdiv` itself", and THAT CLAIM WAS
+// FALSE: the code restated the law locally in `div_rhu` below and never drove
+// the divider at all. The restatement was of v1's round-half-AWAY-FROM-ZERO,
+// which `spec/qformats.md:53`, `:147` and `rast.cpp:31-41` all contradict --
+// so the file agreed with the block it was testing and with nothing else,
+// which is exactly the "shared misunderstanding" its own sentence warned of.
+// Calling the reference removes both the restatement and the false claim.
 //
 // The comparison is made where it can actually fail:
 //
-//   * NEGATIVE attributes, and planes that CROSS ZERO inside a row -- the
-//     recurrence changes branch there and has to reseed. A test whose
-//     attributes are all positive never exercises the branch that exists.
-//   * exact halves, where the shipped round-half-away-from-zero law differs
-//     from the round-half-up form the ruling stated.
+//   * NEGATIVE attributes, and planes that CROSS ZERO inside a row. Under v1's
+//     law this was where the recurrence changed BRANCH and reseeded; under the
+//     ratified law the floor pair is continuous and there is no branch, so the
+//     same stimulus now tests the OPPOSITE claim -- that nothing special
+//     happens at zero. It is kept and strengthened for that reason: the case
+//     that used to prove the reseed works now proves the reseed is unnecessary.
+//   * exact halves, which is where v1 and the reference disagree at all (100%
+//     of negative exact halves with an even divisor).
 //   * gradients large enough that the quotient part of the step is non-zero,
 //     and small enough that it is zero and only the remainder moves.
 //
@@ -35,15 +43,19 @@
 #include "Vzhao_raster_attrstep.h"
 
 #include "zhao_sim.hpp"
+#include "zrender/internal.hpp"
 
 namespace {
 
 using i128 = __int128;
 
-/** The shipped law, restated only to build expectations the RTL is checked on. */
-int64_t div_rhu(i128 n, i128 A) {
-  return static_cast<int64_t>((n >= 0) ? ((2 * n + A) / (2 * A)) : -((-2 * n + A) / (2 * A)));
-}
+/**
+ * The ratified law, CALLED rather than restated: floor((n + floor(A/2))/A),
+ * saturated to s32. This is the same function every attribute in the reference
+ * rasteriser goes through, and the one zhao_raster_attrdiv_v2 matched on all
+ * 640,000 of R100's sampled pairs.
+ */
+int64_t div_rhu(i128 n, i128 A) { return zref::render::div_rhu_s128(n, A); }
 
 void put_wide(uint32_t* w, int words, i128 v) {
   for (int i = 0; i < words; ++i) w[i] = static_cast<uint32_t>((v >> (32 * i)) & 0xFFFFFFFFu);

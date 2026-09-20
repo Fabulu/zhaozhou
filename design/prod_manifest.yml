@@ -115,10 +115,9 @@ top:
   # TEXJOIN V2 remains in-tree as the behavioural oracle, but is excluded below:
   # V3 owns the lifecycle inside the selected texture subsystem. This is an
   # accounting correction only; neither path is connected to the shell today.
-  # THESE TWO STILL WIRE `zhao_raster_attrdiv` (v1) AND THE COMPLETION REGISTER
-  # IS FATAL ON IT -- deliberately, and it is not an oversight. Owner ruling
-  # R100 asked for both to move to `zhao_raster_attrdiv_v2`; the move is a
-  # BEHAVIOUR change and it is also blocked by a port that has no v2 equivalent.
+  # BOTH OF THESE NOW WIRE `zhao_raster_attrdiv_v2`. Done 2026-09-20 under owner
+  # rulings R100 and R104; the paragraphs this replaces described the blocker
+  # correctly and are kept in summary because the REASON is still load-bearing.
   #
   #   ROUNDING. v1 is round-half-AWAY-FROM-ZERO; v2, `spec/qformats.md` (:53
   #   and :147) and `zref::render::div_rhu_s128` are all round-half-UP. v2
@@ -126,28 +125,48 @@ top:
   #   100% of negative exact halves with an even divisor, at a rate ~1/(4d).
   #   OVERFLOW. v1 publishes q = 0 with `q_overflow_o`; v2 and the reference
   #   SATURATE to INT32_MAX/MIN. Different answers, not different reports.
-  #   So v2 is RIGHT and v1 is wrong, and the tie law is already ruled -- see
-  #   the corrected `zhao_raster_attrwalk` note below.
+  #   So v2 is RIGHT and v1 is wrong. ADOPTING V2 IS A BUG FIX.
   #
-  # THE ACTUAL BLOCKER IS `rem_o`, AND IT IS ENGINEERING. `zhao_raster_attrdiv`
-  # publishes the Euclidean remainder; `zhao_raster_attrdiv_v2` publishes no
-  # remainder at all. `zhao_raster_attrstep.sv:140` consumes it as the SEED of
-  # the exact quotient/remainder recurrence `tests/proofs/attribute_step_
-  # equivalence.cpp` proves -- "10x fewer divides with every rendered bit
-  # unchanged" -- and `zhao_raster_attrdiv_svc.sv:82` re-publishes it on its own
-  # boundary for the same customer. Swapping to v2 today DELETES that seam,
-  # which is closing a gap by removing function, and the protocol forbids it.
-  # v1's `q_overflow_o` has no v2 equivalent either: `q_saturated_o` and
-  # `q_error_o` are two signals with different meanings.
+  # HOW THE `rem_o` BLOCKER WAS CLEARED, and the correction that mattered. The
+  # earlier note said v2 "publishes no remainder at all" and R104 replied that
+  # v2 already computes one, so the work was "publishing an internal signal".
+  # BOTH HALVES WERE INCOMPLETE and the note below was closer:
   #
-  # NEITHER IS RECLASSIFIED AS A RETAINED ORACLE. Both are selected tops here,
-  # they are production hardware on the per-pixel path, and moving them into
-  # `excluded:` to make the register green would be editing the instrument to
-  # agree with the tree -- the one thing this run has found nine times.
-  # The repair is one packet: give v2 a remainder output, re-prove the step
-  # recurrence against v2's dividend (the negative branch forms its magnitude as
-  # `(~dividend) + den`, so the remainder is NOT v1's and the proof must be
-  # re-taken, not transplanted), then swap both consumers in one commit.
+  #   * v2 does compute a residue, but it is NOT v1's. v1 divides 2|n|+A by 2A
+  #     and publishes mod 2A; v2 divides M = n+floor(A/2) by A. No fixup turns
+  #     one into the other, so the consumers' algebra is RE-DERIVED, as this
+  #     note already said ("the proof must be re-taken, not transplanted").
+  #   * the RAW residue is not publishable either: the negative branch divides
+  #     |M|+A-1, so v2 now publishes the TRUE FLOOR REMAINDER after a one-line
+  #     conditional fixup on the edge that already latches the quotient.
+  #
+  # v2 gained `rem_o [46:0]` and `rem_range_err_o`. The width is MEASURED, not
+  # asserted -- widest observed 47 bits over the widest legal areas -- and the
+  # guard has a committed positive control at
+  # tests/mutants/zhao_raster_attrdiv_v2_remwidth_mutant.sv.
+  #
+  # THE REFUSAL MAPPING, which R104 called the half that can silently change
+  # behaviour. `q_overflow_o` is not renamed, it is SPLIT. The service publishes
+  # `q_saturated_o` and `q_error_o` both and collapses neither. ATTRSTEP refuses
+  # on both, which reproduces v1's behaviour exactly on that path, because a
+  # clamped quotient breaks q*A+r == M and is not a legal recurrence seed.
+  #
+  # WHAT MOVED IN THE CONSUMERS. ATTRSTEP lost its entire negative branch: v1's
+  # law is symmetric about zero so its pair is a magnitude that BREAKS at zero,
+  # while floor is continuous, so the second step decomposition, the sign bit,
+  # the 96-bit shadow accumulator and the mid-row reseed are all gone. A row is
+  # now one divide however often it crosses zero. Against that, v2 walks 98
+  # quotient positions where v1 walked 33, so each divide is ~2.6-2.8x longer
+  # (36 -> 101 clocks at radix 2, 20 -> 52 at radix 4). Both numbers are in the
+  # blocks' headers. Recovering the occupancy by teaching v2 v1's window trick
+  # is a named follow-on and is NOT assumed anywhere.
+  #
+  # NEITHER ROOT IS RECLASSIFIED AS A RETAINED ORACLE. Both are still selected
+  # tops here: they are production hardware on the per-pixel path, and moving
+  # them into `excluded:` to make the register green would be editing the
+  # instrument to agree with the tree. v1 itself IS now a retained oracle --
+  # nothing instantiates it and three committed differentials drive it -- and it
+  # is declared as one under `excluded:`, which is a different act.
   - zhao_raster_attrdiv_svc
   - zhao_raster_attrinterp
   - zhao_raster_attrstep
@@ -730,6 +749,7 @@ excluded:
   - zhao_geom_bin_pipe: superseded  by zhao_geom_bin_pipe_v2, which zhao_shell_top_v2 composes as u_render_bin (63 -> 166 ports). Retained as the oracle the V2 stream/counter parity differential runs against
   - zhao_geom_binner: superseded  by zhao_geom_binner_v2 (exact accepted-triangle-owned 1,157-bit metadata in 29 ascending 40-bit slices), reached through zhao_geom_bin_pipe_v2. Retained as the parity oracle; this is the same pair completion_register's superseded_in_closure() flagged on 2026-09-19 outside FIELD
   - zhao_raster_tile_pipe: superseded  by zhao_raster_tile_pipe_v2, reached through zhao_geom_bin_pipe_v2. The second pair superseded_in_closure() flagged on 2026-09-19. Retained with its directed tests and its existing fit target
+  - zhao_raster_attrdiv: superseded  by zhao_raster_attrdiv_v2 (owner rulings R100/R104, adopted 2026-09-20). It was the LAST superseded-in-a-production-root pair: zhao_raster_attrdiv_svc and zhao_raster_attrstep both wired it and both now wire v2, so nothing in the tree instantiates this file any more. Its law is WRONG -- round-half-away-from-zero against the ratified round-half-up of spec/qformats.md:53/:147 and zref::render::div_rhu_s128, differing on 100% of negative exact halves with an even divisor -- and it is retained on disk for exactly one reason: it is the executable oracle three committed differentials drive. raster_attrdiv_directed and raster_attrdiv_r4 enforce its own law (including the ONLY assertion in the tree of its mod-2A remainder), attrstep_qr_differential drives it at radix 4, and attrwalk_rtl_differential uses it as the away-from-zero side of a two-law comparison whose anti-vacuity gate REQUIRES the two laws to differ. Retained with its standalone fit target and its receipts, exactly as zhao_terrain_bake above
   - zhao_video_slotmgr: superseded  by zhao_video_slotmgr_v2 (22 -> 74 ports; fair renderer/blitter lease authority with full writer/generation publication identity), composed by zhao_shell_top_v2. Retained as the pre-Packet-G oracle
   - zhao_hps_arbiter: superseded  by zhao_hps_arbiter_n (owner ruling R4, the N-client arbiter; the 2-client module is its wrapper). zhao_shell_top_v2 composes the N core at BUILD_HPS_N=2 -- the value zhao_console_core.sv:10531 passes -- so the wrapper is out of the machine on the same ground zhao_mem_share2 already was
   - zhao_fb_tuple_contract: not-yet-adopted  Packet-H elaboration check that the six READY/swap fields tile the 84-bit CDC tuple exactly -- no hole and no overlap; carries no logic and exists so a wrong width is a compile failure rather than a test failure
