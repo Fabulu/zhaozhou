@@ -8042,6 +8042,31 @@ int main(int argc, char** argv) {
   }
   // The knee must stay inside the ceiling whichever order the two were set in.
   if (u02::g_u02_rear_span_soft_mm >= u02::g_u02_rear_span_travel_mm) return 2;
+  // PASS 20 REPAIR: the rear band's bow. `legacy` restores the pass-19 solve,
+  // and is the byte-exactness control for this pass.
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW")) {
+    if (std::strcmp(e, "arc") == 0) u02::g_u02_rear_bow = u02::RearBow::kArc;
+    else if (std::strcmp(e, "legacy") == 0)
+      u02::g_u02_rear_bow = u02::RearBow::kLegacy;
+    else return 2;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW_SIGN")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_BOW_SIGN", e, -1, 1, v)) return 2;
+    u02::g_u02_rear_bow_sign = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW_ONSET_MM")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_BOW_ONSET_MM", e, 0, 2000, v))
+      return 2;
+    u02::g_u02_rear_bow_onset_mm = v;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW_MAX_A16")) {
+    int v = 0;
+    if (!parse_strict_env_int("ZHAO_U02_REAR_BOW_MAX_A16", e, 64, 32000, v))
+      return 2;
+    u02::g_u02_rear_bow_max_alpha16 = v;
+  }
   // PASS 20 (Direction 21 item 2): the kneading dip's global gain. 0 is the
   // EXACT-OFF control -- knead_dip_mm returns 0 for every sample, so the bank
   // is byte-for-byte what it was before the dip existed.

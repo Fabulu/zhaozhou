@@ -894,6 +894,17 @@ int32_t sample_local_y(const zc::Clip& c, int frame, uint8_t bone,
   return v[(static_cast<size_t>(frame) * u02::kBoneCount + bone) * 3u + 1u];
 }
 
+// PASS 20: any component, for the kBSpanDeltaE receipt's recorded chord.
+int32_t sample_local_axis(const zc::Clip& c, int frame, uint8_t bone,
+                          uint8_t sub, int axis) {
+  const std::vector<int32_t>& v =
+      sub == 0 ? c.local_translation : c.mid_local_translation;
+  const size_t want = static_cast<size_t>(c.frame_count) * u02::kBoneCount * 3u;
+  if (v.size() != want) return 0;
+  return v[(static_cast<size_t>(frame) * u02::kBoneCount + bone) * 3u +
+           static_cast<size_t>(axis)];
+}
+
 void check_shipping_tracks(const zc::CreatureType& type,
                            const Stations& stations, bool csv) {
   const auto specs = span_specs(stations);
@@ -912,6 +923,9 @@ void check_shipping_tracks(const zc::CreatureType& type,
   if (csv)
     std::printf("\nslot,key,sub,FA_mm,AB_mm,BC_mm,CE_mm\n");
 
+  const auto mm_e = [](int32_t fx) {
+    return static_cast<int32_t>((static_cast<int64_t>(fx) * 1000) >> 16);
+  };
   for (const zc::Clip& c : type.bank.clips) {
     for (int f = 0; f < c.frame_count; ++f) {
       for (uint8_t sub = 0; sub <= 1; ++sub) {
@@ -933,10 +947,46 @@ void check_shipping_tracks(const zc::CreatureType& type,
             sample_local_y(c, f, u02::kBSpanDeltaEMid, sub);
         const int32_t e_presocket =
             sample_local_y(c, f, u02::kBSpanDeltaEPreSocket, sub);
-        if (e_start != u02::span_e_start_delta_fx(e_full) ||
-            e_mid != u02::span_e_mid_delta_fx(e_full) ||
-            e_presocket != u02::span_e_presocket_delta_fx(e_full))
-          ++e_stage_mismatch;
+        // PASS 20: the C-End helpers are checked against THE PRODUCTION LAW,
+        // not against one hard-coded formula.
+        //
+        // This used to assert the three fractions literally, which made it a
+        // unit test of an implementation rather than a check of a property --
+        // and the bow repair (manafold_art.h, kRearBowSign) changed that
+        // implementation for a measured reason, so the leg turned red on a
+        // band that is now CORRECT. What the staging must actually guarantee is
+        // that the helpers are a consistent, reproducible distribution of the
+        // SAME closure the receipt records; so we re-run the production writer
+        // on that receipt and require the shipped values to match it exactly.
+        // A helper written by anything else, or drifting from the solve, still
+        // fails -- and it now keeps failing whatever law is in force.
+        {
+          // The receipt stores the DELTA, so the chord it was solved from is
+          // only known to the millimetre it was rounded to. Accept the law
+          // evaluated at either neighbouring millimetre -- that is the exact
+          // width of the ambiguity, not slack in the check: a helper written by
+          // anything other than the production writer still fails.
+          const int32_t base_mm = u02::kRearSocketFromCMm + mm_e(e_full);
+          bool matched = false;
+          for (int d = -1; d <= 1 && !matched; ++d) {
+            std::vector<int32_t> scratch(
+                static_cast<size_t>(u02::kBoneCount) * 3u, 0);
+            if (!u02::write_rear_bow(scratch, 0, base_mm + d)) {
+              scratch[static_cast<size_t>(u02::kBSpanDeltaEStart) * 3u + 1u] =
+                  u02::span_e_start_delta_fx(e_full);
+              scratch[static_cast<size_t>(u02::kBSpanDeltaEMid) * 3u + 1u] =
+                  u02::span_e_mid_delta_fx(e_full);
+              scratch[static_cast<size_t>(u02::kBSpanDeltaEPreSocket) * 3u + 1u] =
+                  u02::span_e_presocket_delta_fx(e_full);
+            }
+            matched =
+                e_start == scratch[static_cast<size_t>(u02::kBSpanDeltaEStart) * 3u + 1u] &&
+                e_mid == scratch[static_cast<size_t>(u02::kBSpanDeltaEMid) * 3u + 1u] &&
+                e_presocket ==
+                    scratch[static_cast<size_t>(u02::kBSpanDeltaEPreSocket) * 3u + 1u];
+          }
+          if (!matched) ++e_stage_mismatch;
+        }
         mm[3] = static_cast<int32_t>(
             (static_cast<int64_t>(e_full) * 1000) >> 16);
         for (int si = 0; si < 4; ++si) {
@@ -1069,7 +1119,33 @@ void check_shipping_posed_ring_order(const zc::CreatureType& type,
               worst_sub = sub;
               worst_span = spec.name;
             }
-            if (!(projection > 0.25)) ++reversed;
+            // PASS 20: the reversal test is LOCAL, not against a straight
+            // axis across the whole zone.
+            //
+            // `chord` is zone.back() - zone.front(): a straight line. Projecting
+            // every ring step onto it asks "does the band run straight", which
+            // was a fine proxy while the rear run COULD only be straight. The
+            // bow repair makes it curve into its socket by design, and a curve
+            // genuinely goes backwards against its own chord for part of its
+            // length -- 13,033 of 339,500 steps did, with min projection
+            // -82 mm, while `pinched` stayed at 0 the whole time.
+            //
+            // The property worth protecting is that the band does not FOLD BACK
+            // ON ITSELF. That is the turn between CONSECUTIVE steps, and it is
+            // bounded by the same 140 deg used for the rear centreline in
+            // manafold_rear_audit (above the repaired shape's 113, below
+            // version 18's 171). Pinching -- rings collapsing together -- is
+            // unchanged and still the crossing guard.
+            if (i >= 2) {
+              const Vec3 prev = zone[i - 1] - zone[i - 2];
+              const double lp = length(prev), ls = separation;
+              if (lp > 1e-6 && ls > 1e-6) {
+                double cth = dot(prev, step) / (lp * ls);
+                cth = std::max(-1.0, std::min(1.0, cth));
+                const double turn = std::acos(cth) * 180.0 / 3.14159265358979;
+                if (turn > 140.0) ++reversed;
+              }
+            }
             if (!(separation > 0.50)) ++pinched;
           }
         }

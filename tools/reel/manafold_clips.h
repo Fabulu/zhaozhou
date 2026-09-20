@@ -144,6 +144,64 @@ inline bool eye_size_muted(bool left) {
          (!left && g_u02_eye_size_mute == EyeSizeMute::kRight);
 }
 
+/** PASS 20 REPAIR: the rear band's bow. See kRearBowSign in manafold_art.h for
+ *  the geometry and for why this is the repair rather than a damping knob.
+ *
+ *  Half-angle alpha (angle16) of the circular arc of length `arc_mm` whose
+ *  chord is `chord_mm`, by integer bisection on sin(alpha)/alpha = c/L.
+ *  sinc is strictly decreasing on (0, pi), so the bisection is exact and
+ *  deterministic. Returns 0 when the band is taut or straight enough that the
+ *  arc is the straight line.
+ *
+ *  The comparison is cross-multiplied to stay in integers:
+ *      L*sin(a) = c*a      with a in radians
+ *  and one angle16 unit is 2*pi/65536 rad, so with sin as Q16.16 this is
+ *      L * sin_q16 * 65536  vs  c * a16 * round(2*pi*65536)
+ *  and 411775 is that constant (2*pi*65536 = 411774.7).
+ */
+inline int32_t rear_bow_alpha16(int32_t chord_mm, int32_t arc_mm) {
+  if (arc_mm <= 0 || chord_mm <= 0 || chord_mm >= arc_mm) return 0;
+  const auto sin_a16 = [](int32_t a) {
+    return static_cast<int64_t>(
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>(a)}).raw);
+  };
+  int32_t lo = 1, hi = 32000;  // (0, pi); sinc(pi) = 0
+  for (int it = 0; it < 24; ++it) {
+    const int32_t mid = lo + (hi - lo) / 2;
+    if (mid == lo) break;
+    const int64_t lhs = static_cast<int64_t>(arc_mm) * sin_a16(mid) * 65536;
+    const int64_t rhs = static_cast<int64_t>(chord_mm) * mid * 411775;
+    // sinc still too large means the arc is not bent far enough yet.
+    if (lhs > rhs) lo = mid; else hi = mid;
+  }
+  const int32_t a = lo + (hi - lo) / 2;
+  return a < kRearBowMinAlpha16 ? 0 : a;
+}
+
+/** The displacement of the band's station `s_mm` from its STRAIGHT bind line to
+ *  the arc, in HingeD's frame. `alpha16` comes from rear_bow_alpha16. */
+inline void rear_bow_delta_mm(int32_t alpha16, int32_t chord_mm, int32_t arc_mm,
+                              int32_t s_mm, int32_t& dx, int32_t& dy) {
+  dx = 0;
+  dy = 0;
+  if (alpha16 <= 0 || arc_mm <= 0) return;
+  const auto sin_a16 = [](int32_t a) {
+    return static_cast<int64_t>(
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>(a & 0xFFFF)}).raw);
+  };
+  const auto cos_a16 = [&](int32_t a) { return sin_a16(a + 16384); };
+  const int64_t sa = sin_a16(alpha16);
+  if (sa <= 0) return;
+  // R = c / (2 sin alpha), in millimetres.
+  const int64_t r_mm = (static_cast<int64_t>(chord_mm) * 32768) / sa;
+  const int32_t phi16 = static_cast<int32_t>(
+      (static_cast<int64_t>(s_mm) * 2 * alpha16) / arc_mm);
+  const int32_t th = phi16 - alpha16;
+  dx = static_cast<int32_t>((r_mm * (cos_a16(th) - cos_a16(alpha16))) >> 16);
+  dy = static_cast<int32_t>((r_mm * (sin_a16(th) + sa)) >> 16) - s_mm;
+  dx *= g_u02_rear_bow_sign;
+}
+
 /** PASS 20 (Direction 21 item 1): THE REAR SPAN'S SOFT TRAVEL LIMIT.
  *
  *  See kRearSpanTravelMm in manafold_art.h for the measurement this exists for.
@@ -266,9 +324,92 @@ inline int32_t span_e_presocket_delta_fx(int32_t full_delta_fx) {
  *  very excursion this pass exists to bound: the instrument must still be able
  *  to report "the solve asked for 662 mm", which is how anyone later can tell
  *  the limiter is doing work rather than sitting unused. */
+/** PASS 20 REPAIR: place every rear helper on the bowed arc.
+ *
+ *  Each helper is a delta-only child of kBHingeD sitting at a known arc-length
+ *  from carrier C, so all six take the SAME law -- the displacement of their own
+ *  station from the straight bind line to the arc. The helper runs are measured
+ *  from the gradient start, which is kLoopCarrierCoreHalfMm[3] past C, so that
+ *  offset is added once here rather than baked into six constants.
+ *
+ *  Returns false when the band is taut (chord >= arc) or straight, and the
+ *  caller keeps the old linear law -- which is the correct behaviour for a band
+ *  being pulled longer, and is what makes this change a no-op on that side.
+ */
+inline bool write_rear_bow(std::vector<int32_t>& track, size_t tbase,
+                           int32_t chord_mm) {
+  if (g_u02_rear_bow == RearBow::kLegacy) return false;
+  const int32_t arc_mm = kRearSocketFromCMm;
+  int32_t alpha16 = rear_bow_alpha16(chord_mm, arc_mm);
+  if (alpha16 <= 0) return false;
+  // Cap the turn to what the helpers can finish (see kRearBowMaxAlpha16), and
+  // recover the chord that capped arc actually spans: c' = L * sin(a)/a. The
+  // slack beyond it is left to the linear law below.
+  int32_t bow_chord_mm = chord_mm;
+  if (alpha16 > g_u02_rear_bow_max_alpha16) {
+    alpha16 = g_u02_rear_bow_max_alpha16;
+    const int64_t sa = static_cast<int64_t>(
+        zref::fx_sin(zref::angle16{static_cast<uint16_t>(alpha16)}).raw);
+    // c' = L * sin(a) / a, with a in radians = alpha16 * 2*pi/65536.
+    bow_chord_mm = static_cast<int32_t>(
+        (static_cast<int64_t>(arc_mm) * sa * 65536) /
+        (static_cast<int64_t>(alpha16) * 411775));
+    if (bow_chord_mm <= chord_mm) return false;
+  }
+  const int32_t from_c = kSpanEGradientStartMm - kKnuckleAtCMm;
+  const uint8_t bone[6] = {kBSpanDeltaEStart, kBSpanDeltaEMid,
+                           kBSpanDeltaEPreSocket, kBRearPreRootDelta,
+                           kBRearRootTurnMid, kBRearRootDelta};
+  const int32_t run[6] = {kSpanEStartRunMm, kSpanEMidRunMm,
+                          kSpanEPreSocketRunMm, kRearPreRootDeltaRunMm,
+                          kRearRootTurnMidDeltaRunMm, kRearRootDeltaRunMm};
+  // The onset blend: smoothstep over the first kRearBowOnsetMm of slack, per
+  // mille. See kRearBowOnsetMm for why this exists (it removes the arc's
+  // square-root singularity at the taut point, not a taste problem).
+  const int32_t slack_mm = arc_mm - chord_mm;
+  const int32_t onset = g_u02_rear_bow_onset_mm;
+  int32_t u = onset > 0
+                  ? (slack_mm >= onset ? 1000 : slack_mm * 1000 / onset)
+                  : 1000;
+  if (u < 0) u = 0;
+  const int32_t w = static_cast<int32_t>(
+      (static_cast<int64_t>(u) * u * (3000 - 2 * u)) / 1000000);
+  // ⚠ IT BLENDS OUT OF THE EXACT LAW THE NON-BOWED PATH WRITES, per helper --
+  // not a re-derived straight line. The first version blended toward
+  // -slack * s / arc, which is a DIFFERENT linear law from the shipped one
+  // (that distributes over the 840 mm gradient, with its own run offsets, not
+  // over the 1010 mm arc). Two different laws either side of the switch is a
+  // step, and it measured as one: R4's rail step went 0.163 -> 0.382, i.e. the
+  // "smoothing" blend made the discontinuity worse than the singularity it was
+  // added to remove.
+  // The residual the capped arc did not absorb: the band still has to reach
+  // the real chord, and that part squashes as it always did.
+  const int32_t lin_fx = fxu(chord_mm - bow_chord_mm);
+  const int32_t linear_fx[6] = {
+      span_e_start_delta_fx(lin_fx),     span_e_mid_delta_fx(lin_fx),
+      span_e_presocket_delta_fx(lin_fx), rear_preroot_delta_fx(lin_fx),
+      rear_root_turn_mid_delta_fx(lin_fx), rear_root_delta_fx(lin_fx)};
+  for (int i = 0; i < 6; ++i) {
+    int32_t ax = 0, ay = 0;
+    rear_bow_delta_mm(alpha16, bow_chord_mm, arc_mm, from_c + run[i], ax, ay);
+    const int32_t dx_fx = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(ax)) * w) / 1000);
+    // arc + residual squash, rather than a blend BETWEEN them: the two now
+    // describe different halves of the same slack and both are always present.
+    const int32_t dy_fx = static_cast<int32_t>(
+        (static_cast<int64_t>(fxu(ay)) * w) / 1000) + linear_fx[i];
+    const size_t at = tbase + static_cast<size_t>(bone[i]) * 3u;
+    track[at + 0] = dx_fx;
+    track[at + 1] = dy_fx;
+    track[at + 2] = 0;
+  }
+  return true;
+}
+
 inline void write_rear_span_delta(std::vector<int32_t>& track, size_t tbase,
                                   int32_t skin_delta_fx,
-                                  int32_t solved_delta_fx) {
+                                  int32_t solved_delta_fx,
+                                  int32_t chord_mm = 0) {
   track[tbase + static_cast<size_t>(kBSpanDeltaEStart) * 3u + 1u] =
       span_e_start_delta_fx(skin_delta_fx);
   track[tbase + static_cast<size_t>(kBSpanDeltaEMid) * 3u + 1u] =
@@ -276,6 +417,13 @@ inline void write_rear_span_delta(std::vector<int32_t>& track, size_t tbase,
   track[tbase + static_cast<size_t>(kBSpanDeltaEPreSocket) * 3u + 1u] =
       span_e_presocket_delta_fx(skin_delta_fx);
   track[tbase + static_cast<size_t>(kBSpanDeltaE) * 3u + 1u] = solved_delta_fx;
+  // ⚠ kBSpanDeltaE's X IS NOT FREE, although its comment calls the bone an
+  // unskinned receipt. Pass 20 tried to record the solved chord there so an
+  // auditor would not have to round the delta back through millimetres; it
+  // turned mspan's "SpanDeltaE and body-attached RearSocket do not meet at End"
+  // red, because that leg reads the bone's whole transform to test the closure.
+  // The chord is recovered in the gate instead. Left here as a warning.
+  (void)chord_mm;
 }
 
 /** The per-key quat/translation/scale accumulator (mirrors zixx's Rig; bodies differ). */
@@ -842,7 +990,13 @@ inline void finalize_rear_follow(zc::Clip& c) {
     // ordinary motion is bit-for-bit what it was.
     const int32_t skin_delta_fx = rear_span_limit_fx(full_delta_fx);
     write_rear_span_delta(c.local_translation, tbase, skin_delta_fx,
-                          full_delta_fx);
+                          full_delta_fx, static_cast<int32_t>(mag));
+    // PASS 20 REPAIR: when the band is SLACK, replace that linear compression
+    // with the circular arc it should actually be. write_rear_bow overwrites
+    // all six helpers' three components; the receipt written above keeps the
+    // raw solve. Taut bands fall through and keep the linear law.
+    const bool bowed = write_rear_bow(c.local_translation, tbase,
+                                      static_cast<int32_t>(mag));
 
     // Version 18 rear helpers retain the exact version-17 signed translation
     // slope. RearPre remains HingeD-rotated through the free run; RearRoot adds
@@ -860,15 +1014,18 @@ inline void finalize_rear_follow(zc::Clip& c) {
     c.quats[qbase + kBRearRootTurnMid] =
         zc::quat16_nlerp(identity, rear_relative, 2, 3);
     c.quats[qbase + kBRearRootDelta] = rear_relative;
-    c.local_translation[
-        tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
-        rear_preroot_delta_fx(skin_delta_fx);
-    c.local_translation[
-        tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
-        rear_root_turn_mid_delta_fx(skin_delta_fx);
-    c.local_translation[
-        tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
-        rear_root_delta_fx(skin_delta_fx);
+    if (!bowed)
+      c.local_translation[
+          tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
+          rear_preroot_delta_fx(skin_delta_fx);
+    if (!bowed)
+      c.local_translation[
+          tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
+          rear_root_turn_mid_delta_fx(skin_delta_fx);
+    if (!bowed)
+      c.local_translation[
+          tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
+          rear_root_delta_fx(skin_delta_fx);
     const int32_t tx_fx = mag > 0
         ? sx + signed_scaled_fx(dx, kRearSocketBurialMm, mag)
         : sx;
@@ -1032,7 +1189,9 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
         fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm);
     const int32_t skin_delta_fx = rear_span_limit_fx(full_delta_fx);
     write_rear_span_delta(c.mid_local_translation, tbase, skin_delta_fx,
-                          full_delta_fx);
+                          full_delta_fx, static_cast<int32_t>(mag));
+    const bool bowed = write_rear_bow(c.mid_local_translation, tbase,
+                                      static_cast<int32_t>(mag));
     const zc::quat16 qd =
         quat_mul(Q, c.mid_quats[qbase + kBHingeD]);
     const zc::quat16 rear_relative = quat_mul(
@@ -1043,15 +1202,18 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
     c.mid_quats[qbase + kBRearRootTurnMid] =
         zc::quat16_nlerp(identity, rear_relative, 2, 3);
     c.mid_quats[qbase + kBRearRootDelta] = rear_relative;
-    c.mid_local_translation[
-        tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
-        rear_preroot_delta_fx(skin_delta_fx);
-    c.mid_local_translation[
-        tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
-        rear_root_turn_mid_delta_fx(skin_delta_fx);
-    c.mid_local_translation[
-        tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
-        rear_root_delta_fx(skin_delta_fx);
+    if (!bowed)
+      c.mid_local_translation[
+          tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
+          rear_preroot_delta_fx(skin_delta_fx);
+    if (!bowed)
+      c.mid_local_translation[
+          tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
+          rear_root_turn_mid_delta_fx(skin_delta_fx);
+    if (!bowed)
+      c.mid_local_translation[
+          tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
+          rear_root_delta_fx(skin_delta_fx);
     const int32_t tx_fx = mag > 0
         ? sx + signed_scaled_fx(dx, kRearSocketBurialMm, mag)
         : sx;

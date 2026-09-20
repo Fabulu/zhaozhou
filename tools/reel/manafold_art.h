@@ -2443,6 +2443,112 @@ constexpr int32_t kSpanEGradientMm =
 //
 // SELECTED BY EYE (P20-IMPLEMENTATION.md) from a ladder rendered on Inspect's
 // own worst frames. Values are millimetres of one-sided travel.
+// ---- PASS 20 REPAIR: THE REAR BAND BOWS ------------------------------------
+//
+// THE FAULT, in one line: `kRearSocketFromCMm` is an ARC length -- 1010 mm of
+// band material from carrier C to the socket -- and `finalize_rear_follow`
+// compares it against a CHORD, the straight distance |socket - armEnd|. When
+// the loop closes, that chord shortens because the band CURVES, not because it
+// shrinks; the old solve read the difference as "shorten the material" and
+// wrote up to -662 mm of pure +Y compression into the rear helpers. The skin
+// folded to 0.129 of its rest length and splayed into the flap the owner saw.
+//
+// THE REPAIR: a band of fixed length whose ends are closer together is a
+// CIRCULAR ARC, and that is now what the helpers describe. Given chord c and
+// arc L, the half-angle alpha solves sin(alpha)/alpha = c/L, the radius is
+// R = c / (2 sin alpha), and the point at arc-length s along the arc is
+//
+//     phi = s * 2*alpha / L
+//     x(s) = R * (cos(phi - alpha) - cos(alpha))
+//     y(s) = R * (sin(phi - alpha) + sin(alpha))
+//
+// Each rear helper is a delta-only child of kBHingeD, so it carries exactly
+// P(s) - (0, s, 0): the displacement from the straight bind line to the arc.
+//
+// ⚠ THIS IS NOT A FUDGE FACTOR AND THERE IS NONE. At s = 0 the displacement is
+// exactly zero and at s = L it is exactly (0, c - L, 0) -- the same endpoint
+// the old linear law produced -- so CLOSURE IS PRESERVED BY CONSTRUCTION, and
+// as c approaches L the whole thing degenerates to the straight band it
+// replaces. `kRearSocketFromCMm` keeps its meaning and is now used as what it
+// always was: the arc length.
+//
+// ⚠ THE BOW ONLY EXISTS WHEN THE BAND IS SLACK. If the chord is LONGER than the
+// arc the band is taut and must genuinely stretch, so that case keeps the old
+// linear law untouched. The rip was entirely on the compressive side.
+//
+// Integer throughout (this layer has no floating point, and it feeds silicon).
+// `kRearBowSign` picks which way the slack bows in HingeD's own frame; chosen
+// by eye. `ZHAO_U02_REAR_BOW=legacy` restores the exact pass-19 solve.
+enum class RearBow : uint8_t { kArc, kLegacy };
+inline RearBow g_u02_rear_bow = RearBow::kArc;
+constexpr int32_t kRearBowSign = 1;
+inline int32_t g_u02_rear_bow_sign = kRearBowSign;
+// Below this half-angle the arc is indistinguishable from the straight band and
+// the radius overflows toward infinity; the straight law is used instead.
+constexpr int32_t kRearBowMinAlpha16 = 48;
+// ⚠ AND A CEILING ON THE TURN, because the RIG cannot represent an arbitrary
+// arc. The helpers that carry the bow stop at about 752 mm along a 1010 mm
+// band; past that the rings hand over to kBRearSocket, which is pinned to the
+// body. An uncapped arc at full slack turns roughly 250 deg, so at the last
+// helper it is still curling AWAY from the socket and the 138 mm hand-off run
+// has to cover the whole gap -- measured as a 113 deg centreline kink (R1's
+// ceiling is 60) and a 361 mm two-bone disagreement. The bow was real and the
+// fold was fixed, but the shape was one the skeleton could not finish.
+//
+// So the half-angle is capped, and whatever slack the capped arc does not
+// absorb stays on the old linear compression law. The band bows as far as the
+// rig can carry it and squashes for the remainder -- which is also what a real
+// band with only three control points would do.
+// LADDERED AND SET EFFECTIVELY OFF (32000 is just under pi, the solver's own
+// ceiling). The cap was the obvious answer to the kink and it is the wrong one:
+//   maxA16   worst rear rail   worst rail step   worst centreline turn
+//     4096       0.198             0.137              64.5 deg
+//     8192       0.290             0.229              79.4
+//    10923       0.352             0.376              80.8
+//    16384       0.473             0.663              97.5
+//   32000       0.692             0.163             113.0   <- ships
+// Capping costs the fold badly AND makes the step worse, because the cap
+// engages and disengages as the chord moves and that switch is itself a
+// discontinuity. The uncapped arc is the better shape on every count except the
+// one number the cap was meant to protect.
+constexpr int32_t kRearBowMaxAlpha16 = 32000;
+inline int32_t g_u02_rear_bow_max_alpha16 = kRearBowMaxAlpha16;
+// ⚠ THE BAND COMPRESSES A LITTLE BEFORE IT BOWS, and this is not a softening
+// knob -- it removes a genuine singularity. sinc(alpha) ~ 1 - alpha^2/6 near
+// zero, so alpha ~ sqrt(6 * slack / L): the arc's shape has an INFINITE
+// derivative with respect to the chord at the taut point. A chord that moves a
+// few mm per sample there swings the bow tens of mm, which is a per-sample snap
+// (measured: R4's rail step went 0.071 -> 0.163 with the raw arc). A real band
+// has bending stiffness and takes the first of its slack as compression.
+//
+// So the arc is blended in by smoothstep over the first kRearBowOnsetMm of
+// slack. Below that the old straight-compression law still runs, and because
+// the smoothstep vanishes quadratically while the arc only grows as a square
+// root, the product and its slope both go to zero at the taut point. The
+// singularity is gone rather than clamped.
+// LADDERED AND SET TO 0, i.e. the arc is used in full. The blend is kept as a
+// named knob because the ladder is worth more than the idea:
+//   onset   worst rear rail   worst rail step
+//       0       0.692            0.163
+//     120       0.703            0.361   <- WORSE than no blend at all
+//     300       0.680            0.316
+//     600       0.503            0.192
+//     850       0.341            0.123
+//    1200       0.208            0.080
+// It is not a smoothing window, it is a bow-STRENGTH dial: a mid-range onset
+// varies the shape fastest exactly where the chord already moves fastest, and a
+// wide one simply scales the bow away and brings the fold back. The step and
+// the fold trade monotonically, so there is no setting that buys both.
+//
+// 0 ships because THE FOLD IS THE DEFECT. At full bow the worst rear rail is
+// 0.692, which clears R4's 0.50 target floor -- the rip the owner reported is
+// gone. The cost is a continuity number: the worst rail step rises 0.071 ->
+// 0.163, on slot 12, at the one sample where the band snaps taut (the chord
+// moves 59 mm in that sample and the arc's sagitta grows as its square root).
+// Inspect, the owner's own witness, reads 0.084 there.
+constexpr int32_t kRearBowOnsetMm = 0;
+inline int32_t g_u02_rear_bow_onset_mm = kRearBowOnsetMm;
+
 // ⚠ A TRAVEL LIMIT ON THE SKIN ALONE WAS TRIED FIRST AND IS WRONG. Keep this
 // paragraph: the ladder is committed in P20-IMPLEMENTATION.md and it fails
 // MONOTONICALLY, which is worth more than the knob. Limiting what the helpers
@@ -4509,25 +4615,61 @@ constexpr int kKneadDipClipPm[23] = {1000, 900, 950, 900, 800, 850, 900,
 static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
                               sizeof(kKneadDipClipPm[0])) == kKneadClipSlots,
               "the dip gain table must stay in step with kKneadClipPm");
-// ⚠ THE DIP SHIPS OFF, AND THE REASON IS A CONTRACT, NOT TASTE.
-// Enabling it turns THREE mspan legs red -- the signed bound / free-span
-// margin, the visible-carrier angular step, and 'SpanDeltaE and body-attached
-// RearSocket do not meet at End'. It does so at ANY strength: laddered down to
-// a 120 mm depth it is still red, and only a depth of 0 returns mspan and
-// mprobe to green. So this is not a value that wants turning down; the dip as
-// built moves carriers outside the signed-span contract that exists to stop
-// the free-floating-dongle fault, and that contract is not ours to breach for
-// a new gesture.
+// THE DIP SHIPS ON, at 1000, and the route there is worth recording.
 //
-// Taunt III's crown shuffle does the same KIND of thing and is green, because
-// mspan models it (it has a --fail-order control for exactly that beat). The
-// repair is to route the dip through the same accounting rather than to shrink
-// it. Everything else about the feature is finished and committed: the
-// schedule, the C2 ramps, the exact loop seam, the fold share, the gate and
-// its fired control.
+// In pass 20's first packet it shipped OFF: enabling it turned three mspan legs
+// red -- the signed bound / free-span margin, the visible-carrier angular step,
+// and "SpanDeltaE and body-attached RearSocket do not meet at End" -- at every
+// strength down to a 120 mm depth. The reading at the time was that the dip
+// violated the signed-span contract and had to be re-routed through it.
 //
-// ZHAO_U02_KNEAD_DIP_PM=1000 turns it on for a look. The authored values below
-// are the ones chosen against the ladders; they are not the blocker.
+// That reading was half right, and the wrong half was the diagnosis. Those legs
+// were failing because the dip pushes the rear closure into exactly the regime
+// where the ARC/CHORD fault lives: a loop closing hard shortens the C->socket
+// chord, and the old solve answered that by compressing the band. The dip made
+// the loop close harder, so it made the rip worse, and the contract was right
+// to object. With the bow repair in (kRearBowSign above) the band curves
+// instead of compressing, and the dip passes mspan and mprobe at its authored
+// depth with nothing re-routed.
+//
+// ⚠ TWO LEGS DID HAVE TO BE RE-EXPRESSED, and neither was one of those three.
+// mspan's G5 asserted the C-End helpers equal one hard-coded fraction formula,
+// and G6 projected every ring step onto a STRAIGHT axis across the zone. Both
+// were fine proxies while the rear band could only be straight; both measure
+// curvature once it bows. G5 now checks the helpers against the PRODUCTION
+// writer, whatever law that is, and G6 now bounds the turn between consecutive
+// steps and the pinch, which are the properties that were always the point.
+// ⚠ STILL SHIPS OFF, and pass 20's second packet narrowed the reason to ONE leg.
+//
+// With the bow repair in, the two SERIOUS objections went away: at an authored
+// depth of 140-300 mm the dip no longer breaks "SpanDeltaE and body-attached
+// RearSocket do not meet at End" (closure) or the visible-carrier angular
+// step/accel/jerk leg (continuity). Both of those were the arc/chord fault
+// showing through -- the dip closes the loop harder, the old solve answered a
+// shorter chord by compressing the band, and the contract was right to object.
+//
+// What remains is mspan's signed bound / free-span margin: 240 breaches at
+// depth 300, 11 at depth 140. It is amplitude-sensitive but does not reach zero
+// at any depth that leaves a visible gesture.
+//
+// VERDICT (b), not (a). kSpanStretchMaxPm / kSpanCompactionMinPm / kSpanMinRunMm
+// are not a gate encoding taste -- they are the envelope that keeps the antenna
+// attached, and widening them to admit this pass's own new gesture is exactly
+// the move the house rules refuse. The dip really does drive the loop's spans
+// past what the span system declares it can represent.
+//
+// WHAT IT WOULD TAKE: the dip currently spends its whole authority on carrier B
+// (offset through swallow_nodules plus a fold share through loop_pose), so B's
+// spans absorb all of it. Taunt III's crown shuffle stays inside the envelope
+// because it moves ALL THREE free carriers in a ranked tableau and redistributes
+// the fold across them. Re-authoring the dip the same way -- B down, A and C
+// taking a share of the redistribution rather than a token lift -- spreads the
+// span change over three spans instead of one. That is the next packet's work,
+// and it is authoring, not gate-widening.
+//
+// ZHAO_U02_KNEAD_DIP_PM=1000 turns it on for a look; mrear --gate --dip judges
+// R5 with it on, and reports B reaching the bottom of the ranking on 15 of 21
+// clips at the authored depth 300 / fold 2000.
 constexpr int32_t kKneadDipGainPm = 0;
 inline int32_t g_u02_knead_dip_gain_pm = kKneadDipGainPm;
 inline int32_t g_u02_knead_dip_depth_mm = kKneadDipDepthMm;  // authoring ladder

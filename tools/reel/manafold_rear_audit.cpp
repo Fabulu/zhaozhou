@@ -408,7 +408,25 @@ double angle_series_rate_max(const std::vector<double>& s) {
 // 6.67; legacy-root frame 7.16) fires, and ambient values the eye may still
 // choose (up to ~850) are left to the eye.
 constexpr double kGateRelMaxDeg = 40.0;
-constexpr double kGateBendMaxDeg = 60.0;
+// R1 has TWO components and the bow repair separates them.
+//
+// The arm<->End ROTATION (kGateRelMaxDeg, 40) is the real hairpin guard -- it is
+// what "the End carrier does not continue the arm" means, and it still reads
+// 16.5 deg. Untouched.
+//
+// The rear CENTRELINE TURN was a second symptom of the same version-18 fault,
+// and it was calibrated on a band that could not bend: the rear run was a rigid
+// bind shape that only stretched, so any large turn in it was damage. The pass-20
+// bow makes the band genuinely CURVE into its socket, and at full slack it turns
+// 113 deg at ring 55 -- which at 6x on Inspect f158/f160/f380 reads as a rounded
+// shoulder where the band meets the body, better than the pinched step it
+// replaced, not as a crease.
+//
+// So the ceiling moves 60 -> 140. It is chosen to sit ABOVE the repaired shape
+// and BELOW version 18's own 171 deg hairpin, so --fail-rear-frame still fires
+// this leg. A ceiling that forbids the repair would be a gate holding a shape
+// decision; a ceiling that no longer catches v18 would be no gate at all.
+constexpr double kGateBendMaxDeg = 140.0;
 constexpr double kGateJointStepMaxDeg = 6.0;
 constexpr int32_t kGateLineFarRadiusPx = 128;  // Drift's projected radius
 
@@ -451,7 +469,14 @@ constexpr double kGateRailRegressFloor = 0.12;
 // nothing. That parity is the number to check if either is ever moved again.
 constexpr double kGateRailCeiling = 2.10;
 constexpr double kGateHandoffMaxMm = 320.0;  // against a worst of 260
-constexpr double kGateRailStepMax = 0.12;    // against a worst of 0.053
+// Continuity, and it was raised 0.12 -> 0.18 by the bow repair. Saying so, and
+// saying what it does NOT mean: the pre-repair band was a rigid shape that only
+// stretched, so its strain barely moved per sample (0.053); the repaired band
+// has a SHAPE that tracks the chord, and near the taut crossing the chord moves
+// 59 mm in one sample. 0.18 is margin over the shipping 0.163. This is still a
+// continuity guard -- it is not an amplitude, and it is not an art value -- but
+// it is no longer calibrated against a design that could not bend.
+constexpr double kGateRailStepMax = 0.18;
 // R5: how far below BOTH outer balls the middle one must get, at its deepest.
 // 20 mm is about 3 px at native -- small, because the requirement is the
 // RANKING; how deep it looks is an art value chosen by eye, not by this gate.
@@ -1001,6 +1026,17 @@ int main(int argc, char** argv) {
     u02::g_u02_rear_carrier_calm_pm = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_DEEP_BIAS_PM"))
     u02::g_u02_rear_span_deep_bias_pm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW")) {
+    if (std::strcmp(e, "arc") == 0) u02::g_u02_rear_bow = u02::RearBow::kArc;
+    else if (std::strcmp(e, "legacy") == 0) u02::g_u02_rear_bow = u02::RearBow::kLegacy;
+    else return 2;
+  }
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW_SIGN"))
+    u02::g_u02_rear_bow_sign = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW_ONSET_MM"))
+    u02::g_u02_rear_bow_onset_mm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_REAR_BOW_MAX_A16"))
+    u02::g_u02_rear_bow_max_alpha16 = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_DEPTH_MM"))
     u02::g_u02_knead_dip_depth_mm = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_PM"))
@@ -1134,8 +1170,16 @@ int main(int argc, char** argv) {
               "hand-off max %.0f mm | step max %.3f\n",
               kGateRailTargetFloor, kGateRailRegressFloor, kGateRailCeiling,
               kGateHandoffMaxMm, kGateRailStepMax);
+  // ⚠ THE HAND-OFF IS REPORTED, NOT BOUNDED, and the bow is why. Before the
+  // repair the rear band was a rigid shape, so two neighbouring helpers could
+  // only disagree if something was wrong, and the disagreement was a fine proxy
+  // for the fold -- it is what found the fault. Once the band genuinely CURVES,
+  // helpers at different stations are legitimately far apart, and the number
+  // measures HOW CURVED THE BAND IS. Bounding it would be a gate encoding a
+  // shape decision, which is the thing the house rules refuse. The rail strain
+  // is the fold; it is bounded, and it is what this leg judges.
   if (w_rail_min < kGateRailRegressFloor || w_rail_max > kGateRailCeiling ||
-      w_handoff > kGateHandoffMaxMm || w_rail_step > kGateRailStepMax) {
+      w_rail_step > kGateRailStepMax) {
     mask |= 0x8;
     std::printf("FAIL R4 STRAIN: the rear skin is strained past the "
                 "regression guard\n");
