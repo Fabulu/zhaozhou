@@ -15667,9 +15667,25 @@ module zhao_console_core
     // its program reads as whatever the front cleared the register to.
     //
     // WHAT IS NOT WIDE ENOUGH, SAID HERE SO IT IS NOT DISCOVERED LATER: the
-    // WARP profile is 14 in. GEOM.WARP is NOT BUILT AT ALL (the register's own
-    // list), so nothing offers a warp record today; the day it does, this pair
-    // moves to 14/7 and the adapters' elaboration guards are what will say so.
+    // WARP profile is FIFTEEN in, not fourteen. GEOM.WARP is NOT BUILT AT ALL
+    // (the register's own list), so nothing offers a warp record today; the day
+    // it does, this pair moves to 15/7 and the adapters' elaboration guards are
+    // what will say so.
+    //
+    // THIS COMMENT SAID 14 UNTIL 2026-09-20, and that was not a typo with no
+    // consequence -- it is the sentence that would have sized the lane bus.
+    // `spec/form/field-ir.md` 7.1 listed FIFTEEN warp input fields and then
+    // wrote "(14)" after them; the arithmetic was wrong and the fields were
+    // right, and the wrong number is the one that reached this file. Corrected
+    // under decision W01 of the owner directive
+    // `reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt` (owner commit
+    // 4c256137), ratified in reports/OWNER-RATIFICATION-20260920-WARP.md.
+    //
+    // Count them: px,py,pz + nx,ny,nz + a0..a3 + time + p0..p3 = 15. Building
+    // to 14 drops p3, and by THIS BLOCK'S OWN RULE eight lines up -- "a lane it
+    // cannot present is a lane its program reads as whatever the front cleared
+    // the register to" -- that does not read as a missing lane. It reads as a
+    // plausible number nobody supplied, which is the direction nobody audits.
     .IN_LANES (13),
     .OUT_LANES(7),
 

@@ -126,3 +126,64 @@ reach the new collision state.
 | R98 | **R83 is implemented NOWHERE, and `zhao_view_projq88` was built the same day in the Q8.8 container R83 rejects** -- with a saturation counter its own header calls "extreme" that actually fires at **53.13 deg hfov on Duo**. Widening must now land in TWO ports, not one | **(coordinator)** A ruling written in the morning and a block built in the afternoon of the same day, disagreeing, with neither aware of the other -- the coordination failure is MINE. R83 amended R73 in the rulings file and the MEASURE lane was already mid-build against the original. **Rulings that change a FORMAT must be routed to every live lane, not filed.** Fix both ports together. And the chain is longer than anyone has stated: I14's viewport rect -> `zhao_view_projscale` -> `zhao_view_projq88` -> R83 -> MEASURE.GOVERNOR -> TERRAIN.LOD, **five links**, so "cam*_scale_i now exists" is true and nearly useless on its own. |
 | R99 | D-PRODTOP-A: `zhao_prod_top` wires `zhao_geom_project` AND `zhao_terrain_project`, superseded by `zhao_proj_subsystem` under owner ruling R3 -- pricing **~12,267 ALM and 66 DSP of projector the console does not contain** while NOT pricing the 9,135 ALUT / 39 DSP one it does. Two written laws collide: `prod_manifest.yml` defers adoption *"after the composed fit closes"*, R86 says the fit must not measure superseded modules | **(coordinator)** I checked which is actually true of the machine before choosing, and it decides itself: **`zhao_proj_subsystem` IS in the console core's closure and both v1 projectors are NOT.** The shipped machine is already correct; only the instrument that measures it is wrong. So the manifest's deferral is not protecting anything -- it is describing a state that no longer exists, and honouring it would mean the completion fit prices two projectors the console does not have and omits the one it does. **ADOPT BEFORE THE FIT.** One manifest edit, then regenerate. The deferral was written before R86 and before the composition; it does not survive either. |
 | R100 | D-PRODTOP-B: `zhao_raster_attrdiv_svc` and `zhao_raster_attrstep` both wire `zhao_raster_attrdiv` while the console composes `zhao_raster_attrdiv_v2` -- two rounding laws for one quantity, and the now-fatal superseded check counts both as production roots | **(provisional, coordinator)** Same check, same answer: **`zhao_raster_attrdiv_v2` is in the core's closure and v1 is not.** These two roots are standalone fit targets, so they do not put a wrong module in the shipped machine -- what they do is **produce measurements that describe a rounding law the console does not use**, which is the quieter half of the same defect. Move both to v2. **If that is a BEHAVIOUR change rather than a swap, the difference IS the owner's tie-law decision and must be reported with NUMBERS** -- the same tie-law `zhao_raster_attrwalk` is already waiting on -- not assumed either way. What is NOT acceptable is reclassifying them alongside the ten retained pre-Packet-B oracles to make the gate green: that is making the instrument agree with the tree by editing the instrument. |
+| R101 | **A LIVE, SHIPPING CORRECTNESS DEFECT IN THE SHARED FIELD HOST, found by the WARP lane: `cur_out_seen == '0'` tests whether ANY output was written, not whether ALL REQUIRED ones were.** A point that writes 5 of 6 declared lanes reports **SUCCESS**, with the sixth reading the zero that was cleared at grant. That violates W10 in RTL every profile shares -- not Warp's, not new, and not hypothetical | **(coordinator)** This is the most consequential find of the run and it has the signature this file keeps describing: **the author's comment states the exact hazard and then guards only the all-zero case**, and **the proof that it is live was already committed and GREEN** -- `field_host_directed` case 1 loads a program writing 1 of 4 declared lanes and asserts "status is OK". A passing test documenting the defect, for however long it has been there. The lane did NOT add a test asserting the bug, which is right: CLAUDE.md forbids it, because such a test passes only while the defect exists. **Repair before ANYTHING is measured on this host** -- a silent wrong value in a field result is worse than a refusal, and every profile inherits it. The header word has **64 free bits** for a required-output mask, and `mask == 0` preserves today's behaviour exactly, so the repair is additive. Assert the CORRECT behaviour (all declared lanes present, or a counted refusal) and keep the positive control separate. |
+| R102 | **`zref::GeomWarp` was a PHANTOM REFERENCE** -- the ledger has named it as GEOM.WARP's `reference_model` since the block was specified and **no such symbol ever existed** (item 9 of `PHANTOM_REFERENCES.md`, so this class was already known and catalogued) | **(coordinator)** Second instance in two lanes, after R94's `zref::forge::shadow_hull`. That there is a FILE listing these means the class was known and nobody was gating on it -- the `.gitignore` shape again: written down, and nothing reads it back. **Make it a check**, as R94 already asks: every `reference_model:` in `blocks.yml` must resolve to a symbol that exists. Until then, `uncashed_cheques.py` check 3 -- one of the few defences against a second implementation of ratified arithmetic -- is silently blind to every block whose declared model is a phantom, which is exactly the set most likely to grow one. The lane built the real `zref::geom_warp` (102 directed checks over real `.zprog` fixtures through the real validator, three mutants fired first), so this one is discharged rather than merely reported. |
+| R103 | **NINE of the directive's shared Field prerequisites are ABSENT and one is partial**, verified rather than assumed: P1 lanes (`IN_LANES=13` vs 15, in THREE places), P2 no free client port, P3 sparse output map, P4 all-outputs completion (see R101), P5 per-context uniforms, P7 `INSTR_N=32` vs a 48-op ceiling, P8 handle-to-slot binding, P9. P6 partial. **And P9 means MY R91 RULED ON A LEVER THAT DOES NOT EXIST** -- the lane verified `gz/carriers` carries zero field-RTL delta | **(coordinator)** R91 took the "uniforms once per association" fast path on the strength of the contract asking for it; the contract asks, and nothing implements. My ruling stands as a DIRECTION and must stop being quoted as an available lever. Warp measures **51 + T_run clocks/point against Earth's 49**, so it inherits the 481% wall rather than escaping it -- the third throughput wall this run, and the first that was ruled on before being checked. **The honest position: GEOM.WARP is architected, its reference model is built and tested, and it cannot compose until nine shared Field prerequisites are built.** The lane composed NOTHING rather than tying its Field port off, which would have converted an honestly-absent entry into a tie-off. |
+
+## R104 — the attrdiv v2 adoption is FUNDED, and its blocker is smaller than reported
+
+**2026-09-20, coordinator.** PROJADOPT refused the `zhao_raster_attrdiv` →
+`zhao_raster_attrdiv_v2` swap and named the blocker correctly in kind: v1
+publishes `rem_o` and both consumers seed the proven step recurrence with it, so
+a swap that dropped it would DELETE FUNCTION — the exact move rule 1 forbids.
+The refusal was right. **The cost estimate attached to it was not**, and the
+difference decides whether this is worth a slot.
+
+**v2 already computes the remainder.** `zhao_raster_attrdiv_v2.sv` carries
+`rem_r [48:0]` at line 79 and runs the full restoring recurrence at 148–173
+(`rem_shift_c`, the three `d1_c`/`d2_c`/`d3_c` compares, `rem_next_c`). What it
+does not do is expose it. So the repair is **publishing an internal signal that
+is already correct by construction**, not implementing new arithmetic — and the
+distinction matters, because a remainder that has to be written is a
+correctness risk needing its own oracle, while one that already exists needs a
+port and a width check.
+
+**Two real questions the lane must answer, neither of them arithmetic:**
+
+1. **The width is not the same.** v1's `rem_o` is `[47:0]`; v2's `rem_r` is
+   `[48:0]`. After the final restoring step the remainder is less than the
+   divisor and should fit, but *should* is not a measurement — **prove the top
+   bit is clear at the point of publication**, by stimulus, and if it is not,
+   the port is 49 bits and every consumer widens. Do not assume the truncation
+   is safe because the mathematics says so; the mathematics describes the
+   converged value, and a port publishes whatever is in the register.
+2. **The refusal semantics differ.** v1 has `q_overflow_o`; v2 has
+   `q_saturated_o` AND `q_error_o`. Those are not the same signal renamed —
+   v1 REFUSES where v2 SATURATES. Every consumer of `q_overflow_o` needs an
+   explicit mapping decision, written down, and a test that exercises the
+   overflow path on both sides. This is the part that can silently change
+   behaviour, not the remainder.
+
+**Why this is funded rather than queued behind the gaps.** These two sites —
+`zhao_raster_attrdiv_svc` and `zhao_raster_attrstep` — are the LAST
+superseded-in-a-production-root pair in the tree (4 → 2 after R99 retired the
+two projector shells, and these are the 2). R86 made that check fatal across all
+72 roots precisely so the console cannot be fitted while composing a superseded
+module. **It is therefore a PRE-FIT BLOCKER, not a gap**, and it outranks queue
+position.
+
+**The rounding question is settled and must not be re-litigated.** R100
+established over 640,000 sampled pairs that v2 matches
+`zref::render::div_rhu_s128` EXACTLY in every sweep, while v1 disagrees on 100%
+of negative exact halves with an even divisor — a rate of about 1/(4d), which is
+over 10% on a one-subpixel triangle. `spec/qformats.md:53`, `:147` and
+`rast.cpp:31-41` all say round-half-up, and the owner ruled this same shape on
+2026-09-09 ("qformats governs", `FORGE.PRIM.md:105`). My earlier framing that
+"the repo's stated law and zref disagree" was FALSE and is withdrawn. Adopting
+v2 is a bug fix, not a preference.
+
+**No owner decision is owed here.** PROJADOPT listed "funding the `rem_o`
+repair" as owed to the owner; it is a scheduling call inside a run whose
+standing goal is to reach zero and then fit, so I am making it. The owner
+decisions that remain genuinely owed are the two contact sheets (R37, R65) and
+the seven unresolved `reference_model:` rows.
