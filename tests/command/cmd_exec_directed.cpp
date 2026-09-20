@@ -49,6 +49,10 @@
 #include "zhao_sim.hpp"
 #include "zref/zref_frame.hpp"
 #include "zref/zref_post.hpp"
+// `zref::render::viewports_of()` -- the ORACLE the viewport lowering is
+// differentialled against (video_rules 3.2). It lives in reference/src rather
+// than the public headers; a dozen tests already reach it this way.
+#include "zrender/internal.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -148,6 +152,9 @@ struct Run {
   // fail -- it would move those numbers to 19 and 38 and read as a bug in the
   // matrix walk.
   std::vector<CfgWrite> eyes;
+  // The viewport rect, cfg addresses 16 and 17 (2026-09-20).
+  std::vector<CfgWrite> rects;
+  uint32_t viewport_refused = 0;
   std::vector<StampOut> stamps;
   std::vector<DrawOut> draws;
   std::vector<UploadOut> uploads;
@@ -357,6 +364,12 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     if (cfg_fires) {
       if (w.addr == 18) r.profiles.push_back(w);
       else if (w.addr >= 19 && w.addr <= 21) r.eyes.push_back(w);
+      // The VIEWPORT RECT, cfg 16/17. Kept OUT of `cfg` for exactly the reason
+      // the profile and the eye are: `cfg` means "a matrix word" and eleven
+      // checks count its size against 16 and 32. Folding two more writes in
+      // would not fail -- it would move those numbers to 18 and 36 and read as
+      // a bug in the matrix walk.
+      else if (w.addr == 16 || w.addr == 17) r.rects.push_back(w);
       else r.cfg.push_back(w);
     }
     if (draw_fires) r.draws.push_back(d);
@@ -408,6 +421,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.grade_written = dut.grade_entries_written_o;
   r.post_refused = dut.post_refused_o;
   r.grade_overflow = dut.grade_overflow_o;
+  r.viewport_refused = dut.viewport_range_refused_o;
   return r;
 }
 
@@ -415,7 +429,8 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
 
 std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t first_word,
                                    uint32_t gtok = 0, uint32_t ftok = 0,
-                                   int32_t eye_x = 0, int32_t eye_y = 0, int32_t eye_z = 0) {
+                                   int32_t eye_x = 0, int32_t eye_y = 0, int32_t eye_z = 0,
+                                   uint8_t viewport_id = 0) {
   zhao_abi::ZhRecordSetView rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
   // FROM THE TYPE, NOT A LITERAL. This was `96` until ruling R63 grew the
@@ -425,7 +440,9 @@ std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t 
   rec.hdr.record_bytes = static_cast<uint16_t>(sizeof(zhao_abi::ZhRecordSetView));
   rec.hdr.source_id = source_id;
   rec.payload.view_id = view_id;
-  rec.payload.viewport_id = 0;
+  // A SEPARATE FIELD from `view_id` -- byte 17 against byte 16. `view_id`
+  // picks the bank; `viewport_id` picks the rectangle out of video_rules 3.2.
+  rec.payload.viewport_id = viewport_id;
   rec.payload.flags = 0;
   // Sixteen distinguishable words, written out BY NAME in declaration order.
   // Not a loop over a pointer into the struct: the point of this stimulus is
@@ -538,12 +555,15 @@ std::vector<uint8_t> drawFormRecord(uint32_t source_id, uint32_t form, uint32_t 
 
 // SetPresentationContract, the token CEILING (R18/R33), by the generated packer.
 std::vector<uint8_t> contractRecord(uint32_t g0, uint32_t g1, uint32_t f0, uint32_t f1,
-                                    uint32_t sh) {
+                                    uint32_t sh,
+                                    zhao_abi::video_mode mode = zhao_abi::VIDEO_DUO) {
   zhao_abi::ZhRecordSetPresentationContract rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_PRESENTATION_CONTRACT;
   rec.hdr.record_bytes = 48;
   rec.hdr.source_id = 0x31u;
-  rec.payload.mode = zhao_abi::VIDEO_DUO;
+  // The mode is what indexes the viewport table in the executor as well as
+  // what retimes the raster in the scheduler. Both parse this one byte.
+  rec.payload.mode = mode;
   rec.payload.view_count = 2;
   rec.payload.geometry_tokens[0] = g0;
   rec.payload.geometry_tokens[1] = g1;
@@ -1708,6 +1728,155 @@ int main(int argc, char** argv) {
     if (!r.tflds.empty())
       check(r.tflds[0].cmd == 0xABCDu, "case31: and the low half is what is carried", 0xABCDu,
             r.tflds[0].cmd);
+  }
+
+  // ---- 32. THE VIEWPORT RECT LANDS, and it is the oracle's rectangle ------
+  //
+  // `SetView.viewport_id` indexes `spec/video_rules.md` 3.2, whose executable
+  // form is `zref::render::viewports_of()`. The EXPECTATION BELOW IS TAKEN
+  // FROM THE ORACLE, not retyped from the table: a hand-copied rectangle here
+  // would agree with a hand-copied rectangle in the RTL and the pair would
+  // prove nothing. This is the differential the lowering owes.
+  //
+  // The packing is `zhao_project_core`'s: cfg 16 = {y0[27:16], x0[11:0]},
+  // cfg 17 = {h[27:16], w[11:0]}.
+  {
+    auto expect = [](zhao_abi::video_mode m, uint32_t id, uint32_t& org, uint32_t& ext) {
+      zref::render::Viewport vp[2];
+      const uint32_t n = zref::render::viewports_of(m, vp);
+      if (id >= n) { org = 0; ext = 0; return false; }
+      org = (static_cast<uint32_t>(vp[id].y) << 16) | static_cast<uint32_t>(vp[id].x);
+      ext = (static_cast<uint32_t>(vp[id].h) << 16) | static_cast<uint32_t>(vp[id].w);
+      return true;
+    };
+
+    struct Row { zhao_abi::video_mode mode; uint8_t id; const char* name; };
+    const Row rows[] = {
+        {zhao_abi::VIDEO_Z60, 0, "Z60 view 0"},
+        {zhao_abi::VIDEO_STORM, 0, "Storm view 0"},
+        {zhao_abi::VIDEO_DUO, 0, "Duo view 0"},
+        {zhao_abi::VIDEO_DUO, 1, "Duo view 1"},
+    };
+
+    for (const Row& row : rows) {
+      zhao::ZhaoFrameBuilder b;
+      b.begin_frame(1, 0, 0, 0);
+      b.append_record(contractRecord(0, 0, 0, 0, 0, row.mode));
+      b.append_record(setViewRecord(0, 0x0000'00A0u, 0x0011'0000, 0, 0, 0, 0, 0, row.id));
+      b.end_frame(0);
+      const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+      uint32_t org = 0, ext = 0;
+      (void)expect(row.mode, row.id, org, ext);
+
+      std::string tag = std::string("case32[") + row.name + "]";
+      check(r.rects.size() == 2, (tag + ": both rect words land, once each").c_str(), 2,
+            r.rects.size());
+      check(r.viewport_refused == 0, (tag + ": an in-range id is not refused").c_str(), 0,
+            r.viewport_refused);
+      // The matrix is untouched by the two extra steps.
+      check(r.cfg.size() == 16, (tag + ": the matrix walk is still sixteen words").c_str(), 16,
+            r.cfg.size());
+      if (r.rects.size() == 2) {
+        check(r.rects[0].addr == 16, (tag + ": the origin goes to cfg 16").c_str(), 16,
+              r.rects[0].addr);
+        check(r.rects[1].addr == 17, (tag + ": the extent goes to cfg 17").c_str(), 17,
+              r.rects[1].addr);
+        check(r.rects[0].data == org, (tag + ": origin matches viewports_of()").c_str(), org,
+              r.rects[0].data);
+        check(r.rects[1].data == ext, (tag + ": extent matches viewports_of()").c_str(), ext,
+              r.rects[1].data);
+        // ORDERING, and it is the whole reason the rect is steps 20/21: the
+        // rectangle must not land before the camera it belongs to, or a
+        // projector could run one cycle with this view's box and the last
+        // view's matrix.
+        check(r.rects[0].cycle > r.cfg.back().cycle,
+              (tag + ": the rect lands AFTER the matrix, never before").c_str(), 1,
+              r.rects[0].cycle > r.cfg.back().cycle ? 1 : 0);
+      }
+    }
+  }
+
+  // ---- 33. AN OUT-OF-RANGE viewport_id IS REFUSED, NEVER ALIASED ----------
+  //
+  // POSITIVE CONTROL FOR `viewport_range_refused_o`. The state is legally
+  // reachable -- Z60 and Storm declare exactly one viewport, so id 1 is one
+  // past the end of the table -- so this needs stimulus and not a mutant.
+  //
+  // And it asserts the CORRECT behaviour beside the counter, which is the law
+  // about not writing a test that asserts the bug: the rect is not written,
+  // the bank keeps whatever it had, and THE CAMERA IN THE SAME RECORD STILL
+  // LANDS. Refusing a rectangle must not refuse a view.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(contractRecord(0, 0, 0, 0, 0, zhao_abi::VIDEO_Z60));
+    b.append_record(setViewRecord(0, 0x0000'00A1u, 0x00CC'0000, 0, 0, 0, 0, 0, /*viewport*/ 1));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.viewport_refused == 1, "case33: the refusal is COUNTED, once", 1, r.viewport_refused);
+    check(r.rects.empty(), "case33: and no rectangle is written at all", 0, r.rects.size());
+    // The camera survives the refusal.
+    check(r.cfg.size() == 16, "case33: the matrix still lands, all sixteen words", 16,
+          r.cfg.size());
+    check(r.views == 1, "case33: and the view still counts as written", 1, r.views);
+    check(r.refused == 0, "case33: view_range_refused_o is a DIFFERENT field and stays still", 0,
+          r.refused);
+    if (r.cfg.size() == 16)
+      check(r.cfg[0].data == 0x00CC'0000u, "case33: with this record's own first word",
+            0x00CC'0000u, r.cfg[0].data);
+  }
+
+  // ---- 34. THE SAME id IS IN RANGE IN DUO AND OUT OF IT IN Z60 ------------
+  //
+  // NEGATIVE CONTROL FOR CASE 33, and the check that the counter is reading
+  // the MODE rather than merely the id. One byte of stimulus differs between
+  // this case and the one above; the verdict inverts. A refusal that fired on
+  // `id != 0` regardless of mode would pass case 33 and fail here.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(contractRecord(0, 0, 0, 0, 0, zhao_abi::VIDEO_DUO));
+    b.append_record(setViewRecord(0, 0x0000'00A2u, 0x00DD'0000, 0, 0, 0, 0, 0, /*viewport*/ 1));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.viewport_refused == 0, "case34: id 1 is legal in Duo and is NOT refused", 0,
+          r.viewport_refused);
+    check(r.rects.size() == 2, "case34: so both rect words land", 2, r.rects.size());
+    if (r.rects.size() == 2) {
+      // Duo's view 1 is at y = 192, NOT x = 256 -- the stacked stored surface.
+      zref::render::Viewport vp[2];
+      (void)zref::render::viewports_of(zhao_abi::VIDEO_DUO, vp);
+      const uint32_t org = (static_cast<uint32_t>(vp[1].y) << 16) | static_cast<uint32_t>(vp[1].x);
+      check(r.rects[0].data == org, "case34: and it is the STACKED origin, y=192 and not x=256",
+            org, r.rects[0].data);
+    }
+  }
+
+  // ---- 35. NO CONTRACT IN THE PACKET: the mode is STICKY ------------------
+  //
+  // `pc_mode` persists across packets like the token ceilings beside it, and
+  // resets to VIDEO_Z60 -- the same reset mode the scheduler and the raster
+  // take. A packet carrying a SetView and no contract must therefore index
+  // the Z60 row, where id 1 is out of range.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(0, 0x0000'00A3u, 0x00EE'0000, 0, 0, 0, 0, 0, /*viewport*/ 0));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    zref::render::Viewport vp[2];
+    (void)zref::render::viewports_of(zhao_abi::VIDEO_Z60, vp);
+    const uint32_t ext = (static_cast<uint32_t>(vp[0].h) << 16) | static_cast<uint32_t>(vp[0].w);
+    check(r.rects.size() == 2, "case35: the reset mode still produces a rectangle", 2,
+          r.rects.size());
+    check(r.viewport_refused == 0, "case35: viewport 0 is legal in every mode", 0,
+          r.viewport_refused);
+    if (r.rects.size() == 2)
+      check(r.rects[1].data == ext, "case35: and it is Z60's full canvas", ext, r.rects[1].data);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

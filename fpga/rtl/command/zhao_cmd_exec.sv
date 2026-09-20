@@ -135,14 +135,43 @@
 // silently.
 //
 // SetView 0x0010 carries EIGHT fields since ruling R63 added `eye[3]`. This
-// block carries or reads six of them; the two it does not have NO PORT ON THIS
-// CONSOLE -- that is a gap, not a decision:
+// block carries or reads SEVEN of them since 2026-09-20; the one it does not
+// has NO PORT ON THIS CONSOLE -- that is a gap, not a decision:
 //   CARRIED   view_id           -> `proj_cfg_view_o` (see the refusal below)
 //   CARRIED   view_projection   -> `proj_cfg_addr_o` 0..15, one word per clock
-//   NOT       viewport_id       -- the bank's viewport rect is at cfg addresses
-//                                  16/17 and SetView carries no rect, only an
-//                                  id; the id -> rect table is video_rules.md's
-//                                  and is not in the ABI.
+//   CARRIED   viewport_id       -- LOWERED TO A RECTANGLE, as of 2026-09-20,
+//                                  at cfg addresses 16/17 (steps 20/21 of the
+//                                  view walk).
+//
+//                                  THE SENTENCE HERE UNTIL TODAY WAS FALSE AND
+//                                  IT ASSERTED A PRESENCE, which is the
+//                                  expensive kind: "the id -> rect table is
+//                                  video_rules.md's and is not in the ABI."
+//                                  There was no such table in video_rules.md.
+//                                  There is now -- section 3.2 -- and
+//                                  `zref::render::viewports_of()` has held the
+//                                  same rectangles since the 2026-08-15
+//                                  ratification, so lowering them here invents
+//                                  nothing and differentials against the
+//                                  oracle like everything else this block
+//                                  lowers. The table is DERIVED and not an ABI
+//                                  field (ruling R73's distinction), so this
+//                                  costs no zidl change and no capture
+//                                  regeneration.
+//
+//                                  WHICH MODE indexes it is the one decision
+//                                  the lowering needed: video_rules 3.2 and
+//                                  FINDINGS-projinput.md D-2 both recommend
+//                                  the mode the CONTRACT set, and that is what
+//                                  `pc_mode` holds. The reasoning, including
+//                                  the part neither of them could see, is at
+//                                  `pc_mode`'s declaration.
+//
+//                                  An id that names no viewport in that mode
+//                                  is REFUSED, never aliased, and counted on
+//                                  `viewport_range_refused_o`; the bank keeps
+//                                  its previous rectangle and the camera that
+//                                  arrived with it still lands.
 //   CARRIED   flags[1:0]        -- depth_profile, as of 2026-09-19. The frozen
 //                                  ruling of 2026-08-31 assigns it, and
 //                                  `zhao_project_core` now has cfg address 18 to
@@ -652,6 +681,14 @@ module zhao_cmd_exec
     output logic [31:0] grade_overflow_o,        // entries refused for want of staging room
     output logic [31:0] trace_arms_applied_o,    // R52: DebugTraceArm records committed
     output logic [31:0] trace_arm_refused_o,     // R52: reserved bits set on the wire
+    // A SetView whose `viewport_id` names no viewport in the mode the last
+    // contract set. The rect is not written and the bank keeps its previous
+    // rectangle (video_rules 3.2); the camera that arrived with it still
+    // lands. Distinct from `view_range_refused_o`, which is the BANK select
+    // (`view_id`) and is mode-independent -- two different fields, two
+    // different refusals, and one counter for both would attribute a bad
+    // rectangle to a bad bank.
+    output logic [31:0] viewport_range_refused_o,
     output logic [31:0] unsupported_o
 );
 
@@ -705,6 +742,48 @@ module zhao_cmd_exec
   localparam int unsigned CFG_EYE_X = 19;
   localparam int unsigned CFG_EYE_Y = 20;
   localparam int unsigned CFG_EYE_Z = 21;
+
+  // ---- THE VIEWPORT RECT (cfg 16/17): SetView.viewport_id, lowered ---------
+  // `SetView.viewport_id` is a SEPARATE field from `view_id` -- 17 and 16 of
+  // the record, the generated package says so -- and until 2026-09-20 this
+  // block parsed neither it nor the rectangle it indexes. `view_id` picks the
+  // BANK; `viewport_id` picks the RECTANGLE. They are not the same number and
+  // a console that conflated them would put view 1 at the origin.
+  localparam int unsigned SV_VPORT = ZHAO_SET_VIEW_OFF_VIEWPORT_ID;
+  // The two cfg addresses, named for the same reason the eye's three are.
+  // `zhao_project_core.sv` reads 16 as {y0[27:16], x0[11:0]} and 17 as
+  // {h[27:16], w[11:0]}; `zhao_geom_cull` ignores addr >= 16 and
+  // `zhao_view_eye` answers only to 19/20/21, so these two words reach the
+  // projector and nobody else.
+  localparam int unsigned CFG_VP_ORG = 16;
+  localparam int unsigned CFG_VP_EXT = 17;
+
+  // The mode byte of SetPresentationContract. THIS BLOCK ALREADY PARSES THIS
+  // RECORD -- the five token ceilings below -- so lifting one more of its
+  // fields is the same act, not a second opinion about the console's mode.
+  // CMD.SCHEDULER parses the same byte for the raster's own timing; the two
+  // agree because the refusal rule here is copied from it verbatim (see the
+  // capture).
+  localparam int unsigned OFF_PC_MODE = ZHAO_SET_PRESENTATION_CONTRACT_OFF_MODE;
+
+  // THE TABLE, `spec/video_rules.md` section 3.2, differentialled against
+  // `zref::render::viewports_of()` (reference/src/zrender/internal.hpp), which
+  // has held it since the 2026-08-15 ratification. NAMED CONSTANTS and not
+  // literals in the mux: these are the console's picture geometry and they
+  // stay editable, which is this repository's standing rule about generated
+  // numbers becoming unadjustable ones.
+  //
+  // Duo's view 1 sits at y = 192 and NOT at x = 256 because video_rules 3
+  // makes Duo one logical 256x384 stored surface; x = 256 would describe the
+  // DISPLAYED image, which is assembled at scanout and is not what anything
+  // upstream of scanout can address.
+  localparam int unsigned VP_Z60_W   = 384;
+  localparam int unsigned VP_Z60_H   = 240;
+  localparam int unsigned VP_STORM_W = 320;
+  localparam int unsigned VP_STORM_H = 240;
+  localparam int unsigned VP_DUO_W   = 256;
+  localparam int unsigned VP_DUO_H   = 192;
+  localparam int unsigned VP_DUO_Y1  = 192;
   localparam int unsigned OFF_PC_G0 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_GEOMETRY_TOKENS_0;
   localparam int unsigned OFF_PC_G1 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_GEOMETRY_TOKENS_1;
   localparam int unsigned OFF_PC_F0 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_FRAGMENT_TOKENS_0;
@@ -764,6 +843,29 @@ module zhao_cmd_exec
     // needs a bypass for and this one must not.
     if ((OFF_SV_EYEZ + 4) >= ZHAO_SET_VIEW_BYTES)
       $fatal(1, "zhao_cmd_exec: SetView.eye is the record's last field; add the df_flags_c-style bypass");
+    // `viewport_id` must arrive AFTER `view_id`, or `sv_view`/`sv_ok` are not
+    // settled when it lands and the id goes into the wrong bank slot. Today
+    // they are bytes 16 and 17; this guard is what lets the capture assume it
+    // rather than re-derive the ordering.
+    if (SV_VPORT <= SV_VIEW_ID)
+      $fatal(1, "zhao_cmd_exec: SetView.viewport_id no longer follows view_id; sv_view is unsettled when it lands");
+    // ... and BEFORE the record's last byte, for the same reason the eye must.
+    if ((SV_VPORT + 1) >= ZHAO_SET_VIEW_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetView.viewport_id is the record's last field; add the df_flags_c-style bypass");
+    // The viewport rect's two cfg addresses must not collide with the eye's
+    // three or the profile's one. All six are named constants above, so a
+    // collision is an edit away and silent: the projector would take an eye
+    // word as a rectangle and centre every vertex somewhere it was not asked.
+    if ((CFG_VP_ORG == CFG_EYE_X) || (CFG_VP_ORG == CFG_EYE_Y) || (CFG_VP_ORG == CFG_EYE_Z)
+     || (CFG_VP_EXT == CFG_EYE_X) || (CFG_VP_EXT == CFG_EYE_Y) || (CFG_VP_EXT == CFG_EYE_Z)
+     || (CFG_VP_ORG == CFG_VP_EXT) || (CFG_VP_ORG == 18) || (CFG_VP_EXT == 18))
+      $fatal(1, "zhao_cmd_exec: the viewport rect's cfg addresses collide with the eye's or the profile's");
+    // Every rectangle in the table must fit the projector's 12-bit cfg fields.
+    // A silent truncation here is a picture drawn to the wrong box with every
+    // counter still reading right.
+    if ((VP_Z60_W > 4095) || (VP_Z60_H > 4095) || (VP_STORM_W > 4095) || (VP_STORM_H > 4095)
+     || (VP_DUO_W > 4095) || (VP_DUO_H > 4095) || (VP_DUO_Y1 > 4095))
+      $fatal(1, "zhao_cmd_exec: a viewport table entry exceeds the projector's 12-bit cfg fields");
     if (ZHAO_SURFACE_STAMP_BYTES != 64)
       $fatal(1, "zhao_cmd_exec: SurfaceStamp record size moved; re-read the offsets");
     if ((SV_MAT_HI - SV_MAT_LO) != 64)
@@ -853,10 +955,36 @@ module zhao_cmd_exec
   logic [31:0] sv_eyex [0:1];
   logic [31:0] sv_eyey [0:1];
   logic [31:0] sv_eyez [0:1];
+  // The view's VIEWPORT ID, shadowed per view exactly like the profile and
+  // the eye, and committed under the SAME `sv_dirty` bit -- for the same
+  // reason: a view whose camera is this frame's and whose rectangle is last
+  // frame's would project into a box the picture was not composed for, and
+  // nothing downstream could tell.
+  logic [ 7:0] sv_vpid [0:1];
   // SetPresentationContract's ceiling, staged whole; `pc_dirty` is its
   // presence in THIS packet. The last contract in a packet wins.
   logic [31:0] pc_g0, pc_g1, pc_f0, pc_f1, pc_sh;
   logic        pc_dirty;
+  // THE MODE THE CONTRACT SET -- PERSISTENT across packets, like the ceiling
+  // registers beside it and unlike `pc_dirty`. The console's mode is sticky
+  // until a contract changes it, so a packet that carries a SetView and no
+  // contract indexes the table with the mode the last contract set.
+  //
+  // WHICH MODE, and why this one. `spec/video_rules.md` 1.1 latches the mode
+  // at frame start, effective the NEXT frame, while a SetView commits
+  // immediately -- so "the mode on screen" and "the mode the contract set"
+  // are two different registers and both exist (`zhao_cmd_scheduler.sv`
+  // holds them as `mode_act` and `mode_pend`). video_rules 3.2 records the
+  // choice as OPEN and RECOMMENDS the contract's mode; so does
+  // FINDINGS-projinput.md D-2. Taken here, for their reason -- the view being
+  // configured is the view of the frame that contract governs -- plus one
+  // this block can see that they could not: the bank rectangle is LATCHED by
+  // this walk and not recomputed per frame, so indexing with the OUTGOING
+  // mode writes a rectangle that is wrong from the moment the mode flips and
+  // stays wrong until the next SetView. On a Z60 -> Duo switch the outgoing
+  // mode makes viewport_id 1 OUT OF RANGE, so view 1 would be refused
+  // entirely and keep its reset rectangle. That is not a one-frame blemish.
+  logic [ 1:0] pc_mode;
   logic [ 1:0] sv_dirty;
   logic        sv_view;   // the bank view this record targets
   logic        sv_ok;     // ... and whether view_id could address it at all
@@ -1133,14 +1261,61 @@ module zhao_cmd_exec
   assign gq_re_c = (st == EX_POST) && post_in_q && !st_post_v && (gq_rp != gq_wp) && !gq_rd_v_q;
 
   logic       cv;   // view being committed
-  // FIVE BITS, NOT FOUR, since 2026-09-19: the commit walk is now TWENTY steps
-  // per view -- matrix words 0..15 at cfg addresses 0..15, step 16 carrying
-  // SetView's depth profile to cfg address 18, and steps 17/18/19 carrying
-  // SetView's eye (R63) to cfg addresses 19/20/21. Five bits still suffice;
-  // the terminal comparison moved from 16 to 19 and is the only place the
-  // walk's length is written down.
-  logic [4:0] cw;   // commit step: 0..15 matrix, 16 profile, 17..19 eye x/y/z
+  // FIVE BITS, NOT FOUR, since 2026-09-19: the commit walk is now TWENTY-TWO
+  // steps per view -- matrix words 0..15 at cfg addresses 0..15, step 16
+  // carrying SetView's depth profile to cfg address 18, steps 17/18/19
+  // carrying SetView's eye (R63) to cfg addresses 19/20/21, and steps 20/21
+  // carrying the VIEWPORT RECT to cfg addresses 16/17 (2026-09-20). Five bits
+  // still suffice; the terminal comparison is `vp_last_c` below and is the
+  // only place the walk's length is written down.
+  logic [4:0] cw;   // 0..15 matrix, 16 profile, 17..19 eye, 20..21 viewport
   logic [1:0] tk;   // EX_TOK step: 0 contract, 1 view 0, 2 view 1
+
+  // ---- THE VIEWPORT TABLE, evaluated for the view being committed ----------
+  // Combinational from `pc_mode` and this view's `viewport_id`. It invents
+  // nothing: every number is a named constant above, taken from
+  // video_rules 3.2 and the reference oracle's `viewports_of()`.
+  //
+  // AN OUT-OF-RANGE ID IS REFUSED, NEVER ALIASED (video_rules 3.2). Z60 and
+  // Storm have exactly one viewport, Duo has two. On a refusal the walk stops
+  // at step 19, the two rect words are never issued, and THE BANK KEEPS ITS
+  // PREVIOUS RECTANGLE -- the same law, and the same reason, as
+  // `SetView.flags[1:0] == 3` being refused by the bank rather than folded
+  // onto a neighbour: one past the end of a table is a diagnosis, not a
+  // picture. The matrix, profile and eye of that same SetView still land;
+  // refusing the rectangle does not refuse the camera.
+  logic        vp_ok_c;
+  logic [ 4:0] vp_last_c;
+  logic [31:0] vp_org_c, vp_ext_c;
+
+  always_comb begin
+    // The packing is `zhao_project_core`'s: cfg 16 = {y0[27:16], x0[11:0]},
+    // cfg 17 = {h[27:16], w[11:0]}. The gaps are zero and there is no
+    // arithmetic here -- a rectangle is placed, never computed.
+    case (pc_mode)
+      2'd0: begin  // VIDEO_Z60 -- one viewport, the full canvas
+        vp_ok_c  = (sv_vpid[cv] == 8'd0);
+        vp_org_c = {4'd0, 12'd0, 4'd0, 12'd0};
+        vp_ext_c = {4'd0, 12'(VP_Z60_H), 4'd0, 12'(VP_Z60_W)};
+      end
+      2'd1: begin  // VIDEO_STORM -- one viewport, the full canvas
+        vp_ok_c  = (sv_vpid[cv] == 8'd0);
+        vp_org_c = {4'd0, 12'd0, 4'd0, 12'd0};
+        vp_ext_c = {4'd0, 12'(VP_STORM_H), 4'd0, 12'(VP_STORM_W)};
+      end
+      default: begin  // VIDEO_DUO -- two stacked 256x192 view blocks.
+        // 2'd3 cannot reach here: `pc_mode` refuses an out-of-range mode byte
+        // and holds its previous value, which is the same rule
+        // `zhao_cmd_scheduler` applies to the same byte.
+        vp_ok_c  = (sv_vpid[cv] <= 8'd1);
+        vp_org_c = {4'd0, (sv_vpid[cv] == 8'd1) ? 12'(VP_DUO_Y1) : 12'd0,
+                    4'd0, 12'd0};
+        vp_ext_c = {4'd0, 12'(VP_DUO_H), 4'd0, 12'(VP_DUO_W)};
+      end
+    endcase
+    // The walk's length, and the ONE place it is written down.
+    vp_last_c = vp_ok_c ? 5'd21 : 5'd19;
+  end
 
   // The byte stream is accepted only while staging. During a commit the fork's
   // AND holds CMD.DMA off, which is what makes "nothing escapes early" a
@@ -1165,8 +1340,15 @@ module zhao_cmd_exec
         sv_eyex[vi] <= 32'd0;
         sv_eyey[vi] <= 32'd0;
         sv_eyez[vi] <= 32'd0;
+        // Viewport 0 is legal in every mode, so the reset value is in range
+        // for all three and a console that never issues a viewport_id gets
+        // the mode's full canvas rather than a refusal.
+        sv_vpid[vi] <= 8'd0;
       end
       pc_g0 <= 32'd0; pc_g1 <= 32'd0; pc_f0 <= 32'd0; pc_f1 <= 32'd0; pc_sh <= 32'd0;
+      // VIDEO_Z60, the same reset mode `zhao_cmd_scheduler` and
+      // `zhao_video_mode` both take, so the three agree before any contract.
+      pc_mode <= 2'd0;
       pc_dirty <= 1'b0; tk <= 2'd0;
       tok_budget_valid_o <= 1'b0; tok_vreq_valid_o <= 1'b0; tok_vreq_view_o <= 1'b0;
       // R52: DebugTraceArm
@@ -1220,6 +1402,7 @@ module zhao_cmd_exec
       packets_committed_o <= 32'd0; packets_abandoned_o <= 32'd0;
       views_written_o <= 32'd0; stamps_issued_o <= 32'd0;
       stamp_overflow_o <= 32'd0; view_range_refused_o <= 32'd0;
+      viewport_range_refused_o <= 32'd0;
       stamp_src_truncated_o <= 32'd0; unsupported_o <= 32'd0;
     end else begin
       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
@@ -1277,6 +1460,15 @@ module zhao_cmd_exec
                     `ZHAO_EXEC_INC(view_range_refused_o);
                   end
                 end
+                // THE VIEWPORT ID. Byte SV_VPORT is 17 and SV_VIEW_ID is 16,
+                // so it arrives one byte AFTER the bank select and `sv_view` /
+                // `sv_ok` are already settled when this fires -- the same
+                // ordering the profile and the matrix words rely on, and it is
+                // checked by an elaboration guard rather than assumed.
+                // CARRIED WHOLE, all eight bits: the range check belongs at
+                // the commit, where the MODE that decides the range is known.
+                if ((rpos == 16'(SV_VPORT)) && sv_ok)
+                  sv_vpid[sv_view] <= pkt_byte_i;
                 // THE DEPTH PROFILE, `flags[1:0]`, owner ruling 2026-08-31 §1.
                 // Byte SV_FLAGS is the u16's LOW byte (little-endian) and it
                 // arrives AFTER SV_VIEW_ID (18 > 16), so `sv_view`/`sv_ok` are
@@ -1312,6 +1504,18 @@ module zhao_cmd_exec
 
               // ---- SetPresentationContract (R18/R33): the ceiling ----------
               if (r_op == ZHAO_OP_SET_PRESENTATION_CONTRACT) begin
+                // THE MODE, for the viewport table. The refusal rule is
+                // `zhao_cmd_scheduler.sv`'s, verbatim and for its reason:
+                // `video_mode` declares members 0..2 ONLY, the Phase-2
+                // structural walk in CMD.DMA deliberately does not perform the
+                // decoder's BAD_VALUE step, so an unlawful byte CAN arrive
+                // here -- and adopting it would index this block's own table
+                // out of range. LAST VALID WINS; an unlawful byte holds the
+                // previous mode. Not counted here: CMD.SCHEDULER owns the
+                // verdict on this byte, and two blocks counting one wire event
+                // would report one bad packet as two.
+                if ((rpos == 16'(OFF_PC_MODE)) && (pkt_byte_i <= 8'd2))
+                  pc_mode <= pkt_byte_i[1:0];
                 if ((rpos >= 16'(OFF_PC_G0)) && (rpos < 16'(OFF_PC_G0 + 4))) pc_g0 <= {pkt_byte_i, pc_g0[31:8]};
                 if ((rpos >= 16'(OFF_PC_G1)) && (rpos < 16'(OFF_PC_G1 + 4))) pc_g1 <= {pkt_byte_i, pc_g1[31:8]};
                 if ((rpos >= 16'(OFF_PC_F0)) && (rpos < 16'(OFF_PC_F0 + 4))) pc_f0 <= {pkt_byte_i, pc_f0[31:8]};
@@ -1672,10 +1876,17 @@ module zhao_cmd_exec
           if (proj_cfg_we_o) begin
             if (proj_cfg_ready_i) begin
               // Accepted. Retire this word and drop `we` for one cycle.
-              if (cw == 5'd19) begin
+              // The terminal step is `vp_last_c`: 21 when this view's
+              // viewport_id is in range for the mode, 19 when it is not --
+              // which is how the rect is REFUSED without refusing the camera
+              // that arrived with it.
+              if (cw == vp_last_c) begin
                 cw           <= 5'd0;
                 sv_dirty[cv] <= 1'b0;
                 `ZHAO_EXEC_INC(views_written_o);
+                if (!vp_ok_c) begin
+                  `ZHAO_EXEC_INC(viewport_range_refused_o);
+                end
                 if (cv) st <= EX_STAMP;
                 else    cv <= 1'b1;
               end else begin
@@ -1708,15 +1919,24 @@ module zhao_cmd_exec
             // decoded by `zhao_view_eye`, which snoops this same bus.
             // `zhao_project_core` ignores them, which is the property that let
             // the viewport rect and then the profile be added here too.
+            // STEPS 20/21 ARE cfg ADDRESSES 16/17 -- the VIEWPORT RECT,
+            // landed 2026-09-20. They come LAST so the refusal above can end
+            // the walk at 19 without disturbing the matrix, the profile or the
+            // eye, and they ride the SAME `sv_dirty` bit as the matrix, so a
+            // view's camera and its rectangle cannot land in different frames.
             proj_cfg_addr_o <= (cw == 5'd16) ? 5'd18
                              : (cw == 5'd17) ? 5'(CFG_EYE_X)
                              : (cw == 5'd18) ? 5'(CFG_EYE_Y)
                              : (cw == 5'd19) ? 5'(CFG_EYE_Z)
+                             : (cw == 5'd20) ? 5'(CFG_VP_ORG)
+                             : (cw == 5'd21) ? 5'(CFG_VP_EXT)
                                              : {1'b0, cw[3:0]};
             proj_cfg_data_o <= (cw == 5'd16) ? {30'd0, sv_prof[cv]}
                              : (cw == 5'd17) ? sv_eyex[cv]
                              : (cw == 5'd18) ? sv_eyey[cv]
                              : (cw == 5'd19) ? sv_eyez[cv]
+                             : (cw == 5'd20) ? vp_org_c
+                             : (cw == 5'd21) ? vp_ext_c
                                              : sv_mat[cv][cw[3:0]];
           end else begin
             if (cv) st <= EX_STAMP;

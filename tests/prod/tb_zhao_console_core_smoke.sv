@@ -1466,6 +1466,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_stamps_o;
   logic [31:0] cmd_exec_stamp_overflow_o;
   logic [31:0] cmd_exec_view_refused_o;
+  logic [31:0] cmd_exec_viewport_refused_o;
   logic [31:0] cmd_exec_trace_arms_o;
   logic [31:0] cmd_exec_trace_arm_refused_o;
   logic [31:0] cmd_exec_src_truncated_o;
