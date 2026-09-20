@@ -2266,3 +2266,115 @@ found it names **four build items, none of which is the port change.** I have
 messaged CMDFIELD to read the block and report what it actually requires rather
 than building to fit my instruction — because work done to satisfy a wrong brief
 is worse than no work.
+
+## R166 — I BUILT A FALSE ALARM AND NEARLY SHIPPED IT AS A CAMPAIGN FINDING
+
+**2026-09-20, me, answering R159. This is the day's most useful mistake because
+it runs the OTHER way from every other one.**
+
+R159 found that `completion_register.py` cannot see a tie-off nobody declared,
+and said the fix is a rule plus a reviewer check. `tools/design/packet_h_tieoff_audit.py`
+is exactly that reviewer check — already written, with the right philosophy
+("deliberately dumb about SystemVerilog... it can only be wrong about text") —
+and **its targets were two hardcoded Packet-H files. It had never been pointed at
+`zhao_console_core.sv`.**
+
+Pointed at the core, it reported **`0 declared, 19 silent`.** Nineteen
+undeclared tie-offs in the console, days before the honest fit, in the file whose
+INCOMPLETE block feeds the primary metric. That is a dramatic, campaign-relevant,
+immediately quotable finding.
+
+**Every one of the nineteen dissolved on reading.** Three separate defects, all
+in my instrument, none in the design:
+
+1. **It could see 18 of the core's 88 instantiations.** `INSTANCE` matched only
+   `zhao_foo u_foo (`; **70 of the core's instantiations are parameterised**
+   (`) u_foo (`). It would have printed a total over one fifth of the file that
+   looked like a whole-file audit.
+2. **The core declares with `REAL:`, not `TIE:` — 163 uses against 0.** The tool
+   knew one dialect and the core speaks the other.
+3. **The core writes one reason above a RUN of connections.** A walk-back that
+   stops at the first non-comment line credits `ev_tile_i` and calls
+   `ev_primitive_i` and `ev_pixel_i` silent. It also split `vp_x0_i` from the
+   `vp_y0_i` on the very next line.
+
+Calibrated: **7 declared, 1 reasoned, 10 covered by a group comment, 1 SILENT.**
+
+**19 → 1, and the core turns out to be exemplary.** Its reasons are better than
+any `TIE:` line would be: `ev_stage_i (8'd0)` is *"an IDENTITY, not data: it
+names which of the charter's seven sources this port is, and there is nothing
+for a producer to supply"*; `b_j_flags_i (16'd0)` is *"a passthrough nobody
+reads would be worse than this zero, which says plainly that nothing on this
+path wants them"*.
+
+**THE LESSON, AND IT IS NOT THE ONE I HAVE BEEN WRITING ALL DAY.** Twelve times
+this session I have found an instrument reading GREEN while structurally unable
+to see its subject. This one read **RED** while structurally unable to see its
+subject. **It is the same disease** — the instrument is not measuring the thing
+— but it presents as *diligence*, and that makes it harder to stop, not easier:
+
+* a false green gets believed because **nobody audits good news** (`CLAUDE.md`);
+* a false red gets believed because **it looks like the tool doing its job**, and
+  because acting on it feels like rigour.
+
+Had I reported "19 undeclared tie-offs in the console core" I would have
+commissioned a packet to chase nothing, cast doubt on a file that is doing the
+right thing better than my tool knows how to check, and burned a lane on the eve
+of the fit. **The cost of a false alarm here is a packet; the cost of believing
+it in the report is the owner's trust in every other number I have quoted today.**
+
+**And I nearly confirmed it with a broken cross-check of my own.** To test
+whether the 19 were declared centrally, I grepped the INCOMPLETE block with
+`sed -n '/INCOMPLETE -- TIED OFF/,/^module\|^endmodule/p'`. `endmodule` is at the
+**end of the file**, so that range was lines 406–16,685 — essentially the whole
+core, **including the very port-map lines being audited**. Every port "appeared
+in the INCOMPLETE block" because it appeared in itself. I wrote, from that,
+*"the lanes have been honest, which is what R159 hoped but could not prove"*.
+
+**A reassuring conclusion from a range that covered its own input** — the exact
+defect class this run is about, committed by me, while building the instrument
+meant to catch it. The block really ends at 4,201. Measured properly, 16 of 18
+were NOT named there — which sent me to read them, which is what found the truth.
+
+**Rules from this:**
+
+1. **Before quoting a tool pointed at a NEW file, measure whether it can SEE
+   that file.** I counted 88 instantiations against 18 matches. That took one
+   `grep -c` and it is the only reason the rest was caught.
+2. **A tool firing on EVERYTHING is as broken as one firing on nothing.** "0
+   declared" out of 19 is precision at an extreme, and `CLAUDE.md`'s law —
+   *"a number that is exactly zero is a broken instrument until proven
+   otherwise"* — applies to a zero in the GOOD column just as hard.
+3. **Read three of the alarms by hand before reporting the total.** Each read
+   cost under a minute; the first one (`vp_x0_i`'s `// REAL:`) already falsified
+   the headline.
+4. **A convention the tool does not know is not a defect in the file.** The core
+   had a systematic, well-kept, better-than-required practice. The gap was in my
+   instrument's vocabulary.
+
+## R167 — THE AUDIT IS NOW COMMITTED, CALIBRATED AND SWEPT; ONE REAL FINDING
+
+`packet_h_tieoff_audit.py` takes targets on the command line, knows both
+markers, understands the group convention, and keeps the Packet-H ctest
+**bit-identical at 39/45 declared, 0 silent** — verified by running the
+pre-change version side by side, not asserted.
+
+Its new self-tests are the ones that matter: the parameterised form **with the
+old pattern kept in the file as a negative control** so the fix cannot silently
+regress, a divider comment that must stay SILENT (the defence against becoming a
+comment-grader, R105), and the group comment's bounded reach.
+
+**The one real finding in the console core:** `zhao_console_core.sv:14824`,
+`u_material_resolve.dir_valid_i (1'b1)` — the only literal in the file with no
+reason anywhere near it. It is almost certainly correct (you never publish an
+invalid directory entry, and `dir_we_i` beside it is gated on the publish), so
+this is a one-line comment, not a design change. **Not made now: the C1 smoke is
+reading the live tree**, and `CLAUDE.md` is explicit that editing RTL under a
+running suite makes its answer worthless in both directions.
+
+**A tree-wide sweep found 97 silent literals across 23 files** — the console core
+being the cleanest at 1. `zhao_texture_island_v3_top` (23),
+`zhao_raster_texture_v3_fit_top` (14) and `zhao_shell_top` (13) lead it.
+**These are DOCKET CANDIDATES, not findings.** Every one of those files may have
+its own dialect exactly as the core did, and R166 is four hours old. Quoting 97
+as a defect count would be the same error at tree scale.
