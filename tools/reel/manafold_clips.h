@@ -3118,7 +3118,7 @@ inline bool apply_knead_dip_env() {
   if (const char* e = std::getenv("ZHAO_U02_BALL_PM")) {
     char* end = nullptr;
     const long v = std::strtol(e, &end, 10);
-    if (end == nullptr || *end != ' ' || v < 200 || v > 4000) return false;
+    if (end == nullptr || *end != '\0' || v < 200 || v > 4000) return false;
     g_u02_ball_pm = static_cast<int32_t>(v);
   }
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_SOLVER")) {

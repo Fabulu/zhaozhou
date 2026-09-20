@@ -1,0 +1,57 @@
+# CONTROLS FIRED BY THE REVIEWER -- 2026-09-20T23:10:59Z
+# RODS column is the shipping rig. 'attributed' = the mutant failed ONLY its named causal detector.
+# observed=0x0 = THE CONTROL DID NOT FIRE (a dead control: no evidence about its leg).
+
+== mrod (all 24 slots) ==
+  --fail-rod-bend        CONTROL: 8 leg(s) failed -- the control FIRED (instrument proven)
+  --fail-rod-twist       CONTROL: 5 leg(s) failed -- the control FIRED (instrument proven)
+  --fail-rod-flicker     CONTROL: 8 leg(s) failed -- the control FIRED (instrument proven)
+  --fail-rod-uniform     CONTROL: 8 leg(s) failed -- the control FIRED (instrument proven)
+  --fail-joint-step      CONTROL: 1 leg(s) failed -- the control FIRED (instrument proven)
+  --fail-ball-blend      CONTROL: 1 leg(s) failed -- the control FIRED (instrument proven)
+
+== mrear ==
+  --fail-rear-strain     RC=1   FAIL R4 STRAIN
+  --fail-rear-frame      RC=1   FAIL R1 FRAME
+  --fail-rear-joint      RC=1   FAIL R2 JOINT
+  --fail-no-dip          RC=1   FAIL R5 DIP
+  --fail-dip-stuck       RC=1   FAIL R5 DIP
+
+== mspan: EVERY control, both rigs ==
+  CONTROL                          RODS                       PASS20
+  --fail-rigid-span F-A            attributed detector fired  attributed detector fired
+  --fail-rigid-span A-B            attributed detector fired  attributed detector fired
+  --fail-rigid-span B-C            attributed detector fired  attributed detector fired
+  --fail-rigid-span C-E            attributed detector fired  attributed detector fired
+  --fail-overcompact F-A           attributed detector fired  attributed detector fired
+  --fail-overcompact A-B           attributed detector fired  attributed detector fired
+  --fail-overcompact B-C           attributed detector fired  attributed detector fired
+  --fail-overcompact C-E           attributed detector fired  attributed detector fired
+  --fail-clamp-negative F-A        attributed detector fired  attributed detector fired
+  --fail-clamp-negative C-E        attributed detector fired  attributed detector fired
+  --fail-delta-drift A             attributed detector fired  attributed detector fired
+  --fail-delta-drift E             attributed detector fired  attributed detector fired
+  --fail-e-start                   attributed detector fired  attributed detector fired
+  --fail-e-mid                     attributed detector fired  attributed detector fired
+  --fail-e-presocket               attributed detector fired  attributed detector fired
+  --fail-posed-order               observed=0x0               attributed detector fired
+  --fail-order                     attributed detector fired  attributed detector fired
+  --fail-mute F                    attributed detector fired  attributed detector fired
+  --fail-mute A                    attributed detector fired  attributed detector fired
+  --fail-mute E                    attributed detector fired  attributed detector fired
+  --fail-antenna-snap              attributed detector fired  attributed detector fired
+  --fail-accent-switch             attributed detector fired  attributed detector fired
+  --fail-hold-tremor               attributed detector fired  attributed detector fired
+  --fail-compress-wrap             attributed detector fired  attributed detector fired
+  --fail-final-dwell               attributed detector fired  attributed detector fired
+  --fail-root-authority            observed=0x0               attributed detector fired
+  --fail-front-flex                attributed detector fired  attributed detector fired
+  --fail-swell-size                attributed detector fired  attributed detector fired
+  --fail-terminal-cap              attributed detector fired  attributed detector fired
+  --fail-walk-pairing              attributed detector fired  attributed detector fired
+  --fail-dent-pin                  attributed detector fired  attributed detector fired
+
+== mprobe ==
+  --fail-mirror          RC=1 (1 = fired)
+  --fail-trick-support   RC=1 (1 = fired)
+  --fail-trick-support-depth RC=1 (1 = fired)

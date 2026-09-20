@@ -35,6 +35,7 @@
 #include <cstring>
 #include <limits>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -444,11 +445,37 @@ ExpectedSkin expected_skin(int32_t x, const Stations& s) {
   return pair(u02::kBReturnTip, u02::kBReturnTip, 0, 18);
 }
 
+// ⚠ PASS 21 REVIEW: THIS WAS A SECOND COPY OF THE UNIFORM STATION LAW, and it
+// went stale the moment the rods station table shipped. The implementer removed
+// exactly this duplicate from manafold_rear_audit.cpp::ring_map() with the right
+// reason beside it -- "a SECOND COPY of the uniform expression here is exactly
+// the stale-ring-table fault that made a pass-19 gate report a confident wrong
+// number" -- and left the sibling copy here.
+//
+// The consequence was not a wrong number; it was SILENCE. Under rods this map
+// keyed 64 rings at uniform stations that the rods mesh does not have, so
+// `ring_map.find(v.y)` missed nearly every loop vertex, and the two live
+// consumers both failed OPEN:
+//
+//   * mutate_rigid_span() rebound NO vertices, so --fail-rigid-span was a no-op
+//     on all four spans (observed=0x0 against expected=0x2) -- while the pass-21
+//     implementation report listed it among the controls that DO fire, and the
+//     committed receipt mspan-ctl-fail-rigid-span.txt already said UNATTRIBUTED.
+//   * minimum_free_ring_step_y() found no rings in any window and returned
+//     +inf, so G4's ring-collapse detector printed "min ring dy inf mm" on all
+//     eight legs and passed -- taking --fail-overcompact on all four spans down
+//     with it, which is the ONLY control for the compaction-bound leg that R4's
+//     re-based rail floor cites as the thing still holding the line.
+//
+// Ten controls, two of them honestly declared and EIGHT of them silently dead,
+// behind a gate reporting "PASS: 0 failure(s)". Under pass20
+// loop_ring_station_at() is bit-identical to the expression removed here
+// (loop_ring_station_mm, the same kLoopTotalMm*i/(kLoopRings-1), and
+// Stations::total == kLoopTotalMm), so the exact-off leg cannot move.
 std::map<int32_t, int32_t> ring_station_map(const Stations& s) {
   std::map<int32_t, int32_t> out;
   for (int i = 0; i < u02::kLoopRings; ++i) {
-    const int32_t x = static_cast<int32_t>(
-        (static_cast<int64_t>(s.total) * i) / (u02::kLoopRings - 1));
+    const int32_t x = u02::loop_ring_station_at(i);
     out[u02::fxu(s.y0 + x)] = x;
   }
   return out;
@@ -796,10 +823,30 @@ struct RingAccum {
   int count = 0;
 };
 
+/** ⚠ PASS 21 REVIEW: `ring_seen` IS AN OUTPUT, AND THE CALLER MUST CHECK IT.
+ *
+ *  This returned `+inf` from a window containing no rings, which the caller's
+ *  `if (!(min_step > 0.05)) fail(...)` reads as "infinitely well ordered" -- the
+ *  most reassuring possible answer, produced from an empty operand set. That is
+ *  how the stale ring table above stayed invisible: the detector did not report
+ *  a wrong ordering, it reported a perfect one, on nothing.
+ *
+ *  A detector whose input set is empty is not evidence about ordering, so the
+ *  count comes back with the number and the caller fails on it separately. This
+ *  is the same discipline the RTL side of CLAUDE.md states for a counter reading
+ *  zero: a detector asserting the good value is the claim to check hardest. */
+/** ⚠ AND `only` IS WHY A STATION RANGE IS NOT ENOUGH UNDER RODS. A ball's
+ *  leading rings sit at stations BELOW its pivot, so they fall inside the
+ *  preceding rod's numeric station range (ball A's first three rings are at 858,
+ *  868 and 894, inside rod F-A's 318..929). Filtering by range alone therefore
+ *  re-admits the buried cone this leg must not measure, and the shipping rig
+ *  reads a large negative step that is a fold inside a ball. When `only` is
+ *  given, membership is by the station table's ROLE, not by arithmetic. */
 double minimum_free_ring_step_y(
     const zc::CreatureType& type,
     const std::array<zc::mat3x4fx, zc::kMaxBones>& pose,
-    const Stations& stations, int32_t free_start, int32_t free_end) {
+    const Stations& stations, int32_t free_start, int32_t free_end,
+    int* ring_seen = nullptr, const std::set<int32_t>* only = nullptr) {
   const auto ring_map = ring_station_map(stations);
   std::map<int32_t, RingAccum> rings;
   for (const zc::Meshlet& m : type.mesh) {
@@ -819,18 +866,25 @@ double minimum_free_ring_step_y(
   }
   double min_step = std::numeric_limits<double>::infinity();
   bool have_previous = false;
+  int seen = 0;
   Vec3 previous{};
   for (auto& entry : rings) {
-    if (entry.first < free_start || entry.first > free_end) continue;
+    if (only != nullptr) {
+      if (only->find(entry.first) == only->end()) continue;
+    } else if (entry.first < free_start || entry.first > free_end) {
+      continue;
+    }
     RingAccum& a = entry.second;
     if (a.count <= 0) continue;
     a.p.x /= a.count;
     a.p.y /= a.count;
     a.p.z /= a.count;
+    ++seen;
     if (have_previous) min_step = std::min(min_step, a.p.y - previous.y);
     previous = a.p;
     have_previous = true;
   }
+  if (ring_seen != nullptr) *ring_seen = seen;
   return min_step;
 }
 
@@ -844,6 +898,22 @@ void check_synthetic_signs(const zc::CreatureType& type,
   for (int si = 0; si < kSpanCount; ++si) {
     const Span selected = static_cast<Span>(si);
     const SpanSpec& spec = specs[si];
+    // PASS 21 REVIEW: the span's ROD ring set, read off the station table once
+    // per span. It sizes the overcompact mutant (below) and scopes the
+    // ring-collapse window (further down); both were derived from the retired
+    // kSpanGradientMm and were wrong under rods in opposite directions.
+    std::set<int32_t> rod_rings;
+    int32_t rod_lo = u02::kLoopTotalMm, rod_hi = 0;
+    if (u02::rig_rods()) {
+      for (int r = 0; r < u02::kLoopRings; ++r) {
+        const u02::RodsRing rr = u02::rods_ring(r);
+        if (rr.role != u02::RingRole::kRod || rr.elem != si) continue;
+        rod_rings.insert(rr.station_mm);
+        rod_lo = std::min(rod_lo, rr.station_mm);
+        rod_hi = std::max(rod_hi, rr.station_mm);
+      }
+    }
+    const int32_t rod_len = u02::rig_rods() ? rod_hi - rod_lo : 0;
     const int32_t legal[2] = {
         static_cast<int32_t>(
             (static_cast<int64_t>(spec.centre_length) *
@@ -854,8 +924,18 @@ void check_synthetic_signs(const zc::CreatureType& type,
     };
     for (int leg = 0; leg < 2; ++leg) {
       int32_t requested = legal[leg];
-      if (leg == 1 && selected == overcompact_span)
-        requested = -(u02::kSpanGradientMm[si] + u02::kSpanMinRunMm);
+      if (leg == 1 && selected == overcompact_span) {
+        // ⚠ THE MUTANT'S MAGNITUDE MUST BE SIZED TO THE RUN IT COMPACTS. The
+        // pass-20 magnitude is the fold-blend gradient length; under rods the run
+        // is the rod, and for F-A, A-B and B-C the pass-20 figure is SHORTER than
+        // the rod, so the mutant compacted the run without inverting it and the
+        // control came back clean (observed=0x0) on three of four spans. Only C-E
+        // happened to fire, because its gradient is long. A control that is too
+        // weak to reach the state is not evidence about the state.
+        requested = u02::rig_rods()
+                        ? -(rod_len + u02::kSpanMinRunMm)
+                        : -(u02::kSpanGradientMm[si] + u02::kSpanMinRunMm);
+      }
 
       zc::Clip rest = straight_clip();
       u02::Rig gr;
@@ -899,18 +979,48 @@ void check_synthetic_signs(const zc::CreatureType& type,
       const double endpoint_error = length(pc - ph);
       const double signed_y = pc.y - p0.y;
       const double movement_error = std::abs(signed_y - requested);
+      // PASS 21 REVIEW: the free-run window is the span's own ROD under rods.
+      // The pass-20 window is the fold-blend gradient zone (out of one carrier's
+      // core into the next), and kFoldBlendMm / kLoopCarrierCoreHalfMm describe a
+      // ladder the rods rig does not have -- so that window can land between
+      // rods rings and see nothing. Under rods the run whose ordering this leg is
+      // about is the rod carrying this span's signed delta.
+      //
+      // ⚠ IT IS THE ROD'S OWN RING SPAN, NOT PIVOT-TO-PIVOT. A pivot-to-pivot
+      // window swallows the ball rings, which are DELIBERATELY non-monotone in
+      // station (each ball's 2 mm end ring sits behind the rod ring before it --
+      // the buried cone), so it reads a large negative step on the SHIPPING rig
+      // and the leg fails on a fold that is inside a ball and invisible. mrear's
+      // rail_is_along_band() makes the same exclusion for the same reason. The
+      // window is READ OFF the station table rather than re-derived from the lead
+      // and end offsets, so this does not become a fourth copy of a ring law.
+      const int32_t free_start =
+          u02::rig_rods() ? rod_lo : spec.gradient_start;
+      const int32_t free_end = u02::rig_rods() ? rod_hi : spec.gradient_end;
+      int ring_seen = 0;
       const double min_step = minimum_free_ring_step_y(
-          type, pose, stations, spec.gradient_start, spec.gradient_end);
+          type, pose, stations, free_start, free_end, &ring_seen,
+          u02::rig_rods() ? &rod_rings : nullptr);
       const int32_t visible_run = u02::kSpanGradientMm[si] + requested;
 
       std::printf("G4 synthetic %-3s %s %+4d mm: endpoint err %.3f, "
-                  "signed y %+7.2f, run %d, min ring dy %.2f mm\n",
+                  "signed y %+7.2f, run %d, min ring dy %.2f mm over %d ring(s) "
+                  "in [%d,%d]\n",
                   spec.name, leg == 0 ? "extend" : "compact", requested,
-                  endpoint_error, signed_y, visible_run, min_step);
+                  endpoint_error, signed_y, visible_run, min_step, ring_seen,
+                  free_start, free_end);
       if (endpoint_error > 0.6)
         fail("child/socket endpoint does not coincide with its span-delta skin endpoint");
       if (movement_error > 0.6)
         fail("a signed span request was clamped, lost or changed sign");
+      // ⚠ THE EMPTY-WINDOW CASE IS ITS OWN FAILURE, and it is listed FIRST
+      // because it is the one that used to pass. With fewer than two rings in the
+      // window there is no ordering to measure, min_step is +inf, and every
+      // ring-collapse mutant is a no-op -- so the gate must say it is blind
+      // rather than quote the infinity.
+      if (ring_seen < 2)
+        fail("the free-run ring window holds fewer than two rings -- the "
+             "ring-collapse detector has no operand and cannot fire");
       if (!(min_step > 0.05))
         fail("ordered loop rings collapsed or inverted under signed span motion");
       if (leg == 1 && selected != overcompact_span &&
@@ -2181,8 +2291,19 @@ int main(int argc, char** argv) {
     expected_category = expected;
     allowed_categories = allowed;
   };
-  select_mutant(rigid_span != Span::kNone, "rigid-span", kCatZones,
-                kCatZones | kCatPosedOrder | kCatCrown | kCatRootAuthority);
+  // ⚠ PASS 21 REVIEW: rigid-span's CAUSAL detector is rig-dependent, because the
+  // leg it used to fire is retired. Under pass20 it fires G1/G2 (kCatZones), the
+  // compiled-zone audit. Under rods G1/G2 declares itself NOT APPLICABLE and
+  // returns before measuring anything, so kCatZones cannot fire and the mutant
+  // would be stamped UNATTRIBUTED forever -- a real control filed as noise, which
+  // is how open issue 2 of the implementation report reads a live instrument as
+  // dead weight. Under rods the property "this span's rings still carry the
+  // signed delta" is G4's (kCatSynthetic), which is what the mutant now trips:
+  // F-A 0x10, A-B/B-C/C-E 0x90 (G4 plus the crown-order leg).
+  select_mutant(rigid_span != Span::kNone, "rigid-span",
+                u02::rig_rods() ? kCatSynthetic : kCatZones,
+                kCatZones | kCatSynthetic | kCatPosedOrder | kCatCrown |
+                    kCatRootAuthority);
   select_mutant(clamp_span != Span::kNone, "clamp-negative", kCatSynthetic,
                 kCatSynthetic);
   select_mutant(drift_span != Span::kNone, "delta-drift", kCatSynthetic,

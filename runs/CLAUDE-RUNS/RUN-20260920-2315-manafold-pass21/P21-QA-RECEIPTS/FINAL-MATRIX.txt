@@ -1,0 +1,20 @@
+# P21 REVIEW+QA MATRIX -- independent build, 2026-09-20T23:10:31Z
+# binaries built by the reviewer from the pass-21 tree + the two review fixes
+
+== SHIPPING (rods) ==
+mrod-all24                     RC=0   mrod: ALL LEGS OK
+mrear                          RC=0   rear gate mask 0x0 -> GREEN
+mspan                          RC=0   PASS: 0 failure(s)
+mprobe                         RC=0   
+mjointpub                      RC=0   PASS: 0 failure(s)
+mmeshcheck                     RC=0   CLEAN
+moutline                       RC=0   PASS: 0 failure(s)
+mshell                         RC=0   shellgate --selftest: every check is failable
+mnodule                        RC=0   PASS: 0 failure(s)
+meyesize                       RC=0   PASS: 0 failure(s)
+msmooth                        RC=0   PASS: 0 failure(s)
+mqa                            RC=0   PASS: 0 failure(s)
+
+== EXACT-OFF (ZHAO_U02_RIG=pass20) ==
+mspan-pass20                   RC=0   PASS: 0 failure(s)
+mrear-pass20                   RC=0  

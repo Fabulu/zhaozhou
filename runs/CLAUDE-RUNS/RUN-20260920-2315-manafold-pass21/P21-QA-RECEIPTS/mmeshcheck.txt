@@ -1,0 +1,1 @@
+u02-meshcheck: 34 meshlets, 2800 tris, 1416 position groups, 4200 edges — CLEAN

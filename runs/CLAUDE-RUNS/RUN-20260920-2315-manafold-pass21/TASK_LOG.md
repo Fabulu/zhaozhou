@@ -76,3 +76,65 @@ Manafold pass 21 from Owner Direction 22: the antenna reads as having too many j
 - TWO mspan controls still cannot fire under rods and mspan says so itself; recorded as an open issue rather than left to be discovered.
 - IDENTITY: `ZHAO_U02_RIG=pass20` reproduces the pass-20 bank on 22/22 subjects, frame counts and sequence_crc32c, against the committed manifest. Checked on 22 not 3 (pass 20's own lesson). `zhao-reel-cel --crc` added so it costs no disk.
 - NOT done, by instruction: no 22-subject bank render, no encode, no merge, no deploy.
+
+### 2026-09-21 00:45-01:15 - REVIEWER + QA packet (independent, sole agent)
+- Rebuilt all 13 gate/reel binaries from the pass-21 tree myself; every figure in
+  `P21-REVIEW-QA.md` is re-measured, none quoted from the implementer's receipts.
+- VERDICT **FIXED**. Three real defects found and repaired:
+  * **A raw NUL byte committed in `manafold_clips.h:3121`** (a literal 0x00 inside
+    a char literal where `'\0'` belongs). Value correct, tooling poisoned: git
+    called the file BINARY so the pass's largest diff was unreviewable, git
+    stopped normalising its line endings, grep/ripgrep silently skipped it, and
+    g++ warned 12x unread. Fixed; diff is now one line, rebuild has 0 warnings.
+  * **`mspan::ring_station_map()` held a SECOND COPY of the uniform station law** --
+    the exact duplicate the implementer removed from mrear this pass, left in the
+    sibling. Under rods it keyed 64 rings the mesh does not have, so
+    `mutate_rigid_span` rebound nothing and `minimum_free_ring_step_y` returned
+    **+inf** from an empty set. The gate printed `min ring dy inf mm` on all eight
+    G4 legs and reported PASS. **EIGHT controls were silently dead**, not the two
+    reported -- including the only control for the G5 compaction leg that R4's
+    re-based floor cites as the thing holding the line. `--fail-rigid-span C-E`
+    was reported as firing while its own committed receipt says UNATTRIBUTED.
+  * **The overcompact mutant was sized to the RETIRED gradient length**, shorter
+    than the rod on three of four spans, so it compacted without inverting.
+  Fixes are gate-side only; identity proves they moved no rendered byte.
+  **29 of 31 mspan controls now fire attributed under rods (was 21).**
+- Claim 1 VERIFIED and strengthened: mrod's gate hard-codes 6 slots (mrear
+  enumerates the bank), so the headline was 8 of 24 clips. Re-run over **all 24
+  slots / 9,700 samples**: rod turn 0.02, sag 0.02 mm, joint-on-ball 999.7 pm all
+  hold; R9 947->938 pm and R10 0.059->0.107 % on the unsampled slots, both fine.
+  The 64-ring deviation is sound -- no run or ball is short of rings.
+- Claim 3: the stage-4 skip is SAFE, but the reported comparison was invalid --
+  **mrod cannot select the bow at all** (`ZHAO_U02_REAR_BOW` is parsed per-main,
+  not in `apply_knead_dip_env`), so the "pass-19" and "pass-20" rows are ONE
+  configuration measured twice; proved by byte-identical output with the env set
+  to legacy, arc and garbage. Like-for-like on 24 slots the comparison REVERSES:
+  rods **6.98** deg/sample vs pass20 **7.50** against an 8 bound. Rods beats the
+  shipped rig; margin is 1.02 deg, a watch item, not a defect.
+- Claim 5: **22/22 identity byte-exact** on the NUL-fixed build, and I ran the
+  positive control too -- **22/22 CHANGE** under rods. Knead 19/19, margin +29 mm.
+- Claim 6: plant -25 mm exactly, B owns 140/140, clearance floor and contact
+  window untouched in source. B's 1.23x is required: at its 100.2 deg worst the
+  crotch floor is 69 mm against R 85 -- B is the only ball whose rods stay inside.
+- R4-FLOOR JUDGEMENT: the retirement is justified (worst rail is at ring 51,
+  INSIDE rod C-End, where R9 applies; no bound moved; G5 clean) but **0.12 is not
+  what its own argument yields** -- kSpanCompactionMinPm[3]=-700 implies ~0.300,
+  so the floor is 2.5x looser than its derivation and cannot fire. Floor NOT
+  moved; instead the guard behind it was made able to fire. Recommendation for
+  pass 22 recorded.
+- 17 controls fired by me across four gates, including `--fail-rear-strain`
+  (FAIL R4 STRAIN) and R8's invented `--fail-joint-step` (fires exactly one leg).
+  Caveat recorded: mrod has 6 control NAMES for 4 configurations.
+- VISUAL QA (production ink, 9 clips on BOTH rigs, frames chosen by badness from
+  mrod's CSV via a committed probe): (a) straight rods YES, (b) End calm YES --
+  speed -44 % and jerk -41 % on inspect, and pass20's trace is jagged spikes where
+  rods is a clean oscillation; (c) **the character change is a large improvement**
+  -- pass20 has NO legible structure at all in half the orbit while rods reads as
+  a jointed limb; it is more geometric and that is what makes it legible; not a
+  faceted chain, not a bent wire; (d) no visible crotch even at A 150.4 / C 152.1
+  deg (worse than declared) -- reads as a folded hinge; (e) knead preserved, both
+  rigs dip at the identical key; (f) no new faults across eight clips.
+- Full matrix re-run in ONE invocation on my build: 12 gates + both exact-off
+  legs, all RC=0. Receipts in `P21-QA-RECEIPTS/`, looks in `P21-QA-LOOKS/`.
+- 2.0 GB of `.rgb` render intermediates purged after the looks (CLAUDE.md).
+- NOT done, by instruction: no bank render, no encode, no merge, no deploy.

@@ -1,0 +1,13 @@
+e737f1a0e380fe2f46e9da1ec01b6897 *manafold-eyesize.exe
+4c6243802269441da66517bf23abc7b9 *manafold-meshcheck.exe
+8e866474ac041e4d67c13b1f6af5d41b *manafold-motiongate.exe
+3576ff2d45958f835ac71abbb6949747 *manafold-nodule.exe
+6d51cc369ede353312d2d166b9f6556f *manafold-outlinegate.exe
+6eb525fab8ee57f01390a81f4df185dc *manafold-probe.exe
+b544cce41936017067d3b5aa625be464 *manafold-public-jointgate.exe
+fb27b11fd57f1e3632163a37abab4d97 *manafold-qa-p12.exe
+a7d39033110c0704e627bf9e9e8566bd *manafold-rear-audit.exe
+f857d8abe98de602287a64cdceee8e82 *manafold-rodgate.exe
+140d6f1dd26c890cf9ca50e4bc20d62b *manafold-shellgate.exe
+2874538bebbc452a890ac705b0afbd9b *manafold-spangate.exe
+355354c28de0dfd862ba2047ea36b877 *zhao-reel-cel.exe
