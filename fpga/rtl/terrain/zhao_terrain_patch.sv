@@ -222,9 +222,24 @@ module zhao_terrain_patch (
   // every replaced expression was compared comment-stripped against the
   // package body after one declared identifier substitution (9 of 9 identical,
   // zero drift), and the pre-factoring module was instantiated beside this one
-  // on identical stimulus for 500,000 random vectors with no output
-  // disagreeing on any clock. Six deliberate mutations of the package were run
-  // through that same bench to show it can fire.
+  // on identical stimulus for 500,000 random vectors -- 262,559 of them on a
+  // clock where an output MOVED -- with no output disagreeing on any clock.
+  //
+  // FIVE deliberate mutations of the package were then run through that same
+  // bench and ALL FIVE produced a disagreement: the §9.1 closed-interval test
+  // made half-open, §3.4 line 1's underside clamp dropped, h16->fx shifted by
+  // 9 instead of 8, fx_add_sat's non-saturating result flipped in bit 0, and
+  // sp_mask's col_lo border rule removed.
+  //
+  // IT SAYS FIVE AND NOT THE SEVEN THAT WERE ATTEMPTED, and the two that fell
+  // out are the useful part. `{{9{h[15]}}, h[14:0], 8'b0}` IS
+  // `{{8{h[15]}}, h, 8'b0}` on all 65,536 inputs -- eight sign copies plus
+  // h[15] are nine sign copies -- and sp_mask's `row_hi` clamp cannot change a
+  // comparison against r in 0..3. Neither was a mutation, and their silence
+  // was read for a while as this bench being blind. A control that cannot
+  // enter the failing state is not a control (owner ruling R173); worth
+  // recording that the rule caught its author twice inside the commit that
+  // cites it.
 
   // -------------------------------------------------------------------------
   // the field list: 16 footprint rectangles. The program hash and command

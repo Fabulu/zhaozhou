@@ -220,6 +220,24 @@ module zhao_terrain_velocity (
   // it explains a shape that otherwise looks redundant: the saturation flag is
   // a SEPARATE function rather than a second field of the result, because
   // indexing a function's return value is exactly what Quartus 17.0 rejects.
+  //
+  // WHAT THE EVIDENCE FOR THIS FILE IS, AND WHAT IT IS NOT. A pin-level
+  // differential against the pre-factoring module ran 500,000 random vectors
+  // (245,818 of them on a clock where an output moved) with no disagreement.
+  // That null is NOT uniformly strong, and saying so is the point: of the three
+  // package functions this block calls, deliberate mutation of
+  // zhao_tp_fx_add_fired disagreed at vector 35, but mutations of
+  // zhao_tp_fx_add_sat and zhao_tp_sp_mask stayed SILENT. Random stimulus
+  // reaches `StIdle` and the zero-lane path; it does not reliably drive a
+  // `start_lanes_i > 0` sweep through `StLane` to a bake, which is where those
+  // two are called. A gate that cannot reach the state is not evidence about
+  // the state.
+  //
+  // So the load-bearing evidence here is the OTHER two instruments: all three
+  // removed bodies are byte-identical to the package's, checked
+  // comment-stripped after one declared rename; and `terrain_velocity_directed`
+  // (133 checks) and `terrain_velocity_chain` (55) do drive the sweep and the
+  // bake, and pass at this commit.
 
   // -------------------------------------------------------------------------
   // the held sweep

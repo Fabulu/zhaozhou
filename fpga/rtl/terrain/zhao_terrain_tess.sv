@@ -344,10 +344,13 @@ module zhao_terrain_tess #(
   //
   // EVIDENCE, not argument. The pre-factoring module was instantiated beside
   // this one on identical stimulus and every output compared on every clock,
-  // for 500,000 random vectors, with no disagreement -- the same instrument
-  // used for zhao_terrain_patch, and shown able to fire by deliberate
-  // mutations of the package. `terrain_tess_directed` and the pipeline tests
-  // are the durable regression evidence and are run at this commit.
+  // for 500,000 random vectors -- 490,958 of them on a clock where one of the
+  // 42 outputs MOVED -- with no disagreement anywhere. The same bench with
+  // zhao_tp_fx_add_sat's non-saturating result flipped in bit 0 disagreed at
+  // vector 22,546, so the null above is a null this instrument could have
+  // broken. `terrain_tess_directed` (6,751 checks), `terrain_tess_modes_directed`
+  // (33) and `terrain_pipe_rpp3_matw18_fit_top_directed` (15) are the durable
+  // regression evidence and are run at this commit.
 
   // rescale(x, 1): round-half-up shift by one, then saturate to the fx16 word.
   function automatic logic signed [31:0] rescale1(input logic signed [33:0] x);

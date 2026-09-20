@@ -219,6 +219,20 @@ module zhao_terrain_lodfeed #(
   // it replaces was `{{8{lat_h_q[15]}}, lat_h_q, 8'd0}` -- the package writes
   // the same eight zero bits as `8'b0`, which is the same value and the same
   // width.
+  //
+  // WHAT THE EVIDENCE FOR THIS ONE LINE IS.  The two texts are byte-identical
+  // after that one declared literal substitution, and `terrain_lodpath_directed`
+  // (286 checks) and `terrain_lodhist_directed` (158) drive the walk that reads
+  // it and pass at this commit.  A pin-level differential against the
+  // pre-factoring module also ran 500,000 vectors with no disagreement, BUT
+  // THAT NULL IS WEAK HERE and it is worth saying why rather than quoting it:
+  // shifting the package's conversion to `raw << 9` -- wrong on 65,535 of
+  // 65,536 inputs -- did NOT make that bench disagree, because `have_q` is set
+  // only when `fill_q` reaches VERTS-1, so a random stream that keeps
+  // restarting its fill never starts the walk and `lat_h_q` is never read.
+  // The bench exercised 196,848 clocks of output movement and none of them
+  // touched this line.  A gate that cannot reach the state is not evidence
+  // about the state.
   assign lat_fx_c = zhao_tp_h16_to_fx(lat_h_q);
 
   // The walker only ever reads surface 0 -- there is one buffer -- so its
