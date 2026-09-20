@@ -15535,10 +15535,15 @@ set_tests_properties(lint_geom_drawjob PROPERTIES
 # reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt, owner commit
 # 4c256137; ratified in reports/OWNER-RATIFICATION-20260920-WARP.md).
 #
-# This is the directive's COMMIT A gate and nothing more: "reference tests/
-# decoder/program hash/map tests pass; NO RTL CLAIM YET". There is deliberately
-# no verilate() here, because there is no zhao_geom_warp.sv at this commit --
-# see FINDINGS-warp.md for the shared Field host prerequisites that block it.
+# This was the directive's COMMIT A gate: "reference tests/decoder/program
+# hash/map tests pass; NO RTL CLAIM YET".
+#
+# CORRECTED 2026-09-20 by packet W1: this comment used to end "there is
+# deliberately no verilate() here, because there is no zhao_geom_warp.sv at
+# this commit". THERE IS NOW -- fpga/rtl/geometry/zhao_geom_warp.sv -- and its
+# RTL differential is registered below as geom_warp_rtl_directed. The block is
+# still NOT composed into zhao_console_core; see FINDINGS-fieldw1.md for which
+# prerequisites actually block that and which had already landed.
 #
 # It links zhao_zref only (the pattern of field_crater_ring / field_fplan_diff):
 # every fixture is assembled as a real .zprog image and pushed through the REAL
@@ -15547,3 +15552,62 @@ add_executable(test_geom_warp_reference_directed geometry/geom_warp_reference_di
 target_link_libraries(test_geom_warp_reference_directed PRIVATE zhao_zref)
 add_test(NAME geom_warp_reference_directed COMMAND test_geom_warp_reference_directed)
 set_tests_properties(geom_warp_reference_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# GEOM.WARP, THE RTL HALF. `zhao_geom_warp` differentially against
+# `zref::geom_warp::apply_outputs` -- the SAME function the reference test uses,
+# fed the HARDWARE's six output words. Nothing in the test restates the
+# application law in C++, because a restatement is a second implementation and
+# two implementations by the same hand agree on exactly the cases its author
+# thought of. `apply_outputs` was split out of `apply` for this.
+#
+# The bench PLAYS the Field adapter. The real `zhao_field_warp_adapter` against
+# the real `zhao_field_host_v2` is a separate bench, because W13 requires the
+# application claim and the transport claim to stay apart.
+add_executable(test_geom_warp_rtl_directed geometry/geom_warp_rtl_directed.cpp)
+target_link_libraries(test_geom_warp_rtl_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_warp_rtl_directed
+  PREFIX Vzhao_geom_warp
+  TOP_MODULE zhao_geom_warp
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv)
+add_test(NAME geom_warp_rtl_directed COMMAND test_geom_warp_rtl_directed)
+set_tests_properties(geom_warp_rtl_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+# -Wall, and warnings FATAL: `verilate()` does not pass -Wall.
+add_test(NAME lint_geom_warp
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    --top-module zhao_geom_warp
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv)
+set_tests_properties(lint_geom_warp PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# GEOM.WARP's NORMAL-SHIFT MUTANT. A COMMITTED POSITIVE CONTROL.
+#
+# `tests/mutants/zhao_geom_warp_shift_oneliner_mutant.sv` is a COPY of the
+# production block, renamed so no source list can elaborate it by mistake, with
+# exactly one substantive line changed: the range-reduction's second stage reads
+# the ORIGINAL magnitude instead of the one the first stage produced.
+#
+# The fault is reachable by EXACTLY ONE 32-bit value, -2147483647. The driver's
+# polarity is INVERTED -- it passes when the mutant is CAUGHT -- and it also
+# measures a 20,000-triple RANDOM sweep, which must find NOTHING. Those two
+# numbers together are the argument for geom_warp_rtl_directed FT096 naming the
+# value explicitly rather than trusting a fuzzer. Ruling R123 is why the rate is
+# measured at all: a mutant that fires on nothing is a green control attached to
+# nothing.
+#
+# Its NEGATIVE CONTROL is the identical stimulus in geom_warp_rtl_directed
+# FT096, where PRODUCTION agrees with the oracle. Neither run is evidence alone.
+#
+# NOTE THE SOURCE LIST: production `zhao_geom_warp.sv` is ABSENT and the mutant
+# stands in its place. A build carrying both would elaborate whichever the
+# top-module name selected and the other would sit there looking like coverage.
+add_executable(test_geom_warp_shift_oneliner_mutant
+  mutants/geom_warp_shift_oneliner_mutant_driver.cpp)
+target_link_libraries(test_geom_warp_shift_oneliner_mutant PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_warp_shift_oneliner_mutant
+  PREFIX Vzhao_geom_warp_shift_oneliner_mutant
+  TOP_MODULE zhao_geom_warp_shift_oneliner_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_warp_shift_oneliner_mutant.sv)
+add_test(NAME geom_warp_shift_oneliner_mutant COMMAND test_geom_warp_shift_oneliner_mutant)
+set_tests_properties(geom_warp_shift_oneliner_mutant PROPERTIES
+  LABELS "fast;nightly;mutant" TIMEOUT 300)

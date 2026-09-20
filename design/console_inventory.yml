@@ -208,6 +208,9 @@ modules:
     disposition: superseded
     superseded_by: zhao_proj_subsystem
     why: "a thin shell over zhao_project_core, whose one shared instance serves geometry as client A of zhao_proj_subsystem. Owner ruling R3 (reports/OWNER-RULINGS-20260919-EVENING.md): keep the time-multiplex, no third port -- composing this shell would be a second projector (~6,199 ALM / 33 DSP). The register resolves GEOM.PROJECT to zhao_proj_subsystem with the witnesses beside that alias."
+  zhao_geom_warp:
+    disposition: pending_compose
+    why: "GEOM.WARP's application stage, BUILT 2026-09-20 by packet W1 against zref::geom_warp (2,468 directed checks, every counter seen to fire, one committed mutant). NOT composed, and its Field request port is NOT tied off -- the two are different statements. Composition is C1's act and needs three things W1 could not do: the shared host at IN_LANES=15 (R103 P1; composed at 13), a free client port (P2; CLIENTS=2, both taken), and a DrawWarpedForm 0x0304 command, without which no draw can ever set d_warp_en_i and the block would sit permanently in its W09 bypass. pending_compose deliberately, NOT instrument -- `instrument` is a SETTLED disposition and would stop uncashed_cheques.py watching this, which is the exact suppression conflict C5 records against R44."
   zhao_measure_governor:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
