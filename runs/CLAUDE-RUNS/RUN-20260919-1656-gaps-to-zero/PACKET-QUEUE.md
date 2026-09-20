@@ -116,6 +116,26 @@ reference-derived pixel count regenerated in the SAME commit, both numbers
 stated, plus a `proj_en_i` producer), **I17** (POST — now priced at 153/553
 M10K, 27.7%, see R120), **I20**, **I21**, **I27**, **I29**, **I32**.
 
+### 5b. LEDGER DEBT surfaced today -- two small packets, neither on the critical path
+
+**(a) 153 undeclared counter ports (R140).** `check_counters.py` now looks both
+ways and reports **153 self-incrementing 32-bit outputs across 35 blocks that no
+ledger row names**, against 252 that it does -- roughly 38% of the counter
+surface. They are QUESTIONS, not defects: either the ledger owes each a name, or
+it is not a counter and the row is noise. Needs one pass with the contracts open.
+`design/counter_catalog` is APPEND-ONLY with ids equal to positions, so **exactly
+one lane may hold it**.
+
+**(b) The six unresolved `reference_model:` rows (R139).** The expensive half is
+done: `zref::part::` and `zref::post::` DO exist and already serve PART.LADDER,
+PART.EXPAND, PART.SOFT and the grade/echo paths. The six that do not resolve name
+laws that are **genuinely absent, not renamed** -- no collision, spawn or
+integration law in `zref::part::`, no composite in `zref::post::`. Five look like
+removals with a stated reason; **PART.STATE could go either way**, because
+`particle_pack`/`particle_unpack` may be a FORMAT rather than its state law. That
+one needs the contract in hand, and guessing it in the "name a plausible symbol"
+direction is exactly the defect R94 exists to prevent.
+
 ### 6. Whatever the running three refuse
 
 Every packet that refuses must name its exact blocker. **Those blockers are the
