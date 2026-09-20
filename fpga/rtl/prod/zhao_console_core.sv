@@ -7552,14 +7552,20 @@ module zhao_console_core
   // closes, the store joins this stream and `w_ready_i` becomes the AND of the
   // two readies -- which is why the ready below is written as a named wire.
   wire                    tlf_w_valid, tlf_w_ready;
-  wire [3:0]              tlf_w_sp;
   wire [23:0]             tlf_w_dev1, tlf_w_dev2, tlf_w_dev3;
   wire [15:0]             tlf_w_src_id;
-  wire                    tlf_inv_valid;
   /* verilator lint_off UNUSEDSIGNAL */
+  // EVERY FIELD OF THE WRITE PORT THAT THE HISTOGRAM DOES NOT READ, waived
+  // here in one place rather than one at a time, because the set is exactly
+  // "what `zhao_terrain_devstore` would take" and it should read as one
+  // absence and not five coincidences. The store keys on {slot, subpatch} and
+  // holds the centre height and the invalidation; MEASURE.HISTOGRAM keys on
+  // `src_id` and takes only the three magnitudes.
   wire [TERR_MEMSLOT-1:0] tlf_w_slot;        // the devstore's key (absent, above)
+  wire [3:0]              tlf_w_sp;          // ... and its subpatch index
   wire signed [15:0]      tlf_w_cy;          // the devstore's centre height
-  wire [TERR_MEMSLOT-1:0] tlf_inv_slot;      // the devstore's invalidation
+  wire                    tlf_inv_valid;     // the devstore's invalidation strobe
+  wire [TERR_MEMSLOT-1:0] tlf_inv_slot;      // ... and the slot it invalidates
   wire                    tlf_busy;
   // Four of the block's ten counters stop here rather than at this module's
   // edge, and the choice is stated because "which counters get exported" is
