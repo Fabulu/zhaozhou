@@ -283,6 +283,23 @@ def normalise_law(name):
     return name
 
 
+def _yaml_uncommented(line):
+    """The line with any `#` comment removed.
+
+    ADDED 2026-09-20, and it is a REAL DEFECT REPAIR, not tidying. This file's
+    reader searched raw lines for `reference_model:`, so a COMMENT saying what a
+    row used to declare was read as a declaration. That is not hypothetical: the
+    R94 repair of FORGE.SHADOW records the phantom `zref::forge::shadow_hull` in
+    prose immediately above the row, and without this the tool would have gone on
+    seeing a law that was deleted -- a parser that reads its own changelog. The
+    self-test below fires on exactly that line.
+
+    blocks.yml has no `#` inside any reference_model value, so stripping from the
+    first `#` is sufficient here and is deliberately not a YAML parser.
+    """
+    return line.split("#", 1)[0]
+
+
 def declared_laws(path=BLOCKS):
     """{reference_model: [block ids]} from design/blocks.yml."""
     out = {}
@@ -292,7 +309,8 @@ def declared_laws(path=BLOCKS):
     except OSError:
         return out
     cur = None
-    for line in text.splitlines():
+    for raw in text.splitlines():
+        line = _yaml_uncommented(raw)
         m = re.match(r"^\s*-\s+id:\s*([A-Za-z0-9._]+)\s*$", line)
         if m:
             cur = m.group(1)
@@ -301,6 +319,68 @@ def declared_laws(path=BLOCKS):
         if r and cur:
             out.setdefault(r.group(1), []).append(cur)
     return out
+
+
+def _reference_symbols():
+    """Every identifier-bearing byte under reference/, as one blob."""
+    parts = []
+    base = os.path.join(ROOT, "reference")
+    for dirpath, _dirs, names in os.walk(base):
+        for n in names:
+            if n.endswith((".hpp", ".cpp", ".h", ".c")):
+                try:
+                    parts.append(io.open(os.path.join(dirpath, n),
+                                         encoding="utf-8",
+                                         errors="replace").read())
+                except OSError:
+                    pass
+    return "\n".join(parts)
+
+
+def unresolved_reference_models(laws, ref_blob=None, decl=None):
+    """CHECK 5: a `reference_model:` that names a symbol the tree does not have.
+
+    OWNER RULING R94, 2026-09-20: `design/blocks.yml`'s FORGE.SHADOW row declared
+    `zref::forge::shadow_hull`, which has ZERO occurrences under `reference/`.
+
+    WHY THIS IS A DETECTOR AND NOT A LINT. Check 3 above finds two blocks that
+    have declared the SAME ratified law -- the signal that caught the 66-DSP
+    projector duplication, sitting in this file the whole time with nothing
+    reading it. A name that resolves to NOTHING can never collide with anything,
+    so a row like that is silently EXEMPT from check 3. The defect is invisible
+    and it is in the flattering direction: one fewer collision reported.
+
+    Two namespaces, two questions, because the repo uses both:
+      `zref::...`  the LEAF identifier must appear somewhere under `reference/`.
+                   Leaf rather than the full path, because the declarations are
+                   written with varying namespace depth and matching the whole
+                   string reports everything and is therefore useless.
+      `rtl::...`   the named MODULE must be declared in fpga/rtl. These are
+                   blocks whose oracle is another block, which is a legitimate
+                   thing to say and a different resolution.
+
+    It REPORTS. Turning it into a gate means first deciding what the eight
+    currently-unresolved rows should say, and a gate that is red on arrival is a
+    gate people learn to skip -- which is how the v1 FIELD datapath got composed.
+    """
+    if ref_blob is None:
+        ref_blob = _reference_symbols()
+    if decl is None:
+        decl = {}
+    rows = []
+    for sym, blocks in sorted(laws.items()):
+        leaf = sym.split("::")[-1]
+        if not leaf:
+            continue
+        if sym.startswith("rtl::"):
+            ok = leaf in decl
+            kind = "rtl module"
+        else:
+            ok = leaf in ref_blob
+            kind = "reference/ symbol"
+        if not ok:
+            rows.append((sym, kind, sorted(set(blocks))))
+    return rows
 
 
 def shared_law_collisions(laws):
@@ -471,6 +551,36 @@ def self_test():
     assert len(declared_laws()) > 50 or not os.path.exists(
         os.path.join(ROOT, BLOCKS)), "declared_laws went vacuous"
 
+    # THE COMMENT STRIPPER, FIRED. This exact line is in blocks.yml today (the
+    # R94 repair records the phantom it removed), and without _yaml_uncommented
+    # the reader takes it for a live declaration -- a parser reading its own
+    # changelog, and the failure is silent and flattering.
+    ghost = "    # `reference_model: zref::forge::shadow_hull` STOOD HERE UNTIL"
+    assert re.search(r"reference_model:\s*([A-Za-z_][A-Za-z0-9_:]*)",
+                     ghost) is not None, "the self-test's own ghost line stopped matching"
+    assert re.search(r"reference_model:\s*([A-Za-z_][A-Za-z0-9_:]*)",
+                     _yaml_uncommented(ghost)) is None,         "FIRE case missed: a commented-out reference_model is still read as one"
+    assert _yaml_uncommented("    reference_model: zref::render::project_vertex")         .strip() == "reference_model: zref::render::project_vertex",         "FALSE POSITIVE: the stripper ate a live declaration"
+
+    # CHECK 5 in both polarities, on the shape R94 names.
+    u = unresolved_reference_models(
+        {"zref::forge::shadow_hull": ["FORGE.SHADOW"],
+         "zref::render::project_vertex": ["GEOM.PROJECT"],
+         "rtl::zhao_real_block": ["A.BLOCK"],
+         "rtl::zhao_absent_block": ["B.BLOCK"]},
+        ref_blob="int32_t project_vertex(const mat4fx& vp);",
+        decl={"zhao_real_block": "r.sv"})
+    u_got = {s for s, _k, _b in u}
+    assert "zref::forge::shadow_hull" in u_got,         "FIRE case missed: a zref name with no symbol under reference/"
+    assert "rtl::zhao_absent_block" in u_got,         "FIRE case missed: an rtl:: name with no module"
+    assert "zref::render::project_vertex" not in u_got,         "FALSE POSITIVE: a law that does resolve"
+    assert "rtl::zhao_real_block" not in u_got,         "FALSE POSITIVE: an rtl:: name that does resolve"
+    # And on LIVE data it must not go vacuous in the other direction: with a
+    # blob that contains nothing, every declared law is unresolved.
+    assert len(unresolved_reference_models(declared_laws(), ref_blob="",
+                                           decl={})) > 50 or not os.path.exists(
+        os.path.join(ROOT, BLOCKS)), "check 5 went vacuous against an empty tree"
+
     # CHECK 4 in both polarities, on the shape that actually hid the projector:
     # a chain that is rooted at every link and adopted at none. `m_adopted` is
     # reachable from the production top; `m_orphan_chain` is instantiated (so
@@ -575,7 +685,8 @@ def main():
     targets = load_fit_targets()
 
     print("uncashed_cheques: self-test PASSED -- fire and no-fire controls "
-          "for checks 1-4, the verdict split, and the --gate ratchet")
+          "for checks 1-5, the YAML comment stripper, the verdict split, "
+          "and the --gate ratchet")
     print("scanned %d modules, %d fit targets, %d manifest entries\n"
           % (len(decl), len(targets), len(manifest)))
 
@@ -669,6 +780,24 @@ def main():
     print("  A module can be built, composed into a subsystem, composed into a")
     print("  pipe and fitted on physical pins, and still not be what production")
     print("  instantiates. Rooted at every step, adopted at none.")
+
+    print("\n== CHECK 5: A `reference_model:` THAT RESOLVES TO NOTHING "
+          "(owner ruling R94)")
+    urows = unresolved_reference_models(laws, decl=decl)
+    for sym, kind, blocks in urows:
+        print("  ** %-40s no %-18s  declared by %s"
+              % (sym, kind, ", ".join(blocks)))
+    print("\n  %d of %d declared reference models do not resolve."
+          % (len(urows), len(laws)))
+    print("  These rows are EXEMPT FROM CHECK 3 ABOVE, silently: a name that")
+    print("  resolves to nothing can never collide with another block's, so a")
+    print("  wrong string buys an exemption from the one tool this tree has")
+    print("  against a second implementation of ratified arithmetic. That is")
+    print("  the broken-instrument law in the ledger rather than in a counter:")
+    print("  the defect makes the report SHORTER.")
+    print("  Repair is one of two things and never a third: name the law that")
+    print("  exists, or REMOVE the key and say in the row why the block has no")
+    print("  reference model. Inventing a plausible symbol is the same defect.")
 
     # --gate is a RATCHET, not a verdict on the backlog. PENDING rows are
     # allowed: the manifest wrote the cheque down, and this tool exists to
