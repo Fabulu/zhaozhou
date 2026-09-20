@@ -3400,3 +3400,127 @@ would create roughly **twenty-two** tie-offs, and all four terrain blocks
 together *"would have read 21 → 17 and buried roughly fifty undeclared
 tie-offs — available on any afternoon, and the campaign's single largest act of
 self-deception."* **Holding the fit does not license buying the register down.**
+
+## R201 — R176 WAS RIGHT AND TOO SMALL: five implementations, not three
+
+**TERRLAW, 2026-09-20.** R176 said the ratified terrain law had three
+implementations. **Measured, it had five.**
+
+`fx_add_sat` lived in **patch, patch_acc, TESS and VELOCITY** — and per
+`module_graph.build()`, **tess is composed in all three production roots and
+velocity is in `zhao_prod_top`.** `sp_mask` was in two.
+
+**The packet found the other two only because it measured with
+`duplicate_functions.py` instead of reading the count off the ruling.** That
+tool could not see signed functions until this morning (R173), which is very
+likely why R176 undercounted in the first place — **a ruling written on a blind
+instrument's output, corrected by the same instrument once it could see.**
+
+**Two corrections to my brief, both self-diagnosed and both worth keeping:**
+
+* **`lodfeed` has NO functions at all** and carried only the `h16 → fx`
+  conversion — not `fx_add_sat`, not `covers`. My brief named it as carrying its
+  own copies of all three.
+* **`patch_acc` is uncomposed because its two mentions inside the composed
+  `zhao_field_v3_exec` are COMMENTS.** The packet's own first reasoning — *"its
+  instantiator isn't composed"* — was wrong, and it said so rather than letting
+  a right conclusion stand on a wrong premise. That is R180's trap
+  (`upstream:` is intent, grep hits are prose) arriving in a packet's own
+  analysis.
+
+## R202 — A WIDER VARIANT THAT WASN'T: the extra bit was a duplicated sign
+
+**The near-miss in this packet, and the reason it is worth a ruling.**
+
+`tess`'s `fx_add_sat` took **33-bit inputs summed at 34**. R176's own text warns
+that if a composed copy handles a case the package does not, **the package must
+grow to cover it** — never the copy narrow. So this looked exactly like the case
+that forces the package wider.
+
+**It was not.** Both call sites pass `{x[31], x}`, and all four operands are
+`signed [31:0]`. **The 33rd bit was a duplicated sign bit.** Nothing was ever
+carried in it; nothing narrowed when it went away. **The package file is
+byte-unchanged** — `git diff` against the merge base on that path is empty.
+
+**The lesson is the one `CLAUDE.md` states about port widths and SETUPDOOR
+restated today (R188): a width is a PROJECTION of a value, not the value.**
+Reading "33 bits" as "a wider quantity" would have grown a ratified law's
+container to hold a bit that cannot be set — the same error as widening
+`zhao_part_expand`'s arm for a 22nd bit that the clamp makes unreachable.
+
+**And note the direction it would have failed in.** Growing the package would
+have *looked* like diligence — honouring the rule that says never narrow — while
+committing silicon to nothing. **The rule "never narrow" does not imply "widen
+when in doubt"; it implies MEASURE WHAT THE VALUE CAN ACTUALLY BE.**
+
+**No forwarders were left behind**, deliberately, so `duplicate_functions.py`
+can still report honestly: **43 → 41** duplicated names, **433 → 429** distinct,
+the −4 being exactly the four names removed. A forwarder would have made the
+tool report success while the duplication persisted.
+
+## R203 — AND MY OWN BRIEF'S ALM ARGUMENT DOES NOT TRANSFER
+
+**I briefed this packet that the work was area-relevant**, citing plan §14.4's
+*"eliminate duplicated ownership/engines by construction"* and the combiner
+chapter where fourteen multipliers appeared. **TERRLAW measured and corrected
+me:**
+
+> §14.4 is about duplicated **engines**. A `function automatic` elaborates **per
+> call site wherever it is declared**, and the law-evaluation sites are
+> unchanged in every module — patch 10→10, acc 7→7, velocity 3→3, tess 2→2,
+> lodfeed 1→1. **Expect ALM-NEUTRAL.**
+
+**So the value of this work is ONE STATEMENT OF A RATIFIED LAW, not area** — and
+that is still worth having, because five copies of a law is five places for it
+to drift. But **the number must not be claimed.** If the next fit moves on these
+modules, that movement is **something to EXPLAIN, not something to bank**, and a
+packet quoting an area win here would be quoting my error back at me.
+
+**Three of TERRLAW's own instruments lied, all caught and recorded:**
+
+1. **Static-linked mutants HUNG at zero user CPU — and a hang reads as "not
+   fired".** This is `CLAUDE.md`'s alive-at-zero-CPU tell, in the mutant harness
+   rather than in ctest.
+2. **The verdict used a case-insensitive `-match`, so `"0 mismatches"` matched
+   `"MISMATCH"`** — and it printed **"11 of 11 fired"**. A pattern that matches
+   its own negation is the purest form of an instrument that cannot see its
+   subject.
+3. **Four of seven "mutations" were not mutations** — e.g.
+   `{{9{h[15]}}, h[14:0]}` is identical to `{{8{h[15]}}, h}` across all 65,536
+   inputs. **A mutant that does not change behaviour is a positive control that
+   cannot fire**, and it had been counted as one.
+
+Corrected to **7 real controls, 4 fired**, with the three silences named as
+**reachability limits** rather than passes — and each module's header now records
+what its differential does **not** cover. Naming an uncovered case is worth more
+than a green.
+
+## R204 — A GATE WENT RED ON LINE ENDINGS WHILE THE CONTENT WAS PERFECT
+
+Post-merge, `packet_i_g8b_registration_static` failed with *"manifest hash does
+not describe `fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv`"*, and the G8B
+generator refused outright: *"G8B generator input is not checkout-stable LF
+text."*
+
+**Nothing was wrong with the content.** `git ls-files --eol` told the whole
+story: **`i/lf w/crlf attr/text eol=lf`** — the index was LF, the attribute
+demanded LF, and the **working copy was CRLF because the file was written before
+the `.gitattributes` pin landed.** `core.autocrlf` did it; TERRLAW added the pin
+(line 107) but a pin governs **future checkouts** and does not rewrite a copy
+already on disk.
+
+Re-materialising the file made the generator run and reproduce its output
+**byte-identically** — `git status` clean afterwards, nothing to commit. The
+gate hashes the **working tree**, so a line-ending difference in a file whose
+content is correct reads as a manifest mismatch.
+
+**Two things to carry:**
+
+1. **`git ls-files --eol <path>` is the diagnostic**, and it is instant. A hash
+   mismatch on a file you did not edit is a line-ending question before it is a
+   content question.
+2. **Adding an `eol=lf` pin does not fix the copies that already exist.** This
+   is the `.gitignore` lesson again — *"making waste invisible to your tooling
+   is not the same as removing it"* — in its line-ending costume: **the rule was
+   added and nothing renormalised the tree.** Anyone holding a working copy from
+   before the pin will hit this same red, and the content will be perfect.
