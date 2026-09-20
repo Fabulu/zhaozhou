@@ -13,23 +13,37 @@
 // So every case below is about the wrapper, and every one of them is a COUNTER
 // THAT MUST MOVE. `tools/budget/completion_register.py`'s rule is that a
 // counter asserted zero needs a firing positive control or a stated structural
-// reason it cannot fire; this file is the firing control for all eight of this
-// block's own counters, and the assertions are on the CORRECT behaviour rather
-// than on the defect, so nothing here passes only while a bug exists.
+// reason it cannot fire; this file is the firing control for this block's own
+// counters, and the assertions are on the CORRECT behaviour rather than on the
+// defect, so nothing here passes only while a bug exists.
 //
-//   1  a loaded program runs and its outputs reach the right client   runs_o
-//   2  an unloaded slot is REFUSED, never faked                       noprog_o
-//   3  an insert through the directory invalidates the slot           noprog_o
-//   4  two clients contend and the grant alternates                   contended_grants_o
-//   5  a load offered during a run defers the next grant              load_defers_o
-//   6  an over-long header is clamped, not wrapped                    hdr_clamped_o
-//   7  a program naming a table the store lacks is seen               tbl_oob_o
-//   8  loads are counted                                              loads_o
+//   1   a loaded program runs and its outputs reach the right client  runs_o
+//   1b  a DECLARED output that was never written is REFUSED           out_incomplete_o
+//   1c  `mask == 0` keeps the pre-R101 behaviour exactly              (negative control)
+//   1d  the detector differences the MASK, not "all lanes"            out_incomplete_o
+//   2   an unloaded slot is REFUSED, never faked                      noprog_o
+//   3   an insert through the directory invalidates the slot          noprog_o
+//   4   two clients contend and the grant alternates                  contended_grants_o
+//   5   a load offered during a run defers the next grant             load_defers_o
+//   6   an out-of-plan uop is REFUSED, not wrapped                    ld_oob_o
+//   8   loads are counted                                             loads_o
+//   9   the fabric's alarms are asserted zero as a composition guard
 //
-// `pc_oob_o` is the ninth and it is the one that CANNOT be fired with legal
-// stimulus: case 6's clamp is what makes the state unreachable. That is the
-// committed-mutant case, and it is recorded in the block header rather than
-// faked with an assertion here.
+// THREE COUNTERS THIS HEADER USED TO NAME DO NOT EXIST, and the claim is
+// corrected here rather than inherited (2026-09-20, the FIELDP4 packet). It
+// listed `hdr_clamped_o` for case 6, `tbl_oob_o` for a case 7 that was never
+// written, and `pc_oob_o` as "the ninth ... the committed-mutant case". Zero
+// occurrences of any of the three anywhere under `fpga/rtl`. Case 6 fires
+// `ld_oob_o`; there is no case 7; and the block has no counter that legal
+// stimulus cannot reach, so it owes no mutant. A test header that names
+// instruments the design does not have is the false-PRESENCE half of this
+// repo's most repeated defect, and it reads as coverage.
+//
+// `no_result_o` is the one counter here that stimulus does not fire, and the
+// reason is structural rather than untested: it needs a program that reaches
+// OP_END having written NOTHING into its window, which every program this file
+// loads deliberately does not do. It is asserted zero in case 1b as the
+// disjointness claim against `out_incomplete_o`, not as evidence it works.
 
 #include <cstdint>
 #include <cstdio>
@@ -106,18 +120,40 @@ bool load_word(Dut& d, uint8_t kind, uint8_t slot, uint32_t addr, uint64_t lo64,
 }
 
 // The program header word: instr_count in [7:0], out_base in [13:8], the two
-// table entry counts at 16 and 24.
-uint64_t header_word(uint8_t count, uint8_t out_base, uint8_t tbl_n0 = 0, uint8_t tbl_n1 = 0) {
+// table entry counts at 16 and 24, and the REQUIRED-OUTPUT MASK at 32 (owner
+// ruling R101). The mask is OUT_LANES wide -- four here, since this bench takes
+// the module's defaults (IN_LANES=12, OUT_LANES=4, REGS=32) and
+// tests/CMakeLists.txt overrides no parameter.
+//
+// `req_mask == 0` means the program DECLARED NOTHING and the pre-R101
+// completion test applies unchanged. That clause is what makes the repair
+// additive, and case 1c is the assertion on it.
+uint64_t header_word(uint8_t count, uint8_t out_base, uint8_t tbl_n0 = 0, uint8_t tbl_n1 = 0,
+                     uint8_t req_mask = 0) {
   return static_cast<uint64_t>(count) | (static_cast<uint64_t>(out_base & 0x3F) << 8) |
          (static_cast<uint64_t>(tbl_n0 & 0x7F) << 16) |
-         (static_cast<uint64_t>(tbl_n1 & 0x7F) << 24);
+         (static_cast<uint64_t>(tbl_n1 & 0x7F) << 24) |
+         (static_cast<uint64_t>(req_mask & 0x0F) << 32);
 }
 
-// Load `R[out_base] = R0 + R1`, then END. Two instructions.
-bool load_add_program(Dut& d, uint8_t slot, uint8_t out_base) {
+// Load `R[out_base] = R0 + R1`, then END. Two instructions. It writes exactly
+// ONE of the four lanes of its declared output window, which is what makes it
+// the right stimulus for both sides of the R101 guard.
+bool load_add_program(Dut& d, uint8_t slot, uint8_t out_base, uint8_t req_mask = 0) {
   if (!load_word(d, kLdUop, slot, 0, instr(kOpAdd, out_base, 0, 1, 0, 0))) return false;
   if (!load_word(d, kLdUop, slot, 1, instr(kOpEnd, 0, 0, 0, 0, 0))) return false;
-  return load_word(d, kLdHeader, slot, 0, header_word(2, out_base));
+  return load_word(d, kLdHeader, slot, 0, header_word(2, out_base, 0, 0, req_mask));
+}
+
+// Two window lanes written, not one: `R[ob] = R0 + R1`, `R[ob+1] = R0 + R1`,
+// END. Case 1d runs THIS program twice with two different masks, which is the
+// discrimination proof -- the only thing that moves between the OK verdict and
+// the refusal is the field the detector reads.
+bool load_two_out_program(Dut& d, uint8_t slot, uint8_t out_base, uint8_t req_mask) {
+  if (!load_word(d, kLdUop, slot, 0, instr(kOpAdd, out_base, 0, 1, 0, 0))) return false;
+  if (!load_word(d, kLdUop, slot, 1, instr(kOpAdd, out_base + 1, 0, 1, 0, 0))) return false;
+  if (!load_word(d, kLdUop, slot, 2, instr(kOpEnd, 0, 0, 0, 0, 0))) return false;
+  return load_word(d, kLdHeader, slot, 0, header_word(3, out_base, 0, 0, req_mask));
 }
 
 void set_req_in(Dut& d, int client, int lane, int32_t value) {
@@ -144,6 +180,11 @@ void set_req_slot(Dut& d, int client, uint8_t slot) {
 // state, and the accept is then missed entirely while the engine goes on to run
 // the request. That is what the first version of this file did, and the symptom
 // was a timeout beside a `runs_o` of exactly one.
+// The WHOLE response window of the last run, captured at the same instant as
+// `out0`. Case 1d needs lane 1, and reading `resp_out_o` after `run_once`
+// returns would read it after the front has left E_RESP.
+int32_t g_last_out[4] = {0, 0, 0, 0};
+
 bool run_once(Dut& d, int client, int32_t* out0, uint8_t* status, int budget = 40000) {
   const uint32_t m = (1u << client);
   d.req_valid_i |= m;
@@ -155,6 +196,7 @@ bool run_once(Dut& d, int client, int32_t* out0, uint8_t* status, int budget = 4
     if (!accepted && (d.req_ready_o & m)) accepted = true;
     if (accepted && (d.resp_valid_o & m)) {
       if (out0 != nullptr) *out0 = static_cast<int32_t>(d.resp_out_o[0]);
+      for (int l = 0; l < 4; ++l) g_last_out[l] = static_cast<int32_t>(d.resp_out_o[l]);
       if (status != nullptr) *status = d.resp_status_o;
       got = true;
     }
@@ -188,7 +230,15 @@ int main(int argc, char** argv) {
   // R2 = R0 + R1 with out_base = 2, so the first output lane is the sum. The
   // value is checked because a composition that delivered SOMETHING would pass
   // a liveness test while handing back the previous run's register.
-  check(load_add_program(dut, /*slot=*/1, /*out_base=*/2), "program loads", 1, 1);
+  //
+  // THE MASK IS 0b0001 AND THAT IS THE POINT. This program writes exactly one
+  // of the four lanes in its declared window, so a header saying it requires
+  // lane 0 is the TRUE declaration, and the run must succeed. Before owner
+  // ruling R101 this case carried no mask at all and asserted "status is OK"
+  // for a program writing 1 of 4 -- a passing test that documented the defect,
+  // which is why the assertion is now on what the host is SUPPOSED to do.
+  check(load_add_program(dut, /*slot=*/1, /*out_base=*/2, /*req_mask=*/0x1), "program loads", 1,
+        1);
   check(dut.loads_o == 3, "loads_o counts three words", 3, dut.loads_o);
 
   set_req_slot(dut, 0, 1);
@@ -217,8 +267,90 @@ int main(int argc, char** argv) {
   check(run_once(dut, 1, &out, &st), "client 1 completes a run", 1, 1);
   check(out == 4, "client 1 gets its OWN operands", 4, static_cast<uint64_t>(out & 0xFFFFFFFF));
 
+  // ---- 1b. A DECLARED OUTPUT THAT WAS NEVER WRITTEN IS A REFUSAL ----------
+  // Owner ruling R101, and `spec/form/field-ir.md` 7.1's law W10: "Do not make
+  // an absent output look like a zero result."
+  //
+  // THE SAME two-instruction program as case 1, loaded with a header declaring
+  // ALL FOUR lanes of its output window required. It writes one. Lanes 1..3
+  // then hold the zeroes the front cleared them to at grant -- values a caller
+  // reading only the lanes cannot tell from a field that is genuinely zero
+  // there. Until R101 the host answered 8'h00 SUCCESS for exactly this.
+  //
+  // The assertion is on the REPAIRED behaviour, not on the defect: it would
+  // fail against the pre-R101 host (which returns 0x00 here), and it goes on
+  // passing forever after the repair. That is the distinction CLAUDE.md draws
+  // between a control and a test that asserts the bug.
+  const uint32_t runs_before_1b = dut.runs_o;
+  check(dut.out_incomplete_o == 0, "out_incomplete_o starts at zero, and that is a claim", 0,
+        dut.out_incomplete_o);
+  check(load_add_program(dut, /*slot=*/3, /*out_base=*/2, /*req_mask=*/0xF),
+        "the same program loads with all four lanes declared", 1, 1);
+  set_req_slot(dut, 0, 3);
+  set_req_in(dut, 0, 0, 11);
+  set_req_in(dut, 0, 1, 31);
+  check(run_once(dut, 0, &out, &st), "the under-writing run still ANSWERS", 1, 1);
+  check(st == 0xF3, "status is ST_PARTIAL, not OK", 0xF3, st);
+  check(dut.out_incomplete_o == 1, "out_incomplete_o FIRED", 1, dut.out_incomplete_o);
+  check(dut.runs_o == runs_before_1b, "a refused run is NOT counted as a run", runs_before_1b,
+        dut.runs_o);
+  // The two verdicts are disjoint by construction, and this is the assertion
+  // that says so: `no_result_o` still means "the window was untouched", which
+  // is not what happened here. Merging them would have been the five-faults-
+  // one-bit shape the block's own header argues against.
+  check(dut.no_result_o == 0, "no_result_o is NOT what fired", 0, dut.no_result_o);
+  // The lane that WAS written still carries its real value. The refusal is a
+  // STATUS, not a wipe -- wiping would destroy the one honest number in the
+  // answer and tell the caller nothing extra.
+  check(out == 42, "the written lane still carries its real value", 42,
+        static_cast<uint64_t>(out));
+
+  // ---- 1c. `mask == 0` KEEPS THE PRE-R101 BEHAVIOUR EXACTLY --------------
+  // This is the clause that makes the repair ADDITIVE: every program written
+  // against the old contract declares nothing, so nothing that exists today
+  // changes meaning. It is also the guard's negative control in the "does it
+  // refuse everything?" direction -- the identical under-writing program, one
+  // field changed, and the verdict goes back to OK.
+  const uint32_t runs_before_1c = dut.runs_o;
+  check(load_add_program(dut, /*slot=*/4, /*out_base=*/2, /*req_mask=*/0x0),
+        "the same program loads declaring nothing", 1, 1);
+  set_req_slot(dut, 0, 4);
+  check(run_once(dut, 0, &out, &st), "the undeclared run completes", 1, 1);
+  check(st == 0, "an undeclared program keeps the old ANY-write test", 0, st);
+  check(dut.out_incomplete_o == 1, "out_incomplete_o did NOT fire on mask 0", 1,
+        dut.out_incomplete_o);
+  check(dut.runs_o == runs_before_1c + 1, "and it counts as a run", runs_before_1c + 1,
+        dut.runs_o);
+
+  // ---- 1d. THE DETECTOR DIFFERENCES THE MASK, not "all lanes" ------------
+  // The composed console runs a 3-output STAMP profile and a 7-output FLOW
+  // profile through ONE seven-lane window (`zhao_console_core.sv`, OUT_LANES=7),
+  // so "every lane of the window" would refuse every stamp point. Required is
+  // PER PROGRAM, and these two runs are the proof: the same three-instruction
+  // program writing window lanes 0 and 1, run twice, with only the mask moved.
+  const uint32_t incomplete_before_1d = dut.out_incomplete_o;
+  check(load_two_out_program(dut, /*slot=*/5, /*out_base=*/2, /*req_mask=*/0x3),
+        "a two-lane program loads declaring those two", 1, 1);
+  set_req_slot(dut, 0, 5);
+  check(run_once(dut, 0, &out, &st), "the two-lane run completes", 1, 1);
+  check(st == 0, "a subset mask that is SATISFIED is OK", 0, st);
+  check(g_last_out[0] == 42 && g_last_out[1] == 42, "both declared lanes carry the sum", 42,
+        static_cast<uint64_t>(g_last_out[1]));
+  check(dut.out_incomplete_o == incomplete_before_1d, "no refusal on the satisfied subset",
+        incomplete_before_1d, dut.out_incomplete_o);
+
+  check(load_two_out_program(dut, /*slot=*/6, /*out_base=*/2, /*req_mask=*/0x7),
+        "the SAME program loads declaring three", 1, 1);
+  set_req_slot(dut, 0, 6);
+  check(run_once(dut, 0, &out, &st), "the three-declared run still answers", 1, 1);
+  check(st == 0xF3, "one undeclared-but-required lane short is a refusal", 0xF3, st);
+  check(dut.out_incomplete_o == incomplete_before_1d + 1, "out_incomplete_o fired on the mask",
+        incomplete_before_1d + 1, dut.out_incomplete_o);
+
   // ---- 2. an unloaded slot is refused, never faked ------------------------
-  set_req_slot(dut, 0, 5);  // nothing was ever loaded into slot 5
+  // Slot 7 -- slots 1..6 all hold programs by now (cases 1, 1b, 1c, 1d) and
+  // slot 2 is loaded in case 4, so 7 and 0 are the only never-written ones.
+  set_req_slot(dut, 0, 7);  // nothing was ever loaded into slot 7
   check(run_once(dut, 0, &out, &st), "an unloaded slot still answers", 1, 1);
   check(st == 0xF0, "status is ST_NO_PROGRAM", 0xF0, st);
   check(out == 0, "lanes are zeroed, and the STATUS is what says so", 0,
@@ -323,13 +455,16 @@ int main(int argc, char** argv) {
   check(dut.ld_oob_o == 1, "ld_oob_o fired", 1, dut.ld_oob_o);
 
   // ---- 8. loads are counted ----------------------------------------------
-  // EIGHT, counted out rather than bounded, because a `>=` would not notice a
-  // load the port accepted twice: 3 for the ADD program (two uops and a
-  // header), 3 for the second copy of it, 1 for the load that was deferred past
-  // a client in case 5, and 1 for the out-of-plan uop in case 6. An accepted
-  // word is counted whether or not it was written, which is what makes
-  // `ld_oob_o` a REFUSAL count rather than a second load count.
-  check(dut.loads_o == 8, "loads_o counted every accepted word, and only once", 8,
+  // TWENTY-TWO, counted out rather than bounded, because a `>=` would not
+  // notice a load the port accepted twice: 3 each for the four copies of the
+  // ADD program (two uops and a header) in cases 1, 1b and 1c, 4 each for the
+  // two copies of the two-lane program in case 1d (three uops and a header),
+  // 3 for the second ADD program in case 4, 1 for the load that was deferred
+  // past a client in case 5, and 1 for the out-of-plan uop in case 6:
+  // 3 + 3 + 3 + 4 + 4 + 3 + 1 + 1 = 22. An accepted word is counted whether or
+  // not it was written, which is what makes `ld_oob_o` a REFUSAL count rather
+  // than a second load count.
+  check(dut.loads_o == 22, "loads_o counted every accepted word, and only once", 22,
         dut.loads_o);
 
   // ---- 9. THE FABRIC'S ALARMS ALL READ ZERO, and that is a claim ----------

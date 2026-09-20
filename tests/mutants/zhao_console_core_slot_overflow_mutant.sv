@@ -2369,6 +2369,11 @@ module zhao_console_core_slot_overflow_mutant
   // then hold the zeroes the front cleared them to, and a caller reading only
   // the lanes could not tell that from a field whose value is zero.
   output logic [31:0]  fld_no_result_o,
+  // A point whose run wrote SOME BUT NOT ALL of the lanes its program header
+  // declared required (owner ruling R101). Forwarded by `.*` like every other
+  // port -- this file is a WRAPPER, so it carries the production port list and
+  // no copy of the production body.
+  output logic [31:0]  fld_out_incomplete_o,
   // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
   // `zhao_field_v3_engine`'s own header is right that five faults reduced to
   // one bit is a bit that says "something, somewhere", and a guard that cannot

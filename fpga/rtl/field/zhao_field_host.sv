@@ -291,9 +291,15 @@ module zhao_field_host #(
     // issuing back-to-back points would starve the loader for a whole frame.
     //
     // `ld_kind_i`: 0 UOP, 1 TABLE ENTRY, 2 HEADER, 3 UNIFORM. The HEADER is
-    // written LAST: it carries `out_base`, commits both knot tables with their
-    // entry counts, and is the write that marks the slot runnable, so a
-    // partially written program can never execute.
+    // written LAST: it carries `out_base`, the REQUIRED-OUTPUT MASK, commits
+    // both knot tables with their entry counts, and is the write that marks the
+    // slot runnable, so a partially written program can never execute.
+    //
+    // THE HEADER WORD LAYOUT, which was written down nowhere until R101:
+    //   [13:8]          out_base          (REGW bits)
+    //   [22:16]         knot entry count
+    //   [32 +: OUT_LANES] required-output mask; 0 = not declared
+    //   everything else reserved, must be zero
     input  logic                       ld_valid_i,
     output logic                       ld_ready_o,
     input  logic [              1:0]   ld_kind_i,
@@ -374,6 +380,13 @@ module zhao_field_host #(
     // lanes then answer with the zeroes this block cleared them to, and a
     // caller reading only the lanes could not tell that from a field of zero.
     output logic [31:0] no_result_o,
+    // A point whose run wrote SOME but not ALL of the lanes its header
+    // declared required. Separate from `no_result_o` on purpose: that one
+    // means the window was untouched, this one means the answer is a MIXTURE
+    // of real values and cleared zeroes, which is the failure a caller cannot
+    // see. Zero while no header declares a mask; fired with legal stimulus by
+    // `tests/field/field_host_directed.cpp` case 1b.
+    output logic [31:0] out_incomplete_o,
     // EVERY ALARM THE FABRIC OWNS, UNMERGED. `zhao_field_v3_engine`'s own header
     // is right that five faults reduced to one bit is a bit that says
     // "something, somewhere"; these are counted separately for the same reason.
@@ -403,6 +416,51 @@ module zhao_field_host #(
   localparam logic [7:0] StNoProgram = 8'hF0;
   localparam logic [7:0] StNoResult  = 8'hF1;
   localparam logic [7:0] StAlarm     = 8'hF2;
+  // A run that wrote SOME but not ALL of the lanes its header declared
+  // REQUIRED. See `THE REQUIRED-OUTPUT MASK` below; this is the status W10
+  // ("Do not make an absent output look like a zero result") asks for, and it
+  // is distinct from StNoResult because "wrote nothing" and "wrote four of
+  // seven" are different faults and merging them is the five-faults-one-bit
+  // shape `zhao_field_v3_engine`'s header already argues against.
+  localparam logic [7:0] StPartial   = 8'hF3;
+
+  // ==========================================================================
+  // THE REQUIRED-OUTPUT MASK -- header word bits [32 +: OUT_LANES]
+  // ==========================================================================
+  // WHY IT EXISTS. Until 2026-09-20 a run was called successful when
+  // `cur_out_seen != '0` -- ANY write into the declared window. A point that
+  // wrote five of its six declared lanes reported 8'h00 SUCCESS and the sixth
+  // lane answered with the zero this block cleared it to at grant. That is
+  // exactly the hazard the StNoResult comment beside it states, generalised
+  // from "wrote nothing" to "wrote some", and the reasoning there covers it
+  // without changing a word. Owner ruling R101.
+  //
+  // WHY THE GUARD COULD NOT HAVE BEEN WRITTEN BEFORE. "Required" was not a
+  // quantity this interface carried: the header word gives `instr_count`,
+  // `out_base` and the table counts, and nothing says how many lanes the
+  // program's profile declares. `spec/form/field-ir.md` 7.1 DOES -- earth 4,
+  // warp 6, flow 7, formation 6, stamp 3 -- and 5.3's I/O map names the
+  // registers. So the mask is that ratified fact TRANSPORTED, not a new law.
+  // The defect was upstream of the guard, which is why patching the guard
+  // alone would have sent the next person to the wrong line.
+  //
+  // WHY IT IS ADDITIVE. Bits 32..95 of the 96-bit header word are unread by
+  // the header path: the LdHeader decode touches only `ld_data_i[8 +: REGW]`
+  // (out_base, bits 8..13 at the ceiling REGW=6) and `ld_data_i[22:16]` (the
+  // table count). Sixty-four free bits, and `OUT_LANES <= REGS <= 64` by the
+  // guards above, so the mask always fits. **`mask == 0` MEANS "NOT DECLARED"
+  // AND KEEPS THE OLD TEST EXACTLY**, so no program written against the
+  // previous contract changes meaning -- today no software emits a header word
+  // at all (`zhao_field_doorbell` forwards the HPS's 96 bits verbatim), so the
+  // legacy clause is genuinely inert rather than merely compatible.
+  //
+  // THE TWO SIDES OF THE COMPARISON ARE CLOCKED BY DIFFERENT THINGS, which is
+  // the first question CLAUDE.md's metadata-swap chapter says to ask of any
+  // checker. `cur_out_seen` is set from the FABRIC's arbiter write port during
+  // E_RUN; `hdr_outreq` is written by the LOADER, which is accepted only in
+  // E_IDLE. No register enable drives both, so the difference cannot be
+  // corrupted in lockstep -- and the counter is fired by legal stimulus in
+  // `tests/field/field_host_directed.cpp` case 1b rather than argued.
 
   // Quartus 17.0 rejects a module-scope `if`; the elaboration guards live in an
   // `initial begin ... end` per the house rule. `--lint-only` does not run
@@ -413,6 +471,18 @@ module zhao_field_host #(
     end
     if (OUT_LANES > REGS) begin
       $fatal(1, "zhao_field_host: OUT_LANES=%0d exceeds REGS=%0d", OUT_LANES, REGS);
+    end
+    // THE REQUIRED-OUTPUT MASK'S HOME, CHECKED RATHER THAN ASSERTED IN PROSE.
+    // It occupies `ld_data_i[32 +: OUT_LANES]` of the 96-bit header word, so
+    // OUT_LANES > 64 would run the mask off the end of the word -- silently,
+    // since a part-select past the top of a vector reads zero and a mask of
+    // zero means "nothing declared", i.e. the guard would switch itself OFF in
+    // the flattering direction. That is the failure this line exists to stop.
+    // It is implied by OUT_LANES <= REGS <= 64 today; it is stated anyway
+    // because the two ceilings are set by different arguments and one of them
+    // could move without the other.
+    if (OUT_LANES > 64) begin
+      $fatal(1, "zhao_field_host: OUT_LANES=%0d; the required-output mask lives in header bits [32 +: OUT_LANES] of a 96-bit word, so 64 is the ceiling", OUT_LANES);
     end
     if (CLIENTS < 1) $fatal(1, "zhao_field_host: CLIENTS must be at least 1");
     // A replication of zero is illegal and a fabric of zero lanes has no
@@ -508,6 +578,11 @@ module zhao_field_host #(
   // PROGCACHE contract names.
   logic [PROGS-1:0] hdr_loaded;
   logic [REGW-1:0]  hdr_outbase [0:PROGS-1];
+  // The required-output mask, one per slot. See the chapter above the status
+  // localparams. Read LIVE at completion, exactly as `hdr_outbase` is read
+  // live by `out_hit_c`, and for the same reason: a load is accepted only in
+  // E_IDLE, so no header write can race a run that is reading this.
+  logic [OUT_LANES-1:0] hdr_outreq [0:PROGS-1];
 
   // ==========================================================================
   // THE ARBITER
@@ -776,6 +851,18 @@ module zhao_field_host #(
                    ((int'(fab_wr_reg) - int'(hdr_outbase[cur_slot])) < int'(OUT_LANES));
   wire [OUTW-1:0] out_idx_c = OUTW'(int'(fab_wr_reg) - int'(hdr_outbase[cur_slot]));
 
+  // The running point's declared-required set, and the two verdicts drawn from
+  // it. `req_mask_c == 0` is "the header declared nothing", which is the ONLY
+  // case that keeps the pre-R101 test -- and it keeps it exactly.
+  // The two verdicts are DISJOINT and neither changes `no_result_o`'s meaning.
+  // "Wrote nothing" stays StNoResult whatever the mask says -- it is the more
+  // specific description and it is the one that counter's header documents.
+  // StPartial is the NEW state: some lanes landed and a required one did not.
+  wire [OUT_LANES-1:0] req_mask_c = hdr_outreq[cur_slot];
+  wire out_none_c       = (cur_out_seen == '0);
+  wire out_incomplete_c = (req_mask_c != '0) && (cur_out_seen != '0) &&
+                          ((cur_out_seen & req_mask_c) != req_mask_c);
+
   wire alarm_c = fab_unsupported || fab_exec_desync || fab_bank_desync ||
                  fab_svc_bank_desync || fab_tag_mismatch || fab_wrong_op ||
                  fab_sk_overflow || fab_sb_bad || fab_imm_bad;
@@ -905,6 +992,7 @@ module zhao_field_host #(
       cur_out_seen <= '0;
       hdr_loaded <= '0;
       for (k = 0; k < int'(PROGS); k = k + 1) hdr_outbase[k] <= '0;
+      for (k = 0; k < int'(PROGS); k = k + 1) hdr_outreq[k] <= '0;
       for (k = 0; k < int'(IN_LANES); k = k + 1) cur_in[k] <= 32'sd0;
       for (k = 0; k < int'(OUT_LANES); k = k + 1) cur_out[k] <= 32'sd0;
       runs_o             <= 32'd0;
@@ -916,6 +1004,7 @@ module zhao_field_host #(
       contended_grants_o <= 32'd0;
       ld_oob_o           <= 32'd0;
       no_result_o        <= 32'd0;
+      out_incomplete_o   <= 32'd0;
       exec_desync_o      <= 32'd0;
       bank_desync_o      <= 32'd0;
       svc_bank_desync_o  <= 32'd0;
@@ -980,6 +1069,9 @@ module zhao_field_host #(
             if (loads_o != 32'hFFFF_FFFF) loads_o <= loads_o + 32'd1;
             if (ld_kind_i == LdHeader) begin
               hdr_outbase[ld_slot_i] <= ld_data_i[8 +: REGW];
+              // The required-output mask. Zero means the program declared
+              // nothing and the pre-R101 completion test applies unchanged.
+              hdr_outreq[ld_slot_i]  <= ld_data_i[32 +: OUT_LANES];
               // The header is written LAST by the loader and is what marks the
               // slot runnable, so a partially written program can never be
               // executed. Enforced from the other side too: any uop, table or
@@ -1059,13 +1151,27 @@ module zhao_field_host #(
             if (alarm_c) begin
               cur_status <= StAlarm;
               if (run_faults_o != 32'hFFFF_FFFF) run_faults_o <= run_faults_o + 32'd1;
-            end else if (cur_out_seen == '0) begin
+            end else if (out_none_c) begin
               // The run completed and wrote NOTHING into its declared output
               // window. The lanes are the zeroes cleared at grant, and a caller
               // reading only the lanes could not tell that from a field whose
               // value is zero. So it is a status and a counter.
               cur_status <= StNoResult;
               if (no_result_o != 32'hFFFF_FFFF) no_result_o <= no_result_o + 32'd1;
+            end else if (out_incomplete_c) begin
+              // THE SAME HAZARD, ONE STEP ALONG, and the step the guard above
+              // used to stop short of. Some declared lanes carry real values
+              // and at least one required lane carries the zero cleared at
+              // grant -- an answer a caller reading only the lanes cannot tell
+              // from a field that happens to be zero there, which is W10's
+              // "Do not make an absent output look like a zero result".
+              // REFUSED, not clamped and not patched: a silent wrong field
+              // value is worse than a refusal because the consumer has no way
+              // to know. Owner ruling R101.
+              cur_status <= StPartial;
+              if (out_incomplete_o != 32'hFFFF_FFFF) begin
+                out_incomplete_o <= out_incomplete_o + 32'd1;
+              end
             end else begin
               cur_status <= 8'd0;
               if (runs_o != 32'hFFFF_FFFF) runs_o <= runs_o + 32'd1;

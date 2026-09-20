@@ -480,6 +480,7 @@ module zhao_prod_top (
   logic [32-1:0] u04_contended_grants_o;
   logic [32-1:0] u04_ld_oob_o;
   logic [32-1:0] u04_no_result_o;
+  logic [32-1:0] u04_out_incomplete_o;
   logic [32-1:0] u04_exec_desync_o;
   logic [32-1:0] u04_bank_desync_o;
   logic [32-1:0] u04_svc_bank_desync_o;
@@ -538,6 +539,7 @@ module zhao_prod_top (
       .contended_grants_o(u04_contended_grants_o),
       .ld_oob_o(u04_ld_oob_o),
       .no_result_o(u04_no_result_o),
+      .out_incomplete_o(u04_out_incomplete_o),
       .exec_desync_o(u04_exec_desync_o),
       .bank_desync_o(u04_bank_desync_o),
       .svc_bank_desync_o(u04_svc_bank_desync_o),
@@ -551,7 +553,7 @@ module zhao_prod_top (
   logic u04_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u04_fold_q <= 1'b0;
-    else u04_fold_q <= u04_fold_q ^ (((^u04_ld_ready_o)) & u04_src[0]) ^ (((^u04_pc_lu_ready_o)) & u04_src[1]) ^ (((^u04_pc_lu_resp_valid_o)) & u04_src[2]) ^ (((^u04_pc_lu_hit_o)) & u04_src[3]) ^ (((^u04_pc_lu_slot_o)) & u04_src[4]) ^ (((^u04_pc_cm_ready_o)) & u04_src[5]) ^ (((^u04_pc_cm_resp_valid_o)) & u04_src[6]) ^ (((^u04_pc_cm_inserted_o)) & u04_src[7]) ^ (((^u04_pc_cm_evicted_o)) & u04_src[8]) ^ (((^u04_pc_cm_slot_o)) & u04_src[9]) ^ (((^u04_pc_hits_o)) & u04_src[10]) ^ (((^u04_pc_misses_o)) & u04_src[11]) ^ (((^u04_pc_rejected_o)) & u04_src[12]) ^ (((^u04_pc_evictions_o)) & u04_src[13]) ^ (((^u04_pc_occupancy_o)) & u04_src[14]) ^ (((^u04_req_ready_o)) & u04_src[15]) ^ (((^u04_resp_valid_o)) & u04_src[16]) ^ (((^u04_resp_out_o)) & u04_src[17]) ^ (((^u04_resp_status_o)) & u04_src[18]) ^ (((^u04_runs_o)) & u04_src[19]) ^ (((^u04_run_faults_o)) & u04_src[20]) ^ (((^u04_noprog_o)) & u04_src[21]) ^ (((^u04_instr_retired_o)) & u04_src[22]) ^ (((^u04_loads_o)) & u04_src[23]) ^ (((^u04_load_defers_o)) & u04_src[24]) ^ (((^u04_grants_o)) & u04_src[25]) ^ (((^u04_contended_grants_o)) & u04_src[26]) ^ (((^u04_ld_oob_o)) & u04_src[27]) ^ (((^u04_no_result_o)) & u04_src[28]) ^ (((^u04_exec_desync_o)) & u04_src[29]) ^ (((^u04_bank_desync_o)) & u04_src[30]) ^ (((^u04_svc_bank_desync_o)) & u04_src[31]) ^ (((^u04_tag_mismatch_o)) & u04_src[32]) ^ (((^u04_wrong_op_o)) & u04_src[33]) ^ (((^u04_unsupported_o)) & u04_src[34]) ^ (((^u04_skid_overflow_o)) & u04_src[35]) ^ (((^u04_uniform_bad_o)) & u04_src[36]) ^ (((^u04_sat_o)) & u04_src[37]);
+    else u04_fold_q <= u04_fold_q ^ (((^u04_ld_ready_o)) & u04_src[0]) ^ (((^u04_pc_lu_ready_o)) & u04_src[1]) ^ (((^u04_pc_lu_resp_valid_o)) & u04_src[2]) ^ (((^u04_pc_lu_hit_o)) & u04_src[3]) ^ (((^u04_pc_lu_slot_o)) & u04_src[4]) ^ (((^u04_pc_cm_ready_o)) & u04_src[5]) ^ (((^u04_pc_cm_resp_valid_o)) & u04_src[6]) ^ (((^u04_pc_cm_inserted_o)) & u04_src[7]) ^ (((^u04_pc_cm_evicted_o)) & u04_src[8]) ^ (((^u04_pc_cm_slot_o)) & u04_src[9]) ^ (((^u04_pc_hits_o)) & u04_src[10]) ^ (((^u04_pc_misses_o)) & u04_src[11]) ^ (((^u04_pc_rejected_o)) & u04_src[12]) ^ (((^u04_pc_evictions_o)) & u04_src[13]) ^ (((^u04_pc_occupancy_o)) & u04_src[14]) ^ (((^u04_req_ready_o)) & u04_src[15]) ^ (((^u04_resp_valid_o)) & u04_src[16]) ^ (((^u04_resp_out_o)) & u04_src[17]) ^ (((^u04_resp_status_o)) & u04_src[18]) ^ (((^u04_runs_o)) & u04_src[19]) ^ (((^u04_run_faults_o)) & u04_src[20]) ^ (((^u04_noprog_o)) & u04_src[21]) ^ (((^u04_instr_retired_o)) & u04_src[22]) ^ (((^u04_loads_o)) & u04_src[23]) ^ (((^u04_load_defers_o)) & u04_src[24]) ^ (((^u04_grants_o)) & u04_src[25]) ^ (((^u04_contended_grants_o)) & u04_src[26]) ^ (((^u04_ld_oob_o)) & u04_src[27]) ^ (((^u04_no_result_o)) & u04_src[28]) ^ (((^u04_out_incomplete_o)) & u04_src[29]) ^ (((^u04_exec_desync_o)) & u04_src[30]) ^ (((^u04_bank_desync_o)) & u04_src[31]) ^ (((^u04_svc_bank_desync_o)) & u04_src[32]) ^ (((^u04_tag_mismatch_o)) & u04_src[33]) ^ (((^u04_wrong_op_o)) & u04_src[34]) ^ (((^u04_unsupported_o)) & u04_src[35]) ^ (((^u04_skid_overflow_o)) & u04_src[36]) ^ (((^u04_uniform_bad_o)) & u04_src[37]) ^ (((^u04_sat_o)) & u04_src[38]);
 
   // ---- zhao_field_stamp_adapter ----
   logic [63:0] u05_lfsr_q;

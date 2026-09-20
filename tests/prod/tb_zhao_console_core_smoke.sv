@@ -1279,6 +1279,7 @@ module tb_zhao_console_core_smoke
   logic        [31:0] fld_contended_grants_o;
   logic        [31:0] fld_ld_oob_o;
   logic        [31:0] fld_no_result_o;
+  logic        [31:0] fld_out_incomplete_o;
   logic        [31:0] fld_exec_desync_o;
   logic        [31:0] fld_bank_desync_o;
   logic        [31:0] fld_svc_bank_desync_o;
