@@ -221,8 +221,40 @@ group of `zhao_forge_shadow` (`:106-164`):
 | `tap_*` (`:131-137`) | **NONE — this one is genuinely clear.** `zhao_terrain_heighttap` mirrors these ports signal for signal (its `:21`, `:168`) and is **already composed** at `zhao_console_core.sv:9233`. | ✅ |
 | `cast_strength_i` (`:118`) | **no producer anywhere** (above). Owner decision. | ❌ |
 | `cast_{x,z,radius,rung,src_id}` (`:115-120`) | `zhao_geom_lodstate`'s `c_*`, and **LODSTATE is not composed**; it needs `zhao_geom_ladderbank`, which needs an ENGINE1 share and a page-publication path. | ❌ |
-| `rung_floor_i` (`:125`) | its only producer is the **uncomposed `zhao_measure_governor`** (R118, itself blocked at both ends). | ❌ |
+| `rung_floor_i` (`:125`) | its only producer is the **uncomposed `zhao_measure_governor`** (R118, itself blocked at both ends). Named exactly, so the subsystem packet does not rediscover it: **`deg0_o` / `deg1_o`** (`zhao_measure_governor.sv:314-315`), 2-bit per-camera degradation — the same width and the same meaning as `rung_floor_i`. The governor is instantiated **only** at `zhao_prod_top.sv:2877`, the LFSR census top. | ❌ |
 | `vtx_*` (`:142-154`) | **no consumer.** Route A (batch, through `GEOM.GROUP_SEQ`'s `v_*`) **DEADLOCKS** on `zhao_geom_vattr.sv:490`'s `done_o`, a six-term AND requiring a lit rgb and a u/v that a shadow hull has neither of. Route B (private arena) is unbuilt and needs the client-A widening, an arbiter at GEOM.CLIP's door, and the absolute→rebased frame conversion. | ❌ |
+
+### The chain is THREE blocks long and none of them is composed
+
+Named end to end, because the shape is what makes it a subsystem rather than a
+wiring job — and every link was read first-hand:
+
+```
+zhao_measure_governor          zhao_geom_lodstate            zhao_forge_shadow
+  cam0/1_thresh_q8_o  ---->  thresh0_i / thresh1_i
+  deg0_o / deg1_o  ------------------------------------>  rung_floor_i
+                               c_{x,z,radius,rung}  ---->  cast_{x,z,radius,rung}
+                                                           cast_strength_i  <- NOTHING
+```
+
+`zhao_measure_governor` is instantiated only at `zhao_prod_top.sv:2877`;
+`zhao_geom_lodstate` is instantiated **nowhere** in `fpga/rtl/prod/`;
+`zhao_geom_ladderbank`, which LODSTATE needs for `a_*`, is instantiated nowhere
+at all. All three verified by searching for an instantiation (`^\s*<module>\s+\w+`),
+not for a mention — the distinction that made `zhao_forge_shadow` look composed
+in `zhao_console_core.sv`, where all four hits are comments.
+
+**A NEAR MISS WORTH NAMING, because the name matches and the quantity does
+not.** There *is* a composed governor floor in the console:
+`zhao_part_project.sv:332`'s `lad_gov_floor_o`, wired at
+`zhao_console_core.sv:12991` to `:13046`'s `p_gov_floor_i`. **It is not a
+producer for `rung_floor_i` and must not be wired to one.** It is **3 bits**,
+not 2; it is read from the **particle's own attribute record**
+(`zhao_part_project.sv:681`, `attr_rd_c[50:48]`), so it is a per-particle stored
+floor rather than a camera measurement; and it serves **PART.LADDER's eight-rung
+ladder**, a different ladder from the creature one this block's `rung_floor_i`
+belongs to. Wiring it would truncate a bit and cross two ladders, and every
+gate would stay green.
 
 **LODSTATE and FORGE.SHADOW are MUTUALLY blocked** — `c_*` has no consumer
 because FORGE.SHADOW is uncomposed, and `cast_*` has no producer because
