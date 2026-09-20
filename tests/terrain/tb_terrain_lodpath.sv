@@ -60,6 +60,13 @@ module tb_terrain_lodpath #(
     output var logic [31:0] dev_lattice_reads_o,
     output var logic        feed_busy_o,
 
+    // `zhao_terrain_lodfeed` gained `w_src_id_o` on 2026-09-20 (ruling R70).
+    // The store keys on the SLOT and has no src_id input, so this wrapper
+    // carries it out to the bench rather than leaving the pin empty: a new
+    // port left unconnected here is the PINMISSING the packet protocol warns
+    // about, and an empty pin says nothing about whether the value is right.
+    output var logic [15:0] w_src_id_o,
+
     output var logic [31:0] records_written_o,
     output var logic [31:0] patches_committed_o,
     output var logic [31:0] patches_read_o,
@@ -103,6 +110,7 @@ module tb_terrain_lodpath #(
     .w_dev2_o (w_dev2),
     .w_dev3_o (w_dev3),
     .w_cy_o   (w_cy),
+    .w_src_id_o(w_src_id_o),
 
     .inv_valid_o(inv_valid),
     .inv_slot_o (inv_slot),

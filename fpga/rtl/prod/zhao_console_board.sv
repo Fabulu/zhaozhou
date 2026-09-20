@@ -1618,15 +1618,15 @@ module zhao_console_board
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
 
-  // ---- I18: the histogram's events ----------------------------------------
-  // Its HOST WINDOW is no longer here. `hist_rd_*` was entry I19 and is now
-  // driven inside this file by `u_hostreg_hist` off the HPS register aperture
-  // (section 7b-iii, owner ruling R51).
-  input  logic                    hist_ev_valid_i,
-  input  logic [HIST_LANES-1:0]   hist_ev_lane_valid_i,
-  input  logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i,
-  input  logic [15:0]             hist_ev_src_id_i,
-  output logic                    hist_ev_ready_o,
+  // ---- THE HISTOGRAM. Its EVENTS ARE NO LONGER HERE ------------------------
+  // I18 CLOSED 2026-09-20 (owner ruling R70). `hist_ev_valid_i`,
+  // `hist_ev_lane_valid_i`, `hist_ev_err_i`, `hist_ev_src_id_i` and
+  // `hist_ev_ready_o` LEFT THIS PORT LIST rather than being driven from a
+  // harness: `zhao_terrain_lodfeed` is composed below and its deviation
+  // records are the events. Its HOST WINDOW went the same way one day earlier
+  // -- `hist_rd_*` was entry I19 and is now driven inside this file by
+  // `u_hostreg_hist` off the HPS register aperture (section 7b-iii, ruling
+  // R51). What is left here is only the block's OUTPUT evidence.
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,
@@ -2449,6 +2449,27 @@ module zhao_console_board
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,
+
+  // ---- TERRAIN.LODFEED, and these four are why entry I18 can be read at all
+  // Composed 2026-09-20 under owner ruling R70: `zhao_terrain_lodfeed` observes
+  // the mip pass's fine stream and its records are MEASURE.HISTOGRAM's events.
+  // The chain is entirely internal, so WITHOUT THESE COUNTERS a console-level
+  // bench could not tell "the histogram saw no events because the metric is
+  // broken" from "because no page was ever mipped" -- and those two need
+  // different repairs.
+  //
+  // THEY READ ZERO IN THE SMOKE AND THAT IS THE MEASURED, EXPLAINED ANSWER,
+  // not an unexamined zero: every page the bench plays fails its CRC (the
+  // directory reports `crc_fail=3`), so `tpl_fin_ok` never rises, so
+  // TERRAIN.MIPREQ issues no job, so TERRAIN.MIPFEED never streams a lattice.
+  // The smoke prints the whole chain of zeros on one line for exactly this
+  // reason. The counters are FIRED, non-zero, by
+  // `tests/terrain/terrain_lodhist_directed.cpp`, which drives the same
+  // arrangement with a lattice that moves.
+  output logic [31:0]  terr_lodfeed_lattices_walked_o,
+  output logic [31:0]  terr_lodfeed_lattices_dropped_o,
+  output logic [31:0]  terr_lodfeed_dev_records_o,
+  output logic [31:0]  terr_lodfeed_stray_samples_o,
 
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
@@ -3372,11 +3393,6 @@ module zhao_console_board
       .post_output_writes_o              (post_output_writes_o),
       .post_plane_reads_o                (post_plane_reads_o),
       .post_ring_hazard_o                (post_ring_hazard_o),
-      .hist_ev_valid_i                   (hist_ev_valid_i),
-      .hist_ev_lane_valid_i              (hist_ev_lane_valid_i),
-      .hist_ev_err_i                     (hist_ev_err_i),
-      .hist_ev_src_id_i                  (hist_ev_src_id_i),
-      .hist_ev_ready_o                   (hist_ev_ready_o),
       .hist_snap_valid_o                 (hist_snap_valid_o),
       .hist_snap_total_o                 (hist_snap_total_o),
       .hist_snap_src_id_o                (hist_snap_src_id_o),
@@ -3851,6 +3867,10 @@ module zhao_console_board
       .terr_mg_m17_writes_o              (terr_mg_m17_writes_o),
       .terr_mg_m9_writes_o               (terr_mg_m9_writes_o),
       .terr_mg_aborts_o                  (terr_mg_aborts_o),
+      .terr_lodfeed_lattices_walked_o    (terr_lodfeed_lattices_walked_o),
+      .terr_lodfeed_lattices_dropped_o   (terr_lodfeed_lattices_dropped_o),
+      .terr_lodfeed_dev_records_o        (terr_lodfeed_dev_records_o),
+      .terr_lodfeed_stray_samples_o      (terr_lodfeed_stray_samples_o),
       .fld_ld_valid_i                    (fld_ld_valid_i),
       .fld_ld_ready_o                    (fld_ld_ready_o),
       .fld_ld_kind_i                     (fld_ld_kind_i),

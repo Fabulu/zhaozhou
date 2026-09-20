@@ -1323,100 +1323,80 @@
 //           nothing and are counted). What is owed AFTER the ruling: the RTL
 //           adapter, the HUD plane store, and composing zhao_post_gather.
 //           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says.
-// I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Its
-//      INTERVAL is real (I5 of the connected list), its EVENTS are not.
+// (I18 CLOSED 2026-09-20, owner ruling R70 and the terrain6 packet.
+//      MEASURE.HISTOGRAM's event ingress has a real producer inside this
+//      module: `u_terrain_lodfeed` observes the mip pass's fine stream, walks
+//      the lattice through `zhao_terrain_loddev`, and its three deviation
+//      magnitudes are the events. Five ports -- `hist_ev_valid_i`,
+//      `hist_ev_lane_valid_i`, `hist_ev_err_i`, `hist_ev_src_id_i` and
+//      `hist_ev_ready_o` -- left this module's port list rather than being
+//      driven from a harness. The metric is written into
+//      `spec/measure_rules.md` section 3, the 24 -> 32 widening is declared at
+//      the instance, and the traverse is shown by
+//      `tests/terrain/terrain_lodhist_directed.cpp`.
 //
-//      THE REASON CHANGED 2026-09-20 (gz/hostdbg), because the one that stood
-//      here was not true of this block. It read: "Nothing in the console
-//      produces an error-magnitude stream; the block measures a difference
-//      against a reference and the console has no reference."
+//      AND THE THING RULING R70 MADE THE PACKET CHECK FIRST, MEASURED RATHER
+//      THAN ARGUED, because it is the one fact that decides whether any of the
+//      above is real. THE SMOKE'S STIMULUS DOES NOT MOVE MIPFEED'S FINE STREAM
+//      AT ALL. Measured 2026-09-20 by printing the lane that had never been
+//      printed:
 //
-//      THE SECOND CLAUSE IS DEBUG.TRACE'S PORT, NOT THIS ONE'S. `ev_err_i` is
-//      `LANES*EW` bits -- ONE UNSIGNED MAGNITUDE PER LANE. There is no
-//      expected, no actual and no difference anywhere on this block's event
-//      port. `design/contracts/MEASURE.HISTOGRAM.md` says it in terms -- "this
-//      block counts error magnitudes, which is not a [difference]" -- and the
-//      RTL header says "it takes an unsigned magnitude of EW bits and says
-//      nothing about what it measures". The differential sentence belongs to
-//      `ev_expected_fx_i` beside `ev_actual_fx_i`.
+//        SMOKE:   pl    loaded=0 faulted=3 ... SMOKE:   res ... crc_fail=3
+//        SMOKE:   mip   mipreq requests=0 issued=0 drops=0 | mipfeed
+//                       pages_mipped=0 faulted=0 samples_sent=0 | mipgen
+//                       m17_writes=0 m9_writes=0 aborts=0
 //
-//      AND THIS IS THE ENTRY THAT RECORDS THE TRACE REFUSAL HAVING REASONED
-//      FROM THE WRONG PORT, four paragraphs down. It then did the same thing
-//      itself. That is left visible rather than tidied away, because the
-//      sentence travelled: it was still being quoted as this gap's blocker a
-//      day later, in a brief, by someone who had not opened the port list.
+//      The cause is structural and one line up from the counters:
+//      `u_terrain_mipreq`'s trigger is `tpl_fin_valid && tpl_fin_ready &&
+//      tpl_fin_ok`, the bench plays zero pages whose CRC cannot match the
+//      record's declared `expected_page_crc32c` (`32'hDEAD_BEEF`, written by
+//      hand at `tb_zhao_console_core_smoke.sv`'s arena layout), so `fin_ok` is
+//      never high, so no mip job is ever issued. EVERY number downstream of it
+//      is zero for that reason and not because the chain is broken.
 //
-//      THE FIRST CLAUSE IS ALSO WRONG, AND THAT IS THE USEFUL HALF.
-//      `fpga/rtl/terrain/zhao_terrain_loddev.sv` emits `dev1_o`/`dev2_o`/
-//      `dev3_o` -- three 24-bit UNSIGNED DEVIATION MAGNITUDES per record, with
-//      `dev_valid_o`/`dev_ready_i` and a `dev_src_id_o`. That is `hist_ev_*`'s
-//      shape, field for field. It is BUILT and differentially tested
-//      (`terrain_lodpath_directed`, 286 checks, four counters fired), and its
-//      OWN producer is already composed IN THIS FILE: `zhao_terrain_lodfeed`'s
-//      inputs name TERRAIN.MIPFEED's ports in its own comments, and MIPFEED's
-//      fine stream is live here at `tmg_fine_valid/ready/h`. lodfeed OBSERVES
-//      that stream, so composing it steals nothing and needs no arbitration.
+//      SO THE SMOKE'S GREEN IS NOT EVIDENCE ABOUT THIS CHAIN, and the bench
+//      now says so in its own output rather than leaving the next reader to
+//      infer it. What the smoke DOES assert is two things that hold at zero
+//      and at a thousand: no fine sample ever arrives without a lattice start
+//      (a `$fatal`, because that fault is wrong under any stimulus), and every
+//      record lodfeed emits is accepted by the histogram (`dev_records ==
+//      hist events`). Neither asserts the gap; both survive the fixture
+//      getting better.
 //
-//      `design/console_inventory.yml` blocks lodfeed on "the same missing
-//      camera-position producer". THAT IS ITS CONSUMER'S BLOCKER, NOT ITS OWN.
-//      TERRAIN.LOD selects a level in SCREEN space and needs the eye (owner
-//      ruling R63); a WORLD-space deviation needs no camera, and neither
-//      `zhao_terrain_loddev` nor `zhao_terrain_lodfeed` has a camera port. The
-//      consumer's blocker was applied wholesale to the producer.
+//      WHAT WOULD MAKE THE SMOKE EXERCISE IT, named because it is the next
+//      cheap thing and it is not this packet's: the bench already instantiates
+//      the production CRC folder (`u_bench_fold`) and already uses it to seal
+//      the record list. Folding each played page the same way and writing that
+//      value into the record instead of `DEAD_BEEF` would make pages load,
+//      then mip, then reach this chain. It is NOT a one-line change -- the
+//      page also has to satisfy `zhao_terrain_hdrread`'s identity check -- and
+//      it would move the terrain spine from "no page resident" to "pages
+//      resident", which is a change to what the whole bench measures. That
+//      belongs to a packet that owns the fixture, with R12's reference-derived
+//      pixel count regenerated in the same commit.
 //
-//      SO THE GAP IS NOT "NOTHING PRODUCES AN ERROR MAGNITUDE". IT IS "THE
-//      METRIC IS UNRATIFIED", which is an OWNER DECISION -- written up with
-//      both options and a recommendation in FINDINGS-hostdbg.md. The contract's
-//      own list of inventions opens with it: "the error metric -- what number
-//      goes in a bucket. Charter says 'candidate error buckets' and stops."
+//      THE CORRECTIONS THIS ENTRY MADE ARE KEPT, because both of them were
+//      quoted as blockers after they had stopped being true:
 //
-//      IT WAS REFUSED RATHER THAN WIRED, and this is the reason that decided
-//      it. Charter section 9 Version 1 has the ARM predict a PIXEL-error
-//      threshold PER CAMERA from these counters. Putting a world-space terrain
-//      page deviation into that organ would close this entry and put the WRONG
-//      QUANTITY in it, and NOTHING WOULD CATCH IT, because the block is
-//      metric-agnostic by design. That is this contract's own named failure
-//      mode -- "two blocks disagreeing about one policy" -- manufactured
-//      deliberately. A gap closed by a producer that is real but WRONG is worse
-//      than an open gap.
+//        * `ev_err_i` is `LANES*EW` bits -- ONE UNSIGNED MAGNITUDE PER LANE.
+//          There is no expected, no actual and no difference anywhere on this
+//          block's event port; the differential sentence belongs to
+//          `ev_expected_fx_i` beside `ev_actual_fx_i`, which is DEBUG.TRACE's
+//          port. This entry once reasoned from that wrong port, recorded the
+//          trace refusal for doing the same, and then did it again itself.
+//        * DO NOT WIRE `RASTER.FRAGMENT`'s `fragment_error_o` BY NAME. It is
+//          `s1_v_r && !rd_valid_i`, a one-bit tilestore-read protocol flag that
+//          "should never fire", and it carries no value. The ledger's declared
+//          `inputs: [fragment_error]` points at it, which is the false-PRESENCE
+//          shape this header records elsewhere.
+//        * DO NOT BUILD A SECOND PRODUCER. One exists, it is tested, and a
+//          second would be the duplication `uncashed_cheques.py` check 3 exists
+//          to catch.)
 //
-//      RULING R70 (provisional, coordinator, 2026-09-20) ANSWERS IT: the v1
-//      metric IS the terrain page-load LOD deviation. So the quantity above is
-//      no longer "wrong" -- it is the ratified one, and the charter's
-//      screen-space pixel error per camera becomes the v2 refinement the
-//      governor will want, which needs a projector-side residual nothing
-//      computes (R68 work, not wiring).
-//
-//      THREE THINGS THE RULING REQUIRES OF WHOEVER CLOSES THIS, and it is the
-//      TERRAIN lane's work, not the debug lane's -- their stream, their block:
-//
-//        1. the metric is written into `spec/` as the v1 definition, with the
-//           interval's `src_id` recording which source an interval came from,
-//           so the ratification is a document and not a wiring decision;
-//        2. the width adaptation is declared: three lanes of four carry
-//           `dev1/2/3` zero-extended 24 to 32 and the fourth `lane_valid`
-//           stays low. The log2 bucketing makes that a constant shift of the
-//           bin index and no change of shape, which is why it is an adaptation
-//           and not an invention -- say so where it is done;
-//        3. CHECK FIRST THAT THE SMOKE'S STIMULUS DRIVES MIPFEED'S FINE STREAM
-//           AT ALL. hostdbg explicitly did NOT verify that, its three pages
-//           fault on CRC, and the smoke prints no mip counter. A traverse
-//           quoted against a stream that never moves is the gap re-opened
-//           under a green gate.
-//
-//      DO NOT READ THIS ENTRY AS "BUILD A PRODUCER". One exists, it is tested,
-//      and building a second would be the duplication `uncashed_cheques.py`
-//      check 3 was written to catch.
-//
-//      AND DO NOT WIRE `RASTER.FRAGMENT`'s `fragment_error_o` BY NAME. The
-//      contract already refuses it: it is `s1_v_r && !rd_valid_i`, a one-bit
-//      tilestore-read protocol flag that "should never fire". It carries no
-//      value. The ledger's declared `inputs: [fragment_error]` points at it,
-//      which is the false-PRESENCE shape this header records elsewhere.
-//
-//      ITS TWO MEASURE SIBLINGS ARE REFUSED, 2026-09-19, and the reasons are
-//      recorded here because "the histogram is composed, so its siblings must
-//      be nearly composable" is the plausible reading and it is wrong.
+// I18-siblings. THE OTHER TWO MEASURE BLOCKS, and they are NOT closed by the
+//      above. They are kept under this number because "the histogram is
+//      composed, so its siblings must be nearly composable" is the plausible
+//      reading and it is wrong.
 //
 //      MEASURE.TOKENS IS COMPOSED ON ITS BUDGET SIDE, 2026-09-19 (cmdmem,
 //      rulings R18/R33). The refusal that stood here -- "`zhao_cmd_scheduler`
@@ -4141,15 +4121,15 @@ module zhao_console_core
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
 
-  // ---- I18: the histogram's events ----------------------------------------
-  // Its HOST WINDOW is no longer here. `hist_rd_*` was entry I19 and is now
-  // driven inside this file by `u_hostreg_hist` off the HPS register aperture
-  // (section 7b-iii, owner ruling R51).
-  input  logic                    hist_ev_valid_i,
-  input  logic [HIST_LANES-1:0]   hist_ev_lane_valid_i,
-  input  logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i,
-  input  logic [15:0]             hist_ev_src_id_i,
-  output logic                    hist_ev_ready_o,
+  // ---- THE HISTOGRAM. Its EVENTS ARE NO LONGER HERE ------------------------
+  // I18 CLOSED 2026-09-20 (owner ruling R70). `hist_ev_valid_i`,
+  // `hist_ev_lane_valid_i`, `hist_ev_err_i`, `hist_ev_src_id_i` and
+  // `hist_ev_ready_o` LEFT THIS PORT LIST rather than being driven from a
+  // harness: `zhao_terrain_lodfeed` is composed below and its deviation
+  // records are the events. Its HOST WINDOW went the same way one day earlier
+  // -- `hist_rd_*` was entry I19 and is now driven inside this file by
+  // `u_hostreg_hist` off the HPS register aperture (section 7b-iii, ruling
+  // R51). What is left here is only the block's OUTPUT evidence.
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,
@@ -4975,6 +4955,27 @@ module zhao_console_core
   output logic [31:0]  terr_mg_m17_writes_o,
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,
+
+  // ---- TERRAIN.LODFEED, and these four are why entry I18 can be read at all
+  // Composed 2026-09-20 under owner ruling R70: `zhao_terrain_lodfeed` observes
+  // the mip pass's fine stream and its records are MEASURE.HISTOGRAM's events.
+  // The chain is entirely internal, so WITHOUT THESE COUNTERS a console-level
+  // bench could not tell "the histogram saw no events because the metric is
+  // broken" from "because no page was ever mipped" -- and those two need
+  // different repairs.
+  //
+  // THEY READ ZERO IN THE SMOKE AND THAT IS THE MEASURED, EXPLAINED ANSWER,
+  // not an unexamined zero: every page the bench plays fails its CRC (the
+  // directory reports `crc_fail=3`), so `tpl_fin_ok` never rises, so
+  // TERRAIN.MIPREQ issues no job, so TERRAIN.MIPFEED never streams a lattice.
+  // The smoke prints the whole chain of zeros on one line for exactly this
+  // reason. The counters are FIRED, non-zero, by
+  // `tests/terrain/terrain_lodhist_directed.cpp`, which drives the same
+  // arrangement with a lattice that moves.
+  output logic [31:0]  terr_lodfeed_lattices_walked_o,
+  output logic [31:0]  terr_lodfeed_lattices_dropped_o,
+  output logic [31:0]  terr_lodfeed_dev_records_o,
+  output logic [31:0]  terr_lodfeed_stray_samples_o,
 
   // ==========================================================================
   // THE FIELD ENGINE'S EDGE. I42, and it is ONE entry where there were THREE.
@@ -7430,6 +7431,45 @@ module zhao_console_core
   wire [TERR_GENW-1:0]    tmg_job_gen;
   wire [31:0]             tmg_job_epoch;
 
+  // ---- TERRAIN.LODFEED, the page-load deviation pass (entry I18, ruling R70)
+  // Its write port is MEASURE.HISTOGRAM's event ingress.  The three deviation
+  // magnitudes are the v1 histogram metric; `w_slot_o` and `w_cy_o` are
+  // `zhao_terrain_devstore`'s and that store is NOT composed here, so they are
+  // waived AT the declaration rather than left as empty pins.
+  //
+  // WHY THE STORE IS ABSENT AND THIS IS NOT A HALF-COMPOSITION.  The store's
+  // only reader is `zhao_terrain_lod`, which entry I21 still refuses, and ruling
+  // R59 prices the store at ~77 M10K of 553.  Composing 77 M10K of RAM whose
+  // every word is unread is the "BUILT, INSTALLED NOWHERE" shape CLAUDE.md
+  // names, and it would buy nothing this pass: the histogram is a SECOND
+  // consumer of the same records, not a substitute for the first.  When I21
+  // closes, the store joins this stream and `w_ready_i` becomes the AND of the
+  // two readies -- which is why the ready below is written as a named wire.
+  wire                    tlf_w_valid, tlf_w_ready;
+  wire [3:0]              tlf_w_sp;
+  wire [23:0]             tlf_w_dev1, tlf_w_dev2, tlf_w_dev3;
+  wire [15:0]             tlf_w_src_id;
+  wire                    tlf_inv_valid;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [TERR_MEMSLOT-1:0] tlf_w_slot;        // the devstore's key (absent, above)
+  wire signed [15:0]      tlf_w_cy;          // the devstore's centre height
+  wire [TERR_MEMSLOT-1:0] tlf_inv_slot;      // the devstore's invalidation
+  wire                    tlf_busy;
+  // Four of the block's ten counters stop here rather than at this module's
+  // edge, and the choice is stated because "which counters get exported" is
+  // exactly the kind of decision that looks arbitrary later. `walk_clocks` is a
+  // BUDGET input and the block's header says a pinned clock count goes stale
+  // silently, so its home is the directed test that prints it. `lattices_seen`
+  // is `walked + dropped` by construction. `dev_clipped`, `dev_vertices` and
+  // `dev_lattice_reads` describe the WALK's interior, which is
+  // `terrain_lodpath_directed`'s subject, not a console bench's. The four that
+  // DO leave are the four a console-level reader needs to tell an empty
+  // histogram's two causes apart.
+  wire [31:0]             tlf_lattices_seen, tlf_surface1_samples;
+  wire [31:0]             tlf_walk_clocks, tlf_dev_clipped;
+  wire [31:0]             tlf_dev_vertices, tlf_dev_lattice_reads;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   // The share's owner bit and the block idles: real outputs with no consumer
   // in this core, named rather than left as empty by-name connections.  The
   // mip completion's source id is the same case and the reason is the bench's:
@@ -8496,9 +8536,64 @@ module zhao_console_core
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================
-  // MEASURE. The INTERVAL is the console's real frame (glue 2). The EVENTS are
-  // not: nothing here produces an error magnitude -- header entry I18.
+  // MEASURE. The INTERVAL is the console's real frame (glue 2), and as of
+  // 2026-09-20 THE EVENTS ARE REAL TOO -- entry I18, owner ruling R70.
   // ==========================================================================
+  // THE V1 METRIC IS THE TERRAIN PAGE-LOAD LOD DEVIATION. Ruling R70 ratified
+  // it and `spec/measure_rules.md` section 3 is the written definition, which is
+  // the ruling's first requirement: the metric is a DOCUMENT, so that the next
+  // person wiring something into this port has a sentence to check it against
+  // rather than a precedent to copy.
+  //
+  // THE WIDTH ADAPTATION, DECLARED HERE BECAUSE THIS IS WHERE IT IS DONE
+  // (ruling R70's second requirement). `zhao_terrain_loddev` emits three 24-bit
+  // unsigned magnitudes; this block takes LANES=4 of EW=32. Lanes 0..2 carry
+  // dev1/dev2/dev3 ZERO-EXTENDED 24 -> 32 and lane 3's `lane_valid` stays LOW,
+  // so lane 3 contributes no event rather than contributing a zero one.
+  //
+  // WHY ZERO-EXTENSION IS AN ADAPTATION AND NOT AN INVENTION. The block bins by
+  // `log2` of the magnitude, so widening an UNSIGNED value by leading zeros
+  // moves no bin: the bin index of x is the position of its top set bit, and
+  // zero-extension adds no set bits. It changes the RANGE the histogram could
+  // represent, never the bucket any actual value lands in. Had the adaptation
+  // been a shift or a truncation it would have been a law and would have needed
+  // a ruling of its own.
+  //
+  // THE SOURCE ID IS THE WALK'S, NOT THE FILL'S, and `zhao_terrain_lodfeed`'s
+  // `w_src_id_o` port comment carries the argument. Taking the id of whatever
+  // page is currently streaming would attribute page A's deviations to page B
+  // on every drop, and this block is metric-agnostic by design, so nothing
+  // downstream could ever see it.
+  wire [HIST_LANES*HIST_EW-1:0] hist_ev_err_c =
+      { {HIST_EW{1'b0}},                                 // lane 3: not valid
+        {(HIST_EW-24){1'b0}}, tlf_w_dev3,                // lane 2
+        {(HIST_EW-24){1'b0}}, tlf_w_dev2,                // lane 1
+        {(HIST_EW-24){1'b0}}, tlf_w_dev1 };              // lane 0
+  wire                    hist_ev_ready_c;
+
+  // THE ADAPTATION ABOVE IS ONLY TRUE AT THESE WIDTHS, so it is GUARDED rather
+  // than commented. A LANES of anything but 4 makes `4'b0111` name the wrong
+  // lanes silently, and an EW below 24 makes the concatenation truncate a
+  // deviation -- which reads LOW, the flattering direction, and would be
+  // invisible in a histogram that has no idea what it is counting.
+  // `initial begin ... end` and not a module-scope `if`: Quartus 17.0 rejects
+  // the latter (CLAUDE.md), and `--lint-only` does not run this, which is why
+  // it is here AND the shape is checked by the syntax gate.
+  // synthesis translate_off
+  initial begin
+    if (HIST_LANES != 4)
+      $fatal(1, "zhao_console_core: MEASURE.HISTOGRAM's R70 event mapping assumes LANES=4, got %0d", HIST_LANES);
+    if (HIST_EW < 24)
+      $fatal(1, "zhao_console_core: MEASURE.HISTOGRAM's EW=%0d truncates a 24-bit LOD deviation", HIST_EW);
+  end
+  // synthesis translate_on
+
+  // TERRAIN.LODFEED's write port is accepted when the histogram accepts. When
+  // entry I21 closes and `zhao_terrain_devstore` joins this stream, this
+  // becomes the AND of the two readies and NOTHING ELSE CHANGES -- which is
+  // why it is a named wire and not the port connection itself.
+  assign tlf_w_ready = hist_ev_ready_c;
+
   zhao_measure_histogram #(
     .EW       (HIST_EW),
     .SUB_BITS (HIST_SUB_BITS),
@@ -8508,12 +8603,12 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I18: no error-event producer exists in this console.
-    .ev_valid_i     (hist_ev_valid_i),
-    .ev_lane_valid_i(hist_ev_lane_valid_i),
-    .ev_err_i       (hist_ev_err_i),
-    .ev_src_id_i    (hist_ev_src_id_i),
-    .ev_ready_o     (hist_ev_ready_o),
+    // REAL: TERRAIN.LODFEED's deviation records, one event per subpatch.
+    .ev_valid_i     (tlf_w_valid),
+    .ev_lane_valid_i(4'b0111),
+    .ev_err_i       (hist_ev_err_c),
+    .ev_src_id_i    (tlf_w_src_id),
+    .ev_ready_o     (hist_ev_ready_c),
 
     // REAL: one measurement interval per console frame.
     .snapshot_i(core_tick_c),
@@ -13369,6 +13464,73 @@ module zhao_console_core
     .m17_writes_o(terr_mg_m17_writes_o),
     .m9_writes_o (terr_mg_m9_writes_o),
     .aborts_o    (terr_mg_aborts_o)
+  );
+
+  // ---- TERRAIN.LODFEED -----------------------------------------------------
+  // ENTRY I18's PRODUCER, composed 2026-09-20 under owner ruling R70. It
+  // OBSERVES the fine stream between TERRAIN.MIPFEED and TERRAIN.MIPGEN and
+  // takes nothing from it: `f_valid_i` is the handshake that has ALREADY
+  // happened (`valid && ready`), so this block cannot stall the mip pass, which
+  // cannot stall TERRAIN.PAGESTREAM, which would hold a MEM.GUARD burst open.
+  // The block's own header states that as a law and this connection is what
+  // makes it true -- a `ready` here would have been a tap that bites.
+  //
+  // THE SOURCE ID COMES OFF `ps_src_id_o` AND IS NARROWED, which is a real
+  // decision and not a cast: TERRAIN.MIPFEED carries 32 bits and this block
+  // takes 16, because MEASURE.HISTOGRAM's `ev_src_id_i` is 16 and
+  // `spec/measure_rules.md` section 3 says so. The bench's ids are 1000..1002,
+  // T5's `src_id` field is a u32, and a source above 65,535 would ALIAS. That
+  // is declared in the spec section rather than hidden here, and it is the
+  // histogram's limit, not this chain's.
+  //
+  // MEASURED 2026-09-20: in `tests/prod/run_console_core_smoke.ps1` this block
+  // sees NOTHING, and the reason is upstream and printed. Every page the smoke
+  // plays fails its CRC, `tpl_fin_ok` never rises, TERRAIN.MIPREQ issues no job
+  // and no lattice is ever streamed -- `mipreq requests=0 ... samples_sent=0`
+  // on the smoke's `mip` line. The traverse is shown instead by
+  // `tests/terrain/terrain_lodhist_directed.cpp`, which drives this exact
+  // arrangement -- lodfeed, the same widening, the same histogram -- with a
+  // lattice that moves. Quoting the smoke's green as evidence for this chain
+  // would be the gap re-opened under a green gate, which is the thing ruling
+  // R70 spends its last paragraph warning about.
+  zhao_terrain_lodfeed #(
+    .SLOTW               (TERR_MEMSLOT),
+    .EDGE                (33),
+    .DEV_INCLUDE_BOUNDARY(1'b1)          // owner ruling R22: the MESH reading
+  ) u_terrain_lodfeed (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .f_start_i (tmg_start),
+    .f_slot_i  (tmg_job_slot),
+    .f_src_id_i(tmf_ps_src_id[15:0]),
+    .f_valid_i (tmg_fine_valid && tmg_fine_ready),
+    .f_h_i     (tmg_fine_h),
+
+    .w_valid_o (tlf_w_valid),
+    .w_ready_i (tlf_w_ready),
+    .w_slot_o  (tlf_w_slot),
+    .w_sp_o    (tlf_w_sp),
+    .w_dev1_o  (tlf_w_dev1),
+    .w_dev2_o  (tlf_w_dev2),
+    .w_dev3_o  (tlf_w_dev3),
+    .w_cy_o    (tlf_w_cy),
+    .w_src_id_o(tlf_w_src_id),
+
+    .inv_valid_o(tlf_inv_valid),
+    .inv_slot_o (tlf_inv_slot),
+
+    .lattices_seen_o    (tlf_lattices_seen),
+    .lattices_walked_o  (terr_lodfeed_lattices_walked_o),
+    .lattices_dropped_o (terr_lodfeed_lattices_dropped_o),
+    .surface1_samples_o (tlf_surface1_samples),
+    .stray_samples_o    (terr_lodfeed_stray_samples_o),
+    .walk_clocks_o      (tlf_walk_clocks),
+    .dev_records_o      (terr_lodfeed_dev_records_o),
+    .dev_clipped_o      (tlf_dev_clipped),
+    .dev_vertices_o     (tlf_dev_vertices),
+    .dev_lattice_reads_o(tlf_dev_lattice_reads),
+    .busy_o             (tlf_busy)
   );
 
   // ==========================================================================

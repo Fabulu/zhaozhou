@@ -871,11 +871,15 @@ module tb_zhao_console_core_smoke
   logic [31:0]             post_output_writes_o;
   logic [31:0]             post_plane_reads_o;
   logic [31:0]             post_ring_hazard_o;
-  logic                    hist_ev_valid_i;
-  logic [HIST_LANES-1:0]   hist_ev_lane_valid_i;
-  logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i;
-  logic [15:0]             hist_ev_src_id_i;
-  logic                    hist_ev_ready_o;
+  // `hist_ev_*` IS GONE from the core's edge too (entry I18 closed 2026-09-20,
+  // owner ruling R70): `zhao_terrain_lodfeed` is composed inside the core and
+  // its deviation records ARE the events. This bench used to drive five ports
+  // here with zeros; it now drives none, and the four counters below are how it
+  // reads what the internal producer did.
+  logic [31:0]             terr_lodfeed_lattices_walked_o;
+  logic [31:0]             terr_lodfeed_lattices_dropped_o;
+  logic [31:0]             terr_lodfeed_dev_records_o;
+  logic [31:0]             terr_lodfeed_stray_samples_o;
   // `hist_rd_*` is GONE from the core's edge (entry I19 closed 2026-09-20):
   // the histogram's read port is driven inside the core by the HPS register
   // aperture's tenant 0. This bench reads bins through `hostreg_*` instead.
@@ -3289,10 +3293,9 @@ module tb_zhao_console_core_smoke
     post_atm_add_i = '0;
     post_hud_valid_i = '0;
     post_hud_rgb_i = '0;
-    hist_ev_valid_i = '0;
-    hist_ev_lane_valid_i = '0;
-    hist_ev_err_i = '0;
-    hist_ev_src_id_i = '0;
+    // The four `hist_ev_*` drives that stood here are GONE with the ports:
+    // entry I18 closed and the histogram's events come from TERRAIN.LODFEED
+    // inside the core. There is nothing for this bench to initialise.
     cfg_valid_i = '0;
     cfg_op_i = '0;
     cfg_page_generation_i = '0;
@@ -4995,6 +4998,48 @@ module tb_zhao_console_core_smoke
     $display("SMOKE:   arb   c0_bursts=%0d c1_bursts=%0d c1_wait_cycles=%0d c2_bursts=%0d c2_wait_cycles=%0d",
              terr_hps_c0_bursts_o, terr_hps_c1_bursts_o, terr_hps_c1_wait_cycles_o,
              terr_hps_c2_bursts_o, terr_hps_c2_wait_cycles_o);
+    // THE MIP LANE, PRINTED BECAUSE A RULING TURNS ON IT (R70, terrain6).
+    // `samples_sent` is TERRAIN.MIPFEED's count of fine-lattice samples pushed
+    // onto `mg_fine_valid_o` -- the stream ruling R70's histogram metric is
+    // derived from. It was NOT printed before, and R70 says in terms: "a
+    // traverse quoted against a stream that never moves is the gap re-opened
+    // under a green gate." These six numbers are how that stops being an
+    // argument. Read `mipreq requests` FIRST: TERRAIN.MIPREQ's trigger is
+    // `tpl_fin_valid && tpl_fin_ready && tpl_fin_ok`, so a spine whose pages
+    // all fault on CRC issues no mip job, and every number to its right is
+    // then zero for that reason and not because the mip lane is broken.
+    $display("SMOKE:   mip   mipreq requests=%0d issued=%0d drops=%0d | mipfeed pages_mipped=%0d faulted=%0d samples_sent=%0d | mipgen m17_writes=%0d m9_writes=%0d aborts=%0d",
+             terr_mipreq_requests_o, terr_mipreq_issued_o, terr_mipreq_drops_o,
+             terr_mip_pages_mipped_o, terr_mip_pages_faulted_o, terr_mip_samples_sent_o,
+             terr_mg_m17_writes_o, terr_mg_m9_writes_o, terr_mg_aborts_o);
+    // TERRAIN.LODFEED rides the line above, so it is printed beside it. These
+    // four and `hist events` below are ONE READING: lodfeed's records ARE the
+    // histogram's events (entry I18, ruling R70), so `dev_records` and
+    // `hist_events` must move together or something between them is dropping.
+    $display("SMOKE:   lodfd lattices_walked=%0d dropped=%0d dev_records=%0d stray_samples=%0d -> hist events=%0d updates=%0d stalls=%0d",
+             terr_lodfeed_lattices_walked_o, terr_lodfeed_lattices_dropped_o,
+             terr_lodfeed_dev_records_o, terr_lodfeed_stray_samples_o,
+             hist_events_o, hist_updates_o, hist_stall_cycles_o);
+    // A SAMPLE WITH NO START IS ALWAYS WRONG, whatever the stimulus, so this
+    // one IS asserted while the counters above are not. It means the fine
+    // stream moved while TERRAIN.MIPFEED had not announced a job -- a
+    // level-versus-edge fault on `mg_start_o`, and it would put one page's
+    // heights into another page's lattice with every downstream number still
+    // looking healthy. It is NOT asserting the gap: it must read zero on a
+    // spine that pages successfully too.
+    if (terr_lodfeed_stray_samples_o != 0)
+      $fatal(1, "SMOKE: TERRAIN.LODFEED saw %0d fine sample(s) with no lattice start -- mg_start_o and mg_fine_valid_o are out of step",
+             terr_lodfeed_stray_samples_o);
+    // AND THE CHAIN IS ASSERTED CONSISTENT RATHER THAN ASSERTED BUSY. Whatever
+    // the stimulus reaches, every deviation record lodfeed emitted must have
+    // been accepted by the histogram, because the two are joined by one
+    // handshake and nothing sits between them. This holds at zero AND at a
+    // thousand, so it is a check that survives the fixture getting better --
+    // unlike `== 0`, which would assert the gap, or `> 0`, which would fail
+    // honestly today and tempt somebody to delete it.
+    if (hist_events_o != HIST_CW'(terr_lodfeed_dev_records_o))
+      $fatal(1, "SMOKE: TERRAIN.LODFEED emitted %0d deviation record(s) and MEASURE.HISTOGRAM accepted %0d -- the I18 join is dropping events",
+             terr_lodfeed_dev_records_o, hist_events_o);
     $display("SMOKE:   wb    sheets written=%0d refused=%0d faulted=%0d guard_denied=%0d acks_unmatched=%0d overdue=%0d | doorbell starved=%0d ret_overflow=%0d | rdshare jobs A=%0d B=%0d WB=%0d",
              terr_wb_sheets_written_o, terr_wb_sheets_refused_o, terr_wb_sheets_faulted_o,
              terr_wb_guard_denied_o, terr_wb_acks_unmatched_o, terr_wb_acks_overdue_o,

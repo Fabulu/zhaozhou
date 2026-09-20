@@ -9709,6 +9709,32 @@ add_test(NAME terrain_lodpath_directed COMMAND test_terrain_lodpath_directed)
 set_tests_properties(terrain_lodpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
 # ---------------------------------------------------------------------------
+# THE SAME PRODUCER INTO THE OTHER CONSUMER -- core entry I18, ruling R70:
+#   zhao_terrain_lodfeed -> the 24 -> 32 widening -> zhao_measure_histogram
+# The path above ends at the STORE and proves the deviation is CORRECT; this
+# one ends at the ORGAN THE CONSOLE COMPOSES and proves it ARRIVES, in the
+# right bin. The console smoke cannot show it: every page it plays fails its
+# CRC, so the fine stream never moves (measured -- the bench prints the lane).
+# tests/terrain/tb_terrain_lodhist.sv is a wrapper and its widening is copied
+# from zhao_console_core.sv character for character.
+# ---------------------------------------------------------------------------
+add_executable(test_terrain_lodhist_directed terrain/terrain_lodhist_directed.cpp)
+target_link_libraries(test_terrain_lodhist_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_lodhist_directed PRIVATE ${CMAKE_SOURCE_DIR}/tests/measure)
+verilate(test_terrain_lodhist_directed
+  PREFIX Vtb_terrain_lodhist
+  TOP_MODULE tb_terrain_lodhist
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodhist.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
+          # The histogram's double bank. It is the reason the block is RAM and
+          # not 3,072 registers, so it is a real dependency, not glue.
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+add_test(NAME terrain_lodhist_directed COMMAND test_terrain_lodhist_directed)
+set_tests_properties(terrain_lodhist_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
 # THE EYE (owner ruling R63). SetView 0x0010 carries `fx16 eye[3]`, zhao_cmd_exec
 # commits it as steps 17/18/19 of the view walk onto projector configuration
 # addresses 19/20/21, and zhao_view_eye is what holds those three words per view
