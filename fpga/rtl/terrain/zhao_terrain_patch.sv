@@ -183,43 +183,63 @@ module zhao_terrain_patch (
     output logic        idle_o
 );
 
+  // The ratified TERRAIN.PATCH arithmetic, imported in MODULE scope rather
+  // than $unit scope -- an import::* outside a module raises IMPORTSTAR under
+  // -Wall and would put these names in every file compiled beside this one.
+  // Same placement, and for the same reason, as zhao_terrain_patch_acc.sv.
+  import zhao_terrain_patch_law_pkg::*;
+
   // ---- MAX_PATCH_FIELDS, frozen (terrain_rules §9.1) -----------------------
   localparam int unsigned MaxFields = 16;
 
-  // ---- functions -----------------------------------------------------------
-
-  // §3 saturating fx16 add: one add at 33 bits, then narrow with saturation.
-  function automatic logic signed [31:0] fx_add_sat(input logic signed [31:0] a,
-                                                    input logic signed [31:0] b);
-    logic signed [32:0] s;
-    begin
-      s = $signed({a[31], a}) + $signed({b[31], b});
-      if (s > 33'sd2147483647) fx_add_sat = 32'sh7FFF_FFFF;
-      else if (s < -33'sd2147483648) fx_add_sat = 32'sh8000_0000;
-      else fx_add_sat = s[31:0];
-    end
-  endfunction
-
-  // The 4x4 subpatch mask of one lattice vertex (chosen law 3). A vertex on a
-  // subpatch border marks both neighbours; a corner vertex marks four.
-  function automatic logic [15:0] sp_mask(input logic [5:0] vi, input logic [5:0] vj);
-    logic [5:0] col_lo, col_hi, row_lo, row_hi;
-    logic [15:0] m;
-    begin
-      col_lo = (vi == 6'd0) ? 6'd0 : ((vi - 6'd1) >> 3);
-      col_hi = ((vi >> 3) > 6'd3) ? 6'd3 : (vi >> 3);
-      row_lo = (vj == 6'd0) ? 6'd0 : ((vj - 6'd1) >> 3);
-      row_hi = ((vj >> 3) > 6'd3) ? 6'd3 : (vj >> 3);
-      m = 16'd0;
-      for (int r = 0; r < 4; r++) begin
-        for (int c = 0; c < 4; c++) begin
-          if (r >= int'(row_lo) && r <= int'(row_hi) && c >= int'(col_lo) && c <= int'(col_hi))
-            m[r*4+c] = 1'b1;
-        end
-      end
-      sp_mask = m;
-    end
-  endfunction
+  // ---- the ratified arithmetic, and where it now lives ---------------------
+  //
+  // FACTORED 2026-09-20 (packet TERRLAW, owner ruling R176) into
+  // zhao_terrain_patch_law_pkg. THIS MODULE IS COMPOSED -- zhao_console_core
+  // instantiates it -- and until this commit the package was imported ONLY by
+  // zhao_terrain_patch_acc, which is NOT composed. So the ratified law had one
+  // statement and the silicon had another, and the one the console shipped was
+  // this file's copy.
+  //
+  // WHAT USED TO BE HERE, and where each piece went:
+  //
+  //   `fx_add_sat`  -> zhao_tp_fx_add_sat   (§3 saturating fx16 add)
+  //   `sp_mask`     -> zhao_tp_sp_mask      (charter §11.1's 4x4 dirty mask)
+  //   `cur_covers`  -> zhao_tp_covers       (§9.1's closed-interval test)
+  //   base/scar/bot -> zhao_tp_h16_to_fx    (qformats §9's exact raw << 8)
+  //   `ctop_new`    -> zhao_tp_compose_top  (§3.4 line 1)
+  //   `ctop_clamped`-> zhao_tp_bottom_clamp (§3.4 line 2's one clamp)
+  //
+  // THERE IS NO LOCAL FORWARDER, DELIBERATELY. A one-line
+  // `function fx_add_sat(...) return zhao_tp_fx_add_sat(...)` keeps the call
+  // sites unchanged and is tempting for exactly that reason -- but it is still
+  // a FUNCTION DEFINITION, so `tools/budget/duplicate_functions.py` goes on
+  // reporting `fx_add_sat` in this file and the instrument that found R176
+  // keeps saying the duplication is here. Deduplicating the law while leaving
+  // the tool reading unchanged is the wrong half of the job.
+  //
+  // The bit-exactness evidence for the substitutions is NOT "it still builds":
+  // every replaced expression was compared comment-stripped against the
+  // package body after one declared identifier substitution (9 of 9 identical,
+  // zero drift), and the pre-factoring module was instantiated beside this one
+  // on identical stimulus for 500,000 random vectors -- 262,559 of them on a
+  // clock where an output MOVED -- with no output disagreeing on any clock.
+  //
+  // FIVE deliberate mutations of the package were then run through that same
+  // bench and ALL FIVE produced a disagreement: the §9.1 closed-interval test
+  // made half-open, §3.4 line 1's underside clamp dropped, h16->fx shifted by
+  // 9 instead of 8, fx_add_sat's non-saturating result flipped in bit 0, and
+  // sp_mask's col_lo border rule removed.
+  //
+  // IT SAYS FIVE AND NOT THE SEVEN THAT WERE ATTEMPTED, and the two that fell
+  // out are the useful part. `{{9{h[15]}}, h[14:0], 8'b0}` IS
+  // `{{8{h[15]}}, h, 8'b0}` on all 65,536 inputs -- eight sign copies plus
+  // h[15] are nine sign copies -- and sp_mask's `row_hi` clamp cannot change a
+  // comparison against r in 0..3. Neither was a mutation, and their silence
+  // was read for a while as this bench being blind. A control that cannot
+  // enter the failing state is not a control (owner ruling R173); worth
+  // recording that the rule caught its author twice inside the commit that
+  // cites it.
 
   // -------------------------------------------------------------------------
   // the field list: 16 footprint rectangles. The program hash and command
@@ -271,8 +291,9 @@ module zhao_terrain_patch (
   wire signed [31:0] cur_z0 = fp_z0[lane[3:0]];
   wire signed [31:0] cur_x1 = fp_x1[lane[3:0]];
   wire signed [31:0] cur_z1 = fp_z1[lane[3:0]];
-  wire cur_covers = !((held_wx < cur_x0) || (held_wx > cur_x1) ||
-                      (held_wz < cur_z0) || (held_wz > cur_z1));
+  // R176: this was an inline restatement of the law; it is now THE call.
+  wire cur_covers = zhao_tp_covers(held_wx, held_wz, cur_x0, cur_z0,
+                                   cur_x1, cur_z1);
 
   wire last_lane = (lane + 5'd1) == n_fields;
 
@@ -296,23 +317,26 @@ module zhao_terrain_patch (
   // ---- the vertex's own composition, before any field lane ----------------
   // height16 -> fx16 is the EXACT `raw << 8` (qformats §9): sign-extend the
   // 16-bit word to 24 bits of fx16 raw. No rounding exists here.
-  wire signed [31:0] base_fx = {{8{base_i[15]}}, base_i, 8'b0};
-  wire signed [31:0] scar_fx = {{8{scar_i[15]}}, scar_i, 8'b0};
-  wire signed [31:0] bot_fx = {{8{bottom_i[15]}}, bottom_i, 8'b0};
-  wire signed [31:0] sum_bs = fx_add_sat(base_fx, scar_fx);
-  // clamp at the underside (§3.4 line 1); a legacy page has no underside
-  wire signed [31:0] ctop_new = (dual_i && (sum_bs < bot_fx)) ? bot_fx : sum_bs;
+  wire signed [31:0] base_fx = zhao_tp_h16_to_fx(base_i);
+  wire signed [31:0] scar_fx = zhao_tp_h16_to_fx(scar_i);
+  wire signed [31:0] bot_fx = zhao_tp_h16_to_fx(bottom_i);
+  // clamp at the underside (§3.4 line 1); a legacy page has no underside.
+  // `sum_bs` -- zhao_tp_fx_add_sat(base_fx, scar_fx) -- is now INSIDE
+  // zhao_tp_compose_top, which is the same two statements in the same order.
+  // It is not kept as a separate wire because its only consumer was this line
+  // and an unread wire is an UNUSEDSIGNAL under -Wall.
+  wire signed [31:0] ctop_new = zhao_tp_compose_top(base_fx, scar_fx, bot_fx, dual_i);
 
   // With no live field the chain is empty, so §3.4 line 2's clamp acts on
   // compose_top itself — which line 1 already clamped, so it is a no-op. It is
   // written out rather than elided so the two lines stay visibly separate.
-  wire signed [31:0] ctop_clamped = (dual_i && (ctop_new < bot_fx)) ? bot_fx : ctop_new;
+  wire signed [31:0] ctop_clamped = zhao_tp_bottom_clamp(ctop_new, bot_fx, dual_i);
 
   // ---- the field chain, one lane at a time --------------------------------
   // A lane whose footprint misses this vertex is CONSUMED and discarded,
   // exactly as compose_lattice `continue`s past it — identical in value and
   // identical in saturation records.
-  wire signed [31:0] acc_next = cur_covers ? fx_add_sat(acc, fld_height_i) : acc;
+  wire signed [31:0] acc_next = cur_covers ? zhao_tp_fx_add_sat(acc, fld_height_i) : acc;
   // live_top = max(compose_top + fields, bottom): the ONE clamp after the whole
   // command-order fx_add chain (§3.4 line 2). A transient wave can never punch
   // below the underside, so it can never fake a breach.
@@ -404,7 +428,7 @@ module zhao_terrain_patch (
           held_wx   <= wx_i;
           held_wz   <= wz_i;
           held_src  <= src_id_i;
-          held_mask <= sp_mask(vi_i, vj_i);
+          held_mask <= zhao_tp_sp_mask(vi_i, vj_i);
           if (n_fields == 5'd0) begin
             // No live field touches this patch: the vertex composes in one
             // cycle, which is the ledger's "1 patch-layer update per clock".
@@ -414,7 +438,7 @@ module zhao_terrain_patch (
             r_ctop <= ctop_new;
             r_dirty <= ctop_clamped != base_fx;
             r_src <= src_id_i;
-            if (ctop_clamped != base_fx) subpatch_dirty_o <= subpatch_dirty_o | sp_mask(vi_i, vj_i);
+            if (ctop_clamped != base_fx) subpatch_dirty_o <= subpatch_dirty_o | zhao_tp_sp_mask(vi_i, vj_i);
             terrain_samples_evaluated_o <= terrain_samples_evaluated_o + 32'd1;
           end else begin
             busy <= 1'b1;

@@ -295,6 +295,12 @@ module zhao_terrain_tess #(
     output logic        idle_o
 );
 
+  // The ratified TERRAIN.PATCH arithmetic, imported in MODULE scope rather
+  // than $unit scope -- an import::* outside a module raises IMPORTSTAR under
+  // -Wall and would put these names in every file compiled beside this one.
+  // Same placement, and for the same reason, as zhao_terrain_patch_acc.sv.
+  import zhao_terrain_patch_law_pkg::*;
+
   localparam int unsigned SubCells = 8;  // charter §11.1
   localparam int unsigned Side = SubCells + 1;  // 9 lattice vertices per window side
   localparam int unsigned Depth = Side * Side;  // 81, the arena's identity space
@@ -316,17 +322,35 @@ module zhao_terrain_tess #(
   localparam logic [1:0] ModeRef = 2'd2;
 
   // ---- §3/§4 arithmetic ----------------------------------------------------
-
-  function automatic logic signed [31:0] fx_add_sat(input logic signed [32:0] a,
-                                                    input logic signed [32:0] b);
-    logic signed [33:0] s;
-    begin
-      s = $signed({a[32], a}) + $signed({b[32], b});
-      if (s > 34'sd2147483647) fx_add_sat = 32'sh7FFF_FFFF;
-      else if (s < -34'sd2147483648) fx_add_sat = 32'sh8000_0000;
-      else fx_add_sat = s[31:0];
-    end
-  endfunction
+  //
+  // `fx_add_sat` LIVED HERE and is now zhao_tp_fx_add_sat in
+  // zhao_terrain_patch_law_pkg (packet TERRLAW, owner ruling R176). It is worth
+  // recording WHY it was not obviously the same function, because the shape is
+  // the one that hides a duplicate from a reader AND from
+  // `tools/budget/duplicate_functions.py`'s eye even while the tool names it:
+  //
+  //   this copy took **33-bit** inputs and summed at 34, where the package
+  //   takes 32 and sums at 33 -- so it LOOKED like a deliberately wider
+  //   variant, the kind of thing R176 says must make the package GROW rather
+  //   than be narrowed away.
+  //
+  // IT IS NOT WIDER. Both call sites passed `{x[31], x}` -- a 32-bit signed
+  // value hand-extended to 33 -- and all four operands (`v_ha`, `m_half`,
+  // `ln3_vh_q`, `ln3_step_q`) are declared `logic signed [31:0]`. The extra bit
+  // was always a duplicated sign bit, so the 34-bit add and the package's
+  // 33-bit add compare identically against the same two bounds. The calls below
+  // therefore drop the manual extension and pass the 32-bit values straight in:
+  // nothing is narrowed, because nothing was ever wider than 32 bits.
+  //
+  // EVIDENCE, not argument. The pre-factoring module was instantiated beside
+  // this one on identical stimulus and every output compared on every clock,
+  // for 500,000 random vectors -- 490,958 of them on a clock where one of the
+  // 42 outputs MOVED -- with no disagreement anywhere. The same bench with
+  // zhao_tp_fx_add_sat's non-saturating result flipped in bit 0 disagreed at
+  // vector 22,546, so the null above is a null this instrument could have
+  // broken. `terrain_tess_directed` (6,751 checks), `terrain_tess_modes_directed`
+  // (33) and `terrain_pipe_rpp3_matw18_fit_top_directed` (15) are the durable
+  // regression evidence and are run at this commit.
 
   // rescale(x, 1): round-half-up shift by one, then saturate to the fx16 word.
   function automatic logic signed [31:0] rescale1(input logic signed [33:0] x);
@@ -1074,7 +1098,7 @@ module zhao_terrain_tess #(
   // same single rounding column_query performs over its common denominator.
   wire signed [33:0] m_dab = {{2{lat_h_i[31]}}, lat_h_i} - {{2{v_ha[31]}}, v_ha};
   wire signed [31:0] m_half = rescale1(m_dab);
-  wire signed [31:0] m_hc = fx_add_sat({v_ha[31], v_ha}, {m_half[31], m_half});
+  wire signed [31:0] m_hc = zhao_tp_fx_add_sat(v_ha, m_half);
   // y = h + fx_mul(morph, hc - h): §4.3's shape, an exact add of a rounded
   // delta. morph = 0 gives h and morph = 65536 gives hc, both bit-exactly.
   wire signed [33:0] m_d = {{2{m_hc[31]}}, m_hc} - {{2{vh[pend_slot][31]}}, vh[pend_slot]};
@@ -1224,8 +1248,7 @@ module zhao_terrain_tess #(
   logic [15:0]             ln3_src_q;
 
   // The blend's final value, now computed at D from registered operands.
-  wire signed [31:0] m_y_d = fx_add_sat({ln3_vh_q[31], ln3_vh_q},
-                                        {ln3_step_q[31], ln3_step_q});
+  wire signed [31:0] m_y_d = zhao_tp_fx_add_sat(ln3_vh_q, ln3_step_q);
 
   wire signed [31:0] land_x = ln3_x_q;
   wire signed [31:0] land_z = ln3_z_q;

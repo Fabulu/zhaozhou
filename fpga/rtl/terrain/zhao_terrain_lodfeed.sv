@@ -165,6 +165,12 @@ module zhao_terrain_lodfeed #(
     output var logic        busy_o
 );
 
+  // The ratified TERRAIN.PATCH arithmetic, imported in MODULE scope rather
+  // than $unit scope -- an import::* outside a module raises IMPORTSTAR under
+  // -Wall and would put these names in every file compiled beside this one.
+  // Same placement, and for the same reason, as zhao_terrain_patch_acc.sv.
+  import zhao_terrain_patch_law_pkg::*;
+
   localparam int unsigned VERTS = EDGE * EDGE;    // 1,089
   localparam int unsigned AW    = $clog2(VERTS);  // 11
 
@@ -207,7 +213,27 @@ module zhao_terrain_lodfeed #(
   wire [AW-1:0] dv_addr_c = (({5'd0, dv_lat_vj} << 5) + {5'd0, dv_lat_vj}) + {5'd0, dv_lat_vi};
   logic signed [15:0] lat_h_q;
   logic signed [31:0] lat_fx_c;
-  assign lat_fx_c = {{8{lat_h_q[15]}}, lat_h_q, 8'd0};   // qformats 9: raw << 8, EXACT
+  // qformats 9: raw << 8, EXACT.  R176: this was the THIRD statement of the
+  // conversion in this directory (with zhao_terrain_patch.sv and the package);
+  // it is now the package's, which is the one the spec ratifies.  The literal
+  // it replaces was `{{8{lat_h_q[15]}}, lat_h_q, 8'd0}` -- the package writes
+  // the same eight zero bits as `8'b0`, which is the same value and the same
+  // width.
+  //
+  // WHAT THE EVIDENCE FOR THIS ONE LINE IS.  The two texts are byte-identical
+  // after that one declared literal substitution, and `terrain_lodpath_directed`
+  // (286 checks) and `terrain_lodhist_directed` (158) drive the walk that reads
+  // it and pass at this commit.  A pin-level differential against the
+  // pre-factoring module also ran 500,000 vectors with no disagreement, BUT
+  // THAT NULL IS WEAK HERE and it is worth saying why rather than quoting it:
+  // shifting the package's conversion to `raw << 9` -- wrong on 65,535 of
+  // 65,536 inputs -- did NOT make that bench disagree, because `have_q` is set
+  // only when `fill_q` reaches VERTS-1, so a random stream that keeps
+  // restarting its fill never starts the walk and `lat_h_q` is never read.
+  // The bench exercised 196,848 clocks of output movement and none of them
+  // touched this line.  A gate that cannot reach the state is not evidence
+  // about the state.
+  assign lat_fx_c = zhao_tp_h16_to_fx(lat_h_q);
 
   // The walker only ever reads surface 0 -- there is one buffer -- so its
   // surface request and its surface echo are constants it produces and this

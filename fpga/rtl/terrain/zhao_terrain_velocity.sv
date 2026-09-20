@@ -184,58 +184,60 @@ module zhao_terrain_velocity (
   // ---- frozen constants ----------------------------------------------------
   localparam logic [5:0] LatMax = 6'd32;  // Island Patch v1: 33x33 (§2)
 
+  // The ratified TERRAIN.PATCH arithmetic, imported in MODULE scope rather
+  // than $unit scope -- an import::* outside a module raises IMPORTSTAR under
+  // -Wall and would put these names in every file compiled beside this one.
+  // Same placement, and for the same reason, as zhao_terrain_patch_acc.sv.
+  import zhao_terrain_patch_law_pkg::*;
+
   // ---- states --------------------------------------------------------------
   localparam logic [1:0] StIdle = 2'd0;
   localparam logic [1:0] StZero = 2'd1;  // lanes == 0: emit the V2 zero word
   localparam logic [1:0] StLane = 2'd2;  // consuming this vertex's lane words
   logic [1:0] state;
 
-  // ---- functions -----------------------------------------------------------
-
-  // §3 saturating fx16 add: ONE add at 33 bits, then narrow with saturation.
-  function automatic logic signed [31:0] fx_add_sat(input logic signed [31:0] a,
-                                                    input logic signed [31:0] b);
-    logic signed [32:0] s;
-    begin
-      s = $signed({a[31], a}) + $signed({b[31], b});
-      if (s > 33'sd2147483647) fx_add_sat = 32'sh7FFF_FFFF;
-      else if (s < -33'sd2147483648) fx_add_sat = 32'sh8000_0000;
-      else fx_add_sat = s[31:0];
-    end
-  endfunction
-
-  // Did that add saturate? Split out rather than returned alongside, because
+  // ---- the ratified arithmetic, and where it now lives ---------------------
+  //
+  // FACTORED 2026-09-20 (packet TERRLAW, owner ruling R176) into
+  // zhao_terrain_patch_law_pkg. THIS BLOCK IS IN A PRODUCTION ROOT --
+  // `zhao_prod_top` instantiates it -- and it held THREE copies of the
+  // TERRAIN.PATCH law that R176 is about. R176's own text names only
+  // `zhao_terrain_patch` and `zhao_terrain_lodfeed`; this file and
+  // `zhao_terrain_tess` were found by running
+  // `tools/budget/duplicate_functions.py` rather than by reading the ruling,
+  // which is the whole reason that tool exists.
+  //
+  //   `fx_add_sat`       -> zhao_tp_fx_add_sat    (§3 saturating fx16 add)
+  //   `fx_add_sat_fired` -> zhao_tp_fx_add_fired  (the saturation EVENT)
+  //   `sp_mask`          -> zhao_tp_sp_mask       (charter §11.1's 4x4 mask)
+  //
+  // All three bodies were CHARACTER-FOR-CHARACTER identical to the package's,
+  // checked comment-stripped after one declared rename, not by eye. The local
+  // names are not kept as forwarders: a forwarder is still a function
+  // definition, so `duplicate_functions.py` would go on naming this file.
+  //
+  // The comment the old `fx_add_sat_fired` carried is worth keeping, because
+  // it explains a shape that otherwise looks redundant: the saturation flag is
+  // a SEPARATE function rather than a second field of the result, because
   // indexing a function's return value is exactly what Quartus 17.0 rejects.
-  function automatic logic fx_add_sat_fired(input logic signed [31:0] a,
-                                            input logic signed [31:0] b);
-    logic signed [32:0] s;
-    begin
-      s = $signed({a[31], a}) + $signed({b[31], b});
-      fx_add_sat_fired = (s > 33'sd2147483647) || (s < -33'sd2147483648);
-    end
-  endfunction
-
-  // The 4x4 subpatch mask of one lattice vertex — `zref::terrain::subpatch_mask`
-  // verbatim (charter §11.1's sixteen 8x8-cell subpatches). A vertex on a
-  // subpatch border marks BOTH neighbours; a corner vertex marks four.
-  function automatic logic [15:0] sp_mask(input logic [5:0] vi, input logic [5:0] vj);
-    logic [5:0] col_lo, col_hi, row_lo, row_hi;
-    logic [15:0] m;
-    begin
-      col_lo = (vi == 6'd0) ? 6'd0 : ((vi - 6'd1) >> 3);
-      col_hi = ((vi >> 3) > 6'd3) ? 6'd3 : (vi >> 3);
-      row_lo = (vj == 6'd0) ? 6'd0 : ((vj - 6'd1) >> 3);
-      row_hi = ((vj >> 3) > 6'd3) ? 6'd3 : (vj >> 3);
-      m = 16'd0;
-      for (int r = 0; r < 4; r++) begin
-        for (int c = 0; c < 4; c++) begin
-          if (r >= int'(row_lo) && r <= int'(row_hi) && c >= int'(col_lo) && c <= int'(col_hi))
-            m[r*4+c] = 1'b1;
-        end
-      end
-      sp_mask = m;
-    end
-  endfunction
+  //
+  // WHAT THE EVIDENCE FOR THIS FILE IS, AND WHAT IT IS NOT. A pin-level
+  // differential against the pre-factoring module ran 500,000 random vectors
+  // (245,818 of them on a clock where an output moved) with no disagreement.
+  // That null is NOT uniformly strong, and saying so is the point: of the three
+  // package functions this block calls, deliberate mutation of
+  // zhao_tp_fx_add_fired disagreed at vector 35, but mutations of
+  // zhao_tp_fx_add_sat and zhao_tp_sp_mask stayed SILENT. Random stimulus
+  // reaches `StIdle` and the zero-lane path; it does not reliably drive a
+  // `start_lanes_i > 0` sweep through `StLane` to a bake, which is where those
+  // two are called. A gate that cannot reach the state is not evidence about
+  // the state.
+  //
+  // So the load-bearing evidence here is the OTHER two instruments: all three
+  // removed bodies are byte-identical to the package's, checked
+  // comment-stripped after one declared rename; and `terrain_velocity_directed`
+  // (133 checks) and `terrain_velocity_chain` (55) do drive the sweep and the
+  // bake, and pass at this commit.
 
   // -------------------------------------------------------------------------
   // the held sweep
@@ -260,8 +262,8 @@ module zhao_terrain_velocity (
   // ---- the lane fold -------------------------------------------------------
   // A lane whose footprint misses the vertex is CONSUMED and DISCARDED, not
   // added as zero — identical in value and identical in SatLedger records.
-  wire signed [31:0] acc_next = lane_covers_i ? fx_add_sat(acc, lane_velocity_i) : acc;
-  wire add_sat_now = lane_covers_i && fx_add_sat_fired(acc, lane_velocity_i);
+  wire signed [31:0] acc_next = lane_covers_i ? zhao_tp_fx_add_sat(acc, lane_velocity_i) : acc;
+  wire add_sat_now = lane_covers_i && zhao_tp_fx_add_fired(acc, lane_velocity_i);
   wire last_lane = (k + 5'd1) == c_lanes;
 
   // ---- the bake-back (qformats §2/§9, ops.yml FIELD.OUT.VELOCITY) ----------
@@ -381,7 +383,7 @@ module zhao_terrain_velocity (
               r_covered <= any_cov || lane_covers_i;
               r_src <= c_src;
               if (bake_sat) velocity_rescale_sats_o <= velocity_rescale_sats_o + 32'd1;
-              if (bake_vel != 16'sd0) moving_mask_o <= moving_mask_o | sp_mask(vi, vj);
+              if (bake_vel != 16'sd0) moving_mask_o <= moving_mask_o | zhao_tp_sp_mask(vi, vj);
               terrain_samples_evaluated_o <= terrain_samples_evaluated_o + 32'd1;
               k <= '0;
               acc <= '0;
