@@ -2353,9 +2353,36 @@
 //      4c's own `body_off` mechanism was designed to make one cheap: the
 //      header "names the byte offset at which that body will begin, so the
 //      unfrozen half can be appended later without moving a byte of the frozen
-//      half". The recommendation and its evidence are in
-//      FINDINGS-forge.md. Until it is ruled, this stays a gap and the reason
-//      is a freeze, not a missing model.
+//      half".
+//
+//      OWNER RULING R90 GRANTED THAT LIFT, AND THE LIFT IS NOT THE WHOLE
+//      OBSTACLE. Two things were checked on 2026-09-20 by the geomseam packet
+//      and both are recorded on R90's own row in
+//      `reports/OWNER-RULINGS-20260919-EVENING.md` -- a durable home, unlike
+//      the run folder the previous sentence pointed at:
+//
+//        * NOTHING ANYWHERE DEFINES THE BYTES. `zref_creature.hpp` holds C++
+//          structs whose members are `std::vector` (no wire layout at all),
+//          `spec/creature_rules.md:58-60` holds a size in prose, and
+//          `zref_creature_page.hpp:23-28` explicitly disclaims freezing them.
+//          `zref_creature.hpp:43-46` calls the quaternion lane format
+//          "PROPOSED, NOT FROZEN". So the lift does not UNBLOCK a layout;
+//          somebody must AUTHOR one, and that is an ABI freeze.
+//        * THE PRODUCER IS ~17,568 BITS OF ASYNCHRONOUS-READ STORE, UNPRICED.
+//          `zhao_geom_pose_decode.sv:89-92` makes the fetch COMBINATIONAL BY
+//          CONTRACT and `:146` drives `bone_idx_o` combinationally, so per bone
+//          the caller owes 5 + 3*32 + 4*16 + 12*32 = 549 bits, held stable for
+//          every cycle the block sits in S_FETCH -- 549 * 32 bones. A
+//          synchronous M10K cannot serve it. The same file's own header
+//          (:56-69) spends THIRTEEN CYCLES of latency to keep 12,288 registers
+//          out of ALMs for its ancestor store, and says a combinational read
+//          "pushes Quartus into logic cells and the block stops fitting". On a
+//          device at ~113% of its ALM ceiling that is an owner-visible
+//          decision, not a packaging step: see D-GEOMSEAM-A.
+//
+//      Until those are settled this stays a gap, and the reason is a freeze
+//      PLUS an absent byte layout PLUS an unpriced store -- not a missing
+//      memory model.
 //
 //      WHAT IS NOT PART OF THIS GAP, because the distinction is the whole
 //      point of closing I10: the palette STORE is present and internal. A
@@ -3444,13 +3471,31 @@
 //          * and the one alpha the console does supply is
 //            `MAT_BASE_ALPHA_C = 8'hFF` by owner ruling R48, whose stated
 //            reason is "no ratified vertex format carries alpha".
-//        R48 AND THE FORGE.SHADOW CONTRACT CONTRADICT EACH OTHER IN WRITING.
-//        That is an OWNER DECISION, written up with evidence and a
-//        recommendation in FINDINGS-forge.md, and it is the thing to settle
-//        before any more of this chain is built: a shadow composed today is a
-//        flat opaque dark polygon with a depth bias under every creature,
-//        which is exactly the art defect CLAUDE.md's ground-contact law
-//        exists to refuse -- shipped, and counted as a gap closed.
+//        R48 AND THE FORGE.SHADOW CONTRACT CONTRADICTED EACH OTHER IN WRITING,
+//        and a shadow composed under R48 as written is a flat opaque dark
+//        polygon with a depth bias under every creature -- exactly the art
+//        defect CLAUDE.md's ground-contact law exists to refuse, shipped and
+//        counted as a gap closed.
+//
+//        RULED, 2026-09-20, BY OWNER RULING R89, and recorded in BOTH written
+//        laws rather than here: `design/contracts/FORGE.SHADOW.md`'s new
+//        section "Where the transparency comes from", and the amendment on
+//        R48's row in `reports/OWNER-RULINGS-20260919-EVENING.md`. Both are
+//        durable homes; the sentence that stood here pointed at
+//        FINDINGS-forge.md, which the harness refused and which does not
+//        exist in this tree -- a citation to nowhere, in production RTL.
+//
+//        THE RESOLUTION IS A READING, NOT A COMPROMISE, and it means R48
+//        stands unamended: `zhao_forge_shadow.sv:295` is
+//        `assign vtx_alpha_o = strength_q` with `strength_q` latched PER
+//        CASTER, so shadow alpha is ALREADY CONSTANT OVER THE HULL. The
+//        per-vertex port carries a per-primitive quantity. What FORGE.SHADOW
+//        needs is therefore a producer for `tri_continuation_tail_i`'s
+//        EXISTING flat `vertex_alpha` into the composed `zhao_raster_blend` --
+//        not a fourth attrpack plane and a fourth rasteriser lane for a value
+//        that does not vary across the primitive. Interpolated per-vertex
+//        alpha stays a real, uncommissioned feature and `ALPHA_C` stays its
+//        named seam.
 //
 //   AND THERE ARE TWO READINGS OF "THE ARENA ROUTE", WHICH IS WORTH SAYING
 //   BECAUSE ONLY ONE OF THEM HITS REASON 1. Reason 1 is an objection to
