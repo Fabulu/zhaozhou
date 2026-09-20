@@ -253,6 +253,16 @@ struct Bench {
     for (int i = 0; i < budget && af_releases == before; ++i) step();
     return af_releases == before + 1;
   }
+  // R57: the asset buffer now goes back EARLY -- as soon as the walk has ended
+  // and every handle is in -- so "released" and "finished drawing" are two
+  // different moments and every case that reads emissions must wait for the
+  // second one. `meshlets_o` still counts at the arena release, which is the
+  // end of the meshlet's replay.
+  bool drain_meshlet(int budget = 8000) {
+    const uint32_t before = t.meshlets_o;
+    for (int i = 0; i < budget && t.meshlets_o == before; ++i) step();
+    return t.meshlets_o == before + 1;
+  }
 };
 
 bool corner_ok(const Emitted& e, int k, const Vtx& v, unsigned /*profile: the store's business*/) {
@@ -290,7 +300,8 @@ int main(int argc, char** argv) {
       ck(b.tri(tr[0], tr[1], tr[2], 0x0A1, 0x0033), "A: a triangle is taken");
     }
     b.done();
-    ck(b.drain_release(), "A: the meshlet is released exactly once, after its last triangle");
+    ck(b.drain_release(), "A: the asset buffer goes back once, as soon as the walk ended and the handle was in");
+    ck(b.drain_meshlet(), "A: ... and the meshlet retires when its last triangle has been drawn");
     int bad = 0;
     if (b.out.size() != 20) ++bad;
     for (size_t n = 0; n < b.out.size() && n < 20; ++n) {
@@ -327,7 +338,7 @@ int main(int argc, char** argv) {
       ck(b.tri(tr[0], tr[1], tr[2], 0x0B2, 0x0044), "B: triangle");
     }
     b.done();
-    ck(b.drain_release(), "B: released once");
+    ck(b.drain_release() && b.drain_meshlet(), "B: released once, then retired");
     int bad = 0;
     if (b.out.size() != 16) ++bad;
     for (size_t n = 0; n < 8 && 2 * n + 1 < b.out.size(); ++n) {
@@ -362,7 +373,7 @@ int main(int argc, char** argv) {
     ck(b.tri(0, 1, 0x1005, 1, 1), "C: vertex id wider than the index -> refused, not aliased");
     ck(b.tri(3, 4, 5, 1, 1), "C: clean again");
     b.done();
-    ck(b.drain_release(), "C: released");
+    ck(b.drain_release() && b.drain_meshlet(), "C: released, then retired");
     ck(b.out.size() == 2, "C: only the two drawable triangles are emitted");
     ck(b.t.missed_o == 2, "C: missed_o counts both missed triangles");
     ck(b.t.refused_o == 2, "C: refused_o counts both refused triangles");
@@ -381,7 +392,7 @@ int main(int argc, char** argv) {
     ck(b.token(0b01, 8) && b.handle(2, 4 /* stale */, 0), "D: token and a STALE handle");
     ck(b.tri(0, 1, 2, 1, 1), "D: triangle");
     b.done();
-    ck(b.drain_release(), "D: released");
+    ck(b.drain_release() && b.drain_meshlet(), "D: released, then retired");
     ck(b.out.empty() && b.t.refused_o == before + 1, "D: a stale handle draws nothing and is refused");
   }
 
@@ -392,7 +403,7 @@ int main(int argc, char** argv) {
     ck(b.token(0b01, 0), "E: a zero-vertex token");
     ck(b.tri(0, 1, 2, 1, 1), "E: its triangle is still taken, so the walk drains");
     b.done();
-    ck(b.drain_release(), "E: released with no arena held");
+    ck(b.drain_release() && b.drain_meshlet(), "E: released with no arena held, then retired");
     ck(b.rels.empty() && b.out.empty() && b.t.refused_o == before + 1,
        "E: nothing released to GROUP_SEQ, nothing drawn, the triangle counted refused");
   }
@@ -408,7 +419,7 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 5; ++i) b.step();
     ck(b.af_releases >= 0 && b.t.grp_ready_o, "F: still waiting for its handle");
     ck(b.handle(1, 6, 0), "F: the handle arrives late");
-    ck(b.drain_release(), "F: released: the early end was not lost");
+    ck(b.drain_release() && b.drain_meshlet(), "F: released: the early end was not lost");
     ck(b.rels.size() == 1, "F: its arena is released");
   }
 
@@ -420,7 +431,7 @@ int main(int argc, char** argv) {
     b.land(2, 0);
     ck(b.token(0b01, 4) && b.handle(2, 8, 1), "G: mask 01, handle for view 1");
     b.done();
-    ck(b.drain_release(), "G: released");
+    ck(b.drain_release() && b.drain_meshlet(), "G: released, then retired");
     ck(b.t.view_bad_o == 1, "G: view_bad_o counts it");
   }
 
@@ -434,7 +445,7 @@ int main(int argc, char** argv) {
     b.att_delay_next = 1;
     ck(b.tri(0, 1, 2, 1, 1), "I: triangle");
     b.done();
-    ck(b.drain_release(), "I: released");
+    ck(b.drain_release() && b.drain_meshlet(), "I: released, then retired");
     ck(b.t.att_skew_o >= 1, "I: att_skew_o moves when the store and the arena disagree on timing");
   }
 
@@ -460,7 +471,7 @@ int main(int argc, char** argv) {
     ck(b.handle(1, 12, 0, 1) && b.handle(3, 13, 1, 0), "K: view 0 poisoned, view 1 clean");
     ck(b.tri(0, 1, 2, 1, 1) && b.tri(3, 4, 5, 1, 1) && b.tri(0, 2, 4, 1, 1), "K: three triangles taken");
     b.done();
-    ck(b.drain_release(), "K: R31: the poisoned meshlet is RELEASED -- the frame completes");
+    ck(b.drain_release() && b.drain_meshlet(), "K: R31: the poisoned meshlet is RELEASED -- the frame completes");
     ck(b.out.empty(), "K: nothing drawn from a poisoned meshlet, in EITHER view");
     ck(b.t.poisoned_o - p0 == 3, "K: poisoned_o counts every dropped descriptor");
     ck(b.t.refused_o == r0 && b.t.missed_o == m0, "K: ... and not as refused or missed");
@@ -478,15 +489,102 @@ int main(int argc, char** argv) {
     ck(b.token(0b01, 4) && b.handle(2, 14, 0, 0), "L: token and a clean handle");
     ck(b.tri(0, 1, 2, 1, 1), "L: triangle");
     b.done();
-    ck(b.drain_release(), "L: released");
+    ck(b.drain_release() && b.drain_meshlet(), "L: released, then retired");
     ck(b.out.size() == 1 && b.t.poisoned_o == p0, "L: a clean meshlet after a poisoned one draws");
   }
 
-  ck(b.t.meshlets_o == 10, "the meshlet count is every token taken");
+  // ---- M: OWNER RULING R57 -- the SECOND meshlet is taken while the first is
+  // still being drawn. This is the whole point of the change, and it is asserted
+  // as a JOIN rather than as a duration: meshlet 2's token, its handle and every
+  // one of its descriptors are accepted at clocks when meshlet 1 has not yet
+  // retired (`meshlets_o` has not moved) and has not yet emitted all sixteen of
+  // its view-triangles. A serial block cannot do any of it.
+  {
+    b.stall_pct = 0;
+    b.out.clear(); b.rels.clear();
+    b.make_arena(1, 8, 20);      // meshlet 1, view 0
+    b.make_arena(2, 8, 21);      // meshlet 1, view 1
+    b.make_arena(3, 8, 22);      // meshlet 2, view 0
+    const uint32_t m0 = b.t.meshlets_o;
+    const int      r0 = b.af_releases;
+    ck(b.token(0b11, 8), "M: meshlet 1's token");
+    ck(b.handle(1, 20, 0) && b.handle(2, 21, 1), "M: meshlet 1's two handles");
+    for (unsigned n = 0; n < 8; ++n)
+      ck(b.tri(n % 8, (n + 3) % 8, (n + 5) % 8, 0x0C3, 0x0055), "M: meshlet 1's descriptors");
+    b.done();
+    // The buffer goes back NOW -- before a single triangle of meshlet 1 has been
+    // drawn in view 1 -- because both readers are provably finished.
+    ck(b.af_releases == r0 + 1 || b.drain_release(),
+       "M: meshlet 1's asset buffer is released while its replay is still running");
+    const size_t out_at_release = b.out.size();
+    ck(out_at_release < 16,
+       "M: ... and the release really is EARLY (fewer than 16 view-triangles drawn)");
+
+    const bool tok2 = b.token(0b01, 8);
+    const uint32_t m_at_tok2 = b.t.meshlets_o;
+    ck(tok2 && m_at_tok2 == m0,
+       "M: meshlet 2's token is taken BEFORE meshlet 1 retires -- the loop overlaps");
+    ck(b.handle(3, 22, 0), "M: meshlet 2's handle is taken too");
+    unsigned pushed_early = 0;
+    for (unsigned n = 0; n < 6; ++n) {
+      const bool ok = b.tri(n % 8, (n + 2) % 8, (n + 4) % 8, 0x0C4, 0x0066);
+      if (ok && b.t.meshlets_o == m0) ++pushed_early;
+    }
+    ck(pushed_early >= 1,
+       "M: meshlet 2's descriptors are queued while meshlet 1 is still drawing");
+    b.done();
+    ck(b.drain_meshlet(), "M: meshlet 1 retires");
+    ck(b.drain_meshlet(), "M: meshlet 2 retires after it");
+    ck(b.af_releases == r0 + 2, "M: exactly one asset release per meshlet");
+    ck(b.rels.size() == 3, "M: three arenas went back (2 + 1)");
+    ck(b.out.size() == 16 + 6, "M: every view-triangle of both meshlets was drawn");
+    ck(b.t.triq_stall_o == 0, "M: the queue never backpressured at this depth");
+  }
+
+  // ---- N: the queue's own guard, FIRED. `triq_stall_o` is asserted zero
+  // everywhere above, and a counter asserted zero and never seen to move is a
+  // claim. It is reachable with LEGAL stimulus -- no mutant is owed -- because a
+  // meshlet may declare more descriptors than the queue holds if its consumer is
+  // stopped: `o_ready_i` held low wedges the emit side, the intake side fills
+  // TRIQ_DEPTH entries, and the next descriptor is REFUSED on `t_ready_o` rather
+  // than dropped. The proof that nothing was lost is that every queued triangle
+  // still comes out once the consumer resumes.
+  {
+    b.stall_pct = 0;
+    b.out.clear(); b.rels.clear();
+    b.make_arena(4, 8, 30);
+    ck(b.token(0b01, 8) && b.handle(4, 30, 0), "N: token and handle");
+    // Wedge the emit side: no `o_ready_i`, so nothing retires from E_EMIT.
+    b.stall_pct = 100;
+    unsigned pushed = 0;
+    for (unsigned n = 0; n < 600; ++n) {
+      b.t.t_valid_i = 1;
+      b.t.t_v0_i = n % 8; b.t.t_v1_i = (n + 1) % 8; b.t.t_v2_i = (n + 2) % 8;
+      b.t.t_src_id_i = 0x0D4; b.t.t_material_i = 0x0077; b.t.t_raster_i = 0xA5000077u;
+      b.t.eval();
+      if (b.t.t_ready_o) ++pushed;
+      b.step();
+    }
+    b.t.t_valid_i = 0;
+    // TRIQ_DEPTH in the queue, plus the one the emit side already took out of
+    // it and is holding wedged in E_EMIT.
+    ck(pushed <= 257, "N: the queue never accepted more than TRIQ_DEPTH descriptors plus the one in hand");
+    ck(b.t.triq_stall_o > 0,
+       "N: triq_stall_o FIRES -- the full queue refuses, it does not drop");
+    const uint32_t ti_at_full = b.t.triangles_in_o;
+    b.stall_pct = 0;
+    b.done();
+    ck(b.drain_release() && b.drain_meshlet(8000 * 8), "N: it still retires once the consumer resumes");
+    ck(b.t.triangles_in_o == ti_at_full,
+       "N: no descriptor was taken behind the refusal");
+    ck(b.out.size() == pushed, "N: every ACCEPTED descriptor was drawn -- nothing was lost");
+  }
+
+  ck(b.t.meshlets_o == 13, "the meshlet count is every token taken");
   std::printf("geom_replay_directed: %d checks, %d failed (meshlets=%u groups=%u tri_in=%u "
-              "tri_out=%u refused=%u missed=%u skew=%u view_bad=%u poisoned=%u)\n",
+              "tri_out=%u refused=%u missed=%u skew=%u view_bad=%u poisoned=%u stall=%u)\n",
               g_checks, g_fail, b.t.meshlets_o, b.t.groups_o, b.t.triangles_in_o,
               b.t.triangles_out_o, b.t.refused_o, b.t.missed_o, b.t.att_skew_o,
-              b.t.view_bad_o, b.t.poisoned_o);
+              b.t.view_bad_o, b.t.poisoned_o, b.t.triq_stall_o);
   zhao::exit_hard(g_fail ? 1 : 0);
 }

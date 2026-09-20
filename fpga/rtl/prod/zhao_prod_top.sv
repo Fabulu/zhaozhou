@@ -1722,6 +1722,7 @@ module zhao_prod_top (
   logic [32-1:0] u23_att_skew_o;
   logic [32-1:0] u23_view_bad_o;
   logic [32-1:0] u23_poisoned_o;
+  logic [32-1:0] u23_triq_stall_o;
   zhao_geom_replay u23_i (
       .clk(clk),
       .rst_n(rst_n),
@@ -1786,12 +1787,13 @@ module zhao_prod_top (
       .missed_o(u23_missed_o),
       .att_skew_o(u23_att_skew_o),
       .view_bad_o(u23_view_bad_o),
-      .poisoned_o(u23_poisoned_o)
+      .poisoned_o(u23_poisoned_o),
+      .triq_stall_o(u23_triq_stall_o)
   );
   logic u23_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u23_fold_q <= 1'b0;
-    else u23_fold_q <= u23_fold_q ^ (((^u23_mt_ready_o)) & u23_src[0]) ^ (((^u23_grp_ready_o)) & u23_src[1]) ^ (((^u23_rel_valid_o)) & u23_src[2]) ^ (((^u23_rel_arena_o)) & u23_src[3]) ^ (((^u23_t_ready_o)) & u23_src[4]) ^ (((^u23_look_valid_o)) & u23_src[5]) ^ (((^u23_look_arena_o)) & u23_src[6]) ^ (((^u23_look_gen_o)) & u23_src[7]) ^ (((^u23_look_index_o)) & u23_src[8]) ^ (((^u23_af_release_o)) & u23_src[9]) ^ (((^u23_o_valid_o)) & u23_src[10]) ^ (((^u23_o_ax_o)) & u23_src[11]) ^ (((^u23_o_ay_o)) & u23_src[12]) ^ (((^u23_o_bx_o)) & u23_src[13]) ^ (((^u23_o_by_o)) & u23_src[14]) ^ (((^u23_o_cx_o)) & u23_src[15]) ^ (((^u23_o_cy_o)) & u23_src[16]) ^ (((^u23_o_behind_o)) & u23_src[17]) ^ (((^u23_o_invw_a_o)) & u23_src[18]) ^ (((^u23_o_invw_b_o)) & u23_src[19]) ^ (((^u23_o_invw_c_o)) & u23_src[20]) ^ (((^u23_o_attr_a_o)) & u23_src[21]) ^ (((^u23_o_attr_b_o)) & u23_src[22]) ^ (((^u23_o_attr_c_o)) & u23_src[23]) ^ (((^u23_o_view_o)) & u23_src[24]) ^ (((^u23_o_src_id_o)) & u23_src[25]) ^ (((^u23_o_material_o)) & u23_src[26]) ^ (((^u23_o_raster_o)) & u23_src[27]) ^ (((^u23_meshlets_o)) & u23_src[28]) ^ (((^u23_groups_o)) & u23_src[29]) ^ (((^u23_triangles_in_o)) & u23_src[30]) ^ (((^u23_triangles_out_o)) & u23_src[31]) ^ (((^u23_refused_o)) & u23_src[32]) ^ (((^u23_missed_o)) & u23_src[33]) ^ (((^u23_att_skew_o)) & u23_src[34]) ^ (((^u23_view_bad_o)) & u23_src[35]) ^ (((^u23_poisoned_o)) & u23_src[36]);
+    else u23_fold_q <= u23_fold_q ^ (((^u23_mt_ready_o)) & u23_src[0]) ^ (((^u23_grp_ready_o)) & u23_src[1]) ^ (((^u23_rel_valid_o)) & u23_src[2]) ^ (((^u23_rel_arena_o)) & u23_src[3]) ^ (((^u23_t_ready_o)) & u23_src[4]) ^ (((^u23_look_valid_o)) & u23_src[5]) ^ (((^u23_look_arena_o)) & u23_src[6]) ^ (((^u23_look_gen_o)) & u23_src[7]) ^ (((^u23_look_index_o)) & u23_src[8]) ^ (((^u23_af_release_o)) & u23_src[9]) ^ (((^u23_o_valid_o)) & u23_src[10]) ^ (((^u23_o_ax_o)) & u23_src[11]) ^ (((^u23_o_ay_o)) & u23_src[12]) ^ (((^u23_o_bx_o)) & u23_src[13]) ^ (((^u23_o_by_o)) & u23_src[14]) ^ (((^u23_o_cx_o)) & u23_src[15]) ^ (((^u23_o_cy_o)) & u23_src[16]) ^ (((^u23_o_behind_o)) & u23_src[17]) ^ (((^u23_o_invw_a_o)) & u23_src[18]) ^ (((^u23_o_invw_b_o)) & u23_src[19]) ^ (((^u23_o_invw_c_o)) & u23_src[20]) ^ (((^u23_o_attr_a_o)) & u23_src[21]) ^ (((^u23_o_attr_b_o)) & u23_src[22]) ^ (((^u23_o_attr_c_o)) & u23_src[23]) ^ (((^u23_o_view_o)) & u23_src[24]) ^ (((^u23_o_src_id_o)) & u23_src[25]) ^ (((^u23_o_material_o)) & u23_src[26]) ^ (((^u23_o_raster_o)) & u23_src[27]) ^ (((^u23_meshlets_o)) & u23_src[28]) ^ (((^u23_groups_o)) & u23_src[29]) ^ (((^u23_triangles_in_o)) & u23_src[30]) ^ (((^u23_triangles_out_o)) & u23_src[31]) ^ (((^u23_refused_o)) & u23_src[32]) ^ (((^u23_missed_o)) & u23_src[33]) ^ (((^u23_att_skew_o)) & u23_src[34]) ^ (((^u23_view_bad_o)) & u23_src[35]) ^ (((^u23_poisoned_o)) & u23_src[36]) ^ (((^u23_triq_stall_o)) & u23_src[37]);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u24_lfsr_q;

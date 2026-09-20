@@ -28,6 +28,54 @@
 // is a sibling of the shared projector (`zhao_geom_proj_lane`'s header).
 //
 // ---------------------------------------------------------------------------
+// TWO MESHLETS IN FLIGHT -- OWNER RULING R57 (2026-09-20)
+// ---------------------------------------------------------------------------
+// R47 measured the composed meshlet loop at 305 clocks with ZERO overlap
+// between a meshlet's VERTEX phase and its REPLAY phase, and R57 found the
+// cause: four "accept only when idle" gates, of which this block held three by
+// itself -- `mt_ready_o`, and, through the buffer release it owns, GEOM.
+// ASSETFETCH's `m_ready_o` and GEOM.ASSEMBLE's `m_ready_o`. A meshlet's
+// triangle descriptors were produced by ASSEMBLE in about three clocks each and
+// consumed here at about fifteen, so ASSEMBLE spent the whole replay stalled on
+// `t_ready_o`, its walk never ended, and the asset buffer could not be released
+// until the LAST triangle had been drawn.
+//
+// The fix is a QUEUE and a second meshlet slot, both here:
+//
+//   * an INTAKE side takes the token, the handles and EVERY TriangleDescriptor
+//     of a meshlet as fast as they are offered, pushing {v0,v1,v2} into a
+//     `TRIQ_DEPTH`-entry queue (M10K-shaped: one word, one write port, one read
+//     port). ASSEMBLE's walk therefore ends at ITS OWN rate, and `m_done_i`
+//     arrives while the meshlet is still being drawn;
+//   * `af_release_o` fires as soon as the two readers the entry-I38 proof names
+//     are done -- which is now EARLY, not at the last emission (see below);
+//   * an EMIT side walks the queue for the OLDER slot while the intake side
+//     fills the newer one, so meshlet N+1's vertex phase runs concurrently with
+//     meshlet N's replay.
+//
+// TWO SLOTS AND NOT MORE, because `GEOM_ARENAS` is 4 and a meshlet holds one
+// arena per visible view: two meshlets in flight is exactly the arena budget.
+// A third would stall in GEOM.GROUP_SEQ's allocator instead, which is the same
+// wait one block further from where it can be understood.
+//
+// THE I38 PROOF IS UNCHANGED IN KIND AND STRONGER IN TIME. GEOM.ASSETFETCH
+// holds one meshlet until "whoever knows that BOTH readers have finished" says
+// so. This block still knows, structurally, and by exactly the same two facts:
+//   * the VERTEX reader is done: every handle arrives only after GEOM.GROUP_SEQ
+//     sealed, which it does only after `count` vertices LANDED, which needs all
+//     `count` records to have left GEOM.ASSETFETCH's vertex stream;
+//   * the INDEX reader is done: GEOM.ASSEMBLE's `m_done_i` pulses on every way
+//     its walk ends, after its last triangle was accepted HERE -- and "accepted
+//     here" now means "in the queue", which is still after ASSETFETCH's index
+//     service answered it.
+// What changed is only WHEN both hold: `closed && handles-complete` rather than
+// `closed && every triangle drawn`. Emission reads the ARENA and the STORE, not
+// the asset buffer, so nothing the release frees is still being read. A meshlet
+// GEOM.GROUP_SEQ would refuse (no vertices, or no visible view) expects NO
+// handles and is marked handles-complete at its token, exactly as before, so it
+// cannot wedge here.
+//
+// ---------------------------------------------------------------------------
 // ONE WALK, BOTH VIEWS -- AND WHY ASSEMBLE'S VERTEX OFFSET IS ZERO
 // ---------------------------------------------------------------------------
 // GEOM.GROUP_SEQ opens ONE arena per visible view per meshlet and fills vertex
@@ -38,20 +86,6 @@
 // visible view" guard is satisfied by replaying ONE walk into each view's own
 // arena here, which is the property its header asks for (view 1 never reads
 // view 0's vertices, because it never names view 0's arena).
-//
-// ---------------------------------------------------------------------------
-// THE RELEASE IS PROVEN, NOT GUESSED (zhao_console_core entry I38)
-// ---------------------------------------------------------------------------
-// GEOM.ASSETFETCH holds one meshlet until "whoever knows that BOTH readers have
-// finished" says so. This block knows, structurally:
-//   * the VERTEX reader is done: every handle arrives only after GEOM.GROUP_SEQ
-//     sealed, which it does only after `count` vertices LANDED, which needs all
-//     `count` records to have left GEOM.ASSETFETCH's vertex stream;
-//   * the INDEX reader is done: GEOM.ASSEMBLE's `m_done_i` pulses on every way
-//     its walk ends, after its last triangle was accepted HERE.
-// `af_release_o` fires only when both hold and every triangle has been emitted
-// and every arena released. A meshlet GEOM.GROUP_SEQ would refuse (no vertices,
-// or no visible view) expects NO handles, so it cannot wedge here.
 //
 // ---------------------------------------------------------------------------
 // DEPTH IS READ, NOT COMPUTED HERE (owner ruling R31, 2026-09-19)
@@ -90,6 +124,13 @@
 // lookup -- its later indices name the wrong vertices, so a lookup would HIT
 // -- counted on `poisoned_o`, and its arenas are released as usual.
 //
+// A triangle offered while the queue is FULL is refused on `t_ready_o` and the
+// refusal is counted on `triq_stall_o` -- backpressure, never a drop. The queue
+// is sized at twice `MAX_TRIANGLES` so the two-slot pipeline cannot fill it with
+// legal traffic; `triq_stall_o` is therefore the instrument that says the
+// sizing assumption still holds, and it is fired by stimulus in
+// tests/geometry/geom_replay_directed.cpp CASE M.
+//
 // Throughput is stated, not claimed: see the directed test's measured clocks
 // per triangle. Conservative SystemVerilog subset only (charter section 2).
 `default_nettype none
@@ -102,7 +143,12 @@ module zhao_geom_replay #(
     parameter int unsigned SRCW      = 16,
     parameter int unsigned PAYLOAD_W = 106,
     // Attribute store words per vertex (u_over_w, v_over_w, r, g, b, alpha).
-    parameter int unsigned ATTRW     = 6 * 32
+    parameter int unsigned ATTRW     = 6 * 32,
+    // GEOM.ASSETFETCH's own limit: the most triangles one meshlet may carry.
+    parameter int unsigned MAX_TRIANGLES = 126,
+    // The descriptor queue. TWO meshlets are in flight, so it holds two full
+    // meshlets and the pipeline never backpressures itself. Power of two.
+    parameter int unsigned TRIQ_DEPTH    = 256
 ) (
     input  wire clk,
     input  wire rst_n,
@@ -184,7 +230,8 @@ module zhao_geom_replay #(
     output logic [31:0]            missed_o,         // dropped: a corner missed
     output logic [31:0]            att_skew_o,       // store and arena disagreed on timing
     output logic [31:0]            view_bad_o,       // a handle for a view not in the mask
-    output logic [31:0]            poisoned_o        // dropped: the batch lost a record (R31)
+    output logic [31:0]            poisoned_o,       // dropped: the batch lost a record (R31)
+    output logic [31:0]            triq_stall_o      // a descriptor refused: the queue was full
 );
 
   initial begin
@@ -192,54 +239,105 @@ module zhao_geom_replay #(
       $fatal(1, "zhao_geom_replay: PAYLOAD_W is %0d; the arena packs {behind,w,d,y,x} = 106", PAYLOAD_W);
     if (VIDW < INDEX_W)
       $fatal(1, "zhao_geom_replay: VIDW (%0d) narrower than INDEX_W (%0d)", VIDW, INDEX_W);
+    if ((TRIQ_DEPTH & (TRIQ_DEPTH - 1)) != 0)
+      $fatal(1, "zhao_geom_replay: TRIQ_DEPTH (%0d) is not a power of two", TRIQ_DEPTH);
+    if (TRIQ_DEPTH < 2 * MAX_TRIANGLES)
+      $fatal(1, "zhao_geom_replay: TRIQ_DEPTH (%0d) holds fewer than the two meshlets in flight (2 x %0d)",
+             TRIQ_DEPTH, MAX_TRIANGLES);
   end
 
-  // ---- state ---------------------------------------------------------------
-  localparam logic [2:0] S_IDLE  = 3'd0;
-  localparam logic [2:0] S_HAND  = 3'd1;
-  localparam logic [2:0] S_TRI   = 3'd2;
-  localparam logic [2:0] S_LOOK  = 3'd3;
-  localparam logic [2:0] S_EMIT  = 3'd5;
-  localparam logic [2:0] S_REL   = 3'd6;
+  localparam int unsigned QAW  = $clog2(TRIQ_DEPTH);
+  localparam int unsigned QW   = 3 * VIDW;
+  localparam int unsigned OCCW = QAW + 1;
 
-  logic [2:0] st_q;
+  // ---- the two meshlet slots ------------------------------------------------
+  // Written by the intake side, read by the emit side; never the same slot at
+  // the same time, because a slot is allocated at its token and freed only when
+  // the emit side retires it.
+  logic               busy_q    [2];   // token taken, not yet retired
+  logic               hc_q      [2];   // every handle this meshlet expects is in
+  logic               closed_q  [2];   // GEOM.ASSEMBLE's walk for it has ended
+  logic               relsent_q [2];   // its asset buffer has been released
+  logic [1:0]         need_q    [2];
+  logic [1:0]         mask_q    [2];
+  logic [1:0]         nh_q      [2];
+  logic               pois_q    [2];
+  logic [ARENA_W-1:0] sa_q      [2][2];
+  logic [GEN_W-1:0]   sg_q      [2][2];
+  logic               sv_q      [2][2];
+  logic [15:0]        mat_q     [2];
+  logic [31:0]        rast_q    [2];
+  logic [SRCW-1:0]    src_q     [2];
+  logic [OCCW-1:0]    ntri_q    [2];   // descriptors pushed for this meshlet
 
-  logic [1:0]         need_q;          // handles this meshlet expects, 0..2
-  logic [1:0]         nh_q;            // handles taken
-  logic [1:0]         mask_q;
-  logic               done_seen_q;     // GEOM.ASSEMBLE's walk has ended
-  logic               pois_q;          // a handle of this meshlet was poisoned
-  logic [ARENA_W-1:0] sl_arena_q [2];
-  logic [GEN_W-1:0]   sl_gen_q   [2];
-  logic               sl_view_q  [2];
-  logic               vs_q;            // the slot being replayed
-  logic               rk_rel_q;        // the slot being released
+  logic mr_q;                          // the slot the emit side is walking
 
-  // the triangle in hand
+  // THE FOUR PORT POINTERS, each the OLDEST slot that still owes that port its
+  // work. They are decodes of `mr_q` and the slot flags, never counters of their
+  // own: a second counter is a second opinion about which meshlet is which, and
+  // that is the drift this file's own header warns about.
+  //
+  // Slot allocation is strictly in order, so `busy_q[~mr_q] && !busy_q[mr_q]`
+  // is unreachable and no pointer has to consider it.
+  wire tkp_c = busy_q[mr_q]                       ? ~mr_q : mr_q;
+  wire hp_c  = (busy_q[mr_q] && !hc_q[mr_q])      ?  mr_q : ~mr_q;
+  wire wp_c  = (busy_q[mr_q] && !closed_q[mr_q])  ?  mr_q : ~mr_q;
+  wire rp_c  = (busy_q[mr_q] && !relsent_q[mr_q]) ?  mr_q : ~mr_q;
+
+  // ---- the descriptor queue -------------------------------------------------
+  // One word, one write port, one read port, synchronous read: the shape a
+  // Cyclone V M10K infers. The emit side spends about fifteen clocks on a
+  // triangle and the queue refills its head in two, so the read latency is
+  // paid ONCE per run of triangles and never per triangle.
+  logic [QW-1:0]   triq_q [TRIQ_DEPTH];
+  logic [QAW-1:0]  wptr_q, rptr_q;
+  logic [OCCW-1:0] qcnt_q;    // entries sitting in the RAM, not yet read
+  logic [OCCW-1:0] occ_q;     // entries anywhere in the queue, head included
+  logic            rdp_q;     // a read is in flight
+  logic            head_v_q;
+  logic [QW-1:0]   head_q;
+  logic [QW-1:0]   ram_q;
+
+  wire q_full_c = (occ_q == OCCW'(TRIQ_DEPTH));
+
+  // ---- intake handshakes ----------------------------------------------------
+  assign mt_ready_o  = !busy_q[tkp_c];
+  assign grp_ready_o = busy_q[hp_c] && !hc_q[hp_c];
+  assign t_ready_o   = busy_q[wp_c] && !closed_q[wp_c] && !q_full_c;
+
+  wire tk_take_c  = mt_valid_i  && mt_ready_o;
+  wire grp_take_c = grp_valid_i && grp_ready_o;
+  wire t_take_c   = t_valid_i   && t_ready_o;
+
+  wire [1:0] mt_need_c = ((mt_vertex_count_i == 8'd0) || (mt_view_mask_i == 2'b00))
+                         ? 2'd0
+                         : (2'(mt_view_mask_i[0]) + 2'(mt_view_mask_i[1]));
+
+  // ---- the asset-buffer release (entry I38) ---------------------------------
+  // A ONE-CYCLE pulse the cycle both readers are proven done, for the OLDEST
+  // meshlet that has not had one. `relsent_q` is what makes it one pulse.
+  assign af_release_o = busy_q[rp_c] && closed_q[rp_c] && hc_q[rp_c] && !relsent_q[rp_c];
+
+  // ---- the emit machine -----------------------------------------------------
+  localparam logic [1:0] E_IDLE = 2'd0;
+  localparam logic [1:0] E_LOOK = 2'd1;
+  localparam logic [1:0] E_EMIT = 2'd2;
+  localparam logic [1:0] E_REL  = 2'd3;
+
+  logic [1:0] est_q;
+
   logic [VIDW-1:0]    tv_q [3];
-  logic [15:0]        tmat_q;
-  logic [31:0]        trast_q;
-  logic [SRCW-1:0]    tsrc_q;
-
-  // the lookups
   logic [1:0]         ik_q;            // lookups issued, 0..3
   logic [1:0]         rk_q;            // replies taken, 0..3
+  logic               vs_q;            // the slot being replayed (0 or 1)
+  logic               rk_rel_q;        // the arena being released
   logic               any_ref_q, any_miss_q;
   logic signed [20:0] cx_q [3];
   logic signed [20:0] cy_q [3];
   logic [2:0]         cb_q;
   logic [ATTRW-1:0]   ca_q [3];
   logic [23:0]        invw_q [3];
-
-  // ---- handshakes ----------------------------------------------------------
-  assign mt_ready_o  = (st_q == S_IDLE);
-  assign grp_ready_o = (st_q == S_HAND);
-  assign t_ready_o   = (st_q == S_TRI);
-  assign o_valid_o   = (st_q == S_EMIT) && !any_ref_q && !any_miss_q;
-
-  wire [1:0] mt_need_c = ((mt_vertex_count_i == 8'd0) || (mt_view_mask_i == 2'b00))
-                         ? 2'd0
-                         : (2'(mt_view_mask_i[0]) + 2'(mt_view_mask_i[1]));
+  logic [OCCW-1:0]    tdone_q;         // descriptors taken off the queue for mr_q
 
   // ---- lookups -------------------------------------------------------------
   // A vertex id wider than the arena index is FORCED to the all-ones index,
@@ -255,20 +353,19 @@ module zhao_geom_replay #(
     end
   end
 
-  assign look_valid_o = (st_q == S_LOOK) && (ik_q != 2'd3);
-  assign look_arena_o = sl_arena_q[vs_q];
-  assign look_gen_o   = sl_gen_q[vs_q];
+  assign look_valid_o = (est_q == E_LOOK) && (ik_q != 2'd3);
+  assign look_arena_o = sa_q[mr_q][vs_q];
+  assign look_gen_o   = sg_q[mr_q][vs_q];
   assign look_index_o = look_ix_c;
 
-  // ---- release -------------------------------------------------------------
-  assign rel_valid_o  = (st_q == S_REL) && (need_q != 2'd0);
-  assign rel_arena_o  = sl_arena_q[rk_rel_q];
-  // The buffer goes in the SAME cycle as the last arena (or at once for a
-  // meshlet that held none).
-  assign af_release_o = (st_q == S_REL) &&
-                        ((need_q == 2'd0) || (rk_rel_q == (need_q == 2'd2)));
+  // ---- the arena release ----------------------------------------------------
+  assign rel_valid_o  = (est_q == E_REL) && (need_q[mr_q] != 2'd0);
+  assign rel_arena_o  = sa_q[mr_q][rk_rel_q];
+  wire rel_done_c     = (need_q[mr_q] == 2'd0) ||
+                        (rk_rel_q == (need_q[mr_q] == 2'd2));
 
   // ---- the replayed triangle -----------------------------------------------
+  assign o_valid_o    = (est_q == E_EMIT) && !any_ref_q && !any_miss_q;
   assign o_ax_o       = cx_q[0];
   assign o_ay_o       = cy_q[0];
   assign o_bx_o       = cx_q[1];
@@ -282,10 +379,10 @@ module zhao_geom_replay #(
   assign o_attr_a_o   = ca_q[0];
   assign o_attr_b_o   = ca_q[1];
   assign o_attr_c_o   = ca_q[2];
-  assign o_view_o     = sl_view_q[vs_q];
-  assign o_src_id_o   = tsrc_q;
-  assign o_material_o = tmat_q;
-  assign o_raster_o   = trast_q;
+  assign o_view_o     = sv_q[mr_q][vs_q];
+  assign o_src_id_o   = src_q[mr_q];
+  assign o_material_o = mat_q[mr_q];
+  assign o_raster_o   = rast_q[mr_q];
 
   // ---- the machine ----------------------------------------------------------
   // The arena's `d` field (the projector's Q16.16 1/w, bits 73:42) and `w`
@@ -299,35 +396,71 @@ module zhao_geom_replay #(
   wire rep_bad_ref_c  = rep_valid_i && rep_refuse_i;
   wire rep_bad_miss_c = rep_valid_i && !rep_refuse_i && !rep_hit_i;
 
+  // The emit side takes a descriptor off the queue when it has one and the
+  // meshlet's handles are all in (it needs the arena to look anything up).
+  //
+  // THE HEAD MAY ALREADY HOLD THE NEXT MESHLET'S FIRST DESCRIPTOR, because the
+  // queue is one FIFO across both slots and the intake side runs ahead. So what
+  // says a descriptor is THIS meshlet's is its ORDINAL, not the head's validity:
+  // descriptor `tdone_q` belongs to `mr_q` exactly while `tdone_q` is below the
+  // count pushed for it. Reading `!head_v_q` as "this meshlet is finished" would
+  // replay the next meshlet's first triangle against this one's arenas -- a
+  // plausible corner from the wrong mesh, which is the class of fault this
+  // block's own refusals exist to prevent.
+  wire emit_armed_c = busy_q[mr_q] && hc_q[mr_q];
+  wire tri_left_c   = (tdone_q < ntri_q[mr_q]);
+  wire pop_c        = (est_q == E_IDLE) && emit_armed_c && head_v_q && tri_left_c;
+  wire finish_c     = (est_q == E_IDLE) && emit_armed_c && !tri_left_c &&
+                      closed_q[mr_q];
+
+  // Queue read issue: fill the head whenever it is (or is about to be) empty.
+  wire rd_issue_c = (!head_v_q || pop_c) && !rdp_q && (qcnt_q != '0);
+
   integer ai;
+  integer si;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      st_q            <= S_IDLE;
-      need_q          <= '0;
-      nh_q            <= '0;
-      mask_q          <= '0;
-      done_seen_q     <= 1'b0;
-      pois_q          <= 1'b0;
-      poisoned_o      <= '0;
-      sl_arena_q[0]   <= '0;
-      sl_arena_q[1]   <= '0;
-      sl_gen_q[0]     <= '0;
-      sl_gen_q[1]     <= '0;
-      sl_view_q[0]    <= 1'b0;
-      sl_view_q[1]    <= 1'b0;
-      vs_q            <= 1'b0;
-      rk_rel_q        <= 1'b0;
+      for (si = 0; si < 2; si = si + 1) begin
+        busy_q[si]    <= 1'b0;
+        hc_q[si]      <= 1'b0;
+        closed_q[si]  <= 1'b0;
+        relsent_q[si] <= 1'b0;
+        need_q[si]    <= '0;
+        mask_q[si]    <= '0;
+        nh_q[si]      <= '0;
+        pois_q[si]    <= 1'b0;
+        sa_q[si][0]   <= '0;
+        sa_q[si][1]   <= '0;
+        sg_q[si][0]   <= '0;
+        sg_q[si][1]   <= '0;
+        sv_q[si][0]   <= 1'b0;
+        sv_q[si][1]   <= 1'b0;
+        mat_q[si]     <= '0;
+        rast_q[si]    <= '0;
+        src_q[si]     <= '0;
+        ntri_q[si]    <= '0;
+      end
+      mr_q            <= 1'b0;
+      est_q           <= E_IDLE;
+      wptr_q          <= '0;
+      rptr_q          <= '0;
+      qcnt_q          <= '0;
+      occ_q           <= '0;
+      rdp_q           <= 1'b0;
+      head_v_q        <= 1'b0;
+      head_q          <= '0;
+      ram_q           <= '0;
       tv_q[0]         <= '0;
       tv_q[1]         <= '0;
       tv_q[2]         <= '0;
-      tmat_q          <= '0;
-      trast_q         <= '0;
-      tsrc_q          <= '0;
       ik_q            <= '0;
       rk_q            <= '0;
+      vs_q            <= 1'b0;
+      rk_rel_q        <= 1'b0;
       any_ref_q       <= 1'b0;
       any_miss_q      <= 1'b0;
       cb_q            <= '0;
+      tdone_q         <= '0;
       for (ai = 0; ai < 3; ai = ai + 1) begin
         cx_q[ai]   <= '0;
         cy_q[ai]   <= '0;
@@ -342,53 +475,92 @@ module zhao_geom_replay #(
       missed_o        <= '0;
       att_skew_o      <= '0;
       view_bad_o      <= '0;
+      poisoned_o      <= '0;
+      triq_stall_o    <= '0;
     end else begin
 
       // --- the attribute store must answer with the arena's timing ---------
       if ((att_rep_valid_i != rep_valid_i) && (att_skew_o != 32'hFFFF_FFFF))
         att_skew_o <= att_skew_o + 32'd1;
 
-      // --- the walk's end may arrive in any non-idle state ------------------
-      if ((st_q != S_IDLE) && m_done_i) done_seen_q <= 1'b1;
+      // ====================== THE INTAKE SIDE ==============================
+      // The token allocates a slot.
+      if (tk_take_c) begin
+        busy_q[tkp_c]    <= 1'b1;
+        need_q[tkp_c]    <= mt_need_c;
+        mask_q[tkp_c]    <= mt_view_mask_i;
+        nh_q[tkp_c]      <= '0;
+        // A meshlet that expects no handle is handles-complete at once, which
+        // is what keeps a GROUP_SEQ refusal from wedging the pipeline.
+        hc_q[tkp_c]      <= (mt_need_c == 2'd0);
+        closed_q[tkp_c]  <= 1'b0;
+        relsent_q[tkp_c] <= 1'b0;
+        pois_q[tkp_c]    <= 1'b0;
+        ntri_q[tkp_c]    <= '0;
+      end
 
-      case (st_q)
-        S_IDLE: begin
-          if (mt_valid_i) begin
-            need_q      <= mt_need_c;
-            mask_q      <= mt_view_mask_i;
-            nh_q        <= '0;
-            done_seen_q <= 1'b0;
-            pois_q      <= 1'b0;
-            rk_rel_q    <= 1'b0;
-            st_q        <= (mt_need_c == 2'd0) ? S_TRI : S_HAND;
-          end
-        end
+      // A sealed handle.
+      if (grp_take_c) begin
+        sa_q[hp_c][nh_q[hp_c][0]] <= grp_arena_i;
+        sg_q[hp_c][nh_q[hp_c][0]] <= grp_gen_i;
+        sv_q[hp_c][nh_q[hp_c][0]] <= grp_view_i;
+        // One poisoned handle poisons the MESHLET: both views were filled from
+        // the same record stream, so the same hole is in both.
+        if (grp_poison_i) pois_q[hp_c] <= 1'b1;
+        if (groups_o != 32'hFFFF_FFFF) groups_o <= groups_o + 32'd1;
+        if (!mask_q[hp_c][grp_view_i] && (view_bad_o != 32'hFFFF_FFFF))
+          view_bad_o <= view_bad_o + 32'd1;
+        nh_q[hp_c] <= nh_q[hp_c] + 2'd1;
+        if ((nh_q[hp_c] + 2'd1) == need_q[hp_c]) hc_q[hp_c] <= 1'b1;
+      end
 
-        S_HAND: begin
-          if (grp_valid_i) begin
-            sl_arena_q[nh_q[0]] <= grp_arena_i;
-            sl_gen_q[nh_q[0]]   <= grp_gen_i;
-            sl_view_q[nh_q[0]]  <= grp_view_i;
-            // One poisoned handle poisons the MESHLET: both views were filled
-            // from the same record stream, so the same hole is in both.
-            if (grp_poison_i) pois_q <= 1'b1;
-            if (groups_o != 32'hFFFF_FFFF) groups_o <= groups_o + 32'd1;
-            if (!mask_q[grp_view_i] && (view_bad_o != 32'hFFFF_FFFF))
-              view_bad_o <= view_bad_o + 32'd1;
-            nh_q <= nh_q + 2'd1;
-            if ((nh_q + 2'd1) == need_q) st_q <= S_TRI;
-          end
-        end
+      // A TriangleDescriptor, straight into the queue.
+      if (t_take_c) begin
+        triq_q[wptr_q] <= {t_v2_i, t_v1_i, t_v0_i};
+        wptr_q         <= wptr_q + QAW'(1);
+        ntri_q[wp_c]   <= ntri_q[wp_c] + OCCW'(1);
+        // Per-MESHLET fields, and GEOM.ASSEMBLE latches them for the whole walk,
+        // so writing them on every descriptor writes the same value.
+        mat_q[wp_c]    <= t_material_i;
+        rast_q[wp_c]   <= t_raster_i;
+        src_q[wp_c]    <= t_src_id_i;
+        if (triangles_in_o != 32'hFFFF_FFFF) triangles_in_o <= triangles_in_o + 32'd1;
+      end else if (t_valid_i && busy_q[wp_c] && !closed_q[wp_c] && q_full_c) begin
+        // Backpressure, counted. `t_ready_o` is low, so nothing is dropped --
+        // this is the instrument that says TRIQ_DEPTH is still large enough.
+        if (triq_stall_o != 32'hFFFF_FFFF) triq_stall_o <= triq_stall_o + 32'd1;
+      end
 
-        S_TRI: begin
-          if (t_valid_i) begin
-            tv_q[0] <= t_v0_i;
-            tv_q[1] <= t_v1_i;
-            tv_q[2] <= t_v2_i;
-            tmat_q  <= t_material_i;
-            trast_q <= t_raster_i;
-            tsrc_q  <= t_src_id_i;
-            if (triangles_in_o != 32'hFFFF_FFFF) triangles_in_o <= triangles_in_o + 32'd1;
+      // The walk's end closes the slot for writing.
+      if (m_done_i && busy_q[wp_c] && !closed_q[wp_c]) closed_q[wp_c] <= 1'b1;
+
+      // The asset buffer goes back, once.
+      if (af_release_o) relsent_q[rp_c] <= 1'b1;
+
+      // ====================== THE QUEUE ====================================
+      if (rd_issue_c) begin
+        ram_q  <= triq_q[rptr_q];
+        rptr_q <= rptr_q + QAW'(1);
+        rdp_q  <= 1'b1;
+      end else begin
+        rdp_q  <= 1'b0;
+      end
+
+      if (rdp_q)      head_v_q <= 1'b1;
+      else if (pop_c) head_v_q <= 1'b0;
+      if (rdp_q)      head_q   <= ram_q;
+
+      qcnt_q <= qcnt_q + (t_take_c ? OCCW'(1) : OCCW'(0)) - (rd_issue_c ? OCCW'(1) : OCCW'(0));
+      occ_q  <= occ_q  + (t_take_c ? OCCW'(1) : OCCW'(0)) - (pop_c     ? OCCW'(1) : OCCW'(0));
+
+      // ====================== THE EMIT SIDE ================================
+      case (est_q)
+        E_IDLE: begin
+          if (pop_c) begin
+            tv_q[0]    <= head_q[0        +: VIDW];
+            tv_q[1]    <= head_q[VIDW     +: VIDW];
+            tv_q[2]    <= head_q[2 * VIDW +: VIDW];
+            tdone_q    <= tdone_q + OCCW'(1);
             vs_q       <= 1'b0;
             ik_q       <= '0;
             rk_q       <= '0;
@@ -396,24 +568,24 @@ module zhao_geom_replay #(
             any_miss_q <= 1'b0;
             // A meshlet that holds no arena cannot draw: its triangles are
             // taken and dropped as refused, so the walk still drains.
-            if (need_q == 2'd0) begin
+            if (need_q[mr_q] == 2'd0) begin
               if (refused_o != 32'hFFFF_FFFF) refused_o <= refused_o + 32'd1;
-            end else if (pois_q) begin
+            end else if (pois_q[mr_q]) begin
               // R31: the batch lost a record, so every arena index after the
               // hole names the wrong vertex. The descriptor is taken so the
               // walk drains, and dropped WITHOUT a lookup -- a lookup would
               // HIT, with a plausible corner from the wrong vertex.
               if (poisoned_o != 32'hFFFF_FFFF) poisoned_o <= poisoned_o + 32'd1;
             end else begin
-              st_q <= S_LOOK;
+              est_q <= E_LOOK;
             end
-          end else if (done_seen_q || m_done_i) begin
+          end else if (finish_c) begin
             rk_rel_q <= 1'b0;
-            st_q     <= S_REL;
+            est_q    <= E_REL;
           end
         end
 
-        S_LOOK: begin
+        E_LOOK: begin
           if (look_valid_o && look_ready_i) ik_q <= ik_q + 2'd1;
           if (rep_valid_i) begin
             cx_q[rk_q] <= $signed(rp[20:0]);
@@ -428,23 +600,23 @@ module zhao_geom_replay #(
               // The third reply. Judge the triangle on all three.
               if (any_ref_q || rep_bad_ref_c) begin
                 if (refused_o != 32'hFFFF_FFFF) refused_o <= refused_o + 32'd1;
-                st_q <= S_EMIT;       // resolved below as a drop
+                est_q <= E_EMIT;       // resolved below as a drop
               end else if (any_miss_q || rep_bad_miss_c) begin
                 if (missed_o != 32'hFFFF_FFFF) missed_o <= missed_o + 32'd1;
-                st_q <= S_EMIT;
+                est_q <= E_EMIT;
               end else begin
                 // All three corners, their depth and their attributes are in
                 // hand on this clock: nothing left to wait for (R31).
-                st_q <= S_EMIT;
+                est_q <= E_EMIT;
               end
             end
           end
         end
 
-        S_EMIT: begin
+        E_EMIT: begin
           // A dropped triangle (a refused or missed corner) passes through here
           // for ONE clock with its flag set and is never offered: `o_valid_o`
-          // is gated below by the flags. A drawable one waits for `o_ready_i`.
+          // is gated above by the flags. A drawable one waits for `o_ready_i`.
           if (any_ref_q || any_miss_q || o_ready_i) begin
             if (!(any_ref_q || any_miss_q) && (triangles_out_o != 32'hFFFF_FFFF))
               triangles_out_o <= triangles_out_o + 32'd1;
@@ -452,29 +624,57 @@ module zhao_geom_replay #(
             rk_q       <= '0;
             any_ref_q  <= 1'b0;
             any_miss_q <= 1'b0;
-            if ((need_q == 2'd2) && (vs_q == 1'b0)) begin
-              vs_q <= 1'b1;
-              st_q <= S_LOOK;
+            if ((need_q[mr_q] == 2'd2) && (vs_q == 1'b0)) begin
+              vs_q  <= 1'b1;
+              est_q <= E_LOOK;
             end else begin
-              st_q <= S_TRI;
+              est_q <= E_IDLE;
             end
           end
         end
 
-        S_REL: begin
-          if (af_release_o) begin
+        E_REL: begin
+          if (rel_done_c) begin
             if (meshlets_o != 32'hFFFF_FFFF) meshlets_o <= meshlets_o + 32'd1;
-            done_seen_q <= 1'b0;
-            st_q        <= S_IDLE;
+            busy_q[mr_q] <= 1'b0;
+            tdone_q      <= '0;
+            mr_q         <= ~mr_q;
+            est_q        <= E_IDLE;
           end else begin
             rk_rel_q <= 1'b1;
           end
         end
 
-        default: st_q <= S_IDLE;
+        default: est_q <= E_IDLE;
       endcase
     end
   end
+
+`ifndef SYNTHESIS
+  // ENFORCED-BY: tests/geometry/geom_replay_directed.cpp
+  // The reset is sensed ASYNCHRONOUSLY here, exactly as the datapath above
+  // senses it: a checker that flopped the same net synchronously would make
+  // `rst_n` both, which Verilator reports as SYNCASYNCNET and which is a real
+  // recovery-timing hazard, not a lint nicety.
+  logic chk_arm_q;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      chk_arm_q <= 1'b0;
+    end else begin
+      chk_arm_q <= 1'b1;
+      // GEOM.ASSEMBLE is single-in-flight and takes its meshlet on the SAME
+      // dispatcher-fork clock as this block takes the token, so every `m_done_i`
+      // has an open slot waiting for it. If this fires, the fork has stopped
+      // being an AND-fork and the queue is attributing triangles to the wrong
+      // meshlet.
+      a_done_has_slot: assert (!chk_arm_q || !m_done_i || (busy_q[wp_c] && !closed_q[wp_c]))
+        else $error("zhao_geom_replay: m_done_i with no open meshlet slot");
+      // Slots retire in order, so the newer one can never be busy alone.
+      a_slots_in_order: assert (!(busy_q[~mr_q] && !busy_q[mr_q]))
+        else $error("zhao_geom_replay: the newer meshlet slot outlived the older one");
+    end
+  end
+`endif
 
 endmodule : zhao_geom_replay
 

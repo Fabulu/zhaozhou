@@ -3444,6 +3444,10 @@ module zhao_console_core
   output logic [31:0]             geom_rp_view_bad_o,
   // R31: triangles GEOM.REPLAY dropped because their batch lost a record.
   output logic [31:0]             geom_rp_poisoned_o,
+  // R57: a TriangleDescriptor refused because the two-meshlet descriptor queue
+  // was full. Backpressure, never a drop -- and the instrument that says the
+  // queue's sizing assumption (twice MAX_TRIANGLES) still holds.
+  output logic [31:0]             geom_rp_triq_stall_o,
 
   // ---- GEOM.CLIP / GEOM.SETUP evidence and carried attributes --------------
   // The attributes and the flip leave the module for the same reason I23's
@@ -12272,8 +12276,19 @@ module zhao_console_core
   // AND-fork, the shape this file already uses twice: one ready is the AND of
   // all three, and each consumer's valid is gated by the OTHER two readies.
   // None of the three readies is a function of its own valid -- each is a
-  // state decode (StIdle, S_IDLE, S_IDLE) -- so it cannot deadlock, and the
-  // three accept the SAME meshlet or none does.
+  // state or occupancy decode (StIdle, S_IDLE, "a meshlet slot is free") -- so
+  // it cannot deadlock, and the three accept the SAME meshlet or none does.
+  //
+  // OWNER RULING R57 (2026-09-20): THE FORK IS THE SAME AND THE READIES MOVED.
+  // GEOM.REPLAY's `mt_ready_o` used to be `st_q == S_IDLE` -- busy for the whole
+  // replay -- and its buffer release came only after the last triangle was
+  // drawn, so GEOM.ASSETFETCH and GEOM.ASSEMBLE were held for that long too and
+  // meshlet N+1's vertex phase could not begin until meshlet N's replay ended.
+  // GEOM.REPLAY now carries TWO meshlet slots and a descriptor queue: it is
+  // ready while a slot is free, it takes GEOM.ASSEMBLE's whole walk at
+  // ASSEMBLE's rate, and it releases the asset buffer as soon as both readers
+  // are proven done (its header's I38 paragraph). That is the whole overlap --
+  // no wire here changed, and no second dispatcher exists.
   //
   // THE VERTEX STREAM CANNOT RACE THE JOB: GEOM.ASSETFETCH starts streaming
   // vertex records only AFTER `s_*` is accepted (its S_HAND -> S_SERVE), which
@@ -12315,7 +12330,11 @@ module zhao_console_core
     .VIDW      (GEOM_ASM_VIDW),
     .SRCW      (16),
     .PAYLOAD_W (GEOM_PAYLOAD_W),
-    .ATTRW     (GEOM_ATTR_STORE_W)
+    .ATTRW     (GEOM_ATTR_STORE_W),
+    // R57: the descriptor queue holds the TWO meshlets the arena budget allows
+    // in flight, so the pipeline never backpressures itself. 256 x 48 bits.
+    .MAX_TRIANGLES (GEOM_ASSET_MAX_TRIANGLES),
+    .TRIQ_DEPTH    (256)
   ) u_geom_replay (
     .clk   (gpu_clk),
     .rst_n (rst_n),
@@ -12399,7 +12418,8 @@ module zhao_console_core
     .missed_o        (geom_rp_missed_o),
     .att_skew_o      (geom_rp_att_skew_o),
     .view_bad_o      (geom_rp_view_bad_o),
-    .poisoned_o      (geom_rp_poisoned_o)
+    .poisoned_o      (geom_rp_poisoned_o),
+    .triq_stall_o    (geom_rp_triq_stall_o)
   );
 
   // --------------------------------------------------------------------------
