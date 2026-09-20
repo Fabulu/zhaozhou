@@ -93,8 +93,21 @@ MIN_REASON = 24
 CONN = re.compile(r'(?:^|[\s,])\.(\w+)\s*\(([^()]*)\)')
 TRAILING = re.compile(r'//\s*(.*)$')
 
-# A literal: sized (16'd0, 2'b10, 84'h0), unsized ('0, '1), or a bare number.
-LITERAL = re.compile(r"^\s*(?:\d+\s*'\s*[bdho]?\s*[0-9a-fA-FxXzZ_]+|'[01]|\d+)\s*$")
+# A literal: sized (16'd0, 2'b10, 84'h0), SIGNED (18'sd0, 8'shFF), unsized
+# ('0, '1), or a bare number.
+#
+# THE SIGNED FORMS WERE MISSING until 2026-09-20, and they were missing in the
+# under-reporting direction -- `CLAUDE.md`'s "a broken instrument lies in ONE
+# direction", which is always the flattering one. `zhao_field_flow_adapter.sv`
+# ties off twelve inputs of a bidirectional codec it uses decode-only; six are
+# unsigned and were reported, and six are `18'sd0` / `11'sd0` / `32'sd0` and
+# were **invisible**, so the file read as half as tied-off as it is.
+#
+# Found by READING the six the tool did report, which is R166's rule working
+# exactly as intended: the fix for an instrument you do not trust is to check
+# its output by hand, and doing so found the half it was not showing.
+LITERAL = re.compile(
+    r"^\s*(?:\d+\s*'\s*[sS]?[bdhoBDHO]?\s*[0-9a-fA-FxXzZ_]+|'[01]|\d+)\s*$")
 
 # TWO instantiation forms, and the second one was missing until 2026-09-20.
 #
@@ -309,6 +322,17 @@ def main(argv=None):
 # this repository's most-repeated failure. Prove every regex still bites.
 assert LITERAL.match("16'd0") and LITERAL.match("'0") and LITERAL.match("2'b10")
 assert not LITERAL.match('some_net') and not LITERAL.match('zhao_fb_tuple_slot(x')
+# SIGNED literals. A tie-off written `18'sd0` is exactly as much a tie-off as
+# one written `18'd0`, and until 2026-09-20 only the second was seen.
+for _s in ("18'sd0", "11'sd0", "32'sd0", "8'shFF", "4'sb0"):
+    assert LITERAL.match(_s), _s
+# NEGATIVE CONTROL for that fix: the OLD pattern is kept verbatim so the
+# improvement cannot silently regress. It must still fail where the new one
+# succeeds; if this ever passes, the two have converged and the loop above has
+# stopped proving anything.
+_OLD_LITERAL = re.compile(
+    r"^\s*(?:\d+\s*'\s*[bdho]?\s*[0-9a-fA-FxXzZ_]+|'[01]|\d+)\s*$")
+assert _OLD_LITERAL.match("18'd0") and not _OLD_LITERAL.match("18'sd0")
 _probe = audit("\n".join([
     'zhao_thing u_probe (',
     "    .a (1'b0),",

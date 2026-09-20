@@ -2498,3 +2498,43 @@ with a measured delta is the right way to close one.
 count is **102, not 95** — wrong in three places that agreed with each other
 **while none had run the binary.** Mutual agreement between documents is not
 evidence; it is usually just copying.
+
+## R172 — THE TIE-OFF AUDIT COULD NOT SEE A SIGNED LITERAL, AND THAT IS THE FLATTERING DIRECTION
+
+**2026-09-20, hours after R166, in the same tool, found the way R166 says to
+find things: BY READING THE OUTPUT BY HAND.**
+
+`LITERAL` matched `16'd0` and did **not** match `18'sd0`. Every **signed**
+literal in the tree was invisible to the audit.
+
+It surfaced in `zhao_field_flow_adapter.sv`, which ties off **twelve** inputs of
+`zhao_part_record` — a bidirectional codec this instance uses **decode-only**,
+with `rec_o` empty and the whole instantiation wrapped in a
+`PINCONNECTEMPTY` pragma. Six of the twelve are unsigned and were reported. Six
+are `18'sd0` / `11'sd0` / `32'sd0` and **were not**, so the file read as half as
+tied-off as it is.
+
+**The direction is the point.** R166 was the tool crying wolf — over-reporting,
+loud, and self-correcting because an alarm gets investigated. This is the same
+tool **under**-reporting, silent, and it would never have corrected itself:
+`CLAUDE.md`'s law is that a broken instrument lies in the direction that makes
+the answer look better, smaller or simpler, and **nobody audits good news.**
+
+**Both defects lived in the same file at the same time**, one in each direction.
+That is worth saying plainly, because "the tool over-reports" had become a
+reason to discount its numbers — and discounting them would have hidden this.
+
+**Tree-wide, corrected: 128 silent literals across 26 files, against the 97
+across 23 I docketed four hours ago. The audit was under-counting by a third**,
+and I published the 97 as a docket item with confidence.
+
+The fix keeps the **old pattern in the file as a negative control** — it must
+still fail where the new one succeeds, so the two cannot silently converge and
+leave the positive test proving nothing. The Packet-H ctest is bit-identical at
+39/45 with 0 silent, and `zhao_console_core.sv` is unchanged at
+`7 / 1 / 10 / 1`, which says the core has no signed tie-offs at all.
+
+**The rule, and it is the one that actually found this:** when you do not trust
+an instrument, **read its output by hand against the source.** I was checking the
+six rows it DID report, to see whether they were real. They were benign — and
+sitting six lines above them were six more the tool had never mentioned.

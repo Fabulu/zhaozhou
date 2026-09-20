@@ -5411,8 +5411,8 @@ Every item below needs either the toolchain or an owner:
 
 `tools/design/packet_h_tieoff_audit.py` now takes targets on the command line
 and understands both marker dialects and the group-comment convention
-(R166/R167). Swept across `fpga/rtl`, it reports **97 literal connections with
-no reason anywhere near them, in 23 files**:
+(R166/R167). Swept across `fpga/rtl`, it reports **128 literal connections with
+no reason anywhere near them, in 26 files**:
 
 ```
 zhao_texture_island_v3_top.sv         23     zhao_pair_tess_normals.sv        4
@@ -5443,3 +5443,21 @@ worked in that file today (R152).
 
 The one confirmed finding, already isolated: `zhao_console_core.sv:14824`,
 `u_material_resolve.dir_valid_i (1'b1)`.
+
+### CORRECTION, 2026-09-20 21:40 — the number above was 97, and it was LOW
+
+The audit could not see a **signed** literal: `LITERAL` matched `16'd0` and not
+`18'sd0` (owner ruling R172). Corrected, the sweep is **128 across 26 files**,
+not 97 across 23 — the tool was under-counting by a third, in the flattering
+direction, while I was quoting it.
+
+The table above is the pre-correction ranking and is kept only as a record of
+that; re-run the sweep rather than reading it. The two leaders are unchanged
+(`zhao_texture_island_v3_top` 23, `zhao_raster_texture_v3_fit_top` 22), and
+`zhao_field_flow_adapter.sv` moves 6 -> 13, which makes it the largest file on
+the **production path** by this measure.
+
+Its thirteen are already understood and are NOT a defect: `zhao_part_record` is
+a bidirectional codec and this instance uses it decode-only, so every encode
+input is zeroed, `rec_o` is empty, and the instantiation carries a
+`PINCONNECTEMPTY` pragma. It wants a comment, not a change.
