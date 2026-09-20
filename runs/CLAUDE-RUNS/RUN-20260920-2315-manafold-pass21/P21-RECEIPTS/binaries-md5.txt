@@ -1,0 +1,4 @@
+df31ee5071a97524356c30e638969683 *.tmp/p21-arch/bin/manafold-p21-curvature.exe
+888b6c1a7717be55375707df6ceaf54d *.tmp/p21-arch/bin/manafold-rear-audit.exe
+f0840005dc096f0856a8968c8bbf3e66 *.tmp/p21-arch/bin/manafold-spangate.exe
+ad4f636179425dcb9d04bf7b665726be *.tmp/p21-arch/bin/zhao-reel-cel.exe

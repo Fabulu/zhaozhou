@@ -1,0 +1,28 @@
+ATTRIBUTION (Inspect, slot 0): per-ring max turn rate (deg / 60 Hz sample) and mean turn (deg)
+
+shipping (pass-20 arc bow)
+  ring         12    17    18    19    24    25    26    32    33    34    36    37    38    39    45    46    49    50    52    55
+  max rate    1.5   2.1   1.0   4.2   0.5   0.3   2.7   1.1   0.2   4.6  28.5  24.3   5.3   4.8   2.7   5.3   6.0   8.0   9.5  11.3
+  mean turn  13.4  41.1  26.4  80.1  25.6  11.1  76.2  18.2   3.0  94.9  56.3  49.9  18.9  32.5  15.8  32.8  32.0  41.0  45.9  67.2
+
+ZHAO_U02_REAR_BOW=legacy
+  ring         12    17    18    19    24    25    26    32    33    34    36    37    38    39    45    46    49    50    52    55
+  max rate    1.5   2.1   1.0   4.2   0.5   0.3   2.7   1.1   0.2   4.6   1.2   8.6   0.8   3.9   0.1   0.1   0.1   0.2   4.0   3.4
+  mean turn  13.4  41.1  26.4  80.1  25.6  11.1  76.2  18.2   3.0  94.9   5.9  48.9   4.0  24.2   0.0   0.0   0.0   0.0   5.4   4.5
+
+REAR_AMBIENT_GAIN_PM=0 REAR_CARRIER_CALM_PM=0
+  ring         12    17    18    19    24    25    26    32    33    34    36    37    38    39    45    46    49    50    52    55
+  max rate    1.5   2.1   1.0   3.8   0.4   0.2   2.3   0.9   0.2   3.1  11.1  13.8   7.8   6.6   3.8   7.4   8.9  10.7  14.3  15.6
+  mean turn  13.4  41.3  26.5  79.9  25.7  11.1  76.2  20.1   3.4  86.1  50.3  43.9  19.8  32.3  15.7  32.7  32.0  41.0  45.7  66.7
+
+BALL-CHORD JOINT ANGLES (rods = ball-to-ball chords, what the joints WILL be under the rods rig)
+slot  0 inspect  joint turn mean/max: A  80.5/152.2  B  72.4/103.5  C  96.2/148.0  End  3.7/13.9 | step max A 4.37 B 2.77 C 5.32 | crotch floor mm (r=46) A 178 B 74 C 167
+         rod lengths mm F-A 642..819  A-B 279..397  B-C 265..458  C-End 349..1164   (rest 680/340/380/1010)
+slot  2 channel  joint turn mean/max: A  78.5/124.0  B  75.1/ 89.7  C  90.5/142.1  End  3.1/13.1 | step max A 2.86 B 1.82 C 3.57 | crotch floor mm (r=46) A 98 B 65 C 142
+         rod lengths mm F-A 632..791  A-B 261..412  B-C 278..463  C-End 327..1027   (rest 680/340/380/1010)
+slot 11 taunt    joint turn mean/max: A  70.0/134.1  B  70.3/ 79.6  C  91.7/149.4  End  3.6/14.4 | step max A 4.15 B 1.46 C 6.19 | crotch floor mm (r=46) A 118 B 60 C 174
+         rod lengths mm F-A 645..879  A-B 276..395  B-C 308..473  C-End 428..1098   (rest 680/340/380/1010)
+slot  5 rest     joint turn mean/max: A  82.6/149.0  B  72.6/ 86.1  C  99.9/139.5  End  2.3/ 9.2 | step max A 3.93 B 2.11 C 4.94 | crotch floor mm (r=46) A 172 B 63 C 133
+         rod lengths mm F-A 651..740  A-B 280..396  B-C 338..452  C-End 481..1003   (rest 680/340/380/1010)
+slot 21 taunt3   joint turn mean/max: A  58.1/100.7  B  49.8/ 75.9  C  86.2/132.0  End  4.4/ 9.8 | step max A 6.99 B 6.76 C 6.50 | crotch floor mm (r=46) A 72 B 58 C 113
+         rod lengths mm F-A 522..897  A-B 232..499  B-C 337..534  C-End 502..1296   (rest 680/340/380/1010)
