@@ -136,6 +136,51 @@ _INLINE_GENVAR = re.compile(r"\bfor\s*\(\s*genvar\b")
 # binary, and `)` is not in the lookbehind set.
 _UNARY_MINUS_CAST = re.compile(r"(?<=[=(\[{,?:;])\s*-\s*(\w+)\s*'\s*\(")
 
+# FORM 6 -- MORE THAN ONE `import` STATEMENT in a module header.
+#
+# Quartus 17.0 accepts ONE import item list in the header and aborts on a
+# SECOND `import` statement. Found 2026-09-21 by packet POSEABI, whose
+# `quartus_map` died on `zhao_field_loader.sv` at the second of two:
+#
+#     module zhao_field_loader
+#       import zhao_pkg::*;
+#       import zhao_field_host_image_pkg::*;     <-- ABORTS HERE
+#     #(
+#
+# THE FORM ITSELF IS FINE AND MUST NOT BE FLAGGED. `zhao_console_core.sv`
+# writes `import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;` -- one
+# statement, three packages -- and it has been through `quartus_map`. Measured
+# on the merged tree: **49 files use the one-statement form, and exactly ONE
+# used two statements.** The reporting packet described this as "41 files use
+# it" and recommended leaving it alone as too large to touch; the real defect
+# was a single file, and the difference is the whole cost of the fix.
+#
+# So the discriminator is the SECOND `import`, never the presence of one --
+# a checker written to the over-broad reading would have turned 49 correct
+# files red (owner ruling R166: a tool that fires on everything is as broken as
+# one that fires on nothing).
+#
+# `quartus_map` is what proves this, not lint: Verilator parses the rejected
+# form without complaint, which is `CLAUDE.md`'s "Verilator lint-clean is not
+# Quartus-synthesizable" with a fourth exhibit.
+# `\r?\n` IS LOAD-BEARING, and leaving it out cost a live-fault miss here.
+# `scan_repo` reads with `newline=""` ON PURPOSE -- form 5 hunts a lone CR, so
+# universal-newline translation would erase the very thing it looks for. The
+# text therefore arrives with CRLF intact, and a pattern written `;[ \t]*\n`
+# cannot match across the `\r`.
+#
+# The first version of this check was written that way. Its self-test passed
+# (the `_MUST_FLAG` strings are LF) while the repo scan reported a clean sheet
+# over a file it had just been built to catch -- **a canary that cannot enter
+# the blind spot it guards**, which is owner ruling R173's exact shape, in the
+# checker added to fix a different blindness the same hour. The CRLF case in
+# `_MUST_FLAG` below exists so it cannot recur.
+_MULTI_HEADER_IMPORT = re.compile(
+    r"^[ \t]*module\s+\w+[ \t]*\r?\n"               # module NAME, newline
+    r"(?:[ \t]*import\s+[^;]+;[ \t]*\r?\n)"         # first import -- legal
+    r"((?:[ \t]*import\s+[^;]+;[ \t]*\r?\n)+)",     # any FURTHER one -- defect
+    re.M)
+
 
 # FORM 5, added 2026-09-20 (owner ruling R61): a LONE CR inside a line -- a
 # carriage return that is not the CRLF terminator of that line.
@@ -219,6 +264,14 @@ def scan_text(text: str) -> list[tuple[int, str]]:
         line = clean.count("\n", 0, m.start()) + 1
         hits.append((line, "-%s'(...) -- unary minus on a size cast; "
                            "write -(%s'(...))" % (m.group(1), m.group(1))))
+    for m in _MULTI_HEADER_IMPORT.finditer(clean):
+        # Report the SECOND import's line, which is where quartus_map aborts,
+        # not the module's -- a reader following this diagnostic should land on
+        # the statement to merge, not on the declaration above it.
+        line = clean.count("\n", 0, m.start(1)) + 1
+        hits.append((line, "a SECOND `import` statement in a module header -- "
+                           "Quartus 17.0 takes one item list only. Merge them: "
+                           "`import a::*, b::*;`"))
     # RAW text, not `clean` -- see scan_cr's header.
     hits.extend(scan_cr(text))
     return hits
@@ -258,6 +311,18 @@ def scan_repo() -> tuple[list[tuple[str, int, str]], int]:
 # negative controls are the repaired form and the seven comments describing it.
 # ---------------------------------------------------------------------------
 _MUST_FLAG = [
+    # form 6 -- the second header import, exactly as zhao_field_loader.sv had
+    # it. `quartus_map` aborts on the SECOND line, not the first.
+    "module zhao_field_loader\n  import zhao_pkg::*;\n"
+    "  import zhao_field_host_image_pkg::*;\n#(\n",
+    # three statements must fire too, not just two
+    "module m\n  import a::*;\n  import b::*;\n  import c::*;\n(\n",
+    # THE SAME FAULT WITH CRLF, and this case is the reason the check works at
+    # all. `scan_repo` reads with newline="" so real files arrive as CRLF; the
+    # LF cases above passed while the live scan found nothing (see the pattern's
+    # own header). A self-test that only ever sees LF cannot see this.
+    "module zhao_field_loader\r\n  import zhao_pkg::*;\r\n"
+    "  import zhao_field_host_image_pkg::*;\r\n#(\r\n",
     "  for (genvar l = 0; l < LANES; l++) begin : gen_lane",
     "for(genvar i=0;i<N;i++) begin",
     "    for ( genvar  N = 0 ; N <= 8 ; N++ ) begin : g_fold",
@@ -277,6 +342,16 @@ _MUST_FLAG = [
     "  assign a = b;\r  assign c = d;",
 ]
 _MUST_NOT_FLAG = [
+    # form 6's LEGAL shape, and this is the assertion that keeps the check
+    # narrow. `zhao_console_core.sv` writes exactly this and has been through
+    # quartus_map; 49 files in the tree use it. If form 6 ever fires here, it
+    # has become a false alarm across the whole repository.
+    "module zhao_console_core\n"
+    "  import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;\n#(\n",
+    # one import, one package -- also legal, also common
+    "module m\n  import zhao_pkg::*;\n#(\n",
+    # a package import in the BODY is not a header import at all
+    "module m (\n  input logic clk\n);\n  import zhao_pkg::*;\n  import other::*;\n",
     # the repaired form, which is what crc32c_fold and now alu_vec use
     "  genvar gl;\n  generate\n  for (gl = 0; gl < LANES; gl++) begin : gen_lane",
     # an ordinary procedural loop

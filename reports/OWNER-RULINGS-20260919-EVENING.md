@@ -3867,3 +3867,122 @@ the part worth keeping.** It asserts four things at once:
 **A control that proves the absence of four consequences is worth more than one
 that proves the presence of a count.** The count alone would be satisfied by a
 counter incremented in the wrong place.
+
+## R212 — EVERY `quartus_map` IN THE TREE WAS DEAD, AND THE SYNTAX GATE SAID "NO REJECTED FORMS FOUND"
+
+**2026-09-21, found by POSEABI when its first map run died, fixed and PROVEN
+here.**
+
+`quartus_map` aborts on **a SECOND `import` statement in a module header**.
+Quartus 17.0 takes **one** item list there. And because `run_block_map.ps1`
+compiles **every `.sv` under `fpga/rtl`**, that one file killed **every map, for
+every block, tree-wide.**
+
+**`check_quartus17_syntax.py` reported `no Quartus-17.0-rejected forms found`
+throughout.** It knew three forms; this is a fourth. It is in every gate list in
+every brief I have written, and thirteen packets have quoted its green.
+
+**PROVEN, not asserted:** after the repair, `quartus_map` on
+`zhao_field_loader` completes in **77.9 s, RC 0**, and writes its row. Before
+it, the same command aborted. `CLAUDE.md` predicted the shape exactly — *"The
+failure is fast (33 s) and loud, so it costs a fit rather than a day. The trap
+is reporting 'lint: 0' as though it settled synthesizability"* — and Verilator
+parses the rejected form without a murmur, which is that law's **fourth
+exhibit**.
+
+### The scale was reported as 41 files. Measured, the defect was TWO
+
+POSEABI reported *"41 files use it"* and recommended leaving it alone as too
+large to touch and outside its file set. **That was the right instinct about
+scope and the wrong number, and the difference is the entire cost of the fix.**
+
+Measured on the merged tree:
+
+* **49 files** use the **LEGAL** one-statement form —
+  `import zhao_pkg::*, zhao_abi_pkg::*, zhao_fb_tuple_pkg::*;` — including
+  **`zhao_console_core.sv`, which has been through `quartus_map`**. The *form*
+  is fine.
+* **TWO files** used a second statement: `zhao_field_loader.sv` and
+  **`tests/formal/formal_mem_refresh.sv`, which nobody had found.**
+
+**A checker written to the over-broad reading would have turned 49 correct files
+red** — R166's lesson, which is why the discriminator is *the second `import`*
+and never the presence of one, and why `_MUST_NOT_FLAG` now asserts the console
+core's own header must never fire.
+
+### AND MY OWN FIRST PATTERN WAS DEFEATED BY CRLF — R173's shape, one hour later
+
+The check I added **passed its self-test (12 fire / 19 no-fire) and reported a
+clean sheet over the live fault it was written to catch.**
+
+`scan_repo()` reads with `newline=""` **deliberately** — form 5 hunts a lone CR,
+so universal-newline translation would erase the very thing it looks for. Real
+files therefore arrive **with CRLF intact**, and my pattern's `;[ \t]*\n` could
+not match across the `\r`. **The `_MUST_FLAG` strings are LF, so the canary
+could not enter the blind spot it guarded.**
+
+That is **exactly R173** — `duplicate_functions`' unsigned canary passing over
+its signed blind spot — **reproduced by me, in the checker written to fix a
+different blindness, within the hour.** The pattern now carries `\r?\n` and
+`_MUST_FLAG` carries **the same fault spelled with CRLF**, so it cannot recur.
+
+**The general form, and it is worth more than the fix:** when a scanner
+deliberately reads raw bytes, **every pattern in it inherits that decision**.
+One regex written against normalised text is enough to blind the tool, and its
+LF-only self-test will certify the blindness.
+
+## R213 — THE "113% OF CEILING" FIGURE IS A DIRTY FIT OF A DIFFERENT CHIP
+
+**POSEABI, while sourcing a baseline for its own price. This corrects a number I
+have quoted repeatedly, including to the owner.**
+
+The `zhao_console_core@console-core-first-light` row that "~113% of the ALM
+ceiling" comes from is:
+
+* **47,582 ALM fitted on `5CEBA9F31C7` — NOT the target part.** The row's own
+  field says so: **`notTargetDevice: true`**.
+* from a tree with **`treeCleanAtHead: false`** — a dirty fit, which
+  `CLAUDE.md`'s receipt chapter says describes no committed state exactly and
+  whose digest therefore describes nothing.
+
+**So every area decision quoting 113% has been quoting a dirty fit of a
+different chip**, and the campaign's central constraint — *"ALMs are the binding
+constraint"* — has been resting on it. The constraint may well still be real;
+**the number supporting it is not evidence about `5CSEBA6U23I7`.**
+
+This is `CLAUDE.md`'s own law twice over: *"Read `rtlCleanAtHead` first,
+always"*, and *"never compare a current file to an old measurement."* The row
+was honest — it **declared** both flaws in its own fields. **Nobody read them.**
+
+**POSEABI did the right thing instead:** it produced **new standalone map rows
+on the target device**, `zhao_geom_bonesrc@{sync-m10k,async-derived,async-flat}`,
+and said plainly that its numbers are additive to whatever that baseline is.
+
+### And the price inverted the ARRANGEMENT, not the packet
+
+| `SRC_STYLE` | ALM | % of 41,910 | |
+|---|---:|---:|---|
+| `SYNC_M10K` | **830** | **2.0%** | built |
+| `ASYNC_DERIVED` | 6,440 | 15.4% | |
+| `ASYNC_FLAT` | **14,056** | **33.5%** | R90's arrangement |
+
+**R90's bit count was exactly right and its conclusion was still wrong**, because
+what nobody priced is **the ACCESS, not the storage**: a 32-deep mux over 549
+bits costs **21,617 ALUTs against 17,665 registers**, and **Quartus infers NO
+MLAB** for the async array — so the optimistic *"it becomes cheap LUT RAM"*
+reading is false on this tool and this device.
+
+**R90 warned the decoder's combinational contract might have to move and that it
+"must not be discovered halfway through the packet."** It does not have to move:
+`bone_idx_o` is a register that changes in exactly two places with a measured
+**115.4 cycles** between, so a synchronous read is short by **one cycle and no
+more**, and a 2-deep prefetch buys it with ~115 cycles of notice for a 7-cycle
+fill. **The decoder is unchanged — not one port.**
+
+**And POSEABI's own first probe was wrong in the flattering direction**, which it
+reported: style 2 stored 576 bits/bone while still *deriving* `inv_rest`, so
+Quartus pruned the 320 bits nothing read and style 2 **collapsed onto style 1**
+— 6,421 against 6,440, *"which looked like a result."* Corrected, style 2 costs
+**2.2× the first draft**. The rule it extracted is the keeper:
+
+> **A store is only priced by what is READ out of it.**

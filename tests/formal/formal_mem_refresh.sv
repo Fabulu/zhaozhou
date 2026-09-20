@@ -25,8 +25,9 @@
 // environment is carried on PORTS because `(* anyseq *)` locals do not
 // survive this frontend and elaborate to constants.
 module formal_mem_refresh
-  import zhao_pkg::*;
-  import zhao_sdram_params_pkg::*;
+  // ONE import statement -- see zhao_field_loader.sv and owner ruling R212.
+  // Quartus 17.0 aborts on a second `import` in a module header.
+  import zhao_pkg::*, zhao_sdram_params_pkg::*;
 (
   input logic        clk,
   input logic        env_valid,

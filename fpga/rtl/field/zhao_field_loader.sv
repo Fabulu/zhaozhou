@@ -82,8 +82,14 @@
 `default_nettype none
 
 module zhao_field_loader
-  import zhao_pkg::*;
-  import zhao_field_host_image_pkg::*;
+  // ONE import statement, not two. Quartus 17.0 takes a single item list in a
+  // module header and ABORTS on a second `import` -- `quartus_map` died right
+  // here, on the line below this one, and because run_block_map.ps1 compiles
+  // every .sv under fpga/rtl that failure killed EVERY map in the tree, for
+  // any block, until this was merged (owner ruling R212). Verilator parses the
+  // rejected form without a murmur, so lint said nothing for as long as it
+  // stood: "lint-clean is not Quartus-synthesizable", fourth exhibit.
+  import zhao_pkg::*, zhao_field_host_image_pkg::*;
 #(
     // The backing-store descriptor catalogue. FH15: this is NOT the active
     // program cache -- `zhao_field_progcache` owns residency, this owns the
