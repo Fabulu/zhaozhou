@@ -141,3 +141,6 @@ PASS f-sel-bow-onset rc=2 exp=2 | ZHAO_U02_REAR_BOW_ONSET_MM=2001 outside 0..200
 PASS f-sel-bow-maxa rc=2 exp=2 | ZHAO_U02_REAR_BOW_MAX_A16=32001 outside 64..32000
 PASS e-live-history-legacy rc=0 exp=0 | CONTROL legacy: HISTORY detector fired on every live subject -- OK
 PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK
+FAIL e-live-history-normal rc=1 exp=0 | FAIL
+FAIL e-live-history-legacy rc=1 exp=0 | CONTROL legacy: HISTORY detector did NOT fire everywhere -- FAIL
+PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK
