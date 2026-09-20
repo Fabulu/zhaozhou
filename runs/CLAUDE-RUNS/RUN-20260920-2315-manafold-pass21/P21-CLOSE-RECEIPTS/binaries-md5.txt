@@ -1,0 +1,13 @@
+e7e75190781f45256e66f9515d606965 *.tmp/p21-close/bin/manafold-eyesize.exe
+d5cbe24884e2d3a1e77ceec04d394456 *.tmp/p21-close/bin/manafold-meshcheck.exe
+424592e9d3e2111e6394ec6a71838475 *.tmp/p21-close/bin/manafold-motiongate.exe
+0b371352cf2ba8c78f455dad3e8f4422 *.tmp/p21-close/bin/manafold-nodule.exe
+8898ebcd17e0843ee6a4b29b8a80acf3 *.tmp/p21-close/bin/manafold-outlinegate.exe
+de0235644c6b590e64d09a7e670456f5 *.tmp/p21-close/bin/manafold-probe.exe
+6ee2efd1411ffea8705f23d41f4ffdab *.tmp/p21-close/bin/manafold-public-jointgate.exe
+26ccd1d26998b841c007ac0f03093670 *.tmp/p21-close/bin/manafold-qa-p12.exe
+960cb1f6ed128fe51668aaa79a487833 *.tmp/p21-close/bin/manafold-rear-audit.exe
+6edd713d526bfe56324c533a1df1ffb2 *.tmp/p21-close/bin/manafold-rodgate.exe
+42c9e7bfc46e7c3b25258c8a11fce0d0 *.tmp/p21-close/bin/manafold-shellgate.exe
+2caeb3ea844240dbf4d6a0092c281452 *.tmp/p21-close/bin/manafold-spangate.exe
+4fcf5c865466532bf23cd17f9641e5a6 *.tmp/p21-close/bin/zhao-reel-cel.exe

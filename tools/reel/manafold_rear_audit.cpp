@@ -506,7 +506,30 @@ constexpr double kGateRailRegressFloor = 0.40;
 // ⚠ AND THE SPAN BOUND IS NOT TOUCHED. kSpanCompactionMinPm still judges the
 // solve; the shipping worst is -691 pm against -700, so the existing bound is
 // the thing holding the line and it was not moved to let this through.
-constexpr double kGateRailRodsFloor = 0.12;
+//
+// ⚠ PASS-21 CLOSE: THE FLOOR IS NOW DERIVED FROM THAT BOUND INSTEAD OF BEING A
+// NUMBER BESIDE IT. It shipped as a literal 0.12, and the review caught what
+// that meant: the sentence above says "the band may not be compacted past what
+// the C-E span bound already allows", and kSpanCompactionMinPm[3] == -700 per
+// mille allows a length ratio of 0.300 -- so the written floor was 2.5x LOOSER
+// than its own stated basis. The shipping worst rail (0.324) sits 8 % above the
+// derived bound and 170 % above the transcribed one, which is another way of
+// saying the leg as written could not distinguish a healthy band from one that
+// had broken the span law by a factor of two. A guard nothing can reach is not a
+// guard; it is a detector asserting zero, and this creature has a rule about
+// citing those.
+//
+// So the floor is COMPUTED, and the two can no longer drift apart: move the span
+// bound and this floor moves with it, which is what "derived" has to mean if it
+// is to stay true after the next pass edits one of them. The tightening does not
+// relax anything -- 0.300 > 0.12 -- and the shipping rail clears it with margin.
+// Its positive control is g_u02_rods_rear_overcompact_mm (the state is
+// unreachable with legal stimulus, so the demonstration is a committed mutant).
+constexpr double kGateRailRodsFloor =
+    1.0 + u02::kSpanCompactionMinPm[3] / 1000.0;
+static_assert(u02::kSpanCompactionMinPm[3] < 0,
+              "the C-E compaction bound must be a negative per-mille or the "
+              "derived rail floor is nonsense");
 // Under rods every rear ring's two bones share a rotation by construction, so
 // this is 0 and a non-zero reading means a frame hand-off has come back onto the
 // band. The bound is tight on purpose: it is not a tolerance, it is a structural
@@ -1188,6 +1211,25 @@ int main(int argc, char** argv) {
         std::printf("MUTANT: --fail-rear-strain (pass-19 arc/chord solve -- the "
                     "band compresses instead of bowing)\n");
       }
+    } else if (std::strcmp(argv[i], "--fail-rail-floor") == 0) {
+      gate = true;
+      // R4's RAIL-FLOOR control, and it exists because the floor was TIGHTENED
+      // at the pass-21 close to the value its own derivation yields (see
+      // kGateRailRodsFloor). --fail-rear-strain fires the leg's HAND-OFF
+      // ROTATION operand, which is a different one of the four quantities that
+      // share R4's mask bit; before this flag the rail floor itself had no
+      // control under rods at all, and a floor nothing can reach is the thing
+      // the review objected to. The state is unreachable with legal stimulus --
+      // the shipping solve never asks for that much compaction -- so this is a
+      // committed mutant: 120 mm of extra compaction pushed into the rear span's
+      // skin delta, which squeezes the rod's rings past the span bound and
+      // nothing else. 120 is sized to the rod it compacts, not guessed: it takes
+      // the worst rail from 0.324 to below 0.300 with room to spare, the sizing
+      // mistake the review found in mspan's overcompact mutant.
+      u02::g_u02_rods_rear_overcompact_mm = 120;
+      std::printf("MUTANT: --fail-rail-floor (120 mm of extra compaction in the "
+                  "rear span's skin delta -- the rod's rings squeeze past "
+                  "kSpanCompactionMinPm[3])\n");
     } else if (std::strcmp(argv[i], "--fail-line-flag") == 0) {
       gate = true;
       g_fail_line_flag = true;
@@ -1388,13 +1430,15 @@ int main(int argc, char** argv) {
       w_rail_min, w_rail_min_slot, w_rail_min_ring, w_rail_max, w_rail_max_slot,
       w_handoff, w_handoff_slot, w_rail_step);
   const bool rods = u02::rig_rods();
-  std::printf("  target floor %.2f%s | regression floor %.2f%s | ceiling %.2f | "
+  std::printf("  target floor %.2f%s | regression floor %.3f%s | ceiling %.2f | "
               "hand-off max %.0f mm%s | step max %.3f\n",
               kGateRailTargetFloor,
               rods ? " [RETIRED under rods: superseded by mrod R9 uniformity]"
                    : "",
               rods ? kGateRailRodsFloor : kGateRailRegressFloor,
-              rods ? " [rods hard bound; pass-20 floor 0.40 retired]" : "",
+              rods ? " [rods hard bound, DERIVED from kSpanCompactionMinPm[3] "
+                     "= -700 pm; pass-20 floor 0.40 retired]"
+                   : "",
               kGateRailCeiling, kGateHandoffMaxMm,
               rods ? " [POSITION disagreement; under rods it IS the uniform "
                      "stretch -- the ROTATION operand below is the fold "

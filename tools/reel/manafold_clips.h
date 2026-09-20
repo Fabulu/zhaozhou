@@ -241,6 +241,18 @@ inline int32_t rear_span_limit_fx(int32_t full_delta_fx) {
   return static_cast<int32_t>(full_delta_fx < 0 ? -out : out);
 }
 
+/** PASS-21 CLOSE: R4's RAIL-FLOOR CONTROL, applied to the rear span's SKIN
+ *  delta. See g_u02_rods_rear_overcompact_mm -- the floor it demonstrates is
+ *  derived from kSpanCompactionMinPm[3] and is unreachable with legal stimulus,
+ *  so the only evidence the leg can fire is a committed mutant that compacts the
+ *  rear rod past the bound. Off (0) is identity, and it is inert outside `rods`
+ *  because under pass20 the rail floor is the untouched 0.40 regression guard
+ *  with its own, reachable control (the pass-19 arc/chord solve). */
+inline int32_t rods_rear_overcompact_fx(int32_t skin_delta_fx) {
+  if (g_u02_rods_rear_overcompact_mm == 0 || !rig_rods()) return skin_delta_fx;
+  return skin_delta_fx - fxu(g_u02_rods_rear_overcompact_mm);
+}
+
 inline int32_t span_fraction_delta_fx(int32_t full_delta_fx,
                                       int32_t run_mm,
                                       int32_t gradient_mm) {
@@ -1555,7 +1567,8 @@ inline void finalize_rear_follow(zc::Clip& c) {
     // PASS 20: the skin sees the travel-limited excursion; the receipt keeps
     // the raw solve. rear_span_limit_fx is identity below the soft knee, so
     // ordinary motion is bit-for-bit what it was.
-    const int32_t skin_delta_fx = rear_span_limit_fx(full_delta_fx);
+    const int32_t skin_delta_fx =
+        rods_rear_overcompact_fx(rear_span_limit_fx(full_delta_fx));
     write_rear_span_delta(c.local_translation, tbase, skin_delta_fx,
                           full_delta_fx, static_cast<int32_t>(mag));
     // PASS 20 REPAIR: when the band is SLACK, replace that linear compression
@@ -1770,7 +1783,8 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
     const int64_t mag = isqrt64(dx * dx + dy * dy + dz * dz);
     const int32_t full_delta_fx =
         fxu(static_cast<int32_t>(mag) - kRearSocketFromCMm);
-    const int32_t skin_delta_fx = rear_span_limit_fx(full_delta_fx);
+    const int32_t skin_delta_fx =
+        rods_rear_overcompact_fx(rear_span_limit_fx(full_delta_fx));
     write_rear_span_delta(c.mid_local_translation, tbase, skin_delta_fx,
                           full_delta_fx, static_cast<int32_t>(mag));
     const bool bowed = write_rear_bow(c.mid_local_translation, tbase,

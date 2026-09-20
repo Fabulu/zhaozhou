@@ -138,3 +138,59 @@ Manafold pass 21 from Owner Direction 22: the antenna reads as having too many j
   legs, all RC=0. Receipts in `P21-QA-RECEIPTS/`, looks in `P21-QA-LOOKS/`.
 - 2.0 GB of `.rgb` render intermediates purged after the looks (CLAUDE.md).
 - NOT done, by instruction: no bank render, no encode, no merge, no deploy.
+
+### 2026-09-21 01:20-01:55 - CLOSING WORKER, part 1: the two instrument repairs
+- Sole Opus worker. All 13 gate/reel binaries rebuilt by me from the pass-21 tree
+  (g++ 16.1.0 winlibs, `tools/env/zhao-env.ps1`'s PATH; bare `g++` is not on the
+  Git Bash PATH -- worth knowing, the first build attempt failed 13/13 on
+  "g++: command not found" and that looks nothing like a toolchain problem).
+  **0 warnings** on every target, which is the NUL-byte repair still holding.
+- Baseline reproduced EXACTLY on my build before touching anything: mrod over 24
+  slots = 9,700 samples, rod turn 0.02, joint-on-ball 999.7 pm, step 6.70, R9
+  938.2 pm, R10 0.00107; mrear rail floor 0.324 (slot 2, ring 51), hand-off
+  rotation 0.00 deg, R5 19 clips / worst margin 29 mm.
+- **REPAIR 1 -- mrod's gate now measures the WHOLE BANK.** `slots` defaults to
+  `T.bank.clips` (mrear's precedent) for `--gate`, `--report` AND `--csv` alike,
+  so no mode can sample less than another. Confirmed: no-argument run reads 24
+  slots / 9,700 samples with every leg OK. The retired 6-slot list reproduces the
+  published R9 947.3 / R10 0.00059, which independently confirms the review's
+  account of where those two numbers came from.
+- **REPAIR 1b -- six control names became four.** `--fail-rod-bend`,
+  `--fail-rod-uniform` and `--fail-rod-flicker` were one configuration (the
+  pass-20 rig swap) under three names; they are now the single
+  `--fail-rig-pass20` and the retired names are a HARD ERROR (RC=2 with a message
+  naming the replacement), not a silent alias. Each control now DECLARES the exact
+  leg set it must break (`kCtlTable`) and the run is UNATTRIBUTED unless the
+  observed mask matches -- the attribution check mspan has had since pass 17.
+  Measured, then written down: rig-pass20 0xFF (honestly blanket), rod-twist 0x4F
+  (R6x3 + R7 + R9, and NOT R8/R10), ball-blend 0x80, joint-step 0x10. All four
+  ATTRIBUTED.
+- **REPAIR 2 -- R4's floor is now DERIVED, not transcribed.**
+  `kGateRailRodsFloor = 1.0 + u02::kSpanCompactionMinPm[3]/1000.0` = **0.300**,
+  computed from the bound its own comment cites, with a static_assert on the
+  sign. It shipped as a literal 0.12 -- 2.5x looser than the same sentence of
+  reasoning. This TIGHTENS the gate. The shipping rail is **0.324**, clearing the
+  derived floor by 8 % (0.024 absolute); mrear stays GREEN, mask 0x0.
+- **And the floor now has a control, because tightening it made the state
+  unreachable with legal stimulus** -- the CLAUDE.md committed-mutant law.
+  `--fail-rail-floor` pushes 120 mm of extra compaction into the rear span's
+  skin delta (`g_u02_rods_rear_overcompact_mm`, 0 = off, rods-only): rail
+  0.324 -> **0.230**, `FAIL R4 STRAIN [rail-floor]`, RC=1, and it fires that
+  operand ALONE -- ceiling, step and hand-off all stay clean. `--fail-rear-strain`
+  still fires the hand-off operand, so the four quantities sharing R4's mask bit
+  now have two separately attributed controls between them.
+- **IDENTITY: no rendered byte moved.** Full 22-subject `--crc` walk from a
+  528cc15f worktree build and from the repaired build: 8,062 lines each, ONE
+  differing line and it is my own FIXED/BASE marker. Receipt:
+  `P21-CLOSE-RECEIPTS/identity-proof.md`.
+- **Full matrix, ONE invocation, MATRIX_FAIL=0**: 12 shipping gates + both
+  exact-off legs + 10 mrear/mrod controls + the 8 mspan legs the review
+  resurrected (all still attributed after the header change).
+  `P21-CLOSE-RECEIPTS/FINAL-MATRIX.txt`.
+- **Pass 20 ARCHIVED before any encode.** 44/44 live files verified against the
+  production-verified `P20-LIVE-MEDIA-SHA256.txt`, copied to
+  `archive-p20-manafold-*`, copies re-hashed: 44/44, **44,980,318 bytes** -- the
+  same total pass 20's production verification recorded. `P20-ARCHIVE-SHA256.txt`
+  is beside the creature.
+- NEXT: the creatures.json pass-20 archive generation + checkarchive lock, then
+  the exact 22-subject bank from this frozen source.

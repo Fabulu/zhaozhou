@@ -984,6 +984,29 @@ inline bool g_u02_rod_ball_blend_control = false;
 // disagree, which fires R4's hand-off-ROTATION operand and mrod's R6 together.
 // 0 is off and changes nothing.
 inline int32_t g_u02_rods_helper_twist_a16 = 0;
+// ⚠ AND R4's RAIL-FLOOR CONTROL, added at the PASS-21 CLOSE with the floor it
+// guards. `kGateRailRodsFloor` is now DERIVED from kSpanCompactionMinPm[3]: the
+// rear band may not be compacted past what the C-E span bound already forbids,
+// so the floor is 1 + (-700/1000) = 0.300 exactly, and it is computed from that
+// constant rather than transcribed from it. The number it replaced -- 0.12 --
+// was 2.5x looser than the same sentence of reasoning, which meant the leg could
+// not distinguish a healthy band from one that had broken the span law by a
+// factor of two. The review found it and did not move it; this is that repair.
+//
+// Tightening the floor creates the problem the CLAUDE.md law names: the state
+// is UNREACHABLE WITH LEGAL STIMULUS. The shipping solve never asks for that
+// much compaction (mspan's G5 reads -691 pm against the -700 bound, and the
+// worst rail is 0.324 against the derived 0.300), so no environment, no clip and
+// no rig selector can move the leg, and "it can fire" would stay an argument
+// forever -- a floor whose only property is that nothing reaches it, which is
+// precisely what was wrong with 0.12. The demonstration therefore has to be a
+// COMMITTED MUTANT, and it is this knob: extra millimetres of compaction pushed
+// into the rear span's skin delta, so the rod's rings squeeze past the bound.
+//
+// It is a control, not a shape: 0 is off, it is read only under `rods`, and the
+// shipping path is byte-identical with it at 0 -- which the 22/22 identity leg
+// proves rather than asserts.
+inline int32_t g_u02_rods_rear_overcompact_mm = 0;
 constexpr int kBallRingCount = 7;
 constexpr int32_t kBallRingOffsetPm[kBallRingCount] = {-1000, -866, -500, 0,
                                                        500, 866, 1000};

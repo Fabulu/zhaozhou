@@ -1,0 +1,44 @@
+# P21 CLOSE MATRIX -- one invocation, 2026-09-20T23:34:30Z
+# built by the closing worker from the pass-21-close tree
+
+== SHIPPING (rods) -- all gates, whole bank ==
+mrod                               RC=0   ALL LEGS OK
+mrear                              RC=0   rear gate mask 0x0 -> GREEN
+mspan                              RC=0   PASS: 0 failure(s)
+mprobe                             RC=0   
+mjointpub                          RC=0   PASS: 0 failure(s)
+mmeshcheck                         RC=0   CLEAN
+moutline                           RC=0   PASS: 0 failure(s)
+mshell                             RC=0   every check is failable
+mnodule                            RC=0   PASS: 0 failure(s)
+meyesize                           RC=0   PASS: 0 failure(s)
+msmooth                            RC=0   PASS: 0 failure(s)
+mqa                                RC=0   PASS: 0 failure(s)
+
+== EXACT-OFF (ZHAO_U02_RIG=pass20) ==
+mspan-pass20                       RC=0   PASS: 0 failure(s)
+mrear-pass20                       RC=0   rear gate mask 0x0 -> GREEN
+
+== CONTROLS: the two repaired instruments ==
+mrod --fail-rig-pass20             RC=0   -> ATTRIBUTED
+mrod --fail-rod-twist              RC=0   -> ATTRIBUTED
+mrod --fail-ball-blend             RC=0   -> ATTRIBUTED
+mrod --fail-joint-step             RC=0   -> ATTRIBUTED
+mrear --fail-rail-floor            RC=1   FAIL R4 STRAIN: the rear skin is strained past the regression guard [rail-floor ]
+mrear --fail-rear-strain           RC=1   FAIL R4 STRAIN: the rear skin is strained past the regression guard [hand-off ]
+mrear --fail-rear-frame            RC=1   FAIL R2 JOINT
+mrear --fail-rear-joint            RC=1   FAIL R2 JOINT
+mrear --fail-no-dip                RC=1   FAIL R5 DIP
+mrear --fail-dip-stuck             RC=1   FAIL R5 DIP
+
+== CONTROLS: the eight mspan legs the review resurrected (re-confirmed) ==
+mspan --fail-rigid-span F-A        RC=1   
+mspan --fail-overcompact F-A       RC=1   
+mspan --fail-rigid-span A-B        RC=1   
+mspan --fail-overcompact A-B       RC=1   
+mspan --fail-rigid-span B-C        RC=1   
+mspan --fail-overcompact B-C       RC=1   
+mspan --fail-rigid-span C-E        RC=1   
+mspan --fail-overcompact C-E       RC=1   
+
+MATRIX_FAIL=0

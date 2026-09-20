@@ -1,0 +1,29 @@
+CONFIG JUDGED (mrod): every shipping constant AND MECHANISM at its shipped value (rig rods, solver dent, bow arc [inert under rods], dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)
+RIG rods  rings 64  samples 9700
+  rod F-A    9 rings st  318.. 929 | ball A   5 rings R 101/90
+  rod A-B    5 rings st  931..1269 | ball B   5 rings R 85/68
+  rod B-C    5 rings st 1271..1649 | ball C   5 rings R 101/71
+  rod C-End  9 rings st 1651..2659 | ball End 5 rings R 106/84
+R6  ROD STRAIGHT   worst turn   0.02 deg (<= 1.50)  [slot0 f88.1 rod C-End ring 49 (st 2281)]
+                   worst shear   0.05 deg (<= 5.0)  [slot8 f111.0 rod C-End ring 47 (st 2029)]
+                   worst sag     0.02 mm  (<= 4.0)  [slot15 f433.1 rod C-End ring 49 sag]
+R7  JOINT ON BALL  articulation at the balls  999.7 pm (>= 980) (rods 642.4 deg, balls 2124127.3 deg)
+R8  JOINT SMOOTH   worst joint step   6.70 deg (<= 8.0)  [slot21 f79.1 joint C]
+                   worst rod turn rate   0.02 deg (<= 8.0)  [slot2 f81.1 rod C-End ring 49 (st 2281)]
+R9  ROD UNIFORM    worst min/max rail  938.2 pm (>= 850)  [slot16 f99.0 rod F-A min/max rail]
+R10 BALL RIGID     worst strain  0.00107 (<= 0.0100)  [slot13 f150.0 ball End ring 55]
+INFO blade roll worst step   6.98 deg/sample  [slot22 f121.0 rod A-B blade roll]
+INFO rear rod posed length 322..1283 mm (rest 1010), worst rear rail floor 0.317
+INFO ball A   joint max  150.4 deg mean  65.4 | crotch floor r/cos(th/2) =   180 mm vs shipping R 101
+INFO ball B   joint max  100.2 deg mean  69.3 | crotch floor r/cos(th/2) =    69 mm vs shipping R 85
+INFO ball C   joint max  152.1 deg mean  82.6 | crotch floor r/cos(th/2) =   199 mm vs shipping R 101
+INFO ball End joint max   16.5 deg mean   1.7 | crotch floor r/cos(th/2) =    50 mm vs shipping R 106
+R6 rod turn          OK
+R6 rod shear         OK
+R6 rod sag           OK
+R7 joint share       OK
+R8 joint step        OK
+R8 rod turn rate     OK
+R9 rod uniform       OK
+R10 ball rigid       OK
+mrod: ALL LEGS OK
