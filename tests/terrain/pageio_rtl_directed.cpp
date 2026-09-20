@@ -772,6 +772,93 @@ void case_cell_cursor_moves(Vtb_pageio& dut) {
      long(before.get8(kSlotUT, tp::kLayerDOff + 9u)), long(dut.cell_state));
 }
 
+// A HELD CELL ANSWER MUST NOT SURVIVE A WRITE TO ITS OWN CELL.
+//
+// `dwrd_q` is one buffer for both directions (contract section 5's "further
+// halving"), so a cs write changes the byte a held answer was read from.
+// TERRAIN.BAKE's own traversal never re-reads a written cell, which is exactly
+// why this could sit wrong indefinitely: it is INVISIBLE under the one order
+// the machine uses today, and it is the block's promise to any order. So it is
+// driven here on purpose -- hold an answer, write the same cell WITHOUT
+// consuming the answer, and require the re-read to produce the NEW byte.
+void case_write_invalidates_held_cell(Vtb_pageio& dut) {
+  World w(dut);
+  Pool before;
+  for (uint32_t s = 0; s < kSlots; ++s) fill_page(before, s, int(s) + 1);
+  w.reset();
+  w.load(before);
+
+  dut.cell_ci = 0;
+  dut.cell_cj = 0;
+  dut.cell_ready = 0;
+  ck(w.offer_job(kSlotUT, 0x5Au, 0x11u, 0x7u), "invalidate: the job was accepted");
+  ck(wait_serving(w), "invalidate: the page window opened");
+
+  dut.eval();
+  int guard = 0;
+  while (!dut.cell_valid && guard < 5000) {
+    zhao::tick(dut);
+    dut.eval();
+    ++guard;
+  }
+  ck(guard < 5000, "invalidate: an answer is held for cell 0");
+  const uint8_t orig = before.get8(kSlotUT, tp::kLayerDOff);
+  ck(uint8_t(dut.cell_state) == orig, "invalidate: it is the ORIGINAL byte", long(orig),
+     long(dut.cell_state));
+
+  // THE PHASE BOUNDARY IS PART OF THE CONTRACT, so the stimulus respects it.
+  // The first draft of this case wrote a cell without pulsing `dig_done`, and
+  // the block's own `a_breach_after_dig` assertion stopped the run -- correctly:
+  // a cs write before dig_done means the two phases overlapped, which is the
+  // one condition under which the single layer-D buffer's argument fails. The
+  // assertion caught the TEST, which is what a sound assertion does to unsound
+  // stimulus.
+  dut.dig_done = 1;
+  dut.eval();
+  zhao::tick(dut);
+  dut.dig_done = 0;
+  dut.eval();
+
+  // Write cell 0 with a byte that cannot be confused with the original, and
+  // never consume the held answer.
+  const uint8_t fresh = uint8_t(orig ^ 0xA9);
+  dut.cs_valid = 1;
+  dut.cs_ci = 0;
+  dut.cs_cj = 0;
+  dut.cs_state = fresh;
+  dut.eval();
+  guard = 0;
+  while (!dut.cs_ready && guard < 5000) {
+    zhao::tick(dut);
+    dut.eval();
+    ++guard;
+  }
+  ck(guard < 5000, "invalidate: the cs write was accepted");
+  zhao::tick(dut);
+  dut.cs_valid = 0;
+  dut.eval();
+
+  // The held answer is now stale and must not be offered.
+  ck(dut.cell_valid == 0, "invalidate: the stale answer is withdrawn the moment the "
+                          "write is accepted");
+
+  dut.cell_ready = 1;
+  dut.eval();
+  guard = 0;
+  while (!dut.cell_valid && guard < 5000) {
+    zhao::tick(dut);
+    dut.eval();
+    ++guard;
+  }
+  ck(guard < 5000, "invalidate: the re-read arrived");
+  ck(uint8_t(dut.cell_state) == fresh,
+     "invalidate: the re-read returned the NEW byte, not the held one", long(fresh),
+     long(dut.cell_state));
+  // This is NOT a fault, so it must not move the fault counter.
+  ck(dut.c_cell_refetch == 0u, "invalidate: cell_refetch is NOT charged for an ordinary "
+                               "write invalidation", 0, long(dut.c_cell_refetch));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -787,6 +874,7 @@ int main(int argc, char** argv) {
   { Vtb_pageio dut; case_short_burst(dut); }
   { Vtb_pageio dut; case_nobake_mutated(dut); }
   { Vtb_pageio dut; case_cell_cursor_moves(dut); }
+  { Vtb_pageio dut; case_write_invalidates_held_cell(dut); }
 
   std::printf("pageio_rtl_directed: %d checks, %d failures\n", g_checks, g_fail);
   std::fflush(stdout);

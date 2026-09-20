@@ -125,10 +125,18 @@
 // -- so no cell is ever re-read after it is written.
 //
 // THAT IS AN ARGUMENT, AND `pageio_rtl_directed` TESTS IT rather than trusting
-// it: the aliasing case is driven deliberately (a cs write to cell k followed
-// by a cell read of k-1) and the read is asserted to return the ORIGINAL byte.
-// An aliasing bug here changes only breach decisions, which is the exact fault
-// class no counter can see.
+// it. Its breach drive advances the cell cursor to k+1 AT THE ACCEPT, exactly
+// as `zhao_terrain_bake_v2` does, so this block is reading cell k+1 while the
+// cs write for cell k is still in flight -- and every one of the 1,024 reads is
+// asserted to return the ORIGINAL byte. An aliasing bug here changes only
+// breach decisions, which is the exact fault class no counter can see.
+//
+// The block does not RELY on that order, which is the distinction worth
+// keeping: a held cell answer is invalidated when a cs write targets the same
+// cell (see the serve arbiter), so a traversal that did re-read a written cell
+// would get the NEW byte rather than a stale one. The contract's argument buys
+// the single buffer; the invalidation is what makes the buffer honest for any
+// traversal, and the bench drives that re-read too.
 //
 // ---------------------------------------------------------------------------
 // THE CELL READ CANNOT BE ALLOWED TO ANSWER A DIFFERENT ADDRESS
