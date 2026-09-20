@@ -1701,7 +1701,7 @@ targets:
   - top: zhao_raster_attrdiv_svc
     sources:
       - fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
-      - fpga/rtl/raster/zhao_raster_attrdiv.sv
+      - fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
 
   - top: zhao_raster_toon
     sources:

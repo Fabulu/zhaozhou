@@ -3018,11 +3018,13 @@ foreach(div_units 1 2 4 8)
   add_executable(${div_tgt} raster/raster_attrdiv_svc_directed.cpp)
   target_link_libraries(${div_tgt} PRIVATE zhao_harness zhao_zref)
   target_compile_definitions(${div_tgt} PRIVATE ZHAO_SVC_UNITS=${div_units})
+  # The oracle is the compiled reference, not a restatement of it (R100/R104).
+  target_include_directories(${div_tgt} PRIVATE ${CMAKE_SOURCE_DIR}/reference/src)
   verilate(${div_tgt}
     PREFIX Vzhao_raster_attrdiv_svc
     TOP_MODULE zhao_raster_attrdiv_svc
     SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
-            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
     VERILATOR_ARGS -GUNITS=${div_units})
   add_test(NAME raster_attrdiv_svc_u${div_units} COMMAND ${div_tgt})
   set_tests_properties(raster_attrdiv_svc_u${div_units}
@@ -3034,11 +3036,12 @@ foreach(div_units 1 2 4 8)
   add_executable(${div_tgt4} raster/raster_attrdiv_svc_directed.cpp)
   target_link_libraries(${div_tgt4} PRIVATE zhao_harness zhao_zref)
   target_compile_definitions(${div_tgt4} PRIVATE ZHAO_SVC_UNITS=${div_units} ZHAO_SVC_RADIX=4)
+  target_include_directories(${div_tgt4} PRIVATE ${CMAKE_SOURCE_DIR}/reference/src)
   verilate(${div_tgt4}
     PREFIX Vzhao_raster_attrdiv_svc
     TOP_MODULE zhao_raster_attrdiv_svc
     SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_svc.sv
-            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv.sv
+            ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
     VERILATOR_ARGS -GUNITS=${div_units} -GRADIX=4)
   add_test(NAME raster_attrdiv_svc_u${div_units}_r4 COMMAND ${div_tgt4})
   set_tests_properties(raster_attrdiv_svc_u${div_units}_r4
