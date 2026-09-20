@@ -1,7 +1,7 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_raster_texture_v3_fit_top.py
 // generator-sha256: 2d2ae17769fb6931c3812d1c20bd02f610b7bad968f54f197c9a5968d2ba0291
-// template-sha256: d12b6c7ca558b51b8c0a657d2420c62e228d3d6df78e73f1420639b893a1f7fb
+// template-sha256: 307f81354305ea62bcb4d389bf8888b072fb4a2a4b3e5e77004ed3457dd56361
 // manifest: fpga/rtl/generated/zhao_raster_texture_v3_fit_top.manifest.json
 // Product witness: u_tile.u_texture_stage explicitly sets MIGRATION_SHADOWS=1'b0.
 // ATTR_DSP3/BILERP_DSP2 are explicit top parameters; the G8A flow must set both to 1.
@@ -117,6 +117,10 @@ wire [1:0] job_profile_bad_w = {(job_meta_w[424:378] == 47'd0),
   logic [31:0] texture_cache_misses_w, texture_palette_lookups_w;
   logic [31:0] texture_plan_accepted_w, texture_dispatch_accepted_w;
   logic [31:0] texture_combine_refused_w;
+// Entry I49: the TMU samples the island PUBLISHED into a fragment, promoted out
+// of the tile pipe 2026-09-20. This top is the tree's one end-to-end sampling
+// constructor, so it is also the natural place to read the new counter.
+logic [31:0] texture_samples_w;
 
   logic coverage_hold_valid_w;
   logic [2:0] coverage_delivered_mask_w;
@@ -250,6 +254,8 @@ wire [1:0] job_profile_bad_w = {(job_meta_w[424:378] == 47'd0),
       6'd60: signature_word_c = {16'd0, stimulus_lfsr_q[15:0]};
       6'd61: signature_word_c = stimulus_lfsr_q[47:16];
       6'd62: signature_word_c = {jobs_accepted_q[15:0], tiles_done_q[15:0]};
+      // Entry I49, 2026-09-20: the samples the island PUBLISHED into a fragment.
+      6'd63: signature_word_c = texture_samples_w;
       default: signature_word_c = stimulus_lfsr_q[63:32];
     endcase
   end
@@ -530,6 +536,7 @@ wire [1:0] job_profile_bad_w = {(job_meta_w[424:378] == 47'd0),
       .texture_plan_accepted_o(texture_plan_accepted_w),
       .texture_dispatch_accepted_o(texture_dispatch_accepted_w),
       .texture_combine_refused_o(texture_combine_refused_w),
+      .texture_samples_o(texture_samples_w),
       .coverage_hold_valid_o(coverage_hold_valid_w),
       .coverage_delivered_mask_o(coverage_delivered_mask_w),
       .start_delivered_mask_o(start_delivered_mask_w),

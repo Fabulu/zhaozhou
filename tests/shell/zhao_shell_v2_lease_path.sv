@@ -687,6 +687,8 @@ module zhao_shell_v2_lease_path
       .texture_plan_accepted_o      (),
       .texture_dispatch_accepted_o  (),
       .texture_combine_refused_o    (),
+      // Entry I49, 2026-09-20: TMU samples PUBLISHED into a fragment.
+      .texture_samples_o            (),
       // TIE: the SHELL routes this to its `render_fragment_error_o` top-level
       // port, which this harness does not have -- it composes the lease path,
       // not the shell's full output surface. It is not in either fault OR on

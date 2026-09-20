@@ -14291,6 +14291,35 @@ set_tests_properties(lint_zhao_geom_loom PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# MATERIAL.RESOLVE's REQUEST ISSUE POINT and RESPONSE JOIN (core entry I49).
+#
+# The RESOLVE is owned by `material_resolve_rtl_directed`; this driver plays
+# the resolver's role and tests the JOIN, which is a timing property: that the
+# material published at the shell's triangle door is the one belonging to the
+# triangle at the door, across a material change, in both directions (a late
+# publication and an early one), and that a repeat of the same material costs
+# no second resolve. Both of the block's structural guards are FIRED here with
+# legal stimulus at its own ports -- the disposal events are inputs, so a
+# departure with no arrival is a legal thing to present, and neither guard
+# owes a committed mutant.
+add_executable(test_material_window_directed texture/material_window_directed.cpp)
+target_link_libraries(test_material_window_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_material_window_directed
+  PREFIX Vzhao_material_window
+  TOP_MODULE zhao_material_window
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_window.sv)
+add_test(NAME material_window_directed COMMAND test_material_window_directed)
+set_tests_properties(material_window_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_material_window
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_material_window
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/texture/zhao_material_window.sv)
+set_tests_properties(lint_material_window PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # GEOM.ATTRPACK -- the three-plane front end over one shared GEOM.ATTRSETUP.
 #
 # The arithmetic is NOT re-tested here; `geom_attrsetup_directed` owns it. This
