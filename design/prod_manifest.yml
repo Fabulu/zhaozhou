@@ -653,6 +653,20 @@ excluded:
   # counterpart is differenced against, and `zhao_field_seq`'s leaf fit row
   # (4,494 ALM / 3,725 reg / 5 M10K / 3 DSP at 58.99 MHz) is the only measured
   # FIELD number this repo has.
+  # --- 2026-09-20, the W profile's stream adapter, CARRIED BY W1 -------------
+  # *** COORDINATOR: PREFER A1's PLACEMENT OVER THIS ROW WHEN YOU MERGE. ***
+  # `zhao_field_warp_adapter.sv` is A1's file. W1 carried it in at blob
+  # e078caa6 from gz/fielda1 0e6b1a93 -- byte-identical -- because
+  # tests/field/tb_warp_field_chain.sv has to BUILD AND RUN, and GEOM.WARP's
+  # evidence that it can be a real client of the real shared fabric needs the
+  # real adapter in it rather than a stand-in.
+  #
+  # A1's own branch lists this module under `top:` instead, and regenerates
+  # zhao_prod_top.sv to match. W1 CANNOT do that: zhao_prod_top.sv is a
+  # generated top and belongs to packet C1, which is serialised. Declaring the
+  # module absent here satisfies the census without touching a file W1 does not
+  # own. When gz/fielda1 merges, DELETE THIS ROW and keep A1's `top:` entry.
+  - zhao_field_warp_adapter: not-yet-adopted  the W profile's stream adapter, built by packet A1 and carried into gz/fieldw1 so the three-module Warp chain bench could build and run. NOT composed: zhao_console_core composes the shared host at .IN_LANES(13) against the W profile's FIFTEEN (decision W01), and the adapter's own elaboration guard REFUSES the narrow pair rather than silently dropping p3. Widening the three composition sites to 15 and CLIENTS from 2 to 3 is R103's P1/P2 and is the composer's single atomic act. A1's branch declares this module a production top; see the note above
   # --- 2026-09-20, GEOM.WARP's application stage, packet W1 ------------------
   # `not-yet-adopted` and NOT `superseded`, chosen deliberately: CLAUDE.md
   # records that a note saying `unused` or `not-yet-adopted` is A DEFERRAL

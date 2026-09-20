@@ -15611,3 +15611,51 @@ verilate(test_geom_warp_shift_oneliner_mutant
 add_test(NAME geom_warp_shift_oneliner_mutant COMMAND test_geom_warp_shift_oneliner_mutant)
 set_tests_properties(geom_warp_shift_oneliner_mutant PROPERTIES
   LABELS "fast;nightly;mutant" TIMEOUT 300)
+
+# ---------------------------------------------------------------------------
+# GEOM.WARP AS A REAL CLIENT OF THE REAL SHARED FIELD FABRIC.
+#
+# `zhao_geom_warp` -> `zhao_field_warp_adapter` -> `zhao_field_host_v2`, all
+# three REAL, joined in tests/field/tb_warp_field_chain.sv. Before this target,
+# each of the three had a green directed test against a hand-built stand-in for
+# its neighbour, and NOTHING in the tree instantiated any two of them together.
+# Three suites can all be right about their own half and say nothing about the
+# seam -- and the seam is where ordinal-versus-window lives.
+#
+# The differential is DOUBLE: each program is built once as a real .zprog pushed
+# through the real zfield::decode and evaluated by zref::geom_warp::apply, and
+# once as host loader words. So the comparison is software engine versus silicon
+# engine on the same program, not hardware versus a C++ restatement.
+#
+# `zhao_field_warp_adapter.sv` is A1's file, carried here at blob e078caa6 from
+# gz/fielda1 0e6b1a93 so this bench can build and run. Identical content, so a
+# merge of both branches resolves trivially.
+add_executable(test_warp_field_chain_directed field/warp_field_chain_directed.cpp)
+target_link_libraries(test_warp_field_chain_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_warp_field_chain_directed
+  PREFIX Vtb_warp_field_chain
+  TOP_MODULE tb_warp_field_chain
+  SOURCES
+    ${ZHAO_FIELD_HOST_V2_SOURCES}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv
+    ${CMAKE_SOURCE_DIR}/tests/field/tb_warp_field_chain.sv)
+add_test(NAME warp_field_chain_directed COMMAND test_warp_field_chain_directed)
+set_tests_properties(warp_field_chain_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# -Wall on the chain. UNUSEDPARAM and UNUSEDSIGNAL are waived because they are
+# INHERITED from the field closure's own modules, not produced by anything this
+# packet wrote -- the single UNUSEDSIGNAL is zhao_field_host_v2.sv:987. The
+# wrapper's own PINCONNECTEMPTY is waived INSIDE the wrapper with its reason
+# beside it, so it cannot silently cover a production file, and `lint_geom_warp`
+# still lints zhao_geom_warp.sv at full -Wall with no waiver at all.
+add_test(NAME lint_warp_field_chain
+  COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+    -Wno-UNUSEDPARAM -Wno-UNUSEDSIGNAL
+    --top-module tb_warp_field_chain
+    ${ZHAO_FIELD_HOST_V2_SOURCES}
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_warp.sv
+    ${CMAKE_SOURCE_DIR}/tests/field/tb_warp_field_chain.sv)
+set_tests_properties(lint_warp_field_chain PROPERTIES
+  LABELS "lint;fast" ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
