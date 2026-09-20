@@ -520,6 +520,52 @@ def main():
     print("WROTE %s" % args.md_out)
 
 
+def superseded_modules(path="design/console_inventory.yml"):
+    """{module: replacement} for every module the console has decided not to ship.
+
+    `design/console_inventory.yml` is the authoritative place a disposition is
+    recorded -- `disposition: superseded` with `superseded_by:`. This generator
+    had no notion of one until 2026-09-20 (owner ruling R184), so its ALM
+    ranking advertised a 7,664-ALM optimisation target whose replacement had
+    already been adopted at 976 fitted ALM.
+
+    Deliberately text-scraped rather than YAML-parsed, for the same reason the
+    tie-off audit is dumb about SystemVerilog: this file carries very long
+    multi-line `why:` strings, and a parser that chokes on one would take the
+    whole heatmap down. Missing a disposition degrades to today's behaviour --
+    the row simply is not struck -- which is the safe direction for a
+    cosmetic annotation and the WRONG direction for anything load-bearing. Do
+    not reuse this for a gate.
+    """
+    p = os.path.join(REPO, path)
+    if not os.path.exists(p):
+        return {}
+    with open(p, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    out, cur = {}, None
+    for line in text.splitlines():
+        m = re.match(r"^  (\w+):\s*$", line)
+        if m:
+            cur = m.group(1)
+            continue
+        m = re.match(r"^\s+superseded_by:\s*(\S+)", line)
+        if m and cur:
+            out[cur] = m.group(1).strip("\"'")
+    return out
+
+
+# SELF-CHECK, because a scraper that matches nothing would silently strike no
+# rows and look exactly like a tree with no superseded modules. `zhao_forge_cliff`
+# is superseded by `zhao_forge_cliff_ram` as of 2026-09-20 (owner ruling R142,
+# executed by packet FORGE4); if this stops resolving, the pattern has rotted.
+def _superseded_self_test():
+    s = superseded_modules()
+    assert s, ("superseded_modules() found NOTHING. Either console_inventory.yml "
+               "moved or the pattern rotted -- and a silent empty result means "
+               "every superseded module is advertised as a live ALM target.")
+    return s
+
+
 def fmt_ratio(dr):
     """Demand ratios in this design span five orders of magnitude.
 
@@ -639,6 +685,24 @@ def write_heatmap(path, man, calib, wl):
     L.append("estimate, and it is an estimate -- but a block estimating over twice the whole")
     L.append("device is not a question of estimator error.")
     L.append("")
+    # WHICH OF THESE DOES THE CONSOLE ACTUALLY SHIP? Added 2026-09-20, owner
+    # ruling R184, after packet FORGE4 pointed out that this table's #1 ALM row
+    # was `zhao_forge_cliff` at 7,664 ALM / 18.3% -- a module the console had
+    # just decided NOT to ship, having adopted `zhao_forge_cliff_ram` at 976
+    # fitted ALM. `zhao_terrain_bake` and `zhao_shell_top` were in it the same
+    # way, both superseded the day before.
+    #
+    # This generator had no notion of a disposition, so the budget's headline
+    # optimisation target was a module already dealt with. It is wrong in the
+    # direction nobody questions -- it OVERSTATES the remaining problem, which
+    # reads as honest bad news, and it sends the next reader at a block whose
+    # replacement is already chosen.
+    #
+    # The rows are KEPT rather than dropped, because the measurement is real
+    # and a silently shortened table is its own defect. They are struck through
+    # and annotated instead, so the ranking still shows what was measured while
+    # nobody can read a superseded row as a live target.
+    sup = superseded_modules()
     L.append("| block | est. ALM | % of device | DSP | expected storage bits | inferred |")
     L.append("| --- | ---: | ---: | ---: | ---: | ---: |")
     for r in sorted(R, key=lambda x: -(x["resources"].get("mapEstimatedAlms") or 0))[:14]:
@@ -647,13 +711,32 @@ def write_heatmap(path, man, calib, wl):
         if not a:
             continue
         pct = 100.0 * a / 41910
-        L.append("| `%s` | %s | %s | %s | %s | %s |" % (
-            r["module"], "{:,}".format(a),
+        mod = r["module"]
+        name = ("~~`%s`~~ **NOT SHIPPED** (superseded by `%s`)" % (mod, sup[mod])
+                if mod in sup else "`%s`" % mod)
+        L.append("| %s | %s | %s | %s | %s | %s |" % (
+            name, "{:,}".format(a),
             ("**%.0f%%**" % pct) if pct > 25 else ("%.1f%%" % pct),
             res.get("mapDspBlocks", "-"),
             "{:,}".format(ram["expectedTotalBits"]) if ram["expectedTotalBits"] else "-",
             "{:,}".format(ram["mapBlockMemoryBits"]) if ram["mapBlockMemoryBits"] else "**0**"))
     L.append("")
+    shown = [r["module"] for r in
+             sorted(R, key=lambda x: -(x["resources"].get("mapEstimatedAlms") or 0))[:14]
+             if r["resources"].get("mapEstimatedAlms")]
+    struck = [m for m in shown if m in sup]
+    if struck:
+        L.append("**%d of these rows are modules the console does not ship** (%s). They "
+                 "are struck through above and kept, not removed: the measurement is "
+                 "real and a table that silently shortens itself is its own defect. "
+                 "But do not read a struck row as an optimisation target -- its "
+                 "replacement is already chosen, and in the largest case "
+                 "(`zhao_forge_cliff`) the replacement fits at **976 ALM against "
+                 "6,674**, which is the saving this table would otherwise still be "
+                 "advertising as available. Dispositions come from "
+                 "`design/console_inventory.yml`."
+                 % (len(struck), ", ".join("`%s`" % m for m in struck)))
+        L.append("")
 
     # ---- map-vs-fit agreement -------------------------------------------
     L.append("## Is the map lane trustworthy? Measured, not assumed")

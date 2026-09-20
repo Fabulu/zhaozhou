@@ -5,7 +5,7 @@
 > Regenerate rather than edit; a hand-corrected number here is indistinguishable
 > from a measured one, which is the failure this whole audit exists to stop.
 
-HEAD `51deecc3`. Frame budget **1,666,666 clocks** (compute), *not* the 251,520 raster period.
+HEAD `8b2f582f`. Frame budget **1,666,666 clocks** (compute), *not* the 251,520 raster period.
 
 | coverage | |
 | --- | ---: |
@@ -156,20 +156,22 @@ device is not a question of estimator error.
 
 | block | est. ALM | % of device | DSP | expected storage bits | inferred |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `zhao_forge_cliff` | 7,664 | 18.3% | 2 | 119,808 | 119,808 |
-| `zhao_terrain_project` | 5,503 | 13.1% | 33 | - | 3,822 |
-| `zhao_geom_bin_pipe` | 5,299 | 12.6% | 21 | 75,712 | 75,712 |
+| ~~`zhao_forge_cliff`~~ **NOT SHIPPED** (superseded by `zhao_forge_cliff_ram`) | 7,664 | 18.3% | 2 | 119,808 | 119,808 |
+| ~~`zhao_terrain_project`~~ **NOT SHIPPED** (superseded by `zhao_proj_subsystem`) | 5,503 | 13.1% | 33 | - | 3,822 |
+| ~~`zhao_geom_bin_pipe`~~ **NOT SHIPPED** (superseded by `zhao_geom_bin_pipe_v2`) | 5,299 | 12.6% | 21 | 75,712 | 75,712 |
 | `zhao_field_seq` | 5,142 | 12.3% | 3 | 22,865 | 8,192 |
-| `zhao_geom_project` | 5,028 | 12.0% | 33 | - | 2,870 |
+| ~~`zhao_geom_project`~~ **NOT SHIPPED** (superseded by `zhao_proj_subsystem`) | 5,028 | 12.0% | 33 | - | 2,870 |
 | `zhao_project_core` | 4,996 | 11.9% | 33 | - | 2,870 |
 | `zhao_field_exec_shared` | 4,793 | 11.4% | 3 | 20,817 | **0** |
-| `zhao_raster_tile_pipe` | 4,465 | 10.7% | 9 | 32,768 | 32,768 |
+| ~~`zhao_raster_tile_pipe`~~ **NOT SHIPPED** (superseded by `zhao_raster_tile_pipe_v2`) | 4,465 | 10.7% | 9 | 32,768 | 32,768 |
 | `zhao_debug_counters` | 3,795 | 9.1% | 0 | 2,560 | **0** |
 | `zhao_geom_pose_decode` | 2,520 | 6.0% | 18 | 12,288 | 12,288 |
 | `zhao_geom_skin` | 2,494 | 6.0% | 9 | - | **0** |
-| `zhao_terrain_bake` | 2,324 | 5.5% | 17 | 1,089 | **0** |
+| ~~`zhao_terrain_bake`~~ **NOT SHIPPED** (superseded by `zhao_terrain_bake_v2`) | 2,324 | 5.5% | 17 | 1,089 | **0** |
 | `zhao_raster_edgewalk` | 2,308 | 5.5% | 2 | - | **0** |
 | `zhao_field_progcache` | 2,237 | 5.3% | 0 | - | **0** |
+
+**6 of these rows are modules the console does not ship** (`zhao_forge_cliff`, `zhao_terrain_project`, `zhao_geom_bin_pipe`, `zhao_geom_project`, `zhao_raster_tile_pipe`, `zhao_terrain_bake`). They are struck through above and kept, not removed: the measurement is real and a table that silently shortens itself is its own defect. But do not read a struck row as an optimisation target -- its replacement is already chosen, and in the largest case (`zhao_forge_cliff`) the replacement fits at **976 ALM against 6,674**, which is the saving this table would otherwise still be advertising as available. Dispositions come from `design/console_inventory.yml`.
 
 ## Is the map lane trustworthy? Measured, not assumed
 
