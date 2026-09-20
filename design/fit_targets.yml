@@ -1470,12 +1470,19 @@ targets:
   # 100 MHz is the operating requirement of the machine, not a guess.
   - top: zhao_terrain_pipe_rpp3_matw18_fit_top
     sources:
-      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
+      # ORDER IS LOAD-BEARING HERE and nowhere else in this file:
+      # tests/tools/test_terrain_pipe_rpp3_matw18_fit_top.py's
+      # `test_four_statements_of_the_source_closure_agree` compares this list
+      # ELEMENT BY ELEMENT against the generator's SOURCE_CLOSURE, the manifest
+      # and ZHAO_G8B_TERRAIN_SOURCES. The law package therefore sits where the
+      # generator puts it -- before its consumer, after the other leaves --
+      # and not at the head of the list the way the other targets carry it.
       - fpga/rtl/common/zhao_project_core.sv
       - fpga/rtl/common/zhao_project_service.sv
       - fpga/rtl/common/zhao_proj_subsystem.sv
       - fpga/rtl/geometry/zhao_vertex_arena.sv
       - fpga/rtl/terrain/zhao_terrain_wcache.sv
+      - fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
       - fpga/rtl/terrain/zhao_terrain_tess.sv
       - fpga/rtl/terrain/zhao_terrain_group_seq.sv
       - fpga/rtl/terrain/zhao_terrain_pipe.sv

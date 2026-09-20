@@ -269,7 +269,15 @@ class G8BFitTopTests(unittest.TestCase):
                          "design/fit_targets.yml differs from the generator's closure")
         self.assertEqual(cmake_paths, EXPECTED_SOURCES,
                          "ZHAO_G8B_TERRAIN_SOURCES differs from the generator's closure")
-        self.assertEqual(len(EXPECTED_SOURCES), 9)
+        # 9 until 2026-09-20; 10 since packet TERRLAW put the ratified
+        # TERRAIN.PATCH arithmetic in zhao_terrain_patch_law_pkg and had
+        # zhao_terrain_tess import it (owner ruling R176). This literal is the
+        # FIFTH statement of the closure size -- the other four are the
+        # generator's SOURCE_CLOSURE, the manifest, design/fit_targets.yml and
+        # ZHAO_G8B_TERRAIN_SOURCES -- and the test's own name says four, which
+        # is how it came to be the last one found. It is kept rather than
+        # derived because a length that recomputes itself asserts nothing.
+        self.assertEqual(len(EXPECTED_SOURCES), 10)
 
     def test_source_closure_parity_detector_fires(self) -> None:
         text = CMAKELISTS.read_text(encoding="utf-8").replace(

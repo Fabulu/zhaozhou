@@ -98,6 +98,13 @@ fpga/rtl/terrain/zhao_terrain_wcache.sv text eol=lf
 fpga/rtl/terrain/zhao_terrain_tess.sv text eol=lf
 fpga/rtl/terrain/zhao_terrain_group_seq.sv text eol=lf
 fpga/rtl/terrain/zhao_terrain_pipe.sv text eol=lf
+# The ninth, added 2026-09-20 (packet TERRLAW, owner ruling R176): the ratified
+# TERRAIN.PATCH arithmetic became a package that `zhao_terrain_tess` imports, so
+# it is now a G8B closure member and inherits the rule above. It was NOT pinned
+# before, and the symptom was exactly the one this block's comment predicts --
+# `core.autocrlf` (true in the system config) checked it out CRLF while every
+# other closure member was LF, and the generator refused to run at all.
+fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv text eol=lf
 fpga/rtl/common/zhao_skid2.sv text eol=lf
 fpga/rtl/raster/zhao_raster_texture_stage_v3.sv text eol=lf
 fpga/rtl/raster/zhao_raster_fill.sv text eol=lf

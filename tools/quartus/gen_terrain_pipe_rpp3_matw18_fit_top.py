@@ -34,6 +34,7 @@ SOURCE_CLOSURE = (
     "fpga/rtl/common/zhao_proj_subsystem.sv",
     "fpga/rtl/geometry/zhao_vertex_arena.sv",
     "fpga/rtl/terrain/zhao_terrain_wcache.sv",
+    "fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv",
     "fpga/rtl/terrain/zhao_terrain_tess.sv",
     "fpga/rtl/terrain/zhao_terrain_group_seq.sv",
     "fpga/rtl/terrain/zhao_terrain_pipe.sv",

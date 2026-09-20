@@ -12861,8 +12861,8 @@ set(ZHAO_G8B_TERRAIN_SOURCES
   ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_pipe.sv
   ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_terrain_pipe_rpp3_matw18_fit_top.sv)
 list(LENGTH ZHAO_G8B_TERRAIN_SOURCES ZHAO_G8B_SOURCE_COUNT)
-if(NOT ZHAO_G8B_SOURCE_COUNT EQUAL 9)
-  message(FATAL_ERROR "G8B terrain fit closure must contain exactly 9 sources")
+if(NOT ZHAO_G8B_SOURCE_COUNT EQUAL 10)
+  message(FATAL_ERROR "G8B terrain fit closure must contain exactly 10 sources")
 endif()
 foreach(g8b_source IN LISTS ZHAO_G8B_TERRAIN_SOURCES)
   if(NOT EXISTS "${g8b_source}")
