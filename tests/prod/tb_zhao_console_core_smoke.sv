@@ -5795,6 +5795,15 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: MUTANT PASS -- terr_pl_slot_overflow_o fired %0d time(s). The detector works; production's zero is a measurement.",
              terr_pl_slot_overflow_o);
     $finish;
+    // `$finish` runs this block to the end of its time step, and the `else`
+    // arm below ends at the TERRAIN verdict's `endif` -- every production
+    // check after that still executes against the mutant. This arm survived
+    // that only because production's geometry counters happen to agree on
+    // its design; the R197 arm does not (nothing enters GEOM.CLIP by design)
+    // and printed nine %Fatal lines under a PASSING exit code on 2026-09-20.
+    // `disable run` leaves the named block NOW, so a mutant verdict is the
+    // last thing this bench says.
+    disable run;
 `elsif ZHAO_MUT_UNTEX_DECL
     // R197's door, INVERTED polarity. With the mesh producer declaring
     // UNTEXTURED against a material that samples (this smoke's record 1 --
@@ -5824,6 +5833,7 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: MUTANT PASS -- geom_untex_refused_o fired %0d time(s), nothing entered GEOM.CLIP, the window's accounting held. The detector works; production's zero is a measurement.",
              geom_untex_refused_o);
     $finish;
+    disable run;   // see the slot-overflow arm above: $finish alone is not a stop
 `else
 
     // ---- 1. THE COMMAND WAS READ OVER THE BRIDGE -------------------------
