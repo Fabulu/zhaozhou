@@ -198,6 +198,69 @@ is the worse failure and the one nobody can debug from a frame capture.
 stops. It is not skipped and it does not return zero, because a sequencer that
 quietly ignores an opcode produces a plausible field and a wrong world.
 
+### AN ABSENT OUTPUT IS A REFUSAL, NOT A ZERO (owner ruling R101, 2026-09-20)
+
+The paragraph above is about an op the machine will not run. This is the same
+law one level up, about a LANE the program did not produce, and it was broken
+in `zhao_field_host` — the shell every profile shares — from the day the front
+was written until 2026-09-20.
+
+`zhao_field_host` captures a run's result by watching the register-file write
+port over a CONTIGUOUS window `[out_base, out_base + OUT_LANES)`, clearing the
+window to zero at grant. Its completion test was `cur_out_seen == '0`: **did ANY
+lane get written**, not did all the required ones. A point that wrote five of
+its six declared lanes therefore answered `8'h00` SUCCESS with the sixth lane
+carrying the zero from the clear — a plausible field and a wrong world, exactly
+as above, and `GEOM.WARP`'s law W10 in as many words: *"Do not make an absent
+output look like a zero result."*
+
+**The defect was upstream of the guard.** "Required" was not a quantity the
+loader interface carried, so `cur_out_seen == '0` was the best test available
+from the information present, and the block's own comment states the hazard
+correctly before guarding only the all-zero case. Blaming the guard sends the
+next person to the wrong line.
+
+**The law now.** The program header word carries a **required-output mask** in
+bits `[32 +: OUT_LANES]` — 64 bits there are unread by the header decode, which
+touches only `[8 +: REGW]` and `[22:16]`. It is `spec/form/field-ir.md` 7.1's
+per-profile output record (earth 4, warp 6, flow 7, formation 6, stamp 3),
+transported; it is not a new law. Completion is then:
+
+| `cur_out_seen` | verdict | status | counter |
+|---|---|---|---|
+| `== 0` | wrote nothing | `ST_NO_RESULT` 0xF1 | `no_result_o` |
+| `!= 0`, `(seen & mask) != mask`, `mask != 0` | **wrote some, not all** | `ST_PARTIAL` 0xF3 | `out_incomplete_o` |
+| otherwise | complete | `8'h00` | `runs_o` |
+
+`mask == 0` means "the program declared nothing" and keeps the previous test
+**exactly**, so the repair is additive and nothing written against the old
+contract changes meaning.
+
+**HOLES ARE THE NORMAL CASE, NOT AN EDGE ONE, AND THAT IS THE MEASUREMENT THAT
+JUSTIFIES THE MASK.** The capture window is contiguous; the IR does not require
+a program's output registers to be. `tools/field/zprog_output_coverage.py` is
+the committed probe, and on the three real Earth programs this repo ships:
+
+| program | output regs | span | mask | holes at `OUT_LANES=7` |
+|---|---|---|---|---|
+| `crater_ring` | R13,R14,R15,R17 | 5 | `0x17` | lanes 3, 5, 6 |
+| `impact_wave` | R12,R14,R15,R16 | 5 | `0x1D` | lanes 1, 5, 6 |
+| `wave_pool`   | R12,R13,R14,R16 | 5 | `0x17` | lanes 3, 5, 6 |
+
+Every one writes all four outputs its profile declares, and every one leaves
+three lanes of the console's seven-lane window unwritten. Under the old test all
+three answer SUCCESS with three cleared zeroes in the result. (They also need a
+five-lane span, so none of them fits the module's default `OUT_LANES=4` at all —
+one declared output falls outside the capture window entirely.)
+
+**What this does NOT close.** The capture is still ONE CONTIGUOUS WINDOW. The
+sparse output map that `GEOM.WARP` prerequisite P3 asks for is not built; the
+mask lets the host *refuse* an undeclared-but-required lane, which removes the
+silent zero, and does not let it capture a lane outside the span.
+
+Fired by legal stimulus, not argued: `tests/field/field_host_directed.cpp`
+cases 1b and 1d, the latter running one program twice with only the mask moved.
+
 ## Counters and traces
 
 `instr_retired_o`, one pulse per executed instruction, feeding
