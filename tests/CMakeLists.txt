@@ -14953,6 +14953,60 @@ verilate(test_field_host_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_sin_rom.sv)
 add_test(NAME field_host_directed COMMAND test_field_host_directed)
 set_tests_properties(field_host_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+# --------------------------------------------------------------------------
+# THE ZFH2 HOST-IMAGE ENVELOPE (packet S1). spec/form/field-host-image.md.
+#
+# Three lanes, because the schema owes three different kinds of evidence and
+# a single green tick would hide two of them.
+#
+#   field_host_schema_roundtrip        every record packed and read back
+#                                      through the GENERATED offsets, plus the
+#                                      ordinal-versus-window translation on
+#                                      crater_ring's measured register set.
+#   field_host_schema_generated_freshness
+#                                      the committed .hpp and .sv still match
+#                                      the schema, AND the C++/SV offset
+#                                      parity, the bidirectional FH21 opcode
+#                                      parity, and the profile-arity checks
+#                                      against field-ir.md 7.1.
+#   field_host_mask_type_separation    the COMPILE-FAIL control: assigning a
+#                                      RequiredMask to a WindowMask must not
+#                                      compile, and the legal use must. Both
+#                                      polarities are required -- a
+#                                      compile-fail case that has never been
+#                                      seen to compile might be failing for a
+#                                      typo.
+#
+# The roundtrip target needs no RTL and no zref: it is a statement about the
+# generated header alone, which is exactly what makes it fast enough to run on
+# every change to the schema.
+add_executable(test_field_host_schema_roundtrip
+               differential/field_host_schema_roundtrip.cpp)
+target_include_directories(test_field_host_schema_roundtrip PRIVATE
+                           ${CMAKE_SOURCE_DIR}/reference/include)
+add_test(NAME field_host_schema_roundtrip
+         COMMAND test_field_host_schema_roundtrip)
+set_tests_properties(field_host_schema_roundtrip PROPERTIES
+                     LABELS "fast;nightly")
+
+add_test(NAME field_host_schema_generated_freshness
+         COMMAND "${Python3_EXECUTABLE}"
+                 ${CMAKE_SOURCE_DIR}/tools/field/gen_field_host_schema.py
+                 --check)
+set_tests_properties(field_host_schema_generated_freshness PROPERTIES
+                     LABELS "lint;fast")
+
+# CXX is passed explicitly rather than trusted to the PATH: this lane's whole
+# job is to read a COMPILER's exit code, so it must be the same compiler the
+# rest of the tree builds with, not whichever g++ a shell happens to resolve.
+add_test(NAME field_host_mask_type_separation
+         COMMAND "${Python3_EXECUTABLE}"
+                 ${CMAKE_SOURCE_DIR}/tools/field/gen_field_host_schema.py
+                 --compile-fail-control)
+set_tests_properties(field_host_mask_type_separation PROPERTIES
+                     ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}"
+                     LABELS "fast;nightly;mutant" TIMEOUT 300)
+# --------------------------------------------------------------------------
 
 add_test(NAME lint_zhao_field_host
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
