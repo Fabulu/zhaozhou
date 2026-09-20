@@ -101,9 +101,17 @@ is not a compromise, it is a reading of what this block actually produces:
   hull.** The per-vertex port carries a per-primitive quantity.
 * So what FORGE.SHADOW needs is a **flat per-triangle alpha**, and the console
   already has carriage for exactly that: `tri_continuation_tail_i`'s
-  `vertex_alpha` field, feeding the composed `zhao_raster_blend` (six instances
-  in `zhao_raster_fragment.sv:490-510`). Giving that open boundary a producer
+  `vertex_alpha` field, feeding the composed blend ALU (six instances in
+  `zhao_raster_fragment.sv:490-510`). Giving that open boundary a producer
   is the whole job.
+  **NAME CORRECTED 2026-09-20 (forgeshadow packet), because the old wording
+  sends a reader to a grep that returns nothing.** The six instances are
+  `zhao_raster_blend_prod` (`:490`, `:493`, `:496`) and `zhao_raster_blend_fin`
+  (`:502`, `:505`, `:508`). The line range and the count were exactly right;
+  the MODULE NAME was not. **`zhao_raster_blend` itself is instantiated
+  nowhere in `fpga/`** — it is the unsplit reference wrapper, kept so the
+  formal proof targets shipping logic (`zhao_raster_fragment.sv:358`). Only
+  the `_prod` half carries the alpha port, and it is called `a_i`.
 * **R48 therefore stands, unamended and true.** No ratified vertex format
   carries alpha and none is being invented here. The alternative — a fourth
   `zhao_geom_attrpack` plane AND a fourth `zhao_raster_tile_pipe_v2` lane, for
@@ -120,6 +128,153 @@ not possible.
 Recorded in both places by ruling: here, and against R48 in
 `reports/OWNER-RULINGS-20260919-EVENING.md`. *A contract corrected in one place
 and not the other is how this pair got here.*
+
+## R89 IS DECIDED, THE CONSUMER IS REAL, AND THE VALUE IT WANTS HAS NO PRODUCER
+
+Added 2026-09-20 by the **forgeshadow** packet, which was scheduled by ruling
+R132 on the premise that R89 was FORGE.SHADOW's last blocker and therefore
+*"the cheapest remaining unlock in the whole run"*. **That premise does not
+hold, and this section is the evidence, so the next lane inherits a verified
+list instead of a spent one.** R130's own procedural fix is what produced it:
+*a lane's closing recommendation is a claim about the tree as that lane saw
+it* — so it was re-asked rather than implemented.
+
+### The half of R89 that is TRUE, and is now traced end to end
+
+**The consumer is real, composed, and complete.** The carriage from the tail's
+`vertex_alpha` to the blend's alpha port is **ten hops with no constant, no
+tie-off and no dangling bit anywhere inside the datapath**:
+
+| # | file:line | what happens |
+|---|---|---|
+| 1 | `zhao_console_core.sv:5655` | `input logic [47:0] tri_continuation_tail_i` — **the open boundary** |
+| 2 | `zhao_shell_top_v2.sv:188`, `:1143` | pass-through |
+| 3 | `zhao_geom_bin_pipe_v2.sv:64`, `:236` | packed into the frozen 1157-bit metadata ABI at bits `[345:298]` |
+| 4 | `zhao_geom_binner_v2` | stored and drained opaquely |
+| 5 | `zhao_raster_tile_pipe_v2.sv:266` | `incoming_continuation_tail_w = job_meta_i[345:298]` |
+| 6 | `zhao_raster_tile_pipe_v2.sv:657-658` | cast to `zhao_raster_continuation_tail_v2_t` |
+| 7 | `zhao_raster_texture_stage_v3.sv:286` | `frag_vert_a_o = …post_earlyz.vertex_alpha` |
+| 8 | `zhao_raster_tile_pipe_v2.sv:868`, `:957` | into `zhao_raster_fragment.frag_vert_a_i` |
+| 9 | `zhao_raster_fragment.sv:737, 722, 461, 701` | `s0_va_r → s1_src_a_r → s2_src_a_r` |
+| 10 | `zhao_raster_fragment.sv:490/493/496` | `zhao_raster_blend_prod.a_i` — **the consumer** |
+
+The field law is `zhao_render_texture_pkg.sv:44-54`: `vertex_alpha` is bits
+**[23:16]** of the 48, asserted by the package's own one-hot span self-test at
+`:784-786`. So R89's sentence *"the console already has carriage for exactly
+that"* is **correct and now documented rather than asserted**.
+
+### THE CORRECTION THAT MATTERS: `ALPHA_C` IS NOT ON THIS PATH AND NEVER WAS
+
+R48 and R89 are both written as though `ALPHA_C` were the seam that a shadow
+alpha would replace. **It is not the same seam.** Searched every occurrence in
+the tree:
+
+* `ALPHA_C` is declared **once**, `zhao_geom_vattr.sv:193-194`, as a **32-bit
+  fx16** parameter `32'h0001_0000`, and used **once**, `:537`, writing
+  `rep_data_o[191:160]` — **per-vertex attribute slot 3**.
+* Slot 3 **has no interpolator and no lane**: `zhao_geom_attrpack` emits
+  exactly three planes and `zhao_raster_tile_pipe_v2.sv:601` has exactly three
+  attribute lanes. `ALPHA_C` is written into a slot nothing reads.
+* The blend's `a_i` is an **8-bit unit8** off the continuation tail, by the
+  ten-hop chain above. The two never meet.
+* A **third** opaque constant, `MAT_BASE_ALPHA_C = 8'hFF`
+  (`zhao_console_core.sv:15205`), is the *texture* base alpha in the flat
+  request, and is also not `a_i`.
+
+**Three unrelated opaque constants, and none of them drives the blend.** This
+does not disturb R89's ruling — flat-alpha is still the right route — but it
+does mean the sentence *"`ALPHA_C` remains its named seam"* describes a
+different feature (interpolated per-vertex alpha) than the one being produced
+here, and a reader who replaces `ALPHA_C` will have changed nothing.
+
+### THE VALUE R89 WANTS TO TRAVERSE HAS NO PRODUCER ANYWHERE
+
+R89 names the producer precisely: *a caster's `strength_q`*. **`strength_q` is
+latched from `cast_strength_i`, and `cast_strength_i` has no producer in the
+tree, no source in the ladder, and no field in the ABI.**
+
+* **`zhao_geom_lodstate` does not emit it.** Its caster output
+  (`zhao_geom_lodstate.sv:188-195`) is exactly
+  `{c_valid, c_instance_id, c_x, c_z, c_radius, c_rung, c_view}` — **no
+  strength**. The header at `:180-187` is explicit that the block "emits the
+  measured quantity and invents no factor".
+* **Nothing else produces one.** Searched `strength` across all of `fpga/rtl`:
+  every hit is SURFACE.STAMP's u16 (`zhao_cmd_exec.sv:381`), the FIELD stamp
+  adapter, `DEBUG_RUMBLE`, `SET_ENVIRONMENT`'s `tint_strength`, or
+  `zhao_shell_top_v2.sv:1178`'s `pg_strength_i(8'd0)` — a particle-glue port
+  already tied to zero. **None is a shadow strength.**
+* **No ratified command carries one.** Searched `spec/` and `design/`: the only
+  hits for a shadow strength are this contract's own prose, `:56` and `:99`.
+
+So FORGE.SHADOW's `cast_strength_i` is today **unproduceable**, and composing
+the block would make it a **tie-off** — the one thing the campaign forbids. This
+is the same shape as `ALPHA_C`'s own origin: a quantity a contract assumes and
+no format carries.
+
+### AND R89 WAS NEVER THE ONLY BLOCKER — FOUR REMAIN, ALL VERIFIED FIRST-HAND
+
+R132 scheduled this work believing R89 was the last one. Walking every port
+group of `zhao_forge_shadow` (`:106-164`):
+
+| port group | blocker | status |
+|---|---|---|
+| `tap_*` (`:131-137`) | **NONE — this one is genuinely clear.** `zhao_terrain_heighttap` mirrors these ports signal for signal (its `:21`, `:168`) and is **already composed** at `zhao_console_core.sv:9233`. | ✅ |
+| `cast_strength_i` (`:118`) | **no producer anywhere** (above). Owner decision. | ❌ |
+| `cast_{x,z,radius,rung,src_id}` (`:115-120`) | `zhao_geom_lodstate`'s `c_*`, and **LODSTATE is not composed**; it needs `zhao_geom_ladderbank`, which needs an ENGINE1 share and a page-publication path. | ❌ |
+| `rung_floor_i` (`:125`) | its only producer is the **uncomposed `zhao_measure_governor`** (R118, itself blocked at both ends). Named exactly, so the subsystem packet does not rediscover it: **`deg0_o` / `deg1_o`** (`zhao_measure_governor.sv:314-315`), 2-bit per-camera degradation — the same width and the same meaning as `rung_floor_i`. The governor is instantiated **only** at `zhao_prod_top.sv:2877`, the LFSR census top. | ❌ |
+| `vtx_*` (`:142-154`) | **no consumer.** Route A (batch, through `GEOM.GROUP_SEQ`'s `v_*`) **DEADLOCKS** on `zhao_geom_vattr.sv:490`'s `done_o`, a six-term AND requiring a lit rgb and a u/v that a shadow hull has neither of. Route B (private arena) is unbuilt and needs the client-A widening, an arbiter at GEOM.CLIP's door, and the absolute→rebased frame conversion. | ❌ |
+
+### The chain is THREE blocks long and none of them is composed
+
+Named end to end, because the shape is what makes it a subsystem rather than a
+wiring job — and every link was read first-hand:
+
+```
+zhao_measure_governor          zhao_geom_lodstate            zhao_forge_shadow
+  cam0/1_thresh_q8_o  ---->  thresh0_i / thresh1_i
+  deg0_o / deg1_o  ------------------------------------>  rung_floor_i
+                               c_{x,z,radius,rung}  ---->  cast_{x,z,radius,rung}
+                                                           cast_strength_i  <- NOTHING
+```
+
+`zhao_measure_governor` is instantiated only at `zhao_prod_top.sv:2877`;
+`zhao_geom_lodstate` is instantiated **nowhere** in `fpga/rtl/prod/`;
+`zhao_geom_ladderbank`, which LODSTATE needs for `a_*`, is instantiated nowhere
+at all. All three verified by searching for an instantiation (`^\s*<module>\s+\w+`),
+not for a mention — the distinction that made `zhao_forge_shadow` look composed
+in `zhao_console_core.sv`, where all four hits are comments.
+
+**A NEAR MISS WORTH NAMING, because the name matches and the quantity does
+not.** There *is* a composed governor floor in the console:
+`zhao_part_project.sv:332`'s `lad_gov_floor_o`, wired at
+`zhao_console_core.sv:12991` to `:13046`'s `p_gov_floor_i`. **It is not a
+producer for `rung_floor_i` and must not be wired to one.** It is **3 bits**,
+not 2; it is read from the **particle's own attribute record**
+(`zhao_part_project.sv:681`, `attr_rd_c[50:48]`), so it is a per-particle stored
+floor rather than a camera measurement; and it serves **PART.LADDER's eight-rung
+ladder**, a different ladder from the creature one this block's `rung_floor_i`
+belongs to. Wiring it would truncate a bit and cross two ladders, and every
+gate would stay green.
+
+**LODSTATE and FORGE.SHADOW are MUTUALLY blocked** — `c_*` has no consumer
+because FORGE.SHADOW is uncomposed, and `cast_*` has no producer because
+LODSTATE is uncomposed. **They can only be composed together, and even then the
+other three blockers remain.** So FORGE.SHADOW is a **subsystem packet**, not a
+wiring job, and it should not be scheduled as one again.
+
+### What was deliberately NOT done, and why
+
+Closing `tri_continuation_tail_i` the way `tri_flat_request_i` was closed
+(`zhao_console_core.sv:15228`) was considered and **refused**. That closure is
+legitimate because a *majority* of the flat request's fields come from a real
+composed producer (`mw_pub_*`, MATERIAL.RESOLVE) and only the unproduceable
+ones are named constants with rulings. **The tail has no such producer for any
+of its four fields** — `zhao_console_core.sv:15198-15202` says so in terms, that
+the vertex colour "is left at its constants deliberately rather than invented".
+Building the tail from four constants would be **moving a tie-off from a port
+into the core**, which closes a gap on the register while changing nothing in
+the silicon. That is the campaign's first prohibition and it is also the
+flattering move, which is why it is written down here rather than just avoided.
 
 ## Latency (fixed or variable)
 

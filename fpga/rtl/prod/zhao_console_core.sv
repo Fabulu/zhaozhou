@@ -3642,7 +3642,11 @@
 //   WAS WRITTEN:
 //
 //     1. COMPOSING THE HULL AS A GEOMETRY BATCH WEDGES THE WHOLE FRONT END.
-//        `zhao_geom_vattr`'s `done_o` (its :490) is a six-term AND including
+//        `zhao_geom_vattr`'s `done_o` (its :553, re-verified 2026-09-20 by the
+//        forgeshadow packet; the old citation :490 is now a colour-writer
+//        localparam. THE CAUSE SURVIVES AND IS STRONGER -- that file's own
+//        header :126-153 now names "R88's shadow hull is the example that
+//        found it") is a six-term AND including
 //        `lit_ord_q == uv_ord_q` -- every decoded vertex must receive a lit
 //        r/g/b from GEOM.LIGHT and every landing a u/v from GEOM.VDECODE. A
 //        shadow hull has NEITHER: it is not skinned, carries no texture
@@ -3674,14 +3678,31 @@
 //        FORGE.SHADOW's whole output is "ordinary TRANSPARENT geometry
 //        through the main renderer" and its `vtx_alpha_o` is a per-vertex
 //        unit8. SEARCHED, and the blend ALU is NOT the missing piece -- it is
-//        real and composed (`zhao_raster_blend`, six instances in
+//        real and composed (six instances in
 //        `zhao_raster_fragment.sv:490-510`, live through
-//        `zhao_raster_tile_pipe_v2`). What is missing is every path that
-//        would reach it:
-//          * `zhao_geom_vattr.sv:474` injects the packet's alpha slot as the
-//            named constant `ALPHA_C` = fx16 1.0 (OPAQUE) and its own header
+//        `zhao_raster_tile_pipe_v2`). THREE CITATIONS IN THIS PARAGRAPH WERE
+//        CORRECTED 2026-09-20 by the forgeshadow packet; each was true when
+//        written and each now sends a reader to the wrong place:
+//          * the six instances are `zhao_raster_blend_prod` (:490, :493, :496)
+//            and `zhao_raster_blend_fin` (:502, :505, :508). The line range and
+//            the count are right; the MODULE NAME is not. `zhao_raster_blend`
+//            itself is instantiated NOWHERE in `fpga/` -- it is the unsplit
+//            reference wrapper kept so the formal proof targets shipping logic
+//            (`zhao_raster_fragment.sv:358`). Only the `_prod` half has the
+//            alpha port and it is called `a_i`.
+//        What is missing is every path that would reach it:
+//          * `zhao_geom_vattr.sv:194` DECLARES and `:537` USES the packet's
+//            alpha slot as the named constant `ALPHA_C` = fx16 1.0 (OPAQUE)
+//            -- the old citation `:474` is a BLANK LINE -- and its own header
 //            :69-74 says why: "ALPHA HAS NO PRODUCER ... R11's 'rgb/alpha
-//            from zhao_light_stream' names a quantity that does not exist";
+//            from zhao_light_stream' names a quantity that does not exist".
+//            AND `ALPHA_C` IS NOT ON THE BLEND'S PATH AT ALL: it is a 32-bit
+//            fx16 written into per-vertex attribute SLOT 3, which has no
+//            interpolator and no lane, while the blend's `a_i` is an 8-bit
+//            unit8 off the continuation tail. Replacing `ALPHA_C` would change
+//            nothing about a shadow's opacity. See FORGE.SHADOW.md's section
+//            "R89 IS DECIDED, THE CONSUMER IS REAL, AND THE VALUE IT WANTS HAS
+//            NO PRODUCER" for the full ten-hop trace and the other blockers;
 //          * `zhao_geom_attrpack` emits exactly THREE planes and indexes only
 //            SLOT_INVW / SLOT_U_OVER_W / SLOT_V_OVER_W (its :225-227, :267-275),
 //            and the rasteriser has exactly three attribute lanes
