@@ -1277,10 +1277,72 @@
 //           nothing and are counted). What is owed AFTER the ruling: the RTL
 //           adapter, the HUD plane store, and composing zhao_post_gather.
 //           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says.
-// I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Nothing in
-//      the console produces an error-magnitude stream; the block measures a
-//      difference against a reference and the console has no reference. Its
+// I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Its
 //      INTERVAL is real (I5 of the connected list), its EVENTS are not.
+//
+//      THE REASON CHANGED 2026-09-20 (gz/hostdbg), because the one that stood
+//      here was not true of this block. It read: "Nothing in the console
+//      produces an error-magnitude stream; the block measures a difference
+//      against a reference and the console has no reference."
+//
+//      THE SECOND CLAUSE IS DEBUG.TRACE'S PORT, NOT THIS ONE'S. `ev_err_i` is
+//      `LANES*EW` bits -- ONE UNSIGNED MAGNITUDE PER LANE. There is no
+//      expected, no actual and no difference anywhere on this block's event
+//      port. `design/contracts/MEASURE.HISTOGRAM.md` says it in terms -- "this
+//      block counts error magnitudes, which is not a [difference]" -- and the
+//      RTL header says "it takes an unsigned magnitude of EW bits and says
+//      nothing about what it measures". The differential sentence belongs to
+//      `ev_expected_fx_i` beside `ev_actual_fx_i`.
+//
+//      AND THIS IS THE ENTRY THAT RECORDS THE TRACE REFUSAL HAVING REASONED
+//      FROM THE WRONG PORT, four paragraphs down. It then did the same thing
+//      itself. That is left visible rather than tidied away, because the
+//      sentence travelled: it was still being quoted as this gap's blocker a
+//      day later, in a brief, by someone who had not opened the port list.
+//
+//      THE FIRST CLAUSE IS ALSO WRONG, AND THAT IS THE USEFUL HALF.
+//      `fpga/rtl/terrain/zhao_terrain_loddev.sv` emits `dev1_o`/`dev2_o`/
+//      `dev3_o` -- three 24-bit UNSIGNED DEVIATION MAGNITUDES per record, with
+//      `dev_valid_o`/`dev_ready_i` and a `dev_src_id_o`. That is `hist_ev_*`'s
+//      shape, field for field. It is BUILT and differentially tested
+//      (`terrain_lodpath_directed`, 286 checks, four counters fired), and its
+//      OWN producer is already composed IN THIS FILE: `zhao_terrain_lodfeed`'s
+//      inputs name TERRAIN.MIPFEED's ports in its own comments, and MIPFEED's
+//      fine stream is live here at `tmg_fine_valid/ready/h`. lodfeed OBSERVES
+//      that stream, so composing it steals nothing and needs no arbitration.
+//
+//      `design/console_inventory.yml` blocks lodfeed on "the same missing
+//      camera-position producer". THAT IS ITS CONSUMER'S BLOCKER, NOT ITS OWN.
+//      TERRAIN.LOD selects a level in SCREEN space and needs the eye (owner
+//      ruling R63); a WORLD-space deviation needs no camera, and neither
+//      `zhao_terrain_loddev` nor `zhao_terrain_lodfeed` has a camera port. The
+//      consumer's blocker was applied wholesale to the producer.
+//
+//      SO THE GAP IS NOT "NOTHING PRODUCES AN ERROR MAGNITUDE". IT IS "THE
+//      METRIC IS UNRATIFIED", which is an OWNER DECISION -- written up with
+//      both options and a recommendation in FINDINGS-hostdbg.md. The contract's
+//      own list of inventions opens with it: "the error metric -- what number
+//      goes in a bucket. Charter says 'candidate error buckets' and stops."
+//
+//      IT IS REFUSED RATHER THAN WIRED, and this is the reason that decides it.
+//      Charter section 9 Version 1 has the ARM predict a PIXEL-error threshold
+//      PER CAMERA from these counters. Putting a world-space terrain page
+//      deviation into that organ would close this entry and put the WRONG
+//      QUANTITY in it, and NOTHING WOULD CATCH IT, because the block is
+//      metric-agnostic by design. That is this contract's own named failure
+//      mode -- "two blocks disagreeing about one policy" -- manufactured
+//      deliberately. A gap closed by a producer that is real but WRONG is worse
+//      than an open gap.
+//
+//      DO NOT READ THIS ENTRY AS "BUILD A PRODUCER". One exists, it is tested,
+//      and building a second would be the duplication `uncashed_cheques.py`
+//      check 3 was written to catch.
+//
+//      AND DO NOT WIRE `RASTER.FRAGMENT`'s `fragment_error_o` BY NAME. The
+//      contract already refuses it: it is `s1_v_r && !rd_valid_i`, a one-bit
+//      tilestore-read protocol flag that "should never fire". It carries no
+//      value. The ledger's declared `inputs: [fragment_error]` points at it,
+//      which is the false-PRESENCE shape this header records elsewhere.
 //
 //      ITS TWO MEASURE SIBLINGS ARE REFUSED, 2026-09-19, and the reasons are
 //      recorded here because "the histogram is composed, so its siblings must
@@ -1492,6 +1554,32 @@
 //      declares it: the manager's `lease_writer_o` is the value it will
 //      become, and making that substitution is CMD.SCHEDULER's act, not this
 //      composer's.
+//
+//      RE-EXAMINED 2026-09-20 (gz/hostdbg), because a refusal's stated cause
+//      is worth checking before it is inherited a third time. The cause above
+//      is WEAKER than it reads. `zhao_video_slotmgr_v2` loads `lease_writer_q`
+//      from `rsp_writer_q` -- whoever was GRANTED the lease -- so it is the
+//      manager's own record rather than a policy invention, and
+//      `zhao_shell_top_v2` ALREADY consumes it one line over
+//      (`rmap_valid_q = v2_lease_valid && v2_lease_writer`). The substitution
+//      is more defensible than this entry admits.
+//
+//      IT IS STILL NOT MADE, and the reason is cost rather than principle:
+//      IT WOULD NOT CLOSE THIS ENTRY. The three MATERIAL.RESOLVE ports below
+//      keep I20 a BOUNDARY whatever happens to `fb_writer_i`, so the trade is
+//      a SHELL port removed -- which forces the paired-diff harness AND its
+//      mutant to be regenerated, and re-proves a framebuffer SAFETY guard whose
+//      first version let both writers pass at once -- against zero register
+//      movement. It belongs in the packet that closes I49, where the triangle
+//      port is being opened anyway.
+//
+//      THE EXACT BLOCKER FOR THE THREE OPEN PORTS, stated once so it is not
+//      re-derived: MATERIAL.RESOLVE's request ISSUE POINT and its RESPONSE
+//      JOIN -- entry I49, the texture lane's. The block is built and composed
+//      and its record path is proven end to end; what is missing is a request
+//      issued per meshlet and its answer joined back to the triangles that
+//      asked. The 2026-09-20 host register window (ruling R51) has nothing to
+//      do with any of it and closes none of it.
 //
 // I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer

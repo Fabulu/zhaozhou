@@ -5668,7 +5668,13 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE/BAD_TRACE_ARM: the ring reads armed=%b stored=%0d after a REFUSED arm -- expected 0/0",
              dbg_trace_armed_o, dbg_trace_count_o);
     $display("SMOKE: PASS/BAD_TRACE_ARM -- the reserved bit was refused whole and nothing was armed.");
-    $finish;
+    // NO `$finish` HERE, and the absence is deliberate. Verilator's `$finish`
+    // does not stop the CURRENT process -- it raises a flag that is honoured
+    // when the eval returns -- so a `$finish` written here printed this line
+    // and then fell straight through to the run's own PASS line, giving TWO
+    // verdicts for one run. A stop that does not stop is worse than no stop.
+    // The control's polarity is DIRECT: its assertions above are the gate, and
+    // the run finishes normally.
 `else
     if (cmd_exec_trace_arms_o != 32'd1)
       $fatal(1, "SMOKE: CMD.EXEC applied %0d DebugTraceArm record(s), expected exactly 1 -- the packet's 0xF003 record did not reach the executor",

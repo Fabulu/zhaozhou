@@ -174,6 +174,16 @@ if (-not $BuildIn) {
          elseif ($BadDescriptor) { 'zhao_console_core_smoke_baddesc' }
          elseif ($BadVertex) { 'zhao_console_core_smoke_badvtx' }
          elseif ($NoEchoArm) { 'zhao_console_core_smoke_noecho' }
+         # WITHOUT THIS ARM, `-BadTraceArm` FELL THROUGH TO THE PLAIN TAG and
+         # built into the plain run's object directory -- the exact collision
+         # the comment below describes, reintroduced by adding a switch and
+         # forgetting its tag. It is silent: the script deletes `*.o` before
+         # compiling, so the variants merely rebuild each other rather than
+         # failing, and the only symptom is that the two can never run
+         # concurrently and that a `smoke.exe` left running by one blocks the
+         # other's link. Found 2026-09-20 by reading the running process's
+         # PATH, not by a failure. EVERY NEW SWITCH NEEDS A TAG HERE.
+         elseif ($BadTraceArm) { 'zhao_console_core_smoke_badarm' }
          else { 'zhao_console_core_smoke' }
   # PER CHECKOUT. The default used to be one %TEMP% directory for every
   # checkout on the machine, so concurrent packets in separate worktrees
