@@ -3087,6 +3087,17 @@ blocks:
     tests:
       directed: tests/terrain/terrain_bake_directed.cpp
       random: tests/terrain/terrain_bake_random.cpp
+      # OPTION A's SECOND DEPTH LAW, added 2026-09-20 under owner ruling R194.
+      # `inputs: [stamp_results]` above was a sentence with nothing behind it
+      # for months; `zref::terrain::stamp_depth_at_vertex` is the law that
+      # bridges SURFACE.STAMP's per-texel sheet to this block's per-vertex dig,
+      # and these two suites are where it is held to the reference. They are
+      # named HERE because the last time a v2 suite existed and no ledger row
+      # or CMake target pointed at it, the number it produced was
+      # unreproducible from the tree and nobody noticed for eleven days --
+      # the same fault this file already records against TERRAIN.NORMALMAP.
+      differential: tests/terrain/terrain_stampdepth_directed.cpp
+      unit: tests/terrain/terrain_bake_v2_sheet_directed.cpp
     counters: [terrain_bake_surface_texels_touched]
     counter_ports:
       terrain_bake_surface_texels_touched: surface_texels_touched_o
