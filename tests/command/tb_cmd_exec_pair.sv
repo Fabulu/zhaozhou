@@ -32,7 +32,10 @@ module tb_cmd_exec_pair #(
     // Small for the same reason: five PublishResources in one packet fire
     // upload_overflow_o with legal stimulus.
     parameter int unsigned UPL_Q   = 4,
-    parameter int unsigned UPL_PQ  = 4
+    parameter int unsigned UPL_PQ  = 4,
+    // Small for the same reason (R36): three eight-entry SetGradeTables in one
+    // packet fire grade_overflow_o with legal stimulus.
+    parameter int unsigned GRADE_Q = 16
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -55,6 +58,7 @@ module tb_cmd_exec_pair #(
     input  logic        proj_cfg_ready_i,
     // MEM.UPLOAD's request ready (R17): it takes one request at a time.
     input  logic        upl_ready_i,
+    input  logic        post_idle_i,
 
     // ---- CMD.DECODER's verdict, observable -------------------------------
     output logic        decode_done_o,
@@ -118,6 +122,21 @@ module tb_cmd_exec_pair #(
   output logic [31:0] tok_vreq_frag_o,
   output logic [31:0] contracts_applied_o,
 
+    output logic              post_look_busy_o,
+    output logic [ 7:0]       post_bloom_gain_o,
+    output logic              post_grade_valid_o,
+    output logic              post_echo_arm_o,
+    output logic signed [8:0] post_bias_r_o,
+    output logic signed [8:0] post_bias_g_o,
+    output logic signed [8:0] post_bias_b_o,
+    output logic [15:0]       post_flash_rgb_o,
+    output logic [ 7:0]       post_flash_amt_o,
+    output logic [15:0]       post_ink_rgb_o,
+    output logic              post_pv_we_o,
+    output logic [ 1:0]       post_pv_sel_o,
+    output logic [ 5:0]       post_pv_addr_o,
+    output logic [71:0]       post_pv_data_o,
+
     // ---- CMD.EXEC's evidence ---------------------------------------------
     output logic [31:0] packets_committed_o,
     output logic [31:0] packets_abandoned_o,
@@ -131,6 +150,10 @@ module tb_cmd_exec_pair #(
     output logic [31:0] draw_src_truncated_o,
     output logic [31:0] uploads_issued_o,
     output logic [31:0] upload_overflow_o,
+    output logic [31:0] post_looks_applied_o,
+    output logic [31:0] grade_entries_written_o,
+    output logic [31:0] post_refused_o,
+    output logic [31:0] grade_overflow_o,
     output logic [31:0] unsupported_o
 );
 
@@ -173,7 +196,8 @@ module tb_cmd_exec_pair #(
       .STAMP_Q(STAMP_Q),
       .DRAW_Q (DRAW_Q),
       .UPL_Q  (UPL_Q),
-      .UPL_PQ (UPL_PQ)
+      .UPL_PQ (UPL_PQ),
+      .GRADE_Q(GRADE_Q)
   ) u_exec (
       .clk  (clk),
       .rst_n(rst_n),
@@ -245,6 +269,22 @@ module tb_cmd_exec_pair #(
     .tok_vreq_frag_o    (tok_vreq_frag_o),
     .contracts_applied_o(contracts_applied_o),
 
+      .post_idle_i       (post_idle_i),
+      .post_look_busy_o  (post_look_busy_o),
+      .post_bloom_gain_o (post_bloom_gain_o),
+      .post_grade_valid_o(post_grade_valid_o),
+      .post_echo_arm_o   (post_echo_arm_o),
+      .post_bias_r_o     (post_bias_r_o),
+      .post_bias_g_o     (post_bias_g_o),
+      .post_bias_b_o     (post_bias_b_o),
+      .post_flash_rgb_o  (post_flash_rgb_o),
+      .post_flash_amt_o  (post_flash_amt_o),
+      .post_ink_rgb_o    (post_ink_rgb_o),
+      .post_pv_we_o      (post_pv_we_o),
+      .post_pv_sel_o     (post_pv_sel_o),
+      .post_pv_addr_o    (post_pv_addr_o),
+      .post_pv_data_o    (post_pv_data_o),
+
       .packets_committed_o  (packets_committed_o),
       .packets_abandoned_o  (packets_abandoned_o),
       .views_written_o      (views_written_o),
@@ -257,6 +297,10 @@ module tb_cmd_exec_pair #(
       .draw_src_truncated_o (draw_src_truncated_o),
       .uploads_issued_o     (uploads_issued_o),
       .upload_overflow_o    (upload_overflow_o),
+      .post_looks_applied_o (post_looks_applied_o),
+      .grade_entries_written_o(grade_entries_written_o),
+      .post_refused_o       (post_refused_o),
+      .grade_overflow_o     (grade_overflow_o),
       .unsupported_o        (unsupported_o)
   );
 

@@ -305,7 +305,13 @@ module zhao_cmd_exec
     // multi-burst upload -- MEM.UPLOAD takes one request at a time and is a
     // background client (memory_rules 5d). A commit that finds it full WAITS
     // (backpressure, counted in no counter because nothing is lost).
-    parameter int unsigned UPL_PQ = 4
+    parameter int unsigned UPL_PQ = 4,
+
+    // Staged grading-table entries per packet (R36): one whole product-vector
+    // table is 32 + 64 + 32 = 128. More than this in one packet is refused WHOLE
+    // on `grade_overflow_o`. The staging is a memory (128 x 80 b, two M10K at the
+    // 256x40 shape), written once per entry and read once at commit.
+    parameter int unsigned GRADE_Q = 128
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -434,6 +440,27 @@ module zhao_cmd_exec
     output logic [31:0] tok_vreq_frag_o,
     output logic [31:0] contracts_applied_o,  // SetPresentationContract records committed
 
+    // ---- R35/R36: SetPost and SetGradeTable -> POST.COMPOSITE and POST.ECHO --
+    // The LOOK (every value POST.COMPOSITE takes per frame) and the grading
+    // table's product vectors, applied ONLY while the post lease is idle
+    // (`post_idle_i`) and HELD against a pass start while a table is streaming
+    // (`post_look_busy_o`), so no pass ever sees half a look or half a table.
+    input  logic              post_idle_i,
+    output logic              post_look_busy_o,
+    output logic [ 7:0]       post_bloom_gain_o,
+    output logic              post_grade_valid_o,
+    output logic              post_echo_arm_o,     // R35: capture only when armed
+    output logic signed [8:0] post_bias_r_o,
+    output logic signed [8:0] post_bias_g_o,
+    output logic signed [8:0] post_bias_b_o,
+    output logic [15:0]       post_flash_rgb_o,
+    output logic [ 7:0]       post_flash_amt_o,
+    output logic [15:0]       post_ink_rgb_o,
+    output logic              post_pv_we_o,
+    output logic [ 1:0]       post_pv_sel_o,
+    output logic [ 5:0]       post_pv_addr_o,
+    output logic [71:0]       post_pv_data_o,
+
     // ---- evidence ----------------------------------------------------------
     // Every one of these is fired by a directed case in
     // tests/command/cmd_exec_directed.cpp. None is asserted zero without one.
@@ -449,6 +476,10 @@ module zhao_cmd_exec
     output logic [31:0] draw_src_truncated_o,
     output logic [31:0] uploads_issued_o,    // handed to MEM.UPLOAD
     output logic [31:0] upload_overflow_o,   // packets refused: > UPL_Q uploads
+    output logic [31:0] post_looks_applied_o,    // SetPost looks handed to POST.COMPOSITE
+    output logic [31:0] grade_entries_written_o, // product vectors written into its table
+    output logic [31:0] post_refused_o,          // SetPost/SetGradeTable records REFUSED
+    output logic [31:0] grade_overflow_o,        // entries refused for want of staging room
     output logic [31:0] unsupported_o
 );
 
@@ -508,6 +539,21 @@ module zhao_cmd_exec
   localparam int unsigned OFF_PR_SLOT  = ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT;
   localparam int unsigned OFF_PR_KIND  = ZHAO_PUBLISH_RESOURCE_OFF_KIND;
 
+  // SetPost 0x0040 and SetGradeTable 0x0041 (R36), same rule, same package.
+  localparam int unsigned OFF_SP_GAIN  = ZHAO_SET_POST_OFF_BLOOM_GAIN;
+  localparam int unsigned OFF_SP_FLAGS = ZHAO_SET_POST_OFF_FLAGS;
+  localparam int unsigned OFF_SP_AMT   = ZHAO_SET_POST_OFF_FLASH_AMOUNT;
+  localparam int unsigned OFF_SP_BR    = ZHAO_SET_POST_OFF_BIAS_R;
+  localparam int unsigned OFF_SP_BG    = ZHAO_SET_POST_OFF_BIAS_G;
+  localparam int unsigned OFF_SP_BB    = ZHAO_SET_POST_OFF_BIAS_B;
+  localparam int unsigned OFF_SP_FLASH = ZHAO_SET_POST_OFF_FLASH;
+  localparam int unsigned OFF_SP_INK   = ZHAO_SET_POST_OFF_INK;
+  localparam int unsigned OFF_GT_CURVE = ZHAO_SET_GRADE_TABLE_OFF_CURVE;
+  localparam int unsigned OFF_GT_FIRST = ZHAO_SET_GRADE_TABLE_OFF_FIRST;
+  localparam int unsigned OFF_GT_COUNT = ZHAO_SET_GRADE_TABLE_OFF_COUNT;
+  localparam int unsigned OFF_GT_VEC   = ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0;
+  localparam int unsigned GT_VEC_BYTES = 72;    // eight entries of nine bytes
+
   // Quartus 17.0 needs an elaboration check inside `initial begin ... end`; a
   // bare module-scope `if` is a syntax error there however clean the lint
   // (CLAUDE.md, "Verilator lint-clean is not Quartus-synthesizable"). And
@@ -552,6 +598,20 @@ module zhao_cmd_exec
       $fatal(1, "zhao_cmd_exec: SetPresentationContract record size moved; re-read the offsets");
     if (UPL_Q < 2 || UPL_PQ < 2)
       $fatal(1, "zhao_cmd_exec: UPL_Q and UPL_PQ must be >= 2 (the pointers need a bit)");
+    if (ZHAO_SET_POST_BYTES != 32)
+      $fatal(1, "zhao_cmd_exec: SetPost record size moved; re-read the offsets");
+    // Both records finish their fields BEFORE their last byte (ink ends at 29 of
+    // 32, the vectors at 91 of 96), so neither needs the DrawForm bypass.
+    if ((OFF_SP_INK + 2) >= ZHAO_SET_POST_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetPost's ink is its last bytes; add a df_flags_c-style bypass");
+    if (ZHAO_SET_GRADE_TABLE_BYTES != 96)
+      $fatal(1, "zhao_cmd_exec: SetGradeTable record size moved; re-read the offsets");
+    if ((OFF_GT_VEC + GT_VEC_BYTES) >= ZHAO_SET_GRADE_TABLE_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetGradeTable's vectors reach its last byte; add a bypass");
+    if (OFF_GT_COUNT >= OFF_GT_VEC)
+      $fatal(1, "zhao_cmd_exec: SetGradeTable's count must arrive before its vectors");
+    if ((GRADE_Q < 2) || ((GRADE_Q & (GRADE_Q - 1)) != 0))
+      $fatal(1, "zhao_cmd_exec: GRADE_Q must be a power of two >= 2");
   end
 
   // ---- the packet walk (glue 3's framing, port for port) -------------------
@@ -748,6 +808,75 @@ module zhao_cmd_exec
   wire [7:0] pq_handle_gen_unused = pq_head[UQ_RES_LO +: 8];
   /* verilator lint_on UNUSEDSIGNAL */
 
+  // ---- SetPost / SetGradeTable staging (R35/R36) ---------------------------
+  // A SetPost is STATE, like a SetView: the last VALID one in a packet wins, and
+  // it is staged into a shadow (`st_*`) only when its record ends clean. The
+  // capture registers (`sp_*`) are overwritten byte by byte and never leave.
+  logic [ 7:0] sp_gain, sp_flags, sp_amt;
+  logic [15:0] sp_br, sp_bg, sp_bb, sp_flash, sp_ink;
+  logic        st_post_v;     // a clean SetPost is staged in this packet
+  logic [ 7:0] st_gain, st_amt;
+  logic [ 1:0] st_flags;          // the two assigned bits; 7:2 were refused
+  logic [ 8:0] st_br, st_bg, st_bb; // nine bits: wider was refused
+  logic [15:0] st_flash, st_ink;
+
+  // REFUSE, NEVER MASK. Flags bits 7:2 are unassigned, and the block takes a
+  // SIGNED NINE-BIT bias, so a wider value is refused rather than clamped:
+  // [-256, 255] is exactly "bits 15:8 all equal bit 8".
+  logic sp_ok_c;
+  assign sp_ok_c = (sp_flags[7:2] == 6'd0)
+                && (sp_br[15:8] == {8{sp_br[8]}})
+                && (sp_bg[15:8] == {8{sp_bg[8]}})
+                && (sp_bb[15:8] == {8{sp_bb[8]}});
+
+  // A SetGradeTable is a stream of ENTRIES. Its header (curve, first, count)
+  // arrives before its vectors, so each nine-byte entry is validated and written
+  // into the staging memory the byte it completes -- never half an entry, and
+  // never an entry of a refused record.
+  logic [ 7:0] gt_curve, gt_first, gt_count;
+  logic [ 3:0] gv_b;          // byte within the entry, 0..8
+  logic [ 3:0] gv_k;          // entry within the record, 0..7
+  logic [63:0] gv_acc;        // the entry's first eight bytes, little-endian
+  logic [ 7:0] gt_size_c;
+  logic        gt_ok_c;
+  always_comb begin
+    unique case (gt_curve)
+      8'd0:    gt_size_c = 8'd32;   // R
+      8'd1:    gt_size_c = 8'd64;   // G
+      8'd2:    gt_size_c = 8'd32;   // B
+      default: gt_size_c = 8'd0;    // no such curve
+    endcase
+  end
+  assign gt_ok_c = (gt_size_c != 8'd0) && (gt_count >= 8'd1) && (gt_count <= 8'd8)
+                && ({1'b0, gt_first} + {1'b0, gt_count} <= {1'b0, gt_size_c});
+
+  localparam int unsigned GQW = $clog2(GRADE_Q);
+  logic [79:0]  gq [0:GRADE_Q-1];   // {sel[1:0], addr[5:0], data[71:0]}
+  logic [GQW:0] gq_wp, gq_rp;
+  logic         gq_full;
+  assign gq_full = ((gq_wp - gq_rp) >= (GQW+1)'(GRADE_Q));
+
+  logic        gq_entry_c;    // this byte completes an entry of the record
+  logic        gq_we_c;       // ... and it is written into the staging memory
+  logic [79:0] gq_wdata_c;
+  logic        in_vec_c;
+  assign in_vec_c   = (r_op == ZHAO_OP_SET_GRADE_TABLE)
+                   && (rpos >= 16'(OFF_GT_VEC)) && (rpos < 16'(OFF_GT_VEC + GT_VEC_BYTES));
+  // `pkt_ready_o` is `st == EX_STAGE`: bytes move only while staging.
+  assign gq_entry_c = pkt_ready_o && take && in_rec_region && in_vec_c
+                   && (gv_b == 4'd8) && gt_ok_c && ({4'd0, gv_k} < gt_count);
+  assign gq_we_c    = gq_entry_c && !gq_full;
+  assign gq_wdata_c = {gt_curve[1:0], 6'(gt_first + {4'd0, gv_k}), pkt_byte_i, gv_acc};
+
+  // The memory, written and read in its own block with no reset so it infers
+  // an M10K; read REGISTERED at commit.
+  logic [79:0] gq_q;
+  logic        gq_re_c;
+  always_ff @(posedge clk) begin
+    if (gq_we_c) gq[gq_wp[GQW-1:0]] <= gq_wdata_c;
+    if (gq_re_c) gq_q <= gq[gq_rp[GQW-1:0]];
+  end
+
   // A packet that overflowed the stamp ring is POISONED: it is refused WHOLE at
   // its own verdict, even if the verdict is ZH_ABI_OK. Half of a frame's scars
   // is not a degraded frame, it is a wrong one. A packet that overflowed the
@@ -766,9 +895,19 @@ module zhao_cmd_exec
     EX_CFG,    // draining the view shadow into the matrix bank
     EX_STAMP,  // draining the stamp ring into SURFACE.STAMP
     EX_UPL,    // moving staged uploads into the pending queue
+    EX_POST,   // the look and the grading table into POST.COMPOSITE (R36)
     EX_DRAW    // draining the draw ring out of the console
   } ex_e;
   ex_e st;
+
+  // EX_POST's two facts: it has ENTERED (the lease was idle at the door), and a
+  // registered read of the staging memory is in flight.
+  logic post_in_q, gq_rd_v_q;
+  // Held against a pass START from the moment EX_POST enters until it leaves,
+  // so a pass that arms meanwhile waits for the whole look and table.
+  assign post_look_busy_o = (st == EX_POST) && post_in_q
+                         && (st_post_v || gq_rd_v_q || (gq_rp != gq_wp));
+  assign gq_re_c = (st == EX_POST) && post_in_q && !st_post_v && (gq_rp != gq_wp) && !gq_rd_v_q;
 
   logic       cv;   // view being committed
   // FIVE BITS, NOT FOUR, since 2026-09-19: the commit walk is now SEVENTEEN
@@ -817,6 +956,22 @@ module zhao_cmd_exec
       pr_slot <= 8'd0; pr_kind <= 8'd0;
       uq_wp <= '0; uq_rp <= '0; pq_wp <= '0; pq_rp <= '0;
       uploads_issued_o <= 32'd0; upload_overflow_o <= 32'd0;
+      sp_gain <= 8'd0; sp_flags <= 8'd0; sp_amt <= 8'd0;
+      sp_br <= 16'd0; sp_bg <= 16'd0; sp_bb <= 16'd0; sp_flash <= 16'd0; sp_ink <= 16'd0;
+      st_post_v <= 1'b0; st_gain <= 8'd0; st_flags <= 2'd0; st_amt <= 8'd0;
+      st_br <= 9'd0; st_bg <= 9'd0; st_bb <= 9'd0; st_flash <= 16'd0; st_ink <= 16'd0;
+      gt_curve <= 8'd0; gt_first <= 8'd0; gt_count <= 8'd0;
+      gv_b <= 4'd0; gv_k <= 4'd0; gv_acc <= 64'd0;
+      gq_wp <= '0; gq_rp <= '0;
+      post_in_q <= 1'b0; gq_rd_v_q <= 1'b0;
+      // THE IDENTITY LOOK until a SetPost says otherwise: no bloom, no grade,
+      // no bias, no flash, black ink, and POST.ECHO DISARMED (R35).
+      post_bloom_gain_o <= 8'd0; post_grade_valid_o <= 1'b0; post_echo_arm_o <= 1'b0;
+      post_bias_r_o <= 9'sd0; post_bias_g_o <= 9'sd0; post_bias_b_o <= 9'sd0;
+      post_flash_rgb_o <= 16'd0; post_flash_amt_o <= 8'd0; post_ink_rgb_o <= 16'd0;
+      post_pv_we_o <= 1'b0; post_pv_sel_o <= 2'd0; post_pv_addr_o <= 6'd0; post_pv_data_o <= 72'd0;
+      post_looks_applied_o <= 32'd0; grade_entries_written_o <= 32'd0;
+      post_refused_o <= 32'd0; grade_overflow_o <= 32'd0;
       draw_valid_o <= 1'b0;
       draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
       draw_src_truncated_o <= 32'd0;
@@ -833,6 +988,7 @@ module zhao_cmd_exec
       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
       tok_budget_valid_o <= 1'b0;   // both token loads are one-cycle pulses
       tok_vreq_valid_o   <= 1'b0;
+      post_pv_we_o  <= 1'b0;   // so is a table write
 
       // THE PENDING UPLOAD QUEUE DRAINS IN EVERY STATE. Its entries are
       // committed already; MEM.UPLOAD takes one whenever it is idle.
@@ -963,6 +1119,53 @@ module zhao_cmd_exec
                 if (rpos == 16'(OFF_PR_KIND)) pr_kind <= pkt_byte_i;
               end
 
+              // ---- SetPost (R36) -------------------------------------------
+              if (r_op == ZHAO_OP_SET_POST) begin
+                if (rpos == 16'(OFF_SP_GAIN))  sp_gain  <= pkt_byte_i;
+                if (rpos == 16'(OFF_SP_FLAGS)) sp_flags <= pkt_byte_i;
+                if (rpos == 16'(OFF_SP_AMT))   sp_amt   <= pkt_byte_i;
+                if ((rpos >= 16'(OFF_SP_BR)) && (rpos < 16'(OFF_SP_BR + 2)))
+                  sp_br <= {pkt_byte_i, sp_br[15:8]};
+                if ((rpos >= 16'(OFF_SP_BG)) && (rpos < 16'(OFF_SP_BG + 2)))
+                  sp_bg <= {pkt_byte_i, sp_bg[15:8]};
+                if ((rpos >= 16'(OFF_SP_BB)) && (rpos < 16'(OFF_SP_BB + 2)))
+                  sp_bb <= {pkt_byte_i, sp_bb[15:8]};
+                if ((rpos >= 16'(OFF_SP_FLASH)) && (rpos < 16'(OFF_SP_FLASH + 2)))
+                  sp_flash <= {pkt_byte_i, sp_flash[15:8]};
+                if ((rpos >= 16'(OFF_SP_INK)) && (rpos < 16'(OFF_SP_INK + 2)))
+                  sp_ink <= {pkt_byte_i, sp_ink[15:8]};
+              end
+
+              // ---- SetGradeTable (R36) -------------------------------------
+              if (r_op == ZHAO_OP_SET_GRADE_TABLE) begin
+                if (rpos == 16'(OFF_GT_CURVE)) gt_curve <= pkt_byte_i;
+                if (rpos == 16'(OFF_GT_FIRST)) gt_first <= pkt_byte_i;
+                if (rpos == 16'(OFF_GT_COUNT)) begin
+                  gt_count <= pkt_byte_i;
+                  gv_b     <= 4'd0;
+                  gv_k     <= 4'd0;
+                end
+                if (in_vec_c) begin
+                  if (gv_b == 4'd8) begin
+                    gv_b <= 4'd0;
+                    gv_k <= gv_k + 4'd1;
+                    // The entry is written by `gq_we_c` (the memory's own
+                    // block); a full memory refuses the PACKET whole.
+                    if (gq_entry_c) begin
+                      if (gq_full) begin
+                        poisoned <= 1'b1;
+                        `ZHAO_EXEC_INC(grade_overflow_o);
+                      end else begin
+                        gq_wp <= gq_wp + (GQW+1)'(1);
+                      end
+                    end
+                  end else begin
+                    gv_acc <= {pkt_byte_i, gv_acc[63:8]};
+                    gv_b   <= gv_b + 4'd1;
+                  end
+                end
+              end
+
               // ---- the record ends ----------------------------------------
               // Every SetView and SurfaceStamp field lands at or before the
               // last field byte of a well-formed record (83 of 96, 59 of 64),
@@ -1015,6 +1218,22 @@ module zhao_cmd_exec
                                            pr_hlo, pr_res};
                     uq_wp <= uq_wp + (UQW+1)'(1);
                   end
+                end else if (r_op == ZHAO_OP_SET_POST) begin
+                  // STATE, not an event: the last clean one in the packet wins.
+                  if (sp_ok_c) begin
+                    st_post_v <= 1'b1;
+                    st_gain <= sp_gain; st_flags <= sp_flags[1:0]; st_amt <= sp_amt;
+                    st_br <= sp_br[8:0]; st_bg <= sp_bg[8:0]; st_bb <= sp_bb[8:0];
+                    st_flash <= sp_flash; st_ink <= sp_ink;
+                  end else begin
+                    `ZHAO_EXEC_INC(post_refused_o);
+                  end
+                end else if (r_op == ZHAO_OP_SET_GRADE_TABLE) begin
+                  // Its entries were written as they completed; a refused record
+                  // wrote none, and is counted here once.
+                  if (!gt_ok_c) begin
+                    `ZHAO_EXEC_INC(post_refused_o);
+                  end
                 end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
                              && (zhao_opcode_record_bytes(r_op) != 32'd0)) begin
                   // A record the ABI defines and this block has no arm for.
@@ -1065,6 +1284,10 @@ module zhao_cmd_exec
               // already committed; abandoning this one must not cancel those.
               uq_wp    <= '0;
               uq_rp    <= '0;
+              // The post state of a refused packet never leaves either.
+              st_post_v <= 1'b0;
+              gq_wp     <= '0;
+              gq_rp     <= '0;
               poisoned <= 1'b0;
             end
           end
@@ -1195,7 +1418,55 @@ module zhao_cmd_exec
           end else begin
             uq_wp <= '0;
             uq_rp <= '0;
-            st    <= EX_DRAW;
+            st    <= EX_POST;
+          end
+        end
+
+        // ------------------------------------------------------------------
+        // COMMIT phase 4 -- the LOOK and the GRADING TABLE (R35/R36)
+        // ------------------------------------------------------------------
+        // The door is the post lease being IDLE: a pass in flight finishes on
+        // the look it started with. Once through the door, `post_look_busy_o`
+        // holds any pass that arms from STARTING until the look and every
+        // staged table entry are in, so a pass sees all of it or none of it --
+        // and this phase never waits on the lease again, because a lease that
+        // is armed and held is waiting on THIS, and waiting back would be a
+        // deadlock. Before EX_DRAW, so a frame's look is in place before any of
+        // its draws leave.
+        //
+        // The look is one cycle; the table is one entry per TWO clocks (the
+        // staging memory's registered read). 128 entries is 256 clocks, once,
+        // when a packet carries a table.
+        EX_POST: begin
+          if (!post_in_q) begin
+            if (post_idle_i || (!st_post_v && (gq_rp == gq_wp))) post_in_q <= 1'b1;
+          end else if (st_post_v) begin
+            post_bloom_gain_o  <= st_gain;
+            post_grade_valid_o <= st_flags[0];
+            post_echo_arm_o    <= st_flags[1];
+            post_bias_r_o      <= $signed(st_br);
+            post_bias_g_o      <= $signed(st_bg);
+            post_bias_b_o      <= $signed(st_bb);
+            post_flash_rgb_o   <= st_flash;
+            post_flash_amt_o   <= st_amt;
+            post_ink_rgb_o     <= st_ink;
+            st_post_v          <= 1'b0;
+            `ZHAO_EXEC_INC(post_looks_applied_o);
+          end else if (gq_rd_v_q) begin
+            post_pv_we_o   <= 1'b1;
+            post_pv_sel_o  <= gq_q[79:78];
+            post_pv_addr_o <= gq_q[77:72];
+            post_pv_data_o <= gq_q[71:0];
+            gq_rp          <= gq_rp + (GQW+1)'(1);
+            gq_rd_v_q      <= 1'b0;
+            `ZHAO_EXEC_INC(grade_entries_written_o);
+          end else if (gq_rp != gq_wp) begin
+            gq_rd_v_q <= 1'b1;                    // `gq_re_c` issued the read
+          end else begin
+            gq_wp     <= '0;
+            gq_rp     <= '0;
+            post_in_q <= 1'b0;
+            st        <= EX_DRAW;
           end
         end
 

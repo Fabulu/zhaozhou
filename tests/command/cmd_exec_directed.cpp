@@ -48,6 +48,7 @@
 
 #include "zhao_sim.hpp"
 #include "zref/zref_frame.hpp"
+#include "zref/zref_post.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -112,6 +113,13 @@ struct TokOut {
   uint32_t view = 0, geom = 0, frag = 0;            // request
 };
 
+struct PvWrite {
+  uint32_t cycle;
+  uint8_t sel, addr;
+  uint64_t lo64;
+  uint8_t hi8;
+};
+
 struct Run {
   bool done = false;
   uint8_t err = 0;
@@ -130,6 +138,11 @@ struct Run {
   uint32_t draws_issued = 0, draw_overflow = 0, draw_truncated = 0;
   std::vector<EnvOut> envs;
   uint32_t envs_issued = 0;
+  // R35/R36: the look as the run LEFT it, every table write, and the hold.
+  std::vector<PvWrite> pv;
+  zref::post::look::Look look;
+  uint32_t looks_applied = 0, grade_written = 0, post_refused = 0, grade_overflow = 0;
+  uint32_t look_busy_cycles = 0, look_busy_first = 0;
 };
 
 /**
@@ -143,8 +156,8 @@ struct Run {
  */
 Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
               uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu,
-              uint32_t upl_mask = 0xFFFFFFFFu,
-              uint32_t env_mask = 0xFFFFFFFFu) {
+              uint32_t upl_mask = 0xFFFFFFFFu, uint32_t env_mask = 0xFFFFFFFFu,
+              uint32_t idle_from = 0) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
@@ -155,6 +168,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   dut.draw_ready_i = 1;
   dut.upl_ready_i = 1;
   dut.env_ready_i = 1;
+  dut.post_idle_i = 1;
   dut.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(dut);
   dut.rst_n = 1;
@@ -188,7 +202,22 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     // MEM.UPLOAD's ready: in the composition it is high only in its S_IDLE.
     dut.upl_ready_i = ((upl_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     dut.env_ready_i = ((env_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    // The post lease: busy until idle_from, idle after (R36's door).
+    dut.post_idle_i = (cyc >= idle_from) ? 1 : 0;
     dut.eval();
+
+    if (dut.post_look_busy_o) {
+      if (r.look_busy_cycles++ == 0) r.look_busy_first = cyc;
+    }
+    if (dut.post_pv_we_o) {
+      PvWrite pw;
+      pw.cycle = cyc;
+      pw.sel = static_cast<uint8_t>(dut.post_pv_sel_o);
+      pw.addr = static_cast<uint8_t>(dut.post_pv_addr_o);
+      pw.lo64 = uint64_t(dut.post_pv_data_o[0]) | (uint64_t(dut.post_pv_data_o[1]) << 32);
+      pw.hi8 = static_cast<uint8_t>(dut.post_pv_data_o[2] & 0xFFu);
+      r.pv.push_back(pw);
+    }
 
     const bool moved = have && dut.pkt_ready_o;
     // The stamp handshake is a pre-edge view, like every ready/valid pair in
@@ -310,6 +339,21 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.upload_overflow = dut.upload_overflow_o;
   r.envs_issued = dut.envs_issued_o;
   r.contracts = dut.contracts_applied_o;
+  r.look.bloom_gain = static_cast<uint8_t>(dut.post_bloom_gain_o);
+  r.look.grade_valid = dut.post_grade_valid_o != 0;
+  r.look.echo_arm = dut.post_echo_arm_o != 0;
+  // Nine-bit signed ports: sign-extend what Verilator hands over as unsigned.
+  auto s9 = [](uint32_t v) { return static_cast<int16_t>((v & 0x100u) ? int(v & 0x1FFu) - 512 : int(v & 0x1FFu)); };
+  r.look.bias_r = s9(dut.post_bias_r_o);
+  r.look.bias_g = s9(dut.post_bias_g_o);
+  r.look.bias_b = s9(dut.post_bias_b_o);
+  r.look.flash = static_cast<uint16_t>(dut.post_flash_rgb_o);
+  r.look.flash_amount = static_cast<uint8_t>(dut.post_flash_amt_o);
+  r.look.ink = static_cast<uint16_t>(dut.post_ink_rgb_o);
+  r.looks_applied = dut.post_looks_applied_o;
+  r.grade_written = dut.grade_entries_written_o;
+  r.post_refused = dut.post_refused_o;
+  r.grade_overflow = dut.grade_overflow_o;
   return r;
 }
 
@@ -472,6 +516,72 @@ std::vector<uint8_t> setEnvironmentRecord(uint32_t source_id, uint16_t yaw, uint
   std::vector<uint8_t> out;
   zhao_abi::zhao_pack_set_environment(rec, out);
   return out;
+}
+
+// SetPost (R36), packed by the GENERATED packer.
+std::vector<uint8_t> setPostRecord(uint8_t gain, uint8_t flags, uint8_t amt, int16_t br, int16_t bg,
+                                   int16_t bb, uint16_t flash, uint16_t ink) {
+  zhao_abi::ZhRecordSetPost rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_POST;
+  rec.hdr.record_bytes = 32;
+  rec.hdr.source_id = 0x77u;
+  rec.payload.bloom_gain = gain;
+  rec.payload.flags = flags;
+  rec.payload.flash_amount = amt;
+  rec.payload.bias_r = br;
+  rec.payload.bias_g = bg;
+  rec.payload.bias_b = bb;
+  rec.payload.flash.bits = flash;
+  rec.payload.ink.bits = ink;
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_set_post(rec, out);
+  return out;
+}
+
+// SetGradeTable (R36): entries from the zref EMITTER's product vectors.
+std::vector<uint8_t> setGradeRecord(const zref::post::look::GradeRecord& g) {
+  zhao_abi::ZhRecordSetGradeTable rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_GRADE_TABLE;
+  rec.hdr.record_bytes = 96;
+  rec.hdr.source_id = 0x78u;
+  rec.payload.curve = g.curve;
+  rec.payload.first = g.first;
+  rec.payload.count = g.count;
+  for (unsigned i = 0; i < 72; ++i) rec.payload.vectors[i] = g.vectors[i];
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_set_grade_table(rec, out);
+  return out;
+}
+
+// A deterministic, non-trivial curve set and a matrix with negative and
+// cross-channel terms, so a transpose or a sign-extension error changes bits.
+struct GradeFixture {
+  uint8_t r[32], g[64], b[32];
+  int16_t m[9] = {int16_t(18000), int16_t(-1200), int16_t(700), int16_t(-900), int16_t(16384),
+                  int16_t(2100), int16_t(300), int16_t(-2500), int16_t(19000)};
+  std::vector<zref::post::look::GradeRecord> recs;
+  GradeFixture() {
+    for (unsigned i = 0; i < 32; ++i) r[i] = uint8_t((i * 255u) / 31u);
+    for (unsigned i = 0; i < 64; ++i) g[i] = uint8_t(255u - (i * 255u) / 63u);
+    for (unsigned i = 0; i < 32; ++i) b[i] = uint8_t((i * i * 255u) / (31u * 31u));
+    zref::post::look::emit_grade_table(r, g, b, m, [&](const zref::post::look::GradeRecord& x) {
+      recs.push_back(x);
+    });
+  }
+};
+
+// Check one RTL table write against entry k of a zref record.
+void checkPv(const PvWrite& w, const zref::post::look::GradeRecord& g, unsigned k,
+             const std::string& tag) {
+  int32_t p[3];
+  zref::post::look::grade_entry(g.vectors, k, p);
+  uint64_t lo;
+  uint8_t hi;
+  zref::post::look::pack_pv(p, &lo, &hi);
+  check(w.sel == g.curve && w.addr == g.first + k, (tag + " curve and entry").c_str(),
+        g.curve * 64u + g.first + k, w.sel * 64u + w.addr);
+  check(w.lo64 == lo && w.hi8 == hi, (tag + " product vector, all 72 bits").c_str(), 0,
+        (w.lo64 == lo && w.hi8 == hi) ? 0 : 1);
 }
 
 // The stamp this test uses wherever the values themselves are not the point.
@@ -1102,6 +1212,149 @@ int main(int argc, char** argv) {
     check(r.envs.empty() && r.envs_issued == 0,
           "case18: a staged environment is DISCARDED with its packet", 0,
           static_cast<uint32_t>(r.envs.size()) + r.envs_issued);
+  }
+  // THE CLOSING BRACE ABOVE WAS DROPPED BY THE 2026-09-20 MERGE, which spliced
+  // the post lane's cases in after the geom lane's case 18 without closing it.
+  // Every block below was then nested inside case 18 and the file did not
+  // compile -- so `cmd_exec_directed` was not running on the merged tree at all.
+  //
+  // NOTE, not repaired here: the two lanes' case NUMBERS collide (17, 18 and 19
+  // each name two different blocks, and "case17:" labels 35 checks across
+  // three). The numbers are comments and labels, not assertions, so renumbering
+  // 35 strings is churn with a typo risk; it is recorded so a failure message
+  // reading "case17:" is known to be ambiguous until somebody renumbers.
+
+  // ---- 17. SetPost + two SetGradeTables + a form: the look and the table ---
+  // Field for field against zref::post::look, the table entries generated by
+  // the zref EMITTER (grade_product_vector) and read back off `pv_*` in order,
+  // AFTER the verdict and BEFORE the form (EX_POST precedes EX_DRAW).
+  {
+    GradeFixture gf;
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setPostRecord(0x9Cu, 0x03u, 0x40u, -256, 17, 255, 0xF81Fu, 0x07E0u));
+    b.append_record(setGradeRecord(gf.recs[0]));   // R 0..7
+    b.append_record(setGradeRecord(gf.recs[11]));  // G 56..63 (R is 4 records, G 8)
+    b.append_record(drawFormRecord(0x70u, 0xF00Du, 0xBEA7u, 0xC0DEu, 1, 0, 0));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    zref::post::look::Look want;
+    const bool ok = zref::post::look::apply_set_post(0x9Cu, 0x03u, 0x40u, -256, 17, 255, 0xF81Fu,
+                                                     0x07E0u, &want);
+    check(ok, "case17: zref accepts the look", 1, ok ? 1 : 0);
+    check(r.err == zhao_abi::ZH_ABI_OK && r.committed == 1, "case17: committed", 1, r.committed);
+    check(r.unsupported == 2, "case17: SetPost/SetGradeTable are no longer unsupported", 2,
+          r.unsupported);
+    check(r.looks_applied == 1, "case17: one look applied", 1, r.looks_applied);
+    check(r.look.bloom_gain == want.bloom_gain && r.look.grade_valid == want.grade_valid &&
+              r.look.echo_arm == want.echo_arm,
+          "case17: bloom gain, grade-valid and the ECHO ARM as zref", 1, 1);
+    check(r.look.bias_r == want.bias_r && r.look.bias_g == want.bias_g && r.look.bias_b == want.bias_b,
+          "case17: the three biases, sign and all (-256 and 255 are the edges)", 0,
+          (r.look.bias_r - want.bias_r) + (r.look.bias_b - want.bias_b));
+    check(r.look.flash == want.flash && r.look.flash_amount == want.flash_amount &&
+              r.look.ink == want.ink,
+          "case17: flash colour, flash amount and ink", 1, 1);
+    check(r.pv.size() == 16 && r.grade_written == 16, "case17: sixteen table entries written", 16,
+          r.pv.size());
+    if (r.pv.size() == 16) {
+      for (unsigned k = 0; k < 8; ++k) checkPv(r.pv[k], gf.recs[0], k, "case17 R" + std::to_string(k));
+      for (unsigned k = 0; k < 8; ++k)
+        checkPv(r.pv[8 + k], gf.recs[11], k, "case17 G" + std::to_string(56 + k));
+      check(r.pv.front().cycle > r.verdict_cycle, "case17: no table write before the verdict", 1,
+            r.pv.front().cycle > r.verdict_cycle ? 1 : 0);
+      if (r.draws.size() == 1)
+        check(r.pv.back().cycle < r.draws[0].cycle, "case17: the table is in before the form leaves", 1,
+              r.pv.back().cycle < r.draws[0].cycle ? 1 : 0);
+    }
+    check(r.look_busy_cycles > 0, "case17: the pass-start hold was raised while it streamed", 1,
+          r.look_busy_cycles > 0 ? 1 : 0);
+  }
+
+  // ---- 18. REFUSE, NEVER MASK: five bad records, the packet still commits ---
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setPostRecord(1, 0x04u, 0, 0, 0, 0, 0, 0));      // unassigned flag bit
+    b.append_record(setPostRecord(1, 0x00u, 0, 256, 0, 0, 0, 0));    // bias past nine bits
+    b.append_record(setPostRecord(1, 0x00u, 0, 0, 0, -257, 0, 0));   // ... and below
+    zref::post::look::GradeRecord bad;
+    bad.curve = 3; bad.first = 0; bad.count = 1;                     // no such curve
+    b.append_record(setGradeRecord(bad));
+    bad.curve = 1; bad.first = 60; bad.count = 5;                    // past G's 64 entries
+    b.append_record(setGradeRecord(bad));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    zref::post::look::Look z;
+    const bool zr = zref::post::look::apply_set_post(1, 0x04u, 0, 0, 0, 0, 0, 0, &z) ||
+                    zref::post::look::apply_set_post(1, 0, 0, 256, 0, 0, 0, 0, &z) ||
+                    zref::post::look::apply_set_post(1, 0, 0, 0, 0, -257, 0, 0, &z) ||
+                    zref::post::look::grade_record_ok(3, 0, 1) ||
+                    zref::post::look::grade_record_ok(1, 60, 5);
+    check(!zr, "case18: zref refuses all five", 0, zr ? 1 : 0);
+    check(r.post_refused == 5, "case18: post_refused_o counts all five", 5, r.post_refused);
+    check(r.committed == 1, "case18: a refused RECORD does not refuse the packet", 1, r.committed);
+    check(r.looks_applied == 0 && r.pv.empty(), "case18: nothing applied, nothing written", 0,
+          r.looks_applied + r.pv.size());
+    check(r.look.bloom_gain == 0 && !r.look.echo_arm, "case18: the identity look stands", 0,
+          r.look.bloom_gain);
+  }
+
+  // ---- 19. more entries than GRADE_Q = 16: refused WHOLE, counted ----------
+  {
+    GradeFixture gf;
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setPostRecord(5, 0x02u, 0, 0, 0, 0, 0, 0));
+    for (unsigned i = 0; i < 3; ++i) b.append_record(setGradeRecord(gf.recs[i]));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case19: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    check(r.grade_overflow >= 1, "case19: grade_overflow_o fires", 1, r.grade_overflow >= 1 ? 1 : 0);
+    check(r.abandoned == 1, "case19: the packet is abandoned", 1, r.abandoned);
+    check(r.pv.empty() && r.looks_applied == 0 && !r.look.echo_arm,
+          "case19: NO entry and NO look leaves -- not sixteen of twenty-four", 0,
+          r.pv.size() + r.looks_applied);
+  }
+
+  // ---- 20. THE DOOR: a busy post lease holds the look, then lets it in ------
+  // Idle held LOW until long after the verdict. Nothing may reach POST.COMPOSITE
+  // (or POST.ECHO's arm) while a pass is in flight; once idle, all of it lands.
+  {
+    GradeFixture gf;
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setPostRecord(0x11u, 0x02u, 0, 0, 0, 0, 0, 0));
+    b.append_record(setGradeRecord(gf.recs[4]));
+    b.end_frame(0);
+    const std::vector<uint8_t> pkt = b.seal(1, 1, 0);
+    const uint32_t door = static_cast<uint32_t>(pkt.size()) + 1500u;
+    const Run r = runPacket(pkt, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu, door);   // env_mask, then the lease door
+    check(r.committed == 1 && r.looks_applied == 1 && r.pv.size() == 8,
+          "case20: the look and the table land once the lease is idle", 9,
+          r.looks_applied + r.pv.size());
+    uint32_t early = 0;
+    for (const PvWrite& w : r.pv)
+      if (w.cycle < door) ++early;
+    check(early == 0 && r.look_busy_first >= door,
+          "case20: nothing crossed the door while the pass was in flight", 0, early);
+    check(r.look.echo_arm && r.look.bloom_gain == 0x11u, "case20: the echo is ARMED by it", 1,
+          r.look.echo_arm ? 1 : 0);
+  }
+
+  // ---- 21. a packet with no post records never waits on the door -----------
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(drawFormRecord(0x70u, 0xF00Du, 0xBEA7u, 0xC0DEu, 1, 0, 0));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu);
+    check(r.committed == 1 && r.draws.size() == 1,
+          "case21: no post state -> the commit passes a busy lease without waiting", 1,
+          r.draws.size());
+    check(r.look_busy_cycles == 0, "case21: and never holds a pass start", 0, r.look_busy_cycles);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

@@ -1,8 +1,8 @@
 // GENERATED FILE -- DO NOT EDIT.
 // Generator: tools/quartus/gen_shell_fit_top.py
-// shell-declaration-sha256: c1b68329afa7582935e8cbed616aad92123fc0873d2b8372453c9164a273c92f
-// policy-sha256: 5913ca4f289e625d8d2f6fd3a3cd2899b4a7485c1094b3860084e16c916ee19c
-// generator-sha256: 55900894edddbf9a0e82373e7d4e80cee0b0c3551b1d144c093ea6f94134509a
+// shell-declaration-sha256: 8bf15b0d3414e9d0b5acb408ab8aadb0b716d997b89e50479195c4655cbb8080
+// policy-sha256: 00fb17fcb296c6e93419b71d4a7c78daad65cf5cb447df13ad730f68cea051b3
+// generator-sha256: 7734f1ac63564fc0762ee9cbd98d28c0e30825fac9ee0df70247a3c70f8ce7f7
 // parser-sha256: cf10b580276970bf2be1e4abea5cb6d97248e46671ba525027f45c8079815fc5
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.
@@ -196,6 +196,10 @@ module shell_v2_top
   (* keep = "true" *) logic [1-1:0] shell_build_hps_grant_o;
   (* keep = "true" *) zhao_hps_burst_rsp_t [1-1:0] shell_build_hps_rsp_o;
   (* keep = "true" *) logic [1-1:0] [31:0] shell_build_hps_wait_o;
+  (* keep = "true" *) logic [1-1:0] shell_build_hps_wr_valid_i;
+  (* keep = "true" *) logic [1-1:0] [63:0] shell_build_hps_wr_data_i;
+  (* keep = "true" *) logic [1-1:0] shell_build_hps_wr_last_i;
+  (* keep = "true" *) logic shell_build_hps_wr_ready_o;
   (* keep = "true" *) logic shell_build_res_valid_i;
   (* keep = "true" *) logic [31:0] shell_build_res_base_i;
   (* keep = "true" *) logic [31:0] shell_build_res_span_i;
@@ -244,6 +248,8 @@ module shell_v2_top
   (* keep = "true" *) logic [8:0] shell_post_frame_w_i;
   (* keep = "true" *) logic [7:0] shell_post_frame_h_i;
   (* keep = "true" *) logic shell_post_duo_i;
+  (* keep = "true" *) logic shell_post_echo_arm_i;
+  (* keep = "true" *) logic shell_post_look_hold_i;
   (* keep = "true" *) logic shell_post_pass_start_o;
   (* keep = "true" *) logic shell_post_view_o;
   (* keep = "true" *) logic shell_post_src_valid_o;
@@ -285,9 +291,9 @@ module shell_v2_top
   (* keep = "true" *) logic [31:0] shell_cmd_pkt_len_o;
   (* keep = "true" *) logic shell_cmd_pkt_ready_i;
 
-  logic [2826:0] gpu_payload_c;
+  logic [2827:0] gpu_payload_c;
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [2826:0] gpu_capture_bus;
+  logic [2827:0] gpu_capture_bus;
   /* verilator lint_on UNUSEDSIGNAL */
   always_comb begin
     gpu_payload_c = '0;
@@ -396,47 +402,48 @@ module shell_v2_top
     gpu_payload_c[2170 +: 1] = shell_build_hps_grant_o;
     gpu_payload_c[2171 +: 67] = shell_build_hps_rsp_o;
     gpu_payload_c[2238 +: 32] = shell_build_hps_wait_o;
-    gpu_payload_c[2270 +: 1] = shell_render_drain_done_o;
-    gpu_payload_c[2271 +: 1] = shell_render_busy_o;
-    gpu_payload_c[2272 +: 32] = shell_render_pixels_o;
-    gpu_payload_c[2304 +: 32] = shell_render_bursts_o;
-    gpu_payload_c[2336 +: 1] = shell_render_stream_error_o;
-    gpu_payload_c[2337 +: 1] = shell_render_drained_o;
-    gpu_payload_c[2338 +: 1] = shell_render_fatal_o;
-    gpu_payload_c[2339 +: 32] = shell_render_issued_words_o;
-    gpu_payload_c[2371 +: 32] = shell_render_retired_words_o;
-    gpu_payload_c[2403 +: 1] = shell_render_overflow_o;
-    gpu_payload_c[2404 +: 1] = shell_render_fragment_error_o;
-    gpu_payload_c[2405 +: 1] = shell_post_pass_start_o;
-    gpu_payload_c[2406 +: 1] = shell_post_view_o;
-    gpu_payload_c[2407 +: 1] = shell_post_src_valid_o;
-    gpu_payload_c[2408 +: 16] = shell_post_src_rgb_o;
-    gpu_payload_c[2424 +: 1] = shell_post_out_ready_o;
-    gpu_payload_c[2425 +: 1] = shell_post_busy_o;
-    gpu_payload_c[2426 +: 32] = shell_post_passes_o;
-    gpu_payload_c[2458 +: 32] = shell_post_frames_o;
-    gpu_payload_c[2490 +: 1] = shell_post_fault_o;
-    gpu_payload_c[2491 +: 32] = shell_post_src_reads_o;
-    gpu_payload_c[2523 +: 32] = shell_post_src_pixels_o;
-    gpu_payload_c[2555 +: 32] = shell_post_retire_unowned_o;
-    gpu_payload_c[2587 +: 32] = shell_post_share_contention_o;
-    gpu_payload_c[2619 +: 32] = shell_echo_passes_complete_o;
-    gpu_payload_c[2651 +: 32] = shell_echo_passes_torn_o;
-    gpu_payload_c[2683 +: 32] = shell_echo_pixels_written_o;
-    gpu_payload_c[2715 +: 32] = shell_echo_pixels_dropped_o;
-    gpu_payload_c[2747 +: 1] = shell_echo_fault_o;
-    gpu_payload_c[2748 +: 1] = shell_phy_cs_n_o;
-    gpu_payload_c[2749 +: 1] = shell_phy_ras_n_o;
-    gpu_payload_c[2750 +: 1] = shell_phy_cas_n_o;
-    gpu_payload_c[2751 +: 1] = shell_phy_we_n_o;
-    gpu_payload_c[2752 +: 13] = shell_phy_a_o;
-    gpu_payload_c[2765 +: 2] = shell_phy_ba_o;
-    gpu_payload_c[2767 +: 16] = shell_phy_dq_o;
-    gpu_payload_c[2783 +: 1] = shell_phy_dq_oe_o;
-    gpu_payload_c[2784 +: 2] = shell_phy_dqm_o;
-    gpu_payload_c[2786 +: 1] = shell_cmd_pkt_valid_o;
-    gpu_payload_c[2787 +: 8] = shell_cmd_pkt_byte_o;
-    gpu_payload_c[2795 +: 32] = shell_cmd_pkt_len_o;
+    gpu_payload_c[2270 +: 1] = shell_build_hps_wr_ready_o;
+    gpu_payload_c[2271 +: 1] = shell_render_drain_done_o;
+    gpu_payload_c[2272 +: 1] = shell_render_busy_o;
+    gpu_payload_c[2273 +: 32] = shell_render_pixels_o;
+    gpu_payload_c[2305 +: 32] = shell_render_bursts_o;
+    gpu_payload_c[2337 +: 1] = shell_render_stream_error_o;
+    gpu_payload_c[2338 +: 1] = shell_render_drained_o;
+    gpu_payload_c[2339 +: 1] = shell_render_fatal_o;
+    gpu_payload_c[2340 +: 32] = shell_render_issued_words_o;
+    gpu_payload_c[2372 +: 32] = shell_render_retired_words_o;
+    gpu_payload_c[2404 +: 1] = shell_render_overflow_o;
+    gpu_payload_c[2405 +: 1] = shell_render_fragment_error_o;
+    gpu_payload_c[2406 +: 1] = shell_post_pass_start_o;
+    gpu_payload_c[2407 +: 1] = shell_post_view_o;
+    gpu_payload_c[2408 +: 1] = shell_post_src_valid_o;
+    gpu_payload_c[2409 +: 16] = shell_post_src_rgb_o;
+    gpu_payload_c[2425 +: 1] = shell_post_out_ready_o;
+    gpu_payload_c[2426 +: 1] = shell_post_busy_o;
+    gpu_payload_c[2427 +: 32] = shell_post_passes_o;
+    gpu_payload_c[2459 +: 32] = shell_post_frames_o;
+    gpu_payload_c[2491 +: 1] = shell_post_fault_o;
+    gpu_payload_c[2492 +: 32] = shell_post_src_reads_o;
+    gpu_payload_c[2524 +: 32] = shell_post_src_pixels_o;
+    gpu_payload_c[2556 +: 32] = shell_post_retire_unowned_o;
+    gpu_payload_c[2588 +: 32] = shell_post_share_contention_o;
+    gpu_payload_c[2620 +: 32] = shell_echo_passes_complete_o;
+    gpu_payload_c[2652 +: 32] = shell_echo_passes_torn_o;
+    gpu_payload_c[2684 +: 32] = shell_echo_pixels_written_o;
+    gpu_payload_c[2716 +: 32] = shell_echo_pixels_dropped_o;
+    gpu_payload_c[2748 +: 1] = shell_echo_fault_o;
+    gpu_payload_c[2749 +: 1] = shell_phy_cs_n_o;
+    gpu_payload_c[2750 +: 1] = shell_phy_ras_n_o;
+    gpu_payload_c[2751 +: 1] = shell_phy_cas_n_o;
+    gpu_payload_c[2752 +: 1] = shell_phy_we_n_o;
+    gpu_payload_c[2753 +: 13] = shell_phy_a_o;
+    gpu_payload_c[2766 +: 2] = shell_phy_ba_o;
+    gpu_payload_c[2768 +: 16] = shell_phy_dq_o;
+    gpu_payload_c[2784 +: 1] = shell_phy_dq_oe_o;
+    gpu_payload_c[2785 +: 2] = shell_phy_dqm_o;
+    gpu_payload_c[2787 +: 1] = shell_cmd_pkt_valid_o;
+    gpu_payload_c[2788 +: 8] = shell_cmd_pkt_byte_o;
+    gpu_payload_c[2796 +: 32] = shell_cmd_pkt_len_o;
   end
 
   logic [171:0] video_payload_c;
@@ -487,21 +494,21 @@ module shell_v2_top
     .cnt_snap_id_o_captured_i(gpu_capture_bus[1711 +: 16]),
     .init_done_o_captured_i(gpu_capture_bus[1889 +: 1]),
     .render_tri_ready_o_native_i(shell_render_tri_ready_o),
-    .render_drained_o_captured_i(gpu_capture_bus[2337 +: 1]),
-    .render_issued_words_o_captured_i(gpu_capture_bus[2339 +: 32]),
-    .render_retired_words_o_captured_i(gpu_capture_bus[2371 +: 32]),
+    .render_drained_o_captured_i(gpu_capture_bus[2338 +: 1]),
+    .render_issued_words_o_captured_i(gpu_capture_bus[2340 +: 32]),
+    .render_retired_words_o_captured_i(gpu_capture_bus[2372 +: 32]),
     .geom_guard_rsp_o_captured_i(zhao_guard_rsp_t'(gpu_capture_bus[2023 +: 3])),
     .geom_beat_valid_o_captured_i(gpu_capture_bus[2026 +: 1]),
     .geom_beat_last_o_captured_i(gpu_capture_bus[2091 +: 1]),
-    .phy_cs_n_o_captured_i(gpu_capture_bus[2748 +: 1]),
-    .phy_ras_n_o_captured_i(gpu_capture_bus[2749 +: 1]),
-    .phy_cas_n_o_captured_i(gpu_capture_bus[2750 +: 1]),
-    .phy_we_n_o_captured_i(gpu_capture_bus[2751 +: 1]),
-    .phy_a_o_captured_i(gpu_capture_bus[2752 +: 13]),
-    .phy_ba_o_captured_i(gpu_capture_bus[2765 +: 2]),
-    .phy_dq_o_captured_i(gpu_capture_bus[2767 +: 16]),
-    .phy_dq_oe_o_captured_i(gpu_capture_bus[2783 +: 1]),
-    .phy_dqm_o_captured_i(gpu_capture_bus[2784 +: 2]),
+    .phy_cs_n_o_captured_i(gpu_capture_bus[2749 +: 1]),
+    .phy_ras_n_o_captured_i(gpu_capture_bus[2750 +: 1]),
+    .phy_cas_n_o_captured_i(gpu_capture_bus[2751 +: 1]),
+    .phy_we_n_o_captured_i(gpu_capture_bus[2752 +: 1]),
+    .phy_a_o_captured_i(gpu_capture_bus[2753 +: 13]),
+    .phy_ba_o_captured_i(gpu_capture_bus[2766 +: 2]),
+    .phy_dq_o_captured_i(gpu_capture_bus[2768 +: 16]),
+    .phy_dq_oe_o_captured_i(gpu_capture_bus[2784 +: 1]),
+    .phy_dqm_o_captured_i(gpu_capture_bus[2785 +: 2]),
     .cfg_valid_i(shell_cfg_valid_i),
     .cfg_op_i(shell_cfg_op_i),
     .cfg_page_generation_i(shell_cfg_page_generation_i),
@@ -561,6 +568,9 @@ module shell_v2_top
     .build_wvalid_i(shell_build_wvalid_i),
     .build_wlast_i(shell_build_wlast_i),
     .build_hps_req_i(shell_build_hps_req_i),
+    .build_hps_wr_valid_i(shell_build_hps_wr_valid_i),
+    .build_hps_wr_data_i(shell_build_hps_wr_data_i),
+    .build_hps_wr_last_i(shell_build_hps_wr_last_i),
     .build_res_valid_i(shell_build_res_valid_i),
     .build_res_base_i(shell_build_res_base_i),
     .build_res_span_i(shell_build_res_span_i),
@@ -598,6 +608,8 @@ module shell_v2_top
     .post_frame_w_i(shell_post_frame_w_i),
     .post_frame_h_i(shell_post_frame_h_i),
     .post_duo_i(shell_post_duo_i),
+    .post_echo_arm_i(shell_post_echo_arm_i),
+    .post_look_hold_i(shell_post_look_hold_i),
     .post_src_ready_i(shell_post_src_ready_i),
     .post_out_valid_i(shell_post_out_valid_i),
     .post_out_rgb_i(shell_post_out_rgb_i),
@@ -790,6 +802,10 @@ module shell_v2_top
     .build_hps_grant_o(shell_build_hps_grant_o),
     .build_hps_rsp_o(shell_build_hps_rsp_o),
     .build_hps_wait_o(shell_build_hps_wait_o),
+    .build_hps_wr_valid_i(shell_build_hps_wr_valid_i),
+    .build_hps_wr_data_i(shell_build_hps_wr_data_i),
+    .build_hps_wr_last_i(shell_build_hps_wr_last_i),
+    .build_hps_wr_ready_o(shell_build_hps_wr_ready_o),
     .build_res_valid_i(shell_build_res_valid_i),
     .build_res_base_i(shell_build_res_base_i),
     .build_res_span_i(shell_build_res_span_i),
@@ -838,6 +854,8 @@ module shell_v2_top
     .post_frame_w_i(shell_post_frame_w_i),
     .post_frame_h_i(shell_post_frame_h_i),
     .post_duo_i(shell_post_duo_i),
+    .post_echo_arm_i(shell_post_echo_arm_i),
+    .post_look_hold_i(shell_post_look_hold_i),
     .post_pass_start_o(shell_post_pass_start_o),
     .post_view_o(shell_post_view_o),
     .post_src_valid_o(shell_post_src_valid_o),
@@ -1003,6 +1021,9 @@ module shell_v2_stimulus
   (* preserve *) output var logic build_wvalid_i,
   (* preserve *) output var logic build_wlast_i,
   (* preserve *) output var zhao_hps_burst_req_t [1-1:0] build_hps_req_i,
+  (* preserve *) output var logic [1-1:0] build_hps_wr_valid_i,
+  (* preserve *) output var logic [1-1:0] [63:0] build_hps_wr_data_i,
+  (* preserve *) output var logic [1-1:0] build_hps_wr_last_i,
   (* preserve *) output var logic build_res_valid_i,
   (* preserve *) output var logic [31:0] build_res_base_i,
   (* preserve *) output var logic [31:0] build_res_span_i,
@@ -1040,6 +1061,8 @@ module shell_v2_stimulus
   (* preserve *) output var logic [8:0] post_frame_w_i,
   (* preserve *) output var logic [7:0] post_frame_h_i,
   (* preserve *) output var logic post_duo_i,
+  (* preserve *) output var logic post_echo_arm_i,
+  (* preserve *) output var logic post_look_hold_i,
   (* preserve *) output var logic post_src_ready_i,
   (* preserve *) output var logic post_out_valid_i,
   (* preserve *) output var logic [15:0] post_out_rgb_i,
@@ -1626,6 +1649,9 @@ module shell_v2_stimulus
       build_wvalid_i <= '0;
       build_wlast_i <= '0;
       build_hps_req_i <= '0;
+      build_hps_wr_valid_i <= '0;
+      build_hps_wr_data_i <= '0;
+      build_hps_wr_last_i <= '0;
       build_res_valid_i <= '0;
       build_res_base_i <= '0;
       build_res_span_i <= '0;
@@ -1663,6 +1689,8 @@ module shell_v2_stimulus
       post_frame_w_i <= '0;
       post_frame_h_i <= '0;
       post_duo_i <= '0;
+      post_echo_arm_i <= '0;
+      post_look_hold_i <= '0;
       post_src_ready_i <= '0;
       post_out_valid_i <= '0;
       post_out_rgb_i <= '0;
@@ -2323,14 +2351,14 @@ endmodule
 module shell_v2_gpu_sink (
   input  logic clk,
   input  logic rst_n,
-  input  logic [2826:0] payload_i,
-  output logic [2826:0] capture_o,
+  input  logic [2827:0] payload_i,
+  output logic [2827:0] capture_o,
   output logic signature_o,
   output logic epoch_o
 );
 
   // Immediate native-domain endpoint for every shell output bit.
-  (* preserve *) logic [2826:0] capture_q;
+  (* preserve *) logic [2827:0] capture_q;
   always_ff @(posedge clk) capture_q <= payload_i;
   assign capture_o = capture_q;
 
@@ -2446,7 +2474,7 @@ module shell_v2_gpu_sink (
       7'd86: selected_c = capture_q[2752 +: 32];
       7'd87: selected_c = capture_q[2784 +: 32];
       7'd88: begin
-        selected_c[10:0] = capture_q[2816 +: 11];
+        selected_c[11:0] = capture_q[2816 +: 12];
       end
       default: selected_c = 32'h0;
     endcase

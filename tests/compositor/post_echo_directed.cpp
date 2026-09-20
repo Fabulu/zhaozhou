@@ -248,14 +248,152 @@ int main(int argc, char** argv) {
                 "every pixel of it dropped, the pass torn", 400, o.dropped);
   }
 
+  // ---- 5b. w == 0 and h == 0 are REFUSED too (Q003 F3) ----------------------
+  // `bad_geom_c` has three terms and only the width-not-whole-chunks one was
+  // ever driven. A zero-sized view opens nothing, writes nothing and is a torn
+  // pass, so "nothing happened" can never read as a capture.
+  for (const auto& wh : {std::pair<unsigned, unsigned>{0u, 8u}, std::pair<unsigned, unsigned>{64u, 0u}}) {
+    postmem::Model m;
+    m.allow = capture_only;
+    const unsigned t0 = top.passes_torn_o, c0 = top.passes_complete_o, w0 = top.pixels_written_o;
+    top.pass_start_i = 1;
+    top.view_i = 0;
+    top.w_i = wh.first;
+    top.h_i = wh.second;
+    top.tap_valid_i = 0;
+    for (int cyc = 0; cyc < 64; ++cyc) {
+      const auto d = m.drive();
+      top.guard_rsp_i = d.rsp;
+      top.guard_wready_i = d.wready;
+      top.retire_words_i = d.credits;
+      top.clk = 0;
+      top.eval();
+      const auto req = postmem::decode(top.guard_req_o);
+      top.clk = 1;
+      top.eval();
+      m.edge(d, req, false, 0, false);
+      top.pass_start_i = 0;
+    }
+    zhao::check(!echo::geometry_ok(wh.first, wh.second, 1), "the reference refuses a zero-sized view",
+                0, 0);
+    zhao::check(top.passes_torn_o - t0 == 1 && top.passes_complete_o == c0,
+                wh.first == 0 ? "w == 0 is a torn pass, never complete"
+                              : "h == 0 is a torn pass, never complete",
+                1, top.passes_torn_o - t0);
+    zhao::check(m.accepts == 0 && top.pixels_written_o == w0 && !top.busy_o,
+                "and it opens nothing and writes nothing", 0,
+                m.accepts + (top.pixels_written_o - w0) + top.busy_o);
+  }
+
+  // ---- 5c. a pass_start over a LIVE pass tears it (Q003 F4) -----------------
+  // torn_inc_c's second term: a new start while the previous pass is still
+  // open. The abandoned pass (view 1, cut after 200 of its 512 pixels) must be
+  // counted torn ONCE, and the pass that replaced it must land whole.
+  {
+    postmem::Model m;
+    m.allow = capture_only;
+    const unsigned t0 = top.passes_torn_o, c0 = top.passes_complete_o;
+    // Pass A: offer 200 pixels and walk away without waiting for it to settle.
+    {
+      unsigned x = 0, y = 0, offered = 0;
+      bool first = true;
+      for (int cyc = 0; offered < 200 && cyc < 100000; ++cyc) {
+        const auto d = m.drive();
+        top.guard_rsp_i = d.rsp;
+        top.guard_wready_i = d.wready;
+        top.retire_words_i = d.credits;
+        top.pass_start_i = first;
+        top.view_i = 1;
+        top.w_i = 64;
+        top.h_i = 8;
+        const bool offer = !first && ((cyc % 23) < 16);
+        top.tap_valid_i = offer;
+        top.tap_rgb_i = tapval(1, x, y);
+        top.tap_x_i = x;
+        top.tap_y_i = y;
+        top.clk = 0;
+        top.eval();
+        const auto req = postmem::decode(top.guard_req_o);
+        const bool wv = top.guard_wvalid_o;
+        const uint64_t wd = top.guard_wdata_o;
+        const bool wl = top.guard_wlast_o;
+        top.clk = 1;
+        top.eval();
+        m.edge(d, req, wv, wd, wl);
+        first = false;
+        if (offer) {
+          ++offered;
+          if (++x == 64) { x = 0; ++y; }
+        }
+      }
+      top.tap_valid_i = 0;
+    }
+    const bool a_open = top.busy_o;
+    // Pass B replaces it.
+    const auto ob = pass(top, m, 0, 64, 8, 0, 1, 55);
+    const auto ab = audit(m, 0, 64, 8);
+    std::printf("    5c: B complete=%u torn=%u written=%u dropped=%u fault=%d | model bad_order=%u viol=%u accepts=%u wbeats=%u\n",
+                ob.complete, ob.torn, ob.written, ob.dropped, ob.fault ? 1 : 0, m.bad_write_order,
+                m.violations, m.accepts, m.write_beats);
+    zhao::check(a_open, "pass A was still open when B started", 1, a_open ? 1 : 0);
+    zhao::check(top.passes_torn_o - t0 == 1, "the abandoned pass is counted torn exactly once", 1,
+                top.passes_torn_o - t0);
+    zhao::check(top.passes_complete_o - c0 == 1 && ob.complete == 1,
+                "and the pass that replaced it is one WHOLE capture", 1, ob.complete);
+    zhao::check(ab.present == 64u * 8u && ab.wrong == 0 && ab.partial == 0,
+                "B lands whole at view 0's rows", 512, ab.present);
+    zhao::check(!ob.fault && m.bad_write_order == 0, "no fault, every data beat owned", 0,
+                (ob.fault ? 1 : 0) + m.bad_write_order);
+  }
+
   // ---- 6. a refused burst: fault_o latches and the pass is torn -------------
-  //      (LAST, because FBWRITE's fatal latch is sticky until reset.)
+  //      (Late, because FBWRITE's fatal latch is sticky until reset.)
   {
     postmem::Model m;
     m.allow = [](const postmem::Req& q) { return q.addr != echo::kCaptureBase + 64u; };
     const auto o = pass(top, m, 0, 64, 4, 0, 1, 6);
     zhao::check(o.fault, "a refused capture burst latches fault_o", 1, o.fault ? 1 : 0);
     zhao::check(o.torn == 1 && o.complete == 0, "and the pass is torn, not complete", 1, o.torn);
+  }
+
+  // ---- 6b. every LATER pass is torn while the fault is latched (Q003 F5) ----
+  // POST.ECHO.md: a fault is sticky and no later capture may be called whole.
+  // This pass is legal, fully written and fully accepted by the guard.
+  {
+    postmem::Model m;
+    m.allow = capture_only;
+    const auto o = pass(top, m, 0, 64, 4, 0, 1, 66);
+    zhao::check(o.fault, "the fault is still latched", 1, o.fault ? 1 : 0);
+    zhao::check(o.torn == 1 && o.complete == 0,
+                "so a clean pass after it is TORN, never complete", 1, o.torn);
+  }
+
+  // ---- 7. a geometry that OVERRUNS the capture span (Q003 F1) ---------------
+  // The echo has no span check of its own; the contract's row 110 says the
+  // GUARD refuses the first burst past the window, which latches fault_o and
+  // tears the pass. View 1 of a 384x240 pair starts at capture row 240, and the
+  // window holds 320 rows of 768 bytes, so rows 320.. are outside it.
+  // Reset first: 6/6b left FBWRITE's fatal latch set.
+  {
+    top.rst_n = 0;
+    for (int i = 0; i < 4; ++i) zhao::tick(top);
+    top.rst_n = 1;
+    zhao::tick(top);
+    postmem::Model m;
+    m.allow = capture_only;
+    zhao::check(!echo::geometry_ok(384, 240, 2), "the reference refuses a 384x240 pair (span)", 0, 0);
+    const auto o = pass(top, m, 1, 384, 240, 0, 1, 7);
+    zhao::check(m.violations >= 1, "the guard refused the first burst past the window", 1,
+                m.violations >= 1 ? 1 : 0);
+    zhao::check(o.fault, "fault_o latches", 1, o.fault ? 1 : 0);
+    zhao::check(o.torn == 1 && o.complete == 0, "and the pass is TORN", 1, o.torn);
+    zhao::check(strays(m, 2, 384, 240) == 0 &&
+                    [&] {
+                      for (const auto& kv : m.mem)
+                        if (kv.first >= echo::kCaptureBase + echo::kCaptureSpan) return false;
+                      return true;
+                    }(),
+                "and nothing lands past the capture window", 0, 0);
   }
 
   std::printf("  post_echo: complete=%u torn=%u written=%u dropped=%u\n", top.passes_complete_o,

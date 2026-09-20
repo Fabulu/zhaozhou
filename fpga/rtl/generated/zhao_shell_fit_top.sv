@@ -2,7 +2,7 @@
 // Generator: tools/quartus/gen_shell_fit_top.py
 // shell-declaration-sha256: 428f942178a8b3a6b900fed93d03fe94ceda3bfc8d929a59ffd3a841aafdd81a
 // policy-sha256: 50b395ef85f9def005309ba44f52baf782df02046860fd6081c315d41362842b
-// generator-sha256: 55900894edddbf9a0e82373e7d4e80cee0b0c3551b1d144c093ea6f94134509a
+// generator-sha256: 7734f1ac63564fc0762ee9cbd98d28c0e30825fac9ee0df70247a3c70f8ce7f7
 // parser-sha256: cf10b580276970bf2be1e4abea5cb6d97248e46671ba525027f45c8079815fc5
 // packet-rom-sha256: bf1363eb06c8a58cb63e6a82608b1321279a4dc4178fd9497b9b90ed31942b51
 // Traffic is deterministic legal-ish characterization stimulus, not an HPS/SDRAM model.

@@ -268,6 +268,9 @@ SIBLING_HANDLER_INPUT_PORTS: Mapping[str, tuple[str, ...]] = {
         "post_frame_w_i",
         "post_frame_h_i",
         "post_duo_i",
+        # R35/R36 (post pass 2): the echo arm and the look hold, CMD.EXEC's.
+        "post_echo_arm_i",
+        "post_look_hold_i",
         "post_src_ready_i",
         "post_out_valid_i",
         "post_out_rgb_i",

@@ -1357,6 +1357,11 @@ module zhao_console_board
   // onto it (owner ruling R17). These two are CMD.EXEC's upload evidence.
   output logic [31:0]             cmd_exec_uploads_o,
   output logic [31:0]             cmd_exec_upload_overflow_o,
+  // R35/R36: SetPost / SetGradeTable, each fired by tests/command/cmd_exec_directed.cpp.
+  output logic [31:0]             cmd_exec_post_looks_o,       // looks handed to POST.COMPOSITE
+  output logic [31:0]             cmd_exec_grade_entries_o,    // product vectors written
+  output logic [31:0]             cmd_exec_post_refused_o,     // records REFUSED (flags/bias/header)
+  output logic [31:0]             cmd_exec_grade_overflow_o,   // entries refused for staging room
   // Host configuration, the terrain spine's `terr_cfg_*` shape: the
   // destination region MEM.GUARD's TERRAIN_BUILD arm must also admit (in
   // TERRAIN.PAGE_POOL always; in RENDER.ASSET_POOL through R32's arm, which is
@@ -1545,18 +1550,10 @@ module zhao_console_board
   // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
   // this module and the atmosphere sheet never leaves. Entry I17 records what
   // changed and what did not.
-  input  logic [7:0]              post_bloom_gain_i,
-  input  logic                    post_grade_valid_i,
-  input  logic                    post_pv_we_i,
-  input  logic [1:0]              post_pv_sel_i,
-  input  logic [5:0]              post_pv_addr_i,
-  input  logic [71:0]             post_pv_data_i,
-  input  logic signed [8:0]       post_bias_r_i,
-  input  logic signed [8:0]       post_bias_g_i,
-  input  logic signed [8:0]       post_bias_b_i,
-  input  logic [15:0]             post_flash_rgb_i,
-  input  logic [7:0]              post_flash_amt_i,
-  input  logic [15:0]             post_ink_rgb_i,
+  // THE LOOK AND THE GRADING TABLE ARE GONE FROM THIS EDGE, 2026-09-19 (post
+  // pass 2, owner rulings R35/R36): post_bloom_gain_i, post_grade_valid_i,
+  // post_pv_*, post_bias_*, post_flash_* and post_ink_rgb_i are driven by
+  // CMD.EXEC's SetPost / SetGradeTable arm (section 7c). Entry I17 (a)(b).
   output logic                    post_hud_req_v_o,
   output logic [POST_XW-1:0]      post_hud_req_x_o,
   output logic [POST_YW-1:0]      post_hud_req_y_o,
@@ -3128,6 +3125,10 @@ module zhao_console_board
       .terr_hps_c3_wait_cycles_o         (terr_hps_c3_wait_cycles_o),
       .cmd_exec_uploads_o                (cmd_exec_uploads_o),
       .cmd_exec_upload_overflow_o        (cmd_exec_upload_overflow_o),
+      .cmd_exec_post_looks_o             (cmd_exec_post_looks_o),
+      .cmd_exec_grade_entries_o          (cmd_exec_grade_entries_o),
+      .cmd_exec_post_refused_o           (cmd_exec_post_refused_o),
+      .cmd_exec_grade_overflow_o         (cmd_exec_grade_overflow_o),
       .upl_cfg_region_base_i             (upl_cfg_region_base_i),
       .upl_cfg_region_bytes_i            (upl_cfg_region_bytes_i),
       .upl_cfg_arena_base_i              (upl_cfg_arena_base_i),
@@ -3262,18 +3263,6 @@ module zhao_console_board
       .post_gg_present_i                 (post_gg_present_i),
       .post_gg_glow_i                    (post_gg_glow_i),
       .post_gg_ink_i                     (post_gg_ink_i),
-      .post_bloom_gain_i                 (post_bloom_gain_i),
-      .post_grade_valid_i                (post_grade_valid_i),
-      .post_pv_we_i                      (post_pv_we_i),
-      .post_pv_sel_i                     (post_pv_sel_i),
-      .post_pv_addr_i                    (post_pv_addr_i),
-      .post_pv_data_i                    (post_pv_data_i),
-      .post_bias_r_i                     (post_bias_r_i),
-      .post_bias_g_i                     (post_bias_g_i),
-      .post_bias_b_i                     (post_bias_b_i),
-      .post_flash_rgb_i                  (post_flash_rgb_i),
-      .post_flash_amt_i                  (post_flash_amt_i),
-      .post_ink_rgb_i                    (post_ink_rgb_i),
       .post_hud_req_v_o                  (post_hud_req_v_o),
       .post_hud_req_x_o                  (post_hud_req_x_o),
       .post_hud_req_y_o                  (post_hud_req_y_o),

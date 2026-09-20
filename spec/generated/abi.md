@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = ce34affb9e20fc8a4c15ea519c015054617f0b0b3ad4ff40c28acabc991202f5
-zidl_sha256         = 08da9339570ce7bf01f4ff96a1bfbe3c9586bee028a73bc45b11962e427b0a03
+abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
+zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-19 commands (15 implemented).
+21 commands (17 implemented).
 
 ## Commands
 
@@ -36,6 +36,8 @@ ABI version **3**, little-endian, command alignment
 | `DebugFrameBlit` | `0xF002` | 48 | implemented |
 | `DebugRumble` | `0xF004` | 32 | implemented |
 | `PublishResource` | `0x0030` | 48 | implemented |
+| `SetPost` | `0x0040` | 32 | implemented |
+| `SetGradeTable` | `0x0041` | 96 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -501,6 +503,58 @@ Golden sample: `tests/abi/golden/cmd_publish_resource.bin` (C++ packer
 TS `zhaoPackPublishResource(zhaoSamplePublishResource(), ...)`, SV round-trips it via
 `zhao_unpack_publish_resource`/`zhao_pack_publish_resource`).
 
+### SetPost — 0x0040 (32 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `bloom_gain` | u8 |
+| 1 | 1 | `flags` | u8 |
+| 2 | 1 | `flash_amount` | u8 |
+| 3 | 1 | `pad` | pad (zero) |
+| 4 | 2 | `bias_r` | i16 |
+| 6 | 2 | `bias_g` | i16 |
+| 8 | 2 | `bias_b` | i16 |
+| 10 | 2 | `flash` | rgb565 |
+| 12 | 2 | `ink` | rgb565 |
+| 14 | 2 | `pad_1` | pad (zero) ×2 |
+
+`flash` (rgb565) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 20 | 2 | `flash.bits` | u16 |
+
+`ink` (rgb565) leaves:
+
+| Offset | Size | Leaf | Type |
+|---|---|---|---|
+| 24 | 2 | `ink.bits` | u16 |
+
+Golden sample: `tests/abi/golden/cmd_set_post.bin` (C++ packer
+`zhao_abi::zhao_pack_set_post(zhao_abi::zhao_sample_set_post(), ...)`,
+TS `zhaoPackSetPost(zhaoSampleSetPost(), ...)`, SV round-trips it via
+`zhao_unpack_set_post`/`zhao_pack_set_post`).
+
+### SetGradeTable — 0x0041 (96 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `curve` | u8 |
+| 1 | 1 | `first` | u8 |
+| 2 | 1 | `count` | u8 |
+| 3 | 1 | `pad` | pad (zero) |
+| 4 | 72 | `vectors` | u8 ×72 |
+| 76 | 4 | `pad_1` | pad (zero) ×4 |
+
+Golden sample: `tests/abi/golden/cmd_set_grade_table.bin` (C++ packer
+`zhao_abi::zhao_pack_set_grade_table(zhao_abi::zhao_sample_set_grade_table(), ...)`,
+TS `zhaoPackSetGradeTable(zhaoSampleSetGradeTable(), ...)`, SV round-trips it via
+`zhao_unpack_set_grade_table`/`zhao_pack_set_grade_table`).
+
 ## Composed structs
 
 ### rectfx — 16 B
@@ -659,6 +713,8 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_debug_frame_blit.bin` | canonical DebugFrameBlit sample record |
 | `tests/abi/golden/cmd_debug_rumble.bin` | canonical DebugRumble sample record |
 | `tests/abi/golden/cmd_publish_resource.bin` | canonical PublishResource sample record |
+| `tests/abi/golden/cmd_set_post.bin` | canonical SetPost sample record |
+| `tests/abi/golden/cmd_set_grade_table.bin` | canonical SetGradeTable sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |
