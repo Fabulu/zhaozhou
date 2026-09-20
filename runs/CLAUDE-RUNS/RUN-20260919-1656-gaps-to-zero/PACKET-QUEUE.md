@@ -24,33 +24,35 @@ should change how the next slots are spent.
 
 ## Running
 
-*(Updated 2026-09-20, 21:00. The table before this one listed H1, D1 and A1 --
-all three had LANDED. That is the third time today this section has described
-finished work as live, which is exactly the fiction this file exists to prevent.
-**Verify against `git ls-remote origin` before filling a slot from it** -- and
-note that `git log origin/<branch>` is NOT that check: the local remote-tracking
-ref on the coordinator branch is stale and reported the branch 10 commits behind
-while `git push` correctly said up-to-date.)*
+*(Updated 2026-09-20, 22:10. **Verify against `git ls-remote origin` before
+filling a slot from this table** -- and note `git log origin/<branch>` is NOT
+that check: the coordinator branch's local tracking ref is stale and reported it
+10 commits behind while `git push` correctly said up-to-date.)*
 
 | lane | owns | branch | state |
 |---|---|---|---|
-| CMDFIELD | the orphaned seams: `zfield_plan.cpp`'s classifier, §13.7's TerrainField producer, I34's real requirement | `gz/cmdfield` | RUNNING |
-| FORGE4 | composing `zhao_forge_shadow` / `_prim` / `_prim_eval` / `_cliff`, and the cliff RAM-vs-logic decision | `gz/forge4` | RUNNING |
+| FORGE4 | composing `zhao_forge_shadow` / `_prim` / `_prim_eval` / `_cliff`, and the cliff RAM-vs-logic decision (6,674 ALM against 976) | `gz/forge4` | RUNNING |
+| WARPFIX | R168: the warp adapter's ordinal-vs-window mis-wiring, the SPARSE case as a named test, and `resp_present_o` | `gz/warpfix` | RUNNING |
+| POSTMEAS | composing `zhao_post_gather`, `zhao_measure_governor`, `zhao_geom_parambuf` | `gz/postmeas` | RUNNING |
 
-**Awaiting merge by the coordinator** (work complete and pushed, NOT yet in the
-coordinator branch -- do not hand these files to a new packet):
+**Merged since the last revision:** FIELD-E1, FIELD-W1, CMDFIELD, TERRCOMP.
 
-| lane | head | what it landed |
-|---|---|---|
-| FIELD-E1 | `4186789e` | R44's probe promotion proven a no-op, the 273->297 group count in 3 of its 4 homes, the ratified terrain arithmetic factored into `zhao_terrain_patch_law_pkg.sv`. Register held at 21; I34 REFUSED with its blocker named. |
-| FIELD-W1 | `3285a290` | **GEOM.WARP is BUILT** -- `zhao_geom_warp.sv` and `zhao_field_warp_adapter.sv`, directed tests, a committed mutant with its driver. Register does NOT move, which is the honest number: built is not connected. |
+**TERRCOMP refused all four terrain compositions and changed zero files**, and
+that is a success, not a stall -- its findings are transcribed in
+`FINDINGS-terrcomp.md` and produced rulings R173-R177. `zhao_terrain_normalmap`
+is blocked on owner ruling **R115** (its recommendation: supersede, which would
+drop 21 -> 20 honestly -- **an owner call, not a packet's and not mine**).
 
-**Next slot goes to TERRAIN composition** (`gz/terrcomp`, packet B of
-`BRIEF-WAVE4-COMPOSITION.md`) -- `zhao_terrain_normalmap`, `_velocity`,
-`_bake_v2`, `_lod`. **It is held until E1 is merged**, because E1 moves the two
-Earth probes into `fpga/rtl/terrain/` and adds a package there; starting it
-first would hand a packet a file set that is about to change underneath it
-(R106).
+## NEXT SLOT
+
+**R176: the ratified terrain law package is imported only by the module that is
+NOT composed.** `zhao_terrain_patch_law_pkg.sv` was created this evening
+precisely so a v2 could not copy the arithmetic; `patch` and `lodfeed`, both
+COMPOSED, still carry their own `fx_add_sat` / `covers` / `h16 -> fx`. Three
+implementations of a law with one ratified statement. It closes no gap, so it
+ranks below composition work -- but it is **area**, the binding constraint, and
+`duplicate_functions.py` now reports **43** duplicated names against the 30 it
+could see this morning (`sub_sat` in 9 files, `resc16` in 8).
 
 **Landed today:** field, geomlod, texmat2, terrain6, projinput, post3, terrain7,
 forge, carriers, warp, projadopt, forgeconnect, fieldp4, terrain9, post3b,
