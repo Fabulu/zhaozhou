@@ -449,6 +449,10 @@ struct Rig {
   // tableau 2 pairs B's -325 mm low with a fold delta of -1000 pm
   // (kTaunt3OrderFoldDeltaPm) -- and the fold delta is the dominant term.
   int32_t fold_delta_pm[3] = {0, 0, 0};  // A, B, C
+  // PASS 20 PACKET 5: the DENT's depth for this key, `s` in per mille (see
+  // kKneadDentDepthPm). 0 means the guarded block in loop_pose executes zero
+  // instructions, which is what makes the off path byte-identical.
+  int32_t dent_pm = 0;
   /** Signed centre-distance change for Front/A, A/B and B/C, in per-mille.
    *  These are diagnostic receipts only. Visible length uses a constant-slope
    *  partial helper across the free run and the full child translation across
@@ -478,6 +482,7 @@ struct Rig {
     }
     nod = NoduleOffsets{};
     fold_delta_pm[0] = fold_delta_pm[1] = fold_delta_pm[2] = 0;
+    dent_pm = 0;
     span_pm[0] = span_pm[1] = span_pm[2] = 0;
     eye_lean = 0;
   }
@@ -640,6 +645,55 @@ inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
   pz += dz;
 }
 
+/** PASS 20 PACKET 5: where B goes during the DENT.
+ *
+ *  Given the three carrier positions the EXISTING pose already produced, press
+ *  B along its own perpendicular to the A-C chord:
+ *
+ *      u    = (C - A)/|C - A|;  foot = A + ((B - A).u) u;  h = B - foot
+ *      B(s) = B - s*h
+ *
+ *  s = 1000 puts B on the chord, s = 2000 is its mirror image -- and the mirror
+ *  is STRETCH-FREE, |A B(2)| == |A B| and |B(2) C| == |B C| exactly. B never
+ *  leaves the plane of (A, B, C), so tilt and yaw play are honoured rather than
+ *  fought.
+ *
+ *  `cross_pm` slides the foot along the chord (per mille of |AC|) to
+ *  redistribute the length the two interior spans give up AT the crossing.
+ *
+ *  ⚠ ONE function, so the rounding is the same everywhere. int64 throughout:
+ *  |C-A| is under ~1500 mm, so the projection numerator stays well inside it.
+ *  Both divides are rounded and magnitude-symmetric, like signed_scaled_fx. */
+inline void dent_target_mm(int32_t ax, int32_t ay, int32_t az,
+                           int32_t bx, int32_t by, int32_t bz,
+                           int32_t cx, int32_t cy, int32_t cz,
+                           int32_t s_pm, int32_t cross_pm,
+                           int32_t& ox, int32_t& oy, int32_t& oz) {
+  ox = bx; oy = by; oz = bz;
+  const int64_t ux = cx - ax, uy = cy - ay, uz = cz - az;
+  const int64_t den = ux * ux + uy * uy + uz * uz;
+  if (den <= 0 || s_pm == 0) return;
+  const int64_t vx = bx - ax, vy = by - ay, vz = bz - az;
+  int64_t dot = ux * vx + uy * vy + uz * vz;
+  if (cross_pm != 0) {
+    // Slide the foot along the chord by cross_pm per mille of |AC|: in the
+    // projection's own units that is cross_pm/1000 of |AC|^2.
+    dot += (den * cross_pm) / 1000;
+  }
+  const auto rdiv = [](int64_t n, int64_t d) {
+    const int64_t mag = n < 0 ? -n : n;
+    const int64_t q = (mag + d / 2) / d;
+    return n < 0 ? -q : q;
+  };
+  // foot = A + (dot/den) * (C - A);  h = B - foot
+  const int64_t hx = vx - rdiv(dot * ux, den);
+  const int64_t hy = vy - rdiv(dot * uy, den);
+  const int64_t hz = vz - rdiv(dot * uz, den);
+  ox = static_cast<int32_t>(bx - rdiv(hx * s_pm, 1000));
+  oy = static_cast<int32_t>(by - rdiv(hy * s_pm, 1000));
+  oz = static_cast<int32_t>(bz - rdiv(hz * s_pm, 1000));
+}
+
 inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32_t c_pm,
                       int32_t tilt_a16 = 0, int32_t d_play_a16 = 0,
                       int32_t tilt_b_a16 = 0, int32_t tilt_c_a16 = 0,
@@ -753,6 +807,68 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
                  &g.span_pm[2], &delta_mm);
       g.set_span_delta(2, delta_mm);
     }
+  }
+
+  // ---- PASS 20 PACKET 5: THE DENT ---------------------------------------
+  //
+  // A pinned two-bone re-fold of the A-B-C triangle. See kKneadDentDepthPm.
+  // It runs AFTER the carried nodule solve (so it presses on wherever the
+  // ambient schedule, the swallow beats and the play have just put the three
+  // carriers) and BEFORE the closure walk (so the closure sees the new folds
+  // and still lands the arm by construction, exactly as the nodule solve does).
+  //
+  // ⚠ THE GUARD IS THE BYTE-IDENTITY GUARANTEE. dent_pm is 0 on every key
+  // unless the dent solver is selected, so this block executes zero
+  // instructions on the off path and every existing clip poses exactly as it
+  // did.
+  if (g.dent_pm > 0) {
+    // The walk, copied verbatim from the closure walk below -- including the
+    // >> 16 that floors a negative delta -- so all three walks (this, the
+    // closure, and finalize_rear_follow's) agree on every length to the LSB.
+    const auto len_of = [&](uint8_t bone, int arc) {
+      return arc + static_cast<int32_t>(
+                       (static_cast<int64_t>(g.local_t[bone][1]) * 1000) >> 16);
+    };
+    int32_t px = kLoopTubeXMm, py = kLoopNeckExitYMm, pz = 0;
+    zc::quat16 Q = quat_mul(g.q[kBJunctionF], g.q[kBNeck]);
+    int32_t dx, dy, dz;
+    quat_rot_vec(Q, 0, len_of(kBNeck, kLoopArcMm[1]), 0, dx, dy, dz);
+    px += dx; py += dy; pz += dz;              // A
+    const int32_t pax = px, pay = py, paz = pz;
+    const zc::quat16 Q1 = quat_mul(Q, g.q[kBHingeA]);
+    quat_rot_vec(Q1, 0, len_of(kBHingeA, kLoopArcMm[2]), 0, dx, dy, dz);
+    const int32_t pbx = px + dx, pby = py + dy, pbz = pz + dz;   // B
+    const zc::quat16 Q2 = quat_mul(Q1, g.q[kBHingeB]);
+    quat_rot_vec(Q2, 0, len_of(kBHingeB, kLoopArcMm[3]), 0, dx, dy, dz);
+    const int32_t pcx = pbx + dx, pcy = pby + dy, pcz = pbz + dz;  // C
+    // The frame that ENTERS the closure walk. Pinning this is what keeps
+    // HingeD's aim, the arm's arrival frame, the End frame, the rear helpers
+    // and the socket at their pre-dent values.
+    const zc::quat16 qc_world = quat_mul(Q2, g.q[kBHingeC]);
+
+    int32_t btx, bty, btz;
+    dent_target_mm(pax, pay, paz, pbx, pby, pbz, pcx, pcy, pcz,
+                   g.dent_pm, g_u02_knead_dent_cross_pm, btx, bty, btz);
+
+    // Two aims, through the production primitive: A->B(s), then B(s)->the
+    // SAVED world C. nodule_aim reports the absolute length delta and advances
+    // p exactly onto the target, so the second aim starts from B(s) precisely.
+    zc::quat16 NQ = Q1;
+    int32_t p2x = pax, p2y = pay, p2z = paz;
+    int32_t d1 = 0, d2 = 0;
+    nodule_aim(g.q[kBHingeA], NQ, kLoopArcMm[2], p2x, p2y, p2z,
+               btx, bty, btz, &g.span_pm[1], &d1);
+    g.set_span_delta(1, d1);
+    NQ = quat_mul(NQ, g.q[kBHingeB]);
+    nodule_aim(g.q[kBHingeB], NQ, kLoopArcMm[3], p2x, p2y, p2z,
+               pcx, pcy, pcz, &g.span_pm[2], &d2);
+    g.set_span_delta(2, d2);
+    // THE PIN. HingeC's local rotation becomes whatever returns its WORLD
+    // frame to qc_world. Renormalised with the production renormaliser for the
+    // reason rear_socket_compose gives: a long quat16 product is not unit and
+    // quat16_to_mat3 scales by |q|^2.
+    const zc::quat16 pin = quat_mul(quat_conj(NQ), qc_world);
+    g.q[kBHingeC] = zc::quat16_nlerp(pin, pin, 1, 2);
   }
 
   // ---- the closure aim, in 3D: quaternion-walk the chain to hinge D
@@ -2492,8 +2608,49 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
  *  140-sample clip is a snap, and a snap on a carrier is what QA's per-key step
  *  checks exist to catch; a window longer than the clip would leave B parked at
  *  the bottom forever, which is a pose, not a knead. */
-inline int32_t knead_dip_mm(uint32_t slot, int keys, int f, int32_t gain_pm) {
-  if (gain_pm <= 0 || keys <= 0) return 0;
+/** PASS 20 PACKET 5: ONE SHARED PARSER for the dip/dent knobs.
+ *
+ *  ⚠ THIS EXISTS BECAUSE AN ENV-VAR CONTROL IS ONLY A CONTROL IN A BINARY THAT
+ *  READS IT. `ZHAO_U02_KNEAD_DIP_PM` was parsed in zhao_reel.cpp and
+ *  manafold_rear_audit.cpp only, so every "dip ON" ladder run against mspan and
+ *  mprobe in packet 3 had the dip at its compiled default and proved nothing
+ *  (P20-GATE-CHANGES.md records it). Every main() that builds clips calls this,
+ *  so a knob cannot be inert in one tool and live in another.
+ *
+ *  Returns false on a malformed value; callers return RC 2, as the reel's
+ *  strict selectors do. */
+inline bool apply_knead_dip_env() {
+  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_SOLVER")) {
+    if (std::strcmp(e, "dent") == 0)
+      g_u02_knead_dip_solver = KneadDipSolver::kDent;
+    else if (std::strcmp(e, "carried") == 0)
+      g_u02_knead_dip_solver = KneadDipSolver::kCarried;
+    else
+      return false;
+  }
+  const auto num = [](const char* name, int lo, int hi, int32_t& dst) {
+    const char* e = std::getenv(name);
+    if (e == nullptr) return true;
+    if (*e == ' ') return false;
+    char* end = nullptr;
+    const long v = std::strtol(e, &end, 10);
+    if (end == nullptr || *end != ' ' || v < lo || v > hi) return false;
+    dst = static_cast<int32_t>(v);
+    return true;
+  };
+  if (!num("ZHAO_U02_KNEAD_DIP_PM", 0, 1000, g_u02_knead_dip_gain_pm)) return false;
+  if (!num("ZHAO_U02_KNEAD_DENT_DEPTH_PM", 0, 4000, g_u02_knead_dent_depth_pm))
+    return false;
+  if (!num("ZHAO_U02_KNEAD_DENT_CROSS_PM", -800, 800, g_u02_knead_dent_cross_pm))
+    return false;
+  if (!num("ZHAO_U02_KNEAD_DENT_DUCK_PM", 0, 1000,
+           g_u02_knead_dent_ambient_duck_pm))
+    return false;
+  return true;
+}
+
+inline int32_t knead_dip_window_env(uint32_t slot, int keys, int f) {
+  if (keys <= 0) return 0;
   const int span = keys;
   const auto win_keys = [&](int32_t pm, int floor_k) {
     int k = static_cast<int>((static_cast<int64_t>(span) * pm) / 1000);
@@ -2507,7 +2664,6 @@ inline int32_t knead_dip_mm(uint32_t slot, int keys, int f, int32_t gain_pm) {
   const int fall = win_keys(kKneadDipFallPm, kKneadDipMinRampKeys);
   const int win = rise + hold + fall;
   if (win >= span) return 0;  // nothing that would leave B permanently down
-  // Drop dips until the schedule fits with real rest between them.
   int n = kKneadDipCount;
   while (n > 1 && n * (win + kKneadDipMinRestKeys) > span) --n;
   const int32_t phase = static_cast<int32_t>(
@@ -2528,6 +2684,15 @@ inline int32_t knead_dip_mm(uint32_t slot, int keys, int f, int32_t gain_pm) {
     }
   }
   if (env > 1000) env = 1000;  // windows are spaced so this cannot bind
+  return env;
+}
+
+/** The carried solver's depth in mm. The window arithmetic is now
+ *  knead_dip_window_env's; the integer operations are unchanged, so this is
+ *  byte-neutral. */
+inline int32_t knead_dip_mm(uint32_t slot, int keys, int f, int32_t gain_pm) {
+  if (gain_pm <= 0 || keys <= 0) return 0;
+  const int32_t env = knead_dip_window_env(slot, keys, f);
   return static_cast<int32_t>(
       (static_cast<int64_t>(g_u02_knead_dip_depth_mm) * env / 1000 * gain_pm) / 1000);
 }
@@ -2725,41 +2890,57 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   // "that's on all animations", and the knead gain and the dip gain are
   // different questions: a clip may want no ambient fold-hold-knead and still
   // want the dip. Its own table says which clips opt out.
+  //
+  // PASS 20 PACKET 5: two solvers, one schedule. The timing, the C2 ramps, the
+  // exact loop seam, the per-slot table and the global gain are shared; only
+  // how the gesture is REALISED differs. See kKneadDentDepthPm.
   {
     const int32_t dip_base =
         slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadDipClipPm[slot] : 750;
     const int32_t dip_gain = static_cast<int32_t>(
         (static_cast<int64_t>(dip_base) * motion_pm / 1000) *
         g_u02_knead_dip_gain_pm / 1000);
+    if (g_u02_knead_dip_solver == KneadDipSolver::kDent) {
+      const int32_t env_pm = static_cast<int32_t>(
+          (static_cast<int64_t>(knead_dip_window_env(slot, keys, f)) * dip_gain) /
+          1000);
+      if (env_pm > 0) {
+        g.dent_pm = static_cast<int32_t>(
+            (static_cast<int64_t>(env_pm) * g_u02_knead_dent_depth_pm) / 1000);
+        // THE AMBIENT DUCK: "the press owns the carriers while it presses."
+        // Scales the ambient A/B/C offsets already in g.nod, through the same
+        // path rather than a second channel, so an ambient compaction extreme
+        // cannot stack on top of the dent's crossing. It can only REDUCE an
+        // existing excursion. F and E are not ducked.
+        const int32_t duck = static_cast<int32_t>(
+            1000 - (static_cast<int64_t>(env_pm) *
+                    g_u02_knead_dent_ambient_duck_pm) / 1000000);
+        if (duck < 1000) {
+          const auto d = [&](int32_t v) {
+            return static_cast<int32_t>((static_cast<int64_t>(v) * duck) / 1000);
+          };
+          g.nod.ax = d(g.nod.ax); g.nod.ay = d(g.nod.ay); g.nod.az = d(g.nod.az);
+          g.nod.bx = d(g.nod.bx); g.nod.by = d(g.nod.by); g.nod.bz = d(g.nod.bz);
+          g.nod.cx = d(g.nod.cx); g.nod.cy = d(g.nod.cy); g.nod.cz = d(g.nod.cz);
+        }
+      }
+    } else {
     const int32_t dip = knead_dip_mm(slot, keys, f, dip_gain);
     if (dip > 0) {
       // Through the ONE production consumption point, so the dip inherits the
       // public F/A/B/C/E mute and the attachment law rather than writing g.nod
       // directly.
-      //
-      // ALL THREE FREE CARRIERS MOVE, in the crown's own tableau-2 proportions:
-      // A holds near its mid, B travels to its low, C rises to its high. The
-      // span between two carriers only has to absorb the DIFFERENCE of their
-      // travel, so a coordinated knead asks far less of the signed spans than
-      // the same B displacement taken alone -- which is why the single-carrier
-      // version could not stay inside mspan's envelope at any depth.
       const int32_t depth =
           g_u02_knead_dip_depth_mm > 0 ? g_u02_knead_dip_depth_mm : 1;
       const auto at = [&](int32_t mm) {
         return static_cast<int32_t>((static_cast<int64_t>(mm) * dip) / depth);
       };
-      // B goes down; C is handed the same amount BACK so the carry does not
-      // reach the return arm. See kKneadDipCarryCancelPm.
       const int32_t b_mm = at(knead_dip_carrier_mm(1));
       const int32_t c_cancel = static_cast<int32_t>(
           (-static_cast<int64_t>(b_mm) * g_u02_knead_dip_carry_cancel_pm) / 1000);
       int32_t swal[5] = {0, at(knead_dip_carrier_mm(0)), b_mm,
                          at(knead_dip_carrier_mm(2)) + c_cancel, 0};
       swallow_nodules(g, swal, 0);  // no lateral lean: the dip is vertical
-      // ...and the fold share, which is what actually changes the RANKING.
-      // Scaled by the dip's own envelope (dip / depth), so it rises, holds and
-      // releases on exactly the same C2 curve as the offset -- the two halves
-      // cannot drift apart or leave a fold delta standing at the loop seam.
       const auto share = [&](int32_t full) {
         return static_cast<int32_t>((static_cast<int64_t>(full) * dip) / depth *
                                     g_u02_knead_dip_fold_pm / 1000);
@@ -2767,6 +2948,7 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
       g.fold_delta_pm[0] += share(kKneadDipFoldDeltaPm[0]);
       g.fold_delta_pm[1] += share(kKneadDipFoldDeltaPm[1]);
       g.fold_delta_pm[2] += share(kKneadDipFoldDeltaPm[2]);
+    }
     }
   }
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,

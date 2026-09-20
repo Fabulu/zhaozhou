@@ -1487,6 +1487,9 @@ DeathBackingMetrics check_death_backing_opacity(const zc::CreatureType& type) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--fail-lightning-switch") == 0)
       u02::g_u02_fx_continuity_fault = u02::FxContinuityFault::kLightningSwitch;

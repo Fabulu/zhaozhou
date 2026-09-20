@@ -160,6 +160,9 @@ bool is_support_b(const zc::SkinVertex& v) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   const bool fail_leg = argc > 1 && std::strcmp(argv[1], "--fail-lane") == 0;
   // Q4's leg must be set BEFORE the first u02::type() call -- the bank is a
   // function-local static, so a leg is one process, not a toggle.

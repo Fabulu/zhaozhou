@@ -125,6 +125,9 @@ bool public_input_guard(u02::PublicJointMute mute) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   if (const char* e = std::getenv("ZHAO_U02_FRONT_JOINT_PER_MM")) {
     const int v = std::atoi(e);
     if (v <= 0 || v > 64) return 2;

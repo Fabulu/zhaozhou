@@ -1044,8 +1044,7 @@ int main(int argc, char** argv) {
     u02::g_u02_rear_bow_max_alpha16 = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_DEPTH_MM"))
     u02::g_u02_knead_dip_depth_mm = std::atoi(e);
-  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_PM"))
-    u02::g_u02_knead_dip_gain_pm = std::atoi(e);
+  if (!u02::apply_knead_dip_env()) return 2;
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_FOLD_PM"))
     u02::g_u02_knead_dip_fold_pm = std::atoi(e);
 

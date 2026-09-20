@@ -4592,6 +4592,8 @@ constexpr int kKneadClipSlots =
 // carrier, away from the rear closure. A rises to its high, B drops to its low,
 // C holds near its mid. The outers still give way, all three still move, the
 // spans still only absorb differences, and the rear closure is left alone.
+// ⚠ INERT under KneadDipSolver::kDent -- the dent targets world space and
+// carries no rank, offset, lift or fold share. Kept for the carried solver.
 constexpr int8_t kKneadDipRank[3] = {0, -1, 0};
 // ⚠ A RANK OF 0 MEANS "HOLD AT REST", NOT "GO TO MID". The crown's Mid is an
 // authored height like the other two (+70 mm for C), and C is the carrier the
@@ -4633,6 +4635,47 @@ constexpr int32_t kKneadDipSlotSkewPm = 97;
 // outers lift slightly, which is what makes it read as KNEADING rather than as
 // the whole antenna sagging.
 constexpr int32_t kKneadDipOuterLiftPm = 180;
+// ---- PASS 20 PACKET 5: THE DENT -------------------------------------------
+//
+// The carried solve cannot make B the lowest ball without charging the
+// attachment, and P20-DIP-STOP.md has the ledger. P20-SOLVER-ARCHITECTURE.md
+// has the replacement, and this is it.
+//
+// THE DENT is a PINNED TWO-BONE RE-FOLD of the A-B-C triangle. A and C keep
+// their world position AND frame; B is pressed along its own perpendicular to
+// the A-C chord, through the chord, to its mirror image on the far side. Only
+// the folds at HingeA and HingeB change (through the existing nodule_aim), plus
+// the two interior span deltas the crossing geometrically requires. HingeC is
+// PINNED to the world frame it had before the dent, so the closure walk enters
+// unchanged.
+//
+// ⚠ F-A AND C-E HAVE NO TERM IN THE SOLVE. That is why the attachment cannot be
+// charged for this gesture -- not a tolerance, an absence. The mirror is also
+// stretch-free: |A B(2)| == |A B| and |B(2) C| == |B C| exactly, so at the
+// bottom of the dent no span is stretched at all.
+//
+// s = kKneadDentDepthPm / 1000:  0 = the pose as it is, 1000 = B flat on the
+// chord, 2000 = the mirror. Strictly lowest needs s of about 1.35 (B passes A
+// at ~1.24 and C at ~0.8), so the by-eye ladder is over {1400, 1600, 2000}.
+enum class KneadDipSolver : uint8_t { kCarried, kDent };
+constexpr KneadDipSolver kKneadDipSolver = KneadDipSolver::kCarried;
+inline KneadDipSolver g_u02_knead_dip_solver = kKneadDipSolver;
+constexpr int32_t kKneadDentDepthPm = 2000;
+inline int32_t g_u02_knead_dent_depth_pm = kKneadDentDepthPm;
+// Slides the crossing point along the chord from B's foot, per mille of |AC|,
+// to redistribute the ~102 mm the two interior spans must give up AT the
+// crossing. 0 = through the foot.
+constexpr int32_t kKneadDentCrossPm = 0;
+inline int32_t g_u02_knead_dent_cross_pm = kKneadDentCrossPm;
+// "The press owns the carriers while it presses." Scales the AMBIENT nodule
+// offsets on A/B/C while the dent is active, so an ambient compaction extreme
+// cannot stack on top of the crossing. F and E are not ducked. It can only
+// REDUCE an existing excursion.
+constexpr int32_t kKneadDentAmbientDuckPm = 1000;
+inline int32_t g_u02_knead_dent_ambient_duck_pm = kKneadDentAmbientDuckPm;
+// Gate constant (mspan G10), not a solver input.
+constexpr int32_t kKneadDentPinToleranceMm = 2;
+
 // ---- THE CARRY CANCEL: why B's descent no longer reaches the attachment -----
 //
 // loop_pose's nodule solve is a SEQUENTIAL CARRIED solve. Each carrier's target

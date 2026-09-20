@@ -298,6 +298,9 @@ int selftest() {
 
 
 int main(int argc, char** argv) {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   if (argc > 1 && std::strcmp(argv[1], "--selftest") == 0) return selftest();
 
   const zc::CreatureType& T = u02::type();

@@ -8070,11 +8070,9 @@ int main(int argc, char** argv) {
   // PASS 20 (Direction 21 item 2): the kneading dip's global gain. 0 is the
   // EXACT-OFF control -- knead_dip_mm returns 0 for every sample, so the bank
   // is byte-for-byte what it was before the dip existed.
-  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_PM")) {
-    int v = 0;
-    if (!parse_strict_env_int("ZHAO_U02_KNEAD_DIP_PM", e, 0, 1000, v)) return 2;
-    u02::g_u02_knead_dip_gain_pm = v;
-  }
+  // PASS 20 PACKET 5: one shared parser for the dip/dent knobs, so the reel and
+  // every gate binary read the same set. See u02::apply_knead_dip_env.
+  if (!u02::apply_knead_dip_env()) return 2;
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_DEPTH_MM")) {
     int v = 0;
     if (!parse_strict_env_int("ZHAO_U02_KNEAD_DIP_DEPTH_MM", e, 0, 1200, v))

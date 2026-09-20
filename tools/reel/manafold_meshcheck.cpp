@@ -47,6 +47,9 @@ struct EdgeInfo {
 }  // namespace
 
 int main() {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) {
     std::printf("u02-meshcheck: FAIL compile produced no meshlets\n");

@@ -147,6 +147,9 @@ void posed_center(const zc::CreatureType& T, const zc::Clip& clip, uint16_t f,
 }  // namespace
 
 int main(int argc, char** argv) {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   const char* mute = nullptr;
   bool ignore_all = false, csv = false;
   for (int i = 1; i < argc; ++i) {

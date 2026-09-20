@@ -93,6 +93,9 @@ int rigid_vertex_count(const zc::CreatureType& t, uint8_t bone) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // PASS 20 PACKET 5: the shared dip/dent knob parser, so this binary cannot
+  // be blind to a knob a ladder is being run against (see apply_knead_dip_env).
+  if (!u02::apply_knead_dip_env()) return 2;
   enum class Mode { kNormal, kMuteL, kMuteR, kWrongBone } mode = Mode::kNormal;
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--fail-mute") == 0 && i + 1 < argc) {
