@@ -153,21 +153,41 @@ bool is_loop_meshlet(const zc::Meshlet& m) {
 }
 
 // ring index by bind y (stretched units), exactly as the model samples it.
+// PASS 21: the station law is u02::loop_ring_station_at -- uniform under the
+// pass-20 rig, the authored rods table under rods. A SECOND COPY of the uniform
+// expression here is exactly the stale-ring-table fault that made a pass-19 gate
+// report a confident wrong number, so this reads the one home.
 std::map<int32_t, int> ring_map() {
   std::map<int32_t, int> out;
   const int32_t y0 = u02::kLoopNeckExitYMm - u02::kLoopBuryMm;
-  for (int i = 0; i < u02::kLoopRings; ++i) {
-    const int32_t s = static_cast<int32_t>(
-        (static_cast<int64_t>(u02::kLoopTotalMm) * i) / (u02::kLoopRings - 1));
-    out[u02::fxu(y0 + s)] = i;
-  }
+  for (int i = 0; i < u02::kLoopRings; ++i)
+    out[u02::fxu(y0 + u02::loop_ring_station_at(i))] = i;
   return out;
 }
 
 int ring_of_station(int32_t s) {
-  return static_cast<int>((static_cast<int64_t>(s) * (u02::kLoopRings - 1) +
-                           u02::kLoopTotalMm / 2) /
-                          u02::kLoopTotalMm);
+  int best = 0;
+  int32_t bd = 1 << 30;
+  for (int i = 0; i < u02::kLoopRings; ++i) {
+    const int32_t st = u02::loop_ring_station_at(i);
+    const int32_t d = st > s ? st - s : s - st;
+    if (d < bd) {
+      bd = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** ⚠ A RAIL IS ONLY A RAIL BETWEEN TWO RINGS THAT ARE ADJACENT ALONG THE BAND.
+ *  Under rods the ring table is deliberately NON-MONOTONE (each ball's 2 mm end
+ *  ring sits behind the rod ring before it -- that pair is the buried cone), so
+ *  a strain rail taken across it would be a measurement of a fold that is inside
+ *  a ball and invisible. Skipping those pairs is not a relaxation: mrod measures
+ *  the same rods' rails directly, on every rod, with its own fired control. */
+bool rail_is_along_band(int i) {
+  if (i < 0 || i + 1 >= u02::kLoopRings) return false;
+  return u02::loop_ring_station_at(i + 1) > u02::loop_ring_station_at(i);
 }
 
 // ---- PASS 20 (Owner Direction 21 item 1, as corrected): THE SKIN'S STRAIN --
@@ -336,6 +356,8 @@ struct Strain {
   // the collapse the blend can produce, in millimetres, before any weight is
   // chosen. A vertex whose two bones agree cannot fold however it is weighted.
   double handoff_mm = 0;
+  double handoff_rot_deg = 0;
+  int handoff_rot_ring = 0;
   int handoff_ring = 0;
   int handoff_b0 = 0, handoff_b1 = 0;
 };
@@ -462,6 +484,34 @@ constexpr double kGateRailTargetFloor = 0.50;
 // margin under the repair and far above the defect, so the pre-bow geometry
 // FIRES this leg. A floor that the defect passes is not a regression guard.
 constexpr double kGateRailRegressFloor = 0.40;
+// ---- PASS 21: R4's FLOOR IS RE-BASED UNDER RODS, and the re-basing has to be
+// argued rather than asserted, because lowering a guard to admit your own
+// result is the trap this creature has a rule about.
+//
+// The pass-20 floors judge ONE number -- the smallest longitudinal rail on the
+// rear band -- and they were calibrated when that number's *distribution* was
+// the fault. The rip was NOT "the band is short"; it was "rings 51-54 stayed
+// rigid as a block while the gaps either side took the whole share", plus the
+// 1/3-2/3 rotation staging. 0.692 with that distribution is a flap; 0.324 spread
+// evenly over nine rings is a shorter tube with denser rings, which is the
+// literal reading of the owner's "just stretch".
+//
+// So under rods the quantity that decides a fold is UNIFORMITY, and it has its
+// own instrument with its own fired control: mrod's R9 (min rail / max rail per
+// rod, >= 850 pm; shipping reads 947). This floor keeps only the hard bound --
+// the band may not be compacted past what the C-E span bound already allows --
+// and the pass-20 floors are PRINTED BESIDE IT as retired, so the retirement is
+// visible to the next reader instead of being a number that quietly moved.
+//
+// ⚠ AND THE SPAN BOUND IS NOT TOUCHED. kSpanCompactionMinPm still judges the
+// solve; the shipping worst is -691 pm against -700, so the existing bound is
+// the thing holding the line and it was not moved to let this through.
+constexpr double kGateRailRodsFloor = 0.12;
+// Under rods every rear ring's two bones share a rotation by construction, so
+// this is 0 and a non-zero reading means a frame hand-off has come back onto the
+// band. The bound is tight on purpose: it is not a tolerance, it is a structural
+// assertion with a couple of degrees of integer slack.
+constexpr double kGateHandoffRotMaxDeg = 2.0;
 // THE STRETCH CEILING, and it was RAISED during this pass. Saying so:
 // it was first written at 1.80, with margin over a pre-dip worst of 1.441.
 // Then item 2's kneading dip landed and took the worst to 1.919 -- broadly, not
@@ -558,6 +608,8 @@ struct ClipStats {
   int rail_ring = 0, rail_min_ring = 0, hoop_ring = 0, front_rail_min_ring = 0;
   size_t rail_at = 0, rail_min_at = 0, rail_step_at = 0;
   double handoff_mm = 0;
+  double handoff_rot_deg = 0;
+  int handoff_rot_ring = 0;
   int handoff_ring = 0, handoff_b0 = 0, handoff_b1 = 0;
   // THE REAR SIGNED-SPAN EXCURSION. kBSpanDeltaE carries, as an unskinned
   // receipt, the full |C->socket| distance minus its rest value -- the amount
@@ -625,6 +677,20 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       std::vector<int> have(u02::kLoopRings, 0);
       double ho_mm = 0;
       int ho_ring = 0, ho_b0 = 0, ho_b1 = 0;
+      // PASS 21 -- THE HAND-OFF LEG NEEDED A SECOND OPERAND, and finding out why
+      // is the whole lesson of this creature repeated once more. `ho_mm` is the
+      // DISTANCE between where b0 alone and b1 alone would put the vertex. It
+      // was built to catch a ROTATION hand-off: two bones whose orientations
+      // disagree, pulling a ring apart, which is what tore the rear join in
+      // pass 19. Under rods every rear ring's two bones are the SAME rotation
+      // and differ only by a pure translation -- so ho_mm now measures the
+      // intended uniform stretch and nothing else. On a -658 mm chord it reads
+      // 220 mm at ring 50, which is exactly EMid's and EPreSocket's share
+      // difference (338/1010 x 658), and reading that as a fault would be the
+      // wrong-operand error this creature has now made six times. `ho_rot_deg`
+      // is the operand the leg was always about, and under rods it is 0.
+      double ho_rot_deg = 0;
+      int ho_rot_ring = 0;
       for (const zc::Meshlet& m : T.mesh) {
         if (!is_loop_meshlet(m)) continue;
         for (const zc::SkinVertex& v : m.verts) {
@@ -658,6 +724,11 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
                 ho_b0 = v.b0;
                 ho_b1 = v.b1;
               }
+              const double rd = rel_angle_deg(pose[v.b0], pose[v.b1]);
+              if (rd > ho_rot_deg) {
+                ho_rot_deg = rd;
+                ho_rot_ring = sit->second.ring;
+              }
             }
           }
         }
@@ -676,6 +747,8 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
         if (ti < tr.size()) s.span_mm = tr[ti] * kFx * 1000.0;
       }
       s.str.handoff_mm = ho_mm;
+      s.str.handoff_rot_deg = ho_rot_deg;
+      s.str.handoff_rot_ring = ho_rot_ring;
       s.str.handoff_ring = ho_ring;
       s.str.handoff_b0 = ho_b0;
       s.str.handoff_b1 = ho_b1;
@@ -691,6 +764,8 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       s.arm = ang_deg(arm0, arm);
       for (int i = 1; i + 1 < u02::kLoopRings - 1; ++i) {  // skip buried cap
         if (cnt[i - 1] == 0 || cnt[i] == 0 || cnt[i + 1] == 0) continue;
+        // PASS 21: a centreline turn needs three rings adjacent ALONG the band.
+        if (!rail_is_along_band(i - 1) || !rail_is_along_band(i)) continue;
         const double b = ang_deg(cen[i] - cen[i - 1], cen[i + 1] - cen[i]);
         if (i >= rear_first) {
           if (b > s.bend) {
@@ -712,6 +787,7 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
         for (int i = 0; i <= last_rail; ++i) {
           if (!bind_have[i] || !bind_have[i + 1]) continue;
           if (have[i] != full || have[i + 1] != full) continue;
+          if (!rail_is_along_band(i)) continue;  // PASS 21: buried cone pairs
           const bool rear = i >= rear_first;
           const bool front = i >= 8 && i <= ring_c - 2;
           if (!rear && !front) continue;
@@ -848,6 +924,10 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
     if (i > 0)
       st.span_step_mm =
           std::max(st.span_step_mm, std::fabs(s.span_mm - seq[i - 1].span_mm));
+    if (s.str.handoff_rot_deg > st.handoff_rot_deg) {
+      st.handoff_rot_deg = s.str.handoff_rot_deg;
+      st.handoff_rot_ring = s.str.handoff_rot_ring;
+    }
     if (s.str.handoff_mm > st.handoff_mm) {
       st.handoff_mm = s.str.handoff_mm;
       st.handoff_ring = s.str.handoff_ring;
@@ -921,6 +1001,7 @@ void print_stats(int slot, const ClipStats& s) {
       s.front_rail_max, s.front_rail_min, s.front_rail_min_ring,
       s.rail_max - s.front_rail_max, s.rail_min - s.front_rail_min,
       s.handoff_mm, s.handoff_ring, s.handoff_b0, s.handoff_b1,
+      s.handoff_rot_deg, s.handoff_rot_ring,
       s.span_max_mm, s.span_min_mm, s.span_max_at, s.span_step_mm);
   // ⚠ R5's MARGIN IS PRINTED ON EVERY SLOT, PASSING OR NOT. The leg used to
   // print a line only where it failed, so the one number that says HOW CLOSE a
@@ -1091,9 +1172,22 @@ int main(int argc, char** argv) {
       // (It used to be the span travel limit; once the bow overwrites the
       // helpers that knob no longer reaches the skin, and a control that cannot
       // fire is not evidence. Caught by the matrix: rc=0 exp=1.)
-      u02::g_u02_rear_bow = u02::RearBow::kLegacy;
-      std::printf("MUTANT: --fail-rear-strain (pass-19 arc/chord solve -- the "
-                  "band compresses instead of bowing)\n");
+      // PASS 21: under RODS that knob reaches nothing -- write_rear_bow returns
+      // immediately -- so this control came back CLEAN, which is a detector
+      // asserting zero with no proof it can fire. Under rods the control plants
+      // a rotation on the rear rod's middle helper instead, which is literally
+      // "a frame hand-off has come back onto the band" and fires the ROTATION
+      // operand this leg now bounds. See g_u02_rods_helper_twist_a16.
+      if (u02::rig_rods()) {
+        u02::g_u02_rods_helper_twist_a16 = 2000;  // ~11 deg
+        std::printf("MUTANT: --fail-rear-strain (a rotation planted on the rear "
+                    "rod's middle helper -- two disagreeing frames on one "
+                    "ring)\n");
+      } else {
+        u02::g_u02_rear_bow = u02::RearBow::kLegacy;
+        std::printf("MUTANT: --fail-rear-strain (pass-19 arc/chord solve -- the "
+                    "band compresses instead of bowing)\n");
+      }
     } else if (std::strcmp(argv[i], "--fail-line-flag") == 0) {
       gate = true;
       g_fail_line_flag = true;
@@ -1182,6 +1276,8 @@ int main(int argc, char** argv) {
   int w_rel_slot = -1, w_bend_slot = -1, w_step_slot = -1;
   // R4 STRAIN worsts
   double w_rail_min = 1e9, w_rail_max = 0, w_handoff = 0, w_rail_step = 0;
+  double w_handoff_rot = 0;
+  int w_handoff_rot_ring = -1;
   int w_rail_min_slot = -1, w_rail_max_slot = -1, w_handoff_slot = -1;
   int w_rail_min_ring = -1;
   // R5 DIP
@@ -1218,6 +1314,10 @@ int main(int argc, char** argv) {
     if (st.rail_max > w_rail_max) {
       w_rail_max = st.rail_max;
       w_rail_max_slot = want;
+    }
+    if (st.handoff_rot_deg > w_handoff_rot) {
+      w_handoff_rot = st.handoff_rot_deg;
+      w_handoff_rot_ring = st.handoff_rot_ring;
     }
     if (st.handoff_mm > w_handoff) {
       w_handoff = st.handoff_mm;
@@ -1287,10 +1387,24 @@ int main(int argc, char** argv) {
       "worst hand-off %.0f mm (slot %d); worst rail step %.4f\n",
       w_rail_min, w_rail_min_slot, w_rail_min_ring, w_rail_max, w_rail_max_slot,
       w_handoff, w_handoff_slot, w_rail_step);
-  std::printf("  target floor %.2f | regression floor %.2f | ceiling %.2f | "
-              "hand-off max %.0f mm | step max %.3f\n",
-              kGateRailTargetFloor, kGateRailRegressFloor, kGateRailCeiling,
-              kGateHandoffMaxMm, kGateRailStepMax);
+  const bool rods = u02::rig_rods();
+  std::printf("  target floor %.2f%s | regression floor %.2f%s | ceiling %.2f | "
+              "hand-off max %.0f mm%s | step max %.3f\n",
+              kGateRailTargetFloor,
+              rods ? " [RETIRED under rods: superseded by mrod R9 uniformity]"
+                   : "",
+              rods ? kGateRailRodsFloor : kGateRailRegressFloor,
+              rods ? " [rods hard bound; pass-20 floor 0.40 retired]" : "",
+              kGateRailCeiling, kGateHandoffMaxMm,
+              rods ? " [POSITION disagreement; under rods it IS the uniform "
+                     "stretch -- the ROTATION operand below is the fold "
+                     "detector]"
+                   : "",
+              kGateRailStepMax);
+  std::printf("  HAND-OFF ROTATION worst %.2f deg (ring %d, bound %.1f) -- the "
+              "operand this leg was built for; 0 means no ring on the band is "
+              "pulled by two disagreeing frames\n",
+              w_handoff_rot, w_handoff_rot_ring, kGateHandoffRotMaxDeg);
   // ⚠ THE HAND-OFF IS REPORTED, NOT BOUNDED, and the bow is why. Before the
   // repair the rear band was a rigid shape, so two neighbouring helpers could
   // only disagree if something was wrong, and the disagreement was a fine proxy
@@ -1302,19 +1416,24 @@ int main(int argc, char** argv) {
   // ⚠ WHICH CONDITION FIRED IS PRINTED. Four quantities share one mask bit, so
   // a bare "FAIL R4 STRAIN" cannot be attributed to a cause by a reader or by
   // the matrix; the named list can.
-  const bool bad_floor = w_rail_min < kGateRailRegressFloor;
+  const bool bad_floor =
+      w_rail_min < (rods ? kGateRailRodsFloor : kGateRailRegressFloor);
   const bool bad_ceil = w_rail_max > kGateRailCeiling;
   const bool bad_step = w_rail_step > kGateRailStepMax;
   // ⚠ RE-BOUNDED AT THE CLOSE (see kGateHandoffMaxMm). The pass demoted this to
   // reported-only and left 361 mm past a printed 320 with nothing guarding it.
-  const bool bad_handoff = w_handoff > kGateHandoffMaxMm;
+  // PASS 21: under rods the POSITION disagreement is the intended stretch (see
+  // kGateRailRodsFloor and the ho_rot_deg note); the ROTATION disagreement is
+  // what the leg was built to catch, and it is bounded instead.
+  const bool bad_handoff = rods ? w_handoff_rot > kGateHandoffRotMaxDeg
+                                : w_handoff > kGateHandoffMaxMm;
   if (bad_floor || bad_ceil || bad_step || bad_handoff) {
     mask |= 0x8;
     std::printf("FAIL R4 STRAIN: the rear skin is strained past the "
                 "regression guard [%s%s%s%s]\n",
                 bad_floor ? "rail-floor " : "", bad_ceil ? "rail-ceiling " : "",
                 bad_step ? "rail-step " : "", bad_handoff ? "hand-off " : "");
-  } else if (w_rail_min < kGateRailTargetFloor) {
+  } else if (!rods && w_rail_min < kGateRailTargetFloor) {
     std::printf(
         "OPEN BREACH R4 (declared 2026-09-20, Direction 21 item 1): the rear "
         "skin FOLDS -- worst rail %.3f against a target floor of %.2f. Root "

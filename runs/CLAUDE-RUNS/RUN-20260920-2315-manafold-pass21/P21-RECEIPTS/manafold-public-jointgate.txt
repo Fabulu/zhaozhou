@@ -1,0 +1,11 @@
+PUBLIC FIVE-CARRIER VISIBLE-SKIN GATE (candidate shipping)
+  fixed mechanism floor 20.0 mm (~3 native px); pictures decide likeness
+  carrier cores  Taunt centroid/max     Taunt-II centroid/max    verdict
+  F        18/18    29.92/  48.18        33.79/  54.46       OK
+  A        36/36   133.62/ 136.41       151.73/ 156.93       OK
+  B        36/36   106.15/ 135.12       156.11/ 193.38       OK
+  C        27/27   134.44/ 142.81       154.96/ 184.42       OK
+  E       108/108    4.14/  44.05         4.72/  49.49       OK
+rear socket: 108 influenced vertices, authored rho 1.043
+PASS: 0 failure(s)
+RC=0

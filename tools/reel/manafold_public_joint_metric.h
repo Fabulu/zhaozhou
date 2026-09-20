@@ -30,9 +30,33 @@ struct Carrier {
   int32_t station_mm;
   int32_t half_mm;
   bool anchored;
+  // PASS 21: a SECOND bone that is part of the same joint. 255 means none and
+  // reproduces the pass-20 test exactly.
+  //
+  // ⚠ THIS EXISTS BECAUSE THE F CARRIER READ 0/0 UNDER RODS -- a public proof
+  // returning "no visible contribution" for a joint that plainly moves the whole
+  // front run. The cause is real and is not a defect: under rods NO VERTEX IS
+  // BOUND TO kBJunctionF. The front rod is skinned kBNeck -> kBSpanDeltaA, and
+  // those two are one frame (the helper is a zero-rest-offset identity child),
+  // so every front-rod vertex is driven 100% by the F joint and NONE of them is
+  // "rigid on kBJunctionF". Reporting 0/0 there would have been a detector
+  // asserting zero about a thing it cannot see -- so the carrier names both
+  // bones of the joint instead, and the test is "driven ONLY by this joint".
+  uint8_t alt = 255;
 };
 
 inline std::array<Carrier, 5> carriers() {
+  if (rig_rods())
+    return {{{"F", kBNeck, kLoopCarrierCoreAtMm[0], kRodsFrontCoreHalfMm, true,
+              kBSpanDeltaA},
+             {"A", kBHingeA, kLoopCarrierCoreAtMm[1],
+              kLoopCarrierCoreHalfMm[1], false},
+             {"B", kBHingeB, kLoopCarrierCoreAtMm[2],
+              kLoopCarrierCoreHalfMm[2], false},
+             {"C", kBHingeC, kLoopCarrierCoreAtMm[3],
+              kLoopCarrierCoreHalfMm[3], false},
+             {"E", kBRearSocket, kLoopCarrierCoreAtMm[4],
+              kLoopCarrierCoreHalfMm[4], true}}};
   return {{{"F", kBJunctionF, kLoopCarrierCoreAtMm[0],
             kLoopCarrierCoreHalfMm[0], true},
            {"A", kBHingeA, kLoopCarrierCoreAtMm[1],
@@ -103,8 +127,11 @@ inline CoreDelta core_delta(const zc::CreatureType& t,
           (bind.y < want - win || bind.y > want + win))
         continue;
       const bool rigid =
-          (bind.b0 == carrier.bone && bind.w0 == 64) ||
-          (bind.b1 == carrier.bone && bind.w0 == 0);
+          carrier.alt == 255
+              ? ((bind.b0 == carrier.bone && bind.w0 == 64) ||
+                 (bind.b1 == carrier.bone && bind.w0 == 0))
+              : ((bind.b0 == carrier.bone || bind.b0 == carrier.alt) &&
+                 (bind.b1 == carrier.bone || bind.b1 == carrier.alt));
       if (!rigid) continue;
       const zc::DeformVertex meta =
           vi < m.deform.size() ? m.deform[vi] : zc::DeformVertex{};

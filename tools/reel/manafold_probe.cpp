@@ -240,6 +240,8 @@ int main(int argc, char** argv) {
     int32_t spin_deepest = INT32_MAX, spin_shallowest = INT32_MIN;
     uint16_t worst_frame = 0;
     uint8_t worst_sub = 0;
+    int32_t worst_bind_y = 0;
+    uint8_t worst_b0 = 0, worst_b1 = 0;
     for (uint16_t f = 0; f < clip.frame_count; ++f) {
       const bool in_window =
           has_window && f >= u02::kTrickPlantKey && f < u02::kTrickLiftKey;
@@ -314,6 +316,12 @@ int main(int argc, char** argv) {
               worst = y;
               worst_frame = f;
               worst_sub = sub;
+              // PASS 21: NAME THE VERTEX. "min clearance 32 mm" says a rule was
+              // broken and nothing about WHICH part broke it, and a clearance
+              // failure after a skin change is exactly the moment that matters.
+              worst_bind_y = sv.y;
+              worst_b0 = sv.b0;
+              worst_b1 = sv.b1;
             }
           }
         }
@@ -386,9 +394,11 @@ int main(int argc, char** argv) {
     // something true about the part of the clip that IS floating.
     const int32_t worst_mm = static_cast<int32_t>((static_cast<int64_t>(worst) * 1000) >> 16);
     const bool ok = worst == INT32_MAX ? true : worst_mm >= kMinClearanceMm;
-    std::printf("u02-probe: slot %u (%u keys): min clearance %d mm at key %u sub %u — %s\n",
+    std::printf("u02-probe: slot %u (%u keys): min clearance %d mm at key %u "
+                "sub %u [bind-y %d mm, bones %u/%u] — %s\n",
                 clip.slot_id, clip.frame_count, worst_mm, worst_frame, worst_sub,
-                ok ? "OK" : "FAIL");
+                static_cast<int32_t>((static_cast<int64_t>(worst_bind_y) * 1000) >> 16),
+                worst_b0, worst_b1, ok ? "OK" : "FAIL");
     if (!ok) rc = 1;
     if (has_window) {
       const int32_t wmm =

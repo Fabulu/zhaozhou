@@ -1,0 +1,3 @@
+eye scale: L/R q15 49152/24576 basis 95178/47589 registration OK/OK
+PASS: 0 failure(s)
+RC=0

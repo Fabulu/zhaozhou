@@ -332,7 +332,8 @@ inline zc::RingPart make_loop() {
     if (rods && rr.role == RingRole::kBall) {
       const auto ball_r = [&](const int32_t* R) {
         const int32_t full = static_cast<int32_t>(
-            (static_cast<int64_t>(R[rr.elem]) * g_u02_swell_pm) / 1000);
+            (static_cast<int64_t>(R[rr.elem]) * g_u02_swell_pm / 1000) *
+            g_u02_ball_pm / 1000);
         return static_cast<int32_t>(
             (static_cast<int64_t>(full) * kBallRingRadiusPm[rr.k]) / 1000);
       };

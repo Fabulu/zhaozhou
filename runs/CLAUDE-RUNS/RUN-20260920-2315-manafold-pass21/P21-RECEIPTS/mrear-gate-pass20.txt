@@ -1,0 +1,238 @@
+rear frame arm, follow 1000 pm, ambient gain 400 pm, line law distance full 360 px
+slot  0 (600 samples): rel max 12.3 mean 3.5 step 2.73 (sample 225) deg | axis max 12.2 | rear bend max 110.3 (ring 55, sample 158) mean 67.1 | front bend max 143.0 | socket-local max 172.0 step 4.41 | arm dev 45.4 step 2.19
+  motion (root-local, mm/sample): End  path 628 vmax 2.7 amax 0.70 jmax 0.71 jrms 0.309
+                                  last path 10357 vmax 48.9 amax 44.48 jmax 60.42 jrms 8.915
+                                  C    path 11284 vmax 38.3 amax 21.13 jmax 21.98 jrms 6.806
+  strain (posed/REST): REAR rail max 2.023 (ring 52, sample 157) min 0.709 (ring 45, sample 156) step 0.0876 (sample 332) hoop max 1.001 (ring 50)
+                       FRONT rail max 3.768 min 0.316 (ring 25)  | rear-vs-front excess: max -1.745 min +0.393
+                       HAND-OFF worst two-bone disagreement 355 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4639270467360784384), worst step -658.0 mm/sample
+  R5 DIP: B lowest margin +171 mm (need >= 20), returns to +444 mm above (need >= 60), B travel 629 mm, dip share 715 pm
+slot  1 (300 samples): rel max 9.0 mean 2.6 step 2.10 (sample 195) deg | axis max 9.0 | rear bend max 100.9 (ring 55, sample 209) mean 70.6 | front bend max 134.3 | socket-local max 169.5 step 4.11 | arm dev 35.4 step 2.48
+  motion (root-local, mm/sample): End  path 544 vmax 2.9 amax 1.00 jmax 1.00 jrms 0.504
+                                  last path 4468 vmax 37.0 amax 20.37 jmax 27.86 jrms 7.158
+                                  C    path 5176 vmax 43.6 amax 17.07 jmax 19.46 jrms 6.390
+  strain (posed/REST): REAR rail max 1.859 (ring 53, sample 211) min 0.759 (ring 45, sample 182) step 0.0461 (sample 299) hoop max 1.002 (ring 41)
+                       FRONT rail max 3.575 min 0.310 (ring 25)  | rear-vs-front excess: max -1.716 min +0.449
+                       HAND-OFF worst two-bone disagreement 326 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 0), worst step -561.0 mm/sample
+  R5 DIP: B lowest margin +99 mm (need >= 20), returns to +401 mm above (need >= 60), B travel 737 mm, dip share 730 pm
+slot  2 (420 samples): rel max 11.4 mean 2.3 step 2.05 (sample 230) deg | axis max 11.4 | rear bend max 113.0 (ring 55, sample 160) mean 72.6 | front bend max 115.4 | socket-local max 168.7 step 3.31 | arm dev 29.3 step 1.34
+  motion (root-local, mm/sample): End  path 819 vmax 4.0 amax 1.00 jmax 1.03 jrms 0.360
+                                  last path 4150 vmax 29.6 amax 27.80 jmax 41.04 jrms 7.194
+                                  C    path 4904 vmax 33.4 amax 20.45 jmax 21.18 jrms 5.454
+  strain (posed/REST): REAR rail max 2.052 (ring 52, sample 160) min 0.692 (ring 45, sample 160) step 0.0548 (sample 1) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.566 min 0.264 (ring 25)  | rear-vs-front excess: max -1.515 min +0.428
+                       HAND-OFF worst two-bone disagreement 361 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4607214304637222912), worst step -686.0 mm/sample
+  R5 DIP: B lowest margin +188 mm (need >= 20), returns to +468 mm above (need >= 60), B travel 576 mm, dip share 680 pm
+slot  3 (180 samples): rel max 9.1 mean 0.5 step 2.40 (sample 43) deg | axis max 9.1 | rear bend max 108.6 (ring 55, sample 50) mean 73.7 | front bend max 124.0 | socket-local max 167.4 step 4.60 | arm dev 39.1 step 3.17
+  motion (root-local, mm/sample): End  path 265 vmax 2.3 amax 1.61 jmax 1.63 jrms 0.394
+                                  last path 2438 vmax 59.1 amax 52.41 jmax 74.44 jrms 11.722
+                                  C    path 2513 vmax 33.7 amax 31.66 jmax 31.97 jrms 7.873
+  strain (posed/REST): REAR rail max 1.973 (ring 52, sample 50) min 0.757 (ring 45, sample 52) step 0.0789 (sample 15) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.499 min 0.375 (ring 25)  | rear-vs-front excess: max -1.526 min +0.381
+                       HAND-OFF worst two-bone disagreement 349 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4624075178010214400), worst step -564.0 mm/sample
+  R5 DIP: B lowest margin +137 mm (need >= 20), returns to +435 mm above (need >= 60), B travel 564 mm, dip share 730 pm
+slot  4 (160 samples): rel max 4.7 mean 0.3 step 1.62 (sample 47) deg | axis max 4.7 | rear bend max 94.5 (ring 55, sample 119) mean 61.2 | front bend max 104.4 | socket-local max 169.2 step 3.31 | arm dev 22.8 step 1.66
+  motion (root-local, mm/sample): End  path 299 vmax 5.8 amax 10.44 jmax 10.43 jrms 1.733
+                                  last path 2086 vmax 31.9 amax 27.32 jmax 32.98 jrms 9.394
+                                  C    path 2441 vmax 33.8 amax 16.39 jmax 16.33 jrms 6.436
+  strain (posed/REST): REAR rail max 1.797 (ring 52, sample 116) min 0.794 (ring 45, sample 118) step 0.0610 (sample 33) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.296 min 0.297 (ring 25)  | rear-vs-front excess: max -1.498 min +0.497
+                       HAND-OFF worst two-bone disagreement 308 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4625198638375632896), worst step -491.0 mm/sample
+  R5 DIP: B lowest margin +144 mm (need >= 20), returns to +456 mm above (need >= 60), B travel 375 mm, dip share 650 pm
+slot  5 (400 samples): rel max 8.4 mean 2.3 step 1.57 (sample 220) deg | axis max 8.2 | rear bend max 99.1 (ring 55, sample 165) mean 70.5 | front bend max 138.1 | socket-local max 168.7 step 2.81 | arm dev 33.1 step 2.57
+  motion (root-local, mm/sample): End  path 318 vmax 1.6 amax 0.44 jmax 0.50 jrms 0.160
+                                  last path 5193 vmax 33.7 amax 12.14 jmax 18.29 jrms 6.703
+                                  C    path 5611 vmax 35.5 amax 15.71 jmax 16.60 jrms 5.905
+  strain (posed/REST): REAR rail max 1.838 (ring 53, sample 166) min 0.772 (ring 45, sample 166) step 0.0516 (sample 398) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.613 min 0.293 (ring 25)  | rear-vs-front excess: max -1.775 min +0.478
+                       HAND-OFF worst two-bone disagreement 321 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 0), worst step -537.0 mm/sample
+  R5 DIP: B lowest margin +150 mm (need >= 20), returns to +436 mm above (need >= 60), B travel 637 mm, dip share 770 pm
+slot  6 (240 samples): rel max 8.6 mean 0.4 step 2.38 (sample 45) deg | axis max 8.6 | rear bend max 101.1 (ring 55, sample 202) mean 83.0 | front bend max 121.9 | socket-local max 166.9 step 4.75 | arm dev 28.0 step 2.11
+  motion (root-local, mm/sample): End  path 439 vmax 3.6 amax 1.13 jmax 1.14 jrms 0.593
+                                  last path 2336 vmax 28.8 amax 21.11 jmax 25.22 jrms 6.988
+                                  C    path 2677 vmax 27.6 amax 19.67 jmax 21.34 jrms 5.733
+  strain (posed/REST): REAR rail max 1.870 (ring 53, sample 122) min 0.761 (ring 45, sample 204) step 0.0561 (sample 19) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.498 min 0.291 (ring 25)  | rear-vs-front excess: max -1.628 min +0.470
+                       HAND-OFF worst two-bone disagreement 328 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 0), worst step -556.0 mm/sample
+  R5 DIP: B lowest margin +161 mm (need >= 20), returns to +414 mm above (need >= 60), B travel 404 mm, dip share 730 pm
+slot  7 (4 samples): rel max 0.0 mean 0.0 step 0.00 (sample 1) deg | axis max 0.0 | rear bend max 20.5 (ring 55, sample 0) mean 20.5 | front bend max 65.1 | socket-local max 165.2 step 0.00 | arm dev 0.0 step 0.00
+  motion (root-local, mm/sample): End  path 0 vmax 0.0 amax 0.00 jmax 0.00 jrms 0.000
+                                  last path 0 vmax 0.0 amax 0.00 jmax 0.00 jrms 0.000
+                                  C    path 0 vmax 0.0 amax 0.00 jmax 0.00 jrms 0.000
+  strain (posed/REST): REAR rail max 1.000 (ring 0, sample 0) min 1.000 (ring 0, sample 0) step 0.0000 (sample 0) hoop max 1.000 (ring 0)
+                       FRONT rail max 1.000 min 1.000 (ring 0)  | rear-vs-front excess: max +0.000 min +0.000
+                       HAND-OFF worst two-bone disagreement 67 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 0), worst step -24.0 mm/sample
+  R5 DIP: B lowest margin -233 mm (need >= 20), returns to +233 mm above (need >= 60), B travel 0 mm, dip share 0 pm
+slot  8 (240 samples): rel max 8.4 mean 2.1 step 2.21 (sample 45) deg | axis max 8.4 | rear bend max 102.1 (ring 55, sample 195) mean 75.0 | front bend max 128.8 | socket-local max 168.4 step 5.08 | arm dev 52.5 step 3.24
+  motion (root-local, mm/sample): End  path 739 vmax 5.9 amax 2.37 jmax 2.34 jrms 1.392
+                                  last path 4978 vmax 66.1 amax 65.19 jmax 81.96 jrms 12.174
+                                  C    path 5748 vmax 51.0 amax 23.14 jmax 23.76 jrms 8.622
+  strain (posed/REST): REAR rail max 1.863 (ring 53, sample 46) min 0.760 (ring 45, sample 192) step 0.1053 (sample 238) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.903 min 0.338 (ring 25)  | rear-vs-front excess: max -2.040 min +0.422
+                       HAND-OFF worst two-bone disagreement 328 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4633219816218427392), worst step -559.0 mm/sample
+  R5 DIP: B lowest margin +83 mm (need >= 20), returns to +431 mm above (need >= 60), B travel 720 mm, dip share 770 pm
+slot  9 (340 samples): rel max 6.6 mean 0.7 step 1.04 (sample 239) deg | axis max 6.6 | rear bend max 91.6 (ring 55, sample 253) mean 32.3 | front bend max 84.5 | socket-local max 172.2 step 1.56 | arm dev 25.2 step 1.31
+  motion (root-local, mm/sample): End  path 297 vmax 7.7 amax 8.36 jmax 16.01 jrms 1.285
+                                  last path 3189 vmax 78.6 amax 78.61 jmax 118.07 jrms 10.765
+                                  C    path 3960 vmax 38.3 amax 38.34 jmax 59.80 jrms 6.861
+  strain (posed/REST): REAR rail max 1.766 (ring 52, sample 253) min 0.815 (ring 45, sample 310) step 0.0962 (sample 338) hoop max 1.002 (ring 41)
+                       FRONT rail max 3.314 min 0.200 (ring 25)  | rear-vs-front excess: max -1.547 min +0.615
+                       HAND-OFF worst two-bone disagreement 299 mm (ring 53, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4641029793339408384), worst step -444.0 mm/sample
+  R5 DIP: B lowest margin +37 mm (need >= 20), returns to +400 mm above (need >= 60), B travel 401 mm, dip share 950 pm
+slot 10 (140 samples): rel max 7.2 mean 0.5 step 2.01 (sample 45) deg | axis max 7.2 | rear bend max 85.1 (ring 55, sample 112) mean 62.5 | front bend max 121.3 | socket-local max 168.5 step 2.99 | arm dev 19.8 step 1.53
+  motion (root-local, mm/sample): End  path 167 vmax 9.2 amax 9.09 jmax 9.10 jrms 1.534
+                                  last path 1705 vmax 66.8 amax 64.20 jmax 104.94 jrms 14.973
+                                  C    path 1763 vmax 36.1 amax 28.74 jmax 28.97 jrms 8.279
+  strain (posed/REST): REAR rail max 1.686 (ring 52, sample 112) min 0.826 (ring 52, sample 4) step 0.0828 (sample 4) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.786 min 0.364 (ring 25)  | rear-vs-front excess: max -2.100 min +0.462
+                       HAND-OFF worst two-bone disagreement 277 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4627728374112976896), worst step -397.0 mm/sample
+  R5 DIP: B lowest margin +80 mm (need >= 20), returns to +401 mm above (need >= 60), B travel 648 mm, dip share 820 pm
+slot 11 (280 samples): rel max 13.9 mean 3.1 step 2.37 (sample 46) deg | axis max 13.9 | rear bend max 104.2 (ring 55, sample 246) mean 61.9 | front bend max 123.7 | socket-local max 169.8 step 3.62 | arm dev 55.0 step 2.48
+  motion (root-local, mm/sample): End  path 982 vmax 9.4 amax 3.97 jmax 3.98 jrms 1.797
+                                  last path 4307 vmax 83.9 amax 77.64 jmax 111.30 jrms 14.964
+                                  C    path 5131 vmax 45.8 amax 26.28 jmax 27.13 jrms 8.691
+  strain (posed/REST): REAR rail max 1.894 (ring 53, sample 248) min 0.743 (ring 45, sample 248) step 0.1034 (sample 112) hoop max 1.001 (ring 45)
+                       FRONT rail max 3.517 min 0.239 (ring 25)  | rear-vs-front excess: max -1.623 min +0.504
+                       HAND-OFF worst two-bone disagreement 336 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4634908064783269888), worst step -591.0 mm/sample
+  R5 DIP: B lowest margin +105 mm (need >= 20), returns to +422 mm above (need >= 60), B travel 707 mm, dip share 815 pm
+slot 12 (240 samples): rel max 15.6 mean 3.4 step 2.27 (sample 45) deg | axis max 15.6 | rear bend max 100.0 (ring 55, sample 46) mean 58.8 | front bend max 113.0 | socket-local max 170.4 step 5.30 | arm dev 38.3 step 3.02
+  motion (root-local, mm/sample): End  path 896 vmax 6.1 amax 3.51 jmax 3.49 jrms 2.104
+                                  last path 5048 vmax 97.1 amax 66.31 jmax 99.70 jrms 14.357
+                                  C    path 5937 vmax 63.4 amax 35.98 jmax 37.83 jrms 9.289
+  strain (posed/REST): REAR rail max 1.847 (ring 53, sample 46) min 0.784 (ring 45, sample 44) step 0.1630 (sample 74) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.306 min 0.260 (ring 25)  | rear-vs-front excess: max -1.459 min +0.523
+                       HAND-OFF worst two-bone disagreement 324 mm (ring 53, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4643140769765392384), worst step -515.0 mm/sample
+  R5 DIP: B lowest margin +157 mm (need >= 20), returns to +434 mm above (need >= 60), B travel 792 mm, dip share 650 pm
+slot 13 (400 samples): rel max 0.3 mean 0.1 step 0.24 (sample 199) deg | axis max 0.2 | rear bend max 63.8 (ring 55, sample 172) mean 16.3 | front bend max 82.1 | socket-local max 173.0 step 0.57 | arm dev 19.7 step 2.46
+  motion (root-local, mm/sample): End  path 308 vmax 2.5 amax 2.33 jmax 2.55 jrms 0.800
+                                  last path 4181 vmax 71.7 amax 67.95 jmax 108.54 jrms 14.180
+                                  C    path 5060 vmax 47.0 amax 42.81 jmax 42.67 jrms 6.400
+  strain (posed/REST): REAR rail max 1.472 (ring 52, sample 172) min 0.826 (ring 52, sample 24) step 0.1102 (sample 153) hoop max 1.002 (ring 48)
+                       FRONT rail max 1.637 min 0.418 (ring 18)  | rear-vs-front excess: max -0.165 min +0.408
+                       HAND-OFF worst two-bone disagreement 210 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4642683355748368384), worst step -224.0 mm/sample
+  R5 DIP: B lowest margin -148 mm (need >= 20), returns to +306 mm above (need >= 60), B travel 228 mm, dip share 0 pm
+slot 14 (464 samples): rel max 6.5 mean 0.5 step 1.45 (sample 271) deg | axis max 6.5 | rear bend max 96.6 (ring 55, sample 244) mean 60.0 | front bend max 113.5 | socket-local max 168.0 step 2.11 | arm dev 24.8 step 1.71
+  motion (root-local, mm/sample): End  path 2086 vmax 26.5 amax 25.79 jmax 25.78 jrms 4.890
+                                  last path 4102 vmax 47.8 amax 47.22 jmax 75.46 jrms 9.073
+                                  C    path 4164 vmax 35.0 amax 20.85 jmax 21.72 jrms 5.521
+  strain (posed/REST): REAR rail max 1.820 (ring 52, sample 245) min 0.807 (ring 45, sample 384) step 0.0773 (sample 8) hoop max 1.001 (ring 45)
+                       FRONT rail max 3.135 min 0.293 (ring 25)  | rear-vs-front excess: max -1.315 min +0.514
+                       HAND-OFF worst two-bone disagreement 314 mm (ring 53, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4624075178010214400), worst step -462.0 mm/sample
+  R5 DIP: B lowest margin +123 mm (need >= 20), returns to +363 mm above (need >= 60), B travel 550 mm, dip share 635 pm
+slot 15 (1440 samples): rel max 3.0 mean 1.9 step 0.60 (sample 871) deg | axis max 2.5 | rear bend max 100.7 (ring 55, sample 459) mean 81.2 | front bend max 78.7 | socket-local max 167.2 step 1.82 | arm dev 37.2 step 2.02
+  motion (root-local, mm/sample): End  path 1736 vmax 2.1 amax 0.41 jmax 0.45 jrms 0.236
+                                  last path 20583 vmax 32.0 amax 18.48 jmax 20.17 jrms 6.315
+                                  C    path 20696 vmax 29.8 amax 8.29 jmax 9.11 jrms 4.759
+  strain (posed/REST): REAR rail max 1.841 (ring 53, sample 462) min 0.761 (ring 45, sample 460) step 0.0531 (sample 1428) hoop max 1.001 (ring 45)
+                       FRONT rail max 1.523 min 0.604 (ring 18)  | rear-vs-front excess: max +0.318 min +0.157
+                       HAND-OFF worst two-bone disagreement 324 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4621257679464038400), worst step -553.0 mm/sample
+  R5 DIP: B lowest margin -191 mm (need >= 20), returns to +391 mm above (need >= 60), B travel 408 mm, dip share 0 pm
+slot 16 (864 samples): rel max 16.5 mean 1.8 step 1.45 (sample 613) deg | axis max 16.5 | rear bend max 88.6 (ring 55, sample 342) mean 23.1 | front bend max 87.2 | socket-local max 171.0 step 0.52 | arm dev 17.2 step 1.67
+  motion (root-local, mm/sample): End  path 117 vmax 0.6 amax 0.58 jmax 0.59 jrms 0.082
+                                  last path 6836 vmax 64.7 amax 62.15 jmax 95.06 jrms 12.055
+                                  C    path 8753 vmax 35.6 amax 45.45 jmax 46.58 jrms 5.454
+  strain (posed/REST): REAR rail max 1.728 (ring 52, sample 342) min 0.821 (ring 45, sample 342) step 0.1156 (sample 325) hoop max 1.001 (ring 41)
+                       FRONT rail max 2.467 min 0.198 (ring 18)  | rear-vs-front excess: max -0.739 min +0.623
+                       HAND-OFF worst two-bone disagreement 289 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4643545359979642880), worst step -433.0 mm/sample
+  R5 DIP: B lowest margin -74 mm (need >= 20), returns to +430 mm above (need >= 60), B travel 423 mm, dip share 0 pm
+slot 17 (450 samples): rel max 0.2 mean 0.0 step 0.22 (sample 140) deg | axis max 0.2 | rear bend max 80.5 (ring 55, sample 160) mean 62.7 | front bend max 101.1 | socket-local max 167.2 step 0.99 | arm dev 8.3 step 0.96
+  motion (root-local, mm/sample): End  path 657 vmax 108.3 amax 108.76 jmax 217.09 jrms 12.680
+                                  last path 1332 vmax 185.3 amax 185.29 jmax 362.15 jrms 22.405
+                                  C    path 1407 vmax 213.0 amax 213.05 jmax 416.01 jrms 24.486
+  strain (posed/REST): REAR rail max 1.648 (ring 52, sample 160) min 0.857 (ring 45, sample 163) step 0.1445 (sample 72) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.066 min 0.330 (ring 25)  | rear-vs-front excess: max -1.418 min +0.527
+                       HAND-OFF worst two-bone disagreement 264 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4639622654679056384), worst step -358.0 mm/sample
+  R5 DIP: B lowest margin +132 mm (need >= 20), returns to +377 mm above (need >= 60), B travel 350 mm, dip share 635 pm
+slot 18 (590 samples): rel max 6.0 mean 0.2 step 1.50 (sample 221) deg | axis max 6.0 | rear bend max 97.4 (ring 55, sample 166) mean 66.7 | front bend max 105.8 | socket-local max 166.2 step 2.29 | arm dev 19.4 step 1.23
+  motion (root-local, mm/sample): End  path 603 vmax 108.4 amax 108.80 jmax 217.17 jrms 11.052
+                                  last path 2332 vmax 182.2 amax 182.21 jmax 349.16 jrms 18.551
+                                  C    path 2358 vmax 213.0 amax 213.04 jmax 407.30 jrms 20.694
+  strain (posed/REST): REAR rail max 1.807 (ring 52, sample 155) min 0.780 (ring 45, sample 164) step 0.0856 (sample 99) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.152 min 0.400 (ring 18)  | rear-vs-front excess: max -1.345 min +0.380
+                       HAND-OFF worst two-bone disagreement 314 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4640607812802576384), worst step -516.0 mm/sample
+  R5 DIP: B lowest margin +112 mm (need >= 20), returns to +407 mm above (need >= 60), B travel 522 mm, dip share 590 pm
+slot 19 (336 samples): rel max 11.5 mean 5.4 step 1.92 (sample 215) deg | axis max 11.4 | rear bend max 102.0 (ring 55, sample 253) mean 68.3 | front bend max 99.5 | socket-local max 176.1 step 5.13 | arm dev 39.3 step 4.50
+  motion (root-local, mm/sample): End  path 615 vmax 3.0 amax 0.98 jmax 1.02 jrms 0.546
+                                  last path 3384 vmax 65.1 amax 54.50 jmax 55.11 jrms 7.974
+                                  C    path 3454 vmax 51.8 amax 20.83 jmax 20.71 jrms 6.088
+  strain (posed/REST): REAR rail max 1.884 (ring 53, sample 253) min 0.797 (ring 45, sample 254) step 0.0858 (sample 94) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.275 min 0.277 (ring 25)  | rear-vs-front excess: max -1.391 min +0.520
+                       HAND-OFF worst two-bone disagreement 332 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4637019041209253888), worst step -481.0 mm/sample
+  R5 DIP: B lowest margin +131 mm (need >= 20), returns to +417 mm above (need >= 60), B travel 442 mm, dip share 645 pm
+slot 20 (292 samples): rel max 7.0 mean 0.2 step 1.84 (sample 45) deg | axis max 7.0 | rear bend max 91.5 (ring 55, sample 64) mean 68.7 | front bend max 127.2 | socket-local max 164.8 step 2.81 | arm dev 48.8 step 5.20
+  motion (root-local, mm/sample): End  path 417 vmax 6.1 amax 8.70 jmax 8.74 jrms 1.228
+                                  last path 2604 vmax 53.7 amax 22.21 jmax 26.70 jrms 6.547
+                                  C    path 3464 vmax 74.6 amax 28.23 jmax 31.73 jrms 7.139
+  strain (posed/REST): REAR rail max 1.758 (ring 52, sample 61) min 0.809 (ring 45, sample 62) step 0.0582 (sample 47) hoop max 1.001 (ring 41)
+                       FRONT rail max 3.623 min 0.357 (ring 25)  | rear-vs-front excess: max -1.865 min +0.452
+                       HAND-OFF worst two-bone disagreement 298 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 0), worst step -459.0 mm/sample
+  R5 DIP: B lowest margin +67 mm (need >= 20), returns to +452 mm above (need >= 60), B travel 555 mm, dip share 815 pm
+slot 21 (368 samples): rel max 9.9 mean 4.2 step 1.23 (sample 160) deg | axis max 9.9 | rear bend max 97.2 (ring 55, sample 257) mean 27.5 | front bend max 93.1 | socket-local max 173.0 step 1.29 | arm dev 30.3 step 2.92
+  motion (root-local, mm/sample): End  path 511 vmax 7.9 amax 4.51 jmax 4.52 jrms 1.163
+                                  last path 3594 vmax 89.3 amax 71.04 jmax 116.22 jrms 13.466
+                                  C    path 5033 vmax 60.1 amax 21.43 jmax 21.91 jrms 8.513
+  strain (posed/REST): REAR rail max 1.823 (ring 52, sample 252) min 0.780 (ring 45, sample 255) step 0.1179 (sample 162) hoop max 1.001 (ring 41)
+                       FRONT rail max 2.262 min 0.104 (ring 25)  | rear-vs-front excess: max -0.439 min +0.676
+                       HAND-OFF worst two-bone disagreement 316 mm (ring 53, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4643492746630266880), worst step -517.0 mm/sample
+  R5 DIP: B lowest margin +64 mm (need >= 20), returns to +524 mm above (need >= 60), B travel 378 mm, dip share 0 pm
+slot 22 (352 samples): rel max 7.4 mean 2.3 step 1.34 (sample 242) deg | axis max 7.4 | rear bend max 106.4 (ring 55, sample 239) mean 65.6 | front bend max 139.1 | socket-local max 165.3 step 1.76 | arm dev 59.7 step 2.98
+  motion (root-local, mm/sample): End  path 289 vmax 1.7 amax 0.33 jmax 0.33 jrms 0.151
+                                  last path 4967 vmax 36.4 amax 38.28 jmax 56.83 jrms 9.334
+                                  C    path 5798 vmax 41.1 amax 11.13 jmax 12.23 jrms 5.524
+  strain (posed/REST): REAR rail max 1.928 (ring 52, sample 239) min 0.724 (ring 45, sample 248) step 0.0471 (sample 318) hoop max 1.001 (ring 45)
+                       FRONT rail max 3.707 min 0.335 (ring 25)  | rear-vs-front excess: max -1.779 min +0.389
+                       HAND-OFF worst two-bone disagreement 342 mm (ring 52, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4618437707016699904), worst step -627.0 mm/sample
+  R5 DIP: B lowest margin +70 mm (need >= 20), returns to +447 mm above (need >= 60), B travel 652 mm, dip share 800 pm
+slot 23 (600 samples): rel max 12.3 mean 3.5 step 2.73 (sample 225) deg | axis max 12.2 | rear bend max 110.3 (ring 55, sample 158) mean 67.1 | front bend max 143.0 | socket-local max 172.0 step 4.41 | arm dev 45.4 step 2.19
+  motion (root-local, mm/sample): End  path 628 vmax 2.7 amax 0.70 jmax 0.71 jrms 0.309
+                                  last path 10357 vmax 48.9 amax 44.48 jmax 60.42 jrms 8.915
+                                  C    path 11284 vmax 38.3 amax 21.13 jmax 21.98 jrms 6.806
+  strain (posed/REST): REAR rail max 2.023 (ring 52, sample 157) min 0.709 (ring 45, sample 156) step 0.0876 (sample 332) hoop max 1.001 (ring 50)
+                       FRONT rail max 3.768 min 0.316 (ring 25)  | rear-vs-front excess: max -1.745 min +0.393
+                       HAND-OFF worst two-bone disagreement 355 mm (ring 54, bones 24/14)
+                       REAR SPAN excursion +0 .. +0 mm (max at sample 4639270467360784384), worst step -658.0 mm/sample
+  R5 DIP: B lowest margin +171 mm (need >= 20), returns to +444 mm above (need >= 60), B travel 629 mm, dip share 715 pm
+
+CONFIG JUDGED (mrear): RIG pass20 **OVERRIDE, shipping rods**
+
+R1 FRAME: worst arm<->End rotation 16.48 deg (slot 16, ceiling 40.0); worst rear centreline turn 113.03 deg (slot 2, ceiling 140.0)
+R2 JOINT: worst End joint step 2.73 deg/sample (slot 0, ceiling 6.0)
+  line r  2 px: far(128 px) -> 1 px, full(360 px) -> 2 px
+  line r 14 px: far(128 px) -> 5 px, full(360 px) -> 14 px
+  line r  6 px: far(128 px) -> 2 px, full(360 px) -> 6 px
+  line r  3 px: far(128 px) -> 1 px, full(360 px) -> 3 px
+  line r  6 px: far(128 px) -> 2 px, full(360 px) -> 6 px
+  line r  5 px: far(128 px) -> 2 px, full(360 px) -> 5 px
+  line r  2 px: far(128 px) -> 1 px, full(360 px) -> 2 px
+  line census slot 1: 363000 line splats, 27900 other splats
+  line census slot 0: 705699 line splats, 55800 other splats
+R3 LINE: 0 law violations
+R4 STRAIN: worst rear rail 0.692 (slot 2, ring 45) .. 2.052 (slot 2); worst hand-off 361 mm (slot 2); worst rail step 0.1630
+  target floor 0.50 | regression floor 0.40 | ceiling 2.10 | hand-off max 420 mm | step max 0.180
+  HAND-OFF ROTATION worst 0.05 deg (ring 52, bound 2.0) -- the operand this leg was built for; 0 means no ring on the band is pulled by two disagreeing frames
+R5 DIP: 19 clip(s) author a dip; 0 never reach lowest; 0 do not return; worst margin 37 mm (slot 9, need 20)
+rear gate mask 0x0 -> GREEN
+RC=0

@@ -1,0 +1,20 @@
+CONFIG JUDGED (mrod): every shipping constant AND MECHANISM at its shipped value (rig rods, solver dent, bow arc [inert under rods], dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)
+RIG rods  rings 64  samples 1388
+  rod F-A    9 rings st  318.. 929 | ball A   5 rings R 72/64
+  rod A-B    5 rings st  931..1269 | ball B   5 rings R 69/57
+  rod B-C    5 rings st 1271..1649 | ball C   5 rings R 72/51
+  rod C-End  9 rings st 1651..2659 | ball End 5 rings R 76/60
+R6  ROD STRAIGHT   worst turn   0.02 deg (<= 1.50)  [slot0 f88.1 rod C-End ring 49 (st 2281)]
+                   worst shear   0.04 deg (<= 5.0)  [slot0 f80.0 rod C-End ring 51 (st 2533)]
+                   worst sag     0.02 mm  (<= 4.0)  [slot2 f174.1 rod C-End ring 49 sag]
+R7  JOINT ON BALL  articulation at the balls  999.7 pm (>= 980) (rods 91.4 deg, balls 324164.9 deg)
+R8  JOINT SMOOTH   worst joint step   6.70 deg (<= 8.0)  [slot21 f79.1 joint C]
+                   worst rod turn rate   0.02 deg (<= 8.0)  [slot2 f81.1 rod C-End ring 49 (st 2281)]
+R9  ROD UNIFORM    worst min/max rail  947.3 pm (>= 850)  [slot21 f90.1 rod F-A min/max rail]
+R10 BALL RIGID     worst strain  0.00055 (<= 0.0100)  [slot2 f84.0 ball B ring 29]
+INFO blade roll worst step   5.10 deg/sample  [slot0 f93.1 rod B-C blade roll]
+INFO rear rod posed length 322..1280 mm (rest 1010), worst rear rail floor 0.317
+INFO ball A   joint max  150.4 deg mean  74.8 | crotch floor r/cos(th/2) =   180 mm vs shipping R 72
+INFO ball B   joint max  100.2 deg mean  66.8 | crotch floor r/cos(th/2) =    69 mm vs shipping R 69
+INFO ball C   joint max  146.8 deg mean  88.8 | crotch floor r/cos(th/2) =   168 mm vs shipping R 72
+INFO ball End joint max   12.2 deg mean   3.1 | crotch floor r/cos(th/2) =    49 mm vs shipping R 76

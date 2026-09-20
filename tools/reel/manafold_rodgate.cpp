@@ -39,7 +39,7 @@
 //   manafold-rodgate.exe --report [slot ...]      per-element tables, no verdict
 // Controls (each runs the measurement in a configuration that MUST fail):
 //   --fail-rod-bend --fail-rod-flicker --fail-rod-uniform --fail-ball-blend
-//   --fail-joint-step
+//   --fail-joint-step --fail-rod-twist
 //
 // ⚠ IT GATES NOTHING ABOUT THE LOOK. The ball radius, the crotch at deep
 // joints, the compacted rear rod: all reported as INFO, all decided by eye.
@@ -86,6 +86,34 @@ double ang_deg(V3 a, V3 b) {
   double c = dot(a, b) / (la * lb);
   c = std::max(-1.0, std::min(1.0, c));
   return std::acos(c) * 180.0 / 3.14159265358979;
+}
+V3 unitv(V3 a) {
+  const double l = len(a);
+  return l < 1e-12 ? V3{} : a * (1.0 / l);
+}
+/** Rodrigues: `v` carried by the MINIMAL rotation taking `from` to `to`. This is
+ *  the parallel transport that makes a roll measurement mean something -- without
+ *  it, "the spoke moved" and "the rod turned" are the same number, and an angle
+ *  against any fixed reference folds at 0 and 180 (which is exactly how a first
+ *  version of this leg read 88.9 deg/sample on a creature whose blade does not
+ *  flip: the measure, not the rig). */
+V3 rotate_min(V3 v, V3 from, V3 to) {
+  const V3 a = unitv(from), b = unitv(to);
+  const V3 ax = cross(a, b);
+  const double sn = len(ax), cs = dot(a, b);
+  if (sn < 1e-9) return cs >= 0 ? v : v * -1.0;
+  const V3 k = ax * (1.0 / sn);
+  const double th = std::atan2(sn, cs);
+  return v * std::cos(th) + cross(k, v) * std::sin(th) +
+         k * (dot(k, v) * (1.0 - std::cos(th)));
+}
+double signed_ang_about(V3 a, V3 b, V3 axis) {
+  const V3 n = unitv(axis);
+  const V3 pa = unitv(a - n * dot(a, n));
+  const V3 pb = unitv(b - n * dot(b, n));
+  if (len(pa) < 0.5 || len(pb) < 0.5) return 0.0;
+  return std::atan2(dot(cross(pa, pb), n), dot(pa, pb)) * 180.0 /
+         3.14159265358979;
 }
 constexpr double kFx = 1.0 / 65536.0;
 V3 col(const zc::mat3x4fx& m, int j) {
@@ -238,6 +266,8 @@ std::map<std::array<int32_t, 3>, RingSeg> seg_index_map(const zc::CreatureType& 
 struct Sample {
   std::vector<V3> cen;    // ring centroid, root-local mm
   std::vector<V3> nrm;    // ring plane normal
+  std::vector<V3> seg0;   // the ring's segment-0 spoke: a MATERIAL direction,
+                          // so its motion about the rod axis IS the blade roll
   std::vector<double> hoop;  // mean vertex distance from the centroid
   std::vector<bool> ok;
 };
@@ -265,6 +295,7 @@ Sample read_sample(const zc::CreatureType& T, const zc::Clip& clip, int f,
   Sample s;
   s.cen.assign(u02::kLoopRings, V3{});
   s.nrm.assign(u02::kLoopRings, V3{});
+  s.seg0.assign(u02::kLoopRings, V3{});
   s.hoop.assign(u02::kLoopRings, 0.0);
   s.ok.assign(u02::kLoopRings, false);
   const int full = (1 << kSeg) - 1;
@@ -275,6 +306,7 @@ Sample read_sample(const zc::CreatureType& T, const zc::Clip& clip, int f,
     s.cen[i] = c * (1.0 / kSeg);
     s.nrm[i] = cross(pos[i][0] - pos[i][kSeg / 2],
                      pos[i][kSeg / 4] - pos[i][3 * kSeg / 4]);
+    s.seg0[i] = pos[i][0] - s.cen[i];
     double h = 0;
     for (int k = 0; k < kSeg; ++k) h += len(pos[i][k] - s.cen[i]);
     s.hoop[i] = h / kSeg;
@@ -314,6 +346,14 @@ struct Tally {
   long joint_n = 0;
   Low rear_rod_len;
   Worst rear_rod_len_hi;
+  // STAGE 4's QUESTION, measured before anything is changed. The blade is
+  // elliptical (rx 44-58 against rz 20-30), so an aim's residual ROLL about the
+  // rod is the flat side flipping. P21-ARCHITECTURE section 3.6 proposed moving
+  // the five rod aims onto the roll-stable primitive; this is the measurement
+  // that decides whether they need it. The quantity is the per-sample change in
+  // the angle between the rod's own segment-0 spoke (a material direction) and
+  // the LOOP PLANE, which is the reference the eye uses.
+  Worst blade_roll_step;
   long samples = 0;
 };
 
@@ -339,6 +379,7 @@ void measure(const zc::CreatureType& T, const zc::Clip& clip, int slot,
 
   std::vector<double> prev_turn(u02::kLoopRings, 0.0);
   std::vector<double> prev_joint(4, 0.0);
+  std::vector<V3> prev_axis(4), prev_spoke(4);
   bool have_prev = false;
 
   for (int f = 0; f < clip.frame_count; ++f) {
@@ -410,6 +451,27 @@ void measure(const zc::CreatureType& T, const zc::Clip& clip, int slot,
             t.rear_rod_len_hi.take(L, w);
           }
         }
+      }
+
+      // ---- BLADE ROLL, reported not gated -------------------------------
+      // The rod's segment-0 spoke is a MATERIAL direction. Carry the previous
+      // sample's spoke along with the rod's own rigid turn (parallel transport)
+      // and the residual is the roll -- the flat side of the blade twisting,
+      // which an elliptical section shows and a round one would not.
+      for (int e = 0; e < 4; ++e) {
+        if (rod[e].size() < 2) continue;
+        const int m = rod[e][rod[e].size() / 2];
+        if (!s.ok[m] || !s.ok[rod[e].front()] || !s.ok[rod[e].back()]) continue;
+        const V3 ax = s.cen[rod[e].back()] - s.cen[rod[e].front()];
+        if (len(ax) < 1e-6) continue;
+        if (have_prev && len(prev_axis[e]) > 1e-6) {
+          const V3 carried = rotate_min(prev_spoke[e], prev_axis[e], ax);
+          char w[200];
+          std::snprintf(w, sizeof(w), "%s rod %s blade roll", at, kRodName[e]);
+          t.blade_roll_step.take(std::fabs(signed_ang_about(carried, s.seg0[m], ax)), w);
+        }
+        prev_axis[e] = ax;
+        prev_spoke[e] = s.seg0[m];
       }
 
       // ---- R7/R8 the joints ---------------------------------------------
@@ -506,6 +568,7 @@ Sample bind_sample(const zc::CreatureType& T,
   }
   s.cen.assign(u02::kLoopRings, V3{});
   s.nrm.assign(u02::kLoopRings, V3{});
+  s.seg0.assign(u02::kLoopRings, V3{});
   s.hoop.assign(u02::kLoopRings, 0.0);
   s.ok.assign(u02::kLoopRings, false);
   const int full = (1 << kSeg) - 1;
@@ -514,6 +577,7 @@ Sample bind_sample(const zc::CreatureType& T,
     V3 c{};
     for (int k = 0; k < kSeg; ++k) c = c + pos[i][k];
     s.cen[i] = c * (1.0 / kSeg);
+    s.seg0[i] = pos[i][0] - s.cen[i];
     double h = 0;
     for (int k = 0; k < kSeg; ++k) h += len(pos[i][k] - s.cen[i]);
     s.hoop[i] = h / kSeg;
@@ -538,7 +602,7 @@ int main(int argc, char** argv) {
   bool gate = false, report = false;
   const char* csv_path = nullptr;
   std::vector<int> slots;
-  enum class Ctl { kNone, kBend, kFlicker, kUniform, kBallBlend, kJointStep } ctl =
+  enum class Ctl { kNone, kBend, kFlicker, kUniform, kBallBlend, kJointStep, kRodTwist } ctl =
       Ctl::kNone;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -550,6 +614,7 @@ int main(int argc, char** argv) {
     else if (a == "--fail-rod-uniform") ctl = Ctl::kUniform;
     else if (a == "--fail-ball-blend") ctl = Ctl::kBallBlend;
     else if (a == "--fail-joint-step") ctl = Ctl::kJointStep;
+    else if (a == "--fail-rod-twist") ctl = Ctl::kRodTwist;
     else if (!a.empty() && (a[0] == '-' )) {
       std::fprintf(stderr, "unknown flag %s\n", a.c_str());
       return 2;
@@ -570,6 +635,12 @@ int main(int argc, char** argv) {
   if (ctl == Ctl::kBend || ctl == Ctl::kFlicker || ctl == Ctl::kUniform)
     u02::g_u02_rig = u02::RigMode::kPass20;
   if (ctl == Ctl::kBallBlend) u02::g_u02_rod_ball_blend_control = true;
+  // R6's RODS-NATIVE control. The pass-20 rig fires R6 hard, but it fires it by
+  // being a different ladder; this one keeps the rods ladder and plants a
+  // rotation on the rear rod's middle helper, so the two bones of one segment
+  // disagree and THAT rod bends. It proves R6 sees a broken rod inside its own
+  // rig rather than only recognising the old one.
+  if (ctl == Ctl::kRodTwist) u02::g_u02_rods_helper_twist_a16 = 2000;
   // R8's JOINT-STEP control. The step ceiling is a property of the AUTHORED
   // MOTION, so no rig configuration can breach it -- the pass-20 rig reads 5.44
   // deg/sample against an 8 deg ceiling, i.e. running the gate on the broken
@@ -662,6 +733,8 @@ int main(int argc, char** argv) {
       t.ball_rigid.where.c_str());
 
   // ---- INFO, not gated: the crotch floor and the rear rod's length ---------
+  std::printf("INFO blade roll worst step %6.2f deg/sample  [%s]\n",
+              t.blade_roll_step.v, t.blade_roll_step.where.c_str());
   std::printf("INFO rear rod posed length %.0f..%.0f mm (rest %d), worst rear "
               "rail floor %.3f\n",
               t.rear_rod_len.v, t.rear_rod_len_hi.v,

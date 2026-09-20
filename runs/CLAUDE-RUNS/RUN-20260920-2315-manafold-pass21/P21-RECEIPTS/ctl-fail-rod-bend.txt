@@ -1,9 +1,9 @@
 CONFIG JUDGED (mrod): RIG pass20 **OVERRIDE, shipping rods**
 RIG pass20  rings 64  samples 600
-  rod F-A   13 rings st  279.. 837 | ball A   3 rings R 72/64
-  rod A-B    4 rings st 1023..1162 | ball B   3 rings R 69/57
-  rod B-C    5 rings st 1348..1534 | ball C   4 rings R 72/51
-  rod C-End 18 rings st 1767..2557 | ball End 3 rings R 76/60
+  rod F-A   13 rings st  279.. 837 | ball A   3 rings R 101/90
+  rod A-B    4 rings st 1023..1162 | ball B   3 rings R 85/68
+  rod B-C    5 rings st 1348..1534 | ball C   4 rings R 101/71
+  rod C-End 18 rings st 1767..2557 | ball End 3 rings R 106/84
 R6  ROD STRAIGHT   worst turn  65.20 deg (<= 1.50)  [slot0 f79.1 rod C-End ring 50 (st 2325)]
                    worst shear  89.99 deg (<= 5.0)  [slot0 f293.0 rod C-End ring 54 (st 2511)]
                    worst sag   328.22 mm  (<= 4.0)  [slot0 f78.1 rod C-End ring 46 sag]
@@ -12,11 +12,12 @@ R8  JOINT SMOOTH   worst joint step   5.44 deg (<= 8.0)  [slot0 f240.1 joint C]
                    worst rod turn rate   9.53 deg (<= 8.0)  [slot0 f165.1 rod C-End ring 52 (st 2418)]
 R9  ROD UNIFORM    worst min/max rail  317.6 pm (>= 850)  [slot0 f78.1 rod C-End min/max rail]
 R10 BALL RIGID     worst strain  0.87881 (<= 0.0100)  [slot0 f74.0 ball C ring 37]
+INFO blade roll worst step   4.84 deg/sample  [slot0 f93.1 rod B-C blade roll]
 INFO rear rod posed length 306..938 mm (rest 1010), worst rear rail floor 0.710
-INFO ball A   joint max  159.4 deg mean  80.6 | crotch floor r/cos(th/2) =   257 mm vs shipping R 72
-INFO ball B   joint max  114.3 deg mean  79.4 | crotch floor r/cos(th/2) =    81 mm vs shipping R 69
-INFO ball C   joint max  154.0 deg mean 106.2 | crotch floor r/cos(th/2) =   213 mm vs shipping R 72
-INFO ball End joint max   19.3 deg mean   9.1 | crotch floor r/cos(th/2) =    50 mm vs shipping R 76
+INFO ball A   joint max  159.4 deg mean  80.6 | crotch floor r/cos(th/2) =   257 mm vs shipping R 101
+INFO ball B   joint max  114.3 deg mean  79.4 | crotch floor r/cos(th/2) =    81 mm vs shipping R 85
+INFO ball C   joint max  154.0 deg mean 106.2 | crotch floor r/cos(th/2) =   213 mm vs shipping R 101
+INFO ball End joint max   19.3 deg mean   9.1 | crotch floor r/cos(th/2) =    50 mm vs shipping R 106
 R6 rod turn          FAIL
 R6 rod shear         FAIL
 R6 rod sag           FAIL

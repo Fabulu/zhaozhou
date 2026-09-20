@@ -1,0 +1,42 @@
+MANAFOLD DIRECTION-18 EFFECT CONTINUITY GATE
+  STAR<->HEART station shift 15 (reversed)
+G0 fold MVC invariants: range failures 0, sum failures 0
+G1 persistent lightning clocks: short 0, chain breaks 0, bad starts 0
+G2 folded-figure morph duration: 50 completed, min 16 frames, short 0
+G3 persistent mote noise step/accel/jerk: 14.457 / 1.736 / 0.258 mm
+G4 living figure edge: 0 non-death blackouts
+G5 lab production continuity:
+   stations step/accel/jerk 73.79 / 68.26 / 122.57 mm
+   motes    step/accel/jerk 126.46 / 138.35 / 270.09 mm
+   strands  step/accel/jerk 125.46 / 21.32 / 13.88 mm
+   surge    step/accel/jerk 171.07 / 61.33 / 34.96 mm
+   visibility fold 0/0/0 pm; surge 0/0/0 pm
+   seam 130.33 mm; edge presence 10/3/6 pm; stamps 4/4/8; energy 4/4/8 pm; count/role 0/0 surge 0/0 blackouts 0
+   candidate 1 body 28.08/16.02/16.44 seam 28.08 radius 7.00/3.00/4.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 2 body 39.48/17.45/16.42 seam 30.86 radius 0.00/0.00/0.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 5 body 31.11/16.25/16.39 seam 29.75 radius 0.00/0.00/0.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 7 body 37.76/16.34/16.53 seam 30.42 radius 0.00/0.00/0.00 gain 0.00/0.00/0.00 count/role 0/0
+   candidate 8 body 28.08/16.02/16.44 seam 28.08 radius 7.00/3.00/4.00 gain 0.00/0.00/0.00 count/role 0/0
+G6 shipping mana-body continuity: position 39.48/17.45/16.53 seam 30.86; radius 7.00/3.00/4.00; gain 0.00/0.00/0.00; count/role 0/0
+G7 Boil palette continuity: 600 frames; entry 72.28/23.49/14.73 seam 3.46 @f15/p1/i2; energy 45.95/15.93/12.75; integer-phase mismatches 0/126
+G8 death backing slot 17 opacity step/accel/jerk 11.00/2.00/3.00 pm @f135
+G8 death backing slot 18 opacity step/accel/jerk 10.00/3.00/6.00 pm @f100
+G6 full-bank 60 Hz FX traces (including loop seams):
+   free lightning step/accel/jerk 134.92 / 124.95 / 125.46 mm
+   fold stations  step/accel/jerk 347.85 / 355.43 / 706.99 mm
+   fold particles step/accel/jerk 257.16 / 131.08 / 130.94 mm
+   surge motes    step/accel/jerk 202.06 / 129.00 / 125.56 mm
+   mote visibility fold 8/3/6 pm; surge 0/0/0 pm
+   edge presence  step/accel/jerk 166.00 / 81.00 / 85.00 pm
+   per-stamp gain step/accel/jerk 166.00 / 81.00 / 85.00 pm
+   fold stamps    step/accel/jerk 24.00 / 24.00 / 48.00
+   fold energy    step/accel/jerk 21.00 / 21.00 / 39.00 pm
+   free stamps    step/accel/jerk 0.00 / 0.00 / 0.00
+   free energy    step/accel/jerk 1.00 / 1.00 / 2.00 pm
+   seam max 130.33 mm across 1560 entity samples; held-tail samples 9
+   blackouts 0 fold role/count 0/0 surge role/count 0/0 shape-chain breaks 0 morph reversals 0
+   maxima: free accel s13/f333/id16 jerk s13/f333/id16; fold accel s19/f88/id9 jerk s19/f89/id9
+           fold-mote accel s13/f333/id6 jerk s13/f298/id5; surge accel s13/f297/id4 jerk s13/f333/id4
+
+PASS: 0 failure(s)
+RC=0

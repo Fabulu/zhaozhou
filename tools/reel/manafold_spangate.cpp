@@ -477,6 +477,23 @@ void mutate_rigid_span(zc::CreatureType& type, Span selected,
 
 void check_compiled_zones(const zc::CreatureType& type,
                           const Stations& stations) {
+  // PASS 21 -- NOT APPLICABLE UNDER RODS, and this is a DECLARATION, not a
+  // silent skip.
+  // This leg reconstructs the PASS-20 blend ladder -- fold blends into carrier
+  // cores, signed-gradient zones -- and compares the compiled skin against it.
+  // The rods ladder has no fold blends and no gradient zones: every run is one
+  // straight rod between a joint bone and its pure-translation helper, and every
+  // ball is rigid on one bone. The zone table describes a rig that is not there.
+  // The question is carried instead by manafold-rodgate (mrod) on the POSED
+  // SURFACE (R6/R9), with a control fired in the same invocation --
+  // which is the instrument Direction 22 asks for ("the gates must measure
+  // the posed surface"). Under ZHAO_U02_RIG=pass20 this leg runs in full.
+  if (u02::rig_rods()) {
+    std::printf("G2 compiled zones: NOT APPLICABLE under rods -- the pass-20 "
+                "ladder it reconstructs does not exist; carried by "
+                "mrod R6/R9 on the posed surface\n");
+    return;
+  }
   const auto ring_map = ring_station_map(stations);
   std::array<size_t, 20> zone_count{};
   size_t vertices = 0;
@@ -530,6 +547,22 @@ void check_compiled_zones(const zc::CreatureType& type,
 
 void check_root_authority(const zc::CreatureType& type,
                           const Stations& stations) {
+  // PASS 21 -- NOT APPLICABLE UNDER RODS, and this is a DECLARATION, not a
+  // silent skip.
+  // The version-18 staged root helpers (kBFrontRootDelta, kBRearRootDelta,
+  // kBRearPreRootDelta, kBRearRootTurnMid) are INERT under rods: they skin
+  // nothing, carry identity quats and zero translation. A leg auditing whether
+  // they share their carrier's rotation has no operand to read.
+  // The question is carried instead by manafold-rodgate (mrod) on the POSED
+  // SURFACE (R6), with a control fired in the same invocation --
+  // which is the instrument Direction 22 asks for ("the gates must measure
+  // the posed surface"). Under ZHAO_U02_RIG=pass20 this leg runs in full.
+  if (u02::rig_rods()) {
+    std::printf("G1b root authority: NOT APPLICABLE under rods -- the pass-20 "
+                "ladder it reconstructs does not exist; carried by "
+                "mrod R6 on the posed surface\n");
+    return;
+  }
   const auto ring_map = ring_station_map(stations);
   size_t front_vertices = 0, rear_vertices = 0, terminal_vertices_count = 0,
          bad_front = 0, bad_rear = 0, bad_terminal = 0;
@@ -973,7 +1006,21 @@ void check_shipping_tracks(const zc::CreatureType& type,
           for (int d = -1; d <= 1 && !matched; ++d) {
             std::vector<int32_t> scratch(
                 static_cast<size_t>(u02::kBoneCount) * 3u, 0);
-            if (!u02::write_rear_bow(scratch, 0, base_mm + d)) {
+            if (u02::rig_rods()) {
+              // PASS 21: under rods the rear rod's law is ONE station-
+              // proportional share of the chord delta -- no bow, no onset, no
+              // travel limiter. The leg keeps its shape (re-run the production
+              // writer on the receipt and demand an exact match) because that
+              // is what makes it a property check rather than a unit test of
+              // an implementation; only the law it re-runs changes.
+              for (int st = 0; st < 3; ++st) {
+                static const uint8_t kStage[3] = {u02::kBSpanDeltaEStart,
+                                                  u02::kBSpanDeltaEMid,
+                                                  u02::kBSpanDeltaEPreSocket};
+                scratch[static_cast<size_t>(kStage[st]) * 3u + 1u] =
+                    u02::rods_rear_share_fx(e_full, st);
+              }
+            } else if (!u02::write_rear_bow(scratch, 0, base_mm + d)) {
               scratch[static_cast<size_t>(u02::kBSpanDeltaEStart) * 3u + 1u] =
                   u02::span_e_start_delta_fx(e_full);
               scratch[static_cast<size_t>(u02::kBSpanDeltaEMid) * 3u + 1u] =
@@ -1060,6 +1107,22 @@ std::map<int32_t, Vec3> posed_ring_centroids(
 void check_shipping_posed_ring_order(const zc::CreatureType& type,
                                       const Stations& stations,
                                       bool fail_posed_order) {
+  // PASS 21 -- NOT APPLICABLE UNDER RODS, and this is a DECLARATION, not a
+  // silent skip.
+  // Its zones are the pass-20 signed-gradient windows and it keys rings by a
+  // MONOTONE station order. The rods table is deliberately non-monotone at each
+  // ball -- the two 2 mm end rings are the buried cone -- so the order walk and
+  // the zone lookup are both reading a layout that does not exist.
+  // The question is carried instead by manafold-rodgate (mrod) on the POSED
+  // SURFACE (R6/R7), with a control fired in the same invocation --
+  // which is the instrument Direction 22 asks for ("the gates must measure
+  // the posed surface"). Under ZHAO_U02_RIG=pass20 this leg runs in full.
+  if (u02::rig_rods()) {
+    std::printf("G6 posed ring order: NOT APPLICABLE under rods -- the pass-20 "
+                "ladder it reconstructs does not exist; carried by "
+                "mrod R6/R7 on the posed surface\n");
+    return;
+  }
   const auto specs = span_specs(stations);
   double worst_projection = std::numeric_limits<double>::infinity();
   double worst_separation = std::numeric_limits<double>::infinity();

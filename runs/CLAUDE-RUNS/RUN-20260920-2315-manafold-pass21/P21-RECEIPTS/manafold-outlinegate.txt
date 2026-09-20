@@ -1,0 +1,9 @@
+G1 enclosed negative space: 9/9 pixels
+G2 complete creature-side O boundary: 12/12 witnesses
+G3 O remains open: 0 opening pixels selected for ink
+G4 body/head top line: visible owned, nearer-antenna suppression owned by foreground
+G5 final ownership: behind effect occluded, nearer effect retained
+G6 mist cover: uncovered ink 0, covered O pixels 0
+
+PASS: 0 failure(s)
+RC=0

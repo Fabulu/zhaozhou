@@ -900,10 +900,56 @@ static_assert(kRodsPivotAMm == 930 && kRodsPivotBMm == 1270 &&
 // the pivot; past the ball that reads as a visible crotch. The gate PRINTS
 // r/cos(theta_max/2) beside the shipping radius and does not gate it: the
 // number bounds the question, the eye answers it (CLAUDE.md, the art law).
-constexpr int32_t kBallRxMm[4] = {72, 69, 72, 76};   // A, B, C, End
-constexpr int32_t kBallRzMm[4] = {64, 57, 51, 60};
-// The half-extent along the band. Equal to rx by default, so the ball reads
-// round in the LOOP PLANE -- the plane the owner sees it in.
+// CHOSEN BY EYE on a four-rung ladder at 8x on the deep-knead frame
+// (Inspect f280), against the pass-20 corner and the Side concept sheet:
+// P21-LOOKS2/P21-BALL-LADDER-RX-8X.jpg, notes in P21-LOOK-NOTES-2.md look 4.
+//
+//   1000 (= today's profile at the carrier, 72/64 at A): the corner is rounder
+//        and cleaner than pass 20's mitre, but the ball does not READ. On a band
+//        six pixels wide at 240p a 1.56x knuckle is three pixels of difference,
+//        and the antenna reads as a bent wire with the articulation in the right
+//        place and nothing visible at it. Every gate passed on this frame.
+//   1400 CHOSEN. A distinct rounded knuckle at every corner; the band still
+//        dominates the silhouette, which is what the Side sheet draws -- modest
+//        nubs on the outside of the corners, not beads.
+//   1800 an obvious round knob. Legible, but it is the "obviously big protruding
+//        balls" version 18 looked at and rejected, and the band-to-ball step
+//        starts to read as two separate parts.
+//
+// ⚠ ONLY THE CROSS-SECTION IS LADDERED. kBallRyMm -- the extent ALONG the band
+// -- stays at the carrier profile, so the ball is a slightly oblate bead: wider
+// across the band than it is long. That is what a knuckle on a band looks like
+// from the side, and it keeps the visible rod between two balls long enough to
+// read as a rod. Lengthening Ry instead eats the A->B run, which is only 340 mm.
+//
+// ⚠ B IS SMALLER THAN THE LADDER CHOSE (1.23x, not 1.4x), AND THE REASON IS A
+// REAL ART CONSTRAINT RATHER THAN A GATE DODGE. Carrier B is the crown that
+// PLANTS in Trick -- it is the creature's foot for seventy keys of a headstand.
+// At 1.4x the foot reaches 15 mm further down, and the committed ground probe
+// read the APPROACH three keys ahead of the declared window at 32 mm against
+// the 40 mm clearance floor. Raising kTrickPlantRootMm cannot fix that alone:
+// it moves the plant DEPTH one-for-one but the approach only three millimetres
+// in sixteen, because build_trick pivots the body about the planted support
+// centre, so the two constraints converge at the plant key and not before it.
+// The floor was NOT lowered and the contact window was NOT widened; the ball
+// that does the planting is sized to the contact it has to make, which is a
+// thing the Side sheet also does -- its three balls are not the same size.
+constexpr int32_t kBallRxMm[4] = {101, 85, 101, 106};  // A, B, C, End
+constexpr int32_t kBallRzMm[4] = {90, 68, 71, 84};
+// THE BALL LADDER'S KNOB (`ZHAO_U02_BALL_PM`, per mille, 1000 = the table
+// above). It exists because the FIRST render of the rods rig answered a
+// question the numbers could not: with the balls at today's profile-at-carrier
+// the joints are only 1.56x the band's own half-width, and on a band six pixels
+// wide at 240p that is not a knuckle -- it is a sharp mitre. The antenna read as
+// a bent wire, with the articulation in the right place and nothing visible at
+// it. Only looking says that; the gate said ALL LEGS OK on the same frames.
+inline int32_t g_u02_ball_pm = 1000;
+// The half-extent along the band. NOT laddered with the cross-section (see
+// kBallRxMm): it stays at each carrier's own profile radius, which is also what
+// keeps the rods between the balls long enough to read as rods. It is constexpr
+// because it sets the ring STATIONS, and the station table must be checkable at
+// compile time -- so this one is a rebuild knob, not an env knob, and the
+// difference is stated rather than discovered.
 constexpr int32_t kBallRyMm[4] = {72, 69, 72, 76};
 // A 2 mm end ring rather than a true pole: the same terminal-cap trick
 // kReturnTipCapRxMm uses, so the ring builder never has to fan a degenerate
@@ -924,6 +970,20 @@ constexpr int32_t kBallPoleRxMm = 2;
 // shape -- rather than a tests/mutants file, because the control has to run
 // through the SHIPPING skin builder to prove anything about it.
 inline bool g_u02_rod_ball_blend_control = false;
+// ⚠ AND THE REAR FOLD DETECTOR'S CONTROL, for the same reason and with a worse
+// history. mrear's `--fail-rear-strain` fired R4 by switching the pass-20 bow to
+// the pass-19 arc/chord solve -- and under rods the bow is not called at all, so
+// that knob reaches nothing and the control comes back CLEAN. That is the exact
+// shape of the fault this creature keeps finding: a detector reading zero, cited
+// as evidence, with no proof it could ever have fired. (Pass 20 had already hit
+// it once with this very control, when the bow overwrote the travel limiter.)
+//
+// So under rods the control is a rotation planted on the REAR ROD'S MIDDLE
+// HELPER, in angle16. That is precisely "a frame hand-off has come back onto the
+// band": the rod's middle segment is then pulled by two bones whose orientations
+// disagree, which fires R4's hand-off-ROTATION operand and mrod's R6 together.
+// 0 is off and changes nothing.
+inline int32_t g_u02_rods_helper_twist_a16 = 0;
 constexpr int kBallRingCount = 7;
 constexpr int32_t kBallRingOffsetPm[kBallRingCount] = {-1000, -866, -500, 0,
                                                        500, 866, 1000};
@@ -957,6 +1017,11 @@ constexpr int kRodsTailRings = 4;
 // entry cone: its first ring is a normal rod station one step past the base's
 // last, not the 1 mm cone base the other three rods start with.
 constexpr int32_t kRodsFrontLeadMm = 68;
+// The window the PUBLIC carrier proof reads for the F joint under rods. It is
+// wider than the pass-20 carrier core (70) because under rods the Front joint
+// has no ball of its own -- the body is its ball -- so its publicly readable
+// contribution is the first stretch of the F->A rod, not a swell core.
+constexpr int32_t kRodsFrontCoreHalfMm = 140;
 static_assert(kRodsBaseRings + kRodsRodRings[0] + kRodsRodRings[1] +
                       kRodsRodRings[2] + kRodsRodRings[3] +
                       4 * kBallRingCount + kRodsTailRings == kLoopRings,
@@ -3466,7 +3531,30 @@ constexpr int kTrickKeys = 200;
 // probe now follows carrier B's antenna swell at every key/midpoint. 1534 is the
 // authored arrival height; build_trick pivots the body about that planted support
 // centre so the balance performance cannot pull the contact off the dirt.
-constexpr int32_t kTrickPlantRootMm = 1534;   // root height at support arrival
+// PASS 21: 1534 -> 1550, the same event a third time and for the same reason.
+// The rods rig gives carrier B a rigid ball of Rx 97 mm where the pass-20 swell
+// peaked at 69, so the planted support reaches 16-17 mm further down: the
+// committed probe read carrier-B depth -48..-35 mm against pass 20's -33..-18,
+// and the APPROACH three keys ahead of the window fell to 32 mm against the
+// 40 mm clearance floor. Raised by the measured shortfall, exactly as pass 6
+// (1670 -> 1644, the rebuilt antenna) and pass 12 (1644 -> 1706, the round body)
+// did. THE DECLARATION IS UNCHANGED -- kTrickPlantDepthMm is still 25 mm and the
+// accepted band is still -60..-5; what moved is the knob that exists to hold the
+// authored contact steady when the mesh under it changes. The clearance floor
+// was NOT relaxed to admit the result.
+// ⚠ AND IT IS RIG-DEPENDENT, which it has to be: this constant COMPENSATES for
+// the mesh, so a single value cannot serve two meshes. Holding one number here
+// would have moved the pass-20 bank's bytes and broken the exact-off identity
+// leg -- a shipping constant silently changing the control it is checked
+// against is how an identity claim becomes worthless.
+// 1545 lands the deepest planted vertex on EXACTLY the declared -25 mm (pass 20
+// read -36 through the same declaration), with carrier B owning 140/140 of the
+// window and the approach clearing at 44 mm.
+constexpr int32_t kTrickPlantRootRodsMm = 1545;
+constexpr int32_t kTrickPlantRootPass20Mm = 1534;
+inline int32_t trick_plant_root_mm() {
+  return rig_rods() ? kTrickPlantRootRodsMm : kTrickPlantRootPass20Mm;
+}
 constexpr int32_t kTrickPlantDepthMm = 25;    // DECLARED penetration at plant
 constexpr int kTrickFlipStartKey = 42;        // the pitch-over begins
 constexpr int kTrickPlantKey = 78;            // contact window opens
@@ -5362,6 +5450,7 @@ inline int print_judged_config(const char* who) {
        kRearSpanDeepBiasPm},
       {"rear carrier calm pm", g_u02_rear_carrier_calm_pm, kRearCarrierCalmPm},
       {"taunt3 punch A mm", g_u02_taunt3_punch_a_mm, kTaunt3PunchAMm},
+      {"ball radius pm", g_u02_ball_pm, 1000},
   };
   int overridden = 0;
   std::printf("CONFIG JUDGED (%s): ", who);

@@ -1,0 +1,94 @@
+u02-probe: slot 0 (300 keys): min clearance 330 mm at key 87 sub 0 [bind-y -736 mm, bones 0/0] — OK
+u02-probe: slot 1 (150 keys): min clearance 396 mm at key 88 sub 0 [bind-y -739 mm, bones 0/0] — OK
+u02-probe: slot 2 (210 keys): min clearance 422 mm at key 115 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 3 (90 keys): min clearance 396 mm at key 23 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 4 (80 keys): min clearance 484 mm at key 74 sub 0 [bind-y -738 mm, bones 0/0] — OK
+u02-probe: slot 5 (200 keys): min clearance 313 mm at key 150 sub 0 [bind-y -739 mm, bones 0/0] — OK
+u02-probe: slot 6 (120 keys): min clearance 368 mm at key 65 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 7 (2 keys): min clearance 510 mm at key 0 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 8 (120 keys): min clearance 268 mm at key 90 sub 0 [bind-y -739 mm, bones 0/0] — OK
+u02-probe: slot 9 (170 keys): min clearance 497 mm at key 140 sub 0 [bind-y -735 mm, bones 0/0] — OK
+u02-probe: slot 10 (70 keys): min clearance 463 mm at key 61 sub 0 [bind-y -737 mm, bones 0/0] — OK
+u02-probe: slot 11 (140 keys): min clearance 190 mm at key 24 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 12 (120 keys): min clearance 329 mm at key 45 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 13 (200 keys): min clearance 44 mm at key 75 sub 1 [bind-y 1649 mm, bones 4/4] — OK
+u02-probe: slot 13 DECLARED CONTACT keys 78..148 (+2-key apron): deepest vertex -25 mm (declared -25, accepted -60..-5) — OK
+u02-probe: slot 13 ANTENNA SUPPORT carrier B key+midpoints 140/140 owned, missing 0 depth-fail 0, range -25..-16 mm — OK
+u02-probe: slot 13 PLANTED 360 keys 100..140: carrier-B owned 82/82, depth-fail 0, range -25..-17 mm — OK
+u02-probe: slot 14 (232 keys): min clearance 372 mm at key 91 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 15 (720 keys): min clearance 328 mm at key 430 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 16 (432 keys): min clearance 510 mm at key 0 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 17 (225 keys): min clearance 407 mm at key 15 sub 0 [bind-y -738 mm, bones 0/0] — OK
+u02-probe: slot 17 DEATH strike 0 key 38 (+5-key contact beat): deepest vertex -113 mm (accepted -150..-8) - OK
+u02-probe: slot 17 DEATH strike 1 key 66 (+5-key contact beat): deepest vertex -83 mm (accepted -150..-8) - OK
+u02-probe: slot 17 DEATH strike 2 key 86 (+5-key contact beat): deepest vertex -59 mm (accepted -150..-8) - OK
+u02-probe: slot 17 DEATH strike 3 key 100 (+5-key contact beat): deepest vertex -40 mm (accepted -150..-8) - OK
+u02-probe: slot 17 DEATH strike 4 key 110 (+3-key contact beat): deepest vertex -27 mm (accepted -150..-8) - OK
+u02-probe: slot 17 DEATH airborne (between strikes): deepest vertex -46 mm (crash bound -150; NO float floor applies here) - OK
+u02-probe: slot 17 DEATH eternal rest keys 117..225: deepest vertex -20 mm (declared -25, accepted -150..-8) - OK
+u02-probe: slot 17 DEATH deform HOLDS from key 117: 0 key-to-key changes, 0 samples off the authored sag (flatten 39600, spread 21780) - OK
+u02-probe: slot 18 (295 keys): min clearance 270 mm at key 104 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 18 DEATH strike 0 key 158 (+5-key contact beat): deepest vertex -96 mm (accepted -150..-8) - OK
+u02-probe: slot 18 DEATH strike 1 key 180 (+5-key contact beat): deepest vertex -45 mm (accepted -150..-8) - OK
+u02-probe: slot 18 DEATH airborne (between strikes): deepest vertex -45 mm (crash bound -150; NO float floor applies here) - OK
+u02-probe: slot 18 DEATH eternal rest keys 191..295: deepest vertex -20 mm (declared -25, accepted -150..-8) - OK
+u02-probe: slot 18 DEATH deform HOLDS from key 191: 0 key-to-key changes, 0 samples off the authored sag (flatten 39600, spread 21780) - OK
+u02-probe: slot 19 (168 keys): min clearance 243 mm at key 41 sub 0 [bind-y -740 mm, bones 0/0] — OK
+u02-probe: slot 20 (146 keys): min clearance 305 mm at key 22 sub 0 [bind-y -735 mm, bones 0/0] — OK
+u02-probe: slot 21 (184 keys): min clearance 214 mm at key 175 sub 0 [bind-y -736 mm, bones 0/0] — OK
+u02-probe: slot 22 (176 keys): min clearance 211 mm at key 70 sub 0 [bind-y -737 mm, bones 0/0] — OK
+u02-probe: slot 23 (300 keys): min clearance 330 mm at key 87 sub 0 [bind-y -736 mm, bones 0/0] — OK
+u02-probe: CLEARANCE CONTRACT HOLDS (>= 40 mm everywhere)
+u02-probe: closure sweep 700..1160 worst arm RIM 861 pm of surface (at pm 700) — OK (rim gate 1120; centreline gate 920 unchanged)
+u02-probe: closure over the clip bank (both subs): worst arm RIM 1085 pm (slot 22 key 112) — OK (rim gate 1120)
+u02-probe: C.1 legacy kBLoopBase2 closure influence 0 mm (0 of 24 clips) — RETIRED (must remain exactly zero; rear socket is the replacement)
+u02-probe: 0.1 mist_follow_step equivalence vs the frozen pass-9 inline arithmetic: 4000 steps, 0 mismatches — IDENTICAL
+u02-probe: mist-follow [traverse, shipped] follow_pm  820 -> plane content moved 9.00 cells over 40 frames
+u02-probe: mist-follow [traverse, follow=0] follow_pm    0 -> plane content moved 0.00 cells over 40 frames
+u02-probe: mist-follow [sub-cell bob, shipped] follow_pm  820 -> plane content moved 1.00 cells over 240 frames
+u02-probe: MIST FOLLOW GATE — traverse 9.00 (>= 4.00), follow=0 0.00 (<= 0.25), sub-cell bob 1.00 (>= 0.75) — OK
+u02-probe: mist row [trace   ] follow_pm  820 — attached
+u02-probe: mist row [smidgen ] follow_pm  820 — attached
+u02-probe: mist row [sparing ] follow_pm  820 — attached
+u02-probe: mist row [mid     ] follow_pm  820 — attached
+u02-probe: mist row [rich    ] follow_pm  820 — attached
+u02-probe: mist row [thick   ] follow_pm  820 — attached
+u02-probe: mist row [white   ] follow_pm  820 — attached
+u02-probe: mist row [parked  ] follow_pm    0 — CONTROL (exactly 0, by design)
+u02-probe: MIST ROW ATTACHMENT GATE — 7 shipping rows attached, 1 control(s) at 0, 0 bad (floor 400 pm over 8 rows) — OK
+u02-probe: mist-follow SELFTEST: at follow_pm = 0 the plane moves 0.00 cells, gate floor 4.00 — the rejected setting is CAUGHT
+u02-probe: P.3 star containment (DESCRIBER, no bound asserted): side arm 77 mm scaled by 950 pm + white rim 16 = 89 across; lens half-width 100; overhang -11 mm
+u02-probe: fold station Neck at  250 mm, blend +/- 90, gap from previous    0 mm, needs  180 — (shared pivot, by design: the lower bone is a pure parent and leaves the ladder)
+u02-probe: fold station A    at  930 mm, blend +/- 90, gap from previous  680 mm, needs  180 — OK
+u02-probe: fold station B    at 1270 mm, blend +/- 90, gap from previous  340 mm, needs  180 — OK
+u02-probe: fold station C    at 1650 mm, blend +/- 90, gap from previous  380 mm, needs  180 — OK
+u02-probe: fold station D    at 1650 mm, blend +/- 90, gap from previous    0 mm, needs  180 — (shared pivot, by design: the lower bone is a pure parent and leaves the ladder)
+u02-probe: F.1 LADDER CONTINUITY — OK every station pair clears 2*blend
+u02-probe: E.2 star depth ordering: white front 56 mm, cyan front 62 mm (margin 6) — OK cyan sits ON its white
+u02-probe: E.2 cyan star depth is 400 pm of the lens's full DEPTH (floor 300) - OK a form
+u02-probe: eye crown [purple lens] ellip 1292 pm — stands 131 mm proud of the body
+u02-probe: eye crown [cyan star] ellip 1270 pm — stands 121 mm proud of the body
+u02-probe: eye crown [white star] ellip 1281 pm — stands 126 mm proud of the body
+u02-probe: eye-protrusion gate (LENS >= 1215 pm): OK
+u02-probe: 5c LEASH rule 1 (overhang <= 32 mm = 370 pm of a 89 mm star half-width): worst 0 mm at slot 0 key 0 - OK
+u02-probe: 5c LEASH rule 2 (>= 600 pm of the star on the purple): worst 1000 pm - OK
+u02-probe: 5c LEASH rule 3 (star excursion past the BODY outline, swept over 72 yaw steps of the SHIPPING camera ring at the showcase pitch): worst 0 pm of a body radius past it, cap 420 pm; 0 vertex-view samples outside - OK
+u02-probe: 5d instrument census: 5515776 white-star, 2661120 lens verts
+u02-probe: 5d EXTREMES (12096 composed corners: roll x gaze-side x gaze-lift x eyeball-shift, both eyes, all at full amplitude)
+u02-probe: 5d gate A -- eyes never touch: closest approach 0 mm (corner 2080, floor 12) - FAIL
+u02-probe: 5d channel state: roll SHIPPED (cap 1200 a16), gaze SHIPPED, eyeball-shift NOT SHIPPED (kEyeShiftPivotMm=0, so eye_shift_a16(1000)=0) -- Direction 5 5c's eyeball shift is a DECLARED GAP, not a silent one
+u02-probe: 5d gate B -- nothing clips: lens deepest 941 pm of the body (corner 256) vs 942 pm at rest, floor 1000 - OK
+u02-probe: SURFACE CROSSING 1 (exiting) near root-local (83, 735) mm (arc station 322 mm; prev sample (84, 725))
+u02-probe: SURFACE CROSSING 2 (entering) near root-local (-351, 464) mm (arc station 2676 mm; prev sample (-353, 474))
+u02-probe: TRAVEL slot 1 (span 8253 mm, bump_ext 18): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 399 mm (key 88) — OK
+u02-probe: TRAVEL slot 4 (span 748 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 484 mm (key 74) — OK
+u02-probe: TRAVEL slot 13 (span 1427 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 63 mm (key 75) [declared-contact keys judged by the contact contract] — OK
+u02-probe: TRAVEL slot 14 (span 1560 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 384 mm (key 91) — OK
+u02-probe: TRAVEL slot 15 (span 1684 mm, bump_ext 6): max terrain rise 0 mm under the path (key 0); worst clearance-minus-rise 344 mm (key 630) — OK
+u02-probe: REST ANCHOR junctionF root-local (   89,   664,     0) mm
+u02-probe: REST ANCHOR neck      root-local (   89,   664,     0) mm
+u02-probe: REST ANCHOR hingeA    root-local (    0,  1337,    29) mm
+u02-probe: REST ANCHOR hingeB    root-local ( -231,  1564,   132) mm
+u02-probe: REST ANCHOR hingeC    root-local ( -574,  1435,   235) mm
+u02-probe: REST ANCHOR junctionB root-local ( -140,   199,     0) mm
+RC=1

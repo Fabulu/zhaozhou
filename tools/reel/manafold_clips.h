@@ -1585,6 +1585,11 @@ inline void finalize_rear_follow(zc::Clip& c) {
       c.quats[qbase + kBRearPreRootDelta] = identity;
       c.quats[qbase + kBRearRootTurnMid] = identity;
       c.quats[qbase + kBRearRootDelta] = identity;
+      // R4/R6's rods control (g_u02_rods_helper_twist_a16, off by default).
+      c.quats[qbase + kBSpanDeltaEMid] =
+          g_u02_rods_helper_twist_a16 != 0
+              ? quat_z(g_u02_rods_helper_twist_a16)
+              : identity;
     } else {
       c.quats[qbase + kBRearPreRootDelta] =
           zc::quat16_nlerp(identity, rear_relative, 1, 3);
@@ -1782,6 +1787,10 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
       c.mid_quats[qbase + kBRearPreRootDelta] = identity;
       c.mid_quats[qbase + kBRearRootTurnMid] = identity;
       c.mid_quats[qbase + kBRearRootDelta] = identity;
+      c.mid_quats[qbase + kBSpanDeltaEMid] =
+          g_u02_rods_helper_twist_a16 != 0
+              ? quat_z(g_u02_rods_helper_twist_a16)
+              : identity;
     } else {
       c.mid_quats[qbase + kBRearPreRootDelta] =
           zc::quat16_nlerp(identity, rear_relative, 1, 3);
@@ -3102,6 +3111,15 @@ inline bool apply_knead_dip_env() {
       g_u02_rig = RigMode::kPass20;
     else
       return false;
+  }
+  // The ball-radius eye ladder. Parsed here so the reel, mrod and every other
+  // gate read the same value (an env control is only a control in a binary that
+  // reads it).
+  if (const char* e = std::getenv("ZHAO_U02_BALL_PM")) {
+    char* end = nullptr;
+    const long v = std::strtol(e, &end, 10);
+    if (end == nullptr || *end != ' ' || v < 200 || v > 4000) return false;
+    g_u02_ball_pm = static_cast<int32_t>(v);
   }
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_SOLVER")) {
     if (std::strcmp(e, "dent") == 0)
@@ -4432,13 +4450,15 @@ inline zc::Clip build_trick() {
                               {70, -840}, {78, -1000}, {148, -1000},
                               {166, 80},  {178, -40}, {186, 0}, {199, 0}};
   // root height: hover -> gather dip -> climb through the flip -> planted
-  // at kTrickPlantRootMm -> lift back -> home with a small bounce
+  // at kTrickPlantRoot*Mm -> lift back -> home with a small bounce
   // the approach ARRIVES at the dirt exactly at the plant key (a touch at
   // an interpolated midpoint before the declared window is the probe's
   // fault to catch — and it did); the plant height is the named constant.
-  static const Key kRootY[] = {{0, 1250},  {22, 1130}, {34, 1290}, {50, 1560},
-                               {66, 1790}, {75, 1640}, {78, kTrickPlantRootMm},
-                               {148, kTrickPlantRootMm}, {162, 1420},
+  // NOT `static`: it reads trick_plant_root_mm(), which is rig-dependent, and a
+  // function-local static would freeze the first rig it ever saw.
+  const Key kRootY[] = {{0, 1250},  {22, 1130}, {34, 1290}, {50, 1560},
+                               {66, 1790}, {75, 1640}, {78, trick_plant_root_mm()},
+                               {148, trick_plant_root_mm()}, {162, 1420},
                                {174, 1180}, {186, 1290}, {199, 1250}};
   static const Key kGazeDown[] = {{0, 0}, {8, -800}, {30, -800}, {46, -300},
                                   {78, 200}, {148, 200}, {170, 500}, {186, 0},
@@ -4571,7 +4591,7 @@ inline zc::Clip build_trick() {
       // around it. This is a kinematic pivot, not a whole-mesh-minimum fit: the
       // committed probe separately checks the actual B-swell surface at every
       // key and midpoint, including ownership and penetration depth.
-      root_y_mm = kTrickPlantRootMm + planted_support_reference_y_mm -
+      root_y_mm = trick_plant_root_mm() + planted_support_reference_y_mm -
                   trick_support_center_y_mm(g);
     }
     g.write(c, f);
