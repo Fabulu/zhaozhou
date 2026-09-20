@@ -490,6 +490,25 @@ module zhao_cmd_exec
     output logic [ 5:0]       post_pv_addr_o,
     output logic [71:0]       post_pv_data_o,
 
+    // ---- R52: DebugTraceArm 0xF003 -> DEBUG.TRACE --------------------------
+    // A ONE-CYCLE pulse at the DebugTraceArm record's LAST BYTE, during the
+    // walk -- not after the packet's verdict like every other command here.
+    // The arm below carries the argument in full; the short form is that the
+    // decoder reports a record at its byte 15 and may still reject the packet,
+    // so the ring is speculative by contract and arming after the verdict would
+    // make it blind to the packet somebody is debugging.
+    //
+    // THE ORDERING IS EXACT: the arming record itself is not traced, and every
+    // record after it in the packet is.
+    //
+    // THIS IS THE RING'S ONLY WRITER, and that is ruling R18's principle (one
+    // authority per level) rather than an omission. `zhao_host_regwin`'s tenant
+    // 1 can READ `armed` and is refused a write, so a capture is always
+    // attributable to the packet that asked for it.
+    output logic       dbg_trace_arm_we_o,
+    output logic [6:0] dbg_trace_arm_mask_o,
+    output logic       dbg_trace_clear_o,
+
     // ---- evidence ----------------------------------------------------------
     // Every one of these is fired by a directed case in
     // tests/command/cmd_exec_directed.cpp. None is asserted zero without one.
@@ -509,6 +528,8 @@ module zhao_cmd_exec
     output logic [31:0] grade_entries_written_o, // product vectors written into its table
     output logic [31:0] post_refused_o,          // SetPost/SetGradeTable records REFUSED
     output logic [31:0] grade_overflow_o,        // entries refused for want of staging room
+    output logic [31:0] trace_arms_applied_o,    // R52: DebugTraceArm records committed
+    output logic [31:0] trace_arm_refused_o,     // R52: reserved bits set on the wire
     output logic [31:0] unsupported_o
 );
 
@@ -594,6 +615,10 @@ module zhao_cmd_exec
   localparam int unsigned OFF_GT_COUNT = ZHAO_SET_GRADE_TABLE_OFF_COUNT;
   localparam int unsigned OFF_GT_VEC   = ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0;
   localparam int unsigned GT_VEC_BYTES = 72;    // eight entries of nine bytes
+
+  // ---- R52: DebugTraceArm 0xF003 ------------------------------------------
+  localparam int unsigned OFF_TA_MASK  = ZHAO_DEBUG_TRACE_ARM_OFF_STAGE_MASK;
+  localparam int unsigned OFF_TA_FLAGS = ZHAO_DEBUG_TRACE_ARM_OFF_FLAGS;
 
   // Quartus 17.0 needs an elaboration check inside `initial begin ... end`; a
   // bare module-scope `if` is a syntax error there however clean the lint
@@ -889,6 +914,22 @@ module zhao_cmd_exec
                 && (sp_bg[15:8] == {8{sp_bg[8]}})
                 && (sp_bb[15:8] == {8{sp_bb[8]}});
 
+  // ---- DebugTraceArm capture (R52) ----------------------------------------
+  // The two wire bytes, captured as they pass. Unlike SetPost there is no
+  // shadow: the arming is applied at the record's END rather than after the
+  // packet's verdict, and the arm itself says why (the trace surface is
+  // speculative by the decoder's own contract).
+  //
+  // REFUSE, NEVER MASK, exactly as `sp_ok_c` above. `stage_mask` bit 7 is
+  // unassigned (DEBUG.TRACE's `arm_mask_i` is seven bits: charter 20.6's seven
+  // stages) and `flags` bits 7:1 are unassigned. A record setting either is
+  // REFUSED whole and counted -- masking it off would silently arm a different
+  // set of stages than the host asked for, and a trace that is not the trace
+  // that was requested is worse than no trace.
+  logic [7:0] ta_mask, ta_flags;
+  logic       ta_ok_c;
+  assign ta_ok_c = (ta_mask[7] == 1'b0) && (ta_flags[7:1] == 7'd0);
+
   // A SetGradeTable is a stream of ENTRIES. Its header (curve, first, count)
   // arrives before its vectors, so each nine-byte entry is validated and written
   // into the staging memory the byte it completes -- never half an entry, and
@@ -1006,6 +1047,11 @@ module zhao_cmd_exec
       pc_g0 <= 32'd0; pc_g1 <= 32'd0; pc_f0 <= 32'd0; pc_f1 <= 32'd0; pc_sh <= 32'd0;
       pc_dirty <= 1'b0; tk <= 2'd0;
       tok_budget_valid_o <= 1'b0; tok_vreq_valid_o <= 1'b0; tok_vreq_view_o <= 1'b0;
+      // R52: DebugTraceArm
+      ta_mask <= 8'd0; ta_flags <= 8'd0;
+      dbg_trace_arm_we_o <= 1'b0; dbg_trace_arm_mask_o <= 7'd0;
+      dbg_trace_clear_o <= 1'b0;
+      trace_arms_applied_o <= 32'd0; trace_arm_refused_o <= 32'd0;
       tok_budget_geom0_o <= 32'd0; tok_budget_geom1_o <= 32'd0;
       tok_budget_frag0_o <= 32'd0; tok_budget_frag1_o <= 32'd0;
       tok_budget_shared_o <= 32'd0; tok_vreq_geom_o <= 32'd0; tok_vreq_frag_o <= 32'd0;
@@ -1057,6 +1103,13 @@ module zhao_cmd_exec
       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
       tok_budget_valid_o <= 1'b0;   // both token loads are one-cycle pulses
       tok_vreq_valid_o   <= 1'b0;
+      // R52: so is the trace arming -- and `clear_i` MUST be a pulse, not a
+      // level. DEBUG.TRACE gates its ring write with `!clear_i` and zeroes both
+      // counts while it is high, so a clear left asserted is a ring that stores
+      // nothing and reports zero drops: a silently dead instrument, in the
+      // flattering direction.
+      dbg_trace_arm_we_o <= 1'b0;
+      dbg_trace_clear_o  <= 1'b0;
       post_pv_we_o  <= 1'b0;   // so is a table write
 
       // THE PENDING UPLOAD QUEUE DRAINS IN EVERY STATE. Its entries are
@@ -1215,6 +1268,12 @@ module zhao_cmd_exec
                   sp_ink <= {pkt_byte_i, sp_ink[15:8]};
               end
 
+              // ---- DebugTraceArm (R52) -------------------------------------
+              if (r_op == ZHAO_OP_DEBUG_TRACE_ARM) begin
+                if (rpos == 16'(OFF_TA_MASK))  ta_mask  <= pkt_byte_i;
+                if (rpos == 16'(OFF_TA_FLAGS)) ta_flags <= pkt_byte_i;
+              end
+
               // ---- SetGradeTable (R36) -------------------------------------
               if (r_op == ZHAO_OP_SET_GRADE_TABLE) begin
                 if (rpos == 16'(OFF_GT_CURVE)) gt_curve <= pkt_byte_i;
@@ -1312,6 +1371,41 @@ module zhao_cmd_exec
                   // wrote none, and is counted here once.
                   if (!gt_ok_c) begin
                     `ZHAO_EXEC_INC(post_refused_o);
+                  end
+                end else if (r_op == ZHAO_OP_DEBUG_TRACE_ARM) begin
+                  // ---- R52: armed HERE, at the record's end, NOT in a commit
+                  // phase -- and that is the one design decision in this arm.
+                  //
+                  // Every other command in this block stages to a shadow and
+                  // commits after the packet's VERDICT, so a corrupt packet
+                  // changes no console state. This one deliberately does not,
+                  // because the TRACE SURFACE IS ALREADY SPECULATIVE BY
+                  // CONTRACT: `zhao_cmd_decoder` raises `rec_valid_o` at record
+                  // offset 15 -- the end of the record HEADER -- and its own
+                  // port comment says it reports "a record that may still be
+                  // rejected", the alternative (buffer and replay) having been
+                  // refused as re-introducing the storage it exists to avoid.
+                  // The ring therefore traces records of packets that fail.
+                  // Arming after the verdict would make the ring unable to
+                  // observe the one packet anybody debugging actually cares
+                  // about.
+                  //
+                  // THE ORDERING IS EXACT, not approximate. `rec_done` is the
+                  // record's LAST byte; the decoder reported this same record
+                  // at its byte 15 and will report the next at ITS byte 15, at
+                  // least sixteen cycles later. So: the DebugTraceArm record
+                  // itself is NOT traced, and every record after it in the
+                  // packet IS. A host reading the ring can rely on that.
+                  //
+                  // STATE, not an event: a second DebugTraceArm later in the
+                  // same packet re-arms, and the last one wins.
+                  if (ta_ok_c) begin
+                    dbg_trace_arm_we_o   <= 1'b1;
+                    dbg_trace_arm_mask_o <= ta_mask[6:0];
+                    dbg_trace_clear_o    <= ta_flags[0];
+                    `ZHAO_EXEC_INC(trace_arms_applied_o);
+                  end else begin
+                    `ZHAO_EXEC_INC(trace_arm_refused_o);
                   end
                 end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
                              && (r_op != ZHAO_OP_SET_POPULATION) // R41: likewise

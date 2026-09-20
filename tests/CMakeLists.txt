@@ -5137,6 +5137,51 @@ set_tests_properties(debug_trace_rtl_random PROPERTIES LABELS "fast;nightly" TIM
 add_test(NAME debug_trace_rtl_random_nightly COMMAND test_debug_trace_rtl_directed --random 3000)
 set_tests_properties(debug_trace_rtl_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# ---------------------------------------------------------------------------
+# HOST.REGWIN -- the HPS lightweight-bridge CSR aperture (owner ruling R51),
+# and the carrier that closed zhao_console_core header entries I19 and I45.
+#
+# The APERTURE ALONE, against tenant MODELS. The composed smoke proves it
+# answers two real tenants with real values; only this target can prove the
+# three things a carrier has to get right and a live console hides: that a
+# tenant is never offered another tenant's address (measured on the wire, not
+# inferred from a plausible answer), that `refused_timeout_o` can move at all
+# (both real tenants always acknowledge, so no console stimulus reaches it --
+# but `t_ack_i` is an INPUT here, so holding it low is legal and no mutant is
+# owed), and that reads/writes are counted as ASKED rather than as succeeded.
+add_executable(test_host_regwin_directed debug/host_regwin_directed.cpp)
+target_link_libraries(test_host_regwin_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_host_regwin_directed
+  PREFIX Vzhao_host_regwin
+  TOP_MODULE zhao_host_regwin
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_host_regwin.sv)
+add_test(NAME host_regwin_directed COMMAND test_host_regwin_directed)
+set_tests_properties(host_regwin_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_test(NAME lint_zhao_host_regwin
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_host_regwin
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_host_regwin.sv)
+set_tests_properties(lint_zhao_host_regwin PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_zhao_host_reg_hist
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_host_reg_hist
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_host_reg_hist.sv)
+set_tests_properties(lint_zhao_host_reg_hist PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+add_test(NAME lint_zhao_host_reg_trace
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_host_reg_trace
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/debug/zhao_host_reg_trace.sv)
+set_tests_properties(lint_zhao_host_reg_trace PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_zhao_debug_trace
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_debug_trace

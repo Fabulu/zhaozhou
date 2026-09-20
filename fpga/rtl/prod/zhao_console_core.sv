@@ -722,6 +722,51 @@
 //    every other, so the stray note changes nothing today. Named so the next
 //    reader knows it was looked at rather than missed.
 //
+//  * I19 was MEASURE.HISTOGRAM's HOST READ WINDOW (`hist_rd_*`) and I45 was
+//    DEBUG.TRACE's ARMING AND HOST READOUT (`dbg_trace_arm_*`,
+//    `dbg_trace_clear_i`, `dbg_trace_rd_*`). BOTH CLOSED AND DELETED
+//    2026-09-20 (gz/hostdbg), in one pass, because I45's own text asked for
+//    that: "the same sentence I19 writes about MEASURE.HISTOGRAM applies
+//    unchanged ... Closing one closes both, and they should be closed together
+//    rather than twice."
+//
+//    THE SHARED PREMISE WAS TRUE AND IT WAS A MISSING CARRIER, NOT A MISSING
+//    BLOCK. "The host is the HPS and no register path from HPS to this block
+//    exists" was correct: `zhao_hps_bridge` is a 64-byte BURST engine on the
+//    h2f data bridge (spec/memory_rules.md 3) and a 24-bit bin count is not in
+//    DRAM for it to fetch. SEARCHED before building: `fpga/rtl` for `csr`,
+//    `regwin`, `lwh2f`, `h2f_lw` and `lightweight bridge` (zero hits outside
+//    ruling R51's own text); every `.sv` whose NAME contains hps, csr, bridge,
+//    reg, host, dbg or debug (nine files -- `zhao_hps_bridge`,
+//    `zhao_hps_arbiter`, `zhao_part_hps`, `zhao_field_host`,
+//    `zhao_video_ready_bridge_v2` and the four `fpga/rtl/debug/` blocks); and
+//    `spec/memory_rules.md`'s twenty-six section headings. Nothing in the tree
+//    was a register aperture. `zhao_debug_counters` is the nearest thing and is
+//    not one -- it STREAMS (counter_id, u64) pairs in ascending order at
+//    vblank, which is a different protocol serving a different law
+//    (spec/counters.md), and bending it into an address-mapped window would
+//    have been a second opinion about what a host read is.
+//
+//    WHAT CLOSED THEM. Owner ruling R51 ratified a HOST REGISTER WINDOW on the
+//    HPS LIGHTWEIGHT bridge -- the Cyclone V's SECOND host port, 32 bits wide,
+//    whose whole purpose is register access. `zhao_host_regwin` is the
+//    aperture (section 7b-iii), `zhao_host_reg_hist` and `zhao_host_reg_trace`
+//    its first two tenants, and the map is frozen in `spec/memory_rules.md`
+//    section 8. The word offset handed to a tenant is ten bits wide, so
+//    no-escape is STRUCTURAL: there is no wire on which one tenant could be
+//    given another's address.
+//
+//    AND I45'S OTHER HALF, THE ARMING, DID NOT GO TO THE APERTURE. Owner ruling
+//    R52 ratified `DebugTraceArm` 0xF003 in the reserved debug range, lowered
+//    by CMD.EXEC at that record's last byte, because ruling R18's principle -- ONE
+//    AUTHORITY PER LEVEL -- forbids a ring with two writers and no ordering
+//    between them. The aperture can READ `armed` and is refused a write, so a
+//    capture is always attributable to the packet that asked for it.
+//
+//    WHAT DID NOT CLOSE, so the composition is not over-read: six of the seven
+//    charter 20.6 stages still have no producer and arming them stores nothing.
+//    That is entry I18's argument, not this one's, and it is where it lives.
+//
 // ---------------------------------------------------------------------------
 // THE TERRAIN CLUSTER, SWEPT 2026-09-19 -- what was composed and what was not
 // ---------------------------------------------------------------------------
@@ -1278,10 +1323,72 @@
 //           nothing and are counted). What is owed AFTER the ruling: the RTL
 //           adapter, the HUD plane store, and composing zhao_post_gather.
 //           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says.
-// I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Nothing in
-//      the console produces an error-magnitude stream; the block measures a
-//      difference against a reference and the console has no reference. Its
+// I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Its
 //      INTERVAL is real (I5 of the connected list), its EVENTS are not.
+//
+//      THE REASON CHANGED 2026-09-20 (gz/hostdbg), because the one that stood
+//      here was not true of this block. It read: "Nothing in the console
+//      produces an error-magnitude stream; the block measures a difference
+//      against a reference and the console has no reference."
+//
+//      THE SECOND CLAUSE IS DEBUG.TRACE'S PORT, NOT THIS ONE'S. `ev_err_i` is
+//      `LANES*EW` bits -- ONE UNSIGNED MAGNITUDE PER LANE. There is no
+//      expected, no actual and no difference anywhere on this block's event
+//      port. `design/contracts/MEASURE.HISTOGRAM.md` says it in terms -- "this
+//      block counts error magnitudes, which is not a [difference]" -- and the
+//      RTL header says "it takes an unsigned magnitude of EW bits and says
+//      nothing about what it measures". The differential sentence belongs to
+//      `ev_expected_fx_i` beside `ev_actual_fx_i`.
+//
+//      AND THIS IS THE ENTRY THAT RECORDS THE TRACE REFUSAL HAVING REASONED
+//      FROM THE WRONG PORT, four paragraphs down. It then did the same thing
+//      itself. That is left visible rather than tidied away, because the
+//      sentence travelled: it was still being quoted as this gap's blocker a
+//      day later, in a brief, by someone who had not opened the port list.
+//
+//      THE FIRST CLAUSE IS ALSO WRONG, AND THAT IS THE USEFUL HALF.
+//      `fpga/rtl/terrain/zhao_terrain_loddev.sv` emits `dev1_o`/`dev2_o`/
+//      `dev3_o` -- three 24-bit UNSIGNED DEVIATION MAGNITUDES per record, with
+//      `dev_valid_o`/`dev_ready_i` and a `dev_src_id_o`. That is `hist_ev_*`'s
+//      shape, field for field. It is BUILT and differentially tested
+//      (`terrain_lodpath_directed`, 286 checks, four counters fired), and its
+//      OWN producer is already composed IN THIS FILE: `zhao_terrain_lodfeed`'s
+//      inputs name TERRAIN.MIPFEED's ports in its own comments, and MIPFEED's
+//      fine stream is live here at `tmg_fine_valid/ready/h`. lodfeed OBSERVES
+//      that stream, so composing it steals nothing and needs no arbitration.
+//
+//      `design/console_inventory.yml` blocks lodfeed on "the same missing
+//      camera-position producer". THAT IS ITS CONSUMER'S BLOCKER, NOT ITS OWN.
+//      TERRAIN.LOD selects a level in SCREEN space and needs the eye (owner
+//      ruling R63); a WORLD-space deviation needs no camera, and neither
+//      `zhao_terrain_loddev` nor `zhao_terrain_lodfeed` has a camera port. The
+//      consumer's blocker was applied wholesale to the producer.
+//
+//      SO THE GAP IS NOT "NOTHING PRODUCES AN ERROR MAGNITUDE". IT IS "THE
+//      METRIC IS UNRATIFIED", which is an OWNER DECISION -- written up with
+//      both options and a recommendation in FINDINGS-hostdbg.md. The contract's
+//      own list of inventions opens with it: "the error metric -- what number
+//      goes in a bucket. Charter says 'candidate error buckets' and stops."
+//
+//      IT IS REFUSED RATHER THAN WIRED, and this is the reason that decides it.
+//      Charter section 9 Version 1 has the ARM predict a PIXEL-error threshold
+//      PER CAMERA from these counters. Putting a world-space terrain page
+//      deviation into that organ would close this entry and put the WRONG
+//      QUANTITY in it, and NOTHING WOULD CATCH IT, because the block is
+//      metric-agnostic by design. That is this contract's own named failure
+//      mode -- "two blocks disagreeing about one policy" -- manufactured
+//      deliberately. A gap closed by a producer that is real but WRONG is worse
+//      than an open gap.
+//
+//      DO NOT READ THIS ENTRY AS "BUILD A PRODUCER". One exists, it is tested,
+//      and building a second would be the duplication `uncashed_cheques.py`
+//      check 3 was written to catch.
+//
+//      AND DO NOT WIRE `RASTER.FRAGMENT`'s `fragment_error_o` BY NAME. The
+//      contract already refuses it: it is `s1_v_r && !rd_valid_i`, a one-bit
+//      tilestore-read protocol flag that "should never fire". It carries no
+//      value. The ledger's declared `inputs: [fragment_error]` points at it,
+//      which is the false-PRESENCE shape this header records elsewhere.
 //
 //      ITS TWO MEASURE SIBLINGS ARE REFUSED, 2026-09-19, and the reasons are
 //      recorded here because "the histogram is composed, so its siblings must
@@ -1348,9 +1455,6 @@
 //      has no reference, and the two fields that would need one are the two a
 //      decoder-stage event does not carry. The other six charter 20.6 stages
 //      have no producer here; entry I45 records that as the remaining half.
-//
-// I19. MEASURE.HISTOGRAM's host read window (`hist_rd_*`) -- BOUNDARY. The
-//      host is the HPS; no register path from HPS to this block exists.
 //
 // I20. Everything `zhao_shell_top_v2` already declares provisional at its own
 //      edge -- the triangle port, `fb_writer_i`, the FRAME_RING view, the
@@ -1496,6 +1600,32 @@
 //      declares it: the manager's `lease_writer_o` is the value it will
 //      become, and making that substitution is CMD.SCHEDULER's act, not this
 //      composer's.
+//
+//      RE-EXAMINED 2026-09-20 (gz/hostdbg), because a refusal's stated cause
+//      is worth checking before it is inherited a third time. The cause above
+//      is WEAKER than it reads. `zhao_video_slotmgr_v2` loads `lease_writer_q`
+//      from `rsp_writer_q` -- whoever was GRANTED the lease -- so it is the
+//      manager's own record rather than a policy invention, and
+//      `zhao_shell_top_v2` ALREADY consumes it one line over
+//      (`rmap_valid_q = v2_lease_valid && v2_lease_writer`). The substitution
+//      is more defensible than this entry admits.
+//
+//      IT IS STILL NOT MADE, and the reason is cost rather than principle:
+//      IT WOULD NOT CLOSE THIS ENTRY. The three MATERIAL.RESOLVE ports below
+//      keep I20 a BOUNDARY whatever happens to `fb_writer_i`, so the trade is
+//      a SHELL port removed -- which forces the paired-diff harness AND its
+//      mutant to be regenerated, and re-proves a framebuffer SAFETY guard whose
+//      first version let both writers pass at once -- against zero register
+//      movement. It belongs in the packet that closes I49, where the triangle
+//      port is being opened anyway.
+//
+//      THE EXACT BLOCKER FOR THE THREE OPEN PORTS, stated once so it is not
+//      re-derived: MATERIAL.RESOLVE's request ISSUE POINT and its RESPONSE
+//      JOIN -- entry I49, the texture lane's. The block is built and composed
+//      and its record path is proven end to end; what is missing is a request
+//      issued per meshlet and its answer joined back to the triangles that
+//      asked. The 2026-09-20 host register window (ruling R51) has nothing to
+//      do with any of it and closes none of it.
 //
 // I21. TERRAIN.GROUP_SEQ's subpatch job port (`terr_job_*`,
 //      `terr_sparse_fill_i`) -- BOUNDARY, and this one has a near-producer
@@ -2094,50 +2224,6 @@
 //      outside a slot's window, and the header clamp that fires
 //      `fld_ld_oob_o` is exactly what makes that state unreachable. The
 //      other eight are driven by `tests/field/field_host_directed.cpp`.
-//
-// I45. DEBUG.TRACE's ARMING AND HOST READOUT (`dbg_trace_arm_*`,
-//      `dbg_trace_clear_i`, `dbg_trace_rd_*`) -- BOUNDARY. NEW 2026-09-19 with
-//      the ring at section 7b-ii, and it is the SMALL half that the composition
-//      left open rather than a restatement of the refusal it replaced.
-//
-//      THE DATA PATH IS CLOSED. CMD.DECODER's record port drives the ring
-//      through `zref::trace::Ring::on_record()`'s own mapping; nothing about
-//      the event is invented here and I18 carries that argument in full.
-//
-//      WHAT LEAVES IS CONTROL, AND IT IS EXTERNAL BY DESIGN, not by omission.
-//      `arm_mask_i` is a DEBUG COMMAND -- charter 20.6 says the ring is
-//      "selectable", the contract calls trace selection a debug command, and
-//      the block's own header calls arming "a seven-bit MASK, not a selector,
-//      so two stages can be traced in one run". Nothing in this console decodes
-//      such a command: `zhao_cmd_exec` has arms for SetView, SurfaceStamp and
-//      DrawForm and its `unsupported_o` counts the rest. So this is the same
-//      absent owner I14, I30 and I41 name, seen from the debug surface.
-//
-//      AND UNARMED IS THE CORRECT DEFAULT, WHICH IS WHAT SEPARATES THIS FROM A
-//      CONSTANT WEARING A PORT'S NAME. An unarmed stage "is not an event either. It is
-//      not stored and NOT counted" -- the block's own words. A ring nobody
-//      armed stores nothing, which is precisely what a trace ring does when no
-//      trace was asked for. A tie-off is a value invented so a consumer sees
-//      something; this is the absence of a request.
-//
-//      THE READOUT IS I19'S SHAPE EXACTLY. `rd_addr_i`/`rd_data_o` is a host
-//      drain -- "writing events into the trace arena is MEM.HPS.BRIDGE's job
-//      downstream, which is why this block's output is a stream rather than an
-//      address" -- and the same sentence I19 writes about MEASURE.HISTOGRAM
-//      applies unchanged: the host is the HPS and no register path from HPS to
-//      this block exists. Closing one closes both, and they should be closed
-//      together rather than twice.
-//
-//      SIX OF THE SEVEN STAGES HAVE NO PRODUCER, stated so the composition is
-//      not over-read. `kCommandDecoder` (0) is wired. Stages 1..6 -- vertex
-//      output, clipped triangle, tile insertion, texture address, depth test,
-//      final pixel -- have no offer port in this file, so arming them produces
-//      nothing. SEARCHED: no module in `fpga/rtl` has an output group shaped
-//      like {tile, primitive, pixel, expected, actual}, and the reason is the
-//      one I18 gives and that survives intact -- `expected_fx` against
-//      `actual_fx` is a differential against a reference, and the console has
-//      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
-//      too. One absent owner, two blocks waiting on it.
 //
 // I49. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
 //      BOUNDARY. NEW 2026-09-19 (cmdmem packet, ruling R20), opened in the
@@ -4031,17 +4117,15 @@ module zhao_console_core
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
 
-  // ---- I18/I19: the histogram's events and its host window ----------------
+  // ---- I18: the histogram's events ----------------------------------------
+  // Its HOST WINDOW is no longer here. `hist_rd_*` was entry I19 and is now
+  // driven inside this file by `u_hostreg_hist` off the HPS register aperture
+  // (section 7b-iii, owner ruling R51).
   input  logic                    hist_ev_valid_i,
   input  logic [HIST_LANES-1:0]   hist_ev_lane_valid_i,
   input  logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i,
   input  logic [15:0]             hist_ev_src_id_i,
   output logic                    hist_ev_ready_o,
-  input  logic                    hist_rd_valid_i,
-  input  logic [HIST_BINW-1:0]    hist_rd_bin_i,
-  output logic                    hist_rd_ready_o,
-  output logic                    hist_rd_data_valid_o,
-  output logic [HIST_CW-1:0]      hist_rd_count_o,
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,
@@ -4690,29 +4774,61 @@ module zhao_console_core
   output logic [31:0] cmd_commands_o,
 
   // --------------------------------------------------------------------------
-  // DEBUG.TRACE's arming and its host readout.  Added 2026-09-19 with the ring.
+  // DEBUG.TRACE's evidence.  Added 2026-09-19 with the ring.
   // --------------------------------------------------------------------------
-  // BOUNDARY, and entry I45 argues it. The trace ring's DATA path is closed
-  // inside this module -- CMD.DECODER's record port feeds it and nothing is
-  // invented on the way -- so what leaves here is the debug CONTROL surface
-  // (arming is a debug command, charter 20.6 "selectable") and the host drain
-  // (the ring streams into the HPS trace arena through MEM.HPS.BRIDGE, which
-  // has no register path to this block). Both are the same shape as
-  // MEASURE.HISTOGRAM's `hist_rd_*` at entry I19, and for the same reason.
+  // OUTPUTS ONLY as of 2026-09-20. The arming and the host readout that stood
+  // here as entry I45's BOUNDARY are both closed INSIDE this file now:
   //
-  // UNARMED IS THE CORRECT DEFAULT and it is not a tie-off: an unarmed stage
-  // produces no event AT ALL -- not a suppressed one -- so an undriven
-  // `dbg_trace_arm_we_i` leaves a ring that costs its memory and stores
-  // nothing, which is exactly what a trace ring does when nobody asked for a
-  // trace.
-  input  logic        dbg_trace_arm_we_i,
-  input  logic [ 6:0] dbg_trace_arm_mask_i,
-  input  logic        dbg_trace_clear_i,
-  input  logic [ 8:0] dbg_trace_rd_addr_i,     // {event[5:0], word[2:0]}
-  output logic [31:0] dbg_trace_rd_data_o,
+  //   arming   CMD.EXEC lowers `DebugTraceArm` 0xF003 (owner ruling R52) and
+  //            drives `arm_we`/`arm_mask`/`clear` at section 7c.
+  //   readout  `u_hostreg_trace` answers the HPS register aperture at section
+  //            7b-iii (owner ruling R51), which is the same carrier that closed
+  //            MEASURE.HISTOGRAM's I19 in the same pass -- I45's own text asked
+  //            for exactly that: "Closing one closes both, and they should be
+  //            closed together rather than twice."
+  //
+  // These three remain because they are what a BENCH reads. `armed_o` is also
+  // readable by the host at aperture word 0x1800, which is the useful asymmetry:
+  // a host can confirm what the command stream armed without being able to arm
+  // behind its back (ruling R18, one authority per level).
   output logic [ 6:0] dbg_trace_armed_o,
   output logic [31:0] dbg_trace_count_o,
   output logic [31:0] dbg_trace_dropped_o,
+
+  // --------------------------------------------------------------------------
+  // HOST.REGWIN -- the HPS lightweight-bridge CSR aperture (owner ruling R51).
+  // --------------------------------------------------------------------------
+  // THE CONSOLE'S SECOND HOST PORT, and it is a physical edge of the part in
+  // the same class as `hps_req_*` and `pad_buttons_i`, not a boundary standing
+  // in for something unbuilt. On the Cyclone V SoC the HPS drives two bridges:
+  // the h2f DATA bridge, which `zhao_hps_bridge` uses for 64-byte bursts, and
+  // this narrow 32-bit lightweight bridge, whose entire purpose is the ARM
+  // reading and writing FPGA registers one word at a time.
+  //
+  // The aperture is 64 KiB of byte address, sixteen 4 KiB tenant regions, and
+  // the map is FROZEN in `spec/memory_rules.md` section 8. Two tenants are
+  // populated: MEASURE.HISTOGRAM at 0x0000 and DEBUG.TRACE at 0x1000. Every
+  // other region, every misaligned address and every write is REFUSED with a
+  // response and counted -- it never hangs, ruling R20's law.
+  //
+  // No-escape is STRUCTURAL rather than checked: the word offset handed to a
+  // tenant is TENANT_LSB-2 bits wide, so there is no wire on which one tenant
+  // could be given another's address. See the block's own header.
+  input  logic        hostreg_valid_i,
+  input  logic        hostreg_write_i,
+  input  logic [15:0] hostreg_addr_i,     // byte address within the aperture
+  input  logic [31:0] hostreg_wdata_i,
+  output logic        hostreg_ready_o,
+  output logic        hostreg_rvalid_o,
+  output logic [31:0] hostreg_rdata_o,
+  output logic        hostreg_err_o,
+  output logic [31:0] hostreg_reads_o,
+  output logic [31:0] hostreg_writes_o,
+  output logic [31:0] hostreg_refused_unmapped_o,
+  output logic [31:0] hostreg_refused_misaligned_o,
+  output logic [31:0] hostreg_refused_tenant_o,
+  output logic [31:0] hostreg_refused_timeout_o,
+  output logic [31:0] hostreg_stall_cycles_o,
 
   // --------------------------------------------------------------------------
   // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
@@ -4740,6 +4856,12 @@ module zhao_console_core
   output logic [31:0] cmd_exec_unsupported_o,
   // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
   output logic [31:0] cmd_exec_envs_o,
+  // R52: committed DebugTraceArm records handed to DEBUG.TRACE, and the ones
+  // REFUSED for a reserved bit set on the wire. The second is the interesting
+  // one: it is the guard that keeps a stray bit from arming a set of stages
+  // nobody asked for, and the smoke fires it deliberately.
+  output logic [31:0] cmd_exec_trace_arms_o,
+  output logic [31:0] cmd_exec_trace_arm_refused_o,
 
   // ==========================================================================
   // MEASURE.TOKENS (rulings R18/R33, 2026-09-19, cmdmem packet)
@@ -8187,6 +8309,169 @@ module zhao_console_core
   );
 
   // ==========================================================================
+  // 7b-iii. HOST.REGWIN -- the HPS register aperture and its two tenants.
+  //         Owner ruling R51.  Added 2026-09-20.  THIS CLOSES ENTRY I19 AND
+  //         THE READOUT HALF OF ENTRY I45.
+  // ==========================================================================
+  // Both entries asked for the same thing in the same words. I19: "the host is
+  // the HPS; no register path from HPS to this block exists." I45, of the trace
+  // ring's drain: "the same sentence I19 writes about MEASURE.HISTOGRAM applies
+  // unchanged ... Closing one closes both, and they should be closed together
+  // rather than twice." So one carrier, two tenants, one pass.
+  //
+  // WHY THIS IS A CARRIER AND NOT A RELOCATED TIE-OFF, stated plainly because
+  // that is the accusation this composition has to answer. `hostreg_*` leaves
+  // this module, so the question is whether the gap simply moved outward one
+  // port. It did not, and the test is whether the far end is a REAL THING or a
+  // thing nobody has built:
+  //
+  //   * the far end is the Cyclone V HPS's lightweight bridge, a port of the
+  //     part. It is the same class of edge as `hps_req_*` (the h2f DATA bridge,
+  //     which `zhao_hps_bridge` has driven since plan D10) and as
+  //     `pad_buttons_i`. Neither of those is a register entry either;
+  //   * in Verilator the harness IS the HPS, exactly as it is for the burst
+  //     bridge and the FRAME_RING view, and the smoke bench drives this port as
+  //     the host -- reading a histogram bin and a trace word back through it;
+  //   * nothing inside this module is invented to make it look driven. An
+  //     aperture nobody accesses simply answers nothing, and every counter it
+  //     owns reads zero honestly.
+  //
+  // THE MAP IS FROZEN IN `spec/memory_rules.md` SECTION 8 and is bit-sliced,
+  // not compared: tenant = addr[15:12], word offset = addr[11:2]. A tenant
+  // cannot be handed an address outside its own 4 KiB region because the offset
+  // wire is only ten bits wide. Sixteen regions exist; two are populated and
+  // fourteen are refused and counted.
+  logic [1:0]  hw_sel_c;
+  logic [9:0]  hw_woff_c;
+  logic        hw_write_c;
+  logic [31:0] hw_wdata_c;
+  logic [1:0]  hw_ack_c;
+  logic [1:0]  hw_rvalid_c;
+  logic [63:0] hw_rdata_c;
+  logic [1:0]  hw_err_c;
+
+  // tenant 0 <-> MEASURE.HISTOGRAM
+  logic                 hrh_rd_valid_c;
+  logic [HIST_BINW-1:0] hrh_rd_bin_c;
+  logic                 hrh_rd_ready_c;
+  logic                 hrh_rd_data_valid_c;
+  logic [HIST_CW-1:0]   hrh_rd_count_c;
+
+  // tenant 1 <-> DEBUG.TRACE
+  logic [ 8:0] hrt_rd_addr_c;
+  logic [31:0] hrt_rd_data_c;
+
+  // R52: CMD.EXEC's lowering of DebugTraceArm 0xF003 into the ring.
+  logic       cx_trace_arm_we_c;
+  logic [6:0] cx_trace_arm_mask_c;
+  logic       cx_trace_clear_c;
+
+  zhao_host_regwin #(
+    .NTENANT    (2),
+    .AW         (16),
+    .TENANT_LSB (12),
+    .CW         (32),
+    .ACK_LIMIT  (255)
+  ) u_hostreg (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .h_valid_i (hostreg_valid_i),
+    .h_write_i (hostreg_write_i),
+    .h_addr_i  (hostreg_addr_i),
+    .h_wdata_i (hostreg_wdata_i),
+    .h_ready_o (hostreg_ready_o),
+    .h_rvalid_o(hostreg_rvalid_o),
+    .h_rdata_o (hostreg_rdata_o),
+    .h_err_o   (hostreg_err_o),
+
+    .t_sel_o   (hw_sel_c),
+    .t_woff_o  (hw_woff_c),
+    .t_write_o (hw_write_c),
+    .t_wdata_o (hw_wdata_c),
+    .t_ack_i   (hw_ack_c),
+    .t_rvalid_i(hw_rvalid_c),
+    .t_rdata_i (hw_rdata_c),
+    .t_err_i   (hw_err_c),
+
+    .reads_o              (hostreg_reads_o),
+    .writes_o             (hostreg_writes_o),
+    .refused_unmapped_o   (hostreg_refused_unmapped_o),
+    .refused_misaligned_o (hostreg_refused_misaligned_o),
+    .refused_tenant_o     (hostreg_refused_tenant_o),
+    .refused_timeout_o    (hostreg_refused_timeout_o),
+    .stall_cycles_o       (hostreg_stall_cycles_o)
+  );
+
+  // Tenant 0: the histogram. Word offset IS the bin.
+  zhao_host_reg_hist #(
+    .OFFW (10),
+    .BINW (HIST_BINW),
+    .CW   (HIST_CW)
+  ) u_hostreg_hist (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .sel_i   (hw_sel_c[0]),
+    .woff_i  (hw_woff_c),
+    .write_i (hw_write_c),
+    .ack_o   (hw_ack_c[0]),
+    .rvalid_o(hw_rvalid_c[0]),
+    .rdata_o (hw_rdata_c[31:0]),
+    .err_o   (hw_err_c[0]),
+
+    .rd_valid_o     (hrh_rd_valid_c),
+    .rd_bin_o       (hrh_rd_bin_c),
+    .rd_ready_i     (hrh_rd_ready_c),
+    .rd_data_valid_i(hrh_rd_data_valid_c),
+    .rd_count_i     (hrh_rd_count_c),
+
+    .snap_valid_i   (hist_snap_valid_o),
+    .snap_total_i   (hist_snap_total_o),
+    .snap_src_id_i  (hist_snap_src_id_o),
+    .snap_index_i   (hist_snap_index_o),
+    .events_i       (hist_events_o),
+    .updates_i      (hist_updates_o),
+    .stall_cycles_i (hist_stall_cycles_o),
+    .bin_sat_i      (hist_bin_sat_o),
+    .fwd_hits_i     (hist_fwd_hits_o),
+    .host_conflict_i(hist_host_conflict_o),
+    .snapshots_i    (hist_snapshots_o),
+    .frozen_write_i (hist_frozen_write_o)
+  );
+
+  // Tenant 1: the trace ring. Word offset IS {event, word}.
+  zhao_host_reg_trace #(
+    .OFFW  (10),
+    .DEPTH (64)
+  ) u_hostreg_trace (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .sel_i   (hw_sel_c[1]),
+    .woff_i  (hw_woff_c),
+    .write_i (hw_write_c),
+    .ack_o   (hw_ack_c[1]),
+    .rvalid_o(hw_rvalid_c[1]),
+    .rdata_o (hw_rdata_c[63:32]),
+    .err_o   (hw_err_c[1]),
+
+    .rd_addr_o (hrt_rd_addr_c),
+    .rd_data_i (hrt_rd_data_c),
+    .armed_i   (dbg_trace_armed_o),
+    .count_i   (dbg_trace_count_o),
+    .dropped_i (dbg_trace_dropped_o)
+  );
+
+  // `hw_wdata_c` reaches both tenants and both REFUSE a write (the aperture's
+  // header says why: arming is DebugTraceArm's, ruling R52/R18). Declared
+  // unused rather than deleted, because the wire is the aperture's contract
+  // with a third tenant that will want it.
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire [31:0] hostreg_wdata_unused = hw_wdata_c;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  // ==========================================================================
   // MEASURE. The INTERVAL is the console's real frame (glue 2). The EVENTS are
   // not: nothing here produces an error magnitude -- header entry I18.
   // ==========================================================================
@@ -8209,12 +8494,15 @@ module zhao_console_core
     // REAL: one measurement interval per console frame.
     .snapshot_i(core_tick_c),
 
-    // I19: no HPS register path to this block.
-    .rd_valid_i     (hist_rd_valid_i),
-    .rd_bin_i       (hist_rd_bin_i),
-    .rd_ready_o     (hist_rd_ready_o),
-    .rd_data_valid_o(hist_rd_data_valid_o),
-    .rd_count_o     (hist_rd_count_o),
+    // R51, 2026-09-20: entry I19 is CLOSED. The HPS register path exists and
+    // this is its far end -- `u_hostreg_hist` is tenant 0 of the aperture and
+    // the word offset IS the bin index, so a read carries its own bin and
+    // nothing is stateful between accesses.
+    .rd_valid_i     (hrh_rd_valid_c),
+    .rd_bin_i       (hrh_rd_bin_c),
+    .rd_ready_o     (hrh_rd_ready_c),
+    .rd_data_valid_o(hrh_rd_data_valid_c),
+    .rd_count_o     (hrh_rd_count_c),
 
     .snap_valid_o (hist_snap_valid_o),
     .snap_total_o (hist_snap_total_o),
@@ -9255,10 +9543,15 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    .arm_we_i   (dbg_trace_arm_we_i),
-    .arm_mask_i (dbg_trace_arm_mask_i),
+    // R52: the arming is CMD.EXEC's, lowered from `DebugTraceArm` 0xF003 as a
+    // one-cycle pulse at that record's LAST BYTE. `u_cmd_decoder` offers a
+    // record to this ring at the record's byte 15, so the arming record itself
+    // is not traced and every record after it in the packet is -- a guarantee,
+    // because the next header cannot complete for sixteen more byte-cycles.
+    .arm_we_i   (cx_trace_arm_we_c),
+    .arm_mask_i (cx_trace_arm_mask_c),
     .armed_o    (dbg_trace_armed_o),
-    .clear_i    (dbg_trace_clear_i),
+    .clear_i    (cx_trace_clear_c),
 
     .ev_valid_i       (cmd_rec_valid_w),
     // `zref::trace::kCommandDecoder`. An IDENTITY, not data: it names which of
@@ -9275,8 +9568,9 @@ module zhao_console_core
     .ev_source_id_i   (cmd_rec_source_id_w),
     .ev_command_seq_i (cmd_rec_index_w),
 
-    .rd_addr_i (dbg_trace_rd_addr_i),
-    .rd_data_o (dbg_trace_rd_data_o),
+    // R51: the readout is the HPS register aperture's tenant 1, section 7b-iii.
+    .rd_addr_i (hrt_rd_addr_c),
+    .rd_data_o (hrt_rd_data_c),
 
     .count_o   (dbg_trace_count_o),
     .dropped_o (dbg_trace_dropped_o)
@@ -11110,6 +11404,12 @@ module zhao_console_core
     .grade_entries_written_o(cmd_exec_grade_entries_o),
     .post_refused_o       (cmd_exec_post_refused_o),
     .grade_overflow_o     (cmd_exec_grade_overflow_o),
+    // R52: DebugTraceArm 0xF003 -> DEBUG.TRACE at section 7b-ii.
+    .dbg_trace_arm_we_o   (cx_trace_arm_we_c),
+    .dbg_trace_arm_mask_o (cx_trace_arm_mask_c),
+    .dbg_trace_clear_o    (cx_trace_clear_c),
+    .trace_arms_applied_o (cmd_exec_trace_arms_o),
+    .trace_arm_refused_o  (cmd_exec_trace_arm_refused_o),
     .unsupported_o        (cmd_exec_unsupported_o)
   );
 

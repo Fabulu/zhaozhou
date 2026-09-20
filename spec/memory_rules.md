@@ -728,3 +728,137 @@ The software side of all of this is `design/contracts/SW.STREAM.md`.
 - Bandwidth budget test (§2 worst case, zero starvation).
 - Formal: `mem_vram_arbiter_liveness` (the B bound), `mem_guard_no_escape`,
   `mem_sdram_refresh_bound` (banked — blocked_on hardware gate).
+
+---
+
+## 8. The HOST REGISTER WINDOW (owner ruling R51, 2026-09-20)
+
+**THIS MAP IS FROZEN.** A tenant's region, and every register inside it, is a
+number the ARM's debug tooling compiles against. Adding a tenant is additive
+(populate the next free region); moving one is a wire change and needs a ruling.
+
+Ruling R51: *"Ratify a HOST REGISTER WINDOW on the HPS lightweight bridge (a
+read/write CSR aperture with a frozen address map in `spec/memory_rules.md`).
+I19's histogram window and I45's readout are its first two tenants. It is
+guarded like every other client (a region per tenant, no escape)."*
+
+### 8.0 Why this is not §3's bridge
+
+`MEM.HPS.BRIDGE` (§3) is the **h2f DATA bridge**: 64-byte-aligned bursts of
+64-bit beats, one in flight per client, for moving bulk. A host that wants one
+24-bit histogram bin cannot use it — the bin lives in a block's registers, not
+in DRAM, and no agent copies it there.
+
+This is the **h2f LIGHTWEIGHT bridge**, the Cyclone V's second, narrow, 32-bit
+host port, whose purpose is exactly register access. It is a physical port of
+the part, in the same class as the pad inputs and the FRAME_RING word view. In
+Verilator the harness is the HPS, as it is for §3.
+
+`DEBUG.COUNTERS` is a third thing and is not this either: it **streams**
+`(counter_id, u64)` pairs in ascending catalog order at vblank
+(`spec/counters.md`). That is a different protocol serving a different law, and
+it is not address-mapped.
+
+### 8.1 The aperture
+
+| property | value |
+|---|---|
+| base (Cyclone V h2f_lw) | `0xFF20_0000` |
+| size | 64 KiB (`AW` = 16 byte-address bits) |
+| region stride | 4 KiB (`TENANT_LSB` = 12) |
+| regions | 16 (`addr[15:12]`), of which **2 are populated** |
+| access | 32-bit words only; `addr[1:0]` must be `00` |
+| outstanding | one |
+
+**No-escape is STRUCTURAL, not a bound check.** The tenant index is
+`addr[15:12]` and the word offset handed to a tenant is `addr[11:2]` — ten bits
+wide. There is no wire on which one tenant could be given another's address, so
+the escape is not refused, it is unrepresentable. §5's `MEM.GUARD` compares
+against bounds because *its* regions are runtime configuration; these are frozen
+at elaboration, so the stronger form is available and is taken.
+
+**Every refusal is ANSWERED and COUNTED. It never hangs** (ruling R20's law):
+
+| condition | counter |
+|---|---|
+| `addr[1:0] != 00` | `refused_misaligned` |
+| `addr[15:12] >= 2` (an unpopulated region) | `refused_unmapped` |
+| the tenant refuses (no such register, or a write) | `refused_tenant` |
+| the tenant does not answer within 255 cycles | `refused_timeout` |
+
+`reads` and `writes` count what was **asked**, before any verdict — a census of
+only the accesses that worked would read low, which is the flattering direction.
+
+**No v1 tenant accepts a write**, and that is a decision rather than an
+omission. The one thing a host would want to write, DEBUG.TRACE's arming,
+travels in the command stream instead (`DebugTraceArm` 0xF003, ruling R52),
+because ruling R18's principle — one authority per level — forbids a second
+arming path. The write path is carried to the tenant and refused there, so a
+third tenant that wants writes needs no change to the aperture.
+
+### 8.2 Tenant 0 — `0x0000`..`0x0FFF`, MEASURE.HISTOGRAM
+
+Closes `zhao_console_core` header entry I19. Read-only.
+
+| word offset | byte | register |
+|---|---|---|
+| `0x000`..`0x03F` | `0x000`..`0x0FF` | **bin[n]** — the frozen interval's count for bin `n`, zero-extended from `CW` |
+| `0x040` | `0x100` | `snap_total` — events accepted into the interval |
+| `0x041` | `0x104` | `{ snap_valid, 15'b0, snap_src_id }` |
+| `0x042` | `0x108` | `snap_index` — interval sequence number |
+| `0x043` | `0x10C` | `events` |
+| `0x044` | `0x110` | `updates` |
+| `0x045` | `0x114` | `stall_cycles` |
+| `0x046` | `0x118` | `bin_sat` |
+| `0x047` | `0x11C` | `fwd_hits` |
+| `0x048` | `0x120` | `host_conflict` |
+| `0x049` | `0x124` | `snapshots` |
+| `0x04A` | `0x128` | `frozen_write` |
+
+**THE ADDRESS IS THE BIN.** There is no select register, deliberately: a
+select/data pair is a race in a machine whose accumulator is live — two readers
+interleave a select and a read and each gets the other's bin, with nothing able
+to notice. Nothing is stateful between accesses here, so nothing can interleave
+wrongly.
+
+An offset at or above `2**BINW` is **refused**, not answered with zero: zero
+would make a map error indistinguishable from an empty bin.
+
+A bin read is a two-cycle handshake against the live block, not a register mux,
+and it can hold off an accumulator group. The histogram counts that itself, on
+`host_conflict` — readable at `0x120`, so a host can see the cost it is
+imposing.
+
+### 8.3 Tenant 1 — `0x1000`..`0x1FFF`, DEBUG.TRACE
+
+Closes the readout half of header entry I45. Read-only.
+
+| word offset | byte | register |
+|---|---|---|
+| `0x000`..`0x1FF` | `0x1000`..`0x17FF` | the ring, word-addressed as `{event[5:0], word[2:0]}` |
+| `0x200` | `0x1800` | `armed` — the seven-bit stage mask |
+| `0x201` | `0x1804` | `count` — events stored |
+| `0x202` | `0x1808` | `dropped` — events lost to a full ring |
+
+The eight words per event are `spec/capture_format.md` chunk `0x000A`'s layout:
+`0` tile, `1` primitive, `2` pixel, `3` `{rsv[3]=0, stage}`, `4` expected_fx,
+`5` actual_fx, `6` source_id, `7` command_seq.
+
+`armed` is **readable and not writable**, which is the useful asymmetry: a host
+can confirm what the command stream armed without being able to arm behind its
+back.
+
+### 8.4 Regions 2..15 — unpopulated
+
+Refused and counted. They are the additive space for a third tenant.
+
+### 8.5 Test obligations
+
+* `tests/debug/host_regwin_directed.cpp` — the aperture's own directed test:
+  every guard fired by legal stimulus, including a tenant that never
+  acknowledges (which the composed console cannot produce, and which is a
+  legal input at the block's port).
+* `tests/prod/run_console_core_smoke.ps1` — the composed proof: the bench is
+  the HPS, reads a trace ring word and a histogram register back through the
+  aperture, and fires the unmapped, misaligned, no-such-register and
+  read-only-write refusals in the running console.

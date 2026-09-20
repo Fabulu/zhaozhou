@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 3312b382502ead91ca279204a1456828cd3da20f9d38a7aba8f0ec6188a9545a
-//   zidl_sha256         = 33dea60414f7d449efa214da236fea0f3b8e5a3b8277d2fd0ccb964d4dcf6e00
+//   abi_identity_sha256 = 8008bf8f702becc21ada6da2744a9686e60f15883bd2dd1b19d3ace4ef96efd1
+//   zidl_sha256         = 2be41d9f94d2ee34152934d5f2cf244764c18f499d7586c162c6ef7fcf8be50d
 #pragma once
 
 #include <cstdint>
@@ -75,6 +75,7 @@ constexpr uint16_t ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_SET_POST = 0x0040; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
 constexpr uint16_t ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
+constexpr uint16_t ZHAO_OP_DEBUG_TRACE_ARM = 0xF003; // 32 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -878,6 +879,23 @@ struct ZhRecordSetPopulation {
 };
 static_assert(sizeof(ZhRecordSetPopulation) == 48, "layout drift: SetPopulation record");
 
+// DebugTraceArm 0xF003: 32-byte record (implemented)
+struct ZhCmdDebugTraceArm {
+  uint8_t stage_mask;
+  uint8_t flags;
+  uint8_t pad[14];
+};
+static_assert(offsetof(ZhCmdDebugTraceArm, stage_mask) == 0, "layout drift: DebugTraceArm.stage_mask");
+static_assert(offsetof(ZhCmdDebugTraceArm, flags) == 1, "layout drift: DebugTraceArm.flags");
+static_assert(offsetof(ZhCmdDebugTraceArm, pad[0]) == 2, "layout drift: DebugTraceArm.pad");
+static_assert(sizeof(ZhCmdDebugTraceArm) == 16, "layout drift: DebugTraceArm payload");
+
+struct ZhRecordDebugTraceArm {
+  ZhCmdHeader hdr;
+  ZhCmdDebugTraceArm payload;
+};
+static_assert(sizeof(ZhRecordDebugTraceArm) == 32, "layout drift: DebugTraceArm record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1460,6 +1478,18 @@ inline ZhRecordSetPopulation zhao_sample_set_population() {
   return r;
 }
 
+inline ZhRecordDebugTraceArm zhao_sample_debug_trace_arm() {
+  ZhRecordDebugTraceArm r{};
+  r.hdr.opcode       = ZHAO_OP_DEBUG_TRACE_ARM;
+  r.hdr.record_bytes = 32;
+  r.hdr.source_id    = 1342242838u; // kind 5, module 1, index 22
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.stage_mask = 165u;
+  r.payload.flags = 137u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1776,6 +1806,15 @@ inline void zhao_pack_set_population(const ZhRecordSetPopulation& r, std::vector
   w.u16(r.payload.plane_ny);
   w.u16(r.payload.plane_nz);
   w.u16(r.payload.flags);
+}
+
+inline void zhao_pack_debug_trace_arm(const ZhRecordDebugTraceArm& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.stage_mask);
+  w.u8(r.payload.flags);
+  for (int i = 0; i < 14; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -2333,6 +2372,17 @@ inline bool zhao_unpack_set_population(ZhReader& r, ZhRecordSetPopulation& out) 
   return true;
 }
 
+inline bool zhao_unpack_debug_trace_arm(ZhReader& r, ZhRecordDebugTraceArm& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.stage_mask = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  if (!r.skip(14)) return false;
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -2355,6 +2405,7 @@ constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 
 constexpr uint16_t ZHAO_PADS_PUBLISH_RESOURCE[] = {30, 31};
 constexpr uint16_t ZHAO_PADS_SET_POST[] = {3, 14, 15};
 constexpr uint16_t ZHAO_PADS_SET_GRADE_TABLE[] = {3, 76, 77, 78, 79};
+constexpr uint16_t ZHAO_PADS_DEBUG_TRACE_ARM[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -2378,8 +2429,9 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"SetPost", 0x0040, 32, true, ZHAO_PADS_SET_POST, 3},
   {"SetGradeTable", 0x0041, 96, true, ZHAO_PADS_SET_GRADE_TABLE, 5},
   {"SetPopulation", 0x0303, 48, true, nullptr, 0},
+  {"DebugTraceArm", 0xF003, 32, true, ZHAO_PADS_DEBUG_TRACE_ARM, 14},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 22;
+constexpr size_t ZHAO_COMMAND_COUNT = 23;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2414,8 +2466,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x33, 0x12, 0xB3, 0x82, 0x50, 0x2E, 0xAD, 0x91, 0xCA, 0x27, 0x92, 0x04, 0xA1, 0x45, 0x68, 0x28, 0xCD, 0x3D, 0xA2, 0x0F, 0x9D, 0x38, 0xA7, 0xAB, 0xA8, 0xF0, 0xEC, 0x61, 0x88, 0xA9, 0x54, 0x5A};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x33, 0xDE, 0xA6, 0x04, 0x14, 0xF7, 0xD4, 0x49, 0xEF, 0xA2, 0x14, 0xDA, 0x23, 0x6F, 0xEA, 0x0F, 0x3B, 0x8E, 0x5A, 0x3B, 0x82, 0x77, 0xD2, 0xFD, 0x0C, 0xCB, 0x96, 0x4D, 0x4D, 0xCF, 0x6E, 0x00};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x80, 0x08, 0xBF, 0x8F, 0x70, 0x2B, 0xEC, 0xC2, 0x1A, 0xDA, 0x6D, 0xA2, 0x74, 0x4A, 0x96, 0x86, 0xE6, 0x0F, 0x15, 0x88, 0x3B, 0xD2, 0xDD, 0x1B, 0x19, 0xD3, 0xAC, 0xE4, 0xEF, 0x96, 0xEF, 0xD1};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x2B, 0xE4, 0x1D, 0x9F, 0x94, 0xD2, 0xEE, 0x34, 0x15, 0x29, 0x34, 0xD5, 0xF2, 0xCF, 0x24, 0x47, 0x64, 0xC1, 0x8F, 0x49, 0x9D, 0x75, 0x86, 0xC1, 0x62, 0xC6, 0xEF, 0x7F, 0xCF, 0x8B, 0xE5, 0x0D};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

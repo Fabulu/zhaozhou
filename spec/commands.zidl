@@ -807,3 +807,57 @@ command SetPopulation 0x0303 implemented {
   i16 plane_nz;
   u16 flags;           // b0 seed_first_generation, b1 plane_enable; b2-15 rsv 0
 }
+
+// ---- DEBUG.TRACE arming (owner ruling R52, 2026-09-19) ----------------------
+//
+// DebugTraceArm: THE ONE COMMAND THAT ARMS THE TRACE RING. Ruling R52
+// (reports/OWNER-RULINGS-20260919-EVENING.md): "Ratify `DebugTraceArm` in the
+// reserved 0xF0xx debug range, lowered by CMD.EXEC. ABI addition: zidl, zref
+// and captures move together."
+//
+// WHY A COMMAND AND NOT A CSR. `zhao_host_regwin` (ruling R51) gives the HPS a
+// register aperture, and arming through it would have been one line. Ruling
+// R18's principle decides against it: ONE AUTHORITY PER LEVEL. A ring armed
+// from the command stream and also from a register has two writers with no
+// ordering between them, so a capture could not be attributed to the packet
+// that asked for it. `armed` is READABLE at the aperture (tenant 1, word
+// 0x200) and writable only here.
+//
+// WHEN IT TAKES EFFECT, exactly. CMD.EXEC applies the mask at this record's
+// LAST BYTE, during the walk. CMD.DECODER offers a record to the ring at the
+// record's byte 15 (the end of its header), so:
+//
+//     the DebugTraceArm record itself is NOT traced;
+//     every record after it in the same packet IS.
+//
+// That is a guarantee, not an approximation -- the next record's header cannot
+// complete for at least sixteen more byte-cycles.
+//
+// It is applied WITHOUT waiting for the packet's verdict, unlike every other
+// command CMD.EXEC executes. The trace surface is already speculative by the
+// decoder's own contract ("a record that may still be rejected"), and a ring
+// that could not observe a packet that FAILS would be blind to the one packet
+// anybody is debugging.
+//
+// STAGE NUMBERS are charter 20.6's, and DEBUG.TRACE's `arm_mask_i` is a MASK
+// rather than a selector so two stages can be traced in one run:
+//   bit 0 command decoder   bit 1 vertex output    bit 2 clipped triangle
+//   bit 3 tile insertion    bit 4 texture address  bit 5 depth test
+//   bit 6 final pixel
+// Only bit 0 has a producer in the v1 console; `zhao_console_core` header
+// entry I18 argues why the other six do not, and arming them stores nothing
+// rather than storing something invented.
+//
+// 0xF003 was the one unallocated opcode between DebugFrameBlit 0xF002 and
+// DebugRumble 0xF004. `abi version` STAYS 3, the PublishResource/TerrainEpoch
+// precedent: a v3 decoder built before this line reports
+// ZH_ABI_UNKNOWN_OPCODE on 0xF003, which is a clean refusal.
+//
+// Wire layout: stage_mask @0 u8, flags @1 u8, pad @2 (14 B) -- 16-B payload,
+// 32-B record. A frame containing it MUST set header flags bit0
+// (ZH_ABI_DEBUG_FLAG_REQUIRED), like every other 0xF0nn opcode.
+command DebugTraceArm 0xF003 implemented {
+  u8 stage_mask;  // bit n arms stage n; bit 7 must be 0
+  u8 flags;       // bit0 = clear the ring and the drop count; bits 1-7 reserved 0
+  pad[14];        // rsv -- 16-B payload, 32-B record
+}

@@ -50,6 +50,20 @@ top:
   # instantiate zhao_console_core, so neither block is reachable through it
   # and neither can be inside anything. Counted once, on its own.
   - zhao_cmd_exec
+  # HOST.REGWIN and its two tenants, composed into zhao_console_core 2026-09-20
+  # (its section 7b-iii, owner ruling R51). TOPS here for the same reason
+  # CMD.EXEC is: the resource top does not instantiate zhao_console_core, so
+  # they are reachable through nothing it holds and cannot be inside anything.
+  #
+  # COUNTED, not `not-yet-adopted`. They are composed, they are in the console
+  # fit's source list, and they cost ALM and M10K in the shipping machine. The
+  # aperture is small (a four-state FSM, four saturating counters and a 2:1
+  # response mux); the two tenants are smaller still and add no memory -- the
+  # histogram's bins and the trace ring are already priced at their own blocks,
+  # and these only address them.
+  - zhao_host_regwin
+  - zhao_host_reg_hist
+  - zhao_host_reg_trace
 
   # --- texture island (Packet B production accounting) ----------------------
   # Count the current texture implementation exactly once, at its composed V3

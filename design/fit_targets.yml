@@ -2069,6 +2069,12 @@ targets:
       - fpga/rtl/audio/zhao_audio_fifo.sv
       - fpga/rtl/command/zhao_cmd_decoder.sv
       - fpga/rtl/command/zhao_cmd_exec.sv
+      # HOST.REGWIN and its two tenants (owner ruling R51), census slots of
+      # their own: this top does not instantiate zhao_console_core, so they are
+      # reachable through nothing it holds and are counted here directly.
+      - fpga/rtl/debug/zhao_host_regwin.sv
+      - fpga/rtl/debug/zhao_host_reg_hist.sv
+      - fpga/rtl/debug/zhao_host_reg_trace.sv
       - fpga/rtl/command/zhao_cmd_dma.sv
       - fpga/rtl/command/zhao_cmd_scheduler.sv
       - fpga/rtl/common/zhao_cdc_snapshot.sv
@@ -2520,6 +2526,14 @@ targets:
       # zhao_cmd_decoder's record port. Quartus takes a set, so the ordering
       # buys nothing; it is placed beside the decoder so a reader sees the pair.
       - fpga/rtl/debug/zhao_debug_trace.sv
+      # HOST.REGWIN and its two tenants, composed 2026-09-20 at section 7b-iii
+      # (owner ruling R51). The aperture is the HPS lightweight bridge's CSR
+      # window; the two adapters are MEASURE.HISTOGRAM's readout (which closed
+      # header entry I19) and DEBUG.TRACE's (the readout half of I45). Placed
+      # beside the ring because one of them answers for it.
+      - fpga/rtl/debug/zhao_host_regwin.sv
+      - fpga/rtl/debug/zhao_host_reg_hist.sv
+      - fpga/rtl/debug/zhao_host_reg_trace.sv
       - fpga/rtl/input/zhao_input_snapshot.sv
       - fpga/rtl/input/zhao_input_rumble.sv
       - fpga/rtl/audio/zhao_audio_fifo.sv

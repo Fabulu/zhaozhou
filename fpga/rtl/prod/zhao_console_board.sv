@@ -1618,17 +1618,15 @@ module zhao_console_board
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
 
-  // ---- I18/I19: the histogram's events and its host window ----------------
+  // ---- I18: the histogram's events ----------------------------------------
+  // Its HOST WINDOW is no longer here. `hist_rd_*` was entry I19 and is now
+  // driven inside this file by `u_hostreg_hist` off the HPS register aperture
+  // (section 7b-iii, owner ruling R51).
   input  logic                    hist_ev_valid_i,
   input  logic [HIST_LANES-1:0]   hist_ev_lane_valid_i,
   input  logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i,
   input  logic [15:0]             hist_ev_src_id_i,
   output logic                    hist_ev_ready_o,
-  input  logic                    hist_rd_valid_i,
-  input  logic [HIST_BINW-1:0]    hist_rd_bin_i,
-  output logic                    hist_rd_ready_o,
-  output logic                    hist_rd_data_valid_o,
-  output logic [HIST_CW-1:0]      hist_rd_count_o,
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,
@@ -2274,29 +2272,61 @@ module zhao_console_board
   output logic [31:0] cmd_commands_o,
 
   // --------------------------------------------------------------------------
-  // DEBUG.TRACE's arming and its host readout.  Added 2026-09-19 with the ring.
+  // DEBUG.TRACE's evidence.  Added 2026-09-19 with the ring.
   // --------------------------------------------------------------------------
-  // BOUNDARY, and entry I45 argues it. The trace ring's DATA path is closed
-  // inside this module -- CMD.DECODER's record port feeds it and nothing is
-  // invented on the way -- so what leaves here is the debug CONTROL surface
-  // (arming is a debug command, charter 20.6 "selectable") and the host drain
-  // (the ring streams into the HPS trace arena through MEM.HPS.BRIDGE, which
-  // has no register path to this block). Both are the same shape as
-  // MEASURE.HISTOGRAM's `hist_rd_*` at entry I19, and for the same reason.
+  // OUTPUTS ONLY as of 2026-09-20. The arming and the host readout that stood
+  // here as entry I45's BOUNDARY are both closed INSIDE this file now:
   //
-  // UNARMED IS THE CORRECT DEFAULT and it is not a tie-off: an unarmed stage
-  // produces no event AT ALL -- not a suppressed one -- so an undriven
-  // `dbg_trace_arm_we_i` leaves a ring that costs its memory and stores
-  // nothing, which is exactly what a trace ring does when nobody asked for a
-  // trace.
-  input  logic        dbg_trace_arm_we_i,
-  input  logic [ 6:0] dbg_trace_arm_mask_i,
-  input  logic        dbg_trace_clear_i,
-  input  logic [ 8:0] dbg_trace_rd_addr_i,     // {event[5:0], word[2:0]}
-  output logic [31:0] dbg_trace_rd_data_o,
+  //   arming   CMD.EXEC lowers `DebugTraceArm` 0xF003 (owner ruling R52) and
+  //            drives `arm_we`/`arm_mask`/`clear` at section 7c.
+  //   readout  `u_hostreg_trace` answers the HPS register aperture at section
+  //            7b-iii (owner ruling R51), which is the same carrier that closed
+  //            MEASURE.HISTOGRAM's I19 in the same pass -- I45's own text asked
+  //            for exactly that: "Closing one closes both, and they should be
+  //            closed together rather than twice."
+  //
+  // These three remain because they are what a BENCH reads. `armed_o` is also
+  // readable by the host at aperture word 0x1800, which is the useful asymmetry:
+  // a host can confirm what the command stream armed without being able to arm
+  // behind its back (ruling R18, one authority per level).
   output logic [ 6:0] dbg_trace_armed_o,
   output logic [31:0] dbg_trace_count_o,
   output logic [31:0] dbg_trace_dropped_o,
+
+  // --------------------------------------------------------------------------
+  // HOST.REGWIN -- the HPS lightweight-bridge CSR aperture (owner ruling R51).
+  // --------------------------------------------------------------------------
+  // THE CONSOLE'S SECOND HOST PORT, and it is a physical edge of the part in
+  // the same class as `hps_req_*` and `pad_buttons_i`, not a boundary standing
+  // in for something unbuilt. On the Cyclone V SoC the HPS drives two bridges:
+  // the h2f DATA bridge, which `zhao_hps_bridge` uses for 64-byte bursts, and
+  // this narrow 32-bit lightweight bridge, whose entire purpose is the ARM
+  // reading and writing FPGA registers one word at a time.
+  //
+  // The aperture is 64 KiB of byte address, sixteen 4 KiB tenant regions, and
+  // the map is FROZEN in `spec/memory_rules.md` section 8. Two tenants are
+  // populated: MEASURE.HISTOGRAM at 0x0000 and DEBUG.TRACE at 0x1000. Every
+  // other region, every misaligned address and every write is REFUSED with a
+  // response and counted -- it never hangs, ruling R20's law.
+  //
+  // No-escape is STRUCTURAL rather than checked: the word offset handed to a
+  // tenant is TENANT_LSB-2 bits wide, so there is no wire on which one tenant
+  // could be given another's address. See the block's own header.
+  input  logic        hostreg_valid_i,
+  input  logic        hostreg_write_i,
+  input  logic [15:0] hostreg_addr_i,     // byte address within the aperture
+  input  logic [31:0] hostreg_wdata_i,
+  output logic        hostreg_ready_o,
+  output logic        hostreg_rvalid_o,
+  output logic [31:0] hostreg_rdata_o,
+  output logic        hostreg_err_o,
+  output logic [31:0] hostreg_reads_o,
+  output logic [31:0] hostreg_writes_o,
+  output logic [31:0] hostreg_refused_unmapped_o,
+  output logic [31:0] hostreg_refused_misaligned_o,
+  output logic [31:0] hostreg_refused_tenant_o,
+  output logic [31:0] hostreg_refused_timeout_o,
+  output logic [31:0] hostreg_stall_cycles_o,
 
   // --------------------------------------------------------------------------
   // CMD.EXEC's evidence.  Added 2026-09-19 with section 7c.
@@ -2324,6 +2354,12 @@ module zhao_console_board
   output logic [31:0] cmd_exec_unsupported_o,
   // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
   output logic [31:0] cmd_exec_envs_o,
+  // R52: committed DebugTraceArm records handed to DEBUG.TRACE, and the ones
+  // REFUSED for a reserved bit set on the wire. The second is the interesting
+  // one: it is the guard that keeps a stray bit from arming a set of stages
+  // nobody asked for, and the smoke fires it deliberately.
+  output logic [31:0] cmd_exec_trace_arms_o,
+  output logic [31:0] cmd_exec_trace_arm_refused_o,
 
   // ==========================================================================
   // MEASURE.TOKENS (rulings R18/R33, 2026-09-19, cmdmem packet)
@@ -3341,11 +3377,6 @@ module zhao_console_board
       .hist_ev_err_i                     (hist_ev_err_i),
       .hist_ev_src_id_i                  (hist_ev_src_id_i),
       .hist_ev_ready_o                   (hist_ev_ready_o),
-      .hist_rd_valid_i                   (hist_rd_valid_i),
-      .hist_rd_bin_i                     (hist_rd_bin_i),
-      .hist_rd_ready_o                   (hist_rd_ready_o),
-      .hist_rd_data_valid_o              (hist_rd_data_valid_o),
-      .hist_rd_count_o                   (hist_rd_count_o),
       .hist_snap_valid_o                 (hist_snap_valid_o),
       .hist_snap_total_o                 (hist_snap_total_o),
       .hist_snap_src_id_o                (hist_snap_src_id_o),
@@ -3741,14 +3772,24 @@ module zhao_console_board
       .cmd_decode_error_o                (cmd_decode_error_o),
       .cmd_bytes_consumed_o              (cmd_bytes_consumed_o),
       .cmd_commands_o                    (cmd_commands_o),
-      .dbg_trace_arm_we_i                (dbg_trace_arm_we_i),
-      .dbg_trace_arm_mask_i              (dbg_trace_arm_mask_i),
-      .dbg_trace_clear_i                 (dbg_trace_clear_i),
-      .dbg_trace_rd_addr_i               (dbg_trace_rd_addr_i),
-      .dbg_trace_rd_data_o               (dbg_trace_rd_data_o),
       .dbg_trace_armed_o                 (dbg_trace_armed_o),
       .dbg_trace_count_o                 (dbg_trace_count_o),
       .dbg_trace_dropped_o               (dbg_trace_dropped_o),
+      .hostreg_valid_i                   (hostreg_valid_i),
+      .hostreg_write_i                   (hostreg_write_i),
+      .hostreg_addr_i                    (hostreg_addr_i),
+      .hostreg_wdata_i                   (hostreg_wdata_i),
+      .hostreg_ready_o                   (hostreg_ready_o),
+      .hostreg_rvalid_o                  (hostreg_rvalid_o),
+      .hostreg_rdata_o                   (hostreg_rdata_o),
+      .hostreg_err_o                     (hostreg_err_o),
+      .hostreg_reads_o                   (hostreg_reads_o),
+      .hostreg_writes_o                  (hostreg_writes_o),
+      .hostreg_refused_unmapped_o        (hostreg_refused_unmapped_o),
+      .hostreg_refused_misaligned_o      (hostreg_refused_misaligned_o),
+      .hostreg_refused_tenant_o          (hostreg_refused_tenant_o),
+      .hostreg_refused_timeout_o         (hostreg_refused_timeout_o),
+      .hostreg_stall_cycles_o            (hostreg_stall_cycles_o),
       .cmd_exec_committed_o              (cmd_exec_committed_o),
       .cmd_exec_abandoned_o              (cmd_exec_abandoned_o),
       .cmd_exec_views_o                  (cmd_exec_views_o),
@@ -3758,6 +3799,8 @@ module zhao_console_board
       .cmd_exec_src_truncated_o          (cmd_exec_src_truncated_o),
       .cmd_exec_unsupported_o            (cmd_exec_unsupported_o),
       .cmd_exec_envs_o                   (cmd_exec_envs_o),
+      .cmd_exec_trace_arms_o             (cmd_exec_trace_arms_o),
+      .cmd_exec_trace_arm_refused_o      (cmd_exec_trace_arm_refused_o),
       .tok_req_valid_i                   (tok_req_valid_i),
       .tok_req_view_i                    (tok_req_view_i),
       .tok_req_class_i                   (tok_req_class_i),

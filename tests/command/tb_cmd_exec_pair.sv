@@ -168,6 +168,18 @@ module tb_cmd_exec_pair #(
     output logic [31:0] grade_entries_written_o,
     output logic [31:0] post_refused_o,
     output logic [31:0] grade_overflow_o,
+
+    // ---- DEBUG.TRACE arming (R52) ----------------------------------------
+    // Brought out rather than left unconnected: the arm is applied DURING the
+    // walk, without waiting for the verdict, so "which byte armed it" is only
+    // observable from the live strobe. A local unused wire would have silenced
+    // the PINMISSING and made the one interesting instant unmeasurable.
+    output logic        dbg_trace_arm_we_o,
+    output logic [ 6:0] dbg_trace_arm_mask_o,
+    output logic        dbg_trace_clear_o,
+    output logic [31:0] trace_arms_applied_o,
+    output logic [31:0] trace_arm_refused_o,
+
     output logic [31:0] unsupported_o
 );
 
@@ -328,6 +340,13 @@ module tb_cmd_exec_pair #(
       .grade_entries_written_o(grade_entries_written_o),
       .post_refused_o       (post_refused_o),
       .grade_overflow_o     (grade_overflow_o),
+
+      .dbg_trace_arm_we_o   (dbg_trace_arm_we_o),
+      .dbg_trace_arm_mask_o (dbg_trace_arm_mask_o),
+      .dbg_trace_clear_o    (dbg_trace_clear_o),
+      .trace_arms_applied_o (trace_arms_applied_o),
+      .trace_arm_refused_o  (trace_arm_refused_o),
+
       .unsupported_o        (unsupported_o)
   );
 
