@@ -703,7 +703,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  // ---- 17. R18/R33: the token CEILING, then each view's REQUEST ----------
+  // ---- 2. R18/R33: the token CEILING, then each view's REQUEST ----------
   // Counts, field for field off the generated packers; the ceiling leaves
   // FIRST, then view 0's request, then view 1's, all before the first matrix
   // word -- so a request always meets its own packet's ceiling. The contract is
@@ -716,40 +716,40 @@ int main(int argc, char** argv) {
     b.append_record(setViewRecord(0, 0x0000'0007u, 0x0011'0000, 12345u, 67890u));
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
-    check(r.done && r.err == zhao_abi::ZH_ABI_OK, "case17: well formed", 1, r.done ? 1 : 0);
-    check(r.committed == 1, "case17: committed", 1, r.committed);
-    check(r.contracts == 1, "case17: contracts_applied_o", 1, r.contracts);
-    check(r.unsupported == 2, "case17: the contract is no longer 'unsupported'", 2, r.unsupported);
-    check(r.toks.size() == 3, "case17: one ceiling and two requests left", 3, r.toks.size());
+    check(r.done && r.err == zhao_abi::ZH_ABI_OK, "case2: well formed", 1, r.done ? 1 : 0);
+    check(r.committed == 1, "case2: committed", 1, r.committed);
+    check(r.contracts == 1, "case2: contracts_applied_o", 1, r.contracts);
+    check(r.unsupported == 2, "case2: the contract is no longer 'unsupported'", 2, r.unsupported);
+    check(r.toks.size() == 3, "case2: one ceiling and two requests left", 3, r.toks.size());
     if (r.toks.size() == 3) {
       const TokOut& c = r.toks[0];
-      check(c.budget, "case17: the CEILING leaves first", 1, c.budget ? 1 : 0);
+      check(c.budget, "case2: the CEILING leaves first", 1, c.budget ? 1 : 0);
       check(c.g0 == 40000u && c.g1 == 30000u && c.f0 == 90000u && c.f1 == 80000u && c.sh == 5000u,
-            "case17: the five counts, as sent", 1,
+            "case2: the five counts, as sent", 1,
             c.g0 == 40000u && c.g1 == 30000u && c.f0 == 90000u && c.f1 == 80000u && c.sh == 5000u);
       check(!r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u &&
                 r.toks[1].frag == 67890u,
-            "case17: view 0's request, as sent", 1,
+            "case2: view 0's request, as sent", 1,
             !r.toks[1].budget && r.toks[1].view == 0 && r.toks[1].geom == 12345u &&
                 r.toks[1].frag == 67890u);
       // view 1 asked for MORE than its ceiling: the executor forwards it as sent
       // -- the CLAMP is MEASURE.TOKENS', one authority per level (R18).
       check(!r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u &&
                 r.toks[2].frag == 20000u,
-            "case17: view 1's request, as sent (the clamp is the guard's)", 1,
+            "case2: view 1's request, as sent (the clamp is the guard's)", 1,
             !r.toks[2].budget && r.toks[2].view == 1 && r.toks[2].geom == 0xFFFF'FFF0u &&
                 r.toks[2].frag == 20000u);
       check(r.toks[0].cycle < r.toks[1].cycle && r.toks[1].cycle < r.toks[2].cycle,
-            "case17: ceiling, then view 0, then view 1", 1, 1);
+            "case2: ceiling, then view 0, then view 1", 1, 1);
       const uint32_t first_cfg = r.cfg.empty() ? 0xFFFFFFFFu : r.cfg[0].cycle;
-      check(r.toks[2].cycle < first_cfg, "case17: every token load precedes the first matrix word",
+      check(r.toks[2].cycle < first_cfg, "case2: every token load precedes the first matrix word",
             1, r.toks[2].cycle < first_cfg ? 1 : 0);
-      check(r.toks[0].cycle > r.verdict_cycle, "case17: nothing leaves before the verdict", 1,
+      check(r.toks[0].cycle > r.verdict_cycle, "case2: nothing leaves before the verdict", 1,
             r.toks[0].cycle > r.verdict_cycle ? 1 : 0);
     }
   }
 
-  // ---- 17b. a packet that FAILS its CRC loads NO tokens --------------------
+  // ---- 2b. a packet that FAILS its CRC loads NO tokens --------------------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -759,12 +759,12 @@ int main(int argc, char** argv) {
     std::vector<uint8_t> p = b.seal(1, 1, 0);
     p[36 + 32 + 20] = static_cast<uint8_t>(p[36 + 32 + 20] ^ 0xFFu);  // a contract count byte
     const Run r = runPacket(p, 0xFFFFFFFFu);
-    check(r.abandoned == 1, "case17b: abandoned", 1, r.abandoned);
-    check(r.toks.empty() && r.contracts == 0, "case17b: no ceiling and no request escaped", 0,
+    check(r.abandoned == 1, "case2b: abandoned", 1, r.abandoned);
+    check(r.toks.empty() && r.contracts == 0, "case2b: no ceiling and no request escaped", 0,
           r.toks.size() + r.contracts);
   }
 
-  // ---- 2. the same packet with one payload byte flipped -------------------
+  // ---- 3. the same packet with one payload byte flipped -------------------
   // The positive control for packets_abandoned_o, and the whole reason this
   // block stages instead of acting.
   {
@@ -781,21 +781,21 @@ int main(int argc, char** argv) {
     p[36 + 32 + 24] = static_cast<uint8_t>(p[36 + 32 + 24] ^ 0xFFu);
     const Run r = runPacket(p, 0xFFFFFFFFu);
 
-    check(r.done, "case2: reached a verdict", 1, r.done ? 1 : 0);
-    check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case2: the payload CRC fails",
+    check(r.done, "case3: reached a verdict", 1, r.done ? 1 : 0);
+    check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case3: the payload CRC fails",
           zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, r.err);
-    check(r.abandoned == 1, "case2: packets_abandoned_o fires", 1, r.abandoned);
-    check(r.committed == 0, "case2: packets_committed_o", 0, r.committed);
+    check(r.abandoned == 1, "case3: packets_abandoned_o fires", 1, r.abandoned);
+    check(r.committed == 0, "case3: packets_committed_o", 0, r.committed);
     // The assertion this block exists for: a staged SetView and a staged stamp
     // BOTH evaporate, and the surface sheet is never scarred by a packet that
     // failed its CRC.
-    check(r.cfg.empty(), "case2: NO matrix word was written", 0, r.cfg.size());
-    check(r.stamps.empty(), "case2: NO stamp was dispatched", 0, r.stamps.size());
-    check(r.views == 0, "case2: views_written_o", 0, r.views);
-    check(r.issued == 0, "case2: stamps_issued_o", 0, r.issued);
+    check(r.cfg.empty(), "case3: NO matrix word was written", 0, r.cfg.size());
+    check(r.stamps.empty(), "case3: NO stamp was dispatched", 0, r.stamps.size());
+    check(r.views == 0, "case3: views_written_o", 0, r.views);
+    check(r.issued == 0, "case3: stamps_issued_o", 0, r.issued);
   }
 
-  // ---- 3. a view_id the bank cannot address -------------------------------
+  // ---- 4. a view_id the bank cannot address -------------------------------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -803,16 +803,16 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.err == zhao_abi::ZH_ABI_OK, "case3: the RECORD is legal ABI", zhao_abi::ZH_ABI_OK,
+    check(r.err == zhao_abi::ZH_ABI_OK, "case4: the RECORD is legal ABI", zhao_abi::ZH_ABI_OK,
           r.err);
-    check(r.refused == 1, "case3: view_range_refused_o fires", 1, r.refused);
+    check(r.refused == 1, "case4: view_range_refused_o fires", 1, r.refused);
     // Refused, not masked. view_id 7 must NOT land in view 1.
-    check(r.cfg.empty(), "case3: nothing was written to either view", 0, r.cfg.size());
-    check(r.views == 0, "case3: views_written_o", 0, r.views);
-    check(r.committed == 1, "case3: the packet still commits", 1, r.committed);
+    check(r.cfg.empty(), "case4: nothing was written to either view", 0, r.cfg.size());
+    check(r.views == 0, "case4: views_written_o", 0, r.views);
+    check(r.committed == 1, "case4: the packet still commits", 1, r.committed);
   }
 
-  // ---- 4. a source_id whose high half does not fit ------------------------
+  // ---- 5. a source_id whose high half does not fit ------------------------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -821,15 +821,15 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.err == zhao_abi::ZH_ABI_OK, "case4: well formed", zhao_abi::ZH_ABI_OK, r.err);
-    check(r.truncated == 1, "case4: stamp_src_truncated_o fires", 1, r.truncated);
-    check(r.stamps.size() == 1, "case4: the stamp is still dispatched", 1, r.stamps.size());
+    check(r.err == zhao_abi::ZH_ABI_OK, "case5: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    check(r.truncated == 1, "case5: stamp_src_truncated_o fires", 1, r.truncated);
+    check(r.stamps.size() == 1, "case5: the stamp is still dispatched", 1, r.stamps.size());
     if (r.stamps.size() == 1)
-      check(r.stamps[0].src_id == 5, "case4: the low half is what is carried", 5,
+      check(r.stamps[0].src_id == 5, "case5: the low half is what is carried", 5,
             r.stamps[0].src_id);
   }
 
-  // ---- 5. more stamps than the ring holds ---------------------------------
+  // ---- 6. more stamps than the ring holds ---------------------------------
   // STAMP_Q is 8 in the harness; nine stamps is a legal packet the console
   // cannot execute, and it is refused WHOLE rather than eight-ninths applied.
   {
@@ -843,16 +843,16 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.err == zhao_abi::ZH_ABI_OK, "case5: the PACKET is well formed", zhao_abi::ZH_ABI_OK,
+    check(r.err == zhao_abi::ZH_ABI_OK, "case6: the PACKET is well formed", zhao_abi::ZH_ABI_OK,
           r.err);
-    check(r.overflow == 1, "case5: stamp_overflow_o fires", 1, r.overflow);
-    check(r.abandoned == 1, "case5: the packet is refused whole", 1, r.abandoned);
-    check(r.committed == 0, "case5: packets_committed_o", 0, r.committed);
-    check(r.stamps.empty(), "case5: not one stamp escaped", 0, r.stamps.size());
-    check(r.issued == 0, "case5: stamps_issued_o", 0, r.issued);
+    check(r.overflow == 1, "case6: stamp_overflow_o fires", 1, r.overflow);
+    check(r.abandoned == 1, "case6: the packet is refused whole", 1, r.abandoned);
+    check(r.committed == 0, "case6: packets_committed_o", 0, r.committed);
+    check(r.stamps.empty(), "case6: not one stamp escaped", 0, r.stamps.size());
+    check(r.issued == 0, "case6: stamps_issued_o", 0, r.issued);
   }
 
-  // ---- 6. the collapse law -------------------------------------------------
+  // ---- 7. the collapse law -------------------------------------------------
   {
     // Two SetViews for the SAME view: idempotent state, last one wins, ONE
     // commit. This is the property that makes the shadow bank bounded.
@@ -878,17 +878,17 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.views == 2, "case6b: both views commit", 2, r.views);
-    check(r.cfg.size() == 32, "case6b: thirty-two words", 32, r.cfg.size());
+    check(r.views == 2, "case7b: both views commit", 2, r.views);
+    check(r.cfg.size() == 32, "case7b: thirty-two words", 32, r.cfg.size());
     if (r.cfg.size() == 32) {
-      check(r.cfg[0].view == 0, "case6b: view 0 drains first", 0, r.cfg[0].view);
-      check(r.cfg[0].data == 0x0066'0000u, "case6b: view 0 data", 0x0066'0000u, r.cfg[0].data);
-      check(r.cfg[16].view == 1, "case6b: view 1 drains second", 1, r.cfg[16].view);
-      check(r.cfg[16].data == 0x0055'0000u, "case6b: view 1 data", 0x0055'0000u, r.cfg[16].data);
+      check(r.cfg[0].view == 0, "case7b: view 0 drains first", 0, r.cfg[0].view);
+      check(r.cfg[0].data == 0x0066'0000u, "case7b: view 0 data", 0x0066'0000u, r.cfg[0].data);
+      check(r.cfg[16].view == 1, "case7b: view 1 drains second", 1, r.cfg[16].view);
+      check(r.cfg[16].data == 0x0055'0000u, "case7b: view 1 data", 0x0055'0000u, r.cfg[16].data);
     }
   }
 
-  // ---- 7. the same work under stamp backpressure --------------------------
+  // ---- 8. the same work under stamp backpressure --------------------------
   // The result must be identical, only slower. A drain that drops a stamp when
   // its consumer is slow is the defect this case exists to catch.
   {
@@ -904,7 +904,7 @@ int main(int argc, char** argv) {
       }
       b.end_frame(0);
       const Run r = runPacket(b.seal(1, 1, 0), masks[m]);
-      const std::string tag = "case7[mask " + std::to_string(m) + "]";
+      const std::string tag = "case8[mask " + std::to_string(m) + "]";
 
       check(r.err == zhao_abi::ZH_ABI_OK, (tag + ": well formed").c_str(), zhao_abi::ZH_ABI_OK,
             r.err);
@@ -926,7 +926,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  // ---- 8. the matrix bank refuses, and refuses hard -----------------------
+  // ---- 9. the matrix bank refuses, and refuses hard -----------------------
   // In the composed core the host cfg port owns addresses 16 and 17 and wins
   // any cycle it wants, so CMD.EXEC's write can be refused at any point in the
   // drain. Every word must still land, ONCE, in order. A drain that skipped a
@@ -943,7 +943,7 @@ int main(int argc, char** argv) {
           surfaceStampRecord(0x31u, kPatch, kOp, kTag, kStrength, kTx, kTy, kRadius, kRing));
       b.end_frame(0);
       const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, cfg_masks[m]);
-      const std::string tag = "case8[cfg mask " + std::to_string(m) + "]";
+      const std::string tag = "case9[cfg mask " + std::to_string(m) + "]";
 
       check(r.err == zhao_abi::ZH_ABI_OK, (tag + ": well formed").c_str(), zhao_abi::ZH_ABI_OK,
             r.err);
@@ -971,7 +971,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  // ---- 9. one DrawForm, whole -------------------------------------------
+  // ---- 10. one DrawForm, whole -------------------------------------------
   // Every one of DrawForm's six fields plus the header's source_id, packed by
   // `zhao_pack_draw_form` and read back off the dispatch port. The values are
   // deliberately all-different and byte-asymmetric: a transposed field, a
@@ -992,31 +992,31 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.err == zhao_abi::ZH_ABI_OK, "case9: the packet is well formed", zhao_abi::ZH_ABI_OK,
+    check(r.err == zhao_abi::ZH_ABI_OK, "case10: the packet is well formed", zhao_abi::ZH_ABI_OK,
           r.err);
-    checkNothingEscapedEarly(r, "case9");
-    check(r.committed == 1, "case9: packets_committed_o", 1, r.committed);
-    check(r.draws_issued == 1, "case9: draws_issued_o", 1, r.draws_issued);
-    check(r.draws.size() == 1, "case9: exactly one dispatch left the block", 1, r.draws.size());
-    check(r.draw_overflow == 0, "case9: draw_overflow_o", 0, r.draw_overflow);
-    check(r.draw_truncated == 0, "case9: draw_src_truncated_o", 0, r.draw_truncated);
+    checkNothingEscapedEarly(r, "case10");
+    check(r.committed == 1, "case10: packets_committed_o", 1, r.committed);
+    check(r.draws_issued == 1, "case10: draws_issued_o", 1, r.draws_issued);
+    check(r.draws.size() == 1, "case10: exactly one dispatch left the block", 1, r.draws.size());
+    check(r.draw_overflow == 0, "case10: draw_overflow_o", 0, r.draw_overflow);
+    check(r.draw_truncated == 0, "case10: draw_src_truncated_o", 0, r.draw_truncated);
     // DrawForm now has an arm, so it must NOT be counted as unsupported.
-    check(r.unsupported == 2, "case9: unsupported_o is BeginFrame + EndFrame only", 2,
+    check(r.unsupported == 2, "case10: unsupported_o is BeginFrame + EndFrame only", 2,
           r.unsupported);
     if (r.draws.size() == 1) {
       const DrawOut& d = r.draws[0];
-      check(d.form == 0x1234'56A7u, "case9: form handle", 0x1234'56A7u, d.form);
-      check(d.material_set == 0x89AB'CD03u, "case9: material_set handle", 0x89AB'CD03u,
+      check(d.form == 0x1234'56A7u, "case10: form handle", 0x1234'56A7u, d.form);
+      check(d.material_set == 0x89AB'CD03u, "case10: material_set handle", 0x89AB'CD03u,
             d.material_set);
-      check(d.transform == 0x0F1E'2D5Cu, "case9: transform handle", 0x0F1E'2D5Cu, d.transform);
-      check(d.viewport_mask == 0x03u, "case9: viewport_mask", 0x03u, d.viewport_mask);
-      check(d.semantic_weight == 0x77u, "case9: semantic_weight", 0x77u, d.semantic_weight);
-      check(d.flags == 0xBEEFu, "case9: flags, the record's LAST two bytes", 0xBEEFu, d.flags);
-      check(d.src_id == 0x0021u, "case9: the record header's source_id", 0x0021u, d.src_id);
+      check(d.transform == 0x0F1E'2D5Cu, "case10: transform handle", 0x0F1E'2D5Cu, d.transform);
+      check(d.viewport_mask == 0x03u, "case10: viewport_mask", 0x03u, d.viewport_mask);
+      check(d.semantic_weight == 0x77u, "case10: semantic_weight", 0x77u, d.semantic_weight);
+      check(d.flags == 0xBEEFu, "case10: flags, the record's LAST two bytes", 0xBEEFu, d.flags);
+      check(d.src_id == 0x0021u, "case10: the record header's source_id", 0x0021u, d.src_id);
     }
   }
 
-  // ---- 10. the draw ring overflows, and the packet is refused WHOLE -------
+  // ---- 11. the draw ring overflows, and the packet is refused WHOLE -------
   // DRAW_Q is 4 in the bench, so five forms in one packet is LEGAL stimulus
   // that reaches the guard. The counter fires without a committed mutant, and
   // the packet is abandoned rather than half-drawn: a frame with four of its
@@ -1031,16 +1031,16 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.err == zhao_abi::ZH_ABI_OK, "case10: the PACKET is well formed -- the refusal is ours",
+    check(r.err == zhao_abi::ZH_ABI_OK, "case11: the PACKET is well formed -- the refusal is ours",
           zhao_abi::ZH_ABI_OK, r.err);
-    check(r.draw_overflow == 1, "case10: draw_overflow_o FIRED", 1, r.draw_overflow);
-    check(r.abandoned == 1, "case10: the poisoned packet is abandoned", 1, r.abandoned);
-    check(r.committed == 0, "case10: nothing was committed", 0, r.committed);
-    check(r.draws.empty(), "case10: not one form was dispatched", 0, r.draws.size());
-    check(r.cfg.empty(), "case10: and the view did not commit either", 0, r.cfg.size());
+    check(r.draw_overflow == 1, "case11: draw_overflow_o FIRED", 1, r.draw_overflow);
+    check(r.abandoned == 1, "case11: the poisoned packet is abandoned", 1, r.abandoned);
+    check(r.committed == 0, "case11: nothing was committed", 0, r.committed);
+    check(r.draws.empty(), "case11: not one form was dispatched", 0, r.draws.size());
+    check(r.cfg.empty(), "case11: and the view did not commit either", 0, r.cfg.size());
   }
 
-  // ---- 11. a source_id whose high half cannot fit ------------------------
+  // ---- 12. a source_id whose high half cannot fit ------------------------
   // The SurfaceStamp narrowing rule, applied to the draw arm and counted on
   // its OWN counter: one flag for both records would attribute a form's
   // truncated id to a stamp.
@@ -1051,15 +1051,15 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
 
-    check(r.draw_truncated == 1, "case11: draw_src_truncated_o FIRED", 1, r.draw_truncated);
-    check(r.truncated == 0, "case11: and the STAMP counter did not move", 0, r.truncated);
-    check(r.draws_issued == 1, "case11: the draw still dispatches", 1, r.draws_issued);
+    check(r.draw_truncated == 1, "case12: draw_src_truncated_o FIRED", 1, r.draw_truncated);
+    check(r.truncated == 0, "case12: and the STAMP counter did not move", 0, r.truncated);
+    check(r.draws_issued == 1, "case12: the draw still dispatches", 1, r.draws_issued);
     if (r.draws.size() == 1)
-      check(r.draws[0].src_id == 0x1234u, "case11: the low half is carried", 0x1234u,
+      check(r.draws[0].src_id == 0x1234u, "case12: the low half is carried", 0x1234u,
             r.draws[0].src_id);
   }
 
-  // ---- 12. VIEWS BEFORE DRAWS, under backpressure ------------------------
+  // ---- 13. VIEWS BEFORE DRAWS, under backpressure ------------------------
   // The ordering claim the header makes structurally, measured rather than
   // argued: every matrix word of this packet retires BEFORE the first form
   // leaves. A draw that overtook its own packet's SetView would render the
@@ -1082,7 +1082,7 @@ int main(int argc, char** argv) {
                                        static_cast<uint16_t>(0xAB00u + k)));
       b.end_frame(0);
       const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, draw_masks[m]);
-      const std::string tag = "case12[draw mask " + std::to_string(m) + "]";
+      const std::string tag = "case13[draw mask " + std::to_string(m) + "]";
 
       check(r.err == zhao_abi::ZH_ABI_OK, (tag + ": well formed").c_str(), zhao_abi::ZH_ABI_OK,
             r.err);
@@ -1113,7 +1113,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  // ---- 13. PublishResource (R17): two uploads and a form, committed --------
+  // ---- 14. PublishResource (R17): two uploads and a form, committed --------
   // Every MEM.UPLOAD request field off the generated offsets, in submission
   // order, AFTER the verdict, and BEFORE the form (EX_UPL precedes EX_DRAW).
   {
@@ -1124,37 +1124,37 @@ int main(int argc, char** argv) {
     b.append_record(publishRecord(1));
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
-    check(r.err == zhao_abi::ZH_ABI_OK, "case13: well formed", zhao_abi::ZH_ABI_OK, r.err);
-    checkNothingEscapedEarly(r, "case13");
-    check(r.committed == 1, "case13: committed", 1, r.committed);
-    check(r.uploads.size() == 2, "case13: two uploads handed to MEM.UPLOAD", 2, r.uploads.size());
-    check(r.uploads_issued == 2, "case13: uploads_issued_o", 2, r.uploads_issued);
-    check(r.unsupported == 2, "case13: only BeginFrame/EndFrame unsupported now", 2, r.unsupported);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case14: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    checkNothingEscapedEarly(r, "case14");
+    check(r.committed == 1, "case14: committed", 1, r.committed);
+    check(r.uploads.size() == 2, "case14: two uploads handed to MEM.UPLOAD", 2, r.uploads.size());
+    check(r.uploads_issued == 2, "case14: uploads_issued_o", 2, r.uploads_issued);
+    check(r.unsupported == 2, "case14: only BeginFrame/EndFrame unsupported now", 2, r.unsupported);
     if (r.uploads.size() == 2) {
-      checkUpload(r.uploads[0], 0, "case13 upload 0");
-      checkUpload(r.uploads[1], 1, "case13 upload 1");
-      check(r.uploads[0].cycle > r.verdict_cycle, "case13: no upload before the verdict", 1,
+      checkUpload(r.uploads[0], 0, "case14 upload 0");
+      checkUpload(r.uploads[1], 1, "case14 upload 1");
+      check(r.uploads[0].cycle > r.verdict_cycle, "case14: no upload before the verdict", 1,
             r.uploads[0].cycle > r.verdict_cycle ? 1 : 0);
       if (r.draws.size() == 1)
-        check(r.uploads[0].cycle < r.draws[0].cycle, "case13: the upload starts before the form", 1,
+        check(r.uploads[0].cycle < r.draws[0].cycle, "case14: the upload starts before the form", 1,
               r.uploads[0].cycle < r.draws[0].cycle ? 1 : 0);
     }
   }
 
-  // ---- 14. five uploads against UPL_Q = 4: refused WHOLE, counted ----------
+  // ---- 15. five uploads against UPL_Q = 4: refused WHOLE, counted ----------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
     for (uint32_t k = 0; k < 5; ++k) b.append_record(publishRecord(k));
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
-    check(r.err == zhao_abi::ZH_ABI_OK, "case14: well formed", zhao_abi::ZH_ABI_OK, r.err);
-    check(r.upload_overflow == 1, "case14: upload_overflow_o fires", 1, r.upload_overflow);
-    check(r.abandoned == 1, "case14: the packet is abandoned", 1, r.abandoned);
-    check(r.uploads.empty(), "case14: NO upload leaves -- not four of five", 0, r.uploads.size());
+    check(r.err == zhao_abi::ZH_ABI_OK, "case15: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    check(r.upload_overflow == 1, "case15: upload_overflow_o fires", 1, r.upload_overflow);
+    check(r.abandoned == 1, "case15: the packet is abandoned", 1, r.abandoned);
+    check(r.uploads.empty(), "case15: NO upload leaves -- not four of five", 0, r.uploads.size());
   }
 
-  // ---- 15. a payload-CRC failure carries no upload out ---------------------
+  // ---- 16. a payload-CRC failure carries no upload out ---------------------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -1163,14 +1163,14 @@ int main(int argc, char** argv) {
     std::vector<uint8_t> p = b.seal(1, 1, 0);
     p[36 + 32 + 20] = static_cast<uint8_t>(p[36 + 32 + 20] ^ 0x5Au);  // inside hps_addr_lo
     const Run r = runPacket(p, 0xFFFFFFFFu);
-    check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case15: payload CRC fails",
+    check(r.err == zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, "case16: payload CRC fails",
           zhao_abi::ZH_ABI_BAD_PAYLOAD_CRC, r.err);
-    check(r.abandoned == 1, "case15: abandoned", 1, r.abandoned);
-    check(r.uploads.empty(), "case15: NO upload of a packet that failed its CRC", 0,
+    check(r.abandoned == 1, "case16: abandoned", 1, r.abandoned);
+    check(r.uploads.empty(), "case16: NO upload of a packet that failed its CRC", 0,
           r.uploads.size());
   }
 
-  // ---- 16. MEM.UPLOAD busy: the commit does NOT wait for it ----------------
+  // ---- 17. MEM.UPLOAD busy: the commit does NOT wait for it ----------------
   // Ready held low for the whole run. The packet must still commit and its
   // form still dispatch; the upload waits in the pending queue, lost nowhere.
   {
@@ -1180,14 +1180,14 @@ int main(int argc, char** argv) {
     b.append_record(drawFormRecord(0x70u, 0xF00Du, 0xBEA7u, 0xC0DEu, 1, 0, 0));
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0x0u);
-    check(r.committed == 1, "case16: committed with MEM.UPLOAD busy", 1, r.committed);
-    check(r.draws.size() == 1, "case16: the form was not held behind the upload", 1,
+    check(r.committed == 1, "case17: committed with MEM.UPLOAD busy", 1, r.committed);
+    check(r.draws.size() == 1, "case17: the form was not held behind the upload", 1,
           r.draws.size());
-    check(r.uploads.empty() && r.uploads_issued == 0, "case16: the upload is still pending", 0,
+    check(r.uploads.empty() && r.uploads_issued == 0, "case17: the upload is still pending", 0,
           r.uploads_issued);
   }
 
-  // ---- 17. R25: SetEnvironment, committed -- the LAST record wins ---------
+  // ---- 18. R25: SetEnvironment, committed -- the LAST record wins ---------
   // Two SetEnvironment records around a SetView, the ambient/colour values
   // chosen so a byte-swap or an offset slip shows. Exactly ONE environment
   // leaves, after the verdict, carrying the SECOND record's four bank fields;
@@ -1202,24 +1202,24 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
                             0xFFFFFFFFu, 0xFFFF0000u);
-    check(r.err == zhao_abi::ZH_ABI_OK, "case17: the packet is well formed (SetEnvironment implemented)",
+    check(r.err == zhao_abi::ZH_ABI_OK, "case18: the packet is well formed (SetEnvironment implemented)",
           zhao_abi::ZH_ABI_OK, r.err);
-    check(r.committed == 1, "case17: committed", 1, r.committed);
-    check(r.envs.size() == 1, "case17: ONE environment presented for two records", 1, r.envs.size());
-    check(r.envs_issued == 1, "case17: envs_issued_o", 1, r.envs_issued);
-    check(r.unsupported == 2, "case17: SetEnvironment is no longer unsupported", 2, r.unsupported);
+    check(r.committed == 1, "case18: committed", 1, r.committed);
+    check(r.envs.size() == 1, "case18: ONE environment presented for two records", 1, r.envs.size());
+    check(r.envs_issued == 1, "case18: envs_issued_o", 1, r.envs_issued);
+    check(r.unsupported == 2, "case18: SetEnvironment is no longer unsupported", 2, r.unsupported);
     if (!r.envs.empty()) {
       const EnvOut& e = r.envs[0];
-      check(e.cycle > r.verdict_cycle, "case17: the environment leaves AFTER the verdict", 1,
+      check(e.cycle > r.verdict_cycle, "case18: the environment leaves AFTER the verdict", 1,
             e.cycle > r.verdict_cycle ? 1 : 0);
-      check(e.yaw == 0xA1B2u, "case17: sun_yaw of the LAST record", 0xA1B2u, e.yaw);
-      check(e.pitch == 0x0C3Du, "case17: sun_pitch", 0x0C3Du, e.pitch);
-      check(e.sun == 0xBDF7u, "case17: sun_colour", 0xBDF7u, e.sun);
-      check(e.ambient == 0x4208u, "case17: ambient", 0x4208u, e.ambient);
+      check(e.yaw == 0xA1B2u, "case18: sun_yaw of the LAST record", 0xA1B2u, e.yaw);
+      check(e.pitch == 0x0C3Du, "case18: sun_pitch", 0x0C3Du, e.pitch);
+      check(e.sun == 0xBDF7u, "case18: sun_colour", 0xBDF7u, e.sun);
+      check(e.ambient == 0x4208u, "case18: ambient", 0x4208u, e.ambient);
     }
   }
 
-  // ---- 18. R25: an ABANDONED packet's environment never leaves ------------
+  // ---- 19. R25: an ABANDONED packet's environment never leaves ------------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -1229,9 +1229,9 @@ int main(int argc, char** argv) {
     // a pad byte of the SetEnvironment record: header CRC intact, payload CRC not
     p[36 + 32 + 40] = static_cast<uint8_t>(p[36 + 32 + 40] ^ 0xFFu);
     const Run r = runPacket(p, 0xFFFFFFFFu);
-    check(r.abandoned == 1, "case18: the packet is abandoned", 1, r.abandoned);
+    check(r.abandoned == 1, "case19: the packet is abandoned", 1, r.abandoned);
     check(r.envs.empty() && r.envs_issued == 0,
-          "case18: a staged environment is DISCARDED with its packet", 0,
+          "case19: a staged environment is DISCARDED with its packet", 0,
           static_cast<uint32_t>(r.envs.size()) + r.envs_issued);
   }
   // THE CLOSING BRACE ABOVE WAS DROPPED BY THE 2026-09-20 MERGE, which spliced
@@ -1239,13 +1239,19 @@ int main(int argc, char** argv) {
   // Every block below was then nested inside case 18 and the file did not
   // compile -- so `cmd_exec_directed` was not running on the merged tree at all.
   //
-  // NOTE, not repaired here: the two lanes' case NUMBERS collide (17, 18 and 19
-  // each name two different blocks, and "case17:" labels 35 checks across
-  // three). The numbers are comments and labels, not assertions, so renumbering
-  // 35 strings is churn with a typo risk; it is recorded so a failure message
-  // reading "case17:" is known to be ambiguous until somebody renumbers.
+  // REPAIRED 2026-09-20 (owner ruling R62). THREE blocks were numbered 17 --
+  // the token ceiling, SetEnvironment and SetPost -- and one label numbered 17
+  // named 35 checks across all three, so a failure message named no block at
+  // all. Every
+  // block is now renumbered in file order, 1 through 27.
+  //
+  // The numbers are comments and string literals, not assertions, so nothing in
+  // the compiler can notice the next collision. `tools/budget/check_case_labels.py`
+  // is what notices: it refuses a duplicate block number and refuses a "caseN:"
+  // label sitting in a block that is not N -- which is the likelier defect, a
+  // label copied along with the code it labels. Run it, do not re-derive it.
 
-  // ---- 17. SetPost + two SetGradeTables + a form: the look and the table ---
+  // ---- 20. SetPost + two SetGradeTables + a form: the look and the table ---
   // Field for field against zref::post::look, the table entries generated by
   // the zref EMITTER (grade_product_vector) and read back off `pv_*` in order,
   // AFTER the verdict and BEFORE the form (EX_POST precedes EX_DRAW).
@@ -1262,37 +1268,37 @@ int main(int argc, char** argv) {
     zref::post::look::Look want;
     const bool ok = zref::post::look::apply_set_post(0x9Cu, 0x03u, 0x40u, -256, 17, 255, 0xF81Fu,
                                                      0x07E0u, &want);
-    check(ok, "case17: zref accepts the look", 1, ok ? 1 : 0);
-    check(r.err == zhao_abi::ZH_ABI_OK && r.committed == 1, "case17: committed", 1, r.committed);
-    check(r.unsupported == 2, "case17: SetPost/SetGradeTable are no longer unsupported", 2,
+    check(ok, "case20: zref accepts the look", 1, ok ? 1 : 0);
+    check(r.err == zhao_abi::ZH_ABI_OK && r.committed == 1, "case20: committed", 1, r.committed);
+    check(r.unsupported == 2, "case20: SetPost/SetGradeTable are no longer unsupported", 2,
           r.unsupported);
-    check(r.looks_applied == 1, "case17: one look applied", 1, r.looks_applied);
+    check(r.looks_applied == 1, "case20: one look applied", 1, r.looks_applied);
     check(r.look.bloom_gain == want.bloom_gain && r.look.grade_valid == want.grade_valid &&
               r.look.echo_arm == want.echo_arm,
-          "case17: bloom gain, grade-valid and the ECHO ARM as zref", 1, 1);
+          "case20: bloom gain, grade-valid and the ECHO ARM as zref", 1, 1);
     check(r.look.bias_r == want.bias_r && r.look.bias_g == want.bias_g && r.look.bias_b == want.bias_b,
-          "case17: the three biases, sign and all (-256 and 255 are the edges)", 0,
+          "case20: the three biases, sign and all (-256 and 255 are the edges)", 0,
           (r.look.bias_r - want.bias_r) + (r.look.bias_b - want.bias_b));
     check(r.look.flash == want.flash && r.look.flash_amount == want.flash_amount &&
               r.look.ink == want.ink,
-          "case17: flash colour, flash amount and ink", 1, 1);
-    check(r.pv.size() == 16 && r.grade_written == 16, "case17: sixteen table entries written", 16,
+          "case20: flash colour, flash amount and ink", 1, 1);
+    check(r.pv.size() == 16 && r.grade_written == 16, "case20: sixteen table entries written", 16,
           r.pv.size());
     if (r.pv.size() == 16) {
-      for (unsigned k = 0; k < 8; ++k) checkPv(r.pv[k], gf.recs[0], k, "case17 R" + std::to_string(k));
+      for (unsigned k = 0; k < 8; ++k) checkPv(r.pv[k], gf.recs[0], k, "case20 R" + std::to_string(k));
       for (unsigned k = 0; k < 8; ++k)
-        checkPv(r.pv[8 + k], gf.recs[11], k, "case17 G" + std::to_string(56 + k));
-      check(r.pv.front().cycle > r.verdict_cycle, "case17: no table write before the verdict", 1,
+        checkPv(r.pv[8 + k], gf.recs[11], k, "case20 G" + std::to_string(56 + k));
+      check(r.pv.front().cycle > r.verdict_cycle, "case20: no table write before the verdict", 1,
             r.pv.front().cycle > r.verdict_cycle ? 1 : 0);
       if (r.draws.size() == 1)
-        check(r.pv.back().cycle < r.draws[0].cycle, "case17: the table is in before the form leaves", 1,
+        check(r.pv.back().cycle < r.draws[0].cycle, "case20: the table is in before the form leaves", 1,
               r.pv.back().cycle < r.draws[0].cycle ? 1 : 0);
     }
-    check(r.look_busy_cycles > 0, "case17: the pass-start hold was raised while it streamed", 1,
+    check(r.look_busy_cycles > 0, "case20: the pass-start hold was raised while it streamed", 1,
           r.look_busy_cycles > 0 ? 1 : 0);
   }
 
-  // ---- 18. REFUSE, NEVER MASK: five bad records, the packet still commits ---
+  // ---- 21. REFUSE, NEVER MASK: five bad records, the packet still commits ---
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -1312,16 +1318,16 @@ int main(int argc, char** argv) {
                     zref::post::look::apply_set_post(1, 0, 0, 0, 0, -257, 0, 0, &z) ||
                     zref::post::look::grade_record_ok(3, 0, 1) ||
                     zref::post::look::grade_record_ok(1, 60, 5);
-    check(!zr, "case18: zref refuses all five", 0, zr ? 1 : 0);
-    check(r.post_refused == 5, "case18: post_refused_o counts all five", 5, r.post_refused);
-    check(r.committed == 1, "case18: a refused RECORD does not refuse the packet", 1, r.committed);
-    check(r.looks_applied == 0 && r.pv.empty(), "case18: nothing applied, nothing written", 0,
+    check(!zr, "case21: zref refuses all five", 0, zr ? 1 : 0);
+    check(r.post_refused == 5, "case21: post_refused_o counts all five", 5, r.post_refused);
+    check(r.committed == 1, "case21: a refused RECORD does not refuse the packet", 1, r.committed);
+    check(r.looks_applied == 0 && r.pv.empty(), "case21: nothing applied, nothing written", 0,
           r.looks_applied + r.pv.size());
-    check(r.look.bloom_gain == 0 && !r.look.echo_arm, "case18: the identity look stands", 0,
+    check(r.look.bloom_gain == 0 && !r.look.echo_arm, "case21: the identity look stands", 0,
           r.look.bloom_gain);
   }
 
-  // ---- 19. more entries than GRADE_Q = 16: refused WHOLE, counted ----------
+  // ---- 22. more entries than GRADE_Q = 16: refused WHOLE, counted ----------
   {
     GradeFixture gf;
     zhao::ZhaoFrameBuilder b;
@@ -1330,15 +1336,15 @@ int main(int argc, char** argv) {
     for (unsigned i = 0; i < 3; ++i) b.append_record(setGradeRecord(gf.recs[i]));
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
-    check(r.err == zhao_abi::ZH_ABI_OK, "case19: well formed", zhao_abi::ZH_ABI_OK, r.err);
-    check(r.grade_overflow >= 1, "case19: grade_overflow_o fires", 1, r.grade_overflow >= 1 ? 1 : 0);
-    check(r.abandoned == 1, "case19: the packet is abandoned", 1, r.abandoned);
+    check(r.err == zhao_abi::ZH_ABI_OK, "case22: well formed", zhao_abi::ZH_ABI_OK, r.err);
+    check(r.grade_overflow >= 1, "case22: grade_overflow_o fires", 1, r.grade_overflow >= 1 ? 1 : 0);
+    check(r.abandoned == 1, "case22: the packet is abandoned", 1, r.abandoned);
     check(r.pv.empty() && r.looks_applied == 0 && !r.look.echo_arm,
-          "case19: NO entry and NO look leaves -- not sixteen of twenty-four", 0,
+          "case22: NO entry and NO look leaves -- not sixteen of twenty-four", 0,
           r.pv.size() + r.looks_applied);
   }
 
-  // ---- 20. THE DOOR: a busy post lease holds the look, then lets it in ------
+  // ---- 23. THE DOOR: a busy post lease holds the look, then lets it in ------
   // Idle held LOW until long after the verdict. Nothing may reach POST.COMPOSITE
   // (or POST.ECHO's arm) while a pass is in flight; once idle, all of it lands.
   {
@@ -1353,18 +1359,18 @@ int main(int argc, char** argv) {
     const Run r = runPacket(pkt, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
                             0xFFFFFFFFu, door);   // env_mask, then the lease door
     check(r.committed == 1 && r.looks_applied == 1 && r.pv.size() == 8,
-          "case20: the look and the table land once the lease is idle", 9,
+          "case23: the look and the table land once the lease is idle", 9,
           r.looks_applied + r.pv.size());
     uint32_t early = 0;
     for (const PvWrite& w : r.pv)
       if (w.cycle < door) ++early;
     check(early == 0 && r.look_busy_first >= door,
-          "case20: nothing crossed the door while the pass was in flight", 0, early);
-    check(r.look.echo_arm && r.look.bloom_gain == 0x11u, "case20: the echo is ARMED by it", 1,
+          "case23: nothing crossed the door while the pass was in flight", 0, early);
+    check(r.look.echo_arm && r.look.bloom_gain == 0x11u, "case23: the echo is ARMED by it", 1,
           r.look.echo_arm ? 1 : 0);
   }
 
-  // ---- 21. a packet with no post records never waits on the door -----------
+  // ---- 24. a packet with no post records never waits on the door -----------
   {
     zhao::ZhaoFrameBuilder b;
     b.begin_frame(1, 0, 0, 0);
@@ -1373,12 +1379,12 @@ int main(int argc, char** argv) {
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
                             0xFFFFFFFFu);
     check(r.committed == 1 && r.draws.size() == 1,
-          "case21: no post state -> the commit passes a busy lease without waiting", 1,
+          "case24: no post state -> the commit passes a busy lease without waiting", 1,
           r.draws.size());
-    check(r.look_busy_cycles == 0, "case21: and never holds a pass start", 0, r.look_busy_cycles);
+    check(r.look_busy_cycles == 0, "case24: and never holds a pass start", 0, r.look_busy_cycles);
   }
 
-  // ---- 22. THE EYE (ruling R63) reaches cfg 19/20/21, per view ------------
+  // ---- 25. THE EYE (ruling R63) reaches cfg 19/20/21, per view ------------
   //
   // The gap R63 closes is that TERRAIN.LOD wants a world-space camera and
   // `SetView` carried only the FUSED view-projection. This case is the
@@ -1404,18 +1410,18 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(2, 2, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
                             0xFFFFFFFFu);
-    check(r.committed == 1, "case22: committed", 1, r.committed);
+    check(r.committed == 1, "case25: committed", 1, r.committed);
     // Two views, three words each. Exactly six: a repeat would mean the walk
     // re-presented an accepted word, which `proj_cfg_ready_i` makes possible
     // and which no result-checking assertion would notice (CLAUDE.md,
     // "counters see what pictures cannot").
-    check(r.eyes.size() == 6, "case22: six eye writes, two views x three words", 6,
+    check(r.eyes.size() == 6, "case25: six eye writes, two views x three words", 6,
           r.eyes.size());
     // And the matrix walk is UNDISTURBED -- 32 words for two views. If the
     // three new steps had been spliced into the 0..15 range instead of
     // appended, this is the number that would move.
-    check(r.cfg.size() == 32, "case22: the matrix walk is still 32 words", 32, r.cfg.size());
-    check(r.views == 2, "case22: both views written", 2, r.views);
+    check(r.cfg.size() == 32, "case25: the matrix walk is still 32 words", 32, r.cfg.size());
+    check(r.views == 2, "case25: both views written", 2, r.views);
     if (r.eyes.size() == 6) {
       const int32_t want[2][3] = {
           {0x0012'3456, 0x0007'8000, static_cast<int32_t>(0xFFF8'0000)},
@@ -1427,15 +1433,15 @@ int main(int argc, char** argv) {
       for (unsigned k = 0; k < 6; ++k) {
         const unsigned v = k / 3, w = k % 3;
         const CfgWrite& e = r.eyes[k];
-        check(e.view == v, "case22: eye write view", v, e.view);
-        check(e.addr == 19 + w, "case22: eye write address", 19 + w, e.addr);
-        check(static_cast<int32_t>(e.data) == want[v][w], "case22: eye word value",
+        check(e.view == v, "case25: eye write view", v, e.view);
+        check(e.addr == 19 + w, "case25: eye write address", 19 + w, e.addr);
+        check(static_cast<int32_t>(e.data) == want[v][w], "case25: eye word value",
               static_cast<uint32_t>(want[v][w]), e.data);
       }
     }
   }
 
-  // ---- 23. the eye is IDEMPOTENT STATE, like the matrix beside it ---------
+  // ---- 26. the eye is IDEMPOTENT STATE, like the matrix beside it ---------
   //
   // Case 6a proves two SetViews for one view commit ONCE and the second wins.
   // The eye must obey the same law or a view can run with this frame's camera
@@ -1449,25 +1455,25 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(2, 2, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
                             0xFFFFFFFFu);
-    check(r.views == 1, "case23: two SetViews for one view commit once", 1, r.views);
-    check(r.eyes.size() == 3, "case23: and write the eye once, not twice", 3, r.eyes.size());
+    check(r.views == 1, "case26: two SetViews for one view commit once", 1, r.views);
+    check(r.eyes.size() == 3, "case26: and write the eye once, not twice", 3, r.eyes.size());
     if (r.eyes.size() == 3) {
-      check(static_cast<int32_t>(r.eyes[0].data) == 444, "case23: the SECOND eye lands (x)", 444,
+      check(static_cast<int32_t>(r.eyes[0].data) == 444, "case26: the SECOND eye lands (x)", 444,
             r.eyes[0].data);
-      check(static_cast<int32_t>(r.eyes[1].data) == 555, "case23: the SECOND eye lands (y)", 555,
+      check(static_cast<int32_t>(r.eyes[1].data) == 555, "case26: the SECOND eye lands (y)", 555,
             r.eyes[1].data);
-      check(static_cast<int32_t>(r.eyes[2].data) == 666, "case23: the SECOND eye lands (z)", 666,
+      check(static_cast<int32_t>(r.eyes[2].data) == 666, "case26: the SECOND eye lands (z)", 666,
             r.eyes[2].data);
     }
     // The same record's matrix must be the second one too. Two shadows, one
     // dirty bit: if the eye and the matrix could be committed under separate
     // flags this is where they would disagree.
     if (!r.cfg.empty())
-      check(r.cfg[0].data == 0x0044'0000u, "case23: matrix and eye come from the SAME record",
+      check(r.cfg[0].data == 0x0044'0000u, "case26: matrix and eye come from the SAME record",
             0x0044'0000u, r.cfg[0].data);
   }
 
-  // ---- 24. a REFUSED view_id writes no eye -------------------------------
+  // ---- 27. a REFUSED view_id writes no eye -------------------------------
   //
   // `view_id >= 2` is refused, never masked (case 7's law). The eye rides the
   // same `sv_ok` gate, so an out-of-range view must not smuggle three words
@@ -1481,8 +1487,8 @@ int main(int argc, char** argv) {
     b.end_frame(0);
     const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
                             0xFFFFFFFFu);
-    check(r.refused == 1, "case24: the out-of-range view_id is refused", 1, r.refused);
-    check(r.eyes.empty(), "case24: and no eye word is written for it", 0, r.eyes.size());
+    check(r.refused == 1, "case27: the out-of-range view_id is refused", 1, r.refused);
+    check(r.eyes.empty(), "case27: and no eye word is written for it", 0, r.eyes.size());
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

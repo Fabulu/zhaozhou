@@ -10979,6 +10979,15 @@ add_test(NAME mutant_copy_drift
 set_tests_properties(mutant_copy_drift PROPERTIES
   LABELS "fast;lint;nightly" TIMEOUT 300)
 
+# A directed test's case labels must identify their own block (ruling R62).
+# Three blocks were numbered 17 and one label named 35 checks across all three;
+# nothing in the compiler can see that, so it is a gate or it is nothing.
+add_test(NAME case_labels
+  COMMAND "${Python3_EXECUTABLE}"
+    ${CMAKE_SOURCE_DIR}/tools/budget/check_case_labels.py)
+set_tests_properties(case_labels PROPERTIES
+  LABELS "fast;lint;nightly" TIMEOUT 120)
+
 # counter_id = catalog index, APPEND-ONLY (spec/counters.md 2, ruling R19):
 # design/blocks.yml's counter_catalog must begin with design/counter_ids.lock,
 # and every zhao_pkg ZHAO_CNT_* id must be its name's index. The script

@@ -153,7 +153,23 @@ param(
   [switch]$BadDescriptor,
   [switch]$BadVertex,
   [switch]$NoEchoArm,
-  [switch]$BadTraceArm
+  [switch]$BadTraceArm,
+  # ---------------------------------------------------------------------------
+  # -LintOnly: THE CHEAP HALF, AND IT BELONGS FIRST (owner ruling R71)
+  # ---------------------------------------------------------------------------
+  # Added 2026-09-20. Three merges in one run swallowed a closing construct --
+  # a brace in `cmd_exec_directed`, `spt_entry`'s `end`/`endfunction`, and a
+  # whole superseded `tbl_load` task dragged back in from an older branch --
+  # and the ENTIRE static gate set stayed green through all three, because it
+  # is Python plus Verilator lint over `fpga/rtl` and none of it elaborates a
+  # bench. Each was found by a ten-minute run or a full build.
+  #
+  # This stops after the verilate step and reports its exit code. It is about a
+  # minute against the full run's ten, so it goes FIRST on the merge checklist:
+  # a cheap gate that runs always beats an expensive one that runs eventually.
+  # It is NOT a substitute for the run -- it proves the tree ELABORATES, and
+  # says nothing whatever about what the console then does.
+  [switch]$LintOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -189,6 +205,11 @@ if (-not $BuildIn) {
          # PATH, not by a failure. EVERY NEW SWITCH NEEDS A TAG HERE.
          elseif ($BadTraceArm) { 'zhao_console_core_smoke_badarm' }
          else { 'zhao_console_core_smoke' }
+  # -LintOnly is the one switch that COMBINES with the others, so it appends
+  # rather than joining the chain above. Without this it would fall through to
+  # whichever tag its companion chose and verilate into a directory a real run
+  # may be compiling in -- the same collision, one switch later.
+  if ($LintOnly) { $tag = "${tag}_lint" }
   # PER CHECKOUT. The default used to be one %TEMP% directory for every
   # checkout on the machine, so concurrent packets in separate worktrees
   # verilated into the SAME object directory and failed each other's link with
@@ -274,6 +295,16 @@ if (-not $SkipVerilate) {
   $vlrc = $LASTEXITCODE
   $ErrorActionPreference = 'Stop'
   if ($vlrc -ne 0) { throw "verilator returned $vlrc" }
+}
+
+if ($LintOnly) {
+  # Deliberately AFTER the verilate step rather than instead of it: `--cc`
+  # elaborates the whole closure, which is what catches an unterminated
+  # function. `--lint-only` would be faster still and would NOT have caught
+  # the merge damage this switch exists for, because the damage was in a
+  # bench that `--lint-only` over `fpga/rtl` never reads.
+  Write-Host "LINT-ONLY: $top elaborates. This says NOTHING about what the console does."
+  exit 0
 }
 
 $classesMk = Join-Path $bd "V${top}_classes.mk"

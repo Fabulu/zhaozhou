@@ -56,8 +56,15 @@ Three forms, all documented in CLAUDE.md's Build note as having passed
   3. an implicit `if` generate at module scope -- `if (EN) begin : g ... end`.
      Quartus 17.0 needs explicit `generate` / `endgenerate`.
 
-Only form 1 is detected precisely enough to gate on, and only form 1 is
-reported as an ERROR. Forms 2 and 3 need real scope tracking to tell a
+  4. a UNARY minus on a size cast, `-WIDTH'(expr)`. Quartus 17.0 parses the
+     minus, reaches the apostrophe and stops. Six killed the first
+     zhao_console_core synthesis. Repair: `-(WIDTH'(expr))`.
+  5. a LONE CR inside a line (owner ruling R61). Not a Quartus form: a latent
+     one, because the tools that read and rewrite these files promote it into a
+     real line break. See scan_cr's header.
+
+Forms 1, 4 and 5 are detected precisely enough to gate on, and only those three
+are reported as ERRORS. Forms 2 and 3 need real scope tracking to tell a
 module-level `if` from one inside an always block, and a checker that cries wolf
 gets suppressed -- so they are not guessed at here. Form 1 is the one that cost
 the ten days.
@@ -75,6 +82,19 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RTL = os.path.join(REPO, "fpga", "rtl")
+
+# Widened 2026-09-20 (owner ruling R61). `fpga/rtl` alone was the WRONG scope
+# from the day the first mutant was committed: `tests/mutants/` holds renamed
+# copies of production blocks that go to `quartus_map` under their own names,
+# and `fpga/synth/` holds the wrappers the map lane actually compiles. A form
+# this checker refuses in production is equally fatal in either, and a checker
+# that looks at only one of three places reports a clean scan that means less
+# than its own output line claims.
+SCAN_ROOTS = (
+    RTL,
+    os.path.join(REPO, "fpga", "synth"),
+    os.path.join(REPO, "tests"),
+)
 
 # `for (genvar x = ...` with any spacing. Quartus 17.0 rejects the inline
 # declaration regardless of what surrounds it.
@@ -115,6 +135,40 @@ _INLINE_GENVAR = re.compile(r"\bfor\s*\(\s*genvar\b")
 # after an `=` on the previous line is still caught. A `)` before the minus means
 # binary, and `)` is not in the lookbehind set.
 _UNARY_MINUS_CAST = re.compile(r"(?<=[=(\[{,?:;])\s*-\s*(\w+)\s*'\s*\(")
+
+
+# FORM 5, added 2026-09-20 (owner ruling R61): a LONE CR inside a line -- a
+# carriage return that is not the CRLF terminator of that line.
+#
+# It is not a Quartus form at all, and it is here anyway because it is the same
+# shape of trap: every tool in the daily loop tolerates it, and one does not.
+# Verilator treats a stray CR inside a `//` comment as ordinary whitespace, so
+# the file lints clean for as long as nobody touches it. Then something splits
+# the text on CR as well as LF -- PowerShell's `[IO.File]::ReadAllLines` does
+# exactly that, and `WriteAllLines` writes the break back out as a real newline
+# -- and the second half of the comment lands in the code as a bare line. That
+# is how one became a syntax error during a merge, which is the worst possible
+# moment for it: the diff looks like somebody's edit.
+#
+# THE SCAN RUNS ON RAW TEXT, not on the comment-stripped copy. Every instance
+# found so far has been inside a `//` comment, so scanning `clean` would report
+# a confident zero -- the broken-instrument law, and it would read as good news.
+#
+# The rule is per line: strip ONE trailing CR (the legitimate CRLF terminator)
+# and flag any CR that remains. A file that is wholly CRLF therefore produces no
+# findings, which is correct -- `.gitattributes` and core.autocrlf decide line
+# endings, and this checker has no opinion about them.
+def scan_cr(text: str) -> list[tuple[int, str]]:
+    """Return [(line_number, form)] for carriage returns inside a line."""
+    hits = []
+    for n, line in enumerate(text.split("\n"), 1):
+        if line.endswith("\r"):
+            line = line[:-1]
+        if "\r" in line:
+            col = line.index("\r") + 1
+            hits.append((n, "lone CR inside the line at column %d -- a tool that "
+                            "splits on CR turns it into a line break" % col))
+    return hits
 
 
 def strip_comments(text: str) -> str:
@@ -165,25 +219,36 @@ def scan_text(text: str) -> list[tuple[int, str]]:
         line = clean.count("\n", 0, m.start()) + 1
         hits.append((line, "-%s'(...) -- unary minus on a size cast; "
                            "write -(%s'(...))" % (m.group(1), m.group(1))))
+    # RAW text, not `clean` -- see scan_cr's header.
+    hits.extend(scan_cr(text))
     return hits
 
 
 def scan_repo() -> tuple[list[tuple[str, int, str]], int]:
     findings, scanned = [], 0
-    for dirpath, dirnames, filenames in os.walk(RTL):
-        dirnames[:] = [d for d in dirnames if d != ".git"]
-        for fn in sorted(filenames):
-            if not fn.endswith((".sv", ".svh", ".v", ".vh")):
-                continue
-            full = os.path.join(dirpath, fn)
-            rel = os.path.relpath(full, REPO).replace(os.sep, "/")
-            try:
-                text = io.open(full, encoding="utf-8", errors="replace").read()
-            except OSError:
-                continue
-            scanned += 1
-            for line, form in scan_text(text):
-                findings.append((rel, line, form))
+    for root in SCAN_ROOTS:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+            for fn in sorted(filenames):
+                if not fn.endswith((".sv", ".svh", ".v", ".vh")):
+                    continue
+                full = os.path.join(dirpath, fn)
+                rel = os.path.relpath(full, REPO).replace(os.sep, "/")
+                try:
+                    # `newline=""` is LOad-BEARING. Python's universal-newline
+                    # translation turns a lone CR into "\n" on read, so without
+                    # it form 5 would scan text that no longer contains the
+                    # thing it is looking for and report a confident zero.
+                    with io.open(full, encoding="utf-8", errors="replace",
+                                 newline="") as fh:
+                        text = fh.read()
+                except OSError:
+                    continue
+                scanned += 1
+                for line, form in scan_text(text):
+                    findings.append((rel, line, form))
     return findings, scanned
 
 
@@ -204,6 +269,12 @@ _MUST_FLAG = [
     # a genuinely unary minus wrapped onto its own line after an `=` -- the
     # lookbehind spans the newline, so dropping `^` must not lose this
     "  assign v_min =\n      -ACC_W'(1 << (VEL_W-1));",
+    # form 5 -- a lone CR mid-line. This is the exact shape found in
+    # zhao_cmd_exec.sv: inside a `//` comment, which is why it must be scanned
+    # on raw text. The second one is in code, which is what it becomes after a
+    # ReadAllLines/WriteAllLines round trip promotes the CR to a line break.
+    "  // the ring is armed at the record's last byte\rand not before",
+    "  assign a = b;\r  assign c = d;",
 ]
 _MUST_NOT_FLAG = [
     # the repaired form, which is what crc32c_fold and now alu_vec use
@@ -233,6 +304,13 @@ _MUST_NOT_FLAG = [
     # one belongs in the fire list, not here -- see _MUST_FLAG.
     # and a comment describing the hazard is not the hazard
     "  // never write -W'(x); Quartus 17.0 stops at the apostrophe",
+    # form 5 negatives -- a wholly CRLF file is NOT a finding. This checker has
+    # no opinion about line endings; `.gitattributes` and core.autocrlf own
+    # that. Only a CR that is not a terminator is a latent line break.
+    "  assign a = b;\r\n  assign c = d;\r\n",
+    "  assign a = b;\n  assign c = d;\n",
+    # a CRLF file whose last line has no terminator at all
+    "  assign a = b;\r\n  assign c = d;",
 ]
 
 
@@ -258,18 +336,23 @@ def main() -> int:
     findings, scanned = scan_repo()
     print("check_quartus17_syntax: self-test %d fire / %d no-fire cases PASSED"
           % (len(_MUST_FLAG), len(_MUST_NOT_FLAG)))
-    print("scanned %d file(s) under fpga/rtl" % scanned)
+    roots = ", ".join(os.path.relpath(r, REPO).replace(os.sep, "/")
+                      for r in SCAN_ROOTS if os.path.isdir(r))
+    print("scanned %d file(s) under %s" % (scanned, roots))
     if not findings:
         print("no Quartus-17.0-rejected forms found")
         return 0
-    print("\n%d REJECTED FORM(S) -- these fail quartus_map and, because"
+    print("\n%d REJECTED FORM(S) -- forms 1-4 fail quartus_map and, because"
           % len(findings))
-    print("run_block_map.ps1 compiles every .sv under fpga/rtl, they fail EVERY map:\n")
+    print("run_block_map.ps1 compiles every .sv under fpga/rtl, they fail EVERY map.")
+    print("Form 5 (a lone CR) fails nothing today and becomes a line break tomorrow:\n")
     for rel, line, form in findings:
         print("  %s:%d" % (rel, line))
         print("      %s" % form)
-    print("\nRepair: declare the genvar separately and wrap the loop in explicit")
-    print("generate / endgenerate. fpga/rtl/common/zhao_crc32c_fold.sv is the pattern.")
+    print("\nRepair, form 1: declare the genvar separately and wrap the loop in")
+    print("explicit generate / endgenerate; fpga/rtl/common/zhao_crc32c_fold.sv is")
+    print("the pattern. Form 4: parenthesise, -(W'(x)). Form 5: delete the CR, or")
+    print("restore whatever character a tool overwrote with it.")
     return 1
 
 
