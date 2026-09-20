@@ -821,7 +821,10 @@ module zhao_prod_top (
   logic [32-1:0] u07_faults_o;
   logic [32-1:0] u07_stall_cycles_o;
   logic [32-1:0] u07_vtx_changed_o;
-  zhao_field_warp_adapter u07_i (
+  zhao_field_warp_adapter #(
+      .IN_LANES(32'd15),
+      .OUT_LANES(32'd7)
+  ) u07_i (
       .clk(clk),
       .rst_n(rst_n),
       .vtx_valid_i(u07_src[0 +: 1]),

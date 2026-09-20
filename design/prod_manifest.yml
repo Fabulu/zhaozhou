@@ -644,6 +644,16 @@ production_parameter_overrides:
   zhao_field_flow_adapter:
     IN_LANES: 32'd15
     OUT_LANES: 32'd7
+  # NOT COMPOSED IN THE CONSOLE -- it is a census top only, and the row is here
+  # anyway. `zhao_field_warp_adapter`'s own defaults are already 15/7, so this
+  # override changes nothing today; that is exactly why it is written down.
+  # R151's lesson is that a default nobody notices is what lets the measured
+  # machine drift from the composed one, and the three instances above are all
+  # 15/7 for the same reason. If the shared pair ever moves again, this row
+  # moves with its siblings instead of being the one the grep missed.
+  zhao_field_warp_adapter:
+    IN_LANES: 32'd15
+    OUT_LANES: 32'd7
 
 # ==============================================================================
 # SELECTED PROFILES -- intended measurement profile, not current evidence
