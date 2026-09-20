@@ -1496,10 +1496,15 @@
 //          bullet makes the contents of that store undefined. Building a
 //          correct store for an invented value is the worse half of the two.
 //
-//        * RE-MEASURED 2026-09-20 (postmeas), AND THE FIRST BULLET IS TOO
-//          KIND TO R37. It reads as though one owner art ruling stands between
-//          this block and a composition. It does not: R37 COVERS ONE OF THE
-//          THREE INPUT PLANES, and the other two have no SOURCE AT ALL.
+//        * RE-MEASURED 2026-09-20 (postmeas). WHAT FOLLOWS IS A MEASUREMENT
+//          I STAND BY AND A CONCLUSION I WITHDREW; both are kept, because the
+//          withdrawal is the more useful half and deleting it would leave the
+//          next reader free to make the same inference from the same true
+//          facts. THE MEASUREMENT: the spec defines ONE tag channel. THE
+//          CONCLUSION I DREW AND RETRACTED: "so R37 covers only one of the
+//          three input planes and cannot unblock this composition." THAT IS
+//          WRONG -- see the retraction two bullets down. R37's proposal covers
+//          ALL THREE.
 //
 //          `spec/stars_and_flares.md` 1 is marked "(frozen)" and defines
 //          EXACTLY ONE channel of `tag = (channel << 6) | strength`:
@@ -1512,12 +1517,55 @@
 //            "shockwave"                     ONE hit, creature_rules.md:152,
 //                                            a gameplay effect, not a channel
 //          So `f_disp_x_i`/`f_disp_y_i` (refraction/shockwave/heat-haze) and
-//          `f_ink_i` (the creature outline) HAVE NO TAG CHANNEL. Allocating
-//          one is an edit to a section the spec calls FROZEN -- an ABI/spec
-//          decision, which PACKET-PROTOCOL rule 4 makes a DIFFERENT KIND of
-//          owner call from R37's coefficients. **A ruling on R37 would not
-//          unblock this composition**, and whoever queues behind R37 expecting
-//          it to should be told that before they queue.
+//          `f_ink_i` (the creature outline) HAVE NO TAG CHANNEL IN THE SPEC.
+//          That part is measured and it stands.
+//
+//        * RETRACTED IN THE SAME SESSION THAT WROTE IT, 2026-09-20 (postmeas),
+//          AND THE DIRECTION OF MY ERROR IS WHY IT IS WRITTEN OUT IN FULL.
+//          From the measurement above I concluded: "displacement and ink have
+//          no source, so R37 cannot unblock this composition, and allocating
+//          the channels is a SECOND and NEW owner decision." **THAT IS FALSE.
+//          R37's proposal already decides all three planes, explicitly.**
+//          `design/contracts/POST.GATHER.md`, the R37 section, decision 3:
+//
+//            "Displacement and ink are NOT invented. Channels `0b10` and
+//             `0b11` are unallocated in the spec, so a fragment carrying one
+//             contributes nothing and is COUNTED (`reserved_channel`). Under
+//             this law `c_disp_x_o`, `c_disp_y_o` and `c_ink_o` are ZERO -- a
+//             statement about what v1 does, not an omission. Ink arrives as a
+//             look value on `SetPost` instead (R36), not from a tag."
+//
+//          `zref::post::gather` implements exactly that: `kChannelNone = 0`,
+//          `kChannelGlow = 1`, `kChannelReserved2 = 2`, `kChannelReserved3 = 3`,
+//          and `tag_to_fragment()` sets `reserved_channel = true` for any
+//          allocated-but-unknown channel so that "the day refraction is
+//          specified, the counter says whether anything was already drawing
+//          it." SO THERE IS NO SECOND OWNER DECISION. There is one, R37, and
+//          ratifying it defines the adapter completely.
+//
+//          HOW I GOT IT WRONG, because the mechanism is the reusable part: I
+//          read the contract's R37 section through a `grep -B4 -A12` on the
+//          string "R37", which printed the heading and the coefficient table
+//          and then jumped to the directed tests -- **skipping the three
+//          numbered decisions in between, one of which is the answer.** I then
+//          measured `spec/` carefully, with a positive control, and reported a
+//          conclusion about a file I had not opened at the point I drew it.
+//          That is TERRCOMP's diagnosed shared cause verbatim, one day later,
+//          in a packet that had read TERRCOMP's diagnosis.
+//
+//          AND NOTE WHICH WAY IT FAILED. `CLAUDE.md`'s law is that a broken
+//          instrument lies in the direction that makes the answer look better;
+//          this lied in the direction that made the GAP look bigger and MY
+//          FINDING look more important -- a new owner decision nobody had
+//          found. A context window is not audited for flattering ITSELF, and
+//          this one was heading for a run report as a headline.
+//
+//          WHAT SURVIVES, and it is not nothing: the channel census is right,
+//          and it is the EVIDENCE FOR decision 3 rather than a counter to it.
+//          If the owner ratifies R37, `c_disp_*` and `c_ink_o` ship as declared
+//          zeros -- which whoever composes this block must declare in the
+//          INCOMPLETE section as a RULED v1 scope, not leave as an undeclared
+//          tie-off the register cannot see (R159).
 //
 //          AND BEWARE THE INK NAME COLLISION, which is how this gets misread
 //          as already served: `spec/commands.zidl:777` DOES define an `ink`
@@ -1572,7 +1620,9 @@
 //          `tile_start_i`/`tile_flush_i`, which are pulses). And
 //          `design/contracts/POST.GATHER.md` does not name the mechanism
 //          either: its whole statement of this seam is one sentence, "Writes
-//          out for POST.COMPOSITE". So the store must be told the tile ORIGIN
+//          out for POST.COMPOSITE" -- and this one WAS checked against the
+//          whole file after the retraction above, not through a grep window.
+//          So the store must be told the tile ORIGIN
 //          by somebody, and the cheapest correct source is the one this entry
 //          already identified for the other half -- the shell's absolute
 //          `fb_x_o`/`fb_y_o`, latched at `tile_start_i`, with
@@ -1593,6 +1643,21 @@
 //          whose own contract says it "reads no external memory" -- it
 //          describes the PLANE STORE, and the ledger has been carrying a
 //          counter for the unbuilt block on the built block's row.
+//          BE PRECISE ABOUT WHAT IS NEW HERE, because the raw mismatch is not.
+//          `tools/design/check_counters.py` ALREADY PRINTS this row
+//          ("post_gather_vram_bytes_by_client no ..._o and no mapping") and it
+//          is one of roughly fifteen it prints; its own last line says "It
+//          REPORTS; it does not gate." So the mismatch is known and ungated.
+//          What is new is the READING: a VRAM-bytes-BY-CLIENT counter cannot
+//          belong to a block whose contract says it reads no external memory,
+//          so this row is not sloppiness -- it NAMES THE MISSING BLOCK. A
+//          third list disagrees with both: the contract asks for five counters
+//          (`glow_saturations`, `displacement_clamps`, `glow_cells_lit`,
+//          `ink_cells_set`, `unknown_tags`), the RTL exports four, the ledger
+//          declares one, and no two of the three sets match.
+//          (The contract's three `zref::post::*` citations were checked for
+//          the phantom-citation shape its own text records -- `glow_pack565`,
+//          `glow_accumulate` and `disp_to_pixels` ALL EXIST. Clean.)
 //          The same row also declares `inputs: [dispatch]` and
 //          `upstream: [CMD.SCHEDULER, RASTER.RESOLVE]`, while
 //          `zhao_post_gather.sv` contains the strings cmd/dispatch/sched
