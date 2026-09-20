@@ -65,15 +65,49 @@
 // `(v.op == UOP_RING_PREP) ? 1 : optable::shape_of(v.op)->dst_width`, because
 // a synthetic uop has no entry in the canonical shape table at all.
 //
-// The varying-radius OP_RING (0x21) is still absent and stays absent: the
-// brief leaves it COLD, and per-point it would need a reciprocal per point
-// rather than two prepared once.
+// The varying-radius OP_RING (0x21) is still absent. RE-ASKED 2026-09-20 and
+// THE STATED CAUSE STILL HOLDS, verified rather than inherited: per point it
+// needs `m = ring_mid(r0,r1)` and then TWO reciprocals, where the prepared form
+// has all of that computed ONCE -- and computed in SOFTWARE, by
+// `zfield::prepare()`, then loaded into the scalar bank as uniforms
+// (reference/src/zfield/zfield_plan.cpp:137-151 emits `PrepUop{OP_RCP, ...}`
+// twice). `zhao_field_v3_ring.sv` opens with "nine separately-rounded products
+// on the shared bank, and NO reciprocal" and states the deferral deliberately
+// at its lines 32-37: a per-point reciprocal is a second shared resource with
+// its own arbitration, refusal and starvation questions.
 //
-// The brief costs the PREPARED ring (`UOP_RING_PREP`, 0xF1) as its HOT path
-// and leaves the varying-radius `OP_RING` (0x21) cold -- so 0xF1 is what
-// eventually belongs in this table, once a ring service exists to answer it.
-// The service path now has TWO services, the noise unit and the curve service,
-// and `wrong_op_o` is still the wire that says an op reached neither.
+// CANONICAL OP_RCP (0x17) IS ABSENT FROM THIS TABLE FOR THE SAME REASON, and
+// the two are one piece of work. 0x17 is a canonical Field opcode -- it is in
+// `reference/include/zfield/zfield.hpp:74`, its oracle shape is
+// `{1, {1,0,0}, 1, 0}`, IDENTICAL to OP_SIN and OP_COS which ARE in the table
+// below, and `zhao_field_alu.sv:34` says RCP is deliberately not in the ALU, so
+// it can only be a long op. The exact leaf exists and is differentially tested:
+// `zhao_field_rcp.sv`, which implements `zref::field_rcp` -- NOT the 24-bit
+// two-step `zhao_field_rcp24_rom` used inside normalize, and NOT the raster or
+// projector reciprocal, whose widths merely look similar.
+//
+// SO THE ENTRY IS THE LAST STEP, NOT THE FIRST, exactly as SPLINE and
+// UOP_RING_PREP were. Adding an opcode here is what makes the executor OFFER
+// it; adding it before something can answer rebuilds the park-forever deadlock
+// this file was written to prevent. The owner directive of 2026-09-20 states
+// the same rule at its line 2269: the support table may advertise an operation
+// only when its request, service, result AND STATUS all work.
+//
+// CORRECTED 2026-09-20: this header used to say "The service path now has TWO
+// services, the noise unit and the curve service." IT HAS SEVEN -- noise,
+// curve, normalize, rot, ring, trig and len, all instantiated in
+// `zhao_field_v3_svcpath.sv`. The fourteen non-zero widths in the table below
+// and those seven services' opcode sets agree exactly, so every advertised
+// opcode does have a live request/service/result path today. The stale sentence
+// is worth more as a correction than as a deletion: it was true when written,
+// nobody re-asked, and it would have told the next reader that a route they
+// needed did not exist.
+//
+// `wrong_op_o` is still the wire that says an op reached no service -- but note
+// it cannot presently fire: `svc_ready` is 1'b0 in exactly the default case, so
+// an unroutable op can never complete the handshake the detector watches. It is
+// a backstop for a future service with an independently driven ready, and its
+// silence is not evidence about op routing.
 //
 // When that decision lands it is one line in this file rather than two edits
 // that can fall out of step, which is the entire point.

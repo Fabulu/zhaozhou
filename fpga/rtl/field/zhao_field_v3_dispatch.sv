@@ -203,7 +203,38 @@ module zhao_field_v3_dispatch #(
     // accept order and only one group is outstanding, so this can never fire.
     // It is an output rather than an assertion because the same choice caught
     // a real pipeline bug in zhao_field_v3_exec on its first run.
-    output var logic                          tag_mismatch_o
+    output var logic                          tag_mismatch_o,
+
+    // ---- THE SERVICES' NUMERIC STATUS, PER POINT --------------------------
+    //
+    // One bit per point of the responding group, in the same lane order as
+    // `rsp_r0_i`. Every service on the path has always computed these; until
+    // 2026-09-20 `zhao_field_v3_svcpath` terminated all of them in `*_unused`
+    // wires, so no long op's saturation reached the engine's ledger and
+    // `fld_sat_o` at the console boundary described the scalar ALU alone.
+    //
+    // THEY ARE CAPTURED HERE, AND NOT IN THE MUX THAT SELECTS THEM, because
+    // this is the only block that knows how many lanes of the group are real.
+    // `s_used_r` is that number.
+    input  var logic [3:0]                    rsp_sat_add_i,
+    input  var logic [3:0]                    rsp_sat_mul_i,
+    input  var logic [3:0]                    rsp_sat_rescale_i,
+
+    // The fabric's long-op ledger, latched over the run, in the same shape as
+    // the executor's so the engine can simply OR the two together.
+    output var logic                          svc_sat_add_o,
+    output var logic                          svc_sat_mul_o,
+    output var logic                          svc_sat_rescale_o,
+
+    // HOW OFTEN A PADDED LANE TRIED TO RAISE A FLAG AND WAS STOPPED.
+    //
+    // This is the positive control for the mask above, and it is reachable by
+    // ordinary stimulus: a group issued short is padded with the PAD_* constants
+    // and those are real operands that go through real arithmetic. If this
+    // counter is zero the mask has never been exercised, which is a statement
+    // about the workload and not about the guard -- so it is an output rather
+    // than a comment.
+    output var logic [31:0]                   pad_status_masked_o
 );
 
   localparam int CTXW = $clog2(CONTEXTS);
@@ -233,41 +264,40 @@ module zhao_field_v3_dispatch #(
   // guessed: a wrong width writes the wrong number of registers, which is a
   // corruption rather than an error.
   //
-  // TWO OPS HAVE FOUR-POINT BLOCKS BUILT AND CLOSED AND ARE STILL ABSENT FROM
-  // THIS LIST. That is worth saying out loud, because absence here looks
-  // exactly like an omission and one of the two IS deliberate. A reader who
-  // finds no OP_SPLINE case, knowing zhao_field_v3_spline.sv is closed at
-  // 21/21, has every reason to think a case was forgotten.
+  // CORRECTED 2026-09-20. THE PARAGRAPHS THAT STOOD HERE SAID OP_SPLINE AND
+  // UOP_RING_PREP WERE ABSENT FROM THIS LIST. BOTH ARE IN IT, and have been
+  // since 2026-08-29 -- `zhao_field_ops_pkg.sv` gives OP_SPLINE (0x1B) and
+  // UOP_RING_PREP (0xF1) a width of 1, and `zhao_field_v3_svcpath.sv`
+  // instantiates the services that answer them.
   //
-  //   OP_SPLINE (0x1B) -- DELIBERATE. Fieldv3.md section 6 puts spline on the
-  //     COLD SERVICE LANE: keep the complete exact scalar implementation,
-  //     classify it as exact but not certified for the maximum live-field
-  //     workload. zhao_field_v3_curve.sv states the same in its own header --
-  //     "MODES: CURVE (0) and DCURVE (1) only. SPLINE is COLD by the brief's
-  //     own service split and is not barreled." The scalar path in
-  //     zhao_field_curve.sv implements the whole op, lookup included, and is
-  //     live in four test targets. A SPLINE arriving here SHOULD be refused.
+  // THE CORRECTION IS THE POINT, NOT THE TYPO. The old text was true when it
+  // was written and nobody re-asked. It said, in capitals, that two built and
+  // closed blocks were unreachable -- so a reader arriving later, finding a
+  // route they needed, would read this and conclude it did not exist. That is
+  // the false-absence pattern this repository has now produced seventeen times,
+  // and prose in a header is where it survives longest, because no gate reads
+  // prose.
   //
-  //     What is not settled is whether that stays true. The four-point block
-  //     exists and its shape only pays if SPLINE becomes hot -- a decision
-  //     recorded in STATUS.md and reports/FIELD_V3_REMAINING_OPS.md, not one
-  //     this file may make. If it goes hot, this case list is the first thing
-  //     that changes, and it needs a four-point table lookup that does not
-  //     exist yet.
+  // WHAT IS STILL TRUE AND STILL LOAD-BEARING:
   //
-  //   UOP_RING_PREP (0xF1) -- NOT YET WIRED, and NOT for the cold-lane reason.
-  //     The brief cools "unprepared ring" only; the PREPARED ring is its hot
-  //     path, costed there at "approximately nine vector-multiplier issue
-  //     slots, not four scalar runs through a 50-clock FSM", which is exactly
-  //     what zhao_field_v3_ring.sv implements and what its 23/23 sweep scores.
-  //     So this one is a genuine gap rather than a decision: the block is
-  //     ready and the dispatcher cannot reach it.
+  //   The canonical OP_RING (0x21) is NOT UOP_RING_PREP (0xF1). 0xF1 is a
+  //   plan-internal uop the lowerer emits when both radii are uniform; 0x21 is
+  //   the canonical varying-radius opcode and is genuinely absent. Confusing
+  //   the two would route the expensive form into a block that does not
+  //   implement it.
   //
-  //     Note it is 0xF1, a UOP, not OP_RING (0x21) -- the canonical opcode a
-  //     varying-radius ring would arrive as, which stays cold. Adding the
-  //     wrong one of those two would route the expensive form into a block
-  //     that does not implement it, which is the mistake wrong_op_o in
-  //     zhao_field_v3_svcpath.sv exists to catch.
+  //   0x21's blocker was re-asked on 2026-09-20 and STILL HOLDS: per point it
+  //   needs `m = ring_mid(r0,r1)` and TWO reciprocals, where the prepared form
+  //   has them computed once by software and loaded as uniforms
+  //   (reference/src/zfield/zfield_plan.cpp:137-151). zhao_field_v3_ring.sv
+  //   opens with "nine separately-rounded products on the shared bank, and NO
+  //   reciprocal" and records the deferral deliberately at its lines 32-37. So
+  //   0x21 waits on a per-point reciprocal service, which is also what
+  //   canonical OP_RCP (0x17) waits on -- one piece of work unblocks both.
+  //
+  //   OP_SPLINE's own history is worth keeping: Fieldv3.md section 6 had put it
+  //   on the cold lane, and the owner chose the hot path instead ("spend the
+  //   work", 2026-08-28). That is why it is here now.
   // DERIVED, NOT DECLARED -- see zhao_field_ops_pkg.sv. The executor asks
   // the same table whether to offer an op that this one asks whether to
   // accept, so the two cannot disagree. They did, and it deadlocked.
@@ -603,6 +633,38 @@ module zhao_field_v3_dispatch #(
       end
   end
 
+  // ---- the responding group's numeric status, MASKED TO ITS LIVE LANES ----
+  //
+  // A group issued short is padded up to four points with the PAD_* constants,
+  // and padding arithmetic is real arithmetic: those operands go through the
+  // same service and can raise the same flags. `zhao_field_host.sv` says what
+  // that costs -- "Padding with a value that can raise an alarm makes the
+  // status describe the padding" -- and the directive says it as a rule (§8.4:
+  // "Invalid lanes must not ... contribute flags to a live lane. A group-level
+  // aggregate may OR only LIVE lane statuses").
+  //
+  // `s_used_r` is the live count, and it lives HERE and nowhere else, which is
+  // why the masking is here and not in the response mux upstream that chooses
+  // between the services.
+  logic [3:0] rsp_live_c;
+  logic       rsp_sat_add_live_c, rsp_sat_mul_live_c, rsp_sat_resc_live_c;
+  logic       rsp_pad_tried_c;
+  always_comb begin
+    rsp_live_c = 4'b0;
+    for (int l = 0; l < 4; l++)
+      if (3'(l) < s_used_r[rsp_slot_c]) rsp_live_c[l] = 1'b1;
+
+    rsp_sat_add_live_c  = |(rsp_sat_add_i     & rsp_live_c);
+    rsp_sat_mul_live_c  = |(rsp_sat_mul_i     & rsp_live_c);
+    rsp_sat_resc_live_c = |(rsp_sat_rescale_i & rsp_live_c);
+
+    // A flag raised by a lane that holds no point. Counted rather than
+    // discarded silently, so "the mask never mattered" and "the mask was never
+    // tested" stop looking alike.
+    rsp_pad_tried_c = |((rsp_sat_add_i | rsp_sat_mul_i | rsp_sat_rescale_i) &
+                        ~rsp_live_c);
+  end
+
   // ---- the drain ----------------------------------------------------------
   //
   // ONE WRITE CARRIES LANES POINTS. A register in the file is LANES values
@@ -662,6 +724,10 @@ module zhao_field_v3_dispatch #(
       partial_o  <= 32'd0;
       writes_o   <= 32'd0;
       tag_mismatch_o <= 1'b0;
+      svc_sat_add_o       <= 1'b0;
+      svc_sat_mul_o       <= 1'b0;
+      svc_sat_rescale_o   <= 1'b0;
+      pad_status_masked_o <= 32'd0;
       iss_slot_r <= '0;
       for (int i = 0; i < GATHERS; i++) begin
         g_v_r[i]    <= 1'b0;
@@ -757,6 +823,19 @@ module zhao_field_v3_dispatch #(
             r2_r[rsp_slot_c][l] <= rsp_r2_i[l];
           end
           s_done_r[rsp_slot_c] <= 1'b1;
+
+          // THE STATUS LANDS WITH THE DATA, on the same accepted handshake and
+          // from the same tag-selected slot. Capturing it anywhere else would
+          // be a detector clocked by a different enable than the value it
+          // describes, which is the defect CLAUDE.md records at length: two
+          // quantities that move independently cannot be compared, and a
+          // status captured a clock away from its data belongs to whichever
+          // group happens to be offering.
+          if (rsp_sat_add_live_c)  svc_sat_add_o     <= 1'b1;
+          if (rsp_sat_mul_live_c)  svc_sat_mul_o     <= 1'b1;
+          if (rsp_sat_resc_live_c) svc_sat_rescale_o <= 1'b1;
+          if (rsp_pad_tried_c)
+            pad_status_masked_o <= pad_status_masked_o + 32'd1;
         end
       end
 

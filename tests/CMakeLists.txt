@@ -2487,6 +2487,54 @@ verilate(test_field_alu_vec_directed
 add_test(NAME field_alu_vec_directed COMMAND test_field_alu_vec_directed)
 set_tests_properties(field_alu_vec_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# ---------------------------------------------------------------------------
+# FH11's per-lane saturation attribution, in BOTH polarities from ONE driver.
+# ---------------------------------------------------------------------------
+# `zhao_field_alu_vec` used to OR its per-lane saturation flags into a single
+# group flag, so one point's overflow labelled its neighbours and nothing could
+# say WHICH lane saturated. The narrow flags are now carried out per lane.
+#
+# THE DEFECT THAT REPLACES IT IS INVISIBLE TO AGGREGATES. Re-ORing the group
+# flag back into every lane leaves `sat_add_o` bit-identical, so only a check
+# that names a lane can catch it. That is what these two targets are for:
+# differential/field_alu_vec_flag_attribution_control.cpp is compiled twice
+# from one source with one set of expectations.
+add_executable(test_field_alu_vec_flag_attribution
+               differential/field_alu_vec_flag_attribution_control.cpp)
+target_link_libraries(test_field_alu_vec_flag_attribution PRIVATE zhao_harness zhao_zref)
+verilate(test_field_alu_vec_flag_attribution
+  PREFIX Vzhao_field_alu_vec
+  TOP_MODULE zhao_field_alu_vec
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu_vec.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+add_test(NAME field_alu_vec_flag_attribution COMMAND test_field_alu_vec_flag_attribution)
+set_tests_properties(field_alu_vec_flag_attribution PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300)
+
+# THE SAME DRIVER, THE SAME EXPECTATIONS, AGAINST THE BROKEN COPY. It PASSES
+# WHEN THE DRIVER FAILS -- inverse polarity, deliberately, because this is
+# evidence about the instrument and not about the design.
+#
+# If the `ZHAO_ALUVEC_MUTANT` selector ever failed to engage, this build would
+# compile against the production class, the driver would pass, and ctest would
+# report THIS test as failed because it expected a failure. The silent-`-D`
+# trap CLAUDE.md records therefore cannot hide here.
+add_executable(test_field_alu_vec_flag_broadcast_control
+               differential/field_alu_vec_flag_attribution_control.cpp)
+target_compile_definitions(test_field_alu_vec_flag_broadcast_control
+                           PRIVATE ZHAO_ALUVEC_MUTANT=1)
+target_link_libraries(test_field_alu_vec_flag_broadcast_control
+                      PRIVATE zhao_harness zhao_zref)
+verilate(test_field_alu_vec_flag_broadcast_control
+  PREFIX Vzhao_field_alu_vec_flag_broadcast_mutant
+  TOP_MODULE zhao_field_alu_vec_flag_broadcast_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_alu_vec_flag_broadcast_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_alu.sv)
+add_test(NAME field_alu_vec_flag_broadcast_control
+         COMMAND test_field_alu_vec_flag_broadcast_control)
+set_tests_properties(field_alu_vec_flag_broadcast_control PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300 WILL_FAIL TRUE)
+
 # THE GEOMETRY -> RASTER SEAM. Both sides are individually green and have
 # never been joined: the binner decides which tiles a triangle touches and
 # the raster pipe renders exactly those jobs in exactly that order. Every
