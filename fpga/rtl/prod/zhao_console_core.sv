@@ -1646,8 +1646,10 @@
 //          BE PRECISE ABOUT WHAT IS NEW HERE, because the raw mismatch is not.
 //          `tools/design/check_counters.py` ALREADY PRINTS this row
 //          ("post_gather_vram_bytes_by_client no ..._o and no mapping") and it
-//          is one of roughly fifteen it prints; its own last line says "It
-//          REPORTS; it does not gate." So the mismatch is known and ungated.
+//          is ONE OF 119 SUCH ROWS ACROSS 43 BLOCKS -- counted, after I first
+//          wrote "roughly fifteen" here from an eyeball of the tail and was
+//          wrong by eight-fold. Its own last line says "It REPORTS; it does
+//          not gate." So the mismatch is known, ungated, and COMMON.
 //          What is new is the READING: a VRAM-bytes-BY-CLIENT counter cannot
 //          belong to a block whose contract says it reads no external memory,
 //          so this row is not sloppiness -- it NAMES THE MISSING BLOCK. A
