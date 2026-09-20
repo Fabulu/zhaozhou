@@ -2826,3 +2826,52 @@ Three consequences, escalating:
 **The coordinator transcribes them** — `FINDINGS-terrcomp.md` (988 lines),
 `FINDINGS-warpfix.md` and `FINDINGS-forge4.md` are all landed by hand. **That is
 a workaround, not a fix**, and the fix belongs at the harness.
+
+## R184 — THE BUDGET'S TOP OPTIMISATION TARGETS ARE MODULES WE DO NOT SHIP
+
+**2026-09-20, flagged by FORGE4, and larger than it reported.**
+
+`reports/BUDGET_HEATMAP.md`'s ALM ranking led with **`zhao_forge_cliff` at 7,664
+ALM / 18.3% of the device** — the module the console had **just decided not to
+ship**, having adopted `zhao_forge_cliff_ram` at **976 fitted ALM** (R178).
+
+FORGE4 flagged it rather than hand-editing a generated file, which was the right
+call, and named two more it had noticed. **Measured while fixing it: six of the
+fourteen rows are superseded — the TOP THREE, and five of the top eight:**
+
+| struck row | est. ALM | superseded by |
+|---|---:|---|
+| `zhao_forge_cliff` | 7,664 | `zhao_forge_cliff_ram` |
+| `zhao_terrain_project` | 5,503 | `zhao_proj_subsystem` |
+| `zhao_geom_bin_pipe` | 5,299 | `zhao_geom_bin_pipe_v2` |
+| `zhao_geom_project` | 5,028 | `zhao_proj_subsystem` |
+| `zhao_raster_tile_pipe` | 4,465 | `zhao_raster_tile_pipe_v2` |
+| `zhao_terrain_bake` | 2,324 | `zhao_terrain_bake_v2` |
+
+**The real #1 shipped ALM consumer is `zhao_field_seq` at 5,142 / 12.3%.**
+
+**`build_manifest.py` had no notion of a disposition at all.** So the document
+this campaign would consult to decide *where to spend area effort* has been
+pointing at retired modules — and pointing at the biggest one hardest.
+
+**It is wrong in the flattering-looking direction, which is why it survived.**
+It **overstates** the remaining problem, and an overstated area figure reads as
+honest bad news, so nobody audits it. Meanwhile it sends the next reader at a
+block whose replacement was chosen days ago — the most expensive kind of wasted
+effort, because the work looks well-targeted the whole time.
+
+**The rows are STRUCK, not dropped.** The measurement is real, and a table that
+silently shortens itself is its own defect — the same reasoning that keeps a
+superseded module on disk as a differential oracle. A paragraph beneath names
+the struck rows and says plainly why one is not a target.
+
+**The scraper carries a self-check**, because a pattern that matched nothing
+would strike no rows and look **exactly** like a tree with no superseded
+modules — this repository's single most repeated failure. It resolves **38**.
+
+And it is deliberately **text-scraped rather than YAML-parsed**, with the reason
+in its docstring: `console_inventory.yml` carries very long multi-line `why:`
+strings, and a parser that choked on one would take the whole heatmap down. Its
+failure mode degrades to the old behaviour — the row simply is not struck —
+**which is the safe direction for a cosmetic annotation and the WRONG direction
+for anything load-bearing. It must not be reused as a gate.**

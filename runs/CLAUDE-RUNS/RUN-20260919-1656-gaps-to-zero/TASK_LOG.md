@@ -391,3 +391,31 @@ Found by **reading the six rows it DID report** in `zhao_field_flow_adapter.sv`
 to check whether they were real. They were benign — and six lines above them sat
 six more the tool had never mentioned. All three packets messaged, since their
 copy predates the fix and would hand them a false all-clear.
+
+## FORGE4 + WARPFIX merged; three packets relaunched (2026-09-20, 22:40)
+
+**Where I am:** merged and pushed. Three packets running: POSTMEAS, SETUPDOOR,
+TERRLAW. **Next step: attend whichever lands first and check its diff against
+the INCOMPLETE block.**
+
+* **FORGE4 adopted `zhao_forge_cliff_ram` — −5,698 ALM, 13.6% of the device**,
+  the campaign's largest area result, and **it was a ruling nobody executed**
+  (R142 said adopt; the gate had run twice; `uncashed_cheques.py` was reporting
+  it correctly the whole time). R178/R179.
+* **WARPFIX repaired R168 and proved the defect LIVE**, not latent — reachable
+  with legal stimulus in the correctly wired console. Evidence is a run that
+  FAILED 12 of 22 checks. R181/R182.
+* Register **21**, `superseded check: 72 production roots CLEAN` + 71 fit-target
+  tops (**143 total, unchanged** — one module changed category). All thirteen
+  gates green; core tie-off audit **0 SILENT**.
+* Landed `FINDINGS-warpfix.md` and `FINDINGS-forge4.md` by hand — **five lanes
+  in a row cannot write a report `.md`** (R183), and that refusal has already
+  put a citation to a never-written `FINDINGS-forge.md` into production RTL.
+* **R184: six of the budget heatmap's fourteen ALM rows are modules we do not
+  ship**, including the top three. `build_manifest.py` now reads dispositions
+  and strikes them, with a self-check resolving 38.
+
+**New packets:** SETUPDOOR (build the GEOM.SETUP triangle-arm arbiter — one
+missing door is holding composed `zhao_part_expand` at boundary I24, and there
+is a real 22-vs-21-bit width question it must ANSWER, not assume) and TERRLAW
+(R176 — three implementations of a terrain law with one ratified statement).
