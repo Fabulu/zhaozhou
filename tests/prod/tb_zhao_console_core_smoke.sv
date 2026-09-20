@@ -206,9 +206,10 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_hps_ticks_faulted_o;
   logic [31:0]             part_hps_records_discarded_o;
   logic [31:0]             terr_hps_pend_dropped_o;
-  logic [4:0]              terr_hps_pend_dropped_mask_o;
+  logic [5:0]              terr_hps_pend_dropped_mask_o;
   logic [31:0]             terr_hps_c3_bursts_o;
   logic [31:0]             terr_hps_c4_bursts_o, terr_hps_c4_wait_cycles_o;
+  logic [31:0]             terr_hps_c5_bursts_o, terr_hps_c5_wait_cycles_o;
   logic [31:0]             terr_hps_c3_wait_cycles_o;
   // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
   // PORTS THAT USED TO BE DECLARED HERE ARE GONE: the core instantiates
@@ -1246,7 +1247,11 @@ module tb_zhao_console_core_smoke
   logic        [ 1:0] fld_db_post_op_i;
   logic        [ 1:0] fld_db_post_kind_i;
   logic        [ 2:0] fld_db_post_slot_i;
-  logic        [ 6:0] fld_db_post_addr_i;
+  // EIGHT BITS since 2026-09-20 (packet D1). The mailbox's address field is
+  // the FH2 control verb's and is deliberately wider than the loader's
+  // LDADDRW = 7 (directive 10.2). A legacy LOAD that does not fit is refused
+  // and counted, never narrowed.
+  logic        [ 7:0] fld_db_post_addr_i;
   logic        [95:0] fld_db_post_data_i;
   logic        [31:0] fld_db_post_hash_i;
   logic               fld_db_post_ok_i;
@@ -1268,6 +1273,44 @@ module tb_zhao_console_core_smoke
   logic        [31:0] fld_db_commits_refused_o;
   logic        [31:0] fld_db_post_stalls_o;
   logic        [31:0] fld_db_ret_overflow_o;
+  // FH14 / FH2, packet D1. `ret_verdict_o` names WHICH refusal; `ret_handle_o`
+  // is the generation-bearing binding the loader issues.
+  logic        [ 3:0] fld_db_ret_verdict_o;
+  logic        [31:0] fld_db_ret_handle_o;
+  logic        [31:0] fld_db_fh2_posts_o;
+  logic        [31:0] fld_db_addr_refused_o;
+
+  // ---- THE FH2 TRANSACTIONAL LOADER (FH13 / FH15 / FH16) ------------------
+  // Declared because `.*` binds by name and a port with no net is a compile
+  // error. This bench does not exercise the install transaction -- that is
+  // `field_loader_directed`'s job, with real packer bytes through a played
+  // bridge; what the bench checks is that the composed machine comes out of
+  // reset with the loader attached and publishing NOTHING, which is the
+  // correct state before any capsule is offered.
+  logic        [31:0] fld_ldr_stage_base_i;
+  logic        [31:0] fld_ldr_stage_bytes_i;
+  logic        [ 2:0] fld_ldr_pub_sel_i;
+  logic        [ 7:0] fld_ldr_pub_ready_o;
+  logic        [ 7:0] fld_ldr_pub_pinned_o;
+  logic        [31:0] fld_ldr_pub_handle_o;
+  logic        [31:0] fld_ldr_pub_prog_hash_o;
+  logic        [ 7:0] fld_ldr_pub_gen_o;
+  logic        [31:0] fld_ldr_installs_ok_o;
+  logic        [31:0] fld_ldr_installs_failed_o;
+  logic        [31:0] fld_ldr_binds_ok_o;
+  logic        [31:0] fld_ldr_binds_failed_o;
+  logic        [31:0] fld_ldr_controls_ok_o;
+  logic        [31:0] fld_ldr_bad_operation_o;
+  logic        [31:0] fld_ldr_bad_envelope_o;
+  logic        [31:0] fld_ldr_bad_range_o;
+  logic        [31:0] fld_ldr_bad_section_o;
+  logic        [31:0] fld_ldr_bad_crc_o;
+  logic        [31:0] fld_ldr_bad_meta_o;
+  logic        [31:0] fld_ldr_bridge_errs_o;
+  logic        [31:0] fld_ldr_no_capacity_o;
+  logic        [31:0] fld_ldr_evictions_o;
+  logic        [31:0] fld_ldr_hint_overrides_o;
+  logic        [31:0] fld_ldr_load_bytes_o;
   logic        [ 2:0] fld_stamp_slot_i;
   logic               fld_stamp_slot_valid_i;
   // The F profile's arm and its four program parameters (entry I5, R40).
@@ -1728,7 +1771,16 @@ module tb_zhao_console_core_smoke
   assign fld_stamp_slot_valid_i = 1'b0;
   assign fld_db_ret_ready_i     = 1'b1;
   assign fld_db_post_kind_i     = 2'd0;
-  assign fld_db_post_addr_i     = 7'd0;
+  assign fld_db_post_addr_i     = 8'd0;
+  // THE LOADER'S STAGING WINDOW. A real base and a real extent rather than
+  // zero: a zero-length window would make every install refuse for the same
+  // reason, and a bench that cannot tell "refused because the window is empty"
+  // from "refused because the capsule is bad" is not watching anything. This
+  // bench offers no capsule, so nothing installs -- what it checks is that the
+  // composed loader comes out of reset publishing NOTHING.
+  assign fld_ldr_stage_base_i   = 32'h1000_0000;
+  assign fld_ldr_stage_bytes_i  = 32'h0010_0000;
+  assign fld_ldr_pub_sel_i      = 3'd0;
   assign fld_db_post_data_i     = 96'd0;
 
   // ---- THE F PROFILE IS ARMED AT A SLOT NOTHING WAS LOADED INTO ------------
@@ -5150,7 +5202,7 @@ module tb_zhao_console_core_smoke
         (part_hps_records_discarded_o != 0))
       $fatal(1, "SMOKE: the bridge refused the particle store (errs=%0d faulted=%0d discarded=%0d) -- the composition's own argument says it cannot",
              part_hps_bridge_errs_o, part_hps_ticks_faulted_o, part_hps_records_discarded_o);
-    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 5'd0))
+    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 6'd0))
       $fatal(1, "SMOKE: the HPS arbiter dropped a pending request (count=%0d mask=%b) -- every client on it is a holder",
              terr_hps_pend_dropped_o, terr_hps_pend_dropped_mask_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is

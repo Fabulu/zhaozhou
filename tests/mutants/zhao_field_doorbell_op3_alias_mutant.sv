@@ -1,25 +1,35 @@
-// zhao_field_doorbell_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
+// zhao_field_doorbell_op3_alias_mutant.sv -- A DELIBERATELY BROKEN COPY. NOT SHIPPED.
 //
-// WHAT IT PROVES. `ret_overflow_o` in zhao_field_doorbell.sv watches for a
-// return record with nowhere to go. That state is UNREACHABLE while the credit
-// is right (the block header, law 3): a COMMIT or a LOOKUP is consumed only
-// while fewer than RETQ answerable posts still owe their return, and each owes
-// exactly one. No legal stimulus moves the counter, so "it can fire" would
-// stay an argument forever -- and a counter that has not been seen to fire is
-// a claim, not an instrument.
+// WHAT IT PROVES. Owner decision FH14 says the doorbell's catch-all LOAD arm
+// must be replaced by EXHAUSTIVE decoding, because `post_op_i` is two bits and
+// the old final `else` therefore sent op 3 to `D_LOAD` -- performing a real
+// uop/table/header/uniform write for an operation nobody had defined.
 //
-// THE ONE SUBSTANTIVE CHANGE:
+// Production now decodes all four ops by name and routes op 3 to the FH2
+// transaction. That repair is only worth the paper it is written on if the
+// test that checks it would FAIL against the old arrangement, so this file IS
+// the old arrangement, re-lifted from current production.
 //
-//     wire ret_credit = (owed + r_used) < (RETW+1)'(RETQ);
-//  -> wire ret_credit = 1'b1;                  // MUTANT: no credit
+// THE TWO SUBSTANTIVE CHANGES, both one token:
 //
-// With the credit gone, RETQ+1 lookups whose returns the HPS does not drain
-// overflow the queue and the counter fires.
+//     wire head_is_fh2    = (q_op[q_ri] == OpFh2);
+//  -> wire head_is_fh2    = 1'b0;      // MUTANT: op 3 is not recognised
 //
-// INVERTED POLARITY: driven by tests/field/field_doorbell_mutant_control.cpp,
-// which PASSES when `ret_overflow_o` FIRES. Evidence about the INSTRUMENT, not
-// about the design. The module is RENAMED so a source list can never elaborate
-// it in place of the real one.
+//     wire head_is_load   = (q_op[q_ri] == OpLoad);
+//  -> wire head_is_load   = 1'b1;      // MUTANT: the catch-all is back
+//
+// Together they restore the exact pre-FH14 behaviour: anything that is not a
+// refusal, a commit or a lookup falls into the LOAD arm. Op 3 then reaches
+// `ld_valid_o` and moves `hdr_written`, which is the defect.
+//
+// NORMAL POLARITY, unlike the sibling `zhao_field_doorbell_mutant.sv`. That one
+// is an inverted-polarity control for an unreachable counter. THIS one is
+// reachable with ordinary stimulus, so the honest shape is to run FT060's own
+// driver against it and require it to GO RED -- the mutant is the negative
+// control for a test, not a positive control for a counter.
+//
+// The module is RENAMED so a source list can never elaborate it in place of the
+// real one.
 //
 // REGENERATE IT if zhao_field_doorbell.sv changes shape: a copy of an old
 // version is a positive control for a block that no longer exists.
@@ -199,7 +209,7 @@
 // ENFORCED-BY: tests/field/field_doorbell_directed.cpp:main
 `default_nettype none
 
-module zhao_field_doorbell_mutant #(
+module zhao_field_doorbell_op3_alias_mutant #(
     // Resident programs -- `zhao_field_host`'s PROGS, and the width of the
     // header shadow. A literal rather than $clog2 for the reason that module's
     // parameter list gives: `tools/quartus/gen_prod_top.py` cannot evaluate a
@@ -339,7 +349,15 @@ module zhao_field_doorbell_mutant #(
   localparam logic [1:0] OpLoad   = 2'd0;
   localparam logic [1:0] OpCommit = 2'd1;
   localparam logic [1:0] OpLookup = 2'd2;
+  // MUTANT-ONLY LINT WAIVER, and it is a consequence of the mutation rather
+  // than a third change to the design. `head_is_fh2` is forced to 1'b0 above,
+  // so nothing reads OpFh2 any more and -Wall reports it unused. Waiving it
+  // HERE keeps the mutant lintable without touching production, which is the
+  // same discipline CLAUDE.md sets for a mutant that trips a simulation
+  // assertion: silence it in the copy, with the reason beside it.
+  /* verilator lint_off UNUSEDPARAM */
   localparam logic [1:0] OpFh2    = 2'd3;
+  /* verilator lint_on UNUSEDPARAM */
 
   localparam int unsigned PTRW = (POSTS > 1) ? $clog2(POSTS) : 1;
   localparam int unsigned RETW = (RETQ  > 1) ? $clog2(RETQ)  : 1;
@@ -401,7 +419,7 @@ module zhao_field_doorbell_mutant #(
 
   // Consumed commits that have not yet written their return record. THE CREDIT.
   logic [RETW:0] owed;
-  wire           ret_credit = 1'b1;  // MUTANT: was (owed + r_used) < (RETW+1)'(RETQ) -- the credit guard is disabled so ret_overflow MUST fire
+  wire           ret_credit = (owed + r_used) < (RETW+1)'(RETQ);
 
   // ==========================================================================
   // THE HEADER SHADOW -- law 2
@@ -428,10 +446,10 @@ module zhao_field_doorbell_mutant #(
   // the loader. `head_is_load` is stated positively on purpose: the old code
   // said "not a commit and not a lookup, therefore a load", which is the
   // reasoning that made op 3 a load.
-  wire head_is_load   = (q_op[q_ri] == OpLoad);
+  wire head_is_load   = 1'b1;   // MUTANT: was (q_op[q_ri] == OpLoad) -- the catch-all LOAD arm, restored
   wire head_is_commit = (q_op[q_ri] == OpCommit);
   wire head_is_lookup = (q_op[q_ri] == OpLookup);
-  wire head_is_fh2    = (q_op[q_ri] == OpFh2);
+  wire head_is_fh2    = 1'b0;   // MUTANT: was (q_op[q_ri] == OpFh2)
   wire head_hdr_ok    = hdr_written[q_slot[q_ri]];
 
   // A legacy LOAD address that does not fit the loader's own width. Refused

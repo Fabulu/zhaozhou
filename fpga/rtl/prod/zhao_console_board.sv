@@ -1454,6 +1454,13 @@ module zhao_console_board
   // Client 4, GEOM.LOOM's node-stream carrier (`u_geom_loomfeed`, I50 closed).
   output logic [31:0]             terr_hps_c4_bursts_o,
   output logic [31:0]             terr_hps_c4_wait_cycles_o,
+  // SIX CLIENTS SINCE 2026-09-20 (packet D1, owner decisions FH13/FH15).
+  // FIELD's capsule loader takes index 5, the LOWEST, by the same argument
+  // clients 2, 3 and 4 make and which the arbiter's own law states: a
+  // continuously-asking lower index starves every higher one, so a burst of
+  // page loads makes a program install wait -- visibly, in `c5_wait_cycles`.
+  output logic [31:0]             terr_hps_c5_bursts_o,
+  output logic [31:0]             terr_hps_c5_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -1461,7 +1468,7 @@ module zhao_console_board
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [4:0]              terr_hps_pend_dropped_mask_o,
+  output logic [5:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -2717,17 +2724,29 @@ module zhao_console_board
   // exactly as it is for `terr_jdb_*` above (owner ruling R14, the pattern
   // R43 names) and for the FRAME_RING view.
   //
-  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP. For a LOAD WORD,
+  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP, 3 FH2. For a LOAD WORD,
   // `post_kind_i` is the host's own 0 uop / 1 table entry / 2 header /
   // 3 uniform, and the HEADER is written LAST because it is what marks a slot
   // runnable -- so a partially written program can never execute.
-  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, trace only
+  //
+  // OP 3 IS THE FH2 TRANSACTION (owner decision FH14, directive section 10.2).
+  // It used to fall into the doorbell's catch-all LOAD arm and perform a real
+  // loader write for an operation nobody had defined; it is now decoded by name
+  // and routed to `u_field_loader` below, sub-decoded by `post_kind_i` as
+  // 0 INSTALL_CAPSULE / 1 BIND_PROGRAM / 2 CONTROL / 3 reserved.
+  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, captured AT ACCEPTANCE
   input  logic         fld_db_post_valid_i,
   output logic         fld_db_post_ready_o,
   input  logic [ 1:0]  fld_db_post_op_i,
   input  logic [ 1:0]  fld_db_post_kind_i,
   input  logic [ 2:0]  fld_db_post_slot_i,
-  input  logic [ 6:0]  fld_db_post_addr_i,
+  // EIGHT BITS, NOT SEVEN, and the width is the FH2 control verb's. Directive
+  // 10.2: "widen that mailbox field explicitly to at least 8 through its
+  // wrappers ... Do not write [7:0] onto an unchanged 7-bit port." The LOADER's
+  // own address stays LDADDRW = 7; a legacy LOAD whose address does not fit is
+  // REFUSED by the doorbell and counted in `fld_db_addr_refused_o`, never
+  // narrowed.
+  input  logic [ 7:0]  fld_db_post_addr_i,
   input  logic [95:0]  fld_db_post_data_i,
   input  logic [31:0]  fld_db_post_hash_i,
   input  logic         fld_db_post_ok_i,
@@ -2742,6 +2761,13 @@ module zhao_console_board
   output logic         fld_db_ret_evicted_o,
   output logic [ 2:0]  fld_db_ret_slot_o,
   output logic [31:0]  fld_db_ret_plan_o,
+  // FH2 only. `ret_verdict_o` names WHICH refusal (BAD_CRC is not BAD_RANGE),
+  // and `ret_handle_o` is the generation-bearing binding the caller uses
+  // afterwards -- NOT a raw cache slot, which is FH16's distinction. Both read
+  // zero on a legacy LOAD/COMMIT/LOOKUP return, so `ret_op_o` has to be read
+  // alongside them.
+  output logic [ 3:0]  fld_db_ret_verdict_o,
+  output logic [31:0]  fld_db_ret_handle_o,
   output logic [31:0]  fld_db_posts_o,
   output logic [31:0]  fld_db_load_words_o,
   output logic [31:0]  fld_db_lookups_o,
@@ -2756,6 +2782,54 @@ module zhao_console_board
   // Unreachable while the return credit is right, so its zero is an argument
   // and not a measurement. Fired by tests/mutants/zhao_field_doorbell_mutant.sv.
   output logic [31:0]  fld_db_ret_overflow_o,
+  // Op-3 posts handed to the loader, and legacy LOAD posts whose address does
+  // not fit LDADDRW. The second is reachable with ordinary stimulus (post an
+  // address >= 128), so it needs no mutant -- `field_doorbell_directed` fires
+  // it and its negative control shows 0x7F still reaching the loader.
+  output logic [31:0]  fld_db_fh2_posts_o,
+  output logic [31:0]  fld_db_addr_refused_o,
+
+  // ---- THE FH2 TRANSACTIONAL LOADER (FH13 / FH15 / FH16) ------------------
+  // `zhao_field_loader` owns the BACKING STORE's descriptor table: installed
+  // immutable capsules, their generations, their pin counts and their READY
+  // bits. That is deliberately NOT `zhao_field_progcache`, which owns
+  // residency of the ACTIVE cache -- FH15's whole point is that the two are
+  // different objects with different lifetimes.
+  //
+  // The staging window is a PARAMETER of the machine rather than a constant
+  // here, for the reason `zhao_terrain_pageloader`'s REGION_BASE gives: a block
+  // that hard-codes an address the guard also hard-codes gives the owner one
+  // knob with two halves and no gate that says so.
+  input  logic [31:0]  fld_ldr_stage_base_i,
+  input  logic [31:0]  fld_ldr_stage_bytes_i,
+  // Publication. A STAGING object is absent from `pub_ready_o` by construction,
+  // so nothing downstream can execute a half-filled image even by guessing its
+  // index. `pub_pinned_o` is FH16's "acquire and pin at association open".
+  output logic [ 7:0]  fld_ldr_pub_ready_o,
+  output logic [ 7:0]  fld_ldr_pub_pinned_o,
+  input  logic [ 2:0]  fld_ldr_pub_sel_i,
+  output logic [31:0]  fld_ldr_pub_handle_o,
+  output logic [31:0]  fld_ldr_pub_prog_hash_o,
+  output logic [ 7:0]  fld_ldr_pub_gen_o,
+  // Evidence, PER CLASS. "The install failed" is not a diagnosis, so a reader
+  // can tell an unreachable address from a bad checksum from a full catalogue
+  // without a waveform.
+  output logic [31:0]  fld_ldr_installs_ok_o,
+  output logic [31:0]  fld_ldr_installs_failed_o,
+  output logic [31:0]  fld_ldr_binds_ok_o,
+  output logic [31:0]  fld_ldr_binds_failed_o,
+  output logic [31:0]  fld_ldr_controls_ok_o,
+  output logic [31:0]  fld_ldr_bad_operation_o,
+  output logic [31:0]  fld_ldr_bad_envelope_o,
+  output logic [31:0]  fld_ldr_bad_range_o,
+  output logic [31:0]  fld_ldr_bad_section_o,
+  output logic [31:0]  fld_ldr_bad_crc_o,
+  output logic [31:0]  fld_ldr_bad_meta_o,
+  output logic [31:0]  fld_ldr_bridge_errs_o,
+  output logic [31:0]  fld_ldr_no_capacity_o,
+  output logic [31:0]  fld_ldr_evictions_o,
+  output logic [31:0]  fld_ldr_hint_overrides_o,
+  output logic [31:0]  fld_ldr_load_bytes_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one
   // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
@@ -3492,6 +3566,8 @@ module zhao_console_board
       .terr_hps_c3_wait_cycles_o          (terr_hps_c3_wait_cycles_o),
       .terr_hps_c4_bursts_o               (terr_hps_c4_bursts_o),
       .terr_hps_c4_wait_cycles_o          (terr_hps_c4_wait_cycles_o),
+      .terr_hps_c5_bursts_o               (terr_hps_c5_bursts_o),
+      .terr_hps_c5_wait_cycles_o          (terr_hps_c5_wait_cycles_o),
       .terr_hps_pend_dropped_o            (terr_hps_pend_dropped_o),
       .terr_hps_pend_dropped_mask_o       (terr_hps_pend_dropped_mask_o),
       .cmd_exec_uploads_o                 (cmd_exec_uploads_o),
@@ -4184,6 +4260,8 @@ module zhao_console_board
       .fld_db_ret_evicted_o               (fld_db_ret_evicted_o),
       .fld_db_ret_slot_o                  (fld_db_ret_slot_o),
       .fld_db_ret_plan_o                  (fld_db_ret_plan_o),
+      .fld_db_ret_verdict_o               (fld_db_ret_verdict_o),
+      .fld_db_ret_handle_o                (fld_db_ret_handle_o),
       .fld_db_posts_o                     (fld_db_posts_o),
       .fld_db_load_words_o                (fld_db_load_words_o),
       .fld_db_lookups_o                   (fld_db_lookups_o),
@@ -4191,6 +4269,32 @@ module zhao_console_board
       .fld_db_commits_refused_o           (fld_db_commits_refused_o),
       .fld_db_post_stalls_o               (fld_db_post_stalls_o),
       .fld_db_ret_overflow_o              (fld_db_ret_overflow_o),
+      .fld_db_fh2_posts_o                 (fld_db_fh2_posts_o),
+      .fld_db_addr_refused_o              (fld_db_addr_refused_o),
+      .fld_ldr_stage_base_i               (fld_ldr_stage_base_i),
+      .fld_ldr_stage_bytes_i              (fld_ldr_stage_bytes_i),
+      .fld_ldr_pub_ready_o                (fld_ldr_pub_ready_o),
+      .fld_ldr_pub_pinned_o               (fld_ldr_pub_pinned_o),
+      .fld_ldr_pub_sel_i                  (fld_ldr_pub_sel_i),
+      .fld_ldr_pub_handle_o               (fld_ldr_pub_handle_o),
+      .fld_ldr_pub_prog_hash_o            (fld_ldr_pub_prog_hash_o),
+      .fld_ldr_pub_gen_o                  (fld_ldr_pub_gen_o),
+      .fld_ldr_installs_ok_o              (fld_ldr_installs_ok_o),
+      .fld_ldr_installs_failed_o          (fld_ldr_installs_failed_o),
+      .fld_ldr_binds_ok_o                 (fld_ldr_binds_ok_o),
+      .fld_ldr_binds_failed_o             (fld_ldr_binds_failed_o),
+      .fld_ldr_controls_ok_o              (fld_ldr_controls_ok_o),
+      .fld_ldr_bad_operation_o            (fld_ldr_bad_operation_o),
+      .fld_ldr_bad_envelope_o             (fld_ldr_bad_envelope_o),
+      .fld_ldr_bad_range_o                (fld_ldr_bad_range_o),
+      .fld_ldr_bad_section_o              (fld_ldr_bad_section_o),
+      .fld_ldr_bad_crc_o                  (fld_ldr_bad_crc_o),
+      .fld_ldr_bad_meta_o                 (fld_ldr_bad_meta_o),
+      .fld_ldr_bridge_errs_o              (fld_ldr_bridge_errs_o),
+      .fld_ldr_no_capacity_o              (fld_ldr_no_capacity_o),
+      .fld_ldr_evictions_o                (fld_ldr_evictions_o),
+      .fld_ldr_hint_overrides_o           (fld_ldr_hint_overrides_o),
+      .fld_ldr_load_bytes_o               (fld_ldr_load_bytes_o),
       .fld_stamp_slot_i                   (fld_stamp_slot_i),
       .fld_stamp_slot_valid_i             (fld_stamp_slot_valid_i),
       .fld_runs_o                         (fld_runs_o),

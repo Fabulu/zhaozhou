@@ -5291,6 +5291,13 @@ module zhao_console_core
   // Client 4, GEOM.LOOM's node-stream carrier (`u_geom_loomfeed`, I50 closed).
   output logic [31:0]             terr_hps_c4_bursts_o,
   output logic [31:0]             terr_hps_c4_wait_cycles_o,
+  // SIX CLIENTS SINCE 2026-09-20 (packet D1, owner decisions FH13/FH15).
+  // FIELD's capsule loader takes index 5, the LOWEST, by the same argument
+  // clients 2, 3 and 4 make and which the arbiter's own law states: a
+  // continuously-asking lower index starves every higher one, so a burst of
+  // page loads makes a program install wait -- visibly, in `c5_wait_cycles`.
+  output logic [31:0]             terr_hps_c5_bursts_o,
+  output logic [31:0]             terr_hps_c5_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -5298,7 +5305,7 @@ module zhao_console_core
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [4:0]              terr_hps_pend_dropped_mask_o,
+  output logic [5:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -6557,17 +6564,29 @@ module zhao_console_core
   // exactly as it is for `terr_jdb_*` above (owner ruling R14, the pattern
   // R43 names) and for the FRAME_RING view.
   //
-  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP. For a LOAD WORD,
+  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP, 3 FH2. For a LOAD WORD,
   // `post_kind_i` is the host's own 0 uop / 1 table entry / 2 header /
   // 3 uniform, and the HEADER is written LAST because it is what marks a slot
   // runnable -- so a partially written program can never execute.
-  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, trace only
+  //
+  // OP 3 IS THE FH2 TRANSACTION (owner decision FH14, directive section 10.2).
+  // It used to fall into the doorbell's catch-all LOAD arm and perform a real
+  // loader write for an operation nobody had defined; it is now decoded by name
+  // and routed to `u_field_loader` below, sub-decoded by `post_kind_i` as
+  // 0 INSTALL_CAPSULE / 1 BIND_PROGRAM / 2 CONTROL / 3 reserved.
+  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, captured AT ACCEPTANCE
   input  logic         fld_db_post_valid_i,
   output logic         fld_db_post_ready_o,
   input  logic [ 1:0]  fld_db_post_op_i,
   input  logic [ 1:0]  fld_db_post_kind_i,
   input  logic [ 2:0]  fld_db_post_slot_i,
-  input  logic [ 6:0]  fld_db_post_addr_i,
+  // EIGHT BITS, NOT SEVEN, and the width is the FH2 control verb's. Directive
+  // 10.2: "widen that mailbox field explicitly to at least 8 through its
+  // wrappers ... Do not write [7:0] onto an unchanged 7-bit port." The LOADER's
+  // own address stays LDADDRW = 7; a legacy LOAD whose address does not fit is
+  // REFUSED by the doorbell and counted in `fld_db_addr_refused_o`, never
+  // narrowed.
+  input  logic [ 7:0]  fld_db_post_addr_i,
   input  logic [95:0]  fld_db_post_data_i,
   input  logic [31:0]  fld_db_post_hash_i,
   input  logic         fld_db_post_ok_i,
@@ -6582,6 +6601,13 @@ module zhao_console_core
   output logic         fld_db_ret_evicted_o,
   output logic [ 2:0]  fld_db_ret_slot_o,
   output logic [31:0]  fld_db_ret_plan_o,
+  // FH2 only. `ret_verdict_o` names WHICH refusal (BAD_CRC is not BAD_RANGE),
+  // and `ret_handle_o` is the generation-bearing binding the caller uses
+  // afterwards -- NOT a raw cache slot, which is FH16's distinction. Both read
+  // zero on a legacy LOAD/COMMIT/LOOKUP return, so `ret_op_o` has to be read
+  // alongside them.
+  output logic [ 3:0]  fld_db_ret_verdict_o,
+  output logic [31:0]  fld_db_ret_handle_o,
   output logic [31:0]  fld_db_posts_o,
   output logic [31:0]  fld_db_load_words_o,
   output logic [31:0]  fld_db_lookups_o,
@@ -6596,6 +6622,54 @@ module zhao_console_core
   // Unreachable while the return credit is right, so its zero is an argument
   // and not a measurement. Fired by tests/mutants/zhao_field_doorbell_mutant.sv.
   output logic [31:0]  fld_db_ret_overflow_o,
+  // Op-3 posts handed to the loader, and legacy LOAD posts whose address does
+  // not fit LDADDRW. The second is reachable with ordinary stimulus (post an
+  // address >= 128), so it needs no mutant -- `field_doorbell_directed` fires
+  // it and its negative control shows 0x7F still reaching the loader.
+  output logic [31:0]  fld_db_fh2_posts_o,
+  output logic [31:0]  fld_db_addr_refused_o,
+
+  // ---- THE FH2 TRANSACTIONAL LOADER (FH13 / FH15 / FH16) ------------------
+  // `zhao_field_loader` owns the BACKING STORE's descriptor table: installed
+  // immutable capsules, their generations, their pin counts and their READY
+  // bits. That is deliberately NOT `zhao_field_progcache`, which owns
+  // residency of the ACTIVE cache -- FH15's whole point is that the two are
+  // different objects with different lifetimes.
+  //
+  // The staging window is a PARAMETER of the machine rather than a constant
+  // here, for the reason `zhao_terrain_pageloader`'s REGION_BASE gives: a block
+  // that hard-codes an address the guard also hard-codes gives the owner one
+  // knob with two halves and no gate that says so.
+  input  logic [31:0]  fld_ldr_stage_base_i,
+  input  logic [31:0]  fld_ldr_stage_bytes_i,
+  // Publication. A STAGING object is absent from `pub_ready_o` by construction,
+  // so nothing downstream can execute a half-filled image even by guessing its
+  // index. `pub_pinned_o` is FH16's "acquire and pin at association open".
+  output logic [ 7:0]  fld_ldr_pub_ready_o,
+  output logic [ 7:0]  fld_ldr_pub_pinned_o,
+  input  logic [ 2:0]  fld_ldr_pub_sel_i,
+  output logic [31:0]  fld_ldr_pub_handle_o,
+  output logic [31:0]  fld_ldr_pub_prog_hash_o,
+  output logic [ 7:0]  fld_ldr_pub_gen_o,
+  // Evidence, PER CLASS. "The install failed" is not a diagnosis, so a reader
+  // can tell an unreachable address from a bad checksum from a full catalogue
+  // without a waveform.
+  output logic [31:0]  fld_ldr_installs_ok_o,
+  output logic [31:0]  fld_ldr_installs_failed_o,
+  output logic [31:0]  fld_ldr_binds_ok_o,
+  output logic [31:0]  fld_ldr_binds_failed_o,
+  output logic [31:0]  fld_ldr_controls_ok_o,
+  output logic [31:0]  fld_ldr_bad_operation_o,
+  output logic [31:0]  fld_ldr_bad_envelope_o,
+  output logic [31:0]  fld_ldr_bad_range_o,
+  output logic [31:0]  fld_ldr_bad_section_o,
+  output logic [31:0]  fld_ldr_bad_crc_o,
+  output logic [31:0]  fld_ldr_bad_meta_o,
+  output logic [31:0]  fld_ldr_bridge_errs_o,
+  output logic [31:0]  fld_ldr_no_capacity_o,
+  output logic [31:0]  fld_ldr_evictions_o,
+  output logic [31:0]  fld_ldr_hint_overrides_o,
+  output logic [31:0]  fld_ldr_load_bytes_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one
   // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
@@ -11621,44 +11695,69 @@ module zhao_console_core
   //
   // It is a READ-ONLY client: the carrier never writes DDR, so its write arm
   // is zero exactly as clients 0 and 1 already are.
-  zhao_hps_burst_req_t [4:0]       thps_req;
-  logic                [4:0]       thps_grant;
-  logic                [4:0]       thps_wr_valid, thps_wr_last;
-  logic                [4:0][63:0] thps_wr_data;
-  zhao_hps_burst_rsp_t [4:0]       thps_rsp;
-  logic                [4:0][31:0] thps_bursts;
-  logic                [4:1][31:0] thps_wait;
+  // SIX CLIENTS SINCE 2026-09-20 (packet D1, owner decisions FH13 and FH15).
+  // FIELD's capsule loader takes index 5, the LOWEST, and the placement is a
+  // statement rather than a default -- the same one clients 2, 3 and 4 make.
+  //
+  // IT CANNOT DEADLOCK, and the reason is the loader's POSITION IN TIME rather
+  // than a dependency argument: FH15 puts program images in "bounded, pinned
+  // HPS staging" that the HPS fills AHEAD OF NEED, and the doorbell's mailbox
+  // exists precisely so a plan can be staged before the fabric goes idle. No
+  // terrain or particle client waits on a program install; an install that
+  // waits delays a program becoming resident and nothing else, and
+  // `terr_hps_c5_wait_cycles_o` is the number that would say the choice had
+  // started to cost something. Indices 0-4 keep their meaning, so `c0..c4`
+  // read exactly what they read before.
+  //
+  // It is a READ-ONLY client: the loader never writes DDR, so its write arm is
+  // zero exactly as clients 0, 1 and 4 already are.
+  zhao_hps_burst_req_t [5:0]       thps_req;
+  logic                [5:0]       thps_grant;
+  logic                [5:0]       thps_wr_valid, thps_wr_last;
+  logic                [5:0][63:0] thps_wr_data;
+  zhao_hps_burst_rsp_t [5:0]       thps_rsp;
+  logic                [5:0][31:0] thps_bursts;
+  logic                [5:1][31:0] thps_wait;
 
   zhao_hps_burst_req_t glf_hps_req;
   logic                glf_hps_grant;
   zhao_hps_burst_rsp_t glf_hps_rsp;
 
-  assign thps_req      = {glf_hps_req, ptb_hps_req, twb_hps_req, tpl_hps_req, tcm_hps_req};
-  assign thps_wr_valid = {1'b0, ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
-  assign thps_wr_last  = {1'b0, ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
-  assign thps_wr_data  = {64'd0, ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
-  assign tcm_hps_grant = thps_grant[0];
-  assign tpl_hps_grant = thps_grant[1];
-  assign twb_hps_grant = thps_grant[2];
-  assign ptb_hps_grant = thps_grant[3];
-  assign glf_hps_grant = thps_grant[4];
+  zhao_hps_burst_req_t fldr_hps_req;
+  logic                fldr_hps_grant;
+  zhao_hps_burst_rsp_t fldr_hps_rsp;
+
+  assign thps_req      = {fldr_hps_req, glf_hps_req, ptb_hps_req, twb_hps_req,
+                          tpl_hps_req, tcm_hps_req};
+  assign thps_wr_valid = {1'b0, 1'b0, ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
+  assign thps_wr_last  = {1'b0, 1'b0, ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
+  assign thps_wr_data  = {64'd0, 64'd0, ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
+  assign tcm_hps_grant  = thps_grant[0];
+  assign tpl_hps_grant  = thps_grant[1];
+  assign twb_hps_grant  = thps_grant[2];
+  assign ptb_hps_grant  = thps_grant[3];
+  assign glf_hps_grant  = thps_grant[4];
+  assign fldr_hps_grant = thps_grant[5];
   assign tcm_hps_rsp   = thps_rsp[0];
   assign tpl_hps_rsp   = thps_rsp[1];
   assign twb_hps_rsp   = thps_rsp[2];
   assign ptb_hps_rsp   = thps_rsp[3];
   assign glf_hps_rsp   = thps_rsp[4];
+  assign fldr_hps_rsp  = thps_rsp[5];
   assign terr_hps_c0_bursts_o      = thps_bursts[0];
   assign terr_hps_c1_bursts_o      = thps_bursts[1];
   assign terr_hps_c2_bursts_o      = thps_bursts[2];
   assign terr_hps_c3_bursts_o      = thps_bursts[3];
   assign terr_hps_c4_bursts_o      = thps_bursts[4];
+  assign terr_hps_c5_bursts_o      = thps_bursts[5];
   assign terr_hps_c1_wait_cycles_o = thps_wait[1];
   assign terr_hps_c2_wait_cycles_o = thps_wait[2];
   assign terr_hps_c3_wait_cycles_o = thps_wait[3];
   assign terr_hps_c4_wait_cycles_o = thps_wait[4];
+  assign terr_hps_c5_wait_cycles_o = thps_wait[5];
 
   zhao_hps_arbiter_n #(
-    .N(5)
+    .N(6)
   ) u_terr_hps_arb (
     .clk          (gpu_clk),
     .rst_n        (rst_n),
@@ -11684,6 +11783,13 @@ module zhao_console_core
     // on the transition INTO B_REQ and never while B_REQ holds, and a refusal
     // takes the request down to B_IDLE before any re-offer) -- so this reads
     // zero, and it reads zero rather than being argued to.
+    //
+    // THE SIXTH, `u_field_loader`, is the same shape and it is worth saying
+    // WHY rather than asserting it: its request fields come from `rq_addr` and
+    // `burst_off`, both of which are written only on a state TRANSITION
+    // (`L_IDLE` -> capture, and the advance at the end of a body burst), never
+    // while `L_HDR_REQ` or `L_BODY_REQ` holds. So the request it offers cannot
+    // change underneath a pending slot.
     .pend_dropped_o     (terr_hps_pend_dropped_o),
     .pend_dropped_mask_o(terr_hps_pend_dropped_mask_o)
   );
@@ -16041,10 +16147,27 @@ module zhao_console_core
   // HPS is genuinely across this edge -- `zfield::decode` is software by
   // FIELD.PROGCACHE's own contract -- so the exchange is the thing that can be
   // built here, and it is built.
+  wire        fdb_fh2_valid, fdb_fh2_ready;
+  wire [1:0]  fdb_fh2_kind;
+  wire [7:0]  fdb_fh2_verb;
+  wire [95:0] fdb_fh2_data;
+  wire [31:0] fdb_fh2_hash, fdb_fh2_ticket, fdb_fh2_plan;
+  wire        fdb_fh2_resp_valid, fdb_fh2_resp_ready, fdb_fh2_resp_ok;
+  wire [3:0]  fdb_fh2_resp_verdict;
+  wire [31:0] fdb_fh2_resp_handle;
+  wire [2:0]  fdb_fh2_resp_slot;
+  wire        fdb_fh2_resp_evicted;
+
   zhao_field_doorbell #(
     .PROGS  (8),
     .SLOTW  (3),
     .LDADDRW(7),
+    // EIGHT, against the loader's seven. Directive 10.2 selects an 8-bit FH2
+    // control address and says in as many words not to write it onto an
+    // unchanged 7-bit port; the two widths are separate because the two fields
+    // are separate, and the doorbell REFUSES a legacy load that does not fit
+    // rather than narrowing it.
+    .POSTADDRW(8),
     // Four posts staged ahead of the fabric going idle. The host accepts a
     // load word only while the fabric is IDLE (its own law), so a mailbox is
     // what keeps the HPS from having to watch for that window.
@@ -16092,6 +16215,22 @@ module zhao_console_core
     .pc_cm_evicted_i   (fdb_cm_evicted),
     .pc_cm_slot_i      (fdb_cm_slot),
 
+    .fh2_valid_o       (fdb_fh2_valid),
+    .fh2_ready_i       (fdb_fh2_ready),
+    .fh2_kind_o        (fdb_fh2_kind),
+    .fh2_verb_o        (fdb_fh2_verb),
+    .fh2_data_o        (fdb_fh2_data),
+    .fh2_hash_o        (fdb_fh2_hash),
+    .fh2_ticket_o      (fdb_fh2_ticket),
+    .fh2_plan_o        (fdb_fh2_plan),
+    .fh2_resp_valid_i  (fdb_fh2_resp_valid),
+    .fh2_resp_ready_o  (fdb_fh2_resp_ready),
+    .fh2_resp_ok_i     (fdb_fh2_resp_ok),
+    .fh2_resp_verdict_i(fdb_fh2_resp_verdict),
+    .fh2_resp_handle_i (fdb_fh2_resp_handle),
+    .fh2_resp_slot_i   (fdb_fh2_resp_slot),
+    .fh2_resp_evicted_i(fdb_fh2_resp_evicted),
+
     .ret_valid_o   (fld_db_ret_valid_o),
     .ret_ready_i   (fld_db_ret_ready_i),
     .ret_ticket_o  (fld_db_ret_ticket_o),
@@ -16102,6 +16241,8 @@ module zhao_console_core
     .ret_evicted_o (fld_db_ret_evicted_o),
     .ret_slot_o    (fld_db_ret_slot_o),
     .ret_plan_o    (fld_db_ret_plan_o),
+    .ret_verdict_o (fld_db_ret_verdict_o),
+    .ret_handle_o  (fld_db_ret_handle_o),
 
     .posts_o           (fld_db_posts_o),
     .load_words_o      (fld_db_load_words_o),
@@ -16109,7 +16250,92 @@ module zhao_console_core
     .commits_o         (fld_db_commits_o),
     .commits_refused_o (fld_db_commits_refused_o),
     .post_stalls_o     (fld_db_post_stalls_o),
-    .ret_overflow_o    (fld_db_ret_overflow_o)
+    .ret_overflow_o    (fld_db_ret_overflow_o),
+    .fh2_posts_o       (fld_db_fh2_posts_o),
+    .addr_refused_o    (fld_db_addr_refused_o)
+  );
+
+  // ==========================================================================
+  // THE FH2 TRANSACTIONAL LOADER -- owner decisions FH13, FH15, FH16
+  // ==========================================================================
+  // FH13: "New loading uses reserve -> fill -> validate -> seal -> bind. The
+  // allocator chooses the slot before writes. A binding becomes executable only
+  // after its own bytes, maps and metadata are complete."
+  //
+  // THE DOORBELL'S OP-3 ARM IS A REAL PRODUCER AND THIS IS A REAL CONSUMER, and
+  // the pairing is the point: before FH14, op 3 fell into the doorbell's
+  // catch-all LOAD arm and became a uop/table/header/uniform write for an
+  // operation nobody had defined. The decode is now exhaustive and the arm it
+  // routes to is this block.
+  //
+  // ITS BYTES COME THROUGH THE ARBITER, as client 5. Directive 20.5 requires
+  // "the production packer's bytes through the real bridge/arbiter shape", and
+  // a loader wired to anything else would be measuring a machine that does not
+  // ship. The staging window is `fld_ldr_stage_base_i`/`_bytes_i` rather than a
+  // constant here, so the owner has one knob and not two halves of one.
+  zhao_field_loader #(
+    .OBJECTS(8),
+    .OBJW(3),
+    .GENW(8),
+    .BURST_BYTES(64),
+    .MAX_CAPSULE_BYTES(65536),
+    .MAX_SECTIONS(24),
+    .CHECK_EPOCH(1'b1)
+  ) u_field_loader (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    .cfg_hps_client_i (ZHAO_CLIENT_ENGINE1),
+    .cfg_epoch_i      (fld_cfg_plan_base_i),
+    .cfg_stage_base_i (fld_ldr_stage_base_i),
+    .cfg_stage_bytes_i(fld_ldr_stage_bytes_i),
+
+    .fh2_valid_i (fdb_fh2_valid),
+    .fh2_ready_o (fdb_fh2_ready),
+    .fh2_kind_i  (fdb_fh2_kind),
+    .fh2_verb_i  (fdb_fh2_verb),
+    .fh2_data_i  (fdb_fh2_data),
+    .fh2_hash_i  (fdb_fh2_hash),
+    .fh2_ticket_i(fdb_fh2_ticket),
+    .fh2_plan_i  (fdb_fh2_plan),
+
+    .fh2_resp_valid_o  (fdb_fh2_resp_valid),
+    .fh2_resp_ready_i  (fdb_fh2_resp_ready),
+    .fh2_resp_ok_o     (fdb_fh2_resp_ok),
+    .fh2_resp_verdict_o(fdb_fh2_resp_verdict),
+    .fh2_resp_ticket_o (),  // the doorbell replays its OWN captured ticket
+    .fh2_resp_plan_o   (),  // and its OWN captured plan; see law 5
+    .fh2_resp_handle_o (fdb_fh2_resp_handle),
+    .fh2_resp_slot_o   (fdb_fh2_resp_slot),
+    .fh2_resp_evicted_o(fdb_fh2_resp_evicted),
+
+    .hps_req_o      (fldr_hps_req),
+    .hps_req_grant_i(fldr_hps_grant),
+    .hps_rsp_i      (fldr_hps_rsp),
+
+    .pub_ready_o    (fld_ldr_pub_ready_o),
+    .pub_pinned_o   (fld_ldr_pub_pinned_o),
+    .pub_sel_i      (fld_ldr_pub_sel_i),
+    .pub_handle_o   (fld_ldr_pub_handle_o),
+    .pub_prog_hash_o(fld_ldr_pub_prog_hash_o),
+    .pub_gen_o      (fld_ldr_pub_gen_o),
+
+    .installs_ok_o    (fld_ldr_installs_ok_o),
+    .installs_failed_o(fld_ldr_installs_failed_o),
+    .binds_ok_o       (fld_ldr_binds_ok_o),
+    .binds_failed_o   (fld_ldr_binds_failed_o),
+    .controls_ok_o    (fld_ldr_controls_ok_o),
+    .bad_operation_o  (fld_ldr_bad_operation_o),
+    .bad_envelope_o   (fld_ldr_bad_envelope_o),
+    .bad_range_o      (fld_ldr_bad_range_o),
+    .bad_section_o    (fld_ldr_bad_section_o),
+    .bad_crc_o        (fld_ldr_bad_crc_o),
+    .bad_meta_o       (fld_ldr_bad_meta_o),
+    .bridge_errs_o    (fld_ldr_bridge_errs_o),
+    .no_capacity_o    (fld_ldr_no_capacity_o),
+    .evictions_o      (fld_ldr_evictions_o),
+    .hint_overrides_o (fld_ldr_hint_overrides_o),
+    .load_bytes_o     (fld_ldr_load_bytes_o)
   );
 
   // ==========================================================================
