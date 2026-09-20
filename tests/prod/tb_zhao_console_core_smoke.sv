@@ -996,6 +996,27 @@ module tb_zhao_console_core_smoke
   logic [15:0] pad_ly_i [0:3];
   logic [15:0] pad_rx_i [0:3];
   logic [15:0] pad_ry_i [0:3];
+
+  // ---- INPUT.SNAC's physical edge (owner ruling R7) ------------------------
+  // The bench is the SNAC CONNECTOR, exactly as it is the HPS for the burst
+  // bridge: nothing is plugged in, so DAT and /ACK idle high and the adapter
+  // reads every slot absent and passes `pad_*_i` through unchanged. That is
+  // the merge's identity case, and it is what keeps this bench's pad numbers
+  // the same as they were before the adapter existed. The decode itself is
+  // exercised in tests/input/input_snac_directed.cpp, where a modelled PS1
+  // pad actually answers.
+  localparam int SMOKE_SNAC_PORTS = 2;
+  logic [SMOKE_SNAC_PORTS-1:0] snac_dat_i;
+  logic [SMOKE_SNAC_PORTS-1:0] snac_ack_n_i;
+  logic [SMOKE_SNAC_PORTS-1:0] snac_att_n_o;
+  logic                        snac_clk_o;
+  logic                        snac_cmd_o;
+  logic [3:0]                  snac_present_o;
+  logic [63:0]                 snac_polls_o;
+  logic [63:0]                 snac_timeouts_o;
+  logic [63:0]                 snac_bad_header_o;
+  logic [63:0]                 snac_overrides_o;
+  logic [63:0]                 snac_seq_gaps_o;
   logic        aud_wr_valid_i;
   logic [15:0] aud_wr_l_i;
   logic [15:0] aud_wr_r_i;
@@ -3556,6 +3577,9 @@ module tb_zhao_console_core_smoke
     pad_ly_i = '{default: '0};
     pad_rx_i = '{default: '0};
     pad_ry_i = '{default: '0};
+    // the SNAC connector, unpopulated: both lines idle HIGH
+    snac_dat_i   = '1;
+    snac_ack_n_i = '1;
     aud_wr_valid_i = '0;
     aud_wr_l_i = '0;
     aud_wr_r_i = '0;

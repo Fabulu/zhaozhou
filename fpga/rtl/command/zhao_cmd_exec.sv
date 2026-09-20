@@ -1573,9 +1573,21 @@ module zhao_cmd_exec
             proj_cfg_view_o <= cv;
             // STEP 16 IS cfg ADDRESS 18, NOT 16. Addresses 16 and 17 are the
             // viewport rect, which SetView does not carry -- it carries a
-            // viewport_id, and the id-to-rect table is video_rules.md's, not in
-            // the ABI at all. The console's host port owns those two words.
-            // Writing them from here would be this block inventing a rectangle.
+            // viewport_id. The console's host port owns those two words for now.
+            //
+            // CORRECTED 2026-09-20 (projinput): this comment used to continue
+            // "and the id-to-rect table is video_rules.md's, not in the ABI at
+            // all ... writing them from here would be this block inventing a
+            // rectangle." BOTH HALVES WERE FALSE. `video_rules.md` contained no
+            // such table -- it does now, section 3.2 -- and
+            // `zref::render::viewports_of()` has held one since 2026-08-15, so
+            // lowering it here would invent nothing: it would differential
+            // against the oracle like everything else this block lowers. What
+            // is actually owed is the lowering itself plus ONE decision, which
+            // `video_mode` indexes the table, given that video_rules 1.1
+            // latches the mode at frame start while this walk commits
+            // immediately. `zhao_console_core.sv` entry I14 carries the whole
+            // correction and the recommendation.
             // STEPS 17/18/19 ARE cfg ADDRESSES 19/20/21 -- the eye (R63),
             // decoded by `zhao_view_eye`, which snoops this same bus.
             // `zhao_project_core` ignores them, which is the property that let

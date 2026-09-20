@@ -76,6 +76,9 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned FRAMER_Q = 8,
   parameter int unsigned WFIFO_W  = 64,
 
+  // ---- INPUT.SNAC (owner ruling R7) ----------------------------------------
+  parameter int unsigned SNAC_PORTS = 2,
+
   // ---- CMD.EXEC (section 7c) -----------------------------------------------
   // How many SurfaceStamps one packet may carry. It is the ONE number in the
   // executor that can refuse an otherwise legal packet, so it is a knob and not
@@ -1541,6 +1544,19 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [15:0] pad_rx_i [0:3],
   input  logic [15:0] pad_ry_i [0:3],
 
+  // ---- INPUT.SNAC's physical edge (owner ruling R7, input_rules.md 7) -----
+  input  logic [SNAC_PORTS-1:0] snac_dat_i,
+  input  logic [SNAC_PORTS-1:0] snac_ack_n_i,
+  output logic [SNAC_PORTS-1:0] snac_att_n_o,
+  output logic                  snac_clk_o,
+  output logic                  snac_cmd_o,
+  output logic [3:0]            snac_present_o,
+  output logic [63:0]           snac_polls_o,
+  output logic [63:0]           snac_timeouts_o,
+  output logic [63:0]           snac_bad_header_o,
+  output logic [63:0]           snac_overrides_o,
+  output logic [63:0]           snac_seq_gaps_o,
+
   // ---- audio: ring-read client seam (pairs in) + PCM out -----------------
   input  logic        aud_wr_valid_i,
   input  logic [15:0] aud_wr_l_i,
@@ -2351,6 +2367,7 @@ module zhao_console_core_slot_overflow_mutant
   zhao_console_core #(
       .FRAMER_Q(FRAMER_Q),
       .WFIFO_W(WFIFO_W),
+      .SNAC_PORTS(SNAC_PORTS),
       .PART_REC_W(PART_REC_W),
       .PART_CAPACITY(PART_CAPACITY),
       .PART_CHILD_D(PART_CHILD_D),

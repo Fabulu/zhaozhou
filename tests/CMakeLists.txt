@@ -415,6 +415,34 @@ set_tests_properties(input_random PROPERTIES LABELS "fast;nightly")
 add_test(NAME input_random_soak COMMAND test_input_random --frames 100000)
 set_tests_properties(input_random_soak PROPERTIES LABELS "nightly")
 
+# INPUT.SNAC (owner ruling R7). The bench parameterisation is SMALL on
+# purpose -- CLK_DIV 200 -> 4, ACK_TIMEOUT 10000 -> 64, IDLE_GAP 1600 -> 4 --
+# because a directed run would otherwise spend millions of cycles shifting
+# bits. NO DECODED VALUE DEPENDS ON ANY OF THE THREE: they set the bus rate
+# and the timeout, never a button, an axis or a presence bit, which is what
+# makes the fast bench evidence about the shipping configuration. PORTS stays
+# at its production default so the round-robin under test is the real one.
+set(ZHAO_INPUT_SNAC_SV ${CMAKE_SOURCE_DIR}/fpga/rtl/input/zhao_input_snac.sv)
+add_executable(test_input_snac_directed input/input_snac_directed.cpp)
+target_link_libraries(test_input_snac_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_input_snac_directed
+  PREFIX Vzhao_input_snac
+  TOP_MODULE zhao_input_snac
+  INCLUDE_DIRS ${ZHAO_INPUT_INCLUDES}
+  SOURCES ${ZHAO_ABI_PKG} ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_SNAC_SV}
+  VERILATOR_ARGS -GCLK_DIV=4 -GACK_TIMEOUT=64 -GIDLE_GAP=4)
+add_test(NAME input_snac_directed COMMAND test_input_snac_directed)
+set_tests_properties(input_snac_directed PROPERTIES LABELS "fast;nightly")
+
+add_test(NAME lint_input_snac
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_input_snac
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${ZHAO_ZHAO_PKG} ${ZHAO_INPUT_SNAC_SV})
+set_tests_properties(lint_input_snac PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 add_test(NAME lint_input_snapshot
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_input_snapshot

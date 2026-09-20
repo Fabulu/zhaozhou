@@ -2538,6 +2538,7 @@ targets:
       - fpga/rtl/debug/zhao_host_reg_trace.sv
       - fpga/rtl/input/zhao_input_snapshot.sv
       - fpga/rtl/input/zhao_input_rumble.sv
+      - fpga/rtl/input/zhao_input_snac.sv
       - fpga/rtl/audio/zhao_audio_fifo.sv
       - fpga/rtl/memory/zhao_sdram_ctrl.sv
       - fpga/rtl/memory/zhao_vram_arbiter.sv

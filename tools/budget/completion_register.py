@@ -777,9 +777,12 @@ _ALIAS: dict[str, str | None] = {
     # The SECOND entry _stale_none_aliases() has caught the same day it was
     # added, which is the argument for the guard rather than for my memory.
     "FORGE.SHADOW":      "zhao_forge_shadow",
-    # the owner revoked their deferral 2026-09-18; all three were cut BEFORE
-    # their contracts were written, so each needs its spec authored first
-    "INPUT.SNAC":        None,
+    # the owner revoked their deferral 2026-09-18; both were cut BEFORE their
+    # contracts were written, so each needs its spec authored first.
+    # INPUT.SNAC: spec (spec/input_rules.md 7), contract and RTL written
+    # 2026-09-20 under ruling R7, and COMPOSED in zhao_console_core between its
+    # pad_*_i ports and the shell's INPUT.SNAPSHOT. It is no longer a None.
+    "INPUT.SNAC":        "zhao_input_snac",
     "GEOM.WARP":         None,
     # POST.ECHO: spec written and BUILT 2026-09-19 (ruling R7) -- composed on
     # POST.COMPOSITE's echo tap inside the shell's zhao_post_lease.
