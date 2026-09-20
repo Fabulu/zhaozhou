@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 8008bf8f702becc21ada6da2744a9686e60f15883bd2dd1b19d3ace4ef96efd1
-zidl_sha256         = 2be41d9f94d2ee34152934d5f2cf244764c18f499d7586c162c6ef7fcf8be50d
+abi_identity_sha256 = e45f63693d9775583709d3a1809db73b70a673ae5ebb4b0f799117d8e9fe95ee
+zidl_sha256         = 39b8ba0609d7c9a52ddc70a2c5689ccb9fc62bdcb62e797e26258c86eef7e005
 ```
 
 ABI version **3**, little-endian, command alignment
@@ -697,6 +697,11 @@ TS `zhaoPackDebugTraceArm(zhaoSampleDebugTraceArm(), ...)`, SV round-trips it vi
 | Value | Name |
 |---|---|
 | 0 | `FORGE_HEIGHTFIELD_PATCH` |
+| 1 | `FORGE_RIBBON` |
+| 2 | `FORGE_RADIAL_FAN` |
+| 3 | `FORGE_TUBE` |
+| 4 | `FORGE_RADIAL_SHELL` |
+| 5 | `FORGE_BILLBOARD_SHEET` |
 
 ### `fog_mode` — backing `u8`
 

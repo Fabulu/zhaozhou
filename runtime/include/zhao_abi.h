@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8008bf8f702becc21ada6da2744a9686e60f15883bd2dd1b19d3ace4ef96efd1
-//   zidl_sha256         = 2be41d9f94d2ee34152934d5f2cf244764c18f499d7586c162c6ef7fcf8be50d
+//   abi_identity_sha256 = e45f63693d9775583709d3a1809db73b70a673ae5ebb4b0f799117d8e9fe95ee
+//   zidl_sha256         = 39b8ba0609d7c9a52ddc70a2c5689ccb9fc62bdcb62e797e26258c86eef7e005
 #pragma once
 
 #include <cstdint>
@@ -45,6 +45,11 @@ enum video_mode : uint8_t {
 // enum forge_kind: u8 on the wire (capture_format.md 3.2 step 7)
 enum forge_kind : uint8_t {
   FORGE_HEIGHTFIELD_PATCH = 0,
+  FORGE_RIBBON = 1,
+  FORGE_RADIAL_FAN = 2,
+  FORGE_TUBE = 3,
+  FORGE_RADIAL_SHELL = 4,
+  FORGE_BILLBOARD_SHEET = 5,
 };
 
 // enum fog_mode: u8 on the wire (capture_format.md 3.2 step 7)
@@ -1191,7 +1196,7 @@ inline ZhRecordDrawProcedural zhao_sample_draw_procedural() {
   r.payload.material = 704643074u;
   r.payload.transform = zhao_sample_transform2fx();
   r.payload.screen_error = 88599;
-  r.payload.kind = static_cast<forge_kind>(0u);
+  r.payload.kind = static_cast<forge_kind>(3u);
   return r;
 }
 
@@ -2447,7 +2452,7 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
     }
     case ZHAO_OP_DRAW_PROCEDURAL: {
       const uint32_t v0 = uint32_t(p[36]);  // kind: forge_kind
-      if (!(v0 == 0u)) return false;
+      if (!(v0 == 0u || v0 == 1u || v0 == 2u || v0 == 3u || v0 == 4u || v0 == 5u)) return false;
       return true;
     }
     case ZHAO_OP_SET_ENVIRONMENT: {
@@ -2466,8 +2471,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x80, 0x08, 0xBF, 0x8F, 0x70, 0x2B, 0xEC, 0xC2, 0x1A, 0xDA, 0x6D, 0xA2, 0x74, 0x4A, 0x96, 0x86, 0xE6, 0x0F, 0x15, 0x88, 0x3B, 0xD2, 0xDD, 0x1B, 0x19, 0xD3, 0xAC, 0xE4, 0xEF, 0x96, 0xEF, 0xD1};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x2B, 0xE4, 0x1D, 0x9F, 0x94, 0xD2, 0xEE, 0x34, 0x15, 0x29, 0x34, 0xD5, 0xF2, 0xCF, 0x24, 0x47, 0x64, 0xC1, 0x8F, 0x49, 0x9D, 0x75, 0x86, 0xC1, 0x62, 0xC6, 0xEF, 0x7F, 0xCF, 0x8B, 0xE5, 0x0D};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xE4, 0x5F, 0x63, 0x69, 0x3D, 0x97, 0x75, 0x58, 0x37, 0x09, 0xD3, 0xA1, 0x80, 0x9D, 0xB7, 0x3B, 0x70, 0xA6, 0x73, 0xAE, 0x5E, 0xBB, 0x4B, 0x0F, 0x79, 0x91, 0x17, 0xD8, 0xE9, 0xFE, 0x95, 0xEE};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x39, 0xB8, 0xBA, 0x06, 0x09, 0xD7, 0xC9, 0xA5, 0x2D, 0xDC, 0x70, 0xA2, 0xC5, 0x68, 0x9C, 0xCB, 0x9F, 0xC6, 0x2B, 0xDC, 0xB6, 0x2E, 0x79, 0x7E, 0x26, 0x25, 0x8C, 0x86, 0xEE, 0xF7, 0xE0, 0x05};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

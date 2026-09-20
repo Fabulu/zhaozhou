@@ -67,7 +67,12 @@ package zhao_abi_pkg;
 
   // enum forge_kind: u8 on the wire (capture_format.md 3.2 step 7)
   typedef enum logic [7:0] {
-    FORGE_HEIGHTFIELD_PATCH = 8'd0
+    FORGE_HEIGHTFIELD_PATCH = 8'd0,
+    FORGE_RIBBON = 8'd1,
+    FORGE_RADIAL_FAN = 8'd2,
+    FORGE_TUBE = 8'd3,
+    FORGE_RADIAL_SHELL = 8'd4,
+    FORGE_BILLBOARD_SHEET = 8'd5
   } zhao_forge_kind_e;
 
   // enum fog_mode: u8 on the wire (capture_format.md 3.2 step 7)
@@ -2954,7 +2959,7 @@ package zhao_abi_pkg;
         end
         ZHAO_OP_DRAW_PROCEDURAL: begin
           v = {24'b0, p[base+16+36]};  // kind: forge_kind
-          if (!(v == 32'd0)) zhao_record_enum_bad = 1'b1;
+          if (!(v == 32'd0 || v == 32'd1 || v == 32'd2 || v == 32'd3 || v == 32'd4 || v == 32'd5)) zhao_record_enum_bad = 1'b1;
         end
         ZHAO_OP_SET_ENVIRONMENT: begin
           v = {24'b0, p[base+16+11]};  // fog: fog_mode
