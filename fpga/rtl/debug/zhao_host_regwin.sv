@@ -50,8 +50,25 @@
 //     access.
 //   * a tenant that REFUSES the access itself (an offset it does not map, or a
 //     write to a read-only register) -> refused, counted (`refused_tenant_o`)
-//   * a tenant that never answers    -> refused after ACK_LIMIT cycles,
-//     counted (`refused_timeout_o`)
+//   * a tenant that never answers    -> refused, counted (`refused_timeout_o`)
+//
+//     THE BOUND, EXACTLY, because the first version of this line said "after
+//     ACK_LIMIT cycles" and that is not what the RTL does (found by a review
+//     of the shipped block, 2026-09-20). `ackc_q` starts at 0 and the ack test
+//     is taken BEFORE the limit test, so the tenant is given ACK_LIMIT + 1
+//     opportunities and the refusal falls on the (ACK_LIMIT+1)-th cycle in the
+//     state. That priority is deliberate -- an answer arriving on the limit
+//     cycle IS an answer, and discarding it would manufacture a timeout out of
+//     a tenant that met its deadline.
+//
+//     AND THERE ARE TWO BUDGETS, NOT ONE. `ackc_q` is cleared again on the ack
+//     (S_SEL -> S_WAIT), so the acknowledge and the data each get their own
+//     ACK_LIMIT + 1, and the worst case for one access is 2*(ACK_LIMIT+1)
+//     cycles, 512 at the default. That is also deliberate -- "I have your
+//     request" and "here is your answer" are two separate promises and a
+//     tenant that keeps the first slowly has not broken the second -- but the
+//     header read as a single budget and somebody sizing a host-side timeout
+//     off it would have sized it half.
 //
 // EVERY ONE OF THOSE RETURNS A RESPONSE. A refused access is answered with
 // `h_rvalid_o` + `h_err_o` and `h_rdata_o` = 0. IT NEVER HANGS -- owner ruling
@@ -98,6 +115,9 @@ module zhao_host_regwin #(
     parameter int unsigned TENANT_LSB = 12,
     parameter int unsigned CW         = 32,
     // Cycles a tenant may take to acknowledge before the access is refused.
+    // READ THE HEADER'S "THE BOUND, EXACTLY": the tenant actually gets
+    // ACK_LIMIT + 1 opportunities, and the acknowledge and the data have
+    // SEPARATE budgets of that size, so one access can take 2*(ACK_LIMIT+1).
     parameter int unsigned ACK_LIMIT  = 255
 ) (
     input  logic clk,

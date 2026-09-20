@@ -1,0 +1,770 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q008: hostregwin-noescape
+## Brief
+`zhao_host_regwin` is a NEW block: a register aperture on the Cyclone V HPS's
+LIGHTWEIGHT bridge, so the ARM can read the console's measurement organs. It is
+the only path by which the host reads `zhao_measure_histogram`'s bins (tenant 0,
+`zhao_host_reg_hist`) and `zhao_debug_trace`'s ring (tenant 1,
+`zhao_host_reg_trace`). It answers reads and refuses writes.
+
+Its author's claim, which is what you are checking, is that isolation between
+tenants is STRUCTURAL rather than a bounds check: the tenant is `addr[15:12]`,
+the word offset is `addr[11:2]`, and the offset wire handed to a tenant is only
+ten bits wide -- so there is allegedly no wire on which one tenant could be
+given another tenant's address. The author also claims that every refusal is
+ANSWERED and COUNTED and that the aperture never hangs: misaligned address,
+unmapped region, the tenant's own refusal, and a tenant that does not answer
+within 255 cycles.
+
+You are shown the aperture and both tenants, complete.
+
+## Questions
+1. Can a read ever be answered with data that belongs to a DIFFERENT tenant, or
+   to a different word of the same tenant? Look specifically at what happens
+   when a new request is offered while a previous response is still in flight,
+   and at whether the captured tenant/offset and the captured data are loaded by
+   the SAME register enable. (A checker whose two operands move together cannot
+   fire; the same shape defeats a response mux.)
+2. Can the aperture HANG? Name every state in which `h_ready_o` is low and say
+   what lowers it and what raises it again. Is there any input sequence -- an
+   abandoned request, a tenant that acknowledges and then goes quiet, a timeout
+   that expires in the same cycle the tenant finally answers -- after which no
+   further request can ever be accepted?
+3. Is a WRITE ever able to change tenant state? The `armed` bit is documented as
+   readable here and writable only through the command stream. Check that a
+   write is refused BEFORE anything is presented to a tenant, not after.
+4. Is the timeout counter's terminal value reachable and does it reset on every
+   path out of the wait state? A counter that saturates without clearing would
+   make the SECOND slow read time out immediately.
+5. Are the counters (`hostreg_reads_o`, `hostreg_writes_o`, the four refusals,
+   `hostreg_stall_cycles_o`) each incremented exactly once per event? Name any
+   that can double-count or miss, and say on what stimulus.
+
+Answer only about what is shown. If a question depends on how the block is
+wired into the console, say so and say what you would need to see; do not guess.
+
+# INPUT fpga/rtl/debug/zhao_host_regwin.sv:1-320
+```
+    1| // zhao_host_regwin.sv -- HOST.REGWIN: the HPS lightweight-bridge CSR aperture.
+    2| //
+    3| // Law: spec/memory_rules.md section 8 (the frozen host register map), owner
+    4| // ruling R51 (reports/OWNER-RULINGS-20260919-EVENING.md): "Ratify a HOST
+    5| // REGISTER WINDOW on the HPS lightweight bridge (a read/write CSR aperture with
+    6| // a frozen address map in spec/memory_rules.md). I19's histogram window and
+    7| // I45's readout are its first two tenants. It is guarded like every other
+    8| // client (a region per tenant, no escape)."
+    9| //
+   10| // ---------------------------------------------------------------------------
+   11| // WHAT THIS IS AND WHAT IT IS NOT
+   12| // ---------------------------------------------------------------------------
+   13| // It is NOT a second memory path. `zhao_hps_bridge` (spec/memory_rules.md 3) is
+   14| // the HPS-DDR BURST engine: 64-byte-aligned bursts of 64-bit beats, on the
+   15| // h2f DATA bridge, and every client of it MOVES BULK. A host that wants to read
+   16| // one 24-bit bin count cannot use it -- the bin lives in a block's registers,
+   17| // not in DRAM, and there is no agent that would copy it there.
+   18| //
+   19| // This is the other bridge. On the Cyclone V SoC the HPS exposes a SECOND,
+   20| // narrow, 32-bit port -- the lightweight HPS-to-FPGA bridge -- whose whole
+   21| // purpose is exactly this: the ARM reads and writes FPGA registers directly,
+   22| // one word at a time, with no descriptor and no DMA. It is a physical port of
+   23| // the part, in the same class as `pad_buttons_i` or `hps_req_*`: the console's
+   24| // edge, not a tie-off standing in for something unbuilt.
+   25| //
+   26| // ---------------------------------------------------------------------------
+   27| // THE NO-ESCAPE PROPERTY IS STRUCTURAL, NOT A COMPARISON
+   28| // ---------------------------------------------------------------------------
+   29| // MEM.GUARD proves no-escape by COMPARING an address against a region bound,
+   30| // which is the right shape there because the regions are runtime configuration.
+   31| // Here they are not: the map is frozen at elaboration, so the stronger form is
+   32| // available and is taken.
+   33| //
+   34| //     tenant index = h_addr_i[AW-1:TENANT_LSB]     -- selects the region
+   35| //     word offset  = h_addr_i[TENANT_LSB-1:2]      -- is what the tenant sees
+   36| //
+   37| // `t_woff_o` is OFFW = TENANT_LSB-2 bits WIDE. A tenant is therefore physically
+   38| // incapable of being handed an address outside its own region: there is no
+   39| // wire on which the tenant field could reach it. CLAUDE.md's law about
+   40| // detectors wired to operands that move together applies to bound-checks and
+   41| // not to this, because there is no check to get wrong -- the escape is not
+   42| // refused, it is unrepresentable.
+   43| //
+   44| // What IS checked, because it is representable:
+   45| //
+   46| //   * a tenant index >= NTENANT      -> refused, counted (`refused_unmapped_o`)
+   47| //   * a byte address with addr[1:0] != 0 -> refused, counted
+   48| //     (`refused_misaligned_o`). Same law as the burst bridge's malformed-burst
+   49| //     rejection: refused at the port, nothing issued downstream, never a wild
+   50| //     access.
+   51| //   * a tenant that REFUSES the access itself (an offset it does not map, or a
+   52| //     write to a read-only register) -> refused, counted (`refused_tenant_o`)
+   53| //   * a tenant that never answers    -> refused after ACK_LIMIT cycles,
+   54| //     counted (`refused_timeout_o`)
+   55| //
+   56| // EVERY ONE OF THOSE RETURNS A RESPONSE. A refused access is answered with
+   57| // `h_rvalid_o` + `h_err_o` and `h_rdata_o` = 0. IT NEVER HANGS -- owner ruling
+   58| // R20's law for MATERIAL.RESOLVE's denied fetch, and the same reason: a host
+   59| // bus that can stop answering is a console that locks up at the one moment
+   60| // somebody is trying to find out why.
+   61| //
+   62| // ---------------------------------------------------------------------------
+   63| // ONE ACCESS IN FLIGHT, AND WHY THAT IS NOT A NARROWING
+   64| // ---------------------------------------------------------------------------
+   65| // The lightweight bridge is a single-outstanding AXI-lite-class port used by an
+   66| // ARM doing register reads between frames. Pipelining it would buy throughput
+   67| // nobody asks for and would need a reorder buffer to keep tenant responses in
+   68| // request order. `h_ready_o` is low while an access is in flight, so the host
+   69| // simply waits; `stall_cycles_o` counts how long it waited, which is the number
+   70| // anyone sizing this later actually needs.
+   71| //
+   72| // ---------------------------------------------------------------------------
+   73| // WRITES: THE PATH IS REAL AND NO v1 TENANT ACCEPTS ONE
+   74| // ---------------------------------------------------------------------------
+   75| // Stated plainly so it is not read as a stub. The aperture carries `h_write_i`
+   76| // and `h_wdata_i` to the tenant, and each tenant decides. Both v1 tenants
+   77| // (MEASURE.HISTOGRAM's bins, DEBUG.TRACE's ring) are READ-ONLY, and a write to
+   78| // either is refused on `t_err_i` and counted -- because the one thing a host
+   79| // would want to WRITE, DEBUG.TRACE's arming, travels in the command stream
+   80| // instead: owner ruling R52 ratified `DebugTraceArm` 0xF003 for it, and ONE
+   81| // AUTHORITY PER LEVEL (ruling R18's principle) says it may not also be a CSR.
+   82| // The refusal is behaviour, not absence: it is counted, it is tested, and a
+   83| // third tenant that wants writes needs no change here.
+   84| //
+   85| // Conservative SystemVerilog subset only (charter section 2). No inline
+   86| // `for (genvar`, no module-scope `if` guard, explicit generate.
+   87| // Lint: clean under `verilator_bin --lint-only -Wall` (lint_host_regwin).
+   88| // ENFORCED-BY: tests/debug/host_regwin_directed.cpp
+   89| 
+   90| module zhao_host_regwin #(
+   91|     // Tenants in the map. The map is frozen in spec/memory_rules.md section 8;
+   92|     // this parameter says how many of its slots are POPULATED, and every slot
+   93|     // at or above it is refused.
+   94|     parameter int unsigned NTENANT    = 2,
+   95|     // Byte-address width of the whole aperture (16 -> 64 KiB).
+   96|     parameter int unsigned AW         = 16,
+   97|     // Region stride, log2 bytes (12 -> 4 KiB per tenant, 16 tenants in 64 KiB).
+   98|     parameter int unsigned TENANT_LSB = 12,
+   99|     parameter int unsigned CW         = 32,
+  100|     // Cycles a tenant may take to acknowledge before the access is refused.
+  101|     parameter int unsigned ACK_LIMIT  = 255
+  102| ) (
+  103|     input  logic clk,
+  104|     input  logic rst_n,
+  105| 
+  106|     // ---- host side: the HPS lightweight bridge -----------------------------
+  107|     input  logic          h_valid_i,
+  108|     input  logic          h_write_i,
+  109|     input  logic [AW-1:0] h_addr_i,     // byte address WITHIN the aperture
+  110|     input  logic [31:0]   h_wdata_i,
+  111|     output logic          h_ready_o,    // level: low while an access is in flight
+  112|     output logic          h_rvalid_o,   // one-cycle response pulse
+  113|     output logic [31:0]   h_rdata_o,
+  114|     output logic          h_err_o,      // qualified by h_rvalid_o
+  115| 
+  116|     // ---- tenant side -------------------------------------------------------
+  117|     // One-hot select. `t_woff_o` is the WORD offset inside the selected
+  118|     // tenant's region and is physically too narrow to leave it.
+  119|     output logic [NTENANT-1:0]        t_sel_o,
+  120|     output logic [TENANT_LSB-3:0]     t_woff_o,
+  121|     output logic                      t_write_o,
+  122|     output logic [31:0]               t_wdata_o,
+  123|     input  logic [NTENANT-1:0]        t_ack_i,     // tenant took the access
+  124|     input  logic [NTENANT-1:0]        t_rvalid_i,  // tenant returns data
+  125|     input  logic [NTENANT*32-1:0]     t_rdata_i,
+  126|     input  logic [NTENANT-1:0]        t_err_i,     // tenant refuses (with rvalid)
+  127| 
+  128|     // ---- evidence ----------------------------------------------------------
+  129|     output logic [CW-1:0] reads_o,
+  130|     output logic [CW-1:0] writes_o,
+  131|     output logic [CW-1:0] refused_unmapped_o,
+  132|     output logic [CW-1:0] refused_misaligned_o,
+  133|     output logic [CW-1:0] refused_tenant_o,
+  134|     output logic [CW-1:0] refused_timeout_o,
+  135|     output logic [CW-1:0] stall_cycles_o
+  136| );
+  137| 
+  138|   localparam int unsigned OFFW  = TENANT_LSB - 2;      // word-offset width
+  139|   localparam int unsigned TIDW  = AW - TENANT_LSB;     // tenant-index width
+  140|   localparam int unsigned SELW  = (NTENANT > 1) ? $clog2(NTENANT) : 1;
+  141|   localparam int unsigned ACKW  = $clog2(ACK_LIMIT + 1);
+  142| 
+  143|   localparam logic [CW-1:0] CNT_MAX = {CW{1'b1}};
+  144| 
+  145|   // Quartus 17.0 rejects a module-scope `if` elaboration guard; it must sit
+  146|   // inside an initial block (CLAUDE.md, 2026-09-08).
+  147|   // synthesis translate_off
+  148|   initial begin
+  149|     if (AW <= TENANT_LSB)
+  150|       $fatal(1, "zhao_host_regwin: AW (%0d) must exceed TENANT_LSB (%0d)",
+  151|              AW, TENANT_LSB);
+  152|     if (TENANT_LSB < 3)
+  153|       $fatal(1, "zhao_host_regwin: TENANT_LSB (%0d) leaves no word offset",
+  154|              TENANT_LSB);
+  155|     if (NTENANT == 0)
+  156|       $fatal(1, "zhao_host_regwin: NTENANT must be at least 1");
+  157|     if (NTENANT > (1 << TIDW))
+  158|       $fatal(1, "zhao_host_regwin: NTENANT (%0d) exceeds the %0d map regions",
+  159|              NTENANT, 1 << TIDW);
+  160|   end
+  161|   // synthesis translate_on
+  162| 
+  163|   function automatic logic [CW-1:0] sat_inc(input logic [CW-1:0] c);
+  164|     logic [CW:0] s;
+  165|     begin
+  166|       s = {1'b0, c} + {{CW{1'b0}}, 1'b1};
+  167|       sat_inc = s[CW] ? CNT_MAX : s[CW-1:0];
+  168|     end
+  169|   endfunction
+  170| 
+  171|   localparam logic [1:0] S_IDLE = 2'd0;
+  172|   localparam logic [1:0] S_SEL  = 2'd1;  // offering the access to the tenant
+  173|   localparam logic [1:0] S_WAIT = 2'd2;  // tenant took it; waiting for data
+  174|   localparam logic [1:0] S_RESP = 2'd3;  // one-cycle answer to the host
+  175| 
+  176|   logic [1:0]      st_q;
+  177|   logic [OFFW-1:0] woff_q;
+  178|   logic [SELW-1:0] sel_q;
+  179|   logic            write_q;
+  180|   logic [31:0]     wdata_q;
+  181|   logic [31:0]     rdata_q;
+  182|   logic            err_q;
+  183|   logic [ACKW-1:0] ackc_q;
+  184| 
+  185|   // ---- decode of the OFFERED address (combinational, IDLE only) ------------
+  186|   logic [TIDW-1:0] tid_c;
+  187|   logic            misaligned_c;
+  188|   logic            unmapped_c;
+  189| 
+  190|   assign tid_c        = h_addr_i[AW-1:TENANT_LSB];
+  191|   assign misaligned_c = (h_addr_i[1:0] != 2'b00);
+  192|   // A tenant index at or above NTENANT names a region the map has not
+  193|   // populated. Compared against a PARAMETER, so the comparison cannot be
+  194|   // desynchronised from the thing it guards the way a runtime bound can.
+  195|   assign unmapped_c   = ({{(32-TIDW){1'b0}}, tid_c} >= NTENANT);
+  196| 
+  197|   // ---- the tenant-facing offer --------------------------------------------
+  198|   integer si;
+  199|   always_comb begin
+  200|     t_sel_o = '0;
+  201|     if (st_q == S_SEL) begin
+  202|       for (si = 0; si < NTENANT; si = si + 1) begin
+  203|         if (si == {{(32-SELW){1'b0}}, sel_q}) t_sel_o[si] = 1'b1;
+  204|       end
+  205|     end
+  206|   end
+  207| 
+  208|   assign t_woff_o  = woff_q;
+  209|   assign t_write_o = write_q;
+  210|   assign t_wdata_o = wdata_q;
+  211| 
+  212|   // The selected tenant's response, chosen AFTER the registers so the mux is
+  213|   // one level and the selector cannot be a cycle out of step with the data it
+  214|   // steers (CLAUDE.md: a comparison whose two sides move on one enable is
+  215|   // blind; the cure here is to have exactly one enable and one source).
+  216|   logic        sel_ack_c;
+  217|   logic        sel_rvalid_c;
+  218|   logic        sel_err_c;
+  219|   logic [31:0] sel_rdata_c;
+  220| 
+  221|   assign sel_ack_c    = t_ack_i[sel_q];
+  222|   assign sel_rvalid_c = t_rvalid_i[sel_q];
+  223|   assign sel_err_c    = t_err_i[sel_q];
+  224|   assign sel_rdata_c  = t_rdata_i[{{(32-SELW){1'b0}}, sel_q} * 32 +: 32];
+  225| 
+  226|   assign h_ready_o  = (st_q == S_IDLE);
+  227|   assign h_rvalid_o = (st_q == S_RESP);
+  228|   assign h_rdata_o  = rdata_q;
+  229|   assign h_err_o    = err_q;
+  230| 
+  231|   always_ff @(posedge clk or negedge rst_n) begin
+  232|     if (!rst_n) begin
+  233|       st_q                 <= S_IDLE;
+  234|       woff_q               <= '0;
+  235|       sel_q                <= '0;
+  236|       write_q              <= 1'b0;
+  237|       wdata_q              <= '0;
+  238|       rdata_q              <= '0;
+  239|       err_q                <= 1'b0;
+  240|       ackc_q               <= '0;
+  241|       reads_o              <= '0;
+  242|       writes_o             <= '0;
+  243|       refused_unmapped_o   <= '0;
+  244|       refused_misaligned_o <= '0;
+  245|       refused_tenant_o     <= '0;
+  246|       refused_timeout_o    <= '0;
+  247|       stall_cycles_o       <= '0;
+  248|     end else begin
+  249|       if (st_q != S_IDLE) stall_cycles_o <= sat_inc(stall_cycles_o);
+  250| 
+  251|       case (st_q)
+  252|         S_IDLE: begin
+  253|           if (h_valid_i) begin
+  254|             // Every accepted access is counted as what it ASKED to be, before
+  255|             // any verdict. A refused read is still a read the host attempted,
+  256|             // and a census that only counted the ones that worked would read
+  257|             // low -- the flattering direction.
+  258|             if (h_write_i) writes_o <= sat_inc(writes_o);
+  259|             else           reads_o  <= sat_inc(reads_o);
+  260| 
+  261|             woff_q  <= h_addr_i[TENANT_LSB-1:2];
+  262|             sel_q   <= h_addr_i[TENANT_LSB +: SELW];
+  263|             write_q <= h_write_i;
+  264|             wdata_q <= h_wdata_i;
+  265|             rdata_q <= '0;
+  266|             ackc_q  <= '0;
+  267| 
+  268|             if (misaligned_c) begin
+  269|               refused_misaligned_o <= sat_inc(refused_misaligned_o);
+  270|               err_q                <= 1'b1;
+  271|               st_q                 <= S_RESP;
+  272|             end else if (unmapped_c) begin
+  273|               refused_unmapped_o <= sat_inc(refused_unmapped_o);
+  274|               err_q              <= 1'b1;
+  275|               st_q               <= S_RESP;
+  276|             end else begin
+  277|               err_q <= 1'b0;
+  278|               st_q  <= S_SEL;
+  279|             end
+  280|           end
+  281|         end
+  282| 
+  283|         S_SEL: begin
+  284|           if (sel_ack_c) begin
+  285|             ackc_q <= '0;
+  286|             st_q   <= S_WAIT;
+  287|           end else if (ackc_q == ACKW'(ACK_LIMIT)) begin
+  288|             refused_timeout_o <= sat_inc(refused_timeout_o);
+  289|             err_q             <= 1'b1;
+  290|             rdata_q           <= '0;
+  291|             st_q              <= S_RESP;
+  292|           end else begin
+  293|             ackc_q <= ackc_q + ACKW'(1);
+  294|           end
+  295|         end
+  296| 
+  297|         S_WAIT: begin
+  298|           if (sel_rvalid_c) begin
+  299|             rdata_q <= sel_err_c ? 32'd0 : sel_rdata_c;
+  300|             err_q   <= sel_err_c;
+  301|             if (sel_err_c) refused_tenant_o <= sat_inc(refused_tenant_o);
+  302|             st_q    <= S_RESP;
+  303|           end else if (ackc_q == ACKW'(ACK_LIMIT)) begin
+  304|             refused_timeout_o <= sat_inc(refused_timeout_o);
+  305|             err_q             <= 1'b1;
+  306|             rdata_q           <= '0;
+  307|             st_q              <= S_RESP;
+  308|           end else begin
+  309|             ackc_q <= ackc_q + ACKW'(1);
+  310|           end
+  311|         end
+  312| 
+  313|         default: begin  // S_RESP
+  314|           st_q <= S_IDLE;
+  315|         end
+  316|       endcase
+  317|     end
+  318|   end
+  319| 
+  320| endmodule
+```
+
+# INPUT fpga/rtl/debug/zhao_host_reg_hist.sv:1-215
+```
+    1| // zhao_host_reg_hist.sv -- HOST.REGWIN tenant 0: MEASURE.HISTOGRAM's readout.
+    2| //
+    3| // Law: spec/memory_rules.md section 8.1 (the frozen tenant-0 map), owner ruling
+    4| // R51. This is the block that closes `zhao_console_core` header entry I19,
+    5| // whose whole text was: "MEASURE.HISTOGRAM's host read window (`hist_rd_*`) --
+    6| // BOUNDARY. The host is the HPS; no register path from HPS to this block
+    7| // exists." The path now exists and this is its far end.
+    8| //
+    9| // ---------------------------------------------------------------------------
+   10| // THE ADDRESS IS THE BIN, AND THAT IS THE WHOLE DESIGN
+   11| // ---------------------------------------------------------------------------
+   12| // The obvious CSR shape for a windowed readout is a pair: write a bin index to
+   13| // a SELECT register, then read a DATA register. That shape is a race in a
+   14| // machine where the accumulator is live -- two hosts, or one host and an
+   15| // interrupt, interleave a select and a read and each gets the other's bin, with
+   16| // nothing anywhere able to notice. It is the metadata-swap defect of CLAUDE.md's
+   17| // own chapter, rebuilt on purpose.
+   18| //
+   19| // So there is no select register. Word offset N IS bin N, and a read is one
+   20| // transaction that carries its own index. Nothing is stateful between accesses,
+   21| // so nothing can be interleaved wrongly.
+   22| //
+   23| //   words 0x000..0x03F   bin[woff] -- the frozen interval's count for that bin,
+   24| //                        zero-extended from CW bits. Offsets at or above
+   25| //                        2**BINW are REFUSED (they are not bins; returning zero
+   26| //                        would make a map error indistinguishable from an empty
+   27| //                        bin, which is the flattering direction).
+   28| //   word  0x040          snap_total      events ACCEPTED into the interval
+   29| //   word  0x041          { snap_valid, 15'b0, snap_src_id }
+   30| //   word  0x042          snap_index      interval sequence number
+   31| //   word  0x043          events
+   32| //   word  0x044          updates
+   33| //   word  0x045          stall_cycles
+   34| //   word  0x046          bin_sat
+   35| //   word  0x047          fwd_hits
+   36| //   word  0x048          host_conflict
+   37| //   word  0x049          snapshots
+   38| //   word  0x04A          frozen_write
+   39| //   anything else        REFUSED and counted by the window
+   40| //
+   41| // READ-ONLY. A write is refused (`err_o`) rather than ignored, because a host
+   42| // that wrote a register and got an acknowledgement would be entitled to believe
+   43| // the write took.
+   44| //
+   45| // THE BIN READ IS A HANDSHAKE, NOT A REGISTER. `zhao_measure_histogram`'s
+   46| // `rd_ready_o` goes low for the one-time initialisation sweep, and its
+   47| // `rd_data_valid_o` arrives two cycles after acceptance. This block holds the
+   48| // request until it is accepted and the window simply waits -- which is why the
+   49| // window counts `stall_cycles_o`. The histogram's own `host_conflict_o` counts
+   50| // the accumulator groups a host read held off, and it is readable at word 0x048
+   51| // so the host can see the cost it is imposing.
+   52| //
+   53| // Conservative SystemVerilog subset only (charter section 2).
+   54| // Lint: clean under `verilator_bin --lint-only -Wall` (lint_host_reg_hist).
+   55| // ENFORCED-BY: tests/debug/host_regwin_directed.cpp
+   56| 
+   57| module zhao_host_reg_hist #(
+   58|     parameter int unsigned OFFW = 10,  // word-offset width handed over by the window
+   59|     parameter int unsigned BINW = 6,   // histogram bin-index width
+   60|     parameter int unsigned CW   = 24   // histogram counter width
+   61| ) (
+   62|     input  logic clk,
+   63|     input  logic rst_n,
+   64| 
+   65|     // ---- window side -------------------------------------------------------
+   66|     input  logic            sel_i,
+   67|     input  logic [OFFW-1:0] woff_i,
+   68|     input  logic            write_i,
+   69|     output logic            ack_o,
+   70|     output logic            rvalid_o,
+   71|     output logic [31:0]     rdata_o,
+   72|     output logic            err_o,
+   73| 
+   74|     // ---- MEASURE.HISTOGRAM side -------------------------------------------
+   75|     output logic            rd_valid_o,
+   76|     output logic [BINW-1:0] rd_bin_o,
+   77|     input  logic            rd_ready_i,
+   78|     input  logic            rd_data_valid_i,
+   79|     input  logic [CW-1:0]   rd_count_i,
+   80| 
+   81|     input  logic          snap_valid_i,
+   82|     input  logic [CW-1:0] snap_total_i,
+   83|     input  logic [15:0]   snap_src_id_i,
+   84|     input  logic [CW-1:0] snap_index_i,
+   85|     input  logic [CW-1:0] events_i,
+   86|     input  logic [CW-1:0] updates_i,
+   87|     input  logic [CW-1:0] stall_cycles_i,
+   88|     input  logic [CW-1:0] bin_sat_i,
+   89|     input  logic [CW-1:0] fwd_hits_i,
+   90|     input  logic [CW-1:0] host_conflict_i,
+   91|     input  logic [CW-1:0] snapshots_i,
+   92|     input  logic [CW-1:0] frozen_write_i
+   93| );
+   94| 
+   95|   // The map is FROZEN, so the status block sits at a fixed word and a
+   96|   // parameterisation that would collide with it is an elaboration failure
+   97|   // rather than a silent overlap.
+   98|   localparam int unsigned STATUS_BASE = 'h40;
+   99|   localparam int unsigned STATUS_N    = 'h0B;
+  100| 
+  101|   // synthesis translate_off
+  102|   initial begin
+  103|     if ((1 << BINW) > STATUS_BASE)
+  104|       $fatal(1, "zhao_host_reg_hist: BINW=%0d overruns the frozen status base",
+  105|              BINW);
+  106|     if (OFFW < 8)
+  107|       $fatal(1, "zhao_host_reg_hist: OFFW=%0d cannot address the status block",
+  108|              OFFW);
+  109|     if (CW > 32)
+  110|       $fatal(1, "zhao_host_reg_hist: CW=%0d does not fit a 32-bit register", CW);
+  111|   end
+  112|   // synthesis translate_on
+  113| 
+  114|   localparam logic [1:0] S_IDLE = 2'd0;
+  115|   localparam logic [1:0] S_BIN  = 2'd1;  // holding the bin request
+  116|   localparam logic [1:0] S_DATA = 2'd2;  // waiting for rd_data_valid_i
+  117|   localparam logic [1:0] S_RESP = 2'd3;
+  118| 
+  119|   logic [1:0]      st_q;
+  120|   logic [31:0]     rdata_q;
+  121|   logic            err_q;
+  122|   logic [BINW-1:0] bin_q;
+  123| 
+  124|   logic            is_bin_c;
+  125|   logic            is_status_c;
+  126|   logic [31:0]     status_c;
+  127|   logic [3:0]      sidx_c;
+  128| 
+  129|   assign is_bin_c    = ({{(32-OFFW){1'b0}}, woff_i} < (1 << BINW));
+  130|   assign is_status_c = ({{(32-OFFW){1'b0}}, woff_i} >= STATUS_BASE)
+  131|                     && ({{(32-OFFW){1'b0}}, woff_i} <  (STATUS_BASE + STATUS_N));
+  132|   // STATUS_BASE is 0x40, so the status index IS the low nibble of the offset.
+  133|   // Taking it that way rather than by subtraction keeps the expression the
+  134|   // exact width it needs and leaves no unused upper bits to reason about.
+  135|   assign sidx_c      = woff_i[3:0];
+  136| 
+  137|   always_comb begin
+  138|     case (sidx_c)
+  139|       4'h0:    status_c = {{(32-CW){1'b0}}, snap_total_i};
+  140|       4'h1:    status_c = {snap_valid_i, 15'd0, snap_src_id_i};
+  141|       4'h2:    status_c = {{(32-CW){1'b0}}, snap_index_i};
+  142|       4'h3:    status_c = {{(32-CW){1'b0}}, events_i};
+  143|       4'h4:    status_c = {{(32-CW){1'b0}}, updates_i};
+  144|       4'h5:    status_c = {{(32-CW){1'b0}}, stall_cycles_i};
+  145|       4'h6:    status_c = {{(32-CW){1'b0}}, bin_sat_i};
+  146|       4'h7:    status_c = {{(32-CW){1'b0}}, fwd_hits_i};
+  147|       4'h8:    status_c = {{(32-CW){1'b0}}, host_conflict_i};
+  148|       4'h9:    status_c = {{(32-CW){1'b0}}, snapshots_i};
+  149|       default: status_c = {{(32-CW){1'b0}}, frozen_write_i};
+  150|     endcase
+  151|   end
+  152| 
+  153|   assign rd_valid_o = (st_q == S_BIN);
+  154|   assign rd_bin_o   = bin_q;
+  155|   assign rdata_o    = rdata_q;
+  156|   assign err_o      = err_q;
+  157|   assign rvalid_o   = (st_q == S_RESP);
+  158| 
+  159|   // ACK is a single cycle and never coincides with RVALID: the window moves
+  160|   // S_SEL -> S_WAIT on the ack and only then looks at rvalid, so an adapter
+  161|   // that raised both together would have its response missed.
+  162|   assign ack_o = sel_i && (st_q == S_IDLE);
+  163| 
+  164|   always_ff @(posedge clk or negedge rst_n) begin
+  165|     if (!rst_n) begin
+  166|       st_q    <= S_IDLE;
+  167|       rdata_q <= '0;
+  168|       err_q   <= 1'b0;
+  169|       bin_q   <= '0;
+  170|     end else begin
+  171|       case (st_q)
+  172|         S_IDLE: begin
+  173|           if (sel_i) begin
+  174|             rdata_q <= '0;
+  175|             if (write_i) begin
+  176|               // READ-ONLY. Refused, not ignored.
+  177|               err_q <= 1'b1;
+  178|               st_q  <= S_RESP;
+  179|             end else if (is_bin_c) begin
+  180|               bin_q <= woff_i[BINW-1:0];
+  181|               err_q <= 1'b0;
+  182|               st_q  <= S_BIN;
+  183|             end else if (is_status_c) begin
+  184|               rdata_q <= status_c;
+  185|               err_q   <= 1'b0;
+  186|               st_q    <= S_RESP;
+  187|             end else begin
+  188|               err_q <= 1'b1;
+  189|               st_q  <= S_RESP;
+  190|             end
+  191|           end
+  192|         end
+  193| 
+  194|         S_BIN: begin
+  195|           // Held until the histogram accepts it. rd_ready_i is low only during
+  196|           // the one-time init sweep; the window's timeout is the backstop.
+  197|           if (rd_ready_i) st_q <= S_DATA;
+  198|         end
+  199| 
+  200|         S_DATA: begin
+  201|           if (rd_data_valid_i) begin
+  202|             rdata_q <= {{(32-CW){1'b0}}, rd_count_i};
+  203|             err_q   <= 1'b0;
+  204|             st_q    <= S_RESP;
+  205|           end
+  206|         end
+  207| 
+  208|         default: begin  // S_RESP
+  209|           st_q <= S_IDLE;
+  210|         end
+  211|       endcase
+  212|     end
+  213|   end
+  214| 
+  215| endmodule
+```
+
+# INPUT fpga/rtl/debug/zhao_host_reg_trace.sv:1-165
+```
+    1| // zhao_host_reg_trace.sv -- HOST.REGWIN tenant 1: DEBUG.TRACE's host readout.
+    2| //
+    3| // Law: spec/memory_rules.md section 8.2 (the frozen tenant-1 map), owner ruling
+    4| // R51. This is the readout half of `zhao_console_core` header entry I45, whose
+    5| // own text said of it: "THE READOUT IS I19'S SHAPE EXACTLY ... the host is the
+    6| // HPS and no register path from HPS to this block exists. Closing one closes
+    7| // both, and they should be closed together rather than twice." They are.
+    8| //
+    9| // ---------------------------------------------------------------------------
+   10| // THE MAP
+   11| // ---------------------------------------------------------------------------
+   12| //   words 0x000..0x1FF   the ring, word-addressed exactly as DEBUG.TRACE
+   13| //                        addresses it: {event[5:0], word[2:0]}. Eight 32-bit
+   14| //                        words per event, the capture layout of
+   15| //                        spec/capture_format.md chunk 0x000A:
+   16| //                          0 tile  1 primitive  2 pixel  3 {rsv[3],stage}
+   17| //                          4 expected_fx  5 actual_fx  6 source_id  7 seq
+   18| //   word  0x200          armed       the seven-bit stage mask now armed
+   19| //   word  0x201          count       events STORED
+   20| //   word  0x202          dropped     events lost to a full ring
+   21| //   anything else        REFUSED and counted by the window
+   22| //
+   23| // READ-ONLY, AND THE ARMING IS DELIBERATELY NOT HERE. Owner ruling R52
+   24| // ratified `DebugTraceArm` 0xF003 in the reserved debug opcode range and put
+   25| // the arming in the COMMAND stream, lowered by CMD.EXEC. Ruling R18's principle
+   26| // -- one authority per level -- then forbids a second arming path through this
+   27| // aperture, so a write here is refused and counted. `armed` is READABLE here,
+   28| // which is the useful half: a host can confirm what the command took without
+   29| // being able to change it behind the command stream's back.
+   30| //
+   31| // WHY THE RING IS NOT DRAINED INTO DRAM INSTEAD. DEBUG.TRACE's own header says
+   32| // "writing events into the trace arena is MEM.HPS.BRIDGE's job downstream,
+   33| // which is why this block's output is a stream rather than an address". That
+   34| // remains the right answer for a LONG capture. It is the wrong answer for the
+   35| // 64-event ring the block actually is: a burst engine that moves 2 KiB needs a
+   36| // descriptor, an arena, a completion and a reader, and every one of those is a
+   37| // thing to get wrong for a buffer the ARM can read in 512 word reads between
+   38| // frames. The stream output is untouched and still available to whoever builds
+   39| // the arena path.
+   40| //
+   41| // THE READ IS REGISTERED IN THE RING, ONE CYCLE. `rd_data_o` is valid the cycle
+   42| // after `rd_addr_i` is presented (the entry is read whole into a register and
+   43| // the word selected after it, with the selector delayed to match). So this
+   44| // block presents the address on its ACK cycle and answers on the next.
+   45| //
+   46| // Conservative SystemVerilog subset only (charter section 2).
+   47| // Lint: clean under `verilator_bin --lint-only -Wall` (lint_host_reg_trace).
+   48| // ENFORCED-BY: tests/debug/host_regwin_directed.cpp
+   49| 
+   50| module zhao_host_reg_trace #(
+   51|     parameter int unsigned OFFW  = 10,  // word-offset width from the window
+   52|     parameter int unsigned DEPTH = 64   // DEBUG.TRACE ring depth, in events
+   53| ) (
+   54|     input  logic clk,
+   55|     input  logic rst_n,
+   56| 
+   57|     // ---- window side -------------------------------------------------------
+   58|     input  logic            sel_i,
+   59|     input  logic [OFFW-1:0] woff_i,
+   60|     input  logic            write_i,
+   61|     output logic            ack_o,
+   62|     output logic            rvalid_o,
+   63|     output logic [31:0]     rdata_o,
+   64|     output logic            err_o,
+   65| 
+   66|     // ---- DEBUG.TRACE side --------------------------------------------------
+   67|     output logic [$clog2(DEPTH*8)-1:0] rd_addr_o,
+   68|     input  logic [31:0]                rd_data_i,
+   69|     input  logic [6:0]                 armed_i,
+   70|     input  logic [31:0]                count_i,
+   71|     input  logic [31:0]                dropped_i
+   72| );
+   73| 
+   74|   localparam int unsigned RAW         = $clog2(DEPTH * 8);
+   75|   localparam int unsigned RING_WORDS  = DEPTH * 8;
+   76|   localparam int unsigned STATUS_BASE = 'h200;
+   77| 
+   78|   // synthesis translate_off
+   79|   initial begin
+   80|     if (RING_WORDS > STATUS_BASE)
+   81|       $fatal(1, "zhao_host_reg_trace: DEPTH=%0d overruns the frozen status base",
+   82|              DEPTH);
+   83|     if (OFFW < 10)
+   84|       $fatal(1, "zhao_host_reg_trace: OFFW=%0d cannot address the status block",
+   85|              OFFW);
+   86|   end
+   87|   // synthesis translate_on
+   88| 
+   89|   localparam logic [1:0] S_IDLE = 2'd0;
+   90|   localparam logic [1:0] S_RING = 2'd1;  // address presented; ring answers next
+   91|   localparam logic [1:0] S_RESP = 2'd2;
+   92| 
+   93|   logic [1:0]     st_q;
+   94|   logic [31:0]    rdata_q;
+   95|   logic           err_q;
+   96|   logic           ring_q;   // the response in flight is a ring word
+   97|   logic [RAW-1:0] raddr_q;
+   98| 
+   99|   logic is_ring_c;
+  100|   logic is_status_c;
+  101| 
+  102|   assign is_ring_c   = ({{(32-OFFW){1'b0}}, woff_i} < RING_WORDS);
+  103|   assign is_status_c = ({{(32-OFFW){1'b0}}, woff_i} >= STATUS_BASE)
+  104|                     && ({{(32-OFFW){1'b0}}, woff_i} <  (STATUS_BASE + 3));
+  105| 
+  106|   assign rd_addr_o = raddr_q;
+  107|   assign rdata_o   = ring_q ? rd_data_i : rdata_q;
+  108|   assign err_o     = err_q;
+  109|   assign rvalid_o  = (st_q == S_RESP);
+  110|   assign ack_o     = sel_i && (st_q == S_IDLE);
+  111| 
+  112|   always_ff @(posedge clk or negedge rst_n) begin
+  113|     if (!rst_n) begin
+  114|       st_q    <= S_IDLE;
+  115|       rdata_q <= '0;
+  116|       err_q   <= 1'b0;
+  117|       ring_q  <= 1'b0;
+  118|       raddr_q <= '0;
+  119|     end else begin
+  120|       case (st_q)
+  121|         S_IDLE: begin
+  122|           if (sel_i) begin
+  123|             rdata_q <= '0;
+  124|             ring_q  <= 1'b0;
+  125|             if (write_i) begin
+  126|               // READ-ONLY: arming is DebugTraceArm 0xF003's, ruling R52.
+  127|               err_q <= 1'b1;
+  128|               st_q  <= S_RESP;
+  129|             end else if (is_ring_c) begin
+  130|               raddr_q <= woff_i[RAW-1:0];
+  131|               ring_q  <= 1'b1;
+  132|               err_q   <= 1'b0;
+  133|               st_q    <= S_RING;
+  134|             end else if (is_status_c) begin
+  135|               err_q <= 1'b0;
+  136|               case (woff_i[1:0])
+  137|                 2'd0:    rdata_q <= {25'd0, armed_i};
+  138|                 2'd1:    rdata_q <= count_i;
+  139|                 default: rdata_q <= dropped_i;
+  140|               endcase
+  141|               st_q <= S_RESP;
+  142|             end else begin
+  143|               err_q <= 1'b1;
+  144|               st_q  <= S_RESP;
+  145|             end
+  146|           end
+  147|         end
+  148| 
+  149|         S_RING: begin
+  150|           // One cycle: rd_data_i is now the addressed word. It is muxed
+  151|           // combinationally into rdata_o rather than re-registered, so the
+  152|           // response carries the word the address asked for and cannot be a
+  153|           // cycle out of step with it.
+  154|           st_q <= S_RESP;
+  155|         end
+  156| 
+  157|         default: begin  // S_RESP
+  158|           st_q   <= S_IDLE;
+  159|           ring_q <= 1'b0;
+  160|         end
+  161|       endcase
+  162|     end
+  163|   end
+  164| 
+  165| endmodule
+```
