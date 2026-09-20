@@ -1503,8 +1503,10 @@
 //          facts. THE MEASUREMENT: the spec defines ONE tag channel. THE
 //          CONCLUSION I DREW AND RETRACTED: "so R37 covers only one of the
 //          three input planes and cannot unblock this composition." THAT IS
-//          WRONG -- see the retraction two bullets down. R37's proposal covers
-//          ALL THREE.
+//          WRONG -- see the retraction in the NEXT bullet. R37's proposal
+//          covers ALL THREE. (This cross-reference said "two bullets down"
+//          until it was counted. A pointer nobody checks is how a correction
+//          stops being reachable, which is this entry's own subject.)
 //
 //          `spec/stars_and_flares.md` 1 is marked "(frozen)" and defines
 //          EXACTLY ONE channel of `tag = (channel << 6) | strength`:
