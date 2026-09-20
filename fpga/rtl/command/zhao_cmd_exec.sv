@@ -320,7 +320,23 @@ module zhao_cmd_exec
     // table is 32 + 64 + 32 = 128. More than this in one packet is refused WHOLE
     // on `grade_overflow_o`. The staging is a memory (128 x 80 b, two M10K at the
     // 256x40 shape), written once per entry and read once at commit.
-    parameter int unsigned GRADE_Q = 128
+    parameter int unsigned GRADE_Q = 128,
+
+    // Staged TerrainField records per packet (entry I34 build item (a)). A
+    // field application is an EVENT and events do not collapse: two
+    // TerrainFields over the same footprint are two field lanes on the
+    // section 3.4 sum, not a last-one-wins shadow. So it stages into a ring
+    // and the bound is DECLARED, exactly as STAMP_Q is, and a packet that
+    // exceeds it is REFUSED WHOLE on `tfld_overflow_o` rather than
+    // half-applied -- the surface-sheet argument in this file's header
+    // applies verbatim, because a composed height that is missing one of its
+    // lanes is a wrong terrain with every counter balancing.
+    //
+    // 4 x 496 b = 1,984 flip-flops at the default. TERRAIN.PATCH's own list
+    // is the thing that bounds how many lanes a vertex can get, and the
+    // 16-field tail-reject policy of the directive's 13.7 lives THERE, in
+    // command order, not here -- this block does not re-decide it.
+    parameter int unsigned TFLD_Q = 4
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -453,6 +469,68 @@ module zhao_cmd_exec
     output logic [15:0] pop_plane_nz_o,
     output logic [15:0] pop_flags_o,         // b0 seed, b1 plane_enable
     output logic [31:0] pops_issued_o,
+
+    // ---- TerrainField 0x0200: the producer entry I34 has been waiting for --
+    //
+    // Entry I34 in `zhao_console_core.sv` lists four things left to build and
+    // this is (a) and (b) of them, quoted so the division is not re-derived:
+    //
+    //   (a) CMD.EXEC's TerrainField arm, staging ~480 bits per record
+    //       (program, four footprint fx16, start_tick, duration_ticks and
+    //       p0..p7) and emitting {footprint, hash, cmd index} onto
+    //       `terr_pt_fld_add_*` at commit
+    //   (b) a descriptor table keyed by that cmd index holding the uniforms
+    //
+    // (c) the EARTH stream adapter and (d) the `pc_lu_*` two-client share are
+    // NOT here and are not this block's. I34 DOES NOT CLOSE on this commit.
+    //
+    // THE DESTINATION ALREADY EXISTS AND IS RATIFIED. `zhao_terrain_patch`'s
+    // `fld_add_valid_i / fld_add_ready_o / fld_add_x0_i / fld_add_z0_i /
+    // fld_add_x1_i / fld_add_z1_i / fld_add_hash_i / fld_add_cmd_i` is the
+    // section 9.1 list intake, and `zhao_console_core` promotes it to the
+    // CORE BOUNDARY as inputs it does not produce -- which is precisely why
+    // the register calls I34 a `boundary` and not a tie-off. This arm is the
+    // missing producer, not a new interface.
+    //
+    // (b) IS EMITTED ON THE SAME HANDSHAKE rather than held in a table with a
+    // read port. A table indexed by `cmd` would need an address input that
+    // nothing drives until (c) exists, and a disconnected input is a gap --
+    // so the uniforms ride the record and the consumer keeps them. The two
+    // fan out to different owners: {footprint, handle, cmd} is the patch's
+    // list intake, {start_tick, duration, p0..p7} is the EARTH adapter's
+    // descriptor. One producer, one handshake, two readers.
+    //
+    // START_TICK AND DURATION ARE EMITTED RAW, NOT AS AGE OR PHASE. The
+    // directive's 13.7 says software "uses the existing canonical age/phase
+    // helper/model" and that "no new approximate phase divider is invented in
+    // the core composer". `age = tick - start_tick` is the consumer's, and
+    // computing it here would be that forbidden second divider.
+    //
+    // THIS IS A HANDLE AND IT IS NOT A HASH -- the one thing 20.8 forbids is
+    // declaring a channel present because the bits are there. TerrainField
+    // carries `handle32[program] program`; FIELD.PROGCACHE's directory key is
+    // a CONTENT hash (`CRC32C(code||tables) + instr_count`), and I34 records
+    // that NOTHING IN HARDWARE publishes {handle -> hash} -- `program_hash`,
+    // `prog_hash` and `programHash` across all of `fpga/rtl` including
+    // `synth/` are zero hits, re-checked this pass. So this port carries the
+    // handle, is NAMED the handle, and `fld_add_hash_i` stays unfed until the
+    // BIND post kind I34 recommends exists. Wiring this output into a port
+    // called `hash` would put a handle in a trace field that says hash, which
+    // is a lie that costs nothing today and an afternoon later.
+    output logic               tfld_valid_o,
+    input  logic               tfld_ready_i,
+    output logic signed [31:0] tfld_x0_o,          // footprint rectfx.x0, fx16
+    output logic signed [31:0] tfld_z0_o,          // rectfx.y0 -- world Z here
+    output logic signed [31:0] tfld_x1_o,          // rectfx.x1
+    output logic signed [31:0] tfld_z1_o,          // rectfx.y1 -- world Z here
+    output logic        [31:0] tfld_handle_o,      // handle32[program]: NOT a hash
+    output logic        [15:0] tfld_cmd_o,         // record source_id, low 16
+    output logic        [31:0] tfld_start_tick_o,  // R2 age uniform's origin
+    output logic        [31:0] tfld_duration_o,    // R3 phase uniform's span
+    output logic       [255:0] tfld_params_o,      // p0..p7, Q16.16 LE, R4..R11
+    output logic        [31:0] tflds_issued_o,     // records handed downstream
+    output logic        [31:0] tfld_overflow_o,    // packets refused: > TFLD_Q
+    output logic        [31:0] tfld_src_truncated_o,  // source_id did not fit 16 b
 
     // ---- MEASURE.TOKENS (R18/R33): the ceiling, then each view's request ---
     // One-cycle pulses in commit phase EX_TOK. MEASURE.TOKENS takes both every
@@ -1478,6 +1556,7 @@ module zhao_cmd_exec
                   end
                 end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
                              && (r_op != ZHAO_OP_SET_POPULATION) // R41: likewise
+                             && (r_op != ZHAO_OP_TERRAIN_FIELD)  // I34 (a): likewise
                              && (zhao_opcode_record_bytes(r_op) != 32'd0)) begin
                   // A record the ABI defines and this block has no arm for.
                   // Counted rather than narrated, so the distance between the
@@ -1946,6 +2025,189 @@ module zhao_cmd_exec
           pop_flags_o        <= pp_flg;
         end
         pp_dirty <= 1'b0;
+      end
+    end
+  end
+
+  // ==========================================================================
+  // TerrainField 0x0200 -- THE PRODUCER ENTRY I34 NAMES AS BUILD ITEM (a)
+  // ==========================================================================
+  // The port block above argues what this is and what it is not. What follows
+  // is the mechanism, and three things about it are worth stating because the
+  // next person will want to change each of them.
+  //
+  // IT IS NOT A SECOND VALIDATOR, and the temptation here is specific.
+  // `spec/commands.zidl` says of the parameter blob: "bytes [0, 4*lane_count)
+  // carry lanes, the rest MUST be zero". That is a wire law and it reads like
+  // an invitation to check it here. It is not one. CMD.DECODER owns the
+  // VERDICT and this block owns the PAYLOAD -- a zero-tail test here would be
+  // a second implementation of a ratified rule, the exact failure this file's
+  // header forbids twice. If nothing currently enforces that law, the repair
+  // belongs in the decoder and the finding belongs in a report; it does not
+  // belong in an arm that was only ever meant to lower bytes.
+  //
+  // ONLY p0..p7 ARE LIFTED, out of a 64-byte blob. field-ir.md 7.1 and the
+  // command's own doc comment give Earth eight parameter lanes; the remaining
+  // 32 bytes are the mandatory-zero tail. Lifting all sixteen possible lanes
+  // would double this ring for bytes the ratified Earth signature has no
+  // register for -- and would quietly invent a sixteen-lane contract.
+  //
+  // THE CAPTURE CANNOT COLLIDE WITH `rec_done`, and that is checked rather
+  // than assumed. p7 ends at byte 76 of a 112-byte record, so every field is
+  // registered many cycles before the record's last byte arrives and this arm
+  // needs none of the DrawForm bypass. The elaboration guard below pins it,
+  // so a layout move cannot make the collision appear silently.
+  localparam int unsigned OFF_TF_SRC   = ZHAO_TERRAIN_FIELD_OFF_H_SOURCE_ID;
+  localparam int unsigned OFF_TF_PROG  = ZHAO_TERRAIN_FIELD_OFF_PROGRAM;
+  localparam int unsigned OFF_TF_FOOT  = ZHAO_TERRAIN_FIELD_OFF_FOOTPRINT;
+  localparam int unsigned OFF_TF_START = ZHAO_TERRAIN_FIELD_OFF_START_TICK;
+  localparam int unsigned OFF_TF_DUR   = ZHAO_TERRAIN_FIELD_OFF_DURATION_TICKS;
+  localparam int unsigned OFF_TF_P0    = ZHAO_TERRAIN_FIELD_OFF_PARAMETERS_0;
+  localparam int unsigned TF_LANES     = 8;   // p0..p7, the Earth signature
+
+  initial begin
+    if (ZHAO_TERRAIN_FIELD_BYTES != 112)
+      $fatal(1, "zhao_cmd_exec: TerrainField record size moved; re-read the offsets");
+    // rectfx is x0,y0,x1,y1 and the footprint must still be four fx16 sitting
+    // immediately before start_tick, or the four captures below shear.
+    if ((OFF_TF_FOOT + 16) != OFF_TF_START)
+      $fatal(1, "zhao_cmd_exec: TerrainField footprint is no longer four fx16 before start_tick");
+    if ((OFF_TF_START + 4) != OFF_TF_DUR)
+      $fatal(1, "zhao_cmd_exec: TerrainField start_tick/duration_ticks are no longer adjacent");
+    // The collision guard the comment above promises.
+    if ((OFF_TF_P0 + 4 * TF_LANES) >= ZHAO_TERRAIN_FIELD_BYTES)
+      $fatal(1, "zhao_cmd_exec: TerrainField p0..p7 reach the record's last byte; add a bypass");
+    if (TFLD_Q < 2)
+      $fatal(1, "zhao_cmd_exec: TFLD_Q must be >= 2 (the pointers need a bit)");
+  end
+
+  localparam int unsigned TQ_X0_LO  = 0;
+  localparam int unsigned TQ_Z0_LO  = 32;
+  localparam int unsigned TQ_X1_LO  = 64;
+  localparam int unsigned TQ_Z1_LO  = 96;
+  localparam int unsigned TQ_HDL_LO = 128;
+  localparam int unsigned TQ_CMD_LO = 160;
+  localparam int unsigned TQ_ST_LO  = 176;
+  localparam int unsigned TQ_DUR_LO = 208;
+  localparam int unsigned TQ_P_LO   = 240;
+  localparam int unsigned TQ_TRN_LO = 496;  // source_id did not fit 16 bits
+  localparam int unsigned TFLD_W    = 497;
+  localparam int unsigned TQW       = $clog2(TFLD_Q);
+
+  logic [31:0] tf_x0, tf_z0, tf_x1, tf_z1, tf_hdl, tf_st, tf_dur;
+  logic [31:0] tf_p [0:TF_LANES-1];
+  logic [15:0] tf_cmd;
+  logic        tf_src_hi_nz;   // the dropped half of source_id was not zero
+
+  logic [TFLD_W-1:0] tq [0:TFLD_Q-1];
+  // THREE pointers, not two. `tq_wp` is where staging writes, `tq_cp` is what
+  // the VERDICT has published, and `tq_rp` is what the consumer has taken.
+  // Nothing between `tq_cp` and `tq_wp` is visible downstream, which is how a
+  // packet that is later abandoned leaves no record behind -- the same law
+  // "not one console-visible bit moves before verdict_valid_i" that the
+  // header argues for the whole block.
+  logic [TQW:0] tq_wp, tq_rp, tq_cp;
+  logic         tq_ovf;
+  wire  [TQW:0] tq_occ  = tq_wp - tq_rp;
+  wire          tq_full = (tq_occ >= (TQW+1)'(TFLD_Q));
+
+  wire [TFLD_W-1:0] tq_head = tq[tq_rp[TQW-1:0]];
+  assign tfld_valid_o     = (tq_rp != tq_cp);
+  assign tfld_x0_o        = $signed(tq_head[TQ_X0_LO  +: 32]);
+  assign tfld_z0_o        = $signed(tq_head[TQ_Z0_LO  +: 32]);
+  assign tfld_x1_o        = $signed(tq_head[TQ_X1_LO  +: 32]);
+  assign tfld_z1_o        = $signed(tq_head[TQ_Z1_LO  +: 32]);
+  assign tfld_handle_o    = tq_head[TQ_HDL_LO +: 32];
+  assign tfld_cmd_o       = tq_head[TQ_CMD_LO +: 16];
+  assign tfld_start_tick_o= tq_head[TQ_ST_LO  +: 32];
+  assign tfld_duration_o  = tq_head[TQ_DUR_LO +: 32];
+  assign tfld_params_o    = tq_head[TQ_P_LO   +: 256];
+
+  wire tf_byte_c = (st == EX_STAGE) && take && in_rec_region
+                && (r_op == ZHAO_OP_TERRAIN_FIELD);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tf_x0 <= 32'd0; tf_z0 <= 32'd0; tf_x1 <= 32'd0; tf_z1 <= 32'd0;
+      tf_hdl <= 32'd0; tf_st <= 32'd0; tf_dur <= 32'd0; tf_cmd <= 16'd0;
+      tf_src_hi_nz <= 1'b0;
+      for (int k = 0; k < TF_LANES; k++) tf_p[k] <= 32'd0;
+      tq_wp <= '0; tq_rp <= '0; tq_cp <= '0;
+      tq_ovf <= 1'b0;
+      tflds_issued_o <= 32'd0;
+      tfld_overflow_o <= 32'd0;
+      tfld_src_truncated_o <= 32'd0;
+    end else begin
+      if (tf_byte_c) begin
+        // Little-endian on the wire, so every field shifts DOWN and the new
+        // byte enters at the top -- the same assembly the population arm uses.
+        if ((rpos >= 16'(OFF_TF_FOOT))      && (rpos < 16'(OFF_TF_FOOT + 4)))
+          tf_x0  <= {pkt_byte_i, tf_x0[31:8]};
+        if ((rpos >= 16'(OFF_TF_FOOT + 4))  && (rpos < 16'(OFF_TF_FOOT + 8)))
+          tf_z0  <= {pkt_byte_i, tf_z0[31:8]};
+        if ((rpos >= 16'(OFF_TF_FOOT + 8))  && (rpos < 16'(OFF_TF_FOOT + 12)))
+          tf_x1  <= {pkt_byte_i, tf_x1[31:8]};
+        if ((rpos >= 16'(OFF_TF_FOOT + 12)) && (rpos < 16'(OFF_TF_FOOT + 16)))
+          tf_z1  <= {pkt_byte_i, tf_z1[31:8]};
+        if ((rpos >= 16'(OFF_TF_PROG))      && (rpos < 16'(OFF_TF_PROG + 4)))
+          tf_hdl <= {pkt_byte_i, tf_hdl[31:8]};
+        if ((rpos >= 16'(OFF_TF_START))     && (rpos < 16'(OFF_TF_START + 4)))
+          tf_st  <= {pkt_byte_i, tf_st[31:8]};
+        if ((rpos >= 16'(OFF_TF_DUR))       && (rpos < 16'(OFF_TF_DUR + 4)))
+          tf_dur <= {pkt_byte_i, tf_dur[31:8]};
+        // source_id is u32 on the wire and the patch's `fld_add_cmd_i` is 16
+        // bits. NARROWED, exactly as the stamp and draw arms narrow it, and
+        // the dropped half is COUNTED rather than discarded quietly.
+        if ((rpos >= 16'(OFF_TF_SRC))       && (rpos < 16'(OFF_TF_SRC + 2)))
+          tf_cmd <= {pkt_byte_i, tf_cmd[15:8]};
+        if ((rpos >= 16'(OFF_TF_SRC + 2))   && (rpos < 16'(OFF_TF_SRC + 4))
+            && (pkt_byte_i != 8'd0))
+          tf_src_hi_nz <= 1'b1;
+        for (int k = 0; k < TF_LANES; k++) begin
+          if ((rpos >= 16'(OFF_TF_P0 + 4*k)) && (rpos < 16'(OFF_TF_P0 + 4*k + 4)))
+            tf_p[k] <= {pkt_byte_i, tf_p[k][31:8]};
+        end
+
+        // Every field is registered long before the record's last byte (the
+        // elaboration guard pins that), so the push needs no bypass.
+        if (rec_done) begin
+          if (tq_full) begin
+            tq_ovf <= 1'b1;
+          end else begin
+            tq[tq_wp[TQW-1:0]] <= {tf_src_hi_nz,
+                                   tf_p[7], tf_p[6], tf_p[5], tf_p[4],
+                                   tf_p[3], tf_p[2], tf_p[1], tf_p[0],
+                                   tf_dur, tf_st, tf_cmd, tf_hdl,
+                                   tf_z1, tf_x1, tf_z0, tf_x0};
+            tq_wp <= tq_wp + 1'b1;
+          end
+          tf_src_hi_nz <= 1'b0;
+        end
+      end
+
+      if (tfld_valid_o && tfld_ready_i) begin
+        tq_rp <= tq_rp + 1'b1;
+        `ZHAO_EXEC_INC(tflds_issued_o);
+        // Counted on the way OUT, not on the way in, so an abandoned packet's
+        // records never reach this counter. A truncation count that included
+        // staged-then-discarded records would measure the wire and claim to
+        // measure the console.
+        if (tq_head[TQ_TRN_LO]) `ZHAO_EXEC_INC(tfld_src_truncated_o);
+      end
+
+      if ((st == EX_STAGE) && verdict_valid_i) begin
+        // PUBLISH or ROLL BACK, whole. A packet carrying more TerrainFields
+        // than TFLD_Q is refused entire -- never half-applied -- because a
+        // section 3.4 sum missing one of its lanes is a plausible wrong
+        // terrain, which is the failure this file exists to refuse.
+        if ((verdict_error_i == ZH_ABI_OK) && !poisoned && !tq_ovf) begin
+          tq_cp <= tq_wp;
+        end else begin
+          tq_wp <= tq_cp;
+        end
+        if (tq_ovf) `ZHAO_EXEC_INC(tfld_overflow_o);
+        tq_ovf       <= 1'b0;
+        tf_src_hi_nz <= 1'b0;
       end
     end
   end
