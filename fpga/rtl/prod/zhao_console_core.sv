@@ -2385,6 +2385,93 @@
 //      test it owns; (d) a two-client share on the host's single `pc_lu_*`
 //      port, since the doorbell holds it for the HPS.
 //
+//      ---------------------------------------------------------------------
+//      WORKED AGAIN 2026-09-20 (gz/carriers). THE HANDLE -> HASH BLOCKER IS
+//      CONFIRMED AND IT IS THE SMALLER OF TWO. A SECOND ONE WAS FOUND, IT IS
+//      STRUCTURAL, AND IT IS AN OWNER DECISION.
+//
+//      (A) THE STATED BLOCKER STILL HOLDS, re-checked rather than inherited.
+//      `program_hash`, `prog_hash` and `programHash` across all of `fpga/rtl`
+//      including `synth/`: ZERO hits. Nothing in hardware publishes
+//      {handle -> hash}. And the field host's own header says the other half
+//      in as many words -- "Nothing inside the console loads a field program
+//      ... its owner is CMD.EXEC's TerrainField 0x0200 arm ... That arm is not
+//      built."
+//
+//      ONE CORRECTION TO THE LIST ABOVE, and it makes (c) smaller: the hash's
+//      ONLY real consumer is the EARTH adapter. `zhao_terrain_patch.sv`:125-126
+//      marks `fld_add_hash_i` and `fld_add_cmd_i` "trace only" and the block
+//      keys nothing on either -- its list is FOOTPRINTS. So the handle -> hash
+//      mapping is needed to let the ADAPTER resolve a slot, not to let the
+//      patch accept a lane.
+//
+//      THE BIND RECOMMENDATION HOLDS AND `post_op_i` HAS ROOM: it is [1:0] and
+//      2'd3 is unspent, so a fourth post kind costs no ABI change and no wider
+//      port. The cheaper alternative -- BIND {handle32, SLOT} instead of
+//      {handle32, hash32}, since `zhao_field_doorbell`'s return record already
+//      hands software the slot -- is REJECTED, and the reason is worth keeping:
+//      a slot can be EVICTED after the bind, and software's copy then goes
+//      stale in silence. The hash survives eviction because the DIRECTORY is
+//      the authority on residency, which is the whole point of keying it by
+//      content. Paying one lookup buys that.
+//
+//      (B) THE BLOCKER THAT MATTERS MORE: THE COMPOSED FRONT IS THE
+//      ARRANGEMENT FIELD.SEQ.EARTH's OWN CONTRACT EXCLUDES, IN WRITING.
+//      `design/contracts/FIELD.SEQ.EARTH.md`:105 -- "The v2 generic 12-in/4-out
+//      host stream (27,225 clocks/association measured against a 10,416
+//      allowance) is not part of this profile's production path." This console
+//      composes a GENERIC PER-POINT FRONT of exactly that family, and at this
+//      console's parameters it is WORSE per point, not better:
+//
+//        `zhao_field_host` E_ZERO is REGS clocks PER POINT (the file says so:
+//        "REGS clocks, once per point", and the console's instantiation repeats
+//        it) and E_WRITE is IN_LANES+1. At the composed REGS=32 / IN_LANES=13
+//        that is >= 46 clocks of transport per point BEFORE ONE INSTRUCTION
+//        EXECUTES, against the v2 front's 25.
+//
+//        One Earth association is 1,089 lattice vertices (33x33), and the
+//        adapter owes ONE RUN PER COVERING LANE PER VERTEX. So ONE field lane
+//        over ONE patch is >= 1,089 x 46 = 50,094 clocks against the
+//        10,416-clock allowance -- about 481%, transport alone, one lane.
+//        The v2 arrangement `reports/Fieldv3.md` condemned was 261%.
+//
+//      So (a)-(d) above can ALL be built correctly and the result still misses
+//      its own declared allowance by ~5x. That is not a reason to skip them; it
+//      is a reason not to discover it after they are composed, which is what
+//      this paragraph exists to prevent. It is also the SAME lever entry I5
+//      already records on the particle seam ("the rate is a cost, not a gap ...
+//      the lever is the gathering front `zhao_field_host`'s header already
+//      calls for"), so one repair serves both.
+//
+//      THE OWNER DECISION, with three options and a recommendation:
+//
+//        1. ACCEPT IT for v1 -- field-driven terrain height exists and does not
+//           fit its budget. Honest, and it makes the allowance a lie.
+//        2. TAKE R44 LITERALLY and swap TERRAIN.PATCH for the probes'
+//           field-major four-wide whole-patch architecture. This is what the
+//           previous pass found and refused as an owner call; the number above
+//           is what that call is actually about.
+//        3. RECOMMENDED -- GIVE THE FRONT THE "SAME PROGRAM, SAME UNIFORMS"
+//           FAST PATH THE CONTRACT ALREADY ASKS FOR. FIELD.SEQ.EARTH.md says
+//           "Uniform lanes live in the scalar bank, loaded ONCE per
+//           association"; the front zeroes and reloads all of them per point
+//           instead. Skipping E_ZERO and rewriting only the VARYING lanes (x,
+//           z) when the slot and the uniforms are unchanged takes 46 clocks to
+//           about 3, i.e. 1,089 x 3 = 3,267 clocks per association -- inside
+//           the allowance, with no new architecture and no second reducer.
+//           ITS OWN CAVEAT, named rather than discovered: E_ZERO exists because
+//           "a program that reads a register it did not write would read that
+//           point's value". The fast path is only sound for a program whose
+//           read-before-write set is empty, or if the zeroing is narrowed to
+//           that set -- which `zfield::decode` can declare, because it is
+//           software and it already walks the image. That declaration is the
+//           real work, and it is bounded.
+//
+//      NOTHING WAS BUILT FOR I34 THIS PASS, deliberately. Building (c) against
+//      a front that is about to change shape, or composing any of (a)-(d)
+//      alone, would dangle at the core boundary and put the register UP -- the
+//      thing the protocol forbids and the thing geom4 was right to refuse.
+//
 //
 //
 // I40. THE GEOMETRY ASSET PATH's TWO ASSIGNED IDENTITIES -- NOT a tie-off:
