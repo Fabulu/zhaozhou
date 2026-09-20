@@ -1,5 +1,34 @@
-// zhao_probe_walk_earth.sv — Field v3 Phase 4 (reports/Fieldv3.md): the Earth
+// zhao_terrain_field_walk.sv — Field v3 Phase 4 (reports/Fieldv3.md): the Earth
 // lattice walker, the front of the composed Earth machine
+//
+// PROMOTED 2026-09-20 FROM `fpga/rtl/synth/zhao_probe_walk_earth.sv` UNDER
+// OWNER RULING R44 AND THE DIRECTIVE'S FH18. NO LOGIC CHANGED.
+// ---------------------------------------------------------------------
+// The whole of this promotion commit, in this file, is: the module name, this
+// paragraph and the file's home. The walk, the per-vertex footprint test, the
+// group shape, the two counters and both formal properties are byte-identical
+// to the probe's last revision, and `tests/differential/field_walk_earth_directed.cpp`
+// is the SAME test asserting the SAME expectations against it. A diff of this
+// file against `zhao_probe_walk_earth.sv` at its final commit is therefore the
+// evidence that the promotion changed no behaviour — which is the point, and
+// is why the rename and any subsequent repair are separate commits.
+//
+// WHY IT HAD TO MOVE, AND WHY NOTHING NOTICED IT WAS FINISHED. It was built,
+// differentially tested and mutation-swept, and it was invisible to every tool
+// in this tree because `probe` was in its filename and `disposition:
+// instrument` sat beside it in `design/console_inventory.yml`. `instrument` is
+// a SETTLED disposition, so `tools/budget/uncashed_cheques.py` can never flag
+// it: the inventory was suppressing the exact cheque R44 wrote. This
+// repository lost three weeks once already to rebuilding a finished engine it
+// could not see, and that incident is why `zhao_console_core.sv` carries a
+// capitalised instruction to read this file before building a walker.
+//
+// THE OWNER'S 2,655-LINE DIRECTIVE OF 2026-09-20 NEVER NAMES THIS FILE.
+// `probe_walk` and `walk_earth` are both ZERO hits in it. It commissions "the
+// field-major scheduler" as new work, and it independently derives this file's
+// own group count twice (its sections 2.10 and 13.5): "UPDATE is
+// 33 * ceil(33/4) = 297 row-bounded quad groups, not 273." That is the number
+// this walker measured, and the derivation below is the one it agrees with.
 //
 //   prepared field descriptor -> [WALKER] -> v3 vector executor
 //                             -> patch accumulator -> composed-height cache
@@ -89,7 +118,7 @@
 
 `default_nettype none
 
-module zhao_probe_walk_earth #(
+module zhao_terrain_field_walk #(
     // The Earth profile's lattice. Named, editable knobs -- the 33 is the
     // cartridge patch page's grid, not a constant of nature.
     parameter int LAT_W = 33,

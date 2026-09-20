@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The mutant table for zhao_probe_walk_earth.sv (FIELD.WALK.EARTH).
+"""The mutant table for zhao_terrain_field_walk.sv (FIELD.WALK.EARTH).
 
 WHY THIS SWEEP EXISTS
 ---------------------
@@ -40,7 +40,7 @@ import io
 import os
 import sys
 
-RTL = "fpga/rtl/synth/zhao_probe_walk_earth.sv"
+RTL = "fpga/rtl/terrain/zhao_terrain_field_walk.sv"
 
 # name, old, new -- each applied to the PRISTINE file, one at a time.
 MUTANTS = [

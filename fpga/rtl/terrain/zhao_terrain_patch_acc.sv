@@ -1,4 +1,4 @@
-// zhao_probe_patch_acc.sv — Field v3 decisive probe 5 (reports/Fieldv3.md
+// zhao_terrain_patch_acc.sv — Field v3 decisive probe 5 (reports/Fieldv3.md
 // Phase 3): the four-bank patch accumulator with exact command-order
 // reducers (the TERRAIN.PATCH field-major amendment, 2026-08-27).
 //
@@ -71,7 +71,7 @@
 // TERRAIN.PATCH's as-built RTL), the footprint test (the Earth walker
 // walks only covered vertices — coverage is geometric at this seam), the
 // program evaluation (FIELD.SEQ.EARTH), and the height16 bake-backs.
-module zhao_probe_patch_acc (
+module zhao_terrain_patch_acc (
     input logic clk,
     input logic rst_n,
 
@@ -163,6 +163,12 @@ module zhao_probe_patch_acc (
     output logic signed [31:0] out_nav_3_o
 );
 
+  // The ratified TERRAIN.PATCH arithmetic, imported in MODULE scope rather
+  // than $unit scope -- an import::* outside a module raises IMPORTSTAR
+  // under -Wall and would put these names in every file compiled beside this
+  // one.
+  import zhao_terrain_patch_law_pkg::*;
+
   localparam int BANKS = 4;
 
   // wmask bit positions
@@ -172,22 +178,27 @@ module zhao_probe_patch_acc (
   localparam int W_N = 3;
 
   // ---- the §3 saturating add: 33 bits, narrowed, ONE add at a time --------
+  //
+  // FACTORED 2026-09-20 into zhao_terrain_patch_law_pkg. These two functions
+  // lived here as bodies that were CHARACTER-FOR-CHARACTER identical to
+  // zhao_terrain_patch.sv:192-201 -- two implementations of ratified
+  // arithmetic, in one directory, invisible to `tools/budget/uncashed_cheques.py`
+  // check 3 because that check compares the `reference_model` strings declared
+  // in design/blocks.yml and never looks at a function body.
+  //
+  // Local names kept as one-line forwarders so the body below is UNTOUCHED by
+  // the factoring, which is what lets the existing 39,232 directed checks stand
+  // as the evidence that nothing moved.
   function automatic logic signed [31:0] fx_add_sat(input logic signed [31:0] a,
                                                     input logic signed [31:0] b);
-    logic signed [32:0] s;
     begin
-      s = $signed({a[31], a}) + $signed({b[31], b});
-      if (s > 33'sd2147483647) fx_add_sat = 32'sh7FFF_FFFF;
-      else if (s < -33'sd2147483648) fx_add_sat = 32'sh8000_0000;
-      else fx_add_sat = s[31:0];
+      fx_add_sat = zhao_tp_fx_add_sat(a, b);
     end
   endfunction
 
   function automatic logic fx_add_fired(input logic signed [31:0] a, input logic signed [31:0] b);
-    logic signed [32:0] s;
     begin
-      s = $signed({a[31], a}) + $signed({b[31], b});
-      fx_add_fired = (s > 33'sd2147483647) || (s < -33'sd2147483648);
+      fx_add_fired = zhao_tp_fx_add_fired(a, b);
     end
   endfunction
 
@@ -518,4 +529,4 @@ module zhao_probe_patch_acc (
     end
   end
 
-endmodule : zhao_probe_patch_acc
+endmodule : zhao_terrain_patch_acc

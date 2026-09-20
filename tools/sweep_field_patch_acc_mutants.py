@@ -2,7 +2,7 @@
 """Mutation table for the FIELD v3 four-bank patch accumulator probe sweep
 (tools/sweep_field_patch_acc.sh).
 
-Target: fpga/rtl/synth/zhao_probe_patch_acc.sv ONLY — the probe has exactly
+Target: fpga/rtl/terrain/zhao_terrain_patch_acc.sv ONLY — the probe has exactly
 one consumer (guard 7).
 
 Classes from the TERRAIN.PATCH field-major amendment where they exist in
@@ -13,7 +13,7 @@ the dirty law, the legacy bottom lane, saturation-lane misattribution,
 init leakage between lanes, and non-writer clobber of the material lane.
 """
 
-RTL = "fpga/rtl/synth/zhao_probe_patch_acc.sv"
+RTL = "fpga/rtl/terrain/zhao_terrain_patch_acc.sv"
 
 MUTANTS = [
     ("P01 material pools into an add (the generic-reducer defect)",

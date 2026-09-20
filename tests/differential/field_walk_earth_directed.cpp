@@ -1,5 +1,5 @@
 // field_walk_earth_directed.cpp — the differential for the Earth lattice
-// walker (fpga/rtl/synth/zhao_probe_walk_earth.sv), Field v3 Phase 4.
+// walker (fpga/rtl/terrain/zhao_terrain_field_walk.sv), Field v3 Phase 4.
 //
 // WHAT IS BEING PROVED, AND AGAINST WHAT
 // ---------------------------------------
@@ -44,7 +44,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_walk_earth.h"
+#include "Vzhao_terrain_field_walk.h"
 
 #include "zhao_sim.hpp"
 #include "zref/zref_fixp.hpp"
@@ -124,7 +124,7 @@ std::vector<Group> expect_groups(const Lattice& lat, const Assoc& a) {
   return out;
 }
 
-void load_tables(Vzhao_probe_walk_earth& t, const Lattice& lat) {
+void load_tables(Vzhao_terrain_field_walk& t, const Lattice& lat) {
   for (int i = 0; i < kLat; ++i) {
     t.lt_we_i = 1;
     t.lt_sel_i = 0;
@@ -141,7 +141,7 @@ void load_tables(Vzhao_probe_walk_earth& t, const Lattice& lat) {
 // Drive one association and collect its groups. `stall` picks a backpressure
 // schedule; 0 means never stall. Returns the clocks the association occupied
 // from acceptance to its last group, so the gate can be MEASURED.
-std::vector<Group> run_assoc(Vzhao_probe_walk_earth& t, const Assoc& a, Prng* stall, int* clocks) {
+std::vector<Group> run_assoc(Vzhao_terrain_field_walk& t, const Assoc& a, Prng* stall, int* clocks) {
   std::vector<Group> got;
   t.as_valid_i = 1;
   t.as_fp_x0_i = (uint32_t)a.x0;
@@ -206,7 +206,7 @@ bool compare(const std::vector<Group>& want, const std::vector<Group>& got, cons
 // ---------------------------------------------------------------------------
 
 // A full-patch association: the whole lattice, footprint wide open.
-void test_full_patch_gate(Vzhao_probe_walk_earth& t) {
+void test_full_patch_gate(Vzhao_terrain_field_walk& t) {
   printf("-- full patch: the 297-group gate\n");
   const Lattice lat(0, 32 << 16, 0, 32 << 16);
   load_tables(t, lat);
@@ -239,7 +239,7 @@ void test_full_patch_gate(Vzhao_probe_walk_earth& t) {
 
 // Every group must lie in ONE row -- the property that lets a group carry a
 // single z for all four lanes.
-void test_group_never_straddles_a_row(Vzhao_probe_walk_earth& t) {
+void test_group_never_straddles_a_row(Vzhao_terrain_field_walk& t) {
   printf("-- one z per group\n");
   const Lattice lat(0, 32 << 16, 0, 32 << 16);
   load_tables(t, lat);
@@ -259,7 +259,7 @@ void test_group_never_straddles_a_row(Vzhao_probe_walk_earth& t) {
 
 // THE BOX IS A HINT. An inflated box must not add coverage; a tight box must
 // not lose any.
-void test_box_is_a_hint_not_the_law(Vzhao_probe_walk_earth& t) {
+void test_box_is_a_hint_not_the_law(Vzhao_terrain_field_walk& t) {
   printf("-- the box is a hint, the closed-interval test is the law\n");
   const Lattice lat(0, 32 << 16, 0, 32 << 16);
   load_tables(t, lat);
@@ -288,7 +288,7 @@ void test_box_is_a_hint_not_the_law(Vzhao_probe_walk_earth& t) {
 }
 
 // The border is INSIDE (spec/terrain_rules.md 9.1).
-void test_footprint_border_is_inside(Vzhao_probe_walk_earth& t) {
+void test_footprint_border_is_inside(Vzhao_terrain_field_walk& t) {
   printf("-- closed interval: a border vertex is inside\n");
   const Lattice lat(0, 32 << 16, 0, 32 << 16);
   load_tables(t, lat);
@@ -311,7 +311,7 @@ void test_footprint_border_is_inside(Vzhao_probe_walk_earth& t) {
 // An empty box costs one acceptance and no groups -- and must not hang.
 // Offer one association and count the groups it emits, without waiting for a
 // `last` that an empty box will never produce.
-int emitted_groups_for(Vzhao_probe_walk_earth& t, const Assoc& a, int clocks) {
+int emitted_groups_for(Vzhao_terrain_field_walk& t, const Assoc& a, int clocks) {
   t.as_valid_i = 1;
   t.as_fp_x0_i = (uint32_t)a.x0;
   t.as_fp_x1_i = (uint32_t)a.x1;
@@ -340,7 +340,7 @@ int emitted_groups_for(Vzhao_probe_walk_earth& t, const Assoc& a, int clocks) {
 // SURVIVED the first mutation sweep of this block (W15): the original case
 // drove `i0 > i1` alone, so dropping the row half changed nothing it could
 // see. An empty ROW range must be refused by its own term.
-void test_empty_box_does_not_hang(Vzhao_probe_walk_earth& t) {
+void test_empty_box_does_not_hang(Vzhao_terrain_field_walk& t) {
   printf("-- an empty association is accepted and emits nothing, on either axis\n");
   const Lattice lat(0, 32 << 16, 0, 32 << 16);
   load_tables(t, lat);
@@ -365,7 +365,7 @@ void test_empty_box_does_not_hang(Vzhao_probe_walk_earth& t) {
 }
 
 // Backpressure must not change the stream.
-void test_backpressure_drops_nothing(Vzhao_probe_walk_earth& t) {
+void test_backpressure_drops_nothing(Vzhao_terrain_field_walk& t) {
   printf("-- backpressure changes timing, never content\n");
   const Lattice lat(-7 << 16, 25 << 16, 3 << 16, 40 << 16);
   load_tables(t, lat);
@@ -378,7 +378,7 @@ void test_backpressure_drops_nothing(Vzhao_probe_walk_earth& t) {
 }
 
 // Randomized: arbitrary envelopes, footprints and boxes.
-void test_random(Vzhao_probe_walk_earth& t, int iters) {
+void test_random(Vzhao_terrain_field_walk& t, int iters) {
   printf("-- randomized differential, %d associations\n", iters);
   Prng p(0x5EED17);
   int bad = 0;
@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
     if (std::string(argv[i]) == "--random" && i + 1 < argc) iters = std::atoi(argv[++i]);
   }
 
-  Vzhao_probe_walk_earth top;
+  Vzhao_terrain_field_walk top;
   // zhao::reset() drives in_valid/in_data, which belong to the byte-stream
   // blocks; this probe's intake is a descriptor port. Reset it directly.
   top.rst_n = 0;

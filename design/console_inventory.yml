@@ -27,6 +27,12 @@ modules:
   zhao_view_projq88:
     disposition: pending_compose
     why: "The per-camera projection scale in Q12.8 (20 bits, owner rulings R83/R98 -- it was Q8.8 in 16 until 2026-09-20, which saturated below 90 deg hfov single-view and below 53.13 deg on Duo) for MEASURE.GOVERNOR's proj0/1_i, DERIVED under owner ruling R73 (proj_Q8.8 = rhu(kx_raw * viewport_w / 512)) rather than added to the ABI. Its inputs are zhao_view_projscale's kx*_o/vw*_o; it is not a second implementation of zhao_geom_projradius, which computes kx*R*vw/(2w) -- a projected radius with the bound radius and perspective w inside it -- and never emits the camera factor alone. Verified against design/contracts/MEASURE.GOVERNOR.md line 75's hand-worked Duo camera (221.70 px, Q8.8 raw 56755) to within the LSB its text truncated. 24 checks in view_projq88_directed (it was 19 before the R83 widening). Not composed for the same reason as zhao_measure_starve, and it additionally depends on I14's still-open half: the viewport rect at projector cfg address 17 has no CMD producer. The Q8.8 port width FINDINGS-post3.md raised as a decision was ruled (R83) and landed 2026-09-20 in BOTH ports plus a third site R98 did not name, zref::measure::GovernorCamera::proj, which was a uint16_t and would have TRUNCATED a 20-bit stimulus rather than saturating it. 24 checks in view_projq88_directed, including a positive control that still fires the saturation counter on an extreme kx."
+  zhao_terrain_field_walk:
+    disposition: pending_compose
+    why: "THE EARTH LATTICE WALKER, promoted 2026-09-20 by packet E1 from fpga/rtl/synth/zhao_probe_walk_earth.sv under owner ruling R44 ('promote zhao_probe_walk_earth/zhao_probe_patch_acc out of fpga/rtl/synth/ to production names and homes, as FIELD v3 was, rather than rebuilding them') and the owner directive's FH18/sections 13.1-13.4. NO LOGIC CHANGED IN THE PROMOTION COMMIT -- module name, header and home only -- so the diff against the probe's final revision is itself the evidence that behaviour is unchanged, and tests/differential/field_walk_earth_directed.cpp is the SAME test against the SAME expectations. EVIDENCE: 23 checks in field_walk_earth_directed on the default path, plus field_walk_earth_random; 17 mutants caught and 1 proven equivalent by tools/sweep_field_walk_earth_mutants.py. WHY THIS ENTRY EXISTS AT ALL: its previous disposition was `instrument` ('synthesis probe under fpga/rtl/synth; measures, never ships'), and `instrument` is a SETTLED disposition, so tools/budget/uncashed_cheques.py could never flag it -- the inventory was suppressing the exact cheque R44 wrote, which is why a finished, differentially tested, mutation-swept engine sat unseen while the owner's 2,655-line directive commissioned 'the field-major scheduler' as new work without naming the file once (`probe_walk` and `walk_earth` are both ZERO hits in it). It is NOT composed because the console boundary is packet C1's serialised act: closing I34 needs velocity/material/nav channels that zhao_terrain_patch.sv:154-156 does not have, and section 20.8 forbids closing it by wiring only height. DELETE THIS ENTRY when C1 composes the Earth datapath."
+  zhao_terrain_patch_acc:
+    disposition: pending_compose
+    why: "THE FOUR-BANK PATCH ACCUMULATOR, promoted 2026-09-20 by packet E1 from fpga/rtl/synth/zhao_probe_patch_acc.sv under owner ruling R44 and the directive's section 13.4 ('Promote/factor its numerical implementation, give it an explicit phase owner, and add a drain skid/credit adapter or ready/valid handling so actual cache backpressure cannot lose a group'). It holds the four exact reducers the Earth contract ratifies -- height/velocity/nav as saturating fx_add chains, material as last-covering-writer wholesale -- with a one-deep same-address RMW bypass, over four vertex-residue banks indexed by vertex mod 4. EVIDENCE: field_patch_acc_directed plus field_patch_acc_random; tools/sweep_field_patch_acc_mutants.py. KNOWN OPEN, recorded rather than hidden: the block has NO ready/valid and NO backpressure on any of its three phases, and its INIT/ACCUM/DRAIN exclusivity plus the 'two idle cycles between phase changes' are CALLER OBLIGATIONS its own header states and its RTL does not enforce (the single structural guard is `d1_valid <= dr_valid_i && !up_valid_i`). Section 13.4 commissions exactly that repair; it is deliberately NOT folded into the promotion commit, so that the rename stays a provable no-op. Its INIT/DRAIN phases walk the flat aligned 273 groups; only the UPDATE walk costs 297 (design/contracts/FIELD.SEQ.EARTH.md:137-154). Not composed for the same C1 reason as zhao_terrain_field_walk above. DELETE THIS ENTRY when C1 composes the Earth datapath."
   zhao_terrain_devstore:
     disposition: pending_compose
     why: "TERRAIN.LOD's per-page deviation and history store (owner rulings R24 and R59), built and tested by terrain_lodpath_directed. It is not composed because its CONSUMER, zhao_terrain_lod, cannot be composed: TERRAIN.LOD's cam0/cam1 eye positions are x16 world units (design/contracts/TERRAIN.LOD.md line 64) and NO RATIFIED COMMAND CARRIES A CAMERA POSITION -- spec/commands.zidl's SetView 0x0010 carries view_projection, pixel_error and token counts and nothing else. Composing the store alone would add 160 M10K with no reader. See FINDINGS-terrain4.md, owner decision D1."
@@ -245,9 +251,6 @@ modules:
   zhao_probe_dist_svc:
     disposition: instrument
     why: "synthesis probe under fpga/rtl/synth; measures, never ships"
-  zhao_probe_patch_acc:
-    disposition: instrument
-    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
   zhao_probe_ram_infer:
     disposition: instrument
     why: "synthesis probe under fpga/rtl/synth; measures, never ships"
@@ -255,9 +258,6 @@ modules:
     disposition: instrument
     why: "synthesis probe under fpga/rtl/synth; measures, never ships"
   zhao_probe_v3rq_queue:
-    disposition: instrument
-    why: "synthesis probe under fpga/rtl/synth; measures, never ships"
-  zhao_probe_walk_earth:
     disposition: instrument
     why: "synthesis probe under fpga/rtl/synth; measures, never ships"
   zhao_prod_top:

@@ -39,7 +39,7 @@
 
 #include "verilated.h"
 
-#include "Vzhao_probe_patch_acc.h"
+#include "Vzhao_terrain_patch_acc.h"
 
 #include "zhao_sim.hpp"
 #include "zref/zref_fixp.hpp"
@@ -154,7 +154,7 @@ struct SatCount {
   uint64_t h = 0, v = 0, n = 0;
 };
 
-void collect_sat(Vzhao_probe_patch_acc& dut, SatCount& sc) {
+void collect_sat(Vzhao_terrain_patch_acc& dut, SatCount& sc) {
   if (dut.sat_valid_o) {
     sc.h += __builtin_popcount(dut.sat_h_o);
     sc.v += __builtin_popcount(dut.sat_v_o);
@@ -162,7 +162,7 @@ void collect_sat(Vzhao_probe_patch_acc& dut, SatCount& sc) {
   }
 }
 
-void idle(Vzhao_probe_patch_acc& dut, SatCount& sc, int cycles) {
+void idle(Vzhao_terrain_patch_acc& dut, SatCount& sc, int cycles) {
   dut.in_valid_i = 0;
   dut.up_valid_i = 0;
   dut.dr_valid_i = 0;
@@ -175,7 +175,7 @@ void idle(Vzhao_probe_patch_acc& dut, SatCount& sc, int cycles) {
 }
 
 /** INIT the whole patch; returns cycles used (accepts are unconditional). */
-int run_init(Vzhao_probe_patch_acc& dut, const PatchIn& p, SatCount& sc) {
+int run_init(Vzhao_terrain_patch_acc& dut, const PatchIn& p, SatCount& sc) {
   int cycles = 0;
   for (int g = 0; g < kGroups; ++g) {
     const int16_t* B = p.base;
@@ -213,7 +213,7 @@ int run_init(Vzhao_probe_patch_acc& dut, const PatchIn& p, SatCount& sc) {
 }
 
 /** Drive one vector update. */
-void drive_update(Vzhao_probe_patch_acc& dut, int iv, uint8_t mask, uint8_t wmask,
+void drive_update(Vzhao_terrain_patch_acc& dut, int iv, uint8_t mask, uint8_t wmask,
                   const int32_t h[4], const int32_t v[4], const uint32_t m[4], const int32_t n[4]) {
   dut.up_valid_i = 1;
   dut.up_iv_i = (uint16_t)iv;
@@ -238,7 +238,7 @@ void drive_update(Vzhao_probe_patch_acc& dut, int iv, uint8_t mask, uint8_t wmas
 }
 
 /** Walk one field row-major, one vector update per clock. Returns cycles. */
-int run_field(Vzhao_probe_patch_acc& dut, const Field& f, SatCount& sc) {
+int run_field(Vzhao_terrain_patch_acc& dut, const Field& f, SatCount& sc) {
   int cycles = 0;
   for (int vj = f.vj0; vj <= f.vj1; ++vj) {
     const int vstart = vj * kLat + f.vi0;
@@ -269,7 +269,7 @@ int run_field(Vzhao_probe_patch_acc& dut, const Field& f, SatCount& sc) {
 }
 
 /** DRAIN the whole patch and compare against the oracle. */
-void run_drain_and_check(Vzhao_probe_patch_acc& dut, const PatchIn& p, const PatchOut& want,
+void run_drain_and_check(Vzhao_terrain_patch_acc& dut, const PatchIn& p, const PatchOut& want,
                          SatCount& sc, const char* what) {
   const std::string t(what);
   int32_t got_top[kVerts], got_bot[kVerts], got_vel[kVerts], got_nav[kVerts];
@@ -359,7 +359,7 @@ void run_drain_and_check(Vzhao_probe_patch_acc& dut, const PatchIn& p, const Pat
 }
 
 /** Full patch through the DUT field-major; compare everything. */
-void run_patch(Vzhao_probe_patch_acc& dut, const PatchIn& p, const char* what) {
+void run_patch(Vzhao_terrain_patch_acc& dut, const PatchIn& p, const char* what) {
   const PatchOut want = oracle(p);
   SatCount sc;
   run_init(dut, p, sc);
@@ -433,7 +433,7 @@ int main(int argc, char** argv) {
     if (!strcmp(argv[i], "--random") && i + 1 < argc) random_n = atoi(argv[i + 1]);
   }
 
-  Vzhao_probe_patch_acc dut;
+  Vzhao_terrain_patch_acc dut;
   dut.rst_n = 0;
   dut.in_valid_i = 0;
   dut.up_valid_i = 0;

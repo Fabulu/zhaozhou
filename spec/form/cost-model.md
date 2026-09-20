@@ -180,7 +180,7 @@ hardware resource per full 1,089-vertex association, derived from the FPLAN:
 
 | component | meaning |
 |---|---|
-| `vec_groups` | vector groups per association (273 for a full patch) |
+| `vec_groups` | vector groups per association (**297** for a full patch's UPDATE walk — see the note below) |
 | `vec_issue` | vector instructions issued (varying uops × groups) |
 | `vmul_slots` | vector multiply/MAD bank slots (MUL/MAD/DOT, curve interpolation, prepared-ring products — 9/group per prepared RING) |
 | `curve_req` | four-point CURVE/DCURVE/SPLINE service requests |
@@ -190,6 +190,35 @@ hardware resource per full 1,089-vertex association, derived from the FPLAN:
 | `table_bytes` | table data the curve service must have resident |
 | `vreg_hwm` | vector registers the hot plan allocates (≤ 32) |
 | `sreg_hwm` | scalar (uniform) bank registers |
+
+### `vec_groups` is 297, and it was 273 here until 2026-09-20
+
+Two group counts exist for the same 33x33 lattice and they belong to different
+phases. Substituting one for the other is invisible in every gate, because both
+numbers are real:
+
+    UPDATE      33 * ceil(33/4) = 297   row-bounded quad groups
+    INIT/DRAIN  ceil(1089/4)    = 273   flat ALIGNED quad groups
+
+The association walk is **row-major** — z-then-x, the cartridge patch order the
+reference records velocity in — and 33 is not a multiple of 4, so an UPDATE
+group may not straddle a row boundary. Every row costs `ceil(33/4) = 9` groups
+and a full patch costs `9 x 33 = 297`; the last group of each row carries one
+live lane of four. Only the patch accumulator's INIT and DRAIN phases walk the
+1,089 vertices flat and aligned, and only they cost 273.
+
+`design/contracts/FIELD.SEQ.EARTH.md:137-154` corrected this on 2026-08-27 and
+`fpga/rtl/terrain/zhao_terrain_field_walk.sv` (promoted 2026-09-20 from `fpga/rtl/synth/zhao_probe_walk_earth.sv`) measured 297 directly. **This line
+was not updated with it**, and three consumers inherited the wrong number from
+here — `tools/field/measure_earth_budget.cpp`, `tests/differential/field_v3_earth_directed.cpp`
+and `reference/src/zfield/zfield_plan.cpp`.
+
+**The error is always in the flattering direction.** `vec_groups` multiplies a
+per-group resource demand into the per-association occupancy that §5's
+admission rule compares against the 6,000-clock deadline, so understating it by
+8.8% lets a program whose true occupancy is up to 6,527 clocks be admitted as
+if it fitted. A smaller group count never reports a program as worse than it
+is; it only ever reports one as better.
 
 **Admission law.** A program is `realtime/hot` for a profile if and only if
 every component of its demand vector fits the MEASURED machine — measured

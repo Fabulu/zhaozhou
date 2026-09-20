@@ -12,8 +12,8 @@
 // ---------------
 //   prepared descriptor -> walker -> [THIS] -> patch accumulator -> cache
 //
-// The walker (zhao_probe_walk_earth) generates the points. The accumulator
-// (zhao_probe_patch_acc) reduces the results. This is the middle: it runs a
+// The walker (zhao_terrain_field_walk) generates the points. The accumulator
+// (zhao_terrain_patch_acc) reduces the results. This is the middle: it runs a
 // context's uops to END and produces that point's four output lanes.
 //
 // ONE LANE, AND THAT IS THE POINT. The engine is four-wide because a vector
