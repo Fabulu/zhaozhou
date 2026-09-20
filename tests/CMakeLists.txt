@@ -4604,7 +4604,8 @@ target_link_libraries(test_field_patch_acc_directed PRIVATE zhao_harness zhao_zr
 verilate(test_field_patch_acc_directed
   PREFIX Vzhao_terrain_patch_acc
   TOP_MODULE zhao_terrain_patch_acc
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_acc.sv)
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_law_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_patch_acc.sv)
 add_test(NAME field_patch_acc_directed COMMAND test_field_patch_acc_directed)
 set_tests_properties(field_patch_acc_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 add_test(NAME field_patch_acc_random COMMAND test_field_patch_acc_directed --random 40)
