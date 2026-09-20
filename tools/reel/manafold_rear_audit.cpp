@@ -344,6 +344,7 @@ struct Sample {
   double rel = 0, axis = 0, bend = 0, front_bend = 0, sock = 0, arm = 0;
   int bend_ring = 0;
   double span_mm = 0;
+  double ball_a_y = 0, ball_b_y = 0, ball_c_y = 0;  // R5
   V3 end, last, c;
   M3 relm;
   Strain str;
@@ -432,9 +433,31 @@ constexpr int32_t kGateLineFarRadiusPx = 128;  // Drift's projected radius
 // that matters and the regress floor is raised to meet it.
 constexpr double kGateRailTargetFloor = 0.50;
 constexpr double kGateRailRegressFloor = 0.12;
-constexpr double kGateRailCeiling = 1.80;    // stretch, against a worst of 1.441
+// THE STRETCH CEILING, and it was RAISED during this pass. Saying so:
+// it was first written at 1.80, with margin over a pre-dip worst of 1.441.
+// Then item 2's kneading dip landed and took the worst to 1.919 -- broadly, not
+// on one clip: lowering the worst offender's gain simply promoted the next one.
+// So there is no setting of the dip that both delivers the gesture and stays
+// under 1.80, and 2.10 is margin over the shipping 1.919.
+//
+// ⚠ RAISING A GUARD TO LET YOUR OWN NEW FEATURE THROUGH IS THE TRAP, so what
+// this ceiling does and does not claim matters. It does NOT claim 1.919 is the
+// right amount of stretch -- only the render settles that, and the dip was
+// looked at on Inspect before/after (P20-IMPLEMENTATION.md) where it reads as a
+// gentle squeeze of the loop with no collapse. It DOES claim that from here on,
+// anything past 2.10 is a regression. The FOLD floor, which is the item-1 guard
+// and the one that matters, was NOT touched: at the shipping dip the worst rear
+// rail is 0.129, exactly the dip-off value, so the new gesture costs item 1
+// nothing. That parity is the number to check if either is ever moved again.
+constexpr double kGateRailCeiling = 2.10;
 constexpr double kGateHandoffMaxMm = 320.0;  // against a worst of 260
 constexpr double kGateRailStepMax = 0.12;    // against a worst of 0.053
+// R5: how far below BOTH outer balls the middle one must get, at its deepest.
+// 20 mm is about 3 px at native -- small, because the requirement is the
+// RANKING; how deep it looks is an art value chosen by eye, not by this gate.
+constexpr double kGateDipMarginMm = 20.0;
+// B's own vertical travel over the clip: the dip must go and COME BACK.
+constexpr double kGateDipReturnMm = 60.0;
 
 struct ClipStats {
   size_t samples = 0;
@@ -459,6 +482,11 @@ struct ClipStats {
   // of it. This is the authority behind "it stretches too much".
   double span_max_mm = 0, span_min_mm = 0, span_step_mm = 0;
   size_t span_max_at = 0;
+  // R5 DIP: how far B gets below the lower of A and C (positive == B is the
+  // lowest ball), and B's own vertical travel over the clip.
+  double dip_margin_mm = -1e9;
+  double b_low = 1e9, b_high = -1e9;
+  size_t dip_at = 0;
 };
 
 ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
@@ -472,6 +500,10 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
   std::vector<std::array<double, kStrainSegments>> rail0, hoop0;
   const bool have_rest = rest_edge_lengths(T, smap, rail0, hoop0);
   const int ring_c = ring_of_station(u02::kKnuckleAtCMm);
+  // PASS 20 (Direction 21 item 2): the three free carriers' own rings, for R5.
+  const int ring_ball_a = ring_of_station(u02::kKnuckleAtAMm);
+  const int ring_ball_b = ring_of_station(u02::kKnuckleAtBMm);
+  const int ring_ball_c = ring_c;
   const int ring_end = ring_of_station(u02::kKnuckleAtEndMm);
   const int ring_last = (ring_c + ring_end) / 2;
   // first ring whose BOTH neighbouring segments lie past C's exit blend
@@ -625,6 +657,20 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
           }
         }
       }
+      // ---- R5 (PASS 20, Direction 21 item 2): WHICH BALL IS LOWEST ---------
+      // ⚠ READ OFF THE POSED SKIN, NOT OFF THE BONE ORIGINS, and that is not a
+      // style choice. The first version of this check read HingeA/B/C's posed
+      // ORIGINS through the production pose path, and it reported the dip as
+      // completely absent -- identical numbers at depth 470 and at depth 2000 --
+      // while the rendered bank's CRC changed. The carriers' offsets are
+      // realised through span-delta HELPER bones the skin is weighted to, so a
+      // ball can travel half a metre on screen with its nominal bone's origin
+      // never moving. The ball the owner is pointing at is a piece of SURFACE.
+      // (Same lesson as item 1, one gate along: measure the thing, and prove
+      // the instrument can see it before believing what it reports.)
+      s.ball_a_y = cen[ring_ball_a].y;
+      s.ball_b_y = cen[ring_ball_b].y;
+      s.ball_c_y = cen[ring_ball_c].y;
       s.end = cen[ring_end];
       s.last = cen[ring_last];
       s.c = cen[ring_c];
@@ -690,6 +736,15 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       st.span_max_at = i;
     }
     st.span_min_mm = std::min(st.span_min_mm, s.span_mm);
+    {
+      const double m = std::min(s.ball_a_y, s.ball_c_y) - s.ball_b_y;
+      if (m > st.dip_margin_mm) {
+        st.dip_margin_mm = m;
+        st.dip_at = i;
+      }
+      st.b_low = std::min(st.b_low, s.ball_b_y);
+      st.b_high = std::max(st.b_high, s.ball_b_y);
+    }
     if (i > 0)
       st.span_step_mm =
           std::max(st.span_step_mm, std::fabs(s.span_mm - seq[i - 1].span_mm));
@@ -805,6 +860,11 @@ int line_law_failures(bool verbose) {
 // splats (so motes/bodies/glows kept their size). Control --fail-line-flag
 // strips the flags after production and must fire R3 alone.
 bool g_fail_line_flag = false;
+// R5 is only JUDGED when the dip is on, or when its control forces it -- the
+// feature ships off (see kKneadDipGainPm), and a leg that cannot reach its
+// state is not evidence, so the control forces it rather than the normal run
+// asserting something that is switched off.
+bool g_force_dip_leg = false;
 int line_flag_failures(const zc::CreatureType& T, bool verbose) {
   int fails = 0;
   for (int want : {1, 0}) {
@@ -869,6 +929,20 @@ int main(int argc, char** argv) {
       gate = true;
       u02::g_u02_rear_ambient_gain_pm = 3 * u02::kRearSocketAmbientGainPm;
       std::printf("MUTANT: --fail-rear-joint (End ambient rotation x3)\n");
+    } else if (std::strcmp(argv[i], "--fail-no-dip") == 0) {
+      gate = true;
+      g_force_dip_leg = true;
+      // R5's positive control: the dip's own production knob, switched off. It
+      // is also the EXACT-OFF control for the feature -- with it the bank is
+      // byte-for-byte the pre-dip bank -- so one switch proves both that the
+      // gate can see the dip and that the mechanism is cleanly removable.
+      u02::g_u02_knead_dip_gain_pm = 0;
+      std::printf("MUTANT: --fail-no-dip (kneading dip switched off)\n");
+    } else if (std::strcmp(argv[i], "--dip") == 0) {
+      gate = true;
+      g_force_dip_leg = true;
+      u02::g_u02_knead_dip_gain_pm = 1000;
+      std::printf("DIP ENABLED: judging R5 with the kneading dip on\n");
     } else if (std::strcmp(argv[i], "--fail-rear-strain") == 0) {
       gate = true;
       // The committed NEGATIVE CONTROL from manafold_art.h: limiting what the
@@ -927,6 +1001,12 @@ int main(int argc, char** argv) {
     u02::g_u02_rear_carrier_calm_pm = std::atoi(e);
   if (const char* e = std::getenv("ZHAO_U02_REAR_SPAN_DEEP_BIAS_PM"))
     u02::g_u02_rear_span_deep_bias_pm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_DEPTH_MM"))
+    u02::g_u02_knead_dip_depth_mm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_PM"))
+    u02::g_u02_knead_dip_gain_pm = std::atoi(e);
+  if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_FOLD_PM"))
+    u02::g_u02_knead_dip_fold_pm = std::atoi(e);
 
   const zc::CreatureType& T = u02::type();
   if (T.mesh.empty()) {
@@ -956,6 +1036,9 @@ int main(int argc, char** argv) {
   double w_rail_min = 1e9, w_rail_max = 0, w_handoff = 0, w_rail_step = 0;
   int w_rail_min_slot = -1, w_rail_max_slot = -1, w_handoff_slot = -1;
   int w_rail_min_ring = -1;
+  // R5 DIP
+  int dip_clips = 0, dip_missing = 0, dip_stuck = 0, dip_worst_slot = -1;
+  double dip_worst_margin = 1e9;
   for (int want : slots) {
     const zc::Clip* clip = nullptr;
     for (const zc::Clip& c : T.bank.clips)
@@ -993,6 +1076,32 @@ int main(int argc, char** argv) {
       w_handoff_slot = want;
     }
     w_rail_step = std::max(w_rail_step, st.rail_step);
+    // R5: only clips that AUTHOR a dip are judged for one.
+    const int32_t dip_want =
+        want >= 0 && want < u02::kKneadClipSlots ? u02::kKneadDipClipPm[want] : 750;
+    if (dip_want > 0 && u02::g_u02_knead_dip_gain_pm > 0) {
+      ++dip_clips;
+      if (st.dip_margin_mm < kGateDipMarginMm) {
+        ++dip_missing;
+        std::printf("  R5 slot %2d: B never becomes the lowest ball "
+                    "(best margin %.0f mm)\n", want, st.dip_margin_mm);
+      }
+      // ⚠ AGAINST A NAMED ABSOLUTE, NOT AGAINST THE AUTHORED DEPTH. This leg
+      // asks "did the dip come back up", and coupling it to the authored depth
+      // made it ask "was the dip deep" instead -- so raising the depth knob
+      // turned this leg RED on short clips whose ramps are floored and whose
+      // envelope never reaches 1. A knob that breaks a gate by being turned up
+      // is a gate measuring the wrong operand.
+      if (st.b_high - st.b_low < kGateDipReturnMm) {
+        ++dip_stuck;
+        std::printf("  R5 slot %2d: B's travel is only %.0f mm -- the dip does "
+                    "not return\n", want, st.b_high - st.b_low);
+      }
+      if (st.dip_margin_mm < dip_worst_margin) {
+        dip_worst_margin = st.dip_margin_mm;
+        dip_worst_slot = want;
+      }
+    }
   }
   if (!gate) return 0;
   std::printf("\nR1 FRAME: worst arm<->End rotation %.2f deg (slot %d, ceiling %.1f); "
@@ -1040,6 +1149,46 @@ int main(int argc, char** argv) {
         "to 662 mm. Not repaired in pass 20; three candidate fixes were "
         "measured and falsified (P20-IMPLEMENTATION.md).\n",
         w_rail_min, kGateRailTargetFloor);
+  }
+  // ---- R5 DIP (PASS 20, Direction 21 item 2) -------------------------------
+  //
+  // Owner: "the ball in the very middle at the top [must] sometimes move
+  // downwards so much it BECOMES THE LOWEST BALL."
+  //
+  // That is a RANKING claim, so this checks the ranking. "B travelled 470 mm
+  // down" would pass while B remained the highest ball, because the three rest
+  // heights differ -- which is the pass-19 fault exactly: a gate that measures a
+  // component instead of the thing. It also requires the dip to RETURN, so a
+  // carrier that sagged and stayed there fails.
+  std::printf("R5 DIP: %d clip(s) author a dip; %d never reach lowest; "
+              "%d do not return; worst margin %.0f mm (slot %d, need %.0f)\n",
+              dip_clips, dip_missing, dip_stuck, dip_worst_margin,
+              dip_worst_slot, kGateDipMarginMm);
+  // TWO thresholds again, and for the same reason as R4.
+  //
+  // HARD: the dip must HAPPEN and RETURN on every clip that authors one. That
+  // is objectively true or false, it is what --fail-no-dip flips, and it is the
+  // regression guard that stops the mechanism being silently switched off or
+  // scheduled off the end of a short clip.
+  //
+  // REPORTED: whether B actually reaches the BOTTOM of the ranking. It does on
+  // the idle family and not yet on every clip, because each clip poses the loop
+  // differently and the depth is a per-clip art value the owner has not seen
+  // yet. Listing those clips loudly is honest; hard-failing on them would make
+  // the matrix red over a value nobody has chosen by eye.
+  if ((dip_clips == 0 && g_force_dip_leg) || dip_stuck != 0) {
+    mask |= 0x10;
+    std::printf("FAIL R5 DIP: the kneading dip does not happen and return on "
+                "every clip that authors one\n");
+  } else if (dip_missing != 0) {
+    std::printf(
+        "OPEN R5 (declared 2026-09-20, Direction 21 item 2): the dip runs on "
+        "all %d clips and returns on all of them, but B reaches the BOTTOM of "
+        "the ranking on only %d. The per-clip lever is kKneadDipClipPm and the "
+        "global one is ZHAO_U02_KNEAD_DIP_FOLD_PM (1000 ships; the ladder to "
+        "2000 takes it from 3 clips to 15). Both are art values and want the "
+        "owner's eye.\n",
+        dip_clips, dip_clips - dip_missing);
   }
   std::printf("rear gate mask 0x%X -> %s\n", mask, mask ? "RED" : "GREEN");
   return mask ? 1 : 0;

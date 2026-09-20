@@ -4397,6 +4397,141 @@ constexpr int kKneadClipPm[23] = {1000, 850, 950, 900, 700, 800, 850,
 constexpr int kKneadClipSlots =
     static_cast<int>(sizeof(kKneadClipPm) / sizeof(kKneadClipPm[0]));
 
+// ---- PASS 20 (Owner Direction 21 item 2): THE KNEADING DIP -----------------
+//
+// Owner, 2026-09-20: "I want the ball in the very middle at the top to sometimes
+// move downwards so much it becomes the lowest ball. That's a kneading
+// operation. [...] That's on all animations."
+//
+// And, naming the reference himself: "nodule taunt already does the kneading
+// motion at times." That is slot 21 / Taunt III, and inside it the mechanism is
+// Direction 16's CROWN SHUFFLE, whose own comment is already this feature's
+// specification: "Four held A/B/C rankings give every free carrier top and
+// bottom ownership."
+//
+// SO THIS IS A GENERALISATION, NOT A SECOND KNEADING SYSTEM.
+//
+// SHARED with the crown shuffle:
+//   * the authoring shape -- a carrier is sent to a named HEIGHT and held,
+//     rather than driven by an oscillator. kTaunt3OrderLowMm[1] is -325 and is
+//     the deepest of the three lows; kKneadDipDepthMm below is its sibling.
+//   * motion_c2_ease for every attack and release, so C2 at every join.
+//   * swallow_nodules as the ONE production consumption point, which is what
+//     keeps the dip under the same F/A/B/C/E public mute and attachment law as
+//     every other carrier beat. The dip writes swal[2] and nothing else.
+//   * the per-slot gain discipline of kKneadClipPm, so a clip that must not do
+//     it can say so.
+//   * antenna_knead as the host -- already the one layer every performing clip
+//     calls.
+//
+// PER-CLIP, and it has to be:
+//   * WHEN and HOW OFTEN. Clip lengths run from 140 to 600 samples, so a fixed
+//     key number would put the dip in a different place in every performance
+//     and off the end of the short ones. The schedule is expressed in fractions
+//     of the clip and evaluated MODULO `keys`, exactly as eye_travel_life_pm
+//     is, so the loop seam needs no arithmetic luck -- a dip that would straddle
+//     key 0 simply wraps and is continuous across it.
+//   * WHETHER. Taunt III is 0: its crown shuffle already owns the carrier
+//     rankings for its whole middle, and a second dip underneath would be the
+//     two-authorities fault. Slot 7 (the still form diagnostic) and slot 13
+//     (Trick, whose plant contact is pinned) are 0 for the same reason
+//     kKneadClipPm zeroes them.
+//
+// THE DEPTH IS A RANKING REQUIREMENT, not a displacement one: B must end up
+// BELOW A and C, and their rest heights differ. The value below is chosen by
+// eye; that B actually becomes the lowest carrier is checked on the comparison
+// side, by manafold-nodule's N6 leg, per clip, inside the authored window.
+constexpr int32_t kKneadDipDepthMm = 300;
+// Fractions of the clip, per dip: rise, hold at the bottom, release.
+constexpr int32_t kKneadDipRisePm = 130;
+constexpr int32_t kKneadDipHoldPm = 70;
+constexpr int32_t kKneadDipFallPm = 160;
+// Floors in KEYS so a short clip still gets a knead and not a snap (the same
+// reason eye_travel_life_pm floors its ramps).
+constexpr int kKneadDipMinRampKeys = 9;
+constexpr int kKneadDipMinHoldKeys = 3;
+// At most this many dips per loop, dropped until they fit with real rest
+// between them. A crowded dip is a wobble, not a knead.
+constexpr int kKneadDipCount = 2;
+constexpr int kKneadDipMinRestKeys = 24;
+// Where the first dip sits, per mille of the clip, plus a per-slot skew so two
+// clips playing side by side do not knead in lockstep.
+constexpr int32_t kKneadDipPhasePm = 240;
+constexpr int32_t kKneadDipSlotSkewPm = 97;
+// The dip carries a little of A and C the other way -- the same asymmetry the
+// Taunt III shrug uses ("a middle that drops carries the rear down with it, so
+// it takes the smaller share"), read in reverse: when the middle goes down the
+// outers lift slightly, which is what makes it read as KNEADING rather than as
+// the whole antenna sagging.
+constexpr int32_t kKneadDipOuterLiftPm = 180;
+// The FOLD share, per carrier (A, B, C), at full dip depth. Taken from the same
+// family as the crown shuffle's own tableau-2 row, kTaunt3OrderFoldDeltaPm
+// {-170, -1000, 0} -- the row that puts B at the bottom. B closing its fold is
+// what actually drops the middle of the loop; the carrier offset alone is a
+// target the span aims at over a fixed length and is mostly absorbed. A takes a
+// small share with it so the loop closes as a shape rather than kinking at one
+// station, and C is left alone so the rear closure is not disturbed (item 1).
+constexpr int32_t kKneadDipFoldDeltaPm[3] = {-170, -1000, 0};
+// The FOLD share's multiplier. 1000 is the crown shuffle's own authored
+// strength; 2000 SHIPS, and the reason is measured rather than preferred.
+// Laddered against the item-1 strain gate and the item-2 ranking gate together
+// (P20-IMPLEMENTATION.md):
+//   fold    worst rear rail      clips where B reaches the bottom
+//      0    0.000  (much worse)   0 / 21
+//   1000    0.085  (worse)        0 / 21
+//   1500    0.129  (NEUTRAL)      4 / 21
+//   2000    0.129  (NEUTRAL)     14 / 21
+//   2400    0.129  (NEUTRAL)     15 / 21
+// 0.129 is exactly the dip-OFF value, so from 1500 up the dip costs item 1
+// nothing. Below it the dip makes the rip WORSE -- the carrier offset alone
+// drags the rear closure and it is the fold share that compensates, which is
+// the opposite of what "turn the new thing down if it hurts" would have done.
+// 2000 is the knee: 2400 buys one more clip for a much larger pose change.
+constexpr int32_t kKneadDipFoldPm = 2000;
+inline int32_t g_u02_knead_dip_fold_pm = kKneadDipFoldPm;
+
+// ---- PASS 20 (Direction 21 item 3): THE FOLD'S REACTION TO THE DIP --------
+// See the block in manafold_fx.h beside kKneadVisualSmoothFrames for why this
+// is read from the POSE (B's sag below the A/C midline) and not from the dip's
+// own schedule. Millimetres of sag; the onset is where the fold starts to
+// notice and the reference is where it is fully roused.
+// ZHAO_U02_FOLD_DIP_PM=0 is the EXACT-OFF control: the agitation reverts to the
+// version-18/19 speed-only term and the mana is byte-for-byte what it was.
+constexpr int32_t kFoldDipOnsetMm = 90;
+constexpr int32_t kFoldDipRefMm = 420;
+static_assert(kFoldDipOnsetMm < kFoldDipRefMm,
+              "the fold's dip onset must lie below its reference depth");
+constexpr int32_t kFoldDipGainPm = 650;
+inline int32_t g_u02_fold_dip_gain_pm = kFoldDipGainPm;
+constexpr int kKneadDipClipPm[23] = {1000, 900, 950, 900, 800, 850, 900,
+                                     0,    850, 700, 750, 900, 800, 0,   700,
+                                     750,  750, 700, 650, 900, 750, 0, 800};
+static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
+                              sizeof(kKneadDipClipPm[0])) == kKneadClipSlots,
+              "the dip gain table must stay in step with kKneadClipPm");
+// ⚠ THE DIP SHIPS OFF, AND THE REASON IS A CONTRACT, NOT TASTE.
+// Enabling it turns THREE mspan legs red -- the signed bound / free-span
+// margin, the visible-carrier angular step, and 'SpanDeltaE and body-attached
+// RearSocket do not meet at End'. It does so at ANY strength: laddered down to
+// a 120 mm depth it is still red, and only a depth of 0 returns mspan and
+// mprobe to green. So this is not a value that wants turning down; the dip as
+// built moves carriers outside the signed-span contract that exists to stop
+// the free-floating-dongle fault, and that contract is not ours to breach for
+// a new gesture.
+//
+// Taunt III's crown shuffle does the same KIND of thing and is green, because
+// mspan models it (it has a --fail-order control for exactly that beat). The
+// repair is to route the dip through the same accounting rather than to shrink
+// it. Everything else about the feature is finished and committed: the
+// schedule, the C2 ramps, the exact loop seam, the fold share, the gate and
+// its fired control.
+//
+// ZHAO_U02_KNEAD_DIP_PM=1000 turns it on for a look. The authored values below
+// are the ones chosen against the ladders; they are not the blocker.
+constexpr int32_t kKneadDipGainPm = 0;
+inline int32_t g_u02_knead_dip_gain_pm = kKneadDipGainPm;
+inline int32_t g_u02_knead_dip_depth_mm = kKneadDipDepthMm;  // authoring ladder
+
 // ---- PASS 6 STAGE A: THE JUDGING FRAME ------------------------------------
 // A.2 (architecture §2.1, owner question 3): the house camera for the
 // fixed-camera clips. 240000 -> 360000. This is the one knob in the pass-5

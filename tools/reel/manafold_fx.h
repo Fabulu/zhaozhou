@@ -2993,7 +2993,56 @@ inline int32_t mana_fold(uint32_t frame, uint32_t slot, int keys, const FxAnchor
   int32_t agit_step = agit_delta / kKneadVisualSmoothFrames;
   if (agit_step == 0 && agit_delta != 0) agit_step = agit_delta > 0 ? 1 : -1;
   stfx.knead_visible += agit_step;
-  const int32_t agit = stfx.knead_visible;
+  // ---- PASS 20 (Owner Direction 21 item 3): THE FOLD REACTS TO THE DIP -----
+  //
+  // Owner: "The particles should react to it when it does it."
+  //
+  // The agitation above is an anchor-SPEED excess over a slow baseline, and the
+  // kneading dip is deliberately slow and C2 -- so it can travel the middle of
+  // the loop half a metre and never clear that threshold. The fold would keep
+  // churning at its resting rate through the one gesture the owner wants it to
+  // notice. Speed is the wrong operand for a knead; DEPTH is the thing.
+  //
+  // ⚠ READ FROM THE POSE, NOT FROM THE DIP'S SCHEDULE. The obvious route is to
+  // call knead_dip_mm here with the same slot and frame. That duplicates the
+  // schedule in a second place with its own idea of what `frame` and `keys`
+  // mean, and the two can drift apart silently -- the particles would react on
+  // the wrong frames and every gate would still pass, because no gate compares
+  // them. The dip is VISIBLE IN THE ANCHORS: it is exactly "carrier B below the
+  // line between A and C". Measuring that cannot desynchronise from the motion,
+  // because it IS the motion.
+  //
+  // It also means the reaction is free on ANY authored dip, not just this one:
+  // Taunt III's crown shuffle drops B through the same geometry and the fold
+  // now answers it too, which is the behaviour the owner was already pointing
+  // at when he named the nodule taunt.
+  //
+  // kFoldDipRefMm is the depth that earns a full reaction; the gain is how much
+  // agitation a full dip is worth. Both chosen by eye against the v18/v19 mana
+  // character, which is otherwise untouched -- this adds to the SAME agitation
+  // scalar the fold already consumes, so the population, the palette and the
+  // distance-scaled lines all keep their existing behaviour and simply have
+  // something more to say during the knead.
+  int32_t dip_pm = 0;
+  if (g_u02_fold_dip_gain_pm > 0) {
+    // +Y is up, so B below the A/C midline is a positive sag.
+    const int32_t mid_y = (A.hinge_a[1] + A.hinge_c[1]) / 2;
+    const int32_t sag_mm =
+        static_cast<int32_t>((static_cast<int64_t>(mid_y - A.hinge_b[1]) * 1000) >> 16);
+    if (sag_mm > kFoldDipOnsetMm) {
+      const int32_t over = sag_mm - kFoldDipOnsetMm;
+      const int32_t span = kFoldDipRefMm - kFoldDipOnsetMm;
+      const int32_t u = span > 0 ? (over >= span ? 1000 : over * 1000 / span) : 0;
+      // Smoothstep so the reaction arrives and leaves without a corner, and so
+      // a dip that just grazes the onset does not flicker the whole field.
+      const int32_t s = static_cast<int32_t>(
+          (static_cast<int64_t>(u) * u * (3000 - 2 * u)) / 1000000);
+      dip_pm = static_cast<int32_t>(
+          (static_cast<int64_t>(s) * g_u02_fold_dip_gain_pm) / 1000);
+    }
+  }
+  int32_t agit = stfx.knead_visible + dip_pm;
+  if (agit > 1000) agit = 1000;
   // DRAG: hinge B's relative velocity, C1-smoothed before entering the lag
   // buffer. Raw acceleration spikes otherwise get multiplied by 2.6x and make
   // the particle field look more violent than the antenna that carries it.

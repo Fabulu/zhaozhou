@@ -288,6 +288,19 @@ struct Rig {
   // ordering every clip already uses -- so not one call site changes, and a
   // clip that never touches them poses exactly as it did before.
   NoduleOffsets nod;
+  // PASS 20 (Direction 21 item 2): the kneading dip's FOLD share, riding the
+  // rig for exactly the reason nod does -- antenna_knead sets it, loop_pose
+  // consumes it, and not one clip call site changes.
+  //
+  // ⚠ IT IS THE HALF THAT ACTUALLY MOVES THE BALL. The first version of the
+  // dip drove only the carrier OFFSET channel (swallow_nodules -> g.nod), and
+  // the render changed while the ball barely did: raising the authored depth
+  // from 470 mm to 1100 mm improved B's rank by 43 mm. A nodule offset is a
+  // target the span AIMS at over a fixed span length, so most of it is
+  // absorbed. The crown shuffle this generalises always drove both -- its
+  // tableau 2 pairs B's -325 mm low with a fold delta of -1000 pm
+  // (kTaunt3OrderFoldDeltaPm) -- and the fold delta is the dominant term.
+  int32_t fold_delta_pm[3] = {0, 0, 0};  // A, B, C
   /** Signed centre-distance change for Front/A, A/B and B/C, in per-mille.
    *  These are diagnostic receipts only. Visible length uses a constant-slope
    *  partial helper across the free run and the full child translation across
@@ -316,6 +329,7 @@ struct Rig {
       scale_q15[b] = kEyeScaleIdentityQ15;
     }
     nod = NoduleOffsets{};
+    fold_delta_pm[0] = fold_delta_pm[1] = fold_delta_pm[2] = 0;
     span_pm[0] = span_pm[1] = span_pm[2] = 0;
     eye_lean = 0;
   }
@@ -485,10 +499,14 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
   const auto a = [](int32_t base, int32_t pm) {
     return static_cast<int32_t>((static_cast<int64_t>(base) * pm) / 1000);
   };
+  // PASS 20: the kneading dip's fold share, set by antenna_knead. Zero unless a
+  // dip is running, so every existing caller poses exactly as it did. Taunt III
+  // passes its crown-shuffle deltas in through its own arguments and authors no
+  // dip (kKneadDipClipPm[21] == 0), so the two can never both be in play.
   const int32_t fn = a(kLoopFoldNeckA16, neck_pm);
-  const int32_t fa = a(kLoopFoldAA16, a_pm);
-  const int32_t fb = a(kLoopFoldBA16, b_pm);
-  const int32_t fc = a(kLoopFoldCA16, c_pm);
+  const int32_t fa = a(kLoopFoldAA16, a_pm + g.fold_delta_pm[0]);
+  const int32_t fb = a(kLoopFoldBA16, b_pm + g.fold_delta_pm[1]);
+  const int32_t fc = a(kLoopFoldCA16, c_pm + g.fold_delta_pm[2]);
   // PASS 4: the drawn kink/lean is a REST attitude on the FRONT JUNCTION
   // bone (the old neck bind — accepted silhouette preserved verbatim).
   // The NEW kBNeck hinge is identity at rest: a pure articulation joint
@@ -2297,6 +2315,61 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
   return n;
 }
 
+/** PASS 20 (Direction 21 item 2): THE KNEADING DIP's schedule.
+ *
+ *  Returns B's authored downward travel in mm for this sample, 0 outside a dip.
+ *  See kKneadDipDepthMm in manafold_art.h for what this generalises and why.
+ *
+ *  PERIODIC BY CONSTRUCTION. Every window is evaluated modulo `keys`, so a dip
+ *  that straddles key 0 wraps and is continuous across the seam -- no clip
+ *  length has to divide anything, and the one-shots get the same treatment as
+ *  the loops without a special case. C2 at every join because both ramps run
+ *  through motion_c2_ease, the same ease the crown shuffle's attacks use.
+ *
+ *  ⚠ THE RAMPS HAVE FLOORS IN KEYS AND THE WINDOW IS CAPPED. A fraction of a
+ *  140-sample clip is a snap, and a snap on a carrier is what QA's per-key step
+ *  checks exist to catch; a window longer than the clip would leave B parked at
+ *  the bottom forever, which is a pose, not a knead. */
+inline int32_t knead_dip_mm(uint32_t slot, int keys, int f, int32_t gain_pm) {
+  if (gain_pm <= 0 || keys <= 0) return 0;
+  const int span = keys;
+  const auto win_keys = [&](int32_t pm, int floor_k) {
+    int k = static_cast<int>((static_cast<int64_t>(span) * pm) / 1000);
+    if (k < floor_k) k = floor_k;
+    if (k > span / 3) k = span / 3;
+    if (k < 1) k = 1;
+    return k;
+  };
+  const int rise = win_keys(kKneadDipRisePm, kKneadDipMinRampKeys);
+  const int hold = win_keys(kKneadDipHoldPm, kKneadDipMinHoldKeys);
+  const int fall = win_keys(kKneadDipFallPm, kKneadDipMinRampKeys);
+  const int win = rise + hold + fall;
+  if (win >= span) return 0;  // nothing that would leave B permanently down
+  // Drop dips until the schedule fits with real rest between them.
+  int n = kKneadDipCount;
+  while (n > 1 && n * (win + kKneadDipMinRestKeys) > span) --n;
+  const int32_t phase = static_cast<int32_t>(
+      (static_cast<int64_t>(span) *
+       (kKneadDipPhasePm + static_cast<int32_t>(slot) * kKneadDipSlotSkewPm)) /
+      1000);
+  int32_t env = 0;
+  for (int i = 0; i < n; ++i) {
+    const int start = i * span / n + phase;
+    int d = (f - start) % span;
+    if (d < 0) d += span;
+    if (d < rise) {
+      env += motion_c2_ease(d * 1000 / rise);
+    } else if (d < rise + hold) {
+      env += 1000;
+    } else if (d < win) {
+      env += 1000 - motion_c2_ease((d - rise - hold) * 1000 / fall);
+    }
+  }
+  if (env > 1000) env = 1000;  // windows are spaced so this cannot bind
+  return static_cast<int32_t>(
+      (static_cast<int64_t>(g_u02_knead_dip_depth_mm) * env / 1000 * gain_pm) / 1000);
+}
+
 /** PASS 13 R1(c) -- THE EYE TRAVEL IS A SCHEDULE: DWELL, THEN GLANCE.
  *
  *  D9 SS12.1: "They should always be centered unless they DECIDE to move."
@@ -2483,6 +2556,50 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
       g.nod.cx = static_cast<int32_t>((static_cast<int64_t>(g.nod.cx) * cg) / 1000);
       g.nod.cy = static_cast<int32_t>((static_cast<int64_t>(g.nod.cy) * cg) / 1000);
       g.nod.cz = static_cast<int32_t>((static_cast<int64_t>(g.nod.cz) * cg) / 1000);
+    }
+  }
+  // ---- PASS 20 (Direction 21 item 2): THE KNEADING DIP -------------------
+  // ⚠ IT RUNS BEFORE THE `gain <= 0` RETURN BELOW, deliberately. The owner said
+  // "that's on all animations", and the knead gain and the dip gain are
+  // different questions: a clip may want no ambient fold-hold-knead and still
+  // want the dip. Its own table says which clips opt out.
+  {
+    const int32_t dip_base =
+        slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadDipClipPm[slot] : 750;
+    const int32_t dip_gain = static_cast<int32_t>(
+        (static_cast<int64_t>(dip_base) * motion_pm / 1000) *
+        g_u02_knead_dip_gain_pm / 1000);
+    const int32_t dip = knead_dip_mm(slot, keys, f, dip_gain);
+    if (dip > 0) {
+      // Through the ONE production consumption point, so the dip inherits the
+      // public F/A/B/C/E mute and the attachment law rather than writing
+      // g.nod directly. B goes down; the outers take a small lift the other
+      // way, which is what makes it read as kneading rather than sagging.
+      const int32_t lift = static_cast<int32_t>(
+          (static_cast<int64_t>(dip) * kKneadDipOuterLiftPm) / 1000);
+      // ⚠ C GETS NO LIFT, AND THAT IS AN ITEM-1 CONSTRAINT, not a taste one.
+      // The first version lifted A and C together. C is where the return arm
+      // starts (finalize_rear_follow walks the arm's origin through HingeC), so
+      // moving it changes |C -> socket| -- the very span whose excursion is the
+      // rip in item 1. It measured plainly: with the outer lift on both, the
+      // rear rail fell from 0.129 to 0.006, i.e. the new feature made the old
+      // defect twice as bad. A alone keeps the kneading read -- middle down,
+      // front up -- and leaves the rear closure exactly where it was.
+      int32_t swal[5] = {0, lift, -dip, 0, 0};
+      swallow_nodules(g, swal, 0);  // no lateral lean: the dip is vertical
+      // ...and the fold share, which is what actually changes the RANKING.
+      // Scaled by the dip's own envelope (dip / depth), so it rises, holds and
+      // releases on exactly the same C2 curve as the offset -- the two halves
+      // cannot drift apart or leave a fold delta standing at the loop seam.
+      const int32_t depth =
+          g_u02_knead_dip_depth_mm > 0 ? g_u02_knead_dip_depth_mm : 1;
+      const auto share = [&](int32_t full) {
+        return static_cast<int32_t>((static_cast<int64_t>(full) * dip) / depth *
+                                    g_u02_knead_dip_fold_pm / 1000);
+      };
+      g.fold_delta_pm[0] += share(kKneadDipFoldDeltaPm[0]);
+      g.fold_delta_pm[1] += share(kKneadDipFoldDeltaPm[1]);
+      g.fold_delta_pm[2] += share(kKneadDipFoldDeltaPm[2]);
     }
   }
   // every authored slot reads its own gain (pass 5: the guard was `< 14`,
