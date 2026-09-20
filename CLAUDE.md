@@ -884,6 +884,19 @@ stale-binary trap from a silent wrong number into a loud one. If ninja still
 says "no work to do", force it with
 `(Get-Item <file>).LastWriteTime = Get-Date`.
 
+**`Copy-Item` is a second producer of the same trap, and it bites on the PUT
+IT BACK half of a fire test.** Added 2026-09-20. `Copy-Item` carries the
+SOURCE's `LastWriteTime` across, so restoring a backup taken before a
+deliberate mutation leaves the restored file OLDER than the objects built from
+the mutant. Ninja says "no work to do", the "restored" run reports the
+MUTANT's failures, and the obvious reading is that the repair did not work —
+which is the flattering direction for *"my fire test was real"* and the wrong
+one for everything else. Measured here restoring `zhao_field_host.sv` after
+proving R101's guard fires. The tell and the fix are the ones above; what is
+new is that a *restore* looks nothing like an edit, so nobody thinks to check.
+Verify the content, not the copy: `RESTORED_OK` on a `.Contains()` of the line
+you put back, then force the timestamp.
+
 **Configure from PowerShell with `tools/env/zhao-env.ps1` sourced, always.**
 `CMakePresets.json` gates `windows-base` on `${hostSystemName} equals Windows`.
 Run `cmake` from Git Bash and it resolves to the MSYS cmake, which reports a
