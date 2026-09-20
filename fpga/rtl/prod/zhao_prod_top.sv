@@ -4787,6 +4787,7 @@ module zhao_prod_top (
   logic [6-1:0] u59_vtx_vi_o;
   logic [6-1:0] u59_vtx_vj_o;
   logic [1-1:0] u59_vtx_ready_o;
+  logic [12-1:0] u59_sheet_texel_o;
   logic [1-1:0] u59_sc_valid_o;
   logic signed [16-1:0] u59_sc_scar_o;
   logic [6-1:0] u59_sc_vi_o;
@@ -4813,6 +4814,7 @@ module zhao_prod_top (
   logic [32-1:0] u59_scar_saturations_o;
   logic [32-1:0] u59_nobake_clamps_o;
   logic [32-1:0] u59_bake_radius_rejects_o;
+  logic [32-1:0] u59_sheet_vertices_dug_o;
   logic [1-1:0] u59_idle_o;
   zhao_terrain_bake_v2 u59_i (
       .clk(clk),
@@ -4835,17 +4837,20 @@ module zhao_prod_top (
       .cmd_dual_i(u59_src[84 +: 1]),
       .cmd_cells_i(u59_src[91 +: 1]),
       .cmd_src_id_i(u59_src[98 +: 16]),
+      .cmd_depth_sheet_i(u59_src[105 +: 1]),
       .trace_patch_id_o(u59_trace_patch_id_o),
       .vtx_vi_o(u59_vtx_vi_o),
       .vtx_vj_o(u59_vtx_vj_o),
-      .vtx_valid_i(u59_src[105 +: 1]),
+      .vtx_valid_i(u59_src[112 +: 1]),
       .vtx_ready_o(u59_vtx_ready_o),
-      .vtx_base_i(u59_src[112 +: 16]),
-      .vtx_scar_i(u59_src[119 +: 16]),
-      .vtx_bottom_i(u59_src[126 +: 16]),
-      .vtx_nobake_i(u59_src[133 +: 1]),
+      .vtx_base_i(u59_src[119 +: 16]),
+      .vtx_scar_i(u59_src[126 +: 16]),
+      .vtx_bottom_i(u59_src[133 +: 16]),
+      .vtx_nobake_i(u59_src[140 +: 1]),
+      .sheet_texel_o(u59_sheet_texel_o),
+      .sheet_strength_i(u59_src[147 +: 8]),
       .sc_valid_o(u59_sc_valid_o),
-      .sc_ready_i(u59_src[140 +: 1]),
+      .sc_ready_i(u59_src[154 +: 1]),
       .sc_scar_o(u59_sc_scar_o),
       .sc_vi_o(u59_sc_vi_o),
       .sc_vj_o(u59_sc_vj_o),
@@ -4855,11 +4860,11 @@ module zhao_prod_top (
       .sc_src_id_o(u59_sc_src_id_o),
       .cell_ci_o(u59_cell_ci_o),
       .cell_cj_o(u59_cell_cj_o),
-      .cell_valid_i(u59_src[147 +: 1]),
+      .cell_valid_i(u59_src[161 +: 1]),
       .cell_ready_o(u59_cell_ready_o),
-      .cell_state_i(u59_src[154 +: 8]),
+      .cell_state_i(u59_src[168 +: 8]),
       .cs_valid_o(u59_cs_valid_o),
-      .cs_ready_i(u59_src[161 +: 1]),
+      .cs_ready_i(u59_src[175 +: 1]),
       .cs_state_o(u59_cs_state_o),
       .cs_ci_o(u59_cs_ci_o),
       .cs_cj_o(u59_cs_cj_o),
@@ -4874,12 +4879,13 @@ module zhao_prod_top (
       .scar_saturations_o(u59_scar_saturations_o),
       .nobake_clamps_o(u59_nobake_clamps_o),
       .bake_radius_rejects_o(u59_bake_radius_rejects_o),
+      .sheet_vertices_dug_o(u59_sheet_vertices_dug_o),
       .idle_o(u59_idle_o)
   );
   logic u59_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u59_fold_q <= 1'b0;
-    else u59_fold_q <= u59_fold_q ^ (((^u59_budget_full_o)) & u59_src[0]) ^ (((^u59_bakes_this_frame_o)) & u59_src[1]) ^ (((^u59_cmd_ready_o)) & u59_src[2]) ^ (((^u59_trace_patch_id_o)) & u59_src[3]) ^ (((^u59_vtx_vi_o)) & u59_src[4]) ^ (((^u59_vtx_vj_o)) & u59_src[5]) ^ (((^u59_vtx_ready_o)) & u59_src[6]) ^ (((^u59_sc_valid_o)) & u59_src[7]) ^ (((^u59_sc_scar_o)) & u59_src[8]) ^ (((^u59_sc_vi_o)) & u59_src[9]) ^ (((^u59_sc_vj_o)) & u59_src[10]) ^ (((^u59_sc_touched_o)) & u59_src[11]) ^ (((^u59_sc_meets_o)) & u59_src[12]) ^ (((^u59_sc_clamped_o)) & u59_src[13]) ^ (((^u59_sc_src_id_o)) & u59_src[14]) ^ (((^u59_cell_ci_o)) & u59_src[15]) ^ (((^u59_cell_cj_o)) & u59_src[16]) ^ (((^u59_cell_ready_o)) & u59_src[17]) ^ (((^u59_cs_valid_o)) & u59_src[18]) ^ (((^u59_cs_state_o)) & u59_src[19]) ^ (((^u59_cs_ci_o)) & u59_src[20]) ^ (((^u59_cs_cj_o)) & u59_src[21]) ^ (((^u59_cs_event_o)) & u59_src[22]) ^ (((^u59_cs_sub_o)) & u59_src[23]) ^ (((^u59_cs_src_id_o)) & u59_src[24]) ^ (((^u59_dig_done_o)) & u59_src[25]) ^ (((^u59_bake_done_o)) & u59_src[26]) ^ (((^u59_breach_active_o)) & u59_src[27]) ^ (((^u59_surface_texels_touched_o)) & u59_src[28]) ^ (((^u59_breach_events_o)) & u59_src[29]) ^ (((^u59_scar_saturations_o)) & u59_src[30]) ^ (((^u59_nobake_clamps_o)) & u59_src[31]) ^ (((^u59_bake_radius_rejects_o)) & u59_src[32]) ^ (((^u59_idle_o)) & u59_src[33]);
+    else u59_fold_q <= u59_fold_q ^ (((^u59_budget_full_o)) & u59_src[0]) ^ (((^u59_bakes_this_frame_o)) & u59_src[1]) ^ (((^u59_cmd_ready_o)) & u59_src[2]) ^ (((^u59_trace_patch_id_o)) & u59_src[3]) ^ (((^u59_vtx_vi_o)) & u59_src[4]) ^ (((^u59_vtx_vj_o)) & u59_src[5]) ^ (((^u59_vtx_ready_o)) & u59_src[6]) ^ (((^u59_sheet_texel_o)) & u59_src[7]) ^ (((^u59_sc_valid_o)) & u59_src[8]) ^ (((^u59_sc_scar_o)) & u59_src[9]) ^ (((^u59_sc_vi_o)) & u59_src[10]) ^ (((^u59_sc_vj_o)) & u59_src[11]) ^ (((^u59_sc_touched_o)) & u59_src[12]) ^ (((^u59_sc_meets_o)) & u59_src[13]) ^ (((^u59_sc_clamped_o)) & u59_src[14]) ^ (((^u59_sc_src_id_o)) & u59_src[15]) ^ (((^u59_cell_ci_o)) & u59_src[16]) ^ (((^u59_cell_cj_o)) & u59_src[17]) ^ (((^u59_cell_ready_o)) & u59_src[18]) ^ (((^u59_cs_valid_o)) & u59_src[19]) ^ (((^u59_cs_state_o)) & u59_src[20]) ^ (((^u59_cs_ci_o)) & u59_src[21]) ^ (((^u59_cs_cj_o)) & u59_src[22]) ^ (((^u59_cs_event_o)) & u59_src[23]) ^ (((^u59_cs_sub_o)) & u59_src[24]) ^ (((^u59_cs_src_id_o)) & u59_src[25]) ^ (((^u59_dig_done_o)) & u59_src[26]) ^ (((^u59_bake_done_o)) & u59_src[27]) ^ (((^u59_breach_active_o)) & u59_src[28]) ^ (((^u59_surface_texels_touched_o)) & u59_src[29]) ^ (((^u59_breach_events_o)) & u59_src[30]) ^ (((^u59_scar_saturations_o)) & u59_src[31]) ^ (((^u59_nobake_clamps_o)) & u59_src[32]) ^ (((^u59_bake_radius_rejects_o)) & u59_src[33]) ^ (((^u59_sheet_vertices_dug_o)) & u59_src[34]) ^ (((^u59_idle_o)) & u59_src[35]);
 
   // ---- zhao_terrain_island_dir ----
   logic [63:0] u60_lfsr_q;
