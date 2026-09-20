@@ -123,6 +123,27 @@ module tb_cmd_exec_pair #(
     output logic [15:0] pop_plane_nz_o,
     output logic [15:0] pop_flags_o,
     output logic [31:0] pops_issued_o,
+
+  // TerrainField 0x0200 (entry I34 build item (a)). A port added to a leaf
+  // costs its WHOLE instantiation chain plus every bench -- this block gained
+  // five trace ports once and this bench was not updated, and the merged tree
+  // then failed to verilate on a file the packet never touched. Connected
+  // here in the same commit that adds them, for exactly that reason.
+  input  logic               tfld_ready_i,
+  output logic               tfld_valid_o,
+  output logic signed [31:0] tfld_x0_o,
+  output logic signed [31:0] tfld_z0_o,
+  output logic signed [31:0] tfld_x1_o,
+  output logic signed [31:0] tfld_z1_o,
+  output logic        [31:0] tfld_handle_o,
+  output logic        [15:0] tfld_cmd_o,
+  output logic        [31:0] tfld_start_tick_o,
+  output logic        [31:0] tfld_duration_o,
+  output logic       [255:0] tfld_params_o,
+  output logic        [31:0] tflds_issued_o,
+  output logic        [31:0] tfld_overflow_o,
+  output logic        [31:0] tfld_src_truncated_o,
+
   // R18/R33: the token ceiling and each view's request.
   output logic        tok_budget_valid_o,
   output logic [31:0] tok_budget_geom0_o,
@@ -296,6 +317,22 @@ module tb_cmd_exec_pair #(
       .pop_plane_nz_o    (pop_plane_nz_o),
       .pop_flags_o       (pop_flags_o),
       .pops_issued_o     (pops_issued_o),
+
+      .tfld_valid_o        (tfld_valid_o),
+      .tfld_ready_i        (tfld_ready_i),
+      .tfld_x0_o           (tfld_x0_o),
+      .tfld_z0_o           (tfld_z0_o),
+      .tfld_x1_o           (tfld_x1_o),
+      .tfld_z1_o           (tfld_z1_o),
+      .tfld_handle_o       (tfld_handle_o),
+      .tfld_cmd_o          (tfld_cmd_o),
+      .tfld_start_tick_o   (tfld_start_tick_o),
+      .tfld_duration_o     (tfld_duration_o),
+      .tfld_params_o       (tfld_params_o),
+      .tflds_issued_o      (tflds_issued_o),
+      .tfld_overflow_o     (tfld_overflow_o),
+      .tfld_src_truncated_o(tfld_src_truncated_o),
+
     .tok_budget_valid_o (tok_budget_valid_o),
     .tok_budget_geom0_o (tok_budget_geom0_o),
     .tok_budget_geom1_o (tok_budget_geom1_o),

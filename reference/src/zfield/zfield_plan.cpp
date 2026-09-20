@@ -20,7 +20,25 @@ using zref::SatLedger;
 
 constexpr uint16_t kNoSlot = 0xFFFF;
 constexpr uint8_t kNoVreg = 0xFF;
-constexpr uint32_t kGroups = 273;  // ceil(1089 / 4): vector groups per full patch
+// Vector groups per full 33x33 (1,089-vertex) Earth association.
+//
+// NOT ceil(1089 / 4) = 273. That is the ALIGNED FLAT packing, which is what
+// the accumulator's INIT and DRAIN phases cost (`zhao_probe_patch_acc.sv`
+// is legitimately 273 for exactly that reason, and must not be "corrected").
+// The UPDATE path is row-major and A GROUP MAY NOT STRADDLE A ROW, so every
+// row costs ceil(33 / 4) = 9 groups and a full patch costs 9 * 33 = 297.
+// `fpga/rtl/synth/zhao_probe_walk_earth.sv` is the RTL law here and asserts
+// the row-boundedness rather than assuming it (`a_group_within_one_row`).
+// Budgeting the executor at 273 under-provisions it by 8.8%.
+//
+// THIS CONSTANT IS A CLASSIFIER, NOT A REPORT -- owner ruling R156, and the
+// reason this correction is not cosmetic. It is the denominator of
+// `finish_demand()`'s admission decision below, so a stale 273 ADMITS a
+// program that is over its deadline: the flattering direction. Concretely,
+// `bind` is always (a per-group factor) * kGroups, so at 273 the largest
+// factor that still reads HOT is 21 -- and 21 * 297 = 6,237 real clocks
+// against the 6,000-clock association deadline, 237 over and admitted.
+constexpr uint32_t kGroups = 297;
 
 // Where a canonical register's CURRENT value lives during the lowering walk.
 struct RegLoc {

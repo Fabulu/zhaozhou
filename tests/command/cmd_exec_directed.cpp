@@ -120,6 +120,21 @@ struct PvWrite {
   uint8_t hi8;
 };
 
+// One TerrainField record as it left CMD.EXEC. `handle` is the handle32 the
+// command carries and is deliberately NOT called a hash: FIELD.PROGCACHE keys
+// its directory by CONTENT hash and nothing in hardware publishes
+// {handle -> hash}, so naming this field `hash` here would bake the confusion
+// entry I34 spends a paragraph refusing into the test as well.
+struct TfldOut {
+  uint32_t cycle = 0;
+  int32_t x0 = 0, z0 = 0, x1 = 0, z1 = 0;
+  uint32_t handle = 0;
+  uint16_t cmd = 0;
+  uint32_t start_tick = 0;
+  uint32_t duration = 0;
+  uint32_t p[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+};
+
 struct Run {
   bool done = false;
   uint8_t err = 0;
@@ -149,6 +164,10 @@ struct Run {
   zref::post::look::Look look;
   uint32_t looks_applied = 0, grade_written = 0, post_refused = 0, grade_overflow = 0;
   uint32_t look_busy_cycles = 0, look_busy_first = 0;
+  // TerrainField 0x0200 (entry I34 build item (a)): every record that LEFT the
+  // executor, with the cycle, plus the three counters.
+  std::vector<TfldOut> tflds;
+  uint32_t tflds_issued = 0, tfld_overflow = 0, tfld_truncated = 0;
 };
 
 /**
@@ -163,7 +182,7 @@ struct Run {
 Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
               uint32_t cfg_mask = 0xFFFFFFFFu, uint32_t draw_mask = 0xFFFFFFFFu,
               uint32_t upl_mask = 0xFFFFFFFFu, uint32_t env_mask = 0xFFFFFFFFu,
-              uint32_t idle_from = 0) {
+              uint32_t idle_from = 0, uint32_t tfld_mask = 0xFFFFFFFFu) {
   Vtb_cmd_exec_pair dut;
   dut.rst_n = 0;
   dut.pkt_valid_i = 0;
@@ -174,6 +193,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   dut.draw_ready_i = 1;
   dut.upl_ready_i = 1;
   dut.env_ready_i = 1;
+  dut.tfld_ready_i = 1;
   dut.post_idle_i = 1;
   dut.eval();
   for (int i = 0; i < 3; ++i) zhao::tick(dut);
@@ -208,6 +228,10 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     // MEM.UPLOAD's ready: in the composition it is high only in its S_IDLE.
     dut.upl_ready_i = ((upl_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     dut.env_ready_i = ((env_mask >> (cyc & 31)) & 1u) ? 1 : 0;
+    // TERRAIN.PATCH's section 9.1 list intake can refuse -- its `fld_add_ready_o`
+    // goes low while the patch is mid-issue -- so the arm must hold the record
+    // and re-present it unchanged, never skip and never duplicate.
+    dut.tfld_ready_i = ((tfld_mask >> (cyc & 31)) & 1u) ? 1 : 0;
     // The post lease: busy until idle_from, idle after (R36's door).
     dut.post_idle_i = (cyc >= idle_from) ? 1 : 0;
     dut.eval();
@@ -283,6 +307,22 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     EnvOut ev{cyc, static_cast<uint16_t>(dut.env_sun_yaw_o), static_cast<uint16_t>(dut.env_sun_pitch_o),
               static_cast<uint16_t>(dut.env_sun_colour_o), static_cast<uint16_t>(dut.env_ambient_o)};
 
+    const bool tfld_fires = (dut.tfld_valid_o != 0) && (dut.tfld_ready_i != 0);
+    TfldOut tf{};
+    if (tfld_fires) {
+      tf.cycle = cyc;
+      tf.x0 = static_cast<int32_t>(dut.tfld_x0_o);
+      tf.z0 = static_cast<int32_t>(dut.tfld_z0_o);
+      tf.x1 = static_cast<int32_t>(dut.tfld_x1_o);
+      tf.z1 = static_cast<int32_t>(dut.tfld_z1_o);
+      tf.handle = dut.tfld_handle_o;
+      tf.cmd = static_cast<uint16_t>(dut.tfld_cmd_o);
+      tf.start_tick = dut.tfld_start_tick_o;
+      tf.duration = dut.tfld_duration_o;
+      // 256 bits arrives as eight 32-bit words, lane k in word k.
+      for (int k = 0; k < 8; ++k) tf.p[k] = dut.tfld_params_o[k];
+    }
+
     // The two token loads are one-cycle pulses with no ready: sampled pre-edge.
     if (dut.tok_budget_valid_o) {
       TokOut k;
@@ -320,6 +360,7 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
       else r.cfg.push_back(w);
     }
     if (draw_fires) r.draws.push_back(d);
+    if (tfld_fires) r.tflds.push_back(tf);
 
     if (dut.decode_done_o && !r.done) {
       r.done = true;
@@ -342,6 +383,9 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
   r.refused = dut.view_range_refused_o;
   r.truncated = dut.stamp_src_truncated_o;
   r.unsupported = dut.unsupported_o;
+  r.tflds_issued = dut.tflds_issued_o;
+  r.tfld_overflow = dut.tfld_overflow_o;
+  r.tfld_truncated = dut.tfld_src_truncated_o;
   r.draws_issued = dut.draws_issued_o;
   r.draw_overflow = dut.draw_overflow_o;
   r.draw_truncated = dut.draw_src_truncated_o;
@@ -441,6 +485,36 @@ std::vector<uint8_t> surfaceStampRecord(uint32_t source_id, uint32_t patch, uint
   rec.payload.ring_width = ring;
   std::vector<uint8_t> out;
   zhao_abi::zhao_pack_surface_stamp(rec, out);
+  return out;
+}
+
+// TerrainField 0x0200. `p` is p0..p7 -- the eight Earth parameter lanes,
+// Q16.16 LE, in declaration order (field-ir.md 7.1). The remaining 32 bytes of
+// the 64-byte blob are the mandatory-zero tail and are LEFT ZERO here: the
+// executor does not police that law (CMD.DECODER owns the verdict) and a test
+// that filled them would be asserting a rule nobody implements.
+std::vector<uint8_t> terrainFieldRecord(uint32_t source_id, uint32_t program, int32_t x0,
+                                        int32_t z0, int32_t x1, int32_t z1, uint32_t start_tick,
+                                        uint32_t duration_ticks, const uint32_t p[8]) {
+  zhao_abi::ZhRecordTerrainField rec{};
+  rec.hdr.opcode = zhao_abi::ZHAO_OP_TERRAIN_FIELD;
+  rec.hdr.record_bytes = 112;
+  rec.hdr.source_id = source_id;
+  rec.payload.program = program;
+  rec.payload.footprint.x0 = x0;
+  rec.payload.footprint.y0 = z0;  // rectfx.y IS world Z on a terrain footprint
+  rec.payload.footprint.x1 = x1;
+  rec.payload.footprint.y1 = z1;
+  rec.payload.start_tick = start_tick;
+  rec.payload.duration_ticks = duration_ticks;
+  for (int k = 0; k < 8; ++k) {
+    rec.payload.parameters[4 * k + 0] = static_cast<uint8_t>(p[k] & 0xFFu);
+    rec.payload.parameters[4 * k + 1] = static_cast<uint8_t>((p[k] >> 8) & 0xFFu);
+    rec.payload.parameters[4 * k + 2] = static_cast<uint8_t>((p[k] >> 16) & 0xFFu);
+    rec.payload.parameters[4 * k + 3] = static_cast<uint8_t>((p[k] >> 24) & 0xFFu);
+  }
+  std::vector<uint8_t> out;
+  zhao_abi::zhao_pack_terrain_field(rec, out);
   return out;
 }
 
@@ -1489,6 +1563,151 @@ int main(int argc, char** argv) {
                             0xFFFFFFFFu);
     check(r.refused == 1, "case27: the out-of-range view_id is refused", 1, r.refused);
     check(r.eyes.empty(), "case27: and no eye word is written for it", 0, r.eyes.size());
+  }
+
+  // ---- 28. TerrainField 0x0200: EVERY lane traverses, not just the footprint
+  //
+  // Entry I34's build item (a). The thing this case exists to refuse is the
+  // shape the directive's 20.8 forbids on the consumer side and which is just
+  // as available here: emitting the footprint, which is the easy half, and
+  // leaving the uniforms zero. A field program run with ten zeroed uniform
+  // lanes is "a field program applied to every vertex, invisible in the
+  // result" -- entry I34's own words -- so every one of the sixteen values is
+  // given a DIFFERENT non-trivial value and checked by name. A swap, a shear
+  // or a dropped lane cannot survive this; a footprint-only implementation
+  // fails twelve checks.
+  {
+    const uint32_t kProgram = 0xC0DE'0042u;
+    const int32_t kX0 = -12'345'678, kZ0 = 0x0011'2233, kX1 = 0x7FFF'0000, kZ1 = -1;
+    const uint32_t kStart = 0xABCD'1234u, kDur = 0x0000'0F00u;
+    uint32_t p[8];
+    for (int k = 0; k < 8; ++k) p[k] = 0x1000'0001u + static_cast<uint32_t>(k) * 0x0111'0111u;
+
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(terrainFieldRecord(0x1234u, kProgram, kX0, kZ0, kX1, kZ1, kStart, kDur, p));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+
+    check(r.done && r.err == zhao_abi::ZH_ABI_OK, "case28: well formed", 1, r.done ? 1 : 0);
+    check(r.committed == 1, "case28: packets_committed_o", 1, r.committed);
+    check(r.tflds.size() == 1, "case28: one TerrainField left the executor", 1, r.tflds.size());
+    check(r.tflds_issued == 1, "case28: tflds_issued_o", 1, r.tflds_issued);
+    check(r.tfld_overflow == 0, "case28: tfld_overflow_o", 0, r.tfld_overflow);
+    check(r.tfld_truncated == 0, "case28: source_id fitted 16 bits", 0, r.tfld_truncated);
+    // The arm must no longer be counted as a record nobody executes.
+    check(r.unsupported == 2, "case28: unsupported_o counts BeginFrame + EndFrame ONLY", 2,
+          r.unsupported);
+    if (!r.tflds.empty()) {
+      const TfldOut& t = r.tflds[0];
+      check(t.x0 == kX0, "case28: footprint x0", static_cast<uint32_t>(kX0),
+            static_cast<uint32_t>(t.x0));
+      check(t.z0 == kZ0, "case28: footprint z0 (rectfx.y0)", static_cast<uint32_t>(kZ0),
+            static_cast<uint32_t>(t.z0));
+      check(t.x1 == kX1, "case28: footprint x1", static_cast<uint32_t>(kX1),
+            static_cast<uint32_t>(t.x1));
+      check(t.z1 == kZ1, "case28: footprint z1 (rectfx.y1)", static_cast<uint32_t>(kZ1),
+            static_cast<uint32_t>(t.z1));
+      check(t.handle == kProgram, "case28: program HANDLE (not a content hash)", kProgram,
+            t.handle);
+      check(t.cmd == 0x1234u, "case28: cmd index is the record source_id, low 16", 0x1234u, t.cmd);
+      check(t.start_tick == kStart, "case28: start_tick, the R2 age uniform's origin", kStart,
+            t.start_tick);
+      check(t.duration == kDur, "case28: duration_ticks, the R3 phase uniform's span", kDur,
+            t.duration);
+      for (int k = 0; k < 8; ++k) {
+        char tag[64];
+        snprintf(tag, sizeof tag, "case28: uniform lane p%d (R%d)", k, 4 + k);
+        check(t.p[k] == p[k], tag, p[k], t.p[k]);
+      }
+    }
+    // The commit law: not one console-visible bit moves before the verdict.
+    if (!r.tflds.empty())
+      check(r.tflds[0].cycle > r.verdict_cycle,
+            "case28: nothing left the executor at or before the verdict", 1,
+            r.tflds[0].cycle > r.verdict_cycle ? 1 : 0);
+  }
+
+  // ---- 29. more than TFLD_Q records REFUSES THE PACKET WHOLE --------------
+  //
+  // TFLD_Q defaults to 4. Five field records must emit NOTHING -- not four,
+  // not "the first four" -- because a section 3.4 sum missing one of its lanes
+  // is a plausible wrong terrain, and a half-applied packet is the one failure
+  // mode nobody would see. This is the stamp arm's declared-bound law, and the
+  // counter is the evidence that the refusal happened rather than a hang.
+  {
+    uint32_t p[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    for (uint32_t k = 0; k < 5; ++k)
+      b.append_record(terrainFieldRecord(0x20u + k, 0x0BAD'0000u + k, static_cast<int32_t>(k),
+                                         static_cast<int32_t>(k), static_cast<int32_t>(k + 1),
+                                         static_cast<int32_t>(k + 1), 100u + k, 7u, p));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.tfld_overflow == 1, "case29: tfld_overflow_o fires once for the packet", 1,
+          r.tfld_overflow);
+    check(r.tflds.empty(), "case29: NOTHING is emitted -- refused whole, never half-applied", 0,
+          r.tflds.size());
+    check(r.tflds_issued == 0, "case29: tflds_issued_o stays zero", 0, r.tflds_issued);
+  }
+
+  // ---- 30. exactly TFLD_Q records all arrive, in order, under backpressure -
+  //
+  // The both-polarity control for case 29: four is the bound, not over it, so
+  // all four must arrive. And with the list intake refusing on most cycles the
+  // arm must HOLD each record and re-present it unchanged -- never skipping
+  // one, never issuing one twice. `tflds_issued_o` counting four while five
+  // records arrived, or four arriving out of order, are the two defects a
+  // result-checking test cannot see.
+  {
+    uint32_t p[8] = {9, 8, 7, 6, 5, 4, 3, 2};
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    for (uint32_t k = 0; k < 4; ++k)
+      b.append_record(terrainFieldRecord(0x30u + k, 0xFEED'0000u + k, static_cast<int32_t>(k * 16),
+                                         static_cast<int32_t>(k * 32),
+                                         static_cast<int32_t>(k * 48),
+                                         static_cast<int32_t>(k * 64), 900u + k, 11u + k, p));
+    b.end_frame(0);
+    // The intake says yes on one cycle in eight.
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu, 0, 0x01010101u);
+    check(r.tfld_overflow == 0, "case30: four records is the bound, not over it", 0,
+          r.tfld_overflow);
+    check(r.tflds.size() == 4, "case30: all four arrive under backpressure", 4, r.tflds.size());
+    check(r.tflds_issued == 4, "case30: tflds_issued_o counts four, not three and not five", 4,
+          r.tflds_issued);
+    for (size_t k = 0; k < r.tflds.size() && k < 4; ++k) {
+      char tag[80];
+      snprintf(tag, sizeof tag, "case30: record %zu arrives in submission order", k);
+      check(r.tflds[k].handle == 0xFEED'0000u + static_cast<uint32_t>(k), tag,
+            0xFEED'0000u + static_cast<uint32_t>(k), r.tflds[k].handle);
+      snprintf(tag, sizeof tag, "case30: record %zu is unchanged by the stall", k);
+      check(r.tflds[k].start_tick == 900u + static_cast<uint32_t>(k), tag,
+            900u + static_cast<uint32_t>(k), r.tflds[k].start_tick);
+    }
+  }
+
+  // ---- 31. a source_id that does not fit 16 bits is COUNTED ---------------
+  //
+  // `fld_add_cmd_i` is 16 bits and source_id is u32 on the wire, so the arm
+  // narrows it exactly as the stamp and draw arms do. The dropped half is a
+  // number, not a silence -- and it is counted on the way OUT, so an abandoned
+  // packet's records never reach the counter.
+  {
+    uint32_t p[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(terrainFieldRecord(0x0007'ABCDu, 0x1111'2222u, 1, 2, 3, 4, 5u, 6u, p));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu);
+    check(r.tflds.size() == 1, "case31: the record still commits", 1, r.tflds.size());
+    check(r.tfld_truncated == 1, "case31: tfld_src_truncated_o sees the dropped high half", 1,
+          r.tfld_truncated);
+    if (!r.tflds.empty())
+      check(r.tflds[0].cmd == 0xABCDu, "case31: and the low half is what is carried", 0xABCDu,
+            r.tflds[0].cmd);
   }
 
   return zhao::report_and_exit("cmd_exec_directed");
