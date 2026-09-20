@@ -1,5 +1,44 @@
-// zhao_view_projq88.sv -- the per-camera PROJECTION SCALE in Q8.8, derived,
-// under owner ruling R73.
+// zhao_view_projq88.sv -- the per-camera PROJECTION SCALE in Q12.8, derived,
+// under owner rulings R73, R83 and R98.
+//
+// ---------------------------------------------------------------------------
+// THE CONTAINER IS Q12.8 IN 20 BITS, NOT Q8.8 IN 16 (R83, landed under R98)
+// ---------------------------------------------------------------------------
+// THE FILE NAME STILL SAYS q88 AND THAT IS DELIBERATE: the module name is what
+// `design/blocks.yml`, `design/prod_manifest.yml`, `design/fit_targets.yml`,
+// `tests/CMakeLists.txt` and the receipts all key on, and renaming a block to
+// record a width change trades one wrong number for five stale references.
+// The FORMAT is stated here, on the port, and in `PROJW`.
+//
+// R83 (2026-09-20) amended R73:
+//
+//   > the derivation stands, the container does not. `proj = kx*vw/2` gives
+//   > 443.41 at 60 deg / 512 px, and the port is Q8.8, which caps at 255.996
+//   > -- so it saturates below 90 deg hfov single-view and below 53.13 deg on
+//   > Duo, which is an ordinary game camera. A saturated `proj` pegs the LOD
+//   > ladder at its FINEST rung: maximum cost, no visible symptom, and nothing
+//   > downstream can tell. Take 20-bit Q12.8 (G1's `STEPS` 33 to 37), NOT a
+//   > unit rescale -- rescaling would move a quantity
+//   > `zref::creature::projected_bound_radius_q8` already defines, which is
+//   > the one thing R73 was chosen to avoid.
+//
+// R98 (2026-09-20) added that this block was BUILT THE SAME DAY, in the
+// container R83 rejects, because the ruling was filed rather than routed to the
+// live lane -- and that the widening therefore has to land in TWO ports: this
+// one and `zhao_measure_governor`'s `proj0_i`/`proj1_i`. Both moved together.
+//
+//     viewport   90 deg   75 deg   60 deg   50 deg   saturates below
+//     256 (Duo)  128.00   166.81   221.70   274.50       ~7 deg  (Q12.8)
+//     512 (one)  256.00   333.63   443.41   548.99       ~7 deg  (Q12.8)
+//
+// Every cell in that table used to be a clamp except the four on the Duo row's
+// left; none of them is now. The ceiling is 4095.996 px per unit tangent.
+//
+// THE SATURATION COUNTER STAYS, and so does the case that fires it. A counter
+// whose state has become unreachable-in-practice is not a counter to delete:
+// `kx` is a matrix magnitude bound, not an angle, and nothing structurally
+// stops a caller presenting one that still clamps. `view_projq88_directed`
+// case 3 drives it deliberately.
 //
 // ---------------------------------------------------------------------------
 // THE RULING, AND WHY IT IS A DERIVATION AND NOT A WIRE
@@ -82,7 +121,7 @@
 // `(n + 256) >> 9`, and it is the only rounding in this file.
 //
 // SATURATION IS POSSIBLE AND IS COUNTED. `kx_raw * vw` reaches 2^44, and the
-// Q8.8 port is 16 bits, so a camera with an extreme row-0 magnitude clamps.
+// Q12.8 port is 20 bits, so a camera with an extreme row-0 magnitude clamps.
 // Unlike the governor's threshold rescale -- which its own header proves
 // cannot saturate and therefore deliberately has no counter -- this one can,
 // so it has one, and the directed test fires it.
@@ -96,7 +135,14 @@ module zhao_view_projq88 #(
     // `zhao_view_projscale`'s `vw*_o` width and the projector's
     // "addr 17 : { h [27:16], w [11:0] }" layout. NAMED AND EDITABLE
     // (CLAUDE.md rule 6) so the block moves by parameter if that field does.
-    parameter int unsigned VWW = 12
+    parameter int unsigned VWW = 12,
+    // Width of the projection-scale port, fraction bits fixed at 8. 20 is
+    // Q12.8 under owner ruling R83; 16 is the Q8.8 container R83 rejects and
+    // is kept reachable ONLY so the saturation table above can be reproduced.
+    // NAMED AND EDITABLE (CLAUDE.md rule 6): the owner moves the container by
+    // changing this and `zhao_measure_governor`'s matching `PROJW`, which are
+    // the TWO ports R98 says must move together.
+    parameter int unsigned PROJW = 20
 ) (
     input var logic clk,
     input var logic rst_n,
@@ -107,12 +153,13 @@ module zhao_view_projq88 #(
     input var logic [VWW-1:0] vw0_i,
     input var logic [VWW-1:0] vw1_i,
 
-    // ---- the camera projection scale, Q8.8, for MEASURE.GOVERNOR -----------
+    // ---- the camera projection scale, Q12.8, for MEASURE.GOVERNOR ----------
     // HELD. Each output is the last completed pass for that view and stands
-    // until the next one completes.
-    output var logic [15:0] proj0_o,
-    output var logic [15:0] proj1_o,
-    output var logic        busy_o,
+    // until the next one completes. Q12.8 in PROJW=20 bits (R83/R98); it was
+    // Q8.8 in 16 until 2026-09-20 and saturated on ordinary cameras.
+    output var logic [PROJW-1:0] proj0_o,
+    output var logic [PROJW-1:0] proj1_o,
+    output var logic             busy_o,
 
     // ---- evidence ----------------------------------------------------------
     output var logic [31:0] passes0_o,
@@ -135,6 +182,10 @@ module zhao_view_projq88 #(
   initial begin
     if (VWW < 1 || VWW > 16)
       $fatal(1, "zhao_view_projq88: VWW must be 1..16; the accumulator is sized from it");
+    // PROJW must leave the saturation test a bit to look at, and must not
+    // exceed the accumulator it selects from.
+    if (PROJW < 8 || PROJW >= ACCW)
+      $fatal(1, "zhao_view_projq88: PROJW must be 8..ACCW-1");
   end
 
   logic [ACCW-1:0]      acc_r;
@@ -153,15 +204,15 @@ module zhao_view_projq88 #(
   // linter warns about it and synthesis resolves it silently.
 
   // The completed product, rounded once and clamped once.
-  logic [ACCW-1:0] biased_c;
-  logic [ACCW-1:0] shifted_c;
-  logic            sat_c;
-  logic [15:0]     result_c;
+  logic [ACCW-1:0]  biased_c;
+  logic [ACCW-1:0]  shifted_c;
+  logic             sat_c;
+  logic [PROJW-1:0] result_c;
   always_comb begin
     biased_c  = acc_r + ACCW'(256);
     shifted_c = biased_c >> 9;
-    sat_c     = |shifted_c[ACCW-1:16];
-    result_c  = sat_c ? 16'hFFFF : shifted_c[15:0];
+    sat_c     = |shifted_c[ACCW-1:PROJW];
+    result_c  = sat_c ? {PROJW{1'b1}} : shifted_c[PROJW-1:0];
   end
 
   always_ff @(posedge clk) begin
@@ -171,8 +222,8 @@ module zhao_view_projq88 #(
       vwsh_r   <= VWW'(0);
       view_r   <= 1'b0;
       step_r   <= 5'd0;
-      proj0_o  <= 16'd0;
-      proj1_o  <= 16'd0;
+      proj0_o  <= PROJW'(0);
+      proj1_o  <= PROJW'(0);
       passes0_o     <= 32'd0;
       passes1_o     <= 32'd0;
       saturations_o <= 32'd0;

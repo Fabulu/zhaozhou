@@ -1,6 +1,61 @@
-// zhao_raster_attrdiv.sv — the attribute divide, exactly as the oracle rounds.
+// zhao_raster_attrdiv.sv — the attribute divide, round-half-AWAY-FROM-ZERO.
 //
 // ENFORCED-BY: tests/raster/raster_attrdiv_directed.cpp:main
+//
+// ---------------------------------------------------------------------------
+// THE TITLE OF THIS FILE SAID "EXACTLY AS THE ORACLE ROUNDS" UNTIL 2026-09-20,
+// AND IT IS NOT TRUE. CORRECTED UNDER OWNER RULING R100.
+// ---------------------------------------------------------------------------
+// The ratified law is round-half-UP -- ties toward POSITIVE INFINITY -- and it
+// is written down in three places that AGREE with each other and disagree with
+// this block:
+//
+//   spec/qformats.md:53   `round_half_up(n/d)` (integer division, d > 0)
+//                         = `floor((n + floor(d/2))/d)` -- ties round toward
+//                         +infinity.
+//   spec/qformats.md:147  `round_half_up_s(n, d)` for signed exact division:
+//                         if d < 0 negate both, then `floor_div(n + d/2, d)`.
+//   rast.cpp:31-41        `div_rhu_s128`: h = n + d/2; q = floor(h/d);
+//                         saturate to int32. This is the function EVERY
+//                         attribute in the reference rasteriser goes through.
+//
+// This block computes `sign(n) * floor((2|n| + d) / (2d))`, which is
+// round-half-AWAY-FROM-ZERO. The two laws are identical for n >= 0, identical
+// for every ODD `d` (no exact half can occur), and differ by exactly ONE LSB on
+// a NEGATIVE EXACT HALF with an EVEN `d`: this block gives -1 where the law
+// gives 0, -2 where the law gives -1.
+//
+// MEASURED, 640,000 sampled operand pairs, against both this block's law and
+// `div_rhu_s128` transcribed:
+//
+//     constructed negative exact half, EVEN d      100.0000%  disagree
+//     constructed negative half candidate, ODD d     0.0000%  (cannot occur)
+//     small dense n and d                            1.5945%
+//     attribute-lane shaped (S8.24 attr x weight)    0.0000%  in 200,000
+//     zref::render::div_rhu_s128 vs zhao_raster_attrdiv_v2   0 differences
+//
+// and the rate falls as ~1/(4d), so it is >10% on a one-subpixel triangle and
+// vanishing on a large one. Small triangles are the common case in a dense
+// mesh, so "0 in 200,000 random attribute samples" is a statement about the
+// sampler, not a licence.
+//
+// THE OVERFLOW BEHAVIOUR IS THE SECOND DISAGREEMENT AND IT IS BIGGER.
+// `div_rhu_s128` SATURATES to INT32_MAX / INT32_MIN; this block publishes
+// `q_o = 0` with `q_overflow_o` set. Those are different answers to the same
+// question, not different reports of one.
+//
+// `zhao_raster_attrdiv_v2` implements the ratified law, including the
+// saturation, and agreed with the reference on every one of the 640,000 pairs.
+//
+// WHY THIS FILE IS STILL HERE AND STILL WIRED. Two consumers instantiate it --
+// `zhao_raster_attrdiv_svc` and `zhao_raster_attrstep` -- and BOTH READ `rem_o`,
+// which v2 does not have. The remainder is not a diagnostic: it is the seed of
+// the exact quotient/remainder recurrence `tests/proofs/attribute_step_
+// equivalence.cpp` proves, and it is the whole reason ATTRSTEP exists ("10x
+// fewer divides with every rendered bit unchanged"). Swapping to v2 today would
+// DELETE that seam, which is closing a gap by removing function. The repair is
+// to give v2 a remainder and re-prove the recurrence against v2's dividend --
+// engineering, not a rename. See FINDINGS-projadopt.md and owner ruling R100.
 //
 // ---------------------------------------------------------------------------
 // WHY THIS BLOCK IS THE ONE THAT MATTERS
@@ -22,18 +77,28 @@
 // able to say so.
 //
 // ---------------------------------------------------------------------------
-// THE ROUNDING IS THE LAW, NOT A CHOICE
+// THE ROUNDING THIS BLOCK IMPLEMENTS (and the paragraph that was wrong)
 // ---------------------------------------------------------------------------
-// rast.cpp rounds half-up ON THE QUOTIENT:
+// THIS SECTION SAID "rast.cpp rounds half-up ON THE QUOTIENT" AND ATTRIBUTED
+// THE FORMULA BELOW TO IT. Corrected 2026-09-20 under R100: the formula is this
+// block's, not `rast.cpp`'s. What this block computes is
 //
 //     n >= 0 :   (2n + d) / (2d)
 //     n <  0 :  -((-2n + d) / (2d))
 //
-// which is symmetric about zero -- NOT floor-toward-negative-infinity, and not
-// round-half-to-even. Getting that wrong is a one-LSB error on about half of
-// all pixels, invisible in anything but an exact comparison, and it would move
-// every golden capture CRC. So the block computes |n|, divides, and applies the
-// sign, which is the same three steps in the same order as the reference.
+// which is symmetric about zero -- round-half-AWAY-FROM-ZERO. It is not
+// floor-toward-negative-infinity and not round-half-to-even, and it is also not
+// `spec/qformats.md`'s round-half-UP, which ties toward +infinity. See the
+// banner: the difference is one LSB on a negative exact half with an even
+// divisor, which is invisible in anything but an exact comparison and does move
+// golden capture CRCs. The block computes |n|, divides, and applies the sign;
+// the reference adds `floor(d/2)` to the SIGNED numerator and floors, and those
+// two orders are not the same operation.
+//
+// THE ONE PLACE THE OLD SENTENCE WAS RIGHT: this is the rounding the retained
+// per-pixel ATTRDIV/ATTRSTEP candidate was built and tested against, and its
+// directed tests pin it. Correcting the PROSE does not move a bit of RTL, and
+// deliberately does not -- see the banner for why the swap is engineering.
 //
 // ---------------------------------------------------------------------------
 // THE RADIX IS A PARAMETER BECAUSE THE ANSWER IS A MEASUREMENT

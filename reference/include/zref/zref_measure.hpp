@@ -277,7 +277,16 @@ struct GovernorConstants {
 /** One camera's inputs for one frame. */
 struct GovernorCamera {
   uint32_t px_err = 0;   //!< SetView.pixel_error, fx16 unsigned
-  uint16_t proj = 0;     //!< projection scale, Q8.8 unsigned
+  //! Projection scale, **Q12.8 unsigned in 20 bits** (owner rulings R83/R98).
+  //! It was `uint16_t` Q8.8 until 2026-09-20 and could not express the range
+  //! the console actually runs at: `proj = kx * vw / 2` reaches 443.41 at
+  //! 60 deg / 512 px, and Q8.8 caps at 255.996. R98 says the widening lands in
+  //! "TWO ports" -- `zhao_view_projq88`'s output and
+  //! `zhao_measure_governor`'s input. THIS IS THE THIRD SITE, and it is the
+  //! one that would have silently capped every cosim: a `uint16_t` field
+  //! TRUNCATES rather than saturating, so a 20-bit stimulus fed through this
+  //! struct would have wrapped to a small, plausible number.
+  uint32_t proj = 0;
   bool starved = false;  //!< this view had work refused against its OWN pool
 };
 
@@ -335,7 +344,13 @@ inline int32_t governor_thresh_q8(uint32_t px_err, int deg) {
   return static_cast<int32_t>(w >> 8);
 }
 
-inline uint16_t governor_scale(uint16_t proj, uint32_t px_err, int deg) {
+/**
+ * LAW G1's ratio. `proj` is Q12.8 in 20 bits (R83/R98); the RESULT stays the
+ * 16-bit Q8.8 `cam*_scale` TERRAIN.LOD takes, so widening the input only moves
+ * where the existing clamp is entered. The numerator was already computed in
+ * 64 bits, so nothing about the arithmetic changed -- only what can be said.
+ */
+inline uint16_t governor_scale(uint32_t proj, uint32_t px_err, int deg) {
   if (px_err == 0) return 0xFFFFu;
   const uint64_t num = (static_cast<uint64_t>(proj) << (16 - deg)) + (px_err >> 1);
   const uint64_t q = num / px_err;

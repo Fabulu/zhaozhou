@@ -192,7 +192,14 @@ module zhao_measure_governor #(
     parameter int unsigned MIN_HOLD   = 6,
     parameter int unsigned MORPH_STEP = 10923,
     parameter int unsigned DEG_HOLD   = 12,
-    parameter int unsigned DEG_MAX    = 3
+    parameter int unsigned DEG_MAX    = 3,
+    // THE CAMERA PROJECTION-SCALE CONTAINER, fraction bits fixed at 8.
+    // 20 = Q12.8 (owner ruling R83, landed under R98). It was a hard-wired 16
+    // (Q8.8) until 2026-09-20 and saturated on ordinary cameras -- see the
+    // port comment below. NAMED AND EDITABLE (CLAUDE.md rule 6), and it must
+    // match `zhao_view_projq88`'s `PROJW`: those are R98's two ports.
+    // The divider's `STEPS` is DERIVED from it, so the two cannot drift.
+    parameter int unsigned PROJW      = 20
 ) (
     input logic clk,
     input logic rst_n,
@@ -206,7 +213,7 @@ module zhao_measure_governor #(
     input logic [31:0] px_err0_i,     // SetView.pixel_error, fx16 unsigned
     input logic [31:0] px_err1_i,
     // -----------------------------------------------------------------------
-    // THE CAMERA PROJECTION SCALE, Q8.8 unsigned.
+    // THE CAMERA PROJECTION SCALE, Q12.8 unsigned (PROJW = 20).
     //
     // A PRODUCER EXISTS AS OF 2026-09-20: `zhao_view_projq88` derives it under
     // owner ruling R73 as `rhu(kx_raw * viewport_w / 512)` from
@@ -214,8 +221,14 @@ module zhao_measure_governor #(
     // added, because the quantity is already defined by
     // `zref::creature::projected_bound_radius_q8`'s NDC-to-pixel factor.
     //
-    // AND THIS PORT IS TOO NARROW TO CARRY IT. AN OWNER DECISION (post3).
-    // Q8.8 in 16 bits tops out at 255.996 px per unit tangent, and
+    // THIS PORT WAS TOO NARROW TO CARRY IT UNTIL 2026-09-20. The owner ruled
+    // it (R83, amending R73; R98 added that the widening lands in TWO ports)
+    // and both moved in one commit. The table below is why, and it is kept
+    // because a format validated by one example near its ceiling is not
+    // validated -- the contract's single worked example was the 60 deg / 256
+    // cell at 87% of full scale.
+    //
+    // Q8.8 in 16 bits topped out at 255.996 px per unit tangent, and
     // `proj = kx * vw / 2` with `kx = 1/tan(hfov/2)` exceeds that across most
     // of the console's own operating range:
     //
@@ -224,25 +237,22 @@ module zhao_measure_governor #(
     //     512 (one)  256.00*  333.63*  443.41*  548.99*      90.00 deg
     //                                                   (* does not fit)
     //
-    // The contract's own worked example is the 60 deg / 256 cell -- 221.70,
-    // which is 87% of full scale. So the port fits the ONE camera anybody
-    // worked by hand and fails just outside it, which is why nothing caught
-    // it. A single-view camera saturates for ANY horizontal FOV narrower than
-    // 90 degrees, and a saturated `proj` pegs `cam*_scale_o` at SCALE_MAX and
-    // holds the whole ladder at its finest rung: silent, plausible, and
-    // expensive. `view_projq88_directed` case 3 asserts the clamp rather than
-    // letting it wrap.
+    // So the port fitted the ONE camera anybody worked by hand and failed just
+    // outside it, which is why nothing caught it. A single-view camera
+    // saturated for ANY horizontal FOV narrower than 90 degrees, and a
+    // saturated `proj` pegs `cam*_scale_o` at SCALE_MAX and holds the whole
+    // ladder at its finest rung: silent, plausible, and expensive.
     //
-    // RECOMMENDED: widen to 20 bits (Q12.8, ceiling 4095.996), which covers
-    // 512-wide down to about 7 degrees. Law G1's numerator grows from under
-    // 2^33 to under 2^37, so STEPS goes 33 -> 37 -- a local change to a block
-    // that runs once per frame. Do NOT rescale the units to fit Q8.8: that
-    // would be a second statement of the law R73 chose precisely to avoid
-    // restating. R73 is provisional and this is the cheapest it will ever be,
-    // because the port has no producer wired yet and no capture has pinned it.
+    // DONE: PROJW = 20 (Q12.8, ceiling 4095.996), which covers 512-wide down to
+    // about 7 degrees. Law G1's numerator grew from under 2^33 to under 2^37,
+    // so `STEPS` went 33 -> 37 -- and it is now DERIVED from PROJW rather than
+    // written down twice. The units were NOT rescaled: that would be a second
+    // statement of the law R73 chose precisely to avoid restating, and it would
+    // move a quantity `zref::creature::projected_bound_radius_q8` already
+    // defines.
     // -----------------------------------------------------------------------
-    input logic [15:0] proj0_i,
-    input logic [15:0] proj1_i,
+    input logic [PROJW-1:0] proj0_i,
+    input logic [PROJW-1:0] proj1_i,
     input logic [15:0] src_id_i,      // `source_ids: true`
 
     // -----------------------------------------------------------------------
@@ -357,27 +367,53 @@ module zhao_measure_governor #(
   // ---- the divider (law G1) ------------------------------------------------
   // ONE restoring divider, sequenced across the two cameras: this block runs
   // once per frame, so a second divider would buy nothing and cost a second
-  // 33-step datapath. 33 iterations, because the round-half-up numerator
-  // `(proj << (16-deg)) + (px_err >> 1)` is at most
-  // (2^32 - 2^16) + (2^31 - 1) < 2^33, and a 33-bit numerator over a divisor
-  // of at least one needs 33 quotient bits.
-  localparam int unsigned STEPS = 33;
+  // NUMW-step datapath.
+  //
+  // NUMW IS DERIVED FROM PROJW, NOT WRITTEN DOWN TWICE. The round-half-up
+  // numerator is `(proj << (16 - deg)) + (px_err >> 1)`:
+  //
+  //     proj << 16        <  2^(PROJW+16)          = 2^SHIFTW
+  //     px_err >> 1       <  2^31
+  //     sum               <  2^(SHIFTW+1)          = 2^NUMW      (SHIFTW >= 31)
+  //
+  // and a NUMW-bit numerator over a divisor of at least one needs NUMW quotient
+  // bits, so STEPS == NUMW. At PROJW = 20 that is SHIFTW 36, NUMW 37, STEPS 37,
+  // which is exactly the 33 -> 37 owner ruling R83 costed. At the old PROJW = 16
+  // it reproduces SHIFTW 32 / NUMW 33 / STEPS 33 -- the parameterisation is a
+  // generalisation of what was here, not a different divider.
+  localparam int unsigned SHIFTW = PROJW + 16;
+  localparam int unsigned NUMW   = SHIFTW + 1;
+  localparam int unsigned STEPS  = NUMW;
 
-  logic [32:0] num_r;  // the shifted, rounding-biased numerator
-  logic [31:0] den_r;
-  logic [31:0] rem_r;  // invariant: rem_r < den_r, so 32 bits always suffice
-  logic [32:0] quo_r;
-  logic [ 5:0] step_r;
+  logic [NUMW-1:0] num_r;  // the shifted, rounding-biased numerator
+  logic [31:0]     den_r;
+  logic [31:0]     rem_r;  // invariant: rem_r < den_r, so 32 bits always suffice
+  logic [NUMW-1:0] quo_r;
+  logic [ 5:0]     step_r;
+
+  // Quartus 17.0 needs an elaboration check inside `initial begin ... end`; a
+  // bare module-scope `if` is a syntax error there however clean the lint. And
+  // `--lint-only` does not run this block, so a clean lint is NOT evidence
+  // about it.
+  initial begin
+    // The `px_err >> 1` term must fit under 2^SHIFTW for the +1 above to be a
+    // sufficient carry bit, and `step_r` is six bits.
+    if (SHIFTW < 31)
+      $fatal(1, "zhao_measure_governor: PROJW too small; the numerator carry bit is unsound");
+    if (STEPS > 63)
+      $fatal(1, "zhao_measure_governor: PROJW too large; step_r is six bits");
+  end
 
   // Numerator for one view, EXACT: the shift carries the degrade (G2) and the
   // bias carries qformats section 3's round-half-up. No rounding happens here
   // -- the single rounding is the floor of the division that follows.
-  function automatic logic [32:0] num_of(input logic [15:0] proj, input logic [31:0] px_err,
-                                         input logic [1:0] deg);
-    logic [31:0] shifted;
+  function automatic logic [NUMW-1:0] num_of(input logic [PROJW-1:0] proj,
+                                             input logic [31:0] px_err,
+                                             input logic [1:0] deg);
+    logic [SHIFTW-1:0] shifted;
     begin
-      shifted = {16'b0, proj} << (6'd16 - {4'b0, deg});
-      num_of  = {1'b0, shifted} + ({1'b0, px_err} >> 1);
+      shifted = SHIFTW'({{(SHIFTW-PROJW){1'b0}}, proj} << (6'd16 - {4'b0, deg}));
+      num_of  = {1'b0, shifted} + NUMW'({1'b0, px_err} >> 1);
     end
   endfunction
 
@@ -415,7 +451,7 @@ module zhao_measure_governor #(
   logic [15:0] sid_r;
   logic        zero0_r, zero1_r;  // px_err was zero (law G6)
   logic [31:0] px1_r;  // view 1's operands, latched at the frame pulse
-  logic [15:0] pj1_r;
+  logic [PROJW-1:0] pj1_r;
   // View 0's pixel error, latched for the SAME reason px1_r is: the
   // threshold (R26) is published at S_DONE, 70 cycles after the frame
   // pulse, and `px_err0_i` is the caller's wire.
@@ -426,13 +462,16 @@ module zhao_measure_governor #(
   // The quotient, clamped to the 16-bit Q8.8 port TERRAIN.LOD takes.
   logic [15:0] quo_clamped;
   always_comb begin
-    if (quo_r[32:16] != 17'd0) quo_clamped = SCALE_MAX;
+    // The output port stays 16-bit Q8.8 (`cam*_scale_o`, what TERRAIN.LOD
+    // takes); only the INPUT container widened, so the clamp simply looks at
+    // more bits above bit 15 than it used to.
+    if (|quo_r[NUMW-1:16]) quo_clamped = SCALE_MAX;
     else quo_clamped = quo_r[15:0];
   end
 
   logic [32:0] rem_shift;
   logic [31:0] rem_diff;
-  assign rem_shift = {rem_r, num_r[32]};
+  assign rem_shift = {rem_r, num_r[NUMW-1]};
   // The 32-bit subtract is EXACT even when `rem_shift` has bit 32 set. In the
   // branch that uses it, `rem_shift >= den_r` and the true difference is
   // < den_r <= 2^32 - 1, so it equals (rem_shift[31:0] - den_r) mod 2^32.
@@ -474,10 +513,10 @@ module zhao_measure_governor #(
       deg1_r          <= 2'd0;
       hold0_r         <= 8'd0;
       hold1_r         <= 8'd0;
-      num_r           <= 33'd0;
+      num_r           <= NUMW'(0);
       den_r           <= 32'd0;
       rem_r           <= 32'd0;
-      quo_r           <= 33'd0;
+      quo_r           <= NUMW'(0);
       step_r          <= 6'd0;
       scale0_r        <= 16'd0;
       nd0_r           <= 2'd0;
@@ -487,7 +526,7 @@ module zhao_measure_governor #(
       zero0_r         <= 1'b0;
       zero1_r         <= 1'b0;
       px1_r           <= 32'd0;
-      pj1_r           <= 16'd0;
+      pj1_r           <= PROJW'(0);
       px0_r           <= 32'd0;
       targets_valid_o <= 1'b0;
       // Reset the targets to a SAFE, VALID policy rather than to zero: a zero
@@ -536,7 +575,7 @@ module zhao_measure_governor #(
             // divider fed zero would double its remainder every step.
             den_r   <= (px_err0_i == 32'd0) ? 32'd1 : px_err0_i;
             rem_r   <= 32'd0;
-            quo_r   <= 33'd0;
+            quo_r   <= NUMW'(0);
             step_r  <= 6'd0;
             state_r <= S_DIV0;
             // View 1's operands are latched HERE too: px_err1_i and proj1_i
@@ -551,16 +590,16 @@ module zhao_measure_governor #(
         S_DIV0, S_DIV1: begin
           // One restoring step: shift the remainder up by one numerator bit,
           // subtract the divisor if it fits, and record the quotient bit.
-          num_r <= {num_r[31:0], 1'b0};
+          num_r <= {num_r[NUMW-2:0], 1'b0};
           if (rem_shift >= {1'b0, den_r}) begin
             // Both branches fit 32 bits by the invariant `rem_r < den_r`:
             // rem_shift = 2*rem + bit < 2*den, so the difference is < den and
             // the untaken branch is < den. den_r is never zero (see S_IDLE).
             rem_r <= rem_diff;
-            quo_r <= {quo_r[31:0], 1'b1};
+            quo_r <= {quo_r[NUMW-2:0], 1'b1};
           end else begin
             rem_r <= rem_shift[31:0];
-            quo_r <= {quo_r[31:0], 1'b0};
+            quo_r <= {quo_r[NUMW-2:0], 1'b0};
           end
 
           if (step_r == 6'(STEPS - 1)) begin
@@ -582,7 +621,7 @@ module zhao_measure_governor #(
           num_r    <= num_of(pj1_r, px1_r, nd1_r);
           den_r    <= (px1_r == 32'd0) ? 32'd1 : px1_r;
           rem_r    <= 32'd0;
-          quo_r    <= 33'd0;
+          quo_r    <= NUMW'(0);
           step_r   <= 6'd0;
           state_r  <= S_DIV1;
         end

@@ -73,11 +73,22 @@ shipped Duo canvas in the directed lane and it lands on the right pixel count:
 
 > `spec/video_rules.md` §3.1: VIDEO_DUO is two 256×192 canvases. At 60° of
 > horizontal FOV the projection scale is `(256/2)/tan 30° = 221.70` px per unit
-> tangent = Q8.8 raw 56755. With a 2-pixel budget (`px_err = 2.0` fx16):
+> tangent = Q12.8 raw 56755. With a 2-pixel budget (`px_err = 2.0` fx16):
 > `scale = round_half_up(56755 · 65536 / 131072) = 28378`. TERRAIN.LOD then
 > admits a level while `dev · 28378 ≤ distance · 256`, so at 100 units the
 > largest admissible deviation is 0.9021 units, which projects to **1.9999
 > pixels**. That is the budget.
+
+**AND THIS IS THE ONLY WORKED EXAMPLE IN THIS DOCUMENT, WHICH IS WHY THE PORT
+WAS THE WRONG WIDTH FOR A DAY.** 221.70 px is 87% of the old Q8.8 port's
+255.996 ceiling, so every check anyone wrote passed while a 512-wide raster at
+the same 60° — 443.41 px — saturated silently and pegged the LOD ladder at its
+FINEST rung. Owner ruling R83 widened the container to Q12.8; R98 added that it
+lands in `zhao_view_projq88`'s output as well, and a third site nobody had
+named, `zref::measure::GovernorCamera::proj`, which was a `uint16_t` and would
+have TRUNCATED rather than saturated. **A format validated by one example near
+its ceiling is not validated.** The suite now carries a case above 2^16
+(`measure_governor_directed`'s `wide/*`) that no Q8.8 port can pass.
 
 **Nothing in TERRAIN.LOD was changed.** The prose fix belongs to that block's
 owner; this contract records the discrepancy and the evidence for which side is
@@ -216,7 +227,7 @@ before the first frame ever arrives. `cam0_en_o` resets high, `cam1_en_o` low
 |---|---|---|
 | `view_count_i` | 2 | `SetPresentationContract.view_count` |
 | `px_err0_i` `px_err1_i` | 32 | `SetView.pixel_error`, fx16 unsigned |
-| `proj0_i` `proj1_i` | 16 | camera projection scale, Q8.8 unsigned — **no ABI field yet** (found-law 2) |
+| `proj0_i` `proj1_i` | 20 | camera projection scale, **Q12.8** unsigned (owner rulings R83/R98; it was 16-bit Q8.8 until 2026-09-20) — **no ABI field**, it is DERIVED by `zhao_view_projq88` under R73 (found-law 2) |
 | `src_id_i` | 16 | `source_ids: true` |
 
 `screen_error_stats` in — **one bit per view**, and each reaches only its own

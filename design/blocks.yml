@@ -5147,10 +5147,53 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
-    reference_model: zref::forge::shadow_hull
+    # `reference_model: zref::forge::shadow_hull` STOOD HERE UNTIL 2026-09-20
+    # (owner ruling R94) AND THAT SYMBOL HAS NEVER EXISTED -- zero occurrences
+    # anywhere under `reference/`, re-verified at this commit over every .hpp
+    # and .cpp there. It is not a renamed model: `reference/include/zref/`
+    # holds zref_forge.hpp, zref_forge_eval.hpp and the generated jitter table,
+    # and none of the three declares a hull.
+    #
+    # THE DAMAGE IS NOT THAT THE FIELD WAS WRONG, IT IS THAT IT WAS QUIET.
+    # `tools/budget/uncashed_cheques.py` check 3 reads these strings to find two
+    # blocks that have declared the SAME ratified law -- the signal that caught
+    # the 66-DSP projector duplication. A name that resolves to nothing can
+    # never collide with anything, so this row was silently EXEMPT from one of
+    # the few defences this tree has against a second implementation of ratified
+    # arithmetic. A false `reference_model` is worse than a missing one.
+    #
+    # THE KEY IS REMOVED RATHER THAN REPLACED, because the block genuinely has
+    # no reference model and inventing one would be the same defect with a
+    # better name. `zhao_forge_shadow.sv` carries no `REFERENCE:` line,
+    # `tests/forge/forge_shadow_directed.cpp` links no zref, and the block holds
+    # no ratified arithmetic to model: its unit-circle table is sixteen
+    # hand-written fx16 constants ("written out rather than computed so the
+    # values are auditable") and its depth bias is an ART value the RTL
+    # deliberately keeps as an editable knob under CLAUDE.md rule 6. SYS.PLL,
+    # SYS.RESET and SYS.CDC carry no `reference_model` for the same reason.
+    # If a hull oracle is ever written, this key comes back naming it.
+    #
+    # `uncashed_cheques.py` CHECK 5 now resolves every `reference_model:` in
+    # this file against the tree, so the next one cannot be quiet.
     tests:
-      directed: "PLANNED -- NOT WRITTEN"
+      # WAS "PLANNED -- NOT WRITTEN" ON BOTH ROWS UNTIL 2026-09-20 (R94), while
+      # the directed suite existed and passed. The same row carried a FALSE
+      # PRESENCE and a FALSE ABSENCE at once, which is the thing to notice:
+      # a ledger is not documentation, it is an input to the completion number.
+      directed: tests/forge/forge_shadow_directed.cpp
       random: "PLANNED -- NOT WRITTEN"
+    # COUNTERS ARE STILL WRONG IN BOTH DIRECTIONS AND ARE NOT REPAIRED HERE,
+    # deliberately. `shadows_skipped` has no producer anywhere
+    # (`tools/design/check_counters.py` reports "no shadows_skipped_o and no
+    # mapping"), while `zhao_forge_shadow.sv:160-162` emits THREE counters this
+    # list does not name -- `no_ground_o`, `zero_radius_o`, `far_rung_o`, each
+    # of which records a CORRECT refusal rather than a fault. Fixing it means
+    # appending three names to `counter_catalog` and regenerating
+    # `design/counter_ids.lock`, and that list is APPEND-ONLY with ids equal to
+    # positions: two lanes appending concurrently produce a merge whose wrong
+    # resolution renumbers every counter after the seam. It is one packet's work
+    # on a quiet tree, not a line in this one. Recorded in
+    # FINDINGS-projadopt.md with the exact edit.
     counters: [shadows_emitted, shadows_skipped]
     source_ids: true
     budget_group: myriad_forge

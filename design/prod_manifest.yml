@@ -115,6 +115,39 @@ top:
   # TEXJOIN V2 remains in-tree as the behavioural oracle, but is excluded below:
   # V3 owns the lifecycle inside the selected texture subsystem. This is an
   # accounting correction only; neither path is connected to the shell today.
+  # THESE TWO STILL WIRE `zhao_raster_attrdiv` (v1) AND THE COMPLETION REGISTER
+  # IS FATAL ON IT -- deliberately, and it is not an oversight. Owner ruling
+  # R100 asked for both to move to `zhao_raster_attrdiv_v2`; the move is a
+  # BEHAVIOUR change and it is also blocked by a port that has no v2 equivalent.
+  #
+  #   ROUNDING. v1 is round-half-AWAY-FROM-ZERO; v2, `spec/qformats.md` (:53
+  #   and :147) and `zref::render::div_rhu_s128` are all round-half-UP. v2
+  #   matched the reference on 640,000 sampled pairs; v1 differs by one LSB on
+  #   100% of negative exact halves with an even divisor, at a rate ~1/(4d).
+  #   OVERFLOW. v1 publishes q = 0 with `q_overflow_o`; v2 and the reference
+  #   SATURATE to INT32_MAX/MIN. Different answers, not different reports.
+  #   So v2 is RIGHT and v1 is wrong, and the tie law is already ruled -- see
+  #   the corrected `zhao_raster_attrwalk` note below.
+  #
+  # THE ACTUAL BLOCKER IS `rem_o`, AND IT IS ENGINEERING. `zhao_raster_attrdiv`
+  # publishes the Euclidean remainder; `zhao_raster_attrdiv_v2` publishes no
+  # remainder at all. `zhao_raster_attrstep.sv:140` consumes it as the SEED of
+  # the exact quotient/remainder recurrence `tests/proofs/attribute_step_
+  # equivalence.cpp` proves -- "10x fewer divides with every rendered bit
+  # unchanged" -- and `zhao_raster_attrdiv_svc.sv:82` re-publishes it on its own
+  # boundary for the same customer. Swapping to v2 today DELETES that seam,
+  # which is closing a gap by removing function, and the protocol forbids it.
+  # v1's `q_overflow_o` has no v2 equivalent either: `q_saturated_o` and
+  # `q_error_o` are two signals with different meanings.
+  #
+  # NEITHER IS RECLASSIFIED AS A RETAINED ORACLE. Both are selected tops here,
+  # they are production hardware on the per-pixel path, and moving them into
+  # `excluded:` to make the register green would be editing the instrument to
+  # agree with the tree -- the one thing this run has found nine times.
+  # The repair is one packet: give v2 a remainder output, re-prove the step
+  # recurrence against v2's dividend (the negative branch forms its magnitude as
+  # `(~dividend) + den`, so the remainder is NOT v1's and the proof must be
+  # re-taken, not transplanted), then swap both consumers in one commit.
   - zhao_raster_attrdiv_svc
   - zhao_raster_attrinterp
   - zhao_raster_attrstep
@@ -130,15 +163,49 @@ top:
   - zhao_geom_clip
   - zhao_geom_cull
   - zhao_geom_lod
-  - zhao_geom_project
+  # THE ONE SHARED PROJECTOR, NOT TWO WRAPPERS, SINCE 2026-09-20 (owner ruling
+  # R99, on R86's own reasoning and the owner's capitalised "YOU ONLY GET TO FIT
+  # THE LATEST VERSION").
+  #
+  # This list named `zhao_geom_project` and `zhao_terrain_project`: two shells
+  # over two SEPARATE `zhao_project_core` instances that the console does not
+  # contain. Verified against the instantiation graph rather than inherited --
+  # `zhao_geom_project` and `zhao_terrain_project` are instantiated by THIS FILE'S
+  # top and by nothing else in fpga/rtl, while `zhao_console_core` instantiates
+  # `zhao_proj_subsystem` (driven by `zhao_geom_group_seq`) and
+  # `zhao_geom_proj_lane`. `design/console_inventory.yml` has recorded both shells
+  # as superseded by `zhao_proj_subsystem` under owner ruling R3 ("keep the
+  # time-multiplex, no third port") since 2026-09-19.
+  #
+  # The deferral this file used to carry -- "after the composed fit closes" --
+  # does NOT survive R99: it makes the completion fit the arbiter of a swap the
+  # fit cannot observe, because the fit composed the wrong projectors. That is
+  # the identical circle R86 broke for `zhao_terrain_bake`, one level larger.
+  #
+  # PRICE, from console_inventory.yml's own numbers: the two shells cost
+  # ~12,267 ALM / 66 DSP (6,199 + 6,068 ALM, 33 + 33 DSP) against
+  # `zhao_proj_subsystem`'s measured 9,135 ALUT / 39 DSP with ONE
+  # `zhao_project_core`. On a 41,910 ALM / 112 DSP device that is the difference
+  # between two of R80's numbers and the truth.
+  - zhao_proj_subsystem
+  # GEOMETRY's half of the shared service: client A's result packed into
+  # zhao_geom_wcache, {arena,index} rider as the fill address. It is wiring;
+  # nothing in it computes. `zhao_geom_wcache` LEAVES the top: it is instantiated
+  # by this lane, and this file's own rule is that a module its parent
+  # instantiates is not a top.
+  - zhao_geom_proj_lane
   # The per-vertex half of D-5: §8's frozen fog factor from the guarded w that
-  # zhao_geom_project already emits on out_w_o.
+  # the projector emits on out_w_o (`zhao_project_core.out_w_o`, reached through
+  # zhao_proj_subsystem since R99; it was `zhao_geom_project` until 2026-09-20).
   - zhao_geom_fogfactor
   - zhao_geom_skin
   - zhao_geom_pose_cache
   - zhao_geom_pose_decode
   - zhao_geom_vdecode
-  - zhao_geom_wcache
+  # zhao_geom_wcache WAS A TOP HERE UNTIL 2026-09-20 (owner ruling R99) and is
+  # not any more: zhao_geom_proj_lane instantiates it, so it is counted INSIDE
+  # that lane under this file's own rule. The census total does not change; it
+  # stops being a separate standalone instance beside a lane that contains one.
   - zhao_geom_attrsetup
   - zhao_geom_parambuf
   # Both built 2026-09-03/04 from BORING_3D_FUNDAMENTALS_AUDIT. ASSEMBLE is R1,
@@ -247,7 +314,12 @@ top:
   # census requires: a module its parent instantiates is not a top.)
   - zhao_terrain_lightlane
   - zhao_terrain_lod
-  - zhao_terrain_project
+  # zhao_terrain_project WAS A TOP HERE UNTIL 2026-09-20 (owner ruling R99). It
+  # is the TWIN of zhao_geom_project -- a second zhao_project_core the console
+  # does not contain -- and console_inventory.yml records it superseded by
+  # zhao_proj_subsystem under owner ruling R3. TERRAIN's projection now reaches
+  # the machine through the one shared service selected in the geometry section
+  # above; zhao_terrain_wcache is counted INSIDE it.
   - zhao_terrain_velocity
   # V2, NOT V1, SINCE 2026-09-20 (owner ruling R86). `console_inventory.yml`
   # records `zhao_terrain_bake` as superseded by this module, citing the owner's
@@ -611,7 +683,24 @@ excluded:
   # completion fit now measures the module the prediction is about.
   - zhao_terrain_bake: superseded  by zhao_terrain_bake_v2 (console_inventory.yml, owner ruling 2026-09-19 "only the latest version"; adopted into this list by R86 on 2026-09-20). Retained on disk as the executable oracle v2 is differenced against -- 267/267 -- with its standalone fit target, its directed tests and its existing receipts intact
   - zhao_terrain_bake_delta: superseded  the per-sample delta stage read only by zhao_terrain_bake; zhao_terrain_bake_v2 folds the same arithmetic into its operand-muxed 34x34 and instantiates no delta child. Retained with its parent oracle
-  - zhao_raster_attrwalk: not-yet-adopted  divider-free exact attribute stepping; differentials pass against the compiled reference and the verilated divider, but adoption needs the owner's ruling on the tie law (the repo's stated law and zref disagree on negative exact halves)
+  # THIS ROW'S STATED BLOCKER WAS FALSE AND IS CORRECTED 2026-09-20 (owner
+  # ruling R100, and R85's rule that a refusal's stated cause is re-checked
+  # before it is inherited). It said "adoption needs the owner's ruling on the
+  # tie law (the repo's stated law and zref disagree on negative exact halves)".
+  # THEY DO NOT DISAGREE. Searched and quoted rather than inherited:
+  #   spec/qformats.md:53   round_half_up(n/d) = floor((n + floor(d/2))/d),
+  #                         "ties round toward +infinity"
+  #   spec/qformats.md:147  round_half_up_s(n,d) = floor_div(n + d/2, d)
+  #   rast.cpp:31-41        div_rhu_s128, the same expression, SATURATING
+  # All three say round-half-UP. `zhao_raster_attrdiv_v2` implements exactly
+  # that and agreed with the reference on 640,000 sampled operand pairs;
+  # `zhao_raster_attrdiv` (v1) implements round-half-AWAY-FROM-ZERO and
+  # disagrees on 100% of negative exact halves with an even divisor.
+  # The owner has also already ruled this SHAPE of conflict: 2026-09-09,
+  # "Rounding law: qformats wins unless FORGE has strong visible/content-law
+  # reason to be exceptional", recorded at design/contracts/FORGE.PRIM.md:105
+  # as "qformats governs". There is no open tie-law question.
+  - zhao_raster_attrwalk: not-yet-adopted  divider-free exact attribute stepping; differentials pass against the compiled reference and the verilated divider. Its RECORDED blocker (an owner ruling on the tie law) was false and is corrected above: spec/qformats.md and zref agree, and both say round-half-up. What adoption actually needs is the same thing R100's two dividers need -- the v1/v2 divider question settled at the ATTRDIV seam, because attrwalk's differentials are taken against the verilated v1 divider and its rounding is the one being replaced
   - zhao_proj_arena3: superseded  a SECOND copy of a mechanism the 2026-08-24 ruling says must live once -- zhao_vertex_arena already owns it, with the committed geom_wcache_arena_bounds.sby proof (8 labelled assertions + 6 covers before the consolidation; the "58 formal assertions" once quoted here counted comment mentions, not properties). Kept as the DESIGN STUDY it is. Its dense-fill valid mechanism WAS folded into zhao_vertex_arena as VALID_MODE=1 on 2026-09-09, with the proof extended (prove_dense/cover_dense/bmc_dense tasks) and its padded-vs-mixed addressing observation repaired in the primitive (linear arena*DEPTH+index; prove_np2 holds it). See reports/ARENA-I-BUILT-A-SECOND-ONE-20260909.md and reports/VERTEX-ARENA-DENSE-SEAL-20260909.md
 
   # Packet B's CURRENT children are not listed here: they are reachable from
@@ -722,11 +811,11 @@ excluded:
   # ledger, the manifest and a source list are three different acts and doing two
   # of three leaves a file nothing bills and nothing declares absent.
   #
-  # `unused` for now: the service is instantiated only below the explicitly
-  # not-yet-adopted terrain composition. Production still counts the retained
-  # geometry and terrain projectors separately; that changes only in one future
-  # adoption edit after the composed fit and remaining seams close.
-  - zhao_project_service: unused  ONE shared projector; instantiated by the not-yet-adopted terrain composition, while production still counts geom_project + terrain_project separately
+  # zhao_project_service WAS `excluded: unused` HERE UNTIL 2026-09-20 with the
+  # note "production still counts geom_project + terrain_project separately".
+  # Owner ruling R99 made that sentence false in the same edit that made the
+  # service real: `zhao_proj_subsystem` is a selected top above, so the service
+  # and its one `zhao_project_core` are counted INSIDE it.
   # --- 2026-09-12, terrain projection pipeline composed but NOT ADOPTED --------
   # zhao_proj_subsystem is now the reusable leaf: one service plus the three-copy
   # terrain arena shell, driven through generic fill and reference ports. It no
@@ -739,11 +828,21 @@ excluded:
   # renamed mutant fires. Those are functional receipts, not adoption or fit
   # evidence. Production remains unchanged until zhao_terrain_pipe has a clean
   # composed fit and the NORMALS and DEPTHQUANT seams are designed and verified.
-  - zhao_geom_proj_lane: not-yet-adopted  GEOMETRY's half of the shared projector, built 2026-09-18 to close the gap zhao_proj_subsystem's header names -- client A's result port packed into zhao_geom_wcache, {arena,index} rider as the fill address, no adapter because zhao_vertex_arena's fill_ready_o is a stated constant 1'b1. It is wiring: nothing in it computes. Selecting one shared service instead of two wrappers (6,598 ALM / 33 DSP against ~12,400 / 66) needs this composed AND a producer driving it. CORRECTED 2026-09-19: the producer is NO LONGER ABSENT -- zhao_geom_group_seq exists and drives this lane inside zhao_console_core. What is still open is the ADOPTION, which is the selected census deciding to count one shared service instead of zhao_geom_project plus zhao_terrain_project, after the composed fit closes
-  - zhao_proj_subsystem: not-yet-adopted  shared projection service + three-copy terrain arena shell behind generic reference ports; no embedded walker; CORRECTED 2026-09-19: no longer used only inside zhao_terrain_pipe -- zhao_console_core also instantiates it, driven by zhao_geom_group_seq, and measured it at 9,135 total ALUTs and 39 DSP with ONE zhao_project_core where the census carries two. Still not-yet-adopted: neither composition is a selected census root
+  # zhao_geom_proj_lane and zhao_proj_subsystem WERE `not-yet-adopted` HERE UNTIL
+  # 2026-09-20. Both are selected `top:` entries now, under owner ruling R99.
+  # Their old notes ended "after the composed fit closes" and "neither
+  # composition is a selected census root" -- the first is the deferral R99
+  # overturns, and the second was a statement about THIS FILE that this file was
+  # free to make true.
+  # The superseded shells they replace are recorded below.
+  - zhao_geom_project: superseded  by zhao_proj_subsystem (design/console_inventory.yml, owner ruling R3 "keep the time-multiplex, no third port"; adopted into this list by R99 on 2026-09-20). A thin shell over its OWN zhao_project_core -- composing it is a SECOND PROJECTOR (~6,199 ALM / 33 DSP) the console does not contain. Retained on disk with its directed tests, its standalone fit target and its receipts; nothing in fpga/rtl instantiated it except this file's top
+  - zhao_terrain_project: superseded  by zhao_proj_subsystem (design/console_inventory.yml, owner ruling R3; adopted into this list by R99 on 2026-09-20). The twin of zhao_geom_project -- a second projector (~6,068 ALM / 33 DSP) -- and the executable oracle the composed dense and bitmap differentials are taken against in both views. Retained on disk with those differentials, its contract (design/contracts/TERRAIN.PROJECT.md) and its receipts intact
   - zhao_terrain_group_seq: not-yet-adopted  per-view arena allocation, ModeVtx fill/seal, ModeRef replay and release controller; used only inside the not-yet-adopted zhao_terrain_pipe
   - zhao_terrain_pipe: not-yet-adopted  composed ModeVtx/ModeRef terrain projection boundary; both-view dense/bitmap differential and release-mutant control pass, but composed fit, NORMALS, DEPTHQUANT and production adoption remain open
-  - zhao_terrain_wcache: not-yet-adopted  three zhao_vertex_arena read replicas (4x81x106, DENSE_SEAL) with triangle-rate replay; used inside the not-yet-adopted projection subsystem/pipe
+  # zhao_terrain_wcache WAS `not-yet-adopted` HERE UNTIL 2026-09-20: three
+  # zhao_vertex_arena read replicas (4x81x106, DENSE_SEAL) with triangle-rate
+  # replay. zhao_proj_subsystem instantiates it, and that is a selected top under
+  # owner ruling R99, so it is counted INSIDE it and can no longer be excluded.
   - zhao_terrain_topo: superseded  retained level-0 legacy/test walker; topology-aware ModeRef from zhao_terrain_tess now drives the generic subsystem reference ports, and no production composition instantiates this module
   - zhao_texture_ident_probe: probe  exposes the identity encoding functions for ident_encoding_directed
   # Added 2026-09-09, and CAUGHT BY check_prod_manifest.py rather than remembered.

@@ -2176,7 +2176,15 @@ targets:
       - fpga/rtl/geometry/zhao_geom_parambuf.sv
       - fpga/rtl/geometry/zhao_geom_pose_cache.sv
       - fpga/rtl/geometry/zhao_geom_pose_decode.sv
-      - fpga/rtl/geometry/zhao_geom_project.sv
+      # OWNER RULING R99, 2026-09-20. zhao_geom_project.sv and
+      # zhao_terrain_project.sv LEFT this list with the two shells they declare;
+      # the one shared service and its geometry lane entered. The fit now prices
+      # the projector the console actually contains. Removing the two .sv files
+      # from THIS list removes nothing from the tree: both keep their own
+      # standalone fit targets above, their directed tests and their receipts.
+      - fpga/rtl/common/zhao_proj_subsystem.sv
+      - fpga/rtl/common/zhao_project_service.sv
+      - fpga/rtl/geometry/zhao_geom_proj_lane.sv
       - fpga/rtl/geometry/zhao_geom_quat2mat.sv
       - fpga/rtl/geometry/zhao_geom_setup.sv
       - fpga/rtl/geometry/zhao_geom_skin.sv
@@ -2231,7 +2239,9 @@ targets:
       - fpga/rtl/mem/zhao_mem_upload.sv
       - fpga/rtl/terrain/zhao_terrain_place.sv
       - fpga/rtl/terrain/zhao_terrain_patch.sv
-      - fpga/rtl/terrain/zhao_terrain_project.sv
+      # R99: zhao_terrain_project.sv out, the three-replica read cache that
+      # zhao_proj_subsystem instantiates in.
+      - fpga/rtl/terrain/zhao_terrain_wcache.sv
       - fpga/rtl/terrain/zhao_terrain_residency_v2.sv
       - fpga/rtl/terrain/zhao_terrain_tess.sv
       - fpga/rtl/terrain/zhao_terrain_velocity.sv

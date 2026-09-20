@@ -1,5 +1,13 @@
-// view_projq88_directed.cpp -- the per-camera PROJECTION SCALE in Q8.8,
-// derived under owner ruling R73 by `zhao_view_projq88`.
+// view_projq88_directed.cpp -- the per-camera PROJECTION SCALE in Q12.8,
+// derived under owner rulings R73 / R83 / R98 by `zhao_view_projq88`.
+//
+// THE CONTAINER WIDENED ON 2026-09-20, from Q8.8 in 16 bits to Q12.8 in 20.
+// Case 3 below used to assert that a single-view 512-pixel raster at 60 degrees
+// of horizontal FOV CLAMPS. That was a test asserting the bug -- it passed only
+// while the defect existed, and CLAUDE.md says not to write one. It now asserts
+// the CORRECT behaviour (the camera fits, and reads 443.41 px per unit tangent)
+// and the saturation counter keeps its own separate positive control, which is
+// the split that file prescribes.
 //
 // WHAT THIS LANE WOULD CATCH:
 //
@@ -16,12 +24,15 @@
 //   2. ONE ROUNDING, AND IT IS ROUND-HALF-UP. A product whose remainder mod
 //      512 is exactly 256 is the one input where round-half-up and truncation
 //      differ, and it is constructed rather than hoped for.
-//   3. SATURATION FIRES AND IS COUNTED. The Q8.8 port tops out at 255.996 px
-//      per unit tangent, and the console's own single-view 512-pixel raster
-//      exceeds it for any horizontal FOV narrower than 90 degrees. That is a
-//      REAL operating point, not a synthetic one -- see FINDINGS-post3.md,
-//      which raises the port width as a decision. Here it is simply asserted
-//      that the block clamps once, does not wrap, and counts it.
+//   3. THE CONSOLE'S OWN SINGLE-VIEW CAMERA FITS. 512 px at 60 degrees is
+//      443.41 px per unit tangent -- past the old Q8.8 ceiling of 255.996 and
+//      well inside Q12.8's 4095.996. This is the case R83 was ruled on.
+//   3b. SATURATION STILL FIRES AND IS COUNTED. `kx` is a matrix MAGNITUDE
+//      BOUND, not an angle, so nothing structurally stops a caller presenting
+//      one that clamps; the counter is not deleted just because the ordinary
+//      operating range stopped reaching it. Driven deliberately, and asserted
+//      to CLAMP rather than wrap -- a wrap would produce a small, entirely
+//      plausible number and peg every camera at the fine end of the ladder.
 //   4. THE TWO VIEWS ARE INDEPENDENT. View 1's camera must not move view 0's
 //      output, which is the governor's law G3 one block upstream.
 //   5. THE OPERANDS ARE LATCHED PER PASS. Changing the inputs while a pass is
@@ -38,11 +49,15 @@ namespace {
 
 using zhao::check;
 
+/** The port's container, Q12.8 in 20 bits (R83/R98). Mirrors the RTL's PROJW
+ *  and is the ONE place this file states the ceiling. */
+constexpr uint32_t kProjMax = 0xFFFFFu;
+
 /** The law, restated here rather than imported from the RTL (R73). */
 uint32_t want_proj(uint32_t kx_raw, uint32_t vw) {
   const uint64_t n = static_cast<uint64_t>(kx_raw) * vw + 256u;
   const uint64_t q = n >> 9;
-  return q > 0xFFFFu ? 0xFFFFu : static_cast<uint32_t>(q);
+  return q > kProjMax ? kProjMax : static_cast<uint32_t>(q);
 }
 
 /** fx16 (Q16.16) from a double. */
@@ -116,21 +131,43 @@ int main() {
     check(want == 1001, "the tie case is the one that distinguishes truncation", 1001, want);
   }
 
-  // ---- case 3: saturation, at a real operating point ---------------------
+  // ---- case 3: the operating point R83 was ruled on, which now FITS -------
   {
     const uint32_t sat_before = dut.saturations_o;
-    // Single-view 512-pixel raster at 60 degrees horizontal FOV: proj = 443.4,
-    // which the Q8.8 port cannot carry.
+    // Single-view 512-pixel raster at 60 degrees horizontal FOV: proj = 443.41,
+    // which the old Q8.8 port could not carry and Q12.8 carries with room.
     const double kx = 1.0 / std::tan(30.0 * 3.14159265358979323846 / 180.0);
     const uint32_t kx_raw = fx16(kx);
     drive(dut, kx_raw, 512, 0, 0);
-    check(dut.proj0_o == 0xFFFF, "512-wide 60deg clamps to the Q8.8 ceiling", 0xFFFF,
+
+    const uint32_t want = want_proj(kx_raw, 512);
+    check(dut.proj0_o == want, "512-wide 60deg: the value, not a clamp", want, dut.proj0_o);
+    check(dut.proj0_o != kProjMax, "512-wide 60deg does NOT saturate any more", 0,
+          dut.proj0_o == kProjMax ? 1 : 0);
+    check(dut.proj0_o > 0xFFFFu, "and it is a value the old Q8.8 port could not hold", 1,
+          dut.proj0_o > 0xFFFFu ? 1 : 0);
+    check(dut.saturations_o == sat_before, "saturations_o did not fire on a legal camera",
+          sat_before, dut.saturations_o);
+    // And it is the physical quantity R83 quotes: 443.41 px per unit tangent.
+    const double px = static_cast<double>(dut.proj0_o) / 256.0;
+    check(px > 443.3 && px < 443.5, "512-wide 60deg reads as 443.4 px", 443,
+          static_cast<uint64_t>(px));
+  }
+
+  // ---- case 3b: the saturation counter's POSITIVE CONTROL ----------------
+  {
+    const uint32_t sat_before = dut.saturations_o;
+    // `kx` is a row-0 MAGNITUDE BOUND of the view-projection matrix, not an
+    // angle, so an extreme one is presentable however implausible the camera.
+    // kx = 100.0 against a 512-wide raster is 25,600 px per unit tangent,
+    // past Q12.8's 4095.996 ceiling.
+    const uint32_t kx_raw = fx16(100.0);
+    drive(dut, kx_raw, 512, 0, 0);
+    check(dut.proj0_o == kProjMax, "an extreme kx clamps to the Q12.8 ceiling", kProjMax,
           dut.proj0_o);
     check(dut.saturations_o > sat_before, "saturations_o fired", sat_before + 1,
           dut.saturations_o);
-    // It CLAMPED, it did not wrap. A wrap would have produced a small, entirely
-    // plausible number and pegged every camera at the fine end of the ladder.
-    check(want_proj(kx_raw, 512) == 0xFFFF, "the oracle agrees it saturates", 0xFFFF,
+    check(want_proj(kx_raw, 512) == kProjMax, "the oracle agrees it saturates", kProjMax,
           want_proj(kx_raw, 512));
   }
 

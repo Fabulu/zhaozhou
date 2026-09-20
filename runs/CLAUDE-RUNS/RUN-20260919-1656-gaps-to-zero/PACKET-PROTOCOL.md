@@ -53,6 +53,17 @@ Do NOT fetch-and-rebase onto the shared branch, do NOT push to
 land. The coordinator merges your branch, resolves conflicts, and runs the gates
 once on the merged result. If you need something another packet landed, ask the
 coordinator for the commit and `git merge <commit-hash>` it into your branch. Merge the HASH: in a worktree, `git fetch` may not advance the `origin/...` tracking ref, and merging that ref then says "Already up to date", which reads as good news and is not.
+
+**AND THE SAME STALE REF LIES WHEN YOU QUERY IT, which is the half this file
+missed.** The coordinator checked `git cat-file -e origin/claude/...:<path>` for
+the two contact sheets the owner is waiting on and was told **NOT ON ORIGIN**
+for both. They were on origin — in the commit that had just been pushed
+successfully. `origin/claude/...` was sitting eight commits back at `f98f5846`
+while `FETCH_HEAD` and `HEAD` agreed exactly. **A stale tracking ref reports a
+pushed file as unpushed**, and unlike the merge direction it does not even say
+something reassuring: it says something alarming and false, and the obvious
+response is to re-push work that is already there. **Ask `FETCH_HEAD` or the
+literal commit hash, never `origin/<branch>`**, in both directions.
 Commit messages via `git commit -F file` (PowerShell mangles `-m` multiline).
 End every commit message with:
 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
