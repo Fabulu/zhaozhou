@@ -523,6 +523,42 @@ module zhao_shell_top_v2
   output logic [31:0] render_texture_combine_refused_o,
   output logic [31:0] render_texture_samples_o,
 
+  // ---- POST.GATHER's RESOLVED-FRAGMENT TAP (core entry I17, ruling R195) ---
+  // Entry I17 refused POST.GATHER three times, and its own last correction
+  // named what was actually in the way on the input side:
+  //
+  //   "`zhao_shell_top_v2.sv` line 1181 reads
+  //      .fb_tag_o(rp_fb_tag_unused), .fb_addr_o(rp_fb_addr_unused),
+  //    while fb_valid_o, fb_rgb565_o, fb_x_o, fb_y_o and fb_last_o all leave
+  //    on the lines around it. So the tag is DISCARDED INSIDE THE SHELL, not
+  //    absent from the machine."
+  //
+  // TRUE OF THE TILE PIPE, AND NOT TRUE OF THIS EDGE, which is worth saying
+  // plainly because the entry's "the repair is ONE 8-BIT PORT" was costed off
+  // it. The five neighbours leave `zhao_raster_tile_pipe`; they land on the
+  // shell-internal wires `rpx_*` and go to RASTER.FBWRITE. NOTHING resolved
+  // leaves this module today. The repair is this SEVEN-PORT GROUP, not one
+  // port, and it is still small.
+  //
+  // WHY A TAP AND NOT A STREAM. POST.GATHER must never backpressure
+  // RASTER.RESOLVE (R5) -- it is a side channel, and a side channel with a
+  // `ready` is a throughput term. So there is no handshake here: `gth_valid_o`
+  // is the ACCEPTED beat (`rpx_valid && rpx_ready`), asserted for exactly one
+  // clock per fragment, and the consumer keeps up by construction.
+  //
+  // `gth_x_o`/`gth_y_o` are SURFACE coordinates and `gth_addr_o` is the same
+  // beat's position INSIDE its 16x16 tile, so the tile origin is a four-bit
+  // subtract at the far end. That is why no tile-start handshake crosses this
+  // edge: a pulse is a second thing that can be one cycle out, and the
+  // subtraction cannot be.
+  output logic        gth_valid_o,       // an ACCEPTED resolved fragment
+  output logic [15:0] gth_rgb565_o,      // the fragment's OWN colour (R195)
+  output logic [7:0]  gth_tag_o,         // (channel << 6) | strength, NEVER dithered
+  output logic [7:0]  gth_addr_o,        // {row[3:0], col[3:0]} within the tile
+  output logic signed [11:0] gth_x_o,    // SURFACE pixel x of this beat
+  output logic signed [11:0] gth_y_o,    // SURFACE pixel y of this beat
+  output logic        gth_last_o,        // the 256th pixel of this tile
+
   // ---- POST.COMPOSITE's FRAMEBUFFER LEASE (core entries I15/I16, 2026-09-19)
   // POST.COMPOSITE.md: "an exclusive framebuffer read/write lease after resolve
   // and before publication". The lease is held HERE, by `zhao_post_lease`,
@@ -1092,7 +1128,10 @@ module zhao_shell_top_v2
   zhao_guard_req_t render_gv_req;
 
   logic [15:0] rp_fb_src_unused;
-  logic [ 7:0] rp_fb_tag_unused, rp_fb_addr_unused;
+  // `rp_fb_tag_unused` and `rp_fb_addr_unused` are GONE. They were entry
+  // I17's named obstacle and they are now `rpx_tag`/`rpx_addr`, leaving on
+  // the POST.GATHER tap. A name ending in `_unused` that starts being used is
+  // worse than either state, so it is renamed in the same edit.
   logic [15:0] rp_crc_idx_unused, rp_depth_unused;
   logic [31:0] rp_crc_unused, rp_ez_unused, rp_refs_unused, rp_culled_unused;
   logic [31:0] rp_jobs_unused, rp_jobstall_unused, rp_stall_unused;
@@ -1102,7 +1141,25 @@ module zhao_shell_top_v2
 
   logic               rpx_valid, rpx_ready, rpx_last;
   logic        [15:0] rpx_rgb565;
+  logic        [ 7:0] rpx_tag, rpx_addr;
   logic signed [11:0] rpx_x, rpx_y;
+
+  // ---- the POST.GATHER tap (entry I17, ruling R195) -----------------------
+  // THE ACCEPTED BEAT, not the raw valid, and this is the whole subtlety of
+  // the tap. POST.GATHER has no `ready` by law (R5), so a beat held across a
+  // stall would be accumulated once per stalled clock and one bright fragment
+  // would light its cell as though it were many. `rpx_ready` already carries
+  // the post-phase interlock (`!post_phase_w && fbw_px_ready`), so gating on
+  // it also keeps the gather silent while the compositor owns the lease --
+  // which is the property `zhao_post_gather_store`'s single plane rests on
+  // and which that block's `rdw_collide_o` measures rather than assumes.
+  assign gth_valid_o  = rpx_valid && rpx_ready;
+  assign gth_rgb565_o = rpx_rgb565;
+  assign gth_tag_o    = rpx_tag;
+  assign gth_addr_o   = rpx_addr;
+  assign gth_x_o      = rpx_x;
+  assign gth_y_o      = rpx_y;
+  assign gth_last_o   = rpx_last;
 
   // ---- THE V2 BIN PIPE --------------------------------------------------
   //
@@ -1178,7 +1235,9 @@ module zhao_shell_top_v2
     .pg_tag_i(8'd0), .pg_strength_i(8'd0), .pg_src_id_i(16'd0),
     .fb_valid_o(rpx_valid), .fb_ready_i(rpx_ready),
     .fb_rgb565_o(rpx_rgb565),
-    .fb_tag_o(rp_fb_tag_unused), .fb_addr_o(rp_fb_addr_unused),
+    // REAL: the effect tag and the in-tile address now LEAVE this shell, on
+    // the POST.GATHER tap above. Entry I17's named obstacle, closed.
+    .fb_tag_o(rpx_tag), .fb_addr_o(rpx_addr),
     .fb_x_o(rpx_x), .fb_y_o(rpx_y), .fb_last_o(rpx_last),
     .fb_src_id_o(rp_fb_src_unused),
     .tile_crc_o(rp_crc_unused), .tile_crc_index_o(rp_crc_idx_unused),

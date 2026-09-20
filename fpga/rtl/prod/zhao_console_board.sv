@@ -1704,20 +1704,12 @@ module zhao_console_board
   // `post_view_sel_i` and the source stream `post_s_*` are GONE FROM THIS EDGE
   // (I15, 2026-09-19): the pass, its view and its pixels come from the shell's
   // `zhao_post_lease`, which reads the back buffer in raster order.
-  output logic                    post_gd_req_v_o,
-  output logic                    post_gd_view_o,
-  output logic [POST_XW-3:0]      post_gd_cx_o,
-  output logic [POST_YW-3:0]      post_gd_cy_o,
-  input  logic                    post_gd_present_i,
-  input  logic signed [7:0]       post_gd_dx_i,
-  input  logic signed [7:0]       post_gd_dy_i,
-  output logic                    post_gg_req_v_o,
-  output logic                    post_gg_view_o,
-  output logic [POST_XW-3:0]      post_gg_cx_o,
-  output logic [POST_YW-3:0]      post_gg_cy_o,
-  input  logic                    post_gg_present_i,
-  input  logic [15:0]             post_gg_glow_i,
-  input  logic                    post_gg_ink_i,
+  // THE `post_gd_*` AND `post_gg_*` GROUPS ARE GONE FROM THIS EDGE,
+  // 2026-09-21, owner ruling R195. Fourteen ports. They are now internal:
+  // `u_post_gather_tag` -> `u_post_gather` -> `u_post_gather_store` ->
+  // `u_post_composite`, all in this module, fed by the shell's
+  // resolved-fragment tap. Entry I17 bullet (c) records what closed them and
+  // what the ruling did NOT answer.
   // The `atm_*` GROUP IS GONE FROM THIS EDGE, 2026-09-19. It is now internal:
   // TWOD.PLANE, TWOD.SAMPLER and POST.COMPOSITE are composed at the end of
   // this module and the atmosphere sheet never leaves. Entry I17 records what
@@ -1760,6 +1752,45 @@ module zhao_console_board
   output logic [31:0]             post_output_writes_o,
   output logic [31:0]             post_plane_reads_o,
   output logic [31:0]             post_ring_hazard_o,
+
+  // ---- POST.GATHER evidence (composed 2026-09-21, ruling R195) -------------
+  // THE FOUR TAG COUNTERS PARTITION THE RESOLVED STREAM, which is what makes
+  // them readable together: every accepted fragment lands in exactly one of
+  // untagged / below-knee / lit / reserved-channel, and the four must sum to
+  // `gather_fragments_o`. A partition is a much stronger instrument than four
+  // independent tallies -- one wrong branch breaks the sum, and no single
+  // counter can hide a miscount by being read on its own.
+  output logic [31:0]             gather_frag_untagged_o,
+  output logic [31:0]             gather_frag_below_knee_o,
+  output logic [31:0]             gather_frag_lit_o,
+  // R195 decision 3's instrument: channels 0b10 and 0b11 are unallocated in
+  // the frozen spec, so this reads the number of fragments that asked for a
+  // displacement or an ink bit the law does not yet supply. The day
+  // `stars_and_flares.md` allocates one, this says whether anything was
+  // already drawing it.
+  output logic [31:0]             gather_reserved_channel_o,
+  output logic [31:0]             gather_fragments_o,
+  output logic [31:0]             gather_glow_saturations_o,
+  output logic [31:0]             gather_disp_clamps_o,
+  output logic [31:0]             gather_cells_flushed_o,
+  // ---- the plane store -----------------------------------------------------
+  output logic [31:0]             gather_cells_written_o,
+  output logic [31:0]             gather_oob_writes_o,     // a cell off the plane
+  output logic [31:0]             gather_gd_reads_o,
+  output logic [31:0]             gather_gg_reads_o,
+  output logic [31:0]             gather_gd_miss_o,
+  output logic [31:0]             gather_gg_miss_o,
+  // TRIPWIRES, and they are named as such so that nobody quotes their silence
+  // without firing them first. `flush_overrun_o` differences the gather's own
+  // sixteen-clock flush walk against the raster's 256-pixel tile cadence --
+  // two operands, two clocks, nothing in common. `rdw_collide_o` is the
+  // instrument for the claim that one plane is enough, i.e. that the raster
+  // and post phases never overlap. Both are fired deliberately in
+  // `tests/compositor/post_gather_store_directed.cpp`; in the composed
+  // console both must read ZERO.
+  output logic [31:0]             gather_flush_overrun_o,
+  output logic [31:0]             gather_rdw_collide_o,
+  output logic [31:0]             gather_plane_commits_o,
 
   // ---- THE HISTOGRAM. Its EVENTS ARE NO LONGER HERE ------------------------
   // I18 CLOSED 2026-09-20 (owner ruling R70). `hist_ev_valid_i`,
@@ -3809,20 +3840,6 @@ module zhao_console_board
       .terr_light_degen_mismatch_o        (terr_light_degen_mismatch_o),
       .proj_contended_o                   (proj_contended_o),
       .proj_mat_refused_o                 (proj_mat_refused_o),
-      .post_gd_req_v_o                    (post_gd_req_v_o),
-      .post_gd_view_o                     (post_gd_view_o),
-      .post_gd_cx_o                       (post_gd_cx_o),
-      .post_gd_cy_o                       (post_gd_cy_o),
-      .post_gd_present_i                  (post_gd_present_i),
-      .post_gd_dx_i                       (post_gd_dx_i),
-      .post_gd_dy_i                       (post_gd_dy_i),
-      .post_gg_req_v_o                    (post_gg_req_v_o),
-      .post_gg_view_o                     (post_gg_view_o),
-      .post_gg_cx_o                       (post_gg_cx_o),
-      .post_gg_cy_o                       (post_gg_cy_o),
-      .post_gg_present_i                  (post_gg_present_i),
-      .post_gg_glow_i                     (post_gg_glow_i),
-      .post_gg_ink_i                      (post_gg_ink_i),
       .post_hud_req_v_o                   (post_hud_req_v_o),
       .post_hud_req_x_o                   (post_hud_req_x_o),
       .post_hud_req_y_o                   (post_hud_req_y_o),
@@ -3850,6 +3867,23 @@ module zhao_console_board
       .post_output_writes_o               (post_output_writes_o),
       .post_plane_reads_o                 (post_plane_reads_o),
       .post_ring_hazard_o                 (post_ring_hazard_o),
+      .gather_frag_untagged_o             (gather_frag_untagged_o),
+      .gather_frag_below_knee_o           (gather_frag_below_knee_o),
+      .gather_frag_lit_o                  (gather_frag_lit_o),
+      .gather_reserved_channel_o          (gather_reserved_channel_o),
+      .gather_fragments_o                 (gather_fragments_o),
+      .gather_glow_saturations_o          (gather_glow_saturations_o),
+      .gather_disp_clamps_o               (gather_disp_clamps_o),
+      .gather_cells_flushed_o             (gather_cells_flushed_o),
+      .gather_cells_written_o             (gather_cells_written_o),
+      .gather_oob_writes_o                (gather_oob_writes_o),
+      .gather_gd_reads_o                  (gather_gd_reads_o),
+      .gather_gg_reads_o                  (gather_gg_reads_o),
+      .gather_gd_miss_o                   (gather_gd_miss_o),
+      .gather_gg_miss_o                   (gather_gg_miss_o),
+      .gather_flush_overrun_o             (gather_flush_overrun_o),
+      .gather_rdw_collide_o               (gather_rdw_collide_o),
+      .gather_plane_commits_o             (gather_plane_commits_o),
       .hist_snap_valid_o                  (hist_snap_valid_o),
       .hist_snap_total_o                  (hist_snap_total_o),
       .hist_snap_src_id_o                 (hist_snap_src_id_o),

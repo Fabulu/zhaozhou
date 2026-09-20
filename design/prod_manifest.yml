@@ -378,6 +378,15 @@ top:
   # counted inside its parent instead of beside it.
   - zhao_part_soft
   - zhao_post_gather
+  # POST.GATHER's LAW and its PLANE, built 2026-09-21 (owner ruling R195, core
+  # entry I17 (c)). Counted as tops for the same reason `zhao_twod_sampler`
+  # below is: the console does not merely intend to have them -- all three are
+  # instantiated in `zhao_console_core` and the compositor's gather seam is
+  # closed through them. They are not inside `zhao_post_gather`'s closure,
+  # because the accumulator instantiates neither; the three are siblings that
+  # the core wires in series.
+  - zhao_post_gather_tag
+  - zhao_post_gather_store
   - zhao_twod_plane
   - zhao_twod_sprite
   # TWOD.SAMPLER, built 2026-09-19. The texel-request-to-colour block between
