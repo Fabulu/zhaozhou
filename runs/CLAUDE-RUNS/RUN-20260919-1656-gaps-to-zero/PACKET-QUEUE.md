@@ -24,15 +24,33 @@ should change how the next slots are spent.
 
 ## Running
 
-*(Updated 2026-09-20 late evening. The previous table listed three lanes that had
-all landed -- exactly the fiction this file exists to prevent. Verify against
-`git ls-remote origin` before filling a slot from it.)*
+*(Updated 2026-09-20, 21:00. The table before this one listed H1, D1 and A1 --
+all three had LANDED. That is the third time today this section has described
+finished work as live, which is exactly the fiction this file exists to prevent.
+**Verify against `git ls-remote origin` before filling a slot from it** -- and
+note that `git log origin/<branch>` is NOT that check: the local remote-tracking
+ref on the coordinator branch is stale and reported the branch 10 commits behind
+while `git push` correctly said up-to-date.)*
 
-| lane | owns | branch |
+| lane | owns | branch | state |
+|---|---|---|---|
+| CMDFIELD | the orphaned seams: `zfield_plan.cpp`'s classifier, §13.7's TerrainField producer, I34's real requirement | `gz/cmdfield` | RUNNING |
+| FORGE4 | composing `zhao_forge_shadow` / `_prim` / `_prim_eval` / `_cliff`, and the cliff RAM-vs-logic decision | `gz/forge4` | RUNNING |
+
+**Awaiting merge by the coordinator** (work complete and pushed, NOT yet in the
+coordinator branch -- do not hand these files to a new packet):
+
+| lane | head | what it landed |
 |---|---|---|
-| FIELD-H1 | the new host: FH02/03/05/06/08/09/20, **R126's elaboration guard**, and the `sat_o` widening `rcp0` needs | `gz/fieldh1` |
-| FIELD-D1 | doorbell + loader: FH13/FH14, the `cfg_plan_base_i` live-pin defect, and the doorbell mutant refresh | `gz/fieldd1` |
-| FIELD-A1 | adapters: FH17/FH26, the two named stamp bindings, and GEOM.WARP's P2 warp adapter | `gz/fielda1` |
+| FIELD-E1 | `4186789e` | R44's probe promotion proven a no-op, the 273->297 group count in 3 of its 4 homes, the ratified terrain arithmetic factored into `zhao_terrain_patch_law_pkg.sv`. Register held at 21; I34 REFUSED with its blocker named. |
+| FIELD-W1 | `3285a290` | **GEOM.WARP is BUILT** -- `zhao_geom_warp.sv` and `zhao_field_warp_adapter.sv`, directed tests, a committed mutant with its driver. Register does NOT move, which is the honest number: built is not connected. |
+
+**Next slot goes to TERRAIN composition** (`gz/terrcomp`, packet B of
+`BRIEF-WAVE4-COMPOSITION.md`) -- `zhao_terrain_normalmap`, `_velocity`,
+`_bake_v2`, `_lod`. **It is held until E1 is merged**, because E1 moves the two
+Earth probes into `fpga/rtl/terrain/` and adds a package there; starting it
+first would hand a packet a file set that is about to change underneath it
+(R106).
 
 **Landed today:** field, geomlod, texmat2, terrain6, projinput, post3, terrain7,
 forge, carriers, warp, projadopt, forgeconnect, fieldp4, terrain9, post3b,
