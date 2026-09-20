@@ -171,9 +171,49 @@ fragments that are already flowing. That is the second reason the ruling's
 | unknown material tag | ignore for gather purposes, count. A tag this block does not recognise must not corrupt a plane |
 
 ## Counters and traces
-* `glow_saturations`, `displacement_clamps`
-* `glow_cells_lit`, `ink_cells_set`
-* `unknown_tags`
+
+**RECONCILED 2026-09-21.** Three lists disagreed and no two of them matched:
+this section asked for five counters, the RTL exported four, and
+`design/blocks.yml` declared ONE — `post_gather_vram_bytes_by_client`, a string
+that was in no `.sv` file in the repository. Packet POSTMEAS diagnosed that row
+correctly (*"a VRAM-bytes-by-client counter cannot belong to a block whose own
+contract says it reads no external memory — it describes the PLANE STORE"*),
+and the diagnosis is now confirmed by construction: the store exists, and it
+reads no external memory either. The row is retired rather than implemented.
+
+What the composition exports, across its three modules:
+
+| module | counters |
+|---|---|
+| `zhao_post_gather_tag` | `frag_untagged`, `frag_below_knee`, `frag_lit`, `reserved_channel` |
+| `zhao_post_gather` | `fragments`, `glow_saturations`, `disp_clamps`, `cells_flushed` |
+| `zhao_post_gather_store` | `cells_written`, `oob_writes`, `gd_reads`, `gg_reads`, `gd_miss`, `gg_miss`, `flush_overrun`, `rdw_collide`, `plane_commits` |
+
+**The first four are a PARTITION** — every accepted fragment lands in exactly
+one — so they sum to `fragments`, and `tb_zhao_console_core_smoke.sv` asserts
+that SUM rather than the parts. A partition is a stronger instrument than four
+tallies: one wrong branch breaks it, and no counter read on its own could say
+so.
+
+**`glow_cells_lit`, `ink_cells_set` and `unknown_tags` are NOT built**, and
+saying which is which matters more than listing them:
+
+* `unknown_tags` is SUPERSEDED by `reserved_channel`, which is the same
+  quantity under R195's vocabulary — channels 0b10/0b11 are unallocated rather
+  than unknown, and the counter exists so that the day the spec allocates one,
+  it says whether anything was already drawing it.
+* `glow_cells_lit` and `ink_cells_set` are per-frame plane statistics and would
+  belong to the STORE. They are not built and nothing depends on them.
+
+**Two of the store's counters are TRIPWIRES** and are named as such so nobody
+quotes their silence without firing them first. `flush_overrun` differences the
+gather's sixteen-clock flush walk against the raster's 256-pixel tile cadence —
+two clocks with nothing in common, so it can see a TIMING fault and not only a
+value fault. `rdw_collide` is the instrument for the claim that ONE PLANE IS
+ENOUGH, i.e. that the raster and post phases never overlap. Both are fired
+deliberately in `tests/compositor/post_gather_store_directed.cpp`; in the
+composed console both must read ZERO, and the smoke bench `$fatal`s if they do
+not.
 
 ## Scalar reference function
 `zref::post::glow_pack565`, with `zref::post::glow_accumulate` and
@@ -184,18 +224,39 @@ been written** — a phantom citation the ledger caught the moment the block
 gained evidence to check against. The law owns the accumulation
 arithmetic, the saturation and clamp rules, and the pack.
 
-## The tag-to-gather law — PROPOSED, owner ruling R37 (2026-09-19), NOT RATIFIED
+## The tag-to-gather law — **RATIFIED, owner ruling R195 (2026-09-20)**
 
 This block's per-fragment input is glow RGB, a signed 8.8 displacement pair and
 an ink bit. What RASTER.RESOLVE actually latches is ONE BYTE:
 `spec/stars_and_flares.md` §1, frozen — `tag = (channel << 6) | strength`, with
 `GLOW = 0b01` and strength the source texel's CLUT intensity (0..63). The step
-between those two is an ART law, and ruling R37 asks this packet to PROPOSE it
-with every coefficient in a named constant, a zref model, and a before/after for
-the owner to judge by eye. Here it is; nothing in `fpga/rtl` implements it yet
-and this section is a proposal until the owner rules.
+between those two is an ART law. Ruling R37 asked for it to be PROPOSED with
+every coefficient in a named constant, a zref model and a before/after to judge
+by eye; **ruling R195 RATIFIED it, unchanged, on 2026-09-20**:
 
-**The proposal** (`zref::post::gather`, `reference/include/zref/zref_post.hpp`):
+> **Fabian, looking at `reports/post-gather-law/gather_law_contact.png`:**
+> *"Everything but before looks basically the same. Pick cheapest."*
+
+**Not one coefficient moved.** R195 records why "cheapest" is not "the lowest
+number in every column", and it is worth carrying here because the sheet's
+three axes do not cost the same thing:
+
+1. **Blur passes are the real cost axis.** One pass = two sweeps of the 96×60
+   plane = 11,520 cell-steps; **two = 23,040, which is the glow prep this
+   contract already budgets for Z60**; five = 57,600 = 3.5% of a
+   1,666,666-clock frame.
+2. **`knee` runs the OTHER WAY, and lower is not cheaper.** This contract
+   measured it: **knee 16 has 907 of 5,760 cells contributing against 74** —
+   twelve times the work — for the hazed image the same text describes.
+3. **`bloom_gain` is not a cost at all** — a multiply constant that
+   `SetPost.bloom_gain` rescales per frame at runtime.
+
+**It is IMPLEMENTED**, in `fpga/rtl/compositor/zhao_post_gather_tag.sv`, with
+every coefficient a PARAMETER whose default is the ratified value, and it is
+differenced against `zref::post::gather` over **all 2^24 (tag, rgb565) pairs**
+by `tests/compositor/post_gather_tag_directed.cpp`.
+
+**The law** (`zref::post::gather`, `reference/include/zref/zref_post.hpp`):
 
 | constant | proposed | what it decides |
 |---|---|---|
@@ -233,12 +294,46 @@ cell-steps (3.5% of a 1,666,666-clock frame). The renderer's default is TWO —
 the budgeted number — and the sheet shows what the fifth pass buys so the owner
 can spend it deliberately or not at all.
 
-**What is still owed after a ruling**: the RTL adapter (resolve tag + colour ->
-this block's `f_glow_*`), the HUD plane store R37 names next, and composing
-`zhao_post_gather` itself. Core entry I17 (c) stays open until then.
+**What was owed after the ruling, and is now built** (2026-09-21, core entry
+I17 (c)): the RTL adapter (`zhao_post_gather_tag.sv`), the PLANE STORE
+(`zhao_post_gather_store.sv`) and the composition of `zhao_post_gather` itself
+inside `zhao_console_core`. **Core entry I17 (c) is CLOSED**; the entry stays
+open on its HUD half, which is a separate store and a separate owner decision.
+
+**TWO THINGS ARE STILL OWED AND ARE NAMED HERE RATHER THAN LEFT TO BE FOUND BY
+LOOKING AT A FRAME:**
+
+* **PART A, THE SEPARABLE BLUR, IS NOT BUILT.** R195 ratified TWO passes.
+  `POST.COMPOSITE.md` describes Part A as "a separable blur over the compact
+  glow plane: one horizontal and one vertical quarter-res pass" and
+  `zhao_post_composite.sv`'s header names the seam exactly — *"THE SEAM IS
+  `gg_*`: a blur module sits between POST.GATHER's plane and that port, or
+  nothing does"*. **Nothing does.** The glow therefore reaches the compositor
+  CELL-QUANTISED. No port is tied and nothing was narrowed — `gg_*` carries a
+  real accumulated value and the blur would refine it — but the ruling bought a
+  roundness the hardware does not yet deliver, and that is a cheque this
+  repository has a chapter about leaving uncashed. Price: 23,040 cell-steps
+  (1.4% of a frame) plus one glow-sized plane (≈14 M10K) to ping-pong against,
+  and a pass engine between the raster's drain and `post_pass_start` — which is
+  a change to the SHELL's post lease.
+* **THE FLUSH STREAM'S ADDRESS was a gap this contract did not name**, and it
+  is worth recording that it did not. Its whole statement of the output seam
+  was one sentence, *"Writes out for POST.COMPOSITE"*, while `c_index_o` is
+  four bits "within the tile" and the compositor reads absolute
+  `{view, cx, cy}`. Packet POSTMEAS found it; `zhao_post_gather_store.sv`
+  answers it, and its header carries the mechanism. The origin needs no new
+  raster signal: `zhao_raster_tile_pipe` already publishes `fb_x_o`/`fb_y_o`
+  beside `fb_addr_o`, so the tile origin is a four-bit subtract on every beat.
 
 ## Directed tests
-`tests/compositor/post_gather_directed.cpp`.
+`tests/compositor/post_gather_directed.cpp`, and since 2026-09-21
+`post_gather_tag_directed.cpp` (the law, swept over ALL 2^24 (tag, rgb565)
+pairs against `zref::post::gather`, with a positive control that scores the
+RTL against the FOLDED law and REQUIRES a difference — 1,221,632 channel-values
+— because `0 mismatches` over 16.7 million points is otherwise a broken
+instrument until proven otherwise) and `post_gather_store_directed.cpp` (the
+plane: the address map in all three modes, the two-deep origin pipeline, and
+all three of its counters fired deliberately).
 
 * one emissive fragment lights exactly one cell, at the right coordinate — the
   quarter-resolution mapping, at all four corners of the frame;
@@ -269,7 +364,25 @@ to promise evidence nobody produced. The properties it would carry:
 * every fragment affects at most one cell per plane.
 
 ## Synthesis / resource ceiling
-Unbuilt. **Ceiling: 1,200 ALMs, 0 DSPs, ≤ 30 M10K.**
+**UNFITTED, not unbuilt** (2026-09-21). **Ceiling: 1,200 ALMs, 0 DSPs,
+≤ 30 M10K.**
+
+All three modules are composed and have leaf rows in `design/fit_targets.yml`,
+and they are SEPARATE rows because they answer separate questions: the law is
+combinational arithmetic (does R195 cost a DSP block, and does it meet
+`gpu_clk` in one stage?), the store is memory (does the plane infer M10K, or
+fall back to registers?). **Both of the numbers below are ARITHMETIC and
+neither is a measurement**, which is exactly the distinction this contract's
+own M10K paragraph was written about:
+
+* the plane is 8,192 cells split as 8,192 × 16 (displacement) and 8,192 × 17
+  (glow + ink) = **≈27 M10K**, under the ceiling. The split is not cosmetic:
+  `gd_*` and `gg_*` read DIFFERENT coordinates on the same beat, so one memory
+  would need three ports and infer nothing.
+* **zero DSPs is now a claim rather than a consequence.** The accumulator is
+  still adds and clamps, but the LAW carries six 8×8 unit multiplies and the
+  store three 7×7 address multiplies. Quartus may put those in DSP blocks; the
+  leaf fits are what will say.
 
 **The M10K ceiling was ≤ 10 and is wrong.** R5 raises it to **≤ 30**. The
 compact data is 31,680 bytes, which looks like ten M10Ks if you divide bytes by
