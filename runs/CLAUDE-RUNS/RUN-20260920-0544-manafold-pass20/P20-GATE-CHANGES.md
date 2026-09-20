@@ -106,3 +106,28 @@ Two companions from the same pass, both the same shape:
 **The rule that follows: an env-var control is only a control in a binary that
 reads it.** Before quoting a ladder, confirm the knob moves a number in *that*
 executable.
+
+---
+
+## 7. Packet 4: `kSpanStretchMaxPm` / `kSpanCompactionMinPm` — **NOT CHANGED**
+
+Recorded because it was *considered and rejected*, and a reviewer should see the
+decision rather than its absence.
+
+* **The attachment bound `kSpanStretchMaxPm[C-E] = 440` was not touched.** Pass
+  20 exists because that attachment tore; a bound protecting attachment does not
+  move to fit a new beat. At the shipping dip C-E reads 404 pm, with 36 pm of
+  headroom.
+* **A-B stretch (480→490) and B-C compaction (−430→−450) were prototyped**, to
+  let the two spans *between the free carriers* absorb the knead — which is where
+  a knead belongs and neither is an attachment span. They cleared all 6 bound
+  breaches at gain 650. **They are not in the shipped tree**, because clearing
+  the envelope simply exposed two other mspan legs (carrier jerk, and
+  "SpanDeltaE and RearSocket do not meet at End") that fail at every amplitude
+  with that mechanism. Shipping a widened bound to buy a red gate elsewhere
+  would be strictly worse than not widening it.
+* **`kSpanMinRunMm = 80` untouched throughout.** It is the guard that actually
+  keeps the antenna attached; at the prototyped B-C floor the remaining run was
+  212 mm, nowhere near it.
+
+The full ledger, per station, before and after, is in `P20-DIP-STOP.md`.

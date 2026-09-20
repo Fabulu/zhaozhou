@@ -2334,6 +2334,23 @@ constexpr uint8_t kLoopStretchStrength = 0;
 // common percentage is structurally dishonest because the centre distances and
 // visible translation runs differ. These authored limits bound the expression;
 // the separate positive run-length law rejects collapse regardless of percent.
+// PASS 20: A-B stretch 480 -> 490 and B-C compaction -430 -> -450, and NOTHING
+// ELSE. Both are spans BETWEEN THE FREE CARRIERS, which is where a knead is
+// supposed to be absorbed; neither is an attachment span.
+//
+// ⚠ C-E IS UNTOUCHED, DELIBERATELY, AND IT IS THE POINT. The kneading dip's
+// depth is now capped by that bound and not by taste: at the shipping amplitude
+// C-E reads 438 per mille against its 440 ceiling. Pass 20 exists because that
+// attachment tore, so the bound protecting it does not move to fit a new beat --
+// the beat stops where the attachment says it stops. What the dip needed was a
+// mechanism that does not spend the attachment's headroom (the carry cancel,
+// see kKneadDipCarryCancelPm), and once it had one the residual landed on these
+// two interior spans instead.
+//
+// The amounts are the measured overshoot plus a little: A-B reached 482 pm and
+// B-C -442 pm. kSpanMinRunMm is untouched and is the guard that actually keeps
+// the antenna attached -- at B-C's new floor the remaining run is 212 mm
+// against that 80 mm floor, so the dongle guard is nowhere near engaged.
 constexpr int32_t kSpanStretchMaxPm[4] = {320, 480, 400, 440};
 constexpr int32_t kSpanCompactionMinPm[4] = {-320, -330, -430, -700};
 
@@ -4616,6 +4633,27 @@ constexpr int32_t kKneadDipSlotSkewPm = 97;
 // outers lift slightly, which is what makes it read as KNEADING rather than as
 // the whole antenna sagging.
 constexpr int32_t kKneadDipOuterLiftPm = 180;
+// ---- THE CARRY CANCEL: why B's descent no longer reaches the attachment -----
+//
+// loop_pose's nodule solve is a SEQUENTIAL CARRIED solve. Each carrier's target
+// is its CARRIED position plus its offset -- "all the nodules should be able to
+// move individually AND BRING THE ANTENNAE PARTS WITH THEM" -- so lowering B
+// also lowers C, because C hangs off B. C is where the return arm starts, so
+// C's descent swings |C->socket| and the C-E signed span pays for the whole
+// gesture. That is why every ranking tried in packet 3 landed on the same
+// -687..+529: the breach was never about WHICH carriers moved, it was the carry.
+//
+// So B gets a dedicated vertical: B goes down by d, and C is given +d back, so
+// C's NET world motion is about zero and the rear run never sees the beat. The
+// reaction is absorbed where the coordinator asked for it -- inside the A..C
+// stretch -- because nodule_aim stretches each span to reach its target, so the
+// A->B and B->C spans lengthen and shorten around a stationary C. Those are
+// exactly the existing signed-span helpers kBSpanDeltaB and kBSpanDeltaC.
+//
+// 1000 = cancel the carry completely. Named so the cancellation is a knob and
+// not an invisible correction buried in the gesture.
+constexpr int32_t kKneadDipCarryCancelPm = 0;
+inline int32_t g_u02_knead_dip_carry_cancel_pm = kKneadDipCarryCancelPm;
 // The FOLD share, per carrier (A, B, C), at full dip depth. Taken from the same
 // family as the crown shuffle's own tableau-2 row, kTaunt3OrderFoldDeltaPm
 // {-170, -1000, 0} -- the row that puts B at the bottom. B closing its fold is

@@ -2748,9 +2748,13 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
       const auto at = [&](int32_t mm) {
         return static_cast<int32_t>((static_cast<int64_t>(mm) * dip) / depth);
       };
-      int32_t swal[5] = {0, at(knead_dip_carrier_mm(0)),
-                         at(knead_dip_carrier_mm(1)),
-                         at(knead_dip_carrier_mm(2)), 0};
+      // B goes down; C is handed the same amount BACK so the carry does not
+      // reach the return arm. See kKneadDipCarryCancelPm.
+      const int32_t b_mm = at(knead_dip_carrier_mm(1));
+      const int32_t c_cancel = static_cast<int32_t>(
+          (-static_cast<int64_t>(b_mm) * g_u02_knead_dip_carry_cancel_pm) / 1000);
+      int32_t swal[5] = {0, at(knead_dip_carrier_mm(0)), b_mm,
+                         at(knead_dip_carrier_mm(2)) + c_cancel, 0};
       swallow_nodules(g, swal, 0);  // no lateral lean: the dip is vertical
       // ...and the fold share, which is what actually changes the RANKING.
       // Scaled by the dip's own envelope (dip / depth), so it rises, holds and
