@@ -1,0 +1,2445 @@
+ZHAOZHOU — GEOM.WARP: COMPLETE ARCHITECTURE AND IMPLEMENTATION DIRECTIVE
+====================================================================
+Revision: 1.1 — source-rechecked and compatibility-reviewed
+Prepared: 20 September 2026
+Repository: Fabulu/zhaozhou
+Audited hardware branch: claude/ceiling-architecture-20260912
+Audited source commit: 8d351ea9794816de57ac9ab7069e2b7737000380
+
+STATUS AND AUTHORITY
+--------------------
+This is an owner-ready architecture proposal, not a claim that the described
+hardware, ABI additions, tests, or measurements already exist. Existing law is
+cited as [Sxx]. Decisions labelled W01–W18 below are NEW resolutions of the
+missing Warp contract. Supplying this document as an owner directive can ratify
+those decisions; the implementation must record that ratification in the repo,
+not attribute it to an older ruling that never said it.
+
+The review read the pinned contracts, command ABI, Field IR/compiler metadata,
+Field v3 host and loader, software plan representation, production geometry
+connections, relevant test harnesses, and owner rulings. It did not run Quartus,
+Verilator, the project test suite, or a physical board. No ALM, DSP, RAM, timing,
+or full-workload result for this new design is claimed.
+
+THIS DOCUMENT'S PURPOSE
+-----------------------
+Build the missing, mandatory GEOM.WARP as an actual application of the existing
+Warp Field profile, in the actual console, from a real command to real deformed
+geometry and lighting. Do not replace the missing contract with another refusal,
+a second Field engine, a testbench-supplied result, or an unconnected module.
+
+The difficult work is not inventing a bend function. It is making the command,
+program binding, position, normal, attributes, vertex identity, visibility,
+resource lifetime, and result retirement agree. This document defines those
+connections and identifies the shared Field work that must be checked rather
+than assumed to exist.
+
+READING ORDER
+-------------
+1. Decisions and invariants: sections 1–4.
+2. Semantic operation, command, and resources: sections 5–9.
+3. Actual RTL integration and shared Field prerequisites: sections 10–15.
+4. Visibility, failures, scheduling, and cost: sections 16–20.
+5. References, tests, implementation sequence, and acceptance: sections 21–26.
+
+A. THE EXECUTIVE DECISION
+========================
+
+GEOM.WARP is a VIEW-INDEPENDENT, POST-SKIN, PRE-LIGHT/PRE-PROJECTION stage.
+It submits the Warp profile's input record to the ONE existing Field v3
+execution fabric. It adds the returned displacement to the skinned world
+position, adopts the returned normal, and publishes one coherent vertex.
+
+It does NOT:
+  * instantiate a private zhao_field_seq, a v2 fallback engine, or a new v3 engine;
+  * implement its own SIN, RING, normalization, noise, or interpreter;
+  * add a third projector or another raster path;
+  * treat GEOM.LOOM's transform matrices as vertices;
+  * evaluate the same vertex separately for the two cameras;
+  * change DrawForm or raw vertex format 0 by reinterpreting reserved bytes;
+  * assume source_id is a vertex identity;
+  * assume two streams belong together because they are valid together;
+  * silently leave normals or culling bounds unwarped;
+  * promise a 48-instruction program evaluates one vertex per clock;
+  * use a successful identity/bypass test as evidence of active deformation.
+
+The main production flow becomes:
+
+  DrawForm / DrawWarpedForm
+      -> CMD.EXEC ordered draw effects
+      -> GEOM.DRAWJOB + immutable per-draw Warp descriptor
+      -> GEOM.MESHFETCH, with conservative Warp-aware visibility
+      -> GEOM.ASSETFETCH
+      -> GEOM.VDECODE -> palette
+      -> existing SKIN / SKIN.NORM fork
+      -> tagged position/normal/attribute join
+      -> GEOM.WARP application + shared FIELD.SEQ.WARP execution
+      -> coherent result fork:
+            position -> GEOM.GROUP_SEQ -> shared projector -> arena
+            normal   -> existing light adapter -> zhao_light_stream
+      -> existing GEOM.VATTR / REPLAY / material / CLIP / raster path.
+
+Ordinary DrawForm follows the existing semantics and makes no Warp Field
+request. Its final output must remain bit-identical. Enabled Warp is not allowed
+to hide behind that bypass.
+
+1. WHAT THE REPOSITORY ALREADY REQUIRES
+=====================================
+
+1.1 Mandatory, not deferred
+
+The old GEOM.WARP and FIELD.SEQ.WARP contract prose still describes the
+2026-08-31 deferral. The ledger revokes that deferral on 2026-09-18, and R7
+explicitly requires GEOM.WARP, INPUT.SNAC, and POST.ECHO. The old cut_order=5
+and deferred title cannot authorize omitting Warp. [S01, S02, S03]
+
+1.2 One semantic Field engine
+
+FIELD.SEQ.WARP is a profile, not an additional sequencer. Field v3 is the
+production realization; its canonical ISA, validator, hash, software interpreter,
+and exact planner remain the arithmetic authorities. A Warp stream adapter is
+permitted. A private Warp instruction set or duplicate interpreter is not.
+[S04, S05, S06, S07]
+
+1.3 Pipeline location and Duo
+
+Charter section 10 explicitly places bounded deformation after rigid transform/
+two-weight skinning and before the world/projection path. Fetch, decode, skin,
+deform, model-to-world, and lighting are shared between views; projection and
+clipping are view-specific. Current R27 confirms WORLD positions at the shared
+projector; it does not require a new per-arena origin. [S02, S03]
+
+1.4 Warp's existing semantic interface
+
+The Field IR names position, normal, four attributes, time, and four parameters
+as inputs. Outputs are displacement dx/dy/dz and three new normal components.
+The program is bounded, branchless, loopless, and has no arbitrary memory access.
+The current Warp ceiling is 48 canonical instructions, under the global ceiling
+64, with the common opcode whitelist. [S06, S08]
+
+1.5 Existing geometry facts that the integration must retain
+
+GEOM.SKIN produces positions. GEOM.SKIN.NORM independently produces the blended,
+range-reduced world-normal direction. The normal is NOT a unit vector. LIGHT
+already computes its magnitude. GEOM.VATTR associates UVs and lit colors with
+projected landings. The current two-view group/replay machinery has explicit
+handling for refused raw vertices and poisoned batches. [S09, S10, S11, S12]
+
+1.6 Scope exclusions are not missing Warp functionality
+
+Skeletal pose/cape animation, the existing species-specific deformation rules,
+Transform Loom, procedural geometry generation, particle Flow, and terrain Earth
+are not replaced by this stage. They can coexist. Their existing behavior does
+not acquire an extra Warp unless the application issues the new command.
+
+1.7 Existing final-shading boundary is not magically closed by Warp
+
+The pinned GEOM.ATTRPACK exports three planes: inverse-W, U/W, and V/W. Its
+source explicitly says that four of seven attribute slots are not transported
+there. Thus a correct changed normal reaching LIGHT and VATTR is not, by itself,
+proof that all lit RGB/alpha interpolation reaches final fragments. [S26]
+
+Preserve and test Warp's actual normal -> LIGHT -> attribute-store consumer.
+Track the existing renderer/material/attribute work with its current owner;
+do not fabricate a flat color or add a second interpolator inside Warp. A
+position-change render can prove active geometric integration now; a claim of
+fully normal-dependent final-pixel shading requires the real RGB path as well.
+Label the two proofs separately if that pre-existing boundary remains open.
+
+2. OWNER-READY RESOLUTIONS W01–W18
+================================
+
+W01 — Correct the signature count.
+  Warp has FIFTEEN input lanes, not fourteen. Keep every named field in
+  field-ir.md section 7.1; correct its parenthetical count. Do not drop p3,
+  attributes, or time to make the prose add up. Six output lanes remain.
+
+W02 — Fix the application space.
+  Position is the existing skinned, world-space Q16.16 position. Input normal is
+  the existing range-reduced world direction, carried exactly as signed fixed-
+  point component words; it is not implicitly normalized. Displacement is in
+  world-space Q16.16 units. Output normal is a replacement world direction.
+
+W03 — Fix application arithmetic.
+  Pout = componentwise canonical saturating ADD(Pin, displacement).
+  Nout = the program's three output normal words, adapted by the existing common
+  range-reduction rule for LIGHT. No implicit Jacobian, finite differences,
+  extra unit normalization, blend with the old normal, or amplitude multiplier.
+
+W04 — Add an explicit command.
+  Allocate DrawWarpedForm at proposed opcode 0x0304, a 96-byte record. Preserve
+  DrawForm 0x0300 and vertex format 0 byte-for-byte. Re-check allocation at live
+  HEAD before landing; 0x0312–0x031F remain sky-reserved, not spare opcodes.
+
+W05 — Snapshot every draw.
+  The program handle, time, parameters, attribute mode, attribute resource, and
+  displacement bound belong to that draw. There is no mutable global
+  current_warp register applied to previously queued draws.
+
+W06 — Supply all four attributes honestly.
+  Support INLINE4 constants per draw and STREAM4 arbitrary per-vertex data from
+  a versioned WARP_ATTRIBUTES resource. Do not steal format-0 reserved bytes,
+  commandeer formats 1/2, or synthesize missing attributes from guessed UV units.
+
+W07 — Use one shared program-binding authority.
+  Handle -> canonical program -> prepared plan/resident slot is a common Field
+  service, shared with Earth/Flow/Formation/Stamp where needed. A handle is not a
+  content hash, and a content hash is not a physical resident slot.
+
+W08 — Bind identity to actual transfers.
+  The internal identity is a draw-instance cookie plus meshlet/batch identity
+  and vertex ordinal. Input source_id remains attribution, not identity.
+  Refused raw records and successful decoded ordinals must remain distinct.
+
+W09 — Preserve the ordinary path.
+  DrawForm disables Warp, performs zero Warp lookups/evaluations, and preserves
+  positions, normals, UVs, light values, materials, raster state, and outputs.
+  Any bypass throughput regression must be measured and resolved, not excused.
+
+W10 — Publish no partially warped meshlet.
+  On active Warp failure, poison and drain that meshlet using the existing
+  batch refusal/release mechanism. Do not draw a mixture of deformed and
+  undeformed vertices. Do not make an absent output look like a zero result.
+
+W11 — Make visibility conservative before fetching/deforming.
+  Every active Warp draw declares a world-space componentwise displacement
+  bound. Expand visibility bounds before culling and account for deformation
+  in LOD error. Runtime-check returned displacements against the declaration.
+
+W12 — Keep one Field fabric and one projector complex.
+  Add a logical Warp client to the existing Field host. Do not allocate a
+  private execution engine, math bank, normalizer, or projector by convenience.
+
+W13 — Separate three performance claims.
+  Application arithmetic can be an II=1 registered lane. Field evaluation
+  throughput depends on the actual program and shared host. Whole-frame
+  affordability additionally includes traffic, queues, all other profiles,
+  geometry, texture, post, and measured clock. None proves the other two.
+
+W14 — Preserve program legality and explicit admission.
+  The common Warp opcode whitelist and canonical 48-op limit do not change.
+  A legal program need not be realtime/hot under the existing cost-model law.
+  Lack of a hardware lowering is recorded explicitly; it is not relabelled an
+  illegal program or answered by an unannounced old engine. Hardware closure
+  must include genuinely executed nontrivial Warp programs on v3.
+
+W15 — Honor mandatory service capacity.
+  Warp may not steal reserved Earth or other guaranteed profile work. Add its
+  demand to the existing shared admission/schedule proof. Do not invent a
+  convenient fixed percentage, vertex quota, or cycle denominator in RTL.
+
+W16 — All shared-host limitations are real prerequisites.
+  Correct lane capacity, output maps, program/table lifetime, prepared-uniform
+  identity, complete result capture, and commit/run coherence in the shared
+  host. Do not bury a second Field loader inside GEOM.WARP to avoid doing this.
+
+W17 — Freeze numeric and content ownership.
+  Artist choices remain authored data or named constants. All numeric adapter
+  decisions below become spec/reference/test changes together. The normal-
+  deformation law is authored by the Warp program, not guessed by the shell.
+
+W18 — Close by end-to-end evidence.
+  Real command -> real program binding -> real Field v3 execution -> coherent
+  warped vertex/normal -> lighting/projection -> reference-checked result.
+  A built block, zero gap counter, or a picture alone is not sufficient.
+
+3. CONFLICT REGISTER: WHAT TO CORRECT, NOT INHERIT
+===============================================
+
+C01  field-ir.md says "(14)" after fifteen Warp input fields.
+     Resolution: W01; exact lane map in section 5. No numeric ISA change.
+
+C02  GEOM.WARP's old deferral contradicts the current mandatory ruling.
+     Resolution: replace the contract and annotate the superseded deferral.
+     FIELD.SEQ.WARP remains a profile; do not turn it into an RTL engine.
+
+C03  GEOM.WARP's ledger input is "instanced_transforms" and Loom names Warp
+     downstream, while actual Loom emits matrices to DRAWJOB's palette.
+     Resolution: retain that control dependency, correct the DATA dependency.
+     Warp consumes post-skin vertices and normals, not Loom's matrix stream.
+
+C04  Old diagrams place a "world cache" where the current GEOM.WCACHE is a
+     PROJECTED arena. Resolution: integrate at actual SKIN/GROUP_SEQ and
+     SKIN.NORM/LIGHT wires. No extra world cache is implied by an old label.
+
+C05  The profile speaks fixed-point normals; current SKIN.NORM deliberately
+     emits a non-unit direction to avoid double rounding in Lambert.
+     Resolution: W02/W03. Programs needing unit length use the explicit Field
+     NORMALIZE3 operation. Disabled and identity Warp must retain exact lighting.
+
+C06  The Field host's default input/output capacities and contiguous output
+     window are not the full canonical Warp contract.
+     Resolution: shared host conformance work in section 12. A wider req bus
+     alone is not a fix; zero-filled unused output slots are not results.
+
+C07  The ledger target says one warped vertex/clock. The current Field host
+     clears and preloads registers for each point and runs only one point at a
+     time. Resolution: keep the declared target visible and publish application
+     II, evaluator II, and frame demand separately. Never quote bypass speed
+     as active program speed or quietly rewrite a missed target to pass it.
+
+C08  The canonical program hash is not sufficient prepared-instance identity.
+     Resolution: include full validated image/signature and preparation identity
+     in binding/lifetime checks; keep the canonical hash algorithm unchanged.
+
+C09  DrawForm has no Warp verb or free payload; its flag high bits are reserved.
+     Resolution: additive command W04, not reinterpretation of old commands.
+
+C10  Deformation can escape pre-Warp bounds and invalidate normal cones/LOD.
+     Resolution: W11 and section 16. Correct arithmetic after an incorrect cull
+     is still missing geometry.
+
+C11  "FIELD is implemented" does not prove arbitrary FPLANs fit the host's
+     compact register-group loader or its output capture.
+     Resolution: test the actual loader translation against canonical execution;
+     promote reusable code out of test harnesses; account for unsupported cases.
+
+C12  Existing broad throughput estimates are not a Warp certificate.
+     Resolution: cost model section 5, actual lowerer demand, shared resource
+     measurements, and complete admitted workloads. No extrapolation from one
+     triangle or one sine program to all 48-op programs.
+
+4. REQUIRED INVARIANTS
+======================
+
+I-A  Each successful decoded vertex has exactly one application outcome in the
+     selected path. Two views do not double the number of Warp evaluations.
+
+I-B  A vertex's position, normal, attributes, program, time, parameters, and
+     displacement bound have one common identity. No later stage reads live
+     configuration that may already describe a different draw.
+
+I-C  Every issued Field request has exactly one captured terminal response or a
+     controlled reset/quiescence disposition. A timed-out request's storage is
+     never immediately reused while a late write can still reach it.
+
+I-D  Every meshlet is either fully eligible for replay or poisoned and drained.
+     A failure does not strand GROUP_SEQ, VATTR, REPLAY, or an asset bank.
+
+I-E  Code, I/O maps, prepared values, tables, and resident bindings used by a
+     running point are immutable until its completion. A cache hit is not a
+     lease. A generation comparison is not permission to overwrite live state.
+
+I-F  UV/material/raster/semantic-weight identity remains intact through Warp.
+     Warp changes only position and normal, plus its own evidence/status.
+
+I-G  The resources counted by synthesis include the real shared execution
+     path. No additional Field engine or projected-coordinate shortcut exists.
+
+I-H  Every newly exposed hardware interface has both a production producer and
+     consumer, or is an explicitly ratified physical/software boundary with a
+     protocol and driver. A raw leaf port renamed "host" does not qualify.
+
+5. EXACT WARP SEMANTICS
+======================
+
+5.1 Input lanes (canonical order)
+
+All lanes are 32-bit words. fx means signed Q16.16, using existing project
+rounding and saturation rules. time is u32 tick data, not a wall-clock read.
+
+  lane/reg  name       type   owner
+  0         px         fx     GEOM.SKIN world X
+  1         py         fx     GEOM.SKIN world Y
+  2         pz         fx     GEOM.SKIN world Z
+  3         nx         fx     SKIN.NORM reduced direction X
+  4         ny         fx     SKIN.NORM reduced direction Y
+  5         nz         fx     SKIN.NORM reduced direction Z
+  6         a0         fx     selected attribute source, section 8
+  7         a1         fx     selected attribute source
+  8         a2         fx     selected attribute source
+  9         a3         fx     selected attribute source
+  10        time       u32    THIS DrawWarpedForm.time
+  11        p0         fx     THIS DrawWarpedForm.params[0]
+  12        p1         fx     THIS DrawWarpedForm.params[1]
+  13        p2         fx     THIS DrawWarpedForm.params[2]
+  14        p3         fx     THIS DrawWarpedForm.params[3]
+
+"Warp8" is the historical capability name. It does not override the explicit
+fifteen-lane signature or 48-instruction Warp ceiling with an eight-lane,
+eight-instruction, or eight-clock rule.
+
+The program's canonical input registers are R0..R14. A prepared FPLAN may map
+these to different physical registers; that is the shared planner/loader's
+job, not an alternative semantic record.
+
+Do not read a timer halfway through a meshlet. Replaying the same commands and
+assets supplies the same time. An application wanting simulation-frame time
+writes that tick in the command; it may also deliberately freeze or offset it.
+
+5.2 Output lanes
+
+  output  name          type
+  0       dx            fx
+  1       dy            fx
+  2       dz            fx
+  3       nx_out        fx
+  4       ny_out        fx
+  5       nz_out        fx
+
+Their physical/canonical register locations come from the decoded program's
+output map. They are NOT assumed to be R15..R20 or one contiguous window.
+The canonical decoder owns legality of that map.
+
+5.3 Position application
+
+For each component, form the exact signed sum in at least 33 bits:
+
+  wide = sign_extend(Pin) + sign_extend(d)
+  Pout = clamp(wide, INT32_MIN, INT32_MAX)
+
+Use the existing canonical ADD helper in the C++ oracle. RTL must implement
+that same saturation, not wrap or rescale. There is no multiplication by dt,
+no hidden gain, and no second application of the instance transform.
+
+Keep application-add saturation distinct from Field-program saturation in the
+instrumentation. The combined visible numeric status may OR them, but their
+individual causes must remain inspectable.
+
+5.4 Normal input and output
+
+SKIN.NORM currently exports signed 64-bit wires whose actual reduced components
+fit signed 32-bit, with max(abs(component)) < 2^30. Capture the exact low word
+only after checking that sign extension reconstructs the full input. An out-of-
+range input is a seam fault, not permission to truncate it. [S09, S11]
+
+Interpreting those component words as fx for the Warp program does not assert
+that length equals 1. Scaling all components together changes their magnitude,
+not the represented direction. The program author must use NORMALIZE3 explicitly
+when a displacement operation requires a unit normal.
+
+The program supplies a REPLACEMENT normal. It may preserve the input, rotate
+it, or compute its own deformed direction. The adapter does not infer derivatives
+from three position samples and does not claim arbitrary deformations preserve
+surface normals. Example twist programs must author their corresponding normal
+change, or explicitly use an artistic normal rule.
+
+Before sending enabled-Warp output to LIGHT:
+  * detect zero iff all three words are zero;
+  * otherwise apply the SAME common arithmetic-right-shift range reduction
+    used by skin_world_normal until max(abs(component)) < 2^30;
+  * use a widened unsigned magnitude for abs(INT32_MIN), not signed overflow;
+  * sign-extend the resulting words to the light adapter's actual input widths;
+  * leave magnitude computation to zhao_light_stream's existing root.
+
+At signed-32 input width this reduction needs at most two common shifts. A
+registered shift-count select or two short stages suffices; it is not a new
+sqrt/divider. No extra normalization is introduced on the disabled path.
+
+An identity Warp outputs d=(0,0,0), n_out=n_in. Given lawful upstream reduced
+normals, the adapter performs no additional shift and final lighting is exact.
+
+5.5 Status is not a Boolean success code
+
+Canonical Field saturation and reciprocal-of-zero have defined numeric answers.
+They are not automatically malformed programs. Keep canonical status and
+transport/execution failure separate. A check of `resp_status != 0` MUST NOT
+turn a defined saturated Field answer into a dropped vertex.
+
+A missing program, incomplete output map, unsupported lowered operation, broken
+plan, or actual fabric alarm is a failure. Section 17 defines its disposition.
+
+5.6 Bounds apply to the RETURNED displacement
+
+Before application, compare each returned displacement to the command's
+nonnegative bound using widened absolute values. If |d[k]| > bound[k], flag the
+meshlet as poisoned. Do not clamp displacement to the bound and pretend the
+program computed that clamp. Saturating position addition stays the canonical
+position law, separately reported.
+
+6. ADDITIVE COMMAND: DrawWarpedForm
+==================================
+
+6.1 Proposed command
+
+0x0304 is in the forms/populations range and follows DrawForm 0x0300,
+DrawPopulation 0x0301, DrawProcedural 0x0302, and SetPopulation 0x0303.
+At implementation HEAD, assert it is still free before assigning it. [S13]
+
+Suggested .zidl declaration (NEW law W04):
+
+  command DrawWarpedForm 0x0304 implemented {
+    handle32[form] form;
+    handle32[material_set] material_set;
+    handle32[transform] transform;
+    u8 viewport_mask;
+    u8 semantic_weight;
+    u16 flags;
+    handle32[program] warp_program;
+    u32 time;
+    fx16 params[4];
+    fx16 attributes[4];
+    handle32[resource] warp_attributes;
+    u8 attribute_mode;              // 0 INLINE4, 1 STREAM4; other values refused
+    u8 warp_flags;                  // reserved zero in this revision
+    pad[2];
+    fx16 displacement_bound[3];      // each >= 0, world-space component bound
+    pad[4];
+  }
+
+Payload layout, relative to payload byte 0 (record header adds 16):
+
+  0..15    existing DrawForm payload, same field ordering and meanings
+  16..19   warp_program
+  20..23   time
+  24..39   params[4]
+  40..55   attributes[4]
+  56..59   warp_attributes
+  60       attribute_mode
+  61       warp_flags
+  62..63   reserved zero
+  64..75   displacement_bound[3]
+  76..79   reserved zero
+
+Total payload: 80 bytes. Total aligned record: 96 bytes.
+The ABI generator, not a handwritten C/SV struct, remains the emitted-layout
+owner. Assert these expected sizes/offsets against its generated constants.
+
+6.2 No hidden state command
+
+Do NOT implement SetWarp followed by ordinary DrawForm as the first design.
+CMD.EXEC groups some state updates before draws; a mutable last-writer Warp
+setting would need additional ordering semantics and could retroactively change
+older draws. This command carries its own snapshot and avoids that entire class.
+
+Do NOT make every DrawForm read a mutable per-instance Warp table either.
+That would change the meaning of old commands and confuse repeated draws of the
+same instance with different deformation parameters.
+
+6.3 Validation and behavior
+
+  * The first six fields retain DrawForm semantics, including cull flags.
+  * warp_program must resolve to a validated W-profile program/binding.
+  * attribute_mode 0 uses all four inline words and requires warp_attributes=0.
+  * attribute_mode 1 requires a resident matching WARP_ATTRIBUTES resource;
+    inline attribute words must be zero to avoid unused ambiguous content.
+  * warp_flags and pads must be zero.
+  * displacement bounds must be nonnegative signed fx values.
+  * Payload validation is generated/centralized with the decoder; CMD.EXEC
+    stages the payload and consumes the final decoder verdict.
+  * An invalid record/packet has no speculative persistent side effects.
+
+Do not reuse ZH_ABI_STALE_HANDLE for an unrelated execution error without
+updating its authoritative definition. Keep packet errors separate from counted
+runtime resource misses/refusals.
+
+6.4 ABI version and existing captures
+
+Follow the project's current additive-command precedent: retain ABI version 3
+unless the coordinator is deliberately performing a broader version transition.
+Old decoders reject the unknown new opcode; old DrawForm records do not change.
+Explicitly record this compatibility decision, rather than inheriting contradictory
+historical comments about when version bumps occurred. [S13]
+
+Regenerate all current ABI outputs, command samples, tables, and affected
+captures THROUGH THEIR REAL PRODUCERS. Do not hand-edit capture hashes/CRCs.
+Update any current opcode-size table using the generated table, not another
+private switch. Adding the opcode to the decoder but not CMD.DMA would repeat
+a defect the current campaign already repaired.
+
+7. DRAW SNAPSHOT STORAGE AND ORDERING
+====================================
+
+7.1 Staging at CMD.EXEC
+
+Ordinary and warped draws are one ordered event sequence. They must not be
+placed in two independently draining queues, which could reorder transparency,
+state observation, or repeated draws. Existing views/environment/upload commit
+ordering remains intact. [S14]
+
+Store the Warp extension in a RAM-shaped descriptor sidecar keyed by the draw
+queue slot. The common draw item holds `warp_enabled` plus a compact descriptor
+cookie, not an 80-byte Warp record copied through every geometry stage.
+
+The sidecar capacity must cover the current ordered DRAW queue capacity; it is
+not permitted to reduce the number of legal draws merely because only two Warp
+slots were easy to build. If an explicit capacity is added, the resulting whole-
+packet overflow rule must be declared and tested, with cost/admission reporting.
+
+Do not free a sidecar row when CMD.EXEC hands the draw to DRAWJOB: DRAWJOB may
+still emit several meshlets and downstream stages can outlive that transfer.
+Either transfer ownership into a downstream descriptor pool or keep the original
+row leased until the last affected meshlet drains.
+
+7.2 Cookie identity and reuse
+
+A cookie contains a pool index and an allocation generation, derived from the
+actual configured depth. It identifies an occurrence of a draw, not a transform
+handle or source_id. Two commands drawing one transform with different p/time
+values receive different immutable descriptors.
+
+Cookie reuse requires:
+  * DRAWJOB has finished enumerating that draw's jobs, including empty/refused
+    outcomes;
+  * every issued meshlet has reached its terminal release;
+  * all associated raw/decoded metadata, Field requests, and output records have
+    drained;
+  * reference count is zero and no response can still name the old allocation.
+
+Generation width alone does not solve wraparound. Prevent reuse with outstanding
+references; reset/abort additionally follows the quiescence rule in section 17.
+
+7.3 How the cookie moves
+
+Extend the draw-side metadata in ONE documented packing definition. Today
+DRAWJOB/MESHFETCH use SIDEW=72 for weight/material/raster and DRAWJOB explicitly
+asserts that width. [S15, S16]
+
+Add the Warp cookie and enabled bit at this existing handshake-carried seam;
+update every producer, latch, pass-through, width assertion, test wrapper, and
+unpacker together. Do not silently change SIDEW while keeping one old 72-bit
+slice. Keep the existing fields' meanings and tested values intact.
+
+Only stages that need the descriptor read it. Position/normal numeric payloads
+in GEOM.SKIN need not gain the entire Warp state; use the sidecar identity
+mechanism below, preserving R11's separation of geometry and attribute state.
+
+7.4 Command finish versus geometry finish
+
+Introduce a named draw-enumeration-done event if the present DRAWJOB interface
+has no such event. It must fire on every completion path: zero visible views,
+empty stream, bad header, missing transform, resource refusal, and the last
+emitted job. No consumer may infer end-of-draw from a temporary gap in valid.
+
+The exact reference-count events are acceptance of a real meshlet token and
+its actual terminal release. They are not declarations that a meshlet "should"
+exist. Check for underflow, duplicated release, and stranded descriptors.
+
+8. THE FOUR ATTRIBUTES: REAL DATA WITHOUT A NEW VERTEX FORMAT
+===========================================================
+
+8.1 INLINE4
+
+All vertices of the draw read the command's four attribute words. This is useful
+for attribute-independent programs and per-draw material/deformation controls.
+Zero is allowed only because the author supplied it, not because a missing
+reader was tied off.
+
+8.2 STREAM4: WARP_ATTRIBUTES resource
+
+Propose resource kind 14, currently reserved in the inspected cartridge table;
+re-check live HEAD before allocation. Allocate a noncolliding section type in
+the same registry update rather than inventing a hard-coded section id here.
+The resource is uploaded through existing PublishResource/MEM.UPLOAD. No private
+asset upload protocol is introduced. [S17]
+
+Purpose: four arbitrary fx attributes for each RAW format-0 meshlet vertex.
+It is not a second interpretation of MESH_STREAM geometry and contains no
+positions, normals, transforms, or triangle indices.
+
+A simple deterministic first layout is deliberately direct-indexed:
+
+  HEADER: 64 bytes, little-endian
+    +0   u32 magic = 0x3441575A       // bytes "ZWA4"
+    +4   u16 version = 1
+    +6   u16 header_bytes = 64
+    +8   u32 form_handle             // complete handle, including generation
+    +12  u32 mesh_stream_crc32c      // CRC of the published mesh image
+    +16  u32 meshlet_count
+    +20  u32 attributes_offset = 64
+    +24  u16 vertices_per_meshlet = 64
+    +26  u16 attribute_stride = 16
+    +28  u32 flags = 0
+    +32  u8 reserved[32] = 0
+
+  DATA:
+    meshlet_count groups, each 64 records × 16 bytes = 1,024 bytes.
+    Each record: a0, a1, a2, a3, signed fx32 in canonical order.
+    Unused records beyond a meshlet's actual vertex_count are zero padding and
+    are never submitted as vertices.
+
+Address of original local vertex vi in descriptor ordinal mi:
+
+  resource_base + 64 + (mi << 10) + (vi << 4)
+
+No multiplier is required for these power-of-two strides. Use widened address
+arithmetic before bounds checking; do not truncate and then test.
+
+The fixed 64-record group is a layout simplicity choice, NOT free storage.
+Charge 1,024 bytes per meshlet even when a meshlet uses fewer vertices. If that
+cost is unacceptable for a target asset, a future compact layout must be a
+versioned format, not a secret different address law. Only populated record
+lines need be fetched; four 16-byte records share one 64-byte memory line.
+
+8.3 Why not use vertex formats 1 and 2 or the spare eight bytes?
+
+Formats 1/2 are reserved for the existing packed-vertex bake-off. Format 0's
+reserved eight bytes must be zero. Reusing either would violate existing
+validation and invalidate unrelated geometry tests. [S18]
+
+Why not derive a0/a1 from UVs? The profile promises authored attributes, not a
+particular UV conversion, and VDECODE currently describes raw widening. A shader
+wanting UV-derived attributes can have the packer supply those values in the
+sidecar, with their conversion stated in the asset recipe.
+
+8.4 Association and publication
+
+The header's form handle and mesh CRC must match the MESH_STREAM actually
+resolved for this draw. Capture the publisher's CRC for that directory entry
+or add a proper query to the shared publication metadata; do not compare the
+header to a second copy of itself.
+
+The resource's own generation/base/extent/CRC come from its real publication.
+Do not infer residency from the command merely having been encountered.
+A resource still being uploaded follows the existing draw/upload ordering law.
+
+Validate the required total extent with overflow-safe arithmetic:
+
+  required = 64 + uint64(meshlet_count) * 1024
+
+Check the count against the resolved mesh header. Check each emitted meshlet's
+original descriptor ordinal and raw vertex ordinal, before any decode refusals
+or LOD filtering can renumber it. Do not index attributes by the dense sequence
+of surviving vertices.
+
+8.5 Memory path
+
+Use an additional LOGICAL requester on the existing geometry memory adapter,
+which owns the actual ENGINE1 identity and read-only guard access. Re-prove the
+N-requester arbitration bounds. Do not allocate another physical HPS bridge,
+VRAM client identity, or a second resource directory law.
+
+A reader needs a 64-byte response buffer and a captured owner for each issued
+read. MEM.GUARD's acceptance and verdict are different cycles; the HPS/SDRAM
+response may have no ready. Never backpressure an unstallable response by merely
+holding its valid bit. Reserve response storage before issuing the request.
+
+Bad header, short extent, stale mesh association, and denied read are terminal
+refusals with counters. They cannot leave a vertex waiting for absent attributes.
+
+9. SHARED FIELD PROGRAM BINDING
+==============================
+
+9.1 Do not conflate three identities
+
+  program handle: application identity, including its handle generation;
+  canonical hash: existing CRC32C(code || tables) + instruction count;
+  resident slot: current physical plan/context storage location.
+
+The canonical hash definition does not change. It does not encode the full I/O
+map/profile or the prepared values for one time/parameter set. Two typed bindings
+with the same hash must not accidentally share incompatible metadata. [S06, S19]
+
+9.2 One common binding service
+
+Implement or extend a common FIELD binding table, not a Warp-only mapping that
+Earth will later duplicate. A row records at least:
+
+  full program_handle
+  canonical_hash
+  validated_image_crc32c / signature identity
+  profile id, input count/types, output count/types
+  current resident slot + allocation generation
+  prepared-plan ABI/fabric version and valid state
+  metadata/load-completion state
+
+The source of handle and hash together is SW.STREAM/the validated program
+loader, not arithmetic on the handle in CMD.EXEC. The existing Field doorbell
+already supplies loader/lookup/commit traffic. Acquire once per program/draw
+association, not per vertex; the scanned-directory contract explicitly requires
+that lifetime. [S20, S27]
+
+9.3 Concrete doorbell extension
+
+The current post_op values are 0 LOAD, 1 COMMIT, 2 LOOKUP. Use newly ratified
+post_op=3 as a common BINDING transaction, with post_kind selecting:
+
+  0 BIND_BEGIN: post_slot names the intended resident slot;
+      post_data[31:0]  = full program handle
+      post_data[63:32] = canonical hash
+      post_data[95:64] = validated image CRC/signature id
+  1 BIND_META: indexed metadata word, post_addr selects the word;
+      post_data carries its generated layout, including profile, maps, and
+      lowered-plan properties.
+  2 BIND_SEAL: atomically publish the complete row after all prerequisite
+      validations, loader writes, and directory operations completed.
+  3 UNBIND: revoke a handle when it has no active lease; otherwise backpressure
+      or return the declared busy refusal. Never invalidate live work silently.
+
+This is a protocol extension, not proof the existing doorbell already does it.
+Put the record encodings, version, reply fields, and generated metadata layout
+in a shared Field binding contract and one software packer. Return a ticketed
+completion/refusal for every consumed binding operation. BIND_META must not
+become an arbitrary unbounded buffer: its word count is fixed by the header/map
+schema and hardware parameters.
+
+Reuse the mailbox's existing credit/return discipline. The bind service may
+need a held read of PROGCACHE, but it must not start an independent second
+program load or bypass software validation on a cache miss.
+
+9.4 Publication is a protocol, not two adjacent calls
+
+The inspected host clears hdr_loaded on a successful directory-commit request,
+while the doorbell describes requiring a header before commit. These mechanisms
+must be tested TOGETHER: a valid published hash must resolve to a runnable plan,
+not a slot that publication just invalidated. This is a specific coherence
+obligation, not an assertion that an unexecuted test has demonstrated a bug.
+[S07, S20]
+
+The final protocol must enforce one invariant:
+
+  binding.visible => matching directory identity AND complete runnable header
+                     AND matching plan/tables/I/O metadata.
+
+Choose and implement the ordering in the shared host/doorbell once. A defensible
+sequence is reserve/invalidate old identity, load plan/tables/metadata, finalize
+header, then atomically expose directory/binding readiness. If the existing
+PROGCACHE allocation interface requires commit before load, hold the binding
+unpublished until load finishes and use that allocated slot. Do NOT preserve a
+contradictory ordering merely to keep two isolated tests green.
+
+9.5 Program and prepared-data lifetime
+
+Code/header/map are pinned from draw admission until its outstanding vertex
+requests drain. A slot reassignment cannot occur underneath a captured cookie.
+A reference count or an explicit frame/working-set lease must enforce this.
+
+Prepared uniforms require their OWN identity: program hash + actual preparation
+inputs (time/params/inline attributes where uniform) + preparation epoch. The
+same program drawn twice with different time/p values cannot reuse stale
+prepared values. Global table/scalar banks must not be overwritten while a
+client can still consume their previous contents.
+
+The implementation must pick a physical solution already compatible with the
+shared Field fabric: resident bank allocation, immutable prepared working sets,
+or serialized switch/reload epochs with their transfer cost counted. It must
+not call a raw shared scalar table "per program" when the address wires contain
+no program index. Test alternating Earth/Warp/Flow programs with different tables
+and parameters. A reload-only solution may be correct but fail realtime
+admission; report both outcomes separately.
+
+9.6 No broad lock that deadlocks the machine
+
+Do not hold the entire Field execution resource while waiting for an asset
+fetch or for software to supply a missing program. Finish binding/asset admission
+before obtaining execution credit. Release per-point execution ownership when
+that point completes; a program-residency lease is not exclusive execution.
+
+If a required table working-set switch is necessary, schedule it at a bounded
+quiescent boundary. Never let a long Warp draw starve mandatory Earth work by
+holding a global configuration lock indefinitely.
+
+10. RTL ORGANIZATION: SMALL OWNERS, NOT A SECOND GEOMETRY PIPELINE
+==============================================================
+
+Names below are proposed files. Reuse an equivalent existing owner if one has
+landed since the audit, documenting its actual interface and tests.
+
+10.1 zhao_geom_warp.sv — the mandatory capability owner
+
+Owns enabled/bypass selection, per-vertex request bookkeeping, result application,
+normal adaptation, meshlet failure aggregation, and the coherent output.
+Instantiates a small application lane if that keeps the code clearer. It does
+not instantiate Field arithmetic or perform asset/program decoding.
+
+Inputs conceptually:
+  batch begin/end descriptor, its immutable Warp cookie, expected vertex count;
+  joined vertex {ticket, world position, reduced normal, attributes, attribution};
+  binding/admission outcome and shared Field response;
+  reset / controlled abort-disposition signals.
+
+Outputs conceptually:
+  shared Field request;
+  coherent post-Warp vertex {ticket, position, normal, degenerate, status};
+  batch-complete and batch-poison evidence;
+  counters and trace events.
+
+10.2 zhao_geom_warp_join.sv — actual stream association
+
+Owns the small ticket pool and the position/normal/attribute join around the
+existing palette/SKIN/SKIN.NORM path. It is not an associative CAM over source
+IDs. Each storage row is directly addressed by an allocated ticket.
+
+Default starting exploration: JOIN_DEPTH=4 with tests at 1, 2, 4, and 8. This
+is a queue-implementation starting point, not a claimed throughput certificate
+or an architectural cap on meshlet vertex count. Backpressure must make every
+legal depth correct; measurements choose the production depth.
+
+Use separate position, normal, and metadata banks or small register arrays so
+independent writers do not invent a three-write-port RAM. The two actual skin
+outputs can arrive in different cycles. The consumer waits for all required
+valid bits of the same row, not for concurrent valids on live buses.
+
+10.3 zhao_geom_warp_attrs.sv — optional sidecar fetch
+
+Owns WARP_ATTRIBUTES header validation, captured memory requests, one or more
+explicitly credited line buffers, and original-meshlet/original-vertex indexing.
+Inline mode bypasses this reader entirely. It uses the existing geometry memory
+adapter and publication metadata. No separate physical memory controller.
+
+10.4 Common Field binding/host improvements
+
+Put reusable handle/signature/plan/lifetime support in fpga/rtl/field and the
+corresponding common software code. Do not name a generic program-map fix
+"warp loader" and force the Earth path to reinvent it.
+
+10.5 Shared parameter/package definitions
+
+Add a narrow package for Warp semantic records/constants and one shared draw-
+side packing definition. It defines widths and field meanings, not an alternate
+numeric library. Derive cookie/index widths from parameters with guards that
+also elaborate at depth 1. Avoid zero-width slices/replications preceding a
+fatal check.
+
+11. HOW TO INSERT IT INTO THE CURRENT CORE
+========================================
+
+11.1 Existing seams to replace
+
+The pinned core has these actual connections: [S10]
+
+  pal_o_valid -> atomic fork -> GEOM.SKIN and GEOM.SKIN.NORM
+  GEOM.SKIN.o_* -> gs_v_* -> GEOM.GROUP_SEQ.v_*
+  GEOM.SKIN.NORM.n_* -> zhao_light_skin_adapter.s_*
+  zhao_light_stream.r_* -> GEOM.VATTR lit-color input.
+
+Replace the two DIRECT output connections with the coherent Warp join/application
+and result fork. Keep the palette-to-skin algorithms intact. Do not put all Warp
+arithmetic combinationally on GEOM.SKIN.o_*; the registered application stage
+is a separate owner as the existing skin contract requires.
+
+11.2 Tickets before the two skin consumers diverge
+
+Allocate a ticket only when the upstream vertex can actually be accepted by
+both SKIN and SKIN.NORM and the corresponding metadata storage is reserved.
+The same transfer enqueues that ticket into the position-completion order queue
+and normal-completion order queue.
+
+The numeric SKIN ports need not be widened if their outputs are provably in
+acceptance order. A position output consumes its position-ticket queue head;
+a normal output consumes its normal-ticket queue head. Those queues retain
+identity through independent latency/backpressure. Assert their conservation.
+
+Do not use the current source_id output to select a row. Multiple vertices and
+draws routinely have the same source_id. A test MUST deliberately repeat it.
+
+11.3 Connect raw attributes to the correct decoded vertex
+
+The raw record ordinal advances on EVERY accepted raw ASSETFETCH vertex record.
+The decoded ordinal advances only when VDECODE emits a legal vertex. On a
+refusal, preserve the existing hole event and discard that raw record's pending
+attribute metadata. Do not shift all following attributes one vertex left.
+
+Carry an original descriptor ordinal from DRAWJOB's descriptor walk and an
+original vertex ordinal through the intake adapter. Those choose STREAM4 data.
+The dense decoded ordinal continues to be what the existing successful-position/
+UV/color store machinery expects within a nonpoisoned batch.
+
+A workable staged intake is:
+  a. latch raw-record identity and reserve attribute metadata capacity;
+  b. obtain INLINE4 or the corresponding STREAM4 entry;
+  c. offer the raw record to VDECODE, holding the associated metadata;
+  d. on decode success, transfer the metadata with that successful vertex;
+  e. on decode refusal, release it and propagate the existing hole exactly once.
+
+This may add latency for streamed attributes. Count it. It is preferable to
+inventing an asynchronous association after the bytes have already moved on.
+
+11.4 Batch identity is explicit
+
+Use the actual accepted meshlet token as a batch-begin event. Capture its Warp
+cookie and original descriptor ordinal at that event. The current geometry may
+have more than one meshlet in flight: do not let the next batch overwrite a
+single global descriptor while the previous batch's normal is still in LIGHT.
+
+A per-active-batch context contains:
+  expected raw vertices;
+  successful decoded vertices;
+  raw holes;
+  completed Warp outcomes;
+  outputs accepted by the downstream fork;
+  poison/error bits;
+  draw descriptor reference and generation.
+
+Its capacity is derived from the selected geometry pipeline's outstanding
+meshlet capacity. It may apply backpressure when full; it may not silently
+assume that capacity is one because an old test only sent one meshlet.
+
+11.5 Preserve the existing UV and color store discipline
+
+Original UVs remain UVs; Warp does not replace them. Existing GEOM.VATTR receives
+UVs from its actual decoded-vertex transfer and the NEW lit result from the
+warped normal. Both correspond to the same decoded ordinal.
+
+The new join must not count an offered-but-stalled VDECODE vertex as accepted.
+Use the exact enable the current VATTR uses. Check that both views' projected
+landings use the same new position and the same per-vertex color/UV identity.
+
+If a normal/program failure forces a poisoned batch, keep sufficient placeholder
+completion traffic to satisfy existing ordinal/row accounting, but do not let
+those rows become drawable. Placeholder values are bookkeeping for a discarded
+batch, not a legal visual fallback. A clean batch after it must start with clean
+counters and stores.
+
+11.6 Coherent downstream fork
+
+The Warp result contains position and normal together. Publish them through a
+registered output hold. Position is consumed by GROUP_SEQ; normal by the current
+light adapter. Both consumers must take each vertex exactly once.
+
+Either use an atomic fork where each consumer's valid is gated by the OTHER
+consumer's ready, after checking that neither ready depends on its own valid,
+or use independent consumed bits in the output hold. Do not simply AND ready
+signals while leaving both valids asserted: that previously duplicated accepted
+work under backpressure elsewhere in this console.
+
+An output is freed only after both destinations accepted it. Field response
+storage is reserved before issue so a blocked downstream fork cannot lose an
+unstallable Field result.
+
+11.7 Last-vertex and seal races
+
+A batch may be physically sealed in the position arena before its final Field
+status, normal/color, or VATTR row has completed. Replay admission therefore
+requires the conjunction of:
+  existing GROUP_SEQ position/arena readiness;
+  existing VATTR completion;
+  new Warp batch completion and final poison status.
+
+On the last completion edge, compute next-state counts/poison before deciding
+that the batch is done. A nonblocking assignment's old poison value must not
+publish a clean handle on the same edge that the last vertex fails.
+
+12. THE SHARED FIELD HOST: CONFORMANCE WORK THAT CANNOT BE SKIPPED
+===============================================================
+
+This is the most important dependency audit. The pinned host is not a complete
+implementation of the canonical profile interface merely because it contains
+a v3 fabric. Its file states one active point, fixed preload widths, and a
+contiguous output snoop window. [S07]
+
+12.1 Lane and register capacity
+
+Warp needs 15 input lanes and 6 output lanes; Flow currently needs 13/7. The
+shared envelope therefore needs at least 15 input words and 7 output words,
+with per-request/per-program counts or masks. Do not require every Warp program
+to write a seventh result, and do not interpret padded lanes as real inputs.
+
+The canonical file uses 64 registers and Warp allows 48 instructions. Host
+defaults of REGS=32 and INSTR_N=32 do not establish that capacity. Inspect the
+actual selected core parameters and the lowered plan's requirements. Explicitly
+configure native register capacity and a sufficient plan store, propagating
+PC/address widths through the real loader and all wrappers.
+
+Do not assume 48 canonical instructions equal 48 prepared uops. Preserve the
+canonical ceiling, report the derived plan size, and use the planner's actual
+output to size/check the plan store. A store overrun must never wrap onto another
+instruction or program.
+
+12.2 Canonical maps versus physical maps
+
+Canonical input order is fixed, but a prepared FPLAN has in_vreg/in_slot and
+out_map entries whose sources may be vector or prepared-scalar values. The
+current compact a/b/c loader is not the same object as VecUop.src[9]. [S19]
+
+Promote the useful hardware-translation logic currently in the Earth directed
+test into a common runtime/planner adapter, then make it complete for the
+accepted hardware classes. The inspected test Translator explicitly refuses op
+shapes it has not been taught. Copying it and deleting that refusal is not a
+valid lowering. [S21]
+
+Generated operation metadata must determine operand group shape. Verify vector
+adjacency after physical register allocation. Broadcast/copy uniforms only where
+the actual v3 register/scalar-bank architecture supports them. Never feed a
+flattened src[9] array into three group-start ports by guessing indices.
+
+12.3 Full output map, including constant outputs
+
+Replace or extend hdr_outbase-only capture with a per-program output mapping.
+For each profile output, record its physical vector register or prepared scalar
+source. Initialize scalar outputs from the prepared values and snoop vector
+outputs only on the actual accepted register-file writeback for the correct
+context.
+
+Track a seen bit per required output. Completion requires ALL required outputs,
+not any output and not the maximum bus width. Handle the last writeback on the
+same edge as END using next-state seen/data. A program whose displacement is
+constant and whose normal outputs are varying must work; so must an all-uniform
+six-output program.
+
+Do not force every canonical program to use contiguous outputs or append six
+MOV instructions that then falsely exceed the original 48-instruction limit.
+A derived export copy is allowed only if its uops/cycles are separately accounted
+and its semantics are proved; it does not alter canonical instruction count.
+
+12.4 Correct preparation identity
+
+For Warp, lanes 0..5 normally vary per vertex. STREAM4 also makes lanes 6..9
+vary; INLINE4 can make them uniform. Time and p0..p3 are uniform within a draw.
+Use that actual varying mask in the planner; do not label varying attributes
+uniform to obtain a better cost result.
+
+The canonical interpreter is the reference for the whole operation. Required
+comparison:
+
+  interpret(decoded, full_input)
+    == prepare(plan, draw_uniforms) + execute_point(plan, vertex_varying)
+    == hardware-loaded v3 plan on the same point.
+
+Compare all six output words, Status.sat, Status.rcp0, and available per-cause
+SatLedger lanes. The host currently exposes only a limited saturation summary
+in the inspected path; complete any missing status transport in the COMMON
+Field implementation rather than assuming it is equivalent.
+
+12.5 Program/table isolation
+
+The canonical format permits up to four tables, each with its own entry count.
+Host defaults of two tables and a header-driven table commit are not evidence
+that four independent table lengths have been transported correctly.
+
+Use the existing curve service and a declared allocation/epoch mapping. Check
+per-table counts, table selector widths, and imm-based references. If the current
+physical table cache cannot hold a working set, account for the scheduled reload;
+do not silently alias two table IDs or read the previous program's count.
+
+Similarly, a global scalar bank written through sb_we is not automatically
+per-context storage. Prove isolation for every simultaneously eligible plan.
+
+12.6 No artificial universal-hot promise
+
+All canonical Warp programs keep their existing legal status and opcode limits.
+The shared lowerer identifies actual hardware support and realtime classes.
+Unsupported mapping and non-realtime demand are different diagnostics.
+
+Do not close mandatory hardware Warp with ONLY a software fallback. At least
+the identity, actual displacement, normal-changing, attribute-dependent, and
+mixed-contention cases in section 22 must run through the production v3 fabric.
+Any outstanding common-Field opcode/lowering limitation stays explicitly listed
+as a shared support/performance gap; it is not hidden by narrowing the Warp
+whitelist or fabricating outputs.
+
+12.7 Minimal practical commissioning path
+
+Land the adapter initially through the existing one-point request/response host,
+with correct 15-lane packing, metadata/maps, and status/lifetime fixes. That
+provides a tractable correctness baseline and reuses the real execution path.
+It is NOT a certificate for high-rate Warp content.
+
+If the admitted workload needs vector groups/multiple points in flight, extend
+the shared Field front, not the Warp semantic operation. The current host says
+that FAB_LANES>1 merely replicates one point and discards other lanes; changing
+that parameter alone cannot improve useful throughput. [S07]
+
+A future batched front must gather DISTINCT tickets into lanes, count partial
+lane masks correctly, preserve each result/status, and export every active lane.
+Batch only points sharing program/preparation identity and compatible table
+leases. Mixed descriptors cannot be collapsed into one vector group.
+
+13. INTERFACE CONTRACTS TO WRITE BEFORE RTL
+==========================================
+
+These are logical interfaces. Use packed structs internally where the toolchain
+supports them; export flat ports only at wrappers that require them. All fields
+are held stable while valid && !ready, and all transfers use valid && ready.
+
+13.1 DrawWarpDescriptor
+
+  enable
+  cookie {index,generation}
+  program_handle32
+  time32
+  params[4] s32
+  inline_attributes[4] s32
+  attribute_mode
+  attribute_resource_handle32
+  displacement_bound[3] s32 nonnegative
+  full source_id32 for descriptor-level attribution
+
+The ordinary draw's form/material/transform/view/weight/flags remain in the
+existing common draw record. Avoid duplicating them in per-vertex storage.
+
+13.2 WarpVertexToken
+
+  draw cookie
+  batch cookie / generation
+  original descriptor ordinal
+  original raw vertex ordinal (0..63 for current meshlet format)
+  successful decoded ordinal
+  attribution reference
+
+Width every field to the actual declared geometry/queue limits. Do not use a
+fixed 8-bit ticket counter without a proof that it cannot alias outstanding work.
+
+13.3 WarpJoinedVertex
+
+  token
+  position[3] s32
+  normal[3] s32 reduced direction
+  input_degenerate
+  attributes[4] s32
+
+No camera id is necessary for execution because the operation is view-independent.
+Preserve the active view mask in its existing batch descriptor.
+
+13.4 Shared Field request extension
+
+Required meaning, whether represented as explicit fields or a typed descriptor:
+  selected client
+  resident binding/slot and its validated generation
+  profile/signature identity
+  preparation identity
+  input_count + required output mask
+  mapped input words
+  internally held Warp token
+
+At the present scalar host the Warp wrapper can retain the token locally because
+there is only one outstanding point. If the common host becomes concurrent,
+request/response identity becomes explicit and must be checked on every return.
+Do not carry a synthetic tag which is never compared.
+
+13.5 Shared Field result
+
+  matching request identity
+  all required output words
+  completion / execution failure classification
+  canonical sat and rcp0
+  per-cause numeric ledger where the common engine exposes it
+
+A result must be stable under downstream backpressure or land in reserved local
+storage if the fabric's writeback cannot be stalled.
+
+13.6 WarpAppliedVertex
+
+  original token
+  position[3] s32
+  reduced normal[3] s32
+  output_degenerate
+  numeric status
+  poison / terminal error
+
+Only a nonpoisoned batch may be admitted to visible replay. Existing output
+ports that expose 64-bit normal components receive exact sign extension.
+
+14. STATE MACHINES AND CREDIT RULES
+==================================
+
+14.1 Draw preparation state
+
+  IDLE
+    -> CAPTURE_DRAW
+    -> RESOLVE_PROGRAM_BINDING
+    -> RESOLVE_ATTRIBUTE_RESOURCE (STREAM4 only)
+    -> CHECK_BOUNDS_AND_ADMISSION
+    -> PIN_DESCRIPTOR_AND_RESOURCES
+    -> EMIT_EXISTING_DRAWJOB_STREAM
+    -> WAIT_ENUMERATION_AND_BATCH_RELEASES
+    -> RELEASE
+
+A failed preparation emits no meshlet. It returns/counts the appropriate draw
+refusal and releases any partial leases. No execution lock is held while a
+resource may need software action.
+
+14.2 Per-point scalar baseline
+
+  FREE
+    -> WAIT_COMPONENTS      (position, normal, attributes for one ticket)
+    -> BYPASS_READY         (ordinary draw)
+       or FIELD_REQUEST
+    -> FIELD_WAIT
+    -> APPLY_CHECK          (bounds + saturating position + normal adaptation)
+    -> OUTPUT_HOLD
+    -> FREE after both downstream acceptances
+
+This names logical phases, not a mandate to use seven unpipelined clocks.
+The application subpipeline can accept one completed result per clock when
+credited; the scalar evaluator remains its actual bottleneck.
+
+14.3 Credit before issue
+
+Reserve a result slot before asserting a Field request that can be accepted.
+Reserve memory-response space before issuing STREAM4 reads. Reserve metadata
+before accepting raw/skin work. A downstream stall must stop NEW work before it
+can overwrite already promised storage.
+
+Credit invariants:
+  allocated join rows <= JOIN_DEPTH;
+  live Field requests <= reserved Field result capacity;
+  promised memory beats <= free response capacity + accepted drain capacity;
+  descriptor references never negative;
+  a free descriptor/vertex row has no outstanding response that can name it.
+
+14.4 Progress without circular wait
+
+Asset/program preparation precedes execution. Result retirement does not need
+an unissued new request. Batch release does not wait for a vertex that was
+refused without a hole/completion accounting event. A poisoned meshlet still
+has a terminal drain path.
+
+Document service assumptions for liveness: memory and downstream consumers must
+eventually respond/accept, and the common Field program is bounded. Formal proofs
+under those assumptions must state them; no bounded simulation is an unconditional
+proof of arbitrary external response time.
+
+15. IDENTITY, RESET, AND REORDERING EXAMPLES
+==========================================
+
+15.1 Same source_id, different vertices
+
+Send vertices A and B with identical source_id but different positions, normals,
+a3, and p3 snapshots. Stall the normal output for A and the position output for B.
+The accepted outputs must still be A with A and B with B. This test rejects an
+implementation that compares source_id and assumes equality proves identity.
+
+15.2 Same form/instance, different Warp commands
+
+Draw the same form and transform twice with opposite p0 and different time.
+Permit both draws to reach the geometry machinery before the first fully drains.
+No vertex of the first draw may see the second descriptor. A mutable instance-
+indexed Warp setting would fail this case.
+
+15.3 Missing raw vertex
+
+Raw vertex 3 is malformed. Vertices 4..N retain their original STREAM4 attribute
+addresses even though the successful decoded ordinal skipped the hole. The whole
+meshlet is poisoned under the existing refusal rule. Its successor meshlet is
+clean and starts at the correct attribute group.
+
+15.4 Field completion arrives out of order in a future concurrent host
+
+A slow RCP/NORMALIZE point and a fast ADD point may finish in opposite order.
+They land by request token into their reserved rows; downstream publication
+follows the geometry's required order. A completion counter or arrival order
+is not a substitute for a token.
+
+15.5 Abort is not permission to reuse
+
+On frame abort, stop admitting new work. Mark old output ineligible, but drain
+or cancel the shared fabric using its real supported protocol. Do not declare
+an old resident context free until its writes and long-op returns are quiescent.
+A new frame with the same program/slot must not inherit an old answer.
+
+Reset across the shared fabric clears its own outstanding work consistently.
+A Warp-only reset must not reset Earth/Flow. If only the requester is reset,
+use an epoch/tombstone/drain mechanism and refuse late results before they touch
+new rows. Do not invent a global engine-reset side effect inside Warp.
+
+16. VISIBILITY, LOD, CACHE, AND SHADOW SAFETY
+==========================================
+
+16.1 Inflate the world bound before the existing cull service
+
+MESHFETCH transforms local descriptor bounds into world bounds before asking
+GEOM.CULL. Apply Warp expansion AFTER that transform, because command bounds
+are already in world units. Do not scale the displacement a second time by the
+instance matrix. [S16]
+
+With D=(Dx,Dy,Dz), use a conservative scalar expansion:
+
+  D1 = uint64(Dx) + uint64(Dy) + uint64(Dz)
+  Rexpanded = Runwarped_world + D1
+
+D1 upper-bounds Euclidean displacement, so it is safe though possibly loose.
+This is a bound, not new deformation arithmetic. Use widened add/checks. If the
+expanded radius cannot be represented by the current cull interface, take the
+conservative no-frustum-reject route for that draw/meshlet and count it, or
+reject the draw at admission under a documented capacity rule. Do not wrap or
+saturate to a smaller radius and delete geometry.
+
+Existing descriptor legality checks still run. Bypassing a cull decision is not
+permission to skip CRC, generation, count, range, or memory-guard checks.
+
+16.2 Runtime bound violation
+
+The loader/author's bound is not a mathematical proof for arbitrary code.
+Runtime-check every returned displacement. A violation poisons the batch, sets
+an attributable bound-violation event, and never substitutes a silently clamped
+position. Asset tools should also generate adversarial bound tests for the
+intended input domains; those tests are not universal proofs.
+
+16.3 Normals and normal cones
+
+A Warp can rotate or reverse normals. Do not apply an unwarped normal-cone cull
+to an active arbitrary Warp unless a matching conservative normal-cone bound is
+supplied and validated. In the first implementation, disable that optimization
+for active Warp. Actual post-Warp triangle winding/cull mode still applies in
+GEOM.CLIP according to the original draw's raster state.
+
+16.4 LOD cannot pretend the deformation did not happen
+
+The LOD governor and per-camera state remain the existing owners. Feed them a
+conservative bound/radius. Do not add camera-dependent deformation to the shared
+vertex path to compensate for a missing LOD interface.
+
+For a geometric approximation whose unwarped world-space error bound is E,
+a conservative deformed bound is E + 2*D1, PROVIDED both representations carry
+that displacement bound in the same space and the underlying surface/error
+metric satisfies the corresponding triangle-inequality assumption. This is a
+sufficient bound, not a claim the error actually grows by that amount.
+
+For proxy representations with different semantics (microforms, splats, glints),
+use their explicitly authored Warp-compatible representation/error certificate.
+Without one, choose a compatible geometric representation conservatively and
+charge its true work. Do not feed an unproved tiny error into the ladder just
+to keep the performance test green. If that conservative representation exceeds
+the admitted workload, report the capacity conflict before launching the draw.
+
+A tighter Jacobian/Lipschitz certificate is a future optimization, not a
+prerequisite for correctness and not a hidden new constant in this composer.
+
+16.5 Shared and per-camera caches
+
+Warp evaluation is once per decoded vertex of the selected shared geometry,
+not once per camera. A cached world/deformed result may be reused only while
+its program binding, prepared parameters/time/attributes, geometry generation,
+pose, and draw identity still match. Prefer existing per-batch lifetime rather
+than introducing a new persistent cache that requires an enormous key.
+
+Existing projected arenas continue to be per-view. Their fill must use the
+post-Warp position, and their generation/release rules remain unchanged.
+Do not reintroduce the R27-deleted arena-origin ports.
+
+16.6 Shadows and picking
+
+A Warp draw's conservative caster bound must not become smaller than its
+possible deformed extent. The exact contact-shadow footprint remains the Forge
+art law, not something Warp guesses. At minimum, pass the expanded conservative
+bound through the same draw/caster identity path when that path is composed.
+
+Warp is a presentation-stage deformation. It does not silently move canonical
+simulation collision, navigation, or hitboxes. Any game-truth deformation must
+be evaluated under the separately declared simulation law, with its own costs.
+
+17. FAILURE TAXONOMY AND DISPOSITION
+===================================
+
+Use distinct saturating counters and trace reasons; do not create one
+"warp_error" that loses every cause. Proposed categories:
+
+  DRAW_INVALID
+    bad attribute mode, reserved flags, negative bound, wrong profile/signature;
+    refuse before emitting meshlets.
+
+  PROGRAM_NOT_RESIDENT / STALE_BINDING / PLAN_NOT_READY
+    fail draw admission; do not ask hardware to execute another slot's plan.
+
+  ATTR_NOT_RESIDENT / ATTR_MESH_MISMATCH / ATTR_HEADER_BAD / ATTR_DENIED
+    refuse prefetch/batch; drain any issued reads and release credits.
+
+  FIELD_EXECUTION_FAULT / OUTPUT_INCOMPLETE / RESPONSE_IDENTITY_FAULT
+    poison the current batch; drain all outstanding outcomes; do not display it.
+
+  DISPLACEMENT_BOUND_VIOLATION / NORMAL_INPUT_WIDTH_FAULT
+    poison the batch and preserve source attribution and offending vertex index.
+
+  NUMERIC_SATURATION / RCP_ZERO
+    defined canonical results, not transport failure; count them separately.
+
+  DEADLINE_EXCEEDED
+    use the existing frame-repeat/fault policy; no partially completed frame
+    becomes visible. Never introduce Warp-specific partial presentation.
+
+17.1 One terminal outcome per successful decoded vertex
+
+On a per-point failure, produce a failure completion so downstream accounting
+cannot wait forever. The completion can carry zero/degenerate placeholder data
+ONLY while the batch is irrevocably poisoned and blocked from visible replay.
+Do not forward a failed point as successful identity deformation.
+
+An error before a raw vertex is decoded follows the existing raw-hole/batch
+refusal path; do not count both a hole and a successful decoded completion for
+one record.
+
+17.2 Failure after some positions already landed
+
+The arena can contain partial results; no triangle may have been released from
+that batch until final status/attributes are ready. Poison its handle, drain
+ASSEMBLE/REPLAY using the existing proven-release mechanism, then recycle the
+arena. If the implementation cannot maintain that ordering, it must buffer more
+or invalidate the frame, not display the partial meshlet.
+
+17.3 No imaginary watchdog guarantee
+
+A watchdog timeout value must derive from the selected lowered program's bound,
+shared arbitration assumptions, and external stall policy. The old scalar
+sequencer's bound is not automatically a Field v3 whole-request bound.
+
+A watchdog detects failure; it does not prove every legal request meets a frame.
+It also does not authorize reusing a context whose long-op response can still
+arrive. Test timeout and recovery under the actual shared host protocol.
+
+18. THROUGHPUT AND ADMISSION: NO NEW FAIRY-TALE BUDGET
+===================================================
+
+18.1 What "one vertex per clock" can truthfully refer to
+
+The GEOM.WARP ledger describes an APPLICATION stage consuming Field results.
+A pipelined saturating add/normal-adaptation/output stage can target one accepted
+completed vertex each clock. That is distinct from executing a 48-op program.
+
+Keep these measured columns in every report:
+
+  application II and latency, with ready results and a ready sink;
+  no-Warp bypass II and complete existing-frame regression;
+  active Warp request/response II for each named program and host configuration;
+  per-draw binding/preparation/attribute-fetch costs;
+  complete shared-frame clocks and deadline result.
+
+If the repository insists on interpreting the old target as sustained complete
+program evaluation at one vertex/clock, that is a different hardware requirement.
+Do not declare it met by renaming the column. Record the conflict explicitly and
+obtain a deliberate throughput-contract amendment or build the required rate.
+The semantic command and application laws above do not secretly waive it.
+
+18.2 The present scalar front has a real fixed cost
+
+The inspected host clears REGS and writes IN_LANES before executing a point.
+At 64 registers and 15 inputs that is at least 79 preload/clear cycles before
+execution/control/output costs, if the present schedule is retained. This is
+arithmetic from the FSM, not a benchmark. It immediately disproves any claim
+that merely adding a 15-word port supplies 120,000 active Warp vertices/frame.
+
+Do not multiply an isolated application's II=1 by the frame clock and call it
+Warp capacity. Do not turn FAB_LANES up and count four copies of the same point
+as four useful vertices.
+
+18.3 Program cost class
+
+Use the exact shared planner's resource-demand vector and the measured common
+fabric: issue slots, multiply bank slots, long-op service requests, register
+ports, preparation/loading, table residency, and output transport. [S22]
+
+Preserve `instr_count <= authored max_ops <= 48` for canonical Warp, but opcode
+count alone does not admit a realtime program. Legal cold/software classification
+is already part of the common cost-model law. A concrete software path must
+actually exist before it is offered as runtime fallback; a comment naming the
+ARM is not one.
+
+No automatic opcode-whitelist cut, silent half-rate animation, unrequested CPU
+fallback, or removed Warp application is permitted to satisfy a deadline.
+Any chosen presentation degradation must be part of the established author/
+governor contract and retain guaranteed content requirements.
+
+18.4 Shared frame proof
+
+For each required scenario, count EVERY shared resource once:
+
+  common Field demand = Earth + Warp + Flow + Formation + Stamp, as actually used;
+  shared geometry demand = ordinary geometry + active Warp + procedural inputs;
+  memory demand = geometry + attributes + textures + terrain + post + other traffic.
+
+Use the selected actual clock, not the desired 100 MHz when the current placed
+machine is slower. Until a full clock is certified, publish cycle demand and
+state the frequency assumption separately.
+
+Prove or conservatively measure peak contention, not only average rates. Include
+burst arrivals, table/program changes, output stalls, material switches, both
+views, and post-armed frames. The current console's asset-fetch bottleneck must
+not disappear from the measurement because Warp's bench preloaded all vertices.
+
+18.5 Scheduler policy
+
+A logical additional client needs bounded fairness and resource admission, not
+only round-robin selection. Preserve mandatory profile reservations and account
+for loader priority and configuration switches. A legal but enormous Warp draw
+must not monopolize the fabric while an Earth deadline expires.
+
+Use the existing demand/admission framework; add a declared Warp reservation or
+certificate only with its measured supporting workload. Do not invent a new
+capacity figure in the command or hardware because the available fraction is
+unknown. Scheduling and admission limits are an explicit acceptance output of
+this work, not arbitrary constants frozen in this document.
+
+19. RESOURCE SHAPE AND PHYSICAL CONSTRAINTS
+=========================================
+
+19.1 No promised ALM number
+
+There is no measured ALM bound for this proposed design. A hard envelope assigned
+without a demonstrated implementation would repeat the project's budgeting
+failure. Report costs as new application/join/control, shared-host delta,
+attribute-reader delta, descriptor state, and memory-adapter delta separately.
+
+Do not charge the entire already-present Field v3 engine to Warp. Do not call
+its additional lane/register/map support free either.
+
+19.2 Intended incremental expensive resources
+
+  * No new execution engine, reciprocal, square root, sine, noise, or projector.
+  * Three saturating position additions and bounded normal range adaptation.
+  * Small direct-indexed join/output queues and active-batch state.
+  * RAM-shaped per-draw descriptor storage sized to the draw queue contract.
+  * Optional STREAM4 line buffering and logical memory arbitration.
+  * Common Field metadata/maps/binding support, counted once for all profiles.
+
+This is an architectural inventory, not a fitted-resource guarantee. Verify the
+netlist actually shares the intended arithmetic and does not infer unexpected
+wide multipliers from an address expression or a normalization helper.
+
+19.3 Physical RAM ports, not just bit counts
+
+Separate the independently written position/normal/attribute arrays or schedule
+writes explicitly. An array named RAM does not provide arbitrary simultaneous
+addresses. Match inferred dual-port constraints, synchronous reads, and collision
+behavior; do not infer three writes plus a read and divide bits by 10,240 to
+claim an M10K count. [E01, E02]
+
+For very small join queues, a bounded flop implementation may be cheaper than
+fragmented M10Ks. Compare actual alternatives at the permitted measurement
+stage. Do not force RAM for aesthetics, and do not reset large data arrays when
+valid-bit scrubbing is sufficient.
+
+19.4 Timing structure
+
+Place registers between descriptor lookup, result selection, position addition,
+normal range adaptation, and downstream handshake fanout as needed. Do not
+create a ready chain from Field through Warp through GROUP_SEQ through projector
+through the material/raster path.
+
+Existing byte layouts or capacities that change during implementation require
+regeneration and remeasurement; the source pin is not permission to overwrite
+newer shared owners from a concurrent lane.
+
+The no-Warp path must not become a giant combinational bypass around the
+registered topology. An extra bounded latency is measurable; an unbounded
+combinational cross-subsystem path is not a harmless shortcut.
+
+19.5 Existing fit policy
+
+This document does not authorize breaking the current owner policy of fitting
+the complete design only. During the closure campaign, use elaboration,
+functional tests, analytic storage/operation inventory, and cycle measurements.
+At the authorized full fit, report the incremental hierarchy and shared-host
+costs. Any separately requested cost experiment must name its hypothesis and
+source/configuration; its result is not a full-console fit certificate.
+
+20. OBSERVABILITY AND CONSERVATION EQUATIONS
+==========================================
+
+Use a compact counter set, with unique catalog identities and source meanings.
+Recommended counters (split/pack readout according to the existing counter ABI):
+
+  warp_draws_accepted / warp_draws_refused
+  warp_vertices_bypassed / warp_vertices_evaluated / warp_vertices_published
+  warp_field_requests / warp_field_responses
+  warp_program_misses / warp_signature_refused / warp_stale_bindings
+  warp_attribute_lines / warp_attribute_denied / warp_attribute_mismatches
+  warp_bound_violations / warp_normal_width_faults
+  warp_numeric_sat / warp_rcp_zero / warp_output_incomplete
+  warp_batches_poisoned / warp_batches_drained
+  warp_join_stall_cycles / warp_field_wait_cycles / warp_output_stall_cycles
+  warp_outstanding_highwater / warp_descriptor_highwater
+  warp_identity_faults / warp_credit_faults / warp_late_responses
+
+The existing geom_warp_vertices_transformed counter must be given an exact
+meaning: successful ENABLED applications, not bypasses and not both camera
+landings. Preserve a separate bypass counter. Do not increase an engine's
+instruction counter again at the Warp wrapper and double-count it globally.
+
+For a completed, nonaborted trace:
+  accepted successful decoded vertices
+      = bypass outcomes + active-Warp outcomes;
+  active Field requests = completed Field responses;
+  active outcomes = successful applications + failed/poison bookkeeping outcomes;
+  position fork accepts = normal fork accepts = published vertex outcomes;
+  all descriptor references and outstanding credits return to zero.
+
+For aborted work, include named canceled/drained/late-refused terms instead of
+expecting the clean equations to hold. Every counter that should be reachable
+must be fired by an actual test. An invariant-violation counter unreachable under
+legal stimulus needs a controlled mutation test with a correct-production
+negative control.
+
+21. SOFTWARE REFERENCE AND ASSET SUPPORT
+=======================================
+
+21.1 Define the previously phantom reference
+
+Create reference/include/zref/zref_geom_warp.hpp, exposing a zref::GeomWarp
+wrapper or equivalent named API so the existing ledger reference becomes real.
+Its implementation should be a composition of existing semantics:
+
+  validate Warp signature;
+  assemble the exact 15-word input record;
+  call zfield::interpret on the validated canonical program;
+  compare returned displacement against the declared bound;
+  apply canonical saturating ADD to position;
+  adapt the output normal by the existing common range-reduction law;
+  return output + numeric status + application/transport classification.
+
+It does not contain an opcode switch. zfield::interpret / zfield_steps remain
+the arithmetic authorities. The optimized/prepared reference is independently
+compared against this canonical wrapper. [S06, S19, S23]
+
+21.2 Reference input/output types
+
+Use explicit fixed-width integer fields, e.g.:
+
+  WarpInputs:
+    int32_t position[3], direction[3], attributes[4], params[4];
+    uint32_t time;
+
+  WarpDeclaration:
+    int32_t displacement_bound[3];
+    validated decoded-program / binding identity;
+
+  WarpResult:
+    int32_t position[3], direction[3];
+    bool degenerate;
+    zfield::Status field_status;
+    application saturation/bound/refusal information;
+
+Array order in the semantic record is the section-5 lane table, not the C++
+struct's incidental memory layout. Serialize through the generated packer.
+
+Avoid undefined behavior in reference arithmetic: use widened sums, unsigned
+absolute magnitude for signed minimum, and the project's defined arithmetic
+shift helpers. Do not depend on compiler-specific signed overflow to make a
+negative-control test happen to pass.
+
+21.3 Canonical fixtures, not handwritten hardware expected values
+
+Use the existing program builder/serializer and validator to generate .zprog
+and .zvec fixtures. Include:
+
+  IDENTITY: zero displacement, output input normal unchanged.
+    Canonical construction can use three LDC(0), three MOV(normal), END;
+    it must still execute in hardware when Warp is enabled.
+
+  TRANSLATE: displacement = p0,p1,p2; normal unchanged.
+
+  P3_SENTINEL: at least one output explicitly depends on input lane 14.
+    This catches the spec's fourteen-versus-fifteen mistake.
+
+  ATTRIBUTES: distinct dependence on a0,a1,a2,a3, including negative values;
+    render one draw in INLINE4 and another using STREAM4.
+
+  ROTATE_POSITION_AND_NORMAL: use the common Field rotation operations and
+    subtraction to produce displacement and a changed normal. Let the generated
+    operation table/builder define operand encoding; do not type a second op map.
+
+  NONLINEAR: a bounded sine/twist/noise-based example with explicit normal output,
+    chosen from the currently supported common v3 lowering and checked against
+    the untouched canonical interpreter.
+
+  SPARSE_OUTPUTS: six valid, noncontiguous output registers, including high
+    register addresses, with a different order from the physical write order.
+
+  CONSTANT_OUTPUTS: some or all outputs uniform after preparation, so the host
+    cannot rely on observing six varying writebacks.
+
+  STATUS: exact saturation and RCP(0) cases with valid defined results.
+
+No example may be used as a universal bound on all Warp programs. Artist-facing
+motion/normal choices require comparison renders at native resolution, but
+render taste does not replace the numeric differential.
+
+21.4 Asset tool and runtime
+
+Add one packer for WARP_ATTRIBUTES with a self-checking golden header/page.
+For each meshlet, preserve its original descriptor ordinal and original local
+vertex order. Reject a mismatch in vertex count or form generation.
+
+Add generated command emission and a desktop/ARM-facing wrapper for
+DrawWarpedForm. The wrapper supplies explicit time, params, attributes, and
+bounds; it must not secretly query a different clock or bind a global program.
+Update cost reports with command bytes, optional attribute bytes, and linked
+program demand. The provisional Nanquan status does not excuse omitting the
+real ABI/reference/runtime path; a complete language feature can remain a
+separately tracked compiler task under R50. [S02, S13, S22]
+
+21.5 Keep hash validation honest
+
+CRC32 values are not mathematically collision-free identities. Keep the existing
+canonical hash algorithm, but do not use a matching hash as proof that two
+independently supplied code/table images and typed signatures are identical.
+The trusted loader has the bytes: compare them before reusing a resident image
+under a colliding hash, and refuse a conflicting resident identity or allocate
+under an explicitly extended common key. Do not return the first matching hash
+row regardless of handle, map, profile, or preparation epoch.
+
+A particularly important non-random test uses the SAME code/tables and different
+valid output maps. The canonical hash is legitimately the same by definition.
+Each binding must still export its OWN mapped outputs. This catches a real
+schema omission without requiring an accidental CRC collision.
+
+22. REQUIRED TEST MATRIX
+========================
+
+Tests listed here are deliverables, not tests claimed to have been executed by
+this architecture review. Give them real CMake targets; build and run them.
+Do not cite a target that exists only as a planned filename.
+
+22.1 Semantic/reference tests
+
+T01  Exactly 15 inputs and 6 outputs accepted; 14-input legacy typo refused with
+     an explicit signature diagnostic rather than reading past input storage.
+T02  Profile mismatch rejected; ordinary Earth/Flow programs are not treated as
+     Warp merely because some output words happen to fit the bus.
+T03  Identity preserves position, raw reduced normal, and lighting exactly.
+T04  p3 changes a returned displacement; all four parameter words independently
+     influence a fixture output.
+T05  All four attributes independently influence a fixture, including STREAM4.
+T06  Negative displacement, signed rails, zero, +/- one LSB, and position ADD
+     saturation use the exact canonical result and separate application status.
+T07  Zero output normal yields the declared degenerate light input.
+T08  Output INT32_MIN and large normal components use safe absolute/range
+     reduction; common shift applies to all components.
+T09  Sparse/noncontiguous/high output registers export the correct six values.
+T10  Constant and mixed uniform/varying outputs all have explicit validity.
+T11  Canonical Status.sat and Status.rcp0 match the prepared and RTL paths.
+T12  48-instruction boundary and END/map validation remain the common decoder's.
+
+22.2 Program binding and shared host
+
+T13  Valid LOAD/COMMIT/BIND/SEAL -> a genuinely runnable program after publication.
+     Specifically exercise the hdr_loaded/directory-commit interaction.
+T14  Partial header/map/plan cannot become runnable.
+T15  Same canonical hash, different valid output maps/profile metadata does not
+     share the wrong export window.
+T16  Same program, different time/params/draw preparation does not reuse stale
+     scalar values.
+T17  Alternating Earth/Warp/Flow with different tables and table lengths preserves
+     outputs and statuses; program changes wait for the required quiescence.
+T18  Stale slot generation and evicted binding refuse cleanly, without executing
+     whatever now occupies that slot.
+T19  A loader update attempted while a request is active cannot change the
+     running instruction, map, scalar values, or tables.
+T20  Input/output envelopes 15/7 do not force a six-output Warp to invent a
+     seventh result, or give Flow missing inputs.
+T21  Output written on the same edge as completion is captured once.
+T22  An actually missing required output returns failure, not zero or old data.
+T23  Long-op/fabric alarms and numeric status are not conflated.
+T24  All intended Warp hardware op shapes map through the REAL common loader;
+     unsupported shapes are counted and named, not silently remapped.
+
+22.3 Join/order/backpressure
+
+T25  Identical source_id on every vertex; distinct position/normal/attributes.
+     Independent position/normal stalls cannot swap partners.
+T26  Consumer advances live inputs immediately after acceptance. Held ticket
+     data remains correct.
+T27  Field request held under backpressure; accepted exactly once.
+T28  Field response and output held under long downstream stalls; stable payload,
+     no overwrite and no duplicate result.
+T29  Join pool fills, ready goes low before overwrite, and drains without loss.
+T30  Distinct consecutive draws of the same form/instance with opposite parameters
+     retain separate descriptors across overlapping meshlets.
+T31  Alternate ordinary and warped draws in one packet; submission order remains.
+T32  Last vertex fails on the seal edge; no clean handle escapes.
+T33  Multiple views produce one Warp outcome per shared vertex, not one per view.
+T34  VDECODE refusal in the middle of a raw batch keeps original attribute indices
+     and poisons/releases the batch without hanging the successor.
+T35  Early refusal on batch acceptance, all-refused batch, and clean batch after
+     poison preserve the already repaired GROUP_SEQ hole behavior.
+T36  Future concurrent mode: slow/fast operations complete out of order and
+     return by token, while required downstream ordering is retained.
+
+22.4 Resource reader and command path
+
+T37  .zidl sample packer -> CMD.DMA -> CMD.DECODER -> CMD.EXEC -> real draw
+     descriptor -> real binding. No testbench drives a private Warp enable port.
+T38  Bad command CRC/verdict causes no committed Warp draw or leaked descriptor.
+T39  Queue overflow refuses according to the declared whole-packet policy;
+     no prefix of warped draws quietly survives an overflow.
+T40  New record bytes/offsets equal generated constants; preceding and following
+     commands remain intact in the packet builder's running offsets/counts.
+T41  INLINE4 performs zero attribute reads and uses all four exact inline words.
+T42  STREAM4 page goes through PublishResource; header/form/CRC association
+     compares independent actual publication data.
+T43  STREAM4 addresses cover first/last local vertex, first/last meshlet, partial
+     final line, repeated form draws, and descriptor filtering by visibility.
+T44  Unknown kind/version, mismatched mesh, short resource, overflowing extent,
+     stale generation, and memory denial all terminate and release credits.
+T45  Actual guard acceptance followed by later verdict; no model that raises
+     ready and ok together substitutes for the real memory path.
+T46  Response beats while downstream is blocked are fully buffered, not lost.
+T47  Additional logical memory requester under all existing contenders retains
+     the arbiter's promised behavior and counted denials/drops.
+
+22.5 Geometry correctness and visibility
+
+T48  Object initially outside an original frustum moves into view within its
+     declared bound. It is not incorrectly culled before Warp.
+T49  Visible only in the second Duo view; the first camera does not suppress it.
+T50  Expanded bound exceeds cull representation; conservative bypass/refusal is
+     observed, never a wrapped tiny radius.
+T51  Bound violation on the final vertex poisons the whole meshlet.
+T52  Non-unit input normals and identity Warp preserve baseline Lambert rounding.
+T53  Position unchanged, normal changed: LIGHT's result and VATTR color change
+     as the reference predicts, proving the normal path actually goes through
+     Warp. Claim final-pixel shading only when the real RGB transport is present
+     (section 1.7), not from a testbench-supplied fragment color.
+T54  Position changed, normal held: projected coordinates change as expected,
+     while UV/material/raster ownership is unchanged.
+T55  Deformation crosses the near plane; existing CLIP handles actual warped
+     coordinates, with correct attributes and reference expectations.
+T56  Distinct materials on consecutive draws; no Warp metadata update changes
+     a material already held by the material window.
+T57  Warp-aware LOD does not use an unwarped error/caster bound; per-camera
+     fairness and existing hold semantics survive.
+
+22.6 Abort/liveness
+
+T58  Reset during raw fetch, component join, Field execution, result hold, and
+     batch seal has a defined clean recovery.
+T59  Frame abort with outstanding long-op result; late result cannot write a
+     new frame's ticket or program slot.
+T60  Field execution failure emits terminal poison accounting, so GROUP_SEQ,
+     VATTR, REPLAY, and ASSETFETCH all release.
+T61  Missing software program preparation is an admission failure, not a global
+     Field lock that starves unrelated clients.
+T62  Watchdog fires only under its declared model and never releases a still-live
+     context for immediate reuse.
+
+22.7 Controls and performance
+
+T63  Mutate pairing/ticket routing: the same positive test catches the wrong
+     normal/attribute without relying on a private error flag.
+T64  Mutate displacement application to zero: active Warp numerical/render test
+     fails while the ordinary bypass still passes.
+T65  Mutate output lane 14/p3, sparse output map, and same-edge last-write capture:
+     their dedicated tests fail.
+T66  Mutate conservative cull expansion to omit D: off-frustum moving-in fixture
+     fails. A scene already fully inside the frustum is not a control for this.
+T67  Mutate result-credit check: the controlled overflow counter fires; production
+     under the SAME stimulus correctly backpressures and does not overflow.
+T68  Measure no-Warp path against the identical baseline fixture and source.
+T69  Measure application II=1 separately from complete active Field rate.
+T70  Measure mixed required workloads, with actual asset traffic, both views,
+     post-armed cases, program changes, and mandatory other Field demand.
+
+Tests may be grouped sensibly into fewer executables. The required cases and
+negative controls must remain traceable by stable case names.
+
+23. CONSOLE INTEGRATION CAPTURE: WHAT MUST BE REAL
+================================================
+
+Build a committed minimal Warp smoke variation of the actual console smoke.
+It must preserve the ordinary scenario and add a clearly distinguishable active
+Warp scenario; do not replace all prior checks with the new demonstration.
+
+The host/testbench may supply only the legitimate external inputs:
+  * HPS memory contents and the physical bridge/register protocol;
+  * valid command packets built by generated packers;
+  * validated program preparation posted through the real Field loader/binder;
+  * texture/configuration resources through their existing ratified boundaries;
+  * controller pins where needed.
+
+It may NOT drive:
+  private post-Warp position/normal results;
+  a fabricated Field response inside the console;
+  a guessed resident slot tied permanently to one program;
+  prepared screen triangles bypassing geometry;
+  an attribute-store output that hardware is supposed to own.
+
+Recommended fixture sequence:
+  1. Publish mesh, material, and optional WARP_ATTRIBUTES page.
+  2. Load and seal a real W-profile program using the common Field protocol.
+  3. Submit ordinary DrawForm and DrawWarpedForm commands with distinguishable
+     parameters/materials, then repeat with the order reversed.
+  4. Use two views with different camera transforms.
+  5. Include a normal-changing case and a displacement case; compare against
+     the reference's actual projected vertices/light/covered output.
+  6. Include one malformed-program/resource control that poisons/refuses and
+     still allows a following clean draw/frame to finish.
+
+Print and assert at least:
+  ordinary vertices bypassed;
+  active Warp vertices evaluated;
+  Field requests and completed responses;
+  bound/signature/identity faults;
+  position and normal fork accepts;
+  per-view landings and completed VATTR rows;
+  texture samples where the fixture asks for them;
+  descriptor/batch/asset releases;
+  issued/retired memory work;
+  admitted/displayed frame result;
+  cycle totals by binding, fetching, joining, Field waiting, and output waiting.
+
+Expected pixels/hashes must be generated from ZRef, NOT read from the RTL's first
+run and frozen. A fixture where the displacement does not change any covered
+pixel may still test numeric vertices, but it cannot alone prove visible
+integration. Retain independent numeric and render checks.
+
+24. IMPLEMENTATION SEQUENCE AND FILE TOUCH MAP
+=============================================
+
+Work in a private branch/worktree; the coordinator owns merging. Re-check live
+HEAD and concurrent Field/geometry changes before editing shared files. Do not
+kill other lanes' processes or discard full build logs. [S02]
+
+COMMIT A — Ratification and executable semantics
+  * Fill all GEOM.WARP contract sections from this directive.
+  * Correct field-ir.md's Warp input count; link the exact application law.
+  * Update FIELD.SEQ.WARP to point to its real stream adapter/reference without
+    pretending that the profile is a second hardware engine.
+  * Correct GEOM.WARP/LOOM/WCACHE ledger edges and stale deferral explanations.
+  * Add zref_geom_warp wrapper, reference tests, and canonical fixtures.
+  Gate: reference tests/decoder/program hash/map tests pass; no RTL claim yet.
+
+COMMIT B — Shared Field conformance and binding
+  * Implement the common handle/signature/binding transaction and readiness
+    invariant, reusing the current doorbell/PROGCACHE path.
+  * Fix actual selected lane/register/plan capacity and output-map capture.
+  * Promote and verify the needed common hardware plan translation.
+  * Preserve Earth/Flow status, mapping, and table behavior under the change.
+  Gate: real host + real loader/binder + v3 Warp/other-profile tests run, including
+    sparse/constant outputs and header/directory publication ordering.
+
+COMMIT C — Additive ABI and ordered draw descriptors
+  * Add DrawWarpedForm to commands.zidl and generated outputs.
+  * Extend CMD.EXEC's existing ordered draw effects and descriptor sidecar.
+  * Add DRAWJOB cookie/enumeration-completion ownership.
+  * Regenerate captures through real producers and verify expected provenance
+    changes versus actual payload changes.
+  Gate: generated round-trip, command directed tests, bad-verdict/overflow tests,
+    and ordinary DrawForm equivalence.
+
+COMMIT D — Four-attribute resource
+  * Ratify kind/layout/section type and build one packer/reference parser.
+  * Add the shared-publication metadata query needed for independent association.
+  * Add the bounded reader on the current geometry memory adapter.
+  Gate: real-memory directed test and malformed/denied/alias controls.
+
+COMMIT E — Tagged geometry join and application
+  * Implement Warp join/application/normal adaptation.
+  * Insert at the actual post-SKIN and post-SKIN.NORM seams.
+  * Carry cookie and original/dense ordinals correctly; update batch poison and
+    done gating around GROUP_SEQ/VATTR/REPLAY.
+  * Keep ordinary path exact, and preserve fixed existing skin/deform behavior.
+  Gate: join, application, error drain, and no-Warp regression tests.
+
+COMMIT F — Conservative culling and LOD integration
+  * Expand actual transformed world bounds before GEOM.CULL.
+  * Propagate Warp-aware bound/error/caster state under existing ownership.
+  * Disable unproved normal-cone optimizations only for active Warp.
+  Gate: off-frustum moving-in case, two-view fairness, bound overflow/violation,
+    and reference comparisons.
+
+COMMIT G — Complete console capture and resource accounting
+  * Add the real command-driven integration fixture.
+  * Update blocks.yml, ops/profile linkage where appropriate, counter catalog,
+    console inventory, fit source sets, production manifest, generated board,
+    paired-diff harness, and affected mutation wrappers.
+  * Remove obsolete raw Warp boundaries rather than tying them to constants.
+  * Run all required complete-source checks and directed tests after the merge.
+  Gate: active deformation and changed normals reach real consumers; no private
+    program engine; no testbench substitution; no regressions.
+
+COMMIT H — Workload/performance qualification
+  * Publish actual selected-host demand and complete scenario cycles.
+  * State which programs/workloads are realtime/hot and which remain cold.
+  * Identify unmet throughput goals and required shared-host work honestly.
+  * At the owner-authorized fit stage, archive hierarchy cost/timing with exact
+    source digest, device, parameters, constraints, and clock assumptions.
+
+Do not call A or E alone a completed Warp. C and B are the real producer, E the
+implementation, F/G the consumers/correct integration, and H its performance
+qualification. Some commits can be combined if that avoids a long-lived broken
+intermediate interface; the acceptance obligations do not disappear.
+
+FILES THAT NEED ATTENTION (EXISTING)
+  design/contracts/GEOM.WARP.md
+  design/contracts/FIELD.SEQ.WARP.md
+  design/contracts/FIELD.SEQ.CORE.md
+  design/contracts/FIELD.PROGCACHE.md
+  design/blocks.yml
+  design/ops.yml
+  design/console_inventory.yml
+  design/fit_targets.yml
+  design/prod_manifest.yml
+  spec/form/field-ir.md
+  spec/form/cost-model.md
+  spec/commands.zidl
+  spec/cartridge.md
+  spec/creature_rules.md (cross-reference only unless a named law changes)
+  spec/counters.md
+  fpga/rtl/field/zhao_field_host.sv
+  fpga/rtl/field/zhao_field_doorbell.sv
+  fpga/rtl/field/zhao_field_v3_engine.sv and shared leaves ONLY where necessary
+  fpga/rtl/command/zhao_cmd_exec.sv
+  fpga/rtl/geometry/zhao_geom_drawjob.sv
+  fpga/rtl/geometry/zhao_geom_meshfetch.sv
+  fpga/rtl/geometry/zhao_geom_assetfetch.sv
+  fpga/rtl/geometry/zhao_geom_group_seq.sv
+  fpga/rtl/geometry/zhao_geom_vattr.sv
+  fpga/rtl/geometry/zhao_geom_replay.sv
+  fpga/rtl/geometry/zhao_geom_mem_adapter.sv
+  fpga/rtl/prod/zhao_console_core.sv
+  tests/CMakeLists.txt
+  tests/prod/tb_zhao_console_core_smoke.sv
+  tests/prod/run_console_core_smoke.ps1
+  tests/prod/smoke_geom_fixture_gen.cpp
+  runtime/generated/compiler ABI consumers and capture producers.
+
+PROPOSED NEW OWNERS/TESTS (NOT PRESENT CLAIMS)
+  fpga/rtl/geometry/zhao_geom_warp.sv
+  fpga/rtl/geometry/zhao_geom_warp_join.sv
+  fpga/rtl/geometry/zhao_geom_warp_attrs.sv
+  a common Field-binding/metadata owner under fpga/rtl/field
+  reference/include/zref/zref_geom_warp.hpp
+  a shared zfield hardware-plan adapter, promoted from test-only logic as needed
+  tests/geometry/geom_warp_directed.cpp
+  tests/geometry/geom_warp_random.cpp
+  tests/geometry/geom_warp_join_directed.cpp
+  tests/geometry/geom_warp_attrs_directed.cpp
+  tests/field/field_warp_host_directed.cpp
+  tests/formal/geom_warp_control.sby (or smaller compositional control proofs)
+  tools/pack/mkwarpattributes.py (or the existing packer's appropriate module)
+  one versioned Warp command/resource capture fixture.
+
+Do not create redundant files when a current shared owner can absorb the exact
+function. Conversely, do not put a substantive state machine inline inside the
+console core merely to avoid registering a new block.
+
+25. CONTRACT TEXT: FIFTEEN SECTIONS TO COMPLETE
+==============================================
+
+The implementation should replace the blank GEOM.WARP contract with the following
+substance, expanding with exact landed signal names and measured receipts.
+
+1 Purpose/exclusions
+  Apply validated W-profile displacement/replacement-normal results to post-skin
+  world vertices, once across both views. Reuse common Field v3; no arithmetic
+  ISA, projection, material, or simulation-state ownership.
+
+2 Clock/reset
+  Existing gpu clock and reset style of the actual production seam. Registered
+  transfers; no new clock domain. Reset/abort drains or invalidates outstanding
+  work without allowing late writes into reused storage.
+
+3 Input/output records
+  Fifteen canonical input lanes, six mapped Field outputs, immutable per-draw
+  descriptor, tagged vertex identity, coherent post-Warp position/normal result.
+
+4 Backpressure
+  Reserve join/result/memory storage before acceptance; hold valid payloads;
+  distinct position/normal acceptances exactly once; no unbounded ready chain.
+
+5 Memory ownership
+  Bounded descriptor/join state; optional read-only attributes over the existing
+  geometry adapter; common program/plan/tables under explicit leases. No private
+  Field program store and no second projection arena.
+
+6 Q formats/rounding
+  Existing fixed-point arithmetic; signed saturating displacement addition;
+  non-unit input normal convention; existing common output range reduction;
+  explicit Field-program normal calculation; exact sat/rcp0 transport.
+
+7 Latency
+  Variable with the selected program and shared execution/memory. List application
+  pipeline latency separately; state liveness assumptions and bounded capacities.
+
+8 Throughput
+  Application lane goal II=1; real active evaluator and frame rate measured
+  separately. Preserve declared hardware goals and annotate misses honestly.
+
+9 Overflow/malformed behavior
+  Early admission refusals; bound/signature checks; poison/drain whole meshlets;
+  no partial successful deformation; defined numeric saturation remains legal.
+
+10 Counters/traces
+  Unique per-owner counters, source attribution, ticket/batch trace identity,
+  conservation equations, and reachable/invariant controls.
+
+11 Scalar reference
+  zref::GeomWarp composition over zfield::interpret and canonical fixed-point
+  helpers, with prepared/hardware paths checked against it.
+
+12 Directed tests
+  Command/program/resource -> join -> application -> downstream traversal;
+  explicit lane14, sparse/constant outputs, pairing, bounds, failures, and Duo.
+
+13 Random differential
+  Legal programs within admitted classes, hostile values, randomized valid/ready
+  stalls, repeated IDs, multiple draws, program/table changes, and reset/abort.
+
+14 Formal properties
+  Ticket/credit conservation, output stability, no reuse while outstanding,
+  exactly-once fork acceptance, clean/poison seal ordering, bounded controller
+  progress under declared service assumptions. Use abstract arithmetic where
+  necessary; don't claim proving 48-op fixed-point execution from a control-only
+  harness. Numeric correctness remains differential against the common engine.
+
+15 Resource/synthesis and integration captures
+  List selected physical resources, common-host delta, actual storage ports,
+  exact source/parameter provenance, and the real end-to-end capture. No invented
+  ALM limit or unperformed fit. Reference the authorized full-fit policy.
+
+26. ACCEPTANCE AND HANDOVER
+===========================
+
+26.1 Functional closure is ALL of the following
+
+  [ ] Old deferred/blank Warp contract is replaced and authority is explicit.
+  [ ] The 15-input/6-output signature is implemented and tested end to end.
+  [ ] DrawWarpedForm has a real generated ABI, decoder/DMA/executor path, and
+      ordered immutable descriptor lifetime.
+  [ ] Program handle resolves through one shared loader/binder into a runnable
+      v3 plan with correct map, status, tables, and preparation identity.
+  [ ] INLINE4 and STREAM4 both have real producers and tested nonzero use.
+  [ ] World position/normal are joined by accepted-token identity, not time.
+  [ ] Actual enabled deformation and changed normal reach projection and LIGHT.
+  [ ] No-Warp and identity cases preserve their required exact outputs.
+  [ ] Bounds/culling/LOD cannot reject geometry solely because the old bound
+      ignored deformation.
+  [ ] Failure/abort paths poison and drain without stranding geometry or Field.
+  [ ] Existing ordinary geometry, terrain, Flow, texture, and post tests remain.
+  [ ] No second Field engine/projector or raw testbench-only Warp input remains.
+
+26.2 Performance and physical qualification are separate visible states
+
+  [ ] Application II measured independently.
+  [ ] Selected shared-host program demand and active rate measured.
+  [ ] Guaranteed content scenarios fit their actual combined cycle envelope,
+      or named unmet requirements remain red rather than being erased.
+  [ ] Required physical fit/timing evidence exists when the owner allows it.
+
+The completion register can record a real connected implementation, but it
+cannot establish realtime admission or target-device timing by itself. Do not
+let a transition to zero mandatory composition gaps imply those later gates
+have passed.
+
+26.3 Final report must contain
+
+  commit and clean-tree/source digest;
+  exact generated opcode/resource allocations and compatibility changes;
+  old-versus-new semantic edges and remaining pre-existing unrelated boundaries;
+  real program fixture hashes and binding/plan metadata;
+  complete test names, command lines, exit codes, and full log paths;
+  negative-control results, including production controls;
+  no-Warp, identity, nontrivial Warp, normal-changing, and fault/recovery captures;
+  measured cycle/resource evidence, with shared costs counted once;
+  explicit unresolved common-Field or full-workload limitations;
+  updated contract/ledger/counter/manifest/generator receipts.
+
+Do not write "blocked: commands.zidl has no Warp" after this directive is adopted.
+Adding that missing command and its defined ownership path is part of the task.
+If a NEW live-tree conflict appears, state the exact conflicting file/line and
+law, preserve the established semantics, and propose the smallest explicit
+amendment. Do not substitute a guessed wire or an unowned global state register.
+
+APPENDIX A — PRACTICAL COMMANDS AND AUDIT CHECKS
+===============================================
+
+Before editing, record:
+  git rev-parse HEAD
+  git status --short
+  git log --oneline -20
+
+Search tracked source, not only the default-branch search index:
+  git grep -n -i -E 'geom[._]warp|warp8|field[._]seq[._]warp'
+  git grep -n '0x0304' -- spec tools compiler runtime fpga tests
+  git grep -n -E 'SIDEW|j_side|r_side|s_side' -- fpga/rtl/geometry
+  git grep -n -E 'hdr_outbase|hdr_loaded|cur_out_seen|IN_LANES|OUT_LANES' -- fpga/rtl/field
+  git grep -n -E 'geom_skin|geom_skin_norm|light_skin_adapter|geom_vattr' -- fpga/rtl/prod
+  git grep -n -E 'out_map|in_vreg|in_slot|map_one' -- reference runtime tests
+
+Use the repository's current environment wrapper before building. The current
+closure tools include, subject to current-head path/CLI verification:
+  python tools/budget/completion_register.py
+  python tools/quartus/check_console_inventory.py
+  python tools/quartus/check_prod_manifest.py
+  python tools/quartus/gen_prod_top.py --check
+  python tools/quartus/gen_console_board.py --check
+  python tools/design/gen_shell_paired_diff.py --check
+  python tools/quartus/check_quartus17_syntax.py
+  python tools/budget/mutant_copy_drift.py
+  python tools/budget/check_case_labels.py
+  npm run abi:gen
+  npm run abi:check
+
+Run the actual touched directed tests after building them, not just CMake
+configuration. Start console integration with the current smoke's -LintOnly,
+then its normal and controlled variants. Capture the ENTIRE stdout/stderr to
+files before filtering for display. Do not discard error output.
+
+Regenerate copied/generated wrappers from their owners; do not hand-merge stale
+port blocks. Preserve the one intended mutation when refreshing a mutant copy.
+Run controls against both mutated and production forms.
+
+APPENDIX B — SOURCE REGISTER
+============================
+
+All repository references below are to the audited hardware commit:
+  8d351ea9794816de57ac9ab7069e2b7737000380
+
+A source citation supports the described existing behavior, not the newly
+proposed W decisions. Some source comments are historical and are explicitly
+corrected in the conflict register; actual pinned connections and current
+owner rulings take precedence over stale block summaries.
+
+[S01] design/contracts/GEOM.WARP.md
+  Blank fifteen-section contract; old deferral; intended application role.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/design/contracts/GEOM.WARP.md
+
+[S02] reports/OWNER-RULINGS-20260919-EVENING.md
+  In particular R2, R3, R7, R11, R19/R20, R27–R33, R40/R43, R48–R50,
+  R60, R66, R74/R75, R80–R82. Existing ownership, no new projector,
+  mandatory Warp, no invented capacity, fit and process requirements.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/reports/OWNER-RULINGS-20260919-EVENING.md
+
+[S03] ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md, especially sections 6A, 9, 10
+  Post-skin deformation; shared view-independent work; controlled presentation;
+  exact semantic profiles and pipeline position.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/ZHAOZHOU_CONSOLE_ENGINEERING_CHARTER.md
+
+[S04] design/contracts/FIELD.SEQ.WARP.md
+  Explicitly a profile, not another datapath; missing application-side binding.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/design/contracts/FIELD.SEQ.WARP.md
+
+[S05] design/contracts/FIELD.SEQ.CORE.md
+  v3 production amendment, permitted stream adapters, canonical semantic engine;
+  contains historical scalar material that must not be mistaken for current v3.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/design/contracts/FIELD.SEQ.CORE.md
+
+[S06] spec/form/field-ir.md, sections 1–5 and 7.1–7.3
+  Canonical ISA, validation, hash, map, exact profiles, and Warp count mismatch.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/spec/form/field-ir.md
+
+[S07] fpga/rtl/field/zhao_field_host.sv
+  Actual v3 host, scalar request FSM, loader, parameters, output capture,
+  directory/header interaction, and explicit replicated-lane warning.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/field/zhao_field_host.sv
+
+[S08] compiler/src/field_ir/types.ts
+  Profile ids/ceilings and I/O lane metadata; provisional class costs are not
+  measured realtime admission.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/compiler/src/field_ir/types.ts
+
+[S09] fpga/rtl/geometry/zhao_geom_skin_norm.sv
+  Exact range-reduced, non-unit world direction; magnitude moved to LIGHT;
+  independent normal path and one-rounding rationale.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_skin_norm.sv
+
+[S10] fpga/rtl/prod/zhao_console_core.sv
+  Inspected geometry seams around lines 6,840–7,530 at this pin: VDECODE,
+  palette, SKIN/SKIN.NORM fork, direct position/normal consumers, LIGHT, and
+  GROUP_SEQ. Line numbers change; use instance/signal names when implementing.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/prod/zhao_console_core.sv
+
+[S11] design/blocks.yml, GEOM.LOOM / GEOM.WARP / GEOM.WCACHE entries
+  Declared targets, old graph edges, current revocation, counter/reference names.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/design/blocks.yml
+
+[S12] Current group/replay/VATTR connections documented in the core and its
+  shared geometry work; verify their actual selected versions when integrating:
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_group_seq.sv
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_vattr.sv
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_replay.sv
+
+[S13] spec/commands.zidl
+  Actual v3 command layouts, opcode ranges, DrawForm, resource publication,
+  generated-layout authority, and additive-command precedent.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/spec/commands.zidl
+
+[S14] fpga/rtl/command/zhao_cmd_exec.sv, opening ownership/commit-order sections
+  Decoder verdict versus payload, effect staging, ordered draws, and prohibition
+  on speculative persistent effects before packet validation.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/command/zhao_cmd_exec.sv
+
+[S15] fpga/rtl/geometry/zhao_geom_drawjob.sv
+  Draw fields, directory/palette ownership, SIDEW=72, carried draw state.
+  Its referenced semantic model is reference/include/zref/zref_drawjob.hpp;
+  there was no design/contracts/GEOM.DRAWJOB.md at the audited pin.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_drawjob.sv
+
+[S16] fpga/rtl/geometry/zhao_geom_meshfetch.sv
+  Local-to-world bounds, shared cull service, 64-byte descriptor, max 64 vertices,
+  side-state transport, actual delayed guard verdict, and captured request state.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_meshfetch.sv
+
+[S17] spec/cartridge.md, kind registry and sections 4a–4c
+  Existing generic asset families, kind 12 MESH_STREAM, kind 13 SPECIES_TABLE,
+  kinds 14–255 reserved at this pin, and software program/page ownership.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/spec/cartridge.md
+
+[S18] design/contracts/GEOM.VDECODE.md
+  Raw format 0, 32-byte stride, reserved bytes, separate normal path, and
+  bake-off-gated formats 1/2. Actual RTL connections outrank old interface prose.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/design/contracts/GEOM.VDECODE.md
+
+[S19] reference/include/zfield/zfield_plan.hpp
+  Prepared plans, uniform/varying masks, arbitrary output tags, source groups,
+  demand vector, and canonical/plan/preparation identity.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/reference/include/zfield/zfield_plan.hpp
+
+[S20] fpga/rtl/field/zhao_field_doorbell.sv
+  Actual three-operation mailbox, existing load/commit/lookup ports, return
+  credits, software validation ownership, and header-before-commit requirement.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/field/zhao_field_doorbell.sv
+
+[S21] tests/differential/field_v3_earth_directed.cpp
+  Real prepared-plan translation, explicit unsupported op-shape refusals,
+  uniform broadcast/register pressure, actual write observation, completion
+  ordering, partial groups, and measured useful-point rather than replica rate.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/tests/differential/field_v3_earth_directed.cpp
+
+[S22] spec/form/cost-model.md, especially sections 1 and 5
+  Demand vectors rather than one provisional cycles_est, hot/cold/software
+  distinctions, and explicit shared measured-machine admission.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/spec/form/cost-model.md
+
+[S23] reference/include/zfield/zfield.hpp
+  Actual Decoded/IoLane/Status API, 64-register canonical limit, Warp profile,
+  program hash, and interpreter signatures. Some opening version comments are
+  historical; use the generated/current numeric versions rather than copying them.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/reference/include/zfield/zfield.hpp
+
+[S24] FORM_LANGUAGE_HARDWARE_CODESIGN.md, sections 8–10
+  Warp profile semantics, exact dual execution, explicit output bounds,
+  prohibition on arbitrary memory/loops, and simulation/presentation separation.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/FORM_LANGUAGE_HARDWARE_CODESIGN.md
+
+[S26] fpga/rtl/geometry/zhao_geom_attrpack.sv, especially lines 160–235
+  Three emitted attribute planes and explicit exclusion of four other slots;
+  prevents claiming complete final-pixel lighting from a correct Warp normal.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/fpga/rtl/geometry/zhao_geom_attrpack.sv
+
+[S27] design/contracts/FIELD.PROGCACHE.md
+  Two-phase directory interface, scanned-directory amendment, once-per-
+  association acquisition, actual plan-key/lifetime law, and distinction between
+  directory and caller-owned program store.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/design/contracts/FIELD.PROGCACHE.md
+
+[S25] tests/differential/field_v3_full_directed.cpp
+  Existing common fabric harness interfaces and actual writeback observation.
+  Its early historical comments are not a complete current capability census.
+  https://github.com/Fabulu/zhaozhou/blob/8d351ea9794816de57ac9ab7069e2b7737000380/tests/differential/field_v3_full_directed.cpp
+
+[E01] Intel — Verilog true dual-port RAM, single clock design example.
+  Used only for the physical RAM-port/collision caveat, not any Zhaozhou estimate.
+  https://www.intel.com/content/www/us/en/support/programmable/support-resources/design-examples/horizontal/ver-true-dual-port-ram-sclk.html
+
+[E02] Intel/Altera — Quartus Prime Standard Edition User Guide, Design
+  Recommendations: True Dual-Port Synchronous RAM (18.1).
+  Used only for RAM access/port constraints; actual project support must still
+  be checked on its Quartus 17.0.2 flow.
+  https://docs.altera.com/r/docs/683323/18.1/intel-quartus-prime-standard-edition-user-guide-design-recommendations/true-dual-port-synchronous-ram
+
+FINAL SOURCE RECHECK
+--------------------
+The hardware branch was rechecked after drafting and still pointed to
+8d351ea9794816de57ac9ab7069e2b7737000380. No newer official GEOM.WARP
+implementation was observed at that check.
+
+Two concurrently pushed branches were inspected for relevant overlap:
+  gz/carriers at 32abe8d9586707c7689291bb06812b28a2b84b07 adds a Loom node-stream
+  feeder. Keep that as Loom's producer; Warp does not replace it or read its
+  node/matrix stream as vertices.
+  gz/forge at 7af03a10356028e9db42a9cd1364a576e11d4113 discusses generic world-
+  vertex injection, missing alpha/RGB carriers, and its arena route. Do not
+  generalize Warp into a new Forge frontend. Its repeated "LOCAL (REBASED)"
+  description conflicts with official R27's world-position resolution; use the
+  official rule and actual selected connections, not that stale phrase.
+
+These are unmerged branch observations, not amendments to the source baseline.
+Check current shared contracts before implementation. New opcodes/resource
+kinds must be allocated through the coordinator so parallel lanes do not choose
+0x0304 or kind 14 independently. Numeric renumbering of the proposed additions
+is permitted if required to avoid a real collision; preserve the specified
+semantic layouts and regenerate every consumer together.
+
+APPENDIX C — THE NON-NEGOTIABLE HANDOVER SENTENCE
+================================================
+
+Build GEOM.WARP as a real command-driven, tagged post-skin application of the
+existing fifteen-input/six-output Warp Field profile on the shared Field v3
+fabric. Preserve both cameras' common deformation, exact position/normal laws,
+program/attribute lifetime, conservative visibility, and complete failure
+retirement. Correct the shared host's real limitations instead of inventing
+outputs or a second engine. Close it with an active end-to-end capture and
+publish performance limitations separately rather than pretending a port or an
+identity picture proves the whole capability.
+
+END OF DIRECTIVE
