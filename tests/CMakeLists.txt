@@ -9095,6 +9095,24 @@ verilate(test_measure_governor_directed
 add_test(NAME measure_governor_directed COMMAND test_measure_governor_directed)
 set_tests_properties(measure_governor_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# The per-camera PIXEL-ERROR THRESHOLD (owner ruling R26, scheduled by R68).
+# A SEPARATE suite rather than more cases in measure_governor_directed, for the
+# reason part_state_capacity_backstop is separate: that suite's check count is
+# quoted as evidence, and a number that moves whenever somebody adds a case is
+# a number nobody can use. It links zhao_zref and runs the published threshold
+# through zref::creature::lod_raw -- the law zhao_geom_lod implements -- so the
+# number means something rather than merely being self-consistent.
+add_executable(test_measure_governor_thresh measure/measure_governor_thresh.cpp)
+target_link_libraries(test_measure_governor_thresh PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_measure_governor_thresh PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/measure)
+verilate(test_measure_governor_thresh
+  PREFIX Vzhao_measure_governor
+  TOP_MODULE zhao_measure_governor
+  SOURCES ${ZHAO_MEASURE_GOVERNOR_SV})
+add_test(NAME measure_governor_thresh COMMAND test_measure_governor_thresh)
+set_tests_properties(measure_governor_thresh PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
 add_executable(test_measure_governor_random measure/measure_governor_random.cpp)
 target_link_libraries(test_measure_governor_random PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_measure_governor_random PRIVATE

@@ -82,6 +82,14 @@ struct Cosim {
     check(held, where, 1, held ? 1 : 0);
     check(t.scale[0] == r.scale[0], where, r.scale[0], t.scale[0]);
     check(t.scale[1] == r.scale[1], where, r.scale[1], t.scale[1]);
+    // Owner ruling R26's threshold, in lockstep with the ratio. Added to the
+    // COSIM rather than only to its own suite, so that every lane below --
+    // the worked Duo frame, the rounding tie, the volcano, the hold boundary
+    // -- checks it too without any of them gaining a case.
+    check(t.thresh_q8[0] == r.thresh_q8[0], where,
+          static_cast<uint64_t>(r.thresh_q8[0]), static_cast<uint64_t>(t.thresh_q8[0]));
+    check(t.thresh_q8[1] == r.thresh_q8[1], where,
+          static_cast<uint64_t>(r.thresh_q8[1]), static_cast<uint64_t>(t.thresh_q8[1]));
     check(t.en[0] == r.en[0], where, r.en[0] ? 1 : 0, t.en[0] ? 1 : 0);
     check(t.en[1] == r.en[1], where, r.en[1] ? 1 : 0, t.en[1] ? 1 : 0);
     check(t.hyst == r.hyst, where, r.hyst, t.hyst);

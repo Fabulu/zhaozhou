@@ -284,6 +284,11 @@ struct GovernorCamera {
 /** The `lod_targets` this block publishes. */
 struct GovernorTargets {
   uint16_t scale[2] = {256, 256};
+  //! The per-camera pixel-error THRESHOLD, S12.8 (owner ruling R26). Its reset
+  //! value is the FINE end (1.0 px), the opposite direction from `scale`'s
+  //! neutral 256: a console that never issues a pixel error must not hold
+  //! every creature at rung 0 forever.
+  int32_t thresh_q8[2] = {256, 256};
   bool en[2] = {true, false};
   uint16_t hyst = 320;
   uint8_t min_hold = 6;
@@ -307,6 +312,29 @@ struct GovernorTargets {
  * 0xFFFF. `proj == 0` puts nothing on screen and yields 0, which is the
  * coarsest. Neither is a special case bolted on.
  */
+/**
+ * LAW G1's sibling, owner ruling R26 — the per-camera pixel-error THRESHOLD
+ * that `zref::creature::lod_raw` (and `zhao_geom_lod`) take directly.
+ *
+ * TERRAIN.LOD consumes the RATIO because its ladder divides by a DISTANCE;
+ * the creature ladder divides by the creature's own bound radius, so the
+ * projection scale is already inside `proj_radius_q8` when it arrives and
+ * what is wanted here is the tolerance itself. Two consumers, two shapes, one
+ * policy.
+ *
+ * `px_err` is fx16 and the port is S12.8, so this is qformats section 3's
+ * round-half-up rescale by 8 — and LAW G2 applies unchanged: the shift that
+ * divides the ratio by 2^deg MULTIPLIES the tolerance by 2^deg. Writing the
+ * degrade into one and not the other would be two policies from one block.
+ *
+ * No saturation is possible: ((2^32 - 1) << 3) + 128 < 2^35, so the result is
+ * under 2^27.
+ */
+inline int32_t governor_thresh_q8(uint32_t px_err, int deg) {
+  const uint64_t w = (static_cast<uint64_t>(px_err) << deg) + 128u;
+  return static_cast<int32_t>(w >> 8);
+}
+
 inline uint16_t governor_scale(uint16_t proj, uint32_t px_err, int deg) {
   if (px_err == 0) return 0xFFFFu;
   const uint64_t num = (static_cast<uint64_t>(proj) << (16 - deg)) + (px_err >> 1);
@@ -361,6 +389,8 @@ class LodGovernor {
     GovernorTargets t;
     t.scale[0] = governor_scale(cam[0].proj, cam[0].px_err, deg_[0]);
     t.scale[1] = governor_scale(cam[1].proj, cam[1].px_err, deg_[1]);
+    t.thresh_q8[0] = governor_thresh_q8(cam[0].px_err, deg_[0]);
+    t.thresh_q8[1] = governor_thresh_q8(cam[1].px_err, deg_[1]);
     t.en[0] = view_count >= 1;
     t.en[1] = view_count >= 2;
     t.hyst = k_.hyst;

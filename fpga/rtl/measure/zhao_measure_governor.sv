@@ -227,6 +227,36 @@ module zhao_measure_governor #(
     output logic        busy_o,           // a decision is in flight
     output logic [15:0] cam0_scale_o,
     output logic [15:0] cam1_scale_o,
+    // -----------------------------------------------------------------------
+    // THE PER-CAMERA PIXEL-ERROR THRESHOLD, S12.8 — owner ruling R26.
+    //
+    // TERRAIN.LOD takes the RATIO (law G1's whole argument: "the ladder only
+    // ever uses their quotient"). `zhao_geom_lod` does not: its
+    // `thresh_q8_i` is the threshold ITSELF, because the creature ladder
+    // divides by the creature's own bound radius rather than by a distance,
+    // so the projection scale is already inside `proj_radius_q8_i` when it
+    // arrives. Two consumers, two shapes, ONE policy — which is why this is a
+    // second output of this block and not a second block.
+    //
+    // R26: "MEASURE.GOVERNOR additionally emits a per-camera `thresh_q8`."
+    // R68 puts it in the same packet as the rest of GEOM.LOD's inputs,
+    // because on its own it has no consumer.
+    //
+    // THE DEGRADE APPLIES HERE TOO, AND IT IS THE SAME LAW G2 — the shift
+    // that divides `scale` by 2^deg is the shift that MULTIPLIES the allowed
+    // pixel error by 2^deg. Writing the degrade into the ratio and leaving it
+    // out of the threshold would be two policies from one block: a degraded
+    // view would coarsen its terrain and keep its creatures at full rate.
+    //
+    // ONE ROUNDING, and NO SATURATION IS POSSIBLE. `px_err` is fx16 (Q16.16)
+    // and the port is S12.8, so the conversion is qformats §3's
+    // round-half-up rescale by 8. The widest value is
+    // ((2^32 - 1) << 3) + 128 < 2^35, and >> 8 leaves under 2^27 — so the
+    // result always fits the 32-bit signed port and there is deliberately no
+    // saturation counter here. A counter that cannot fire is a claim, and
+    // this one would be permanently zero.
+    output logic signed [31:0] cam0_thresh_q8_o,
+    output logic signed [31:0] cam1_thresh_q8_o,
     output logic        cam0_en_o,
     output logic        cam1_en_o,
     output logic [15:0] hyst_o,
@@ -315,6 +345,26 @@ module zhao_measure_governor #(
     end
   endfunction
 
+  // The per-camera pixel-error THRESHOLD (R26), at the same degrade rung the
+  // ratio above is taken at. `deg` shifts the allowed error UP, which is law
+  // G2 read from the other end: dividing the scale by 2^deg and multiplying
+  // the tolerance by 2^deg are the same statement. The shift introduces no
+  // rounding of its own, so the round-half-up rescale by 8 below is the ONLY
+  // rounding, exactly as G1's is for the ratio.
+  // `w[7:0]` is the ROUNDING REMAINDER. The rescale by 8 discards it, and that
+  // discard IS qformats §3's single rounding -- so -Wall's UNUSEDSIGNAL on it
+  // is correct and the waiver says why rather than hiding it.
+  /* verilator lint_off UNUSEDSIGNAL */
+  function automatic logic signed [31:0] thresh_of(input logic [31:0] px_err,
+                                                   input logic [1:0] deg);
+    logic [35:0] w;
+    begin
+      w = ({4'b0, px_err} << deg) + 36'd128;
+      thresh_of = $signed({4'b0, w[35:8]});
+    end
+  endfunction
+  /* verilator lint_on UNUSEDSIGNAL */
+
   // ---- the FSM -------------------------------------------------------------
   localparam logic [2:0] S_IDLE = 3'd0;
   localparam logic [2:0] S_DIV0 = 3'd1;
@@ -330,6 +380,10 @@ module zhao_measure_governor #(
   logic        zero0_r, zero1_r;  // px_err was zero (law G6)
   logic [31:0] px1_r;  // view 1's operands, latched at the frame pulse
   logic [15:0] pj1_r;
+  // View 0's pixel error, latched for the SAME reason px1_r is: the
+  // threshold (R26) is published at S_DONE, 70 cycles after the frame
+  // pulse, and `px_err0_i` is the caller's wire.
+  logic [31:0] px0_r;
 
   assign busy_o = (state_r != S_IDLE);
 
@@ -398,6 +452,7 @@ module zhao_measure_governor #(
       zero1_r         <= 1'b0;
       px1_r           <= 32'd0;
       pj1_r           <= 16'd0;
+      px0_r           <= 32'd0;
       targets_valid_o <= 1'b0;
       // Reset the targets to a SAFE, VALID policy rather than to zero: a zero
       // scale would make TERRAIN.LOD admit every level and put the whole world
@@ -405,6 +460,16 @@ module zhao_measure_governor #(
       // ladder's own neutral point ("dev <= distance").
       cam0_scale_o    <= 16'd256;
       cam1_scale_o    <= 16'd256;
+      // The threshold's safe reset is the OTHER direction from the ratio's.
+      // 256 raw = 1.0 px of allowed screen-space error, which is the finest
+      // the creature ladder is ever asked for and therefore the answer that
+      // cannot make something disappear before the first SetView lands.
+      // Zero would demand infinite precision and is a legal RUNTIME value
+      // (law G6's limit); it is the wrong POWER-ON value, because a console
+      // that never issues a pixel error would then hold every creature at
+      // rung 0 forever.
+      cam0_thresh_q8_o <= 32'sd256;
+      cam1_thresh_q8_o <= 32'sd256;
       cam0_en_o       <= 1'b1;
       cam1_en_o       <= 1'b0;
       src_id_o        <= 16'd0;
@@ -443,6 +508,7 @@ module zhao_measure_governor #(
             // from now. They ride these two registers until S_LOAD1.
             px1_r   <= px_err1_i;
             pj1_r   <= proj1_i;
+            px0_r   <= px_err0_i;
           end
         end
 
@@ -490,6 +556,12 @@ module zhao_measure_governor #(
           targets_valid_o <= 1'b1;
           cam0_scale_o    <= scale0_r;
           cam1_scale_o    <= zero1_r ? SCALE_MAX : quo_clamped;
+          // R26. Published in the SAME cycle and under the SAME
+          // `targets_valid_o` pulse as the ratio: a consumer that saw one
+          // move without the other would be running this frame's tolerance
+          // against last frame's degrade rung.
+          cam0_thresh_q8_o <= thresh_of(px0_r, nd0_r);
+          cam1_thresh_q8_o <= thresh_of(px1_r, nd1_r);
           cam0_en_o       <= (vc_r >= 2'd1);
           cam1_en_o       <= (vc_r >= 2'd2);
           src_id_o        <= sid_r;

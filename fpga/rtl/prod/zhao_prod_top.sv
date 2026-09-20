@@ -2465,6 +2465,8 @@ module zhao_prod_top (
   logic [1-1:0] u33_busy_o;
   logic [16-1:0] u33_cam0_scale_o;
   logic [16-1:0] u33_cam1_scale_o;
+  logic signed [32-1:0] u33_cam0_thresh_q8_o;
+  logic signed [32-1:0] u33_cam1_thresh_q8_o;
   logic [1-1:0] u33_cam0_en_o;
   logic [1-1:0] u33_cam1_en_o;
   logic [16-1:0] u33_hyst_o;
@@ -2493,6 +2495,8 @@ module zhao_prod_top (
       .busy_o(u33_busy_o),
       .cam0_scale_o(u33_cam0_scale_o),
       .cam1_scale_o(u33_cam1_scale_o),
+      .cam0_thresh_q8_o(u33_cam0_thresh_q8_o),
+      .cam1_thresh_q8_o(u33_cam1_thresh_q8_o),
       .cam0_en_o(u33_cam0_en_o),
       .cam1_en_o(u33_cam1_en_o),
       .hyst_o(u33_hyst_o),
@@ -2509,7 +2513,7 @@ module zhao_prod_top (
   logic u33_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u33_fold_q <= 1'b0;
-    else u33_fold_q <= u33_fold_q ^ (((^u33_targets_valid_o)) & u33_src[0]) ^ (((^u33_busy_o)) & u33_src[1]) ^ (((^u33_cam0_scale_o)) & u33_src[2]) ^ (((^u33_cam1_scale_o)) & u33_src[3]) ^ (((^u33_cam0_en_o)) & u33_src[4]) ^ (((^u33_cam1_en_o)) & u33_src[5]) ^ (((^u33_hyst_o)) & u33_src[6]) ^ (((^u33_min_hold_o)) & u33_src[7]) ^ (((^u33_morph_step_o)) & u33_src[8]) ^ (((^u33_src_id_o)) & u33_src[9]) ^ (((^u33_deg0_o)) & u33_src[10]) ^ (((^u33_deg1_o)) & u33_src[11]) ^ (((^u33_lod_rep_count0_o)) & u33_src[12]) ^ (((^u33_lod_rep_count1_o)) & u33_src[13]) ^ (((^u33_lod_rep_count2_o)) & u33_src[14]) ^ (((^u33_lod_rep_count3_o)) & u33_src[15]);
+    else u33_fold_q <= u33_fold_q ^ (((^u33_targets_valid_o)) & u33_src[0]) ^ (((^u33_busy_o)) & u33_src[1]) ^ (((^u33_cam0_scale_o)) & u33_src[2]) ^ (((^u33_cam1_scale_o)) & u33_src[3]) ^ (((^u33_cam0_thresh_q8_o)) & u33_src[4]) ^ (((^u33_cam1_thresh_q8_o)) & u33_src[5]) ^ (((^u33_cam0_en_o)) & u33_src[6]) ^ (((^u33_cam1_en_o)) & u33_src[7]) ^ (((^u33_hyst_o)) & u33_src[8]) ^ (((^u33_min_hold_o)) & u33_src[9]) ^ (((^u33_morph_step_o)) & u33_src[10]) ^ (((^u33_src_id_o)) & u33_src[11]) ^ (((^u33_deg0_o)) & u33_src[12]) ^ (((^u33_deg1_o)) & u33_src[13]) ^ (((^u33_lod_rep_count0_o)) & u33_src[14]) ^ (((^u33_lod_rep_count1_o)) & u33_src[15]) ^ (((^u33_lod_rep_count2_o)) & u33_src[16]) ^ (((^u33_lod_rep_count3_o)) & u33_src[17]);
 
   // ---- zhao_measure_tokens ----
   logic [63:0] u34_lfsr_q;
