@@ -261,6 +261,133 @@ silent zero, and does not let it capture a lane outside the span.
 Fired by legal stimulus, not argued: `tests/field/field_host_directed.cpp`
 cases 1b and 1d, the latter running one program twice with only the mask moved.
 
+### SUPERSEDED 2026-09-20 BY THE ORDINAL LAW — `zhao_field_host_v2` (packet H1)
+
+The section above is **correct and insufficient**, and the sentence that says so
+is already in it: *"the capture is still ONE CONTIGUOUS WINDOW."* R111 then
+measured what that costs and the answer was not an edge case. This section is
+the law `zhao_field_host_v2` implements. `zhao_field_host` is **retained,
+unchanged, as the named oracle (FH02)**; it appears in `tests/CMakeLists.txt`
+and in **no production source list**, because composing both versions is exactly
+what `completion_register.py`'s `superseded_in_closure()` exists to catch.
+
+**ORDINAL IS NOT WINDOW, AND THEY ARE DIFFERENT TYPES.**
+
+| quantity | indexed by | width | lives in |
+|---|---|---|---|
+| **window mask** | contiguous capture position `k`: register `out_base + k` was written | `OUT_LANES` (7) | header `[32 +: OUT_LANES]`, `zfh_window_mask_t` |
+| **required mask** | canonical output **ordinal** `j`: output `j` is declared | profile output count, carried in a u8 | `PROGRAM_META.required_mask`, `zfh_required_mask_t` |
+
+They coincide only when a program's output registers run contiguously from
+`out_base`, and the table above measured that **they never do**. The generated
+schema gives them distinct type names and distinct widths so a cross-assignment
+is a compile error rather than a silent truncation, and `OUTPUT_MAP` — one row
+per ordinal, carrying `source_kind` and `source_index` — **is the translation.
+Nothing else converts between the two spaces.**
+
+A window mask can detect a missing write. It **cannot** compact window slots
+`0,1,2,4` into canonical result slots `0,1,2,3`, so nothing indexed by window
+position can return results in declared output order. `resp_out_o` is therefore
+`OUT_ORDINALS` wide and ordinal-indexed; `resp_window_o` is the only
+window-indexed port on the module and exists solely so a caller can tell
+**padding** (a window lane no ordinal claims) from a **missing result**.
+
+**COMPLETION IS `ALL`, PER ORDINAL, ON NEXT-STATE SETS.**
+
+```
+seen_next = seen | writes_granted_this_clock | valid_uniform_seeds
+complete  = ((seen_next & required_mask) == required_mask) && fenced
+```
+
+`seen[j]` is set by a **granted** register write whose register equals
+`source_index[j]`, so two ordinals naming one register are both satisfied by one
+write. Only the arbiter's granted write counts; a refused ALU request is not a
+committed output.
+
+**A UNIFORM OUTPUT IS A RESULT.** For `source_kind == PREPARED_SCALAR` the
+export is **seeded at point start** and `seen[j]` set there, under two conditions
+that are checked and never inferred from the data:
+
+* the prepared slot's **valid bit**, which is driven independently of the value —
+  a prepared zero with its valid bit set is a result, a zero without it is an
+  absence;
+* the slot's **preparation generation** against the running association's. A
+  matching program hash is not a matching parameter set.
+
+An all-uniform image is declared `UNIFORM_ONLY` and **does not start a context at
+all**: it has zero physical uops, so starting one would park it waiting for an
+END no instruction will issue. The form is not taken on trust — an image
+declaring `UNIFORM_ONLY` whose declared ordinals are not all prepared scalars is
+refused at load.
+
+**END IS NOT A FENCE.** Publication waits for a real drain, not a guessed delay.
+The oracle computes its verdict on the clock END is observed, reading the
+pre-update `seen` register, and stops capturing there; `E_DRAIN` keeps capturing
+and the verdict is computed on next-state sets. The fence condition is
+over-determined from the four things a host can see — `active_o == 0`,
+`!dbg_long_valid_o`, and `rf_writes_o`/`drain_writes_o` stable for a clock —
+because **there is no per-context outstanding-work port anywhere in the v3
+fabric**. That was searched for, not assumed: at port level the only matches for
+`*_outstanding*`, `*_inflight*`, `*_pending*`, `*_busy*`, `*_drain*`, `*_empty*`
+across the whole family are `idle_clocks_o` and `drain_writes_o`, and both are
+32-bit **counters**. `active_o == 0` alone is already sufficient *by
+construction*, and that is precisely why it is not used alone: the sufficiency is
+**emergent from three gates in three different files**
+(`zhao_field_v3_exec.sv:378`'s `!sk_busy_c`, `zhao_field_v3_dispatch.sv:694`'s
+release-with-last-write, `zhao_field_v3_exec.sv:1373`'s un-park), declared
+nowhere and covered by no assertion. `late_write_o` is the fence's own instrument
+and must read zero.
+
+**LOAD-TIME REFUSALS.** The header is written **last** and is the write that
+makes a slot runnable, so it is also the first moment the descriptor is
+**complete** — and therefore the only place it can be validated. Four refusals
+live there, each with its own counter:
+
+| condition | counter |
+|---|---|
+| ordinal mask is zero while `output_count` is not (R111's hazard) | `zero_mask_o` |
+| `output_count` disagrees with the mask's population count | `bad_image_o` |
+| `UNIFORM_ONLY` with a declared ordinal that is not a prepared scalar | `bad_image_o` |
+| a `VECTOR_REG` ordinal outside `[out_base, out_base + OUT_LANES)` | `bad_image_o` |
+
+The last one is the case that otherwise produces a wrong value silently: the
+write happens, the window never observes it, the ordinal can never be seen, and
+the point refuses for the **wrong reason** — sending the next reader to the
+completion logic instead of to the image.
+
+**THE PER-POINT CLEAR IS SKIPPED ONLY UNDER A PROOF.** `hdr_ipok[slot]` is set
+only by an accepted `INIT_PROOF` load and is the sole gate on the fast path;
+`cfg_slow_clear_i` forces the walk back on for the differential. The proof is a
+property of the image and is walked by the C++ validator — the hardware owns the
+interlock, not the proof.
+
+**NUMERIC STATUS IS FOUR CAUSES.** `num_status_o` is
+`{rcp0, sat_rescale, sat_mul, sat_add}` where the oracle's `sat_o` is three bits.
+`rcp0` keeps its own family, per directive §8.1's `numeric_rcp0` separate from
+`numeric_sat`: a reciprocal of zero is a **defined answer**, not a saturation and
+not a fault, and folding it into either is one of the two wrong things to do with
+it. **Its producer chain above this block is incomplete** — `rcp0` has no port on
+`zhao_field_v3_svcpath`, `_dispatch`, `_core` or `_engine`, and stops inside
+svcpath as `nm_rcp0_unconsumed` — so it arrives here as a real **input port**
+whose unconnected end is visible, rather than as a bit this block invents.
+
+**ONE ACTIVE PREPARED-DATA DOMAIN (FH09), AND ITS HONEST LIMIT.** The prepared
+file carries a generation tag per slot and a read whose tag does not match the
+running association refuses rather than returning another association's number.
+That is one *active* domain with exclusive ownership — **not** per-context
+uniforms. It satisfies `GEOM.WARP` prerequisite **P5 only if Warp never
+interleaves with Earth inside a frame**, so P5 is **deferred with a measured
+justification, never closed.**
+
+**Evidence.** 152 checks in `tests/field/field_host_v2_directed.cpp`, built and
+run. R126's elaboration guard **seen to fire** by `field_host_v2_r126_guard` —
+necessary because `--lint-only` does not run `initial` blocks, so a clean lint is
+no evidence about it. R101's ANY-not-ALL defect re-planted as
+`tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv`, one substantive line,
+**fired**, with case 1d polarity B as its negative control. `fieldp4`'s case 1d
+is carried forward into ordinal space as the permanent both-polarity control.
+**PHYSICAL FIT PENDING.**
+
 ## Counters and traces
 
 `instr_retired_o`, one pulse per executed instruction, feeding
