@@ -148,10 +148,16 @@ module tb_zhao_console_core_smoke
   // bench supplies is what the HPS supplies -- two buffer bases and a seed.
   logic [31:0]             part_cfg_base0_i;
   logic [31:0]             part_cfg_base1_i;
-  logic                    part_seed_valid_i;
-  logic                    part_seed_ready_o;
-  logic                    part_seed_buf_i;
-  logic [15:0]             part_seed_count_i;   // $clog2(PART_CAPACITY)+1
+  // (I1's four part_seed_* ports are GONE, R41/R46: the store's first
+  //  generation is seeded by SetPopulation's active_count through
+  //  u_part_pop, from the command packet this bench builds below.)
+  logic [31:0]             part_pop_taken_o;
+  logic [31:0]             part_pop_refused_normal_o;
+  logic [31:0]             part_pop_refused_count_o;
+  logic [31:0]             part_pop_refused_flags_o;
+  logic [31:0]             part_pop_seeds_issued_o;
+  logic [31:0]             part_pop_handle_o;
+  logic [31:0]             cmd_exec_pops_o;
   logic                    part_hps_cur_buf_o;
   logic [15:0]             part_hps_cur_count_o;
   logic [31:0]             part_hps_ticks_o;
@@ -209,14 +215,9 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_tap_answered_o;
   logic [31:0]             terr_tap_off_patch_o;
   logic [31:0]             terr_tap_faults_o;
-  logic signed [31:0]      part_pop_origin_x_i;
-  logic signed [31:0]      part_pop_origin_y_i;
-  logic signed [31:0]      part_pop_origin_z_i;
-  logic                    part_plane_en_i;
-  logic signed [PART_NRM_W-1:0] part_plane_nx_i;
-  logic signed [PART_NRM_W-1:0] part_plane_ny_i;
-  logic signed [PART_NRM_W-1:0] part_plane_nz_i;
-  logic signed [31:0]      part_plane_c_i;
+  // (I7's eight part_pop_origin_* / part_plane_* ports are GONE, R41: the
+  //  population descriptor arrives as a SetPopulation 0x0303 record in the
+  //  command packet and is held by u_part_pop.)
   logic                    part_cap_full_i;
   logic                    part_tick_busy_o;
   logic                    part_tick_done_o;
@@ -1880,6 +1881,10 @@ module tb_zhao_console_core_smoke
   // `instance_id` before R29 and is the DrawForm record's source id now.
   localparam int unsigned SMK_XFORM_NODE_C = 5;
   localparam logic [15:0] SMK_DRAW_SRC_C   = 16'h00A1;
+  // R41: the handle SetPopulation names the pool by. Arbitrary and DISTINCT,
+  // so part_pop_handle_o reading it back proves the record travelled rather
+  // than the bank powering up in a state that happens to match.
+  localparam logic [31:0] SMK_POP_HANDLE_C = 32'h0051_C0DE;
   logic [63:0] upl_mem [0:UPL_ALL_WORDS-1];
   logic [255:0] upl_rec0;         // record 0 of the uploaded MATERIAL_SET
   logic [31:0]  upl_crc_material_q, upl_crc_mesh_q;
@@ -2415,12 +2420,11 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  bit part_seed_taken_q;
-  assign part_seed_valid_i = reset_released_q && !part_seed_taken_q;
-  always @(posedge gpu_clk) begin
-    if (!rst_n)                                        part_seed_taken_q <= 1'b0;
-    else if (part_seed_valid_i && part_seed_ready_o)   part_seed_taken_q <= 1'b1;
-  end
+  // (The bench used to seed the store itself here, from eset_released_q.
+  //  It does not any more: the seed is SetPopulation.active_count, and it
+  //  reaches the store through CMD.DECODER's verdict, CMD.EXEC's commit and
+  //  u_part_pop. That is the whole point of R41 -- the value now traverses
+  //  a real chain from a real producer instead of arriving on a pin.)
   // --------------------------------------------------------------------------
   // THE GEOMETRY VERTEX STREAM.
   //
@@ -2852,8 +2856,7 @@ module tb_zhao_console_core_smoke
     // into a pass.
     part_cfg_base0_i = PART_HPS_BASE0;
     part_cfg_base1_i = PART_HPS_BASE1;
-    part_seed_buf_i = 1'b0;
-    part_seed_count_i = 16'(N_PART_RECORDS);
+
     part_tbl_ld_valid_i = '0;
     part_tbl_ld_sel_i = '0;
     part_tbl_ld_index_i = '0;
@@ -2949,14 +2952,7 @@ module tb_zhao_console_core_smoke
 
     // The population sits at the island datum: a legal origin, and the one
     // under which a local position IS a world position.
-    part_pop_origin_x_i = '0;
-    part_pop_origin_y_i = '0;
-    part_pop_origin_z_i = '0;
-    part_plane_en_i = '0;
-    part_plane_nx_i = '0;
-    part_plane_ny_i = '0;
-    part_plane_nz_i = '0;
-    part_plane_c_i = '0;
+
     part_cap_full_i = '0;
     part_hist_sel_i = '0;
 
@@ -3204,11 +3200,9 @@ module tb_zhao_console_core_smoke
     //     marker is disabled and the lifetime is unbounded -- so the other
     //     three spawn counters staying at zero is a specificity check, not an
     //     oversight.
-    part_plane_en_i         = 1'b1;
-    part_plane_nx_i         = '0;
-    part_plane_ny_i         = PART_NRM_W'(1 << 10);   // NRM_Q = 10: a unit +Y normal
-    part_plane_nz_i         = '0;
-    part_plane_c_i          = 32'(PART_TER_H) <<< 10; // y = +100 LSBs, Q NRM_Q
+    // (the plane is a SetPopulation record now -- see PART_PLANE_* below and
+    //  the packet builder. Its values did not change: a unit +Y normal at
+    //  y = PART_TER_H, so the acceptance value further down did not move.)
     // (the STICK response and the spawn rule are now LOADED INTO PART.TABLE
     //  after reset lifts -- see the load sequence below.)
     proj_en_i               = 1'b1;
@@ -3447,14 +3441,15 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_draw_form_t        df;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
       zhao_abi_pkg::zhao_rec_set_environment_t  se;
+      zhao_abi_pkg::zhao_rec_set_population_t   sp;
       logic [255:0] bfv, efv;
-      logic [383:0] prv, pr2v, pcv, sev;
+      logic [383:0] prv, pr2v, pcv, sev, spv;
       logic [255:0] dfv;
       logic [767:0] svv;
       logic [511:0] matv;
       logic [31:0]  c;
       int unsigned  o;
-      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; df = '0;
+      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; df = '0; sp = '0;
       // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
       // already runs), two views, and the five token CEILINGS.
       pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
@@ -3519,12 +3514,32 @@ module tb_zhao_console_core_smoke
       se.sun_pitch   = SGF_ENV_PITCH;
       se.sun_colour  = SGF_ENV_SUN;
       se.ambient     = SGF_ENV_AMB;
+      // R41: THE POPULATION DESCRIPTOR, from the command packet. Every value
+      // here used to be a board pin on zhao_console_core (entry I7) or a
+      // provisional seed port (I1's, R46), and they are the SAME values --
+      // origin at the island datum, a unit +Y plane at y = PART_TER_H, and a
+      // first generation of N_PART_RECORDS staged in buffer 0. What changed is
+      // that they now TRAVEL: decoder -> executor -> PART.POP -> PART.COLLIDE,
+      // PART.TERRAIN_TAP and the generation store.
+      sp.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_POPULATION;    sp.h_record_bytes = 16'd48;
+      sp.h_source_id   = 32'd81;
+      sp.population    = SMK_POP_HANDLE_C;
+      sp.origin_x      = 32'sd0;
+      sp.origin_y      = 32'sd0;
+      sp.origin_z      = 32'sd0;
+      sp.active_count  = 32'(N_PART_RECORDS);
+      sp.plane_c       = 32'(PART_TER_H) <<< 10;   // y = +100 LSBs, Q NRM_Q
+      sp.plane_nx      = 16'sd0;
+      sp.plane_ny      = 16'sd1024;                // NRM_Q = 10: a unit +Y normal
+      sp.plane_nz      = 16'sd0;
+      sp.flags         = 16'h0003;                 // b0 seed, b1 plane_enable
       ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
       prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
       dfv  = zhao_abi_pkg::zhao_pack_draw_form(df);
       sev = zhao_abi_pkg::zhao_pack_set_environment(se);
+      spv = zhao_abi_pkg::zhao_pack_set_population(sp);
       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
       pcv = zhao_abi_pkg::zhao_pack_set_presentation_contract(pc);
       svv = zhao_abi_pkg::zhao_pack_set_view(sv);
@@ -3532,33 +3547,36 @@ module tb_zhao_console_core_smoke
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
       // BeginFrame 32 | SetPresentationContract 48 | SetView 96 |
       // PublishResource 48 | PublishResource 48 | SetEnvironment 48 |
-      // DrawForm 32 | EndFrame 32 = 384 bytes, EIGHT records. The draw comes
-      // after both publications because the page it names must be resident
-      // before it resolves -- and the core holds the draw while a publication
-      // is in flight, which is what makes the ORDER enough.
+      // SetPopulation 48 | DrawForm 32 | EndFrame 32 = 432 bytes, NINE
+      // records. The draw comes after both publications because the page it
+      // names must be resident before it resolves -- and the core holds the
+      // draw while a publication is in flight, which is what makes the ORDER
+      // enough. SetPopulation's position does not matter: like SetEnvironment
+      // it is applied at the packet's COMMIT, not where it sits.
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]       = bfv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k]  = pcv[8*k +: 8];
       for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 80 + k]  = svv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 176 + k] = prv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = pr2v[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 272 + k] = sev[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 320 + k] = dfv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 352 + k] = efv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 320 + k] = spv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 368 + k] = dfv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 400 + k] = efv[8*k +: 8];
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
       // deadline 0 (the mode's period), EIGHT records, 384 bytes of them
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd8;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd384;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd9;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd432;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 384; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+387], pkt_mem[o+386], pkt_mem[o+385], pkt_mem[o+384]} = ~c;
-      pkt_len_q   = o + 384 + 4;
+      for (int unsigned k = 0; k < 432; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+435], pkt_mem[o+434], pkt_mem[o+433], pkt_mem[o+432]} = ~c;
+      pkt_len_q   = o + 432 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
@@ -5178,9 +5196,31 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd8 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd2)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 8, 1, 2)",
+    if (cmd_commands_o != 32'd9 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd2)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 9, 1, 2)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+    // ---- R41 / entry I7: THE POPULATION DESCRIPTOR CAME FROM THE PACKET ----
+    // Every one of these was a BOARD PIN before this ruling. The chain is
+    // decoder -> CMD.EXEC -> PART.POP -> PART.COLLIDE / PART.TERRAIN_TAP and
+    // the generation store, and the handle is the cheapest proof it is the
+    // record's value rather than a power-on state: nothing else in this bench
+    // writes 0x0051C0DE.
+    $display("SMOKE: population handle=%08x taken=%0d seeds=%0d lowered=%0d refused[normal/count/flags]=[%0d %0d %0d]",
+             part_pop_handle_o, part_pop_taken_o, part_pop_seeds_issued_o,
+             cmd_exec_pops_o, part_pop_refused_normal_o, part_pop_refused_count_o,
+             part_pop_refused_flags_o);
+    if (cmd_exec_pops_o != 32'd1)
+      $fatal(1, "SMOKE: CMD.EXEC lowered %0d SetPopulation records; the packet carries one", cmd_exec_pops_o);
+    if (part_pop_taken_o != 32'd1)
+      $fatal(1, "SMOKE: PART.POP took %0d descriptors; the packet carries one", part_pop_taken_o);
+    if (part_pop_handle_o != SMK_POP_HANDLE_C)
+      $fatal(1, "SMOKE: PART.POP holds population %08x, the packet named %08x", part_pop_handle_o, SMK_POP_HANDLE_C);
+    if ((part_pop_refused_normal_o != 0) || (part_pop_refused_count_o != 0) ||
+        (part_pop_refused_flags_o != 0))
+      $fatal(1, "SMOKE: PART.POP refused the packet's descriptor (normal=%0d count=%0d flags=%0d)",
+             part_pop_refused_normal_o, part_pop_refused_count_o, part_pop_refused_flags_o);
+    if (part_pop_seeds_issued_o != 32'd1)
+      $fatal(1, "SMOKE: the store took %0d seeds from PART.POP; SetPopulation asked for one", part_pop_seeds_issued_o);
     // ---- MEASURE.TOKENS (R18/R33): the CEILING and the REQUEST ----------
     // Counts off the wire, unchanged. View 0 sent no SetView, so it keeps the
     // contract's ceiling; view 1 asked for MORE geometry than its ceiling (cut

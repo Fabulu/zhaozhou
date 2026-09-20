@@ -258,10 +258,13 @@ module zhao_console_core_slot_overflow_mutant
   // (spec/qformats.md 10) -- and is taken only between ticks.
   input  logic [31:0]             part_cfg_base0_i,
   input  logic [31:0]             part_cfg_base1_i,
-  input  logic                    part_seed_valid_i,
-  output logic                    part_seed_ready_o,
-  input  logic                    part_seed_buf_i,
-  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // (I1's four provisional `part_seed_*` ports were here. CLOSED 2026-09-19
+  //  under owner rulings R41/R46: the seed is `SetPopulation`'s `active_count`
+  //  and the buffer is 0 by that ratification, so `u_part_pop` drives the
+  //  store's seed handshake and the board drives neither. The two BASES stay:
+  //  they are the HPS allocator's (spec/memory_rules.md 5), not a game-facing
+  //  command field, and putting an allocator address in a ratified record is a
+  //  decision nobody has made.)
   // The store's evidence. `cur_count` is the generation's length as the
   // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
   // stimulus in tests/particles/part_hps_directed.cpp.
@@ -329,21 +332,18 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             terr_tap_off_patch_o,
   output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
 
-  // ---- I7: the one plane, and the population origin ------------------------
-  // The origin is widened INTO I7 rather than opened as a new entry because it
-  // is the same kind of thing with the same absent owner: a per-frame
-  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
-  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
-  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
-  // terrain height -- and it became visible the moment a real height arrived.
-  input  logic signed [31:0]      part_pop_origin_x_i,
-  input  logic signed [31:0]      part_pop_origin_y_i,
-  input  logic signed [31:0]      part_pop_origin_z_i,
-  input  logic                    part_plane_en_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nz_i,
-  input  logic signed [31:0]      part_plane_c_i,
+  // (I7's eight `part_pop_origin_*` / `part_plane_*` inputs were here. CLOSED
+  //  2026-09-19 under owner ruling R41: `SetPopulation` 0x0303 is ratified and
+  //  carries all eight, CMD.EXEC lowers it, and `u_part_pop` holds the
+  //  descriptor as the levels PART.COLLIDE and PART.TERRAIN_TAP read on every
+  //  beat. The evidence below is that bank's.)
+  output logic [31:0]             part_pop_taken_o,
+  output logic [31:0]             part_pop_refused_normal_o,
+  output logic [31:0]             part_pop_refused_count_o,
+  output logic [31:0]             part_pop_refused_flags_o,
+  output logic [31:0]             part_pop_seeds_issued_o,
+  output logic [31:0]             part_pop_handle_o,     // the population it holds
+  output logic [31:0]             cmd_exec_pops_o,       // records CMD.EXEC lowered
 
   // (I2's PART.SPAWN slice was here. CLOSED: PART.TABLE serves it below.)
 

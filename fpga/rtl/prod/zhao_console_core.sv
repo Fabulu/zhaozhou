@@ -428,6 +428,23 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+//  * I7 was PART.COLLIDE's PLANE (`part_plane_*`) and the POPULATION ORIGIN
+//    (`part_pop_origin_*`), eight board pins whose entry said "No ratified
+//    command carries a population descriptor to this core -- DrawPopulation
+//    names a pool handle, not an origin". CLOSED AND DELETED 2026-09-19
+//    (gz/pfs2) under owner ruling R41: one is ratified now. `SetPopulation`
+//    0x0303 carries origin, plane and `active_count`; `u_cmd_exec` lowers it
+//    on a clean verdict exactly as it lowers SetEnvironment; `u_part_pop`
+//    holds it as levels and REFUSES what PART.COLLIDE's formats cannot carry,
+//    counting each refusal. The refusals live in the bank rather than in the
+//    executor because the widths that can be breached are PART.COLLIDE's, and
+//    a second opinion about them in the command path is how two truths drift.
+//    I1's four provisional `part_seed_*` ports went with it (R46): the store's
+//    first generation is seeded from `active_count`, in buffer 0 by the same
+//    ratification. The smoke bench no longer drives any of it -- the values
+//    are in its command packet and `part_pop_handle_o` reads back the handle
+//    the packet named.
+//
 //  * I1 was PART.STATE's GENERATION STORE (`part_rd_*`, `part_wr_*`), a
 //    boundary whose text said "MEM.HPS.BRIDGE is instantiated inside the shell
 //    and has no particle client port". CLOSED AND DELETED 2026-09-19 (gz/pfs).
@@ -943,20 +960,6 @@
 //      gates `in_valid_i` and PART.STATE's `prt_ready_i` on "the answer for
 //      THIS record is ready", and the record is held stable for the whole
 //      offer. That is a join a composer may write. The binding is not.
-//
-//  I7. PART.COLLIDE's plane (`part_plane_*`) -- BOUNDARY. A per-frame owner
-//      value by the block's own design; CMD.SCHEDULER has no path to it.
-//      WIDENED 2026-09-19 BY THE POPULATION ORIGIN (`part_pop_origin_*`), when
-//      I6 closed. spec/qformats.md 10 puts a particle's position RELATIVE TO
-//      ITS POPULATION'S ORIGIN, "fx16 on a 1/256-m grid", and PART.TERRAIN_TAP
-//      needs it to turn a local position into the world point the terrain is
-//      indexed by (and the terrain's world height back into the local frame
-//      PART.COLLIDE compares against). No ratified command carries a
-//      population descriptor to this core -- DrawPopulation names a pool
-//      handle, not an origin -- so it is the same kind of value as the plane,
-//      with the same absent owner, and it rides this entry rather than a new
-//      one. Zero is a legal origin (the island datum), which is what an
-//      undriven bench gets.
 //
 //  I9. PART.SPAWN's parent id (`par_id_i`) -- NOT a tie-off: the core assigns
 //      it. The particle128 record (amendment C2) carries no id field, so the
@@ -2911,10 +2914,13 @@ module zhao_console_core
   // (spec/qformats.md 10) -- and is taken only between ticks.
   input  logic [31:0]             part_cfg_base0_i,
   input  logic [31:0]             part_cfg_base1_i,
-  input  logic                    part_seed_valid_i,
-  output logic                    part_seed_ready_o,
-  input  logic                    part_seed_buf_i,
-  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // (I1's four provisional `part_seed_*` ports were here. CLOSED 2026-09-19
+  //  under owner rulings R41/R46: the seed is `SetPopulation`'s `active_count`
+  //  and the buffer is 0 by that ratification, so `u_part_pop` drives the
+  //  store's seed handshake and the board drives neither. The two BASES stay:
+  //  they are the HPS allocator's (spec/memory_rules.md 5), not a game-facing
+  //  command field, and putting an allocator address in a ratified record is a
+  //  decision nobody has made.)
   // The store's evidence. `cur_count` is the generation's length as the
   // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
   // stimulus in tests/particles/part_hps_directed.cpp.
@@ -2982,21 +2988,18 @@ module zhao_console_core
   output logic [31:0]             terr_tap_off_patch_o,
   output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
 
-  // ---- I7: the one plane, and the population origin ------------------------
-  // The origin is widened INTO I7 rather than opened as a new entry because it
-  // is the same kind of thing with the same absent owner: a per-frame
-  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
-  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
-  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
-  // terrain height -- and it became visible the moment a real height arrived.
-  input  logic signed [31:0]      part_pop_origin_x_i,
-  input  logic signed [31:0]      part_pop_origin_y_i,
-  input  logic signed [31:0]      part_pop_origin_z_i,
-  input  logic                    part_plane_en_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nz_i,
-  input  logic signed [31:0]      part_plane_c_i,
+  // (I7's eight `part_pop_origin_*` / `part_plane_*` inputs were here. CLOSED
+  //  2026-09-19 under owner ruling R41: `SetPopulation` 0x0303 is ratified and
+  //  carries all eight, CMD.EXEC lowers it, and `u_part_pop` holds the
+  //  descriptor as the levels PART.COLLIDE and PART.TERRAIN_TAP read on every
+  //  beat. The evidence below is that bank's.)
+  output logic [31:0]             part_pop_taken_o,
+  output logic [31:0]             part_pop_refused_normal_o,
+  output logic [31:0]             part_pop_refused_count_o,
+  output logic [31:0]             part_pop_refused_flags_o,
+  output logic [31:0]             part_pop_seeds_issued_o,
+  output logic [31:0]             part_pop_handle_o,     // the population it holds
+  output logic [31:0]             cmd_exec_pops_o,       // records CMD.EXEC lowered
 
   // (I2's PART.SPAWN slice was here. CLOSED: PART.TABLE serves it below.)
 
@@ -5300,6 +5303,76 @@ module zhao_console_core
   // Provisional, one constant to change: `PART_HPS_CLIENT` below.
   localparam zhao_client_e PART_HPS_CLIENT = ZHAO_CLIENT_ENGINE1;
 
+  // ==========================================================================
+  // PART.POP -- entry I7 CLOSED 2026-09-19 (gz/pfs2, owner ruling R41).
+  // ==========================================================================
+  // The population descriptor's frame values -- origin, analytic plane and
+  // `active_count` -- were eight board pins and a provisional seed port,
+  // because "no ratified command carries a population descriptor to this
+  // core". R41 ratified one: `SetPopulation` 0x0303. The chain composed here
+  // is a REAL one end to end -- the command packet carries the record,
+  // `u_cmd_decoder` validates it, `u_cmd_exec` lowers it on a clean verdict,
+  // `u_part_pop` holds it and refuses what the engine's formats cannot carry,
+  // and PART.COLLIDE, PART.TERRAIN_TAP and the generation store read it.
+  //
+  // THE REFUSALS ARE THE BANK'S, NOT THE EXECUTOR'S, on purpose: the widths
+  // that can be breached are PART.COLLIDE's, and a second opinion about them
+  // living in the command path is how two truths start to drift.
+  logic        cmd_pop_valid, cmd_pop_ready;
+  logic [31:0] cmd_pop_population, cmd_pop_ox, cmd_pop_oy, cmd_pop_oz;
+  logic [31:0] cmd_pop_count, cmd_pop_pc;
+  logic [15:0] cmd_pop_nx, cmd_pop_ny, cmd_pop_nz, cmd_pop_flags;
+
+  logic signed [31:0]           pop_origin_x_c, pop_origin_y_c, pop_origin_z_c;
+  logic                         pop_plane_en_c;
+  logic signed [PART_NRM_W-1:0] pop_plane_nx_c, pop_plane_ny_c, pop_plane_nz_c;
+  logic signed [31:0]           pop_plane_c_c;
+  logic                         pop_seed_valid, pop_seed_ready, pop_seed_buf;
+  logic [$clog2(PART_CAPACITY):0] pop_seed_count;
+
+  zhao_part_pop #(
+    .CAPACITY(PART_CAPACITY),
+    .CNT_W   ($clog2(PART_CAPACITY) + 1),
+    .NRM_W   (PART_NRM_W)
+  ) u_part_pop (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .rec_valid_i       (cmd_pop_valid),
+    .rec_ready_o       (cmd_pop_ready),
+    .rec_population_i  (cmd_pop_population),
+    .rec_origin_x_i    (cmd_pop_ox),
+    .rec_origin_y_i    (cmd_pop_oy),
+    .rec_origin_z_i    (cmd_pop_oz),
+    .rec_active_count_i(cmd_pop_count),
+    .rec_plane_c_i     (cmd_pop_pc),
+    .rec_plane_nx_i    (cmd_pop_nx),
+    .rec_plane_ny_i    (cmd_pop_ny),
+    .rec_plane_nz_i    (cmd_pop_nz),
+    .rec_flags_i       (cmd_pop_flags),
+
+    .origin_x_o  (pop_origin_x_c),
+    .origin_y_o  (pop_origin_y_c),
+    .origin_z_o  (pop_origin_z_c),
+    .plane_en_o  (pop_plane_en_c),
+    .plane_nx_o  (pop_plane_nx_c),
+    .plane_ny_o  (pop_plane_ny_c),
+    .plane_nz_o  (pop_plane_nz_c),
+    .plane_c_o   (pop_plane_c_c),
+    .population_o(part_pop_handle_o),
+
+    .seed_valid_o(pop_seed_valid),
+    .seed_ready_i(pop_seed_ready),
+    .seed_buf_o  (pop_seed_buf),
+    .seed_count_o(pop_seed_count),
+
+    .taken_o          (part_pop_taken_o),
+    .refused_normal_o (part_pop_refused_normal_o),
+    .refused_count_o  (part_pop_refused_count_o),
+    .refused_flags_o  (part_pop_refused_flags_o),
+    .seeds_issued_o   (part_pop_seeds_issued_o)
+  );
+
   zhao_hps_burst_req_t ptb_hps_req;
   logic                ptb_hps_grant;
   zhao_hps_burst_rsp_t ptb_hps_rsp;
@@ -5324,10 +5397,12 @@ module zhao_console_core
     .rst_n            (rst_n),
     .cfg_base0_i      (part_cfg_base0_i),
     .cfg_base1_i      (part_cfg_base1_i),
-    .seed_valid_i     (part_seed_valid_i),
-    .seed_ready_o     (part_seed_ready_o),
-    .seed_buf_i       (part_seed_buf_i),
-    .seed_count_i     (part_seed_count_i),
+    // REAL (I7/R41): the seed is SetPopulation's `active_count`, held by
+    // `u_part_pop` until this block takes it.
+    .seed_valid_i     (pop_seed_valid),
+    .seed_ready_o     (pop_seed_ready),
+    .seed_buf_i       (pop_seed_buf),
+    .seed_count_i     (pop_seed_count),
     .tick_i           (core_tick_c),
     .ps_tick_start_o  (ph_tick_start),
     .ps_rd_empty_o    (ph_rd_empty),
@@ -5573,9 +5648,9 @@ module zhao_console_core
     .rst_n(rst_n),
 
     // I7, widened: the population origin has no producer in this core.
-    .origin_x_i(part_pop_origin_x_i),
-    .origin_y_i(part_pop_origin_y_i),
-    .origin_z_i(part_pop_origin_z_i),
+    .origin_x_i(pop_origin_x_c),
+    .origin_y_i(pop_origin_y_c),
+    .origin_z_i(pop_origin_z_c),
     // REAL: the same net TERRAIN.PLACE and TERRAIN.HEIGHTTAP read.
     .pitch_log2_i(ptt_pitch_c),
     .inval_i     (ptt_inval_c),
@@ -5672,11 +5747,11 @@ module zhao_console_core
     .t_nz_i    (ptt_t_nz),
 
     // I7: the one plane, a per-frame owner value with no CMD path.
-    .pl_en_i(part_plane_en_i),
-    .pl_nx_i(part_plane_nx_i),
-    .pl_ny_i(part_plane_ny_i),
-    .pl_nz_i(part_plane_nz_i),
-    .pl_c_i (part_plane_c_i),
+    .pl_en_i(pop_plane_en_c),
+    .pl_nx_i(pop_plane_nx_c),
+    .pl_ny_i(pop_plane_ny_c),
+    .pl_nz_i(pop_plane_nz_c),
+    .pl_c_i (pop_plane_c_c),
 
     // REAL: forked to PART.STATE's write-back channel and to PART.SPAWN
     // (glue 3). `c_spawn_record_o` is the POST-CONTACT record by ruling I4 §3,
@@ -10777,6 +10852,20 @@ module zhao_console_core
     .env_sun_colour_o(cmd_env_sun),
     .env_ambient_o   (cmd_env_amb),
     .envs_issued_o   (cmd_exec_envs_o),
+    // R41: SetPopulation -> PART.POP (u_part_pop, beside the particle engine).
+    .pop_valid_o       (cmd_pop_valid),
+    .pop_ready_i       (cmd_pop_ready),
+    .pop_population_o  (cmd_pop_population),
+    .pop_origin_x_o    (cmd_pop_ox),
+    .pop_origin_y_o    (cmd_pop_oy),
+    .pop_origin_z_o    (cmd_pop_oz),
+    .pop_active_count_o(cmd_pop_count),
+    .pop_plane_c_o     (cmd_pop_pc),
+    .pop_plane_nx_o    (cmd_pop_nx),
+    .pop_plane_ny_o    (cmd_pop_ny),
+    .pop_plane_nz_o    (cmd_pop_nz),
+    .pop_flags_o       (cmd_pop_flags),
+    .pops_issued_o     (cmd_exec_pops_o),
     // R18/R33: the token CEILING and each view's REQUEST -> MEASURE.TOKENS.
     .tok_budget_valid_o (cmd_tok_budget_valid),
     .tok_budget_geom0_o (cmd_tok_budget_geom0),

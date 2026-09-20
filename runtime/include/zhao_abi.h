@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = ce34affb9e20fc8a4c15ea519c015054617f0b0b3ad4ff40c28acabc991202f5
-//   zidl_sha256         = 08da9339570ce7bf01f4ff96a1bfbe3c9586bee028a73bc45b11962e427b0a03
+//   abi_identity_sha256 = e9c5ecdcb72ba92220a8dea77899cdce8d3f9fade730ef21b015760032ed0025
+//   zidl_sha256         = 742f5879428e9f5ba1ab1976a12083db955226eb03bd884e4f926edac11bebfc
 #pragma once
 
 #include <cstdint>
@@ -72,6 +72,7 @@ constexpr uint16_t ZHAO_OP_DEBUG_BOOTSTRAP = 0xF001; // 64 B, reserved
 constexpr uint16_t ZHAO_OP_DEBUG_FRAME_BLIT = 0xF002; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
+constexpr uint16_t ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -786,6 +787,37 @@ struct ZhRecordPublishResource {
 };
 static_assert(sizeof(ZhRecordPublishResource) == 48, "layout drift: PublishResource record");
 
+// SetPopulation 0x0303: 48-byte record (implemented)
+struct ZhCmdSetPopulation {
+  uint32_t population;  // handle32 {index:24, generation:8} kind=population
+  int32_t origin_x;
+  int32_t origin_y;
+  int32_t origin_z;
+  uint32_t active_count;
+  int32_t plane_c;
+  int16_t plane_nx;
+  int16_t plane_ny;
+  int16_t plane_nz;
+  uint16_t flags;
+};
+static_assert(offsetof(ZhCmdSetPopulation, population) == 0, "layout drift: SetPopulation.population");
+static_assert(offsetof(ZhCmdSetPopulation, origin_x) == 4, "layout drift: SetPopulation.origin_x");
+static_assert(offsetof(ZhCmdSetPopulation, origin_y) == 8, "layout drift: SetPopulation.origin_y");
+static_assert(offsetof(ZhCmdSetPopulation, origin_z) == 12, "layout drift: SetPopulation.origin_z");
+static_assert(offsetof(ZhCmdSetPopulation, active_count) == 16, "layout drift: SetPopulation.active_count");
+static_assert(offsetof(ZhCmdSetPopulation, plane_c) == 20, "layout drift: SetPopulation.plane_c");
+static_assert(offsetof(ZhCmdSetPopulation, plane_nx) == 24, "layout drift: SetPopulation.plane_nx");
+static_assert(offsetof(ZhCmdSetPopulation, plane_ny) == 26, "layout drift: SetPopulation.plane_ny");
+static_assert(offsetof(ZhCmdSetPopulation, plane_nz) == 28, "layout drift: SetPopulation.plane_nz");
+static_assert(offsetof(ZhCmdSetPopulation, flags) == 30, "layout drift: SetPopulation.flags");
+static_assert(sizeof(ZhCmdSetPopulation) == 32, "layout drift: SetPopulation payload");
+
+struct ZhRecordSetPopulation {
+  ZhCmdHeader hdr;
+  ZhCmdSetPopulation payload;
+};
+static_assert(sizeof(ZhRecordSetPopulation) == 48, "layout drift: SetPopulation record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1242,6 +1274,26 @@ inline ZhRecordPublishResource zhao_sample_publish_resource() {
   return r;
 }
 
+inline ZhRecordSetPopulation zhao_sample_set_population() {
+  ZhRecordSetPopulation r{};
+  r.hdr.opcode       = ZHAO_OP_SET_POPULATION;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242835u; // kind 5, module 1, index 19
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.population = 704643073u;
+  r.payload.origin_x = 0;
+  r.payload.origin_y = 0;
+  r.payload.origin_z = 0;
+  r.payload.active_count = 0u;
+  r.payload.plane_c = 0;
+  r.payload.plane_nx = 4151;
+  r.payload.plane_ny = 59330;
+  r.payload.plane_nz = 55757;
+  r.payload.flags = 644u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1512,6 +1564,22 @@ inline void zhao_pack_publish_resource(const ZhRecordPublishResource& r, std::ve
   w.u8(r.payload.dst_slot);
   w.u8(r.payload.kind);
   for (int i = 0; i < 2; ++i) w.u8(r.payload.pad[i]);
+}
+
+inline void zhao_pack_set_population(const ZhRecordSetPopulation& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.population);
+  w.u32(r.payload.origin_x);
+  w.u32(r.payload.origin_y);
+  w.u32(r.payload.origin_z);
+  w.u32(r.payload.active_count);
+  w.u32(r.payload.plane_c);
+  w.u16(r.payload.plane_nx);
+  w.u16(r.payload.plane_ny);
+  w.u16(r.payload.plane_nz);
+  w.u16(r.payload.flags);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -1944,6 +2012,24 @@ inline bool zhao_unpack_publish_resource(ZhReader& r, ZhRecordPublishResource& o
   return true;
 }
 
+inline bool zhao_unpack_set_population(ZhReader& r, ZhRecordSetPopulation& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.population = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.origin_x = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.origin_y = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.origin_z = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.active_count = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.plane_c = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.plane_nx = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.plane_ny = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.plane_nz = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.flags = t; }
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -1983,8 +2069,9 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"DebugFrameBlit", 0xF002, 48, true, ZHAO_PADS_DEBUG_FRAME_BLIT, 18},
   {"DebugRumble", 0xF004, 32, true, ZHAO_PADS_DEBUG_RUMBLE, 13},
   {"PublishResource", 0x0030, 48, true, ZHAO_PADS_PUBLISH_RESOURCE, 2},
+  {"SetPopulation", 0x0303, 48, true, nullptr, 0},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 19;
+constexpr size_t ZHAO_COMMAND_COUNT = 20;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2019,8 +2106,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xCE, 0x34, 0xAF, 0xFB, 0x9E, 0x20, 0xFC, 0x8A, 0x4C, 0x15, 0xEA, 0x51, 0x9C, 0x01, 0x50, 0x54, 0x61, 0x7F, 0x0B, 0x0B, 0x3A, 0xD4, 0xFF, 0x40, 0xC2, 0x8A, 0xCA, 0xBC, 0x99, 0x12, 0x02, 0xF5};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x08, 0xDA, 0x93, 0x39, 0x57, 0x0C, 0xE7, 0xBF, 0x01, 0xF4, 0xFF, 0x96, 0xA1, 0xBF, 0xBE, 0x3C, 0x95, 0x86, 0xBE, 0xE0, 0x28, 0xA7, 0x3B, 0xC4, 0x5B, 0x11, 0x96, 0x2E, 0x42, 0x7B, 0x0A, 0x03};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0xE9, 0xC5, 0xEC, 0xDC, 0xB7, 0x2B, 0xA9, 0x22, 0x20, 0xA8, 0xDE, 0xA7, 0x78, 0x99, 0xCD, 0xCE, 0x8D, 0x3F, 0x9F, 0xAD, 0xE7, 0x30, 0xEF, 0x21, 0xB0, 0x15, 0x76, 0x00, 0x32, 0xED, 0x00, 0x25};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x74, 0x2F, 0x58, 0x79, 0x42, 0x8E, 0x9F, 0x5B, 0xA1, 0xAB, 0x19, 0x76, 0xA1, 0x20, 0x83, 0xDB, 0x95, 0x52, 0x26, 0xEB, 0x03, 0xBD, 0x88, 0x4E, 0x4F, 0x92, 0x6E, 0xDA, 0xC1, 0x1B, 0xEB, 0xFC};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

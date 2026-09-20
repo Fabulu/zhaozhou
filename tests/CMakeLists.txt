@@ -13761,6 +13761,27 @@ add_test(NAME lint_zhao_part_table
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table.sv)
 set_tests_properties(lint_zhao_part_table PROPERTIES LABELS "lint;fast")
 
+# ---- PART.POP (owner ruling R41, core entry I7) -----------------------------
+# The population descriptor bank, differenced field for field against
+# zref::population after every record. CAPACITY = 8 for the same reason
+# PART.STATE's bench runs at 8: at the production tier an `active_count`
+# refusal needs a four-billion-record population to reach.
+add_executable(test_part_pop_directed particles/part_pop_directed.cpp)
+target_link_libraries(test_part_pop_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_pop_directed
+  PREFIX Vzhao_part_pop
+  TOP_MODULE zhao_part_pop
+  VERILATOR_ARGS -GCAPACITY=8 -GCNT_W=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_pop.sv)
+add_test(NAME part_pop_directed COMMAND test_part_pop_directed)
+set_tests_properties(part_pop_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_pop
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_pop
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_pop.sv)
+set_tests_properties(lint_zhao_part_pop PROPERTIES LABELS "lint;fast")
+
 # ---------------------------------------------------------------------------
 # PART.STATE's capacity backstop -- gap I8, `capacity_full_o`.
 #

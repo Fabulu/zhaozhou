@@ -419,6 +419,26 @@ module zhao_cmd_exec
     output logic [15:0] env_ambient_o,      // rgb565
     output logic [31:0] envs_issued_o,
 
+    // ---- R41: SetPopulation 0x0303, the population descriptor ---------------
+    // Staged and presented exactly like SetEnvironment above -- a shadow during
+    // STAGE, last record wins, offered ONCE per committed packet that carried
+    // one and never on an abandoned packet. Its consumer is `zhao_part_pop`,
+    // which is also what REFUSES a field the engine cannot carry; this block
+    // lowers the record and interprets none of it.
+    output logic        pop_valid_o,
+    input  logic        pop_ready_i,
+    output logic [31:0] pop_population_o,
+    output logic [31:0] pop_origin_x_o,      // 1/256-m grid (qformats 10)
+    output logic [31:0] pop_origin_y_o,
+    output logic [31:0] pop_origin_z_o,
+    output logic [31:0] pop_active_count_o,
+    output logic [31:0] pop_plane_c_o,       // Q10
+    output logic [15:0] pop_plane_nx_o,      // Q1.10
+    output logic [15:0] pop_plane_ny_o,
+    output logic [15:0] pop_plane_nz_o,
+    output logic [15:0] pop_flags_o,         // b0 seed, b1 plane_enable
+    output logic [31:0] pops_issued_o,
+
     // ---- MEASURE.TOKENS (R18/R33): the ceiling, then each view's request ---
     // One-cycle pulses in commit phase EX_TOK. MEASURE.TOKENS takes both every
     // cycle (a load is never refused), so no ready is needed or offered.
@@ -1016,6 +1036,7 @@ module zhao_cmd_exec
                     uq_wp <= uq_wp + (UQW+1)'(1);
                   end
                 end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
+                             && (r_op != ZHAO_OP_SET_POPULATION) // R41: likewise
                              && (zhao_opcode_record_bytes(r_op) != 32'd0)) begin
                   // A record the ABI defines and this block has no arm for.
                   // Counted rather than narrated, so the distance between the
@@ -1302,6 +1323,112 @@ module zhao_cmd_exec
           env_ambient_o    <= en_amb;
         end
         en_dirty <= 1'b0;
+      end
+    end
+  end
+
+  // ==========================================================================
+  // R41: SetPopulation 0x0303 -> zhao_part_pop. SELF-CONTAINED, for the same
+  // reason the environment arm above is: it reads the packet walk and the
+  // verdict and touches nothing the state machine owns, so every other arm of
+  // CMD.EXEC is unchanged by it.
+  //
+  // THE SAME ATOMICITY AS SetView AND SetEnvironment: fields land in a shadow
+  // during STAGE, the record's end marks it pending, and it leaves this block
+  // only on a CLEAN verdict (ZH_ABI_OK and not poisoned). Several
+  // SetPopulation records in one packet: the last one wins, which is the same
+  // law as a per-frame global. NOTHING IS INTERPRETED HERE -- the flags, the
+  // plane's range and the count's range are `zhao_part_pop`'s to judge, so the
+  // executor cannot develop a second opinion about the engine's formats.
+  //
+  // The last field ends at byte 47 of a 48-byte record, which is the LAST
+  // byte, so the capture of `pop_flags` and `rec_done` land on the SAME edge.
+  // That is safe and it is not an accident: `pop_dirty` is set from `rec_done`
+  // in this same block, and the shadow is read at the VERDICT, many cycles
+  // later. The elaboration guard below pins the assumption that the record is
+  // never shorter than the last field.
+  // ==========================================================================
+  localparam int unsigned OFF_PP_POP  = ZHAO_SET_POPULATION_OFF_POPULATION;
+  localparam int unsigned OFF_PP_OX   = ZHAO_SET_POPULATION_OFF_ORIGIN_X;
+  localparam int unsigned OFF_PP_OY   = ZHAO_SET_POPULATION_OFF_ORIGIN_Y;
+  localparam int unsigned OFF_PP_OZ   = ZHAO_SET_POPULATION_OFF_ORIGIN_Z;
+  localparam int unsigned OFF_PP_CNT  = ZHAO_SET_POPULATION_OFF_ACTIVE_COUNT;
+  localparam int unsigned OFF_PP_PC   = ZHAO_SET_POPULATION_OFF_PLANE_C;
+  localparam int unsigned OFF_PP_NX   = ZHAO_SET_POPULATION_OFF_PLANE_NX;
+  localparam int unsigned OFF_PP_NY   = ZHAO_SET_POPULATION_OFF_PLANE_NY;
+  localparam int unsigned OFF_PP_NZ   = ZHAO_SET_POPULATION_OFF_PLANE_NZ;
+  localparam int unsigned OFF_PP_FLG  = ZHAO_SET_POPULATION_OFF_FLAGS;
+  initial begin
+    if ((OFF_PP_FLG + 2) > ZHAO_SET_POPULATION_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetPopulation's flags run past the record");
+  end
+
+  logic [31:0] pp_pop, pp_ox, pp_oy, pp_oz, pp_cnt, pp_pc;
+  logic [15:0] pp_nx, pp_ny, pp_nz, pp_flg;
+  logic        pp_dirty;
+  wire pp_byte_c = (st == EX_STAGE) && take && in_rec_region
+                && (r_op == ZHAO_OP_SET_POPULATION);
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      pp_pop <= 32'd0; pp_ox <= 32'd0; pp_oy <= 32'd0; pp_oz <= 32'd0;
+      pp_cnt <= 32'd0; pp_pc <= 32'd0;
+      pp_nx <= 16'd0; pp_ny <= 16'd0; pp_nz <= 16'd0; pp_flg <= 16'd0;
+      pp_dirty <= 1'b0;
+      pop_valid_o <= 1'b0;
+      pop_population_o <= 32'd0;
+      pop_origin_x_o <= 32'd0; pop_origin_y_o <= 32'd0; pop_origin_z_o <= 32'd0;
+      pop_active_count_o <= 32'd0; pop_plane_c_o <= 32'd0;
+      pop_plane_nx_o <= 16'd0; pop_plane_ny_o <= 16'd0; pop_plane_nz_o <= 16'd0;
+      pop_flags_o <= 16'd0;
+      pops_issued_o <= 32'd0;
+    end else begin
+      if (pp_byte_c) begin
+        // Little-endian on the wire, so every field shifts DOWN and the new
+        // byte enters at the top -- the same assembly the environment arm uses.
+        if ((rpos >= 16'(OFF_PP_POP)) && (rpos < 16'(OFF_PP_POP + 4)))
+          pp_pop <= {pkt_byte_i, pp_pop[31:8]};
+        if ((rpos >= 16'(OFF_PP_OX))  && (rpos < 16'(OFF_PP_OX + 4)))
+          pp_ox  <= {pkt_byte_i, pp_ox[31:8]};
+        if ((rpos >= 16'(OFF_PP_OY))  && (rpos < 16'(OFF_PP_OY + 4)))
+          pp_oy  <= {pkt_byte_i, pp_oy[31:8]};
+        if ((rpos >= 16'(OFF_PP_OZ))  && (rpos < 16'(OFF_PP_OZ + 4)))
+          pp_oz  <= {pkt_byte_i, pp_oz[31:8]};
+        if ((rpos >= 16'(OFF_PP_CNT)) && (rpos < 16'(OFF_PP_CNT + 4)))
+          pp_cnt <= {pkt_byte_i, pp_cnt[31:8]};
+        if ((rpos >= 16'(OFF_PP_PC))  && (rpos < 16'(OFF_PP_PC + 4)))
+          pp_pc  <= {pkt_byte_i, pp_pc[31:8]};
+        if ((rpos >= 16'(OFF_PP_NX))  && (rpos < 16'(OFF_PP_NX + 2)))
+          pp_nx  <= {pkt_byte_i, pp_nx[15:8]};
+        if ((rpos >= 16'(OFF_PP_NY))  && (rpos < 16'(OFF_PP_NY + 2)))
+          pp_ny  <= {pkt_byte_i, pp_ny[15:8]};
+        if ((rpos >= 16'(OFF_PP_NZ))  && (rpos < 16'(OFF_PP_NZ + 2)))
+          pp_nz  <= {pkt_byte_i, pp_nz[15:8]};
+        if ((rpos >= 16'(OFF_PP_FLG)) && (rpos < 16'(OFF_PP_FLG + 2)))
+          pp_flg <= {pkt_byte_i, pp_flg[15:8]};
+        if (rec_done) pp_dirty <= 1'b1;
+      end
+
+      if (pop_valid_o && pop_ready_i) begin
+        pop_valid_o <= 1'b0;
+        `ZHAO_EXEC_INC(pops_issued_o);
+      end
+
+      if ((st == EX_STAGE) && verdict_valid_i) begin
+        if ((verdict_error_i == ZH_ABI_OK) && !poisoned && pp_dirty) begin
+          pop_valid_o        <= 1'b1;
+          pop_population_o   <= pp_pop;
+          pop_origin_x_o     <= pp_ox;
+          pop_origin_y_o     <= pp_oy;
+          pop_origin_z_o     <= pp_oz;
+          pop_active_count_o <= pp_cnt;
+          pop_plane_c_o      <= pp_pc;
+          pop_plane_nx_o     <= pp_nx;
+          pop_plane_ny_o     <= pp_ny;
+          pop_plane_nz_o     <= pp_nz;
+          pop_flags_o        <= pp_flg;
+        end
+        pp_dirty <= 1'b0;
       end
     end
   end

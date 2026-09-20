@@ -107,6 +107,18 @@ module zhao_prod_top (
   logic [16-1:0] u01_env_sun_colour_o;
   logic [16-1:0] u01_env_ambient_o;
   logic [32-1:0] u01_envs_issued_o;
+  logic [1-1:0] u01_pop_valid_o;
+  logic [32-1:0] u01_pop_population_o;
+  logic [32-1:0] u01_pop_origin_x_o;
+  logic [32-1:0] u01_pop_origin_y_o;
+  logic [32-1:0] u01_pop_origin_z_o;
+  logic [32-1:0] u01_pop_active_count_o;
+  logic [32-1:0] u01_pop_plane_c_o;
+  logic [16-1:0] u01_pop_plane_nx_o;
+  logic [16-1:0] u01_pop_plane_ny_o;
+  logic [16-1:0] u01_pop_plane_nz_o;
+  logic [16-1:0] u01_pop_flags_o;
+  logic [32-1:0] u01_pops_issued_o;
   logic [1-1:0] u01_tok_budget_valid_o;
   logic [32-1:0] u01_tok_budget_geom0_o;
   logic [32-1:0] u01_tok_budget_geom1_o;
@@ -184,6 +196,19 @@ module zhao_prod_top (
       .env_sun_colour_o(u01_env_sun_colour_o),
       .env_ambient_o(u01_env_ambient_o),
       .envs_issued_o(u01_envs_issued_o),
+      .pop_valid_o(u01_pop_valid_o),
+      .pop_ready_i(u01_src[77 +: 1]),
+      .pop_population_o(u01_pop_population_o),
+      .pop_origin_x_o(u01_pop_origin_x_o),
+      .pop_origin_y_o(u01_pop_origin_y_o),
+      .pop_origin_z_o(u01_pop_origin_z_o),
+      .pop_active_count_o(u01_pop_active_count_o),
+      .pop_plane_c_o(u01_pop_plane_c_o),
+      .pop_plane_nx_o(u01_pop_plane_nx_o),
+      .pop_plane_ny_o(u01_pop_plane_ny_o),
+      .pop_plane_nz_o(u01_pop_plane_nz_o),
+      .pop_flags_o(u01_pop_flags_o),
+      .pops_issued_o(u01_pops_issued_o),
       .tok_budget_valid_o(u01_tok_budget_valid_o),
       .tok_budget_geom0_o(u01_tok_budget_geom0_o),
       .tok_budget_geom1_o(u01_tok_budget_geom1_o),
@@ -212,7 +237,7 @@ module zhao_prod_top (
   logic u01_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u01_fold_q <= 1'b0;
-    else u01_fold_q <= u01_fold_q ^ (((^u01_pkt_ready_o)) & u01_src[0]) ^ (((^u01_proj_cfg_we_o)) & u01_src[1]) ^ (((^u01_proj_cfg_view_o)) & u01_src[2]) ^ (((^u01_proj_cfg_addr_o)) & u01_src[3]) ^ (((^u01_proj_cfg_data_o)) & u01_src[4]) ^ (((^u01_stamp_valid_o)) & u01_src[5]) ^ (((^u01_stamp_patch_o)) & u01_src[6]) ^ (((^u01_stamp_operation_o)) & u01_src[7]) ^ (((^u01_stamp_tag_o)) & u01_src[8]) ^ (((^u01_stamp_strength_o)) & u01_src[9]) ^ (((^u01_stamp_tx_o)) & u01_src[10]) ^ (((^u01_stamp_ty_o)) & u01_src[11]) ^ (((^u01_stamp_radius_o)) & u01_src[12]) ^ (((^u01_stamp_ring_width_o)) & u01_src[13]) ^ (((^u01_stamp_src_id_o)) & u01_src[14]) ^ (((^u01_draw_valid_o)) & u01_src[15]) ^ (((^u01_draw_form_o)) & u01_src[16]) ^ (((^u01_draw_material_set_o)) & u01_src[17]) ^ (((^u01_draw_transform_o)) & u01_src[18]) ^ (((^u01_draw_viewport_mask_o)) & u01_src[19]) ^ (((^u01_draw_semantic_weight_o)) & u01_src[20]) ^ (((^u01_draw_flags_o)) & u01_src[21]) ^ (((^u01_draw_src_id_o)) & u01_src[22]) ^ (((^u01_upl_valid_o)) & u01_src[23]) ^ (((^u01_upl_index_o)) & u01_src[24]) ^ (((^u01_upl_kind_o)) & u01_src[25]) ^ (((^u01_upl_hps_addr_o)) & u01_src[26]) ^ (((^u01_upl_vram_addr_o)) & u01_src[27]) ^ (((^u01_upl_len_o)) & u01_src[28]) ^ (((^u01_upl_epoch_o)) & u01_src[29]) ^ (((^u01_upl_dst_slot_o)) & u01_src[30]) ^ (((^u01_upl_new_gen_o)) & u01_src[31]) ^ (((^u01_upl_crc_o)) & u01_src[32]) ^ (((^u01_env_valid_o)) & u01_src[33]) ^ (((^u01_env_sun_yaw_o)) & u01_src[34]) ^ (((^u01_env_sun_pitch_o)) & u01_src[35]) ^ (((^u01_env_sun_colour_o)) & u01_src[36]) ^ (((^u01_env_ambient_o)) & u01_src[37]) ^ (((^u01_envs_issued_o)) & u01_src[38]) ^ (((^u01_tok_budget_valid_o)) & u01_src[39]) ^ (((^u01_tok_budget_geom0_o)) & u01_src[40]) ^ (((^u01_tok_budget_geom1_o)) & u01_src[41]) ^ (((^u01_tok_budget_frag0_o)) & u01_src[42]) ^ (((^u01_tok_budget_frag1_o)) & u01_src[43]) ^ (((^u01_tok_budget_shared_o)) & u01_src[44]) ^ (((^u01_tok_vreq_valid_o)) & u01_src[45]) ^ (((^u01_tok_vreq_view_o)) & u01_src[46]) ^ (((^u01_tok_vreq_geom_o)) & u01_src[47]) ^ (((^u01_tok_vreq_frag_o)) & u01_src[48]) ^ (((^u01_contracts_applied_o)) & u01_src[49]) ^ (((^u01_packets_committed_o)) & u01_src[50]) ^ (((^u01_packets_abandoned_o)) & u01_src[51]) ^ (((^u01_views_written_o)) & u01_src[52]) ^ (((^u01_stamps_issued_o)) & u01_src[53]) ^ (((^u01_stamp_overflow_o)) & u01_src[54]) ^ (((^u01_view_range_refused_o)) & u01_src[55]) ^ (((^u01_stamp_src_truncated_o)) & u01_src[56]) ^ (((^u01_draws_issued_o)) & u01_src[57]) ^ (((^u01_draw_overflow_o)) & u01_src[58]) ^ (((^u01_draw_src_truncated_o)) & u01_src[59]) ^ (((^u01_uploads_issued_o)) & u01_src[60]) ^ (((^u01_upload_overflow_o)) & u01_src[61]) ^ (((^u01_unsupported_o)) & u01_src[62]);
+    else u01_fold_q <= u01_fold_q ^ (((^u01_pkt_ready_o)) & u01_src[0]) ^ (((^u01_proj_cfg_we_o)) & u01_src[1]) ^ (((^u01_proj_cfg_view_o)) & u01_src[2]) ^ (((^u01_proj_cfg_addr_o)) & u01_src[3]) ^ (((^u01_proj_cfg_data_o)) & u01_src[4]) ^ (((^u01_stamp_valid_o)) & u01_src[5]) ^ (((^u01_stamp_patch_o)) & u01_src[6]) ^ (((^u01_stamp_operation_o)) & u01_src[7]) ^ (((^u01_stamp_tag_o)) & u01_src[8]) ^ (((^u01_stamp_strength_o)) & u01_src[9]) ^ (((^u01_stamp_tx_o)) & u01_src[10]) ^ (((^u01_stamp_ty_o)) & u01_src[11]) ^ (((^u01_stamp_radius_o)) & u01_src[12]) ^ (((^u01_stamp_ring_width_o)) & u01_src[13]) ^ (((^u01_stamp_src_id_o)) & u01_src[14]) ^ (((^u01_draw_valid_o)) & u01_src[15]) ^ (((^u01_draw_form_o)) & u01_src[16]) ^ (((^u01_draw_material_set_o)) & u01_src[17]) ^ (((^u01_draw_transform_o)) & u01_src[18]) ^ (((^u01_draw_viewport_mask_o)) & u01_src[19]) ^ (((^u01_draw_semantic_weight_o)) & u01_src[20]) ^ (((^u01_draw_flags_o)) & u01_src[21]) ^ (((^u01_draw_src_id_o)) & u01_src[22]) ^ (((^u01_upl_valid_o)) & u01_src[23]) ^ (((^u01_upl_index_o)) & u01_src[24]) ^ (((^u01_upl_kind_o)) & u01_src[25]) ^ (((^u01_upl_hps_addr_o)) & u01_src[26]) ^ (((^u01_upl_vram_addr_o)) & u01_src[27]) ^ (((^u01_upl_len_o)) & u01_src[28]) ^ (((^u01_upl_epoch_o)) & u01_src[29]) ^ (((^u01_upl_dst_slot_o)) & u01_src[30]) ^ (((^u01_upl_new_gen_o)) & u01_src[31]) ^ (((^u01_upl_crc_o)) & u01_src[32]) ^ (((^u01_env_valid_o)) & u01_src[33]) ^ (((^u01_env_sun_yaw_o)) & u01_src[34]) ^ (((^u01_env_sun_pitch_o)) & u01_src[35]) ^ (((^u01_env_sun_colour_o)) & u01_src[36]) ^ (((^u01_env_ambient_o)) & u01_src[37]) ^ (((^u01_envs_issued_o)) & u01_src[38]) ^ (((^u01_pop_valid_o)) & u01_src[39]) ^ (((^u01_pop_population_o)) & u01_src[40]) ^ (((^u01_pop_origin_x_o)) & u01_src[41]) ^ (((^u01_pop_origin_y_o)) & u01_src[42]) ^ (((^u01_pop_origin_z_o)) & u01_src[43]) ^ (((^u01_pop_active_count_o)) & u01_src[44]) ^ (((^u01_pop_plane_c_o)) & u01_src[45]) ^ (((^u01_pop_plane_nx_o)) & u01_src[46]) ^ (((^u01_pop_plane_ny_o)) & u01_src[47]) ^ (((^u01_pop_plane_nz_o)) & u01_src[48]) ^ (((^u01_pop_flags_o)) & u01_src[49]) ^ (((^u01_pops_issued_o)) & u01_src[50]) ^ (((^u01_tok_budget_valid_o)) & u01_src[51]) ^ (((^u01_tok_budget_geom0_o)) & u01_src[52]) ^ (((^u01_tok_budget_geom1_o)) & u01_src[53]) ^ (((^u01_tok_budget_frag0_o)) & u01_src[54]) ^ (((^u01_tok_budget_frag1_o)) & u01_src[55]) ^ (((^u01_tok_budget_shared_o)) & u01_src[56]) ^ (((^u01_tok_vreq_valid_o)) & u01_src[57]) ^ (((^u01_tok_vreq_view_o)) & u01_src[58]) ^ (((^u01_tok_vreq_geom_o)) & u01_src[59]) ^ (((^u01_tok_vreq_frag_o)) & u01_src[60]) ^ (((^u01_contracts_applied_o)) & u01_src[61]) ^ (((^u01_packets_committed_o)) & u01_src[62]) ^ (((^u01_packets_abandoned_o)) & u01_src[63]) ^ (((^u01_views_written_o)) & u01_src[64]) ^ (((^u01_stamps_issued_o)) & u01_src[65]) ^ (((^u01_stamp_overflow_o)) & u01_src[66]) ^ (((^u01_view_range_refused_o)) & u01_src[67]) ^ (((^u01_stamp_src_truncated_o)) & u01_src[68]) ^ (((^u01_draws_issued_o)) & u01_src[69]) ^ (((^u01_draw_overflow_o)) & u01_src[70]) ^ (((^u01_draw_src_truncated_o)) & u01_src[71]) ^ (((^u01_uploads_issued_o)) & u01_src[72]) ^ (((^u01_upload_overflow_o)) & u01_src[73]) ^ (((^u01_unsupported_o)) & u01_src[74]);
 
   // ---- zhao_field_host ----
   logic [63:0] u02_lfsr_q;
