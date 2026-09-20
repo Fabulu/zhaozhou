@@ -3577,3 +3577,65 @@ verified by differential" would be false.**
 green across rows that were not all checked the same way. The packet declared
 the unevenness itself, unprompted, which is why it is recorded here rather than
 discovered later by someone quoting a differential that never ran.
+
+## R206 — THE SWEEP AFTER R204: SEVEN MORE, AND TWO OF THEM FEED THE FIT
+
+R204 ended with *"anyone holding a working copy from before the pin will hit
+this same red, and the content will be perfect."* **That was a prediction, so I
+swept for it.**
+
+Of **506** files pinned `eol=lf`, **seven** had a CRLF working copy:
+
+```
+design/shell_fit_ports.yml
+fpga/rtl/geometry/zhao_geom_skin.sv
+fpga/rtl/geometry/zhao_geom_wcache.sv
+fpga/rtl/particles/zhao_part_record.sv
+tests/texture/texture_aux_div6_directed.cpp
+tests/texture/texture_v3own_adversarial.cpp
+tools/quartus/run_block_fit.ps1
+```
+
+**`tools/quartus/run_block_fit.ps1` is the fit script. `design/shell_fit_ports.yml`
+is fit ports.** A fit here costs 1.5–4 hours, and it snapshots its sources —
+so **discovering a checkout-stability refusal partway through one is the most
+expensive place available to discover it.** All seven re-materialised; **`git
+status` stayed clean throughout**, which is the proof the content was always
+correct and only the working copies were wrong.
+
+**`tools/maintenance/check_eol_worktree.py` makes it a ten-second question**
+instead of a diagnosis from a hash mismatch. Two design points:
+
+* **It refuses to list a DIRTY file for re-materialisation**, and says why:
+  `git checkout --` discards unstaged work and unstaged work has no reflog. A
+  maintenance tool that helpfully offers to destroy a colleague's edits is worse
+  than no tool.
+* **It must never be registered as a CI gate**, and its docstring says so. CI
+  checks out fresh, so every working copy there is correct **by construction** —
+  the check would pass forever **without ever having been able to fail**. That
+  is this campaign's defining failure shape, and building it deliberately would
+  be perverse.
+
+**Proven in both directions before being committed:** RC 0 on the clean tree,
+and RC 1 with a CRLF copy planted in a pinned file — which it also correctly
+flagged **DIRTY, do not re-materialise**, because planting the fault made the
+file dirty. Fault removed, tree clean.
+
+### And I hit the pipeline-exit-code trap AGAIN, reading my own checker
+
+I ran `python check_eol_worktree.py | head -8; echo "RC=$?"` and read **`head`'s**
+exit status — printing `RC=0` for a script that had just correctly returned 1.
+
+`CLAUDE.md` names this: *"Read the build's exit code, not the pipeline's."* I
+have now done it **three times in this session**, including once while writing a
+ruling about instruments that cannot see their subject, and once on a `git push`
+where it briefly looked like the push had succeeded when nothing had been read
+at all.
+
+**It is worth recording as a habit rather than an incident.** The tell is that
+`$?` after a pipe is *always* about the last stage, and the last stage is nearly
+always `head`, `tail` or `grep` — which succeed. **So the trap fires exactly
+when you are trying to read a long output, i.e. when something interesting is
+happening.** The fix that actually works is redirecting to a file and reading
+`$?` before touching the file, which is what every gate invocation in this
+session's briefs now does.
