@@ -2113,7 +2113,11 @@ targets:
       - fpga/rtl/field/zhao_field_rot.sv
       - fpga/rtl/field/zhao_field_exec_shared.sv
       - fpga/rtl/field/zhao_field_seq.sv
-      - fpga/rtl/field/zhao_field_host.sv
+      # THE v2 HOST, composed by packet C1 on 2026-09-20. The unversioned
+      # zhao_field_host is NOT in this list and must never be: it is the
+      # retained named oracle (FH02) and lives in tests/CMakeLists.txt only.
+      # Listing both is exactly what superseded_in_closure() exists to catch.
+      - fpga/rtl/field/zhao_field_host_v2.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_flow_adapter.sv
       # GEOM.WARP prerequisite P2. In THIS list because zhao_prod_top is a
@@ -3043,7 +3047,8 @@ targets:
       - fpga/rtl/field/zhao_field_v3_svcpath.sv
       - fpga/rtl/field/zhao_field_v3_engine.sv
       - fpga/rtl/field/zhao_field_progcache.sv
-      - fpga/rtl/field/zhao_field_host.sv
+      # v2 as of packet C1. See the note in the zhao_prod_top target above.
+      - fpga/rtl/field/zhao_field_host_v2.sv
       - fpga/rtl/field/zhao_field_stamp_adapter.sv
       - fpga/rtl/field/zhao_field_flow_adapter.sv
       - fpga/rtl/field/zhao_field_doorbell.sv

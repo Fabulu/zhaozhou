@@ -437,7 +437,7 @@ top:
   # separate FIELD.SEQ.EARTH sequencer in hardware and there is not going to be
   # one" -- so the five profiles are program sets plus stream adapters, and
   # counting them as blocks would count one engine five times.
-  - zhao_field_host
+  - zhao_field_host_v2
   # The S profile's STREAM ADAPTER, which FIELD.SEQ.CORE.md permits by name.
   # Counted because zhao_console_core instantiates it and it closes entry I31:
   # SURFACE.STAMP's field-driven brush has a producer.
@@ -590,9 +590,59 @@ retired_census_slots:
 production_parameter_overrides:
   zhao_shell_top_v2:
     BUILD_HPS_N: 32'd2
+  # ---- THE SHARED FIELD PORT, STATED AT EVERY INSTANCE ----------------------
+  # R151 is why this section has to be complete rather than representative.
+  # `zhao_prod_top.sv` is what the whole-design census and the production fit
+  # MEASURE, and it is generated with no parameter overrides of its own -- so
+  # every instance there takes module DEFAULTS unless a row here says otherwise.
+  # A1 found the stamp adapter defaulting 12/4 while the console passed 13/7,
+  # which meant the production top had been pricing a 384-bit client bus against
+  # the console's 416. The top that gets measured was not the machine that gets
+  # composed, and nothing compared them.
+  #
+  # IT HAPPENED AGAIN IN THE SAME SECTION, WHICH IS THE PART WORTH RECORDING.
+  # A1's own fix wrote `IN_LANES: 32'd13` here. Packet C1 moved the shared pair
+  # to 15 for the WARP record (GEOM.WARP prerequisite P1) and this row did not
+  # move with it -- so for the length of one commit the override AGREED WITH THE
+  # OLD VALUE, which is worse than absent: an override that is present and wrong
+  # looks audited. A stale override is a stale mutant wearing a manifest row.
+  #
+  # THE RULE THIS SECTION NOW CARRIES: the shared FIELD port width appears in
+  # FOUR places -- the host instance, both adapter instances, and here -- and
+  # they move together or the fit measures a machine nobody composed.
+  zhao_field_host_v2:
+    CLIENTS: 32'd2
+    PROGS: 32'd8
+    INSTR_N: 32'd32
+    REGS: 32'd32
+    TABLES: 32'd2
+    TBL_N: 32'd64
+    IN_LANES: 32'd15
+    OUT_LANES: 32'd7
+    # NOT the same quantity as OUT_LANES, equal to it here by coincidence of
+    # this console's profile set. OUT_LANES is the capture WINDOW; this is the
+    # count of canonical declared OUTPUTS.
+    OUT_ORDINALS: 32'd7
+    PREP_SCALARS: 32'd64
+    CREDITS: 32'd2
+    # The fabric knobs the console selects. Defaulting these in the census top
+    # would price a FOUR-lane vector ALU and eight distance banks that the
+    # console does not compose -- roughly the +6,000 ALM / +12 DSP that C2 puts
+    # in front of the owner as an open question.
+    FAB_LANES: 32'd1
+    FAB_OUTSTANDING: 32'd4
+    FAB_LONGQ: 32'd4
+    FAB_GATHERS: 32'd4
+    FAB_DIST_BANKS: 32'd2
+    FAB_GROUP_PTS: 32'd1
+    FAB_RING_UNITS: 32'd2
+    FAB_RING_DESC: 32'd2
   zhao_field_stamp_adapter:
     STAMP_BINDING: 32'd1
-    IN_LANES: 32'd13
+    IN_LANES: 32'd15
+    OUT_LANES: 32'd7
+  zhao_field_flow_adapter:
+    IN_LANES: 32'd15
     OUT_LANES: 32'd7
 
 # ==============================================================================
@@ -725,27 +775,28 @@ excluded:
   - zhao_field_normalize: superseded  by zhao_field_v3_normalize
   - zhao_field_ring: superseded  by zhao_field_v3_ring, which zhao_field_v3_ring_svc carries
   - zhao_field_rot: superseded  by zhao_field_v3_rot, with zhao_field_v3_trig supplying sin/cos
-  # --- 2026-09-20, THE ASSOCIATION-AWARE HOST (packet H1) --------------------
-  # BUILT, TESTED, AND COMPOSED NOWHERE YET -- and the wording below is chosen
-  # deliberately. "not-yet-adopted" is the deferral wording uncashed_cheques.py
-  # watches for; "superseded" or "probe" would CLOSE the question, and this
-  # question is open. Being NAMED in this manifest is not being SETTLED by it.
+  # --- 2026-09-20, THE ASSOCIATION-AWARE HOST (packets H1, then C1) ---------
+  # THIS ROW USED TO NAME zhao_field_host_v2 AS "not-yet-adopted". It is
+  # adopted: packet C1 composed it into `zhao_console_core.sv` the same day H1
+  # built it, both generated tops were regenerated, and
+  # `design/console_inventory.yml`'s version_exceptions entry -- the other half
+  # of that note -- was DELETED, which is the condition its own text set. The
+  # module has moved to the `top` section above and CANNOT appear here as well;
+  # `read_manifest` raises on the overlap, which is how the half-finished swap
+  # was caught rather than shipped.
   #
-  # zhao_field_host_v2 is the strict-output-contract host: results indexed by
-  # canonical output ORDINAL rather than by capture-window position, uniform
-  # outputs seeded from prepared scalars as results, a real post-END drain
-  # fence, and the no-clear fast path gated on the image's INIT_PROOF. The
-  # unversioned zhao_field_host is RETAINED as the named oracle (FH02) and
-  # appears only in tests/CMakeLists.txt -- never in a production source list,
-  # because composing both is exactly what superseded_in_closure() exists to
-  # catch.
+  # What is excluded now is the OTHER one, and it is excluded for a good reason
+  # rather than a pending one.
   #
-  # It is not composed because composition of zhao_console_core.sv is packet
-  # C1's serialised act, and it needs a port change there (the host's response
-  # is OUT_ORDINALS wide, not OUT_LANES) plus both generated tops regenerated.
-  # See design/console_inventory.yml's version_exceptions entry, which is the
-  # other half of this and is meant to be DELETED when C1 lands.
-  - zhao_field_host_v2: not-yet-adopted  the strict-output-contract FIELD host (owner directive sections 6/7, decisions FH02/FH03/FH05/FH06/FH08/FH09/FH20); 152 checks in field_host_v2_directed, R126's elaboration guard fired by field_host_v2_r126_guard, and R101's ANY-not-ALL defect re-planted as tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv with its negative control in case 1d; adopt in place of zhao_field_host when C1 composes it
+  # `oracle` is a CLOSING disposition in uncashed_cheques.py's vocabulary, and
+  # it is the right one: zhao_field_host is not waiting for anything and is not
+  # a saving anyone can cash. FH02 requires the old host be kept as the named
+  # differential oracle for the new one, so it is retained ON PURPOSE, and it
+  # appears in tests/CMakeLists.txt ONLY -- never in a production source list,
+  # because composing both is precisely what superseded_in_closure() exists to
+  # catch. Deleting it would destroy the only independent check on the block
+  # that replaced it.
+  - zhao_field_host: oracle  the pre-2026-09-20 FIELD host, RETAINED DELIBERATELY as the named differential oracle for zhao_field_host_v2 (owner decision FH02, owner ruling R143). It is elaborated by tests/ source lists only and by no production root; `zhao_console_core` composes zhao_field_host_v2. Its window-indexed `resp_out_o` and three-bit `sat_o` are the older contract on purpose -- widening them to match the new host would be changing the instrument to agree with the thing it measures, which is the defect this campaign is named for.
   - zhao_field_rcp: superseded  the v1 reciprocal; the v3 normalize path uses zhao_field_rcp24_rom, which stays counted because it is version-neutral and used outside FIELD
   - zhao_field_rcp_rom: superseded  the v1 reciprocal table, read only by zhao_field_rcp  # --- 2026-09-09, FORGE.PRIM.EVAL (the lightning evaluator) -----------------
   # Both BUILT and composed nowhere -- deliberately. The evaluator emits the

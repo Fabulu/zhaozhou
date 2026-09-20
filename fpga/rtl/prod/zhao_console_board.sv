@@ -2735,10 +2735,31 @@ module zhao_console_board
   // and routed to `u_field_loader` below, sub-decoded by `post_kind_i` as
   // 0 INSTALL_CAPSULE / 1 BIND_PROGRAM / 2 CONTROL / 3 reserved.
   input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, captured AT ACCEPTANCE
+  // FH08's differential control, and NOT a test hook. HIGH forces the blanket
+  // per-point register walk back on for every point regardless of the image's
+  // INIT_PROOF; directive 6.1 keeps the slow clear "for differential testing
+  // and explicit legacy unvalidated bench images only". It is host state on the
+  // same footing as `fld_cfg_plan_base_i` -- the producer is SW.STREAM, outside
+  // this console -- so it is a boundary input and not a gap.
+  //
+  // Production may NOT bypass validation to enter the fast path: the host gates
+  // that on `hdr_ipok` and not on this bit being low, so driving this low is a
+  // request, never a permission.
+  input  logic         fld_cfg_slow_clear_i,
   input  logic         fld_db_post_valid_i,
   output logic         fld_db_post_ready_o,
   input  logic [ 1:0]  fld_db_post_op_i,
-  input  logic [ 1:0]  fld_db_post_kind_i,
+  // THREE BITS AS OF PACKET C1, and the two consumers want different widths
+  // on purpose. `zhao_field_host_v2` decodes EIGHT load kinds (0 UOP, 1 TABLE,
+  // 2 HEADER, 3 UNIFORM, 4 OUTMAP, 5 ASSOC, 6 INITPROOF, 7 PREPARED) and
+  // implements all eight; at two bits, kinds 4..7 had no producer and the new
+  // host's ordinal, association and init-proof machinery was unreachable from
+  // this console. The FH2 sub-decode above still uses the LOW TWO BITS, which
+  // is why the doorbell truncates rather than widening `fh2_kind_o`: the two
+  // fields are separate quantities that happen to share a mailbox word, and
+  // this file has been bitten once already by writing one onto the other
+  // (see `fld_db_post_addr_i`'s eight-against-seven note below).
+  input  logic [ 2:0]  fld_db_post_kind_i,
   input  logic [ 2:0]  fld_db_post_slot_i,
   // EIGHT BITS, NOT SEVEN, and the width is the FH2 control verb's. Directive
   // 10.2: "widen that mailbox field explicitly to at least 8 through its
@@ -2873,6 +2894,47 @@ module zhao_console_board
   // adapter reads lanes 3-5, and until R101 a program that skipped any of them
   // came back 8'h00 SUCCESS.
   output logic [31:0]  fld_out_incomplete_o,
+  // ---- THE v2 HOST'S OWN EVIDENCE, new with the composition ---------------
+  // These are siblings of the twenty counters around them and have the same
+  // standing: the console's counter surface, read by the host. They are NOT
+  // new gaps -- a boundary counter is only a tie-off if this file's own
+  // "INCOMPLETE -- TIED OFF, AND WHY" block says so, and none of these is in
+  // it. Each names one thing and only that thing, which is the discipline
+  // R150 was written about.
+  //
+  // A PREPARED_SCALAR ordinal whose slot was invalid, or whose generation did
+  // not match the running association. Apart from `fld_out_incomplete_o`
+  // because "the preparation is wrong" and "the program did not write" send
+  // the next person to different files.
+  output logic [31:0]  fld_prep_bad_o,
+  // A load-time refusal: an OUTPUT_MAP row naming a register outside the
+  // capture window, which the window cannot observe, so the ordinal could
+  // never be seen. Refused at LOAD rather than hanging a point later.
+  output logic [31:0]  fld_bad_image_o,
+  // R111's standing hazard, counted: a strict descriptor whose ordinal mask is
+  // ZERO. A plan writer who omits the mask would otherwise silently restore the
+  // R101 defect and pass every gate.
+  output logic [31:0]  fld_zero_mask_o,
+  // The retirement fence's own positive control. A granted write for the
+  // retired context arriving after the fence released. IT MUST READ ZERO --
+  // and a detector reading zero is a claim, so it is fired deliberately rather
+  // than quoted.
+  output logic [31:0]  fld_late_write_o,
+  // Writes captured during drain: the ones the oracle loses. NOT a fault. This
+  // is the measurement that the fence is doing work, which is the half that
+  // separates "the fence never mattered" from "the fence was never tested".
+  output logic [31:0]  fld_fence_writes_o,
+  // Points that retired with no vector write at all because every declared
+  // ordinal was a prepared scalar. FH06's terminal path, counted so that "the
+  // uniform route is live" is a number rather than an argument.
+  output logic [31:0]  fld_uniform_runs_o,
+  // Grants refused for want of a reserved response entry (FH20's credit pool).
+  output logic [31:0]  fld_credit_stall_o,
+  // FH08's differential pair. Points that took the no-clear fast path, and
+  // points that walked. Both are exported because the interesting number is
+  // the RATIO, and one of them alone cannot give it.
+  output logic [31:0]  fld_fast_path_o,
+  output logic [31:0]  fld_slow_path_o,
   // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
   // `zhao_field_v3_engine`'s own header is right that five faults reduced to
   // one bit is a bit that says "something, somewhere", and a guard that cannot
@@ -2885,8 +2947,13 @@ module zhao_console_board
   output logic [31:0]  fld_unsupported_o,
   output logic [31:0]  fld_skid_overflow_o,
   output logic [31:0]  fld_uniform_bad_o,
-  // {sat_rescale, sat_mul, sat_add} -- the op ledger, latched over the run.
-  output logic [ 2:0]  fld_sat_o,
+  // {rcp0, sat_rescale, sat_mul, sat_add} -- the op ledger, latched over the
+  // run. FOUR causes as of packet C1, not three: owner ruling R145 carried
+  // `rcp0` out of the service path, and `zhao_field_host_v2.num_status_o` is
+  // the four-bit port that receives it. rcp0 keeps its OWN family per directive
+  // 8.1 -- a reciprocal of zero is a defined answer, not a clamp -- so it is a
+  // fourth bit here rather than a fourth thing ORed into saturation.
+  output logic [ 3:0]  fld_sat_o,
   output logic [31:0]  fld_pc_hits_o,
   output logic [31:0]  fld_pc_misses_o,
   output logic [31:0]  fld_pc_rejected_o,
@@ -4240,6 +4307,7 @@ module zhao_console_board
       .terr_lodfeed_dev_records_o         (terr_lodfeed_dev_records_o),
       .terr_lodfeed_stray_samples_o       (terr_lodfeed_stray_samples_o),
       .fld_cfg_plan_base_i                (fld_cfg_plan_base_i),
+      .fld_cfg_slow_clear_i               (fld_cfg_slow_clear_i),
       .fld_db_post_valid_i                (fld_db_post_valid_i),
       .fld_db_post_ready_o                (fld_db_post_ready_o),
       .fld_db_post_op_i                   (fld_db_post_op_i),
@@ -4308,6 +4376,15 @@ module zhao_console_board
       .fld_ld_oob_o                       (fld_ld_oob_o),
       .fld_no_result_o                    (fld_no_result_o),
       .fld_out_incomplete_o               (fld_out_incomplete_o),
+      .fld_prep_bad_o                     (fld_prep_bad_o),
+      .fld_bad_image_o                    (fld_bad_image_o),
+      .fld_zero_mask_o                    (fld_zero_mask_o),
+      .fld_late_write_o                   (fld_late_write_o),
+      .fld_fence_writes_o                 (fld_fence_writes_o),
+      .fld_uniform_runs_o                 (fld_uniform_runs_o),
+      .fld_credit_stall_o                 (fld_credit_stall_o),
+      .fld_fast_path_o                    (fld_fast_path_o),
+      .fld_slow_path_o                    (fld_slow_path_o),
       .fld_exec_desync_o                  (fld_exec_desync_o),
       .fld_bank_desync_o                  (fld_bank_desync_o),
       .fld_svc_bank_desync_o              (fld_svc_bank_desync_o),

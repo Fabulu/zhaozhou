@@ -214,7 +214,15 @@ module zhao_field_doorbell #(
     // op 0: host ld_kind -- 0 uop, 1 table, 2 header, 3 uniform.
     // op 3: FH2 kind    -- 0 INSTALL_CAPSULE, 1 BIND_PROGRAM, 2 CONTROL,
     //                      3 reserved (answered BAD_OPERATION).
-    input  var logic [1:0]           post_kind_i,
+    // THREE BITS AS OF PACKET C1. `zhao_field_host_v2` decodes eight load kinds
+    // and implements all eight; at two bits, kinds 4..7 (OUTMAP, ASSOC,
+    // INITPROOF, PREPARED) had no producer anywhere on the console and the new
+    // host's ordinal machinery was unreachable. `fh2_kind_o` below stays TWO
+    // bits and takes the low pair -- the FH2 sub-decode has four kinds and is a
+    // different quantity that happens to share this mailbox word. Widening both
+    // because they sit in one field is the mistake directive 10.2 names for
+    // `post_addr_i`, one field over.
+    input  var logic [2:0]           post_kind_i,
     input  var logic [SLOTW-1:0]     post_slot_i,
     input  var logic [POSTADDRW-1:0] post_addr_i,
     input  var logic [95:0]          post_data_i,
@@ -225,7 +233,7 @@ module zhao_field_doorbell #(
     // ---- to zhao_field_host's loader ----------------------------------------
     output var logic                 ld_valid_o,
     input  var logic                 ld_ready_i,
-    output var logic [1:0]           ld_kind_o,
+    output var logic [2:0]           ld_kind_o,
     output var logic [SLOTW-1:0]     ld_slot_o,
     output var logic [LDADDRW-1:0]   ld_addr_o,
     output var logic [95:0]          ld_data_o,
@@ -307,7 +315,7 @@ module zhao_field_doorbell #(
     output var logic [31:0] addr_refused_o
 );
 
-  localparam logic [1:0] LdHeader = 2'd2;
+  localparam logic [2:0] LdHeader = 3'd2;
 
   localparam logic [1:0] OpLoad   = 2'd0;
   localparam logic [1:0] OpCommit = 2'd1;
@@ -332,7 +340,7 @@ module zhao_field_doorbell #(
   // THE POSTED MAILBOX
   // ==========================================================================
   logic [1:0]           q_op     [0:POSTS-1];
-  logic [1:0]           q_kind   [0:POSTS-1];
+  logic [2:0]           q_kind   [0:POSTS-1];
   logic [SLOTW-1:0]     q_slot   [0:POSTS-1];
   logic [POSTADDRW-1:0] q_addr   [0:POSTS-1];
   logic [95:0]          q_data   [0:POSTS-1];
@@ -429,7 +437,14 @@ module zhao_field_doorbell #(
 
   // ---- the FH2 seam -------------------------------------------------------
   assign fh2_valid_o      = (dstate == D_FH2);
-  assign fh2_kind_o       = q_kind[q_ri];
+  // THE LOW TWO BITS, deliberately. The FH2 transaction has four kinds
+  // (0 INSTALL_CAPSULE, 1 BIND_PROGRAM, 2 CONTROL, 3 reserved) and the legacy
+  // LOAD path has eight; they share this mailbox field and they are not the
+  // same quantity. A post that reaches the FH2 arm carries a kind in 0..3, so
+  // the truncation is exact for every legal FH2 command -- and an illegal one
+  // is refused by `u_field_loader`'s `bad_operation_o`, which is where an
+  // unknown FH2 kind is supposed to be counted.
+  assign fh2_kind_o       = q_kind[q_ri][1:0];
   assign fh2_verb_o       = 8'(q_addr[q_ri]);
   assign fh2_data_o       = q_data[q_ri];
   assign fh2_hash_o       = q_hash[q_ri];
@@ -500,7 +515,7 @@ module zhao_field_doorbell #(
       ret_overflow_o <= 32'd0;
       for (i = 0; i < int'(POSTS); i = i + 1) begin
         q_op[i] <= OpLoad;
-        q_kind[i] <= 2'd0;
+        q_kind[i] <= 3'd0;
         q_slot[i] <= '0;
         q_addr[i] <= '0;
         q_data[i] <= 96'd0;
