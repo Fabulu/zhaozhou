@@ -1367,3 +1367,56 @@ better name.**
 **The sweep also found `tools/rtl/check_guard_verdict.py` already strips
 comments** — so this is not universal, and the tools that got it right are worth
 noting alongside the ones that did not.
+
+## R139 — the six unresolved `reference_model:` rows: the NAMESPACES exist, the LAWS do not
+
+**2026-09-20, coordinator.** R94 required a per-row call on every
+`reference_model:` that resolves to nothing. Two independent tools now agree the
+set is exactly six. This is the investigation that makes those six calls cheap;
+it is deliberately NOT the calls themselves.
+
+**What `reference/` actually holds:**
+
+* `zref::part::` (in `zref_particle.hpp`, `zref_particle_soft.hpp`) — structs
+  `Particle`, `PolyExpand`, `ExpandedVertex`, `LadderOut`, `SoftRect`; functions
+  `expand_polygon`, `ladder_raw`, `ladder_step`, `ladder_want`, `soft_rect`,
+  `particle_pack`, `particle_unpack`, `particle_angle16`, `particle_radius`.
+* `zref::post::` (in `zref_post.hpp`) — `grade_*`, `glow_*`, `echo`, `look`,
+  `capture_addr`, `chunk_of`, `apply_set_post`, `disp_to_pixels`, and more.
+
+**So the oracle is not missing wholesale — it covers DIFFERENT BLOCKS.**
+PART.LADDER, PART.EXPAND and PART.SOFT already resolve, against
+`zref::part::ladder_want`, `::expand_polygon` and `::soft_rect` respectively.
+`zref::post::` likewise serves the grade and echo paths.
+
+**The six that do not resolve name laws that are genuinely absent, not renamed:**
+
+| row | declares | nearest real thing |
+|---|---|---|
+| PART.COLLIDE | `zref::ParticleCollide` | nothing — no collision law in `zref::part::` |
+| PART.SPAWN | `zref::ParticleSpawn` | nothing — no spawn law |
+| PART.STATE | `zref::ParticleState` | `particle_pack`/`particle_unpack` exist, but that is a FORMAT, not a state law — **check before assuming either way** |
+| PART.UPDATE | `zref::ParticleUpdate` | nothing — no integration law |
+| POST.COMPOSITE | `zref::PostComposite` | `zref::post::` has grade/glow/echo/capture, **no composite** |
+| MEASURE.HISTOGRAM | `zref::MeasureHistogram` | not examined here |
+
+**The recommendation, and why it is not a decision.** R94's rule is *name the law
+that exists, or REMOVE the key and say in the row why the block has no reference
+model — inventing a plausible symbol is the same defect with a better name.* On
+this evidence five of the six look like removals with a stated reason, and
+**PART.STATE is the one that could go either way**, because `particle_pack` /
+`particle_unpack` may or may not BE its ratified law rather than merely adjacent
+to it. That distinction needs the contract in hand, and getting it wrong in the
+"name a plausible symbol" direction is precisely the defect R94 exists to
+prevent.
+
+**So this goes to a small packet with the contracts open, not to a coordinator
+guess.** The measurement above is the expensive half and it is done: whoever
+takes it does not have to re-derive which namespaces exist.
+
+**One caution for that packet.** A `reference_model` naming a symbol that does
+not exist is not merely untidy — it buys **silent exemption from CHECK 3**, the
+duplicate-ratified-law detector that caught the 66-DSP projector duplication,
+because a name resolving to nothing can never collide with another block's. So
+each removal must say why the block has no oracle, in the row, where the next
+reader meets it.
