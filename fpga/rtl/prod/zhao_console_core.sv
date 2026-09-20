@@ -2818,7 +2818,64 @@
 //          `zref_creature.hpp:43-46` calls the quaternion lane format
 //          "PROPOSED, NOT FROZEN". So the lift does not UNBLOCK a layout;
 //          somebody must AUTHOR one, and that is an ABI freeze.
-//        * THE PRODUCER IS ~17,568 BITS OF ASYNCHRONOUS-READ STORE, UNPRICED.
+//
+//          AUTHORED AND FROZEN 2026-09-21 (POSEABI), and HALF OF THAT
+//          CITATION WAS STALE. Two of the four places checked in-tree:
+//          `spec/creature_rules.md` 2.1 is headed "Storage (FROZEN; the Q
+//          formats are frozen -- qformats 7.6, C1)" and gives the kind-9
+//          bytes outright (12 B root displacement then bone_count x 8 B,
+//          <= 268 B/frame at 32 bones), and `spec/qformats.md` 7.6 ratifies
+//          the `quat16` lane format under AMENDMENT C1 -- four s16 lanes,
+//          S 1.0.14, hemisphere-canonical -- which is the very change
+//          control `zref_creature.hpp`'s note flags. That note was stale and
+//          is corrected there. **THE KIND-9 CLIP FRAME WAS ALREADY FROZEN,** 
+//          bytes and lane semantics both; what it lacks is a PRODUCER.
+//
+//          Only the kind-8 BODY needed authoring, and it now exists: a
+//          64-byte body header at `body_off` then one 32-byte bone record
+//          each, stated in `tools/pack/mkcreatureladder.py`, the
+//          `zref::creature_page::body` namespace and `zhao_geom_bonesrc.sv`,
+//          and pinned by ONE artefact -- the second golden,
+//          `ladder_page_body_v1.bin`. `inv_rest` is THREE numbers rather
+//          than a 3x4 matrix because `bake_skeleton` builds every one as
+//          identity rotation plus negated world-rest translation and
+//          `zref::creature::Bone` carries no rest rotation at all, so nine
+//          of twelve elements are the constants 65536 and 0.
+//
+//          THE APPEND COST NOTHING, structurally: `ladder_page_v1.bin` is
+//          BYTE-IDENTICAL (absent from the freeze commit's diff), and
+//          owner ruling R108's five-golden-capture fare does not apply
+//          because `spec/commands.zidl` carries no creature-page layout.
+//        * THE PRODUCER IS ~17,568 BITS OF ASYNCHRONOUS-READ STORE. PRICED
+//          2026-09-21 (POSEABI), AND THE PRICE INVERTED THE ARRANGEMENT
+//          RATHER THAN THE PACKET. quartus_map 17.0.2 on the TARGET device,
+//          standalone leaf, three arrangements from one parameterised source
+//          (`zhao_geom_bonesrc.sv`, SRC_STYLE): the asynchronous store
+//          described below costs **14,056 ALM, 33.5% of the 41,910 ceiling**,
+//          with ZERO block memory and NO MLAB inference -- Quartus puts every
+//          stored bit in registers and the 32-deep multiplexer over 549 bits
+//          costs MORE than the storage does (21,617 ALUTs against 17,665
+//          registers). The bit count below is EXACTLY RIGHT; what was
+//          unpriced was what those bits cost.
+//
+//          IT IS ALSO NOT REQUIRED, and that is the finding that matters.
+//          `bone_idx_o` is a REGISTER that moves in exactly two places
+//          (S_IDLE on start, S_EMIT on the accepted last beat) with a
+//          measured 115.4 cycles between them, so a synchronous read is
+//          short by ONE CYCLE and no more. A 2-deep prefetch buys that
+//          cycle with ~115 cycles of notice for a fetch needing seven, and
+//          the arrangement built costs **829 ALM (2.0%) plus 10,240 block
+//          memory bits** -- 17.0x cheaper, with THE DECODER UNCHANGED, not
+//          one port. So D-GEOMSEAM-A's fallback (move the decoder's
+//          combinational contract) is NOT needed and that owner decision
+//          can be closed on the cheap side.
+//
+//          WHAT REMAINS OF I29 IS THE PRODUCER, NOT THE STORE. Nothing
+//          FILLS `zhao_geom_bonesrc` yet: the kind-8/kind-9 page reader and
+//          the sixth `u_geom_mem_adapter` requester are R90's item 3 and
+//          were not reached. Composing a store with no producer would MOVE
+//          this entry rather than close it, so it was deliberately not
+//          composed and this entry stands. THE BYTES ARE NO LONGER THE GAP.
 //          `zhao_geom_pose_decode.sv:89-92` makes the fetch COMBINATIONAL BY
 //          CONTRACT and `:146` drives `bone_idx_o` combinationally, so per bone
 //          the caller owes 5 + 3*32 + 4*16 + 12*32 = 549 bits, held stable for

@@ -40,8 +40,22 @@
 //                          29-7 no host floats in deterministic paths —
 //                             everything below is integer-only
 //
-// QUATERNION LANE FORMAT (PROPOSED, NOT FROZEN — flags the qformats 13
-// change control): S 1.0.14 per lane, i.e. raw = round_half_up(q * 2^14),
+// QUATERNION LANE FORMAT — **FROZEN**, and this note used to say "PROPOSED,
+// NOT FROZEN" for longer than it was true. Corrected 2026-09-21 (POSEABI),
+// because owner ruling R90's amendment cited this line as evidence that the
+// kind-9 clip frame has no defined layout, and it is the qformats 13 change
+// control it flags that settled it: `spec/qformats.md` §7.6 ratifies the lane
+// format under **amendment C1** (QFMT_VERSION 1 -> 2), and §7's format table
+// restates it. `spec/creature_rules.md` §2.1 is headed "Storage (frozen; the Q
+// formats are frozen — qformats §7.6, C1)" and gives the bytes outright: 12 B
+// of root displacement then bone_count x 8 B, <= 268 B/frame at 32 bones.
+//
+// A STALE "not frozen" NOTE IS A FALSE ABSENCE, and it cost a ruling: a reader
+// who greps this file finds a disclaimer and concludes the layout must be
+// authored, when it was authored and ratified two amendments ago. What IS
+// still absent for kind 9 is a PRODUCER, not a layout.
+//
+// The format: S 1.0.14 per lane, i.e. raw = round_half_up(q * 2^14),
 // |raw| <= 16384, packed s16[4] = the 8 B/bone/frame of creature_rules 2.1.
 // Decode = the 9-product quat->matrix formula, ONE rescale(.,11) per
 // element, NO renormalization (GEOM.POSE contract). The measured worst-case
