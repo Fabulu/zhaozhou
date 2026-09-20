@@ -147,4 +147,6 @@ PASS s-walk-pairing rc=1 exp=1 | MUTANT] restore the packet-5 one-bone-early den
 PASS e-live-history-normal rc=0 exp=0 | PASS: no persistent history on any live Manafold subject
 PASS e-live-history-legacy rc=0 exp=0 | CONTROL legacy: HISTORY detector fired on every live subject -- OK
 PASS e-live-history-list-drift rc=0 exp=0 | CONTROL list-drift: LIST detector fired -- OK
-total 149 pass 149 fail 0
+PASS e-identity-carried crcs=[0x79D3F0C5 0x0710E704 0xC81598AA ] want=[0x79D3F0C5 0x0710E704 0xC81598AA ]
+PASS e-identity-legacy crcs=[0xE6DD5EBA 0xDE1F5918 0x75BC4777 ] want=[0xE6DD5EBA 0xDE1F5918 0x75BC4777 ]
+total 151 pass 151 fail 0

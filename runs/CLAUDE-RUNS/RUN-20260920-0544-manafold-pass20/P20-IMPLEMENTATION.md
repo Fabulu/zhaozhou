@@ -447,3 +447,25 @@ Two NUL bytes that a heredoc had written into `'\0'` character literals in
 `apply_knead_dip_env` were replaced with proper escapes. They compiled and
 behaved correctly (gcc: "null character(s) preserved in literal"), but a source
 file with raw NULs in it is a trap for the next reader.
+
+---
+
+# Packet 7 — the roll-stable aim, and the dip ships
+
+Result and receipts: **`P20-PACKET7-RESULT.md`**.
+
+* `u02::shortest_arc_from_y(vx, vy, vz)` -- the minimal rotation taking +Y to a
+  target direction, as (L + vy, vz, 0, -vx) normalised into quat16. No
+  trigonometry, no accumulated twist, and the antiparallel case takes a NAMED
+  axis (+Z, the loop's fold axis) rather than whatever the arithmetic produces.
+* `u02::nodule_aim_rollstable(...)` -- nodule_aim's bookkeeping with that
+  correction. A SEPARATE function: the production nodule solve still calls
+  nodule_aim verbatim, so it is exact-off by construction rather than by a flag.
+* `kKneadDipSolver = kDent` and `kKneadDentDepthPm = 2200`: the dent ships.
+* `kKneadDipClipPm[20]` 750 -> 900 (blown), the per-clip lever this table exists
+  to be, which took the last gameplay clip to strictly lowest.
+
+The particle reaction needed no work: manafold_fx.h reads B's sag from the POSED
+rig, not from the dip's schedule, so it followed the solver change by itself.
+`ZHAO_U02_FOLD_DIP_PM=0` still reverts the mana to its version-18/19 bytes
+(inspect 0xE5C1D75B against the shipping 0xFD8D4D0E).

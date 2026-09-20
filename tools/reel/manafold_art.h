@@ -4658,12 +4658,29 @@ constexpr int32_t kKneadDipOuterLiftPm = 180;
 // bottom of the dent no span is stretched at all.
 //
 // s = kKneadDentDepthPm / 1000:  0 = the pose as it is, 1000 = B flat on the
-// chord, 2000 = the mirror. Strictly lowest needs s of about 1.35 (B passes A
-// at ~1.24 and C at ~0.8), so the by-eye ladder is over {1400, 1600, 2000}.
+// chord, 2000 = the mirror. The rest-pose arithmetic said strictly lowest
+// needed s ~ 1.35; the POSED chain gets there at s ~ 0.9, which is one more
+// reading of the art law -- the estimate was of a shape nobody was in.
+//
+// ⚠ s IS A PRODUCT, not this knob alone:
+//     s = kKneadDipClipPm[slot]/1000 * motion/1000 * dip gain/1000 * depth/1000
+// so at the shipping gain (550) and a typical clip share (750) this 2200 is
+// s ~ 0.91 at the bottom of the gesture.
+//
+// PASS 20 PACKET 7: THE DENT SHIPS ON, at depth 2200, and the number is the
+// eye's, bounded by one gate:
+//   * the ladder {2200, 2425, 2700} read as a clean kneading tube at every
+//     rung with the roll-stable aim (the slab that made packet 6 refuse the
+//     dent was the z-then-x aim's roll flip, not the fold);
+//   * G9's carrier continuity ceiling is 8 deg of angular step per 60 Hz
+//     sample and the BANK ALREADY SITS AT 7.591 with no dip at all. Depth 2200
+//     measures 7.772; 2250 measures 8.080 and is over. The ceiling was NOT
+//     moved to fit a deeper number -- the depth was chosen to fit the ceiling,
+//     which is the only honest direction for that trade.
 enum class KneadDipSolver : uint8_t { kCarried, kDent };
-constexpr KneadDipSolver kKneadDipSolver = KneadDipSolver::kCarried;
+constexpr KneadDipSolver kKneadDipSolver = KneadDipSolver::kDent;
 inline KneadDipSolver g_u02_knead_dip_solver = kKneadDipSolver;
-constexpr int32_t kKneadDentDepthPm = 2000;
+constexpr int32_t kKneadDentDepthPm = 2200;
 inline int32_t g_u02_knead_dent_depth_pm = kKneadDentDepthPm;
 // Slides the crossing point along the chord from B's foot, per mille of |AC|,
 // to redistribute the ~102 mm the two interior spans must give up AT the
@@ -4676,6 +4693,18 @@ inline int32_t g_u02_knead_dent_cross_pm = kKneadDentCrossPm;
 // REDUCE an existing excursion.
 constexpr int32_t kKneadDentAmbientDuckPm = 1000;
 inline int32_t g_u02_knead_dent_ambient_duck_pm = kKneadDentAmbientDuckPm;
+// ---- PASS 20 PACKET 7: the roll-stable aim's declared degenerate axis ------
+//
+// At b = -a the shortest arc is not unique: every axis perpendicular to the
+// segment turns it through a half circle onto the target. `shortest_arc_from_y`
+// therefore does not let the arithmetic pick one -- it asks here. +Z is the
+// loop's own fold axis, so a fully reversed segment folds in the plane the
+// creature already bends in rather than rolling out of it; kTiltX is the
+// out-of-plane alternative, kept as a knob because this is an art choice about
+// which way a reversal reads, not a mathematical one.
+enum class NoduleAimFlipAxis : uint8_t { kFoldZ, kTiltX };
+constexpr NoduleAimFlipAxis kNoduleAimFlipAxis = NoduleAimFlipAxis::kFoldZ;
+
 // ---- PASS 20 PACKET 6: THE SWING ------------------------------------------
 //
 // P20-SOLVER-ARCHITECTURE §R2.2. A PLANAR press must cross the A-C chord, and
@@ -4782,9 +4811,14 @@ static_assert(kFoldDipOnsetMm < kFoldDipRefMm,
               "the fold's dip onset must lie below its reference depth");
 constexpr int32_t kFoldDipGainPm = 650;
 inline int32_t g_u02_fold_dip_gain_pm = kFoldDipGainPm;
+// ⚠ SLOT 20 (blown) CARRIES 900 RATHER THAN 750. It is the one gameplay clip
+// whose pose kept B above the ranking at the shipping depth (-26 mm, R5), and
+// the per-clip share is the lever this table exists to be. The two clips still
+// short of the ranking after it are 15 (the lab diagnostic) and 16
+// (nodule-solo) -- diagnostics, excluded by the owner's own carve-out.
 constexpr int kKneadDipClipPm[23] = {1000, 900, 950, 900, 800, 850, 900,
                                      0,    850, 700, 750, 900, 800, 0,   700,
-                                     750,  750, 700, 650, 900, 750, 0, 800};
+                                     750,  750, 700, 650, 900, 900, 0, 800};
 static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
                               sizeof(kKneadDipClipPm[0])) == kKneadClipSlots,
               "the dip gain table must stay in step with kKneadClipPm");

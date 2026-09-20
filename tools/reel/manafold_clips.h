@@ -645,6 +645,87 @@ inline void nodule_aim(zc::quat16& local, zc::quat16& Q, int32_t len,
   pz += dz;
 }
 
+/** PASS 20 PACKET 7: THE ROLL-STABLE AIM.
+ *
+ *  `nodule_aim` builds its correction as quat_z(aim_z) * quat_x(aim_x). That
+ *  lands the segment on its target, but the ROLL it leaves about the segment's
+ *  own axis is whatever the decomposition happens to produce -- and the
+ *  decomposition is degenerate when the target leaves the parent's XY plane,
+ *  because aim_z is then the angle of a vanishing projection. The dent's swing
+ *  sends B exactly there, and the measured cost was **55-80 degrees of frame
+ *  rotation in a single 60 Hz sample** on a carrier whose POSITION was moving
+ *  smoothly: a roll flip, against G9's 8 degree ceiling.
+ *
+ *  This is the minimal rotation instead: the shortest arc taking the segment's
+ *  current direction (+Y in the parent frame) to the target direction. Its axis
+ *  is perpendicular to both, so it introduces NO twist about the segment, and
+ *  it is a function of the two directions alone -- nothing accumulates.
+ *
+ *      a = (0,1,0), b = v/|v|;  q ~ (1 + a.b, a x b) = (L + vy, vz, 0, -vx)/N
+ *
+ *  which needs no trigonometry at all: one isqrt64 for L, one for the norm.
+ *
+ *  ⚠ THE ANTIPARALLEL CASE HAS A NAMED AXIS. At b = -a every perpendicular axis
+ *  is a shortest arc, so the choice must be declared rather than fall out of
+ *  the arithmetic: `kNoduleAimFlipAxis` (manafold_art.h) names it, and it is
+ *  +Z, the loop's own fold axis, so a fully reversed segment folds in the plane
+ *  the creature already bends in rather than rolling out of it.
+ */
+inline zc::quat16 shortest_arc_from_y(int32_t vx, int32_t vy, int32_t vz) {
+  const int64_t x = vx, y = vy, z = vz;
+  const int64_t len = isqrt64(x * x + y * y + z * z);
+  if (len == 0) return zc::quat16{{zc::kQuatOne, 0, 0, 0}};
+  if (x == 0 && z == 0) {
+    if (y >= 0) return zc::quat16{{zc::kQuatOne, 0, 0, 0}};
+    // THE NAMED AXIS. A half turn about the declared axis, not about whichever
+    // one the arithmetic would have produced from a vanishing cross product.
+    return kNoduleAimFlipAxis == NoduleAimFlipAxis::kFoldZ
+               ? zc::quat16{{0, 0, 0, zc::kQuatOne}}
+               : zc::quat16{{0, zc::kQuatOne, 0, 0}};
+  }
+  const int64_t qw = len + y, qx = z, qy = 0, qz = -x;
+  const int64_t n = isqrt64(qw * qw + qx * qx + qy * qy + qz * qz);
+  if (n == 0) return zc::quat16{{0, 0, 0, zc::kQuatOne}};
+  const auto s = [&](int64_t c) {
+    const int64_t mag = c < 0 ? -c : c;
+    int64_t r = (mag * zc::kQuatOne + n / 2) / n;
+    if (r > zc::kQuatOne) r = zc::kQuatOne;
+    return static_cast<int16_t>(c < 0 ? -r : r);
+  };
+  return zc::quat16{{s(qw), s(qx), s(qy), s(qz)}};
+}
+
+/** `nodule_aim`'s bookkeeping -- the same `want`, the same reported delta, the
+ *  same advance onto the target -- with the roll-stable correction above in
+ *  place of the z-then-x one.
+ *
+ *  ⚠ IT IS A SEPARATE FUNCTION ON PURPOSE. The production nodule solve keeps
+ *  `nodule_aim` verbatim, so the shipping carriers do not move by a single
+ *  LSB; only the dent, which is new, aims this way. */
+inline void nodule_aim_rollstable(zc::quat16& local, zc::quat16& Q, int32_t len,
+                                  int32_t& px, int32_t& py, int32_t& pz,
+                                  int32_t tx, int32_t ty, int32_t tz,
+                                  int32_t* short_pm = nullptr,
+                                  int32_t* delta_mm = nullptr) {
+  const int64_t dx_target = tx - px, dy_target = ty - py, dz_target = tz - pz;
+  const int64_t want = isqrt64(dx_target * dx_target + dy_target * dy_target +
+                               dz_target * dz_target);
+  if (short_pm != nullptr)
+    *short_pm = len > 0 ? static_cast<int32_t>(((want - len) * 1000) / len) : 0;
+  if (delta_mm != nullptr) *delta_mm = static_cast<int32_t>(want - len);
+  int32_t vx, vy, vz;
+  quat_rot_vec(quat_conj(Q), tx - px, ty - py, tz - pz, vx, vy, vz);
+  const zc::quat16 corr = shortest_arc_from_y(vx, vy, vz);
+  local = quat_mul(local, corr);
+  Q = quat_mul(Q, corr);
+  int32_t dx, dy, dz;
+  const int32_t solved_len = delta_mm != nullptr ? static_cast<int32_t>(want) : len;
+  quat_rot_vec(Q, 0, solved_len, 0, dx, dy, dz);
+  px += dx;
+  py += dy;
+  pz += dz;
+}
+
 /** PASS 20 PACKET 6: THE ONE LOOP WALK.
  *
  *  Walks the loop chain from the tube base through `spans` segments (0 <= spans
@@ -939,8 +1020,8 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     zc::quat16 NQ = Q1;
     int32_t p2x = pax, p2y = pay, p2z = paz;
     int32_t d1 = 0, d2 = 0;
-    nodule_aim(g.q[kBHingeA], NQ, kLoopArcMm[2], p2x, p2y, p2z,
-               btx, bty, btz, &g.span_pm[1], &d1);
+    nodule_aim_rollstable(g.q[kBHingeA], NQ, kLoopArcMm[2], p2x, p2y, p2z,
+                          btx, bty, btz, &g.span_pm[1], &d1);
     // ⚠ RENORMALISE EVERY QUAT THE AIM TOUCHED. quat16_to_mat3 scales a vector
     // by |q|^2, so a local rotation left a few LSB short SHORTENS the segment
     // the closure walk then rebuilds from it, and the dent adds two products
@@ -955,8 +1036,8 @@ inline void loop_pose(Rig& g, int32_t neck_pm, int32_t a_pm, int32_t b_pm, int32
     NQ = zc::quat16_nlerp(NQ, NQ, 1, 2);
     g.set_span_delta(1, d1);
     NQ = quat_mul(NQ, g.q[kBHingeB]);
-    nodule_aim(g.q[kBHingeB], NQ, kLoopArcMm[3], p2x, p2y, p2z,
-               pcx, pcy, pcz, &g.span_pm[2], &d2);
+    nodule_aim_rollstable(g.q[kBHingeB], NQ, kLoopArcMm[3], p2x, p2y, p2z,
+                          pcx, pcy, pcz, &g.span_pm[2], &d2);
     g.q[kBHingeB] = zc::quat16_nlerp(g.q[kBHingeB], g.q[kBHingeB], 1, 2);
     NQ = zc::quat16_nlerp(NQ, NQ, 1, 2);
     g.set_span_delta(2, d2);

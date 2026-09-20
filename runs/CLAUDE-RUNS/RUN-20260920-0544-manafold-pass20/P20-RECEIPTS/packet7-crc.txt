@@ -1,0 +1,14 @@
+PACKET 7 shipping (kKneadDipSolver=kDent, kKneadDentDepthPm=2200, swing 1000):
+  manafold-hover:   600 frames  sequence_crc32c=0xC8FAD499
+  manafold-inspect: 600 frames  sequence_crc32c=0xFD8D4D0E
+  manafold-still:     4 frames  sequence_crc32c=0x138FE8B0   (unchanged: authors no dip)
+  manafold-taunt3:  368 frames  sequence_crc32c=0xC81598AA   (unchanged: authors no dip)
+IDENTITY, ZHAO_U02_KNEAD_DIP_SOLVER=carried -- the packet-5 bank, 4/4:
+  0x79D3F0C5  0x0710E704  0x138FE8B0  0xC81598AA
+IDENTITY, ... plus ZHAO_U02_REAR_BOW=legacy -- the pass-19 bow at b7c096c2, 3/3:
+  0xE6DD5EBA  0xDE1F5918  0x75BC4777
+PARTICLE EXACT-OFF, ZHAO_U02_FOLD_DIP_PM=0:
+  manafold-inspect 0xE5C1D75B (differs from the shipping 0xFD8D4D0E, so the
+  fold's reaction is tied to the dip that ships)
+Renderer md5 d8dcb918c9f6f7a7560479abaee0799f, built from the committed source.
+Gate matrix: 151 legs, 151 PASS, 0 FAIL (gate-matrix.txt).

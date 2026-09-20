@@ -39,9 +39,23 @@ runmask r-line-flag 0x4 "$B/manafold-rear-audit.exe" --fail-line-flag
 # pass 20: R4 STRAIN + R5 DIP
 runmask r-rear-strain 0x8 "$B/manafold-rear-audit.exe" --fail-rear-strain
 runmask r-no-dip 0x10 "$B/manafold-rear-audit.exe" --fail-no-dip
-# the dip ships OFF (mspan contract, see manafold_art.h): this leg judges R5
-# with it ON, so the mechanism is proven rather than merely switched off.
+# PASS 20 PACKET 7: the dip now ships ON, through the DENT solver. This leg
+# judges R5 on the shipping configuration; the two legs below hold the CARRIED
+# solver and the pass-19 bow to their exact bytes, so switching the mechanism
+# on cannot hide a change to the one it replaced.
 run n-mrear-dip 0 "$B/manafold-rear-audit.exe" --gate --dip
+# identity: the carried solver and the pass-19 bow, byte for byte
+crcs() { grep -oE 'manafold-[a-z0-9]+:.*crc32c=0x[0-9A-F]+' "$1" | grep -oE '0x[0-9A-F]+' | tr '
+' ' '; }
+idleg() { # id expected-crcs env...
+  local id="$1" want="$2"; shift 2
+  mkdir -p "$L/$id"
+  env ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross "$@" "$R" "$L/$id"       manafold-hover manafold-inspect manafold-taunt3 > "$L/$id.log" 2>&1
+  local got; got=$(crcs "$L/$id.log")
+  local st=FAIL; [ "$got" = "$want" ] && st=PASS
+  echo "$st $id crcs=[$got] want=[$want]" >> "$OUT"
+  rm -rf "$L/$id"
+}
 # mspan controls
 for s in F-A A-B B-C C-E; do run s-rigid-$s 1 "$B/manafold-spangate.exe" --fail-rigid-span $s; done
 for s in F-A A-B B-C C-E; do run s-clamp-$s 1 "$B/manafold-spangate.exe" --fail-clamp-negative $s; done
@@ -127,4 +141,6 @@ LH="python $REPO/tools/reel/manafold_live_history_gate.py --renderer $R"
 run e-live-history-normal 0 $LH --out "$L/lh-normal"
 run e-live-history-legacy 0 $LH --out "$L/lh-legacy" --control legacy
 run e-live-history-list-drift 0 $LH --out "$L/lh-drift" --control list-drift
+idleg e-identity-carried "0x79D3F0C5 0x0710E704 0xC81598AA " ZHAO_U02_KNEAD_DIP_SOLVER=carried
+idleg e-identity-legacy "0xE6DD5EBA 0xDE1F5918 0x75BC4777 " ZHAO_U02_KNEAD_DIP_SOLVER=carried ZHAO_U02_REAR_BOW=legacy
 echo "total $(wc -l < "$OUT") pass $(grep -c '^PASS' "$OUT") fail $(grep -c '^FAIL' "$OUT")"

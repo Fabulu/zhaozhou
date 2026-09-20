@@ -172,3 +172,36 @@ experiment, and the strict selector above still rejects anything past it.
 `kSpanStretchMaxPm`, `kSpanCompactionMinPm`, `kSpanMinRunMm`, every R1..R5
 ceiling, G5..G10's thresholds, and `kAntennaMaxAngularStepDeg/AccelDeg/JerkDeg`
 (8/6/6) — which is what the swing fails, and it was left exactly where it was.
+
+---
+
+## Packet 7 (2026-09-20)
+
+### NO gate threshold changed, and one was deliberately NOT changed
+
+`kAntennaMaxAngularStepDeg` stays at 8 degrees. The roll-stable aim brought the
+dent's worst angular step from 55-80 deg to 7.772, and the shipping DEPTH was
+then chosen to fit that ceiling (2200 measures 7.772; 2250 measures 8.080 and is
+over). The ceiling was never a candidate for moving: a gate that the art value
+has to fit is doing its job, and an 8 that becomes a 9 to admit a number is the
+loosening this pass exists to avoid.
+
+### NEW matrix legs: byte identity, in the matrix rather than in a receipt
+
+`e-identity-carried` and `e-identity-legacy` render hover / inspect / taunt3 and
+compare the CRCs against literals in the script:
+
+* `ZHAO_U02_KNEAD_DIP_SOLVER=carried` -> `0x79D3F0C5 0x0710E704 0xC81598AA`,
+  the packet-5 shipping bytes. The solver the dent replaces is provably
+  untouched.
+* `... REAR_BOW=legacy` -> `0xE6DD5EBA 0xDE1F5918 0x75BC4777`, the pass-19 bow
+  path at `b7c096c2`.
+
+These were checked by hand every packet and written into a markdown file, which
+is exactly how a receipt goes stale. They are now legs that fail.
+
+### The dip ships ON
+
+`n-mrear-dip` now judges R5 on the shipping configuration rather than on a knob
+turned on for the leg. The comment that said "the dip ships OFF" was updated
+with it.

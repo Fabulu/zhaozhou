@@ -304,3 +304,29 @@ same invocation.
   range 4000 -> 6000 (a range, not a bound; no gate reads it). Nothing relaxed.
 - Ship state unchanged: kKneadDipSolver = kCarried, dent OFF, bank bytes equal.
 - Gate matrix 149/149 PASS, 0 FAIL (P20-RECEIPTS/gate-matrix.txt).
+
+### 2026-09-20 - PACKET 7: the roll-stable aim, and the dip SHIPS
+- shortest_arc_from_y + nodule_aim_rollstable: the minimal rotation from +Y to
+  the target direction, so the aim leaves NO twist about the segment. Separate
+  function; the production nodule solve keeps nodule_aim verbatim, so it is
+  exact-off by construction.
+- G9 worst angular step on a visible carrier: 55-80 deg (packet 6) -> 7.772 deg
+  at depth 2200, against an 8 deg ceiling that was NOT moved. 2250 measures
+  8.080 and is over, so 2200 is the deepest the ceiling admits. Accel 5.040 and
+  jerk 5.000 are both below the no-dip bank's own 5.280 / 5.247.
+- THE SLAB WAS THE ROLL FLIP, not the fold. With the roll-stable aim every rung
+  of the ladder {2200, 2425, 2700} reads as a continuous kneading tube on
+  Inspect and Hover. Packet 6's verdict is retracted with its cause named.
+- SHIPPING: kKneadDipSolver = kDent, kKneadDentDepthPm = 2200, swing 1000,
+  overpress 0. R5: 21 clips author a dip, 19 reach strictly lowest, 0 fail to
+  return. The two misses are slot 15 (lab diagnostic, -191 mm) and slot 16
+  (nodule-solo diagnostic, -74 mm); both are diagnostics. Slot 20 (blown) took
+  the per-clip lever, kKneadDipClipPm[20] 750 -> 900, from -26 mm to lowest.
+- Identity: SOLVER=carried reproduces the packet-5 bytes 4/4; adding
+  REAR_BOW=legacy reproduces b7c096c2 3/3. Still and Taunt III are unchanged by
+  the dent shipping because neither authors a dip. Both identity checks are now
+  MATRIX LEGS (e-identity-carried, e-identity-legacy) rather than a markdown
+  receipt that goes stale.
+- Particle reaction rides along: manafold_fx.h reads B's sag from the posed rig,
+  and ZHAO_U02_FOLD_DIP_PM=0 still reverts the mana to its old bytes.
+- Gate matrix 151/151 PASS, 0 FAIL, including both byte-identity legs.
