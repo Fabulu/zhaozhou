@@ -2323,6 +2323,12 @@ targets:
       - fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
       - fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
       - fpga/rtl/terrain/zhao_terrain_bake_v2.sv
+      # ...and its ONE child, added 2026-09-20 under OWNER RULING R194: the
+      # layer-F reader that spec/terrain_rules.md 9.3's two stamp-to-bake laws
+      # live in. v2 instantiated NO child before this, so a source list that
+      # named only the parent was complete and is not any more -- and a missing
+      # source does not shrink the design, it kills the fit at elaboration.
+      - fpga/rtl/terrain/zhao_terrain_stampdepth.sv
       - fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
       - fpga/rtl/video/zhao_renderer_lease_v2.sv
       - fpga/rtl/video/zhao_video_blit_lease_v2.sv

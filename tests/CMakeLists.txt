@@ -9097,8 +9097,13 @@ set_tests_properties(terrain_bake_random_nightly PROPERTIES LABELS "nightly" TIM
 # The rate bounds are V2's OWN declared price (24 covered / 5 uncovered against
 # v1's 19 / 2 -- the sequenced shared multiplier), so a regression past its own
 # declaration fails loudly.
+# `zhao_terrain_stampdepth.sv` joined this list 2026-09-20 under OWNER RULING
+# R194: v2 instantiated NO child before that, so every list naming only the
+# parent was complete and none of them is any more. Verilator answers a missing
+# source with MODMISSING, which is loud; Quartus answers it hours into a fit.
 set(ZHAO_TERRAIN_BAKE_V2_SV
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake_v2.sv
+    ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_stampdepth.sv
     ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_bake_delta.sv)
 
 add_executable(test_terrain_bake_v2_directed terrain/terrain_bake_directed.cpp)
@@ -9117,6 +9122,31 @@ verilate(test_terrain_bake_v2_directed
   SOURCES ${ZHAO_TERRAIN_BAKE_V2_SV})
 add_test(NAME terrain_bake_v2_directed COMMAND test_terrain_bake_v2_directed)
 set_tests_properties(terrain_bake_v2_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# ---------------------------------------------------------------------------
+# OPTION A's SECOND DEPTH MODE -- the per-vertex layer-F dig, added 2026-09-20
+# under OWNER RULING R194 ("Shipped is fine. Slightly different but not off.").
+#
+# The target above holds the PARAMETRIC DISC to `zref::terrain::bake_dig`, 267
+# checks, and must go on passing UNCHANGED -- that is the evidence the new mode
+# is additive rather than a rewrite. This one holds the sheet mode to
+# `zref::terrain::stamp_depth_at_vertex` and fires `sheet_vertices_dug_o`, with
+# a disc record as the negative control in the same executable.
+#
+# It does NOT share `bake_dev.hpp`: that driver is a template over BOTH v1 and
+# v2 and naming a port only v2 has would break the v1 targets, so this file
+# carries its own driver deliberately.
+add_executable(test_terrain_bake_v2_sheet_directed terrain/terrain_bake_v2_sheet_directed.cpp)
+target_link_libraries(test_terrain_bake_v2_sheet_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_terrain_bake_v2_sheet_directed PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/terrain)
+verilate(test_terrain_bake_v2_sheet_directed
+  PREFIX Vzhao_terrain_bake_v2
+  TOP_MODULE zhao_terrain_bake_v2
+  VERILATOR_ARGS -Wall
+  SOURCES ${ZHAO_TERRAIN_BAKE_V2_SV})
+add_test(NAME terrain_bake_v2_sheet_directed COMMAND test_terrain_bake_v2_sheet_directed)
+set_tests_properties(terrain_bake_v2_sheet_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
 # ---------------------------------------------------------------------------
 # THE POSITIVE CONTROL FOR V2'S MEETS-PLANE ROW WINDOW -- ruling R93.
@@ -9142,7 +9172,10 @@ target_include_directories(test_terrain_bake_v2_mutant_control PRIVATE
 verilate(test_terrain_bake_v2_mutant_control
   PREFIX Vzhao_terrain_bake_v2
   TOP_MODULE zhao_terrain_bake_v2_mutant
-  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_bake_v2_mutant.sv)
+  # The mutant is a COPY of the parent and instantiates the same real child --
+  # the layer-F reader is not what is mutated and must not be duplicated.
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_terrain_bake_v2_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_stampdepth.sv)
 add_test(NAME terrain_bake_v2_mutant_control COMMAND test_terrain_bake_v2_mutant_control)
 set_tests_properties(terrain_bake_v2_mutant_control PROPERTIES
                      LABELS "fast;nightly;mutant" TIMEOUT 600)
@@ -10087,6 +10120,24 @@ add_executable(test_stamp_to_bake_laws_directed terrain/stamp_to_bake_laws_direc
 target_link_libraries(test_stamp_to_bake_laws_directed PRIVATE zhao_zref)
 add_test(NAME stamp_to_bake_laws_directed COMMAND test_stamp_to_bake_laws_directed)
 set_tests_properties(stamp_to_bake_laws_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
+# ...AND THE SAME TWO LAWS IN SILICON, added 2026-09-20 under OWNER RULING R194.
+# The target above is pure zref and proves the REFERENCE is right; it says
+# nothing about RTL, and until R194 accepted the nearest-texel rim by looking
+# ("Shipped is fine. Slightly different but not off.") there was no RTL to
+# check -- the core's entry I32 records a search of all of fpga/rtl for these
+# law names returning ZERO HITS. `zhao_terrain_stampdepth` is that silicon and
+# this is the exhaustive differential: every one of the 33x33 vertices against
+# the address law, all 256 strengths against the art table, and the composed
+# law over a rim-crossing disc sheet.
+add_executable(test_terrain_stampdepth_directed terrain/terrain_stampdepth_directed.cpp)
+target_link_libraries(test_terrain_stampdepth_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_terrain_stampdepth_directed
+  PREFIX Vzhao_terrain_stampdepth
+  TOP_MODULE zhao_terrain_stampdepth
+  VERILATOR_ARGS -Wall
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_stampdepth.sv)
+add_test(NAME terrain_stampdepth_directed COMMAND test_terrain_stampdepth_directed)
+set_tests_properties(terrain_stampdepth_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 # ---------------------------------------------------------------------------
 # THE PAGE-LOAD DEVIATION PATH (owner rulings R22/R24/R59):
 #   zhao_terrain_lodfeed (the mip pass's fine stream, buffered, walked)

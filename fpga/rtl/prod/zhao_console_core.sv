@@ -2924,27 +2924,49 @@
 //      >> written against (`spec/terrain_rules.md` 9.3(c)'s closing line says
 //      >> so in as many words).
 //
-//      >> AND IT IS STILL NOT BUILDABLE TODAY, FOR A REASON THAT IS AN ART
-//      >> JUDGEMENT AND NOT AN ENGINEERING ONE. Option A needs a layer-F
-//      >> reader, and a layer-F reader IS an implementation of 9.3(b)'s
-//      >> `sheet_texel_for_vertex` -- the NEAREST-TEXEL fallback whose
-//      >> acceptability is the open question of ruling **R65**. R65 owes the
-//      >> OWNER'S EYE a render of a dig across a patch seam; the render was
-//      >> made (`reports/terrain-seam-dig/seam_dig_contact.png`) and it CHANGED
-//      >> THE QUESTION rather than answering it. Section 9.3(c) records the
-//      >> finding: the fallback "does not produce a visible CRACK ALONG THE
-//      >> SEAM. It produces a rim that is wrong by up to one vertex,
-//      >> EVERYWHERE, and the seam is one of the places it is wrong."
+//      >> AND THE ART JUDGEMENT THAT BLOCKED IT HAS BEEN MADE. **OWNER RULING
+//      >> R194, 2026-09-20, BY LOOKING: "Shipped is fine. Slightly different
+//      >> but not off."** The nearest-texel rim is ACCEPTED, the terrain page
+//      >> format is FROZEN AT 64x64, and `sheet_texel_for_vertex` stands as
+//      >> written -- it does NOT become the identity. The reader's ADDRESS
+//      >> GENERATOR was exactly the contested thing, and it is decided; every
+//      >> later terrain block inherits the 64x64 format.
 //      >>
-//      >> Whether a rim wrong by up to one vertex everywhere is acceptable is
-//      >> a question nobody has put to the owner, and only looking settles it.
-//      >> If the answer is no, the page format moves to a vertex-aligned 65x65
-//      >> and `sheet_texel_for_vertex` becomes the identity -- so the reader's
-//      >> address generator is EXACTLY the contested thing. Building it now
-//      >> would commit the silicon to a format decision the owner has not
-//      >> made, which is why terrain7 did not build it. The depth table
-//      >> (9.3(a), `kStampDepthTable`) is format-INDEPENDENT and could be
-//      >> built today; on its own it would be a block nothing drives.
+//      >> This paragraph used to end "building it now would commit the silicon
+//      >> to a format decision the owner has not made, which is why terrain7
+//      >> did not build it." That refusal was correct and it has EXPIRED. R116
+//      >> called this "not six failures; it is one blocker seen six times", and
+//      >> the blocker was a question nobody had been asked.
+//
+//      >> SO THE LAYER-F READER IS BUILT, 2026-09-20 (seamdig).
+//      >>   * `fpga/rtl/terrain/zhao_terrain_stampdepth.sv` -- 9.3(a)'s ART
+//      >>     TABLE (sixteen editable fx16 metres, one symmetric round on the
+//      >>     low-nibble delta, last segment HELD) and 9.3(b)'s NEAREST-TEXEL
+//      >>     address generator, in RTL for the first time. The search recorded
+//      >>     above -- all of `fpga/rtl` for these law names, ZERO HITS -- is
+//      >>     no longer true, and this is where it stopped being true.
+//      >>   * `zhao_terrain_bake_v2` gained `cmd_depth_sheet_i`, `sheet_texel_o`
+//      >>     and `sheet_strength_i`, plus `sheet_vertices_dug_o`. The DISC law
+//      >>     did not move: `terrain_bake_v2_directed` still passes 267/267.
+//      >>   * `tests/terrain/terrain_stampdepth_directed.cpp` -- 6,505 checks,
+//      >>     every one of the 33x33 vertices and all 256 strengths against
+//      >>     zref, plus the composed law over a seam-tangent disc.
+//      >>   * `tests/terrain/terrain_bake_v2_sheet_directed.cpp` -- 6,548
+//      >>     checks. `sheet_vertices_dug_o` FIRED at 255 on a sheet record and
+//      >>     stayed at 0 on a disc record carrying the same sheet, which is
+//      >>     the positive and the negative control in one executable.
+//      >>
+//      >> THIS DOES NOT CLOSE THIS ENTRY, and the dossier said so before the
+//      >> decision was taken: `design/contracts/TERRAIN.PAGEIO.md` section 8 --
+//      >> "I32 does not close on this block alone." What R194 removed is one of
+//      >> the FOUR things holding TERRAIN.BAKE out of this module, and it was
+//      >> the smallest. The other three are below and in
+//      >> `zhao_terrain_bake_v2.sv`'s own header: layer D has no reader
+//      >> anywhere in the machine (needed on TWO of bake's ports), `sc_*` --
+//      >> the layer-B scar writeback -- has no consumer anywhere, and nothing
+//      >> in this console writes a height layer back to a page at all. All
+//      >> three are ONE unbuilt block, TERRAIN.PAGEIO, which has a written
+//      >> contract and NO `design/blocks.yml` row.
 //
 //      A THIRD ABSENCE, AND IT IS ARBITRATION: `zhao_surface_sheet` IS COMPOSED
 //      in this module (search for `u_surface_sheet`) and holds layer F, so the

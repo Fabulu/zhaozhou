@@ -41,13 +41,128 @@
 // nothing else may move, and tests/terrain/terrain_bake_v2_directed.cpp holds
 // it to the same zref oracle the v1 suite uses, boundary for boundary.
 //
-// Law, in citation order (identical to v1 — the law did not move):
+// Law, in citation order (identical to v1 — the disc law did not move; the
+// per-vertex layer-F mode added 2026-09-20 is additive and cites §9.3):
 //   design/contracts/TERRAIN.BAKE.md — the block contract.
+//   spec/terrain_rules.md §9.3 — stamp-to-bake: the ART depth table and the
+//       nearest-texel resample, implemented by `zhao_terrain_stampdepth`.
 //   spec/terrain_rules.md §2 §3.3 §3.4 §7 §9/§9.2 — layers, corner shadow,
 //       breach law, ownership, cadence budget.
 //   spec/qformats.md §2/§3/§4/§9 — height16/fx16, rescale, round-half-up.
 //   reference/src/zterrain/terrain_core.cpp `bake_dig`, `apply_breach_law`,
 //       `zref::terrain::lattice_lerp` — THE EXECUTED LAW.
+//
+// ---------------------------------------------------------------------------
+// WHAT STOPS THIS BLOCK BEING COMPOSED — 2026-09-20 (terrain7)
+// ---------------------------------------------------------------------------
+// Kept here rather than only in `zhao_console_core.sv`'s entry I32, because
+// this is where the next person composing it will look, and three of the four
+// items below were found by re-checking a blocker that had stopped being true.
+//
+// 1. THE A/B/C READ SIDE IS SOLVED. THE LAYER-D READ SIDE IS NOT, AND
+//    `u_terrain_pagestream` already emits `v_base_o`/`v_scar_o`/`v_bottom_o`/
+//    `v_vi_o`/`v_vj_o` — this block's `vtx_base_i`/`vtx_scar_i`/`vtx_bottom_i`
+//    and its two index outputs PORT FOR PORT, same widths, same signedness,
+//    same vi=column/vj=row convention. `zhao_terrain_psmux` is the composed
+//    two-client share of that exact stream, so a third client is a widening,
+//    not a new arbiter. What is left is a CURSOR-MATCH ADAPTER (the streamer
+//    pushes, this block pulls) and `vtx_nobake_i`, which has no producer.
+//
+// 1b. **LAYER D HAS NO READER ANYWHERE IN THE MACHINE**, and this block needs
+//    it on TWO ports, one per phase. Found 2026-09-20 (terrain8) by re-checking
+//    item 1 rather than inheriting it; the correction runs in the direction of
+//    MORE missing work, which is why it had not been made.
+//      * `vtx_nobake_i` -- the sec 3.3 corner shadow, a reduction over up to
+//        four layer-D cells. The entry above already names it.
+//      * `cell_state_i` (with `cell_ci_o`/`cell_cj_o`) -- the BREACH phase's
+//        32x32 layer-D read-modify-write. NOT previously recorded anywhere.
+//    `zref_terrain_page.hpp:317` puts layer D at page offset 6,598. SEARCHED
+//    every .sv/.v/.txt/.qsf/.yml under fpga/ for 6598, `D_OFF` and kLayerDOff:
+//    ZERO hits that are a page offset (the matches are `d_off`/`rd_off` in
+//    FIELD and CMD.DMA, and the area figure "6,598 ALM"). `pagestream.sv:251`
+//    reads exactly '{A_OFF, B_OFF, C_OFF}; `pageloader` writes whole pages and
+//    reads none back; `writeback` is layer F only. This is the same shape as
+//    the layer-E absence at offset 7,622: TWO of the eight page layers have no
+//    reader, and both are on this block's critical path.
+//
+// 1c. AND THE SEAM `zhao_console_core.sv:2546-2551` NAMES IS NOT A PAGE WRITE.
+//    Mapping `cs_event_o`/`cs_sub_o`/`cs_ci_o`/`cs_cj_o` onto
+//    `zhao_terrain_compcache_front`'s `cs_we_i`/`cs_w_substance_i`/`cs_w_ci_i`/
+//    `cs_w_cj_i` is real and useful and it is an ON-CHIP MIRROR: that block has
+//    no VRAM port, and it stores `logic [1:0] sub_m` -- the SUBSTANCE field
+//    only. This block preserves sec 3.3's flag bits deliberately
+//    (`cs_state_o <= {cell_state_i[7:2], sub_out}`) and through that seam all
+//    six are DROPPED, while `cs_state_o`, the byte that carries them, has no
+//    consumer at all. Both consumers are wanted; they are different consumers,
+//    and only a page write discharges terrain_rules sec 7.
+//
+// 1d. THE FOUR UNSERVED PORTS ARE ONE BLOCK, NOT FOUR OWNERS.
+//    `design/contracts/TERRAIN.PAGEIO.md` (written 2026-09-20, NOT BUILT)
+//    specifies it: every one of them needs the same residency slot, the same
+//    generation and the same guard socket on the page pool, and this block
+//    bakes ONE record at a time with strictly sequential phases, so one agent
+//    per bake serves all four by construction. It also makes that agent the
+//    only honest writer of entry I27's `terr_dm_*`, because it is the only
+//    thing that holds the slot and generation the patch was served under.
+//
+// 2. THE WRITE SIDE IS THE REAL HOLE AND NOBODY HAD WRITTEN IT DOWN.
+//    **`sc_*`, the layer-B scar writeback, HAS NO CONSUMER ANYWHERE.**
+//    `zhao_terrain_compcache_front` accepts cell-state writes and composed
+//    heights and never a scar; `zhao_terrain_pagestream` is read-only;
+//    `zhao_terrain_writeback` writes the F SHEET, not layer B. Nothing in the
+//    closure writes a page's height layers at all. A bake whose scar cannot be
+//    stored has not deformed anything — it has computed a deformation and
+//    dropped it. The same absent block is why entry I27's deformation mark has
+//    no writer and why I28's writeback has never seen a beat.
+//
+// 3. THIS BLOCK DOES NOT DRIVE THE DEFORMATION MARK AND CANNOT.
+//    Entry I27 said "its writer is TERRAIN.BAKE". That is an INTENTION in the
+//    ledger, not a port match: there is NO slot, NO generation, NO epoch and
+//    NO per-layer dirty bit anywhere on this module. `cmd_patch_id_i` and
+//    `cmd_src_id_i` are not residency handles. Whoever drives `terr_dm_*` must
+//    hold the slot and generation the patch was served under and pair them
+//    with `bake_done_o` — a third block, not a wire.
+//
+// 4. THE PER-VERTEX DEPTH MODE IS RULED AND IS NOW **BUILT**. This item used
+//    to read "RULED AND NOT BUILDABLE YET", blocked on an ART JUDGEMENT.
+//    **OWNER RULING R194, 2026-09-20, by looking: *"Shipped is fine. Slightly
+//    different but not off."*** The nearest-texel rim is ACCEPTED, the terrain
+//    page format is FROZEN AT 64x64 and `sheet_texel_for_vertex` stands as
+//    written — it does NOT become the identity. The reader's address generator
+//    was exactly the contested thing, and it is decided.
+//
+//    So Option A is implemented, and it is the ONLY item in this list that has
+//    moved: this block KEEPS its parametric disc (`cmd_radius_i`,
+//    `cmd_depth_from_i`/`_to_i`, oracle `zref::terrain::bake_dig`, 267 directed
+//    checks, bit for bit unchanged) and has GAINED the second, per-vertex depth
+//    mode on `cmd_depth_sheet_i`, fed from layer F through
+//    `zhao_terrain_stampdepth` — spec/terrain_rules.md §9.3's two laws in RTL
+//    for the first time, oracle `zref::terrain::stamp_depth_at_vertex`,
+//    differenced exhaustively by `tests/terrain/terrain_stampdepth_directed.cpp`
+//    and driven through a whole bake by
+//    `tests/terrain/terrain_bake_v2_sheet_directed.cpp`. Do not re-open the
+//    choice; do not re-open the format.
+//
+//    WHAT IT DOES NOT CLOSE, said plainly so the next reader does not have to
+//    re-derive it: the mode needs somebody to SERVE `sheet_strength_i`, and
+//    `zhao_surface_sheet`'s request port is annotated "SURFACE.STAMP is the
+//    only requester". That share is a SCHEDULER — one small block with a
+//    contract, the shape `zhao_terrain_psmux` and `zhao_mem_share_n` already
+//    have twice. It is a smaller obstacle than items 1b, 2 and 3 above, and it
+//    is not the reason this block is uncomposed.
+//
+// AND ONE THING THAT USED TO BE HERE IS **STRUCK, BOTH HALVES**, 2026-09-20
+// (seamdig). It said `zhao_prod_top.sv` instantiates v1 and
+// `fpga/quartus/prod_fit_sources.txt` carries the v1 file. Re-measured rather
+// than inherited: `zhao_prod_top.sv` instantiates **`zhao_terrain_bake_v2`**
+// (`u59_i`), adopted by owner ruling R86, and there is no
+// `prod_fit_sources.txt` — the file is `prod_fit_sources.ORPHANED.txt`, whose
+// own first line reads "ORPHANED 2026-09-09. NOTHING READS THIS FILE. Do not
+// edit it and do not draw conclusions from it." The real closure is
+// `design/fit_targets.yml` under `- top: zhao_prod_top`, which names v2. A
+// warning that quotes a file nobody reads is worse than no warning: it sends
+// the next packet to repair something that is not broken, using evidence that
+// describes nothing.
 //
 // ---------------------------------------------------------------------------
 // WHAT MOVED, AND WHY IT IS LEGAL
@@ -114,53 +229,6 @@
 // counters, the handshake free-slot argument. Where v1's comment said why, the
 // why is unchanged and not repeated here — read v1 alongside this file.
 //
-//
-// RE-LIFTED 2026-09-20 and verified IDENTICAL. mutant_copy_drift.py flagged
-// this copy after the terrain7 merge touched production. It was re-lifted from
-// zhao_terrain_bake_v2.sv by script, renamed, and the one mutation re-applied
-// -- and the result was BYTE-IDENTICAL to what was already here, because
-// terrain7's changes were in production's HEADER and a copy keeps its own.
-// So the alarm was PROVENANCE, not content: the tool compares commit dates and
-// cannot see that a body is already current. That is the safe direction for it
-// to fail in, and this line is what clears it honestly rather than by a
-// cosmetic diff. The re-lift script REFUSES if production no longer carries the
-// line being mutated, which is the check that would have mattered.
-//
-// PROVENANCE, 2026-09-20 (terrain8, second commit): production's header gained
-// items 1b-1d -- the layer-D read absence -- in the same commit as this line.
-// THE BODY DID NOT MOVE. This line exists so mutant_copy_drift.py's provenance
-// test (it compares commit dates and cannot see that a body is already current)
-// clears honestly rather than by a cosmetic diff, exactly as the RE-LIFT note
-// above did for the same cause on the same day.
-//// RULING R93 IS DISCHARGED, 2026-09-20 (terrain8): IT HAS A DRIVER.
-//   tests/terrain/terrain_bake_v2_mutant_control.cpp
-//   ctest `terrain_bake_v2_mutant_control`    -- passes when this copy FIRES
-//   ctest `terrain_bake_v2_mutant_negative`   -- the SAME driver against
-//        PRODUCTION, WILL_FAIL: the negative control that proves the driver
-//        discriminates rather than merely runs. Without it, "the control
-//        passed" is evidence that an executable ran and none about which
-//        module it ran.
-// A driver was chosen over retirement because the fault class is real and is
-// UNREACHABLE BY LEGAL STIMULUS: the window fill is internal and no input can
-// make the prefetch land on a different row, so CLAUDE.md's committed-mutant
-// rule applies exactly. Measured at the driver's first run: 160 of 1,024
-// layer-D cells wrong on the banded fixture and 164 wrong under a real dig,
-// while layer B is bit-identical to the oracle on all 1,089 vertices and every
-// counter balances the stream it counts.
-//
-// AND THE FIRST RUN CORRECTED THIS FILE'S OWN DESCRIPTION OF ITS FAULT, which
-// is the whole of R93's argument about an unrun control. The sentence above --
-// "at each row advance `mrow_hi` receives the row the window ALREADY holds in
-// `mrow_lo`" -- is true of the FIRST advance and of no other. The slide is
-// `mrow_lo <= mrow_hi; mrow_hi <= mq` (production :865), so:
-//     window(0)     = (0, 1)       the explicit StBrA/StBrB/StBrC fill: CORRECT
-//     window(1)     = (1, 1)       the described fault, once
-//     window(cj>=2) = (cj-1, cj)   A ONE-ROW LAG, for the rest of the scan
-// The control's first fixture was built from that sentence and used a
-// row-alternating `meets` plane -- for which (cj, cj+1) and (cj-1, cj) are
-// indistinguishable -- so it reported ZERO disagreements against a mutant that
-// is genuinely broken. Three passes had read the sentence and none could have
-// caught it, because nothing had ever executed it.
 // Conservative SystemVerilog subset only (charter §2).
 
 module zhao_terrain_bake_v2_mutant (
@@ -192,6 +260,17 @@ module zhao_terrain_bake_v2_mutant (
     input  logic               cmd_dual_i,        // layer C present
     input  logic               cmd_cells_i,       // layer D present
     input  logic        [15:0] cmd_src_id_i,
+    // WHICH LAW DIGS THIS RECORD (owner decision on I32: OPTION A).
+    //   0 -- the PARAMETRIC DISC. cmd_cx/cz/radius/depth_from/depth_to with the
+    //        radial falloff, oracle `zref::terrain::bake_dig`. Unchanged, bit
+    //        for bit; a record that leaves this low behaves exactly as every
+    //        record did before 2026-09-20.
+    //   1 -- PER-VERTEX FROM LAYER F. The depth at each lattice vertex is read
+    //        from the surface sheet through `sheet_texel_o`/`sheet_strength_i`
+    //        and section 9.3's two laws, oracle
+    //        `zref::terrain::stamp_depth_at_vertex`. cmd_cx/cz/radius/depth_*
+    //        are NOT read on this path.
+    input  logic               cmd_depth_sheet_i,
     output logic        [15:0] trace_patch_id_o,  // the record under bake
 
     // -----------------------------------------------------------------------
@@ -205,6 +284,31 @@ module zhao_terrain_bake_v2_mutant (
     input  logic signed [15:0] vtx_scar_i,    // layer B in
     input  logic signed [15:0] vtx_bottom_i,  // layer C
     input  logic               vtx_nobake_i,  // §3.3 corner shadow
+
+    // -----------------------------------------------------------------------
+    // THE LAYER-F READ, for `cmd_depth_sheet_i` records only (OWNER RULING R194)
+    // -----------------------------------------------------------------------
+    // `sheet_texel_o` is combinational on the DIG cursor and is therefore valid
+    // whenever `vtx_vi_o`/`vtx_vj_o` are — it is the SAME beat, addressed by
+    // §9.3(b)'s nearest-texel law, in `zhao_surface_sheet`'s own `req_texel_i`
+    // encoding (j*64 + i, scan order). `sheet_strength_i` is sampled with
+    // `vtx_valid_i`, exactly like base/scar/bottom/nobake: the page server
+    // delivers all five together or the vertex is not ready.
+    //
+    // It is presented on EVERY record, disc or sheet, because gating a
+    // combinational address behind a mode bit buys nothing and costs a reader
+    // the ability to check the address against the cursor at a glance. Nothing
+    // reads the strength on a disc record.
+    //
+    // WHO SERVES IT is NOT this block and is not settled: `zhao_surface_sheet`
+    // is composed in `zhao_console_core` and its request port is annotated
+    // "SURFACE.STAMP is the only requester". Whatever shares that port between
+    // the stamp and this reader is a SCHEDULER — one small block with a
+    // contract, of the shape `zhao_terrain_psmux` and `zhao_mem_share_n`
+    // already have twice — and a composer may not write an arbiter inline.
+    // Entry I32 in `zhao_console_core.sv` carries this.
+    output logic        [11:0] sheet_texel_o,
+    input  logic        [ 7:0] sheet_strength_i,
 
     output logic               sc_valid_o,
     input  logic               sc_ready_i,
@@ -247,6 +351,14 @@ module zhao_terrain_bake_v2_mutant (
     // OWNER RULING 2026-08-24: MAX_BAKE_RADIUS = 512 m. Rejected, never
     // clamped, counted (v1's comment says why; the ruling did not move).
     output logic [31:0] bake_radius_rejects_o,
+    // How many vertices the PER-VERTEX LAYER-F mode has actually dug — a
+    // vertex whose sheet strength is non-zero, on a `cmd_depth_sheet_i` record.
+    // It is the counter that separates "the sheet mode ran" from "the sheet
+    // mode was wired and read zeros", which are the two readings a silent
+    // machine allows and a counter reading zero cannot distinguish (CLAUDE.md:
+    // a detector reading zero is a claim, and it is the claim to check
+    // hardest). Fired by stimulus in `terrain_bake_v2_sheet_directed`.
+    output logic [31:0] sheet_vertices_dug_o,
     output logic        idle_o
 );
 
@@ -309,6 +421,7 @@ module zhao_terrain_bake_v2_mutant (
   logic signed [31:0] c_x0, c_z0, c_x1, c_z1;
   logic signed [31:0] c_rad;  // held so radius^2 can be sequenced (StRad)
   logic               c_dual, c_cells;
+  logic               c_sheet;  // this record digs from layer F, not from the disc
   logic        [15:0] c_src;
   logic        [62:0] c_r2;  // radius^2, unsigned; 0 when radius <= 0 (B5)
   logic signed [32:0] c_spx, c_spz;  // envelope spans, captured at StRad
@@ -323,7 +436,8 @@ module zhao_terrain_bake_v2_mutant (
   // ---- the vertex under evaluation ----------------------------------------
   logic signed [15:0] h_base, h_scar, h_bottom;
   logic               h_nobake;
-  logic               v_covered;  // d2 < r2
+  logic        [ 7:0] h_strength;  // layer F at this vertex (sheet mode only)
+  logic               v_covered;  // d2 < r2, or (strength != 0) in sheet mode
 
   // ---- the stencil divider (v1, verbatim) ---------------------------------
   logic [79:0] div_rem;
@@ -490,8 +604,66 @@ module zhao_terrain_bake_v2_mutant (
   // bake_delta's own arithmetic ((0+32768)>>>16 = 0; (0+128)>>>8 = 0). The
   // covered path never skips StPfM/StPtM, so the mux below is exactly v1's
   // `stencil = v_covered ? div_quo : 0` one stage later.
-  assign delta16   = v_covered ? (g_from_c - g_to_c) : 32'sd0;
-  assign delta_sat = v_covered ? (delta_g_sat(pf_q) || delta_g_sat(mul_p[49:0])) : 1'b0;
+  // -------------------------------------------------------------------------
+  // THE SECOND DEPTH LAW — per-vertex, out of layer F (OWNER RULING R194)
+  // -------------------------------------------------------------------------
+  // `zhao_terrain_stampdepth` is spec/terrain_rules.md §9.3's two laws: the
+  // nearest-texel address generator §9.3(b) and the sixteen-entry ART TABLE
+  // §9.3(a). Its oracle is `zref::terrain::stamp_depth_at_vertex` and
+  // `tests/terrain/terrain_stampdepth_directed.cpp` differences it exhaustively
+  // — every one of the 33x33 vertices and all 256 strengths.
+  //
+  // ONE INSTANCE SERVES BOTH HALVES, and that is a property of the block rather
+  // than a coincidence: its `texel_o` depends on `vi_i`/`vj_i` ALONE and its
+  // depth outputs depend on `strength_i` ALONE — two independent combinational
+  // paths through one file. So the address comes out against the LIVE DIG
+  // cursor (valid with `vtx_vi_o`/`vtx_vj_o`, which is what the page server
+  // needs) while the depth comes out against the REGISTERED strength captured
+  // at StVtx (which is what StEmit needs, one state later). The independence is
+  // ASSERTED, not assumed: `terrain_stampdepth_directed` case 1 sweeps the
+  // cursor with the strength held and case 2 sweeps the strength with the
+  // cursor held, and `terrain_bake_v2_sheet_directed` checks the address
+  // against the cursor on every beat of a whole bake.
+  logic        [11:0] sd_texel;
+  logic signed [31:0] sd_depth_h16;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // `depth_fx16_o` is the law's own intermediate and is brought out of the
+  // reader for its directed test, not for this block: bake's scar arithmetic
+  // is height16 and consuming the fx16 word here would mean rounding it twice.
+  logic signed [31:0] sd_depth_fx16;
+  logic               sd_covered;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_terrain_stampdepth u_stampdepth (
+      .vi_i        (vi),
+      .vj_i        (vj),
+      .texel_o     (sd_texel),
+      .strength_i  (h_strength),
+      .depth_fx16_o(sd_depth_fx16),
+      .depth_h16_o (sd_depth_h16),
+      .covered_o   (sd_covered)
+  );
+
+  assign sheet_texel_o = sd_texel;
+
+  // THE MUX IS THE WHOLE OF OPTION A. An uncovered vertex contributes zero on
+  // BOTH paths, so the three-way select collapses to "which law computed the
+  // delta", and the disc arm is v1's expression untouched — a record that
+  // leaves `cmd_depth_sheet_i` low is bit-identical to every record this block
+  // has ever baked. That is what makes the mode ADDITIVE and independently
+  // testable, and it is why `terrain_bake_v2_directed`'s 267 checks still hold
+  // the disc law with nothing changed.
+  assign delta16 = !v_covered ? 32'sd0 :
+                   c_sheet    ? sd_depth_h16 : (g_from_c - g_to_c);
+
+  // The sheet path CANNOT saturate here and the disc path can. `delta_g`'s
+  // fx16 saturate exists because `depth * stencil` is a 50-bit product; the
+  // sheet's depth is a 32-bit table entry whose height16 form is 25 bits
+  // sign-extended into 32, which is exact. A runaway table entry is caught by
+  // `rail_hi`/`rail_lo` below, once, where `scar_saturations_o` counts it —
+  // NOT counted twice as a delta saturation it never had.
+  assign delta_sat = (v_covered && !c_sheet)
+                   ? (delta_g_sat(pf_q) || delta_g_sat(mul_p[49:0])) : 1'b0;
 
   // -------------------------------------------------------------------------
   // scar = scar + delta, the no_bake clamp, the height16 rails (v1, verbatim)
@@ -629,6 +801,7 @@ module zhao_terrain_bake_v2_mutant (
       c_rad <= '0;
       c_dual <= 1'b0;
       c_cells <= 1'b0;
+      c_sheet <= 1'b0;
       c_src <= '0;
       c_r2 <= '0;
       c_spx <= '0;
@@ -641,6 +814,7 @@ module zhao_terrain_bake_v2_mutant (
       h_scar <= '0;
       h_bottom <= '0;
       h_nobake <= 1'b0;
+      h_strength <= '0;
       v_covered <= 1'b0;
       div_rem <= '0;
       div_dsh <= '0;
@@ -678,6 +852,7 @@ module zhao_terrain_bake_v2_mutant (
       scar_saturations_o <= '0;
       nobake_clamps_o <= '0;
       bake_radius_rejects_o <= '0;
+      sheet_vertices_dug_o <= '0;
     end else begin
       dig_done_o  <= 1'b0;
       bake_done_o <= 1'b0;
@@ -706,6 +881,7 @@ module zhao_terrain_bake_v2_mutant (
             c_rad <= cmd_radius_i;
             c_dual <= cmd_dual_i;
             c_cells <= cmd_cells_i;
+            c_sheet <= cmd_depth_sheet_i;
             c_src <= cmd_src_id_i;
             trace_patch_id_o <= cmd_patch_id_i;
             vi <= '0;
@@ -773,8 +949,27 @@ module zhao_terrain_bake_v2_mutant (
             h_scar <= vtx_scar_i;
             h_bottom <= vtx_bottom_i;
             h_nobake <= vtx_nobake_i;
-            v_covered <= covers;
-            if (covers) begin
+            // Layer F rides the SAME beat as layers A/B/C: the page server
+            // delivers all five or the vertex is not ready. Captured on every
+            // record; read only on a sheet one.
+            h_strength <= sheet_strength_i;
+            // Coverage, by whichever law digs this record. The sheet arm is
+            // `zhao_terrain_stampdepth`'s `covered_o` law applied to this
+            // beat's own strength — the reader instance sees the REGISTERED
+            // copy one state later and gives the same answer;
+            // `terrain_bake_v2_sheet_directed` asserts the two agree rather
+            // than leaving it as an argument.
+            v_covered <= c_sheet ? (sheet_strength_i != 8'd0) : covers;
+            // THE SHEET PATH SKIPS THE STENCIL ENTIRELY. There is no divide and
+            // there are no depth products on it: the depth is a table lookup,
+            // already in height16, valid combinationally off `h_strength` at
+            // the next edge. So it goes straight to StEmit and a sheet vertex
+            // costs 20 fewer states than a covered disc vertex. The disc arm
+            // below is untouched.
+            if (c_sheet) begin
+              div_quo <= '0;
+              state   <= StEmit;
+            end else if (covers) begin
               div_rem <= sn_init;
               div_dsh <= dsh_init;
               div_quo <= '0;
@@ -822,6 +1017,14 @@ module zhao_terrain_bake_v2_mutant (
           // bit 32 rides the RAM write itself (m_wdata) at this same edge
           if (vi != LatMax) wrow[vi[4:0]] <= meets_new;
           if (v_covered) surface_texels_touched_o <= surface_texels_touched_o + 32'd1;
+          // THE SHEET MODE'S OWN COUNTER, and it counts a DIFFERENT thing from
+          // the one above: `surface_texels_touched_o` counts every covered
+          // vertex on either law, so it cannot separate "the layer-F mode ran"
+          // from "a disc record covered the same vertices". This one moves only
+          // on a `cmd_depth_sheet_i` record and only where the sheet actually
+          // carried strength — which is precisely the question a wired-up but
+          // dead reader would answer wrongly with every other counter balanced.
+          if (c_sheet && v_covered) sheet_vertices_dug_o <= sheet_vertices_dug_o + 32'd1;
           if (clamp_fires) nobake_clamps_o <= nobake_clamps_o + 32'd1;
           if (rail_hi || rail_lo || (v_covered && delta_sat))
             scar_saturations_o <= scar_saturations_o + 32'd1;

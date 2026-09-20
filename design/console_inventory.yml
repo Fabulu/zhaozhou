@@ -396,6 +396,9 @@ modules:
   zhao_terrain_normals:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
+  zhao_terrain_stampdepth:
+    disposition: pending_compose
+    why: "the layer-F reader built 2026-09-20 under owner ruling R194 (the seam dig ACCEPTED, the page format FROZEN at 64x64). It is spec/terrain_rules.md 9.3's two stamp-to-bake laws in RTL -- the ART depth table and the nearest-texel resample -- and it is instantiated by zhao_terrain_bake_v2, which is itself pending_compose. It reaches the console exactly when TERRAIN.BAKE does and not before; it is NOT a second owner of a capability and has no design/blocks.yml row of its own, because the capability it serves is TERRAIN.BAKE's"
   zhao_terrain_pipe:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
