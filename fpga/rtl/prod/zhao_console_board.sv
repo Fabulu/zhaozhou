@@ -2129,6 +2129,37 @@ module zhao_console_board
   input  logic        [15:0] part_prj_trail_i,
   input  logic               part_prj_narrow_i,
   input  logic               part_prj_protected_i,
+  // An OWNER DECISION sits on this one port, found 2026-09-20 (post3) and
+  // written here rather than only in a run folder, because a run folder is the
+  // wrong home for anything durable.
+  //
+  // This is PART.LADDER's `p_gov_floor_i`, and PART.LADDER is COMPOSED -- so it
+  // is the ONE composed consumer MEASURE.GOVERNOR has. It is nevertheless not
+  // wired, because the two ends do not mean the same thing and making them
+  // agree is a policy choice nobody has made:
+  //
+  //   * the governor emits `deg0/1_o`, a DEGRADE RUNG 0..3 whose law (G2) is
+  //     "multiply the allowed pixel error by 2^deg";
+  //   * this port is a FLOOR on a 0..5 particle ladder whose rungs are chosen
+  //     by SCREEN SIZE thresholds, and `zhao_part_ladder.sv:108` says of its
+  //     own reading "this reading of it is AN INTERPRETATION ... the contract
+  //     says this block consumes 'governor targets' and does not say by what
+  //     mechanism".
+  //
+  // A degrade rung is not a rung of that ladder, and the DERIVED mapping would
+  // scale the ladder's size thresholds by 2^deg rather than clamp the result --
+  // which this port cannot express. Writing `deg -> floor` here would be a
+  // composer inventing the policy, and it would be invisible once written.
+  // See FINDINGS-post3.md for the evidence and the recommendation.
+  //
+  // NOTE ALSO, for whoever fixes it: `zhao_part_ladder.sv:85-86` says "The
+  // rungs, coarse to fine ... 'coarser' is 'numerically smaller'", and BOTH
+  // halves of that are backwards against the localparams directly beneath it
+  // (MESHLET = 0 is the FINEST, CULLED = 5 the coarsest) and against the
+  // `max()` on line 121, which forces COARSER. The arithmetic is right and the
+  // prose is wrong -- the same prose/arithmetic inversion the governor's own
+  // header reports inside TERRAIN.LOD. Reading the comment and wiring to it
+  // would invert the policy.
   input  logic        [ 2:0] part_prj_gov_floor_i,
   input  logic        [ 2:0] part_prj_prev_rung_i,
   input  logic        [ 3:0] part_prj_hold_i,

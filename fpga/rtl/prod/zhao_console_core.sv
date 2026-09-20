@@ -1175,6 +1175,17 @@
 //          MEASURE.TOKENS, none of which is composed. A ratified field with no
 //          port is still a gap.
 //
+//          NARROWED 2026-09-20 (post3): "none of which is composed" HAS
+//          EXPIRED for two of the three fields. MEASURE.TOKENS IS composed
+//          (section 11b of this file) and CMD.EXEC already lifts each
+//          SetView's two token COUNTS in phase EX_TOK under rulings R18/R33 --
+//          the I18 entry records that landing. So `geometry_tokens` and
+//          `fragment_tokens` have their port and their producer, and what is
+//          left of this bullet is `pixel_error` (which wants MEASURE.GOVERNOR,
+//          still uncomposed for its OUTPUT side -- see I18) and `proj_en_i`.
+//          Left as a narrowing rather than a deletion because the bullet's
+//          closing sentence is still the law.
+//
 //      CLOSED 2026-09-19: THE DEPTH PROFILE. This entry used to read
 //      "`flags[1:0]` is the depth profile of the frozen 2026-08-31 ruling and
 //      `zhao_project_core` has no port to put it on". It has one now, and NO
@@ -1305,13 +1316,51 @@
 //          makes truly. The difference is checkable: there, both sides of the
 //          seam were already RGB565; here, one side is 8 bits and the other is
 //          25, and nothing in the tree says how to get from one to the other.
-//        * AND THE STREAM IT WOULD READ IS INTERNAL ANYWAY. Corrected
-//          2026-09-19 with I15: the RESOLVED stream is not internal -- it is
-//          nine ports on `zhao_geom_bin_pipe_v2`. What never leaves is the
-//          PRE-RESOLVE FRAGMENT stream that POST.GATHER's per-fragment input
-//          actually describes; `stage_fragment_*` exposes a fragment's texel
-//          sample as a structural probe for the directed gate and the mutants,
-//          not as a handshaked stream and not as a glow value.
+//        * "AND THE STREAM IT WOULD READ IS INTERNAL ANYWAY" -- WITHDRAWN
+//          2026-09-20 (post3). IT NAMED THE WRONG STREAM, and it is preserved
+//          here rather than deleted because it is the second refusal in this
+//          entry to reason from a port the block does not have. It read:
+//
+//            "Corrected 2026-09-19 with I15: the RESOLVED stream is not
+//             internal -- it is nine ports on `zhao_geom_bin_pipe_v2`. What
+//             never leaves is the PRE-RESOLVE FRAGMENT stream that
+//             POST.GATHER's per-fragment input actually describes;
+//             `stage_fragment_*` exposes a fragment's texel sample as a
+//             structural probe for the directed gate and the mutants, not as a
+//             handshaked stream and not as a glow value."
+//
+//          POST.GATHER'S INPUT IS THE RESOLVED STREAM, NOT THE PRE-RESOLVE
+//          ONE. Its own header's first sentence is "RESOLVED FRAGMENTS carry
+//          effect tags" and its port group is commented "from RASTER.RESOLVE,
+//          and NEVER backpressured" (`zhao_post_gather.sv` lines 6 and 104).
+//          So the sentence above conceded the half that was true and then
+//          refused on a stream this block never asked for.
+//
+//          AND THE RESOLVED STREAM CARRIES THE SHAPE, FIELD FOR FIELD.
+//          `zhao_raster_resolve` emits `fb_valid_o`, `fb_rgb565_o`,
+//          `fb_tag_o` (8 bits) and `fb_addr_o` = `{row[3:0], col[3:0]}` --
+//          and `fb_addr_o` IS `f_y_i`/`f_x_i` at this block's `PXW` of 4,
+//          which is the same 16x16 tile over 4x4 cells R5 fixed. R37's law
+//          has the glow "borrow the fragment's own colour", and that colour is
+//          `fb_rgb565_o` on the same beat. Nothing has to be joined across a
+//          stall.
+//
+//          WHAT IS ACTUALLY IN THE WAY ON THE INPUT SIDE IS ONE TIE-OFF, and
+//          naming it is the point of this correction. `zhao_shell_top_v2.sv`
+//          line 1181 reads
+//
+//            .fb_tag_o(rp_fb_tag_unused), .fb_addr_o(rp_fb_addr_unused),
+//
+//          while `fb_valid_o`, `fb_rgb565_o`, `fb_x_o`, `fb_y_o` and
+//          `fb_last_o` all leave on the lines around it. So the tag is
+//          DISCARDED INSIDE THE SHELL, not absent from the machine -- and
+//          `fb_addr_o` is not even needed, because the in-tile position is the
+//          low four bits of the `fb_x_o`/`fb_y_o` the shell already forwards.
+//          The repair is ONE 8-BIT PORT, which is a different and far smaller
+//          thing than "the stream is internal", and whoever takes I17 next
+//          should cost it as such. It is not done HERE because exposing it
+//          with no consumer would dangle a producer at this module's edge and
+//          put the register up by one, which is the trade R75 refused.
 //        * ITS OUTPUT IS A THIRD GAP. The block flushes sixteen cells per tile
 //          as a STREAM, while POST.COMPOSITE reads a plane by {view, cx, cy}.
 //          The store between a flush and a random access is the same shape of
@@ -1359,6 +1408,32 @@
 //           nothing and are counted). What is owed AFTER the ruling: the RTL
 //           adapter, the HUD plane store, and composing zhao_post_gather.
 //           `post_hud_*`: the HUD store is unbuilt, as bullet 1 says.
+//
+//           REFUSED AGAIN 2026-09-20 (post3), AND THE REFUSAL IS NOW ONE
+//           SENTENCE LONG INSTEAD OF THREE. The input-side objection is
+//           withdrawn above (it named the wrong stream; the real obstacle is
+//           one 8-bit tie-off in the shell) and the output-side objection --
+//           "the store between a flush and a random access" -- is conceded by
+//           this entry's own text to be buildable now that TWOD.SAMPLER's
+//           atmosphere ring exists. WHAT REMAINS IS THE ART LAW, AND IT IS THE
+//           OWNER'S:
+//
+//             `reports/post-gather-law/gather_law_contact.png` EXISTS and has
+//             NOT BEEN JUDGED. R37 asks for a render "for the OWNER TO JUDGE
+//             BY EYE", and no disposition for it appears in
+//             `reports/OWNER-RULINGS-20260919-EVENING.md` or in any newer
+//             owner file.
+//
+//           Building the tag->glow adapter is COMMITTING to that law, because
+//           the adapter IS the law -- knee, slope, tint and master are its
+//           only content. CLAUDE.md's art rule is the governing one here:
+//           component checks passing is not likeness evidence, and a bloom
+//           curve verified against a zref model can be bit-exact and still
+//           read wrong on a 240p frame under one key light. So this packet
+//           stopped rather than shipping an unjudged look, and the whole of
+//           what is owed after the owner looks is: the adapter (the law), the
+//           8-bit shell tag port (the input), and a plane store on the
+//           TWOD.SAMPLER ring's pattern (the output).
 // I18. MEASURE.HISTOGRAM's event ingress (`hist_ev_*`) -- BOUNDARY. Its
 //      INTERVAL is real (I5 of the connected list), its EVENTS are not.
 //
@@ -1479,6 +1554,45 @@
 //      governor wants a per-frame per-view verdict: the latch between them is
 //      state, and state belongs in a file with a contract and a test. Its
 //      outputs go to TERRAIN.LOD, which is not composed (entry I21).
+//
+//      UPDATED 2026-09-20 (post3). THREE OF THOSE FOUR BLOCKERS ARE SPENT, AND
+//      THE FOURTH IS THE ONE THAT STILL REFUSES. Recorded in this shape because
+//      "the governor has a clear path" was the reading this packet was sent in
+//      with, and it is true of the INPUT side only.
+//
+//        * `starved0/1_i` -- ANSWERED. `zhao_measure_starve` is built and
+//          tested (70 checks; its elaboration guard fired through the
+//          expect-fatal wrapper with its own negative control). It is exactly
+//          the file the paragraph above asks for, and its reason
+//          classification is LIFTED from MEASURE.TOKENS' own
+//          REASON_LOW_PRIORITY / REASON_EXHAUSTED / REASON_RELOAD encoding
+//          rather than chosen -- a RELOAD denial is law T9's budget-load
+//          collision and says nothing about a budget, so counting it would let
+//          a frame boundary degrade a view that was never short.
+//        * `proj0/1_i` -- ANSWERED by owner ruling R73 and built:
+//          `zhao_view_projq88` derives `rhu(kx_raw * viewport_w / 512)` from
+//          `zhao_view_projscale`'s snoop of the projector cfg bus (19 checks,
+//          verified against MEASURE.GOVERNOR.md's own hand-worked Duo camera).
+//          NO ABI FIELD WAS ADDED.
+//        * "the same absent CMD path I14 describes" -- HALF EXPIRED. That bus
+//          HAS a real producer: line 8173 of this file merges
+//          `cmd_exec_cfg_*_w` onto it and CMD.EXEC lowers SetView's
+//          `view_projection` onto cfg addresses 0..15. What is still absent is
+//          I14's OTHER half, the VIEWPORT RECT at cfg address 17, which is
+//          where `zhao_view_projq88`'s `vw` comes from. `px_err0/1_i` needs one
+//          more arm on CMD.EXEC's existing SetView walk -- the field is
+//          ratified (`spec/commands.zidl:344`) and the walk is already
+//          seventeen steps.
+//        * THE OUTPUTS ARE THE REMAINING BLOCKER, and they are why this packet
+//          did NOT compose the governor. `cam0/1_scale_o` goes to TERRAIN.LOD
+//          and `cam0/1_thresh_q8_o` to `zhao_geom_lodstate` (R26/R68), and
+//          NEITHER IS COMPOSED. Composing the governor today would move
+//          MEASURE.GOVERNOR out of the disconnected list and dangle two output
+//          groups at this module's edge -- the register unchanged at best, and
+//          a gap closed by opening one, which is the trade R75 endorsed
+//          refusing. The third consumer, PART.LADDER, IS composed, and it is
+//          an OWNER DECISION rather than wiring: see the note at
+//          `part_prj_gov_floor_i` in the I24 port group.
 //
 //      DEBUG.TRACE IS NO LONGER REFUSED. It is COMPOSED at section 7b-ii as
 //      of 2026-09-19, and the refusal that stood here was WRONG rather than
@@ -4838,6 +4952,37 @@ module zhao_console_core
   input  logic        [15:0] part_prj_trail_i,
   input  logic               part_prj_narrow_i,
   input  logic               part_prj_protected_i,
+  // An OWNER DECISION sits on this one port, found 2026-09-20 (post3) and
+  // written here rather than only in a run folder, because a run folder is the
+  // wrong home for anything durable.
+  //
+  // This is PART.LADDER's `p_gov_floor_i`, and PART.LADDER is COMPOSED -- so it
+  // is the ONE composed consumer MEASURE.GOVERNOR has. It is nevertheless not
+  // wired, because the two ends do not mean the same thing and making them
+  // agree is a policy choice nobody has made:
+  //
+  //   * the governor emits `deg0/1_o`, a DEGRADE RUNG 0..3 whose law (G2) is
+  //     "multiply the allowed pixel error by 2^deg";
+  //   * this port is a FLOOR on a 0..5 particle ladder whose rungs are chosen
+  //     by SCREEN SIZE thresholds, and `zhao_part_ladder.sv:108` says of its
+  //     own reading "this reading of it is AN INTERPRETATION ... the contract
+  //     says this block consumes 'governor targets' and does not say by what
+  //     mechanism".
+  //
+  // A degrade rung is not a rung of that ladder, and the DERIVED mapping would
+  // scale the ladder's size thresholds by 2^deg rather than clamp the result --
+  // which this port cannot express. Writing `deg -> floor` here would be a
+  // composer inventing the policy, and it would be invisible once written.
+  // See FINDINGS-post3.md for the evidence and the recommendation.
+  //
+  // NOTE ALSO, for whoever fixes it: `zhao_part_ladder.sv:85-86` says "The
+  // rungs, coarse to fine ... 'coarser' is 'numerically smaller'", and BOTH
+  // halves of that are backwards against the localparams directly beneath it
+  // (MESHLET = 0 is the FINEST, CULLED = 5 the coarsest) and against the
+  // `max()` on line 121, which forces COARSER. The arithmetic is right and the
+  // prose is wrong -- the same prose/arithmetic inversion the governor's own
+  // header reports inside TERRAIN.LOD. Reading the comment and wiring to it
+  // would invert the policy.
   input  logic        [ 2:0] part_prj_gov_floor_i,
   input  logic        [ 2:0] part_prj_prev_rung_i,
   input  logic        [ 3:0] part_prj_hold_i,
