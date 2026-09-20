@@ -38,12 +38,20 @@
 //      below walks `d` across three decades and also asserts the TREND, which
 //      an inversion fails even where a single value might not.
 //
-// THE TWO POSITIVE CONTROLS. `geom_tag_collision_o` and `ladder_unexpected_o`
-// are asserted zero through every functional case, and this tree's law is that
-// a detector reading zero is the claim to check hardest. Both are fired
-// deliberately here through ports the bench owns -- a geometry rider with the
-// owner tag set, and a ladder verdict offered with nothing outstanding. Neither
-// needs a committed mutant because neither state is unreachable.
+// THE THREE POSITIVE CONTROLS. `geom_tag_collision_o`, `owner_unroutable_o`
+// and `ladder_unexpected_o` are asserted zero through every functional case,
+// and this tree's law is that a detector reading zero is the claim to check
+// hardest. All three are fired deliberately here through ports the bench owns
+// -- a geometry rider whose owner field is not `OWNER_GEOM`, a client-A result
+// owned by one of the two UNCLAIMED encodings, and a ladder verdict offered
+// with nothing outstanding. None needs a committed mutant because none of the
+// three states is unreachable through a port.
+//
+// `owner_unroutable_o` also carries a NEGATIVE control, because it is new and
+// because it is the one that will read zero in every real run until GEOM.LOD
+// claims owner 2: the same stimulus with a well-formed owner must route
+// normally and leave the counter at zero. Fired-and-quiet together is the
+// evidence; either alone is not.
 //
 // WHAT IS NOT CHECKED HERE. Whether the projection itself is right: that is
 // zhao_project_core's law and tests/geometry/geom_project_directed.cpp is its
@@ -67,7 +75,27 @@ using zhao::check;
 namespace {
 
 constexpr int kProjLatency = 6;
-constexpr int kTagBit = 15;  // PAY_W - 1
+// R68 sub-build 4: the client-A rider is 17 bits and the owner is a two-bit
+// FIELD at the top, not a single tag bit. These mirror `zhao_part_project`'s
+// own localparams; the block is verilated at its default PAY_W, so a change
+// there without a change here is exactly the drift this comment exists to
+// make loud. `kOwnerGeom` is ZERO because `zhao_geom_proj_lane` zero-pads.
+constexpr int kPayW = 17;
+constexpr int kOwnerW = 2;
+constexpr int kOwnerLo = kPayW - kOwnerW;  // 15
+constexpr uint32_t kOwnerGeom = 0u;
+constexpr uint32_t kOwnerPart = 1u;
+constexpr uint32_t kOwnerLod = 2u;  // reserved; nothing mints it yet
+constexpr uint32_t kOwnerSpare = 3u;
+
+// Put `owner` in the field of `rider`, leaving the low bits alone.
+static inline uint32_t with_owner(uint32_t rider, uint32_t owner) {
+  const uint32_t mask = ((1u << kOwnerW) - 1u) << kOwnerLo;
+  return (rider & ~mask) | ((owner << kOwnerLo) & mask);
+}
+static inline uint32_t owner_of(uint32_t rider) {
+  return (rider >> kOwnerLo) & ((1u << kOwnerW) - 1u);
+}
 
 // ---------------------------------------------------------------------------
 // The size oracle: zref::render::draw_form_marker's world-space branch.
@@ -225,6 +253,12 @@ struct Bench {
   bool q_ready = true;
   bool ladder_enabled = true;
   bool force_rng_valid = false;  // the ladder positive control
+  // The `owner_unroutable_o` positive control. -1 leaves the returning rider
+  // exactly as the projector model produced it; 0..3 overrides its owner field
+  // on the way back in. The bench owns `a_payload_i`, so an owner no producer
+  // mints today is still reachable with LEGAL stimulus through a port -- this
+  // detector needs no committed mutant.
+  int force_a_owner = -1;
 
   explicit Bench(Vzhao_part_project* d) : v(d) {}
 
@@ -310,7 +344,10 @@ struct Bench {
     v->a_d_i = static_cast<uint32_t>(res_d(o.vz));
     v->a_w_i = res_w(o.vx) & 0x7FFFFFFFu;
     v->a_behind_i = res_behind(o.vz) ? 1 : 0;
-    v->a_payload_i = o.payload;
+    v->a_payload_i = (force_a_owner < 0)
+                         ? o.payload
+                         : with_owner(o.payload,
+                                      static_cast<uint32_t>(force_a_owner));
     v->a_ready_i = proj_ready ? 1 : 0;
     v->q_ready_i = q_ready ? 1 : 0;
     v->rng_valid_i = (lad.valid || force_rng_valid) ? 1 : 0;
@@ -438,6 +475,8 @@ int main() {
   check(top.part_grants_o == 0, "reset: part grants", 0, top.part_grants_o);
   check(top.contended_o == 0, "reset: contended", 0, top.contended_o);
   check(top.geom_tag_collision_o == 0, "reset: tag collisions", 0, top.geom_tag_collision_o);
+  check(top.owner_unroutable_o == 0, "reset: unroutable owners", 0,
+        top.owner_unroutable_o);
   check(top.ladder_unexpected_o == 0, "reset: ladder unexpected", 0, top.ladder_unexpected_o);
   check(top.slot_pressure_o == 0, "reset: slot pressure", 0, top.slot_pressure_o);
   check(top.size_saturations_o == 0, "reset: size saturations", 0, top.size_saturations_o);
@@ -773,15 +812,23 @@ int main() {
   // =========================================================================
   // G. POSITIVE CONTROL 1 -- `geom_tag_collision_o` fires.
   //
-  // The rider's top bit is free only because zhao_geom_proj_lane pads at the
-  // top and the console's ARENA_W + INDEX_W is 15 of 16. The day that stops
+  // The rider's top TWO bits are free only because zhao_geom_proj_lane pads at
+  // the top and the console's ARENA_W + INDEX_W is 15 of 17. The day that stops
   // being true this counter is what says so, and a counter nobody has seen move
   // is a claim. It is fired here through a port the bench owns.
+  //
+  // R68 SUB-BUILD 4 RE-AUTHORED WHAT "POISONED" MEANS. Under the old one-bit
+  // law this poked bit 15 and that WAS the tag. Bit 15 is now the LOW bit of a
+  // two-bit field, so the poke still collides -- but it does so for a different
+  // reason, and a version of this test that kept `1u << 15` while the RTL moved
+  // to 17 bits would have gone on passing for the wrong reason at width 16 and
+  // failed confusingly at 17. The owner is set through `with_owner` so the
+  // intent survives the next width change.
   // =========================================================================
   {
     b.reset();
     b.geom_seen.clear();
-    const uint32_t poisoned = (1u << kTagBit) | 0x0041u;
+    const uint32_t poisoned = with_owner(0x0041u, kOwnerPart);
     b.clear_offers();
     b.load_geometry(0x2000, 0x1000, 0x30, poisoned);
     top.g_valid_i = 1;
@@ -796,6 +843,81 @@ int main() {
           1, b.geom_seen.size());
     check(top.particles_projected_o == 0, "tag control: it was not mistaken for a particle", 0,
           top.particles_projected_o);
+    check(top.owner_unroutable_o == 0,
+          "tag control: a FORCED-to-GEOM rider is still routable", 0,
+          top.owner_unroutable_o);
+  }
+
+  // =========================================================================
+  // G2. POSITIVE CONTROL 3 -- `owner_unroutable_o` fires, both spare owners.
+  //
+  // With a one-bit tag the result-side demux was total: set or clear, particle
+  // or geometry. The two-bit field has two UNCLAIMED encodings, and a result
+  // carrying one would be dropped by both arms. That drop would surface
+  // downstream as a vertex that never landed in the arena -- a fault reported
+  // several blocks away from its cause -- so it is counted here.
+  //
+  // This is the detector whose silence is easiest to misread, because nothing
+  // in the console mints owner 2 or 3 yet and it will read zero in every real
+  // run. That is exactly why it is fired deliberately before its zero is
+  // quoted. It needs no committed mutant: `a_payload_i` is an input port and
+  // the bench owns it, so the state is reachable with legal stimulus.
+  //
+  // Note what is asserted -- that the CORRECT behaviour holds (the routed
+  // owners still route, and the unroutable one is counted rather than
+  // silently dropped). Nothing here asserts a bug, so nothing here goes red
+  // when GEOM.LOD claims owner 2 and makes it routable; at that point this
+  // control moves to owner 3 and the law is unchanged.
+  // =========================================================================
+  for (const uint32_t spare : {kOwnerLod, kOwnerSpare}) {
+    b.reset();
+    b.geom_seen.clear();
+    b.clear_offers();
+    b.force_a_owner = static_cast<int>(spare);
+    b.load_geometry(0x2000, 0x1000, 0x30, with_owner(0x0041u, kOwnerGeom));
+    top.g_valid_i = 1;
+    b.pre();
+    b.step();
+    b.idle(40);
+    b.force_a_owner = -1;
+
+    check(top.owner_unroutable_o >= 1,
+          "unroutable control: the detector FIRED on a spare owner", 1,
+          top.owner_unroutable_o);
+    check(b.geom_seen.empty(),
+          "unroutable control: it was NOT delivered as geometry", 0,
+          b.geom_seen.size());
+    check(top.particles_projected_o == 0,
+          "unroutable control: it was NOT delivered as a particle", 0,
+          top.particles_projected_o);
+    check(top.geom_tag_collision_o == 0,
+          "unroutable control: the INGRESS detector stayed quiet (it is a "
+          "different fault, on a different port)",
+          0, top.geom_tag_collision_o);
+  }
+
+  // The negative control for the detector above: with the owner left exactly
+  // as the projector returned it, the same stimulus must route normally and
+  // the counter must NOT move. A detector that fires on everything is as
+  // useless as one that never fires, and only the pair separates them.
+  {
+    b.reset();
+    b.geom_seen.clear();
+    b.clear_offers();
+    b.load_geometry(0x2000, 0x1000, 0x30, with_owner(0x0041u, kOwnerGeom));
+    top.g_valid_i = 1;
+    b.pre();
+    b.step();
+    b.idle(40);
+    check(top.owner_unroutable_o == 0,
+          "unroutable negative control: a well-owned rider does NOT fire it", 0,
+          top.owner_unroutable_o);
+    check(b.geom_seen.size() == 1,
+          "unroutable negative control: it routed as geometry", 1,
+          b.geom_seen.size());
+    check(owner_of(b.geom_seen[0].payload) == kOwnerGeom,
+          "unroutable negative control: it came back owned by GEOM",
+          kOwnerGeom, owner_of(b.geom_seen[0].payload));
   }
 
   // =========================================================================
