@@ -357,7 +357,18 @@ counter_catalog:
   - twod_plane_blended_fragments
   - twod_sprite_blended_fragments
   - sprite_texels
-  - post_gather_vram_bytes_by_client
+  # `post_gather_vram_bytes_by_client` WAS HERE and is gone, 2026-09-21. It
+  # was catalogued but appeared in no `.sv` file, and POST.GATHER's contract
+  # says the block "reads no external memory" -- so a VRAM-bytes-by-client
+  # counter could not have been its. It named the PLANE STORE, which had not
+  # been built. The store is built now and reads no external memory either, so
+  # the counter is retired rather than implemented. The four below are what
+  # `zhao_post_gather.sv` exports; the sibling modules' thirteen are named in
+  # the POST.GATHER row, with the reason they are not catalogued here.
+  - post_gather_fragments
+  - post_gather_glow_saturations
+  - post_gather_disp_clamps
+  - post_gather_cells_flushed
   - post_composite_covered_fragments
   - post_composite_blended_fragments
   - post_echo_vram_bytes_by_client
@@ -5716,15 +5727,78 @@ blocks:
     tests:
       directed: tests/compositor/post_gather_directed.cpp
       random: tests/compositor/post_gather_random.cpp
-    counters: [post_gather_vram_bytes_by_client]
+      # The law and the plane, 2026-09-21 (owner ruling R195). The tag bench
+      # sweeps ALL 2^24 (tag, rgb565) pairs against `zref::post::gather` and
+      # carries its own positive control: it also scores the RTL against the
+      # FOLDED law -- `unit_mul(c, unit_mul(gain, tint))` -- and REQUIRES a
+      # difference (1,221,632 channel-values), because `mismatches == 0` over
+      # 16.7 million points is otherwise a broken instrument until proven
+      # otherwise. The store bench fires all three of its counters.
+      law_directed: tests/compositor/post_gather_tag_directed.cpp
+      store_directed: tests/compositor/post_gather_store_directed.cpp
+    # CORRECTED 2026-09-21. This row declared ONE counter,
+    # `post_gather_vram_bytes_by_client`, and that string was in NO `.sv` file
+    # in the repository. Packet POSTMEAS read it correctly and its reading is
+    # now confirmed by construction: a VRAM-bytes-BY-CLIENT counter cannot
+    # belong to a block whose contract says it "reads no external memory" --
+    # IT DESCRIBED THE PLANE STORE, which had not been built. The store exists
+    # now (`zhao_post_gather_store.sv`) and reads no external memory either, so
+    # the counter it stood in for was never going to be written. Retired.
+    #
+    # WHAT IS DECLARED HERE IS WHAT `zhao_post_gather.sv` ITSELF EXPORTS, and
+    # that is a deliberate boundary rather than an omission.
+    # `check_counters.py` resolves ONE MODULE PER BLOCK ID
+    # (`module_for_block`), so listing a sibling's port here would trade one
+    # phantom row for thirteen. The composition's other two thirds export
+    # thirteen more, published at the core's edge under a `gather_` prefix and
+    # printed by `tb_zhao_console_core_smoke.sv`:
+    #
+    #   zhao_post_gather_tag.sv    frag_untagged_o, frag_below_knee_o,
+    #                              frag_lit_o, reserved_channel_o
+    #                              -- A PARTITION: every accepted fragment
+    #                              lands in exactly one, so the four sum to
+    #                              fragments_o, and the smoke asserts that sum.
+    #   zhao_post_gather_store.sv  cells_written_o, oob_writes_o, gd_reads_o,
+    #                              gg_reads_o, gd_miss_o, gg_miss_o,
+    #                              flush_overrun_o, rdw_collide_o,
+    #                              plane_commits_o
+    #
+    # Giving those two modules ledger rows of their own is the correct fix and
+    # is NOT taken here: they would need contracts, and inventing a contract to
+    # satisfy a reporting tool is backwards. Named rather than hidden, so the
+    # next reader inherits a decision instead of a gap.
+    counters:
+      [post_gather_fragments, post_gather_glow_saturations,
+       post_gather_disp_clamps, post_gather_cells_flushed]
+    counter_ports:
+      post_gather_fragments: fragments_o
+      post_gather_glow_saturations: glow_saturations_o
+      post_gather_disp_clamps: disp_clamps_o
+      post_gather_cells_flushed: cells_flushed_o
     source_ids: true
     budget_group: twod_post
-    maturity: REFERENCE_COMPLETE
+    maturity: RTL_VERIFIED
     maturity_log:
       - state: REFERENCE_COMPLETE
         date: "2026-09-03"
         commit: "9ae86823"
         evidence: fpga/rtl/compositor/zhao_post_gather.sv
+      - state: RTL_VERIFIED
+        date: "2026-09-21"
+        commit: "gz/postgather"
+        evidence: >-
+          COMPOSED in zhao_console_core (owner ruling R195, core entry I17 (c)).
+          The seam carries: SMOKE frags=2560 against the raster's own
+          pixels=2560, one for one; cells_flushed=160 = ten whole tiles;
+          plane written=160 oob=0; reads[gd/gg]=[770308 770308] with
+          miss[gd/gg]=[0 0]. Three files -- zhao_post_gather_tag.sv (R195's
+          law, every coefficient a parameter), zhao_post_gather.sv (R5's
+          accumulator, UNCHANGED) and zhao_post_gather_store.sv (the plane,
+          which answers the flush-stream address gap POSTMEAS found and R195
+          did not address). NOT YET FITTED: the ~27 M10K claim for the plane
+          and the DSP cost of the law's six 8x8 multiplies are both
+          ARITHMETIC, not measurements, and each block has its own leaf fit row
+          in design/fit_targets.yml asking exactly that question.
     deferred: false
     cut_order: 6
     superseded_by: null
