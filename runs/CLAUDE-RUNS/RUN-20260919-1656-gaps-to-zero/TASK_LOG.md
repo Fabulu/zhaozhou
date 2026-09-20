@@ -301,3 +301,54 @@ about the remote; `origin/<branch>` is a cache with no guarantee.**
 And I captured `PUSH_RC=$?` after a pipe to `tail` — reading `tail`'s status,
 the exact trap `CLAUDE.md` names — inside the same hour I wrote a ruling about
 instruments that cannot see their subject.
+
+## Three merges landed; three packets relaunched (2026-09-20, 21:20)
+
+**Where I am, written before attending anything else:** E1, W1 and CMDFIELD are
+merged and pushed at `1f9680dc`. Six smoke forms running on the merged tree
+(`coord_merge3_smoke.log`). Three packets running: FORGE4, TERRCOMP, WARPFIX.
+**Next step after the smoke: read it, then attend whichever packet lands first.**
+
+### Merged
+
+* **E1** (`4186789e`) — probe promotion proven a no-op, 273→297 in 3 of 4 homes,
+  `zhao_terrain_patch_law_pkg.sv`. Conflict in `prod_manifest.yml` resolved by
+  keeping HEAD's oracle row and **dropping E1's `zhao_field_host_v2:
+  not-yet-adopted` row, which had EXPIRED** — it said "adopt when C1 composes
+  it" and C1 composed it. Kept E1's two probe rows.
+* **W1** (`3285a290`) — GEOM.WARP BUILT. Two conflicts. In
+  `console_inventory.yml` I kept HEAD but **replaced its now-stale clause**
+  (`zhao_geom_warp.sv` "does not exist yet" — W1 just built it) and added the
+  R168 warning. In `GEOM.WARP.md` **neither side was right**: W1's table is the
+  measured one but was measured against a base predating C1 and D1, so I kept
+  it and **re-measured four rows on the merged tree** (P1 closed at
+  `.IN_LANES (15)`, P3/P4 now composed, P8's BIND now exists via D1). Executed
+  W1's own self-deletion instruction for its `not-yet-adopted` adapter row now
+  that A1 is merged.
+* **CMDFIELD** (`33571772`) — the orphaned classifier and I34's item (a)+(b).
+
+### Its two handoffs, done
+
+`zhao_prod_top.sv` regenerated (71 instances, `--check` fresh, manifest OK at
+354 modules), and `zfield_plan_classify_directed.cpp` **registered in ctest and
+proven to run**: 14 checks, 0 failures, discriminating — at M=21 the correct 297
+refuses at 6,237 clocks where the stale 273 would have admitted at 5,733, and
+the band is exactly one step wide.
+
+Getting there hit the documented trap: E1's promotion deleted
+`fpga/rtl/synth/zhao_probe_patch_acc.sv`, `build.ninja` still named it, and the
+failing rule is part of `build.ninja`'s own regeneration — so ninja could not
+rebuild the graph that would have fixed it. `cmake --preset windows-native`
+fixed it; another `cmake --build` would not have.
+
+### My own error, shipped to three packets
+
+**Four of the nine gate paths in the Wave-4 brief were wrong** — they are under
+`tools/quartus/` and `tools/budget/`, not `tools/design/`. Found by running the
+list myself, where four returned `RC=2 -- can't open file`. **A gate that cannot
+be found exits non-zero and that is NOT a failing gate**; reading the number
+alone chases a phantom regression, and reading it as "absent, skip" ships
+without the check. Brief corrected, all three packets messaged.
+
+**Gate state at `1f9680dc`: all twelve green, register 21, `superseded check:
+73 production roots CLEAN`.**
