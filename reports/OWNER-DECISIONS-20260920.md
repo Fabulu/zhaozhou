@@ -131,9 +131,86 @@ Building it now would commit silicon to a format decision you have not made.
 
 ---
 
-# 2. TERRAIN.NORMALMAP — ratify a spec sentence, or supersede the block?
+# 2. TERRAIN.NORMALMAP — ~~ratify a spec sentence, or supersede the block?~~ **STRUCK**
 
-## The question
+> ## STRUCK 2026-09-20 by DOSSIERCHECK — **THE FEATURE IS ALREADY RATIFIED, AND THE RECOMMENDATION QUOTED THE OWNER AGAINST HIMSELF**
+>
+> **This entry asked the owner to supersede a capability the owner ruled IN**,
+> and it was this document's closing call to action (*"the only gap on the board
+> an owner sentence closes today"*). It is the most consequential item in the
+> file and it was wrong. Three independent primary sources, each opened and read
+> rather than sampled:
+>
+> **1. Owner ruling D-8 ratifies it — `reports/OWNER-RULINGS-20260903-FUNDAMENTALS.md`,
+> whose own line 4 reads *"This file is the authority; the contracts defer to it."***
+> D-8 is titled a REFUSAL of general tangent-space normal maps and carves terrain
+> out by name:
+>
+> > *"The terrain normal-map block is a **specialised exception** whose economy
+> > depends on the heightfield having a world-axis-aligned tangent frame. … For
+> > v1: **terrain may use the specialised detail-normal path**; creatures and
+> > props use authored/skinned vertex normals… **The terrain block is not
+> > precedent.**"*
+>
+> **2. The ratified lighting law NAMES the detail term as an operand.** Same file,
+> D-1: `ndl_i = clamp01(raw_i + normal_detail_i)`. Superseding the block deletes
+> the producer half of a ratified composition law.
+>
+> **3. `design/V1-RELEASE-DEFINITION.md` anticipated this exact question and
+> ruled it out of the open-questions table:**
+>
+> > *"**Terrain normal detail is NOT in this table.** It is a capability to
+> > protect and implement, **not an unanswered optional-feature question.** Do
+> > not charge the terrain's missing *ordinary* lighting to the normal-detail
+> > feature."*
+>
+> **AND THE RECOMMENDATION'S OWN CITATION IS INVERTED.** It urged supersede on
+> *"your own ledger sentence"* — *"normal maps are not the thing presently
+> threatening it. The broken texture storage structures are."* That sentence is
+> `reports/BRO-20260903-NORMALMAP-AND-ANIMATION-PATH.md`, a document **titled
+> "normal maps stay"** whose first heading is **"PROTECT THE FEATURE, DISCARD THE
+> DRAFT"**, and it lands immediately after *"normal-map detail alone is ~4% of
+> the known ALM recovery"*. **In context it is an argument that the feature is
+> cheap enough to KEEP.** The owner's words in the same brief: *"I would
+> **protect the normal-map feature**. But we should not squeeze in the current
+> normal-map RTL. That draft is fundamentally wrong."*
+>
+> **R115's null was real and its boundary was drawn in the wrong place.** The
+> `spec/` grep is reproducible (0 hits, positive control fired) — but the
+> authority for this feature lives in `reports/` and `design/`, not `spec/`.
+> **What is missing is a `spec/` TRANSCRIPTION of a ruling that already exists.**
+> That is a documentation port, not an owner decision, and R115 was written
+> without citing D-8.
+>
+> **The cost table's "supersede = one ledger line" is also false.**
+> `zhao_light_stream` — owner ruling R2's owner of vertex light, **composed in
+> `zhao_console_core.sv`** — already carries the detail lane (*"half A: light
+> direction s32 x3 + **detail s32**"*) with a header insisting *"THE TERRAIN
+> DETAIL MUST NOT BE CLAMPED EARLY"* and a terrain-only profile that exists
+> solely to admit the term. Superseding strands a live input on a shipping block.
+>
+> **Two claims in the entry below DO survive and are worth keeping:** the block
+> is instantiated nowhere (verified tree-wide — one module declaration, two
+> comments, one `TOP_MODULE` source-list entry, one C++ bench, zero
+> instantiations), and nobody has ever watched the effect move under a moving
+> sun. **The look-gate is still owed.** But it is a gate on *shipping the
+> feature*, not a question about whether to keep it.
+>
+> **A third claim does NOT survive: "the fragment stream has no producer."** The
+> contract itself names the producer at `design/contracts/TERRAIN.NORMALMAP.md`
+> — *"**TEXJOIN's `f_*` accept port, same clock, same order**"* — and
+> `zhao_raster_texjoin_v2.sv` carries `f_valid_i`/`f_ready_o`/`f_u_i`/`f_v_i`/
+> `f_lod_i` with the same names, widths and `LODW` parameter the block was copied
+> from. `zhao_geom_bin_pipe_v2`'s `stage_fragment_*` was the **wrong candidate**.
+> Of the four fields, **only `f_detail_i` lacks a producer** — a one-bit
+> qualifier whose absent-default the block already defines (*"0 = force delta 0,
+> no tile read"*) — plus a Q4.4→integer LOD slice. **No port change on a composed
+> block is required.**
+>
+> **Residue, and it is engineering:** transcribe D-8 into `spec/terrain_rules.md`
+> §4.4, give `f_detail_i` a qualifier, slice the LOD. Then take the look.
+
+## ~~The question~~ (retained for the record)
 
 `zhao_terrain_normalmap` has a contract, a ledger row, an oracle and a
 **4,738-check suite**, and **no ratified spec sentence anywhere.**
@@ -470,9 +547,64 @@ wrong by 2.4x.
 
 ---
 
-# 7. THE TERRAIN JOB PORT — is a player mask a view mask?
+# 7. THE TERRAIN JOB PORT — ~~is a player mask a view mask?~~ **STRUCK**
 
-## The question, and it is the shortest on the board
+> ## STRUCK 2026-09-20 by DOSSIERCHECK — **THERE IS NO PLAYER MASK. BOTH ARE VIEW MASKS, AND THE MAPPING IS RATIFIED SPEC**
+>
+> The entry's premise — *"Those are a PLAYER mask and a PROJECTOR VIEW mask"* —
+> is false on both halves, and the ratified answer has been on disk since
+> 2026-08-15.
+>
+> **1. The 8-bit field is not a player tag; it is a view mask, and its own
+> declaration says so.** `spec/commands.zidl`, `SubmitTerrainSet 0x0230`:
+>
+> > `u8  view_mask;             // which views this set was unioned for`
+>
+> T5 (`reports/OWNER-RULINGS-BUILDABILITY-20260902.md` §T5) ratifies it as
+> `view_mask` in **both** the command and the patch-list record, and its sort key
+> is the *"view-union key"*. **"T5's per-player tag" traces to
+> `zhao_console_core.sv`'s own commentary, not to T5** — the entry inherited the
+> core's phrasing and then reasoned from it. This is `CLAUDE.md`'s *"reasoning
+> from a port width is reasoning from a projection"* (R188) applied to a name.
+>
+> **2. The player→view mapping is RATIFIED SPEC.** `spec/video_rules.md` §3.1,
+> *"Duo canvas map (D-mode only)"*, ratified 2026-08-15 (review MAJOR-3):
+>
+> > | View | Source region | Displayed at |
+> > |---|---|---|
+> > | **View 0 (P1)** | slot bytes [0, 0x18000) | x ∈ [0,255], y ∈ [24,215] |
+> > | **View 1 (P2)** | slot bytes [0x18000, 0x30000) | x ∈ [256,511], y ∈ [24,215] |
+>
+> `(P1)` and `(P2)` **are** the mapping. They do not "very probably coincide" —
+> they coincide by ratified construction, in the document that owns the canvas.
+>
+> **3. The 2-bit encoding is already pinned in the golden model.**
+> `zref_sw_stream.hpp`: `if (c.view_mask == 0x3) { r.flags |= kFlagDual; }`, and
+> the merge accumulates `e.view_mask |= view_bit` — *"union the views before
+> deduplication"*. `zref_forge_eval.hpp` declares `int view_mask; // 2 bits, same
+> semantics as zhao_forge_prim`. **The hardware is differenced against a model
+> that already uses bits [1:0] only.** `zhao_geom_group_seq.sv` goes further and
+> `$fatal`s unless `NVIEWS == 2`: *"the slot fan-out is written for the camera
+> pair"*.
+>
+> **So the narrowing 8 → 2 is legal today and is not a hidden adapter.** It is
+> the discard of six bits that carry no ratified meaning.
+>
+> **The residue is real but it is a different, smaller question, and it is ABI
+> hygiene rather than a design choice:** what do the six unused high bits mean —
+> must-be-zero, refuse, or ignore? `spec/commands.zidl` does not say. Decide it
+> in the composer's commit with a counted refusal, the way
+> `mat_win_clut_unowned_o` handles its own absence.
+>
+> **And a wider finding this entry did not reach:** the tree carries **three**
+> names for one quantity — `view_mask` (u8, T5), `viewport_mask` (u8, on
+> `DrawForm`/`DrawPopulation`/the sky command) and `job_view_mask_i` /
+> `j_view_mask_i` / `d_view_mask_i` / `mt_view_mask_i` (2 b, nine blocks) —
+> plus `SetView`'s separate `u8 view_id` and `u8 viewport_id`, neither with
+> documented semantics. **That naming spread is the actual hidden-adapter risk
+> and it is wider than this entry states.** It is engineering, not a ruling.
+
+## ~~The question, and it is the shortest on the board~~ (retained for the record)
 
 The compose door's view mask is **8 bits** (T5's per-player tag).
 `zhao_terrain_group_seq.job_view_mask_i` is **2 bits**, documented *"bit v =
@@ -517,9 +649,64 @@ See SPENT.*
 
 ---
 
-# 8. THE CREATURE ABI FREEZE (I29) — author the bytes, and price the store first
+# 8. THE CREATURE ABI FREEZE (I29) — ~~author the bytes, and price the store first~~ **STRUCK**
 
-## The question
+> ## STRUCK 2026-09-20 by DOSSIERCHECK — **THIS IS R90's OWN AMENDMENT, RESTATED. IT IS ALREADY LIVE BY THIS DOCUMENT'S OWN RULE**
+>
+> This file's opening sets the test: *"Every **(provisional, coordinator)** ruling
+> in `OWNER-RULINGS-20260919-EVENING.md` is therefore already live and is **not**
+> in this file."* **R90 is a (provisional, coordinator) ruling in that file**,
+> and its 2026-09-20 amendment already contains this entry's question, its
+> evidence and its recommendation — in places word for word.
+>
+> R90's amendment, quoted rather than summarised:
+>
+> > *"**AMENDED 2026-09-20 (geomseam): THE LIFT IS RIGHT AND IT IS NOT THE WHOLE
+> > OBSTACLE, and the part it misses is priced in ALMs on a device already at
+> > ~113% of its ceiling.** … (a) **Nothing anywhere defines the BYTES.**
+> > `zref_creature.hpp` holds C++ structs with `std::vector` members (no wire
+> > layout), `spec/creature_rules.md:58-60` holds a size in prose,
+> > `zref_creature_page.hpp:23-28` explicitly disclaims freezing them, and
+> > `zref_creature.hpp:43-46` calls the quaternion lane format "PROPOSED, NOT
+> > FROZEN". So the lift does not UNBLOCK a layout; somebody must AUTHOR one…
+> > (b) **`zhao_geom_pose_decode.sv:89-92` makes the source fetch COMBINATIONAL
+> > BY CONTRACT** … so at 32 bones the producer is a **~17.6 kbit
+> > ASYNCHRONOUS-READ store** that a synchronous M10K cannot serve. …
+> > **RECOMMENDATION: grant the lift, and schedule I29 as its own packet with
+> > four named items -- author/freeze the body section and a minimal kind-9 frame
+> > with a zref model; emit a non-zero `body_off` from
+> > `tools/pack/mkcreatureladder.py`; compose the page reader as the sixth
+> > adapter requester; and PRICE THE ASYNC-READ PALETTE SOURCE IN ALMS BEFORE
+> > BUILDING IT.** If it is not affordable, the thing that has to move is the
+> > DECODER's combinational contract, which is a larger decision than the freeze
+> > and must not be discovered halfway through the packet."*
+>
+> **That is this entry's four-item schedule, its ~17.6 kbit figure, its "price it
+> as a precondition of building", and its "what has to move is the decoder's
+> combinational contract" closing line.** The entry is a faithful copy of a live
+> ruling, presented as a question the ruling does not cover.
+>
+> **The second half is not an owner decision at all.** *"Is a ~17.6 kbit store
+> affordable at ~113% ALM?"* is a **measurement**. Nobody — owner included — can
+> answer it today, because the number does not exist; that is precisely what R90
+> says to go and get. A measurement in an owner-decision list spends attention
+> and returns nothing.
+>
+> **How it survived:** D-GEOMSEAM-A, at the head of the rulings file, records the
+> same recommendation under *"Neither is mine to settle"* — so the tree holds the
+> item as BOTH a live provisional ruling (R90's row) and an open decision
+> (D-GEOMSEAM-A). **Two sources of truth for one item, four days old.** The
+> reconciliation is that R90's row is the operative one, because the owner's
+> standing *"go with your recommended answers"* attaches to the rulings table.
+>
+> **One thing IS genuinely reserved to the owner and should be said plainly
+> instead:** when the I29 packet authors the byte layout, **that layout is an ABI
+> freeze and wants the owner's signature before it becomes law.** That is a
+> future ratification of a document that does not yet exist — not a decision
+> available today. Record it as an owed step in the I29 packet, not as a live
+> question.
+
+## ~~The question~~ (retained for the record)
 
 R90 granted a second partial lift of the kind-8 / kind-9 freeze. **Two things
 follow that R90 does not cover: who authors and freezes the byte layout, and is
@@ -646,9 +833,54 @@ Say so and it is one packet.
 
 ---
 
-# 10. VERTEX ALPHA — flat per-primitive, or a fourth interpolated plane?
+# 10. VERTEX ALPHA — ~~flat per-primitive, or a fourth interpolated plane?~~ **STRUCK**
 
-## The question
+> ## STRUCK 2026-09-20 by DOSSIERCHECK — **R48-AS-AMENDED AND R89 ALREADY ANSWER IT, IN THIS ENTRY'S OWN WORDS**
+>
+> The entry concedes *"the shadow half of this question is answered"* and then
+> keeps the item alive on *"the general carriage"*. **The general carriage is what
+> R48's amendment rules.** Quoting the ruling this entry cites but does not
+> finish reading — `reports/OWNER-RULINGS-20260919-EVENING.md`, R48's row:
+>
+> > *"Its producer is `tri_continuation_tail_i`'s existing `vertex_alpha` into the
+> > composed `zhao_raster_blend`, not a fourth attrpack plane and a fourth
+> > rasteriser lane. **Interpolated per-vertex alpha remains a real,
+> > uncommissioned feature and `ALPHA_C` remains its named seam.**"*
+>
+> `design/contracts/FORGE.SHADOW.md`, *"Where the transparency comes from — OWNER
+> RULING R89, and R48 reconciled"*, says the same thing and generalises it
+> explicitly:
+>
+> > *"**R48 therefore stands, unamended and true.** No ratified vertex format
+> > carries alpha and none is being invented here. The alternative — a fourth
+> > `zhao_geom_attrpack` plane AND a fourth `zhao_raster_tile_pipe_v2` lane, for a
+> > value that does not vary across the primitive — **is a real feature
+> > (interpolated per-vertex alpha) that should be commissioned as one, not
+> > smuggled in as part of closing a shadow gap.**"*
+>
+> **That is this entry's recommendation, verbatim, already ruled and recorded in
+> two places by R89's own instruction** (*"Recorded in both places by ruling: here,
+> and against R48 … A contract corrected in one place and not the other is how
+> this pair got here."*). R48 and R89 are both live under the standing
+> authorisation.
+>
+> **And the carriage the entry calls "open" is composed, traced and complete.**
+> FORGE.SHADOW.md's ten-hop table walks `vertex_alpha` from
+> `zhao_console_core.sv`'s `input logic [47:0] tri_continuation_tail_i` — **an
+> open core boundary, so every primitive through the main renderer carries it,
+> PART.EXPAND and the compositor included** — through the frozen 1157-bit
+> metadata ABI at bits `[345:298]`, to `zhao_raster_blend_prod.a_i`, with *"no
+> constant, no tie-off and no dangling bit anywhere inside the datapath"*. The
+> field law is `zhao_render_texture_pkg.sv`, bits `[23:16]` of the 48, asserted by
+> the package's own one-hot span self-test.
+>
+> **So nothing about PART.EXPAND or the compositor changes the answer** — they
+> reach the same flat alpha by the same ratified route. **Giving that boundary a
+> producer is engineering.** Commissioning interpolated per-vertex alpha is a
+> feature request the owner may raise whenever it is wanted; it is not a question
+> the console is blocked on.
+
+## ~~The question~~ (retained for the record)
 
 The console has **no vertex alpha**, and two ratified statements disagree about
 whether it needs one. **Does transparency arrive as a flat per-primitive value,
