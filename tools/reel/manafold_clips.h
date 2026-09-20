@@ -2734,27 +2734,28 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
     const int32_t dip = knead_dip_mm(slot, keys, f, dip_gain);
     if (dip > 0) {
       // Through the ONE production consumption point, so the dip inherits the
-      // public F/A/B/C/E mute and the attachment law rather than writing
-      // g.nod directly. B goes down; the outers take a small lift the other
-      // way, which is what makes it read as kneading rather than sagging.
-      const int32_t lift = static_cast<int32_t>(
-          (static_cast<int64_t>(dip) * kKneadDipOuterLiftPm) / 1000);
-      // ⚠ C GETS NO LIFT, AND THAT IS AN ITEM-1 CONSTRAINT, not a taste one.
-      // The first version lifted A and C together. C is where the return arm
-      // starts (finalize_rear_follow walks the arm's origin through HingeC), so
-      // moving it changes |C -> socket| -- the very span whose excursion is the
-      // rip in item 1. It measured plainly: with the outer lift on both, the
-      // rear rail fell from 0.129 to 0.006, i.e. the new feature made the old
-      // defect twice as bad. A alone keeps the kneading read -- middle down,
-      // front up -- and leaves the rear closure exactly where it was.
-      int32_t swal[5] = {0, lift, -dip, 0, 0};
+      // public F/A/B/C/E mute and the attachment law rather than writing g.nod
+      // directly.
+      //
+      // ALL THREE FREE CARRIERS MOVE, in the crown's own tableau-2 proportions:
+      // A holds near its mid, B travels to its low, C rises to its high. The
+      // span between two carriers only has to absorb the DIFFERENCE of their
+      // travel, so a coordinated knead asks far less of the signed spans than
+      // the same B displacement taken alone -- which is why the single-carrier
+      // version could not stay inside mspan's envelope at any depth.
+      const int32_t depth =
+          g_u02_knead_dip_depth_mm > 0 ? g_u02_knead_dip_depth_mm : 1;
+      const auto at = [&](int32_t mm) {
+        return static_cast<int32_t>((static_cast<int64_t>(mm) * dip) / depth);
+      };
+      int32_t swal[5] = {0, at(knead_dip_carrier_mm(0)),
+                         at(knead_dip_carrier_mm(1)),
+                         at(knead_dip_carrier_mm(2)), 0};
       swallow_nodules(g, swal, 0);  // no lateral lean: the dip is vertical
       // ...and the fold share, which is what actually changes the RANKING.
       // Scaled by the dip's own envelope (dip / depth), so it rises, holds and
       // releases on exactly the same C2 curve as the offset -- the two halves
       // cannot drift apart or leave a fold delta standing at the loop seam.
-      const int32_t depth =
-          g_u02_knead_dip_depth_mm > 0 ? g_u02_knead_dip_depth_mm : 1;
       const auto share = [&](int32_t full) {
         return static_cast<int32_t>((static_cast<int64_t>(full) * dip) / depth *
                                     g_u02_knead_dip_fold_pm / 1000);

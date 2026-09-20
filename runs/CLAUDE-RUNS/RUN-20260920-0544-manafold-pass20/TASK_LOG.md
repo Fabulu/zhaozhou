@@ -158,3 +158,25 @@ not a moved goalpost.
 ### Gate matrix after the repair: 143/143 PASS, 0 FAIL
 All 11 normals green, `n-mrear-dip` green, `--fail-rear-strain` now firing 0x8
 on the real defect, and four new bow selectors returning RC 2.
+
+### 2026-09-20 - PACKET 3: the dip ships; gate-change ledger written
+- **Dip SHIPS ON** at `kKneadDipGainPm = 550`, ranking `{0,-1,0}` over the
+  crown's own High/Mid/Low tables, reference depth 325 (B's authored low).
+  All 11 gate normals green. Looked at on Inspect f200/f230/f260: the loop's
+  top-middle presses down and the loop squeezes -- a knead, not a spasm.
+- **B does NOT reach strictly lowest, and distribution is not the fix.**
+  Re-authored across all three carriers as instructed and measured seven
+  configurations: every one lands on the same C-E signed span (-687..+529).
+  What stretches that span is B's own descent -- not which other carriers move,
+  not the fold share (fold 0 is WORSE), not C (removing C entirely changes
+  nothing). `kSpanStretchMaxPm[C-E]` is +440 and the bank already sits at +305
+  before the dip exists: ~135 pm of headroom against ~225 needed. A's rise just
+  moves the breach to F-A. Full table in P20-IMPLEMENTATION.md 2.5.
+- **Trick excluded explicitly** (`kKneadDipClipPm[13] = 0`), with slot 7 and
+  Taunt III.
+- **P20-GATE-CHANGES.md** written for the reviewer: all six threshold/status
+  changes with before/after/why-not-a-loosening/fired control, plus the three
+  broken-instrument cases (R4's control that stopped firing, the inert
+  REAR_BOW=legacy in the reel, the inert dip ladders in mspan/mprobe).
+- **Live-history legs re-run cleanly** and the whole matrix re-run from scratch
+  rather than patched, so it is a receipt and not a reconstruction.

@@ -7,23 +7,20 @@ the owner's mid-run correction to item 1.
 **Worker:** Claude (sole Opus worker; no Qwen, no sub-agents)
 **Branch:** Zhaozhou `manafold-pass20`
 
-**Verdict: ITEM 1 IS REPAIRED. Items 2 and 3 are built and gated but still ship
-OFF, on one named leg.**
+**Verdict: item 1 REPAIRED. The dip SHIPS ON, at the amplitude the span
+envelope allows — which is short of the strict "lowest ball" read.**
 
-* **Item 1 (the rip) — FIXED AT THE ROOT.** The rear band now BOWS instead of
-  shortening. Worst rear rail strain **0.129 -> 0.692** across the bank
-  (R4's target floor is 0.50, so the declared OPEN BREACH is gone). At 4x on
-  Inspect f380 the splayed wedge is a clean even tube; at 6x on f158/f160 the
-  junction reads as a rounded shoulder where it was a pinched step.
-* **Items 2 and 3 (the dip and its particle reaction)** — the bow removed the
-  two SERIOUS objections (closure, and the carrier jerk leg). One remains:
-  mspan's signed bound / free-span margin. **Verdict (b)**, and §2.5 says why.
+* **Item 1 (the rip) — FIXED AT THE ROOT.** The rear band bows instead of
+  shortening. Worst rear rail strain **0.129 -> 0.692**, past R4's 0.50 target.
+* **Items 2 and 3 — SHIPPING ON.** `kKneadDipGainPm = 550`, all 21 clips that
+  author the beat, C2, exact loop seams, particles tied to it. Every gate green.
+* **⚠ The dip does NOT make B the strictly lowest carrier.** See §2.5 — the
+  blocker is not the dip's distribution and re-authoring it across carriers did
+  not move it.
 
-**Shipping CRCs** hover `0xEFE5AFC1`, inspect `0x9E71DF79`, taunt3 `0xC81598AA`.
-**`ZHAO_U02_REAR_BOW=legacy` reproduces the pass-19 bank byte for byte, 3/3**
-(hover `0xA2D0E051`, inspect `0x779615BB`, taunt3 `0x75BC4777` — the
-authoritative `P19-FINAL-BANK-INTEGRITY.md` values; the different numbers in
-`P19-IMPLEMENTATION.md` are pre-review and the discrepancy is closed).
+**Every gate threshold and status changed this pass is itemised in
+`P20-GATE-CHANGES.md`**, with what each protected before, what it protects now,
+why it is not a loosening, and the fired control.
 
 Still no bank render, encode, merge or deploy.
 
@@ -280,46 +277,59 @@ feature's exact-off control.
 
 ---
 
-### 2.5 The dip verdict: (b), and exactly what blocks it
+### 2.5 The dip: shipped, and the honest limit
 
-The coordinator asked for a plain choice. **(b): the dip as authored really does
-violate the span system's declared envelope.** Not (a).
+**It ships.** `kKneadDipGainPm = 550`, ranking `{0, -1, 0}` over the crown's own
+High/Mid/Low tables, reference depth 325 mm (carrier B's authored low). On
+Inspect f200/f230/f260 the loop's top-middle presses down and the loop squeezes
+— a knead, not a spasm. All 11 gate normals green.
 
-With the bow repair in, two of the three original objections go away at an
-authored depth of 140-300 mm: *"SpanDeltaE and body-attached RearSocket do not
-meet at End"* (closure) and the visible-carrier angular step/accel/jerk leg
-(continuity). **Both were the arc/chord fault showing through** — the dip closes
-the loop harder, the old solve answered a shorter chord by compressing the band,
-so the dip made the rip worse and the contract was right to object.
+**It does not make B the strictly lowest carrier, and the reason is not the
+dip's authoring.** The coordinator's read was that Taunt III stays legal by
+moving all three carriers while the dip spent everything on B, so distributing
+would fix it. I re-authored it that way and measured; it did not.
 
-What remains is mspan's **signed bound / free-span margin**: 240 breaches at
-depth 300, **11 at depth 140**. Amplitude-sensitive, but it does not reach zero
-at any depth that leaves a visible gesture.
+| ranking | amplitude | mspan | C-E signed span | B reaches lowest |
+|---|---|---|---|---|
+| crown row 2 `{0,-1,+1}` | 1000 | RED, 391 breaches | −687..+529 | 15/21 |
+| `{+1,-1,0}` (A high) | 1000 | RED, 303 | −687..+529 | 17/21 |
+| `{+1,-1,0}`, C removed entirely | 1000 | RED, 303 | −687..+529 | — |
+| `{0,-1,0}` (B alone) | 1000 | RED, 251 | −687..+529 | 14/21 |
+| `{0,-1,0}`, fold share 0 | 1000 | RED, 284 | — | 21 never |
+| `{+1,-1,0}` | 550 | RED, 58 (**F-A**) | −687..+408 | 21 never |
+| **`{0,-1,0}`** | **550** | **GREEN, 0** | **−687..+408** | **21 never** |
+| (no dip at all) | — | GREEN, 0 | −687..**+305** | — |
 
-`kSpanStretchMaxPm` / `kSpanCompactionMinPm` / `kSpanMinRunMm` are **not** a gate
-encoding taste — they are the envelope that keeps the antenna attached, and
-widening them to admit this pass's own new gesture is the move the house rules
-refuse. So the dip stays off and this is honest rather than green.
+**The binding constraint is `kSpanStretchMaxPm[C-E] = +440`, and the bank
+already sits at +305 of it before the dip exists.** Every configuration above
+lands on the same C-E figure, because what stretches that span is B's descent
+itself — not which other carriers move, not the fold share (fold 0 is *worse*),
+not C (removing C entirely changes nothing). The rear span has ~135 pm of
+headroom and the readable dip needs ~225.
 
-**What it would take (authoring, not gate-widening).** The dip currently spends
-its whole authority on carrier B — an offset through `swallow_nodules` plus a
-fold share through `loop_pose` — so **B's spans absorb all of it**. Taunt III's
-crown shuffle stays inside the envelope because it moves **all three** free
-carriers in a ranked tableau and redistributes the fold across them. Re-authoring
-the dip the same way — B down, with A and C taking a real share of the
-redistribution rather than a token lift — spreads the span change over three
-spans instead of one. That is the next packet.
+So the distribution argument is sound in general and simply does not apply here:
+**the span that breaches is not one the dip distributes across.** A's rise moves
+the breach to F-A rather than removing it.
 
-**A correction to the previous packet, and a method note.** Its claim that the
-dip "breaks mspan at any strength" was measured with `ZHAO_U02_KNEAD_DIP_PM`
-set in the environment — **and mspan never parsed that knob**, so every one of
-those runs had the dip at its compiled default. The same blindness cost a second
-round here. *An env-var control is only a control in a binary that reads it;
-check that before believing a ladder.*
+**What it would take, precisely:** either B is lowered by a channel that does not
+lengthen C→socket — a dedicated vertical on B rather than a fold that reshapes
+the loop — or the C-E stretch bound is revisited by the owner/architect. That
+second one is now a *fair question* rather than gate-widening, because the bow
+changed what a C-E excursion means: it used to be absorbed as material
+compression (and was the rip), and is now absorbed as curvature with the skin at
+0.692. I have not touched it, because the bound also feeds the attachment guard
+and that is not my call to make alone.
 
-To see it: `ZHAO_U02_KNEAD_DIP_PM=1000`, and `manafold-rear-audit --gate --dip`
-judges R5 with it on — B reaches the bottom of the ranking on **15 of 21** clips
-at the authored depth 300 / fold 2000.
+**Trick is excluded explicitly:** `kKneadDipClipPm[13] = 0`, alongside slot 7
+(the still form diagnostic) and slot 21 (Taunt III, whose crown shuffle already
+owns its carrier rankings).
+
+**A method correction from the first packet.** Its claim that the dip "breaks
+mspan at any strength" was measured with `ZHAO_U02_KNEAD_DIP_PM` in the
+environment — and **neither mspan nor mprobe parses that knob**, so every run in
+that ladder had the dip at its compiled default. The conclusion happened to be
+directionally right and the evidence was worthless. *An env-var control is only
+a control in a binary that reads it.*
 
 ## 3. Item 3 — the particles react
 

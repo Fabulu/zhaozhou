@@ -4547,7 +4547,53 @@ constexpr int kKneadClipSlots =
 // BELOW A and C, and their rest heights differ. The value below is chosen by
 // eye; that B actually becomes the lowest carrier is checked on the comparison
 // side, by manafold-nodule's N6 leg, per clip, inside the authored window.
-constexpr int32_t kKneadDipDepthMm = 300;
+// ---- THE DIP IS A CROWN TABLEAU, not a push on one ball --------------------
+//
+// The first version spent the whole gesture on carrier B: B took a large
+// displacement and A took a token lift, so B's OWN spans absorbed all of it and
+// mspan's signed bound / free-span margin went red at every depth down to
+// 120 mm. The note in the rejected version was right about the cause and wrong
+// about the remedy -- the answer is not a smaller push, it is a COORDINATED one.
+//
+// Taunt III's crown shuffle stays inside the envelope because it moves all
+// three free carriers in a ranked tableau, so the chain redistributes instead of
+// one station taking the whole excursion. Its row 2 is {0, -1, +1}: A holds at
+// Mid, B goes to its LOW, C rises to its HIGH. That is already, exactly, "the
+// ball in the very middle at the top moves downwards so much it becomes the
+// lowest ball" with the outers giving way -- so the dip does not get its own
+// height vocabulary. It READS THE CROWN'S TABLES.
+// ⚠ THE RANKING IS {+1, -1, 0}, NOT THE CROWN'S ROW 2 {0, -1, +1}, and the one
+// place they differ is the whole of item 1's constraint. Row 2 sends C to its
+// HIGH (+230 mm), and C is where the return arm starts -- finalize_rear_follow
+// walks the arm's origin through HingeC, so a large C travel swings |C->socket|,
+// which is the span the bow repair exists to keep honest. Measured: with row 2
+// the signed-bound breaches went 240 -> 391 and the closure and jerk legs came
+// back with them.
+//
+// So the dip keeps the crown's VOCABULARY -- the same High/Mid/Low tables, the
+// same authored heights -- and puts the big outer travel on A, the FRONT
+// carrier, away from the rear closure. A rises to its high, B drops to its low,
+// C holds near its mid. The outers still give way, all three still move, the
+// spans still only absorb differences, and the rear closure is left alone.
+constexpr int8_t kKneadDipRank[3] = {0, -1, 0};
+// ⚠ A RANK OF 0 MEANS "HOLD AT REST", NOT "GO TO MID". The crown's Mid is an
+// authored height like the other two (+70 mm for C), and C is the carrier the
+// rear closure hangs off. With C on its Mid the C-E signed span ran -687..+529
+// against a bank that reads +160..-662 without the dip -- the breach was the
+// REAR span, every time, never F-A or A-B. C therefore contributes nothing at
+// all: no height, no fold. The gesture is A and B trading, which is still a
+// coordinated knead -- the A-B span absorbs only their difference -- and it
+// leaves |C->socket| exactly where the bow repair put it.
+constexpr int32_t knead_dip_carrier_mm(int i) {
+  return kKneadDipRank[i] > 0   ? kTaunt3OrderHighMm[i]
+         : kKneadDipRank[i] < 0 ? kTaunt3OrderLowMm[i]
+                                : 0;
+}
+// The reference depth is B's own low, so `dip / depth` is the gesture's envelope
+// and the three carriers travel in fixed proportion to one another.
+constexpr int32_t kKneadDipDepthMm = 325;
+static_assert(kKneadDipDepthMm == -kTaunt3OrderLowMm[1],
+              "the dip's reference depth is carrier B's authored low");
 // Fractions of the clip, per dip: rise, hold at the bottom, release.
 constexpr int32_t kKneadDipRisePm = 130;
 constexpr int32_t kKneadDipHoldPm = 70;
@@ -4577,7 +4623,11 @@ constexpr int32_t kKneadDipOuterLiftPm = 180;
 // target the span aims at over a fixed length and is mostly absorbed. A takes a
 // small share with it so the loop closes as a shape rather than kinking at one
 // station, and C is left alone so the rear closure is not disturbed (item 1).
-constexpr int32_t kKneadDipFoldDeltaPm[3] = {-170, -1000, 0};
+// The fold share is the SAME ROW of the same table, for the same reason.
+// The fold share matches the ranking: A opens with its rise, B closes hard as it
+// drops -- the crown's own -1000 for a carrier going to its low -- and C is left
+// at zero for the same rear-closure reason as its height.
+constexpr int32_t kKneadDipFoldDeltaPm[3] = {+170, -1000, 0};
 // The FOLD share's multiplier. 1000 is the crown shuffle's own authored
 // strength; 2000 SHIPS, and the reason is measured rather than preferred.
 // Laddered against the item-1 strain gate and the item-2 ranking gate together
@@ -4670,7 +4720,7 @@ static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
 // ZHAO_U02_KNEAD_DIP_PM=1000 turns it on for a look; mrear --gate --dip judges
 // R5 with it on, and reports B reaching the bottom of the ranking on 15 of 21
 // clips at the authored depth 300 / fold 2000.
-constexpr int32_t kKneadDipGainPm = 0;
+constexpr int32_t kKneadDipGainPm = 550;
 inline int32_t g_u02_knead_dip_gain_pm = kKneadDipGainPm;
 inline int32_t g_u02_knead_dip_depth_mm = kKneadDipDepthMm;  // authoring ladder
 
