@@ -70,6 +70,7 @@ module tb_terrain_downstream (
   wire        [15:0] c_src;
   wire        [31:0] c_attr_a_unused, c_attr_b_unused, c_attr_c_unused;
   wire               c_flip_unused;
+  wire               c_untex_unused;
 
   zhao_geom_clip #(.ATTRS(1)) u_clip (
       .clk                  (clk),
@@ -84,6 +85,11 @@ module tb_terrain_downstream (
       .tri_cy_i             (tri_cy_i),
       .tri_behind_i         (tri_behind_i),
       .tri_src_id_i         (tri_src_id_i),
+      // R197's untextured declaration: TEXTURED. This bench measures the
+      // clip->setup->binner seam with the bench's own attribute words; the
+      // declaration is the bit, not the words. (Terrain's real triangles have
+      // no coordinate law -- core entry I13 -- and would declare 1 here.)
+      .tri_untex_i          (1'b0),
       .tri_attr_a_i         (tri_attr_a_i),
       .tri_attr_b_i         (tri_attr_b_i),
       .tri_attr_c_i         (tri_attr_c_i),
@@ -106,6 +112,7 @@ module tb_terrain_downstream (
       .out_min_y_o          (c_min_y),
       .out_max_y_o          (c_max_y),
       .out_src_id_o         (c_src),
+      .out_untex_o          (c_untex_unused),
       .out_attr_a_o         (c_attr_a_unused),
       .out_attr_b_o         (c_attr_b_unused),
       .out_attr_c_o         (c_attr_c_unused),

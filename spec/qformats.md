@@ -607,6 +607,25 @@ by plane equation; per pixel `u = rescale((s64)u_over_w · rcp_u24(invw24_interp
 Hecker's span-subdivision approximation is deliberately **not** used — the
 exact per-pixel rcp avoids his documented span-width-dependent rounding bug.
 
+**Untextured primitives — owner ruling R197, 2026-09-20.** A primitive MAY
+enter the clip stage with `u_over_w` and `v_over_w` undefined, **provided it
+declares that it has none**: one bit, per primitive, `untex`, presented beside
+the source id on the same handshake. The absence is DECLARED, never ENCODED —
+`u_over_w = v_over_w = 0` is texel (0,0) on every pixel, not "no texture", and
+no consumer may infer texturedness from the content of a coordinate slot
+(rule W10: an absent output must not look like a zero result). When the bit is
+set, nothing reads the two slots: the plane front end (GEOM.ATTRPACK) emits
+the null plane for both, and the primitive may only be shaded under a material
+that takes ZERO samples (`sample_count == 0`, the untextured profile
+`MATERIAL.RESOLVE` already defines). A declared-untextured primitive offered
+under a material that samples is **refused at the clip door and counted**
+(`geom_untex_refused`), never sampled. This is the same fact the reference
+model states: `ScreenV::u, v` are *read only when `raster_tri` carries a
+`TextureSpan`* — texturedness is a property of the call, not of the vertex.
+The seven-slot per-corner packet itself is unchanged; the declaration rides
+beside it. The mechanism, the consumers by instantiation and the positive
+control are in `design/contracts/GEOM.CLIP.md`, "The untextured declaration".
+
 **Fog — deterministic, per-vertex.** *(Added 2026-08-17, lighting & pose
 consolidation wave. Charter §8 names "deterministic fog" a non-negotiable
 basic, §16 lists a fog sheet under Twin Horizons, and §20.1 makes ZRef

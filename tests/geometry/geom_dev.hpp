@@ -129,6 +129,9 @@ class ClipDev {
     top_.tri_cy_i = m21(t.cy);
     top_.tri_behind_i = t.behind & 7u;
     top_.tri_src_id_i = src_id;
+    // R197's per-primitive untextured declaration rides beside src_id and is
+    // checked on the accepted packet exactly as src_id is (below).
+    top_.tri_untex_i = untex ? 1 : 0;
     top_.tri_valid_i = 1;
     top_.eval();
 
@@ -173,6 +176,7 @@ class ClipDev {
           add_err(err, "out_valid_o disagrees with the verdict");
         if (out.verdict == zref::Clip::kAccept) {
           if (top_.out_src_id_o != src_id) add_err(err, "out_src_id_o mismatch");
+          if ((top_.out_untex_o != 0) != untex) add_err(err, "out_untex_o mismatch");
           out.ax = s21(top_.out_ax_o);
           out.ay = s21(top_.out_ay_o);
           out.bx = s21(top_.out_bx_o);
@@ -197,6 +201,9 @@ class ClipDev {
   uint32_t submitted() const { return top_.triangles_submitted_o; }
   uint32_t clipped() const { return top_.triangles_clipped_o; }
   uint32_t culled() const { return top_.triangles_culled_o; }
+
+  /** The untextured declaration offered with every triangle `run` drives. */
+  bool untex = false;
 
  private:
   static uint32_t next(uint32_t* s) {

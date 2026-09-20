@@ -160,6 +160,7 @@ module zhao_console_core_slot_overflow_mutant
   // The vertex-attribute store's word (owner ruling R11): slots 1..6 of the
   // packet above -- everything but invw24, which is GEOM.DEPTHQUANT's alone.
   parameter int unsigned GEOM_ATTR_STORE_W = (GEOM_CLIP_ATTRS - 1) * 32,
+  parameter int unsigned GEOM_REPLAY_UNTEX_DECL = 0,
   // WHICH SLOT OF THAT PACKET CARRIES WHICH PACKET-D PLANE. Named constants
   // rather than literals inside `u_geom_attrpack`, because CLAUDE.md's rule is
   // that a ratified layout is still a knob: "this is generated from the
@@ -838,6 +839,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             geom_clip_culled_o,
   output logic signed [47:0]      geom_setup_area2_o,
   output logic [31:0]             geom_setup_triangles_submitted_o,
+  output logic [31:0]             geom_untex_refused_o,
   // GEOM.ATTRPACK's two counters, out of the module for the same reason every
   // other block's are: a counter nobody can read is not evidence. Their RATIO
   // is the thing worth asserting -- `planes` must be exactly three times
@@ -2739,6 +2741,7 @@ module zhao_console_core_slot_overflow_mutant
       .GEOM_ASM_VIDW(GEOM_ASM_VIDW),
       .GEOM_CLIP_ATTRS(GEOM_CLIP_ATTRS),
       .GEOM_CLIP_ATTRW(GEOM_CLIP_ATTRW),
+      .GEOM_REPLAY_UNTEX_DECL(GEOM_REPLAY_UNTEX_DECL),
       .PROJ_T_ARENAS(PROJ_T_ARENAS),
       .PROJ_T_DEPTH(PROJ_T_DEPTH),
       .PROJ_T_INDEX_W(PROJ_T_INDEX_W),

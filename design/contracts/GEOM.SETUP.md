@@ -55,6 +55,8 @@ Single clock `clk` in the `gpu` domain; no CDC. Reset is `rst_n`, async assert /
 
 Input (`tri_valid_i` / `tri_ready_o`) — GEOM.CLIP's accepted packet, unchanged: six signed-21 vertices (winding-normalised, S 12.8 subpixels), `tri_area2_i` (signed 48, > 0), the four signed-12 scan-box edges, and `tri_src_id_i`.
 
+**R197's untextured declaration (2026-09-20) does NOT pass through this block, deliberately.** GEOM.CLIP now carries a per-primitive `untex` bit (GEOM.CLIP.md, "The untextured declaration"). This block reads no attribute and needs no bit: its consumer, the shell's triangle door, receives the attribute PLANES from GEOM.ATTRPACK on the other tine of the fork, and ATTRPACK — the only reader of the u/w and v/w slots — is the block that branches on the declaration. Threading the bit through here would give the join a second copy of a fact it does not consume, and the refusal the law requires happens at GEOM.CLIP's INPUT, before either tine. The port list is unchanged and `check_seam_widths.py`'s row for this block still holds.
+
 Output (`out_valid_o` / `out_ready_i`):
 
 | field | width | meaning |

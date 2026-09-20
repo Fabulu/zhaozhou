@@ -1297,6 +1297,7 @@ module tb_zhao_shell (
   logic signed [11:0] cl_min_x, cl_max_x, cl_min_y, cl_max_y;
   /* verilator lint_off UNUSEDSIGNAL */
   logic [15:0] cl_src_id;
+  logic        cl_untex;
   logic [CLIP_ATTRS*32-1:0] cl_attr_a, cl_attr_b, cl_attr_c;
   logic        cl_ret_valid;
   logic [2:0]  cl_ret_verdict;
@@ -1324,6 +1325,10 @@ module tb_zhao_shell (
       // zero there would hide exactly the case CLIP exists to reject.
       .tri_behind_i(project_mode_i ? pj_behind_r : 3'b000),
       .tri_src_id_i(render_src_id_i),
+      // R197's untextured declaration: TEXTURED. This bench's triangles are
+      // the shell's textured packets and the attribute slots beside them are
+      // the bench's own zeros, which is not the declaration -- the bit is.
+      .tri_untex_i(1'b0),
       .tri_attr_a_i('0), .tri_attr_b_i('0), .tri_attr_c_i('0),
       // The scissor is the render grid in whole pixels; sixteen pixels per
       // tile is the shell's own tile size, so this is the same rectangle the
@@ -1343,6 +1348,7 @@ module tb_zhao_shell (
       .out_min_x_o(cl_min_x), .out_max_x_o(cl_max_x),
       .out_min_y_o(cl_min_y), .out_max_y_o(cl_max_y),
       .out_src_id_o(cl_src_id),
+      .out_untex_o(cl_untex),
       .out_attr_a_o(cl_attr_a), .out_attr_b_o(cl_attr_b), .out_attr_c_o(cl_attr_c),
       .out_flip_o(dbg_clip_flip_o),
       .ret_valid_o(cl_ret_valid), .ret_verdict_o(cl_ret_verdict),

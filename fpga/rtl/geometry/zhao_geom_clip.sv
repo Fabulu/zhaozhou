@@ -175,6 +175,21 @@ module zhao_geom_clip #(
   input  logic signed [20:0] tri_cy_i,
   input  logic        [2:0]  tri_behind_i,
   input  logic        [15:0] tri_src_id_i,   // source_id passthrough
+  // ---- THE UNTEXTURED DECLARATION (owner ruling R197, 2026-09-20) --------
+  // ONE bit, PER PRIMITIVE, riding beside `tri_src_id_i` on the same
+  // handshake. Set, it declares that this primitive carries NO texture
+  // coordinates: slots u_over_w and v_over_w of the packet below are
+  // DON'T-CARE, and the block that reads those slots (GEOM.ATTRPACK) must not
+  // read them. This block never interprets the bit; it carries it through the
+  // three stages exactly as it carries the source id, and it is deliberately
+  // NOT a slot of the packet: a triangle is textured or not as a WHOLE
+  // (the reference reads `ScreenV::u, v` "only when raster_tri carries a
+  // TextureSpan" -- a per-CALL fact), three per-corner copies could disagree
+  // and would need a checker, and the B/C winding swap has nothing to swap.
+  // The absence is DECLARED here, never ENCODED in a coordinate: u/w = v/w =
+  // 0 is texel (0,0), not "no texture" (spec rule W10). See GEOM.CLIP.md
+  // "The untextured declaration".
+  input  logic               tri_untex_i,
   // ---- the attribute-bearing vertex packet, per vertex -------------------
   // Carried through untouched EXCEPT for the winding flip, which is the whole
   // reason they pass through this block rather than around it. See out_attr_*.
@@ -207,6 +222,9 @@ module zhao_geom_clip #(
   output logic signed [11:0] out_min_y_o,
   output logic signed [11:0] out_max_y_o,
   output logic        [15:0] out_src_id_o,
+  // The untextured declaration of the accepted triangle, carried with it and
+  // untouched by the flip (it is per primitive, not per corner).
+  output logic               out_untex_o,
   // ---- the attributes, FOLLOWING their vertices --------------------------
   // When the double-sided law swaps B and C to normalise winding, B's
   // attributes must swap with it. Swapping the positions and not the
@@ -314,6 +332,7 @@ module zhao_geom_clip #(
   // ============================================================ stage 1 ====
   logic signed [20:0] s1_ax, s1_ay, s1_bx, s1_by, s1_cx, s1_cy;
   logic        [15:0] s1_src;
+  logic               s1_untex;
   logic [ATTRS*32-1:0] s1_aa, s1_ab, s1_ac;
   logic        [2:0]  s1_behind;
   logic        [1:0]  s1_cull;
@@ -324,6 +343,7 @@ module zhao_geom_clip #(
   logic signed [DIFF_W-1:0] s2_p, s2_q, s2_u, s2_v_op;
   logic signed [20:0] s2_ax, s2_ay, s2_bx, s2_by, s2_cx, s2_cy;
   logic        [15:0] s2_src;
+  logic               s2_untex;
   logic [ATTRS*32-1:0] s2_aa, s2_ab, s2_ac;
   logic        [2:0]  s2_behind;
   logic        [1:0]  s2_cull;
@@ -341,6 +361,7 @@ module zhao_geom_clip #(
   logic signed [CROSS_W-1:0] s3_area;
   logic signed [20:0] s3_ax, s3_ay, s3_bx, s3_by, s3_cx, s3_cy;
   logic        [15:0] s3_src;
+  logic               s3_untex;
   logic [ATTRS*32-1:0] s3_aa, s3_ab, s3_ac;
   logic        [2:0]  s3_behind;
   logic        [1:0]  s3_cull;
@@ -403,6 +424,7 @@ module zhao_geom_clip #(
   assign out_min_y_o = s3_min_y;
   assign out_max_y_o = s3_max_y;
   assign out_src_id_o = s3_src;
+  assign out_untex_o  = s3_untex;
   assign out_attr_a_o = s3_aa;
   assign out_attr_b_o = flip ? s3_ac : s3_ab;
   assign out_attr_c_o = flip ? s3_ab : s3_ac;
@@ -434,6 +456,7 @@ module zhao_geom_clip #(
       s1_cx     <= 21'sd0;
       s1_cy     <= 21'sd0;
       s1_src    <= 16'd0;
+      s1_untex  <= 1'b0;
       s1_aa     <= '0;
       s1_ab     <= '0;
       s1_ac     <= '0;
@@ -454,6 +477,7 @@ module zhao_geom_clip #(
       s2_cx     <= 21'sd0;
       s2_cy     <= 21'sd0;
       s2_src    <= 16'd0;
+      s2_untex  <= 1'b0;
       s2_aa     <= '0;
       s2_ab     <= '0;
       s2_ac     <= '0;
@@ -475,6 +499,7 @@ module zhao_geom_clip #(
       s3_cx     <= 21'sd0;
       s3_cy     <= 21'sd0;
       s3_src    <= 16'd0;
+      s3_untex  <= 1'b0;
       s3_aa     <= '0;
       s3_ab     <= '0;
       s3_ac     <= '0;
@@ -498,6 +523,7 @@ module zhao_geom_clip #(
       s1_cx     <= tri_cx_i;
       s1_cy     <= tri_cy_i;
       s1_src    <= tri_src_id_i;
+      s1_untex  <= tri_untex_i;
       s1_aa     <= tri_attr_a_i;
       s1_ab     <= tri_attr_b_i;
       s1_ac     <= tri_attr_c_i;
@@ -524,6 +550,7 @@ module zhao_geom_clip #(
       s2_cx     <= s1_cx;
       s2_cy     <= s1_cy;
       s2_src    <= s1_src;
+      s2_untex  <= s1_untex;
       s2_aa     <= s1_aa;
       s2_ab     <= s1_ab;
       s2_ac     <= s1_ac;
@@ -556,6 +583,7 @@ module zhao_geom_clip #(
       s3_cx     <= s2_cx;
       s3_cy     <= s2_cy;
       s3_src    <= s2_src;
+      s3_untex  <= s2_untex;
       s3_aa     <= s2_aa;
       s3_ab     <= s2_ab;
       s3_ac     <= s2_ac;
