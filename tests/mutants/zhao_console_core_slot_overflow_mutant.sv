@@ -118,7 +118,7 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned GEOM_DEPTH    = 1089,
   parameter int unsigned GEOM_NVIEWS   = 2,
   parameter int unsigned GEOM_GEN_W    = 8,
-  parameter int unsigned GEOM_PAY_A_W  = 16,
+  parameter int unsigned GEOM_PAY_A_W  = 17,   // R68 sub-build 4
   parameter int unsigned GEOM_PAYLOAD_W= 106,
   parameter int unsigned GEOM_INDEX_W  = $clog2(GEOM_DEPTH) + 1,
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
@@ -1951,6 +1951,9 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] part_prj_size_sat_o,
   output logic [31:0] part_prj_slot_pressure_o,
   output logic [31:0] part_prj_tag_collision_o,
+  // R68 sub-build 4's new observation port. Declared here so `.*` binds it;
+  // this wrapper instantiates production, so it carries no copy to go stale.
+  output logic [31:0] part_prj_owner_unroutable_o,
   output logic [31:0] part_prj_ladder_unexpected_o,
   output logic [31:0] part_lad_decisions_o,
   output logic [31:0] part_lad_changes_o,

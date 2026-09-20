@@ -43,17 +43,35 @@
 // THE DEMUX IS BY RIDER, NOT BY A SHADOW FIFO, for the reason the service's own
 // header gives: "the rider carried the owner all the way through the pipeline,
 // so routing needs no shadow FIFO and cannot drift from the data it
-// describes." The top bit of the client-A rider is the owner tag.
+// describes." The top TWO bits of the client-A rider are the owner FIELD.
 //
-// **THAT BIT IS PROVABLY FREE, and it is checked rather than assumed.**
+// **THOSE BITS ARE PROVABLY FREE, and it is checked rather than assumed.**
 // `zhao_geom_proj_lane` packs `{{(PAYLOAD_A_W-ARENA_W-INDEX_W){1'b0}},
 // rider_arena_i, rider_index_i}` -- the padding is at the TOP. In the console
-// core ARENA_W=3, INDEX_W=12, PAYLOAD_A_W=16, so bit 15 is a hard zero. The
-// elaboration guard below requires the slot index to fit under the tag, and
-// `geom_tag_collision_o` COUNTS a geometry rider that arrives with the tag bit
-// set. It is a live detector with a positive control in the directed test, not
-// a comment -- the day somebody widens the geometry rider to 16 useful bits,
-// the number moves instead of the particles silently becoming vertices.
+// core ARENA_W=3, INDEX_W=12, PAYLOAD_A_W=17, so bits 16:15 are a hard zero,
+// and that zero IS `OWNER_GEOM`. The lane therefore needs no edit to produce a
+// correctly-owned rider: the encoding was chosen so its existing zero fill is
+// already the right answer. The elaboration guard below requires the slot
+// index to fit under the field, and `geom_tag_collision_o` COUNTS a geometry
+// rider that arrives with any owner bit set. It is a live detector with a
+// positive control in the directed test, not a comment -- the day somebody
+// widens the geometry rider into the field, the number moves instead of the
+// particles silently becoming vertices.
+//
+// WHY THE FIELD IS TWO BITS AND NOT ONE (R68 sub-build 4). One bit names two
+// owners, and this port has a third coming: `zhao_geom_lodstate` projects the
+// INSTANCE CENTRE through the same client A so `zhao_geom_projradius` can
+// divide by its `w`. Owner ruling R3 keeps client A a time-multiplex, so the
+// third owner is a third arm here and not a second projector. The encoding is
+// sized for it NOW, because the failure mode of sizing it later is silent:
+// `TAG_BIT` would still be a legal expression, still demux two owners
+// correctly, and route the third to whichever of them it collided with.
+//
+// THE RESULT-SIDE DEMUX IS EXHAUSTIVE BY OBSERVATION, NOT BY ASSUMPTION.
+// With one bit it was total -- set or clear, particle or geometry, no third
+// case. With two bits, two of the four encodings are unclaimed, so a result
+// carrying one would previously have been DROPPED with nothing saying so.
+// `owner_unroutable_o` is that missing statement.
 //
 // THROUGHPUT, because a shared resource's cost is a rate and not an opinion.
 // `zhao_project_service`'s header computes the composed demand with the vertex
@@ -163,13 +181,21 @@
 //   slot_pressure_o        cycles a particle was offered and all    stimulus
 //                          slots were busy (raise offers, or run
 //                          the bench at SLOTS = 2).
-//   geom_tag_collision_o   a geometry rider arrived with the owner  stimulus
-//                          tag set. Driveable directly: the bench
-//                          owns `g_payload_i`.
+//   geom_tag_collision_o   a geometry rider arrived with a NON-ZERO  stimulus
+//                          owner field (it must be `OWNER_GEOM`).
+//                          Driveable directly: the bench owns
+//                          `g_payload_i`.
+//   owner_unroutable_o     a client-A result came back carrying an   stimulus
+//                          owner the demux does not route -- i.e.
+//                          neither `OWNER_GEOM` nor `OWNER_PART`.
+//                          Driveable directly: the bench owns
+//                          `a_payload_i`, so this needs NO mutant
+//                          even though no producer mints such a
+//                          rider yet.
 //   ladder_unexpected_o    the ladder answered with nothing         stimulus
 //                          outstanding. Driveable directly: the
 //                          bench owns `rng_valid_i`.
-// Every one of the nine is reachable with legal stimulus through a port, so
+// Every one of the ten is reachable with legal stimulus through a port, so
 // none of them needs a committed mutant. The overflow states they would
 // otherwise watch -- a slot allocated with none free, a ladder queue pushed
 // while full -- are UNREACHABLE BY CONSTRUCTION rather than uncounted: both
@@ -185,10 +211,21 @@
 module zhao_part_project #(
     parameter int unsigned REC_W = 128,      // particle128, amendment C2
 
-    // The shared projector's client-A rider. The TOP bit is this block's owner
-    // tag and the low SLOT_W bits are the slot index; everything between is
-    // untouched padding.
-    parameter int unsigned PAY_W = 16,
+    // The shared projector's client-A rider. The TOP `OWNER_W` bits are this
+    // block's owner FIELD and the low SLOT_W bits are the slot index;
+    // everything between is untouched padding.
+    //
+    // R68 SUB-BUILD 4: THIS WAS 16 AND FULL, AND THE OWNER WAS ONE BIT.
+    // ARENA_W 3 + INDEX_W 12 = 15 left exactly one bit at the top, so the
+    // console could name exactly two owners. `zhao_geom_lodstate`'s
+    // instance-centre projection (`pr_*`) is a THIRD, and a third owner does
+    // not fit in one bit -- so the rider is 17 and the owner is a two-bit
+    // FIELD. Widening the payload WITHOUT widening the owner field is the
+    // defect this parameter's history is here to prevent: the geometry rider
+    // would grow into bit 15, `geom_tag_collision_o` would see a legitimate
+    // index bit as an owner tag, and the counter would stop meaning anything
+    // while still reading whatever it read.
+    parameter int unsigned PAY_W = 17,
 
     // Particles in flight at the projector. A FRONTIER KNOB, not a law: the
     // core's latency is 36 clocks, so SLOTS below that throttles the particle
@@ -330,6 +367,7 @@ module zhao_part_project #(
     output var logic [31:0] size_saturations_o,
     output var logic [31:0] slot_pressure_o,
     output var logic [31:0] geom_tag_collision_o,
+    output var logic [31:0] owner_unroutable_o,
     output var logic [31:0] ladder_unexpected_o
 );
 
@@ -337,8 +375,8 @@ module zhao_part_project #(
   initial begin
     if (REC_W != 128)
       $fatal(1, "zhao_part_project: REC_W is %0d; particle128 (amendment C2) is 128", REC_W);
-    if (SLOT_W + 1 > PAY_W)
-      $fatal(1, "zhao_part_project: the rider is %0d bits but a slot index (%0d) plus the owner tag does not fit",
+    if (SLOT_W + 2 > PAY_W)
+      $fatal(1, "zhao_part_project: the rider is %0d bits but a slot index (%0d) plus the two-bit owner field does not fit",
              PAY_W, SLOT_W);
     if (SLOTS < 2)
       $fatal(1, "zhao_part_project: SLOTS is %0d; one in-flight particle stalls the shared port for 36 clocks",
@@ -353,7 +391,27 @@ module zhao_part_project #(
       $fatal(1, "zhao_part_project: LAD_D is %0d; the ladder queue needs a power of two", LAD_D);
   end
 
-  localparam int unsigned TAG_BIT = PAY_W - 1;
+  // ---- THE CLIENT-A OWNER FIELD (R68 sub-build 4) ---------------------------
+  // Two bits at the TOP of the rider. The values are NAMED rather than spelled
+  // as literals at each use, because the one-bit law's whole failure mode was
+  // that `[TAG_BIT]` read as self-evident at five sites and encoded a two-owner
+  // assumption at every one of them.
+  //
+  // `OWNER_GEOM` IS ZERO ON PURPOSE. `zhao_geom_proj_lane` zero-pads the top of
+  // the rider it packs, so a geometry rider is correctly owned with no change
+  // to that block. Renumbering these values is therefore NOT cosmetic: it would
+  // silently re-own every vertex in flight.
+  localparam int unsigned OWNER_W  = 2;
+  localparam int unsigned OWNER_LO = PAY_W - OWNER_W;
+
+  localparam logic [OWNER_W-1:0] OWNER_GEOM = 2'd0;  // GEOM.GROUP_SEQ's vertices
+  localparam logic [OWNER_W-1:0] OWNER_PART = 2'd1;  // this block's particles
+  // 2'd2 and 2'd3 are UNCLAIMED. 2'd2 is reserved for GEOM.LOD's instance
+  // centre (`zhao_geom_lodstate.pr_*`); it is not wired here because that block
+  // is not composed in `zhao_console_core` yet -- see this packet's FINDINGS.
+  // Nothing mints them, and `owner_unroutable_o` is what says so at run time
+  // rather than a comment claiming it.
+
   localparam int unsigned PTR_W   = SLOT_W + 1;
   localparam int unsigned LQP_W   = LAD_W + 1;
 
@@ -480,17 +538,18 @@ module zhao_part_project #(
   assign a_vz_o      = sel_p_c ? p_wz_c : g_vz_i;
   assign a_view_o    = sel_p_c ? cfg_view_i : g_view_i;
 
-  // The particle rider: the owner tag, then zero padding, then the slot. The
-  // geometry rider passes through with its top bit FORCED low -- the guard and
-  // the lane's own zero padding say it is already low, and `geom_tag_collision_o`
-  // is what says so at run time instead of a comment saying it.
+  // The particle rider: the owner field, then zero padding, then the slot. The
+  // geometry rider passes through with its owner field FORCED to `OWNER_GEOM`
+  // -- the guard and the lane's own zero padding say it is already that, and
+  // `geom_tag_collision_o` is what says so at run time instead of a comment
+  // saying it.
   logic [PAY_W-1:0] ride_p_c, ride_g_c;
   always_comb begin
-    ride_p_c            = '0;
-    ride_p_c[TAG_BIT]   = 1'b1;
-    ride_p_c[SLOT_W-1:0]= wp_q[SLOT_W-1:0];
-    ride_g_c            = g_payload_i;
-    ride_g_c[TAG_BIT]   = 1'b0;
+    ride_p_c                       = '0;
+    ride_p_c[OWNER_LO +: OWNER_W]  = OWNER_PART;
+    ride_p_c[SLOT_W-1:0]           = wp_q[SLOT_W-1:0];
+    ride_g_c                       = g_payload_i;
+    ride_g_c[OWNER_LO +: OWNER_W]  = OWNER_GEOM;
   end
   assign a_payload_o = sel_p_c ? ride_p_c : ride_g_c;
 
@@ -504,10 +563,16 @@ module zhao_part_project #(
   // ==========================================================================
   // THE RESULT SIDE.
   // ==========================================================================
-  logic res_is_part_c;
-  assign res_is_part_c = a_valid_i && a_payload_i[TAG_BIT];
+  // The returning rider's owner field, decoded ONCE. Both arms and the
+  // unroutable detector read this same wire, so no reader can disagree with
+  // another about who a result belongs to.
+  logic [OWNER_W-1:0] res_owner_c;
+  assign res_owner_c = a_payload_i[OWNER_LO +: OWNER_W];
 
-  assign h_valid_o   = a_valid_i && !a_payload_i[TAG_BIT];
+  logic res_is_part_c;
+  assign res_is_part_c = a_valid_i && (res_owner_c == OWNER_PART);
+
+  assign h_valid_o   = a_valid_i && (res_owner_c == OWNER_GEOM);
   assign h_x_o       = a_x_i;
   assign h_y_o       = a_y_i;
   assign h_d_o       = a_d_i;
@@ -700,6 +765,7 @@ module zhao_part_project #(
       size_saturations_o    <= '0;
       slot_pressure_o       <= '0;
       geom_tag_collision_o  <= '0;
+      owner_unroutable_o    <= '0;
       ladder_unexpected_o   <= '0;
     end else begin
       // ---- the shared port ------------------------------------------------
@@ -709,8 +775,20 @@ module zhao_part_project #(
       end
       if (g_take_c) begin
         geom_grants_o <= geom_grants_o + 32'd1;
-        if (g_payload_i[TAG_BIT]) geom_tag_collision_o <= geom_tag_collision_o + 32'd1;
+        // The offered rider and the acceptance are the SAME cycle's
+        // combinational values, so this comparison is not blind to a timing
+        // fault the way a detector differencing two separately-enabled
+        // registers would be: there is no held copy to drift.
+        if (g_payload_i[OWNER_LO +: OWNER_W] != OWNER_GEOM)
+          geom_tag_collision_o <= geom_tag_collision_o + 32'd1;
       end
+
+      // A result whose owner the demux does not route goes nowhere. With a
+      // one-bit tag this state did not exist; with a two-bit field it does,
+      // and an undetected drop here would present downstream as a vertex that
+      // never landed -- i.e. as a fault in the arena, several blocks away.
+      if (a_valid_i && (res_owner_c != OWNER_GEOM) && (res_owner_c != OWNER_PART))
+        owner_unroutable_o <= owner_unroutable_o + 32'd1;
       if (pv_take_c) begin
         part_grants_o            <= part_grants_o + 32'd1;
         m_rad [wp_q[SLOT_W-1:0]] <= rec_radius;

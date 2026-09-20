@@ -3469,12 +3469,29 @@
 //   `zhao_geom_lodstate` (the per-instance LodState nobody held),
 //   `zhao_geom_projradius` and `zhao_view_projscale`. Five blocks, all
 //   unit-verified against `zref::creature`, all `pending_compose`. THE CASTER
-//   IS REAL. What is still owed on the INPUT side is one thing and it is
-//   named: `GEOM_PAY_A_W` is 16 and FULL -- ARENA_W 3 + INDEX_W 12 = 15 with
-//   the geometry/particle owner tag at bit 15 (see the elaboration guard
-//   below) -- so the instance centre's `1/w` needs the payload widened to 17
-//   AND a front mux on `zhao_part_project`'s geometry arm, owner ruling R3
-//   keeping client A a time-multiplex. That is R68's sub-build 4, unlanded.
+//   IS REAL. What was still owed on the INPUT side was one thing and it was
+//   named: `GEOM_PAY_A_W` was 16 and FULL -- ARENA_W 3 + INDEX_W 12 = 15 with
+//   the geometry/particle owner tag at bit 15 -- so the instance centre's `w`
+//   needed the payload widened AND a front mux on `zhao_part_project`'s
+//   geometry arm, owner ruling R3 keeping client A a time-multiplex.
+//
+//   THE PAYLOAD HALF OF SUB-BUILD 4 HAS LANDED (2026-09-20, the geompay4
+//   packet). `GEOM_PAY_A_W` is 17, and the owner is a two-bit FIELD rather
+//   than a single tag bit: `OWNER_GEOM = 0`, `OWNER_PART = 1`, with `2'd2`
+//   RESERVED for GEOM.LOD's instance centre and `2'd3` unclaimed. The
+//   encoding puts GEOM at zero deliberately, so `zhao_geom_proj_lane`'s
+//   existing top-of-word zero padding already produces a correctly-owned
+//   rider and that block needed no edit. `geom_tag_collision_o` was
+//   re-authored with it -- it now counts a geometry rider arriving with ANY
+//   owner bit set, and `owner_unroutable_o` is new beside it, counting a
+//   result owned by neither routed owner.
+//
+//   WHAT IS STILL OWED IS THE FRONT MUX AND ITS PRODUCER, and the blocker is
+//   NOT the payload any more. `zhao_geom_lodstate` is not composed in this
+//   file; composing it requires `zhao_geom_ladderbank`, which needs an
+//   ENGINE1 share off `zhao_mem_share_n` and a page-publication path for its
+//   `pub_*` port. Wiring the third arm before that producer exists would tie
+//   off `a_hit_i`/`a_bound_i`, which is the one thing this campaign forbids.
 //
 //   AND THE BLOCKER HAS MOVED TWICE MORE, WHICH IS WHY THIS ENTRY IS LONG
 //   RATHER THAN CLOSED. Traced 2026-09-20 by the forge packet, under owner
@@ -3612,14 +3629,15 @@
 //        REASON 2, because an opaque shadow is the wrong picture however
 //        elegantly it arrives.
 //
-//   A DETAIL THE WIDENING ARITHMETIC NEEDS AND NOBODY HAS WRITTEN DOWN: with
-//   a THIRD owner on client A, the single top tag bit stops being enough.
-//   `zhao_part_project.sv:356` is `TAG_BIT = PAY_W - 1` and `:53`'s
-//   `geom_tag_collision_o` counts a geometry rider arriving with that bit
-//   set -- a ONE-BIT, TWO-OWNER law. Three owners make it a two-bit owner
-//   field, so the payload goes to 17 AT LEAST and that counter's meaning
-//   changes with it. Sizing the widening as "16 -> 17" without re-authoring
-//   the tag law is how the collision counter silently stops meaning anything.
+//   A DETAIL THE WIDENING ARITHMETIC NEEDED AND NOBODY HAD WRITTEN DOWN, now
+//   DISCHARGED: with a THIRD owner on client A, the single top tag bit stops
+//   being enough. `TAG_BIT = PAY_W - 1` and `geom_tag_collision_o` counting a
+//   geometry rider arriving with that bit set was a ONE-BIT, TWO-OWNER law.
+//   Three owners make it a two-bit owner field, so the payload goes to 17 AT
+//   LEAST and that counter's meaning changes with it. Sizing the widening as
+//   "16 -> 17" without re-authoring the tag law is how the collision counter
+//   silently stops meaning anything -- so both were done in one commit, and
+//   the counter was fired on the NEW law before its silence was quoted.
 //
 //   TWO SMALLER CORRECTIONS FROM THE SAME RE-SEARCH, both about what the
 //   forge files ARE, because each one would send a reader to the wrong block:
@@ -4098,7 +4116,11 @@ module zhao_console_core
   parameter int unsigned GEOM_DEPTH    = 1089,
   parameter int unsigned GEOM_NVIEWS   = 2,
   parameter int unsigned GEOM_GEN_W    = 8,
-  parameter int unsigned GEOM_PAY_A_W  = 16,
+  // R68 sub-build 4: 17, not 16. The low GEOM_ARENA_W+GEOM_INDEX_W = 15 bits
+  // are the {arena, index} rider; the top TWO are `zhao_part_project`'s owner
+  // FIELD. At 16 the field was one bit and client A could name exactly two
+  // owners, which is the constraint that held GEOM.LOD's instance centre out.
+  parameter int unsigned GEOM_PAY_A_W  = 17,
   parameter int unsigned GEOM_PAYLOAD_W= 106,
   parameter int unsigned GEOM_INDEX_W  = $clog2(GEOM_DEPTH) + 1,
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
@@ -6000,6 +6022,11 @@ module zhao_console_core
   output logic [31:0] part_prj_size_sat_o,
   output logic [31:0] part_prj_slot_pressure_o,
   output logic [31:0] part_prj_tag_collision_o,
+  // R68 sub-build 4: a client-A result came back owned by neither GEOM nor
+  // PART. Unreachable until a third owner is minted, and exported anyway --
+  // the whole point of widening the field is that a third owner is coming, and
+  // a drop that nothing counts would surface as a missing vertex in the arena.
+  output logic [31:0] part_prj_owner_unroutable_o,
   output logic [31:0] part_prj_ladder_unexpected_o,
   output logic [31:0] part_lad_decisions_o,
   output logic [31:0] part_lad_changes_o,
@@ -6479,6 +6506,13 @@ module zhao_console_core
   logic [63:0]             terr_hps_wr_data;
   zhao_hps_burst_rsp_t     terr_hps_rsp;
 
+  // The width of `zhao_part_project`'s client-A owner field, mirrored here so
+  // the guard below can state the rider's real budget. It is a LOCALPARAM in
+  // that block and not a parameter, because two bits is a law and not a knob;
+  // this copy exists only so the console can check its own rider against it,
+  // and the guard is what catches the two drifting apart.
+  localparam int unsigned GEOM_OWNER_W_C = 2;
+
   // ==========================================================================
   // ELABORATION GUARDS.
   //
@@ -6489,9 +6523,15 @@ module zhao_console_core
   // CLAUDE.md, 2026-09-08.
   // ==========================================================================
   initial begin
-    if (GEOM_ARENA_W + GEOM_INDEX_W > GEOM_PAY_A_W)
-      $fatal(1, "zhao_console_core: the geometry rider is %0d bits (ARENA_W %0d + INDEX_W %0d) but GEOM_PAY_A_W is %0d",
-             GEOM_ARENA_W + GEOM_INDEX_W, GEOM_ARENA_W, GEOM_INDEX_W, GEOM_PAY_A_W);
+    // R68 sub-build 4: the rider must fit UNDER the owner field, not merely
+    // inside the payload. The old form compared against GEOM_PAY_A_W alone,
+    // so growing the rider to 16 bits would have passed this guard while
+    // colliding with `zhao_part_project`'s owner tag -- the exact silent
+    // failure `geom_tag_collision_o` exists to catch, one layer earlier.
+    if (GEOM_ARENA_W + GEOM_INDEX_W > GEOM_PAY_A_W - GEOM_OWNER_W_C)
+      $fatal(1, "zhao_console_core: the geometry rider is %0d bits (ARENA_W %0d + INDEX_W %0d) but only %0d bits sit under the %0d-bit owner field of a %0d-bit GEOM_PAY_A_W",
+             GEOM_ARENA_W + GEOM_INDEX_W, GEOM_ARENA_W, GEOM_INDEX_W,
+             GEOM_PAY_A_W - GEOM_OWNER_W_C, GEOM_OWNER_W_C, GEOM_PAY_A_W);
     if (POST_LINE_W < 384)
       $fatal(1, "zhao_console_core: POST_LINE_W is %0d, narrower than the Z60 view (384)", POST_LINE_W);
     if (PART_REC_W != 128)
@@ -12792,6 +12832,7 @@ module zhao_console_core
     .size_saturations_o   (part_prj_size_sat_o),
     .slot_pressure_o      (part_prj_slot_pressure_o),
     .geom_tag_collision_o (part_prj_tag_collision_o),
+    .owner_unroutable_o   (part_prj_owner_unroutable_o),
     .ladder_unexpected_o  (part_prj_ladder_unexpected_o)
   );
 
