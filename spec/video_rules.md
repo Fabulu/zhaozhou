@@ -252,16 +252,43 @@ wire would be a second statement of a law that already exists, and one more
 thing a capture can disagree with. R63 put the eye on the wire for the opposite
 reason: recovering it would have needed an unratified 4×4 inverse.
 
-> **OPEN, and it belongs to whoever composes this table into CMD.EXEC.**
-> §1.1 latches the mode only at frame start, effective the NEXT frame, while a
-> `SetView` in the same packet commits immediately. So which mode indexes the
-> table — the one on screen, or the one `SetPresentationContract` just set?
-> **Recommended: the mode the contract set**, because the view being configured
-> is the view of the frame that contract governs, and indexing with the
-> outgoing mode would give a Duo frame's second view a Z60 rectangle for
-> exactly one frame. It is recorded here rather than decided in RTL, because a
-> composer choosing between two defensible readings is how a layout gets
-> invented quietly.
+> **DECIDED 2026-09-20 (projbound), when the table was composed into CMD.EXEC.
+> The recommendation below was taken, and the evidence that settled it is new.**
+>
+> The question was: §1.1 latches the mode only at frame start, effective the
+> NEXT frame, while a `SetView` in the same packet commits immediately. So
+> which mode indexes the table — the one on screen, or the one
+> `SetPresentationContract` just set? Both exist as real gpu-domain registers
+> in one composed block: `zhao_cmd_scheduler.sv` holds `mode_act` (on screen,
+> latched at frame start) and `mode_pend` (what the contract set).
+>
+> **Taken: the mode the contract set.** The original reason stands — the view
+> being configured is the view of the frame that contract governs. What
+> settles it, and what this note could not see before the lowering was
+> written, is that **the projector's viewport rectangle is LATCHED into the
+> matrix bank by the view walk and is never recomputed per frame.** The clip
+> scissor (`zhao_console_core.sv` GLUE 1) is combinational from `mode_act_o`
+> and therefore self-corrects every frame; the bank rectangle does not. So
+> indexing with the outgoing mode writes a rectangle that is wrong from the
+> instant the mode flips and **stays wrong until the next `SetView`** — and on
+> a Z60 → Duo switch the outgoing mode makes `viewport_id` 1 *out of range*,
+> so the second view is refused outright and keeps its **reset** rectangle.
+> That is not the one-frame blemish this note originally described.
+>
+> **Where it lives, and how to reverse it.** `zhao_cmd_exec.sv`'s `pc_mode`,
+> one register, lifted from the same `SetPresentationContract` record the
+> block already parses for the token ceilings — so the choice costs no port on
+> any boundary, and the out-of-range refusal rule there is copied verbatim
+> from `zhao_cmd_scheduler`'s so the two cannot disagree about the same byte.
+> Reversing the decision is a change to that one register's source.
+>
+> **A consequence worth stating, because nothing counts it.** For the one
+> frame between a contract and its frame start, the bank rectangle describes
+> the incoming mode while the clip scissor still describes the outgoing one.
+> They disagree for that frame by construction. The alternative disagrees
+> *permanently*, which is why this is the right side of the trade — but a
+> future packet that makes the scissor latch, or the rect live, should revisit
+> both together rather than either alone.
 
 ## 4. Scanout law (D7) — repeat, never tear
 

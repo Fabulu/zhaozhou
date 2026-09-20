@@ -5405,6 +5405,10 @@ set_tests_properties(lint_zhao_cmd_decoder PROPERTIES
 # ready fork or the one-cycle staging race.
 add_executable(test_cmd_exec_directed command/cmd_exec_directed.cpp)
 target_link_libraries(test_cmd_exec_directed PRIVATE zhao_harness zhao_zref)
+# white-box: zrender/internal.hpp. Cases 32-35 differential the viewport
+# lowering against `zref::render::viewports_of()` -- the ORACLE video_rules
+# 3.2 names -- rather than against a retyped copy of the table.
+target_include_directories(test_cmd_exec_directed PRIVATE ${CMAKE_SOURCE_DIR}/reference/src)
 verilate(test_cmd_exec_directed
   PREFIX Vtb_cmd_exec_pair
   TOP_MODULE tb_cmd_exec_pair

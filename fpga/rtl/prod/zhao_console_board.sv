@@ -2591,6 +2591,13 @@ module zhao_console_board
   output logic [31:0] cmd_exec_stamps_o,
   output logic [31:0] cmd_exec_stamp_overflow_o,
   output logic [31:0] cmd_exec_view_refused_o,
+  // A SetView whose `viewport_id` names no viewport in the mode the last
+  // SetPresentationContract set -- Z60 and Storm have one, Duo has two
+  // (video_rules 3.2). The rectangle is refused and the bank keeps its
+  // previous one; the camera in the same record still lands. Separate from
+  // `cmd_exec_view_refused_o`, which is the BANK select and is
+  // mode-independent: two fields, two refusals.
+  output logic [31:0] cmd_exec_viewport_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
   // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
@@ -4247,6 +4254,7 @@ module zhao_console_board
       .cmd_exec_stamps_o                  (cmd_exec_stamps_o),
       .cmd_exec_stamp_overflow_o          (cmd_exec_stamp_overflow_o),
       .cmd_exec_view_refused_o            (cmd_exec_view_refused_o),
+      .cmd_exec_viewport_refused_o        (cmd_exec_viewport_refused_o),
       .cmd_exec_src_truncated_o           (cmd_exec_src_truncated_o),
       .cmd_exec_unsupported_o             (cmd_exec_unsupported_o),
       .cmd_exec_envs_o                    (cmd_exec_envs_o),

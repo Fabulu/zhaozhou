@@ -1152,7 +1152,18 @@
 //
 //      WHAT ACTUALLY REMAINS, which the stale clause was hiding: GEOM.CLIP has
 //      exactly ONE triangle producer, `rp_o_valid` from GEOM.REPLAY, and there
-//      is NO TWO-PRODUCER MERGE. Terrain's projected corners leave this module
+//      is NO TWO-PRODUCER MERGE.
+//
+//      RE-MEASURED 2026-09-20 (projbound) AND STILL TRUE, but the CITATION had
+//      rotted and the new one looks like the opposite: GEOM.CLIP's
+//      `tri_valid_i` is no longer `rp_o_valid` but `mw_t_valid`. That is NOT a
+//      merge appearing. `u_material_window` (I49's closing half) is a GATE in
+//      series on the one producer -- it holds a triangle until its material is
+//      published and passes GEOM.REPLAY's own unbuffered data wires beneath.
+//      One producer in, one out. Anybody grepping for `rp_o_valid` at
+//      `u_geom_clip` will not find it and must not read that as progress.
+//
+//      Terrain's projected corners leave this module
 //      on `proj_out_*` and its lit colour on `terr_light_*`, and both land
 //      nowhere. So the missing pieces are (a) the merge into GEOM.CLIP and
 //      (b) terrain's attribute packet. Wiring the corners into a port that
@@ -1178,8 +1189,19 @@
 //                     texture-coordinate law does not exist in this tree.
 //        lit r/g/b -- `terr_light_base_o` is ONE signed 32-bit SCALAR shade,
 //                     not three channels. Turning it into lit rgb needs the
-//                     material's colour, which is the same missing binding
-//                     `tri_flat_request_i` waits on (entry I49).
+//                     material's COLOUR.
+//
+//                     THIS POINTED AT I49 AND I49 NO LONGER EXISTS. Corrected
+//                     2026-09-20 (projbound): the texmat2 packet CLOSED and
+//                     DELETED I49 the same day this clause was written, so the
+//                     blocker outlived its citation by hours. `MATERIAL.RESOLVE`
+//                     is composed, `tri_flat_request_i` is retired, and it is
+//                     built inside this file from the published answer.
+//                     WHAT IS STILL MISSING MOVED TO I20: `base_rgb` is the
+//                     VERTEX's colour and not the material's (ruling R11), and
+//                     picking a corner for a FLAT field is an art decision a
+//                     composer must not make. Re-point at I20, not I49 -- the
+//                     blocker is real, the entry it named is gone.
 //        alpha     -- owner ruling R48's named constant. NOT a gap.
 //
 //      So this entry is blocked on TWO ABSENT LAWS and not on one absent wire,
@@ -1203,11 +1225,22 @@
 //      addresses 0..15, one word per clock, out of a packet CMD.DECODER has
 //      already ratified. `cmd_exec_views_o` counts it.
 //
-//      STILL OPEN, and it is THREE things. It used to say two, and both of
-//      those sentences were wrong when re-read on 2026-09-20 (projinput).
+//      STILL OPEN, and it is TWO things as of 2026-09-20 (projbound): the
+//      `proj_en_i` OWNER DECISION and `pixel_error`'s uncomposed
+//      MEASURE.GOVERNOR. It said THREE, and before that two, and both of
+//      those earlier sentences were wrong when re-read on 2026-09-20
+//      (projinput). The viewport bullet is now CLOSED and is KEPT rather than
+//      deleted, because the reasoning in it is what the next reader needs --
+//      and a stale CLOSED entry under-reports progress exactly as deleting an
+//      open one would over-report it (entry I4's rule).
 //
-//        * THE VIEWPORT RECT, cfg addresses 16 and 17. SetView carries a
-//          `viewport_id` and NOT a rectangle.
+//      NEITHER REMAINING ITEM IS WIRING AND NEITHER IS THIS LANE'S TO DECIDE,
+//      which is why this entry does not close today. `proj_en_i` needs the
+//      OWNER (see FINDINGS-projinput.md D-1, re-measured and still open);
+//      `pixel_error` needs a block another packet owns.
+//
+//        * THE VIEWPORT RECT, cfg addresses 16 and 17 -- CLOSED 2026-09-20.
+//          SetView carries a `viewport_id` and NOT a rectangle.
 //
 //          THE REST OF WHAT THIS BULLET USED TO SAY WAS FALSE, and it is the
 //          expensive kind of false -- it asserted a PRESENCE and then refused
@@ -1236,12 +1269,47 @@
 //          The table is now WRITTEN, in `spec/video_rules.md` section 3.2,
 //          citing all three. It is DERIVED and not an ABI field (owner ruling
 //          R73's distinction), so the lowering costs no zidl change and no
-//          capture regeneration. What is still owed here is the LOWERING --
-//          CMD.EXEC indexing that table and writing cfg 16/17 -- plus R67's
-//          fixture move to Duo, and one decision: section 1.1 latches the mode
-//          at frame start while a SetView commits immediately, so WHICH mode
-//          indexes the table is a real choice and is recorded as OPEN in 3.2
-//          rather than picked here.
+//          capture regeneration.
+//
+//          THIS BULLET IS CLOSED, 2026-09-20 (projbound). The lowering exists:
+//          `zhao_cmd_exec` parses `SetView.viewport_id` (ABI byte 17, a
+//          SEPARATE field from `view_id` at byte 16 -- it had parsed NEITHER),
+//          indexes the 3.2 table, and writes cfg 16 and 17 as steps 20 and 21
+//          of its view walk, under the SAME dirty bit as the matrix. So a
+//          view's camera and its rectangle cannot land in different frames,
+//          which is the property the profile's step 16 already had.
+//
+//          An id that names no viewport in the current mode is REFUSED, never
+//          aliased: the walk ends at step 19, the bank keeps its previous
+//          rectangle, and `cmd_exec_viewport_refused_o` counts it. THE CAMERA
+//          IN THE SAME RECORD STILL LANDS -- refusing a rectangle must not
+//          refuse a view. `tests/command/cmd_exec_directed.cpp` cases 32-35
+//          differential all four rectangles against
+//          `zref::render::viewports_of()` (the ORACLE, not a retyped table),
+//          fire the counter by stimulus in Z60, and prove the same id is
+//          accepted in Duo -- so the counter is seen to read the MODE and not
+//          merely the id.
+//
+//          THE DECISION 3.2 RECORDED AS OPEN IS TAKEN, and it is recorded
+//          there as taken rather than left for the next reader. Section 1.1
+//          latches the mode at frame start while a SetView commits
+//          immediately, so "the mode on screen" and "the mode the contract
+//          set" are different registers -- `zhao_cmd_scheduler` holds both, as
+//          `mode_act` and `mode_pend`. THE CONTRACT'S MODE is taken, which is
+//          what 3.2 and FINDINGS-projinput.md D-2 both recommended, for their
+//          reason plus one neither could see: this bank rectangle is LATCHED
+//          by the walk and never recomputed per frame, so indexing with the
+//          OUTGOING mode writes a rectangle that is wrong from the instant the
+//          mode flips and stays wrong until the next SetView -- and on a
+//          Z60 -> Duo switch it makes viewport 1 out of range, so the second
+//          view would be refused outright and keep its RESET rectangle. That
+//          is not the one-frame blemish 3.2 described; it is worse, and it
+//          settles the choice on evidence rather than on taste. Cheap to
+//          reverse: `pc_mode` is one register with its reason beside it.
+//
+//          STILL OWED, and NOT this bullet: R67's fixture move to Duo. The
+//          smoke's geometry fixture is Z60 and the lowering does not change
+//          it, so `raster pixels=2560` is unmoved.
 //
 //        * `proj_en_i`. THIS BULLET USED TO SAY "and `SetView`'s OTHER FOUR
 //          FIELDS ... `geometry_tokens`/`fragment_tokens` want MEASURE.TOKENS,
@@ -6890,6 +6958,13 @@ module zhao_console_core
   output logic [31:0] cmd_exec_stamps_o,
   output logic [31:0] cmd_exec_stamp_overflow_o,
   output logic [31:0] cmd_exec_view_refused_o,
+  // A SetView whose `viewport_id` names no viewport in the mode the last
+  // SetPresentationContract set -- Z60 and Storm have one, Duo has two
+  // (video_rules 3.2). The rectangle is refused and the bank keeps its
+  // previous one; the camera in the same record still lands. Separate from
+  // `cmd_exec_view_refused_o`, which is the BANK select and is
+  // mode-independent: two fields, two refusals.
+  output logic [31:0] cmd_exec_viewport_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
   // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
@@ -10135,19 +10210,26 @@ module zhao_console_core
   // THE MATRIX BANK HAS TWO WRITERS.  I14, and this is the closing half of it.
   // ==========================================================================
   // CMD.EXEC (section 7c) owns cfg addresses 0..15 -- SetView's `mat4fx`, the
-  // camera. The host port owns 16 and 17, the viewport origin and extent, and
-  // it keeps them because NO RATIFIED COMMAND CARRIES A VIEWPORT RECT: SetView
-  // has a `viewport_id` and not a rectangle.
+  // camera -- 18 (the depth profile), 19..21 (the eye), AND, as of 2026-09-20,
+  // 16 and 17: THE VIEWPORT RECT.
   //
-  // THE REASON THIS SENTENCE USED TO GIVE WAS FALSE, corrected 2026-09-20
-  // (projinput). It said "the id-to-rectangle table is `spec/video_rules.md`'s
-  // and is not in the ABI. Inventing that table here is precisely what this
-  // file may not do." `video_rules.md` contained no such table -- and
-  // `zref::render::viewports_of()` has contained it since 2026-08-15, so
-  // lowering it would invent nothing. The table is now written down, in
-  // `spec/video_rules.md` section 3.2, with the oracle named as the thing to
-  // differential against. Entry I14 carries the full correction and what is
-  // still owed; the host port stays until the lowering lands.
+  // THE LOWERING HAS LANDED, and this is what changed. SetView carries a
+  // `viewport_id` and not a rectangle, and the sentence here used to say the
+  // id-to-rectangle table "is `spec/video_rules.md`'s and is not in the ABI.
+  // Inventing that table here is precisely what this file may not do."
+  // `video_rules.md` contained no such table (projinput, 2026-09-20) -- it
+  // does now, section 3.2 -- and `zref::render::viewports_of()` has contained
+  // the same rectangles since 2026-08-15. So `zhao_cmd_exec` now indexes that
+  // table with `SetView.viewport_id` and the mode the last contract set, and
+  // writes both words as steps 20/21 of its view walk, under the same dirty
+  // bit as the camera. Nothing here derives a rectangle; the lowering is in
+  // the executor, where the record is.
+  //
+  // THE HOST PORT STAYS, and it is not vestigial. It keeps cycle priority, so
+  // a host can still place a rectangle the ABI has no command for -- a debug
+  // or bring-up override -- and CMD.EXEC re-presents behind it. Removing it
+  // now that the command path exists would remove function rather than close
+  // anything, which is the one thing this ledger forbids.
   //
   // LOSSLESS, IN BOTH DIRECTIONS, AND THAT IS WHY THERE IS NO COUNTER HERE.
   // The host takes any cycle it asks for; CMD.EXEC's `proj_cfg_ready_i` goes
@@ -10183,8 +10265,9 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I14, HALF CLOSED: the camera words come from CMD.EXEC, the viewport rect
-    // still comes from the host port. See the merge directly above.
+    // I14: the camera words, the depth profile, the eye AND the viewport rect
+    // all come from CMD.EXEC as of 2026-09-20; the host port remains as a
+    // priority override. See the merge directly above.
     .cfg_we_i  (proj_cfg_we_m),
     .cfg_view_i(proj_cfg_view_m),
     .cfg_addr_i(proj_cfg_addr_m),
@@ -10261,9 +10344,17 @@ module zhao_console_core
     .ref_mat_b_i  (ts_r_mat_b),
     .ref_weight_i (ts_r_weight),
 
-    // I13: the projected triangle. GEOM.SETUP is the customer and is not
-    // composed; the shell's own triangle door takes EDGE FUNCTIONS, which is
-    // setup's arithmetic and not this file's to invent.
+    // I13: the projected triangle, TERRAIN's, and it still leaves the module.
+    //
+    // THE CLAUSE HERE WAS STALE, corrected 2026-09-20 (projbound). It read
+    // "GEOM.SETUP is the customer and is not composed" -- `zhao_geom_setup
+    // u_geom_setup` IS composed in this file, and entry I13 recorded that
+    // correction on 2026-09-20 without this port map being re-read. The
+    // customer is GEOM.CLIP, which has exactly one producer and no merge.
+    // What is missing is the TWO-PRODUCER MERGE and terrain's attribute
+    // packet (two absent terrain-lane LAWS, not wiring -- I13 names both).
+    // Wiring corners into a port that wants edge functions would still be the
+    // hidden adapter this file must not contain.
     .out_valid_o  (proj_out_valid_o),
     .out_ready_i  (proj_out_ready_i),
     .out_ax_o     (proj_out_ax_o),
@@ -14014,6 +14105,7 @@ module zhao_console_core
     .stamps_issued_o      (cmd_exec_stamps_o),
     .stamp_overflow_o     (cmd_exec_stamp_overflow_o),
     .view_range_refused_o (cmd_exec_view_refused_o),
+    .viewport_range_refused_o (cmd_exec_viewport_refused_o),
     .stamp_src_truncated_o(cmd_exec_src_truncated_o),
     .draws_issued_o       (cmd_exec_draws_o),
     .draw_overflow_o      (cmd_exec_draw_overflow_o),

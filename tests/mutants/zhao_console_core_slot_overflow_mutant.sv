@@ -2322,6 +2322,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] cmd_exec_stamps_o,
   output logic [31:0] cmd_exec_stamp_overflow_o,
   output logic [31:0] cmd_exec_view_refused_o,
+  // A SetView whose viewport_id names no viewport in the mode the last
+  // contract set (video_rules 3.2). Carried over verbatim 2026-09-20 with
+  // the port block, as this wrapper's header requires.
+  output logic [31:0] cmd_exec_viewport_refused_o,
   output logic [31:0] cmd_exec_src_truncated_o,
   output logic [31:0] cmd_exec_unsupported_o,
   // R25: committed SetEnvironment records handed to GEOM.LIGHT.ENV.
