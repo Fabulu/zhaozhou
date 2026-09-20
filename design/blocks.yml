@@ -375,6 +375,29 @@ counter_catalog:
   - geom_replay_missed
   - geom_replay_att_skew
   - geom_replay_profile_mixed
+  # FORGE.SHADOW (2026-09-20, owner ruling R94) -- the four census ports the
+  # ledger row never named. `zhao_forge_shadow.sv` splits its refusals by
+  # WHETHER THEY ARE CORRECT: no_ground, zero_radius and far_rung each record a
+  # refusal that is the right answer, and only tap_protocol is a fault. The row
+  # meanwhile declared `shadows_skipped`, which has no producer anywhere
+  # (tools/design/check_counters.py: "no shadows_skipped_o and no mapping").
+  # `shadows_skipped` KEEPS its id 78 because this list is append-only and ids
+  # are positions; it is simply no longer claimed by any block.
+  - forge_shadow_no_ground
+  - forge_shadow_zero_radius
+  - forge_shadow_far_rung
+  - forge_shadow_tap_protocol
+  # FORGE.PRIM (2026-09-20) -- the same defect one row down. The ledger named
+  # `forge_prim_triangles_submitted`, which is not a port either; the block
+  # emits jobs_o, triangles_o, refused_family_o, refused_limit_o and
+  # skipped_view_o, and forge_prim_directed fires all five with legal stimulus
+  # ("116 jobs, 7600 triangles, 2 family-refused, 4 limit-refused,
+  # 1 view-skipped"). Named here so the census can be read.
+  - forge_prim_jobs
+  - forge_prim_triangles
+  - forge_prim_refused_family
+  - forge_prim_refused_limit
+  - forge_prim_skipped_view
 blocks:
 
   # ===========================================================================
@@ -5147,6 +5170,15 @@ blocks:
     backpressure: ready_valid
     latency: variable
     target_throughput: see contract
+    # TWO LANES AUTHORED THIS REPAIR INDEPENDENTLY AND REACHED THE SAME ANSWER.
+    # `gz/projadopt` and `gz/forgeconnect` both removed the key, both re-verified
+    # `shadow_hull` from scratch, and neither could see the other -- because the
+    # coordinator briefed the second lane from the FIRST LANE'S UNMERGED BRANCH
+    # as though it were the tree (owner ruling R106). The duplication cost a
+    # hand-resolved conflict and nearly cost the counter catalogue, which is
+    # append-only with ids equal to positions. The agreement is worth recording:
+    # two independent searches for `zref::forge::shadow_hull` both found zero.
+    #
     # `reference_model: zref::forge::shadow_hull` STOOD HERE UNTIL 2026-09-20
     # (owner ruling R94) AND THAT SYMBOL HAS NEVER EXISTED -- zero occurrences
     # anywhere under `reference/`, re-verified at this commit over every .hpp
@@ -5174,7 +5206,12 @@ blocks:
     # If a hull oracle is ever written, this key comes back naming it.
     #
     # `uncashed_cheques.py` CHECK 5 now resolves every `reference_model:` in
-    # this file against the tree, so the next one cannot be quiet.
+    # this file against the tree, so the next one cannot be quiet. (And as of
+    # R105 it strips COMMENTS before resolving -- otherwise a header explaining
+    # that a phantom was replaced would itself resolve the phantom.)
+    #
+    # DO NOT INVENT ONE. If a hull oracle is ever written, this key comes back
+    # naming it, and not before.
     tests:
       # WAS "PLANNED -- NOT WRITTEN" ON BOTH ROWS UNTIL 2026-09-20 (R94), while
       # the directed suite existed and passed. The same row carried a FALSE
@@ -5182,23 +5219,45 @@ blocks:
       # a ledger is not documentation, it is an input to the completion number.
       directed: tests/forge/forge_shadow_directed.cpp
       random: "PLANNED -- NOT WRITTEN"
-    # COUNTERS ARE STILL WRONG IN BOTH DIRECTIONS AND ARE NOT REPAIRED HERE,
-    # deliberately. `shadows_skipped` has no producer anywhere
-    # (`tools/design/check_counters.py` reports "no shadows_skipped_o and no
-    # mapping"), while `zhao_forge_shadow.sv:160-162` emits THREE counters this
-    # list does not name -- `no_ground_o`, `zero_radius_o`, `far_rung_o`, each
-    # of which records a CORRECT refusal rather than a fault. Fixing it means
-    # appending three names to `counter_catalog` and regenerating
-    # `design/counter_ids.lock`, and that list is APPEND-ONLY with ids equal to
-    # positions: two lanes appending concurrently produce a merge whose wrong
-    # resolution renumbers every counter after the seam. It is one packet's work
-    # on a quiet tree, not a line in this one. Recorded in
-    # FINDINGS-projadopt.md with the exact edit.
-    counters: [shadows_emitted, shadows_skipped]
+    # THE FIVE CENSUS PORTS THE RTL ACTUALLY EMITS -- R94's other half, and it
+    # IS repaired here, by the gz/forgeconnect lane. (The projadopt lane left
+    # this deliberately undone, correctly, because `counter_catalog` is
+    # APPEND-ONLY with ids equal to positions and two lanes appending
+    # concurrently produce a merge whose wrong resolution renumbers every
+    # counter after the seam. Exactly one lane held it. Verified before merging:
+    # projadopt's commit range touches neither counter file.)
+    #
+    # This row read `[shadows_emitted, shadows_skipped]`, and it was wrong in
+    # BOTH directions at once. `shadows_skipped` has no producer anywhere;
+    # `zhao_forge_shadow.sv:160-162` emits four ports this list never named.
+    # Four of the five record a CORRECT refusal and only
+    # forge_shadow_tap_protocol is a fault. All are fired by legal stimulus in
+    # forge_shadow_directed (39 checks), so none is owed a mutant -- checked,
+    # not assumed. Ids 276-284 appended, nothing renumbered.
+    #
+    # `tools/design/check_counters.py` could see exactly ONE of these ten: it
+    # detects declared-without-port and is BLIND to port-without-declaration
+    # (owner ruling R110). That is why this row could drift -- the tool looks
+    # only one way down its own comparison, and the defect made its report
+    # SHORTER.
+    counters: [shadows_emitted, forge_shadow_no_ground, forge_shadow_zero_radius, forge_shadow_far_rung, forge_shadow_tap_protocol]
+    counter_ports:
+      shadows_emitted: shadows_emitted_o
+      forge_shadow_no_ground: no_ground_o
+      forge_shadow_zero_radius: zero_radius_o
+      forge_shadow_far_rung: far_rung_o
+      forge_shadow_tap_protocol: tap_protocol_o
     source_ids: true
     budget_group: myriad_forge
-    maturity: SPECIFIED
-    maturity_log: []
+    # The row said SPECIFIED with an empty log while a registered ctest passed
+    # 39 checks against the block -- the false-absence half of R94. The RTL and
+    # its directed test landed together in 759b449a.
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - state: UNIT_VERIFIED
+        date: "2026-09-19"
+        commit: "759b449a"
+        evidence: tests/forge/forge_shadow_directed.cpp
     deferred: false
     cut_order: null
     superseded_by: null
@@ -5232,7 +5291,20 @@ blocks:
     tests:
       directed: tests/forge/forge_prim_directed.cpp
       random: tests/forge/forge_prim_directed.cpp
-    counters: [forge_prim_triangles_submitted]
+    # `forge_prim_triangles_submitted` was declared and is NOT a port: the block
+    # emits `triangles_o`. Rather than map the old name onto it and leave the
+    # other four unnamed, all five evidence ports are named, each fired by
+    # legal stimulus in forge_prim_directed (11 checks: "116 jobs, 7600
+    # triangles, 2 family-refused, 4 limit-refused, 1 view-skipped").
+    # `forge_prim_triangles_submitted` keeps its catalog id for the same
+    # append-only reason as `shadows_skipped` and is no longer claimed here.
+    counters: [forge_prim_jobs, forge_prim_triangles, forge_prim_refused_family, forge_prim_refused_limit, forge_prim_skipped_view]
+    counter_ports:
+      forge_prim_jobs: jobs_o
+      forge_prim_triangles: triangles_o
+      forge_prim_refused_family: refused_family_o
+      forge_prim_refused_limit: refused_limit_o
+      forge_prim_skipped_view: skipped_view_o
     source_ids: true
     budget_group: myriad_forge
     maturity: UNIT_VERIFIED

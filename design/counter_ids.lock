@@ -278,3 +278,12 @@ geom_replay_refused
 geom_replay_missed
 geom_replay_att_skew
 geom_replay_profile_mixed
+forge_shadow_no_ground
+forge_shadow_zero_radius
+forge_shadow_far_rung
+forge_shadow_tap_protocol
+forge_prim_jobs
+forge_prim_triangles
+forge_prim_refused_family
+forge_prim_refused_limit
+forge_prim_skipped_view
