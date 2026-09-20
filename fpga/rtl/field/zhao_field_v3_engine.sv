@@ -170,6 +170,11 @@ module zhao_field_v3_engine #(
     output var logic                    sat_add_o,
     output var logic                    sat_mul_o,
     output var logic                    sat_rescale_o,
+    // The FOURTH numeric cause, and the one that is not a saturation. Owner
+    // ruling R145, packet C1. It has exactly ONE producer -- the service
+    // path's normalize -- so unlike the three above it is not an OR of two
+    // halves; see the assignment below.
+    output var logic                    rcp0_o,
 
     // The single write port, after arbitration. This is the register file's
     // write as it actually happens, and it is exposed so a test can watch the
@@ -441,6 +446,9 @@ module zhao_field_v3_engine #(
       // THE LONG OPS' HALF of the numeric ledger, new on 2026-09-20.
       .svc_sat_add_o(svc_sat_add), .svc_sat_mul_o(svc_sat_mul),
       .svc_sat_rescale_o(svc_sat_rescale),
+      // R145's last link. Straight to the port -- no local wire, because
+      // there is nothing to OR it with.
+      .svc_rcp0_o(rcp0_o),
       // The mask's positive control. It is read by the service path's own
       // directed test, which drives zhao_field_v3_svcpath as its top and can
       // therefore see this port directly. Promoting it to a host counter
@@ -470,6 +478,14 @@ module zhao_field_v3_engine #(
   assign sat_add_o     = exec_sat_add     | svc_sat_add;
   assign sat_mul_o     = exec_sat_mul     | svc_sat_mul;
   assign sat_rescale_o = exec_sat_rescale | svc_sat_rescale;
+
+  // rcp0 HAS NO SECOND HALF TO OR, and that asymmetry is the point rather than
+  // an oversight. The scalar executor cannot raise it: `zhao_field_v3_exec.sv`
+  // contains no rcp0 signal at all, because the reciprocal that can be handed
+  // a zero lives in `zhao_field_v3_normalize` on the service path. R145 reads
+  // the chain as four files; measured, it is three, and adding an `rcp0_o` to
+  // `zhao_field_v3_core` to make the shapes match would be a port with nothing
+  // driving it. `zhao_field_v3_svcpath` drives `rcp0_o` directly above.
 
 
   assign mul_grants_o      = svc_bank_grants;

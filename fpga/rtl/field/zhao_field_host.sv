@@ -751,6 +751,12 @@ module zhao_field_host #(
       .sat_add_o    (fab_sat_add),
       .sat_mul_o    (fab_sat_mul),
       .sat_rescale_o(fab_sat_rescale),
+      // DELIBERATELY UNCONNECTED, and this comment is the difference between a
+      // decision and an oversight. This module is the RETAINED NAMED ORACLE
+      // (owner ruling R143); its `sat_o` is `[2:0]` and widening it would be
+      // changing the oracle to match the thing it is meant to check
+      // independently. `zhao_field_host_v2` carries rcp0 on `num_status_o[3]`.
+      .rcp0_o       (),
 
       .wr_en_o  (fab_wr_en),
       .wr_ctx_o (fab_wr_ctx),

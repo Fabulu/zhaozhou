@@ -9958,7 +9958,9 @@ module zhao_console_core
   // declared at the end of this module; these wires are here so the engine's
   // port map can be read without scrolling for a declaration.
   // The two widths are IN_LANES*32 and OUT_LANES*32 at the values the
-  // instantiation below selects (13 and 7, owner ruling R40). They are
+  // instantiation below selects (15 and 7 -- owner ruling R40 set 13/7 and
+  // packet C1 widened the input pair to the WARP record's 15 under GEOM.WARP
+  // prerequisite P1, so these are 480 and 224). They are
   // literals because a body localparam declared here would still have to agree
   // with the instance's parameter overrides; the host's own elaboration guards
   // are what refuse a disagreement, and a width mismatch on these wires is
@@ -9966,7 +9968,7 @@ module zhao_console_core
   logic         sfa_req_valid, sfa_req_ready;
   logic [  2:0] sfa_req_slot;
   logic         sfa_req_noprog;
-  logic [415:0] sfa_req_in;
+  logic [479:0] sfa_req_in;
   logic         sfa_resp_valid, sfa_resp_ready;
   logic [223:0] fld_resp_out_c;
   logic [  7:0] fld_resp_status_c;
@@ -9976,7 +9978,7 @@ module zhao_console_core
   logic         pfa_req_valid, pfa_req_ready;
   logic [  2:0] pfa_req_slot;
   logic         pfa_req_noprog;
-  logic [415:0] pfa_req_in;
+  logic [479:0] pfa_req_in;
   logic         pfa_resp_valid, pfa_resp_ready;
   logic         pfa_ans_valid, pfa_fld_valid;
   logic signed [10:0] pfa_fld_ax, pfa_fld_ay, pfa_fld_az;
@@ -16033,7 +16035,22 @@ module zhao_console_core
     // cannot present is a lane its program reads as whatever the front cleared
     // the register to" -- that does not read as a missing lane. It reads as a
     // plausible number nobody supplied, which is the direction nobody audits.
-    .IN_LANES (13),
+    // FIFTEEN as of packet C1, 2026-09-20. This is GEOM.WARP prerequisite P1
+    // and it is the day the comment above predicted: the WARP profile is 15 in,
+    // and `zhao_field_warp_adapter.sv:293` refuses at elaboration below that
+    // with the message "The console's shared pair must move to 15 before this
+    // adapter can be composed -- that is GEOM.WARP prerequisite P1, not a
+    // defect here." Moving it is this packet's act.
+    //
+    // WIDENING IS NOT A TIE-OFF, and the distinction is the one rule 1 turns
+    // on. Lanes 13 and 14 carry no value for the S and F profiles, which
+    // declare 8 and 13 canonical inputs; the host CLEARS every register a
+    // program does not write, so an unfilled lane is the same defined zero it
+    // was at 13. No port is disconnected, no function is narrowed, and both
+    // adapters' own elaboration guards (`IN_LANES < 13` / `< 8`) still hold.
+    // What changes is that the bus can now CARRY a warp record, which is the
+    // whole of P1.
+    .IN_LANES (15),
     .OUT_LANES(7),
 
     // ---- the fabric's own knobs. Shipped values in the comment, always. ----
@@ -16373,7 +16390,12 @@ module zhao_console_core
   // and PART.STATE's `prt_ready_i` on "the answer for THIS record is ready".
   zhao_field_flow_adapter #(
     .SLOTW    (3),
-    .IN_LANES (13),
+    // The SHARED pair, 15/7 as of C1 -- not the F profile's own 13/7. The
+    // adapter guards `IN_LANES < 13` and fills lanes 0..12; lanes 13 and 14 are
+    // the warp client's and the host clears them. A number here that differed
+    // from `u_field_host`'s would be a silent width truncation on the
+    // concatenated bus, which is why all three sites move together.
+    .IN_LANES (15),
     .OUT_LANES(7)
   ) u_field_flow_adapter (
     .clk  (gpu_clk),
@@ -16444,10 +16466,11 @@ module zhao_console_core
     .STAMP_BINDING(1),
     // The SHARED port's lane counts, not the S profile's own (8 in / 3 out).
     // They follow `u_field_host`'s, which owner ruling R40 set to the FLOW
-    // record's 13/7; the stamp adapter fills lanes 0 and 1 and reads lanes 0
-    // and 1, and the rest are the wider client's. Two different numbers here
+    // record's 13/7 and packet C1 moved to 15/7 for the WARP record (GEOM.WARP
+    // prerequisite P1); the stamp adapter fills lanes 0 and 1 and reads lanes 0
+    // and 1, and the rest are the wider clients'. Two different numbers here
     // and there would be a silent width truncation on the concatenated bus.
-    .IN_LANES (13),
+    .IN_LANES (15),
     .OUT_LANES(7)
   ) u_field_stamp_adapter (
     .clk  (gpu_clk),

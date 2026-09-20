@@ -219,12 +219,18 @@ module zhao_field_v3_dispatch #(
     input  var logic [3:0]                    rsp_sat_add_i,
     input  var logic [3:0]                    rsp_sat_mul_i,
     input  var logic [3:0]                    rsp_sat_rescale_i,
+    // rcp0's per-point vector. Masked to the live lanes by the SAME
+    // `s_used_r` as the three above -- a padded lane cannot raise it either.
+    input  var logic [3:0]                    rsp_rcp0_i,
 
     // The fabric's long-op ledger, latched over the run, in the same shape as
     // the executor's so the engine can simply OR the two together.
     output var logic                          svc_sat_add_o,
     output var logic                          svc_sat_mul_o,
     output var logic                          svc_sat_rescale_o,
+    // Latched the same way, reported separately. Directive 8.1's
+    // `numeric_rcp0` family; see the svcpath port comment.
+    output var logic                          svc_rcp0_o,
 
     // HOW OFTEN A PADDED LANE TRIED TO RAISE A FLAG AND WAS STOPPED.
     //
@@ -648,6 +654,7 @@ module zhao_field_v3_dispatch #(
   // between the services.
   logic [3:0] rsp_live_c;
   logic       rsp_sat_add_live_c, rsp_sat_mul_live_c, rsp_sat_resc_live_c;
+  logic       rsp_rcp0_live_c;
   logic       rsp_pad_tried_c;
   always_comb begin
     rsp_live_c = 4'b0;
@@ -657,10 +664,19 @@ module zhao_field_v3_dispatch #(
     rsp_sat_add_live_c  = |(rsp_sat_add_i     & rsp_live_c);
     rsp_sat_mul_live_c  = |(rsp_sat_mul_i     & rsp_live_c);
     rsp_sat_resc_live_c = |(rsp_sat_rescale_i & rsp_live_c);
+    rsp_rcp0_live_c     = |(rsp_rcp0_i        & rsp_live_c);
 
     // A flag raised by a lane that holds no point. Counted rather than
     // discarded silently, so "the mask never mattered" and "the mask was never
     // tested" stop looking alike.
+    //
+    // rcp0 IS DELIBERATELY ABSENT FROM THIS OR, and the reason is the one that
+    // put it in its own port: `pad_status_masked_o` is named for the
+    // SATURATION mask, and a padded-lane reciprocal-of-zero counted here would
+    // make this counter measure something other than its name -- the exact
+    // defect D1 found in its own new counter the same day (R150). rcp0 is
+    // masked above, so padding still cannot raise it; what it does not do is
+    // increment a counter that does not describe it.
     rsp_pad_tried_c = |((rsp_sat_add_i | rsp_sat_mul_i | rsp_sat_rescale_i) &
                         ~rsp_live_c);
   end
@@ -727,6 +743,7 @@ module zhao_field_v3_dispatch #(
       svc_sat_add_o       <= 1'b0;
       svc_sat_mul_o       <= 1'b0;
       svc_sat_rescale_o   <= 1'b0;
+      svc_rcp0_o          <= 1'b0;
       pad_status_masked_o <= 32'd0;
       iss_slot_r <= '0;
       for (int i = 0; i < GATHERS; i++) begin
@@ -834,6 +851,7 @@ module zhao_field_v3_dispatch #(
           if (rsp_sat_add_live_c)  svc_sat_add_o     <= 1'b1;
           if (rsp_sat_mul_live_c)  svc_sat_mul_o     <= 1'b1;
           if (rsp_sat_resc_live_c) svc_sat_rescale_o <= 1'b1;
+          if (rsp_rcp0_live_c)     svc_rcp0_o        <= 1'b1;
           if (rsp_pad_tried_c)
             pad_status_masked_o <= pad_status_masked_o + 32'd1;
         end
