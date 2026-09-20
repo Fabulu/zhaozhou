@@ -5075,7 +5075,46 @@ inline int32_t g_u02_trick_cam_k = kU02CamKTrick;
 //
 // Add a row whenever a new knob gets an override path. The rule the rows
 // encode: a gate READS the shipping constants; it does not choose them.
+//
+// ⚠ PASS 20 RE-REVIEW -- THE BANNER'S FIRST VERSION HAD THE VERY BLIND SPOT IT
+// WAS BUILT TO CLOSE, and the way it was blind is worth keeping written down,
+// because it is the third wrong-operand case in this one pass. The row table
+// covered fourteen NUMERIC constants and no MODE SELECTOR, while both gates
+// fully honour four of them. Measured on the shipping binaries:
+//
+//   ZHAO_U02_KNEAD_DIP_SOLVER=carried  ->  mrear R5 goes from "19 clips reach
+//     B-lowest, worst +37 mm" to "18 never reach lowest, worst -192 mm", and
+//     mspan's G10 DENT PIN silently measures "0 dent samples" -- and the banner
+//     printed "every shipping constant at its shipped value".
+//   ZHAO_U02_REAR_BOW=legacy           ->  the whole R4 STRAIN family reverts to
+//     the PRE-REPAIR creature (hand-off 270 not 361, centreline turn 35.60 not
+//     113.03, rail floor 0.129 not 0.692) -- banner silent again.
+//
+// Either one could have put a figure from a different creature under a line
+// asserting there was no override, which is `--dip` exactly. A selector that
+// swaps the MECHANISM is a bigger override than any constant that scales it, so
+// the modes are printed FIRST. `same` is the comparison, spelled per row,
+// because an enum has no subtraction: do not reach for a default.
 inline int print_judged_config(const char* who) {
+  struct Mode {
+    const char* name;
+    bool same;
+    const char* live;
+    const char* ship;
+  };
+  const Mode modes[] = {
+      {"knead dip SOLVER", g_u02_knead_dip_solver == kKneadDipSolver,
+       g_u02_knead_dip_solver == KneadDipSolver::kDent ? "dent" : "carried",
+       kKneadDipSolver == KneadDipSolver::kDent ? "dent" : "carried"},
+      {"rear BOW", g_u02_rear_bow == RearBow::kArc,
+       g_u02_rear_bow == RearBow::kArc ? "arc" : "legacy", "arc"},
+      {"rear socket FRAME", g_u02_rear_socket_frame == RearSocketFrame::kArm,
+       g_u02_rear_socket_frame == RearSocketFrame::kArm ? "arm" : "legacy-root",
+       "arm"},
+      {"rear span LIMIT", g_u02_rear_span_limit_legacy,
+       g_u02_rear_span_limit_legacy ? "legacy/none" : "limited",
+       "legacy/none"},
+  };
   struct Row { const char* name; long long live, ship; };
   const Row rows[] = {
       {"knead dip gain pm", g_u02_knead_dip_gain_pm, kKneadDipGainPm},
@@ -5096,9 +5135,25 @@ inline int print_judged_config(const char* who) {
        kRearSocketAmbientGainPm},
       {"rear bow sign", g_u02_rear_bow_sign, kRearBowSign},
       {"rear bow onset mm", g_u02_rear_bow_onset_mm, kRearBowOnsetMm},
+      // Re-review: the remaining env paths the gates parse. Each one was
+      // reachable and unnamed, which is the same fault as the modes above in a
+      // smaller size.
+      {"rear bow max a16", g_u02_rear_bow_max_alpha16, kRearBowMaxAlpha16},
+      {"rear span travel mm", g_u02_rear_span_travel_mm, kRearSpanTravelMm},
+      {"rear span soft mm", g_u02_rear_span_soft_mm, kRearSpanSoftMm},
+      {"rear span deep bias pm", g_u02_rear_span_deep_bias_pm,
+       kRearSpanDeepBiasPm},
+      {"rear carrier calm pm", g_u02_rear_carrier_calm_pm, kRearCarrierCalmPm},
+      {"taunt3 punch A mm", g_u02_taunt3_punch_a_mm, kTaunt3PunchAMm},
   };
   int overridden = 0;
   std::printf("CONFIG JUDGED (%s): ", who);
+  for (const Mode& m : modes) {
+    if (m.same) continue;
+    ++overridden;
+    std::printf("%s%s %s **OVERRIDE, shipping %s**", overridden > 1 ? "; " : "",
+                m.name, m.live, m.ship);
+  }
   for (const Row& r : rows) {
     if (r.live == r.ship) continue;
     ++overridden;
@@ -5106,8 +5161,9 @@ inline int print_judged_config(const char* who) {
                 r.name, r.live, r.ship);
   }
   if (overridden == 0)
-    std::printf("every shipping constant at its shipped value (dip gain %lld, "
-                "dent depth %lld, ramp floor %lld, fold reaction %lld)",
+    std::printf("every shipping constant AND MECHANISM at its shipped value "
+                "(solver dent, bow arc, dip gain %lld, dent depth %lld, "
+                "ramp floor %lld, fold reaction %lld)",
                 static_cast<long long>(kKneadDipGainPm),
                 static_cast<long long>(kKneadDentDepthPm),
                 static_cast<long long>(kKneadDipMinRampKeys),

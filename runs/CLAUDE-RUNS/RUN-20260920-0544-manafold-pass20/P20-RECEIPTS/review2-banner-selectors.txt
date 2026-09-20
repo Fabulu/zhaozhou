@@ -1,0 +1,16 @@
+### ZHAO_U02_KNEAD_DIP_SOLVER=carried
+CONFIG JUDGED (mrear): knead dip SOLVER carried **OVERRIDE, shipping dent**
+R1 FRAME: worst arm<->End rotation 16.48 deg (slot 16, ceiling 40.0); worst rear centreline turn 113.03 deg (slot 2, ceiling 140.0)
+R4 STRAIN: worst rear rail 0.692 (slot 2, ring 45) .. 2.052 (slot 2); worst hand-off 361 mm (slot 2); worst rail step 0.1630
+R5 DIP: 19 clip(s) author a dip; 18 never reach lowest; 0 do not return; worst margin -192 mm (slot 10, need 20)
+### ZHAO_U02_REAR_BOW=legacy
+CONFIG JUDGED (mrear): rear BOW legacy **OVERRIDE, shipping arc**
+R1 FRAME: worst arm<->End rotation 16.48 deg (slot 16, ceiling 40.0); worst rear centreline turn 35.60 deg (slot 0, ceiling 140.0)
+R4 STRAIN: worst rear rail 0.129 (slot 2, ring 49) .. 1.441 (slot 21); worst hand-off 270 mm (slot 2); worst rail step 0.0647
+R5 DIP: 19 clip(s) author a dip; 0 never reach lowest; 0 do not return; worst margin 37 mm (slot 9, need 20)
+### ZHAO_U02_REAR_SOCKET_FRAME=legacy-root
+CONFIG JUDGED (mrear): rear socket FRAME legacy-root **OVERRIDE, shipping arm**
+R1 FRAME: worst arm<->End rotation 175.08 deg (slot 21, ceiling 40.0); worst rear centreline turn 171.08 deg (slot 13, ceiling 140.0)
+R4 STRAIN: worst rear rail 0.240 (slot 3, ring 50) .. 2.243 (slot 0); worst hand-off 523 mm (slot 16); worst rail step 0.1289
+R5 DIP: 19 clip(s) author a dip; 0 never reach lowest; 0 do not return; worst margin 37 mm (slot 9, need 20)
+CONFIG JUDGED (mrear): every shipping constant AND MECHANISM at its shipped value (solver dent, bow arc, dip gain 550, dent depth 4200, ramp floor 30, fold reaction 650)

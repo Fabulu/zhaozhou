@@ -560,3 +560,134 @@ the durable part; the pattern is worth carrying forward.
   identical to `ZHAO_U02_KNEAD_DIP_PM=0`, digit for digit.
 * **Pass-19 identity:** `0xA2D0E051 / 0x779615BB / 0x75BC4777`, exact.
 * Not done, correctly: no 22-subject bank, no encode, no merge, no deploy.
+
+---
+
+# RE-REVIEW (independent, second review agent) — 2026-09-20
+
+**Where I was before reading the matrix result:** every claim re-measured from my
+own binaries and the visual QA complete; two instrument repairs written
+(`print_judged_config`'s mode table, R5's recorded sensitivity); report drafted;
+the only thing outstanding was the full matrix in one invocation.
+
+## Verdict: FIXED
+
+The first review BLOCKED on three things. I re-measured all three with binaries I
+compiled myself, no overrides, and they hold:
+
+* **19 of 19 hosting clips B strictly lowest, worst margin +37 mm (slot 9),
+  G9 7.642 against an UNMOVED 8.0.** My numbers, not the report's.
+* **The roll flip is gone, not smaller.** At the first review's own worst case
+  (gain 1000 / depth 2200, which read **50.963 deg FAIL**) I measure **7.591** --
+  exactly the dip-off bank's worst, i.e. the dent is invisible to G9 there. The
+  ladder is smooth and monotone to depth 6000 with no cliff, which is the
+  signature of a well-conditioned aim and independent corroboration of the
+  quantisation diagnosis.
+* **The particle reaction is visible at NATIVE.** Judged by looking at 384x240,
+  not by pixel counts; the counts (127 frames / 2,745 px on Hover) were taken
+  only as the bias check and they reproduce.
+
+## Item 4 -- the hand-off bound 320 -> 420: LEGITIMATE. No correction.
+
+Measured rather than argued. Three findings:
+
+1. **The bound did not exist at the branch point.** It first appears at
+   `934a73a4`, INSIDE pass 20, before the bow repair landed at `5a18cdf7`. It was
+   never an inherited contract being relaxed.
+2. **320 provably described the pre-bow geometry.** With `REAR_BOW=legacy` the
+   band reads **hand-off 270 mm** (turn 35.60, rail 0.129). 320 = 270 x 1.185.
+   The new 420 = 361 x 1.163 -- the SAME construction, applied to the geometry
+   the accepted bow fix produced.
+3. **The pass's new art contributes exactly zero.** 361 with the beat on is
+   digit-identical to 361 with `KNEAD_DIP_PM=0`. A gate fitted to the art would
+   have had to move FOR the art; this one did not move for it at all. The rise
+   270 -> 361 (x1.34) is sub-linear in a centreline turn that rose x3.17, which
+   is how a bend distributed along the helper chain behaves.
+
+Caveat stated in the report: it is a REGRESSION ceiling, calibrated by the thing
+it measures, and can never assert correctness. The correctness evidence is the
+eye, taken at Channel f080 -- the exact 361 mm / 113 deg frame -- where the join
+reads as one continuous fused trunk.
+
+## Two real faults found and fixed (instruments only; no bound, no art value)
+
+* **The judged-configuration banner was blind to every MECHANISM SELECTOR** --
+  this pass's FOURTH wrong-operand case, inside the instrument built to stop
+  them. `ZHAO_U02_KNEAD_DIP_SOLVER=carried` swings R5 from "19 reach lowest" to
+  "18 NEVER reach lowest, worst -192 mm" and makes G10 read "0 dent samples";
+  `ZHAO_U02_REAR_BOW=legacy` reverts the whole R4 family to the PRE-REPAIR
+  creature. Both gates honour both. The banner printed "every shipping constant
+  at its shipped value" for each. Fixed: a mode table printed first, plus six
+  missing numeric rows; fired four ways.
+* **R5's `dip_stuck` arm fires at 2 of 19 under its own control.** It fires, so
+  it is not dead -- but the claim "nothing but the dip can hide that" is wrong:
+  the return is measured against `min(A_y, C_y)` and the outer balls run their
+  own schedule, so a B frozen at the bottom still reads "above the lower outer
+  ball" on 17 clips. Sensitivity recorded beside the constant with the numbers a
+  correction would be made from. Bound NOT moved -- out of remit.
+
+## Confirmed honest rather than convenient
+
+* Slot 21 (Taunt III) is **368 of 368 frames byte-identical** with the dip off --
+  I rendered both banks. The dent provably does not run there and its +64 mm
+  comes from its own crown shuffle, as declared.
+* Slots 7/15/16 genuinely never call the knead layer (`build_still` and
+  `build_nodule_solo` contain no call; `build_manalab` calls the forked
+  `lab_antenna_knead`). The old 750 entries were an unreachable gate state.
+* `knead_schedule_slot` has exactly the three callers the report names.
+* Independent override sweep of all eleven gate/driver `.cpp` files: every
+  `g_u02_*` assignment is a saved/restored declared mutant, a strict env parse,
+  or the shellgate's declared inverted-polarity control. No second `--dip`.
+
+Controls fired by me: `--fail-rear-frame` (523 mm, 0xB, `[rail-floor
+rail-ceiling hand-off ]`), `--fail-rear-joint` (393 mm, deliberately under,
+0xA), `--fail-dip-stuck` (0x10, ranking arm), `--fail-no-dip` (0x10, the other
+arm), `--fail-dent-pin` (93.658 deg frame, position blind at 8 mm, 0x10300), and
+the repaired banner four ways.
+
+Visual verdicts: (a) rear connection whole through the orbit -- YES, including
+f380 and Channel f080. (b) the knead reads AND B reaches the bottom -- YES, at
+native; this is the change since the last review, which found it not legible.
+(c) particles react deliberately -- YES, at native. (d) new faults -- NONE.
+
+Full report: `P20-REVIEW-QA-2.md`. Pictures: `P20-LOOKS2/` (17).
+Not done, correctly: no 22-subject bank, no encode, no merge, no deploy.
+
+### Re-review receipts
+
+* **Gate matrix: 159 legs, 159 PASS, 0 FAIL**, one invocation, the beat ON, from
+  a clean rebuild of every binary after both repairs.
+  `P20-RECEIPTS/gate-matrix-review2.txt`.
+* **All four identity legs exact**, including the two the close re-baselined.
+  `e-identity-pass19` reproduces pass 19 byte for byte:
+  `0xA2D0E051 0x779615BB 0x75BC4777`.
+* **The shipping bank reproduces from my own build with both repairs in place** --
+  hover `0x93B95AEE`, inspect `0xD00478A1`, taunt3 `0xC81598AA`, blown
+  `0xC6AAF7AD` -- so the repairs are renderer-invisible and the tree's bank is
+  what the close says it is.
+* `P20-RECEIPTS/review2-{mrear,mspan}-shipping.txt`,
+  `review2-banner-selectors.txt` (the repaired banner naming all three
+  mechanism overrides, plus the clean line),
+  `review2-binaries-md5.txt`.
+* One last rung rendered that the depth ladder did not have: at depth 4600 the
+  extra press buys crowding at the left shoulder rather than read, so the
+  shipped 4200 stands as a choice rather than as the ceiling's shadow.
+
+### One I caused, and the rule that caught it late
+
+I ran `zhao-reel-cel.exe` with no arguments to list its clip names. CLAUDE.md
+warns about exactly this -- **the reel has no help flag**, `g_out = argv[1]`, so a
+bare invocation starts a full default-bank render into the current directory. I
+killed it inside two minutes and verified no orphan process, and I got the clip
+names out of the source instead.
+
+**What the kill did not undo was 2.29 GB in 49 directories at the repo root**,
+and the instructive part is that `git status` showed **none of them** at first:
+`.gitignore` covers `*.rgb`, so a directory holding only frames is invisible, and
+the ones that did surface only surfaced because a `meta.txt` had landed beside
+the frames. That is CLAUDE.md's "a rule that HIDES waste is not a rule that
+removes it", reproduced live -- the tree looked clean while 2.29 GB sat in it.
+
+Removed, scoped by creation-time window to my own two-minute run and only after
+checking every directory held nothing but `.rgb` and `meta.txt`. One neighbouring
+directory (`manafold-lasso`, 10:32) predates my run and was left alone.

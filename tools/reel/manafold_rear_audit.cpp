@@ -519,6 +519,28 @@ constexpr double kGateDipMarginMm = 20.0;
 // this used to read -- cannot see a stuck dip at all. 60 mm is the same order
 // as the 20 mm ranking margin with room for the resting pose to breathe;
 // shipping clips clear it by hundreds.
+//
+// ⚠ PASS 20 RE-REVIEW -- ITS SENSITIVITY, MEASURED, BECAUSE THE CLAIM AROUND IT
+// WAS TOO STRONG. The close report says of this quantity "nothing but the dip
+// can hide that". That is not what it does. Under its own positive control
+// (`--fail-dip-stuck`, the dip frozen at a full envelope on EVERY clip, so the
+// defect is present on all 19) the per-clip returns fall from +363..+468 mm to
+// +23..+430 mm -- a real reduction everywhere -- but only slots 9 (+23) and 10
+// (+25) cross this 60 mm bound. THE ARM FIRES AT 2 OF 19.
+//
+// The reason is operand contamination, not a dead detector: the return is
+// measured against min(A_y, C_y), and A and C run their own ambient nodule
+// schedule. When an OUTER ball dips on its own timing, a B frozen at the bottom
+// is still "above the lower outer ball", and the clip reports a healthy return.
+// So this arm catches a bank-wide stuck dip and would probably MISS a stuck dip
+// on one clip -- which is the regression it actually has to catch.
+//
+// NOT CHANGED HERE: moving it is a bound change and this re-review's remit was
+// to keep bounds untouched. The recommendation is recorded instead, with the
+// numbers it would be made from: shipping worst is +363 mm, so a floor of about
+// 250 mm keeps ~45% headroom under the worst shipping clip while catching 15 of
+// 19 under this same control. Whoever raises it owns re-firing the control and
+// re-reading every per-clip margin, not just the aggregate.
 constexpr double kGateDipReturnMm = 60.0;
 
 struct ClipStats {
