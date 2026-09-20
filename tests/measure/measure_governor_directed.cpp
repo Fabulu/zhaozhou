@@ -106,7 +106,11 @@ struct Cosim {
   }
 };
 
-Frame mkframe(uint16_t proj, uint32_t px_err, bool s0 = false, bool s1 = false, int vc = 2,
+// `proj` is Q12.8 in 20 bits since owner rulings R83/R98 -- it was uint16_t
+// Q8.8 here and everywhere until 2026-09-20. Widening the PARAMETER is what
+// lets a case above 0xFFFF be written at all; every existing call passes a
+// value under 2^16 and is unaffected.
+Frame mkframe(uint32_t proj, uint32_t px_err, bool s0 = false, bool s1 = false, int vc = 2,
               uint16_t src = 0) {
   Frame f;
   f.cam[0].proj = proj;
@@ -218,6 +222,60 @@ void test_limits(Cosim& c) {
   f = mkframe(proj, px_edge + 1);
   const Targets e2 = c.run(f, "limits/edge+1");
   check(e2.scale[0] <= 0xFFFF, "limits: one token past it stays in range", 0xFFFF, e2.scale[0]);
+}
+
+// -------------------------------------------------------------------- 3b --
+// THE WIDENED INPUT CONTAINER (owner rulings R83, landed under R98).
+//
+// `proj0_i`/`proj1_i` are Q12.8 in 20 bits since 2026-09-20. Every case above
+// drives a value under 2^16, so NONE of them can tell whether the widening
+// took: they would all pass byte-identically against the old Q8.8 port. This
+// case is the one that cannot.
+//
+// The arithmetic is checked, not just the range: at px_err = 256.0 fx16 the
+// divisor is 2^24 and `proj << 16` is exact, so scale = proj / 256 with no
+// rounding at all -- an LSB slip or a truncated top bit shows immediately.
+void test_wide_proj_container(Cosim& c) {
+  c.reset();
+
+  // R83's single-view camera: 512 px at 60 degrees = 443.41 px per unit
+  // tangent = Q12.8 raw 113509. The OLD 16-bit port could not hold it.
+  const uint32_t proj = 113509;
+  check(proj > 0xFFFFu, "the case is above the old Q8.8 ceiling", 1, proj > 0xFFFFu ? 1 : 0);
+
+  const uint32_t px_err = 256u * kOne;  // 256.0 px: divisor 2^24, exact
+  const Targets t = c.run(mkframe(proj, px_err), "wide/exact");
+  check(t.scale[0] == proj / 256u, "wide: the ratio is exact at a 20-bit proj", proj / 256u,
+        t.scale[0]);
+  check(t.scale[1] == proj / 256u, "wide: and on view 1 too", proj / 256u, t.scale[1]);
+
+  // A 20-bit proj TRUNCATED to 16 bits would be 113509 & 0xFFFF = 47973, and
+  // 47973/256 = 187 -- a small, entirely plausible number. Naming it here is
+  // what makes the check above a discriminator rather than a coincidence.
+  check(t.scale[0] != (proj & 0xFFFFu) / 256u, "wide: and it is NOT the truncated value",
+        (proj & 0xFFFFu) / 256u, t.scale[0]);
+
+  // The largest EXACT multiple inside the container: Q12.8 raw 0xFFF00 = 4095.0
+  // px per unit tangent, which divides with no rounding at all.
+  const Targets hi = c.run(mkframe(0xFFF00u, px_err), "wide/high-exact");
+  check(hi.scale[0] == 0xFFF00u / 256u, "wide: 4095.0 px divides exactly", 0xFFF00u / 256u,
+        hi.scale[0]);
+
+  // And the very top of the container, 0xFFFFF = 4095.99609 px, which does NOT
+  // divide exactly -- it is 0.996 of the way to 4096, so law G1's round-half-up
+  // carries it UP. Written as the ruled law rather than as `/ 256`, because
+  // C's truncating division would say 4095 and that is the one answer qformats
+  // section 3 forbids here. (It said 4095 on the first draft of this case; the
+  // RTL said 4096 and the RTL was right.)
+  const Targets top = c.run(mkframe(0xFFFFFu, px_err), "wide/top");
+  check(top.scale[0] == 4096u, "wide: the top of Q12.8 rounds half UP, not down", 4096u,
+        top.scale[0]);
+
+  // And the OUTPUT port is still 16-bit Q8.8, so a wide proj against a tight
+  // budget still clamps there -- the widening moved the input, not the result.
+  const Targets clamp = c.run(mkframe(0xFFFFFu, 1), "wide/output-clamp");
+  check(clamp.scale[0] == 0xFFFF, "wide: cam*_scale_o still clamps at 16 bits", 0xFFFF,
+        clamp.scale[0]);
 }
 
 // --------------------------------------------------------------------- 4 --
@@ -369,11 +427,28 @@ void test_latency_and_hold(Cosim& c) {
   c.reset();
   int clocks = 0;
   c.run(mkframe(12345, 3 * kOne, false, false, 2, 0xAB), "latency", &clocks);
-  std::printf(
-      "  latency: %d clocks from the frame pulse to targets_valid (2 x 33-step "
-      "restoring divide)\n",
-      clocks);
-  check(clocks == 69, "latency: 1 + 33 + 1 + 33 + 1 clocks, MEASURED", 69, clocks);
+
+  // THE DIVIDER IS `STEPS` LONG AND `STEPS` IS DERIVED FROM `PROJW`.
+  // At PROJW = 20 (Q12.8, owner ruling R83 landed under R98) the numerator is
+  // NUMW = PROJW + 17 = 37 bits, so the walk is 37 steps and the decision is
+  // 1 + 37 + 1 + 37 + 1 = 77 clocks. It was 69 at the old PROJW = 16.
+  //
+  // Stated as the arithmetic rather than as the number, because the literal 69
+  // was the ONLY check in this suite that the widening moved -- it is a real
+  // consequence of a real change, and writing 77 in its place would leave the
+  // next container move failing the same way for the same reason.
+  //
+  // THE FRAME DEADLINE IS UNTOUCHED: 77 clocks against a 1,666,666-clock frame,
+  // once per frame. The block's own header already argues that this divider's
+  // length is free for exactly this reason.
+  const int kProjW = 20;
+  const int kSteps = kProjW + 17;
+  const int kLatency = 1 + kSteps + 1 + kSteps + 1;
+  std::printf("  latency: %d clocks from the frame pulse to targets_valid (2 x %d-step "
+              "restoring divide)\n",
+              clocks, kSteps);
+  check(clocks == kLatency, "latency: 1 + STEPS + 1 + STEPS + 1 clocks, MEASURED", kLatency,
+        clocks);
 
   // A second decision costs the same: there is no warm-up path.
   int clocks2 = 0;
@@ -419,6 +494,7 @@ int main() {
   test_worked_duo_frame(c);
   test_rounding_tie(c);
   test_limits(c);
+  test_wide_proj_container(c);
   test_degrade_is_exact(c);
   test_volcano(c);
   test_hold_boundary(c);
