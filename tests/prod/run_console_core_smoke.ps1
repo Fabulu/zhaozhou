@@ -64,8 +64,12 @@
 # colour byte are claims about what the table served. A claim like that is worth
 # nothing until the check has been seen to FAIL.
 #
-# With -NoTableLoad the four loads are skipped and NOTHING else changes
-# (`+define+ZHAO_SMOKE_SKIP_TBL_LOAD`, a plain `ifdef` -- CLAUDE.md records that
+# CHANGED 2026-09-19 evening (owner ruling R42, core entry I33). The bench no
+# longer LOADS the table at all -- the descriptors are a SPECIES_TABLE page it
+# stages and PUBLISHES, and zhao_part_table_loader reads them back. So the
+# control is no longer "skip the loads"; it is a page the loader must REFUSE.
+# With -NoTableLoad one byte of the page's magic is wrong and NOTHING else
+# changes (`+define+ZHAO_SMOKE_BAD_SPECIES_PAGE`, a plain `ifdef` -- CLAUDE.md records that
 # a command-line define cannot override a FUNCTION-LIKE `define` and says
 # nothing when it fails to). Its polarity is INVERTED: the control PASSES when
 # the run fails.
@@ -208,8 +212,8 @@ if ($Mutant) {
   Write-Host 'MUTANT BUILD: zhao_console_core_slot_overflow_mutant, INVERTED POLARITY (passes when the counter fires)'
 }
 if ($NoTableLoad) {
-  $defs += '+define+ZHAO_SMOKE_SKIP_TBL_LOAD'
-  Write-Host 'NEGATIVE CONTROL: PART.TABLE is NOT loaded, INVERTED POLARITY (passes when the run FAILS)'
+  $defs += '+define+ZHAO_SMOKE_BAD_SPECIES_PAGE'
+  Write-Host 'NEGATIVE CONTROL: the SPECIES_TABLE page has a wrong magic byte, so PART.TABLE is never loaded. INVERTED POLARITY (passes when the run FAILS)'
 }
 if ($BadVertex) {
   $defs += '+define+ZHAO_SMOKE_BAD_VERTEX'
@@ -297,7 +301,7 @@ if ($NoTableLoad) {
   # never loaded -- which would make them evidence about something other than
   # what the table served.
   if ($rc -eq 0) {
-    Write-Host 'NEGATIVE CONTROL FAILED: the run PASSED with PART.TABLE unloaded. The table checks are not measuring the table.'
+    Write-Host 'NEGATIVE CONTROL FAILED: the run PASSED with the species page refused and PART.TABLE unloaded. The table checks are not measuring the table.'
     exit 1
   }
   Write-Host "NEGATIVE CONTROL PASS: the run failed (rc=$rc) with PART.TABLE unloaded, as it must."

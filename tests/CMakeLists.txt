@@ -13801,6 +13801,31 @@ add_test(NAME lint_zhao_part_pop
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_pop.sv)
 set_tests_properties(lint_zhao_part_pop PROPERTIES LABELS "lint;fast")
 
+# ---- PART.TABLE's species-page loader (owner ruling R42, core entry I33) ----
+# Differenced against zref::species_page after every entry: the page under test
+# is built by the REFERENCE, so a layout disagreement is visible. The exact
+# READ COUNT is asserted, because a loader that read a line twice would load
+# the right descriptors twice and every content check would still pass.
+add_executable(test_part_table_loader_directed particles/part_table_loader_directed.cpp)
+target_link_libraries(test_part_table_loader_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_table_loader_directed
+  PREFIX Vtb_part_table_loader
+  TOP_MODULE tb_part_table_loader
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/particles/tb_part_table_loader.sv)
+add_test(NAME part_table_loader_directed COMMAND test_part_table_loader_directed)
+set_tests_properties(part_table_loader_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_table_loader
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_table_loader
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv)
+set_tests_properties(lint_zhao_part_table_loader PROPERTIES LABELS "lint;fast")
+
 # ---------------------------------------------------------------------------
 # PART.STATE's capacity backstop -- gap I8, `capacity_full_o`.
 #

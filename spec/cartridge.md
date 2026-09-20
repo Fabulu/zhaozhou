@@ -65,6 +65,7 @@ body is trusted, mirroring the fail-safe order of capture_format §3.2).
 | 0x000E | TEXTURE_PAGE | generic sampled bytes + interpretation (§4a; owner ruling D-2, 2026-09-03) |
 | 0x000F | MATERIAL_SET | generic immutable material table indexed by `material_id` (§4a) |
 | 0x0010 | MESH_STREAM | generic meshlet descriptors + vertex + local-index streams (§4a) |
+| 0x0011 | SPECIES_TABLE | particle species descriptor table (§4b; owner ruling R42, 2026-09-19) |
 | 0x8000-0xFFFF | tool namespace | tools may add private sections; readers MUST skip (capture_format §4.3-1) |
 
 FRAME_PACKET sections do not belong in a cartridge (a cartridge is not a
@@ -102,9 +103,10 @@ page-id constant (language-semantics §5); `kind` selects the page family:
 | 10 | texture page | TEXTURE_PAGE | immutable sampled bytes: dimensions, format, mip count/offsets, strides, texel payload, integrity identity, optional palette subtype (§4a) |
 | 11 | material set | MATERIAL_SET | immutable table indexed by `material_id`: 0–3 sample bindings, page handles, TMU state, combiner recipe/weight, raster state, cel/ink participation, fog exemption, AUX use (§4a) |
 | 12 | mesh stream | MESH_STREAM | immutable geometry: meshlet descriptors, vertex stream, local-index stream, offsets/counts, format + generation metadata (§4a) |
+| 13 | species table | SPECIES_TABLE | the particle species descriptor table: a header then PART.TABLE load words, one per entry (§4b; owner ruling R42, 2026-09-19) |
 
 ~~Kinds 6-255 reserved~~ ~~Kinds 8-255 reserved~~ ~~Kinds 10-255 reserved~~
-Kinds 13-255 reserved
+~~Kinds 13-255 reserved~~ Kinds 14-255 reserved
 (world-identity wave, RUN-20260816-0046, added kinds 6/7 then 8/9); a reader
 that meets an unknown kind skips the page
 (fail-safe, never guesses). The packer cross-checks every Form page-id
@@ -212,6 +214,54 @@ what unblocks the loader and the uploader.
   fx16 pitch; u8 sample_index; u8 rsv[3]; u32 rsv2}`. `event_id` matches the
   EmitAudioEvent `event_id` field; a missing id at play time is a mixer-level
   drop, never a truth change (FORM §15).
+
+## 4b - SPECIES_TABLE (owner ruling R42, 2026-09-19)
+
+The particle species descriptor table, as a page. Core entry I33 refused to
+invent a command that carries a species descriptor, and it was right to:
+`reference/include/zref/zref_particle.hpp` says "there is no species table
+... That is a DATA/ABI question and it is properly the owner's". R42 makes the
+descriptors DATA instead - authored in a page, published through
+`PublishResource`, and read into `PART.TABLE` by
+`fpga/rtl/particles/zhao_part_table_loader.sv`.
+
+WHAT IS FROZEN HERE IS THE ENVELOPE, NOT A SPECIES. An entry carries
+`zhao_part_table`'s OWN load word, unchanged and uninterpreted: the four
+selector slices that block already accepts, {sel, index, event, data}. Nothing
+in the console reads a field inside `data`; the contents remain the author's.
+
+Everything is 64-byte shaped because `MEM.GUARD`'s read is at most 64 bytes
+and its shape rule requires the byte mask to match the length, so a reader that
+asks for whole lines is the simplest one that can be correct. An entry is 32
+bytes rather than the 19 its fields need, so two fit a line exactly and no
+entry ever straddles a read.
+
+`
+HEADER - 64 bytes, one line, at the page's base
+  u32 magic     'ZSPT'  (0x5450535A little-endian on the wire)
+  u16 version   1
+  u16 entries   how many entries follow
+  u8  rsv[56]   zero
+
+ENTRY - 32 bytes, TWO per line, starting at byte 64
+  bit   1:0   sel     0 UPD, 1 COL, 2 SPW, 3 CRV
+  bit   3:2   event   SPW only: 0 birth, 1 mark, 2 collision, 3 death
+  bit   7:4   rsv     zero
+  bit  14:8   index   species, or curve bucket in its low four bits
+  bit  31:15  rsv     zero
+  bit 172:32  data    the LD_W-wide load word, LSB-aligned (LD_W = 141 at the
+                      console's widths: 12 + 2*AGE_W + 5*VEL_W + 3*POS_W)
+  bit 255:173 rsv     zero
+`
+
+A page is REFUSED WHOLE on a wrong magic, a wrong version, or an `entries`
+count that runs past the length the publication declared. It is never
+partially loaded: a half-loaded species table is a particle engine running on a
+mixture of two authors' physics, which reads as a tuning problem and is not one.
+
+Model: `reference/include/zref/zref_species_page.hpp` (`build` and
+`decode`). Hardware: `zhao_part_table_loader`, differenced against it in
+`tests/particles/part_table_loader_directed.cpp`.
 
 ## 5. Packing discipline (tools/pack, W3.6)
 

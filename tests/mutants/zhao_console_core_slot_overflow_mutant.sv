@@ -295,12 +295,19 @@ module zhao_console_core_slot_overflow_mutant
   // all four reads inside this module. What is left is the host that fills it,
   // and this is that seam. One word per clock; the table never refuses for
   // backpressure (`ld_ready_o` is constant high and says so in its own file).
-  input  logic                    part_tbl_ld_valid_i,
-  output logic                    part_tbl_ld_ready_o,
-  input  logic [1:0]              part_tbl_ld_sel_i,
-  input  logic [6:0]              part_tbl_ld_index_i,
-  input  logic [1:0]              part_tbl_ld_event_i,
-  input  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i,
+  // (I33's six part_tbl_ld_* ports were here. CLOSED 2026-09-19 under owner
+  //  ruling R42: the descriptors travel as DATA in a SPECIES_TABLE page the
+  //  owner authors, published by the command that publishes every other
+  //  resource, and u_part_table_loader carries the load words from the page
+  //  to the port. Nothing in this console chooses what a species IS, which is
+  //  the whole reason the entry stayed open. The evidence below is that
+  //  block's.)
+  output logic [31:0]             part_tbl_pages_o,
+  output logic [31:0]             part_tbl_entries_o,
+  output logic [31:0]             part_tbl_pages_dropped_o,
+  output logic [31:0]             part_tbl_bad_magic_o,
+  output logic [31:0]             part_tbl_truncated_o,
+  output logic [31:0]             part_tbl_denied_o,
 
   // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
   input  logic                    part_fld_valid_i,
@@ -1164,6 +1171,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             mat_fetch_denied_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
+  output logic [31:0]             geom_ma_jobs_e_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,

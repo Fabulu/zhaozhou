@@ -428,6 +428,23 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+//  * I33 was PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`), six ports whose
+//    entry's whole argument was one sentence: "NO RATIFIED COMMAND CARRIES A
+//    SPECIES DESCRIPTOR ... Inventing one here would mean this file choosing
+//    what a species IS, which is owner DATA". CLOSED AND DELETED 2026-09-19
+//    (gz/pfs2) under owner ruling R42, which answers it without anyone
+//    choosing that: the descriptors travel as a SPECIES_TABLE page
+//    (spec/cartridge.md 4, kind 13), authored by the owner and published by
+//    the PublishResource this console already executes.
+//    `u_part_table_loader` watches the publication for that kind, reads the
+//    page as whole 64-byte lines through requester E of `u_geom_mem_adapter`
+//    -- the same asset window MATERIAL.RESOLVE's record fetch uses -- and
+//    hands PART.TABLE its OWN load word, {sel, index, event, data},
+//    uninterpreted. Nothing in this module reads a descriptor field. The page
+//    is refused WHOLE on a wrong magic, a wrong version or a count that runs
+//    past the declared extent, each counted; a half-loaded species table is a
+//    particle engine on a mixture of two authors' physics.
+//
 //  * I30 was SURFACE.STAMP's DISPATCH (`surf_cmd_*`). It closed in two halves
 //    and the second one is CLOSED AND DELETED 2026-09-19 (gz/pfs2), under
 //    owner ruling R45. The first half closed when CMD.EXEC grew its
@@ -1797,45 +1814,6 @@
 //      The cache's `cs_oob_o` is exported beside it, and reads zero because no
 //      write is attempted rather than because every write was in range.
 //
-// I33. PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`) -- BOUNDARY. NEW
-//      2026-09-19, and it is the SUCCESSOR to the deleted I2/I3 rather than a
-//      restatement of them: the descriptor table is built, instantiated and
-//      answering all four reads inside this module, and what has no owner here
-//      is the HOST THAT FILLS IT. Six ports, one word per clock, never refused
-//      for backpressure.
-//
-//      CORRECTED 2026-09-19. This entry used to say "THE ABSENT OWNER IS
-//      CMD.SCHEDULER, the same one I14 and I30 name. `zhao_cmd_decoder` is not
-//      composed (see the refusal list below)". BOTH CLAUSES ARE STALE.
-//      CMD.DECODER is composed, as section 7b, and CMD.SCHEDULER is not absent
-//      at all -- it is `u_sched` inside `u_shell`, running in this composition
-//      (the evidence is at entry I36). The conclusion is unchanged and is now
-//      the only thing holding the entry open, so it is stated on its own:
-//
-//      NO RATIFIED COMMAND CARRIES A SPECIES DESCRIPTOR. `spec/commands.zidl`
-//      has no opcode with one, which is why CMD.EXEC has no arm for it and
-//      says so in its own header. No block in this core produces a descriptor
-//      write either. Inventing one here would
-//      mean this file choosing what a species IS, which is owner DATA --
-//      `reference/include/zref/zref_particle.hpp` says so in as many words:
-//      "there is no species table ... That is a DATA/ABI question and it is
-//      properly the owner's". So the load is a port and the CONTENTS are not
-//      guessed.
-//
-//      WHAT AN UNLOADED TABLE DOES, stated rather than left to be discovered:
-//      every read answers with whatever the array holds -- X in simulation,
-//      zero on Cyclone V power-up -- and zero is a recipe of 0 (HOLD), an
-//      unbounded lifetime, an IGNORE response, count 0 and known 0. Every
-//      consumer already refuses on its own terms, with its own counter. The
-//      table adds no fifth opinion, deliberately.
-//
-//      `part_tbl_load_refused_o` CANNOT FIRE IN THIS COMPOSITION and its zero
-//      is therefore not a measurement: at PART_SPECIES_N = 128 and CRV_N = 16 a
-//      seven-bit index cannot address outside the table, so the refusal is
-//      structurally unreachable. It is reachable and fired at SPECIES_N = 8 in
-//      `tests/particles/part_table_directed.cpp`. Said here because a counter
-//      asserted zero and never seen to move is a claim, not evidence.
-//
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
 //      composing the terrain compose engine (connected item 10).
@@ -2931,12 +2909,19 @@ module zhao_console_core
   // all four reads inside this module. What is left is the host that fills it,
   // and this is that seam. One word per clock; the table never refuses for
   // backpressure (`ld_ready_o` is constant high and says so in its own file).
-  input  logic                    part_tbl_ld_valid_i,
-  output logic                    part_tbl_ld_ready_o,
-  input  logic [1:0]              part_tbl_ld_sel_i,
-  input  logic [6:0]              part_tbl_ld_index_i,
-  input  logic [1:0]              part_tbl_ld_event_i,
-  input  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i,
+  // (I33's six part_tbl_ld_* ports were here. CLOSED 2026-09-19 under owner
+  //  ruling R42: the descriptors travel as DATA in a SPECIES_TABLE page the
+  //  owner authors, published by the command that publishes every other
+  //  resource, and u_part_table_loader carries the load words from the page
+  //  to the port. Nothing in this console chooses what a species IS, which is
+  //  the whole reason the entry stayed open. The evidence below is that
+  //  block's.)
+  output logic [31:0]             part_tbl_pages_o,
+  output logic [31:0]             part_tbl_entries_o,
+  output logic [31:0]             part_tbl_pages_dropped_o,
+  output logic [31:0]             part_tbl_bad_magic_o,
+  output logic [31:0]             part_tbl_truncated_o,
+  output logic [31:0]             part_tbl_denied_o,
 
   // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
   input  logic                    part_fld_valid_i,
@@ -3800,6 +3785,7 @@ module zhao_console_core
   output logic [31:0]             mat_fetch_denied_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
+  output logic [31:0]             geom_ma_jobs_e_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -5204,6 +5190,73 @@ module zhao_console_core
   wire [6:0]                  ptb_s_child_spc;
   wire [4:0]                  ptb_s_count;
 
+  // ==========================================================================
+  // PART.TABLE's HOST -- entry I33 CLOSED 2026-09-19 (gz/pfs2, ruling R42).
+  // ==========================================================================
+  // The entry's argument was "NO RATIFIED COMMAND CARRIES A SPECIES DESCRIPTOR
+  // ... Inventing one here would mean this file choosing what a species IS,
+  // which is owner DATA". R42 answers it without anyone choosing that: the
+  // descriptors travel as a SPECIES_TABLE page (spec/cartridge.md 4 kind 13),
+  // published by the PublishResource this console already executes, and
+  // `u_part_table_loader` carries the load words from the page to the port.
+  // The page's byte layout is frozen in `zref::species_page`; its CONTENTS are
+  // the owner's and nothing in this module reads a descriptor field.
+  //
+  // THE TRIGGER IS THE PUBLICATION, not the command: by then the page is
+  // resident, CRC-checked and bounded. The READ is requester E of
+  // `u_geom_mem_adapter` -- the same asset window MATERIAL.RESOLVE's record
+  // fetch uses, and the rarest traffic on it.
+  logic                      ptl_ld_valid, ptl_ld_ready;
+  logic [1:0]                ptl_ld_sel, ptl_ld_event;
+  logic [6:0]                ptl_ld_index;
+  logic [PART_TBL_LD_W-1:0]  ptl_ld_data;
+  zhao_guard_req_t           ptl_guard_req;
+  zhao_guard_rsp_t           ptl_guard_rsp;
+  logic                      ptl_beat_valid;
+  logic [63:0]               ptl_beat_data;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The loader counts its own eight beats per line, so `last` is corroboration
+  // rather than control -- the same reading MATERIAL.RESOLVE takes of it. And
+  // `busy` is PART.TABLE's own back-pressure by construction: the load port
+  // never refuses, so nothing here needs to wait for the loader.
+  logic                      ptl_beat_last;
+  logic                      ptl_busy_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_part_table_loader #(
+    .LD_W     (PART_TBL_LD_W),
+    .PAGE_KIND(PART_KIND_SPECIES_TABLE),
+    .CLIENT   (ZHAO_CLIENT_ENGINE1)
+  ) u_part_table_loader (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .pub_valid_i (upl_publish_valid_o),
+    .pub_tag_i   (upl_publish_tag_o),
+    .pub_base_i  (upl_publish_base_o),
+    .pub_extent_i(upl_publish_extent_o),
+
+    .g_req_o       (ptl_guard_req),
+    .g_rsp_i       (ptl_guard_rsp),
+    .g_beat_valid_i(ptl_beat_valid),
+    .g_beat_data_i (ptl_beat_data),
+
+    .ld_valid_o(ptl_ld_valid),
+    .ld_ready_i(ptl_ld_ready),
+    .ld_sel_o  (ptl_ld_sel),
+    .ld_index_o(ptl_ld_index),
+    .ld_event_o(ptl_ld_event),
+    .ld_data_o (ptl_ld_data),
+
+    .pages_o        (part_tbl_pages_o),
+    .entries_o      (part_tbl_entries_o),
+    .pages_dropped_o(part_tbl_pages_dropped_o),
+    .bad_magic_o    (part_tbl_bad_magic_o),
+    .truncated_o    (part_tbl_truncated_o),
+    .denied_o       (part_tbl_denied_o),
+    .busy_o         (ptl_busy_unused)
+  );
+
   zhao_part_table #(
     .SPECIES_N (PART_SPECIES_N),
     .AGE_W     (PART_AGE_W),
@@ -5218,13 +5271,14 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I33: the per-frame load, out at the boundary.
-    .ld_valid_i (part_tbl_ld_valid_i),
-    .ld_ready_o (part_tbl_ld_ready_o),
-    .ld_sel_i   (part_tbl_ld_sel_i),
-    .ld_index_i (part_tbl_ld_index_i),
-    .ld_event_i (part_tbl_ld_event_i),
-    .ld_data_i  (part_tbl_ld_data_i),
+    // REAL (I33 closed, R42): the load comes from a published SPECIES_TABLE
+    // page, read by u_part_table_loader below.
+    .ld_valid_i (ptl_ld_valid),
+    .ld_ready_o (ptl_ld_ready),
+    .ld_sel_i   (ptl_ld_sel),
+    .ld_index_i (ptl_ld_index),
+    .ld_event_i (ptl_ld_event),
+    .ld_data_i  (ptl_ld_data),
 
     // REAL: PART.UPDATE's species descriptor.  I2, update half.
     .u_index_i   (ptb_u_index),
@@ -12030,6 +12084,10 @@ module zhao_console_core
   // makes -- VRAM is 2^27 bytes and every region either block may name is
   // inside it.
   localparam logic [7:0] MAT_KIND_MATERIAL_SET = 8'd11;   // cartridge.md 4, kind 11
+  // R42: the species descriptor page. cartridge.md 4, kind 13, allocated by
+  // that ruling. Named here rather than repeated as a literal, so the console
+  // and the loader cannot disagree about which publication is a table.
+  localparam logic [7:0] PART_KIND_SPECIES_TABLE = 8'd13;
 
   zhao_guard_req_t mr_guard_req;
   zhao_guard_rsp_t mr_guard_rsp;
@@ -12155,6 +12213,13 @@ module zhao_console_core
     // REAL: requester D, GEOM.DRAWJOB's 64-byte MESH_STREAM header (R29). One
     // read per DRAW, against A's one per meshlet, so it is the lightest of the
     // four and the round robin's bound is unchanged in kind.
+    // REAL (I33 closed, R42): requester E, PART.TABLE's species-page loader.
+    .e_req_i       (ptl_guard_req),
+    .e_rsp_o       (ptl_guard_rsp),
+    .e_beat_valid_o(ptl_beat_valid),
+    .e_beat_data_o (ptl_beat_data),
+    .e_beat_last_o (ptl_beat_last),
+
     .d_req_i       (dj_guard_req),
     .d_rsp_o       (dj_guard_rsp),
     .d_beat_valid_o(dj_beat_valid),
@@ -12172,6 +12237,7 @@ module zhao_console_core
     .jobs_b_o     (geom_ma_jobs_b_o),
     .jobs_c_o     (geom_ma_jobs_c_o),
     .jobs_d_o     (geom_ma_jobs_d_o),
+    .jobs_e_o     (geom_ma_jobs_e_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),

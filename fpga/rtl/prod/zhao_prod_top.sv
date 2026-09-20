@@ -1257,13 +1257,20 @@ module zhao_prod_top (
   logic [1-1:0] u17_d_beat_valid_o;
   logic [64-1:0] u17_d_beat_data_o;
   logic [1-1:0] u17_d_beat_last_o;
+  zhao_guard_req_t u17_e_req_i;
+  assign u17_e_req_i = zhao_guard_req_t'(u17_src[28 +: $bits(zhao_guard_req_t)]);
+  zhao_guard_rsp_t u17_e_rsp_o;
+  logic [1-1:0] u17_e_beat_valid_o;
+  logic [64-1:0] u17_e_beat_data_o;
+  logic [1-1:0] u17_e_beat_last_o;
   zhao_guard_req_t u17_m_req_o;
   zhao_guard_rsp_t u17_m_rsp_i;
-  assign u17_m_rsp_i = zhao_guard_rsp_t'(u17_src[28 +: $bits(zhao_guard_rsp_t)]);
+  assign u17_m_rsp_i = zhao_guard_rsp_t'(u17_src[35 +: $bits(zhao_guard_rsp_t)]);
   logic [32-1:0] u17_jobs_a_o;
   logic [32-1:0] u17_jobs_b_o;
   logic [32-1:0] u17_jobs_c_o;
   logic [32-1:0] u17_jobs_d_o;
+  logic [32-1:0] u17_jobs_e_o;
   logic [32-1:0] u17_denied_o;
   logic [32-1:0] u17_contention_o;
   logic [32-1:0] u17_err_short_o;
@@ -1292,15 +1299,21 @@ module zhao_prod_top (
       .d_beat_valid_o(u17_d_beat_valid_o),
       .d_beat_data_o(u17_d_beat_data_o),
       .d_beat_last_o(u17_d_beat_last_o),
+      .e_req_i(u17_e_req_i),
+      .e_rsp_o(u17_e_rsp_o),
+      .e_beat_valid_o(u17_e_beat_valid_o),
+      .e_beat_data_o(u17_e_beat_data_o),
+      .e_beat_last_o(u17_e_beat_last_o),
       .m_req_o(u17_m_req_o),
       .m_rsp_i(u17_m_rsp_i),
-      .m_beat_valid_i(u17_src[35 +: 1]),
-      .m_beat_data_i(u17_src[42 +: 64]),
-      .m_beat_last_i(u17_src[49 +: 1]),
+      .m_beat_valid_i(u17_src[42 +: 1]),
+      .m_beat_data_i(u17_src[49 +: 64]),
+      .m_beat_last_i(u17_src[56 +: 1]),
       .jobs_a_o(u17_jobs_a_o),
       .jobs_b_o(u17_jobs_b_o),
       .jobs_c_o(u17_jobs_c_o),
       .jobs_d_o(u17_jobs_d_o),
+      .jobs_e_o(u17_jobs_e_o),
       .denied_o(u17_denied_o),
       .contention_o(u17_contention_o),
       .err_short_o(u17_err_short_o),
@@ -1310,7 +1323,7 @@ module zhao_prod_top (
   logic u17_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u17_fold_q <= 1'b0;
-    else u17_fold_q <= u17_fold_q ^ (((^u17_a_rsp_o)) & u17_src[0]) ^ (((^u17_a_beat_valid_o)) & u17_src[1]) ^ (((^u17_a_beat_data_o)) & u17_src[2]) ^ (((^u17_a_beat_last_o)) & u17_src[3]) ^ (((^u17_b_rsp_o)) & u17_src[4]) ^ (((^u17_b_beat_valid_o)) & u17_src[5]) ^ (((^u17_b_beat_data_o)) & u17_src[6]) ^ (((^u17_b_beat_last_o)) & u17_src[7]) ^ (((^u17_c_rsp_o)) & u17_src[8]) ^ (((^u17_c_beat_valid_o)) & u17_src[9]) ^ (((^u17_c_beat_data_o)) & u17_src[10]) ^ (((^u17_c_beat_last_o)) & u17_src[11]) ^ (((^u17_d_rsp_o)) & u17_src[12]) ^ (((^u17_d_beat_valid_o)) & u17_src[13]) ^ (((^u17_d_beat_data_o)) & u17_src[14]) ^ (((^u17_d_beat_last_o)) & u17_src[15]) ^ (((^u17_m_req_o)) & u17_src[16]) ^ (((^u17_jobs_a_o)) & u17_src[17]) ^ (((^u17_jobs_b_o)) & u17_src[18]) ^ (((^u17_jobs_c_o)) & u17_src[19]) ^ (((^u17_jobs_d_o)) & u17_src[20]) ^ (((^u17_denied_o)) & u17_src[21]) ^ (((^u17_contention_o)) & u17_src[22]) ^ (((^u17_err_short_o)) & u17_src[23]) ^ (((^u17_err_long_o)) & u17_src[24]) ^ (((^u17_err_unowned_o)) & u17_src[25]);
+    else u17_fold_q <= u17_fold_q ^ (((^u17_a_rsp_o)) & u17_src[0]) ^ (((^u17_a_beat_valid_o)) & u17_src[1]) ^ (((^u17_a_beat_data_o)) & u17_src[2]) ^ (((^u17_a_beat_last_o)) & u17_src[3]) ^ (((^u17_b_rsp_o)) & u17_src[4]) ^ (((^u17_b_beat_valid_o)) & u17_src[5]) ^ (((^u17_b_beat_data_o)) & u17_src[6]) ^ (((^u17_b_beat_last_o)) & u17_src[7]) ^ (((^u17_c_rsp_o)) & u17_src[8]) ^ (((^u17_c_beat_valid_o)) & u17_src[9]) ^ (((^u17_c_beat_data_o)) & u17_src[10]) ^ (((^u17_c_beat_last_o)) & u17_src[11]) ^ (((^u17_d_rsp_o)) & u17_src[12]) ^ (((^u17_d_beat_valid_o)) & u17_src[13]) ^ (((^u17_d_beat_data_o)) & u17_src[14]) ^ (((^u17_d_beat_last_o)) & u17_src[15]) ^ (((^u17_e_rsp_o)) & u17_src[16]) ^ (((^u17_e_beat_valid_o)) & u17_src[17]) ^ (((^u17_e_beat_data_o)) & u17_src[18]) ^ (((^u17_e_beat_last_o)) & u17_src[19]) ^ (((^u17_m_req_o)) & u17_src[20]) ^ (((^u17_jobs_a_o)) & u17_src[21]) ^ (((^u17_jobs_b_o)) & u17_src[22]) ^ (((^u17_jobs_c_o)) & u17_src[23]) ^ (((^u17_jobs_d_o)) & u17_src[24]) ^ (((^u17_jobs_e_o)) & u17_src[25]) ^ (((^u17_denied_o)) & u17_src[26]) ^ (((^u17_contention_o)) & u17_src[27]) ^ (((^u17_err_short_o)) & u17_src[28]) ^ (((^u17_err_long_o)) & u17_src[29]) ^ (((^u17_err_unowned_o)) & u17_src[30]);
 
   // ---- zhao_geom_meshfetch ----
   logic [63:0] u18_lfsr_q;
