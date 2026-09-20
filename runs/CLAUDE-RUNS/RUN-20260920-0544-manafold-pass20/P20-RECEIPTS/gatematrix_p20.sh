@@ -47,10 +47,10 @@ run n-mrear-dip 0 "$B/manafold-rear-audit.exe" --gate --dip
 # identity: the carried solver and the pass-19 bow, byte for byte
 crcs() { grep -oE 'manafold-[a-z0-9]+:.*crc32c=0x[0-9A-F]+' "$1" | grep -oE '0x[0-9A-F]+' | tr '
 ' ' '; }
-idleg() { # id expected-crcs env...
+idleg() { # id expected-crcs env...     (IDLEG_CLIPS overrides the witness clips)
   local id="$1" want="$2"; shift 2
   mkdir -p "$L/$id"
-  env ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross "$@" "$R" "$L/$id"       manafold-hover manafold-inspect manafold-taunt3 > "$L/$id.log" 2>&1
+  env ZIXX_EXP=celmain ZIXX_LIGHT=diagonal-cool-cross "$@" "$R" "$L/$id"       ${IDLEG_CLIPS:-manafold-hover manafold-inspect manafold-taunt3} > "$L/$id.log" 2>&1
   local got; got=$(crcs "$L/$id.log")
   local st=FAIL; [ "$got" = "$want" ] && st=PASS
   echo "$st $id crcs=[$got] want=[$want]" >> "$OUT"
@@ -154,7 +154,30 @@ run e-live-history-list-drift 0 $LH --out "$L/lh-drift" --control list-drift
 # identities of a selectable alternative mechanism, and they were re-baselined at
 # the pass-20 close because the dip's SHARED schedule moved (the 30-key ramp
 # floor and the re-trimmed per-clip shares feed both solvers, by design).
-idleg e-identity-pass19 "0xA2D0E051 0x779615BB 0x75BC4777 " ZHAO_U02_KNEAD_DIP_PM=0 ZHAO_U02_REAR_BOW=legacy
+# ⚠ PASS 20 FINAL BANK: THIS LEG WAS MISSING AN OPERAND, AND ITS WITNESSES
+# COULD NOT SEE IT. Pass 20 has THREE exact-off switches, not two -- the third
+# is the particle reaction, ZHAO_U02_FOLD_DIP_PM. It is read from the POSE (B's
+# sag below the A/C midline) rather than from the dip's schedule, on purpose, so
+# it answers ANY authored dip and not only this pass's beat. With only the first
+# two switches off the reaction still fires wherever a clip's own ambient motion
+# sags B past the 90 mm onset -- and the 22-subject scope render found exactly
+# that on BLOWN, FALL and TRICK, which were NOT pass 19 (0x053C4391 / 0x3F9F7CBA
+# / 0xBEDD03D3 against 0xCCAC7CAB / 0x0DE69D1C / 0x71BB47B9).
+#
+# Hover, Inspect and Taunt III carry no such ambient sag, so the three clips this
+# leg sampled were the three that could not fail. A leg that samples 3 of 22
+# cannot see the 3 that differ. Both halves are fixed: the third switch is here,
+# and the second leg below witnesses on the three clips that discriminate.
+# (The expected strings are in the RENDERER's output order -- fall, trick, blown
+# -- not the argument order, because `crcs` reads them off the log.)
+idleg e-identity-pass19 "0xA2D0E051 0x779615BB 0x75BC4777 " ZHAO_U02_KNEAD_DIP_PM=0 ZHAO_U02_REAR_BOW=legacy ZHAO_U02_FOLD_DIP_PM=0
+IDLEG_CLIPS="manafold-blown manafold-fall manafold-trick" \
+  idleg e-identity-pass19-ambient "0x0DE69D1C 0x71BB47B9 0xCCAC7CAB " ZHAO_U02_KNEAD_DIP_PM=0 ZHAO_U02_REAR_BOW=legacy ZHAO_U02_FOLD_DIP_PM=0
+# The two-switch leg is KEPT, with its own (different) expectation, as the
+# POSITIVE CONTROL for the finding: it must NOT equal pass 19 on these clips,
+# which is what proves the reaction is live and pose-driven rather than dead.
+IDLEG_CLIPS="manafold-blown manafold-fall manafold-trick" \
+  idleg e-reaction-ambient-live "0x3F9F7CBA 0xBEDD03D3 0x053C4391 " ZHAO_U02_KNEAD_DIP_PM=0 ZHAO_U02_REAR_BOW=legacy
 idleg e-identity-dipoff "0xEFE5AFC1 0x9E71DF79 0xC81598AA " ZHAO_U02_KNEAD_DIP_PM=0
 idleg e-identity-carried "0x40AA70E8 0xF6BD3444 0xC81598AA " ZHAO_U02_KNEAD_DIP_SOLVER=carried
 idleg e-identity-legacy "0x46A9C936 0x99CCAC21 0x75BC4777 " ZHAO_U02_KNEAD_DIP_SOLVER=carried ZHAO_U02_REAR_BOW=legacy

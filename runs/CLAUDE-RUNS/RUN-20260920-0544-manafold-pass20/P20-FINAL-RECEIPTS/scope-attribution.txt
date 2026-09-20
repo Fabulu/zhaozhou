@@ -1,0 +1,27 @@
+# Pass-20 scope attribution, all three banks from ONE binary (MD5 e95faca916627d1bddb02892c5eb67e1), production env
+# pass19 = all THREE switches off; rearonly = shipping bow, no beat, no reaction; reaction-only = KNEAD_DIP_PM=0 only, i.e. shipping bow, no beat, reaction LIVE
+# comparison is the per-subject ordered-frame-bytes SHA-256
+subject	frames	p19-recorded	p19-bank	reproduces-p19	rearonly	shipping	rear-changed(rearonly!=p19)	knead-changed(shipping!=rearonly)	reaction-only	ambient-reaction(reaction-only!=rearonly)
+manafold-blown	292	0xCCAC7CAB	0xCCAC7CAB	SAME	0x7B275500	0xC6AAF7AD	yes	yes	0x4BEE75EA	yes
+manafold-channel	420	0x8D8022A0	0x8D8022A0	SAME	0x92A23880	0x0FC52D19	yes	yes	0x92A23880	no
+manafold-crackle	600	0x43CA2CCD	0x43CA2CCD	SAME	0xB611474A	0xC6D1F16C	yes	yes	0xB611474A	no
+manafold-curious	180	0x265BD173	0x265BD173	SAME	0x0245EF7E	0xED285AB6	yes	yes	0x0245EF7E	no
+manafold-damage	464	0x28FAADC2	0x28FAADC2	SAME	0x7A62C46C	0x5D486AE7	yes	yes	0x7A62C46C	no
+manafold-death-drop	450	0xF4FF71A1	0xF4FF71A1	SAME	0x7C85CAD3	0xCBA3990E	yes	yes	0x7C85CAD3	no
+manafold-death-gutter	590	0x658B4D3D	0x658B4D3D	SAME	0x62328C5D	0x186AA00F	yes	yes	0x62328C5D	no
+manafold-drift	300	0x9A76FE69	0x9A76FE69	SAME	0x50EBBFFB	0xB4855BA7	yes	yes	0x50EBBFFB	no
+manafold-fall	340	0x0DE69D1C	0x0DE69D1C	SAME	0x7CE77327	0x02518063	yes	yes	0x81FA87A1	yes
+manafold-flight	352	0x5A0897E1	0x5A0897E1	SAME	0xE0C9990A	0xFD8E3AE8	yes	yes	0xE0C9990A	no
+manafold-hasty	240	0x14EFB828	0x14EFB828	SAME	0xFFE0C9C2	0xEB7D6F85	yes	yes	0xFFE0C9C2	no
+manafold-hit	140	0x39F4EE4F	0x39F4EE4F	SAME	0xF6FEBB86	0xF64B887F	yes	yes	0xF6FEBB86	no
+manafold-hover	600	0xA2D0E051	0xA2D0E051	SAME	0xEFE5AFC1	0x93B95AEE	yes	yes	0xEFE5AFC1	no
+manafold-inspect	600	0x779615BB	0x779615BB	SAME	0x9E71DF79	0xD00478A1	yes	yes	0x9E71DF79	no
+manafold-lasso	336	0xF6B893FE	0xF6B893FE	SAME	0x710BE7F1	0xA3D16C94	yes	yes	0x710BE7F1	no
+manafold-pirouette	240	0xE05DB5C3	0xE05DB5C3	SAME	0x731CD334	0xC5B176F8	yes	yes	0x731CD334	no
+manafold-rest	400	0xA8B3AD33	0xA8B3AD33	SAME	0xA0D1649A	0xEB3FB76D	yes	yes	0xA0D1649A	no
+manafold-startle	160	0xFD813D7E	0xFD813D7E	SAME	0xAFB33366	0xD64F3B15	yes	yes	0xAFB33366	no
+manafold-taunt	280	0x3F19A505	0x3F19A505	SAME	0x48F84048	0xBF2461C3	yes	yes	0x48F84048	no
+manafold-taunt2	240	0xE2F2232F	0xE2F2232F	SAME	0x37BF5C85	0x46D3619D	yes	yes	0x37BF5C85	no
+manafold-taunt3	368	0x75BC4777	0x75BC4777	SAME	0xC81598AA	0xC81598AA	yes	no	0xC81598AA	no
+manafold-trick	400	0x71BB47B9	0x71BB47B9	SAME	0xDAD318C5	0xABAB51E1	yes	yes	0xABAB51E1	yes
+# reproduces pass 19: 22/22; rear changes bytes: 22/22; knead changes bytes: 21/22; reaction fires on ambient sag with NO beat: 3/22
