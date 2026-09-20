@@ -63,9 +63,12 @@
 // ===========================================================================
 // `reference/include/zref/zref_post.hpp` is the law's model and this block
 // differences against it in `tests/compositor/post_gather_tag_directed.cpp`
-// over ALL 8,388,608 (tag, rgb565) pairs -- exhaustive, because the input
-// space is small enough that a sample would be a worse instrument than a
-// sweep.
+// over ALL 16,777,216 (tag, rgb565) pairs -- 2^24, exhaustive, because the
+// input space is small enough that a sample would be a worse instrument than a
+// sweep. (This line said 8,388,608 when it was first written, which is 2^23.
+// An 8-bit tag and a 16-bit colour is 24 bits, not 23. Corrected rather than
+// quietly fixed, because a header that states its own coverage and states it
+// WRONG is a claim nobody re-derives -- and the bench prints the real figure.)
 //
 // THE ROUNDING ORDER IS LOAD-BEARING AND IS NOT AN ACCIDENT OF TRANSCRIPTION.
 // The model computes `unit_mul(unit_mul(channel, gain), tint)` -- TWO
@@ -224,7 +227,20 @@ module zhao_post_gather_tag #(
   assign is_glow_c   = (ch_c == CH_GLOW);
   assign is_res_c    = !is_none_c && !is_glow_c;
   assign gain_c      = unit_mul(glow_gain(st_c), 8'(GLOW_MASTER));
-  assign above_knee_c = is_glow_c && (gain_c != 8'd0);
+  // THE CLASSIFICATION IS ON THE RAMP, NOT ON THE FINAL GAIN, and the
+  // difference is a counter that means what its name says. `frag_below_knee_o`
+  // reports "this texel is LIT, not a LIGHT" -- a statement about the KNEE. If
+  // it were taken from `gain_c` it would also fire whenever GLOW_MASTER is
+  // small enough to round the product to zero: unit_mul(1, 1) is 0, so at
+  // GLOW_MASTER = 1 every glow fragment in the frame would be reported below
+  // the knee and the knee would look wrong to whoever read the counter.
+  //
+  // At the ratified GLOW_MASTER of 255 the two are identical, which is exactly
+  // why it is worth pinning down here: a counter that is right only because of
+  // another knob's current value is a wrong number waiting for that knob to
+  // move, and the master gain is the one R195 calls "the one the owner is most
+  // likely to want on a slider".
+  assign above_knee_c = is_glow_c && (glow_gain(st_c) != 8'd0);
 
   assign r_c = exp5(f_rgb565_i[15:11]);
   assign g_c = exp6(f_rgb565_i[10:5]);
