@@ -730,6 +730,50 @@ quarter cell, uniformly, which reads as the dig being slightly off-centre
 rather than as distortion. The seam figure is the visible fault R56 names, and
 it is the price of the frozen format.
 
+#### (c) A HALF CELL SIDEWAYS IS NOT A HALF METRE DOWN — 2026-09-20, ruling R65
+
+Added by the pass that rendered R65's picture, because the table above is
+correct and is read wrong, including by the packet that wrote it. **Every
+figure in it is a HORIZONTAL displacement — where the sample is taken from.
+None of them is the height difference that results.**
+
+Depth is a function of strength, and a stamp's coverage test is a THRESHOLD
+(`zref::surface::covers` is `d² ≤ r²`). So when the half-cell offset moves a
+sample across a stamp's rim, strength does not change by a little: it changes
+from 0 to the stamp's full value. The two pages then give a shared border
+vertex two heights that differ by **the whole dig depth**.
+
+Measured by `tools/terrain/seam_dig_render.cpp` on the worst placement it can
+construct — a 9 m disc whose rim is TANGENT to the seam, strength 128
+(−3.25 m), a 1 m pitch:
+
+| quantity | value |
+|---|---|
+| shared border vertices whose two pages disagree | **4 of 99** |
+| worst height tear at such a vertex | **3.2500 m** — the dig's full depth |
+| where the tear is at all | only where a rim crosses the half-cell band |
+
+Both patches still draw their own border column, so the meshes do not meet
+there and the fault is a genuine discontinuity in the surface, not a shading
+artefact.
+
+**AND YET IT DOES NOT READ AS A SEAM**, which is the finding the render exists
+to produce and is the opposite of what the number suggests. At a 1 m lattice
+the rim of any dig is ALREADY quantised to whole vertices, so it is a ragged
+staircase of vertical faces everywhere. `reports/terrain-seam-dig/
+seam_dig_contact.png`'s DIFF panel shows the two laws differing in scattered
+rim segments all the way round the crater and NOT concentrated at x = 64: the
+quarter-cell offset perturbs the rim globally, and the seam is merely where the
+offset changes sign. The full-depth tear lands inside that staircase and is not
+distinguishable from it.
+
+So the honest statement of the cost is: **the nearest-texel fallback does not
+produce a visible CRACK ALONG THE SEAM. It produces a rim that is wrong by up
+to one vertex, everywhere, and the seam is one of the places it is wrong.**
+That is a different defect from the one R56 was arguing about, it is milder to
+look at and harder to argue away, and the owner's decision should be taken
+against the render rather than against the 0.50 m figure.
+
 Choosing the other tie-break (`max(2v−1, 0)`) flips the interior sign and
 leaves the seam discontinuity at exactly ½ cell. **No integer rounding rule
 removes it**, because the area grid has no sample AT either edge: its extreme
