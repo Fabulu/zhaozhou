@@ -378,7 +378,7 @@ and is not caused by it. Every before/after comparison here is against this
 tree's own baseline, which is the like-for-like one. **Worth chasing before the
 next bank render**, since it means the pass-19 receipt does not reproduce here.
 
-**Gate matrix: 143/143 PASS, 0 FAIL** (repair packet; was 140/140) (`P20-RECEIPTS/gate-matrix.txt`, script
+**Gate matrix: 144/144 PASS, 0 FAIL** (re-run clean from scratch with the dip shipping, including all three live-history legs).
 `P20-RECEIPTS/gatematrix_p20.sh`). All 11 normals green, plus `n-mrear-dip`
 which judges R5 with the dip ON.
 

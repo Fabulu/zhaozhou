@@ -180,3 +180,10 @@ on the real defect, and four new bow selectors returning RC 2.
   REAR_BOW=legacy in the reel, the inert dip ladders in mspan/mprobe).
 - **Live-history legs re-run cleanly** and the whole matrix re-run from scratch
   rather than patched, so it is a receipt and not a reconstruction.
+
+### Final gate matrix: 144/144 PASS, 0 FAIL
+Re-run from scratch with the dip shipping -- not patched, not reconstructed.
+All three live-history legs pass on clean renders (the earlier FAILs were my own
+orphan-cleanup kill landing mid-render, not a regression). Nothing else in the
+matrix was affected by that cleanup: every other leg is a fresh run in this
+same invocation.
