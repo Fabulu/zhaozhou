@@ -8544,6 +8544,25 @@ verilate(test_surface_sheet_directed
 add_test(NAME surface_sheet_directed COMMAND test_surface_sheet_directed)
 set_tests_properties(surface_sheet_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---- SURFACE.DISPATCH (owner ruling R45, core entry I30) --------------------
+# The world->patch law, differenced against `zhao_terrain_place`'s placement
+# restated in C++ -- NOT against this block's own RTL. Negative coordinates
+# FLOOR, which is the trap `zhao_terrain_heighttap`'s header names by example.
+add_executable(test_surface_dispatch_directed surface/surface_dispatch_directed.cpp)
+target_link_libraries(test_surface_dispatch_directed PRIVATE zhao_harness)
+verilate(test_surface_dispatch_directed
+  PREFIX Vzhao_surface_dispatch
+  TOP_MODULE zhao_surface_dispatch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_dispatch.sv)
+add_test(NAME surface_dispatch_directed COMMAND test_surface_dispatch_directed)
+set_tests_properties(surface_dispatch_directed PROPERTIES LABELS "fast;surface" TIMEOUT 300)
+
+add_test(NAME lint_zhao_surface_dispatch
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_surface_dispatch
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_dispatch.sv)
+set_tests_properties(lint_zhao_surface_dispatch PROPERTIES LABELS "lint;fast")
+
 add_executable(test_surface_sheet_random surface/surface_sheet_random.cpp)
 target_link_libraries(test_surface_sheet_random PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_surface_sheet_random PRIVATE

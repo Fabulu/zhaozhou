@@ -2204,6 +2204,7 @@ targets:
       - fpga/rtl/surface/zhao_surface_sheet.sv
       - fpga/rtl/surface/zhao_surface_sq.sv
       - fpga/rtl/surface/zhao_surface_stamp.sv
+      - fpga/rtl/surface/zhao_surface_dispatch.sv
       - fpga/rtl/terrain/zhao_terrain_bake.sv
       - fpga/rtl/terrain/zhao_terrain_bake_delta.sv
       - fpga/rtl/terrain/zhao_terrain_lod.sv
@@ -2877,6 +2878,7 @@ targets:
       - fpga/rtl/surface/zhao_surface_sq.sv
       - fpga/rtl/surface/zhao_surface_sheet.sv
       - fpga/rtl/surface/zhao_surface_stamp.sv
+      - fpga/rtl/surface/zhao_surface_dispatch.sv
       # THE SECOND COMPLETION, added 2026-09-19 with composition item 12. The
       # directory publishes on TWO completions and this closure had one, so
       # every page it loaded parked in ST_MIPGEN and `resident_o` could not

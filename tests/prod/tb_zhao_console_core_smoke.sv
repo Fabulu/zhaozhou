@@ -1126,14 +1126,16 @@ module tb_zhao_console_core_smoke
   logic signed [31:0] surf_cmd_ty_i;
   logic signed [31:0] surf_cmd_radius_i;
   logic signed [31:0] surf_cmd_ring_width_i;
-  logic signed [31:0] surf_cmd_env_x0_i;
-  logic signed [31:0] surf_cmd_env_z0_i;
-  logic signed [31:0] surf_cmd_env_x1_i;
-  logic signed [31:0] surf_cmd_env_z1_i;
-  logic               surf_cmd_blend_en_i;
-  logic        [ 2:0] surf_cmd_blend_i;
-  logic        [ 2:0] surf_cmd_age_shift_i;
-  logic               surf_cmd_field_en_i;
+  // (I30's nine open ports are GONE, R45: u_surface_dispatch resolves the
+  //  patch envelope from the stamp's own translation by the world->patch law,
+  //  and the policy is three named parameters. These are its evidence.)
+  logic [31:0]        surf_disp_dispatched_o;
+  logic [31:0]        surf_disp_pitch_refused_o;
+  logic [31:0]        surf_disp_env_clamped_o;
+  logic signed [15:0] surf_disp_patch_ix_o;
+  logic signed [15:0] surf_disp_patch_iz_o;
+  logic signed [31:0] surf_disp_env_x0_o;
+  logic signed [31:0] surf_disp_env_x1_o;
   logic        [15:0] surf_cmd_src_id_i;
   // I31 CLOSED 2026-09-19: `surf_fld_*` is no longer at the DUT's edge. The
   // brush is driven inside the core by `u_field_stamp_adapter`, so these four
@@ -1660,14 +1662,9 @@ module tb_zhao_console_core_smoke
   assign surf_cmd_ty_i         = 32'sd0;
   assign surf_cmd_radius_i     = 6 * SURF_M;
   assign surf_cmd_ring_width_i = 2 * SURF_M;  // a crack ring, not a filled disc
-  assign surf_cmd_env_x0_i     = SURF_ENV_LO;
-  assign surf_cmd_env_z0_i     = SURF_ENV_LO;
-  assign surf_cmd_env_x1_i     = SURF_ENV_HI;
-  assign surf_cmd_env_z1_i     = SURF_ENV_HI;
-  assign surf_cmd_blend_en_i   = 1'b0;        // 0 = the ABI operation mapping
-  assign surf_cmd_blend_i      = 3'd0;
-  assign surf_cmd_age_shift_i  = 3'd1;
-  assign surf_cmd_field_en_i   = 1'b0;
+  // (the bench drove the envelope and the policy here. It does not any more:
+  //  u_surface_dispatch derives both, and SURF_ENV_LO/HI below are kept only
+  //  as the numbers the stamp's own geometry comment is written against.)
   assign surf_cmd_src_id_i     = 16'd4242;
 
   // ONE command, offered once and withdrawn on its ACCEPTANCE -- the same
@@ -5050,6 +5047,24 @@ module tb_zhao_console_core_smoke
     //    SHEET's at zero (the block drops a non-resident write and says so on
     //    `wr_miss_o`), so this is a conservation statement and not "a counter
     //    moved".
+    // ---- R45 / entry I30: THE DISPATCH RESOLVED THE PATCH -------------------
+    // The envelope and the policy were BENCH CONSTANTS before this ruling.
+    // They are `u_surface_dispatch`'s now, from the stamp's own translation
+    // and the live pitch, by the world->patch law the height tap inverts.
+    $display("SMOKE: dispatch  stamps=%0d patch=(%0d,%0d) env_x=[%0d,%0d] fx16 (%0d m wide) pitch_refused=%0d env_clamped=%0d",
+             surf_disp_dispatched_o, surf_disp_patch_ix_o, surf_disp_patch_iz_o,
+             surf_disp_env_x0_o, surf_disp_env_x1_o,
+             (surf_disp_env_x1_o - surf_disp_env_x0_o) / SURF_M,
+             surf_disp_pitch_refused_o, surf_disp_env_clamped_o);
+    if (surf_disp_dispatched_o != surf_stamps_o)
+      $fatal(1, "SMOKE: the dispatch placed %0d stamps and SURFACE.STAMP completed %0d -- the envelope and the command are not the same event",
+             surf_disp_dispatched_o, surf_stamps_o);
+    if (surf_disp_pitch_refused_o != 0)
+      $fatal(1, "SMOKE: the dispatch refused the pitch %0d time(s); the staged page's pitch_log2 is outside the ratified set",
+             surf_disp_pitch_refused_o);
+    if (surf_disp_env_clamped_o != 0)
+      $fatal(1, "SMOKE: the dispatch clamped the envelope %0d time(s); the stamp is outside the +-4,096 m domain",
+             surf_disp_env_clamped_o);
     if (surf_stamp_texels_touched_o == 0)
       $fatal(1, "SMOKE: SURFACE.STAMP visited no texel -- a ring of outer radius 6 m on a 64 m envelope covers a few dozen, so the command's geometry never reached the walker");
     if (surf_sheet_texels_touched_o != surf_stamp_texels_touched_o)

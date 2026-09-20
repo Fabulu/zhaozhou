@@ -428,6 +428,32 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+//  * I30 was SURFACE.STAMP's DISPATCH (`surf_cmd_*`). It closed in two halves
+//    and the second one is CLOSED AND DELETED 2026-09-19 (gz/pfs2), under
+//    owner ruling R45. The first half closed when CMD.EXEC grew its
+//    SurfaceStamp arm: every RATIFIED field comes off a validated packet. What
+//    stayed open was the ENVELOPE -- which entry I27 recorded as having "no
+//    placement owner anywhere in the tree" -- and three policy bits no opcode
+//    carries. R45: "The stamp's patch is resolved by the SAME world->patch law
+//    `zhao_terrain_heighttap` implements (powers-of-two pitch, no divider);
+//    the directory is keyed by the resulting patch coordinates. No second
+//    mapping law. blend_en=0 is the ratified policy." `u_surface_dispatch` is
+//    that, combinational from the stamp's own translation and the LIVE pitch
+//    `ptt_pitch_c` the tap already uses, emitting the patch rectangle and the
+//    key {patch_ix, patch_iz}. Nine ports are GONE from this edge rather than
+//    driven: the four `surf_cmd_env_*`, the three policy bits, and
+//    `surf_cmd_field_en_i` -- whose console policy was already "a stamp
+//    program is resident", so the residency is the producer and the host half
+//    of that AND carried no information.
+//
+//    WHAT REMAINS UNDER `surf_cmd_*` IS THE HOST'S OWN DISPATCH PORT, and it
+//    is not a tie-off in the register's sense: every field of it also has an
+//    in-core producer now (CMD.EXEC for the ratified ones, the dispatch for
+//    the rest), the executor has priority with backpressure, and the host path
+//    is a parallel convenience -- the same shape `part_cfg_base*` and
+//    `terr_cfg_*` have. Removing it would remove function, which is the one
+//    thing a closure may not do.
+//
 //  * I7 was PART.COLLIDE's PLANE (`part_plane_*`) and the POPULATION ORIGIN
 //    (`part_pop_origin_*`), eight board pins whose entry said "No ratified
 //    command carries a population descriptor to this core -- DrawPopulation
@@ -1689,52 +1715,6 @@
 //      `zhao_geom_pose_palette` with nothing external in between, and the
 //      store's own `geom_pal_bone_unset_o` reports any vertex that arrived
 //      before its pose did. The missing thing is the BYTES, not the path.
-//
-// I30. SURFACE.STAMP's DISPATCH (`surf_cmd_*`) -- BOUNDARY. NEW 2026-09-19,
-//      opened by composing the SURFACE pair (connected item 9).
-//      `spec/commands.zidl` carries SurfaceStamp with its `handle32[patch]`,
-//      operation byte, tag, strength, transform, radius and ring width, so the
-//      command is RATIFIED and the fields below are its fields -- what was
-//      missing was the path to here. HALF CLOSED 2026-09-19.
-//
-//      CLOSED: THE RATIFIED FIELDS. `zhao_cmd_exec` (section 7c) supplies the
-//      patch handle, operation, tag, strength, the transform's translation,
-//      radius, ring width and the record header's source id, out of a packet
-//      CMD.DECODER has ratified. `cmd_exec_stamps_o` counts the dispatches.
-//      The owner turned out NOT to be CMD.SCHEDULER, which this entry named:
-//      the scheduler works on framed 16-byte record payloads and a SurfaceStamp
-//      carries its transform at record byte 28, past the framer's window. The
-//      executor reads the byte stream itself, which is why it exists.
-//
-//      STILL OPEN: THE ENVELOPE AND THE POLICY. `surf_cmd_env_*` is the patch
-//      placement entry I27 records as having no owner anywhere in the tree, and
-//      `cmd_blend_en_i` / `cmd_blend_i` / `cmd_age_shift_i` / `cmd_field_en_i`
-//      are console policy that no opcode carries. An executor-issued stamp
-//      therefore rides the HOST port's envelope and policy, which is stated in
-//      the merge above rather than left to be discovered from a stamp landing
-//      in the wrong place. `brush` is a third kind of absence and
-//      `zhao_surface_stamp.sv` S5 owns it: nothing in this tree defines a brush
-//      page's format, so there is no port to drive.
-//
-//      (I31 was SURFACE.STAMP's FIELD-DRIVEN BRUSH. It is CLOSED and the
-//      entry is DELETED, 2026-09-19. Its old text said "FIELD.SEQ.STAMP is the
-//      named owner and it is not built", and that owner is ruled never to
-//      exist -- `design/contracts/FIELD.SEQ.STAMP.md`: "one engine, five
-//      profiles ... There is no separate FIELD.SEQ.STAMP sequencer in hardware
-//      and there is not going to be one." What was missing was the engine,
-//      which is `u_field_host` now, and the S profile's STREAM ADAPTER, which
-//      FIELD.SEQ.CORE.md permits by name and which is
-//      `u_field_stamp_adapter`. `surf_fld_valid_i`, `surf_fld_ready_o`,
-//      `surf_fld_tag_op_i` and `surf_fld_strength_i` are GONE from the port
-//      list rather than driven from it.
-//
-//      The binding was assembled rather than chosen: FIELD.SEQ.CORE.md names
-//      the S varying lanes "stencil u,v", and `zhao_surface_stamp` already
-//      unpacks spec/form/field-ir.md 7.1's {tag_op, strength} byte for byte.
-//      The ONE decision this file takes is policy and is stated beside the
-//      stamp: `cmd_field_en_i` is ANDed with "a stamp program is resident", so
-//      a stamp that asks for the brush with nothing loaded runs as a plain ABI
-//      stamp instead of stalling forever on records that cannot come.)
 //
 // I32. SURFACE.STAMP's `stamp_results` (`surf_res_*`) -- BOUNDARY. TERRAIN.BAKE
 //      is the named consumer, it is built and it is NOT composed. The port is
@@ -4361,15 +4341,27 @@ module zhao_console_core
   input  logic signed [31:0] surf_cmd_ty_i,
   input  logic signed [31:0] surf_cmd_radius_i,
   input  logic signed [31:0] surf_cmd_ring_width_i,
-  input  logic signed [31:0] surf_cmd_env_x0_i,
-  input  logic signed [31:0] surf_cmd_env_z0_i,
-  input  logic signed [31:0] surf_cmd_env_x1_i,
-  input  logic signed [31:0] surf_cmd_env_z1_i,
-  input  logic               surf_cmd_blend_en_i,
-  input  logic        [ 2:0] surf_cmd_blend_i,
-  input  logic        [ 2:0] surf_cmd_age_shift_i,
-  input  logic               surf_cmd_field_en_i,
+  // (I30's OPEN HALF was here: surf_cmd_env_* -- the patch envelope, which
+  //  entry I27 recorded as having no placement owner anywhere in the tree --
+  //  and the three policy bits no opcode carries. CLOSED 2026-09-19 under
+  //  owner ruling R45: u_surface_dispatch resolves the patch by the SAME
+  //  world->patch law zhao_terrain_heighttap inverts, from the stamp's own
+  //  translation and the live pitch, and carries the policy in three named
+  //  parameters with blend_en = 0 as R45 ratifies. surf_cmd_field_en_i went
+  //  with them: the policy was already "a stamp program is resident", so the
+  //  residency IS the producer and the host had nothing to add.)
   input  logic        [15:0] surf_cmd_src_id_i,
+  // The dispatch's evidence.
+  output logic [31:0]        surf_disp_dispatched_o,
+  output logic [31:0]        surf_disp_pitch_refused_o,
+  output logic [31:0]        surf_disp_env_clamped_o,
+  output logic signed [15:0] surf_disp_patch_ix_o,
+  output logic signed [15:0] surf_disp_patch_iz_o,
+  // The rectangle itself, because a patch index alone cannot be checked
+  // against the stamp's own geometry and an unchecked envelope is how a stamp
+  // lands somewhere plausible and wrong.
+  output logic signed [31:0] surf_disp_env_x0_o,
+  output logic signed [31:0] surf_disp_env_x1_o,
 
   // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
   // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
@@ -8184,6 +8176,32 @@ module zhao_console_core
   logic signed [31:0] cmd_exec_stamp_tx_w, cmd_exec_stamp_ty_w;
   logic signed [31:0] cmd_exec_stamp_radius_w, cmd_exec_stamp_ring_w;
 
+  // ==========================================================================
+  // SURFACE.DISPATCH -- entry I30's OPEN HALF, CLOSED 2026-09-19 (ruling R45).
+  // ==========================================================================
+  // The paragraph above used to end "an executor-issued stamp rides the host's
+  // envelope and policy", and that was honest and was a gap: the envelope had
+  // no owner anywhere in the tree (entry I27 said so) and the policy was three
+  // bits no opcode carries. R45 gave both an owner. `u_surface_dispatch`
+  // resolves the patch from the stamp's OWN translation by the world->patch
+  // law `zhao_terrain_heighttap` inverts -- powers-of-two pitch, arithmetic
+  // shift, no divider, floor -- and emits the patch rectangle plus the
+  // directory key {patch_ix, patch_iz}. NO SECOND MAPPING LAW EXISTS: this is
+  // the same shift, on the same live pitch (`ptt_pitch_c`, from
+  // TERRAIN.HDRREAD's staged header) that the tap uses.
+  //
+  // It is COMBINATIONAL from the merged command's translation, so the envelope
+  // and the command it belongs to cannot be a cycle apart -- the join that
+  // would otherwise have to be argued about is not a join at all.
+  logic signed [31:0] sd_env_x0_c, sd_env_z0_c, sd_env_x1_c, sd_env_z1_c;
+  logic               sd_blend_en_c;
+  logic [2:0]         sd_blend_c, sd_age_shift_c;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The directory key leaves this module as evidence; nothing inside it keys
+  // on a patch yet, and inventing a consumer would be worse than saying so.
+  logic               sd_patch_valid_c;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   logic        surf_cmd_valid_m;
   logic [31:0] surf_cmd_handle_m;
   logic [ 7:0] surf_cmd_operation_m, surf_cmd_tag_m;
@@ -8210,7 +8228,10 @@ module zhao_console_core
   logic [31:0] sfa_fld_tag_op;
   logic [15:0] sfa_fld_strength;
   logic        sfa_arm_ready;
-  assign surf_field_en_c = surf_cmd_field_en_i && sfa_arm_ready;
+  // R45: the policy WAS surf_cmd_field_en_i && sfa_arm_ready, and the host
+  // half of that AND carried no information the console did not already have.
+  // A stamp uses the brush exactly when a stamp program is resident.
+  assign surf_field_en_c = sfa_arm_ready;
 
   assign surf_cmd_valid_m       = cmd_exec_stamp_valid_w || surf_cmd_valid_i;
   assign cmd_exec_stamp_ready_w = surf_cmd_ready_int;
@@ -8235,6 +8256,32 @@ module zhao_console_core
   assign surf_cmd_src_id_m     = cmd_exec_stamp_valid_w ? cmd_exec_stamp_src_id_w
                                                         : surf_cmd_src_id_i;
 
+  zhao_surface_dispatch u_surface_dispatch (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+    .pitch_log2_i (ptt_pitch_c),
+    .cmd_tx_i     (surf_cmd_tx_m),
+    .cmd_ty_i     (surf_cmd_ty_m),
+    .cmd_fire_i   (surf_cmd_valid_m && surf_cmd_ready_int),
+    .env_x0_o     (sd_env_x0_c),
+
+    .env_z0_o     (sd_env_z0_c),
+    .env_x1_o     (sd_env_x1_c),
+    .env_z1_o     (sd_env_z1_c),
+    .patch_ix_o   (surf_disp_patch_ix_o),
+    .patch_iz_o   (surf_disp_patch_iz_o),
+    .patch_valid_o(sd_patch_valid_c),
+    .blend_en_o   (sd_blend_en_c),
+    .blend_o      (sd_blend_c),
+    .age_shift_o  (sd_age_shift_c),
+    .dispatched_o   (surf_disp_dispatched_o),
+    .pitch_refused_o(surf_disp_pitch_refused_o),
+    .env_clamped_o  (surf_disp_env_clamped_o)
+  );
+
+  assign surf_disp_env_x0_o = sd_env_x0_c;
+  assign surf_disp_env_x1_o = sd_env_x1_c;
+
   zhao_surface_stamp #(
     .SQ_RADIX (SURF_SQ_RADIX)
   ) u_surface_stamp (
@@ -8253,13 +8300,16 @@ module zhao_console_core
     .cmd_ty_i        (surf_cmd_ty_m),
     .cmd_radius_i    (surf_cmd_radius_m),
     .cmd_ring_width_i(surf_cmd_ring_width_m),
-    .cmd_env_x0_i    (surf_cmd_env_x0_i),
-    .cmd_env_z0_i    (surf_cmd_env_z0_i),
-    .cmd_env_x1_i    (surf_cmd_env_x1_i),
-    .cmd_env_z1_i    (surf_cmd_env_z1_i),
-    .cmd_blend_en_i  (surf_cmd_blend_en_i),
-    .cmd_blend_i     (surf_cmd_blend_i),
-    .cmd_age_shift_i (surf_cmd_age_shift_i),
+    // REAL (I30 closed, R45): the envelope is the patch the stamp's own
+    // translation lands on, by the world->patch law, and the policy is the
+    // dispatch's three named constants.
+    .cmd_env_x0_i    (sd_env_x0_c),
+    .cmd_env_z0_i    (sd_env_z0_c),
+    .cmd_env_x1_i    (sd_env_x1_c),
+    .cmd_env_z1_i    (sd_env_z1_c),
+    .cmd_blend_en_i  (sd_blend_en_c),
+    .cmd_blend_i     (sd_blend_c),
+    .cmd_age_shift_i (sd_age_shift_c),
     .cmd_field_en_i  (surf_field_en_c),
     .cmd_src_id_i    (surf_cmd_src_id_m),
 

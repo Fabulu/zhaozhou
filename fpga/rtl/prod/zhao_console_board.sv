@@ -1974,15 +1974,27 @@ module zhao_console_board
   input  logic signed [31:0] surf_cmd_ty_i,
   input  logic signed [31:0] surf_cmd_radius_i,
   input  logic signed [31:0] surf_cmd_ring_width_i,
-  input  logic signed [31:0] surf_cmd_env_x0_i,
-  input  logic signed [31:0] surf_cmd_env_z0_i,
-  input  logic signed [31:0] surf_cmd_env_x1_i,
-  input  logic signed [31:0] surf_cmd_env_z1_i,
-  input  logic               surf_cmd_blend_en_i,
-  input  logic        [ 2:0] surf_cmd_blend_i,
-  input  logic        [ 2:0] surf_cmd_age_shift_i,
-  input  logic               surf_cmd_field_en_i,
+  // (I30's OPEN HALF was here: surf_cmd_env_* -- the patch envelope, which
+  //  entry I27 recorded as having no placement owner anywhere in the tree --
+  //  and the three policy bits no opcode carries. CLOSED 2026-09-19 under
+  //  owner ruling R45: u_surface_dispatch resolves the patch by the SAME
+  //  world->patch law zhao_terrain_heighttap inverts, from the stamp's own
+  //  translation and the live pitch, and carries the policy in three named
+  //  parameters with blend_en = 0 as R45 ratifies. surf_cmd_field_en_i went
+  //  with them: the policy was already "a stamp program is resident", so the
+  //  residency IS the producer and the host had nothing to add.)
   input  logic        [15:0] surf_cmd_src_id_i,
+  // The dispatch's evidence.
+  output logic [31:0]        surf_disp_dispatched_o,
+  output logic [31:0]        surf_disp_pitch_refused_o,
+  output logic [31:0]        surf_disp_env_clamped_o,
+  output logic signed [15:0] surf_disp_patch_ix_o,
+  output logic signed [15:0] surf_disp_patch_iz_o,
+  // The rectangle itself, because a patch index alone cannot be checked
+  // against the stamp's own geometry and an unchecked envelope is how a stamp
+  // lands somewhere plausible and wrong.
+  output logic signed [31:0] surf_disp_env_x0_o,
+  output logic signed [31:0] surf_disp_env_x1_o,
 
   // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
   // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
@@ -3526,15 +3538,14 @@ module zhao_console_board
       .surf_cmd_ty_i                     (surf_cmd_ty_i),
       .surf_cmd_radius_i                 (surf_cmd_radius_i),
       .surf_cmd_ring_width_i             (surf_cmd_ring_width_i),
-      .surf_cmd_env_x0_i                 (surf_cmd_env_x0_i),
-      .surf_cmd_env_z0_i                 (surf_cmd_env_z0_i),
-      .surf_cmd_env_x1_i                 (surf_cmd_env_x1_i),
-      .surf_cmd_env_z1_i                 (surf_cmd_env_z1_i),
-      .surf_cmd_blend_en_i               (surf_cmd_blend_en_i),
-      .surf_cmd_blend_i                  (surf_cmd_blend_i),
-      .surf_cmd_age_shift_i              (surf_cmd_age_shift_i),
-      .surf_cmd_field_en_i               (surf_cmd_field_en_i),
       .surf_cmd_src_id_i                 (surf_cmd_src_id_i),
+      .surf_disp_dispatched_o            (surf_disp_dispatched_o),
+      .surf_disp_pitch_refused_o         (surf_disp_pitch_refused_o),
+      .surf_disp_env_clamped_o           (surf_disp_env_clamped_o),
+      .surf_disp_patch_ix_o              (surf_disp_patch_ix_o),
+      .surf_disp_patch_iz_o              (surf_disp_patch_iz_o),
+      .surf_disp_env_x0_o                (surf_disp_env_x0_o),
+      .surf_disp_env_x1_o                (surf_disp_env_x1_o),
       .surf_res_valid_o                  (surf_res_valid_o),
       .surf_res_ready_i                  (surf_res_ready_i),
       .surf_res_texel_o                  (surf_res_texel_o),
