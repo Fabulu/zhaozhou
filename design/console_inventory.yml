@@ -151,6 +151,15 @@ modules:
       because the descriptor bank has no producer for reasons of ownership and format
       rather than wiring -- zhao_console_core.sv's lighting section carries that
       argument in full."
+  zhao_geom_ladderbank:
+    disposition: pending_compose
+    why: "GEOM.LOD's four per-creature-type constants, read from the CREATURE_FORM page
+      layout owner ruling R26 unfroze and spec/cartridge.md 4c freezes (R68 sub-builds 1
+      and 3). Differenced against zref::creature_page and required to read the packer's
+      own committed golden. NOT composed yet because its consumer -- the per-instance
+      LodState owner that drives zhao_geom_lod -- is R68 sub-build 3 and lands with it;
+      composing a bank whose only reader does not exist would connect nothing at either
+      end, which is the test TERRAIN.HEIGHTTAP and GEOM.LOOM were held against."
   zhao_geom_lod:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"

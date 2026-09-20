@@ -13943,6 +13943,41 @@ add_test(NAME lint_zhao_part_table_loader
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv)
 set_tests_properties(lint_zhao_part_table_loader PROPERTIES LABELS "lint;fast")
 
+# ---- GEOM.LOD's ladder-constant bank (owner rulings R26/R68) ---------------
+# The same discipline as the species-page loader above, plus one case that only
+# a DOUBLE-BANKED store can pass: an illegal record FIVE rows into a seven-row
+# page, with the previous page's rows required to still answer bit for bit
+# afterwards. "Fewer rows" is not the test; "the same rows" is.
+add_executable(test_geom_ladderbank_directed geometry/geom_ladderbank_directed.cpp)
+target_link_libraries(test_geom_ladderbank_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_ladderbank_directed PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+verilate(test_geom_ladderbank_directed
+  PREFIX Vtb_geom_ladderbank
+  TOP_MODULE tb_geom_ladderbank
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_ladderbank.sv)
+add_test(NAME geom_ladderbank_directed COMMAND test_geom_ladderbank_directed)
+set_tests_properties(geom_ladderbank_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_zhao_geom_ladderbank
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_ladderbank
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv)
+set_tests_properties(lint_zhao_geom_ladderbank PROPERTIES LABELS "lint;fast")
+
+# ...and the PACKER, which is the third statement of the same layout. It
+# rebuilds the committed golden from its own constants and fires each of its
+# four refusals; geom_ladderbank_directed requires zref::creature_page::build
+# to reproduce that SAME file and the RTL to read it. Three statements, one
+# artefact.
+add_test(NAME pack_creature_ladder_check
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/pack/mkcreatureladder.py" --check)
+set_tests_properties(pack_creature_ladder_check PROPERTIES LABELS "fast;tools" TIMEOUT 120)
+
 # ---------------------------------------------------------------------------
 # PART.STATE's capacity backstop -- gap I8, `capacity_full_o`.
 #
