@@ -37,7 +37,7 @@
 //
 //   SRC_STYLE        ALM     ALUT    regs   blockmem  MLAB   % of 41,910
 //   ---------------  ------  ------  -----  --------  -----  -----------
-//   0 SYNC_M10K         829     454    865    10,240      0      2.0%
+//   0 SYNC_M10K         830     458    866    10,240      0      2.0%
 //   1 ASYNC_DERIVED   6,440   9,234  8,449         0      0     15.4%
 //   2 ASYNC_FLAT     14,056  21,617 17,665         0      0     33.5%
 //
@@ -45,10 +45,18 @@
 // a console already reported over its ALM ceiling. It is not affordable, and
 // the amendment was right to make the pricing a precondition of building.
 //
-// **The arrangement actually built costs 829 ALM, 2.0%.** The saving is 13,227
-// ALM, a 17.0x reduction, and the three rows attribute it rather than asserting
+// **The arrangement actually built costs 830 ALM, 2.0%.** The saving is 13,226
+// ALM, a 16.9x reduction, and the three rows attribute it rather than asserting
 // it: deriving `inv_rest` is worth 7,616 ALM (14,056 -> 6,440) and making the
-// read synchronous is worth a further 5,611 (6,440 -> 829).
+// read synchronous is worth a further 5,610 (6,440 -> 830).
+//
+// RE-MEASURED after the two detector-arming repairs below, because a number
+// taken before a change is a number about a machine that no longer exists
+// (CLAUDE.md, "FIXED, NEVER RE-MEASURED"). Style 0 moved 829 -> 830 ALM and
+// 865 -> 866 registers: EXACTLY the one flip-flop `started_q` added. The two
+// async rows did not move at all, because the repair is inside the
+// `SRC_STYLE == 0` generate branch. A delta that matches the edit is the only
+// form in which "nothing moved" is evidence rather than a stale binary.
 //
 // TWO THINGS THE ROWS SETTLE THAT ARITHMETIC COULD NOT:
 //
@@ -71,7 +79,7 @@
 // is Analysis & Synthesis's ESTIMATE, there is no placement and no routing, and
 // no timing number appears above because none was measured. What a map settles
 // is exactly what was asked — relative area and whether storage becomes RAM or
-// flops — and the gap between 829 and 14,056 is not a number a fit reverses.
+// flops — and the gap between 830 and 14,056 is not a number a fit reverses.
 //
 // ---------------------------------------------------------------------------
 // LEVER 1 — `inv_rest` IS DERIVED, AND THE REFERENCE IS WHERE THAT IS DECIDED
