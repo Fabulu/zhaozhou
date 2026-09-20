@@ -902,7 +902,7 @@ module zhao_prod_top (
     if (!rst_n) u07_fold_q <= 1'b0;
     else u07_fold_q <= u07_fold_q ^ (((^u07_req_valid_o)) & u07_src[0]) ^ (((^u07_req_slot_o)) & u07_src[1]) ^ (((^u07_req_noprog_o)) & u07_src[2]) ^ (((^u07_req_in_o)) & u07_src[3]) ^ (((^u07_resp_ready_o)) & u07_src[4]) ^ (((^u07_ans_valid_o)) & u07_src[5]) ^ (((^u07_warp_valid_o)) & u07_src[6]) ^ (((^u07_dx_o)) & u07_src[7]) ^ (((^u07_dy_o)) & u07_src[8]) ^ (((^u07_dz_o)) & u07_src[9]) ^ (((^u07_nx_o)) & u07_src[10]) ^ (((^u07_ny_o)) & u07_src[11]) ^ (((^u07_nz_o)) & u07_src[12]) ^ (((^u07_vertices_o)) & u07_src[13]) ^ (((^u07_identities_o)) & u07_src[14]) ^ (((^u07_bypassed_o)) & u07_src[15]) ^ (((^u07_noprog_o)) & u07_src[16]) ^ (((^u07_sig_refused_o)) & u07_src[17]) ^ (((^u07_faults_o)) & u07_src[18]) ^ (((^u07_absent_outputs_o)) & u07_src[19]) ^ (((^u07_stall_cycles_o)) & u07_src[20]) ^ (((^u07_vtx_changed_o)) & u07_src[21]);
 
-  // ---- zhao_forge_cliff ----
+  // ---- zhao_forge_cliff_ram ----
   logic [63:0] u08_lfsr_q;
   logic [1023:0] u08_src;
   assign u08_src = {16{u08_lfsr_q}};
@@ -924,7 +924,8 @@ module zhao_prod_top (
   logic [12-1:0] u08_page_dropped_o;
   logic [1-1:0] u08_idle_o;
   logic [32-1:0] u08_triangles_submitted_o;
-  zhao_forge_cliff u08_i (
+  logic [8-1:0] u08_walk_fault_o;
+  zhao_forge_cliff_ram u08_i (
       .clk(clk),
       .rst_n(rst_n),
       .cmd_valid_i(u08_src[0 +: 1]),
@@ -953,12 +954,13 @@ module zhao_prod_top (
       .page_merged_o(u08_page_merged_o),
       .page_dropped_o(u08_page_dropped_o),
       .idle_o(u08_idle_o),
-      .triangles_submitted_o(u08_triangles_submitted_o)
+      .triangles_submitted_o(u08_triangles_submitted_o),
+      .walk_fault_o(u08_walk_fault_o)
   );
   logic u08_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u08_fold_q <= 1'b0;
-    else u08_fold_q <= u08_fold_q ^ (((^u08_cmd_ready_o)) & u08_src[0]) ^ (((^u08_ld_ready_o)) & u08_src[1]) ^ (((^u08_vd_en_o)) & u08_src[2]) ^ (((^u08_vd_addr_o)) & u08_src[3]) ^ (((^u08_edge_valid_o)) & u08_src[4]) ^ (((^u08_edge_ci_o)) & u08_src[5]) ^ (((^u08_edge_cj_o)) & u08_src[6]) ^ (((^u08_edge_side_o)) & u08_src[7]) ^ (((^u08_edge_span_o)) & u08_src[8]) ^ (((^u08_edge_src_id_o)) & u08_src[9]) ^ (((^u08_page_done_o)) & u08_src[10]) ^ (((^u08_page_merged_o)) & u08_src[11]) ^ (((^u08_page_dropped_o)) & u08_src[12]) ^ (((^u08_idle_o)) & u08_src[13]) ^ (((^u08_triangles_submitted_o)) & u08_src[14]);
+    else u08_fold_q <= u08_fold_q ^ (((^u08_cmd_ready_o)) & u08_src[0]) ^ (((^u08_ld_ready_o)) & u08_src[1]) ^ (((^u08_vd_en_o)) & u08_src[2]) ^ (((^u08_vd_addr_o)) & u08_src[3]) ^ (((^u08_edge_valid_o)) & u08_src[4]) ^ (((^u08_edge_ci_o)) & u08_src[5]) ^ (((^u08_edge_cj_o)) & u08_src[6]) ^ (((^u08_edge_side_o)) & u08_src[7]) ^ (((^u08_edge_span_o)) & u08_src[8]) ^ (((^u08_edge_src_id_o)) & u08_src[9]) ^ (((^u08_page_done_o)) & u08_src[10]) ^ (((^u08_page_merged_o)) & u08_src[11]) ^ (((^u08_page_dropped_o)) & u08_src[12]) ^ (((^u08_idle_o)) & u08_src[13]) ^ (((^u08_triangles_submitted_o)) & u08_src[14]) ^ (((^u08_walk_fault_o)) & u08_src[15]);
 
   // ---- zhao_forge_prim ----
   logic [63:0] u09_lfsr_q;
