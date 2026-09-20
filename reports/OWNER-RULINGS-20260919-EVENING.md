@@ -1485,3 +1485,61 @@ some rows will turn out to be payloads that happen to increment. Each row is
 *either the ledger owes it a name, or it is not a counter and the row is noise* —
 and that is written into the output, so the next reader is not handed a number
 that looks like a verdict.
+
+## R141 — THE ENTIRE gaps-to-zero RUN HAS HAD NO CI. The G0 defect recurred, on a branch name
+
+**2026-09-20, coordinator, found by following the fit guard's instruction to pick
+up `reports/DOCKET.md` instead of idling.**
+
+`.github/workflows/ci.yml` triggers on `main`, `zixxtrixx-v8-closeout` and
+`hw/**`. The branch every piece of this campaign lands on is
+**`claude/ceiling-architecture-20260912`**, which matches none of them.
+`gh run list --branch claude/ceiling-architecture-20260912` returns **nothing at
+all** — not a failure, not a skip: the workflow has never run on it.
+
+**So around twenty merges, the whole FIELD repair, the ABI regeneration with its
+five golden captures, and every instrument repair recorded today have been gated
+by local runs alone.** The local gates are real and they are thorough, but they
+are the only ones, and nobody has been in a position to say so.
+
+**The part that makes this worth a ruling is the comment sitting directly above
+the branch list**, written five days ago by whoever last fixed exactly this:
+
+> *"G0 (2026-09-05): main ALONE was wrong. Every hardware campaign lands on an
+> integration branch — the texture-island work, the fit harness fixes and the D19
+> docket all sit on `zixxtrixx-v8-closeout`, which never triggered this workflow.
+> A green `main` badge said nothing about the branch the work was actually on,
+> **which is the same failure as a gate that cannot fire: it reassures without
+> checking.**"*
+
+That diagnosis is exact, it is the thesis of this entire run, and **it aged out
+within a fortnight** — because the fix was to NAME the branch. A list of names
+goes stale every time the work moves; a pattern does not. The repair reassured
+about the one branch it named while the campaign walked to the next one.
+
+**This is the ninth instrument today that read green while structurally unable to
+see its subject**, and the largest in scope: it was not one counter or one
+checker, it was *the entire continuous-integration system* with respect to *all
+of this run's work*.
+
+**Fixed by SHAPE, not by name:** `claude/**` added. Naming
+`claude/ceiling-architecture-20260912` would merely reset the same clock.
+
+**`gz/**` — the per-packet lanes — was considered and DELIBERATELY LEFT OUT**,
+with the reason written into the file so it is not silently "corrected" later.
+Those branches push often, three at a time, and a run here is 45–60 minutes;
+adding them would queue dozens of concurrent runs behind a pipeline that is
+currently **red on `main`**, buying noise rather than signal. The coordinator
+gates every packet on the merged tree regardless, and that is the only tree that
+has to be correct. It is a cost call, not a claim that lane coverage is
+worthless, and the file says which.
+
+**What this does NOT do, stated so the next green badge is not over-read:** CI is
+currently **failing on `main`** (run `35509134755`, and the nightly schedule
+too). Turning it on for this branch will very likely produce red runs
+immediately. **That is information, not damage** — but it means the first runs on
+`claude/**` must be read as *"what does CI think of this branch"*, not as a
+regression introduced by enabling it. Docket D17's live residual is relevant: CI
+pins cppcheck 2.19.0, this machine has 2.20.0, and D17's finding **does not
+reproduce on 2.20.0 at all** — same command, same file, different answer. So a
+local-versus-CI disagreement on that lane is expected and already documented.

@@ -36,10 +36,34 @@ on:
     # this workflow. A green `main` badge said nothing about the branch the work
     # was actually on, which is the same failure as a gate that cannot fire:
     # it reassures without checking.
+    #
+    # G0 RECURRED, 2026-09-20. The fix above was to NAME the branch, and the
+    # campaign then moved to `claude/ceiling-architecture-20260912`, which
+    # matches none of these patterns. THE ENTIRE gaps-to-zero RUN -- around
+    # twenty merges, the whole FIELD repair, the ABI regeneration and every
+    # instrument repair -- has had ZERO CI COVERAGE, on the branch all of it
+    # lands on. The comment above diagnosed this exactly and then aged out,
+    # because a list of NAMES goes stale every time the work moves and a
+    # PATTERN does not.
+    #
+    # So this is fixed by shape rather than by name. Naming the next branch
+    # would just reset the same clock.
     branches:
       - main
       - zixxtrixx-v8-closeout   # the current hardware integration branch
       - 'hw/**'                 # future hardware lanes, by convention
+      - 'claude/**'             # agent integration branches (G0 recurrence, 2026-09-20)
+    #
+    # `gz/**` -- the per-packet lanes -- is DELIBERATELY NOT HERE, and the
+    # reason is worth stating so it is not "fixed" by someone later without
+    # weighing it. Those branches push often, three at a time, and a CI run on
+    # this repo is 45-60 minutes; adding them would put dozens of concurrent
+    # runs behind a pipeline that is currently RED on main, which buys noise
+    # rather than signal. The coordinator gates every packet on the merged tree
+    # anyway, which is the only tree that has to be correct.
+    #
+    # Revisit if the packet cadence drops or CI gets faster. It is a cost call,
+    # not a judgement that lane coverage is worthless.
   pull_request:
   schedule:
     - cron: '0 3 * * *'  # nightly (UTC): full nightly label
