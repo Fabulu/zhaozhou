@@ -15353,6 +15353,74 @@ set_tests_properties(lint_zhao_field_doorbell PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
 
+# ==========================================================================
+# PACKET D1 -- FH14 (op 3 decoded), FH13/FH15/FH16 (the FH2 loader), FT061.
+# ==========================================================================
+#
+# FT060's NEGATIVE CONTROL. `zhao_field_doorbell_op3_alias_mutant.sv` restores
+# the pre-FH14 catch-all LOAD arm; this driver runs FT060's own stimulus
+# against it and PASSES WHEN THE OLD BEHAVIOUR APPEARS. Unlike its sibling
+# above it is not a positive control for an unreachable counter -- op-3
+# aliasing is reachable with an ordinary post -- it is the evidence that FT060
+# would have NOTICED the defect it claims to catch (ruling R123).
+add_executable(test_field_doorbell_op3_alias_control field/field_doorbell_op3_alias_control.cpp)
+target_link_libraries(test_field_doorbell_op3_alias_control PRIVATE zhao_harness)
+verilate(test_field_doorbell_op3_alias_control
+  PREFIX Vzhao_field_doorbell_op3_alias_mutant
+  TOP_MODULE zhao_field_doorbell_op3_alias_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_doorbell_op3_alias_mutant.sv)
+add_test(NAME field_doorbell_op3_alias_control COMMAND test_field_doorbell_op3_alias_control)
+set_tests_properties(field_doorbell_op3_alias_control PROPERTIES LABELS "fast;mutant" TIMEOUT 300)
+
+add_test(NAME lint_zhao_field_doorbell_op3_alias_mutant
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_doorbell_op3_alias_mutant
+                 ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_field_doorbell_op3_alias_mutant.sv)
+set_tests_properties(lint_zhao_field_doorbell_op3_alias_mutant PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# THE FH2 TRANSACTIONAL LOADER -- owner decisions FH13/FH15/FH16, install FSM
+# of directive section 10.3.
+#
+# The capsule bytes are produced by the PRODUCTION PACKER LIBRARY
+# (`zfield::host_plan::serialize_program_image`), not hand-rolled in the test,
+# and they enter the DUT only through the `zhao_hps_burst_req_t` bridge port --
+# directive 20.5: "A testbench secretly writing the engine's private
+# uop/table/scalar ports is not that path." Hence BOTH `zhao_harness` and
+# `zhao_zref`, plus compiler/tests/generated for crater_ring.hpp.
+add_executable(test_field_loader_directed field/field_loader_directed.cpp)
+target_link_libraries(test_field_loader_directed PRIVATE zhao_harness zhao_zref)
+target_include_directories(test_field_loader_directed PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+verilate(test_field_loader_directed
+  PREFIX Vtb_field_loader
+  TOP_MODULE tb_field_loader
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_loader.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/field/tb_field_loader.sv)
+add_test(NAME field_loader_directed COMMAND test_field_loader_directed)
+set_tests_properties(field_loader_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+# The loader's lint. `field_image_pkg_inherited.vlt` waives UNUSEDPARAM for
+# S1's generated schema package ONLY -- see that file's header for why the
+# waiver is narrow and for the measurement showing it is not a no-op.
+add_test(NAME lint_zhao_field_loader
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_loader
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_crc32c_fold.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/generated/zhao_field_host_image_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_loader.sv
+                 ${CMAKE_CURRENT_SOURCE_DIR}/field/field_image_pkg_inherited.vlt)
+set_tests_properties(lint_zhao_field_loader PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
 # --------------------------------------------------------------------------
 # FIELD.SEQ.FLOW's STREAM ADAPTER -- zhao_console_core entry I5, ruling R40.
 #

@@ -1,0 +1,44 @@
+// field_image_pkg_inherited.vlt -- inherited-warning waivers, scoped BY FILE.
+//
+// `fpga/rtl/field/generated/zhao_field_host_image_pkg.sv` is S1's generated
+// schema package. It declares every ZFH2 offset, length, section kind and
+// enumeration, and ANY ONE CONSUMER uses only a fraction of them -- which is
+// the point of a single generated source of truth. Linting a consumer at
+// `-Wall` therefore reports ~70 UNUSEDPARAM warnings that belong to the
+// package's completeness, not to the consumer.
+//
+// THIS IS THE FIRST THING IN THE TREE TO ELABORATE THAT PACKAGE, and that was
+// measured rather than assumed: at the commit this file was written, a
+// tree-wide search for `zhao_field_host_image_pkg` matched exactly two files --
+// the package itself and `fpga/rtl/field/zhao_field_loader.sv`. S1's roundtrip
+// evidence is C++-side; the SystemVerilog half had never been linted or
+// elaborated at all.
+//
+// (That sentence originally began its last line with the simulator's name,
+// which made this a BADVLTPRAGMA -- CLAUDE.md's "a comment whose first word
+// after `//` is `verilator` is a pragma" trap, caught here on first lint.)
+//
+// THE SIBLING GENERATED PACKAGE DOES NOT NEED THIS, and the difference is the
+// finding: `fpga/rtl/generated/zhao_abi_pkg.sv` carries TWENTY-SEVEN
+// `/* verilator lint_off UNUSEDPARAM */` pairs emitted by its own generator.
+// `tools/field/gen_field_host_schema.py` emits none -- a search of that file
+// for `lint_off` returns nothing. So the right long-term repair is in the
+// GENERATOR, matching the established pattern, and it belongs to whoever owns
+// the schema. This waiver is the short-term half and it is deliberately
+// narrow: one rule, one file.
+//
+// WHY A .vlt AND NOT `-Wno-UNUSEDPARAM` ON THE COMMAND LINE. A blanket
+// suppression would also hide an unused parameter in `zhao_field_loader.sv`
+// itself, which is the one file this lint exists to keep clean.
+//
+// A NOTE ON THE GLOB, inherited from `tests/shell/v3_closure_inherited.vlt`
+// and NOT re-derived: Verilator reports Windows paths with MIXED separators,
+// so a pattern containing a literal `/` before the basename can match nothing
+// -- and a waiver that matches nothing is perfectly silent about being
+// useless. `?` matches a single character in Verilator's globs, so the
+// separator-agnostic spelling below cannot rot that way.
+//
+// This is a WAIVER, not a fix.
+`verilator_config
+
+lint_off -rule UNUSEDPARAM -file "*zhao_field_host_image_pkg.sv"

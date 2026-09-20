@@ -1883,3 +1883,103 @@ files, not the four a naive grep suggests; `counter_ids.lock` does not govern RT
 evidence ports; and **`zhao_crc32c_fold` already existed**, so its draft
 bit-serial CRC would have been both a duplicate of ratified arithmetic and a
 64-level timing defect.
+
+## R151 — `zhao_prod_top` WAS FITTING A DIFFERENT MACHINE: the stamp adapter's defaults were live there
+
+**2026-09-20, A1.** My brief flagged `zhao_field_stamp_adapter.sv:101` as
+defaulting 12/4 while instantiated 13/7, and called it "a trap waiting for the
+next composer". **It was not waiting. It had already fired.**
+
+There are **two** instantiations:
+
+* `zhao_console_core.sv:16203` passes **13/7** explicitly;
+* **`zhao_prod_top.sv:579` passed NO override at all** and took the defaults.
+
+So **the production fit top has been building a 384-bit client bus against the
+console's 416** — and `zhao_prod_top` is the thing the whole-design census and
+the production fit measure. Verified independently here: defaults still read
+`IN_LANES = 12`, `OUT_LANES = 4` before A1's fix lands.
+
+**This is R99's shape again, one level down.** R99 found the production top
+*pricing two projectors the console does not contain*; this is the production
+top *pricing the same adapter at the wrong width*. Both are the same failure:
+**the top that gets measured is not the machine that gets composed**, and
+nothing compared them.
+
+Fixed both ways, which is right: defaults corrected to 13/7 **and** the composed
+selection stated in `production_parameter_overrides`, the same mechanism and the
+same reason as the existing `BUILD_HPS_N` row. A default and an override that
+agree are cheap; a default nobody notices is what produced this.
+
+**And 12/4 was not arbitrary — it is EARTH's record, copied.** Stamp's own arity
+is 8/3. So the wrong number had a plausible origin, which is exactly why it
+survived: it looked like it came from somewhere.
+
+## R152 — R40's SUBTRAHEND WAS READ FROM LIVE PINS, and the guard beside it could not have caught that
+
+**A1, in the flow adapter, and it is a live shipping defect.**
+
+R40's law is `sat_s11((v' - v) >> 8)`. The adapter read **`v` from the live pins
+at response time** rather than capturing it with the request — so a record that
+moved mid-flight computed **`(v' of A) − (v of B)`**: two different records'
+velocities subtracted from each other, silently, producing a plausible number.
+
+**The existing guard could not prevent it, and the reason is exactly
+`CLAUDE.md`'s two-operand law**: it samples one state *after* the wrong value has
+already been latched. A detector downstream of the corruption cannot see the
+corruption. That law was written after a metadata bank shipped a record-swapping
+defect with a live identity counter beside it reading zero, and this is the same
+structure in a different subsystem.
+
+Repaired with **one capture latch**. Test case 8 asserts **7, not 517** — a
+discriminating number rather than a pass/fail. Cost **+416 flops, declared**
+rather than discovered later.
+
+## R153 — FH26's TWO BINDINGS, DISCRIMINATED BY A SINGLE VALUE
+
+The brief demanded that A1 *"name the case that discriminated them"*, because two
+bindings that share a test are one binding with two names. It did:
+
+**Same response, unit strength fx16 1.0 (`0x0001_0000`): `LEGACY` delivers 0
+(no brush), `CANONICAL` delivers 65535 (full brush)** — because the legacy bridge
+takes the low sixteen bits. A second discriminator on the input side: texel 0
+offers `R0 = 0` against `R0 = 512`.
+
+Two **separately elaborated** instances, and case D asserts that a full
+4,096-record legacy walk moves **no** canonical counter **and the converse**. That
+converse is the half usually skipped, and it is the half that proves the two are
+not quietly the same object.
+
+**And `STAMP_BINDING` has no safe default: omission is an elaboration refusal**,
+with a committed positive control — written as a *wrapper*, so it cannot go
+stale the way a copied mutant does — firing it with the exact text at `:319`,
+and the "did not fire" path never reached. **Lint says nothing about it**, as
+`CLAUDE.md` predicts for anything inside an `initial` block.
+
+That is FH26 done properly: legacy is a **named mode**, not a value a capsule can
+fall into by omission — which is the trap R111 recorded, where `mask == 0` is the
+only case that occurs and a plan writer who omits it silently restores the R101
+defect.
+
+## R154 — A1 REVERTED ITS OWN PLAN BECAUSE IT WOULD HAVE COST A GAP
+
+Worth recording as the behaviour, not the outcome. A1 had planned two new console
+boundary outputs and **dropped them**, because an output nothing reads is a
+tie-off in waiting — it would have *increased* the register while looking like
+progress.
+
+That is the same judgement FORGESHADOW made in refusing to close
+`tri_continuation_tail_i` from four constants, and ENGINE1 made in refusing to
+compose a block whose chain was blocked at both ends. **Three lanes independently
+declining the flattering move on the same day**, without being asked in the
+moment. The briefs carry rule 1; the lanes are applying it unprompted.
+
+**Stale claims it also found**, each re-verified: plan §F2's Formation "(11)" is
+already fixed at `field-ir.md:525`; `GEOM.WARP.md:317` said *"there is no Warp
+adapter"* and **it amended that row**; `:319` still says P4 is ABSENT although
+R101 merged it; and `ops.yml:27` contradicts `blocks.yml:1142`.
+
+**Including one of its own**: it had claimed appending a manifest row would avoid
+renumbering — **`gen_prod_top.py` sorts, so it does not** — measured both ways
+and corrected its own note. A lane correcting its own published claim, in the
+same report, is the standard this run has been trying to set.

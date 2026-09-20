@@ -77,6 +77,11 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned WFIFO_W  = 64,
 
   // ---- INPUT.SNAC (owner ruling R7) ----------------------------------------
+  // How many SNAC connectors the board carries. They drive canonical pad slots
+  // 0..SNAC_PORTS-1; slots above that are always the incoming route's. Two is
+  // the MiSTer SNAC shape. The bus rate, the /ACK timeout and the inter-poll
+  // gap are the ADAPTER's knobs and stay there (spec/input_rules.md 7.1); this
+  // one is here because it sets a PORT WIDTH on this module.
   parameter int unsigned SNAC_PORTS = 2,
 
   // ---- CMD.EXEC (section 7c) -----------------------------------------------
@@ -118,7 +123,11 @@ module zhao_console_core_slot_overflow_mutant
   parameter int unsigned GEOM_DEPTH    = 1089,
   parameter int unsigned GEOM_NVIEWS   = 2,
   parameter int unsigned GEOM_GEN_W    = 8,
-  parameter int unsigned GEOM_PAY_A_W  = 17,   // R68 sub-build 4
+  // R68 sub-build 4: 17, not 16. The low GEOM_ARENA_W+GEOM_INDEX_W = 15 bits
+  // are the {arena, index} rider; the top TWO are `zhao_part_project`'s owner
+  // FIELD. At 16 the field was one bit and client A could name exactly two
+  // owners, which is the constraint that held GEOM.LOD's instance centre out.
+  parameter int unsigned GEOM_PAY_A_W  = 17,
   parameter int unsigned GEOM_PAYLOAD_W= 106,
   parameter int unsigned GEOM_INDEX_W  = $clog2(GEOM_DEPTH) + 1,
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
@@ -788,9 +797,14 @@ module zhao_console_core_slot_overflow_mutant
   // not a fault), and the batch poison GEOM.VATTR adds to GROUP_SEQ's.
   output logic [31:0]             geom_va_uv_waits_o,
   output logic                    geom_va_poison_o,
-  // OWNER RULING R88: GEOM.VATTR's stall watchdog. Carried here because `.*`
-  // binds by name -- a production port missing from this list fails to
-  // elaborate, which is this wrapper's whole staleness guarantee.
+  // OWNER RULING R88: `u_geom_vattr.done_o` gates BOTH sides of the
+  // GROUP_SEQ -> REPLAY handshake (:7354 and :13722), and two of its six terms
+  // are count equalities a producer can leave open forever -- a batch whose
+  // vertices are never lit wedges the WHOLE geometry front end. There is no
+  // timeout (releasing early would serve REPLAY rows that were never written)
+  // so there is a WATCHDOG instead: one count per episode in which the store
+  // owed something, every machine in it was idle, and nothing moved at any of
+  // its inputs for its `STALL_LIMIT` clocks. Zero on every healthy frame.
   output logic [31:0]             geom_va_done_stall_o,
 
   // ---- GEOM.REPLAY's evidence ----------------------------------------------
@@ -1168,6 +1182,13 @@ module zhao_console_core_slot_overflow_mutant
   // Client 4, GEOM.LOOM's node-stream carrier (`u_geom_loomfeed`, I50 closed).
   output logic [31:0]             terr_hps_c4_bursts_o,
   output logic [31:0]             terr_hps_c4_wait_cycles_o,
+  // SIX CLIENTS SINCE 2026-09-20 (packet D1, owner decisions FH13/FH15).
+  // FIELD's capsule loader takes index 5, the LOWEST, by the same argument
+  // clients 2, 3 and 4 make and which the arbiter's own law states: a
+  // continuously-asking lower index starves every higher one, so a burst of
+  // page loads makes a program install wait -- visibly, in `c5_wait_cycles`.
+  output logic [31:0]             terr_hps_c5_bursts_o,
+  output logic [31:0]             terr_hps_c5_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -1175,7 +1196,7 @@ module zhao_console_core_slot_overflow_mutant
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [4:0]              terr_hps_pend_dropped_mask_o,
+  output logic [5:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -1216,7 +1237,13 @@ module zhao_console_core_slot_overflow_mutant
   // ---- MATERIAL.RESOLVE (composed 2026-09-19, cmdmem packet, ruling R20) ---
   // I49: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
   // internal and real; see the entry for the one seam in the way.
-  // I49, CLOSED 2026-09-20: the request and the response's ready are internal.
+  // I49, CLOSED 2026-09-20 (texmat2). The REQUEST and the RESPONSE's ready
+  // are INTERNAL: `u_material_window` issues one resolve per distinct material
+  // from the triangle's own {material_set, material_id, semantic weight} and
+  // consumes the answer. Five ports left this list rather than being driven
+  // from constants. The response FIELDS stay as outputs, because a harness
+  // differencing a resolve against `zref::material` must be able to read them
+  // without reaching inside.
   output logic                    mat_rsp_valid_o,
   output logic [ 2:0]             mat_rsp_status_o,
   output logic                    mat_rsp_has_record_o,
@@ -1242,6 +1269,13 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             mat_selector_overflow_o,
   output logic [31:0]             mat_recipe_count_mismatch_o,
   output logic [31:0]             mat_fetch_denied_o,
+  // ---- the WINDOW's evidence (entry I49) ---------------------------------
+  // `mat_win_resolves_o` against `mat_win_switches_o` is the "counters see
+  // what pictures cannot" reading: a window that re-resolved a material it
+  // already held would produce a byte-identical frame and spend the meshlet
+  // loop's clocks twice. The two stall counters are split because they have
+  // different cures. The last two are STRUCTURAL guards and read zero in any
+  // correct composition.
   output logic [31:0]             mat_win_resolves_o,
   output logic [31:0]             mat_win_switches_o,
   output logic [31:0]             mat_win_drain_stall_o,
@@ -1249,6 +1283,9 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             mat_win_occupancy_max_o,
   output logic [31:0]             mat_win_no_record_o,
   output logic [31:0]             mat_win_selector_overflow_o,
+  // Loud rather than silent: a CLUT material needs the binding page's palette
+  // slot and generation as witnesses and NOTHING in this console produces
+  // them. See FINDINGS-texmat2's owner decision.
   output logic [31:0]             mat_win_clut_unowned_o,
   output logic [31:0]             mat_win_err_unpublished_o,
   output logic [31:0]             mat_win_err_underflow_o,
@@ -1421,10 +1458,14 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             post_ring_hazard_o,
 
   // ---- THE HISTOGRAM. Its EVENTS ARE NO LONGER HERE ------------------------
-  // I18 CLOSED 2026-09-20 (owner ruling R70): the five `hist_ev_*` ports left
-  // the core's list because `zhao_terrain_lodfeed` is composed inside it. Its
-  // HOST WINDOW went the same way one day earlier -- `hist_rd_*` was entry I19,
-  // now driven by `u_hostreg_hist` off the HPS register aperture (ruling R51).
+  // I18 CLOSED 2026-09-20 (owner ruling R70). `hist_ev_valid_i`,
+  // `hist_ev_lane_valid_i`, `hist_ev_err_i`, `hist_ev_src_id_i` and
+  // `hist_ev_ready_o` LEFT THIS PORT LIST rather than being driven from a
+  // harness: `zhao_terrain_lodfeed` is composed below and its deviation
+  // records are the events. Its HOST WINDOW went the same way one day earlier
+  // -- `hist_rd_*` was entry I19 and is now driven inside this file by
+  // `u_hostreg_hist` off the HPS register aperture (section 7b-iii, ruling
+  // R51). What is left here is only the block's OUTPUT evidence.
   output logic                    hist_snap_valid_o,
   output logic [HIST_CW-1:0]      hist_snap_total_o,
   output logic [15:0]             hist_snap_src_id_o,
@@ -1506,7 +1547,9 @@ module zhao_console_core_slot_overflow_mutant
   // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
   // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
   // sentence naming the residency directory's KEY. See entry I20.
-  // 	ri_flat_request_i left the core's port list 2026-09-20 (entry I49).
+  // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
+  // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
+  // as `tri_area2_i` and the three attribute planes were retired before it.
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
   input  logic         fill_req_ready_i,
@@ -1584,6 +1627,17 @@ module zhao_console_core_slot_overflow_mutant
   input  logic [15:0] pad_ry_i [0:3],
 
   // ---- INPUT.SNAC's physical edge (owner ruling R7, input_rules.md 7) -----
+  // PINS OF THE PART, NOT A BOUNDARY. Exactly the class `pad_buttons_i` above
+  // and `hps_req_*` are in, and for the same reason the HOST.REGWIN
+  // composition states at length further down: the far end is a connector on
+  // the board, not a block nobody has built. In Verilator the harness IS the
+  // controller, as it is the HPS for the burst bridge.
+  //
+  // The adapter is composed below, BETWEEN these pads and the shell, so a
+  // slot with a real PS1 pad on it is driven by that pad and every other slot
+  // carries `pad_*_i` through untouched. With nothing plugged in -- DAT idles
+  // high, every poll times out -- the merge is the identity and this console
+  // behaves exactly as it did before the block existed.
   input  logic [SNAC_PORTS-1:0] snac_dat_i,
   input  logic [SNAC_PORTS-1:0] snac_ack_n_i,
   output logic [SNAC_PORTS-1:0] snac_att_n_o,
@@ -1893,6 +1947,91 @@ module zhao_console_core_slot_overflow_mutant
   input  logic        [15:0] part_prj_trail_i,
   input  logic               part_prj_narrow_i,
   input  logic               part_prj_protected_i,
+  // An OWNER DECISION sits on this one port, found 2026-09-20 (post3) and
+  // written here rather than only in a run folder, because a run folder is the
+  // wrong home for anything durable.
+  //
+  // This is PART.LADDER's `p_gov_floor_i`, and PART.LADDER is COMPOSED -- so it
+  // is the ONE composed consumer MEASURE.GOVERNOR has. It is nevertheless not
+  // wired, because the two ends do not mean the same thing and making them
+  // agree is a policy choice nobody has made:
+  //
+  //   * the governor emits `deg0/1_o`, a DEGRADE RUNG 0..3 whose law (G2) is
+  //     "multiply the allowed pixel error by 2^deg";
+  //   * this port is a FLOOR on a 0..5 particle ladder whose rungs are chosen
+  //     by SCREEN SIZE thresholds, and `zhao_part_ladder.sv:108` says of its
+  //     own reading "this reading of it is AN INTERPRETATION ... the contract
+  //     says this block consumes 'governor targets' and does not say by what
+  //     mechanism".
+  //
+  // A degrade rung is not a rung of that ladder, and the DERIVED mapping would
+  // scale the ladder's size thresholds by 2^deg rather than clamp the result --
+  // which this port cannot express. Writing `deg -> floor` here would be a
+  // composer inventing the policy, and it would be invisible once written.
+  //
+  // CITATION REPAIRED 2026-09-20 (post3b). This line read "See FINDINGS-post3.md
+  // for the evidence and the recommendation" and THAT FILE DOES NOT EXIST --
+  // not in the run folder, not anywhere in the tree. A pointer to nothing reads
+  // as coverage exactly the way a false `reference_model:` does (R94/R105), and
+  // no gate looks at a citation in a comment. The evidence is in
+  // `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-post3b.md`.
+  //
+  // AND THE DECISION IS SHARPER THAN "NOBODY CHOSE", which is how it was
+  // recorded above. Searched 2026-09-20 (post3b), and the governor's OWN
+  // RATIFIED CONTRACT SETTLES IT AGAINST THE WIRING:
+  //
+  //   * `design/contracts/MEASURE.GOVERNOR.md`'s output table has THREE columns
+  //     -- port, width, and THE CONSUMER PORT IT DRIVES. Read down the third:
+  //       `cam0_scale_o` `cam1_scale_o` | 16 | `cam0_scale_i` / `cam1_scale_i`
+  //       `cam0_en_o` `cam1_en_o`       |  1 | `cam0_en_i` / `cam1_en_i`
+  //       `hyst_o`                      | 16 | `hyst_i`
+  //       `min_hold_o`                  |  8 | `min_hold_i`
+  //       `morph_step_o`                | 17 | `morph_step_i`
+  //       `src_id_o`                    | 16 | rides the decision
+  //       `deg0_o` `deg1_o`             |  2 | -- (capture / post-mortem)
+  //     EVERY policy output NAMES A CONSUMER PORT. `deg0_o`/`deg1_o` name NONE,
+  //     and the dash is spelled out as "capture / post-mortem". Note also WHICH
+  //     block each named consumer port belongs to: `cam*_scale_i`, `cam*_en_i`,
+  //     `hyst_i`, `min_hold_i` and `morph_step_i` are all TERRAIN.LOD's. The
+  //     governor's ratified output table is written ENTIRELY against TERRAIN.LOD
+  //     and gives PART.LADDER NOTHING.
+  //   * `design/contracts/PART.LADDER.md` never contains the words "deg",
+  //     "floor" or "degrade" at all. Its `:20` in-packet names a
+  //     `governor_target` with NO units, NO range and NO law, and its `:101`
+  //     failure row ("governor target unattainable at the lowest rung")
+  //     assumes a target in the LADDER's own currency, not a rung count.
+  //   * `design/blocks.yml:1650` / `:5026` assert only the EDGE
+  //     (MEASURE.GOVERNOR -> PART.LADDER) and the abstract packet name
+  //     `lod_targets`. An edge is not a field mapping.
+  //
+  // SO THE FINDING IS SHARPER THAN "NOBODY CHOSE A MAPPING", which is how it
+  // was recorded before. THE LEDGER ASSERTS AN EDGE THAT NEITHER CONTRACT
+  // REALISES AT PORT LEVEL: the producer's table routes every policy output to
+  // a DIFFERENT block and rules its remaining two ports out of policy
+  // altogether, while the consumer's contract never names the quantity at all.
+  // Neither the composer nor either block may invent it.
+  //
+  // RECOMMENDATION (owner's call; see the FINDINGS file above). The
+  // dimensionally correct mapping is NOT a floor. `deg` multiplies the ALLOWED
+  // PIXEL ERROR by 2^deg (governor law G2), and PART.LADDER picks its rung from
+  // SCREEN-SIZE thresholds in U8.8 pixels -- so the faithful conversion shifts
+  // `MESHLET_MIN..GLINT_MIN` LEFT by `deg` (a particle must be 2^deg times
+  // bigger to earn the same rung), which degrades smoothly across all six rungs
+  // and needs no rounding. `p_gov_floor_i` cannot express that: it is a clamp,
+  // so it collapses a whole population onto one rung the moment it bites. That
+  // argues for a new `p_deg_i[1:0]` on PART.LADDER rather than a deg->floor
+  // table, and it is an ART knob (how hard particles coarsen under pressure),
+  // so CLAUDE.md rule 6 puts it in a named editable constant and CLAUDE.md's
+  // art law puts the value in the owner's eye, not in a derivation.
+  //
+  // NOTE ALSO, for whoever fixes it: `zhao_part_ladder.sv:85-86` says "The
+  // rungs, coarse to fine ... 'coarser' is 'numerically smaller'", and BOTH
+  // halves of that are backwards against the localparams directly beneath it
+  // (MESHLET = 0 is the FINEST, CULLED = 5 the coarsest) and against the
+  // `max()` on line 121, which forces COARSER. The arithmetic is right and the
+  // prose is wrong -- the same prose/arithmetic inversion the governor's own
+  // header reports inside TERRAIN.LOD. Reading the comment and wiring to it
+  // would invert the policy.
   input  logic        [ 2:0] part_prj_gov_floor_i,
   input  logic        [ 2:0] part_prj_prev_rung_i,
   input  logic        [ 3:0] part_prj_hold_i,
@@ -1951,8 +2090,10 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0] part_prj_size_sat_o,
   output logic [31:0] part_prj_slot_pressure_o,
   output logic [31:0] part_prj_tag_collision_o,
-  // R68 sub-build 4's new observation port. Declared here so `.*` binds it;
-  // this wrapper instantiates production, so it carries no copy to go stale.
+  // R68 sub-build 4: a client-A result came back owned by neither GEOM nor
+  // PART. Unreachable until a third owner is minted, and exported anyway --
+  // the whole point of widening the field is that a third owner is coming, and
+  // a drop that nothing counts would surface as a missing vertex in the arena.
   output logic [31:0] part_prj_owner_unroutable_o,
   output logic [31:0] part_prj_ladder_unexpected_o,
   output logic [31:0] part_lad_decisions_o,
@@ -2281,7 +2422,22 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  terr_mg_m9_writes_o,
   output logic [31:0]  terr_mg_aborts_o,
 
-  // ---- TERRAIN.LODFEED (entry I18, owner ruling R70, 2026-09-20) -----------
+  // ---- TERRAIN.LODFEED, and these four are why entry I18 can be read at all
+  // Composed 2026-09-20 under owner ruling R70: `zhao_terrain_lodfeed` observes
+  // the mip pass's fine stream and its records are MEASURE.HISTOGRAM's events.
+  // The chain is entirely internal, so WITHOUT THESE COUNTERS a console-level
+  // bench could not tell "the histogram saw no events because the metric is
+  // broken" from "because no page was ever mipped" -- and those two need
+  // different repairs.
+  //
+  // THEY READ ZERO IN THE SMOKE AND THAT IS THE MEASURED, EXPLAINED ANSWER,
+  // not an unexamined zero: every page the bench plays fails its CRC (the
+  // directory reports `crc_fail=3`), so `tpl_fin_ok` never rises, so
+  // TERRAIN.MIPREQ issues no job, so TERRAIN.MIPFEED never streams a lattice.
+  // The smoke prints the whole chain of zeros on one line for exactly this
+  // reason. The counters are FIRED, non-zero, by
+  // `tests/terrain/terrain_lodhist_directed.cpp`, which drives the same
+  // arrangement with a lattice that moves.
   output logic [31:0]  terr_lodfeed_lattices_walked_o,
   output logic [31:0]  terr_lodfeed_lattices_dropped_o,
   output logic [31:0]  terr_lodfeed_dev_records_o,
@@ -2299,17 +2455,29 @@ module zhao_console_core_slot_overflow_mutant
   // exactly as it is for `terr_jdb_*` above (owner ruling R14, the pattern
   // R43 names) and for the FRAME_RING view.
   //
-  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP. For a LOAD WORD,
+  // `post_op_i` is 0 LOAD WORD, 1 COMMIT, 2 LOOKUP, 3 FH2. For a LOAD WORD,
   // `post_kind_i` is the host's own 0 uop / 1 table entry / 2 header /
   // 3 uniform, and the HEADER is written LAST because it is what marks a slot
   // runnable -- so a partially written program can never execute.
-  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, trace only
+  //
+  // OP 3 IS THE FH2 TRANSACTION (owner decision FH14, directive section 10.2).
+  // It used to fall into the doorbell's catch-all LOAD arm and perform a real
+  // loader write for an operation nobody had defined; it is now decoded by name
+  // and routed to `u_field_loader` below, sub-decoded by `post_kind_i` as
+  // 0 INSTALL_CAPSULE / 1 BIND_PROGRAM / 2 CONTROL / 3 reserved.
+  input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, captured AT ACCEPTANCE
   input  logic         fld_db_post_valid_i,
   output logic         fld_db_post_ready_o,
   input  logic [ 1:0]  fld_db_post_op_i,
   input  logic [ 1:0]  fld_db_post_kind_i,
   input  logic [ 2:0]  fld_db_post_slot_i,
-  input  logic [ 6:0]  fld_db_post_addr_i,
+  // EIGHT BITS, NOT SEVEN, and the width is the FH2 control verb's. Directive
+  // 10.2: "widen that mailbox field explicitly to at least 8 through its
+  // wrappers ... Do not write [7:0] onto an unchanged 7-bit port." The LOADER's
+  // own address stays LDADDRW = 7; a legacy LOAD whose address does not fit is
+  // REFUSED by the doorbell and counted in `fld_db_addr_refused_o`, never
+  // narrowed.
+  input  logic [ 7:0]  fld_db_post_addr_i,
   input  logic [95:0]  fld_db_post_data_i,
   input  logic [31:0]  fld_db_post_hash_i,
   input  logic         fld_db_post_ok_i,
@@ -2324,6 +2492,13 @@ module zhao_console_core_slot_overflow_mutant
   output logic         fld_db_ret_evicted_o,
   output logic [ 2:0]  fld_db_ret_slot_o,
   output logic [31:0]  fld_db_ret_plan_o,
+  // FH2 only. `ret_verdict_o` names WHICH refusal (BAD_CRC is not BAD_RANGE),
+  // and `ret_handle_o` is the generation-bearing binding the caller uses
+  // afterwards -- NOT a raw cache slot, which is FH16's distinction. Both read
+  // zero on a legacy LOAD/COMMIT/LOOKUP return, so `ret_op_o` has to be read
+  // alongside them.
+  output logic [ 3:0]  fld_db_ret_verdict_o,
+  output logic [31:0]  fld_db_ret_handle_o,
   output logic [31:0]  fld_db_posts_o,
   output logic [31:0]  fld_db_load_words_o,
   output logic [31:0]  fld_db_lookups_o,
@@ -2338,6 +2513,54 @@ module zhao_console_core_slot_overflow_mutant
   // Unreachable while the return credit is right, so its zero is an argument
   // and not a measurement. Fired by tests/mutants/zhao_field_doorbell_mutant.sv.
   output logic [31:0]  fld_db_ret_overflow_o,
+  // Op-3 posts handed to the loader, and legacy LOAD posts whose address does
+  // not fit LDADDRW. The second is reachable with ordinary stimulus (post an
+  // address >= 128), so it needs no mutant -- `field_doorbell_directed` fires
+  // it and its negative control shows 0x7F still reaching the loader.
+  output logic [31:0]  fld_db_fh2_posts_o,
+  output logic [31:0]  fld_db_addr_refused_o,
+
+  // ---- THE FH2 TRANSACTIONAL LOADER (FH13 / FH15 / FH16) ------------------
+  // `zhao_field_loader` owns the BACKING STORE's descriptor table: installed
+  // immutable capsules, their generations, their pin counts and their READY
+  // bits. That is deliberately NOT `zhao_field_progcache`, which owns
+  // residency of the ACTIVE cache -- FH15's whole point is that the two are
+  // different objects with different lifetimes.
+  //
+  // The staging window is a PARAMETER of the machine rather than a constant
+  // here, for the reason `zhao_terrain_pageloader`'s REGION_BASE gives: a block
+  // that hard-codes an address the guard also hard-codes gives the owner one
+  // knob with two halves and no gate that says so.
+  input  logic [31:0]  fld_ldr_stage_base_i,
+  input  logic [31:0]  fld_ldr_stage_bytes_i,
+  // Publication. A STAGING object is absent from `pub_ready_o` by construction,
+  // so nothing downstream can execute a half-filled image even by guessing its
+  // index. `pub_pinned_o` is FH16's "acquire and pin at association open".
+  output logic [ 7:0]  fld_ldr_pub_ready_o,
+  output logic [ 7:0]  fld_ldr_pub_pinned_o,
+  input  logic [ 2:0]  fld_ldr_pub_sel_i,
+  output logic [31:0]  fld_ldr_pub_handle_o,
+  output logic [31:0]  fld_ldr_pub_prog_hash_o,
+  output logic [ 7:0]  fld_ldr_pub_gen_o,
+  // Evidence, PER CLASS. "The install failed" is not a diagnosis, so a reader
+  // can tell an unreachable address from a bad checksum from a full catalogue
+  // without a waveform.
+  output logic [31:0]  fld_ldr_installs_ok_o,
+  output logic [31:0]  fld_ldr_installs_failed_o,
+  output logic [31:0]  fld_ldr_binds_ok_o,
+  output logic [31:0]  fld_ldr_binds_failed_o,
+  output logic [31:0]  fld_ldr_controls_ok_o,
+  output logic [31:0]  fld_ldr_bad_operation_o,
+  output logic [31:0]  fld_ldr_bad_envelope_o,
+  output logic [31:0]  fld_ldr_bad_range_o,
+  output logic [31:0]  fld_ldr_bad_section_o,
+  output logic [31:0]  fld_ldr_bad_crc_o,
+  output logic [31:0]  fld_ldr_bad_meta_o,
+  output logic [31:0]  fld_ldr_bridge_errs_o,
+  output logic [31:0]  fld_ldr_no_capacity_o,
+  output logic [31:0]  fld_ldr_evictions_o,
+  output logic [31:0]  fld_ldr_pin_forced_victim_o,
+  output logic [31:0]  fld_ldr_load_bytes_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one
   // is resident at all. The same shape as `surf_cmd_field_en_i` beside it and
@@ -2373,9 +2596,13 @@ module zhao_console_core_slot_overflow_mutant
   // the lanes could not tell that from a field whose value is zero.
   output logic [31:0]  fld_no_result_o,
   // A point whose run wrote SOME BUT NOT ALL of the lanes its program header
-  // declared required (owner ruling R101). Forwarded by `.*` like every other
-  // port -- this file is a WRAPPER, so it carries the production port list and
-  // no copy of the production body.
+  // declared required (owner ruling R101). Counted apart from
+  // `fld_no_result_o` because the answer is then a MIXTURE of real values and
+  // cleared zeroes, which is the case a caller cannot see at all -- W10's "do
+  // not make an absent output look like a zero result". Both composed clients
+  // are exposed to it: the stamp adapter reads window lanes 0-1 and the flow
+  // adapter reads lanes 3-5, and until R101 a program that skipped any of them
+  // came back 8'h00 SUCCESS.
   output logic [31:0]  fld_out_incomplete_o,
   // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
   // `zhao_field_v3_engine`'s own header is right that five faults reduced to
