@@ -1098,3 +1098,223 @@ work.** Scheduling further geometry packets against a blocker that is already
 spent is how five terrain lanes closed zero of the same four blocks, and it is
 the same shape from a different direction: **the constraint moved and the queue
 did not.**
+
+## R133 — R132 IS WITHDRAWN. R89 cannot be implemented, and FORGE.SHADOW is a SUBSYSTEM, not a wiring job
+
+**2026-09-20, FORGESHADOW, at `d33d99a3`. Register 21 → 21: no gap closed, and
+none opened.**
+
+I wrote R132 accepting ENGINE1's escalation that *"the cheapest unlock is R89"*
+and sent a packet to implement it. **The packet verified the recommendation
+before building — because R130's procedural fix told it to — and the
+recommendation does not hold.**
+
+**R89's CONSUMER half is true, and is now TRACED rather than asserted.** Ten
+hops, no tie-off anywhere in the datapath: `zhao_console_core.sv:5655` → bin_pipe
+`[345:298]` → tile_pipe_v2 → texture_stage_v3`:286` → fragment →
+`zhao_raster_blend_prod.a_i`. **The plumbing is finished. Only the faucet is
+missing.**
+
+**And the faucet cannot be built.** `cast_strength_i` has **no producer
+anywhere**: LODSTATE's caster output (`:188-195`) carries no strength; a search
+for `strength` across all of `fpga/rtl` returns only SURFACE.STAMP, the FIELD
+adapter, rumble, tint, and a particle port already tied to zero; **no ABI command
+carries one.** Verified independently here: `cast_strength_i` occurs as an input
+on the block, as `strength_q`, and at `zhao_prod_top.sv:752` connected to
+`u08_src[28 +: 8]` — **the pricing top's generic stimulus source, which is not a
+producer.** Composing it would create a **tie-off**.
+
+**Four blockers, walked port group by port group, not one.** Only `tap_*` is
+clear. The chain `zhao_measure_governor` → `zhao_geom_lodstate` →
+`zhao_forge_shadow` is three blocks and **none is composed**, with LODSTATE and
+FORGE.SHADOW **mutually blocked** — they can only compose together. Route A
+**deadlocks** at `zhao_geom_vattr.sv:553`, re-verified first-hand.
+
+**THE REFUSAL THAT MATTERS MOST IS THE ONE IT DID NOT TAKE.** Closing
+`tri_continuation_tail_i` from four constants — exactly as `tri_flat_request_i`
+was closed — **would have dropped the register by one, with every gate green and
+the silicon unchanged.** That is tie-off relocation, the campaign's first
+prohibition, and it was available, cheap, and would have looked like progress in
+every report this run produces. It was declined and the reason written down.
+
+**And my brief's premise was wrong too:** it pointed the packet at R48/`ALPHA_C`,
+and **`ALPHA_C` is not on the blend's path and never was** — it is a 32-bit fx16
+into attribute slot 3, which has no interpolator and no lane. A packet
+"implementing R89" by replacing that constant would have changed **nothing** while
+appearing to close the contradiction.
+
+**Three stale citations corrected**, each true when written: the six blend
+instances are `zhao_raster_blend_prod`/`_fin` (the named wrapper is instantiated
+**nowhere**); `zhao_geom_vattr.sv:474` is a **blank line**; `:490` is a
+localparam while the real `done_o` is `:553` — **and that refusal survives the
+correction and is stronger for it.** A near-miss was also recorded rather than
+left to trap the next lane: `lad_gov_floor_o` is **not** a producer for
+`rung_floor_i` — 3 bits against 2, read from the particle's own attribute record,
+serving PART.LADDER's eight-rung ladder.
+
+### D-FORGESHADOW-A — shadow strength gets a NAMED CONSTANT, not an ABI freeze
+
+Accepted as recommended. Shadow strength has no producer and no ABI field, and
+the honest treatment is the one R48 gave `ALPHA_C` and that
+`zhao_geom_lodstate.sv:180-187` **already prescribes for the sibling quantity**:
+a named, editable constant at composition. Under `CLAUDE.md` rule 6 that is a
+knob, not a stub — nothing is being hidden, and the seam is named for when a
+producer exists. Freezing an ABI field for a value nobody produces would be the
+worse move.
+
+### D-FORGESHADOW-B — ACCEPTED: schedule no further FORGE.SHADOW wiring packet
+
+*"Leaving it costs 1 on the register; composing it wrong costs a deadlock behind
+a closed gap."* That is the correct trade and it is now a standing instruction.
+
+FORGE.SHADOW is a **subsystem**: LODSTATE and SHADOW together, ladderbank as a
+sixth adapter requester, the governor, Route B, and the client-A widening — the
+last of which **re-authors a ratified law**. It is not a wiring job and will not
+be closed by one.
+
+## R134 — R130's PROCEDURAL FIX WORKED, ONE PACKET AFTER IT WAS WRITTEN
+
+Worth recording because the failures get recorded and the corrections usually do
+not.
+
+R130 named my repeated error — converting a lane's closing recommendation into a
+work order without re-asking — and prescribed the fix: **a brief that exists
+because of another lane's recommendation must instruct the new lane to verify
+the recommendation itself first, and to stop and report if it does not hold.**
+
+I put that instruction into FORGESHADOW's brief. **It followed it, found the
+premise false, and returned a proof instead of an implementation.** The cost was
+one investigation rather than one wasted build plus a wrong composition that
+every gate would have passed.
+
+Four times today a lane has corrected a ruling of mine — R98, R100, R104, and now
+R132. **That ratio is the system working**, and it only works because the briefs
+say to check.
+
+## R135 — THE REMAINING 21 ARE NOT ALL WIRING, AND THE OWNER SHOULD KNOW BEFORE THE NEXT SCOPING DECISION
+
+This is the strategic finding of the day and it is owed upward rather than
+decided here.
+
+The standing goal is to drive the mandatory gap count to zero and then fit. The
+run has taken it 61 → 21. **But the remaining eleven disconnected blocks are not
+eleven wiring jobs.** Measured, across today's lanes:
+
+* **FORGE.SHADOW + GEOM.LODSTATE are MUTUALLY blocked** and compose only
+  together, as part of a subsystem that includes the governor, ladderbank, Route
+  B, and a ratified-law re-authoring (R133).
+* **MEASURE.GOVERNOR is blocked at BOTH ends**, and **no core boundary port
+  exists that a governor output could replace** — composing it *creates* gaps
+  (R118).
+* **GEOM.PARAMBUF's arena is unmapped in both directions**, and needs an
+  allocator, a quota seal and a frame-fault path that are all unbuilt (R131).
+* **Four terrain blocks are behind R65**, an owner art call, and six lanes have
+  now closed zero of them.
+* **GEOM.WARP is waiting on nine FIELD prerequisites**, eight of which the
+  owner's directive supplies and one of which (P5) it supplies by a weaker
+  mechanism than the prerequisite asked for (R103, and the FIELD plan §4).
+
+**So "drive the register to zero" is, for a real fraction of what remains, a
+request to BUILD SUBSYSTEMS, not to connect existing ones.** That is not a reason
+to stop — it is a reason to say so before the next scoping decision is made on
+the assumption that twenty-one wires remain.
+
+**What I am NOT doing:** lowering the bar, redefining a gap, or closing anything
+by relocating a tie-off. FORGESHADOW had that move available today, cheap and
+green, and declined it. The number stays honest even when that makes it move
+slowly.
+
+**The recommendation:** the fit preconditions are otherwise all met —
+`superseded check: 71 production roots CLEAN`, and six of the seven items in
+`reports/FIT-PLAN-AT-ZERO.md` are satisfied. It is worth the owner deciding
+whether to **spend the remaining effort on the FIELD subsystem the directive
+commissioned** (which closes I34 and GEOM.WARP, the two the plan can actually
+reach) **and then fit with a declared, itemised remainder**, rather than holding
+the fit behind blocks that are subsystem builds gated on art calls and unbuilt
+allocators. That is the owner's call, not mine; both paths are honest, and the
+second one requires the remainder to be **named in the receipt**, not rounded
+away.
+
+## R136 — `fld_sat_o` DESCRIBED THE SCALAR ALU ALONE: seven services' saturation terminated in `*_unused`
+
+**2026-09-20, F1.** Not in its brief, not in the owner's directive, and it is a
+shipping defect.
+
+**All seven v3 services computed per-lane saturation. `zhao_field_v3_svcpath`
+terminated every one of them in an `*_unused` wire, and carried no status port on
+the module at all.** So `fld_sat_o` at the console boundary reported the scalar
+ALU and nothing else.
+
+**What that means in operation: any long op could saturate in every point, and
+the ledger would read clean.** The counter is not wrong — it is structurally
+incapable of seeing six-sevenths of what it appears to report, and the direction
+of the error is, once again, flattering.
+
+Now connected, and **masked to live lanes in the dispatcher where `s_used_r`
+lives** — the mask matters, because an unmasked reduction would have replaced one
+wrong answer with another by letting padding lanes vote.
+
+This is the same family as R101 (ANY rather than ALL), R110 (`check_counters.py`
+one-directional), R113 (a dead stimulus passing), R118 (a governor with no
+boundary port), R123 (a mutant that fires zero times) and R129 (a checker grading
+prose). **Seven distinct instruments today, all reading green, all structurally
+unable to see the fault they exist for.** That is no longer a run of bad luck; it
+is the dominant defect mode of this console, and it should shape what gets built
+next: **every new observation port needs a demonstration that it can see the
+thing, not merely that it compiles.**
+
+### And the lane committed the same defect in its own tooling, one hour later
+
+Recorded in its own words because it is the most useful thing in the report:
+
+> *"my own smoke watcher grepped only `SMOKE: PASS` and went silent through two
+> controls that print `MUTANT PASS` / `BAD_VERTEX PASS`, reporting '2 of 5' while
+> four had passed. Same broken-instrument shape I'd just repaired in
+> `fld_sat_o`, committed by me in the tooling an hour later."*
+
+**Knowing the defect class does not confer immunity to it.** The lane had just
+finished repairing a filter that could not see six of seven cases, and then wrote
+a filter that could not see two of five. This is exactly the coordinator's own
+day — I documented the `$(basename …)` exit-code trap and then reproduced it an
+hour later (R121).
+
+**So the mitigation cannot be vigilance.** It has to be structural: a watcher
+that counts *completions* rather than matching a success string, and a gate that
+asserts the expected number of verdicts rather than the presence of one.
+
+## R137 — OP_RCP and OP_RING DECLINED WITH EXECUTED EVIDENCE, and one piece of work unblocks both
+
+F1 was asked to add canonical RCP (`0x17`) and a bounded varying-radius RING
+(`0x21`). It added neither, and **proved the refusal by driver rather than
+asserting it**: FT014's census shows both *refused*, 15 opcodes routed and 4
+refused.
+
+* **RCP is blocked by the directive's own line 2269** — status must work before
+  an opcode is advertised. And `rcp0` **has no destination**:
+  `zhao_field_host.sv:402` is `[2:0] sat_o`, too narrow to carry it. **FT040
+  cannot pass for any route until that bit exists.**
+* **RING is blocked by RCP**, re-asked rather than inherited, and the blocker
+  still holds because `zfield::prepare()` computes the two reciprocals in
+  software.
+
+**One piece of work unblocks both**, and it is H1's: widen `sat_o`, with C1
+carrying it to the boundary. Recorded in the Wave 2 notes so it is not
+rediscovered.
+
+**This is the correct shape for a refusal**: the advertised-but-unrouted opcodes
+are now *demonstrated* unrouted by a census with a driver behind it, instead of
+being listed in a table that agrees with itself.
+
+### What changed shape, for the packets that follow
+
+* `zhao_field_alu_vec` gained `lane_live_i` and three per-lane status outputs —
+  one instantiation site tree-wide (`exec:731`), connected.
+* `zhao_field_v3_svcpath` gained four status outputs; `zhao_field_v3_dispatch`
+  gained three status inputs and four outputs. One instantiation site each.
+* **`zhao_field_v3_engine`'s ports are UNCHANGED**, which is why the host,
+  `zhao_prod_top` and `zhao_console_board` were untouched and all three
+  generators stayed fresh without regeneration.
+* **`zhao_field_ops_pkg.sv` changed COMMENTS ONLY** — verified by diffing comment
+  lines out, with no localparam, function or width moved, so S1's C++/SV
+  cross-check is unaffected. That verification is exactly what R129 says to
+  demand, applied by the lane to its own change.
