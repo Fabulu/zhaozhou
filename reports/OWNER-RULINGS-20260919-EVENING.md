@@ -3639,3 +3639,107 @@ when you are trying to read a long output, i.e. when something interesting is
 happening.** The fix that actually works is redirecting to a file and reading
 `$?` before touching the file, which is what every gate invocation in this
 session's briefs now does.
+
+## R207 — THE MUTANT SMOKE PASSED WHILE PRINTING NINE `%Fatal` LINES
+
+**2026-09-20/21, UNTEX, found while adding a smoke form — and it is a defect in
+the gate set this campaign has quoted all day.**
+
+The smoke's mutant verdicts end in `$finish`. **`$finish` runs the named block
+to the end of its time step**, and the `ifdef` chain's `else` arm ends at the
+terrain verdict — so **every later production check still ran, against the
+mutant.**
+
+The new R197 arm therefore printed **nine `%Fatal` lines under a PASSING exit
+code.**
+
+**And the sentence that makes this a ruling rather than a bug report:**
+
+> *"the slot-overflow arm only ever survived because production's geometry
+> counters happen to agree with it."*
+
+**`-Mutant` has been green all day for a reason that is a coincidence.** It is
+in every gate list in every brief I have written, it is one of the six forms I
+have required of eleven packets, and I have quoted its green in a dozen commit
+messages and several reports to the owner. It was not measuring what I said it
+measured.
+
+**This is `CLAUDE.md`'s broken-instrument law at the top of the instrument
+stack.** The mutant smoke is the thing that proves the *other* detectors fire —
+it is the positive control for the positive controls. A false green there does
+not just mislead about one counter; **it launders every "the detector works"
+claim that rests on it.**
+
+**Note which direction it failed in, because it is the usual one.** The extra
+checks ran against a deliberately broken design and **passed**, so nothing went
+red and nobody looked. Had they failed, the form would have gone red on day one
+and been fixed in an afternoon. *"Nobody audits good news."*
+
+**Fixed with `disable run;` after each arm's `$finish`, on both arms**, and
+re-measured at zero `%Fatal` lines. All seven forms pass at `55451c42`.
+
+**The second instrument defect in the same commit**, and it is the one that
+would have wasted a day: `PC_CORE` / `PC_SHELL` knew only **one** wrapper
+define, so a second wrapper mutant failed **47 hierarchical probes at
+elaboration** — which **reads exactly like a broken core**. A packet meeting that
+would have gone looking in production RTL. Both macros now list every wrapper.
+
+**The rule to carry: when you add an arm to a shared verdict chain, check what
+runs AFTER your arm.** A `$finish` is not a `return`.
+
+## R208 — "DON'T CARE" WAS A LIE, AND MEASURING IT CHOSE THE DESIGN
+
+The best engineering judgement in this packet, and it is the art law's shape in
+a place the art law does not reach.
+
+R197 says the untextured slot's content is **don't-care**. UNTEX checked whether
+that was *true* rather than assuming it, and found it is not:
+
+> `zhao_raster_tile_pipe_v2`'s `incoming_range_bad_c` **ORs every lane's
+> `q_error_o`**, and `zhao_raster_attrgrad_v2` raises it when a lane's gradient
+> divide is refused — **so arbitrary don't-care content in slots 1/2 COULD
+> TERMINATE A FRAME** through lanes 1 or 2.
+
+So a design that left the slots genuinely undefined would have shipped **a
+constraint every future producer must remember and nothing would enforce** —
+"you may leave these undefined, except not *those* values, and the failure is a
+terminated frame two subsystems away."
+
+**The fix makes the words true instead of making producers careful:** ATTRPACK
+does not latch the slots when the bit is set, and feeds its shared attrsetup
+core the zero operand, so the packed planes are the **null plane `{0,0,0}`** —
+and `0 / 2A` never errors. **The content is now genuinely irrelevant.**
+
+**This is the same class as R197's own constraint one level down.** R197 forbade
+encoding absence as a value because a consumer cannot distinguish it from data.
+R208 is the converse: **an absence that is DECLARED still has to be SAFE in the
+slot it leaves behind.** Declaring "ignore this" does not make downstream logic
+ignore it; only wiring a value that cannot fault does.
+
+**And the schedule is untouched** — `planes == 3 × triangles` still holds, so
+this bought its safety without a timing argument.
+
+## R209 — THE PACKET CLASSIFIED ITS OWN DECISION AND INVITED DISAGREEMENT
+
+UNTEX created a named constant at a producer seam — `GEOM_REPLAY_UNTEX_DECL = 0`
+— and rather than quietly calling it "not a tie-off", it **stated the
+classification, gave the reason, and named where to disagree**:
+
+> *"None. `GEOM_REPLAY_UNTEX_DECL` is a named-constant declaration at a seam
+> (R48's shape) and the TRUE value for the producer it describes; recorded at
+> the parameter, the port map (`// REAL:`), the contract and here, **so the
+> coordinator can disagree with that classification in the open.**"*
+
+**I agree with the classification**, and the reasoning is sound: every REPLAY
+triangle is a format-0 record, and format 0 carries u/v — so `0` (TEXTURED) is
+not a placeholder for a missing producer, it is the correct value for a producer
+that exists. A parameter rather than a `localparam` **specifically so a wrapper
+mutant can flip it**, which is what made the positive control possible.
+
+**But the behaviour is the ruling, not the verdict.** R159 exists because the
+completion register cannot see an undeclared tie-off, and the mitigation I wrote
+was *"declare it in the same commit."* **UNTEX went further: it declared
+something it believed was NOT a tie-off, in four places, precisely so the
+judgement could be overturned by someone else.** That is the standard — the
+register's blind spot is closed not by a better parser but by a lane that writes
+down the thing it could have left silent.
