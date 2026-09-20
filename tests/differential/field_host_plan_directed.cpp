@@ -217,6 +217,17 @@ void ft007() {
     std::string r;
     check(map(uop(zfield::OP_NORMALIZE3, 8, {V(20), V(21), V(22)}), &m, &r), "NORMALIZE3 maps");
     check_eq(m.n_groups, 1, "NORMALIZE3 has one group");
+    // THE CASE THAT DISCRIMINATES, and it was measured rather than assumed.
+    // NORMALIZE3's three sources are ONE GROUP starting at a. The old
+    // test-local mapper defaulted its width to 1, fell into the width-1
+    // catch-all (n_src == 3 satisfies it) and SCATTERED THE GROUP ACROSS THREE
+    // PORTS as a=R20, b=R21, c=R22 -- presenting a vector group to the
+    // hardware as three independent scalars. So b and c are asserted EMPTY,
+    // not merely a asserted correct.
+    check_eq(m.a, 20, "NORMALIZE3 group A starts at src[0]");
+    check_eq(m.b, 0, "operand b is EMPTY -- the group is not scattered across ports");
+    check_eq(m.c, 0, "operand c is EMPTY");
+    check_eq(m.group_width[0], 3, "the single group is three wide");
     // The destination is a GROUP of three. The defined-set walk must add all
     // three, or a later read of dst+1 or dst+2 would look undefined.
     check_eq(m.dst_width, 3, "NORMALIZE3 writes THREE registers");
@@ -233,6 +244,10 @@ void ft007() {
     std::string r;
     check(map(uop(zfield::OP_NORMALIZE2, 8, {V(20), V(21)}), &m, &r), "NORMALIZE2 maps");
     check_eq(m.dst_width, 2, "NORMALIZE2 writes TWO registers");
+    // Same discriminator one width down: the old mapper produced a=R20, b=R21.
+    check_eq(m.a, 20, "NORMALIZE2 group A starts at src[0]");
+    check_eq(m.b, 0, "operand b is EMPTY -- the group is not scattered across ports");
+    check_eq(m.n_groups, 1, "NORMALIZE2 has one group");
   }
   // MISWIRE CONTROL
   {
