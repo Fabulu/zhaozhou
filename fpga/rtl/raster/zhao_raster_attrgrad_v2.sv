@@ -195,7 +195,17 @@ module zhao_raster_attrgrad_v2 #(
       .divides_o      (dv_divides),
       .saturations_o  (dv_saturations),
       .errors_o       (dv_errors),
-      .busy_clocks_o  (unused_dv_busy)
+      .busy_clocks_o  (unused_dv_busy),
+      // SUNK DELIBERATELY. This block consumes the QUOTIENT only -- it walks a
+      // row by gradient adds, not by a Euclidean pair -- so the divider's
+      // remainder and the width guard that watches it have no reader here.
+      // The guard is read where the pair is actually used (ATTRDIV.SVC and
+      // RASTER.ATTRSTEP), and its positive control is the committed mutant
+      // tests/mutants/zhao_raster_attrdiv_v2_remwidth_mutant.sv.
+      /* verilator lint_off PINCONNECTEMPTY */
+      .rem_o           (),
+      .rem_range_err_o ()
+      /* verilator lint_on PINCONNECTEMPTY */
   );
 
   assign divides_o      = dv_divides;

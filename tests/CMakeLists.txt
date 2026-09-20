@@ -2543,6 +2543,59 @@ add_executable(test_attribute_step_equivalence proofs/attribute_step_equivalence
 add_test(NAME attribute_step_equivalence COMMAND test_attribute_step_equivalence)
 set_tests_properties(attribute_step_equivalence PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
 
+# ---- RASTER.ATTRDIV V2's published floor remainder (owner ruling R104) ------
+# v2 gained `rem_o` and `rem_range_err_o` on 2026-09-20 so the two remaining
+# superseded-in-a-production-root sites could move off v1. Three targets:
+#
+#   raster_attrdiv_v2_rem_directed     the pair's Euclidean invariant, the width
+#                                      claim R104 asked to be MEASURED, and the
+#                                      continuity across zero that lets a
+#                                      consumer drop v1's second sign branch.
+#   raster_attrdiv_v2_rem_r4           the same case list at radix 4, because a
+#                                      divider whose answer moves with the radix
+#                                      is two dividers.
+#   raster_attrdiv_v2_remwidth_mutant  the guard's POSITIVE CONTROL, inverted
+#                                      polarity: it passes when the counter
+#                                      fires. The mutant source is compiled
+#                                      IMMEDIATELY BEFORE the production file so
+#                                      its `ifndef` seam sees the macro defined.
+#
+# The unmutated targets above are that mutant's negative control: they build the
+# identical C++ against unmutated RTL and require the counter to stay at zero.
+add_executable(test_raster_attrdiv_v2_rem_directed raster/raster_attrdiv_v2_rem_directed.cpp)
+target_link_libraries(test_raster_attrdiv_v2_rem_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_raster_attrdiv_v2_rem_directed
+  PREFIX Vzhao_raster_attrdiv_v2
+  TOP_MODULE zhao_raster_attrdiv_v2
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv)
+add_test(NAME raster_attrdiv_v2_rem_directed COMMAND test_raster_attrdiv_v2_rem_directed)
+set_tests_properties(raster_attrdiv_v2_rem_directed
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_raster_attrdiv_v2_rem_r4 raster/raster_attrdiv_v2_rem_directed.cpp)
+target_link_libraries(test_raster_attrdiv_v2_rem_r4 PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_raster_attrdiv_v2_rem_r4 PRIVATE ZHAO_ATTR_RADIX=4)
+verilate(test_raster_attrdiv_v2_rem_r4
+  PREFIX Vzhao_raster_attrdiv_v2
+  TOP_MODULE zhao_raster_attrdiv_v2
+  VERILATOR_ARGS -GRADIX=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv)
+add_test(NAME raster_attrdiv_v2_rem_r4 COMMAND test_raster_attrdiv_v2_rem_r4)
+set_tests_properties(raster_attrdiv_v2_rem_r4 PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
+
+add_executable(test_raster_attrdiv_v2_remwidth_mutant raster/raster_attrdiv_v2_rem_directed.cpp)
+target_link_libraries(test_raster_attrdiv_v2_remwidth_mutant PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_raster_attrdiv_v2_remwidth_mutant PRIVATE EXPECT_REM_WIDTH_MUTANT=1)
+verilate(test_raster_attrdiv_v2_remwidth_mutant
+  PREFIX Vzhao_raster_attrdiv_v2
+  TOP_MODULE zhao_raster_attrdiv_v2
+  VERILATOR_ARGS -DZHAO_ATTR_V2_MUTANT_REM_WIDTH
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_raster_attrdiv_v2_remwidth_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/raster/zhao_raster_attrdiv_v2.sv)
+add_test(NAME raster_attrdiv_v2_remwidth_mutant COMMAND test_raster_attrdiv_v2_remwidth_mutant)
+set_tests_properties(raster_attrdiv_v2_remwidth_mutant
+  PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
 # The depth-profile derivation (owner ruling 2026-08-31 #1). It derives `scale`
 # from wmin/wmax through the frozen rcp_u24 law and proves the four properties
 # the ruling demands: the pin at wmin, monotonicity, a non-zero floor at wmax,
