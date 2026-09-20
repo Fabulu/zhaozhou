@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
-zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
+abi_identity_sha256 = 25040287e67ea99f080e34c1aa4910b7e2411b93e254f4f786217a5ffd209124
+zidl_sha256         = 0d238da63e1eb257931ee4726c7bf5094fb6f5e765b1960b6c632855fc6bdbda
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-21 commands (17 implemented).
+22 commands (18 implemented).
 
 ## Commands
 
@@ -38,6 +38,7 @@ ABI version **3**, little-endian, command alignment
 | `PublishResource` | `0x0030` | 48 | implemented |
 | `SetPost` | `0x0040` | 32 | implemented |
 | `SetGradeTable` | `0x0041` | 96 | implemented |
+| `DebugTraceArm` | `0xF003` | 32 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -555,6 +556,21 @@ Golden sample: `tests/abi/golden/cmd_set_grade_table.bin` (C++ packer
 TS `zhaoPackSetGradeTable(zhaoSampleSetGradeTable(), ...)`, SV round-trips it via
 `zhao_unpack_set_grade_table`/`zhao_pack_set_grade_table`).
 
+### DebugTraceArm — 0xF003 (32 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 1 | `stage_mask` | u8 |
+| 1 | 1 | `flags` | u8 |
+| 2 | 14 | `pad` | pad (zero) ×14 |
+
+Golden sample: `tests/abi/golden/cmd_debug_trace_arm.bin` (C++ packer
+`zhao_abi::zhao_pack_debug_trace_arm(zhao_abi::zhao_sample_debug_trace_arm(), ...)`,
+TS `zhaoPackDebugTraceArm(zhaoSampleDebugTraceArm(), ...)`, SV round-trips it via
+`zhao_unpack_debug_trace_arm`/`zhao_pack_debug_trace_arm`).
+
 ## Composed structs
 
 ### rectfx — 16 B
@@ -715,6 +731,7 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_publish_resource.bin` | canonical PublishResource sample record |
 | `tests/abi/golden/cmd_set_post.bin` | canonical SetPost sample record |
 | `tests/abi/golden/cmd_set_grade_table.bin` | canonical SetGradeTable sample record |
+| `tests/abi/golden/cmd_debug_trace_arm.bin` | canonical DebugTraceArm sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |

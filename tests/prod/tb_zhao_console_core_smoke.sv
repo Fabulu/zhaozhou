@@ -869,11 +869,9 @@ module tb_zhao_console_core_smoke
   logic [HIST_LANES*HIST_EW-1:0] hist_ev_err_i;
   logic [15:0]             hist_ev_src_id_i;
   logic                    hist_ev_ready_o;
-  logic                    hist_rd_valid_i;
-  logic [HIST_BINW-1:0]    hist_rd_bin_i;
-  logic                    hist_rd_ready_o;
-  logic                    hist_rd_data_valid_o;
-  logic [HIST_CW-1:0]      hist_rd_count_o;
+  // `hist_rd_*` is GONE from the core's edge (entry I19 closed 2026-09-20):
+  // the histogram's read port is driven inside the core by the HPS register
+  // aperture's tenant 0. This bench reads bins through `hostreg_*` instead.
   logic                    hist_snap_valid_o;
   logic [HIST_CW-1:0]      hist_snap_total_o;
   logic [15:0]             hist_snap_src_id_o;
@@ -1258,24 +1256,42 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_bytes_consumed_o;
   logic [31:0] cmd_commands_o;
 
-  // ---- DEBUG.TRACE's arming and readout (core entry I45) -----------------
-  // Declared for the `.*` reason above, and ARMED below, because the thing
-  // worth checking here is the one neither block's isolated test can see: the
-  // ring's contract says "composition with CMD.DECODER is the point ... a
-  // field mismatch that neither block's isolated tests can see". So the bench
-  // arms stage 0 and asserts the ring stored EXACTLY as many events as the
-  // decoder reports records walked. A count that is merely non-zero would pass
-  // with the source id and the sequence swapped, or with a stage constant that
-  // happened to be armed; an EQUALITY against the producer's own counter is
-  // the check that can fail.
-  logic        dbg_trace_arm_we_i;
-  logic [ 6:0] dbg_trace_arm_mask_i;
-  logic        dbg_trace_clear_i;
-  logic [ 8:0] dbg_trace_rd_addr_i;
-  logic [31:0] dbg_trace_rd_data_o;
+  // ---- DEBUG.TRACE's evidence --------------------------------------------
+  // The arming and the readout that used to be driven from HERE are gone from
+  // the core's edge, and their absence is the point of this pass. Entry I45 is
+  // closed: arming arrives as a `DebugTraceArm` 0xF003 record in the packet
+  // this bench already builds (owner ruling R52), and the readout is tenant 1
+  // of the HPS register aperture (ruling R51). THE BENCH NO LONGER STANDS IN
+  // FOR A PRODUCER; it is the host at a real host port, which is a different
+  // thing and the whole distinction this register measures.
+  //
+  // The check the old comment argued for is UNCHANGED and is still the one
+  // worth having: the ring must store EXACTLY as many events as the decoder
+  // reports records walked, less the arming record itself, which by
+  // construction is offered to the ring before the arm lands. A count that is
+  // merely non-zero would pass with the source id and the sequence swapped.
   logic [ 6:0] dbg_trace_armed_o;
   logic [31:0] dbg_trace_count_o;
   logic [31:0] dbg_trace_dropped_o;
+
+  // ---- HOST.REGWIN, the HPS lightweight bridge (ruling R51) ---------------
+  // The bench is the HPS here exactly as it is for the burst bridge and the
+  // FRAME_RING word view. `host_read` below is the whole protocol.
+  logic        hostreg_valid_i;
+  logic        hostreg_write_i;
+  logic [15:0] hostreg_addr_i;
+  logic [31:0] hostreg_wdata_i;
+  logic        hostreg_ready_o;
+  logic        hostreg_rvalid_o;
+  logic [31:0] hostreg_rdata_o;
+  logic        hostreg_err_o;
+  logic [31:0] hostreg_reads_o;
+  logic [31:0] hostreg_writes_o;
+  logic [31:0] hostreg_refused_unmapped_o;
+  logic [31:0] hostreg_refused_misaligned_o;
+  logic [31:0] hostreg_refused_tenant_o;
+  logic [31:0] hostreg_refused_timeout_o;
+  logic [31:0] hostreg_stall_cycles_o;
 
   logic [31:0] cmd_exec_committed_o;
   logic [31:0] cmd_exec_abandoned_o;
@@ -1283,6 +1299,8 @@ module tb_zhao_console_core_smoke
   logic [31:0] cmd_exec_stamps_o;
   logic [31:0] cmd_exec_stamp_overflow_o;
   logic [31:0] cmd_exec_view_refused_o;
+  logic [31:0] cmd_exec_trace_arms_o;
+  logic [31:0] cmd_exec_trace_arm_refused_o;
   logic [31:0] cmd_exec_src_truncated_o;
   logic [31:0] cmd_exec_unsupported_o;
 
@@ -2350,6 +2368,68 @@ module tb_zhao_console_core_smoke
   localparam logic [7:0] TBL_CURVE_COLOUR  = 8'hA5;
   localparam logic [5:0] TBL_CURVE_SIZE    = 6'h2A;
 
+  // The 1-BASED SLOT of the DebugTraceArm record in the packet built below.
+  // Every record at or before it is offered to DEBUG.TRACE before CMD.EXEC's
+  // arm lands, so the ring stores `records - TRACE_SKIP_C`. It is also the
+  // 0-based index the FIRST STORED event must carry in its `command_seq` word,
+  // which is why one constant serves both checks.
+  localparam int unsigned TRACE_SKIP_C = 2;
+
+  // ---- HOST.REGWIN, the bench AS THE HPS (ruling R51) ----------------------
+  // The whole lightweight-bridge protocol: offer while `h_ready_o` is high,
+  // then wait for the one-cycle `h_rvalid_o`. It NEVER HANGS by design -- every
+  // refusal is answered with err -- so a guard count here is a real bug rather
+  // than a benign timeout, and this task fatals rather than returning silence.
+  logic [31:0] hr_data;
+  logic [31:0] hr_hsnap;
+  logic        hr_err;
+
+  task automatic host_access(input logic wr,
+                             input logic [15:0] addr,
+                             input logic [31:0] wdata,
+                             output logic [31:0] rdata,
+                             output logic err);
+    int unsigned g;
+    g = 0;
+    while (!hostreg_ready_o && (g < 1000)) begin
+      @(posedge gpu_clk);
+      g++;
+    end
+    if (g >= 1000)
+      $fatal(1, "SMOKE: HOST.REGWIN never raised h_ready_o -- the aperture is stuck, not busy");
+    hostreg_addr_i  = addr;
+    hostreg_wdata_i = wdata;
+    hostreg_write_i = wr;
+    hostreg_valid_i = 1'b1;
+    @(posedge gpu_clk);
+    hostreg_valid_i = 1'b0;
+    hostreg_write_i = 1'b0;
+    g = 0;
+    while (!hostreg_rvalid_o && (g < 1000)) begin
+      @(posedge gpu_clk);
+      g++;
+    end
+    if (g >= 1000)
+      $fatal(1, "SMOKE: HOST.REGWIN gave no response to %s 0x%04x in 1000 cycles -- a host bus that stops answering is a console that locks up",
+             wr ? "write" : "read", addr);
+    rdata = hostreg_rdata_o;
+    err   = hostreg_err_o;
+    @(posedge gpu_clk);
+  endtask
+
+  task automatic host_read(input logic [15:0] addr,
+                           output logic [31:0] rdata,
+                           output logic err);
+    host_access(1'b0, addr, 32'd0, rdata, err);
+  endtask
+
+  task automatic host_write(input logic [15:0] addr,
+                            input logic [31:0] wdata,
+                            output logic err);
+    logic [31:0] d;
+    host_access(1'b1, addr, wdata, d, err);
+  endtask
+
   task automatic tbl_load(input logic [1:0] sel,
                           input logic [6:0] idx,
                           input logic [1:0] ev,
@@ -3110,16 +3190,14 @@ module tb_zhao_console_core_smoke
     // says why: the draw drain is the LAST phase of CMD.EXEC's commit, so a
     // low ready parks the executor and stops the command path outright.
 
-    // DEBUG.TRACE (core entry I45). ARM STAGE 0 -- `zref::trace::kCommandDecoder`
-    // -- and nothing else, because stage 0 is the only one this console has a
-    // producer for. Arming is one write; the mask is held by the block.
-    // This is stimulus the bench OWNS: arming is a debug command and no block
-    // here decodes one, so the bench stands in for the host exactly as it does
-    // for the HPS everywhere else in this file.
-    dbg_trace_clear_i    = 1'b0;
-    dbg_trace_rd_addr_i  = '0;
-    dbg_trace_arm_mask_i = 7'b000_0001;
-    dbg_trace_arm_we_i   = 1'b1;
+    // DEBUG.TRACE's arming is NO LONGER STIMULUS THIS BENCH OWNS. It rides the
+    // packet as a `DebugTraceArm` 0xF003 record (ruling R52), built below with
+    // the other ten, and CMD.EXEC lowers it. The bench's only debug-surface
+    // job now is to be the HOST on the register aperture.
+    hostreg_valid_i = 1'b0;
+    hostreg_write_i = 1'b0;
+    hostreg_addr_i  = '0;
+    hostreg_wdata_i = '0;
     // One world unit of base radius, fx16. A VALUE, not a law: no species
     // radius table exists anywhere in the tree and the reference says that is
     // properly the owner's, so this bench picks one so that the projected size
@@ -3201,8 +3279,6 @@ module tb_zhao_console_core_smoke
     hist_ev_lane_valid_i = '0;
     hist_ev_err_i = '0;
     hist_ev_src_id_i = '0;
-    hist_rd_valid_i = '0;
-    hist_rd_bin_i = '0;
     cfg_valid_i = '0;
     cfg_op_i = '0;
     cfg_page_generation_i = '0;
@@ -3594,6 +3670,9 @@ module tb_zhao_console_core_smoke
       zhao_abi_pkg::zhao_rec_set_grade_table_t  gt;
       logic [255:0] spv;
       logic [767:0] gtv2;
+      // R52: DebugTraceArm 0xF003, the real producer of DEBUG.TRACE's arming.
+      zhao_abi_pkg::zhao_rec_debug_trace_arm_t  ta;
+      logic [255:0] tav;
       // EVERY RECORD IS CLEARED BEFORE ANY OF THEM IS FILLED, and the order is
       // load-bearing rather than tidy. The 2026-09-20 merge of the geom and post
       // packets moved this line BELOW the SetPresentationContract and SetView
@@ -3604,6 +3683,7 @@ module tb_zhao_console_core_smoke
       // landed, so the smoke's geometry job (gated on `geom_light_env_loads_o
       // >= 2`, ruling R25) was never issued and GEOM.REPLAY released no meshlet.
       bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; df = '0; sp = '0; gt = '0;
+      ta = '0;
       // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
       // already runs), two views, and the five token CEILINGS.
       pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
@@ -3693,6 +3773,23 @@ module tb_zhao_console_core_smoke
       // read back out of POST.COMPOSITE's own table below.
       gt.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_GRADE_TABLE;   gt.h_record_bytes = 16'd96;
       gt.curve = 8'd2; gt.first = 8'd8; gt.count = 8'd8;
+      // DebugTraceArm (R52): ARM STAGE 0 -- `zref::trace::kCommandDecoder` --
+      // and nothing else, because stage 0 is the only one this console has a
+      // producer for (core entry I18). `flags` bit 0 clears the ring first, so
+      // the count this bench checks describes THIS packet and nothing before
+      // it. It is placed SECOND, right after BeginFrame, because the arming
+      // record is itself offered to the ring before the arm lands -- so every
+      // record after it is traced and it is not.
+      ta.h_opcode = zhao_abi_pkg::ZHAO_OP_DEBUG_TRACE_ARM; ta.h_record_bytes = 16'd32;
+`ifdef ZHAO_SMOKE_BAD_TRACE_ARM
+      // NEGATIVE CONTROL for `cmd_exec_trace_arm_refused_o`: bit 7 of
+      // stage_mask is unassigned, so the record is refused WHOLE and nothing
+      // is armed. REFUSE, NEVER MASK.
+      ta.stage_mask = 8'b1000_0001;
+`else
+      ta.stage_mask = 8'b0000_0001;
+`endif
+      ta.flags      = 8'h01;
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
       prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
@@ -3703,41 +3800,53 @@ module tb_zhao_console_core_smoke
       svv = zhao_abi_pkg::zhao_pack_set_view(sv);
 
       spv = zhao_abi_pkg::zhao_pack_set_post(sp);
+      tav = zhao_abi_pkg::zhao_pack_debug_trace_arm(ta);
       gtv2 = zhao_abi_pkg::zhao_pack_set_grade_table(gt);
       for (int unsigned k = 0; k < 72; k++)
         gtv2[8*(zhao_abi_pkg::ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0 + k) +: 8] = sm_grade_byte(k);
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
-      // ONE packet, ALL THREE lanes' records (coordinator merge 2026-09-20):
-      // BeginFrame 32 | SetPresentationContract 48 | SetView 96 | PublishResource 48 |
-      // PublishResource 48 | SetEnvironment 48 | SetPost 32 | SetGradeTable 96 |
-      // DrawForm 32 | EndFrame 32 = 512 bytes, TEN records. The draw stays AFTER both
-      // publications (the page it names must be resident) and after the look.
+      // ONE packet, ALL FOUR lanes' records (coordinator merge 2026-09-20;
+      // DebugTraceArm added the same day by gz/hostdbg, ruling R52):
+      // BeginFrame 32 | DebugTraceArm 32 | SetPresentationContract 48 | SetView 96 |
+      // PublishResource 48 | PublishResource 48 | SetEnvironment 48 | SetPost 32 |
+      // SetGradeTable 96 | DrawForm 32 | EndFrame 32 = 544 bytes, ELEVEN records.
+      // The draw stays AFTER both publications (the page it names must be
+      // resident) and after the look. DebugTraceArm is SECOND so that every
+      // record the ring is meant to see comes after the arm.
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]       = bfv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k]  = pcv[8*k +: 8];
-      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 80 + k]  = svv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 176 + k] = prv[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = pr2v[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 272 + k] = sev[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 320 + k] = spv[8*k +: 8];
-      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 352 + k] = gtv2[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 448 + k] = dfv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 480 + k] = efv[8*k +: 8];
-      // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), TEN records, 512 bytes of them
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 32 + k]  = tav[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 64 + k]  = pcv[8*k +: 8];
+      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 112 + k] = svv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 208 + k] = prv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 256 + k] = pr2v[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 304 + k] = sev[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 352 + k] = spv[8*k +: 8];
+      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 384 + k] = gtv2[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 480 + k] = dfv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 512 + k] = efv[8*k +: 8];
+      // header: magic, abi version, frame id 1, sequence 1, epoch 0,
+      // deadline 0 (the mode's period), ELEVEN records, 544 bytes of them.
+      //
+      // FLAGS BIT 0 IS NOW SET, and it is required rather than decorative:
+      // `zhao_cmd_decoder` stamps ZH_ABI_DEBUG_FLAG_REQUIRED (error 12) on any
+      // record in 0xF000..0xF0FF whose FRAME header does not declare
+      // contains_debug_commands. DebugTraceArm is 0xF003, so the packet must
+      // say so on the wire. That rule is the ABI's, not this bench's.
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
+      {pkt_mem[zhao_abi_pkg::ZHAO_OFF_FLAGS + 1], pkt_mem[zhao_abi_pkg::ZHAO_OFF_FLAGS]} = 16'h0001;
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd10;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd512;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd11;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd544;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 512; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+515], pkt_mem[o+514], pkt_mem[o+513], pkt_mem[o+512]} = ~c;
-      pkt_len_q   = o + 512 + 4;
+      for (int unsigned k = 0; k < 544; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+547], pkt_mem[o+546], pkt_mem[o+545], pkt_mem[o+544]} = ~c;
+      pkt_len_q   = o + 544 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
@@ -5469,8 +5578,9 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd10 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd2)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 10, 1, 2)",
+    // ELEVEN since 2026-09-20: DebugTraceArm 0xF003 joined the packet (R52).
+    if (cmd_commands_o != 32'd11 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd2)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 11, 1, 2)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
     // ---- MEASURE.TOKENS (R18/R33): the CEILING and the REQUEST ----------
     // Counts off the wire, unchanged. View 0 sent no SetView, so it keeps the
@@ -5517,25 +5627,130 @@ module tb_zhao_console_core_smoke
     if (!mat_rec_has_q || mat_rec_q != upl_rec0)
       $fatal(1, "SMOKE: MATERIAL.RESOLVE's record (has=%b) %064x is not the uploaded record %064x",
              mat_rec_has_q, mat_rec_q, upl_rec0);
-    // ---- DEBUG.TRACE against its producer (core entry I45) ----------------
+    // ---- DEBUG.TRACE against its producer, and its ARMING producer (R52) ---
     // The composition check the ring's contract asks for, and it is an
     // EQUALITY on purpose. `cmd_commands_o` is CMD.DECODER's own count of
     // records walked; `dbg_trace_count_o` is what the ring stored with stage 0
-    // armed. They must agree exactly: the ring drops only when full (64 events)
-    // and this packet carries far fewer, so any difference is a lost event, a
-    // stage byte that is not 0, or an arming gate that does not gate.
-    $display("SMOKE: trace     armed=%b stored=%0d dropped=%0d against decoder records=%0d",
+    // armed. They must agree EXCEPT for the records that were offered to the
+    // ring BEFORE the arm landed, and that is exactly the first two:
+    //
+    //   record 1  BeginFrame      offered while the mask is still 0
+    //   record 2  DebugTraceArm   offered at its byte 15; CMD.EXEC applies the
+    //                             arm at its LAST byte, sixteen bytes later
+    //   records 3..11             armed, and stored
+    //
+    // TRACE_SKIP_C IS DERIVED FROM WHERE THE RECORD SITS, not fitted to the
+    // answer. Move the DebugTraceArm record and this constant moves with it;
+    // that is the whole reason it is named rather than written as a literal
+    // minus two. (It was minus ONE on first writing, which forgot BeginFrame,
+    // and the check caught it -- which is the check working.)
+    //
+    // The ring drops only when full (64 events) and this packet carries far
+    // fewer, so any other difference is a lost event, a stage byte that is not
+    // 0, or an arming gate that does not gate.
+    $display("SMOKE: trace     armed=%b stored=%0d dropped=%0d against decoder records=%0d arms=%0d arm_refused=%0d",
              dbg_trace_armed_o, dbg_trace_count_o, dbg_trace_dropped_o,
-             cmd_commands_o);
+             cmd_commands_o, cmd_exec_trace_arms_o, cmd_exec_trace_arm_refused_o);
+`ifdef ZHAO_SMOKE_BAD_TRACE_ARM
+    // R52 CONTROL, DIRECT POLARITY: the record carries an unassigned
+    // stage_mask bit, so it is REFUSED WHOLE and NOTHING is armed. This is the
+    // positive control for `trace_arm_refused_o` and, just as importantly, the
+    // proof that the refusal does not MASK: a machine that dropped bit 7 and
+    // armed stage 0 anyway would pass every check in the plain run and would
+    // have armed a set of stages nobody asked for.
+    if (cmd_exec_trace_arm_refused_o != 32'd1)
+      $fatal(1, "SMOKE/BAD_TRACE_ARM: refusals read %0d, expected exactly 1",
+             cmd_exec_trace_arm_refused_o);
+    if (cmd_exec_trace_arms_o != 32'd0)
+      $fatal(1, "SMOKE/BAD_TRACE_ARM: %0d arm(s) were APPLIED from a record with a reserved bit set -- the guard masked instead of refusing",
+             cmd_exec_trace_arms_o);
+    if (dbg_trace_armed_o != 7'd0 || dbg_trace_count_o != 32'd0)
+      $fatal(1, "SMOKE/BAD_TRACE_ARM: the ring reads armed=%b stored=%0d after a REFUSED arm -- expected 0/0",
+             dbg_trace_armed_o, dbg_trace_count_o);
+    $display("SMOKE: PASS/BAD_TRACE_ARM -- the reserved bit was refused whole and nothing was armed.");
+    $finish;
+`else
+    if (cmd_exec_trace_arms_o != 32'd1)
+      $fatal(1, "SMOKE: CMD.EXEC applied %0d DebugTraceArm record(s), expected exactly 1 -- the packet's 0xF003 record did not reach the executor",
+             cmd_exec_trace_arms_o);
+    if (cmd_exec_trace_arm_refused_o != 32'd0)
+      $fatal(1, "SMOKE: CMD.EXEC REFUSED %0d DebugTraceArm record(s) -- the clean record is being read as having a reserved bit set",
+             cmd_exec_trace_arm_refused_o);
     if (dbg_trace_armed_o != 7'b000_0001)
-      $fatal(1, "SMOKE: DEBUG.TRACE armed mask reads %b, expected 000_0001 -- the arm write did not land",
+      $fatal(1, "SMOKE: DEBUG.TRACE armed mask reads %b, expected 000_0001 -- the command's arm did not land",
              dbg_trace_armed_o);
     if (dbg_trace_dropped_o != 32'd0)
       $fatal(1, "SMOKE: DEBUG.TRACE dropped %0d event(s) into a 64-deep ring from %0d records",
              dbg_trace_dropped_o, cmd_commands_o);
-    if (dbg_trace_count_o != cmd_commands_o)
-      $fatal(1, "SMOKE: DEBUG.TRACE stored %0d event(s) against %0d records walked by CMD.DECODER -- the record port and the ring disagree",
-             dbg_trace_count_o, cmd_commands_o);
+    if (dbg_trace_count_o != (cmd_commands_o - TRACE_SKIP_C))
+      $fatal(1, "SMOKE: DEBUG.TRACE stored %0d event(s) against %0d records walked by CMD.DECODER (expected records-%0d: everything up to and including the DebugTraceArm record at slot %0d is offered before the arm lands) -- the record port and the ring disagree",
+             dbg_trace_count_o, cmd_commands_o, TRACE_SKIP_C, TRACE_SKIP_C);
+
+    // ---- HOST.REGWIN (ruling R51): the host reads both tenants -------------
+    // THIS IS THE CLOSURE OF ENTRIES I19 AND I45, measured rather than argued.
+    // Every value below crossed the HPS lightweight bridge as a 32-bit register
+    // read, was decoded to a tenant by address bits alone, was answered by the
+    // block that owns it, and came back. Nothing here reads a core output port
+    // directly -- that would prove the block, not the carrier.
+    host_read(16'h1804, hr_data, hr_err);          // DEBUG.TRACE: count
+    if (hr_err || hr_data != dbg_trace_count_o)
+      $fatal(1, "SMOKE: aperture 0x1804 returned err=%b %0d, DEBUG.TRACE's own count_o is %0d",
+             hr_err, hr_data, dbg_trace_count_o);
+    host_read(16'h1800, hr_data, hr_err);          // DEBUG.TRACE: armed
+    if (hr_err || hr_data != 32'(dbg_trace_armed_o))
+      $fatal(1, "SMOKE: aperture 0x1800 returned err=%b %08x, DEBUG.TRACE's own armed_o is %b",
+             hr_err, hr_data, dbg_trace_armed_o);
+    // A RING WORD. Word 3 of event 0 is {rsv[3]=0, stage}, and stage 0 is the
+    // only stage this console arms, so the whole word must read 0 -- a value
+    // that is CHECKABLE rather than merely present. Its neighbour, word 7, is
+    // `command_seq`, which must be the index of the first record the ring saw:
+    // record 2 of the packet, the SetPresentationContract after the arm.
+    host_read(16'h100C, hr_data, hr_err);          // event 0, word 3
+    if (hr_err || hr_data != 32'd0)
+      $fatal(1, "SMOKE: aperture 0x100C (event 0 stage word) returned err=%b %08x, expected 0",
+             hr_err, hr_data);
+    host_read(16'h101C, hr_data, hr_err);          // event 0, word 7
+    if (hr_err || hr_data != 32'(TRACE_SKIP_C))
+      $fatal(1, "SMOKE: aperture 0x101C (event 0 command_seq) returned err=%b %0d, expected record index %0d -- the first record AFTER the arm",
+             hr_err, hr_data, TRACE_SKIP_C);
+    // MEASURE.HISTOGRAM, tenant 0. `snapshots` is a LIVE counter driven by the
+    // console's own frame tick, so a non-zero read is the interval machinery
+    // seen through the aperture. Bin 0 is a bin read, which is the two-cycle
+    // handshake path rather than a register mux -- a different route through
+    // the same tenant, and it must ANSWER (err low) whatever the count is.
+    host_read(16'h0124, hr_hsnap, hr_err);         // snapshots
+    if (hr_err)
+      $fatal(1, "SMOKE: aperture 0x0124 (histogram snapshots) was refused");
+    host_read(16'h0000, hr_data, hr_err);          // bin 0
+    if (hr_err)
+      $fatal(1, "SMOKE: aperture 0x0000 (histogram bin 0) was refused -- the bin handshake did not complete");
+    // THE GUARDS, FIRED WITH LEGAL STIMULUS. Each must REFUSE and be counted;
+    // a detector that has not been seen to fire has not been tested.
+    host_read(16'h2000, hr_data, hr_err);          // tenant 2: unpopulated
+    if (!hr_err)
+      $fatal(1, "SMOKE: aperture 0x2000 names an UNMAPPED tenant and was answered, not refused");
+    host_read(16'h0002, hr_data, hr_err);          // misaligned
+    if (!hr_err)
+      $fatal(1, "SMOKE: aperture 0x0002 is misaligned and was answered, not refused");
+    host_read(16'h0800, hr_data, hr_err);          // tenant 0, no such register
+    if (!hr_err)
+      $fatal(1, "SMOKE: aperture 0x0800 is no register of tenant 0 and was answered, not refused");
+    host_write(16'h1800, 32'h7F, hr_err);          // write to a read-only tenant
+    if (!hr_err)
+      $fatal(1, "SMOKE: a WRITE to DEBUG.TRACE's armed register was accepted -- ruling R52 makes the command stream its only writer");
+    $display("SMOKE: hostreg   reads=%0d writes=%0d unmapped=%0d misaligned=%0d tenant=%0d timeout=%0d stall=%0d snapshots=%0d",
+             hostreg_reads_o, hostreg_writes_o, hostreg_refused_unmapped_o,
+             hostreg_refused_misaligned_o, hostreg_refused_tenant_o,
+             hostreg_refused_timeout_o, hostreg_stall_cycles_o, hr_hsnap);
+    if (hostreg_refused_unmapped_o != 32'd1 || hostreg_refused_misaligned_o != 32'd1
+        || hostreg_refused_tenant_o != 32'd2 || hostreg_writes_o != 32'd1)
+      $fatal(1, "SMOKE: aperture guards read unmapped=%0d misaligned=%0d tenant=%0d writes=%0d, expected 1/1/2/1",
+             hostreg_refused_unmapped_o, hostreg_refused_misaligned_o,
+             hostreg_refused_tenant_o, hostreg_writes_o);
+    if (hostreg_refused_timeout_o != 32'd0)
+      $fatal(1, "SMOKE: a tenant failed to answer %0d time(s) -- the aperture timed out on a live block",
+             hostreg_refused_timeout_o);
+`endif  // ZHAO_SMOKE_BAD_TRACE_ARM
     // THE EQUALITY ABOVE IS NO LONGER TWO ZEROS AGREEING. Until 2026-09-19 this
     // bench submitted no command packet, CMD.DECODER walked nothing and the
     // ring stored nothing, and this comment said so rather than let a green

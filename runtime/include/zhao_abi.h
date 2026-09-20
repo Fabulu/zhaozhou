@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
-//   zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
+//   abi_identity_sha256 = 25040287e67ea99f080e34c1aa4910b7e2411b93e254f4f786217a5ffd209124
+//   zidl_sha256         = 0d238da63e1eb257931ee4726c7bf5094fb6f5e765b1960b6c632855fc6bdbda
 #pragma once
 
 #include <cstdint>
@@ -74,6 +74,7 @@ constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_SET_POST = 0x0040; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
+constexpr uint16_t ZHAO_OP_DEBUG_TRACE_ARM = 0xF003; // 32 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -842,6 +843,23 @@ struct ZhRecordSetGradeTable {
 };
 static_assert(sizeof(ZhRecordSetGradeTable) == 96, "layout drift: SetGradeTable record");
 
+// DebugTraceArm 0xF003: 32-byte record (implemented)
+struct ZhCmdDebugTraceArm {
+  uint8_t stage_mask;
+  uint8_t flags;
+  uint8_t pad[14];
+};
+static_assert(offsetof(ZhCmdDebugTraceArm, stage_mask) == 0, "layout drift: DebugTraceArm.stage_mask");
+static_assert(offsetof(ZhCmdDebugTraceArm, flags) == 1, "layout drift: DebugTraceArm.flags");
+static_assert(offsetof(ZhCmdDebugTraceArm, pad[0]) == 2, "layout drift: DebugTraceArm.pad");
+static_assert(sizeof(ZhCmdDebugTraceArm) == 16, "layout drift: DebugTraceArm payload");
+
+struct ZhRecordDebugTraceArm {
+  ZhCmdHeader hdr;
+  ZhCmdDebugTraceArm payload;
+};
+static_assert(sizeof(ZhRecordDebugTraceArm) == 32, "layout drift: DebugTraceArm record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1401,6 +1419,18 @@ inline ZhRecordSetGradeTable zhao_sample_set_grade_table() {
   return r;
 }
 
+inline ZhRecordDebugTraceArm zhao_sample_debug_trace_arm() {
+  ZhRecordDebugTraceArm r{};
+  r.hdr.opcode       = ZHAO_OP_DEBUG_TRACE_ARM;
+  r.hdr.record_bytes = 32;
+  r.hdr.source_id    = 1342242837u; // kind 5, module 1, index 21
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.stage_mask = 165u;
+  r.payload.flags = 137u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1699,6 +1729,15 @@ inline void zhao_pack_set_grade_table(const ZhRecordSetGradeTable& r, std::vecto
   for (int i = 0; i < 1; ++i) w.u8(r.payload.pad);
   for (int i = 0; i < 72; ++i) { w.u8(r.payload.vectors[i]); }
   for (int i = 0; i < 4; ++i) w.u8(r.payload.pad_1[i]);
+}
+
+inline void zhao_pack_debug_trace_arm(const ZhRecordDebugTraceArm& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u8(r.payload.stage_mask);
+  w.u8(r.payload.flags);
+  for (int i = 0; i < 14; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -2234,6 +2273,17 @@ inline bool zhao_unpack_set_grade_table(ZhReader& r, ZhRecordSetGradeTable& out)
   return true;
 }
 
+inline bool zhao_unpack_debug_trace_arm(ZhReader& r, ZhRecordDebugTraceArm& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.stage_mask = t; }
+  { uint8_t t; if (!r.take8(t)) return false; out.payload.flags = t; }
+  if (!r.skip(14)) return false;
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -2255,6 +2305,7 @@ constexpr uint16_t ZHAO_PADS_DEBUG_RUMBLE[] = {3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 
 constexpr uint16_t ZHAO_PADS_PUBLISH_RESOURCE[] = {30, 31};
 constexpr uint16_t ZHAO_PADS_SET_POST[] = {3, 14, 15};
 constexpr uint16_t ZHAO_PADS_SET_GRADE_TABLE[] = {3, 76, 77, 78, 79};
+constexpr uint16_t ZHAO_PADS_DEBUG_TRACE_ARM[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
@@ -2277,8 +2328,9 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"PublishResource", 0x0030, 48, true, ZHAO_PADS_PUBLISH_RESOURCE, 2},
   {"SetPost", 0x0040, 32, true, ZHAO_PADS_SET_POST, 3},
   {"SetGradeTable", 0x0041, 96, true, ZHAO_PADS_SET_GRADE_TABLE, 5},
+  {"DebugTraceArm", 0xF003, 32, true, ZHAO_PADS_DEBUG_TRACE_ARM, 14},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 21;
+constexpr size_t ZHAO_COMMAND_COUNT = 22;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2313,8 +2365,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x85, 0x93, 0x45, 0x80, 0x75, 0xD6, 0x65, 0xE6, 0x9F, 0x30, 0x57, 0x50, 0x45, 0x6E, 0x34, 0x20, 0x5D, 0x05, 0xD7, 0x91, 0xA0, 0x2A, 0x14, 0xDD, 0x5B, 0x48, 0xB7, 0x5A, 0xC6, 0x26, 0x92, 0x97};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBF, 0xE9, 0x4A, 0xE7, 0x22, 0x67, 0xC7, 0x84, 0x00, 0x83, 0xAA, 0x04, 0x9C, 0x9A, 0x3A, 0xA2, 0x64, 0xB4, 0x08, 0x9F, 0x1B, 0x4D, 0x5B, 0xC6, 0x87, 0x7E, 0x06, 0xA3, 0x5A, 0x99, 0x5A, 0x3E};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x25, 0x04, 0x02, 0x87, 0xE6, 0x7E, 0xA9, 0x9F, 0x08, 0x0E, 0x34, 0xC1, 0xAA, 0x49, 0x10, 0xB7, 0xE2, 0x41, 0x1B, 0x93, 0xE2, 0x54, 0xF4, 0xF7, 0x86, 0x21, 0x7A, 0x5F, 0xFD, 0x20, 0x91, 0x24};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x0D, 0x23, 0x8D, 0xA6, 0x3E, 0x1E, 0xB2, 0x57, 0x93, 0x1E, 0xE4, 0x72, 0x6C, 0x7B, 0xF5, 0x09, 0x4F, 0xB6, 0xF5, 0xE7, 0x65, 0xB1, 0x96, 0x0B, 0x6C, 0x63, 0x28, 0x55, 0xFC, 0x6B, 0xDB, 0xDA};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

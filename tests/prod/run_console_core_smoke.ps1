@@ -148,7 +148,8 @@ param(
   [switch]$NoTableLoad,
   [switch]$BadDescriptor,
   [switch]$BadVertex,
-  [switch]$NoEchoArm
+  [switch]$NoEchoArm,
+  [switch]$BadTraceArm
 )
 
 $ErrorActionPreference = 'Stop'
@@ -234,6 +235,10 @@ if ($BadVertex) {
 if ($NoEchoArm) {
   $defs += '+define+ZHAO_SMOKE_NO_ECHO_ARM'
   Write-Host 'NEGATIVE CONTROL: the SetPost leaves POST.ECHO DISARMED (R35); the bench asserts no capture happens'
+}
+if ($BadTraceArm) {
+  $defs += '+define+ZHAO_SMOKE_BAD_TRACE_ARM'
+  Write-Host 'R52 CONTROL: the DebugTraceArm record sets an UNASSIGNED stage_mask bit, DIRECT polarity (passes when the record is refused whole and nothing is armed)'
 }
 if ($BadDescriptor) {
   $defs += '+define+ZHAO_SMOKE_BAD_DESC'

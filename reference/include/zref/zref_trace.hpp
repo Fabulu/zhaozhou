@@ -158,5 +158,48 @@ class Ring {
   std::vector<Event> events_;
 };
 
+// ---------------------------------------------------------------------------
+// DebugTraceArm 0xF003 -> Ring, the RATIFIED lowering (owner ruling R52)
+// ---------------------------------------------------------------------------
+// Ruling R52 put the arming in the command stream and required that "zidl, zref
+// and captures move together". This is the zref half: the mapping from the two
+// wire bytes to the ring's two control calls, written ONCE here so the RTL
+// (`zhao_cmd_exec`'s EX_TOK commit) has a reference to be differenced against
+// rather than a convention to be re-derived. CLAUDE.md's sibling-contract
+// lesson is exactly this shape -- two implementations of one law, neither
+// naming the owner.
+//
+// REFUSE, NEVER MASK. `stage_mask` bit 7 is unassigned (there are seven stages)
+// and `flags` bits 7:1 are unassigned. A record setting either is refused
+// WHOLE and nothing is armed. Masking the stray bit off would arm a different
+// set of stages than the host asked for, and a capture that is not the capture
+// that was requested is worse than no capture -- it is a wrong answer wearing
+// the right label.
+//
+// ORDER: clear THEN arm. A record that clears and arms in one go must not lose
+// the events its own arming admits, and clearing after arming would.
+
+struct ArmCommand {
+  uint8_t stage_mask = 0;
+  uint8_t flags = 0;
+};
+
+inline constexpr uint8_t kArmFlagClear = 0x01;
+
+/** True when both wire bytes are legal. Reserved bits set => the record is
+ *  refused whole (zhao_cmd_exec counts it on `trace_arm_refused_o`). */
+inline constexpr bool arm_command_ok(const ArmCommand& c) {
+  return ((c.stage_mask & 0x80u) == 0u) && ((c.flags & 0xFEu) == 0u);
+}
+
+/** Apply a DebugTraceArm record. Returns false, changing nothing, when the
+ *  record is refused. */
+inline bool apply_arm_command(Ring& ring, const ArmCommand& c) {
+  if (!arm_command_ok(c)) return false;
+  if ((c.flags & kArmFlagClear) != 0u) ring.clear();
+  ring.arm(c.stage_mask);
+  return true;
+}
+
 }  // namespace trace
 }  // namespace zref
