@@ -98,6 +98,7 @@ package zhao_abi_pkg;
   localparam logic [15:0] ZHAO_OP_PUBLISH_RESOURCE = 16'h0030;
   localparam logic [15:0] ZHAO_OP_SET_POST = 16'h0040;
   localparam logic [15:0] ZHAO_OP_SET_GRADE_TABLE = 16'h0041;
+  localparam logic [15:0] ZHAO_OP_SET_POPULATION = 16'h0303;
   /* verilator lint_off UNUSEDPARAM */
   localparam int unsigned ZHAO_MAX_RECORD_BYTES = 176;  // consumed by the probe
   /* verilator lint_on UNUSEDPARAM */
@@ -1331,6 +1332,45 @@ package zhao_abi_pkg;
   localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_70 = 90;
   localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_VECTORS_71 = 91;
   localparam int unsigned ZHAO_SET_GRADE_TABLE_OFF_PAD_1 = 92;
+
+  // SetPopulation 0x0303: 48-B record (implemented).
+  // Command header fields first on the wire, then payload; declared reversed.
+  typedef struct packed {
+    logic [15:0] flags;  // u16 @46
+    logic [15:0] plane_nz;  // i16 @44
+    logic [15:0] plane_ny;  // i16 @42
+    logic [15:0] plane_nx;  // i16 @40
+    logic [31:0] plane_c;  // i32 @36
+    logic [31:0] active_count;  // u32 @32
+    logic [31:0] origin_z;  // i32 @28
+    logic [31:0] origin_y;  // i32 @24
+    logic [31:0] origin_x;  // i32 @20
+    logic [31:0] population;  // handle32 @16  // handle32 {index:24, generation:8}
+    logic [15:0] h_opcode;  // u16 @0
+    logic [15:0] h_record_bytes;  // u16 @2
+    logic [31:0] h_source_id;  // u32 @4
+    logic [31:0] h_flags;  // u32 @8
+    logic [31:0] h_reserved0;  // u32 @12
+  } zhao_rec_set_population_t;
+
+  /* verilator lint_off UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_POPULATION_BYTES = 48;
+  /* verilator lint_on UNUSEDPARAM */
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_H_OPCODE = 0;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_H_RECORD_BYTES = 2;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_H_SOURCE_ID = 4;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_H_FLAGS = 8;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_H_RESERVED0 = 12;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_POPULATION = 16;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_ORIGIN_X = 20;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_ORIGIN_Y = 24;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_ORIGIN_Z = 28;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_ACTIVE_COUNT = 32;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_PLANE_C = 36;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_PLANE_NX = 40;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_PLANE_NY = 42;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_PLANE_NZ = 44;
+  localparam int unsigned ZHAO_SET_POPULATION_OFF_FLAGS = 46;
 
   function automatic logic [127:0] zhao_pack_rectfx(input zhao_rectfx_t c);
     logic [127:0] v;
@@ -2668,6 +2708,50 @@ package zhao_abi_pkg;
     end
   endfunction
 
+  function automatic logic [383:0] zhao_pack_set_population(input zhao_rec_set_population_t c);
+    logic [383:0] v;
+    begin
+      v[ZHAO_SET_POPULATION_OFF_H_OPCODE*8 +: 16] = c.h_opcode;
+      v[ZHAO_SET_POPULATION_OFF_H_RECORD_BYTES*8 +: 16] = c.h_record_bytes;
+      v[ZHAO_SET_POPULATION_OFF_H_SOURCE_ID*8 +: 32] = c.h_source_id;
+      v[ZHAO_SET_POPULATION_OFF_H_FLAGS*8 +: 32] = c.h_flags;
+      v[ZHAO_SET_POPULATION_OFF_H_RESERVED0*8 +: 32] = c.h_reserved0;
+      v[ZHAO_SET_POPULATION_OFF_POPULATION*8 +: 32] = c.population;
+      v[ZHAO_SET_POPULATION_OFF_ORIGIN_X*8 +: 32] = c.origin_x;
+      v[ZHAO_SET_POPULATION_OFF_ORIGIN_Y*8 +: 32] = c.origin_y;
+      v[ZHAO_SET_POPULATION_OFF_ORIGIN_Z*8 +: 32] = c.origin_z;
+      v[ZHAO_SET_POPULATION_OFF_ACTIVE_COUNT*8 +: 32] = c.active_count;
+      v[ZHAO_SET_POPULATION_OFF_PLANE_C*8 +: 32] = c.plane_c;
+      v[ZHAO_SET_POPULATION_OFF_PLANE_NX*8 +: 16] = c.plane_nx;
+      v[ZHAO_SET_POPULATION_OFF_PLANE_NY*8 +: 16] = c.plane_ny;
+      v[ZHAO_SET_POPULATION_OFF_PLANE_NZ*8 +: 16] = c.plane_nz;
+      v[ZHAO_SET_POPULATION_OFF_FLAGS*8 +: 16] = c.flags;
+      zhao_pack_set_population = v;
+    end
+  endfunction
+
+  function automatic zhao_rec_set_population_t zhao_unpack_set_population(input logic [383:0] v);
+    zhao_rec_set_population_t c;
+    begin
+      c.h_opcode = v[ZHAO_SET_POPULATION_OFF_H_OPCODE*8 +: 16];
+      c.h_record_bytes = v[ZHAO_SET_POPULATION_OFF_H_RECORD_BYTES*8 +: 16];
+      c.h_source_id = v[ZHAO_SET_POPULATION_OFF_H_SOURCE_ID*8 +: 32];
+      c.h_flags = v[ZHAO_SET_POPULATION_OFF_H_FLAGS*8 +: 32];
+      c.h_reserved0 = v[ZHAO_SET_POPULATION_OFF_H_RESERVED0*8 +: 32];
+      c.population = v[ZHAO_SET_POPULATION_OFF_POPULATION*8 +: 32];
+      c.origin_x = v[ZHAO_SET_POPULATION_OFF_ORIGIN_X*8 +: 32];
+      c.origin_y = v[ZHAO_SET_POPULATION_OFF_ORIGIN_Y*8 +: 32];
+      c.origin_z = v[ZHAO_SET_POPULATION_OFF_ORIGIN_Z*8 +: 32];
+      c.active_count = v[ZHAO_SET_POPULATION_OFF_ACTIVE_COUNT*8 +: 32];
+      c.plane_c = v[ZHAO_SET_POPULATION_OFF_PLANE_C*8 +: 32];
+      c.plane_nx = v[ZHAO_SET_POPULATION_OFF_PLANE_NX*8 +: 16];
+      c.plane_ny = v[ZHAO_SET_POPULATION_OFF_PLANE_NY*8 +: 16];
+      c.plane_nz = v[ZHAO_SET_POPULATION_OFF_PLANE_NZ*8 +: 16];
+      c.flags = v[ZHAO_SET_POPULATION_OFF_FLAGS*8 +: 16];
+      zhao_unpack_set_population = c;
+    end
+  endfunction
+
   // 0 = unknown opcode (capture_format.md 3.2 step 5)
   function automatic int unsigned zhao_opcode_record_bytes(input logic [15:0] op);
     begin
@@ -2693,6 +2777,7 @@ package zhao_abi_pkg;
         ZHAO_OP_PUBLISH_RESOURCE: zhao_opcode_record_bytes = 48;
         ZHAO_OP_SET_POST: zhao_opcode_record_bytes = 32;
         ZHAO_OP_SET_GRADE_TABLE: zhao_opcode_record_bytes = 96;
+        ZHAO_OP_SET_POPULATION: zhao_opcode_record_bytes = 48;
         default: zhao_opcode_record_bytes = 0;
       endcase
     end
@@ -2883,6 +2968,7 @@ package zhao_abi_pkg;
       if ($bits(zhao_rec_publish_resource_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_set_post_t) != 8*32) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rec_set_grade_table_t) != 8*96) zhao_layout_ok = 1'b0;
+      if ($bits(zhao_rec_set_population_t) != 8*48) zhao_layout_ok = 1'b0;
       if ($bits(zhao_rectfx_t) != 8*16) zhao_layout_ok = 1'b0;
       if ($bits(zhao_transform2fx_t) != 8*24) zhao_layout_ok = 1'b0;
       if ($bits(zhao_mat4fx_t) != 8*64) zhao_layout_ok = 1'b0;

@@ -718,3 +718,65 @@ command SetGradeTable 0x0041 implemented {
   u8 vectors[72];     // count x {outR s24, outG s24, outB s24}, little-endian
   pad[4];
 }
+
+// SetPopulation: THE POPULATION DESCRIPTOR'S FRAME VALUES, owner ruling R41
+// (reports/OWNER-RULINGS-20260919-EVENING.md): "Ratify `SetPopulation`
+// (origin, plane, active_count), lowered by CMD.EXEC. active_count also seeds
+// PART.STATE's first generation, replacing I1's provisional HPS seed."
+//
+// It closes core entry I7. Everything in it was already a LIVE INPUT of the
+// particle engine with no ratified carrier -- the composer drove them from
+// board pins, which is the shape the completion register calls a boundary:
+//
+//   population      the handle32 the game names the pool by, exactly as
+//                   DrawPopulation 0x0301 names it. Carried so a capture can
+//                   be read without guessing which pool a descriptor is for;
+//                   v1 hardware holds ONE population's descriptor and the
+//                   bank records the handle it last took.
+//   origin_x/y/z    the population origin. spec/qformats.md 10: "origin x/y/z
+//                   as fx16 ON A 1/256-M GRID" and "World position = origin +
+//                   local". DECLARED i32 AND NOT fx16 DELIBERATELY: this
+//                   file's fx16 is Q16.16 in four bytes, and the origin's
+//                   grid is 1/256 m -- eight fractional bits. The container is
+//                   the same four bytes either way, so nothing on the wire
+//                   depends on the choice; the NAME is what a reader converts
+//                   by, and Q16.16 would be wrong by 256. The law is
+//                   `zhao_part_terrain_tap`'s: world = origin + (local <<< 8).
+//   active_count    records live in the first generation. It is the seed:
+//                   children come from parents, so a store that starts empty
+//                   stays empty (see `zhao_part_hps`). THE FIRST GENERATION IS
+//                   STAGED IN BUFFER 0, by this ratification -- the HPS writes
+//                   it there before the frame that carries the seed. The two
+//                   buffer BASES stay the HPS's allocation (spec/memory_rules.md
+//                   5, "particle pools per the charter allocator") and are not
+//                   a command field: an allocator address in a game-facing
+//                   record is a different decision and nobody has made it.
+//   plane_c         the analytic collision plane's constant, Q10 (PART.COLLIDE
+//                   `NRM_Q`); the surface is n.p = c.
+//   plane_nx/ny/nz  the plane's unit normal, signed Q1.10. i16 on the wire;
+//                   PART.COLLIDE carries a SIGNED 12-bit component, so a value
+//                   outside [-2048, 2047] cannot be represented. It is REFUSED AND
+//                   COUNTED by `zhao_part_pop`, never truncated -- a silently
+//                   truncated normal is a plane that tilts.
+//   flags           b0 seed_first_generation (take active_count as the store's
+//                   seed), b1 plane_enable (b1 clear = no analytic plane, and
+//                   the terrain is still sampled). b2..b15 reserved 0.
+//
+// VERSION DECISION: `abi version` STAYS 3, on the PublishResource 0x0030
+// precedent recorded below. 0x0303 is the next free opcode in the
+// forms/populations range (0x0300 DrawForm, 0x0301 DrawPopulation, 0x0302
+// DrawProcedural); no opcode, field or size of an existing command moves, so
+// every committed capture stays valid and a v3 decoder built before this line
+// reports ZH_ABI_UNKNOWN_OPCODE on 0x0303, which is a clean refusal.
+command SetPopulation 0x0303 implemented {
+  handle32[population] population;
+  i32 origin_x;        // 1/256-m grid (see above) -- NOT Q16.16
+  i32 origin_y;
+  i32 origin_z;
+  u32 active_count;    // records live in the first generation, staged in buffer 0
+  i32 plane_c;         // Q10; the surface is n.p = c
+  i16 plane_nx;        // Q1.10 unit normal, -2048..2047 (signed 12 bits)
+  i16 plane_ny;
+  i16 plane_nz;
+  u16 flags;           // b0 seed_first_generation, b1 plane_enable; b2-15 rsv 0
+}

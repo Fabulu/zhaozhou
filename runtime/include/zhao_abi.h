@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
-//   zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
+//   abi_identity_sha256 = 8579d42e1a4152536820d6e0057145520cc640ca21027e4e18b8fd3c5ae9040b
+//   zidl_sha256         = bd6a9410f50842c4c3495499e53f14042acf2ccf892bbc3520a8d2867d92ff98
 #pragma once
 
 #include <cstdint>
@@ -74,6 +74,7 @@ constexpr uint16_t ZHAO_OP_DEBUG_RUMBLE = 0xF004; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_PUBLISH_RESOURCE = 0x0030; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_SET_POST = 0x0040; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_SET_GRADE_TABLE = 0x0041; // 96 B, implemented
+constexpr uint16_t ZHAO_OP_SET_POPULATION = 0x0303; // 48 B, implemented
 
 constexpr uint32_t ZHAO_FRAME_MAGIC        = 0x314B505Au; // 'Z','P','K','1' LE
 constexpr uint32_t ZHAO_FRAME_HEADER_BYTES = 36;
@@ -842,6 +843,37 @@ struct ZhRecordSetGradeTable {
 };
 static_assert(sizeof(ZhRecordSetGradeTable) == 96, "layout drift: SetGradeTable record");
 
+// SetPopulation 0x0303: 48-byte record (implemented)
+struct ZhCmdSetPopulation {
+  uint32_t population;  // handle32 {index:24, generation:8} kind=population
+  int32_t origin_x;
+  int32_t origin_y;
+  int32_t origin_z;
+  uint32_t active_count;
+  int32_t plane_c;
+  int16_t plane_nx;
+  int16_t plane_ny;
+  int16_t plane_nz;
+  uint16_t flags;
+};
+static_assert(offsetof(ZhCmdSetPopulation, population) == 0, "layout drift: SetPopulation.population");
+static_assert(offsetof(ZhCmdSetPopulation, origin_x) == 4, "layout drift: SetPopulation.origin_x");
+static_assert(offsetof(ZhCmdSetPopulation, origin_y) == 8, "layout drift: SetPopulation.origin_y");
+static_assert(offsetof(ZhCmdSetPopulation, origin_z) == 12, "layout drift: SetPopulation.origin_z");
+static_assert(offsetof(ZhCmdSetPopulation, active_count) == 16, "layout drift: SetPopulation.active_count");
+static_assert(offsetof(ZhCmdSetPopulation, plane_c) == 20, "layout drift: SetPopulation.plane_c");
+static_assert(offsetof(ZhCmdSetPopulation, plane_nx) == 24, "layout drift: SetPopulation.plane_nx");
+static_assert(offsetof(ZhCmdSetPopulation, plane_ny) == 26, "layout drift: SetPopulation.plane_ny");
+static_assert(offsetof(ZhCmdSetPopulation, plane_nz) == 28, "layout drift: SetPopulation.plane_nz");
+static_assert(offsetof(ZhCmdSetPopulation, flags) == 30, "layout drift: SetPopulation.flags");
+static_assert(sizeof(ZhCmdSetPopulation) == 32, "layout drift: SetPopulation payload");
+
+struct ZhRecordSetPopulation {
+  ZhCmdHeader hdr;
+  ZhCmdSetPopulation payload;
+};
+static_assert(sizeof(ZhRecordSetPopulation) == 48, "layout drift: SetPopulation record");
+
 inline ZhMat4fx zhao_sample_mat4fx() {
   ZhMat4fx v{};
   v.m00 = 88599;
@@ -1401,6 +1433,26 @@ inline ZhRecordSetGradeTable zhao_sample_set_grade_table() {
   return r;
 }
 
+inline ZhRecordSetPopulation zhao_sample_set_population() {
+  ZhRecordSetPopulation r{};
+  r.hdr.opcode       = ZHAO_OP_SET_POPULATION;
+  r.hdr.record_bytes = 48;
+  r.hdr.source_id    = 1342242837u; // kind 5, module 1, index 21
+  r.hdr.flags        = 0u;
+  r.hdr.reserved0    = 0u;
+  r.payload.population = 704643073u;
+  r.payload.origin_x = 0;
+  r.payload.origin_y = 0;
+  r.payload.origin_z = 0;
+  r.payload.active_count = 0u;
+  r.payload.plane_c = 0;
+  r.payload.plane_nx = 4151;
+  r.payload.plane_ny = 59330;
+  r.payload.plane_nz = 55757;
+  r.payload.flags = 644u;
+  return r;
+}
+
 inline void zhao_pack_mat4fx(const ZhMat4fx& v, ZhWriter& w) {
   w.u32(v.m00);
   w.u32(v.m01);
@@ -1699,6 +1751,22 @@ inline void zhao_pack_set_grade_table(const ZhRecordSetGradeTable& r, std::vecto
   for (int i = 0; i < 1; ++i) w.u8(r.payload.pad);
   for (int i = 0; i < 72; ++i) { w.u8(r.payload.vectors[i]); }
   for (int i = 0; i < 4; ++i) w.u8(r.payload.pad_1[i]);
+}
+
+inline void zhao_pack_set_population(const ZhRecordSetPopulation& r, std::vector<uint8_t>& out) {
+  ZhWriter w(out);
+  w.u16(r.hdr.opcode); w.u16(r.hdr.record_bytes); w.u32(r.hdr.source_id);
+  w.u32(r.hdr.flags); w.u32(r.hdr.reserved0);
+  w.u32(r.payload.population);
+  w.u32(r.payload.origin_x);
+  w.u32(r.payload.origin_y);
+  w.u32(r.payload.origin_z);
+  w.u32(r.payload.active_count);
+  w.u32(r.payload.plane_c);
+  w.u16(r.payload.plane_nx);
+  w.u16(r.payload.plane_ny);
+  w.u16(r.payload.plane_nz);
+  w.u16(r.payload.flags);
 }
 
 inline bool zhao_unpack_mat4fx(ZhReader& r, ZhMat4fx& out) {
@@ -2234,6 +2302,24 @@ inline bool zhao_unpack_set_grade_table(ZhReader& r, ZhRecordSetGradeTable& out)
   return true;
 }
 
+inline bool zhao_unpack_set_population(ZhReader& r, ZhRecordSetPopulation& out) {
+  out = {};
+  if (!r.take16(out.hdr.opcode) || !r.take16(out.hdr.record_bytes) ||
+      !r.take32(out.hdr.source_id) || !r.take32(out.hdr.flags) ||
+      !r.take32(out.hdr.reserved0)) return false;
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.population = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.origin_x = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.origin_y = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.origin_z = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.active_count = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.plane_c = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.plane_nx = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.plane_ny = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.plane_nz = t; }
+  { uint16_t t; if (!r.take16(t)) return false; out.payload.flags = t; }
+  return true;
+}
+
 struct ZhCommandInfo {
   const char* name;
   uint16_t opcode;
@@ -2277,8 +2363,9 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"PublishResource", 0x0030, 48, true, ZHAO_PADS_PUBLISH_RESOURCE, 2},
   {"SetPost", 0x0040, 32, true, ZHAO_PADS_SET_POST, 3},
   {"SetGradeTable", 0x0041, 96, true, ZHAO_PADS_SET_GRADE_TABLE, 5},
+  {"SetPopulation", 0x0303, 48, true, nullptr, 0},
 };
-constexpr size_t ZHAO_COMMAND_COUNT = 21;
+constexpr size_t ZHAO_COMMAND_COUNT = 22;
 constexpr uint16_t ZHAO_MAX_RECORD_BYTES = 176;
 inline const ZhCommandInfo* zhao_command_info(uint16_t opcode) {
   for (const auto& e : ZHAO_COMMAND_TABLE) if (e.opcode == opcode) return &e;
@@ -2313,8 +2400,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x85, 0x93, 0x45, 0x80, 0x75, 0xD6, 0x65, 0xE6, 0x9F, 0x30, 0x57, 0x50, 0x45, 0x6E, 0x34, 0x20, 0x5D, 0x05, 0xD7, 0x91, 0xA0, 0x2A, 0x14, 0xDD, 0x5B, 0x48, 0xB7, 0x5A, 0xC6, 0x26, 0x92, 0x97};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBF, 0xE9, 0x4A, 0xE7, 0x22, 0x67, 0xC7, 0x84, 0x00, 0x83, 0xAA, 0x04, 0x9C, 0x9A, 0x3A, 0xA2, 0x64, 0xB4, 0x08, 0x9F, 0x1B, 0x4D, 0x5B, 0xC6, 0x87, 0x7E, 0x06, 0xA3, 0x5A, 0x99, 0x5A, 0x3E};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x85, 0x79, 0xD4, 0x2E, 0x1A, 0x41, 0x52, 0x53, 0x68, 0x20, 0xD6, 0xE0, 0x05, 0x71, 0x45, 0x52, 0x0C, 0xC6, 0x40, 0xCA, 0x21, 0x02, 0x7E, 0x4E, 0x18, 0xB8, 0xFD, 0x3C, 0x5A, 0xE9, 0x04, 0x0B};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBD, 0x6A, 0x94, 0x10, 0xF5, 0x08, 0x42, 0xC4, 0xC3, 0x49, 0x54, 0x99, 0xE5, 0x3F, 0x14, 0x04, 0x2A, 0xCF, 0x2C, 0xCF, 0x89, 0x2B, 0xBC, 0x35, 0x20, 0xA8, 0xD2, 0x86, 0x7D, 0x92, 0xFF, 0x98};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

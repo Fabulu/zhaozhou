@@ -93,6 +93,16 @@ module zhao_geom_mem_adapter
     output var logic [63:0]     d_beat_data_o,
     output var logic            d_beat_last_o,
 
+    // Requester E, PART.TABLE's species-page loader (owner ruling R42, core
+    // entry I33). 64-byte lines, read ONCE per published SPECIES_TABLE page --
+    // by far the rarest traffic on this share, so the round robin's bound
+    // lengthens by at most one line and only while a page is loading.
+    input  var zhao_guard_req_t e_req_i,
+    output var zhao_guard_rsp_t e_rsp_o,
+    output var logic            e_beat_valid_o,
+    output var logic [63:0]     e_beat_data_o,
+    output var logic            e_beat_last_o,
+
     // ---- the one permitted client, downstream to MEM.GUARD ----------------
     output var zhao_guard_req_t m_req_o,
     input  var zhao_guard_rsp_t m_rsp_i,
@@ -105,6 +115,7 @@ module zhao_geom_mem_adapter
     output var logic [31:0]     jobs_b_o,          // ...and B
     output var logic [31:0]     jobs_c_o,          // ...and C
     output var logic [31:0]     jobs_d_o,          // ...and D
+    output var logic [31:0]     jobs_e_o,          // ...and E
     output var logic [31:0]     denied_o,          // guard violations, any
     output var logic [31:0]     contention_o,
     output var logic [31:0]     err_short_o,
@@ -121,39 +132,45 @@ module zhao_geom_mem_adapter
   // worst-case wait by at most one 32-byte record -- and it is the SAME core the
   // two-port `zhao_mem_share2` instantiates, so nothing about the guard's
   // two-cycle verdict law is re-derived here.
-  zhao_guard_req_t [3:0] s_req;
-  zhao_guard_rsp_t [3:0] s_rsp;
-  logic            [3:0] s_bv, s_bl;
+  zhao_guard_req_t [4:0] s_req;
+  zhao_guard_rsp_t [4:0] s_rsp;
+  logic            [4:0] s_bv, s_bl;
   logic           [63:0] s_bd;
-  logic      [3:0][31:0] s_jobs;
+  logic      [4:0][31:0] s_jobs;
 
   assign s_req[0] = a_req_i;
   assign s_req[1] = b_req_i;
   assign s_req[2] = c_req_i;
   assign s_req[3] = d_req_i;
+  assign s_req[4] = e_req_i;
   assign a_rsp_o = s_rsp[0];
   assign b_rsp_o = s_rsp[1];
   assign c_rsp_o = s_rsp[2];
   assign d_rsp_o = s_rsp[3];
+  assign e_rsp_o = s_rsp[4];
   assign a_beat_valid_o = s_bv[0];
   assign b_beat_valid_o = s_bv[1];
   assign c_beat_valid_o = s_bv[2];
   assign d_beat_valid_o = s_bv[3];
+  assign e_beat_valid_o = s_bv[4];
   assign a_beat_last_o  = s_bl[0];
   assign b_beat_last_o  = s_bl[1];
   assign c_beat_last_o  = s_bl[2];
   assign d_beat_last_o  = s_bl[3];
+  assign e_beat_last_o  = s_bl[4];
   assign a_beat_data_o  = s_bd;   // ONE bus; valid routes it
   assign b_beat_data_o  = s_bd;
   assign c_beat_data_o  = s_bd;
   assign d_beat_data_o  = s_bd;
+  assign e_beat_data_o  = s_bd;
   assign jobs_a_o = s_jobs[0];
   assign jobs_b_o = s_jobs[1];
   assign jobs_c_o = s_jobs[2];
   assign jobs_d_o = s_jobs[3];
+  assign jobs_e_o = s_jobs[4];
 
   zhao_mem_share_n #(
-    .N         (4),
+    .N         (5),
     .CLIENT_ID (3),          // ZHAO_CLIENT_ENGINE1 -- see zhao_pkg
     .FORCE_READ(1'b1)        // the asset window is READ-ONLY by construction
   ) u_share (

@@ -22,6 +22,16 @@
 //      reasons), bursts, records -- and the bridge's own `wr_early_beats` and
 //      `hps_err_count` read ZERO while its request counter moved, so the zero
 //      is a compliant client rather than an idle one.
+//   H/I/J. A BRIDGE REFUSAL, THE REAL WAY (ruling R54). `err` with NO grant
+//      and nothing issued is what `zhao_hps_bridge` answers a malformed or
+//      colliding request with, and `zhao_part_hps` used to wait only for the
+//      grant -- so the refusal was an unbounded spin with every counter here
+//      frozen. The bench does not fake the response: it misaligns the address
+//      reaching the bridge, and the REAL bridge refuses. H is one refusal,
+//      retried and served. I refuses every request and requires the tick to
+//      END, truncated, with the store usable afterwards. J starts refusing
+//      MID-TICK and requires the new generation to be exactly the records that
+//      reached DDR, densely, bit for bit.
 #include <cstdint>
 #include <cstdio>
 #include <deque>
@@ -127,6 +137,13 @@ struct Bench {
   int rival_grants = 0;
   // bridge tag evidence
   int particle_reqs = 0, particle_reqs_engine1 = 0;
+  // R54: how many more requests the bridge should be made to refuse. The
+  // budget is spent by the bridge's OWN `hps_err_count` moving, so it counts
+  // refusals that really happened rather than cycles the input was held.
+  int refuse_budget = 0;
+  int refusals_seen = 0;
+  bool saw_abort = false;
+  uint32_t br_err_last = 0;
 
   explicit Bench(Vtb_part_hps_chain* d) : v(d) {}
 
@@ -185,6 +202,8 @@ struct Bench {
     v->rv_len_i = 64;
     // ---- HPS ----
     drive_hps_inputs();
+    // ---- R54: make the bridge refuse ----
+    v->err_inject_i = refuse_budget > 0 ? 1 : 0;
 
     v->clk = 0;
     v->eval();
@@ -226,7 +245,15 @@ struct Bench {
       offered.push_back(pr);
       pending.push_back(pr);
     }
+    if (v->tick_abort_o) saw_abort = true;
     if (chl_fire) children.pop_front();
+    // R54: the bridge's own refusal counter is the ledger for the budget.
+    if (v->br_err_count_o != br_err_last) {
+      const int grew = static_cast<int>(v->br_err_count_o - br_err_last);
+      br_err_last = v->br_err_count_o;
+      refusals_seen += grew;
+      if (refuse_budget > 0) refuse_budget -= grew;
+    }
     if (rival_cool > 0) --rival_cool;
     if (rv_granted) {
       rival_want = false;
@@ -277,6 +304,7 @@ struct Bench {
   void idle_inputs() {
     v->seed_valid_i = 0;
     v->tick_i = 0;
+    v->err_inject_i = 0;
   }
 
   void reset() {
@@ -317,6 +345,22 @@ struct Bench {
     pulse_tick();
     for (int g = 0; g < max_cycles; ++g) {
       if (v->ticks_o != t0 && !v->hps_busy_o) return true;
+      cycle();
+    }
+    return false;
+  }
+
+  // R54: the same, but a FAULTED tick counts as an ending too. A tick that
+  // never ends is the defect, so the waiter must be able to see either end.
+  bool run_tick_settled(int max_cycles = 40000) {
+    offered.clear();
+    pending.clear();
+    const uint32_t t0 = v->ticks_o;
+    const uint32_t f0 = v->ticks_faulted_o;
+    pulse_tick();
+    for (int g = 0; g < max_cycles; ++g) {
+      if ((v->ticks_o != t0 || v->ticks_faulted_o != f0) && !v->hps_busy_o)
+        return true;
       cycle();
     }
     return false;
@@ -453,6 +497,124 @@ int main(int argc, char** argv) {
   check(b.hps.requests > 20, "the bridge carried the traffic");
   check(b.particle_reqs > 0 && b.particle_reqs == b.particle_reqs_engine1,
         "every particle burst carries the composer's client tag");
+
+  // ======================================================================
+  // H: ONE refusal, retried and served (ruling R54). Before the repair the
+  // streamer held its request through the refusal and the arbiter re-served
+  // it forever: no beat, no counter, no end. The refusal is produced by the
+  // REAL bridge (`err`, no grant, nothing issued) and `bridge_errs_o` is the
+  // instrument that was argued to be unnecessary.
+  // ======================================================================
+  b.hps.jitter = false;
+  b.rival_on = false;
+  b.modify_xor = 0;
+  b.survive_plan.clear();
+  b.children.clear();
+  std::vector<Rec> genh;
+  for (int i = 0; i < 5; ++i) {
+    genh.push_back(make_rec(400 + i, i % 4));
+    b.hps.put(kBase0, i, genh.back());
+  }
+  b.seed(kBase0, kBase1, 0, 5);
+  const uint32_t be0 = top->bridge_errs_o;
+  const uint32_t tf0 = top->ticks_faulted_o;
+  const uint32_t tk0 = top->ticks_o;
+  const int seen0 = b.refusals_seen;
+  check_eq(be0, 0, "no refusal has been seen up to here");
+  b.refuse_budget = 1;
+  check(b.run_tick(), "a refused request is retried and the tick still completes");
+  check_eq(b.refusals_seen - seen0, 1, "the real bridge refused exactly once");
+  check_eq(top->bridge_errs_o, be0 + 1, "the streamer counted the refusal");
+  check_eq(top->ticks_faulted_o, tf0, "one refusal does not fault a tick");
+  check_eq(top->ticks_o, tk0 + 1, "the tick completed normally");
+  check_eq(b.offered.size(), 5, "every record still traversed after the refusal");
+  for (size_t i = 0; i < b.offered.size() && i < genh.size(); ++i)
+    check(b.offered[i] == genh[i], "the retried burst delivered the right record");
+  check_eq(top->cur_count_o, 5, "the retried tick wrote the whole generation");
+  check_eq(top->cur_buf_o, 1, "and swapped");
+
+  // ======================================================================
+  // I: EVERY request refused. The tick must END -- truncated, counted, and
+  // with the store usable for the next tick. A hang is the one outcome a
+  // fault must not have.
+  // ======================================================================
+  const uint32_t be1 = top->bridge_errs_o;
+  const uint32_t tf1 = top->ticks_faulted_o;
+  const uint32_t tk1 = top->ticks_o;
+  b.refuse_budget = 1000000;
+  check(b.run_tick_settled(), "a tick whose every request is refused still ENDS");
+  b.refuse_budget = 0;
+  check_eq(top->ticks_faulted_o, tf1 + 1, "the faulted tick is counted");
+  check_eq(top->ticks_o, tk1, "a faulted tick is not counted as completed");
+  check_eq(top->bridge_errs_o - be1, 4, "ERR_RETRY_N refusals abandon the tick");
+  check_eq(b.offered.size(), 0, "nothing was read, so nothing was offered");
+  check_eq(top->cur_count_o, 0, "the new generation is exactly what reached DDR");
+  check_eq(top->cur_buf_o, 0, "the buffers still swap");
+  check_eq(top->tick_abort_o, 0, "the abort is released when the tick ends");
+  check_eq(top->records_discarded_o, 0, "PART.STATE wrote nothing to discard");
+  check(b.saw_abort, "the read stream was ended BY THE ABORT, not by itself");
+
+  // The store still works: seed a real generation and run it clean.
+  std::vector<Rec> geni;
+  for (int i = 0; i < 5; ++i) {
+    geni.push_back(make_rec(500 + i, i % 4));
+    b.hps.put(kBase1, i, geni.back());
+  }
+  b.seed(kBase0, kBase1, 1, 5);
+  const uint32_t tk2 = top->ticks_o;
+  check(b.run_tick(), "the store accepts a tick after a fault");
+  check_eq(top->ticks_o, tk2 + 1, "and completes it");
+  check_eq(b.offered.size(), 5, "and reads the whole generation");
+  for (size_t i = 0; i < b.offered.size() && i < geni.size(); ++i)
+    check(b.offered[i] == geni[i], "bit for bit, after the fault");
+
+  // ======================================================================
+  // J: the refusal starts MID-TICK, after records have already crossed. The
+  // new generation must be exactly the records that reached DDR -- dense,
+  // from index zero, bit for bit -- and never a fabricated or replayed one.
+  // ======================================================================
+  std::vector<Rec> genj;
+  for (int i = 0; i < 13; ++i) {
+    genj.push_back(make_rec(600 + i, i % 4));
+    b.hps.put(kBase0, i, genj.back());
+  }
+  for (int i = 0; i < 16; ++i) b.hps.put(kBase1, i, Rec{0xBADBADBADBADBADull, 0});
+  b.seed(kBase0, kBase1, 0, 13);
+  b.modify_xor = 0x00000000000BB000ull;
+  const uint32_t tf2 = top->ticks_faulted_o;
+  b.offered.clear();
+  b.pending.clear();
+  const uint32_t reads_start = top->records_read_o;
+  b.pulse_tick();
+  // Arm the refusal on EVIDENCE, not on a cycle count: wait until a whole
+  // burst has really crossed. A fixed delay was tried first and was longer
+  // than the entire tick, so the case measured nothing and said so.
+  for (int g = 0; g < 4000; ++g) {
+    if (top->records_read_o >= reads_start + 4) break;
+    b.cycle();
+  }
+  const uint32_t reads_before = top->records_read_o;
+  check(reads_before >= reads_start + 4, "a burst crossed before the refusal was armed");
+  b.refuse_budget = 1000000;
+  bool ended = false;
+  for (int g = 0; g < 40000; ++g) {
+    if (top->ticks_faulted_o != tf2 && !top->hps_busy_o) { ended = true; break; }
+    b.cycle();
+  }
+  b.refuse_budget = 0;
+  check(ended, "a tick that loses the bridge MID-TICK still ends");
+  check_eq(top->ticks_faulted_o, tf2 + 1, "and is counted as faulted");
+  check(top->records_read_o > reads_before ||
+        b.offered.size() > 0, "records had already crossed before the fault");
+  const uint32_t nj = top->cur_count_o;
+  check(nj <= 13, "the truncated generation is no longer than the one it came from");
+  for (uint32_t i = 0; i < nj; ++i)
+    check(b.hps.get(kBase1, static_cast<int>(i)) ==
+              Rec{genj[i].lo ^ b.modify_xor, genj[i].hi},
+          "every record of the truncated generation is dense and bit-exact");
+  check(b.saw_abort, "the mid-tick fault also raised the abort");
+  check_eq(top->tick_abort_o, 0, "the abort is released");
+  b.modify_xor = 0;
 
   std::printf("part_hps_directed: %d checks, %d failed\n", g_checks, g_fail);
   zhao::exit_hard(g_fail == 0 ? 0 : 1);

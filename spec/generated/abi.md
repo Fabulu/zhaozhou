@@ -5,13 +5,13 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
-zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
+abi_identity_sha256 = 8579d42e1a4152536820d6e0057145520cc640ca21027e4e18b8fd3c5ae9040b
+zidl_sha256         = bd6a9410f50842c4c3495499e53f14042acf2ccf892bbc3520a8d2867d92ff98
 ```
 
 ABI version **3**, little-endian, command alignment
 **16 B**, opcode width u16,
-21 commands (17 implemented).
+22 commands (18 implemented).
 
 ## Commands
 
@@ -38,6 +38,7 @@ ABI version **3**, little-endian, command alignment
 | `PublishResource` | `0x0030` | 48 | implemented |
 | `SetPost` | `0x0040` | 32 | implemented |
 | `SetGradeTable` | `0x0041` | 96 | implemented |
+| `SetPopulation` | `0x0303` | 48 | implemented |
 
 Every record starts with the 16-byte command header (capture_format.md 3.1):
 
@@ -555,6 +556,28 @@ Golden sample: `tests/abi/golden/cmd_set_grade_table.bin` (C++ packer
 TS `zhaoPackSetGradeTable(zhaoSampleSetGradeTable(), ...)`, SV round-trips it via
 `zhao_unpack_set_grade_table`/`zhao_pack_set_grade_table`).
 
+### SetPopulation — 0x0303 (48 B, implemented)
+
+Payload bytes (offsets relative to payload start, i.e. record offset + 16):
+
+| Offset | Size | Field | Type |
+|---|---|---|---|
+| 0 | 4 | `population` | handle32 [population] |
+| 4 | 4 | `origin_x` | i32 |
+| 8 | 4 | `origin_y` | i32 |
+| 12 | 4 | `origin_z` | i32 |
+| 16 | 4 | `active_count` | u32 |
+| 20 | 4 | `plane_c` | i32 |
+| 24 | 2 | `plane_nx` | i16 |
+| 26 | 2 | `plane_ny` | i16 |
+| 28 | 2 | `plane_nz` | i16 |
+| 30 | 2 | `flags` | u16 |
+
+Golden sample: `tests/abi/golden/cmd_set_population.bin` (C++ packer
+`zhao_abi::zhao_pack_set_population(zhao_abi::zhao_sample_set_population(), ...)`,
+TS `zhaoPackSetPopulation(zhaoSampleSetPopulation(), ...)`, SV round-trips it via
+`zhao_unpack_set_population`/`zhao_pack_set_population`).
+
 ## Composed structs
 
 ### rectfx — 16 B
@@ -715,6 +738,7 @@ See `spec/capture_format.md` 3. 36-byte sealed header + command stream
 | `tests/abi/golden/cmd_publish_resource.bin` | canonical PublishResource sample record |
 | `tests/abi/golden/cmd_set_post.bin` | canonical SetPost sample record |
 | `tests/abi/golden/cmd_set_grade_table.bin` | canonical SetGradeTable sample record |
+| `tests/abi/golden/cmd_set_population.bin` | canonical SetPopulation sample record |
 | `tests/abi/golden/frame_minimal.bin` | BeginFrame/Nop/EndFrame sealed packet |
 | `tests/abi/golden/zcap_minimal.zcap` | minimal .zcap (ABI_INFO + FRAME_PACKET + SOURCE_MAP) |
 | `tests/abi/golden/abi_corpus.zcorpus` | fuzz corpus with expected error codes |

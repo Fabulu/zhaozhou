@@ -96,6 +96,46 @@
 //    that ignores a refusal `err` while holding re-requests forever -- which
 //    is why MEM.UPLOAD and DEBUG.FRAMEBLIT now leave their request states on it.
 //
+//    6c. **THE SLOT HOLDS ONE REQUEST, AND A SECOND DIFFERENT ONE IS DROPPED.**
+//    (Ruling R55, 2026-09-19 evening, gz/pfs2.) The capture above is guarded by
+//    `!pend_v[i]`, so while a client's slot is occupied its port is not read
+//    again. A client that offers a DIFFERENT request in that window -- a pulse,
+//    which by definition is gone the next cycle -- loses it, and rule 6b's
+//    promise ("once offered it WILL be served") does not hold for it. Nothing
+//    saw this, which is the broken-instrument shape: the drop is silent and the
+//    symptom appears in the CLIENT, as a wait with no end.
+//
+//    It is not repaired by a second slot, because the answer to "how many"
+//    would be a guess. It is repaired by being TRUE and INSTRUMENTED:
+//    `pend_dropped_o` counts each distinct second request dropped and
+//    `pend_dropped_mask_o` is sticky per client, so the zero everyone expects
+//    is a reading rather than an argument.
+//
+//    PER CLIENT, MAY IT CHANGE A REQUEST THAT IS ALREADY PENDING? The answer
+//    is NO for every client in the console, and each for a structural reason
+//    that can be read in its RTL -- not for a timing reason:
+//
+//      * HOLDERS -- one request state, left only on grant or `err`, and the
+//        request's fields are registers that do not move inside that state:
+//        TERRAIN.CMD (S_HREQ), TERRAIN.PAGELOADER (S_HREQ), TERRAIN.WRITEBACK,
+//        MEM.UPLOAD (S_ISSUE), DEBUG.FRAMEBLIT (B_READ_REQUEST) and
+//        PART.STATE's store (`zhao_part_hps` B_REQ). A holder re-presents the
+//        SAME request every cycle, so `req_i[i] != pend_req[i]` is false and
+//        the detector cannot fire on it. Each also DE-ASSERTS before its burst
+//        ends, structurally: the request is driven from the request state
+//        alone (`hps_req_o.valid = (b_q == B_REQ)` and its equivalents), and
+//        that state is left on the GRANT, which the arbiter pulses at
+//        A_WAIT -> A_ACTIVE -- one full state before the burst ends at
+//        A_ACTIVE -> A_IDLE. So a held request cannot still be up when the
+//        arbiter returns to A_IDLE and cannot be served twice.
+//      * THE ONE PULSER -- CMD.DMA raises `req` for exactly one cycle in
+//        M_HDR_REQ and then waits in M_HDR_WAIT for the response. It has ONE
+//        request in flight by construction and cannot offer a second before
+//        the first is answered.
+//
+//    So `pend_dropped_o` is expected to read ZERO in the console, and it is
+//    fired on purpose in tests/memory/hps_arbiter_n_directed.cpp case 10.
+//
 // 7. **CLIENT 0 HAS STRICT PRIORITY, AND THE WAITING IS COUNTED.** Command
 //    packet acquisition outranks a debug blit, which is not game-facing and may
 //    wait. Strict priority means client 1 can be starved by a client 0 that
@@ -160,7 +200,12 @@ module zhao_hps_arbiter_n #(
 
     // ---- counters -----------------------------------------------------------
     output logic [N-1:0][31:0] bursts_o,
-    output logic [N-1:1][31:0] wait_cycles_o  // rule 7: starvation must be visible
+    output logic [N-1:1][31:0] wait_cycles_o, // rule 7: starvation must be visible
+    // Rule 6c / R55: a second, DIFFERENT request offered while this client's
+    // pending slot is occupied. One count per distinct offering, plus a sticky
+    // per-client mask so the reading names a culprit instead of a total.
+    output logic [31:0]        pend_dropped_o,
+    output logic [N-1:0]       pend_dropped_mask_o
 );
 
   localparam int unsigned IW = (N > 1) ? $clog2(N) : 1;
@@ -211,6 +256,23 @@ module zhao_hps_arbiter_n #(
       end
     end
   end
+
+  // Rule 6c / R55: the drop, as a named expression. The two sides of the
+  // comparison are clocked by DIFFERENT things on purpose -- `pend_req[i]` by
+  // the capture enable, `req_i[i]` by the client -- so this is not a detector
+  // whose operands move together. The exclusion is the one case that is NOT a
+  // drop: the slot is being served from on this very edge, so it clears and
+  // the live request is captured next cycle.
+  logic [N-1:0] pend_drop_c;
+  always_comb begin
+    for (int i = 0; i < N; i++) begin
+      pend_drop_c[i] = req_i[i].valid && pend_v[i] &&
+                       (req_i[i] != pend_req[i]) &&
+                       !((state == A_IDLE) && any_req && (pick == IW'(i)));
+    end
+  end
+  logic [N-1:0] pend_drop_q;
+  wire  [N-1:0] pend_drop_new_c = pend_drop_c & ~pend_drop_q;
 
   // Rule 1: the request presented to the bridge is the OWNER's once one is
   // chosen -- never a fresh re-decision, which is how a grant lands on one
@@ -275,8 +337,19 @@ module zhao_hps_arbiter_n #(
       req_grant_o <= '0;
       bursts_o <= '0;
       wait_cycles_o <= '0;
+      pend_drop_q <= '0;
+      pend_dropped_o <= 32'd0;
+      pend_dropped_mask_o <= '0;
     end else begin
       req_grant_o <= '0;
+
+      // Rule 6c / R55, BEFORE the capture below, because the capture is what
+      // the drop is a consequence of.
+      pend_drop_q <= pend_drop_c;
+      if (pend_drop_new_c != '0) begin
+        if (pend_dropped_o != 32'hFFFF_FFFF) pend_dropped_o <= pend_dropped_o + 32'd1;
+        pend_dropped_mask_o <= pend_dropped_mask_o | pend_drop_new_c;
+      end
 
       // Rule 7: every client that can be made to wait, waiting while it wants
       // the bridge and does not have it. Strict priority is the policy; this is
@@ -385,6 +458,21 @@ module zhao_hps_arbiter (
   logic [1:0]       grant;
   logic [1:0][31:0] bursts;
 
+  // Rule 6c / R55. THIS WRAPPER DOES NOT EXPOSE THE DROP COUNTER, and the
+  // reason is not that it does not matter. Its only two instantiations are
+  // `zhao_shell_top.sv` -- the PROTECTED V1 shell, whose port set is reserved
+  // to the owner by the pin file and by ruling R39 -- and the terrain world
+  // bench. Widening the wrapper would widen V1 and change its pinned hash for
+  // a counter, which is a decision the owner makes and not a packet. The
+  // instrument lives on the N core, where the console's own four-client
+  // instance (`u_terr_hps_arb`) exposes it through `zhao_console_core`, and
+  // where the directed test fires it. If V1 ever needs the reading, the two
+  // wires below become two ports.
+  /* verilator lint_off UNUSEDSIGNAL */
+  logic [31:0] pend_dropped_unused;
+  logic [1:0]  pend_dropped_mask_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   assign req[0] = c0_req_i;
   assign req[1] = c1_req_i;
   assign c0_req_grant_o = grant[0];
@@ -410,7 +498,9 @@ module zhao_hps_arbiter (
       .b_wr_last_o  (b_wr_last_o),
       .b_rsp_i      (b_rsp_i),
       .bursts_o     (bursts),
-      .wait_cycles_o(c1_wait_cycles_o)
+      .wait_cycles_o(c1_wait_cycles_o),
+      .pend_dropped_o     (pend_dropped_unused),
+      .pend_dropped_mask_o(pend_dropped_mask_unused)
   );
 
 endmodule : zhao_hps_arbiter

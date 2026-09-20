@@ -2204,6 +2204,7 @@ targets:
       - fpga/rtl/surface/zhao_surface_sheet.sv
       - fpga/rtl/surface/zhao_surface_sq.sv
       - fpga/rtl/surface/zhao_surface_stamp.sv
+      - fpga/rtl/surface/zhao_surface_dispatch.sv
       - fpga/rtl/terrain/zhao_terrain_bake.sv
       - fpga/rtl/terrain/zhao_terrain_bake_delta.sv
       - fpga/rtl/terrain/zhao_terrain_lod.sv
@@ -2561,6 +2562,8 @@ targets:
       # PART.STATE's HPS DDR face, 2026-09-19 (gz/pfs, core entry I1): the
       # ping-pong streamer between PART.STATE and client 3 of u_terr_hps_arb.
       - fpga/rtl/particles/zhao_part_hps.sv
+      - fpga/rtl/particles/zhao_part_pop.sv
+      - fpga/rtl/particles/zhao_part_table_loader.sv
       - fpga/rtl/particles/zhao_part_update.sv
       - fpga/rtl/particles/zhao_part_collide.sv
       # PART.TERRAIN_TAP, 2026-09-19 (core entry I6, owner ruling R1): the terrain
@@ -2876,6 +2879,7 @@ targets:
       - fpga/rtl/surface/zhao_surface_sq.sv
       - fpga/rtl/surface/zhao_surface_sheet.sv
       - fpga/rtl/surface/zhao_surface_stamp.sv
+      - fpga/rtl/surface/zhao_surface_dispatch.sv
       # THE SECOND COMPLETION, added 2026-09-19 with composition item 12. The
       # directory publishes on TWO completions and this closure had one, so
       # every page it loaded parked in ST_MIPGEN and `resident_o` could not

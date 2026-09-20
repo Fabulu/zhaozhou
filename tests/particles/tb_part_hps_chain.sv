@@ -41,6 +41,17 @@ module tb_part_hps_chain #(
     input  var logic [127:0]     chl_record_i,
     input  var logic             chl_busy_i,
 
+    // A REAL BRIDGE REFUSAL (R54). Nothing here fakes a response. While this
+    // is held, the address on its way INTO `zhao_hps_bridge` is misaligned by
+    // one qword -- which is one of the two conditions the bridge itself calls
+    // `malformed` (`zhao_hps_bridge.sv:106`). The bridge then runs its OWN
+    // refusal path: `err` and `last` high, NO grant, nothing issued, and
+    // `hps_err_count` incremented. That is the shape the streamer used to be
+    // blind to, and it is produced by the block that produces it in silicon.
+    // It applies to whichever client owns the bridge, so the rival is left off
+    // in the cases that use it.
+    input  var logic             err_inject_i,
+
     // the rival bridge client (index 0, higher priority): reads only
     input  var logic             rv_valid_i,
     input  var logic [31:0]      rv_addr_i,
@@ -80,9 +91,17 @@ module tb_part_hps_chain #(
     output var logic [31:0]      wr_bursts_o,
     output var logic [31:0]      records_read_o,
     output var logic [31:0]      records_written_o,
+    output var logic [31:0]      bridge_errs_o,
+    output var logic [31:0]      ticks_faulted_o,
+    output var logic [31:0]      records_discarded_o,
+    output var logic             tick_abort_o,
     output var logic [31:0]      survivors_o,
     output var logic [31:0]      children_written_o,
-    output var logic [31:0]      arb_c1_wait_o
+    output var logic [31:0]      arb_c1_wait_o,
+    // R55: the streamer is a HOLDER -- it re-presents the same request until
+    // grant or refusal -- so it can never make the arbiter drop a second,
+    // different one. This is that claim as a reading.
+    output var logic [31:0]      arb_pend_dropped_o
 );
 
   import zhao_pkg::*;
@@ -111,6 +130,7 @@ module tb_part_hps_chain #(
       .seed_buf_i(seed_buf_i), .seed_count_i(seed_count_i),
       .tick_i(tick_i),
       .ps_tick_start_o(ps_tick_start), .ps_rd_empty_o(ps_rd_empty),
+      .ps_tick_abort_o(tick_abort_o),
       .ps_tick_done_i(ps_tick_done_o),
       .rd_valid_o(rd_valid), .rd_ready_i(rd_ready),
       .rd_record_o(rd_record), .rd_last_o(rd_last),
@@ -123,7 +143,9 @@ module tb_part_hps_chain #(
       .ticks_unseeded_o(ticks_unseeded_o),
       .seeds_o(seeds_o), .seeds_refused_o(seeds_refused_o),
       .rd_bursts_o(rd_bursts_o), .wr_bursts_o(wr_bursts_o),
-      .records_read_o(records_read_o), .records_written_o(records_written_o)
+      .records_read_o(records_read_o), .records_written_o(records_written_o),
+      .bridge_errs_o(bridge_errs_o), .ticks_faulted_o(ticks_faulted_o),
+      .records_discarded_o(records_discarded_o)
   );
 
   /* verilator lint_off UNUSEDSIGNAL */
@@ -140,6 +162,7 @@ module tb_part_hps_chain #(
       .tick_start_i(ps_tick_start), .tick_busy_o(ps_busy), .tick_done_o(ps_tick_done_o),
       .rd_valid_i(rd_valid), .rd_ready_o(rd_ready), .rd_record_i(rd_record),
       .rd_last_i(rd_last), .rd_empty_i(ps_rd_empty),
+      .tick_abort_i(tick_abort_o),
       .prt_valid_o(prt_valid_o), .prt_ready_i(prt_ready_i), .prt_record_o(prt_record_o),
       .vrd_valid_i(vrd_valid_i), .vrd_ready_o(vrd_ready_o),
       .vrd_survive_i(vrd_survive_i), .vrd_record_i(vrd_record_i),
@@ -156,10 +179,18 @@ module tb_part_hps_chain #(
   zhao_hps_burst_req_t [1:0] a_req;
   logic                [1:0] a_grant;
   zhao_hps_burst_rsp_t [1:0] a_rsp;
+  zhao_hps_burst_req_t       b_req_raw;
   zhao_hps_burst_req_t       b_req;
   zhao_hps_burst_rsp_t       b_rsp;
+
+  // R54: the one line that makes a REAL refusal happen. See `err_inject_i`.
+  always_comb begin
+    b_req = b_req_raw;
+    if (err_inject_i) b_req.addr = {b_req_raw.addr[31:6], 6'h08};
+  end
   /* verilator lint_off UNUSEDSIGNAL */
   logic [1:0][31:0]          a_bursts;
+  logic [1:0]                arb_pend_dropped_mask_unused;
   /* verilator lint_on UNUSEDSIGNAL */
 
   always_comb begin
@@ -187,10 +218,12 @@ module tb_part_hps_chain #(
       .wr_data_i ({p_wr_data, 64'd0}),
       .wr_last_i ({p_wr_last, 1'b0}),
       .rsp_o(a_rsp),
-      .b_req_o(b_req), .b_req_grant_i(b_grant),
+      .b_req_o(b_req_raw), .b_req_grant_i(b_grant),
       .b_wr_valid_o(b_wr_valid), .b_wr_data_o(b_wr_data), .b_wr_last_o(b_wr_last),
       .b_rsp_i(b_rsp),
-      .bursts_o(a_bursts), .wait_cycles_o(arb_c1_wait_o)
+      .bursts_o(a_bursts), .wait_cycles_o(arb_c1_wait_o),
+      .pend_dropped_o(arb_pend_dropped_o),
+      .pend_dropped_mask_o(arb_pend_dropped_mask_unused)
   );
 
   assign br_req_client_o = b_req.client;

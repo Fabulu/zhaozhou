@@ -164,10 +164,16 @@ module tb_zhao_console_core_smoke
   // bench supplies is what the HPS supplies -- two buffer bases and a seed.
   logic [31:0]             part_cfg_base0_i;
   logic [31:0]             part_cfg_base1_i;
-  logic                    part_seed_valid_i;
-  logic                    part_seed_ready_o;
-  logic                    part_seed_buf_i;
-  logic [15:0]             part_seed_count_i;   // $clog2(PART_CAPACITY)+1
+  // (I1's four part_seed_* ports are GONE, R41/R46: the store's first
+  //  generation is seeded by SetPopulation's active_count through
+  //  u_part_pop, from the command packet this bench builds below.)
+  logic [31:0]             part_pop_taken_o;
+  logic [31:0]             part_pop_refused_normal_o;
+  logic [31:0]             part_pop_refused_count_o;
+  logic [31:0]             part_pop_refused_flags_o;
+  logic [31:0]             part_pop_seeds_issued_o;
+  logic [31:0]             part_pop_handle_o;
+  logic [31:0]             cmd_exec_pops_o;
   logic                    part_hps_cur_buf_o;
   logic [15:0]             part_hps_cur_count_o;
   logic [31:0]             part_hps_ticks_o;
@@ -179,6 +185,16 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_hps_wr_bursts_o;
   logic [31:0]             part_hps_records_read_o;
   logic [31:0]             part_hps_records_written_o;
+  // R54 / R55: the two silences this composition is now able to read. The
+  // store's bridge refusal and the arbiter's dropped pending request are both
+  // argued to be unreachable HERE -- and both are asserted zero below, which
+  // is a check on the argument rather than a restatement of it. Each is fired
+  // on purpose in its own directed test.
+  logic [31:0]             part_hps_bridge_errs_o;
+  logic [31:0]             part_hps_ticks_faulted_o;
+  logic [31:0]             part_hps_records_discarded_o;
+  logic [31:0]             terr_hps_pend_dropped_o;
+  logic [3:0]              terr_hps_pend_dropped_mask_o;
   logic [31:0]             terr_hps_c3_bursts_o;
   logic [31:0]             terr_hps_c3_wait_cycles_o;
   // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
@@ -189,12 +205,16 @@ module tb_zhao_console_core_smoke
   // the point, because a descriptor that reaches PART.COLLIDE now has to have
   // travelled through the table to get there.
   localparam int unsigned PART_TBL_LD_W = 12 + (2 * PART_AGE_W) + (5 * 11) + (3 * 18);
-  logic                    part_tbl_ld_valid_i;
-  logic                    part_tbl_ld_ready_o;
-  logic [1:0]              part_tbl_ld_sel_i;
-  logic [6:0]              part_tbl_ld_index_i;
-  logic [1:0]              part_tbl_ld_event_i;
-  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i;
+  // (I33's six part_tbl_ld_* ports are GONE, R42: the descriptors are a
+  //  SPECIES_TABLE page this bench STAGES and PUBLISHES, and
+  //  u_part_table_loader carries them. These are its evidence.)
+  logic [31:0]             part_tbl_pages_o;
+  logic [31:0]             part_tbl_entries_o;
+  logic [31:0]             part_tbl_pages_dropped_o;
+  logic [31:0]             part_tbl_bad_magic_o;
+  logic [31:0]             part_tbl_truncated_o;
+  logic [31:0]             part_tbl_denied_o;
+  logic [31:0]             geom_ma_jobs_e_o;
   logic [31:0]             part_tbl_loads_update_o;
   logic [31:0]             part_tbl_loads_collide_o;
   logic [31:0]             part_tbl_loads_spawn_o;
@@ -215,14 +235,9 @@ module tb_zhao_console_core_smoke
   logic [31:0]             terr_tap_answered_o;
   logic [31:0]             terr_tap_off_patch_o;
   logic [31:0]             terr_tap_faults_o;
-  logic signed [31:0]      part_pop_origin_x_i;
-  logic signed [31:0]      part_pop_origin_y_i;
-  logic signed [31:0]      part_pop_origin_z_i;
-  logic                    part_plane_en_i;
-  logic signed [PART_NRM_W-1:0] part_plane_nx_i;
-  logic signed [PART_NRM_W-1:0] part_plane_ny_i;
-  logic signed [PART_NRM_W-1:0] part_plane_nz_i;
-  logic signed [31:0]      part_plane_c_i;
+  // (I7's eight part_pop_origin_* / part_plane_* ports are GONE, R41: the
+  //  population descriptor arrives as a SetPopulation 0x0303 record in the
+  //  command packet and is held by u_part_pop.)
   logic                    part_cap_full_i;
   logic                    part_tick_busy_o;
   logic                    part_tick_done_o;
@@ -1123,14 +1138,16 @@ module tb_zhao_console_core_smoke
   logic signed [31:0] surf_cmd_ty_i;
   logic signed [31:0] surf_cmd_radius_i;
   logic signed [31:0] surf_cmd_ring_width_i;
-  logic signed [31:0] surf_cmd_env_x0_i;
-  logic signed [31:0] surf_cmd_env_z0_i;
-  logic signed [31:0] surf_cmd_env_x1_i;
-  logic signed [31:0] surf_cmd_env_z1_i;
-  logic               surf_cmd_blend_en_i;
-  logic        [ 2:0] surf_cmd_blend_i;
-  logic        [ 2:0] surf_cmd_age_shift_i;
-  logic               surf_cmd_field_en_i;
+  // (I30's nine open ports are GONE, R45: u_surface_dispatch resolves the
+  //  patch envelope from the stamp's own translation by the world->patch law,
+  //  and the policy is three named parameters. These are its evidence.)
+  logic [31:0]        surf_disp_dispatched_o;
+  logic [31:0]        surf_disp_pitch_refused_o;
+  logic [31:0]        surf_disp_env_clamped_o;
+  logic signed [15:0] surf_disp_patch_ix_o;
+  logic signed [15:0] surf_disp_patch_iz_o;
+  logic signed [31:0] surf_disp_env_x0_o;
+  logic signed [31:0] surf_disp_env_x1_o;
   logic        [15:0] surf_cmd_src_id_i;
   // I31 CLOSED 2026-09-19: `surf_fld_*` is no longer at the DUT's edge. The
   // brush is driven inside the core by `u_field_stamp_adapter`, so these four
@@ -1657,14 +1674,9 @@ module tb_zhao_console_core_smoke
   assign surf_cmd_ty_i         = 32'sd0;
   assign surf_cmd_radius_i     = 6 * SURF_M;
   assign surf_cmd_ring_width_i = 2 * SURF_M;  // a crack ring, not a filled disc
-  assign surf_cmd_env_x0_i     = SURF_ENV_LO;
-  assign surf_cmd_env_z0_i     = SURF_ENV_LO;
-  assign surf_cmd_env_x1_i     = SURF_ENV_HI;
-  assign surf_cmd_env_z1_i     = SURF_ENV_HI;
-  assign surf_cmd_blend_en_i   = 1'b0;        // 0 = the ABI operation mapping
-  assign surf_cmd_blend_i      = 3'd0;
-  assign surf_cmd_age_shift_i  = 3'd1;
-  assign surf_cmd_field_en_i   = 1'b0;
+  // (the bench drove the envelope and the policy here. It does not any more:
+  //  u_surface_dispatch derives both, and SURF_ENV_LO/HI below are kept only
+  //  as the numbers the stamp's own geometry comment is written against.)
   assign surf_cmd_src_id_i     = 16'd4242;
 
   // ONE command, offered once and withdrawn on its ACCEPTANCE -- the same
@@ -1831,7 +1843,7 @@ module tb_zhao_console_core_smoke
   // A write, or a read anywhere else, is something this bench has no bytes
   // for, and serving zeros would be inventing them.
   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
-  localparam int unsigned PKT_MAX_C     = 640;   // 512 B of records + header + CRC (ten records after the 2026-09-20 merges)
+  localparam int unsigned PKT_MAX_C     = 768;   // 608 B of records + header + CRC (twelve records after the 2026-09-20 merges)
   // The token counts the packet carries (R18/R33): the CONTRACT's ceiling per
   // view and class, and view 1's SetView REQUEST -- geometry ABOVE its ceiling
   // (so it is clamped, and counted) and fragment BELOW it (so it lowers the
@@ -1893,16 +1905,35 @@ module tb_zhao_console_core_smoke
   // descriptor table and the index runs only.
   localparam int unsigned MSH_WORDS_C   = 88;
   localparam int unsigned MSH_ARENA_W   = UPL_WORDS_C;      // words into the arena
-  localparam int unsigned UPL_ALL_WORDS = UPL_WORDS_C + MSH_WORDS_C;
+  // ---- the SPECIES_TABLE page, owner ruling R42 (core entry I33) -----------
+  // A THIRD PublishResource, of kind 13, carrying the four species descriptors
+  // this bench used to write straight into PART.TABLE's load port. The port is
+  // gone: the descriptors are DATA in a page now, and `u_part_table_loader`
+  // carries them. Layout frozen by `zref::species_page`: a 64-byte header then
+  // 32-byte entries, TWO per line.
+  localparam logic [23:0] SPT_INDEX_C   = 24'h00_5EED;
+  localparam logic [ 7:0] SPT_KIND_C    = 8'd13;            // SPECIES_TABLE
+  localparam logic [ 7:0] SPT_SLOT_C    = 8'd3;
+  localparam logic [15:0] SPT_GEN_C     = 16'h0007;
+  localparam logic [31:0] SPT_DST_C     = UPL_REGION_C + 32'h0000_0800;   // MOVED 2026-09-20 (coordinator merge): the 704-byte MESH_STREAM page at +0x400 runs to +0x6C0, so +0x600 landed INSIDE it and overwrote vertex records -- the smoke reported 18 degenerate normals, six blocks downstream
+  localparam int unsigned SPT_ENTRIES_C = 4;
+  localparam int unsigned SPT_WORDS_C   = 8 + (4 * SPT_ENTRIES_C);  // 64 B + 32 B each
+  localparam int unsigned SPT_ARENA_W   = UPL_WORDS_C + MSH_WORDS_C;
+  localparam logic [31:0] SPT_MAGIC_C   = 32'h5450_535A;    // 'ZSPT' little-endian
+  localparam int unsigned UPL_ALL_WORDS = UPL_WORDS_C + MSH_WORDS_C + SPT_WORDS_C;
   // The Loom node the draw's transform handle names, and the draw's own
   // identity. `SMK_DRAW_SRC_C` becomes the meshlet's src_id, which is what the
   // vertex records are attributed to downstream -- it was the job port's
   // `instance_id` before R29 and is the DrawForm record's source id now.
   localparam int unsigned SMK_XFORM_NODE_C = 5;
   localparam logic [15:0] SMK_DRAW_SRC_C   = 16'h00A1;
+  // R41: the handle SetPopulation names the pool by. Arbitrary and DISTINCT,
+  // so part_pop_handle_o reading it back proves the record travelled rather
+  // than the bank powering up in a state that happens to match.
+  localparam logic [31:0] SMK_POP_HANDLE_C = 32'h0051_C0DE;
   logic [63:0] upl_mem [0:UPL_ALL_WORDS-1];
   logic [255:0] upl_rec0;         // record 0 of the uploaded MATERIAL_SET
-  logic [31:0]  upl_crc_material_q, upl_crc_mesh_q;
+  logic [31:0]  upl_crc_material_q, upl_crc_mesh_q, upl_crc_species_q;
   logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
   int unsigned pkt_len_q;
   logic        pkt_armed_q;       // set by the initial block once the packet is built
@@ -2350,27 +2381,24 @@ module tb_zhao_console_core_smoke
   localparam logic [7:0] TBL_CURVE_COLOUR  = 8'hA5;
   localparam logic [5:0] TBL_CURVE_SIZE    = 6'h2A;
 
-  task automatic tbl_load(input logic [1:0] sel,
-                          input logic [6:0] idx,
-                          input logic [1:0] ev,
-                          input logic [PART_TBL_LD_W-1:0] data);
-    int unsigned g;
-    part_tbl_ld_sel_i   = sel;
-    part_tbl_ld_index_i = idx;
-    part_tbl_ld_event_i = ev;
-    part_tbl_ld_data_i  = data;
-    part_tbl_ld_valid_i = 1'b1;
-    g = 0;
-    while (!part_tbl_ld_ready_o && (g < 100)) begin
-      @(posedge gpu_clk);
-      g++;
+  // ONE ENTRY OF THE SPECIES_TABLE PAGE, in zref::species_page's frozen
+  // layout. The bench WRITES a page now instead of driving a load port, which
+  // is the whole of R42: the descriptors are data the owner authors and the
+  // console reads, not wires a harness holds.
+  function automatic logic [255:0] spt_entry(input logic [1:0] sel,
+                                             input logic [6:0] idx,
+                                             input logic [1:0] ev,
+                                             input logic [PART_TBL_LD_W-1:0] data);
+    logic [255:0] e;
+    begin
+      e = '0;
+      e[1:0]   = sel;
+      e[3:2]   = ev;
+      e[14:8]  = idx;
+      e[32 +: PART_TBL_LD_W] = data;
+      spt_entry = e;
     end
-    if (g >= 100)
-      $fatal(1, "SMOKE: PART.TABLE never raised ld_ready_o -- its load port is not reachable from the boundary");
-    @(posedge gpu_clk);
-    part_tbl_ld_valid_i = 1'b0;
-    part_tbl_ld_data_i  = '0;
-  endtask
+  endfunction
 
   // The colour byte, captured where it leaves the module, ONE SAMPLE PER
   // PARTICLE.
@@ -2435,12 +2463,11 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  bit part_seed_taken_q;
-  assign part_seed_valid_i = reset_released_q && !part_seed_taken_q;
-  always @(posedge gpu_clk) begin
-    if (!rst_n)                                        part_seed_taken_q <= 1'b0;
-    else if (part_seed_valid_i && part_seed_ready_o)   part_seed_taken_q <= 1'b1;
-  end
+  // (The bench used to seed the store itself here, from eset_released_q.
+  //  It does not any more: the seed is SetPopulation.active_count, and it
+  //  reaches the store through CMD.DECODER's verdict, CMD.EXEC's commit and
+  //  u_part_pop. That is the whole point of R41 -- the value now traverses
+  //  a real chain from a real producer instead of arriving on a pin.)
   // --------------------------------------------------------------------------
   // THE GEOMETRY VERTEX STREAM.
   //
@@ -2991,13 +3018,8 @@ module tb_zhao_console_core_smoke
     // into a pass.
     part_cfg_base0_i = PART_HPS_BASE0;
     part_cfg_base1_i = PART_HPS_BASE1;
-    part_seed_buf_i = 1'b0;
-    part_seed_count_i = 16'(N_PART_RECORDS);
-    part_tbl_ld_valid_i = '0;
-    part_tbl_ld_sel_i = '0;
-    part_tbl_ld_index_i = '0;
-    part_tbl_ld_event_i = '0;
-    part_tbl_ld_data_i = '0;
+
+
     part_fld_valid_i = '0;
     part_fld_ax_i = '0;
     part_fld_ay_i = '0;
@@ -3088,14 +3110,7 @@ module tb_zhao_console_core_smoke
 
     // The population sits at the island datum: a legal origin, and the one
     // under which a local position IS a world position.
-    part_pop_origin_x_i = '0;
-    part_pop_origin_y_i = '0;
-    part_pop_origin_z_i = '0;
-    part_plane_en_i = '0;
-    part_plane_nx_i = '0;
-    part_plane_ny_i = '0;
-    part_plane_nz_i = '0;
-    part_plane_c_i = '0;
+
     part_cap_full_i = '0;
     part_hist_sel_i = '0;
 
@@ -3331,11 +3346,9 @@ module tb_zhao_console_core_smoke
     //     marker is disabled and the lifetime is unbounded -- so the other
     //     three spawn counters staying at zero is a specificity check, not an
     //     oversight.
-    part_plane_en_i         = 1'b1;
-    part_plane_nx_i         = '0;
-    part_plane_ny_i         = PART_NRM_W'(1 << 10);   // NRM_Q = 10: a unit +Y normal
-    part_plane_nz_i         = '0;
-    part_plane_c_i          = 32'(PART_TER_H) <<< 10; // y = +100 LSBs, Q NRM_Q
+    // (the plane is a SetPopulation record now -- see PART_PLANE_* below and
+    //  the packet builder. Its values did not change: a unit +Y normal at
+    //  y = PART_TER_H, so the acceptance value further down did not move.)
     // (the STICK response and the spawn rule are now LOADED INTO PART.TABLE
     //  after reset lifts -- see the load sequence below.)
     proj_en_i               = 1'b1;
@@ -3574,17 +3587,73 @@ module tb_zhao_console_core_smoke
       fold_c_i = fold_c_o;
     end
     upl_crc_mesh_q = ~fold_c_i;
+    // ---- THE SPECIES_TABLE PAGE (R42, core entry I33) --------------------
+    // Four species-0 descriptors, in zref::species_page's frozen layout: a
+    // 64-byte header then 32-byte entries, TWO per 64-byte line. These are the
+    // SAME four words this bench used to drive into part_tbl_ld_*, byte for
+    // byte -- what changed is who carries them.
+    begin : spt_image
+      automatic logic [511:0] ln;
+      automatic logic [255:0] e0, e1;
+      // the header line
+      ln = '0;
+      ln[31:0]  = SPT_MAGIC_C;
+      ln[47:32] = 16'd1;                       // version
+      ln[63:48] = 16'(SPT_ENTRIES_C);
+`ifdef ZHAO_SMOKE_BAD_SPECIES_PAGE
+      // THE NEGATIVE CONTROL FOR EVERY PART.TABLE CHECK IN THIS FILE, and it
+      // is a committed switch rather than an edit somebody made once and
+      // reverted. One byte of the page's magic, wrong. The loader must refuse
+      // the page WHOLE, `part_tbl_bad_magic_o` must fire, and every table
+      // check at the foot of the run must go RED -- otherwise those checks are
+      // passing on something other than the page's contents.
+      //
+      // It is a PLAIN `ifdef` on purpose: CLAUDE.md records that a
+      // command-line `-D` cannot override a FUNCTION-LIKE `define` and says
+      // nothing when it fails to, so a macro-selected control has to be a form
+      // `-D` reaches. Run it by adding the define to the verilate step in
+      // tests/prod/run_console_core_smoke.ps1.
+      ln[7:0] = 8'hFF;
+`endif
+      for (int unsigned k = 0; k < 8; k++) upl_mem[SPT_ARENA_W + k] = ln[64*k +: 64];
+      // entries 0 and 1
+      e0 = spt_entry(TBL_SEL_UPD, 7'd0, 2'd0,
+                     PART_TBL_LD_W'(TBL_RECIPE_COLOUR) << TBL_U_OFF_RCP);
+      e1 = spt_entry(TBL_SEL_COL, 7'd0, 2'd0,
+                     PART_TBL_LD_W'(3'd2) << TBL_C_OFF_RSP);
+      ln = {e1, e0};
+      for (int unsigned k = 0; k < 8; k++) upl_mem[SPT_ARENA_W + 8 + k] = ln[64*k +: 64];
+      // entries 2 and 3
+      e0 = spt_entry(TBL_SEL_SPW, 7'd0, 2'd2,
+                     (PART_TBL_LD_W'(7'd0) << TBL_S_OFF_CHD) |
+                     (PART_TBL_LD_W'(5'd1) << TBL_S_OFF_CNT) |
+                     (PART_TBL_LD_W'(1'b1) << TBL_S_OFF_KNW));
+      e1 = spt_entry(TBL_SEL_CRV, 7'd0, 2'd0,
+                     (PART_TBL_LD_W'(TBL_CURVE_SIZE)   << TBL_V_OFF_SIZ) |
+                     (PART_TBL_LD_W'(TBL_CURVE_COLOUR) << TBL_V_OFF_CLR));
+      ln = {e1, e0};
+      for (int unsigned k = 0; k < 8; k++) upl_mem[SPT_ARENA_W + 16 + k] = ln[64*k +: 64];
+    end
+    fold_c_i = 32'hFFFF_FFFF;
+    for (int unsigned w = 0; w < SPT_WORDS_C; w++) begin
+      fold_d_i = upl_mem[SPT_ARENA_W + w];
+      #1ns;
+      fold_c_i = fold_c_o;
+    end
+    upl_crc_species_q = ~fold_c_i;
     begin : build_packet
       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
       zhao_abi_pkg::zhao_rec_set_presentation_contract_t pc;
       zhao_abi_pkg::zhao_rec_set_view_t         sv;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
       zhao_abi_pkg::zhao_rec_publish_resource_t pr2;
+      zhao_abi_pkg::zhao_rec_publish_resource_t pr3;
       zhao_abi_pkg::zhao_rec_draw_form_t        df;
       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
       zhao_abi_pkg::zhao_rec_set_environment_t  se;
+      zhao_abi_pkg::zhao_rec_set_population_t   spop;
       logic [255:0] bfv, efv;
-      logic [383:0] prv, pr2v, pcv, sev;
+      logic [383:0] prv, pr2v, pr3v, pcv, sev, spopv;
       logic [255:0] dfv;
       logic [767:0] svv;
       logic [511:0] matv;
@@ -3603,7 +3672,7 @@ module tb_zhao_console_core_smoke
       // The visible symptom was six subsystems away -- the SetEnvironment never
       // landed, so the smoke's geometry job (gated on `geom_light_env_loads_o
       // >= 2`, ruling R25) was never issued and GEOM.REPLAY released no meshlet.
-      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; df = '0; sp = '0; gt = '0;
+      bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; pr3 = '0; df = '0; sp = '0; gt = '0; spop = '0;
       // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
       // already runs), two views, and the five token CEILINGS.
       pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
@@ -3651,6 +3720,21 @@ module tb_zhao_console_core_smoke
       pr2.epoch          = UPL_EPOCH_C;
       pr2.dst_slot       = MSH_SLOT_C;
       pr2.kind           = MSH_KIND_C;
+      // THE THIRD PUBLICATION (R42): the SPECIES_TABLE page. Its kind is what
+      // u_part_table_loader watches for, so nothing else in the console has
+      // to know a species table exists.
+      pr3.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE; pr3.h_record_bytes = 16'd48;
+      pr3.h_source_id    = 32'd83;
+      pr3.resource       = {SPT_INDEX_C, SPT_GEN_C[7:0]};
+      pr3.hps_addr_lo    = UPL_ARENA_C + 32'(SPT_ARENA_W * 8);
+      pr3.hps_addr_hi    = 32'd0;
+      pr3.vram_dst       = SPT_DST_C;
+      pr3.length         = 32'(SPT_WORDS_C * 8);
+      pr3.crc32c         = upl_crc_species_q;
+      pr3.new_generation = SPT_GEN_C;
+      pr3.epoch          = UPL_EPOCH_C;
+      pr3.dst_slot       = SPT_SLOT_C;
+      pr3.kind           = SPT_KIND_C;
       // THE DRAW ITSELF (`DrawForm 0x0300`). `form` names the page above,
       // `transform` names the Loom node this bench streams, and `flags` is
       // ZERO -- cull mode NONE, the double-sided law every capture was
@@ -3669,6 +3753,25 @@ module tb_zhao_console_core_smoke
       se.sun_pitch   = SGF_ENV_PITCH;
       se.sun_colour  = SGF_ENV_SUN;
       se.ambient     = SGF_ENV_AMB;
+      // R41: THE POPULATION DESCRIPTOR, from the command packet. Every value
+      // here used to be a board pin on zhao_console_core (entry I7) or a
+      // provisional seed port (I1's, R46), and they are the SAME values --
+      // origin at the island datum, a unit +Y plane at y = PART_TER_H, and a
+      // first generation of N_PART_RECORDS staged in buffer 0. What changed is
+      // that they now TRAVEL: decoder -> executor -> PART.POP -> PART.COLLIDE,
+      // PART.TERRAIN_TAP and the generation store.
+      spop.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_POPULATION;    spop.h_record_bytes = 16'd48;
+      spop.h_source_id   = 32'd81;
+      spop.population    = SMK_POP_HANDLE_C;
+      spop.origin_x      = 32'sd0;
+      spop.origin_y      = 32'sd0;
+      spop.origin_z      = 32'sd0;
+      spop.active_count  = 32'(N_PART_RECORDS);
+      spop.plane_c       = 32'(PART_TER_H) <<< 10;   // y = +100 LSBs, Q NRM_Q
+      spop.plane_nx      = 16'sd0;
+      spop.plane_ny      = 16'sd1024;                // NRM_Q = 10: a unit +Y normal
+      spop.plane_nz      = 16'sd0;
+      spop.flags         = 16'h0003;                 // b0 seed, b1 plane_enable
       ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
       // SetPost (R36): POST.ECHO ARMED (R35) -- the capture this bench checks
       // word for word exists only because this record arms it -- and a look
@@ -3696,8 +3799,10 @@ module tb_zhao_console_core_smoke
       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
       prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
       pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
+      pr3v = zhao_abi_pkg::zhao_pack_publish_resource(pr3);
       dfv  = zhao_abi_pkg::zhao_pack_draw_form(df);
       sev = zhao_abi_pkg::zhao_pack_set_environment(se);
+      spopv = zhao_abi_pkg::zhao_pack_set_population(spop);
       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
       pcv = zhao_abi_pkg::zhao_pack_set_presentation_contract(pc);
       svv = zhao_abi_pkg::zhao_pack_set_view(sv);
@@ -3708,36 +3813,39 @@ module tb_zhao_console_core_smoke
         gtv2[8*(zhao_abi_pkg::ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0 + k) +: 8] = sm_grade_byte(k);
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
-      // ONE packet, ALL THREE lanes' records (coordinator merge 2026-09-20):
-      // BeginFrame 32 | SetPresentationContract 48 | SetView 96 | PublishResource 48 |
-      // PublishResource 48 | SetEnvironment 48 | SetPost 32 | SetGradeTable 96 |
-      // DrawForm 32 | EndFrame 32 = 512 bytes, TEN records. The draw stays AFTER both
-      // publications (the page it names must be resident) and after the look.
+      // ONE packet, ALL FOUR lanes' records (coordinator merge 2026-09-20):
+      // BeginFrame 32 | SetPresentationContract 48 | SetView 96 | PublishResource 48 x3 |
+      // SetEnvironment 48 | SetPost 32 | SetGradeTable 96 | SetPopulation 48 |
+      // DrawForm 32 | EndFrame 32 = 608 bytes, TWELVE records. The draw stays after every
+      // publication and after the look; SetPopulation applies at the packet's COMMIT.
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + k]       = bfv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 32 + k]  = pcv[8*k +: 8];
       for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 80 + k]  = svv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 176 + k] = prv[8*k +: 8];
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 224 + k] = pr2v[8*k +: 8];
-      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 272 + k] = sev[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 320 + k] = spv[8*k +: 8];
-      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 352 + k] = gtv2[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 448 + k] = dfv[8*k +: 8];
-      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 480 + k] = efv[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 272 + k] = pr3v[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 320 + k] = sev[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 368 + k] = spv[8*k +: 8];
+      for (int unsigned k = 0; k < 96; k++) pkt_mem[o + 400 + k] = gtv2[8*k +: 8];
+      for (int unsigned k = 0; k < 48; k++) pkt_mem[o + 496 + k] = spopv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 544 + k] = dfv[8*k +: 8];
+      for (int unsigned k = 0; k < 32; k++) pkt_mem[o + 576 + k] = efv[8*k +: 8];
+      // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
       // deadline 0 (the mode's period), TEN records, 512 bytes of them
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd10;
-      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd512;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd12;
+      {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'd608;
       c = 32'hFFFF_FFFF;
       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
       c = 32'hFFFF_FFFF;
-      for (int unsigned k = 0; k < 512; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
-      {pkt_mem[o+515], pkt_mem[o+514], pkt_mem[o+513], pkt_mem[o+512]} = ~c;
-      pkt_len_q   = o + 512 + 4;
+      for (int unsigned k = 0; k < 608; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+      {pkt_mem[o+611], pkt_mem[o+610], pkt_mem[o+609], pkt_mem[o+608]} = ~c;
+      pkt_len_q   = o + 608 + 4;
       pkt_armed_q = 1'b1;
     end    upl_cfg_region_base_i  = UPL_REGION_C;
     upl_cfg_region_bytes_i = UPL_REGION_SZ;
@@ -3769,65 +3877,20 @@ module tb_zhao_console_core_smoke
     geom_write_camera();
     geom_camera_ready_q = 1'b1;
 
-    // ---- LOAD PART.TABLE, BEFORE ANY PARTICLE IS OFFERED ------------------
-    // Four words for species 0 -- the only species these records carry (the
-    // generation store writes position X and leaves every other field zero, so
-    // `species` is 0 by construction). The host loads between ticks and the
-    // table is read during them; that is the discipline `no_rw_check` on its
-    // arrays is correct under, and doing it here is what makes the attribute
-    // honest rather than convenient.
+    // ---- PART.TABLE IS LOADED FROM A PUBLISHED PAGE NOW (R42) -------------
+    // This block used to drive part_tbl_ld_* four times from a task. Entry
+    // I33 is CLOSED and the port is gone: the four species-0 descriptors are
+    // staged into the arena as a SPECIES_TABLE page (see spt_image above),
+    // the command packet PUBLISHES it, and u_part_table_loader reads it back
+    // out of the asset window and writes them.
     //
-    // ORDER MATTERS AND IS CHECKED. The generation store below only offers
-    // records once `part_tick_busy_o` rises, so this must complete first; the
-    // assertion after it is what turns "it should have" into "it did".
-`ifndef ZHAO_SMOKE_SKIP_TBL_LOAD
-    tbl_load(TBL_SEL_UPD, 7'd0, 2'd0,
-             PART_TBL_LD_W'(TBL_RECIPE_COLOUR) << TBL_U_OFF_RCP);   // lifetime 0 = unbounded,
-                                                                    // drag/grav/strength/centre/params 0
-    tbl_load(TBL_SEL_COL, 7'd0, 2'd0,
-             PART_TBL_LD_W'(3'd2) << TBL_C_OFF_RSP);                // STICK; both coefficients 0
-    tbl_load(TBL_SEL_SPW, 7'd0, 2'd2,                                // event 2 = COLLISION
-             (PART_TBL_LD_W'(7'd0) << TBL_S_OFF_CHD) |               // child species 0
-             (PART_TBL_LD_W'(5'd1) << TBL_S_OFF_CNT) |               // one child
-             (PART_TBL_LD_W'(1'b1) << TBL_S_OFF_KNW));               // known
-    tbl_load(TBL_SEL_CRV, 7'd0, 2'd0,                                // curve bucket 0: age_next[9:6]
-             (PART_TBL_LD_W'(TBL_CURVE_SIZE)   << TBL_V_OFF_SIZ) |
-             (PART_TBL_LD_W'(TBL_CURVE_COLOUR) << TBL_V_OFF_CLR));
-
-    if (part_updated_o != 0)
-      $fatal(1, "SMOKE: %0d particle(s) were already updated when PART.TABLE was loaded -- the load lost its race with the first tick and every descriptor read below is against an empty table",
-             part_updated_o);
-    if (part_tbl_loads_update_o != 1 || part_tbl_loads_collide_o != 1 ||
-        part_tbl_loads_spawn_o != 1 || part_tbl_loads_curve_o != 1)
-      $fatal(1, "SMOKE: PART.TABLE counted upd=%0d col=%0d spw=%0d crv=%0d against one load each -- the load port does not reach all four slices",
-             part_tbl_loads_update_o, part_tbl_loads_collide_o,
-             part_tbl_loads_spawn_o, part_tbl_loads_curve_o);
-    if (part_tbl_load_refused_o != 0)
-      $fatal(1, "SMOKE: PART.TABLE refused %0d of four in-range loads", part_tbl_load_refused_o);
-`else
-    // THE NEGATIVE CONTROL FOR EVERY PART.TABLE CHECK IN THIS FILE, and it is a
-    // committed switch rather than an edit somebody made once and reverted.
-    //
-    // With `ZHAO_SMOKE_SKIP_TBL_LOAD` defined, the four loads above do not
-    // happen and nothing else changes. The table then answers every read with
-    // what an unwritten array holds, and the checks at the foot of the run MUST
-    // go red -- otherwise they are passing on something other than the table's
-    // contents, which is the whole thing they claim to measure.
-    //
-    // MEASURED 2026-09-19, the pass that composed the table:
-    //   loads[upd/col/spw/crv] = [0 0 0 0]
-    //   `part_colour_beats_q` = 0 and the run fails at
-    //   "PART.UPDATE never raised out_colour_en_o".
-    // Run it by adding `+define+ZHAO_SMOKE_SKIP_TBL_LOAD` to the verilate step
-    // in tests/prod/run_console_core_smoke.ps1. (Written as prose rather than
-    // as a command line, because a comment beginning with the tool's own name
-    // is parsed as a metacomment and rejected -- BADVLTPRAGMA, met here.)
-    // It is a PLAIN `ifdef` on purpose: CLAUDE.md records that a command-line
-    // `-D` cannot override a FUNCTION-LIKE `define` and says nothing when it
-    // fails to, so a macro-selected control has to be a form `-D` reaches.
-    $display("SMOKE: NEGATIVE CONTROL -- PART.TABLE is deliberately NOT loaded; every table check below must fail.");
-`endif
-
+    // THE ORDERING CHECK MOVED WITH THE OWNER. The bench could assert "the
+    // table was loaded before any particle was offered" while IT did the
+    // loading. It cannot now, because the load happens when MEM.UPLOAD
+    // publishes -- so the ordering is asserted at the FOOT of the run instead,
+    // against what the particle path actually did with the descriptors. If the
+    // load lost its race, contacts_stick and spawn_by_event go to zero and
+    // the checks down there fail loudly.
     // ---- PACKET P-TERRAIN: one SubmitTerrainSet, then let the spine run ---
     // A HOST PACKET, which is what the plan lets a harness present. Everything
     // after it is the console's own work: TERRAIN.CMD reads the list over the
@@ -4349,6 +4412,22 @@ module tb_zhao_console_core_smoke
              terr_hps_c3_bursts_o, part_hps_rd_bursts_o + part_hps_wr_bursts_o);
     if ((part_hps_ticks_o >= 2) && (part_hps_records_read_o <= N_PART_RECORDS))
       $fatal(1, "SMOKE: %0d store ticks but no generation was read back out of DDR", part_hps_ticks_o);
+    // R54 / R55. These two zeros are CLAIMS about this composition -- that the
+    // bridge never refuses the store (every burst aligned, the arbiter pulses
+    // only from idle) and that no client offers a second different request
+    // while one is pending (all four are holders). Both are instruments that
+    // have been seen to fire elsewhere, so their zero here means something.
+    $display("SMOKE: particle store faults: bridge_errs=%0d ticks_faulted=%0d discarded=%0d ; arbiter pend_dropped=%0d mask=%b",
+             part_hps_bridge_errs_o, part_hps_ticks_faulted_o,
+             part_hps_records_discarded_o, terr_hps_pend_dropped_o,
+             terr_hps_pend_dropped_mask_o);
+    if ((part_hps_bridge_errs_o != 0) || (part_hps_ticks_faulted_o != 0) ||
+        (part_hps_records_discarded_o != 0))
+      $fatal(1, "SMOKE: the bridge refused the particle store (errs=%0d faulted=%0d discarded=%0d) -- the composition's own argument says it cannot",
+             part_hps_bridge_errs_o, part_hps_ticks_faulted_o, part_hps_records_discarded_o);
+    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 4'd0))
+      $fatal(1, "SMOKE: the HPS arbiter dropped a pending request (count=%0d mask=%b) -- every client on it is a holder",
+             terr_hps_pend_dropped_o, terr_hps_pend_dropped_mask_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is
     // downstream of a meshlet arriving. Firing the `-BadDescriptor` control
     // with these checks placed AFTER the ones below stopped the run at
@@ -4609,6 +4688,34 @@ module tb_zhao_console_core_smoke
              part_tbl_loads_spawn_o, part_tbl_loads_curve_o,
              part_tbl_load_refused_o, part_colour_beats_q, part_updated_o,
              part_colour_last_q, part_contacts_stick_o, part_spawn_by_event2_o);
+    // ---- R42 / entry I33: THE DESCRIPTORS CAME FROM A PUBLISHED PAGE ------
+    // The four words above used to be driven into `part_tbl_ld_*` by this
+    // bench. They are a SPECIES_TABLE page now -- staged into the arena,
+    // published by the command packet's third PublishResource, read back out
+    // of the asset window by `u_part_table_loader` through requester E. The
+    // checks above are what prove they ARRIVED (a5 on every retire, six STICK
+    // contacts, six collision spawns); these are what prove they arrived THIS
+    // WAY and that nothing was refused on the road.
+    $display("SMOKE: species    pages=%0d entries=%0d dropped=%0d bad_magic=%0d truncated=%0d denied=%0d adapter_jobs_e=%0d",
+             part_tbl_pages_o, part_tbl_entries_o, part_tbl_pages_dropped_o,
+             part_tbl_bad_magic_o, part_tbl_truncated_o, part_tbl_denied_o,
+             geom_ma_jobs_e_o);
+    if (part_tbl_pages_o != 32'd1)
+      $fatal(1, "SMOKE: the species loader finished %0d page(s); the packet publishes one", part_tbl_pages_o);
+    if (part_tbl_entries_o != 32'(SPT_ENTRIES_C))
+      $fatal(1, "SMOKE: the species loader handed over %0d entries against the page's %0d",
+             part_tbl_entries_o, SPT_ENTRIES_C);
+    if ((part_tbl_bad_magic_o != 0) || (part_tbl_truncated_o != 0) ||
+        (part_tbl_denied_o != 0) || (part_tbl_pages_dropped_o != 0))
+      $fatal(1, "SMOKE: the species loader refused the page (magic=%0d truncated=%0d denied=%0d dropped=%0d)",
+             part_tbl_bad_magic_o, part_tbl_truncated_o, part_tbl_denied_o,
+             part_tbl_pages_dropped_o);
+    // Three lines per page: the header and two entry lines. Asserted exactly,
+    // because a loader that re-read a line would load the same descriptor
+    // twice and every check above would still pass.
+    if (geom_ma_jobs_e_o != 32'd3)
+      $fatal(1, "SMOKE: requester E served %0d reads for a %0d-entry page; the header plus two entry lines is three",
+             geom_ma_jobs_e_o, SPT_ENTRIES_C);
     // `part_tbl_load_refused_o` IS NOT CHECKED FOR A FIRING and its zero is not
     // quoted as evidence: at the console's PART_SPECIES_N = 128 a seven-bit
     // index cannot address outside the table, so the refusal is structurally
@@ -5323,6 +5430,24 @@ module tb_zhao_console_core_smoke
     //    SHEET's at zero (the block drops a non-resident write and says so on
     //    `wr_miss_o`), so this is a conservation statement and not "a counter
     //    moved".
+    // ---- R45 / entry I30: THE DISPATCH RESOLVED THE PATCH -------------------
+    // The envelope and the policy were BENCH CONSTANTS before this ruling.
+    // They are `u_surface_dispatch`'s now, from the stamp's own translation
+    // and the live pitch, by the world->patch law the height tap inverts.
+    $display("SMOKE: dispatch  stamps=%0d patch=(%0d,%0d) env_x=[%0d,%0d] fx16 (%0d m wide) pitch_refused=%0d env_clamped=%0d",
+             surf_disp_dispatched_o, surf_disp_patch_ix_o, surf_disp_patch_iz_o,
+             surf_disp_env_x0_o, surf_disp_env_x1_o,
+             (surf_disp_env_x1_o - surf_disp_env_x0_o) / SURF_M,
+             surf_disp_pitch_refused_o, surf_disp_env_clamped_o);
+    if (surf_disp_dispatched_o != surf_stamps_o)
+      $fatal(1, "SMOKE: the dispatch placed %0d stamps and SURFACE.STAMP completed %0d -- the envelope and the command are not the same event",
+             surf_disp_dispatched_o, surf_stamps_o);
+    if (surf_disp_pitch_refused_o != 0)
+      $fatal(1, "SMOKE: the dispatch refused the pitch %0d time(s); the staged page's pitch_log2 is outside the ratified set",
+             surf_disp_pitch_refused_o);
+    if (surf_disp_env_clamped_o != 0)
+      $fatal(1, "SMOKE: the dispatch clamped the envelope %0d time(s); the stamp is outside the +-4,096 m domain",
+             surf_disp_env_clamped_o);
     if (surf_stamp_texels_touched_o == 0)
       $fatal(1, "SMOKE: SURFACE.STAMP visited no texel -- a ring of outer radius 6 m on a 64 m envelope covers a few dozen, so the command's geometry never reached the walker");
     if (surf_sheet_texels_touched_o != surf_stamp_texels_touched_o)
@@ -5382,13 +5507,14 @@ module tb_zhao_console_core_smoke
              upl_done_seen_q, upl_status_seen_q, upl_published_o, upl_pub_seen_q,
              sh_bursts_q, upl_hps_wait_o, upl_pub_slot_q, upl_pub_gen_q,
              upl_pub_tag_q, upl_pub_index_q, upl_pub_base_q, upl_pub_extent_q);
-    // TWO uploads since 2026-09-20 (owner ruling R29): the MATERIAL_SET, and
-    // the MESH_STREAM page the DrawForm names.
-    if (upl_done_seen_q != 2 || upl_status_seen_q != 8'd0)
-      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with last status %0d, expected TWICE with 0 (kUploadOk) -- refused=%032x",
+    // THREE uploads since 2026-09-19 evening (owner ruling R42): the
+    // MATERIAL_SET, the MESH_STREAM page the DrawForm names, and the
+    // SPECIES_TABLE page PART.TABLE is loaded from.
+    if (upl_done_seen_q != 3 || upl_status_seen_q != 8'd0)
+      $fatal(1, "SMOKE: MEM.UPLOAD finished %0d time(s) with last status %0d, expected THREE TIMES with 0 (kUploadOk) -- refused=%032x",
              upl_done_seen_q, upl_status_seen_q, upl_refused_o);
-    if (upl_pub_seen_q != 1 || msh_pub_seen_q != 1 || upl_published_o != 16'd2)
-      $fatal(1, "SMOKE: MEM.UPLOAD published %0d MATERIAL_SET and %0d MESH_STREAM row(s) (census %0d), expected one of each",
+    if (upl_pub_seen_q != 1 || msh_pub_seen_q != 1 || upl_published_o != 16'd3)
+      $fatal(1, "SMOKE: MEM.UPLOAD published %0d MATERIAL_SET and %0d MESH_STREAM row(s) (census %0d), expected one of each and three rows in all",
              upl_pub_seen_q, msh_pub_seen_q, upl_published_o);
     if (sh_bursts_q != (UPL_ALL_WORDS / 8))
       $fatal(1, "SMOKE: the shell's bridge served %0d HPS bursts for %0d bytes of upload, expected %0d",
@@ -5469,9 +5595,31 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: command   pkt_bursts=%0d decoder_records=%0d exec_committed=%0d exec_abandoned=%0d uploads=%0d overflow=%0d",
              sh_pkt_bursts_q, cmd_commands_o, cmd_exec_committed_o, cmd_exec_abandoned_o,
              cmd_exec_uploads_o, cmd_exec_upload_overflow_o);
-    if (cmd_commands_o != 32'd10 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd2)
-      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 10, 1, 2)",
+    if (cmd_commands_o != 32'd12 || cmd_exec_committed_o != 32'd1 || cmd_exec_uploads_o != 32'd3)
+      $fatal(1, "SMOKE: the command packet did not travel: %0d records walked, %0d committed, %0d uploads handed to MEM.UPLOAD (expected 12, 1, 3)",
              cmd_commands_o, cmd_exec_committed_o, cmd_exec_uploads_o);
+    // ---- R41 / entry I7: THE POPULATION DESCRIPTOR CAME FROM THE PACKET ----
+    // Every one of these was a BOARD PIN before this ruling. The chain is
+    // decoder -> CMD.EXEC -> PART.POP -> PART.COLLIDE / PART.TERRAIN_TAP and
+    // the generation store, and the handle is the cheapest proof it is the
+    // record's value rather than a power-on state: nothing else in this bench
+    // writes 0x0051C0DE.
+    $display("SMOKE: population handle=%08x taken=%0d seeds=%0d lowered=%0d refused[normal/count/flags]=[%0d %0d %0d]",
+             part_pop_handle_o, part_pop_taken_o, part_pop_seeds_issued_o,
+             cmd_exec_pops_o, part_pop_refused_normal_o, part_pop_refused_count_o,
+             part_pop_refused_flags_o);
+    if (cmd_exec_pops_o != 32'd1)
+      $fatal(1, "SMOKE: CMD.EXEC lowered %0d SetPopulation records; the packet carries one", cmd_exec_pops_o);
+    if (part_pop_taken_o != 32'd1)
+      $fatal(1, "SMOKE: PART.POP took %0d descriptors; the packet carries one", part_pop_taken_o);
+    if (part_pop_handle_o != SMK_POP_HANDLE_C)
+      $fatal(1, "SMOKE: PART.POP holds population %08x, the packet named %08x", part_pop_handle_o, SMK_POP_HANDLE_C);
+    if ((part_pop_refused_normal_o != 0) || (part_pop_refused_count_o != 0) ||
+        (part_pop_refused_flags_o != 0))
+      $fatal(1, "SMOKE: PART.POP refused the packet's descriptor (normal=%0d count=%0d flags=%0d)",
+             part_pop_refused_normal_o, part_pop_refused_count_o, part_pop_refused_flags_o);
+    if (part_pop_seeds_issued_o != 32'd1)
+      $fatal(1, "SMOKE: the store took %0d seeds from PART.POP; SetPopulation asked for one", part_pop_seeds_issued_o);
     // ---- MEASURE.TOKENS (R18/R33): the CEILING and the REQUEST ----------
     // Counts off the wire, unchanged. View 0 sent no SetView, so it keeps the
     // contract's ceiling; view 1 asked for MORE geometry than its ceiling (cut

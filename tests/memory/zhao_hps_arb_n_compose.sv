@@ -50,6 +50,9 @@ module zhao_hps_arb_n_compose (
     output logic [ 2:0][31:0] bursts_o,
     output logic [31:0]       c1_wait_cycles_o,
     output logic [31:0]       c2_wait_cycles_o,
+    // R55: the pending slot's silent drop, made loud.
+    output logic [31:0]       pend_dropped_o,
+    output logic [ 2:0]       pend_dropped_mask_o,
     output logic [31:0]       hps_err_count_o
 );
 
@@ -96,7 +99,9 @@ module zhao_hps_arb_n_compose (
       .b_wr_last_o  (b_wr_last),
       .b_rsp_i      (b_rsp),
       .bursts_o     (bursts_o),
-      .wait_cycles_o(waits)
+      .wait_cycles_o(waits),
+      .pend_dropped_o     (pend_dropped_o),
+      .pend_dropped_mask_o(pend_dropped_mask_o)
   );
 
   logic [6:0][31:0] hps_bytes_unused;

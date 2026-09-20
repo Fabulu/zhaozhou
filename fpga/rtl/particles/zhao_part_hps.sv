@@ -54,12 +54,50 @@
 // on (counted in `ticks_unseeded_o`) -- a tick against unconfigured bases would
 // write children to address zero.
 //
+// ---------------------------------------------------------------------------
+// A BRIDGE REFUSAL -- ruling R54, 2026-09-19 evening
+// ---------------------------------------------------------------------------
+// Until this repair B_REQ waited for `hps_grant_i` and NOTHING ELSE, and the
+// header argued at length that `zhao_hps_bridge`'s refusal (`err`, no grant,
+// nothing issued) could not reach this block. The argument is still believed
+// and it is not a guard: `zhao_hps_arbiter_n` re-serves a held request, so a
+// refusal this state cannot see is an unbounded spin with every counter here
+// frozen -- exactly the S1 defect repaired in MEM.UPLOAD and DEBUG.FRAMEBLIT
+// at 525a3f6d. What is built now instead:
+//
+//   * `err` at B_REQ is COUNTED (`bridge_errs_o`) and the request is taken
+//     DOWN. The bridge refuses a burst that is malformed or that collides with
+//     a busy port; the second is transient, so the burst is re-offered, and
+//     dropping the request for a cycle is what makes the re-offer a new
+//     request rather than the same one being re-served.
+//   * A refusal that REPEATS `ERR_RETRY_N` times on one burst is permanent by
+//     definition, and the tick is FAULTED rather than retried forever.
+//   * A FAULTED TICK IS TRUNCATED, NEVER HUNG and never fabricated. The DDR
+//     side stops; `ps_tick_abort_o` ends PART.STATE's read stream (its
+//     `tick_abort_i`); records still offered by PART.STATE are accepted and
+//     DISCARDED (`records_discarded_o`) so it can finish; and the new
+//     generation's length becomes `wr_iss_q` -- EXACTLY the records that
+//     reached DDR, densely, from index zero. The buffers still swap, because
+//     replaying the previous generation would age no particle and is a worse
+//     lie than a shorter one. `ticks_faulted_o` counts it; `ticks_o` does not,
+//     so "ticks completed" stays the number it has always been.
+//
+// ENFORCED-BY: tests/particles/part_hps_directed.cpp -- CASE H refuses ONE
+// request the real way and requires the retry to succeed; CASE I refuses every
+// request and requires the tick to end, the counters to move, and the store to
+// accept the next tick.
+//
 // Conservative SystemVerilog subset only (charter 2).
 `default_nettype none
 
 module zhao_part_hps #(
     parameter int unsigned CAPACITY = 32768,
     parameter int unsigned CNT_W    = $clog2(CAPACITY) + 1,
+    // Consecutive refusals of ONE burst before the tick is abandoned. Named
+    // and editable: it is the boundary between "the bridge was busy" and "this
+    // burst will never be accepted", and nothing in the protocol distinguishes
+    // them, so it is a judgement and belongs in a knob.
+    parameter int unsigned ERR_RETRY_N = 4,
     // Staging depths, in RECORDS. Eight is two bursts: one landing while the
     // other drains, which is what keeps one-in-flight from serialising the
     // tick on round-trip latency more than it must.
@@ -84,6 +122,9 @@ module zhao_part_hps #(
     input  var logic             tick_i,
     output var logic             ps_tick_start_o,
     output var logic             ps_rd_empty_o,
+    // The store cannot deliver the rest of this generation: end the read
+    // stream. Held for the whole fault, see the refusal chapter above.
+    output var logic             ps_tick_abort_o,
     input  var logic             ps_tick_done_i,
 
     // ---- the previous generation, to PART.STATE ------------------------------
@@ -100,11 +141,7 @@ module zhao_part_hps #(
     // ---- MEM.HPS.BRIDGE client -------------------------------------------------
     output zhao_pkg::zhao_hps_burst_req_t hps_req_o,
     input  var logic                      hps_grant_i,
-    // `err` is not read, and that is the argument at B_REQ below: holding the
-    // request IS the retry, and the bridge counts its own refusals.
-    /* verilator lint_off UNUSEDSIGNAL */
     input  zhao_pkg::zhao_hps_burst_rsp_t hps_rsp_i,
-    /* verilator lint_on UNUSEDSIGNAL */
     output var logic                      hps_wr_valid_o,
     output var logic [63:0]               hps_wr_data_o,
     output var logic                      hps_wr_last_o,
@@ -123,12 +160,17 @@ module zhao_part_hps #(
     output var logic [31:0]      rd_bursts_o,
     output var logic [31:0]      wr_bursts_o,
     output var logic [31:0]      records_read_o,     // handed to PART.STATE
-    output var logic [31:0]      records_written_o   // taken from PART.STATE
+    output var logic [31:0]      records_written_o,  // taken from PART.STATE
+    // ---- the bridge refusal (R54) ------------------------------------------
+    output var logic [31:0]      bridge_errs_o,      // `err` seen at B_REQ
+    output var logic [31:0]      ticks_faulted_o,    // ticks truncated by one
+    output var logic [31:0]      records_discarded_o // taken and thrown away
 );
 
   localparam int unsigned BURST_REC = 4;   // 64 B / 16 B
   localparam int unsigned RPW = $clog2(RD_D);
   localparam int unsigned WPW = $clog2(WR_D);
+  localparam int unsigned ERW = $clog2(ERR_RETRY_N + 1);
 
   initial begin
     if (RD_D < 2 * BURST_REC || (RD_D & (RD_D - 1)) != 0)
@@ -137,12 +179,15 @@ module zhao_part_hps #(
       $fatal(1, "zhao_part_hps: WR_D=%0d must be a power of two of at least %0d", WR_D, 2 * BURST_REC);
     if (CNT_W < 3)
       $fatal(1, "zhao_part_hps: CNT_W=%0d is too narrow", CNT_W);
+    if (ERR_RETRY_N < 1)
+      $fatal(1, "zhao_part_hps: ERR_RETRY_N=%0d must be at least 1", ERR_RETRY_N);
   end
 
   // ---- the generation ----------------------------------------------------
   localparam logic [1:0] T_IDLE  = 2'd0;
   localparam logic [1:0] T_RUN   = 2'd1;
   localparam logic [1:0] T_FLUSH = 2'd2;
+  localparam logic [1:0] T_FAULT = 2'd3;   // R54: the tick is being abandoned
 
   logic [1:0]       t_q;
   logic             seeded_q;
@@ -179,6 +224,10 @@ module zhao_part_hps #(
   logic [2:0]  b_beat_q;                  // beat index within the burst, 0..7
   logic [63:0] rd_lo_q;                   // the low half of a landing record
 
+  // ---- the refusal (R54) --------------------------------------------------
+  logic [ERW-1:0] err_run_q;              // consecutive refusals of THIS burst
+  logic           fault_done_q;           // PART.STATE has ended its tick
+
   // ---- the seed ------------------------------------------------------------
   wire seed_aligned_c = (cfg_base0_i[5:0] == 6'd0) && (cfg_base1_i[5:0] == 6'd0);
   wire seed_ok_c      = seed_aligned_c && (seed_count_i <= CNT_W'(CAPACITY));
@@ -191,13 +240,24 @@ module zhao_part_hps #(
   assign ps_rd_empty_o   = (cnt_q == '0);
 
   // ---- PART.STATE's two streams -------------------------------------------
-  assign rd_valid_o  = (t_q != T_IDLE) && (rf_occ_c != '0);
+  // A FAULTED tick offers no more records: the stream is ended by
+  // `ps_tick_abort_o` instead, and anything still staged belongs to a
+  // generation that will not be completed.
+  assign rd_valid_o  = ((t_q == T_RUN) || (t_q == T_FLUSH)) && (rf_occ_c != '0);
   assign rd_record_o = rf_m[rf_rp_q[RPW-1:0]];
   assign rd_last_o   = (rd_taken_q + CNT_W'(1) == tick_cnt_q);
   wire   rd_fire_c   = rd_valid_o && rd_ready_i;
 
-  assign wr_ready_o  = (t_q == T_RUN) && (wf_occ_c != (WPW+1)'(WR_D));
+  // IN A FAULT THE WRITE SIDE STAYS OPEN AND THROWS THE RECORDS AWAY. Refusing
+  // them would back PART.STATE up against a consumer that is never coming
+  // back, which is the hang the fault exists to avoid.
+  assign wr_ready_o  = ((t_q == T_RUN) && (wf_occ_c != (WPW+1)'(WR_D))) ||
+                       (t_q == T_FAULT);
   wire   wr_fire_c   = wr_valid_i && wr_ready_o;
+  wire   wr_take_c   = wr_fire_c && (t_q == T_RUN);
+  wire   wr_drop_c   = wr_fire_c && (t_q == T_FAULT);
+
+  assign ps_tick_abort_o = (t_q == T_FAULT);
 
   // ---- what to issue next --------------------------------------------------
   // WRITES FIRST once a whole burst is staged (or the tick is flushing its
@@ -213,9 +273,10 @@ module zhao_part_hps #(
     wr_n_c = (wf_occ_c >= (WPW+1)'(BURST_REC)) ? 3'(BURST_REC) : wf_occ_c[2:0];
   end
 
-  wire want_wr_c = (wf_occ_c >= (WPW+1)'(BURST_REC)) ||
-                   ((t_q == T_FLUSH) && (wf_occ_c != '0));
-  wire want_rd_c = (t_q != T_IDLE) && (rd_left_c != '0) &&
+  wire want_wr_c = (t_q != T_FAULT) &&
+                   ((wf_occ_c >= (WPW+1)'(BURST_REC)) ||
+                    ((t_q == T_FLUSH) && (wf_occ_c != '0)));
+  wire want_rd_c = (t_q != T_IDLE) && (t_q != T_FAULT) && (rd_left_c != '0) &&
                    ((RPW+1)'(RD_D) - rf_occ_c >= (RPW+1)'(rd_n_c));
 
   // ---- the bridge request --------------------------------------------------
@@ -271,6 +332,11 @@ module zhao_part_hps #(
       b_addr_q   <= 32'd0;
       b_beat_q   <= 3'd0;
       rd_lo_q    <= 64'd0;
+      err_run_q    <= '0;
+      fault_done_q <= 1'b0;
+      bridge_errs_o       <= 32'd0;
+      ticks_faulted_o     <= 32'd0;
+      records_discarded_o <= 32'd0;
       ticks_o           <= 32'd0;
       ticks_dropped_o   <= 32'd0;
       ticks_unseeded_o  <= 32'd0;
@@ -306,6 +372,8 @@ module zhao_part_hps #(
           rd_taken_q <= '0;
           wr_cnt_q   <= '0;
           wr_iss_q   <= '0;
+          err_run_q    <= '0;
+          fault_done_q <= 1'b0;
         end else if (!seeded_q || seed_fire_c) begin
           ticks_unseeded_o <= ticks_unseeded_o + 32'd1;
         end else begin
@@ -319,12 +387,15 @@ module zhao_part_hps #(
         rd_taken_q     <= rd_taken_q + CNT_W'(1);
         records_read_o <= records_read_o + 32'd1;
       end
-      if (wr_fire_c) begin
+      if (wr_take_c) begin
         wf_m[wf_wp_q[WPW-1:0]] <= wr_record_i;
         wf_wp_q           <= wf_wp_q + (WPW+1)'(1);
         wr_cnt_q          <= wr_cnt_q + CNT_W'(1);
         records_written_o <= records_written_o + 32'd1;
       end
+      // R54: taken so PART.STATE can finish, and thrown away. NOT counted as
+      // written -- `records_written_o` is what went into a generation.
+      if (wr_drop_c) records_discarded_o <= records_discarded_o + 32'd1;
 
       // ---- the tick's end -------------------------------------------------
       // PART.STATE raises `tick_done` only after its last write was accepted
@@ -335,6 +406,19 @@ module zhao_part_hps #(
         cur_q   <= ~cur_q;
         cnt_q   <= wr_cnt_q;
         ticks_o <= ticks_o + 32'd1;
+      end
+
+      // R54: the faulted tick ends when PART.STATE has finished (its read
+      // stream was ended by `ps_tick_abort_o`) and nothing is in flight. The
+      // new generation is EXACTLY what reached DDR.
+      if (t_q == T_FAULT) begin
+        if (ps_tick_done_i) fault_done_q <= 1'b1;
+        if ((fault_done_q || ps_tick_done_i) && (b_q == B_IDLE)) begin
+          t_q             <= T_IDLE;
+          cur_q           <= ~cur_q;
+          cnt_q           <= wr_iss_q;
+          ticks_faulted_o <= ticks_faulted_o + 32'd1;
+        end
       end
 
       // ---- the burst engine -----------------------------------------------
@@ -354,20 +438,37 @@ module zhao_part_hps #(
           end
         end
 
-        // HELD UNTIL GRANTED, and deliberately blind to `err`. The bridge
-        // refuses only a malformed burst or one that collides with a busy port
-        // (`zhao_hps_bridge.sv` 105-146). This block cannot make the first --
-        // bases are refused at the seed unless 64-byte aligned and every burst
-        // starts on a four-record boundary -- and the arbiter cannot make the
-        // second, because it pulses the bridge only when it is idle. And if one
-        // did arrive, the arbiter returns to idle on it while this request is
-        // still up, re-latches it and asks again: holding IS the retry. The
-        // bridge's own `hps_err_count` is the instrument that sees a refusal;
-        // a counter here could never be moved and would be a claim, not
-        // evidence, so there is none.
+        // HELD UNTIL GRANTED OR REFUSED (R54). The bridge refuses a malformed
+        // burst or one that collides with a busy port (`zhao_hps_bridge.sv`
+        // 105-147) with `err` and NO grant. This block is believed to be
+        // incapable of the first -- bases are refused at the seed unless
+        // 64-byte aligned and every burst starts on a four-record boundary --
+        // and `zhao_hps_arbiter_n` pulses the bridge only from A_IDLE, so the
+        // second should not reach it either. That belief used to BE the
+        // handling, and it is now only the reason `bridge_errs_o` is expected
+        // to read zero in the console. The handling is below, because the
+        // arbiter re-serves a held request: a refusal this state could not see
+        // was an unbounded spin.
         B_REQ: begin
-          if (hps_grant_i) begin
-            b_q <= b_write_q ? B_WR : B_RD;
+          if (hps_rsp_i.err) begin
+            bridge_errs_o <= bridge_errs_o + 32'd1;
+            b_q           <= B_IDLE;   // take the request DOWN, then re-offer
+            if (ERW'(err_run_q + ERW'(1)) >= ERW'(ERR_RETRY_N)) begin
+              // Permanent by definition: this burst has been refused
+              // ERR_RETRY_N times running. Abandon the tick.
+              t_q                 <= T_FAULT;
+              fault_done_q        <= (t_q == T_FLUSH) || ps_tick_done_i;
+              rf_rp_q             <= rf_wp_q;   // staged reads are moot
+              wf_rp_q             <= wf_wp_q;   // staged writes never go out
+              records_discarded_o <= records_discarded_o + 32'(wf_occ_c);
+              rd_req_q            <= tick_cnt_q;
+              err_run_q           <= '0;
+            end else begin
+              err_run_q <= ERW'(err_run_q + ERW'(1));
+            end
+          end else if (hps_grant_i) begin
+            b_q       <= b_write_q ? B_WR : B_RD;
+            err_run_q <= '0;
             if (b_write_q) wr_bursts_o <= wr_bursts_o + 32'd1;
             else           rd_bursts_o <= rd_bursts_o + 32'd1;
           end

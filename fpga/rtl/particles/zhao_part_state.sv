@@ -222,6 +222,21 @@ module zhao_part_state #(
     // previous generation is known to be non-empty; the block then behaves
     // exactly as before.
     input  wire                  rd_empty_i,
+    // THE SOURCE CANNOT DELIVER THE REST OF THIS GENERATION. Added 2026-09-19
+    // evening (gz/pfs2, ruling R54) with `zhao_part_hps`'s bridge-refusal
+    // repair. `rd_last_i` rides a RECORD and `rd_empty_i` is sampled once at
+    // `tick_start_i`, so a store that loses its memory MID-TICK -- the bridge
+    // refusing a burst with `err` and no grant -- had no way to end the
+    // survivor pass, and this block waited forever for a record that could not
+    // come. A HANG is the one outcome a fault must not have. High here ends the
+    // read stream exactly as a last record would: the survivor pass closes on
+    // its own `out_q == 0` exit and the append phase runs normally, so the tick
+    // completes with the records that DID arrive. It is a level, held by the
+    // source until the tick is over, and it is counted THERE
+    // (`zhao_part_hps.ticks_faulted_o`) rather than here, so one event has one
+    // counter. Tie LOW where the source cannot fail mid-generation; the block
+    // then behaves exactly as before.
+    input  wire                  tick_abort_i,
 
     // ---- offered to PART.UPDATE ----------------------------------------------
     output wire                  prt_valid_o,
@@ -442,6 +457,13 @@ module zhao_part_state #(
       end
 
       if (wr_fire_c) wr_v_q <= 1'b0;
+
+      // THE ABORT, BEFORE THE CASE ON PURPOSE. S_IDLE's `tick_start_i` arm
+      // assigns `rd_done_q <= rd_empty_i` and must WIN if both land on one
+      // edge: a tick that is starting has not yet read anything, so "the
+      // previous tick's source failed" must not close it before it opens.
+      // Ordering in an always_ff is the guard; see the header.
+      if (tick_abort_i) rd_done_q <= 1'b1;
 
       case (st_q)
         S_IDLE: begin

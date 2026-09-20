@@ -428,6 +428,66 @@
 // every register run before that date is this, and it changed the KIND column
 // only -- `mandatory_gap` is true for both kinds, so no total was ever wrong.)
 //
+//  * I33 was PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`), six ports whose
+//    entry's whole argument was one sentence: "NO RATIFIED COMMAND CARRIES A
+//    SPECIES DESCRIPTOR ... Inventing one here would mean this file choosing
+//    what a species IS, which is owner DATA". CLOSED AND DELETED 2026-09-19
+//    (gz/pfs2) under owner ruling R42, which answers it without anyone
+//    choosing that: the descriptors travel as a SPECIES_TABLE page
+//    (spec/cartridge.md 4, kind 13), authored by the owner and published by
+//    the PublishResource this console already executes.
+//    `u_part_table_loader` watches the publication for that kind, reads the
+//    page as whole 64-byte lines through requester E of `u_geom_mem_adapter`
+//    -- the same asset window MATERIAL.RESOLVE's record fetch uses -- and
+//    hands PART.TABLE its OWN load word, {sel, index, event, data},
+//    uninterpreted. Nothing in this module reads a descriptor field. The page
+//    is refused WHOLE on a wrong magic, a wrong version or a count that runs
+//    past the declared extent, each counted; a half-loaded species table is a
+//    particle engine on a mixture of two authors' physics.
+//
+//  * I30 was SURFACE.STAMP's DISPATCH (`surf_cmd_*`). It closed in two halves
+//    and the second one is CLOSED AND DELETED 2026-09-19 (gz/pfs2), under
+//    owner ruling R45. The first half closed when CMD.EXEC grew its
+//    SurfaceStamp arm: every RATIFIED field comes off a validated packet. What
+//    stayed open was the ENVELOPE -- which entry I27 recorded as having "no
+//    placement owner anywhere in the tree" -- and three policy bits no opcode
+//    carries. R45: "The stamp's patch is resolved by the SAME world->patch law
+//    `zhao_terrain_heighttap` implements (powers-of-two pitch, no divider);
+//    the directory is keyed by the resulting patch coordinates. No second
+//    mapping law. blend_en=0 is the ratified policy." `u_surface_dispatch` is
+//    that, combinational from the stamp's own translation and the LIVE pitch
+//    `ptt_pitch_c` the tap already uses, emitting the patch rectangle and the
+//    key {patch_ix, patch_iz}. Nine ports are GONE from this edge rather than
+//    driven: the four `surf_cmd_env_*`, the three policy bits, and
+//    `surf_cmd_field_en_i` -- whose console policy was already "a stamp
+//    program is resident", so the residency is the producer and the host half
+//    of that AND carried no information.
+//
+//    WHAT REMAINS UNDER `surf_cmd_*` IS THE HOST'S OWN DISPATCH PORT, and it
+//    is not a tie-off in the register's sense: every field of it also has an
+//    in-core producer now (CMD.EXEC for the ratified ones, the dispatch for
+//    the rest), the executor has priority with backpressure, and the host path
+//    is a parallel convenience -- the same shape `part_cfg_base*` and
+//    `terr_cfg_*` have. Removing it would remove function, which is the one
+//    thing a closure may not do.
+//
+//  * I7 was PART.COLLIDE's PLANE (`part_plane_*`) and the POPULATION ORIGIN
+//    (`part_pop_origin_*`), eight board pins whose entry said "No ratified
+//    command carries a population descriptor to this core -- DrawPopulation
+//    names a pool handle, not an origin". CLOSED AND DELETED 2026-09-19
+//    (gz/pfs2) under owner ruling R41: one is ratified now. `SetPopulation`
+//    0x0303 carries origin, plane and `active_count`; `u_cmd_exec` lowers it
+//    on a clean verdict exactly as it lowers SetEnvironment; `u_part_pop`
+//    holds it as levels and REFUSES what PART.COLLIDE's formats cannot carry,
+//    counting each refusal. The refusals live in the bank rather than in the
+//    executor because the widths that can be breached are PART.COLLIDE's, and
+//    a second opinion about them in the command path is how two truths drift.
+//    I1's four provisional `part_seed_*` ports went with it (R46): the store's
+//    first generation is seeded from `active_count`, in buffer 0 by the same
+//    ratification. The smoke bench no longer drives any of it -- the values
+//    are in its command packet and `part_pop_handle_o` reads back the handle
+//    the packet named.
+//
 //  * I1 was PART.STATE's GENERATION STORE (`part_rd_*`, `part_wr_*`), a
 //    boundary whose text said "MEM.HPS.BRIDGE is instantiated inside the shell
 //    and has no particle client port". CLOSED AND DELETED 2026-09-19 (gz/pfs).
@@ -943,20 +1003,6 @@
 //      gates `in_valid_i` and PART.STATE's `prt_ready_i` on "the answer for
 //      THIS record is ready", and the record is held stable for the whole
 //      offer. That is a join a composer may write. The binding is not.
-//
-//  I7. PART.COLLIDE's plane (`part_plane_*`) -- BOUNDARY. A per-frame owner
-//      value by the block's own design; CMD.SCHEDULER has no path to it.
-//      WIDENED 2026-09-19 BY THE POPULATION ORIGIN (`part_pop_origin_*`), when
-//      I6 closed. spec/qformats.md 10 puts a particle's position RELATIVE TO
-//      ITS POPULATION'S ORIGIN, "fx16 on a 1/256-m grid", and PART.TERRAIN_TAP
-//      needs it to turn a local position into the world point the terrain is
-//      indexed by (and the terrain's world height back into the local frame
-//      PART.COLLIDE compares against). No ratified command carries a
-//      population descriptor to this core -- DrawPopulation names a pool
-//      handle, not an origin -- so it is the same kind of value as the plane,
-//      with the same absent owner, and it rides this entry rather than a new
-//      one. Zero is a legal origin (the island datum), which is what an
-//      undriven bench gets.
 //
 //  I9. PART.SPAWN's parent id (`par_id_i`) -- NOT a tie-off: the core assigns
 //      it. The particle128 record (amendment C2) carries no id field, so the
@@ -1714,52 +1760,6 @@
 //      store's own `geom_pal_bone_unset_o` reports any vertex that arrived
 //      before its pose did. The missing thing is the BYTES, not the path.
 //
-// I30. SURFACE.STAMP's DISPATCH (`surf_cmd_*`) -- BOUNDARY. NEW 2026-09-19,
-//      opened by composing the SURFACE pair (connected item 9).
-//      `spec/commands.zidl` carries SurfaceStamp with its `handle32[patch]`,
-//      operation byte, tag, strength, transform, radius and ring width, so the
-//      command is RATIFIED and the fields below are its fields -- what was
-//      missing was the path to here. HALF CLOSED 2026-09-19.
-//
-//      CLOSED: THE RATIFIED FIELDS. `zhao_cmd_exec` (section 7c) supplies the
-//      patch handle, operation, tag, strength, the transform's translation,
-//      radius, ring width and the record header's source id, out of a packet
-//      CMD.DECODER has ratified. `cmd_exec_stamps_o` counts the dispatches.
-//      The owner turned out NOT to be CMD.SCHEDULER, which this entry named:
-//      the scheduler works on framed 16-byte record payloads and a SurfaceStamp
-//      carries its transform at record byte 28, past the framer's window. The
-//      executor reads the byte stream itself, which is why it exists.
-//
-//      STILL OPEN: THE ENVELOPE AND THE POLICY. `surf_cmd_env_*` is the patch
-//      placement entry I27 records as having no owner anywhere in the tree, and
-//      `cmd_blend_en_i` / `cmd_blend_i` / `cmd_age_shift_i` / `cmd_field_en_i`
-//      are console policy that no opcode carries. An executor-issued stamp
-//      therefore rides the HOST port's envelope and policy, which is stated in
-//      the merge above rather than left to be discovered from a stamp landing
-//      in the wrong place. `brush` is a third kind of absence and
-//      `zhao_surface_stamp.sv` S5 owns it: nothing in this tree defines a brush
-//      page's format, so there is no port to drive.
-//
-//      (I31 was SURFACE.STAMP's FIELD-DRIVEN BRUSH. It is CLOSED and the
-//      entry is DELETED, 2026-09-19. Its old text said "FIELD.SEQ.STAMP is the
-//      named owner and it is not built", and that owner is ruled never to
-//      exist -- `design/contracts/FIELD.SEQ.STAMP.md`: "one engine, five
-//      profiles ... There is no separate FIELD.SEQ.STAMP sequencer in hardware
-//      and there is not going to be one." What was missing was the engine,
-//      which is `u_field_host` now, and the S profile's STREAM ADAPTER, which
-//      FIELD.SEQ.CORE.md permits by name and which is
-//      `u_field_stamp_adapter`. `surf_fld_valid_i`, `surf_fld_ready_o`,
-//      `surf_fld_tag_op_i` and `surf_fld_strength_i` are GONE from the port
-//      list rather than driven from it.
-//
-//      The binding was assembled rather than chosen: FIELD.SEQ.CORE.md names
-//      the S varying lanes "stencil u,v", and `zhao_surface_stamp` already
-//      unpacks spec/form/field-ir.md 7.1's {tag_op, strength} byte for byte.
-//      The ONE decision this file takes is policy and is stated beside the
-//      stamp: `cmd_field_en_i` is ANDed with "a stamp program is resident", so
-//      a stamp that asks for the brush with nothing loaded runs as a plain ABI
-//      stamp instead of stalling forever on records that cannot come.)
-//
 // I32. SURFACE.STAMP's `stamp_results` (`surf_res_*`) -- BOUNDARY. TERRAIN.BAKE
 //      is the named consumer, it is built and it is NOT composed. The port is
 //      on this module's edge so the result stream is observable rather than
@@ -1840,45 +1840,6 @@
 //      distinguish "the world is solid" from "nothing ever wrote the world".
 //      The cache's `cs_oob_o` is exported beside it, and reads zero because no
 //      write is attempted rather than because every write was in range.
-//
-// I33. PART.TABLE's PER-FRAME LOAD (`part_tbl_ld_*`) -- BOUNDARY. NEW
-//      2026-09-19, and it is the SUCCESSOR to the deleted I2/I3 rather than a
-//      restatement of them: the descriptor table is built, instantiated and
-//      answering all four reads inside this module, and what has no owner here
-//      is the HOST THAT FILLS IT. Six ports, one word per clock, never refused
-//      for backpressure.
-//
-//      CORRECTED 2026-09-19. This entry used to say "THE ABSENT OWNER IS
-//      CMD.SCHEDULER, the same one I14 and I30 name. `zhao_cmd_decoder` is not
-//      composed (see the refusal list below)". BOTH CLAUSES ARE STALE.
-//      CMD.DECODER is composed, as section 7b, and CMD.SCHEDULER is not absent
-//      at all -- it is `u_sched` inside `u_shell`, running in this composition
-//      (the evidence is at entry I36). The conclusion is unchanged and is now
-//      the only thing holding the entry open, so it is stated on its own:
-//
-//      NO RATIFIED COMMAND CARRIES A SPECIES DESCRIPTOR. `spec/commands.zidl`
-//      has no opcode with one, which is why CMD.EXEC has no arm for it and
-//      says so in its own header. No block in this core produces a descriptor
-//      write either. Inventing one here would
-//      mean this file choosing what a species IS, which is owner DATA --
-//      `reference/include/zref/zref_particle.hpp` says so in as many words:
-//      "there is no species table ... That is a DATA/ABI question and it is
-//      properly the owner's". So the load is a port and the CONTENTS are not
-//      guessed.
-//
-//      WHAT AN UNLOADED TABLE DOES, stated rather than left to be discovered:
-//      every read answers with whatever the array holds -- X in simulation,
-//      zero on Cyclone V power-up -- and zero is a recipe of 0 (HOLD), an
-//      unbounded lifetime, an IGNORE response, count 0 and known 0. Every
-//      consumer already refuses on its own terms, with its own counter. The
-//      table adds no fifth opinion, deliberately.
-//
-//      `part_tbl_load_refused_o` CANNOT FIRE IN THIS COMPOSITION and its zero
-//      is therefore not a measurement: at PART_SPECIES_N = 128 and CRV_N = 16 a
-//      seven-bit index cannot address outside the table, so the refusal is
-//      structurally unreachable. It is reachable and fired at SPECIES_N = 8 in
-//      `tests/particles/part_table_directed.cpp`. Said here because a counter
-//      asserted zero and never seen to move is a claim, not evidence.
 //
 // I34. TERRAIN.PATCH's FIELD-HEIGHT LANE (`terr_pt_fld_*`) and its section 9.1
 //      LIST INTAKE (`terr_pt_fld_add_*`) -- BOUNDARY. NEW 2026-09-19, opened by
@@ -2980,10 +2941,13 @@ module zhao_console_core
   // (spec/qformats.md 10) -- and is taken only between ticks.
   input  logic [31:0]             part_cfg_base0_i,
   input  logic [31:0]             part_cfg_base1_i,
-  input  logic                    part_seed_valid_i,
-  output logic                    part_seed_ready_o,
-  input  logic                    part_seed_buf_i,
-  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // (I1's four provisional `part_seed_*` ports were here. CLOSED 2026-09-19
+  //  under owner rulings R41/R46: the seed is `SetPopulation`'s `active_count`
+  //  and the buffer is 0 by that ratification, so `u_part_pop` drives the
+  //  store's seed handshake and the board drives neither. The two BASES stay:
+  //  they are the HPS allocator's (spec/memory_rules.md 5), not a game-facing
+  //  command field, and putting an allocator address in a ratified record is a
+  //  decision nobody has made.)
   // The store's evidence. `cur_count` is the generation's length as the
   // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
   // stimulus in tests/particles/part_hps_directed.cpp.
@@ -2998,6 +2962,15 @@ module zhao_console_core
   output logic [31:0]             part_hps_wr_bursts_o,
   output logic [31:0]             part_hps_records_read_o,
   output logic [31:0]             part_hps_records_written_o,
+  // R54, 2026-09-19 evening: the bridge refusal `zhao_part_hps` used to be
+  // blind to. `bridge_errs` is expected to read ZERO here -- the arbiter
+  // pulses the bridge only from A_IDLE and every burst is aligned -- and that
+  // expectation is now an EXPECTATION with an instrument behind it rather than
+  // an argument standing in place of one. It is fired by stimulus in
+  // tests/particles/part_hps_directed.cpp CASE H/I.
+  output logic [31:0]             part_hps_bridge_errs_o,
+  output logic [31:0]             part_hps_ticks_faulted_o,
+  output logic [31:0]             part_hps_records_discarded_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -3005,12 +2978,19 @@ module zhao_console_core
   // all four reads inside this module. What is left is the host that fills it,
   // and this is that seam. One word per clock; the table never refuses for
   // backpressure (`ld_ready_o` is constant high and says so in its own file).
-  input  logic                    part_tbl_ld_valid_i,
-  output logic                    part_tbl_ld_ready_o,
-  input  logic [1:0]              part_tbl_ld_sel_i,
-  input  logic [6:0]              part_tbl_ld_index_i,
-  input  logic [1:0]              part_tbl_ld_event_i,
-  input  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i,
+  // (I33's six part_tbl_ld_* ports were here. CLOSED 2026-09-19 under owner
+  //  ruling R42: the descriptors travel as DATA in a SPECIES_TABLE page the
+  //  owner authors, published by the command that publishes every other
+  //  resource, and u_part_table_loader carries the load words from the page
+  //  to the port. Nothing in this console chooses what a species IS, which is
+  //  the whole reason the entry stayed open. The evidence below is that
+  //  block's.)
+  output logic [31:0]             part_tbl_pages_o,
+  output logic [31:0]             part_tbl_entries_o,
+  output logic [31:0]             part_tbl_pages_dropped_o,
+  output logic [31:0]             part_tbl_bad_magic_o,
+  output logic [31:0]             part_tbl_truncated_o,
+  output logic [31:0]             part_tbl_denied_o,
 
   // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
   input  logic                    part_fld_valid_i,
@@ -3042,21 +3022,18 @@ module zhao_console_core
   output logic [31:0]             terr_tap_off_patch_o,
   output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
 
-  // ---- I7: the one plane, and the population origin ------------------------
-  // The origin is widened INTO I7 rather than opened as a new entry because it
-  // is the same kind of thing with the same absent owner: a per-frame
-  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
-  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
-  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
-  // terrain height -- and it became visible the moment a real height arrived.
-  input  logic signed [31:0]      part_pop_origin_x_i,
-  input  logic signed [31:0]      part_pop_origin_y_i,
-  input  logic signed [31:0]      part_pop_origin_z_i,
-  input  logic                    part_plane_en_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nz_i,
-  input  logic signed [31:0]      part_plane_c_i,
+  // (I7's eight `part_pop_origin_*` / `part_plane_*` inputs were here. CLOSED
+  //  2026-09-19 under owner ruling R41: `SetPopulation` 0x0303 is ratified and
+  //  carries all eight, CMD.EXEC lowers it, and `u_part_pop` holds the
+  //  descriptor as the levels PART.COLLIDE and PART.TERRAIN_TAP read on every
+  //  beat. The evidence below is that bank's.)
+  output logic [31:0]             part_pop_taken_o,
+  output logic [31:0]             part_pop_refused_normal_o,
+  output logic [31:0]             part_pop_refused_count_o,
+  output logic [31:0]             part_pop_refused_flags_o,
+  output logic [31:0]             part_pop_seeds_issued_o,
+  output logic [31:0]             part_pop_handle_o,     // the population it holds
+  output logic [31:0]             cmd_exec_pops_o,       // records CMD.EXEC lowered
 
   // (I2's PART.SPAWN slice was here. CLOSED: PART.TABLE serves it below.)
 
@@ -3805,6 +3782,14 @@ module zhao_console_core
   // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
   output logic [31:0]             terr_hps_c3_bursts_o,
   output logic [31:0]             terr_hps_c3_wait_cycles_o,
+  // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
+  // pending slot is already occupied is DROPPED, and used to be dropped in
+  // silence. These two are that reading -- a count of distinct dropped
+  // offerings and a sticky mask naming the client. Expected zero here, and
+  // the arbiter's header argues structurally why; the argument is no longer
+  // the only thing standing where the instrument should be.
+  output logic [31:0]             terr_hps_pend_dropped_o,
+  output logic [3:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -3878,6 +3863,7 @@ module zhao_console_core
   output logic [31:0]             mat_fetch_denied_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
+  output logic [31:0]             geom_ma_jobs_e_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -4411,15 +4397,27 @@ module zhao_console_core
   input  logic signed [31:0] surf_cmd_ty_i,
   input  logic signed [31:0] surf_cmd_radius_i,
   input  logic signed [31:0] surf_cmd_ring_width_i,
-  input  logic signed [31:0] surf_cmd_env_x0_i,
-  input  logic signed [31:0] surf_cmd_env_z0_i,
-  input  logic signed [31:0] surf_cmd_env_x1_i,
-  input  logic signed [31:0] surf_cmd_env_z1_i,
-  input  logic               surf_cmd_blend_en_i,
-  input  logic        [ 2:0] surf_cmd_blend_i,
-  input  logic        [ 2:0] surf_cmd_age_shift_i,
-  input  logic               surf_cmd_field_en_i,
+  // (I30's OPEN HALF was here: surf_cmd_env_* -- the patch envelope, which
+  //  entry I27 recorded as having no placement owner anywhere in the tree --
+  //  and the three policy bits no opcode carries. CLOSED 2026-09-19 under
+  //  owner ruling R45: u_surface_dispatch resolves the patch by the SAME
+  //  world->patch law zhao_terrain_heighttap inverts, from the stamp's own
+  //  translation and the live pitch, and carries the policy in three named
+  //  parameters with blend_en = 0 as R45 ratifies. surf_cmd_field_en_i went
+  //  with them: the policy was already "a stamp program is resident", so the
+  //  residency IS the producer and the host had nothing to add.)
   input  logic        [15:0] surf_cmd_src_id_i,
+  // The dispatch's evidence.
+  output logic [31:0]        surf_disp_dispatched_o,
+  output logic [31:0]        surf_disp_pitch_refused_o,
+  output logic [31:0]        surf_disp_env_clamped_o,
+  output logic signed [15:0] surf_disp_patch_ix_o,
+  output logic signed [15:0] surf_disp_patch_iz_o,
+  // The rectangle itself, because a patch index alone cannot be checked
+  // against the stamp's own geometry and an unchecked envelope is how a stamp
+  // lands somewhere plausible and wrong.
+  output logic signed [31:0] surf_disp_env_x0_o,
+  output logic signed [31:0] surf_disp_env_x1_o,
 
   // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
   // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
@@ -5262,6 +5260,73 @@ module zhao_console_core
   wire [6:0]                  ptb_s_child_spc;
   wire [4:0]                  ptb_s_count;
 
+  // ==========================================================================
+  // PART.TABLE's HOST -- entry I33 CLOSED 2026-09-19 (gz/pfs2, ruling R42).
+  // ==========================================================================
+  // The entry's argument was "NO RATIFIED COMMAND CARRIES A SPECIES DESCRIPTOR
+  // ... Inventing one here would mean this file choosing what a species IS,
+  // which is owner DATA". R42 answers it without anyone choosing that: the
+  // descriptors travel as a SPECIES_TABLE page (spec/cartridge.md 4 kind 13),
+  // published by the PublishResource this console already executes, and
+  // `u_part_table_loader` carries the load words from the page to the port.
+  // The page's byte layout is frozen in `zref::species_page`; its CONTENTS are
+  // the owner's and nothing in this module reads a descriptor field.
+  //
+  // THE TRIGGER IS THE PUBLICATION, not the command: by then the page is
+  // resident, CRC-checked and bounded. The READ is requester E of
+  // `u_geom_mem_adapter` -- the same asset window MATERIAL.RESOLVE's record
+  // fetch uses, and the rarest traffic on it.
+  logic                      ptl_ld_valid, ptl_ld_ready;
+  logic [1:0]                ptl_ld_sel, ptl_ld_event;
+  logic [6:0]                ptl_ld_index;
+  logic [PART_TBL_LD_W-1:0]  ptl_ld_data;
+  zhao_guard_req_t           ptl_guard_req;
+  zhao_guard_rsp_t           ptl_guard_rsp;
+  logic                      ptl_beat_valid;
+  logic [63:0]               ptl_beat_data;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The loader counts its own eight beats per line, so `last` is corroboration
+  // rather than control -- the same reading MATERIAL.RESOLVE takes of it. And
+  // `busy` is PART.TABLE's own back-pressure by construction: the load port
+  // never refuses, so nothing here needs to wait for the loader.
+  logic                      ptl_beat_last;
+  logic                      ptl_busy_unused;
+  /* verilator lint_on UNUSEDSIGNAL */
+
+  zhao_part_table_loader #(
+    .LD_W     (PART_TBL_LD_W),
+    .PAGE_KIND(PART_KIND_SPECIES_TABLE),
+    .CLIENT   (ZHAO_CLIENT_ENGINE1)
+  ) u_part_table_loader (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .pub_valid_i (upl_publish_valid_o),
+    .pub_tag_i   (upl_publish_tag_o),
+    .pub_base_i  (upl_publish_base_o),
+    .pub_extent_i(upl_publish_extent_o),
+
+    .g_req_o       (ptl_guard_req),
+    .g_rsp_i       (ptl_guard_rsp),
+    .g_beat_valid_i(ptl_beat_valid),
+    .g_beat_data_i (ptl_beat_data),
+
+    .ld_valid_o(ptl_ld_valid),
+    .ld_ready_i(ptl_ld_ready),
+    .ld_sel_o  (ptl_ld_sel),
+    .ld_index_o(ptl_ld_index),
+    .ld_event_o(ptl_ld_event),
+    .ld_data_o (ptl_ld_data),
+
+    .pages_o        (part_tbl_pages_o),
+    .entries_o      (part_tbl_entries_o),
+    .pages_dropped_o(part_tbl_pages_dropped_o),
+    .bad_magic_o    (part_tbl_bad_magic_o),
+    .truncated_o    (part_tbl_truncated_o),
+    .denied_o       (part_tbl_denied_o),
+    .busy_o         (ptl_busy_unused)
+  );
+
   zhao_part_table #(
     .SPECIES_N (PART_SPECIES_N),
     .AGE_W     (PART_AGE_W),
@@ -5276,13 +5341,14 @@ module zhao_console_core
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I33: the per-frame load, out at the boundary.
-    .ld_valid_i (part_tbl_ld_valid_i),
-    .ld_ready_o (part_tbl_ld_ready_o),
-    .ld_sel_i   (part_tbl_ld_sel_i),
-    .ld_index_i (part_tbl_ld_index_i),
-    .ld_event_i (part_tbl_ld_event_i),
-    .ld_data_i  (part_tbl_ld_data_i),
+    // REAL (I33 closed, R42): the load comes from a published SPECIES_TABLE
+    // page, read by u_part_table_loader below.
+    .ld_valid_i (ptl_ld_valid),
+    .ld_ready_o (ptl_ld_ready),
+    .ld_sel_i   (ptl_ld_sel),
+    .ld_index_i (ptl_ld_index),
+    .ld_event_i (ptl_ld_event),
+    .ld_data_i  (ptl_ld_data),
 
     // REAL: PART.UPDATE's species descriptor.  I2, update half.
     .u_index_i   (ptb_u_index),
@@ -5353,13 +5419,83 @@ module zhao_console_core
   // Provisional, one constant to change: `PART_HPS_CLIENT` below.
   localparam zhao_client_e PART_HPS_CLIENT = ZHAO_CLIENT_ENGINE1;
 
+  // ==========================================================================
+  // PART.POP -- entry I7 CLOSED 2026-09-19 (gz/pfs2, owner ruling R41).
+  // ==========================================================================
+  // The population descriptor's frame values -- origin, analytic plane and
+  // `active_count` -- were eight board pins and a provisional seed port,
+  // because "no ratified command carries a population descriptor to this
+  // core". R41 ratified one: `SetPopulation` 0x0303. The chain composed here
+  // is a REAL one end to end -- the command packet carries the record,
+  // `u_cmd_decoder` validates it, `u_cmd_exec` lowers it on a clean verdict,
+  // `u_part_pop` holds it and refuses what the engine's formats cannot carry,
+  // and PART.COLLIDE, PART.TERRAIN_TAP and the generation store read it.
+  //
+  // THE REFUSALS ARE THE BANK'S, NOT THE EXECUTOR'S, on purpose: the widths
+  // that can be breached are PART.COLLIDE's, and a second opinion about them
+  // living in the command path is how two truths start to drift.
+  logic        cmd_pop_valid, cmd_pop_ready;
+  logic [31:0] cmd_pop_population, cmd_pop_ox, cmd_pop_oy, cmd_pop_oz;
+  logic [31:0] cmd_pop_count, cmd_pop_pc;
+  logic [15:0] cmd_pop_nx, cmd_pop_ny, cmd_pop_nz, cmd_pop_flags;
+
+  logic signed [31:0]           pop_origin_x_c, pop_origin_y_c, pop_origin_z_c;
+  logic                         pop_plane_en_c;
+  logic signed [PART_NRM_W-1:0] pop_plane_nx_c, pop_plane_ny_c, pop_plane_nz_c;
+  logic signed [31:0]           pop_plane_c_c;
+  logic                         pop_seed_valid, pop_seed_ready, pop_seed_buf;
+  logic [$clog2(PART_CAPACITY):0] pop_seed_count;
+
+  zhao_part_pop #(
+    .CAPACITY(PART_CAPACITY),
+    .CNT_W   ($clog2(PART_CAPACITY) + 1),
+    .NRM_W   (PART_NRM_W)
+  ) u_part_pop (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    .rec_valid_i       (cmd_pop_valid),
+    .rec_ready_o       (cmd_pop_ready),
+    .rec_population_i  (cmd_pop_population),
+    .rec_origin_x_i    (cmd_pop_ox),
+    .rec_origin_y_i    (cmd_pop_oy),
+    .rec_origin_z_i    (cmd_pop_oz),
+    .rec_active_count_i(cmd_pop_count),
+    .rec_plane_c_i     (cmd_pop_pc),
+    .rec_plane_nx_i    (cmd_pop_nx),
+    .rec_plane_ny_i    (cmd_pop_ny),
+    .rec_plane_nz_i    (cmd_pop_nz),
+    .rec_flags_i       (cmd_pop_flags),
+
+    .origin_x_o  (pop_origin_x_c),
+    .origin_y_o  (pop_origin_y_c),
+    .origin_z_o  (pop_origin_z_c),
+    .plane_en_o  (pop_plane_en_c),
+    .plane_nx_o  (pop_plane_nx_c),
+    .plane_ny_o  (pop_plane_ny_c),
+    .plane_nz_o  (pop_plane_nz_c),
+    .plane_c_o   (pop_plane_c_c),
+    .population_o(part_pop_handle_o),
+
+    .seed_valid_o(pop_seed_valid),
+    .seed_ready_i(pop_seed_ready),
+    .seed_buf_o  (pop_seed_buf),
+    .seed_count_o(pop_seed_count),
+
+    .taken_o          (part_pop_taken_o),
+    .refused_normal_o (part_pop_refused_normal_o),
+    .refused_count_o  (part_pop_refused_count_o),
+    .refused_flags_o  (part_pop_refused_flags_o),
+    .seeds_issued_o   (part_pop_seeds_issued_o)
+  );
+
   zhao_hps_burst_req_t ptb_hps_req;
   logic                ptb_hps_grant;
   zhao_hps_burst_rsp_t ptb_hps_rsp;
   logic [63:0]         ptb_hps_wdata;
   logic                ptb_hps_wvalid, ptb_hps_wlast;
 
-  logic                   ph_tick_start, ph_rd_empty;
+  logic                   ph_tick_start, ph_rd_empty, ph_tick_abort;
   logic                   ph_rd_valid, ph_rd_ready, ph_rd_last;
   logic [PART_REC_W-1:0]  ph_rd_record;
   logic                   ph_wr_valid, ph_wr_ready;
@@ -5377,13 +5513,16 @@ module zhao_console_core
     .rst_n            (rst_n),
     .cfg_base0_i      (part_cfg_base0_i),
     .cfg_base1_i      (part_cfg_base1_i),
-    .seed_valid_i     (part_seed_valid_i),
-    .seed_ready_o     (part_seed_ready_o),
-    .seed_buf_i       (part_seed_buf_i),
-    .seed_count_i     (part_seed_count_i),
+    // REAL (I7/R41): the seed is SetPopulation's `active_count`, held by
+    // `u_part_pop` until this block takes it.
+    .seed_valid_i     (pop_seed_valid),
+    .seed_ready_o     (pop_seed_ready),
+    .seed_buf_i       (pop_seed_buf),
+    .seed_count_i     (pop_seed_count),
     .tick_i           (core_tick_c),
     .ps_tick_start_o  (ph_tick_start),
     .ps_rd_empty_o    (ph_rd_empty),
+    .ps_tick_abort_o  (ph_tick_abort),
     .ps_tick_done_i   (part_tick_done_o),
     .rd_valid_o       (ph_rd_valid),
     .rd_ready_i       (ph_rd_ready),
@@ -5410,7 +5549,10 @@ module zhao_console_core
     .rd_bursts_o      (part_hps_rd_bursts_o),
     .wr_bursts_o      (part_hps_wr_bursts_o),
     .records_read_o   (part_hps_records_read_o),
-    .records_written_o(part_hps_records_written_o)
+    .records_written_o(part_hps_records_written_o),
+    .bridge_errs_o       (part_hps_bridge_errs_o),
+    .ticks_faulted_o     (part_hps_ticks_faulted_o),
+    .records_discarded_o (part_hps_records_discarded_o)
   );
 
   zhao_part_state #(
@@ -5437,6 +5579,9 @@ module zhao_console_core
     .rd_record_i  (ph_rd_record),
     .rd_last_i    (ph_rd_last),
     .rd_empty_i   (ph_rd_empty),
+    // REAL (R54): the store could not finish reading the generation out of
+    // DDR, so the survivor pass ends here instead of waiting forever.
+    .tick_abort_i (ph_tick_abort),
 
     // REAL: straight into PART.UPDATE.
     .prt_valid_o  (ps_prt_valid),
@@ -5619,9 +5764,9 @@ module zhao_console_core
     .rst_n(rst_n),
 
     // I7, widened: the population origin has no producer in this core.
-    .origin_x_i(part_pop_origin_x_i),
-    .origin_y_i(part_pop_origin_y_i),
-    .origin_z_i(part_pop_origin_z_i),
+    .origin_x_i(pop_origin_x_c),
+    .origin_y_i(pop_origin_y_c),
+    .origin_z_i(pop_origin_z_c),
     // REAL: the same net TERRAIN.PLACE and TERRAIN.HEIGHTTAP read.
     .pitch_log2_i(ptt_pitch_c),
     .inval_i     (ptt_inval_c),
@@ -5718,11 +5863,11 @@ module zhao_console_core
     .t_nz_i    (ptt_t_nz),
 
     // I7: the one plane, a per-frame owner value with no CMD path.
-    .pl_en_i(part_plane_en_i),
-    .pl_nx_i(part_plane_nx_i),
-    .pl_ny_i(part_plane_ny_i),
-    .pl_nz_i(part_plane_nz_i),
-    .pl_c_i (part_plane_c_i),
+    .pl_en_i(pop_plane_en_c),
+    .pl_nx_i(pop_plane_nx_c),
+    .pl_ny_i(pop_plane_ny_c),
+    .pl_nz_i(pop_plane_nz_c),
+    .pl_c_i (pop_plane_c_c),
 
     // REAL: forked to PART.STATE's write-back channel and to PART.SPAWN
     // (glue 3). `c_spawn_record_o` is the POST-CONTACT record by ruling I4 §3,
@@ -8170,6 +8315,32 @@ module zhao_console_core
   logic signed [31:0] cmd_exec_stamp_tx_w, cmd_exec_stamp_ty_w;
   logic signed [31:0] cmd_exec_stamp_radius_w, cmd_exec_stamp_ring_w;
 
+  // ==========================================================================
+  // SURFACE.DISPATCH -- entry I30's OPEN HALF, CLOSED 2026-09-19 (ruling R45).
+  // ==========================================================================
+  // The paragraph above used to end "an executor-issued stamp rides the host's
+  // envelope and policy", and that was honest and was a gap: the envelope had
+  // no owner anywhere in the tree (entry I27 said so) and the policy was three
+  // bits no opcode carries. R45 gave both an owner. `u_surface_dispatch`
+  // resolves the patch from the stamp's OWN translation by the world->patch
+  // law `zhao_terrain_heighttap` inverts -- powers-of-two pitch, arithmetic
+  // shift, no divider, floor -- and emits the patch rectangle plus the
+  // directory key {patch_ix, patch_iz}. NO SECOND MAPPING LAW EXISTS: this is
+  // the same shift, on the same live pitch (`ptt_pitch_c`, from
+  // TERRAIN.HDRREAD's staged header) that the tap uses.
+  //
+  // It is COMBINATIONAL from the merged command's translation, so the envelope
+  // and the command it belongs to cannot be a cycle apart -- the join that
+  // would otherwise have to be argued about is not a join at all.
+  logic signed [31:0] sd_env_x0_c, sd_env_z0_c, sd_env_x1_c, sd_env_z1_c;
+  logic               sd_blend_en_c;
+  logic [2:0]         sd_blend_c, sd_age_shift_c;
+  /* verilator lint_off UNUSEDSIGNAL */
+  // The directory key leaves this module as evidence; nothing inside it keys
+  // on a patch yet, and inventing a consumer would be worse than saying so.
+  logic               sd_patch_valid_c;
+  /* verilator lint_on UNUSEDSIGNAL */
+
   logic        surf_cmd_valid_m;
   logic [31:0] surf_cmd_handle_m;
   logic [ 7:0] surf_cmd_operation_m, surf_cmd_tag_m;
@@ -8196,7 +8367,10 @@ module zhao_console_core
   logic [31:0] sfa_fld_tag_op;
   logic [15:0] sfa_fld_strength;
   logic        sfa_arm_ready;
-  assign surf_field_en_c = surf_cmd_field_en_i && sfa_arm_ready;
+  // R45: the policy WAS surf_cmd_field_en_i && sfa_arm_ready, and the host
+  // half of that AND carried no information the console did not already have.
+  // A stamp uses the brush exactly when a stamp program is resident.
+  assign surf_field_en_c = sfa_arm_ready;
 
   assign surf_cmd_valid_m       = cmd_exec_stamp_valid_w || surf_cmd_valid_i;
   assign cmd_exec_stamp_ready_w = surf_cmd_ready_int;
@@ -8221,6 +8395,32 @@ module zhao_console_core
   assign surf_cmd_src_id_m     = cmd_exec_stamp_valid_w ? cmd_exec_stamp_src_id_w
                                                         : surf_cmd_src_id_i;
 
+  zhao_surface_dispatch u_surface_dispatch (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+    .pitch_log2_i (ptt_pitch_c),
+    .cmd_tx_i     (surf_cmd_tx_m),
+    .cmd_ty_i     (surf_cmd_ty_m),
+    .cmd_fire_i   (surf_cmd_valid_m && surf_cmd_ready_int),
+    .env_x0_o     (sd_env_x0_c),
+
+    .env_z0_o     (sd_env_z0_c),
+    .env_x1_o     (sd_env_x1_c),
+    .env_z1_o     (sd_env_z1_c),
+    .patch_ix_o   (surf_disp_patch_ix_o),
+    .patch_iz_o   (surf_disp_patch_iz_o),
+    .patch_valid_o(sd_patch_valid_c),
+    .blend_en_o   (sd_blend_en_c),
+    .blend_o      (sd_blend_c),
+    .age_shift_o  (sd_age_shift_c),
+    .dispatched_o   (surf_disp_dispatched_o),
+    .pitch_refused_o(surf_disp_pitch_refused_o),
+    .env_clamped_o  (surf_disp_env_clamped_o)
+  );
+
+  assign surf_disp_env_x0_o = sd_env_x0_c;
+  assign surf_disp_env_x1_o = sd_env_x1_c;
+
   zhao_surface_stamp #(
     .SQ_RADIX (SURF_SQ_RADIX)
   ) u_surface_stamp (
@@ -8239,13 +8439,16 @@ module zhao_console_core
     .cmd_ty_i        (surf_cmd_ty_m),
     .cmd_radius_i    (surf_cmd_radius_m),
     .cmd_ring_width_i(surf_cmd_ring_width_m),
-    .cmd_env_x0_i    (surf_cmd_env_x0_i),
-    .cmd_env_z0_i    (surf_cmd_env_z0_i),
-    .cmd_env_x1_i    (surf_cmd_env_x1_i),
-    .cmd_env_z1_i    (surf_cmd_env_z1_i),
-    .cmd_blend_en_i  (surf_cmd_blend_en_i),
-    .cmd_blend_i     (surf_cmd_blend_i),
-    .cmd_age_shift_i (surf_cmd_age_shift_i),
+    // REAL (I30 closed, R45): the envelope is the patch the stamp's own
+    // translation lands on, by the world->patch law, and the policy is the
+    // dispatch's three named constants.
+    .cmd_env_x0_i    (sd_env_x0_c),
+    .cmd_env_z0_i    (sd_env_z0_c),
+    .cmd_env_x1_i    (sd_env_x1_c),
+    .cmd_env_z1_i    (sd_env_z1_c),
+    .cmd_blend_en_i  (sd_blend_en_c),
+    .cmd_blend_i     (sd_blend_c),
+    .cmd_age_shift_i (sd_age_shift_c),
     .cmd_field_en_i  (surf_field_en_c),
     .cmd_src_id_i    (surf_cmd_src_id_m),
 
@@ -9221,7 +9424,14 @@ module zhao_console_core
     .b_wr_last_o  (terr_hps_wr_last),
     .b_rsp_i      (terr_hps_rsp),
     .bursts_o     (thps_bursts),
-    .wait_cycles_o(thps_wait)
+    .wait_cycles_o(thps_wait),
+    // R55: the pending slot holds ONE request per client, and a second,
+    // different one offered while it is occupied is dropped. No client here
+    // can do it -- each is a holder whose request fields do not move inside
+    // its request state (the arbiter's rule 6c names all four) -- so this
+    // reads zero, and now it reads zero rather than being argued to.
+    .pend_dropped_o     (terr_hps_pend_dropped_o),
+    .pend_dropped_mask_o(terr_hps_pend_dropped_mask_o)
   );
 
   // ---- TERRAIN.CMD -> TERRAIN.SEQ -----------------------------------------
@@ -10835,6 +11045,20 @@ module zhao_console_core
     .env_sun_colour_o(cmd_env_sun),
     .env_ambient_o   (cmd_env_amb),
     .envs_issued_o   (cmd_exec_envs_o),
+    // R41: SetPopulation -> PART.POP (u_part_pop, beside the particle engine).
+    .pop_valid_o       (cmd_pop_valid),
+    .pop_ready_i       (cmd_pop_ready),
+    .pop_population_o  (cmd_pop_population),
+    .pop_origin_x_o    (cmd_pop_ox),
+    .pop_origin_y_o    (cmd_pop_oy),
+    .pop_origin_z_o    (cmd_pop_oz),
+    .pop_active_count_o(cmd_pop_count),
+    .pop_plane_c_o     (cmd_pop_pc),
+    .pop_plane_nx_o    (cmd_pop_nx),
+    .pop_plane_ny_o    (cmd_pop_ny),
+    .pop_plane_nz_o    (cmd_pop_nz),
+    .pop_flags_o       (cmd_pop_flags),
+    .pops_issued_o     (cmd_exec_pops_o),
     // R18/R33: the token CEILING and each view's REQUEST -> MEASURE.TOKENS.
     .tok_budget_valid_o (cmd_tok_budget_valid),
     .tok_budget_geom0_o (cmd_tok_budget_geom0),
@@ -11970,6 +12194,10 @@ module zhao_console_core
   // makes -- VRAM is 2^27 bytes and every region either block may name is
   // inside it.
   localparam logic [7:0] MAT_KIND_MATERIAL_SET = 8'd11;   // cartridge.md 4, kind 11
+  // R42: the species descriptor page. cartridge.md 4, kind 13, allocated by
+  // that ruling. Named here rather than repeated as a literal, so the console
+  // and the loader cannot disagree about which publication is a table.
+  localparam logic [7:0] PART_KIND_SPECIES_TABLE = 8'd13;
 
   zhao_guard_req_t mr_guard_req;
   zhao_guard_rsp_t mr_guard_rsp;
@@ -12095,6 +12323,13 @@ module zhao_console_core
     // REAL: requester D, GEOM.DRAWJOB's 64-byte MESH_STREAM header (R29). One
     // read per DRAW, against A's one per meshlet, so it is the lightest of the
     // four and the round robin's bound is unchanged in kind.
+    // REAL (I33 closed, R42): requester E, PART.TABLE's species-page loader.
+    .e_req_i       (ptl_guard_req),
+    .e_rsp_o       (ptl_guard_rsp),
+    .e_beat_valid_o(ptl_beat_valid),
+    .e_beat_data_o (ptl_beat_data),
+    .e_beat_last_o (ptl_beat_last),
+
     .d_req_i       (dj_guard_req),
     .d_rsp_o       (dj_guard_rsp),
     .d_beat_valid_o(dj_beat_valid),
@@ -12112,6 +12347,7 @@ module zhao_console_core
     .jobs_b_o     (geom_ma_jobs_b_o),
     .jobs_c_o     (geom_ma_jobs_c_o),
     .jobs_d_o     (geom_ma_jobs_d_o),
+    .jobs_e_o     (geom_ma_jobs_e_o),
     .denied_o     (geom_ma_denied_o),
     .contention_o (geom_ma_contention_o),
     .err_short_o  (geom_ma_err_short_o),

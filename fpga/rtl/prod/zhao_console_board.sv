@@ -530,10 +530,13 @@ module zhao_console_board
   // (spec/qformats.md 10) -- and is taken only between ticks.
   input  logic [31:0]             part_cfg_base0_i,
   input  logic [31:0]             part_cfg_base1_i,
-  input  logic                    part_seed_valid_i,
-  output logic                    part_seed_ready_o,
-  input  logic                    part_seed_buf_i,
-  input  logic [$clog2(PART_CAPACITY):0] part_seed_count_i,
+  // (I1's four provisional `part_seed_*` ports were here. CLOSED 2026-09-19
+  //  under owner rulings R41/R46: the seed is `SetPopulation`'s `active_count`
+  //  and the buffer is 0 by that ratification, so `u_part_pop` drives the
+  //  store's seed handshake and the board drives neither. The two BASES stay:
+  //  they are the HPS allocator's (spec/memory_rules.md 5), not a game-facing
+  //  command field, and putting an allocator address in a ratified record is a
+  //  decision nobody has made.)
   // The store's evidence. `cur_count` is the generation's length as the
   // hardware counted it; the rest are `zhao_part_hps`'s counters, each fired by
   // stimulus in tests/particles/part_hps_directed.cpp.
@@ -548,6 +551,15 @@ module zhao_console_board
   output logic [31:0]             part_hps_wr_bursts_o,
   output logic [31:0]             part_hps_records_read_o,
   output logic [31:0]             part_hps_records_written_o,
+  // R54, 2026-09-19 evening: the bridge refusal `zhao_part_hps` used to be
+  // blind to. `bridge_errs` is expected to read ZERO here -- the arbiter
+  // pulses the bridge only from A_IDLE and every burst is aligned -- and that
+  // expectation is now an EXPECTATION with an instrument behind it rather than
+  // an argument standing in place of one. It is fired by stimulus in
+  // tests/particles/part_hps_directed.cpp CASE H/I.
+  output logic [31:0]             part_hps_bridge_errs_o,
+  output logic [31:0]             part_hps_ticks_faulted_o,
+  output logic [31:0]             part_hps_records_discarded_o,
 
   // ---- I33: PART.TABLE's PER-FRAME LOAD -----------------------------------
   // I2 and I3 ARE CLOSED and their twenty-five ports are GONE from this list
@@ -555,12 +567,19 @@ module zhao_console_board
   // all four reads inside this module. What is left is the host that fills it,
   // and this is that seam. One word per clock; the table never refuses for
   // backpressure (`ld_ready_o` is constant high and says so in its own file).
-  input  logic                    part_tbl_ld_valid_i,
-  output logic                    part_tbl_ld_ready_o,
-  input  logic [1:0]              part_tbl_ld_sel_i,
-  input  logic [6:0]              part_tbl_ld_index_i,
-  input  logic [1:0]              part_tbl_ld_event_i,
-  input  logic [PART_TBL_LD_W-1:0] part_tbl_ld_data_i,
+  // (I33's six part_tbl_ld_* ports were here. CLOSED 2026-09-19 under owner
+  //  ruling R42: the descriptors travel as DATA in a SPECIES_TABLE page the
+  //  owner authors, published by the command that publishes every other
+  //  resource, and u_part_table_loader carries the load words from the page
+  //  to the port. Nothing in this console chooses what a species IS, which is
+  //  the whole reason the entry stayed open. The evidence below is that
+  //  block's.)
+  output logic [31:0]             part_tbl_pages_o,
+  output logic [31:0]             part_tbl_entries_o,
+  output logic [31:0]             part_tbl_pages_dropped_o,
+  output logic [31:0]             part_tbl_bad_magic_o,
+  output logic [31:0]             part_tbl_truncated_o,
+  output logic [31:0]             part_tbl_denied_o,
 
   // ---- I5: the bounded FIELD/FLOW acceleration sample ---------------------
   input  logic                    part_fld_valid_i,
@@ -592,21 +611,18 @@ module zhao_console_board
   output logic [31:0]             terr_tap_off_patch_o,
   output logic [31:0]             terr_tap_faults_o,     // placement + pitch + overflow
 
-  // ---- I7: the one plane, and the population origin ------------------------
-  // The origin is widened INTO I7 rather than opened as a new entry because it
-  // is the same kind of thing with the same absent owner: a per-frame
-  // population value (spec/qformats.md 10, "Population descriptor: origin x/y/z
-  // as fx16 on a 1/256-m grid") that no ratified command carries to this core.
-  // It was always needed -- PART.COLLIDE compares a LOCAL position against the
-  // terrain height -- and it became visible the moment a real height arrived.
-  input  logic signed [31:0]      part_pop_origin_x_i,
-  input  logic signed [31:0]      part_pop_origin_y_i,
-  input  logic signed [31:0]      part_pop_origin_z_i,
-  input  logic                    part_plane_en_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nx_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_ny_i,
-  input  logic signed [PART_NRM_W-1:0] part_plane_nz_i,
-  input  logic signed [31:0]      part_plane_c_i,
+  // (I7's eight `part_pop_origin_*` / `part_plane_*` inputs were here. CLOSED
+  //  2026-09-19 under owner ruling R41: `SetPopulation` 0x0303 is ratified and
+  //  carries all eight, CMD.EXEC lowers it, and `u_part_pop` holds the
+  //  descriptor as the levels PART.COLLIDE and PART.TERRAIN_TAP read on every
+  //  beat. The evidence below is that bank's.)
+  output logic [31:0]             part_pop_taken_o,
+  output logic [31:0]             part_pop_refused_normal_o,
+  output logic [31:0]             part_pop_refused_count_o,
+  output logic [31:0]             part_pop_refused_flags_o,
+  output logic [31:0]             part_pop_seeds_issued_o,
+  output logic [31:0]             part_pop_handle_o,     // the population it holds
+  output logic [31:0]             cmd_exec_pops_o,       // records CMD.EXEC lowered
 
   // (I2's PART.SPAWN slice was here. CLOSED: PART.TABLE serves it below.)
 
@@ -1355,6 +1371,14 @@ module zhao_console_board
   // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
   output logic [31:0]             terr_hps_c3_bursts_o,
   output logic [31:0]             terr_hps_c3_wait_cycles_o,
+  // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
+  // pending slot is already occupied is DROPPED, and used to be dropped in
+  // silence. These two are that reading -- a count of distinct dropped
+  // offerings and a sticky mask naming the client. Expected zero here, and
+  // the arbiter's header argues structurally why; the argument is no longer
+  // the only thing standing where the instrument should be.
+  output logic [31:0]             terr_hps_pend_dropped_o,
+  output logic [3:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -1428,6 +1452,7 @@ module zhao_console_board
   output logic [31:0]             mat_fetch_denied_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
+  output logic [31:0]             geom_ma_jobs_e_o,
 
   // ---- TERRAIN evidence: the sequencer's and the tessellator's ------------
   output logic [PROJ_T_ARENAS-1:0] terr_held_o,
@@ -1958,15 +1983,27 @@ module zhao_console_board
   input  logic signed [31:0] surf_cmd_ty_i,
   input  logic signed [31:0] surf_cmd_radius_i,
   input  logic signed [31:0] surf_cmd_ring_width_i,
-  input  logic signed [31:0] surf_cmd_env_x0_i,
-  input  logic signed [31:0] surf_cmd_env_z0_i,
-  input  logic signed [31:0] surf_cmd_env_x1_i,
-  input  logic signed [31:0] surf_cmd_env_z1_i,
-  input  logic               surf_cmd_blend_en_i,
-  input  logic        [ 2:0] surf_cmd_blend_i,
-  input  logic        [ 2:0] surf_cmd_age_shift_i,
-  input  logic               surf_cmd_field_en_i,
+  // (I30's OPEN HALF was here: surf_cmd_env_* -- the patch envelope, which
+  //  entry I27 recorded as having no placement owner anywhere in the tree --
+  //  and the three policy bits no opcode carries. CLOSED 2026-09-19 under
+  //  owner ruling R45: u_surface_dispatch resolves the patch by the SAME
+  //  world->patch law zhao_terrain_heighttap inverts, from the stamp's own
+  //  translation and the live pitch, and carries the policy in three named
+  //  parameters with blend_en = 0 as R45 ratifies. surf_cmd_field_en_i went
+  //  with them: the policy was already "a stamp program is resident", so the
+  //  residency IS the producer and the host had nothing to add.)
   input  logic        [15:0] surf_cmd_src_id_i,
+  // The dispatch's evidence.
+  output logic [31:0]        surf_disp_dispatched_o,
+  output logic [31:0]        surf_disp_pitch_refused_o,
+  output logic [31:0]        surf_disp_env_clamped_o,
+  output logic signed [15:0] surf_disp_patch_ix_o,
+  output logic signed [15:0] surf_disp_patch_iz_o,
+  // The rectangle itself, because a patch index alone cannot be checked
+  // against the stamp's own geometry and an unchecked envelope is how a stamp
+  // lands somewhere plausible and wrong.
+  output logic signed [31:0] surf_disp_env_x0_o,
+  output logic signed [31:0] surf_disp_env_x1_o,
 
   // I31 CLOSED 2026-09-19. SURFACE.STAMP's field-driven brush is driven from
   // INSIDE this module now: `u_field_stamp_adapter` walks the stencil and
@@ -2648,10 +2685,6 @@ module zhao_console_board
   ) u_core (
       .part_cfg_base0_i                  (part_cfg_base0_i),
       .part_cfg_base1_i                  (part_cfg_base1_i),
-      .part_seed_valid_i                 (part_seed_valid_i),
-      .part_seed_ready_o                 (part_seed_ready_o),
-      .part_seed_buf_i                   (part_seed_buf_i),
-      .part_seed_count_i                 (part_seed_count_i),
       .part_hps_cur_buf_o                (part_hps_cur_buf_o),
       .part_hps_cur_count_o              (part_hps_cur_count_o),
       .part_hps_ticks_o                  (part_hps_ticks_o),
@@ -2663,12 +2696,15 @@ module zhao_console_board
       .part_hps_wr_bursts_o              (part_hps_wr_bursts_o),
       .part_hps_records_read_o           (part_hps_records_read_o),
       .part_hps_records_written_o        (part_hps_records_written_o),
-      .part_tbl_ld_valid_i               (part_tbl_ld_valid_i),
-      .part_tbl_ld_ready_o               (part_tbl_ld_ready_o),
-      .part_tbl_ld_sel_i                 (part_tbl_ld_sel_i),
-      .part_tbl_ld_index_i               (part_tbl_ld_index_i),
-      .part_tbl_ld_event_i               (part_tbl_ld_event_i),
-      .part_tbl_ld_data_i                (part_tbl_ld_data_i),
+      .part_hps_bridge_errs_o            (part_hps_bridge_errs_o),
+      .part_hps_ticks_faulted_o          (part_hps_ticks_faulted_o),
+      .part_hps_records_discarded_o      (part_hps_records_discarded_o),
+      .part_tbl_pages_o                  (part_tbl_pages_o),
+      .part_tbl_entries_o                (part_tbl_entries_o),
+      .part_tbl_pages_dropped_o          (part_tbl_pages_dropped_o),
+      .part_tbl_bad_magic_o              (part_tbl_bad_magic_o),
+      .part_tbl_truncated_o              (part_tbl_truncated_o),
+      .part_tbl_denied_o                 (part_tbl_denied_o),
       .part_fld_valid_i                  (part_fld_valid_i),
       .part_fld_ax_i                     (part_fld_ax_i),
       .part_fld_ay_i                     (part_fld_ay_i),
@@ -2682,14 +2718,13 @@ module zhao_console_board
       .terr_tap_answered_o               (terr_tap_answered_o),
       .terr_tap_off_patch_o              (terr_tap_off_patch_o),
       .terr_tap_faults_o                 (terr_tap_faults_o),
-      .part_pop_origin_x_i               (part_pop_origin_x_i),
-      .part_pop_origin_y_i               (part_pop_origin_y_i),
-      .part_pop_origin_z_i               (part_pop_origin_z_i),
-      .part_plane_en_i                   (part_plane_en_i),
-      .part_plane_nx_i                   (part_plane_nx_i),
-      .part_plane_ny_i                   (part_plane_ny_i),
-      .part_plane_nz_i                   (part_plane_nz_i),
-      .part_plane_c_i                    (part_plane_c_i),
+      .part_pop_taken_o                  (part_pop_taken_o),
+      .part_pop_refused_normal_o         (part_pop_refused_normal_o),
+      .part_pop_refused_count_o          (part_pop_refused_count_o),
+      .part_pop_refused_flags_o          (part_pop_refused_flags_o),
+      .part_pop_seeds_issued_o           (part_pop_seeds_issued_o),
+      .part_pop_handle_o                 (part_pop_handle_o),
+      .cmd_exec_pops_o                   (cmd_exec_pops_o),
       .part_tbl_loads_update_o           (part_tbl_loads_update_o),
       .part_tbl_loads_collide_o          (part_tbl_loads_collide_o),
       .part_tbl_loads_spawn_o            (part_tbl_loads_spawn_o),
@@ -3128,6 +3163,8 @@ module zhao_console_board
       .terr_hps_c2_wait_cycles_o         (terr_hps_c2_wait_cycles_o),
       .terr_hps_c3_bursts_o              (terr_hps_c3_bursts_o),
       .terr_hps_c3_wait_cycles_o         (terr_hps_c3_wait_cycles_o),
+      .terr_hps_pend_dropped_o           (terr_hps_pend_dropped_o),
+      .terr_hps_pend_dropped_mask_o      (terr_hps_pend_dropped_mask_o),
       .cmd_exec_uploads_o                (cmd_exec_uploads_o),
       .cmd_exec_upload_overflow_o        (cmd_exec_upload_overflow_o),
       .cmd_exec_post_looks_o             (cmd_exec_post_looks_o),
@@ -3184,6 +3221,7 @@ module zhao_console_board
       .mat_fetch_denied_o                (mat_fetch_denied_o),
       .geom_ma_jobs_c_o                  (geom_ma_jobs_c_o),
       .geom_ma_jobs_d_o                  (geom_ma_jobs_d_o),
+      .geom_ma_jobs_e_o                  (geom_ma_jobs_e_o),
       .terr_held_o                       (terr_held_o),
       .terr_busy_o                       (terr_busy_o),
       .terr_jobs_accepted_o              (terr_jobs_accepted_o),
@@ -3503,15 +3541,14 @@ module zhao_console_board
       .surf_cmd_ty_i                     (surf_cmd_ty_i),
       .surf_cmd_radius_i                 (surf_cmd_radius_i),
       .surf_cmd_ring_width_i             (surf_cmd_ring_width_i),
-      .surf_cmd_env_x0_i                 (surf_cmd_env_x0_i),
-      .surf_cmd_env_z0_i                 (surf_cmd_env_z0_i),
-      .surf_cmd_env_x1_i                 (surf_cmd_env_x1_i),
-      .surf_cmd_env_z1_i                 (surf_cmd_env_z1_i),
-      .surf_cmd_blend_en_i               (surf_cmd_blend_en_i),
-      .surf_cmd_blend_i                  (surf_cmd_blend_i),
-      .surf_cmd_age_shift_i              (surf_cmd_age_shift_i),
-      .surf_cmd_field_en_i               (surf_cmd_field_en_i),
       .surf_cmd_src_id_i                 (surf_cmd_src_id_i),
+      .surf_disp_dispatched_o            (surf_disp_dispatched_o),
+      .surf_disp_pitch_refused_o         (surf_disp_pitch_refused_o),
+      .surf_disp_env_clamped_o           (surf_disp_env_clamped_o),
+      .surf_disp_patch_ix_o              (surf_disp_patch_ix_o),
+      .surf_disp_patch_iz_o              (surf_disp_patch_iz_o),
+      .surf_disp_env_x0_o                (surf_disp_env_x0_o),
+      .surf_disp_env_x1_o                (surf_disp_env_x1_o),
       .surf_res_valid_o                  (surf_res_valid_o),
       .surf_res_ready_i                  (surf_res_ready_i),
       .surf_res_texel_o                  (surf_res_texel_o),

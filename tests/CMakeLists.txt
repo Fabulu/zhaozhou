@@ -8582,6 +8582,25 @@ verilate(test_surface_sheet_directed
 add_test(NAME surface_sheet_directed COMMAND test_surface_sheet_directed)
 set_tests_properties(surface_sheet_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 900)
 
+# ---- SURFACE.DISPATCH (owner ruling R45, core entry I30) --------------------
+# The world->patch law, differenced against `zhao_terrain_place`'s placement
+# restated in C++ -- NOT against this block's own RTL. Negative coordinates
+# FLOOR, which is the trap `zhao_terrain_heighttap`'s header names by example.
+add_executable(test_surface_dispatch_directed surface/surface_dispatch_directed.cpp)
+target_link_libraries(test_surface_dispatch_directed PRIVATE zhao_harness)
+verilate(test_surface_dispatch_directed
+  PREFIX Vzhao_surface_dispatch
+  TOP_MODULE zhao_surface_dispatch
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_dispatch.sv)
+add_test(NAME surface_dispatch_directed COMMAND test_surface_dispatch_directed)
+set_tests_properties(surface_dispatch_directed PROPERTIES LABELS "fast;surface" TIMEOUT 300)
+
+add_test(NAME lint_zhao_surface_dispatch
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_surface_dispatch
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/surface/zhao_surface_dispatch.sv)
+set_tests_properties(lint_zhao_surface_dispatch PROPERTIES LABELS "lint;fast")
+
 add_executable(test_surface_sheet_random surface/surface_sheet_random.cpp)
 target_link_libraries(test_surface_sheet_random PRIVATE zhao_harness zhao_zref)
 target_include_directories(test_surface_sheet_random PRIVATE
@@ -13846,6 +13865,52 @@ add_test(NAME lint_zhao_part_table
                  --top-module zhao_part_table
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table.sv)
 set_tests_properties(lint_zhao_part_table PROPERTIES LABELS "lint;fast")
+
+# ---- PART.POP (owner ruling R41, core entry I7) -----------------------------
+# The population descriptor bank, differenced field for field against
+# zref::population after every record. CAPACITY = 8 for the same reason
+# PART.STATE's bench runs at 8: at the production tier an `active_count`
+# refusal needs a four-billion-record population to reach.
+add_executable(test_part_pop_directed particles/part_pop_directed.cpp)
+target_link_libraries(test_part_pop_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_pop_directed
+  PREFIX Vzhao_part_pop
+  TOP_MODULE zhao_part_pop
+  VERILATOR_ARGS -GCAPACITY=8 -GCNT_W=4
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_pop.sv)
+add_test(NAME part_pop_directed COMMAND test_part_pop_directed)
+set_tests_properties(part_pop_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_pop
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_pop
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_pop.sv)
+set_tests_properties(lint_zhao_part_pop PROPERTIES LABELS "lint;fast")
+
+# ---- PART.TABLE's species-page loader (owner ruling R42, core entry I33) ----
+# Differenced against zref::species_page after every entry: the page under test
+# is built by the REFERENCE, so a layout disagreement is visible. The exact
+# READ COUNT is asserted, because a loader that read a line twice would load
+# the right descriptors twice and every content check would still pass.
+add_executable(test_part_table_loader_directed particles/part_table_loader_directed.cpp)
+target_link_libraries(test_part_table_loader_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_part_table_loader_directed
+  PREFIX Vtb_part_table_loader
+  TOP_MODULE tb_part_table_loader
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/particles/tb_part_table_loader.sv)
+add_test(NAME part_table_loader_directed COMMAND test_part_table_loader_directed)
+set_tests_properties(part_table_loader_directed PROPERTIES LABELS "fast;particles" TIMEOUT 300)
+
+add_test(NAME lint_zhao_part_table_loader
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_part_table_loader
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/generated/zhao_abi_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_pkg.sv
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/particles/zhao_part_table_loader.sv)
+set_tests_properties(lint_zhao_part_table_loader PROPERTIES LABELS "lint;fast")
 
 # ---------------------------------------------------------------------------
 # PART.STATE's capacity backstop -- gap I8, `capacity_full_o`.
