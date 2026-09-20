@@ -424,3 +424,246 @@ presence inside a TEST header reads as coverage** exactly the way a false
 
 **No owner decision is owed:** the repair enforces W10 and `field-ir.md` §7.1,
 both already in writing.
+
+## R112 — R70 STANDS. My suspicion that it needed reversing was wrong, and the lane proved it first-hand
+
+**2026-09-20.** I briefed TERRAIN9 that R70 might be cheaper to reverse than to
+keep. R70 had ratified the histogram's v1 metric as the terrain page-load LOD
+deviation (option A), choosing it partly BECAUSE option B — a per-camera
+pixel-error residual — needed a quantity nothing computed. R26/R68 then landed a
+per-camera pixel-error threshold and R83/R98 widened it to Q12.8, so I reasoned
+that B's producer now existed and R70's stated reason was spent.
+
+**It is not the same quantity, and the lane checked the RTL rather than the
+prose.** `zhao_measure_governor.sv:206-207`: `px_err*_i` are **INPUTS** —
+`SetView.pixel_error`, an AUTHORED BUDGET handed in by the host. `:294-295` are
+derived **thresholds**. Option B wants an OBSERVED RESIDUAL, and nothing in this
+console computes one. What R26/R68 landed is a budget and a threshold, not a
+measurement of error.
+
+**R70 is closed and needs no owner action.** I was right to make the lane
+re-ask — an organ fed the wrong quantity is exactly what R70 exists to prevent,
+and the cost of asking was one verification. I was wrong about the answer, and
+the reason I was wrong is instructive: **"a per-camera pixel-error quantity now
+exists" is not the same claim as "the per-camera pixel-error RESIDUAL now
+exists", and the names are close enough to swap without noticing.** That is the
+mismatched-quantity error the art law warns about, in a register file instead of
+a drawing.
+
+## R113 — THE SMOKE'S TERRAIN STIMULUS WAS DEAD, AND PASSING
+
+**This is the biggest instrument finding of the run.** R70's third requirement
+was "check that the smoke's stimulus drives TERRAIN.MIPFEED's fine stream at
+all" — a requirement written because an earlier lane had quoted a traverse
+without verifying it. TERRAIN9 checked. At `c55e0417`:
+
+```
+pl loaded=0 faulted=3        mipfeed samples_sent=0
+lodfd dev_records=0          hist events=0
+SMOKE: PASS
+```
+
+**Every terrain number was zero and the bench passed over all of it.** A gate
+that cannot reach the state is not evidence about the state, and for an unknown
+number of passes this one was cited as though it were.
+
+**The recorded cause of the failure was also wrong.** The bench blamed
+`"CRC cannot match"`; the measured truth is `crc_fails=0`, `hdr_ident_fails=3` —
+it played a HEADERLESS page and failed the IDENTITY test, not the CRC. And the
+bench asserted `"TERRAIN.MIPFEED is not composed"`; it is, at
+`zhao_console_core.sv:15281`. **A false-absence claim inside the test harness**,
+which is the seventeenth of these and the first found in a bench.
+
+Repaired by giving the played pages a real §2.1 header and their own body CRC
+over `[64, 21320)`. The chain now carries a value end to end:
+`loaded=3, resident=3, samples_sent=6534, dev_records=48, hist events=144` —
+and `raster pixels=2560 / frames_admitted=1` **unchanged**, so R12's
+reference-derived pixel count needed no regeneration. That invariance is itself
+the evidence that the repair added stimulus without disturbing the raster path.
+
+**Three checks were then found that could only ever have held at zero.** This is
+the category to hunt, because each one is green forever and means nothing:
+
+1. **`crc_failures == N_TERR_REC`** used CRC *failures* as a proxy for
+   completions *arriving*. It **asserted the stimulus's own defect** and would
+   have gone RED on an improved machine — a test that passes only while the
+   thing it tests is broken. Repaired.
+2. **`hist_events == dev_records`** compared **two different units**. Measured:
+   48 records produce 144 events, at 3 valid lanes per record. Repaired to the
+   real law plus an aggregation bound.
+3. **`stray_samples_o == 0`** — measured **2,726**.
+
+## R114 — `stray_samples_o` is a MISLABELLING, and NOT repairing it was correct
+
+`zhao_terrain_lodfeed` classifies on `fill_active_q`, which is cleared when the
+deviation walk RETIRES. Surface-1 samples that arrive after the walk are
+therefore filed as "a sample with no start" — 2,726 of them. The block, as
+built, **cannot distinguish the two cases**.
+
+TERRAIN9 had a working RTL fix and **reverted it**, because it turned
+`terrain_lodhist_directed` check 3 — another lane's committed positive control,
+encoding the present meaning — red (expected 8, got 0). **Re-authoring another
+lane's control is not a thing a packet should do silently**, and stopping was
+the right call. Instead the smoke now asserts a law that is TRUE
+(`stray + VERTS*walked <= samples_sent`) with the mislabelling printed by name.
+
+That is the correct shape for a known-wrong instrument: assert what is true,
+name what is wrong, and hand the re-authoring to whoever owns the control.
+Queued, with the measured number attached so the next lane does not have to
+rediscover it.
+
+## R115 — TERRAIN.NORMALMAP has a contract, a ledger row, an oracle and a 4,738-check suite, and NO RATIFIED SPEC SENTENCE
+
+Everything downstream of a specification exists; the specification does not.
+This is the inverse of the phantom-reference defect (R94/R105): there the ledger
+pointed at something absent, here everything real points back at nothing.
+
+**Owner decision: ratify a spec sentence for TERRAIN.NORMALMAP, or supersede the
+block.** It cannot be composed against a law that was never written, and writing
+one now to match the implementation would be ratifying whatever got built —
+which is how an accident becomes a requirement.
+
+## R116 — R65 IS THE RUN'S HARDEST STOP AND FOUR PACKETS ARE NOW QUEUED BEHIND IT
+
+`reports/terrain-seam-dig/seam_dig_contact.png` is rendered, committed and
+pushed. It is waiting on the owner's eye and on nothing else.
+
+**It gates I32, TERRAIN.BAKE's option A, and the terrain PAGE FORMAT itself.**
+Six terrain lanes have now closed zero of the same four disconnected blocks —
+five before TERRAIN9 and TERRAIN9 itself, which says plainly "I am not the
+exception". That is not six failures; it is one blocker seen six times.
+
+**The packer does not exist yet, so the format is cheaper to change now than it
+will ever be.** And the render changed the question rather than answering it:
+spec §9.3(c) says the half-cell step "does not read as a seam", while the sheet
+shows a rim wrong by up to one vertex, everywhere. Under the art law this is not
+a measurement question at all — it is a LOOK, and only the owner's look settles
+whether that rim reads as a defect.
+
+Escalated with the cost attached: **one look unblocks four packets.**
+
+## R117 — F-CLIFF1 HAS ALREADY RUN. It ran on 18 September, it was a FULL FIT on the TARGET DEVICE, and R109 is superseded
+
+**2026-09-20, coordinator. This corrects a ruling I wrote three hours ago, and
+the error in it is the one this run keeps finding.**
+
+R109 said *"the deciding gate exists and has never run: F-CLIFF1"*. I took that
+from the FORGECONNECT lane's report and did not re-ask. I then wrote it into
+`reports/FIT-PLAN-AT-ZERO.md` as a fit to schedule. **Both statements are
+false.** `reports/synthesis/blockpaths/` has carried the receipts since
+**Fri 18 Sep 2026**:
+
+```
+zhao_forge_cliff_ram@first-measurement.map.rpt / .map.summary
+zhao_forge_cliff_ram@first-measurement.fit.rpt / .fit.summary
+zhao_forge_cliff_ram@first-measurement.sta.rpt / .setup.rpt / .hold.rpt
+zhao_forge_cliff_ram@first-measurement.sources.sha256
+```
+
+That is the **seventeenth** false-absence claim in this repository, and the
+first one I authored myself. The pattern held exactly: the refusal was true when
+written, nobody re-asked, and I repeated it with a ruling number attached, which
+made it *more* authoritative rather than less. **A ruling is not a place to
+launder an inherited claim.**
+
+I found it only because I went to RUN the gate and looked for the runner.
+
+### The provenance holds — checked before quoting anything
+
+`.sources.sha256` records `1D6C6D07E208B267...` and
+`fpga/rtl/forge/zhao_forge_cliff_ram.sv` hashes to `1d6c6d07e208b267...` **at
+this commit**. The measurement describes the file that is in the tree today.
+This is the discipline from `CLAUDE.md` — read the provenance before the number
+— and it is the reason these numbers are usable at all.
+
+### The answer to question (a): PASS
+
+The gate asked whether `inferredMemories` lists **five** memories. It lists
+exactly five: `win_mem_rtl_0`, `edge_key_r_rtl_0`, `edge_span_r_rtl_0`,
+`prio_mem_r_rtl_0`, `run_mem_r_rtl_0`. Total MLAB memory bits **0**, total block
+memory bits **120,964**, 15 RAM blocks. The gate's stated failure condition was
+*"flip-flops is the failure"* — the window went to block RAM, not flops.
+
+**With one qualification the gate itself set and which is NOT met:** it demanded
+`ramConversionWarnings 0`, and the map reports **four** `Warning (276020)` —
+*"Inferred RAM node ... Pass-through logic has been added to match the
+read-during-write behavior of the original design."* That is not a conversion
+*failure* (the RAMs were inferred), but it is not zero either, it costs logic,
+and it means four RAMs have had their read-during-write semantics matched by
+added logic rather than by the memory block. **Declared as a breach rather than
+rounded away.**
+
+### The answer to question (b), stated at the ONLY stage where both sides exist
+
+**This is where the comparison must be handled carefully**, because the two
+sides are not the same kind of number and the gate's own comment warns about it.
+
+| | golden `zhao_forge_cliff` | candidate `zhao_forge_cliff_ram` |
+|---|---|---|
+| stage | **map-only ESTIMATE, never fitted** | map-only, **and** a full fit |
+| comb ALUT (map) | 8,149 | **1,326** |
+| registers (map) | 3,875 | **826** |
+| DSP | 2 | 2 |
+| memory bits | 119,808 | 120,964 |
+| **fitted ALM** | **does not exist** | **976** on `5CSEBA6U23I7` |
+
+Like for like, at map stage: **the candidate uses 16% of the golden's
+combinational ALUTs and 21% of its registers.**
+
+**I must NOT say "it saves 6,688 ALM."** The golden's 7,664 is a map-only
+estimate that `reports/FORGE-CLIFF-BITMAP-RAM-20260910.md:165` explicitly labels
+*"an ESTIMATE (map-only), never fitted"*, while 976 is a fitted number. Setting
+those two against each other is the mismatched-comparison error — the same shape
+as measuring a grounded stance against an aerial drawing — and it would be a
+confident number in the flattering direction.
+
+What can be said, and it is enough: **`zhao_forge_cliff` is 7,664 ALM and
+18.3% of the whole ALM budget** (`reports/BUDGET_HEATMAP.md:159`), the candidate
+is **fitted at 976 ALM, 2% of the device, on the actual target part**, and at
+the one stage where both were measured the candidate is smaller by a factor of
+six on ALUTs. **ALMs are the binding constraint and the console is at roughly
+113% of the device.** This is plausibly the single largest lever in the tree,
+and it has been sitting measured and unused for two days because everyone
+believed the gate had not run.
+
+### The inferred latch: I called it a defect too fast, and it is not one
+
+The map reports `Info (10041): Inferred latch for "triangles_submitted_o[0]"`.
+My first reading was that this blocks adoption. **It does not, and the reason is
+worth writing down rather than quietly dropping.**
+
+`triangles_submitted_o` is a plain `always_ff` register: reset to `32'd0` at
+line 581, and the only other assignment is at 881–882, `+ 32'd2`, commented
+`C3`. **It counts triangles in PAIRS**, so bit 0 is provably constant zero for
+all time, and that constant bit is what Quartus latched. It is an artifact of
+incrementing a 32-bit counter by two, not a missing branch in combinational
+logic.
+
+Cheap cleanup, not a blocker: make the counter 31 bits with a hard-zero LSB, or
+count pairs and multiply at the port. Worth doing because a latch cell is real
+area and complicates timing closure — but it does not gate the decision.
+
+### The ruling
+
+**R109 is superseded. `zhao_forge_cliff_ram` is the version to adopt**, subject
+to two things that are now specific rather than a deferral to an unrun gate:
+
+1. **The four `Warning (276020)` pass-through insertions must be accounted
+   for** — either accepted in writing with their cost, or removed by matching
+   the RAM's native read-during-write behaviour. The gate asked for zero.
+2. **The bit-0 latch cleaned up**, as above.
+
+`console_inventory.yml:109-127` must stop giving the two blocks the identical
+boilerplate disposition — a ledger that describes two rival implementations in
+the same words is not recording a decision, it is hiding that none was taken.
+The golden becomes `superseded` with this ruling and these receipts cited, and
+**`zhao_forge_cliff` needs its own fitted row before any final claim about the
+saving is made**, because the number everyone will want to quote is
+fit-minus-fit and only one half of it exists today.
+
+### And the fit plan is corrected
+
+`reports/FIT-PLAN-AT-ZERO.md` listed F-CLIFF1 as a fit to run. It is done. What
+belongs there instead is **a fit of the GOLDEN `zhao_forge_cliff`**, so the
+comparison stops being estimate-versus-fit — and that is a cheap leaf fit, not a
+console placement.

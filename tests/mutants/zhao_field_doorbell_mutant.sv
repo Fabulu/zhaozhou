@@ -232,10 +232,10 @@ module zhao_field_doorbell_mutant #(
   // 2026-09-08).
   initial begin
     if ((1 << SLOTW) < int'(PROGS)) begin
-      $fatal(1, "zhao_field_doorbell: SLOTW=%0d cannot address PROGS=%0d", SLOTW, PROGS);
+      $fatal(1, "zhao_field_doorbell_mutant: SLOTW=%0d cannot address PROGS=%0d", SLOTW, PROGS);
     end
-    if (POSTS < 1) $fatal(1, "zhao_field_doorbell: POSTS must be at least 1");
-    if (RETQ  < 1) $fatal(1, "zhao_field_doorbell: RETQ must be at least 1");
+    if (POSTS < 1) $fatal(1, "zhao_field_doorbell_mutant: POSTS must be at least 1");
+    if (RETQ  < 1) $fatal(1, "zhao_field_doorbell_mutant: RETQ must be at least 1");
   end
 
   // ==========================================================================
@@ -278,10 +278,8 @@ module zhao_field_doorbell_mutant #(
 
   // Consumed commits that have not yet written their return record. THE CREDIT.
   logic [RETW:0] owed;
-  // MUTANT: the credit is gone. Production reads:
-  //   wire ret_credit = (owed + r_used) < (RETW+1)'(RETQ);
   /* verilator lint_off UNUSEDSIGNAL */
-  wire           ret_credit = 1'b1;
+  wire           ret_credit = 1'b1;  // MUTANT: was (owed + r_used) < (RETW+1)'(RETQ) -- the credit guard is disabled so ret_overflow MUST fire
   /* verilator lint_on UNUSEDSIGNAL */
 
   // ==========================================================================

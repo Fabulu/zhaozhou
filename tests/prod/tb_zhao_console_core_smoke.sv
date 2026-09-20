@@ -102,6 +102,18 @@ module tb_zhao_console_core_smoke
   localparam int unsigned HIST_EW        = 32;
   localparam int unsigned HIST_SUB_BITS  = 1;
   localparam int unsigned HIST_LANES     = 4;
+  // HOW MANY OF THOSE LANES THE R70 MAPPING ACTUALLY DRIVES. `zhao_terrain_
+  // loddev` emits THREE 24-bit deviations, so `zhao_console_core.sv:10023-10025`
+  // fills lanes 0..2 and holds lane 3's `lane_valid` LOW -- "so lane 3
+  // contributes no event rather than contributing a zero one". Named here
+  // because the events-per-record ratio below depends on it, and a bare `3`
+  // beside a `HIST_LANES = 4` is exactly the kind of number that goes wrong
+  // silently when somebody adds a fourth deviation.
+  localparam int unsigned HIST_R70_LANES = 3;
+  // The Island Patch v1 fine lattice: 33 x 33 vertices, one mip-pass surface.
+  // `zhao_terrain_lodfeed`'s own EDGE/VERTS, restated here because the terrain
+  // verdict bounds its surplus against TERRAIN.MIPFEED's `samples_sent`.
+  localparam int unsigned TERR_LATTICE_VERTS = 33 * 33;   // 1,089
   localparam int unsigned HIST_CW        = 24;
   localparam int unsigned HIST_BINW      = $clog2((HIST_EW - HIST_SUB_BITS + 1) << HIST_SUB_BITS);
   // SURFACE.SHEET's resident slot count, mirrored so `surf_res_occupancy_o`
@@ -1928,7 +1940,25 @@ module tb_zhao_console_core_smoke
   localparam int unsigned ARENA_BYTES_C = PAGE0_OFF_C + N_TERR_REC * PAGE_BYTES_C;
   localparam int unsigned HPS_WORDS     = (ARENA_BYTES_C + 7) / 8;
 
+  // THE PAGE CRC WINDOW, from `spec/terrain_rules.md` 2.1 line 144: the
+  // `page_crc32c` at header +32 covers bytes [64, 21320) -- the BODY, never the
+  // header. That is why the CRC can be written INTO the header after it is
+  // computed without invalidating itself, and it is the same window
+  // `zhao_terrain_pageloader`'s CRC_LO/CRC_HI parameters carry (its lines
+  // 106-107). Named here rather than open-coded so the two cannot drift apart
+  // silently -- a bench CRC window one beat different from the loader's is the
+  // "wrong CRC over a page that is otherwise perfect" defect the loader's own
+  // header calls the worst shape.
+  localparam int unsigned PAGE_CRC_LO_C = 64;
+  localparam int unsigned PAGE_CRC_HI_C = 21320;
+
   logic [63:0] hps_mem [0:HPS_WORDS-1];
+
+  // The body CRC of each played page, computed at time zero from the bytes
+  // actually in `hps_mem` (see the layout loop) and then written into BOTH the
+  // page header's +32 word and the T5 record's `expected_page_crc32c`, because
+  // TERRAIN.PAGELOADER checks the page against both (`CHECK_HEADER_CRC` is 1).
+  logic [31:0] page_crc_q [0:N_TERR_REC-1];
 
   // The frozen sim profile the bridge's own comment names: a latency to first
   // beat, then one beat per cycle. Held as a small state machine rather than a
@@ -3384,13 +3414,17 @@ module tb_zhao_console_core_smoke
   // below -- `ready` is a level with the request, the verdict PULSES one cycle
   // later -- because it is the same block's contract.
   //
-  // THE IMAGE IT SERVES IS ZEROS, AND THIS BENCH CANNOT REACH IT ANYWAY. Every
-  // page in this run fails its CRC (that is asserted, at `terr_res_crc_failures_o
-  // == N_TERR_REC`), so no page reaches RESIDENT_CLEAN, TERRAIN.SEQ issues no
-  // patch, and the compose engine sits idle with `terr_ps_idle_o` high. The
-  // model exists so that the day a page does become resident this bench reports
-  // a lattice rather than a hang, and it is documented as UNEXERCISED here
-  // rather than quoted as evidence. The engine's own evidence is
+  // THE IMAGE IT SERVES IS ZEROS, AND AS OF 2026-09-20 IT IS REACHED.
+  // WHAT THIS PARAGRAPH USED TO SAY, struck because the stimulus moved under
+  // it: "Every page in this run fails its CRC (that is asserted, at
+  // `terr_res_crc_failures_o == N_TERR_REC`), so no page reaches
+  // RESIDENT_CLEAN, TERRAIN.SEQ issues no patch, and the compose engine sits
+  // idle." The pages now carry a spec 2.1 header and their own body CRC and
+  // they LOAD (see the arena layout loop and the R70 chain check in the terrain
+  // verdict). The BODY is still all zeros, so the lattice this window serves is
+  // a flat zero height field -- which is why this model is still not evidence
+  // about composed terrain VALUES, only about the path reaching it. The
+  // engine's own evidence is
   // `tests/terrain/tb_terrain_compose.sv` (four blocks on real page bytes) and
   // `tests/terrain/tb_terrain_place_cache.sv` (the placement seam this packet
   // added).
@@ -3798,6 +3832,101 @@ module tb_zhao_console_core_smoke
     // starts and nothing in the DUT may depend on when it was written.
     for (int unsigned w = 0; w < HPS_WORDS; w++) hps_mem[w] = 64'd0;
 
+    // ---- THE PAGE HEADERS, SO A PAGE CAN ACTUALLY LOAD --------------------
+    // NEW 2026-09-20 (terrain9). Until this loop existed, every page this bench
+    // played was 21,376 bytes of ZERO -- header included -- against a record
+    // declaring island 0x42 and patch coordinates (r+3, r+7). The measured
+    // consequence at `c55e0417`, quoted from this bench's own output:
+    //
+    //   pl    loaded=0 faulted=3 crc_fails=0 ... hdr_ident_fails=3
+    //   mip   mipreq requests=0 issued=0 | mipfeed pages_mipped=0 samples_sent=0
+    //   lodfd lattices_walked=0 dropped=0 dev_records=0 -> hist events=0
+    //
+    // AND NOTE WHICH COUNTER MOVED, because the note that stood here named the
+    // wrong one. It said the pages fault "because a zero page's CRC cannot match
+    // the record's declared expected_page_crc32c" -- but `crc_fails=0`. The page
+    // never reached the CRC: it failed TERRAIN.PAGELOADER's IDENTITY test first
+    // (`hdr_ident_fails=3`, verdict 8), on {format_version, island_id, patch_ix,
+    // patch_iz} against the record the job came from. A stated cause that the
+    // machine's own counters refute is the shape CLAUDE.md keeps finding, and it
+    // matters here because fixing only the CRC would have changed nothing.
+    //
+    // WHY IT IS WORTH FIXING RATHER THAN DOCUMENTING. Owner ruling R70 made the
+    // terrain page-load LOD deviation MEASURE.HISTOGRAM's v1 metric, and the
+    // ruling's own third requirement is "before quoting a traverse, check that
+    // the smoke's stimulus drives MIPFEED's fine stream at all". It did not.
+    // TERRAIN.MIPREQ triggers on a page load that FINISHED OK, so with every
+    // page faulting, the whole chain behind it -- MIPREQ, MIPFEED's fine stream,
+    // TERRAIN.LODFEED's lattice walk, `zhao_terrain_loddev`'s deviations and the
+    // histogram's events -- sat at exactly zero while the join between them
+    // passed every check written against it. A gate that cannot reach the state
+    // is not evidence about the state.
+    //
+    // The header is `spec/terrain_rules.md` 2.1, little-endian, page-relative,
+    // written field by field from that table -- not as a blob -- so a layout
+    // change fails here loudly rather than producing a plausible page:
+    //
+    //     +0  u16 format_version = 1     +16 rectfx envelope x0,z0,x1,z1
+    //     +2  i8  pitch_log2             +32 u32 page_crc32c
+    //     +3  u8  flags                  +36 u8  rsv[28] (must be 0)
+    //     +4  u32 island_id
+    //     +8  i16 patch_ix, patch_iz     +12 u32 tileset_id
+    //
+    // The envelope obeys 2.1's own redundancy law -- "must equal origin +
+    // coords x 32 x pitch exactly" -- with the island datum at the origin and
+    // pitch_log2 = 0, so pitch is 1 m and the patch spans 32 m. It is written
+    // correctly even though TERRAIN.HDRREAD does not check it (that is
+    // TERRAIN.PLACE's `place_env_mismatch_o`), because a bench that satisfies
+    // only the checks that happen to run today is a fixture that breaks the
+    // moment the next block composes.
+    for (int unsigned r = 0; r < N_TERR_REC; r++) begin
+      automatic int unsigned pw    = (PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3;
+      automatic int          ix_i  = int'(r) + 3;
+      automatic int          iz_i  = int'(r) + 7;
+      // fx16 is Q16.18-free Q16.16 here (FX16_ONE = 32'sh0001_0000), so one
+      // metre is 65,536 raw and a 32 m patch edge is 32 * 65,536.
+      automatic logic signed [31:0] ex0 = 32'( ix_i      * 32 * 65536);
+      automatic logic signed [31:0] ez0 = 32'( iz_i      * 32 * 65536);
+      automatic logic signed [31:0] ex1 = 32'((ix_i + 1) * 32 * 65536);
+      automatic logic signed [31:0] ez1 = 32'((iz_i + 1) * 32 * 65536);
+      hps_mem[pw + 0] = {32'h0000_0042,     // +4  island_id
+                         8'h00,             // +3  flags (no C, no D layer)
+                         8'h00,             // +2  pitch_log2 = 0 -> 1 m
+                         16'h0001};         // +0  format_version = 1
+      hps_mem[pw + 1] = {32'h0000_0000,     // +12 tileset_id
+                         16'(iz_i),         // +10 patch_iz
+                         16'(ix_i)};        // +8  patch_ix
+      hps_mem[pw + 2] = {ez0, ex0};         // +16 x0, +20 z0
+      hps_mem[pw + 3] = {ez1, ex1};         // +24 x1, +28 z1
+      // +32 page_crc32c is written by the fold below, once the body is final.
+    end
+
+    // ---- AND ITS BODY CRC, FOLDED OVER THE BYTES THAT ARE ACTUALLY THERE ---
+    // Same standing caveat as the record list's fold, stated again rather than
+    // cross-referenced because it is the caveat people skip: this bench seals
+    // the page with a CRC it computed over the page it wrote, so it is NO
+    // EVIDENCE WHATEVER about the CRC law. `tests/terrain/tb_terrain_pageloader`
+    // is where that is tested. What it buys is the thing it can honestly buy --
+    // a page that LOADS, so the chain behind the load can be observed at all.
+    //
+    // It is folded with `zhao_abi_pkg::zhao_crc32c_step` rather than with
+    // `u_bench_fold`, for two reasons. It is a pure function, so 3 x 21,256
+    // bytes cost ZERO simulation time, where the folder's `#1ns` per beat would
+    // push ~8 us of dead time in front of a reset the rest of this bench is
+    // timed against. And it is a different expression of the same law from the
+    // one the list uses, which is worth a little on a page the DUT's own
+    // `crc_r` register is independently computing.
+    for (int unsigned r = 0; r < N_TERR_REC; r++) begin
+      automatic int unsigned pbase = PAGE0_OFF_C + r * PAGE_BYTES_C;
+      automatic logic [31:0] c     = 32'hFFFF_FFFF;
+      for (int unsigned b = PAGE_CRC_LO_C; b < PAGE_CRC_HI_C; b++) begin
+        automatic int unsigned a = pbase + b;
+        c = zhao_abi_pkg::zhao_crc32c_step(c, hps_mem[a >> 3][8*(a % 8) +: 8]);
+      end
+      page_crc_q[r]        = ~c;
+      hps_mem[(pbase >> 3) + 4] = {32'd0, page_crc_q[r]};   // +32, +36 rsv
+    end
+
     // T5's 32-byte record, four whole beats, little-endian, in the field order
     // `zhao_terrain_cmd`'s own header tabulates. Written field by field from
     // that table rather than as an opaque blob, so a layout change fails here
@@ -3829,7 +3958,7 @@ module tb_zhao_console_core_smoke
       hps_mem[b + 2] = {8'd0,                // priority   u8   byte 23
                         8'h01,               // view_mask  u8   byte 22
                         16'h0001,            // flags      u16  bytes 20..21 (REQUIRED)
-                        32'hDEAD_BEEF};      // expected_page_crc32c bytes 16..19
+                        page_crc_q[r]};      // expected_page_crc32c bytes 16..19
       hps_mem[b + 3] = {32'd0,               // reserved   u32  bytes 28..31
                         32'(1000 + r)};      // source_id  u32  bytes 24..27
     end
@@ -3858,8 +3987,23 @@ module tb_zhao_console_core_smoke
       if (hps_mem[b + 1] !== 64'(HPS_BASE) + 64'(PAGE0_OFF_C + r * PAGE_BYTES_C))
         $fatal(1, "SMOKE: arena record %0d holds page address %016x, not %016x -- the list layout aliased",
                r, hps_mem[b + 1], 64'(HPS_BASE) + 64'(PAGE0_OFF_C + r * PAGE_BYTES_C));
-      if (hps_mem[b + 2] !== {8'd0, 8'h01, 16'h0001, 32'hDEAD_BEEF})
+      if (hps_mem[b + 2] !== {8'd0, 8'h01, 16'h0001, page_crc_q[r]})
         $fatal(1, "SMOKE: arena record %0d holds crc/flags/mask/prio %016x -- the list layout aliased", r, hps_mem[b + 2]);
+      // AND THE PAGE ITSELF IS READ BACK, same independent-operand discipline
+      // as the record above. The identity fields are what TERRAIN.PAGELOADER
+      // tests the job against, so a header written to the wrong word is LOUD at
+      // time zero instead of arriving later as `hdr_ident_fails`.
+      if (hps_mem[(PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3] !==
+          {32'h0000_0042, 8'h00, 8'h00, 16'h0001})
+        $fatal(1, "SMOKE: page %0d header word 0 is %016x -- version/pitch/flags/island not where 2.1 puts them",
+               r, hps_mem[(PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3]);
+      if (hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 1] !==
+          {32'h0000_0000, 16'(r + 7), 16'(r + 3)})
+        $fatal(1, "SMOKE: page %0d header word 1 is %016x -- patch_ix/patch_iz do not match record %0d",
+               r, hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 1], r);
+      if (hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 4][31:0] !== page_crc_q[r])
+        $fatal(1, "SMOKE: page %0d header carries crc %08x, record carries %08x -- CHECK_HEADER_CRC will refuse it",
+               r, hps_mem[((PAGE0_OFF_C + r * PAGE_BYTES_C) >> 3) + 4][31:0], page_crc_q[r]);
       if (hps_mem[b + 3][31:0] !== 32'(1000 + r))
         $fatal(1, "SMOKE: arena record %0d holds source id %0d, not %0d -- the list layout aliased", r, hps_mem[b + 3][31:0], 1000 + r);
     end
@@ -5127,11 +5271,16 @@ module tb_zhao_console_core_smoke
       $fatal(1, "SMOKE: the shade law and TERRAIN.NORMALS disagreed about degeneracy %0d time(s)",
              terr_light_degen_mismatch_o);
     // WHAT THIS BENCH DOES NOT PROVE ABOUT THE LIGHT, said before somebody
-    // quotes `degenerate=128` as a defect or as a pass. Every page in this run
-    // fails its CRC by construction, so no page is resident and the lattice
-    // TERRAIN.TESS emits is flat zero: all three corners of every triangle are
-    // the same point, the cross product is exactly zero, and the LAW's answer
-    // to that is degenerate with shade 0. The counters above are therefore
+    // quotes `degenerate=128` as a defect or as a pass. The pages this bench
+    // plays are all-zero BODIES (a real spec 2.1 header over 21,256 zero
+    // bytes), so the lattice TERRAIN.TESS emits is a flat zero height field,
+    // the cross product is exactly zero, and the LAW's answer to that is
+    // degenerate with shade 0. UPDATED 2026-09-20 (terrain9): the reason used
+    // to read "every page fails its CRC by construction, so no page is
+    // resident" -- the pages now load, and the degeneracy survives because it
+    // was never residency that caused it, it was the ZERO HEIGHTS. Giving the
+    // bench a non-flat page body is the next step and is a separate change,
+    // because it moves what the rasteriser sees. The counters above are
     // evidence that the reference reached the store, the normal and the shade
     // and came back -- not that the shade VALUE is right. The value is proved
     // bit-for-bit against zref in tests/terrain/terrain_lightlane_directed.cpp
@@ -5389,26 +5538,109 @@ module tb_zhao_console_core_smoke
              terr_lodfeed_lattices_walked_o, terr_lodfeed_lattices_dropped_o,
              terr_lodfeed_dev_records_o, terr_lodfeed_stray_samples_o,
              hist_events_o, hist_updates_o, hist_stall_cycles_o);
-    // A SAMPLE WITH NO START IS ALWAYS WRONG, whatever the stimulus, so this
-    // one IS asserted while the counters above are not. It means the fine
-    // stream moved while TERRAIN.MIPFEED had not announced a job -- a
-    // level-versus-edge fault on `mg_start_o`, and it would put one page's
-    // heights into another page's lattice with every downstream number still
-    // looking healthy. It is NOT asserting the gap: it must read zero on a
-    // spine that pages successfully too.
+    // ---- `stray_samples_o` IS A KNOWN-MISLABELLED COUNTER. READ THIS -------
+    // REWRITTEN 2026-09-20 (terrain9), on the first run in which this stream
+    // ever moved. What stood here asserted `stray_samples_o == 0` and called a
+    // non-zero value "mg_start_o and mg_fine_valid_o out of step ... it must
+    // read zero on a spine that pages successfully too". BOTH HALVES WERE
+    // UNTESTED CLAIMS: the counter had never been anything but zero, because
+    // the fixture never loaded a page (see the arena layout loop).
+    //
+    // MEASURED, the first time it moved: 2,726 of 3,267 surplus samples.
+    // THE SPINE IS HEALTHY AND THE COUNTER IS MISLABELLED. Why:
+    //
+    //   * `zhao_terrain_mipfeed.sv:258` sends ONE `mg_start_o` for BOTH passes
+    //     by design (MIPGEN's surface counter runs across them), then streams
+    //     2 x 1,089 samples: pass 0 is SURF0_PLANE (layer A) and pass 1 is
+    //     SURF1_PLANE (layer C, the underside);
+    //   * `zhao_terrain_lodfeed` buffers surface 0 and drops surface 1 by
+    //     law 7, counting it on `surface1_samples_o` -- correct;
+    //   * but its classifier tests `!fill_active_q` BEFORE `surf1_q`, and
+    //     `fill_active_q` is cleared by the DEVIATION WALK RETIRING (`dv_done`)
+    //     -- an event with nothing to do with where the stream is. So every
+    //     surface-1 sample arriving after the walk finished is filed as "a
+    //     sample with no start". In the console the walk (~9.8k clocks)
+    //     retires part-way through pass 1, so ~909 of every 1,089 land wrong.
+    //
+    // TWO CASES SEPARATED ON A FLAG THAT NEITHER OF THEM OWNS -- CLAUDE.md's
+    // detector-wired-to-the-wrong-operand, and it reads as a paging fault.
+    //
+    // WHY IT IS NOT REPAIRED IN THIS COMMIT, stated so the next packet does not
+    // assume it was an oversight. The block CANNOT distinguish the two cases:
+    // a surface-1 sample and a genuine orphan both arrive with `surf1_q` high
+    // and `fill_active_q` low, and the only separator is a COUNT. Every
+    // correct reclassification therefore changes what the counter means -- and
+    // `terrain_lodhist_directed` check 3 is a COMMITTED POSITIVE CONTROL that
+    // fires this counter with eight samples presented AFTER a walk has retired,
+    // i.e. it encodes the present meaning directly. I tried the bounded fix,
+    // it worked in the console, and it turned that control red (expected 8,
+    // got 0). Re-authoring another lane's committed positive control is not a
+    // thing to do inside a packet scoped elsewhere, so it is MEASURED and
+    // HANDED OVER instead. RECOMMENDED next packet: make `stray_samples_o`
+    // mean "a sample before any start was ever seen", move everything else to
+    // `surface1_samples_o`, and MOVE check 3's control to the top of the test
+    // where that condition is reachable.
+    //
+    // WHAT IS ASSERTED MEANWHILE IS A LAW THAT IS TRUE OF THE SHIPPED BLOCK:
+    // the surplus this block reports can never exceed the surplus TERRAIN.
+    // MIPFEED actually sent. `samples_sent` is every sample offered; this block
+    // takes VERTS of them per lattice it walked; everything else is surplus,
+    // split between the two counters by the walk's timing. If `mg_start_o` and
+    // `mg_fine_valid_o` really were out of step -- a stream with no job behind
+    // it -- this bound is what breaks.
+    if ((terr_lodfeed_stray_samples_o +
+         TERR_LATTICE_VERTS * terr_lodfeed_lattices_walked_o) >
+        terr_mip_samples_sent_o)
+      $fatal(1, "SMOKE: TERRAIN.LODFEED accounted for %0d stray + %0d buffered = %0d sample(s) against TERRAIN.MIPFEED's %0d sent -- it saw samples the mip pass never offered, so mg_start_o and mg_fine_valid_o ARE out of step",
+             terr_lodfeed_stray_samples_o,
+             TERR_LATTICE_VERTS * terr_lodfeed_lattices_walked_o,
+             terr_lodfeed_stray_samples_o +
+               TERR_LATTICE_VERTS * terr_lodfeed_lattices_walked_o,
+             terr_mip_samples_sent_o);
     if (terr_lodfeed_stray_samples_o != 0)
-      $fatal(1, "SMOKE: TERRAIN.LODFEED saw %0d fine sample(s) with no lattice start -- mg_start_o and mg_fine_valid_o are out of step",
-             terr_lodfeed_stray_samples_o);
+      $display("SMOKE: NOTE TERRAIN.LODFEED reported %0d 'stray' sample(s) of the %0d surplus the second mip pass sends. THIS IS THE MISLABELLING DESCRIBED ABOVE, NOT A PAGING FAULT -- see zhao_terrain_lodfeed's classifier. Do not chase it as a spine defect.",
+               terr_lodfeed_stray_samples_o,
+               terr_mip_samples_sent_o -
+                 TERR_LATTICE_VERTS * terr_lodfeed_lattices_walked_o);
     // AND THE CHAIN IS ASSERTED CONSISTENT RATHER THAN ASSERTED BUSY. Whatever
-    // the stimulus reaches, every deviation record lodfeed emitted must have
-    // been accepted by the histogram, because the two are joined by one
-    // handshake and nothing sits between them. This holds at zero AND at a
-    // thousand, so it is a check that survives the fixture getting better --
-    // unlike `== 0`, which would assert the gap, or `> 0`, which would fail
-    // honestly today and tempt somebody to delete it.
-    if (hist_events_o != HIST_CW'(terr_lodfeed_dev_records_o))
-      $fatal(1, "SMOKE: TERRAIN.LODFEED emitted %0d deviation record(s) and MEASURE.HISTOGRAM accepted %0d -- the I18 join is dropping events",
-             terr_lodfeed_dev_records_o, hist_events_o);
+    // the stimulus reaches, every deviation lodfeed emitted must have been
+    // accepted by the histogram: the two are joined by one handshake and
+    // nothing sits between them.
+    //
+    // CORRECTED 2026-09-20 (terrain9). THE TWO SIDES WERE IN DIFFERENT UNITS
+    // and the check could only ever have held at zero. It read
+    // `hist_events_o != terr_lodfeed_dev_records_o`, and its comment argued
+    // "this holds at zero AND at a thousand, so it is a check that survives
+    // the fixture getting better". It does not. `dev_records_o` counts
+    // RECORDS; `events_o` counts EVENTS, and this composition presents each
+    // record on THREE LANES -- dev1, dev2, dev3, with lane 3's `lane_valid`
+    // held low (the R70 width adaptation, `zhao_console_core.sv:10023-10025`).
+    // MEASURED the first time the stream ever moved: 48 records, 144 events.
+    // Exactly 3x, and the check fired as "the I18 join is dropping events" on
+    // a join that was dropping nothing.
+    //
+    // It is the same shape as the defect it sits next to and as the one this
+    // packet repaired in `zhao_terrain_lodfeed`: an equality written while both
+    // operands were ZERO is not a law, it is 0 == 0, and it reads as a passing
+    // check for as long as nothing exercises it.
+    if (hist_events_o != HIST_CW'(terr_lodfeed_dev_records_o * HIST_R70_LANES))
+      $fatal(1, "SMOKE: TERRAIN.LODFEED emitted %0d deviation record(s), so MEASURE.HISTOGRAM should have accepted %0d event(s) on %0d valid lanes, and it accepted %0d -- the I18 join is dropping events",
+             terr_lodfeed_dev_records_o,
+             terr_lodfeed_dev_records_o * HIST_R70_LANES,
+             HIST_R70_LANES, hist_events_o);
+    // AND THE AGGREGATION IS BOUNDED, which is the other half of the histogram's
+    // own stated contract ("`updates_o` counts memory updates while `events_o`
+    // counts events, and their ratio IS the aggregation",
+    // `zhao_measure_histogram.sv:124-126`). One record's three deviations land
+    // in one bin when they agree and in up to three when they do not, so the
+    // memory updates must sit between one per record and one per event. On the
+    // flat zero lattice this bench plays, all three agree and it is the lower
+    // bound -- asserted as a RANGE rather than pinned to that, because pinning
+    // it would assert the fixture's flatness rather than the block's law.
+    if ((hist_updates_o < HIST_CW'(terr_lodfeed_dev_records_o)) ||
+        (hist_updates_o > hist_events_o))
+      $fatal(1, "SMOKE: MEASURE.HISTOGRAM made %0d memory update(s) for %0d event(s) over %0d record(s) -- outside [records, events], so the lane aggregation is not doing what its contract says",
+             hist_updates_o, hist_events_o, terr_lodfeed_dev_records_o);
     $display("SMOKE:   wb    sheets written=%0d refused=%0d faulted=%0d guard_denied=%0d acks_unmatched=%0d overdue=%0d | doorbell starved=%0d ret_overflow=%0d | rdshare jobs A=%0d B=%0d WB=%0d",
              terr_wb_sheets_written_o, terr_wb_sheets_refused_o, terr_wb_sheets_faulted_o,
              terr_wb_guard_denied_o, terr_wb_acks_unmatched_o, terr_wb_acks_overdue_o,
@@ -5572,13 +5804,22 @@ module tb_zhao_console_core_smoke
              N_TERR_REC, terr_pl_pages_loaded_o, terr_pl_pages_faulted_o,
              terr_pl_pages_refused_o, guard);
 
-    // EVERY COMPLETION REACHED THE DIRECTORY. This is the return leg of the
-    // spine and the one a counter inside the loader cannot witness: the
-    // directory validates the CRC on every completion it accepts, so a
-    // completion that never arrived and one that arrived bad are told apart
-    // here and nowhere else.
-    if (terr_res_crc_failures_o != N_TERR_REC)
-      $fatal(1, "SMOKE: the directory recorded %0d completions for %0d jobs -- TERRAIN.PAGELOADER's fin_* is not reaching TERRAIN.RESIDENCY",
+    // EVERY COMPLETION REACHED THE DIRECTORY, AND EVERY ONE WAS GOOD.
+    //
+    // REWRITTEN 2026-09-20 (terrain9), AND THE OLD FORM IS THE INSTRUCTIVE
+    // PART. It read `if (terr_res_crc_failures_o != N_TERR_REC) $fatal(...
+    // "fin_* is not reaching TERRAIN.RESIDENCY")` -- it used the count of CRC
+    // FAILURES as a proxy for the count of completions that ARRIVED, which is
+    // only a proxy while every page is guaranteed to fail. So the check
+    // asserted the stimulus's defect: repair the fixture and it goes RED on a
+    // machine that has strictly improved, which is CLAUDE.md's "do not write a
+    // test that asserts the bug" with the bug living in the bench rather than
+    // in the RTL. It is now two checks that mean what they say.
+    if ((terr_res_claims_o) != N_TERR_REC)
+      $fatal(1, "SMOKE: the directory recorded %0d claims for %0d jobs -- TERRAIN.SEQ's claims are not reaching TERRAIN.RESIDENCY",
+             terr_res_claims_o, N_TERR_REC);
+    if (terr_res_crc_failures_o != 0)
+      $fatal(1, "SMOKE: the directory rejected %0d of %0d page completion(s) on CRC -- the bench seals each page with the CRC of the bytes it wrote, so a mismatch is a transport fault, not a fixture one",
              terr_res_crc_failures_o, N_TERR_REC);
 
     // THE WIDTH STEP HELD. The pool index is one bit wider than the
@@ -5591,26 +5832,46 @@ module tb_zhao_console_core_smoke
     if (terr_pl_slot_overflow_o != 0)
       $fatal(1, "SMOKE: %0d completions carried a pool slot outside the directory's range", terr_pl_slot_overflow_o);
 
-    // ---- 5. WHAT IS *NOT* CLAIMED, stated so nobody reads more in --------
-    // `terr_res_resident_o` is ZERO here and that is the CORRECT reading of
-    // this composition, for two independent declared reasons:
-    //   * the pages this bench plays are ZEROS, so their CRC cannot match the
-    //     `expected_page_crc32c` in the record and ruling T7 says a CRC-failed
-    //     page is never rendered. The fault is the required behaviour on the
-    //     stimulus given, not a defect;
-    //   * even a clean page would stop in ST_MIPGEN, because the directory
-    //     publishes on TWO completions and the second's producer
-    //     (TERRAIN.MIPFEED) is not composed -- see the refusal list in
-    //     zhao_console_core.sv.
-    // Asserting `resident == 0` would be asserting the gap, so this is a
-    // $display. Asserting the CRC fault would be asserting a bug. What IS
-    // asserted is the refusal's own law: every faulted page was counted.
-    if (terr_pl_pages_faulted_o > 0)
-      $display("SMOKE: NOTE %0d page(s) FAULTED as required -- the bench plays a zero page whose CRC cannot match the record's declared expected_page_crc32c, and ruling T7 forbids rendering it. The spine is proven by bytes retired (%0d) and by the record/claim seams above, not by residency.",
-               terr_pl_pages_faulted_o, terr_pl_load_bytes_o);
-    if (terr_res_resident_o != 0)
-      $display("SMOKE: NOTE %0d page(s) reached RESIDENT, which this composition did not expect -- TERRAIN.MIPFEED is not composed, so check what produced the second completion.",
-               terr_res_resident_o);
+    // ---- 5. THE PAGE LOADS, AND THE CHAIN BEHIND IT MOVES ----------------
+    // REPLACED 2026-09-20 (terrain9). What stood here gave TWO declared reasons
+    // for `terr_res_resident_o == 0`, and BOTH had expired:
+    //   * "the pages this bench plays are ZEROS, so their CRC cannot match" --
+    //     the pages are no longer zeros (they carry a 2.1 header and their own
+    //     body CRC), and the stated cause was wrong even then: the loader's
+    //     own counters read `crc_fails=0, hdr_ident_fails=3`, so the refusal
+    //     was the IDENTITY test, not the CRC;
+    //   * "even a clean page would stop in ST_MIPGEN, because ... the second's
+    //     producer (TERRAIN.MIPFEED) is not composed" -- TERRAIN.MIPFEED IS
+    //     composed, at `zhao_console_core.sv:15281`, since 2026-09-19. A bench
+    //     comment naming a block as absent is exactly the false-absence shape
+    //     this campaign has now found sixteen times, and this one was load
+    //     bearing: it is the sentence that made a zero look expected.
+    //
+    // These are the R70 chain, asserted as ONE reading. TERRAIN.MIPREQ triggers
+    // only on a load that finished OK, so each link below is unreachable while
+    // the one above it is zero -- which is why the whole chain sat at zero and
+    // no check could see it.
+    if (terr_pl_pages_loaded_o != N_TERR_REC)
+      $fatal(1, "SMOKE: %0d of %0d page(s) loaded (faulted=%0d refused=%0d, verdict=%0d, hdr_ident_fails=%0d) -- the bench now writes a spec 2.1 header and the page's own body CRC, so a page that does not load is a spine fault",
+             terr_pl_pages_loaded_o, N_TERR_REC, terr_pl_pages_faulted_o,
+             terr_pl_pages_refused_o, terr_pl_fault_verdict_o,
+             terr_pl_hdr_ident_fails_o);
+    if (terr_mip_samples_sent_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.MIPFEED pushed ZERO fine-lattice samples after %0d page load(s) (mipreq requests=%0d issued=%0d) -- ruling R70's metric has no stream behind it",
+             terr_pl_pages_loaded_o, terr_mipreq_requests_o, terr_mipreq_issued_o);
+    if (terr_lodfeed_lattices_walked_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.LODFEED walked ZERO lattices against %0d fine sample(s) -- mg_start_o is not reaching it",
+             terr_mip_samples_sent_o);
+    if (terr_lodfeed_dev_records_o == 0)
+      $fatal(1, "SMOKE: TERRAIN.LODFEED walked %0d lattice(s) and emitted ZERO deviation records -- zhao_terrain_loddev produced nothing for MEASURE.HISTOGRAM",
+             terr_lodfeed_lattices_walked_o);
+    if (hist_events_o == 0)
+      $fatal(1, "SMOKE: MEASURE.HISTOGRAM accepted ZERO events while TERRAIN.LODFEED emitted %0d record(s) -- the entry I18 / ruling R70 join is not carrying a value",
+             terr_lodfeed_dev_records_o);
+    $display("SMOKE: NOTE the R70 chain CARRIES A VALUE: %0d page(s) loaded -> mipreq issued=%0d -> mipfeed samples_sent=%0d -> lodfeed walked=%0d dev_records=%0d -> histogram events=%0d, resident=%0d. Before 2026-09-20 every one of these was ZERO because the bench played a headerless page and TERRAIN.MIPREQ triggers only on a load that finished OK.",
+             terr_pl_pages_loaded_o, terr_mipreq_issued_o,
+             terr_mip_samples_sent_o, terr_lodfeed_lattices_walked_o,
+             terr_lodfeed_dev_records_o, hist_events_o, terr_res_resident_o);
 
     $display("SMOKE: TERRAIN spine -- %0d records emitted and %0d consumed, %0d claims, %0d loads, %0d bytes retired over %0d played bursts.",
              terr_cmd_records_emitted_o, terr_seq_records_consumed_o,

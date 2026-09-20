@@ -37,23 +37,56 @@ taken of a machine nobody meant to measure.
 run.* An island fit is 1.5–4 hours; two of them once consumed most of a session
 while the actual engineering took minutes. The fit is the scarce resource.
 
-### F-CLIFF1 — a `quartus_map`, minutes, runs FIRST and independently
+### ~~F-CLIFF1~~ — **ALREADY RUN, 18 September. Superseded by F-CLIFF-GOLDEN below.**
 
-**Question: does `zhao_forge_cliff` or `zhao_forge_cliff_ram` infer RAM, and at
-what cost?**
+**This entry said "it has never run" and that was FALSE** (ruling R117). The
+receipts have been in `reports/synthesis/blockpaths/` for two days —
+`zhao_forge_cliff_ram@first-measurement.{map,fit,sta,setup,hold}.rpt` plus a
+`.sources.sha256` that **matches the current source**, so the numbers describe
+the file in the tree today. And it was not a map: it was a **full fit on the
+target part `5CSEBA6U23I7`**.
 
-Ruling R109. The two are **rival candidates**, not parent and child, and
-`console_inventory.yml:109-127` gives both the identical boilerplate disposition
-— which is how the rivalry stayed invisible. Until this is ruled **neither may
-be composed**, because composing either is choosing by default and would leave
-G3 enforcing a decision nobody took.
+It answered its own question. Five inferred memories (`win_mem`, `edge_key_r`,
+`edge_span_r`, `prio_mem_r`, `run_mem_r`), MLAB bits 0, 120,964 block memory
+bits, 15 RAM blocks — the window went to block RAM, which was the pass
+condition. **Fitted at 976 ALM, 2% of the device.** At map stage, like for like,
+1,326 combinational ALUTs against the golden's 8,149 and 826 registers against
+3,875.
 
-This is a **map, not a fit**. The batching rule is about 1.5–4 hour placements;
-this is minutes. And RAM inference is precisely the class that genuinely needs
-Quartus rather than Verilator — Verilator will answer correctness and throughput
-in seconds and cannot answer this at all.
+Two declared breaches, neither of which gates the decision: **four**
+`Warning (276020)` pass-through insertions where the gate demanded
+`ramConversionWarnings 0`, and a cosmetic bit-0 inferred latch on
+`triangles_submitted_o` (the counter increments by 2, so bit 0 is provably
+constant — an artifact, not a missing branch).
 
-`fit_targets.yml:1608-1625`. It has never run.
+**How this entry came to be wrong is the lesson.** I inherited "the gate has
+never run" from a lane report, wrote it into a RULING, and then copied the
+ruling into this plan. A ruling number made an unverified claim read as more
+authoritative rather than less. It was found only because I went to run the gate
+and looked for the runner.
+
+### F-CLIFF-GOLDEN — a leaf fit, and the ONLY honest way to state the saving
+
+**Question: what does `zhao_forge_cliff` actually FIT at on `5CSEBA6U23I7`?**
+
+`zhao_forge_cliff` is **7,664 ALM and 18.3% of the whole ALM budget**
+(`BUDGET_HEATMAP.md:159`) — but that figure is a **map-only ESTIMATE that was
+never fitted**, and `FORGE-CLIFF-BITMAP-RAM-20260910.md:165` says so in as many
+words.
+
+So the number everyone will want — "the RAM version saves N ALM" — **cannot be
+computed today**, because it would set a fitted 976 against an unfitted 7,664.
+That is estimate-versus-fit, the same mismatched-comparison error as measuring a
+grounded stance against an aerial drawing, and it would land confidently in the
+flattering direction.
+
+One cheap leaf fit of the golden closes it. Until then the defensible statement
+is the map-stage one: **the candidate uses 16% of the golden's combinational
+ALUTs and 21% of its registers**, and separately fits at 976 ALM on the target.
+
+Given ALMs are the binding constraint and the console sits at roughly 113% of
+the device, this is plausibly the largest single lever in the tree — which is
+exactly why its headline number must not be manufactured.
 
 ### F-CONSOLE-TARGET — the VERDICT fit, on `5CSEBA6U23I7`
 
