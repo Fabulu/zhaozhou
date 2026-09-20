@@ -1672,6 +1672,16 @@ constexpr int32_t kEyeTravelTotalMaxDeg = 80;
 // scheduled layer regardless.
 constexpr uint16_t kIdleOrbitSlot = 0;
 constexpr uint16_t kIdleFixedSlot = 23;
+// ⚠ THE SCHEDULE SLOT IS NOT ALWAYS THE CLIP SLOT. build_hover_idle passes
+// kIdleOrbitSlot to every SCHEDULED layer (the glance skew, the dwell seed, the
+// knead gain, the nodule table, the dip share) while the CLIP carries slot 23,
+// so a gate that reports "this clip's share" by indexing on the clip's slot_id
+// reads a default the renderer never used. mrear's R5 line did exactly that and
+// printed 750 for a clip running on 715. One helper, so a report cannot name a
+// knob the creature is not turning.
+constexpr uint16_t knead_schedule_slot(uint16_t clip_slot) {
+  return clip_slot == kIdleFixedSlot ? kIdleOrbitSlot : clip_slot;
+}
 
 // THE ONE PLACE the fixed three-quarter camera is written down.
 // subject_u02_clip WRITES this into s.cam_yaw; eye_face_base_a16 READS it.

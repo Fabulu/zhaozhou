@@ -3309,8 +3309,17 @@ inline void antenna_knead(Rig& g, uint32_t slot, EyeCam cam, int keys, int f,
   // exact loop seam, the per-slot table and the global gain are shared; only
   // how the gesture is REALISED differs. See kKneadDentDepthPm.
   {
+    // ⚠ THE SCHEDULE SLOT. Every scheduled layer is called with kIdleOrbitSlot
+    // for BOTH idle bakes (build_hover_idle's own comment says so), so this is
+    // the identity in production today -- but the 750 fallback is a silent
+    // default waiting for the next clip whose slot_id runs past the table, and
+    // that is exactly the pass-5 orphaned-index fault. knead_schedule_slot
+    // names the mapping once; see its comment in manafold_art.h.
+    const uint32_t dip_slot = knead_schedule_slot(static_cast<uint16_t>(slot));
     const int32_t dip_base =
-        slot < static_cast<uint32_t>(kKneadClipSlots) ? kKneadDipClipPm[slot] : 750;
+        dip_slot < static_cast<uint32_t>(kKneadClipSlots)
+            ? kKneadDipClipPm[dip_slot]
+            : 750;
     const int32_t dip_gain = static_cast<int32_t>(
         (static_cast<int64_t>(dip_base) * motion_pm / 1000) *
         g_u02_knead_dip_gain_pm / 1000);

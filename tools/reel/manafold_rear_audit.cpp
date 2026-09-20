@@ -907,8 +907,14 @@ void print_stats(int slot, const ClipStats& s) {
   // the review repaired in mspan's G6: a detector that prints only its failures
   // cannot be read for margin. `dip share` is the authored per-clip factor, so
   // the line also says which knob moves it.
-  const int32_t share = slot >= 0 && slot < u02::kKneadClipSlots
-                            ? u02::kKneadDipClipPm[slot]
+  // ⚠ THE SCHEDULE SLOT, NOT THE CLIP SLOT. See u02::knead_schedule_slot: the
+  // fixed-camera idle bake renders with the ORBIT idle's schedule, so indexing
+  // on its own slot_id fell off the end of the table onto a 750 default the
+  // renderer never used. This line printed 750 for a clip running on 715.
+  const int ssl = static_cast<int>(
+      u02::knead_schedule_slot(static_cast<uint16_t>(slot < 0 ? 0 : slot)));
+  const int32_t share = slot >= 0 && ssl < u02::kKneadClipSlots
+                            ? u02::kKneadDipClipPm[ssl]
                             : 750;
   std::printf(
       "  R5 DIP: B lowest margin %+.0f mm (need >= %.0f), returns to %+.0f mm "
@@ -1197,8 +1203,11 @@ int main(int argc, char** argv) {
     }
     w_rail_step = std::max(w_rail_step, st.rail_step);
     // R5: only clips that AUTHOR a dip are judged for one.
+    // The SCHEDULE slot, for the same reason print_stats uses it.
+    const int wsl = static_cast<int>(
+        u02::knead_schedule_slot(static_cast<uint16_t>(want < 0 ? 0 : want)));
     const int32_t dip_want =
-        want >= 0 && want < u02::kKneadClipSlots ? u02::kKneadDipClipPm[want] : 750;
+        want >= 0 && wsl < u02::kKneadClipSlots ? u02::kKneadDipClipPm[wsl] : 750;
     if (dip_want > 0 && u02::g_u02_knead_dip_gain_pm > 0) {
       ++dip_clips;
       if (st.dip_margin_mm < kGateDipMarginMm) {
