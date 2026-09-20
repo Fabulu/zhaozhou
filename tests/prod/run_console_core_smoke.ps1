@@ -164,11 +164,19 @@ param(
   # is Python plus Verilator lint over `fpga/rtl` and none of it elaborates a
   # bench. Each was found by a ten-minute run or a full build.
   #
-  # This stops after the verilate step and reports its exit code. It is about a
-  # minute against the full run's ten, so it goes FIRST on the merge checklist:
-  # a cheap gate that runs always beats an expensive one that runs eventually.
-  # It is NOT a substitute for the run -- it proves the tree ELABORATES, and
-  # says nothing whatever about what the console then does.
+  # This stops after the verilate step and reports its exit code. MEASURED
+  # 2026-09-20: 23 s clean against the full run's ~10 min, and 1 s when it
+  # fails. So it goes FIRST on the merge checklist: a cheap gate that runs
+  # always beats an expensive one that runs eventually. It is NOT a substitute
+  # for the run -- it proves the tree ELABORATES, and says nothing whatever
+  # about what the console then does.
+  #
+  # SEEN TO FIRE, not assumed. `spt_entry`'s `end`/`endfunction` was deleted
+  # from the bench on purpose -- the exact damage the 2026-09-20 hostdbg merge
+  # did -- and this switch returned nonzero with
+  # `tb_zhao_console_core_smoke.sv:2416: syntax error, unexpected localparam`
+  # in one second. The file was restored in the same invocation; the control is
+  # reproducible from this paragraph and leaves no copy to rot.
   [switch]$LintOnly
 )
 
