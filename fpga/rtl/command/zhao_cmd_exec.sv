@@ -1898,23 +1898,29 @@ module zhao_cmd_exec
           end else if (sv_dirty[cv]) begin
             proj_cfg_we_o   <= 1'b1;
             proj_cfg_view_o <= cv;
-            // STEP 16 IS cfg ADDRESS 18, NOT 16. Addresses 16 and 17 are the
-            // viewport rect, which SetView does not carry -- it carries a
-            // viewport_id. The console's host port owns those two words for now.
+            // STEP 16 IS cfg ADDRESS 18, NOT 16 -- the depth profile. The
+            // walk's step numbers and the bus's addresses are deliberately
+            // NOT the same sequence, and this mux is the only place that is
+            // written down.
             //
-            // CORRECTED 2026-09-20 (projinput): this comment used to continue
-            // "and the id-to-rect table is video_rules.md's, not in the ABI at
-            // all ... writing them from here would be this block inventing a
-            // rectangle." BOTH HALVES WERE FALSE. `video_rules.md` contained no
-            // such table -- it does now, section 3.2 -- and
-            // `zref::render::viewports_of()` has held one since 2026-08-15, so
-            // lowering it here would invent nothing: it would differential
-            // against the oracle like everything else this block lowers. What
-            // is actually owed is the lowering itself plus ONE decision, which
-            // `video_mode` indexes the table, given that video_rules 1.1
-            // latches the mode at frame start while this walk commits
-            // immediately. `zhao_console_core.sv` entry I14 carries the whole
-            // correction and the recommendation.
+            // THE HISTORY, KEPT SHORT BECAUSE IT IS INSTRUCTIVE. Until
+            // 2026-09-20 this comment said "addresses 16 and 17 are the
+            // viewport rect ... the console's host port owns those two words
+            // for now", and before that it justified the absence with "the
+            // id-to-rect table is video_rules.md's, not in the ABI at all".
+            // THAT JUSTIFICATION ASSERTED A PRESENCE THAT DID NOT EXIST --
+            // `video_rules.md` contained no such table (projinput). It does
+            // now, section 3.2, and `zref::render::viewports_of()` had held
+            // the same rectangles since 2026-08-15 all along.
+            //
+            // BOTH SENTENCES ARE NOW SPENT: the lowering is the two lines
+            // below, and the one decision it needed -- WHICH mode indexes the
+            // table, given that video_rules 1.1 latches the mode at frame
+            // start while this walk commits immediately -- is TAKEN and
+            // recorded at `pc_mode`'s declaration and in 3.2. The host port
+            // still writes 16/17 and still wins the cycle, but it is now an
+            // OVERRIDE rather than the only producer.
+            //
             // STEPS 17/18/19 ARE cfg ADDRESSES 19/20/21 -- the eye (R63),
             // decoded by `zhao_view_eye`, which snoops this same bus.
             // `zhao_project_core` ignores them, which is the property that let
