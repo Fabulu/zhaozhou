@@ -2532,6 +2532,10 @@ targets:
       - fpga/rtl/mem/zhao_mem_upload.sv
       # MATERIAL.RESOLVE, composed 2026-09-19 (cmdmem, R20).
       - fpga/rtl/texture/zhao_material_resolve.sv
+      # MATERIAL.RESOLVE's request issue point and response join (entry I49,
+      # 2026-09-20, texmat2). No new arithmetic and no memory: a small FSM,
+      # one published record and an occupancy counter.
+      - fpga/rtl/texture/zhao_material_window.sv
       # MEASURE.TOKENS, composed on its budget side 2026-09-19 (cmdmem, R18/R33).
       - fpga/rtl/measure/zhao_measure_tokens.sv
       - fpga/rtl/debug/zhao_debug_frameblit.sv

@@ -1147,13 +1147,8 @@ module zhao_console_core_slot_overflow_mutant
   // ---- MATERIAL.RESOLVE (composed 2026-09-19, cmdmem packet, ruling R20) ---
   // I49: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
   // internal and real; see the entry for the one seam in the way.
-  input  logic                    mat_req_valid_i,
-  output logic                    mat_req_ready_o,
-  input  logic [31:0]             mat_req_material_set_i,
-  input  logic [15:0]             mat_req_material_id_i,
-  input  logic [ 7:0]             mat_req_quality_tier_i,
+  // I49, CLOSED 2026-09-20: the request and the response's ready are internal.
   output logic                    mat_rsp_valid_o,
-  input  logic                    mat_rsp_ready_i,
   output logic [ 2:0]             mat_rsp_status_o,
   output logic                    mat_rsp_has_record_o,
   output logic [255:0]            mat_rsp_record_o,
@@ -1178,6 +1173,16 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]             mat_selector_overflow_o,
   output logic [31:0]             mat_recipe_count_mismatch_o,
   output logic [31:0]             mat_fetch_denied_o,
+  output logic [31:0]             mat_win_resolves_o,
+  output logic [31:0]             mat_win_switches_o,
+  output logic [31:0]             mat_win_drain_stall_o,
+  output logic [31:0]             mat_win_answer_stall_o,
+  output logic [31:0]             mat_win_occupancy_max_o,
+  output logic [31:0]             mat_win_no_record_o,
+  output logic [31:0]             mat_win_selector_overflow_o,
+  output logic [31:0]             mat_win_clut_unowned_o,
+  output logic [31:0]             mat_win_err_unpublished_o,
+  output logic [31:0]             mat_win_err_underflow_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -1438,7 +1443,7 @@ module zhao_console_core_slot_overflow_mutant
   // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
   // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
   // sentence naming the residency directory's KEY. See entry I20.
-  input  logic [297:0] tri_flat_request_i,
+  // 	ri_flat_request_i left the core's port list 2026-09-20 (entry I49).
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
   input  logic         fill_req_ready_i,

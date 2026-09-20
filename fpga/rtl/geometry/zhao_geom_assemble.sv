@@ -60,6 +60,16 @@ module zhao_geom_assemble #(
     input  var logic [7:0]        m_triangle_count_i,
     input  var logic [15:0]       m_material_id_i,
     input  var logic [31:0]       m_raster_state_i,
+  // The draw's MATERIAL_SET handle32, the OTHER half of MATERIAL.RESOLVE's
+  // request (core entry I49). It arrives on the same handshake as
+  // m_material_id_i and is latched by the same enable, so the pair cannot
+  // separate -- exactly the argument m_raster_state_i above already rests
+  // on. Carried, not consumed: this block has no opinion about materials.
+  input  var logic [31:0]       m_material_set_i,
+  // The draw's SEMANTIC WEIGHT, the Measure policy's degrade order, which
+  // MATERIAL.RESOLVE carries as its request's quality tier. Same handshake,
+  // same latch, same argument as the two above.
+  input  var logic [ 7:0]       m_quality_tier_i,
     input  var logic [SRCW-1:0]   m_src_id_i,
 
     // ---- the u8 local index stream -----------------------------------------
@@ -82,6 +92,8 @@ module zhao_geom_assemble #(
     output var logic [VIDW-1:0]   t_v2_o,
     output var logic [15:0]       t_material_o,
     output var logic [31:0]       t_raster_o,
+  output var logic [31:0]       t_material_set_o,
+  output var logic [ 7:0]       t_quality_tier_o,
     output var logic [SRCW-1:0]   t_src_id_o,
     output var logic              t_last_o,
 
@@ -119,6 +131,8 @@ module zhao_geom_assemble #(
   logic [7:0]      tcount_q;
   logic [15:0]     mat_q;
   logic [31:0]     rast_q;
+  logic [31:0]     mset_q;
+  logic [ 7:0]     qtier_q;
   logic [SRCW-1:0] src_q;
   logic [8:0]      tri_q;        // which triplet, 0..triangle_count-1
 
@@ -150,6 +164,8 @@ module zhao_geom_assemble #(
       t_v2_o           <= '0;
       t_material_o     <= '0;
       t_raster_o       <= '0;
+      t_material_set_o <= '0;
+      t_quality_tier_o <= '0;
       t_src_id_o       <= '0;
       m_done_o         <= 1'b0;
     end else begin
@@ -171,6 +187,8 @@ module zhao_geom_assemble #(
               tcount_q <= m_triangle_count_i;
               mat_q    <= m_material_id_i;
               rast_q   <= m_raster_state_i;
+        mset_q   <= m_material_set_i;
+        qtier_q  <= m_quality_tier_i;
               src_q    <= m_src_id_i;
               tri_q    <= '0;
               st_q     <= S_FETCH;
@@ -199,6 +217,8 @@ module zhao_geom_assemble #(
               t_v2_o       <= voff_q + VIDW'(ix_c_i);
               t_material_o <= mat_q;
               t_raster_o   <= rast_q;
+          t_material_set_o <= mset_q;
+          t_quality_tier_o <= qtier_q;
               t_src_id_o   <= src_q;
               st_q         <= S_HOLD;
             end

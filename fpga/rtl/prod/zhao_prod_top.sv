@@ -626,6 +626,8 @@ module zhao_prod_top (
   logic [16-1:0] u07_t_v2_o;
   logic [16-1:0] u07_t_material_o;
   logic [32-1:0] u07_t_raster_o;
+  logic [32-1:0] u07_t_material_set_o;
+  logic [8-1:0] u07_t_quality_tier_o;
   logic [16-1:0] u07_t_src_id_o;
   logic [1-1:0] u07_t_last_o;
   logic [1-1:0] u07_m_done_o;
@@ -643,20 +645,24 @@ module zhao_prod_top (
       .m_triangle_count_i(u07_src[21 +: 8]),
       .m_material_id_i(u07_src[28 +: 16]),
       .m_raster_state_i(u07_src[35 +: 32]),
-      .m_src_id_i(u07_src[42 +: 16]),
+      .m_material_set_i(u07_src[42 +: 32]),
+      .m_quality_tier_i(u07_src[49 +: 8]),
+      .m_src_id_i(u07_src[56 +: 16]),
       .ix_req_o(u07_ix_req_o),
       .ix_index_o(u07_ix_index_o),
-      .ix_valid_i(u07_src[49 +: 1]),
-      .ix_a_i(u07_src[56 +: 8]),
-      .ix_b_i(u07_src[63 +: 8]),
-      .ix_c_i(u07_src[70 +: 8]),
+      .ix_valid_i(u07_src[63 +: 1]),
+      .ix_a_i(u07_src[70 +: 8]),
+      .ix_b_i(u07_src[77 +: 8]),
+      .ix_c_i(u07_src[84 +: 8]),
       .t_valid_o(u07_t_valid_o),
-      .t_ready_i(u07_src[77 +: 1]),
+      .t_ready_i(u07_src[91 +: 1]),
       .t_v0_o(u07_t_v0_o),
       .t_v1_o(u07_t_v1_o),
       .t_v2_o(u07_t_v2_o),
       .t_material_o(u07_t_material_o),
       .t_raster_o(u07_t_raster_o),
+      .t_material_set_o(u07_t_material_set_o),
+      .t_quality_tier_o(u07_t_quality_tier_o),
       .t_src_id_o(u07_t_src_id_o),
       .t_last_o(u07_t_last_o),
       .m_done_o(u07_m_done_o),
@@ -668,7 +674,7 @@ module zhao_prod_top (
   logic u07_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u07_fold_q <= 1'b0;
-    else u07_fold_q <= u07_fold_q ^ (((^u07_m_ready_o)) & u07_src[0]) ^ (((^u07_ix_req_o)) & u07_src[1]) ^ (((^u07_ix_index_o)) & u07_src[2]) ^ (((^u07_t_valid_o)) & u07_src[3]) ^ (((^u07_t_v0_o)) & u07_src[4]) ^ (((^u07_t_v1_o)) & u07_src[5]) ^ (((^u07_t_v2_o)) & u07_src[6]) ^ (((^u07_t_material_o)) & u07_src[7]) ^ (((^u07_t_raster_o)) & u07_src[8]) ^ (((^u07_t_src_id_o)) & u07_src[9]) ^ (((^u07_t_last_o)) & u07_src[10]) ^ (((^u07_m_done_o)) & u07_src[11]) ^ (((^u07_meshlets_o)) & u07_src[12]) ^ (((^u07_triangles_o)) & u07_src[13]) ^ (((^u07_refused_limits_o)) & u07_src[14]) ^ (((^u07_refused_index_o)) & u07_src[15]);
+    else u07_fold_q <= u07_fold_q ^ (((^u07_m_ready_o)) & u07_src[0]) ^ (((^u07_ix_req_o)) & u07_src[1]) ^ (((^u07_ix_index_o)) & u07_src[2]) ^ (((^u07_t_valid_o)) & u07_src[3]) ^ (((^u07_t_v0_o)) & u07_src[4]) ^ (((^u07_t_v1_o)) & u07_src[5]) ^ (((^u07_t_v2_o)) & u07_src[6]) ^ (((^u07_t_material_o)) & u07_src[7]) ^ (((^u07_t_raster_o)) & u07_src[8]) ^ (((^u07_t_material_set_o)) & u07_src[9]) ^ (((^u07_t_quality_tier_o)) & u07_src[10]) ^ (((^u07_t_src_id_o)) & u07_src[11]) ^ (((^u07_t_last_o)) & u07_src[12]) ^ (((^u07_m_done_o)) & u07_src[13]) ^ (((^u07_meshlets_o)) & u07_src[14]) ^ (((^u07_triangles_o)) & u07_src[15]) ^ (((^u07_refused_limits_o)) & u07_src[16]) ^ (((^u07_refused_index_o)) & u07_src[17]);
 
   // ---- zhao_geom_assetfetch ----
   logic [63:0] u08_lfsr_q;
@@ -1751,6 +1757,8 @@ module zhao_prod_top (
   logic [16-1:0] u23_o_src_id_o;
   logic [16-1:0] u23_o_material_o;
   logic [32-1:0] u23_o_raster_o;
+  logic [32-1:0] u23_o_material_set_o;
+  logic [8-1:0] u23_o_quality_tier_o;
   logic [32-1:0] u23_meshlets_o;
   logic [32-1:0] u23_groups_o;
   logic [32-1:0] u23_triangles_in_o;
@@ -1783,23 +1791,25 @@ module zhao_prod_top (
       .t_v2_i(u23_src[77 +: 16]),
       .t_material_i(u23_src[84 +: 16]),
       .t_raster_i(u23_src[91 +: 32]),
-      .t_src_id_i(u23_src[98 +: 16]),
-      .m_done_i(u23_src[105 +: 1]),
+      .t_material_set_i(u23_src[98 +: 32]),
+      .t_quality_tier_i(u23_src[105 +: 8]),
+      .t_src_id_i(u23_src[112 +: 16]),
+      .m_done_i(u23_src[119 +: 1]),
       .look_valid_o(u23_look_valid_o),
-      .look_ready_i(u23_src[112 +: 1]),
+      .look_ready_i(u23_src[126 +: 1]),
       .look_arena_o(u23_look_arena_o),
       .look_gen_o(u23_look_gen_o),
       .look_index_o(u23_look_index_o),
-      .rep_valid_i(u23_src[119 +: 1]),
-      .rep_hit_i(u23_src[126 +: 1]),
-      .rep_refuse_i(u23_src[133 +: 1]),
-      .rep_payload_i(u23_src[140 +: 106]),
-      .att_rep_valid_i(u23_src[147 +: 1]),
-      .att_invw_i(u23_src[154 +: 24]),
-      .att_rep_data_i(u23_src[161 +: 192]),
+      .rep_valid_i(u23_src[133 +: 1]),
+      .rep_hit_i(u23_src[140 +: 1]),
+      .rep_refuse_i(u23_src[147 +: 1]),
+      .rep_payload_i(u23_src[154 +: 106]),
+      .att_rep_valid_i(u23_src[161 +: 1]),
+      .att_invw_i(u23_src[168 +: 24]),
+      .att_rep_data_i(u23_src[175 +: 192]),
       .af_release_o(u23_af_release_o),
       .o_valid_o(u23_o_valid_o),
-      .o_ready_i(u23_src[168 +: 1]),
+      .o_ready_i(u23_src[182 +: 1]),
       .o_ax_o(u23_o_ax_o),
       .o_ay_o(u23_o_ay_o),
       .o_bx_o(u23_o_bx_o),
@@ -1817,6 +1827,8 @@ module zhao_prod_top (
       .o_src_id_o(u23_o_src_id_o),
       .o_material_o(u23_o_material_o),
       .o_raster_o(u23_o_raster_o),
+      .o_material_set_o(u23_o_material_set_o),
+      .o_quality_tier_o(u23_o_quality_tier_o),
       .meshlets_o(u23_meshlets_o),
       .groups_o(u23_groups_o),
       .triangles_in_o(u23_triangles_in_o),
@@ -1831,7 +1843,7 @@ module zhao_prod_top (
   logic u23_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u23_fold_q <= 1'b0;
-    else u23_fold_q <= u23_fold_q ^ (((^u23_mt_ready_o)) & u23_src[0]) ^ (((^u23_grp_ready_o)) & u23_src[1]) ^ (((^u23_rel_valid_o)) & u23_src[2]) ^ (((^u23_rel_arena_o)) & u23_src[3]) ^ (((^u23_t_ready_o)) & u23_src[4]) ^ (((^u23_look_valid_o)) & u23_src[5]) ^ (((^u23_look_arena_o)) & u23_src[6]) ^ (((^u23_look_gen_o)) & u23_src[7]) ^ (((^u23_look_index_o)) & u23_src[8]) ^ (((^u23_af_release_o)) & u23_src[9]) ^ (((^u23_o_valid_o)) & u23_src[10]) ^ (((^u23_o_ax_o)) & u23_src[11]) ^ (((^u23_o_ay_o)) & u23_src[12]) ^ (((^u23_o_bx_o)) & u23_src[13]) ^ (((^u23_o_by_o)) & u23_src[14]) ^ (((^u23_o_cx_o)) & u23_src[15]) ^ (((^u23_o_cy_o)) & u23_src[16]) ^ (((^u23_o_behind_o)) & u23_src[17]) ^ (((^u23_o_invw_a_o)) & u23_src[18]) ^ (((^u23_o_invw_b_o)) & u23_src[19]) ^ (((^u23_o_invw_c_o)) & u23_src[20]) ^ (((^u23_o_attr_a_o)) & u23_src[21]) ^ (((^u23_o_attr_b_o)) & u23_src[22]) ^ (((^u23_o_attr_c_o)) & u23_src[23]) ^ (((^u23_o_view_o)) & u23_src[24]) ^ (((^u23_o_src_id_o)) & u23_src[25]) ^ (((^u23_o_material_o)) & u23_src[26]) ^ (((^u23_o_raster_o)) & u23_src[27]) ^ (((^u23_meshlets_o)) & u23_src[28]) ^ (((^u23_groups_o)) & u23_src[29]) ^ (((^u23_triangles_in_o)) & u23_src[30]) ^ (((^u23_triangles_out_o)) & u23_src[31]) ^ (((^u23_refused_o)) & u23_src[32]) ^ (((^u23_missed_o)) & u23_src[33]) ^ (((^u23_att_skew_o)) & u23_src[34]) ^ (((^u23_view_bad_o)) & u23_src[35]) ^ (((^u23_poisoned_o)) & u23_src[36]) ^ (((^u23_triq_stall_o)) & u23_src[37]);
+    else u23_fold_q <= u23_fold_q ^ (((^u23_mt_ready_o)) & u23_src[0]) ^ (((^u23_grp_ready_o)) & u23_src[1]) ^ (((^u23_rel_valid_o)) & u23_src[2]) ^ (((^u23_rel_arena_o)) & u23_src[3]) ^ (((^u23_t_ready_o)) & u23_src[4]) ^ (((^u23_look_valid_o)) & u23_src[5]) ^ (((^u23_look_arena_o)) & u23_src[6]) ^ (((^u23_look_gen_o)) & u23_src[7]) ^ (((^u23_look_index_o)) & u23_src[8]) ^ (((^u23_af_release_o)) & u23_src[9]) ^ (((^u23_o_valid_o)) & u23_src[10]) ^ (((^u23_o_ax_o)) & u23_src[11]) ^ (((^u23_o_ay_o)) & u23_src[12]) ^ (((^u23_o_bx_o)) & u23_src[13]) ^ (((^u23_o_by_o)) & u23_src[14]) ^ (((^u23_o_cx_o)) & u23_src[15]) ^ (((^u23_o_cy_o)) & u23_src[16]) ^ (((^u23_o_behind_o)) & u23_src[17]) ^ (((^u23_o_invw_a_o)) & u23_src[18]) ^ (((^u23_o_invw_b_o)) & u23_src[19]) ^ (((^u23_o_invw_c_o)) & u23_src[20]) ^ (((^u23_o_attr_a_o)) & u23_src[21]) ^ (((^u23_o_attr_b_o)) & u23_src[22]) ^ (((^u23_o_attr_c_o)) & u23_src[23]) ^ (((^u23_o_view_o)) & u23_src[24]) ^ (((^u23_o_src_id_o)) & u23_src[25]) ^ (((^u23_o_material_o)) & u23_src[26]) ^ (((^u23_o_raster_o)) & u23_src[27]) ^ (((^u23_o_material_set_o)) & u23_src[28]) ^ (((^u23_o_quality_tier_o)) & u23_src[29]) ^ (((^u23_meshlets_o)) & u23_src[30]) ^ (((^u23_groups_o)) & u23_src[31]) ^ (((^u23_triangles_in_o)) & u23_src[32]) ^ (((^u23_triangles_out_o)) & u23_src[33]) ^ (((^u23_refused_o)) & u23_src[34]) ^ (((^u23_missed_o)) & u23_src[35]) ^ (((^u23_att_skew_o)) & u23_src[36]) ^ (((^u23_view_bad_o)) & u23_src[37]) ^ (((^u23_poisoned_o)) & u23_src[38]) ^ (((^u23_triq_stall_o)) & u23_src[39]);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u24_lfsr_q;

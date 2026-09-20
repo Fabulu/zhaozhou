@@ -875,6 +875,10 @@ module tb_zhao_shell (
       .m_triangle_count_i(meshfetch_mode_i ? mf_tc_r : asm_triangle_count_i),
       .m_material_id_i(meshfetch_mode_i ? mf_mat_r : 16'd1),
       .m_raster_state_i(32'd0),
+    // I49: this bench drives no draw, so it has no MATERIAL_SET and no
+    // semantic weight to carry. Tied at the BENCH, where a tie is stimulus.
+    .m_material_set_i(32'd0),
+    .m_quality_tier_i(8'd0),
       .m_src_id_i(render_src_id_i),
       .ix_req_o(asm_ix_req), .ix_index_o(asm_ix_index),
       // TREAD 9: valid follows the SOURCE. The bench responder is always

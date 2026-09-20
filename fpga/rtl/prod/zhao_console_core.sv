@@ -1366,14 +1366,41 @@
 //        tri_invw_plane_i       240b   CLOSED -- GEOM.ATTRPACK, plane 0
 //        tri_u_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 1
 //        tri_v_over_w_plane_i   240b   CLOSED -- GEOM.ATTRPACK, plane 2
-//        tri_flat_request_i     298b   OPEN, still a BOUNDARY
+//        tri_flat_request_i     298b   CLOSED 2026-09-20 -- MATERIAL.RESOLVE,
+//                                      through `u_material_window` (I49)
 //        tri_continuation_tail_i 48b   OPEN, still a BOUNDARY
 //        tri_fragment_state_i    32b   OPEN, still a BOUNDARY
 //
-//      The three OPEN ports are a BOUNDARY and this entry stays one. Their
-//      owner is MATERIAL.RESOLVE, which IS built and is NOT composed -- the
-//      distinction matters and this line used to get it wrong ("it is not
-//      built"). See below.
+//      TWO OPEN PORTS REMAIN and this entry stays a BOUNDARY for them. The
+//      third, `tri_flat_request_i`, is retired as of 2026-09-20: it is built
+//      in this module from MATERIAL.RESOLVE's published answer, field by
+//      field, with the owner of each named at the assignment. Read that
+//      block before re-deriving anything here -- in particular, a ZERO flat
+//      request is still a LEGAL profile and is exactly what this console
+//      presents until a material has actually been resolved, so the
+//      retirement changes behaviour only where a real record exists.
+//
+//      WHAT THE FLAT REQUEST STILL CARRIES AS A CONSTANT, and why each is a
+//      LAW or a RULING rather than a plausible value:
+//        base_alpha    owner ruling R48 -- no ratified vertex format carries
+//                      alpha, so OPAQUE is a named editable constant and
+//                      nothing is stubbed;
+//        base_rgb      the VERTEX's, not the material's. GEOM.VATTR holds a
+//                      PER-VERTEX colour (ruling R11) and this field is a
+//                      FLAT one; picking a corner would be an art decision
+//                      made by a composer. This is I20's remaining half and
+//                      it is named rather than quietly filled;
+//        lod_q4_4      the SAMPLER's by MATERIAL.RESOLVE's contract, and the
+//                      row this console programs has mip_enable low;
+//        aux_*         ZERO IS THE NON-TERRAIN PROFILE, in the resolver's own
+//                      words, and the tile pipe REFUSES a non-zero one that
+//                      has no producer;
+//        palette_slot / palette_generation
+//                      ZERO IS THE BINDING ROW'S OWN LAW for a direct format
+//                      (`binding_row_legal` refuses a direct row whose pair is
+//                      not zero). For a CLUT row they are real and this
+//                      console produces neither -- COUNTED on
+//                      `mat_win_clut_unowned_o`, and an owner decision.
 //
 //      HOW THE THREE PLANES CLOSED, and why it was a FRONT END and never
 //      missing arithmetic. `fpga/rtl/geometry/zhao_geom_attrsetup.sv` was real,
@@ -2139,41 +2166,42 @@
 //      no reference. Those six are what MEASURE.HISTOGRAM's `hist_ev_*` wants
 //      too. One absent owner, two blocks waiting on it.
 //
-// I49. MATERIAL.RESOLVE's REQUEST and RESPONSE (`mat_req_*`, `mat_rsp_*`) --
-//      BOUNDARY. NEW 2026-09-19 (cmdmem packet, ruling R20), opened in the
-//      commit that COMPOSED the block: its DIRECTORY is MEM.UPLOAD's
-//      MATERIAL_SET publications (5f.1's row) and its FETCH is requester C of
-//      the ENGINE1 adapter, with the new denied-fetch input. Both real.
+// I49 IS CLOSED AND DELETED, 2026-09-20 (texmat2). MATERIAL.RESOLVE's
+//      REQUEST and RESPONSE. Five ports left this module's list --
+//      mat_req_valid_i, mat_req_material_set_i, mat_req_material_id_i,
+//      mat_req_quality_tier_i and mat_rsp_ready_i -- and the entry is
+//      kept here only as the one sentence that says what closed it and how,
+//      because it was open for one day and its argument is reused by I20.
 //
-//      THE SEAM THIS ENTRY DESCRIBED IS HALF GONE, 2026-09-20, and the half
-//      that went is the one it called impossible. It read: "What no block in
-//      this core carries is the triangle's MATERIAL_SET HANDLE ... The handle
-//      has to ride the job that produces the triangles, which is I36's
-//      ruling." I36 was ruled (R29) and the handle now DOES ride: GEOM.DRAWJOB
-//      puts the draw's `material_set` in the job's sideband, GEOM.MESHFETCH
-//      and GEOM.ASSETFETCH carry it beside the meshlet, and it is offered on
-//      `af_s_side[63:32]` in the SAME handshake as `af_s_material_id` -- the
-//      two halves of this block's request, joined by construction rather than
-//      by timing. Nothing here pairs two live wires any more.
+//      WHAT THE ENTRY ASKED FOR: 'a request must be issued per meshlet (or
+//      per triangle) and its answer joined back to the triangles that asked'.
+//      zhao_material_window, composed with GEOM.REPLAY below, is that. It
+//      reads the triangle's OWN {material_set, material_id, semantic weight},
+//      all three of which ride with the meshlet from GEOM.DRAWJOB under
+//      ruling R29 and are latched by the same enable at every stage, so the
+//      request's halves are joined BY CONSTRUCTION. Entry I39's refusal --
+//      'TWO LIVE WIRES ARE NOT A PRODUCER' -- is answered rather than
+//      side-stepped: these are not two wires, they are fields of one record.
 //
-//      WHAT IS STILL OPEN is the REQUEST's issue point and the RESPONSE, which
-//      is this entry and is the texture lane's: a request must be issued per
-//      meshlet (or per triangle) and its answer joined back to the triangles
-//      that asked, and this packet did not build that and will not pretend to.
+//      AND THE JOIN, which is the half that is easy to fake. The published
+//      answer is read combinationally at the shell's triangle door, several
+//      stages downstream -- the exact shape of the metadata-swap defect this
+//      file has a chapter about. What makes it sound is an INTERLOCK: the
+//      window never changes what it publishes while any triangle is between
+//      GEOM.CLIP's input and the door, and the three disposal events of that
+//      span (GEOM.CLIP accepts, GEOM.CLIP retires a non-ACCEPT verdict, the
+//      door takes) are exhaustive, so the drain always completes. The
+//      argument does not rest on any block's latency.
+//      mat_win_err_unpublished_o watches the one thing that would falsify
+//      it, and both of the window's guards were FIRED in
+//      	ests/texture/material_window_directed.cpp (45 checks).
 //
-//      AND BEHIND IT, ONE MORE THING, NAMED SO THE NEXT READER COUNTS IT:
-//      (a) the response feeds `tri_flat_request_i` together with the binding
-//      page's palette slot / generation / response class (I20 seam 4) and
-//      needs the material id carried with each triangle through GEOM.CLIP,
-//      GEOM.SETUP and GEOM.ATTRPACK, which carry `src_id` beside a triangle
-//      today and nothing else. (b), "the record cannot be read where it
-//      lands", is CLOSED by owner ruling R32 (provisional): MEM.UPLOAD now
-//      writes the published region inside RENDER.ASSET_POOL, where ENGINE1
-//      reads. The smoke bench shows it end to end: PublishResource lands a
-//      MATERIAL_SET in the pool, MATERIAL.RESOLVE finds it in the directory,
-//      fetches the 32-byte record through requester C and the guard, and
-//      resolves it (`mat_fetch_denied_o` = 0). The denied path stays live
-//      and is fired by the block's own bench (case R20).
+//      WHAT IS STILL OWED AND IS NOW I20's, NOT THIS ENTRY'S: the binding
+//      page's palette_slot and palette_generation are ZERO BY LAW for a
+//      direct format and UNPRODUCED for a CLUT one -- counted, loudly, on
+//      mat_win_clut_unowned_o -- and the tmu_mode -> response_class
+//      encoding is an OWNER DECISION written up in FINDINGS-texmat2.md and
+//      held in ONE editable parameter.
 //
 // I50. GEOM.LOOM's NODE STREAM and CAMERA BASIS (`geom_loom_*`) -- BOUNDARY.
 //      NEW 2026-09-20 (geom3 packet), and like I41 before it this is a gap
@@ -3832,13 +3860,14 @@ module zhao_console_core
   // ---- MATERIAL.RESOLVE (composed 2026-09-19, cmdmem packet, ruling R20) ---
   // I49: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
   // internal and real; see the entry for the one seam in the way.
-  input  logic                    mat_req_valid_i,
-  output logic                    mat_req_ready_o,
-  input  logic [31:0]             mat_req_material_set_i,
-  input  logic [15:0]             mat_req_material_id_i,
-  input  logic [ 7:0]             mat_req_quality_tier_i,
+  // I49, CLOSED 2026-09-20 (texmat2). The REQUEST and the RESPONSE's ready
+  // are INTERNAL: `u_material_window` issues one resolve per distinct material
+  // from the triangle's own {material_set, material_id, semantic weight} and
+  // consumes the answer. Five ports left this list rather than being driven
+  // from constants. The response FIELDS stay as outputs, because a harness
+  // differencing a resolve against `zref::material` must be able to read them
+  // without reaching inside.
   output logic                    mat_rsp_valid_o,
-  input  logic                    mat_rsp_ready_i,
   output logic [ 2:0]             mat_rsp_status_o,
   output logic                    mat_rsp_has_record_o,
   output logic [255:0]            mat_rsp_record_o,
@@ -3863,6 +3892,26 @@ module zhao_console_core
   output logic [31:0]             mat_selector_overflow_o,
   output logic [31:0]             mat_recipe_count_mismatch_o,
   output logic [31:0]             mat_fetch_denied_o,
+  // ---- the WINDOW's evidence (entry I49) ---------------------------------
+  // `mat_win_resolves_o` against `mat_win_switches_o` is the "counters see
+  // what pictures cannot" reading: a window that re-resolved a material it
+  // already held would produce a byte-identical frame and spend the meshlet
+  // loop's clocks twice. The two stall counters are split because they have
+  // different cures. The last two are STRUCTURAL guards and read zero in any
+  // correct composition.
+  output logic [31:0]             mat_win_resolves_o,
+  output logic [31:0]             mat_win_switches_o,
+  output logic [31:0]             mat_win_drain_stall_o,
+  output logic [31:0]             mat_win_answer_stall_o,
+  output logic [31:0]             mat_win_occupancy_max_o,
+  output logic [31:0]             mat_win_no_record_o,
+  output logic [31:0]             mat_win_selector_overflow_o,
+  // Loud rather than silent: a CLUT material needs the binding page's palette
+  // slot and generation as witnesses and NOTHING in this console produces
+  // them. See FINDINGS-texmat2's owner decision.
+  output logic [31:0]             mat_win_clut_unowned_o,
+  output logic [31:0]             mat_win_err_unpublished_o,
+  output logic [31:0]             mat_win_err_underflow_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -4123,7 +4172,9 @@ module zhao_console_core
   // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
   // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
   // sentence naming the residency directory's KEY. See entry I20.
-  input  logic [297:0] tri_flat_request_i,
+  // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
+  // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
+  // as `tri_area2_i` and the three attribute planes were retired before it.
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
   input  logic         fill_req_ready_i,
@@ -6621,6 +6672,26 @@ module zhao_console_core
   wire [GEOM_PAYLOAD_W-1:0] ln_rep_payload;
   // GEOM.REPLAY -> GEOM.CLIP: the triangle and its three attribute packets
   wire                    rp_o_valid, rp_o_ready;
+  // ---- MATERIAL.RESOLVE's WINDOW (entry I49, 2026-09-20) ------------------
+  // The window sits in this handshake, between GEOM.REPLAY and GEOM.CLIP. It
+  // gates the VALID/READY pair only -- every data wire below still runs
+  // straight from GEOM.REPLAY to GEOM.CLIP, so nothing is re-registered and no
+  // second copy of a triangle exists. Declared here because `default_nettype
+  // none` makes a net used before its declaration an error, and GEOM.CLIP is
+  // instantiated some five thousand lines above the window.
+  wire                    mw_t_valid, mw_t_ready;
+  wire [31:0]             rp_o_material_set;
+  wire [ 7:0]             rp_o_quality_tier;
+  wire [15:0]             rp_o_material;
+  // What the window PUBLISHES: the material-owned half of the 298-bit flat
+  // request, plus the two binding witnesses the binding page's own legality
+  // law fixes at zero for a direct format.
+  wire                    mw_pub_valid;
+  wire [ 1:0]             mw_pub_sample_count;
+  wire [ 2:0]             mw_pub_material_recipe;
+  wire [ 7:0]             mw_pub_recipe_weight;
+  wire [ 7:0]             mw_pub_base_binding;
+  wire [ 1:0]             mw_pub_response_class;
   wire signed [20:0]      rp_o_ax, rp_o_ay, rp_o_bx, rp_o_by, rp_o_cx, rp_o_cy;
   wire [2:0]              rp_o_behind;
   wire [15:0]             rp_o_src_id;
@@ -6798,8 +6869,12 @@ module zhao_console_core
     // of the arena, the packets built at section 11 from GEOM.DEPTHQUANT's
     // invw24 and the attribute store's slots. Entry I24's triangle half and
     // the bench's triangle door are both GONE.
-    .tri_valid_i  (rp_o_valid),
-    .tri_ready_o  (rp_o_ready),
+    // I49, 2026-09-20: the handshake is the MATERIAL WINDOW's, not
+    // GEOM.REPLAY's. The window holds a triangle whose material is not the
+    // published one until the span below has drained and the resolve has
+    // answered. Every DATA wire beneath is still GEOM.REPLAY's own, unbuffered.
+    .tri_valid_i  (mw_t_valid),
+    .tri_ready_o  (mw_t_ready),
     .tri_ax_i     (rp_o_ax),
     .tri_ay_i     (rp_o_ay),
     .tri_bx_i     (rp_o_bx),
@@ -8841,7 +8916,8 @@ module zhao_console_core
     .tri_invw_plane_i          (ap_invw_plane_w),
     .tri_u_over_w_plane_i      (ap_u_over_w_plane_w),
     .tri_v_over_w_plane_i      (ap_v_over_w_plane_w),
-    .tri_flat_request_i        (tri_flat_request_i),
+    // I49: the RESOLVED material, per triangle, from u_material_window.
+    .tri_flat_request_i        (tri_flat_request_c),
     .tri_continuation_tail_i   (tri_continuation_tail_i),
     .tri_fragment_state_i      (tri_fragment_state_i),
     .fill_req_ready_i          (fill_req_ready_i),
@@ -12263,6 +12339,15 @@ module zhao_console_core
 
   wire [26:0] mr_extent_records = upl_publish_extent_o[31:5];
 
+  // Entry I49's seam, now internal. `u_material_window` is instantiated with
+  // GEOM.REPLAY, several thousand lines below; these are declared here because
+  // this is where they are CONSUMED and `default_nettype none` wants them
+  // before their first use.
+  wire        mat_req_valid_c, mat_req_ready_c, mat_rsp_ready_c;
+  wire [31:0] mat_req_material_set_c;
+  wire [15:0] mat_req_material_id_c;
+  wire [ 7:0] mat_req_quality_tier_c;
+
   zhao_material_resolve u_material_resolve (
     .clk   (gpu_clk),
     .rst_n (rst_n),
@@ -12275,11 +12360,13 @@ module zhao_console_core
     .dir_base_i       (upl_publish_base_o),
     .dir_count_i      ((mr_extent_records > 27'd65536) ? 17'd65536 : mr_extent_records[16:0]),
 
-    .req_valid_i        (mat_req_valid_i),
-    .req_ready_o        (mat_req_ready_o),
-    .req_material_set_i (mat_req_material_set_i),
-    .req_material_id_i  (mat_req_material_id_i),
-    .req_quality_tier_i (mat_req_quality_tier_i),
+    // I49, CLOSED: the REQUEST, from `u_material_window`. Both halves are
+    // fields of ONE triangle record, not two live wires paired by timing.
+    .req_valid_i        (mat_req_valid_c),
+    .req_ready_o        (mat_req_ready_c),
+    .req_material_set_i (mat_req_material_set_c),
+    .req_material_id_i  (mat_req_material_id_c),
+    .req_quality_tier_i (mat_req_quality_tier_c),
 
     .mem_req_valid_o  (mr_mem_req_valid),
     .mem_req_ready_i  (mr_guard_rsp.ready),
@@ -12289,7 +12376,7 @@ module zhao_console_core
     .mem_rsp_denied_i (mr_guard_rsp.violation),
 
     .rsp_valid_o            (mat_rsp_valid_o),
-    .rsp_ready_i            (mat_rsp_ready_i),
+    .rsp_ready_i            (mat_rsp_ready_c),
     .rsp_status_o           (mat_rsp_status_o),
     .rsp_has_record_o       (mat_rsp_has_record_o),
     .rsp_record_o           (mat_rsp_record_o),
@@ -12474,6 +12561,11 @@ module zhao_console_core
   wire [GEOM_ASM_VIDW-1:0] asm_t_v0, asm_t_v1, asm_t_v2;
   wire [15:0]              asm_t_material, asm_t_src_id;
   wire [31:0]              asm_t_raster;
+  // R29's OTHER sideband half, now CARRIED rather than dropped: the draw's
+  // MATERIAL_SET handle32, on the same handshake and the same latch as the
+  // meshlet's material id. Entry I49.
+  wire [31:0]              asm_t_material_set;
+  wire [ 7:0]              asm_t_quality_tier;
 
   zhao_geom_assemble #(
     .MAX_VERTICES  (GEOM_ASSET_MAX_VERTICES),
@@ -12502,6 +12594,13 @@ module zhao_console_core
     // [31:2] the material's half, which every v1 material writes as zero and
     // GEOM.DRAWJOB names as a constant at the seam a resolved record replaces.
     .m_raster_state_i (af_s_side[31:0]),
+    // I49: the DRAW's MATERIAL_SET, [63:32] of the same sideband word. It is
+    // offered on the SAME handshake as f_s_material_id above, which is why
+    // the two halves of MATERIAL.RESOLVE's request are joined by construction.
+    .m_material_set_i (af_s_side[63:32]),
+    // I49: the draw's SEMANTIC WEIGHT, [71:64] of the same word -- the Measure
+    // policy's degrade order, which travels as the resolve's quality tier.
+    .m_quality_tier_i (af_s_side[71:64]),
 
     // REAL: the index service.  `ix_valid_i` follows the FETCHER's valid and is
     // not tied to the request -- the served answer has a real valid, and tying
@@ -12521,6 +12620,8 @@ module zhao_console_core
     .t_v2_o     (asm_t_v2),
     .t_material_o(asm_t_material),
     .t_raster_o (asm_t_raster),
+    .t_material_set_o(asm_t_material_set),
+    .t_quality_tier_o(asm_t_quality_tier),
     .t_src_id_o (asm_t_src_id),
     .t_last_o   (asm_t_last),
     .m_done_o   (asm_m_done),
@@ -12578,12 +12679,12 @@ module zhao_console_core
   wire [GEOM_ATTR_STORE_W-1:0] va_rep_data;
   wire [23:0]                  rp_invw_a, rp_invw_b, rp_invw_c;
   wire [GEOM_ATTR_STORE_W-1:0] rp_st_a, rp_st_b, rp_st_c;
-  // The triangle's view, material and raster word ride out of GEOM.REPLAY and
-  // are read by nothing here: GEOM.CLIP takes neither, and the material's
-  // consumer is MATERIAL.RESOLVE's request (core entry I20, the texture lane's).
+  // The triangle's VIEW rides out of GEOM.REPLAY and is read by nothing here:
+  // GEOM.CLIP does not take it. Its MATERIAL and MATERIAL SET are no longer in
+  // this list -- as of 2026-09-20 they are MATERIAL.RESOLVE's request, through
+  // u_material_window (entry I49), and are declared with that handshake.
   /* verilator lint_off UNUSEDSIGNAL */
   wire                         rp_o_view;
-  wire [15:0]                  rp_o_material;
   /* verilator lint_on UNUSEDSIGNAL */
 
   zhao_geom_replay #(
@@ -12632,6 +12733,8 @@ module zhao_console_core
     .t_v2_i       (asm_t_v2),
     .t_material_i (asm_t_material),
     .t_raster_i   (asm_t_raster),
+    .t_material_set_i(asm_t_material_set),
+    .t_quality_tier_i(asm_t_quality_tier),
     .t_src_id_i   (asm_t_src_id),
     .m_done_i     (asm_m_done),
 
@@ -12672,6 +12775,8 @@ module zhao_console_core
     .o_src_id_o   (rp_o_src_id),
     .o_material_o (rp_o_material),
     .o_raster_o   (rp_o_raster),
+    .o_material_set_o(rp_o_material_set),
+    .o_quality_tier_o(rp_o_quality_tier),
 
     .meshlets_o      (geom_rp_meshlets_o),
     .groups_o        (geom_rp_groups_o),
@@ -12684,6 +12789,186 @@ module zhao_console_core
     .poisoned_o      (geom_rp_poisoned_o),
     .triq_stall_o    (geom_rp_triq_stall_o)
   );
+
+  // ==========================================================================
+  // MATERIAL.RESOLVE's WINDOW -- entry I49, CLOSED 2026-09-20 (texmat2)
+  // ==========================================================================
+  // `zhao_material_resolve` was composed on 2026-09-19 with its DIRECTORY
+  // (MEM.UPLOAD's 5f.1 publication) and its FETCH (requester C of the ENGINE1
+  // adapter) both real, and entry I49 recorded what was left: "a request must
+  // be issued per meshlet (or per triangle) and its answer joined back to the
+  // triangles that asked". `u_material_window` is that, and the five ports
+  // `mat_req_valid_i`, `mat_req_material_set_i`, `mat_req_material_id_i`,
+  // `mat_req_quality_tier_i` and `mat_rsp_ready_i` have LEFT this module's port
+  // list rather than being driven from constants -- the same retirement
+  // `tri_area2_i` and the three attribute planes took.
+  //
+  // THE REQUEST'S TWO HALVES ARE THE TRIANGLE'S OWN. `rp_o_material_set` and
+  // `rp_o_material` are both per-meshlet fields of the triangle GEOM.REPLAY is
+  // presenting on this very handshake. They reached it on ONE path -- the
+  // draw's sideband through GEOM.DRAWJOB, GEOM.MESHFETCH, GEOM.ASSETFETCH (on
+  // the same handshake as the meshlet's own material id), GEOM.ASSEMBLE and
+  // GEOM.REPLAY, latched by the same enable at every stage. That is what entry
+  // I39 demanded and what entry I20's third seam said did not yet exist:
+  // "TWO LIVE WIRES ARE NOT A PRODUCER". These are not two live wires; they are
+  // two fields of one record.
+  //
+  // THE QUALITY TIER is the draw's SEMANTIC WEIGHT, `mf_r_side[71:64]`, carried
+  // beside the meshlet for exactly this reason (its declaration says so: "the
+  // weight is the Measure policy's degrade order"). `zhao_material_resolve`
+  // ECHOES the tier and reads it nowhere, so this is a label travelling with
+  // its request rather than a policy invented at a composer.
+  //
+  // THE DOWNSTREAM SPAN the window protects is GEOM.CLIP's input to the shell's
+  // triangle door, and its three disposal events are all real nets of this
+  // module:
+  //
+  //   d_enter_i   GEOM.CLIP accepted a triangle  (mw_t_valid && mw_t_ready)
+  //   d_reject_i  GEOM.CLIP retired one with a non-ACCEPT verdict -- its own
+  //               `ret_valid_o` / `ret_verdict_o`, which fire once per
+  //               submitted triangle, so a dropped triangle is never lost to
+  //               the accounting
+  //   d_leave_i   the door took one   (door_tri_valid_w && door_tri_ready_w)
+  //
+  // There is no fourth outcome for a triangle in that span, so the occupancy
+  // always returns to zero and the drain always completes. The window's own
+  // header carries the full argument and its two structural guards.
+  wire mw_clip_reject_c = geom_clip_ret_valid_o && (geom_clip_ret_verdict_o != 3'd0);
+
+  zhao_material_window #(
+    // The default mapping: the material record's tmu_mode IS the binding
+    // resolver's response class. See the block's header and FINDINGS-texmat2 --
+    // the ENCODING is an owner decision and this parameter is where it lives.
+    .TMU_MODE_CLASS (8'b11_10_01_00),
+    .OCCW           (8)
+  ) u_material_window (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: GEOM.REPLAY's triangle handshake, and the triangle's own material.
+    .t_valid_i        (rp_o_valid),
+    .t_ready_o        (rp_o_ready),
+    .t_material_set_i (rp_o_material_set),
+    .t_material_id_i  (rp_o_material),
+    .t_quality_tier_i (rp_o_quality_tier),
+
+    // REAL: into GEOM.CLIP, gated.
+    .t_valid_o (mw_t_valid),
+    .t_ready_i (mw_t_ready),
+
+    // REAL: the span's three disposal events.
+    .d_enter_i  (mw_t_valid && mw_t_ready),
+    .d_reject_i (mw_clip_reject_c),
+    .d_leave_i  (door_tri_valid_w && door_tri_ready_w),
+
+    // REAL: MATERIAL.RESOLVE, whose request had no producer until now.
+    .req_valid_o        (mat_req_valid_c),
+    .req_ready_i        (mat_req_ready_c),
+    .req_material_set_o (mat_req_material_set_c),
+    .req_material_id_o  (mat_req_material_id_c),
+    .req_quality_tier_o (mat_req_quality_tier_c),
+    .rsp_valid_i        (mat_rsp_valid_o),
+    .rsp_ready_o        (mat_rsp_ready_c),
+    .rsp_status_i       (mat_rsp_status_o),
+    .rsp_has_record_i   (mat_rsp_has_record_o),
+    .rsp_sample_count_i (mat_rsp_sample_count_o),
+    .rsp_material_recipe_i  (mat_rsp_material_recipe_o),
+    .rsp_recipe_weight_i    (mat_rsp_recipe_weight_o),
+    .rsp_base_binding_i     (mat_rsp_base_binding_o),
+    .rsp_selector_overflow_i(mat_rsp_selector_overflow_o),
+    .rsp_sample0_modes_i    (mat_rsp_sample0_modes_o),
+
+    // REAL: the published material, into the flat request below.
+    .pub_valid_o           (mw_pub_valid),
+    .pub_sample_count_o    (mw_pub_sample_count),
+    .pub_material_recipe_o (mw_pub_material_recipe),
+    .pub_recipe_weight_o   (mw_pub_recipe_weight),
+    .pub_base_binding_o    (mw_pub_base_binding),
+    .pub_response_class_o  (mw_pub_response_class),
+
+    .resolves_o                (mat_win_resolves_o),
+    .switches_o                (mat_win_switches_o),
+    .drain_stall_cycles_o      (mat_win_drain_stall_o),
+    .answer_stall_cycles_o     (mat_win_answer_stall_o),
+    .occupancy_max_o           (mat_win_occupancy_max_o),
+    .no_record_o               (mat_win_no_record_o),
+    .selector_overflow_o       (mat_win_selector_overflow_o),
+    .clut_unowned_o            (mat_win_clut_unowned_o),
+    .err_unpublished_o         (mat_win_err_unpublished_o),
+    .err_occupancy_underflow_o (mat_win_err_underflow_o)
+  );
+
+  // --------------------------------------------------------------------------
+  // THE FLAT REQUEST -- entry I20's `tri_flat_request_i`, driven from here
+  // --------------------------------------------------------------------------
+  // `zhao_texture_v3_request_v2_t`'s 298 bits, field by field, with the OWNER
+  // of each named. Nothing below is a plausible constant chosen to make a
+  // picture: every field is either the resolved record's, or a LAW, or a named
+  // editable constant with a ruling behind it.
+  //
+  //   [297:296] sample_count           MATERIAL.RESOLVE  (the record's)
+  //   [295:288] base_binding_selector  MATERIAL.RESOLVE  (sample0.binding_slot)
+  //   [287:280] lod_q4_4               THE SAMPLER's. MATERIAL.RESOLVE's
+  //             contract excludes it in terms -- "it returns the mip policy;
+  //             the sampler picks the level" -- and the binding row this
+  //             console programs has mip_enable low, so level 0 is the only
+  //             level there is. A named constant, not a guess.
+  //   [279:277] material_recipe        MATERIAL.RESOLVE  (control[4:2])
+  //   [276:269] recipe_weight          MATERIAL.RESOLVE  (the record's)
+  //   [268]     aux_required           ZERO IS THE PROFILE, not a tie-off.
+  //             MATERIAL.RESOLVE's own header says a zero aux context is "the
+  //             LEGAL and CORRECT non-terrain profile", and
+  //             `zhao_raster_tile_pipe_v2` REFUSES a job whose aux context is
+  //             non-zero without a producer for it. The console's AUX response
+  //             (`pg_*` inside the shell) has no producer either, so a fragment
+  //             that asked would never retire.
+  //   [267:44]  aux_surface_ctx        the same, 224 bits of it
+  //   [43:20]   base_rgb               THE VERTEX's, not the material's.
+  //   [19:12]   base_alpha             THE VERTEX's. Owner ruling R48: no
+  //             ratified vertex format carries alpha, so OPAQUE lives in a
+  //             named editable constant and nothing is stubbed.
+  //   [11:10]   response_class         THE BINDING PAGE's, witnessed from the
+  //             material record's tmu_mode (see the window's header and the
+  //             owner decision in FINDINGS-texmat2).
+  //   [9:8]     palette_slot           THE BINDING PAGE's, and ZERO IS ITS LAW
+  //   [7:0]     palette_generation     for a direct format:
+  //             `binding_row_legal` REFUSES a direct row whose
+  //             {palette_generation, palette_slot} is not zero. For a CLUT row
+  //             they are real and unproduced, and `mat_win_clut_unowned_o`
+  //             counts every material that would need them.
+  //
+  // THE VERTEX COLOUR IS THE REMAINING HALF OF ENTRY I20 and it is left at its
+  // constants deliberately rather than invented: GEOM.VATTR holds a per-VERTEX
+  // rgb/alpha (owner ruling R11) and this request wants a FLAT base colour for
+  // the triangle, which is a different quantity. Picking one of the three
+  // corners would be an art decision made by a composer.
+  localparam logic [ 7:0] MAT_LOD_Q4_4_C     = 8'd0;    // level 0, mip_enable low
+  localparam logic [23:0] MAT_BASE_RGB_C     = 24'hFF_FF_FF;  // white: the record's own colour, unmodulated
+  localparam logic [ 7:0] MAT_BASE_ALPHA_C   = 8'hFF;   // opaque -- owner ruling R48
+  localparam logic [ 1:0] MAT_PALETTE_SLOT_C = 2'd0;    // the direct-format row's law
+  localparam logic [ 7:0] MAT_PALETTE_GEN_C  = 8'd0;    // the direct-format row's law
+
+  wire [297:0] mat_flat_request_c = {
+      mw_pub_sample_count,                      // [297:296]
+      mw_pub_base_binding,                      // [295:288]
+      MAT_LOD_Q4_4_C,                           // [287:280]
+      mw_pub_material_recipe,                   // [279:277]
+      mw_pub_recipe_weight,                     // [276:269]
+      1'b0,                                     // [268]     aux_required
+      224'd0,                                   // [267:44]  aux_surface_ctx
+      MAT_BASE_RGB_C,                           // [43:20]
+      MAT_BASE_ALPHA_C,                         // [19:12]
+      mw_pub_response_class,                    // [11:10]
+      MAT_PALETTE_SLOT_C,                       // [9:8]
+      MAT_PALETTE_GEN_C                         // [7:0]
+  };
+
+  // Before anything is published the request is ALL ZERO, which is the legal
+  // "this surface takes no texture sample" profile -- the same value the port
+  // carried when it was a boundary. So the retirement of the port changes what
+  // the console does only once a material has actually been resolved.
+  wire [297:0] tri_flat_request_c = mw_pub_valid ? mat_flat_request_c : 298'd0;
+
 
   // --------------------------------------------------------------------------
   // GEOM.VATTR. Every input is a REAL producer's own net, in its own handshake:
@@ -13054,6 +13339,16 @@ module zhao_console_core
     // with empty parentheses -- rather than deleting them from the instance --
     // is what makes the retirement visible at the point of use instead of
     // being a silent absence somebody later reads as an oversight.
+    // PRE-EXISTING RED REPAIRED 2026-09-20 (texmat2), not introduced here:
+    // ruling R64 retired the coarse-height planes at 91335fe2 and left these
+    // eight pins NAMED AND EMPTY on purpose -- the retirement is meant to be
+    // visible where the block is used. That intent is right and the eight
+    // %Warning-PINCONNECTEMPTY it produced turned the WAIVED console-board
+    // lint from SILENT RC 0 into RC 1 for every packet that ran it after that
+    // commit. The pragma keeps the intent and restores the gate; deleting the
+    // pins instead would have hidden the retirement, which is the opposite of
+    // what R64 asked for.
+    /* verilator lint_off PINCONNECTEMPTY */
     .m17_valid_o(),
     .m17_addr_o (),
     .m17_surf_o (),
@@ -13062,6 +13357,7 @@ module zhao_console_core
     .m9_addr_o  (),
     .m9_surf_o  (),
     .m9_h_o     (),
+    /* verilator lint_on PINCONNECTEMPTY */
 
     .samples_o   (tmg_samples),
     .m17_writes_o(terr_mg_m17_writes_o),

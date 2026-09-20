@@ -706,11 +706,17 @@ module tb_zhao_console_core_smoke
 
   // ---- MEM.UPLOAD on the TERRAIN.BUILD socket (2026-09-19, cmdmem) --------
   // ---- MATERIAL.RESOLVE (R20): directory + fetch internal, request at I49 --
-  logic         mat_req_valid_i, mat_req_ready_o;
-  logic [31:0]  mat_req_material_set_i;
-  logic [15:0]  mat_req_material_id_i;
-  logic [ 7:0]  mat_req_quality_tier_i;
-  logic         mat_rsp_valid_o, mat_rsp_ready_i;
+  // I49, 2026-09-20: the REQUEST and the response's ready are gone from the
+  // core's port list -- `u_material_window` issues the resolve from the
+  // triangle's own material and consumes the answer. This bench OBSERVES the
+  // response, which is the whole point: it no longer plays the seam it is
+  // supposed to be measuring.
+  logic         mat_rsp_valid_o;
+  logic [31:0]  mat_win_resolves_o, mat_win_switches_o;
+  logic [31:0]  mat_win_drain_stall_o, mat_win_answer_stall_o;
+  logic [31:0]  mat_win_occupancy_max_o, mat_win_no_record_o;
+  logic [31:0]  mat_win_selector_overflow_o, mat_win_clut_unowned_o;
+  logic [31:0]  mat_win_err_unpublished_o, mat_win_err_underflow_o;
   logic [ 2:0]  mat_rsp_status_o;
   logic         mat_rsp_has_record_o;
   logic [255:0] mat_rsp_record_o;
@@ -925,7 +931,8 @@ module tb_zhao_console_core_smoke
   // contains their producer (GEOM.ATTRPACK), so a net here would bind to
   // nothing under `.*` and, worse, would read as though this bench were still
   // supplying them.
-  logic [297:0] tri_flat_request_i;
+  // 	ri_flat_request_i is no longer a core port (entry I49): the console
+  // builds it from MATERIAL.RESOLVE's published answer.
   logic [47:0]  tri_continuation_tail_i;
   logic [31:0]  tri_fragment_state_i;
   logic         fill_req_ready_i;
@@ -1937,6 +1944,7 @@ module tb_zhao_console_core_smoke
   localparam logic [31:0] SMK_POP_HANDLE_C = 32'h0051_C0DE;
   logic [63:0] upl_mem [0:UPL_ALL_WORDS-1];
   logic [255:0] upl_rec0;         // record 0 of the uploaded MATERIAL_SET
+  logic [255:0] upl_rec1;         // record 1 -- the one the MESHLET names
   logic [31:0]  upl_crc_material_q, upl_crc_mesh_q, upl_crc_species_q;
   logic [ 7:0] pkt_mem [0:PKT_MAX_C-1];
   int unsigned pkt_len_q;
@@ -2173,11 +2181,156 @@ module tb_zhao_console_core_smoke
       end
     end
   end
-  // ---- ONE MATERIAL RESOLVE, once the MATERIAL_SET has been published -------
-  // Request = the handle the PublishResource named ({index, low 8 bits of the
-  // new residency generation}) and material 0. Its REQUEST is a boundary
-  // (I49); what is real is the DIRECTORY it hits (MEM.UPLOAD's publication)
-  // and the FETCH it issues (requester C, the real MEM.GUARD).
+  // ==========================================================================
+  // THE TEXTURE PAGE: BOUND, SEALED AND SERVED (entry I49's second half)
+  // ==========================================================================
+  // Until 2026-09-20 every one of the V3 programming channels was held at zero
+  // in this bench and the island could not have sampled whatever the flat
+  // request said. These are BOUNDARY ports of `zhao_console_core` -- the V3
+  // binding page and the texture fill socket -- so driving them here is
+  // stimulus at an edge, which is what a bench is for, and NOT a producer
+  // invented inside the console.
+  //
+  // THE ROW IS A DIRECT FORMAT ON PURPOSE. `binding_row_legal` REQUIRES a
+  // direct row's {palette_generation, palette_slot} to be zero, so the two
+  // witnesses the console publishes are the page's own LAW rather than a value
+  // anybody chose -- and no palette has to be resident for a texel to arrive.
+  // A CLUT row would need a palette identity that nothing in this console
+  // produces (FINDINGS-texmat2, owner decision D2).
+  //
+  // THE SEAL IS NOT HAND-ROLLED. 32'hB37C_0807 is
+  // `zhao_binding_seal::page_crc(1, {selector 3 = this row}, ...)` from
+  // `tests/harness/zhao_binding_seal.hpp`, the tree's ONE model of the fold --
+  // the header exists precisely so a second test does not write the CRC again.
+  // A wrong seal is LOUD, not silent: the page is refused with CFG_BAD_CRC and
+  // the status check below fires.
+  localparam logic [ 7:0] TEX_PAGE_GEN_C = 8'd1;
+  localparam logic [ 7:0] TEX_SELECTOR_C = 8'd3;
+  localparam logic [31:0] TEX_BASE_C     = 32'h0000_2000;
+  // fmt 1 (RGB565), filter 0, wrap 0/0, log2w 4, log2h 4, max_level 0, mip 0
+  localparam logic [31:0] TEX_MODE_C     = 32'h0000_4401;
+  localparam logic [74:0] TEX_ROW_C      = {11'h400, TEX_MODE_C, TEX_BASE_C};
+  localparam logic [31:0] TEX_SEAL_C     = 32'hB37C_0807;
+  localparam logic [15:0] TEX_TEXEL_C    = 16'h07E0;   // saturated green, RGB565
+
+  localparam int unsigned TBS_BEGIN  = 0;
+  localparam int unsigned TBS_ROW    = 1;
+  localparam int unsigned TBS_END    = 2;
+  localparam int unsigned TBS_ACTIVE = 3;
+  int unsigned  tbind_st_q;
+  logic         tbind_sent_q;
+  logic [3:0]   tbind_status_q;
+  logic [31:0]  tbind_acks_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tbind_st_q            <= TBS_BEGIN;
+      tbind_sent_q          <= 1'b0;
+      tbind_status_q        <= 4'hF;
+      tbind_acks_q          <= 32'd0;
+      cfg_valid_i           <= 1'b0;
+      cfg_op_i              <= 2'd0;
+      cfg_page_generation_i <= 8'd0;
+      cfg_selector_i        <= 8'd0;
+      cfg_row_i             <= 75'd0;
+      cfg_crc32_i           <= 32'd0;
+      cfg_rsp_ready_i       <= 1'b1;
+    end else begin
+      if (cfg_valid_i && cfg_ready_o) begin
+        cfg_valid_i  <= 1'b0;
+        tbind_sent_q <= 1'b1;
+      end
+      if (cfg_rsp_valid_o && cfg_rsp_ready_i) begin
+        tbind_status_q <= cfg_rsp_status_o;
+        tbind_acks_q   <= tbind_acks_q + 32'd1;
+        tbind_sent_q   <= 1'b0;
+        // A BAD STATUS STOPS THE WALK rather than driving on: the next
+        // command would be refused for a second reason and the first one
+        // would be lost. The check at the end of the run reads the status.
+        if (cfg_rsp_status_o == 4'd0 && tbind_st_q < TBS_ACTIVE)
+          tbind_st_q <= tbind_st_q + 1;
+        else if (cfg_rsp_status_o != 4'd0)
+          tbind_st_q <= TBS_ACTIVE;
+      end
+      if (!cfg_valid_i && !tbind_sent_q) begin
+        case (tbind_st_q)
+          TBS_BEGIN: begin
+            cfg_valid_i <= 1'b1; cfg_op_i <= 2'd0;
+            cfg_page_generation_i <= TEX_PAGE_GEN_C;
+            cfg_selector_i <= 8'd0; cfg_row_i <= 75'd0; cfg_crc32_i <= 32'd0;
+          end
+          TBS_ROW: begin
+            cfg_valid_i <= 1'b1; cfg_op_i <= 2'd1;
+            cfg_page_generation_i <= TEX_PAGE_GEN_C;
+            cfg_selector_i <= TEX_SELECTOR_C; cfg_row_i <= TEX_ROW_C;
+            cfg_crc32_i <= 32'd0;
+          end
+          TBS_END: begin
+            cfg_valid_i <= 1'b1; cfg_op_i <= 2'd2;
+            cfg_page_generation_i <= TEX_PAGE_GEN_C;
+            cfg_selector_i <= 8'd0; cfg_row_i <= 75'd0;
+            cfg_crc32_i <= TEX_SEAL_C;
+          end
+          default: begin end
+        endcase
+      end
+    end
+  end
+
+  // THE FILL SOCKET. `zhao_texture_cache_pipe_v2`'s protocol, followed to the
+  // letter: the request is accepted on one edge, the eight 16-bit beats begin
+  // on the NEXT one (presenting data in the offer cycle is a protocol fault the
+  // block counts), and a line is exactly eight beats with no partial refusal.
+  // Every texel is the same green, because what is being proven here is that a
+  // texel ARRIVES -- the value it carries is the island's own directed tests'
+  // business and re-checking it here would be a second opinion.
+  logic       tfill_busy_q;
+  logic [3:0] tfill_beat_q;
+  logic [31:0] tfill_lines_q, tfill_beats_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) begin
+      tfill_busy_q      <= 1'b0;
+      tfill_beat_q      <= 4'd0;
+      tfill_lines_q     <= 32'd0;
+      tfill_beats_q     <= 32'd0;
+      fill_req_ready_i  <= 1'b1;
+      fill_data_valid_i <= 1'b0;
+      fill_data_i       <= 16'd0;
+      fill_refused_i    <= 1'b0;
+    end else begin
+      fill_data_valid_i <= 1'b0;
+      if (!tfill_busy_q) begin
+        if (fill_req_valid_o && fill_req_ready_i) begin
+          tfill_busy_q     <= 1'b1;
+          tfill_beat_q     <= 4'd0;
+          tfill_lines_q    <= tfill_lines_q + 32'd1;
+          fill_req_ready_i <= 1'b0;
+        end
+      end else begin
+        fill_data_valid_i <= 1'b1;
+        fill_data_i       <= TEX_TEXEL_C;
+        tfill_beats_q     <= tfill_beats_q + 32'd1;
+        if (tfill_beat_q == 4'd7) begin
+          tfill_busy_q     <= 1'b0;
+          tfill_beat_q     <= 4'd0;
+          fill_req_ready_i <= 1'b1;
+        end else begin
+          tfill_beat_q <= tfill_beat_q + 4'd1;
+        end
+      end
+    end
+  end
+  // ---- THE MATERIAL RESOLVE, OBSERVED (entry I49, CLOSED 2026-09-20) -------
+  // The bench no longer issues the request. `u_material_window` does, from the
+  // triangle's own {material_set, material_id, semantic weight} -- the DRAW's
+  // handle, carried with the meshlet. So all four seams are now real here: the
+  // DIRECTORY (MEM.UPLOAD's publication), the FETCH (requester C through the
+  // real MEM.GUARD), the REQUEST and the RESPONSE. What this block does is
+  // WATCH, which is the only thing a bench should do at a closed seam.
+  logic         mat_rsp_v_q;
+  always_ff @(posedge gpu_clk or negedge rst_n) begin
+    if (!rst_n) mat_rsp_v_q <= 1'b0;
+    else        mat_rsp_v_q <= mat_rsp_valid_o;
+  end
   logic         mat_fired_q;
   int unsigned  mat_rsp_seen_q;
   logic [2:0]   mat_status_seen_q;
@@ -2185,27 +2338,19 @@ module tb_zhao_console_core_smoke
   logic [255:0] mat_rec_q;
   always_ff @(posedge gpu_clk or negedge rst_n) begin
     if (!rst_n) begin
-      mat_req_valid_i        <= 1'b0;
-      mat_req_material_set_i <= '0;
-      mat_req_material_id_i  <= '0;
-      mat_req_quality_tier_i <= '0;
-      mat_rsp_ready_i        <= 1'b1;
       mat_fired_q            <= 1'b0;
       mat_rsp_seen_q         <= 0;
       mat_status_seen_q      <= 3'd7;
       mat_rec_has_q          <= 1'b0;
       mat_rec_q              <= '0;
     end else begin
-      if ((upl_pub_seen_q != 0) && !mat_fired_q && !mat_req_valid_i) begin
-        mat_req_valid_i        <= 1'b1;
-        mat_req_material_set_i <= {UPL_INDEX_C, UPL_GEN_C[7:0]};
-        mat_req_material_id_i  <= 16'd0;
-      end
-      if (mat_req_valid_i && mat_req_ready_o) begin
-        mat_req_valid_i <= 1'b0;
-        mat_fired_q     <= 1'b1;
-      end
-      if (mat_rsp_valid_o && mat_rsp_ready_i) begin
+      // THE RESPONSE, OBSERVED ON ITS RISING EDGE. The window is ready only
+      // in the clock it takes the answer and leaves ST_WAIT on the same edge,
+      // so a bench that waited to see valid AND ready on a later clock would
+      // never see the acceptance at all -- the same trap the window's own
+      // directed test records.
+      if (mat_rsp_valid_o && !mat_rsp_v_q) begin
+        mat_fired_q       <= 1'b1;
         mat_rsp_seen_q    <= mat_rsp_seen_q + 1;
         mat_status_seen_q <= mat_rsp_status_o;
         mat_rec_has_q     <= mat_rsp_has_record_o;
@@ -3222,13 +3367,6 @@ module tb_zhao_console_core_smoke
     hist_ev_src_id_i = '0;
     hist_rd_valid_i = '0;
     hist_rd_bin_i = '0;
-    cfg_valid_i = '0;
-    cfg_op_i = '0;
-    cfg_page_generation_i = '0;
-    cfg_selector_i = '0;
-    cfg_row_i = '0;
-    cfg_crc32_i = '0;
-    cfg_rsp_ready_i = '0;
     pal_load_valid_i = '0;
     pal_load_op_i = '0;
     pal_load_slot_i = '0;
@@ -3237,13 +3375,8 @@ module tb_zhao_console_core_smoke
     pal_load_rgb565_i = '0;
     pal_load_crc_ok_i = '0;
     tri_area2_i = '0;
-    tri_flat_request_i = '0;
     tri_continuation_tail_i = '0;
     tri_fragment_state_i = '0;
-    fill_req_ready_i = '0;
-    fill_data_valid_i = '0;
-    fill_data_i = '0;
-    fill_refused_i = '0;
     frame_clear_word_i = '0;
     sheet_req_ready_i = '0;
     blank_cmd_i = '0;
@@ -3503,6 +3636,34 @@ module tb_zhao_console_core_smoke
       mr.raster_state               = 32'h0000_0007;
       upl_rec0 = zhao_abi_pkg::zhao_pack_material_record(mr);
       for (int unsigned w = 0; w < 4; w++) upl_mem[w] = upl_rec0[64*w +: 64];
+    end
+    // RECORD 1 IS THE ONE THE MESHLET ACTUALLY NAMES, and it is a separate
+    // record ON PURPOSE. `zhao_geom_meshfetch` reads the material id from
+    // descriptor bytes 4-5 (`dh(4)`), and this fixture's descriptors carry
+    // 16'h0001 there -- so a resolve issued from the TRIANGLE asks for record
+    // 1, and a window that quietly defaulted to record 0 would get a material
+    // with `tmu_mode 0` (CLUT) and a different weight. That is a POSITIVE
+    // DISCRIMINATOR rather than a convenience: the two records differ in every
+    // field the flat request carries, so "it asked for the triangle's material"
+    // and "it asked for the first one" cannot produce the same answer.
+    //
+    // It is also the record that lets the TEXTURE ISLAND SAMPLE: one sample,
+    // recipe 0 (PASSTHRU, which `material_count_legal` pairs with count 1),
+    // binding selector 3 -- the selector the binding page below programs --
+    // and `tmu_mode 1`, which is NEAREST under the encoding
+    // `zhao_material_window.TMU_MODE_CLASS` holds (FINDINGS-texmat2, D1).
+    begin : build_material1
+      zhao_abi_pkg::zhao_material_record_t mr1;
+      mr1 = '0;
+      mr1.control                    = 8'h01;         // count 1, recipe 0 (PASSTHRU)
+      mr1.recipe_weight              = 8'h5A;
+      mr1.sample0.binding_slot       = 16'(TEX_SELECTOR_C);
+      mr1.sample0.binding_generation = 8'h01;
+      mr1.sample0.modes              = 8'h01;         // tmu_mode 1 = NEAREST, wrap 0
+      mr1.palette_base               = 32'h0000_0000; // direct format: no CLUT
+      mr1.raster_state               = 32'h0000_0000;
+      upl_rec1 = zhao_abi_pkg::zhao_pack_material_record(mr1);
+      for (int unsigned w = 0; w < 4; w++) upl_mem[4 + w] = upl_rec1[64*w +: 64];
     end
     // ---- THE MESH_STREAM PAGE (owner ruling R29) --------------------------
     // Words MSH_ARENA_W..+MSH_WORDS_C of the same staging arena: the frozen
@@ -3771,7 +3932,14 @@ module tb_zhao_console_core_smoke
       df.h_opcode = zhao_abi_pkg::ZHAO_OP_DRAW_FORM;         df.h_record_bytes = 16'd32;
       df.h_source_id   = 32'(SMK_DRAW_SRC_C);
       df.form          = {MSH_INDEX_C, MSH_GEN_C[7:0]};
-      df.material_set  = {UPL_INDEX_C, 8'h2A};
+      // THE HANDLE THE PUBLICATION ACTUALLY CREATED. Its generation byte is
+      // the LOW BYTE OF `new_generation`, exactly as pr2/the MESH_STREAM page
+      // above already notes -- "that is what GEOM.DRAWJOB compares, the same
+      // law zhao_material_resolve applies to the same handle shape". It used
+      // to read 8'h2A, which was `pr.resource`'s own (unused) generation byte,
+      // and no resolve issued from the DRAW could ever have hit the directory
+      // with it. Nothing noticed while the bench issued the request itself.
+      df.material_set  = {UPL_INDEX_C, UPL_GEN_C[7:0]};
       df.transform     = {24'(SMK_XFORM_NODE_C), 8'h00};
       df.viewport_mask = 8'h03;                 // BOTH cameras, as before
       df.semantic_weight = 8'd7;
@@ -5457,11 +5625,30 @@ module tb_zhao_console_core_smoke
              render_texture_dispatch_accepted_o, render_texture_combine_refused_o);
     if (geom_attrpack_triangles_o == 0)
       $fatal(1, "SMOKE: GEOM.ATTRPACK never saw a triangle, so every plane the shell read was its reset value");
+    // THE SAMPLE IS A HARD GATE, and it is asserted several ways because a
+    // single number can be right for the wrong reason.
+    if (render_texture_fragments_o == 0)
+      $fatal(1, "SMOKE: no fragment reached the texture island at all -- this is a RASTER failure, not a texture one");
+    if (render_texture_samples_o == 0)
+      $fatal(1, "SMOKE: %0d fragment(s) reached the island and NOT ONE TMU SAMPLE was published. plan_accepted=%0d dispatch_accepted=%0d combine_refused=%0d -- a zero plan count means the flat request asked for no sample; a non-zero plan with zero samples means the binding page or the witnesses refused it",
+             render_texture_fragments_o, render_texture_plan_accepted_o,
+             render_texture_dispatch_accepted_o, render_texture_combine_refused_o);
+    if (render_texture_combine_refused_o != 32'd0)
+      $fatal(1, "SMOKE: the combiner refused %0d fragment(s) -- recipe and sample_count disagree, which is material_count_legal's law",
+             render_texture_combine_refused_o);
+    // A SAMPLE WITH NO CACHE TRAFFIC WOULD BE A SAMPLE OF NOTHING. The fill
+    // socket is the only place a texel can come from in this console, so the
+    // line count and the beat count are what say a real page was READ: eight
+    // 16-bit beats per line, exactly, or the cache would have counted a
+    // protocol fault instead.
+    if (tfill_lines_q == 0 || tfill_beats_q != tfill_lines_q * 32'd8)
+      $fatal(1, "SMOKE: the texture fill socket served %0d line(s) in %0d beat(s) -- a line is exactly eight",
+             tfill_lines_q, tfill_beats_q);
 
-    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s). The path is proven END TO END, and the three Packet-D attribute planes now have a PRODUCER: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) -- three lanes through one shared GEOM.ATTRSETUP -- from GEOM.CLIP's own winding-flipped vertex attributes, so depth and both texture coordinates vary across the surface instead of interpolating to zero. What is STILL not proven is the MATERIAL ON A TRIANGLE. The record half is now proven end to end (2026-09-19, cmdmem, rulings R17/R20/R32): a PublishResource in the command packet lands a MATERIAL_SET in RENDER.ASSET_POOL through MEM.UPLOAD on the TERRAIN.BUILD socket, MATERIAL.RESOLVE finds it in the 5f.1 directory, fetches record 0 as ENGINE1 through the adapter's third requester, and answers the uploaded record bit for bit (the `SMOKE: material` line). ONE seam remains, and it is smaller than it was. (1) The resolve REQUEST's two halves are now JOINED BY CONSTRUCTION (2026-09-20, R29): the draw's material_set rides the job's sideband through GEOM.MESHFETCH and GEOM.ASSETFETCH and is offered on the same handshake as the meshlet's own material_id, so the pairing entry I39 refused -- two live wires joined by their timing -- is no longer what anyone would be doing. What is still missing is the issue point and the response join, which is entry I49 and the texture lane's; this bench still drives the request itself, which is why the proof stops at the record. (2) `tri_flat_request_i` wants the binding page's palette slot, palette generation and response class besides, which MATERIAL.RESOLVE's own header says it does not own. So `tri_flat_request_i` still has no producer, sample_count, material_recipe and base_binding_selector are all still zero, and the texture island still samples nothing. Perspective-correct interpolation is composed; the surface it would sample is not bound.",
+    $display("SMOKE: NOTE raster pixels=%0d over %0d burst(s), every issued word retired by the arbiter, from %0d triangle(s) in %0d admitted frame(s), and %0d of those fragments CARRIED A TEXEL. As of 2026-09-20 (entry I49) this bench no longer plays the material seam and the console no longer needs it to: CMD.EXEC lowers a PublishResource, MEM.UPLOAD lands the MATERIAL_SET in RENDER.ASSET_POOL and publishes 5f.1's row, GEOM.DRAWJOB puts the draw's material_set in the job's sideband, it rides the meshlet through GEOM.MESHFETCH, GEOM.ASSETFETCH, GEOM.ASSEMBLE and GEOM.REPLAY beside the meshlet's own material id and the draw's semantic weight, and zhao_material_window reads all three off ONE triangle record and issues the resolve. MATERIAL.RESOLVE finds the set in the directory, fetches RECORD 1 -- the record the MESHLET names, which differs from record 0 in every field the flat request carries -- as ENGINE1 through the adapter's third requester, and the window publishes the answer as the material half of tri_flat_request. The binding page this bench seals (a DIRECT RGB565 row, whose palette slot and generation are ZERO BY THE ROW'S OWN LEGALITY LAW rather than by anyone's choice) accepts the witnesses, the cache misses %0d line(s), the fill socket serves each as eight 16-bit beats, and the island publishes a TMU sample into every fragment. WHAT IS STILL NOT DRIVEN, and is named rather than left to be re-derived: base_rgb is the VERTEX's colour and GEOM.VATTR holds a PER-VERTEX one, so the flat base colour stays a named constant (entry I20's remaining half); tri_continuation_tail_i and tri_fragment_state_i are still boundary ports; and a CLUT material's palette slot and generation have no producer in this console at all, which mat_win_clut_unowned_o counts rather than hides.",
              render_pixels_o, render_bursts_o,
              geom_setup_triangles_submitted_o, v2_frames_admitted_o,
-             geom_attrpack_planes_o, geom_attrpack_triangles_o);
+             render_texture_samples_o, render_texture_cache_misses_o);
 
     // ======================================================================
     // PACKET P-SURFACE, 2026-09-19: SURFACE.STAMP <-> SURFACE.SHEET.
@@ -5759,17 +5946,43 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: material  responses=%0d status=%0d hits=%0d misses=%0d not_resident=%0d fetch_denied=%0d adapter_jobs_c=%0d adapter_denied=%0d",
              mat_rsp_seen_q, mat_status_seen_q, mat_hits_o, mat_misses_o, mat_not_resident_o,
              mat_fetch_denied_o, geom_ma_jobs_c_o, geom_ma_denied_o);
-    if (mat_rsp_seen_q != 1)
-      $fatal(1, "SMOKE: MATERIAL.RESOLVE answered %0d time(s) to one request -- expected exactly one answer", mat_rsp_seen_q);
+    if (mat_rsp_seen_q < 1)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE never answered -- entry I49's window issued no resolve at all");
     if (mat_not_resident_o != 0)
       $fatal(1, "SMOKE: the published MATERIAL_SET was NOT RESIDENT -- MEM.UPLOAD's publication did not reach the directory");
-    if (mat_status_seen_q != 3'd1 || mat_fetch_denied_o != 32'd0 || mat_misses_o != 32'd1
-        || mat_refused_o != 32'd0 || geom_ma_denied_o != 32'd0)
-      $fatal(1, "SMOKE: MATERIAL.RESOLVE status %0d, misses %0d, refused %0d, fetch_denied %0d, adapter_denied %0d -- expected one kMiss (1) with the record: R32 puts the upload where ENGINE1 reads",
-             mat_status_seen_q, mat_misses_o, mat_refused_o, mat_fetch_denied_o, geom_ma_denied_o);
-    if (!mat_rec_has_q || mat_rec_q != upl_rec0)
-      $fatal(1, "SMOKE: MATERIAL.RESOLVE's record (has=%b) %064x is not the uploaded record %064x",
-             mat_rec_has_q, mat_rec_q, upl_rec0);
+    if (mat_fetch_denied_o != 32'd0 || mat_refused_o != 32'd0 || geom_ma_denied_o != 32'd0)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE refused %0d, fetch_denied %0d, adapter_denied %0d -- R32 puts the upload where ENGINE1 reads and record 1 is a legal MaterialRecord",
+             mat_refused_o, mat_fetch_denied_o, geom_ma_denied_o);
+    // THE RECORD IS RECORD **1**, NOT RECORD 0, AND THAT IS THE POINT. The
+    // request is no longer this bench's: `u_material_window` issued it from the
+    // TRIANGLE's own material id, which the meshlet descriptor carries as 1.
+    // A window that defaulted to 0 -- or that paired the draw's material_set
+    // with some other meshlet's id -- would return record 0, and the two
+    // records differ in every field the flat request carries.
+    if (!mat_rec_has_q || mat_rec_q != upl_rec1)
+      $fatal(1, "SMOKE: MATERIAL.RESOLVE's record (has=%b) %064x is not record 1 %064x -- the resolve did not ask for the TRIANGLE's material",
+             mat_rec_has_q, mat_rec_q, upl_rec1);
+    $display("SMOKE: matwin   resolves=%0d switches=%0d stall[drain/answer]=[%0d %0d] occ_max=%0d no_record=%0d sel_ovf=%0d clut_unowned=%0d err[unpub/underflow]=[%0d %0d]",
+             mat_win_resolves_o, mat_win_switches_o, mat_win_drain_stall_o,
+             mat_win_answer_stall_o, mat_win_occupancy_max_o, mat_win_no_record_o,
+             mat_win_selector_overflow_o, mat_win_clut_unowned_o,
+             mat_win_err_unpublished_o, mat_win_err_underflow_o);
+    if (mat_win_err_unpublished_o != 32'd0 || mat_win_err_underflow_o != 32'd0)
+      $fatal(1, "SMOKE: the material window's structural guards fired (unpublished %0d, underflow %0d) -- a triangle reached the door under a material nobody resolved",
+             mat_win_err_unpublished_o, mat_win_err_underflow_o);
+    if (mat_win_resolves_o != mat_win_switches_o)
+      $fatal(1, "SMOKE: the material window issued %0d resolve(s) for %0d switch(es) -- a re-resolve of a material it already held is invisible in the picture and doubles the meshlet loop's cost",
+             mat_win_resolves_o, mat_win_switches_o);
+    // ---- THE BINDING PAGE AND THE FILL SOCKET (entry I49's second half) ----
+    $display("SMOKE: binding  page_gen=%0d acks=%0d last_status=%0d fill[lines/beats]=[%0d %0d]",
+             active_page_generation_o, tbind_acks_q, tbind_status_q,
+             tfill_lines_q, tfill_beats_q);
+    if (tbind_status_q != 4'd0)
+      $fatal(1, "SMOKE: the binding page was refused with status %0d (2 BAD_GENERATION, 3 BAD_ROW, 5 BAD_CRC) after %0d ack(s)",
+             tbind_status_q, tbind_acks_q);
+    if (active_page_generation_o != TEX_PAGE_GEN_C)
+      $fatal(1, "SMOKE: the binding page sealed but never ACTIVATED (generation %0d, want %0d) -- the bank swap waits on data quiet",
+             active_page_generation_o, TEX_PAGE_GEN_C);
     // ---- DEBUG.TRACE against its producer (core entry I45) ----------------
     // The composition check the ring's contract asks for, and it is an
     // EQUALITY on purpose. `cmd_commands_o` is CMD.DECODER's own count of

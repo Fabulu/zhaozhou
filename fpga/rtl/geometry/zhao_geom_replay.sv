@@ -180,6 +180,14 @@ module zhao_geom_replay #(
     input  wire [VIDW-1:0]         t_v2_i,
     input  wire [15:0]             t_material_i,
     input  wire [31:0]             t_raster_i,
+  // The draw's MATERIAL_SET handle32 -- the other half of MATERIAL.RESOLVE's
+  // request (core entry I49). PER-MESHLET, like the material id and the
+  // raster word beside it, and latched by the same enable, so the three
+  // cannot separate.
+  input  wire [31:0]             t_material_set_i,
+  // The draw's SEMANTIC WEIGHT -- MATERIAL.RESOLVE's quality tier. Per-meshlet
+  // like the three beside it.
+  input  wire [ 7:0]             t_quality_tier_i,
     input  wire [SRCW-1:0]         t_src_id_i,
     input  wire                    m_done_i,       // the walk ended
 
@@ -220,6 +228,8 @@ module zhao_geom_replay #(
     output wire [SRCW-1:0]         o_src_id_o,
     output wire [15:0]             o_material_o,
     output wire [31:0]             o_raster_o,
+  output wire [31:0]             o_material_set_o,
+  output wire [ 7:0]             o_quality_tier_o,
 
     // ---- evidence -------------------------------------------------------------
     output logic [31:0]            meshlets_o,       // meshlets released
@@ -267,6 +277,8 @@ module zhao_geom_replay #(
   logic               sv_q      [2][2];
   logic [15:0]        mat_q     [2];
   logic [31:0]        rast_q    [2];
+  logic [31:0]        mset_q    [2];
+  logic [ 7:0]        qtier_q   [2];
   logic [SRCW-1:0]    src_q     [2];
   logic [OCCW-1:0]    ntri_q    [2];   // descriptors pushed for this meshlet
 
@@ -383,6 +395,8 @@ module zhao_geom_replay #(
   assign o_src_id_o   = src_q[mr_q];
   assign o_material_o = mat_q[mr_q];
   assign o_raster_o   = rast_q[mr_q];
+  assign o_material_set_o = mset_q[mr_q];
+  assign o_quality_tier_o = qtier_q[mr_q];
 
   // ---- the machine ----------------------------------------------------------
   // The arena's `d` field (the projector's Q16.16 1/w, bits 73:42) and `w`
@@ -437,6 +451,8 @@ module zhao_geom_replay #(
         sv_q[si][1]   <= 1'b0;
         mat_q[si]     <= '0;
         rast_q[si]    <= '0;
+      mset_q[si]    <= '0;
+      qtier_q[si]   <= '0;
         src_q[si]     <= '0;
         ntri_q[si]    <= '0;
       end
@@ -523,6 +539,8 @@ module zhao_geom_replay #(
         // so writing them on every descriptor writes the same value.
         mat_q[wp_c]    <= t_material_i;
         rast_q[wp_c]   <= t_raster_i;
+      mset_q[wp_c]   <= t_material_set_i;
+      qtier_q[wp_c]  <= t_quality_tier_i;
         src_q[wp_c]    <= t_src_id_i;
         if (triangles_in_o != 32'hFFFF_FFFF) triangles_in_o <= triangles_in_o + 32'd1;
       end else if (t_valid_i && busy_q[wp_c] && !closed_q[wp_c] && q_full_c) begin

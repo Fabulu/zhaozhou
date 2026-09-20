@@ -1419,13 +1419,14 @@ module zhao_console_board
   // ---- MATERIAL.RESOLVE (composed 2026-09-19, cmdmem packet, ruling R20) ---
   // I49: its REQUEST and its RESPONSE -- BOUNDARY. Directory and fetch are
   // internal and real; see the entry for the one seam in the way.
-  input  logic                    mat_req_valid_i,
-  output logic                    mat_req_ready_o,
-  input  logic [31:0]             mat_req_material_set_i,
-  input  logic [15:0]             mat_req_material_id_i,
-  input  logic [ 7:0]             mat_req_quality_tier_i,
+  // I49, CLOSED 2026-09-20 (texmat2). The REQUEST and the RESPONSE's ready
+  // are INTERNAL: `u_material_window` issues one resolve per distinct material
+  // from the triangle's own {material_set, material_id, semantic weight} and
+  // consumes the answer. Five ports left this list rather than being driven
+  // from constants. The response FIELDS stay as outputs, because a harness
+  // differencing a resolve against `zref::material` must be able to read them
+  // without reaching inside.
   output logic                    mat_rsp_valid_o,
-  input  logic                    mat_rsp_ready_i,
   output logic [ 2:0]             mat_rsp_status_o,
   output logic                    mat_rsp_has_record_o,
   output logic [255:0]            mat_rsp_record_o,
@@ -1450,6 +1451,26 @@ module zhao_console_board
   output logic [31:0]             mat_selector_overflow_o,
   output logic [31:0]             mat_recipe_count_mismatch_o,
   output logic [31:0]             mat_fetch_denied_o,
+  // ---- the WINDOW's evidence (entry I49) ---------------------------------
+  // `mat_win_resolves_o` against `mat_win_switches_o` is the "counters see
+  // what pictures cannot" reading: a window that re-resolved a material it
+  // already held would produce a byte-identical frame and spend the meshlet
+  // loop's clocks twice. The two stall counters are split because they have
+  // different cures. The last two are STRUCTURAL guards and read zero in any
+  // correct composition.
+  output logic [31:0]             mat_win_resolves_o,
+  output logic [31:0]             mat_win_switches_o,
+  output logic [31:0]             mat_win_drain_stall_o,
+  output logic [31:0]             mat_win_answer_stall_o,
+  output logic [31:0]             mat_win_occupancy_max_o,
+  output logic [31:0]             mat_win_no_record_o,
+  output logic [31:0]             mat_win_selector_overflow_o,
+  // Loud rather than silent: a CLUT material needs the binding page's palette
+  // slot and generation as witnesses and NOTHING in this console produces
+  // them. See FINDINGS-texmat2's owner decision.
+  output logic [31:0]             mat_win_clut_unowned_o,
+  output logic [31:0]             mat_win_err_unpublished_o,
+  output logic [31:0]             mat_win_err_underflow_o,
   output logic [31:0]             geom_ma_jobs_c_o,
   output logic [31:0]             geom_ma_jobs_d_o,
   output logic [31:0]             geom_ma_jobs_e_o,
@@ -1707,7 +1728,9 @@ module zhao_console_board
   // decision" until 2026-09-19; all three clauses had gone stale, the cartridge
   // one by sixteen days. What it waits on is a `spec/memory_rules.md` 5f
   // sentence naming the residency directory's KEY. See entry I20.
-  input  logic [297:0] tri_flat_request_i,
+  // `tri_flat_request_i` LEFT THIS LIST 2026-09-20 (entry I49). It is built a
+  // few thousand lines below from MATERIAL.RESOLVE's published answer, exactly
+  // as `tri_area2_i` and the three attribute planes were retired before it.
   input  logic [47:0]  tri_continuation_tail_i,
   input  logic [31:0]  tri_fragment_state_i,
   input  logic         fill_req_ready_i,
@@ -3205,13 +3228,7 @@ module zhao_console_board
       .upl_published_o                    (upl_published_o),
       .upl_refused_o                      (upl_refused_o),
       .upl_hps_wait_o                     (upl_hps_wait_o),
-      .mat_req_valid_i                    (mat_req_valid_i),
-      .mat_req_ready_o                    (mat_req_ready_o),
-      .mat_req_material_set_i             (mat_req_material_set_i),
-      .mat_req_material_id_i              (mat_req_material_id_i),
-      .mat_req_quality_tier_i             (mat_req_quality_tier_i),
       .mat_rsp_valid_o                    (mat_rsp_valid_o),
-      .mat_rsp_ready_i                    (mat_rsp_ready_i),
       .mat_rsp_status_o                   (mat_rsp_status_o),
       .mat_rsp_has_record_o               (mat_rsp_has_record_o),
       .mat_rsp_record_o                   (mat_rsp_record_o),
@@ -3236,6 +3253,16 @@ module zhao_console_board
       .mat_selector_overflow_o            (mat_selector_overflow_o),
       .mat_recipe_count_mismatch_o        (mat_recipe_count_mismatch_o),
       .mat_fetch_denied_o                 (mat_fetch_denied_o),
+      .mat_win_resolves_o                 (mat_win_resolves_o),
+      .mat_win_switches_o                 (mat_win_switches_o),
+      .mat_win_drain_stall_o              (mat_win_drain_stall_o),
+      .mat_win_answer_stall_o             (mat_win_answer_stall_o),
+      .mat_win_occupancy_max_o            (mat_win_occupancy_max_o),
+      .mat_win_no_record_o                (mat_win_no_record_o),
+      .mat_win_selector_overflow_o        (mat_win_selector_overflow_o),
+      .mat_win_clut_unowned_o             (mat_win_clut_unowned_o),
+      .mat_win_err_unpublished_o          (mat_win_err_unpublished_o),
+      .mat_win_err_underflow_o            (mat_win_err_underflow_o),
       .geom_ma_jobs_c_o                   (geom_ma_jobs_c_o),
       .geom_ma_jobs_d_o                   (geom_ma_jobs_d_o),
       .geom_ma_jobs_e_o                   (geom_ma_jobs_e_o),
@@ -3398,7 +3425,6 @@ module zhao_console_board
       .pal_load_idx_i                     (pal_load_idx_i),
       .pal_load_rgb565_i                  (pal_load_rgb565_i),
       .pal_load_crc_ok_i                  (pal_load_crc_ok_i),
-      .tri_flat_request_i                 (tri_flat_request_i),
       .tri_continuation_tail_i            (tri_continuation_tail_i),
       .tri_fragment_state_i               (tri_fragment_state_i),
       .fill_req_ready_i                   (fill_req_ready_i),
