@@ -74,6 +74,53 @@ for one extra RAM block and ~1.2k memory bits, DSP unchanged. **13.6% of the
 device.** The old map-only row reproduced exactly (8,149 ALUT / 3,875 reg /
 119,808 bits). Full reading in ruling R142.
 
+#### THE ADOPTION IS EXECUTED — 2026-09-20 evening, packet `gz/forge4`
+
+**R142 ruled "adopt" and for most of a day nothing in any ledger moved.** That
+is CLAUDE.md's uncashed cheque in its textbook shape: the plan was right, the
+prerequisite was built, the measurement was taken on the target part, and the
+last step was simply never performed. `prod_manifest.yml`'s own row had named
+its discharge condition -- *"adopt in place of zhao_forge_cliff only after that
+gate"* -- and the gate had by then run **twice**.
+
+`zhao_forge_cliff_ram` is now FORGE.CLIFF's adopted implementation in all four
+ledgers that have to move together (`prod_manifest.yml` `top:`,
+`console_inventory.yml` `superseded`/`superseded_by`, `blocks.yml`
+`implementation:`, `fit_targets.yml`'s `zhao_prod_top` source list), and
+`zhao_prod_top.sv` is regenerated with its extra `walk_fault_o[7:0]` connected
+and folded -- **read in the generated output**, per R151/R161.
+
+**The `implementation:` line is load-bearing and not decoration.**
+`completion_register.py:successor_in()` requires the version tail to `fullmatch`
+`v\d+`, deliberately. `_ram` is a RIVAL, not a version, so the choice is
+**structurally invisible** to the register and FORGE.CLIFF resolved by naming
+convention to the 6,674-ALM module. A decision the primary instrument cannot see
+is the R159 shape pointed the other way.
+
+**And the equivalence half was re-run rather than inherited**, because R142 says
+in as many words that a fitted number settles AREA and nothing about whether the
+two implementations agree: `forge_cliff_ram_differential` built and run at the
+adoption commit -- oracle / golden / candidate in one process, **246 lattices,
+752 pages, 0 mismatches**, every coverage counter nonzero (merged 128, dropped
+122, both 103, merge-only 25, dropped span>1 92, span13 3, partial 182, cw1 2,
+ch1 2, load-stalled 37, output-stalled 70, vdist 66), and it reproduces the
+2026-09-10 report's cycle figures to the digit (5,540,759 vs 5,383,571, −2.84%;
+worst page 85,740 → 84,208; candidate slower on 99 of 246 lattices, by the
+recorded +4 clocks per page).
+
+**ADOPTION IS NOT COMPOSITION and the register did not move: 21 → 21.**
+FORGE.CLIFF still has no producer for any of its three inputs -- no
+lattice-walking page issuer, no 34x34 solid-bit window (`solid\w*_o` as an
+output port across all of `fpga/rtl` including `synth/` and the probes: still
+zero hits) and no vdist read master (`vdist` in exactly four files, all the
+wrong end). The decision settles WHICH module gets composed when those exist.
+
+One accounting note so the move is not misread as a regression: the register's
+`superseded check` goes **73 → 72 production roots** with **70 → 71 further
+fit-target tops**, total unchanged at 143 and both lists still CLEAN. The golden
+left `prod_manifest.yml`'s `top:` and kept its own standalone fit target, so one
+module changed category. Nothing lost coverage.
+
 **R117's two blockers are NON-DIFFERENTIAL:** the golden has the same four
 `Warning (276020)` and the same one inferred latch. Neither is introduced by the
 candidate, so neither is an adoption blocker -- they are costs of the design, not
