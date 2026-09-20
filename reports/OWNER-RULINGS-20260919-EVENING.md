@@ -1318,3 +1318,52 @@ being listed in a table that agrees with itself.
   lines out, with no localparam, function or width moved, so S1's C++/SV
   cross-check is unaffected. That verification is exactly what R129 says to
   demand, applied by the lane to its own change.
+
+## R138 — THIRD INSTANCE of the prose-grading defect, in the reference-model auditor itself
+
+**2026-09-20, coordinator, found by the sweep R129 said was owed.**
+
+R129 recorded that a checker resolving a NAME against raw FILE TEXT will be
+satisfied by the documentation of the thing's absence, and that it had been
+found twice — `uncashed_cheques.py` CHECK 5, and a Python render test asserting
+a formal assertion R32 had deleted, which passed because the token survived in a
+comment in the file it grades.
+
+**`tools/budget/refmodel_liveness.py` had it too**, and it is the worst possible
+host for it: the tool's entire job is deciding which `reference_model:` symbols
+the oracle actually contains. `resolve()` searched `p.read_text()` raw, so **a
+comment reading "zref::X was removed in R32; do not resurrect it" made zref::X
+resolve as PRESENT.**
+
+**Demonstrated before repairing.** A blob containing the name only inside a `//`
+comment returned a hit; the same name absent entirely returned none.
+
+**And its existing self-test could never have caught this.** The tool carries a
+CANARY — a symbol that must resolve, on the stated and correct principle that
+*"this tool reads LOW when broken … so it REFUSES TO RUN unless it can first
+resolve a symbol known to exist."* That guard is sound and it is **one-directional**:
+it proves the search finds what exists, never that it **rejects prose**, because
+the canary resolves either way. **This is R110's shape — a check that only looks
+one way down its own comparison — sitting inside the self-test of a tool built
+to catch exactly this family.**
+
+Repaired with `strip_cxx_comments()` applied in the loader, plus
+`_prose_self_test()` wired into `audit()` beside the canary: five cases, of which
+case 4 (a genuine declaration MUST still resolve) is the negative control
+without which a checker that rejected everything would pass the other three.
+
+**THE REPAIR CHANGES NO VERDICT TODAY** — 89 resolve, 6 unresolved, before and
+after. Nothing in the tree was resolving on prose. Stated plainly rather than
+dressed up as a catch: the value is prospective, and closing a mode that hides
+evidence is worth doing even when it catches nothing on the day.
+
+**Two independent tools now agree the unresolved set is exactly six** —
+`zref::MeasureHistogram`, `zref::PostComposite` and four PART.* rows — which is
+worth more than either count alone. Each still needs the per-row call R94
+defined: **name the law that exists, or remove the key and say why the block has
+no reference model. Inventing a plausible symbol is the same defect with a
+better name.**
+
+**The sweep also found `tools/rtl/check_guard_verdict.py` already strips
+comments** — so this is not universal, and the tools that got it right are worth
+noting alongside the ones that did not.
