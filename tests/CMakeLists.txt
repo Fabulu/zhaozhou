@@ -9798,8 +9798,12 @@ verilate(test_terrain_lodhist_widthguard
           ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
           ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
 add_test(NAME terrain_lodhist_widthguard COMMAND test_terrain_lodhist_widthguard)
+# TIMEOUT 60, deliberately short. The driver's own watchdog exits at 2 seconds
+# and the honest failure path exits in milliseconds, so anything past a minute
+# is the watchdog itself having wedged -- and a TIMEOUT is the one result
+# WILL_FAIL cannot invert, so it must surface in a minute rather than five.
 set_tests_properties(terrain_lodhist_widthguard PROPERTIES
-  LABELS "fast;nightly" TIMEOUT 300 WILL_FAIL TRUE)
+  LABELS "fast;nightly" TIMEOUT 60 WILL_FAIL TRUE)
 
 # ---------------------------------------------------------------------------
 # THE EYE (owner ruling R63). SetView 0x0010 carries `fx16 eye[3]`, zhao_cmd_exec

@@ -63,12 +63,23 @@
 #include "Vtb_terrain_lodhist.h"
 
 namespace {
+// THE WATCHDOG DOES NO I/O, AND THAT IS THE WHOLE POINT OF ITS SECOND VERSION.
+// The first one flushed and printed a friendly line before exiting, and it
+// DEADLOCKED: run under ctest alongside other builds it hit the 300-second
+// timeout, which is the one outcome WILL_FAIL cannot invert. The wedge is
+// inside Verilator's flush/exit machinery, so it is holding the stdio lock --
+// and the escape hatch was asking for that same lock before it could escape.
+//
+// That is this repository's own law in miniature: the recovery path must not
+// depend on the thing that failed. `_Exit` takes no locks, flushes nothing and
+// runs no handler, so it cannot be blocked by whatever wedged. The message the
+// old version printed is the one thing that had to go.
+//
+// The direct run had exited cleanly at RC 1, which is why the first version
+// looked fine: the abort only wedges under load. A control that works when the
+// machine is idle and times out when it is busy is worse than no control.
 void watchdog() {
-  std::this_thread::sleep_for(std::chrono::seconds(3));
-  std::fflush(nullptr);
-  std::printf("widthguard control: the guard fired and the abort wedged;"
-              " exiting 2 so WILL_FAIL can read it.\n");
-  std::fflush(nullptr);
+  std::this_thread::sleep_for(std::chrono::seconds(2));
   std::_Exit(2);  // non-zero: the ctest is WILL_FAIL, so this is the PASS
 }
 }  // namespace
