@@ -312,13 +312,13 @@ std::vector<std::uint8_t> fixtureSparseOutputs() {
 zref::geom_warp::Inputs baseInputs() {
   zref::geom_warp::Inputs in;
   in.position[0] = 100 << 16;
-  in.position[1] = -50 << 16;
+  in.position[1] = -(50 << 16);
   in.position[2] = 7 << 16;
   // A deliberately NON-UNIT direction (W02): SKIN.NORM emits a raw blended
   // direction and LIGHT owns the magnitude. A fixture using a unit vector here
   // would silently pass an implementation that normalized.
   in.direction[0] = 3 << 16;
-  in.direction[1] = -4 << 16;
+  in.direction[1] = -(4 << 16);
   in.direction[2] = 12 << 16;
   in.time = 0x1234ABCD;
   return in;
@@ -412,9 +412,9 @@ int main() {
     in.params[3] = 9 << 16;
     const Result a = GeomWarp::evaluate(p3, in, boundOf(1 << 20));
     check_eq_i64(a.displacement[0], 9 << 16, "case4: lane 14 (p3) REACHES a returned displacement");
-    in.params[3] = -9 << 16;
+    in.params[3] = -(9 << 16);
     const Result b = GeomWarp::evaluate(p3, in, boundOf(1 << 20));
-    check_eq_i64(b.displacement[0], -9 << 16, "case4: and it follows p3's sign");
+    check_eq_i64(b.displacement[0], -(9 << 16), "case4: and it follows p3's sign");
     check(a.displacement[0] != b.displacement[0],
           "case4: THE FIFTEENTH LANE IS LIVE -- a 14-lane record would fail here");
 
@@ -423,11 +423,11 @@ int main() {
     Inputs t = baseInputs();
     t.params[0] = 1 << 16;
     t.params[1] = 2 << 16;
-    t.params[2] = -3 << 16;
+    t.params[2] = -(3 << 16);
     const Result rt = GeomWarp::evaluate(tr, t, boundOf(1 << 20));
     check_eq_i64(rt.displacement[0], 1 << 16, "case4: p0 drives dx");
     check_eq_i64(rt.displacement[1], 2 << 16, "case4: p1 drives dy");
-    check_eq_i64(rt.displacement[2], -3 << 16, "case4: p2 drives dz");
+    check_eq_i64(rt.displacement[2], -(3 << 16), "case4: p2 drives dz");
     check_eq_i64(rt.position[0], t.position[0] + (1 << 16), "case4: dx is ADDED to px");
     check_eq_i64(rt.position[1], t.position[1] + (2 << 16), "case4: dy is ADDED to py");
     check_eq_i64(rt.position[2], t.position[2] - (3 << 16), "case4: dz is ADDED to pz");
@@ -440,14 +440,14 @@ int main() {
     const zfield::Decoded at = mustDecode(fixtureAttributes(), "ATTRIBUTES");
     Inputs in = baseInputs();
     in.attributes[0] = 11 << 16;
-    in.attributes[1] = -22 << 16;
+    in.attributes[1] = -(22 << 16);
     in.attributes[2] = 33 << 16;
-    in.attributes[3] = -44 << 16;
+    in.attributes[3] = -(44 << 16);
     const Result r = GeomWarp::evaluate(at, in, boundOf(1 << 22));
     check_eq_i64(r.displacement[0], 11 << 16, "case5: a0 reaches dx");
-    check_eq_i64(r.displacement[1], -22 << 16, "case5: a1 reaches dy, NEGATIVE");
+    check_eq_i64(r.displacement[1], -(22 << 16), "case5: a1 reaches dy, NEGATIVE");
     check_eq_i64(r.displacement[2], 33 << 16, "case5: a2 reaches dz");
-    check_eq_i64(r.direction[0], -44 << 16, "case5: a3 reaches a NORMAL lane, negative");
+    check_eq_i64(r.direction[0], -(44 << 16), "case5: a3 reaches a NORMAL lane, negative");
     // Each attribute is independent: move one, only one output moves.
     Inputs only = baseInputs();
     only.attributes[1] = 5 << 16;
@@ -649,10 +649,10 @@ int main() {
     const zfield::Decoded tr = mustDecode(fixtureTranslate(), "TRANSLATE");
     Inputs in = baseInputs();
     in.params[0] = 3 << 16;
-    in.params[1] = -5 << 16;
+    in.params[1] = -(5 << 16);
     in.params[2] = 8 << 16;
     const Result whole = GeomWarp::evaluate(tr, in, boundOf(1 << 20));
-    const std::int32_t out6[6] = {3 << 16,          -5 << 16,         8 << 16,
+    const std::int32_t out6[6] = {3 << 16,          -(5 << 16),         8 << 16,
                                   in.direction[0],  in.direction[1],  in.direction[2]};
     const Result split = GeomWarp::applyOutputs(out6, in, boundOf(1 << 20), whole.field_status);
     for (int k = 0; k < 3; ++k) {
