@@ -48,16 +48,44 @@ PKG = RTL / "common" / "zhao_pkg.sv"
 
 # A SystemVerilog function header. The return type is optional and may itself
 # carry a packed dimension, which is why this is not simply \w+\s+\w+.
+#
+# IT USED TO ALLOW **ONE** WORD BEFORE THE RANGE, and that made this tool blind
+# to `function automatic logic signed [31:0] f(...)` -- two words. Measured on
+# 2026-09-20 (owner ruling R173): of **524** function headers under fpga/rtl it
+# matched **380**, missing **125**, and **196** headers carry `signed`. So the
+# tool that exists to find DUPLICATED FUNCTIONS could not see a quarter of the
+# tree's functions -- specifically the arithmetic ones, which are exactly where
+# duplication costs DSPs and ALMs.
+#
+# It is the flattering direction, as always: fewer functions seen is fewer
+# duplicates reported.
+#
+# The repetition is BOUNDED at three words rather than written `*`, because an
+# unbounded alternation here backtracks catastrophically on long headers -- the
+# first attempt at this fix ran for over two minutes on the same corpus this
+# version scans in seconds.
 FUNC = re.compile(
     r"^\s*function\s+(?:automatic\s+)?"      # function [automatic]
-    r"(?:[A-Za-z_]\w*\s*(?:\[[^\]]*\]\s*)?)?"  # optional return type + range
-    r"([A-Za-z_]\w*)\s*(?:\(|;)",              # the NAME
+    r"(?:[A-Za-z_]\w*\s+){0,3}"              # up to 3 type words: logic signed X
+    r"(?:\[[^\]]*\]\s*)?"                    # optional packed range
+    r"([A-Za-z_]\w*)\s*(?:\(|;)",            # the NAME
     re.MULTILINE,
 )
 
-# A name that MUST be found, or the pattern has rotted and every "no duplicates"
+# Names that MUST be found, or the pattern has rotted and every "no duplicates"
 # below would be a false negative.
+#
+# `unit_mul` ALONE WAS NOT ENOUGH, and that is the whole lesson of R173. It is
+# declared `function automatic logic [7:0] unit_mul(...)` -- **UNSIGNED**, one
+# type word -- so it resolved happily under the broken pattern and the
+# self-check passed over the blind spot it was supposed to guard. **A canary
+# that cannot enter the failing state is not a canary.**
+#
+# `mw` is `function automatic logic signed [MATW-1:0] mw(...)`: two type words
+# and a signed return. It is the case the old pattern could not see, so it is
+# the one that has to be in here.
 CANARY = "unit_mul"
+SIGNED_CANARY = "mw"
 
 
 def scan() -> dict[str, list[tuple[pathlib.Path, int]]]:
@@ -91,11 +119,26 @@ def main(argv: list[str]) -> int:
             f"'no duplication' this tool could print would be a false negative."
         )
 
+    # THE SECOND CANARY, and it is the one that would have caught R173. The
+    # unsigned canary above passed for the whole life of the broken pattern,
+    # because it is a one-type-word declaration and the blind spot was two.
+    # A self-check that cannot enter the failing state reports health it never
+    # tested.
+    if SIGNED_CANARY not in found:
+        raise SystemExit(
+            f"SELF-TEST FAILED: the function-header pattern did not find "
+            f"'{SIGNED_CANARY}', a `logic signed [W-1:0]` function. The "
+            f"pattern has lost SIGNED return types again -- that defect hid "
+            f"125 of this tree's 524 functions, and they are the arithmetic "
+            f"ones, which is where duplication actually costs DSPs."
+        )
+
     shared = pkg_names()
     dupes = {n: v for n, v in found.items() if len({p for p, _ in v}) > 1}
 
     print(f"{len(found)} distinct function names across {len(list(RTL.rglob('*.sv')))} RTL files")
-    print(f"self-test OK: '{CANARY}' resolves in {len(found[CANARY])} places")
+    print(f"self-test OK: '{CANARY}' resolves in {len(found[CANARY])} places, "
+          f"and the SIGNED canary '{SIGNED_CANARY}' in {len(found[SIGNED_CANARY])}")
     print(f"zhao_pkg.sv defines {len(shared)} shared function(s)")
     print(f"\nDEFINED IN MORE THAN ONE FILE: {len(dupes)}\n")
 
