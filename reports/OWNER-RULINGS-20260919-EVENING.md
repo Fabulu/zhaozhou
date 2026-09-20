@@ -2685,3 +2685,144 @@ TERRAIN.NORMALMAP (`cut_order: 1`, and `strength=0` is a bit-exact no-op), which
 would drop 21 → 20 honestly. **That is an owner decision and stays one**: taking
 it on my own authority would be closing a gap by removing function, which is the
 one thing rule 1 forbids however well-evidenced the case.
+
+## R178 — THE BIGGEST AREA WIN OF THE CAMPAIGN WAS A RULING NOBODY EXECUTED
+
+**2026-09-20, FORGE4. −5,698 ALM and −3,086 registers, 13.6% of the device, and
+it required no new engineering whatever.**
+
+**R142 ruled "adopt `zhao_forge_cliff_ram`". Nobody carried it out.**
+`prod_manifest.yml`'s row named its own discharge condition — *"adopt … only
+after that gate"* — and **the gate had already run twice.**
+
+`CLAUDE.md`'s uncashed-cheque chapter describes this exactly: the analysis was
+right, the prerequisite was built, the decision was made and written down by
+someone who knew precisely what they were deferring, and **the final step was
+simply never performed.** The twist that makes this one worse than the
+projector: **`uncashed_cheques.py` was reporting it correctly the whole time.**
+The tool built to catch this class caught it, printed it, and nobody read it
+back. *A detector nobody reads is a detector that does not exist.*
+
+**FORGE4 did the two things that make the number trustworthy.** It verified from
+the **primary receipts** rather than the ruling — both `.sources.sha256` digests
+match its tree exactly, same device — and it **re-ran the equivalence half**
+rather than quoting it, on the correct grounds that a fit settles *area*, not
+behaviour: 246 lattices, 752 pages, **0 mismatches**, reproducing the
+2026-09-10 cycle figures to the digit.
+
+## R179 — A THIRD REGISTER BLIND SPOT, AND THIS ONE HID A SAVING
+
+**`successor_in()` requires a module's tail to `fullmatch` `v\d+`.**
+`zhao_forge_cliff_ram` is a **RIVAL**, not a version — so the candidate was
+**structurally invisible to the completion register**, which went on quietly
+resolving `FORGE.CLIFF` to the 6,674-ALM module.
+
+Put the three together, because they are one shape seen from three sides:
+
+* **R159** — the register cannot see an **undeclared tie-off**. Hides a **gap**.
+* **R173** — `duplicate_functions` cannot see a **signed function**. Hides
+  **duplication**.
+* **R179** — the register cannot see a **rival implementation**, only a
+  higher-numbered version. Hides a **saving**.
+
+**Every one is the flattering direction**, and the third is the most expensive:
+it concealed 13.6% of the device for two days while the campaign's stated
+blocker was area.
+
+**The consequence for practice:** `blocks.yml`'s `implementation:` line is
+**load-bearing, not documentation.** It is the only place a rival can be
+declared, because the naming convention cannot express one.
+
+## R180 — `upstream:` IS DESIGN INTENT, NOT A WIRING CLAIM. Three passes read it wrong
+
+`GEOM.SETUP`'s `upstream:` names **six producers, of which exactly one is a
+port.** FORGE4 measured the far end, which no earlier pass had done:
+`zhao_geom_setup` is composed with **one** triangle arm, **fully occupied** by
+GEOM.CLIP through the ATTRPACK fork, **with no arbiter**, and that arm is
+**screen space** (`signed [20:0]`) — while PRIM emits index triples, PRIM_EVAL
+world fx16, and the cliff a rim edge.
+
+**And the same missing door is already costing a second block:**
+`zhao_part_expand` is composed, emits the right shape, and **leaves the core as
+boundary I24 for want of exactly that arbiter.**
+
+This is the **third** ledger-edge-read-as-a-port inside one entry. So the rule
+is now general and belongs beside the ledger: **an `upstream:` row is a
+statement of intent. Reading it as a claim about the tree has misled three
+passes**, and the check is always the same — look for the INSTANTIATION, never
+the name.
+
+## R181 — R168's REPAIR FOUND THE DEFECT WAS LIVE, NOT MERELY LATENT
+
+WARPFIX, and this upgrades R168 from a hazard to a shipping bug.
+
+R168 was recorded as a **mis-wiring** hazard. It is worse: **the hole is
+reachable with legal stimulus in the correctly wired console.** The host answers
+`StOk` when the **image's required mask** is satisfied, so an image declaring
+five of six ordinals **retires OK with present bit 5 clear** — and an adapter
+deciding on `resp_status_i == 0` alone **published the cleared register as a
+normal component.** That is W10's *"an absent output must not look like a zero
+result"*, shipping.
+
+**The evidence is a run that FAILED**, which is the only kind that counts here:
+the new test's exact source against the wrong-wiring arrangement failed 12 of 22
+checks — *"ORDINAL 5 CAME FROM R21, NOT FROM THE UNWRITTEN WINDOW LANE 5,
+expected 0x63, got 0x0"* — and passed 22 of 22 against the right one. Every
+pre-existing Warp test passed against **both**, which is what made R168
+invisible for as long as it was.
+
+**Two mutant design choices worth carrying forward:**
+
+1. **The completion rule is deliberately NOT mutated, so the mutant still
+   answers `StOk`.** This defect is a *successful* run carrying a wrong number;
+   a mutant that answered `StPartial` would be caught by any status check and
+   would be **a positive control for the wrong thing**.
+2. **The mutant's first case is a CONTIGUOUS negative control** — under a
+   contiguous program it is indistinguishable from production. Without it, the
+   sparse verdict could be firing on a botched rename or a stale copy rather
+   than on the mutation.
+
+**Correction to my brief:** the SPARSE case **was** already registered in ctest
+(`warp_field_chain_directed`). R168's narrower wording held — the *case* was not
+separately named, so a refactor could have dropped it with everything else still
+green — but "not a name in ctest" was simply wrong, and the packet said so.
+
+## R182 — `OUT_LANES` MEANS TWO DIFFERENT THINGS ONE LINE APART, and that is R168's cause still live
+
+WARPFIX repaired the instance and **named the disease, without fixing it**, which
+is the right call this close to a fit:
+
+`zhao_field_warp_adapter.OUT_LANES` sizes `resp_out_i`, which is
+**ordinal**-indexed. So the bench must pass `.OUT_LANES(W_ORDINALS)` while the
+host one line away takes `.OUT_ORDINALS(W_ORDINALS)` **and**
+`.OUT_LANES(HOST_WINDOW)`.
+
+`tb_warp_field_chain.sv` already calls this *"the sharpest edge in the whole
+composition."*
+
+**Renaming it to `OUT_ORDINALS` is a docket item, not a pre-fit change** — it
+touches `prod_manifest.yml` and the fit is the scarce resource. But it must be
+recorded as **the cause rather than a tidiness item**: R168 happened because two
+quantities of the same width carried names that did not distinguish them, and
+that condition is still in the tree.
+
+## R183 — THE HARNESS HAS NOW COST FIVE LANES THEIR REPORT FILE, AND PUT A DANGLING CITATION IN PRODUCTION RTL
+
+TERRCOMP, WARPFIX and FORGE4 all reported that **they cannot write a
+`FINDINGS-*.md`** — the harness refuses report `.md` files from a subagent —
+following terrain6 and terrain7.
+
+Three consequences, escalating:
+
+1. Findings live in **commit messages**, which are one squash from unreadable
+   and are not where the next session looks.
+2. **`zhao_console_core.sv` already carries a citation pointing at a
+   `FINDINGS-forge.md` that was never written** — the same refusal, recorded in
+   production RTL as a reference to nothing.
+3. **WARPFIX declined to route around it** by switching tools, and said so.
+   That is the correct call and should not be punished: an agent that works
+   around an explicit refusal is a worse outcome than a missing file.
+
+**The coordinator transcribes them** — `FINDINGS-terrcomp.md` (988 lines),
+`FINDINGS-warpfix.md` and `FINDINGS-forge4.md` are all landed by hand. **That is
+a workaround, not a fix**, and the fix belongs at the harness.
