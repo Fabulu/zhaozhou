@@ -21,6 +21,12 @@ modules:
   zhao_console_board:
     disposition: top
     why: "THE SECOND ROOT. Not composed into the console because it CONTAINS the console: since 2026-09-19 it instantiates zhao_console_core and drives it from zhao_sys_pll and zhao_sys_reset, so it is the top that could be programmed onto hardware. check_console_inventory.py walks it as a root in its own right, and this entry is what ties that walk to a decision somebody wrote down -- the gate fails if this line stops saying `top`, and fails differently if the module stops instantiating the core."
+  zhao_terrain_devstore:
+    disposition: pending_compose
+    why: "TERRAIN.LOD's per-page deviation and history store (owner rulings R24 and R59), built and tested by terrain_lodpath_directed. It is not composed because its CONSUMER, zhao_terrain_lod, cannot be composed: TERRAIN.LOD's cam0/cam1 eye positions are x16 world units (design/contracts/TERRAIN.LOD.md line 64) and NO RATIFIED COMMAND CARRIES A CAMERA POSITION -- spec/commands.zidl's SetView 0x0010 carries view_projection, pixel_error and token counts and nothing else. Composing the store alone would add 160 M10K with no reader. See FINDINGS-terrain4.md, owner decision D1."
+  zhao_terrain_lodfeed:
+    disposition: pending_compose
+    why: "the page-load deviation pass (owner ruling R24): it observes TERRAIN.MIPFEED's fine stream, buffers one surface and drives zhao_terrain_loddev into zhao_terrain_devstore. Built and tested by terrain_lodpath_directed (286 checks, four counters fired). Blocked with the store above on the same missing camera-position producer."
   zhao_engine1_raw_last_v2:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
