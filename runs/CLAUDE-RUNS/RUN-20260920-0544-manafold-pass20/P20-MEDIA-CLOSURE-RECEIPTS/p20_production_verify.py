@@ -1,12 +1,12 @@
-"""Cache-bypassed production verification for Manafold pass 19.
+"""Cache-bypassed production verification for Manafold pass 20.
 
-usage: p19_production_verify.py --selftest
-       p19_production_verify.py <out.json> <host> [host ...]
+usage: p20_production_verify.py --selftest
+       p20_production_verify.py <out.json> <host> [host ...]
 Compares index.html (byte-for-byte against the local deployed public/index.html,
-plus content checks), the 44 live media (against P19-LIVE-MEDIA-SHA256.txt),
-and archive spot checks: three version-17 files (V17-ARCHIVE-SHA256.txt) and
-three version-18 files (V18-ARCHIVE-SHA256.txt). Exit 1 on any mismatch.
-Derived from v18_production_verify.py; --selftest proves each check can fire
+plus content checks), the 44 live media (against P20-LIVE-MEDIA-SHA256.txt),
+and NINE archive spot checks: three version-17 (V17-ARCHIVE-SHA256.txt), three
+version-18 (V18-ARCHIVE-SHA256.txt) and three pass-19 (P19-ARCHIVE-SHA256.txt).
+Exit 1 on any mismatch. Derived from p19_production_verify.py; --selftest proves each check can fire
 on a deliberately broken copy before its silence is quoted."""
 import hashlib, json, re, sys, time, urllib.request, uuid
 from pathlib import Path
@@ -14,7 +14,7 @@ from pathlib import Path
 UP = Path(r'C:\programmieren\zencrifice\manafold-p16\Upheaval')
 site = UP / 'website'
 CM = UP / 'creature/Manafold'
-live = [l.split() for l in (CM / 'P19-LIVE-MEDIA-SHA256.txt').read_text().splitlines() if l.strip() and not l.startswith('#')]
+live = [l.split() for l in (CM / 'P20-LIVE-MEDIA-SHA256.txt').read_text().splitlines() if l.strip() and not l.startswith('#')]
 
 
 def archive_spots(receipt, names):
@@ -23,17 +23,18 @@ def archive_spots(receipt, names):
 
 
 spot = (archive_spots('V17-ARCHIVE-SHA256.txt', ('archive-v17-manafold-trick.webm', 'archive-v17-manafold-hover.png', 'archive-v17-manafold-mana-boil.webm'))
-        + archive_spots('V18-ARCHIVE-SHA256.txt', ('archive-v18-manafold-trick.webm', 'archive-v18-manafold-hover.png', 'archive-v18-manafold-inspect.webm')))
-assert len(live) == 44 and len(spot) == 6
+        + archive_spots('V18-ARCHIVE-SHA256.txt', ('archive-v18-manafold-trick.webm', 'archive-v18-manafold-hover.png', 'archive-v18-manafold-inspect.webm'))
+        + archive_spots('P19-ARCHIVE-SHA256.txt', ('archive-p19-manafold-trick.webm', 'archive-p19-manafold-hover.png', 'archive-p19-manafold-inspect.webm')))
+assert len(live) == 44 and len(spot) == 9
 idx = (site / 'public/index.html').read_bytes()
-H = {'Cache-Control': 'no-cache, no-store, max-age=0', 'Pragma': 'no-cache', 'User-Agent': 'p19-verify'}
+H = {'Cache-Control': 'no-cache, no-store, max-age=0', 'Pragma': 'no-cache', 'User-Agent': 'p20-verify'}
 
 
 def get(url):
     err = None
     for attempt in range(1, 6):
         try:
-            with urllib.request.urlopen(urllib.request.Request(f'{url}?p19verify={uuid.uuid4().hex}', headers=H), timeout=120) as r:
+            with urllib.request.urlopen(urllib.request.Request(f'{url}?p20verify={uuid.uuid4().hex}', headers=H), timeout=120) as r:
                 return r.status, r.read(), attempt
         except Exception as e:  # noqa: BLE001
             err = e
@@ -54,13 +55,15 @@ def index_checks(b):
     fall, hover = vids.get('renders/manafold-fall.webm', ''), vids.get('renders/manafold-hover.webm', '')
     return {
         'robots_exactly_one_noindex_nofollow': len(robots) == 1 and 'content="noindex, nofollow"' in robots[0],
-        'card_pass_19': 'MANAFOLD, pass 19' in t and 'MANAFOLD, version 18' not in t,
-        'renderer_md5': '776d55758933d5284147b360ff2eda62' in t,
-        'manifest_sha256': 'f7edc1fbe25016970d6adc830fbea925954fb7d7282297478375c0690f036ed5' in t,
-        'source_10877707': 'zhaozhou 10877707' in t,
+        'card_pass_20': 'MANAFOLD, pass 20' in t and 'MANAFOLD, pass 19 ' not in t,
+        'renderer_md5': 'e95faca916627d1bddb02892c5eb67e1' in t,
+        'manifest_sha256': 'a40b41549383246d7c9580c768c936f8919eb810dce7c0ecae24e3cdb1313b15' in t,
+        'source_55767880': 'zhaozhou 55767880' in t,
         '22_subjects_7992_frames': ('22 live subjects — 7,992 frames' in t) or ('22 live subjects &mdash; 7,992 frames' in t),
         'all_44_live_declared': all(p in t for _, _, p in live),
         'v18_archive_22_declared': len(set(re.findall(r'renders/archive-v18-manafold-[a-z0-9-]+\.webm', t))) == 22,
+        'p19_archive_22_declared': len(set(re.findall(r'renders/archive-p19-manafold-[a-z0-9-]+\.webm', t))) == 22,
+        'archive_15_generations': 'Archive (15 generations)' in t,
         'fall_no_autoplay_no_loop': bool(fall) and not re.search(r'\b(autoplay|loop)\b', opening(fall)),
         'hover_autoplay_loop': bool(hover) and re.search(r'\bautoplay\b', opening(hover)) is not None and re.search(r'\bloop\b', opening(hover)) is not None,
     }
@@ -79,8 +82,15 @@ def selftest():
     negatives = {
         'hover loop stripped': (re.sub(r'(<video src="renders/manafold-hover\.webm"[^>]*?)\sloop\b', r'\1', t), 'hover_autoplay_loop'),
         'robots index,follow': (t.replace('content="noindex, nofollow"', 'content="index, follow"'), 'robots_exactly_one_noindex_nofollow'),
-        'renderer md5 altered': (t.replace('776d55758933d5284147b360ff2eda62', '776d55758933d5284147b360ff2eda63'), 'renderer_md5'),
-        'old v18 card': (t.replace('MANAFOLD, pass 19', 'MANAFOLD, version 18'), 'card_pass_19'),
+        'renderer md5 altered': (t.replace('e95faca916627d1bddb02892c5eb67e1', 'e95faca916627d1bddb02892c5eb67e2'), 'renderer_md5'),
+        'old p19 card': (t.replace('MANAFOLD, pass 20', 'MANAFOLD, pass 19 '), 'card_pass_20'),
+        # The first version of this negative RENAMED the clip to
+        # archive-p19-manafold-zzz.webm, which still matches the pattern and
+        # still counts 22 -- the selftest caught its own broken fixture, which
+        # is the whole reason it runs before any host is queried. It now DROPS
+        # the declaration, which is the fault it is meant to describe.
+        'a pass-19 archive clip dropped': (t.replace('renders/archive-p19-manafold-trick.webm', 'renders/manafold-trick.webm'), 'p19_archive_22_declared'),
+        'generation count stale': (t.replace('Archive (15 generations)', 'Archive (14 generations)'), 'archive_15_generations'),
     }
     for name, (text, key) in negatives.items():
         if text == t:

@@ -1,7 +1,7 @@
-# Task Log: RUN-20260920-0544 - [Describe objective here]
+# Task Log: RUN-20260920-0544 - Manafold pass 20 (Owner Direction 21)
 
 **Created:** 2026-09-20 05:44 UTC+02:00
-**Status:** In Progress
+**Status:** Complete
 **Working Directory:** runs/CLAUDE-RUNS/RUN-20260920-0544-manafold-pass20/
 
 ---
@@ -691,3 +691,40 @@ removes it", reproduced live -- the tree looked clean while 2.29 GB sat in it.
 Removed, scoped by creation-time window to my own two-minute run and only after
 checking every directory held nothing but `.rgb` and `meta.txt`. One neighbouring
 directory (`manafold-lasso`, 10:32) predates my run and was left alone.
+
+
+---
+
+# CLOSED (2026-09-20): published and production-verified
+
+**Status: Complete.** Full records: `P20-FINAL-BANK-INTEGRITY.md`,
+`P20-MEDIA-CLOSURE.md`, `P20-PRODUCTION-VERIFY.md`.
+
+* **Pass 19 archived first**, before any encode could overwrite a live name:
+  44/44 verified against the published receipt, copied to
+  `archive-p19-manafold-*`, every COPY re-hashed, 44,320,731 bytes.
+  `P19-ARCHIVE-SHA256.txt`. Fifteenth archive generation; `checkarchive`
+  selftest fires fifteen red legs, up from nine.
+* **Exact bank:** one renderer (MD5 `e95faca916627d1bddb02892c5eb67e1`), one
+  invocation, 22 subjects, 7,992 frames, manifest
+  `a40b41549383246d7c9580c768c936f8919eb810dce7c0ecae24e3cdb1313b15`,
+  validator PASS, all four re-review CRCs reproduced.
+* **Scope, on 22 subjects rather than three:** with all THREE pass-20 switches
+  off the bank is byte-identical to pass 19 on 22/22. Rear 22, beat 21,
+  pose-driven reaction 3 more on its own.
+* **The finding of the packet:** the pass's own "pass-19 identity" leg was short
+  an operand and sampled on the only three clips that could not fail. It holds
+  on 19 of 22; Blown, Fall and Trick differ. Repaired, with a discriminating
+  witness leg and a positive control. Nothing shipped changed.
+* **Review:** every frame of all 22 clips on complete every-frame sheets, 20
+  images, frames chosen by badness. No fault found. The rear join, the knead at
+  native, and the mana reaction all read.
+* **Gate matrix:** 161 legs, 161 PASS, 0 FAIL, one invocation.
+* **Encode** `ENCODE_RC=0`, 22/22 + posters, probe 44/44. **Local gate**
+  `DEPLOY_ASSEMBLEONLY_RC=0` with no skip flag, decode 1,508/1,508.
+* **Published** `DEPLOY_RC=0` to `https://0cb48546.upheaval.pages.dev`, alias
+  `https://upheaval.pages.dev`. Both mains fast-forwarded, the fast-forward
+  proved rather than assumed.
+* **Production verified 54/54 on BOTH hosts**, 66,906,938 bytes each, 0
+  mismatches, 0 retries, twelve index checks green, verifier selftested on
+  deliberately broken copies first (and it caught a broken negative of its own).
