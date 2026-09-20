@@ -667,3 +667,313 @@ fit-minus-fit and only one half of it exists today.
 belongs there instead is **a fit of the GOLDEN `zhao_forge_cliff`**, so the
 comparison stops being estimate-versus-fit — and that is a cheap leaf fit, not a
 console placement.
+
+## R118 — MEASURE.GOVERNOR is blocked at BOTH ends, and composing it would OPEN tie-offs
+
+**2026-09-20, POST3B, re-verified rather than inherited.**
+
+The governor has been sitting in the disconnected eleven with the implicit
+assumption that it needs wiring. It needs more than that, in both directions.
+
+**Downstream:** `zhao_terrain_lod`, `zhao_geom_lod` and `zhao_geom_lodstate` are
+**all uncomposed** (terrain_lod appears only in the generated pricing top), and —
+the part that decides it — **no core boundary port exists that a governor output
+could replace.** So composing the governor today does not close a gap; it
+**creates** them, because its outputs would terminate at new unowned edges. That
+is rule 1 in its least obvious form: the move that looks like progress converts
+one disconnected block into several tie-offs and the register gets *worse* while
+the diff looks constructive.
+
+**Upstream:** `px_err` and `view_count` need **two** new CMD.EXEC arms, not the
+one that was assumed, and `proj` needs I14's viewport rect — which is a different
+lane's tie-off.
+
+**Correctly refused.** The governor closes when TERRAIN.LOD composes, and
+TERRAIN.LOD is behind R65, which is behind the owner. POST3B kept its worktree so
+the follow-up is one commit — **but that follow-up is NOT currently available**,
+because it is predicated on TERRAIN9 landing `zhao_terrain_lod` and TERRAIN9
+refused all four of its terrain blocks. Re-check before acting on the offer.
+
+## R119 — the governor → PART.LADDER edge is asserted in the LEDGER and realised in NEITHER CONTRACT
+
+Sharper than "nobody chose", which is how I had it.
+
+`MEASURE.GOVERNOR.md`'s output table **names a consumer port for every policy
+output** — except `deg0_o`/`deg1_o`, which name none and are annotated "capture /
+post-mortem". And **every port it does name belongs to TERRAIN.LOD.** Meanwhile
+`PART.LADDER.md` contains the words "deg", "floor" and "degrade" **zero times.**
+
+So `design/blocks.yml` asserts an edge that neither side's contract realises at
+port level. A ledger edge with no port on either end is not a design decision
+that has not been wired yet — it is a **claim with nothing behind it**, and it is
+the same family as a `reference_model:` naming a symbol that does not exist
+(R94): it reads as architecture and buys silence from every check that works by
+matching two declared things together.
+
+**Ruling: add `p_deg_i[1:0]` and SHIFT the ladder's size thresholds left by
+`deg`. Do not build a `deg → floor` table.** POST3B's reasoning is right and it
+is a correctness argument, not a preference: **a floor is a clamp, and a clamp
+collapses an entire population onto one rung.** Shifting thresholds degrades the
+distribution while preserving its shape; flooring it deletes the shape. Both
+contracts get the port written into them in the same commit, so the edge exists
+in three places or in none.
+
+## R120 — I17's HUD store is 153 of 553 M10K, and it had never been costed on-chip
+
+The I17 entry said **"SDRAM"** and no one had priced the on-chip alternative.
+POST3B priced it: **153/553 M10K, 27.7% of the device's memory**.
+
+That number changes the shape of the decision rather than settling it. M10K is
+the one budget with slack (ALM is at ~113% and DSP at ~135%), so 27.7% is
+*affordable* in a way the ALM equivalent would not be — but it is not free, and
+`trade-ALMs-for-M10K` only pays when the lever is **lookup-for-computation**, not
+when it is relocating a store. Relocating the HUD from SDRAM to M10K buys
+bandwidth and determinism, not ALMs.
+
+**Recorded so the next lane argues from the number instead of from the word
+"SDRAM".** The decision stays open and belongs with I17's owner.
+
+## R121 — `mutant_copy_drift.py` READS COMMIT ORDER, so it cannot gate an uncommitted merge
+
+**Found the hard way, on my own merge.**
+
+The gate compares when the mutant and its production module were last committed.
+I ran it on a **staged but uncommitted** merge, where git still reported the
+*old* doorbell commit, and it returned RC 0 — an answer about the tree *before*
+the merge. I recorded that as a green gate. After committing, the same gate
+returned **RC 1**: `zhao_field_doorbell_mutant` had gone stale because
+`gz/fieldp4` edited `zhao_field_doorbell.sv` at `cb20a231`.
+
+The tool is not wrong and it even announces the condition when it hits the other
+half of it — *"1 pairs skipped: one side has uncommitted edits, so there is no
+commit order to read."* **A gate whose input is git history cannot be run against
+the working tree**, and the failure is silent in the flattering direction: it
+reports the *previous* state as current.
+
+**The rule: `mutant_copy_drift.py` runs AFTER the merge commit, not before it.**
+Every other gate in the table reads files and is correct on a staged tree; this
+one reads history and is not. Added to the gate table with that qualification.
+
+**And the second-order lesson, which is mine.** The reason I believed the stale
+green is that my gate loop wrote
+`printf "%-34s RC=%d\n" "$(basename $g)" "$?"` — the command substitution runs
+**before** `$?` expands and resets it, so **every gate printed RC=0 regardless of
+outcome.** I had identified that exact trap in this same session, written it into
+the task log, and then repeated it an hour later. Capturing `rc=$?` on its own
+line immediately surfaced the drift.
+
+Two instruments lying in the same direction at once is how the run's worst
+defects have all looked. Here the shell said "green" about the wrong tree, and
+the loop said "green" about nothing at all.
+
+## R122 — THE LAST PRE-FIT BLOCKER IS CLEARED, and R104's cost model was wrong in the EXPENSIVE direction
+
+**2026-09-20, ATTRDIV, at `c077ee48`.**
+
+**`superseded check: 71 production roots CLEAN` — 2 → 0.** Nothing in `fpga/` or
+`tests/` instantiates `zhao_raster_attrdiv` any longer. R86's check is the one
+that must read zero before the console can honestly be fitted, and it does.
+Register 21 → 21, unchanged and correct: R104 framed this as a pre-fit blocker,
+not a gap.
+
+### R104's two questions, answered by STIMULUS rather than by argument
+
+**Width.** I ruled that the top bit must be proven clear *by stimulus* because
+"the mathematics describes the converged value; a port publishes whatever is in
+the register". It was: widest observed `rem_o` is **47 bits** over the widest
+legal areas across **2,800 divides**, with bits 48 *and* 47 clear and the new
+guard reading zero. **No consumer widens.**
+
+**Refusal semantics.** Split rather than renamed, as suspected. The service
+publishes `q_saturated_o` and `q_error_o` and **collapses neither**; ATTRSTEP
+refuses on both, reproducing v1 exactly — **because a clamped quotient breaks
+`q*A + r == M` and is therefore not a legal seed.** That is a better reason than
+the one I gave, which was only that behaviour must not change silently.
+
+### AND THE PART I GOT WRONG, which is the reason to write this down
+
+R104 said v2 *"already computes the remainder … the work is publishing an
+internal signal that is already correct by construction, not implementing new
+arithmetic."* **The first half is true and the second is not.**
+
+**v1's remainder is mod 2A on a DOUBLED dividend. v2's is mod A.** They are
+different quantities. **No fixup connects them** — the consumers' algebra had to
+be **re-derived**, not rewired. I had reasoned from "the register exists and
+holds a remainder" to "the remainder is the one the consumers need", which is the
+mismatched-quantity error this run keeps producing: R112 was the same shape (a
+pixel-error *budget* is not a pixel-error *residual*), and so was R98's
+`uint16_t` that truncated where the ports saturate.
+
+**`design/prod_manifest.yml:149` already said this, and was more accurate than my
+ruling.** I wrote R104 without reading it. Both texts are now corrected.
+
+### Where consumer numbers move — stated, not buried
+
+* **Every negative exact half with an even divisor moves +1 LSB**, at a rate of
+  about 1/(4d). This is the bug fix, not a regression: `qformats.md` and
+  `rast.cpp` both say round-half-up and v1 did not.
+* **Overflow** now answers with a saturated value at the service and still
+  **refuses** at ATTRSTEP.
+* **Divides per pixel go DOWN** — 69 sign changes, **zero reseeds**, because the
+  crossing reseed is gone.
+* **Each divide is 2.6–2.8× LONGER: 36 → 103 clocks**, measured at radix 2.
+
+**That last one is a real regression and it is stated in both block headers
+rather than hidden.** It is accepted as the price of correct rounding — a
+silently wrong quotient on every negative exact half is worse than a slower
+correct one — and the window-trick follow-on is named in the headers for whoever
+takes it. **Divides/pixel falling partly offsets it, but the two are not the same
+unit and must not be netted against each other in any summary.** PHYSICAL FIT
+PENDING: the clock cost is a cycle count, and whether it moves Fmax is a
+different question that only the fit answers.
+
+## R123 — the lane's OWN FIRST MUTANT WOULD NEVER HAVE FIRED, and it found that before shipping it
+
+The canonical mutation shape for a full-guard is `>=` → `>`. ATTRDIV wrote it,
+**measured 0 fires in 360,000 pairs**, and threw it away rather than committing a
+positive control that proves nothing.
+
+The shipped mutant uses `>= 2*den` and **fires at 1 after 2 divides**, with the
+unmutated build as the negative control.
+
+**This is the committed-mutant law working exactly as intended, one level deeper
+than it is usually applied.** `CLAUDE.md` already says a guard you cannot reach
+with legal stimulus needs a committed mutant. What this adds: **a mutant is
+itself an instrument, and it can be blind too.** A mutation that the design's own
+arithmetic never exercises is a green control attached to nothing — the
+broken-instrument law applied to the instrument that was supposed to prove the
+instrument. **Measure that your mutant fires before you commit it**, and quote
+the number of trials over which it did.
+
+Two more from the same lane, both in the flattering direction:
+
+* **A false presence in `raster_attrstep_directed.cpp`'s header** — it claimed
+  the divider was its oracle while the test actually restated v1's law locally.
+  A test that says it checks against an oracle and does not is worse than one
+  that admits it is self-referential, because it reads as independent evidence.
+* **An svc gate asserting `ovf == 0` that could never reach the overflow state.**
+  The fourth check found this week that can only ever hold at zero.
+
+## R124 — `zhao_raster_attrwalk` was NOT adopted, and the stated blocker is not the real one
+
+ATTRDIV refused to adopt `zhao_raster_attrwalk` in place of ATTRSTEP: it needs
+**three pre-computed Euclidean pairs and no seed stage exists.** Searched every
+`.sv` for `attrseed`, `attr_seed`, `seed_stage` and `attrwalk`; the only hits are
+the file itself. Adopting it would have **deleted function**, so the refusal is
+correct.
+
+**But its manifest row still states a blocker that is now settled**, while the
+real blocker — the missing seed stage — is not recorded anywhere. A row whose
+stated cause has expired is how a refusal survives past its reason, which is the
+mechanism behind every one of this repo's seventeen false-absence claims.
+
+**Ruling: correct the row to name the seed stage.** Whoever next looks at
+attrwalk should meet the true blocker, not an expired one.
+
+## R125 — the two-mask confusion is now a COMPILE ERROR, and both polarities were seen
+
+**2026-09-20, packet S1, at `15349799`. Register 21 → 21, which directive §20.2
+names as the correct outcome for this packet.**
+
+The ZFH2 host-image schema is generated into C++ and SV from one source.
+`RequiredMask` (canonical output ordinal) and `WindowMask` (contiguous
+capture-window position) are **distinct generated types**, so assigning one to
+the other no longer compiles. That was the deliverable: not a comment saying they
+differ — the console already had one, and R101 shipped anyway — but a **type**.
+
+**Every claim was demonstrated in both polarities, which is what makes this
+usable evidence rather than a green:**
+
+* **Cross-check:** `182 symbols agree` (RC 0) → deliberately mismatched offset →
+  `OFFSET MISMATCH ZFH_PM_OFF_REQUIRED_MASK: C++ says 7, SV says 6` (RC 1) →
+  restored, RC 0. **Restoration verified by CONTENT, not by re-copying the file.**
+* **Compile-fail control:** positive case rc 0; negative case rc 1 with
+  `no match for 'operator=' … WindowMask … RequiredMask`.
+* **Roundtrip:** 142 checks / 0 failures, then **deliberately fired to 2
+  failures with 140 still green** — so the suite discriminates on the thing
+  under test rather than collapsing wholesale. FT107 digest
+  `0x194E6739818D1D5E` identical across three runs.
+* **The 0.10 s green was checked with `-V` rather than quoted.** That is the
+  ctest stale-binary lesson applied by a packet before it was bitten by it.
+
+And it corrected the line numbers in its own brief rather than inheriting them:
+`required_mask`/`window_mask` appear **nowhere** in `zhao_field_host.sv` (they
+are `req_mask_c` / `hdr_outreq`), and my cited `:851` is `out_hit_c` —
+`out_idx_c` is `:854`.
+
+**`field-ir.md`'s Formation `(11)` → `(12)`** is fixed, with all five rows
+re-counted rather than just the one that was reported.
+
+## R126 — `ZFH_WINDOW_MASK_BITS` must equal composed `OUT_LANES`, and NOTHING CHECKS IT
+
+Verified independently:
+
+* `fpga/rtl/field/zhao_field_host.sv:218` — `parameter int unsigned OUT_LANES = 4`
+* `fpga/rtl/prod/zhao_console_core.sv:15869` — `.OUT_LANES(7)`
+* the schema fixes `ZFH_WINDOW_MASK_BITS = 7`
+
+Three places, one quantity, **no guard.** A future composition at a different
+`OUT_LANES` leaves the schema's window-mask width silently disagreeing with the
+hardware's — and the disagreement is invisible, because a mask of the wrong width
+still packs, still transmits and still compares. **This is the same shape as the
+defect the whole packet exists to prevent**, one level up: two quantities that
+must agree, with nothing making them.
+
+**Ruling: H1 adds an elaboration guard IN THE NEW HOST.** S1 correctly did not
+touch the retained oracle. Two constraints on how:
+
+1. **Quartus 17.0 rejects a bare module-scope `if`.** The guard goes inside
+   `initial begin … end`, or `quartus_map` fails with *"syntax error near text:
+   `if`; expecting `endmodule`"*. `check_quartus17_syntax.py` catches this.
+2. **`--lint-only` does not run `initial` blocks**, so a clean Verilator lint is
+   **no evidence whatever** about an elaboration `$fatal`. Fire it deliberately
+   with a wrong parameterisation and watch it fail before quoting its silence.
+
+## R127 — there is a THIRD opcode-shape table, hand-written, and its only guard is a corpus
+
+`reference/src/zfield/zfield_decode.cpp:25-108`, `opMeta()`. Its own comment is
+the finding:
+
+> *"op metadata mirrors field-ir.md §2 … duplicated from types.ts by hand ONCE,
+> asserted by the fuzz corpus replay (any drift shows up as a decode/interpret
+> divergence)."*
+
+So the console now has **three** descriptions of opcode shape — the SV package,
+S1's generated C++, and this one — and it is **unmentioned in all 3,108 lines of
+the owner's directive**, whose FH21 asks for *one* generated capability table.
+
+**"Asserted by the fuzz corpus replay" is exactly the claim to distrust.** A
+corpus catches drift only in the shapes it exercises; for any opcode the corpus
+does not reach, the hand-written table can disagree with the generated ones
+indefinitely and every test stays green. That is `CLAUDE.md`'s law verbatim — **a
+gate that cannot reach the state is not evidence about the state** — and it is
+the third instance today, after the smoke's dead terrain stimulus and ATTRDIV's
+mutant that fired zero times in 360,000 pairs.
+
+**Ruling: the L1 packet folds `opMeta()` into the generated schema** — it is C++
+under `reference/src/zfield/`, which is L1's territory, not F1's (F1 owns the SV
+package). **Until then, nobody authors a fourth.** F1 is told it exists so that
+adding `OP_RCP` and `OP_RING` does not create one.
+
+**And measure the corpus's reach before retiring the claim.** If it turns out the
+corpus never exercised some shape, that is worth recording as its own finding,
+because the divergence may already be present and simply never asked about.
+
+## R128 — S1's D3 was TRUE OF ITS BASE and stale by the time it reported
+
+S1 reported `reports/FIELD-REPAIR-PLAN-20260920.md` as **not in git**, with five
+packets executing against a file one `git checkout --` would destroy. It was
+right to escalate: that would have been a serious failure of mine.
+
+**It is committed, in `9e3023d2`, and pushed.** S1 branched before that commit
+landed, so from its base the file genuinely did not exist.
+
+**This is R106 running in the opposite direction, and it is worth naming as its
+own case.** R106 was me stating an unmerged branch's contents as tree state. This
+is a packet stating its own base's state as current — equally honest, equally
+stale, and the fix is the same on both sides: **a report describes the tree its
+author saw, and the reader must date it.** Neither party did anything wrong; the
+protocol has to carry the dating, not the good intentions.
+
+The packet did exactly the right thing by flagging it loudly rather than assuming
+the coordinator had it in hand.

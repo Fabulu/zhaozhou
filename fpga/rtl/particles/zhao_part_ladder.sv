@@ -82,8 +82,23 @@ module zhao_part_ladder #(
     output var logic [31:0] gov_forced_o     // the governor coarsened the choice
 );
 
-  // The rungs, coarse to fine. The numbering IS the ladder order, so "coarser"
-  // is "numerically smaller" and the governor floor is a max().
+  // The rungs, FINE TO COARSE. The numbering IS the ladder order, so "coarser"
+  // is "numerically LARGER" and the governor floor is a max().
+  //
+  // CORRECTED 2026-09-20 (post3b). Both halves of this sentence used to read
+  // backwards -- "coarse to fine" and "coarser is numerically smaller" --
+  // against the six localparams directly beneath it (MESHLET = 0 is the
+  // FINEST, CULLED = 5 the coarsest) and against the `max()` on the governor
+  // line below, which forces COARSER. The arithmetic was right and IS
+  // unchanged by this edit; only the prose moved.
+  //
+  // It is corrected here rather than only flagged elsewhere because this
+  // comment sits directly above the constants it misdescribes, and the whole
+  // hazard is that somebody wiring `p_gov_floor_i` reads it and INVERTS THE
+  // POLICY -- a governor asking for less work would be read as asking for
+  // more. `fpga/rtl/prod/zhao_console_core.sv` already warned about this at
+  // the port; a warning one file away does not protect a reader who is
+  // looking at this one.
   localparam logic [2:0] RUNG_MESHLET = 3'd0;
   localparam logic [2:0] RUNG_SHARD   = 3'd1;
   localparam logic [2:0] RUNG_RIBBON  = 3'd2;

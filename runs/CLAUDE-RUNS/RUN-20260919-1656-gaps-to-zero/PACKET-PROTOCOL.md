@@ -77,7 +77,7 @@ End every commit message with:
 | `python tools/quartus/check_prod_manifest.py` | OK (it was RED at f98f5846 — texture lane owns that repair; do not make it worse) |
 | `python tools/quartus/gen_prod_top.py --check` | fresh |
 | `python tools/quartus/gen_console_board.py --check` | fresh (regenerate it after any core port change) |
-| `python tools/budget/mutant_copy_drift.py` | no NEW drift you caused |
+| `python tools/budget/mutant_copy_drift.py` | no NEW drift you caused — **and RUN IT AFTER YOUR COMMIT, not before** (ruling R121). It compares COMMIT ORDER, so against a staged-but-uncommitted tree it answers about the tree *before* your work and returns a green that means nothing. It admits the other half of this itself when it skips: *"one side has uncommitted edits, so there is no commit order to read."* Every other gate here reads files and is correct on a staged tree; this one reads git history and is not. The coordinator recorded a stale green this way and only caught it after committing. |
 | `python tools/quartus/check_quartus17_syntax.py` | RC 0 |
 | console-board lint (see handover §4, and "Lint, both halves") | waived: silent RC 0 |
 | `powershell -NoProfile -ExecutionPolicy Bypass -File tests/prod/run_console_core_smoke.ps1` | PASS, `raster pixels=2560` (reference-derived by `smoke_geom_fixture_gen.cpp`; ctest `smoke_geom_fixture_fresh`), `frames_admitted=1` |
