@@ -21,7 +21,13 @@
 //   * a LADDER TABLE of 32-byte records immediately after it,
 //
 // and it freezes NOTHING about parts, meshlet ids, the bone hierarchy,
-// attachments or hitboxes. The header carries `body_off`, the byte offset at
+// attachments or hitboxes.
+//
+// AMENDED under owner ruling R90 (2026-09-20): the BONE HIERARCHY is now
+// frozen too, in the `body` namespace at the bottom of this file, and the
+// sentence above is left standing because it is the record of what R26 alone
+// did. Parts, meshlet ids, attachments and hitboxes remain frozen. The header
+// carries `body_off`, the byte offset at
 // which the Phase-12 body begins, precisely so that the frozen half can be
 // read today and the unfrozen half can be appended later without moving a byte
 // of it. `body_off == 0` means "no body yet", which is what the packer emits
@@ -235,6 +241,214 @@ inline bool lookup(const std::vector<Record>& bank, uint32_t form_index,
     }
   }
   return false;
+}
+
+// ===========================================================================
+// THE BODY SECTION — owner ruling R90's SECOND PARTIAL LIFT of the kind-8
+// freeze, and the oracle `zhao_geom_bonesrc` is differentiated against.
+// ===========================================================================
+//
+// R26 lifted four ladder constants. R90 lifts the BONE HIERARCHY, on the same
+// terms and through the same mechanism: `body_off` names where the body starts,
+// so the frozen half above is not touched. It is not touched — the bodyless
+// golden `tests/golden/creature_ladder/ladder_page_v1.bin` is byte-identical
+// before and after this section existed, which `mkcreatureladder.py --check`
+// asserts on every run rather than leaving as a claim.
+//
+// STILL FROZEN, and this file still freezes nothing about them: parts, meshlet
+// ids, attachments and hitboxes. R90 named the bone hierarchy and a clip frame
+// and nothing else.
+//
+// THE CLIP FRAME (kind 9) IS NOT DEFINED HERE BECAUSE IT IS ALREADY FROZEN
+// ELSEWHERE, and the note at zref_creature.hpp's top calling the quaternion
+// lane format "PROPOSED, NOT FROZEN" is STALE — it predates the amendment that
+// settled it. `spec/creature_rules.md` §2.1 is headed "Storage (frozen; the Q
+// formats are frozen — qformats §7.6, C1)" and gives the bytes outright: per
+// frame, 12 B of root displacement (3 × fx16) then `bone_count` × 8 B of
+// `quat16`, ≤ 268 B at 32 bones. `spec/qformats.md` §7.6 ratifies the lane
+// format under amendment C1 — four s16 lanes, S 1.0.14, hemisphere-canonical —
+// and §7's table row states it again. A kind-9 frame reader therefore has a
+// layout to read and needs no lift; what it needs is a producer.
+namespace body {
+
+inline constexpr uint32_t kMagic = 0x38424354u;  //!< 'T','C','B','8' LE
+inline constexpr uint16_t kVersion = 1u;
+inline constexpr size_t kHeaderBytes = 64;
+inline constexpr size_t kBoneBytes = 32;
+inline constexpr int kMaxBones = 32;  //!< creature_rules §1.2
+
+/** `flags` bit 0: inv_rest is translate(−world_rest). Must be set in v1. */
+inline constexpr uint8_t kFlagRigidRest = 0x01u;
+
+// Bone record offsets, little-endian, matching
+// `fpga/rtl/geometry/zhao_geom_bonesrc.sv` field for field.
+inline constexpr size_t kOffParent = 0;
+inline constexpr size_t kOffFlags = 1;
+inline constexpr size_t kOffRestTx = 4;
+inline constexpr size_t kOffInvTx = 16;
+
+enum class BodyVerdict : uint8_t {
+  kOk = 0,
+  kBadMagic = 1,
+  kBadVersion = 2,
+  kTruncated = 3,
+  kBadBoneCount = 4,   //!< 0, or past the 32-bone ceiling
+  kBadParent = 5,      //!< a parent at or after its child, or a non-zero root
+  kNotRigidRest = 6,   //!< a record claiming a rest rotation this build cannot
+                       //!< decode — refused, never decoded wrongly
+  kReservedNz = 7,     //!< a reserved field is not zero
+};
+
+/**
+ * One bone AS STORED. `parent` and the local rest translation are authored;
+ * `inv_*` is BAKED — see `bake_body`.
+ */
+struct BoneRecord {
+  uint8_t parent = 0;
+  int32_t tx = 0, ty = 0, tz = 0;      //!< LOCAL rest translation, fx16
+  int32_t inv_tx = 0, inv_ty = 0, inv_tz = 0;  //!< −world_rest, fx16
+};
+
+inline void put_i32(uint8_t* p, int32_t v) { put_u32(p, static_cast<uint32_t>(v)); }
+inline int32_t get_i32(const uint8_t* p) { return static_cast<int32_t>(get_u32(p)); }
+
+/**
+ * `zref::creature::bake_skeleton`'s running sum, restated over the page's own
+ * record type. Returns false on exactly the legalities that function enforces
+ * — parent-before-child, a zero root parent, the bone ceiling — plus the i32
+ * overflow a long rest chain can reach and C++ would otherwise wrap silently.
+ *
+ * WHY THIS EXISTS BESIDE `bake_skeleton` RATHER THAN CALLING IT: that function
+ * takes `zref::creature::Skeleton` and fills a `SkeletonBake` of twelve-element
+ * matrices, which is the SIM's shape. This one produces the three numbers the
+ * PAGE stores. They must agree, and `tests/geometry/creature_page_body_directed`
+ * requires exactly that against the same skeleton rather than trusting the
+ * restatement — the three-way pin this file already lives under.
+ */
+inline bool bake_body(const std::vector<BoneRecord>& in,
+                      std::vector<BoneRecord>& out) {
+  out.clear();
+  if (in.empty() || static_cast<int>(in.size()) > kMaxBones) return false;
+  std::vector<int64_t> wx, wy, wz;
+  for (size_t b = 0; b < in.size(); ++b) {
+    const BoneRecord& bn = in[b];
+    if (b == 0 && bn.parent != 0) return false;
+    if (static_cast<size_t>(bn.parent) > b) return false;
+    const int64_t px = b == 0 ? 0 : wx[bn.parent];
+    const int64_t py = b == 0 ? 0 : wy[bn.parent];
+    const int64_t pz = b == 0 ? 0 : wz[bn.parent];
+    const int64_t x = px + bn.tx, y = py + bn.ty, z = pz + bn.tz;
+    const int64_t lo = -(int64_t{1} << 31), hi = (int64_t{1} << 31) - 1;
+    if (x < lo || x > hi || y < lo || y > hi || z < lo || z > hi) return false;
+    wx.push_back(x);
+    wy.push_back(y);
+    wz.push_back(z);
+    BoneRecord r = bn;
+    r.inv_tx = static_cast<int32_t>(-x);
+    r.inv_ty = static_cast<int32_t>(-y);
+    r.inv_tz = static_cast<int32_t>(-z);
+    out.push_back(r);
+  }
+  return true;
+}
+
+/**
+ * Expand a baked record into the twelve-element inverse-rest matrix
+ * `zhao_geom_pose_decode` consumes: identity rotation, negated world
+ * translation in m[3]/m[7]/m[11], in Q16.16. This is what the RTL's
+ * `INV_REST_RIGID` path builds out of constants, stated once here so the two
+ * cannot drift.
+ */
+inline void inv_rest_matrix(const BoneRecord& r, int32_t m[12]) {
+  for (int i = 0; i < 12; ++i) m[i] = 0;
+  m[0] = 65536; m[5] = 65536; m[10] = 65536;
+  m[3] = r.inv_tx; m[7] = r.inv_ty; m[11] = r.inv_tz;
+}
+
+/** The body section bytes: a 64-byte header then one 32-byte record per bone,
+ *  padded to 64. Empty on any refusal `bake_body` makes. */
+inline std::vector<uint8_t> build_body(const std::vector<BoneRecord>& bones) {
+  std::vector<BoneRecord> baked;
+  if (!bake_body(bones, baked)) return {};
+  size_t n = kHeaderBytes + kBoneBytes * baked.size();
+  if (n % 64u != 0u) n += 64u - (n % 64u);
+  std::vector<uint8_t> body(n, 0u);
+  put_u32(body.data(), kMagic);
+  body[4] = static_cast<uint8_t>(kVersion & 0xFFu);
+  body[5] = static_cast<uint8_t>((kVersion >> 8) & 0xFFu);
+  body[6] = static_cast<uint8_t>(baked.size() & 0xFFu);
+  body[7] = kFlagRigidRest;
+  put_u32(body.data() + 8, static_cast<uint32_t>(kHeaderBytes));
+  for (size_t i = 0; i < baked.size(); ++i) {
+    uint8_t* p = body.data() + kHeaderBytes + kBoneBytes * i;
+    p[kOffParent] = baked[i].parent;
+    p[kOffFlags] = kFlagRigidRest;
+    put_i32(p + kOffRestTx + 0, baked[i].tx);
+    put_i32(p + kOffRestTx + 4, baked[i].ty);
+    put_i32(p + kOffRestTx + 8, baked[i].tz);
+    put_i32(p + kOffInvTx + 0, baked[i].inv_tx);
+    put_i32(p + kOffInvTx + 4, baked[i].inv_ty);
+    put_i32(p + kOffInvTx + 8, baked[i].inv_tz);
+  }
+  return body;
+}
+
+/** Decode a body section. `out` is left EMPTY on any verdict but kOk — a
+ *  refused body is refused whole, exactly as a refused page is. */
+inline BodyVerdict decode_body(const uint8_t* body, size_t bytes,
+                               std::vector<BoneRecord>& out) {
+  out.clear();
+  if (bytes < kHeaderBytes) return BodyVerdict::kTruncated;
+  if (get_u32(body) != kMagic) return BodyVerdict::kBadMagic;
+  const uint16_t version =
+      static_cast<uint16_t>(body[4] | (static_cast<uint16_t>(body[5]) << 8));
+  if (version != kVersion) return BodyVerdict::kBadVersion;
+  const uint8_t count = body[6];
+  if (body[7] != kFlagRigidRest) return BodyVerdict::kNotRigidRest;
+  if (count == 0 || count > kMaxBones) return BodyVerdict::kBadBoneCount;
+  const uint32_t bones_off = get_u32(body + 8);
+  if (get_u32(body + 12) != 0u) return BodyVerdict::kReservedNz;
+  if (bones_off + kBoneBytes * static_cast<size_t>(count) > bytes)
+    return BodyVerdict::kTruncated;
+  std::vector<BoneRecord> staged;
+  for (uint8_t i = 0; i < count; ++i) {
+    const uint8_t* p = body + bones_off + kBoneBytes * i;
+    BoneRecord r;
+    r.parent = p[kOffParent];
+    if ((p[kOffFlags] & kFlagRigidRest) == 0u) return BodyVerdict::kNotRigidRest;
+    if ((p[kOffFlags] & ~kFlagRigidRest) != 0u) return BodyVerdict::kReservedNz;
+    if (p[2] != 0u || p[3] != 0u) return BodyVerdict::kReservedNz;
+    if (get_u32(p + 28) != 0u) return BodyVerdict::kReservedNz;
+    if (i == 0 && r.parent != 0) return BodyVerdict::kBadParent;
+    if (static_cast<size_t>(r.parent) > i) return BodyVerdict::kBadParent;
+    r.tx = get_i32(p + kOffRestTx + 0);
+    r.ty = get_i32(p + kOffRestTx + 4);
+    r.tz = get_i32(p + kOffRestTx + 8);
+    r.inv_tx = get_i32(p + kOffInvTx + 0);
+    r.inv_ty = get_i32(p + kOffInvTx + 4);
+    r.inv_tz = get_i32(p + kOffInvTx + 8);
+    staged.push_back(r);
+  }
+  out.swap(staged);
+  return BodyVerdict::kOk;
+}
+
+}  // namespace body
+
+/**
+ * Build a page WITH a body appended. The bodyless `build` above is untouched
+ * and still emits `body_off == 0`; this one computes the offset of the body it
+ * actually writes, which is the only honest source for that number.
+ */
+inline std::vector<uint8_t> build_with_body(
+    const std::vector<Record>& records,
+    const std::vector<body::BoneRecord>& bones) {
+  std::vector<uint8_t> page = build(records, 0u);
+  std::vector<uint8_t> b = body::build_body(bones);
+  if (b.empty()) return {};
+  put_u32(page.data() + 8, static_cast<uint32_t>(page.size()));
+  page.insert(page.end(), b.begin(), b.end());
+  return page;
 }
 
 }  // namespace creature_page

@@ -14572,6 +14572,47 @@ verilate(test_geom_ladderbank_directed
 add_test(NAME geom_ladderbank_directed COMMAND test_geom_ladderbank_directed)
 set_tests_properties(geom_ladderbank_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
 
+# GEOM.POSE's bone source -- entry I29's producer (POSEABI, owner ruling R90).
+# The bench holds BOTH zhao_geom_bonesrc and the REAL zhao_geom_pose_decode,
+# because the claim under test is about the JOIN between them: that the
+# decoder's combinational source contract is met by a prefetch in front of
+# SYNCHRONOUS memories. A stubbed decoder cannot see a prefetch a cycle late.
+add_executable(test_geom_bonesrc_directed geometry/geom_bonesrc_directed.cpp)
+target_link_libraries(test_geom_bonesrc_directed PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_bonesrc_directed PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+verilate(test_geom_bonesrc_directed
+  PREFIX Vtb_geom_bonesrc
+  TOP_MODULE tb_geom_bonesrc
+  THREADS 1
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_bonesrc.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_bonesrc.sv)
+add_test(NAME geom_bonesrc_directed COMMAND test_geom_bonesrc_directed)
+set_tests_properties(geom_bonesrc_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 600)
+
+# THE INVERTED-POLARITY MUTANT DRIVER. It PASSES WHEN bone_prefetch_late_o
+# FIRES, and it is evidence about the instrument rather than about the design.
+# The counter is unreachable by legal stimulus (the decoder spends ~115 cycles
+# per bone and the refill takes seven), which CLAUDE.md names as exactly the
+# case needing a committed mutant. Its NEGATIVE control is separate, in
+# geom_bonesrc_directed cases 3 and 4, where the same counter must read ZERO.
+add_executable(test_geom_bonesrc_latefetch_mutant geometry/geom_bonesrc_latefetch_mutant.cpp)
+target_link_libraries(test_geom_bonesrc_latefetch_mutant PRIVATE zhao_harness zhao_zref)
+target_compile_definitions(test_geom_bonesrc_latefetch_mutant PRIVATE ZHAO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+verilate(test_geom_bonesrc_latefetch_mutant
+  PREFIX Vtb_geom_bonesrc_mutant
+  TOP_MODULE tb_geom_bonesrc_mutant
+  THREADS 1
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/zhao_geom_bonesrc_latefetch_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_pose_decode.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_quat2mat.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_mat3x4_mul.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_bonesrc_mutant.sv)
+add_test(NAME geom_bonesrc_latefetch_mutant COMMAND test_geom_bonesrc_latefetch_mutant)
+set_tests_properties(geom_bonesrc_latefetch_mutant PROPERTIES LABELS "fast;geometry;mutant" TIMEOUT 900)
+
 add_test(NAME lint_zhao_geom_ladderbank
          COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
                  --top-module zhao_geom_ladderbank

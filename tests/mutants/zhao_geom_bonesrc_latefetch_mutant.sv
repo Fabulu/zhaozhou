@@ -1,194 +1,47 @@
-// zhao_geom_bonesrc.sv — the per-bone source `zhao_geom_pose_decode` fetches
-// from, and THE PRICING PROBE for owner decision D-GEOMSEAM-A.
+// zhao_geom_bonesrc_latefetch_mutant.sv — A COMMITTED MUTANT. NOT PRODUCTION.
+// Renamed so no source list can elaborate it by mistake.
 //
-// Entry I29 of `zhao_console_core.sv`. The decoder drives `bone_idx_o` and
-// requires that bone's parent, rest translation, quaternion and inverse-rest
-// matrix on the wires in the SAME cycle. This block is that caller.
+// WHAT IT IS EVIDENCE ABOUT: the instrument, not the design. It exists so that
+// `bone_prefetch_late_o` can be SEEN TO FIRE, and it is here because that
+// counter is UNREACHABLE BY LEGAL STIMULUS — which CLAUDE.md names as exactly
+// the case that needs a committed mutant rather than an argument that goes on
+// forever.
 //
-// ---------------------------------------------------------------------------
-// WHY THIS FILE IS PARAMETERISED BY STORAGE STYLE, AND WHY THAT IS NOT
-// DECORATION
-// ---------------------------------------------------------------------------
-// Owner ruling R90's 2026-09-20 amendment priced the source at "a ~17.6 kbit
-// ASYNCHRONOUS-READ store that a synchronous M10K cannot serve", on a device
-// measured at ~113% of its ALM ceiling, and made PRICING IT a precondition of
-// building it. A price is not a price until two arrangements are measured
-// against each other, so the two arrangements live here as `SRC_STYLE` and are
-// mapped from ONE source. The alternative — measure one, estimate the other —
-// is the thing CLAUDE.md's art law forbids one directory over.
+// WHY IT IS UNREACHABLE. `zhao_geom_pose_decode` spends a measured 115.4
+// cycles per bone and this block's refill takes seven, so no legal clip, bone
+// count or backpressure can make the prefetch late. The guard is correct, and
+// a correct guard makes its own detector dead to every legal input.
 //
-//   SRC_STYLE  name           store                        what it isolates
-//   ---------  -------------  ---------------------------  --------------------
-//       0      SYNC_M10K      2 sync RAMs + 2-deep         the shipped design
-//                             320-bit prefetch + 2:1 mux
-//       1      ASYNC_DERIVED  32 x 320 async array         the SYNC lever alone
-//       2      ASYNC_FLAT     32 x 576 async array         R90's literal reading
+// THE FAULT MODELLED, and it is a REAL RISK rather than an invented one:
+// **the page read is slower than the decode.** Today the two stores are filled
+// from on-chip state in seven cycles. The producer entry I29 actually wants is
+// a kind-8/kind-9 page read through MEM.GUARD to SDRAM, and a page read that
+// misses can easily exceed 115 cycles. If that ever happens the decoder
+// advances onto a bone whose data has not landed, latches the PREVIOUS bone's
+// quaternion and rest translation, and emits a wrong palette with every
+// handshake intact, `done_o` still rising and `palettes_decoded_o` still
+// incrementing. `bone_prefetch_late_o` is the only thing that would say so.
 //
-// SRC_STYLE 2 is the arrangement R90 priced; 1 and 2 differ ONLY by whether
-// `inv_rest` is stored or derived; 0 and 1 differ ONLY by whether the read is
-// synchronous. Three rows therefore say which of the two levers does the work,
-// which one number never could.
+// THE SUBSTANTIVE CHANGE, and nothing else in this file differs from
+// `fpga/rtl/geometry/zhao_geom_bonesrc.sv`:
 //
-// ---------------------------------------------------------------------------
-// THE PRICE, MEASURED. `quartus_map` 17.0.2, device 5CSEBA6U23I7 (THE TARGET
-// DEVICE), standalone leaf, VIRTUAL_PIN ON, SEED 1, BALANCED, MAX_BONES = 32.
-// Analysis & Synthesis "Estimate of Logic utilization (ALMs needed)".
-// ---------------------------------------------------------------------------
+//   P_BODY's word cursor no longer advances every cycle. It advances once per
+//   256 cycles, gated on a `stall_q` counter added for that purpose — so one
+//   four-word body fill takes ~1,024 cycles against the decoder's ~115 per
+//   bone, and the decoder is guaranteed to advance with a fill in flight.
 //
-//   SRC_STYLE        ALM     ALUT    regs   blockmem  MLAB   % of 41,910
-//   ---------------  ------  ------  -----  --------  -----  -----------
-//   0 SYNC_M10K         829     454    865    10,240      0      2.0%
-//   1 ASYNC_DERIVED   6,440   9,234  8,449         0      0     15.4%
-//   2 ASYNC_FLAT     14,056  21,617 17,665         0      0     33.5%
+// That is one behaviour changed plus the register it requires. The register is
+// not a second mutation: without it the stall cannot be expressed at all, and
+// naming it here is cheaper than a mutation nobody can read.
 //
-// **R90's arrangement costs 14,056 ALM — ONE THIRD OF THE ENTIRE DEVICE**, on
-// a console already reported over its ALM ceiling. It is not affordable, and
-// the amendment was right to make the pricing a precondition of building.
+// ITS DRIVER'S POLARITY IS INVERTED: `geom_bonesrc_latefetch_mutant` PASSES
+// WHEN THE COUNTER FIRES. The NEGATIVE control is separate and lives in
+// `geom_bonesrc_directed` cases 3 and 4, where the same counter must read ZERO
+// across two correct back-to-back palettes — so the pair proves the detector
+// DISCRIMINATES rather than merely moves (owner ruling R95).
 //
-// **The arrangement actually built costs 829 ALM, 2.0%.** The saving is 13,227
-// ALM, a 17.0x reduction, and the three rows attribute it rather than asserting
-// it: deriving `inv_rest` is worth 7,616 ALM (14,056 -> 6,440) and making the
-// read synchronous is worth a further 5,611 (6,440 -> 829).
-//
-// TWO THINGS THE ROWS SETTLE THAT ARITHMETIC COULD NOT:
-//
-//   * **Quartus infers NO MLAB for the asynchronous array** — "Total MLAB
-//     memory bits: 0" on styles 1 and 2, with every stored bit landing in
-//     dedicated registers. The optimistic reading (an async store becomes cheap
-//     LUT RAM) is false on this device and this tool, and style 2's 17,665
-//     registers are R90's own 17,568-bit figure plus this block's 97 counter
-//     and control bits. **R90's BIT COUNT WAS EXACTLY RIGHT.** What was
-//     unpriced was what those bits cost in ALMs, and the answer is that a
-//     32-deep multiplexer over 549 bits costs more than the storage does:
-//     21,617 ALUTs against 17,665 registers.
-//   * **Style 0 infers BLOCK memory, not MLAB** — 10,240 block memory bits,
-//     0 MLAB bits, exactly the 8,192 + 2,048 the two stores ask for. This is
-//     the measurement `zhao_geom_pose_palette`'s header and
-//     `design/fit_targets.yml` both say is missing for that block and must not
-//     be claimed from arithmetic; it is made here, for these two arrays.
-//
-// A MAP IS NOT A FIT and this file does not pretend otherwise: the ALM figure
-// is Analysis & Synthesis's ESTIMATE, there is no placement and no routing, and
-// no timing number appears above because none was measured. What a map settles
-// is exactly what was asked — relative area and whether storage becomes RAM or
-// flops — and the gap between 829 and 14,056 is not a number a fit reverses.
-//
-// ---------------------------------------------------------------------------
-// LEVER 1 — `inv_rest` IS DERIVED, AND THE REFERENCE IS WHERE THAT IS DECIDED
-// ---------------------------------------------------------------------------
-// R90 counted the decoder's source at 549 bits per bone, of which
-// `inv_rest_i[12]` is 384. THOSE 384 BITS ARE NOT 384 BITS OF ASSET.
-// `bake_skeleton` (reference/src/zcreature/creature_core.cpp) builds every
-// inverse-rest matrix as
-//
-//     inv_rest[b] = identity, with m[3]/m[7]/m[11] = -world_rest[b]
-//
-// and `zref_creature.hpp`'s `Bone` carries NO rest rotation at all — only
-// `{uint8_t parent; int32_t tx, ty, tz;}`. The header states the invariant as a
-// bind convention: *"rings are authored in rest orientation, so B_rest is a
-// pure translation chain and its inverse is EXACT (translate(-world_rest_pos),
-// zero rounding)."*
-//
-// So nine of the twelve elements are the CONSTANTS 65536 and 0, and the other
-// three are one negated vector. 288 of R90's 384 bits are wires to constants
-// and cost nothing to store, nothing to fetch and nothing to multiplex.
-//
-// **THIS IS NOT HARDWIRED PAST THE OWNER.** `INV_REST_RIGID` is the knob, the
-// page record carries a `flags` bit that declares the invariant per creature,
-// and `bone_rest_nonrigid_o` COUNTS any record that arrives claiming otherwise
-// rather than decoding it wrongly in silence. A future skeleton with real rest
-// rotations is a parameter flip and a wider record, not a rewrite — and until
-// one exists, paying 288 bits per bone to store nine constants would be paying
-// for a generality nothing in the tree can author.
-//
-// ---------------------------------------------------------------------------
-// LEVER 2 — THE FETCH IS COMBINATIONAL, AND IT IS STILL NOT AN ASYNC STORE
-// ---------------------------------------------------------------------------
-// This is the finding that decides the packet, and it is a statement about the
-// decoder's FSM rather than about its header.
-//
-// `zhao_geom_pose_decode`'s `bone_idx_o` is `b`, A REGISTER, and `b` moves in
-// exactly two places: `S_IDLE` on `start_i`, and `S_EMIT` on the accepted last
-// beat. Between them the decoder spends a MEASURED 115.4 cycles per bone
-// (its own header, `geom_pose_decode_directed`). So the address is stable for
-// ~115 cycles and changes on one edge, and the DATA is consumed on exactly one
-// of those cycles — the single `S_FETCH` beat that follows the change.
-//
-// A naive synchronous read of `bone_idx_o` misses by ONE CYCLE and no more:
-// `b` becomes b+1 at the same edge that enters `S_FETCH`, `S_FETCH` latches at
-// the next edge, and a registered read would land one edge after that. That one
-// cycle is the whole of the "asynchronous store" requirement.
-//
-// It is bought with a PREFETCH, because bone b+1's address is knowable from the
-// moment bone b begins — roughly 115 cycles of notice for a fetch that needs
-// five. This block holds two bones: `d0` for `i0_q` and `d1` for `i0_q + 1`,
-// selects between them combinationally on the decoder's own `bone_idx_i`, and
-// on observing the advance shifts d1 into d0 and refills d1 from RAM. The
-// decoder sees a purely combinational source and DOES NOT CHANGE — no port, no
-// state, no contract. R90's fallback ("the thing that has to move is the
-// DECODER's combinational contract") is not needed.
-//
-// The cost of that is a 2:1 mux over 320 bits and 640 flip-flops of prefetch,
-// against a 32-deep multiplexer over 549. The measured difference is the packet.
-//
-// WHY NOT MIRROR THE DECODER'S FSM to know the advance a cycle early: that puts
-// a second copy of a ratified sequencing law in a second file, which is the
-// duplication `duplicate_functions.py` exists to find. The mux is cheaper than
-// the maintenance.
-//
-// ---------------------------------------------------------------------------
-// THE PREFETCH CANNOT BE LATE, AND THAT IS COUNTED RATHER THAN ASSERTED
-// ---------------------------------------------------------------------------
-// The whole scheme rests on "115 cycles is more than five". If a future
-// arrangement shortens the decode or lengthens the fill, the prefetch is late
-// and the decoder silently latches a stale bone — a wrong palette with every
-// handshake intact and every counter balanced, which is this repository's
-// named worst case.
-//
-// `bone_prefetch_late_o` is the detector, and it is NOT wired to two operands
-// that move together: it compares the decoder's OWN `bone_idx_i` against
-// `i0_q`, which is loaded by this block's fill sequencer on a different
-// condition entirely. A late refill moves it; a correct one cannot.
-//
-// ---------------------------------------------------------------------------
-// THE BYTES — kind-8 BODY bone record, FROZEN HERE
-// ---------------------------------------------------------------------------
-// 32 bytes per bone, the same record size the ladder table already uses, at
-// `body_off` from the page header. Little-endian, the page's own convention.
-//
-//   +0   u8   parent        bone 0 must carry 0 (validated at bake)
-//   +1   u8   flags         bit0 RIGID_REST (must be 1 in v1); rest reserved 0
-//   +2   u16  reserved      must be 0
-//   +4   s32  rest_tx       LOCAL rest translation, fx16 (Q16.16)
-//   +8   s32  rest_ty
-//   +12  s32  rest_tz
-//   +16  s32  inv_rest_tx   = -world_rest_x, BAKED by the packer
-//   +20  s32  inv_rest_ty
-//   +24  s32  inv_rest_tz
-//   +28  u32  reserved      must be 0
-//
-// `inv_rest_t` is baked by the packer and not recomputed here, for the reason
-// the reference gives: it is a running sum down the parent chain, it is done
-// ONCE at load in `bake_skeleton`, and a second implementation of it in RTL
-// would be a second owner of a ratified law.
-//
-// THE CLIP FRAME (kind 9) IS NOT FROZEN HERE BECAUSE IT ALREADY IS.
-// `spec/creature_rules.md` 2.1 is headed "Storage (frozen; the Q formats are
-// frozen)" and gives the bytes outright — 12 B root displacement (3 x fx16)
-// then `bone_count` x 8 B of `quat16`, <= 268 B/frame at 32 bones — and
-// `spec/qformats.md` 7.6 ratifies the lane format under amendment C1
-// (four s16 lanes, S 1.0.14, hemisphere-canonical). `zref_creature.hpp`'s
-// "PROPOSED, NOT FROZEN" note predates that amendment and is corrected there.
-// This block READS that layout; it does not re-freeze it.
-//
-// ---------------------------------------------------------------------------
-// M10K INFERENCE RULES, copied deliberately from `zhao_geom_pose_decode`'s
-// ancestor store: no initializer, no reset branch touching the array, and the
-// read happens ONLY inside the clocked process. Whether Quartus agrees is the
-// question the map answers, and until it does every memory figure here is
-// arithmetic and says so.
-// ---------------------------------------------------------------------------
-module zhao_geom_bonesrc #(
+// DO NOT "FIX" THIS FILE. A green run here means the mutation is gone.
+module zhao_geom_bonesrc_latefetch_mutant #(
     parameter int MAX_BONES = 32,
 
     // 0 = SYNC_M10K (shipped), 1 = ASYNC_DERIVED, 2 = ASYNC_FLAT (R90's).
@@ -375,6 +228,7 @@ module zhao_geom_bonesrc #(
       // `i0_q` now moves only when bone 0 actually lands, on the same edge the
       // decoder takes `start_i`, so the two are aligned by construction.
       logic started_q;
+      logic [7:0] stall_q;   // MUTANT ONLY: the stall counter
 
       assign body_raddr = ($clog2(MAX_BONES*BODY_WORDS))'(pf_bone * BODY_WORDS + 32'(pf_w));
       assign quat_raddr = ($clog2(MAX_BONES))'(pf_bone);
@@ -397,7 +251,7 @@ module zhao_geom_bonesrc #(
         if (!rst_n) begin
           pf_q <= P_IDLE; pf_w <= '0; pf_bone <= '0; i0_q <= '0;
           d0_body <= '0; d1_body <= '0; d0_quat <= '0; d1_quat <= '0;
-          pf_body <= '0; start_o <= 1'b0; started_q <= 1'b0;
+          pf_body <= '0; start_o <= 1'b0; started_q <= 1'b0; stall_q <= '0;
           bone_prefetch_late_o <= '0;
         end else begin
           start_o <= 1'b0;
@@ -439,9 +293,13 @@ module zhao_geom_bonesrc #(
               end
             end
             P_BODY: begin
-              if (pf_w > 3'd0) pf_body[({29'd0, pf_w} - 1) * 64 +: 64] <= body_rd_q;
-              if (pf_w == 3'd4) begin pf_q <= P_QUAT; pf_w <= '0; end
-              else pf_w <= pf_w + 3'd1;
+              // MUTATION: one word per 256 cycles instead of one per cycle.
+              stall_q <= stall_q + 8'd1;
+              if (stall_q == 8'hFF) begin
+                if (pf_w > 3'd0) pf_body[({29'd0, pf_w} - 1) * 64 +: 64] <= body_rd_q;
+                if (pf_w == 3'd4) begin pf_q <= P_QUAT; pf_w <= '0; end
+                else pf_w <= pf_w + 3'd1;
+              end
             end
             P_QUAT: begin
               if (pf_w == 3'd1) pf_q <= P_LAND;
@@ -543,4 +401,4 @@ module zhao_geom_bonesrc #(
     end
   end
 
-endmodule : zhao_geom_bonesrc
+endmodule : zhao_geom_bonesrc_latefetch_mutant
