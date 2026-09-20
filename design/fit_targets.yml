@@ -2029,10 +2029,20 @@ targets:
       # checker validates the top-level instantiations only, not the
       # transitive closure. Verilator found it.
       # Package declarations precede every importer in the production closure.
+      #
+      # zhao_fb_tuple_pkg ADDED 2026-09-20 with the R86 shell swap, and it is
+      # the interesting one: `check_prod_manifest.py::check_fit_sources` walks
+      # MODULES, so an `import <pkg>::*` was invisible to it. It reported OK on
+      # a list whose `zhao_shell_top_v2.sv:132` imports a package that is not in
+      # it, and the completion fit would have died at elaboration -- the exact
+      # failure that gate exists to prevent, one declaration kind out of reach.
+      # Verilator found it, which is the wrong tool discovering it; the gate now
+      # walks imports too.
       - fpga/rtl/generated/zhao_abi_pkg.sv
       - fpga/rtl/common/zhao_pkg.sv
       - fpga/rtl/field/zhao_field_ops_pkg.sv
       - fpga/rtl/memory/zhao_sdram_params_pkg.sv
+      - fpga/rtl/video/zhao_fb_tuple_pkg.sv
 
       # The selected Packet-B accounting root uses the same exact 26-source
       # compile order as its standalone fit target and interface artifact.
@@ -2081,7 +2091,6 @@ targets:
       - fpga/rtl/common/zhao_crc32c_fold.sv
       - fpga/rtl/common/zhao_dc_sdp_ram.sv
       - fpga/rtl/common/zhao_project_core.sv
-      - fpga/rtl/common/zhao_shell_top.sv
       - fpga/rtl/compositor/zhao_post_gather.sv
       - fpga/rtl/compositor/zhao_twod_sampler.sv
       - fpga/rtl/compositor/zhao_twod_plane.sv
@@ -2141,8 +2150,6 @@ targets:
       - fpga/rtl/geometry/zhao_geom_arena.sv
       - fpga/rtl/geometry/zhao_geom_assemble.sv
       - fpga/rtl/geometry/zhao_geom_attrsetup.sv
-      - fpga/rtl/geometry/zhao_geom_bin_pipe.sv
-      - fpga/rtl/geometry/zhao_geom_binner.sv
       - fpga/rtl/geometry/zhao_geom_clip.sv
       - fpga/rtl/geometry/zhao_geom_cull.sv
       - fpga/rtl/geometry/zhao_geom_depthquant.sv
@@ -2205,7 +2212,6 @@ targets:
       - fpga/rtl/raster/zhao_raster_fragment.sv
       - fpga/rtl/raster/zhao_raster_quant.sv
       - fpga/rtl/raster/zhao_raster_resolve.sv
-      - fpga/rtl/raster/zhao_raster_tile_pipe.sv
       - fpga/rtl/raster/zhao_raster_tilestore.sv
       - fpga/rtl/raster/zhao_raster_toon.sv
       - fpga/rtl/raster/zhao_raster_toon_div.sv
@@ -2214,8 +2220,6 @@ targets:
       - fpga/rtl/surface/zhao_surface_sq.sv
       - fpga/rtl/surface/zhao_surface_stamp.sv
       - fpga/rtl/surface/zhao_surface_dispatch.sv
-      - fpga/rtl/terrain/zhao_terrain_bake.sv
-      - fpga/rtl/terrain/zhao_terrain_bake_delta.sv
       - fpga/rtl/terrain/zhao_terrain_lod.sv
       - fpga/rtl/terrain/zhao_terrain_mipgen.sv
       - fpga/rtl/terrain/zhao_terrain_normals.sv
@@ -2238,7 +2242,43 @@ targets:
       - fpga/rtl/video/zhao_video_mode.sv
       - fpga/rtl/video/zhao_video_scaler.sv
       - fpga/rtl/video/zhao_video_scanout.sv
-      - fpga/rtl/video/zhao_video_slotmgr.sv
+      # ---- 2026-09-20, OWNER RULING R86: THE SHELL AND THE BAKER GO TO V2 ----
+      # `zhao_prod_top` composed `zhao_shell_top` and `zhao_terrain_bake` while
+      # `design/console_inventory.yml` recorded BOTH as `superseded`, citing the
+      # owner's "YOU ONLY GET TO FIT THE LATEST VERSION" ruling verbatim, and
+      # `zhao_console_core.sv:10529` already composed `zhao_shell_top_v2`. The
+      # completion fit would have measured a machine nobody ships.
+      #
+      # WHAT LEFT: zhao_shell_top.sv, and the four blocks only it composed --
+      # zhao_geom_bin_pipe, zhao_geom_binner, zhao_raster_tile_pipe,
+      # zhao_video_slotmgr -- plus zhao_terrain_bake and its delta child.
+      # zhao_hps_arbiter was never in this list; the V2 shell takes the N core.
+      #
+      # WHAT ENTERED: the V2 shell, its six writer-aware video organs, the
+      # POST.COMPOSITE lease trio, and the Packet-D geometry/raster V2 pipeline
+      # that reaches zhao_texture_island_v3_top -- which is why the island is no
+      # longer a standalone top. The five DSP-alternative leaves
+      # (zhao_texture_bilerp_lane_dsp2, zhao_attr_mul72x13_dsp3,
+      # zhao_raster_attrgrad_dsp3, zhao_mul27_exact, zhao_dual18_mul) are NOT
+      # here: Verilator's V3Param elaboration of the shell at BUILD_HPS_N=2
+      # returns 77 cells and none of them is an unselected generate arm.
+      - fpga/rtl/common/zhao_shell_top_v2.sv
+      - fpga/rtl/compositor/zhao_post_echo.sv
+      - fpga/rtl/compositor/zhao_post_fbread.sv
+      - fpga/rtl/compositor/zhao_post_lease.sv
+      - fpga/rtl/geometry/zhao_geom_bin_pipe_v2.sv
+      - fpga/rtl/geometry/zhao_geom_binner_v2.sv
+      - fpga/rtl/raster/zhao_raster_attrdiv_v2.sv
+      - fpga/rtl/raster/zhao_raster_attrgrad_v2.sv
+      - fpga/rtl/raster/zhao_raster_texture_stage_v3.sv
+      - fpga/rtl/raster/zhao_raster_tile_pipe_v2.sv
+      - fpga/rtl/terrain/zhao_terrain_bake_v2.sv
+      - fpga/rtl/video/zhao_fb_ready_cdc_v2.sv
+      - fpga/rtl/video/zhao_renderer_lease_v2.sv
+      - fpga/rtl/video/zhao_video_blit_lease_v2.sv
+      - fpga/rtl/video/zhao_video_ready_bridge_v2.sv
+      - fpga/rtl/video/zhao_video_slotmgr_v2.sv
+      - fpga/rtl/video/zhao_video_terminal_adapter_v2.sv
   # PACKET H: THE COMPOSED SIBLING SHELL.
   #
   # The question this target exists to answer, named in advance as CLAUDE.md

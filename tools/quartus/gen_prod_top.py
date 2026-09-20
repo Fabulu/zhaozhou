@@ -462,12 +462,35 @@ def main(manifest_path=MANIFEST, out_path=OUT, check=None):
                     # `$bits(type)` asks the elaborator for the width instead of
                     # guessing it, and the cast makes the assignment a type match
                     # rather than a packed-vector-into-struct mismatch.
+                    #
+                    # AND A PACKED ARRAY OF THAT TYPE IS A THIRD CASE, missed
+                    # until 2026-09-20. `input var zhao_hps_burst_req_t
+                    # [BUILD_HPS_N-1:0] build_hps_req_i` declares BUILD_HPS_N
+                    # structs; this branch declared ONE and Verilator said so --
+                    # "expects 88 bits ... generates 44". Half the pins constant
+                    # zero is exactly the understating failure the two comments
+                    # above are about, for the third time and the third reason.
+                    # It was already live at HEAD on `zhao_mem_guard`'s `req_i`
+                    # (309 bits expected, 103 generated -- 206 of them stuck at
+                    # zero, with the fitter free to fold whatever they feed).
+                    #
+                    # `w` is the ELEMENT COUNT here, not a bit count: width_expr
+                    # multiplies out the packed ranges, and for a typedef'd port
+                    # those ranges count elements rather than bits.
                     wire = "%s_%s" % (pre, name)
-                    lines.append("  %s %s;" % (user_type, wire))
-                    lines.append(
-                        "  assign %s = %s'(%s_src[%d +: $bits(%s)]);"
-                        % (wire, user_type, pre, off % (SRCW // 2), user_type)
-                    )
+                    if widths:
+                        lines.append("  %s [%s-1:0] %s;" % (user_type, w, wire))
+                        for k in range(int(w)):
+                            lines.append(
+                                "  assign %s[%d] = %s'(%s_src[%d +: $bits(%s)]);"
+                                % (wire, k, user_type, pre,
+                                   (off + 3 * k) % (SRCW // 2), user_type))
+                    else:
+                        lines.append("  %s %s;" % (user_type, wire))
+                        lines.append(
+                            "  assign %s = %s'(%s_src[%d +: $bits(%s)]);"
+                            % (wire, user_type, pre, off % (SRCW // 2), user_type)
+                        )
                     conns.append(".%s(%s)" % (name, wire))
                     needed_types.add(user_type)
                     off += 7
@@ -483,7 +506,14 @@ def main(manifest_path=MANIFEST, out_path=OUT, check=None):
                     # code emitted a bare `logic` of guessed width here, which
                     # is both the wrong width and the wrong type -- and a
                     # struct port driven by a packed vector does not elaborate.
-                    lines.append("  %s %s;" % (user_type, wire))
+                    #
+                    # Packed arrays of the type get their dimension too; see the
+                    # input branch above for the measurement that found this.
+                    # `^wire` still reduces the whole array, because it is packed.
+                    if widths:
+                        lines.append("  %s [%s-1:0] %s;" % (user_type, w, wire))
+                    else:
+                        lines.append("  %s %s;" % (user_type, wire))
                     # AND THE TYPE HAS TO BE IN SCOPE, which is the half this
                     # fix originally missed. Declaring `zhao_guard_req_t u24_x;`
                     # in a module that imports nothing is unresolvable, so the
