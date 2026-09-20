@@ -2954,9 +2954,34 @@
 //   AND THE BLOCKER HAS MOVED TWICE MORE, WHICH IS WHY THIS ENTRY IS LONG
 //   RATHER THAN CLOSED. Traced 2026-09-20 by the forge packet, under owner
 //   ruling R75 ("take the ARENA ROUTE ... rather than building a second
-//   geometry path"). The arena route is the right architecture and it is NOT
-//   REACHABLE TODAY, for two reasons that are structural rather than
-//   arguable, and NEITHER WAS KNOWN WHEN R75 WAS WRITTEN:
+//   geometry path").
+//
+//   FIRST, A CORRECTION TO THE PREMISE R75 WAS GIVEN, because it is false in
+//   its letter and the ruling is RIGHT ANYWAY -- which is the more useful
+//   shape to record. The finding handed up was "nothing in `fpga/rtl`
+//   (incl. `synth/` and the probes) consumes a world-vertex fan", from a
+//   search for `vtx_`-shaped inputs. A CONSUMER OF A WORLD-VERTEX STREAM
+//   EXISTS AND IS COMPOSED IN THIS FILE: `zhao_geom_group_seq`'s
+//   `v_valid_i`/`v_ready_o`/`v_x_i`/`v_y_i`/`v_z_i` (its :208-212), three
+//   `signed [31:0]` -- the same type and width as `zhao_forge_shadow`'s
+//   `vtx_{x,y,z}_o`. The search missed it because the port is spelled `v_`
+//   and not `vtx_`: CLAUDE.md section 9's law, READ THE STRUCTURE NOT THE
+//   CONVENTION, costing a search rather than a tool this time. So the honest
+//   statement is not "no consumer exists" -- it is that the consumer's BATCH
+//   owes things downstream that a shadow hull cannot pay, which is a much
+//   narrower and much more actionable claim. R75's conclusion stands and its
+//   reasoning is now load-bearing rather than incidental.
+//
+//   ONE REAL SEAM THAT PORT COMPARISON HIDES, stated so "it is drop-in" is
+//   never said about it: `v_*` is documented as "skinned vertices in,
+//   view-independent, LOCAL (REBASED) coords" and the arena's origin carries
+//   the rebase. `zhao_forge_shadow` emits ABSOLUTE world fx16 (its `cast_x_i`
+//   plus a unit-circle offset, and a terrain height for y). Same width, same
+//   type, DIFFERENT FRAME. Whatever composes this owes the rebase explicitly.
+//
+//   WITH THAT SAID, THE ARENA ROUTE IS NOT REACHABLE TODAY, for two reasons
+//   that are structural rather than arguable, and NEITHER WAS KNOWN WHEN R75
+//   WAS WRITTEN:
 //
 //     1. COMPOSING THE HULL AS A GEOMETRY BATCH WEDGES THE WHOLE FRONT END.
 //        `zhao_geom_vattr`'s `done_o` (its :490) is a six-term AND including
@@ -3005,6 +3030,40 @@
 //        flat opaque dark polygon with a depth bias under every creature,
 //        which is exactly the art defect CLAUDE.md's ground-contact law
 //        exists to refuse -- shipped, and counted as a gap closed.
+//
+//   AND THERE ARE TWO READINGS OF "THE ARENA ROUTE", WHICH IS WORTH SAYING
+//   BECAUSE ONLY ONE OF THEM HITS REASON 1. Reason 1 is an objection to
+//   route A, not to the ruling:
+//     A. THE BATCH ROUTE -- the hull becomes a meshlet in the existing front
+//        end (a token at the GEOM.ASSETFETCH fork, vertices muxed into
+//        GROUP_SEQ's `v_*`, a triangle stream muxed into GEOM.ASSEMBLE's).
+//        Maximum reuse, and it inherits GEOM.VATTR's `done_o` -- so it
+//        WEDGES, per reason 1 above. Four muxed seams and a deadlock.
+//     B. THE PRIVATE-ARENA ROUTE -- a SECOND, SMALL `zhao_vertex_arena`
+//        instance (16 deep against GEOM_DEPTH's 1089, which is what R75's
+//        parenthetical prices), filled from the SAME client A and the SAME
+//        `zhao_project_core`, walked by a small fan replay whose triangles
+//        are ARBITRATED into GEOM.CLIP's input beside GEOM.REPLAY's. This
+//        does NOT duplicate the ratified projection arithmetic -- which is
+//        the duplication R75 exists to forbid -- and it touches GEOM.VATTR
+//        not at all, because the hull carries its OWN attribute packet
+//        (invw24 from its own w; u/v unused; rgb and alpha AUTHORED, which is
+//        this block's whole design). Reason 1 does not apply to it.
+//        Route B is the recommendation. It still needs: the client-A
+//        widening below, an arbiter at GEOM.CLIP's door (and a material
+//        constant for `u_material_window`, which is an authored value and not
+//        an invention), the rebase named above -- and it is STILL GATED ON
+//        REASON 2, because an opaque shadow is the wrong picture however
+//        elegantly it arrives.
+//
+//   A DETAIL THE WIDENING ARITHMETIC NEEDS AND NOBODY HAS WRITTEN DOWN: with
+//   a THIRD owner on client A, the single top tag bit stops being enough.
+//   `zhao_part_project.sv:356` is `TAG_BIT = PAY_W - 1` and `:53`'s
+//   `geom_tag_collision_o` counts a geometry rider arriving with that bit
+//   set -- a ONE-BIT, TWO-OWNER law. Three owners make it a two-bit owner
+//   field, so the payload goes to 17 AT LEAST and that counter's meaning
+//   changes with it. Sizing the widening as "16 -> 17" without re-authoring
+//   the tag law is how the collision counter silently stops meaning anything.
 //
 //   TWO SMALLER CORRECTIONS FROM THE SAME RE-SEARCH, both about what the
 //   forge files ARE, because each one would send a reader to the wrong block:
