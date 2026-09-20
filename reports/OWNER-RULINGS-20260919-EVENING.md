@@ -2378,3 +2378,123 @@ being the cleanest at 1. `zhao_texture_island_v3_top` (23),
 **These are DOCKET CANDIDATES, not findings.** Every one of those files may have
 its own dialect exactly as the core did, and R166 is four hours old. Quoting 97
 as a defect count would be the same error at tree scale.
+
+## R168 — A1's ADAPTER CAN BE WIRED TO THE WRONG HOST AND EVERY GATE PASSES
+
+**2026-09-20, W1, and this is the most serious finding of the day because the
+code it is about is ALREADY MERGED.**
+
+`zhao_field_warp_adapter`'s host-side ports **match the OLD host name-for-name
+and the NEW host in MEANING.** Wire it to the old host and it elaborates, runs,
+and passes every gate — while reading **window positions as ordinals**.
+
+> *"Nothing in either port list distinguishes correct from wrong."*
+
+That is the ordinal-vs-window distinction this campaign has been circling all
+day: `required_mask` is indexed by canonical output **ordinal**, `hdr_outreq` /
+`window_mask` by contiguous capture-**window** position, and `OUTPUT_MAP` is the
+translation between them. Two indexings with the same width and the same names.
+
+**Why no existing test can see it:** a CONTIGUOUS program makes ordinal and
+window position *identical*, so it is provably incapable of discriminating the
+two wirings — **and every other Warp test uses a contiguous program.** W1's
+SPARSE case (ordinal 5 living at R21, window lane 5 unwritten) is the only
+stimulus in the tree that separates them.
+
+This is `CLAUDE.md`'s **"a gate that cannot reach the state is not evidence about
+the state"**, in its purest form yet. The 392 byte-identical paired records that
+missed the metadata swap are the same shape: a real workload, honestly run,
+structurally unable to enter the state where the defect lives.
+
+**And it is worse than a blind checker, because the blindness is in the TYPE
+SYSTEM.** A port list is the one artefact everyone trusts to catch a mis-wiring;
+`PINMISSING` exists for exactly this. Here the names agree, the widths agree,
+elaboration agrees, and only the *semantics* differ.
+
+**W1's recommendation, which I am adopting as the requirement:** the adapter
+must consume **`resp_present_o`**. Today it decides on `resp_status_i == 0`
+alone. A status of zero cannot distinguish "this ordinal was not requested" from
+"this ordinal was requested and came back zero" — which is the same
+two-things-that-look-alike failure one level down.
+
+**Actions, and the first is not optional:**
+
+1. **The SPARSE case must become a committed, named test**, not a case inside
+   W1's bench. It is the only discriminator that exists and it must survive the
+   packet that wrote it.
+2. **Add `resp_present_o` to the adapter's host interface** and decide on it.
+3. **A1's adapter is already in the coordinator branch.** This is not a new-work
+   item; it is a repair to composed code, and it must land before the fit.
+
+## R169 — W1 REACHED R159 INDEPENDENTLY. THAT IS THREE
+
+W1, unprompted, on `completion_register.py`:
+
+> *"no structural tie-off scan -- its list is parsed from a hand-written comment
+> block. A tied-off composition would read CONNECTED and drop the total to 20."*
+
+C1 found this (R159), W1 found it independently, and I then answered it with the
+tie-off audit (R166/R167). **Three arrivals at the same defect from three
+directions in one day** is why it is a ruling and not a note — and it is the
+strongest possible argument that the rule (declare a tie-off in the commit that
+creates it) needs enforcing rather than merely writing down.
+
+## R170 — RECLASSIFICATION CANCELS EXACTLY, AND W1 CHECKED THE TOOL BEFORE SAYING SO
+
+GEOM.WARP is **BUILT**: `zhao_geom_warp.sv` and `zhao_field_warp_adapter.sv`,
+2,468 directed checks, plus a committed three-module bench joining
+`zhao_geom_warp` → `zhao_field_warp_adapter` → `zhao_field_host_v2` — **all three
+real** — at `IN_LANES=15 / OUT_ORDINALS=6`, Warp on client 2 of a `CLIENTS=3`
+host. 71 checks. `TRANSLATE` moved a vertex to (1111, 1778, 3333) on the real v3
+engine.
+
+**Register 21 → 21**, and the composition of that 21 changed: from
+9 tie-offs + 11 disconnected + **1 unbuilt** to 9 + **12** + **0**.
+
+W1 did not merely observe the total held — **it read the summing code and
+confirmed the two terms cancel by construction** before writing the number down.
+That is the difference between reporting a number and understanding it, and it
+is what stops "the register did not move" being read as "the packet did nothing".
+
+**It also refused the flattering move explicitly:** *"I did not tie its Field
+port off to fake it."* That is the sixth lane today to decline a composition that
+would have moved the register dishonestly.
+
+## R171 — OWNER DECISION: `DrawWarpedForm 0x0304`, AND APPEND IT AT THE END
+
+W1 did **not** touch `spec/commands.zidl`, correctly, and made the case instead:
+
+* **W04 mandates the command; W06 forbids every alternative by name; W09 makes
+  `DrawForm` disable Warp.**
+* **Structurally**, `cmd_draw_*` has no field for a program handle, four
+  parameters, a 3-word bound or an attribute resource.
+* `0x0304` re-verified free by reading the file.
+
+**Without it a composed GEOM.WARP sits permanently in its W09 bypass — present
+and unreachable**, which is a tie-off wearing an opcode's clothes.
+
+**Append it at the END.** Inserting beside `DrawForm` rewrites nine goldens, and
+a golden rewrite is a change nobody can review.
+
+### Three plan corrections, measured, and one deferral honestly renamed
+
+W1 re-measured the repair plan's prerequisites rather than inheriting them:
+
+* **P6** still `TABLES=2` — the plan said YES.
+* **P8** still absent — the doorbell still sends everything to `D_LOAD`, no
+  BIND/SEAL anywhere. The plan said YES.
+* **P1** is three core sites, **not** "plus generated tops".
+* **P5 is DEFERRED, NOT CLOSED.** The prepared bank is still one flat array;
+  what was added is a generation *stamp*, which **detects staleness but does not
+  isolate two eligible plans.** Renaming a deferral as a closure is how R159's
+  flattering direction gets into a plan instead of a register.
+
+**R103 is discharged on P9** — it claimed R91's fast path "does NOT exist
+anywhere in the tree", and W1 built and FIRED it: **slow slot 92 clocks, fast
+slot 60, delta exactly 32 = `REGS`**, bit-identical vertex. A discharged ruling
+with a measured delta is the right way to close one.
+
+**And it corrected a count that three files agreed on:** the reference check
+count is **102, not 95** — wrong in three places that agreed with each other
+**while none had run the binary.** Mutual agreement between documents is not
+evidence; it is usually just copying.
