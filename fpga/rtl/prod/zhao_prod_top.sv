@@ -794,6 +794,8 @@ module zhao_prod_top (
   logic [16-1:0] u09_t_v2_o;
   logic [16-1:0] u09_t_material_o;
   logic [32-1:0] u09_t_raster_o;
+  logic [32-1:0] u09_t_material_set_o;
+  logic [8-1:0] u09_t_quality_tier_o;
   logic [16-1:0] u09_t_src_id_o;
   logic [1-1:0] u09_t_last_o;
   logic [1-1:0] u09_m_done_o;
@@ -811,20 +813,24 @@ module zhao_prod_top (
       .m_triangle_count_i(u09_src[21 +: 8]),
       .m_material_id_i(u09_src[28 +: 16]),
       .m_raster_state_i(u09_src[35 +: 32]),
-      .m_src_id_i(u09_src[42 +: 16]),
+      .m_material_set_i(u09_src[42 +: 32]),
+      .m_quality_tier_i(u09_src[49 +: 8]),
+      .m_src_id_i(u09_src[56 +: 16]),
       .ix_req_o(u09_ix_req_o),
       .ix_index_o(u09_ix_index_o),
-      .ix_valid_i(u09_src[49 +: 1]),
-      .ix_a_i(u09_src[56 +: 8]),
-      .ix_b_i(u09_src[63 +: 8]),
-      .ix_c_i(u09_src[70 +: 8]),
+      .ix_valid_i(u09_src[63 +: 1]),
+      .ix_a_i(u09_src[70 +: 8]),
+      .ix_b_i(u09_src[77 +: 8]),
+      .ix_c_i(u09_src[84 +: 8]),
       .t_valid_o(u09_t_valid_o),
-      .t_ready_i(u09_src[77 +: 1]),
+      .t_ready_i(u09_src[91 +: 1]),
       .t_v0_o(u09_t_v0_o),
       .t_v1_o(u09_t_v1_o),
       .t_v2_o(u09_t_v2_o),
       .t_material_o(u09_t_material_o),
       .t_raster_o(u09_t_raster_o),
+      .t_material_set_o(u09_t_material_set_o),
+      .t_quality_tier_o(u09_t_quality_tier_o),
       .t_src_id_o(u09_t_src_id_o),
       .t_last_o(u09_t_last_o),
       .m_done_o(u09_m_done_o),
@@ -836,7 +842,7 @@ module zhao_prod_top (
   logic u09_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u09_fold_q <= 1'b0;
-    else u09_fold_q <= u09_fold_q ^ (((^u09_m_ready_o)) & u09_src[0]) ^ (((^u09_ix_req_o)) & u09_src[1]) ^ (((^u09_ix_index_o)) & u09_src[2]) ^ (((^u09_t_valid_o)) & u09_src[3]) ^ (((^u09_t_v0_o)) & u09_src[4]) ^ (((^u09_t_v1_o)) & u09_src[5]) ^ (((^u09_t_v2_o)) & u09_src[6]) ^ (((^u09_t_material_o)) & u09_src[7]) ^ (((^u09_t_raster_o)) & u09_src[8]) ^ (((^u09_t_src_id_o)) & u09_src[9]) ^ (((^u09_t_last_o)) & u09_src[10]) ^ (((^u09_m_done_o)) & u09_src[11]) ^ (((^u09_meshlets_o)) & u09_src[12]) ^ (((^u09_triangles_o)) & u09_src[13]) ^ (((^u09_refused_limits_o)) & u09_src[14]) ^ (((^u09_refused_index_o)) & u09_src[15]);
+    else u09_fold_q <= u09_fold_q ^ (((^u09_m_ready_o)) & u09_src[0]) ^ (((^u09_ix_req_o)) & u09_src[1]) ^ (((^u09_ix_index_o)) & u09_src[2]) ^ (((^u09_t_valid_o)) & u09_src[3]) ^ (((^u09_t_v0_o)) & u09_src[4]) ^ (((^u09_t_v1_o)) & u09_src[5]) ^ (((^u09_t_v2_o)) & u09_src[6]) ^ (((^u09_t_material_o)) & u09_src[7]) ^ (((^u09_t_raster_o)) & u09_src[8]) ^ (((^u09_t_material_set_o)) & u09_src[9]) ^ (((^u09_t_quality_tier_o)) & u09_src[10]) ^ (((^u09_t_src_id_o)) & u09_src[11]) ^ (((^u09_t_last_o)) & u09_src[12]) ^ (((^u09_m_done_o)) & u09_src[13]) ^ (((^u09_meshlets_o)) & u09_src[14]) ^ (((^u09_triangles_o)) & u09_src[15]) ^ (((^u09_refused_limits_o)) & u09_src[16]) ^ (((^u09_refused_index_o)) & u09_src[17]);
 
   // ---- zhao_geom_assetfetch ----
   logic [63:0] u10_lfsr_q;
@@ -1919,6 +1925,8 @@ module zhao_prod_top (
   logic [16-1:0] u25_o_src_id_o;
   logic [16-1:0] u25_o_material_o;
   logic [32-1:0] u25_o_raster_o;
+  logic [32-1:0] u25_o_material_set_o;
+  logic [8-1:0] u25_o_quality_tier_o;
   logic [32-1:0] u25_meshlets_o;
   logic [32-1:0] u25_groups_o;
   logic [32-1:0] u25_triangles_in_o;
@@ -1951,23 +1959,25 @@ module zhao_prod_top (
       .t_v2_i(u25_src[77 +: 16]),
       .t_material_i(u25_src[84 +: 16]),
       .t_raster_i(u25_src[91 +: 32]),
-      .t_src_id_i(u25_src[98 +: 16]),
-      .m_done_i(u25_src[105 +: 1]),
+      .t_material_set_i(u25_src[98 +: 32]),
+      .t_quality_tier_i(u25_src[105 +: 8]),
+      .t_src_id_i(u25_src[112 +: 16]),
+      .m_done_i(u25_src[119 +: 1]),
       .look_valid_o(u25_look_valid_o),
-      .look_ready_i(u25_src[112 +: 1]),
+      .look_ready_i(u25_src[126 +: 1]),
       .look_arena_o(u25_look_arena_o),
       .look_gen_o(u25_look_gen_o),
       .look_index_o(u25_look_index_o),
-      .rep_valid_i(u25_src[119 +: 1]),
-      .rep_hit_i(u25_src[126 +: 1]),
-      .rep_refuse_i(u25_src[133 +: 1]),
-      .rep_payload_i(u25_src[140 +: 106]),
-      .att_rep_valid_i(u25_src[147 +: 1]),
-      .att_invw_i(u25_src[154 +: 24]),
-      .att_rep_data_i(u25_src[161 +: 192]),
+      .rep_valid_i(u25_src[133 +: 1]),
+      .rep_hit_i(u25_src[140 +: 1]),
+      .rep_refuse_i(u25_src[147 +: 1]),
+      .rep_payload_i(u25_src[154 +: 106]),
+      .att_rep_valid_i(u25_src[161 +: 1]),
+      .att_invw_i(u25_src[168 +: 24]),
+      .att_rep_data_i(u25_src[175 +: 192]),
       .af_release_o(u25_af_release_o),
       .o_valid_o(u25_o_valid_o),
-      .o_ready_i(u25_src[168 +: 1]),
+      .o_ready_i(u25_src[182 +: 1]),
       .o_ax_o(u25_o_ax_o),
       .o_ay_o(u25_o_ay_o),
       .o_bx_o(u25_o_bx_o),
@@ -1985,6 +1995,8 @@ module zhao_prod_top (
       .o_src_id_o(u25_o_src_id_o),
       .o_material_o(u25_o_material_o),
       .o_raster_o(u25_o_raster_o),
+      .o_material_set_o(u25_o_material_set_o),
+      .o_quality_tier_o(u25_o_quality_tier_o),
       .meshlets_o(u25_meshlets_o),
       .groups_o(u25_groups_o),
       .triangles_in_o(u25_triangles_in_o),
@@ -1999,7 +2011,7 @@ module zhao_prod_top (
   logic u25_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u25_fold_q <= 1'b0;
-    else u25_fold_q <= u25_fold_q ^ (((^u25_mt_ready_o)) & u25_src[0]) ^ (((^u25_grp_ready_o)) & u25_src[1]) ^ (((^u25_rel_valid_o)) & u25_src[2]) ^ (((^u25_rel_arena_o)) & u25_src[3]) ^ (((^u25_t_ready_o)) & u25_src[4]) ^ (((^u25_look_valid_o)) & u25_src[5]) ^ (((^u25_look_arena_o)) & u25_src[6]) ^ (((^u25_look_gen_o)) & u25_src[7]) ^ (((^u25_look_index_o)) & u25_src[8]) ^ (((^u25_af_release_o)) & u25_src[9]) ^ (((^u25_o_valid_o)) & u25_src[10]) ^ (((^u25_o_ax_o)) & u25_src[11]) ^ (((^u25_o_ay_o)) & u25_src[12]) ^ (((^u25_o_bx_o)) & u25_src[13]) ^ (((^u25_o_by_o)) & u25_src[14]) ^ (((^u25_o_cx_o)) & u25_src[15]) ^ (((^u25_o_cy_o)) & u25_src[16]) ^ (((^u25_o_behind_o)) & u25_src[17]) ^ (((^u25_o_invw_a_o)) & u25_src[18]) ^ (((^u25_o_invw_b_o)) & u25_src[19]) ^ (((^u25_o_invw_c_o)) & u25_src[20]) ^ (((^u25_o_attr_a_o)) & u25_src[21]) ^ (((^u25_o_attr_b_o)) & u25_src[22]) ^ (((^u25_o_attr_c_o)) & u25_src[23]) ^ (((^u25_o_view_o)) & u25_src[24]) ^ (((^u25_o_src_id_o)) & u25_src[25]) ^ (((^u25_o_material_o)) & u25_src[26]) ^ (((^u25_o_raster_o)) & u25_src[27]) ^ (((^u25_meshlets_o)) & u25_src[28]) ^ (((^u25_groups_o)) & u25_src[29]) ^ (((^u25_triangles_in_o)) & u25_src[30]) ^ (((^u25_triangles_out_o)) & u25_src[31]) ^ (((^u25_refused_o)) & u25_src[32]) ^ (((^u25_missed_o)) & u25_src[33]) ^ (((^u25_att_skew_o)) & u25_src[34]) ^ (((^u25_view_bad_o)) & u25_src[35]) ^ (((^u25_poisoned_o)) & u25_src[36]) ^ (((^u25_triq_stall_o)) & u25_src[37]);
+    else u25_fold_q <= u25_fold_q ^ (((^u25_mt_ready_o)) & u25_src[0]) ^ (((^u25_grp_ready_o)) & u25_src[1]) ^ (((^u25_rel_valid_o)) & u25_src[2]) ^ (((^u25_rel_arena_o)) & u25_src[3]) ^ (((^u25_t_ready_o)) & u25_src[4]) ^ (((^u25_look_valid_o)) & u25_src[5]) ^ (((^u25_look_arena_o)) & u25_src[6]) ^ (((^u25_look_gen_o)) & u25_src[7]) ^ (((^u25_look_index_o)) & u25_src[8]) ^ (((^u25_af_release_o)) & u25_src[9]) ^ (((^u25_o_valid_o)) & u25_src[10]) ^ (((^u25_o_ax_o)) & u25_src[11]) ^ (((^u25_o_ay_o)) & u25_src[12]) ^ (((^u25_o_bx_o)) & u25_src[13]) ^ (((^u25_o_by_o)) & u25_src[14]) ^ (((^u25_o_cx_o)) & u25_src[15]) ^ (((^u25_o_cy_o)) & u25_src[16]) ^ (((^u25_o_behind_o)) & u25_src[17]) ^ (((^u25_o_invw_a_o)) & u25_src[18]) ^ (((^u25_o_invw_b_o)) & u25_src[19]) ^ (((^u25_o_invw_c_o)) & u25_src[20]) ^ (((^u25_o_attr_a_o)) & u25_src[21]) ^ (((^u25_o_attr_b_o)) & u25_src[22]) ^ (((^u25_o_attr_c_o)) & u25_src[23]) ^ (((^u25_o_view_o)) & u25_src[24]) ^ (((^u25_o_src_id_o)) & u25_src[25]) ^ (((^u25_o_material_o)) & u25_src[26]) ^ (((^u25_o_raster_o)) & u25_src[27]) ^ (((^u25_o_material_set_o)) & u25_src[28]) ^ (((^u25_o_quality_tier_o)) & u25_src[29]) ^ (((^u25_meshlets_o)) & u25_src[30]) ^ (((^u25_groups_o)) & u25_src[31]) ^ (((^u25_triangles_in_o)) & u25_src[32]) ^ (((^u25_triangles_out_o)) & u25_src[33]) ^ (((^u25_refused_o)) & u25_src[34]) ^ (((^u25_missed_o)) & u25_src[35]) ^ (((^u25_att_skew_o)) & u25_src[36]) ^ (((^u25_view_bad_o)) & u25_src[37]) ^ (((^u25_poisoned_o)) & u25_src[38]) ^ (((^u25_triq_stall_o)) & u25_src[39]);
 
   // ---- zhao_geom_setup ----
   logic [63:0] u26_lfsr_q;

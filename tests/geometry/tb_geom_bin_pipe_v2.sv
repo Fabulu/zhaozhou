@@ -183,6 +183,8 @@ module tb_geom_bin_pipe_v2 (
     output logic        [31:0] texture_plan_accepted_o,
     output logic        [31:0] texture_dispatch_accepted_o,
     output logic        [31:0] texture_combine_refused_o,
+    // Entry I49, 2026-09-20: TMU samples PUBLISHED into a fragment.
+    output logic        [31:0] texture_samples_o,
     output logic               fragment_error_o,
 
     output logic               coverage_hold_valid_o,
@@ -327,6 +329,7 @@ module tb_geom_bin_pipe_v2 (
       .texture_plan_accepted_o(texture_plan_accepted_o),
       .texture_dispatch_accepted_o(texture_dispatch_accepted_o),
       .texture_combine_refused_o(texture_combine_refused_o),
+      .texture_samples_o(texture_samples_o),
       .fragment_error_o(fragment_error_o),
       .coverage_hold_valid_o(coverage_hold_valid_o),
       .coverage_delivered_mask_o(coverage_delivered_mask_o),

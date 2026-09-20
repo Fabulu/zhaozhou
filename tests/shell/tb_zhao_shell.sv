@@ -875,6 +875,10 @@ module tb_zhao_shell (
       .m_triangle_count_i(meshfetch_mode_i ? mf_tc_r : asm_triangle_count_i),
       .m_material_id_i(meshfetch_mode_i ? mf_mat_r : 16'd1),
       .m_raster_state_i(32'd0),
+    // I49: this bench drives no draw, so it has no MATERIAL_SET and no
+    // semantic weight to carry. Tied at the BENCH, where a tie is stimulus.
+    .m_material_set_i(32'd0),
+    .m_quality_tier_i(8'd0),
       .m_src_id_i(render_src_id_i),
       .ix_req_o(asm_ix_req), .ix_index_o(asm_ix_index),
       // TREAD 9: valid follows the SOURCE. The bench responder is always
@@ -887,6 +891,9 @@ module tb_zhao_shell (
       .t_valid_o(asm_t_valid), .t_ready_i(1'b1),
       .t_v0_o(asm_v0), .t_v1_o(asm_v1), .t_v2_o(asm_v2),
       .t_material_o(asm_material), .t_raster_o(asm_raster),
+      // I49: the material set and the quality tier ride out of GEOM.ASSEMBLE
+      // for MATERIAL.RESOLVE's request. This bench has no draw and no resolve.
+      .t_material_set_o(), .t_quality_tier_o(),
       .t_src_id_o(asm_src), .t_last_o(asm_t_last), .m_done_o(),
       .meshlets_o(asm_meshlets), .triangles_o(dbg_asm_triangles_o),
       .refused_limits_o(asm_ref_lim), .refused_index_o(asm_ref_idx));

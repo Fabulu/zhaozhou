@@ -507,6 +507,21 @@ module zhao_shell_top_v2
   output logic [31:0] render_retired_words_o,
   output logic        render_overflow_o,
   output logic        render_fragment_error_o,
+  // ---- TEXTURE EVIDENCE, promoted 2026-09-20 (entry I49, texmat2) ---------
+  // Seven of these were left DANGLING at this instantiation and the eighth was
+  // sunk inside the tile pipe, so the composed console had no way whatever to
+  // ask whether the texture island had sampled anything. The samples counter
+  // is the one that answers it: TMU samples PUBLISHED into a fragment. The
+  // other seven say WHY a zero is a zero -- no fragment reached the island at
+  // all, versus fragments that reached it and were refused.
+  output logic [31:0] render_texture_fragments_o,
+  output logic [31:0] render_texture_cache_hits_o,
+  output logic [31:0] render_texture_cache_misses_o,
+  output logic [31:0] render_texture_palette_lookups_o,
+  output logic [31:0] render_texture_plan_accepted_o,
+  output logic [31:0] render_texture_dispatch_accepted_o,
+  output logic [31:0] render_texture_combine_refused_o,
+  output logic [31:0] render_texture_samples_o,
 
   // ---- POST.COMPOSITE's FRAMEBUFFER LEASE (core entries I15/I16, 2026-09-19)
   // POST.COMPOSITE.md: "an exclusive framebuffer read/write lease after resolve
@@ -1200,10 +1215,14 @@ module zhao_shell_top_v2
     .packet_c_drop_fire_o(), .tilestore_references_o(),
     .resolved_tiles_o(), .early_z_rejects_o(rp_ez_unused),
     .early_z_covered_o(), .fragment_covered_o(), .blended_fragments_o(),
-    .texture_fragments_o(), .texture_cache_hits_o(),
-    .texture_cache_misses_o(), .texture_palette_lookups_o(),
-    .texture_plan_accepted_o(), .texture_dispatch_accepted_o(),
-    .texture_combine_refused_o(),
+    .texture_fragments_o(render_texture_fragments_o),
+    .texture_cache_hits_o(render_texture_cache_hits_o),
+    .texture_cache_misses_o(render_texture_cache_misses_o),
+    .texture_palette_lookups_o(render_texture_palette_lookups_o),
+    .texture_plan_accepted_o(render_texture_plan_accepted_o),
+    .texture_dispatch_accepted_o(render_texture_dispatch_accepted_o),
+    .texture_combine_refused_o(render_texture_combine_refused_o),
+    .texture_samples_o(render_texture_samples_o),
     .fragment_error_o(render_fragment_error_o),
     .coverage_hold_valid_o(), .coverage_delivered_mask_o(),
     .start_delivered_mask_o(), .attribute_idle_o(),

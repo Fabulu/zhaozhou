@@ -183,6 +183,9 @@ module zhao_geom_bin_pipe_v2 #(
     output logic        [31:0] texture_plan_accepted_o,
     output logic        [31:0] texture_dispatch_accepted_o,
     output logic        [31:0] texture_combine_refused_o,
+    // Entry I49: TMU samples PUBLISHED into a fragment, straight through from
+    // the tile pipe. The one counter that answers 'did the island sample'.
+    output logic        [31:0] texture_samples_o,
     output logic               fragment_error_o,
 
     // Structural probes for the directed gate and committed mutants.
@@ -405,6 +408,7 @@ module zhao_geom_bin_pipe_v2 #(
       .texture_plan_accepted_o(texture_plan_accepted_o),
       .texture_dispatch_accepted_o(texture_dispatch_accepted_o),
       .texture_combine_refused_o(texture_combine_refused_o),
+      .texture_samples_o(texture_samples_o),
       .coverage_hold_valid_o(coverage_hold_valid_o),
       .coverage_delivered_mask_o(coverage_delivered_mask_o),
       .start_delivered_mask_o(start_delivered_mask_o),
