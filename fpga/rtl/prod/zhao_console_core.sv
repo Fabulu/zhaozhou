@@ -4379,6 +4379,20 @@ module zhao_console_core
   output logic [31:0] render_retired_words_o,
   output logic        render_overflow_o,
   output logic        render_fragment_error_o,
+  // ---- TEXTURE EVIDENCE (entry I49, 2026-09-20, texmat2) ------------------
+  // Promoted from inside the raster tile pipe, where seven of these dangled at
+  // the shell's instantiation and the eighth was sunk as an unused wire. The
+  // composed console could not previously answer the only question that
+  // matters at this seam: DID THE ISLAND SAMPLE. It can now, and the answer is
+  // measured rather than argued.
+  output logic [31:0] render_texture_fragments_o,
+  output logic [31:0] render_texture_cache_hits_o,
+  output logic [31:0] render_texture_cache_misses_o,
+  output logic [31:0] render_texture_palette_lookups_o,
+  output logic [31:0] render_texture_plan_accepted_o,
+  output logic [31:0] render_texture_dispatch_accepted_o,
+  output logic [31:0] render_texture_combine_refused_o,
+  output logic [31:0] render_texture_samples_o,
 
   // ==========================================================================
   // SURFACE. The pair below is composed and CLOSED ON ITSELF -- SURFACE.STAMP
@@ -9045,6 +9059,14 @@ module zhao_console_core
     .render_retired_words_o    (render_retired_words_o),
     .render_overflow_o         (render_overflow_o),
     .render_fragment_error_o   (render_fragment_error_o),
+    .render_texture_fragments_o        (render_texture_fragments_o),
+    .render_texture_cache_hits_o       (render_texture_cache_hits_o),
+    .render_texture_cache_misses_o     (render_texture_cache_misses_o),
+    .render_texture_palette_lookups_o  (render_texture_palette_lookups_o),
+    .render_texture_plan_accepted_o    (render_texture_plan_accepted_o),
+    .render_texture_dispatch_accepted_o(render_texture_dispatch_accepted_o),
+    .render_texture_combine_refused_o  (render_texture_combine_refused_o),
+    .render_texture_samples_o          (render_texture_samples_o),
     // ---- POST.COMPOSITE's lease (I15/I16) and POST.ECHO --------------------
     .post_frame_w_i            (post_frame_w_c),
     .post_frame_h_i            (post_frame_h_c),

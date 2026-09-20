@@ -186,6 +186,12 @@ module zhao_raster_tile_pipe_v2 #(
     output logic         [31:0] texture_plan_accepted_o,
     output logic         [31:0] texture_dispatch_accepted_o,
     output logic         [31:0] texture_combine_refused_o,
+    // R9 / entry I49: the TMU samples zhao_texture_v3own actually PUBLISHED into
+    // a fragment (its ev_texture_samples_o, gated on the commit's generation
+    // check). It was sunk here as unused_cnt_texture_samples while every level
+    // above it had no way to ask whether the island had sampled anything at
+    // all. A counter nobody wired is not evidence about the thing it watches.
+    output logic         [31:0] texture_samples_o,
 
     // Focused structural probes used by the committed Packet-D gate.
     output logic                coverage_hold_valid_o,
@@ -780,7 +786,6 @@ module zhao_raster_tile_pipe_v2 #(
   logic unused_err_aux_degenerate, unused_err_rcp_q;
   logic [31:0] unused_cnt_reorder_held, unused_cnt_live_peak;
   logic [31:0] unused_cnt_bilerp_jobs, unused_cnt_mosaic_samples;
-  logic [31:0] unused_cnt_texture_samples;
   logic [31:0] unused_cnt_aux_accepted, unused_cnt_combine_phases;
   logic [31:0] unused_cnt_rcp_completed, unused_cnt_persp_fragments;
   logic [31:0] unused_cnt_fragrob_id_errors;
@@ -889,7 +894,7 @@ module zhao_raster_tile_pipe_v2 #(
       .cnt_palette_lookups_o(texture_palette_lookups_o),
       .cnt_bilerp_jobs_o(unused_cnt_bilerp_jobs),
       .cnt_mosaic_samples_o(unused_cnt_mosaic_samples),
-      .cnt_texture_samples_o(unused_cnt_texture_samples),
+      .cnt_texture_samples_o(texture_samples_o),
       .cnt_aux_accepted_o(unused_cnt_aux_accepted),
       .cnt_combine_refused_o(texture_combine_refused_o),
       .cnt_combine_phases_o(unused_cnt_combine_phases),
@@ -1475,7 +1480,6 @@ module zhao_raster_tile_pipe_v2 #(
                   unused_err_fragrob_id_error, unused_err_aux_degenerate,
                   unused_err_rcp_q, unused_cnt_reorder_held, unused_cnt_live_peak,
                   unused_cnt_bilerp_jobs, unused_cnt_mosaic_samples,
-                  unused_cnt_texture_samples,
                   unused_cnt_aux_accepted, unused_cnt_combine_phases,
                   unused_cnt_rcp_completed, unused_cnt_persp_fragments,
                   unused_cnt_fragrob_id_errors, unused_shadow_present,

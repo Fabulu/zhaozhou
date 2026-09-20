@@ -1114,6 +1114,18 @@ module tb_zhao_console_core_smoke
   logic [31:0] render_retired_words_o;
   logic        render_overflow_o;
   logic        render_fragment_error_o;
+  // ---- TEXTURE EVIDENCE (entry I49). The composed console's answer to 'did
+  // the island sample'. Eight counters that were dangling or sunk until
+  // 2026-09-20; render_texture_samples_o is the one that says a texel
+  // reached a fragment, and the other seven say why a zero is a zero.
+  logic [31:0] render_texture_fragments_o;
+  logic [31:0] render_texture_cache_hits_o;
+  logic [31:0] render_texture_cache_misses_o;
+  logic [31:0] render_texture_palette_lookups_o;
+  logic [31:0] render_texture_plan_accepted_o;
+  logic [31:0] render_texture_dispatch_accepted_o;
+  logic [31:0] render_texture_combine_refused_o;
+  logic [31:0] render_texture_samples_o;
   // ---- PACKET P-SURFACE, 2026-09-19 -------------------------------------
   // The three ends of the composed SURFACE pair that have no owner in the
   // tree (DUT entries I30, I31, I32), plus its evidence. The request, page
@@ -1835,7 +1847,7 @@ module tb_zhao_console_core_smoke
   // A write, or a read anywhere else, is something this bench has no bytes
   // for, and serving zeros would be inventing them.
   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
-  localparam int unsigned PKT_MAX_C     = 768;   // records + header + CRC; o below is the arithmetic (twelve records, SetView 112 B since R63)
+  localparam int unsigned PKT_MAX_C     = 768;   // records + header + CRC; o below is the arithmetic (twelve records, SetView 112 B since R63)
   // The token counts the packet carries (R18/R33): the CONTRACT's ceiling per
   // view and class, and view 1's SetView REQUEST -- geometry ABOVE its ceiling
   // (so it is clamped, and counted) and fragment BELOW it (so it lowers the
@@ -2455,7 +2467,7 @@ module tb_zhao_console_core_smoke
     end
   end
 
-  // (The bench used to seed the store itself here, from eset_released_q.
+  // (The bench used to seed the store itself here, from eset_released_q.
   //  It does not any more: the seed is SetPopulation.active_count, and it
   //  reaches the store through CMD.DECODER's verdict, CMD.EXEC's commit and
   //  u_part_pop. That is the whole point of R41 -- the value now traverses
@@ -5429,6 +5441,20 @@ module tb_zhao_console_core_smoke
     if (geom_attrpack_planes_o != 3 * geom_attrpack_triangles_o)
       $fatal(1, "SMOKE: GEOM.ATTRPACK packed %0d plane(s) for %0d triangle(s) and three lanes per triangle is the contract -- a lane stopped asking and its plane is the PREVIOUS triangle's",
              geom_attrpack_planes_o, geom_attrpack_triangles_o);
+    // ---- TEXTURE EVIDENCE (entry I49, 2026-09-20) -------------------------
+    // MEASURED, NOT READ OFF THE SOURCE. Until this commit the composed
+    // console exported NO texture counter at all: seven dangled at the shell's
+    // instantiation of the bin pipe and the eighth was sunk inside the raster
+    // tile pipe as an unused wire. So "the island samples nothing" was a
+    // reading of the RTL, never a measurement. It is a measurement now, and
+    // the seven beside it are what stops a zero from being ambiguous: no
+    // fragment reached the island at all, versus fragments that reached it
+    // and were refused.
+    $display("SMOKE: texture  fragments=%0d samples=%0d cache[hit/miss]=[%0d %0d] palette_lookups=%0d plan_accepted=%0d dispatch_accepted=%0d combine_refused=%0d",
+             render_texture_fragments_o, render_texture_samples_o,
+             render_texture_cache_hits_o, render_texture_cache_misses_o,
+             render_texture_palette_lookups_o, render_texture_plan_accepted_o,
+             render_texture_dispatch_accepted_o, render_texture_combine_refused_o);
     if (geom_attrpack_triangles_o == 0)
       $fatal(1, "SMOKE: GEOM.ATTRPACK never saw a triangle, so every plane the shell read was its reset value");
 
