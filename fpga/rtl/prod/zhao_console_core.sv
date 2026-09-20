@@ -1496,6 +1496,179 @@
 //          bullet makes the contents of that store undefined. Building a
 //          correct store for an invented value is the worse half of the two.
 //
+//        * RE-MEASURED 2026-09-20 (postmeas). WHAT FOLLOWS IS A MEASUREMENT
+//          I STAND BY AND A CONCLUSION I WITHDREW; both are kept, because the
+//          withdrawal is the more useful half and deleting it would leave the
+//          next reader free to make the same inference from the same true
+//          facts. THE MEASUREMENT: the spec defines ONE tag channel. THE
+//          CONCLUSION I DREW AND RETRACTED: "so R37 covers only one of the
+//          three input planes and cannot unblock this composition." THAT IS
+//          WRONG -- see the retraction in the NEXT bullet. R37's proposal
+//          covers ALL THREE. (This cross-reference said "two bullets down"
+//          until it was counted. A pointer nobody checks is how a correction
+//          stops being reachable, which is this entry's own subject.)
+//
+//          `spec/stars_and_flares.md` 1 is marked "(frozen)" and defines
+//          EXACTLY ONE channel of `tag = (channel << 6) | strength`:
+//          `GLOW = 0b01`. Measured across all of `spec/`, with a positive
+//          control so the null is evidence rather than a blind sweep --
+//          "GLOW = 0b01" / "glow-tag" returns SIX hits, so the sweep can see
+//          its subject -- and then:
+//            `0b00`, `0b10`, `0b11`          ZERO hits anywhere in spec/
+//            "refraction", "heat haze"       ZERO hits anywhere in spec/
+//            "shockwave"                     ONE hit, creature_rules.md:152,
+//                                            a gameplay effect, not a channel
+//          So `f_disp_x_i`/`f_disp_y_i` (refraction/shockwave/heat-haze) and
+//          `f_ink_i` (the creature outline) HAVE NO TAG CHANNEL IN THE SPEC.
+//          That part is measured and it stands.
+//
+//        * RETRACTED IN THE SAME SESSION THAT WROTE IT, 2026-09-20 (postmeas),
+//          AND THE DIRECTION OF MY ERROR IS WHY IT IS WRITTEN OUT IN FULL.
+//          From the measurement above I concluded: "displacement and ink have
+//          no source, so R37 cannot unblock this composition, and allocating
+//          the channels is a SECOND and NEW owner decision." **THAT IS FALSE.
+//          R37's proposal already decides all three planes, explicitly.**
+//          `design/contracts/POST.GATHER.md`, the R37 section, decision 3:
+//
+//            "Displacement and ink are NOT invented. Channels `0b10` and
+//             `0b11` are unallocated in the spec, so a fragment carrying one
+//             contributes nothing and is COUNTED (`reserved_channel`). Under
+//             this law `c_disp_x_o`, `c_disp_y_o` and `c_ink_o` are ZERO -- a
+//             statement about what v1 does, not an omission. Ink arrives as a
+//             look value on `SetPost` instead (R36), not from a tag."
+//
+//          `zref::post::gather` implements exactly that: `kChannelNone = 0`,
+//          `kChannelGlow = 1`, `kChannelReserved2 = 2`, `kChannelReserved3 = 3`,
+//          and `tag_to_fragment()` sets `reserved_channel = true` for any
+//          allocated-but-unknown channel so that "the day refraction is
+//          specified, the counter says whether anything was already drawing
+//          it." SO THERE IS NO SECOND OWNER DECISION. There is one, R37, and
+//          ratifying it defines the adapter completely.
+//
+//          HOW I GOT IT WRONG, because the mechanism is the reusable part: I
+//          read the contract's R37 section through a `grep -B4 -A12` on the
+//          string "R37", which printed the heading and the coefficient table
+//          and then jumped to the directed tests -- **skipping the three
+//          numbered decisions in between, one of which is the answer.** I then
+//          measured `spec/` carefully, with a positive control, and reported a
+//          conclusion about a file I had not opened at the point I drew it.
+//          That is TERRCOMP's diagnosed shared cause verbatim, one day later,
+//          in a packet that had read TERRCOMP's diagnosis.
+//
+//          AND NOTE WHICH WAY IT FAILED. `CLAUDE.md`'s law is that a broken
+//          instrument lies in the direction that makes the answer look better;
+//          this lied in the direction that made the GAP look bigger and MY
+//          FINDING look more important -- a new owner decision nobody had
+//          found. A context window is not audited for flattering ITSELF, and
+//          this one was heading for a run report as a headline.
+//
+//          WHAT SURVIVES, and it is not nothing: the channel census is right,
+//          and it is the EVIDENCE FOR decision 3 rather than a counter to it.
+//          If the owner ratifies R37, `c_disp_*` and `c_ink_o` ship as declared
+//          zeros -- which whoever composes this block must declare in the
+//          INCOMPLETE section as a RULED v1 scope, not leave as an undeclared
+//          tie-off the register cannot see (R159).
+//
+//          AND BEWARE THE INK NAME COLLISION, which is how this gets misread
+//          as already served: `spec/commands.zidl:777` DOES define an `ink`
+//          -- "rgb565, the exterior-ink colour, stage 9" -- and it is ALREADY
+//          COMPOSED, as `post_look_ink_rgb_w` on `u_post_composite.ink_rgb_i`.
+//          That is a PER-FRAME CONSTANT COLOUR from SetPost. This block's
+//          `f_ink_i` is a PER-FRAGMENT MASK BIT. Same word, different
+//          quantity, and the composed one is the one a grep finds first.
+//
+//        * WHAT R37 IS ACTUALLY WAITING ON IS THE OWNER'S EYE, AND THE THING
+//          TO LOOK AT IS RENDERED AND COMMITTED. Measured rather than assumed,
+//          because "the sheet was never made" and "the sheet is made and
+//          unjudged" are different asks and only one of them is a packet's:
+//            reports/post-gather-law/gather_law_contact.png   PRESENT
+//            tools/post/gather_law_render.cpp                 PRESENT
+//            tools/post/gather_law_sheet.py                   PRESENT
+//            zref::post::gather (kGlowKnee=24, kGlowSlope=0x1C,
+//                kGlowTint, kGlowMaster), zref_post.hpp        PRESENT
+//          So R37 owes NO further packet work on the glow third. It owes a
+//          look. `reports/OWNER-RULINGS-20260919-EVENING.md:188` already says
+//          the two genuinely owed decisions are these two contact sheets.
+//
+//        * R65 IS NOT LOAD-BEARING HERE, said explicitly because POST.GATHER
+//          keeps being listed beside it. Measured: `R65` appears ZERO times in
+//          `design/contracts/POST.GATHER.md` and ZERO times in
+//          `fpga/rtl/compositor/zhao_post_gather.sv`. R65 is
+//          `seam_dig_contact.png` and it gates TERRAIN.BAKE's
+//          `sheet_texel_for_vertex`. The two are both unjudged contact sheets
+//          and nothing else; do not inherit R65 as a gather blocker.
+//
+//        * THE PLANE STORE HAS A PRICE AND NOBODY HAS PUT IT IN FRONT OF THE
+//          OWNER, which is the same omission this entry records for the HUD
+//          store one bullet up -- a TECHNOLOGY named instead of a NUMBER
+//          produced. `design/contracts/POST.GATHER.md` costs it in its own
+//          "The count" section: 128 x 60 = 7,680 cells, 31,680 bytes, "at the
+//          natural 256 x 40 M10K shape that is THIRTY M10Ks". That is
+//          30/553 = 5.4% of the device, against the HUD store's 153/553 =
+//          27.7%. The corrected Duo geometry (6,144 cells, two 64 x 48 views;
+//          reports/DUO-QUARTER-PLANE-GEOMETRY-20260918.md) makes it smaller
+//          still. The owner has ruled in exactly this currency --
+//          reports/OWNER-RULING-M10K-CEILINGS-20260918.md waves 19 M10K
+//          through as "3.4% of a 553-M10K device". SO MEMORY IS NOT THE GATE
+//          HERE; the undefined contents are. Recorded so the next lane stops
+//          costing the store and starts costing the channels.
+//
+//        * A FOURTH GAP THE ENTRY HAS NEVER NAMED: THE FLUSH STREAM CARRIES NO
+//          ADDRESS. `c_index_o` is FOUR BITS, 0..15, and its own comment says
+//          "within the tile". `u_post_composite` reads a plane by
+//          {`gd_view_o`, `gd_cx_o`, `gd_cy_o`} -- absolute, per view.
+//          `zhao_post_gather` has NO tile-x, NO tile-y and NO view port at
+//          all (grep of its port list for tile/cx/cy/view returns only
+//          `tile_start_i`/`tile_flush_i`, which are pulses). And
+//          `design/contracts/POST.GATHER.md` does not name the mechanism
+//          either: its whole statement of this seam is one sentence, "Writes
+//          out for POST.COMPOSITE" -- and this one WAS checked against the
+//          whole file after the retraction above, not through a grep window.
+//          So the store must be told the tile ORIGIN
+//          by somebody, and the cheapest correct source is the one this entry
+//          already identified for the other half -- the shell's absolute
+//          `fb_x_o`/`fb_y_o`, latched at `tile_start_i`, with
+//          cell = {tile_y/4 + c_index_o[3:2], tile_x/4 + c_index_o[1:0]}.
+//          That is a port on the STORE, not on this block, so it costs
+//          nothing already built -- but it is an unstated requirement today
+//          and it is INDEPENDENT of R37. The resolutions do agree, which was
+//          checked before it was reported: composite drives `x_f_q[XW-1:2]`,
+//          a divide by four, and TILE=16 over CELLS=4 is a 4x4-pixel cell.
+//
+//        * AND THE LEDGER CORROBORATES THE ABSENT STORE FROM A SECOND,
+//          INDEPENDENT DIRECTION -- the same instrument that works for
+//          GEOM.PARAMBUF below. `design/blocks.yml`'s POST.GATHER row declares
+//          ONE counter, `post_gather_vram_bytes_by_client`. That string is in
+//          NO `.sv` file in the repository; the RTL exports `fragments_o`,
+//          `glow_saturations_o`, `disp_clamps_o` and `cells_flushed_o`
+//          instead. A VRAM-bytes-by-client counter cannot belong to a block
+//          whose own contract says it "reads no external memory" -- it
+//          describes the PLANE STORE, and the ledger has been carrying a
+//          counter for the unbuilt block on the built block's row.
+//          BE PRECISE ABOUT WHAT IS NEW HERE, because the raw mismatch is not.
+//          `tools/design/check_counters.py` ALREADY PRINTS this row
+//          ("post_gather_vram_bytes_by_client no ..._o and no mapping") and it
+//          is ONE OF 119 SUCH ROWS ACROSS 43 BLOCKS -- counted, after I first
+//          wrote "roughly fifteen" here from an eyeball of the tail and was
+//          wrong by eight-fold. Its own last line says "It REPORTS; it does
+//          not gate." So the mismatch is known, ungated, and COMMON.
+//          What is new is the READING: a VRAM-bytes-BY-CLIENT counter cannot
+//          belong to a block whose contract says it reads no external memory,
+//          so this row is not sloppiness -- it NAMES THE MISSING BLOCK. A
+//          third list disagrees with both: the contract asks for five counters
+//          (`glow_saturations`, `displacement_clamps`, `glow_cells_lit`,
+//          `ink_cells_set`, `unknown_tags`), the RTL exports four, the ledger
+//          declares one, and no two of the three sets match.
+//          (The contract's three `zref::post::*` citations were checked for
+//          the phantom-citation shape its own text records -- `glow_pack565`,
+//          `glow_accumulate` and `disp_to_pixels` ALL EXIST. Clean.)
+//          The same row also declares `inputs: [dispatch]` and
+//          `upstream: [CMD.SCHEDULER, RASTER.RESOLVE]`, while
+//          `zhao_post_gather.sv` contains the strings cmd/dispatch/sched
+//          ZERO times. That is the LEDGER ASSERTS AN EDGE NEITHER SIDE
+//          REALISES AT PORT LEVEL shape, recorded for PART.LADDER in the I24
+//          group -- and an edge is not a field mapping.
+//
 //
 //      REFUSED AGAIN 2026-09-19 BY THE POST PACKET, which closed I15 and I16
 //      beside it, and the three remaining halves each need a DECISION rather
@@ -1796,6 +1969,56 @@
 //          arms plus I14's viewport rect), the output side needs a RULING or a
 //          consumer somebody else composes. Whichever lands first, the other is
 //          still required -- this entry does not close on either alone.
+//
+//          RE-VERIFIED A THIRD TIME 2026-09-20 (postmeas), AND THE OUTPUT
+//          BLOCKER HOLDS -- with the instrument checked before its null was
+//          quoted, which post3b's own search did not state. Enumerated in this
+//          file: 88 instantiation sites, 87 distinct modules -- and that 88
+//          agrees exactly with the figure R166 quotes for the tie-off audit's
+//          subject ("it could see 18 of 88 instantiations"), which is a second
+//          instrument arriving at the same census. `zhao_terrain_lod`
+//          NOT among them; `zhao_geom_lod` NOT (it is instantiated only by
+//          `zhao_geom_lodstate.sv:348`, which is itself not composed, and by
+//          the generated pricing top); `zhao_geom_lodstate` NOT;
+//          `zhao_part_ladder` YES. And the port search that found exactly one
+//          candidate was given a POSITIVE CONTROL: the pattern sees 283 input
+//          ports on this module, and of those exactly ONE matches
+//          lod/gov/thresh/scale/deg/px_err/starv -- `part_prj_gov_floor_i`.
+//          One match out of 283 visible is a measurement; one match out of an
+//          unknown number would have been a guess.
+//
+//          IT IS NOT A CIRCULAR REFUSAL, checked because it looks like one and
+//          a false deadlock is the kind of thing a campaign breaks by mistake.
+//          TERRAIN.LOD does cite this block (`cam0/1_scale_i`), so "each
+//          refuses because of the other" is the available reading -- but
+//          TERRCOMP measured FIVE further absences on TERRAIN.LOD that have
+//          nothing to do with the governor: `sp_cx_i`/`sp_cz_i` have no
+//          producer, `sp_src_id_i` is dropped at the join because
+//          `zhao_terrain_devstore` contains "src_id" zero times, the four
+//          `edge_*` neighbour levels have ownership REFUSED IN WRITING in
+//          MEASURE.GOVERNOR.md, `zhao_terrain_devstore` is uncomposed with no
+//          `design/blocks.yml` row at 185 M10K, and TERRAIN.PROJECT is absent.
+//          So composing the governor would NOT release TERRAIN.LOD. Breaking
+//          the cycle at this end buys nothing, and the pair must not be sold
+//          as a two-module close.
+//
+//          AND ONE INHERITED BLOCKER IS SPENT, AGAINST THIS BLOCK'S FAVOUR --
+//          recorded because a refusal that keeps a dead reason is how a live
+//          one stops being believed. TERRCOMP's list for TERRAIN.LOD item 3
+//          says "R83 rules it currently WRONG: ... the governor's port is
+//          [15:0] Q8.8 capping at 255.996, so it saturates below 90 deg hfov
+//          and PEGS THE LOD LADDER AT ITS FINEST RUNG". THAT IS NOT TRUE IN
+//          THIS TREE. `zhao_measure_governor.sv`'s `PROJW = 20` (Q12.8) and
+//          `zhao_view_projq88.sv`'s `PROJW = 20` are R98's two ports and they
+//          agree; `proj0_i`/`proj1_i` are `[PROJW-1:0]`. TERRCOMP self-
+//          corrected this in its own ADDENDUM 2, but the correction is ~270
+//          lines BELOW the claim in `FINDINGS-terrcomp.md` and a reader who
+//          greps for `zhao_terrain_lod` lands in 2.4 and never sees it. Same
+//          access-pattern failure as the `prod_fit_sources.txt` header and as
+//          the GEOM.PARAMBUF counter sentence corrected below -- three
+//          instances, one mechanism: THE CORRECTION IS NOT WHERE THE GREP
+//          LANDS. The governor's remaining blockers are the ones listed above
+//          and this is not one of them.
 //
 //      DEBUG.TRACE IS NO LONGER REFUSED. It is COMPOSED at section 7b-ii as
 //      of 2026-09-19, and the refusal that stood here was WRONG rather than
@@ -4146,12 +4369,37 @@
 //   over `ARENA_CHUNKS = 65536`. An 8-bit pointer cannot name a 64 Ki-chunk
 //   arena. `zhao_geom_binner_v2` has no memory port at all.
 //
+//   RE-MEASURED 2026-09-20 (postmeas), per R165 -- an inherited blocker is a
+//   claim about a moment. THE REFUSAL STANDS AND GOT STRONGER AGAIN, which is
+//   now twice in a row for this entry. A sixth read-only geometry client the
+//   list above does not name: `zhao_geom_loomfeed.sv:457`,
+//   `assign hps_req_o.write = 1'b0;`. Six clients, all hard-coded read-only.
+//   AND THE SWEEP WAS GIVEN A POSITIVE CONTROL BEFORE ITS ZERO WAS QUOTED,
+//   because a grep that finds no writer and a grep that finds nothing look
+//   identical: the same pattern returns the FIVE writers this entry names
+//   (frameblit:391, mem_upload:394, raster_fbwrite:218,
+//   terrain_pageloader:381, terrain_writeback:583) and no sixth. The only
+//   other `write = 1'b1` in the tree is `zhao_sdram_ctrl.sv:188`'s
+//   `cmd_write`, which is the controller's own command encoding and not a
+//   guard request -- so the count of five is exact, and none is geometry.
+//
 //   THE LEDGER CORROBORATES THE ABSENCE FROM A SECOND, INDEPENDENT DIRECTION,
 //   which is worth more than the port search repeated. `design/blocks.yml`
 //   declares four counters for this block -- `parambuf_records_written`,
 //   `parambuf_chunks_allocated`, `parambuf_stale_handles`,
 //   `parambuf_overflow_frames` -- and all four strings appear in that file and
-//   in NO `.sv` FILE IN THE REPOSITORY. The RTL exports `pv_illegal_count_o`,
+//   in NO `.sv` FILE IN THE REPOSITORY **EXCEPT THE FOUR LINES DIRECTLY ABOVE,
+//   WHICH ARE THIS SENTENCE**. Writing the claim down falsified the grep that
+//   checks it: `grep -r parambuf_records_written --include=*.sv fpga/` now
+//   returns ONE HIT, and that hit is this comment. Excluding it, all four are
+//   still at zero -- re-measured today, and the substance is intact. The
+//   wording is corrected in place because this is the shape TERRCOMP
+//   documented for `prod_fit_sources.txt` and measured failing 4 times out of
+//   4: a true warning at the top of a file, and a grep hit further down that
+//   contradicts it, with nobody scrolling up. A self-falsifying claim is worse
+//   than a stale one, because the reader's own instrument appears to refute
+//   the entry and the natural conclusion is that the whole entry has rotted.
+//   The RTL exports `pv_illegal_count_o`,
 //   `td_illegal_count_o`, `ck_stale_count_o` and `ck_illegal_count_o` instead.
 //   A counter named *records_written* that no RTL drives is the ledger
 //   describing a writer nobody built, and it agrees with the port search
