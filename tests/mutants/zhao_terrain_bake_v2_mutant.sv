@@ -126,7 +126,13 @@
 // cosmetic diff. The re-lift script REFUSES if production no longer carries the
 // line being mutated, which is the check that would have mattered.
 //
-// RULING R93 IS DISCHARGED, 2026-09-20 (terrain8): IT HAS A DRIVER.
+// PROVENANCE, 2026-09-20 (terrain8, second commit): production's header gained
+// items 1b-1d -- the layer-D read absence -- in the same commit as this line.
+// THE BODY DID NOT MOVE. This line exists so mutant_copy_drift.py's provenance
+// test (it compares commit dates and cannot see that a body is already current)
+// clears honestly rather than by a cosmetic diff, exactly as the RE-LIFT note
+// above did for the same cause on the same day.
+//// RULING R93 IS DISCHARGED, 2026-09-20 (terrain8): IT HAS A DRIVER.
 //   tests/terrain/terrain_bake_v2_mutant_control.cpp
 //   ctest `terrain_bake_v2_mutant_control`    -- passes when this copy FIRES
 //   ctest `terrain_bake_v2_mutant_negative`   -- the SAME driver against
