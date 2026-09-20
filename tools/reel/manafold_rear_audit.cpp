@@ -170,11 +170,183 @@ int ring_of_station(int32_t s) {
                           u02::kLoopTotalMm);
 }
 
+// ---- PASS 20 (Owner Direction 21 item 1, as corrected): THE SKIN'S STRAIN --
+//
+// Owner, 2026-09-20: "the rear doesn't leave the body, but it RIPS A BIG PIECE
+// OUT and it STRETCHES TOO MUCH, which leads me to conclude there's too much
+// motion in the back nodule."
+//
+// ⚠ EVERY METRIC ABOVE THIS LINE IS BLIND TO THAT, AND STRUCTURALLY SO. rel,
+// axis and sock are bone ROTATIONS; bend, end/last/c and the whole motion
+// summary are built from `cen[]`, a ring's vertices AVERAGED INTO ONE CENTROID
+// before anything is measured. A ring dragged into an ellipse has the same
+// centroid. Two rings pulled apart have the same centroid each. So the one
+// quantity the owner is describing -- the skin being stretched -- is cancelled
+// by the averaging step, on purpose, three lines before any ceiling sees it.
+// That is why pass 19 shipped 128/128 green with this visible in Inspect: no
+// gate in the matrix measured a posed SURFACE at all. mspan measures station
+// bookkeeping, mprobe clearance and burial, mmeshcheck the BIND mesh, mjointpub
+// a 20 mm End floor (which asks for MORE motion), msmooth effect identities.
+//
+// Strain is the thing itself. Per posed sample, for every (ring, segment) of
+// the loop skin, against the same edge in BIND space:
+//   rail  the longitudinal edge, ring i segment k -> ring i+1 segment k. This
+//         is what a long rigid run swinging on the socket stretches.
+//   hoop  the circumferential edge, segment k -> k+1 inside one ring. This is
+//         what an ellipsed ring shows.
+// The front window's worst rail is printed beside the rear's as the LIKE-FOR-
+// LIKE reference (the authored kRadial loop stretch lengthens the whole chain
+// by a few per cent and is not a rear fault), exactly as bend_deg already does.
+constexpr int kStrainSegments = u02::kLoopSegments;
+constexpr int kRestSlot = 7;  // the still/rest form diagnostic
+
+struct RingSeg {
+  int ring = -1;
+  int seg = -1;
+};
+
+// (bind x, y, z) -> (ring, segment). Segment order is derived from the bind
+// cross-section ANGLE about the tube centre, never from meshlet emission order,
+// so a duplicated seam vertex and a re-ordered meshlet both land in the same
+// slot. Built once from the compiled type.
+std::map<std::array<int32_t, 3>, RingSeg> seg_index_map(
+    const zc::CreatureType& T,
+    std::vector<std::array<V3, kStrainSegments>>& bind_pos,
+    std::vector<int>& bind_have) {
+  const auto rmap = ring_map();
+  // ring -> the distinct bind cross-section points found on it
+  std::vector<std::vector<std::array<int32_t, 3>>> per_ring(u02::kLoopRings);
+  for (const zc::Meshlet& m : T.mesh) {
+    if (!is_loop_meshlet(m)) continue;
+    for (const zc::SkinVertex& v : m.verts) {
+      const auto it = rmap.find(v.y);
+      if (it == rmap.end()) continue;
+      const std::array<int32_t, 3> key{v.x, v.y, v.z};
+      auto& bucket = per_ring[it->second];
+      if (std::find(bucket.begin(), bucket.end(), key) == bucket.end())
+        bucket.push_back(key);
+    }
+  }
+  std::map<std::array<int32_t, 3>, RingSeg> out;
+  bind_pos.assign(u02::kLoopRings, {});
+  bind_have.assign(u02::kLoopRings, 0);
+  const double cx = static_cast<double>(u02::kLoopTubeXMm);
+  for (int r = 0; r < u02::kLoopRings; ++r) {
+    auto& bucket = per_ring[r];
+    if (bucket.empty()) continue;
+    std::sort(bucket.begin(), bucket.end(),
+              [&](const std::array<int32_t, 3>& a,
+                  const std::array<int32_t, 3>& b) {
+                const double ax = a[0] * kFx * 1000.0 - cx;
+                const double az = a[2] * kFx * 1000.0;
+                const double bx = b[0] * kFx * 1000.0 - cx;
+                const double bz = b[2] * kFx * 1000.0;
+                return std::atan2(az, ax) < std::atan2(bz, bx);
+              });
+    const int n = static_cast<int>(bucket.size());
+    if (n != kStrainSegments) continue;  // not a full ring: left out of both windows
+    for (int k = 0; k < n; ++k) {
+      out[bucket[k]] = RingSeg{r, k};
+      bind_pos[r][k] = V3{bucket[k][0] * kFx * 1000.0,
+                          bucket[k][1] * kFx * 1000.0,
+                          bucket[k][2] * kFx * 1000.0};
+    }
+    bind_have[r] = 1;
+  }
+  return out;
+}
+
+// ⚠ THE REFERENCE LENGTH IS THE REST POSE, NOT THE BIND POSE, and the first
+// version of this instrument got that wrong in a way that read as evidence.
+// Against BIND, the FRONT window measured rail 2.45 max / 0.18 min while the
+// rear measured 1.22 / 0.14 -- so the rear looked like the CALMER half of the
+// antenna and the metric quietly argued there was no defect. Slot 7, the
+// codebase's own static rest diagnostic, settled it: at rest the front already
+// reads 1.96 / 0.41 and the rear reads 1.000 / 0.969. The front's strain is the
+// AUTHORED LOOP -- the bind tube is straight and the rest pose curves it, so its
+// outer rail is stretched and its inner rail folded by design, on every frame,
+// including ones nobody is complaining about. Dividing by bind therefore
+// measures "how bent is this creature", which is a shape decision, and buries
+// the thing being asked about underneath it.
+//
+// Against REST, the rear's entire strain is motion: 1.000/0.969 standing still
+// becomes 1.43/0.125 moving. THAT is the owner's sentence, measured.
+//
+// (CLAUDE.md: measurement can remove a bias; it cannot choose a value. Removing
+// this bias is the whole job of the rest baseline. The ceilings are still set
+// from looked-at frames.)
+// The rest reference: slot 7 is this codebase's static form diagnostic (see
+// manafold_art.h, "slot 7 reports the rest pose's lowest vertex"), so it is the
+// pose every rest-relative number here is divided by. Filled once.
+bool rest_edge_lengths(const zc::CreatureType& T,
+                       const std::map<std::array<int32_t, 3>, RingSeg>& smap,
+                       std::vector<std::array<double, kStrainSegments>>& rail0,
+                       std::vector<std::array<double, kStrainSegments>>& hoop0) {
+  rail0.assign(u02::kLoopRings, {});
+  hoop0.assign(u02::kLoopRings, {});
+  const zc::Clip* still = nullptr;
+  for (const zc::Clip& c : T.bank.clips)
+    if (c.slot_id == kRestSlot) still = &c;
+  if (still == nullptr || still->frame_count <= 0) return false;
+  std::array<zc::mat3x4fx, zc::kMaxBones> pose{};
+  zc::decode_pose(T, *still, 0, pose, nullptr, 0);
+  const zc::mat3x4fx& R = pose[u02::kBRoot];
+  std::vector<std::array<V3, kStrainSegments>> pos(u02::kLoopRings);
+  std::vector<int> have(u02::kLoopRings, 0);
+  for (const zc::Meshlet& m : T.mesh) {
+    if (!is_loop_meshlet(m)) continue;
+    for (const zc::SkinVertex& v : m.verts) {
+      const auto sit = smap.find(std::array<int32_t, 3>{v.x, v.y, v.z});
+      if (sit == smap.end()) continue;
+      int32_t ox, oy, oz;
+      zc::skin_vertex(pose.data(), v, ox, oy, oz, nullptr);
+      pos[sit->second.ring][sit->second.seg] = to_root_pt(
+          R, V3{ox * kFx * 1000.0, oy * kFx * 1000.0, oz * kFx * 1000.0});
+      have[sit->second.ring] |= 1 << sit->second.seg;
+    }
+  }
+  const int full = (1 << kStrainSegments) - 1;
+  for (int i = 0; i < u02::kLoopRings; ++i) {
+    if (have[i] != full) continue;
+    for (int k = 0; k < kStrainSegments; ++k) {
+      const int k2 = (k + 1) % kStrainSegments;
+      hoop0[i][k] = len(pos[i][k2] - pos[i][k]);
+      if (i + 1 < u02::kLoopRings && have[i + 1] == full)
+        rail0[i][k] = len(pos[i + 1][k] - pos[i][k]);
+    }
+  }
+  return true;
+}
+
+struct Strain {
+  double rail_max = 1.0;        // worst posed/REST longitudinal ratio, rear window
+  double rail_min = 1.0;        // worst fold-over there
+  double hoop_max = 1.0;
+  double front_rail_max = 1.0;  // the same measure on the front, as the
+  double front_rail_min = 1.0;  // like-for-like reference it can only be once
+                                // both sides are rest-relative
+  int rail_ring = 0;
+  int rail_min_ring = 0;
+  int hoop_ring = 0;
+  int front_rail_min_ring = 0;
+  // THE HAND-OFF DISAGREEMENT, which is what linear blend skinning is being
+  // asked to hide. For a two-bone vertex, the distance between where bone b0
+  // alone would put it and where bone b1 alone would put it. LBS places it on
+  // the straight line between those two points, so this length IS the size of
+  // the collapse the blend can produce, in millimetres, before any weight is
+  // chosen. A vertex whose two bones agree cannot fold however it is weighted.
+  double handoff_mm = 0;
+  int handoff_ring = 0;
+  int handoff_b0 = 0, handoff_b1 = 0;
+};
+
 struct Sample {
   double rel = 0, axis = 0, bend = 0, front_bend = 0, sock = 0, arm = 0;
   int bend_ring = 0;
+  double span_mm = 0;
   V3 end, last, c;
   M3 relm;
+  Strain str;
 };
 
 struct Motion {
@@ -247,11 +419,33 @@ struct ClipStats {
   int bend_ring = 0;
   size_t bend_at = 0, rel_step_at = 0;
   Motion end, last, c;
+  // PASS 20 strain (R4)
+  double rail_max = 1.0, rail_min = 1.0, hoop_max = 1.0;
+  double front_rail_max = 1.0, front_rail_min = 1.0;
+  double rail_step = 0.0;
+  int rail_ring = 0, rail_min_ring = 0, hoop_ring = 0, front_rail_min_ring = 0;
+  size_t rail_at = 0, rail_min_at = 0, rail_step_at = 0;
+  double handoff_mm = 0;
+  int handoff_ring = 0, handoff_b0 = 0, handoff_b1 = 0;
+  // THE REAR SIGNED-SPAN EXCURSION. kBSpanDeltaE carries, as an unskinned
+  // receipt, the full |C->socket| distance minus its rest value -- the amount
+  // the rear span is asked to STRETCH on this sample. It is written straight
+  // into the three SpanDeltaE helpers as pure +Y, so the rear skin absorbs all
+  // of it. This is the authority behind "it stretches too much".
+  double span_max_mm = 0, span_min_mm = 0, span_step_mm = 0;
+  size_t span_max_at = 0;
 };
 
 ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
-                  bool csv, bool dump_rings, int dump_frame) {
+                  bool csv, bool dump_rings, int dump_frame,
+                  bool strain_rings = false) {
   const auto rmap = ring_map();
+  // PASS 20: the strain grid. Built once per clip from the compiled type.
+  std::vector<std::array<V3, kStrainSegments>> bind_pos;
+  std::vector<int> bind_have;
+  const auto smap = seg_index_map(T, bind_pos, bind_have);
+  std::vector<std::array<double, kStrainSegments>> rail0, hoop0;
+  const bool have_rest = rest_edge_lengths(T, smap, rail0, hoop0);
   const int ring_c = ring_of_station(u02::kKnuckleAtCMm);
   const int ring_end = ring_of_station(u02::kKnuckleAtEndMm);
   const int ring_last = (ring_c + ring_end) / 2;
@@ -270,6 +464,12 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       const zc::mat3x4fx& R = pose[u02::kBRoot];
       std::vector<V3> cen(u02::kLoopRings);
       std::vector<int> cnt(u02::kLoopRings, 0);
+      // PASS 20: the same walk fills the strain grid. The posed point is kept
+      // per (ring, segment) BEFORE the centroid sum below averages it away.
+      std::vector<std::array<V3, kStrainSegments>> pos(u02::kLoopRings);
+      std::vector<int> have(u02::kLoopRings, 0);
+      double ho_mm = 0;
+      int ho_ring = 0, ho_b0 = 0, ho_b1 = 0;
       for (const zc::Meshlet& m : T.mesh) {
         if (!is_loop_meshlet(m)) continue;
         for (const zc::SkinVertex& v : m.verts) {
@@ -278,13 +478,52 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
           int32_t ox, oy, oz;
           zc::skin_vertex(pose.data(), v, ox, oy, oz, nullptr);
           const V3 w{ox * kFx * 1000.0, oy * kFx * 1000.0, oz * kFx * 1000.0};
-          cen[it->second] = cen[it->second] + to_root_pt(R, w);
+          const V3 rp = to_root_pt(R, w);
+          cen[it->second] = cen[it->second] + rp;
           ++cnt[it->second];
+          const auto sit = smap.find(std::array<int32_t, 3>{v.x, v.y, v.z});
+          if (sit != smap.end()) {
+            pos[sit->second.ring][sit->second.seg] = rp;
+            have[sit->second.ring] |= 1 << sit->second.seg;
+            // The two ends of the blend, through the PRODUCTION skinning path:
+            // the same vertex with all weight on b0, then all on b1.
+            if (v.b0 != v.b1 && sit->second.ring >= rear_first) {
+              zc::SkinVertex a = v, b = v;
+              a.w0 = 64;
+              b.w0 = 0;
+              int32_t ax, ay, az, bx, by, bz;
+              zc::skin_vertex(pose.data(), a, ax, ay, az, nullptr);
+              zc::skin_vertex(pose.data(), b, bx, by, bz, nullptr);
+              const double d = len(V3{(ax - bx) * kFx * 1000.0,
+                                      (ay - by) * kFx * 1000.0,
+                                      (az - bz) * kFx * 1000.0});
+              if (d > ho_mm) {
+                ho_mm = d;
+                ho_ring = sit->second.ring;
+                ho_b0 = v.b0;
+                ho_b1 = v.b1;
+              }
+            }
+          }
         }
       }
       for (int i = 0; i < u02::kLoopRings; ++i)
         if (cnt[i] > 0) cen[i] = cen[i] * (1.0 / cnt[i]);
       Sample s;
+      {
+        const std::vector<int32_t>& tr =
+            sub == 1 && !clip.mid_local_translation.empty()
+                ? clip.mid_local_translation
+                : clip.local_translation;
+        const size_t ti =
+            (static_cast<size_t>(f) * u02::kBoneCount +
+             static_cast<size_t>(u02::kBSpanDeltaE)) * 3u + 1u;
+        if (ti < tr.size()) s.span_mm = tr[ti] * kFx * 1000.0;
+      }
+      s.str.handoff_mm = ho_mm;
+      s.str.handoff_ring = ho_ring;
+      s.str.handoff_b0 = ho_b0;
+      s.str.handoff_b1 = ho_b1;
       s.rel = rel_angle_deg(pose[u02::kBHingeD], pose[u02::kBRearSocket]);
       s.relm = rel_matrix(pose[u02::kBHingeD], pose[u02::kBRearSocket]);
       s.axis = ang_deg(col(pose[u02::kBHingeD], 1), col(pose[u02::kBRearSocket], 1));
@@ -307,6 +546,60 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
           s.front_bend = std::max(s.front_bend, b);
         }
       }
+      // PASS 20: the strain sweep. The rear window is the same one bend uses;
+      // the last rail (62->63) is EXCLUDED because ring 63 is the declared
+      // rigid buried cap (kRearTerminalTipStationMm) and its authored collapse
+      // to kReturnTipCapRxMm is a profile decision, not a stretch. It is
+      // printed separately rather than silently folded in.
+      {
+        const int full = (1 << kStrainSegments) - 1;
+        const int last_rail = u02::kLoopRings - 3;  // rail 61->62 is the last gated one
+        for (int i = 0; i <= last_rail; ++i) {
+          if (!bind_have[i] || !bind_have[i + 1]) continue;
+          if (have[i] != full || have[i + 1] != full) continue;
+          const bool rear = i >= rear_first;
+          const bool front = i >= 8 && i <= ring_c - 2;
+          if (!rear && !front) continue;
+          for (int k = 0; k < kStrainSegments; ++k) {
+            const double b = have_rest ? rail0[i][k]
+                                      : len(bind_pos[i + 1][k] - bind_pos[i][k]);
+            if (b < 1e-6) continue;
+            const double r = len(pos[i + 1][k] - pos[i][k]) / b;
+            if (rear) {
+              if (r > s.str.rail_max) {
+                s.str.rail_max = r;
+                s.str.rail_ring = i;
+              }
+              if (r < s.str.rail_min) {
+                s.str.rail_min = r;
+                s.str.rail_min_ring = i;
+              }
+            } else {
+              s.str.front_rail_max = std::max(s.str.front_rail_max, r);
+              if (r < s.str.front_rail_min) {
+                s.str.front_rail_min = r;
+                s.str.front_rail_min_ring = i;
+              }
+            }
+            if (strain_rings && f == dump_frame && sub == 0)
+              std::printf("strain,%d,%d,%d,%d,%.4f\n", slot, f, i, k, r);
+          }
+        }
+        for (int i = 0; i <= last_rail + 1; ++i) {
+          if (!bind_have[i] || have[i] != full || i < rear_first) continue;
+          for (int k = 0; k < kStrainSegments; ++k) {
+            const int k2 = (k + 1) % kStrainSegments;
+            const double b = have_rest ? hoop0[i][k]
+                                      : len(bind_pos[i][k2] - bind_pos[i][k]);
+            if (b < 1e-6) continue;
+            const double r = len(pos[i][k2] - pos[i][k]) / b;
+            if (r > s.str.hoop_max) {
+              s.str.hoop_max = r;
+              s.str.hoop_ring = i;
+            }
+          }
+        }
+      }
       s.end = cen[ring_end];
       s.last = cen[ring_last];
       s.c = cen[ring_c];
@@ -321,10 +614,12 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
       }
       if (csv)
         std::printf("csv,%d,%d,%u,%.2f,%.2f,%.2f,%d,%.2f,%.2f,%.2f,"
-                    "%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
+                    "%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.4f,%.4f,%d,%d,%.4f\n",
                     slot, f, sub, s.rel, s.axis, s.bend, s.bend_ring,
                     s.front_bend, s.sock, s.arm, s.end.x, s.end.y, s.end.z,
-                    s.last.x, s.last.y, s.last.z);
+                    s.last.x, s.last.y, s.last.z,
+                    s.str.rail_max, s.str.rail_min, s.str.rail_ring,
+                    s.str.rail_min_ring, s.str.hoop_max);
       seq.push_back(s);
     }
   }
@@ -343,6 +638,47 @@ ClipStats analyse(const zc::CreatureType& T, const zc::Clip& clip, int slot,
     st.arm_dev = std::max(st.arm_dev, s.arm);
     st.rel_mean += s.rel;
     st.bend_mean += s.bend;
+    // PASS 20 strain aggregation
+    if (s.str.rail_max > st.rail_max) {
+      st.rail_max = s.str.rail_max;
+      st.rail_ring = s.str.rail_ring;
+      st.rail_at = i;
+    }
+    if (s.str.rail_min < st.rail_min) {
+      st.rail_min = s.str.rail_min;
+      st.rail_min_ring = s.str.rail_min_ring;
+      st.rail_min_at = i;
+    }
+    if (s.str.front_rail_min < st.front_rail_min) {
+      st.front_rail_min = s.str.front_rail_min;
+      st.front_rail_min_ring = s.str.front_rail_min_ring;
+    }
+    if (s.str.hoop_max > st.hoop_max) {
+      st.hoop_max = s.str.hoop_max;
+      st.hoop_ring = s.str.hoop_ring;
+    }
+    st.front_rail_max = std::max(st.front_rail_max, s.str.front_rail_max);
+    if (s.span_mm > st.span_max_mm) {
+      st.span_max_mm = s.span_mm;
+      st.span_max_at = i;
+    }
+    st.span_min_mm = std::min(st.span_min_mm, s.span_mm);
+    if (i > 0)
+      st.span_step_mm =
+          std::max(st.span_step_mm, std::fabs(s.span_mm - seq[i - 1].span_mm));
+    if (s.str.handoff_mm > st.handoff_mm) {
+      st.handoff_mm = s.str.handoff_mm;
+      st.handoff_ring = s.str.handoff_ring;
+      st.handoff_b0 = s.str.handoff_b0;
+      st.handoff_b1 = s.str.handoff_b1;
+    }
+    if (i > 0) {
+      const double ds = std::fabs(s.str.rail_max - seq[i - 1].str.rail_max);
+      if (ds > st.rail_step) {
+        st.rail_step = ds;
+        st.rail_step_at = i;
+      }
+    }
     if (s.bend > st.bend_max) {
       st.bend_max = s.bend;
       st.bend_ring = s.bend_ring;
@@ -389,6 +725,21 @@ void print_stats(int slot, const ClipStats& s) {
       s.end.path, s.end.vmax, s.end.amax, s.end.jmax, s.end.jrms, s.last.path,
       s.last.vmax, s.last.amax, s.last.jmax, s.last.jrms, s.c.path, s.c.vmax,
       s.c.amax, s.c.jmax, s.c.jrms);
+  std::printf(
+      "  strain (posed/REST): REAR rail max %.3f (ring %d, sample %zu) min %.3f "
+      "(ring %d, sample %zu) step %.4f (sample %zu) hoop max %.3f (ring %d)\n"
+      "                       FRONT rail max %.3f min %.3f (ring %d)"
+      "  | rear-vs-front excess: max %+.3f min %+.3f\n"
+      "                       HAND-OFF worst two-bone disagreement %.0f mm "
+      "(ring %d, bones %d/%d)\n"
+      "                       REAR SPAN excursion %+.0f .. %+.0f mm "
+      "(max at sample %zu), worst step %.1f mm/sample\n",
+      s.rail_max, s.rail_ring, s.rail_at, s.rail_min, s.rail_min_ring,
+      s.rail_min_at, s.rail_step, s.rail_step_at, s.hoop_max, s.hoop_ring,
+      s.front_rail_max, s.front_rail_min, s.front_rail_min_ring,
+      s.rail_max - s.front_rail_max, s.rail_min - s.front_rail_min,
+      s.handoff_mm, s.handoff_ring, s.handoff_b0, s.handoff_b1,
+      s.span_max_mm, s.span_min_mm, s.span_max_at, s.span_step_mm);
 }
 
 // R3: the width law, swept over projected size for every line radius in use.
@@ -469,6 +820,7 @@ int main(int argc, char** argv) {
   std::vector<int> slots;
   bool csv = false;
   bool dump_rings = false;
+  bool strain_rings = false;
   bool gate = false;
   int dump_frame = 0;
   for (int i = 1; i < argc; ++i) {
@@ -476,6 +828,9 @@ int main(int argc, char** argv) {
       csv = true;
     } else if (std::strcmp(argv[i], "--rings") == 0 && i + 1 < argc) {
       dump_rings = true;
+      dump_frame = std::atoi(argv[++i]);
+    } else if (std::strcmp(argv[i], "--strain-rings") == 0 && i + 1 < argc) {
+      strain_rings = true;
       dump_frame = std::atoi(argv[++i]);
     } else if (std::strcmp(argv[i], "--gate") == 0) {
       gate = true;
@@ -548,7 +903,8 @@ int main(int argc, char** argv) {
       std::printf("slot %d: absent\n", want);
       continue;
     }
-    const ClipStats st = analyse(T, *clip, want, csv, dump_rings, dump_frame);
+    const ClipStats st =
+        analyse(T, *clip, want, csv, dump_rings, dump_frame, strain_rings);
     print_stats(want, st);
     if (st.rel_max > w_rel) {
       w_rel = st.rel_max;
