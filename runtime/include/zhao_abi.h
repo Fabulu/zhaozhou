@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
-//   zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
+//   abi_identity_sha256 = 2f1d8758bc91b40f15c45c0f3a52022d4fe31b03d80ba3b3591ac63f14f46e63
+//   zidl_sha256         = 37083f14197a10a1679bd1ef4cd3867a9f820a59ab785b303394e8c22868b74c
 #pragma once
 
 #include <cstdint>
@@ -56,7 +56,7 @@ enum fog_mode : uint8_t {
 constexpr uint16_t ZHAO_OP_NOP = 0x0000; // 16 B, implemented
 constexpr uint16_t ZHAO_OP_BEGIN_FRAME = 0x0001; // 32 B, implemented
 constexpr uint16_t ZHAO_OP_END_FRAME = 0x0002; // 32 B, implemented
-constexpr uint16_t ZHAO_OP_SET_VIEW = 0x0010; // 96 B, implemented
+constexpr uint16_t ZHAO_OP_SET_VIEW = 0x0010; // 112 B, implemented
 constexpr uint16_t ZHAO_OP_SET_PRESENTATION_CONTRACT = 0x0020; // 48 B, implemented
 constexpr uint16_t ZHAO_OP_TERRAIN_FIELD = 0x0200; // 112 B, implemented
 constexpr uint16_t ZHAO_OP_SURFACE_STAMP = 0x0210; // 64 B, implemented
@@ -392,7 +392,7 @@ struct ZhRecordEndFrame {
 };
 static_assert(sizeof(ZhRecordEndFrame) == 32, "layout drift: EndFrame record");
 
-// SetView 0x0010: 96-byte record (implemented)
+// SetView 0x0010: 112-byte record (implemented)
 struct ZhCmdSetView {
   uint8_t view_id;
   uint8_t viewport_id;
@@ -401,6 +401,8 @@ struct ZhCmdSetView {
   int32_t pixel_error;
   uint32_t geometry_tokens;
   uint32_t fragment_tokens;
+  int32_t eye[3];
+  uint8_t pad[4];
 };
 static_assert(offsetof(ZhCmdSetView, view_id) == 0, "layout drift: SetView.view_id");
 static_assert(offsetof(ZhCmdSetView, viewport_id) == 1, "layout drift: SetView.viewport_id");
@@ -409,13 +411,15 @@ static_assert(offsetof(ZhCmdSetView, view_projection) == 4, "layout drift: SetVi
 static_assert(offsetof(ZhCmdSetView, pixel_error) == 68, "layout drift: SetView.pixel_error");
 static_assert(offsetof(ZhCmdSetView, geometry_tokens) == 72, "layout drift: SetView.geometry_tokens");
 static_assert(offsetof(ZhCmdSetView, fragment_tokens) == 76, "layout drift: SetView.fragment_tokens");
-static_assert(sizeof(ZhCmdSetView) == 80, "layout drift: SetView payload");
+static_assert(offsetof(ZhCmdSetView, eye[0]) == 80, "layout drift: SetView.eye");
+static_assert(offsetof(ZhCmdSetView, pad[0]) == 92, "layout drift: SetView.pad");
+static_assert(sizeof(ZhCmdSetView) == 96, "layout drift: SetView payload");
 
 struct ZhRecordSetView {
   ZhCmdHeader hdr;
   ZhCmdSetView payload;
 };
-static_assert(sizeof(ZhRecordSetView) == 96, "layout drift: SetView record");
+static_assert(sizeof(ZhRecordSetView) == 112, "layout drift: SetView record");
 
 // SetPresentationContract 0x0020: 48-byte record (implemented)
 struct ZhCmdSetPresentationContract {
@@ -929,7 +933,7 @@ inline ZhRecordEndFrame zhao_sample_end_frame() {
 inline ZhRecordSetView zhao_sample_set_view() {
   ZhRecordSetView r{};
   r.hdr.opcode       = ZHAO_OP_SET_VIEW;
-  r.hdr.record_bytes = 96;
+  r.hdr.record_bytes = 112;
   r.hdr.source_id    = 1342242819u; // kind 5, module 1, index 3
   r.hdr.flags        = 0u;
   r.hdr.reserved0    = 0u;
@@ -940,6 +944,9 @@ inline ZhRecordSetView zhao_sample_set_view() {
   r.payload.pixel_error = 285207;
   r.payload.geometry_tokens = 0u;
   r.payload.fragment_tokens = 0u;
+  r.payload.eye[0] = 481815;
+  r.payload.eye[1] = 547351;
+  r.payload.eye[2] = 88599;
   return r;
 }
 
@@ -1477,6 +1484,8 @@ inline void zhao_pack_set_view(const ZhRecordSetView& r, std::vector<uint8_t>& o
   w.u32(r.payload.pixel_error);
   w.u32(r.payload.geometry_tokens);
   w.u32(r.payload.fragment_tokens);
+  for (int i = 0; i < 3; ++i) { w.u32(r.payload.eye[i]); }
+  for (int i = 0; i < 4; ++i) w.u8(r.payload.pad[i]);
 }
 
 inline void zhao_pack_set_presentation_contract(const ZhRecordSetPresentationContract& r, std::vector<uint8_t>& out) {
@@ -1792,6 +1801,10 @@ inline bool zhao_unpack_set_view(ZhReader& r, ZhRecordSetView& out) {
   { uint32_t t; if (!r.take32(t)) return false; out.payload.pixel_error = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.geometry_tokens = t; }
   { uint32_t t; if (!r.take32(t)) return false; out.payload.fragment_tokens = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.eye[0] = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.eye[1] = t; }
+  { uint32_t t; if (!r.take32(t)) return false; out.payload.eye[2] = t; }
+  if (!r.skip(4)) return false;
   return true;
 }
 
@@ -2243,6 +2256,7 @@ struct ZhCommandInfo {
   uint16_t pad_count;
 };
 constexpr uint16_t ZHAO_PADS_END_FRAME[] = {12, 13, 14, 15};
+constexpr uint16_t ZHAO_PADS_SET_VIEW[] = {92, 93, 94, 95};
 constexpr uint16_t ZHAO_PADS_SET_PRESENTATION_CONTRACT[] = {24, 25, 26, 27, 28, 29, 30, 31};
 constexpr uint16_t ZHAO_PADS_TERRAIN_FIELD[] = {92, 93, 94, 95};
 constexpr uint16_t ZHAO_PADS_SURFACE_STAMP[] = {44, 45, 46, 47};
@@ -2259,7 +2273,7 @@ constexpr ZhCommandInfo ZHAO_COMMAND_TABLE[] = {
   {"Nop", 0x0000, 16, true, nullptr, 0},
   {"BeginFrame", 0x0001, 32, true, nullptr, 0},
   {"EndFrame", 0x0002, 32, true, ZHAO_PADS_END_FRAME, 4},
-  {"SetView", 0x0010, 96, true, nullptr, 0},
+  {"SetView", 0x0010, 112, true, ZHAO_PADS_SET_VIEW, 4},
   {"SetPresentationContract", 0x0020, 48, true, ZHAO_PADS_SET_PRESENTATION_CONTRACT, 8},
   {"TerrainField", 0x0200, 112, true, ZHAO_PADS_TERRAIN_FIELD, 4},
   {"SurfaceStamp", 0x0210, 64, true, ZHAO_PADS_SURFACE_STAMP, 4},
@@ -2313,8 +2327,8 @@ inline bool zhao_enum_value_ok(uint16_t opcode, const uint8_t* p) {
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 inline constexpr const char* ZHAO_GENERATOR_NAME = "zhaozhou-abi-gen";
-inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x85, 0x93, 0x45, 0x80, 0x75, 0xD6, 0x65, 0xE6, 0x9F, 0x30, 0x57, 0x50, 0x45, 0x6E, 0x34, 0x20, 0x5D, 0x05, 0xD7, 0x91, 0xA0, 0x2A, 0x14, 0xDD, 0x5B, 0x48, 0xB7, 0x5A, 0xC6, 0x26, 0x92, 0x97};
-inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0xBF, 0xE9, 0x4A, 0xE7, 0x22, 0x67, 0xC7, 0x84, 0x00, 0x83, 0xAA, 0x04, 0x9C, 0x9A, 0x3A, 0xA2, 0x64, 0xB4, 0x08, 0x9F, 0x1B, 0x4D, 0x5B, 0xC6, 0x87, 0x7E, 0x06, 0xA3, 0x5A, 0x99, 0x5A, 0x3E};
+inline constexpr uint8_t ZHAO_GENERATOR_SHA256[32] = {0x2F, 0x1D, 0x87, 0x58, 0xBC, 0x91, 0xB4, 0x0F, 0x15, 0xC4, 0x5C, 0x0F, 0x3A, 0x52, 0x02, 0x2D, 0x4F, 0xE3, 0x1B, 0x03, 0xD8, 0x0B, 0xA3, 0xB3, 0x59, 0x1A, 0xC6, 0x3F, 0x14, 0xF4, 0x6E, 0x63};
+inline constexpr uint8_t ZHAO_ZIDL_SHA256[32] = {0x37, 0x08, 0x3F, 0x14, 0x19, 0x7A, 0x10, 0xA1, 0x67, 0x9B, 0xD1, 0xEF, 0x4C, 0xD3, 0x86, 0x7A, 0x9F, 0x82, 0x0A, 0x59, 0xAB, 0x78, 0x5B, 0x30, 0x33, 0x94, 0xE8, 0xC2, 0x28, 0x68, 0xB7, 0x4C};
 inline constexpr uint32_t ZHAO_ZCAP_SCHEMA_VERSION = 1;
 
 }  // namespace zhao_abi

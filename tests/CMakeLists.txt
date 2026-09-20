@@ -9643,6 +9643,29 @@ verilate(test_terrain_lodpath_directed
           ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_devstore.sv)
 add_test(NAME terrain_lodpath_directed COMMAND test_terrain_lodpath_directed)
 set_tests_properties(terrain_lodpath_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
+
+# ---------------------------------------------------------------------------
+# THE EYE (owner ruling R63). SetView 0x0010 carries `fx16 eye[3]`, zhao_cmd_exec
+# commits it as steps 17/18/19 of the view walk onto projector configuration
+# addresses 19/20/21, and zhao_view_eye is what holds those three words per view
+# for zhao_terrain_lod. cmd_exec_directed cases 22-24 are the producer half;
+# this is the store half.
+# ---------------------------------------------------------------------------
+add_test(NAME lint_view_eye
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_view_eye
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_eye.sv)
+set_tests_properties(lint_view_eye PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+add_executable(test_view_eye_directed common/view_eye_directed.cpp)
+target_link_libraries(test_view_eye_directed PRIVATE zhao_harness)
+verilate(test_view_eye_directed
+  PREFIX Vzhao_view_eye
+  TOP_MODULE zhao_view_eye
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_eye.sv)
+add_test(NAME view_eye_directed COMMAND test_view_eye_directed)
+set_tests_properties(view_eye_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 120)
 # R8's side-by-side render of both deviation readings (a tool, not a test):
 # tools/terrain/lod_readings_sheet.py builds it, runs it and assembles the PNG.
 add_executable(terrain_lod_readings_render ${CMAKE_SOURCE_DIR}/tools/terrain/lod_readings_render.cpp)

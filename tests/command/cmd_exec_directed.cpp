@@ -127,6 +127,12 @@ struct Run {
   uint32_t verdict_cycle = 0;
   std::vector<CfgWrite> cfg;       // matrix words, cfg addresses 0..15
   std::vector<CfgWrite> profiles;  // depth-profile writes, cfg address 18
+  // R63: the eye, cfg addresses 19/20/21. Kept OUT of `cfg` for the same
+  // reason the profile is: `cfg` means "a matrix word", and eleven checks
+  // count its size against 16 and 32. Folding three more writes in would not
+  // fail -- it would move those numbers to 19 and 38 and read as a bug in the
+  // matrix walk.
+  std::vector<CfgWrite> eyes;
   std::vector<StampOut> stamps;
   std::vector<DrawOut> draws;
   std::vector<UploadOut> uploads;
@@ -308,7 +314,11 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
     // counted every cfg write as a matrix word, so eleven checks read 17 and
     // 34 where they meant 16 and 32 -- red since that commit. The profile
     // write is recorded on its own and asserted in case 1, not dropped.
-    if (cfg_fires) (w.addr == 18 ? r.profiles : r.cfg).push_back(w);
+    if (cfg_fires) {
+      if (w.addr == 18) r.profiles.push_back(w);
+      else if (w.addr >= 19 && w.addr <= 21) r.eyes.push_back(w);
+      else r.cfg.push_back(w);
+    }
     if (draw_fires) r.draws.push_back(d);
 
     if (dut.decode_done_o && !r.done) {
@@ -360,10 +370,15 @@ Run runPacket(const std::vector<uint8_t>& pkt, uint32_t stamp_mask,
 // ---- record builders, all layout from the generated packers ---------------
 
 std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t first_word,
-                                   uint32_t gtok = 0, uint32_t ftok = 0) {
+                                   uint32_t gtok = 0, uint32_t ftok = 0,
+                                   int32_t eye_x = 0, int32_t eye_y = 0, int32_t eye_z = 0) {
   zhao_abi::ZhRecordSetView rec{};
   rec.hdr.opcode = zhao_abi::ZHAO_OP_SET_VIEW;
-  rec.hdr.record_bytes = 96;
+  // FROM THE TYPE, NOT A LITERAL. This was `96` until ruling R63 grew the
+  // record to 112, and the literal is why sixty-odd checks in this file went
+  // red at once instead of one. `sizeof` is checked by a static_assert in the
+  // generated header, so it cannot drift from the wire.
+  rec.hdr.record_bytes = static_cast<uint16_t>(sizeof(zhao_abi::ZhRecordSetView));
   rec.hdr.source_id = source_id;
   rec.payload.view_id = view_id;
   rec.payload.viewport_id = 0;
@@ -393,6 +408,12 @@ std::vector<uint8_t> setViewRecord(uint8_t view_id, uint32_t source_id, int32_t 
   rec.payload.pixel_error = 0;
   rec.payload.geometry_tokens = gtok;
   rec.payload.fragment_tokens = ftok;
+  // R63: the eye. Defaulted to the origin so every existing case in this file
+  // keeps meaning exactly what it meant -- a zero eye is a legal eye, not an
+  // absent one, and the three cfg writes happen either way.
+  rec.payload.eye[0] = eye_x;
+  rec.payload.eye[1] = eye_y;
+  rec.payload.eye[2] = eye_z;
   std::vector<uint8_t> out;
   zhao_abi::zhao_pack_set_view(rec, out);
   return out;
@@ -1355,6 +1376,113 @@ int main(int argc, char** argv) {
           "case21: no post state -> the commit passes a busy lease without waiting", 1,
           r.draws.size());
     check(r.look_busy_cycles == 0, "case21: and never holds a pass start", 0, r.look_busy_cycles);
+  }
+
+  // ---- 22. THE EYE (ruling R63) reaches cfg 19/20/21, per view ------------
+  //
+  // The gap R63 closes is that TERRAIN.LOD wants a world-space camera and
+  // `SetView` carried only the FUSED view-projection. This case is the
+  // producer half of the traverse: a SetView with a distinguishable eye per
+  // view, and the assertion that the executor puts each of the three fx16
+  // words on its own configuration address, for the right view, with no
+  // sign or byte-order damage.
+  //
+  // NEGATIVE VALUES ON PURPOSE. The eye is fx16 signed and a camera west or
+  // below the origin is ordinary, so `eye_y` of view 1 is negative. Pack the
+  // field unsigned or shift it arithmetically by mistake and this is the
+  // check that says so; three positive words would not.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    // View 0's eye and view 1's eye differ in every word, so a commit walk
+    // that carried the WRONG VIEW's shadow -- the failure the shared
+    // `sv_dirty` bit exists to prevent -- cannot pass by coincidence.
+    b.append_record(setViewRecord(0, 0x90u, 0x0011'0000, 0, 0,
+                                  0x0012'3456, 0x0007'8000, static_cast<int32_t>(0xFFF8'0000)));
+    b.append_record(setViewRecord(1, 0x91u, 0x0022'0000, 0, 0,
+                                  static_cast<int32_t>(0xFFED'CBA9), 0x0000'0001, 0x7FFF'FFFF));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(2, 2, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu);
+    check(r.committed == 1, "case22: committed", 1, r.committed);
+    // Two views, three words each. Exactly six: a repeat would mean the walk
+    // re-presented an accepted word, which `proj_cfg_ready_i` makes possible
+    // and which no result-checking assertion would notice (CLAUDE.md,
+    // "counters see what pictures cannot").
+    check(r.eyes.size() == 6, "case22: six eye writes, two views x three words", 6,
+          r.eyes.size());
+    // And the matrix walk is UNDISTURBED -- 32 words for two views. If the
+    // three new steps had been spliced into the 0..15 range instead of
+    // appended, this is the number that would move.
+    check(r.cfg.size() == 32, "case22: the matrix walk is still 32 words", 32, r.cfg.size());
+    check(r.views == 2, "case22: both views written", 2, r.views);
+    if (r.eyes.size() == 6) {
+      const int32_t want[2][3] = {
+          {0x0012'3456, 0x0007'8000, static_cast<int32_t>(0xFFF8'0000)},
+          {static_cast<int32_t>(0xFFED'CBA9), 0x0000'0001, 0x7FFF'FFFF}};
+      // The walk commits view 0 whole, then view 1 whole, and within a view
+      // the order is x, y, z. Asserting the ORDER and not just the multiset
+      // is deliberate: an address/data mux that swapped two arms would
+      // deliver the right six values to the wrong three registers.
+      for (unsigned k = 0; k < 6; ++k) {
+        const unsigned v = k / 3, w = k % 3;
+        const CfgWrite& e = r.eyes[k];
+        check(e.view == v, "case22: eye write view", v, e.view);
+        check(e.addr == 19 + w, "case22: eye write address", 19 + w, e.addr);
+        check(static_cast<int32_t>(e.data) == want[v][w], "case22: eye word value",
+              static_cast<uint32_t>(want[v][w]), e.data);
+      }
+    }
+  }
+
+  // ---- 23. the eye is IDEMPOTENT STATE, like the matrix beside it ---------
+  //
+  // Case 6a proves two SetViews for one view commit ONCE and the second wins.
+  // The eye must obey the same law or a view can run with this frame's camera
+  // and last frame's eye -- the mismatch nothing downstream can detect, since
+  // both values are individually legal.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(0, 1, 0x0033'0000, 0, 0, 111, 222, 333));
+    b.append_record(setViewRecord(0, 2, 0x0044'0000, 0, 0, 444, 555, 666));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(2, 2, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu);
+    check(r.views == 1, "case23: two SetViews for one view commit once", 1, r.views);
+    check(r.eyes.size() == 3, "case23: and write the eye once, not twice", 3, r.eyes.size());
+    if (r.eyes.size() == 3) {
+      check(static_cast<int32_t>(r.eyes[0].data) == 444, "case23: the SECOND eye lands (x)", 444,
+            r.eyes[0].data);
+      check(static_cast<int32_t>(r.eyes[1].data) == 555, "case23: the SECOND eye lands (y)", 555,
+            r.eyes[1].data);
+      check(static_cast<int32_t>(r.eyes[2].data) == 666, "case23: the SECOND eye lands (z)", 666,
+            r.eyes[2].data);
+    }
+    // The same record's matrix must be the second one too. Two shadows, one
+    // dirty bit: if the eye and the matrix could be committed under separate
+    // flags this is where they would disagree.
+    if (!r.cfg.empty())
+      check(r.cfg[0].data == 0x0044'0000u, "case23: matrix and eye come from the SAME record",
+            0x0044'0000u, r.cfg[0].data);
+  }
+
+  // ---- 24. a REFUSED view_id writes no eye -------------------------------
+  //
+  // `view_id >= 2` is refused, never masked (case 7's law). The eye rides the
+  // same `sv_ok` gate, so an out-of-range view must not smuggle three words
+  // into view 0's registers -- which is exactly what a missing gate on the
+  // three new shift arms would do, silently, while every counter agreed.
+  {
+    zhao::ZhaoFrameBuilder b;
+    b.begin_frame(1, 0, 0, 0);
+    b.append_record(setViewRecord(7, 0x92u, 0x0022'0000, 0, 0, 0x7BAD'0001, 0x7BAD'0002,
+                                  0x7BAD'0003));
+    b.end_frame(0);
+    const Run r = runPacket(b.seal(1, 1, 0), 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu,
+                            0xFFFFFFFFu);
+    check(r.refused == 1, "case24: the out-of-range view_id is refused", 1, r.refused);
+    check(r.eyes.empty(), "case24: and no eye word is written for it", 0, r.eyes.size());
   }
 
   return zhao::report_and_exit("cmd_exec_directed");

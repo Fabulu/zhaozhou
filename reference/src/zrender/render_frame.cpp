@@ -165,6 +165,18 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
     // carries the three-way disagreement in full, including that this default
     // (WORLD_LONG) and the spec's stated default (WORLD_STANDARD) differ.
     uint8_t depth_profile = 0;
+    // THE EYE, ruling R63: `SetView.eye[3]`, fx16 Q16.16 world metres.
+    // Zero is the origin and is a legal value (spec/commands.zidl), so no
+    // "present" flag accompanies it.
+    //
+    // STORED HERE, CONSUMED THERE. This renderer's raster needs no eye -- it
+    // has the fused matrix, which is what a projection wants. The model that
+    // reads this quantity is `zref::terrain::LodCamera` (zref_terrain_lod.hpp),
+    // whose `ex/ey/ez` are exactly these three words and which existed BEFORE
+    // the ABI could deliver them; that mismatch is what R63 repairs. Said
+    // plainly, because the depth-profile field two lines up is a standing
+    // example of a reader assuming that parsed-and-stored means observed.
+    int32_t eye[3] = {0, 0, 0};
   } views[2];
   std::vector<FieldApp> fields;
   struct TerrainInst {
@@ -257,6 +269,13 @@ RenderResult SoftwareRenderer::render_frame(const uint8_t* pkt, size_t len, uint
             views[c.payload.view_id].vp = from_abi_mat4(c.payload.view_projection);
             views[c.payload.view_id].pixel_error = c.payload.pixel_error;
             views[c.payload.view_id].depth_profile = prof;
+            // R63: the eye lands under the SAME condition as the matrix, from
+            // the SAME record. In RTL that is one dirty bit; here it is one
+            // assignment block, and it is the same law -- a view never holds
+            // this frame's camera beside last frame's eye.
+            views[c.payload.view_id].eye[0] = c.payload.eye[0];
+            views[c.payload.view_id].eye[1] = c.payload.eye[1];
+            views[c.payload.view_id].eye[2] = c.payload.eye[2];
           }
         }
         break;

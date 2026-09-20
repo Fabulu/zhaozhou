@@ -311,6 +311,31 @@ command EndFrame 0x0002 implemented {
 // profile needs new evidence, a new proof and an explicit ABI ruling; it may
 // not be smuggled in as custom numbers, which is what 11 being REFUSED rather
 // than aliased protects.
+// THE EYE, ruling R63 of reports/OWNER-RULINGS-20260919-EVENING.md.
+//
+// `view_projection` is the FUSED matrix. A world-space camera POSITION cannot
+// be recovered from it without a 4x4 inverse that nothing in this console
+// ratifies, and TERRAIN.LOD's screen-space-error law needs the eye in world
+// units to measure distance to a subpatch centre. So the eye travels on the
+// wire beside the matrix that was built from it, as ONE record under ONE
+// commit -- the same reason `flags[1:0]` rides here rather than arriving
+// separately.
+//
+// UNITS: fx16 Q16.16 world metres, the same container and the same frame as
+// `SurfaceStamp.transform` translations and TERRAIN.PATCH's world origins.
+// ORDER: eye[0]=x, eye[1]=y, eye[2]=z.
+//
+// ZERO IS LEGAL AND MEANS THE ORIGIN. A console that never writes an eye puts
+// every camera at (0,0,0), which is a defensible picture and not a fault; the
+// consumer's own `cam*_en_i` decides whether a view participates at all. This
+// is the same zero-keeps-its-meaning property the depth profile has, and it is
+// why no "eye present" flag bit is spent.
+//
+// This GROWS the record from 96 to 112 bytes. It is the first layout growth of
+// an already-implemented command in this ABI, so: every generated output, both
+// wave-2 golden capture sets and the console's own elaboration guard move with
+// it, and `zhao_cmd_exec.sv`'s `ZHAO_SET_VIEW_BYTES != 96` $fatal is the thing
+// that makes a half-done move impossible to ship quietly.
 command SetView 0x0010 implemented {
   u8 view_id;
   u8 viewport_id;
@@ -319,6 +344,8 @@ command SetView 0x0010 implemented {
   fx16 pixel_error;
   u32 geometry_tokens;
   u32 fragment_tokens;
+  fx16 eye[3];    // [R63] camera position, world metres Q16.16 (x, y, z)
+  pad[4];
 }
 
 command SetPresentationContract 0x0020 implemented {

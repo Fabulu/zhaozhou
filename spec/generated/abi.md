@@ -5,8 +5,8 @@ GENERATED FILE - DO NOT EDIT. Source: `spec/commands.zidl` via `tools/abi-gen`
 `spec/qformats.md` (fx16 = Q16.16 in a 4-byte int32 container).
 
 ```
-abi_identity_sha256 = 8593458075d665e69f305750456e34205d05d791a02a14dd5b48b75ac6269297
-zidl_sha256         = bfe94ae72267c7840083aa049c9a3aa264b4089f1b4d5bc6877e06a35a995a3e
+abi_identity_sha256 = 2f1d8758bc91b40f15c45c0f3a52022d4fe31b03d80ba3b3591ac63f14f46e63
+zidl_sha256         = 37083f14197a10a1679bd1ef4cd3867a9f820a59ab785b303394e8c22868b74c
 ```
 
 ABI version **3**, little-endian, command alignment
@@ -20,7 +20,7 @@ ABI version **3**, little-endian, command alignment
 | `Nop` | `0x0000` | 16 | implemented |
 | `BeginFrame` | `0x0001` | 32 | implemented |
 | `EndFrame` | `0x0002` | 32 | implemented |
-| `SetView` | `0x0010` | 96 | implemented |
+| `SetView` | `0x0010` | 112 | implemented |
 | `SetPresentationContract` | `0x0020` | 48 | implemented |
 | `TerrainField` | `0x0200` | 112 | implemented |
 | `SurfaceStamp` | `0x0210` | 64 | implemented |
@@ -94,7 +94,7 @@ Golden sample: `tests/abi/golden/cmd_end_frame.bin` (C++ packer
 TS `zhaoPackEndFrame(zhaoSampleEndFrame(), ...)`, SV round-trips it via
 `zhao_unpack_end_frame`/`zhao_pack_end_frame`).
 
-### SetView — 0x0010 (96 B, implemented)
+### SetView — 0x0010 (112 B, implemented)
 
 Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 
@@ -107,6 +107,8 @@ Payload bytes (offsets relative to payload start, i.e. record offset + 16):
 | 68 | 4 | `pixel_error` | fx16 |
 | 72 | 4 | `geometry_tokens` | u32 |
 | 76 | 4 | `fragment_tokens` | u32 |
+| 80 | 12 | `eye` | fx16 ×3 |
+| 92 | 4 | `pad` | pad (zero) ×4 |
 
 `view_projection` (mat4fx) leaves:
 

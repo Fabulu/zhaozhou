@@ -134,8 +134,9 @@
 // below checks `$bits(zhao_transform2fx_t)` so a layout change cannot pass
 // silently.
 //
-// SetView 0x0010 carries seven fields. This block consumes TWO of them and the
-// other five have NO PORT ON THIS CONSOLE -- that is a gap, not a decision:
+// SetView 0x0010 carries EIGHT fields since ruling R63 added `eye[3]`. This
+// block carries or reads six of them; the two it does not have NO PORT ON THIS
+// CONSOLE -- that is a gap, not a decision:
 //   CARRIED   view_id           -> `proj_cfg_view_o` (see the refusal below)
 //   CARRIED   view_projection   -> `proj_cfg_addr_o` 0..15, one word per clock
 //   NOT       viewport_id       -- the bank's viewport rect is at cfg addresses
@@ -159,6 +160,14 @@
 //                                  read -- zhao_sample_set_view() already ships
 //                                  0x8261, so demanding zero would refuse a
 //                                  legal command.
+//   CARRIED   eye[3]            -- the camera position in world metres, as of
+//                                  2026-09-20 (ruling R63). Committed as steps
+//                                  17/18/19 of the view walk to cfg addresses
+//                                  19/20/21, where `zhao_view_eye` holds it for
+//                                  TERRAIN.LOD. Under the SAME dirty bit as the
+//                                  matrix and the profile, so a view can never
+//                                  run with this frame's camera and last
+//                                  frame's eye.
 //   NOT       pixel_error       -- MEASURE.GOVERNOR is not composed.
 //   READ      geometry_tokens   -- the view's token REQUEST (rulings R18/R33),
 //   READ      fragment_tokens      committed to MEASURE.TOKENS as `tok_vreq_*`,
@@ -521,6 +530,18 @@ module zhao_cmd_exec
   // SetView's token request and SetPresentationContract's ceilings (R18/R33).
   localparam int unsigned OFF_SV_GTOK = ZHAO_SET_VIEW_OFF_GEOMETRY_TOKENS;
   localparam int unsigned OFF_SV_FTOK = ZHAO_SET_VIEW_OFF_FRAGMENT_TOKENS;
+  // SetView.eye[3] (R63): three fx16 words, lowered onto the projector
+  // configuration bus at cfg addresses 19/20/21, where `zhao_view_eye` holds
+  // them for TERRAIN.LOD. The offsets come from the generated package like
+  // every other field -- this block reads no layout it did not import.
+  localparam int unsigned OFF_SV_EYEX = ZHAO_SET_VIEW_OFF_EYE_0;
+  localparam int unsigned OFF_SV_EYEY = ZHAO_SET_VIEW_OFF_EYE_1;
+  localparam int unsigned OFF_SV_EYEZ = ZHAO_SET_VIEW_OFF_EYE_2;
+  // The three cfg addresses those three words go to. Named, not literal, so
+  // the map is stated once per block that participates in it.
+  localparam int unsigned CFG_EYE_X = 19;
+  localparam int unsigned CFG_EYE_Y = 20;
+  localparam int unsigned CFG_EYE_Z = 21;
   localparam int unsigned OFF_PC_G0 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_GEOMETRY_TOKENS_0;
   localparam int unsigned OFF_PC_G1 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_GEOMETRY_TOKENS_1;
   localparam int unsigned OFF_PC_F0 = ZHAO_SET_PRESENTATION_CONTRACT_OFF_FRAGMENT_TOKENS_0;
@@ -564,8 +585,18 @@ module zhao_cmd_exec
   initial begin
     if ($bits(zhao_transform2fx_t) != 24 * 8)
       $fatal(1, "zhao_cmd_exec: transform2fx is no longer 24 B; OFF_TX/OFF_TY are stale");
-    if (ZHAO_SET_VIEW_BYTES != 96)
+    // 96 until 2026-09-20, 112 since: ruling R63 added `fx16 eye[3]` plus the
+    // pad that keeps the record a multiple of the 16-byte alignment. The
+    // constant is updated, not relaxed -- this guard's whole value is that it
+    // makes a half-done layout move impossible to ship quietly, and a `>=`
+    // here would have let exactly that happen.
+    if (ZHAO_SET_VIEW_BYTES != 112)
       $fatal(1, "zhao_cmd_exec: SetView record size moved; re-read the offsets");
+    // The eye words must land BEFORE the record's last byte, or the commit
+    // walk reads a shadow one byte early -- the DrawForm hazard, which that arm
+    // needs a bypass for and this one must not.
+    if ((OFF_SV_EYEZ + 4) >= ZHAO_SET_VIEW_BYTES)
+      $fatal(1, "zhao_cmd_exec: SetView.eye is the record's last field; add the df_flags_c-style bypass");
     if (ZHAO_SURFACE_STAMP_BYTES != 64)
       $fatal(1, "zhao_cmd_exec: SurfaceStamp record size moved; re-read the offsets");
     if ((SV_MAT_HI - SV_MAT_LO) != 64)
@@ -646,6 +677,15 @@ module zhao_cmd_exec
   // committed under the same dirty bit: one record, one commit (R18).
   logic [31:0] sv_gtok [0:1];
   logic [31:0] sv_ftok [0:1];
+  // The view's EYE (R63), shadowed per view exactly like the profile and the
+  // token request, and committed under the SAME `sv_dirty` bit. That is the
+  // whole reason it rides SetView instead of arriving on its own command: a
+  // camera whose matrix is this frame's and whose eye is last frame's would
+  // measure LOD against a position the picture was not rendered from, and
+  // nothing downstream could detect the mismatch.
+  logic [31:0] sv_eyex [0:1];
+  logic [31:0] sv_eyey [0:1];
+  logic [31:0] sv_eyez [0:1];
   // SetPresentationContract's ceiling, staged whole; `pc_dirty` is its
   // presence in THIS packet. The last contract in a packet wins.
   logic [31:0] pc_g0, pc_g1, pc_f0, pc_f1, pc_sh;
@@ -789,7 +829,7 @@ module zhao_cmd_exec
   assign upl_valid_o     = (pq_occ != '0);
   // handle32 is {index:24, generation:8} with the INDEX HIGH -- [31:8] -- the
   // packing zcon::detail::handle32, zref::material::Resolver::find and
-  // zhao_material_resolve's eq_set_index_c all use. The first version of
+  // zhao_material_resolve's req_set_index_c all use. The first version of
   // this line took [23:0], and its bench packed the handle the same wrong way,
   // so the round trip agreed with itself; the smoke's MATERIAL_SET would have
   // been published under a key no resolver looks up.
@@ -910,10 +950,13 @@ module zhao_cmd_exec
   assign gq_re_c = (st == EX_POST) && post_in_q && !st_post_v && (gq_rp != gq_wp) && !gq_rd_v_q;
 
   logic       cv;   // view being committed
-  // FIVE BITS, NOT FOUR, since 2026-09-19: the commit walk is now SEVENTEEN
-  // steps per view -- matrix words 0..15 at cfg addresses 0..15, then step 16
-  // carrying SetView's depth profile to cfg address 18.
-  logic [4:0] cw;   // commit step: 0..15 matrix word, 16 depth profile
+  // FIVE BITS, NOT FOUR, since 2026-09-19: the commit walk is now TWENTY steps
+  // per view -- matrix words 0..15 at cfg addresses 0..15, step 16 carrying
+  // SetView's depth profile to cfg address 18, and steps 17/18/19 carrying
+  // SetView's eye (R63) to cfg addresses 19/20/21. Five bits still suffice;
+  // the terminal comparison moved from 16 to 19 and is the only place the
+  // walk's length is written down.
+  logic [4:0] cw;   // commit step: 0..15 matrix, 16 profile, 17..19 eye x/y/z
   logic [1:0] tk;   // EX_TOK step: 0 contract, 1 view 0, 2 view 1
 
   // The byte stream is accepted only while staging. During a commit the fork's
@@ -933,6 +976,12 @@ module zhao_cmd_exec
       for (vi = 0; vi < 2; vi = vi + 1) begin
         sv_gtok[vi] <= 32'd0;
         sv_ftok[vi] <= 32'd0;
+        // The origin. `spec/commands.zidl` makes zero a legal, defined eye, so
+        // a console that never issues one measures from (0,0,0) rather than
+        // from whatever was left in a register.
+        sv_eyex[vi] <= 32'd0;
+        sv_eyey[vi] <= 32'd0;
+        sv_eyez[vi] <= 32'd0;
       end
       pc_g0 <= 32'd0; pc_g1 <= 32'd0; pc_f0 <= 32'd0; pc_f1 <= 32'd0; pc_sh <= 32'd0;
       pc_dirty <= 1'b0; tk <= 2'd0;
@@ -1049,6 +1098,16 @@ module zhao_cmd_exec
                   sv_gtok[sv_view] <= {pkt_byte_i, sv_gtok[sv_view][31:8]};
                 if ((rpos >= 16'(OFF_SV_FTOK)) && (rpos < 16'(OFF_SV_FTOK + 4)) && sv_ok)
                   sv_ftok[sv_view] <= {pkt_byte_i, sv_ftok[sv_view][31:8]};
+                // THE EYE (R63). Same little-endian shift as the tokens, same
+                // `sv_ok` gate, same shadow. All three words end before the
+                // record's last byte -- the elaboration guard above says so --
+                // so the commit walk never reads one early.
+                if ((rpos >= 16'(OFF_SV_EYEX)) && (rpos < 16'(OFF_SV_EYEX + 4)) && sv_ok)
+                  sv_eyex[sv_view] <= {pkt_byte_i, sv_eyex[sv_view][31:8]};
+                if ((rpos >= 16'(OFF_SV_EYEY)) && (rpos < 16'(OFF_SV_EYEY + 4)) && sv_ok)
+                  sv_eyey[sv_view] <= {pkt_byte_i, sv_eyey[sv_view][31:8]};
+                if ((rpos >= 16'(OFF_SV_EYEZ)) && (rpos < 16'(OFF_SV_EYEZ + 4)) && sv_ok)
+                  sv_eyez[sv_view] <= {pkt_byte_i, sv_eyez[sv_view][31:8]};
                 if (sv_in_mat) begin
                   wacc <= {pkt_byte_i, wacc[23:8]};
                   if ((mo[1:0] == 2'd3) && sv_ok)
@@ -1342,14 +1401,15 @@ module zhao_cmd_exec
         // silently wrong camera. With it the merge is LOSSLESS in both
         // directions: the host wins the cycle, this block re-presents.
         //
-        // The bubble costs 68 clocks per frame at two full views -- 64 for the
-        // matrix words and 4 for the two profile writes. That is not
-        // a throughput question by any measure that matters here.
+        // The bubble costs 80 clocks per frame at two full views -- 64 for the
+        // matrix words, 4 for the two profile writes and 12 for the two eyes
+        // (R63). That is not a throughput question by any measure that matters
+        // here: the frame is 1.67M clocks.
         EX_CFG: begin
           if (proj_cfg_we_o) begin
             if (proj_cfg_ready_i) begin
               // Accepted. Retire this word and drop `we` for one cycle.
-              if (cw == 5'd16) begin
+              if (cw == 5'd19) begin
                 cw           <= 5'd0;
                 sv_dirty[cv] <= 1'b0;
                 `ZHAO_EXEC_INC(views_written_o);
@@ -1369,8 +1429,19 @@ module zhao_cmd_exec
             // viewport_id, and the id-to-rect table is video_rules.md's, not in
             // the ABI at all. The console's host port owns those two words.
             // Writing them from here would be this block inventing a rectangle.
-            proj_cfg_addr_o <= (cw == 5'd16) ? 5'd18 : {1'b0, cw[3:0]};
+            // STEPS 17/18/19 ARE cfg ADDRESSES 19/20/21 -- the eye (R63),
+            // decoded by `zhao_view_eye`, which snoops this same bus.
+            // `zhao_project_core` ignores them, which is the property that let
+            // the viewport rect and then the profile be added here too.
+            proj_cfg_addr_o <= (cw == 5'd16) ? 5'd18
+                             : (cw == 5'd17) ? 5'(CFG_EYE_X)
+                             : (cw == 5'd18) ? 5'(CFG_EYE_Y)
+                             : (cw == 5'd19) ? 5'(CFG_EYE_Z)
+                                             : {1'b0, cw[3:0]};
             proj_cfg_data_o <= (cw == 5'd16) ? {30'd0, sv_prof[cv]}
+                             : (cw == 5'd17) ? sv_eyex[cv]
+                             : (cw == 5'd18) ? sv_eyey[cv]
+                             : (cw == 5'd19) ? sv_eyez[cv]
                                              : sv_mat[cv][cw[3:0]];
           end else begin
             if (cv) st <= EX_STAMP;
