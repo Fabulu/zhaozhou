@@ -206,3 +206,23 @@ same invocation.
 - kSpanStretchMaxPm / kSpanCompactionMinPm / kSpanMinRunMm all exactly as pass 19
   left them. P20-GATE-CHANGES.md 7 records the considered-and-rejected widening.
 - Matrix 144/144 in ONE invocation.
+
+### 2026-09-20 - ARCHITECT PACKET: the solver change (P20-SOLVER-ARCHITECTURE.md)
+- Read-only design for the ledger's option 2. Finding from the committed
+  constants: the shipped dip lowers B's RANK mainly by HOISTING C (fold share
+  -2000 pm flips B's fold, sending the B->C span upward ~500 mm est.), B's own
+  descent is clamped at kNoduleOffsetMaxMm[1]=320, and the carry cancel was
+  applied in offset space against a chain that had ROTATED. The attachment cost
+  was the mechanism, not the gesture.
+- Chosen mechanism: THE DENT -- a pinned two-bone re-fold of the A-B-C triangle.
+  A and C keep world position AND frame; B is pressed along its perpendicular
+  to the A-C chord through to its mirror (s=2000), which is stretch-free. Writes
+  only HingeA/HingeB aims (existing nodule_aim), span deltas 1 and 2, and a
+  world-pin of HingeC. F-A and C-E have no term in it.
+- Falsifying experiment: Inspect only, depth 2000, mspan --csv + mrear --dip;
+  any F-A change, >1 mm C-E change, crossing compaction > ~170 pm ducked, or
+  R5 not strictly lowest -> falsified. Ten minutes, no render.
+- Gates: new mspan G10 DENT PIN (+ --fail-dent-pin = the carried solver at
+  gain 1000), R5 promoted to hard, R4 front-window floor (+ --fail-dent-overfold),
+  CRC identity legs. No bound changed. kSpanStretchMaxPm comment at
+  manafold_art.h:2337-2353 contradicts its array and must be repaired.
