@@ -107,7 +107,7 @@ module tb_field_loader
     output var logic [31:0] bridge_errs_o,
     output var logic [31:0] no_capacity_o,
     output var logic [31:0] evictions_o,
-    output var logic [31:0] hint_overrides_o,
+    output var logic [31:0] pin_forced_victim_o,
     output var logic [31:0] load_bytes_o,
 
     // ---- what the played bridge saw, so the C++ can cross-check ------------
@@ -292,7 +292,7 @@ module tb_field_loader
       .bridge_errs_o    (bridge_errs_o),
       .no_capacity_o    (no_capacity_o),
       .evictions_o      (evictions_o),
-      .hint_overrides_o (hint_overrides_o),
+      .pin_forced_victim_o (pin_forced_victim_o),
       .load_bytes_o     (load_bytes_o)
   );
 

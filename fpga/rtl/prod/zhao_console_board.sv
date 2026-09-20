@@ -2828,7 +2828,7 @@ module zhao_console_board
   output logic [31:0]  fld_ldr_bridge_errs_o,
   output logic [31:0]  fld_ldr_no_capacity_o,
   output logic [31:0]  fld_ldr_evictions_o,
-  output logic [31:0]  fld_ldr_hint_overrides_o,
+  output logic [31:0]  fld_ldr_pin_forced_victim_o,
   output logic [31:0]  fld_ldr_load_bytes_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one
@@ -4293,7 +4293,7 @@ module zhao_console_board
       .fld_ldr_bridge_errs_o              (fld_ldr_bridge_errs_o),
       .fld_ldr_no_capacity_o              (fld_ldr_no_capacity_o),
       .fld_ldr_evictions_o                (fld_ldr_evictions_o),
-      .fld_ldr_hint_overrides_o           (fld_ldr_hint_overrides_o),
+      .fld_ldr_pin_forced_victim_o        (fld_ldr_pin_forced_victim_o),
       .fld_ldr_load_bytes_o               (fld_ldr_load_bytes_o),
       .fld_stamp_slot_i                   (fld_stamp_slot_i),
       .fld_stamp_slot_valid_i             (fld_stamp_slot_valid_i),

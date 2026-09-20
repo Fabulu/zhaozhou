@@ -626,7 +626,7 @@ module zhao_prod_top (
   logic [32-1:0] u05_bridge_errs_o;
   logic [32-1:0] u05_no_capacity_o;
   logic [32-1:0] u05_evictions_o;
-  logic [32-1:0] u05_hint_overrides_o;
+  logic [32-1:0] u05_pin_forced_victim_o;
   logic [32-1:0] u05_load_bytes_o;
   zhao_field_loader u05_i (
       .clk(clk),
@@ -675,13 +675,13 @@ module zhao_prod_top (
       .bridge_errs_o(u05_bridge_errs_o),
       .no_capacity_o(u05_no_capacity_o),
       .evictions_o(u05_evictions_o),
-      .hint_overrides_o(u05_hint_overrides_o),
+      .pin_forced_victim_o(u05_pin_forced_victim_o),
       .load_bytes_o(u05_load_bytes_o)
   );
   logic u05_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u05_fold_q <= 1'b0;
-    else u05_fold_q <= u05_fold_q ^ (((^u05_fh2_ready_o)) & u05_src[0]) ^ (((^u05_fh2_resp_valid_o)) & u05_src[1]) ^ (((^u05_fh2_resp_ok_o)) & u05_src[2]) ^ (((^u05_fh2_resp_verdict_o)) & u05_src[3]) ^ (((^u05_fh2_resp_ticket_o)) & u05_src[4]) ^ (((^u05_fh2_resp_plan_o)) & u05_src[5]) ^ (((^u05_fh2_resp_handle_o)) & u05_src[6]) ^ (((^u05_fh2_resp_slot_o)) & u05_src[7]) ^ (((^u05_fh2_resp_evicted_o)) & u05_src[8]) ^ (((^u05_hps_req_o)) & u05_src[9]) ^ (((^u05_pub_ready_o)) & u05_src[10]) ^ (((^u05_pub_pinned_o)) & u05_src[11]) ^ (((^u05_pub_handle_o)) & u05_src[12]) ^ (((^u05_pub_prog_hash_o)) & u05_src[13]) ^ (((^u05_pub_gen_o)) & u05_src[14]) ^ (((^u05_installs_ok_o)) & u05_src[15]) ^ (((^u05_installs_failed_o)) & u05_src[16]) ^ (((^u05_binds_ok_o)) & u05_src[17]) ^ (((^u05_binds_failed_o)) & u05_src[18]) ^ (((^u05_controls_ok_o)) & u05_src[19]) ^ (((^u05_bad_operation_o)) & u05_src[20]) ^ (((^u05_bad_envelope_o)) & u05_src[21]) ^ (((^u05_bad_range_o)) & u05_src[22]) ^ (((^u05_bad_section_o)) & u05_src[23]) ^ (((^u05_bad_crc_o)) & u05_src[24]) ^ (((^u05_bad_meta_o)) & u05_src[25]) ^ (((^u05_bridge_errs_o)) & u05_src[26]) ^ (((^u05_no_capacity_o)) & u05_src[27]) ^ (((^u05_evictions_o)) & u05_src[28]) ^ (((^u05_hint_overrides_o)) & u05_src[29]) ^ (((^u05_load_bytes_o)) & u05_src[30]);
+    else u05_fold_q <= u05_fold_q ^ (((^u05_fh2_ready_o)) & u05_src[0]) ^ (((^u05_fh2_resp_valid_o)) & u05_src[1]) ^ (((^u05_fh2_resp_ok_o)) & u05_src[2]) ^ (((^u05_fh2_resp_verdict_o)) & u05_src[3]) ^ (((^u05_fh2_resp_ticket_o)) & u05_src[4]) ^ (((^u05_fh2_resp_plan_o)) & u05_src[5]) ^ (((^u05_fh2_resp_handle_o)) & u05_src[6]) ^ (((^u05_fh2_resp_slot_o)) & u05_src[7]) ^ (((^u05_fh2_resp_evicted_o)) & u05_src[8]) ^ (((^u05_hps_req_o)) & u05_src[9]) ^ (((^u05_pub_ready_o)) & u05_src[10]) ^ (((^u05_pub_pinned_o)) & u05_src[11]) ^ (((^u05_pub_handle_o)) & u05_src[12]) ^ (((^u05_pub_prog_hash_o)) & u05_src[13]) ^ (((^u05_pub_gen_o)) & u05_src[14]) ^ (((^u05_installs_ok_o)) & u05_src[15]) ^ (((^u05_installs_failed_o)) & u05_src[16]) ^ (((^u05_binds_ok_o)) & u05_src[17]) ^ (((^u05_binds_failed_o)) & u05_src[18]) ^ (((^u05_controls_ok_o)) & u05_src[19]) ^ (((^u05_bad_operation_o)) & u05_src[20]) ^ (((^u05_bad_envelope_o)) & u05_src[21]) ^ (((^u05_bad_range_o)) & u05_src[22]) ^ (((^u05_bad_section_o)) & u05_src[23]) ^ (((^u05_bad_crc_o)) & u05_src[24]) ^ (((^u05_bad_meta_o)) & u05_src[25]) ^ (((^u05_bridge_errs_o)) & u05_src[26]) ^ (((^u05_no_capacity_o)) & u05_src[27]) ^ (((^u05_evictions_o)) & u05_src[28]) ^ (((^u05_pin_forced_victim_o)) & u05_src[29]) ^ (((^u05_load_bytes_o)) & u05_src[30]);
 
   // ---- zhao_field_stamp_adapter ----
   logic [63:0] u06_lfsr_q;

@@ -1309,7 +1309,7 @@ module tb_zhao_console_core_smoke
   logic        [31:0] fld_ldr_bridge_errs_o;
   logic        [31:0] fld_ldr_no_capacity_o;
   logic        [31:0] fld_ldr_evictions_o;
-  logic        [31:0] fld_ldr_hint_overrides_o;
+  logic        [31:0] fld_ldr_pin_forced_victim_o;
   logic        [31:0] fld_ldr_load_bytes_o;
   logic        [ 2:0] fld_stamp_slot_i;
   logic               fld_stamp_slot_valid_i;

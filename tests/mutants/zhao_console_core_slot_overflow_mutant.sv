@@ -2559,7 +2559,7 @@ module zhao_console_core_slot_overflow_mutant
   output logic [31:0]  fld_ldr_bridge_errs_o,
   output logic [31:0]  fld_ldr_no_capacity_o,
   output logic [31:0]  fld_ldr_evictions_o,
-  output logic [31:0]  fld_ldr_hint_overrides_o,
+  output logic [31:0]  fld_ldr_pin_forced_victim_o,
   output logic [31:0]  fld_ldr_load_bytes_o,
 
   // CONSOLE POLICY: which resident program is the stamp brush, and whether one

@@ -186,7 +186,13 @@ module zhao_field_loader
     output var logic [31:0] bridge_errs_o,      // err beat, early last, missing/extra beat
     output var logic [31:0] no_capacity_o,      // catalogue full of PINNED objects
     output var logic [31:0] evictions_o,
-    output var logic [31:0] hint_overrides_o,   // FT057: allocator disagreed with software
+    // FT057. Evictions whose victim was NOT the globally least-recently-used
+    // object -- which can only happen because a PIN excluded the LRU. It is
+    // deliberately NOT "the allocator disagreed with a software hint": FH2's
+    // INSTALL carries no slot (directive 10.2 makes those operands reserved
+    // zero), so there is no hint to disagree with, and a counter named for one
+    // would be measuring something other than its own name.
+    output var logic [31:0] pin_forced_victim_o,
     output var logic [31:0] load_bytes_o
 );
 
@@ -284,6 +290,14 @@ module zhao_field_loader
   logic            victim_any;
   logic [OBJW-1:0] victim_idx;
   logic [31:0]     best_lru;
+  // THE SAME SEARCH, BLIND TO PINS. It selects nothing and drives nothing; its
+  // only job is to be DIFFERENCED against the real victim so the block can say
+  // when a PIN changed the answer. Differencing the allocator against itself
+  // would be the wired-to-two-operands-that-move-together defect, so this one
+  // deliberately does not consult `obj_pins`.
+  logic            lru_blind_any;
+  logic [OBJW-1:0] lru_blind_idx;
+  logic [31:0]     best_lru_blind;
   integer          ai;
   always_comb begin
     free_any   = 1'b0;
@@ -291,6 +305,9 @@ module zhao_field_loader
     victim_any = 1'b0;
     victim_idx = '0;
     best_lru   = 32'hFFFF_FFFF;
+    lru_blind_any  = 1'b0;
+    lru_blind_idx  = '0;
+    best_lru_blind = 32'hFFFF_FFFF;
     // Descending so the LOWEST qualifying index wins, matching the directory's
     // own loop order in zhao_field_progcache.sv:129.
     for (ai = int'(OBJECTS) - 1; ai >= 0; ai = ai - 1) begin
@@ -303,8 +320,26 @@ module zhao_field_loader
         victim_any = 1'b1;
         victim_idx = OBJW'(ai);
       end
+      if (obj_valid[ai] && (obj_lru[ai] <= best_lru_blind)) begin
+        best_lru_blind = obj_lru[ai];
+        lru_blind_any  = 1'b1;
+        lru_blind_idx  = OBJW'(ai);
+      end
     end
   end
+
+  // THE BINDING HANDLE'S RESERVED BITS ARE CHECKED, NOT IGNORED.
+  // The loader issues {8'd0, generation[7:0], 8'd0, 0.., index}, so bits
+  // [31:24] and [15:OBJW] are zero by construction. `-Wall` reported them
+  // unused once the allocator stopped (wrongly) masking the whole word, and
+  // the right answer to "these bits are unused" on an identity field is to
+  // VALIDATE them: a handle carrying rubbish in a reserved span is not a
+  // handle this loader issued, and accepting it would let a caller reach a
+  // real object with a value the loader never produced.
+  wire bind_handle_ok = (rq_bind_handle[31:24] == 8'd0) &&
+                        (rq_bind_handle[15:OBJW] == '0);
+  wire ctrl_handle_ok = (rq_bind_prog[31:24] == 8'd0) &&
+                        (rq_bind_prog[15:OBJW] == '0);
 
   wire            alloc_any = free_any || victim_any;
   wire [OBJW-1:0] alloc_idx = free_any ? free_idx : victim_idx;
@@ -505,7 +540,7 @@ module zhao_field_loader
       bridge_errs_o <= 32'd0;
       no_capacity_o <= 32'd0;
       evictions_o <= 32'd0;
-      hint_overrides_o <= 32'd0;
+      pin_forced_victim_o <= 32'd0;
       load_bytes_o <= 32'd0;
     end else begin
       if (fh2_resp_valid_o && fh2_resp_ready_i) fh2_resp_valid_o <= 1'b0;
@@ -723,12 +758,23 @@ module zhao_field_loader
             if (alloc_evicts) begin
               if (evictions_o != 32'hFFFF_FFFF) evictions_o <= evictions_o + 32'd1;
             end
-            // FT057: the allocator's choice is the one that is used. If
-            // software's pre-commit guess (the legacy post_slot, carried in the
-            // reserved field) disagrees, that is COUNTED rather than obeyed.
-            if (32'(alloc_idx) != (rq_bind_handle & 32'(OBJECTS - 1))) begin
-              if (hint_overrides_o != 32'hFFFF_FFFF) begin
-                hint_overrides_o <= hint_overrides_o + 32'd1;
+            // FT057, AND THE NAME IS THE CORRECTION. This counter first read
+            // `alloc_idx != (rq_bind_handle & OBJECTS-1)` and was called
+            // `pin_forced_victim_o`. That was WRONG IN THE MISLEADING DIRECTION:
+            // directive 10.2 makes INSTALL's slot/addr operands "reserved
+            // zero", so the "hint" it differenced against was always 0 and the
+            // counter really read "the allocator did not pick slot 0". It
+            // could fire, so no blindness check caught it; it simply measured
+            // something other than its own name -- the wrong diagnosis
+            // attached to a working alarm.
+            //
+            // What is worth counting is the thing FH16 actually promises: that
+            // a PIN can change which object is evicted. This fires when an
+            // eviction chose a victim OTHER than the globally least-recently-
+            // used one, which can only happen because the LRU was pinned.
+            if (alloc_evicts && lru_blind_any && (alloc_idx != lru_blind_idx)) begin
+              if (pin_forced_victim_o != 32'hFFFF_FFFF) begin
+                pin_forced_victim_o <= pin_forced_victim_o + 32'd1;
               end
             end
             burst_off <= 32'd0;
@@ -796,7 +842,8 @@ module zhao_field_loader
               VERB_OPEN_ASSOCIATION: begin
                 // FH16: acquire and PIN at association open. The handle names a
                 // READY object; a staging or absent object cannot be opened.
-                if (obj_ready[rq_bind_prog[OBJW-1:0]] &&
+                if (ctrl_handle_ok &&
+                    obj_ready[rq_bind_prog[OBJW-1:0]] &&
                     !obj_staging[rq_bind_prog[OBJW-1:0]] &&
                     (obj_gen[rq_bind_prog[OBJW-1:0]] == rq_bind_prog[16 +: GENW])) begin
                   obj_pins[rq_bind_prog[OBJW-1:0]] <= obj_pins[rq_bind_prog[OBJW-1:0]] + 16'd1;
@@ -812,7 +859,8 @@ module zhao_field_loader
                 // owed results" -- directive 10.2. Here that is exactly one
                 // act: drop the pin. Owed results live in the host's own
                 // retirement path and this block never touches them.
-                if (obj_valid[rq_bind_prog[OBJW-1:0]] &&
+                if (ctrl_handle_ok &&
+                    obj_valid[rq_bind_prog[OBJW-1:0]] &&
                     (obj_pins[rq_bind_prog[OBJW-1:0]] != 16'd0)) begin
                   obj_pins[rq_bind_prog[OBJW-1:0]] <= obj_pins[rq_bind_prog[OBJW-1:0]] - 16'd1;
                   st_verdict <= V_OK;
@@ -840,7 +888,8 @@ module zhao_field_loader
             // FT058: "equal canonical code/table hash but different I/O
             // metadata does not cause semantic object aliasing. Compare exact
             // stored image identity."
-            if (obj_ready[rq_bind_handle[OBJW-1:0]] &&
+            if (bind_handle_ok &&
+                obj_ready[rq_bind_handle[OBJW-1:0]] &&
                 !obj_staging[rq_bind_handle[OBJW-1:0]] &&
                 (obj_gen[rq_bind_handle[OBJW-1:0]] == rq_bind_handle[16 +: GENW]) &&
                 (obj_handle32[rq_bind_handle[OBJW-1:0]] == rq_bind_prog) &&

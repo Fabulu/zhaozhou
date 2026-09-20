@@ -431,9 +431,30 @@ int main(int argc, char** argv) {
        0, kVBadMeta},
   };
 
+  // Read the PER-CLASS counter that the expected verdict names. Asserting the
+  // verdict alone would show the check fired; asserting the counter shows the
+  // INSTRUMENT for that class can see it. Rule: every new counter owes a
+  // demonstration that it can SEE the thing, and a per-class counter nobody
+  // watches move is the shape this console keeps finding.
+  auto counter_for = [&dut](uint8_t verdict) -> uint32_t {
+    switch (verdict) {
+      case kVBadEnvelope: return dut.bad_envelope_o;
+      case kVBadRange:    return dut.bad_range_o;
+      case kVBadSection:  return dut.bad_section_o;
+      case kVBadCrc:      return dut.bad_crc_o;
+      case kVBadMeta:     return dut.bad_meta_o;
+      case kVBridgeErr:   return dut.bridge_errs_o;
+      case kVNoCapacity:  return dut.no_capacity_o;
+      case kVBadOperation:return dut.bad_operation_o;
+      default:            return 0u;
+    }
+  };
+
   for (const Bad& b : bads) {
     const uint32_t ready_before = dut.pub_ready_o;
     const uint32_t ok_before = dut.installs_ok_o;
+    const uint32_t class_before = counter_for(b.want);
+    const uint32_t failed_before = dut.installs_failed_o;
     std::vector<uint8_t> v = cap.bytes;
     if (b.width == 1) {
       v[b.off] = static_cast<uint8_t>(b.value);
@@ -459,6 +480,16 @@ int main(int argc, char** argv) {
                   b.name);
     check(dut.installs_ok_o == ok_before, msg, static_cast<int>(ok_before),
           static_cast<int>(dut.installs_ok_o));
+    std::snprintf(msg, sizeof(msg),
+                  "FT050 control [%s]: its PER-CLASS counter FIRED", b.name);
+    check(counter_for(b.want) == class_before + 1, msg,
+          static_cast<int>(class_before + 1),
+          static_cast<int>(counter_for(b.want)));
+    std::snprintf(msg, sizeof(msg), "FT050 control [%s]: installs_failed_o FIRED",
+                  b.name);
+    check(dut.installs_failed_o == failed_before + 1, msg,
+          static_cast<int>(failed_before + 1),
+          static_cast<int>(dut.installs_failed_o));
   }
 
   // The CRC control, kept separate because it is the one check the others
@@ -695,7 +726,7 @@ int main(int argc, char** argv) {
     check((dut.pub_pinned_o & 1u) != 0, "FT057: and pub_pinned_o shows it", 1,
           (dut.pub_pinned_o & 1u) ? 1 : 0);
 
-    const uint32_t hint_before = dut.hint_overrides_o;
+    const uint32_t hint_before = dut.pin_forced_victim_o;
     const uint32_t evict_before = dut.evictions_o;
 
     Capsule c9 = build_capsule(kHandle + 0x100u);
@@ -714,9 +745,16 @@ int main(int argc, char** argv) {
     check((dut.pub_ready_o & 1u) != 0,
           "FT057: and the PINNED object is still resident and READY", 1,
           (dut.pub_ready_o & 1u) ? 1 : 0);
-    check(dut.hint_overrides_o >= hint_before,
-          "FT057: hint_overrides_o is a live counter", 1,
-          (dut.hint_overrides_o >= hint_before) ? 1 : 0);
+    // FIRED, not merely "did not go backwards". The first version of this
+    // assertion read `>= hint_before`, which is true of a counter that is
+    // welded shut -- a check that cannot fail, guarding a counter that (as
+    // first written) measured something other than its name. Both halves are
+    // fixed: the counter now differences the real victim against a PIN-BLIND
+    // LRU, and this asserts it MOVED BY ONE on the eviction a pin forced.
+    check(dut.pin_forced_victim_o == hint_before + 1,
+          "FT057: pin_forced_victim_o FIRED -- a PIN, not luck, chose the victim",
+          static_cast<int>(hint_before + 1),
+          static_cast<int>(dut.pin_forced_victim_o));
 
     // =======================================================================
     // FT065. A FULLY PINNED CATALOGUE RETURNS NO_CAPACITY PROMPTLY.
