@@ -1,0 +1,403 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q010: smoke-packet-arithmetic
+## Brief
+This is the integration bench for a games console. It builds ONE sealed command
+packet in `pkt_mem` and feeds it to the real command DMA, decoder and executor.
+Four separate merges have broken this builder in four different ways, and every
+automated gate stayed green each time, so it is reviewed rather than trusted.
+
+The packet's shape: a 36-byte header, then N fixed-size records laid down at a
+running offset `ro`, then a 4-byte CRC32C over the first `ro` bytes of the body.
+Two header fields must agree with `ro`: a 32-bit RECORD COUNT at bytes 24..27
+and a 32-bit BODY LENGTH at bytes 28..31. `PKT_MAX_C` sizes `pkt_mem` and must
+be at least `o + ro + 4`.
+
+Each record is built by a function that returns a fixed-width vector, and the
+bytes are then copied into `pkt_mem` little-endian in a loop. Record sizes in
+this packet are 32, 48, 96 and `ZHAO_SET_VIEW_BYTES` bytes.
+
+Known history, so you can look for recurrences rather than re-deriving them:
+
+* a record-CLEAR line (`bf = '0; pc = '0; ...`) was once moved BELOW two of the
+  fills, so two records were zeroed after being filled and the whole packet was
+  rejected with a symptom that appeared three subsystems away;
+* two records were once given the same short variable name by a careless rename,
+  so one silently overwrote the other;
+* one record was written into a memory page that overlapped another, producing
+  18 degenerate normals downstream;
+* declarations were once placed after statements inside the task, which is
+  illegal SystemVerilog.
+
+## Questions
+1. Does the header's RECORD COUNT equal the number of records actually laid
+   down, and does the BODY LENGTH equal the final `ro`? Count the records in the
+   code, do not trust the literal.
+2. Does every `ro = ro + <n>` match the width of the record just written? Check
+   each one against the vector's declared width, and name any mismatch.
+3. Is every record variable ZEROED BEFORE it is filled, and is each one filled
+   exactly once? Name any variable assigned twice, or read before assignment, or
+   cleared after being filled.
+4. Is `PKT_MAX_C` large enough for `o + ro + 4`, and is there any bound check?
+   What happens if a later edit adds a record and forgets the literal?
+5. Does the CRC cover exactly the bytes that were written -- not one byte fewer,
+   not the header, not the CRC's own four bytes? And is it written at the right
+   offset with the right byte order?
+6. Are any two records written to OVERLAPPING offsets in `pkt_mem`, or does any
+   record's copy loop run past its own field?
+
+For each answer give the exact line numbers. If something is correct, say so in
+one line; spend your words on what is wrong.
+
+# INPUT tests/prod/tb_zhao_console_core_smoke.sv:3700-4000
+```
+ 3700|       for (int unsigned k = 0; k < 8; k++) upl_mem[SPT_ARENA_W + 8 + k] = ln[64*k +: 64];
+ 3701|       // entries 2 and 3
+ 3702|       e0 = spt_entry(TBL_SEL_SPW, 7'd0, 2'd2,
+ 3703|                      (PART_TBL_LD_W'(7'd0) << TBL_S_OFF_CHD) |
+ 3704|                      (PART_TBL_LD_W'(5'd1) << TBL_S_OFF_CNT) |
+ 3705|                      (PART_TBL_LD_W'(1'b1) << TBL_S_OFF_KNW));
+ 3706|       e1 = spt_entry(TBL_SEL_CRV, 7'd0, 2'd0,
+ 3707|                      (PART_TBL_LD_W'(TBL_CURVE_SIZE)   << TBL_V_OFF_SIZ) |
+ 3708|                      (PART_TBL_LD_W'(TBL_CURVE_COLOUR) << TBL_V_OFF_CLR));
+ 3709|       ln = {e1, e0};
+ 3710|       for (int unsigned k = 0; k < 8; k++) upl_mem[SPT_ARENA_W + 16 + k] = ln[64*k +: 64];
+ 3711|     end
+ 3712|     fold_c_i = 32'hFFFF_FFFF;
+ 3713|     for (int unsigned w = 0; w < SPT_WORDS_C; w++) begin
+ 3714|       fold_d_i = upl_mem[SPT_ARENA_W + w];
+ 3715|       #1ns;
+ 3716|       fold_c_i = fold_c_o;
+ 3717|     end
+ 3718|     upl_crc_species_q = ~fold_c_i;
+ 3719|     begin : build_packet
+ 3720|       zhao_abi_pkg::zhao_rec_begin_frame_t      bf;
+ 3721|       zhao_abi_pkg::zhao_rec_set_presentation_contract_t pc;
+ 3722|       zhao_abi_pkg::zhao_rec_set_view_t         sv;
+ 3723|       zhao_abi_pkg::zhao_rec_publish_resource_t pr;
+ 3724|       zhao_abi_pkg::zhao_rec_publish_resource_t pr2;
+ 3725|       zhao_abi_pkg::zhao_rec_publish_resource_t pr3;
+ 3726|       zhao_abi_pkg::zhao_rec_draw_form_t        df;
+ 3727|       zhao_abi_pkg::zhao_rec_end_frame_t        ef;
+ 3728|       zhao_abi_pkg::zhao_rec_set_environment_t  se;
+ 3729|       zhao_abi_pkg::zhao_rec_set_population_t   spop;
+ 3730|       logic [255:0] bfv, efv;
+ 3731|       logic [383:0] prv, pr2v, pr3v, pcv, sev, spopv;
+ 3732|       logic [255:0] dfv;
+ 3733|       logic [8*zhao_abi_pkg::ZHAO_SET_VIEW_BYTES-1:0] svv;   // R63 grew SetView 96 -> 112; take the width from the package
+ 3734|       logic [511:0] matv;
+ 3735|       logic [31:0]  c;
+ 3736|       int unsigned  o;
+ 3737|       // THE RUNNING RECORD OFFSET, added 2026-09-20 with ruling R63. The ten
+ 3738|       // offsets below used to be literals, and when SetView grew from 96 to 112
+ 3739|       // bytes every record after it landed 16 bytes early -- with a VALID CRC
+ 3740|       // over the wrong bytes, so the decoder refused the packet and the smoke
+ 3741|       // reported "GEOM.REPLAY released no meshlet", which reads as a geometry
+ 3742|       // fault and is a layout one. A running sum cannot make that mistake, and
+ 3743|       // `ro` at the end IS the byte count the header must declare.
+ 3744|       int unsigned  ro;
+ 3745|       zhao_abi_pkg::zhao_rec_set_post_t         sp;
+ 3746|       zhao_abi_pkg::zhao_rec_set_grade_table_t  gt;
+ 3747|       logic [255:0] spv;
+ 3748|       logic [767:0] gtv2;
+ 3749|       // R52: DebugTraceArm 0xF003, the real producer of DEBUG.TRACE's arming.
+ 3750|       zhao_abi_pkg::zhao_rec_debug_trace_arm_t  ta;
+ 3751|       logic [255:0] tav;
+ 3752|       // EVERY RECORD IS CLEARED BEFORE ANY OF THEM IS FILLED, and the order is
+ 3753|       // load-bearing rather than tidy. The 2026-09-20 merge of the geom and post
+ 3754|       // packets moved this line BELOW the SetPresentationContract and SetView
+ 3755|       // blocks, so two fully populated records were zeroed again before they
+ 3756|       // were packed: CMD.DMA's record walk then read opcode 0x0000 / 0 bytes at
+ 3757|       // offset 32, stamped ST_BAD_LENGTH, and no record ever reached CMD.EXEC.
+ 3758|       // The visible symptom was six subsystems away -- the SetEnvironment never
+ 3759|       // landed, so the smoke's geometry job (gated on `geom_light_env_loads_o
+ 3760|       // >= 2`, ruling R25) was never issued and GEOM.REPLAY released no meshlet.
+ 3761|       bf = '0; pc = '0; sv = '0; pr = '0; ef = '0; se = '0; pr2 = '0; pr3 = '0; df = '0; sp = '0; gt = '0; spop = '0; ta = '0;
+ 3762|       // SetPresentationContract: mode 0 (VIDEO_Z60, the mode the scheduler
+ 3763|       // already runs), two views, and the five token CEILINGS.
+ 3764|       pc.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_PRESENTATION_CONTRACT; pc.h_record_bytes = 16'd48;
+ 3765|       pc.mode = 8'd0; pc.view_count = 8'd2;
+ 3766|       pc.geometry_tokens_0 = TOK_G0_C; pc.geometry_tokens_1 = TOK_G1_C;
+ 3767|       pc.fragment_tokens_0 = TOK_F0_C; pc.fragment_tokens_1 = TOK_F1_C;
+ 3768|       pc.shared_tokens     = TOK_SH_C;
+ 3769|       // SetView, view 1, carrying THE SAME camera the host already wrote
+ 3770|       // (SGF_MAT, profile 0) so the raster is unchanged -- and view 1's REQUEST.
+ 3771|       for (int unsigned k = 0; k < 16; k++) matv[32*k +: 32] = SGF_MAT[k];
+ 3772|       sv.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_VIEW;
+ 3773|       // FROM THE PACKAGE, NOT A LITERAL. This was `16'd96` until ruling R63
+ 3774|       // grew the record to 112 bytes; taking it from the generated constant is
+ 3775|       // what stops the bench and the ABI from disagreeing again.
+ 3776|       sv.h_record_bytes = 16'(zhao_abi_pkg::ZHAO_SET_VIEW_BYTES);
+ 3777|       sv.view_id = 8'd1; sv.viewport_id = 8'd1; sv.flags = 16'd0;
+ 3778|       sv.view_projection = zhao_abi_pkg::zhao_mat4fx_t'(matv);
+ 3779|       sv.pixel_error     = 32'h0001_0000;
+ 3780|       sv.geometry_tokens = TOK_REQ_G1_C;
+ 3781|       sv.fragment_tokens = TOK_REQ_F1_C;
+ 3782|       // THE EYE (ruling R63), carried but NOT YET OBSERVED IN THIS BENCH, and
+ 3783|       // said so rather than left to be inferred. `zhao_cmd_exec` commits these
+ 3784|       // three words to projector configuration addresses 19/20/21, and the block
+ 3785|       // that decodes them -- `zhao_view_eye` -- is not composed into
+ 3786|       // `zhao_console_core` yet because its consumer `zhao_terrain_lod` is not
+ 3787|       // (core entry I21). The producer is proven at `tests/command/
+ 3788|       // cmd_exec_directed.cpp` cases 22-24 and the store at `view_eye_directed`.
+ 3789|       // A DISTINCTIVE, NON-ZERO value is used anyway: zero is a legal eye, so a
+ 3790|       // zero here would prove nothing the day the consumer lands, and a value
+ 3791|       // that is already flowing is one less thing to add then.
+ 3792|       sv.eye_0 = 32'h0004_0000;   // x = +4.0 m, fx16
+ 3793|       sv.eye_1 = 32'h0002_8000;   // y = +2.5 m
+ 3794|       sv.eye_2 = 32'hFFF6_0000;   // z = -10.0 m, signed on purpose
+ 3795| 
+ 3796|       bf.h_opcode = zhao_abi_pkg::ZHAO_OP_BEGIN_FRAME;       bf.h_record_bytes = 16'd32;
+ 3797|       bf.frame_id = 32'd1;
+ 3798|       pr.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE;  pr.h_record_bytes = 16'd48;
+ 3799|       pr.h_source_id    = 32'd77;
+ 3800|       pr.resource       = {UPL_INDEX_C, 8'h2A};              // {index:24, generation:8}, index HIGH
+ 3801|       pr.hps_addr_lo    = UPL_ARENA_C;
+ 3802|       pr.hps_addr_hi    = 32'd0;
+ 3803|       pr.vram_dst       = UPL_REGION_C;
+ 3804|       pr.length         = 32'(UPL_WORDS_C * 8);
+ 3805|       pr.crc32c         = upl_crc_material_q;
+ 3806|       pr.new_generation = UPL_GEN_C;
+ 3807|       pr.epoch          = UPL_EPOCH_C;
+ 3808|       pr.dst_slot       = UPL_SLOT_C;
+ 3809|       pr.kind           = UPL_KIND_C;
+ 3810|       // THE SECOND PUBLICATION: the MESH_STREAM page the draw below names.
+ 3811|       // Its handle generation is the low byte of the generation it is
+ 3812|       // published with, because that is what GEOM.DRAWJOB compares -- the same
+ 3813|       // law `zhao_material_resolve` applies to the same handle shape.
+ 3814|       pr2.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE; pr2.h_record_bytes = 16'd48;
+ 3815|       pr2.h_source_id    = 32'd79;
+ 3816|       pr2.resource       = {MSH_INDEX_C, MSH_GEN_C[7:0]};
+ 3817|       pr2.hps_addr_lo    = UPL_ARENA_C + 32'(MSH_ARENA_W * 8);
+ 3818|       pr2.hps_addr_hi    = 32'd0;
+ 3819|       pr2.vram_dst       = MSH_DST_C;
+ 3820|       pr2.length         = 32'(MSH_WORDS_C * 8);
+ 3821|       pr2.crc32c         = upl_crc_mesh_q;
+ 3822|       pr2.new_generation = MSH_GEN_C;
+ 3823|       pr2.epoch          = UPL_EPOCH_C;
+ 3824|       pr2.dst_slot       = MSH_SLOT_C;
+ 3825|       pr2.kind           = MSH_KIND_C;
+ 3826|       // THE THIRD PUBLICATION (R42): the SPECIES_TABLE page. Its kind is what
+ 3827|       // u_part_table_loader watches for, so nothing else in the console has
+ 3828|       // to know a species table exists.
+ 3829|       pr3.h_opcode = zhao_abi_pkg::ZHAO_OP_PUBLISH_RESOURCE; pr3.h_record_bytes = 16'd48;
+ 3830|       pr3.h_source_id    = 32'd83;
+ 3831|       pr3.resource       = {SPT_INDEX_C, SPT_GEN_C[7:0]};
+ 3832|       pr3.hps_addr_lo    = UPL_ARENA_C + 32'(SPT_ARENA_W * 8);
+ 3833|       pr3.hps_addr_hi    = 32'd0;
+ 3834|       pr3.vram_dst       = SPT_DST_C;
+ 3835|       pr3.length         = 32'(SPT_WORDS_C * 8);
+ 3836|       pr3.crc32c         = upl_crc_species_q;
+ 3837|       pr3.new_generation = SPT_GEN_C;
+ 3838|       pr3.epoch          = UPL_EPOCH_C;
+ 3839|       pr3.dst_slot       = SPT_SLOT_C;
+ 3840|       pr3.kind           = SPT_KIND_C;
+ 3841|       // THE DRAW ITSELF (`DrawForm 0x0300`). `form` names the page above,
+ 3842|       // `transform` names the Loom node this bench streams, and `flags` is
+ 3843|       // ZERO -- cull mode NONE, the double-sided law every capture was
+ 3844|       // recorded under, so the fixture's triangles are not culled by winding.
+ 3845|       df.h_opcode = zhao_abi_pkg::ZHAO_OP_DRAW_FORM;         df.h_record_bytes = 16'd32;
+ 3846|       df.h_source_id   = 32'(SMK_DRAW_SRC_C);
+ 3847|       df.form          = {MSH_INDEX_C, MSH_GEN_C[7:0]};
+ 3848|       df.material_set  = {UPL_INDEX_C, 8'h2A};
+ 3849|       df.transform     = {24'(SMK_XFORM_NODE_C), 8'h00};
+ 3850|       df.viewport_mask = 8'h03;                 // BOTH cameras, as before
+ 3851|       df.semantic_weight = 8'd7;
+ 3852|       df.flags         = 16'd0;
+ 3853|       se.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_ENVIRONMENT;   se.h_record_bytes = 16'd48;
+ 3854|       se.h_source_id = 32'd78;
+ 3855|       se.sun_yaw     = SGF_ENV_YAW;
+ 3856|       se.sun_pitch   = SGF_ENV_PITCH;
+ 3857|       se.sun_colour  = SGF_ENV_SUN;
+ 3858|       se.ambient     = SGF_ENV_AMB;
+ 3859|       // R41: THE POPULATION DESCRIPTOR, from the command packet. Every value
+ 3860|       // here used to be a board pin on zhao_console_core (entry I7) or a
+ 3861|       // provisional seed port (I1's, R46), and they are the SAME values --
+ 3862|       // origin at the island datum, a unit +Y plane at y = PART_TER_H, and a
+ 3863|       // first generation of N_PART_RECORDS staged in buffer 0. What changed is
+ 3864|       // that they now TRAVEL: decoder -> executor -> PART.POP -> PART.COLLIDE,
+ 3865|       // PART.TERRAIN_TAP and the generation store.
+ 3866|       spop.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_POPULATION;    spop.h_record_bytes = 16'd48;
+ 3867|       spop.h_source_id   = 32'd81;
+ 3868|       spop.population    = SMK_POP_HANDLE_C;
+ 3869|       spop.origin_x      = 32'sd0;
+ 3870|       spop.origin_y      = 32'sd0;
+ 3871|       spop.origin_z      = 32'sd0;
+ 3872|       spop.active_count  = 32'(N_PART_RECORDS);
+ 3873|       spop.plane_c       = 32'(PART_TER_H) <<< 10;   // y = +100 LSBs, Q NRM_Q
+ 3874|       spop.plane_nx      = 16'sd0;
+ 3875|       spop.plane_ny      = 16'sd1024;                // NRM_Q = 10: a unit +Y normal
+ 3876|       spop.plane_nz      = 16'sd0;
+ 3877|       spop.flags         = 16'h0003;                 // b0 seed, b1 plane_enable
+ 3878|       ef.h_opcode = zhao_abi_pkg::ZHAO_OP_END_FRAME;         ef.h_record_bytes = 16'd32;
+ 3879|       // SetPost (R36): POST.ECHO ARMED (R35) -- the capture this bench checks
+ 3880|       // word for word exists only because this record arms it -- and a look
+ 3881|       // whose every value is DISTINCTIVE and whose picture is still the
+ 3882|       // identity: no grade, no flash amount, no glow for the gain to scale,
+ 3883|       // no ink bit for the ink colour to paint. Each value is read back at
+ 3884|       // POST.COMPOSITE's own port below, so the carrier is proven end to end.
+ 3885|       sp.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_POST;          sp.h_record_bytes = 16'd32;
+ 3886|       sp.bloom_gain   = SP_GAIN_C;
+ 3887| `ifdef ZHAO_SMOKE_NO_ECHO_ARM
+ 3888|       sp.flags        = 8'h00;                               // NEGATIVE CONTROL: disarmed
+ 3889| `else
+ 3890|       sp.flags        = 8'h02;                               // echo ARM, grade off
+ 3891| `endif
+ 3892|       sp.flash_amount = 8'd0;
+ 3893|       sp.bias_r       = 16'(SP_BIAS_R_C);
+ 3894|       sp.bias_g       = 16'(SP_BIAS_G_C);
+ 3895|       sp.bias_b       = 16'(SP_BIAS_B_C);
+ 3896|       sp.flash        = SP_FLASH_C;
+ 3897|       sp.ink          = SP_INK_C;
+ 3898|       // SetGradeTable (R36): eight B-curve entries at 8..15, distinctive s24s,
+ 3899|       // read back out of POST.COMPOSITE's own table below.
+ 3900|       gt.h_opcode = zhao_abi_pkg::ZHAO_OP_SET_GRADE_TABLE;   gt.h_record_bytes = 16'd96;
+ 3901|       gt.curve = 8'd2; gt.first = 8'd8; gt.count = 8'd8;
+ 3902|       // DebugTraceArm (R52): ARM STAGE 0 -- `zref::trace::kCommandDecoder` --
+ 3903|       // and nothing else, because stage 0 is the only one this console has a
+ 3904|       // producer for (core entry I18). `flags` bit 0 clears the ring first, so
+ 3905|       // the count this bench checks describes THIS packet and nothing before
+ 3906|       // it. It is placed SECOND, right after BeginFrame, because the arming
+ 3907|       // record is itself offered to the ring before the arm lands -- so every
+ 3908|       // record after it is traced and it is not.
+ 3909|       ta.h_opcode = zhao_abi_pkg::ZHAO_OP_DEBUG_TRACE_ARM; ta.h_record_bytes = 16'd32;
+ 3910| `ifdef ZHAO_SMOKE_BAD_TRACE_ARM
+ 3911|       // NEGATIVE CONTROL for `cmd_exec_trace_arm_refused_o`: bit 7 of
+ 3912|       // stage_mask is unassigned, so the record is refused WHOLE and nothing
+ 3913|       // is armed. REFUSE, NEVER MASK.
+ 3914|       ta.stage_mask = 8'b1000_0001;
+ 3915| `else
+ 3916|       ta.stage_mask = 8'b0000_0001;
+ 3917| `endif
+ 3918|       ta.flags      = 8'h01;
+ 3919|       bfv = zhao_abi_pkg::zhao_pack_begin_frame(bf);
+ 3920|       prv  = zhao_abi_pkg::zhao_pack_publish_resource(pr);
+ 3921|       pr2v = zhao_abi_pkg::zhao_pack_publish_resource(pr2);
+ 3922|       pr3v = zhao_abi_pkg::zhao_pack_publish_resource(pr3);
+ 3923|       dfv  = zhao_abi_pkg::zhao_pack_draw_form(df);
+ 3924|       sev = zhao_abi_pkg::zhao_pack_set_environment(se);
+ 3925|       spopv = zhao_abi_pkg::zhao_pack_set_population(spop);
+ 3926|       efv = zhao_abi_pkg::zhao_pack_end_frame(ef);
+ 3927|       pcv = zhao_abi_pkg::zhao_pack_set_presentation_contract(pc);
+ 3928|       svv = zhao_abi_pkg::zhao_pack_set_view(sv);
+ 3929| 
+ 3930|       spv = zhao_abi_pkg::zhao_pack_set_post(sp);
+ 3931|       tav = zhao_abi_pkg::zhao_pack_debug_trace_arm(ta);
+ 3932|       gtv2 = zhao_abi_pkg::zhao_pack_set_grade_table(gt);
+ 3933|       for (int unsigned k = 0; k < 72; k++)
+ 3934|         gtv2[8*(zhao_abi_pkg::ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0 + k) +: 8] = sm_grade_byte(k);
+ 3935|       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
+ 3936|       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
+ 3937|             ro = 0;
+ 3938|       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = bfv[8*k +: 8];
+ 3939|       ro = ro + 32;
+ 3940|       // DebugTraceArm is SECOND (R52): every record the ring is meant to see comes
+ 3941|       // after the arm, which is what TRACE_SKIP_C counts.
+ 3942|       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = tav[8*k +: 8];
+ 3943|       ro = ro + 32;
+ 3944|       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pcv[8*k +: 8];
+ 3945|       ro = ro + 48;
+ 3946|       for (int unsigned k = 0; k < zhao_abi_pkg::ZHAO_SET_VIEW_BYTES; k++)
+ 3947|         pkt_mem[o + ro + k] = svv[8*k +: 8];
+ 3948|       ro = ro + zhao_abi_pkg::ZHAO_SET_VIEW_BYTES;
+ 3949|       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = prv[8*k +: 8];
+ 3950|       ro = ro + 48;
+ 3951|       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr2v[8*k +: 8];
+ 3952|       ro = ro + 48;
+ 3953|       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr3v[8*k +: 8];
+ 3954|       ro = ro + 48;
+ 3955|       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = sev[8*k +: 8];
+ 3956|       ro = ro + 48;
+ 3957|       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = spv[8*k +: 8];
+ 3958|       ro = ro + 32;
+ 3959|       for (int unsigned k = 0; k < 96; k++) pkt_mem[o + ro + k] = gtv2[8*k +: 8];
+ 3960|       ro = ro + 96;
+ 3961|       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = spopv[8*k +: 8];
+ 3962|       ro = ro + 48;
+ 3963|       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = dfv[8*k +: 8];
+ 3964|       ro = ro + 32;
+ 3965|       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = efv[8*k +: 8];
+ 3966|       ro = ro + 32;
+ 3967|       // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
+ 3968|       // deadline 0 (the mode's period), TEN records, ro bytes of them (ro is the running sum above)
+ 3969|       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
+ 3970|       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
+ 3971|       {pkt_mem[zhao_abi_pkg::ZHAO_OFF_FLAGS + 1], pkt_mem[zhao_abi_pkg::ZHAO_OFF_FLAGS]} = 16'h0001;
+ 3972|       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
+ 3973|       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
+ 3974|       {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd13;
+ 3975|       // `ro` IS THE BYTE COUNT -- the same running sum that placed the records,
+ 3976|       // so the header cannot declare a length the packing did not produce.
+ 3977|       {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'(ro);
+ 3978|       c = 32'hFFFF_FFFF;
+ 3979|       for (int unsigned k = 0; k < 32; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[k]);
+ 3980|       {pkt_mem[35], pkt_mem[34], pkt_mem[33], pkt_mem[32]} = ~c;
+ 3981|       c = 32'hFFFF_FFFF;
+ 3982|       for (int unsigned k = 0; k < ro; k++) c = zhao_abi_pkg::zhao_crc32c_step(c, pkt_mem[o + k]);
+ 3983|       {pkt_mem[o+ro+3], pkt_mem[o+ro+2], pkt_mem[o+ro+1], pkt_mem[o+ro]} = ~c;
+ 3984|       pkt_len_q   = o + ro + 4;
+ 3985|       pkt_armed_q = 1'b1;
+ 3986|       // Printed at BUILD time, not at the end: when the packet is malformed the
+ 3987|       // bench dies inside GEOM.REPLAY's watchdog and every summary line below is
+ 3988|       // unreachable, so the one fact that would have identified a layout fault
+ 3989|       // is the one fact you cannot see. Ruling R63's SetView growth cost a whole
+ 3990|       // debugging pass to exactly that.
+ 3991|       $display("SMOKE: packet    records=10 command_bytes=%0d pkt_len=%0d setview=%0d",
+ 3992|                ro, pkt_len_q, zhao_abi_pkg::ZHAO_SET_VIEW_BYTES);
+ 3993|       // EVERY RECORD'S OWN HEADER, AGAINST THE LAWFUL SIZE FOR ITS OPCODE.
+ 3994|       // This walks the bytes that will actually be fetched, not the variables
+ 3995|       // that wrote them, and it exists because of a real defect: a lost edit
+ 3996|       // left `sv.h_record_bytes` at zero, and the ONLY symptom anywhere in the
+ 3997|       // console was `zhao_cmd_dma` returning ST_BAD_LENGTH -- which surfaces
+ 3998|       // 200,000 cycles later as "GEOM.REPLAY released no meshlet", a sentence
+ 3999|       // about the wrong subsystem entirely. Four lines here name the record.
+ 4000|       begin : dump_records
+```
+
+# INPUT tests/prod/tb_zhao_console_core_smoke.sv:1840-1870
+```
+ 1840| 
+ 1841|   // ---- the SHELL's HPS port: the FRAME RING and the upload arena ------------
+ 1842|   // Until 2026-09-19 the shell's own HPS pins were tied low, so no command
+ 1843|   // packet ever reached this console and CMD.DECODER / CMD.EXEC / DEBUG.TRACE
+ 1844|   // walked nothing (the note at the DEBUG.TRACE check said so). The bench now
+ 1845|   // plays the far side of the shell's REAL `zhao_hps_bridge`, exactly as it
+ 1846|   // plays the terrain spine's: a grant, a fixed latency, then len/8 beats.
+ 1847|   //
+ 1848|   // It serves TWO regions and says so loudly for anything else:
+ 1849|   //   * FRAME_RING slot 0's body at RING_BASE (0) + the 4-KiB descriptor table
+ 1850|   //     -- one sealed packet, built below from the GENERATED packers;
+ 1851|   //   * MEM.UPLOAD's staging arena -- the bytes that packet's PublishResource
+ 1852|   //     names.
+ 1853|   // A write, or a read anywhere else, is something this bench has no bytes
+ 1854|   // for, and serving zeros would be inventing them.
+ 1855|   localparam logic [31:0] RING_SLOT0_C  = 32'h0000_1000;   // RING_BASE + DESC_TABLE
+ 1856|   localparam int unsigned PKT_MAX_C     = 768;   // records + header + CRC; the `ro` accumulator below is the arithmetic (thirteen records, SetView 112 B since R63)
+ 1857|   // The token counts the packet carries (R18/R33): the CONTRACT's ceiling per
+ 1858|   // view and class, and view 1's SetView REQUEST -- geometry ABOVE its ceiling
+ 1859|   // (so it is clamped, and counted) and fragment BELOW it (so it lowers the
+ 1860|   // allowance). Counts, as authored; nothing converts them.
+ 1861|   localparam logic [31:0] TOK_G0_C = 32'd40000, TOK_G1_C = 32'd30000;
+ 1862|   localparam logic [31:0] TOK_F0_C = 32'd90000, TOK_F1_C = 32'd80000;
+ 1863|   localparam logic [31:0] TOK_SH_C = 32'd5000;
+ 1864|   localparam logic [31:0] TOK_REQ_G1_C = 32'd50000, TOK_REQ_F1_C = 32'd20000;
+ 1865|   // THE LOOK THE PACKET CARRIES (R36): every value distinctive, the picture
+ 1866|   // still the identity (see build_packet).
+ 1867|   localparam logic [7:0]        SP_GAIN_C   = 8'h5A;
+ 1868|   localparam logic signed [8:0] SP_BIAS_R_C = -9'sd256;
+ 1869|   localparam logic signed [8:0] SP_BIAS_G_C = 9'sd37;
+ 1870|   localparam logic signed [8:0] SP_BIAS_B_C = 9'sd255;
+```

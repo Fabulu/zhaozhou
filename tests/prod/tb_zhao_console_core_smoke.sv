@@ -3742,6 +3742,10 @@ module tb_zhao_console_core_smoke
       // fault and is a layout one. A running sum cannot make that mistake, and
       // `ro` at the end IS the byte count the header must declare.
       int unsigned  ro;
+      // ...and `nrec` at the end IS the record count the header must declare,
+      // for exactly the same reason. Added 2026-09-20 after a review found the
+      // header carrying 13 and the build line printing 10.
+      int unsigned  nrec;
       zhao_abi_pkg::zhao_rec_set_post_t         sp;
       zhao_abi_pkg::zhao_rec_set_grade_table_t  gt;
       logic [255:0] spv;
@@ -3934,44 +3938,67 @@ module tb_zhao_console_core_smoke
         gtv2[8*(zhao_abi_pkg::ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0 + k) +: 8] = sm_grade_byte(k);
       for (int unsigned k = 0; k < PKT_MAX_C; k++) pkt_mem[k] = 8'd0;
       o = zhao_abi_pkg::ZHAO_FRAME_HEADER_BYTES;
-            ro = 0;
+      ro   = 0;
+      // COUNTED, NOT DECLARED, for the same reason `ro` is. Review 2026-09-20
+      // found the header field saying 13 while the build line three screens
+      // down still printed `records=10` -- two literals for one fact, and the
+      // one that was wrong is the one that gets READ, because it is the
+      // evidence line. Both now come from this counter, so they cannot
+      // disagree with each other or with the records actually laid down.
+      nrec = 0;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = bfv[8*k +: 8];
-      ro = ro + 32;
+      ro = ro + 32;  nrec = nrec + 1;
       // DebugTraceArm is SECOND (R52): every record the ring is meant to see comes
       // after the arm, which is what TRACE_SKIP_C counts.
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = tav[8*k +: 8];
-      ro = ro + 32;
+      ro = ro + 32;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pcv[8*k +: 8];
-      ro = ro + 48;
+      ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < zhao_abi_pkg::ZHAO_SET_VIEW_BYTES; k++)
         pkt_mem[o + ro + k] = svv[8*k +: 8];
-      ro = ro + zhao_abi_pkg::ZHAO_SET_VIEW_BYTES;
+      ro = ro + zhao_abi_pkg::ZHAO_SET_VIEW_BYTES;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = prv[8*k +: 8];
-      ro = ro + 48;
+      ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr2v[8*k +: 8];
-      ro = ro + 48;
+      ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = pr3v[8*k +: 8];
-      ro = ro + 48;
+      ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = sev[8*k +: 8];
-      ro = ro + 48;
+      ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = spv[8*k +: 8];
-      ro = ro + 32;
+      ro = ro + 32;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 96; k++) pkt_mem[o + ro + k] = gtv2[8*k +: 8];
-      ro = ro + 96;
+      ro = ro + 96;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 48; k++) pkt_mem[o + ro + k] = spopv[8*k +: 8];
-      ro = ro + 48;
+      ro = ro + 48;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = dfv[8*k +: 8];
-      ro = ro + 32;
+      ro = ro + 32;  nrec = nrec + 1;
       for (int unsigned k = 0; k < 32; k++) pkt_mem[o + ro + k] = efv[8*k +: 8];
-      ro = ro + 32;
-      // header: magic, abi version, flags 0, frame id 1, sequence 1, epoch 0,
-      // deadline 0 (the mode's period), TEN records, ro bytes of them (ro is the running sum above)
+      ro = ro + 32;  nrec = nrec + 1;
+      // THE PACKET MUST FIT. `pkt_mem` is PKT_MAX_C bytes and an out-of-range
+      // write to an unpacked array is silently DISCARDED, so adding a record
+      // without raising the literal produces a truncated packet and a failure
+      // three subsystems downstream. This cannot un-write what has already
+      // been discarded -- the records are laid before `ro` is final -- but it
+      // names the cause instead of leaving a garbled packet to be debugged.
+      // Q010, 2026-09-20: there was no bound check at all.
+      if (o + ro + 4 > PKT_MAX_C)
+        $fatal(1, "SMOKE: the command packet needs %0d bytes and PKT_MAX_C is %0d -- raise it (header %0d + body %0d + CRC 4)",
+               o + ro + 4, PKT_MAX_C, o, ro);
+      // header: magic, abi version, flags, frame id 1, sequence 1, epoch 0,
+      // deadline 0 (the mode's period), `nrec` records, `ro` bytes of them --
+      // both counted by the packing above, never declared beside it.
       {pkt_mem[3], pkt_mem[2], pkt_mem[1], pkt_mem[0]}     = zhao_abi_pkg::ZHAO_FRAME_MAGIC;
       {pkt_mem[5], pkt_mem[4]}                             = 16'(zhao_abi_pkg::ZHAO_ABI_VERSION);
+      // FLAGS BIT 0 IS `ZH_ABI_DEBUG_FLAG_REQUIRED` AND IT IS NOT OPTIONAL
+      // HERE: this packet carries DebugTraceArm 0xF003, and every 0xF0nn
+      // opcode requires it. The comment above used to say "flags 0", which was
+      // true before R52 and is the kind of stale sentence that gets copied
+      // into the next bench.
       {pkt_mem[zhao_abi_pkg::ZHAO_OFF_FLAGS + 1], pkt_mem[zhao_abi_pkg::ZHAO_OFF_FLAGS]} = 16'h0001;
       {pkt_mem[11], pkt_mem[10], pkt_mem[9], pkt_mem[8]}   = 32'd1;
       {pkt_mem[15], pkt_mem[14], pkt_mem[13], pkt_mem[12]} = 32'd1;
-      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'd13;
+      {pkt_mem[27], pkt_mem[26], pkt_mem[25], pkt_mem[24]} = 32'(nrec);
       // `ro` IS THE BYTE COUNT -- the same running sum that placed the records,
       // so the header cannot declare a length the packing did not produce.
       {pkt_mem[31], pkt_mem[30], pkt_mem[29], pkt_mem[28]} = 32'(ro);
@@ -3988,8 +4015,8 @@ module tb_zhao_console_core_smoke
       // unreachable, so the one fact that would have identified a layout fault
       // is the one fact you cannot see. Ruling R63's SetView growth cost a whole
       // debugging pass to exactly that.
-      $display("SMOKE: packet    records=10 command_bytes=%0d pkt_len=%0d setview=%0d",
-               ro, pkt_len_q, zhao_abi_pkg::ZHAO_SET_VIEW_BYTES);
+      $display("SMOKE: packet    records=%0d command_bytes=%0d pkt_len=%0d setview=%0d",
+               nrec, ro, pkt_len_q, zhao_abi_pkg::ZHAO_SET_VIEW_BYTES);
       // EVERY RECORD'S OWN HEADER, AGAINST THE LAWFUL SIZE FOR ITS OPCODE.
       // This walks the bytes that will actually be fetched, not the variables
       // that wrote them, and it exists because of a real defect: a lost edit

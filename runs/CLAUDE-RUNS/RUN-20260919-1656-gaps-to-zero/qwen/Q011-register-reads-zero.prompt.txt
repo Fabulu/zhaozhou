@@ -1,0 +1,1463 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q011: register-reads-zero
+## Brief
+`completion_register.py` is the single number an entire engineering campaign is
+being steered by. It parses a large SystemVerilog file's comment header — a
+numbered list of "entries", each describing one function the console is
+supposed to have and does not — plus a YAML capability ledger, and prints
+
+    MANDATORY GAPS REMAINING : 27   (14 tie-offs + 11 disconnected + 2 unbuilt)
+
+Work stops when that reaches ZERO, and a very expensive FPGA place-and-route
+run is then started on the strength of it.
+
+This codebase has a written law about exactly this situation:
+
+> A broken instrument lies in ONE direction. The defect always made the answer
+> look BETTER, SMALLER or SIMPLER than the truth. A parser that silently drops
+> what it cannot match reports fewer problems. A self-check whose pattern
+> matches nothing reports "no silent drops". **A number that is exactly zero is
+> a broken instrument until proven otherwise** — precision at zero is a tell,
+> not a result. Nobody audits good news.
+
+YOUR JOB IS TO ATTACK THE TOOL, NOT THE DESIGN. Assume the design is full of
+gaps and ask: what could this program fail to count? I am not asking whether
+the 27 is right. I am asking what it would take for this program to print 0
+while gaps remain.
+
+It has a self-test that plants a gap and checks the parser classifies it. Treat
+that self-test as a claim like any other.
+
+## Questions
+1. **Silent drops.** Find every place a regex, `if`, `continue`, `try/except`,
+   `.get(...)` default or `startswith` can cause an entry, a capability or a
+   line to be skipped WITHOUT being counted or reported. For each, say what
+   input reaches it and whether the skip makes the total smaller.
+2. **The zero path specifically.** Trace what has to be true for the printed
+   total to be 0. Name every way the total can be 0 other than "there are no
+   gaps" — an empty parse, a file that moved, a section header that changed
+   spelling, an exception swallowed somewhere, a list that never got appended
+   to.
+3. **The self-test.** Does the planted gap exercise the SAME code path as a
+   real entry, or a narrower one? Could the self-test pass while the real parse
+   silently drops entries? Name what the self-test does NOT cover.
+4. **Excuses.** Entries can be excused (deferred, superseded, waiting on a
+   board). Can an entry be excused by a note that does not actually cite
+   anything, or by a stale note whose claim is no longer true of the tree? Is
+   the citation CHECKED or merely required to be non-empty?
+5. **Asymmetry.** For each defect you find, state the DIRECTION of the error:
+   does it make the count too high or too low? Rank your findings by "too low"
+   first — an over-count is a nuisance, an under-count ends the campaign early.
+
+Be concrete: file and line, the input that triggers it, and the direction.
+Where the code is genuinely defensive, say so in one line and move on.
+
+# INPUT tools/budget/completion_register.py:1-1392
+```
+    1| """completion_register -- is every mandatory v1 capability REALLY present?
+    2| 
+    3| Owner goal, 2026-09-19: build the entire mandatory v1 console, connect it
+    4| honestly, and drive mandatory unresolved items to ZERO. A mandatory function
+    5| does NOT count as present if it is a tie-off, fake stimulus, an external
+    6| placeholder for storage that belongs in hardware, a disconnected
+    7| implementation, synthesis-pruned dead logic, a stub, a TODO, or an
+    8| unimplemented contract.
+    9| 
+   10| Every mandatory function needs:
+   11| 
+   12|     real producer -> real implementation -> real consumer -> tests/evidence
+   13| 
+   14| THE DESIGN DECISION THAT MATTERS: this register is COMPUTED, not maintained.
+   15| 
+   16| A hand-kept completion table is the thing this repository fails at. It has a
+   17| phantom-reference register that went stale in six days, thirteen mutant copies
+   18| that drifted while staying green, twenty owner documents with no recorded
+   19| disposition, and an ENFORCED-BY tag naming a test no target compiles. A status
+   20| field a human edits is a status field that lies the moment someone forgets.
+   21| 
+   22| So every judgement below is derived from the tree at the moment of the run:
+   23| 
+   24|   * the TIE-OFF list is parsed out of `zhao_console_core.sv`'s own
+   25|     "INCOMPLETE -- TIED OFF, AND WHY" header block. That block is maintained by
+   26|     whoever edits the core, next to the ports it describes, and it is the one
+   27|     place a new gap cannot be added without being written down.
+   28|   * COMPOSED means the module appears in `zhao_console_core`'s closure in
+   29|     `design/fit_targets.yml` AND is instantiated somewhere in that closure.
+   30|     A file in the source list that nothing instantiates is not composed -- the
+   31|     shell's own history records eight such modules that elaborated nowhere.
+   32|   * EVIDENCE means a `tests/CMakeLists.txt` target exists that verilates the
+   33|     module. Seven committed tests were found this session that no target
+   34|     compiled; a file on disk is not a gate.
+   35| 
+   36| Nothing here reads a `status:` field, because there isn't one.
+   37| 
+   38| Exit 0 when zero MANDATORY gaps remain. Exit 1 while any remain. Exit 2 if the
+   39| self-test fails, because a register that cannot see a gap it should see would
+   40| report victory, and that is the one direction this must never fail in.
+   41| """
+   42| 
+   43| from __future__ import annotations
+   44| 
+   45| import json
+   46| import pathlib
+   47| import re
+   48| import sys
+   49| 
+   50| ROOT = pathlib.Path(__file__).resolve().parents[2]
+   51| CORE = ROOT / "fpga" / "rtl" / "prod" / "zhao_console_core.sv"
+   52| TARGETS = ROOT / "design" / "fit_targets.yml"
+   53| CMAKE = ROOT / "tests" / "CMakeLists.txt"
+   54| 
+   55| # The second root. See `board_addition()` for what it is allowed to do and for
+   56| # the measurement that bounds it.
+   57| CONSOLE_ROOT = "zhao_console_core"
+   58| BOARD_ROOT = "zhao_console_board"
+   59| 
+   60| # A tie-off entry in the core's header: "//  I4. NAME ... -- KIND."
+   61| _TIEOFF = re.compile(r"^//\s*(I\d+)\.\s+(.*)$")
+   62| _BOUNDARY = re.compile(r"\bBOUNDARY\b")
+   63| _TIED_ZERO = re.compile(r"TIED TO ZERO|STRUCTURALLY STUCK", re.I)
+   64| _NOT_A_TIEOFF = re.compile(r"NOT a tie-off", re.I)
+   65| 
+   66| 
+   67| def tieoffs() -> list[dict]:
+   68|     """Parse the core's own INCOMPLETE block. It is the authoritative gap list."""
+   69|     if not CORE.exists():
+   70|         raise SystemExit("zhao_console_core.sv is missing; there is no console to audit")
+   71|     text = CORE.read_text(encoding="utf-8", errors="replace")
+   72|     start = text.find("INCOMPLETE -- TIED OFF")
+   73|     if start < 0:
+   74|         raise SystemExit(
+   75|             "zhao_console_core.sv has no 'INCOMPLETE -- TIED OFF' block. Either "
+   76|             "every gap is closed and the block was removed -- in which case "
+   77|             "delete this check deliberately -- or the header was reformatted "
+   78|             "and this register has gone blind. It does not guess."
+   79|         )
+   80|     out: list[dict] = []
+   81|     cur: dict | None = None
+   82|     for line in text[start:].splitlines():
+   83|         m = _TIEOFF.match(line.strip())
+   84|         if m:
+   85|             if cur:
+   86|                 out.append(cur)
+   87|             cur = {"id": m.group(1), "head": m.group(2).strip(), "body": ""}
+   88|             continue
+   89|         if cur is None:
+   90|             continue
+   91|         if not line.strip().startswith("//"):
+   92|             break
+   93|         cur["body"] += " " + line.strip().lstrip("/").strip()
+   94|     if cur:
+   95|         out.append(cur)
+   96| 
+   97|     # THE WALK STOPS AT THE FIRST NON-COMMENT LINE, AND THAT IS A SILENT
+   98|     # TRUNCATION unless somebody checks. Added 2026-09-20 after it happened.
+   99|     #
+  100|     # The loop above breaks out of the block the moment a line does not start
+  101|     # with `//`. That is the right way to find the block's END -- but a single
+  102|     # BLANK LINE accidentally left between two entries ends the walk there too,
+  103|     # and everything after it is never parsed. The register then reports a
+  104|     # SMALLER number with no complaint whatever.
+  105|     #
+  106|     # It cost nothing to find only because the drop was implausible: closing one
+  107|     # entry moved the count by five. Had the blank line been left between the
+  108|     # last two entries, the count would have moved by one -- exactly what was
+  109|     # expected -- and the register would have been wrong and believed. This is
+  110|     # the broken-instrument law in its purest form: the defect reads LOW, which
+  111|     # is the direction nobody audits, and the tool's own docstring already warns
+  112|     # that a reformatted header makes it "go blind". It just had no way to say
+  113|     # so.
+  114|     #
+  115|     # The guard is cheap and exact: after the walk, look for any entry head in
+  116|     # the REST of the file. An entry the walk never reached is one the register
+  117|     # cannot count, so it is a hard failure and it names the id.
+  118|     # COLUMN ZERO ONLY, and the restriction is not cosmetic. The walk itself
+  119|     # matches on `line.strip()`, so an INDENTED comment deep in the port list
+  120|     # ("  // I22.  `zhao_terrain_compcache_front` is composed below") looks
+  121|     # exactly like an entry head to it. Every real entry in the block begins at
+  122|     # column 0; prose that CITES an id is indented, because it is inside
+  123|     # something. Without this, the guard's first run reported I22 -- a genuine
+  124|     # sentence about a genuinely CLOSED entry -- and a check that cries wolf on
+  125|     # a closed gap is one people learn to skip.
+  126|     seen = {t["id"] for t in out}
+  127|     missed = [m.group(1) for m in
+  128|               (_TIEOFF.match(ln) for ln in text[start:].splitlines()
+  129|                if ln.startswith("//"))
+  130|               if m and m.group(1) not in seen]
+  131|     if missed:
+  132|         raise SystemExit(
+  133|             "completion_register: THE ENTRY WALK STOPPED EARLY.\n"
+  134|             "  parsed %d entries, but %s appear later in the file and were "
+  135|             "never reached.\n"
+  136|             "  The walk ends at the first line that does not begin with `//`, so "
+  137|             "a single\n"
+  138|             "  blank line between two entries silently truncates the register -- "
+  139|             "and it\n"
+  140|             "  truncates it DOWNWARD, which is the direction nobody questions. "
+  141|             "Find the\n"
+  142|             "  blank line inside zhao_console_core.sv's INCOMPLETE block and make "
+  143|             "it `//`."
+  144|             % (len(out), ", ".join(missed)))
+  145| 
+  146|     # DUPLICATE ENTRY IDS ARE A HARD FAILURE.
+  147|     #
+  148|     # On 2026-09-19 two packets, within one hour, both numbered a new entry I42
+  149|     # -- one for a deviation store, one for a program store. Entries live in a
+  150|     # LIST here, so both were kept, both were counted, and the register reported
+  151|     # nothing wrong. Worse, other entries CITE ids in prose ("the same absent
+  152|     # owner as I42"), and a reader following that citation lands on whichever of
+  153|     # the two they find first.
+  154|     #
+  155|     # It is not obvious which direction this fails in, which is exactly why it
+  156|     # needs a guard rather than a habit: two entries counted is an over-report,
+  157|     # but a citation resolving to the wrong entry sends work at the wrong seam,
+  158|     # and an editor who "fixes the duplicate" by deleting one silently drops a
+  159|     # real gap. The concurrency that caused it is now the normal way this repo
+  160|     # works -- four to six packets editing one header -- so it will happen again.
+  161|     seen_ids: dict[str, str] = {}
+  162|     for t in out:
+  163|         if t["id"] in seen_ids:
+  164|             raise SystemExit(
+  165|                 "completion_register: DUPLICATE ENTRY ID %s in "
+  166|                 "zhao_console_core.sv's INCOMPLETE block.\n"
+  167|                 "  first : %s\n"
+  168|                 "  second: %s\n"
+  169|                 "Two packets numbering the same entry is the normal hazard now "
+  170|                 "that several edit this header at once. Renumber the LATER one "
+  171|                 "to the next free id and move any prose that cites it -- do not "
+  172|                 "delete either, they are different gaps."
+  173|                 % (t["id"], seen_ids[t["id"]][:90], t["head"][:90]))
+  174|         seen_ids[t["id"]] = t["head"]
+  175| 
+  176|     for t in out:
+  177|         # THE MARKER COUNTS ONLY IN THE HEAD LINE, and that is a correctness fix
+  178|         # rather than tidiness.
+  179|         #
+  180|         # This used to search `head + body`, so ANY occurrence of "NOT a tie-off"
+  181|         # anywhere in an entry's prose removed that entry from the mandatory
+  182|         # count. On 2026-09-19 the TERRAIN.COMPOSE worker watched its new entry
+  183|         # I35 read as CLOSED twice -- once when it used the phrase in an
+  184|         # explanation, and again when it QUOTED THE PHRASE while describing the
+  185|         # first accident. An entry could be settled by writing a sentence about
+  186|         # it.
+  187|         #
+  188|         # That is the flattering direction, in the instrument whose whole purpose
+  189|         # is to prevent free reductions, and it is the same root cause as the
+  190|         # three closure defects before it: THE REGISTER WAS READING A CONVENTION
+  191|         # RATHER THAN A STRUCTURE. Prose is not a declaration. The head line is,
+  192|         # because it is the one line that cannot be written by accident while
+  193|         # discussing something else -- and both entries legitimately using this
+  194|         # today (I9, I25) already declare it there.
+  195|         #
+  196|         # A body occurrence is now a HARD FAILURE rather than a silent exclusion,
+  197|         # so an author who means it is told where to put it instead of being
+  198|         # quietly obeyed.
+  199|         if _NOT_A_TIEOFF.search(t["body"]) and not _NOT_A_TIEOFF.search(t["head"]):
+  200|             raise SystemExit(
+  201|                 "completion_register: entry %s says 'NOT a tie-off' in its BODY.\n"
+  202|                 "  %s\n"
+  203|                 "That phrase settles an entry and must therefore be a DECLARATION, "
+  204|                 "not prose: put it in the entry's head line (the `// %s. ...` line), "
+  205|                 "as I9 and I25 do, or reword the body. An entry that can be closed "
+  206|                 "by a sentence about it is not a register."
+  207|                 % (t["id"], t["head"][:100], t["id"]))
+  208|         # The OTHER two markers legitimately scan the whole entry: they make an
+  209|         # entry MORE of a gap, not less, so prose that mentions them costs
+  210|         # nothing but an over-report. Only the settling marker is head-only,
+  211|         # because only it can make a gap disappear.
+  212|         blob = t["head"] + " " + t["body"]
+  213|         t["kind"] = ("resolved-in-composer" if _NOT_A_TIEOFF.search(t["head"])
+  214|                      else "tied-to-zero" if _TIED_ZERO.search(blob)
+  215|                      else "boundary" if _BOUNDARY.search(blob)
+  216|                      else "unclassified")
+  217|         # "tied to zero" and "no owner exists" are the two that delete logic or
+  218|         # have no implementation at all. Boundary means a real port a board or
+  219|         # a producer must drive -- still a gap, but a different repair.
+  220|         t["mandatory_gap"] = t["kind"] != "resolved-in-composer"
+  221|     return out
+  222| 
+  223| 
+  224| def declared_modules(path: pathlib.Path) -> set[str]:
+  225|     """Every module a source file DECLARES, comments stripped."""
+  226|     try:
+  227|         src = path.read_text(encoding="utf-8", errors="replace")
+  228|     except OSError:
+  229|         return set()
+  230|     src = re.sub(r"//[^\n]*", "", src)
+  231|     src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+  232|     return set(re.findall(r"^\s*module\s+(zhao_\w+)", src, re.M))
+  233| 
+  234| 
+  235| def declared_on_disk() -> set[str]:
+  236|     out: set[str] = set()
+  237|     for p in (ROOT / "fpga" / "rtl").rglob("*.sv"):
+  238|         out |= declared_modules(p)
+  239|     return out
+  240| 
+  241| def console_closure() -> set[str]:
+  242|     """The modules named in zhao_console_core's fit target."""
+  243|     if not TARGETS.exists():
+  244|         return set()
+  245|     text = TARGETS.read_text(encoding="utf-8", errors="replace")
+  246|     # ANCHOR ON THE TARGET HEADER, NOT ON THE NAME.
+  247|     #
+  248|     # This was `text.find("zhao_console_core")` -- the first occurrence of the
+  249|     # string ANYWHERE in the file. On 2026-09-19 an agent added a fit target
+  250|     # whose comment says "It is composed in zhao_console_core as well", at line
+  251|     # 1726, which is 625 lines ABOVE the real target. The scan anchored on that
+  252|     # sentence, read the one source under the comment's own target, and returned
+  253|     # a closure of ONE MODULE. The register then reported 124 mandatory gaps
+  254|     # against 77, and NOTHING ABOUT THE DESIGN HAD CHANGED.
+  255|     #
+  256|     # It failed in the loud direction this time, which is luck and not design:
+  257|     # had the hijacked target been a large one, the closure would have grown and
+  258|     # the count would have FALLEN. This is the third defect of the same family in
+  259|     # this instrument -- closure membership counted as connection, the unbounded
+  260|     # scan that absorbed the next target, and now an anchor that matches prose --
+  261|     # and they share one cause: THE REGISTER WAS READING A CONVENTION RATHER THAN
+  262|     # A STRUCTURE. A comment cannot accidentally be a target header, so match the
+  263|     # header.
+  264|     m = re.search(r"^\s*-\s*top:\s*zhao_console_core\s*$", text, re.M)
+  265|     if m is None:
+  266|         return set()
+  267|     i = m.start()
+  268|     out: set[str] = set()
+  269|     started = False
+  270|     for line in text[i:].splitlines()[1:]:
+  271|         s = line.strip()
+  272|         if s.startswith("- fpga/rtl/") or s.startswith("- fpga\\rtl\\"):
+  273|             rel = s[2:].replace("\\", "/")
+  274|             out.add(pathlib.Path(rel).stem)
+  275|             # A FILE IS NOT A MODULE. `zhao_hps_arbiter.sv` declares both the
+  276|             # two-client wrapper and `zhao_hps_arbiter_n`; adding only the stem
+  277|             # made the N-client arbiter -- the one R4 composed -- read as NOT
+  278|             # BUILT AT ALL on 2026-09-19. Every module the file declares is in
+  279|             # the closure. (The handover's instrument defect 6, a third instance.)
+  280|             out |= declared_modules(ROOT / rel)
+  281|             started = True
+  282|             continue
+  283|         # The next target begins at a non-indented key. Only stop once this
+  284|         # target's own source list has actually started, or a `sources:` line
+  285|         # between the target name and its entries ends the scan immediately and
+  286|         # the count reads 0 -- which it did on the first run, and a closure of
+  287|         # zero would have looked like "nothing is composed" rather than a bug.
+  288|         # BOUND THE SCAN AT THE NEXT TARGET.
+  289|         #
+  290|         # The original stopped only on an unindented non-`-` key. A fit target's
+  291|         # header is `- top: ...`, which STARTS WITH `-`, so the scan ran straight
+  292|         # through into the next target and absorbed its sources. Since
+  293|         # `zhao_console_core` is near the end of the file, every target appended
+  294|         # after it silently joined this closure -- and closure membership is one
+  295|         # of the two tests for "connected".
+  296|         #
+  297|         # That is a free, invisible reduction of the mandatory-gap count, inside
+  298|         # the instrument whose whole purpose is to prevent exactly that. Found by
+  299|         # the SYS.PLL worker, which declined to append a fit target rather than
+  300|         # take the reduction. There WAS a target after it (line 2340), so this
+  301|         # was not hypothetical.
+  302|         if started and re.match(r"\s*-\s*top:", line):
+  303|             break
+  304|         if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
+  305|             break
+  306|     return out
+  307| 
+  308| 
+  309| def instantiated_in(closure_files: list[pathlib.Path]) -> set[str]:
+  310|     """Modules actually INSTANTIATED by something in the closure.
+  311| 
+  312|     THIS FUNCTION EXISTS BECAUSE THE DOCSTRING ABOVE WAS A LIE FOR A DAY.
+  313| 
+  314|     It claimed COMPOSED meant "in the closure AND instantiated", and the code
+  315|     tested only closure membership. A worker composing the geometry front end
+  316|     found it and said so. The consequence was not theoretical: **adding a
+  317|     filename to `design/fit_targets.yml` would have lowered the mandatory-gap
+  318|     count without connecting anything** -- the exact "make the number smaller
+  319|     without doing the work" failure the owner's Phase 2 rules forbid, available
+  320|     in the instrument that polices it.
+  321| 
+  322|     The shell's own source list already records eight modules that were declared
+  323|     and elaborated nowhere, so this is a failure mode this repository has met.
+  324| 
+  325|     An instantiation is `zhao_foo #(` or `zhao_foo u_name` at statement
+  326|     position. A mention inside a comment is not one, so comments are stripped.
+  327|     """
+  328|     text = []
+  329|     for p in closure_files:
+  330|         try:
+  331|             src = p.read_text(encoding="utf-8", errors="replace")
+  332|         except OSError:
+  333|             continue
+  334|         src = re.sub(r"//[^\n]*", "", src)
+  335|         src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+  336|         text.append(src)
+  337|     blob = "\n".join(text)
+  338|     live = set(re.findall(r"^\s*(zhao_\w+)\s*(?:#\s*\(|\w+\s*\()", blob, re.M))
+  339|     # A PACKAGE is imported, never instantiated, and so is the TOP. Counting
+  340|     # either as "listed but not instantiated" would be a false alarm, and a
+  341|     # checker that cries wolf gets suppressed -- this repo says so twice.
+  342|     for p in closure_files:
+  343|         stem = p.stem
+  344|         if stem.endswith("_pkg") or stem == "zhao_console_core":
+  345|             live.add(stem)
+  346|     return live
+  347| 
+  348| 
+  349| def closure_paths() -> list[pathlib.Path]:
+  350|     if not TARGETS.exists():
+  351|         return []
+  352|     t = TARGETS.read_text(encoding="utf-8", errors="replace")
+  353|     # Same anchor, same reason, same defect -- see console_closure() above. These
+  354|     # two functions have now carried the identical bug TWICE (the unbounded scan
+  355|     # and this one), which is what happens when a pair of functions is kept in
+  356|     # step by the author remembering to. The `assert` in main() comparing their
+  357|     # two answers is the standing guard against a third.
+  358|     m = re.search(r"^\s*-\s*top:\s*zhao_console_core\s*$", t, re.M)
+  359|     if m is None:
+  360|         return []
+  361|     i = m.start()
+  362|     out, started = [], False
+  363|     for line in t[i:].splitlines()[1:]:
+  364|         s = line.strip()
+  365|         if s.startswith("- fpga/rtl/"):
+  366|             out.append(ROOT / s[2:])
+  367|             started = True
+  368|             continue
+  369|         # same bound as console_closure(); if these two disagree about where the
+  370|         # target ends, one of them is reading another target's sources
+  371|         if started and re.match(r"\s*-\s*top:", line):
+  372|             break
+  373|         # BOUND THE SCAN AT THE NEXT TARGET.
+  374|         #
+  375|         # The original stopped only on an unindented non-`-` key. A fit target's
+  376|         # header is `- top: ...`, which STARTS WITH `-`, so the scan ran straight
+  377|         # through into the next target and absorbed its sources. Since
+  378|         # `zhao_console_core` is near the end of the file, every target appended
+  379|         # after it silently joined this closure -- and closure membership is one
+  380|         # of the two tests for "connected".
+  381|         #
+  382|         # That is a free, invisible reduction of the mandatory-gap count, inside
+  383|         # the instrument whose whole purpose is to prevent exactly that. Found by
+  384|         # the SYS.PLL worker, which declined to append a fit target rather than
+  385|         # take the reduction. There WAS a target after it (line 2340), so this
+  386|         # was not hypothetical.
+  387|         if started and re.match(r"\s*-\s*top:", line):
+  388|             break
+  389|         if started and s and not s.startswith(("-", "#")) and line[:1] not in " \t":
+  390|             break
+  391|     return out
+  392| 
+  393| 
+  394| def has_test_target(module: str) -> bool:
+  395|     if not CMAKE.exists():
+  396|         return False
+  397|     return module in CMAKE.read_text(encoding="utf-8", errors="replace")
+  398| 
+  399| 
+  400| BLOCKS = ROOT / "design" / "blocks.yml"
+  401| RTL = ROOT / "fpga" / "rtl"
+  402| 
+  403| 
+  404| def ledger_blocks() -> list[dict]:
+  405|     """Every `kind: rtl` block, with the fields that decide whether it is ours.
+  406| 
+  407|     `implementation:` would be the obvious source and it is NOT usable: only 6
+  408|     of 98 rtl blocks carry one. So the module is resolved by the repository's
+  409|     naming convention and then CHECKED against the filesystem -- a convention
+  410|     that resolves to nothing is reported as unresolvable rather than counted as
+  411|     missing, because a name heuristic over-reports and an over-reported gap list
+  412|     sends people to build things that already exist.
+  413|     """
+  414|     if not BLOCKS.exists():
+  415|         return []
+  416|     text = BLOCKS.read_text(encoding="utf-8", errors="replace")
+  417|     out: list[dict] = []
+  418|     cur: dict | None = None
+  419|     for line in text.splitlines():
+  420|         m = re.match(r"\s*-\s*id:\s*(\S+)", line)
+  421|         if m:
+  422|             if cur:
+  423|                 out.append(cur)
+  424|             cur = {"id": m.group(1), "kind": None, "deferred": None,
+  425|                    "blocked_on": None, "implementation": None,
+  426|                    "deferred_note": None, "blocked_note": None,
+  427|                    "superseded_by": None}
+  428|             continue
+  429|         if cur is None:
+  430|             continue
+  431|         # `superseded_by:` takes the WHOLE rest of the line, because its value
+  432|         # is a citation (a ruling, a file, a test), not a token. See
+  433|         # superseded_verdict() for what it must carry to excuse anything.
+  434|         # Every block carries the field, and 118 of them say `null`.
+  435|         m = re.match(r"\s*superseded_by:\s*(.+?)\s*$", line)
+  436|         if m:
+  437|             v = m.group(1).strip().strip('"').strip("'")
+  438|             cur["superseded_by"] = None if v in ("null", "~", "") else v
+  439|             continue
+  440|         for key in ("kind", "deferred", "blocked_on", "implementation"):
+  441|             m = re.match(r"\s*%s:\s*(\S+)" % key, line)
+  442|             if m:
+  443|                 cur[key] = m.group(1)
+  444|                 if key == "deferred":
+  445|                     cur["deferred_note"] = line
+  446|                 elif key == "blocked_on":
+  447|                     cur["blocked_note"] = line
+  448|     if cur:
+  449|         out.append(cur)
+  450|     return [b for b in out if b["kind"] == "rtl"]
+  451| 
+  452| 
+  453| # Capabilities whose module name the convention cannot construct. Every entry
+  454| # was resolved BY HAND against the tree on 2026-09-19 and carries what was
+  455| # found, so a reader can re-check rather than trust. `None` means the search
+  456| # genuinely found nothing -- those are real "not built" gaps, and leaving them
+  457| # in the unresolvable bucket would have reported "0 NOT BUILT AT ALL", which is
+  458| # the flattering direction and was the first run's actual output.
+  459| _ALIAS: dict[str, str | None] = {
+  460|     "MEM.VRAM.ARBITER":  "zhao_vram_arbiter",
+  461|     "MEM.HPS.ARBITER":   "zhao_hps_arbiter_n",  # R4: the N-client arbiter; the 2-client module is its superseded wrapper
+  462|     "MEM.HPS.BRIDGE":    "zhao_hps_bridge",
+  463|     # THE ALIAS NAMED A FROZEN GENERATION. Corrected 2026-09-19, and this one
+  464|     # MAKES THE NUMBER SMALLER, so it carries four independent witnesses rather
+  465|     # than an argument. `zhao_field_v2_core` is not the console's field engine
+  466|     # and cannot become it; the console's field engine is composed, and the
+  467|     # register was pointed at the wrong file the entire time.
+  468|     #
+  469|     # This is the SAME defect `superseded_in_closure()`'s docstring already
+  470|     # confesses to -- "the instrument could not see v3 at all, and 'connected'
+  471|     # was satisfiable by wiring the old one" -- seen from the other side. That
+  472|     # fix stopped the register REWARDING a v2 composition. It did not stop the
+  473|     # register PUNISHING the v3 one, so the day FIELD v3 was composed the
+  474|     # capability went on reading as a gap and nothing said why.
+  475|     #
+  476|     #   1. `design/prod_manifest.yml:253` heads its entry, in these words,
+  477|     #      "FIELD.SEQ.CORE as a console organ: the sequencer, its program store
+  478|     #      (two M10K-inferred RAMs), the residency directory above, and the
+  479|     #      arbiter that lets the profiles take turns on ONE engine" -- and the
+  480|     #      line under that heading is `- zhao_field_host`.
+  481|     #   2. `zhao_console_core.sv`'s own header, in the FIELD.PROGCACHE entry:
+  482|     #      "FIELD.SEQ.CORE is composed as `u_field_host`".
+  483|     #   3. `zhao_field_host.sv` line 5 declares `Contract:
+  484|     #      design/contracts/FIELD.SEQ.CORE.md`, and it instantiates
+  485|     #      `zhao_field_v3_engine` -- the composed v3 machine, not v1 and not v2.
+  486|     #      (The manifest comment above that list still says "so `zhao_field_host`
+  487|     #      composes v1"; that sentence predates commit da57defe and the closure
+  488|     #      disagrees with it. The instantiation is the evidence, not the prose.)
+  489|     #   4. `zhao_field_v2_core.sv`'s own first lines: "STATUS RULING 2026-08-27
+  490|     #      ... FIELD v2 IS FROZEN ... NOT the Earth60 production path, and it
+  491|     #      will not become it." The core's header says the same and draws the
+  492|     #      conclusion: v2 is unconnected, "and it is FROZEN as the fallback, so
+  493|     #      that is a ruling rather than a gap."
+  494|     #
+  495|     # So the capability has a real producer, a real implementation and a real
+  496|     # consumer; only this line disagreed. Aliasing to `zhao_field_host` rather
+  497|     # than to `zhao_field_v3_engine` is deliberate: the host is what the console
+  498|     # instantiates and what the manifest calls the organ, and the engine inside
+  499|     # it can be re-parameterised or replaced without this line going stale.
+  500|     "FIELD.SEQ.CORE":    "zhao_field_host",
+  501|     # ONE LAW, TWO SCHEDULES, AND THE CONSOLE RUNS THE SECOND (2026-09-19, geom2,
+  502|     # owner ruling R31). This makes the number smaller, so it carries four
+  503|     # independent witnesses rather than an argument. The convention constructs
+  504|     # `zhao_geom_depthquant`, the one-vertex FSM schedule, which since R31 is
+  505|     # used only by tests/shell/tb_zhao_shell.sv. The capability -- w to invw24
+  506|     # under the profile, `zref::depth_of_raw` -- is performed in the console by
+  507|     # `zhao_geom_depthquant_stream`, the tagged schedule of the SAME law:
+  508|     #   1. the instantiation graph: `u_geom_vattr` (zhao_console_core section 11)
+  509|     #      instantiates `zhao_geom_vattr`, which instantiates
+  510|     #      `zhao_geom_depthquant_stream` (`u_dq`) on a private rcp24_v4;
+  511|     #   2. both schedules instantiate the same two leaves,
+  512|     #      `zhao_geom_depthquant_pre`/`_post`, declared in the SAME file -- the
+  513|     #      arithmetic exists once (zhao_geom_depthquant.sv, "ONE LAW, TWO
+  514|     #      SCHEDULES");
+  515|     #   3. `design/console_inventory.yml` gives the FSM `superseded_by:
+  516|     #      zhao_geom_depthquant_stream`, and `design/prod_manifest.yml` counts the
+  517|     #      stream INSIDE `zhao_geom_vattr` and declares the FSM superseded;
+  518|     #   4. the stream is differenced against `zref::depth_of_raw` itself, out of
+  519|     #      order, in tests/geometry/geom_depthquant_stream_directed.cpp, and in
+  520|     #      composition by tests/geometry/geom_vattr_directed.cpp (every row).
+  521|     "GEOM.DEPTHQUANT":   "zhao_geom_depthquant_stream",
+  522|     "TERRAIN.COMPCACHE": "zhao_terrain_compcache_front",
+  523|     "TERRAIN.ISLAND":    "zhao_terrain_island_dir",
+  524|     # THE NAME CONVENTION RESOLVES THIS ONE TO A SUPERSEDED PROTOTYPE, which is
+  525|     # the block-id-to-module failure CLAUDE.md's broken-instrument section
+  526|     # already records ("three of them existed under a name the rule did not
+  527|     # construct") -- except here the constructed name EXISTS, so nothing looked
+  528|     # wrong. `zhao_terrain_residency.sv` is the direct-mapped first draft and
+  529|     # its own header opens "FIRST BLOCK OF THE WORLD LAYER. Nothing
+  530|     # instantiates it yet."
+  531|     #
+  532|     # THIS CHANGE MAKES THE NUMBER SMALLER, so it is the kind that has to be
+  533|     # checked hardest. It was checked against `design/blocks.yml`'s own
+  534|     # TERRAIN.RESIDENCY row, which says it three independent ways:
+  535|     #   * purpose: "...the direct-mapped prototype is superseded because two
+  536|     #     islands may legally overlap in local patch coordinates";
+  537|     #   * tests:   terrain_residency_v2_directed.cpp / _random.cpp;
+  538|     #   * maturity UNIT_VERIFIED, evidence terrain_residency_v2_directed.cpp.
+  539|     # And structurally: `zhao_terrain_seq`'s master ports match v2 port for
+  540|     # port ({epoch, island, ix, iz} key, SEQW claim sequence, pin/unpin) and do
+  541|     # NOT match v1's {px, py} lookup at all. `zhao_prod_top` instantiates v2.
+  542|     "TERRAIN.RESIDENCY": "zhao_terrain_residency_v2",
+  543|     "GEOM.POSE":         "zhao_geom_pose_decode",
+  544|     # GEOM.PROJECT IS THE SHARED SERVICE'S CLIENT A, BY OWNER RULING. Resolved
+  545|     # 2026-09-19 (geom packet). THIS MAKES THE NUMBER SMALLER, so it carries
+  546|     # four witnesses, and the first is a ruling rather than an argument:
+  547|     #   1. reports/OWNER-RULINGS-20260919-EVENING.md R3 (owner, explicit): "Keep
+  548|     #      the time-multiplex. No third port in v1." -- geometry (and particles
+  549|     #      and FORGE.SHADOW) are projected through `zhao_proj_subsystem` client A.
+  550|     #      Composing `zhao_geom_project` as well would be a SECOND
+  551|     #      `zhao_project_core` (~6,199 ALM / 33 DSP) doing arithmetic the console
+  552|     #      already performs, which the ruling forbids.
+  553|     #   2. `zhao_geom_project.sv`'s own header: "THIS BLOCK IS NOW A THIN SHELL"
+  554|     #      around `zhao_project_core` -- "a ready/valid handshake, the accepted-
+  555|     #      vertex counter, and nothing else".
+  556|     #   3. design/blocks.yml GEOM.PROJECT notes: "MERGED 2026-08-24 ... a thin
+  557|     #      shell around fpga/rtl/common/zhao_project_core.sv".
+  558|     #   4. zhao_console_core.sv: `u_proj_subsystem` client A is driven by
+  559|     #      GEOM.GROUP_SEQ (through PART.PROJECT) and its results land in
+  560|     #      `u_geom_proj_lane` -- real producer, real core, real consumer.
+  561|     # The CENSUS question (prod_manifest still prices the shell separately) is a
+  562|     # different question with its own named precondition -- the composed fit --
+  563|     # and is deliberately not touched here.
+  564|     "GEOM.PROJECT":      "zhao_proj_subsystem",
+  565|     # GEOM.LIGHT IS zhao_light_stream, BY OWNER RULING R2 (2026-09-19, owner
+  566|     # explicit): "zhao_light_stream owns vertex light. zhao_geom_light is
+  567|     # superseded." The naming convention resolves GEOM.LIGHT to the SUPERSEDED
+  568|     # scalar block -- supersession by RENAME, the third shape the core header's
+  569|     # lighting section says no tool looks for -- so "connected" would have been
+  570|     # satisfiable by wiring the wrong one. Witnesses: the ruling;
+  571|     # zhao_light_stream.sv's own first section, "THIS REPLACES THE OWNER, IT DOES
+  572|     # NOT ADD A SECOND LAW"; console_inventory.yml, zhao_geom_light superseded_by
+  573|     # zhao_light_stream; and the composition, `u_light_stream` fed by GEOM.SKIN.NORM
+  574|     # through `u_light_skin_adapter`.
+  575|     "GEOM.LIGHT":        "zhao_light_stream",
+  576|     # TERRAIN.PROJECT IS THE SAME SHARED SERVICE'S CLIENT B. Resolved 2026-09-19
+  577|     # (terrain packet), the twin of the GEOM.PROJECT line above and for the same
+  578|     # reason. THIS MAKES THE NUMBER SMALLER, so four witnesses, and the fourth is
+  579|     # a MEASUREMENT rather than a reading:
+  580|     #   1. `zhao_terrain_project.sv`'s own header: "THE PROJECTOR IS NO LONGER IN
+  581|     #      THIS FILE" -- it keeps the vertex sequencer, triangle reassembly and
+  582|     #      riders around ONE `zhao_project_core`; `zhao_proj_subsystem`'s header
+  583|     #      names its triangle output as "zhao_terrain_project's packet plus three
+  584|     #      `w`" -- the same packet, the Mosaic riders included.
+  585|     #   2. design/blocks.yml TERRAIN.PROJECT notes: "MERGED 2026-08-24 ... The
+  586|     #      projection law now lives once, in fpga/rtl/common/zhao_project_core.sv".
+  587|     #   3. zhao_console_core.sv's own TERRAIN.PROJECT paragraph: "REFUSED, AND IT
+  588|     #      IS A SAVING RATHER THAN A GAP. It is a SECOND PROJECTOR" (6,068 ALM /
+  589|     #      33 DSP); terrain reaches the shared core on client B through
+  590|     #      TERRAIN.GROUP_SEQ, and composing the shell would undo the dedup that
+  591|     #      `zhao_project_core` exists for. Owner ruling R3's "keep the
+  592|     #      time-multiplex" is the same sharing decision made for client A.
+  593|     #   4. MEASURED in the console smoke bench: `proj_b_grants_o` = 81 and
+  594|     #      `proj_replay_triangles_o` = 128 -- terrain vertices ARE projected
+  595|     #      through client B and replayed as triangles in this composition.
+  596|     # Its downstream consumer is GEOM.SETUP/GEOM.CLIP's door (entry I13), which
+  597|     # is a separately counted tie-off; this line does not touch it. The census
+  598|     # question (prod_manifest prices the shell separately) is the fit's, as for
+  599|     # GEOM.PROJECT, and is not touched. Reversible in one line if the owner
+  600|     # rules client B is not the terrain projector's home.
+  601|     "TERRAIN.PROJECT":   "zhao_proj_subsystem",
+  602|     # ---- THE TEXTURE CLUSTER, hand-resolved 2026-09-19 ---------------------
+  603|     #
+  604|     # SIX capabilities resolved by the naming convention to SIX SUPERSEDED
+  605|     # PROTOTYPES, which is the `TERRAIN.RESIDENCY` failure above repeated six
+  606|     # times: the constructed name EXISTS, so nothing looked wrong, and the
+  607|     # register sent readers to compose modules `design/prod_manifest.yml`
+  608|     # explicitly forbids composing ("must not put a second root into the
+  609|     # census").
+  610|     #
+  611|     # WHAT WAS ACTUALLY THE CASE, measured rather than argued:
+  612|     # `zhao_texture_island_v3_top` is ALREADY in the console closure and
+  613|     # ALREADY live -- `zhao_console_core` -> `zhao_shell_top_v2` ->
+  614|     # `zhao_raster_tile_pipe_v2` (line 802) -> `zhao_raster_texture_stage_v3`
+  615|     # (line 362) -> the island. Every one of its seventeen submodules returns
+  616|     # True from both `console_closure()` and `instantiated_in(closure_paths())`.
+  617|     # So the texture path was composed; only its NAMES were wrong here.
+  618|     #
+  619|     # `successor_in()` below cannot and must not fix this. Its comment already
+  620|     # refuses `zhao_texture_cache_pipe_v2` as an automatic successor of
+  621|     # `zhao_texture_cache`, correctly: the automatic rule would also match
+  622|     # `zhao_texture_tmu_plan_v2` to `zhao_texture_tmu`, and that file's own
+  623|     # third line says it succeeds the PLANNER. A loose prefix rule retires real
+  624|     # gaps by coincidence of naming. These are hand resolutions with evidence
+  625|     # instead, one per line, so a reader can re-check rather than trust.
+  626|     #
+  627|     # THIS CHANGE MAKES THE NUMBER SMALLER, so each entry carries TWO
+  628|     # independent witnesses: what `prod_manifest.yml` says, and what the
+  629|     # successor's own header says about the module it replaces.
+  630|     #
+  631|     #   prod_manifest.yml:699 "zhao_texture_cache: superseded  by
+  632|     #   zhao_texture_cache_pipe_v2 inside the Packet B selected V3 root", and
+  633|     #   that file's own line 9: "The unversioned cache remains the executable
+  634|     #   old-island oracle."
+  635|     "TEXTURE.CACHE":     "zhao_texture_cache_pipe_v2",
+  636|     #   prod_manifest.yml:701 names zhao_texture_aux_pipe_v2, the ledger's own
+  637|     #   TEXTURE.AUX row already points at `design/contracts/TEXTURE.AUX.V2.md`
+  638|     #   with tests `texture_aux_pipe_v2_*`, and that file's line 3 says it "is
+  639|     #   the versioned adapter owned by TEXTURE.AUX.V2".
+  640|     "TEXTURE.AUX":       "zhao_texture_aux_pipe_v2",
+  641|     #   prod_manifest.yml:474 "material_combine_v3 is the combiner inside the
+  642|     #   Packet B selected V3 root"; the ledger's TEXTURE.COMBINE row already
+  643|     #   describes the eight-recipe R9 engine and tests
+  644|     #   `material_combine_v3_diff.cpp`; and v3's own header says "V2 remains
+  645|     #   the executable oracle for the old island".
+  646|     "TEXTURE.COMBINE":   "zhao_texture_material_combine_v3",
+  647|     #   prod_manifest.yml:711 "zhao_texture_v3own is the sole owner inside the
+  648|     #   selected V3 subsystem", and the island's own header: "zhao_texture_v3own
+  649|     #   is the only fragment-lifecycle owner". FRAGROB was the differential
+  650|     #   CANDIDATE beside TEXJOIN, which is why its row says `not-yet-adopted`
+  651|     #   rather than `superseded` -- the CAPABILITY still has an owner.
+  652|     "TEXTURE.FRAGROB":   "zhao_texture_v3own",
+  653|     #
+  654|     # TEXTURE.TMU RESOLVES TO THE V3 OWNER, BY OWNER RULING R9 (provisional,
+  655|     # reports/OWNER-RULINGS-20260919-EVENING.md): "Retire TEXTURE.TMU as a
+  656|     # single module in favour of the v3 path, and give `texture_samples` ONE
+  657|     # owner: the v3 block that retires a filtered sample to the fragment. It
+  658|     # counts samples it actually delivered."
+  659|     #
+  660|     # It stayed a gap until 2026-09-19 evening for a reason that was right: the
+  661|     # manifest supersedes the old TMU "by the Packet B texture plan/cache/
+  662|     # dispatch PATH", and no single stage of that path IS the TMU -- pointing
+  663|     # this at the planner would be the false reduction `successor_in()` refuses.
+  664|     # R9 answers the question that refusal asked, by naming the RETIREMENT
+  665|     # rather than a sampling stage. Two witnesses, as for FRAGROB above:
+  666|     #   * `zhao_texture_v3own.sv` publishes a TMU response into its fragment's
+  667|     #     commit bitplane only when C4 is valid and the slot generation holds,
+  668|     #     and `ev_texture_samples_o` counts exactly those published sample bits;
+  669|     #   * the island exports it as `cnt_texture_samples_o`, and
+  670|     #     tests/texture/texture_island_v3_packet_b_directed.cpp asserts it
+  671|     #     exactly: +0 for a count-zero PASSTHRU, +1 NEAR, +1 CLUT.
+  672|     # Two capabilities resolving to one module is deliberate: the ruling makes
+  673|     # the fragment owner the sample owner. If R9 is revised, THIS LINE is the
+  674|     # edit, and `zhao_texture_tmu` goes back to `pending_compose`.
+  675|     "TEXTURE.TMU":       "zhao_texture_v3own",
+  676|     #    # ---- AND ONE CORRECTION IN THE OTHER DIRECTION -------------------------
+  677|     #
+  678|     # MATERIAL.RESOLVE was aliased to `zhao_texture_material_combine_v2`, which
+  679|     # made an UNBUILT capability read as BUILT-BUT-NOT-CONNECTED. That is the
+  680|     # flattering direction and it is wrong on the tree's own evidence:
+  681|     #
+  682|     #   * the ledger row is `maturity: SPECIFIED` with `maturity_log: []` and
+  683|     #     BOTH tests recorded as "PLANNED -- NOT WRITTEN", and its note says it
+  684|     #     is blocked on a cartridge decision (audit R4);
+  685|     #   * `zhao_texture_combine.sv`'s own header lists "resolution
+  686|     #     (MATERIAL.RESOLVE's)" among the things it REFUSES to do. The combiner
+  687|     #     consumes a material record; it does not produce one.
+  688|     #
+  689|     # So this is `None` -- searched and genuinely absent. The mandatory total
+  690|     # does not fall because of this line; one capability moves from the
+  691|     # disconnected bucket to the unbuilt one, which is where it belongs. It
+  692|     # matters beyond bookkeeping: MATERIAL.RESOLVE is the owner of
+  693|     # `tri_flat_request_i`, the half of the console core's entry I20 that
+  694|     # GEOM.ATTRPACK did not close.
+  695|     # BUILT 2026-09-19 (fpga/rtl/.../zhao_material_resolve.sv). FOURTH catch by
+  696|     # _stale_none_aliases(), this one minutes after the texture packet correctly
+  697|     # set it to None -- the block it said was absent then exists now.
+  698|     "MATERIAL.RESOLVE":  "zhao_material_resolve",
+  699|     # searched and genuinely absent -- no file matches these at all
+  700|     # BUILT 2026-09-19 (fpga/rtl/mem/zhao_mem_upload.sv, 89 directed checks).
+  701|     # This entry said None until the block existed, and nothing would have
+  702|     # re-checked it -- see _stale_none_aliases(), which now does, and which
+  703|     # fired on this very line.
+  704|     "MEM.UPLOAD":        "zhao_mem_upload",
+  705|     # BUILT 2026-09-19 (fpga/rtl/geometry/zhao_geom_loom.sv). The THIRD entry
+  706|     # _stale_none_aliases() has caught in one day -- MEM.UPLOAD, FORGE.SHADOW,
+  707|     # and now this one, which it caught while the block was still being written
+  708|     # and was blocking every concurrent worker's register run until fixed.
+  709|     # Pointing it at the module is correct whoever does it.
+  710|     "GEOM.LOOM":         "zhao_geom_loom",
+  711|     # BUILT 2026-09-19 (fpga/rtl/forge/zhao_forge_shadow.sv, 39 directed checks).
+  712|     # The SECOND entry _stale_none_aliases() has caught the same day it was
+  713|     # added, which is the argument for the guard rather than for my memory.
+  714|     "FORGE.SHADOW":      "zhao_forge_shadow",
+  715|     # the owner revoked their deferral 2026-09-18; all three were cut BEFORE
+  716|     # their contracts were written, so each needs its spec authored first
+  717|     "INPUT.SNAC":        None,
+  718|     "GEOM.WARP":         None,
+  719|     # POST.ECHO: spec written and BUILT 2026-09-19 (ruling R7) -- composed on
+  720|     # POST.COMPOSITE's echo tap inside the shell's zhao_post_lease.
+  721|     "POST.ECHO":         "zhao_post_echo",
+  722|     # `deferred`/`blocked_on` used to skip these before resolution ever ran, so
+  723|     # they never needed an alias. Now that nothing is excused by a bare flag,
+  724|     # they reach the resolver and must resolve.
+  725|     "SYS.CDC":           "zhao_cdc_snapshot",
+  726|     "MEM.SDRAM":         "zhao_sdram_ctrl",
+  727|     # BUILT 2026-09-19, and this edit MAKES THE NUMBER SMALLER, so it is the
+  728|     # kind to check hardest. What changed is not the rule but the tree:
+  729|     # `fpga/rtl/sys/zhao_sys_pll.sv` and `fpga/rtl/sys/zhao_sys_reset.sv` now
+  730|     # exist, lint 0/0 under -Wall with a fired positive control, pass
+  731|     # `check_quartus17_syntax`, and each has a registered directed ctest whose
+  732|     # counters are SEEN TO MOVE as deltas. The naming convention resolves both
+  733|     # on its own -- SYS.PLL -> zhao_sys_pll -- so these two lines could simply
+  734|     # be deleted; they are spelled out instead so that the transition from
+  735|     # "hand-searched and genuinely absent" to "built" stays legible in the one
+  736|     # place a reader will look.
+  737|     #
+  738|     # THEY REMAIN GAPS, in the DISCONNECTED bucket, and that is the honest
+  739|     # result: they are composed in `zhao_console_board`, not in
+  740|     # `zhao_console_core`, so they are not in the closure this register reads.
+  741|     # The mandatory total does not move -- only which bucket they sit in.
+  742|     "SYS.PLL":           "zhao_sys_pll",
+  743|     "SYS.RESET":         "zhao_sys_reset",
+  744| }
+  745| 
+  746| 
+  747| def superseded_in_closure() -> list[tuple[str, list[str]]]:
+  748|     """Composed modules for which a HIGHER-VERSIONED sibling exists on disk.
+  749| 
+  750|     OWNER RULING, 2026-09-19, verbatim and unambiguous:
+  751| 
+  752|         "YOU ONLY GET TO FIT THE LATEST VERSION. IF IT IS BROKEN YOU FIX IT."
+  753| 
+  754|     It was issued because the console had composed the ENTIRE v1 FIELD datapath
+  755|     -- alu, seq, ring, rot, noise, mul, len, normalize -- while all FOURTEEN
+  756|     `zhao_field_v3_*` modules sat outside the closure. Fitting that measures a
+  757|     machine nobody ships: it spends ALM and DSP budget on dead weight and makes
+  758|     the eventual resource number describe the wrong design, on a device already
+  759|     over on both (47,582 ALM against 41,910; 151 DSP against 112).
+  760| 
+  761|     THE REGISTER HELPED CAUSE IT. `FIELD.SEQ.CORE` resolves to
+  762|     `zhao_field_v2_core` and `FIELD.PROGCACHE` to `zhao_field_progcache` -- one
+  763|     superseded, one unversioned -- so the instrument could not see v3 at all,
+  764|     and "connected" was satisfiable by wiring the old one. That is a NEW
+  765|     flattering direction and it belongs with the five already fixed here: a gap
+  766|     closed by composing the wrong version is not a gap closed.
+  767| 
+  768|     TWO NAMING SHAPES, because this tree uses both:
+  769| 
+  770|         suffix  zhao_texture_cache_pipe_v2  supersedes  zhao_texture_cache_pipe
+  771|         infix   zhao_field_v3_len           supersedes  zhao_field_len
+  772| 
+  773|     `successor_in()` handles the suffix shape and only to REDUCE the count. This
+  774|     is the opposite question and it is asked of the closure rather than of a
+  775|     capability: what have we actually wired that something newer exists for?
+  776| 
+  777|     Reported, not fatal, and that is a deliberate and temporary choice: the FIELD
+  778|     v1 -> v3 swap is in flight as this lands, and a hard failure would block
+  779|     every concurrent worker's register run for the duration. TURN IT FATAL once
+  780|     the swap is committed -- a report nobody is forced to read is how the v1
+  781|     datapath got composed in the first place.
+  782|     """
+  783|     # INSTANTIATED, not merely listed. A module that sits in the source list but
+  784|     # nothing elaborates costs the fitter nothing -- Quartus builds what is
+  785|     # reachable from the top -- so flagging it would be a false alarm, and a
+  786|     # check that cries wolf about dead sources is a check people learn to skip.
+  787|     # The real fault is having WIRED the old one.
+  788|     on_disk = {p.stem for p in RTL.rglob("*.sv")}
+  789|     live = instantiated_in(closure_paths())
+  790|     out: list[tuple[str, list[str]]] = []
+  791|     for mod in sorted(console_closure() & live):
+  792|         newer: list[str] = []
+  793|         for cand in on_disk:
+  794|             if cand == mod:
+  795|                 continue
+  796|             # suffix:  <mod>_v2, <mod>_v3, ...
+  797|             m = re.fullmatch(re.escape(mod) + r"_v(\d+)", cand)
+  798|             if m:
+  799|                 newer.append(cand)
+  800|                 continue
+  801|             # infix:   zhao_<sub>_v3_<rest>  against  zhao_<sub>_<rest>
+  802|             m2 = re.fullmatch(r"(zhao_[a-z0-9]+)_v(\d+)_(.+)", cand)
+  803|             if m2 and "%s_%s" % (m2.group(1), m2.group(3)) == mod:
+  804|                 newer.append(cand)
+  805|         if newer:
+  806|             out.append((mod, sorted(newer)))
+  807|     return out
+  808| 
+  809| 
+  810| _BOARD_CACHE: dict[str, set[str]] = {}
+  811| 
+  812| 
+  813| def board_addition() -> set[str]:
+  814|     """Modules the BOARD composes that the CORE does not -- the second root.
+  815| 
+  816|     WHY THIS EXISTS, and why it is not "widening the register".
+  817| 
+  818|     `zhao_console_board` instantiates `zhao_console_core` and drives it from
+  819|     `zhao_sys_pll` and `zhao_sys_reset`. It is the only module in this tree that
+  820|     could be programmed onto hardware; the core is an organ of it. So SYS.PLL
+  821|     and SYS.RESET are COMPOSED -- they have a real producer (the 50 MHz board
+  822|     oscillator characterised in `board_truth.json`), a real implementation, and
+  823|     a real consumer (every clock and reset the core runs on). The owner's
+  824|     standard is that a capability is absent when it is "a disconnected
+  825|     implementation". These are not disconnected. They are one level up.
+  826| 
+  827|     THE OBJECTION THE BOARD PACKET RAISED, AND WHY IT DOES NOT SURVIVE
+  828|     MEASUREMENT. It declined to re-point this register because "that would
+  829|     change what CONNECTED means for all 77 capabilities at once, in the
+  830|     direction that makes the number smaller". That is the right instinct and it
+  831|     is the reason this function returns a DIFFERENCE rather than a union of
+  832|     closures. The difference is measurable and it was measured:
+  833| 
+  834|         board closure - core closure = {zhao_console_board, zhao_sys_pll,
+  835|                                         zhao_sys_pll_simclk, zhao_sys_reset,
+  836|                                         zhao_sys_reset_sync}
+  837| 
+  838|     FIVE modules, of which TWO are ledger capabilities. It is not a change to 77
+  839|     judgements; it is a change to exactly the judgements about modules the board
+  840|     adds, and every run prints that set by name (`--json` carries it too), so a
+  841|     sixth member could never arrive unnoticed. Nothing that the core composes
+  842|     moves, in either direction, because the set is disjoint from the core's
+  843|     closure by construction.
+  844| 
+  845|     WHAT KEEPS IT FROM BECOMING A LAUNDRY. Three things, and the first is the
+  846|     one that matters:
+  847| 
+  848|       * THE BOARD MUST INSTANTIATE THE CORE. If it ever stops, this returns the
+  849|         EMPTY SET rather than a five-module amnesty -- so a board that has been
+  850|         detached from the machine cannot go on excusing the blocks hanging off
+  851|         it. `check_console_inventory.py` makes the same check and fails loudly;
+  852|         here the failure mode is chosen to be the one that COUNTS MORE GAPS,
+  853|         because this file's whole discipline is to fail upward.
+  854|       * It is derived from the instantiation graph (`module_graph.build`), the
+  855|         same walk `check_console_inventory.py` uses for its second root, not
+  856|         from a list anybody maintains. There is no fit target for the board and
+  857|         this deliberately does not invent one -- a fit source list is a claim
+  858|         about what gets MEASURED for area, and the board's own area question is
+  859|         a separate packet.
+  860|       * A module the board adds still has to be a ledger capability to count for
+  861|         anything. `zhao_sys_pll_simclk` and `zhao_sys_reset_sync` are helpers
+  862|         inside those two files and resolve to no block id at all.
+  863|     """
+  864|     if "d" in _BOARD_CACHE:
+  865|         return _BOARD_CACHE["d"]
+  866|     try:
+  867|         sys.path.insert(0, str(ROOT / "tools" / "quartus"))
+  868|         from module_graph import build            # noqa: PLC0415
+  869|     except ImportError:                           # pragma: no cover
+  870|         _BOARD_CACHE["d"] = set()
+  871|         return _BOARD_CACHE["d"]
+  872|     decl, inst = build(str(ROOT / "fpga" / "rtl"))
+  873|     _BOARD_CACHE["d"] = _board_addition_from(decl, inst)
+  874|     return _BOARD_CACHE["d"]
+  875| 
+  876| 
+  877| def _reach(root: str, decl: dict, inst: dict) -> set[str]:
+  878|     if root not in decl:
+  879|         return set()
+  880|     seen, stack = {root}, [root]
+  881|     while stack:
+  882|         cur = stack.pop()
+  883|         for child in inst.get(decl[cur], ()):
+  884|             if child not in seen and child in decl:
+  885|                 seen.add(child)
+  886|                 stack.append(child)
+  887|     return seen
+  888| 
+  889| 
+  890| def _board_addition_from(decl: dict, inst: dict) -> set[str]:
+  891|     """The difference, split out so the self-test can drive it on a toy graph."""
+  892|     board = _reach(BOARD_ROOT, decl, inst)
+  893|     # THE GUARD, and it is the whole safety of this function: a board that does
+  894|     # not contain the core is not the machine's top, so nothing under it is
+  895|     # "composed into the console" by any reading.
+  896|     if CONSOLE_ROOT not in board:
+  897|         return set()
+  898|     return board - _reach(CONSOLE_ROOT, decl, inst)
+  899| 
+  900| 
+  901| def _stale_none_aliases() -> list[tuple[str, str]]:
+  902|     """Hand-resolved `None` entries for which a module now EXISTS.
+  903| 
+  904|     A `None` in `_ALIAS` means "searched by hand on 2026-09-19 and genuinely
+  905|     absent". That is a statement about a moment, and this campaign's whole job is
+  906|     to make such statements false by building the thing. Nothing re-checked them,
+  907|     so the first block built to close one of these entries stayed counted as
+  908|     UNBUILT -- the register would have gone on reporting a gap that had been
+  909|     filled, and the only way to notice was to wonder why a number did not move.
+  910| 
+  911|     MEM.UPLOAD proved it the same day it was written. So the hand-resolutions are
+  912|     now re-checked against the tree on every run, and a stale one is a HARD
+  913|     FAILURE rather than a silent under-count: an alias that outlives its search
+  914|     is exactly the phantom-citation shape this file exists to prevent.
+  915|     """
+  916|     stale = []
+  917|     for cap, mod in _ALIAS.items():
+  918|         if mod is not None:
+  919|             continue
+  920|         cand = "zhao_" + cap.lower().replace(".", "_")
+  921|         if list(RTL.rglob(cand + ".sv")):
+  922|             stale.append((cap, cand))
+  923|     return stale
+  924| 
+  925| 
+  926| def resolve_module(block_id: str, implementation: str | None) -> str | None:
+  927|     if block_id in _ALIAS:
+  928|         return _ALIAS[block_id]          # may be None: searched, genuinely absent
+  929|     if implementation:
+  930|         p = ROOT / implementation
+  931|         if p.exists():
+  932|             return p.stem
+  933|     # PART.STATE -> zhao_part_state ; GEOM.SKIN.NORM -> zhao_geom_skin_norm
+  934|     cand = "zhao_" + block_id.lower().replace(".", "_")
+  935|     if (list(RTL.rglob(cand + ".sv"))):
+  936|         return cand
+  937|     return None
+  938| 
+  939| 
+  940| def successor_in(mod: str, closure: set[str], live: set[str]) -> str | None:
+  941|     """Is a VERSIONED SUCCESSOR of `mod` composed instead of `mod` itself?
+  942| 
+  943|     TEXTURE.CACHE resolves by convention to `zhao_texture_cache`, which nothing
+  944|     composes -- but `zhao_texture_island_v3_top` IS composed and instantiates
+  945|     `zhao_texture_cache_pipe_v2`. The capability is present; the resolver was
+  946|     naming the superseded file. Counting that as a mandatory gap inflates the
+  947|     number and sends someone to compose a module the tree has already replaced.
+  948| 
+  949|     THIS CORRECTION MAKES THE NUMBER SMALLER, which is the flattering direction,
+  950|     so the bar is deliberately high: the successor must be BOTH in the closure
+  951|     AND instantiated, and its name must be `mod` plus a version suffix -- never a
+  952|     fuzzy match. The successor is reported by name so every reduction is
+  953|     auditable rather than asserted.
+  954|     """
+  955|     for cand in sorted(closure & live):
+  956|         if cand == mod or not cand.startswith(mod + "_"):
+  957|             continue
+  958|         tail = cand[len(mod) + 1:]
+  959|         # THE TAIL MUST BE A VERSION AND NOTHING ELSE.
+  960|         #
+  961|         # The first draft allowed `(?:\w+_)?v\d+`, and it immediately produced a
+  962|         # FALSE reduction: it matched `zhao_texture_tmu_plan_v2` as a successor
+  963|         # of `zhao_texture_tmu`. That file's own third line says it is the
+  964|         # successor of `zhao_texture_tmu_plan.sv` -- the PLANNER, not the
+  965|         # sampler. Two different modules whose names happen to share a prefix.
+  966|         #
+  967|         # Same for `zhao_texture_cache_pipe_v2` (successor of
+  968|         # `..._cache_pipe`) and `zhao_texture_aux_pipe_v2`. A loose prefix rule
+  969|         # retires a real gap by coincidence of naming, and it does so in the
+  970|         # direction that makes the campaign look further along than it is --
+  971|         # which is the one direction this register must never fail in.
+  972|         if re.fullmatch(r"v\d+", tail):
+  973|             return cand
+  974|     return None
+  975| 
+  976| 
+  977| _CITED_PATH = re.compile(
+  978|     r"\b((?:reference|tests|runtime|spec|design|tools|compiler|fpga)/"
+  979|     r"[\w./-]+\.(?:hpp|cpp|h|sv|md|py|ts|zidl))\b")
+  980| 
+  981| 
+  982| def superseded_verdict(note: str, cmake_text: str,
+  983|                        exists=lambda rel: (ROOT / rel).exists()) -> str | None:
+  984|     """Does a ledger `superseded_by:` note EXCUSE its capability? None = yes.
+  985| 
+  986|     Added 2026-09-19 for owner ruling R16: a hardware block whose function a
+  987|     RULING moved to another provider (TERRAIN.VISIBLE, moved into SW.STREAM by
+  988|     T5) is a duplicate provider, and removing it is allowed -- but only if the
+  989|     replacement is really there. THIS MAKES THE NUMBER SMALLER, so the bar is
+  990|     the one `successor_in()` sets, applied to prose: every condition below is
+  991|     checked against the TREE, and a note that fails any of them is counted AS A
+  992|     GAP (reported with the uncited excuses), never as a pass.
+  993| 
+  994|       1. it cites a RULING by name (`ruling T5`, `R16`), not an opinion;
+  995|       2. it names at least one repository file, and EVERY file it names exists
+  996|          -- a supersession pointing at a deleted file is an uncashed cheque;
+  997|       3. at least one named file is a test under `tests/` that
+  998|          `tests/CMakeLists.txt` actually builds -- "implemented and tested" is
+  999|          the ruling's own condition, and a test nothing compiles tests nothing.
+ 1000|     """
+ 1001|     if not re.search(r"\bruling\s+[A-Z]+\d+\b|\bR\d+\b", note):
+ 1002|         return "cites no ruling"
+ 1003|     paths = _CITED_PATH.findall(note)
+ 1004|     if not paths:
+ 1005|         return "names no file"
+ 1006|     missing = [p for p in paths if not exists(p)]
+ 1007|     if missing:
+ 1008|         return "names files that do not exist: %s" % ", ".join(missing)
+ 1009|     tests = [p for p in paths if p.startswith("tests/")]
+ 1010|     built = [p for p in tests if p[len("tests/"):] in cmake_text]
+ 1011|     if not built:
+ 1012|         return "names no test that tests/CMakeLists.txt builds"
+ 1013|     return None
+ 1014| 
+ 1015| 
+ 1016| def disconnected() -> dict:
+ 1017|     """Mandatory capabilities whose implementation is NOT in the console.
+ 1018| 
+ 1019|     The owner's standard: a mandatory function does not count as present if it
+ 1020|     is "a disconnected implementation". Closure membership is exactly that test,
+ 1021|     and it is the one that cannot be satisfied by a file existing on disk.
+ 1022|     """
+ 1023|     closure = console_closure()
+ 1024|     live = instantiated_in(closure_paths())   # the half the docstring promised
+ 1025|     board = board_addition()                  # the second root; see its docstring
+ 1026|     absent, unbuilt, unresolvable, deferred_ok, connected = [], [], [], [], []
+ 1027|     listed_not_live: list[str] = []
+ 1028|     uncited: list[str] = []
+ 1029|     via_board: list[str] = []
+ 1030|     superseded_ok: list[str] = []
+ 1031|     cmake = ROOT / "tests" / "CMakeLists.txt"
+ 1032|     cmake_text = cmake.read_text(encoding="utf-8", errors="replace") if cmake.exists() else ""
+ 1033|     for b in ledger_blocks():
+ 1034|         if b["superseded_by"]:
+ 1035|             why = superseded_verdict(b["superseded_by"], cmake_text)
+ 1036|             if why is None:
+ 1037|                 superseded_ok.append(b["id"])
+ 1038|                 continue
+ 1039|             # A supersession that does not check out is an excuse that does not
+ 1040|             # hold: counted with the uncited flags, AS A GAP, and named.
+ 1041|             uncited.append("%s (superseded_by: %s)" % (b["id"], why))
+ 1042|             continue
+ 1043|         # THE OWNER'S RULE: "Only explicitly deferred/non-v1 features may remain
+ 1044|         # absent, and each must CITE THE CONTROLLING RULING/SPEC."
+ 1045|         #
+ 1046|         # So a bare flag is not an excuse. On 2026-09-19 the ledger still carried
+ 1047|         # `deferred: true` on four blocks the owner had revoked the day before --
+ 1048|         # this register read that stale field and reported them as "not a gap",
+ 1049|         # under-counting by four. A flag with no citation beside it is exactly
+ 1050|         # how that happens, so an uncited flag is now counted AS A GAP.
+ 1051|         cite = (b["deferred_note"] or "") + (b["blocked_note"] or "")
+ 1052|         has_cite = bool(re.search(r"\b(ruling|SS\d|§\d|spec|charter|plan)\b", cite, re.I))
+ 1053|         if b["deferred"] == "true" or b["blocked_on"] == "hardware":
+ 1054|             if has_cite:
+ 1055|                 deferred_ok.append(b["id"])
+ 1056|                 continue
+ 1057|             uncited.append(b["id"])                # excused by nothing: a GAP
+ 1058|         mod = resolve_module(b["id"], b["implementation"])
+ 1059|         if mod is None and b["id"] in _ALIAS:
+ 1060|             unbuilt.append(b["id"])      # hand-searched and absent: a REAL gap
+ 1061|         elif mod is None:
+ 1062|             unresolvable.append(b["id"])
+ 1063|         elif mod in closure and mod in live:
+ 1064|             connected.append(b["id"])
+ 1065|         elif mod in board:
+ 1066|             # COMPOSED IN THE BOARD, not in the core. Named on every run rather
+ 1067|             # than folded silently into `connected`, because this is the only
+ 1068|             # reduction here that does not come from the core's own closure and
+ 1069|             # it must stay auditable at a glance.
+ 1070|             connected.append("%s (in %s)" % (b["id"], BOARD_ROOT))
+ 1071|             via_board.append(b["id"])
+ 1072|         elif successor_in(mod, closure, live):
+ 1073|             connected.append("%s (via %s)" % (b["id"], successor_in(mod, closure, live)))
+ 1074|         elif mod in closure:
+ 1075|             # in the source list but nothing instantiates it. NOT connected --
+ 1076|             # this is the shell's eight-struck-modules failure, and counting it
+ 1077|             # as present is how a filename becomes "progress".
+ 1078|             listed_not_live.append(b["id"])
+ 1079|             absent.append((b["id"], mod))
+ 1080|         elif list(RTL.rglob(mod + ".sv")) or mod in declared_on_disk():
+ 1081|             absent.append((b["id"], mod))          # built, NOT connected
+ 1082|         else:
+ 1083|             unbuilt.append(b["id"])                # no RTL at all
+ 1084|     return {"connected": connected, "built_not_connected": absent,
+ 1085|             "unbuilt": unbuilt, "unresolvable": unresolvable,
+ 1086|             "deferred_or_blocked": deferred_ok, "uncited_excuse": uncited,
+ 1087|             "listed_but_not_instantiated": listed_not_live,
+ 1088|             "connected_in_board": via_board,
+ 1089|             "superseded_by_ruling": superseded_ok}
+ 1090| 
+ 1091| 
+ 1092| def audit() -> dict:
+ 1093|     ties = tieoffs()
+ 1094|     closure = console_closure()
+ 1095| 
+ 1096|     # THE CROSS-CHECK, and it exists because the claim that it existed was made
+ 1097|     # before the code did. `console_closure()` and `closure_paths()` read the
+ 1098|     # same region of the same file by two separate copies of the same walk, and
+ 1099|     # they have now carried the identical defect twice -- the unbounded scan that
+ 1100|     # absorbed the following target, and the substring anchor that matched a
+ 1101|     # COMMENT mentioning the core 625 lines above the real target. The second one
+ 1102|     # collapsed the closure to a single module and moved the headline number from
+ 1103|     # 77 to 124 with nothing in the design changed.
+ 1104|     #
+ 1105|     # Two independent walks that must agree are worth far more than one walk
+ 1106|     # trusted, so their disagreement is now a HARD FAILURE rather than a sentence
+ 1107|     # in a commit message. It is checked here rather than in main() so that every
+ 1108|     # consumer of audit() gets it, including --json.
+ 1109|     stale = _stale_none_aliases()
+ 1110|     if stale:
+ 1111|         raise SystemExit(
+ 1112|             "completion_register: %d hand-resolved _ALIAS entry(ies) say a module "
+ 1113|             "is absent, but it now EXISTS in the tree:\n%s\n"
+ 1114|             "Point each alias at its module. A `None` that outlives its search "
+ 1115|             "under-counts progress and hides a block somebody already built."
+ 1116|             % (len(stale),
+ 1117|                "\n".join("  %-18s -> %s" % (c, m) for c, m in stale)))
+ 1118| 
+ 1119|     paths = {p.stem for p in closure_paths()}
+ 1120|     for p in closure_paths():
+ 1121|         paths |= declared_modules(p)      # both walks resolve MODULES, not filenames
+ 1122|     if paths != closure:
+ 1123|         only_c = sorted(closure - paths)
+ 1124|         only_p = sorted(paths - closure)
+ 1125|         raise SystemExit(
+ 1126|             "completion_register: the two closure walks DISAGREE, so neither "
+ 1127|             "number can be trusted.\n"
+ 1128|             "  console_closure() only: %s\n"
+ 1129|             "  closure_paths()  only: %s\n"
+ 1130|             "One of them is reading the wrong region of design/fit_targets.yml. "
+ 1131|             "Fix that before reading any gap count." % (only_c, only_p)
+ 1132|         )
+ 1133|     gaps = [t for t in ties if t["mandatory_gap"]]
+ 1134|     dis = disconnected()
+ 1135|     # UNRESOLVABLE COUNTS AS A GAP. It was excluded at first on the reasoning
+ 1136|     # that a name heuristic over-reports -- true, but the conclusion was wrong:
+ 1137|     # a capability whose implementation cannot even be located is not EXCUSED,
+ 1138|     # it is UNDEMONSTRATED, and the owner's standard is that a mandatory
+ 1139|     # function does not count as present unless it is really there. Excluding it
+ 1140|     # made the total smaller, which is the direction this file exists to resist.
+ 1141|     # It is reported as its own class so nobody mistakes it for a build task.
+ 1142|     total = (len(gaps) + len(dis["built_not_connected"])
+ 1143|              + len(dis["unbuilt"]) + len(dis["uncited_excuse"])
+ 1144|              + len(dis["unresolvable"]))
+ 1145|     return {
+ 1146|         "tieoffs_total": len(ties),
+ 1147|         "tieoff_gaps": len(gaps),
+ 1148|         "mandatory_gaps": total,
+ 1149|         "closure_modules": len(closure),
+ 1150|         "by_kind": {k: sum(1 for t in ties if t["kind"] == k)
+ 1151|                     for k in sorted({t["kind"] for t in ties})},
+ 1152|         "gaps": [{"id": t["id"], "kind": t["kind"],
+ 1153|                   "head": t["head"][:100]} for t in gaps],
+ 1154|         "capability": {k: len(v) for k, v in dis.items()},
+ 1155|         "listed_but_not_instantiated": dis["listed_but_not_instantiated"],
+ 1156|         # THE SECOND ROOT, reported by name on every run. The modules are what
+ 1157|         # `zhao_console_board` adds on top of the machine it contains; the
+ 1158|         # capabilities are the subset of those that are ledger blocks. If the
+ 1159|         # first list ever grows, the second is where to look and why.
+ 1160|         "board_addition_modules": sorted(board_addition()),
+ 1161|         "connected_in_board": dis["connected_in_board"],
+ 1162|         "built_not_connected": [m for _, m in dis["built_not_connected"]],
+ 1163|         "unbuilt": dis["unbuilt"],
+ 1164|         "unresolvable": dis["unresolvable"],
+ 1165|         "uncited_excuse": dis["uncited_excuse"],
+ 1166|         "superseded_by_ruling": dis["superseded_by_ruling"],
+ 1167|     }
+ 1168| 
+ 1169| 
+ 1170| def _self_test() -> None:
+ 1171|     """The register must be able to SEE a gap. Prove it on a synthetic header."""
+ 1172|     sample = (
+ 1173|         "// INCOMPLETE -- TIED OFF, AND WHY\n"
+ 1174|         "//  I1. SOMETHING (`a_i`) -- BOUNDARY. no owner exists.\n"
+ 1175|         "//      more prose about it\n"
+ 1176|         "//  I2. OTHER (`b_i`) -- TIED TO ZERO, a real interface mismatch.\n"
+ 1177|         "//  I3. THIRD (`c_i`) -- NOT a tie-off: the core assigns it.\n"
+ 1178|     )
+ 1179|     global CORE
+ 1180|     real = CORE
+ 1181|     try:
+ 1182|         tmp = ROOT / "tools" / "budget" / ".completion_selftest.sv"
+ 1183|         tmp.write_text(sample, encoding="utf-8")
+ 1184|         CORE = tmp
+ 1185|         ts = tieoffs()
+ 1186|         ids = [t["id"] for t in ts]
+ 1187|         kinds = {t["id"]: t["kind"] for t in ts}
+ 1188|         bad = []
+ 1189|         if ids != ["I1", "I2", "I3"]:
+ 1190|             bad.append("parsed %r, expected I1 I2 I3" % ids)
+ 1191|         if kinds.get("I1") != "boundary":
+ 1192|             bad.append("I1 kind %r" % kinds.get("I1"))
+ 1193|         if kinds.get("I2") != "tied-to-zero":
+ 1194|             bad.append("I2 kind %r" % kinds.get("I2"))
+ 1195|         if kinds.get("I3") != "resolved-in-composer":
+ 1196|             bad.append("I3 kind %r" % kinds.get("I3"))
+ 1197|         if sum(1 for t in ts if t["mandatory_gap"]) != 2:
+ 1198|             bad.append("expected 2 mandatory gaps, got %d"
+ 1199|                        % sum(1 for t in ts if t["mandatory_gap"]))
+ 1200|         # THE POSITIVE CONTROL for the truncation guard above. A detector that
+ 1201|         # has not been seen to FIRE has not been tested (CLAUDE.md), and this
+ 1202|         # one guards a failure that reads LOW -- so it is the one to prove.
+ 1203|         # A blank line between I1 and I2 must be a hard failure naming I2 and
+ 1204|         # I3, not a quiet register of one.
+ 1205|         truncated = (
+ 1206|             "// INCOMPLETE -- TIED OFF, AND WHY\n"
+ 1207|             "//  I1. SOMETHING (`a_i`) -- BOUNDARY. no owner exists.\n"
+ 1208|             "\n"
+ 1209|             "//  I2. OTHER (`b_i`) -- TIED TO ZERO, a real interface mismatch.\n"
+ 1210|             "//  I3. THIRD (`c_i`) -- NOT a tie-off: the core assigns it.\n"
+ 1211|         )
+ 1212|         tmp.write_text(truncated, encoding="utf-8")
+ 1213|         fired = ""
+ 1214|         try:
+ 1215|             tieoffs()
+ 1216|         except SystemExit as exc:
+ 1217|             fired = str(exc)
+ 1218|         if "WALK STOPPED EARLY" not in fired or "I2" not in fired or "I3" not in fired:
+ 1219|             bad.append("the truncation guard did not fire on a planted blank "
+ 1220|                        "line (got %r)" % fired[:120])
+ 1221|         if bad:
+ 1222|             sys.stderr.write("completion_register SELF-TEST FAILED:\n")
+ 1223|             for b in bad:
+ 1224|                 sys.stderr.write("  %s\n" % b)
+ 1225|             raise SystemExit(2)
+ 1226|     finally:
+ 1227|         CORE = real
+ 1228|         try:
+ 1229|             (ROOT / "tools" / "budget" / ".completion_selftest.sv").unlink()
+ 1230|         except OSError:
+ 1231|             pass
+ 1232|     _board_self_test()
+ 1233|     _superseded_self_test()
+ 1234| 
+ 1235| 
+ 1236| def _superseded_self_test() -> None:
+ 1237|     """superseded_verdict() excuses a gap, so it is FIRED on every note that
+ 1238|     must not excuse one before its silence is believed."""
+ 1239|     have = {"reference/include/zref/x.hpp", "tests/t/x_directed.cpp",
+ 1240|             "tests/t/unbuilt.cpp"}
+ 1241|     cm = "add_executable(test_x t/x_directed.cpp)\n"
+ 1242|     ex = lambda rel: rel in have
+ 1243|     good = "SW.STREAM, ruling T5: reference/include/zref/x.hpp, tests/t/x_directed.cpp"
+ 1244|     must_fail = {
+ 1245|         "no ruling":    "SW.STREAM: reference/include/zref/x.hpp, tests/t/x_directed.cpp",
+ 1246|         "no file":      "SW.STREAM, ruling T5",
+ 1247|         "missing file": good + ", reference/include/zref/gone.hpp",
+ 1248|         "no test":      "SW.STREAM, ruling T5: reference/include/zref/x.hpp",
+ 1249|         "unbuilt test": "SW.STREAM, ruling T5: reference/include/zref/x.hpp, tests/t/unbuilt.cpp",
+ 1250|     }
+ 1251|     bad = []
+ 1252|     if superseded_verdict(good, cm, ex) is not None:
+ 1253|         bad.append("a complete note was refused: %s" % superseded_verdict(good, cm, ex))
+ 1254|     for k, note in must_fail.items():
+ 1255|         if superseded_verdict(note, cm, ex) is None:
+ 1256|             bad.append("a note with %s EXCUSED its capability" % k)
+ 1257|     if bad:
+ 1258|         sys.stderr.write("completion_register SUPERSEDED SELF-TEST FAILED:\n")
+ 1259|         for b in bad:
+ 1260|             sys.stderr.write("  %s\n" % b)
+ 1261|         raise SystemExit(2)
+ 1262| 
+ 1263| 
+ 1264| def _board_self_test() -> None:
+ 1265|     """The second root must ADD exactly the board's own blocks, and must STOP.
+ 1266| 
+ 1267|     CLAUDE.md: a detector that has not been shown to fire has not been tested,
+ 1268|     and this one's failure mode is an amnesty rather than an error message. The
+ 1269|     dangerous direction is the board going on excusing SYS.PLL after it has
+ 1270|     stopped instantiating the core -- there is nothing to notice, the count just
+ 1271|     stays low. So the guard is driven on a graph where it must fire.
+ 1272|     """
+ 1273|     decl = {"zhao_console_board": "b.sv", "zhao_console_core": "c.sv",
+ 1274|             "zhao_sys_pll": "p.sv", "zhao_inner": "i.sv", "zhao_orphan": "o.sv"}
+ 1275|     joined = {"b.sv": {"zhao_console_core", "zhao_sys_pll"},
+ 1276|               "c.sv": {"zhao_inner"}}
+ 1277|     got = _board_addition_from(decl, joined)
+ 1278|     bad = []
+ 1279|     if got != {"zhao_console_board", "zhao_sys_pll"}:
+ 1280|         bad.append("joined board should add exactly board+pll, got %r" % (got,))
+ 1281|     # THE GUARD: the board no longer instantiates the core. The set must collapse
+ 1282|     # to EMPTY, not merely lose the core -- otherwise SYS.PLL keeps its amnesty
+ 1283|     # while the console is topless, which is the one outcome this must not have.
+ 1284|     detached = {"b.sv": {"zhao_sys_pll"}, "c.sv": {"zhao_inner"}}
+ 1285|     if _board_addition_from(decl, detached) != set():
+ 1286|         bad.append("a board that dropped the core still granted membership: %r"
+ 1287|                    % (_board_addition_from(decl, detached),))
+ 1288|     # And a board that does not exist grants nothing either.
+ 1289|     if _board_addition_from({"zhao_console_core": "c.sv"}, {}) != set():
+ 1290|         bad.append("a missing board granted membership")
+ 1291|     if bad:
+ 1292|         sys.stderr.write("completion_register BOARD SELF-TEST FAILED:\n")
+ 1293|         for b in bad:
+ 1294|             sys.stderr.write("  %s\n" % b)
+ 1295|         raise SystemExit(2)
+ 1296| 
+ 1297| 
+ 1298| def main(argv: list[str]) -> int:
+ 1299|     _self_test()
+ 1300|     rep = audit()
+ 1301|     if "--json" in argv:
+ 1302|         print(json.dumps(rep, indent=2))
+ 1303|         return 0 if rep["mandatory_gaps"] == 0 else 1
+ 1304| 
+ 1305|     print("completion register -- computed from the tree, not maintained by hand")
+ 1306|     print("self-test PASSED: the parser sees a planted gap and classifies it\n")
+ 1307|     sup = superseded_in_closure()
+ 1308|     if sup:
+ 1309|         print("!" * 74)
+ 1310|         print("SUPERSEDED MODULES ARE COMPOSED -- %d of them." % len(sup))
+ 1311|         print("Owner ruling 2026-09-19: \"YOU ONLY GET TO FIT THE LATEST VERSION.")
+ 1312|         print("IF IT IS BROKEN YOU FIX IT.\"  Fitting an old version measures a")
+ 1313|         print("machine nobody ships and spends budget on dead weight.")
+ 1314|         for mod, newer in sup:
+ 1315|             print("   composed %-30s superseded by %s" % (mod, ", ".join(newer)))
+ 1316|         print("!" * 74)
+ 1317|         print()
+ 1318| 
+ 1319|     print("zhao_console_core closure modules : %d" % rep["closure_modules"])
+ 1320|     if rep["board_addition_modules"]:
+ 1321|         print("%s adds %d more    : %s"
+ 1322|               % (BOARD_ROOT, len(rep["board_addition_modules"]),
+ 1323|                  ", ".join(rep["board_addition_modules"])))
+ 1324|         print("    capabilities that reach the machine only through the board: %s"
+ 1325|               % (", ".join(rep["connected_in_board"]) or "none"))
+ 1326|     else:
+ 1327|         print("!! %s adds NOTHING -- either it is missing or it no longer "
+ 1328|               "instantiates %s. Every block hanging off it now counts as a GAP, "
+ 1329|               "which is the safe direction and probably not the true one."
+ 1330|               % (BOARD_ROOT, CONSOLE_ROOT))
+ 1331|     print("tie-off entries in its header     : %d" % rep["tieoffs_total"])
+ 1332|     for k, n in sorted(rep["by_kind"].items()):
+ 1333|         print("    %-22s %d" % (k, n))
+ 1334|     c = rep["capability"]
+ 1335|     print("\nmandatory rtl capabilities (design/blocks.yml)")
+ 1336|     print("    connected in the console  : %d" % c["connected"])
+ 1337|     print("    BUILT BUT NOT CONNECTED   : %d" % c["built_not_connected"])
+ 1338|     print("    NOT BUILT AT ALL          : %d" % c["unbuilt"])
+ 1339|     print("    deferred / waits for board: %d   (cite the ruling, not a gap)"
+ 1340|           % c["deferred_or_blocked"])
+ 1341|     print("    EXCUSED BY AN UNCITED FLAG: %d   <- counted AS GAPS: the owner's"
+ 1342|           % c["uncited_excuse"])
+ 1343|     print("                                     rule is that a deferral must CITE")
+ 1344|     print("                                     its controlling ruling or spec")
+ 1345|     print("    UNRESOLVABLE              : %d   <- counted AS GAPS: not excused,"
+ 1346|           % c["unresolvable"])
+ 1347|     print("                                     UNDEMONSTRATED. Locate the module")
+ 1348|     print("                                     or add it to the alias table.")
+ 1349|     print("    superseded by a ruling    : %d   (cites the ruling, the replacement"
+ 1350|           % c["superseded_by_ruling"])
+ 1351|     print("                                     file and a BUILT test; each named)")
+ 1352|     # EVERY NAME IS PRINTED. These lists were sliced `[:20]` and on 2026-09-19
+ 1353|     # the count read 22 while 20 names were shown, so zhao_forge_cliff and
+ 1354|     # zhao_post_gather were counted and invisible -- a gap list that hides its
+ 1355|     # tail is the flattering direction, and nobody audits a list that looks
+ 1356|     # complete.
+ 1357|     if rep["superseded_by_ruling"]:
+ 1358|         print("\n  SUPERSEDED BY A RULING (not a gap; the note is checked against the tree):")
+ 1359|         for m in rep["superseded_by_ruling"]:
+ 1360|             print("    %s" % m)
+ 1361|     if rep["uncited_excuse"]:
+ 1362|         print("\n  EXCUSES THAT DO NOT HOLD (counted as gaps):")
+ 1363|         for m in rep["uncited_excuse"]:
+ 1364|             print("    %s" % m)
+ 1365|     if rep["built_not_connected"]:
+ 1366|         print("\n  BUILT BUT NOT CONNECTED (a disconnected implementation does not count):")
+ 1367|         for m in rep["built_not_connected"]:
+ 1368|             print("    %s" % m)
+ 1369|     if rep["unbuilt"]:
+ 1370|         print("\n  NOT BUILT AT ALL:")
+ 1371|         for m in rep["unbuilt"]:
+ 1372|             print("    %s" % m)
+ 1373| 
+ 1374|     print("\nMANDATORY GAPS REMAINING          : %d" % rep["mandatory_gaps"])
+ 1375|     print("  (%d tie-offs + %d disconnected + %d unbuilt + %d uncited + %d unresolvable)"
+ 1376|           % (rep["tieoff_gaps"], c["built_not_connected"], c["unbuilt"],
+ 1377|              c["uncited_excuse"], c["unresolvable"]))
+ 1378|     if rep["gaps"]:
+ 1379|         print()
+ 1380|         for g in rep["gaps"]:
+ 1381|             print("  %-4s %-20s %s" % (g["id"], g["kind"], g["head"]))
+ 1382|         print("\nA mandatory function is not present if it is a tie-off, fake")
+ 1383|         print("stimulus, an external placeholder for hardware storage, a")
+ 1384|         print("disconnected implementation, pruned dead logic, a stub, a TODO,")
+ 1385|         print("or an unimplemented contract. Drive this to ZERO.")
+ 1386|     else:
+ 1387|         print("\nZERO mandatory gaps. Freeze this design and measure it.")
+ 1388|     return 0 if rep["mandatory_gaps"] == 0 else 1
+ 1389| 
+ 1390| 
+ 1391| if __name__ == "__main__":
+ 1392|     raise SystemExit(main(sys.argv[1:]))
+```
