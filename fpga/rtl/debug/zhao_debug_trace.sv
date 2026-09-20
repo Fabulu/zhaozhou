@@ -130,6 +130,13 @@ module zhao_debug_trace #(
   logic legal_stage, is_armed, accept, overflow;
   always_comb begin
     legal_stage = ev_valid_i && (ev_stage_i < 8'd7);
+    // `mask_q` is SEVEN bits, so `ev_stage_i[2:0] == 7` selects past its end
+    // and yields x in simulation. That is SAFE here and only here, because
+    // `legal_stage` is already 0 for that stage and `1'b0 && 1'bx` is 1'b0 --
+    // but it is safe by an AND rather than by construction, so do not lift
+    // this expression out of the guard. Raised by review 2026-09-20; kept as
+    // it stands because widening the mask to make an unreachable index legal
+    // would put an eighth stage in the register file to fix a comment.
     is_armed = legal_stage && mask_q[ev_stage_i[2:0]];
     overflow = is_armed && (count_q == CW'(DEPTH));
     accept = is_armed && !overflow;

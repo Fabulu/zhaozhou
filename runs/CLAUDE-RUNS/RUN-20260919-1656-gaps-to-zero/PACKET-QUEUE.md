@@ -70,6 +70,21 @@ alone does not close it.
 Every packet that refuses a gap must name its exact blocker. Those blockers
 are the real queue, and they outrank this list.
 
+## Owed, and cheap only when something else pays the fare
+
+**`spec/commands.zidl`'s DebugTraceArm comment carries an over-broad
+guarantee.** It says flatly that the arming record is never traced and that
+every record after it is. Neither holds without qualifiers: a SECOND arm in an
+already-armed packet is traced, and later records are traced only if the arm
+was accepted, the mask sets bit 0, and the ring has room. The corrected
+statement is in `zhao_cmd_exec.sv`'s R52 port comment.
+
+It is NOT fixed yet on purpose. Every edit to that file changes
+`ZHAO_ZIDL_SHA256`, which forces all five golden captures to be regenerated
+through their real producers -- `demo_duo_markers --write` alone is 600 Duo
+frames and about an hour. **Whoever next changes the zidl for a real reason
+fixes this comment in the same commit**, and the regeneration is free.
+
 ## The fit
 
 **Only at zero.** `5CSEBA6U23I7`: 41,910 ALM / 112 DSP / 553 M10K. Nothing in

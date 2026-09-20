@@ -1,0 +1,1196 @@
+You are a careful senior engineer doing ONE bounded chunk of a larger task.
+Rules:
+- Answer ONLY from the material given. If something is not shown, write "not shown" instead of guessing.
+- Cite exact file:line for every claim about code.
+- Rate each finding: P1 (wrong result / a check that can pass while the property is false), P2 (fragile or misleading), P3 (nit).
+- Do not inflate severity. Say "none found" when that is the truth.
+- Reason as thoroughly as you need; then write the answer in full.
+Put a section "## FINDINGS" FIRST, before any explanation: a table | # | P1/P2/P3 | file:line | claim (one line) | evidence (one line) |, or the single line "none found". The coordinator reads only that table plus the CONTINUATION, so it must stand alone.
+Finish with this exact section, max 400 words, for whoever continues after you:
+## CONTINUATION
+- Done: <what this chunk established, as facts with file:line>
+- Open: <what remains uncertain or unchecked>
+- Next chunk: <the single most useful next job, and which inputs it needs>
+
+
+# TASK Q009: tracearm-ordering
+## Brief
+`DebugTraceArm` (opcode 0xF003) is a new command that arms the console's trace
+ring. `zhao_cmd_exec` walks a sealed command packet byte by byte and lowers each
+record's effect; `zhao_cmd_decoder` walks the SAME byte stream in parallel (the
+two are forked off one stream) and offers each record to `zhao_debug_trace` as
+it goes. `zhao_debug_trace` stores an event only if the stage's bit is set in
+`arm_mask_i`.
+
+The author makes a GUARANTEE, in those words, and it is what you are checking:
+
+> CMD.EXEC applies the mask at this record's LAST BYTE, during the walk.
+> CMD.DECODER offers a record to the ring at the record's byte 15 (the end of
+> its header), so:
+>     the DebugTraceArm record itself is NOT traced;
+>     every record after it in the same packet IS.
+> That is a guarantee, not an approximation -- the next record's header cannot
+> complete for at least sixteen more byte-cycles.
+
+A second, separate claim: the arm is applied WITHOUT waiting for the packet's
+verdict, unlike every other command this block executes, and a record with a
+reserved bit set in `stage_mask` or `flags` is REFUSED WHOLE and counted in
+`trace_arm_refused_o` rather than having the bad bits masked off.
+
+A directed run measured `armed=0000001 stored=9 dropped=0 against decoder
+records=11, arms=1, arm_refused=0` on an 11-record packet, and the author says
+`stored = records - 2` because BeginFrame AND the DebugTraceArm record are both
+offered to the ring before the arm lands. (The packet has since grown to 13
+records and stored=11.)
+
+You are shown the relevant slices of CMD.EXEC, the whole decoder, the whole
+trace ring, and the C++ reference model the RTL is supposed to match.
+
+## Questions
+1. Is the guarantee TRUE as stated -- is there any record offset, record size,
+   or backpressure pattern under which the DebugTraceArm record itself gets
+   traced, or under which the record IMMEDIATELY after it does not? Pay
+   attention to the smallest legal record and to what happens if the byte
+   stream stalls between the arm's last byte and the next record's byte 15.
+2. Is `stored = records - 2` a LAW or an accident of that packet's shape? State
+   the general expression, in terms of the arming record's 1-based position.
+3. Can `dbg_trace_arm_we_o` pulse more than once for one DebugTraceArm record,
+   or for a record that is not a DebugTraceArm? Can it be lost entirely if the
+   downstream is not ready on that exact cycle -- i.e. is it a pulse into
+   something with no handshake?
+4. Is the refusal really WHOLE? Name the exact bits checked, and say whether a
+   refused record can still change `arm_mask_i` or `dbg_trace_clear_o` in any
+   way. Also: is `trace_arm_refused_o` incremented exactly once per bad record?
+5. Does the RTL agree with the C++ reference model field for field -- the same
+   bits reserved, the same refusal, the same clear semantics? Name any
+   disagreement.
+
+Answer only about what is shown. If a question depends on code you were not
+given, say so and name what you would need; do not guess.
+
+# INPUT fpga/rtl/command/zhao_cmd_exec.sv:480-560
+```
+  480|     output logic              post_grade_valid_o,
+  481|     output logic              post_echo_arm_o,     // R35: capture only when armed
+  482|     output logic signed [8:0] post_bias_r_o,
+  483|     output logic signed [8:0] post_bias_g_o,
+  484|     output logic signed [8:0] post_bias_b_o,
+  485|     output logic [15:0]       post_flash_rgb_o,
+  486|     output logic [ 7:0]       post_flash_amt_o,
+  487|     output logic [15:0]       post_ink_rgb_o,
+  488|     output logic              post_pv_we_o,
+  489|     output logic [ 1:0]       post_pv_sel_o,
+  490|     output logic [ 5:0]       post_pv_addr_o,
+  491|     output logic [71:0]       post_pv_data_o,
+  492| 
+  493|     // ---- R52: DebugTraceArm 0xF003 -> DEBUG.TRACE --------------------------
+  494|     // A ONE-CYCLE pulse at the DebugTraceArm record's LAST BYTE, during the
+  495|     // walk -- not after the packet's verdict like every other command here.
+  496|     // The arm below carries the argument in full; the short form is that the
+  497|     // decoder reports a record at its byte 15 and may still reject the packet,
+  498|     // so the ring is speculative by contract and arming after the verdict would
+  499|     // make it blind to the packet somebody is debugging.
+  500|     //
+  501|     // THE ORDERING IS EXACT: the arming record itself is not traced, and every
+  502|     // record after it in the packet is.
+  503|     //
+  504|     // THIS IS THE RING'S ONLY WRITER, and that is ruling R18's principle (one
+  505|     // authority per level) rather than an omission. `zhao_host_regwin`'s tenant
+  506|     // 1 can READ `armed` and is refused a write, so a capture is always
+  507|     // attributable to the packet that asked for it.
+  508|     output logic       dbg_trace_arm_we_o,
+  509|     output logic [6:0] dbg_trace_arm_mask_o,
+  510|     output logic       dbg_trace_clear_o,
+  511| 
+  512|     // ---- evidence ----------------------------------------------------------
+  513|     // Every one of these is fired by a directed case in
+  514|     // tests/command/cmd_exec_directed.cpp. None is asserted zero without one.
+  515|     output logic [31:0] packets_committed_o,
+  516|     output logic [31:0] packets_abandoned_o,
+  517|     output logic [31:0] views_written_o,
+  518|     output logic [31:0] stamps_issued_o,
+  519|     output logic [31:0] stamp_overflow_o,
+  520|     output logic [31:0] view_range_refused_o,
+  521|     output logic [31:0] stamp_src_truncated_o,
+  522|     output logic [31:0] draws_issued_o,
+  523|     output logic [31:0] draw_overflow_o,
+  524|     output logic [31:0] draw_src_truncated_o,
+  525|     output logic [31:0] uploads_issued_o,    // handed to MEM.UPLOAD
+  526|     output logic [31:0] upload_overflow_o,   // packets refused: > UPL_Q uploads
+  527|     output logic [31:0] post_looks_applied_o,    // SetPost looks handed to POST.COMPOSITE
+  528|     output logic [31:0] grade_entries_written_o, // product vectors written into its table
+  529|     output logic [31:0] post_refused_o,          // SetPost/SetGradeTable records REFUSED
+  530|     output logic [31:0] grade_overflow_o,        // entries refused for want of staging room
+  531|     output logic [31:0] trace_arms_applied_o,    // R52: DebugTraceArm records committed
+  532|     output logic [31:0] trace_arm_refused_o,     // R52: reserved bits set on the wire
+  533|     output logic [31:0] unsupported_o
+  534| );
+  535| 
+  536|   // Saturating, like every other counter in the composed core: a wrapped
+  537|   // counter reads low, and low is the flattering direction.
+  538|   `define ZHAO_EXEC_INC(c) if (c != 32'hFFFF_FFFF) c <= c + 32'd1
+  539| 
+  540|   // ---- ABI geometry, all of it from the generated package ------------------
+  541|   localparam int unsigned SV_VIEW_ID = ZHAO_SET_VIEW_OFF_VIEW_ID;
+  542|   localparam int unsigned SV_MAT_LO  = ZHAO_SET_VIEW_OFF_VIEW_PROJECTION;
+  543|   localparam int unsigned SV_MAT_HI  = ZHAO_SET_VIEW_OFF_PIXEL_ERROR;  // exclusive
+  544|   // `flags` is a u16 and the depth profile is its LOW TWO BITS, so only the
+  545|   // low byte is read. From the GENERATED offset like every other field here --
+  546|   // the whole point of the block above is that no layout is written by hand.
+  547|   localparam int unsigned SV_FLAGS   = ZHAO_SET_VIEW_OFF_FLAGS;
+  548| 
+  549|   localparam int unsigned OFF_PATCH = ZHAO_SURFACE_STAMP_OFF_PATCH;
+  550|   localparam int unsigned OFF_OPER  = ZHAO_SURFACE_STAMP_OFF_OPERATION;
+  551|   localparam int unsigned OFF_TAG   = ZHAO_SURFACE_STAMP_OFF_TAG;
+  552|   localparam int unsigned OFF_STR   = ZHAO_SURFACE_STAMP_OFF_STRENGTH;
+  553|   // transform2fx declares `fx16 tx; fx16 ty;` first; the generator emits one
+  554|   // offset for the struct. The $bits guard below is what keeps these honest.
+  555|   localparam int unsigned OFF_TX   = ZHAO_SURFACE_STAMP_OFF_TRANSFORM;
+  556|   localparam int unsigned OFF_TY   = ZHAO_SURFACE_STAMP_OFF_TRANSFORM + 4;
+  557|   localparam int unsigned OFF_RAD  = ZHAO_SURFACE_STAMP_OFF_RADIUS;
+  558|   localparam int unsigned OFF_RING = ZHAO_SURFACE_STAMP_OFF_RING_WIDTH;
+  559| 
+  560|   // The record header's source_id, by the same rule.
+```
+
+# INPUT fpga/rtl/command/zhao_cmd_exec.sv:600-640
+```
+  600|   localparam int unsigned OFF_PR_EPOCH = ZHAO_PUBLISH_RESOURCE_OFF_EPOCH;
+  601|   localparam int unsigned OFF_PR_SLOT  = ZHAO_PUBLISH_RESOURCE_OFF_DST_SLOT;
+  602|   localparam int unsigned OFF_PR_KIND  = ZHAO_PUBLISH_RESOURCE_OFF_KIND;
+  603| 
+  604|   // SetPost 0x0040 and SetGradeTable 0x0041 (R36), same rule, same package.
+  605|   localparam int unsigned OFF_SP_GAIN  = ZHAO_SET_POST_OFF_BLOOM_GAIN;
+  606|   localparam int unsigned OFF_SP_FLAGS = ZHAO_SET_POST_OFF_FLAGS;
+  607|   localparam int unsigned OFF_SP_AMT   = ZHAO_SET_POST_OFF_FLASH_AMOUNT;
+  608|   localparam int unsigned OFF_SP_BR    = ZHAO_SET_POST_OFF_BIAS_R;
+  609|   localparam int unsigned OFF_SP_BG    = ZHAO_SET_POST_OFF_BIAS_G;
+  610|   localparam int unsigned OFF_SP_BB    = ZHAO_SET_POST_OFF_BIAS_B;
+  611|   localparam int unsigned OFF_SP_FLASH = ZHAO_SET_POST_OFF_FLASH;
+  612|   localparam int unsigned OFF_SP_INK   = ZHAO_SET_POST_OFF_INK;
+  613|   localparam int unsigned OFF_GT_CURVE = ZHAO_SET_GRADE_TABLE_OFF_CURVE;
+  614|   localparam int unsigned OFF_GT_FIRST = ZHAO_SET_GRADE_TABLE_OFF_FIRST;
+  615|   localparam int unsigned OFF_GT_COUNT = ZHAO_SET_GRADE_TABLE_OFF_COUNT;
+  616|   localparam int unsigned OFF_GT_VEC   = ZHAO_SET_GRADE_TABLE_OFF_VECTORS_0;
+  617|   localparam int unsigned GT_VEC_BYTES = 72;    // eight entries of nine bytes
+  618| 
+  619|   // ---- R52: DebugTraceArm 0xF003 ------------------------------------------
+  620|   localparam int unsigned OFF_TA_MASK  = ZHAO_DEBUG_TRACE_ARM_OFF_STAGE_MASK;
+  621|   localparam int unsigned OFF_TA_FLAGS = ZHAO_DEBUG_TRACE_ARM_OFF_FLAGS;
+  622| 
+  623|   // Quartus 17.0 needs an elaboration check inside `initial begin ... end`; a
+  624|   // bare module-scope `if` is a syntax error there however clean the lint
+  625|   // (CLAUDE.md, "Verilator lint-clean is not Quartus-synthesizable"). And
+  626|   // `--lint-only` does not run this block, so it is a build-time guard and is
+  627|   // not claimed as a tested one. NOT wrapped in `synthesis translate_off`: the
+  628|   // whole point of the Quartus form is that quartus_map evaluates it, and the
+  629|   // pragma would put it back exactly where the rule says it must not be.
+  630|   initial begin
+  631|     if ($bits(zhao_transform2fx_t) != 24 * 8)
+  632|       $fatal(1, "zhao_cmd_exec: transform2fx is no longer 24 B; OFF_TX/OFF_TY are stale");
+  633|     // 96 until 2026-09-20, 112 since: ruling R63 added `fx16 eye[3]` plus the
+  634|     // pad that keeps the record a multiple of the 16-byte alignment. The
+  635|     // constant is updated, not relaxed -- this guard's whole value is that it
+  636|     // makes a half-done layout move impossible to ship quietly, and a `>=`
+  637|     // here would have let exactly that happen.
+  638|     if (ZHAO_SET_VIEW_BYTES != 112)
+  639|       $fatal(1, "zhao_cmd_exec: SetView record size moved; re-read the offsets");
+  640|     // The eye words must land BEFORE the record's last byte, or the commit
+```
+
+# INPUT fpga/rtl/command/zhao_cmd_exec.sv:900-960
+```
+  900|   logic [ 7:0] sp_gain, sp_flags, sp_amt;
+  901|   logic [15:0] sp_br, sp_bg, sp_bb, sp_flash, sp_ink;
+  902|   logic        st_post_v;     // a clean SetPost is staged in this packet
+  903|   logic [ 7:0] st_gain, st_amt;
+  904|   logic [ 1:0] st_flags;          // the two assigned bits; 7:2 were refused
+  905|   logic [ 8:0] st_br, st_bg, st_bb; // nine bits: wider was refused
+  906|   logic [15:0] st_flash, st_ink;
+  907| 
+  908|   // REFUSE, NEVER MASK. Flags bits 7:2 are unassigned, and the block takes a
+  909|   // SIGNED NINE-BIT bias, so a wider value is refused rather than clamped:
+  910|   // [-256, 255] is exactly "bits 15:8 all equal bit 8".
+  911|   logic sp_ok_c;
+  912|   assign sp_ok_c = (sp_flags[7:2] == 6'd0)
+  913|                 && (sp_br[15:8] == {8{sp_br[8]}})
+  914|                 && (sp_bg[15:8] == {8{sp_bg[8]}})
+  915|                 && (sp_bb[15:8] == {8{sp_bb[8]}});
+  916| 
+  917|   // ---- DebugTraceArm capture (R52) ----------------------------------------
+  918|   // The two wire bytes, captured as they pass. Unlike SetPost there is no
+  919|   // shadow: the arming is applied at the record's END rather than after the
+  920|   // packet's verdict, and the arm itself says why (the trace surface is
+  921|   // speculative by the decoder's own contract).
+  922|   //
+  923|   // REFUSE, NEVER MASK, exactly as `sp_ok_c` above. `stage_mask` bit 7 is
+  924|   // unassigned (DEBUG.TRACE's `arm_mask_i` is seven bits: charter 20.6's seven
+  925|   // stages) and `flags` bits 7:1 are unassigned. A record setting either is
+  926|   // REFUSED whole and counted -- masking it off would silently arm a different
+  927|   // set of stages than the host asked for, and a trace that is not the trace
+  928|   // that was requested is worse than no trace.
+  929|   logic [7:0] ta_mask, ta_flags;
+  930|   logic       ta_ok_c;
+  931|   assign ta_ok_c = (ta_mask[7] == 1'b0) && (ta_flags[7:1] == 7'd0);
+  932| 
+  933|   // A SetGradeTable is a stream of ENTRIES. Its header (curve, first, count)
+  934|   // arrives before its vectors, so each nine-byte entry is validated and written
+  935|   // into the staging memory the byte it completes -- never half an entry, and
+  936|   // never an entry of a refused record.
+  937|   logic [ 7:0] gt_curve, gt_first, gt_count;
+  938|   logic [ 3:0] gv_b;          // byte within the entry, 0..8
+  939|   logic [ 3:0] gv_k;          // entry within the record, 0..7
+  940|   logic [63:0] gv_acc;        // the entry's first eight bytes, little-endian
+  941|   logic [ 7:0] gt_size_c;
+  942|   logic        gt_ok_c;
+  943|   always_comb begin
+  944|     unique case (gt_curve)
+  945|       8'd0:    gt_size_c = 8'd32;   // R
+  946|       8'd1:    gt_size_c = 8'd64;   // G
+  947|       8'd2:    gt_size_c = 8'd32;   // B
+  948|       default: gt_size_c = 8'd0;    // no such curve
+  949|     endcase
+  950|   end
+  951|   assign gt_ok_c = (gt_size_c != 8'd0) && (gt_count >= 8'd1) && (gt_count <= 8'd8)
+  952|                 && ({1'b0, gt_first} + {1'b0, gt_count} <= {1'b0, gt_size_c});
+  953| 
+  954|   localparam int unsigned GQW = $clog2(GRADE_Q);
+  955|   logic [79:0]  gq [0:GRADE_Q-1];   // {sel[1:0], addr[5:0], data[71:0]}
+  956|   logic [GQW:0] gq_wp, gq_rp;
+  957|   logic         gq_full;
+  958|   assign gq_full = ((gq_wp - gq_rp) >= (GQW+1)'(GRADE_Q));
+  959| 
+  960|   logic        gq_entry_c;    // this byte completes an entry of the record
+```
+
+# INPUT fpga/rtl/command/zhao_cmd_exec.sv:1040-1130
+```
+ 1040|         // The origin. `spec/commands.zidl` makes zero a legal, defined eye, so
+ 1041|         // a console that never issues one measures from (0,0,0) rather than
+ 1042|         // from whatever was left in a register.
+ 1043|         sv_eyex[vi] <= 32'd0;
+ 1044|         sv_eyey[vi] <= 32'd0;
+ 1045|         sv_eyez[vi] <= 32'd0;
+ 1046|       end
+ 1047|       pc_g0 <= 32'd0; pc_g1 <= 32'd0; pc_f0 <= 32'd0; pc_f1 <= 32'd0; pc_sh <= 32'd0;
+ 1048|       pc_dirty <= 1'b0; tk <= 2'd0;
+ 1049|       tok_budget_valid_o <= 1'b0; tok_vreq_valid_o <= 1'b0; tok_vreq_view_o <= 1'b0;
+ 1050|       // R52: DebugTraceArm
+ 1051|       ta_mask <= 8'd0; ta_flags <= 8'd0;
+ 1052|       dbg_trace_arm_we_o <= 1'b0; dbg_trace_arm_mask_o <= 7'd0;
+ 1053|       dbg_trace_clear_o <= 1'b0;
+ 1054|       trace_arms_applied_o <= 32'd0; trace_arm_refused_o <= 32'd0;
+ 1055|       tok_budget_geom0_o <= 32'd0; tok_budget_geom1_o <= 32'd0;
+ 1056|       tok_budget_frag0_o <= 32'd0; tok_budget_frag1_o <= 32'd0;
+ 1057|       tok_budget_shared_o <= 32'd0; tok_vreq_geom_o <= 32'd0; tok_vreq_frag_o <= 32'd0;
+ 1058|       contracts_applied_o <= 32'd0;
+ 1059|       sv_dirty <= 2'd0; sv_view <= 1'b0; sv_ok <= 1'b0; wacc <= 24'd0;
+ 1060|       ss_patch <= 32'd0; ss_tx <= 32'd0; ss_ty <= 32'd0;
+ 1061|       ss_rad <= 32'd0; ss_ring <= 32'd0;
+ 1062|       ss_oper <= 8'd0; ss_tag <= 8'd0; ss_str <= 16'd0; ss_src <= 16'd0;
+ 1063|       ss_src_hi_nz <= 1'b0;
+ 1064|       sq_wp <= '0; sq_rp <= '0; sq_head <= '0;
+ 1065|       df_form <= 32'd0; df_mset <= 32'd0; df_xform <= 32'd0;
+ 1066|       df_vpmask <= 8'd0; df_weight <= 8'd0; df_flags <= 16'd0;
+ 1067|       df_src_hi_nz <= 1'b0;
+ 1068|       dq_wp <= '0; dq_rp <= '0; dq_head <= '0;
+ 1069|       pr_res <= 32'd0; pr_hlo <= 32'd0; pr_hhi <= 32'd0; pr_vram <= 32'd0;
+ 1070|       pr_len <= 32'd0; pr_crc <= 32'd0; pr_gen <= 16'd0; pr_epoch <= 16'd0;
+ 1071|       pr_slot <= 8'd0; pr_kind <= 8'd0;
+ 1072|       uq_wp <= '0; uq_rp <= '0; pq_wp <= '0; pq_rp <= '0;
+ 1073|       uploads_issued_o <= 32'd0; upload_overflow_o <= 32'd0;
+ 1074|       sp_gain <= 8'd0; sp_flags <= 8'd0; sp_amt <= 8'd0;
+ 1075|       sp_br <= 16'd0; sp_bg <= 16'd0; sp_bb <= 16'd0; sp_flash <= 16'd0; sp_ink <= 16'd0;
+ 1076|       st_post_v <= 1'b0; st_gain <= 8'd0; st_flags <= 2'd0; st_amt <= 8'd0;
+ 1077|       st_br <= 9'd0; st_bg <= 9'd0; st_bb <= 9'd0; st_flash <= 16'd0; st_ink <= 16'd0;
+ 1078|       gt_curve <= 8'd0; gt_first <= 8'd0; gt_count <= 8'd0;
+ 1079|       gv_b <= 4'd0; gv_k <= 4'd0; gv_acc <= 64'd0;
+ 1080|       gq_wp <= '0; gq_rp <= '0;
+ 1081|       post_in_q <= 1'b0; gq_rd_v_q <= 1'b0;
+ 1082|       // THE IDENTITY LOOK until a SetPost says otherwise: no bloom, no grade,
+ 1083|       // no bias, no flash, black ink, and POST.ECHO DISARMED (R35).
+ 1084|       post_bloom_gain_o <= 8'd0; post_grade_valid_o <= 1'b0; post_echo_arm_o <= 1'b0;
+ 1085|       post_bias_r_o <= 9'sd0; post_bias_g_o <= 9'sd0; post_bias_b_o <= 9'sd0;
+ 1086|       post_flash_rgb_o <= 16'd0; post_flash_amt_o <= 8'd0; post_ink_rgb_o <= 16'd0;
+ 1087|       post_pv_we_o <= 1'b0; post_pv_sel_o <= 2'd0; post_pv_addr_o <= 6'd0; post_pv_data_o <= 72'd0;
+ 1088|       post_looks_applied_o <= 32'd0; grade_entries_written_o <= 32'd0;
+ 1089|       post_refused_o <= 32'd0; grade_overflow_o <= 32'd0;
+ 1090|       draw_valid_o <= 1'b0;
+ 1091|       draws_issued_o <= 32'd0; draw_overflow_o <= 32'd0;
+ 1092|       draw_src_truncated_o <= 32'd0;
+ 1093|       poisoned <= 1'b0;
+ 1094|       st <= EX_STAGE; cv <= 1'b0; cw <= 5'd0;
+ 1095|       proj_cfg_we_o <= 1'b0; proj_cfg_view_o <= 1'b0;
+ 1096|       proj_cfg_addr_o <= 5'd0; proj_cfg_data_o <= 32'd0;
+ 1097|       stamp_valid_o <= 1'b0;
+ 1098|       packets_committed_o <= 32'd0; packets_abandoned_o <= 32'd0;
+ 1099|       views_written_o <= 32'd0; stamps_issued_o <= 32'd0;
+ 1100|       stamp_overflow_o <= 32'd0; view_range_refused_o <= 32'd0;
+ 1101|       stamp_src_truncated_o <= 32'd0; unsupported_o <= 32'd0;
+ 1102|     end else begin
+ 1103|       proj_cfg_we_o <= 1'b0;   // a write is one cycle wide, always
+ 1104|       tok_budget_valid_o <= 1'b0;   // both token loads are one-cycle pulses
+ 1105|       tok_vreq_valid_o   <= 1'b0;
+ 1106|       // R52: so is the trace arming -- and `clear_i` MUST be a pulse, not a
+ 1107|       // level. DEBUG.TRACE gates its ring write with `!clear_i` and zeroes both
+ 1108|       // counts while it is high, so a clear left asserted is a ring that stores
+ 1109|       // nothing and reports zero drops: a silently dead instrument, in the
+ 1110|       // flattering direction.
+ 1111|       dbg_trace_arm_we_o <= 1'b0;
+ 1112|       dbg_trace_clear_o  <= 1'b0;
+ 1113|       post_pv_we_o  <= 1'b0;   // so is a table write
+ 1114| 
+ 1115|       // THE PENDING UPLOAD QUEUE DRAINS IN EVERY STATE. Its entries are
+ 1116|       // committed already; MEM.UPLOAD takes one whenever it is idle.
+ 1117|       if (upl_valid_o && upl_ready_i) begin
+ 1118|         pq_rp <= pq_rp + (PQW+1)'(1);
+ 1119|         `ZHAO_EXEC_INC(uploads_issued_o);
+ 1120|       end
+ 1121| 
+ 1122|       unique case (st)
+ 1123| 
+ 1124|         // ------------------------------------------------------------------
+ 1125|         // STAGE -- walk the packet, capture the fields, touch nothing outside
+ 1126|         // ------------------------------------------------------------------
+ 1127|         EX_STAGE: begin
+ 1128|           if (take) begin
+ 1129|             if (in_rec_region) begin
+ 1130|               // record header
+```
+
+# INPUT fpga/rtl/command/zhao_cmd_exec.sv:1260-1290
+```
+ 1260|                   sp_br <= {pkt_byte_i, sp_br[15:8]};
+ 1261|                 if ((rpos >= 16'(OFF_SP_BG)) && (rpos < 16'(OFF_SP_BG + 2)))
+ 1262|                   sp_bg <= {pkt_byte_i, sp_bg[15:8]};
+ 1263|                 if ((rpos >= 16'(OFF_SP_BB)) && (rpos < 16'(OFF_SP_BB + 2)))
+ 1264|                   sp_bb <= {pkt_byte_i, sp_bb[15:8]};
+ 1265|                 if ((rpos >= 16'(OFF_SP_FLASH)) && (rpos < 16'(OFF_SP_FLASH + 2)))
+ 1266|                   sp_flash <= {pkt_byte_i, sp_flash[15:8]};
+ 1267|                 if ((rpos >= 16'(OFF_SP_INK)) && (rpos < 16'(OFF_SP_INK + 2)))
+ 1268|                   sp_ink <= {pkt_byte_i, sp_ink[15:8]};
+ 1269|               end
+ 1270| 
+ 1271|               // ---- DebugTraceArm (R52) -------------------------------------
+ 1272|               if (r_op == ZHAO_OP_DEBUG_TRACE_ARM) begin
+ 1273|                 if (rpos == 16'(OFF_TA_MASK))  ta_mask  <= pkt_byte_i;
+ 1274|                 if (rpos == 16'(OFF_TA_FLAGS)) ta_flags <= pkt_byte_i;
+ 1275|               end
+ 1276| 
+ 1277|               // ---- SetGradeTable (R36) -------------------------------------
+ 1278|               if (r_op == ZHAO_OP_SET_GRADE_TABLE) begin
+ 1279|                 if (rpos == 16'(OFF_GT_CURVE)) gt_curve <= pkt_byte_i;
+ 1280|                 if (rpos == 16'(OFF_GT_FIRST)) gt_first <= pkt_byte_i;
+ 1281|                 if (rpos == 16'(OFF_GT_COUNT)) begin
+ 1282|                   gt_count <= pkt_byte_i;
+ 1283|                   gv_b     <= 4'd0;
+ 1284|                   gv_k     <= 4'd0;
+ 1285|                 end
+ 1286|                 if (in_vec_c) begin
+ 1287|                   if (gv_b == 4'd8) begin
+ 1288|                     gv_b <= 4'd0;
+ 1289|                     gv_k <= gv_k + 4'd1;
+ 1290|                     // The entry is written by `gq_we_c` (the memory's own
+```
+
+# INPUT fpga/rtl/command/zhao_cmd_exec.sv:1360-1420
+```
+ 1360|                   // STATE, not an event: the last clean one in the packet wins.
+ 1361|                   if (sp_ok_c) begin
+ 1362|                     st_post_v <= 1'b1;
+ 1363|                     st_gain <= sp_gain; st_flags <= sp_flags[1:0]; st_amt <= sp_amt;
+ 1364|                     st_br <= sp_br[8:0]; st_bg <= sp_bg[8:0]; st_bb <= sp_bb[8:0];
+ 1365|                     st_flash <= sp_flash; st_ink <= sp_ink;
+ 1366|                   end else begin
+ 1367|                     `ZHAO_EXEC_INC(post_refused_o);
+ 1368|                   end
+ 1369|                 end else if (r_op == ZHAO_OP_SET_GRADE_TABLE) begin
+ 1370|                   // Its entries were written as they completed; a refused record
+ 1371|                   // wrote none, and is counted here once.
+ 1372|                   if (!gt_ok_c) begin
+ 1373|                     `ZHAO_EXEC_INC(post_refused_o);
+ 1374|                   end
+ 1375|                 end else if (r_op == ZHAO_OP_DEBUG_TRACE_ARM) begin
+ 1376|                   // ---- R52: armed HERE, at the record's end, NOT in a commit
+ 1377|                   // phase -- and that is the one design decision in this arm.
+ 1378|                   //
+ 1379|                   // Every other command in this block stages to a shadow and
+ 1380|                   // commits after the packet's VERDICT, so a corrupt packet
+ 1381|                   // changes no console state. This one deliberately does not,
+ 1382|                   // because the TRACE SURFACE IS ALREADY SPECULATIVE BY
+ 1383|                   // CONTRACT: `zhao_cmd_decoder` raises `rec_valid_o` at record
+ 1384|                   // offset 15 -- the end of the record HEADER -- and its own
+ 1385|                   // port comment says it reports "a record that may still be
+ 1386|                   // rejected", the alternative (buffer and replay) having been
+ 1387|                   // refused as re-introducing the storage it exists to avoid.
+ 1388|                   // The ring therefore traces records of packets that fail.
+ 1389|                   // Arming after the verdict would make the ring unable to
+ 1390|                   // observe the one packet anybody debugging actually cares
+ 1391|                   // about.
+ 1392|                   //
+ 1393|                   // THE ORDERING IS EXACT, not approximate. `rec_done` is the
+ 1394|                   // record's LAST byte; the decoder reported this same record
+ 1395|                   // at its byte 15 and will report the next at ITS byte 15, at
+ 1396|                   // least sixteen cycles later. So: the DebugTraceArm record
+ 1397|                   // itself is NOT traced, and every record after it in the
+ 1398|                   // packet IS. A host reading the ring can rely on that.
+ 1399|                   //
+ 1400|                   // STATE, not an event: a second DebugTraceArm later in the
+ 1401|                   // same packet re-arms, and the last one wins.
+ 1402|                   if (ta_ok_c) begin
+ 1403|                     dbg_trace_arm_we_o   <= 1'b1;
+ 1404|                     dbg_trace_arm_mask_o <= ta_mask[6:0];
+ 1405|                     dbg_trace_clear_o    <= ta_flags[0];
+ 1406|                     `ZHAO_EXEC_INC(trace_arms_applied_o);
+ 1407|                   end else begin
+ 1408|                     `ZHAO_EXEC_INC(trace_arm_refused_o);
+ 1409|                   end
+ 1410|                 end else if ((r_op != ZHAO_OP_SET_ENVIRONMENT)   // R25: its own block below
+ 1411|                              && (r_op != ZHAO_OP_SET_POPULATION) // R41: likewise
+ 1412|                              && (zhao_opcode_record_bytes(r_op) != 32'd0)) begin
+ 1413|                   // A record the ABI defines and this block has no arm for.
+ 1414|                   // Counted rather than narrated, so the distance between the
+ 1415|                   // command surface and the executor is a NUMBER.
+ 1416|                   `ZHAO_EXEC_INC(unsupported_o);
+ 1417|                 end
+ 1418|                 // An opcode the ABI does not define is CMD.DECODER's to
+ 1419|                 // report, and this block deliberately has no opinion on it.
+ 1420| 
+```
+
+# INPUT fpga/rtl/command/zhao_cmd_decoder.sv:1-357
+```
+    1| // zhao_cmd_decoder.sv — CMD.DECODER: the STREAMING packet validator.
+    2| //
+    3| // Contract: design/contracts/CMD.DECODER.md
+    4| // Reference: zref::cmd::validate (reference/include/zref/zref_cmd.hpp), a thin
+    5| // view onto zhao::zhao_frame_validate — the same function zhao_stub_top, the
+    6| // capture tooling and the 19 committed goldens in tests/abi/golden/ have always
+    7| // agreed with.
+    8| //
+    9| // WHY THIS BLOCK EXISTS, given that a validator already runs. zhao_stub_top
+   10| // hands a whole frame slot to zhao_frame_validate as a FUNCTION CALL, and its
+   11| // own header says why that is not the answer: "silicon validates STREAMING
+   12| // byte-by-byte". Silicon has no slot to hand over. CMD.DMA emits verified bytes
+   13| // one at a time and this block must reach the identical verdict having seen
+   14| // each byte exactly once, holding no packet buffer.
+   15| //
+   16| // Not holding one is the point. CMD.DMA's blit_buf was 1.97 Mbit and made the
+   17| // composed shell unsynthesizable; a decoder that buffered a frame slot would be
+   18| // 8 Mbit. This block's whole state is a header capture, two running CRCs, a
+   19| // record cursor and three counters.
+   20| //
+   21| // ---------------------------------------------------------------------------
+   22| // THE VALIDATION ORDER IS NORMATIVE (spec/capture_format.md §3.2)
+   23| // ---------------------------------------------------------------------------
+   24| // Every check runs BEFORE any payload field is consumed; on any error the frame
+   25| // aborts with no partial consumption. `bytes_consumed_o` is part of the law and
+   26| // is easy to get wrong: 36 on a header-level abort (checks 1-3), otherwise
+   27| // 40 + N — the whole packet is consumed before the verdict even when a later
+   28| // check fails.
+   29| //
+   30| // COVERED HERE, all streaming: 1, 2, 3, 4, 5, the record-header half of 6, 9
+   31| // and 10.
+   32| //
+   33| // DEFERRED, AND IT IS A TOOLING GAP RATHER THAN A CHOICE:
+   34| //   6  payload PAD BYTES zero        -> ZH_ABI_RESERVED_FIELD
+   35| //   7  enum ranges / bitfield widths -> ZH_ABI_BAD_VALUE
+   36| // The generated package knows both laws already — zhao_record_pad_nonzero and
+   37| // zhao_record_enum_bad — but both take `input logic [7:0] p []`, an OPEN ARRAY.
+   38| // Those are exactly the "verification-only open-array helpers" the shell
+   39| // project excludes from Quartus with QUARTUS_SYNTHESIS=1, so they cannot be
+   40| // called from synthesizable RTL, and a streaming decoder could not hand them a
+   41| // whole record anyway.
+   42| //
+   43| // Doing these properly needs SW.TOOLS.ABIDOC to emit a SYNTHESIZABLE per-opcode
+   44| // table of (pad offsets, enum offsets, legal ranges) that a streaming walker
+   45| // consults by offset as each byte arrives. Hand-writing that table here would
+   46| // break this contract's own rule that layouts come EXCLUSIVELY from the
+   47| // generated package. So it is recorded, not skipped: a packet this block calls
+   48| // OK may still fail zref's check 6 or 7.
+   49| //   ENFORCED-BY: tests/command/cmd_decoder_directed.cpp — its differential
+   50| //   asserts the deferred pair is the ONLY source of disagreement with zref, so
+   51| //   the day the generator emits that table this test goes red until this block
+   52| //   consumes it.
+   53| //
+   54| //   8  handle generations vs resource_epoch: spec §3.2 records "no v1 field",
+   55| //      so there is nothing to check until DrawSky activates it in wave 8.
+   56| // ---------------------------------------------------------------------------
+   57| module zhao_cmd_decoder
+   58|   import zhao_abi_pkg::*;
+   59| (
+   60|     input  logic clk,
+   61|     input  logic rst_n,
+   62| 
+   63|     // ---- sealed packet byte stream, from CMD.DMA ---------------------------
+   64|     input  logic        pkt_valid_i,
+   65|     output logic        pkt_ready_o,
+   66|     input  logic [ 7:0] pkt_byte_i,
+   67|     input  logic [31:0] pkt_len_i,    // CMD.DMA's verified total, 40 + N
+   68| 
+   69|     // ---- decoded record headers -------------------------------------------
+   70|     // THE CONSUMER MUST NOT RETIRE THESE until decode_done_o with
+   71|     // decode_error_o == ZH_ABI_OK. The payload CRC (4) and the count laws (9)
+   72|     // cannot conclude until the last byte, so a record emitted earlier belongs
+   73|     // to a packet that may still be rejected. The contract argues this choice
+   74|     // and records the rejected alternative (buffer and replay), which would
+   75|     // re-introduce exactly the storage this block exists to avoid.
+   76|     output logic        rec_valid_o,
+   77|     input  logic        rec_ready_i,
+   78|     output logic [15:0] rec_opcode_o,
+   79|     output logic [15:0] rec_bytes_o,
+   80|     output logic [31:0] rec_source_id_o,
+   81|     output logic [31:0] rec_index_o,
+   82| 
+   83|     // ---- verdict -----------------------------------------------------------
+   84|     output logic        decode_done_o,     // one-cycle pulse: verdict valid
+   85|     output logic [ 7:0] decode_error_o,    // zhao_abi_error
+   86|     output logic [31:0] bytes_consumed_o,  // 36 on header abort, else 40+N
+   87|     output logic [31:0] commands_o         // records walked
+   88| );
+   89| 
+   90|   // The fail-safe order means the FIRST failing check is the reported one, so
+   91|   // every later assignment is suppressed by err_set.
+   92|   `define ZHAO_FAIL(code) if (!err_set) begin err <= (code); err_set <= 1'b1; end
+   93| 
+   94|   typedef enum logic [2:0] {
+   95|     S_HDR,    // consuming bytes [0,36)
+   96|     S_CHECK,  // header decided; consumes no byte
+   97|     S_REC,    // walking the command stream
+   98|     S_PCRC,   // the trailing payload CRC word
+   99|     S_DONE
+  100|   } st_e;
+  101|   st_e st;
+  102| 
+  103|   logic [31:0] pos, total;
+  104|   logic [31:0] h_magic, h_cmd_count, h_cmd_bytes, h_hdr_crc;
+  105|   logic [15:0] h_abi_ver, h_flags;
+  106| 
+  107|   // Two CRC accumulators, not one: [0,32) and [36, 36+N) never overlap, so a
+  108|   // single accumulator would need reinitialising mid-stream, which is a state
+  109|   // bug waiting to happen.
+  110|   logic [31:0] crc_hdr, crc_pay;
+  111|   // 24 bits, not 32: the final byte of each word is compared straight from
+  112|   // pkt_byte_i, so only three bytes of history are ever read back.
+  113|   logic [23:0] pcrc_hist;
+  114| 
+  115|   logic [31:0] rec_sum, rec_idx;
+  116|   logic [15:0] rec_off, cur_opcode, cur_bytes;
+  117|   logic [31:0] cur_source, cur_flags;
+  118|   logic [23:0] cur_rsv0;   // same three-byte history as pcrc_hist
+  119| 
+  120|   logic [7:0] err;
+  121|   logic       err_set, hdr_abort, done, hdr_bad;
+  122| 
+  123|   // RECORD-LEVEL ERRORS ARE HELD SEPARATELY, and this is forced by streaming.
+  124|   //
+  125|   // spec 3.2's order puts the payload CRC (check 4) BEFORE the per-record
+  126|   // checks (5, 6, 10). A streaming decoder discovers them the other way round:
+  127|   // a record header is complete long before the CRC over the whole stream is.
+  128|   // Latching a record error into `err` directly therefore reported
+  129|   // ZH_ABI_RESERVED_FIELD where the oracle reports ZH_ABI_BAD_PAYLOAD_CRC --
+  130|   // caught by cmd_decoder_directed on its first run, ten checks in two cases.
+  131|   //
+  132|   // So the record verdict waits here and is only promoted at the end, after
+  133|   // the CRC has had its turn. The normative order is preserved even though the
+  134|   // discovery order cannot be.
+  135|   logic [7:0] rec_err_l;
+  136|   logic       rec_err_set;
+  137| 
+  138|   assign decode_error_o   = err;
+  139|   assign bytes_consumed_o = hdr_abort ? 32'd36 : total;
+  140|   assign commands_o       = rec_idx;
+  141|   assign decode_done_o    = done;
+  142|   assign rec_opcode_o     = cur_opcode;
+  143|   assign rec_bytes_o      = cur_bytes;
+  144|   assign rec_source_id_o  = cur_source;
+  145|   assign rec_index_o      = rec_idx;
+  146| 
+  147|   // Bytes are accepted while this packet is still being consumed, EXCEPT while
+  148|   // a presented record has not been taken.
+  149|   //
+  150|   // An earlier draft claimed a stalled consumer should not stall the stream,
+  151|   // "because the record port is only a report". That was wrong and Verilator
+  152|   // caught it as an unused rec_ready_i: a one-cycle rec_valid_o that nobody
+  153|   // accepts is a DROPPED record, and the ledger says this block's backpressure
+  154|   // is ready_valid. So the handshake is real — hold the byte stream until the
+  155|   // record is taken. CMD.DMA already buffers on its own side, so the stall
+  156|   // propagates cleanly upstream rather than losing anything.
+  157|   assign pkt_ready_o = ((st == S_HDR) || (st == S_REC) || (st == S_PCRC))
+  158|                     && !(rec_valid_o && !rec_ready_i);
+  159| 
+  160|   logic take;
+  161|   assign take = pkt_valid_i && pkt_ready_o;
+  162| 
+  163|   // `total` is latched on the FIRST byte with a non-blocking assignment, so it
+  164|   // still reads zero during that byte. Anything comparing against the length in
+  165|   // the same cycle must use this instead -- the first version of the
+  166|   // short-packet exit did not, and `1 >= 0` sent every packet straight to
+  167|   // S_CHECK with an empty header.
+  168|   logic [31:0] eff_total;
+  169|   assign eff_total = (pos == '0) ? pkt_len_i : total;
+  170| 
+  171|   // A record's declared size, from the GENERATED table. Unknown opcodes return
+  172|   // zero, which is how check 5 tells "not in the ABI" from "wrong size".
+  173|   logic [31:0] known_sz;
+  174|   assign known_sz = 32'(zhao_opcode_record_bytes(cur_opcode));
+  175| 
+  176|   // Checks 1-3 as one combinational verdict, so S_CHECK both reports the first
+  177|   // failure and knows whether to abort without re-listing the conditions.
+  178|   logic [7:0] hdr_err;
+  179|   always_comb begin
+  180|     hdr_err = ZH_ABI_OK;
+  181|     if      (total < 32'd36)                             hdr_err = ZH_ABI_BAD_LENGTH;
+  182|     else if (h_magic != 32'h314B_505A)                   hdr_err = ZH_ABI_BAD_MAGIC;
+  183|     else if (h_abi_ver != 16'(ZHAO_ABI_VERSION))         hdr_err = ZH_ABI_BAD_ABI_VERSION;
+  184|     else if (|h_flags[15:1])                             hdr_err = ZH_ABI_RESERVED_FLAG;
+  185|     else if ((32'd40 + h_cmd_bytes) > FRAME_SLOT_BYTES)  hdr_err = ZH_ABI_BAD_LENGTH;
+  186|     else if (|h_cmd_bytes[3:0])                          hdr_err = ZH_ABI_BAD_LENGTH;
+  187|     // NOT `(h_cmd_count << 4) > h_cmd_bytes`. That shift OVERFLOWS 32 bits: a
+  188|     // command_count of 0x10000000 shifts to 0x1_0000_0000, truncates to zero,
+  189|     // and the check silently passes -- the packet then fell through to the
+  190|     // header CRC and reported BAD_HEADER_CRC where the oracle says BAD_LENGTH.
+  191|     // Found by the random lane at iteration 599, a single bit flipped in byte
+  192|     // 27. Dividing the other side instead cannot overflow, and the two forms
+  193|     // agree exactly because command_bytes is already a multiple of 16 (checked
+  194|     // on the line above).
+  195|     else if (h_cmd_count > (h_cmd_bytes >> 4))           hdr_err = ZH_ABI_BAD_LENGTH;
+  196|     else if (total != (32'd40 + h_cmd_bytes))            hdr_err = ZH_ABI_BAD_LENGTH;
+  197|     else if ((~crc_hdr) != h_hdr_crc)                    hdr_err = ZH_ABI_BAD_HEADER_CRC;
+  198|   end
+  199|   assign hdr_bad = (hdr_err != ZH_ABI_OK);
+  200| 
+  201|   // The record-header verdict, likewise combinational at its decision instant.
+  202|   // `nrsv` completes on the very cycle this is evaluated, so it is formed here
+  203|   // rather than read from the register.
+  204|   logic [7:0]  rec_err;
+  205|   logic [31:0] nrsv;
+  206|   always_comb begin
+  207|     nrsv = {pkt_byte_i, cur_rsv0};
+  208|     rec_err = ZH_ABI_OK;
+  209|     if      (|cur_bytes[3:0] || (cur_bytes < 16'd16))    rec_err = ZH_ABI_BAD_LENGTH;
+  210|     else if ((rec_sum + 32'(cur_bytes)) > h_cmd_bytes)   rec_err = ZH_ABI_BAD_LENGTH;
+  211|     else if (known_sz == 32'd0)                          rec_err = ZH_ABI_UNKNOWN_OPCODE;
+  212|     else if (32'(cur_bytes) != known_sz)                 rec_err = ZH_ABI_BAD_LENGTH;
+  213|     else if (nrsv != 32'd0)                              rec_err = ZH_ABI_RESERVED_FIELD;
+  214|     else if (cur_flags != 32'd0)                         rec_err = ZH_ABI_RESERVED_FLAG;
+  215|     else if ((cur_opcode >= ZHAO_DEBUG_OPCODE_LO)
+  216|           && (cur_opcode <= ZHAO_DEBUG_OPCODE_HI)
+  217|           && !h_flags[0])                                rec_err = ZH_ABI_DEBUG_FLAG_REQUIRED;
+  218|   end
+  219| 
+  220|   always_ff @(posedge clk or negedge rst_n) begin
+  221|     if (!rst_n) begin
+  222|       st <= S_HDR; pos <= '0; total <= '0;
+  223|       h_magic <= '0; h_cmd_count <= '0; h_cmd_bytes <= '0; h_hdr_crc <= '0;
+  224|       h_abi_ver <= '0; h_flags <= '0;
+  225|       crc_hdr <= 32'hFFFF_FFFF; crc_pay <= 32'hFFFF_FFFF; pcrc_hist <= '0;
+  226|       rec_sum <= '0; rec_idx <= '0; rec_off <= '0;
+  227|       cur_opcode <= '0; cur_bytes <= '0; cur_source <= '0;
+  228|       cur_flags <= '0; cur_rsv0 <= '0;
+  229|       err <= ZH_ABI_OK; err_set <= 1'b0; hdr_abort <= 1'b0; done <= 1'b0;
+  230|       rec_err_l <= ZH_ABI_OK; rec_err_set <= 1'b0;
+  231|       rec_valid_o <= 1'b0;
+  232|     end else begin
+  233|       done <= 1'b0;
+  234|       // HOLD rec_valid_o until it is accepted. Clearing it unconditionally was
+  235|       // a bug: pkt_ready_o stalls the byte stream while a record is unaccepted,
+  236|       // so S_REC does not run, so an unconditional clear dropped exactly the
+  237|       // record the stall existed to protect. valid must persist until ready.
+  238|       if (rec_valid_o && rec_ready_i) rec_valid_o <= 1'b0;
+  239| 
+  240|       unique case (st)
+  241| 
+  242|         // ---- bytes [0,36): capture the header, CRC over [0,32) -------------
+  243|         S_HDR: if (take) begin
+  244|           if (pos == '0) total <= pkt_len_i;
+  245|           if (pos < 32'd32) crc_hdr <= zhao_crc32c_step(crc_hdr, pkt_byte_i);
+  246|           if      (pos < 32'd4)  h_magic     <= {pkt_byte_i, h_magic[31:8]};
+  247|           else if (pos < 32'd6)  h_abi_ver   <= {pkt_byte_i, h_abi_ver[15:8]};
+  248|           else if (pos < 32'd8)  h_flags     <= {pkt_byte_i, h_flags[15:8]};
+  249|           else if (pos < 32'd24) ;  // frame_id, sequence, epoch, deadline: not
+  250|                                     // validated here, not needed downstream
+  251|           else if (pos < 32'd28) h_cmd_count <= {pkt_byte_i, h_cmd_count[31:8]};
+  252|           else if (pos < 32'd32) h_cmd_bytes <= {pkt_byte_i, h_cmd_bytes[31:8]};
+  253|           else                   h_hdr_crc   <= {pkt_byte_i, h_hdr_crc[31:8]};
+  254| 
+  255|           pos <= pos + 32'd1;
+  256|           // Normally the header ends at byte 35. But a packet SHORTER than the
+  257|           // 36-byte header must still reach a verdict (BAD_LENGTH, check 1),
+  258|           // and it never delivers a 36th byte -- so leaving on pos == 35 alone
+  259|           // hangs forever waiting for a byte that does not exist. Found by
+  260|           // cmd_decoder_directed's "shorter than a header" case, which timed
+  261|           // out rather than mismatching.
+  262|           if ((pos == 32'd35) || ((pos + 32'd1) >= eff_total)) st <= S_CHECK;
+  263|         end
+  264| 
+  265|         // ---- checks 1-3, consuming nothing ---------------------------------
+  266|         // A separate state precisely because these must be decidable when the
+  267|         // stream STOPS: a 36-byte packet that fails check 1 never delivers
+  268|         // another byte, so a check waiting for one would hang forever.
+  269|         S_CHECK: begin
+  270|           if (hdr_bad) begin
+  271|             `ZHAO_FAIL(hdr_err)
+  272|             hdr_abort <= 1'b1;   // consumed exactly 36 bytes (spec §3.2)
+  273|             done      <= 1'b1;
+  274|             st        <= S_DONE;
+  275|           end else if (h_cmd_bytes == '0) begin
+  276|             st <= S_PCRC;        // a legal empty stream still carries its CRC
+  277|           end else begin
+  278|             st <= S_REC;
+  279|           end
+  280|         end
+  281| 
+  282|         // ---- the command stream --------------------------------------------
+  283|         S_REC: if (take) begin
+  284|           crc_pay <= zhao_crc32c_step(crc_pay, pkt_byte_i);
+  285|           pos     <= pos + 32'd1;
+  286| 
+  287|           if (rec_off < 16'd16) begin
+  288|             if      (rec_off < 16'd2)  cur_opcode <= {pkt_byte_i, cur_opcode[15:8]};
+  289|             else if (rec_off < 16'd4)  cur_bytes  <= {pkt_byte_i, cur_bytes[15:8]};
+  290|             else if (rec_off < 16'd8)  cur_source <= {pkt_byte_i, cur_source[31:8]};
+  291|             else if (rec_off < 16'd12) cur_flags  <= {pkt_byte_i, cur_flags[31:8]};
+  292|             else                       cur_rsv0   <= {pkt_byte_i, cur_rsv0[23:8]};
+  293|           end
+  294| 
+  295|           // The record header completes on its sixteenth byte. Checks 5, 6 and
+  296|           // 10 run here: the earliest instant every field they need exists, and
+  297|           // before one payload byte has been consumed.
+  298|           if (rec_off == 16'd15) begin
+  299|             if (rec_err != ZH_ABI_OK) begin
+  300|               // HELD, not reported: the payload CRC outranks this (see above).
+  301|               if (!rec_err_set) begin
+  302|                 rec_err_l   <= rec_err;
+  303|                 rec_err_set <= 1'b1;
+  304|               end
+  305|             end else begin
+  306|               rec_valid_o <= 1'b1;   // only a record that passed is reported
+  307|             end
+  308|           end
+  309| 
+  310|           // Record boundary. cur_bytes is trustworthy from offset 3 onward and
+  311|           // the minimum record is 16 bytes, so this is never compared against
+  312|           // an incomplete value.
+  313|           if ((rec_off >= 16'd15) && ((rec_off + 16'd1) >= cur_bytes)) begin
+  314|             rec_off <= '0;
+  315|             rec_sum <= rec_sum + 32'(cur_bytes);
+  316|             rec_idx <= rec_idx + 32'd1;
+  317|           end else begin
+  318|             rec_off <= rec_off + 16'd1;
+  319|           end
+  320| 
+  321|           if ((pos + 32'd1) == (32'd36 + h_cmd_bytes)) st <= S_PCRC;
+  322|         end
+  323| 
+  324|         // ---- the trailing payload CRC word ---------------------------------
+  325|         S_PCRC: if (take) begin
+  326|           pcrc_hist <= {pkt_byte_i, pcrc_hist[23:8]};
+  327|           pos       <= pos + 32'd1;
+  328|           if ((pos + 32'd1) == total) begin
+  329|             // 4 and 9 are decidable only here, which is exactly why records
+  330|             // cannot be retired before this instant.
+  331|             // THE NORMATIVE ORDER, restored at the one instant every input to
+  332|             // it exists: 4 (payload CRC), then the held record verdict from
+  333|             // 5/6/10, then 9 (the count laws).
+  334|             if ((~crc_pay) != {pkt_byte_i, pcrc_hist}) begin
+  335|               `ZHAO_FAIL(ZH_ABI_BAD_PAYLOAD_CRC)
+  336|             end else if (rec_err_set) begin
+  337|               `ZHAO_FAIL(rec_err_l)
+  338|             end else if (rec_sum != h_cmd_bytes) begin
+  339|               `ZHAO_FAIL(ZH_ABI_TRUNCATED)
+  340|             end else if (rec_idx != h_cmd_count) begin
+  341|               `ZHAO_FAIL(ZH_ABI_COUNT_MISMATCH)
+  342|             end
+  343|             done <= 1'b1;
+  344|             st   <= S_DONE;
+  345|           end
+  346|         end
+  347| 
+  348|         S_DONE: ;  // hold the verdict until reset
+  349| 
+  350|         default: st <= S_DONE;
+  351|       endcase
+  352|     end
+  353|   end
+  354| 
+  355|   `undef ZHAO_FAIL
+  356| 
+  357| endmodule : zhao_cmd_decoder
+```
+
+# INPUT fpga/rtl/debug/zhao_debug_trace.sv:1-163
+```
+    1| // zhao_debug_trace.sv — DEBUG.TRACE: the bounded event ring.
+    2| //
+    3| // Contract: design/contracts/DEBUG.TRACE.md
+    4| // Reference: `zref::trace::Ring` (reference/include/zref/zref_trace.hpp).
+    5| //
+    6| // ---------------------------------------------------------------------------
+    7| // THE ONE LAW THAT MATTERS MORE THAN THE OTHERS
+    8| // ---------------------------------------------------------------------------
+    9| // **THIS BLOCK DROPS. IT NEVER STALLS.**
+   10| //
+   11| // A trace ring exists to observe a machine without changing it. A ring that
+   12| // back-pressured its producer would make the act of tracing alter the timing
+   13| // being traced — the pipeline would run differently while being watched, and
+   14| // the capture would describe a machine that does not exist when the trace is
+   15| // off. So a full ring counts what it lost and the pipeline runs on untouched.
+   16| //
+   17| // There is no ready signal on the event port. That absence is the law: there is
+   18| // nothing for a producer to wait on, so no producer can be delayed by tracing.
+   19| //
+   20| // ---------------------------------------------------------------------------
+   21| // WHAT IS RATIFIED AND WHAT WAS CHOSEN
+   22| // ---------------------------------------------------------------------------
+   23| // Ratified elsewhere and NOT this block's to invent:
+   24| //   - the 32-byte record layout (capture_format.md chunk 0x000A)
+   25| //   - source_id packing, { kind:4, module:12, index:16 } (capture_format.md §5)
+   26| //   - the seven trace sources (charter §20.6)
+   27| //
+   28| // Chosen in zref_trace.hpp, mirrored here:
+   29| //   - stage numbers are the charter's list order, 0..6. A stage outside that
+   30| //     range is NOT A LEGAL EVENT: it is not stored and it is not counted as a
+   31| //     drop, because nothing was ever offered that this block understood.
+   32| //   - arming is a seven-bit MASK, not a selector, so two stages can be traced
+   33| //     in one run. Correlating two stages is the entire point of a trace ring.
+   34| //   - an unarmed stage is not an event either. It is not stored and NOT counted
+   35| //     as a drop; `dropped` means "a real event was lost to a full ring", which
+   36| //     is the only reading that lets someone trust a capture.
+   37| //
+   38| // ---------------------------------------------------------------------------
+   39| // THE RECORD, word by word
+   40| // ---------------------------------------------------------------------------
+   41| // Eight 32-bit words per event, little-endian, exactly the capture layout:
+   42| //
+   43| //     0 tile        1 primitive   2 pixel       3 { rsv[3]=0, stage }
+   44| //     4 expected_fx 5 actual_fx   6 source_id   7 command_seq
+   45| //
+   46| // Word 3 carries `stage` in its LOW byte with the three reserved bytes zero,
+   47| // which is what a little-endian read of { u8 stage; u8 rsv[3] } produces. The
+   48| // reserved bytes are zero rather than undefined so that two captures can be
+   49| // compared byte for byte; undefined padding is how a trace format rots.
+   50| //
+   51| // A WHOLE RECORD IS WRITTEN IN ONE CYCLE, into a 256-bit entry. The obvious
+   52| // alternative -- eight 32-bit writes over eight cycles -- gives the block a
+   53| // BUSY window, and an event offered during that window would be lost without
+   54| // even being counted as a drop. Silent loss is strictly worse than a counted
+   55| // drop: it makes the ring lie rather than admit. There is no ready signal to
+   56| // hold a producer off with, so the write must not take a window at all.
+   57| //
+   58| // Readout stays 32-bit word-addressed: the entry is read whole and the word is
+   59| // selected after the register, with the selector delayed to match.
+   60| //
+   61| // M10K rules: no initializer, no reset branch on the array, registered read
+   62| // inside the clocked process only.
+   63| module zhao_debug_trace #(
+   64|     parameter int DEPTH = 64
+   65| ) (
+   66|     input  logic clk,
+   67|     input  logic rst_n,
+   68| 
+   69|     // ---- control -----------------------------------------------------------
+   70|     input  logic       arm_we_i,
+   71|     input  logic [6:0] arm_mask_i,    // bit n arms stage n
+   72|     output logic [6:0] armed_o,
+   73|     input  logic       clear_i,       // empties the ring and zeroes the drop count
+   74| 
+   75|     // ---- the event port: no ready, by design -------------------------------
+   76|     input  logic        ev_valid_i,
+   77|     input  logic [ 7:0] ev_stage_i,
+   78|     input  logic [31:0] ev_tile_i,
+   79|     input  logic [31:0] ev_primitive_i,
+   80|     input  logic [31:0] ev_pixel_i,
+   81|     input  logic [31:0] ev_expected_fx_i,
+   82|     input  logic [31:0] ev_actual_fx_i,
+   83|     input  logic [31:0] ev_source_id_i,
+   84|     input  logic [31:0] ev_command_seq_i,
+   85| 
+   86|     // ---- readout -----------------------------------------------------------
+   87|     // Word-addressed: {event, word}. The host drains the ring between frames.
+   88|     input  logic [$clog2(DEPTH*8)-1:0] rd_addr_i,
+   89|     output logic [31:0]                rd_data_o,
+   90| 
+   91|     output logic [31:0] count_o,      // events stored
+   92|     output logic [31:0] dropped_o     // events lost to a full ring
+   93| );
+   94| 
+   95|   localparam int WORDS = DEPTH * 8;
+   96|   localparam int AW = $clog2(WORDS);
+   97|   localparam int CW = $clog2(DEPTH + 1);
+   98|   localparam int EW = $clog2(DEPTH);
+   99| 
+  100|   // One entry per event: eight words side by side, so a record lands whole.
+  101|   logic [255:0] ring [0:DEPTH-1];
+  102|   logic [255:0] rd_entry;
+  103|   logic [2:0]   rd_word_q;
+  104| 
+  105|   logic [EW-1:0]  wr_idx;
+  106|   logic [255:0]   wr_data;
+  107|   logic           wr_en;
+  108| 
+  109|   always_ff @(posedge clk) begin
+  110|     if (wr_en) ring[wr_idx] <= wr_data;
+  111|     rd_entry <= ring[rd_addr_i[AW-1:3]];
+  112|     rd_word_q <= rd_addr_i[2:0];
+  113|   end
+  114| 
+  115|   // The word select sits AFTER the memory register, with the selector delayed
+  116|   // by the same cycle, so a 32-bit read of a 256-bit entry still costs one
+  117|   // cycle of latency and no extra memory ports.
+  118|   assign rd_data_o = rd_entry[{29'd0, rd_word_q} * 32 +: 32];
+  119| 
+  120|   logic [CW-1:0] count_q;
+  121|   logic [6:0]    mask_q;
+  122|   logic [31:0]   dropped_q;
+  123| 
+  124|   assign armed_o = mask_q;
+  125|   assign count_o = 32'(count_q);
+  126|   assign dropped_o = dropped_q;
+  127| 
+  128|   // An event this block understands: a stage inside the charter's list AND a
+  129|   // stage this run asked to see. Neither test is a drop -- see the header.
+  130|   logic legal_stage, is_armed, accept, overflow;
+  131|   always_comb begin
+  132|     legal_stage = ev_valid_i && (ev_stage_i < 8'd7);
+  133|     is_armed = legal_stage && mask_q[ev_stage_i[2:0]];
+  134|     overflow = is_armed && (count_q == CW'(DEPTH));
+  135|     accept = is_armed && !overflow;
+  136| 
+  137|     wr_en = accept && !clear_i;
+  138|     wr_idx = count_q[EW-1:0];
+  139|     // Capture order, little-endian. rsv[3] are zero deliberately.
+  140|     wr_data = {ev_command_seq_i, ev_source_id_i, ev_actual_fx_i, ev_expected_fx_i,
+  141|                {24'd0, ev_stage_i}, ev_pixel_i, ev_primitive_i, ev_tile_i};
+  142|   end
+  143| 
+  144|   always_ff @(posedge clk or negedge rst_n) begin
+  145|     if (!rst_n) begin
+  146|       count_q <= '0;
+  147|       mask_q <= '0;
+  148|       dropped_q <= '0;
+  149|     end else begin
+  150|       if (arm_we_i) mask_q <= arm_mask_i;
+  151| 
+  152|       if (clear_i) begin
+  153|         count_q <= '0;
+  154|         dropped_q <= '0;
+  155|       end else begin
+  156|         if (accept) count_q <= count_q + CW'(1);
+  157|         // Lost, counted, and the producer never knows.
+  158|         if (overflow && dropped_q != 32'hFFFF_FFFF) dropped_q <= dropped_q + 32'd1;
+  159|       end
+  160|     end
+  161|   end
+  162| 
+  163| endmodule : zhao_debug_trace
+```
+
+# INPUT reference/include/zref/zref_trace.hpp:1-205
+```
+    1| // zref_trace.hpp — DEBUG.TRACE's reference model.
+    2| //
+    3| // The ledger declared `zref::DebugTrace` and that symbol never existed: the
+    4| // NINTH phantom reference_model in this tree. Unlike CMD.DECODER, whose law was
+    5| // already shipped under another name, this one genuinely had no implementation
+    6| // anywhere — so this file is a real reference, not a view.
+    7| //
+    8| // WHAT IS RATIFIED, and it is more than it first appears:
+    9| //   - the TRACE record layout, capture_format.md chunk 0x000A:
+   10| //       { u32 tile; u32 primitive; u32 pixel; u8 stage; u8 rsv[3];
+   11| //         u32 expected_fx; u32 actual_fx; u32 source_id; u32 command_seq }
+   12| //     32 bytes, and this block does not get to invent a different one.
+   13| //   - the source-id scheme, capture_format.md §5:
+   14| //       source_id: u32 = { kind: 4 bits, module: 12 bits, index: 16 bits }
+   15| //   - the seven selectable trace sources, charter §20.6.
+   16| //
+   17| // WHAT IS NOT, and is therefore CHOSEN here with the alternative recorded:
+   18| //
+   19| //   1. THE `stage` BYTE VALUES. The charter NAMES seven sources in a list and
+   20| //      numbers none of them. Chosen: their listed order, 0..6, because a list
+   21| //      in a normative document is the only ordering anyone can rediscover.
+   22| //      Rejected: grouping by subsystem, which reads better and is unguessable.
+   23| //      A stage byte outside 0..6 is not a legal event.
+   24| //
+   25| //   2. ARMING IS A MASK, NOT A SELECTOR. The charter says "selectable" without
+   26| //      saying whether one source or several may be armed. Chosen: a seven-bit
+   27| //      mask, so several stages can be traced in one run. Rejected: a single
+   28| //      three-bit index, which is smaller but makes correlating two stages
+   29| //      impossible in one capture, and correlating stages is the entire reason
+   30| //      a trace ring exists.
+   31| //
+   32| //   3. THE UNUSED FIELDS OF A DECODER-STAGE EVENT ARE ZERO. `tile`,
+   33| //      `primitive`, `pixel`, `expected_fx` and `actual_fx` describe a raster
+   34| //      divergence and mean nothing for a decoded command record. Chosen: zero,
+   35| //      because zero is checkable. Rejected: leaving them undefined, which makes
+   36| //      a byte-comparison of captures impossible and is how a trace format rots.
+   37| //
+   38| // None of the three is inventing a WIRE layout — that came from the spec. They
+   39| // are the three questions the spec leaves open, answered in one place.
+   40| #pragma once
+   41| 
+   42| #include <cstdint>
+   43| #include <vector>
+   44| 
+   45| namespace zref {
+   46| namespace trace {
+   47| 
+   48| /** charter §20.6's seven sources, in the order the charter lists them. */
+   49| enum Stage : uint8_t {
+   50|   kCommandDecoder = 0,
+   51|   kVertexOutput = 1,
+   52|   kClippedTriangle = 2,
+   53|   kTileInsertion = 3,
+   54|   kTextureAddress = 4,
+   55|   kDepthTest = 5,
+   56|   kFinalPixel = 6,
+   57|   kStageCount = 7
+   58| };
+   59| 
+   60| /** capture_format.md chunk 0x000A, exactly. 32 bytes on the wire. */
+   61| struct Event {
+   62|   uint32_t tile = 0;
+   63|   uint32_t primitive = 0;
+   64|   uint32_t pixel = 0;
+   65|   uint8_t stage = 0;
+   66|   uint8_t rsv[3] = {0, 0, 0};
+   67|   uint32_t expected_fx = 0;
+   68|   uint32_t actual_fx = 0;
+   69|   uint32_t source_id = 0;
+   70|   uint32_t command_seq = 0;
+   71| 
+   72|   bool operator==(const Event& o) const {
+   73|     return tile == o.tile && primitive == o.primitive && pixel == o.pixel && stage == o.stage &&
+   74|            rsv[0] == o.rsv[0] && rsv[1] == o.rsv[1] && rsv[2] == o.rsv[2] &&
+   75|            expected_fx == o.expected_fx && actual_fx == o.actual_fx && source_id == o.source_id &&
+   76|            command_seq == o.command_seq;
+   77|   }
+   78| };
+   79| 
+   80| inline constexpr uint32_t kEventBytes = 32;
+   81| 
+   82| /** §5: source_id = { kind:4, module:12, index:16 }. Provided so nothing
+   83|  *  downstream re-derives the packing by hand. */
+   84| inline constexpr uint32_t pack_source_id(uint8_t kind, uint16_t module_, uint16_t index) {
+   85|   return (static_cast<uint32_t>(kind & 0xF) << 28) |
+   86|          (static_cast<uint32_t>(module_ & 0x0FFF) << 16) | static_cast<uint32_t>(index);
+   87| }
+   88| inline constexpr uint8_t source_kind(uint32_t s) { return static_cast<uint8_t>(s >> 28); }
+   89| inline constexpr uint16_t source_module(uint32_t s) {
+   90|   return static_cast<uint16_t>((s >> 16) & 0x0FFF);
+   91| }
+   92| inline constexpr uint16_t source_index(uint32_t s) { return static_cast<uint16_t>(s & 0xFFFF); }
+   93| 
+   94| /** One decoded record as CMD.DECODER presents it. */
+   95| struct DecodedRecord {
+   96|   uint16_t opcode = 0;
+   97|   uint16_t bytes = 0;
+   98|   uint32_t source_id = 0;
+   99|   uint32_t index = 0;
+  100| };
+  101| 
+  102| /**
+  103|  * The ring. Bounded, and it DROPS rather than stalling when full.
+  104|  *
+  105|  * That is chosen and it is the important one. A trace ring exists to observe a
+  106|  * machine without changing it; a ring that stalled its producer would make the
+  107|  * act of tracing alter the timing being traced, which is the one thing a
+  108|  * debugging aid must never do. So a full ring counts what it lost and the
+  109|  * pipeline runs on unaffected.
+  110|  *
+  111|  * Rejected: back-pressuring CMD.DECODER. It would preserve every event and
+  112|  * silently destroy the determinism the whole capture system rests on.
+  113|  */
+  114| class Ring {
+  115|  public:
+  116|   explicit Ring(uint32_t depth = 64) : depth_(depth ? depth : 1) {}
+  117| 
+  118|   /** Which stages are armed; bit n arms Stage n. */
+  119|   void arm(uint8_t mask) { mask_ = static_cast<uint8_t>(mask & 0x7F); }
+  120|   uint8_t armed() const { return mask_; }
+  121| 
+  122|   bool stage_armed(Stage s) const {
+  123|     return s < kStageCount && ((mask_ >> static_cast<uint8_t>(s)) & 1u) != 0u;
+  124|   }
+  125| 
+  126|   /** Offer one decoded record to the command-decoder stage. */
+  127|   void on_record(const DecodedRecord& r) {
+  128|     if (!stage_armed(kCommandDecoder)) return;
+  129|     Event e;
+  130|     e.stage = static_cast<uint8_t>(kCommandDecoder);
+  131|     e.source_id = r.source_id;
+  132|     e.command_seq = r.index;
+  133|     // tile/primitive/pixel/expected/actual stay zero: see choice 3 in the
+  134|     // header. They describe a raster divergence and this is not one.
+  135|     push(e);
+  136|   }
+  137| 
+  138|   void push(const Event& e) {
+  139|     if (events_.size() >= depth_) {
+  140|       ++dropped_;
+  141|       return;
+  142|     }
+  143|     events_.push_back(e);
+  144|   }
+  145| 
+  146|   const std::vector<Event>& events() const { return events_; }
+  147|   uint32_t dropped() const { return dropped_; }
+  148|   uint32_t depth() const { return depth_; }
+  149|   void clear() {
+  150|     events_.clear();
+  151|     dropped_ = 0;
+  152|   }
+  153| 
+  154|  private:
+  155|   uint32_t depth_;
+  156|   uint8_t mask_ = 0;
+  157|   uint32_t dropped_ = 0;
+  158|   std::vector<Event> events_;
+  159| };
+  160| 
+  161| // ---------------------------------------------------------------------------
+  162| // DebugTraceArm 0xF003 -> Ring, the RATIFIED lowering (owner ruling R52)
+  163| // ---------------------------------------------------------------------------
+  164| // Ruling R52 put the arming in the command stream and required that "zidl, zref
+  165| // and captures move together". This is the zref half: the mapping from the two
+  166| // wire bytes to the ring's two control calls, written ONCE here so the RTL
+  167| // (`zhao_cmd_exec`'s EX_TOK commit) has a reference to be differenced against
+  168| // rather than a convention to be re-derived. CLAUDE.md's sibling-contract
+  169| // lesson is exactly this shape -- two implementations of one law, neither
+  170| // naming the owner.
+  171| //
+  172| // REFUSE, NEVER MASK. `stage_mask` bit 7 is unassigned (there are seven stages)
+  173| // and `flags` bits 7:1 are unassigned. A record setting either is refused
+  174| // WHOLE and nothing is armed. Masking the stray bit off would arm a different
+  175| // set of stages than the host asked for, and a capture that is not the capture
+  176| // that was requested is worse than no capture -- it is a wrong answer wearing
+  177| // the right label.
+  178| //
+  179| // ORDER: clear THEN arm. A record that clears and arms in one go must not lose
+  180| // the events its own arming admits, and clearing after arming would.
+  181| 
+  182| struct ArmCommand {
+  183|   uint8_t stage_mask = 0;
+  184|   uint8_t flags = 0;
+  185| };
+  186| 
+  187| inline constexpr uint8_t kArmFlagClear = 0x01;
+  188| 
+  189| /** True when both wire bytes are legal. Reserved bits set => the record is
+  190|  *  refused whole (zhao_cmd_exec counts it on `trace_arm_refused_o`). */
+  191| inline constexpr bool arm_command_ok(const ArmCommand& c) {
+  192|   return ((c.stage_mask & 0x80u) == 0u) && ((c.flags & 0xFEu) == 0u);
+  193| }
+  194| 
+  195| /** Apply a DebugTraceArm record. Returns false, changing nothing, when the
+  196|  *  record is refused. */
+  197| inline bool apply_arm_command(Ring& ring, const ArmCommand& c) {
+  198|   if (!arm_command_ok(c)) return false;
+  199|   if ((c.flags & kArmFlagClear) != 0u) ring.clear();
+  200|   ring.arm(c.stage_mask);
+  201|   return true;
+  202| }
+  203| 
+  204| }  // namespace trace
+  205| }  // namespace zref
+```

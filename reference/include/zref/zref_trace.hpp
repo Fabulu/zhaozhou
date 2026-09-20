@@ -137,7 +137,15 @@ class Ring {
 
   void push(const Event& e) {
     if (events_.size() >= depth_) {
-      ++dropped_;
+      // SATURATES, because `zhao_debug_trace.sv` does:
+      //   if (overflow && dropped_q != 32'hFFFF_FFFF) dropped_q <= dropped_q + 1;
+      // A plain `++dropped_` wraps to zero at 2^32 and the RTL sticks, so the
+      // model and the machine would disagree on the one reading that matters
+      // -- a counter pinned at its maximum is "at least this many", and a
+      // counter that wrapped reads as almost none. Unreachable in any test we
+      // will run, which is exactly why it would have been found in hardware
+      // and not here. Found by review 2026-09-20.
+      if (dropped_ != 0xFFFFFFFFu) ++dropped_;
       return;
     }
     events_.push_back(e);

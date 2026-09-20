@@ -498,8 +498,40 @@ module zhao_cmd_exec
     // so the ring is speculative by contract and arming after the verdict would
     // make it blind to the packet somebody is debugging.
     //
-    // THE ORDERING IS EXACT: the arming record itself is not traced, and every
-    // record after it in the packet is.
+    // THE ORDERING IS EXACT, AND THE SENTENCE NEEDS ITS QUALIFIERS. The first
+    // version of this comment said flatly "the arming record itself is not
+    // traced, and every record after it in the packet is". Both halves are
+    // over-broad, found by review 2026-09-20, and an over-broad guarantee is
+    // worse than a hedged one because somebody writes a test against it:
+    //
+    //   * THE ARM IS NOT TRACED only when stage 0 was not ALREADY armed. A
+    //     SECOND DebugTraceArm, in a packet whose ring is already watching the
+    //     decoder, IS offered to the ring at its own byte 15 and IS stored --
+    //     correctly, because by then it is just another record.
+    //   * EVERY LATER RECORD IS TRACED only if the arm was ACCEPTED (a
+    //     reserved bit refuses it whole, see `ta_ok_c`), if the mask actually
+    //     sets bit 0, and while the ring has room -- a full ring DROPS and
+    //     counts, it does not stall the walk.
+    //
+    // What IS unconditional is the TIMING, and that is the part worth having:
+    // CMD.EXEC applies the mask at the arming record's LAST byte and the
+    // decoder offers a record at its byte 15, so no record can be offered
+    // between the two. The next header cannot complete for sixteen more
+    // byte-cycles. Nothing here is a race; the qualifiers are all about
+    // whether a store happens at all, never about when.
+    //
+    // SO THE STORE COUNT IS `N - P`, not `N - 2`: N records in the packet, P
+    // the 1-based position of the first ACCEPTED bit-0 arm. `TRACE_SKIP_C` in
+    // the smoke bench is P, and it is derived from where the record sits
+    // rather than fitted to the answer -- which is why it was wrong by one on
+    // first writing and the check caught it.
+    //
+    // (`spec/commands.zidl`'s DebugTraceArm comment still carries the
+    //  unqualified sentence. It is NOT corrected here because every edit to
+    //  that file changes `ZHAO_ZIDL_SHA256` and forces all five golden
+    //  captures to be regenerated through their producers -- 600 Duo frames,
+    //  about an hour -- for a comment. It is queued in PACKET-QUEUE.md for the
+    //  next commit that touches the zidl for a real reason.)
     //
     // THIS IS THE RING'S ONLY WRITER, and that is ruling R18's principle (one
     // authority per level) rather than an omission. `zhao_host_regwin`'s tenant
