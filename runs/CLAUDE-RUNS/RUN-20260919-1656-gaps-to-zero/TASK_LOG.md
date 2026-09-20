@@ -352,3 +352,42 @@ without the check. Brief corrected, all three packets messaged.
 
 **Gate state at `1f9680dc`: all twelve green, register 21, `superseded check:
 73 production roots CLEAN`.**
+
+## Merged tree verified; R159 is now enforced (2026-09-20, 21:45)
+
+**Where I am:** everything merged, gated and pushed at `1afe2f47`. Three packets
+running (FORGE4, TERRCOMP, WARPFIX), nothing else of mine in flight.
+**Next step: attend whichever packet lands first, and check its diff against the
+INCOMPLETE block before merging.**
+
+* **All six smoke forms PASS on the merged tree** (E1 + W1 + CMDFIELD): 11
+  `SMOKE_RC=0`, none nonzero, the mutant fired once. All twelve static gates
+  green, register **21**, `superseded check: 73 production roots CLEAN`.
+* **The console core's last undeclared literal now says why.**
+  `.dir_valid_i (1'b1)` is the validity bit written INTO the directory row, the
+  write gated by `dir_we_i` on a MATERIAL_SET publication, and a published set
+  is valid by definition — a producer could only drive the same constant.
+  Comment-only: 12 insertions, 0 deletions, 0 non-comment lines. Audit now
+  **8 declared / 1 reasoned / 10 group / 0 SILENT**.
+* **`console_core_tieoff_audit` is a new ctest** — R159's reviewer check made
+  into a gate, because `CLAUDE.md` already knows advisory prose loses to the
+  pull of reporting a status. **Positive control taken in both directions:**
+  RC 0 on the core, RC 1 on `zhao_field_flow_adapter.sv` (13 silent). Legal
+  stimulus reaches the failing state, so no committed mutant is needed.
+
+### R172 — the same tool, broken the OTHER way, found by reading
+
+`LITERAL` matched `16'd0` and **not** `18'sd0`. Every signed literal in the tree
+was invisible. Tree-wide: **128 silent across 26 files, not the 97 across 23 I
+docketed four hours ago and quoted with confidence.**
+
+R166 was this tool over-reporting — loud, investigated, self-correcting.
+**R172 is it under-reporting — silent, and it would never have corrected
+itself.** Both defects were live in the same file at the same time, one in each
+direction, and "the tool over-reports" had become a reason to discount its
+numbers, which would have buried this.
+
+Found by **reading the six rows it DID report** in `zhao_field_flow_adapter.sv`
+to check whether they were real. They were benign — and six lines above them sat
+six more the tool had never mentioned. All three packets messaged, since their
+copy predates the fix and would hand them a false all-clear.
