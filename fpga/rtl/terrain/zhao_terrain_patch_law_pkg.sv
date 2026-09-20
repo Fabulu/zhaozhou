@@ -23,6 +23,22 @@
 //     `zhao_terrain_patch.sv` (as `cur_covers`) and `zhao_terrain_field_walk.sv`
 //     (inside `mask_c[l]`).
 //
+//     BUT `zhao_terrain_field_walk` IS NOT A COPY, AND MUST NOT BE FACTORED
+//     INTO THIS PACKAGE. It states the SAME LAW IN HOISTED FORM: z is tested
+//     ONCE PER GROUP there, not once per lane. Calling `covers()` from it would
+//     evaluate z FOUR TIMES where the hoisted form evaluates it once — a
+//     possible AREA REGRESSION, in a block that is not even composed yet.
+//     Measured and recommended by packet TERRLAW, 2026-09-20 (owner ruling
+//     R205), which factored the four real copies and deliberately left this one
+//     alone.
+//
+//     The distinction is worth the paragraph because the next reader will grep
+//     for the law, find it here, and be tempted to "finish the job". **The same
+//     law in a different form is not duplication. Two statements that must move
+//     together is duplication.** These two must move together — so if §9.1 ever
+//     changes, THIS COMMENT is the pointer that says where the second statement
+//     lives.
+//
 // So the duplication this header removes is not a hazard a future block might
 // have introduced. It was already in the tree, in the files this packet
 // promoted, and nothing could see it — `uncashed_cheques.py` check 3 compares

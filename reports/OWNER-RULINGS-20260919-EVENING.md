@@ -3524,3 +3524,56 @@ content is correct reads as a manifest mismatch.
    is not the same as removing it"* — in its line-ending costume: **the rule was
    added and nothing renormalised the tree.** Anyone holding a working copy from
    before the pin will hit this same red, and the content will be perfect.
+
+## R205 — THE SAME LAW IN A DIFFERENT FORM IS NOT DUPLICATION
+
+**TERRLAW's closing recommendation, taken.**
+
+`zhao_terrain_field_walk` states §9.1's closed-interval footprint test — the
+same law the package now holds — **in HOISTED form: z is tested ONCE PER GROUP
+there, not once per lane.** Calling `covers()` from it would evaluate z **four
+times** where the hoisted form evaluates it once: **a possible area regression,
+in a block that is not even composed.**
+
+**So it was deliberately left alone, and the package header now says so** — at
+the exact place a reader will grep for the law and be tempted to finish the job.
+
+**The distinction, which is worth the paragraph it now carries:**
+
+> **The same law in a different form is not duplication. Two statements that
+> must move together is duplication.**
+
+These two *must* move together. So the header's note is not an excuse for the
+exception — **it is the pointer that says where the second statement lives** if
+§9.1 ever changes. An exception recorded without that pointer would be exactly
+the hazard `CLAUDE.md` describes: a rule written down without the trap that
+comes with it.
+
+**The gate proved itself on this edit.** The package is in the G8B fit closure,
+so a **comment-only** change turned `packet_i_g8b_registration_static` red on a
+manifest hash mismatch until the generator was re-run. One hash line moved, zero
+non-comment lines changed. That is a provenance gate behaving exactly as
+designed, and it is worth saying plainly after R204 — where the *same* gate went
+red for a reason that had nothing to do with content at all.
+
+### And the evidence behind R176's factoring is NOT UNIFORM across the four modules
+
+TERRLAW stated this in its own commit and it must not be flattened into "proven":
+
+| module | corroboration |
+|---|---|
+| `zhao_terrain_patch` | **differential, 5 of 5 mutations fired** |
+| `zhao_terrain_tess` | **differential** |
+| `zhao_terrain_velocity` | **PARTIAL — 1 of 3 call sites reached** |
+| `zhao_terrain_lodfeed` | **NOT corroborated by differential** — its deviation walk needs `fill_q == VERTS-1`, which random stimulus never reaches |
+
+For the last two, the load-bearing evidence is the **byte-identical textual
+proof** (comment-stripped, after one declared rename) **plus the committed
+directed tests that do reach those states.** That is legitimate evidence and it
+is a *different* kind from a differential — **and a summary that said "all four
+verified by differential" would be false.**
+
+**This is the `ruleViolations: []` shape from `CLAUDE.md`:** a uniform-looking
+green across rows that were not all checked the same way. The packet declared
+the unevenness itself, unprompted, which is why it is recorded here rather than
+discovered later by someone quoting a differential that never ran.
