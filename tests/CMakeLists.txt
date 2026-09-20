@@ -13987,6 +13987,51 @@ add_test(NAME lint_zhao_geom_ladderbank
                  ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_ladderbank.sv)
 set_tests_properties(lint_zhao_geom_ladderbank PROPERTIES LABELS "lint;fast")
 
+# ---- GEOM.LOD's projected bound radius (owner ruling R68 sub-build 4) ------
+# The REAL zhao_view_projscale feeding the REAL zhao_geom_projradius, so the
+# driver writes a view MATRIX onto the projector configuration bus and the
+# projected radius comes out the far end. Every expected value is
+# zref::creature::projected_bound_radius_q8's own -- the oracle is CALLED, not
+# transcribed. Four cameras put the largest row-0 magnitude in a different
+# element each time, including one with m[0][0] == 0, which is the case an
+# implementation reading m[0][0] alone gets silently and catastrophically wrong.
+add_executable(test_geom_projradius_directed geometry/geom_projradius_directed.cpp)
+target_link_libraries(test_geom_projradius_directed PRIVATE zhao_harness zhao_zref)
+verilate(test_geom_projradius_directed
+  PREFIX Vtb_geom_projradius
+  TOP_MODULE tb_geom_projradius
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projscale.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv
+          ${CMAKE_CURRENT_SOURCE_DIR}/geometry/tb_geom_projradius.sv)
+add_test(NAME geom_projradius_directed COMMAND test_geom_projradius_directed)
+set_tests_properties(geom_projradius_directed PROPERTIES LABELS "fast;geometry" TIMEOUT 600)
+
+add_test(NAME lint_zhao_geom_projradius
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_geom_projradius
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/geometry/zhao_geom_projradius.sv)
+set_tests_properties(lint_zhao_geom_projradius PROPERTIES LABELS "lint;fast")
+
+# ...and the POSITIVE CONTROL for the one guard legal stimulus cannot reach.
+# `saturated_o` needs a quotient past 2^31 subpixels -- 8.4 million -- which no
+# legal camera produces, so it is fired through a COMMITTED MUTANT whose
+# overflow test is narrowed from bit 31 to bit 12. INVERTED POLARITY: it passes
+# when the counter fires and the answer clamps.
+add_executable(test_geom_projradius_mutant_control mutants/geom_projradius_mutant_control.cpp)
+target_link_libraries(test_geom_projradius_mutant_control PRIVATE zhao_harness)
+verilate(test_geom_projradius_mutant_control
+  PREFIX Vzhao_geom_projradius_mutant
+  TOP_MODULE zhao_geom_projradius_mutant
+  SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mutants/zhao_geom_projradius_mutant.sv)
+add_test(NAME geom_projradius_mutant_control COMMAND test_geom_projradius_mutant_control)
+set_tests_properties(geom_projradius_mutant_control PROPERTIES LABELS "fast;geometry" TIMEOUT 300)
+
+add_test(NAME lint_zhao_view_projscale
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_view_projscale
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_view_projscale.sv)
+set_tests_properties(lint_zhao_view_projscale PROPERTIES LABELS "lint;fast")
+
 # ...and the PACKER, which is the third statement of the same layout. It
 # rebuilds the committed golden from its own constants and fires each of its
 # four refusals; geom_ladderbank_directed requires zref::creature_page::build
