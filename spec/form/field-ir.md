@@ -522,7 +522,7 @@ registers at END.
 | earth | 0 | x:fx, z:fx, age:u32, phase:fx, p0..p7:fx (12) | height:fx, velocity:fx, material:u32, nav_cost:fx (4) |
 | warp | 1 | px,py,pz:fx, nx,ny,nz:fx, a0..a3:fx, time:u32, p0..p3:fx (15) | dx,dy,dz:fx, nx′,ny′,nz′:fx (6) |
 | flow | 2 | px,py,pz, vx,vy,vz:fx, age:u32, seed:u32, dt:fx, p0..p3:fx (13) | px′,py′,pz′, vx′,vy′,vz′:fx, attr0:fx (7) |
-| formation | 3 | index:u32, time:u32, parent rot2:fx,fx, trans2:fx,fx, p0..p5:fx (11) | tx,ty,tz:fx, rot:angle, scale:fx, mat_phase:fx (6) |
+| formation | 3 | index:u32, time:u32, parent rot2:fx,fx, trans2:fx,fx, p0..p5:fx (12) | tx,ty,tz:fx, rot:angle, scale:fx, mat_phase:fx (6) |
 | stamp | 4 | u,v:unit, age:u32, strength:unit, p0..p3:fx (8) | tag_op:u32, strength:unit, emissive:unit (3) |
 
 > **Warp's input count was "(14)" until 2026-09-20 and the fifteen fields were
@@ -549,6 +549,29 @@ registers at END.
 > `P3_SENTINEL` fixture makes lane 14 change an output so the mistake cannot be
 > re-made silently.
 
+> **Formation's input count was "(11)" until 2026-09-20 and the twelve fields
+> were always right.** The identical defect to Warp's, sitting one row below the
+> fix and surviving it. Corrected under section 15.3 of the owner directive
+> `reports/Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt` (owner
+> commit `6262868c`), whose instruction is verbatim *"Correct the parenthetical
+> input count to the 12 actually listed fields."*
+> Count them: index (1) + time (1) + parent rot2 (2) + trans2 (2) + p0..p5 (6)
+> = **12**.
+>
+> **All five rows were re-counted, not just the one that was reported.** earth
+> 2+1+1+8 = 12 OK / 4 OK; warp 15 OK / 6 OK; flow 3+3+1+1+1+4 = 13 OK / 7 OK;
+> formation **11 WRONG -> 12** / 6 OK; stamp 2+1+1+4 = 8 OK / 3 OK. Formation
+> was the only remaining error. A table that has been wrong twice earns a full
+> audit rather than a second point fix -- the first correction is exactly the
+> moment the neighbouring rows stop being looked at.
+>
+> Unlike Warp's, this count had **not** propagated: nothing in `fpga/rtl`,
+> `reference/` or `tools/` encodes a Formation input arity (searched for
+> `formation` case-insensitively across all three trees; the only hits are
+> `zfield.hpp:48`'s `FORMATION = 3` profile id, `zhao_field_host.sv:442`'s
+> *output* table "formation 6", and GEOM.LOOM's unrelated `FORMATION_OFFSET`
+> pose kind). So this is the cheap half of the Warp lesson: caught while it was
+> still only prose.
 ### 7.2 Op whitelists
 
 v1: all five profiles admit the full opcode table (§2). The whitelist *hook*
