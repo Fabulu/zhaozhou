@@ -977,3 +977,124 @@ protocol has to carry the dating, not the good intentions.
 
 The packet did exactly the right thing by flagging it loudly rather than assuming
 the coordinator had it in hand.
+
+## R129 — THE OBITUARY DEFECT IS A CLASS, NOT AN INCIDENT: found again today in an unrelated tool
+
+**2026-09-20, ENGINE1.** This morning R105 recorded that `uncashed_cheques.py`
+CHECK 5 resolved symbol names by substring against **raw file text, comments
+included**, so a header saying *"this replaces the `zref::GeomWarp` phantom"*
+would itself resolve the phantom. I repaired that one and called it a mode.
+
+**It has now been found a second time, in a completely different tool, written
+by different hands, in a different language.**
+
+`tests/render/test_render_texture_packet_e.py:730` asserted the presence of
+`a1_render_asset_ro` — **a formal assertion that owner ruling R32 DELETED.** The
+gate passed anyway, because the token survived **in a comment in the very file
+the test grades.** It was grading prose.
+
+The lane proved it rather than arguing it: deleting the token from that comment —
+**touching no assertion** — moved the suite from 3 failures to 4. Removing the
+dead marker put it back to 3, now green for a real reason. The three R32
+successors were already pinned, so the gate is not weakened.
+
+**Two tools, two languages, same defect: a checker that looks for a NAME in TEXT
+rather than for a DECLARATION in CODE.** That is no longer an incident, it is a
+class, and the class has a signature worth hunting:
+
+> **Any check whose implementation is "does this string appear in this file"
+> will be satisfied by the documentation of the thing's absence.**
+
+And it always fails in the flattering direction — the better the comment
+explaining why something was removed, the more reliably the checker reports it
+present.
+
+**Standing instruction: when a gate's evidence is a string match, ask what it
+matches against.** If the answer is raw file text, it is grading prose, and it
+will certify a corpse on the strength of its obituary. Strip comments, or resolve
+against a parsed declaration. `uncashed_cheques.py` now does the former; this
+Python gate needs the same treatment, and a sweep for others is owed.
+
+## R130 — I COMMISSIONED THE WRONG WORK, by inheriting a blocker for the third time today
+
+**The ENGINE1 packet was built on GEOMPAY4's closing recommendation**, which I
+relayed as its reason to exist: *"it needs `ladderbank`, which needs an ENGINE1
+share and a page-publication path … recommend one packet doing share +
+publication + third arm together."*
+
+**All three of those are reachable, and none of them was the blocker.** ENGINE1
+walked it: the publication path is **already composed** (`zhao_part_table_loader`
+is a byte-identical `pub_*` template), and requester F is the same mechanical
+edit that C, D and E each already were.
+
+**The actual blocker is that GEOM.LODSTATE sits in the MIDDLE OF A CHAIN WITH
+BOTH ENDS BLOCKED.** Walking all five port groups: `thresh0_i`/`thresh1_i`'s only
+producer in the entire tree is the **uncomposed `zhao_measure_governor`** (R118 —
+itself blocked at both ends), and `c_*`'s only consumer is the **uncomposed
+`zhao_forge_shadow`** (R89, unresolved). **Composing it closes one gap by opening
+two.**
+
+**This is the third time today I have propagated an unverified blocker** — R106
+(briefing from an unmerged branch), R117 (a ruling that laundered "the gate never
+ran"), and now this. The mechanism is identical every time: **a lane's closing
+recommendation is a claim about the tree as that lane saw it, and I convert it
+into a work order without re-asking.** A recommendation is evidence about where
+to look, never about what to build.
+
+**The fix is procedural, not attitudinal.** A packet brief that exists *because*
+of another lane's recommendation must open by instructing the new lane to
+**verify the recommendation itself first, and to stop and report if it does not
+hold** — which is exactly what ENGINE1 did unprompted, and why it cost one
+investigation instead of one wasted implementation.
+
+## R131 — GEOM.PARAMBUF's recorded blocker names the WRONG RULE, and the real one is stronger
+
+GEOMPAY4 reported, and I relayed, that `zhao_geom_parambuf` is blocked because
+`spec/memory_rules.md` §5f makes RENDER.ASSET_POOL **read-only** with formal
+assertion `a1_render_asset_ro`. I instructed ENGINE1 to re-ask what that rule
+actually forbids, since the pool **is** written today via
+`PublishResource`/MEM.UPLOAD.
+
+**The rule does not apply to PARAMBUF at all.** Verified in the spec:
+
+| range | region |
+|---|---|
+| `0x0600_0000 .. 0x063F_FFFF` | **PARAMBUF view 0**, 4 MiB |
+| `0x0680_0000 .. 0x069F_FFFF` | shared prefetch / chunk scratch |
+| `0x06A0_0000 .. 0x07FF_FFFF` | **RENDER.ASSET_POOL**, read-only |
+
+**Disjoint.** PARAMBUF's arena ends exactly where the asset pool begins, so §5f's
+read-only rule governs a different address range entirely. My instruction rested
+on a false premise, and the honest-close route I suggested was worse than wrong:
+**publishing a parambuf record the way MATERIAL_SET is published is a CATEGORY
+ERROR** — those are host-published assets, while parambuf records are **per-frame
+fabric output**. The lane said so and declined, invented no second writer, and
+weakened no assertion.
+
+**And the real blocker is STRONGER than the recorded one**, which is the
+valuable half: by the lane's walk, PARAMBUF's range sits in **no MEM.GUARD region
+at all** — so it is unreachable in *both* directions, not read-only in one. A
+refusal that gets stronger under re-examination is the rarest outcome in this run
+and the most trustworthy.
+
+**D-1, to the owner:** grant the GEOM.PARAMBUF arena a mapped region with a
+bounded ENGINE1 write arm, on R32's exact pattern. **But do not schedule it as a
+PARAMBUF-closing packet** — the allocator, the quota seal and the frame-fault
+path are all unbuilt, and the composed binner's chunk format is incompatible. It
+unblocks a subsystem; it is not a wiring job.
+
+## R132 — D-2 ACCEPTED: stop scheduling geometry packets against sub-build 4. The cheapest unlock is R89
+
+ENGINE1's escalation, and it follows directly from R130 and R118.
+
+R68 sub-build 4 has landed (`GEOM_PAY_A_W = 17`, two-bit owner). It was the right
+thing to build and it unblocked what it claimed to. **But the geometry blocks
+queued behind it are not blocked on payload width** — they are blocked on
+`zhao_measure_governor` (R118) and `zhao_forge_shadow` (R89), and those two are
+where the chain actually terminates.
+
+**So the next geometry-adjacent slot goes to R89, not to more payload or arm
+work.** Scheduling further geometry packets against a blocker that is already
+spent is how five terrain lanes closed zero of the same four blocks, and it is
+the same shape from a different direction: **the constraint moved and the queue
+did not.**

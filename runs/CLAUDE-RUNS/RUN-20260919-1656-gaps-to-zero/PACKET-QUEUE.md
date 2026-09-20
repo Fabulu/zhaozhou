@@ -4,182 +4,161 @@ Ceiling is THREE concurrent packets. When one lands, the next one down starts.
 This file is the coordinator's, and it is a WORK LIST: delete a line when the
 gap it names is closed, never when it is merely attempted.
 
-**Rewritten 2026-09-20 afternoon. The previous version read 27 and assigned
-FORGE and GEOM.WARP to a lane that landed different work — a stale queue is
-worse than none, because the next free slot gets filled from fiction.**
+**Rewritten 2026-09-20 evening (third revision today).** A stale queue is worse
+than none, because the next free slot gets filled from fiction. The previous
+version was accurate for about four hours.
 
-**Register: 21** = 9 tie-offs + 11 disconnected + 1 unbuilt. Every one of the
-21 is accounted for below. If a gap is not on this page, either it closed or
-this page is stale again, and `python tools/budget/completion_register.py`
-decides — never this file.
+**Register: 21** = 9 tie-offs + 11 disconnected + 1 unbuilt. Measure it yourself
+with `python tools/budget/completion_register.py`; this line goes stale.
+
+## THE PRE-FIT BLOCKERS ARE GONE
+
+`superseded check: 71 production roots CLEAN`. R86's check reads **zero** —
+ATTRDIV cleared the last one by adopting `zhao_raster_attrdiv_v2` at both sites.
+
+Of the **seven** preconditions in `reports/FIT-PLAN-AT-ZERO.md`, **exactly one
+is unmet: the register itself.** Clean tree, manifest, generators, worst paths,
+syntax and census are all in place. **The gaps are now the only thing between
+this run and the fit**, which is a different situation from this morning and
+should change how the next slots are spent.
 
 ## Running
 
-| lane | what it owns | branch |
+| lane | owns | branch |
 |---|---|---|
-| FIELDP4 | **not a gap** — ruling R101, a live shipping defect (see below) | `gz/fieldp4` |
-| FORGECONNECT | `zhao_forge_shadow`, `zhao_forge_prim`, `zhao_forge_prim_eval`, `zhao_forge_cliff` (4 disconnected) + R94's counter-catalog append | `gz/forgeconnect` |
-| TERRAIN9 | `zhao_terrain_normalmap`, `zhao_terrain_velocity`, `zhao_terrain_bake_v2`, `zhao_terrain_lod` (4 disconnected), then I21, I27, I32 | `gz/terrain9` |
-
-**FIELDP4 holds a slot without closing a gap, deliberately.** R101 is a
-correctness fault in RTL every Field profile shares: `cur_out_seen == '0'` asks
-whether ANY declared output was written, never whether ALL of them were, so a
-point writing 5 of 6 declared lanes reports SUCCESS. A silently wrong field
-value outranks any remaining gap, because unlike a refusal the consumer cannot
-tell. `field_host_directed` case 1 — 1 of 4 lanes, asserting "status is OK" —
-is a committed GREEN TEST DOCUMENTING THE BUG. The repair is additive (the
-header word's 64 free bits carry a required-output mask; `mask == 0` preserves
-today's behaviour exactly), the test must be fixed to assert the CORRECT
-behaviour rather than the defect's signature, and the lane must MEASURE which
-composed paths under-write today — whether this is producing wrong values now
-or only could is a measurement, not an inference.
+| FIELD-F1 | FIELD fabric: per-lane status with attribution, canonical RCP through the SHARED SERVICE ROUTE, bounded varying-radius RING | `gz/fieldf1` |
+| FIELD-L1 | the production lowerer (C++ only), plus R127's third opcode table | `gz/fieldl1` |
+| ENGINE1 | the ENGINE1 share + page-publication + third client-A arm, plus `zhao_geom_parambuf` | `gz/engine1` |
 
 ## Queued, in the order I would start them
 
-### 0. ATTRDIV — a PRE-FIT BLOCKER, and it outranks every gap below
+### 1. The zidl bundle — ONE fare, THREE debts (R108)
 
-Ruling **R104**. `zhao_raster_attrdiv_svc` and `zhao_raster_attrstep` both wire
-`zhao_raster_attrdiv`, superseded by `zhao_raster_attrdiv_v2`. These are the
-**last two superseded-in-a-production-root hits** (4 → 2 after R99 retired the
-projector shells), and R86 made that check fatal across all 72 roots precisely
-so the console cannot be fitted while composing a superseded module. **The fit
-cannot honestly run until this closes**, which is why it sits above the gaps.
+Owner-ruled and ready. `forge_kind` has one member against FORGE.PRIM's six
+families, and the zidl **rules its own extension**: *"new kinds are additive
+members"*, with `fog_mode` citing *"the forge_kind member-0 precedent"*. No
+`abi_version` bump implied.
 
-PROJADOPT refused the swap for the right reason — v1 publishes `rem_o`, both
-consumers seed the proven step recurrence with it, and dropping it would delete
-function. **But v2 already computes the remainder** (`rem_r [48:0]` at line 79,
-the full restoring recurrence at 148–173); it simply does not publish it. The
-work is a port and two checks, not new arithmetic:
+Every edit to `spec/commands.zidl` moves `ZHAO_ZIDL_SHA256` and forces all five
+golden captures through their real producers — `demo_duo_markers --write` alone
+is 600 Duo frames, about an hour. **So all three land in ONE commit:**
 
-1. **Width.** v1's `rem_o` is `[47:0]`, v2's `rem_r` is `[48:0]`. Prove the top
-   bit is clear at publication BY STIMULUS. The mathematics describes the
-   converged value; a port publishes whatever is in the register.
-2. **Refusal semantics.** v1 has `q_overflow_o`; v2 has `q_saturated_o` and
-   `q_error_o`. v1 REFUSES where v2 SATURATES. Every consumer needs an explicit
-   written mapping and a test exercising the overflow path on both sides. This
-   is the half that can silently change behaviour.
+1. the five additive `forge_kind` members (R108),
+2. the **DebugTraceArm** comment's over-broad guarantee — it says flatly that
+   the arming record is never traced and every record after it is; neither holds
+   without qualifiers (a SECOND arm in an already-armed packet IS traced, and
+   later records only if the arm was accepted, the mask sets bit 0, and the ring
+   has room). The corrected statement is in `zhao_cmd_exec.sv`'s R52 comment,
+3. **R77's `tmu_mode`** comment.
 
-**Do not re-litigate the rounding.** R100 settled it: v2 matches
-`zref::render::div_rhu_s128` exactly over 640,000 sampled pairs; v1 disagrees on
-100% of negative exact halves with an even divisor. Adopting v2 is a bug fix.
+Then `npm run abi:check`, and each capture must differ **only** in the container
+CRC (offset 56..59) and the two 32-byte sha fields.
 
-### 1. POST3B / MEASURE — two disconnected blocks and one boundary
+**It closes no gap alone** and R108 says so: a forge page kind must still be
+frozen and four of six families have no evaluator. It removes the ABI as the
+blocker; it does not become the implementation.
 
-**I17** (POST.COMPOSITE's gather planes and HUD, `post_gd_*`/`post_gg_*`),
-`zhao_post_gather`, `zhao_measure_governor`.
+### 2. FORGE.CLIFF adoption — R117, and the data is already in hand
 
-**`zhao_post_gather` is blocked on the owner and on nothing else.** R37's
-gather law is proposed and `reports/post-gather-law/gather_law_contact.png` is
-waiting on the owner's eye. Do not work around it; if the block cannot close,
-refuse it and say so.
+**Do not re-run F-CLIFF1. It ran on 18 September** — a full fit on the target
+part, `.sources.sha256` matching the current source. Five inferred memories,
+MLAB bits 0, **976 ALM fitted, 2% of device**, against a golden that is
+**18.3% of the entire ALM budget**.
 
-`zhao_measure_governor` moved under this run: R26/R68 gave it the per-camera
-pixel-error threshold, R83/R98 widened that to **Q12.8** (Q8.8 saturated at
-255.996 while the real value reaches 443.41), and its latency is now 77
-clocks/frame, up from 69. Read what PROJADOPT landed before touching it.
+Adoption is blocked on exactly two named items, neither of them a gate to run:
 
-### 2. PROJ — I13 and I14, and the ground under them just moved
+1. the **four `Warning (276020)`** pass-through insertions — the gate demanded
+   `ramConversionWarnings 0`, so either accept them in writing with their cost
+   or match the RAM's native read-during-write behaviour;
+2. the **bit-0 inferred latch** on `triangles_submitted_o` — cosmetic (the
+   counter increments by 2, so bit 0 is provably constant), but a latch cell is
+   real area.
 
-**I13** (PROJ_SUBSYSTEM's triangle output, `proj_out_*`) and **I14** (its
-matrix bank, `proj_cfg_*`/`proj_en_i`).
+Then `console_inventory.yml:109-127` stops giving the two rivals the identical
+boilerplate disposition, and the golden becomes `superseded`.
 
-**PROJADOPT changed what these sit on.** Under R99 `zhao_prod_top` stopped
-instantiating the two standalone projector shells (`zhao_geom_project`,
-`zhao_terrain_project` — still in the tree, still selected tops, ~12,267 ALM /
-66 DSP between them) and now instantiates the composition the console core
-actually holds: `zhao_proj_subsystem` + `zhao_geom_proj_lane`. Re-read the
-ports against the current top, not against any earlier note.
+**And `zhao_forge_cliff` needs its own FITTED row (F-CLIFF-GOLDEN) before anyone
+quotes a saving** — 976 is a fit and 7,664 is an unfitted estimate, and setting
+those against each other is the mismatched comparison this repo keeps landing in
+the flattering direction.
 
-R67 says **I14 is a FIXTURE AND MODE decision as much as wiring**: the smoke's
-viewport case has to move to DUO so the two views get distinct ids and distinct
-tiles, and the reference-derived pixel count must be regenerated **in the same
-commit with both numbers stated**. I14 also still needs a `proj_en_i` producer,
-so R30 alone does not close it.
+### 3. FIELD Wave 2 — requires S1 + L1 + F1 all merged
 
-### 3. GEOM — I20, I29, and `zhao_geom_parambuf`
+**D1** (doorbell and loader; FH13, FH14; and it must **refresh
+`zhao_field_doorbell_mutant.sv`**, which has already drifted once today),
+**H1** (the new host; FH02/03/05/06/08/09/20 — and it owns **R126's elaboration
+guard** tying `ZFH_WINDOW_MASK_BITS` to composed `OUT_LANES`), **A1** (adapters;
+FH17, FH26).
 
-**I29** (GEOM.POSE's clip page and skeleton bake, `geom_pose_start_i`),
-**I20** (everything `zhao_shell_top_v2` still declares provisional at its own
-boundary), and `zhao_geom_parambuf` (disconnected).
+Full briefs are cuttable from `reports/FIELD-REPAIR-PLAN-20260920.md` §3.
 
-I20's texture half closed with I49 — the island now samples, 1190 fragments
-carried a texel. What remains of I20 is named rather than left to be
-re-derived: `base_rgb` is the VERTEX's colour and GEOM.VATTR holds a per-vertex
-one, so the flat base colour is still a named constant;
-`tri_continuation_tail_i` and `tri_fragment_state_i` are still boundary ports;
-and a CLUT material's palette slot and generation **have no producer in this
-console at all**, which `mat_win_clut_unowned_o` counts rather than hides.
+### 4. FIELD Wave 3 — E1, W1, then C1
 
-### 4. I34 — TERRAIN.PATCH's field-height lane
+**E1** closes **I34** — but only with a **port change**, because
+`zhao_terrain_patch.sv:154-156` has `fld_valid_i / fld_ready_o / fld_height_i`
+and **nothing else**, so wiring only height is the only thing the current ports
+permit. Its brief must open with `zhao_console_core.sv:2732`'s capitalised
+warning to read `fpga/rtl/synth/zhao_probe_walk_earth.sv` first — that walker
+already exists, is field-major, is differentially tested and **already emits the
+corrected 297 groups**, and the owner's directive never mentions it.
 
-`terr_pt_fld_*` and its section 9.1. It is field-adjacent; do not start it
-while FIELDP4 is live in the same files.
+**W1** closes **GEOM.WARP**, and only if it composes live. **A tie-off does not
+count and must not be attempted** — that converts an honestly-absent entry into
+a tie-off, which the warp lane already refused once.
 
-### 5. GEOM.WARP — the one unbuilt entry, and it is WAITING, not neglected
+**C1** is coordinator-owned, serialised, never concurrent: core, prod_top and
+board regenerated, the three yml files, the smoke bench, `tests/CMakeLists.txt`.
 
-Architected and ratified on 2026-09-20 as W01–W18 from the owner's
-`reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt` (commit `4c256137`),
-dated that day and citing that commit — nothing back-dated, because the file
-self-describes as a proposal. `zref::geom_warp` is BUILT (102 directed checks,
-3 mutants fired), replacing item 9 of `PHANTOM_REFERENCES.md`.
+### 5. The remaining boundary tie-offs
 
-**It composes nothing, deliberately.** Tying `zhao_geom_warp`'s Field port off
-would convert an honestly-absent entry into a tie-off, which is the move rule 1
-forbids. **R103 names nine shared Field prerequisites that do not exist**, and
-this entry cannot close until they do. Its cost is 51+T_run clocks/point
-against Earth's 49. Do not start this lane before those nine have a home.
+**I13/I14** (PROJ — I14 needs the smoke's viewport case moved to DUO with the
+reference-derived pixel count regenerated in the SAME commit, both numbers
+stated, plus a `proj_en_i` producer), **I17** (POST — now priced at 153/553
+M10K, 27.7%, see R120), **I20**, **I21**, **I27**, **I29**, **I32**.
 
 ### 6. Whatever the running three refuse
 
-Every packet that refuses a gap must name its exact blocker. Those blockers are
-the real queue, and they outrank this list.
+Every packet that refuses must name its exact blocker. **Those blockers are the
+real queue and they outrank this list** — and they have been right more often
+than this page has.
 
-## Owed to the OWNER — both now blocking a register entry
+## Owed to the OWNER — five, and R65 is the expensive one
 
-1. **`reports/post-gather-law/gather_law_contact.png`** (R37). `zhao_post_gather`
-   is blocked on nothing else.
-2. **`reports/terrain-seam-dig/seam_dig_contact.png`** (R65) — and **the render
-   changed the question**. Spec §9.3(c) says the half-cell step "does not read
-   as a seam"; the sheet shows a rim wrong by up to one vertex, everywhere. If
-   that reads as an art defect the terrain FORMAT moves, and the packer does not
-   exist yet, so it is cheaper now than it will ever be.
+1. **`reports/terrain-seam-dig/seam_dig_contact.png` (R65).** **One look
+   unblocks four packets.** It gates I32, TERRAIN.BAKE's option A and the
+   terrain page format. **Six terrain lanes have closed zero of the same four
+   blocks** — that is one blocker seen six times, not six failures. The packer
+   does not exist yet, so the format is cheaper to change now than it ever will
+   be. And the render changed the question: spec §9.3(c) says the half-cell step
+   "does not read as a seam"; the sheet shows a rim wrong by up to one vertex,
+   everywhere. Under the art law only the owner's look settles it.
+2. **FH22 sequencing.** `REGS=64` doubles `E_ZERO` from 32 to 64 clocks on a
+   path already at 481% of allowance. FH08 dissolves the reason — but only after
+   H1 lands, so **the intermediate state is worse than either endpoint.**
+3. **FH11 lane width.** Semantics adopted in F1; the width is ~+6,000 ALM and
+   +12 DSP against a budget already ~5,672 ALM over, and
+   `zhao_block_fit.json`'s console row **does not contain FIELD at all**.
+4. **R115.** TERRAIN.NORMALMAP has a contract, a ledger row, an oracle and a
+   4,738-check suite and **no ratified spec sentence**. Ratify or supersede —
+   writing one now to match the implementation would be ratifying whatever got
+   built.
+5. **`reports/post-gather-law/gather_law_contact.png` (R37).** Blocks
+   `zhao_post_gather` and I17, and nothing else.
 
-Three more decisions came out of PROJADOPT: funding the one-packet `rem_o`
-repair that R100 is really blocked on; seven unresolved `reference_model:` rows
-(five of them PART.*) that need a per-row call; and the FORGE.SHADOW
-counter-catalog append, which FORGECONNECT is now carrying.
-
-## Owed, and cheap only when something else pays the fare
-
-**`spec/commands.zidl`'s DebugTraceArm comment carries an over-broad
-guarantee.** It says flatly that the arming record is never traced and that
-every record after it is. Neither holds without qualifiers: a SECOND arm in an
-already-armed packet IS traced, and later records are traced only if the arm was
-accepted, the mask sets bit 0, and the ring has room. The corrected statement is
-in `zhao_cmd_exec.sv`'s R52 port comment. **R77's `tmu_mode` comment is queued
-the same way.**
-
-Not fixed yet on purpose: every edit to that file changes `ZHAO_ZIDL_SHA256`,
-which forces all five golden captures to be regenerated through their real
-producers — `demo_duo_markers --write` alone is 600 Duo frames and about an
-hour. **Whoever next changes the zidl for a real reason fixes both comments in
-the same commit**, and the regeneration is free.
+Plus, lower stakes: the six unresolved `reference_model:` rows
+(`zref::MeasureHistogram`, `zref::PostComposite`, four PART.*) each need the
+per-row call R94 defined — name the law that exists, or remove the key and say
+why. **Inventing a plausible symbol is the same defect with a better name.**
 
 ## The fit
 
-**Only at zero.** Then TWO runs, per R80: the verdict on the target
-`5CSEBA6U23I7` (41,910 ALM / 112 DSP / 553 M10K) and the map on the sizing
-device `5CEBA9F31C7`, because at roughly 113% ALM the target will likely refuse
-to place and a refusal is not a map.
+`reports/FIT-PLAN-AT-ZERO.md` is the plan and it names the gates in advance.
+Three runs: **F-CLIFF-GOLDEN** (a leaf fit, the only honest way to state the
+cliff saving), **F-CONSOLE-TARGET** (the verdict on `5CSEBA6U23I7`) and
+**F-CONSOLE-SIZE** (the map on `5CEBA9F31C7`, because **a refusal is not a
+map**).
 
-The only composed number that exists is `zhao_console_core@console-core-first-light`
-— **47,582 ALM / 151 DSP / 306 M10K**, fitted on the sizing device ONLY to
-measure size, `gpu_clk` 18.5 MHz, setup slack −44.06 ns, TNS −39,647 ns, and
-`treeCleanAtHead: false`. Every packet's cost line in this run is an unmeasured
-claim until the real fit, and several of them say so.
-
-**Read `rtlCleanAtHead` before `status` on any fit row.** A row stamped
-`failed:structure` is not a failed measurement — the fit completed and the
-budget rules rejected it. A row fitted from a dirty tree, whose digest describes
-nothing, can be stamped `ok`. A gate reading `status` alone refuses the
-trustworthy number and quotes the worthless one.
+The only composed number that exists is 47,582 ALM / 151 DSP / 306 M10K on the
+sizing device, from a **dirty tree** carrying a live metadata-swap defect,
+before this run's repairs. **It is a starting estimate. Do not quote it as the
+console's size.**
