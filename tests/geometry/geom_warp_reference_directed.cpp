@@ -253,6 +253,32 @@ std::vector<std::uint8_t> fixtureZeroNormal() {
 }
 
 /**
+ * STATUS (21.3): "exact saturation and RCP(0) cases with valid DEFINED
+ * results."
+ *
+ * dx = ADD(p0, p0) saturates when p0 is the positive rail; dy = RCP(a0) with
+ * a0 = 0 sets rcp0 and returns the canonical answer. Both are DEFINED numeric
+ * results, not malformed programs — directive 5.5 exists precisely so that
+ * "a check of `resp_status != 0` MUST NOT turn a defined saturated Field
+ * answer into a dropped vertex".
+ *
+ * Driving the saturation from p0 rather than from px is deliberate: it keeps
+ * the POSITION far from its own rail, so the FIELD flag fires while the
+ * APPLICATION flag does not. That is the separation §5.3 demands, and a
+ * fixture that saturated both at once could not demonstrate it. case6 already
+ * covers the mirror image (application saturates, field does not).
+ */
+std::vector<std::uint8_t> fixtureStatus() {
+  std::vector<Ins> code;
+  code.push_back({insWord(zfield::OP_ADD, R_DX, R_P0, R_P0), 0});
+  code.push_back({insWord(zfield::OP_RCP, R_DY, R_A0), 0});
+  code.push_back({insWord(zfield::OP_LDC, R_DZ), 0});
+  appendNormalPassthrough(code);
+  code.push_back({insWord(zfield::OP_END, 0), 0});
+  return buildProgram(zfield::WARP, code, warpLanes());
+}
+
+/**
  * SPARSE_OUTPUTS (21.3): six valid, NONCONTIGUOUS output registers, including
  * high addresses, written in a different order from the canonical lane order.
  *
@@ -581,6 +607,38 @@ int main() {
     check_eq_i64(r.direction[0], baseInputs().direction[0], "case9: nx' read from R55");
     check_eq_i64(r.direction[1], baseInputs().direction[1], "case9: ny' read from R60");
     check_eq_i64(r.direction[2], baseInputs().direction[2], "case9: nz' read from R63");
+  }
+
+  // ================================================================ T11 =====
+  // "Canonical Status.sat and Status.rcp0 match the prepared and RTL paths."
+  //
+  // The half this test owns is that they are TRANSPORTED and kept SEPARATE
+  // from the application's own status, and that neither poisons. Directive
+  // 5.5: canonical saturation and reciprocal-of-zero "are not automatically
+  // malformed programs... A check of `resp_status != 0` MUST NOT turn a
+  // defined saturated Field answer into a dropped vertex."
+  {
+    const zfield::Decoded stf = mustDecode(fixtureStatus(), "STATUS");
+    const std::int32_t kMax = 0x7FFFFFFF;
+    Inputs in = baseInputs();
+    in.position[0] = 0;       // keep the POSITION far from its own rail
+    in.position[1] = 0;
+    in.params[0] = kMax;      // p0 + p0 saturates inside the FIELD program
+    in.attributes[0] = 0;     // RCP(0) -> the canonical rcp0 answer
+    zref::SatLedger ledger{};
+    const Result r = GeomWarp::evaluate(stf, in, boundOf(kMax), &ledger);
+
+    check(!r.poison(),
+          "case12: a saturated / rcp0 program is a DEFINED result, never a poison (5.5)");
+    check(r.field_status.sat, "case12: the FIELD program's saturation is transported");
+    check(r.field_status.rcp0, "case12: and so is rcp0, on its own flag");
+    check(!r.app_saturated,
+          "case12: while the APPLICATION flag stays CLEAR -- the two are independent (5.3)");
+    check(ledger.total() != 0,
+          "case12: the per-cause SatLedger is populated, not just the collapsed Status (12.4)");
+    // The position still advanced by the saturated displacement, exactly.
+    check_eq_i64(r.position[0], kMax, "case12: the defined saturated value IS applied");
+    check(!r.degenerate, "case12: and the normal is untouched by any of it");
   }
 
   // =============================================== the application split =====
