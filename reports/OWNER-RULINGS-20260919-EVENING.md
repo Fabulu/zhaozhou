@@ -3158,3 +3158,96 @@ are actually unmade decisions.
 * **FH11's width**, ~+6,000 ALM, against a `zhao_block_fit.json` row that
   **does not contain FIELD at all** — a cost quoted from a receipt that does not
   describe the subsystem being priced.
+
+## R194 — THE SEAM DIG: ACCEPTED. The page format is frozen at 64x64
+
+**Fabian, 2026-09-20, by looking:** *"Shipped is fine. Slightly different but
+not off."*
+
+The nearest-texel rim stands. `sheet_texel_for_vertex` stays as written and does
+**not** become the identity. **The terrain page format is frozen at 64x64**, and
+every later terrain block inherits it.
+
+**This is `CLAUDE.md`'s art law doing precisely the job it was written for.**
+Every measurable thing about this fallback had been measured, and the
+measurements did not decide it: **3.25 m is the dig's full depth**, which sounds
+fatal, and it **lands inside a staircase the 1 m lattice already produces**,
+which sounds harmless. Four of 99 shared border vertices disagree at the worst
+placement the tool can construct. *"Measurement can remove a BIAS; it cannot
+choose a VALUE."* The owner's eye chose it in one sentence.
+
+**Unblocked immediately:** tie-off **I32** (`surf_res_*`),
+**`zhao_terrain_bake_v2`**'s Option A layer-F reader — whose address generator
+was *exactly* the contested thing — and the page format itself.
+
+**Saved:** +38.3% page size, three tripped elaboration guards, and a page that
+would have nearly doubled (8,450 B → 16,384) because `zhao_terrain_jdoorbell`
+requires a power of two.
+
+**R116 called this "not six failures; it is one blocker seen six times."** Six
+terrain lanes closed none of it. **The blocker was a question nobody had been
+asked** — and the campaign spent days routing around a decision that took one
+look. The cost of *not asking* is the finding here, not the answer.
+
+## R195 — THE GATHER LAW: RATIFIED AS PROPOSED, TWO BLUR PASSES
+
+**Fabian, 2026-09-20, by looking:** *"Everything but before looks basically the
+same. Pick cheapest."*
+
+Ratified: **`kGlowKnee` 24, `kGlowSlope` 0x1C, tint 255/236/224, `kGlowMaster`
+255, TWO blur passes.** Not one coefficient moves.
+
+**"Cheapest" resolves to the proposed law, and the reasoning matters because the
+sheet's three axes do not cost the same thing:**
+
+1. **Blur passes are the real cost axis and the only one priced on the sheet.**
+   One pass = two sweeps of the 96×60 plane = 11,520 cell-steps. **Two = 23,040,
+   which is the number this contract already budgets for Z60.** Five = 57,600 =
+   **3.5% of a 1,666,666-clock frame** — for roundness nobody asked for.
+2. **`knee` is a cost axis in the OPPOSITE direction, and lower is not cheaper.**
+   The contract measured it: **knee 16 has 907 of 5,760 cells contributing
+   against 74** — twelve times the work — and its own text says that row is what
+   *"the whole image hazes"* looks like. Taking the smallest number in the
+   column would have bought a hazier image **and** twelve times the cells.
+3. **`bloom_gain` is not a cost at all** — a multiply constant, rescaled per
+   frame at runtime by `SetPost.bloom_gain`.
+
+**So the cheapest reading the owner's eye accepts is the renderer's existing
+default, unchanged.** Worth stating plainly: *"pick cheapest" did not mean "pick
+the lowest number in every column"*, and a packet that had read it that way
+would have shipped knee 16 and a hazed frame while believing it was following
+instructions.
+
+**Unblocks `zhao_post_gather` and tie-off I17, and nothing else.** The remaining
+obstacle is **one 8-bit tie-off**: `zhao_shell_top_v2.sv` discards the resolved
+tag as `rp_fb_tag_unused` while every neighbouring field leaves.
+
+## R196 — AN UNPROMPTED ART OBSERVATION: THE MORPH DOES NOT READ
+
+Looking at `reports/terrain-lod-readings/lod_readings_contact.png`, which was
+**not** a live decision, the owner said:
+
+> *"Not a real question. **Mesh looks like an awesome canyon-like rig. Morph
+> doesn't look like much.** Interesting."*
+
+**Recorded verbatim and NOT acted on, because it is an observation and not yet a
+ruling.** But it is the kind of observation this project exists to catch, and it
+deserves a look rather than a shrug:
+
+* **The mesh reads well** — that is a positive result nobody had written down,
+  about geometry that is already built.
+* **The morph does not read.** That is either a transition doing its job
+  invisibly (which is success), or **silicon spent on something the eye cannot
+  see** (which is the crayon-grain failure from `CLAUDE.md`'s art chapter — the
+  grain that *"measured fine and looked like flat plastic"* because it was
+  clipped narrower than the light rig's own range).
+
+**Those two readings have opposite consequences and the sheet cannot separate
+them**, because a contact sheet of *stills* is the wrong instrument for a
+*transition*. `CLAUDE.md` says so directly: judging an animation from stills
+finds the typical frame and misses the broken one; what is wanted is a
+**trajectory plot of the morph weight against what actually moves on screen**,
+or a before/after pair at the same instant.
+
+**Queued as a question, not a defect.** Nothing is changed on the strength of a
+one-line reaction to a sheet rendered for another purpose.

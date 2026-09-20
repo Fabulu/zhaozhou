@@ -104,7 +104,41 @@ rulings landed on 2026-09-20 — the same day this document was written.**
 
 ---
 
-# 1. THE SEAM DIG — does a rim wrong by one vertex read as a defect?
+# 1. THE SEAM DIG — ~~does a rim wrong by one vertex read as a defect?~~ **DECIDED: ACCEPT**
+
+> ## DECIDED BY THE OWNER, 2026-09-20, BY LOOKING
+>
+> **"Shipped is fine. Slightly different but not off."**
+>
+> **The nearest-texel rim is ACCEPTED. The page format stays 64x64. The
+> `sheet_texel_for_vertex` law stands as written and does NOT become the
+> identity.**
+>
+> The owner compared the SHIPPED and ALIGNED panels on
+> `reports/terrain-seam-dig/seam_dig_contact.png` — the dig placed tangent to
+> the seam at x=64 m, the worst case the law allows, on the sheet's own terms:
+> *"If it does not read here, it does not read."*
+>
+> **This is the art law working exactly as `CLAUDE.md` says it must.** Every
+> measurable thing had been measured and the numbers did not decide it: 3.25 m
+> is the dig's full depth, which sounds fatal, and it lands inside a staircase
+> the 1 m lattice already produces, which sounds harmless. **Measurement could
+> not choose the value; looking did.**
+>
+> **What this unblocks, immediately:**
+> * **tie-off I32** (`surf_res_*`, SURFACE.STAMP's `stamp_results`);
+> * **`zhao_terrain_bake_v2`**'s Option A layer-F reader — and its address
+>   generator was *exactly* the contested thing, so it is now buildable;
+> * **the terrain PAGE FORMAT**, frozen at 64x64, which every later terrain
+>   block inherits.
+>
+> **What it saves:** +38.3% page size, three tripped elaboration guards, and a
+> page that would have nearly doubled (8,450 B to 16,384) because
+> `zhao_terrain_jdoorbell` requires a power of two.
+>
+> R116 called this *"not six failures; it is one blocker seen six times."* Six
+> terrain lanes closed none of it. **The blocker was a question nobody had been
+> asked.**
 
 > ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **but the "no" branch is under-costed and the blocking claim is overstated**
 >
@@ -382,7 +416,43 @@ evidence that it is what the game needs.
 
 ---
 
-# 3. THE GATHER LAW — does the proposed bloom read right at 240p?
+# 3. THE GATHER LAW — ~~does the proposed bloom read right at 240p?~~ **DECIDED: RATIFY AS PROPOSED, TWO PASSES**
+
+> ## DECIDED BY THE OWNER, 2026-09-20, BY LOOKING
+>
+> **"Everything but before looks basically the same. Pick cheapest."**
+>
+> **The law is RATIFIED as proposed — `kGlowKnee` 24, `kGlowSlope` 0x1C, tint
+> 255/236/224, `kGlowMaster` 255 — with TWO blur passes.**
+>
+> **Why "cheapest" resolves to exactly the proposed law**, rather than to the
+> lowest number in every column — the sheet's axes do not cost the same thing:
+>
+> * **Blur passes are the real cost axis and the only one the sheet prices.**
+>   One pass is two sweeps of the 96x60 plane = 11,520 cell-steps. **Two =
+>   23,040, and that is the number this contract already budgets for Z60.** Five
+>   = 57,600, **3.5% of a 1,666,666-clock frame**, for roundness the owner did
+>   not ask for. **Two passes it is.**
+> * **`knee` is a cost axis too, in the other direction, and lower is NOT
+>   cheaper.** The contract measures it: **knee 16 has 907 of 5,760 cells
+>   contributing, against 74** — twelve times the work — and its own text says
+>   that row is what *"the whole image hazes"* looks like. **Knee 24.**
+> * **`bloom_gain` is not a cost at all.** It is a multiply constant, and
+>   `SetPost.bloom_gain` rescales the result per frame at runtime anyway.
+>   `kGlowMaster` stays **255**; the per-frame knob remains the owner's.
+>
+> So the cheapest reading that the owner's eye accepts is **the renderer's
+> existing default and the contract's proposed law, unchanged.** No coefficient
+> moves. Every one of them remains a named editable constant, which is what R37
+> demanded.
+>
+> **What this unblocks:** `zhao_post_gather` — one of the twelve disconnected
+> modules — and **tie-off I17** (`post_gd_*`, `post_gg_*`). And nothing else;
+> the two contact sheets unblock disjoint things.
+>
+> **The one remaining obstacle is now a single 8-bit tie-off**, not a missing
+> stream: `zhao_shell_top_v2.sv` discards the resolved tag as
+> `rp_fb_tag_unused` while every neighbouring field leaves. One port.
 
 > ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **the cleanest item in the file. I could not lay a glove on it.**
 >
