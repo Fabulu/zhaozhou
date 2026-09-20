@@ -520,10 +520,34 @@ registers at END.
 | Profile | id | Input record (R0..) | Output record |
 |---|---|---|---|
 | earth | 0 | x:fx, z:fx, age:u32, phase:fx, p0..p7:fx (12) | height:fx, velocity:fx, material:u32, nav_cost:fx (4) |
-| warp | 1 | px,py,pz:fx, nx,ny,nz:fx, a0..a3:fx, time:u32, p0..p3:fx (14) | dx,dy,dz:fx, nx′,ny′,nz′:fx (6) |
+| warp | 1 | px,py,pz:fx, nx,ny,nz:fx, a0..a3:fx, time:u32, p0..p3:fx (15) | dx,dy,dz:fx, nx′,ny′,nz′:fx (6) |
 | flow | 2 | px,py,pz, vx,vy,vz:fx, age:u32, seed:u32, dt:fx, p0..p3:fx (13) | px′,py′,pz′, vx′,vy′,vz′:fx, attr0:fx (7) |
 | formation | 3 | index:u32, time:u32, parent rot2:fx,fx, trans2:fx,fx, p0..p5:fx (11) | tx,ty,tz:fx, rot:angle, scale:fx, mat_phase:fx (6) |
 | stamp | 4 | u,v:unit, age:u32, strength:unit, p0..p3:fx (8) | tag_op:u32, strength:unit, emissive:unit (3) |
+
+> **Warp's input count was "(14)" until 2026-09-20 and the fifteen fields were
+> always right.** Corrected under decision **W01** of the owner directive
+> `reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt` (owner commit
+> `4c256137`), ratified in `reports/OWNER-RATIFICATION-20260920-WARP.md`.
+> Count them: px,py,pz (3) + nx,ny,nz (3) + a0..a3 (4) + time (1) + p0..p3 (4)
+> = **15**. No numeric ISA changed; the parenthetical was arithmetic, and it was
+> wrong.
+>
+> It is worth recording WHY this mattered more than a typo. The wrong count had
+> already propagated into `fpga/rtl/prod/zhao_console_core.sv`, which sized the
+> shared Field host and said the profile "is 14 in" and that the pair "moves to
+> 14/7" when Warp arrives. Building to that sentence drops **p3** — and a
+> dropped lane does not read as absent. It reads as whatever the host's register
+> clear left in R14, which is the flattering direction: a plausible number from
+> a lane nobody supplied. The console's own comment two lines above already
+> states the general hazard for Flow — *"a lane it cannot present is a lane its
+> program reads as whatever the front cleared the register to"* — so the trap
+> was documented and then walked into anyway.
+>
+> `zref::GeomWarp` enforces fifteen in code rather than prose
+> (`kInLanes`, and `check_signature` refuses fourteen explicitly), and the
+> `P3_SENTINEL` fixture makes lane 14 change an output so the mistake cannot be
+> re-made silently.
 
 ### 7.2 Op whitelists
 

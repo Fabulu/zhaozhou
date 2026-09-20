@@ -3637,14 +3637,27 @@ blocks:
     kind: rtl
     subsystem: geometry
     clock_domain: gpu
-    purpose: Apply Warp8 deformation programs to instanced vertices (consumes FIELD.SEQ.WARP results).
+    purpose: Apply validated W-profile displacement and replacement-normal results to POST-SKIN world vertices, once across both views, on the shared Field v3 fabric.
     contract: design/contracts/GEOM.WARP.md
     phase: 9
     owner_issue: ZH-045
-    inputs: [instanced_transforms, displaced_vertices]
-    outputs: [warped_vertices]
-    upstream: [GEOM.LOOM, FIELD.SEQ.WARP]
-    downstream: [GEOM.PROJECT]
+    # CONFLICT C03, corrected 2026-09-20 under the owner directive
+    # reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt (owner commit
+    # 4c256137; ratified in reports/OWNER-RATIFICATION-20260920-WARP.md).
+    #
+    # These read `inputs: [instanced_transforms, displaced_vertices]` and
+    # `upstream: [GEOM.LOOM, FIELD.SEQ.WARP]`, and the LOOM edge was a DATA
+    # edge. It is wrong: actual GEOM.LOOM emits transform MATRICES into
+    # GEOM.DRAWJOB's palette, and "treat GEOM.LOOM's transform matrices as
+    # vertices" is on the directive's prohibited list by name.
+    #
+    # The CONTROL dependency is retained; the DATA dependency is corrected.
+    # Warp consumes post-skin world positions from GEOM.SKIN and the
+    # range-reduced, NON-unit world direction from GEOM.SKIN.NORM.
+    inputs: [skinned_world_vertices, skin_world_normals, warp_field_results]
+    outputs: [warped_vertices, warped_normals]
+    upstream: [GEOM.SKIN, GEOM.SKIN.NORM, FIELD.SEQ.WARP, GEOM.LOOM]
+    downstream: [GEOM.GROUP_SEQ, GEOM.LIGHT]
     backpressure: ready_valid
     latency: variable
     target_throughput: 1 warped vertex per clock
@@ -3660,7 +3673,39 @@ blocks:
     deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: 5
     superseded_by: null
-    notes: Warp8 throughput is cut-order 5 (§26).
+    notes: >-
+      Warp8 throughput is cut-order 5 (SS26). "Warp8" is the HISTORICAL
+      capability name and it does NOT override the explicit signature: the
+      profile is FIFTEEN input lanes and six output lanes, not eight of
+      anything (decision W01).
+
+      SPECIFIED AND REFERENCED 2026-09-20, NOT BUILT. The contract is filled
+      from the owner directive
+      reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt (owner commit
+      4c256137), whose decisions W01-W18 are ratified in
+      reports/OWNER-RATIFICATION-20260920-WARP.md.
+
+      zref::GeomWarp EXISTS as of this commit --
+      reference/include/zref/zref_geom_warp.hpp, exercised by
+      tests/geometry/geom_warp_reference_directed.cpp at 95 directed checks
+      with three fired mutation controls. It was item 9 of
+      reports/PHANTOM_REFERENCES.md until now.
+
+      THERE IS NO zhao_geom_warp.sv AND THIS ENTRY DOES NOT IMPLY ONE. The
+      block is NOT composed, and composing it is BLOCKED on shared Field host
+      work that was measured rather than assumed on 2026-09-20: the host is
+      composed at IN_LANES=13 against Warp's 15; CLIENTS=2 with both ports
+      occupied by the stamp and flow adapters; output capture is a single
+      CONTIGUOUS window from hdr_outbase, so a sparse output map cannot be
+      captured; completion tests cur_out_seen == '0', i.e. ANY output rather
+      than ALL required ones; the prepared-scalar bank is one flat 64-slot
+      array with no per-context dimension; INSTR_N=32 against Warp's 48-op
+      ceiling; and there is no handle-to-resident-slot binding table. See the
+      contract's prerequisite table P1-P9 and FINDINGS-warp.md.
+
+      Building the block with its Field request port tied off would move this
+      entry from NOT BUILT to a TIE-OFF, which is closing a gap by opening
+      one. It is deliberately left unbuilt instead.
 
   - id: GEOM.WCACHE
     name: Projected-vertex arena
