@@ -249,3 +249,19 @@ same invocation.
   numbers in P20-DENT-EXPERIMENT.md. Dent ships OFF; shipping bank unchanged.
 - Repaired the stale kSpanStretchMaxPm comment (manafold_art.h:2337-2353) that
   described 490/-450 values the arrays never contained.
+
+### 2026-09-20 - ARCHITECT PACKET, REVISION 2 (after P20-DENT-EXPERIMENT.md)
+- The pin did NOT leak: the dent's chain walk (manafold_clips.h:835-842) reads
+  each span's delta off the bone that STARTS the span; the closure walk and
+  finalize_rear_follow read it off the bone that ENDS it (span_child[i] with
+  kLoopArcMm[i]; set_span_delta(0) writes kBHingeA). Off by one on all three
+  spans. Duck-1000/full-envelope zeroes every delta, both walks agree, and that
+  row shows the pin holding. Duck-0 and mid-ramp (where the crossing lives)
+  measured a misplaced triangle. Fix: ONE shared loop_walk, CRC-gated.
+- The crossing deficit is real for a PLANAR press and grows as the loop closes.
+  Revision 2 rotates B rigidly about the A-C chord instead (kKneadDentSwingPm):
+  zero span change on every sample, same mirror endpoint. Extra depth for the
+  clips that need it is a named overpress stretching only A-B/B-C under the
+  full duck, inside 480/400. No bound changes; fallback named in R2.5.
+- Next experiment: three render-free runs, central claim A-B/B-C <= 1 mm from
+  no-dip with swing 1000 / duck 0.

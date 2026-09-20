@@ -1,5 +1,216 @@
 # P20 solver architecture: THE DENT — a pinned re-fold of the A–B–C triangle
 
+**Revision 2** (2026-09-20, after `P20-DENT-EXPERIMENT.md`, implementation
+`b7c096c2`) is §R2 below. **Revision 1** follows it unchanged as history; where
+the two disagree, R2 governs.
+
+---
+
+## R2. Revision 2 — the walk was wrong, the swing is free
+
+### R2.0 Verdict
+
+Both failed criteria were measured through **one implementation defect** in
+the dent's own chain walk, at exactly the moment that matters. The pin is
+recoverable **by construction**. The crossing compaction is real physics of a
+*planar* press — and it disappears entirely if B goes to its mirror by a
+**rigid rotation about the A–C chord** instead of through it. That is the
+coordinator's "partially rotational dent", taken all the way: zero span-length
+change on every sample, F-A and C-E untouched, A and C pinned, and the same
+final pose R5 already accepts. Depth beyond the mirror, where some clips need
+it, is a named **overpress** that stretches only the two interior spans while
+the ambient is fully ducked, inside their existing bounds. No bound changes.
+No owner approval is needed for the mechanism — only the eye's verdict on the
+out-of-plane read, and R2.5 names the fallback if the eye refuses it.
+
+### R2.1 (a) Why the pin leaked — and that it did not
+
+The closure walk pairs `kLoopArcMm[i]` with `span_child[i] = {kBNeck,
+kBHingeA, kBHingeB, kBHingeC, kBHingeD}`: **a span's delta lives on the bone
+that ENDS it.** The 680 mm F→A span reads `local_t[kBHingeA][1]`, which is
+precisely what `set_span_delta(0, …)` writes (`kChild[0] = kBHingeA`);
+`finalize_rear_follow` uses the same pairing, and G7 (10 mm) has validated it
+for the whole bank.
+
+The dent's walk (`manafold_clips.h:835–842`, commit `8fbd7e97`) reads
+`len_of(kBNeck, kLoopArcMm[1])`, `len_of(kBHingeA, kLoopArcMm[2])`,
+`len_of(kBHingeB, kLoopArcMm[3])` — **one bone early on all three spans.**
+`local_t[kBNeck][1]` is always 0, so the walk applies no delta to F→A, the F-A
+delta to A→B, and the A-B delta to B→C. Its A, B and C are therefore wrong by
+up to the ambient deltas (F-A alone reaches ±199 mm).
+
+The consequences match the experiment exactly:
+
+* **Duck 1000, full envelope:** every delta is zero, both walks agree, and the
+  pin held — C-E at or below no-dip. That row *is* the pin working.
+* **Duck 0:** the second aim chases a wrong "saved C"; the real C lands
+  displaced by the walk's error. That is the +19 / −11 mm.
+* **The crossing lives mid-ramp** (s passes 1000 at env ≈ 0.5), where the duck
+  is only half on, so the walk was wrong on precisely the samples criterion 3
+  measured. The aims' `want − len` from misplaced points ships as compaction.
+  The 3× is at least partly this; how much is real is unknown until the walk
+  is fixed, and **no number from `P20-DENT-EXPERIMENT.md` §3 should be quoted
+  again** until it is re-measured.
+
+**Recoverable by construction: yes.** After the fix the pin's residual is
+angle16 quantisation in the two aims (≈ 0.05 mm per stage; ≈ 1 mm worst case
+in `asin16`'s ill-conditioned region), nothing that scales with the gesture.
+The criterion stays **≤ 1 mm on C-E, per sample, duck OFF.**
+
+**The fix is one shared walk, not a corrected copy.** Revision 1 declared "no
+refactor of the closure walk" as an omission; that omission cost exactly this
+— two walks drifted at birth. Factor `loop_walk(const Rig&, int spans, P&, Q&)`
+out of the closure walk *verbatim* (same expression, same `>> 16`), call it
+from the closure and from the dent, and let the existing 4-subject CRC identity
+leg prove the closure did not move a byte. `finalize_rear_follow` keeps its own
+copy this packet (it walks clip tracks, not a `Rig`); its pairing is the
+reference the helper is checked against.
+
+### R2.2 (b) Where the crossing length goes: nowhere — rotate instead of press
+
+The press is planar, and any planar path from one side of the chord to the
+other must cross it, where `|AB| + |BC| = |AC|`. The deficit
+`D = |AB| + |BC| − |AC|` is not a constant: it grows as the loop closes
+(`|AC|` shrinks with B's fold), so the ambient grip modulates it, and a
+crossing that coincides with a closed moment costs more than any rest-pose
+estimate. R1's 102 mm was the *minimum* over the schedule, not the budget.
+
+**A rigid rotation of the triangle about the A–C chord has no deficit at any
+angle.** B moves on a circle of radius |h| around the chord axis; `|AB|` and
+`|BC|` are constant throughout; the endpoint at 180° is the same mirror R5
+already accepted. Target path, replacing `B(s) = B − s·h`:
+
+    n     = u x h_hat                   (unit normal of the A–C–B plane)
+    theta = s * pi/2                    (s in [0, 2]: 0 = rest, 2 = mirror)
+    B(s)  = foot + |h| * (cos theta * h_hat + w * sin theta * n)
+
+with `w = kKneadDentSwingPm / 1000`. `w = 1` is the rigid circle: zero
+compaction, zero stretch, F-A and C-E untouched, A and C pinned, nothing to
+duck for. `w = 0` is Revision 1's press. In between, the mid-gesture length
+cost is `sqrt(|A·foot|² + w²|h|²) − |AB|`: quadratic in `w`, so half a swing
+buys back only a quarter of the compaction — the knob exists for the eye, but
+the physics wants it at or near 1000.
+
+**Integer form.** `n` needs a cross product and one `isqrt64`; `sin/cos` come
+from `zref::fx_sin` on angle16 exactly as `rear_bow_delta_mm` does
+(`theta16 = s_pm * 16384 / 1000`). Two more rounded divides in
+`dent_target_mm`, still one function, still int64.
+
+**What it costs instead.** B leaves the loop plane by up to `w·|h|`
+(≈ 184 mm est., at θ = 90°). The loop plane is the creature's sagittal plane
+and the house camera looks at it from the side, so the excursion is *toward or
+away from the viewer* — foreshortened to a ~10 % size change at 240p — while
+the visible motion is B descending through the chord line and settling under
+it. On Inspect's orbit the swing is visible as a swing. **That is the art
+question, and only the eye answers it** (R2.6). Mid-swing the tube's roll
+about its own axis is whatever `nodule_aim`'s z-then-x composition produces,
+which may not be a natural bend's roll: watch for twist in the front window.
+
+**Depth beyond the mirror: the overpress.** R5 reached strictly lowest on
+13/21 at the mirror and 19/21 at s = 3000, because |h| varies with the loop's
+openness and on some clips the mirror is not 20 mm under A or C. The rotation
+cannot go further than 180° (it comes back up), so extra depth is a straight
+continuation from the mirror along −h_hat:
+
+    B(s > 2) = B(2) − (s − 2) * |h| * h_hat * kKneadDentOverpressPm/1000
+
+It stretches A-B and B-C only, and it happens at full envelope, where the
+ambient duck is complete, so nothing stacks: est. at one extra |h| (184 mm)
+`|AB| ≈ 465` (+125 mm, +368 pm of 480) and `|BC| ≈ 496` (+116 mm, +305 pm of
+400). Inside both interior stretch bounds, with the duck now **load-bearing
+for the overpress** (not for the pin) and stated as such in its comment.
+
+**Bounds: none change in this revision.** The interior compaction floors are
+expression bounds (their comment: the run-length law is the collapse guard;
+these bound how far a visible span may telescope before the skin folds), and
+the swing does not touch them. If the eye rejects the swing and the press must
+ship, the true deficit (re-measured after the walk fix) decides whether those
+two floors are asked for; that request would have to be proven by the
+posed-surface quantity they proxy — the **front-window rail strain** — with a
+positive control, and it never reaches C-E. It is not proposed here.
+
+### R2.3 The implementer's three questions, answered
+
+1. *Where did the 102 mm go?* It was the deficit at the rest fold; the deficit
+   is a function of the instantaneous |AC| and the crossing was measured
+   through a broken walk. It is moot for the swing (no deficit) and unknown for
+   the press until re-measured.
+2. *Can the pin hold exactly?* Yes, once the walk reads the right bones. The
+   duck-1000 row already shows it holding.
+3. *Is a deeper duck the answer?* No — the duck was compensating for the walk.
+   It stays as an art knob and as the overpress's stacking guard. Do not scale
+   the swallow beats.
+
+### R2.4 (c) The next falsifying experiment — render-free, three runs
+
+Prerequisites (implementer): the shared `loop_walk`, the swing term in
+`dent_target_mm`, `kKneadDentSwingPm`, `kKneadDentOverpressPm`; off path still
+bytes (4/4 CRCs).
+
+**Run 1 — the swing is rigid and the pin holds.** `dent`, s = 2000,
+swing = 1000, overpress = 0, **duck = 0** (honest), whole bank. Per-sample
+diff against no-dip from `mspan --csv` and `mrear --dip --csv`:
+
+* F-A: identical on every sample.
+* C-E: `max |Δ| ≤ 1 mm` over **all** samples — per sample, not the extremes;
+  the extremes hid the per-frame leak last time.
+* A-B and B-C: `max |Δ| ≤ 1 mm` over all samples. **This is the new central
+  claim** — a rigid rotation leaves every span length exactly as the ambient
+  had it. Any larger difference means the rotation is not rigid (a bug) or the
+  walk is still wrong.
+* R5: Inspect strictly lowest by 20 mm; bank count reported (expect ≈ 13/21,
+  the same endpoint as before).
+* Reported, not gated: B's out-of-plane excursion per sample (distance from
+  the pre-dent A–C–B plane), the G9 step/accel/jerk worsts, and the front
+  rail min/max. These are the eye's and the next gate's inputs.
+
+**Run 2 — what the press really costs.** Same, swing = 0, duck = 0 and
+duck = 1000: log per-sample `D = |AB| + |BC| − |AC|` and the interior deltas.
+This replaces `P20-DENT-EXPERIMENT.md` §3 with a trustworthy number and is the
+owner's information if the swing is refused on sight.
+
+**Run 3 — the overpress.** swing = 1000, overpress {500, 1000}, duck = 1000:
+R5 count (target: every hosting clip) and A-B/B-C stretch worsts against 480 /
+400. If a clip still misses at 1000, report which and its |h|; do not raise the
+overpress past the interior stretch bounds.
+
+Falsified if Run 1 fails any bullet. Ten minutes per run.
+
+### R2.5 If the eye refuses the swing
+
+Then B-strictly-lowest on every clip requires a planar press, whose crossing
+deficit is paid by the interior spans, and whether it fits inside −330 / −430
+is decided by Run 2. If it does not, **the smallest change the owner must
+approve is the two interior compaction floors** (A-B and/or B-C), by the
+re-measured amount, justified by a front-window rail floor with a fired
+control — never C-E, never F-A, never the run-length floor. I am not proposing
+it; I am naming it so the choice is visible before the ladder rather than
+after.
+
+### R2.6 Gates and look, delta from §10
+
+* **G10 DENT PIN** gains the rigid-swing leg (A-B/B-C ≤ 1 mm with overpress 0)
+  and its control `--fail-dent-rigid` = swing 0 (the press: interior deltas
+  move by tens to hundreds of mm). `--fail-dent-pin` stays the carried solver
+  at gain 1000.
+* **Report** B's out-of-plane excursion and the front rail strain per clip;
+  floor the rail after the ladder, control `--fail-dent-overfold` (overpress
+  3000).
+* **Look:** Inspect at 3× through one full swing (12-tile strip), the
+  fixed-camera idle at native, a before/after pair against HEAD, and a
+  trajectory plot of B's core in Y and Z over the clip — the Z line is the
+  swing, and the eye needs to see whether it reads as a press or a flip.
+
+### R2.7 What I would NOT do
+
+Widen any bound; keep two walks; measure anything through the old walk; scale
+the swallow beats; take the swing past 180°; make the duck carry the pin; ship
+the press with breaches and call the swing "for later".
+
+---
+
+# Revision 1 (superseded where R2 says so; kept as history)
+
 **Date:** 2026-09-20 (architect packet, read-only)
 **Branch / HEAD:** `manafold-pass20` @ `0918d554`
 **Inputs:** `P20-DIP-STOP.md` (the ledger; this is its option 2), `P20-DIAGNOSIS.md`,
