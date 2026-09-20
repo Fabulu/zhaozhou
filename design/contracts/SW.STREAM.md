@@ -310,6 +310,29 @@ entry when its ticket comes back FINAL. The hardware never invents an address or
 a ticket: a dirty eviction with no grant posted waits, and the wait is counted
 (`terr_jdb_starved_cycles_o`) as software backpressure in T12's sense.
 
+**SW.STREAM also owns GEOM.LOOM's NODE STREAM, and hands it to the hardware
+through the same doorbell pattern** (owner rulings **R58** and **R69**,
+`design/contracts/GEOM.LOOM.STREAM.md`). The owner ruling of 2026-08-31 §6.4
+puts the stream on this side of the edge in terms — *"The ARM/compiler supplies
+a parent-before-child topologically sorted stream … Keep-world reparenting is
+computed on the ARM between frames"* — so the sort, the reparenting and the
+camera basis are software's, and GEOM.LOOM composes transforms and nothing else.
+Each frame SW.STREAM **stages** the stream in HPS DDR at the frozen 64-byte
+record (record 0 is the header: magic, node count and the frame's camera 3×3;
+records 1..*n* are the nodes), **posts** `{base, ticket}` into the console's
+mailbox ahead of need, and **recycles** the staging buffer when that ticket
+comes back. The hardware invents no node, no order and no basis: a stream whose
+header is malformed or whose base is not 64-byte aligned is refused before a
+byte is read, and a stream GEOM.LOOM drops is returned with the loom's own
+refusal reason rather than silently not drawn. Nothing times out — a return the
+ARM never drains holds its credit and the mailbox backs up, counted in
+`geom_loom_feed_post_stalls_o`, which is T12's software backpressure again.
+
+This is the **third** instance of the R14 doorbell and the pattern is now the
+house answer to "host state a block needs and no block can build": the F-sheet
+journal (R14), the FIELD program plan (R43) and this. The shapes differ only in
+their fields.
+
 ## Q formats and rounding
 
 **None of its own.** SW.STREAM moves bytes and builds lists; it performs no

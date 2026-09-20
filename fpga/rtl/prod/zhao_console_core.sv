@@ -2641,47 +2641,54 @@
 //      encoding is an OWNER DECISION written up in FINDINGS-texmat2.md and
 //      held in ONE editable parameter.
 //
-// I50. GEOM.LOOM's NODE STREAM and CAMERA BASIS (`geom_loom_*`) -- BOUNDARY.
-//      NEW 2026-09-20 (geom3 packet), and like I41 before it this is a gap
-//      OPENED DELIBERATELY: the register goes up by one here and the trade is
-//      on purpose, because it buys four.
+// I50 IS CLOSED AND DELETED, 2026-09-20 (gz/carriers), by owner rulings R58
+//      and R69. GEOM.LOOM's node stream and camera basis were a BOUNDARY for
+//      one day: the geom3 packet opened the gap deliberately when it composed
+//      GEOM.LOOM for R29's transform palette, and R69 answered it -- "not
+//      blocked, only unbuilt: `zhao_part_hps` is the exact pattern and the
+//      arbiter is already N-client".
 //
-//      WHY GEOM.LOOM IS COMPOSED AT ALL. Owner ruling R29 ratified the draw
-//      job's `xform[12]` as "the instance transform palette row named by the
-//      transform handle", and the palette's writer has to be a real producer of
-//      instance transforms. There is exactly one in this tree and it is this
-//      block: `design/contracts/GEOM.LOOM.md`'s purpose line is "producing
-//      instance transforms" and its output is "{node_index, transform[12]} --
-//      a 3x4 affine, row-major, fx16 S15.16". Composing anything else, or
-//      taking the palette's rows from a port, would have been a second opinion
-//      about where a world transform comes from.
+//      WHAT WAS ACTUALLY MISSING WAS A CARRIER, NOT A BLOCK, and the entry
+//      said so. The owner ruling of 2026-08-31 6.4 puts the producer outside
+//      this console IN TERMS -- "The ARM/compiler supplies a parent-before-
+//      child topologically sorted stream ... Keep-world reparenting is
+//      computed on the ARM between frames" -- and GEOM.LOOM's contract calls
+//      that deletion "what makes this block buildable". So the stream is host
+//      state, like the frame ring, and `u_geom_loomfeed` is what brings its
+//      bytes across: SW.STREAM stages the sorted stream in HPS DDR, a CSR
+//      mailbox names it, the hardware answers by returning the ticket. The
+//      R14/R43 pattern, third instance, after the journal and the field
+//      program loader.
 //
-//      WHY ITS INPUT IS A BOUNDARY AND NOT A MISSING BLOCK, which is the part
-//      worth reading before anyone goes looking for the producer. The owner
-//      ruling of 2026-08-31 6.4 put it outside this console IN TERMS: "The
-//      ARM/compiler supplies a parent-before-child topologically sorted
-//      stream. Loom only composes transforms ... Keep-world reparenting is
-//      computed on the ARM between frames." The contract calls that deletion
-//      "what makes this block buildable". So the stream is host state, like the
-//      frame ring itself, and what is missing is not a block but a CARRIER --
-//      the same shape as I42's field program loader, and its recommendation is
-//      the same: a doorbell on the R14/R43 pattern (SW.STREAM stages the sorted
-//      stream, a CSR mailbox hands over base/count, hardware acknowledges).
-//      That is an ABI addition and an owner call, and it is written up in the
-//      geom3 findings rather than decided here.
+//      THE RECORD IS 64 BYTES AND THE NUMBER IS NOT FREE-CHOSEN.
+//      `zhao_hps_bridge` takes 64-B ALIGNED bursts of 1..64 bytes, so 64 is
+//      the largest burst and the only size at which one record is exactly one
+//      burst. The natural packing of a node is 56 B -- 445 bits of fields
+//      dominated by twelve fx16 parameters -- and 56 is not a burst multiple,
+//      so a 56-byte stream would put every eighth record across a boundary and
+//      need an alignment law nobody could read off the record. The eight spare
+//      bytes buy one-record-one-burst. `design/contracts/GEOM.LOOM.STREAM.md`
+//      freezes the layout and `SW.STREAM.md` section T14 names the owner.
 //
-//      `cam_basis_i` RIDES THE SAME ENTRY because it has the same owner and the
-//      same absence. It is the frame's camera 3x3 for BILLBOARD nodes, and it
-//      cannot be derived from anything this console holds: `SetView` carries a
-//      combined view-PROJECTION matrix, and recovering a rotation basis from it
-//      needs the inversion the ruling excludes by name.
+//      `cam_basis_i` RIDES THE STREAM, IN RECORD 0, NOT THE MAILBOX, and that
+//      is correctness rather than packing. It is a HELD port the loom reads as
+//      BILLBOARD nodes compose; latched by a mailbox write while a stream is in
+//      flight it would be two quantities on two different enables that must
+//      agree -- the metadata-swap shape, where "response A's data and B's
+//      metadata" becomes "this frame's nodes and the next frame's camera". In
+//      record 0 it is loaded ONCE, by the same act that starts the stream.
 //
-//      WHAT IS NOT PART OF THIS GAP: the palette itself, its writer and its
-//      reader are all real and composed, and `geom_dj_pal_writes_o` counts the
-//      rows GEOM.LOOM lands in it. A draw naming a row nobody wrote is REFUSED
-//      and counted (`geom_dj_refused_xform_o`), never drawn at the identity --
-//      an unset matrix is not a pose, it is an unset matrix.
+//      THE CARRIER TAKES ARBITER CLIENT 4, the lowest, read-only, one 64-byte
+//      burst in flight. See `u_terr_hps_arb` for why that cannot deadlock.
 //
+//      WHAT WAS NOT WIDENED, AND IS WORTH THE LINE. Nothing about GEOM.LOOM
+//      changed: no second transform law, no second sort, no re-derived
+//      verdict. The carrier hands over bit ranges of bytes the ARM wrote and
+//      reports the loom's own refusal reason back to the HPS -- which is the
+//      one thing that got BETTER rather than merely connected, because
+//      `refuse_valid_o` used to be a pulse under an UNUSEDSIGNAL waiver with
+//      no consumer at all.
+
 // ---------------------------------------------------------------------------
 // BLOCKS OFFERED TO THIS COMPOSITION AND REFUSED -- the remainder
 // ---------------------------------------------------------------------------
@@ -3637,26 +3644,58 @@ module zhao_console_core
   output logic [31:0]             geom_dj_hdr_crc_fail_o,
   output logic [31:0]             geom_dj_hdr_framing_o,
 
-  // ---- I50: GEOM.LOOM's NODE STREAM and CAMERA BASIS -- BOUNDARY ----------
-  // NEW 2026-09-20, and it is a gap this packet OPENED DELIBERATELY by
-  // composing GEOM.LOOM for R29's transform palette. The owner ruling of
-  // 2026-08-31 6.4 puts the stream's producer OUTSIDE this console on purpose:
-  // "The ARM/compiler supplies a parent-before-child topologically sorted
-  // stream." There is no command that carries one and no block that builds
-  // one, so the stream arrives here, at the edge, whole -- see the header.
-  input  logic                    geom_loom_valid_i,
-  output logic                    geom_loom_ready_o,
-  input  logic [9:0]              geom_loom_node_index_i,
-  input  logic [9:0]              geom_loom_parent_index_i,
-  input  logic [3:0]              geom_loom_kind_i,
-  input  logic signed [31:0]      geom_loom_param_i [0:11],
-  input  logic [15:0]             geom_loom_angle_i,
-  input  logic [1:0]              geom_loom_axis_i,
-  input  logic                    geom_loom_bodypatch_i,
-  input  logic [15:0]             geom_loom_src_id_i,
-  input  logic                    geom_loom_first_i,
-  input  logic                    geom_loom_last_i,
-  input  logic signed [31:0]      geom_loom_cam_basis_i [0:8],
+  // ---- I50 IS CLOSED: GEOM.LOOM's NODE STREAM arrives by DOORBELL ---------
+  // NOT A TIE-OFF, in the same standing and the same words as `terr_jdb_*`
+  // (I28) and `fld_db_*` (I42): the HPS is genuinely on the other side of this
+  // edge, and in Verilator the harness IS the HPS.
+  //
+  // The owner ruling of 2026-08-31 6.4 puts the stream's producer OUTSIDE this
+  // console on purpose -- "The ARM/compiler supplies a parent-before-child
+  // topologically sorted stream" -- so what was missing was never a block. It
+  // was a CARRIER, and owner ruling R69 says so in terms: "not blocked, only
+  // unbuilt". `u_geom_loomfeed` is that carrier: SW.STREAM stages the sorted
+  // stream in HPS DDR at the frozen 64-byte record of
+  // `design/contracts/GEOM.LOOM.STREAM.md`, this mailbox names it, and the
+  // hardware answers by returning the ticket.
+  //
+  // WHAT LEFT THIS EDGE. Twelve wide stream fields and a nine-element camera
+  // basis -- 672 bits of input a host would have had to present 9,000 times a
+  // frame -- are replaced by a POINTER and a TICKET. The bulk rides the
+  // HPS-DDR bridge as client 4 of `u_terr_hps_arb`.
+  input  logic [31:0]             geom_loom_db_plan_base_i,
+  input  logic                    geom_loom_db_post_valid_i,
+  output logic                    geom_loom_db_post_ready_o,
+  input  logic [31:0]             geom_loom_db_post_base_i,
+  input  logic [31:0]             geom_loom_db_post_ticket_i,
+  output logic                    geom_loom_db_ret_valid_o,
+  input  logic                    geom_loom_db_ret_ready_i,
+  output logic [31:0]             geom_loom_db_ret_ticket_o,
+  output logic                    geom_loom_db_ret_ok_o,
+  output logic                    geom_loom_db_ret_refused_o,
+  output logic [2:0]              geom_loom_db_ret_reason_o,
+  output logic [2:0]              geom_loom_db_ret_loom_reason_o,
+  output logic [15:0]             geom_loom_db_ret_nodes_o,
+  output logic [31:0]             geom_loom_db_ret_plan_o,
+  // The carrier's own evidence, separate from the loom's below: a stream the
+  // loom never saw and a stream the loom refused are different faults and are
+  // counted apart.
+  output logic [31:0]             geom_loom_feed_posts_o,
+  output logic [31:0]             geom_loom_feed_streams_o,
+  // Node BEATS handed to the loom, which is NOT `geom_loom_nodes_o` (nodes
+  // TRANSFORMED). They differ by exactly the beats the loom swallowed into a
+  // drain after refusing a stream, so the gap between them is a real reading
+  // and collapsing them into one counter would delete it.
+  output logic [31:0]             geom_loom_feed_nodes_o,
+  output logic [31:0]             geom_loom_feed_bursts_o,
+  output logic [31:0]             geom_loom_feed_align_refused_o,
+  output logic [31:0]             geom_loom_feed_hdr_refused_o,
+  output logic [31:0]             geom_loom_feed_refused_o,
+  output logic [31:0]             geom_loom_feed_faulted_o,
+  output logic [31:0]             geom_loom_feed_replayed_o,
+  output logic [31:0]             geom_loom_feed_post_stalls_o,
+  output logic [31:0]             geom_loom_feed_bridge_errs_o,
+  output logic [31:0]             geom_loom_feed_wait_cycles_o,
+  output logic [31:0]             geom_loom_feed_ret_overflow_o,
   output logic [31:0]             geom_loom_nodes_o,
   output logic [31:0]             geom_loom_streams_o,
   output logic [31:0]             geom_loom_refused_sorted_o,
@@ -4285,6 +4324,9 @@ module zhao_console_core
   // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
   output logic [31:0]             terr_hps_c3_bursts_o,
   output logic [31:0]             terr_hps_c3_wait_cycles_o,
+  // Client 4, GEOM.LOOM's node-stream carrier (`u_geom_loomfeed`, I50 closed).
+  output logic [31:0]             terr_hps_c4_bursts_o,
+  output logic [31:0]             terr_hps_c4_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -4292,7 +4334,7 @@ module zhao_console_core
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [3:0]              terr_hps_pend_dropped_mask_o,
+  output logic [4:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -10483,36 +10525,62 @@ module zhao_console_core
   // Like the writeback, the store gates its write beats on the bridge's level,
   // `terr_hps_wr_ready_i`, and only the burst's owner is streaming.
   // (`ptb_hps_*` are declared with `u_part_hps`, beside PART.STATE.)
-  zhao_hps_burst_req_t [3:0]       thps_req;
-  logic                [3:0]       thps_grant;
-  logic                [3:0]       thps_wr_valid, thps_wr_last;
-  logic                [3:0][63:0] thps_wr_data;
-  zhao_hps_burst_rsp_t [3:0]       thps_rsp;
-  logic                [3:0][31:0] thps_bursts;
-  logic                [3:1][31:0] thps_wait;
+  // FIVE CLIENTS SINCE 2026-09-20 (gz/carriers, entry I50, owner ruling R69).
+  // GEOM.LOOM's node-stream carrier takes index 4, BELOW the particle store,
+  // and the placement is a statement rather than a default -- the same one
+  // clients 2 and 3 make. The arbiter's law is that a continuously-asking
+  // lower index starves every higher one, so a burst of page loads makes the
+  // node stream wait, visibly, in `c4_wait_cycles`.
+  //
+  // IT CANNOT DEADLOCK, and the reason is the carrier's rate rather than a
+  // dependency argument: no terrain or particle client waits on a node
+  // transform, and the carrier holds ONE 64-byte burst in flight against a
+  // consumer that spends 48 clocks per node (GEOM.LOOM's own measured figure
+  // at MUL_LANES = 1). Waiting stalls the stream's composition, never drops a
+  // record, and `geom_loom_feed_wait_cycles_o` is the number that would say
+  // the choice had started to cost something. Indices 0-3 keep their meaning,
+  // so `c0..c3` read exactly what they read before.
+  //
+  // It is a READ-ONLY client: the carrier never writes DDR, so its write arm
+  // is zero exactly as clients 0 and 1 already are.
+  zhao_hps_burst_req_t [4:0]       thps_req;
+  logic                [4:0]       thps_grant;
+  logic                [4:0]       thps_wr_valid, thps_wr_last;
+  logic                [4:0][63:0] thps_wr_data;
+  zhao_hps_burst_rsp_t [4:0]       thps_rsp;
+  logic                [4:0][31:0] thps_bursts;
+  logic                [4:1][31:0] thps_wait;
 
-  assign thps_req      = {ptb_hps_req, twb_hps_req, tpl_hps_req, tcm_hps_req};
-  assign thps_wr_valid = {ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
-  assign thps_wr_last  = {ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
-  assign thps_wr_data  = {ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
+  zhao_hps_burst_req_t glf_hps_req;
+  logic                glf_hps_grant;
+  zhao_hps_burst_rsp_t glf_hps_rsp;
+
+  assign thps_req      = {glf_hps_req, ptb_hps_req, twb_hps_req, tpl_hps_req, tcm_hps_req};
+  assign thps_wr_valid = {1'b0, ptb_hps_wvalid, twb_hps_wvalid, 1'b0, 1'b0};
+  assign thps_wr_last  = {1'b0, ptb_hps_wlast, twb_hps_wlast, 1'b0, 1'b0};
+  assign thps_wr_data  = {64'd0, ptb_hps_wdata, twb_hps_wdata, 64'd0, 64'd0};
   assign tcm_hps_grant = thps_grant[0];
   assign tpl_hps_grant = thps_grant[1];
   assign twb_hps_grant = thps_grant[2];
   assign ptb_hps_grant = thps_grant[3];
+  assign glf_hps_grant = thps_grant[4];
   assign tcm_hps_rsp   = thps_rsp[0];
   assign tpl_hps_rsp   = thps_rsp[1];
   assign twb_hps_rsp   = thps_rsp[2];
   assign ptb_hps_rsp   = thps_rsp[3];
+  assign glf_hps_rsp   = thps_rsp[4];
   assign terr_hps_c0_bursts_o      = thps_bursts[0];
   assign terr_hps_c1_bursts_o      = thps_bursts[1];
   assign terr_hps_c2_bursts_o      = thps_bursts[2];
   assign terr_hps_c3_bursts_o      = thps_bursts[3];
+  assign terr_hps_c4_bursts_o      = thps_bursts[4];
   assign terr_hps_c1_wait_cycles_o = thps_wait[1];
   assign terr_hps_c2_wait_cycles_o = thps_wait[2];
   assign terr_hps_c3_wait_cycles_o = thps_wait[3];
+  assign terr_hps_c4_wait_cycles_o = thps_wait[4];
 
   zhao_hps_arbiter_n #(
-    .N(4)
+    .N(5)
   ) u_terr_hps_arb (
     .clk          (gpu_clk),
     .rst_n        (rst_n),
@@ -10533,8 +10601,11 @@ module zhao_console_core
     // R55: the pending slot holds ONE request per client, and a second,
     // different one offered while it is occupied is dropped. No client here
     // can do it -- each is a holder whose request fields do not move inside
-    // its request state (the arbiter's rule 6c names all four) -- so this
-    // reads zero, and now it reads zero rather than being argued to.
+    // its request state (the arbiter's rule 6c names the first four; the
+    // fifth, `u_geom_loomfeed`, is the same shape: `b_addr_q` is written only
+    // on the transition INTO B_REQ and never while B_REQ holds, and a refusal
+    // takes the request down to B_IDLE before any re-offer) -- so this reads
+    // zero, and it reads zero rather than being argued to.
     .pend_dropped_o     (terr_hps_pend_dropped_o),
     .pend_dropped_mask_o(terr_hps_pend_dropped_mask_o)
   );
@@ -12927,14 +12998,17 @@ module zhao_console_core
   // and a stream's `last` is not the palette's business in any case.
   wire [15:0]        lm_out_src_id;
   wire               lm_out_last;
-  wire               lm_refuse_valid;
-  wire [2:0]         lm_refuse_reason;
   wire [9:0]         lm_refuse_node;
   wire [15:0]        lm_refuse_src;
   wire [15:0]        lm_nodes_max, lm_depth_max;
   wire [31:0]        lm_kind_hist [10];
   wire [31:0]        lm_stall_cycles;
   /* verilator lint_on UNUSEDSIGNAL */
+  // NOT in that waiver since 2026-09-20: the refusal has a consumer now.
+  // `u_geom_loomfeed` reads it, so a stream the loom drops is ANSWERED to the
+  // HPS with the loom's own reason instead of being a pulse nobody caught.
+  wire               lm_refuse_valid;
+  wire [2:0]         lm_refuse_reason;
 
   // ---- GEOM.ASSETFETCH -> GEOM.VDECODE: the 32-byte vertex record ----------
   wire         af_v_valid, af_v_ready;
@@ -12987,25 +13061,122 @@ module zhao_console_core
   // The .zpak resource kind whose pages this path reads (spec/cartridge.md 3).
   localparam logic [7:0] GEOM_KIND_MESH_STREAM = 8'd12;
 
+  // ---- I50 CLOSED: the node stream's CARRIER ------------------------------
+  // Owner rulings R58 and R69. SW.STREAM stages the topologically sorted
+  // stream in HPS DDR; this block plays it into GEOM.LOOM's `in_*` port one
+  // 64-byte record per burst, on client 4 of `u_terr_hps_arb`.
+  //
+  // IT COMPOSES NOTHING AND RE-DECIDES NOTHING. Every number it hands over is
+  // a bit range of bytes the ARM wrote, and every verdict it reports is the
+  // loom's own or the bridge's own -- which is the "no second transform law"
+  // half of R58. `refuse_valid_o` goes back into it so a refused stream is
+  // ANSWERED to the HPS with the loom's reason rather than disappearing.
+  //
+  // MAX_NODES MATCHES THE LOOM'S, and the match is load-bearing: the carrier
+  // refuses a header whose node count exceeds it, so a stream that would be
+  // dropped as OVERFLOW after a thousand composed-and-discarded nodes costs
+  // one burst instead. A mismatch would make the guard useless in one
+  // direction and wrong in the other, so the two are written here together.
+  logic               glf_valid;
+  wire                glf_ready;
+  logic [9:0]         glf_node, glf_parent;
+  logic [3:0]         glf_kind;
+  logic signed [31:0] glf_param [12];
+  logic [15:0]        glf_angle, glf_src;
+  logic [1:0]         glf_axis;
+  logic               glf_bodypatch, glf_first, glf_last;
+  logic signed [31:0] glf_cam [9];
+
+  zhao_geom_loomfeed #(
+    .MAX_NODES(1024),
+    .IDXW     (10),
+    .POSTS    (2),
+    .RETQ     (4),
+    .CLIENT   (ZHAO_CLIENT_ENGINE1)
+  ) u_geom_loomfeed (
+    .clk  (gpu_clk),
+    .rst_n(rst_n),
+
+    // D0/D1/D2: the HPS's own mailbox. Not a tie-off -- see the port group.
+    .cfg_plan_base_i(geom_loom_db_plan_base_i),
+    .post_valid_i   (geom_loom_db_post_valid_i),
+    .post_ready_o   (geom_loom_db_post_ready_o),
+    .post_base_i    (geom_loom_db_post_base_i),
+    .post_ticket_i  (geom_loom_db_post_ticket_i),
+
+    .ret_valid_o      (geom_loom_db_ret_valid_o),
+    .ret_ready_i      (geom_loom_db_ret_ready_i),
+    .ret_ticket_o     (geom_loom_db_ret_ticket_o),
+    .ret_ok_o         (geom_loom_db_ret_ok_o),
+    .ret_refused_o    (geom_loom_db_ret_refused_o),
+    .ret_reason_o     (geom_loom_db_ret_reason_o),
+    .ret_loom_reason_o(geom_loom_db_ret_loom_reason_o),
+    .ret_nodes_o      (geom_loom_db_ret_nodes_o),
+    .ret_plan_o       (geom_loom_db_ret_plan_o),
+
+    // REAL: client 4 of the HPS-DDR arbiter, read only.
+    .hps_req_o  (glf_hps_req),
+    .hps_grant_i(glf_hps_grant),
+    .hps_rsp_i  (glf_hps_rsp),
+
+    // REAL: GEOM.LOOM's node stream, name for name and width for width.
+    .lm_valid_o       (glf_valid),
+    .lm_ready_i       (glf_ready),
+    .lm_node_index_o  (glf_node),
+    .lm_parent_index_o(glf_parent),
+    .lm_kind_o        (glf_kind),
+    .lm_param_o       (glf_param),
+    .lm_angle_o       (glf_angle),
+    .lm_axis_o        (glf_axis),
+    .lm_bodypatch_o   (glf_bodypatch),
+    .lm_src_id_o      (glf_src),
+    .lm_first_o       (glf_first),
+    .lm_last_o        (glf_last),
+    .lm_cam_basis_o   (glf_cam),
+
+    // REAL: the loom's refusal, OBSERVED. The carrier plays the stream on to
+    // its `last` regardless -- the loom's S_DRAIN needs that `last`, and a
+    // carrier that stopped would leave it draining and swallow the NEXT
+    // stream in silence. The block's law 4 is that paragraph in full.
+    .lm_refuse_valid_i (lm_refuse_valid),
+    .lm_refuse_reason_i(lm_refuse_reason),
+
+    .posts_o              (geom_loom_feed_posts_o),
+    .streams_o            (geom_loom_feed_streams_o),
+    .nodes_o              (geom_loom_feed_nodes_o),
+    .bursts_o             (geom_loom_feed_bursts_o),
+    .posts_refused_align_o(geom_loom_feed_align_refused_o),
+    .headers_refused_o    (geom_loom_feed_hdr_refused_o),
+    .streams_refused_o    (geom_loom_feed_refused_o),
+    .streams_faulted_o    (geom_loom_feed_faulted_o),
+    .streams_replayed_o   (geom_loom_feed_replayed_o),
+    .post_stalls_o        (geom_loom_feed_post_stalls_o),
+    .bridge_errs_o        (geom_loom_feed_bridge_errs_o),
+    .feed_wait_cycles_o   (geom_loom_feed_wait_cycles_o),
+    .ret_overflow_o       (geom_loom_feed_ret_overflow_o)
+  );
+
   zhao_geom_loom u_geom_loom (
     .clk   (gpu_clk),
     .rst_n (rst_n),
 
-    // I50, BOUNDARY: the ARM's topologically sorted node stream and the frame's
-    // camera basis. The 2026-08-31 6.4 ruling puts both outside the console.
-    .in_valid_i       (geom_loom_valid_i),
-    .in_ready_o       (geom_loom_ready_o),
-    .in_node_index_i  (geom_loom_node_index_i),
-    .in_parent_index_i(geom_loom_parent_index_i),
-    .in_kind_i        (geom_loom_kind_i),
-    .in_param_i       (geom_loom_param_i),
-    .in_angle_i       (geom_loom_angle_i),
-    .in_axis_i        (geom_loom_axis_i),
-    .in_bodypatch_i   (geom_loom_bodypatch_i),
-    .in_src_id_i      (geom_loom_src_id_i),
-    .in_first_i       (geom_loom_first_i),
-    .in_last_i        (geom_loom_last_i),
-    .cam_basis_i      (geom_loom_cam_basis_i),
+    // I50 CLOSED: the ARM's topologically sorted node stream and the frame's
+    // camera basis, carried by `u_geom_loomfeed` above. The 2026-08-31 6.4
+    // ruling puts the PRODUCER outside the console; the carrier is what
+    // brings its bytes in.
+    .in_valid_i       (glf_valid),
+    .in_ready_o       (glf_ready),
+    .in_node_index_i  (glf_node),
+    .in_parent_index_i(glf_parent),
+    .in_kind_i        (glf_kind),
+    .in_param_i       (glf_param),
+    .in_angle_i       (glf_angle),
+    .in_axis_i        (glf_axis),
+    .in_bodypatch_i   (glf_bodypatch),
+    .in_src_id_i      (glf_src),
+    .in_first_i       (glf_first),
+    .in_last_i        (glf_last),
+    .cam_basis_i      (glf_cam),
 
     // REAL: the composed world transforms, into the palette. The palette is a
     // WRITE PORT that never stalls (one clock, one row), so `out_ready_i` is

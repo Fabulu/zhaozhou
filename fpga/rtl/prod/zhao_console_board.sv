@@ -758,26 +758,58 @@ module zhao_console_board
   output logic [31:0]             geom_dj_hdr_crc_fail_o,
   output logic [31:0]             geom_dj_hdr_framing_o,
 
-  // ---- I50: GEOM.LOOM's NODE STREAM and CAMERA BASIS -- BOUNDARY ----------
-  // NEW 2026-09-20, and it is a gap this packet OPENED DELIBERATELY by
-  // composing GEOM.LOOM for R29's transform palette. The owner ruling of
-  // 2026-08-31 6.4 puts the stream's producer OUTSIDE this console on purpose:
-  // "The ARM/compiler supplies a parent-before-child topologically sorted
-  // stream." There is no command that carries one and no block that builds
-  // one, so the stream arrives here, at the edge, whole -- see the header.
-  input  logic                    geom_loom_valid_i,
-  output logic                    geom_loom_ready_o,
-  input  logic [9:0]              geom_loom_node_index_i,
-  input  logic [9:0]              geom_loom_parent_index_i,
-  input  logic [3:0]              geom_loom_kind_i,
-  input  logic signed [31:0]      geom_loom_param_i [0:11],
-  input  logic [15:0]             geom_loom_angle_i,
-  input  logic [1:0]              geom_loom_axis_i,
-  input  logic                    geom_loom_bodypatch_i,
-  input  logic [15:0]             geom_loom_src_id_i,
-  input  logic                    geom_loom_first_i,
-  input  logic                    geom_loom_last_i,
-  input  logic signed [31:0]      geom_loom_cam_basis_i [0:8],
+  // ---- I50 IS CLOSED: GEOM.LOOM's NODE STREAM arrives by DOORBELL ---------
+  // NOT A TIE-OFF, in the same standing and the same words as `terr_jdb_*`
+  // (I28) and `fld_db_*` (I42): the HPS is genuinely on the other side of this
+  // edge, and in Verilator the harness IS the HPS.
+  //
+  // The owner ruling of 2026-08-31 6.4 puts the stream's producer OUTSIDE this
+  // console on purpose -- "The ARM/compiler supplies a parent-before-child
+  // topologically sorted stream" -- so what was missing was never a block. It
+  // was a CARRIER, and owner ruling R69 says so in terms: "not blocked, only
+  // unbuilt". `u_geom_loomfeed` is that carrier: SW.STREAM stages the sorted
+  // stream in HPS DDR at the frozen 64-byte record of
+  // `design/contracts/GEOM.LOOM.STREAM.md`, this mailbox names it, and the
+  // hardware answers by returning the ticket.
+  //
+  // WHAT LEFT THIS EDGE. Twelve wide stream fields and a nine-element camera
+  // basis -- 672 bits of input a host would have had to present 9,000 times a
+  // frame -- are replaced by a POINTER and a TICKET. The bulk rides the
+  // HPS-DDR bridge as client 4 of `u_terr_hps_arb`.
+  input  logic [31:0]             geom_loom_db_plan_base_i,
+  input  logic                    geom_loom_db_post_valid_i,
+  output logic                    geom_loom_db_post_ready_o,
+  input  logic [31:0]             geom_loom_db_post_base_i,
+  input  logic [31:0]             geom_loom_db_post_ticket_i,
+  output logic                    geom_loom_db_ret_valid_o,
+  input  logic                    geom_loom_db_ret_ready_i,
+  output logic [31:0]             geom_loom_db_ret_ticket_o,
+  output logic                    geom_loom_db_ret_ok_o,
+  output logic                    geom_loom_db_ret_refused_o,
+  output logic [2:0]              geom_loom_db_ret_reason_o,
+  output logic [2:0]              geom_loom_db_ret_loom_reason_o,
+  output logic [15:0]             geom_loom_db_ret_nodes_o,
+  output logic [31:0]             geom_loom_db_ret_plan_o,
+  // The carrier's own evidence, separate from the loom's below: a stream the
+  // loom never saw and a stream the loom refused are different faults and are
+  // counted apart.
+  output logic [31:0]             geom_loom_feed_posts_o,
+  output logic [31:0]             geom_loom_feed_streams_o,
+  // Node BEATS handed to the loom, which is NOT `geom_loom_nodes_o` (nodes
+  // TRANSFORMED). They differ by exactly the beats the loom swallowed into a
+  // drain after refusing a stream, so the gap between them is a real reading
+  // and collapsing them into one counter would delete it.
+  output logic [31:0]             geom_loom_feed_nodes_o,
+  output logic [31:0]             geom_loom_feed_bursts_o,
+  output logic [31:0]             geom_loom_feed_align_refused_o,
+  output logic [31:0]             geom_loom_feed_hdr_refused_o,
+  output logic [31:0]             geom_loom_feed_refused_o,
+  output logic [31:0]             geom_loom_feed_faulted_o,
+  output logic [31:0]             geom_loom_feed_replayed_o,
+  output logic [31:0]             geom_loom_feed_post_stalls_o,
+  output logic [31:0]             geom_loom_feed_bridge_errs_o,
+  output logic [31:0]             geom_loom_feed_wait_cycles_o,
+  output logic [31:0]             geom_loom_feed_ret_overflow_o,
   output logic [31:0]             geom_loom_nodes_o,
   output logic [31:0]             geom_loom_streams_o,
   output logic [31:0]             geom_loom_refused_sorted_o,
@@ -1406,6 +1438,9 @@ module zhao_console_board
   // Client 3, PART.STATE's generation store (`u_part_hps`, entry I1 closed).
   output logic [31:0]             terr_hps_c3_bursts_o,
   output logic [31:0]             terr_hps_c3_wait_cycles_o,
+  // Client 4, GEOM.LOOM's node-stream carrier (`u_geom_loomfeed`, I50 closed).
+  output logic [31:0]             terr_hps_c4_bursts_o,
+  output logic [31:0]             terr_hps_c4_wait_cycles_o,
   // Rule 6c / R55: a second, DIFFERENT request offered by a client whose
   // pending slot is already occupied is DROPPED, and used to be dropped in
   // silence. These two are that reading -- a count of distinct dropped
@@ -1413,7 +1448,7 @@ module zhao_console_board
   // the arbiter's header argues structurally why; the argument is no longer
   // the only thing standing where the instrument should be.
   output logic [31:0]             terr_hps_pend_dropped_o,
-  output logic [3:0]              terr_hps_pend_dropped_mask_o,
+  output logic [4:0]              terr_hps_pend_dropped_mask_o,
 
   // ---- MEM.UPLOAD, composed on the shell's TERRAIN.BUILD socket ----------
   // Its REQUEST is internal: CMD.EXEC lowers the ratified `PublishResource`
@@ -2956,19 +2991,33 @@ module zhao_console_board
       .geom_dj_hdr_reads_o                (geom_dj_hdr_reads_o),
       .geom_dj_hdr_crc_fail_o             (geom_dj_hdr_crc_fail_o),
       .geom_dj_hdr_framing_o              (geom_dj_hdr_framing_o),
-      .geom_loom_valid_i                  (geom_loom_valid_i),
-      .geom_loom_ready_o                  (geom_loom_ready_o),
-      .geom_loom_node_index_i             (geom_loom_node_index_i),
-      .geom_loom_parent_index_i           (geom_loom_parent_index_i),
-      .geom_loom_kind_i                   (geom_loom_kind_i),
-      .geom_loom_param_i                  (geom_loom_param_i),
-      .geom_loom_angle_i                  (geom_loom_angle_i),
-      .geom_loom_axis_i                   (geom_loom_axis_i),
-      .geom_loom_bodypatch_i              (geom_loom_bodypatch_i),
-      .geom_loom_src_id_i                 (geom_loom_src_id_i),
-      .geom_loom_first_i                  (geom_loom_first_i),
-      .geom_loom_last_i                   (geom_loom_last_i),
-      .geom_loom_cam_basis_i              (geom_loom_cam_basis_i),
+      .geom_loom_db_plan_base_i           (geom_loom_db_plan_base_i),
+      .geom_loom_db_post_valid_i          (geom_loom_db_post_valid_i),
+      .geom_loom_db_post_ready_o          (geom_loom_db_post_ready_o),
+      .geom_loom_db_post_base_i           (geom_loom_db_post_base_i),
+      .geom_loom_db_post_ticket_i         (geom_loom_db_post_ticket_i),
+      .geom_loom_db_ret_valid_o           (geom_loom_db_ret_valid_o),
+      .geom_loom_db_ret_ready_i           (geom_loom_db_ret_ready_i),
+      .geom_loom_db_ret_ticket_o          (geom_loom_db_ret_ticket_o),
+      .geom_loom_db_ret_ok_o              (geom_loom_db_ret_ok_o),
+      .geom_loom_db_ret_refused_o         (geom_loom_db_ret_refused_o),
+      .geom_loom_db_ret_reason_o          (geom_loom_db_ret_reason_o),
+      .geom_loom_db_ret_loom_reason_o     (geom_loom_db_ret_loom_reason_o),
+      .geom_loom_db_ret_nodes_o           (geom_loom_db_ret_nodes_o),
+      .geom_loom_db_ret_plan_o            (geom_loom_db_ret_plan_o),
+      .geom_loom_feed_posts_o             (geom_loom_feed_posts_o),
+      .geom_loom_feed_streams_o           (geom_loom_feed_streams_o),
+      .geom_loom_feed_nodes_o             (geom_loom_feed_nodes_o),
+      .geom_loom_feed_bursts_o            (geom_loom_feed_bursts_o),
+      .geom_loom_feed_align_refused_o     (geom_loom_feed_align_refused_o),
+      .geom_loom_feed_hdr_refused_o       (geom_loom_feed_hdr_refused_o),
+      .geom_loom_feed_refused_o           (geom_loom_feed_refused_o),
+      .geom_loom_feed_faulted_o           (geom_loom_feed_faulted_o),
+      .geom_loom_feed_replayed_o          (geom_loom_feed_replayed_o),
+      .geom_loom_feed_post_stalls_o       (geom_loom_feed_post_stalls_o),
+      .geom_loom_feed_bridge_errs_o       (geom_loom_feed_bridge_errs_o),
+      .geom_loom_feed_wait_cycles_o       (geom_loom_feed_wait_cycles_o),
+      .geom_loom_feed_ret_overflow_o      (geom_loom_feed_ret_overflow_o),
       .geom_loom_nodes_o                  (geom_loom_nodes_o),
       .geom_loom_streams_o                (geom_loom_streams_o),
       .geom_loom_refused_sorted_o         (geom_loom_refused_sorted_o),
@@ -3328,6 +3377,8 @@ module zhao_console_board
       .terr_hps_c2_wait_cycles_o          (terr_hps_c2_wait_cycles_o),
       .terr_hps_c3_bursts_o               (terr_hps_c3_bursts_o),
       .terr_hps_c3_wait_cycles_o          (terr_hps_c3_wait_cycles_o),
+      .terr_hps_c4_bursts_o               (terr_hps_c4_bursts_o),
+      .terr_hps_c4_wait_cycles_o          (terr_hps_c4_wait_cycles_o),
       .terr_hps_pend_dropped_o            (terr_hps_pend_dropped_o),
       .terr_hps_pend_dropped_mask_o       (terr_hps_pend_dropped_mask_o),
       .cmd_exec_uploads_o                 (cmd_exec_uploads_o),

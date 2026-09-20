@@ -194,8 +194,9 @@ module tb_zhao_console_core_smoke
   logic [31:0]             part_hps_ticks_faulted_o;
   logic [31:0]             part_hps_records_discarded_o;
   logic [31:0]             terr_hps_pend_dropped_o;
-  logic [3:0]              terr_hps_pend_dropped_mask_o;
+  logic [4:0]              terr_hps_pend_dropped_mask_o;
   logic [31:0]             terr_hps_c3_bursts_o;
+  logic [31:0]             terr_hps_c4_bursts_o, terr_hps_c4_wait_cycles_o;
   logic [31:0]             terr_hps_c3_wait_cycles_o;
   // PART.TABLE's per-frame load (core entry I33). THE TWENTY-FIVE DESCRIPTOR
   // PORTS THAT USED TO BE DECLARED HERE ARE GONE: the core instantiates
@@ -304,24 +305,48 @@ module tb_zhao_console_core_smoke
   logic [31:0] geom_dj_hdr_reads_o, geom_dj_hdr_crc_fail_o, geom_dj_hdr_framing_o;
   logic [31:0] geom_ma_jobs_d_o;
 
-  // I50, BOUNDARY: GEOM.LOOM's node stream and camera basis, which the
-  // 2026-08-31 6.4 ruling puts on the ARM. This bench plays that ARM: ONE ROOT
-  // node carrying the identity, which is the instance transform the draw then
-  // names -- so the descriptor's object bound is its world bound and the cull
-  // sees the sphere the fixture placed.
-  logic                    geom_loom_valid_i;
-  logic                    geom_loom_ready_o;
-  logic [9:0]              geom_loom_node_index_i;
-  logic [9:0]              geom_loom_parent_index_i;
-  logic [3:0]              geom_loom_kind_i;
-  logic signed [31:0]      geom_loom_param_i [0:11];
-  logic [15:0]             geom_loom_angle_i;
-  logic [1:0]              geom_loom_axis_i;
-  logic                    geom_loom_bodypatch_i;
-  logic [15:0]             geom_loom_src_id_i;
-  logic                    geom_loom_first_i;
-  logic                    geom_loom_last_i;
-  logic signed [31:0]      geom_loom_cam_basis_i [0:8];
+  // I50 CLOSED, 2026-09-20 (owner rulings R58 and R69): GEOM.LOOM's node
+  // stream no longer arrives at the console edge as twelve wide fields. The
+  // 2026-08-31 6.4 ruling puts the PRODUCER on the ARM, and `u_geom_loomfeed`
+  // is the carrier that brings its bytes in from HPS DDR. So this bench still
+  // plays that ARM -- ONE ROOT node carrying the identity, the same stimulus
+  // it always sent -- but it plays it THE WAY THE HARDWARE WILL SEE IT: the
+  // record is staged in the played DDR at the frozen 64-byte layout, and what
+  // crosses the console edge is a POINTER and a TICKET.
+  //
+  // That is a strictly stronger fixture than the old one. The old bench drove
+  // the loom's port directly, so the record layout, the burst alignment and
+  // the carrier's framing were all untested in composition; now every node the
+  // loom composes has been through a 64-byte burst on arbiter client 4.
+  logic [31:0]             geom_loom_db_plan_base_i;
+  logic                    geom_loom_db_post_valid_i;
+  logic                    geom_loom_db_post_ready_o;
+  logic [31:0]             geom_loom_db_post_base_i;
+  logic [31:0]             geom_loom_db_post_ticket_i;
+  logic                    geom_loom_db_ret_valid_o;
+  logic                    geom_loom_db_ret_ready_i;
+  logic [31:0]             geom_loom_db_ret_ticket_o;
+  logic                    geom_loom_db_ret_ok_o;
+  logic                    geom_loom_db_ret_refused_o;
+  logic [2:0]              geom_loom_db_ret_reason_o;
+  logic [2:0]              geom_loom_db_ret_loom_reason_o;
+  logic [15:0]             geom_loom_db_ret_nodes_o;
+  logic [31:0]             geom_loom_db_ret_plan_o;
+  logic [31:0]             geom_loom_feed_posts_o, geom_loom_feed_streams_o;
+  logic [31:0]             geom_loom_feed_nodes_o, geom_loom_feed_bursts_o;
+  logic [31:0]             geom_loom_feed_align_refused_o, geom_loom_feed_hdr_refused_o;
+  logic [31:0]             geom_loom_feed_refused_o, geom_loom_feed_faulted_o;
+  logic [31:0]             geom_loom_feed_replayed_o, geom_loom_feed_post_stalls_o;
+  logic [31:0]             geom_loom_feed_bridge_errs_o, geom_loom_feed_wait_cycles_o;
+  logic [31:0]             geom_loom_feed_ret_overflow_o;
+  // What the carrier's return said, latched so the checks can read it after
+  // the frame rather than racing the one-cycle handshake.
+  logic                    loom_ret_seen_q;
+  logic [31:0]             loom_ret_ticket_q;
+  logic                    loom_ret_ok_q, loom_ret_refused_q;
+  logic [2:0]              loom_ret_reason_q, loom_ret_loom_reason_q;
+  logic [15:0]             loom_ret_nodes_q;
+  logic [31:0]             loom_ret_plan_q;
   logic [31:0]             geom_loom_nodes_o, geom_loom_streams_o;
   logic [31:0]             geom_loom_refused_sorted_o, geom_loom_refused_parent_o;
   logic [31:0]             geom_loom_refused_overflow_o, geom_loom_refused_kind_o;
@@ -1940,9 +1965,24 @@ module tb_zhao_console_core_smoke
   logic                  part_ddr_wr_half_q;
   int unsigned           part_ddr_rd_beats_q;
 
+  // ---- THE LOOM NODE STREAM, in the played DDR (entry I50 closed) --------
+  // SW.STREAM's staged stream, at `design/contracts/GEOM.LOOM.STREAM.md`'s
+  // frozen 64-byte record. The bench is the ARM, so it owns this region and
+  // writes it before the machine starts; after that every node GEOM.LOOM
+  // composes has come OUT of this array through the bridge socket.
+  // 0x3200_0000, above the particle buffers, so `hps_region` separates them.
+  localparam logic [31:0] LOOM_HPS_BASE  = 32'h3200_0000;
+  localparam int unsigned LOOM_HPS_WORDS = 16;   // two 64-byte records
+  logic [63:0] loom_mem [0:LOOM_HPS_WORDS-1];
+
+  function automatic bit in_loom_region(input logic [31:0] a);
+    return (a >= LOOM_HPS_BASE) && (a < LOOM_HPS_BASE + 32'(LOOM_HPS_WORDS * 8));
+  endfunction
+
   function automatic logic [63:0] hps_read(input logic [31:0] byte_addr);
     int unsigned w;
     if (in_part_region(byte_addr)) return part_mem[(byte_addr - PART_HPS_BASE0) >> 3];
+    if (in_loom_region(byte_addr)) return loom_mem[(byte_addr - LOOM_HPS_BASE) >> 3];
     if (byte_addr < HPS_BASE) return 64'd0;
     w = (byte_addr - HPS_BASE) >> 3;
     if (w >= HPS_WORDS) return 64'd0;
@@ -2092,8 +2132,9 @@ module tb_zhao_console_core_smoke
     if ((a >= RING_SLOT0_C) && (a < RING_SLOT0_C + 32'(PKT_MAX_C))) return 1;
     if ((a >= UPL_ARENA_C) && (a < UPL_ARENA_C + 32'(UPL_ALL_WORDS * 8))) return 2;   // both PublishResource arenas (geom3's MESH_STREAM page)
     if (in_part_region(a)) return 3;
+    if (in_loom_region(a)) return 5;
     if ((a >= HPS_BASE) && (a < HPS_BASE + 32'(HPS_WORDS * 8))) return 4;
-    return 0;
+    return 0;   // 5 is the loom stream; it reads through `hps_read` like 4
   endfunction
 
   int unsigned sh_region_q;
@@ -3272,14 +3313,35 @@ module tb_zhao_console_core_smoke
   // and a draw whose transform row was never written is REFUSED and counted.
   always @(posedge gpu_clk) begin
     if (!rst_n) begin
-      geom_loom_valid_i <= 1'b0;
-      geom_loom_sent_q  <= 1'b0;
+      geom_loom_db_post_valid_i <= 1'b0;
+      geom_loom_sent_q          <= 1'b0;
+      loom_ret_seen_q           <= 1'b0;
+      loom_ret_ticket_q         <= 32'd0;
+      loom_ret_ok_q             <= 1'b0;
+      loom_ret_refused_q        <= 1'b0;
+      loom_ret_reason_q         <= 3'd0;
+      loom_ret_loom_reason_q    <= 3'd0;
+      loom_ret_nodes_q          <= 16'd0;
+      loom_ret_plan_q           <= 32'd0;
     end else begin
-      if (geom_loom_valid_i && geom_loom_ready_o) begin
-        geom_loom_valid_i <= 1'b0;
-        geom_loom_sent_q  <= 1'b1;
+      if (geom_loom_db_post_valid_i && geom_loom_db_post_ready_o) begin
+        geom_loom_db_post_valid_i <= 1'b0;
+        geom_loom_sent_q          <= 1'b1;
       end else if (reset_released_q && !geom_loom_sent_q) begin
-        geom_loom_valid_i <= 1'b1;
+        geom_loom_db_post_valid_i <= 1'b1;
+      end
+      // The ARM's side of D2. LATCHED, because the return is a one-cycle
+      // handshake and the checks run long after the frame -- a check that
+      // sampled the live port would read zero and call it a failure.
+      if (geom_loom_db_ret_valid_o && geom_loom_db_ret_ready_i) begin
+        loom_ret_seen_q        <= 1'b1;
+        loom_ret_ticket_q      <= geom_loom_db_ret_ticket_o;
+        loom_ret_ok_q          <= geom_loom_db_ret_ok_o;
+        loom_ret_refused_q     <= geom_loom_db_ret_refused_o;
+        loom_ret_reason_q      <= geom_loom_db_ret_reason_o;
+        loom_ret_loom_reason_q <= geom_loom_db_ret_loom_reason_o;
+        loom_ret_nodes_q       <= geom_loom_db_ret_nodes_o;
+        loom_ret_plan_q        <= geom_loom_db_ret_plan_o;
       end
     end
   end
@@ -3603,26 +3665,51 @@ module tb_zhao_console_core_smoke
     // bench that also drove it would be two drivers on the data bus with the
     // harness winning -- which reads as a memory that answers zero.
 
-    // ---- entry I50: the ARM's Loom stream, ONE ROOT node -------------------
-    // ROOT takes its twelve elements straight from `param` (the block's own
-    // kind table), so this IS the instance transform the draw names: the
-    // identity, which keeps the descriptor's object bound its world bound and
-    // leaves GEOM.CULL seeing the sphere the fixture placed.
-    geom_loom_node_index_i   = 10'(SMK_XFORM_NODE_C);
-    geom_loom_parent_index_i = 10'd0;
-    geom_loom_kind_i         = 4'd0;        // ROOT
-    for (int unsigned i = 0; i < 12; i = i + 1)
-      geom_loom_param_i[i] = ((i == 0) || (i == 5) || (i == 10)) ? FX16_ONE : 32'sd0;
-    geom_loom_angle_i     = 16'd0;
-    geom_loom_axis_i      = 2'd0;
-    geom_loom_bodypatch_i = 1'b0;
-    geom_loom_src_id_i    = 16'h00A1;
-    geom_loom_first_i     = 1'b1;
-    geom_loom_last_i      = 1'b1;           // a one-node stream, framed
-    // The camera basis is the identity: no BILLBOARD node is sent, and zeros
-    // would be a matrix this bench invented for a kind it never uses.
-    for (int unsigned i = 0; i < 9; i = i + 1)
-      geom_loom_cam_basis_i[i] = ((i == 0) || (i == 4) || (i == 8)) ? FX16_ONE : 32'sd0;
+    // ---- entry I50 CLOSED: the ARM's Loom stream, STAGED IN DDR -----------
+    // ONE ROOT node, the same stimulus this bench always sent. ROOT takes its
+    // twelve elements straight from `param` (the block's own kind table), so
+    // this IS the instance transform the draw names: the identity, which keeps
+    // the descriptor's object bound its world bound and leaves GEOM.CULL
+    // seeing the sphere the fixture placed.
+    //
+    // WRITTEN OUT BY HAND against `design/contracts/GEOM.LOOM.STREAM.md`, not
+    // derived from the RTL -- so a change to either side is a disagreement
+    // rather than a silent agreement, which is the whole point of freezing a
+    // layout.
+    for (int unsigned w = 0; w < LOOM_HPS_WORDS; w = w + 1) loom_mem[w] = 64'd0;
+
+    // record 0, the STREAM HEADER: magic, the node count, the camera basis.
+    loom_mem[0] = {16'd0, 16'd1, 32'h4D4F_4F4C};           // count 1, "LOOM"
+    // The basis is the identity: no BILLBOARD node is sent, and zeros would be
+    // a matrix this bench invented for a kind it never uses. Two elements per
+    // beat, element 2i in the low half.
+    loom_mem[1] = {32'd0, FX16_ONE};                       // cam 0, 1
+    loom_mem[2] = 64'd0;                                   // cam 2, 3
+    loom_mem[3] = {FX16_ONE, 32'd0};                       // cam 4, 5
+    loom_mem[4] = 64'd0;                                   // cam 6, 7
+    loom_mem[5] = {32'd0, FX16_ONE};                       // cam 8
+
+    // record 1, the NODE. `first` and `last` are NOT in the record: the
+    // carrier derives them from the index against the header's count, so a
+    // staged stream cannot carry framing that disagrees with its own length.
+    loom_mem[8] = {16'h00A1,                               // src_id   [63:48]
+                   16'd0,                                  // angle16  [47:32]
+                   5'd0, 1'b0, 2'd0,                       // pad, bodypatch, axis
+                   4'd0,                                   // kind ROOT
+                   10'd0,                                  // parent
+                   10'(SMK_XFORM_NODE_C)};                 // node index
+    loom_mem[9]  = {32'd0, FX16_ONE};                      // param 0, 1
+    loom_mem[10] = 64'd0;                                  // param 2, 3
+    loom_mem[11] = {FX16_ONE, 32'd0};                      // param 4, 5
+    loom_mem[12] = 64'd0;                                  // param 6, 7
+    loom_mem[13] = 64'd0;                                  // param 8, 9
+    loom_mem[14] = {32'd0, FX16_ONE};                      // param 10, 11
+
+    geom_loom_db_plan_base_i   = 32'h5100_0000;   // the plan's epoch identity
+    geom_loom_db_post_base_i   = LOOM_HPS_BASE;
+    geom_loom_db_post_ticket_i = 32'h0000_5010;
+    geom_loom_db_post_valid_i  = 1'b0;
+    geom_loom_db_ret_ready_i   = 1'b1;
 
     // ---- reset ------------------------------------------------------------
     rst_n            = 1'b0;
@@ -4916,7 +5003,7 @@ module tb_zhao_console_core_smoke
         (part_hps_records_discarded_o != 0))
       $fatal(1, "SMOKE: the bridge refused the particle store (errs=%0d faulted=%0d discarded=%0d) -- the composition's own argument says it cannot",
              part_hps_bridge_errs_o, part_hps_ticks_faulted_o, part_hps_records_discarded_o);
-    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 4'd0))
+    if ((terr_hps_pend_dropped_o != 0) || (terr_hps_pend_dropped_mask_o != 5'd0))
       $fatal(1, "SMOKE: the HPS arbiter dropped a pending request (count=%0d mask=%b) -- every client on it is a holder",
              terr_hps_pend_dropped_o, terr_hps_pend_dropped_mask_o);
     // ---- THE ASSET PATH FIRST, because everything geometric below it is
@@ -6151,6 +6238,54 @@ module tb_zhao_console_core_smoke
     if (geom_loom_streams_o != 32'd1 || geom_loom_nodes_o != 32'd1)
       $fatal(1, "SMOKE: GEOM.LOOM composed %0d node(s) in %0d stream(s), expected 1 and 1 -- the ARM stream this bench plays is one ROOT node",
              geom_loom_nodes_o, geom_loom_streams_o);
+    // ---- THE CARRIER, entry I50 (owner rulings R58 and R69) ---------------
+    // The node above did not arrive at a port. It came out of the played DDR
+    // as a 64-byte burst on arbiter client 4, through `u_geom_loomfeed`, and
+    // these are the numbers that say so. A carrier that composed nothing while
+    // GEOM.LOOM's own counters read 1/1 is impossible -- there is no other
+    // producer -- but the reverse is not: a stream could reach the loom while
+    // the mailbox was never answered, which is exactly the silence R20 forbids.
+    $display("SMOKE: loomfeed  posts=%0d streams=%0d nodes=%0d bursts=%0d c4_bursts=%0d c4_wait=%0d refused[align/hdr/loom]=[%0d %0d %0d] faulted=%0d replayed=%0d stalls=%0d errs=%0d wait=%0d overflow=%0d ret[seen/ok/refused/reason/lreason/nodes/ticket/plan]=[%0b %0b %0b %0d %0d %0d %08x %08x]",
+             geom_loom_feed_posts_o, geom_loom_feed_streams_o, geom_loom_feed_nodes_o,
+             geom_loom_feed_bursts_o, terr_hps_c4_bursts_o, terr_hps_c4_wait_cycles_o,
+             geom_loom_feed_align_refused_o, geom_loom_feed_hdr_refused_o,
+             geom_loom_feed_refused_o, geom_loom_feed_faulted_o,
+             geom_loom_feed_replayed_o, geom_loom_feed_post_stalls_o,
+             geom_loom_feed_bridge_errs_o, geom_loom_feed_wait_cycles_o,
+             geom_loom_feed_ret_overflow_o,
+             loom_ret_seen_q, loom_ret_ok_q, loom_ret_refused_q, loom_ret_reason_q,
+             loom_ret_loom_reason_q, loom_ret_nodes_q, loom_ret_ticket_q,
+             loom_ret_plan_q);
+    if (geom_loom_feed_posts_o != 32'd1 || geom_loom_feed_streams_o != 32'd1 ||
+        geom_loom_feed_nodes_o != 32'd1)
+      $fatal(1, "SMOKE: the loom carrier consumed %0d post(s), delivered %0d stream(s) and handed over %0d node beat(s), expected 1/1/1",
+             geom_loom_feed_posts_o, geom_loom_feed_streams_o, geom_loom_feed_nodes_o);
+    // TWO bursts: the header plus the one node. THE NUMBER IS THE LAYOUT --
+    // one record is one 64-byte burst, and a record that straddled a boundary
+    // would show up here as four.
+    if (geom_loom_feed_bursts_o != 32'd2)
+      $fatal(1, "SMOKE: the loom carrier issued %0d 64-byte burst(s) for a header and one node, expected 2 -- the record is not one burst",
+             geom_loom_feed_bursts_o);
+    // The arbiter's own count of client 4 must agree with the carrier's. Two
+    // counters on opposite sides of one handshake: if they disagree, a burst
+    // was served to somebody else or counted twice.
+    if (terr_hps_c4_bursts_o != geom_loom_feed_bursts_o)
+      $fatal(1, "SMOKE: arbiter client 4 served %0d burst(s) while the carrier counted %0d -- the fifth client is not the carrier's",
+             terr_hps_c4_bursts_o, geom_loom_feed_bursts_o);
+    if ((geom_loom_feed_align_refused_o | geom_loom_feed_hdr_refused_o |
+         geom_loom_feed_refused_o | geom_loom_feed_faulted_o |
+         geom_loom_feed_replayed_o | geom_loom_feed_bridge_errs_o |
+         geom_loom_feed_ret_overflow_o) != 32'd0)
+      $fatal(1, "SMOKE: the loom carrier refused, faulted, replayed or overran on a stream this bench staged correctly -- see the line above");
+    // THE MAILBOX WAS ANSWERED. Every post owes exactly one return; a stream
+    // that composed without one would leave the ARM unable to recycle the
+    // staging buffer, which is the failure the doorbell contract exists for.
+    if (!loom_ret_seen_q || !loom_ret_ok_q || loom_ret_refused_q ||
+        loom_ret_reason_q != 3'd0 || loom_ret_nodes_q != 16'd1 ||
+        loom_ret_ticket_q != 32'h0000_5010 || loom_ret_plan_q != 32'h5100_0000)
+      $fatal(1, "SMOKE: the loom carrier's return is not the post's answer -- seen=%0b ok=%0b refused=%0b reason=%0d nodes=%0d ticket=%08x plan=%08x",
+             loom_ret_seen_q, loom_ret_ok_q, loom_ret_refused_q, loom_ret_reason_q,
+             loom_ret_nodes_q, loom_ret_ticket_q, loom_ret_plan_q);
     if ((geom_loom_refused_sorted_o | geom_loom_refused_parent_o |
          geom_loom_refused_overflow_o | geom_loom_refused_kind_o |
          geom_loom_refused_shear_o | geom_loom_refused_framing_o) != 32'd0)
