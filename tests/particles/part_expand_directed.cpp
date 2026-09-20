@@ -48,6 +48,42 @@ constexpr int32_t kOne = 1 << 16;
 int32_t sx21(uint32_t v) { return static_cast<int32_t>(v << 11) >> 11; }
 int32_t sx22(uint32_t v) { return static_cast<int32_t>(v << 10) >> 10; }
 
+// ---------------------------------------------------------------------------
+// THE 22ND BIT, AND WHY A DOOR INTO GEOM.SETUP NEEDS THIS MEASURED
+// ---------------------------------------------------------------------------
+// `zhao_geom_setup`'s triangle arm is `signed [20:0]`; this block emits
+// `signed [21:0]`. Any future arbiter joining the two has to know what that
+// extra bit IS, and the block header's own answer was reasoned from the PORT
+// WIDTH rather than from the value's law:
+//
+//   "a vertex is at most 21 bits plus a twelve-bit offset: 22 bits signed
+//    covers it with room"
+//
+// A 21-bit port does NOT carry a 21-bit magnitude here. `zhao_project_core`'s
+// `to_screen_xy` CLAMPS to +-524288 (= 2^19 = +-2048 px) and its header says
+// "the clamp is the law; it is not a clip and it is not optional". That clamp
+// is the only producer of this block's `p_x_i`/`p_y_i`: project_core ->
+// zhao_project_service.a_x_o -> zhao_part_project.h_x_o/q_x_o -> the rung
+// demux -> here. So the centre occupies 20 bits of magnitude, not 21, and the
+// largest fan offset is `side_sub = 255 << 4 = 4080`:
+//
+//   max |vertex| = 524288 + 4080 = 528368  <  2^20 = 1048576
+//
+// The 22nd bit is therefore HEADROOM, never RANGE -- it cannot be set by any
+// input that honours the clamp. That is the difference between a narrowing
+// that silently wraps a coordinate and one that provably loses nothing, and it
+// is asserted below on every vector rather than argued in a comment.
+constexpr int32_t kClampRail = 524288;  // zhao_project_core::to_screen_xy
+bool fits21(int32_t v) { return v >= -1048576 && v <= 1048575; }
+
+// GEOM.SETUP's contract: "a triangle arriving here has 2A > 0" -- GEOM.CLIP has
+// already normalised the winding. This fan has not been through GEOM.CLIP.
+int64_t area2_of(const zp::PolyExpand& e) {
+  const int64_t bax = e.b.x - e.a.x, cay = e.c.y - e.a.y;
+  const int64_t bay = e.b.y - e.a.y, cax = e.c.x - e.a.x;
+  return bax * cay - bay * cax;
+}
+
 struct P {
   bool in;
   int32_t x, y, d;
@@ -152,6 +188,19 @@ void diff(Dut& dut, const P& p, const char* what) {
   check(src == p.src, (t + ": src_id rides its own particle").c_str(), p.src, src);
   check(dtest && !dwrite, (t + ": depth is TESTED and never WRITTEN").c_str(), 1,
         (dtest && !dwrite) ? 1 : 0);
+
+  // THE 22ND BIT IS HEADROOM, NOT RANGE. Asserted on every vector this suite
+  // ever runs -- directed and random alike -- so the claim is a measurement
+  // over the whole exercised domain rather than a bound computed once. It is
+  // conditioned on the clamp law actually holding for THIS input, because that
+  // is the premise the narrowing rests on: a caller that violated the clamp
+  // would genuinely need the bit, and this check must not pretend otherwise.
+  if (p.x >= -kClampRail && p.x <= kClampRail && p.y >= -kClampRail && p.y <= kClampRail) {
+    const bool all21 = fits21(got.a.x) && fits21(got.a.y) && fits21(got.b.x) &&
+                       fits21(got.b.y) && fits21(got.c.x) && fits21(got.c.y);
+    check(all21, (t + ": under the +-524288 clamp every vertex is 21-bit representable").c_str(), 1,
+          all21 ? 1 : 0);
+  }
 }
 
 struct Prng {
@@ -367,7 +416,94 @@ int main(int argc, char** argv) {
     check(e.c.x > rail, "a vertex is allowed outside the guard band", 1, e.c.x > rail ? 1 : 0);
   }
 
-  // ---- 7. back-to-back throughput and the counter -------------------------
+  // ---- 7. THE 22ND BIT, EXHAUSTIVELY, AT THE EXTREMA ----------------------
+  // Section 6 shows a vertex may leave the guard band. This section measures
+  // by HOW MUCH, because that is the number a door into `zhao_geom_setup`
+  // (`signed [20:0]`) turns on.
+  //
+  // Every output is a monotone function of ONE input coordinate plus a
+  // size-dependent offset (`ex_ax = x`, `ex_ay = y - side_sub`,
+  // `ex_bx = x - half_w`, `ex_cx = x + half_w`, `ex_by = ex_cy = y +
+  // half_drop`). So the extrema over the whole clamp-legal domain are at the
+  // four rail corners, and sweeping ALL 256 size bytes there is exhaustive for
+  // the magnitude question rather than a sample of it.
+  {
+    int32_t worst = 0;
+    uint8_t worst_size = 0;
+    for (int corner = 0; corner < 4; ++corner) {
+      const int32_t px = (corner & 1) ? kClampRail : -kClampRail;
+      const int32_t py = (corner & 2) ? kClampRail : -kClampRail;
+      for (int sz = 0; sz < 256; ++sz) {
+        const zp::PolyExpand e = zp::expand_polygon(true, px, py, kOne,
+                                                    static_cast<uint8_t>(sz), 1, 2, 3);
+        if (!e.emitted) continue;
+        const int32_t vs[6] = {e.a.x, e.a.y, e.b.x, e.b.y, e.c.x, e.c.y};
+        for (int32_t v : vs) {
+          const int32_t mag = v < 0 ? -v : v;
+          if (mag > worst) {
+            worst = mag;
+            worst_size = static_cast<uint8_t>(sz);
+          }
+        }
+      }
+    }
+    // 524288 (the clamp rail) + 4080 (255 << 4, the apex drop) = 528368.
+    check(worst == 528368,
+          "the largest vertex magnitude anywhere in the clamp-legal domain is 528368",
+          528368, static_cast<uint32_t>(worst));
+    check(worst_size == 255, "and it is reached at the largest size byte", 255, worst_size);
+    check(fits21(worst) && fits21(-worst),
+          "so the 22nd bit is HEADROOM and never RANGE: a door into GEOM.SETUP's "
+          "signed [20:0] arm loses nothing",
+          1, (fits21(worst) && fits21(-worst)) ? 1 : 0);
+    // Stated as the margin too, so a future change to the clamp or to the size
+    // encoding shows up here as a number moving rather than as a silent wrap.
+    check(1048575 - worst == 520207, "with 520207 subpixels of margin under the 21-bit rail",
+          520207, static_cast<uint32_t>(1048575 - worst));
+
+    // And the DUT agrees with the oracle at those extrema, through `diff`'s own
+    // per-vector 21-bit invariant.
+    for (uint8_t sz : {0, 1, 128, 254, 255}) {
+      char tag[96];
+      std::snprintf(tag, sizeof tag, "extremum: size %u on the +rail corner", sz);
+      diff(dut, P{true, kClampRail, kClampRail, kOne, sz, 4, 5, 6,
+                  static_cast<uint16_t>(0x780 + sz)}, tag);
+      std::snprintf(tag, sizeof tag, "extremum: size %u on the -rail corner", sz);
+      diff(dut, P{true, -kClampRail, -kClampRail, kOne, sz, 4, 5, 6,
+                  static_cast<uint16_t>(0x7C0 + sz)}, tag);
+    }
+  }
+
+  // ---- 8. THE FAN'S WINDING IS THE OPPOSITE OF GEOM.SETUP'S CONTRACT ------
+  // `zhao_geom_setup`'s header states its precondition in as many words: "no
+  // zero-area reject (GEOM.CLIP has already done all three -- a triangle
+  // arriving here has 2A > 0)". This fan never went through GEOM.CLIP, and
+  // with screen y increasing downward its 2A is NEGATIVE for every size:
+  //
+  //   2A = -2 * half_w * (half_drop + side_sub)
+  //
+  // Fed raw to GEOM.SETUP, all three edge functions would carry the wrong sign
+  // and RASTER.EDGEWALK would find the complement of the triangle. This is not
+  // a defect in either block -- it is the winding normalisation GEOM.CLIP does
+  // for mesh triangles and nobody yet does for particles. Pinned here so the
+  // packet that builds the door inherits the measurement instead of the bug.
+  {
+    for (uint8_t sz : {1, 16, 64, 255}) {
+      const zp::PolyExpand e = zp::expand_polygon(true, 0, 0, kOne, sz, 0, 0, 0);
+      const int64_t a2 = area2_of(e);
+      char tag[96];
+      std::snprintf(tag, sizeof tag, "size %u: the fan is NEGATIVELY wound (2A < 0)", sz);
+      check(a2 < 0, tag, 1, a2 < 0 ? 1 : 0);
+    }
+    // Size 0 is the degenerate GEOM.CLIP's zero-area reject would have removed
+    // and GEOM.SETUP explicitly does not.
+    const zp::PolyExpand z = zp::expand_polygon(true, 0, 0, kOne, 0, 0, 0, 0);
+    check(z.emitted, "size 0 IS emitted -- it is not suppressed here", 1, z.emitted ? 1 : 0);
+    check(area2_of(z) == 0, "and it is a ZERO-AREA triangle GEOM.SETUP does not reject", 0,
+          static_cast<uint32_t>(area2_of(z)));
+  }
+
+  // ---- 9. back-to-back throughput and the counter -------------------------
   {
     const uint32_t before = dut.counted();
     for (int k = 0; k < 25; ++k) {

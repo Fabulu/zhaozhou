@@ -90,6 +90,44 @@
 // twelve-bit offset: 22 bits signed covers it with room, and the output is
 // widened to 22 rather than silently wrapping a 21-bit port.
 //
+// CORRECTED 2026-09-20 (setupdoor). The paragraph above reasons from the PORT
+// WIDTH, and the port is a PROJECTION of the value rather than the value's own
+// law -- CLAUDE.md's "measure things that ARE the thing". A 21-bit port does
+// not carry a 21-bit magnitude here. `zhao_project_core::to_screen_xy` CLAMPS
+// to ±524288 (= 2^19 = ±2048 px) and its own header says "the clamp is the
+// law; it is not a clip and it is not optional"; that clamp is the only
+// producer of `p_x_i`/`p_y_i`, through `zhao_project_service.a_x_o` ->
+// `zhao_part_project.h_x_o`/`q_x_o` -> the core's rung demux. So the centre
+// occupies TWENTY bits of magnitude, not twenty-one, and the fan offset fits
+// in the spare one:
+//
+//     max |vertex| = 524288 + 4080 = 528368  <  2^20 = 1048576
+//
+// **The 22nd bit is HEADROOM, not RANGE. No input that honours the clamp can
+// set it.** Measured exhaustively over all 256 size bytes at all four rail
+// corners in `tests/particles/part_expand_directed.cpp` section 7, asserted on
+// every vector of both lanes, and seen to FIRE when the clamp premise is
+// withdrawn.
+//
+// The port stays 22 bits. It costs nothing, it is honest about the arithmetic,
+// and it means a caller that ever breaks the clamp gets a wrong-looking
+// coordinate rather than a silently wrapped one. What the measurement buys is
+// the OTHER direction: a future door into `zhao_geom_setup`'s signed [20:0]
+// arm may narrow 22 -> 21 **losslessly and provably**, instead of either
+// truncating on faith or widening the shell door, both shell tops and the
+// raster for a bit that cannot be set. See `design/blocks.yml`'s GEOM.SETUP
+// row for why that door is not merely an arbiter.
+//
+// AND THE FAN IS WOUND THE OPPOSITE WAY FROM WHAT GEOM.SETUP EXPECTS. That
+// block's header states its precondition as "a triangle arriving here has
+// 2A > 0", GEOM.CLIP having normalised the winding. This fan never goes
+// through GEOM.CLIP and, with screen y increasing downward,
+// 2A = -2 * half_w * (half_drop + side_sub) is NEGATIVE for every size; size 0
+// gives 2A = 0, the degenerate GEOM.CLIP rejects and GEOM.SETUP does not.
+// Neither is a defect here -- they are the normalisation nobody yet does for
+// particles -- and both are pinned by committed checks in section 8 of the
+// test above so the door's author inherits the measurement, not the bug.
+//
 // **The expanded fan is NOT re-clamped to the guard band.** A large particle
 // near the edge can put a vertex outside ±2048 px, and that is correct: the
 // software does exactly the same and lets the rasteriser's scan box scissor it.
