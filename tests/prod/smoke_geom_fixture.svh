@@ -7,6 +7,9 @@
 // zref::Binner, union of tiles x 256 (whole-tile resolve).
 localparam int unsigned SGF_N_VERTS = 8;
 localparam int unsigned SGF_N_TRIS  = 8;
+localparam int unsigned SGF_N_MESHLETS = 3;
+localparam int unsigned SGF_MESH_FIRST [0:2] = '{0, 3, 6};
+localparam int unsigned SGF_MESH_NTRI  [0:2] = '{3, 3, 2};
 localparam logic signed [31:0] SGF_VX [0:7] = '{32'shFFFF8000, 32'sh00008000, 32'sh00000000, 32'shFFFF3334, 32'sh0000CCCC, 32'sh00004CCC, 32'sh00000000, 32'sh0000E666};
 localparam logic signed [31:0] SGF_VY [0:7] = '{32'shFFFF8000, 32'shFFFF8000, 32'sh00008000, 32'sh00009999, 32'sh0000B333, 32'shFFFF3334, 32'sh00000000, 32'sh0000E666};
 localparam logic signed [31:0] SGF_VZ [0:7] = '{32'sh00010000, 32'sh00010000, 32'sh00018000, 32'sh00020000, 32'sh00020000, 32'sh00030000, 32'shFFFF0000, 32'sh00014000};

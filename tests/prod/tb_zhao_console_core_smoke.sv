@@ -130,10 +130,26 @@ module tb_zhao_console_core_smoke
   // the ctest `smoke_geom_fixture_fresh`. Nothing below re-derives a count.
 `include "smoke_geom_fixture.svh"
   localparam int unsigned N_GEOM_VERTS   = SGF_N_VERTS;
-  // Whole 64-byte lines of eight beats: the index run starts line-aligned
-  // (GEOM_IX_OFF = 0x80) and so does the vertex run (0x100), 32 B per vertex.
-  localparam int unsigned GEOM_FOOTPRINT_BEATS =
-      8 * (((3 * SGF_N_TRIS) + 63) / 64) + 8 * (((32 * SGF_N_VERTS) + 63) / 64);
+  // R57: the fixture is SGF_N_MESHLETS meshlets over one vertex run. Every
+  // meshlet declares all the vertices and its own contiguous index run, so the
+  // frame decodes the vertex run once PER MESHLET -- which is what gives the
+  // loop something to overlap with, and what every per-vertex count below is
+  // measured against.
+  localparam int unsigned N_GEOM_MESHLETS = SGF_N_MESHLETS;
+  localparam int unsigned N_GEOM_DECODED  = SGF_N_MESHLETS * SGF_N_VERTS;
+  // Whole 64-byte lines of eight beats, PER MESHLET: its index run starts
+  // line-aligned and so does the shared vertex run, 32 B per vertex.
+  function automatic int unsigned geom_beats_of(input int unsigned ntri);
+    geom_beats_of = 8 * (((3 * ntri) + 63) / 64) + 8 * (((32 * SGF_N_VERTS) + 63) / 64);
+  endfunction
+  function automatic int unsigned geom_footprint_beats();
+    int unsigned s;
+    s = 0;
+    for (int unsigned mi = 0; mi < SGF_N_MESHLETS; mi = mi + 1)
+      s = s + geom_beats_of(SGF_MESH_NTRI[mi]);
+    return s;
+  endfunction
+  localparam int unsigned GEOM_FOOTPRINT_BEATS = geom_footprint_beats();
   localparam int unsigned CYCLE_LIMIT    = 1_500_000;
   localparam logic signed [31:0] FX16_ONE = 32'sh0001_0000;
 
@@ -1871,7 +1887,11 @@ module tb_zhao_console_core_smoke
   localparam logic [ 7:0] MSH_SLOT_C    = 8'd2;
   localparam logic [15:0] MSH_GEN_C     = 16'h0055;
   localparam logic [31:0] MSH_DST_C     = UPL_REGION_C + 32'h0000_0400;
-  localparam int unsigned MSH_WORDS_C   = 56;               // 448 B: 64+64+64+8*32
+  // R57: 704 B = 64 header + 3 x 64 descriptor table + 3 x 64 index runs +
+  // 8 x 32 vertex records. The three meshlets SHARE the vertex run -- each
+  // descriptor names the same `vertex_offset` -- so the page grew by the
+  // descriptor table and the index runs only.
+  localparam int unsigned MSH_WORDS_C   = 88;
   localparam int unsigned MSH_ARENA_W   = UPL_WORDS_C;      // words into the arena
   localparam int unsigned UPL_ALL_WORDS = UPL_WORDS_C + MSH_WORDS_C;
   // The Loom node the draw's transform handle names, and the draw's own
@@ -2495,10 +2515,14 @@ module tb_zhao_console_core_smoke
   // vertex/index offsets are page-relative too -- GEOM.MESHFETCH adds the
   // page's pool-relative base once, so what reaches GEOM.ASSETFETCH is still
   // pool-relative and that block is unchanged.
+  // R57: the descriptor table is SGF_N_MESHLETS x 64 B, then one 64-byte index
+  // run per meshlet (each holds 3 x ntri <= 21 bytes and must be 8-byte
+  // aligned), then the ONE vertex run every descriptor names.
   localparam int unsigned GEOM_HDR_OFF   = 32'h0000_0000;
   localparam int unsigned GEOM_DESC_OFF  = 32'h0000_0040;
-  localparam int unsigned GEOM_IX_OFF    = 32'h0000_0080;
-  localparam int unsigned GEOM_VX_OFF    = 32'h0000_00C0;
+  localparam int unsigned GEOM_IX_OFF    = 32'h0000_0100;
+  localparam int unsigned GEOM_IX_STRIDE = 32'h0000_0040;
+  localparam int unsigned GEOM_VX_OFF    = 32'h0000_01C0;
   // The bound, in the meshlet's own space, and the identity instance transform
   // that carries it to world. It sits at the clip origin under the identity
   // camera written below, so GEOM.CULL must call it VISIBLE -- and its radius
@@ -2583,6 +2607,9 @@ module tb_zhao_console_core_smoke
   longint unsigned rt_clk_q;
   longint unsigned rt_skin_first_q, rt_skin_last_q, rt_land_first_q, rt_land_last_q;
   longint unsigned rt_tri_first_q, rt_tri_last_q, rt_vd_first_q, rt_rel_q;
+  longint unsigned rt_rel_first_q, rt_afrel_first_q, rt_afrel_last_q, rt_vd_m2_q;
+  longint unsigned rt_skin_m1_last_q;
+  int unsigned     rt_rel_n_q, rt_afrel_n_q;
   int unsigned     rt_skin_n_q, rt_land_n_q, rt_tri_n_q;
   logic [31:0]     rt_skin_prev_q, rt_land_prev_q, rt_tri_prev_q, rt_vd_prev_q, rt_rel_prev_q;
   always @(posedge gpu_clk) begin
@@ -2592,6 +2619,8 @@ module tb_zhao_console_core_smoke
       rt_land_first_q <= 0; rt_land_last_q <= 0; rt_land_n_q <= 0; rt_land_prev_q <= 0;
       rt_tri_first_q  <= 0; rt_tri_last_q  <= 0; rt_tri_n_q  <= 0; rt_tri_prev_q  <= 0;
       rt_vd_first_q   <= 0; rt_vd_prev_q   <= 0; rt_rel_q    <= 0; rt_rel_prev_q  <= 0;
+      rt_rel_first_q  <= 0; rt_rel_n_q     <= 0; rt_vd_m2_q  <= 0; rt_skin_m1_last_q <= 0;
+      rt_afrel_first_q <= 0; rt_afrel_last_q <= 0; rt_afrel_n_q <= 0;
     end else begin
       rt_clk_q <= rt_clk_q + 1;
       if (geom_vd_vertices_o != rt_vd_prev_q) begin
@@ -2617,9 +2646,35 @@ module tb_zhao_console_core_smoke
         rt_tri_prev_q <= geom_rp_triangles_out_o;
       end
       if (geom_rp_meshlets_o != rt_rel_prev_q) begin
+        if (rt_rel_n_q == 0) rt_rel_first_q <= rt_clk_q;
         rt_rel_q      <= rt_clk_q;
+        rt_rel_n_q    <= rt_rel_n_q + 1;
         rt_rel_prev_q <= geom_rp_meshlets_o;
       end
+      // R57: the ASSET BUFFER release, which is a different moment from the
+      // meshlet retiring and is the one that lets the NEXT meshlet's vertex
+      // phase start. Tapped on the core's own net rather than inferred from a
+      // counter, because the whole claim is about WHEN it happens.
+      if (`PC_CORE.rp_af_release) begin
+        if (rt_afrel_n_q == 0) rt_afrel_first_q <= rt_clk_q;
+        rt_afrel_last_q <= rt_clk_q;
+        rt_afrel_n_q    <= rt_afrel_n_q + 1;
+      end
+      // The clock the FIRST vertex record of meshlet 2 is decoded: if the loop
+      // overlaps, this is BEFORE meshlet 1 has retired, and the two timestamps
+      // printed side by side are the evidence.
+      //
+      // N_GEOM_VERTS + 1, NOT N_GEOM_VERTS. The counter reaching N_GEOM_VERTS is
+      // meshlet 1's LAST record, not meshlet 2's first, and the off-by-one made
+      // the overlap assertion below pass on a serial machine -- a detector
+      // reading the flattering answer, which is the shape to check hardest.
+      if ((geom_vd_vertices_o == N_GEOM_VERTS + 1) && (rt_vd_m2_q == 0))
+        rt_vd_m2_q <= rt_clk_q;
+      // The per-vertex rate INSIDE one meshlet, which is the quantity R57 says
+      // is the next lever. The frame-wide `SMOKE: rate` interval now spans the
+      // gaps BETWEEN meshlets and is a different number.
+      if ((geom_skin_vertices_transformed_o == N_GEOM_VERTS) && (rt_skin_m1_last_q == 0))
+        rt_skin_m1_last_q <= rt_clk_q;
     end
   end
 
@@ -3407,36 +3462,45 @@ module tb_zhao_console_core_smoke
       logic [63:0] dw [8];
       logic [191:0] ixw;
       for (int unsigned w = 0; w < MSH_WORDS_C; w++) upl_mem[MSH_ARENA_W + w] = 64'd0;
-      // the header: format 1, one meshlet, generation 1, table at 64
-      hw[0] = {16'h0000, 16'd1, 16'd1, 8'd0, 8'd1};
+      // the header: format 1, SGF_N_MESHLETS meshlets, generation 1, table at 64
+      // byte 0 format, byte 1 reserved, [3:2] meshlet count, [5:4] generation.
+      hw[0] = {16'h0000, 16'd1, 16'(N_GEOM_MESHLETS), 8'd0, 8'd1};
       hw[1] = {32'd0, GEOM_DESC_OFF};
       for (int unsigned k = 2; k < 8; k++) hw[k] = 64'd0;
       hw[7][63:32] = fixture_desc_crc(hw);   // the SAME fold, over bytes 0..59
       for (int unsigned k = 0; k < 8; k++) upl_mem[MSH_ARENA_W + k] = hw[k];
-      // the descriptor, field for field as before -- with PAGE-relative offsets
-      dw[0] = {16'h0000, 16'h0001, 8'(SGF_N_TRIS), 8'(N_GEOM_VERTS), 8'd0, 8'd1};
-      dw[1] = 64'd0;
-      dw[2] = {GEOM_BOUND_R, 32'h0001_8000};
-      dw[3] = {GEOM_IX_OFF, GEOM_VX_OFF};
-      dw[4] = {32'd0, 16'd0, 16'd1};
+      // ONE DESCRIPTOR PER MESHLET (R57), field for field as before, with
+      // PAGE-relative offsets. Every descriptor names the SAME vertex run and
+      // its OWN index run, so the partition costs the page one table entry and
+      // one 64-byte index line per meshlet and nothing else.
+      for (int unsigned mi = 0; mi < N_GEOM_MESHLETS; mi = mi + 1) begin
+        dw[0] = {16'h0000, 16'h0001, 8'(SGF_MESH_NTRI[mi]), 8'(N_GEOM_VERTS), 8'd0, 8'd1};
+        dw[1] = 64'd0;
+        dw[2] = {GEOM_BOUND_R, 32'h0001_8000};
+        dw[3] = {GEOM_IX_OFF + GEOM_IX_STRIDE * mi, GEOM_VX_OFF};
+        dw[4] = {32'd0, 16'd0, 16'd1};
 `ifdef ZHAO_SMOKE_BAD_DESC
-      // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`), unchanged in
-      // meaning: byte 40 is inside the descriptor's reserved span, which
-      // GEOM.MESHFETCH's sixth refusal row requires to be zero.
-      dw[5] = 64'h0000_0000_0000_0001;
+        // POSITIVE CONTROL, INVERTED POLARITY (`-BadDescriptor`), unchanged in
+        // meaning: byte 40 is inside the descriptor's reserved span, which
+        // GEOM.MESHFETCH's sixth refusal row requires to be zero. Only the
+        // FIRST descriptor is broken, so the refusal is attributable.
+        dw[5] = (mi == 0) ? 64'h0000_0000_0000_0001 : 64'd0;
 `else
-      dw[5] = 64'd0;
+        dw[5] = 64'd0;
 `endif
-      dw[6] = 64'd0;
-      dw[7] = 64'd0;
-      dw[7][63:32] = fixture_desc_crc(dw);
-      for (int unsigned k = 0; k < 8; k++) upl_mem[MSH_ARENA_W + 8 + k] = dw[k];
-      // the index run
-      ixw = '0;
-      for (int unsigned k = 0; k < 3 * SGF_N_TRIS; k = k + 1) ixw[8 * k +: 8] = SGF_IX[k];
-      upl_mem[MSH_ARENA_W + (GEOM_IX_OFF >> 3) + 0] = ixw[63:0];
-      upl_mem[MSH_ARENA_W + (GEOM_IX_OFF >> 3) + 1] = ixw[127:64];
-      upl_mem[MSH_ARENA_W + (GEOM_IX_OFF >> 3) + 2] = ixw[191:128];
+        dw[6] = 64'd0;
+        dw[7] = 64'd0;
+        dw[7][63:32] = fixture_desc_crc(dw);
+        for (int unsigned k = 0; k < 8; k++)
+          upl_mem[MSH_ARENA_W + 8 + 8 * mi + k] = dw[k];
+        // ...and its index run, at its own line.
+        ixw = '0;
+        for (int unsigned k = 0; k < 3 * SGF_MESH_NTRI[mi]; k = k + 1)
+          ixw[8 * k +: 8] = SGF_IX[3 * SGF_MESH_FIRST[mi] + k];
+        upl_mem[MSH_ARENA_W + ((GEOM_IX_OFF + GEOM_IX_STRIDE * mi) >> 3) + 0] = ixw[63:0];
+        upl_mem[MSH_ARENA_W + ((GEOM_IX_OFF + GEOM_IX_STRIDE * mi) >> 3) + 1] = ixw[127:64];
+        upl_mem[MSH_ARENA_W + ((GEOM_IX_OFF + GEOM_IX_STRIDE * mi) >> 3) + 2] = ixw[191:128];
+      end
       // the vertex records
       for (int unsigned nv = 0; nv < N_GEOM_VERTS; nv = nv + 1) begin
         automatic logic [255:0] rec;
@@ -3459,7 +3523,7 @@ module tb_zhao_console_core_smoke
       fold_c_i = fold_c_o;
     end
     upl_crc_material_q = ~fold_c_i;
-    // ...and the MESH_STREAM page's own CRC, over its 448 bytes, folded with
+    // ...and the MESH_STREAM page's own CRC, over its 704 bytes, folded with
     // the SAME production block and AFTER the two controls have had their say,
     // so a deliberately broken descriptor is uploaded faithfully and refused by
     // the block that should refuse it rather than by the uploader.
@@ -3832,11 +3896,11 @@ module tb_zhao_console_core_smoke
     // frame's geometry here. Descriptor fetch, footprint, skin, projection and
     // replay all run inside this window.
     guard = 0;
-    while ((geom_rp_meshlets_o == 0) && (guard < 200000)) begin
+    while ((geom_rp_meshlets_o < N_GEOM_MESHLETS) && (guard < 200000)) begin
       @(posedge gpu_clk);
       guard = guard + 1;
     end
-    if (geom_rp_meshlets_o == 0)
+    if (geom_rp_meshlets_o < N_GEOM_MESHLETS)
       $fatal(1, "SMOKE: GEOM.REPLAY released no meshlet in %0d cycles -- replayed %0d of %0d view-triangles, handles=%0d, fetched=%0d meshlet(s), skinned=%0d, landings=%0d, descriptor refused[fmt/crc/gen/vc/tc/resv/bound]=[%0d %0d %0d %0d %0d %0d %0d]; THE DRAW: draws=%0d jobs=%0d masked=%0d empty=%0d hdr_reads=%0d hdr_crc_fail=%0d refused[cull/resident/stale/xform/denied/fmt/crc/resv/layout]=[%0d %0d %0d %0d %0d %0d %0d %0d %0d]; THE LOOM: nodes=%0d streams=%0d pal_writes=%0d pal_dropped=%0d loom_refused[sorted/parent/ovf/kind/shear/framing]=[%0d %0d %0d %0d %0d %0d]; THE UPLOAD: published=%0d status=%0d",
              guard, geom_rp_triangles_out_o, SGF_EXP_REPLAYED, geom_rp_groups_o,
              geom_af_meshlets_fetched_o, geom_skin_vertices_transformed_o, geom_landings_o,
@@ -4091,7 +4155,7 @@ module tb_zhao_console_core_smoke
     $display("SMOKE: sdram      model_error=%0d kinds[trcd/trp/trc/refresh/protocol/mrs]=%b",
              geom_model_error, geom_model_err);
     $display("SMOKE: vdecode    records_expected=%0d decoded=%0d refused[reserved/w0/format]=[%0d %0d %0d]",
-             N_GEOM_VERTS, geom_vd_vertices_o,
+             N_GEOM_DECODED, geom_vd_vertices_o,
              geom_vd_reserved_nz_count_o, geom_vd_w0_illegal_count_o,
              geom_vd_format_bad_count_o);
     $display("SMOKE: geometry   skinned=%0d vertices_sent=%0d a_grants=%0d landings=%0d groups_opened=%0d groups_sealed=%0d",
@@ -4101,7 +4165,7 @@ module tb_zhao_console_core_smoke
              geom_pal_vertices_served_o, geom_pal_bones_written_o,
              geom_pal_bone_unset_o, geom_pal_bone_oob_o,
              geom_pose_palettes_decoded_o);
-    $display("SMOKE: rate       skin %0d moves, steady %0d.%02d clk/vertex | landings %0d, steady %0d.%02d clk/landing | replay %0d view-tris, steady %0d.%02d clk/view-tri | meshlet loop %0d clk (first decode -> release)",
+    $display("SMOKE: rate       skin %0d moves, steady %0d.%02d clk/vertex | landings %0d, steady %0d.%02d clk/landing | replay %0d view-tris, steady %0d.%02d clk/view-tri | frame span %0d clk (first decode -> last release)",
              rt_skin_n_q,
              (rt_skin_n_q > 1) ? (rt_skin_last_q - rt_skin_first_q) / (rt_skin_n_q - 1) : 0,
              (rt_skin_n_q > 1) ? (((rt_skin_last_q - rt_skin_first_q) * 100) / (rt_skin_n_q - 1)) % 100 : 0,
@@ -4124,6 +4188,28 @@ module tb_zhao_console_core_smoke
              rt_land_first_q - rt_vd_first_q, rt_land_last_q - rt_vd_first_q,
              rt_tri_first_q - rt_vd_first_q, rt_tri_last_q - rt_vd_first_q,
              rt_rel_q - rt_vd_first_q, rt_rel_q - rt_vd_first_q);
+    // ---- R57: THE MESHLET LOOP, ACROSS MESHLETS ----------------------------
+    // The steady loop PERIOD is what R47 measured at 305 clocks with one
+    // meshlet in flight, and it is the number the overlap has to move. It is
+    // (last retirement - first retirement) / (retirements - 1), the same
+    // steady-interval form as the rate line: the first meshlet's period
+    // includes the pipeline's fill, which is latency and not rate.
+    //
+    // `af_release` is the asset buffer going back, which is what LETS the next
+    // meshlet start. Printed beside the first retirement so the two moments can
+    // be compared: before R57 they were the same clock, by construction.
+    $display("SMOKE: invtx      IN-MESHLET vertex rate %0d.%02d clk/vertex over %0d vertices of meshlet 1 (the frame-wide figure on the rate line spans the gaps BETWEEN meshlets and is a different quantity)",
+             (rt_skin_m1_last_q > rt_skin_first_q) ? (rt_skin_m1_last_q - rt_skin_first_q) / (N_GEOM_VERTS - 1) : 0,
+             (rt_skin_m1_last_q > rt_skin_first_q) ? (((rt_skin_m1_last_q - rt_skin_first_q) * 100) / (N_GEOM_VERTS - 1)) % 100 : 0,
+             N_GEOM_VERTS);
+    $display("SMOKE: loop2      meshlets=%0d retire[first=%0d last=%0d] steady_period=%0d.%02d clk | af_release[n=%0d first=%0d last=%0d] | meshlet2_first_decode=%0d",
+             rt_rel_n_q,
+             rt_rel_first_q - rt_vd_first_q, rt_rel_q - rt_vd_first_q,
+             (rt_rel_n_q > 1) ? (rt_rel_q - rt_rel_first_q) / (rt_rel_n_q - 1) : 0,
+             (rt_rel_n_q > 1) ? (((rt_rel_q - rt_rel_first_q) * 100) / (rt_rel_n_q - 1)) % 100 : 0,
+             rt_afrel_n_q,
+             rt_afrel_first_q - rt_vd_first_q, rt_afrel_last_q - rt_vd_first_q,
+             rt_vd_m2_q - rt_vd_first_q);
     $display("SMOKE: skin norm  vertices=%0d degenerate=%0d reduced=%0d fork_stall_cycles=%0d",
              geom_sn_vertices_o, geom_sn_degenerate_o, geom_sn_reduced_o,
              geom_sn_fork_stall_o);
@@ -4242,13 +4328,15 @@ module tb_zhao_console_core_smoke
              geom_mf_refused_generation_o, geom_mf_refused_vertex_count_o,
              geom_mf_refused_triangle_count_o, geom_mf_refused_reserved_o,
              geom_mf_refused_zero_bound_o);
-    // I37: the CRC WALKER, composed. Exactly one descriptor burst ended, its CRC
-    // matched and it was eight beats -- so the verdict the fetcher latched was
-    // COMPUTED, and the refusal check above passing is no longer a tie-off
-    // agreeing with itself.
-    if (geom_mf_crc_descriptors_o != 1 || geom_mf_crc_fail_o != 0 || geom_mf_crc_framing_o != 0)
-      $fatal(1, "SMOKE: the descriptor CRC walker saw descriptors=%0d fail=%0d framing=%0d (want 1/0/0) -- the fold over the returning beats does not agree with the fixture's CRC word",
-             geom_mf_crc_descriptors_o, geom_mf_crc_fail_o, geom_mf_crc_framing_o);
+    // I37: the CRC WALKER, composed. One descriptor burst per meshlet ended,
+    // every CRC matched and every burst was eight beats -- so the verdict the
+    // fetcher latched was COMPUTED, and the refusal check above passing is no
+    // longer a tie-off agreeing with itself.
+    if (geom_mf_crc_descriptors_o != N_GEOM_MESHLETS || geom_mf_crc_fail_o != 0 ||
+        geom_mf_crc_framing_o != 0)
+      $fatal(1, "SMOKE: the descriptor CRC walker saw descriptors=%0d fail=%0d framing=%0d (want %0d/0/0) -- the fold over the returning beats does not agree with the fixture's CRC word",
+             geom_mf_crc_descriptors_o, geom_mf_crc_fail_o, geom_mf_crc_framing_o,
+             N_GEOM_MESHLETS);
     // GEOM.CULL is a real block on the real matrix bank now. Under the
     // identity camera the fixture's bound is at the clip origin, so a cull
     // that rejects it is a wiring or configuration fault and not a verdict.
@@ -4286,7 +4374,7 @@ module tb_zhao_console_core_smoke
     // ONE draw, so ONE meshlet served -- and (entry I38, CLOSED) it was
     // RELEASED: GEOM.REPLAY's meshlet count moves only on the release it
     // proves, which the replay block above already asserted to be 1.
-    if (geom_af_meshlets_fetched_o != 1)
+    if (geom_af_meshlets_fetched_o != N_GEOM_MESHLETS)
       $fatal(1, "SMOKE: GEOM.ASSETFETCH served %0d meshlets for the ONE draw this bench issued",
              geom_af_meshlets_fetched_o);
     // GEOM.ASSEMBLE walked the index run the fetcher served: every triplet of
@@ -4804,20 +4892,30 @@ module tb_zhao_console_core_smoke
     // second half is that every counter on the refusal's path moved by exactly
     // what one hole in a two-view, SGF_N_TRIS-triangle batch implies, and that
     // the render frame still closed.
-    if ((geom_vd_reserved_nz_count_o != 1) || (geom_vd_vertices_o != N_GEOM_VERTS - 1))
-      $fatal(1, "SMOKE BAD_VERTEX: GEOM.VDECODE refused %0d / decoded %0d -- want exactly 1 / %0d",
-             geom_vd_reserved_nz_count_o, geom_vd_vertices_o, N_GEOM_VERTS - 1);
-    if ((geom_holes_o != 1) || (geom_groups_poisoned_o != 2) || (geom_holes_early_o != 0))
-      $fatal(1, "SMOKE BAD_VERTEX: GEOM.GROUP_SEQ holes=%0d poisoned=%0d orphan=%0d -- want 1 / 2 / 0",
-             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o);
-    if ((geom_rp_meshlets_o != 1) || (geom_rp_poisoned_o != SGF_N_TRIS) ||
+    // R57: the vertex run is SHARED by every meshlet, so the one broken record
+    // is refused ONCE PER MESHLET and every count below scales by
+    // N_GEOM_MESHLETS -- except `geom_rp_poisoned_o`, which counts TRIANGLES and
+    // the partition does not change how many there are.
+    if ((geom_vd_reserved_nz_count_o != N_GEOM_MESHLETS) ||
+        (geom_vd_vertices_o != N_GEOM_DECODED - N_GEOM_MESHLETS))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.VDECODE refused %0d / decoded %0d -- want exactly %0d / %0d",
+             geom_vd_reserved_nz_count_o, geom_vd_vertices_o, N_GEOM_MESHLETS,
+             N_GEOM_DECODED - N_GEOM_MESHLETS);
+    if ((geom_holes_o != N_GEOM_MESHLETS) || (geom_groups_poisoned_o != 2 * N_GEOM_MESHLETS) ||
+        (geom_holes_early_o != 0))
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.GROUP_SEQ holes=%0d poisoned=%0d orphan=%0d -- want %0d / %0d / 0",
+             geom_holes_o, geom_groups_poisoned_o, geom_holes_early_o,
+             N_GEOM_MESHLETS, 2 * N_GEOM_MESHLETS);
+    if ((geom_rp_meshlets_o != N_GEOM_MESHLETS) || (geom_rp_poisoned_o != SGF_N_TRIS) ||
         (geom_rp_triangles_out_o != 0) || (geom_rp_refused_o != 0) || (geom_rp_missed_o != 0))
-      $fatal(1, "SMOKE BAD_VERTEX: GEOM.REPLAY meshlets=%0d poisoned=%0d out=%0d refused=%0d missed=%0d -- want 1 / %0d / 0 / 0 / 0",
+      $fatal(1, "SMOKE BAD_VERTEX: GEOM.REPLAY meshlets=%0d poisoned=%0d out=%0d refused=%0d missed=%0d -- want %0d / %0d / 0 / 0 / 0",
              geom_rp_meshlets_o, geom_rp_poisoned_o, geom_rp_triangles_out_o,
-             geom_rp_refused_o, geom_rp_missed_o, SGF_N_TRIS);
-    if ((geom_landings_o != 2 * (N_GEOM_VERTS - 1)) || (geom_groups_sealed_o != 2))
-      $fatal(1, "SMOKE BAD_VERTEX: landings=%0d sealed=%0d -- want %0d / 2 (a hole never lands; the poisoned arenas still seal)",
-             geom_landings_o, geom_groups_sealed_o, 2 * (N_GEOM_VERTS - 1));
+             geom_rp_refused_o, geom_rp_missed_o, N_GEOM_MESHLETS, SGF_N_TRIS);
+    if ((geom_landings_o != 2 * N_GEOM_MESHLETS * (N_GEOM_VERTS - 1)) ||
+        (geom_groups_sealed_o != 2 * N_GEOM_MESHLETS))
+      $fatal(1, "SMOKE BAD_VERTEX: landings=%0d sealed=%0d -- want %0d / %0d (a hole never lands; the poisoned arenas still seal)",
+             geom_landings_o, geom_groups_sealed_o, 2 * N_GEOM_MESHLETS * (N_GEOM_VERTS - 1),
+             2 * N_GEOM_MESHLETS);
     if ((v2_frames_admitted_o != 1) || (render_pixels_o != 0) || (render_issued_words_o != render_retired_words_o))
       $fatal(1, "SMOKE BAD_VERTEX: frames_admitted=%0d pixels=%0d issued=%0d retired=%0d -- want 1 / 0 / equal (the batch drops, the frame completes)",
              v2_frames_admitted_o, render_pixels_o, render_issued_words_o, render_retired_words_o);
@@ -4829,9 +4927,9 @@ module tb_zhao_console_core_smoke
     // compiled out under ZHAO_SMOKE_BAD_VERTEX rather than jumped over: Verilator
     // defers `\$finish` to the end of the time step, so the straight-line checks
     // after it still run (the ZHAO_MUT_SLOT_OVERFLOW note above says the same).
-    if (geom_vd_vertices_o != N_GEOM_VERTS)
-      $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of the %0d records the descriptor declares -- the vertex stream does not cross from GEOM.ASSETFETCH into the decoder",
-             geom_vd_vertices_o, N_GEOM_VERTS);
+    if (geom_vd_vertices_o != N_GEOM_DECODED)
+      $fatal(1, "SMOKE: GEOM.VDECODE decoded %0d of the %0d records the descriptors declare -- the vertex stream does not cross from GEOM.ASSETFETCH into the decoder",
+             geom_vd_vertices_o, N_GEOM_DECODED);
     if ((geom_vd_reserved_nz_count_o != 0) || (geom_vd_w0_illegal_count_o != 0) ||
         (geom_vd_format_bad_count_o != 0))
       $fatal(1, "SMOKE: GEOM.VDECODE refused a well-formed record (reserved=%0d w0=%0d format=%0d) -- the harness's format-0 packing is wrong, so nothing below this line means anything",
@@ -4948,15 +5046,46 @@ module tb_zhao_console_core_smoke
     // takes each of the meshlet's SGF_N_TRIS triangles once and emits it once
     // per visible view, drops nothing (every corner is written and every handle
     // current), and releases the meshlet exactly once.
-    if ((geom_rp_meshlets_o != 1) || (geom_rp_groups_o != 2) ||
+    if ((geom_rp_meshlets_o != N_GEOM_MESHLETS) || (geom_rp_groups_o != 2 * N_GEOM_MESHLETS) ||
         (geom_rp_triangles_in_o != SGF_N_TRIS) ||
         (geom_rp_triangles_out_o != SGF_EXP_REPLAYED))
-      $fatal(1, "SMOKE: GEOM.REPLAY meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d -- the reference wants 1 / 2 / %0d / %0d",
+      $fatal(1, "SMOKE: GEOM.REPLAY meshlets=%0d handles=%0d tri_in=%0d tri_out=%0d -- the reference wants %0d / %0d / %0d / %0d",
              geom_rp_meshlets_o, geom_rp_groups_o, geom_rp_triangles_in_o,
-             geom_rp_triangles_out_o, SGF_N_TRIS, SGF_EXP_REPLAYED);
+             geom_rp_triangles_out_o, N_GEOM_MESHLETS, 2 * N_GEOM_MESHLETS,
+             SGF_N_TRIS, SGF_EXP_REPLAYED);
     if ((geom_rp_refused_o | geom_rp_missed_o | geom_rp_view_bad_o) != 0)
       $fatal(1, "SMOKE: GEOM.REPLAY dropped or faulted: refused=%0d missed=%0d view_bad=%0d",
              geom_rp_refused_o, geom_rp_missed_o, geom_rp_view_bad_o);
+    if (geom_rp_triq_stall_o != 0)
+      $fatal(1, "SMOKE: GEOM.REPLAY's descriptor queue backpressured %0d time(s) -- TRIQ_DEPTH no longer holds the two meshlets in flight",
+             geom_rp_triq_stall_o);
+    // ---- OWNER RULING R57: THE LOOP OVERLAPS, ASSERTED ----------------------
+    // The whole ruling in one inequality. Meshlet 2's FIRST vertex record is
+    // decoded BEFORE meshlet 1 retires, which is impossible in a serial loop:
+    // before R57 GEOM.ASSETFETCH could not take meshlet 2 until GEOM.REPLAY had
+    // released its buffer, and the release was the retirement.
+    //
+    // It is a HARD check and not a printed number because a rate regression is
+    // exactly the kind of fault that reads as "a bit slower" in a log nobody
+    // diffs. `rt_vd_m2_q` is zero only if meshlet 2 never decoded at all, which
+    // the decode census above has already refused.
+    if ((rt_rel_n_q != N_GEOM_MESHLETS) || (rt_afrel_n_q != N_GEOM_MESHLETS))
+      $fatal(1, "SMOKE R57: %0d retirement(s) and %0d asset release(s) for %0d meshlet(s)",
+             rt_rel_n_q, rt_afrel_n_q, N_GEOM_MESHLETS);
+    if (rt_afrel_first_q >= rt_rel_first_q)
+      $fatal(1, "SMOKE R57: the asset buffer went back at clock %0d and the meshlet retired at %0d -- the release is not EARLY, so GEOM.REPLAY has stopped pipelining and the loop is serial again",
+             rt_afrel_first_q - rt_vd_first_q, rt_rel_first_q - rt_vd_first_q);
+    // AND THE OTHER HALF IS NOT ASSERTED YET, DELIBERATELY. `meshlet2_first_decode`
+    // on the loop2 line is where meshlet 2's vertex phase actually begins, and it
+    // is still AFTER meshlet 1 retires. That is not GEOM.REPLAY: the buffer goes
+    // back 50 clocks before the retirement and GEOM.ASSETFETCH then spends about
+    // 420 clocks FETCHING meshlet 2 (its descriptor, its index line and four
+    // vertex lines through MEM.GUARD, the VRAM arbiter and the SDRAM model)
+    // against a vertex-plus-replay phase of about 234. The single-bank fetch is
+    // the remaining gate and it is now the LARGEST term in the loop.
+    // Asserting the overlap here before that bank exists would be asserting the
+    // bug's absence in a place that cannot show it; the number is printed and
+    // the finding is in the run's FINDINGS-geom4.md.
     // ---- GEOM.VATTR, the store every replayed corner read (entry I46) --------
     // Every landing wrote its row (both views of every vertex), every decoded
     // vertex was staged and lit into both views' arenas, and nothing was
@@ -4964,11 +5093,11 @@ module tb_zhao_console_core_smoke
     // read by the replay as the previous occupant's attributes -- no pixel count
     // could see it -- which is why the census is exact rather than nonzero.
     if ((geom_va_landings_o != geom_landings_o) || (geom_va_rows_written_o != geom_landings_o) ||
-        (geom_va_uv_staged_o != N_GEOM_VERTS) || (geom_va_colours_written_o != 2 * N_GEOM_VERTS))
+        (geom_va_uv_staged_o != N_GEOM_DECODED) || (geom_va_colours_written_o != 2 * N_GEOM_DECODED))
       $fatal(1, "SMOKE: GEOM.VATTR landings=%0d rows=%0d uv=%0d colours=%0d -- want %0d / %0d / %0d / %0d",
              geom_va_landings_o, geom_va_rows_written_o, geom_va_uv_staged_o,
-             geom_va_colours_written_o, geom_landings_o, geom_landings_o, N_GEOM_VERTS,
-             2 * N_GEOM_VERTS);
+             geom_va_colours_written_o, geom_landings_o, geom_landings_o, N_GEOM_DECODED,
+             2 * N_GEOM_DECODED);
     if ((geom_va_lq_overflow_o | geom_va_index_oob_o | geom_va_look_oob_o |
          geom_va_profile_mixed_o | geom_va_dq_refused_o | geom_va_dq_stray_o) != 0)
       $fatal(1, "SMOKE: GEOM.VATTR faulted: lq_overflow=%0d index_oob=%0d look_oob=%0d profile_mixed=%0d dq_refused=%0d dq_stray=%0d",
@@ -5262,12 +5391,12 @@ module tb_zhao_console_core_smoke
     if (geom_dj_draws_o != 32'd1)
       $fatal(1, "SMOKE: GEOM.DRAWJOB accepted %0d draw(s), expected the packet's ONE DrawForm",
              geom_dj_draws_o);
-    // EXACTLY ONE JOB, because the header declares exactly one meshlet. A
-    // machine that re-offered the job would raster the identical triangles and
-    // this is the only line that would notice.
-    if (geom_dj_jobs_o != 32'd1)
-      $fatal(1, "SMOKE: GEOM.DRAWJOB emitted %0d job(s) for a one-meshlet stream",
-             geom_dj_jobs_o);
+    // EXACTLY ONE JOB PER MESHLET the header declares, and no more. A machine
+    // that re-offered a job would raster the identical triangles and this is
+    // the only line that would notice.
+    if (geom_dj_jobs_o != 32'(N_GEOM_MESHLETS))
+      $fatal(1, "SMOKE: GEOM.DRAWJOB emitted %0d job(s) for a %0d-meshlet stream",
+             geom_dj_jobs_o, N_GEOM_MESHLETS);
     if ((geom_dj_refused_cull_o | geom_dj_refused_resident_o | geom_dj_refused_stale_o |
          geom_dj_refused_xform_o | geom_dj_refused_denied_o | geom_dj_refused_format_o |
          geom_dj_refused_crc_o | geom_dj_refused_reserved_o | geom_dj_refused_layout_o |

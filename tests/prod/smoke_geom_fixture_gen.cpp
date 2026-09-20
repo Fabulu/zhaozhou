@@ -83,6 +83,33 @@ const uint8_t kTris[][3] = {
 };
 constexpr int kNT = sizeof(kTris) / sizeof(kTris[0]);
 
+// ---- THE MESHLET PARTITION (owner ruling R57, 2026-09-20) -------------------
+// The eight triangles are split across THREE meshlets, in order, each declaring
+// the same eight vertices and its own index run. The console's meshlet loop
+// could not be measured with one meshlet in flight -- there was nothing for it
+// to overlap WITH -- and a gate that cannot reach the state is not evidence
+// about the state.
+//
+// THE PIXEL COUNT DOES NOT MOVE AND THAT IS THE POINT. Partitioning changes
+// which meshlet carries a triangle, not which triangles exist: the same eight
+// are projected in the same two views through the same camera, so
+// `replayed`, `clipped`, `culled`, `accepted`, the tile union and therefore
+// SGF_EXP_PIXELS are identical to the one-meshlet fixture. `derive()` walks the
+// partition rather than the flat list and `main` asserts the two agree, so the
+// claim is checked rather than argued.
+//
+// THREE and not two, because two releases give one interval and three give a
+// steady one -- the same reason the rate line divides by (moves - 1).
+struct Meshlet { int first, n; };
+constexpr Meshlet kMeshlets[] = {{0, 3}, {3, 3}, {6, 2}};
+constexpr int kNM = sizeof(kMeshlets) / sizeof(kMeshlets[0]);
+static_assert(kMeshlets[0].first == 0, "the partition starts at triangle 0");
+static_assert(kMeshlets[0].n + kMeshlets[1].n + kMeshlets[2].n == kNT,
+              "the partition covers every triangle exactly once");
+static_assert(kMeshlets[1].first == kMeshlets[0].n &&
+              kMeshlets[2].first == kMeshlets[0].n + kMeshlets[1].n,
+              "the partition is contiguous and in order");
+
 // The camera, BOTH views, row-major fx16: x and y pass through, w = z. A real
 // perspective divide, so depth varies across every triangle and the near plane
 // is reachable. Row 2 is inert in the projector (its header).
@@ -135,7 +162,9 @@ struct Result {
   bool outside_grid = false;
 };
 
-Result derive() {
+// `partition` false walks the flat triangle list, true walks the meshlets. The
+// two must agree, which is what says the R57 split costs the fixture nothing.
+Result derive(bool partition) {
   Result r;
   zref::mat4fx m{};
   for (int i = 0; i < 4; ++i)
@@ -153,7 +182,17 @@ Result derive() {
     for (int i = 0; i < kNV; ++i)
       p[i] = zr::project_vertex(m, vp, zref::fx16{kVerts[i].x}, zref::fx16{kVerts[i].y},
                                 zref::fx16{kVerts[i].z}, nullptr);
-    for (int t = 0; t < kNT; ++t) {
+    // The order the console actually presents triangles in: meshlet by meshlet,
+    // each meshlet's own index run. A partition that lost or duplicated a
+    // triangle produces a different list here and therefore different totals.
+    std::vector<int> order;
+    if (partition) {
+      for (int mi = 0; mi < kNM; ++mi)
+        for (int k = 0; k < kMeshlets[mi].n; ++k) order.push_back(kMeshlets[mi].first + k);
+    } else {
+      for (int ti = 0; ti < kNT; ++ti) order.push_back(ti);
+    }
+    for (const int t : order) {
       ++r.replayed;
       const zr::ProjOut& a = p[kTris[t][0]];
       const zr::ProjOut& b = p[kTris[t][1]];
@@ -200,6 +239,20 @@ std::string emit(const Result& r) {
   s += "// zref::Binner, union of tiles x 256 (whole-tile resolve).\n";
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_N_VERTS = %d;\n", kNV); s += b;
   std::snprintf(b, sizeof b, "localparam int unsigned SGF_N_TRIS  = %d;\n", kNT); s += b;
+  // R57: the meshlet partition. Each meshlet declares ALL the vertices and its
+  // own contiguous run of triangles, so the page carries one vertex run and
+  // SGF_N_MESHLETS index runs.
+  std::snprintf(b, sizeof b, "localparam int unsigned SGF_N_MESHLETS = %d;\n", kNM); s += b;
+  std::snprintf(b, sizeof b, "localparam int unsigned SGF_MESH_FIRST [0:%d] = '{", kNM - 1); s += b;
+  for (int mi = 0; mi < kNM; ++mi) {
+    std::snprintf(b, sizeof b, "%d", kMeshlets[mi].first); s += b;
+    s += (mi + 1 < kNM) ? ", " : "};\n";
+  }
+  std::snprintf(b, sizeof b, "localparam int unsigned SGF_MESH_NTRI  [0:%d] = '{", kNM - 1); s += b;
+  for (int mi = 0; mi < kNM; ++mi) {
+    std::snprintf(b, sizeof b, "%d", kMeshlets[mi].n); s += b;
+    s += (mi + 1 < kNM) ? ", " : "};\n";
+  }
   auto arr = [&](const char* name, int which) {
     s += "localparam logic signed [31:0] ";
     s += name;
@@ -299,7 +352,25 @@ std::string emit(const Result& r) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  const Result r = derive();
+  const Result r = derive(true);
+  // R57: the partition must cost the fixture NOTHING. The pixel gate is
+  // reference-derived and it has to stay the same number for the same reason,
+  // not because it happened to come out the same.
+  {
+    const Result flat = derive(false);
+    if (flat.replayed != r.replayed || flat.clipped != r.clipped ||
+        flat.culled != r.culled || flat.accepted != r.accepted || flat.tiles != r.tiles) {
+      std::printf("smoke_geom_fixture_gen: the meshlet partition changed the reference result "
+                  "(flat replayed=%d accepted=%d tiles=%zu vs partitioned %d/%d/%zu)\n",
+                  flat.replayed, flat.accepted, flat.tiles.size(), r.replayed, r.accepted,
+                  r.tiles.size());
+      return 1;
+    }
+  }
+  if (kNM < 3) {
+    std::printf("smoke_geom_fixture_gen: fewer than three meshlets gives no STEADY loop interval\n");
+    return 1;
+  }
   if (r.outside_grid) {
     std::printf("smoke_geom_fixture_gen: a tile falls OUTSIDE the %dx%d render grid -- move the fixture\n",
                 kGridTiles, kGridTiles);
