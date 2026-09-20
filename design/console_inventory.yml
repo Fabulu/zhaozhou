@@ -28,6 +28,9 @@ modules:
   zhao_view_eye:
     disposition: pending_compose
     why: "the two views' CAMERA POSITIONS (owner ruling R63), which is the producer half of the blocker the two entries above cite. SetView 0x0010 now carries fx16 eye[3] and zhao_cmd_exec commits it as steps 17/18/19 of the view walk onto projector configuration addresses 19/20/21; this block registers those three words per view and hands them out as the six fx16 wires zhao_terrain_lod's cam0_x_i..cam1_z_i want. It SNOOPS the bus rather than living inside zhao_project_core, because that leaf has seven instantiation sites and a committed mutant copy and not one of its readers wants an eye. Tested by cmd_exec_directed cases 22-24 (order, per-view routing, idempotence, and no write for a refused view_id) and by view_eye_directed. It is not composed because its consumer zhao_terrain_lod is not (core entry I21)."
+  zhao_geom_loomfeed:
+    disposition: pending_compose
+    why: "GEOM.LOOM's node-stream carrier (core entry I50, owner rulings R58 and R69): SW.STREAM stages the topologically sorted stream in HPS DDR at a frozen 64-byte record, a CSR mailbox names it, hardware acknowledges. Built and tested by geom_loomfeed_directed (75 checks, with the REAL loom behind it) and carrying a committed positive control for its return credit. Composed in the commit that closes I50; this entry is deleted there."
   zhao_engine1_raw_last_v2:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
