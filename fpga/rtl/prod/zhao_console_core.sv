@@ -10823,7 +10823,19 @@ module zhao_console_core
   logic signed [11:0] gth_x_w, gth_y_w;
   logic               gth_last_w;
 
-  localparam int unsigned GTH_CW = 7;   // cell-coordinate width, 0..127
+  // THE CELL-COORDINATE WIDTH IS DERIVED, NOT WRITTEN DOWN. POST.COMPOSITE's
+  // `gd_cx_o` is `[POST_XW-3:0]` and `gd_cy_o` is `[POST_YW-3:0]`, i.e. a
+  // quarter of the view in each axis. At the shipped POST_LINE_W = 384 and
+  // POST_MAX_H = 240 those are 7 and 6 bits, so a literal 7 is right TODAY and
+  // would silently TRUNCATE the day a mode got wider -- and an aliased cell-x
+  // puts the right of the screen's bloom somewhere on the left.
+  //
+  // Taking the wider of the two makes the cast from either port a zero-extend
+  // by construction. CLAUDE.md rule 6 cuts the other way for an ART value, but
+  // this is not one: it is a width implied by two parameters, and deriving it
+  // is how it stays true when they move.
+  localparam int unsigned GTH_CW =
+      ((POST_XW - 2) > (POST_YW - 2)) ? (POST_XW - 2) : (POST_YW - 2);
 
   // ---- the tile origin, from the raster's own surface coordinates ----------
   // The shell publishes the SURFACE (x, y) of every accepted beat beside its
