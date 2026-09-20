@@ -2538,3 +2538,150 @@ leave the positive test proving nothing. The Packet-H ctest is bit-identical at
 an instrument, **read its output by hand against the source.** I was checking the
 six rows it DID report, to see whether they were real. They were benign — and
 sitting six lines above them were six more the tool had never mentioned.
+
+## R173 — A CANARY THAT CANNOT ENTER THE FAILING STATE IS NOT A CANARY
+
+**2026-09-20, found by TERRCOMP, verified independently here. R172 in a second
+tool on the same day.**
+
+`tools/budget/duplicate_functions.py` allowed **one** word before the packed
+range, so `function automatic logic signed [31:0] f(...)` — two words — never
+matched. Measured over `fpga/rtl`: **524 function headers, 380 matched, 125
+INVISIBLE**, and 196 headers carry `signed`.
+
+**The consequence is fit-relevant and it lands days before an area-constrained
+fit: duplicated names go 30 → 43.** Thirteen duplications were invisible, and
+they are the *signed arithmetic* ones — precisely where duplicated logic costs
+DSPs and ALMs. `sub_sat` is defined in **9 files**, `resc16` in **8**.
+
+**But the regex is not the finding. The CANARY is.** This tool's own docstring
+says it *"refuses to run unless it first finds a known-good example"* — and it
+did that faithfully for its entire life. Its canary is `unit_mul`, declared
+`function automatic logic [7:0] unit_mul(...)`: **unsigned, one type word.** It
+resolved happily under the broken pattern, so the self-check **passed over the
+exact blind spot it existed to guard.**
+
+This is `CLAUDE.md`'s "a detector that has not been shown to FIRE has not been
+tested", one level deeper: the detector *had* a self-test, the self-test *did*
+fire, and it fired on a case that could not distinguish a working pattern from a
+broken one. **A positive control must exercise the failure mode, not merely the
+happy path.** Added `SIGNED_CANARY = "mw"` — `logic signed [MATW-1:0]`, the case
+the old pattern could not see.
+
+**And a tool fact worth keeping:** the first fix used an unbounded alternation
+and **backtracked catastrophically**, running over two minutes on a corpus the
+bounded version scans in seconds. The repetition is capped at three words
+deliberately.
+
+### The sweep, and its honest result
+
+TERRCOMP recommended sweeping `tools/` for the same shape. Done, and **the
+answer is narrower than the recommendation implied, which is worth saying
+plainly rather than leaving an alarming number standing.**
+
+Twenty-one tools mention SystemVerilog declarations and never mention `signed`.
+**The port-parsing ones are NOT blind**: `check_counters.py` and
+`check_port_coverage.py` both use `(?:[\w:]+\s+)*?` — unbounded word repetition
+— so `signed` matches as simply another word. Verified by probe, not by
+reading: four declarations including `output var logic signed [31:0] x_o` were
+fed to both patterns and both resolved every one.
+
+**So the blindness was in exactly two tools, and they share a cause: each
+allowed EXACTLY ONE leading type word.** That is the shape to grep for, not the
+absence of the string `signed`.
+
+## R174 — R163 AS I WROTE IT IS TOO BROAD
+
+TERRCOMP: **`zhao_terrain_bake_v2` produces no supersession violation and
+cannot**, because `zhao_terrain_bake` (the v1) is **instantiated nowhere**.
+
+R163 says a `_v2` file that merely exists manufactures a `superseded` violation.
+**That is only true when the v1 is COMPOSED** — `superseded_in_closure()`
+reports INSTANTIATED modules with a higher-versioned sibling on disk, and a
+module nothing elaborates costs the fitter nothing, which is deliberate (a check
+that cries wolf about dead sources is one people learn to skip).
+
+So the correct statement is: **a `_v2` born beside a COMPOSED v1 manufactures a
+violation; a `_v2` born beside an uncomposed one does not.** E1's observation
+was real — it hit three production roots because `zhao_terrain_patch` *is*
+composed. My generalisation dropped the condition that made it true.
+
+**The practical rule survives intact** (a `_v2` is born in the commit that
+composes it), and it survives for a better reason than the one I gave.
+
+## R175 — A WARNING IN CAPITALS ON LINE 1 DOES NOT STOP PEOPLE READING THE FILE
+
+`fpga/quartus/prod_fit_sources.txt` opens with:
+
+> `# ORPHANED 2026-09-09. NOTHING READS THIS FILE. Do not edit it and do not`
+> `# draw conclusions from it.`
+
+**It has been misread four times in eleven days — including by owner ruling
+R86.** The warning is as loud as a warning can be and it is at the very top, and
+it did not work, because **a grep hit does not show you line 1.** You get a
+matching line from the middle of the file, and it looks exactly like a live
+source list.
+
+Verified here: nothing in `tools/` actually *reads* it — but
+`completion_register.py` **cited it in a docstring as evidence** that
+`zhao_terrain_bake.sv` is carried "into the production fit". That is a
+conclusion drawn from the orphaned file, sitting inside the tool that measures
+completeness, written by someone who had presumably read the banner.
+
+**Renamed to `prod_fit_sources.ORPHANED.txt`**, so the *path in the grep hit*
+carries the warning. The register's citation is updated to the new name and now
+says, beside it, that citing this file is the mistake being described.
+
+This is the `.gitignore` lesson in its purest form: **making a hazard invisible
+to nobody is not the same as removing it.** The fix for a warning people do not
+read is not a louder warning; it is putting the warning where the reader
+actually looks.
+
+## R176 — THE RATIFIED LAW PACKAGE IS IMPORTED ONLY BY THE MODULE THAT IS NOT COMPOSED
+
+TERRCOMP's new finding, and it is the one that makes R173 matter.
+
+`zhao_terrain_patch_law_pkg.sv` was created by E1 *this evening*, to hold the
+ratified terrain arithmetic **before a v2 could copy it**. TERRCOMP measured who
+imports it: **only `zhao_terrain_patch_acc`, which is NOT composed.** The two
+modules that ARE composed — `patch` and `lodfeed` — carry their own copies of
+`fx_add_sat`, `covers` and the `h16 → fx` conversion.
+
+**So the console today ships three implementations of a law that has exactly one
+ratified statement, and the single module that defers to it is the one not in
+the closure.**
+
+**And this is precisely what `duplicate_functions.py` exists to find, and
+precisely what it could not see**, because those are signed functions (R173).
+TERRCOMP put the two together in one commit subject, which is the right
+reading: the blind tool is *why* the duplication stood.
+
+## R177 — THE STANDARD TERRCOMP SET, worth copying
+
+It refused all four compositions, changed **zero files**, and is one of the most
+useful packets of the campaign. Three habits to copy:
+
+1. **It fired a POSITIVE CONTROL before quoting a null.** Its R115 sweep found
+   **0** hits for `normalmap` in `spec/`, so rather than report the zero it ran
+   the same sweep on terrain terms and got **14** — proving the sweep could see
+   its subject. Nobody asked it to. That is R166's habit arriving by itself.
+2. **It corrected three of its own claims, each in its own commit**, and
+   diagnosed the single shared cause: *citing a file it had not opened.* One of
+   the three, in its words, *"made my own recommendation look better"* — and it
+   said so in the subject line.
+3. **It re-measured every inherited blocker** and found two of terrain7's spent:
+   R83's Q12.8 widening is **DONE** (`PROJW = 20`, with a real producer in
+   `zhao_view_projq88`, both v2s wired in `prod_top` and carried in
+   `fit_targets.yml`).
+
+**Corrections to me that stand:** the Wave-4 brief's split was "11 disconnected
++ 1 unbuilt" when it is **12 + 0** — `zhao_geom_warp` was missing from my list,
+because I wrote the brief from the register's output *before* W1 merged and did
+not re-measure after. The same class as R144 and R155: **a brief is a snapshot,
+and I keep shipping them as though they were standing facts.**
+
+**Its owner recommendation, recorded and NOT acted on:** R115 — supersede
+TERRAIN.NORMALMAP (`cut_order: 1`, and `strength=0` is a bit-exact no-op), which
+would drop 21 → 20 honestly. **That is an owner decision and stays one**: taking
+it on my own authority would be closing a gap by removing function, which is the
+one thing rule 1 forbids however well-evidenced the case.

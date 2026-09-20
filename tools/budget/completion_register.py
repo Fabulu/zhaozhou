@@ -1110,8 +1110,12 @@ def superseded_in_prod_fit(
       * `design/console_inventory.yml:360` records that very module as
         `disposition: superseded`, `superseded_by: zhao_terrain_bake_v2`,
         `why: "... owner ruling 2026-09-19 'only the latest version'"`;
-      * `fpga/quartus/prod_fit_sources.txt:122` carries `zhao_terrain_bake.sv`
-        into the production fit;
+      * `fpga/quartus/prod_fit_sources.ORPHANED.txt:122` carried
+        `zhao_terrain_bake.sv` into the production fit -- note the name:
+        that file was ALREADY orphaned when this was written, and citing
+        it is the very mistake described below. It is renamed so a grep
+        hit labels itself (owner ruling R175); read it as history, never
+        as the current fit list;
       * and `check_console_inventory.py`, `check_prod_manifest.py` and
         `gen_prod_top.py --check` were all GREEN.
 
