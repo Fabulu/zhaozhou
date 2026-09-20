@@ -2226,7 +2226,49 @@ module zhao_console_board
   // scale the ladder's size thresholds by 2^deg rather than clamp the result --
   // which this port cannot express. Writing `deg -> floor` here would be a
   // composer inventing the policy, and it would be invisible once written.
-  // See FINDINGS-post3.md for the evidence and the recommendation.
+  //
+  // CITATION REPAIRED 2026-09-20 (post3b). This line read "See FINDINGS-post3.md
+  // for the evidence and the recommendation" and THAT FILE DOES NOT EXIST --
+  // not in the run folder, not anywhere in the tree. A pointer to nothing reads
+  // as coverage exactly the way a false `reference_model:` does (R94/R105), and
+  // no gate looks at a citation in a comment. The evidence is in
+  // `runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-post3b.md`.
+  //
+  // AND THE DECISION IS SHARPER THAN "NOBODY CHOSE", which is how it was
+  // recorded above. Searched 2026-09-20 (post3b), and the governor's OWN
+  // RATIFIED CONTRACT SETTLES IT AGAINST THE WIRING:
+  //
+  //   * `design/contracts/MEASURE.GOVERNOR.md:251` lists `deg0_o` / `deg1_o`
+  //     in its output table with the consumer column reading
+  //     "-- (capture / post-mortem)". The contract does not merely fail to
+  //     define a mapping; it classifies these two ports as NOT a policy feed.
+  //     Wiring them into a consumer would contradict the document, not fill a
+  //     hole in it.
+  //   * `design/contracts/PART.LADDER.md` never contains the words "deg",
+  //     "floor" or "degrade" at all. Its `:20` in-packet names a
+  //     `governor_target` with NO units, NO range and NO law, and its `:101`
+  //     failure row ("governor target unattainable at the lowest rung")
+  //     assumes a target in the LADDER's own currency, not a rung count.
+  //   * `design/blocks.yml:1650` / `:5026` assert only the EDGE
+  //     (MEASURE.GOVERNOR -> PART.LADDER) and the abstract packet name
+  //     `lod_targets`. An edge is not a field mapping.
+  //
+  // So the two documents do not disagree; between them they define no
+  // conversion, and one of them rules its own port out of the job. Neither the
+  // composer nor this block may invent it.
+  //
+  // RECOMMENDATION (owner's call; see the FINDINGS file above). The
+  // dimensionally correct mapping is NOT a floor. `deg` multiplies the ALLOWED
+  // PIXEL ERROR by 2^deg (governor law G2), and PART.LADDER picks its rung from
+  // SCREEN-SIZE thresholds in U8.8 pixels -- so the faithful conversion shifts
+  // `MESHLET_MIN..GLINT_MIN` LEFT by `deg` (a particle must be 2^deg times
+  // bigger to earn the same rung), which degrades smoothly across all six rungs
+  // and needs no rounding. `p_gov_floor_i` cannot express that: it is a clamp,
+  // so it collapses a whole population onto one rung the moment it bites. That
+  // argues for a new `p_deg_i[1:0]` on PART.LADDER rather than a deg->floor
+  // table, and it is an ART knob (how hard particles coarsen under pressure),
+  // so CLAUDE.md rule 6 puts it in a named editable constant and CLAUDE.md's
+  // art law puts the value in the owner's eye, not in a derivation.
   //
   // NOTE ALSO, for whoever fixes it: `zhao_part_ladder.sv:85-86` says "The
   // rungs, coarse to fine ... 'coarser' is 'numerically smaller'", and BOTH
