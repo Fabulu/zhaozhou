@@ -130,15 +130,49 @@ top:
   - zhao_geom_clip
   - zhao_geom_cull
   - zhao_geom_lod
-  - zhao_geom_project
+  # THE ONE SHARED PROJECTOR, NOT TWO WRAPPERS, SINCE 2026-09-20 (owner ruling
+  # R99, on R86's own reasoning and the owner's capitalised "YOU ONLY GET TO FIT
+  # THE LATEST VERSION").
+  #
+  # This list named `zhao_geom_project` and `zhao_terrain_project`: two shells
+  # over two SEPARATE `zhao_project_core` instances that the console does not
+  # contain. Verified against the instantiation graph rather than inherited --
+  # `zhao_geom_project` and `zhao_terrain_project` are instantiated by THIS FILE'S
+  # top and by nothing else in fpga/rtl, while `zhao_console_core` instantiates
+  # `zhao_proj_subsystem` (driven by `zhao_geom_group_seq`) and
+  # `zhao_geom_proj_lane`. `design/console_inventory.yml` has recorded both shells
+  # as superseded by `zhao_proj_subsystem` under owner ruling R3 ("keep the
+  # time-multiplex, no third port") since 2026-09-19.
+  #
+  # The deferral this file used to carry -- "after the composed fit closes" --
+  # does NOT survive R99: it makes the completion fit the arbiter of a swap the
+  # fit cannot observe, because the fit composed the wrong projectors. That is
+  # the identical circle R86 broke for `zhao_terrain_bake`, one level larger.
+  #
+  # PRICE, from console_inventory.yml's own numbers: the two shells cost
+  # ~12,267 ALM / 66 DSP (6,199 + 6,068 ALM, 33 + 33 DSP) against
+  # `zhao_proj_subsystem`'s measured 9,135 ALUT / 39 DSP with ONE
+  # `zhao_project_core`. On a 41,910 ALM / 112 DSP device that is the difference
+  # between two of R80's numbers and the truth.
+  - zhao_proj_subsystem
+  # GEOMETRY's half of the shared service: client A's result packed into
+  # zhao_geom_wcache, {arena,index} rider as the fill address. It is wiring;
+  # nothing in it computes. `zhao_geom_wcache` LEAVES the top: it is instantiated
+  # by this lane, and this file's own rule is that a module its parent
+  # instantiates is not a top.
+  - zhao_geom_proj_lane
   # The per-vertex half of D-5: §8's frozen fog factor from the guarded w that
-  # zhao_geom_project already emits on out_w_o.
+  # the projector emits on out_w_o (`zhao_project_core.out_w_o`, reached through
+  # zhao_proj_subsystem since R99; it was `zhao_geom_project` until 2026-09-20).
   - zhao_geom_fogfactor
   - zhao_geom_skin
   - zhao_geom_pose_cache
   - zhao_geom_pose_decode
   - zhao_geom_vdecode
-  - zhao_geom_wcache
+  # zhao_geom_wcache WAS A TOP HERE UNTIL 2026-09-20 (owner ruling R99) and is
+  # not any more: zhao_geom_proj_lane instantiates it, so it is counted INSIDE
+  # that lane under this file's own rule. The census total does not change; it
+  # stops being a separate standalone instance beside a lane that contains one.
   - zhao_geom_attrsetup
   - zhao_geom_parambuf
   # Both built 2026-09-03/04 from BORING_3D_FUNDAMENTALS_AUDIT. ASSEMBLE is R1,
@@ -247,7 +281,12 @@ top:
   # census requires: a module its parent instantiates is not a top.)
   - zhao_terrain_lightlane
   - zhao_terrain_lod
-  - zhao_terrain_project
+  # zhao_terrain_project WAS A TOP HERE UNTIL 2026-09-20 (owner ruling R99). It
+  # is the TWIN of zhao_geom_project -- a second zhao_project_core the console
+  # does not contain -- and console_inventory.yml records it superseded by
+  # zhao_proj_subsystem under owner ruling R3. TERRAIN's projection now reaches
+  # the machine through the one shared service selected in the geometry section
+  # above; zhao_terrain_wcache is counted INSIDE it.
   - zhao_terrain_velocity
   # V2, NOT V1, SINCE 2026-09-20 (owner ruling R86). `console_inventory.yml`
   # records `zhao_terrain_bake` as superseded by this module, citing the owner's
@@ -722,11 +761,11 @@ excluded:
   # ledger, the manifest and a source list are three different acts and doing two
   # of three leaves a file nothing bills and nothing declares absent.
   #
-  # `unused` for now: the service is instantiated only below the explicitly
-  # not-yet-adopted terrain composition. Production still counts the retained
-  # geometry and terrain projectors separately; that changes only in one future
-  # adoption edit after the composed fit and remaining seams close.
-  - zhao_project_service: unused  ONE shared projector; instantiated by the not-yet-adopted terrain composition, while production still counts geom_project + terrain_project separately
+  # zhao_project_service WAS `excluded: unused` HERE UNTIL 2026-09-20 with the
+  # note "production still counts geom_project + terrain_project separately".
+  # Owner ruling R99 made that sentence false in the same edit that made the
+  # service real: `zhao_proj_subsystem` is a selected top above, so the service
+  # and its one `zhao_project_core` are counted INSIDE it.
   # --- 2026-09-12, terrain projection pipeline composed but NOT ADOPTED --------
   # zhao_proj_subsystem is now the reusable leaf: one service plus the three-copy
   # terrain arena shell, driven through generic fill and reference ports. It no
@@ -739,11 +778,21 @@ excluded:
   # renamed mutant fires. Those are functional receipts, not adoption or fit
   # evidence. Production remains unchanged until zhao_terrain_pipe has a clean
   # composed fit and the NORMALS and DEPTHQUANT seams are designed and verified.
-  - zhao_geom_proj_lane: not-yet-adopted  GEOMETRY's half of the shared projector, built 2026-09-18 to close the gap zhao_proj_subsystem's header names -- client A's result port packed into zhao_geom_wcache, {arena,index} rider as the fill address, no adapter because zhao_vertex_arena's fill_ready_o is a stated constant 1'b1. It is wiring: nothing in it computes. Selecting one shared service instead of two wrappers (6,598 ALM / 33 DSP against ~12,400 / 66) needs this composed AND a producer driving it. CORRECTED 2026-09-19: the producer is NO LONGER ABSENT -- zhao_geom_group_seq exists and drives this lane inside zhao_console_core. What is still open is the ADOPTION, which is the selected census deciding to count one shared service instead of zhao_geom_project plus zhao_terrain_project, after the composed fit closes
-  - zhao_proj_subsystem: not-yet-adopted  shared projection service + three-copy terrain arena shell behind generic reference ports; no embedded walker; CORRECTED 2026-09-19: no longer used only inside zhao_terrain_pipe -- zhao_console_core also instantiates it, driven by zhao_geom_group_seq, and measured it at 9,135 total ALUTs and 39 DSP with ONE zhao_project_core where the census carries two. Still not-yet-adopted: neither composition is a selected census root
+  # zhao_geom_proj_lane and zhao_proj_subsystem WERE `not-yet-adopted` HERE UNTIL
+  # 2026-09-20. Both are selected `top:` entries now, under owner ruling R99.
+  # Their old notes ended "after the composed fit closes" and "neither
+  # composition is a selected census root" -- the first is the deferral R99
+  # overturns, and the second was a statement about THIS FILE that this file was
+  # free to make true.
+  # The superseded shells they replace are recorded below.
+  - zhao_geom_project: superseded  by zhao_proj_subsystem (design/console_inventory.yml, owner ruling R3 "keep the time-multiplex, no third port"; adopted into this list by R99 on 2026-09-20). A thin shell over its OWN zhao_project_core -- composing it is a SECOND PROJECTOR (~6,199 ALM / 33 DSP) the console does not contain. Retained on disk with its directed tests, its standalone fit target and its receipts; nothing in fpga/rtl instantiated it except this file's top
+  - zhao_terrain_project: superseded  by zhao_proj_subsystem (design/console_inventory.yml, owner ruling R3; adopted into this list by R99 on 2026-09-20). The twin of zhao_geom_project -- a second projector (~6,068 ALM / 33 DSP) -- and the executable oracle the composed dense and bitmap differentials are taken against in both views. Retained on disk with those differentials, its contract (design/contracts/TERRAIN.PROJECT.md) and its receipts intact
   - zhao_terrain_group_seq: not-yet-adopted  per-view arena allocation, ModeVtx fill/seal, ModeRef replay and release controller; used only inside the not-yet-adopted zhao_terrain_pipe
   - zhao_terrain_pipe: not-yet-adopted  composed ModeVtx/ModeRef terrain projection boundary; both-view dense/bitmap differential and release-mutant control pass, but composed fit, NORMALS, DEPTHQUANT and production adoption remain open
-  - zhao_terrain_wcache: not-yet-adopted  three zhao_vertex_arena read replicas (4x81x106, DENSE_SEAL) with triangle-rate replay; used inside the not-yet-adopted projection subsystem/pipe
+  # zhao_terrain_wcache WAS `not-yet-adopted` HERE UNTIL 2026-09-20: three
+  # zhao_vertex_arena read replicas (4x81x106, DENSE_SEAL) with triangle-rate
+  # replay. zhao_proj_subsystem instantiates it, and that is a selected top under
+  # owner ruling R99, so it is counted INSIDE it and can no longer be excluded.
   - zhao_terrain_topo: superseded  retained level-0 legacy/test walker; topology-aware ModeRef from zhao_terrain_tess now drives the generic subsystem reference ports, and no production composition instantiates this module
   - zhao_texture_ident_probe: probe  exposes the identity encoding functions for ident_encoding_directed
   # Added 2026-09-09, and CAUGHT BY check_prod_manifest.py rather than remembered.
