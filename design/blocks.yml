@@ -206,6 +206,18 @@ counter_catalog:
   - writeback_outstanding_hwm
   - writeback_ack_wait_max_cycles
   - writeback_jobs_stall_cycles
+  # TERRAIN.PAGEIO (bake's page window; design/contracts/TERRAIN.PAGEIO.md).
+  # Named apart from writeback_* because they measure a DIFFERENT pool access:
+  # writeback evacuates layer F to the HPS journal, this reads layer D and
+  # writes layers B and D back into the TERRAIN.PAGE_POOL slot in place.
+  - pageio_pages_read
+  - pageio_pages_written
+  - pageio_guard_denied
+  - pageio_bursts_read
+  - pageio_bursts_written
+  - pageio_stale_gen
+  - pageio_marks_emitted
+  - pageio_jobs_refused
   - loadq_accepted
   - loadq_issued
   - loadq_drained
@@ -2337,6 +2349,99 @@ blocks:
       expected_page_crc32c and the page header's own word disagree. Both are
       written; nothing says which wins. Both are checked behind
       CHECK_HEADER_CRC rather than one being picked silently.
+
+  - id: TERRAIN.PAGEIO
+    name: Bake's page window (layer D in, layers B and D out)
+    kind: rtl
+    subsystem: terrain
+    clock_domain: gpu
+    purpose: "Serves the FOUR TERRAIN.BAKE page ports that no block in the machine serves: the layer-D reads behind vtx_nobake_i and cell_state_i, and the layer-B and layer-D writebacks on sc_* and cs_*. Layer D (page offset 6,598) had ZERO readers anywhere under fpga/ and layers B and D had no writer at all, so a bake could compute a scar and a breach and had nowhere to put either -- a bake whose scar cannot be stored has not deformed anything. One block and not two because all four ports need the same residency slot, the same generation and the same MEM.GUARD socket on the terrain page pool, and zhao_terrain_bake_v2 processes one record at a time with strictly sequential phases, so one agent per bake is sufficient by construction. It is also the only block that holds the slot and generation a patch was served under while learning from bake_done_o that the bake finished, which makes it the natural -- and on present evidence the only -- writer of the directory's deformation mark terr_dm_*."
+    contract: design/contracts/TERRAIN.PAGEIO.md
+    phase: 6
+    owner_issue: ZH-128
+    inputs: [page_bake_jobs]
+    outputs: [page_bake_completions, deformation_marks]
+    upstream: [TERRAIN.SEQ, TERRAIN.RESIDENCY, MEM.GUARD, TERRAIN.BAKE]
+    downstream: [TERRAIN.BAKE, MEM.GUARD, TERRAIN.RESIDENCY]
+    backpressure: ready_valid
+    latency: variable
+    target_throughput: "one bake window per patch-bake record: 17 layer-D read bursts in, 35 layer-B plus 17 layer-D write bursts out, plus four read-modify-write edge words; derived from the spec section 2 layout, not observed"
+    reference_model: zref::terrain::nobake_corner_shadow
+    tests:
+      directed: tests/terrain/pageio_rtl_directed.cpp
+      random: tests/terrain/pageio_rtl_directed.cpp
+    counters: [pageio_pages_read, pageio_pages_written, pageio_guard_denied, pageio_bursts_read, pageio_bursts_written, pageio_stale_gen, pageio_marks_emitted, pageio_jobs_refused]
+    counter_ports:
+      pageio_pages_read: pages_read_o
+      pageio_pages_written: pages_written_o
+      pageio_guard_denied: guard_denied_o
+      pageio_bursts_read: bursts_read_o
+      pageio_bursts_written: bursts_written_o
+      pageio_stale_gen: stale_gen_o
+      pageio_marks_emitted: marks_emitted_o
+      pageio_jobs_refused: jobs_refused_o
+    source_ids: true
+    budget_group: geometry_mantle
+    maturity: SPECIFIED
+    maturity_log:
+      - state: SPECIFIED
+        date: "2026-09-20"
+        commit: "78c644ca"
+        evidence: design/contracts/TERRAIN.PAGEIO.md
+    deferred: false
+    cut_order: null
+    superseded_by: null
+    notes: >-
+      THIS ROW IS THE POINT OF THE PACKET THAT WROTE IT. The contract was
+      written on 2026-09-20 and deliberately left the ledger row out, on the
+      reasoning that an unbuilt row is itself a gap. The consequence was the
+      opposite of the one intended: tools/budget/completion_register.py walks
+      this file, so a capability with NO ROW is not absent from the console,
+      it is absent from the QUESTION. The register's total was never wrong --
+      it was answering a smaller question than its readers assumed. A gap that
+      no instrument can see is worse than a gap that every run prints, so the
+      row lands FIRST, before the RTL, and the register's total RISES when it
+      does. That rise is the instrument starting to work.
+
+      RULING T4 ANSWERS THE CONTRACT'S OWNER DECISION 1, and it was already
+      written down. The contract asks whether layer B is persisted through the
+      HPS journal or whether a direct pool write is the whole of it.
+      zhao_terrain_writeback.sv's header states T4 as "B and D are NEVER
+      written back (the HPS keeps the canonical mirror current from the same
+      deterministic commands)" and gives that as the reason layer F -- which
+      has no canonical mirror -- must go behind an ACK barrier while B and D
+      must not. So the pool write is the whole of it, there is no second
+      doorbell and no second ticket space, and the contract's own recommended
+      reading is the ruled one. It is recorded here rather than re-asked.
+
+      THE CONTRACT'S SECTION 4 RECOMMENDATION OF BYTE ENABLES IS STRUCTURALLY
+      UNAVAILABLE, and this is the correction that most changes the block.
+      zhao_mem_guard.sv computes be_ok = (req.be == mask_of(req.len)) and
+      gates every request on it, and its own header says byte_enable "must be
+      the FULL contiguous mask over [addr, addr+len) (partial-word masking is
+      NOT in the Phase-2 arbiter)". zhao_vram_arbiter.sv confirms it from the
+      other side: it converts len to WORDS (words_of(client_req[k].len)) and
+      the SDRAM controller never sees a byte mask at all. So the VRAM write
+      granularity in this machine is a 64-bit WORD and a sparse be is a guard
+      VIOLATION, not an optimisation. The edge handling is therefore a
+      read-modify-write, and it is smaller than the contract feared: not the
+      edge BURSTS but the edge WORDS, of which there are exactly two per
+      plane. Layer B spans [2242, 4420) so its first word (2240) carries
+      layer A's last two bytes and its last word (4416) carries layer C's
+      first four; layer D spans [6598, 7622) so its first word (6592) carries
+      layer C's last six bytes and its last word (7616) carries layer E's
+      first two. Four shared words per bake, everything between them wholly
+      owned. The directed test the contract asks for -- neighbouring layers
+      byte-identical after a bake -- is the acceptance test for exactly this.
+
+      WHAT IT DOES NOT CLOSE, stated because the attraction of this block is
+      that it looks like it closes three core entries. I32 does not close on
+      this block alone: bake also needs its A/B/C reads adapted from
+      TERRAIN.PAGESTREAM's push to its pull, and the stamp_results to cmd_*
+      record seam that entry I32 is actually about. I27 gains a writer for
+      terr_dm_*, which is its first half; the terr_chk_* half is untouched.
+      I28 is already closed (rulings R14 and R4) and merely has never seen a
+      beat, because nothing in the machine can dirty a page.
 
   - id: TERRAIN.WRITEBACK
     name: Dirty-page evacuation (F sheet to the journal)
