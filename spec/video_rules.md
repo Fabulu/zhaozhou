@@ -170,6 +170,99 @@ untouched and outside both CRCs (ratified 2026-08-15, review MAJOR-3: the
 scanout fetcher wants one linear burst stream per view, which the interleaved
 layout would break every 256 pixels mid-line).
 
+### 3.2 Viewport rectangles — the table `SetView.viewport_id` indexes
+
+**Added 2026-09-20 under owner ruling R30** (*"Move the viewport-id→rectangle
+table from `video_rules.md` into the ABI as a fixed table per `video_mode`.
+SetView's viewport_id indexes it."*).
+
+**R30's premise was wrong and that is why this section exists.** There was no
+viewport-id→rectangle table in this file to move. `zhao_console_core.sv` entry
+I14, `zhao_cmd_exec.sv` line 1576 and R30 itself all say the table "is
+`spec/video_rules.md`'s"; a search of `spec/` for *viewport* on 2026-09-20
+returned five hits, four of them `viewport_mask` on unrelated commands and one
+the `SetView.viewport_id` field declaration. The table was believed to exist in
+three places and existed in none — the false-PRESENCE shape the handover's
+claim #15 records, and the reason a refusal that cites it cannot be inherited.
+
+**This section rules nothing new, and it is not even the first statement of
+the table.** Every number below is already entailed by §1's mode table and
+§3/§3.1's stored-surface geometry — and **three places in this repo had already
+derived it, identically, none of them able to cite a table:**
+
+* **`reference/src/zrender/internal.hpp:41`, `zref::render::viewports_of()`** —
+  the reference oracle's own executable form, dated to the 2026-08-15
+  ratification. `VIDEO_DUO` → `{0,0,256,192}` and `{0,192,256,192}`, returning
+  2; every other mode → `{0,0,canvas_width,canvas_height}`, returning 1. **That
+  is this table, including the viewport COUNT that makes an out-of-range id
+  detectable.**
+* `tests/terrain/terrain_project_directed.cpp:462` —
+  `zref::render::Viewport vp1{0, 192, 256, 192};  // video_rules §3.1 stacked Duo`
+* `design/contracts/GEOM.BINNER.md:25` — "Duo's two 256×192 view blocks STACKED
+  at rows 0 and 192 (§3.1)", used to choose the tile-grid anchor.
+
+**So the refusal that kept this out of the ABI was wrong twice over.**
+`zhao_console_core.sv` entry I14 says deriving the rectangle "would be this
+file inventing a layout, which is the thing the whole ledger exists to refuse."
+It would not be inventing anything: the console's reference oracle — the thing
+RTL is *supposed* to be verified against — has held the table since August.
+Whoever implements the lowering **differentials against `viewports_of()`** and
+invents nothing. (It presently lives in `reference/src/`, not the public
+`reference/include/zref/`, so promoting it is that packet's first small step.)
+
+Writing it here is the same act as the 2026-09-18 clarification above: it stops
+the value being re-derived, and eventually re-derived differently, per block.
+
+The rectangle is in the **stored surface's** coordinate space — the space
+`zref::render` writes and `RASTER.RESOLVE` will land in — not the displayed
+raster's. That is the space a projector's viewport transform belongs in: §3.1's
+side-by-side placement and the 48 border rows are SCANOUT's and are applied
+after everything this rectangle governs.
+
+| `video_mode` | `viewport_id` | origin (x0, y0) | extent (w, h) |
+|---|---|---|---|
+| `VIDEO_Z60` (0) | 0 | (0, 0) | 384 × 240 |
+| `VIDEO_STORM` (1) | 0 | (0, 0) | 320 × 240 |
+| `VIDEO_DUO` (2) | 0 | (0, 0) | 256 × 192 |
+| `VIDEO_DUO` (2) | 1 | (0, 192) | 256 × 192 |
+
+Duo's view 1 sits at y = 192 and not at x = 256 because §3 makes Duo **one
+logical 256×384 surface at 512 bytes/row**, with logical rows 0..191 addressing
+view 0 and 192..383 addressing view 1. A packer that put view 1 at x = 256
+would be describing the DISPLAYED image, which §3.1 says is assembled at
+scanout and is not what anything upstream of scanout can address.
+
+**An out-of-range `viewport_id` is REFUSED, never aliased.** Z60 and Storm have
+exactly one viewport, so any id but 0 is out of range; Duo has two. The
+consumer keeps its previous rectangle and counts the refusal — the same law and
+the same reason `SetView.flags[1:0] == 3` is refused rather than folded onto a
+neighbour (`spec/commands.zidl:311`): one past the end of a table is a
+diagnosis, not a picture.
+
+All four values fit the projector's 12-bit configuration fields
+(`zhao_project_core.sv` cfg address 16 = `{y0[27:16], x0[11:0]}`, address 17 =
+`{h[27:16], w[11:0]}`), and origin-plus-extent is exactly the parameterisation
+that block's stage-6 centre (`x0 + w/2`, `y0 + h/2`) already wants. Nothing has
+to be reshaped to carry it.
+
+**It is DERIVED, not an ABI field**, which is R73's distinction applied here:
+`SetView` already carries the `viewport_id`, and the rectangle is a function of
+that id and the mode under §1/§3 alone. Putting the rectangle itself on the
+wire would be a second statement of a law that already exists, and one more
+thing a capture can disagree with. R63 put the eye on the wire for the opposite
+reason: recovering it would have needed an unratified 4×4 inverse.
+
+> **OPEN, and it belongs to whoever composes this table into CMD.EXEC.**
+> §1.1 latches the mode only at frame start, effective the NEXT frame, while a
+> `SetView` in the same packet commits immediately. So which mode indexes the
+> table — the one on screen, or the one `SetPresentationContract` just set?
+> **Recommended: the mode the contract set**, because the view being configured
+> is the view of the frame that contract governs, and indexing with the
+> outgoing mode would give a Duo frame's second view a Z60 rectangle for
+> exactly one frame. It is recorded here rather than decided in RTL, because a
+> composer choosing between two defensible readings is how a layout gets
+> invented quietly.
+
 ## 4. Scanout law (D7) — repeat, never tear
 
 VIDEO.SCANOUT decomposes into:

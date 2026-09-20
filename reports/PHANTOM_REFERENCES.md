@@ -104,6 +104,15 @@ reference written before its RTL can be verified against anything.
 
 ## The list
 
+> **ONE ROW HAS BEEN RESOLVED SINCE THIS FILE WAS WRITTEN.** `zref::SnacAdapter`
+> (INPUT.SNAC, phase 2) now EXISTS, in `reference/include/zref/zref_input.hpp`.
+> It was written on 2026-09-20 when the block was built under owner ruling R7,
+> and `tests/input/input_snac_directed.cpp` differentials the RTL against it
+> rather than transcribing `spec/input_rules.md` 4 and 7.3 a second time. The
+> row is left in the table below and annotated here rather than deleted,
+> because how a phantom closes is the useful part and a list that silently
+> shrinks records none of it.
+
 | Phase | Block | Declared | Subsystem |
 | --- | --- | --- | --- |
 | 0 | SYS.CDC | `zref::CdcFifo` | platform |
