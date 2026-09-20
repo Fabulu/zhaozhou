@@ -50,12 +50,110 @@ Ruling R135 sets this document's agenda:
 **Two of the twenty-one wait on your eye and on nothing else.** Both renders are
 made, committed and pushed. No agent can advance either.
 
-**Twelve decisions are live below.** Two are a look. Four are one sentence each.
-The rest carry numbers.
+~~**Twelve decisions are live below.** Two are a look. Four are one sentence each.
+The rest carry numbers.~~
+
+---
+
+# VERIFICATION PASS — DOSSIERCHECK, 2026-09-20
+
+**This document was written to strike spent decisions, and nine of its own
+twelve inherited items were struck that way. It was then re-attacked in the same
+spirit. Of the twelve it declared live, FOUR ARE SPENT, TWO ARE NOT LIVE TODAY,
+AND SIX SURVIVE** — plus both items of the unnumbered §13, which are also spent,
+making **six strikes in all**. Every strike below quotes the RTL, the ruling or
+the spec clause itself — no summaries, no grep windows (R186).
+
+| # | subject | verdict |
+|---|---|---|
+| 1 | the seam dig | **LIVE** — and the "no" branch is under-costed |
+| 2 | TERRAIN.NORMALMAP | **SPENT** — ruling **D-8** ratifies it; the recommendation's quote is inverted |
+| 3 | the gather law | **LIVE** — nothing to amend; cleanest item in the file |
+| 4 | the untextured attribute law | **LIVE** — two pieces of its evidence are not |
+| 5 | terrain's two absent laws | **NOT LIVE** — its own text says "do not rule these yet" |
+| 6 | the deviation store | **NOT LIVE** — **R87** already carries the number *and* the deferral |
+| 7 | the terrain job port | **SPENT** — there is no player mask; `video_rules.md` §3.1 ratified the mapping in 2026-08 |
+| 8 | the creature ABI freeze | **SPENT** — a restatement of **R90**'s own amendment |
+| 9 | a forge program page kind | **LIVE** — but buys less than one family of six |
+| 10 | vertex alpha | **SPENT** — **R48**-as-amended and **R89** already rule it |
+| 11 | the FIELD lane width | **LIVE** — the headline number prices the wrong knob |
+| 12 | the scoping call | **LIVE, and larger** — it is an authorisation request against the owner's own directive |
+| 13 | two low-stakes items | **BOTH SPENT** — one ruled by **R182**, one already executed |
+
+**THE SIX THAT SURVIVE: 1, 3, 4, 9, 11, 12.** Two are a look (**1** and **3**),
+one is the campaign's highest-leverage ruling (**4**, per R187), one is an
+authorisation the owner's own directive requires (**12**), and two are
+area/ABI calls (**9**, **11**).
+
+**The headline correction.** This document's closing instruction was *"answer
+decision 2 in one sentence — it is the only gap on the board an owner sentence
+closes today, and it takes the register to 20."* **Decision 2 asks the owner to
+supersede a capability the owner ruled IN**, under binding ruling D-8, in a file
+whose own line 4 reads *"This file is the authority"*. Its supporting quote comes
+from a brief titled **"normal maps stay"** and argues the opposite of what it is
+cited for. **Do not act on decision 2.**
+
+**The pattern, stated once.** Four of the five strikes are the same shape as the
+ones this document itself made: **a ruling that already decided the question,
+found by searching the SUBJECT rather than the title.** D-8 was missed because
+R115 searched `spec/` when the authority is in `reports/`. R90 and R48 were
+missed because the entries cite the rulings and stop reading before the
+amendment. R87 was missed because the entry re-derived its number instead of
+looking for it. **A search is a claim about a moment, and every one of these
+rulings landed on 2026-09-20 — the same day this document was written.**
 
 ---
 
 # 1. THE SEAM DIG — does a rim wrong by one vertex read as a defect?
+
+> ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **but the "no" branch is under-costed and the blocking claim is overstated**
+>
+> **The look survives.** I tried three attacks and all three failed. (1) *Has a
+> ruling already taken it?* R65 authorises the fallback but explicitly owes
+> the eye: *"**OWED before this is final: a render of a dig across a patch seam
+> at final resolution for the OWNER'S EYE** -- a half-cell step at every seam is
+> an art defect, and only looking settles whether it reads."* (2) *Is it already
+> ratified away?* `spec/terrain_rules.md` §9.3(c) ratifies the **finding**, not
+> the verdict, and closes on *"whether a rim wrong by up to one vertex everywhere
+> is acceptable is a question nobody has put to the owner"*. (3) *Is the render
+> stale or missing?* It is committed at `fd169553` and the core's I32 entry cites
+> it. **No agent can advance this.**
+>
+> **Two corrections to the entry below, both of which change how it should be
+> read.**
+>
+> **(a) The format is ALREADY FROZEN BY A RATIFIED SPEC SENTENCE, so "no" is not
+> a knob — it reopens a freeze.** `spec/terrain_rules.md` §9.3(b) states
+> **"The format must stay frozen in v1"** and gives the law
+> `sheet_texel_for_vertex(v) = min(2v, 63)`. The cost table below prices the
+> alternative at *"+38.3% page size"* and stops there. §9.3(b) names three
+> further costs it omits, and one carries a measured precedent:
+>
+> > *"Padding to 8,512 … moves the page pool's end past `0x054E_0000` and so
+> > relocates a `spec/memory_rules.md` §5b region, and re-shapes
+> > `zhao_surface_sheet`'s `Slots × Texels` array away from a power of two — **an
+> > array whose last shape change cost 95,947 ALMs when it stopped inferring
+> > memory.** That is a subsystem packet with a fit gate, not a format tweak."*
+>
+> On a device at ~113% of its ALM ceiling that precedent belongs in front of the
+> owner, not three sections away. **The honest framing of "no" is: reopen a
+> ratified freeze, accept a subsystem packet with its own fit gate, and accept an
+> array reshape with a 95,947-ALM precedent — in exchange for a rim that is
+> correct everywhere.** The entry's own argument that it is *"cheaper now than it
+> will ever be"* still stands and is still true; it is simply not cheap.
+>
+> **(b) "Unblocks tie-off I32 — directly" is overstated.**
+> `design/contracts/TERRAIN.PAGEIO.md` §8, *"What this does NOT close"*:
+>
+> > *"**I32 does not close on this block alone.** Bake also needs its A/B/C reads
+> > adapted from `pagestream`'s push to its pull … plus the `stamp_results` →
+> > `cmd_*` record seam that entry I32 is actually about."*
+>
+> TERRAIN.PAGEIO is a contract with **no `blocks.yml` row and no RTL** — layer D
+> has zero readers under `fpga/` (R97). So a "yes" here unblocks the layer-F
+> reader and Option A's second depth mode; **I32 itself still needs an unbuilt
+> block behind it.** The look is worth taking on its own merits; it is not the
+> last thing standing between the register and I32.
 
 ### LOOK AT `reports/terrain-seam-dig/seam_dig_contact.png`
 
@@ -286,6 +384,22 @@ evidence that it is what the game needs.
 
 # 3. THE GATHER LAW — does the proposed bloom read right at 240p?
 
+> ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **the cleanest item in the file. I could not lay a glove on it.**
+>
+> Four attacks, all failed. (1) *Has the law been ratified?*
+> `design/contracts/POST.GATHER.md`'s section is headed **"The tag-to-gather law
+> — PROPOSED, owner ruling R37 (2026-09-19), NOT RATIFIED"** — the contract
+> itself declares the law unratified. (2) *Has a ruling disposed of it?* Every
+> `R37` occurrence tree-wide: the rulings table row (which *asks* for the render),
+> R186 (which **retracted** a challenge to it), R189 (*"The cheapest is **R37**,
+> which needs the owner's *eye* on a contact sheet already rendered and
+> committed"*), and this file. **No disposition exists.** (3) *Is the render
+> outstanding?* Committed at `a41a46da`. (4) *Does R65 gate it?* No — R186
+> confirms it: *"**R65 is NOT load-bearing for POST.GATHER** — zero citations in
+> its contract or RTL; it is terrain's."* The entry already says so, correctly.
+>
+> **Nothing about this entry needs amending, and no agent can advance it.**
+
 ### LOOK AT `reports/post-gather-law/gather_law_contact.png`
 
 38,683 bytes, committed `a41a46da`, pushed.
@@ -359,6 +473,65 @@ key light.
 **This is the highest-leverage item in the document that has never been raised as
 a numbered decision**, and it was found by three independent lanes hitting the
 same wall without recognising each other.
+
+> ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **the question survives; TWO PIECES OF ITS EVIDENCE DO NOT**
+>
+> **The question is live and R187 independently confirms its leverage:**
+> *"TERRAIN AND PARTICLES REACHED THAT WALL INDEPENDENTLY, in two packets that
+> never spoke. So ONE owner decision — an untextured attribute law — unblocks
+> BOTH, and it is now the highest-leverage open item in the campaign."* R189
+> repeats it. No ruling anywhere decides it. **It survives every attack I made.**
+>
+> **But the forge half of the evidence below is spent, and it matters because the
+> stated mechanism is the wrong one.**
+>
+> **(a) THE VATTR ABSENCES ARE FALSE — all three.** The entry says the front end
+> *"wedges with no timeout, no abort and no counter"* and *"nothing differences
+> them"*. `fpga/rtl/geometry/zhao_geom_vattr.sv` carries a section headed
+> **"`done_o` CAN WEDGE THE WHOLE GEOMETRY FRONT END, AND NOW IT SAYS SO"**,
+> opening on **owner ruling R88**, which had already ruled this exact hazard:
+> *"**AND INDEPENDENTLY OF FORGE.SHADOW: the vattr stall deserves a counter
+> now.** A composed path that can wedge the whole front end with no timeout and
+> no counter is the shape this file's own chapter is about."* The counter is
+> `done_stall_o`, with a named watchdog-patience constant in clocks; its terms
+> are **events rather than busy levels**, deliberately, *because a hang holds a
+> busy level high forever*; and it is **fired by legal stimulus** in
+> `geom_vattr_directed` cases L and M. It does not abort **on purpose** —
+> aborting would be a policy change, so it observes, *"which is what R88 asks
+> for"*. **A detector that exists, fires and is cited is the opposite of the
+> entry's claim, and quoting the absence would have sent a packet to build a
+> second one.**
+>
+> **(b) ROUTE A IS NOT FORGE.SHADOW'S ROUTE.** The entry blocks
+> `zhao_forge_shadow` on *"its Route A deadlocks for exactly this reason"*. R88
+> already chose otherwise: *"Take the lane's **route B** (a private 16-deep arena
+> with fan replay arbitrated into GEOM.CLIP), **which dodges blocker (1)
+> entirely**."*
+>
+> **FORGE.SHADOW is still blocked by this decision — but at a different seam, and
+> R187 names it:** Route B arbitrates *into GEOM.CLIP*, and the binding wall is
+> **GEOM.CLIP's seven-slot attribute packet**, not vattr's `done_o`. *"**THE
+> BINDING BLOCKER IS NOT THE ARBITER. It is the seven-slot attribute packet** —
+> `GEOM_CLIP_ATTRS = 7` per corner — **the same wall entry (b) already records
+> for TERRAIN.**"* **Same conclusion, correct mechanism.** The distinction is
+> load-bearing: a packet sent to fix a `done_o` deadlock would work on a path
+> nobody is taking.
+>
+> **(c) AND THE RECOMMENDED OPTION HAS MORE SUPPORT THAN THE ENTRY CLAIMS.** It
+> argues the hardware *"has already chosen this three times independently"*. It
+> is at least five, and one is ratified spec:
+>
+> * `spec/creature_rules.md` §1.2 — **`page == 255` means untextured and falls
+>   back to the flat material colour.** A ratified untextured sentinel already
+>   exists, at the page level.
+> * `reports/MATERIAL_ARCHITECTURE.md` — *"Tier 0 untextured — vertex colour /
+>   Gouraud only, **no primary sample**"*.
+> * `reports/RENDERER_ARCHITECTURE.md` RULING 5 — *"Flat and untextured
+>   triangles **bypass** it"*, of GEOM.ATTRSETUP.
+>
+> **So option A is not new design at all — it is the fifth statement of a
+> convention the architecture already carries, and one of them is in `spec/`.**
+> That strengthens the recommendation and should be in front of the owner.
 
 ## The question
 
@@ -439,7 +612,33 @@ only.
 
 ---
 
-# 5. TERRAIN'S TWO ABSENT LAWS — also never raised as decisions
+# 5. TERRAIN'S TWO ABSENT LAWS — **RECLASSIFIED: PARKED, NOT LIVE**
+
+> ## RECLASSIFIED 2026-09-20 by DOSSIERCHECK — **not spent, and not a live decision either. It asks the owner for nothing.**
+>
+> **This entry's own recommendation is "do not rule these yet".** Its words:
+> *"**Do not rule these yet, and that is the recommendation.** They are listed
+> here because they were never written down as decisions and would otherwise be
+> rediscovered a seventh time — **not because they are ripe.**"* It then explains
+> that law 2 is entangled with the texture lane's I49 *"and should not be ruled
+> in isolation"*.
+>
+> **I agree with all of that and I am not striking the content — I am striking
+> its place in the count.** The document's header says *"**Twelve decisions are
+> live below**"*. An item that instructs the owner not to decide it is not a live
+> decision; it is a parked item with a good reason. Counting it inflates what the
+> owner is being asked to do, and the whole value of this file is that the
+> remaining list can be trusted.
+>
+> **Keep every word. Move it under "WHAT IS NOT AN OWNER DECISION, SAID PLAINLY",
+> beside I20 and I27, which are parked for exactly the same reason.** Its real
+> finding — *"I13 has been mis-scheduled: six passes have treated it as wiring,
+> and it is two art laws wearing a tie-off's clothes"* — is worth more there,
+> where a scheduler will read it, than in a queue of questions.
+>
+> **It becomes live when decision 4 is ruled and the untextured merge is built**,
+> at which point the two laws stop being blockers and become an art pass with a
+> render. That is the correct trigger and the entry already names it.
 
 ## The question
 
@@ -480,7 +679,44 @@ treated it as wiring, and it is two art laws wearing a tie-off's clothes.
 
 ---
 
-# 6. THE DEVIATION STORE — 185 M10K, 33% of the device's memory
+# 6. THE DEVIATION STORE — **RECLASSIFIED: DEFERRED BY R87, NOT LIVE TODAY**
+
+> ## RECLASSIFIED 2026-09-20 by DOSSIERCHECK — **R87 already carries both the corrected number AND the disposition**
+>
+> **The correction this entry presents as new is ruling R87**, in the same
+> rulings file, dated the same day, and it is already cited elsewhere in the tree
+> (`design/contracts/TERRAIN.PAGEIO.md` §8 quotes it by number). R87 in full:
+>
+> > *"**R59's own price was wrong by 2.4x.** A stale `// 576` comment beside a
+> > 704-bit row propagated into TERRAIN.LOD's whole R59 size report … and R59's
+> > premise itself used a 16-bit deviation where `DEVW` is 24 and counted no
+> > history at all. The true cost is **185 M10K of 553 (33%)**, not the ~77 (14%)
+> > the ruling priced … **(coordinator)** The correction stands and it changes
+> > the argument R59 rested on: I have been describing M10K as "the resource with
+> > real slack" -- against 306 of 553 already used, one block wanting 185 is not a
+> > rounding error … **Price M10K explicitly in the fit plan; it is no longer the
+> > free currency.**"*
+>
+> **"Price M10K explicitly in the fit plan" IS "do not decide this before the
+> fit"** — which is this entry's own recommendation. R87 is
+> (provisional, coordinator) and therefore live under the standing authorisation.
+> **The ruling and the entry agree, and the entry does not say the ruling
+> exists.**
+>
+> **So there is no question here the owner can act on today**, and the entry
+> concedes it: *"Composing it today also buys nothing, because TERRAIN.LOD has
+> five other live blockers behind it."*
+>
+> **What the entry adds that R87 does not, and it is worth keeping:** the
+> lookup-for-computation caveat — this store **relocates state and buys no
+> ALMs**, so the owner's M10K ruling does not apply to it. Put that sentence in
+> the fit plan beside R87's pricing instruction, where the person holding the
+> M10K map will read it.
+>
+> **Correct status: a POST-FIT item, gated by decision 12, carrying R87's number
+> and this entry's caveat.** Not one of the twelve. The entry's stated purpose —
+> *"stop the number being discovered inside a composition packet"* — is served by
+> R87 and by TERRAIN.PAGEIO §8 already quoting it.
 
 ## The question
 
@@ -779,6 +1015,59 @@ sixth adapter requester; **price the async store in ALMs before building it.**
 
 # 9. A FORGE PROGRAM PAGE KIND — R108 left this open explicitly
 
+> ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **but it buys LESS than "one family of six", and two citations are wrong**
+>
+> **Live.** No ruling anywhere decides a forge page kind. The page-kind rulings on
+> record are **D-2** (kinds 10/11/12), **R42** (kind 13, SPECIES_TABLE) and
+> **R26/R68** (a partial lift of kind 8) — none touches forge. R108's own closing
+> paragraph says it: *"A forge page kind must still be frozen."* The
+> `handle32[forge_program]` count of two is **correct** (`spec/commands.zidl` and
+> `spec/generated/abi.md`). **The entry survives.**
+>
+> **Four corrections, one of which shrinks the item further.**
+>
+> **(a) The registry is `spec/cartridge.md` §3, not §4.** §4 is the payload-law
+> prose. A reader sent to §4 will not find the table.
+>
+> **(b) A ratified, handle-addressable PROGRAM page already exists, and the entry
+> does not mention it.** §2 section type **0x0002 PROGRAM** — *"one serialized
+> field program `.zprog` body … one section per program"* — and §3 **kind 0,
+> field program**. It is already consumed through a handle:
+> `TerrainField 0x0200 { handle32[program] program; }`, whose comment points at
+> *"cartridge PROGRAM page, spec/cartridge.md 3 kind 0"*. **Kind 14 is the next
+> free slot** and §3's strikethrough chain (`~~6-255~~ ~~8-255~~ ~~10-255~~
+> ~~13-255~~ **14-255 reserved**`) is the ratified precedent for additive growth.
+> So the machinery — page family, hash pin, handle type, publication path — is
+> built and ratified. **The question is narrower than "freeze a page kind": it is
+> whether a forge descriptor reuses kind 0 or earns kind 14.**
+>
+> **(c) Family 0 is already served, so it is not "one of six" — it is fewer.**
+> `DrawProcedural`'s field is typed `handle32[forge_program]` while **its own
+> comment two lines above says it names a kind-4 terrain-patch page**:
+> *"`program` names the cartridge terrain-patch page … whose header carries the
+> patch extents."* The handle's declared resource type and its documented referent
+> already disagree — a defect worth fixing in the same commit — and
+> FORGE_HEIGHTFIELD_PATCH has a page today.
+>
+> **(d) And `design/blocks.yml` says the page is not the binding blocker anyway:**
+>
+> > *"`zhao_forge_prim` emits INDEX TRIPLES … and no coordinate at all;
+> > `zhao_forge_prim_eval` emits WORLD fx16…; `zhao_forge_cliff` emits a RIM
+> > EDGE. Not one of the three is the shape this port takes, so **even a forge
+> > page, a forge_kind and a dispatch would deliver to nowhere** -- what sits
+> > between them and this door is a projection and a clip."*
+>
+> That is decision 4's wall again, and it strengthens this entry's own
+> "defer" recommendation on better grounds than the one it gives.
+>
+> **One citation to correct before this is relayed.** The recommendation calls
+> R133 *"your own standing instruction"*. **R133's D-FORGESHADOW-B is the
+> COORDINATOR's** — *"That is the correct trade and it is now a standing
+> instruction"*, written by the coordinator, not the owner. Attributing a
+> coordinator ruling to the owner is the same mis-attribution this file struck
+> R65 for, and here it is doing real work: the whole "wrong order" argument rests
+> on it.
+
 ## The question
 
 **Freeze a forge program page kind in `spec/cartridge.md` §4?**
@@ -931,6 +1220,60 @@ commissioned as one, not smuggled in as part of closing a shadow gap.**
 
 # 11. THE FIELD LANE WIDTH (FH11) — the largest single area decision open
 
+> ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **but the headline number prices the WRONG PARAMETER, and the directive supports the recommendation more strongly than quoted**
+>
+> **Live, and cleanly so.** `FH11`, `FAB_LANES` and `FAB_GROUP_PTS` appear in **no
+> `OWNER-*` file except this one**. `OWNER-RULINGS-20260919-EVENING.md` has zero
+> hits for `FAB_`; its `LANES` hits are R91, R103, R126 and R182, all about
+> different parameters. `FIELD-REPAIR-PLAN-20260920.md` §5 is headed
+> *"Contradictions — flagged for the owner, NOT resolved"* and C2 carries no
+> disposition. `PACKET-QUEUE.md` lists it under *"Owed to the OWNER"*. **No
+> ruling has touched it.**
+>
+> **THE NUMBER IS ATTACHED TO THE WRONG KNOB.** The table below prices *"Adopt
+> FH11's width"* at `~+6,000 ALM`. `zhao_console_core.sv` prices the two knobs
+> separately, at the composition itself:
+>
+> * **`FAB_LANES`** — *"shipped 4. One point per grant means three discarded
+>   lanes, **~+2,200 ALM** of vector ALU and **~+12 DSP** for nothing."*
+> * **the ~+6,000 ALM** is the `FAB_DIST_BANKS` × `FAB_GROUP_PTS` isqrt-root
+>   axis: *"`zhao_field_v3_len.sv` prices a root at ~251 ALM and eight at
+>   'roughly 2,000 ALMs', so the shipped point is about **+6,000 ALM on this axis
+>   alone**."*
+>
+> **So FH11's width read narrowly is ~+2,200 ALM / +12 DSP, not +6,000.** The
+> +6,000 is right for *the whole fabric widening* and wrong for *FH11*. That is a
+> factor of nearly three in front of an owner on an ALM budget, and it runs in
+> the direction that makes the decision look scarier — the opposite of the usual
+> bias, but wrong either way. **Split the table row in two.**
+>
+> **FH11 ITSELF NEVER ASKS FOR FOUR LANES.** Its whole text: *"**At LANES=4** feed
+> four distinct valid points where available. Carry a live mask and per-point
+> status. … The current OR-reduced ALU flags are insufficient for exact per-point
+> status."* **That is conditional — it says what to do IF the fabric is four
+> lanes wide, and contains no instruction to make it so.** The width reading is
+> an inference. **This makes "adopt the semantics, defer the width" not a
+> compromise but a literal reading of the directive**, and the entry should say
+> so.
+>
+> **And the directive's stronger sentence is §17.2, not §17.3:**
+>
+> > *"Consequently increasing CTX and LANES **cannot be sold as a free way to fix
+> > the front. Measure** the 8/16/32-context and scalar/quad frontier with the
+> > SAME actual workload."*
+>
+> The owner already requires this to be measured rather than asserted. §17.3's
+> *"a faster correct machine can cost more"* is the weaker half.
+>
+> **One thing the entry gets exactly right and should be kept in capitals**, from
+> the same core comment block: *"**NEITHER CONFIGURATION FITS.** That is the
+> finding and it is not fixed by choosing the smaller one; the smaller one is
+> chosen because the front cannot use the larger, and the budget is over either
+> way."*
+>
+> *Minor: the console now composes `zhao_field_host_v2`, not v1 — packet C1 has
+> landed. The nine remaining v1 references in the core are all comments.*
+
 ## The question
 
 FH11 asks for wide useful lanes in the shared FIELD fabric. The console composes
@@ -979,6 +1322,61 @@ This is decision 12 in miniature: the number needed to answer it does not exist.
 ---
 
 # 12. THE SCOPING CALL — fit now with a declared remainder, or hold for zero?
+
+> ## VERIFIED LIVE 2026-09-20 by DOSSIERCHECK — **and it is MORE owner business than stated. THE QUESTION IS FRAMED WRONG, and the governing owner text is not cited.**
+>
+> **This is the entry I attacked hardest and it came back larger.** Two
+> corrections, and the second changes what the owner is actually being asked.
+>
+> **(a) "Hold for zero" HAS NO OWNER SOURCE.** I sorted every fit-timing
+> statement in the tree by authorship. *"Drive the mandatory gap count to zero,
+> freeze that design, then run the honest fit"* is `FIT-PLAN-AT-ZERO.md` — no
+> ruling ID, no owner attribution. R135's *"the standing goal is to reach zero
+> and then fit"* is **(coordinator)** and says so itself: *"That is the owner's
+> call, not mine."* R80 is **(coordinator)**. The owner's own fit rule, in
+> `CLAUDE.md`, is *"we should only fit at big architectural **subsystem**"* —
+> which licenses **batching**, not waiting for zero. **So one side of this
+> either/or is a coordinator construction being offered to the owner as if it
+> were his own standing position.**
+>
+> **(b) THE OWNER'S ACTUAL POLICY IS "THE COMPLETE CONSOLE ONLY", AND IT ALREADY
+> NAMES WHAT THIS ENTRY IS ASKING FOR.** Both directives Fabian committed on
+> 2026-09-20 say so. `Zhaozhou_SHARED_FIELD_Repair_Architecture_2026-09-20.txt`
+> (commit `6262868c`, Fabian), in its opening instruction block:
+>
+> > *"The instruction to fit only the complete console is NOT overridden here.
+> > Use lint, elaboration, differential simulation and structural resource sheets
+> > now. **Obtain a new owner authorization before running an earlier physical
+> > fit.** Never claim that these checks prove placement or timing closure."*
+>
+> `Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt` §19.5, *"Existing fit
+> policy"*: *"This document does not authorize breaking the current owner policy
+> of **fitting the complete design only**."* It is already ratified into a
+> contract — `design/contracts/GEOM.WARP.md`: *"Fit policy is unchanged: the
+> complete design only, at the owner-authorized stage."*
+>
+> **So "fit now with a declared remainder" is not a scoping preference between
+> two coordinator plans. It is precisely the "new owner authorization" the
+> owner's own directive requires, and it should be put to him in those words** —
+> with the remainder itemised, as R135 asks, so the authorisation is given
+> against a known list rather than a rounded one. Framed as it is, the owner
+> could reasonably answer it without realising he is amending a policy he wrote
+> three days ago.
+>
+> **Everything else in the entry holds.** R135's five structural blockers are
+> accurately quoted. The preconditions check out, with one caveat:
+> `FIT-PLAN-AT-ZERO.md`'s precondition table **contradicts itself** on
+> precondition 3 — the cell opens *"UNMET AGAIN … the check reads 2"* and closes
+> *"six of the seven are now met"*. **Precondition 3 IS met**: C1 landed,
+> `zhao_console_core.sv` and `zhao_prod_top.sv` both instantiate
+> `zhao_field_host_v2`, and `console_inventory.yml` records
+> `superseded_in_closure() reads 73 production roots CLEAN`. The stale opening
+> sentence is quotable against the fit and should be struck.
+>
+> *And a number that drifts across three documents: R135 says "71 production
+> roots CLEAN", this file says 72, `console_inventory.yml` says 73. The
+> direction is consistent — roots were added — but reconcile them before the
+> receipt quotes one.*
 
 ## The question
 
@@ -1040,10 +1438,66 @@ permission for the move they declined.
 
 ---
 
-# 13. TWO LOW-STAKES ITEMS, LISTED SO THEY ARE NOT MISTAKEN FOR BLOCKERS
+# 13. TWO LOW-STAKES ITEMS — **BOTH STRUCK**
 
-**Neither blocks anything. Both are one line. Clear them in the same sitting or
-ignore them.**
+> ## STRUCK 2026-09-20 by DOSSIERCHECK — **one was already ruled, the other was already DONE — and doing it broke three tests**
+>
+> **ITEM 1 (`OUT_LANES`) — STRUCK, R182 already ruled it, in the same words.**
+> R182's closing paragraph:
+>
+> > *"**Renaming it to `OUT_ORDINALS` is a docket item, not a pre-fit change** —
+> > it touches `prod_manifest.yml` and the fit is the scarce resource. But it
+> > must be recorded as **the cause rather than a tidiness item**."*
+>
+> That is this item's recommendation — *"rename it immediately after the fit, not
+> before"* — already on record, and R182 is live under the standing
+> authorisation. The entry re-asks a settled question. *(R168's functional half
+> has also shipped: `resp_present_i` exists at `zhao_field_warp_adapter.sv` with
+> a header citing R168 and W10 by name.)*
+>
+> **One hazard worth carrying forward, which neither the entry nor R182 states:**
+> the two parameters agree today **only numerically**. `prod_manifest.yml` says
+> so: *"NOT the same quantity as OUT_LANES, equal to it here by **coincidence of
+> this console's profile set**."* The mis-wiring is masked by that coincidence and
+> un-masks the moment any profile changes either number. R182's "after the fit"
+> still holds — nothing changes in between — but the rename should be first in
+> the queue on the other side, not last.
+>
+> **ITEM 2 (`prod_fit_sources.txt`) — STRUCK, AND IT IS A LIVE DEFECT RATHER THAN
+> A LOW-STAKES ITEM.**
+>
+> **The rename was already executed**, in commit `552c11da` — *"the orphaned fit
+> list renamed so grep hits self-label."* The file on disk is
+> `fpga/quartus/prod_fit_sources.ORPHANED.txt`. The recommendation is spent.
+>
+> **And its premise is false, in the flattering direction, about the one fact it
+> exists to assert.** The banner reads *"NOTHING READS THIS FILE … A repo-wide
+> grep for this filename returns nothing: no script, no QSF, no tcl, no yml."*
+> **Three committed, ctest-registered Python tests read it unconditionally** —
+> `tests/tools/test_render_texture_packet_c.py`, `..._d.py` and `..._e.py`,
+> registered in `tests/CMakeLists.txt`. **The banner's list enumerates
+> script/QSF/tcl/yml and omits `.py`.** So the warning that has been misread four
+> times is itself wrong about its own claim, the rename was performed on the
+> strength of it, and **packet E now fails with `FileNotFoundError:
+> …prod_fit_sources.txt` — reproduced.** *(All three suites were already red for
+> unrelated `sha256` drift, which is why the new breakage went unseen — the
+> already-failing-suite variant of the broken-instrument law.)*
+>
+> **The live item is therefore not a rename. It is: repoint or delete those three
+> reads.** Deleting is defensible — the assertion is redundant; `prod_manifest.yml`
+> and `zhao_prod_top.sv` are checked in the same tuple and are the real
+> instruments. **This is engineering and needs no owner.**
+>
+> **"Re-examine R86" is OVERSTATED and should not be relayed as written.** R86
+> makes two claims. The primary one — *"`zhao_prod_top.sv:3671` instantiates
+> `zhao_shell_top` and `:4076` instantiates `zhao_terrain_bake`"* — rests on a
+> live generated file, is stamped *"Verified independently by me, not
+> inherited"*, and **never touches the orphaned file**. Only the secondary
+> supporting sentence cites it, and that sentence is worthless exactly as the
+> banner warns. **Strike that one sentence; R86's finding, its ruling and its
+> four actions all survive intact.** As written, this item invites
+> re-litigation of the day's most consequential finding on a technicality that
+> does not reach it.
 
 **`OUT_LANES` means two different things one line apart (R182).**
 `zhao_field_warp_adapter.OUT_LANES` sizes an **ordinal**-indexed port, so a bench
@@ -1238,5 +1692,21 @@ They are the only two items in this document that **no agent can advance by any
 amount of work**, and between them they unblock five queued packets. Everything
 else here can wait for the fit; these two have been waiting for you.
 
-Then answer decision 2 (TERRAIN.NORMALMAP) in one sentence — it is the only gap
-on the board an owner sentence closes today, and it takes the register to 20.
+~~Then answer decision 2 (TERRAIN.NORMALMAP) in one sentence — it is the only gap
+on the board an owner sentence closes today, and it takes the register to 20.~~
+
+> **AMENDED 2026-09-20 by DOSSIERCHECK. Do NOT answer decision 2 — it is
+> STRUCK.** Owner ruling **D-8** already ratified the terrain detail-normal path,
+> `design/V1-RELEASE-DEFINITION.md` calls it *"a capability to protect and
+> implement, **not an unanswered optional-feature question**"*, and the sentence
+> quoted in support of superseding comes from a brief titled **"normal maps
+> stay"**. **Superseding it would have taken the register to 20 by deleting a
+> feature the owner ruled in** — the exact move seven lanes refused this
+> campaign, arriving through the one door nobody was watching: an owner
+> decision. The residue is a `spec/` transcription of D-8 and a one-bit
+> qualifier. Both are engineering.
+>
+> **The third thing to do, after the two PNGs, is decision 4** — the untextured
+> attribute law. R187 and R189 both name it the campaign's highest-leverage open
+> item, two subsystems reached it independently, and the architecture has already
+> stated the recommended answer five times, once in ratified `spec/`.
