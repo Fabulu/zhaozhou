@@ -2044,6 +2044,37 @@
 //      >>    wide -- the exact "fit a circuit you already know is wrong" trap,
 //      >>    one layer up. **The Q12.8 widening belongs to whoever owns
 //      >>    MEASURE.GOVERNOR and is not terrain7's to make.**
+//      >>
+//      >>    UPDATED 2026-09-20 (terrain8), and it is worse than flagged.
+//      >>    **`zhao_view_projq88.sv` NOW EXISTS** -- built the same day at
+//      >>    `d7736da9`, "MEASURE.GOVERNOR's two input-side producers, built and
+//      >>    tested standalone" -- and it implements R73's derivation with its
+//      >>    output `proj0_o`/`proj1_o` declared **`[15:0]`, Q8.8: the exact
+//      >>    container ruling R83 rejects.** SEARCHED `fpga/`, `reference/`,
+//      >>    `spec/` and `design/` for Q12.8, q12_8 and "[19:0] proj": THREE
+//      >>    hits, ALL PROSE -- a RECOMMENDED comment at
+//      >>    `zhao_measure_governor.sv:236` and terrain7's two notes in this
+//      >>    file. **R83 IS IMPLEMENTED NOWHERE**, and
+//      >>    `zhao_measure_governor.sv:244-245` still declares `proj0_i` and
+//      >>    `proj1_i` as `[15:0]`. So the widening now has to land in TWO
+//      >>    places, not one: projq88's output port AND the governor's input.
+//      >>    R83's arithmetic RE-DERIVED here rather than quoted: proj =
+//      >>    kx * vw / 2; at 60 deg hfov kx = 1/tan(30) = 1.7320508 and vw = 512
+//      >>    give 443.4 against a Q8.8 ceiling of 255.996. Saturation begins at
+//      >>    kx = 1.0 (hfov 90) single-view and kx = 2.0 (hfov 53.13) on Duo.
+//      >>    Both match R83 exactly.
+//      >>    AND NOTE HOW THE NEW BLOCK DESCRIBES THIS, because the instrument
+//      >>    is honest and its PROSE lands soft: its header says "SATURATION IS
+//      >>    POSSIBLE AND IS COUNTED ... a camera with an EXTREME row-0
+//      >>    magnitude clamps", and contrasts itself favourably with the
+//      >>    governor's rescale which "cannot saturate and therefore
+//      >>    deliberately has no counter". The counter is right and the word
+//      >>    "extreme" is wrong by an order of importance: it clamps at an
+//      >>    ORDINARY GAME CAMERA. A counter that fires on every ordinary camera
+//      >>    is not an edge-case counter -- it is the FORMAT being wrong, and
+//      >>    the counter's presence makes it read as handled.
+//      >>    `zhao_view_projq88` is also instantiated by NO production root:
+//      >>    BUILT, INSTALLED NOWHERE, like `zhao_view_projscale` beside it.
 //
 //      THE ORIGINAL STATEMENT IS KEPT BELOW because the argument it makes --
 //      that `zhao_terrain_patch.st_*` and `zhao_terrain_lod.sp_*` are
@@ -2543,12 +2574,71 @@
 //      >> I28's writeback could not see a beat. One absent owner, three
 //      >> entries, and the previous reading had it filed under the wrong one.
 //
+//      >> CORRECTED 2026-09-20 (terrain8), AND THE CORRECTION RUNS TOWARD MORE
+//      >> MISSING WORK, WHICH IS WHY IT WAS NOT MADE. "The DIG phase's INPUT is
+//      >> now served" is true of layers A, B and C and FALSE of layer D, which
+//      >> this block needs on TWO ports, one per phase:
+//      >>    * `vtx_nobake_i` -- the section 3.3 corner shadow (already named
+//      >>      two paragraphs above, and it is a LAYER-D read, not a gap in the
+//      >>      A/B/C stream);
+//      >>    * `cell_state_i` with `cell_ci_o`/`cell_cj_o` -- the BREACH phase's
+//      >>      32x32 layer-D read-modify-write. **NOT RECORDED IN ANY ENTRY OR
+//      >>      HEADER BEFORE NOW.**
+//      >>
+//      >> **LAYER D HAS NO READER ANYWHERE IN THE MACHINE.**
+//      >> `zref_terrain_page.hpp:317` puts layer D at page offset 6,598.
+//      >> SEARCHED every .sv/.v/.txt/.qsf/.yml under `fpga/` for 6598, 6,598,
+//      >> `D_OFF` and kLayerDOff: ZERO hits that are a page offset -- the only
+//      >> matches are `d_off`/`rd_off` (FIELD and CMD.DMA variables a
+//      >> case-insensitive search picks up) and the area figure "6,598 ALM"
+//      >> quoted in three headers. Corroborating, from three directions:
+//      >> `zhao_terrain_pagestream.sv:251` reads exactly '{A_OFF, B_OFF, C_OFF};
+//      >> `zhao_terrain_pageloader` writes WHOLE pages at load and reads none
+//      >> back; `zhao_terrain_writeback` is layer F only (F_OFF = 10694).
+//      >> This is the same shape as the layer-E absence at offset 7,622 (entry
+//      >> I21 blocker 1, re-verified 2026-09-20 and still true): **TWO of the
+//      >> eight page layers have no reader, and both are on this block's
+//      >> critical path.**
+//      >>
+//      >> SO THE ARITHMETIC OF THE REFUSAL CHANGES. It is not one absent owner
+//      >> under three entries; it is FOUR unserved ports -- and they are ONE
+//      >> BLOCK, because every one of them needs the same residency SLOT, the
+//      >> same GENERATION and the same guard socket on the page pool, and bake
+//      >> processes one record at a time with strictly sequential phases.
+//      >> `design/contracts/TERRAIN.PAGEIO.md` (written 2026-09-20, NOT BUILT,
+//      >> and deliberately with NO design/blocks.yml row -- a mandatory
+//      >> capability that is not built is a gap, and this packet may not close
+//      >> one gap by opening another) specifies it: both faces port for port,
+//      >> what it must not own, the alignment argument, the
+//      >> `zhao_mem_share_wr .N(3) -> .N(4)` composition with no guard change
+//      >> and no new client id, both memory sizes per ruling R59, and the four
+//      >> owner decisions it surfaces.
+//      >> IT IS ALSO THE ONLY HONEST WRITER OF ENTRY I27's `terr_dm_*`, for the
+//      >> reason I27 itself gives: whoever drives the mark must hold the slot
+//      >> and generation the patch was served under, and this agent is the only
+//      >> thing in the proposal that does.
+//
 //      WHAT WOULD BE FIELD ROUTING, SAID SO NOBODY RE-DERIVES IT: the layer-D
 //      WRITE half matches. Bake's `cs_event_o`/`cs_sub_o`/`cs_ci_o`/`cs_cj_o`
 //      map onto `zhao_terrain_compcache_front`'s `cs_we_i`/`cs_w_substance_i`/
 //      `cs_w_ci_i`/`cs_w_cj_i` with only a 6-to-5 bit address narrowing, and
 //      that is the port the next paragraph exports. The gap is the block, not
 //      that seam.
+//
+//      AND READ THAT PARAGRAPH EXACTLY (2026-09-20, terrain8): the seam is real
+//      and it is NOT A PAGE WRITE. `zhao_terrain_compcache_front` is an ON-CHIP
+//      M10K mirror of one patch, double buffered; it has NO VRAM PORT AT ALL
+//      (swept its whole file for guard_/vram/beat_/burst: zero hits), and it
+//      stores `logic [1:0] sub_m` -- the SUBSTANCE field only, with
+//      `cs_w_substance_i` two bits wide. Bake deliberately preserves section
+//      3.3's flag bits (`zhao_terrain_bake_v2.sv:886`,
+//      `cs_state_o <= {cell_state_i[7:2], sub_out}`) and through this seam all
+//      SIX are DROPPED, while `cs_state_o` -- the byte that carries them -- has
+//      no consumer on it at all. Wiring it alone would let THIS FRAME's
+//      composed lattice see the new substance while the page keeps the old one:
+//      the flags are lost and the deformation dies at the next page load. Both
+//      consumers are wanted and they are DIFFERENT consumers; only the page
+//      write discharges terrain_rules section 7.
 //
 //      AND THE BLOCK TO COMPOSE IS NOT THE ONE THIS ENTRY USED TO NAME.
 //      `design/console_inventory.yml` already records `zhao_terrain_bake:
