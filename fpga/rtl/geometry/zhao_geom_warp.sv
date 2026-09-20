@@ -85,9 +85,19 @@
 // file cannot repair: the console composes the Field host at IN_LANES=13 against
 // Warp's fifteen (R103 prerequisite P1) with CLIENTS=2 and both taken (P2), and
 // there is no `DrawWarpedForm` command, so no draw can set `d_warp_en_i`.
-// See runs/.../FINDINGS-fieldw1.md. The Field port is NOT tied off anywhere:
-// `tests/geometry/geom_warp_field_pair_directed.cpp` drives it from the real
-// `zhao_field_warp_adapter` against the real `zhao_field_host_v2`.
+// The Field port is NOT tied off anywhere:
+// `tests/field/warp_field_chain_directed.cpp`, over
+// `tests/field/tb_warp_field_chain.sv`, drives it from the REAL
+// `zhao_field_warp_adapter` against the REAL `zhao_field_host_v2` and follows a
+// value all the way through a real Warp program on the real v3 engine.
+//
+// Packet W1's findings are in its COMMIT MESSAGES on branch `gz/fieldw1`, not
+// in a run-folder file: the harness refuses `.md` under `runs/`, and
+// `gz/fieldh1` hit the same refusal at `89bb9bad`. This comment named a
+// `FINDINGS-fieldw1.md` that does not exist, and a sibling test file under a
+// name I had changed; both were caught by walking every path these files NAME
+// and checking it resolves. A header that cites a file nobody can open is the
+// same defect as a counter nobody reads.
 
 `default_nettype none
 

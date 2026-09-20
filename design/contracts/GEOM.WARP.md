@@ -353,7 +353,7 @@ stage [§19.5].
 [W16]: *"All shared-host limitations are real prerequisites... Do not bury a
 second Field loader inside GEOM.WARP to avoid doing this."* Each was **checked
 in the tree**, not assumed. Full evidence and file:line citations are in
-`runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-warp.md`.
+packet W1's COMMIT MESSAGES on branch `gz/fieldw1` (the harness refuses `.md` under `runs/`; `gz/fieldh1` hit the same refusal at `89bb9bad`, and the earlier warp lane's `FINDINGS-warp.md` was never written for that reason either).
 
 **RE-MEASURED 2026-09-20 BY PACKET W1, AT `55ec050b`, AFTER H1'S HOST LANDED.**
 The table below is not inherited: every row was checked in the tree again, and
@@ -390,7 +390,7 @@ C1's act), **P8**, and one thing no prerequisite table listed:
 **THERE IS NO `DrawWarpedForm` COMMAND, SO NO DRAW CAN EVER ENABLE WARP.** A
 composed `zhao_geom_warp` with today's ABI would sit permanently in its W09
 bypass — function present and structurally unreachable. That is not a
-composition; see the owner decision in `FINDINGS-fieldw1.md`.
+composition; see the owner decision in packet W1's COMMIT MESSAGES on branch `gz/fieldw1` (the harness refuses `.md` under `runs/`; `gz/fieldh1` hit the same refusal at `89bb9bad`, and the earlier warp lane's `FINDINGS-warp.md` was never written for that reason either).
 
 **What W1 did instead of tying the port off.** The block is built, and its Field
 request port is a real client port shaped to `zhao_field_warp_adapter`'s declared

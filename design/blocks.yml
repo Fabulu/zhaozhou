@@ -3763,7 +3763,7 @@ blocks:
       per-slot generation stamp, which detects staleness but does not isolate two
       eligible plans) and four independent tables (host_v2 still declares
       TABLES=2). See the contract's re-measured prerequisite table P1-P9 and
-      runs/CLAUDE-RUNS/RUN-20260919-1656-gaps-to-zero/FINDINGS-fieldw1.md.
+      packet W1's commit messages on branch gz/fieldw1 (the harness refuses .md under runs/).
 
       Composing this block with its Field request port tied off would move the
       entry from BUILT-NOT-CONNECTED to a TIE-OFF, which is closing a gap by
