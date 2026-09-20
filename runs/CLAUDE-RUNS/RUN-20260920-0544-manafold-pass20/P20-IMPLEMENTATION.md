@@ -7,21 +7,25 @@ the owner's mid-run correction to item 1.
 **Worker:** Claude (sole Opus worker; no Qwen, no sub-agents)
 **Branch:** Zhaozhou `manafold-pass20`
 
-**Verdict: NOTHING SHIPS ON BY DEFAULT, and the pass is honest about why.**
+**Verdict: ITEM 1 IS REPAIRED. Items 2 and 3 are built and gated but still ship
+OFF, on one named leg.**
 
-* **Item 1 (the rip)** is DIAGNOSED AND GATED BUT NOT REPAIRED. Three candidate
-  repairs were built, measured and rejected. The root cause is now named
-  exactly, and a gate exists that cannot miss it again.
-* **Items 2 and 3 (the kneading dip and the particles' reaction)** are BUILT,
-  GATED AND COMPLETE, but ship **OFF**: enabling the dip turns three `mspan`
-  legs red at any strength, including the signed-span contract that exists to
-  stop the free-floating-dongle fault. `ZHAO_U02_KNEAD_DIP_PM=1000` turns it on
-  for a look.
+* **Item 1 (the rip) — FIXED AT THE ROOT.** The rear band now BOWS instead of
+  shortening. Worst rear rail strain **0.129 -> 0.692** across the bank
+  (R4's target floor is 0.50, so the declared OPEN BREACH is gone). At 4x on
+  Inspect f380 the splayed wedge is a clean even tube; at 6x on f158/f160 the
+  junction reads as a rounded shoulder where it was a pinched step.
+* **Items 2 and 3 (the dip and its particle reaction)** — the bow removed the
+  two SERIOUS objections (closure, and the carrier jerk leg). One remains:
+  mspan's signed bound / free-span margin. **Verdict (b)**, and §2.5 says why.
 
-**The shipping bank is therefore byte-identical to the pre-pass bank** (hover
-`0xA2D0E051`, inspect `0x779615BB`, taunt3 `0x75BC4777`, 3/3). Everything
-delivered here is instrument, evidence and mechanism -- not a visible change.
-Do not deploy this as a creature pass.
+**Shipping CRCs** hover `0xEFE5AFC1`, inspect `0x9E71DF79`, taunt3 `0xC81598AA`.
+**`ZHAO_U02_REAR_BOW=legacy` reproduces the pass-19 bank byte for byte, 3/3**
+(hover `0xA2D0E051`, inspect `0x779615BB`, taunt3 `0x75BC4777` — the
+authoritative `P19-FINAL-BANK-INTEGRITY.md` values; the different numbers in
+`P19-IMPLEMENTATION.md` are pre-review and the discrepancy is closed).
+
+Still no bank render, encode, merge or deploy.
 
 ---
 
@@ -276,6 +280,47 @@ feature's exact-off control.
 
 ---
 
+### 2.5 The dip verdict: (b), and exactly what blocks it
+
+The coordinator asked for a plain choice. **(b): the dip as authored really does
+violate the span system's declared envelope.** Not (a).
+
+With the bow repair in, two of the three original objections go away at an
+authored depth of 140-300 mm: *"SpanDeltaE and body-attached RearSocket do not
+meet at End"* (closure) and the visible-carrier angular step/accel/jerk leg
+(continuity). **Both were the arc/chord fault showing through** — the dip closes
+the loop harder, the old solve answered a shorter chord by compressing the band,
+so the dip made the rip worse and the contract was right to object.
+
+What remains is mspan's **signed bound / free-span margin**: 240 breaches at
+depth 300, **11 at depth 140**. Amplitude-sensitive, but it does not reach zero
+at any depth that leaves a visible gesture.
+
+`kSpanStretchMaxPm` / `kSpanCompactionMinPm` / `kSpanMinRunMm` are **not** a gate
+encoding taste — they are the envelope that keeps the antenna attached, and
+widening them to admit this pass's own new gesture is the move the house rules
+refuse. So the dip stays off and this is honest rather than green.
+
+**What it would take (authoring, not gate-widening).** The dip currently spends
+its whole authority on carrier B — an offset through `swallow_nodules` plus a
+fold share through `loop_pose` — so **B's spans absorb all of it**. Taunt III's
+crown shuffle stays inside the envelope because it moves **all three** free
+carriers in a ranked tableau and redistributes the fold across them. Re-authoring
+the dip the same way — B down, with A and C taking a real share of the
+redistribution rather than a token lift — spreads the span change over three
+spans instead of one. That is the next packet.
+
+**A correction to the previous packet, and a method note.** Its claim that the
+dip "breaks mspan at any strength" was measured with `ZHAO_U02_KNEAD_DIP_PM`
+set in the environment — **and mspan never parsed that knob**, so every one of
+those runs had the dip at its compiled default. The same blindness cost a second
+round here. *An env-var control is only a control in a binary that reads it;
+check that before believing a ladder.*
+
+To see it: `ZHAO_U02_KNEAD_DIP_PM=1000`, and `manafold-rear-audit --gate --dip`
+judges R5 with it on — B reaches the bottom of the ranking on **15 of 21** clips
+at the authored depth 300 / fold 2000.
+
 ## 3. Item 3 — the particles react
 
 The fold's agitation is an anchor-**speed** excess over a slow baseline. The dip
@@ -339,7 +384,10 @@ window at 2x; a dip strength A/B at 3x; a before/after dip pair at 3x.
 
 ## 5. Open issues
 
-0. **The dip and the particle reaction ship OFF** and must be routed through
+0. **The dip and the particle reaction still ship OFF — one leg.** See 2.5.
+0b. **Item 1 is repaired**; the remaining fold headroom is 0.692 against a 0.50
+   target.
+0c. **[SUPERSEDED] The dip and the particle reaction ship OFF** and must be routed through
    `mspan`'s signed-span accounting before they can ship green. This is the top
    item for pass 21; everything else about them is finished.
 1. **Item 1 is not repaired.** Root cause named (arc vs chord), gated, three

@@ -122,3 +122,35 @@ strict selectors. The pass-19 rear controls' declared masks were updated
 honestly: `--fail-rear-frame` 0x3 -> 0xB, `--fail-rear-joint` 0x2 -> 0xA,
 because those mutations genuinely strain the skin too -- a new true category,
 not a moved goalpost.
+
+### 2026-09-20 - REPAIR PACKET: the rip is fixed
+- **Item 1 REPAIRED at the root.** `kRearSocketFromCMm` is an ARC length and
+  `finalize_rear_follow` measured a CHORD; the band now BOWS on a circular arc
+  instead of shortening. Closure preserved by construction (zero displacement at
+  s=0, exactly the old endpoint at s=L); degenerates to the straight band as the
+  chord approaches the arc; only the slack side bows. Integer throughout.
+  **Worst rear rail strain 0.129 -> 0.692**, clearing R4's 0.50 target floor, so
+  the declared OPEN BREACH is gone. Looked at: 4x Inspect f380 (splayed wedge ->
+  clean even tube) and 6x f158/f160 (pinched step -> rounded shoulder).
+- **Onset blend and turn cap: both tried, both worse, both shipped inert** with
+  their ladders in the source.
+- **Gates re-expressed, not weakened:** R1 centreline 60->140 (above the
+  repaired 113, below v18's 171, control still fires); R4 hand-off demoted to
+  reported (it measures curvature once the band bends); mspan G5 now checks the
+  helpers against the PRODUCTION writer instead of one hard-coded formula; mspan
+  G6 now bounds the consecutive-step turn and the pinch instead of projecting
+  onto a straight axis. R4's regression floor 0.12 -> 0.40 and its control is now
+  the DEFECT itself (`REAR_BOW=legacy`), firing mask 0x8 alone.
+  *The old R4 control silently stopped firing once the bow overwrote the
+  helpers; the matrix caught it as rc=0 exp=1.*
+- **Dip verdict (b).** The bow removed the closure and jerk objections; mspan's
+  signed bound / free-span margin remains (240 breaches at depth 300, 11 at 140).
+  That envelope keeps the antenna attached and is not ours to widen for our own
+  feature. Ships OFF. Fix is to redistribute across A/B/C as Taunt III's crown
+  shuffle does, which is authoring, not gate-widening.
+- **Method correction:** the previous packet's "breaks at any strength" ladder
+  was run with an env knob mspan never parsed. An env control is only a control
+  in a binary that reads it.
+- **Legacy toggle byte-exact 3/3** against the authoritative
+  P19-FINAL-BANK-INTEGRITY values. Open item 3 (CRC discrepancy) is CLOSED:
+  P19-IMPLEMENTATION's numbers were pre-review.

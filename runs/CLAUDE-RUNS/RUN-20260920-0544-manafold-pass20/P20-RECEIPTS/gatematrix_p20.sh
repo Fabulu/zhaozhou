@@ -37,7 +37,7 @@ runmask r-rear-joint 0xA "$B/manafold-rear-audit.exe" --fail-rear-joint
 runmask r-line-scale 0x4 "$B/manafold-rear-audit.exe" --fail-line-scale
 runmask r-line-flag 0x4 "$B/manafold-rear-audit.exe" --fail-line-flag
 # pass 20: R4 STRAIN + R5 DIP
-runmask r-rear-strain 0x9 "$B/manafold-rear-audit.exe" --fail-rear-strain
+runmask r-rear-strain 0x8 "$B/manafold-rear-audit.exe" --fail-rear-strain
 runmask r-no-dip 0x10 "$B/manafold-rear-audit.exe" --fail-no-dip
 # the dip ships OFF (mspan contract, see manafold_art.h): this leg judges R5
 # with it ON, so the mechanism is proven rather than merely switched off.
@@ -112,6 +112,10 @@ sel dip-depth ZHAO_U02_KNEAD_DIP_DEPTH_MM=abc
 sel dip-fold ZHAO_U02_KNEAD_DIP_FOLD_PM=-1
 sel fold-dip ZHAO_U02_FOLD_DIP_PM=2000
 sel dip-fold-hi ZHAO_U02_KNEAD_DIP_FOLD_PM=3001
+sel bow-bogus ZHAO_U02_REAR_BOW=curve
+sel bow-sign ZHAO_U02_REAR_BOW_SIGN=2
+sel bow-onset ZHAO_U02_REAR_BOW_ONSET_MM=2001
+sel bow-maxa ZHAO_U02_REAR_BOW_MAX_A16=32001
 # live-history gate (Wave E)
 LH="python $REPO/tools/reel/manafold_live_history_gate.py --renderer $R"
 run e-live-history-normal 0 $LH --out "$L/lh-normal"

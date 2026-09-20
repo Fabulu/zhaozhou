@@ -450,7 +450,14 @@ constexpr int32_t kGateLineFarRadiusPx = 128;  // Drift's projected radius
 // When the arc-vs-chord repair lands, the target floor becomes the only one
 // that matters and the regress floor is raised to meet it.
 constexpr double kGateRailTargetFloor = 0.50;
-constexpr double kGateRailRegressFloor = 0.12;
+// RE-CALIBRATED BY THE REPAIR, and this is the calibration that makes the leg
+// mean something. While the rip was unfixed this floor had to sit BELOW it
+// (0.12 against a rip of 0.129) so the matrix could be green, and the defect
+// was carried as a printed OPEN BREACH instead. Now that the band bows, the
+// shipping worst is 0.692 and the rip is the thing to catch: 0.40 sits with
+// margin under the repair and far above the defect, so the pre-bow geometry
+// FIRES this leg. A floor that the defect passes is not a regression guard.
+constexpr double kGateRailRegressFloor = 0.40;
 // THE STRETCH CEILING, and it was RAISED during this pass. Saying so:
 // it was first written at 1.80, with margin over a pre-dip worst of 1.441.
 // Then item 2's kneading dip landed and took the worst to 1.919 -- broadly, not
@@ -970,17 +977,15 @@ int main(int argc, char** argv) {
       std::printf("DIP ENABLED: judging R5 with the kneading dip on\n");
     } else if (std::strcmp(argv[i], "--fail-rear-strain") == 0) {
       gate = true;
-      // The committed NEGATIVE CONTROL from manafold_art.h: limiting what the
-      // skinned span helpers carry while kBRearSocket keeps its absolute
-      // body-following translation opens a gap between the end of the span run
-      // and the socket. On Inspect it drives the worst rear rail to 0.004 and
-      // the hand-off to 433 mm, so it fires R4 and nothing else. It is evidence
-      // about the INSTRUMENT, not about the design.
-      u02::g_u02_rear_span_limit_legacy = false;
-      u02::g_u02_rear_span_travel_mm = 300;
-      u02::g_u02_rear_span_soft_mm = 150;
-      std::printf("MUTANT: --fail-rear-strain (rear span travel limited to "
-                  "300 mm, which opens a closure gap)\n");
+      // THE POSITIVE CONTROL IS THE DEFECT ITSELF: the pass-19 arc/chord solve,
+      // which compresses the band instead of bowing it. It drives the worst
+      // rear rail to 0.129 -- the rip the owner reported -- and so fires R4.
+      // (It used to be the span travel limit; once the bow overwrites the
+      // helpers that knob no longer reaches the skin, and a control that cannot
+      // fire is not evidence. Caught by the matrix: rc=0 exp=1.)
+      u02::g_u02_rear_bow = u02::RearBow::kLegacy;
+      std::printf("MUTANT: --fail-rear-strain (pass-19 arc/chord solve -- the "
+                  "band compresses instead of bowing)\n");
     } else if (std::strcmp(argv[i], "--fail-line-flag") == 0) {
       gate = true;
       g_fail_line_flag = true;
