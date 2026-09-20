@@ -17,6 +17,67 @@
 //       `zref::terrain::lattice_lerp` — THE EXECUTED LAW.
 //
 // ---------------------------------------------------------------------------
+// WHAT STOPS THIS BLOCK BEING COMPOSED — 2026-09-20 (terrain7)
+// ---------------------------------------------------------------------------
+// Kept here rather than only in `zhao_console_core.sv`'s entry I32, because
+// this is where the next person composing it will look, and three of the four
+// items below were found by re-checking a blocker that had stopped being true.
+//
+// 1. THE READ SIDE IS SOLVED AND THE ENTRY USED TO SAY IT WAS NOT.
+//    `u_terrain_pagestream` already emits `v_base_o`/`v_scar_o`/`v_bottom_o`/
+//    `v_vi_o`/`v_vj_o` — this block's `vtx_base_i`/`vtx_scar_i`/`vtx_bottom_i`
+//    and its two index outputs PORT FOR PORT, same widths, same signedness,
+//    same vi=column/vj=row convention. `zhao_terrain_psmux` is the composed
+//    two-client share of that exact stream, so a third client is a widening,
+//    not a new arbiter. What is left is a CURSOR-MATCH ADAPTER (the streamer
+//    pushes, this block pulls) and `vtx_nobake_i`, which has no producer.
+//
+// 2. THE WRITE SIDE IS THE REAL HOLE AND NOBODY HAD WRITTEN IT DOWN.
+//    **`sc_*`, the layer-B scar writeback, HAS NO CONSUMER ANYWHERE.**
+//    `zhao_terrain_compcache_front` accepts cell-state writes and composed
+//    heights and never a scar; `zhao_terrain_pagestream` is read-only;
+//    `zhao_terrain_writeback` writes the F SHEET, not layer B. Nothing in the
+//    closure writes a page's height layers at all. A bake whose scar cannot be
+//    stored has not deformed anything — it has computed a deformation and
+//    dropped it. The same absent block is why entry I27's deformation mark has
+//    no writer and why I28's writeback has never seen a beat.
+//
+// 3. THIS BLOCK DOES NOT DRIVE THE DEFORMATION MARK AND CANNOT.
+//    Entry I27 said "its writer is TERRAIN.BAKE". That is an INTENTION in the
+//    ledger, not a port match: there is NO slot, NO generation, NO epoch and
+//    NO per-layer dirty bit anywhere on this module. `cmd_patch_id_i` and
+//    `cmd_src_id_i` are not residency handles. Whoever drives `terr_dm_*` must
+//    hold the slot and generation the patch was served under and pair them
+//    with `bake_done_o` — a third block, not a wire.
+//
+// 4. THE PER-VERTEX DEPTH MODE IS RULED AND IS NOT BUILDABLE YET.
+//    The owner decision on I32 is **Option A**: this block KEEPS its
+//    parametric disc (`cmd_radius_i`, `cmd_depth_from_i`/`_to_i`, oracle
+//    `zref::terrain::bake_dig`, 267 directed checks) and GAINS a second,
+//    per-vertex depth input mode fed from layer F through the ruling-R15 laws,
+//    whose oracle is `zref::terrain::stamp_depth_at_vertex`. Do not re-open
+//    that choice.
+//    It is blocked on an ART JUDGEMENT, not on engineering: the mode needs a
+//    layer-F reader, and a layer-F reader IS an implementation of
+//    `spec/terrain_rules.md` §9.3(b)'s `sheet_texel_for_vertex` — the
+//    nearest-texel fallback whose acceptability is ruling **R65**'s still-open
+//    question. §9.3(c) records what the render showed: it "does not produce a
+//    visible CRACK ALONG THE SEAM. It produces a rim that is wrong by up to
+//    one vertex, EVERYWHERE." If the owner says that does not read, the page
+//    format moves to a vertex-aligned 65×65 and `sheet_texel_for_vertex`
+//    becomes the identity — so the reader's ADDRESS GENERATOR is exactly the
+//    contested thing. §9.3(a)'s `kStampDepthTable` is format-INDEPENDENT and
+//    could be built today; on its own it would be a block nothing drives.
+//
+// AND ONE THING TO FIX WHEN THIS DOES COMPOSE: `fpga/rtl/prod/zhao_prod_top.sv`
+// instantiates **`zhao_terrain_bake`** — v1 — and `fpga/quartus/
+// prod_fit_sources.txt` carries the v1 file, while `design/console_inventory.yml`
+// records v1 as `superseded_by: zhao_terrain_bake_v2` citing the owner's
+// "only the latest version" ruling. The production fit therefore measures the
+// superseded block. `completion_register.py:superseded_in_prod_fit()` reports
+// it as of 2026-09-20 (it is not fatal yet; see that docstring).
+//
+// ---------------------------------------------------------------------------
 // WHAT MOVED, AND WHY IT IS LEGAL
 // ---------------------------------------------------------------------------
 // V1 holds SEVEN multiplier sites (dx*dx, dz*dz, radius^2, lat_lerp x2 call
