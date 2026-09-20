@@ -1815,6 +1815,18 @@ targets:
     sources:
       - fpga/rtl/geometry/zhao_geom_pose_cache.sv
 
+  # GEOM.POSE's BONE SOURCE -- entry I29's producer, and D-GEOMSEAM-A's priced
+  # arrangement. THE QUESTION THIS LEAF ANSWERS: the map already settled the
+  # relative area and the RAM inference (829 ALM / 10,240 block memory bits at
+  # SRC_STYLE=0, against 14,056 ALM and ZERO block memory at SRC_STYLE=2, which
+  # is owner ruling R90's literal arrangement). What a map cannot answer and a
+  # fit must is whether the 2:1 mux across 320 bits in front of the two stores
+  # meets gpu_clk, because that mux sits between an M10K output and the
+  # decoder's S_FETCH latch with nothing registered in between.
+  - top: zhao_geom_bonesrc
+    sources:
+      - fpga/rtl/geometry/zhao_geom_bonesrc.sv
+
   # GEOM.POSE's palette store, added 2026-09-19 with the block itself. NO RULES
   # DELIBERATELY: it has never been fitted and there is no measurement to write
   # one against. THE QUESTION THIS LEAF ANSWERS is the only one its own tests

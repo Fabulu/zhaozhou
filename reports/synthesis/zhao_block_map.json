@@ -1,14 +1,14 @@
 {
     "schemaVersion":  1,
     "characterization":  "map-only-per-block",
-    "newestRunCommit":  "07184e1e5e1edb7541e8dde61164c7483e08955e",
+    "newestRunCommit":  "03554c7fac87b4194dc53c331a916dbc78989e33",
     "newestRunClean":  true,
     "tool":  {
                  "name":  "Quartus Prime Lite",
                  "version":  "17.0.2"
              },
     "device":  "5CSEBA6U23I7",
-    "sourceListHash":  "a6652b587cbbc216",
+    "sourceListHash":  "13a7f524a80d6f8d",
     "blocks":  [
                    {
                        "module":  "zhao_audio_fifo",
@@ -1356,6 +1356,36 @@
                        "ramConversionWarnings":  0,
                        "errors":  0,
                        "critical":  1
+                   },
+                   {
+                       "module":  "zhao_geom_bonesrc@sync-m10k",
+                       "status":  "failed:analysis",
+                       "sourceCommit":  "03554c7fac87b4194dc53c331a916dbc78989e33",
+                       "rtlCleanAtHead":  true,
+                       "sourceListHash":  "13a7f524a80d6f8d",
+                       "sourceFileCount":  348,
+                       "tool":  "Quartus Prime Lite 17.0.2",
+                       "device":  "5CSEBA6U23I7",
+                       "stage":  "map-only",
+                       "topParameters":  "SRC_STYLE=0",
+                       "variantOf":  "zhao_geom_bonesrc",
+                       "seconds":  8.2,
+                       "dspBlocks":  null,
+                       "registers":  null,
+                       "blockMemoryBits":  null,
+                       "virtualPins":  null,
+                       "pins":  null,
+                       "estimatedAlms":  null,
+                       "combAluts":  null,
+                       "mlabMemoryBits":  null,
+                       "inferredMemories":  [
+
+                                            ],
+                       "inferredMemoryCount":  0,
+                       "inferredDesignMemoryCount":  0,
+                       "ramConversionWarnings":  0,
+                       "errors":  1,
+                       "critical":  0
                    },
                    {
                        "module":  "zhao_geom_clip",

@@ -30,6 +30,50 @@
 // which one number never could.
 //
 // ---------------------------------------------------------------------------
+// THE PRICE, MEASURED. `quartus_map` 17.0.2, device 5CSEBA6U23I7 (THE TARGET
+// DEVICE), standalone leaf, VIRTUAL_PIN ON, SEED 1, BALANCED, MAX_BONES = 32.
+// Analysis & Synthesis "Estimate of Logic utilization (ALMs needed)".
+// ---------------------------------------------------------------------------
+//
+//   SRC_STYLE        ALM     ALUT    regs   blockmem  MLAB   % of 41,910
+//   ---------------  ------  ------  -----  --------  -----  -----------
+//   0 SYNC_M10K         829     454    865    10,240      0      2.0%
+//   1 ASYNC_DERIVED   6,440   9,234  8,449         0      0     15.4%
+//   2 ASYNC_FLAT     14,056  21,617 17,665         0      0     33.5%
+//
+// **R90's arrangement costs 14,056 ALM — ONE THIRD OF THE ENTIRE DEVICE**, on
+// a console already reported over its ALM ceiling. It is not affordable, and
+// the amendment was right to make the pricing a precondition of building.
+//
+// **The arrangement actually built costs 829 ALM, 2.0%.** The saving is 13,227
+// ALM, a 17.0x reduction, and the three rows attribute it rather than asserting
+// it: deriving `inv_rest` is worth 7,616 ALM (14,056 -> 6,440) and making the
+// read synchronous is worth a further 5,611 (6,440 -> 829).
+//
+// TWO THINGS THE ROWS SETTLE THAT ARITHMETIC COULD NOT:
+//
+//   * **Quartus infers NO MLAB for the asynchronous array** — "Total MLAB
+//     memory bits: 0" on styles 1 and 2, with every stored bit landing in
+//     dedicated registers. The optimistic reading (an async store becomes cheap
+//     LUT RAM) is false on this device and this tool, and style 2's 17,665
+//     registers are R90's own 17,568-bit figure plus this block's 97 counter
+//     and control bits. **R90's BIT COUNT WAS EXACTLY RIGHT.** What was
+//     unpriced was what those bits cost in ALMs, and the answer is that a
+//     32-deep multiplexer over 549 bits costs more than the storage does:
+//     21,617 ALUTs against 17,665 registers.
+//   * **Style 0 infers BLOCK memory, not MLAB** — 10,240 block memory bits,
+//     0 MLAB bits, exactly the 8,192 + 2,048 the two stores ask for. This is
+//     the measurement `zhao_geom_pose_palette`'s header and
+//     `design/fit_targets.yml` both say is missing for that block and must not
+//     be claimed from arithmetic; it is made here, for these two arrays.
+//
+// A MAP IS NOT A FIT and this file does not pretend otherwise: the ALM figure
+// is Analysis & Synthesis's ESTIMATE, there is no placement and no routing, and
+// no timing number appears above because none was measured. What a map settles
+// is exactly what was asked — relative area and whether storage becomes RAM or
+// flops — and the gap between 829 and 14,056 is not a number a fit reverses.
+//
+// ---------------------------------------------------------------------------
 // LEVER 1 — `inv_rest` IS DERIVED, AND THE REFERENCE IS WHERE THAT IS DECIDED
 // ---------------------------------------------------------------------------
 // R90 counted the decoder's source at 549 bits per bone, of which
@@ -243,7 +287,11 @@ module zhao_geom_bonesrc #(
   assign bone_ty_o = body_sel[95:64];
   assign bone_tz_o = body_sel[127:96];
 
+  // Unused under SRC_STYLE 2 on purpose: that style reads all twelve elements
+  // out of the store instead of deriving three, which is the whole point of it.
+  /* verilator lint_off UNUSEDSIGNAL */
   logic signed [31:0] inv_tx_c, inv_ty_c, inv_tz_c;
+  /* verilator lint_on UNUSEDSIGNAL */
   assign inv_tx_c = body_sel[159:128];
   assign inv_ty_c = body_sel[191:160];
   assign inv_tz_c = body_sel[223:192];
@@ -253,22 +301,34 @@ module zhao_geom_bonesrc #(
   assign quat_y_o = quat_sel[47:32];
   assign quat_z_o = quat_sel[63:48];
 
-  // inv_rest, rebuilt from the invariant. Nine constants and one negated
-  // vector — see LEVER 1 in the header.
+  // The twelve inverse-rest elements, flat, so the three styles drive ONE
+  // signal and the unpack below is written once.
+  //
+  // STYLES 0 AND 1 rebuild it from the invariant: nine constants and one
+  // negated vector (LEVER 1 in the header). STYLE 2 reads all twelve out of the
+  // store, which is R90's literal arrangement and the thing being priced.
+  //
+  // THE FIRST DRAFT OF THIS PROBE GOT THAT WRONG AND THE MAP SAID SO. Style 2
+  // stored 576 bits per bone and still DERIVED inv_rest, so Quartus pruned the
+  // 320 bits nothing read and style 2 collapsed onto style 1 — two rows 19 ALM
+  // apart, which looked like a result and was an artefact. A store is only
+  // priced by what is READ out of it.
+  logic [383:0] invrest_sel;
+
   generate
-    if (INV_REST_RIGID == 1) begin : g_inv_rigid
-      assign inv_rest_o[0]  = FX16_ONE_C;
-      assign inv_rest_o[1]  = 32'sd0;
-      assign inv_rest_o[2]  = 32'sd0;
-      assign inv_rest_o[3]  = inv_tx_c;
-      assign inv_rest_o[4]  = 32'sd0;
-      assign inv_rest_o[5]  = FX16_ONE_C;
-      assign inv_rest_o[6]  = 32'sd0;
-      assign inv_rest_o[7]  = inv_ty_c;
-      assign inv_rest_o[8]  = 32'sd0;
-      assign inv_rest_o[9]  = 32'sd0;
-      assign inv_rest_o[10] = FX16_ONE_C;
-      assign inv_rest_o[11] = inv_tz_c;
+    if (SRC_STYLE != 2) begin : g_inv_rigid
+      assign invrest_sel = {
+          inv_tz_c, FX16_ONE_C, 32'sd0, 32'sd0,
+          inv_ty_c, 32'sd0, FX16_ONE_C, 32'sd0,
+          inv_tx_c, 32'sd0, 32'sd0, FX16_ONE_C
+      };
+    end
+  endgenerate
+
+  genvar gi;
+  generate
+    for (gi = 0; gi < 12; gi = gi + 1) begin : g_inv_unpack
+      assign inv_rest_o[gi] = invrest_sel[gi*32 +: 32];
     end
   endgenerate
 
@@ -391,6 +451,13 @@ module zhao_geom_bonesrc #(
       // THE ASYNCHRONOUS READ. This is the line the price is about.
       assign body_sel = abody[bone_idx_i][BODY_BITS-1:0];
       assign quat_sel = aquat[bone_idx_i];
+
+      // Style 2 only: the twelve elements come OUT OF THE STORE. Without this
+      // the upper 320 bits are written and never read, Quartus deletes them,
+      // and the row silently prices style 1 a second time.
+      if (SRC_STYLE == 2) begin : g_inv_stored
+        assign invrest_sel = abody[bone_idx_i][511:128];
+      end
 
       assign ready_o = 1'b1;
 
