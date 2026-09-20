@@ -269,6 +269,18 @@ set_tests_properties(field_fplan_random PROPERTIES LABELS "fast;nightly")
 add_test(NAME field_fplan_random_nightly COMMAND test_field_fplan_diff --random 600)
 set_tests_properties(field_fplan_random_nightly PROPERTIES LABELS "nightly" TIMEOUT 3600)
 
+# R156 / owner ruling R172: the ADMISSION classifier at its boundary. Built
+# by packet CMDFIELD, which could not register it because tests/CMakeLists.txt
+# was another packet's file that pass -- so the test existed, passed, and DID
+# NOT RUN IN ctest. A committed test nobody runs is the uncashed-cheque shape
+# applied to evidence.
+add_executable(test_zfield_plan_classify differential/zfield_plan_classify_directed.cpp)
+target_link_libraries(test_zfield_plan_classify PRIVATE zhao_zref)
+target_include_directories(test_zfield_plan_classify PRIVATE
+  ${CMAKE_SOURCE_DIR}/compiler/tests/generated)
+add_test(NAME zfield_plan_classify COMMAND test_zfield_plan_classify)
+set_tests_properties(zfield_plan_classify PROPERTIES LABELS "fast;nightly")
+
 # ---- packet L1: the production lowerer (zfield/zfield_host_plan.hpp) -------
 # Directed cases for every opcode shape the owner directive section 5.3
 # enumerates, EACH WITH A DELIBERATE MISWIRE CONTROL; the ordinal<->window
