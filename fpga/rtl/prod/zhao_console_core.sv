@@ -3493,6 +3493,54 @@
 //   `pub_*` port. Wiring the third arm before that producer exists would tie
 //   off `a_hit_i`/`a_bound_i`, which is the one thing this campaign forbids.
 //
+//   THAT PARAGRAPH IS TRUE AND IT IS NOT THE WHOLE BLOCKER, and the ENGINE1
+//   packet found so on 2026-09-20 by walking ALL FIVE of `zhao_geom_lodstate`'s
+//   port groups instead of the two the sentence above names. Recorded here
+//   because the shorter version reads as a three-item work list and is not one:
+//   a packet was commissioned on it and none of the three items is what stops
+//   the block.
+//
+//   THE TWO ITEMS ABOVE ARE BOTH REACHABLE, and neither needs a ruling:
+//     * the PAGE-PUBLICATION PATH ALREADY EXISTS AND IS COMPOSED.
+//       `zhao_mem_upload` is instantiated in this file and its 5f.1 row
+//       (`upl_publish_{valid,tag,base,extent,slot,generation,index}_o`) already
+//       drives two directory sinks. `zhao_part_table_loader` (this file, in the
+//       particle section) takes the IDENTICAL four-signal `pub_*` hookup that
+//       `zhao_geom_ladderbank` wants, and ladderbank does its own
+//       `pub_tag_i == PAGE_KIND` compare (8'd8), so it needs no external gate.
+//       The claim "MEM.UPLOAD is composed nowhere" is STALE wherever it appears.
+//     * the ENGINE1 SHARE is a sixth requester on `u_geom_mem_adapter`, which is
+//       a wrapper over `zhao_mem_share_n` at `.N(5)` with A-E full. Adding F is
+//       the same mechanical edit C, D and E each were. Note also that
+//       `zhao_geom_ladderbank` consumes no `beat_last`.
+//
+//   WHAT ACTUALLY BLOCKS IT IS THE OTHER TWO PORT GROUPS, and both are behind
+//   somebody else's owner decision:
+//     * `thresh0_i`/`thresh1_i` -- the per-camera threshold. THE ONLY PRODUCER
+//       OF `thresh_q8` IN THE WHOLE TREE is `zhao_measure_governor`
+//       (`cam0/cam1_thresh_q8_o`), which is uncomposed, and owner ruling R118
+//       (2026-09-20) finds it blocked at BOTH ends and says composing it today
+//       CREATES tie-offs rather than closing them. There is no config-register
+//       alternative; searched `fpga/` for `thresh_q8`, and the governor is the
+//       only hit outside GEOM.LOD's own input and this block.
+//     * `c_*` -- the caster out, `{instance_id, x, z, radius, rung, view}`,
+//       which this block's own :180 names as FORGE.SHADOW's feed. THE ONLY
+//       CONSUMER OF A `rung` ANYWHERE OUTSIDE THE LODSTATE/LOD/LADDERBANK TRIO
+//       is `zhao_forge_shadow` (`cast_rung_i`, `rung_floor_i`), which is
+//       uncomposed and behind R75/R88 and R89's unresolved vertex-alpha
+//       contradiction. `rung_floor_i` wants the governor too.
+//
+//   SO THE SHAPE IS A THREE-BLOCK CHAIN WITH BOTH ENDS BLOCKED:
+//       MEASURE.GOVERNOR --thresh_q8--> GEOM.LODSTATE --c_*--> FORGE.SHADOW
+//   and GEOM.LODSTATE is the middle. Composing it alone would tie off `thresh*`
+//   and dangle `c_*` -- closing one gap by opening two, which is the same
+//   refusal the `a_hit_i`/`a_bound_i` sentence above makes, one seam further on.
+//   It is NOT ordering-dependent either: the governor's own blocker (R118) is
+//   TERRAIN.LOD, behind R65, behind the owner. Nothing in the GEOM lane moves
+//   this. DO NOT commission another share/publication/third-arm packet against
+//   this entry; the next thing that unblocks it is an owner decision on R65 or
+//   on R89, not geometry work.
+//
 //   AND THE BLOCKER HAS MOVED TWICE MORE, WHICH IS WHY THIS ENTRY IS LONG
 //   RATHER THAN CLOSED. Traced 2026-09-20 by the forge packet, under owner
 //   ruling R75 ("take the ARENA ROUTE ... rather than building a second
@@ -3866,9 +3914,60 @@
 //   2026-09-20 so the phrase "two terrain paths" stops being a thing the next
 //   reader has to re-find. The count is exact and was re-counted. None is
 //   geometry, and
-//   `spec/memory_rules.md` 5f declares RENDER.ASSET_POOL read-only with a formal
-//   assertion (`a1_render_asset_ro`) to match, so a writer today would be built
+//   `spec/memory_rules.md` 5f declares RENDER.ASSET_POOL read-only with formal
+//   assertions to match, so a writer today would be built
 //   against a region the guard is PROVEN to refuse.
+//
+//   CORRECTION, 2026-09-20 (ENGINE1 packet): THE SENTENCE ABOVE NAMES THE WRONG
+//   REGION, and the two ranges are DISJOINT. RENDER.ASSET_POOL is
+//   [0x06A0_0000, 0x0800_0000) -- `ZHAO_RENDER_ASSET_BASE`/`_SPAN` in `zhao_pkg`
+//   and `zhao_mem_guard.sv:14`. GEOM.PARAMBUF's arena is 0x0600_0000 ..
+//   0x069F_FFFF by its own contract's guard map (`design/contracts/
+//   GEOM.PARAMBUF.md`, "Memory ownership"): view 0, view 1 and the chunk
+//   scratch, 10 MiB, ENDING where RENDER.ASSET_POOL BEGINS. That contract calls
+//   0x06A0_0000 upward "reserved/unmapped pending evidence", which is exactly
+//   what the asset pool was later carved out of. Same bank 3; different bytes.
+//
+//   SO THE READ-ONLY RULE IS NOT THIS BLOCK'S BLOCKER AND NEVER WAS, and the
+//   real one is stronger rather than weaker, which is the direction worth
+//   recording: THE PARAMBUF ARENA HAS NO REGION IN MEM.GUARD'S MAP AT ALL.
+//   There is no `ZHAO_PARAMBUF_BASE`/`_SPAN` anywhere in `fpga/` or
+//   `reference/` -- searched both, plus the literal 0x0600_0000; the range
+//   appears only in prose (`zhao_pkg.sv:141-143`) and in the contract. An
+//   unmapped address falls to `default: pass_ok = 1'b0`, so the arena is
+//   unreachable in BOTH directions, not read-only in one.
+//
+//   THAT MATTERS BECAUSE IT CHANGES WHAT WOULD UNBLOCK IT. Weakening a proven
+//   read-only assertion is forbidden and would not help anyway; ADDING A MAPPED
+//   PARAMBUF REGION WITH AN ENGINE1 WRITE ARM is an ordinary ratified-map
+//   change with a precedent in this very file -- R32 did exactly that for the
+//   published-resource region, bounded, with `a1_resource_bounded` proving the
+//   bound. It is an OWNER DECISION, and it is a tractable one.
+//
+//   IT IS ALSO NOT SUFFICIENT, so nobody should read the paragraph above as a
+//   work item. Two things remain after the map entry: (a) GEOM.PARAMBUF.md's
+//   own "Integration capture cases" says the ARENA ALLOCATOR, THE QUOTA SEAL
+//   AND THE FRAME-FAULT PATH ARE NOT BUILT -- `zhao_geom_parambuf.sv` is the
+//   RECORD LAYER only, bytes-in/fields-out; and (b) the composed binner uses a
+//   DIFFERENT, ON-CHIP chunk format (`zhao_geom_binner`: 256 chunks x 4 refs,
+//   7-bit refs in `ref_ram`/`next_ram`) which is precisely the arena R7 says
+//   PARAMBUF replaces, so nothing in the fabric emits a 64-byte tile-reference
+//   chunk, a 24-byte ProjectedVertex or a 16-byte TriangleDescriptor today.
+//   GEOM.ASSEMBLE emits the triangle descriptor's FIELDS (`t_v0_o` .. `t_src_id_o`)
+//   and PARAMBUF decodes those same fields back out of packed bytes, so wiring
+//   the two together directly would be a pack/unpack mirror with no memory
+//   between them -- not the edge, and worth naming because `reports/DOCKET.md`
+//   lists `ASSEMBLE -> PARAMBUF` as a "REAL MISSING EDGE" and it is only real
+//   once the arena exists.
+//
+//   AND THE PUBLICATION ROUTE DOES NOT APPLY HERE, asked explicitly and refused
+//   on shape rather than on permission: MEM.UPLOAD's `PublishResource` path is
+//   HOST -> staging -> VRAM for immutable resources named by a handle32, which
+//   is how MATERIAL_SET and MESH_STREAM land. PARAMBUF records are PER-FRAME
+//   FABRIC OUTPUT -- up to 65,536 projected vertices per view per frame, which
+//   do not exist until the projector runs. There is no sense in which the host
+//   could publish them, so "publish it the way MATERIAL_SET is published" is a
+//   category error and not a missing connection.
 //
 //   AND `zhao_geom_arena.sv` IS NOT THIS ARENA'S ALLOCATOR, said explicitly
 //   because it is a file with "arena" in its name containing a real bump

@@ -492,9 +492,14 @@ ENGINE0 change was the latter and this is honestly not. Two things carry it:
 
 `tests/formal/formal_mem_guard.sv` widened **with** the region rather than
 around it: `a1_map` reads both slots, render assets and terrain instead of
-exempting ENGINE1 from scope. `a1_render_asset_ro` and
-`a1_render_asset_owner` pin direction/owner; `a1_no_forward_client5` pins the
-unspent slot. Separate `c_forward_render_asset_16/32/64` covers prevent the new
+exempting ENGINE1 from scope. `a1_render_asset_rd_owner`,
+`a1_render_asset_wr_owner` and `a1_resource_bounded` pin direction/owner/bound;
+`a1_no_forward_client5` pins the
+unspent slot. (**Corrected 2026-09-20.** This sentence named `a1_render_asset_ro`
+and `a1_render_asset_owner`, which is what the file held before R32 gave the pool
+a bounded writer and split the property three ways. Neither old name exists in
+`tests/formal/formal_mem_guard.sv` any more; the paragraph above, which describes
+the split correctly, was added without this sentence being updated to match.) Separate `c_forward_render_asset_16/32/64` covers prevent the new
 texture shape from hiding dead geometry shapes, and `c_client5_denied` proves an
 accepted client-5 request reaches the denial verdict. The earlier bmc/cover and
 mutation evidence remains in the formal-run ledger under its historical
@@ -566,6 +571,17 @@ wrong surface is exactly what this is supposed to prevent: every
 `spec/`, `design/` and `reference/`. `MEM.UPLOAD`'s publication has **no
 consumer at all** today — the only other `publish_slot_*` in the tree is the
 framebuffer pair above — so no block held a conflicting meaning for it.
+
+**That last sentence was true when ruled and is now STALE, recorded rather than
+edited away (2026-09-20).** The publication has **three** consumers: the
+MESH_STREAM directory into GEOM.DRAWJOB and the MATERIAL_SET directory into
+MATERIAL.RESOLVE, both gated on `upl_publish_tag_o` in `zhao_console_core.sv`,
+and `zhao_part_table_loader`, which takes the raw `pub_*` four-signal group and
+does its own `PAGE_KIND` compare internally. The rule itself is unaffected — all
+three key on the index exactly as 5f.1 requires — but the *search result* is not
+evidence about the tree any more, and the next block wanting this bus
+(`zhao_geom_ladderbank`, `PAGE_KIND = 8'd8`) should copy the loader's hookup
+rather than conclude from this sentence that it would be first.
 
 ## 5g. ENGINE0 under the render lease: POST.COMPOSITE's read, POST.ECHO's capture (2026-09-19)
 

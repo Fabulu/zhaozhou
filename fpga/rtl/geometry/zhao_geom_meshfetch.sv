@@ -56,6 +56,17 @@
 // `zhao_geom_mem_adapter`; adding a second physical client would violate the
 // arbiter's positional client identity.
 //
+// STILL TRUE, AND NO LONGER THE WHOLE LIST (amended 2026-09-20). The one
+// physical slot and the positional-identity rule both stand exactly as written.
+// What has changed is the number of LOGICAL requesters sharing it: the adapter
+// is a wrapper over `zhao_mem_share_n` at `.N(5)`, and MESHFETCH (A) and
+// ASSETFETCH (B) have since been joined by MATERIAL.RESOLVE (C, R20),
+// GEOM.DRAWJOB (D, R29) and PART.TABLE's species-page loader (E, R42). Said
+// here because "MESHFETCH and ASSETFETCH share it" is quoted elsewhere in the
+// tree as though the adapter carried exactly two requesters, which would make a
+// sixth look like a new mechanism rather than the mechanical edit C, D and E
+// each were.
+//
 // `j_client_i` remains an input at this leaf boundary and is captured with the
 // job. At production composition the adapter substitutes the trusted ENGINE1
 // identity and read-only direction before MEM.GUARD. `guard_denied_o` remains a

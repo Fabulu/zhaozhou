@@ -727,10 +727,20 @@ class PacketEClosureTests(unittest.TestCase):
         ), "Packet-E reference")
         for marker in (
             "fwd_in_render_asset",
-            "a1_render_asset_ro",
             # R32 (2026-09-19) split the one owner property in two when the pool
             # gained a bounded WRITER: ENGINE1 alone reads it, TERRAIN_BUILD alone
             # writes it, and only inside the published-resource region.
+            #
+            # THE PRE-R32 NAME USED TO BE ASSERTED HERE AND WAS REMOVED
+            # 2026-09-20 (ENGINE1 lane). R32 deleted that assertion from
+            # formal_mem_guard.sv, but the token survived in a COMMENT in that
+            # same file, so this marker went on matching and this gate went on
+            # reading green -- against an assertion that no longer existed.
+            # Demonstrated rather than argued: deleting the token from that
+            # comment, with no change to any assertion, took this test from
+            # green to red. The three properties R32 split it into are asserted
+            # below and are the real pins; re-adding the dead name would restore
+            # a false green, not a check.
             "a1_render_asset_rd_owner",
             "a1_render_asset_wr_owner",
             "a1_resource_bounded",

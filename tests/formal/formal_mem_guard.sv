@@ -333,7 +333,18 @@ module formal_mem_guard
       //
       // WHAT IS NOT WEAKENED. a1_map is untouched: the bounds did not move, so
       // a read arm accidentally spelled with different constants still escapes
-      // the map and still fails there. a1_render_asset_ro is untouched. a1_client is
+      // the map and still fails there. The render-asset properties are untouched
+      // too -- a1_render_asset_rd_owner, a1_render_asset_wr_owner and
+      // a1_resource_bounded, above. THIS SENTENCE USED TO NAME THE PRE-R32
+      // SINGLE READ-ONLY PROPERTY (the `..._ro` spelling, deliberately not
+      // written out here -- see below). That was true when the terrain
+      // amendment was written (2026-09-06) and stopped being true on
+      // 2026-09-19, when R32 split that one property into the three named
+      // above. The dead name then survived ONLY here, in this comment, while
+      // `tests/tools/test_render_texture_packet_e.py` asserted its presence in
+      // this file -- a gate reading GREEN off a comment about an assertion that
+      // no longer exists, which is why the token is not re-introduced here.
+      // Both halves were repaired together; see FINDINGS-engine1.md. a1_client is
       // untouched. And a read cannot alter a frame buffer -- the RENDER.ASSET_POOL
       // argument -- which holds twice here, since a forwarded read carries no
       // write data and this window is disjoint from both FB slots.
