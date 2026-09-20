@@ -1,0 +1,35 @@
+PASS-20 REVIEW: the dip amplitude ladder, both instruments, one sitting
+Binaries: .tmp/p20-review/bin (build-direct.sh, one target per invocation)
+
+  gain   mspan G9 worst angular step (ceiling 8.0)   mrear R5 never-lowest / 21
+   550   7.772   PASS                                17   <- SHIPS (B lowest on 4)
+   650   9.212   FAIL                                12
+   750  11.283   FAIL                                 7
+   850  24.237   FAIL                                 6
+  1000  50.963   FAIL                                 2   <- the "19 of 21" claim
+
+Gain and depth multiply into the same s, so this is the mechanism, not the knob:
+  gain 1000 / depth 1210 ->  7.740 deg, 18 never lowest   (== the shipping point)
+  gain  550 / depth 4000 -> 17.924 deg,  2 never lowest   (== the claimed point)
+
+G9 position step is 72.303 mm at 550 and 72.359 mm at 1000 -- unchanged -- while
+the angular step goes 7.8 -> 51 deg. That is a ROLL FLIP, i.e. packet 6's fault
+returning past the shipping amplitude, not a real motion.
+
+Clips that reach B-strictly-lowest at the shipping gain: slots 0, 1, 2, 7 only
+(idle, drift, channel, and Still which is a 2-frame diagnostic).
+
+R4 parity, measured: ZHAO_U02_KNEAD_DIP_PM=0 and shipping BOTH read
+  worst rear rail 0.692, stretch 2.052, hand-off 361 mm, rail step 0.1630
+so the stretch-ceiling rise 1.80 -> 2.10 was caused by the BOW, not by the dip.
+
+Pin probe (committed, -DZHAO_P20_PINPROBE on manafold_spangate.cpp),
+3424 dent samples, worst |C_after - C_before| L1:
+  shipping (swing 1000, depth 2200, gain 550)   7 mm
+  swing 0 (the press)                           8 mm
+  gain 1000                                    35 mm
+
+Particle reaction, Hover 600 frames, ship vs ZHAO_U02_FOLD_DIP_PM=0:
+  588 of 600 frames byte-identical; 12 frames differ.
+  strongest frame 0257: 323 px changed of 92160, 72 px by >24/255, max delta 132.
+  for scale, the dip's GEOMETRY moves 6145 px (>24) on frame 0285.

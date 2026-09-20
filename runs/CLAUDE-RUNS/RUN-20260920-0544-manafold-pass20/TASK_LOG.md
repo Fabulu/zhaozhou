@@ -330,3 +330,55 @@ same invocation.
 - Particle reaction rides along: manafold_fx.h reads B's sag from the posed rig,
   and ZHAO_U02_FOLD_DIP_PM=0 still reverts the mana to its old bytes.
 - Gate matrix 151/151 PASS, 0 FAIL, including both byte-identity legs.
+
+### 2026-09-20 - INDEPENDENT REVIEW + QA: **BLOCKED** (P20-REVIEW-QA.md)
+- **Claims 1 and 2 CONFIRMED.** The arc repair closes by construction (checked
+  the algebra at s=0 and s=L, the degenerates, the overflow headroom and the
+  determinism), its control fires on the real defect, and **the eye agrees**:
+  at Inspect f380 -- pass 19's own worst rip -- the P19 tube ends in a pinched
+  stub and the P20 one wraps into the body as a rounded tube. At Channel f080,
+  the worst sample in the bank (113 deg turn, 361 mm hand-off), the join reads
+  as one continuous trunk. R1's 60->140 and the hand-off demotion are supported
+  by the render, which is the only support that counts for them.
+- **Claim 3 IS FALSE AS SHIPPED, on both halves.**
+  * `mrear --gate --dip` **overrode the shipping gain** (550) with **1000**. The
+    "19 of 21 reach strictly lowest, shipping configuration" in packet 7 and the
+    matrix leg `n-mrear-dip` both measured 1000. At 550 it is **4 of 21**
+    (slots 0, 1, 2, 7 -- and 7 is the 2-frame Still diagnostic).
+  * At 1000, **mspan G9 fails at 50.96 deg against an 8 deg ceiling** -- 6.4x
+    over. Position step is unchanged (72.36 vs 72.30 mm), so it is the packet-6
+    **ROLL FLIP returning**, not motion. The roll-stable aim postponed it past
+    the shipping amplitude rather than removing it.
+  * Gain and depth multiply into the same `s`, so this is the MECHANISM:
+    550 -> 7.77 deg / 4 clips, 650 -> 9.21 / 9, 750 -> 11.28 / 14,
+    1000 -> 50.96 / 19. **The ranking and the continuity ceiling trade
+    monotonically and the dent cannot satisfy both.** Ladder in
+    `P20-RECEIPTS/review-dip-ladder.txt`.
+  * **Particles: 588 of 600 Hover frames are BYTE-IDENTICAL** to
+    `ZHAO_U02_FOLD_DIP_PM=0`. Strongest frame moves **72 px** past 24/255, of
+    92,160; the dip's own geometry moves 6,145. Invisible at native. The
+    crayon-grain failure exactly.
+- **Two more instrument faults.** R5's `dip_stuck` arm has **no control** and
+  has never fired. **mspan G10 DENT PIN was specified in the architecture and
+  never built** -- the dent's central contract is ungated.
+- **Re-measured with the committed pin probe** (`-DZHAO_P20_PINPROBE`): the
+  shipping residual is **7 mm L1**, not the 21/38 mm still quoted. The
+  roll-stable aim cut it ~5x -- an undeclared improvement.
+- **Also measured:** `KNEAD_DIP_PM=0` and shipping BOTH read rail 0.692 /
+  stretch 2.052 / step 0.1630, so **the stretch ceiling rise 1.80->2.10 was the
+  BOW, not the dip**, contrary to gate-change row 4.
+- **Repairs made (instruments and comments only; no bound, threshold, art value
+  or shipping byte touched):** `--dip` no longer overrides the gain and now
+  names it; R5's OPEN text states the shipping reality and carries the ladder;
+  G6 prints its margin (shipping **66.43 deg** vs the 140 ceiling, mutant
+  160.20); three stale comments in `manafold_rear_audit.cpp` and three in
+  `manafold_art.h` that described repaired defects as current.
+- **Controls fired by hand:** `--fail-rear-strain` (0x8, rail 0.129),
+  `--fail-walk-pairing` (0x8000, 4 of 5, +750 mm), `--fail-no-dip` (0x10),
+  `--fail-posed-order` (G6's new arm, 160.20 deg), `--fail-e-start/mid/presocket`.
+- **Gate matrix re-run from scratch in ONE invocation after the repairs:
+  151/151 PASS, 0 FAIL**, including both byte-identity legs
+  (carried 3/3, legacy 3/3). `P20-RECEIPTS/gate-matrix-review.txt`.
+- Not done, correctly: no 22-subject bank, no encode, no merge, no deploy.
+  There is a genuine improvement to publish (the rear) and an unfinished item
+  beside it (the dip), and the publish trigger is a pass that is DONE.
