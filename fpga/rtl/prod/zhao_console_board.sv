@@ -2727,6 +2727,15 @@ module zhao_console_board
   // then hold the zeroes the front cleared them to, and a caller reading only
   // the lanes could not tell that from a field whose value is zero.
   output logic [31:0]  fld_no_result_o,
+  // A point whose run wrote SOME BUT NOT ALL of the lanes its program header
+  // declared required (owner ruling R101). Counted apart from
+  // `fld_no_result_o` because the answer is then a MIXTURE of real values and
+  // cleared zeroes, which is the case a caller cannot see at all -- W10's "do
+  // not make an absent output look like a zero result". Both composed clients
+  // are exposed to it: the stamp adapter reads window lanes 0-1 and the flow
+  // adapter reads lanes 3-5, and until R101 a program that skipped any of them
+  // came back 8'h00 SUCCESS.
+  output logic [31:0]  fld_out_incomplete_o,
   // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
   // `zhao_field_v3_engine`'s own header is right that five faults reduced to
   // one bit is a bit that says "something, somewhere", and a guard that cannot
@@ -4130,6 +4139,7 @@ module zhao_console_board
       .fld_contended_grants_o             (fld_contended_grants_o),
       .fld_ld_oob_o                       (fld_ld_oob_o),
       .fld_no_result_o                    (fld_no_result_o),
+      .fld_out_incomplete_o               (fld_out_incomplete_o),
       .fld_exec_desync_o                  (fld_exec_desync_o),
       .fld_bank_desync_o                  (fld_bank_desync_o),
       .fld_svc_bank_desync_o              (fld_svc_bank_desync_o),

@@ -1,0 +1,158 @@
+# The fit plan, written BEFORE the fit — Zhaozhou console, 2026-09-20
+
+**Status: not yet runnable.** The register reads 21. This file exists now
+because `CLAUDE.md` requires the fit gates to be named in advance with the
+question each one answers, and because a plan written after the results are in
+is not a plan, it is a rationalisation.
+
+It lives in `reports/` and not in a run folder deliberately: every pass creates
+a new run folder, so anything durable left in the current one is orphaned by the
+next.
+
+---
+
+## 0. The standing goal this serves
+
+Drive the mandatory gap count to **zero**, freeze that design, then run the
+honest fit against **5CSEBA6U23I7**. Fit at completion only.
+
+## 1. What must be true before ANY fit starts
+
+These are not nice-to-haves. Each one has already caused a measurement to be
+taken of a machine nobody meant to measure.
+
+| # | Precondition | Why, and what it cost when skipped |
+|---|---|---|
+| 1 | **Register reads 0** | The goal. A fit of a design with tie-offs measures a circuit that cannot run. |
+| 2 | **`rtlCleanAtHead` true — the tree is CLEAN at the fitted commit** | A row fitted from a dirty tree has a digest that describes nothing. One such row is stamped `ok` in the receipts while a row with a clean tree, a real digest and three honestly declared breaches is stamped `failed:structure`. **Read `rtlCleanAtHead` before `status`, always.** |
+| 3 | **Superseded-in-a-production-root reads 0** | R86 made this fatal across all 72 roots so the console cannot be fitted while composing a superseded module. Currently **2** — the attrdiv pair. R104 funds it; the ATTRDIV lane holds it. |
+| 4 | **`dsp_census.py` clean, and its `unpriced_requirements:` rows checked against the filesystem** | Three rows once named modules that exist. A census that prices a module list nobody verified is an inventory, not a measurement. |
+| 5 | **`zhao_prod_top` regenerated and `--check` fresh** | It is generated and instantiates every production block by name. A new port nobody connects is a `PINMISSING` that only the next fit discovers. It was found stale for two separate port changes made days apart. |
+| 6 | **Worst paths split by origin** | `reports/synthesis/worst_path_index.json` keeps the prior gating path per module. A recorded endpoint the present design no longer contains can only describe the earlier one — that is structural evidence where the provenance record is absent, and it is how a palette baseline row was dated without a `.sources.sha256`. |
+| 7 | **Every block has been through `quartus_map` at least once** | **Verilator lint-clean is not Quartus-synthesizable.** Two SystemVerilog forms passed `verilator --lint-only` with 0 diagnostics and failed `quartus_map` with a syntax error: a bare module-scope elaboration check, and an implicit generate. `check_quartus17_syntax.py` now catches both, but a block that has never been mapped has not been shown to synthesize, however clean its lint. |
+
+## 2. The fits, and the question each one answers
+
+`CLAUDE.md`: *a fit nobody could state a question for is a fit that should not
+run.* An island fit is 1.5–4 hours; two of them once consumed most of a session
+while the actual engineering took minutes. The fit is the scarce resource.
+
+### F-CLIFF1 — a `quartus_map`, minutes, runs FIRST and independently
+
+**Question: does `zhao_forge_cliff` or `zhao_forge_cliff_ram` infer RAM, and at
+what cost?**
+
+Ruling R109. The two are **rival candidates**, not parent and child, and
+`console_inventory.yml:109-127` gives both the identical boilerplate disposition
+— which is how the rivalry stayed invisible. Until this is ruled **neither may
+be composed**, because composing either is choosing by default and would leave
+G3 enforcing a decision nobody took.
+
+This is a **map, not a fit**. The batching rule is about 1.5–4 hour placements;
+this is minutes. And RAM inference is precisely the class that genuinely needs
+Quartus rather than Verilator — Verilator will answer correctness and throughput
+in seconds and cannot answer this at all.
+
+`fit_targets.yml:1608-1625`. It has never run.
+
+### F-CONSOLE-TARGET — the VERDICT fit, on `5CSEBA6U23I7`
+
+**Question: does the frozen console place and route inside 41,910 ALM / 112 DSP
+/ 553 M10K, and what is `gpu_clk`?**
+
+This is the pass/fail line and the only fit whose answer is the project's
+answer. It is expected to **REFUSE TO PLACE**, and that is why the next one
+exists.
+
+### F-CONSOLE-SIZE — the MAP fit, on `5CEBA9F31C7`
+
+**Question: if it does not fit, by how much, and WHERE?**
+
+R80 requires both runs because **a refusal is not a map.** A device that cannot
+place the design reports that it cannot place the design; it does not report
+which subsystem is over, which path is critical, or what to attack. The larger
+part is fitted *only to measure size*.
+
+The one composed number that exists today is
+`zhao_console_core@console-core-first-light`: **47,582 ALM / 151 DSP / 306
+M10K**, `gpu_clk` 18.5 MHz, setup slack −44.06 ns, TNS −39,647 ns, and
+`treeCleanAtHead: false`. Against the target that is roughly **113% ALM and 135%
+DSP** — and it was measured on a tree carrying a live metadata-swap defect, from
+a dirty checkout, before this run's twenty-odd repairs. **It is a starting
+estimate and nothing more. Do not quote it as the console's size.**
+
+## 3. What the fits are NOT for
+
+Every one of these is a Verilator question and answers in seconds. Sending them
+to Quartus is how days go missing:
+
+correctness · throughput in clocks · handshake behaviour · field routing ·
+atomicity under backpressure · parameter sensitivity · whether a counter fires ·
+whether a guard is reachable.
+
+The RCP V3 swap sat behind a fit for days; the question that actually killed it
+— *does the tile meet its throughput criterion at the island's NCTX?* — was one
+verilate flag and under a minute.
+
+## 4. While a fit runs
+
+**A running fit is not a reason to idle**, and this is enforced by a Stop hook
+(`tools/hooks/fit-running-stop-guard.ps1`), not by trust — the rule was written
+into `CLAUDE.md` and then violated twice in the same session, because advisory
+prose loses to the pull of reporting a status.
+
+A per-block fit compiles only its own closure and `design/fit_targets.yml` says
+exactly which files, so **everything outside that list is free**. Check the
+closure, then pick up the next thing.
+
+The one hard constraint is the **live-tree trap**: the fit reads the working
+tree, so never edit a file inside the running fit's closure
+(`QUARTUS_GOTCHAS.md` §11).
+
+**And when the fit comes back: write down where you were BEFORE reading it.**
+Fit results redirect the work — that is what they are for — and the half-finished
+thing being held in someone's head is exactly what gets lost. A line in
+`TASK_LOG.md` costs seconds; reconstructing it costs the session.
+
+## 5. Disk, before starting anything long
+
+The machine reached **zero bytes free, 952 GB of 952 GB** on 2026-09-06. Quartus
+died mid-placement 55 minutes into a fit and a Verilator build died with "No
+space left on device". About 33 GB was ours: ~129,000 `.rgb` raw frame buffers.
+
+`tools/maintenance/purge_render_intermediates.py` is the tool. Its root defaults
+to the **zencrifice root, not the repo** — 15 of the 33 GB sat in a sibling
+creature directory outside `zhaozhou` entirely. Dry run by default; it spares
+anything touched in 48 h and never touches `.webm`, `.png`, `.md` or git packs.
+
+Check free space before a fit, not after one dies.
+
+## 6. Reading the results honestly
+
+1. **`rtlCleanAtHead` before `status`.** See precondition 2.
+2. **`ruleViolations: []` on a LABELLED row is silence, not compliance.**
+   Labelled rows are never rule-checked — 0 of 26 carry violations, against 12
+   of 92 unlabelled.
+3. **A row stamped `failed:structure` is not a failed measurement.** The fit
+   completed and the *budget rules* rejected it. The numbers are evidence.
+4. **A fit that measures a circuit already known to be wrong is wasted.** The
+   `@pktC` receipt measured an arrangement carrying a live metadata-swap defect.
+   Repair first, then measure.
+5. **Component checks passing is not the design closing.** A palette verified
+   against the sheets, a light rig verified against a face table and a mesh
+   verified by CRC can all pass while the thing is wrong. This is the art law,
+   and it transfers: gates catch regressions, only looking catches wrongness.
+
+## 7. After the numbers land
+
+The ceiling is `5CSEBA6U23I7`: **41,910 ALM / 112 DSP / 553 M10K**. The older
+30k/85 figure is an aspiration, not the gate.
+
+**ALMs are the binding constraint and memory is the slack** — but the lever is
+**lookup-for-computation**, not relocating state. Moving a register file into an
+M10K does not buy ALMs; replacing an arithmetic cone with a table does. And
+M10K is not free: R59's own price was wrong by 2.4×, and TERRAIN.LOD's store is
+**185 M10K of 553**, not the ~77 that was claimed.
+
+Optimisation starts only once the map exists. Guessing which subsystem is over
+before the fit says so is how the wrong thing gets optimised.
