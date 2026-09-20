@@ -327,5 +327,245 @@ int main(int argc, char** argv) {
         "its zero above is an instrument reading, not an argument",
         1, dut.rec_changed_o > 0 ? 1 : 0);
 
+  // =========================================================================
+  // 8. FT097 -- THE CAPTURE. R40's SUBTRAHEND IS THE RECORD THE RUN STARTED
+  //    WITH, NOT WHATEVER IS ON THE PINS WHEN THE ANSWER ARRIVES.
+  // =========================================================================
+  // Owner directive 15.1: "Latch parameters, origin, dt, frame and the actual
+  // particle record at request capture. DERIVE NO LATER RESULT FROM UNRELATED
+  // LIVE rec_i OR par_i PINS."
+  //
+  // This is the case that executes the defect that sentence names. Until
+  // 2026-09-20 the adapter read `in_vx` -- R40's SUBTRAHEND -- from the live
+  // pins at RESPONSE time, so a record that moved mid-flight produced
+  // `(v' of record A) - (v of record B)`.
+  //
+  // Record A is offered and its run is accepted. The record is then replaced
+  // with B WHILE THE RUN IS IN FLIGHT, and the engine answers a velocity
+  // chosen so that the two readings are far apart and both in range:
+  //
+  //     from the CAPTURED A :  (17<<8 - 10<<8)      >> 8  =    7   <- correct
+  //     from the LIVE     B :  (17<<8 - (-500<<8))  >> 8  =  517   <- the defect
+  //
+  // Neither saturates, so this discriminates on the VALUE and not on a clamp.
+  // The assertion is the CORRECT behaviour -- it keeps passing after the
+  // repair, which a test that asserted the defect would not.
+  {
+    // Start from a quiet block.
+    dut.rec_valid_i = 0;
+    dut.resp_valid_i = 0;
+    dut.req_ready_i = 0;
+    for (int i = 0; i < 6; ++i) step(dut);
+
+    const int32_t kVxA = 10;
+    const int32_t kVxB = -500;
+    const int32_t in_vxA = kVxA << kVelShift;
+    const int32_t out_vx8 = in_vxA + (7 << kAccShift);
+
+    const uint32_t changed_before = dut.rec_changed_o;
+
+    set_record(dut, 5, 6, 7, kVxA, 0, 0, 12, 0x5A);
+    dut.rec_valid_i = 1;
+
+    bool accepted = false;
+    bool swapped = false;
+    bool answered = false;
+    int32_t got_ax = 0x7FFF'FFFF;
+    int32_t offered_p0_at_accept = 0;
+
+    for (int i = 0; i < 400 && !answered; ++i) {
+      dut.eval();
+      if (dut.ans_valid_o) {
+        answered = true;
+        got_ax = s11(dut.fld_ax_o);
+        break;
+      }
+      const bool req_taken = dut.req_valid_o && dut.req_ready_i;
+      if (dut.req_valid_o && !accepted) offered_p0_at_accept = req_lane(dut, 9);
+      dut.req_ready_i = 1;
+      step(dut);
+      if (req_taken && !accepted) {
+        accepted = true;
+        // THE RUN IS NOW IN FLIGHT. Move the record underneath it, exactly as
+        // a producer that did not wait for the accept would.
+        set_record(dut, 900, 901, 902, kVxB, 0, 0, 99, 0x0F);
+        swapped = true;
+        dut.resp_valid_i = 1;
+        dut.resp_status_i = kStOk;
+        dut.resp_out_i[3] = static_cast<uint32_t>(out_vx8);
+        dut.resp_out_i[4] = 0;
+        dut.resp_out_i[5] = 0;
+      }
+    }
+
+    // `rec_changed_o` is a REGISTERED count sampled while the block sits in
+    // F_ANS, so it cannot have moved at the first `eval` that shows
+    // `ans_valid_o`: no clock edge has happened in that state yet. Give it
+    // two, WITHOUT retiring -- `rec_valid_i` is still high and `rec_take_i` is
+    // low, so the answer is still being held and record B is still offered.
+    for (int i = 0; i < 2; ++i) step(dut);
+
+    check(accepted && swapped, "8: the record was swapped while the run was in flight", 1,
+          (accepted && swapped) ? 1 : 0);
+    check(answered, "8: the adapter answered", 1, answered ? 1 : 0);
+    check(got_ax == 7,
+          "8 FT097: R40's subtrahend came from the CAPTURED record (7), not the live "
+          "pins (517) -- the two sides of (v' - v) are the same particle",
+          7, got_ax);
+    check(got_ax != 517,
+          "8 FT097: and it is specifically NOT the live-pin answer the defect gave", 1,
+          (got_ax != 517) ? 1 : 0);
+    // The guard still reports that the producer misbehaved. Both things are
+    // true at once, and that is the point: the arithmetic is protected BY
+    // CONSTRUCTION, and the counter is the REPORT rather than the mechanism.
+    check(dut.rec_changed_o > changed_before,
+          "8: rec_changed_o still FIRES on the swap -- the guard remains reachable after "
+          "the repair, and it is a report, not the thing keeping the value right",
+          1, (dut.rec_changed_o > changed_before) ? 1 : 0);
+    // Lane 9 is p0, which is `par_i[0]` -- the value set at the top of main.
+    // (Lane 12 is p3 = par_i[3] = 0x4444'4444; case 1 asserts that one.)
+    check(offered_p0_at_accept == 0x1111'1111,
+          "8: the offered p0 was the captured one", 0x11111111, offered_p0_at_accept);
+
+    dut.rec_take_i = 1;
+    step(dut);
+    dut.rec_take_i = 0;
+    dut.rec_valid_i = 0;
+    dut.resp_valid_i = 0;
+    dut.req_ready_i = 0;
+    for (int i = 0; i < 4; ++i) step(dut);
+  }
+
+  // =========================================================================
+  // 9. FT097 -- A STANDING OFFER'S OPERANDS CANNOT MOVE UNDERNEATH IT
+  // =========================================================================
+  // The other half of 15.1's capture rule, and the hazard
+  // `zhao_field_stamp_adapter`'s S_DROP comment names from the other side:
+  // "CHANGE AN OFFER THAT IS STILL STANDING ... resetting the counter under it
+  // would move the operands of a request the engine has not yet accepted."
+  //
+  // `req_ready_i` is held LOW so the request stands, and `par_i` and the
+  // record are both rewritten. The offered lanes must not move.
+  {
+    set_record(dut, 11, 12, 13, 4, 0, 0, 20, 0x11);
+    dut.par_i[0] = 0xAAAA'0000u;
+    dut.eval();
+    dut.rec_valid_i = 1;
+    dut.req_ready_i = 0;
+
+    bool standing = false;
+    int32_t p0_before = 0, r0_before = 0, r3_before = 0;
+    for (int i = 0; i < 50 && !standing; ++i) {
+      dut.eval();
+      if (dut.req_valid_o) {
+        standing = true;
+        p0_before = req_lane(dut, 9);
+        r0_before = req_lane(dut, 0);
+        r3_before = req_lane(dut, 3);
+        break;
+      }
+      step(dut);
+    }
+    check(standing, "9: an offer is standing, unaccepted", 1, standing ? 1 : 0);
+    check(p0_before == static_cast<int32_t>(0xAAAA'0000u),
+          "9: it carries the p0 that was live at capture", 0xAAAA0000, p0_before);
+
+    // Move everything under the standing offer.
+    dut.par_i[0] = 0xBBBB'1111u;
+    set_record(dut, 777, 778, 779, -300, 0, 0, 55, 0x99);
+    dut.eval();
+    for (int i = 0; i < 3; ++i) { step(dut); dut.eval(); }
+
+    check(dut.req_valid_o == 1, "9: the offer is still standing", 1, dut.req_valid_o);
+    check(req_lane(dut, 9) == p0_before,
+          "9 FT097: p0 did NOT move under the standing offer", p0_before, req_lane(dut, 9));
+    check(req_lane(dut, 0) == r0_before,
+          "9 FT097: nor the position lane", r0_before, req_lane(dut, 0));
+    check(req_lane(dut, 3) == r3_before,
+          "9 FT097: nor the velocity lane R40 will subtract", r3_before, req_lane(dut, 3));
+
+    // Let it finish so the block is left idle.
+    dut.req_ready_i = 1;
+    for (int i = 0; i < 200; ++i) {
+      dut.eval();
+      const bool req_taken = dut.req_valid_o && dut.req_ready_i;
+      if (dut.ans_valid_o) break;
+      step(dut);
+      if (req_taken) {
+        dut.resp_valid_i = 1;
+        dut.resp_status_i = kStOk;
+        for (int l = 3; l < 6; ++l) dut.resp_out_i[l] = 0;
+      }
+    }
+    dut.rec_take_i = 1;
+    step(dut);
+    dut.rec_take_i = 0;
+    dut.rec_valid_i = 0;
+    dut.resp_valid_i = 0;
+    dut.req_ready_i = 0;
+    for (int i = 0; i < 4; ++i) step(dut);
+  }
+
+  // =========================================================================
+  // 10. THE NO-SECOND-INTEGRATOR RULE, ASSERTED RATHER THAN ASSUMED
+  // =========================================================================
+  // R40 maps this seam onto PART.UPDATE's ACCELERATION port, and PART.UPDATE
+  // integrates position itself. Output ordinals 0/1/2 (px'/py'/pz') and 6
+  // (attr0) must therefore change NOTHING here. A program that returned a wild
+  // position and an unchanged velocity must produce acceleration zero -- if
+  // the adapter ever grew a position path, this is the case that would catch
+  // it, and it would catch it as a VALUE rather than as a review comment.
+  {
+    const uint32_t samples_before = dut.samples_o;
+    set_record(dut, 3, 4, 5, 6, 7, 8, 30, 0x2B);
+    const int32_t vin_x = 6 << kVelShift;
+    const int32_t vin_y = 7 << kVelShift;
+    const int32_t vin_z = 8 << kVelShift;
+
+    dut.rec_valid_i = 1;
+    bool answered = false;
+    int32_t ax = 0x7FFF'FFFF, ay = 0x7FFF'FFFF, az = 0x7FFF'FFFF;
+    for (int i = 0; i < 400 && !answered; ++i) {
+      dut.eval();
+      if (dut.ans_valid_o) {
+        answered = true;
+        ax = s11(dut.fld_ax_o);
+        ay = s11(dut.fld_ay_o);
+        az = s11(dut.fld_az_o);
+        break;
+      }
+      const bool req_taken = dut.req_valid_o && dut.req_ready_i;
+      dut.req_ready_i = 1;
+      step(dut);
+      if (req_taken) {
+        dut.resp_valid_i = 1;
+        dut.resp_status_i = kStOk;
+        // Ordinals 0/1/2: a WILD new position. Ordinal 6: a wild attr0.
+        dut.resp_out_i[0] = 0x7FFF'0000u;
+        dut.resp_out_i[1] = 0x8000'1234u;
+        dut.resp_out_i[2] = 0x0BAD'F00Du;
+        // Ordinals 3/4/5: the velocity is UNCHANGED.
+        dut.resp_out_i[3] = static_cast<uint32_t>(vin_x);
+        dut.resp_out_i[4] = static_cast<uint32_t>(vin_y);
+        dut.resp_out_i[5] = static_cast<uint32_t>(vin_z);
+        dut.resp_out_i[6] = 0xFFFF'FFFFu;
+      }
+    }
+    check(answered, "10: answered", 1, answered ? 1 : 0);
+    check(ax == 0 && ay == 0 && az == 0,
+          "10: an unchanged velocity gives ZERO acceleration however wild the returned "
+          "position is -- there is no second integrator and attr0 is not read",
+          0, (ax == 0 && ay == 0 && az == 0) ? 0 : 1);
+    check(dut.samples_o == samples_before + 1,
+          "10: and it was still counted as a real sample", samples_before + 1,
+          dut.samples_o);
+    dut.rec_take_i = 1;
+    step(dut);
+    dut.rec_take_i = 0;
+    dut.rec_valid_i = 0;
+    dut.resp_valid_i = 0;
+    for (int i = 0; i < 4; ++i) step(dut);
+  }
+
   return zhao::report_and_exit("field_flow_adapter_directed");
 }

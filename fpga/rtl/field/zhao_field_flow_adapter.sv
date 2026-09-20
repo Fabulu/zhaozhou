@@ -160,6 +160,20 @@ module zhao_field_flow_adapter #(
     output var logic [IN_LANES*32-1:0]   req_in_o,
     input  var logic                     resp_valid_i,
     output var logic                     resp_ready_o,
+    // THE LANES READ HERE ARE CANONICAL OUTPUT ORDINALS, NOT PHYSICAL WINDOW
+    // POSITIONS -- FH17's one result contract, stated identically in
+    // `zhao_field_stamp_adapter.sv` and `zhao_field_warp_adapter.sv`. Ordinal
+    // 3/4/5 is vx'/vy'/vz' of the flow record whatever physical register the
+    // program wrote; the window-to-ordinal compaction is the HOST's act
+    // through OUTPUT_MAP (owner directive 7.1/7.3). R101's WINDOW mask and
+    // FH05's REQUIRED mask are different named fields of different widths and
+    // are never assigned to one another. R111 measured that the shipped
+    // programs' output registers are never contiguous, so an adapter reading a
+    // window POSITION here would be reading whichever register happened to sit
+    // at that offset -- and the flow adapter reads lanes 3-5, which R111 names
+    // as the exact case that would have fed three zero velocities, "a
+    // plausible-looking maximum deceleration".
+    //
     // THREE OF THE SEVEN OUTPUT LANES ARE READ, AND THAT IS R40 RATHER THAN AN
     // OVERSIGHT. The flow profile also answers px'/py'/pz' and attr0; R40 maps
     // the seam onto PART.UPDATE's ACCELERATION port, and PART.UPDATE integrates
@@ -273,22 +287,74 @@ module zhao_field_flow_adapter #(
   wire signed [31:0] in_vy = 32'(u_vy) <<< VEL_SHIFT;
   wire signed [31:0] in_vz = 32'(u_vz) <<< VEL_SHIFT;
 
+  // THE CANDIDATE PAYLOAD, formed from the LIVE pins. It is what WOULD be sent
+  // if a run were started this cycle; it is never what is sent.
+  logic [IN_LANES*32-1:0] cap_in_c;
   always_comb begin
-    req_in_o = '0;
-    req_in_o[( 0*32) +: 32] = in_px;
-    req_in_o[( 1*32) +: 32] = in_py;
-    req_in_o[( 2*32) +: 32] = in_pz;
-    req_in_o[( 3*32) +: 32] = in_vx;
-    req_in_o[( 4*32) +: 32] = in_vy;
-    req_in_o[( 5*32) +: 32] = in_vz;
-    req_in_o[( 6*32) +: 32] = {22'd0, u_age};              // age:u32
-    req_in_o[( 7*32) +: 32] = {24'd0, u_var};              // seed:u32 -- R40
-    req_in_o[( 8*32) +: 32] = DT_FX;                       // dt:fx    -- R40
-    req_in_o[( 9*32) +: 32] = par_i[( 0*32) +: 32];        // p0
-    req_in_o[(10*32) +: 32] = par_i[( 1*32) +: 32];        // p1
-    req_in_o[(11*32) +: 32] = par_i[( 2*32) +: 32];        // p2
-    req_in_o[(12*32) +: 32] = par_i[( 3*32) +: 32];        // p3
+    cap_in_c = '0;
+    cap_in_c[( 0*32) +: 32] = in_px;
+    cap_in_c[( 1*32) +: 32] = in_py;
+    cap_in_c[( 2*32) +: 32] = in_pz;
+    cap_in_c[( 3*32) +: 32] = in_vx;
+    cap_in_c[( 4*32) +: 32] = in_vy;
+    cap_in_c[( 5*32) +: 32] = in_vz;
+    cap_in_c[( 6*32) +: 32] = {22'd0, u_age};              // age:u32
+    cap_in_c[( 7*32) +: 32] = {24'd0, u_var};              // seed:u32 -- R40
+    cap_in_c[( 8*32) +: 32] = DT_FX;                       // dt:fx    -- R40
+    cap_in_c[( 9*32) +: 32] = par_i[( 0*32) +: 32];        // p0
+    cap_in_c[(10*32) +: 32] = par_i[( 1*32) +: 32];        // p1
+    cap_in_c[(11*32) +: 32] = par_i[( 2*32) +: 32];        // p2
+    cap_in_c[(12*32) +: 32] = par_i[( 3*32) +: 32];        // p3
   end
+
+  // ==========================================================================
+  // 15.1's CAPTURE: THE OFFER AND THE SUBTRAHEND COME FROM THE SAME LATCH
+  // ==========================================================================
+  // Owner directive 15.1, verbatim: "Latch parameters, origin, dt, frame and
+  // the actual particle record at request capture. **Derive no later result
+  // from unrelated live `rec_i` or `par_i` pins.**"
+  //
+  // THAT NAMED A DEFECT THAT WAS LIVE IN THIS FILE, and it is worth writing
+  // down because every gate passed over it. Until 2026-09-20 `req_in_o` was
+  // driven combinationally from the live pins and `a_c[]` -- R40's
+  // `sat_s11((v' - v) >> 8)` -- took its SUBTRAHEND `in_vx/in_vy/in_vz` from
+  // those same live pins at RESPONSE time, tens of clocks after the run
+  // started. So if PART.STATE moved the offered record while a run was in
+  // flight, the console computed
+  //
+  //     acceleration = (v' OF RECORD A)  -  (v OF RECORD B)
+  //
+  // a well-formed, plausible, entirely wrong wind. This is the metadata-swap
+  // shape from CLAUDE.md exactly -- "response A's data with B's metadata" --
+  // and the guard beside it could not prevent it: `rec_changed_o` is sampled
+  // in F_ANS, one state AFTER the wrong difference has already been latched,
+  // and a record that moved during F_WAIT and moved BACK by F_ANS never fired
+  // it at all. A detector downstream of the corruption is not a guard.
+  //
+  // There is now ONE latch, taken once, at the cycle the run is decided:
+  //
+  //   * `req_in_o` is driven FROM IT, so an offer standing in F_REQ cannot
+  //     have its operands moved underneath it while the engine has not yet
+  //     accepted -- the hazard `zhao_field_stamp_adapter`'s S_DROP comment
+  //     names from the other direction.
+  //   * R40's subtrahend is read BACK OUT OF IT, from lanes 3/4/5, so the two
+  //     sides of the subtraction are provably the same point by construction
+  //     rather than by timing argument. That is the first question CLAUDE.md's
+  //     metadata-swap chapter says to ask of any checker, answered structurally.
+  //   * parameters, origin and dt ride in the same latch, because they are
+  //     part of the payload and 15.1 names all of them.
+  //
+  // THE COST, SAID OUT LOUD: this is IN_LANES*32 = 416 flops that the live-pin
+  // version did not spend, on a console already over its ALM budget. It buys
+  // the property that a result cannot belong to two different particles.
+  // PHYSICAL FIT PENDING.
+  logic [IN_LANES*32-1:0] held_in;
+  assign req_in_o = held_in;
+
+  // R40's subtrahend, read back out of the latch the engine was given.
+  wire signed [31:0] cap_vx = held_in[(3*32) +: 32];
+  wire signed [31:0] cap_vy = held_in[(4*32) +: 32];
+  wire signed [31:0] cap_vz = held_in[(5*32) +: 32];
 
   assign req_slot_o   = slot_i;
   assign req_noprog_o = !slot_valid_i;
@@ -352,10 +418,20 @@ module zhao_field_flow_adapter #(
 
   logic signed [10:0] a_c [0:2];
   logic               s_c [0:2];
+  // R40, unchanged: `sat_s11((v' - v) >> ACC_SHIFT)`. The MINUEND is the
+  // engine's answer; the SUBTRAHEND is `cap_v*`, read out of the very latch
+  // the engine was handed -- NOT the live pins. See the CAPTURE chapter above.
+  //
+  // AND THERE IS STILL NO SECOND INTEGRATOR. R40 maps this seam onto
+  // PART.UPDATE's ACCELERATION port and PART.UPDATE integrates position itself
+  // (its step 5) from the velocity it owns. Output lanes 0/1/2 (px'/py'/pz')
+  // and lane 6 (attr0) are read by nothing here, deliberately: taking the
+  // program's position would be a second integrator with a different rounding
+  // law running beside the ratified one.
   always_comb begin
-    a_c[0] = accel_of(out_vx, in_vx, s_c[0]);
-    a_c[1] = accel_of(out_vy, in_vy, s_c[1]);
-    a_c[2] = accel_of(out_vz, in_vz, s_c[2]);
+    a_c[0] = accel_of(out_vx, cap_vx, s_c[0]);
+    a_c[1] = accel_of(out_vy, cap_vy, s_c[1]);
+    a_c[2] = accel_of(out_vz, cap_vz, s_c[2]);
   end
 
   // `zhao_field_host` answers 8'h00 for a run that reached OP_END with a
@@ -370,6 +446,7 @@ module zhao_field_flow_adapter #(
       state <= F_IDLE;
       ans_field <= 1'b0;
       held_rec <= 128'd0;
+      held_in <= '0;
       rec_changed_o <= 32'd0;
       for (k = 0; k < 3; k = k + 1) ans_a[k] <= 11'sd0;
       samples_o <= 32'd0;
@@ -394,7 +471,15 @@ module zhao_field_flow_adapter #(
       case (state)
         F_IDLE: begin
           if (rec_valid_i) begin
+            // 15.1's CAPTURE, and it is ONE act. `held_rec` is the identity
+            // guard's operand; `held_in` is the payload the engine is given
+            // and the source of R40's subtrahend. Both are loaded here, from
+            // this cycle's pins, and neither is ever re-loaded from a live
+            // wire while a run is in flight. The BYPASS answer is formed under
+            // the same capture, so a record that is answered without a run is
+            // held to the same identity rule as one that is not.
             held_rec <= rec_i;
+            held_in  <= cap_in_c;
             if (!slot_valid_i) begin
               // No wind is armed. ANSWERED IMMEDIATELY, with the sample absent
               // rather than zero, and counted apart from a refused run.
