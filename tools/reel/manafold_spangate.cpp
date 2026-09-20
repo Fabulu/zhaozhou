@@ -1068,6 +1068,7 @@ void check_shipping_posed_ring_order(const zc::CreatureType& type,
   const char* worst_span = "none";
   size_t steps = 0;
   size_t reversed = 0;
+  double worst_turn = 0.0;  // pass-20 review: G6's margin to its 140 deg ceiling
   size_t pinched = 0;
   bool mutant_applied = false;
 
@@ -1144,6 +1145,13 @@ void check_shipping_posed_ring_order(const zc::CreatureType& type,
                 double cth = dot(prev, step) / (lp * ls);
                 cth = std::max(-1.0, std::min(1.0, cth));
                 const double turn = std::acos(cth) * 180.0 / 3.14159265358979;
+                // ⚠ PASS-20 REVIEW: REPORT THE MARGIN, not just the count. The
+                // re-expressed leg printed "0 reversed" and nothing else, so a
+                // reader could not tell whether the shipping shape sat at 20
+                // degrees or at 139. A detector reading zero is a claim, and a
+                // claim without its distance to the threshold cannot be
+                // checked. Costs one double.
+                if (turn > worst_turn) worst_turn = turn;
                 if (turn > 140.0) ++reversed;
               }
             }
@@ -1156,9 +1164,11 @@ void check_shipping_posed_ring_order(const zc::CreatureType& type,
 
   std::printf("G6 shipping posed ring order: %zu steps, min projection %.3f mm, "
               "separation %.3f mm at slot %u key %d sub %u %s; "
-              "%zu reversed, %zu pinched\n",
+              "%zu reversed, %zu pinched, worst consecutive-step turn %.2f deg "
+              "(ceiling 140.0)\n",
               steps, worst_projection, worst_separation, worst_slot,
-              worst_frame, worst_sub, worst_span, reversed, pinched);
+              worst_frame, worst_sub, worst_span, reversed, pinched,
+              worst_turn);
   if (fail_posed_order && !mutant_applied)
     fail("posed-order mutant did not reach a shipping clip");
   if (reversed != 0)

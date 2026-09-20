@@ -435,9 +435,13 @@ constexpr int32_t kGateLineFarRadiusPx = 128;  // Drift's projected radius
 // TWO thresholds, and the distinction is the point.
 //
 // kGateRailTargetFloor is the ART TARGET: the value below which a longitudinal
-// skin edge is folding through itself and the owner sees a flap. Shipping
-// BREACHES it today (worst 0.147 on Inspect). That breach is DECLARED, dated
-// and printed loudly on every run; it is not a pass.
+// skin edge is folding through itself and the owner sees a flap.
+// ⚠ STALE TEXT REPAIRED BY THE PASS-20 REVIEW. This paragraph used to say
+// "Shipping BREACHES it today (worst 0.147 on Inspect)", which was true of the
+// pre-bow tree and false of this one: shipping reads 0.692 and CLEARS the
+// target floor. A comment that describes a repaired defect as current is the
+// reassuring-provenance-line hazard CLAUDE.md names, so it is corrected rather
+// than left as history.
 //
 // kGateRailRegressFloor is the REGRESSION guard, set below today's measured
 // worst with margin. Breaching it is a hard R4 failure.
@@ -470,10 +474,13 @@ constexpr double kGateRailRegressFloor = 0.40;
 // right amount of stretch -- only the render settles that, and the dip was
 // looked at on Inspect before/after (P20-IMPLEMENTATION.md) where it reads as a
 // gentle squeeze of the loop with no collapse. It DOES claim that from here on,
-// anything past 2.10 is a regression. The FOLD floor, which is the item-1 guard
-// and the one that matters, was NOT touched: at the shipping dip the worst rear
-// rail is 0.129, exactly the dip-off value, so the new gesture costs item 1
-// nothing. That parity is the number to check if either is ever moved again.
+// anything past 2.10 is a regression.
+// ⚠ THE PARITY NUMBERS IN THIS PARAGRAPH WERE PRE-BOW AND ARE CORRECTED BY THE
+// PASS-20 REVIEW. It said "at the shipping dip the worst rear rail is 0.129,
+// exactly the dip-off value". With the arc repair in, the shipping worst rear
+// rail is 0.692 and the dip-off value is 0.692 as well -- the parity claim
+// still HOLDS (the gesture costs item 1 nothing) but at the repaired value, not
+// at the rip's. That parity is the number to check if either is ever moved.
 constexpr double kGateRailCeiling = 2.10;
 constexpr double kGateHandoffMaxMm = 320.0;  // against a worst of 260
 // Continuity, and it was raised 0.12 -> 0.18 by the bow repair. Saying so, and
@@ -973,8 +980,19 @@ int main(int argc, char** argv) {
     } else if (std::strcmp(argv[i], "--dip") == 0) {
       gate = true;
       g_force_dip_leg = true;
-      u02::g_u02_knead_dip_gain_pm = 1000;
-      std::printf("DIP ENABLED: judging R5 with the kneading dip on\n");
+      // ⚠ PASS 20 REVIEW: THIS FLAG NO LONGER MOVES THE GAIN. It used to set
+      // `g_u02_knead_dip_gain_pm = 1000`, which was right while the dip shipped
+      // OFF -- a leg that cannot reach its state is not evidence, so the flag
+      // reached it. The dip now ships ON at kKneadDipGainPm (550), and a flag
+      // that overwrites the shipping amplitude makes this leg describe a
+      // creature nobody renders. It did: packet 7 reported "R5, shipping
+      // configuration: 19 of 21 reach strictly lowest" from this 1000 run,
+      // while the shipping 550 reaches 4 of 21 -- and 1000 fails mspan's G9 by
+      // 6.4x (50.96 deg against an 8 deg ceiling), so the two numbers describe
+      // configurations that cannot both exist. Use ZHAO_U02_KNEAD_DIP_PM to
+      // ladder the amplitude; this flag only forces the leg to be JUDGED.
+      std::printf("DIP LEG FORCED: judging R5 at the CONFIGURED gain (%d pm)\n",
+                  u02::g_u02_knead_dip_gain_pm);
     } else if (std::strcmp(argv[i], "--fail-rear-strain") == 0) {
       gate = true;
       // THE POSITIVE CONTROL IS THE DEFECT ITSELF: the pass-19 arc/chord solve,
@@ -1194,8 +1212,9 @@ int main(int argc, char** argv) {
         "cause is arc-vs-chord in the rear closure: the span's rest length is "
         "an ARC (kRearSocketFromCMm, 1010 mm) while finalize_rear_follow "
         "measures a CHORD, so a band that should BOW is told to SHORTEN, by up "
-        "to 662 mm. Not repaired in pass 20; three candidate fixes were "
-        "measured and falsified (P20-IMPLEMENTATION.md).\n",
+        "to 662 mm. REPAIRED in pass 20 by the arc solve (kRearBowSign); if "
+        "this line prints again the repair has regressed or been switched off "
+        "with ZHAO_U02_REAR_BOW=legacy.\n",
         w_rail_min, kGateRailTargetFloor);
   }
   // ---- R5 DIP (PASS 20, Direction 21 item 2) -------------------------------
@@ -1230,12 +1249,19 @@ int main(int argc, char** argv) {
                 "every clip that authors one\n");
   } else if (dip_missing != 0) {
     std::printf(
-        "OPEN R5 (declared 2026-09-20, Direction 21 item 2): the dip runs on "
-        "all %d clips and returns on all of them, but B reaches the BOTTOM of "
-        "the ranking on only %d. The per-clip lever is kKneadDipClipPm and the "
-        "global one is ZHAO_U02_KNEAD_DIP_FOLD_PM (1000 ships; the ladder to "
-        "2000 takes it from 3 clips to 15). Both are art values and want the "
-        "owner's eye.\n",
+        "OPEN R5 (declared 2026-09-20, Direction 21 item 2; restated by the "
+        "pass-20 review): the dip runs on all %d clips and returns on all of "
+        "them, but B reaches the BOTTOM of the ranking on only %d. The owner "
+        "asked for it on EVERY animation, so this is the item's outstanding "
+        "half, not a rounding.\n"
+        "  ⚠ AND IT IS NOT A KNOB AWAY. The amplitude lever is "
+        "ZHAO_U02_KNEAD_DIP_PM x ZHAO_U02_KNEAD_DENT_DEPTH_PM (they multiply "
+        "into the same s), and the ranking trades MONOTONICALLY against mspan's "
+        "G9 angular-step ceiling of 8 deg: gain 550 -> 7.77 deg / 4 clips, 650 "
+        "-> 9.21 / 9, 750 -> 11.28 / 14, 1000 -> 50.96 / 19. Every setting that "
+        "delivers the ranking is a carrier roll flip. The dent mechanism cannot "
+        "reach the owner's ask inside the continuity gate; that needs authoring "
+        "(redistribution across A/B/C), not a larger number here.\n",
         dip_clips, dip_clips - dip_missing);
   }
   std::printf("rear gate mask 0x%X -> %s\n", mask, mask ? "RED" : "GREEN");

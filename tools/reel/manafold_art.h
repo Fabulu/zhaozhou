@@ -4791,7 +4791,12 @@ constexpr int32_t kKneadDipFoldDeltaPm[3] = {+170, -1000, 0};
 //   2000    0.129  (NEUTRAL)     14 / 21
 //   2400    0.129  (NEUTRAL)     15 / 21
 // 0.129 is exactly the dip-OFF value, so from 1500 up the dip costs item 1
-// nothing. Below it the dip makes the rip WORSE -- the carrier offset alone
+// nothing.
+// ⚠ THAT LADDER IS PRE-BOW AND PRE-DENT (pass-20 review). Re-measured on the
+// shipping tree the rear rail reads 0.692 both with the dip and with
+// ZHAO_U02_KNEAD_DIP_PM=0, so the PARITY claim still holds -- at the repaired
+// value, not at the rip's -- while the clip counts belong to the carried
+// solver and do not describe the dent. Below it the dip makes the rip WORSE -- the carrier offset alone
 // drags the rear closure and it is the fold share that compensates, which is
 // the opposite of what "turn the new thing down if it hurts" would have done.
 // 2000 is the knee: 2400 buys one more clip for a much larger pose change.
@@ -4846,6 +4851,13 @@ static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
 // curvature once it bows. G5 now checks the helpers against the PRODUCTION
 // writer, whatever law that is, and G6 now bounds the turn between consecutive
 // steps and the pinch, which are the properties that were always the point.
+// ⚠ THIS BLOCK IS PRE-DENT HISTORY. It says "STILL SHIPS OFF"; since packet 7
+// the dip SHIPS ON through KneadDipSolver::kDent at kKneadDentDepthPm, and the
+// gain below is one of the four per-mille factors of the dent's `s`. The
+// paragraphs that follow describe the CARRIED solver's stop and are kept
+// because that solver is still selectable (ZHAO_U02_KNEAD_DIP_SOLVER=carried,
+// a matrix identity leg). Read them as the carried path's ledger, not as the
+// current ship state. -- pass-20 review
 // ⚠ STILL SHIPS OFF, and pass 20's second packet narrowed the reason to ONE leg.
 //
 // With the bow repair in, the two SERIOUS objections went away: at an authored
@@ -4874,9 +4886,15 @@ static_assert(static_cast<int>(sizeof(kKneadDipClipPm) /
 // span change over three spans instead of one. That is the next packet's work,
 // and it is authoring, not gate-widening.
 //
-// ZHAO_U02_KNEAD_DIP_PM=1000 turns it on for a look; mrear --gate --dip judges
-// R5 with it on, and reports B reaching the bottom of the ranking on 15 of 21
-// clips at the authored depth 300 / fold 2000.
+// ZHAO_U02_KNEAD_DIP_PM ladders the amplitude; `mrear --gate --dip` forces the
+// R5 leg to be JUDGED and (since the pass-20 review) judges it at whatever gain
+// is configured, so the leg cannot report a creature nobody renders.
+// ⚠ THE SHIPPING NUMBER IS 4 OF 21, NOT 15 AND NOT 19. At 550 the bank reaches
+// B-strictly-lowest on slots 0, 1, 2 and 7 only. Deeper settings buy the
+// ranking and lose mspan's G9: 650 -> 9.21 deg / 9 clips, 750 -> 11.28 / 14,
+// 1000 -> 50.96 / 19, against an 8 deg ceiling. Gain and kKneadDentDepthPm
+// multiply into the same `s`, so this is a property of the mechanism, not of
+// which knob is turned. Direction 21 item 2 is OUTSTANDING.
 constexpr int32_t kKneadDipGainPm = 550;
 inline int32_t g_u02_knead_dip_gain_pm = kKneadDipGainPm;
 inline int32_t g_u02_knead_dip_depth_mm = kKneadDipDepthMm;  // authoring ladder
