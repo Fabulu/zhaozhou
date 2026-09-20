@@ -256,6 +256,14 @@ module zhao_console_board
   parameter int unsigned FRAMER_Q = 8,
   parameter int unsigned WFIFO_W  = 64,
 
+  // ---- INPUT.SNAC (owner ruling R7) ----------------------------------------
+  // How many SNAC connectors the board carries. They drive canonical pad slots
+  // 0..SNAC_PORTS-1; slots above that are always the incoming route's. Two is
+  // the MiSTer SNAC shape. The bus rate, the /ACK timeout and the inter-poll
+  // gap are the ADAPTER's knobs and stay there (spec/input_rules.md 7.1); this
+  // one is here because it sets a PORT WIDTH on this module.
+  parameter int unsigned SNAC_PORTS = 2,
+
   // ---- CMD.EXEC (section 7c) -----------------------------------------------
   // How many SurfaceStamps one packet may carry. It is the ONE number in the
   // executor that can refuse an otherwise legal packet, so it is a knob and not
@@ -1809,6 +1817,30 @@ module zhao_console_board
   input  logic [15:0] pad_rx_i [0:3],
   input  logic [15:0] pad_ry_i [0:3],
 
+  // ---- INPUT.SNAC's physical edge (owner ruling R7, input_rules.md 7) -----
+  // PINS OF THE PART, NOT A BOUNDARY. Exactly the class `pad_buttons_i` above
+  // and `hps_req_*` are in, and for the same reason the HOST.REGWIN
+  // composition states at length further down: the far end is a connector on
+  // the board, not a block nobody has built. In Verilator the harness IS the
+  // controller, as it is the HPS for the burst bridge.
+  //
+  // The adapter is composed below, BETWEEN these pads and the shell, so a
+  // slot with a real PS1 pad on it is driven by that pad and every other slot
+  // carries `pad_*_i` through untouched. With nothing plugged in -- DAT idles
+  // high, every poll times out -- the merge is the identity and this console
+  // behaves exactly as it did before the block existed.
+  input  logic [SNAC_PORTS-1:0] snac_dat_i,
+  input  logic [SNAC_PORTS-1:0] snac_ack_n_i,
+  output logic [SNAC_PORTS-1:0] snac_att_n_o,
+  output logic                  snac_clk_o,
+  output logic                  snac_cmd_o,
+  output logic [3:0]            snac_present_o,
+  output logic [63:0]           snac_polls_o,
+  output logic [63:0]           snac_timeouts_o,
+  output logic [63:0]           snac_bad_header_o,
+  output logic [63:0]           snac_overrides_o,
+  output logic [63:0]           snac_seq_gaps_o,
+
   // ---- audio: ring-read client seam (pairs in) + PCM out -----------------
   input  logic        aud_wr_valid_i,
   input  logic [15:0] aud_wr_l_i,
@@ -2681,6 +2713,7 @@ module zhao_console_board
   zhao_console_core #(
       .FRAMER_Q                 (FRAMER_Q),
       .WFIFO_W                  (WFIFO_W),
+      .SNAC_PORTS               (SNAC_PORTS),
       .CMD_EXEC_STAMP_Q         (CMD_EXEC_STAMP_Q),
       .PART_REC_W               (PART_REC_W),
       .PART_CAPACITY            (PART_CAPACITY),
@@ -3511,6 +3544,17 @@ module zhao_console_board
       .pad_ly_i                          (pad_ly_i),
       .pad_rx_i                          (pad_rx_i),
       .pad_ry_i                          (pad_ry_i),
+      .snac_dat_i                        (snac_dat_i),
+      .snac_ack_n_i                      (snac_ack_n_i),
+      .snac_att_n_o                      (snac_att_n_o),
+      .snac_clk_o                        (snac_clk_o),
+      .snac_cmd_o                        (snac_cmd_o),
+      .snac_present_o                    (snac_present_o),
+      .snac_polls_o                      (snac_polls_o),
+      .snac_timeouts_o                   (snac_timeouts_o),
+      .snac_bad_header_o                 (snac_bad_header_o),
+      .snac_overrides_o                  (snac_overrides_o),
+      .snac_seq_gaps_o                   (snac_seq_gaps_o),
       .aud_wr_valid_i                    (aud_wr_valid_i),
       .aud_wr_l_i                        (aud_wr_l_i),
       .aud_wr_r_i                        (aud_wr_r_i),

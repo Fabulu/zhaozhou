@@ -1308,21 +1308,35 @@ blocks:
     downstream: [INPUT.SNAPSHOT]
     backpressure: none
     latency: fixed:1
-    target_throughput: 1 poll per frame
+    target_throughput: 1 poll per port per frame (>=; the gap counter fires when it is not met)
     reference_model: zref::SnacAdapter
     tests:
       directed: tests/input/input_snac_directed.cpp
-      random: tests/input/input_snac_random.cpp
     counters: [input_snac_input_sequence_gaps]
     source_ids: true
     async_bridge: true
     budget_group: platform
-    maturity: SPECIFIED
-    maturity_log: []
+    maturity: UNIT_VERIFIED
+    maturity_log:
+      - 2026-09-20 BUILT and COMPOSED under owner ruling R7. fpga/rtl/input/zhao_input_snac.sv;
+        contract and spec/input_rules.md section 7 authored the same day (both were
+        deliberately blank until R7 decided the block). 40 directed checks against
+        zref::SnacAdapter, every counter seen to fire on legal stimulus, and two
+        planted faults (a swapped button-table entry, a wrong axis shift) caught --
+        the first version of the button case did NOT catch the swap and was
+        strengthened to walk all sixteen bits.
     deferred: false   # REVOKED by the owner 2026-09-18: "I don't want to defer any unfinished blocks now". The 2026-08-31 SS6.3 cut is withdrawn.
     cut_order: null
     superseded_by: null
-    notes: Deferred; registered so the ledger records the option without spending a directory.
+    notes: |
+      BUILT AND COMPOSED 2026-09-20 (owner ruling R7). A second ROUTE to the pad
+      state INPUT.SNAPSHOT already latches, never a second input semantics -- the
+      2026-08-31 section 6.6 constraint that survives R7. Composed in
+      zhao_console_core between its pad_*_i ports and zhao_shell_top_v2's
+      INPUT.SNAPSHOT; the merge is IN this block, because the ledger's own
+      `outputs: [pad_pins]` says the adapter's output IS the pad bus. With no
+      connector populated it is the identity function on that bus, asserted in
+      input_snac_directed case 1.
 
   # ===========================================================================
   # AUDIO (fpga/rtl/audio)

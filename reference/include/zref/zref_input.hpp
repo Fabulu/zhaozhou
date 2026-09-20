@@ -226,4 +226,96 @@ class RumbleBridge {
   uint64_t dropped_, dropped_shadow_;
 };
 
+// ---------------------------------------------------------------- snac -----
+//
+// INPUT.SNAC oracle (owner ruling R7; spec/input_rules.md 7).
+//
+// This is the DECODE ONLY, deliberately. The serial engine's timing is the
+// block's, but every VALUE it produces is this function of the nine bytes a
+// PS1 pad replies with, and that is the part a second implementation would get
+// wrong. The directed test asks this oracle rather than transcribing
+// input_rules.md 4's button table a second time -- a transcription is a copy,
+// and a copy of a table is exactly how two implementations of one law come to
+// disagree in this repo.
+
+// The nine bytes of one poll's reply, in wire order (input_rules.md 7.2).
+struct SnacReply {
+  uint8_t mode;    // 0x41 digital, 0x73 analog, 0xFF no pad, anything else unimplemented
+  uint8_t ready;   // must be 0x5A
+  uint8_t btn_lo;  // ACTIVE LOW
+  uint8_t btn_hi;  // ACTIVE LOW
+  uint8_t rjx, rjy, ljx, ljy;  // analog only; u8, 0x80 centre
+};
+
+inline SnacReply snacNoPad() { return SnacReply{0xFF, 0x00, 0xFF, 0xFF, 0x80, 0x80, 0x80, 0x80}; }
+
+class SnacAdapter {
+ public:
+  static constexpr uint8_t kModeDigital = 0x41;
+  static constexpr uint8_t kModeAnalog = 0x73;
+  static constexpr uint8_t kModeNoPad = 0xFF;
+  static constexpr uint8_t kReadyByte = 0x5A;
+
+  // THE AXIS LAW (input_rules.md 7.3): one XOR, lossless and invertible.
+  // 0x80 -> 0, 0x00 -> -32768, 0xFF -> +32512.
+  static int16_t axis(uint8_t a) {
+    return static_cast<int16_t>(static_cast<uint16_t>((static_cast<uint16_t>(a) << 8) ^ 0x8000u));
+  }
+  // The inverse. `axisInverse(axis(a)) == a` for all 256 a -- which is the
+  // property that makes the transform a re-encoding and not a policy, and the
+  // directed test checks all 256 rather than a handful.
+  static uint8_t axisInverse(int16_t v) { return static_cast<uint8_t>((v >> 8) + 128); }
+
+  // PS1's two active-low bytes -> the canonical 32-bit table (input_rules.md 4).
+  static uint32_t buttons(uint8_t lo, uint8_t hi) {
+    uint32_t b = 0;
+    auto set = [&b](int bit, bool on) { if (on) b |= (1u << bit); };
+    set(0, !((lo >> 4) & 1));   // up
+    set(1, !((lo >> 6) & 1));   // down
+    set(2, !((lo >> 7) & 1));   // left
+    set(3, !((lo >> 5) & 1));   // right
+    set(4, !((hi >> 6) & 1));   // A / cross
+    set(5, !((hi >> 5) & 1));   // B / circle
+    set(6, !((hi >> 7) & 1));   // X / square
+    set(7, !((hi >> 4) & 1));   // Y / triangle
+    set(8, !((hi >> 0) & 1));   // L2
+    set(9, !((hi >> 1) & 1));   // R2
+    set(10, !((hi >> 2) & 1));  // L1
+    set(11, !((hi >> 3) & 1));  // R1
+    set(12, !((lo >> 1) & 1));  // L3
+    set(13, !((lo >> 2) & 1));  // R3
+    set(14, !((lo >> 0) & 1));  // select
+    set(15, !((lo >> 3) & 1));  // start
+    return b;  // bits 16-31 reserved ZERO (input_rules.md 4)
+  }
+
+  // A poll's reply -> the slot's raw state as it enters INPUT.SNAPSHOT.
+  // A reply that is not a mode this block implements, or whose ready byte is
+  // wrong, is ABSENT with zeroed fields -- the same shape input_rules.md 2.2
+  // gives an absent pad, so nothing downstream needs a third case.
+  static PadRawState decode(const SnacReply& r) {
+    const bool digital = (r.mode == kModeDigital);
+    const bool analog = (r.mode == kModeAnalog);
+    if ((!digital && !analog) || r.ready != kReadyByte) return absentPad();
+    PadRawState s;
+    s.present = true;
+    s.buttons = buttons(r.btn_lo, r.btn_hi);
+    // A digital pad has no sticks: centre is the honest reading.
+    s.lx = analog ? axis(r.ljx) : 0;
+    s.ly = analog ? axis(r.ljy) : 0;
+    s.rx = analog ? axis(r.rjx) : 0;
+    s.ry = analog ? axis(r.rjy) : 0;
+    return s;
+  }
+
+  // THE MERGE LAW (input_rules.md 7.4): a slot SNAC has a live pad on is
+  // SNAC's; every other slot is the host route's, unchanged.
+  static PadRawState merge(const PadRawState& snac, const PadRawState& host) {
+    return snac.present ? snac : host;
+  }
+
+  // How many bytes the pad sends for a given mode (low nibble = halfwords).
+  static int replyBytes(uint8_t mode) { return (mode == kModeAnalog) ? 9 : 5; }
+};
+
 }  // namespace zref

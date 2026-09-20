@@ -3026,6 +3026,14 @@ module zhao_console_core
   parameter int unsigned FRAMER_Q = 8,
   parameter int unsigned WFIFO_W  = 64,
 
+  // ---- INPUT.SNAC (owner ruling R7) ----------------------------------------
+  // How many SNAC connectors the board carries. They drive canonical pad slots
+  // 0..SNAC_PORTS-1; slots above that are always the incoming route's. Two is
+  // the MiSTer SNAC shape. The bus rate, the /ACK timeout and the inter-poll
+  // gap are the ADAPTER's knobs and stay there (spec/input_rules.md 7.1); this
+  // one is here because it sets a PORT WIDTH on this module.
+  parameter int unsigned SNAC_PORTS = 2,
+
   // ---- CMD.EXEC (section 7c) -----------------------------------------------
   // How many SurfaceStamps one packet may carry. It is the ONE number in the
   // executor that can refuse an otherwise legal packet, so it is a knob and not
@@ -4489,6 +4497,30 @@ module zhao_console_core
   input  logic [15:0] pad_ly_i [0:3],
   input  logic [15:0] pad_rx_i [0:3],
   input  logic [15:0] pad_ry_i [0:3],
+
+  // ---- INPUT.SNAC's physical edge (owner ruling R7, input_rules.md 7) -----
+  // PINS OF THE PART, NOT A BOUNDARY. Exactly the class `pad_buttons_i` above
+  // and `hps_req_*` are in, and for the same reason the HOST.REGWIN
+  // composition states at length further down: the far end is a connector on
+  // the board, not a block nobody has built. In Verilator the harness IS the
+  // controller, as it is the HPS for the burst bridge.
+  //
+  // The adapter is composed below, BETWEEN these pads and the shell, so a
+  // slot with a real PS1 pad on it is driven by that pad and every other slot
+  // carries `pad_*_i` through untouched. With nothing plugged in -- DAT idles
+  // high, every poll times out -- the merge is the identity and this console
+  // behaves exactly as it did before the block existed.
+  input  logic [SNAC_PORTS-1:0] snac_dat_i,
+  input  logic [SNAC_PORTS-1:0] snac_ack_n_i,
+  output logic [SNAC_PORTS-1:0] snac_att_n_o,
+  output logic                  snac_clk_o,
+  output logic                  snac_cmd_o,
+  output logic [3:0]            snac_present_o,
+  output logic [63:0]           snac_polls_o,
+  output logic [63:0]           snac_timeouts_o,
+  output logic [63:0]           snac_bad_header_o,
+  output logic [63:0]           snac_overrides_o,
+  output logic [63:0]           snac_seq_gaps_o,
 
   // ---- audio: ring-read client seam (pairs in) + PCM out -----------------
   input  logic        aud_wr_valid_i,
@@ -9438,12 +9470,15 @@ module zhao_console_core
     .hps_rd_valid_i            (hps_rd_valid_i),
     .hps_rd_data_i             (hps_rd_data_i),
     .hps_rd_last_i             (hps_rd_last_i),
-    .pad_present_i             (pad_present_i),
-    .pad_buttons_i             (pad_buttons_i),
-    .pad_lx_i                  (pad_lx_i),
-    .pad_ly_i                  (pad_ly_i),
-    .pad_rx_i                  (pad_rx_i),
-    .pad_ry_i                  (pad_ry_i),
+    // REAL: the pad bus AFTER the SNAC merge (input_rules.md 7.4). See the
+    // `u_input_snac` composition below the shell for why the merge is the
+    // adapter's and not this file's.
+    .pad_present_i             (snacm_present_c),
+    .pad_buttons_i             (snacm_buttons_c),
+    .pad_lx_i                  (snacm_lx_c),
+    .pad_ly_i                  (snacm_ly_c),
+    .pad_rx_i                  (snacm_rx_c),
+    .pad_ry_i                  (snacm_ry_c),
     .aud_wr_valid_i            (aud_wr_valid_i),
     .aud_wr_l_i                (aud_wr_l_i),
     .aud_wr_r_i                (aud_wr_r_i),
@@ -9655,6 +9690,94 @@ module zhao_console_core
     .cmd_pkt_byte_o            (cmd_pkt_byte_w),
     .cmd_pkt_len_o             (cmd_pkt_len_w),
     .cmd_pkt_ready_i           (cmd_pkt_ready_w)
+  );
+
+  // ==========================================================================
+  // INPUT.SNAC -- the second ROUTE to the pad state, and the merge (R7)
+  // ==========================================================================
+  // Owner ruling R7: "INPUT.SNAC, GEOM.WARP, POST.ECHO -- Build all three
+  // (owner, explicit). They stay mandatory; the 2026-09-18 revocation stands."
+  //
+  // The 2026-08-31 section 6.6 sentence survives that ruling and is the whole
+  // shape of the block: "It must emit the same canonical PadFrame and may not
+  // create a second input semantics." So this is a ROUTE, not a capability:
+  // `spec/input_rules.md` 2's atomic latch, 2.2's absent-pad law, 2.3's
+  // sequence law and 4's button table are all unchanged and all still
+  // INPUT.SNAPSHOT's. Section 7 (written 2026-09-20) adds the bus, the two
+  // normalisations and the merge, and nothing else.
+  //
+  // REAL PRODUCER -> REAL IMPLEMENTATION -> REAL CONSUMER:
+  //   the SNAC connector's five pins  ->  `zhao_input_snac`'s serial engine
+  //   and decode  ->  `zhao_input_snapshot` inside `u_shell`, which latches
+  //   the merged bus at the frame tick exactly as it latched the old one.
+  //
+  // WHY THE MERGE IS IN THE BLOCK AND NOT IN THESE BRACES. A composer holding
+  // a pad mux would be inventing an input law in the one file whose whole
+  // discipline is that it invents none -- and the ledger agrees from the other
+  // side: INPUT.SNAC's declared `outputs: [pad_pins]`, `downstream:
+  // [INPUT.SNAPSHOT]`. The adapter's output IS the pad bus.
+  //
+  // IT IS THE IDENTITY WHEN IDLE. With no connector populated, DAT idles high,
+  // every poll times out, every slot reads absent, and `pad_*_i` reaches the
+  // shell bit for bit. That is asserted against a fixture with distinct values
+  // per slot (`input_snac_directed` case 1), not argued here -- "it is
+  // transparent" is exactly the kind of sentence that gets written in a
+  // comment and never measured.
+  //
+  // THE COUNTERS ARE NOT DECORATION. `spec/input_rules.md` 2.3 has said since
+  // 2026-08-14 that `input_sequence_gaps` counts a gap "in the INPUT.SNAC
+  // merge path"; section 7.5 now says executably what that gap is, and the
+  // counter's two operands are loaded by DIFFERENT events (the serial
+  // engine's completion, the frame tick) so it measures TIMING rather than
+  // values. Every one of the block's counters has been SEEN TO FIRE on legal
+  // stimulus, so none owes a mutant.
+  logic [3:0]  snacm_present_c;
+  logic [31:0] snacm_buttons_c [0:3];
+  logic [15:0] snacm_lx_c [0:3];
+  logic [15:0] snacm_ly_c [0:3];
+  logic [15:0] snacm_rx_c [0:3];
+  logic [15:0] snacm_ry_c [0:3];
+
+  zhao_input_snac #(
+    .PORTS (SNAC_PORTS)
+  ) u_input_snac (
+    .clk   (gpu_clk),
+    .rst_n (rst_n),
+
+    // REAL: pins of the part, the same class as `pad_buttons_i`.
+    .snac_att_n_o (snac_att_n_o),
+    .snac_clk_o   (snac_clk_o),
+    .snac_cmd_o   (snac_cmd_o),
+    .snac_dat_i   (snac_dat_i),
+    .snac_ack_n_i (snac_ack_n_i),
+
+    // REAL: VIDEO.FRAMECTL's frame boundary, the same pulse INPUT.SNAPSHOT
+    // latches on -- so the gap law measures the interval the snapshot uses
+    // and not some other clock's idea of a frame.
+    .frame_tick_i (core_tick_c),
+
+    // REAL: the existing route in.
+    .host_pad_present_i (pad_present_i),
+    .host_pad_buttons_i (pad_buttons_i),
+    .host_pad_lx_i      (pad_lx_i),
+    .host_pad_ly_i      (pad_ly_i),
+    .host_pad_rx_i      (pad_rx_i),
+    .host_pad_ry_i      (pad_ry_i),
+
+    // REAL: the merged route out, into the shell's INPUT.SNAPSHOT.
+    .pad_present_o (snacm_present_c),
+    .pad_buttons_o (snacm_buttons_c),
+    .pad_lx_o      (snacm_lx_c),
+    .pad_ly_o      (snacm_ly_c),
+    .pad_rx_o      (snacm_rx_c),
+    .pad_ry_o      (snacm_ry_c),
+
+    .snac_present_o    (snac_present_o),
+    .snac_polls_o      (snac_polls_o),
+    .snac_timeouts_o   (snac_timeouts_o),
+    .snac_bad_header_o (snac_bad_header_o),
+    .snac_overrides_o  (snac_overrides_o),
+    .input_snac_input_sequence_gaps_o (snac_seq_gaps_o)
   );
 
   // ==========================================================================

@@ -123,3 +123,126 @@ optional SNAC adapter (INPUT.SNAC) must produce THIS table and THIS PadFrame
   out-of-order pad arrival) vs `zref::PadSnapshot`; rumble command
   timelines vs `zref::RumbleBridge` (duty trace bit-exact).
 - Formal: `input_snapshot_atomic` (atomicity + sequence-exactly-once).
+
+## 7. SNAC adapter law (INPUT.SNAC)
+
+**Status:** added 2026-09-20 under owner ruling R7
+(`reports/OWNER-RULINGS-20260919-EVENING.md`): *"INPUT.SNAC, GEOM.WARP,
+POST.ECHO — Build all three (owner, explicit). They stay mandatory."*
+
+The 2026-08-31 §6.6 ruling's constraint survives R7 and is the whole shape of
+this section: *"It must emit the same canonical PadFrame and may not create a
+second input semantics."* Everything in §1–§4 stays exactly as written; §7
+adds a second ROUTE to the state §2 latches, and nothing else. There is no
+SNAC PadFrame, no SNAC button table and no SNAC sequence law.
+
+### 7.1 The bus
+
+The console is the HOST. It drives `/ATT` (one per port, active low), `CLK`
+and `CMD`; the pad drives `DAT` and `/ACK`. Bytes are 8 bits **LSB first**.
+`CLK` idles high; each side presents its bit on the FALLING edge and samples
+the other side's on the RISING edge. `DAT` and `/ACK` are asynchronous to the
+fabric clock and cross through the documented 2-flop synchronizer
+(`async_bridge: true` in the ledger, as for the pad→HPS handoff in §5).
+
+The bus rate, the `/ACK` timeout and the inter-poll gap are NAMED, EDITABLE
+PARAMETERS of the block, not constants of this law. Their defaults give the
+PS1's ~250 kHz at a 100 MHz fabric clock. **No decoded value depends on any of
+them** — that is what lets a bench run the same block at a bench rate.
+
+### 7.2 One poll
+
+| byte | host sends | pad returns |
+|---|---|---|
+| 0 | `0x01` address | (idle) |
+| 1 | `0x42` read | mode byte |
+| 2 | `0x00` | `0x5A`, the ready byte |
+| 3 | `0x00` | buttons low, **ACTIVE LOW** |
+| 4 | `0x00` | buttons high, **ACTIVE LOW** |
+| 5–8 | `0x00` | right X, right Y, left X, left Y (mode `0x73` only) |
+
+Mode `0x41` is a digital pad (no sticks); `0x73` is an analog pad. `0xFF` is
+the idle bus and means NO PAD — it is **not** an error and is not counted as a
+bad header, because an unpopulated port is the normal case and a counter that
+fires on it carries no information. Any OTHER mode byte, and any byte 2 that
+is not `0x5A`, makes the poll absent AND is counted: a pad that answered with
+something unimplemented is a real event somebody needs to see.
+
+A `/ACK` that never arrives abandons the poll and the slot reads absent. That
+is how an empty port is detected; it is counted separately from a bad header.
+
+### 7.3 Normalisation — the two transforms, and why neither is policy
+
+§1's determinism law says hardware applies ZERO policy. Both transforms below
+are pure re-encodings of the same information, and that is the test each has
+to pass.
+
+**Buttons.** The PS1's two bytes are active low. They map onto §4's frozen
+32-bit table (`0x41`'s two bytes and `0x73`'s first two are the same two):
+
+| PS1 byte 3 bit | §4 bit | PS1 byte 4 bit | §4 bit |
+|---|---|---|---|
+| 0 select | 14 | 0 L2 | 8 |
+| 1 L3 | 12 | 1 R2 | 9 |
+| 2 R3 | 13 | 2 L1 | 10 |
+| 3 start | 15 | 3 R1 | 11 |
+| 4 up | 0 | 4 triangle | 7 |
+| 5 right | 3 | 5 circle | 5 |
+| 6 down | 1 | 6 cross | 4 |
+| 7 left | 2 | 7 square | 6 |
+
+§4 bits 16–31 stay reserved zero. A PS1 pad carries nothing that belongs
+there, so they are zero because §4 says so and not because the data ran out.
+
+**Axes.** `canonical_i16 = {ps1_u8, 8'h00} ^ 16'h8000`, read as signed.
+`0x80 → 0`, `0x00 → −32768`, `0xFF → +32512`. It is strictly monotonic and
+**invertible**: `ps1_u8 == (canonical_i16 >>> 8) + 128` for all 256 inputs. No
+information is added, removed or rounded, which is what makes it a re-encoding
+rather than calibration. The asymmetry of the rails is the PS1's own (128
+codes below centre, 127 above) and is DECLARED here rather than re-centred;
+re-centring would be calibration, which §1 forbids in hardware.
+
+A digital pad's four axes read 0 — the same value §2.2 gives an absent axis,
+so no consumer needs a third case.
+
+### 7.4 The merge
+
+Per slot: a slot the adapter has a live pad on is driven by the adapter; every
+other slot carries the incoming route through UNCHANGED. With no SNAC hardware
+attached every slot reads absent, so the adapter is the IDENTITY on the whole
+pad bus and the console behaves exactly as it does without it. That property
+is asserted, not argued (`tests/input/input_snac_directed.cpp` case 1).
+
+The merged bus is INPUT.SNAPSHOT's input. §2's atomic latch, §2.2's absent-pad
+law and §2.3's sequence law all apply to it unchanged, because it is the same
+bus.
+
+### 7.5 The merge-path gap (§2.3's counter, given its meaning)
+
+§2.3 has said since 2026-08-14 that `input_sequence_gaps` counts a gap "in the
+INPUT.SNAC merge path". This is that gap, stated executably:
+
+> Each slot carries a poll sequence that advances once per COMPLETED poll. At
+> each `frame_tick`, a slot that was present at the previous tick, is present
+> now, and whose poll sequence did not advance, is a frame that REUSED the
+> previous frame's sample — the bus ran slower than the display did and a
+> snapshot's worth of input was never taken.
+
+The counter's two operands are loaded by DIFFERENT events (the serial engine's
+completion and the frame tick), so it measures TIMING and not merely values —
+the distinction `CLAUDE.md` records after a detector whose two sides moved
+together. It fires on legal stimulus and therefore owes no mutant
+(`input_snac_directed` case 6).
+
+### 7.6 Test obligations
+
+- Directed: transparency when idle (the identity on all four slots, with the
+  `/ACK` timeout seen to fire); a digital pad reaching the canonical bus while
+  the other slots pass through in the same cycle; **every one of §4's sixteen
+  buttons walked individually**; the axis law over all 256 codes and swept
+  through the RTL; an unimplemented mode counted and falling back rather than
+  going dark; the merge-path gap counter fired.
+- The decoded values are compared against `zref::SnacAdapter`. The button
+  table and the axis law are NOT transcribed into the test — a transcription
+  is a copy, and a copy of a table is how two implementations of one law come
+  to disagree.
