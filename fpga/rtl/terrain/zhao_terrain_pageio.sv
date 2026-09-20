@@ -513,6 +513,17 @@ module zhao_terrain_pageio
   // than `bake_done_i` would, and names the right phase when it does.
   logic dig_seen_q;
   logic dig_short_q;
+  // `bake_done_i` IS A ONE-CYCLE PULSE AND IT CAN LAND MID-WRITE. The last
+  // cs write of a record is a two-cycle read-modify-write, and
+  // `zhao_terrain_bake_v2` raises `bake_done_o` one cycle after its last
+  // handshake -- so the pulse arrives while OP_CS_A/OP_CS_B are still in
+  // flight. Acting on it there ABORTS that write, and the first build of this
+  // file did exactly that: 1,023 of 1,024 cells landed, the page write
+  // completed, every counter agreed, and ONE CELL kept its old substance. A
+  // single wrong cell is one wrong breach decision, which is the fault class
+  // nothing in the machine can see. So the pulse is LATCHED and acted on when
+  // the buffer is quiet.
+  logic bake_pend_q;
 
   // ==========================================================================
   // THE BAKE FACE: pending operations against the page buffers
@@ -637,12 +648,28 @@ module zhao_terrain_pageio
   assign cell_valid_o = (state_q == S_SERVE) && cell_hold_q && cell_addr_match_c;
   assign cell_state_o = cell_byte_q;
 
-  assign sc_ready_o = (state_q == S_SERVE) && (op_q == OP_NONE);
-  assign cs_ready_o = (state_q == S_SERVE) && (op_q == OP_NONE);
-
   // A fresh cell read is wanted when nothing is held for the offered address.
   logic cell_want_c;
   assign cell_want_c = (state_q == S_SERVE) && !(cell_hold_q && cell_addr_match_c);
+
+  // A READY THAT DOES NOT ACCEPT IS NOT A READY, and the first draft of this
+  // file got it wrong in the way that is hardest to see. `sc_ready_o` was
+  // `(state == S_SERVE) && (op_q == OP_NONE)` -- which is true in the very
+  // cycle the arbiter below takes the CELL branch instead, so a producer that
+  // read the level and advanced lost that beat SILENTLY. It cost exactly one
+  // scar word per bake: 1,088 of 1,089, `sc_seen_q` one short, and the whole
+  // page write correctly refused as V_SHORT_B. The verdict was right and the
+  // cause was two hundred lines away.
+  //
+  // So each ready carries the arbiter's own priority. This is a ready that
+  // depends on a valid, which can deadlock against a producer whose valid
+  // depends on ready -- TERRAIN.BAKE's `sc_valid_o`/`cs_valid_o` are
+  // REGISTERED (raised at StEmit and at the StCell accept), so there is no
+  // loop, and that is a property of the consumer this block is built for
+  // rather than a general licence.
+  assign cs_ready_o = (state_q == S_SERVE) && (op_q == OP_NONE) && !cell_want_c;
+  assign sc_ready_o = (state_q == S_SERVE) && (op_q == OP_NONE) && !cell_want_c
+                      && !cs_valid_i;
 
   // ==========================================================================
   // BUFFER PORT ARBITRATION
@@ -767,6 +794,7 @@ module zhao_terrain_pageio
       cell_lane_q <= '0;
       dig_seen_q  <= 1'b0;
       dig_short_q <= 1'b0;
+      bake_pend_q <= 1'b0;
       nbv_q       <= '0;
       op_q        <= OP_NONE;
       cell_ci_q   <= 6'd63;   // an address the cursor cannot present, so the
@@ -844,6 +872,7 @@ module zhao_terrain_pageio
               cs_seen_q   <= '0;
               dig_seen_q  <= 1'b0;
               dig_short_q <= 1'b0;
+              bake_pend_q <= 1'b0;
               nbv_q       <= '0;
               cell_hold_q <= 1'b0;
               cell_ci_q   <= 6'd63;
@@ -963,7 +992,15 @@ module zhao_terrain_pageio
               // Priority: the cell read first, because TERRAIN.BAKE BLOCKS on
               // it (StCell waits for `cell_valid_i`) while a write merely
               // backpressures.
-              if (cell_want_c) begin
+              //
+              // NOTHING NEW IS STARTED ONCE THE RECORD IS RETIRING. The
+              // transition below forces `op_q` back to OP_NONE in the same
+              // cycle, so an operation begun here would be dropped -- and a
+              // DROPPED sc ACCEPT would also have incremented `sc_seen_q`,
+              // which is how a lost write becomes an unnoticed one.
+              if (bake_done_i || bake_pend_q) begin
+                op_q <= OP_NONE;
+              end else if (cell_want_c) begin
                 cell_ci_q   <= cell_ci_i;
                 cell_cj_q   <= cell_cj_i;
                 cell_lane_q <= cell_bix_c[2:0];   // the lane that went out
@@ -1030,9 +1067,25 @@ module zhao_terrain_pageio
           end
           if (cell_valid_o && cell_ready_i) cell_hold_q <= 1'b0;
 
-          // ---- the bake retired --------------------------------------------
-          if (bake_done_i) begin
+          // A HELD ANSWER FOR A CELL THAT IS BEING WRITTEN IS STALE, and it
+          // must not be delivered. `dwrd_q` is one buffer for both directions
+          // (contract section 5's "further halving"), so a cs write changes
+          // the byte a held answer was read from. TERRAIN.BAKE's own order
+          // never re-reads a written cell, which is exactly why this could sit
+          // here wrong for a long time: it is invisible under the one traversal
+          // the machine uses today, and it is the block's promise to any
+          // traversal. Not counted -- it is ordinary invalidation, not a
+          // fault -- and `pageio_rtl_directed` drives the re-read to check the
+          // NEW byte comes back.
+          if (cs_valid_i && cs_ready_o && cell_hold_q
+              && (cs_ci_i == cell_ci_q) && (cs_cj_i == cell_cj_q))
             cell_hold_q <= 1'b0;
+
+          // ---- the bake retired --------------------------------------------
+          if (bake_done_i) bake_pend_q <= 1'b1;
+          if ((bake_done_i || bake_pend_q) && (op_q == OP_NONE)) begin
+            cell_hold_q <= 1'b0;
+            bake_pend_q <= 1'b0;
             op_q        <= OP_NONE;
             burst_q     <= '0;
             beat_q      <= '0;
