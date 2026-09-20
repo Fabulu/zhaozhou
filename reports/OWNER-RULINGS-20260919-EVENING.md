@@ -3251,3 +3251,152 @@ or a before/after pair at the same instant.
 
 **Queued as a question, not a defect.** Nothing is changed on the strength of a
 one-line reaction to a sheet rendered for another purpose.
+
+# THE REMAINING FOUR DECISIONS, TAKEN BY THE COORDINATOR
+
+**Fabian, 2026-09-20: *"answer dossier questions yourself. use a fable agent if
+hard."*** The two that needed an eye he answered himself (R194, R195). These
+four are engineering calls with measured costs, and they are taken here.
+
+## R197 — THE UNTEXTURED ATTRIBUTE LAW: **a sanctioned profile, declared by a FLAG**
+
+**Option A. A primitive MAY enter GEOM.CLIP with `u/w` and `v/w` undefined,
+provided it DECLARES that it has none.**
+
+Three lanes hit this wall independently without recognising each other —
+terrain (I13), FORGE.SHADOW Route A, FORGE.PRIM — which is why it is the
+highest-leverage item on the board and why it had never been raised as a
+decision at all.
+
+**Why A and not the other two, on the evidence already gathered:**
+
+* **The hardware already wants it.** FORGE.SHADOW Route B's own design note says
+  *"u/v unused"* in as many words. A decision that ratifies what the design has
+  independently concluded is cheap; one that fights it is not.
+* **Option B — "every producer must synthesise u/v" — is expensive AND
+  dishonest.** It forces a terrain texture-coordinate law, which is **art
+  content and the owner's to author**, and it invents u/v for shadow hulls and
+  particles that have none *by law*. **Inventing an art law to unblock wiring is
+  backwards**, and this campaign has spent the day learning what happens when a
+  packet treats a missing law as a missing connection: I13 has been
+  mis-scheduled as wiring **six times** (R193).
+* **Option C — a separate untextured path — is a second door**, and SETUPDOOR
+  has just measured what a door costs here: GEOM.SETUP's arm is a three-way
+  ordered join that deadlocks combinationally on an unexpected producer (R187).
+  A fourth lane is the largest option for the least reason.
+
+**THE BINDING CONSTRAINT ON THE DESIGN, and it is not negotiable: the absence
+must be DECLARED, never ENCODED.**
+
+`u/w = v/w = 0` is **not** a neutral value — it samples **texel (0,0) on every
+primitive**. That is W10's *"an absent output must not look like a zero result"*,
+and this campaign has been bitten by exactly that twice **today**: R168, where
+an adapter decided on `resp_status_i == 0` and could not tell *"not requested"*
+from *"requested and came back zero"*; and R181, where the same hole proved
+reachable with legal stimulus. **A sentinel value is the defect. A flag is the
+fix.**
+
+So the law is:
+
+1. **A per-primitive flag declares the packet untextured.** Not a magic
+   coordinate, not a reserved value, not zero.
+2. **Consumers BRANCH on the flag.** When it is set, nothing reads the slot —
+   the slot's content is don't-care and must never reach a sampler.
+3. **An untextured primitive arriving where a textured one is REQUIRED is
+   REFUSED AND COUNTED**, never silently sampled. A counter with a positive
+   control, per the standing rule.
+4. **`R48`'s `ALPHA_C` is the precedent** — a per-primitive constant attribute
+   with a named seam, already ratified, already the shape this wants.
+
+**What it unblocks, stated honestly:** FORGE.SHADOW Route A and
+FORGE.PRIM/PRIM_EVAL's attribute wall. **It unblocks only HALF of I13** —
+terrain still needs `lit r, g, b`, and it has *one signed 32-bit scalar shade,
+not three channels*. That second law is **terrain art content and is NOT taken
+here** (dossier §5, which says in its own text "do not rule these yet").
+
+## R198 — FH11's LANE WIDTH: **adopt the SEMANTICS, defer the WIDTH**
+
+**The two are travelling together and they are different kinds of thing.**
+
+* **The SEMANTICS — exact per-point status, no padding contamination — are a
+  CORRECTNESS property and cost nothing. Adopted now.**
+* **The WIDTH is a PURCHASE. Deferred to a fit.**
+
+**And the headline number was wrong, which is the reason to write this down
+rather than just agree with the repair plan.** DOSSIERCHECK measured it:
+**`FAB_LANES` is ~+2,200 ALM and ~+12 DSP — the ~+6,000 figure prices the
+`FAB_DIST_BANKS` × `FAB_GROUP_PTS` axis instead.** And **FH11 never asks for
+four lanes**: *"At LANES=4 …"* is conditional.
+
+So the purchase is smaller than the board believed — but **the principle that
+defers it is untouched and is the real finding**:
+
+> **`zhao_block_fit.json`'s `zhao_console_core` row DOES NOT CONTAIN FIELD AT
+> ALL.** Its `.sources.sha256` lists exactly one field file.
+
+**Every FIELD area number is additive to a budget that has never measured
+FIELD.** Buying width against that row would be `CLAUDE.md`'s *"never compare a
+current file to an old measurement"* with the subsystem itself missing from the
+baseline — a confident number about a machine the receipt does not describe.
+
+**Deferred, and the deferral CITES the measurement that would discharge it:** a
+fit whose source list contains FIELD.
+
+## R199 — A FORGE PROGRAM PAGE KIND: **deferred, and the ceiling is the reason**
+
+**Not frozen now.** The dossier's own ceiling argument decides it and it is
+decisive:
+
+> Even with a page kind and the enum, **four of the six forge families have no
+> evaluator at all.** `zhao_forge_prim_eval` is the **LIGHTNING evaluator,
+> RIBBON family only**. **A page ruling buys one of six.**
+
+R108 already said the same about its own half: *"It closes no gap on its own …
+The ABI stops being the blocker; it does not become the implementation."*
+
+**And the second forge block is refused on separate, standing owner authority** —
+FORGE.SHADOW under R133 (D-FORGESHADOW-B), re-verified live by FORGE4 today.
+
+Freezing a page format to unblock one family of six, while the evaluators for
+the other five do not exist, is **committing a format before the thing that
+consumes it exists** — the same asymmetry that made the terrain page format
+worth deciding *early* (R194) makes this one worth deciding *late*: **the forge
+packer does not exist either, so nothing is being lost by waiting, and a format
+frozen ahead of its consumers is a format frozen on guesses.**
+
+## R200 — THE SCOPING CALL: **HOLD. The owner has already answered this one**
+
+**Fit at completion only. No fit now.**
+
+The dossier files this as an open decision and DOSSIERCHECK correctly found that
+*"hold for zero"* has **no owner source** — R135 is coordinator-authored and says
+so itself. **But both are looking in the wrong place.** The owner's standing
+instruction for this session is explicit and current:
+
+> *"Drive the Zhaozhou console's mandatory gap count from 61 to ZERO, then
+> freeze that design and run the honest Quartus fit against 5CSEBA6U23I7. …
+> **Fit at completion only.**"*
+
+**That is the owner source, and it is the active goal.** DOSSIERCHECK also found
+the owner's committed directives require *"a new owner authorization before
+running an earlier physical fit"* — so an early fit is not merely undecided, it
+is **gated on an authorization nobody has requested.**
+
+**So the decision is HOLD — but the honest part of this ruling is the tension it
+must report rather than resolve quietly:**
+
+1. **R189 established that the remaining 21 are not wiring.** Eight packets
+   returned 21, every one with a measured blocker, and the blockers are missing
+   producers and owner decisions.
+2. **Three area decisions (6, 8, 11) are unanswerable without a fit**, because
+   nobody knows where the 113% / 135% overage lives — and R198 has just shown
+   the one budget row anyone would consult **does not contain FIELD at all.**
+3. **So "fit at completion" and "decide the area questions" are, at this moment,
+   in tension.** Holding is correct because it is the instruction; **pretending
+   there is no cost to holding would not be.**
+
+**What is NOT deferred by this ruling:** composing `zhao_terrain_lod` today
+would create roughly **twenty-two** tie-offs, and all four terrain blocks
+together *"would have read 21 → 17 and buried roughly fifty undeclared
+tie-offs — available on any afternoon, and the campaign's single largest act of
+self-deception."* **Holding the fit does not license buying the register down.**
