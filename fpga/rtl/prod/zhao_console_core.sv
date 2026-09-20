@@ -1884,6 +1884,24 @@
 //          holds a page handle across a frame and wants to know it is still
 //          valid -- the subpatch issuer of entry I21. There is no such block.
 //
+//          NARROWED 2026-09-20 (terrain6), because a block that holds a page
+//          handle over TIME now exists and it is worth saying exactly why it
+//          is still not this port's caller. `u_terrain_lodfeed`, composed
+//          below, holds `slot_q` across a ~11,000-clock walk. IT DOES NOT NEED
+//          THE CHECK, and the reason is structural rather than lucky: it walks
+//          a BUFFERED COPY of the lattice, so its answer cannot be corrupted
+//          by an eviction, and its consumer here -- MEASURE.HISTOGRAM -- keys
+//          on `src_id`, not on the slot.
+//
+//          THE MOMENT THAT CHANGES is when `zhao_terrain_devstore` composes:
+//          the store keys records BY SLOT, so a slot evicted and reused during
+//          a walk would file page A's deviations under page B's handle, and
+//          nothing downstream could see it. So this port's first honest caller
+//          is lodfeed-with-the-store, not the subpatch issuer, and whoever
+//          composes the store owes this check in the same commit. A staleness
+//          port with no caller is not a gap for lack of a block; it is waiting
+//          on the one consumer that makes the handle load-bearing.
+//
 //      NOT A GAP AND NAMED SO IT IS NOT RE-OPENED: `is_cslot_o` and
 //      `is_cslot_valid_o` are T6's 256-entry composed-height cache index, and
 //      `zhao_terrain_compcache_front` is a two-buffer FRONT rather than that
@@ -8652,11 +8670,26 @@ module zhao_console_core
   // page is currently streaming would attribute page A's deviations to page B
   // on every drop, and this block is metric-agnostic by design, so nothing
   // downstream could ever see it.
+  // IT IS A SIZE CAST AND NOT A `{(HIST_EW-24){1'b0}}` REPLICATION, and that
+  // is not style. The replication was written first and it made the guard
+  // below UNREACHABLE: at HIST_EW < 24 the width expression underflows to a
+  // huge unsigned replication count and elaboration dies inside the
+  // concatenation -- measured, `verilator --lint-only -GEW=16` returns
+  // "Internal Error: V3Number.h:242 `num` member accessed when data type is
+  // UNINITIALIZED" -- so the `$fatal` that exists to explain that exact
+  // mistake could never be reached to explain it. A guard the broken case
+  // cannot reach is CLAUDE.md's detector-that-cannot-fire with the fault one
+  // line away from it.
+  //
+  // `HIST_EW'(x)` zero-extends an unsigned value and cannot underflow, so the
+  // guard below is now the thing that speaks when the width is wrong. (A size
+  // cast is legal in Quartus 17.0; what that tool rejects is unary minus in
+  // front of one, `-W'(x)`, which is not this.)
   wire [HIST_LANES*HIST_EW-1:0] hist_ev_err_c =
       { {HIST_EW{1'b0}},                                 // lane 3: not valid
-        {(HIST_EW-24){1'b0}}, tlf_w_dev3,                // lane 2
-        {(HIST_EW-24){1'b0}}, tlf_w_dev2,                // lane 1
-        {(HIST_EW-24){1'b0}}, tlf_w_dev1 };              // lane 0
+        HIST_EW'(tlf_w_dev3),                            // lane 2
+        HIST_EW'(tlf_w_dev2),                            // lane 1
+        HIST_EW'(tlf_w_dev1) };                          // lane 0
   wire                    hist_ev_ready_c;
 
   // THE ADAPTATION ABOVE IS ONLY TRUE AT THESE WIDTHS, so it is GUARDED rather

@@ -152,11 +152,16 @@ module tb_terrain_lodhist #(
   // dev1/dev2/dev3 zero-extended 24 -> 32; lane 3's `lane_valid` is low, so it
   // contributes no event rather than a zero one. `spec/measure_rules.md`
   // section 3 is why zero-extension moves no value into a different bucket.
+  // A SIZE CAST, for the reason zhao_console_core.sv states at the same lines:
+  // the `{(EW-24){1'b0}}` replication this was written as first underflows at
+  // EW < 24 and kills elaboration INSIDE THE CONCATENATION, so the guard below
+  // could never be reached to explain the very mistake it names. `EW'(x)`
+  // zero-extends an unsigned value and cannot underflow.
   wire [LANES*EW-1:0] ev_err_c =
       { {EW{1'b0}},                            // lane 3: not valid
-        {(EW-24){1'b0}}, w_dev3_o,             // lane 2
-        {(EW-24){1'b0}}, w_dev2_o,             // lane 1
-        {(EW-24){1'b0}}, w_dev1_o };           // lane 0
+        EW'(w_dev3_o),                         // lane 2
+        EW'(w_dev2_o),                         // lane 1
+        EW'(w_dev1_o) };                       // lane 0
 
   // synthesis translate_off
   initial begin

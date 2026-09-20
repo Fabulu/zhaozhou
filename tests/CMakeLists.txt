@@ -9780,6 +9780,27 @@ verilate(test_terrain_lodhist_directed
 add_test(NAME terrain_lodhist_directed COMMAND test_terrain_lodhist_directed)
 set_tests_properties(terrain_lodhist_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
+# THE WIDTH GUARD'S POSITIVE CONTROL. The same wrapper at EW=16, where the
+# 24-bit deviations would be TRUNCATED -- a fault that reads LOW in an organ
+# that is metric-agnostic and therefore cannot notice. WILL_FAIL: it passes
+# when the elaboration $fatal stops the process. The driver's header records
+# why this cannot be a lint (`--lint-only` does not run `initial` blocks) and
+# why the guard's first version could never have fired at all.
+add_executable(test_terrain_lodhist_widthguard terrain/terrain_lodhist_widthguard_control.cpp)
+target_link_libraries(test_terrain_lodhist_widthguard PRIVATE zhao_harness)
+verilate(test_terrain_lodhist_widthguard
+  PREFIX Vtb_terrain_lodhist
+  TOP_MODULE tb_terrain_lodhist
+  VERILATOR_ARGS -GEW=16
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/terrain/tb_terrain_lodhist.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_lodfeed.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/terrain/zhao_terrain_loddev.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/measure/zhao_measure_histogram.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/common/zhao_dc_sdp_ram.sv)
+add_test(NAME terrain_lodhist_widthguard COMMAND test_terrain_lodhist_widthguard)
+set_tests_properties(terrain_lodhist_widthguard PROPERTIES
+  LABELS "fast;nightly" TIMEOUT 300 WILL_FAIL TRUE)
+
 # ---------------------------------------------------------------------------
 # THE EYE (owner ruling R63). SetView 0x0010 carries `fx16 eye[3]`, zhao_cmd_exec
 # commits it as steps 17/18/19 of the view walk onto projector configuration
