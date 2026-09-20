@@ -3986,3 +3986,136 @@ Quartus pruned the 320 bits nothing read and style 2 **collapsed onto style 1**
 **2.2× the first draft**. The rule it extracted is the keeper:
 
 > **A store is only priced by what is READ out of it.**
+
+## R214 — THE REGISTER WENT 21 → 22, AND IT IS THE BEST NUMBER OF THE CAMPAIGN
+
+**2026-09-21, PAGEIO.** R210 said `TERRAIN.PAGEIO` had a written contract and no
+`design/blocks.yml` row, so **no gate could see it was missing** — and therefore
+*"21 has never been wrong; it has been answering a smaller question than a
+reader assumes."*
+
+**PAGEIO wrote the row first, before any RTL, and the count rose:**
+
+```
+before  21   (9 tie-offs + 12 disconnected + 0 unbuilt)
+after   22   (9 tie-offs + 13 disconnected + 0 unbuilt)
+```
+
+**The campaign's headline number moved AWAY from its goal, and that is the
+instrument starting to work.** A gap no instrument could see is not a gap the
+console does not have.
+
+**This is the exact inverse of the move rule 1 forbids.** All day the hazard has
+been a packet making the number fall by hiding something — composing with
+undeclared tie-offs, superseding a capability the owner ruled in, burying fifty
+tie-offs to read 21 → 17. **Here a packet made the number RISE by declaring
+something nobody had declared**, and it is worth as much as any close.
+
+**Both traps were avoided deliberately**, which is why the row works at all:
+the module is `zhao_terrain_pageio` with **no `_vN` suffix**, so `successor_in()`
+can resolve it (R179 — a rival implementation is structurally invisible); it
+carries **no `implementation:` key**, because `ledger_blocks()`'s own docstring
+says that field is unusable; and `upstream:` is written **and labelled** as
+design intent (R180).
+
+**What this says about "drive the gap count to ZERO":** the goal is a statement
+about the console, not about the integer. **An honest 22 is strictly better than
+a 21 that could not see one of its own subsystems**, and the next such row will
+move it again. The number is now measuring more of the machine than it was this
+morning.
+
+## R215 — THREE DEFECTS THE BENCH FOUND THAT NO COUNTER COULD SEE
+
+PAGEIO's own RTL, found by its directed bench, and all three are shapes this
+ledger has been circling:
+
+**1. A READY THAT DOES NOT ACCEPT.** `sc_ready_o` was high in the cycle the cell
+read won arbitration — so one scar word was lost per bake, silently. **It
+presented as a refused bake** (`V_SHORT_B`), because the partial-plane guard then
+correctly refused the page. **A correct verdict, 200 lines from the cause.**
+That is `CLAUDE.md`'s *"a wrong diagnosis attached to a right alarm sends the
+next person to reshape something that is already correct"*, in a handshake.
+
+**2. EVERY COUNTER AGREED, AND THE PAGE WAS WRONG.** A `bake_done_i` pulse
+aborted the last write's in-flight RMW: **1,023 of 1,024 cells landed.** The page
+was written, the mark published, `done_ok` high, **and every counter agreed with
+every other counter.** One wrong cell is one wrong breach decision — a player's
+terrain permanently different from the reference — and **nothing in the design
+could see it.**
+
+This is the metadata-bank law (`CLAUDE.md`) in a new place: **counters that
+balance perfectly because none of them looks at the field that moved.** The only
+instrument that could catch it was a bench comparing against an oracle.
+
+**3.** A write-beat prefetch indexing one word past the buffer — benign today,
+out-of-range in a structure meant to infer M10K.
+
+**The lesson PAGEIO's evidence actually supports:** its counters were not weak.
+**Five of them were asserted zero on a clean bake and then fired by stimulus**,
+and two more were fired by scratchpad mutants that reported **exactly 2 bytes of
+layer A and exactly 60 of layer C — the counts the layout predicts**, which is
+R95's standard (a control must fire *about* the fault it names, not beside it).
+**A block can have excellent instruments and still ship a defect none of them is
+shaped to see.** That is why the differential bench exists.
+
+## R216 — BEFORE ESCALATING A DECISION, GREP FOR THE RULING
+
+`design/contracts/TERRAIN.PAGEIO.md` §7 carries "decision 1" as an owner
+decision. **It was already answered**, by ruling **T4**, in
+`zhao_terrain_writeback.sv`'s own header: *"B and D are NEVER written back."*
+
+**That makes four in two days**: R165 found two of I34's three blockers spent;
+R190 found `{handle → hash}` answered by a producer that landed the same day;
+DOSSIERCHECK struck four decisions as already-ruled, *"every one of those rulings
+landing on 2026-09-20, the day the dossier was written"*; and now a contract's
+own open question was closed in another block's header.
+
+**The rule is cheap and it keeps being worth it: search the SUBJECT, not the
+title, and search the RTL headers, not only `reports/`.** This tree records
+rulings where the code is, and a decision can be spent by a file nobody thought
+to open.
+
+## R217 — A CONTRACT RECOMMENDED SOMETHING THE GUARD MAKES A VIOLATION
+
+`TERRAIN.PAGEIO.md` §4 recommends byte-enables for edge handling.
+**Structurally unavailable, measured:** `zhao_mem_guard` computes
+`be_ok = (req.be == mask_of(req.len))` and gates every request on it; the arbiter
+converts `len` to **words**; the SDRAM controller never sees a byte mask. **A
+sparse `.be` is not an optimisation, it is a guard violation.**
+
+**And the alternative is SMALLER than the contract feared.** Layer D's 17 bursts
+are read anyway, so only **layer B's two edge bursts** cost extra: 19 reads, 52
+writes. **The contract was pessimistic about the thing it should not have
+recommended** — which is why the packet measured instead of either following it
+or refusing it.
+
+### The remaining seam is an OWNER decision, and it is not an arbiter
+
+SEAMDIG called decision 5 an arbiter. **Measured against the real port, that
+understates it by three items.** `zhao_surface_sheet`'s `req_*` is a
+**control-and-read** port — `OP_ACQUIRE` / `OP_READ` / `OP_RELEASE`, a 32-bit
+handle, a separate `pg_*` response stream with `ST_HIT` / `ST_MISS` — while bake
+wants a **combinational** lookup. Missing: a **handle lifetime** (a leak costs
+one of `Slots` = 2), a **latency adapter** (1,089 round trips per record, or an
+8,192-byte second copy of layer F), the arbiter, and:
+
+> **A LAW FOR `ST_MISS`, which is not an engineering question.** Fail the record
+> — *the player's action is silently lost*. Dig zero — *a visible no-op*. Or
+> fall back to the parametric disc — *a different shape from the one authored*.
+
+**That is an owner decision with three player-visible outcomes**, and PAGEIO
+built nothing for the seam. **Its recommendation — take the miss law first,
+because the rest are cheap once it is written — is adopted.**
+
+### And it declared a rule it brushed against
+
+> *"that comment-only edit landed while the smoke was running and the core IS in
+> its 219-source closure. The write was atomic and semantically null, so no form
+> read a half-written file — but it was a rule I brushed against, and I made no
+> further edits inside that closure afterwards."*
+
+**Recorded because it was volunteered.** The live-tree rule exists because a
+suite reads the working tree and a half-written file produces reds that look
+real. A semantically null atomic write is very probably harmless — **and a lane
+that reports brushing a rule, unprompted, is worth more than one that never
+appears to.**
