@@ -83,6 +83,102 @@ inline zc::RingPart make_body(uint8_t bone) {
  * rz across). Per-ring {b0,b1,w0} blends across each hinge over a few rings
  * so the posed folds bend smoothly. The drawn loop shape is a POSE.
  */
+/**
+ * PASS 21 -- THE RODS LADDER'S BONE PALETTE, one function so the layout can be
+ * read in one place and cannot disagree with the station table.
+ *
+ * Every ROD ring blends its parent joint bone with that span's
+ * pure-translation helper. Those two bones carry the SAME rotation (the helper
+ * is a zero-rest-offset identity child of the parent), so the ring's posed
+ * centre is a convex combination of two points on ONE line: the rod cannot
+ * bend, whatever the span delta or the joint angle. Every BALL ring is rigid on
+ * its own joint bone. There is no two-bone blend ACROSS a joint anywhere in the
+ * band -- which is precisely the mechanism that put the pass-20 corners one to
+ * three rings BEFORE each carrier, with an S-jog ahead of them.
+ *
+ * The weight ramp is ROUNDED, not truncated: at the last rod ring (1 mm short
+ * of the child pivot) a truncating ramp lands on 63/64 instead of 64/64 and
+ * leaves the rod's end a couple of millimetres short of the ball centre. It
+ * cannot bend the rod either way -- the error is purely axial -- but it is free
+ * to be exact.
+ */
+inline void rods_ring_bones(int i, uint8_t& b0, uint8_t& b1, uint8_t& w0) {
+  const RodsRing rr = rods_ring(i);
+  const auto ramp = [](int32_t s, int32_t a, int32_t b) -> int32_t {
+    if (b <= a) return 64;
+    if (s <= a) return 0;
+    if (s >= b) return 64;
+    return static_cast<int32_t>(
+        (static_cast<int64_t>(s - a) * 64 + (b - a) / 2) / (b - a));
+  };
+  const auto pair = [&](uint8_t lo, uint8_t hi, int32_t t) {
+    if (t < 0) t = 0;
+    if (t > 64) t = 64;
+    b0 = lo;
+    b1 = hi;
+    w0 = static_cast<uint8_t>(64 - t);
+  };
+  const int32_t s = rr.station_mm;
+  switch (rr.role) {
+    case RingRole::kBase:
+      // The Root -> (JunctionF o Neck) hand-off, entirely inside the body.
+      pair(kBRoot, kBNeck, ramp(s, 0, kRodsPivotFMm));
+      return;
+    case RingRole::kRod: {
+      static constexpr uint8_t kRodParent[4] = {kBNeck, kBHingeA, kBHingeB,
+                                                kBHingeD};
+      static constexpr uint8_t kRodHelper[4] = {kBSpanDeltaA, kBSpanDeltaB,
+                                                kBSpanDeltaC,
+                                                kBSpanDeltaEStart};
+      const int e = rr.elem;
+      if (e < 3) {
+        pair(kRodParent[e], kRodHelper[e],
+             ramp(s, kRodsPivotMm[e], kRodsPivotMm[e + 1]));
+        return;
+      }
+      // The rear rod's three translation stages. Each stage is straight for the
+      // same reason every other rod is -- both of its bones are HingeD-rotated
+      // identity children -- and the stage joins are exact because the helper
+      // deltas are station-proportional shares of ONE chord delta.
+      if (s < kRodsRearHelperStationMm[0])
+        pair(kBHingeD, kBSpanDeltaEStart,
+             ramp(s, kRodsPivotCMm, kRodsRearHelperStationMm[0]));
+      else if (s < kRodsRearHelperStationMm[1])
+        pair(kBSpanDeltaEStart, kBSpanDeltaEMid,
+             ramp(s, kRodsRearHelperStationMm[0], kRodsRearHelperStationMm[1]));
+      else
+        pair(kBSpanDeltaEMid, kBSpanDeltaEPreSocket,
+             ramp(s, kRodsRearHelperStationMm[1], kRodsRearHelperStationMm[2]));
+      return;
+    }
+    case RingRole::kBall: {
+      static constexpr uint8_t kBallBone[4] = {kBHingeA, kBHingeB, kBHingeC,
+                                               kBRearSocket};
+      static constexpr uint8_t kBallParent[4] = {kBSpanDeltaA, kBSpanDeltaB,
+                                                 kBSpanDeltaC,
+                                                 kBSpanDeltaEPreSocket};
+      // R10's positive control (g_u02_rod_ball_blend_control): put the ball's
+      // equator half on the incoming carrier, which is the arrangement pass 21
+      // removed. It must make R10 fire.
+      if (g_u02_rod_ball_blend_control && rr.k == kBallRingCount / 2) {
+        pair(kBallParent[rr.elem], kBallBone[rr.elem], 32);
+        return;
+      }
+      pair(kBallBone[rr.elem], kBallBone[rr.elem], 0);
+      return;
+    }
+    case RingRole::kTail:
+    default:
+      // Rigid on the socket, with the deliberately buried terminal cap on
+      // ReturnTip exactly as version 18 left it.
+      if (s >= kRearTerminalTipStationMm)
+        pair(kBReturnTip, kBReturnTip, 0);
+      else
+        pair(kBRearSocket, kBRearSocket, 0);
+      return;
+  }
+}
+
 inline zc::RingPart make_loop() {
   zc::RingPart p;
   p.chain = true;
@@ -138,7 +234,12 @@ inline zc::RingPart make_loop() {
     return k[6];
   };
   for (int i = 0; i < kLoopRings; ++i) {
-    const int32_t s = static_cast<int32_t>((static_cast<int64_t>(total) * i) / (kLoopRings - 1));
+    // PASS 21: the station comes from loop_ring_station_at, which is the exact
+    // uniform law under `pass20` and the authored rods table under `rods`.
+    const int32_t s = loop_ring_station_at(i);
+    (void)total;
+    const RodsRing rr = rods_ring(i);
+    const bool rods = rig_rods();
     zc::RingSpec rs;
     rs.y = fxu(y0 + s);
     rs.radius = 0;
@@ -190,36 +291,61 @@ inline zc::RingPart make_loop() {
           legacy_swell ? kKnuckleSwellJfLegacyRxMm : kKnuckleSwellJfRxMm,
           legacy_swell ? kKnuckleSwellJfLegacyRzMm : kKnuckleSwellJfRzMm,
           sw_x, sw_z);
-    swell(kKnuckleAtAMm, kKnuckleSwellHalfMm[1],
-          legacy_swell ? kKnuckleSwellALegacyRxMm : kKnuckleSwellARxMm,
-          legacy_swell ? kKnuckleSwellALegacyRzMm : kKnuckleSwellARzMm,
-          sw_x, sw_z);
-    swell(kKnuckleAtBMm, kKnuckleSwellHalfMm[2],
-          legacy_swell ? kKnuckleSwellBLegacyRxMm : kKnuckleSwellBRxMm,
-          legacy_swell ? kKnuckleSwellBLegacyRzMm : kKnuckleSwellBRzMm,
-          sw_x, sw_z);
-    swell(kKnuckleAtCMm, kKnuckleSwellHalfMm[3],
-          legacy_swell ? kKnuckleSwellCLegacyRxMm : kKnuckleSwellCRxMm,
-          legacy_swell ? kKnuckleSwellCLegacyRzMm : kKnuckleSwellCRzMm,
-          sw_x, sw_z);
-    swell(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4],
-          legacy_swell ? kKnuckleSwellEndLegacyRxMm : g_u02_end_swell_rx_mm,
-          legacy_swell ? kKnuckleSwellEndLegacyRzMm : g_u02_end_swell_rz_mm,
-          sw_x, sw_z);
-    // PASS 19 REVIEW: the End BALL (manafold_art.h), MAX-combined, mesh only.
-    // It replaces the read the upright stub used to give, so it belongs to the
-    // ARM frame: under legacy-root the stub is back and the ball stands down,
-    // which keeps that control exactly version 18.
-    if (!legacy_swell && g_u02_rear_socket_frame == RearSocketFrame::kArm &&
-        (g_u02_end_ball_rx_mm > 0 || g_u02_end_ball_rz_mm > 0))
-      swell(g_u02_end_ball_at_mm, g_u02_end_ball_half_mm, g_u02_end_ball_rx_mm,
-            g_u02_end_ball_rz_mm, sw_x, sw_z);
-    const int32_t profile_rx_mm = taper(kLoopBladeRxMm, s) + sw_x;
-    const int32_t profile_rz_mm = taper(kLoopBladeRzMm, s) + sw_z;
+    // PASS 21: under `rods` the A/B/C/End knuckle swells are REPLACED by the
+    // rigid balls below -- a bump on a rod ring that sits inside a ball would
+    // poke out of it -- so only the Front thickening survives as a swell. The
+    // legacy-swell family and the End-ball knobs stay live under `pass20` and
+    // are declared inert under `rods` (P21-IMPLEMENTATION, declared omissions).
+    if (!rods) {
+      swell(kKnuckleAtAMm, kKnuckleSwellHalfMm[1],
+            legacy_swell ? kKnuckleSwellALegacyRxMm : kKnuckleSwellARxMm,
+            legacy_swell ? kKnuckleSwellALegacyRzMm : kKnuckleSwellARzMm,
+            sw_x, sw_z);
+      swell(kKnuckleAtBMm, kKnuckleSwellHalfMm[2],
+            legacy_swell ? kKnuckleSwellBLegacyRxMm : kKnuckleSwellBRxMm,
+            legacy_swell ? kKnuckleSwellBLegacyRzMm : kKnuckleSwellBRzMm,
+            sw_x, sw_z);
+      swell(kKnuckleAtCMm, kKnuckleSwellHalfMm[3],
+            legacy_swell ? kKnuckleSwellCLegacyRxMm : kKnuckleSwellCRxMm,
+            legacy_swell ? kKnuckleSwellCLegacyRzMm : kKnuckleSwellCRzMm,
+            sw_x, sw_z);
+      swell(kKnuckleAtEndMm, kKnuckleSwellHalfMm[4],
+            legacy_swell ? kKnuckleSwellEndLegacyRxMm : g_u02_end_swell_rx_mm,
+            legacy_swell ? kKnuckleSwellEndLegacyRzMm : g_u02_end_swell_rz_mm,
+            sw_x, sw_z);
+      // PASS 19 REVIEW: the End BALL (manafold_art.h), MAX-combined, mesh only.
+      // It replaces the read the upright stub used to give, so it belongs to
+      // the ARM frame: under legacy-root the stub is back and the ball stands
+      // down, which keeps that control exactly version 18.
+      if (!legacy_swell && g_u02_rear_socket_frame == RearSocketFrame::kArm &&
+          (g_u02_end_ball_rx_mm > 0 || g_u02_end_ball_rz_mm > 0))
+        swell(g_u02_end_ball_at_mm, g_u02_end_ball_half_mm,
+              g_u02_end_ball_rx_mm, g_u02_end_ball_rz_mm, sw_x, sw_z);
+    }
+    int32_t profile_rx_mm = taper(kLoopBladeRxMm, s) + sw_x;
+    int32_t profile_rz_mm = taper(kLoopBladeRzMm, s) + sw_z;
+    // THE BALL PROFILE. A body of revolution on the joint bone, rigid about the
+    // pivot: rx/rz are the authored per-ball ellipse scaled by the circle's own
+    // sqrt(1-(d/R)^2) at the ring's offset, with 2 mm end rings so the builder
+    // never fans a degenerate disc. The global diagnostic swell multiplier
+    // still applies, so ZHAO_U02_SWELL_PM remains a live ladder knob.
+    if (rods && rr.role == RingRole::kBall) {
+      const auto ball_r = [&](const int32_t* R) {
+        const int32_t full = static_cast<int32_t>(
+            (static_cast<int64_t>(R[rr.elem]) * g_u02_swell_pm) / 1000);
+        return static_cast<int32_t>(
+            (static_cast<int64_t>(full) * kBallRingRadiusPm[rr.k]) / 1000);
+      };
+      profile_rx_mm = rr.cone ? kBallPoleRxMm : ball_r(kBallRxMm);
+      profile_rz_mm = rr.cone ? kBallPoleRxMm : ball_r(kBallRzMm);
+    }
     // VERSION 18: the authored taper remains complete through its 42/26 final
     // key. Only the last ReturnTip-owned ring is a collapsed buried cap. The
     // positive control restores that ring's authored profile so the burial
     // detector proves why this explicit topology-local exception exists.
+    // Under rods the terminal cap is the LAST TAIL ring, which is still ring
+    // kLoopRings-1 -- the table ends on the authored total length (asserted in
+    // manafold_art.h), so this stays the same ring in both ladders.
     const bool terminal_cap = i + 1 == kLoopRings;
     rs.rx = fxu(terminal_cap && !g_u02_terminal_cap_control
                     ? kReturnTipCapRxMm
@@ -267,7 +393,15 @@ inline zc::RingPart make_loop() {
     const int32_t outE0 = stEnd + kLoopCarrierCoreHalfMm[4];
     const int32_t outE1 = outE0 + kFoldBlendMm[4];
 
-    if (!g_u02_root_authority_legacy_split) {
+    if (rods) {
+      // PASS 21 -- RODS AND BALLS. One call, no fold blends, no carrier cores:
+      // the whole ladder is the station table plus rods_ring_bones().
+      uint8_t rb0 = 0, rb1 = 0, rw0 = 64;
+      rods_ring_bones(i, rb0, rb1, rw0);
+      rs.b0 = rb0;
+      rs.b1 = rb1;
+      rs.w0 = rw0;
+    } else if (!g_u02_root_authority_legacy_split) {
       const int32_t front_in0 =
           kRootSwellSupportStartMm[0] - kFoldBlendMm[0];
       const int32_t front_in1 = kRootSwellSupportStartMm[0];

@@ -7868,6 +7868,16 @@ int main(int argc, char** argv) {
     std::printf(rc == 0 ? "reel --check: all sequence CRCs match\n" : "reel --check: FAILED\n");
     return rc;
   }
+  // PASS 21: `--crc <subject ...>` renders the NAMED subjects and writes
+  // nothing, printing each one's sequence_crc32c. It exists because the identity
+  // leg of a rig change has to be read on ALL 22 live subjects -- pass 20's own
+  // scope proof found a two-switch "reproduces pass 19 byte for byte" claim that
+  // was true on the three clips it was sampled on and false on three others --
+  // and a 22-subject raw render is 2.2 GB of .rgb the disk cannot spare (it hit
+  // zero bytes free once already). `--check` renders the WHOLE library; this
+  // renders exactly what is asked. The CRC is the same quantity `--check` and
+  // meta.txt record, so the comparison is against the committed pass-20 table.
+  if (argc > 1 && std::strcmp(argv[1], "--crc") == 0) g_write = false;
   g_out = argc > 1 ? argv[1] : ".";
   // RUN 1939/2234 experiment gate. Unset (the normal case) leaves every
   // render byte-identical. Faceted cel holds a face at one band; smoothcel3

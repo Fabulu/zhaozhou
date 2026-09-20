@@ -821,6 +821,218 @@ constexpr int32_t kRootSwellSupportEndMm[2] = {
 constexpr int32_t kRearTerminalTipStationMm = kLoopTotalMm;
 static_assert(kRootSwellSupportEndMm[1] == kRearTerminalTipStationMm,
               "rear terminal profile support must be the declared buried exception");
+
+// ======================= PASS 21: RODS AND BALLS ===========================
+//
+// Owner Direction 22 + the same-day addition, verbatim: *"don't let actual
+// antennae parts bend, just stretch. the bending is at the ball joints."*
+//
+// The pass-20 pose layer was ALREADY joint-only. The extra hinges the owner
+// sees are made by the SKIN: each ball's fold is blended into the band over the
+// 90 mm BEFORE the ball (kFoldBlendMm), so the corner lands 47-140 mm short of
+// the carrier and the ball itself rides a straight piece -- with an S-jog on
+// the two rings ahead of it, because an LBS blend of two frames that share a
+// pivot pulls an off-pivot ring toward the bisector. See P21-ARCHITECTURE.md
+// section 2 for the per-ring measurement (corners at rings 17-19, 24-26, 32-34).
+//
+// THE RODS LADDER removes the mechanism rather than retuning it:
+//
+//   * every RUN is a straight rod skinned between its parent joint bone and
+//     that span's pure-translation helper. Both carry the SAME rotation (the
+//     helper is a zero-rest-offset identity child), so every ring of the rod is
+//     a convex combination of two points on ONE posed line: the centreline turn
+//     inside a rod is zero BY CONSTRUCTION, at any delta and any joint angle,
+//     and the only residue is a <=1/64 axial placement error that cannot bend
+//     anything. This is exactly the mechanism that already made rings 21-23 and
+//     28-31 straight; it is extended to the whole run.
+//   * every BALL is a rigid body of revolution on its own joint bone, centred
+//     on the pivot. A rigid body cannot shrink along the bisector the way an
+//     LBS blend across the equator does (cos(theta/2): 23% at 80 deg, 50% at
+//     120 deg), so the ball stays a ball at every angle and carries the whole
+//     corner.
+//   * the rods END INSIDE the balls. A rod's last ring sits 1 mm from the
+//     pivot, so its distance from the ball centre is sqrt(1 + rx^2) ~ rx, which
+//     is smaller than the ball's SMALLEST semi-axis; the ball is convex, so the
+//     buried cone from that ring to the ball's 2 mm end ring is inside the ball
+//     in every pose. There is no LBS across a joint anywhere in the band, so
+//     nothing can pinch, splay or shear at a corner.
+//
+// ⚠ THE RING COUNT IS UNCHANGED AT 64. That is deliberate and it is worth a
+// sentence: every gate, probe and receipt in this creature sizes an array by
+// kLoopRings and keys a ring by its BIND Y. Changing the count would have put a
+// stale ring table in a dozen instruments at once -- the pass-19 blindness
+// pattern -- so the rods layout was budgeted to fit the existing 64. What
+// changes is the ring STATION LAW, from uniform to the authored table below,
+// and every consumer reads loop_ring_station_at().
+enum class RigMode : uint8_t { kPass20, kRods };
+// The compile default, and what ships. `ZHAO_U02_RIG=pass20` is the exact-off
+// control: it restores the pass-20 ladder, station law, rear bow, staging quats
+// and aim primitives together, and must reproduce the pass-20 bank byte for
+// byte. It is a MECHANISM selector, so print_judged_config prints it FIRST --
+// the pass-20 re-review found that banner blind to exactly this class of knob.
+constexpr RigMode kRig = RigMode::kRods;
+inline RigMode g_u02_rig = kRig;
+inline bool rig_rods() { return g_u02_rig == RigMode::kRods; }
+
+// The five joint pivots, in band stations. F is the body-surface exit (the
+// body IS that joint's ball; the Front swell is a thickening on the rod, not a
+// carrier -- see P21-ARCHITECTURE section 7's declared omission). A/B/C are the
+// hinge bones' own pivots and End is the socket.
+constexpr int32_t kRodsPivotFMm = kLoopBuryMm;                              // 250
+constexpr int32_t kRodsPivotAMm = kLoopBuryMm + kLoopArcMm[0] + kLoopArcMm[1];
+constexpr int32_t kRodsPivotBMm = kRodsPivotAMm + kLoopArcMm[2];
+constexpr int32_t kRodsPivotCMm = kRodsPivotBMm + kLoopArcMm[3];
+constexpr int32_t kRodsPivotEndMm = kKnuckleAtEndMm;
+static_assert(kRodsPivotAMm == 930 && kRodsPivotBMm == 1270 &&
+                  kRodsPivotCMm == 1650 && kRodsPivotEndMm == 2660,
+              "the rods pivots must be the shipping carrier stations");
+
+// ---- THE BALLS -------------------------------------------------------------
+//
+// Defaults are today's PROFILE AT THE CARRIER STATION -- the taper plus that
+// carrier's knuckle swell -- so the ball SIZE version 18 accepted is preserved
+// rather than re-derived. A/B/C: 72/64, 69/57, 72/51. End takes 76/60, between
+// its two overlapping swells (the 2560 mm End ball, 80/63, and the 2660 mm
+// socket knuckle, 69/52) because under rods the single ball sits at the socket.
+//
+// ⚠ THESE ARE EYE KNOBS AND THE DECLARED ART RISK LIVES HERE. Two rods of
+// radius r meeting at turning angle theta intersect out to r/cos(theta/2) from
+// the pivot; past the ball that reads as a visible crotch. The gate PRINTS
+// r/cos(theta_max/2) beside the shipping radius and does not gate it: the
+// number bounds the question, the eye answers it (CLAUDE.md, the art law).
+constexpr int32_t kBallRxMm[4] = {72, 69, 72, 76};   // A, B, C, End
+constexpr int32_t kBallRzMm[4] = {64, 57, 51, 60};
+// The half-extent along the band. Equal to rx by default, so the ball reads
+// round in the LOOP PLANE -- the plane the owner sees it in.
+constexpr int32_t kBallRyMm[4] = {72, 69, 72, 76};
+// A 2 mm end ring rather than a true pole: the same terminal-cap trick
+// kReturnTipCapRxMm uses, so the ring builder never has to fan a degenerate
+// disc and the residual opening is sub-pixel at 240p (and is covered by the
+// rod that passes through it in every pose anyway).
+constexpr int32_t kBallPoleRxMm = 2;
+// Seven rings per ball: the two 2 mm ends and five body rings on the circle.
+// offset/radius are per mille of Ry/Rx: sqrt(1 - (d/R)^2) at d/R = 0, +-0.5,
+// +-0.866, +-1.
+// ⚠ R10's POSITIVE CONTROL, and it has to be a committed knob rather than a
+// temporary edit. "The balls are rigid" is a property of the LADDER, so no legal
+// stimulus can break it: the only demonstration that R10 can fire is a
+// configuration in which one ball ring is deliberately weighted half to the
+// incoming carrier, which is exactly the LBS-across-the-equator arrangement
+// pass 21 removed (it shrinks the ring by cos(theta/2) at every posed angle).
+// This follows the house pattern for an unreachable-state control --
+// g_u02_terminal_cap_control and g_u02_knead_dip_stuck_control are the same
+// shape -- rather than a tests/mutants file, because the control has to run
+// through the SHIPPING skin builder to prove anything about it.
+inline bool g_u02_rod_ball_blend_control = false;
+constexpr int kBallRingCount = 7;
+constexpr int32_t kBallRingOffsetPm[kBallRingCount] = {-1000, -866, -500, 0,
+                                                       500, 866, 1000};
+constexpr int32_t kBallRingRadiusPm[kBallRingCount] = {0, 500, 866, 1000, 866,
+                                                       500, 0};
+
+// ---- THE REAR ROD'S TRANSLATION STAGING ------------------------------------
+//
+// Three helper stations at the rod's thirds. The staging is NOT a shape: each
+// helper carries the station-proportional share of the same chord delta, so the
+// whole rod is one straight line whose length is the chord. It exists only
+// because a 6-bit LBS weight over a 1010 mm rod would give three placement
+// levels per ring in one segment and about nine in three.
+constexpr int32_t kRodsRearHelperStationMm[3] = {1986, 2322, kRodsPivotEndMm};
+static_assert(kRodsRearHelperStationMm[2] == kRodsPivotEndMm,
+              "the last rear helper must land exactly on the End ball centre");
+
+// ---- THE RING STATION TABLE ------------------------------------------------
+//
+// Per element, in band order: the buried base, then (rod, ball) four times,
+// then the buried tail. A rod's rings run from 1 mm past its parent pivot to
+// 1 mm short of its child pivot; a ball's seven rings straddle its own pivot.
+// The table is therefore NOT monotone in station -- a ball's first ring sits
+// behind the rod ring that precedes it, which is the buried cone. The ring
+// builder has never required monotone y (creature_core.cpp add_ring), and the
+// two cone rings per ball are flagged so an order-checking gate can skip them.
+constexpr int kRodsBaseRings = 4;
+constexpr int kRodsRodRings[4] = {9, 5, 5, 9};   // F->A, A->B, B->C, C->End
+constexpr int kRodsTailRings = 4;
+// The F pivot carries no ball (the body is its ball), so the front rod has no
+// entry cone: its first ring is a normal rod station one step past the base's
+// last, not the 1 mm cone base the other three rods start with.
+constexpr int32_t kRodsFrontLeadMm = 68;
+static_assert(kRodsBaseRings + kRodsRodRings[0] + kRodsRodRings[1] +
+                      kRodsRodRings[2] + kRodsRodRings[3] +
+                      4 * kBallRingCount + kRodsTailRings == kLoopRings,
+              "the rods layout must fit the shipping ring count exactly");
+
+enum class RingRole : uint8_t { kBase, kRod, kBall, kTail };
+
+/** Even integer spacing over [a, b] inclusive, the same law every rod uses. */
+constexpr int32_t rods_lin_mm(int32_t a, int32_t b, int n, int k) {
+  return n <= 1 ? a
+                : a + static_cast<int32_t>((static_cast<int64_t>(b - a) * k) / (n - 1));
+}
+constexpr int32_t kRodsPivotMm[5] = {kRodsPivotFMm, kRodsPivotAMm,
+                                     kRodsPivotBMm, kRodsPivotCMm,
+                                     kRodsPivotEndMm};
+
+/** The authored station of rods ring `i`, and its role/element. One walk, used
+ *  by three accessors so the layout cannot disagree with itself. */
+struct RodsRing {
+  int32_t station_mm = 0;
+  RingRole role = RingRole::kBase;
+  int8_t elem = -1;   // rod index 0..3, ball index 0..3, -1 for base/tail
+  int8_t k = 0;       // the ring's index WITHIN its element
+  bool cone = false;  // a ball's two 2 mm end rings (non-monotone in station)
+};
+constexpr RodsRing rods_ring(int i) {
+  if (i < kRodsBaseRings)
+    return RodsRing{rods_lin_mm(0, kRodsPivotFMm, kRodsBaseRings, i),
+                    RingRole::kBase, -1, static_cast<int8_t>(i), false};
+  int at = kRodsBaseRings;
+  for (int e = 0; e < 4; ++e) {
+    if (i < at + kRodsRodRings[e])
+      return RodsRing{rods_lin_mm(kRodsPivotMm[e] + (e == 0 ? kRodsFrontLeadMm : 1),
+                                  kRodsPivotMm[e + 1] - 1, kRodsRodRings[e],
+                                  i - at),
+                      RingRole::kRod, static_cast<int8_t>(e),
+                      static_cast<int8_t>(i - at), false};
+    at += kRodsRodRings[e];
+    if (i < at + kBallRingCount) {
+      const int k = i - at;
+      return RodsRing{
+          kRodsPivotMm[e + 1] +
+              static_cast<int32_t>(
+                  (static_cast<int64_t>(kBallRyMm[e]) * kBallRingOffsetPm[k]) /
+                  1000),
+          RingRole::kBall, static_cast<int8_t>(e), static_cast<int8_t>(k),
+          k == 0 || k == kBallRingCount - 1};
+    }
+    at += kBallRingCount;
+  }
+  return RodsRing{rods_lin_mm(kRodsPivotEndMm + 1, kLoopTotalMm, kRodsTailRings,
+                              i - at),
+                  RingRole::kTail, -1, static_cast<int8_t>(i - at), false};
+}
+/** ⚠ EVERY STATION MUST BE DISTINCT. Two rings at the same bind y would
+ *  collide in every ring_map() the gates and probes build, and would emit a
+ *  zero-area band besides. This is checked, not assumed. */
+constexpr bool rods_stations_distinct() {
+  for (int i = 0; i < kLoopRings; ++i)
+    for (int j = i + 1; j < kLoopRings; ++j)
+      if (rods_ring(i).station_mm == rods_ring(j).station_mm) return false;
+  return true;
+}
+static_assert(rods_stations_distinct(),
+              "two rods rings share a bind station -- every ring_map() keyed on "
+              "bind y would conflate them");
+static_assert(rods_ring(kLoopRings - 1).station_mm == kLoopTotalMm,
+              "the rods tail must end on the authored total length");
+
+/** THE station accessor. Uniform under pass20 (the exact shipping law), the
+ *  authored table under rods. Every consumer -- make_loop, the gates, the
+ *  probes -- reads this one function. */
+inline int32_t loop_ring_station_at(int ring) {
+  return rig_rods() ? rods_ring(ring).station_mm : loop_ring_station_mm(ring);
+}
+
 inline bool g_u02_root_authority_legacy_split = false;
 inline int32_t g_u02_swell_pm = 1000;
 // PASS 19 (Owner Direction 20 items 1+2: the back ball "looks like it's almost
@@ -5103,6 +5315,11 @@ inline int print_judged_config(const char* who) {
     const char* ship;
   };
   const Mode modes[] = {
+      // PASS 21: the RIG comes first because it is the largest override in the
+      // creature -- it swaps the whole skin ladder, the rear translation law
+      // and the aim primitive at once.
+      {"RIG", g_u02_rig == kRig, g_u02_rig == RigMode::kRods ? "rods" : "pass20",
+       kRig == RigMode::kRods ? "rods" : "pass20"},
       {"knead dip SOLVER", g_u02_knead_dip_solver == kKneadDipSolver,
        g_u02_knead_dip_solver == KneadDipSolver::kDent ? "dent" : "carried",
        kKneadDipSolver == KneadDipSolver::kDent ? "dent" : "carried"},
@@ -5162,7 +5379,8 @@ inline int print_judged_config(const char* who) {
   }
   if (overridden == 0)
     std::printf("every shipping constant AND MECHANISM at its shipped value "
-                "(solver dent, bow arc, dip gain %lld, dent depth %lld, "
+                "(rig rods, solver dent, bow arc [inert under rods], dip gain "
+                "%lld, dent depth %lld, "
                 "ramp floor %lld, fold reaction %lld)",
                 static_cast<long long>(kKneadDipGainPm),
                 static_cast<long long>(kKneadDentDepthPm),

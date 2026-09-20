@@ -16,6 +16,10 @@
 #define ZHAO_REEL_MANAFOLD_CLIPS_H
 
 #include <cstdlib>
+#include <cstring>  // PASS 21: std::memcmp/std::strcmp are used below. This
+                    // header relied on its CONSUMER's includes, so mhinge --
+                    // which includes neither -- failed to compile on the
+                    // pass-20 tree (P21-ARCHITECTURE section 2.6).
 
 #include "manafold_art.h"
 #include "manafold_rig.h"
@@ -273,6 +277,12 @@ inline int32_t rear_span_fraction_delta_fx(int32_t full_delta_fx,
 
 inline int32_t span_helper_delta_fx(int span, int32_t full_delta_fx) {
   if (span < 0 || span >= 4) return 0;
+  // PASS 21: under `rods` the helper sits AT the child pivot (the rod runs all
+  // the way to the ball centre), so it carries the FULL delta rather than the
+  // free-run share. kSpanHelperRunMm/kSpanGradientMm collapse to the rod length
+  // and are inert; the signed bounds kSpanStretchMaxPm / kSpanCompactionMinPm
+  // are untouched and still judge the same quantity.
+  if (rig_rods()) return full_delta_fx;
   return span_fraction_delta_fx(full_delta_fx, kSpanHelperRunMm[span],
                                 kSpanGradientMm[span]);
 }
@@ -338,6 +348,11 @@ inline int32_t span_e_presocket_delta_fx(int32_t full_delta_fx) {
  */
 inline bool write_rear_bow(std::vector<int32_t>& track, size_t tbase,
                            int32_t chord_mm) {
+  // PASS 21: the bow CURVES A RUN, which Direction 22 forbids outright -- and
+  // the measurement in P21-ARCHITECTURE section 2.4 shows it is also the End
+  // spazz itself (worst rear turn rate 28.5 -> 1.2 deg/sample without it). It is
+  // not called under rods; the length goes into the rod instead.
+  if (rig_rods()) return false;
   if (g_u02_rear_bow == RearBow::kLegacy) return false;
   const int32_t arc_mm = kRearSocketFromCMm;
   int32_t alpha16 = rear_bow_alpha16(chord_mm, arc_mm);
@@ -406,10 +421,51 @@ inline bool write_rear_bow(std::vector<int32_t>& track, size_t tbase,
   return true;
 }
 
+/** PASS 21: the rear rod's STATION-PROPORTIONAL share of the chord delta.
+ *
+ *  Helper at station `st` on a rod running kRodsPivotCMm -> kRodsPivotEndMm
+ *  carries (st - C) / (End - C) of the full delta. That is the ONLY law the rear
+ *  rod has under rods -- no bow, no onset blend, no travel limiter, no deep
+ *  bias. Its consequence is the thing Direction 22 asked for: the rod's length
+ *  IS the chord, so the band only ever stretches or compacts along itself, and
+ *  a ring's posed offset is exactly (s - C) * delta / 1010 -- uniform by
+ *  construction, with the last helper landing precisely on the End ball centre
+ *  so the attachment pays nothing.
+ */
+inline int32_t rods_rear_share_fx(int32_t full_delta_fx, int stage) {
+  const int32_t arc = kRodsPivotEndMm - kRodsPivotCMm;
+  const int32_t run = kRodsRearHelperStationMm[stage] - kRodsPivotCMm;
+  return span_fraction_delta_fx(full_delta_fx, run, arc);
+}
+
 inline void write_rear_span_delta(std::vector<int32_t>& track, size_t tbase,
                                   int32_t skin_delta_fx,
                                   int32_t solved_delta_fx,
                                   int32_t chord_mm = 0) {
+  if (rig_rods()) {
+    for (int st = 0; st < 3; ++st) {
+      static constexpr uint8_t kStage[3] = {kBSpanDeltaEStart, kBSpanDeltaEMid,
+                                            kBSpanDeltaEPreSocket};
+      const size_t at = tbase + static_cast<size_t>(kStage[st]) * 3u;
+      track[at + 0] = 0;
+      track[at + 1] = rods_rear_share_fx(skin_delta_fx, st);
+      track[at + 2] = 0;
+    }
+    // The four version-18 root helpers are INERT under rods: they skin nothing
+    // and must carry no residue, or a later reader would find a live-looking
+    // translation on a bone no vertex reads.
+    static constexpr uint8_t kInert[4] = {kBRearPreRootDelta,
+                                          kBRearRootTurnMid, kBRearRootDelta,
+                                          kBFrontRootDelta};
+    for (uint8_t b : kInert) {
+      const size_t at = tbase + static_cast<size_t>(b) * 3u;
+      track[at + 0] = track[at + 1] = track[at + 2] = 0;
+    }
+    track[tbase + static_cast<size_t>(kBSpanDeltaE) * 3u + 1u] =
+        solved_delta_fx;
+    (void)chord_mm;
+    return;
+  }
   track[tbase + static_cast<size_t>(kBSpanDeltaEStart) * 3u + 1u] =
       span_e_start_delta_fx(skin_delta_fx);
   track[tbase + static_cast<size_t>(kBSpanDeltaEMid) * 3u + 1u] =
@@ -1520,20 +1576,31 @@ inline void finalize_rear_follow(zc::Clip& c) {
     const zc::quat16 rear_relative = quat_mul(
         quat_conj(qd), c.quats[qbase + kBRearSocket]);
     const zc::quat16 identity = zc::quat16_identity();
-    c.quats[qbase + kBRearPreRootDelta] =
-        zc::quat16_nlerp(identity, rear_relative, 1, 3);
-    c.quats[qbase + kBRearRootTurnMid] =
-        zc::quat16_nlerp(identity, rear_relative, 2, 3);
-    c.quats[qbase + kBRearRootDelta] = rear_relative;
-    if (!bowed)
+    if (rig_rods()) {
+      // PASS 21: the version-18 rotation staging (1/3, 2/3, 1 of the socket's
+      // relative rotation over rings 50-54) was a THIRD, FOURTH and FIFTH
+      // corner between C and End -- three more hinges on a run. Under rods the
+      // End ball is rigid on qd-composed RearSocket and the rod arrives
+      // straight, so the staging bones are identity and skin nothing.
+      c.quats[qbase + kBRearPreRootDelta] = identity;
+      c.quats[qbase + kBRearRootTurnMid] = identity;
+      c.quats[qbase + kBRearRootDelta] = identity;
+    } else {
+      c.quats[qbase + kBRearPreRootDelta] =
+          zc::quat16_nlerp(identity, rear_relative, 1, 3);
+      c.quats[qbase + kBRearRootTurnMid] =
+          zc::quat16_nlerp(identity, rear_relative, 2, 3);
+      c.quats[qbase + kBRearRootDelta] = rear_relative;
+    }
+    if (!bowed && !rig_rods())
       c.local_translation[
           tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
           rear_preroot_delta_fx(skin_delta_fx);
-    if (!bowed)
+    if (!bowed && !rig_rods())
       c.local_translation[
           tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
           rear_root_turn_mid_delta_fx(skin_delta_fx);
-    if (!bowed)
+    if (!bowed && !rig_rods())
       c.local_translation[
           tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
           rear_root_delta_fx(skin_delta_fx);
@@ -1629,7 +1696,7 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
       c.mid_local_translation[helper_i] =
           span_helper_delta_fx(span, c.mid_local_translation[child_i]);
     }
-    {
+    if (!rig_rods()) {
       const size_t child_i =
           tbase + static_cast<size_t>(kBHingeA) * 3u + 1u;
       const int32_t partial =
@@ -1708,20 +1775,29 @@ inline void finalize_rear_follow_midpoints(zc::Clip& c) {
     const zc::quat16 rear_relative = quat_mul(
         quat_conj(qd), c.mid_quats[qbase + kBRearSocket]);
     const zc::quat16 identity = zc::quat16_identity();
-    c.mid_quats[qbase + kBRearPreRootDelta] =
-        zc::quat16_nlerp(identity, rear_relative, 1, 3);
-    c.mid_quats[qbase + kBRearRootTurnMid] =
-        zc::quat16_nlerp(identity, rear_relative, 2, 3);
-    c.mid_quats[qbase + kBRearRootDelta] = rear_relative;
-    if (!bowed)
+    if (rig_rods()) {
+      // PASS 21: identity staging on the midpoints too -- the key path and the
+      // baked midpoint path must describe the SAME rig or the creature changes
+      // shape on every half-frame.
+      c.mid_quats[qbase + kBRearPreRootDelta] = identity;
+      c.mid_quats[qbase + kBRearRootTurnMid] = identity;
+      c.mid_quats[qbase + kBRearRootDelta] = identity;
+    } else {
+      c.mid_quats[qbase + kBRearPreRootDelta] =
+          zc::quat16_nlerp(identity, rear_relative, 1, 3);
+      c.mid_quats[qbase + kBRearRootTurnMid] =
+          zc::quat16_nlerp(identity, rear_relative, 2, 3);
+      c.mid_quats[qbase + kBRearRootDelta] = rear_relative;
+    }
+    if (!bowed && !rig_rods())
       c.mid_local_translation[
           tbase + static_cast<size_t>(kBRearPreRootDelta) * 3u + 1u] =
           rear_preroot_delta_fx(skin_delta_fx);
-    if (!bowed)
+    if (!bowed && !rig_rods())
       c.mid_local_translation[
           tbase + static_cast<size_t>(kBRearRootTurnMid) * 3u + 1u] =
           rear_root_turn_mid_delta_fx(skin_delta_fx);
-    if (!bowed)
+    if (!bowed && !rig_rods())
       c.mid_local_translation[
           tbase + static_cast<size_t>(kBRearRootDelta) * 3u + 1u] =
           rear_root_delta_fx(skin_delta_fx);
@@ -3015,6 +3091,18 @@ inline NoduleOffsets nodule_schedule(uint32_t slot, int keys, int f) {
  *  Returns false on a malformed value; callers return RC 2, as the reel's
  *  strict selectors do. */
 inline bool apply_knead_dip_env() {
+  // PASS 21: the RIG selector lives here for the same reason the dip knobs do
+  // -- an env control is only a control in a binary that READS it, and pass 20
+  // shipped a whole ladder of gate runs that proved nothing because one main()
+  // parsed a knob and the others did not.
+  if (const char* e = std::getenv("ZHAO_U02_RIG")) {
+    if (std::strcmp(e, "rods") == 0)
+      g_u02_rig = RigMode::kRods;
+    else if (std::strcmp(e, "pass20") == 0)
+      g_u02_rig = RigMode::kPass20;
+    else
+      return false;
+  }
   if (const char* e = std::getenv("ZHAO_U02_KNEAD_DIP_SOLVER")) {
     if (std::strcmp(e, "dent") == 0)
       g_u02_knead_dip_solver = KneadDipSolver::kDent;
