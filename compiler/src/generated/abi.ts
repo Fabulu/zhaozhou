@@ -1,8 +1,8 @@
 // GENERATED FILE - DO NOT EDIT
 // Source: spec/commands.zidl via tools/abi-gen (`npm run abi:gen`).
 // Law: spec/capture_format.md. Identity (see spec/generated/abi.md):
-//   abi_identity_sha256 = 8008bf8f702becc21ada6da2744a9686e60f15883bd2dd1b19d3ace4ef96efd1
-//   zidl_sha256         = 2be41d9f94d2ee34152934d5f2cf244764c18f499d7586c162c6ef7fcf8be50d
+//   abi_identity_sha256 = e45f63693d9775583709d3a1809db73b70a673ae5ebb4b0f799117d8e9fe95ee
+//   zidl_sha256         = 39b8ba0609d7c9a52ddc70a2c5689ccb9fc62bdcb62e797e26258c86eef7e005
 
 // ---------------------------------------------------------------- abi ---
 
@@ -53,7 +53,12 @@ export const ZHAO_ENUM_VIDEO_MODE: readonly number[] = [0, 1, 2];
 
 // enum forge_kind: u8 on the wire (capture_format.md 3.2 step 7)
 export const FORGE_HEIGHTFIELD_PATCH = 0 as const;
-export const ZHAO_ENUM_FORGE_KIND: readonly number[] = [0];
+export const FORGE_RIBBON = 1 as const;
+export const FORGE_RADIAL_FAN = 2 as const;
+export const FORGE_TUBE = 3 as const;
+export const FORGE_RADIAL_SHELL = 4 as const;
+export const FORGE_BILLBOARD_SHEET = 5 as const;
+export const ZHAO_ENUM_FORGE_KIND: readonly number[] = [0, 1, 2, 3, 4, 5];
 
 // enum fog_mode: u8 on the wire (capture_format.md 3.2 step 7)
 export const FOG_OFF = 0 as const;
@@ -466,7 +471,7 @@ export const ZHAO_COMMAND_TABLE: readonly ZhCommandInfo[] = [
   { name: 'SubmitTerrainSet', opcode: 0x0230, recordBytes: 48, implemented: false, padOffsets: [], enumChecks: [] },
   { name: 'DrawForm', opcode: 0x0300, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
   { name: 'DrawPopulation', opcode: 0x0301, recordBytes: 32, implemented: true, padOffsets: [8, 9, 10, 11, 12, 13, 14, 15], enumChecks: [] },
-  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0] }] },
+  { name: 'DrawProcedural', opcode: 0x0302, recordBytes: 64, implemented: true, padOffsets: [37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], enumChecks: [{ offset: 36, size: 1, values: [0, 1, 2, 3, 4, 5] }] },
   { name: 'DrawSky', opcode: 0x0310, recordBytes: 176, implemented: false, padOffsets: [146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159], enumChecks: [] },
   { name: 'SetEnvironment', opcode: 0x0311, recordBytes: 48, implemented: true, padOffsets: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31], enumChecks: [{ offset: 11, size: 1, values: [0, 1] }] },
   { name: 'EmitAudioEvent', opcode: 0x0400, recordBytes: 32, implemented: true, padOffsets: [], enumChecks: [] },
@@ -835,7 +840,7 @@ export function zhaoSampleDrawProcedural(): ZhRecordDrawProcedural {
     material: 704643074,
     transform: zhaoSampleTransform2fx(),
     screen_error: 88599,
-    kind: 0,
+    kind: 3,
   };
 }
 
@@ -1332,6 +1337,6 @@ export function zhaoPackDebugTraceArm(r: ZhRecordDebugTraceArm, w: ZhByteWriter)
 
 // .zcap ABI_INFO identity (capture_format.md 4.2)
 export const ZHAO_GENERATOR_NAME = 'zhaozhou-abi-gen';
-export const ZHAO_GENERATOR_SHA256: readonly number[] = [0x80, 0x08, 0xBF, 0x8F, 0x70, 0x2B, 0xEC, 0xC2, 0x1A, 0xDA, 0x6D, 0xA2, 0x74, 0x4A, 0x96, 0x86, 0xE6, 0x0F, 0x15, 0x88, 0x3B, 0xD2, 0xDD, 0x1B, 0x19, 0xD3, 0xAC, 0xE4, 0xEF, 0x96, 0xEF, 0xD1];
-export const ZHAO_ZIDL_SHA256: readonly number[] = [0x2B, 0xE4, 0x1D, 0x9F, 0x94, 0xD2, 0xEE, 0x34, 0x15, 0x29, 0x34, 0xD5, 0xF2, 0xCF, 0x24, 0x47, 0x64, 0xC1, 0x8F, 0x49, 0x9D, 0x75, 0x86, 0xC1, 0x62, 0xC6, 0xEF, 0x7F, 0xCF, 0x8B, 0xE5, 0x0D];
+export const ZHAO_GENERATOR_SHA256: readonly number[] = [0xE4, 0x5F, 0x63, 0x69, 0x3D, 0x97, 0x75, 0x58, 0x37, 0x09, 0xD3, 0xA1, 0x80, 0x9D, 0xB7, 0x3B, 0x70, 0xA6, 0x73, 0xAE, 0x5E, 0xBB, 0x4B, 0x0F, 0x79, 0x91, 0x17, 0xD8, 0xE9, 0xFE, 0x95, 0xEE];
+export const ZHAO_ZIDL_SHA256: readonly number[] = [0x39, 0xB8, 0xBA, 0x06, 0x09, 0xD7, 0xC9, 0xA5, 0x2D, 0xDC, 0x70, 0xA2, 0xC5, 0x68, 0x9C, 0xCB, 0x9F, 0xC6, 0x2B, 0xDC, 0xB6, 0x2E, 0x79, 0x7E, 0x26, 0x25, 0x8C, 0x86, 0xEE, 0xF7, 0xE0, 0x05];
 export const ZHAO_ZCAP_SCHEMA_VERSION = 1;

@@ -1420,3 +1420,68 @@ duplicate-ratified-law detector that caught the 66-DSP projector duplication,
 because a name resolving to nothing can never collide with another block's. So
 each removal must say why the block has no oracle, in the row, where the next
 reader meets it.
+
+## R140 — `check_counters.py` now looks BOTH ways, and fixing it exposed a regex that had never worked
+
+**2026-09-20, coordinator. R110's owed repair, plus a defect found only because
+I insisted the new check FIRE before trusting it.**
+
+R110 recorded that this tool asked one question — *is every DECLARED counter
+presented on a port?* — and was structurally blind to its mirror, *is every
+PRESENTED counter declared?* Of ten census ports one lane named on a single
+block, **it could see exactly one.**
+
+**The reverse check is added, and it is a REPORT, not a gate.** Making it a gate
+would put it red on arrival, and a gate that is red on arrival is one people
+learn to skip — which `uncashed_cheques.py` says in as many words about its own
+check 5, citing how the v1 FIELD datapath got composed.
+
+### The defect underneath: `COUNTER_SHAPE` had no `re.M`
+
+`counter_shaped_ports()` applies `COUNTER_SHAPE.finditer()` to a **whole file's
+text**, and the pattern was compiled **without `re.MULTILINE`**. So `^` anchored
+to offset 0 and it matched at most the first line of a file — **returning `[]`
+for every real module.**
+
+**The `--suggest` candidate list has therefore been silently empty for as long as
+it has existed**, and nobody noticed, because *an empty suggestion list looks
+exactly like having no suggestions to make.* That is today's dominant defect mode
+once more, in a helper nobody thought to question.
+
+**It was found because the new check's probe returned `[]` for all four
+polarities — including the two that had to be non-empty.** Had I probed only the
+"should be silent" case, the repair would have shipped as a permanent no-op with
+a passing test beside it. **The tell was an instrument that was empty, not a tree
+that was clean.**
+
+### Narrowing: a counter COUNTS
+
+Raw 32-bit-output shape gives **365 candidates across 70 blocks**, and the very
+first row is `dma_bytes_consumed_o` — which `counter_shaped_ports`' own docstring
+names as the canonical 32-bit output that is *not* a counter. 365 rows of mostly
+noise is the "red on arrival" failure wearing a different hat.
+
+So the reverse direction keys on the one property a counter cannot fake: it is
+**incremented in its own module**, by `name <= name + 1` / `+ 32'd1` or by the
+`_INC(...)` wrapper. That narrows it to **153 candidates across 35 blocks**, and
+the rows are unmistakably real: `guard_violations`, `evictions_o`,
+`leases_granted_o`, `bridge_errs_o`, `crc_fails_o`, `guard_denied_o`,
+`hdr_ident_fails_o`. `dma_bytes_consumed_o` is correctly gone.
+
+Probed in both polarities on a synthetic module carrying all three shapes: the
+incremented port and the macro-incremented port are reported, the payload is
+never reported, and declaring them silences it.
+
+### THE NUMBER, and what it is not
+
+**The ledger names 252 counters. There are 153 more presented on ports it never
+names.** So roughly **38% of this console's counter surface is undeclared** — and
+it was invisible in both of the ways that matter: the tool did not ask, and the
+helper that would have suggested them was returning nothing.
+
+**It is still a LOWER BOUND and still a list of questions, not defects.** A
+counter incremented through an alias or inside a generate loop is missed, and
+some rows will turn out to be payloads that happen to increment. Each row is
+*either the ledger owes it a name, or it is not a counter and the row is noise* —
+and that is written into the output, so the next reader is not handed a number
+that looks like a verdict.

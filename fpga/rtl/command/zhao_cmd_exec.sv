@@ -526,12 +526,24 @@ module zhao_cmd_exec
     // rather than fitted to the answer -- which is why it was wrong by one on
     // first writing and the check caught it.
     //
-    // (`spec/commands.zidl`'s DebugTraceArm comment still carries the
-    //  unqualified sentence. It is NOT corrected here because every edit to
-    //  that file changes `ZHAO_ZIDL_SHA256` and forces all five golden
-    //  captures to be regenerated through their producers -- 600 Duo frames,
-    //  about an hour -- for a comment. It is queued in PACKET-QUEUE.md for the
-    //  next commit that touches the zidl for a real reason.)
+    // (`spec/commands.zidl`'s DebugTraceArm comment CARRIED the unqualified
+    //  sentence and was CORRECTED on 2026-09-20 under owner ruling R108, in the
+    //  same commit that granted FORGE.PRIM's five additive `forge_kind` members
+    //  and fixed R77's `tmu_mode` comment. One fare, three debts: every edit to
+    //  that file changes `ZHAO_ZIDL_SHA256` and forces all five golden captures
+    //  to be regenerated through their real producers -- 600 Duo frames, about
+    //  an hour -- so the queued comment corrections rode along with the first
+    //  change made for a substantive reason. All five captures differ by exactly
+    //  68 bytes: the container CRC at [56..59] and the two 32-byte sha fields,
+    //  verified byte-wise at the merge, with `abi_version` unmoved.
+    //
+    //  This paragraph itself was stale FOR ONE COMMIT -- it described the zidl
+    //  as uncorrected while sitting in the closure of the very producer run that
+    //  corrected it. The ZIDL packet spotted that and could not fix it, because
+    //  its brief granted it `spec/commands.zidl` alone and this file was inside
+    //  its running producer's closure. Noted because a comment that describes a
+    //  debt AFTER the debt is paid is the same false-presence defect this repo
+    //  keeps finding in ledgers, one level down.)
     //
     // THIS IS THE RING'S ONLY WRITER, and that is ruling R18's principle (one
     // authority per level) rather than an omission. `zhao_host_regwin`'s tenant
@@ -1427,7 +1439,32 @@ module zhao_cmd_exec
                   // at its byte 15 and will report the next at ITS byte 15, at
                   // least sixteen cycles later. So: the DebugTraceArm record
                   // itself is NOT traced, and every record after it in the
-                  // packet IS. A host reading the ring can rely on that.
+                  // packet IS -- BUT ONLY UNDER THREE QUALIFIERS, and the
+                  // unqualified form of this sentence was an over-broad
+                  // guarantee (owner ruling R52, corrected in the zidl under
+                  // R108 on 2026-09-20 and corrected here in the same act):
+                  //
+                  //   1. ONLY IF THE ARM WAS ACCEPTED. A reserved bit refuses
+                  //      the record WHOLE and nothing is armed -- which is
+                  //      exactly what the committed `-BadTraceArm` smoke
+                  //      control exercises, and its own description says so:
+                  //      "sets an UNASSIGNED stage_mask bit, DIRECT polarity
+                  //      (passes when the record is refused whole and nothing
+                  //      is armed)". A control already in the tree was
+                  //      demonstrating the case the old sentence denied.
+                  //   2. ONLY IF THE MASK SETS BIT 0. Otherwise the stage that
+                  //      would trace these records is not selected.
+                  //   3. ONLY IF THE RING HAS ROOM. A full ring drops, and a
+                  //      dropped record is not a traced one.
+                  //
+                  // And the "itself is NOT traced" half has its own exception:
+                  // a SECOND DebugTraceArm in an already-armed packet IS
+                  // traced, because the arm that would have suppressed it has
+                  // already taken effect. See the STATE note immediately below
+                  // -- the two paragraphs disagreed with each other, in one
+                  // file, for as long as the unqualified sentence stood.
+                  //
+                  // A host reading the ring can rely on the QUALIFIED form.
                   //
                   // STATE, not an event: a second DebugTraceArm later in the
                   // same packet re-arms, and the last one wins.

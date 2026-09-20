@@ -137,7 +137,18 @@ def outputs_of(path):
     return names
 
 
-COUNTER_SHAPE = re.compile(r"^\s*output\s+(?:var\s+)?(?:[\w:]+\s+)*?\[31:0\]\s*(\w+)")
+# re.M IS LOAD-BEARING AND WAS MISSING until 2026-09-20 (owner ruling R110).
+# `counter_shaped_ports` applies this with `finditer` to a WHOLE FILE's text, and
+# without re.MULTILINE the `^` anchors to offset 0 only -- so it matched at most
+# the first line of a file and returned [] for every real module. The `--suggest`
+# candidate list has therefore been SILENTLY EMPTY for as long as it has existed,
+# and nobody noticed, because an empty suggestion list looks exactly like "no
+# suggestions to make". Found while insisting that R110's new reverse check FIRE
+# before it was trusted: the probe returned [] for all four polarities, including
+# the ones that had to be non-empty, which is the tell that the instrument rather
+# than the tree was empty.
+COUNTER_SHAPE = re.compile(
+    r"^\s*output\s+(?:var\s+)?(?:[\w:]+\s+)*?\[31:0\]\s*(\w+)", re.M)
 
 
 def counter_shaped_ports(path):
@@ -269,9 +280,84 @@ def resolve_block(bid, names, mapping, mods):
     return by_default, by_mapping, unresolved, None
 
 
+def undeclared_ports(bid, names, mapping, mods):
+    """THE OTHER DIRECTION: counter-shaped PORTS that the ledger never names.
+
+    OWNER RULING R110, 2026-09-20. Until today this tool asked ONE question --
+    "is every DECLARED counter presented on a port?" -- and was structurally
+    blind to its mirror image, "is every PRESENTED counter declared?". The
+    FORGECONNECT lane named ten census ports on one block and **this tool could
+    see exactly one of them**: `shadows_skipped`, the declared-but-absent
+    direction. Nine real counters emitted by live RTL were invisible, because
+    the ledger simply never mentioned them.
+
+    That is the same structural blindness as the metadata-bank detector in
+    CLAUDE.md and as R105's prose-grading resolver: a check that compares two
+    things and only ever looks ONE WAY down the comparison. And, as always, the
+    defect made the report SHORTER -- a ledger missing half its counters read as
+    a clean ledger.
+
+    SUGGESTION MATERIAL, DELIBERATELY, AND IT SAYS SO. `counter_shaped_ports`
+    already carries the honest caveat: spec/counters.md 3 makes a counter a
+    32-bit local register presented on request, so a 32-bit output is a
+    CANDIDATE and nothing more -- `dma_bytes_consumed_o` is 32 bits and is a
+    payload. So this reports; it does not gate, and it must not, for the reason
+    uncashed_cheques.py states about its own check 5: a gate that is RED ON
+    ARRIVAL is a gate people learn to skip, which is how the v1 FIELD datapath
+    got composed.
+    """
+    mod = module_for_block(bid)
+    if mod not in mods:
+        return []
+    covered = set()
+    for n in names:
+        covered.add(mapping.get(n, n + "_o"))
+    text = read(mods[mod])
+    shaped = set(counter_shaped_ports(mods[mod]))
+    return [p for p in sorted(shaped)
+            if p not in covered and increments_itself(p, text)]
+
+
+# A counter COUNTS. spec/counters.md 3 says so, and it is the only property that
+# separates a counter from a 32-bit payload without asking a human.
+INC_FORMS = (
+    # `name <= name + 1` / `+ 32'd1`, the dominant idiom in this tree
+    r"\b%s\s*<=\s*%s\s*\+\s*(?:32'd)?1\b",
+    # the wrapper macro, e.g. `ZHAO_EXEC_INC(trace_arms_applied_o)`
+    r"_INC\(\s*%s\s*\)",
+)
+
+
+def increments_itself(port, text):
+    """Does this port get INCREMENTED in its own module?
+
+    ADDED with R110's reverse check, and it is what makes that check usable
+    rather than merely present. The raw 32-bit-output heuristic reports 365
+    candidates across 70 blocks, and THE VERY FIRST ONE is
+    `dma_bytes_consumed_o` -- which `counter_shaped_ports`' own docstring names
+    as the canonical example of a 32-bit output that is NOT a counter.
+
+    A report that is 365 rows of mostly-noise is a report people learn to skip,
+    which is precisely the failure `uncashed_cheques.py` warns about when it
+    refuses to make its own check 5 a gate. So the reverse direction keys on the
+    one property a counter cannot fake: it counts.
+
+    Still a heuristic, and still reporting rather than gating -- a counter
+    incremented through an alias or a generate loop will be missed, so this
+    remains a LOWER BOUND, exactly like the parser's own UNPARSED list.
+    """
+    for form in INC_FORMS:
+        if re.search(form % (re.escape(port), re.escape(port))
+                     if form.count("%s") == 2 else form % re.escape(port),
+                     text):
+            return True
+    return False
+
+
 def main() -> int:
     mods = modules()
     by_default, by_mapping, unresolved, no_module = [], [], [], []
+    undeclared = []
 
     for bid, names, mapping in blocks():
         defaults, mapped, missing, absent = resolve_block(
@@ -280,6 +366,8 @@ def main() -> int:
         by_default.extend(defaults)
         by_mapping.extend(mapped)
         unresolved.extend(missing)
+        for p in undeclared_ports(bid, names, mapping, mods):
+            undeclared.append((bid, p))
         if absent is not None:
             no_module.append(absent)
 
@@ -334,9 +422,35 @@ def main() -> int:
     else:
         print("\nparser read every `output` line it met -- no silent drops.")
 
-    print("\nNOTE: this checks that a PORT EXISTS. It does not check that the "
-          "counter counts the right thing (spec/counters.md) or that anything "
-          "reads it (check_port_coverage.py). It REPORTS; it does not gate.")
+    if undeclared:
+        blocks_hit = len({b for b, _ in undeclared})
+        print("\nTHE OTHER DIRECTION (%d candidate port(s) across %d block(s)) "
+              "-- owner ruling R110. These are 32-bit outputs that NO ledger "
+              "row names. Until 2026-09-20 this tool could not see them at all: "
+              "it asked only whether every DECLARED counter had a port, never "
+              "whether every PRESENTED counter was declared, so a ledger "
+              "missing half its counters read as a clean ledger."
+              % (len(undeclared), blocks_hit))
+        print("  CANDIDATES, NOT COUNTERS. spec/counters.md 3 makes a counter a "
+              "32-bit local register presented on request, so a 32-bit output "
+              "is a candidate and nothing more -- `dma_bytes_consumed_o` is 32 "
+              "bits and is a payload. Each row below is a question for a human, "
+              "not a defect: either the ledger owes it a name, or it is not a "
+              "counter and the row is noise.")
+        cur = None
+        for bid, p in undeclared:
+            if bid != cur:
+                print("  %s" % bid)
+                cur = bid
+            print("      %s" % p)
+    else:
+        print("\nTHE OTHER DIRECTION: no counter-shaped port is missing from "
+              "the ledger (R110).")
+
+    print("\nNOTE: this checks that a PORT EXISTS, and now also that a PORT IS "
+          "NAMED (R110). It does not check that the counter counts the right "
+          "thing (spec/counters.md) or that anything reads it "
+          "(check_port_coverage.py). It REPORTS; it does not gate.")
     return 0
 
 

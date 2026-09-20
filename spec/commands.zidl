@@ -130,9 +130,59 @@ enum video_mode : u8 {
 // pad in v2, so ABI-v2-era records (zero there) remain valid and now read as
 // the one implemented kind. New kinds are additive members (values ascend);
 // a value outside the member set is ZH_ABI_BAD_VALUE (rule 1.1-8).
+// THE FIVE MEMBERS BELOW WERE ADDED BY OWNER RULING R108 (2026-09-20), which
+// applies this file's own additive law rather than creating one: "forge_kind
+// has exactly one member while FORGE.PRIM has six families, so the ABI cannot
+// name five of them ... No `abi_version` bump is implied." The families are
+// CLOSED at six by owner ruling 2026-08-31 6.5, restated by R11 -- ribbon,
+// radial fan/ring, tube, radial shell, billboard sheet, terrain cliff/skirt --
+// and the four deleted candidates (shard burst, chain, spline wall, low cone)
+// are NOT reserved for later; see design/contracts/FORGE.PRIM.md:7-14.
+//
+// !! THIS ENUM IS NOT `zhao_forge_prim`'s `j_family_i` ENCODING. DO NOT WIRE
+// !! ONE TO THE OTHER. They are two numberings of the same six families and
+// !! they DISAGREE, because member 0 here is frozen by the v2 pad-byte
+// !! precedent above and cannot be renumbered to match. The silicon's order is
+// !! `zhao_forge_prim.sv:87-92` (FAM_RIBBON=0 .. FAM_CLIFF=5), mirrored by
+// !! `zref::forge::Family` (reference/include/zref/zref_forge.hpp:35-42) and by
+// !! tests/forge/forge_prim_directed.cpp:47. The translation is exact and it is
+// !! a ROTATION, not an identity:
+// !!
+// !!     forge_kind          value   <->  FAM_* (zhao_forge_prim.sv)
+// !!     FORGE_HEIGHTFIELD_PATCH 0    <->  FAM_CLIFF      5
+// !!     FORGE_RIBBON            1    <->  FAM_RIBBON     0
+// !!     FORGE_RADIAL_FAN        2    <->  FAM_FAN        1
+// !!     FORGE_TUBE              3    <->  FAM_TUBE       2
+// !!     FORGE_RADIAL_SHELL      4    <->  FAM_SHELL      3
+// !!     FORGE_BILLBOARD_SHEET   5    <->  FAM_BILLBOARD  4
+// !!
+// !! i.e. forge_kind = (FAM_* + 1) mod 6. No RTL consumes `forge_kind` today,
+// !! so the two numberings have never had to meet; whoever first wires
+// !! DrawProcedural to a FORGE.PRIM job owns this conversion and owes it a
+// !! directed check. A straight-through assignment is silently wrong for all
+// !! six values.
+//
+// MEMBER 0 IS THE `terrain cliff / skirt` FAMILY under this ruling -- that is
+// what makes R108's arithmetic (six families, one member, five owed) come out,
+// and member 0's own comment already says "terrain skirt/ground". It is
+// recorded here because it is an INFERENCE from R108's count and not a
+// sentence the owner wrote; FINDINGS-zidl.md carries it as an owner question.
+// If it is instead a seventh, software-only island form, then the cliff/skirt
+// family is still unnamed and a sixth member appends at 6 under this same
+// additive law -- no renumber, and nothing below changes.
+//
+// Four of the six families have NO EVALUATOR (fan, tube, shell, billboard):
+// FORGE.PRIM.EVAL serves the ribbon family only, and cliff is FORGE.CLIFF's
+// two unruled rivals (R109). Naming a family here does not implement it.
 enum forge_kind : u8 {
   FORGE_HEIGHTFIELD_PATCH = 0;  // authored heightfield patch projected as
                                 // terrain skirt/ground — the Wound Lab island
+  FORGE_RIBBON = 1;             // ribbon (FAM_RIBBON) — the only family with a
+                                // position evaluator (FORGE.PRIM.EVAL)
+  FORGE_RADIAL_FAN = 2;         // radial fan / ring (FAM_FAN) — no evaluator
+  FORGE_TUBE = 3;               // tube (FAM_TUBE) — no evaluator
+  FORGE_RADIAL_SHELL = 4;       // radial shell (FAM_SHELL) — no evaluator
+  FORGE_BILLBOARD_SHEET = 5;    // billboard sheet (FAM_BILLBOARD) — no evaluator
 }
 
 // [v3, sky_and_beams v1.2] Fog mode (law: qformats.md 8; sky_and_beams 4a).
@@ -239,10 +289,31 @@ struct PadFrame {
 // It resolves to EXACTLY what FRAGROB's input packet needs, which is the whole
 // point -- the contract's words: "a material record resolves to exactly what
 // FRAGROB's input packet needs, so the two cannot drift".
+//
+// `tmu_mode` -- RATIFIED BY R77 (2026-09-20), AND THIS COMMENT USED TO CONTRADICT
+// THE SILICON. It read "bits 0-3 tmu_mode (nearest/bilinear/CLUT/direct)", which
+// is not a value list but reads exactly like one, and so puts CLUT at 2. The
+// composed island has shipped with the opposite numbering since it was written:
+// `zhao_texture_island_v3_top.sv:222-225` declares `CLS_CLUT = 2'd0`,
+// `CLS_NEAR = 2'd1`, `CLS_BIL = 2'd2`, `CLS_ERR = 2'd3`. R77 ratifies the
+// island's constants -- "it is DERIVED rather than chosen ... the constant that
+// was already there" -- so the ABI is what moved, not the hardware.
+//
+// The cost of leaving it was specific, which is why R77 called this the real
+// reason that pays for the capture regeneration: anyone implementing from the
+// ABI spec would have got CLUT wrong, and `witness_mismatch_o` exists to
+// difference two INDEPENDENT sources -- it would have been differencing two
+// copies of the same mistake and reading zero. A detector fed a shared error
+// is the failure mode CLAUDE.md is built around.
+//
+// Value 3 is reserved on the wire: the island spends it on CLS_ERR, its refusal
+// class, which is a response the fabric raises and never a mode a command asks
+// for.
 struct MaterialSample {
   u16 binding_slot;        // texture binding this sample reads
   u8  binding_generation;  // D-3 residency generation, low 8 bits
-  u8  modes;               // bits 0-3 tmu_mode (nearest/bilinear/CLUT/direct)
+  u8  modes;               // bits 0-3 tmu_mode: 0 CLUT, 1 NEAREST, 2 BILINEAR,
+                           //   3 reserved (R77 -- values, NOT a reading order)
                            // bits 4-5 wrap (0 repeat, 1 clamp, 2 mirror, 3 rsv)
                            // bits 6-7 mip_policy
 }
@@ -823,15 +894,37 @@ command SetPopulation 0x0303 implemented {
 // that asked for it. `armed` is READABLE at the aperture (tenant 1, word
 // 0x200) and writable only here.
 //
-// WHEN IT TAKES EFFECT, exactly. CMD.EXEC applies the mask at this record's
-// LAST BYTE, during the walk. CMD.DECODER offers a record to the ring at the
-// record's byte 15 (the end of its header), so:
+// WHEN IT TAKES EFFECT, AND THE SENTENCE NEEDS ITS QUALIFIERS. CMD.EXEC
+// applies the mask at this record's LAST BYTE, during the walk. CMD.DECODER
+// offers a record to the ring at the record's byte 15 (the end of its header).
 //
-//     the DebugTraceArm record itself is NOT traced;
-//     every record after it in the same packet IS.
+// The first version of this comment concluded from that, flatly, that "the
+// DebugTraceArm record itself is NOT traced; every record after it in the same
+// packet IS", and called it a guarantee. BOTH HALVES ARE OVER-BROAD -- found by
+// review 2026-09-20, corrected here by ruling R108's bundle, and the corrected
+// text is lifted from `zhao_cmd_exec.sv`'s R52 port comment (:501-527) rather
+// than re-derived, so the ABI and the block that implements it cannot drift.
+// An over-broad guarantee is worse than a hedged one, because somebody writes
+// a test against it:
 //
-// That is a guarantee, not an approximation -- the next record's header cannot
-// complete for at least sixteen more byte-cycles.
+//   * THE ARM IS NOT TRACED only when stage 0 was not ALREADY armed. A SECOND
+//     DebugTraceArm, in a packet whose ring is already watching the decoder,
+//     IS offered to the ring at its own byte 15 and IS stored -- correctly,
+//     because by then it is just another record.
+//   * EVERY LATER RECORD IS TRACED only if the arm was ACCEPTED (a reserved
+//     bit refuses it whole), if the mask actually sets bit 0, and while the
+//     ring has room -- a full ring DROPS and counts, it does not stall the
+//     walk.
+//
+// What IS unconditional is the TIMING, and that is the part worth having:
+// the mask is applied at the arming record's LAST byte and the decoder offers
+// a record at its byte 15, so no record can be offered between the two. The
+// next header cannot complete for at least sixteen more byte-cycles. Nothing
+// here is a race; the qualifiers are all about whether a store happens at all,
+// never about when.
+//
+// So the store count is `N - P`, not `N - 2`: N records in the packet, P the
+// 1-based position of the first ACCEPTED bit-0 arm.
 //
 // It is applied WITHOUT waiting for the packet's verdict, unlike every other
 // command CMD.EXEC executes. The trace surface is already speculative by the
