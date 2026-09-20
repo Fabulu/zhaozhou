@@ -203,7 +203,38 @@ module zhao_field_v3_dispatch #(
     // accept order and only one group is outstanding, so this can never fire.
     // It is an output rather than an assertion because the same choice caught
     // a real pipeline bug in zhao_field_v3_exec on its first run.
-    output var logic                          tag_mismatch_o
+    output var logic                          tag_mismatch_o,
+
+    // ---- THE SERVICES' NUMERIC STATUS, PER POINT --------------------------
+    //
+    // One bit per point of the responding group, in the same lane order as
+    // `rsp_r0_i`. Every service on the path has always computed these; until
+    // 2026-09-20 `zhao_field_v3_svcpath` terminated all of them in `*_unused`
+    // wires, so no long op's saturation reached the engine's ledger and
+    // `fld_sat_o` at the console boundary described the scalar ALU alone.
+    //
+    // THEY ARE CAPTURED HERE, AND NOT IN THE MUX THAT SELECTS THEM, because
+    // this is the only block that knows how many lanes of the group are real.
+    // `s_used_r` is that number.
+    input  var logic [3:0]                    rsp_sat_add_i,
+    input  var logic [3:0]                    rsp_sat_mul_i,
+    input  var logic [3:0]                    rsp_sat_rescale_i,
+
+    // The fabric's long-op ledger, latched over the run, in the same shape as
+    // the executor's so the engine can simply OR the two together.
+    output var logic                          svc_sat_add_o,
+    output var logic                          svc_sat_mul_o,
+    output var logic                          svc_sat_rescale_o,
+
+    // HOW OFTEN A PADDED LANE TRIED TO RAISE A FLAG AND WAS STOPPED.
+    //
+    // This is the positive control for the mask above, and it is reachable by
+    // ordinary stimulus: a group issued short is padded with the PAD_* constants
+    // and those are real operands that go through real arithmetic. If this
+    // counter is zero the mask has never been exercised, which is a statement
+    // about the workload and not about the guard -- so it is an output rather
+    // than a comment.
+    output var logic [31:0]                   pad_status_masked_o
 );
 
   localparam int CTXW = $clog2(CONTEXTS);
@@ -603,6 +634,38 @@ module zhao_field_v3_dispatch #(
       end
   end
 
+  // ---- the responding group's numeric status, MASKED TO ITS LIVE LANES ----
+  //
+  // A group issued short is padded up to four points with the PAD_* constants,
+  // and padding arithmetic is real arithmetic: those operands go through the
+  // same service and can raise the same flags. `zhao_field_host.sv` says what
+  // that costs -- "Padding with a value that can raise an alarm makes the
+  // status describe the padding" -- and the directive says it as a rule (§8.4:
+  // "Invalid lanes must not ... contribute flags to a live lane. A group-level
+  // aggregate may OR only LIVE lane statuses").
+  //
+  // `s_used_r` is the live count, and it lives HERE and nowhere else, which is
+  // why the masking is here and not in the response mux upstream that chooses
+  // between the services.
+  logic [3:0] rsp_live_c;
+  logic       rsp_sat_add_live_c, rsp_sat_mul_live_c, rsp_sat_resc_live_c;
+  logic       rsp_pad_tried_c;
+  always_comb begin
+    rsp_live_c = 4'b0;
+    for (int l = 0; l < 4; l++)
+      if (3'(l) < s_used_r[rsp_slot_c]) rsp_live_c[l] = 1'b1;
+
+    rsp_sat_add_live_c  = |(rsp_sat_add_i     & rsp_live_c);
+    rsp_sat_mul_live_c  = |(rsp_sat_mul_i     & rsp_live_c);
+    rsp_sat_resc_live_c = |(rsp_sat_rescale_i & rsp_live_c);
+
+    // A flag raised by a lane that holds no point. Counted rather than
+    // discarded silently, so "the mask never mattered" and "the mask was never
+    // tested" stop looking alike.
+    rsp_pad_tried_c = |((rsp_sat_add_i | rsp_sat_mul_i | rsp_sat_rescale_i) &
+                        ~rsp_live_c);
+  end
+
   // ---- the drain ----------------------------------------------------------
   //
   // ONE WRITE CARRIES LANES POINTS. A register in the file is LANES values
@@ -662,6 +725,10 @@ module zhao_field_v3_dispatch #(
       partial_o  <= 32'd0;
       writes_o   <= 32'd0;
       tag_mismatch_o <= 1'b0;
+      svc_sat_add_o       <= 1'b0;
+      svc_sat_mul_o       <= 1'b0;
+      svc_sat_rescale_o   <= 1'b0;
+      pad_status_masked_o <= 32'd0;
       iss_slot_r <= '0;
       for (int i = 0; i < GATHERS; i++) begin
         g_v_r[i]    <= 1'b0;
@@ -757,6 +824,19 @@ module zhao_field_v3_dispatch #(
             r2_r[rsp_slot_c][l] <= rsp_r2_i[l];
           end
           s_done_r[rsp_slot_c] <= 1'b1;
+
+          // THE STATUS LANDS WITH THE DATA, on the same accepted handshake and
+          // from the same tag-selected slot. Capturing it anywhere else would
+          // be a detector clocked by a different enable than the value it
+          // describes, which is the defect CLAUDE.md records at length: two
+          // quantities that move independently cannot be compared, and a
+          // status captured a clock away from its data belongs to whichever
+          // group happens to be offering.
+          if (rsp_sat_add_live_c)  svc_sat_add_o     <= 1'b1;
+          if (rsp_sat_mul_live_c)  svc_sat_mul_o     <= 1'b1;
+          if (rsp_sat_resc_live_c) svc_sat_rescale_o <= 1'b1;
+          if (rsp_pad_tried_c)
+            pad_status_masked_o <= pad_status_masked_o + 32'd1;
         end
       end
 

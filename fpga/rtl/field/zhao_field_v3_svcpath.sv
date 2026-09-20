@@ -209,7 +209,34 @@ module zhao_field_v3_svcpath #(
 
     // Latches if a prepared-ring instruction sets the immediate's reserved
     // bits -- a program written against a later encoding than this silicon.
-    output var logic                          imm_bad_o
+    output var logic                          imm_bad_o,
+
+    // ---- THE LONG OPS' NUMERIC LEDGER --------------------------------------
+    //
+    // EVERY SERVICE ON THIS PATH HAS ALWAYS COMPUTED PER-LANE SATURATION, AND
+    // UNTIL 2026-09-20 THIS MODULE THREW ALL OF IT AWAY. Seven services drove
+    // `cv_sat_add_unused`, `rg_sat_mul_unused`, `nm_sat_resc_unused`,
+    // `rt_sat_add_unused`, `ln_sat_unused`, `nz_sat_add_unused` and their
+    // siblings, and this module had no status port of any kind for them to
+    // reach.
+    //
+    // The consequence was not a missing feature. `zhao_field_host` latches
+    // `sat_o = {sat_rescale, sat_mul, sat_add}` over the run and the console
+    // exports it as `fld_sat_o`, so a caller reading it got a saturation ledger
+    // describing THE SCALAR ALU ALONE. Curve, spline, normalize, rot, ring,
+    // trig and len could saturate in every point of every group and the ledger
+    // still read clean -- a broken instrument reading LOW, which CLAUDE.md
+    // names as the direction nobody audits.
+    //
+    // Latched over the run, in the same shape as the executor's three bits, so
+    // `zhao_field_v3_engine` needs only to OR the two together.
+    output var logic                          svc_sat_add_o,
+    output var logic                          svc_sat_mul_o,
+    output var logic                          svc_sat_rescale_o,
+
+    // Times a padded lane's flag was stopped at the mask. The positive control
+    // for that mask, and reachable by ordinary stimulus -- see the dispatcher.
+    output var logic [31:0]                   pad_status_masked_o
 );
 
   localparam int CTXW = $clog2(CONTEXTS);
@@ -297,6 +324,10 @@ module zhao_field_v3_svcpath #(
   logic               rsp_valid, rsp_ready;
   logic [TAGW-1:0]    rsp_tag;
   logic signed [31:0] rsp_r0 [4], rsp_r1 [4], rsp_r2 [4];
+  // The responding group's per-point numeric status, chosen by the SAME
+  // priority ladder that chooses rsp_r0/r1/r2. Declared beside the data it
+  // travels with; built at the response mux far below.
+  logic        [ 3:0] rsp_sat_add, rsp_sat_mul, rsp_sat_rescale;
 
   // ---- dispatcher's drain, claimant 1 of the writeback arbiter -----------
   logic               drain_valid, drain_ready;
@@ -324,7 +355,15 @@ module zhao_field_v3_svcpath #(
       .wb_ctx_o(drain_ctx), .wb_reg_o(drain_reg), .wb_data_o(drain_data),
       .rel_valid_o(rel_valid_o), .rel_ctx_o(rel_ctx_o),
       .groups_o(groups_o), .partial_o(partial_o), .writes_o(drain_writes_o),
-      .tag_mismatch_o(tag_mismatch_o)
+      .tag_mismatch_o(tag_mismatch_o),
+      // The services' per-point numeric status, selected by the same winner
+      // that selects the data. The dispatcher masks it to the group's live
+      // lanes, because `s_used_r` lives there.
+      .rsp_sat_add_i(rsp_sat_add), .rsp_sat_mul_i(rsp_sat_mul),
+      .rsp_sat_rescale_i(rsp_sat_rescale),
+      .svc_sat_add_o(svc_sat_add_o), .svc_sat_mul_o(svc_sat_mul_o),
+      .svc_sat_rescale_o(svc_sat_rescale_o),
+      .pad_status_masked_o(pad_status_masked_o)
   );
 
   // `svc_s2` is carried by the dispatcher for ops that need a third operand
@@ -360,9 +399,31 @@ module zhao_field_v3_svcpath #(
   logic               rt_mul_issue, rt_mul_ready, rt_mul_valid;
   logic signed [32:0] rt_a [4], rt_b [4];
 
+  logic [3:0] nm_sat_resc;
+  logic [3:0] rt_sat_add, rt_sat_mul;
+
+  // RCP0 IS THE ONE NUMERIC CAUSE WITH NOWHERE TO GO, and it is left visibly
+  // unconsumed rather than quietly folded into a saturation bit.
+  //
+  // `zhao_field_v3_normalize` reports the zero-length vector per point, which
+  // is a DEFINED ANSWER and not an error -- qformats §6.2 pins 1/0 to
+  // 0x7FFFFFFF and `zhao_field_rcp.sv:55` states it. The directive keeps it in
+  // its own family (§8.1 `numeric_rcp0`, separate from `numeric_sat`) and lists
+  // "canonical RCP0 lost or treated as execution failure" as a MUTANT class,
+  // so there are exactly two wrong things to do with it here: drop it, or merge
+  // it into saturation.
+  //
+  // It cannot be carried yet because the destination does not exist:
+  // `zhao_field_host.sv:402` is `output logic [2:0] sat_o` -- three bits,
+  // documented as "{sat_rescale, sat_mul, sat_add}" -- and widening it changes
+  // the host's port list, `zhao_console_core`, and both generated tops. That is
+  // H1's host contract and C1's composition act, not this packet's.
+  //
+  // So it stays a named waiver with its owner written down, which is the
+  // honest state: an unread instruction and a satisfied one must not look
+  // alike. F1's FINDINGS carries it as the one status cause still disconnected.
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [3:0] nm_sat_resc_unused, nm_rcp0_unused;
-  logic [3:0] rt_sat_add_unused, rt_sat_mul_unused;
+  logic [3:0] nm_rcp0_unconsumed;
   /* verilator lint_on UNUSEDSIGNAL */
 
   logic               ln_rsp_valid, ln_rsp_ready;
@@ -370,9 +431,7 @@ module zhao_field_v3_svcpath #(
   logic signed [31:0] ln_r0 [4];
   logic               ln_mul_issue, ln_mul_ready, ln_mul_valid;
   logic signed [32:0] ln_a [4], ln_b [4];
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [3:0] ln_sat_unused;
-  /* verilator lint_on UNUSEDSIGNAL */
+  logic [3:0] ln_sat_resc;
 
   logic               tg_rsp_valid, tg_rsp_ready;
   logic        [ 7:0] tg_rsp_tag;
@@ -385,26 +444,22 @@ module zhao_field_v3_svcpath #(
   logic signed [32:0] rg_a [4], rg_b [4];
   logic        [ 5:0] sb_raddr;
   logic signed [31:0] sb_rdata;
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [3:0] rg_sat_add_unused, rg_sat_mul_unused;
-  /* verilator lint_on UNUSEDSIGNAL */
+  // The prepared ring's per-lane reply flags. The directive says "Prepared RING
+  // already has per-lane reply flags; carry them instead of OR-ing them early"
+  // (§8.3) -- and they were not being OR-ed early, they were being dropped.
+  logic [3:0] rg_sat_add, rg_sat_mul;
 
   logic               cv_rsp_valid, cv_rsp_ready;
   logic        [ 7:0] cv_rsp_tag;
   logic signed [31:0] cv_r0 [4];
   logic               cv_mul_issue, cv_mul_ready, cv_mul_valid;
   logic signed [32:0] cv_a [4], cv_b [4];
+  logic [ 3:0] cv_sat_add, cv_sat_mul;
   /* verilator lint_off UNUSEDSIGNAL */
-  logic [ 3:0] cv_sat_add_unused, cv_sat_mul_unused;
   logic [23:0] cv_seg_unused;
   /* verilator lint_on UNUSEDSIGNAL */
 
   logic [3:0] nz_sat_add, nz_sat_rescale;
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [3:0] nz_sat_add_unused, nz_sat_rescale_unused;
-  /* verilator lint_on UNUSEDSIGNAL */
-  assign nz_sat_add_unused = nz_sat_add;
-  assign nz_sat_rescale_unused = nz_sat_rescale;
 
   // WHICH SERVICE OWNS THIS OP. Decoded once, read by the request routing,
   // the response mux and the wrong-op detector, so the three cannot disagree
@@ -483,7 +538,7 @@ module zhao_field_v3_svcpath #(
       .rsp_valid_o(cv_rsp_valid), .rsp_ready_i(cv_rsp_ready),
       .rsp_r_0_o(cv_r0[0]), .rsp_r_1_o(cv_r0[1]),
       .rsp_r_2_o(cv_r0[2]), .rsp_r_3_o(cv_r0[3]),
-      .rsp_sat_add_o(cv_sat_add_unused), .rsp_sat_mul_o(cv_sat_mul_unused),
+      .rsp_sat_add_o(cv_sat_add), .rsp_sat_mul_o(cv_sat_mul),
       .rsp_seg_o(cv_seg_unused), .rsp_tag_o(cv_rsp_tag)
   );
 
@@ -499,7 +554,7 @@ module zhao_field_v3_svcpath #(
       .o0_0_o(nm_r0[0]), .o0_1_o(nm_r0[1]), .o0_2_o(nm_r0[2]), .o0_3_o(nm_r0[3]),
       .o1_0_o(nm_r1[0]), .o1_1_o(nm_r1[1]), .o1_2_o(nm_r1[2]), .o1_3_o(nm_r1[3]),
       .o2_0_o(nm_r2[0]), .o2_1_o(nm_r2[1]), .o2_2_o(nm_r2[2]), .o2_3_o(nm_r2[3]),
-      .sat_rescale_o(nm_sat_resc_unused), .rcp0_o(nm_rcp0_unused), .tag_o(nm_rsp_tag),
+      .sat_rescale_o(nm_sat_resc), .rcp0_o(nm_rcp0_unconsumed), .tag_o(nm_rsp_tag),
       .mul_issue_o(nm_mul_issue), .mul_ready_i(nm_mul_ready),
       .mul_a_0_o(nm_a[0]), .mul_a_1_o(nm_a[1]), .mul_a_2_o(nm_a[2]), .mul_a_3_o(nm_a[3]),
       .mul_b_0_o(nm_b[0]), .mul_b_1_o(nm_b[1]), .mul_b_2_o(nm_b[2]), .mul_b_3_o(nm_b[3]),
@@ -538,7 +593,7 @@ module zhao_field_v3_svcpath #(
       .o0_0_o(rt_r0[0]), .o0_1_o(rt_r0[1]), .o0_2_o(rt_r0[2]), .o0_3_o(rt_r0[3]),
       .o1_0_o(rt_r1[0]), .o1_1_o(rt_r1[1]), .o1_2_o(rt_r1[2]), .o1_3_o(rt_r1[3]),
       .o2_0_o(rt_r2[0]), .o2_1_o(rt_r2[1]), .o2_2_o(rt_r2[2]), .o2_3_o(rt_r2[3]),
-      .sat_add_o(rt_sat_add_unused), .sat_mul_o(rt_sat_mul_unused), .tag_o(rt_rsp_tag),
+      .sat_add_o(rt_sat_add), .sat_mul_o(rt_sat_mul), .tag_o(rt_rsp_tag),
       .mul_issue_o(rt_mul_issue), .mul_ready_i(rt_mul_ready),
       .mul_a_0_o(rt_a[0]), .mul_a_1_o(rt_a[1]), .mul_a_2_o(rt_a[2]), .mul_a_3_o(rt_a[3]),
       .mul_b_0_o(rt_b[0]), .mul_b_1_o(rt_b[1]), .mul_b_2_o(rt_b[2]), .mul_b_3_o(rt_b[3]),
@@ -579,7 +634,7 @@ module zhao_field_v3_svcpath #(
       .rsp_valid_o(rg_rsp_valid), .rsp_ready_i(rg_rsp_ready),
       .rsp_r_0_o(rg_r0[0]), .rsp_r_1_o(rg_r0[1]),
       .rsp_r_2_o(rg_r0[2]), .rsp_r_3_o(rg_r0[3]),
-      .rsp_sat_add_o(rg_sat_add_unused), .rsp_sat_mul_o(rg_sat_mul_unused),
+      .rsp_sat_add_o(rg_sat_add), .rsp_sat_mul_o(rg_sat_mul),
       .rsp_tag_o(rg_rsp_tag),
       .imm_bad_o(imm_bad_o),
       .req_taken_o(ring_req_taken_o),
@@ -633,7 +688,7 @@ module zhao_field_v3_svcpath #(
       .tag_i(svc_tag),
       .r_valid_o(ln_rsp_valid), .r_ready_i(ln_rsp_ready),
       .o0_0_o(ln_r0[0]), .o0_1_o(ln_r0[1]), .o0_2_o(ln_r0[2]), .o0_3_o(ln_r0[3]),
-      .sat_rescale_o(ln_sat_unused), .tag_o(ln_rsp_tag),
+      .sat_rescale_o(ln_sat_resc), .tag_o(ln_rsp_tag),
       .mul_issue_o(ln_mul_issue), .mul_ready_i(ln_mul_ready),
       .mul_a_0_o(ln_a[0]), .mul_a_1_o(ln_a[1]), .mul_a_2_o(ln_a[2]), .mul_a_3_o(ln_a[3]),
       .mul_b_0_o(ln_b[0]), .mul_b_1_o(ln_b[1]), .mul_b_2_o(ln_b[2]), .mul_b_3_o(ln_b[3]),
@@ -695,6 +750,52 @@ module zhao_field_v3_svcpath #(
       rsp_r2[l] = nm_rsp_valid ? nm_r2[l]
                 : rt_rsp_valid ? rt_r2[l] : 32'sd0;
     end
+  end
+
+  // ---- THE SAME SELECTION, FOR THE NUMERIC STATUS -------------------------
+  //
+  // The status of a response must be chosen by the SAME priority ladder that
+  // chooses its data, or the ledger describes a different group from the one
+  // being written. That is the wired-to-two-operands defect CLAUDE.md records:
+  // two quantities selected by different conditions cannot be compared, and
+  // here they would not even be about the same points.
+  //
+  // So this mux is written directly under the data mux, in the same order, and
+  // deliberately NOT as a separate always_ff that samples when it feels like it.
+  //
+  // WHICH CAUSES EACH SERVICE CAN RAISE -- read off their port lists, not
+  // guessed. A service that cannot raise a cause drives ZERO for it rather than
+  // being left out of the ladder, because "no opinion" and "no saturation" must
+  // not be the same wire:
+  //
+  //     curve / dcurve / spline   add, mul
+  //     normalize2 / normalize3   rescale          (and rcp0, see above)
+  //     rot2 / rot3               add, mul
+  //     prepared ring             add, mul
+  //     sin / cos                 NONE -- a table lookup saturates nothing
+  //     len2 / len3 / dist2       rescale
+  //     noise2 / ridge            add, rescale
+  always_comb begin
+    rsp_sat_add     = cv_rsp_valid ? cv_sat_add
+                    : nm_rsp_valid ? 4'b0
+                    : rt_rsp_valid ? rt_sat_add
+                    : rg_rsp_valid ? rg_sat_add
+                    : tg_rsp_valid ? 4'b0
+                    : ln_rsp_valid ? 4'b0 : nz_sat_add;
+
+    rsp_sat_mul     = cv_rsp_valid ? cv_sat_mul
+                    : nm_rsp_valid ? 4'b0
+                    : rt_rsp_valid ? rt_sat_mul
+                    : rg_rsp_valid ? rg_sat_mul
+                    : tg_rsp_valid ? 4'b0
+                    : ln_rsp_valid ? 4'b0 : 4'b0;
+
+    rsp_sat_rescale = cv_rsp_valid ? 4'b0
+                    : nm_rsp_valid ? nm_sat_resc
+                    : rt_rsp_valid ? 4'b0
+                    : rg_rsp_valid ? 4'b0
+                    : tg_rsp_valid ? 4'b0
+                    : ln_rsp_valid ? ln_sat_resc : nz_sat_rescale;
   end
 
   // THE SERVICES ARE ASKED ONLY FOR OPS THEY IMPLEMENT, and this says so out
