@@ -6865,6 +6865,36 @@ add_test(NAME packet_h_tieoff_audit
 set_tests_properties(packet_h_tieoff_audit PROPERTIES
   LABELS "fast;lint;packet-h" TIMEOUT 120)
 
+# THE SAME AUDIT, POINTED AT THE CONSOLE CORE -- and this one is the
+# enforcement owner ruling R159 asked for.
+#
+# R159: `completion_register.py` counts DECLARED tie-offs, because it parses a
+# hand-maintained comment block. A tie-off nobody writes down is invisible, so
+# **composing a block with undeclared tie-offs makes the gap count go DOWN** --
+# the flattering direction, by construction, and the one move the completion
+# campaign forbids. R159's own conclusion was that the fix is not a smarter
+# register (a tool inferring intent would be guessing) but a RULE plus a
+# reviewer check. This is the reviewer check, and it is a gate rather than
+# prose because `CLAUDE.md` has already learned that "advisory prose loses to
+# the pull of reporting a status".
+#
+# The core passes at 0 SILENT as of 2026-09-20. A composition that adds a
+# literal to a port map without a reason turns this red, which is the whole
+# point: the author states why, or connects it.
+#
+# READ OWNER RULING R166 BEFORE BELIEVING A RED HERE. Pointed at this file for
+# the first time the audit reported 19 silent connections and ALL NINETEEN were
+# its own blindness -- it saw 18 of 88 instantiations, knew the marker `TIE:`
+# but not this file's `REAL:`, and did not understand a reason written above a
+# RUN of connections. It is calibrated now, and the habit it bought is worth
+# more than the gate: read three rows by hand before believing the total.
+add_test(NAME console_core_tieoff_audit
+  COMMAND ${Python3_EXECUTABLE}
+          ${CMAKE_SOURCE_DIR}/tools/design/packet_h_tieoff_audit.py
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/prod/zhao_console_core.sv)
+set_tests_properties(console_core_tieoff_audit PROPERTIES
+  LABELS "fast;lint" TIMEOUT 120)
+
 add_test(NAME lint_shell_v2_lease_path
   COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
           --top-module zhao_shell_v2_lease_path
