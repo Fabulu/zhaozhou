@@ -15246,12 +15246,24 @@ set_tests_properties(lint_zhao_field_flow_adapter PROPERTIES
 # written to the shared engine's real protocol -- one request in flight, the
 # answer HELD until taken -- because a mock that dropped an untaken answer
 # would have hidden the restart defect this driver found.
+#
+# THE TOP IS A WRAPPER HOLDING BOTH NAMED BINDINGS, and that is structural
+# rather than tidy. `STAMP_BINDING` is a PARAMETER, so a verilated top can only
+# ever be ONE binding -- and owner directive 15.2 is explicit that "the legacy
+# bridge is not evidence that the full canonical Stamp binding works". A single
+# elaboration reporting "the stamp adapter passes" would be a green that is
+# structurally unable to see half of what it claims. `tb_field_stamp_bindings`
+# elaborates LEGACY_STAMP_BRUSH and CANONICAL_STAMP side by side with
+# independent stimulus, so the driver can assert that exercising one leaves the
+# other's counters at rest -- and can hand both the SAME response and show them
+# delivering different records.
 add_executable(test_field_stamp_adapter_directed field/field_stamp_adapter_directed.cpp)
 target_link_libraries(test_field_stamp_adapter_directed PRIVATE zhao_harness)
 verilate(test_field_stamp_adapter_directed
-  PREFIX Vzhao_field_stamp_adapter
-  TOP_MODULE zhao_field_stamp_adapter
-  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_stamp_adapter.sv)
+  PREFIX Vtb_field_stamp_bindings
+  TOP_MODULE tb_field_stamp_bindings
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/field/tb_field_stamp_bindings.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_stamp_adapter.sv)
 add_test(NAME field_stamp_adapter_directed COMMAND test_field_stamp_adapter_directed)
 set_tests_properties(field_stamp_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 600)
 
@@ -15262,6 +15274,73 @@ add_test(NAME lint_zhao_field_stamp_adapter
 set_tests_properties(lint_zhao_field_stamp_adapter PROPERTIES
   LABELS "lint;fast"
   ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# --------------------------------------------------------------------------
+# FIELD.SEQ.WARP's STREAM ADAPTER -- GEOM.WARP prerequisite P2.
+#
+# The engine is a MOCK for the same reason as the two sibling adapters:
+# checking a fifteen-lane binding needs an exact chosen response, and getting
+# one from the real host would mean choosing a Warp program -- an ABI decision
+# that does not belong in a test. `zhao_geom_warp.sv` does not exist at this
+# commit, so the CONSUMER is modelled here too and the driver says so.
+#
+# The module elaborates at its OWN defaults (IN_LANES 15 / OUT_LANES 7), which
+# is the pair the console does NOT yet compose. That is deliberate: the
+# adapter's elaboration guard refuses the composed 13, so this test measures
+# the configuration the block is for, and the composition gap stays visible in
+# the completion register rather than being papered over by a narrow build.
+add_executable(test_field_warp_adapter_directed field/field_warp_adapter_directed.cpp)
+target_link_libraries(test_field_warp_adapter_directed PRIVATE zhao_harness)
+verilate(test_field_warp_adapter_directed
+  PREFIX Vzhao_field_warp_adapter
+  TOP_MODULE zhao_field_warp_adapter
+  SOURCES ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv)
+add_test(NAME field_warp_adapter_directed COMMAND test_field_warp_adapter_directed)
+set_tests_properties(field_warp_adapter_directed PROPERTIES LABELS "fast;nightly" TIMEOUT 300)
+
+add_test(NAME lint_zhao_field_warp_adapter
+         COMMAND "${ZHAO_VERILATOR_LINT}" --lint-only -Wall
+                 --top-module zhao_field_warp_adapter
+                 ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_warp_adapter.sv)
+set_tests_properties(lint_zhao_field_warp_adapter PROPERTIES
+  LABELS "lint;fast"
+  ENVIRONMENT "VERILATOR_ROOT=${VERILATOR_ROOT}")
+
+# --------------------------------------------------------------------------
+# THE POSITIVE CONTROL for the stamp adapter's FH26 elaboration guard.
+#
+# THE POLARITY IS INVERTED: the program is SUPPOSED TO DIE. It elaborates a
+# WRAPPER (not a copy -- nothing here goes stale) that instantiates the
+# production adapter with `STAMP_BINDING` OMITTED, which FH26 requires to be
+# refused. PASS_REGULAR_EXPRESSION makes the FATAL TEXT the pass condition, so
+# a guard that silently stopped firing turns this red instead of green.
+#
+# It cannot be a lint: `verilator --lint-only` DOES NOT RUN `initial` BLOCKS,
+# so linting the mutant returns success and says nothing about the guard --
+# measured on this exact wrapper, 2026-09-20.
+#
+# VL_USER_FATAL: the control supplies its OWN `vl_fatal`. The runtime's
+# default one fired the guard correctly and then HUNG AT ZERO CPU inside
+# abort() on this toolchain (measured 2026-09-20, no WerFault dialog visible
+# to a non-interactive session). A control that wedges the suite is not a
+# passing control, and its timeout would have read as an infrastructure flake
+# rather than as evidence.
+add_executable(test_field_stamp_binding_unbound_control
+  mutants/field_stamp_binding_unbound_control.cpp)
+target_compile_definitions(test_field_stamp_binding_unbound_control PRIVATE
+  VL_USER_FATAL VL_USER_STOP)
+target_link_libraries(test_field_stamp_binding_unbound_control PRIVATE zhao_harness)
+verilate(test_field_stamp_binding_unbound_control
+  PREFIX Vtb_field_stamp_binding_unbound_mutant
+  TOP_MODULE tb_field_stamp_binding_unbound_mutant
+  SOURCES ${CMAKE_SOURCE_DIR}/tests/mutants/tb_field_stamp_binding_unbound_mutant.sv
+          ${CMAKE_SOURCE_DIR}/fpga/rtl/field/zhao_field_stamp_adapter.sv)
+add_test(NAME field_stamp_binding_unbound_control
+         COMMAND test_field_stamp_binding_unbound_control)
+set_tests_properties(field_stamp_binding_unbound_control PROPERTIES
+  LABELS "fast;nightly"
+  TIMEOUT 120
+  PASS_REGULAR_EXPRESSION "STAMP_BINDING is UNBOUND")
 
 # TERRAIN.HEIGHTTAP -- the INVERSE map. The console header says of it: "NOTHING
 # IN THE TREE PERFORMS THE INVERSE. That is the missing half of a tap service,

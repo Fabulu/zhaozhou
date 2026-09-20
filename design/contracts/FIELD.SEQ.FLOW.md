@@ -26,11 +26,121 @@ is carried by the DECODED PROGRAM (`zfield::Decoded::in_lanes` /
 `out_lanes`, filled by the decoder from the image), not by the block. So a
 profile is a program set plus shell wiring, not a hardware variant.
 
-**What is still open, and it is not hardware.** The `F` profile of
-`ops.yml` still needs its lane binding written down: which registers the
-inputs arrive in and which the outputs are read from, per program. That is a
-software and shell question, and it belongs with the blocks that consume the
-output.
+**The `F` lane binding, WRITTEN DOWN.** This section used to say the binding
+"still needs writing down". It is settled by two ratified documents and this
+contract only records them.
+
+### The canonical F record
+
+`spec/form/field-ir.md` §7.1 line 524, verbatim:
+
+| Profile | id | Input record (R0..) | Output record |
+|---|---|---|---|
+| flow | 2 | px,py,pz, vx,vy,vz:fx, age:u32, seed:u32, dt:fx, p0..p3:fx (13) | px′,py′,pz′, vx′,vy′,vz′:fx, attr0:fx (7) |
+
+**Thirteen canonical inputs, seven canonical outputs.** That is the SEMANTIC
+ARITY and it is a different quantity from the PHYSICAL CLIENT PORT (FH17).
+Flow is the widest OUTPUT profile, which is why the shared bus is composed at
+7 out; Warp is the widest INPUT profile, which is why R103's prerequisite P1
+moves the input half from 13 to 15.
+
+**Output lanes are read by CANONICAL ORDINAL, never by physical
+capture-window position.** `zhao_field_flow_adapter` reads ordinals 3, 4 and 5
+— `vx′, vy′, vz′` — whatever register the program wrote. R111 named this exact
+adapter as the case that made the hazard concrete: the shipped Earth programs
+leave three of seven window lanes unwritten, and a program writing only lane 6
+"would have fed flow three zero velocities, a plausible-looking maximum
+deceleration". The window→ordinal compaction is the HOST's act through
+`OUTPUT_MAP`.
+
+### R40's seam onto PART.UPDATE
+
+Owner ruling R40 (provisional; particle MOTION is art, so the owner judges by
+eye):
+
+```
+acceleration = sat_s11((v' - v) >> 8)
+seed         = the variation byte
+dt           = 1 tick
+```
+
+Every value R40 names is a NAMED, EDITABLE PARAMETER of the adapter —
+`ACC_SHIFT`, `ACC_ROUND`, `DT_FX`, `POS_SHIFT`, `VEL_SHIFT` — so the owner's
+revision is a parameter edit at the composition (CLAUDE.md rule 6).
+
+**THREE OF THE SEVEN OUTPUTS ARE READ, AND THAT IS THE RULING RATHER THAN AN
+OVERSIGHT.** R40 maps this seam onto PART.UPDATE's ACCELERATION port and
+PART.UPDATE integrates position itself from the velocity it owns. Taking the
+program's `px′/py′/pz′` would be **a second integrator with a different
+rounding law running beside the ratified one**; `attr0` has no port on that
+block at all. Directive §15.1 requires this exclusion be listed honestly —
+"Return all seven canonical Field outputs correctly even though the
+application uses only three of them" — and it is listed here.
+
+### §15.1's CAPTURE RULE, and the defect it named
+
+Directive §15.1: "Latch parameters, origin, dt, frame and the actual particle
+record at request capture. **Derive no later result from unrelated live
+`rec_i` or `par_i` pins.**"
+
+**That named a defect that was live in this tree until 2026-09-20.** The
+adapter drove `req_in_o` combinationally from the live pins, and R40's
+SUBTRAHEND `in_vx/in_vy/in_vz` was read from those same live pins at RESPONSE
+time — tens of clocks after the run began. A record moving mid-flight
+therefore produced
+
+```
+acceleration = (v' OF RECORD A) - (v OF RECORD B)
+```
+
+a well-formed, plausible, entirely wrong wind. The identity guard beside it
+could not prevent it: `rec_changed_o` is sampled one state AFTER the wrong
+difference is latched, and a record that moved during the wait and moved back
+before the answer was offered never fired it at all. **A detector downstream
+of the corruption is not a guard.**
+
+There is now ONE capture latch, taken at the cycle the run is decided. The
+offer is driven from it, so a standing request cannot have its operands moved
+underneath it; and R40's subtrahend is read back out of it, so **the two sides
+of the subtraction are the same point by construction rather than by timing
+argument.** Parameters, origin and dt ride in the same latch because §15.1
+names all of them. Cost: `IN_LANES*32` = 416 flops. PHYSICAL FIT PENDING.
+
+### The identity guard, and why it still earns its place
+
+`rec_changed_o` remains, and it remains REACHABLE: its two operands are
+clocked by different things — `held_rec` is captured once at request time,
+`rec_i` is the live wire — which is the first question CLAUDE.md's
+metadata-swap chapter says to ask of any checker. It is fired by stimulus in
+`tests/field/field_flow_adapter_directed.cpp`. What changed is that it is no
+longer the only thing standing between a moved record and a wrong
+acceleration; it is now a REPORT that the producer misbehaved, not the
+mechanism that keeps the arithmetic correct.
+
+### Absent is not zero
+
+`fld_valid_o` LOW is the honest answer when no FLOW program is resident, when
+the engine refuses the run, or when the run raises an alarm. PART.UPDATE adds
+the sample only `if (fld_valid_i)`, so a low valid REMOVES the term rather
+than adding a zero one. Each reason is counted separately — `bypassed_o`,
+`noprog_o`, `faults_o` — because a merged "no sample" total cannot tell an
+unarmed console from a broken program. §15.1: "Numeric sat/rcp0 does not turn
+a valid Field result into the no-field bypass."
+
+### Still open, and it is NOT built here
+
+§15.1 permits buffering — "A record queue can allow several independent
+particles into the host while retaining the ordered original records for
+PART.UPDATE" — and requires that if it is added, **both handshakes are named**:
+`rec_take_i` means "the update consumed this record's answer" and must never
+be reused to mean "the upstream record was captured".
+
+**No queue is built.** `zhao_field_host`'s front holds ONE point in flight, so
+a deeper queue here would be a mode for a stage that does not exist, and it
+could not be tested against the real host. The capture latch above is its
+prerequisite and is the half that was genuinely wrong. `stall_cycles_o`
+measures what the scalar front costs. Building the queue belongs with the
+host's credit work (FH20).
 
 The sections below are the generated stubs. They are kept rather than deleted
 because a profile still has an I/O contract at the shell boundary -- but they

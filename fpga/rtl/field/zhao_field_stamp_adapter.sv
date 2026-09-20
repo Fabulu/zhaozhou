@@ -136,10 +136,19 @@
 // input ... Do not claim the surface renderer uses the emissive output if it
 // does not. Retaining and correctly returning it is shared-host conformance;
 // commissioning its eventual surface effect is a separate application policy."
-// **So it is stated here as an honest exclusion rather than discarded silently
-// inside the host: `zhao_surface_stamp` HAS NO EMISSIVE INPUT TODAY.** This
-// port is the declared lane; wiring it to a consumer is a later application
-// decision and is not this file's to take.
+//
+// **AND THE CONSUMER ALREADY RECORDED WHY, WHICH IS STRONGER THAN "NOT WIRED
+// YET".** `zhao_surface_stamp.sv:115-117`, verbatim: *"The `emissive` output
+// lane of field-ir 7.1 is DROPPED: layer F has two bytes and charter 12 spends
+// both, and adding a third would change the frozen 8,192 B layer size."* So
+// the exclusion is a RATIFIED LAYOUT DECISION with a cost attached, not an
+// oversight and not a port somebody forgot. Its `fld_*` group is exactly
+// `fld_valid_i`, `fld_ready_o`, `fld_tag_op_i`, `fld_strength_i` -- searched,
+// not assumed.
+//
+// This port is therefore the declared lane, computed correctly and offered;
+// connecting it would require charter 12 and the frozen layer size to be
+// reopened, which is an application decision and is not this file's to take.
 //
 // ---------------------------------------------------------------------------
 // THE ORDER IS THE CONSUMER'S, AND THAT IS THE WHOLE ALIGNMENT ARGUMENT
