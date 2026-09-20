@@ -303,7 +303,11 @@ module zhao_console_board
   parameter int unsigned GEOM_DEPTH    = 1089,
   parameter int unsigned GEOM_NVIEWS   = 2,
   parameter int unsigned GEOM_GEN_W    = 8,
-  parameter int unsigned GEOM_PAY_A_W  = 16,
+  // R68 sub-build 4: 17, not 16. The low GEOM_ARENA_W+GEOM_INDEX_W = 15 bits
+  // are the {arena, index} rider; the top TWO are `zhao_part_project`'s owner
+  // FIELD. At 16 the field was one bit and client A could name exactly two
+  // owners, which is the constraint that held GEOM.LOD's instance centre out.
+  parameter int unsigned GEOM_PAY_A_W  = 17,
   parameter int unsigned GEOM_PAYLOAD_W= 106,
   parameter int unsigned GEOM_INDEX_W  = $clog2(GEOM_DEPTH) + 1,
   parameter int unsigned GEOM_ARENA_W  = $clog2(GEOM_ARENAS) + 1,
@@ -2348,6 +2352,11 @@ module zhao_console_board
   output logic [31:0] part_prj_size_sat_o,
   output logic [31:0] part_prj_slot_pressure_o,
   output logic [31:0] part_prj_tag_collision_o,
+  // R68 sub-build 4: a client-A result came back owned by neither GEOM nor
+  // PART. Unreachable until a third owner is minted, and exported anyway --
+  // the whole point of widening the field is that a third owner is coming, and
+  // a drop that nothing counts would surface as a missing vertex in the arena.
+  output logic [31:0] part_prj_owner_unroutable_o,
   output logic [31:0] part_prj_ladder_unexpected_o,
   output logic [31:0] part_lad_decisions_o,
   output logic [31:0] part_lad_changes_o,
@@ -3958,6 +3967,7 @@ module zhao_console_board
       .part_prj_size_sat_o                (part_prj_size_sat_o),
       .part_prj_slot_pressure_o           (part_prj_slot_pressure_o),
       .part_prj_tag_collision_o           (part_prj_tag_collision_o),
+      .part_prj_owner_unroutable_o        (part_prj_owner_unroutable_o),
       .part_prj_ladder_unexpected_o       (part_prj_ladder_unexpected_o),
       .part_lad_decisions_o               (part_lad_decisions_o),
       .part_lad_changes_o                 (part_lad_changes_o),

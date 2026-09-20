@@ -1523,6 +1523,7 @@ module tb_zhao_console_core_smoke
   logic [31:0] part_prj_size_sat_o;
   logic [31:0] part_prj_slot_pressure_o;
   logic [31:0] part_prj_tag_collision_o;
+  logic [31:0] part_prj_owner_unroutable_o;   // R68 sub-build 4
   logic [31:0] part_prj_ladder_unexpected_o;
   logic [31:0] part_lad_decisions_o;
   logic [31:0] part_lad_changes_o;
