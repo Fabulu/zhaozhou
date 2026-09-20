@@ -45,7 +45,10 @@
 // current production, "theirs" is this file with the rename undone.
 //
 // CUT FROM: fpga/rtl/geometry/zhao_geom_warp.sv, 2026-09-20, packet W1, AFTER
-// the abs33 sign-extension repair and the admission-gate repair.
+// the abs33 repair, the admission-gate repair, and the removal of a dead
+// shifts_q register whose comment claimed an observation port it never had.
+// RE-CUT THREE TIMES IN ONE SESSION. The copy-drift law is not a warning here,
+// it is a log.
 // zhao_geom_warp.sv -- GEOM.WARP, THE WARP APPLICATION STAGE.
 //
 // AUTHORITY. Owner directive reports/Zhaozhou_GEOM_WARP_Architecture_2026-09-20.txt
@@ -716,20 +719,23 @@ module zhao_geom_warp_shift_oneliner_mutant #(
     end
   end
 
-  // How many reduction shifts the last published normal needed. Exposed so the
-  // directed test can compare it against the oracle's `normal_shifts` on EVERY
-  // vertex -- a third-stage requirement would show up here rather than hiding
-  // inside a value that happens to still look plausible.
-  logic [1:0] shifts_q;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) shifts_q <= 2'd0;
-    else if ((st_q == S_REQ) && warp_en_q && f_ans_valid_i && f_warp_valid_i)
-      shifts_q <= degen_c ? 2'd0 : shifts_c;
-  end
-
-  // verilator lint_off UNUSEDSIGNAL
-  wire _unused_shifts = |shifts_q;
-  // verilator lint_on UNUSEDSIGNAL
+  // A `shifts_q` register stood here, with a comment saying it was "exposed so
+  // the directed test can compare it against the oracle's `normal_shifts`".
+  // IT WAS NOT A PORT. It was a register nothing read, kept alive only by a
+  // lint waiver, under a comment asserting an observation path that did not
+  // exist -- the same shape as a status port whose services all terminate in
+  // `*_unused`, just smaller and written by me.
+  //
+  // It is deleted rather than promoted to a port, because the property it
+  // claimed to watch IS already watched, two ways that do not depend on it:
+  // `geom_warp_rtl_directed` FT096 asserts DIRECTLY that every published normal
+  // satisfies max(abs) < 2^30, and the differential compares the reduced value
+  // itself against `zref::geom_warp::apply_outputs` on every vertex. A wrong
+  // shift count cannot pass either. The shift COUNT is corroboration; the
+  // VALUE is the thing, and the value is checked.
+  //
+  // `normal_reduced_o` remains and counts vertices that needed any shift at
+  // all, which is a real port with a real reader.
 
   // ---- elaboration checks ----------------------------------------------------
   // Quartus 17.0 needs these INSIDE `initial begin ... end`; a bare module-scope
