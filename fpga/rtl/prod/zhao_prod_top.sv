@@ -295,7 +295,7 @@ module zhao_prod_top (
     else u02_lfsr_q <= {u02_lfsr_q[62:0], (^(u02_lfsr_q & 64'hD800000000000000)) ^ seed_i};
   logic [1-1:0] u02_post_ready_o;
   logic [1-1:0] u02_ld_valid_o;
-  logic [2-1:0] u02_ld_kind_o;
+  logic [3-1:0] u02_ld_kind_o;
   logic [3-1:0] u02_ld_slot_o;
   logic [7-1:0] u02_ld_addr_o;
   logic [96-1:0] u02_ld_data_o;
@@ -341,7 +341,7 @@ module zhao_prod_top (
       .post_valid_i(u02_src[7 +: 1]),
       .post_ready_o(u02_post_ready_o),
       .post_op_i(u02_src[14 +: 2]),
-      .post_kind_i(u02_src[21 +: 2]),
+      .post_kind_i(u02_src[21 +: 3]),
       .post_slot_i(u02_src[28 +: 3]),
       .post_addr_i(u02_src[35 +: 8]),
       .post_data_i(u02_src[42 +: 96]),
@@ -422,7 +422,7 @@ module zhao_prod_top (
   logic [1-1:0] u03_req_valid_o;
   logic [3-1:0] u03_req_slot_o;
   logic [1-1:0] u03_req_noprog_o;
-  logic [416-1:0] u03_req_in_o;
+  logic [480-1:0] u03_req_in_o;
   logic [1-1:0] u03_resp_ready_o;
   logic [1-1:0] u03_ans_valid_o;
   logic [1-1:0] u03_fld_valid_o;
@@ -436,7 +436,10 @@ module zhao_prod_top (
   logic [32-1:0] u03_saturations_o;
   logic [32-1:0] u03_stall_cycles_o;
   logic [32-1:0] u03_rec_changed_o;
-  zhao_field_flow_adapter u03_i (
+  zhao_field_flow_adapter #(
+      .IN_LANES(32'd15),
+      .OUT_LANES(32'd7)
+  ) u03_i (
       .clk(clk),
       .rst_n(rst_n),
       .rec_valid_i(u03_src[0 +: 1]),
@@ -475,7 +478,7 @@ module zhao_prod_top (
     if (!rst_n) u03_fold_q <= 1'b0;
     else u03_fold_q <= u03_fold_q ^ (((^u03_req_valid_o)) & u03_src[0]) ^ (((^u03_req_slot_o)) & u03_src[1]) ^ (((^u03_req_noprog_o)) & u03_src[2]) ^ (((^u03_req_in_o)) & u03_src[3]) ^ (((^u03_resp_ready_o)) & u03_src[4]) ^ (((^u03_ans_valid_o)) & u03_src[5]) ^ (((^u03_fld_valid_o)) & u03_src[6]) ^ (((^u03_fld_ax_o)) & u03_src[7]) ^ (((^u03_fld_ay_o)) & u03_src[8]) ^ (((^u03_fld_az_o)) & u03_src[9]) ^ (((^u03_samples_o)) & u03_src[10]) ^ (((^u03_bypassed_o)) & u03_src[11]) ^ (((^u03_noprog_o)) & u03_src[12]) ^ (((^u03_faults_o)) & u03_src[13]) ^ (((^u03_saturations_o)) & u03_src[14]) ^ (((^u03_stall_cycles_o)) & u03_src[15]) ^ (((^u03_rec_changed_o)) & u03_src[16]);
 
-  // ---- zhao_field_host ----
+  // ---- zhao_field_host_v2 ----
   logic [63:0] u04_lfsr_q;
   logic [1023:0] u04_src;
   assign u04_src = {16{u04_lfsr_q}};
@@ -499,7 +502,10 @@ module zhao_prod_top (
   logic [4-1:0] u04_pc_occupancy_o;
   logic [2-1:0] u04_req_ready_o;
   logic [2-1:0] u04_resp_valid_o;
-  logic [128-1:0] u04_resp_out_o;
+  logic [224-1:0] u04_resp_out_o;
+  logic [7-1:0] u04_resp_present_o;
+  logic [7-1:0] u04_resp_window_o;
+  logic [4-1:0] u04_resp_count_o;
   logic [8-1:0] u04_resp_status_o;
   logic [32-1:0] u04_runs_o;
   logic [32-1:0] u04_run_faults_o;
@@ -512,6 +518,15 @@ module zhao_prod_top (
   logic [32-1:0] u04_ld_oob_o;
   logic [32-1:0] u04_no_result_o;
   logic [32-1:0] u04_out_incomplete_o;
+  logic [32-1:0] u04_prep_bad_o;
+  logic [32-1:0] u04_bad_image_o;
+  logic [32-1:0] u04_zero_mask_o;
+  logic [32-1:0] u04_late_write_o;
+  logic [32-1:0] u04_fence_writes_o;
+  logic [32-1:0] u04_uniform_runs_o;
+  logic [32-1:0] u04_credit_stall_o;
+  logic [32-1:0] u04_fast_path_o;
+  logic [32-1:0] u04_slow_path_o;
   logic [32-1:0] u04_exec_desync_o;
   logic [32-1:0] u04_bank_desync_o;
   logic [32-1:0] u04_svc_bank_desync_o;
@@ -520,29 +535,50 @@ module zhao_prod_top (
   logic [32-1:0] u04_unsupported_o;
   logic [32-1:0] u04_skid_overflow_o;
   logic [32-1:0] u04_uniform_bad_o;
-  logic [3-1:0] u04_sat_o;
-  zhao_field_host u04_i (
+  logic [4-1:0] u04_num_status_o;
+  zhao_field_host_v2 #(
+      .CLIENTS(32'd2),
+      .CREDITS(32'd2),
+      .FAB_DIST_BANKS(32'd2),
+      .FAB_GATHERS(32'd4),
+      .FAB_GROUP_PTS(32'd1),
+      .FAB_LANES(32'd1),
+      .FAB_LONGQ(32'd4),
+      .FAB_OUTSTANDING(32'd4),
+      .FAB_RING_DESC(32'd2),
+      .FAB_RING_UNITS(32'd2),
+      .INSTR_N(32'd32),
+      .IN_LANES(32'd15),
+      .OUT_LANES(32'd7),
+      .OUT_ORDINALS(32'd7),
+      .PREP_SCALARS(32'd64),
+      .PROGS(32'd8),
+      .REGS(32'd32),
+      .TABLES(32'd2),
+      .TBL_N(32'd64)
+  ) u04_i (
       .clk(clk),
       .rst_n(rst_n),
-      .ld_valid_i(u04_src[0 +: 1]),
+      .cfg_slow_clear_i(u04_src[0 +: 1]),
+      .ld_valid_i(u04_src[7 +: 1]),
       .ld_ready_o(u04_ld_ready_o),
-      .ld_kind_i(u04_src[7 +: 2]),
-      .ld_slot_i(u04_src[14 +: 3]),
-      .ld_addr_i(u04_src[21 +: 7]),
-      .ld_data_i(u04_src[28 +: 96]),
-      .pc_lu_valid_i(u04_src[35 +: 1]),
+      .ld_kind_i(u04_src[14 +: 3]),
+      .ld_slot_i(u04_src[21 +: 3]),
+      .ld_addr_i(u04_src[28 +: 7]),
+      .ld_data_i(u04_src[35 +: 96]),
+      .pc_lu_valid_i(u04_src[42 +: 1]),
       .pc_lu_ready_o(u04_pc_lu_ready_o),
-      .pc_lu_hash_i(u04_src[42 +: 32]),
+      .pc_lu_hash_i(u04_src[49 +: 32]),
       .pc_lu_resp_valid_o(u04_pc_lu_resp_valid_o),
-      .pc_lu_resp_ready_i(u04_src[49 +: 1]),
+      .pc_lu_resp_ready_i(u04_src[56 +: 1]),
       .pc_lu_hit_o(u04_pc_lu_hit_o),
       .pc_lu_slot_o(u04_pc_lu_slot_o),
-      .pc_cm_valid_i(u04_src[56 +: 1]),
+      .pc_cm_valid_i(u04_src[63 +: 1]),
       .pc_cm_ready_o(u04_pc_cm_ready_o),
-      .pc_cm_hash_i(u04_src[63 +: 32]),
-      .pc_cm_ok_i(u04_src[70 +: 1]),
+      .pc_cm_hash_i(u04_src[70 +: 32]),
+      .pc_cm_ok_i(u04_src[77 +: 1]),
       .pc_cm_resp_valid_o(u04_pc_cm_resp_valid_o),
-      .pc_cm_resp_ready_i(u04_src[77 +: 1]),
+      .pc_cm_resp_ready_i(u04_src[84 +: 1]),
       .pc_cm_inserted_o(u04_pc_cm_inserted_o),
       .pc_cm_evicted_o(u04_pc_cm_evicted_o),
       .pc_cm_slot_o(u04_pc_cm_slot_o),
@@ -551,15 +587,19 @@ module zhao_prod_top (
       .pc_rejected_o(u04_pc_rejected_o),
       .pc_evictions_o(u04_pc_evictions_o),
       .pc_occupancy_o(u04_pc_occupancy_o),
-      .req_valid_i(u04_src[84 +: 2]),
+      .req_valid_i(u04_src[91 +: 2]),
       .req_ready_o(u04_req_ready_o),
-      .req_slot_i(u04_src[91 +: 6]),
-      .req_noprog_i(u04_src[98 +: 2]),
-      .req_in_i(u04_src[105 +: 768]),
+      .req_slot_i(u04_src[98 +: 6]),
+      .req_noprog_i(u04_src[105 +: 2]),
+      .req_in_i(u04_src[112 +: 960]),
       .resp_valid_o(u04_resp_valid_o),
-      .resp_ready_i(u04_src[112 +: 2]),
+      .resp_ready_i(u04_src[119 +: 2]),
       .resp_out_o(u04_resp_out_o),
+      .resp_present_o(u04_resp_present_o),
+      .resp_window_o(u04_resp_window_o),
+      .resp_count_o(u04_resp_count_o),
       .resp_status_o(u04_resp_status_o),
+      .rcp0_i(u04_src[126 +: 1]),
       .runs_o(u04_runs_o),
       .run_faults_o(u04_run_faults_o),
       .noprog_o(u04_noprog_o),
@@ -571,6 +611,15 @@ module zhao_prod_top (
       .ld_oob_o(u04_ld_oob_o),
       .no_result_o(u04_no_result_o),
       .out_incomplete_o(u04_out_incomplete_o),
+      .prep_bad_o(u04_prep_bad_o),
+      .bad_image_o(u04_bad_image_o),
+      .zero_mask_o(u04_zero_mask_o),
+      .late_write_o(u04_late_write_o),
+      .fence_writes_o(u04_fence_writes_o),
+      .uniform_runs_o(u04_uniform_runs_o),
+      .credit_stall_o(u04_credit_stall_o),
+      .fast_path_o(u04_fast_path_o),
+      .slow_path_o(u04_slow_path_o),
       .exec_desync_o(u04_exec_desync_o),
       .bank_desync_o(u04_bank_desync_o),
       .svc_bank_desync_o(u04_svc_bank_desync_o),
@@ -579,12 +628,12 @@ module zhao_prod_top (
       .unsupported_o(u04_unsupported_o),
       .skid_overflow_o(u04_skid_overflow_o),
       .uniform_bad_o(u04_uniform_bad_o),
-      .sat_o(u04_sat_o)
+      .num_status_o(u04_num_status_o)
   );
   logic u04_fold_q;
   always_ff @(posedge clk or negedge rst_n)
     if (!rst_n) u04_fold_q <= 1'b0;
-    else u04_fold_q <= u04_fold_q ^ (((^u04_ld_ready_o)) & u04_src[0]) ^ (((^u04_pc_lu_ready_o)) & u04_src[1]) ^ (((^u04_pc_lu_resp_valid_o)) & u04_src[2]) ^ (((^u04_pc_lu_hit_o)) & u04_src[3]) ^ (((^u04_pc_lu_slot_o)) & u04_src[4]) ^ (((^u04_pc_cm_ready_o)) & u04_src[5]) ^ (((^u04_pc_cm_resp_valid_o)) & u04_src[6]) ^ (((^u04_pc_cm_inserted_o)) & u04_src[7]) ^ (((^u04_pc_cm_evicted_o)) & u04_src[8]) ^ (((^u04_pc_cm_slot_o)) & u04_src[9]) ^ (((^u04_pc_hits_o)) & u04_src[10]) ^ (((^u04_pc_misses_o)) & u04_src[11]) ^ (((^u04_pc_rejected_o)) & u04_src[12]) ^ (((^u04_pc_evictions_o)) & u04_src[13]) ^ (((^u04_pc_occupancy_o)) & u04_src[14]) ^ (((^u04_req_ready_o)) & u04_src[15]) ^ (((^u04_resp_valid_o)) & u04_src[16]) ^ (((^u04_resp_out_o)) & u04_src[17]) ^ (((^u04_resp_status_o)) & u04_src[18]) ^ (((^u04_runs_o)) & u04_src[19]) ^ (((^u04_run_faults_o)) & u04_src[20]) ^ (((^u04_noprog_o)) & u04_src[21]) ^ (((^u04_instr_retired_o)) & u04_src[22]) ^ (((^u04_loads_o)) & u04_src[23]) ^ (((^u04_load_defers_o)) & u04_src[24]) ^ (((^u04_grants_o)) & u04_src[25]) ^ (((^u04_contended_grants_o)) & u04_src[26]) ^ (((^u04_ld_oob_o)) & u04_src[27]) ^ (((^u04_no_result_o)) & u04_src[28]) ^ (((^u04_out_incomplete_o)) & u04_src[29]) ^ (((^u04_exec_desync_o)) & u04_src[30]) ^ (((^u04_bank_desync_o)) & u04_src[31]) ^ (((^u04_svc_bank_desync_o)) & u04_src[32]) ^ (((^u04_tag_mismatch_o)) & u04_src[33]) ^ (((^u04_wrong_op_o)) & u04_src[34]) ^ (((^u04_unsupported_o)) & u04_src[35]) ^ (((^u04_skid_overflow_o)) & u04_src[36]) ^ (((^u04_uniform_bad_o)) & u04_src[37]) ^ (((^u04_sat_o)) & u04_src[38]);
+    else u04_fold_q <= u04_fold_q ^ (((^u04_ld_ready_o)) & u04_src[0]) ^ (((^u04_pc_lu_ready_o)) & u04_src[1]) ^ (((^u04_pc_lu_resp_valid_o)) & u04_src[2]) ^ (((^u04_pc_lu_hit_o)) & u04_src[3]) ^ (((^u04_pc_lu_slot_o)) & u04_src[4]) ^ (((^u04_pc_cm_ready_o)) & u04_src[5]) ^ (((^u04_pc_cm_resp_valid_o)) & u04_src[6]) ^ (((^u04_pc_cm_inserted_o)) & u04_src[7]) ^ (((^u04_pc_cm_evicted_o)) & u04_src[8]) ^ (((^u04_pc_cm_slot_o)) & u04_src[9]) ^ (((^u04_pc_hits_o)) & u04_src[10]) ^ (((^u04_pc_misses_o)) & u04_src[11]) ^ (((^u04_pc_rejected_o)) & u04_src[12]) ^ (((^u04_pc_evictions_o)) & u04_src[13]) ^ (((^u04_pc_occupancy_o)) & u04_src[14]) ^ (((^u04_req_ready_o)) & u04_src[15]) ^ (((^u04_resp_valid_o)) & u04_src[16]) ^ (((^u04_resp_out_o)) & u04_src[17]) ^ (((^u04_resp_present_o)) & u04_src[18]) ^ (((^u04_resp_window_o)) & u04_src[19]) ^ (((^u04_resp_count_o)) & u04_src[20]) ^ (((^u04_resp_status_o)) & u04_src[21]) ^ (((^u04_runs_o)) & u04_src[22]) ^ (((^u04_run_faults_o)) & u04_src[23]) ^ (((^u04_noprog_o)) & u04_src[24]) ^ (((^u04_instr_retired_o)) & u04_src[25]) ^ (((^u04_loads_o)) & u04_src[26]) ^ (((^u04_load_defers_o)) & u04_src[27]) ^ (((^u04_grants_o)) & u04_src[28]) ^ (((^u04_contended_grants_o)) & u04_src[29]) ^ (((^u04_ld_oob_o)) & u04_src[30]) ^ (((^u04_no_result_o)) & u04_src[31]) ^ (((^u04_out_incomplete_o)) & u04_src[32]) ^ (((^u04_prep_bad_o)) & u04_src[33]) ^ (((^u04_bad_image_o)) & u04_src[34]) ^ (((^u04_zero_mask_o)) & u04_src[35]) ^ (((^u04_late_write_o)) & u04_src[36]) ^ (((^u04_fence_writes_o)) & u04_src[37]) ^ (((^u04_uniform_runs_o)) & u04_src[38]) ^ (((^u04_credit_stall_o)) & u04_src[39]) ^ (((^u04_fast_path_o)) & u04_src[40]) ^ (((^u04_slow_path_o)) & u04_src[41]) ^ (((^u04_exec_desync_o)) & u04_src[42]) ^ (((^u04_bank_desync_o)) & u04_src[43]) ^ (((^u04_svc_bank_desync_o)) & u04_src[44]) ^ (((^u04_tag_mismatch_o)) & u04_src[45]) ^ (((^u04_wrong_op_o)) & u04_src[46]) ^ (((^u04_unsupported_o)) & u04_src[47]) ^ (((^u04_skid_overflow_o)) & u04_src[48]) ^ (((^u04_uniform_bad_o)) & u04_src[49]) ^ (((^u04_num_status_o)) & u04_src[50]);
 
   // ---- zhao_field_loader ----
   logic [63:0] u05_lfsr_q;
@@ -698,7 +747,7 @@ module zhao_prod_top (
   logic [1-1:0] u06_req_valid_o;
   logic [3-1:0] u06_req_slot_o;
   logic [1-1:0] u06_req_noprog_o;
-  logic [416-1:0] u06_req_in_o;
+  logic [480-1:0] u06_req_in_o;
   logic [1-1:0] u06_resp_ready_o;
   logic [32-1:0] u06_stamps_o;
   logic [32-1:0] u06_texels_o;
@@ -707,7 +756,7 @@ module zhao_prod_top (
   logic [32-1:0] u06_canon_clamps_o;
   logic [1-1:0] u06_busy_o;
   zhao_field_stamp_adapter #(
-      .IN_LANES(32'd13),
+      .IN_LANES(32'd15),
       .OUT_LANES(32'd7),
       .STAMP_BINDING(32'd1)
   ) u06_i (
@@ -772,7 +821,10 @@ module zhao_prod_top (
   logic [32-1:0] u07_faults_o;
   logic [32-1:0] u07_stall_cycles_o;
   logic [32-1:0] u07_vtx_changed_o;
-  zhao_field_warp_adapter u07_i (
+  zhao_field_warp_adapter #(
+      .IN_LANES(32'd15),
+      .OUT_LANES(32'd7)
+  ) u07_i (
       .clk(clk),
       .rst_n(rst_n),
       .vtx_valid_i(u07_src[0 +: 1]),

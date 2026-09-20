@@ -1242,10 +1242,15 @@ module tb_zhao_console_core_smoke
   // returns out. `zhao_field_doorbell` is the R14 pattern with this seam's
   // fields.
   logic        [31:0] fld_cfg_plan_base_i;
+  // FH08's differential control, new with zhao_field_host_v2.
+  logic               fld_cfg_slow_clear_i;
   logic               fld_db_post_valid_i;
   logic               fld_db_post_ready_o;
   logic        [ 1:0] fld_db_post_op_i;
-  logic        [ 1:0] fld_db_post_kind_i;
+  // THREE BITS since packet C1. zhao_field_host_v2 decodes eight load kinds
+  // and the doorbell now carries all three bits of them; the FH2 sub-decode
+  // still reads the low two. See zhao_console_core.sv's port note.
+  logic        [ 2:0] fld_db_post_kind_i;
   logic        [ 2:0] fld_db_post_slot_i;
   // EIGHT BITS since 2026-09-20 (packet D1). The mailbox's address field is
   // the FH2 control verb's and is deliberately wider than the loader's
@@ -1335,6 +1340,16 @@ module tb_zhao_console_core_smoke
   logic        [31:0] fld_ld_oob_o;
   logic        [31:0] fld_no_result_o;
   logic        [31:0] fld_out_incomplete_o;
+  // ---- zhao_field_host_v2's own evidence, new with the composition --------
+  logic        [31:0] fld_prep_bad_o;
+  logic        [31:0] fld_bad_image_o;
+  logic        [31:0] fld_zero_mask_o;
+  logic        [31:0] fld_late_write_o;
+  logic        [31:0] fld_fence_writes_o;
+  logic        [31:0] fld_uniform_runs_o;
+  logic        [31:0] fld_credit_stall_o;
+  logic        [31:0] fld_fast_path_o;
+  logic        [31:0] fld_slow_path_o;
   logic        [31:0] fld_exec_desync_o;
   logic        [31:0] fld_bank_desync_o;
   logic        [31:0] fld_svc_bank_desync_o;
@@ -1343,7 +1358,10 @@ module tb_zhao_console_core_smoke
   logic        [31:0] fld_unsupported_o;
   logic        [31:0] fld_skid_overflow_o;
   logic        [31:0] fld_uniform_bad_o;
-  logic        [ 2:0] fld_sat_o;
+  // FOUR CAUSES since packet C1: {rcp0, sat_rescale, sat_mul, sat_add}.
+  // Owner ruling R145 carried rcp0 out of the service path and
+  // zhao_field_host_v2 reports it as its own family, not as a saturation.
+  logic        [ 3:0] fld_sat_o;
   logic        [31:0] fld_pc_hits_o;
   logic        [31:0] fld_pc_misses_o;
   logic        [31:0] fld_pc_rejected_o;
@@ -1767,10 +1785,20 @@ module tb_zhao_console_core_smoke
   // nothing about its value. A recognisable constant is easier to see in a
   // waveform than a zero that could be a floating net.
   assign fld_cfg_plan_base_i    = 32'hF1E1_D000;
+  // LOW: ask for the fast path. It is a REQUEST and not a permission -- the
+  // host gates the no-clear path on the image's INIT_PROOF (`hdr_ipok`) and
+  // NOT on this bit being low, so a bench cannot reach the fast path by
+  // driving this. Low is therefore the honest default: it says "this bench
+  // does not force the legacy walk", which is true, rather than asserting
+  // anything about which path a point takes. This bench admits no field
+  // program at all, so neither path is exercised and `fld_fast_path_o` and
+  // `fld_slow_path_o` are both expected to stay at zero -- see the negative
+  // assertions below, which say so rather than leaving it to be assumed.
+  assign fld_cfg_slow_clear_i   = 1'b0;
   assign fld_stamp_slot_i       = 3'd0;
   assign fld_stamp_slot_valid_i = 1'b0;
   assign fld_db_ret_ready_i     = 1'b1;
-  assign fld_db_post_kind_i     = 2'd0;
+  assign fld_db_post_kind_i     = 3'd0;
   assign fld_db_post_addr_i     = 8'd0;
   // THE LOADER'S STAGING WINDOW. A real base and a real extent rather than
   // zero: a zero-length window would make every install refuse for the same

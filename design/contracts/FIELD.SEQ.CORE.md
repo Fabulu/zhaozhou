@@ -366,10 +366,28 @@ interlock, not the proof.
 `rcp0` keeps its own family, per directive §8.1's `numeric_rcp0` separate from
 `numeric_sat`: a reciprocal of zero is a **defined answer**, not a saturation and
 not a fault, and folding it into either is one of the two wrong things to do with
-it. **Its producer chain above this block is incomplete** — `rcp0` has no port on
-`zhao_field_v3_svcpath`, `_dispatch`, `_core` or `_engine`, and stops inside
-svcpath as `nm_rcp0_unconsumed` — so it arrives here as a real **input port**
-whose unconnected end is visible, rather than as a bit this block invents.
+it. **Its producer chain was incomplete when this contract was written and is
+complete as of packet C1, 2026-09-20 (owner ruling R145).** `rcp0` now has a port
+on `zhao_field_v3_svcpath` (`svc_rcp0_o`), `_dispatch` (`rsp_rcp0_i` /
+`svc_rcp0_o`) and `_engine` (`rcp0_o`), carried along the `sat_rescale` template
+and masked to the group's live lanes by the same `s_used_r`.
+
+**It is THREE files and not four, and the difference is a tie-off avoided.**
+R145 names `_core` as the fourth. `zhao_field_v3_core` and `zhao_field_v3_exec`
+contain no `rcp0` signal at all — measured by grep across `fpga/rtl/field/`,
+zero hits in both — because the reciprocal that can be handed a zero lives in
+`zhao_field_v3_normalize`, on the **service** path, never under core. A `rcp0_o`
+on core added for symmetry would have been a port with nothing driving it.
+
+`rcp0_i` is **retained** on this block rather than removed. It existed so that
+connecting it would be a wiring act with a visible unconnected end; now that the
+end is connected it remains the bench's way to force the cause without reaching
+inside the fabric, and the run accumulator ORs it with the fabric's own bit. The
+console drives it low, so on the composed machine `fab_rcp0` is what reports the
+event. `zhao_field_host.sv` — the retained oracle — leaves the engine's new
+output explicitly unconnected, because its `sat_o` is `[2:0]` and widening the
+oracle to match would be changing the thing that exists to check this block
+independently.
 
 **ONE ACTIVE PREPARED-DATA DOMAIN (FH09), AND ITS HONEST LIMIT.** The prepared
 file carries a generation tag per slot and a read whose tag does not match the

@@ -76,9 +76,10 @@ modules:
   zhao_field_progdir_scan:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
-  zhao_field_host_v2:
-    disposition: pending_compose
-    why: "THE ASSOCIATION-AWARE FIELD HOST (packet H1, owner directive sections 6 and 7; decisions FH02/FH03/FH05/FH06/FH08/FH09/FH20). It replaces the completion rule the console ships: results are indexed by canonical output ORDINAL rather than by contiguous capture-window position -- R101's mask is window-indexed, and R111 measured all three shipped Earth programs at window masks 0x17/0x1D/0x17, every one leaving three of seven window lanes unwritten, so holes are the NORMAL case and a window mask can never return results in declared order. A PREPARED_SCALAR ordinal is a RESULT, seeded at point start under an independently driven valid bit and an association-generation check, which L1 measured is not optional: every shipped Earth program has uniform outputs no window mask can observe (crater_ring 2 of 4, impact_wave 1, wave_pool 1). END is followed by a real drain FENCE rather than a same-clock verdict. The per-point register walk is skipped only under the image's INIT_PROOF, with cfg_slow_clear_i keeping the slow form for the differential. EVIDENCE: 152 checks in field_host_v2_directed, RC 0, built and run; R126's elaboration guard SEEN TO FIRE by field_host_v2_r126_guard, which exists precisely because a clean --lint-only says nothing whatever about an initial block; R101's ANY-not-ALL defect re-planted as tests/mutants/zhao_field_host_v2_any_not_all_mutant.sv, one substantive line, fired, with case 1d polarity B as its negative control. It is NOT composed because zhao_console_core.sv is packet C1's serialised act: the response bus changes width (OUT_ORDINALS, not OUT_LANES) and gains resp_present_o/resp_window_o/resp_count_o, so both generated tops must be regenerated in the same act. The unversioned zhao_field_host is RETAINED as the named oracle (FH02) and stays out of every production source list, because composing both is exactly what superseded_in_closure() exists to catch. See version_exceptions at the foot of this file, which is the other half of this entry and is meant to be DELETED when C1 lands."
+  zhao_field_host:
+    disposition: oracle
+    superseded_by: zhao_field_host_v2
+    why: "THE RETAINED NAMED ORACLE for zhao_field_host_v2 (owner decision FH02, owner ruling R143), and it is out of the console ON PURPOSE rather than pending anything. Packet C1 composed zhao_field_host_v2 into zhao_console_core on 2026-09-20; this file previously carried a version_exceptions entry saying the console still elaborated the old host, and that entry has been DELETED because its condition -- the composition -- is met. superseded_in_closure() reads 73 production roots CLEAN. It is elaborated by tests/CMakeLists.txt only and must NEVER enter a production source list: composing both is precisely what that check exists to catch, and FH02 requires this one be kept so the new host has an independent differential reference. Its window-indexed resp_out_o and three-bit sat_o are the OLDER contract deliberately -- widening them to agree with zhao_field_host_v2 would be changing the instrument to match the thing it measures. `oracle` is a CLOSING disposition in uncashed_cheques.py, which is correct: there is no cheque here to cash."
   zhao_field_rcp:
     disposition: pending_compose
     why: "built and not composed; belongs to a capability the register still counts as a gap"
@@ -101,7 +102,7 @@ modules:
     why: "built and not composed; belongs to a capability the register still counts as a gap"
   zhao_field_warp_adapter:
     disposition: pending_compose
-    why: "The W profile's STREAM ADAPTER, built 2026-09-20 as GEOM.WARP prerequisite P2. `pending_compose` is the honest word and it is chosen deliberately over `instrument`: the block BELONGS in the console and is not wired yet, which is what this disposition means, and `instrument` would be a SETTLED disposition that silences `uncashed_cheques.py` about a cheque that is genuinely outstanding -- the C5 defect FIELD-REPAIR-PLAN-20260920.md found in this very file for the two Earth probes. It is not composed because it CANNOT yet be: `zhao_console_core` composes the shared client port at `.IN_LANES(13)` and the W profile is FIFTEEN lanes (spec/form/field-ir.md 7.1 line 523, decision W01), so the adapter's own elaboration guard refuses the narrow pair rather than silently dropping p3 -- exactly the failure field-ir.md:536-545 records, where a dropped lane 'does not read as absent, it reads as whatever the host's register clear left in R14'. Widening the three composition sites to 15 and taking CLIENTS from 2 to 3 is R103's prerequisite P1/P2 and is the composer's single atomic act. Directed test: tests/field/field_warp_adapter_directed.cpp."
+    why: "The W profile's STREAM ADAPTER, built 2026-09-20 as GEOM.WARP prerequisite P2. `pending_compose` is the honest word and it is chosen deliberately over `instrument`: the block BELONGS in the console and is not wired yet, which is what this disposition means, and `instrument` would be a SETTLED disposition that silences `uncashed_cheques.py` about a cheque that is genuinely outstanding -- the C5 defect FIELD-REPAIR-PLAN-20260920.md found in this very file for the two Earth probes. It is not composed because it CANNOT yet be: `zhao_console_core` composed the shared client port at `.IN_LANES(13)` and the W profile is FIFTEEN lanes (spec/form/field-ir.md 7.1 line 523, decision W01), so the adapter's own elaboration guard refuses the narrow pair rather than silently dropping p3 -- exactly the failure field-ir.md:536-545 records, where a dropped lane 'does not read as absent, it reads as whatever the host's register clear left in R14'. PACKET C1 DID THE FIRST HALF ON 2026-09-20: the three composition sites are at 15 (`zhao_console_core.sv`, the host and both adapters, plus the regenerated `zhao_prod_top`), so this adapter's elaboration guard now passes and P1 is CLOSED. P2 -- CLIENTS 2 to 3 -- is NOT done and was refused deliberately: a third client port with nothing driving it is a tie-off, and `zhao_geom_warp.sv` does not exist yet. The CLIENTS edit belongs in the same act that composes this adapter, which is one line in `zhao_console_core.sv` once W1's block lands. Directed test: tests/field/field_warp_adapter_directed.cpp."
   zhao_field_v2_core:
     disposition: superseded
     superseded_by: zhao_field_v3_core
@@ -541,46 +542,27 @@ modules:
   # deferral, and nothing was watching for the date to pass -- so membership is
   # derived now instead of asserted.
 
-# Modules the console elaborates DESPITE a newer sibling existing. Each needs a
-# reason good enough to survive the owner reading it.
-version_exceptions:
-  # THIS ENTRY IS A WORK ITEM WITH A DELETION DATE, NOT A SETTLEMENT, and it is
-  # the first one this file has ever carried. Read it as an obligation on packet
-  # C1, because that is what it is.
-  #
-  # The owner's ruling is not in doubt: "YOU ONLY GET TO FIT THE LATEST VERSION.
-  # IF IT IS BROKEN YOU FIX IT." CLAUDE.md adds the half that matters here --
-  # "'It is broken so I composed the old one' is not an answer ... Falling back
-  # is a decision to ship the old thing, and it must not be made quietly inside
-  # a packet."
-  #
-  # SO, SAID PLAINLY: zhao_field_host_v2 IS NOT BROKEN. It is NEW. It was built
-  # on 2026-09-20 by packet H1 with 152 directed checks green, R126's
-  # elaboration guard seen to fire, and R101's defect re-planted as a committed
-  # mutant that fires. Nothing about it is a fallback.
-  #
-  # The console still elaborates the unversioned host for ONE reason, and it is
-  # a sequencing reason rather than a quality one: composing the new host is an
-  # edit to zhao_console_core.sv, which the FIELD repair plan assigns to packet
-  # C1 as a SERIALISED, NEVER-CONCURRENT act. The new host's response bus is
-  # OUT_ORDINALS wide where the old one is OUT_LANES wide, and it gains
-  # resp_present_o, resp_window_o and resp_count_o, so the composition, both
-  # adapters and both generated tops have to move together or the next fit
-  # discovers a PINMISSING. H1 doing that edit concurrently with C1 is the
-  # live-tree hazard this run has already paid for twice.
-  #
-  # WHAT REMOVES THIS ENTRY: C1 composing zhao_field_host_v2 and regenerating
-  # gen_prod_top.py and gen_console_board.py. Deleting these lines is part of
-  # that packet's definition of done, and if this entry is still here after C1
-  # has landed, the composition did not happen and this file is the only thing
-  # that will say so.
-  #
-  # NOTE THE SHAPE: the reason goes on the SAME LINE as the name. The parser at
-  # check_console_inventory.py:153 matches `^  (\S+):\s*(.+)$` for this section,
-  # so a nested `why:` block -- which is what the modules section above uses --
-  # falls through and is recorded as NOTHING. The gate then goes on failing
-  # while the file looks as though it carries an exception, which is the wrong
-  # direction to be wrong in only by luck: an exception that silently does not
-  # register fails LOUD, where one that silently did would have hidden a
-  # superseded composition.
-  zhao_field_host: "INTERIM, 2026-09-20, owned by packet C1 -- A WORK ITEM, NOT A SETTLEMENT. The newer host zhao_field_host_v2 is built and tested and is NOT BROKEN: 152 checks in field_host_v2_directed, R126's elaboration guard seen to fire, R101's ANY-not-ALL defect re-planted as a committed mutant that fires. It is simply not composed yet, and the reason is sequencing rather than quality. Composing it is an edit to zhao_console_core.sv, which the FIELD repair plan assigns to packet C1 as a SERIALISED, NEVER-CONCURRENT act: the new host's response bus is OUT_ORDINALS wide where this one is OUT_LANES wide, and it gains resp_present_o, resp_window_o and resp_count_o, so the composition, both adapters and both generated tops must move together or the next fit discovers a PINMISSING. H1 making that edit concurrently with C1 is the live-tree hazard this run has already paid for twice. zhao_field_host is ALSO retained deliberately as the named oracle (FH02) and appears in tests/CMakeLists.txt only, never in a production source list. DELETE THIS ENTRY when C1 composes zhao_field_host_v2 -- that deletion is part of C1's definition of done, and this entry still being here after C1 has landed is itself the alarm that the composition did not happen."
+# NO VERSION EXCEPTIONS. The console elaborates the latest version of every
+# module it composes, which is the owner's ruling in his own words: "YOU ONLY
+# GET TO FIT THE LATEST VERSION. IF IT IS BROKEN YOU FIX IT."
+#
+# THIS FILE CARRIED EXACTLY ONE EXCEPTION AND IT IS GONE. It named
+# zhao_field_host, superseded by zhao_field_host_v2, and it was written by
+# packet H1 as a WORK ITEM WITH A DELETION CONDITION rather than as a
+# settlement -- "WHAT REMOVES THIS ENTRY: C1 composing zhao_field_host_v2 and
+# regenerating gen_prod_top.py and gen_console_board.py ... if this entry is
+# still here after C1 has landed, the composition did not happen and this file
+# is the only thing that will say so."
+#
+# Packet C1 composed it on 2026-09-20. `zhao_console_core.sv` now instantiates
+# zhao_field_host_v2 and nothing instantiates zhao_field_host outside tests/,
+# where it is RETAINED as the named oracle (FH02) exactly as intended. The
+# deletion of these lines is the evidence, and `completion_register.py`'s
+# superseded check reading 0 is the measurement.
+#
+# IF YOU ADD ONE BACK, keep H1's shape: the reason on the SAME LINE as the
+# name. The parser at check_console_inventory.py:153 matches
+# `^  (\S+):\s*(.+)$` for this section while the modules section above wants a
+# nested block, so a nested entry here registers as NOTHING -- silently, and
+# the gate then goes on failing while the file looks as though it carries an
+# exception. Owner ruling R147.

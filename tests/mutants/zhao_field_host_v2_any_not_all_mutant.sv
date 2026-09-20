@@ -40,7 +40,7 @@
 // was, this file cannot contain what production gained. To refresh, THREE-WAY
 // MERGE against the revision this was cut from; do not transplant.
 
-// zhao_field_host_v2.sv — THE ASSOCIATION-AWARE FIELD HOST.
+// zhao_field_host_v2_any_not_all_mutant.sv — THE ASSOCIATION-AWARE FIELD HOST.
 //
 // Contract: design/contracts/FIELD.SEQ.CORE.md
 // Schema:   fpga/rtl/field/generated/zhao_field_host_image_pkg.sv (packet S1)
@@ -242,21 +242,36 @@
 // NUMERIC STATUS IS FOUR CAUSES, NOT THREE
 // ---------------------------------------------------------------------------
 // The oracle's `sat_o` is `[2:0]` = {sat_rescale, sat_mul, sat_add}. rcp0 has
-// no bit, which is why `zhao_field_v3_svcpath.sv:437` carries a signal named
-// `nm_rcp0_unconsumed` with a waiver naming this file as its destination.
-// `num_status_o` is four bits: {rcp0, sat_rescale, sat_mul, sat_add}, with rcp0
-// in its own family exactly as directive 8.1 requires (`numeric_rcp0` separate
-// from `numeric_sat`) -- a reciprocal of zero is a DEFINED ANSWER, not a
-// saturation and not a fault, and folding it into either is one of the two
-// wrong things to do with it.
+// no bit there. `num_status_o` is four bits: {rcp0, sat_rescale, sat_mul,
+// sat_add}, with rcp0 in its own family exactly as directive 8.1 requires
+// (`numeric_rcp0` separate from `numeric_sat`) -- a reciprocal of zero is a
+// DEFINED ANSWER, not a saturation and not a fault, and folding it into either
+// is one of the two wrong things to do with it.
 //
-// THE BIT EXISTS HERE AND ITS PRODUCER CHAIN IS INCOMPLETE ABOVE THIS FILE.
-// Measured, not assumed: `rcp0` has no port on `zhao_field_v3_svcpath`,
-// `zhao_field_v3_dispatch`, `zhao_field_v3_core` or `zhao_field_v3_engine` --
-// it stops dead inside svcpath. `rcp0_i` is therefore a real INPUT PORT on this
-// module rather than a bit this file invents, so that connecting it is a wiring
-// act with a visible unconnected end, and NOT a tie-off hidden inside a host
-// that pretends to observe something. See FINDINGS-fieldh1 for the chain.
+// THE PRODUCER CHAIN WAS INCOMPLETE WHEN THIS FILE WAS WRITTEN. IT IS COMPLETE
+// NOW -- packet C1, owner ruling R145, 2026-09-20. This paragraph is amended
+// rather than deleted because the shape of the repair is the useful part.
+//
+// As written, rcp0 had no port on `zhao_field_v3_svcpath`,
+// `zhao_field_v3_dispatch` or `zhao_field_v3_engine`; it stopped dead inside
+// svcpath as `nm_rcp0_unconsumed` behind an UNUSEDSIGNAL waiver. C1 carried it
+// out along the `sat_rescale` template, and `.rcp0_o(fab_rcp0)` on `u_fabric`
+// below is the connection.
+//
+// R145 SAID FOUR FILES AND IT IS THREE. `zhao_field_v3_core` and
+// `zhao_field_v3_exec` contain no rcp0 signal at all, because the reciprocal
+// that can be handed a zero lives in `zhao_field_v3_normalize` on the SERVICE
+// path and never under core. Adding a port to core to make the two ledgers
+// look symmetrical would have been a port with nothing driving it -- a tie-off
+// created while closing a gap, which is the one move rule 1 forbids outright.
+// Measured by grep across `fpga/rtl/field/`, not inferred from the ruling.
+//
+// `rcp0_i` IS RETAINED rather than removed. It was a real INPUT PORT so that
+// connecting it would be a wiring act with a visible unconnected end; now that
+// the end is connected, the port stays as the bench's way to force the cause
+// without reaching inside the fabric, and the accumulator ORs the two. The
+// console drives it low, so on the composed machine the fabric's own bit is
+// what reports the event. See FINDINGS-fieldc1 for the chain as built.
 
 `default_nettype none
 
@@ -734,6 +749,9 @@ module zhao_field_host_v2_any_not_all_mutant
   logic                     fab_svc_bank_desync, fab_tag_mismatch, fab_wrong_op;
   logic                     fab_sk_overflow, fab_sb_bad, fab_imm_bad;
   logic                     fab_sat_add, fab_sat_mul, fab_sat_rescale;
+  // R145 landed by packet C1: the fabric now CARRIES rcp0, so this host reads
+  // it from the engine instead of from its own input port. See `rcp0_i`.
+  logic                     fab_rcp0;
   logic [31:0]              fab_uops_issued;
   // THE FENCE'S SOURCE. `active_o[ctx]` is the fabric's own statement that this
   // context still holds work. It is read, not sampled once -- see E_DRAIN.
@@ -813,6 +831,7 @@ module zhao_field_host_v2_any_not_all_mutant
       .sat_add_o    (fab_sat_add),
       .sat_mul_o    (fab_sat_mul),
       .sat_rescale_o(fab_sat_rescale),
+      .rcp0_o       (fab_rcp0),
 
       .wr_en_o  (fab_wr_en),
       .wr_ctx_o (fab_wr_ctx),
@@ -965,7 +984,6 @@ module zhao_field_host_v2_any_not_all_mutant
   // that is FT024 and it is a one-line difference with a two-case consequence.
   wire [OUT_ORDINALS-1:0] seen_next_c = cur_seen | (capture_c ? wr_hits_c : '0);
   wire [OUT_ORDINALS-1:0] req_mask_c  = hdr_reqmask[cur_slot];
-  // THE MUTATION. Production is `== req_mask_c` (ALL). This is `!= 0` (ANY).
   wire complete_c   = ((seen_next_c & req_mask_c) != '0);
   wire nothing_c    = (seen_next_c == '0);
 
@@ -1405,7 +1423,15 @@ module zhao_field_host_v2_any_not_all_mutant
       end
 
       if ((state == E_RUN) || (state == E_DRAIN)) begin
-        cur_num <= cur_num | {rcp0_i, fab_sat_rescale, fab_sat_mul, fab_sat_add};
+        // `rcp0_i` IS STILL ORed IN, and that is deliberate now that the
+        // fabric supplies `fab_rcp0`. The port's header said it existed
+        // because "an input with an unconnected end is visible"; C1 connected
+        // the end, and the port is retained so a bench can force the cause
+        // without reaching inside the fabric. Production drives it to zero and
+        // the fabric's own bit is what reports the real event -- so this reads
+        // as `fab_rcp0` on the console and as either on a bench.
+        cur_num <= cur_num |
+                   {rcp0_i | fab_rcp0, fab_sat_rescale, fab_sat_mul, fab_sat_add};
       end
 
       // ---- response delivery, independent of the run -----------------------

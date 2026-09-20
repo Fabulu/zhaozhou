@@ -245,6 +245,18 @@ module zhao_field_v3_svcpath #(
     output var logic                          svc_sat_mul_o,
     output var logic                          svc_sat_rescale_o,
 
+    // RCP0, IN ITS OWN FAMILY. Latched over the run like the three above, and
+    // deliberately NOT a fourth saturation bit: directive 8.1 separates
+    // `numeric_rcp0` from `numeric_sat` because a reciprocal of zero is a
+    // DEFINED ANSWER (qformats 6.2 pins 1/0 to 0x7FFFFFFF) while a saturation
+    // is a clamp, and the two send the next reader to different files.
+    //
+    // Added by packet C1 under owner ruling R145. Until 2026-09-20 this stopped
+    // dead below as `nm_rcp0_unconsumed` behind an UNUSEDSIGNAL waiver whose own
+    // comment named the destination that did not yet exist. It exists now:
+    // `zhao_field_host_v2.num_status_o[3]`.
+    output var logic                          svc_rcp0_o,
+
     // Times a padded lane's flag was stopped at the mask. The positive control
     // for that mask, and reachable by ordinary stimulus -- see the dispatcher.
     output var logic [31:0]                   pad_status_masked_o
@@ -339,6 +351,8 @@ module zhao_field_v3_svcpath #(
   // priority ladder that chooses rsp_r0/r1/r2. Declared beside the data it
   // travels with; built at the response mux far below.
   logic        [ 3:0] rsp_sat_add, rsp_sat_mul, rsp_sat_rescale;
+  // rcp0's per-point vector, on the SAME ladder and the same lane order.
+  logic        [ 3:0] rsp_rcp0;
 
   // ---- dispatcher's drain, claimant 1 of the writeback arbiter -----------
   logic               drain_valid, drain_ready;
@@ -372,8 +386,10 @@ module zhao_field_v3_svcpath #(
       // lanes, because `s_used_r` lives there.
       .rsp_sat_add_i(rsp_sat_add), .rsp_sat_mul_i(rsp_sat_mul),
       .rsp_sat_rescale_i(rsp_sat_rescale),
+      .rsp_rcp0_i(rsp_rcp0),
       .svc_sat_add_o(svc_sat_add_o), .svc_sat_mul_o(svc_sat_mul_o),
       .svc_sat_rescale_o(svc_sat_rescale_o),
+      .svc_rcp0_o(svc_rcp0_o),
       .pad_status_masked_o(pad_status_masked_o)
   );
 
@@ -424,18 +440,15 @@ module zhao_field_v3_svcpath #(
   // so there are exactly two wrong things to do with it here: drop it, or merge
   // it into saturation.
   //
-  // It cannot be carried yet because the destination does not exist:
-  // `zhao_field_host.sv:402` is `output logic [2:0] sat_o` -- three bits,
-  // documented as "{sat_rescale, sat_mul, sat_add}" -- and widening it changes
-  // the host's port list, `zhao_console_core`, and both generated tops. That is
-  // H1's host contract and C1's composition act, not this packet's.
+  // THE DESTINATION NOW EXISTS AND THIS IS NO LONGER UNCONSUMED. Packet C1,
+  // owner ruling R145. `zhao_field_host_v2.sv` carries `num_status_o[3:0]` =
+  // {rcp0, sat_rescale, sat_mul, sat_add}, so the waiver that used to sit here
+  // has been REMOVED rather than re-worded -- a waiver kept beside a signal
+  // that is now read would be a comment asserting a disconnection that no
+  // longer exists, which is the same lie as a stale mutant.
   //
-  // So it stays a named waiver with its owner written down, which is the
-  // honest state: an unread instruction and a satisfied one must not look
-  // alike. F1's FINDINGS carries it as the one status cause still disconnected.
-  /* verilator lint_off UNUSEDSIGNAL */
-  logic [3:0] nm_rcp0_unconsumed;
-  /* verilator lint_on UNUSEDSIGNAL */
+  // The name loses its `_unconsumed` suffix for the same reason.
+  logic [3:0] nm_rcp0;
 
   logic               ln_rsp_valid, ln_rsp_ready;
   logic        [ 7:0] ln_rsp_tag;
@@ -565,7 +578,7 @@ module zhao_field_v3_svcpath #(
       .o0_0_o(nm_r0[0]), .o0_1_o(nm_r0[1]), .o0_2_o(nm_r0[2]), .o0_3_o(nm_r0[3]),
       .o1_0_o(nm_r1[0]), .o1_1_o(nm_r1[1]), .o1_2_o(nm_r1[2]), .o1_3_o(nm_r1[3]),
       .o2_0_o(nm_r2[0]), .o2_1_o(nm_r2[1]), .o2_2_o(nm_r2[2]), .o2_3_o(nm_r2[3]),
-      .sat_rescale_o(nm_sat_resc), .rcp0_o(nm_rcp0_unconsumed), .tag_o(nm_rsp_tag),
+      .sat_rescale_o(nm_sat_resc), .rcp0_o(nm_rcp0), .tag_o(nm_rsp_tag),
       .mul_issue_o(nm_mul_issue), .mul_ready_i(nm_mul_ready),
       .mul_a_0_o(nm_a[0]), .mul_a_1_o(nm_a[1]), .mul_a_2_o(nm_a[2]), .mul_a_3_o(nm_a[3]),
       .mul_b_0_o(nm_b[0]), .mul_b_1_o(nm_b[1]), .mul_b_2_o(nm_b[2]), .mul_b_3_o(nm_b[3]),
@@ -807,6 +820,18 @@ module zhao_field_v3_svcpath #(
                     : rg_rsp_valid ? 4'b0
                     : tg_rsp_valid ? 4'b0
                     : ln_rsp_valid ? ln_sat_resc : nz_sat_rescale;
+
+    // NORMALIZE IS THE ONLY SERVICE THAT CAN RAISE rcp0 -- it is the only one
+    // that divides by a computed length. Every other arm drives ZERO rather
+    // than being left out of the ladder, which is this file's stated rule
+    // above: a service that cannot raise a cause says so explicitly, so that
+    // "never raised it" and "was never asked" do not look alike.
+    rsp_rcp0        = cv_rsp_valid ? 4'b0
+                    : nm_rsp_valid ? nm_rcp0
+                    : rt_rsp_valid ? 4'b0
+                    : rg_rsp_valid ? 4'b0
+                    : tg_rsp_valid ? 4'b0
+                    : ln_rsp_valid ? 4'b0 : 4'b0;
   end
 
   // THE SERVICES ARE ASKED ONLY FOR OPS THEY IMPLEMENT, and this says so out

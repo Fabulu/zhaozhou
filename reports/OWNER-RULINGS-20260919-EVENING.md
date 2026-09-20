@@ -1983,3 +1983,286 @@ R101 merged it; and `ops.yml:27` contradicts `blocks.yml:1142`.
 renumbering — **`gen_prod_top.py` sorts, so it does not** — measured both ways
 and corrected its own note. A lane correcting its own published claim, in the
 same report, is the standard this run has been trying to set.
+
+## R155 — THREE PIECES OF WORK HAVE NOW FALLEN BETWEEN CLOSED PACKETS. That is my decomposition, not their execution
+
+**2026-09-20, third instance in one day, and the pattern is mine.**
+
+1. **`rcp0`'s port chain (R145).** Four fabric files — `svcpath`, `dispatch`,
+   `core`, `engine`. They were F1's; **F1 closed**; H1 built the destination and
+   could not reach the chain. Routed to C1 after the fact.
+2. **§13.7's TerrainField producer, in `zhao_cmd_exec.sv`.** **No Wave-3 packet
+   owns that file**, so E1 cannot close I34 no matter how well it does its own
+   work. This is the *hard* blocker E1 reports, and it is a hole in the file-set
+   allocation I wrote.
+3. **`reference/src/zfield/zfield_plan.cpp:23`.** L1's territory; **L1 closed**;
+   E1 found a live defect there and correctly did not reach in.
+
+**Each lane behaved correctly. Each named the seam instead of crossing it.** The
+failure is that I assigned file sets by *subsystem* and the work is shaped by
+*data path* — so every place a value crosses a subsystem boundary is a file
+nobody owns, and it only becomes visible when a lane runs out of road.
+
+**The fix is procedural and cheap: before launching a wave, list every file the
+wave's acceptance criteria require to change, and check each has exactly one
+owner.** I listed what each packet owned; I never listed what the *work* needed.
+Those are different lists, and the difference is where three items fell.
+
+**A fourth is latent and worth naming now:** `spec/commands.zidl` is owned by a
+packet that has closed, and W1 may need `DrawWarpedForm`. It was told to ask
+rather than spend a second hour of capture regeneration on its own authority —
+which is the right instruction, but it is the same shape one step ahead.
+
+## R156 — `zfield_plan.cpp`'s `kGroups = 273` IS NOT A REPORT, IT IS A CLASSIFIER
+
+E1, and this one ships wrong behaviour rather than a wrong number on a page.
+
+`reference/src/zfield/zfield_plan.cpp:23` carries `kGroups = 273`, and it feeds
+`hot = bind <= 6000`. With the **correct 297**, a program taking up to **6,527
+clocks per association is classified HOT while being over its deadline.**
+
+**So the 273/297 correction was never cosmetic.** Everywhere else it was a count
+in a test or a document; here it is the denominator of a *scheduling decision*,
+and the stale value makes the classifier optimistic — **flattering direction,
+again**. A program that should be refused gets admitted.
+
+**E1 correctly did not reach into L1's file** and handed it over with evidence.
+It is now unowned (R155) and goes to the next packet with that file.
+
+**And the correction was in FOUR places, not the one my brief named.** I wrote
+"`field_v3_earth_directed.cpp:145`" as though that were the extent of it. E1
+found all four. A brief that names one site of a multi-site change invites
+exactly the partial fix this run keeps finding.
+
+## R157 — THE PROBES WERE HIDDEN BY **TWO** SETTLED LEDGERS, NOT ONE
+
+C5 recorded that `console_inventory.yml` marked both Earth probes
+`disposition: instrument`, and that `instrument` is a **settled** disposition, so
+`uncashed_cheques.py` could never flag them — the inventory suppressing the very
+cheque R44 wrote.
+
+**E1 found a second one: `prod_manifest.yml` marks them `probe`, also settled.**
+So the promotion R44 ordered was invisible in **two independent ledgers at
+once**, and fixing either alone would have left the other silencing the tool.
+
+**Two registries, two settled dispositions, one silence.** A single suppressed
+signal is an oversight; the same signal suppressed twice in two files is a
+*structure* — and it is the ledger-side form of the run's dominant defect, where
+the check cannot see the thing because something upstream declared the question
+closed.
+
+E1 proved the promotion itself a **no-op by measurement** — comment-stripped
+bodies byte-identical after name substitution — which is the right evidence for a
+move: not "it still compiles", but "it is the same file".
+
+## R158 — "EVERY STATEMENT WAS TRUE; EVERY CITATION WAS WRONG"
+
+E1's own summary of three references in my brief and in the FIELD plan:
+
+* C5's `console_inventory.yml:241,253` are **two unrelated probes** — the real
+  rows are **244 and 256**;
+* both `zhao_console_core.sv` line references were **stale**.
+
+**The substance held every time and the pointers did not.** That is the same
+failure as R144 (citing rulings absent from a lane's base) and R148 (quoting the
+owner's directive into its opposite by paraphrase), and E1 has now given it the
+cleanest possible name.
+
+**Line numbers in this tree have a half-life of hours.** Today alone: S1
+corrected three of mine, F1 corrected three more, FORGESHADOW corrected three
+citations in production RTL, and now E1 corrects three more. **The rule from here
+is to cite by SYMBOL or by quoted text, and use a line number only as a hint that
+is expected to rot** — which is what the briefs already demand of the lanes and
+what I have not been doing myself.
+
+**One more thing E1 did that is worth copying:** it corrupted five files with a
+PowerShell array-flattening bug, **caught it immediately from the tool's own
+echo**, restored from the index, redid the edit, and **wrote the trap into its
+findings for the next agent** rather than quietly fixing it. A mistake recorded
+is worth more than a mistake avoided silently.
+
+## R159 — **`completion_register.py` CANNOT SEE A TIED-OFF PORT.** The number this run steers by has a blind spot
+
+**2026-09-20, C1, and this is the most important instrument finding of the
+campaign.**
+
+C1 was about to compose GEOM.WARP's client port. Its recorded blocker had
+dissolved, and **composing it read as 21 → 20.** It re-measured instead of
+banking the win, and found **ten-plus tie-offs behind it**: `v_attr_i` (no
+attribute words on the palette→skin bundle), **all nine warp-descriptor ports**
+(`warp_en` / `warp_slot` / `warp_par` / `warp_bound` — zero hits, and
+`DrawWarpedForm 0x0304` unallocated in `commands.zidl`), and the entire `f_*`
+port.
+
+**The register counts DECLARED tie-offs** — it parses the core's own INCOMPLETE
+comment block, which is hand-maintained. **So a tie-off nobody writes down is
+invisible, and composing a block with undeclared tie-offs makes the count go
+DOWN.**
+
+That is the run's dominant defect mode arriving at **the primary metric itself**.
+Every gate has been audited today; the *number* has not. And it fails in the
+flattering direction by construction: the easiest way to make it drop is the one
+thing the campaign forbids.
+
+**Three consequences, and I am recording all of them rather than only the
+comfortable one:**
+
+1. **Every "register moved" claim in this run rests on the tie-offs being
+   honestly declared.** I believe they are — lanes have consistently declared
+   them, and five separate packets today refused a flattering close. But that is
+   *trust in the lanes*, not a property of the tool, and it should be said in
+   those words.
+2. **The fix is not to make the register smarter.** A tool that inferred
+   tie-offs would be guessing at intent; the INCOMPLETE block exists because a
+   human states what is missing. The fix is a **rule**: if you create a tie-off,
+   you declare it **in the same commit**, and a reviewer checks the block against
+   the diff whenever a composition lands.
+3. **C1 caught this only because it re-measured a blocker it expected to be
+   gone.** W1 documented the trap first. Two lanes independently arriving at it
+   is why it is a ruling and not a note.
+
+**GEOM.WARP's remaining work is a COMMAND and a DESCRIPTOR PATH, not a
+composition.** That is a different packet from the one the plan describes, and
+the plan's §4 mapping — which credited the directive with eight of nine
+prerequisites — was **my analysis, not a measurement**. It is now corrected by
+one that is.
+
+## R160 — the pre-fit blocker is CLEARED, properly this time
+
+**`superseded check: 73 production roots CLEAN`, 2 → 0.** `zhao_field_host_v2`
+is composed, and **all 44 lines of the `version_exceptions` entry are deleted** —
+H1's own deletion condition met, exactly as it wrote it: *"if this entry is still
+here after C1 has landed, the composition did not happen."*
+
+R143 recorded that I would **not** silence the register to make this go away, and
+that C1 composing v2 was the only honest clearance. **That is what happened.**
+The gate went red, stayed red under a documented exception, and went green
+because the thing it was guarding got built — which is what a gate is for.
+
+Also landed: **R145's `rcp0` chain to `num_status_o[3]`**, and GEOM.WARP's **P1**
+(the shared input pair 13→15) at three sites **C1 re-measured itself**, because
+my brief's line numbers were **~340 lines stale** (R158 again, fourth lane).
+
+**And one thing beyond the brief that was necessary:** the doorbell's load-kind
+field went 2→3 bits. `host_v2` implements **eight** kinds, and kinds 4–7
+(OUTMAP / ASSOC / INITPROOF / PREPARED) **had no producer at all** — so composing
+without it *"would have shipped the ordinal machinery unreachable."* A packet
+finding that its own brief under-specified the work, and saying so, is the
+behaviour that makes these reports worth reading.
+
+## R161 — R145 SAID FOUR FILES; IT IS THREE, AND THE FOURTH WOULD HAVE BEEN A TIE-OFF
+
+I wrote that `rcp0`'s chain spans four files. **Measured: `v3_core` and
+`v3_exec` have ZERO `rcp0` hits.** Adding a port there would have been **a
+tie-off created in the act of closing a gap** — the precise move rule 1 forbids,
+introduced by my own instruction.
+
+Two further corrections from the same measurement: the engine has **two
+parents**, and the oracle carries `.rcp0_o()` empty **with its reason stated**
+rather than silently.
+
+**And R151 RECURRED TWICE in this packet.** The generated top again took
+`IN_LANES=12` defaults, and **A1's own override row still said 13** after C1
+moved the real value to 15. So the production top has now been caught measuring
+the wrong machine **three times in one day**, in three different parameters, each
+time because a default and an override disagreed and nothing compared them. All
+four FIELD width sites are now in `production_parameter_overrides`, **verified in
+the generated output** rather than assumed.
+
+## R162 — `mutant_copy_drift.py` IS BLIND TO WRAPPER PORT-LIST DRIFT, BY DESIGN
+
+C1's changes drifted three committed controls. **All three were REGENERATED, not
+patched** — the correct treatment, since a hand-patched copy is a copy of
+something that no longer exists.
+
+The instructive one: **the console-core wrapper failed LOUDLY at elaboration**,
+naming all ten new ports. In C1's words — *"a wrapper can't drift in its body but
+its port list can, and `mutant_copy_drift` is blind to that half by design."*
+
+**It was caught by RUNNING the control, not by a gate. The static set was fully
+green at the commit that broke it.**
+
+That is the twelfth instrument today found unable to see its own subject, and it
+is a reminder that `mutant_copy_drift` — which I have leaned on all day, and
+which R121 taught me to run *after* the commit — answers one question only:
+*is this copy older than what it copies?* It does not answer *does this copy still
+elaborate?* Those are different questions and only the second is evidence.
+
+## R163 — A `_v2` FILE THAT EXISTS BUT IS NOT COMPOSED **CREATES** A VIOLATION. The mirror of R159
+
+**2026-09-20, E1, measured rather than reasoned.**
+
+E1 did not build `zhao_terrain_patch_v2.sv`, and the reason is the finding: **a
+file containing nothing but an empty module makes the register report
+`composed zhao_terrain_patch superseded by zhao_terrain_patch_v2` across THREE
+production roots.**
+
+So the mere existence of a `_v2` name, with no content and no composition,
+**manufactures a superseded violation** — because the supersession check keys on
+the naming convention, not on whether anything was actually superseded.
+
+**This is the exact mirror of R159.** There, composing a block with undeclared
+tie-offs makes the gap count fall *wrongly low*. Here, creating a `_v2` file
+makes the superseded count rise *wrongly high*. **Both are the metric responding
+to a FILE-SYSTEM FACT rather than a DESIGN FACT**, and the two errors point in
+opposite directions, which is why neither is obvious from inside a single packet.
+
+**The rule E1 derived, and it is the right one: a `_v2` must be BORN IN THE
+COMMIT THAT COMPOSES IT.** Not created early and wired later. That also explains,
+retrospectively, why `zhao_field_host_v2` took the superseded count from 0 to 2
+the moment H1 landed it and back to 0 only when C1 composed it — the same
+mechanism, seen from the other end, and it cost a documented exception and two
+rulings to pass through.
+
+## R164 — THE DIRECTIVE'S SILENCE WAS NARROWER THAN I SAID, AND I REPEATED IT ALL DAY
+
+I have said several times, including in briefs and commit messages, that the
+owner's directive *"never mentions"* the existing Earth machinery. **E1 measured
+it: that is true ONLY OF THE WALKER.**
+
+* `zhao_probe_walk_earth` — genuinely unmentioned. The original finding stands.
+* `zhao_probe_patch_acc` — **3 hits.** The directive does cite it.
+* the corrected group count `297` — **7 hits.** The directive uses the right
+  number.
+
+**So the directive knew about the accumulator and the count, and not about the
+walker.** That is a much more interesting and much more specific fact than "it
+never mentions it", and my broader phrasing made the owner's work look less
+careful than it is.
+
+**I amplified an architect's finding without re-measuring its scope**, which is
+the same error as R148 (paraphrasing a concession into a permission) and R158
+(true statements with wrong citations) — a claim that is right at its core and
+wrong at its edges, repeated until the edges look load-bearing.
+
+**Two more corrections E1 made to my own brief:**
+`tools/field/measure_earth_budget.cpp` and `tests/differential/field_walk_earth_directed.cpp`
+**both already existed.** I listed them as things for E1 to own and create.
+
+## R165 — TWO OF I34's RECORDED BLOCKERS HAVE EXPIRED, AND THE ENTRY DOES NOT KNOW
+
+E1, reading the entry's own text at `zhao_console_core.sv:2814-3053`:
+
+1. **"Promoting is an owner call and not a packet's"** — the architecture question
+   the entry stopped on **twice** — is **answered by the owner's directive
+   §13.1/§13.2, which POSTDATE the entry.** The blocker was real when written and
+   the owner has since ruled on it.
+2. **"Nothing publishes {handle→hash}"** — this **predates D1's `BIND_PROGRAM`**
+   (`zhao_field_doorbell.sv:165, 215, 315`), which landed today. **Re-measure
+   before re-quoting.**
+
+**So I34 has been carrying two expired blockers and one live one.** The live one
+is §13.7's TerrainField producer, which had no owner until CMDFIELD.
+
+This is the seventeenth-plus instance of the pattern and the clearest statement
+of it: **a refusal is a claim about a moment, and this tree moves fast enough
+that a blocker written yesterday may be spent today.** The entry is the
+authoritative definition — which is exactly why it has to be *re-read*, not
+quoted from memory or from a brief that paraphrased it.
+
+**And my own framing of I34 was wrong in the same way.** I told two packets its
+hard blocker was a port change on `zhao_terrain_patch`. C1 read the entry and
+found it names **four build items, none of which is the port change.** I have
+messaged CMDFIELD to read the block and report what it actually requires rather
+than building to fit my instruction — because work done to satisfy a wrong brief
+is worse than no work.

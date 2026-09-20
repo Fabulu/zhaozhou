@@ -6596,10 +6596,31 @@ module zhao_console_core
   // and routed to `u_field_loader` below, sub-decoded by `post_kind_i` as
   // 0 INSTALL_CAPSULE / 1 BIND_PROGRAM / 2 CONTROL / 3 reserved.
   input  logic [31:0]  fld_cfg_plan_base_i,   // D0: held, captured AT ACCEPTANCE
+  // FH08's differential control, and NOT a test hook. HIGH forces the blanket
+  // per-point register walk back on for every point regardless of the image's
+  // INIT_PROOF; directive 6.1 keeps the slow clear "for differential testing
+  // and explicit legacy unvalidated bench images only". It is host state on the
+  // same footing as `fld_cfg_plan_base_i` -- the producer is SW.STREAM, outside
+  // this console -- so it is a boundary input and not a gap.
+  //
+  // Production may NOT bypass validation to enter the fast path: the host gates
+  // that on `hdr_ipok` and not on this bit being low, so driving this low is a
+  // request, never a permission.
+  input  logic         fld_cfg_slow_clear_i,
   input  logic         fld_db_post_valid_i,
   output logic         fld_db_post_ready_o,
   input  logic [ 1:0]  fld_db_post_op_i,
-  input  logic [ 1:0]  fld_db_post_kind_i,
+  // THREE BITS AS OF PACKET C1, and the two consumers want different widths
+  // on purpose. `zhao_field_host_v2` decodes EIGHT load kinds (0 UOP, 1 TABLE,
+  // 2 HEADER, 3 UNIFORM, 4 OUTMAP, 5 ASSOC, 6 INITPROOF, 7 PREPARED) and
+  // implements all eight; at two bits, kinds 4..7 had no producer and the new
+  // host's ordinal, association and init-proof machinery was unreachable from
+  // this console. The FH2 sub-decode above still uses the LOW TWO BITS, which
+  // is why the doorbell truncates rather than widening `fh2_kind_o`: the two
+  // fields are separate quantities that happen to share a mailbox word, and
+  // this file has been bitten once already by writing one onto the other
+  // (see `fld_db_post_addr_i`'s eight-against-seven note below).
+  input  logic [ 2:0]  fld_db_post_kind_i,
   input  logic [ 2:0]  fld_db_post_slot_i,
   // EIGHT BITS, NOT SEVEN, and the width is the FH2 control verb's. Directive
   // 10.2: "widen that mailbox field explicitly to at least 8 through its
@@ -6734,6 +6755,47 @@ module zhao_console_core
   // adapter reads lanes 3-5, and until R101 a program that skipped any of them
   // came back 8'h00 SUCCESS.
   output logic [31:0]  fld_out_incomplete_o,
+  // ---- THE v2 HOST'S OWN EVIDENCE, new with the composition ---------------
+  // These are siblings of the twenty counters around them and have the same
+  // standing: the console's counter surface, read by the host. They are NOT
+  // new gaps -- a boundary counter is only a tie-off if this file's own
+  // "INCOMPLETE -- TIED OFF, AND WHY" block says so, and none of these is in
+  // it. Each names one thing and only that thing, which is the discipline
+  // R150 was written about.
+  //
+  // A PREPARED_SCALAR ordinal whose slot was invalid, or whose generation did
+  // not match the running association. Apart from `fld_out_incomplete_o`
+  // because "the preparation is wrong" and "the program did not write" send
+  // the next person to different files.
+  output logic [31:0]  fld_prep_bad_o,
+  // A load-time refusal: an OUTPUT_MAP row naming a register outside the
+  // capture window, which the window cannot observe, so the ordinal could
+  // never be seen. Refused at LOAD rather than hanging a point later.
+  output logic [31:0]  fld_bad_image_o,
+  // R111's standing hazard, counted: a strict descriptor whose ordinal mask is
+  // ZERO. A plan writer who omits the mask would otherwise silently restore the
+  // R101 defect and pass every gate.
+  output logic [31:0]  fld_zero_mask_o,
+  // The retirement fence's own positive control. A granted write for the
+  // retired context arriving after the fence released. IT MUST READ ZERO --
+  // and a detector reading zero is a claim, so it is fired deliberately rather
+  // than quoted.
+  output logic [31:0]  fld_late_write_o,
+  // Writes captured during drain: the ones the oracle loses. NOT a fault. This
+  // is the measurement that the fence is doing work, which is the half that
+  // separates "the fence never mattered" from "the fence was never tested".
+  output logic [31:0]  fld_fence_writes_o,
+  // Points that retired with no vector write at all because every declared
+  // ordinal was a prepared scalar. FH06's terminal path, counted so that "the
+  // uniform route is live" is a number rather than an argument.
+  output logic [31:0]  fld_uniform_runs_o,
+  // Grants refused for want of a reserved response entry (FH20's credit pool).
+  output logic [31:0]  fld_credit_stall_o,
+  // FH08's differential pair. Points that took the no-clear fast path, and
+  // points that walked. Both are exported because the interesting number is
+  // the RATIO, and one of them alone cannot give it.
+  output logic [31:0]  fld_fast_path_o,
+  output logic [31:0]  fld_slow_path_o,
   // EVERY ALARM THE v3 FABRIC OWNS, UNMERGED AND SEPARATELY COUNTED.
   // `zhao_field_v3_engine`'s own header is right that five faults reduced to
   // one bit is a bit that says "something, somewhere", and a guard that cannot
@@ -6746,8 +6808,13 @@ module zhao_console_core
   output logic [31:0]  fld_unsupported_o,
   output logic [31:0]  fld_skid_overflow_o,
   output logic [31:0]  fld_uniform_bad_o,
-  // {sat_rescale, sat_mul, sat_add} -- the op ledger, latched over the run.
-  output logic [ 2:0]  fld_sat_o,
+  // {rcp0, sat_rescale, sat_mul, sat_add} -- the op ledger, latched over the
+  // run. FOUR causes as of packet C1, not three: owner ruling R145 carried
+  // `rcp0` out of the service path, and `zhao_field_host_v2.num_status_o` is
+  // the four-bit port that receives it. rcp0 keeps its OWN family per directive
+  // 8.1 -- a reciprocal of zero is a defined answer, not a clamp -- so it is a
+  // fourth bit here rather than a fourth thing ORed into saturation.
+  output logic [ 3:0]  fld_sat_o,
   output logic [31:0]  fld_pc_hits_o,
   output logic [31:0]  fld_pc_misses_o,
   output logic [31:0]  fld_pc_rejected_o,
@@ -9958,7 +10025,9 @@ module zhao_console_core
   // declared at the end of this module; these wires are here so the engine's
   // port map can be read without scrolling for a declaration.
   // The two widths are IN_LANES*32 and OUT_LANES*32 at the values the
-  // instantiation below selects (13 and 7, owner ruling R40). They are
+  // instantiation below selects (15 and 7 -- owner ruling R40 set 13/7 and
+  // packet C1 widened the input pair to the WARP record's 15 under GEOM.WARP
+  // prerequisite P1, so these are 480 and 224). They are
   // literals because a body localparam declared here would still have to agree
   // with the instance's parameter overrides; the host's own elaboration guards
   // are what refuse a disagreement, and a width mismatch on these wires is
@@ -9966,17 +10035,29 @@ module zhao_console_core
   logic         sfa_req_valid, sfa_req_ready;
   logic [  2:0] sfa_req_slot;
   logic         sfa_req_noprog;
-  logic [415:0] sfa_req_in;
+  logic [479:0] sfa_req_in;
   logic         sfa_resp_valid, sfa_resp_ready;
+  // OUT_ORDINALS * 32, and the index space is the CANONICAL OUTPUT ORDINAL --
+  // NOT the physical register and NOT the capture-window position. At the
+  // composed OUT_LANES=7 / OUT_ORDINALS=7 the two widths coincide numerically
+  // and they are different quantities; conflating them is the defect the whole
+  // FIELD repair exists to prevent. Both adapters index this by ordinal and say
+  // so in their own headers.
   logic [223:0] fld_resp_out_c;
   logic [  7:0] fld_resp_status_c;
+  // Ordinal-indexed presence, window-indexed accounting, and the declared
+  // output COUNT. Declared here so the composition below can be read without
+  // scrolling; see the instantiation for why the console does not forward them.
+  logic [  6:0] fld_resp_present_c;
+  logic [  6:0] fld_resp_window_c;
+  logic [  3:0] fld_resp_count_c;
 
   // ---- the FIELD engine's SECOND client, and the doorbell in front of it ---
   // Client 1, driven by `u_field_flow_adapter` (entry I5, owner ruling R40).
   logic         pfa_req_valid, pfa_req_ready;
   logic [  2:0] pfa_req_slot;
   logic         pfa_req_noprog;
-  logic [415:0] pfa_req_in;
+  logic [479:0] pfa_req_in;
   logic         pfa_resp_valid, pfa_resp_ready;
   logic         pfa_ans_valid, pfa_fld_valid;
   logic signed [10:0] pfa_fld_ax, pfa_fld_ay, pfa_fld_az;
@@ -9985,7 +10066,8 @@ module zhao_console_core
   // The doorbell's side of the loader and of both directory phases (entry I42,
   // owner ruling R43).
   logic        fdb_ld_valid, fdb_ld_ready;
-  logic [ 1:0] fdb_ld_kind;
+  // THREE BITS: host_v2's eight load kinds. See `fld_db_post_kind_i`.
+  logic [ 2:0] fdb_ld_kind;
   logic [ 2:0] fdb_ld_slot;
   logic [ 6:0] fdb_ld_addr;
   logic [95:0] fdb_ld_data;
@@ -15869,7 +15951,7 @@ module zhao_console_core
   // describing the wrong design. `tools/quartus/check_console_inventory.py` is
   // the gate that now says so mechanically, and its G1 named every one of the
   // nine v1 modules that came back out of this console's closure.
-  logic [2:0] fld_sat_c;
+  logic [3:0] fld_sat_c;
 
   // ==========================================================================
   // THE FABRIC'S PARAMETERISATION IS A DECISION, AND IT IS MADE HERE
@@ -15977,7 +16059,15 @@ module zhao_console_core
   // adopted together with the area they cost. Until then, widening the fabric
   // buys area and no throughput, which is the one trade this device cannot
   // afford.
-  zhao_field_host #(
+  zhao_field_host_v2 #(
+    // TWO CLIENTS, and the third is NOT added here. GEOM.WARP prerequisite P2
+    // asks for `CLIENTS(3)` so the warp adapter has a port; a third client
+    // whose `req_valid_i` is a constant zero is a TIE-OFF, and rule 1 forbids
+    // creating one even in the service of closing a gap. `zhao_geom_warp.sv`
+    // does not exist in this tree, so there is nothing to drive it with. The
+    // widening lands in the same act that composes the adapter, which is W1's
+    // block plus one edit here. P1 -- the 15-lane input pair -- IS done, and it
+    // was the prerequisite that blocked W1 from building at all.
     .CLIENTS  (2),
     // PROGS is one number wearing three hats: the directory's ENTRIES, the
     // executor's CONTEXT count and the front's slot space. The v3 uop store is
@@ -16033,8 +16123,48 @@ module zhao_console_core
     // cannot present is a lane its program reads as whatever the front cleared
     // the register to" -- that does not read as a missing lane. It reads as a
     // plausible number nobody supplied, which is the direction nobody audits.
-    .IN_LANES (13),
+    // FIFTEEN as of packet C1, 2026-09-20. This is GEOM.WARP prerequisite P1
+    // and it is the day the comment above predicted: the WARP profile is 15 in,
+    // and `zhao_field_warp_adapter.sv:293` refuses at elaboration below that
+    // with the message "The console's shared pair must move to 15 before this
+    // adapter can be composed -- that is GEOM.WARP prerequisite P1, not a
+    // defect here." Moving it is this packet's act.
+    //
+    // WIDENING IS NOT A TIE-OFF, and the distinction is the one rule 1 turns
+    // on. Lanes 13 and 14 carry no value for the S and F profiles, which
+    // declare 8 and 13 canonical inputs; the host CLEARS every register a
+    // program does not write, so an unfilled lane is the same defined zero it
+    // was at 13. No port is disconnected, no function is narrowed, and both
+    // adapters' own elaboration guards (`IN_LANES < 13` / `< 8`) still hold.
+    // What changes is that the bus can now CARRY a warp record, which is the
+    // whole of P1.
+    .IN_LANES (15),
     .OUT_LANES(7),
+
+    // ---- THE v2 PARAMETERS, STATED RATHER THAN DEFAULTED --------------------
+    // Every one of these happens to equal the module's default at this
+    // composition. They are written out anyway, and R151 is why: A1 found
+    // `zhao_prod_top` instantiating the stamp adapter with NO override at all,
+    // silently taking 12/4 while this file passed 13/7 -- so the production fit
+    // was measuring a 384-bit client bus against the console's 416. A default
+    // and an override that agree are cheap; a default nobody notices is what
+    // produced that.
+    //
+    // OUT_ORDINALS IS NOT OUT_LANES. OUT_LANES is the contiguous capture
+    // WINDOW -- physical registers `out_base` .. `out_base+6`. OUT_ORDINALS is
+    // the count of CANONICAL DECLARED OUTPUTS. They are 7 and 7 here and they
+    // are different quantities: `zprog_output_coverage.py` measures the three
+    // shipped Earth programs at window masks 0x17/0x1D/0x17, every one of which
+    // leaves three window lanes unwritten, so the two masks do not even have
+    // the same population. The host gives them distinct port widths for this
+    // reason; this line is the composer agreeing.
+    .OUT_ORDINALS(7),
+    // The prepared-scalar file. `tools/field/measure_sreg_hwm.cpp` measured the
+    // worst shipped plan at 41, and this matches `zhao_field_v3_sbank`'s SLOTS.
+    .PREP_SCALARS(64),
+    // FH20: response entries reserved BEFORE acceptance, so a grant can never
+    // be taken for a result with nowhere to land.
+    .CREDITS  (2),
 
     // ---- the fabric's own knobs. Shipped values in the comment, always. ----
     // FAB_LANES: shipped 4. One point per grant means three discarded lanes,
@@ -16075,6 +16205,9 @@ module zhao_console_core
   ) u_field_host (
     .clk  (gpu_clk),
     .rst_n(rst_n),
+
+    // FH08. Driven from the boundary, not tied: see the port's own note.
+    .cfg_slow_clear_i(fld_cfg_slow_clear_i),
 
     // I42 CLOSED: the program loader is `u_field_doorbell` below, SW.STREAM's
     // mailbox on the R14 pattern that owner ruling R43 names.
@@ -16124,6 +16257,23 @@ module zhao_console_core
     .resp_valid_o({pfa_resp_valid, sfa_resp_valid}),
     .resp_ready_i({pfa_resp_ready, sfa_resp_ready}),
     .resp_out_o  (fld_resp_out_c),
+    // FH05's other two thirds. THE CONSOLE DOES NOT FORWARD THESE, and that is
+    // a decision rather than an omission.
+    //
+    // Both composed adapters read `resp_out_o` BY ORDINAL and take their arity
+    // from their own profile, which is a compile-time constant in each of them
+    // (S declares 3, F declares 7) -- so neither has an input to receive a
+    // runtime count or presence mask, and neither needs one. Exporting them to
+    // the console boundary instead would create two outputs that nothing reads,
+    // which is precisely the move A1 declined under R154 and which would put
+    // the register UP while looking like progress.
+    //
+    // They are NAMED here rather than left as bare `()` so that the next
+    // packet to give an adapter a partial-result path finds the wires already
+    // declared and this paragraph explaining what they mean.
+    .resp_present_o(fld_resp_present_c),
+    .resp_window_o (fld_resp_window_c),
+    .resp_count_o  (fld_resp_count_c),
     .resp_status_o(fld_resp_status_c),
 
     .runs_o            (fld_runs_o),
@@ -16145,7 +16295,29 @@ module zhao_console_core
     .unsupported_o     (fld_unsupported_o),
     .skid_overflow_o   (fld_skid_overflow_o),
     .uniform_bad_o     (fld_uniform_bad_o),
-    .sat_o             (fld_sat_c)
+
+    // ---- the v2 host's own evidence ----------------------------------------
+    .prep_bad_o        (fld_prep_bad_o),
+    .bad_image_o       (fld_bad_image_o),
+    .zero_mask_o       (fld_zero_mask_o),
+    .late_write_o      (fld_late_write_o),
+    .fence_writes_o    (fld_fence_writes_o),
+    .uniform_runs_o    (fld_uniform_runs_o),
+    .credit_stall_o    (fld_credit_stall_o),
+    .fast_path_o       (fld_fast_path_o),
+    .slow_path_o       (fld_slow_path_o),
+
+    // R145. The fabric now carries rcp0 to this host internally, so the
+    // override input is driven to its identity element: the host ORs
+    // `rcp0_i` with the engine's own `fab_rcp0`, and 0 is the value that lets
+    // the fabric's measurement through unchanged. It is NOT a tie-off standing
+    // in for a missing producer -- the producer exists and is connected one
+    // level down; this port is the bench's way to force the cause without
+    // reaching inside the fabric, and a console has no reason to force it.
+    .rcp0_i            (1'b0),
+
+    // FOUR CAUSES, NOT THREE: {rcp0, sat_rescale, sat_mul, sat_add}.
+    .num_status_o      (fld_sat_c)
   );
 
   assign fld_sat_o = fld_sat_c;
@@ -16373,7 +16545,12 @@ module zhao_console_core
   // and PART.STATE's `prt_ready_i` on "the answer for THIS record is ready".
   zhao_field_flow_adapter #(
     .SLOTW    (3),
-    .IN_LANES (13),
+    // The SHARED pair, 15/7 as of C1 -- not the F profile's own 13/7. The
+    // adapter guards `IN_LANES < 13` and fills lanes 0..12; lanes 13 and 14 are
+    // the warp client's and the host clears them. A number here that differed
+    // from `u_field_host`'s would be a silent width truncation on the
+    // concatenated bus, which is why all three sites move together.
+    .IN_LANES (15),
     .OUT_LANES(7)
   ) u_field_flow_adapter (
     .clk  (gpu_clk),
@@ -16444,10 +16621,11 @@ module zhao_console_core
     .STAMP_BINDING(1),
     // The SHARED port's lane counts, not the S profile's own (8 in / 3 out).
     // They follow `u_field_host`'s, which owner ruling R40 set to the FLOW
-    // record's 13/7; the stamp adapter fills lanes 0 and 1 and reads lanes 0
-    // and 1, and the rest are the wider client's. Two different numbers here
+    // record's 13/7 and packet C1 moved to 15/7 for the WARP record (GEOM.WARP
+    // prerequisite P1); the stamp adapter fills lanes 0 and 1 and reads lanes 0
+    // and 1, and the rest are the wider clients'. Two different numbers here
     // and there would be a silent width truncation on the concatenated bus.
-    .IN_LANES (13),
+    .IN_LANES (15),
     .OUT_LANES(7)
   ) u_field_stamp_adapter (
     .clk  (gpu_clk),
